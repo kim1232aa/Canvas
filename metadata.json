@@ -1,0 +1,8 @@
+{
+  "name": "Remix Remix Remix Remix Remix Remix ComfyCanvas AI - Multi-Provider Node Studio",
+  "description": "Infinite node canvas inspired by ComfyUI with multi-provider execution (Civitai LoRA, Fal.ai, Hugging Face, ModelScope, NanoGPT, and Gemini).",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

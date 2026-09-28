@@ -1,0 +1,13 @@
+{
+  "civitaiKey": "",
+  "falKey": "",
+  "hfToken": "",
+  "modelscopeToken": "",
+  "modelscopeAiToken": "",
+  "nanogptKey": "",
+  "agnesKey": "",
+  "agnesBaseUrl": "https://apihub.agnes-ai.com/v1",
+  "sensenovaKey": "",
+  "sensenovaBaseUrl": "https://token.sensenova.cn/v1",
+  "tensorartKey": "ak_tensor_W6ZHTW13GiAn5lgK9Jc7XXA028Vnx580ubJ4Kbv1o64"
+}
