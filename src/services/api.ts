@@ -359,10 +359,25 @@ export const saveToHistory = async (item: Partial<GenerationHistoryItem>) => {
 
 export const deleteHistoryItem = async (id: string) => {
   try {
-    const resp = await fetch(`/api/history/${id}`, { method: 'DELETE' });
+    const encodedId = encodeURIComponent(id);
+    const resp = await fetch(`/api/history/${encodedId}`, { method: 'DELETE' });
     return resp.ok;
   } catch (e) {
     console.error('History delete error:', e);
+  }
+  return false;
+};
+
+export const deleteHistoryBatch = async (ids: string[]) => {
+  try {
+    const resp = await fetch('/api/history/delete-batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids }),
+    });
+    return resp.ok;
+  } catch (e) {
+    console.error('History batch delete error:', e);
   }
   return false;
 };

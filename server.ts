@@ -64,6 +64,9 @@ export interface CloudProject {
 interface GeneratedItem {
   id: string;
   url: string;
+  imageUrl?: string;
+  videoUrl?: string;
+  mediaType?: string;
   prompt: string;
   negativePrompt?: string;
   provider: string;
@@ -6236,9 +6239,28 @@ app.post('/api/history', (req, res) => {
 
 app.delete('/api/history/:id', (req, res) => {
   const { id } = req.params;
-  generationHistory = generationHistory.filter((h) => h.id !== id);
+  const decodedId = decodeURIComponent(id || '').trim();
+  generationHistory = generationHistory.filter((h) => {
+    if (h.id === id || h.id === decodedId) return false;
+    if (h.url && (h.url === id || h.url === decodedId)) return false;
+    if (h.imageUrl && (h.imageUrl === id || h.imageUrl === decodedId)) return false;
+    return true;
+  });
   writeJsonFile(HISTORY_FILE, generationHistory);
-  return res.json({ success: true });
+  return res.json({ success: true, remaining: generationHistory.length });
+});
+
+app.post('/api/history/delete-batch', (req, res) => {
+  const { ids = [] } = req.body || {};
+  const idSet = new Set((ids as string[]).map((i) => decodeURIComponent(i || '').trim()));
+  generationHistory = generationHistory.filter((h) => {
+    if (h.id && idSet.has(h.id)) return false;
+    if (h.url && idSet.has(h.url)) return false;
+    if (h.imageUrl && idSet.has(h.imageUrl)) return false;
+    return true;
+  });
+  writeJsonFile(HISTORY_FILE, generationHistory);
+  return res.json({ success: true, remaining: generationHistory.length });
 });
 
 app.delete('/api/history', (_req, res) => {

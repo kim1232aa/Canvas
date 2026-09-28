@@ -13,7 +13,7 @@ import { areSocketsCompatible } from '../utils/graphEngine';
 import { NodeItem } from './NodeItem';
 import { SpatialFrameItem } from './SpatialFrameItem';
 import { NODE_DEFINITIONS } from '../constants/nodes';
-import { Plus, X } from 'lucide-react';
+import { Plus, X, Trash2, RotateCcw } from 'lucide-react';
 
 interface CanvasProps {
   canvasMode: CanvasMode;
@@ -45,6 +45,7 @@ interface CanvasProps {
   currentCheckpoint?: string;
   onAutoFixCheckpoint?: (checkpoint: string) => void;
   onOpenModelHub?: (category?: any) => void;
+  onClearCanvas?: (type: 'all' | 'nodes' | 'frames' | 'reset-default') => void;
 }
 
 export const Canvas: React.FC<CanvasProps> = ({
@@ -77,6 +78,7 @@ export const Canvas: React.FC<CanvasProps> = ({
   currentCheckpoint,
   onAutoFixCheckpoint,
   onOpenModelHub,
+  onClearCanvas,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isPanning, setIsPanning] = useState(false);
@@ -400,9 +402,9 @@ export const Canvas: React.FC<CanvasProps> = ({
         }}
         className="absolute inset-0 pointer-events-none"
       >
-        {/* SVG Connections Layer (Visible in both or prominent in Graph mode) */}
+        {/* SVG Connections Layer (Visible only in Graph mode) */}
         <svg className={`absolute inset-0 w-[50000px] h-[50000px] overflow-visible pointer-events-none transition-opacity duration-300 ${
-          canvasMode === 'graph' ? 'opacity-100' : 'opacity-40 hover:opacity-100'
+          canvasMode === 'graph' ? 'opacity-100 z-10' : 'opacity-0 hidden pointer-events-none'
         }`}>
           {connections.map((conn) => {
             const start = getSocketCanvasPosition(conn.fromNodeId, conn.fromSocketId, true);
@@ -472,7 +474,7 @@ export const Canvas: React.FC<CanvasProps> = ({
 
         {/* Spatial Generation Frames Layer */}
         <div className={`absolute inset-0 pointer-events-none transition-opacity duration-300 ${
-          canvasMode === 'spatial' ? 'opacity-100 z-20' : 'opacity-85 z-10'
+          canvasMode === 'spatial' ? 'opacity-100 z-20 pointer-events-auto' : 'opacity-0 pointer-events-none hidden z-0'
         }`}>
           {spatialFrames.map((frame) => (
             <div key={frame.id} className="pointer-events-auto">
@@ -500,7 +502,7 @@ export const Canvas: React.FC<CanvasProps> = ({
 
         {/* ComfyUI Nodes Layer */}
         <div className={`absolute inset-0 pointer-events-none transition-opacity duration-300 ${
-          canvasMode === 'graph' ? 'opacity-100 z-20' : 'opacity-85 z-10'
+          canvasMode === 'graph' ? 'opacity-100 z-20 pointer-events-auto' : 'opacity-0 pointer-events-none hidden z-0'
         }`}>
           {nodes.map((node) => (
             <div key={node.id} className="pointer-events-auto">
@@ -569,6 +571,42 @@ export const Canvas: React.FC<CanvasProps> = ({
               </button>
             ))}
           </div>
+
+          {onClearCanvas && (
+            <div className="pt-2 border-t border-[#232530] space-y-1">
+              <button
+                onClick={() => {
+                  if (confirm('确定一键清空全部画布内容吗？')) {
+                    onClearCanvas('all');
+                    setContextMenu(null);
+                  }
+                }}
+                className="w-full text-left px-3 py-1.5 rounded-lg hover:bg-rose-950/40 text-rose-300 transition-colors flex items-center justify-between"
+              >
+                <div className="flex items-center gap-1.5">
+                  <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                  <span className="font-semibold">一键清空画布</span>
+                </div>
+                <span className="text-[9px] font-mono text-rose-400">Clear All</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  if (confirm('确定恢复标准默认工作流吗？')) {
+                    onClearCanvas('reset-default');
+                    setContextMenu(null);
+                  }
+                }}
+                className="w-full text-left px-3 py-1.5 rounded-lg hover:bg-cyan-950/40 text-cyan-300 transition-colors flex items-center justify-between"
+              >
+                <div className="flex items-center gap-1.5">
+                  <RotateCcw className="w-3.5 h-3.5 text-cyan-400" />
+                  <span className="font-semibold">重置为默认工作流</span>
+                </div>
+                <span className="text-[9px] font-mono text-cyan-400">Default</span>
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -1596,18 +1596,33 @@ export default function App() {
     }
   };
 
-  const handleDeleteHistoryItem = async (id: string) => {
-    setHistory((prev) => prev.filter((item) => item.id !== id));
+  const handleDeleteHistoryItem = async (id: string, url?: string) => {
+    setHistory((prev) => prev.filter((item) => item.id !== id && (!url || (item.url !== url && item.imageUrl !== url))));
     try {
       const { deleteHistoryItem, fetchHistory } = await import('./services/api');
       const ok = await deleteHistoryItem(id);
-      if (ok) {
-        const updated = await fetchHistory();
-        setHistory(updated);
+      if (!ok && url) {
+        await deleteHistoryItem(url);
       }
+      const updated = await fetchHistory();
+      if (updated) setHistory(updated);
       setToast({ type: 'success', title: '资产已删除', message: '已从服务器和资产库永久移除' });
     } catch (e) {
       console.error('Delete history item error:', e);
+    }
+  };
+
+  const handleDeleteBatchHistoryItems = async (ids: string[]) => {
+    const idSet = new Set(ids);
+    setHistory((prev) => prev.filter((item) => !idSet.has(item.id)));
+    try {
+      const { deleteHistoryBatch, fetchHistory } = await import('./services/api');
+      await deleteHistoryBatch(ids);
+      const updated = await fetchHistory();
+      if (updated) setHistory(updated);
+      setToast({ type: 'success', title: '批量资产已删除', message: `已成功移除 ${ids.length} 项生成资产` });
+    } catch (e) {
+      console.error('Batch delete history items error:', e);
     }
   };
 
@@ -1761,6 +1776,7 @@ export default function App() {
         }}
         isExecuting={isExecuting}
         executionStatusText={executionStatusText}
+        onClearCanvas={handleClearCanvas}
       />
 
       {/* Compute current active checkpoint for LoRA compatibility checks */}
@@ -1839,6 +1855,7 @@ export default function App() {
               setModelHubCategory(cat || 'all');
               setIsModelHubOpen(true);
             }}
+            onClearCanvas={handleClearCanvas}
           />
         );
       })()}
@@ -1866,6 +1883,7 @@ export default function App() {
         onAddSpatialFrame={handleAddSpatialFrame}
         onAddNode={handleAddNode}
         onOpenCivitai={() => setIsCivitaiOpen(true)}
+        onClearCanvas={handleClearCanvas}
       />
 
       {/* Floating ComfyUI Parameter Inspector Drawer */}
@@ -2288,6 +2306,13 @@ export default function App() {
         onUseAsReference={handleUseAsReference}
         onPreviewImage={setPreviewImageUrl}
         onDeleteAsset={handleDeleteHistoryItem}
+        onDeleteBatchAssets={handleDeleteBatchHistoryItems}
+        onClearAllHistory={handleClearHistory}
+        onRefreshHistory={async () => {
+          const { fetchHistory } = await import('./services/api');
+          const h = await fetchHistory();
+          if (h) setHistory(h);
+        }}
       />
 
       {/* Real-time Floating Notification Toast */}

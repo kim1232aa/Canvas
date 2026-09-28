@@ -12,6 +12,8 @@ import {
   Cpu,
   Video,
   Image as ImageIcon,
+  Trash2,
+  RotateCcw,
 } from 'lucide-react';
 import { CanvasMode } from '../types/graph';
 
@@ -27,6 +29,7 @@ interface ModernToolDockProps {
   onAddSpatialFrame: () => void;
   onAddNode: (type: string) => void;
   onOpenCivitai: () => void;
+  onClearCanvas?: (type: 'all' | 'nodes' | 'frames' | 'reset-default') => void;
 }
 
 export const ModernToolDock: React.FC<ModernToolDockProps> = ({
@@ -41,21 +44,27 @@ export const ModernToolDock: React.FC<ModernToolDockProps> = ({
   onAddSpatialFrame,
   onAddNode,
   onOpenCivitai,
+  onClearCanvas,
 }) => {
   const [showAddNodeMenu, setShowAddNodeMenu] = useState(false);
+  const [showClearMenu, setShowClearMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const clearRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as HTMLElement)) {
         setShowAddNodeMenu(false);
       }
+      if (clearRef.current && !clearRef.current.contains(e.target as HTMLElement)) {
+        setShowClearMenu(false);
+      }
     };
-    if (showAddNodeMenu) {
+    if (showAddNodeMenu || showClearMenu) {
       document.addEventListener('mousedown', handleClickOutside);
     }
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showAddNodeMenu]);
+  }, [showAddNodeMenu, showClearMenu]);
 
   const nodeGroups = [
     {
@@ -161,6 +170,95 @@ export const ModernToolDock: React.FC<ModernToolDockProps> = ({
           <Sparkles className="w-3.5 h-3.5 text-purple-400" />
           <span>LoRA 模型中心</span>
         </button>
+
+        {/* Clear Canvas Quick Trigger */}
+        {onClearCanvas && (
+          <div className="relative" ref={clearRef}>
+            <button
+              onClick={() => setShowClearMenu(!showClearMenu)}
+              className="px-2.5 py-1.5 rounded-xl bg-rose-950/40 hover:bg-rose-950/80 border border-rose-800/50 text-rose-300 hover:text-rose-200 font-semibold flex items-center gap-1.5 transition-colors"
+              title="一键清空画布 / 重置工作流"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+              <span>清空</span>
+            </button>
+
+            {showClearMenu && (
+              <div className="absolute bottom-12 left-1/2 -translate-x-1/2 w-60 bg-[#161722] border border-[#2e2b3c] rounded-2xl p-2 shadow-2xl space-y-1 animate-in fade-in slide-in-from-bottom-2 duration-150 z-50 text-xs">
+                <div className="px-2 py-1 border-b border-[#252433] text-[11px] font-bold text-slate-300 flex items-center justify-between">
+                  <span>画布清理选项</span>
+                  <span className="text-[9px] font-mono text-rose-400">一键生效</span>
+                </div>
+
+                <button
+                  onClick={() => {
+                    if (confirm('确定一键清空整个画布（包括所有节点、连线与画板）吗？')) {
+                      onClearCanvas('all');
+                      setShowClearMenu(false);
+                    }
+                  }}
+                  className="w-full text-left px-2.5 py-1.5 rounded-xl hover:bg-rose-950/50 text-rose-300 transition-colors flex items-center gap-2"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                  <div>
+                    <div className="font-semibold">一键清空全部</div>
+                    <div className="text-[9px] text-slate-400">清空所有节点、连线与空间画板</div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => {
+                    if (confirm('确定清空所有 ComfyUI 节点与连线吗？')) {
+                      onClearCanvas('nodes');
+                      setShowClearMenu(false);
+                    }
+                  }}
+                  className="w-full text-left px-2.5 py-1.5 rounded-xl hover:bg-[#222432] text-slate-300 transition-colors flex items-center gap-2"
+                >
+                  <Layers className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                  <div>
+                    <div className="font-semibold text-white">仅清空节点连线</div>
+                    <div className="text-[9px] text-slate-400">保留空间画板，清空全部节点</div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => {
+                    if (confirm('确定清空所有空间画板取景框吗？')) {
+                      onClearCanvas('frames');
+                      setShowClearMenu(false);
+                    }
+                  }}
+                  className="w-full text-left px-2.5 py-1.5 rounded-xl hover:bg-[#222432] text-slate-300 transition-colors flex items-center gap-2"
+                >
+                  <LayoutGrid className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                  <div>
+                    <div className="font-semibold text-white">仅清空空间画板</div>
+                    <div className="text-[9px] text-slate-400">保留节点连线，清空全部画板</div>
+                  </div>
+                </button>
+
+                <div className="pt-1 border-t border-[#252433]">
+                  <button
+                    onClick={() => {
+                      if (confirm('确定恢复为标准默认工作流模板吗？')) {
+                        onClearCanvas('reset-default');
+                        setShowClearMenu(false);
+                      }
+                    }}
+                    className="w-full text-left px-2.5 py-1.5 rounded-xl hover:bg-cyan-950/40 text-cyan-300 transition-colors flex items-center gap-2"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                    <div>
+                      <div className="font-semibold">重置为默认工作流</div>
+                      <div className="text-[9px] text-slate-400">恢复标准 FLUX.1 + SDXL 预设</div>
+                    </div>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Vertical divider */}
         <div className="h-5 w-[1px] bg-[#272935]" />
