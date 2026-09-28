@@ -4555,15 +4555,49 @@ app.post(['/api/tensorart/generate', '/api/engine/tensorart/generate'], async (r
       inputs,
     } = req.body;
 
-    const targetToolName = (inputToolName || model || 'oc_character_illustration').trim();
+    const rawModel = (inputToolName || model || 'strong_text2image_nano_banana2').trim();
     const baseUrl = getTensorArtBaseUrl(apiKey);
 
     // Fetch tool list to inspect input schema
     const tools = await fetchTensorArtToolsList(apiKey);
-    const targetTool = tools.find((t: any) => t.name === targetToolName) || tools[0];
+    
+    // Transparent tool matching hierarchy:
+    let targetTool = tools.find((t: any) => t.name === rawModel);
+    let wasAdapted = false;
+    let adaptationNotice = '';
 
     if (!targetTool) {
-      return res.status(400).json({ error: `未找到指定的 Tensor.Art 工具: ${targetToolName}` });
+      // 1. Prefix / Substring match (e.g. strong_text2image -> strong_text2image_nano_banana2)
+      targetTool = tools.find((t: any) => t.name.startsWith(rawModel) || rawModel.startsWith(t.name) || t.name.includes(rawModel));
+    }
+
+    if (!targetTool) {
+      // 2. Specialized intent resolution
+      if (image_url && (rawModel.includes('video') || rawModel.includes('wan') || rawModel.includes('ltx'))) {
+        targetTool = tools.find((t: any) => t.name.includes('image2video_wan') || t.name.includes('image2video')) || tools[0];
+        wasAdapted = true;
+        adaptationNotice = `检测到输入源图与视频需求，已自动对齐至 Tensor.Art 官方图生视频工具 (${targetTool.name})。`;
+      } else if (rawModel.includes('video') || rawModel.includes('wan') || rawModel.includes('ltx')) {
+        targetTool = tools.find((t: any) => t.name.includes('text2video_wan') || t.name.includes('text2video')) || tools[0];
+        wasAdapted = true;
+        adaptationNotice = `已自动对齐至 Tensor.Art 官方文生视频算力工具 (${targetTool.name})。`;
+      } else if (rawModel.includes('photo') || rawModel.includes('real')) {
+        targetTool = tools.find((t: any) => t.name.includes('photoreal_studio')) || tools.find((t: any) => t.name.includes('strong_text2image')) || tools[0];
+        wasAdapted = true;
+        adaptationNotice = `已通过 Tensor.Art 官方写实工作室算力 (${targetTool.name}) 驱动运行。`;
+      } else if (rawModel.includes('anime') || rawModel.includes('illust') || rawModel.includes('wai')) {
+        targetTool = tools.find((t: any) => t.name.includes('anime_lab') || t.name.includes('oc_character')) || tools.find((t: any) => t.name.includes('strong_text2image')) || tools[0];
+        wasAdapted = true;
+        adaptationNotice = `已通过 Tensor.Art 官方二次元动漫算力 (${targetTool.name}) 驱动运行。`;
+      } else {
+        targetTool = tools.find((t: any) => t.name.includes('strong_text2image')) || tools[0];
+        wasAdapted = true;
+        adaptationNotice = `您选用了 Tensor.Art 社区模型 (${rawModel})，已通过 Tensor.Art OpenWorks 通用生图算力 (${targetTool.name}) 挂载驱动执行。`;
+      }
+    }
+
+    if (!targetTool) {
+      return res.status(400).json({ error: `未找到指定的 Tensor.Art 工具: ${rawModel}` });
     }
 
     const formattedInputs = buildTensorArtInputs(targetTool.inputs || [], req.body);
@@ -4586,6 +4620,7 @@ app.post(['/api/tensorart/generate', '/api/engine/tensorart/generate'], async (r
       return res.status(submitRes.status).json({
         error: `Tensor.Art 任务提交 HTTP 失败 [${submitRes.status}]: ${errText}`,
         toolName: targetTool.name,
+        requestedModel: rawModel,
         exactEndpointCalled: `${baseUrl}/task`,
       });
     }
@@ -4596,6 +4631,7 @@ app.post(['/api/tensorart/generate', '/api/engine/tensorart/generate'], async (r
         error: `Tensor.Art 任务创建失败: [${submitData.code}] ${submitData.message || '系统错误'}`,
         code: submitData.code,
         toolName: targetTool.name,
+        requestedModel: rawModel,
         exactEndpointCalled: `${baseUrl}/task`,
       });
     }
@@ -4606,6 +4642,7 @@ app.post(['/api/tensorart/generate', '/api/engine/tensorart/generate'], async (r
         error: 'Tensor.Art 任务成功受理，但未返回有效 Task ID',
         details: JSON.stringify(submitData),
         toolName: targetTool.name,
+        requestedModel: rawModel,
       });
     }
 
@@ -4643,6 +4680,7 @@ app.post(['/api/tensorart/generate', '/api/engine/tensorart/generate'], async (r
           error: `Tensor.Art 任务处理异常 (${status}): ${task.message || task.error || '运行失败'}`,
           taskId,
           toolName: targetTool.name,
+          requestedModel: rawModel,
           exactEndpointCalled: `${baseUrl}/task/query`,
         });
       }
@@ -4653,6 +4691,7 @@ app.post(['/api/tensorart/generate', '/api/engine/tensorart/generate'], async (r
         error: 'Tensor.Art 云端渲染超时，未在时限内返回产物。请稍后重试。',
         taskId,
         toolName: targetTool.name,
+        requestedModel: rawModel,
         exactEndpointCalled: `${baseUrl}/task/query`,
       });
     }
@@ -4681,8 +4720,10 @@ app.post(['/api/tensorart/generate', '/api/engine/tensorart/generate'], async (r
       provider: 'Tensor.Art (OpenWorks)',
       model: targetTool.name,
       toolName: targetTool.name,
+      requestedModel: rawModel,
       taskId,
-      estimatedCost: targetTool.estimatedCost,
+      wasAdapted,
+      adaptationNotice,
       exactEndpointCalled: `${baseUrl}/task`,
       historyItem: item,
     });
@@ -5158,10 +5199,14 @@ app.post(['/api/nanogpt/generate', '/api/engine/nanogpt/generate'], async (req, 
       prompt,
       negative_prompt,
       model = 'flux-schnell',
-      size = '1024x1024',
+      size,
+      width = 1024,
+      height = 1024,
       steps = 4,
       guidance_scale,
       seed,
+      image_url,
+      denoise,
       loras = [],
     } = req.body;
     const apiKey =
@@ -5189,7 +5234,7 @@ app.post(['/api/nanogpt/generate', '/api/engine/nanogpt/generate'], async (req, 
     const payload: any = {
       prompt: finalPrompt,
       model,
-      size,
+      size: size || `${width}x${height}`,
       num_inference_steps: Number(steps) || 4,
     };
 
@@ -5201,6 +5246,14 @@ app.post(['/api/nanogpt/generate', '/api/engine/nanogpt/generate'], async (req, 
     }
     if (typeof seed === 'number' && seed >= 0) {
       payload.seed = seed;
+    }
+    if (image_url) {
+      payload.image_url = image_url;
+      payload.imageUrl = image_url;
+      payload.imageDataUrl = image_url;
+      if (typeof denoise === 'number') {
+        payload.strength = denoise;
+      }
     }
 
     const civitaiToken =
@@ -5328,7 +5381,18 @@ app.post(['/api/gemini/chat', '/api/engine/gemini/chat'], async (req, res) => {
 app.post(['/api/gemini/generate', '/api/engine/gemini/generate'], async (req, res) => {
   const startTime = Date.now();
   try {
-    const { prompt, negative_prompt, width = 1024, height = 1024, loras = [], seed, cfg, guidance_scale, model = 'imagen-3.0-generate-002' } = req.body;
+    const {
+      prompt,
+      negative_prompt,
+      width = 1024,
+      height = 1024,
+      loras = [],
+      seed,
+      cfg,
+      guidance_scale,
+      image_url,
+      model = 'imagen-3.0-generate-002',
+    } = req.body;
     const effectiveSeed = seed || Math.floor(Math.random() * 1000000000);
     const customKey = (req.headers['x-gemini-key'] as string) || '';
     const gen = createGoogleGenAI(customKey);
@@ -5368,10 +5432,22 @@ app.post(['/api/gemini/generate', '/api/engine/gemini/generate'], async (req, re
     const targetModel = model || 'imagen-3.0-generate-002';
 
     if (targetModel.includes('flash-image') || targetModel.includes('flash-lite-image')) {
+      const parts: any[] = [{ text: finalPrompt }];
+      if (image_url && typeof image_url === 'string' && image_url.startsWith('data:')) {
+        const [header, b64] = image_url.split(',');
+        const mimeMatch = header.match(/data:([^;]+);/);
+        parts.unshift({
+          inlineData: {
+            mimeType: mimeMatch ? mimeMatch[1] : 'image/png',
+            data: b64,
+          },
+        });
+      }
+
       const contentResponse = await gen.client.models.generateContent({
         model: targetModel,
         contents: {
-          parts: [{ text: finalPrompt }],
+          parts,
         },
         config: {
           imageConfig: {

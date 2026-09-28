@@ -77,6 +77,7 @@ export class GeminiDriver extends BaseEngineDriver {
         height: params.height || 1024,
         cfg: params.cfg,
         seed: params.seed,
+        image_url: params.image_url,
         loras: (params.loras || []).map((l) => ({
           name: l.name,
           strength: l.strength ?? l.modelStrength ?? 0.8,

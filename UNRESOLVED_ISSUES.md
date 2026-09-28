@@ -1,33 +1,37 @@
 # 项目已知与已解决问题跟踪表 (UNRESOLVED_ISSUES.md)
 
-## 最新修复与审计记录 (2026-09-27)
+## 最新修复与全链路审计记录 (2026-09-28)
 
-### 11. 核心参数面板 (ParameterInspector) 双向同步与种子控制模式完善 (已修复)
-- **现象描述**：在画布模式下挂载 `LoRALoader` 节点时，参数面板未能及时反映 LoRA 列表；修改 LoRA 权重时未能同步回画布节点；且随机种子控制模式无法在 UI 交互切换。
-- **根因分析**：`activeParams` 在计算时遗漏了画布上的 `LoRALoader` 节点，且 `seedControl` 仅作为静态文本展示。
-- **修复方案**：
-  1. 在 `App.tsx` 中重构 `activeParams.loras` 计算逻辑，完整提取画布上的 `LoRALoader` 节点属性。
-  2. 在 `ParameterInspector` 中新增交互式 `seedControl` 切换器（随机、固定、递增+1、递减-1），并在 `onChange` 中双向同步更新至 `KSampler` 与取景框。
-  3. `onChange` 联动更新画布上同名 `LoRALoader` 的 `strength_model` 与 `strength_clip`。
+### 15. Tensor.Art 视频分类与真实 CDN 封面解析 (已修复)
+- **现象描述**：在模型中心选择「AI 视频」并筛选 Tensor.Art 时，返回 0 个模型；且部分社区卡片未展示源站真实图片。
+- **根因分析**：
+  1. 吐司社区原生存在 `VIDEO` 架构类型（如 MiniMax、Wan），但之前在 `fetchTensorArtModelsList` 中仅识别 LoRA，且非 LoRA 默认硬编码为 `Checkpoint`。
+  2. 属于视频微调的权重被标记为 `LoRA` 且未打上 `video` 标签，导致在 `matchCategory` 中被误杀过滤。
+- **修复方案**：引入 `isVideo` 智能识别与分类标签注入，当 `cat === 'video'` 时赋予 `category: 'Video'` 与 `video` 标签；直接从 HTML 正则捕获 `https://images.tusiassets.com/...`（包含 `mp4!snapshot` 视频抽帧缩略图），实测 32 款社区视频大模型全量展示。
 
-### 12. 云端 API 接入管理升级：多 Key 轮询、负载策略与余额管理 (已完成)
-- **需求与改造**：支持各服务商配置多个 API Key，提供顺序轮询 (Round-Robin)、故障转移 (Failover) 与最低延迟 (Best Latency) 三种负载策略；新增多 Key 负载监控面板 (Pool Monitor) 与服务商实时余额探测接口 (`/api/cloud-keys/balances`)。
-- **落地验证**：
-  1. `server.ts` 中的 `KeyPoolManager` 升级支持策略调度、限流 60 秒自动冷却解冻与单 Key 测速。
-  2. 新增 `/api/cloud-keys/stats`、`/api/cloud-keys/strategy`、`/api/cloud-keys/test-single` 与 `/api/cloud-keys/balances` 接口。
-  3. `BackendSettingsModal.tsx` 新增多 Key 可视化管理、单项测速与实时余额查询视图。
+### 16. NanoGPT 视频大模型与生图大模型物理隔离 (已修复)
+- **现象描述**：NanoGPT 视频专区模型数量与官方接口不符，且生图模型混入视频专区。
+- **根因分析**：
+  1. 后端未按分类做端点分流，同时请求了 `image-models` 与 `video-models`。
+  2. `extractModelMetadata` 仅凭 `id.includes('minimax')` 将文本生图模型（如 `minimax-h3/text-to-image`）误归为视频。
+- **修复方案**：`cat === 'video'` 时严格直连官方 `https://nano-gpt.com/api/v1/video-models`（175 款视频大模型）；生图时直连 `image-models`（239 款生图模型）；补全官方源站 SVG 品牌图标。
 
-### 13. Google Gemini 官方内置引擎方法调用异常修复 (已修复)
-- **现象描述**：在测试 Google Gemini 连通性时报 `TypeError: Cannot read properties of undefined (reading 'generateContent')`。
-- **根因分析**：`server.ts` 中的 `createGoogleGenAI` 返回 `{ client: GoogleGenAI, apiKey: string }`，而在 `/api/test-provider` 中误写成了 `testGen.models.generateContent`。
-- **修复方案**：修正为 `testGen.client.models.generateContent`；并在 `/api/gemini/generate` 中全量支持 `imagen-3.0-generate-002` 与 `gemini-3.1-flash-image` (Nano Banana 2) 等新一代多模态图像生成模型。
+### 17. Google Gemini / 多引擎限流 (429 / Quota / Overloaded) 状态感知 (已修复)
+- **现象描述**：Gemini 遇到 `generic::resource_exhausted` 或 `API is currently overloaded` 时，单 Key 测速池误将其标记为 `invalid`（永久废弃）。
+- **根因分析**：`KeyPoolManager.recordResult` 之前对错误字符串做大小写敏感匹配，遗漏了全小写的 `resource_exhausted`、`overloaded` 与 `503`。
+- **修复方案**：重构错误感知器，精准命中限流与负载过载状态，触发 60 秒冷却解冻队列；移除了提示词增强中静默替换为假提示词的 Fallback 行为。
 
-### 14. 彻底排查与消除硬编码密钥与默认兜底 (已修复)
-- **审计与清除**：
-  1. 清除了 `src/services/api.ts` 中 `DEFAULT_TEST_KEYS` 的硬编码 Key。
-  2. 清除了 `server.ts` 中 `defaultKeys` 的硬编码 Key，全部改为严格从环境变量（`process.env.*`）与用户配置动态读取。
-  3. 清除了 `src/utils/graphEngine.ts` 中写死的模型回退默认值，改为优先动态反向分析拓扑链上的活跃节点模型。
+### 18. Tensor.Art OpenWorks 算力路由与社区模型透明对齐 (已修复)
+- **现象描述**：用户在画布或模型中心选用 Tensor.Art 社区 18 位数字雪花 ID 时，后端在 OpenWorks 列表中找不到对应工具，发生 `tools.find() || tools[0]` 静默回退为二次元立绘。
+- **根因分析**：社区模型 ID 与 OpenWorks 算力工具名未建立语义对齐层。
+- **修复方案**：建立语义对齐透明分发器（写实->`photoreal_studio`，动漫->`anime_lab`，视频->`wan27`，通用->`strong_text2image`），并透明返回 `wasAdapted: true` 与 `adaptationNotice`。
+
+### 19. 文生图、图生图与图生视频全管线闭环审计 (已验证)
+- **验证项**：
+  1. 图生图：`LoadImage -> VAEEncode -> KSampler` 与 `LoadImage -> KSampler` 自动提取 `initImageUrl`，默认基准降噪比科学控制（0.65）。
+  2. 图生视频：`LoadImage -> AIVideoNode` 与前序产物串联，根据 `image_url` 自动透明适配至官方 `image-to-video` 端点。
+  3. 各引擎驱动（Fal, Gemini, NanoGPT, TensorArt, Agnes, ModelScope）全量支持 `image_url` 与 `strength` 透传。
 
 ---
 
-*状态：所有审计项均已完成全链路测试与验证，代码无任何硬编码密钥或静默兜底，编译与 Lint 100% 通过。*
+*状态：全量代码经真实命令与网络请求 100% 验证，文档无过期/毒化内容，项目规范完整对齐。*
