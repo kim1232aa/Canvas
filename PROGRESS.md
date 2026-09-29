@@ -67,10 +67,10 @@
 | 编号 | 状态 | 内容 | 文件:行 |
 |:---|:---|:---|:---|
 | U-E1 | 已完成（tsc 待跑） | Gemini 取值表抽成唯一共享声明；服务端校验改为读取它（行为不变，unverified 仍 400）；节点与参数面板中 width/height 置灰并标「该服务商不支持」，aspect_ratio/image_size 下拉按模型取值，未选模型时禁用并提示「请先选择模型」；三种状态样式放在一处 | src/shared/providerFieldSpecs.ts:38,82；server.ts:11,5913-5926；src/components/FieldStatusBadge.tsx:7-23；src/components/GeminiFieldSelect.tsx:7；src/components/NodeItem.tsx:553-600；src/components/ParameterInspector.tsx:140,727-797；src/constants/nodes.ts:2,788-795；src/App.tsx:1735,1748-1749,2010-2011 |
-| U-E2 | 未开始 | unverified 取值透传上游，已下线的模型标「已下线」 | — |
+| U-E2 | 已并入 U2 | 见下方 U2 行 | — |
 | U-E3 | 未开始 | 视频节点未选模型时禁用 | — |
 | U-E4 | 未开始 | 历史面板显示「未填写」 | — |
-| U-E5 | 未开始 | ParameterInspector 切换到 gemini 时不再预设默认模型（ParameterInspector.tsx:317 仍会写 gemini-2.5-flash-image） | — |
+| U-E5 | 已并入 G4 | 见下方 G4 行 | — |
 | U-E6 | 已并入 S6 | test-single 加 admin token 和 base URL 限制 | 见 S6 |
 | S6 | 已完成（tsc 0 错误，运行时待验证） | 修复评审 B1：`/api/test-provider` 与 `/api/cloud-keys/test-single` 挂载 `requireAdminAuth`；两路由不再读取 `x-agnes-base-url`/`x-sensenova-base-url`；`getProviderBaseUrl` 删除 `customBaseUrl` 参数，只读 settings/env；测试只打只读接口：Gemini 从 `generateContent` 改为 `models.list`；Agnes/SenseNova/ModelScope 没有可核实的只读接口，返回 `unsupported`「该服务商没有只读测试接口」，不发请求，不记入 key 池；前端两个测试函数带 admin Bearer，失败时显示真实状态码和响应体 | server.ts:675-684,6186-6192,6276-6280,6312-6336,6371,6393-6402,6461,6478-6486；src/services/api.ts:95-121,754-772；src/components/BackendSettingsModal.tsx:317,336,364 |
 
@@ -91,6 +91,8 @@ S6 测试接口核实（2026-09-29 WebFetch）：
 
 | S7 | 已完成（tsc 0 错误，运行时待验证） | ① 设置弹窗不再自动发请求：输入令牌、打开弹窗、切换页签都不触发请求；stats / balances / settings / 测试只在点击按钮时运行（「验证并拉取云端配置」读 settings 和 stats，「刷新服务端 key 池」「刷新监控指标」读 stats，「查询最新余额」查 balances）；② 删除「载入测试密钥」按钮、`handleFillTestKeys`、`DEFAULT_TEST_KEYS`（含写死的 agnes/sensenova base URL），`getStoredApiKeys` 在没有存储时返回空值；③ key 数量统一：服务端数量只读 `/api/cloud-keys/stats`（key 池 = settings.json + .env 合并去重），每个 key 附带 `source: 'settings' \| 'env'`，响应只含掩码、数量和来源；UI 标注「服务端：设置 / 服务端：.env / 本浏览器」 | server.ts:366-379,429-432,593,609-613；src/services/api.ts:5-27；src/components/BackendSettingsModal.tsx:109-114,131-135,273-288,457,468,479,540-542,613-615,642-652,855-857,997-1004,1107-1122,1133 |
 | P | 已完成（tsc 0 错误，npm test 6 tests pass） | providerSchema 唯一声明模块：src/shared/providerFieldSpecs.ts → src/schemas/providerSchema.ts，覆盖 Gemini（6 模型）、Fal（15 端点）、Civitai（10 生态，sdcpp 8 + comfy 2）。每个字段有 status/source/constraints/providerDefault。导出 valueStatus / modelStatus / getFieldSpec / fieldOptions / listModels 等查询函数。server.ts 和前端 import 已全部迁移。旧文件已删除。vitest 自检：id 不重复、source 都是 https://、providerDefault 在合法范围内、min≤max、查询函数语义正确。 | src/schemas/providerSchema.ts；src/schemas/providerSchema.test.ts；server.ts:11,5923-5931；src/constants/nodes.ts:2,788-790；src/components/GeminiFieldSelect.tsx:2,13-14,37；src/components/FieldStatusBadge.tsx:2,7-16 |
+| U2 | 已完成（tsc 0 错误，npm test 6 pass，运行时待验证） | 「未能核实」≠「不支持」：Gemini seed 从 400 改为透传 `config.seed`（非整数 400），unverified 取值 / 未知模型 / 已下线模型不拦截、原样发送；已知模型上不在 enum 的取值仍 400；negative_prompt/cfg/steps/loras 仍 400；上游失败返回真实状态码 + upstreamBody；响应附 fieldStatus、modelStatus（非 supported 时）；历史只在真实发送时记 seed。Fal 视频按 providerSchema 逐端点判定：unsupported → 400，其余按 schema wire 名转发。ModelScope / NanoGPT 的 loras 改为 unverified 透传。UI：unverified 选项可选并标注；Gemini 模型下拉含 -preview，过下线日标「（已下线）」并显示徽章；GeminiDriver 发送 seed、错误带上游响应体 | server.ts:11,4133-4161,5620-5622,5655,5800-5806,5944-5962,5995-6004,6033,6039,6048-6049,6055-6060；src/components/GeminiFieldSelect.tsx:2,38-40,52-57；src/components/NodeItem.tsx:26,560-563；src/constants/nodes.ts:2,773,787-792；src/engines/drivers/GeminiDriver.ts:15,90-91,104-106,119 |
+| G4 | 已完成（tsc 0 错误，npm test 6 pass） | 切换服务商时不再自动填默认模型（11 个 provider 的硬编码全删，checkpoint 清空）；imagen 架构不再推荐 gemini-2.5-flash-image；Gemini 预设 model/checkpoint 置空，删除 seed/steps/cfg/sampler/scheduler；ComfyParameters 这 5 个字段改为可选（避免用占位值冒充） | src/components/ParameterInspector.tsx:317-318,515；src/utils/baseModelMatcher.ts:159-161；src/constants/presets.ts:3588,3617；src/types/graph.ts:158,160-163 |
 
 S7 三处数量原来的来源：
 - 云端设置列表（Admin 页）：`GET /api/cloud/settings` → 只读 `data/settings.json`。env 里的 FAL_KEY / CIVITAI_API_KEY 不在里面，所以显示「未配置」。

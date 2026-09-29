@@ -3585,7 +3585,7 @@ export const WORKFLOW_PRESETS: WorkflowPreset[] = [
         inputs: NODE_DEFINITIONS['GoogleImagenNode'].inputs,
         outputs: NODE_DEFINITIONS['GoogleImagenNode'].outputs,
         values: {
-          model: 'gemini-2.5-flash-image',
+          model: '',
           aspect_ratio: '1:1',
         },
       },
@@ -3614,13 +3614,8 @@ export const WORKFLOW_PRESETS: WorkflowPreset[] = [
         prompt: 'A majestic crystal dragon hovering over an emerald mountain lake, morning mist, ray tracing reflections, cinematic lighting, 8k masterpiece',
         negativePrompt: '',
         params: {
-          checkpoint: 'gemini-2.5-flash-image',
-          seed: 1234567,
+          checkpoint: '',
           seedControl: 'randomize',
-          steps: 25,
-          cfg: 3.5,
-          sampler: 'euler',
-          scheduler: 'simple',
           denoise: 1.0,
           width: 1024,
           height: 1024,

@@ -156,8 +156,9 @@ export const ARCHITECTURE_PROFILES: Record<ModelArchitectureFamily, BaseArchitec
   imagen: {
     family: 'imagen',
     displayName: 'Google Gemini 生图 (官方直连引擎)',
-    recommendedCheckpoint: 'gemini-2.5-flash-image',
-    alternativeCheckpoints: ['gemini-3.1-flash-image', 'gemini-3-pro-image'],
+    // G4: 不推荐具体 Gemini 模型（由用户在 schema 列出的模型中选择）
+    recommendedCheckpoint: '',
+    alternativeCheckpoints: [],
     recommendedSteps: 28,
     recommendedCfg: 4.0,
     recommendedSampler: 'euler',

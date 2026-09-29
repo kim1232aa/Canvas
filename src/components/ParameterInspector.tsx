@@ -314,18 +314,8 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                   <button
                     key={p.id}
                     onClick={() => {
-                      let defaultModel = params.checkpoint;
-                      if (p.id === 'agnes') defaultModel = 'agnes-image-2.5-flash';
-                      else if (p.id === 'gemini') defaultModel = 'gemini-2.5-flash-image';
-                      else if (p.id === 'sensenova') defaultModel = 'deepseek-v4-flash';
-                      else if (p.id === 'huggingface') defaultModel = 'AIImageStudio/RadianceChromeVoluptuous_z_image_turbo_v2.0';
-                      else if (p.id === 'modelscope') defaultModel = 'Tongyi-MAI/Z-Image-Turbo';
-                      else if (p.id === 'modelscope_ai') defaultModel = 'Tongyi-MAI/Z-Image-Turbo';
-                      else if (p.id === 'nanogpt') defaultModel = 'flux-schnell';
-                      else if (p.id === 'fal') defaultModel = 'fal-ai/krea-2/turbo';
-                      else if (p.id === 'civitai') defaultModel = 'urn:air:krea2:checkpoint:civitai:2726029@3091481';
-                      else if (p.id === 'tensorart') defaultModel = 'strong_text2image_nano_banana2';
-                      update({ targetProvider: p.id as any, checkpoint: defaultModel });
+                      // G4: 切换 provider 时不自动填默认模型 → 清空 checkpoint
+                      update({ targetProvider: p.id as any, checkpoint: '' });
                     }}
                     className={`py-1.5 px-1 rounded-lg text-center font-mono text-[10px] transition-all truncate ${
                       isSelected
@@ -522,7 +512,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
           <div className="space-y-1">
             <div className="flex justify-between text-slate-400 text-[10px] font-mono">
               <span title="提示词引导系数：FLUX 推荐 3.5，SDXL 推荐 7.0~8.0">CFG SCALE (提示词引导系数)</span>
-              <span className="text-cyan-400 font-bold">{params.cfg.toFixed(1)}</span>
+              <span className="text-cyan-400 font-bold">{params.cfg?.toFixed(1) ?? '未设置'}</span>
             </div>
             <input
               type="range"

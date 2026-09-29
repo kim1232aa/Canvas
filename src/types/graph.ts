@@ -155,12 +155,12 @@ export type CanvasMode = 'spatial' | 'graph';
 export interface ComfyParameters {
   checkpoint: string;
   vae?: string;
-  seed: number;
+  seed?: number;
   seedControl: 'randomize' | 'fixed' | 'increment' | 'decrement';
-  steps: number;
-  cfg: number;
-  sampler: string;
-  scheduler: string;
+  steps?: number;
+  cfg?: number;
+  sampler?: string;
+  scheduler?: string;
   denoise: number;
   width: number;
   height: number;
