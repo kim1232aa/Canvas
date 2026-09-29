@@ -2,11 +2,12 @@
 
 ## 0. compat-relays（OpenAI 兼容中转 + Grok 兼容中转）— 2026-09-29
 
-Tip hash: 22baf13ebfdf2cce5d458cd622273b135f21d7a0 (feat commit b28930bd605c4e4800970ca4f8a446143b5774ff; branch compat-relays, not pushed)
+Tip hash: 5db7f912dc2e016f945c76b92c9f5057c8ea1ac7 (feat commit e8c763e3615034a3556cadb4d07d4696f7b1bb2c; branch compat-relays, not pushed)
 
 ### 完成项
 - [x] 新增一等公民 provider：`openai_compat`（仅生图/改图）、`grok_compat`（推理+生图+改图+生视频）
 - [x] 设置面板标签「兼容中转」；可编辑 Base URL + 掩码 Key（Agnes 同款 `resolveProviderAuth`：header > settings > env；无硬编码域名）
+- [x] 设置面板「服务端密钥池」展示掩码 key + 来源徽章；只读「当前服务端 Base URL」（stats.serverBaseUrl，不把 .env URL 写入可编辑浏览器字段）
 - [x] Env：`OPENAI_COMPAT_IMAGE_BASE_URL` / `OPENAI_COMPAT_IMAGE_API_KEY`、`GROK_COMPAT_BASE_URL` / `GROK_COMPAT_API_KEY`（见 `.env.example`；测试密钥在仓库外 `/workspace/canvas-secrets/compat-relays.env`，永不提交）
 - [x] Grok Base URL 缺 `/v1` 时服务端补全；相对视频 URL 相对 base origin 解析
 - [x] providerSchema + UI 灰显「该服务商不支持」：
@@ -14,12 +15,12 @@ Tip hash: 22baf13ebfdf2cce5d458cd622273b135f21d7a0 (feat commit b28930bd605c4e48
   - Grok 兼容：灰 seed / negative / steps / CFG / LoRA / width·height；保留 aspect_ratio / resolution（图 1k/1.5k/2k，视频 480p/720p/1080p）/ 图生图 / 视频 duration
 - [x] 服务端 `rejectUnsupported` 对上述字段 400；绝不静默丢弃或换商
 - [x] Grok 视频 503 `grok_media_no_eligible_account` 原样返回 status+body；`respect_moderation=false` 无 URL 当失败原样报出
-- [x] `npx tsc --noEmit` 0；`npm test` 40/40 pass
+- [x] `npx tsc --noEmit` 0；`npm test` 47/47 pass
 
 ### QA 配置步骤（勿把真实 key 写进仓库）
 ```bash
 cd /workspace/Canvas-ui
-git checkout compat-relays   # tip 22baf13ebfdf2cce5d458cd622273b135f21d7a0
+git checkout compat-relays   # tip 5db7f912dc2e016f945c76b92c9f5057c8ea1ac7
 set -a; source /workspace/canvas-secrets/compat-relays.env; set +a
 # 或在设置面板「OpenAI 兼容中转」「Grok 兼容中转」手填 Base URL + Key
 npm run dev   # 勿占用 3417 / 勿动 Canvas-b1-fix
