@@ -29,6 +29,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+app.set('case sensitive routing', true);
 const PORT = Number(process.env.PORT) || 3000;
 
 // ==========================================
@@ -160,7 +161,10 @@ const isLargeBodyRoute = (req: express.Request): boolean => {
   return LARGE_BODY_ROUTES.has(req.path);
 };
 
-const isApiPath = (p: string): boolean => p === '/api' || p.startsWith('/api/');
+const isApiPath = (p: string): boolean => {
+  const lower = (p || '').toLowerCase();
+  return lower === '/api' || lower.startsWith('/api/');
+};
 
 // Anti CSRF / DNS rebinding: /api only answers requests addressed to this local server.
 const ALLOWED_HOSTS = new Set([`127.0.0.1:${PORT}`, `localhost:${PORT}`]);
@@ -7129,9 +7133,9 @@ async function startServer() {
     });
   }
 
-  const HOST = process.env.HOST || '127.0.0.1';
-  app.listen(PORT, HOST, () => {
-    console.log(`[ComfyCanvas Studio] Server listening on ${HOST}:${PORT}`);
+  const HOST = '127.0.0.1';
+  app.listen(PORT, '127.0.0.1', () => {
+    console.log(`[ComfyCanvas Studio] Server listening on 127.0.0.1:${PORT}`);
   });
 }
 
