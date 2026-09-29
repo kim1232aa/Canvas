@@ -1681,7 +1681,7 @@ app.post('/api/civitai/extract-workflow', async (req, res) => {
           const mData = await mResp.json();
           presetTitle = `Civitai 模型定制：${mData.name}`;
           creatorName = mData.creator?.username || creatorName;
-          const v0 = mData.modelVersions?.[0];
+          const v0 = (mData.modelVersions || [])[0];
           if (v0) {
             if (v0.images?.[0]?.url) previewImage = v0.images[0].url;
             const triggers = v0.trainedWords?.join(', ') || '';
@@ -2897,12 +2897,12 @@ app.get("/api/models", async (req, res) => {
                 provider: "Civitai",
                 type: m.type,
                 category: m.type === "LORA" ? "LoRA" : m.type === "MotionModule" ? "Video" : "Checkpoint",
-                baseModel: m.modelVersions?.[0]?.baseModel || "FLUX.1 / SDXL",
+                baseModel: (m.modelVersions || [])[0]?.baseModel || "FLUX.1 / SDXL",
                 downloads: m.stats?.downloadCount || 0,
                 rating: m.stats?.rating || 0,
-                imageUrl: m.modelVersions?.[0]?.images?.[0]?.url || "",
+                imageUrl: (m.modelVersions || [])[0]?.images?.[0]?.url || "",
                 externalUrl: `https://civitai.com/models/${m.id}`,
-                trainedWords: Array.isArray(m.modelVersions?.[0]?.trainedWords) ? m.modelVersions[0].trainedWords : [],
+                trainedWords: Array.isArray((m.modelVersions || [])[0]?.trainedWords) ? (m.modelVersions || [])[0].trainedWords : [],
               }));
               results.civitai = mappedCivitai;
               const nextCursor = cData.metadata?.nextCursor || null;
@@ -4368,14 +4368,14 @@ async function resolveCivitaiAir(rawInput: string, fallbackType: 'checkpoint' | 
       const candidates = items.slice(0, 10).map((m: any) => ({
         modelId: m.id,
         name: m.name,
-        air: m.modelVersions?.[0]?.air || `${m.id}@${m.modelVersions?.[0]?.id ?? '?'}`,
+        air: (m.modelVersions || [])[0]?.air || `${m.id}@${(m.modelVersions || [])[0]?.id ?? '?'}`,
       }));
       throw new CivitaiAmbiguousError(
         `搜索 "${trimmed}" 返回多个结果，无法确定唯一模型。请从以下候选中选择，或直接使用完整 AIR`,
         candidates,
       );
     }
-    const bestModel = items[0];
+    const bestModel = items.at(0);
     const versions = bestModel?.modelVersions ?? [];
     // 唯一模型但有多个版本 → 同样不取 modelVersions[0]
     if (versions.length > 1) {
