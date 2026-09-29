@@ -6426,8 +6426,9 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`[ComfyCanvas Studio] Server listening on port ${PORT}`);
+  const HOST = process.env.HOST || '127.0.0.1';
+  app.listen(PORT, HOST, () => {
+    console.log(`[ComfyCanvas Studio] Server listening on ${HOST}:${PORT}`);
   });
 }
 
