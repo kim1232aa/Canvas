@@ -46,7 +46,7 @@ import {
   resolveActiveCheckpoint,
   resolveCheckpointForNode,
 } from './utils/resolveCheckpoint';
-import { checkpointNodeTitle } from './utils/providerLabels';
+import { checkpointNodeTitle, spatialFrameTopBarLabel } from './utils/providerLabels';
 
 export default function App() {
   // Canvas View Mode: 'graph' (ComfyUI Node Flow) vs 'spatial' (Modern Freeform Spatial Board)
@@ -1964,7 +1964,14 @@ export default function App() {
       <TopBar
         nodeCount={nodes.length}
         connectionCount={connections.length}
-        projectName={canvases.find((c) => c.id === currentCanvasId)?.name || '活跃画布'}
+        projectName={
+          canvasMode === 'spatial' && activeFrame
+            ? spatialFrameTopBarLabel(
+                activeFrame.params?.targetProvider as string | undefined,
+                activeFrame.params?.checkpoint
+              )
+            : canvases.find((c) => c.id === currentCanvasId)?.name || '活跃画布'
+        }
         canvasMode={canvasMode}
         onChangeCanvasMode={setCanvasMode}
         onOpenSettings={() => setIsSettingsOpen(true)}

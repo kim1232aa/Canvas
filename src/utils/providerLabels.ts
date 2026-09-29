@@ -105,3 +105,19 @@ export function ksamplerNodeTitle(
   if (/^KSampler/i.test(cleaned)) return cleaned.replace(/\s{2,}/g, ' ').trim();
   return cleaned || 'KSampler';
 }
+
+/** Global top-bar pill when a SpatialFrame is active — must match the frame header chips. */
+export function spatialFrameTopBarLabel(
+  provider: string | undefined | null,
+  checkpoint: string | undefined | null
+): string {
+  const prov = String(provider || '').trim();
+  const modelLabel = spatialFrameModelLabel(prov, checkpoint);
+  if (isNonComfyCloudProvider(prov)) {
+    const eng = friendlyProviderLabel(prov) || prov;
+    return `${eng} · ${modelLabel}`;
+  }
+  if (modelLabel && modelLabel !== '未选择模型') return modelLabel;
+  if (prov) return friendlyProviderLabel(prov) || prov;
+  return '未选择模型';
+}

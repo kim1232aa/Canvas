@@ -114,10 +114,10 @@ export const TopBar: React.FC<TopBarProps> = ({
           <button
             onClick={onOpenCanvasManager}
             className="flex items-center gap-1.5 bg-[#14151b]/95 backdrop-blur-xl border border-[#272935] hover:border-cyan-500/50 rounded-xl px-2.5 py-1.5 shadow-xl text-xs text-slate-200 font-medium transition-all hover:bg-[#1e202a]"
-            title="多画布与工程管理中心：切换画板、新建、克隆与另存为"
+            title={projectName ? `${projectName} — 多画布与工程管理中心` : "多画布与工程管理中心：切换画板、新建、克隆与另存为"}
           >
             <FolderOpen className="w-3.5 h-3.5 text-cyan-400" />
-            <span className="max-w-[120px] truncate">{projectName}</span>
+            <span className="max-w-[220px] truncate">{projectName}</span>
             <span className="text-[10px] text-slate-500 font-mono">▾</span>
           </button>
         )}

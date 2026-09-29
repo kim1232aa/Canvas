@@ -7,6 +7,7 @@ import {
   ksamplerNodeTitle,
   PROVIDER_TITLE_LABEL,
   spatialFrameModelLabel,
+  spatialFrameTopBarLabel,
 } from './providerLabels';
 
 describe('checkpointNodeTitle', () => {
@@ -76,5 +77,16 @@ describe('ksamplerNodeTitle — omit step advertising when steps unsupported', (
   it('keeps non-step titles even when steps unsupported', () => {
     expect(ksamplerNodeTitle('KSampler (Tensor.Art 调度)', true)).toBe('KSampler (Tensor.Art 调度)');
     expect(ksamplerNodeTitle('KSampler', true)).toBe('KSampler');
+  });
+});
+
+describe('spatialFrameTopBarLabel', () => {
+  it('matches Gemini frame header: engine · model, never Z-Image leftover', () => {
+    expect(spatialFrameTopBarLabel('gemini', 'gemini-2.5-flash-image')).toBe(
+      'Gemini · gemini-2.5-flash-image'
+    );
+    expect(spatialFrameTopBarLabel('gemini', 'Tongyi-MAI/Z-Image-Turbo')).toBe(
+      'Gemini · 未选择模型'
+    );
   });
 });
