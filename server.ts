@@ -1,3 +1,4 @@
+import { HfInference } from '@huggingface/inference';
 import express from 'express';
 import crypto from 'crypto';
 import dns from 'dns';
@@ -12,7 +13,6 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { GoogleGenAI } from '@google/genai';
-import { HfInference } from '@huggingface/inference';
 import { Agent, setGlobalDispatcher } from 'undici';
 
 dotenv.config();
@@ -31,6 +31,97 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
+
+// ==========================================
+// Upstream request log: one JSON line per provider call → logs/upstream.log
+// Never logs keys, Authorization headers, or query strings that carry tokens.
+// ==========================================
+const UPSTREAM_LOG_FILE = path.join(__dirname, 'logs', 'upstream.log');
+
+const maskSecret = (key: string): string => {
+  if (!key) return '';
+  if (key.length <= 8) return `${key.substring(0, 2)}***${key.substring(key.length - 2)}`;
+  return `${key.substring(0, 4)}...${key.substring(key.length - 4)}`;
+};
+
+interface UpstreamMeta {
+  provider: string;
+  route: string; // this server's route (req.path)
+  model?: string; // model actually sent upstream
+  key?: string; // only its masked form is logged
+}
+
+const sanitizeUpstreamUrl = (raw: string): string => {
+  try {
+    const u = new URL(raw);
+    const q = /token|key|auth|secret|sig|credential|password/i.test(u.search) ? '' : u.search;
+    return `${u.host}${u.pathname}${q}`;
+  } catch {
+    return raw.split('?')[0];
+  }
+};
+
+const logUpstream = (meta: UpstreamMeta, upstream: string, status: number, startedAt: number, error?: string) => {
+  try {
+    fs.mkdirSync(path.dirname(UPSTREAM_LOG_FILE), { recursive: true });
+    fs.appendFileSync(
+      UPSTREAM_LOG_FILE,
+      JSON.stringify({
+        timestamp: new Date().toISOString(),
+        provider: meta.provider,
+        route: meta.route,
+        upstream,
+        model: meta.model ?? null,
+        maskedKey: meta.key ? maskSecret(meta.key) : null,
+        status,
+        durationMs: Date.now() - startedAt,
+        error: error ?? null,
+      }) + '\n'
+    );
+  } catch (e: any) {
+    console.error('upstream.log 写入失败:', e.message);
+  }
+};
+
+// All provider HTTP calls go through here.
+async function upstreamFetch(meta: UpstreamMeta, url: string, init?: RequestInit): Promise<Response> {
+  const startedAt = Date.now();
+  const upstream = sanitizeUpstreamUrl(url);
+  try {
+    const res = await fetch(url, init);
+    let error: string | undefined;
+    if (!res.ok) {
+      error = `HTTP ${res.status}: ${(await res.clone().text().catch(() => '')).slice(0, 500)}`;
+    }
+    logUpstream(meta, upstream, res.status, startedAt, error);
+    return res;
+  } catch (e: any) {
+    logUpstream(meta, upstream, 0, startedAt, e?.message || String(e));
+    throw e;
+  }
+}
+
+// Owner rule: params a provider does not support → explicit 400, never silently dropped.
+const isProvided = (v: any) => v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && v.length === 0);
+const rejectUnsupported = (res: express.Response, provider: string, body: any, fields: string[]): boolean => {
+  const bad = fields.filter((f) => isProvided(body?.[f]));
+  if (bad.length === 0) return false;
+  res.status(400).json({ error: `该服务商不支持: ${bad.join(', ')}（${provider}）`, unsupported: bad });
+  return true;
+};
+
+// SDK calls (@google/genai, @huggingface/inference) are logged through the same sink.
+async function upstreamSdkCall<T>(meta: UpstreamMeta & { upstream: string }, fn: () => Promise<T>): Promise<T> {
+  const startedAt = Date.now();
+  try {
+    const out = await fn();
+    logUpstream(meta, meta.upstream, 200, startedAt);
+    return out;
+  } catch (e: any) {
+    logUpstream(meta, meta.upstream, Number(e?.status || e?.statusCode || e?.httpResponse?.status || 0), startedAt, e?.message || String(e));
+    throw e;
+  }
+}
 
 // Request body limit configuration:
 // Large limit (50mb) is reserved strictly for routes that legitimately process image/video payloads or full canvas graphs.
@@ -147,13 +238,16 @@ interface GeneratedItem {
   imageUrl?: string;
   videoUrl?: string;
   mediaType?: string;
-  prompt: string;
+  prompt: string | null;
   negativePrompt?: string;
-  provider: string;
-  model: string;
-  seed: number;
-  steps: number;
-  cfg: number;
+  provider: string | null;
+  actualProvider?: string | null;
+  model: string | null;
+  actualModel?: string | null;
+  // null = not sent upstream; never fabricate
+  seed: number | null;
+  steps: number | null;
+  cfg: number | null;
   loras?: Array<{ name: string; strength: number; civitaiId?: string }>;
   timestamp: number;
   workflowSnapshot?: any;
@@ -195,6 +289,8 @@ const defaultKeys: Record<string, string> = {
   modelscopeToken: process.env.MODELSCOPE_TOKEN || '',
   modelscopeAiToken: process.env.MODELSCOPE_AI_TOKEN || '',
   geminiKey: process.env.GEMINI_API_KEY || '',
+  agnesBaseUrl: process.env.AGNES_BASE_URL || '',
+  sensenovaBaseUrl: process.env.SENSENOVA_BASE_URL || '',
 };
 
 // Multi-Key Pool & High-Availability Round-Robin Load Balancer
@@ -247,16 +343,16 @@ class KeyPoolManager {
 
   public refreshFromSettings() {
     const providerKeyMap: Record<string, string[]> = {
-      fal: [...this.parseKeyString(cloudSettings['falKey']), ...this.parseKeyString(defaultKeys['falKey']), ...(process.env.FAL_KEY ? [process.env.FAL_KEY] : [])],
-      agnes: [...this.parseKeyString(cloudSettings['agnesKey']), ...this.parseKeyString(defaultKeys['agnesKey']), ...(process.env.AGNES_KEY ? [process.env.AGNES_KEY] : [])],
-      sensenova: [...this.parseKeyString(cloudSettings['sensenovaKey']), ...this.parseKeyString(defaultKeys['sensenovaKey']), ...(process.env.SENSENOVA_KEY ? [process.env.SENSENOVA_KEY] : [])],
-      civitai: [...this.parseKeyString(cloudSettings['civitaiToken']), ...this.parseKeyString(cloudSettings['civitaiKey']), ...this.parseKeyString(defaultKeys['civitaiKey']), ...(process.env.CIVITAI_API_KEY ? [process.env.CIVITAI_API_KEY] : [])],
-      huggingface: [...this.parseKeyString(cloudSettings['hfToken']), ...this.parseKeyString(defaultKeys['hfToken']), ...(process.env.HF_TOKEN ? [process.env.HF_TOKEN] : [])],
-      modelscope: [...this.parseKeyString(cloudSettings['modelscopeToken']), ...this.parseKeyString(defaultKeys['modelscopeToken']), ...(process.env.MODELSCOPE_TOKEN ? [process.env.MODELSCOPE_TOKEN] : [])],
-      modelscope_ai: [...this.parseKeyString(cloudSettings['modelscopeAiToken']), ...this.parseKeyString(defaultKeys['modelscopeAiToken']), ...(process.env.MODELSCOPE_AI_TOKEN ? [process.env.MODELSCOPE_AI_TOKEN] : [])],
-      nanogpt: [...this.parseKeyString(cloudSettings['nanogptKey']), ...this.parseKeyString(defaultKeys['nanogptKey']), ...(process.env.NANOGPT_KEY ? [process.env.NANOGPT_KEY] : [])],
-      tensorart: [...this.parseKeyString(cloudSettings['tensorartKey']), ...this.parseKeyString(defaultKeys['tensorartKey']), ...(process.env.TENSORART_API_KEY ? [process.env.TENSORART_API_KEY] : [])],
-      gemini: [...this.parseKeyString(cloudSettings['geminiKey']), ...this.parseKeyString(defaultKeys['geminiKey']), ...(process.env.GEMINI_API_KEY ? [process.env.GEMINI_API_KEY] : [])],
+      fal: [...this.parseKeyString(cloudSettings['falKey']), ...this.parseKeyString(defaultKeys['falKey'])],
+      agnes: [...this.parseKeyString(cloudSettings['agnesKey']), ...this.parseKeyString(defaultKeys['agnesKey'])],
+      sensenova: [...this.parseKeyString(cloudSettings['sensenovaKey']), ...this.parseKeyString(defaultKeys['sensenovaKey'])],
+      civitai: [...this.parseKeyString(cloudSettings['civitaiToken']), ...this.parseKeyString(cloudSettings['civitaiKey']), ...this.parseKeyString(defaultKeys['civitaiKey'])],
+      huggingface: [...this.parseKeyString(cloudSettings['hfToken']), ...this.parseKeyString(defaultKeys['hfToken'])],
+      modelscope: [...this.parseKeyString(cloudSettings['modelscopeToken']), ...this.parseKeyString(defaultKeys['modelscopeToken'])],
+      modelscope_ai: [...this.parseKeyString(cloudSettings['modelscopeAiToken']), ...this.parseKeyString(defaultKeys['modelscopeAiToken'])],
+      nanogpt: [...this.parseKeyString(cloudSettings['nanogptKey']), ...this.parseKeyString(defaultKeys['nanogptKey'])],
+      tensorart: [...this.parseKeyString(cloudSettings['tensorartKey']), ...this.parseKeyString(defaultKeys['tensorartKey'])],
+      gemini: [...this.parseKeyString(cloudSettings['geminiKey']), ...this.parseKeyString(defaultKeys['geminiKey'])],
     };
 
     Object.entries(providerKeyMap).forEach(([prov, keys]) => {
@@ -280,6 +376,10 @@ class KeyPoolManager {
       });
       this.pools.set(prov, updatedList);
     });
+  }
+
+  public getKeys(prov: string): string[] {
+    return (this.pools.get(prov) || []).map((k) => k.key);
   }
 
   public getNextKey(prov: string, customHeaderKey?: string): string {
@@ -397,7 +497,6 @@ class KeyPoolManager {
         invalidKeys: keys.filter((k) => k.status === 'invalid').length,
         strategy: this.getStrategy(prov),
         keys: keys.map((k) => ({
-          key: k.key,
           maskedKey: k.maskedKey,
           status: k.status,
           totalCalls: k.totalCalls,
@@ -423,13 +522,17 @@ const recordHistoryItem = (item: Partial<GeneratedItem>): GeneratedItem => {
     id: `hist_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
     timestamp: Date.now(),
     url: item.url || '',
-    prompt: item.prompt || 'Untitled Generation',
+    prompt: item.prompt ?? null,
     negativePrompt: item.negativePrompt || '',
-    provider: item.provider || 'ComfyUI Engine',
-    model: item.model || 'Unknown Model',
-    seed: item.seed ?? Math.floor(Math.random() * 1000000000),
-    steps: item.steps ?? 28,
-    cfg: item.cfg ?? 4.5,
+    // Y1: 未知就 null，绝不用 'ComfyUI Engine' 这类假标签
+    provider: item.provider ?? null,
+    actualProvider: item.actualProvider ?? item.provider ?? null,
+    model: item.model ?? null,
+    actualModel: item.actualModel ?? item.model ?? null,
+    // null = not sent upstream. Never fabricate random seeds or default steps/cfg.
+    seed: item.seed ?? null,
+    steps: item.steps ?? null,
+    cfg: item.cfg ?? null,
     loras: item.loras || [],
     ...item,
   };
@@ -449,6 +552,48 @@ if (generationHistory.length === 0) {
 if (!cloudSettings || Object.keys(cloudSettings).length === 0) {
   cloudSettings = {};
   writeJsonFile(SETTINGS_FILE, cloudSettings);
+}
+
+// Agnes / SenseNova key + base URL resolution (A1/A2).
+// Key: header (comma-separated rotates) > pool (settings + env, comma-separated). Base URL: header > settings > env. No hardcoded default.
+// A custom base URL requires a custom key — server keys are never sent to a user-supplied host.
+function resolveProviderAuth(
+  req: express.Request,
+  provider: 'agnes' | 'sensenova'
+): { apiKey: string; baseUrl: string; error?: string } {
+  const headerPrefix = provider === 'agnes' ? 'x-agnes' : 'x-sensenova';
+  const settingsBaseName = provider === 'agnes' ? 'agnesBaseUrl' : 'sensenovaBaseUrl';
+  const envName = provider === 'agnes' ? 'AGNES' : 'SENSENOVA';
+
+  const customBaseUrl = (req.headers[`${headerPrefix}-base-url`] as string)?.trim() || '';
+  const customKey = (req.headers[`${headerPrefix}-key`] as string)?.trim() || '';
+
+  if (customBaseUrl && !customKey) {
+    return { apiKey: '', baseUrl: '', error: `使用自定义 base URL (${headerPrefix}-base-url) 时必须同时提供自定义 API Key (${headerPrefix}-key)，禁止回退使用服务端密钥。` };
+  }
+  const baseUrl = String(customBaseUrl || cloudSettings[settingsBaseName] || defaultKeys[settingsBaseName] || '').replace(/\/+$/, '');
+  if (!baseUrl) {
+    return { apiKey: '', baseUrl: '', error: `未配置 ${provider} Base URL（${envName}_BASE_URL / 设置面板 / ${headerPrefix}-base-url）。` };
+  }
+  const apiKey = keyPoolManager.getNextKey(provider, customKey || undefined);
+  if (!apiKey) {
+    return { apiKey: '', baseUrl, error: `未配置 ${provider} API 密钥（${envName}_KEY / 设置面板 / ${headerPrefix}-key）。` };
+  }
+  return { apiKey, baseUrl };
+}
+
+function getProviderBaseUrl(
+  provider: 'agnes' | 'sensenova',
+  customBaseUrl?: string
+): { baseUrl: string; error?: string } {
+  const settingsBaseName = provider === 'agnes' ? 'agnesBaseUrl' : 'sensenovaBaseUrl';
+  const envName = provider === 'agnes' ? 'AGNES' : 'SENSENOVA';
+  const headerPrefix = provider === 'agnes' ? 'x-agnes' : 'x-sensenova';
+  const baseUrl = String(customBaseUrl || cloudSettings[settingsBaseName] || defaultKeys[settingsBaseName] || '').replace(/\/+$/, '');
+  if (!baseUrl) {
+    return { baseUrl: '', error: `未配置 ${provider} Base URL（${envName}_BASE_URL / 设置面板 / ${headerPrefix}-base-url）。` };
+  }
+  return { baseUrl };
 }
 
 // Helper to create GoogleGenAI client with key rotation and standard aistudio-build telemetry
@@ -2986,6 +3131,30 @@ app.get("/api/models", async (req, res) => {
     return res.status(500).json({ error: error.message || "Failed to pull models" });
   }
 });
+
+// Item 7: read-only Fal key check — GET api.fal.ai/v1/account/billing (no generation, no cost).
+// 200 → key valid + balance; 401 → invalid; 403 → authenticated but not an Admin key (billing needs Admin).
+async function falReadOnlyKeyCheck(key: string, route: string): Promise<{ status: 'active' | 'invalid' | 'unknown' | 'error'; message: string; balance?: string }> {
+  const resp = await upstreamFetch(
+    { provider: 'fal', route, model: 'account/billing', key },
+    'https://api.fal.ai/v1/account/billing',
+    { headers: { 'Authorization': `Key ${key}` } }
+  );
+  if (resp.ok) {
+    const data: any = await resp.json().catch(() => ({}));
+    const bal = data?.credits?.current_balance;
+    const balance = typeof bal === 'number' ? `${bal} ${data?.credits?.currency || ''}`.trim() : undefined;
+    return { status: 'active', message: `Fal.ai Key 有效${balance ? `，余额 ${balance}` : ''}`, balance };
+  }
+  const errBody = await resp.text().catch(() => '');
+  if (resp.status === 401 || resp.status === 403) {
+    return {
+      status: 'unknown',
+      message: `Fal.ai 账单接口返回 [${resp.status}]: ${errBody.slice(0, 300)}。该接口需要 admin key，无法据此判断普通 key 是否有效。`,
+    };
+  }
+  return { status: 'error', message: `Fal.ai 账单接口返回 [${resp.status}]: ${errBody.slice(0, 300)}` };
+}
 
 function normalizeFalEndpoint(model: string, isVideo = false): string {
   const m = (model || '').toLowerCase().trim();
@@ -5786,245 +5955,357 @@ Your task is to transform the user's initial prompt into an exceptional, visuall
 // ==========================================
 // 7. Provider Health & Connectivity Check
 // ==========================================
-app.post('/api/test-provider', async (req, res) => {
-  const { provider, key } = req.body;
+interface SingleKeyTestResult {
+  maskedKey: string;
+  status: 'ok' | 'error' | 'active' | 'invalid' | 'warning' | 'rate_limited';
+  latency: number;
+  message: string;
+}
+
+async function testSingleProviderKey(
+  provider: string,
+  singleKey: string,
+  routePath: string,
+  customBaseUrl?: string
+): Promise<SingleKeyTestResult> {
   const startTime = Date.now();
+  const maskedKey = keyPoolManager.maskKey(singleKey);
+  const prov = provider.toLowerCase().trim();
 
   try {
-    if (provider === 'civitai') {
+    if (prov === 'civitai') {
       const headers: Record<string, string> = { 'User-Agent': 'ComfyCanvas-AI/1.0' };
-      if (key) headers['Authorization'] = `Bearer ${key}`;
-      const resp = await fetch('https://civitai.com/api/v1/models?limit=1&types=LORA', { headers });
+      if (singleKey) headers['Authorization'] = `Bearer ${singleKey}`;
+      const resp = await upstreamFetch(
+        { provider: 'civitai', route: routePath, model: 'key-check', key: singleKey },
+        'https://civitai.com/api/v1/models?limit=1&types=LORA',
+        { headers }
+      );
       const latency = Date.now() - startTime;
       if (resp.ok) {
-        return res.json({
+        return {
+          maskedKey,
           status: 'ok',
           latency,
           message: 'Civitai API 验证成功，已开放 C 站全量 Checkpoint 与 LoRA 模型库检索',
-        });
+        };
       }
-      return res.json({ status: 'error', latency, message: `Civitai 返回错误状态码: ${resp.status}` });
-    }
-
-    if (provider === 'fal') {
-      if (!key) return res.json({ status: 'error', message: '未配置 Fal.ai API 密钥' });
-      // Test Fal by hitting schnell with a dry run check
-      const falResp = await fetch('https://fal.run/fal-ai/flux/schnell', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Key ${key}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ prompt: 'test connection ping', num_inference_steps: 1 }),
-      });
-      const latency = Date.now() - startTime;
-      const falText = await falResp.text();
-
-      if (falResp.ok) {
-        return res.json({
-          status: 'ok',
-          latency,
-          message: 'Fal.ai 认证成功，FLUX.1 极速云端推理引擎已就绪',
-        });
-      }
-
-      if (falText.includes('TOP_UP') || falText.includes('locked')) {
-        return res.json({
-          status: 'warning',
-          latency,
-          message: 'Fal.ai Key 格式与认证有效，但账户额度已耗尽 (TOP_UP)，请充值或切换至其他引擎',
-        });
-      }
-
-      return res.json({
+      const errText = await resp.text().catch(() => '');
+      return {
+        maskedKey,
         status: 'error',
         latency,
-        message: `Fal.ai 响应: ${falText.slice(0, 100)}`,
-      });
+        message: `Civitai 返回错误 [${resp.status}]: ${errText.slice(0, 200)}`,
+      };
     }
 
-    if (provider === 'huggingface') {
-      if (!key) return res.json({ status: 'error', message: '未配置 Hugging Face Token' });
-      const resp = await fetch('https://huggingface.co/api/whoami-v2', {
-        headers: { 'Authorization': `Bearer ${key}` },
-      });
+    if (prov === 'fal') {
+      if (!singleKey) {
+        return { maskedKey, status: 'error', latency: 0, message: '未配置 Fal.ai API 密钥' };
+      }
+      const falTest = await falReadOnlyKeyCheck(singleKey, routePath);
+      const latency = Date.now() - startTime;
+      const status = falTest.status === 'active' ? 'ok' : falTest.status === 'invalid' ? 'error' : 'warning';
+      return {
+        maskedKey,
+        status,
+        latency,
+        message: falTest.message || (status === 'ok' ? 'Fal.ai 认证成功' : 'Fal.ai 认证失败'),
+      };
+    }
+
+    if (prov === 'huggingface') {
+      if (!singleKey) {
+        return { maskedKey, status: 'error', latency: 0, message: '未配置 Hugging Face Token' };
+      }
+      const resp = await upstreamFetch(
+        { provider: 'huggingface', route: routePath, model: 'whoami-v2', key: singleKey },
+        'https://huggingface.co/api/whoami-v2',
+        {
+          headers: { 'Authorization': `Bearer ${singleKey}` },
+        }
+      );
       const latency = Date.now() - startTime;
       if (resp.ok) {
-        const whoami = await resp.json();
-        return res.json({
+        const whoami = await resp.json().catch(() => ({}));
+        return {
+          maskedKey,
           status: 'ok',
           latency,
           message: `Hugging Face 认证成功：@${whoami.name || 'User'} (具备 Serverless 推理与 Hub 访问权限)`,
-        });
+        };
       }
-      return res.json({ status: 'error', latency, message: `Hugging Face 鉴权失败，状态码: ${resp.status}` });
+      const errText = await resp.text().catch(() => '');
+      return {
+        maskedKey,
+        status: 'error',
+        latency,
+        message: `Hugging Face 鉴权失败 [${resp.status}]: ${errText.slice(0, 200)}`,
+      };
     }
 
-    if (provider === 'modelscope' || provider === 'modelscope_cn') {
-      if (!key) return res.json({ status: 'error', message: '未配置魔搭国内站 (ModelScope CN) Token' });
-      const latency = Date.now() - startTime;
-      try {
-        const resp = await fetch('https://api-inference.modelscope.cn/v1/models', {
-          headers: { 'Authorization': `Bearer ${key}` },
-        });
-        if (resp.ok) {
-          return res.json({
-            status: 'ok',
-            latency,
-            message: '魔搭国内站 (modelscope.cn) 认证成功，已接入 Wan 2.1、Z-Image-Turbo 与全量微调 LoRA',
-          });
+    if (prov === 'modelscope' || prov === 'modelscope_cn') {
+      if (!singleKey) {
+        return { maskedKey, status: 'error', latency: 0, message: '未配置魔搭国内站 (ModelScope CN) Token' };
+      }
+      const resp = await upstreamFetch(
+        { provider: 'modelscope_cn', route: routePath, model: 'v1/models', key: singleKey },
+        'https://api-inference.modelscope.cn/v1/models',
+        {
+          headers: { 'Authorization': `Bearer ${singleKey}` },
         }
-        const text = await resp.text();
-        return res.json({ status: 'error', latency, message: `魔搭国内站鉴权未通过 [${resp.status}]: ${text}` });
-      } catch (err: any) {
-        return res.json({ status: 'error', latency, message: `网络连接失败: ${err.message}` });
-      }
-    }
-
-    if (provider === 'modelscope_ai') {
-      if (!key) return res.json({ status: 'error', message: '未配置魔搭国际站 (ModelScope AI) Token' });
+      );
       const latency = Date.now() - startTime;
-      try {
-        const resp = await fetch('https://api-inference.modelscope.ai/v1/models', {
-          headers: { 'Authorization': `Bearer ${key}` },
-        });
-        if (resp.ok) {
-          return res.json({
-            status: 'ok',
-            latency,
-            message: '魔搭国际站 (modelscope.ai) 认证成功，已接入开源生图与通用推理模型',
-          });
-        }
-        const text = await resp.text();
-        return res.json({ status: 'error', latency, message: `魔搭国际站鉴权未通过 [${resp.status}]: ${text}` });
-      } catch (err: any) {
-        return res.json({ status: 'error', latency, message: `网络连接失败: ${err.message}` });
-      }
-    }
-
-    if (provider === 'nanogpt') {
-      if (!key) return res.json({ status: 'error', message: '未配置 NanoGPT API Key' });
-      const resp = await fetch('https://nano-gpt.com/api/v1/images', {
-        method: 'POST',
-        headers: {
-          'x-api-key': key,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ prompt: 'ping', model: 'flux-schnell' }),
-      });
-      const latency = Date.now() - startTime;
-      const respText = await resp.text();
-
       if (resp.ok) {
-        return res.json({ status: 'ok', latency, message: 'NanoGPT API 连接成功，按张计费极速通道已启用' });
-      }
-
-      if (respText.includes('invalid_api_key') || respText.includes('Invalid session')) {
-        return res.json({
-          status: 'error',
+        return {
+          maskedKey,
+          status: 'ok',
           latency,
-          message: 'NanoGPT 提示 Invalid session/key，请确认密钥有效性或重新从 nano-gpt.com 复制',
-        });
+          message: '魔搭国内站 (modelscope.cn) 认证成功，已接入 Wan 2.1、Z-Image-Turbo 与全量微调 LoRA',
+        };
       }
-
-      return res.json({ status: 'error', latency, message: `NanoGPT 响应状态: ${resp.status}` });
+      const errText = await resp.text().catch(() => '');
+      return {
+        maskedKey,
+        status: 'error',
+        latency,
+        message: `魔搭国内站鉴权未通过 [${resp.status}]: ${errText.slice(0, 200)}`,
+      };
     }
 
-    if (provider === 'gemini') {
-      const effectiveKey = key || process.env.GEMINI_API_KEY;
-      if (!effectiveKey) {
-        return res.json({ status: 'error', message: '未配置 Google Gemini API 密钥' });
+    if (prov === 'modelscope_ai') {
+      if (!singleKey) {
+        return { maskedKey, status: 'error', latency: 0, message: '未配置魔搭国际站 (ModelScope AI) Token' };
       }
-      const testGen = createGoogleGenAI(effectiveKey);
-      if (!testGen) {
-        return res.json({ status: 'error', message: 'Google Gemini 初始化失败' });
+      const resp = await upstreamFetch(
+        { provider: 'modelscope_ai', route: routePath, model: 'v1/models', key: singleKey },
+        'https://api-inference.modelscope.ai/v1/models',
+        {
+          headers: { 'Authorization': `Bearer ${singleKey}` },
+        }
+      );
+      const latency = Date.now() - startTime;
+      if (resp.ok) {
+        return {
+          maskedKey,
+          status: 'ok',
+          latency,
+          message: '魔搭国际站 (modelscope.ai) 认证成功，已接入开源生图与通用推理模型',
+        };
       }
-      await testGen.client.models.generateContent({
+      const errText = await resp.text().catch(() => '');
+      return {
+        maskedKey,
+        status: 'error',
+        latency,
+        message: `魔搭国际站鉴权未通过 [${resp.status}]: ${errText.slice(0, 200)}`,
+      };
+    }
+
+    if (prov === 'nanogpt') {
+      if (!singleKey) {
+        return { maskedKey, status: 'error', latency: 0, message: '未配置 NanoGPT API Key' };
+      }
+      const resp = await upstreamFetch(
+        { provider: 'nanogpt', route: routePath, key: singleKey },
+        'https://api.nano-gpt.com/api/check-balance',
+        { method: 'POST', headers: { 'x-api-key': singleKey } }
+      );
+      const latency = Date.now() - startTime;
+      if (resp.ok) {
+        const bal = await resp.json().catch(() => ({}));
+        return {
+          maskedKey,
+          status: 'ok',
+          latency,
+          message: `NanoGPT 认证成功，余额 $${bal.usd_balance ?? '?'}`,
+        };
+      }
+      const respText = await resp.text().catch(() => '');
+      return {
+        maskedKey,
+        status: 'error',
+        latency,
+        message: `NanoGPT 鉴权失败 [${resp.status}]: ${respText.slice(0, 200)}`,
+      };
+    }
+
+    if (prov === 'gemini') {
+      if (!singleKey) {
+        return { maskedKey, status: 'error', latency: 0, message: '未配置 Google Gemini API 密钥' };
+      }
+      const testGen = new GoogleGenAI({
+        apiKey: singleKey,
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build',
+          },
+        },
+      });
+      await testGen.models.generateContent({
         model: 'gemini-3.8-flash',
         contents: [{ role: 'user', parts: [{ text: 'ping' }] }],
       });
       const latency = Date.now() - startTime;
-      return res.json({
+      return {
+        maskedKey,
         status: 'ok',
         latency,
-        message: 'Google Gemini 官方服务在线，Imagen 3.0 高清生图与智能提示词扩写就绪',
-      });
+        message: 'Google Gemini 官方服务在线，generateContent 生图与智能提示词扩写就绪',
+      };
     }
 
-    if (provider === 'agnes') {
-      const effectiveKey = key || cloudSettings['agnesKey'] || defaultKeys['agnesKey'] || '';
-      const effectiveBaseUrl = cloudSettings['agnesBaseUrl'] || defaultKeys['agnesBaseUrl'] || 'https://apihub.agnes-ai.com/v1';
-      if (!effectiveKey) {
-        return res.json({ status: 'error', message: '未配置 Agnes AI API 密钥' });
+    if (prov === 'agnes') {
+      if (!singleKey) {
+        return { maskedKey, status: 'error', latency: 0, message: '未配置 Agnes AI API 密钥' };
       }
-      const resp = await fetch(`${effectiveBaseUrl.replace(/\/+$/, '')}/models`, {
-        headers: { Authorization: `Bearer ${effectiveKey}` },
-      });
+      const { baseUrl, error: urlErr } = getProviderBaseUrl('agnes', customBaseUrl);
+      if (urlErr) {
+        return { maskedKey, status: 'error', latency: 0, message: urlErr };
+      }
+      const resp = await upstreamFetch(
+        { provider: 'agnes', route: routePath, model: 'models', key: singleKey },
+        `${baseUrl}/models`,
+        {
+          headers: { Authorization: `Bearer ${singleKey}` },
+        }
+      );
       const latency = Date.now() - startTime;
       if (resp.ok) {
-        const mData = await resp.json();
+        const mData = await resp.json().catch(() => ({}));
         const count = mData.data?.length || 0;
-        return res.json({
+        return {
+          maskedKey,
           status: 'ok',
           latency,
           message: `Agnes AI (ApiHub) 认证成功，已就绪 ${count} 个模型 (包含 2.5 Flash 生图、动态视频及 3.0 Flash 深度推理大模型)`,
-        });
+        };
       }
-      return res.json({ status: 'error', latency, message: `Agnes AI 验证失败，HTTP 状态码: ${resp.status}` });
+      const errText = await resp.text().catch(() => '');
+      return {
+        maskedKey,
+        status: 'error',
+        latency,
+        message: `Agnes AI 验证失败 [${resp.status}]: ${errText.slice(0, 200)}`,
+      };
     }
 
-    if (provider === 'sensenova') {
-      const effectiveKey = key || cloudSettings['sensenovaKey'] || defaultKeys['sensenovaKey'] || '';
-      const effectiveBaseUrl = cloudSettings['sensenovaBaseUrl'] || defaultKeys['sensenovaBaseUrl'] || 'https://token.sensenova.cn/v1';
-      if (!effectiveKey) {
-        return res.json({ status: 'error', message: '未配置商汤日日新 API 密钥' });
+    if (prov === 'sensenova') {
+      if (!singleKey) {
+        return { maskedKey, status: 'error', latency: 0, message: '未配置商汤日日新 API 密钥' };
       }
-      const resp = await fetch(`${effectiveBaseUrl.replace(/\/+$/, '')}/models`, {
-        headers: { Authorization: `Bearer ${effectiveKey}` },
-      });
+      const { baseUrl, error: urlErr } = getProviderBaseUrl('sensenova', customBaseUrl);
+      if (urlErr) {
+        return { maskedKey, status: 'error', latency: 0, message: urlErr };
+      }
+      const resp = await upstreamFetch(
+        { provider: 'sensenova', route: routePath, model: 'models', key: singleKey },
+        `${baseUrl}/models`,
+        {
+          headers: { Authorization: `Bearer ${singleKey}` },
+        }
+      );
       const latency = Date.now() - startTime;
       if (resp.ok) {
-        const mData = await resp.json();
+        const mData = await resp.json().catch(() => ({}));
         const count = mData.data?.length || 0;
-        return res.json({
+        return {
+          maskedKey,
           status: 'ok',
           latency,
           message: `商汤日日新 (SenseNova) 认证成功，已就绪 ${count} 个大模型 (含 DeepSeek V4 深度思考、GLM-5.2、Kimi 及多模态视觉理解)`,
-        });
+        };
       }
-      return res.json({ status: 'error', latency, message: `商汤日日新 API 验证失败，HTTP 状态码: ${resp.status}` });
+      const errText = await resp.text().catch(() => '');
+      return {
+        maskedKey,
+        status: 'error',
+        latency,
+        message: `商汤日日新 API 验证失败 [${resp.status}]: ${errText.slice(0, 200)}`,
+      };
     }
 
-    if (provider === 'tensorart') {
-      const effectiveKey = key || cloudSettings['tensorartKey'] || process.env.TENSORART_API_KEY || '';
-      if (!effectiveKey) {
-        return res.json({ status: 'error', message: '未配置 Tensor.Art API Key' });
+    if (prov === 'tensorart') {
+      if (!singleKey) {
+        return { maskedKey, status: 'error', latency: 0, message: '未配置 Tensor.Art API Key' };
       }
-      try {
-        const tools = await fetchTensorArtToolsList(effectiveKey);
-        const latencyMs = Date.now() - startTime;
-        return res.json({
-          status: 'ok',
-          latency: latencyMs,
-          message: `Tensor.Art (OpenWorks OpenAPI) 认证成功，已连通 ${tools.length} 个官方算力工具。`,
-        });
-      } catch (err: any) {
-        return res.json({
-          status: 'error',
-          latency: Date.now() - startTime,
-          message: `Tensor.Art OpenWorks 验证失败: ${err.message}`,
-        });
-      }
+      const tools = await fetchTensorArtToolsList(singleKey);
+      const latency = Date.now() - startTime;
+      return {
+        maskedKey,
+        status: 'ok',
+        latency,
+        message: `Tensor.Art (OpenWorks OpenAPI) 认证成功，已连通 ${tools.length} 个官方算力工具。`,
+      };
     }
 
-    return res.status(400).json({ error: '未知模型服务商' });
-  } catch (error: any) {
-    return res.json({
-      status: 'error',
+    return { maskedKey, status: 'error', latency: 0, message: `未知模型服务商: ${provider}` };
+  } catch (err: any) {
+    const errLower = (err.message || '').toLowerCase();
+    const isRate =
+      errLower.includes('quota') ||
+      errLower.includes('resource_exhausted') ||
+      errLower.includes('overloaded') ||
+      errLower.includes('rate limit') ||
+      errLower.includes('429') ||
+      errLower.includes('503');
+    return {
+      maskedKey,
+      status: isRate ? 'rate_limited' : 'error',
       latency: Date.now() - startTime,
-      message: error.message || '连接测试异常',
+      message: err.message || '连接测试异常',
+    };
+  }
+}
+
+app.post('/api/test-provider', async (req, res) => {
+  const { provider, key } = req.body;
+  if (!provider) {
+    return res.status(400).json({ error: 'provider 为必填项' });
+  }
+
+  const prov = String(provider).toLowerCase().trim();
+  const customBaseUrl = prov === 'agnes' ? (req.headers['x-agnes-base-url'] as string) : (req.headers['x-sensenova-base-url'] as string);
+  const rawKeys = keyPoolManager.parseKeyString(key);
+  const keysToTest = rawKeys.length > 0 ? rawKeys : keyPoolManager.getKeys(prov);
+
+  if (keysToTest.length === 0) {
+    if (prov === 'civitai') {
+      keysToTest.push('');
+    } else {
+      return res.json({ status: 'error', message: `未配置 ${provider} API 密钥` });
+    }
+  }
+
+  const results: SingleKeyTestResult[] = [];
+  for (const k of keysToTest) {
+    const r = await testSingleProviderKey(prov, k, req.path, customBaseUrl);
+    const isSuccess = r.status === 'ok' || r.status === 'active' || r.status === 'warning';
+    if (k) {
+      keyPoolManager.recordResult(prov, k, isSuccess, r.latency, isSuccess ? undefined : r.message);
+    }
+    results.push(r);
+  }
+
+  if (results.length === 1) {
+    const single = results[0];
+    return res.json({
+      status: single.status === 'ok' || single.status === 'active' || single.status === 'warning' ? 'ok' : 'error',
+      latency: single.latency,
+      message: single.message,
+      results,
     });
   }
+
+  const allOk = results.every((r) => r.status === 'ok' || r.status === 'active' || r.status === 'warning');
+  const summaryMsg = `共测试 ${results.length} 个密钥：\n` + results.map((r) => `• [${r.maskedKey || '未设Key'}]: ${r.message} (${r.latency}ms)`).join('\n');
+  const avgLatency = Math.round(results.reduce((acc, r) => acc + r.latency, 0) / results.length);
+  return res.json({
+    status: allOk ? 'ok' : 'error',
+    latency: avgLatency,
+    message: summaryMsg,
+    results,
+  });
 });
 
 // Cloud Multi-Key Pool Stats
@@ -6440,13 +6721,13 @@ app.post('/api/history', (req, res) => {
     ...(typeof imageUrl === 'string' && imageUrl.trim() ? { imageUrl: imageUrl.trim() } : {}),
     ...(typeof videoUrl === 'string' && videoUrl.trim() ? { videoUrl: videoUrl.trim() } : {}),
     mediaType: typeof mediaType === 'string' && mediaType.trim() ? mediaType.trim() : (videoUrl ? 'video' : 'image'),
-    prompt: typeof prompt === 'string' ? prompt.trim() : 'Untitled Generation',
+    prompt: typeof prompt === 'string' && prompt.trim() ? prompt.trim() : null,
     ...(typeof negativePrompt === 'string' && negativePrompt.trim() ? { negativePrompt: negativePrompt.trim() } : {}),
-    provider: typeof provider === 'string' && provider.trim() ? provider.trim() : 'Canvas Generated',
-    model: typeof model === 'string' && model.trim() ? model.trim() : 'unknown',
-    seed: typeof seed === 'number' ? seed : 0,
-    steps: typeof steps === 'number' ? steps : 20,
-    cfg: typeof cfg === 'number' ? cfg : 7.0,
+    provider: typeof provider === 'string' && provider.trim() ? provider.trim() : null,
+    model: typeof model === 'string' && model.trim() ? model.trim() : null,
+    seed: typeof seed === 'number' ? seed : null,
+    steps: typeof steps === 'number' ? steps : null,
+    cfg: typeof cfg === 'number' ? cfg : null,
     ...(Array.isArray(loras) ? { loras } : {}),
     ...(workflowSnapshot && typeof workflowSnapshot === 'object' ? { workflowSnapshot } : {}),
   };
