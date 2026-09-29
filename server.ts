@@ -309,7 +309,7 @@ interface GeneratedItem {
   videoUrl?: string;
   mediaType?: string;
   prompt: string | null;
-  negativePrompt?: string;
+  negativePrompt?: string | null;
   provider: string | null;
   actualProvider?: string | null;
   model: string | null;
@@ -620,22 +620,22 @@ const MAX_HISTORY_COUNT = 500;
 // Helper to record history safely both in memory and file
 const recordHistoryItem = (item: Partial<GeneratedItem>): GeneratedItem => {
   const fullItem: GeneratedItem = {
-    id: `hist_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-    timestamp: Date.now(),
-    url: item.url || '',
-    prompt: item.prompt ?? null,
-    negativePrompt: item.negativePrompt || '',
-    // Y1: 未知就 null，绝不用 'ComfyUI Engine' 这类假标签
-    provider: item.provider ?? null,
-    actualProvider: item.actualProvider ?? item.provider ?? null,
-    model: item.model ?? null,
-    actualModel: item.actualModel ?? item.model ?? null,
-    // null = not sent upstream. Never fabricate random seeds or default steps/cfg.
-    seed: item.seed ?? null,
-    steps: item.steps ?? null,
-    cfg: item.cfg ?? null,
-    loras: item.loras || [],
     ...item,
+    id: item.id || `hist_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    timestamp: item.timestamp || Date.now(),
+    url: item.url || '',
+    prompt: typeof item.prompt === 'string' && item.prompt.trim() ? item.prompt.trim() : null,
+    negativePrompt: typeof item.negativePrompt === 'string' && item.negativePrompt.trim() ? item.negativePrompt.trim() : null,
+    // Y1: 未知就 null，绝不用 'ComfyUI Engine' 这类假标签
+    provider: typeof item.provider === 'string' && item.provider.trim() ? item.provider.trim() : null,
+    actualProvider: typeof item.actualProvider === 'string' && item.actualProvider.trim() ? item.actualProvider.trim() : (typeof item.provider === 'string' && item.provider.trim() ? item.provider.trim() : null),
+    model: typeof item.model === 'string' && item.model.trim() ? item.model.trim() : null,
+    actualModel: typeof item.actualModel === 'string' && item.actualModel.trim() ? item.actualModel.trim() : (typeof item.model === 'string' && item.model.trim() ? item.model.trim() : null),
+    // null = not sent upstream. Never fabricate random seeds or default steps/cfg.
+    seed: typeof item.seed === 'number' ? item.seed : null,
+    steps: typeof item.steps === 'number' ? item.steps : null,
+    cfg: typeof item.cfg === 'number' ? item.cfg : null,
+    loras: Array.isArray(item.loras) ? item.loras : [],
   };
   generationHistory.unshift(fullItem);
   if (generationHistory.length > MAX_HISTORY_COUNT) {
@@ -6900,7 +6900,7 @@ app.post('/api/history', (req, res) => {
     ...(typeof videoUrl === 'string' && videoUrl.trim() ? { videoUrl: videoUrl.trim() } : {}),
     mediaType: typeof mediaType === 'string' && mediaType.trim() ? mediaType.trim() : (videoUrl ? 'video' : 'image'),
     prompt: typeof prompt === 'string' && prompt.trim() ? prompt.trim() : null,
-    ...(typeof negativePrompt === 'string' && negativePrompt.trim() ? { negativePrompt: negativePrompt.trim() } : {}),
+    negativePrompt: typeof negativePrompt === 'string' && negativePrompt.trim() ? negativePrompt.trim() : null,
     provider: typeof provider === 'string' && provider.trim() ? provider.trim() : null,
     model: typeof model === 'string' && model.trim() ? model.trim() : null,
     seed: typeof seed === 'number' ? seed : null,

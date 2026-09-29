@@ -104,7 +104,7 @@ export interface GenerationHistoryItem {
   imageUrl?: string;
   mediaType?: 'image' | 'video';
   prompt: string | null;
-  negativePrompt?: string;
+  negativePrompt?: string | null;
   provider?: string | null;
   actualProvider?: string | null;
   model?: string | null;
@@ -112,10 +112,10 @@ export interface GenerationHistoryItem {
   seed: number | null;
   steps: number | null;
   cfg: number | null;
-  sampler?: string;
-  scheduler?: string;
-  width?: number;
-  height?: number;
+  sampler?: string | null;
+  scheduler?: string | null;
+  width?: number | null;
+  height?: number | null;
   timestamp: number;
   loras?: Array<{ name: string; strength: number; civitaiId?: string }>;
 }

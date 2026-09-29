@@ -2,6 +2,13 @@ import React from 'react';
 import { Download, Clock, Copy, Sparkles, Check, Image as ImageIcon, Trash2 } from 'lucide-react';
 import { GenerationHistoryItem } from '../types/providers';
 
+export const displayValue = (val: any): string | number => {
+  if (val === null || val === undefined) return '未填写';
+  if (typeof val === 'string' && (val.trim() === '' || val.trim() === 'null' || val.trim() === 'undefined')) return '未填写';
+  if (typeof val === 'number' && isNaN(val)) return '未填写';
+  return val;
+};
+
 interface HistoryModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -113,17 +120,25 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
                       />
                     )}
                     <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-md px-2 py-0.5 rounded text-[11px] font-mono text-cyan-300 border border-cyan-500/30">
-                      {item.actualProvider || item.provider || '—'}
+                      {displayValue(item.actualProvider || item.provider)}
                     </div>
                     <div className="absolute bottom-2 right-2 bg-black/70 backdrop-blur-md px-2 py-0.5 rounded text-[10px] font-mono text-slate-300">
-                      Seed: {item.seed != null ? item.seed : '—'}
+                      Seed: {displayValue(item.seed)}
                     </div>
                   </div>
 
                   <div className="p-3.5 space-y-2 flex-1 flex flex-col justify-between">
-                    <div>
-                      <p className="text-xs text-slate-200 font-medium line-clamp-2 leading-relaxed">
-                        {item.prompt}
+                    <div className="space-y-1.5">
+                      <p className={`text-xs font-medium line-clamp-2 leading-relaxed ${item.prompt && item.prompt.trim() ? 'text-slate-200' : 'text-slate-400 italic'}`}>
+                        {displayValue(item.prompt)}
+                      </p>
+                      <div className="text-[11px] text-slate-400 font-mono flex flex-wrap gap-x-3 gap-y-0.5">
+                        <span>模型: {displayValue(item.actualModel || item.model)}</span>
+                        <span>步数: {item.steps != null ? `${item.steps} 步` : '未填写'}</span>
+                        <span>CFG: {displayValue(item.cfg)}</span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 font-mono line-clamp-1">
+                        负向: {displayValue(item.negativePrompt)}
                       </p>
                       {item.loras && item.loras.length > 0 && (
                         <div className="mt-1.5 flex flex-wrap gap-1">
@@ -172,7 +187,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
 
                       <button
                         onClick={() => {
-                          onApplyPrompt(item.prompt || '', item.negativePrompt);
+                          onApplyPrompt(item.prompt || '', item.negativePrompt || undefined);
                           onClose();
                         }}
                         className="px-2.5 py-1 rounded bg-cyan-600/20 text-cyan-400 hover:bg-cyan-600/30 text-[11px] font-semibold border border-cyan-500/30 transition-colors flex items-center gap-1"
@@ -201,10 +216,15 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
               alt={selectedImage.prompt || ''}
               className="max-h-[75vh] w-auto rounded-lg shadow-2xl object-contain border border-[#333]"
             />
-            <div className="mt-3 bg-[#18191d] border border-[#2e3038] p-4 rounded-xl text-center w-full max-w-2xl text-xs space-y-1">
-              <p className="text-white font-medium">{selectedImage.prompt}</p>
+            <div className="mt-3 bg-[#18191d] border border-[#2e3038] p-4 rounded-xl text-center w-full max-w-2xl text-xs space-y-1.5">
+              <p className={`font-medium ${selectedImage.prompt && selectedImage.prompt.trim() ? 'text-white' : 'text-slate-400 italic'}`}>
+                {displayValue(selectedImage.prompt)}
+              </p>
+              <p className="text-slate-300 font-mono text-[11px]">
+                负向: {displayValue(selectedImage.negativePrompt)}
+              </p>
               <p className="text-slate-400 font-mono text-[11px]">
-                {selectedImage.provider} | Model: {selectedImage.model} | Seed: {selectedImage.seed} | Steps: {selectedImage.steps} | CFG: {selectedImage.cfg}
+                {displayValue(selectedImage.actualProvider || selectedImage.provider)} | Model: {displayValue(selectedImage.actualModel || selectedImage.model)} | Seed: {displayValue(selectedImage.seed)} | Steps: {selectedImage.steps != null ? `${selectedImage.steps} 步` : '未填写'} | CFG: {displayValue(selectedImage.cfg)}
               </p>
             </div>
             <button

@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { GenerationHistoryItem } from '../types/providers';
 import { SpatialFrame } from '../types/graph';
+import { displayValue } from './HistoryModal';
 
 export interface ImageDetailModalProps {
   isOpen: boolean;
@@ -108,7 +109,7 @@ export const ImageDetailModal: React.FC<ImageDetailModalProps> = ({
               <h3 className="font-bold text-white text-sm flex items-center gap-2">
                 高保真画质与元数据查看器 (Image & Workflow Inspector)
                 <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-cyan-500/10 text-cyan-300 border border-cyan-500/25">
-                  {item.actualProvider || item.provider || 'ComfyUI 云端渲染引擎'}
+                  {displayValue(item.actualProvider || item.provider)}
                 </span>
               </h3>
               <p className="text-[11px] text-slate-400">
@@ -249,16 +250,16 @@ export const ImageDetailModal: React.FC<ImageDetailModalProps> = ({
                   )}
                 </button>
               </div>
-              <p className="text-[11px] text-slate-200 font-mono leading-relaxed bg-[#111216] p-2.5 rounded-lg border border-[#242633] select-text">
-                {item.prompt || 'Untitled Generation Prompt'}
+              <p className={`text-[11px] font-mono leading-relaxed bg-[#111216] p-2.5 rounded-lg border border-[#242633] select-text ${item.prompt && item.prompt.trim() ? 'text-slate-200' : 'text-slate-400 italic'}`}>
+                {displayValue(item.prompt)}
               </p>
             </div>
 
-            {/* Negative Prompt if exists */}
-            {item.negativePrompt && (
-              <div className="bg-[#1b1c24] border border-[#272935] rounded-xl p-3 space-y-1.5">
-                <div className="flex items-center justify-between text-[11px]">
-                  <span className="font-bold text-rose-300">负向提示词 (Negative Prompt)</span>
+            {/* Negative Prompt */}
+            <div className="bg-[#1b1c24] border border-[#272935] rounded-xl p-3 space-y-1.5">
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="font-bold text-rose-300">负向提示词 (Negative Prompt)</span>
+                {item.negativePrompt && item.negativePrompt.trim() && (
                   <button
                     onClick={() => handleCopy('negPrompt', item.negativePrompt || '')}
                     className="text-slate-400 hover:text-white flex items-center gap-1 text-[10px] font-mono"
@@ -275,12 +276,12 @@ export const ImageDetailModal: React.FC<ImageDetailModalProps> = ({
                       </>
                     )}
                   </button>
-                </div>
-                <p className="text-[11px] text-slate-300 font-mono leading-relaxed bg-[#111216] p-2 rounded-lg border border-[#242633] select-text">
-                  {item.negativePrompt}
-                </p>
+                )}
               </div>
-            )}
+              <p className={`text-[11px] font-mono leading-relaxed bg-[#111216] p-2 rounded-lg border border-[#242633] select-text ${item.negativePrompt && item.negativePrompt.trim() ? 'text-slate-300' : 'text-slate-400 italic'}`}>
+                {displayValue(item.negativePrompt)}
+              </p>
+            </div>
 
             {/* Model & Sampling Grid Parameters */}
             <div className="bg-[#1b1c24] border border-[#272935] rounded-xl p-3 space-y-2.5">
@@ -292,50 +293,52 @@ export const ImageDetailModal: React.FC<ImageDetailModalProps> = ({
               <div className="grid grid-cols-2 gap-2 text-[11px] font-mono">
                 <div className="bg-[#111216] p-2 rounded-lg border border-[#242633]">
                   <span className="text-slate-500 text-[10px] block">CHECKPOINT MODEL</span>
-                  <span className="text-cyan-300 font-semibold truncate block" title={item.actualModel || item.model || 'FLUX.1'}>
-                    {item.actualModel || item.model || 'FLUX.1'}
+                  <span className="text-cyan-300 font-semibold truncate block" title={String(displayValue(item.actualModel || item.model))}>
+                    {displayValue(item.actualModel || item.model)}
                   </span>
                 </div>
 
                 <div className="bg-[#111216] p-2 rounded-lg border border-[#242633]">
                   <span className="text-slate-500 text-[10px] block">ENGINE PROVIDER</span>
-                  <span className="text-purple-300 font-semibold truncate block" title={item.actualProvider || item.provider || 'Fal.ai'}>
-                    {item.actualProvider || item.provider || 'Fal.ai'}
+                  <span className="text-purple-300 font-semibold truncate block" title={String(displayValue(item.actualProvider || item.provider))}>
+                    {displayValue(item.actualProvider || item.provider)}
                   </span>
                 </div>
 
                 <div className="bg-[#111216] p-2 rounded-lg border border-[#242633] flex items-center justify-between">
                   <div>
                     <span className="text-slate-500 text-[10px] block">SEED (种子)</span>
-                    <span className="text-emerald-300 font-semibold">{item.seed != null ? item.seed : '—'}</span>
+                    <span className="text-emerald-300 font-semibold">{displayValue(item.seed)}</span>
                   </div>
-                  <button
-                    onClick={() => handleCopy('seed', String(item.seed ?? '—'))}
-                    className="p-1 hover:text-white text-slate-400"
-                    title="复制种子"
-                  >
-                    <Copy className="w-3 h-3" />
-                  </button>
+                  {item.seed != null && (
+                    <button
+                      onClick={() => handleCopy('seed', String(item.seed))}
+                      className="p-1 hover:text-white text-slate-400"
+                      title="复制种子"
+                    >
+                      <Copy className="w-3 h-3" />
+                    </button>
+                  )}
                 </div>
 
                 <div className="bg-[#111216] p-2 rounded-lg border border-[#242633]">
                   <span className="text-slate-500 text-[10px] block">STEPS / CFG</span>
                   <span className="text-amber-300 font-semibold">
-                    {item.steps ?? 28} 步 / CFG {item.cfg ?? 3.5}
+                    {item.steps != null ? `${item.steps} 步` : '未填写'} / CFG {displayValue(item.cfg)}
                   </span>
                 </div>
 
                 <div className="bg-[#111216] p-2 rounded-lg border border-[#242633]">
                   <span className="text-slate-500 text-[10px] block">SAMPLER / SCHEDULER</span>
                   <span className="text-slate-300 font-semibold">
-                    {item.sampler || 'euler'} / {item.scheduler || 'normal'}
+                    {displayValue(item.sampler)} / {displayValue(item.scheduler)}
                   </span>
                 </div>
 
                 <div className="bg-[#111216] p-2 rounded-lg border border-[#242633]">
                   <span className="text-slate-500 text-[10px] block">RESOLUTION (尺寸)</span>
                   <span className="text-slate-300 font-semibold">
-                    {item.width || 1024} x {item.height || 1024}
+                    {item.width && item.height ? `${item.width} x ${item.height}` : '未填写'}
                   </span>
                 </div>
               </div>

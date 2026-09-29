@@ -35,6 +35,7 @@ import {
   FileText,
 } from 'lucide-react';
 import { GenerationHistoryItem } from '../types/providers';
+import { displayValue } from './HistoryModal';
 
 export interface MediaAsset {
   id: string;
@@ -48,9 +49,9 @@ export interface MediaAsset {
   timestamp: number;
   width?: number;
   height?: number;
-  seed?: number;
-  steps?: number;
-  cfg?: number;
+  seed?: number | null;
+  steps?: number | null;
+  cfg?: number | null;
   sampler?: string;
   scheduler?: string;
   loras?: Array<{ name: string; strength?: number }>;
@@ -165,18 +166,18 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
           url,
           type: isVid ? 'video' : 'image',
           title: item.model ? `${item.model.split('/').pop()} 产物` : undefined,
-          prompt: item.prompt || 'AI 艺术创作',
-          negativePrompt: item.negativePrompt,
-          provider: item.provider || 'Cloud AI Engine',
-          model: item.model || 'FLUX / SDXL',
+          prompt: item.prompt || '',
+          negativePrompt: item.negativePrompt || '',
+          provider: item.provider || '',
+          model: item.model || '',
           timestamp: item.timestamp || Date.now() - idx * 60000,
           width: item.width || 1024,
           height: item.height || 1024,
-          seed: item.seed != null ? item.seed : undefined,
-          steps: item.steps != null ? item.steps : undefined,
-          cfg: item.cfg != null ? item.cfg : undefined,
-          sampler: item.sampler,
-          scheduler: item.scheduler,
+          seed: item.seed,
+          steps: item.steps,
+          cfg: item.cfg,
+          sampler: item.sampler || undefined,
+          scheduler: item.scheduler || undefined,
           loras: item.loras?.map((l) => (typeof l === 'string' ? { name: l } : l)),
         };
       });
@@ -917,8 +918,8 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
                       <div className="p-3 bg-[#13141c] border-t border-[#222430] flex flex-col justify-between gap-2 overflow-hidden">
                         <div className="space-y-1">
                           <div className="flex items-center justify-between text-[10px] text-slate-400 gap-1">
-                            <span className="font-semibold text-white truncate flex-1" title={asset.model}>
-                              {asset.model.split('/').pop()}
+                            <span className="font-semibold text-white truncate flex-1" title={String(displayValue(asset.model))}>
+                              {displayValue(asset.model ? asset.model.split('/').pop() : asset.model)}
                             </span>
                             <span className="font-mono text-[9px] text-slate-500 shrink-0">
                               {new Date(asset.timestamp).toLocaleDateString([], { month: '2-digit', day: '2-digit' })}{' '}
@@ -926,8 +927,8 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
                             </span>
                           </div>
 
-                          <p className="text-[10px] text-slate-400 leading-tight line-clamp-2" title={asset.prompt}>
-                            {asset.prompt}
+                          <p className={`text-[10px] leading-tight line-clamp-2 ${asset.prompt && asset.prompt.trim() ? 'text-slate-400' : 'text-slate-500 italic'}`} title={String(displayValue(asset.prompt))}>
+                            {displayValue(asset.prompt)}
                           </p>
                         </div>
 
@@ -1044,49 +1045,41 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
                         <span>{copiedId === selectedAsset.id ? '已复制' : '复制词'}</span>
                       </button>
                     </div>
-                    <div className="p-2.5 rounded-xl bg-[#0a0a0f] border border-[#1f212e] text-slate-200 font-mono text-[11px] leading-relaxed select-text max-h-32 overflow-y-auto">
-                      {selectedAsset.prompt}
+                    <div className={`p-2.5 rounded-xl bg-[#0a0a0f] border border-[#1f212e] font-mono text-[11px] leading-relaxed select-text max-h-32 overflow-y-auto ${selectedAsset.prompt && selectedAsset.prompt.trim() ? 'text-slate-200' : 'text-slate-400 italic'}`}>
+                      {displayValue(selectedAsset.prompt)}
                     </div>
                   </div>
 
-                  {selectedAsset.negativePrompt && (
-                    <div>
-                      <span className="text-slate-400 block mb-1 font-semibold">负向排畸词 (Negative Prompt):</span>
-                      <div className="p-2.5 rounded-xl bg-[#0a0a0f] border border-[#1f212e] text-slate-400 font-mono text-[11px] leading-relaxed select-text max-h-24 overflow-y-auto">
-                        {selectedAsset.negativePrompt}
-                      </div>
+                  <div>
+                    <span className="text-slate-400 block mb-1 font-semibold">负向排畸词 (Negative Prompt):</span>
+                    <div className={`p-2.5 rounded-xl bg-[#0a0a0f] border border-[#1f212e] font-mono text-[11px] leading-relaxed select-text max-h-24 overflow-y-auto ${selectedAsset.negativePrompt && selectedAsset.negativePrompt.trim() ? 'text-slate-400' : 'text-slate-500 italic'}`}>
+                      {displayValue(selectedAsset.negativePrompt)}
                     </div>
-                  )}
+                  </div>
 
                   <div className="grid grid-cols-2 gap-2 font-mono text-[10px]">
                     <div className="p-2 rounded-lg bg-[#161720] border border-[#222430]">
                       <span className="text-slate-500 block">生成服务商:</span>
-                      <span className="text-purple-300 font-bold">{selectedAsset.provider}</span>
+                      <span className="text-purple-300 font-bold">{displayValue(selectedAsset.provider)}</span>
                     </div>
                     <div className="p-2 rounded-lg bg-[#161720] border border-[#222430]">
                       <span className="text-slate-500 block">生成模型:</span>
-                      <span className="text-cyan-300 font-bold truncate block" title={selectedAsset.model}>
-                        {selectedAsset.model.split('/').pop()}
+                      <span className="text-cyan-300 font-bold truncate block" title={String(displayValue(selectedAsset.model))}>
+                        {displayValue(selectedAsset.model ? selectedAsset.model.split('/').pop() : selectedAsset.model)}
                       </span>
                     </div>
-                    {selectedAsset.seed !== undefined && (
-                      <div className="p-2 rounded-lg bg-[#161720] border border-[#222430]">
-                        <span className="text-slate-500 block">随机种子 (Seed):</span>
-                        <span className="text-amber-300 font-bold">{selectedAsset.seed}</span>
-                      </div>
-                    )}
-                    {selectedAsset.steps !== undefined && (
-                      <div className="p-2 rounded-lg bg-[#161720] border border-[#222430]">
-                        <span className="text-slate-500 block">采样步数 (Steps):</span>
-                        <span className="text-white font-bold">{selectedAsset.steps} 步</span>
-                      </div>
-                    )}
-                    {selectedAsset.cfg !== undefined && (
-                      <div className="p-2 rounded-lg bg-[#161720] border border-[#222430]">
-                        <span className="text-slate-500 block">CFG 指导度:</span>
-                        <span className="text-white font-bold">{selectedAsset.cfg}</span>
-                      </div>
-                    )}
+                    <div className="p-2 rounded-lg bg-[#161720] border border-[#222430]">
+                      <span className="text-slate-500 block">随机种子 (Seed):</span>
+                      <span className="text-amber-300 font-bold">{displayValue(selectedAsset.seed)}</span>
+                    </div>
+                    <div className="p-2 rounded-lg bg-[#161720] border border-[#222430]">
+                      <span className="text-slate-500 block">采样步数 (Steps):</span>
+                      <span className="text-white font-bold">{selectedAsset.steps != null ? `${selectedAsset.steps} 步` : '未填写'}</span>
+                    </div>
+                    <div className="p-2 rounded-lg bg-[#161720] border border-[#222430]">
+                      <span className="text-slate-500 block">CFG 指导度:</span>
+                      <span className="text-white font-bold">{displayValue(selectedAsset.cfg)}</span>
+                    </div>
                     {selectedAsset.sampler && (
                       <div className="p-2 rounded-lg bg-[#161720] border border-[#222430]">
                         <span className="text-slate-500 block">采样器 / 调度器:</span>
