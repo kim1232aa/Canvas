@@ -12,7 +12,7 @@ export class GeminiDriver extends BaseEngineDriver {
   readonly name = 'Google Gemini (官方直连)';
   readonly label = 'Google 官方 Gemini';
   readonly badgeColor = '#10b981';
-  readonly description = 'Google 官方 Gemini 生图 (generateContent)。seed 属于 unverified，原样发送。不支持 steps/CFG/sampler/LoRA。';
+  readonly description = 'Google 官方 Gemini 生图 (generateContent)。seed 该服务商不支持（ImageConfig 无 seed），不发送。不支持 steps/CFG/sampler/LoRA。';
   readonly capabilities = ['text2img', 'reasoning'] as const;
 
   readonly supportedModels: ModelSpec[] = [
@@ -87,9 +87,7 @@ export class GeminiDriver extends BaseEngineDriver {
     if (params.image_url) {
       body.image_url = params.image_url;
     }
-    // U2: seed unverified → 原样发送
-    if (params.seed != null) body.seed = params.seed;
-
+    // seed：生图指南 ImageConfig 仅 aspectRatio/imageSize → 不发上游（即使 params 残留 Civitai 导入 seed）
     const resp = await fetch('/api/gemini/generate', {
       method: 'POST',
       headers: {
@@ -116,7 +114,7 @@ export class GeminiDriver extends BaseEngineDriver {
       actualModel: data.actualModel || data.model || params.model,
       actualProvider: data.actualProvider || this.name,
       requestedModel: params.model,
-      seed: data.historyItem?.seed ?? null, // 服务端只在真正发给上游时记录
+      seed: null, // 生图路径不支持 seed；历史固定 null（Seed: 未填写）
       rawResponse: data,
     };
   }

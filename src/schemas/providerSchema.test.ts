@@ -64,6 +64,25 @@ describe('providerSchema 自检', () => {
     expect(modelStatus('gemini', 'gemini-2.5-flash-image', '2026-10-02')).toBe('deprecated');
   });
 
+  it('gemini 生图模型：seed 该服务商不支持（ImageConfig 无 seed），宽高/负向/steps/CFG/denoise/LoRA 同灰', () => {
+    for (const id of [
+      'gemini-3.1-flash-image',
+      'gemini-3.1-flash-lite-image',
+      'gemini-3-pro-image',
+      'gemini-2.5-flash-image',
+    ]) {
+      const grey = ['seed', 'width', 'height', 'negative_prompt', 'steps', 'cfg', 'denoise', 'loras'] as const;
+      for (const f of grey) {
+        expect(getFieldSpec('gemini', id, f)?.status, `${id}.${f}`).toBe('unsupported');
+      }
+      const seed = getFieldSpec('gemini', id, 'seed');
+      expect(seed?.note, id).toMatch(/ImageConfig|image-generation|aspectRatio/i);
+      expect(seed?.source, id).toMatch(/image-generation/);
+      expect(getFieldSpec('gemini', id, 'aspect_ratio')?.status, id).not.toBe('unsupported');
+      expect(getFieldSpec('gemini', id, 'image_size')?.status, id).not.toBe('unsupported');
+    }
+  });
+
   it('openai_compat gpt-image-2：不支持 seed/negative/steps/cfg/sampler/LoRA，支持 size/quality/output_format/background/moderation/n', () => {
     const grey = ['seed', 'negative_prompt', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'loras', 'width', 'height'] as const;
     for (const f of grey) {

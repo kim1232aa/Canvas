@@ -154,7 +154,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
     (isOpenAiCompat ? 'gpt-image-2' : isGrokCompat ? 'grok-imagine-image' : '');
   const fieldUnsupported = (field: FieldKey) =>
     Boolean(schemaProvider && schemaModel && getFieldSpec(schemaProvider, schemaModel, field)?.status === 'unsupported');
-  const greySeed = isOpenAiCompat || isGrokCompat || fieldUnsupported('seed');
+  const greySeed = isGemini || isOpenAiCompat || isGrokCompat || fieldUnsupported('seed');
   const greySteps = isOpenAiCompat || isGrokCompat || fieldUnsupported('steps');
   const greyCfg = isOpenAiCompat || isGrokCompat || fieldUnsupported('cfg');
   const greySampler = isOpenAiCompat || isGrokCompat || fieldUnsupported('sampler');
@@ -556,9 +556,12 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                 type="number"
                 value={greySeed ? '' : params.seed}
                 disabled={greySeed}
+                placeholder={greySeed ? '该服务商不支持' : undefined}
+                title={greySeed ? '该服务商不支持' : undefined}
+                aria-label={greySeed ? 'seed（该服务商不支持）' : 'seed'}
                 onMouseDown={(e) => e.stopPropagation()}
                 onKeyDown={(e) => e.stopPropagation()}
-                onChange={(e) => update({ seed: parseInt(e.target.value) || 0 })}
+                onChange={(e) => { if (!greySeed) update({ seed: parseInt(e.target.value) || 0 }); }}
                 className="flex-1 bg-[#111216] border border-[#2b2d38] focus:border-cyan-500 rounded-lg px-2.5 py-1.5 font-mono text-cyan-300 text-[11px] outline-none select-text cursor-text disabled:opacity-40 disabled:cursor-not-allowed"
               />
               <button

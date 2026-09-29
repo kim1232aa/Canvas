@@ -479,7 +479,7 @@ export function isCanvasFieldUnsupported(
   ) {
     return true;
   }
-  if (prov === 'gemini' && (field === 'width' || field === 'height' || field === 'negative_prompt' || field === 'steps' || field === 'cfg' || field === 'denoise' || field === 'loras')) {
+  if (prov === 'gemini' && (field === 'seed' || field === 'width' || field === 'height' || field === 'negative_prompt' || field === 'steps' || field === 'cfg' || field === 'denoise' || field === 'loras')) {
     return true;
   }
   const schemaProv: Provider | undefined =

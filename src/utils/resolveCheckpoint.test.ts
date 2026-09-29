@@ -163,12 +163,15 @@ describe('resolveCheckpoint — canvas NodeItem grey (compat)', () => {
     expect(forNeg.provider).toBe('openai_compat');
   });
 
-  it('isCanvasFieldUnsupported: openai_compat / grok_compat grey seed/negative/WH', () => {
+  it('isCanvasFieldUnsupported: openai_compat / grok_compat / gemini grey seed/negative/WH', () => {
     expect(isCanvasFieldUnsupported('openai_compat', 'gpt-image-2', 'seed')).toBe(true);
     expect(isCanvasFieldUnsupported('openai_compat', 'gpt-image-2', 'negative_prompt')).toBe(true);
     expect(isCanvasFieldUnsupported('openai_compat', 'gpt-image-2', 'width')).toBe(true);
     expect(isCanvasFieldUnsupported('grok_compat', 'grok-imagine-image', 'seed')).toBe(true);
     expect(isCanvasFieldUnsupported('grok_compat', 'grok-imagine-image', 'height')).toBe(true);
+    expect(isCanvasFieldUnsupported('gemini', 'gemini-3.1-flash-image', 'seed')).toBe(true);
+    expect(isCanvasFieldUnsupported('gemini', '', 'seed')).toBe(true);
+    expect(isCanvasFieldUnsupported('gemini', 'gemini-3.1-flash-image', 'negative_prompt')).toBe(true);
     expect(isCanvasFieldUnsupported('fal', 'fal-ai/flux/dev', 'seed')).toBe(false);
   });
 

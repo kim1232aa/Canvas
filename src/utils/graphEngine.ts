@@ -864,6 +864,7 @@ export async function executeWorkflow(
 
     const omitPx = params.targetProvider === 'gemini' || params.targetProvider === 'openai_compat' || params.targetProvider === 'grok_compat' || params.videoProvider === 'grok_compat';
     const grokOrOpenAi = params.targetProvider === 'openai_compat' || params.targetProvider === 'grok_compat' || params.videoProvider === 'grok_compat';
+    const omitSeed = params.targetProvider === 'gemini' || grokOrOpenAi;
     const grokish = params.targetProvider === 'grok_compat' || params.videoProvider === 'grok_compat';
     const extraParams: Record<string, unknown> = {
       ...(params.sampler !== undefined ? { sampler_name: params.sampler } : {}),
@@ -890,7 +891,7 @@ export async function executeWorkflow(
       height: omitPx ? undefined : params.height,
       steps: grokOrOpenAi ? undefined : params.steps,
       cfg: grokOrOpenAi ? undefined : params.cfg,
-      seed: grokOrOpenAi ? undefined : params.seed,
+      seed: omitSeed ? undefined : params.seed,
       denoise: params.denoise,
       image_url: params.initImageUrl,
       isVideo: params.isVideo,

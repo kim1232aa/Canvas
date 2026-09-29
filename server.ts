@@ -6342,7 +6342,6 @@ app.post(['/api/gemini/generate', '/api/engine/gemini/generate'], async (req, re
       aspect_ratio,
       image_size,
       loras = [],
-      seed,
       cfg,
       guidance_scale,
       image_url,
@@ -6362,19 +6361,15 @@ app.post(['/api/gemini/generate', '/api/engine/gemini/generate'], async (req, re
     }
 
     // Imagen is shut down (https://ai.google.dev/gemini-api/docs/imagen); all image models use generateContent,
-    // which has no negative prompt / cfg / steps / LoRA. seed: schema unverified → forwarded as generationConfig.seed.
-    if (rejectUnsupported(res, 'Google Gemini', req.body, ['negative_prompt', 'cfg', 'guidance_scale', 'steps', 'loras'])) return;
+    // which has no negative prompt / cfg / steps / LoRA / seed（ImageConfig 仅 aspectRatio+imageSize）。
+    if (rejectUnsupported(res, 'Google Gemini', req.body, ['negative_prompt', 'cfg', 'guidance_scale', 'steps', 'loras', 'seed'])) return;
     if (image_url && !(typeof image_url === 'string' && image_url.startsWith('data:'))) {
       return res.status(400).json({ error: '该服务商不支持: image_url 为非 data: URL（Google Gemini 仅接受内联 base64 参考图）', unsupported: ['image_url'] });
-    }
-    if (isProvided(seed) && !Number.isInteger(Number(seed))) {
-      return res.status(400).json({ error: `seed 必须为整数（收到 "${seed}"）` });
     }
 
     // 取值表唯一来源: src/schemas/providerSchema.ts。unverified（含未知模型）原样发送，上游失败原样返回；
     // 已知模型上不在 enum 的取值 → 400。已下线模型不拦截（modelStatus 只随响应返回）。
     const fieldStatus: Record<string, string> = {};
-    if (isProvided(seed)) fieldStatus.seed = getFieldSpec('gemini', model, 'seed')?.status ?? 'unverified';
     for (const [field, value] of [['aspect_ratio', aspect_ratio], ['image_size', image_size]] as const) {
       if (!isProvided(value)) continue;
       const status = valueStatus('gemini', model, field, value);
@@ -6413,10 +6408,9 @@ app.post(['/api/gemini/generate', '/api/engine/gemini/generate'], async (req, re
       });
     }
 
-    // 只放用户实际传了的字段；seed → generationConfig.seed（SDK GenerateContentConfig.seed）
+    // 只放用户实际传了的字段；seed 该服务商不支持（不写入 generationConfig）
     const config: Record<string, any> = {};
     if (Object.keys(imageConfig).length > 0) config.imageConfig = imageConfig;
-    if (isProvided(seed)) config.seed = Number(seed);
     const contentResponse = await upstreamSdkCall(
       { provider: 'gemini', route: req.path, model, key: gen.apiKey, upstream: `generativelanguage.googleapis.com/v1beta/models/${model}:generateContent` },
       () => gen!.client.models.generateContent({
@@ -6451,7 +6445,7 @@ app.post(['/api/gemini/generate', '/api/engine/gemini/generate'], async (req, re
       model,
       actualModel: model,
       actualProvider: 'Google Gemini (官方直连)',
-      seed: isProvided(seed) ? Number(seed) : null,
+      seed: null, // ImageConfig 无 seed；历史 Seed: 未填写
       steps: null,
       cfg: null,
       loras: [],

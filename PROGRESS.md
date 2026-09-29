@@ -1,5 +1,24 @@
 # Canvas Provider API 接线修复进度表
 
+## 0c. F5 — Gemini canvas seed grey (f5-gemini-seed-grey) — 2026-09-29
+
+Tip hash: f4b7063d9a82578abc39bbc1e59c2bad4b26c130 (branch f5-gemini-seed-grey, not pushed)
+
+### 完成项
+- [x] Schema：Gemini 生图模型 `seed` → `unsupported`（cite 生图指南 ImageConfig 仅 aspectRatio/imageSize；https://ai.google.dev/gemini-api/docs/image-generation）
+- [x] `isCanvasFieldUnsupported('gemini', …, 'seed')` = true（含空 model）；NodeItem KSampler seed 灰显空值 + placeholder「该服务商不支持」+ 随机骰子禁用；SpatialFrame 同路径
+- [x] ParameterInspector：`greySeed` 含 `isGemini`；空值 + placeholder「该服务商不支持」
+- [x] generate 路径：`graphEngine` omitSeed for gemini；`GeminiDriver` 不写 body.seed，结果 seed 恒 null；server `/api/gemini/generate` `rejectUnsupported(…, seed)` + history seed null
+- [x] 单测：schema / resolveCheckpoint / graphEngine（Civitai 长 seed 导入）/ GeminiDriver；`npx tsc --noEmit`；`npm test`
+
+### 范围外（本 tip 未改）
+- Grok editable aspect_ratio / resolution
+- Node title stuck as GROK_COMPAT when OpenAI/Gemini selected
+- SpatialFrame panel vs canvas prompt mismatch
+- 未合并 staging-local / 未重启 3417
+
+---
+
 ## 0b. F5 — stop forging seed/sampler defaults (f5-fake-defaults) — 2026-09-29
 
 Tip hash: 5084ddc03661937ec9680ed4b6843d9f929ac137 (F5 code 8de30250de36664d925687dfd63783138e891ce4; branch f5-fake-defaults, not pushed)

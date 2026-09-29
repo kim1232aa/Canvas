@@ -76,7 +76,6 @@ const dims = (spec: FieldSpec) => ({ width: spec, height: spec });
 const G_DOC = 'https://ai.google.dev/gemini-api/docs/image-generation';
 const G_DEPR = 'https://ai.google.dev/gemini-api/docs/deprecations';
 const G_API_V1 = 'https://generativelanguage.googleapis.com/$discovery/rest?version=v1';
-const G_API_V1BETA = 'https://generativelanguage.googleapis.com/$discovery/rest?version=v1beta';
 
 // 3.1 Flash Image 表 14 个比例（与 v1 discovery ImageConfig.aspectRatio 描述一致）
 const RATIOS_14 = ['1:1', '1:4', '1:8', '2:3', '3:2', '3:4', '4:1', '4:3', '4:5', '5:4', '8:1', '9:16', '16:9', '21:9'];
@@ -105,12 +104,14 @@ function gemini(
       aspect_ratio: enumField(G_DOC, ratios, { wire: 'imageConfig.aspectRatio', note: opts.ratioNote ?? '未指定时模型按参考图决定，否则 1:1' }),
       // v1 discovery：「If not specified, the model will use default value `1K`」
       image_size: enumField(G_DOC, sizes, { wire: 'imageConfig.imageSize', providerDefault: opts.sizeDefault, note: opts.sizeNote ?? '必须大写 K' }),
+      // ImageConfig 官方仅 aspectRatio + imageSize（无 seed）；GenerationConfig.seed 出现在文本 migrate 例，生图指南未列。
+      // 画布/PI 按 unsupported 灰显，不把 Civitai 导入 seed 当作生效，不发上游。
       seed: {
-        status: 'unverified',
-        source: G_API_V1BETA,
+        status: 'unsupported',
+        source: G_DOC,
         wire: 'generationConfig.seed',
         type: 'integer',
-        note: 'GenerationConfig.seed（int32，「If not set, the request uses a randomly generated seed」）存在；官方未说明对生图是否生效',
+        note: '生图指南 ImageConfig 仅 aspectRatio/imageSize（https://ai.google.dev/gemini-api/docs/image-generation）；无 imageConfig.seed。GenerationConfig.seed 见于文本例，生图路径不生效 → 灰显且不发上游',
       },
       ...unsupported(G_DOC, ['width', 'height', 'negative_prompt', 'steps', 'cfg', 'denoise', 'loras'], '官方可选配置只有 aspect_ratio / image_size'),
     },

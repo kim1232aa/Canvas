@@ -1,3 +1,4 @@
+import { isCanvasFieldUnsupported } from './resolveCheckpoint';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { extractWorkflowParameters, executeWorkflow, resolveTargetNode } from './graphEngine';
 import { Connection, NodeInstance } from '../types/graph';
@@ -519,6 +520,27 @@ describe('F5 omit unset seed/sampler defaults', () => {
     expect(sent.extraParams).not.toHaveProperty('scheduler');
     expect(res.seed).toBeNull();
     expect(rand).not.toHaveBeenCalled();
+  });
+
+  it('KSampler + CheckpointLoader gemini: imported long seed omitted from generate; history seed null', async () => {
+    const nodes = [
+      node('ckpt', 'CheckpointLoaderSimple', { ckpt_name: 'gemini-3.1-flash-image', targetProvider: 'gemini' }),
+      node('clip', 'CLIPTextEncode', { text: 'a fox' }),
+      node('ks', 'KSampler', { control_after_generate: 'fixed', seed: 1847392847561, steps: 20, cfg: 7 }),
+    ];
+    const conns = [
+      { id: 'c1', fromNodeId: 'ckpt', fromSocketId: 'MODEL', toNodeId: 'ks', toSocketId: 'model', type: 'MODEL' },
+      { id: 'c2', fromNodeId: 'clip', fromSocketId: 'CONDITIONING', toNodeId: 'ks', toSocketId: 'positive', type: 'CONDITIONING' },
+    ] as Connection[];
+    const p = extractWorkflowParameters(nodes, conns, 'ks');
+    expect(p.targetProvider).toBe('gemini');
+    expect(p.seed).toBe(1847392847561); // widget 仍可残留导入值
+    expect(isCanvasFieldUnsupported('gemini', 'gemini-3.1-flash-image', 'seed')).toBe(true);
+    const spy = mockGenerate(null);
+    const res = await executeWorkflow(nodes, conns, () => {}, undefined, 'ks');
+    const sent = spy.mock.calls[0][1];
+    expect(sent.seed).toBeUndefined();
+    expect(res.seed).toBeNull();
   });
 
   it('FalAIEngineNode with only model+prompt: no forged 28/3.5/1024/seed', async () => {
