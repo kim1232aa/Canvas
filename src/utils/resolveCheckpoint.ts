@@ -492,3 +492,15 @@ export function isCanvasFieldUnsupported(
   if (!schemaProv || !schemaModel) return false;
   return getFieldSpec(schemaProv, schemaModel, field)?.status === 'unsupported';
 }
+
+/** Drop leftover LoRA stacks when the active engine/model schema rejects loras. */
+export function sanitizeFrameLoras<T>(
+  provider: string | undefined,
+  model: string | undefined,
+  loras: T[] | undefined | null
+): T[] {
+  const list = Array.isArray(loras) ? loras : [];
+  if (list.length === 0) return list;
+  if (isCanvasFieldUnsupported(provider, model, 'loras')) return [];
+  return list;
+}

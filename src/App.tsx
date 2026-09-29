@@ -45,6 +45,8 @@ import {
   isFalLoraEndpointError,
   resolveActiveCheckpoint,
   resolveCheckpointForNode,
+  isCanvasFieldUnsupported,
+  sanitizeFrameLoras,
 } from './utils/resolveCheckpoint';
 import { checkpointNodeTitle, spatialFrameTopBarLabel } from './utils/providerLabels';
 
@@ -578,7 +580,9 @@ export default function App() {
           : (p.aspectRatio || undefined),
         imageSize: p.imageSize || undefined,
         extraParams,
-        loras: grokOrOpenAi ? undefined : p.loras.map((l) => ({
+        loras: (grokOrOpenAi || isCanvasFieldUnsupported(p.targetProvider, p.checkpoint, 'loras'))
+          ? undefined
+          : p.loras.map((l) => ({
           name: l.name,
           strength: l.modelStrength,
           modelStrength: l.modelStrength,
@@ -757,7 +761,11 @@ export default function App() {
               f.id === activeFrameTargetId
                 ? {
                     ...f,
-                    params: { ...f.params, checkpoint: value },
+                    params: {
+                    ...f.params,
+                    checkpoint: value,
+                    loras: sanitizeFrameLoras(f.params.targetProvider, value, f.params.loras),
+                  },
                   }
                 : f
             )
@@ -784,7 +792,11 @@ export default function App() {
               f.id === activeFrameTargetId
                 ? {
                     ...f,
-                    params: { ...f.params, targetProvider: prov },
+                    params: {
+                      ...f.params,
+                      targetProvider: prov,
+                      loras: sanitizeFrameLoras(prov, f.params.checkpoint, f.params.loras),
+                    },
                   }
                 : f
             )
@@ -814,7 +826,12 @@ export default function App() {
       setSpatialFrames((prev) =>
         prev.map((f) => (f.id === activeFrameTargetId ? {
           ...f,
-          params: { ...f.params, checkpoint: value, targetProvider: 'gemini' },
+          params: {
+          ...f.params,
+          checkpoint: value,
+          targetProvider: 'gemini',
+          loras: sanitizeFrameLoras('gemini', value, f.params.loras),
+        },
         } : f))
       );
     } else if (targetNode.type === 'GoogleImagenNode' && widgetName === 'aspect_ratio') {
@@ -853,7 +870,12 @@ export default function App() {
           params: {
             ...f.params,
             ...(widgetName === 'ckpt_name' ? { checkpoint: value } : {}),
-            ...(widgetName === 'targetProvider' ? { targetProvider: value } : {}),
+            ...(widgetName === 'targetProvider'
+              ? {
+                  targetProvider: value,
+                  loras: sanitizeFrameLoras(value, f.params.checkpoint, f.params.loras),
+                }
+              : {}),
             ...(widgetName === 'aspect_ratio' ? { aspectRatio: value || undefined } : {}),
             ...(widgetName === 'resolution' ? { resolution: value || undefined } : {}),
           },

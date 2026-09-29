@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Play,
   Loader2,
@@ -54,6 +54,13 @@ export const SpatialFrameItem: React.FC<SpatialFrameItemProps> = ({
   onBranchVariation,
 }) => {
   const [isRefining, setIsRefining] = useState(false);
+
+  // Soft-3: engines that reject loras must not keep leftover stacks/strength UI.
+  useEffect(() => {
+    if (!frame.params.loras.length) return;
+    if (!isCanvasFieldUnsupported(frame.params.targetProvider, frame.params.checkpoint, 'loras')) return;
+    onUpdateFrame(frame.id, { params: { ...frame.params, loras: [] } });
+  }, [frame.id, frame.params.targetProvider, frame.params.checkpoint, frame.params.loras.length]);
 
   const handleRefine = async () => {
     if (!frame.prompt) return;
@@ -131,9 +138,11 @@ export const SpatialFrameItem: React.FC<SpatialFrameItemProps> = ({
               isCanvasFieldUnsupported(frame.params.targetProvider, frame.params.checkpoint, 'width') ||
               isCanvasFieldUnsupported(frame.params.targetProvider, frame.params.checkpoint, 'height');
             return whUnsupported ? (
-              <span className="text-[10px] font-mono text-slate-600 bg-[#0d0e12] px-2 py-0.5 rounded border border-[#22242c] flex items-center gap-1" title="该服务商不支持">
-                <span>—</span>
-                <FieldStatusBadge status="unsupported" />
+              <span
+                className="text-[10px] font-mono bg-rose-950/40 border border-rose-500/50 text-rose-300 px-1.5 py-0.5 rounded shrink-0"
+                title="当前引擎不支持像素宽高，请用画面比例 / 尺寸档位"
+              >
+                不支持宽高
               </span>
             ) : (
               <span className="text-[10px] font-mono text-slate-400 bg-[#1c1d25] px-2 py-0.5 rounded border border-[#2b2d38]">
@@ -148,10 +157,14 @@ export const SpatialFrameItem: React.FC<SpatialFrameItemProps> = ({
           <button
             onClick={() => onOpenInspector(frame.id)}
             className="px-2 py-1 rounded bg-[#20222b] hover:bg-[#2b2e3a] text-cyan-300 font-mono text-[10px] flex items-center gap-1 border border-[#303342] transition-colors"
-            title="调节完整 ComfyUI 参数 (KSampler, LoRA, Checkpoint)"
+            title={
+              isNonComfyCloudProvider(frame.params.targetProvider)
+                ? '调节当前引擎的模型与生成参数'
+                : '调节完整 ComfyUI 参数 (KSampler, LoRA, Checkpoint)'
+            }
           >
             <Sliders className="w-3 h-3 text-cyan-400" />
-            <span>ComfyUI 参数</span>
+            <span>{isNonComfyCloudProvider(frame.params.targetProvider) ? '引擎参数' : 'ComfyUI 参数'}</span>
           </button>
           <button
             onClick={() => onDeleteFrame(frame.id)}
@@ -352,7 +365,9 @@ export const SpatialFrameItem: React.FC<SpatialFrameItemProps> = ({
               <p className="text-[11px] text-slate-500 mt-0.5">
                 {frame.mediaType === 'video'
                   ? '输入提示词或选择底图，一键生成 5秒 电影级动态运镜视频'
-                  : '输入提示词并配置 ComfyUI 参数后点击生成'}
+                  : isNonComfyCloudProvider(frame.params.targetProvider)
+                    ? '输入提示词并确认模型后点击生成'
+                    : '输入提示词并配置 ComfyUI 参数后点击生成'}
               </p>
             </div>
           </div>
@@ -465,8 +480,9 @@ export const SpatialFrameItem: React.FC<SpatialFrameItemProps> = ({
           />
         </div>
 
-        {/* Civitai LoRAs Tag Summary & Compatibility */}
-        {frame.params.loras.length > 0 && (
+        {/* Civitai LoRAs Tag Summary & Compatibility — hidden when engine rejects loras */}
+        {frame.params.loras.length > 0 &&
+          !isCanvasFieldUnsupported(frame.params.targetProvider, frame.params.checkpoint, 'loras') && (
           <div className="space-y-1.5">
             <div className="flex flex-wrap gap-1 items-center">
               <span className="text-[10px] text-slate-400 font-mono">LoRAs:</span>

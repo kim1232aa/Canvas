@@ -8,6 +8,7 @@ import {
   isLoraUnsupportedOnEndpoint,
   resolveActiveCheckpoint,
   resolveCheckpointForNode,
+  sanitizeFrameLoras,
 } from './resolveCheckpoint';
 import { validateLoraCompatibility } from './baseModelMatcher';
 
@@ -206,5 +207,17 @@ describe('resolveCheckpoint — canvas NodeItem grey (compat)', () => {
     expect(isCanvasFieldUnsupported('grok_compat', 'grok-imagine-image', 'scheduler')).toBe(true);
     expect(isCanvasFieldUnsupported('fal', 'fal-ai/flux/dev', 'steps')).toBe(false);
     expect(isCanvasFieldUnsupported('fal', 'fal-ai/flux/dev', 'sampler')).toBe(true);
+  });
+});
+
+describe('sanitizeFrameLoras', () => {
+  it('clears leftover LoRAs under Gemini', () => {
+    const left = [{ name: 'x.safetensors', modelStrength: 0.7 }];
+    expect(sanitizeFrameLoras('gemini', 'gemini-2.5-flash-image', left)).toEqual([]);
+  });
+  it('keeps LoRAs when schema allows (fal schnell is unsupported — use civitai-ish path)', () => {
+    // modelscope is not in schema Provider set → isCanvasFieldUnsupported returns false for unknown
+    const left = [{ name: 'x.safetensors', modelStrength: 0.7 }];
+    expect(sanitizeFrameLoras('modelscope', 'Tongyi-MAI/Z-Image-Turbo', left)).toEqual(left);
   });
 });
