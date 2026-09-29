@@ -5409,108 +5409,49 @@ app.post(
 // 5. NanoGPT (nano-gpt.com/api / docs.nano-gpt.com)
 // ==========================================
 app.post(['/api/nanogpt/generate', '/api/engine/nanogpt/generate'], async (req, res) => {
+  const startTime = Date.now();
+  const nanoKey = keyPoolManager.getNextKey('nanogpt', (req.headers['x-nanogpt-key'] as string) || undefined);
+  if (!nanoKey) {
+    return res.status(400).json({ error: '未配置 NanoGPT API Key (x-nanogpt-key)。' });
+  }
+
   try {
-    const {
-      prompt,
-      negative_prompt,
-      model = 'flux-schnell',
-      size,
-      width = 1024,
-      height = 1024,
-      steps = 4,
-      guidance_scale,
-      seed,
-      image_url,
-      denoise,
-      loras = [],
-    } = req.body;
-    const apiKey =
-      (req.headers['x-nanogpt-key'] as string) ||
-      cloudSettings['nanogptKey'] ||
-      defaultKeys['nanogptKey'] ||
-      process.env.NANOGPT_API_KEY ||
-      '';
+    const { prompt, model, resolution, aspect_ratio, seed, image_url } = req.body;
+    if (!model) return res.status(400).json({ error: '模型为必填项（model is required）' });
+    // NanoGPT /api/v1/images: no negative_prompt/steps/cfg/loras/denoise, and no pixel dimensions
+    // (only resolution "1k"/"2k"/"4k" + aspect_ratio, per model — see GET /api/v1/images/models)
+    if (rejectUnsupported(res, 'NanoGPT', req.body, ['negative_prompt', 'steps', 'cfg', 'guidance_scale', 'loras', 'denoise', 'width', 'height', 'size'])) return;
 
-    if (!apiKey) {
-      return res.status(400).json({
-        error: '未配置 NanoGPT API Key，请在右上角设置中填写您的密钥。',
-      });
-    }
+    const payload: any = { prompt: prompt || '', model };
+    if (isProvided(resolution)) payload.resolution = resolution;
+    if (isProvided(aspect_ratio)) payload.aspect_ratio = aspect_ratio;
+    if (isProvided(seed)) payload.seed = Number(seed);
 
-    // Extract triggers and inject into prompt
-    let finalPrompt = prompt || '';
-    if (Array.isArray(loras) && loras.length > 0) {
-      const triggers = loras.map((l: any) => l.triggers || l.triggerWords).filter(Boolean).join(', ');
-      if (triggers && !finalPrompt.includes(triggers)) {
-        finalPrompt = `${triggers}, ${finalPrompt}`.trim();
-      }
-    }
-
-    const payload: any = {
-      prompt: finalPrompt,
-      model,
-      size: size || `${width}x${height}`,
-      num_inference_steps: Number(steps) || 4,
-    };
-
-    if (negative_prompt) {
-      payload.negative_prompt = negative_prompt;
-    }
-    if (guidance_scale !== undefined && guidance_scale !== null) {
-      payload.guidance_scale = Number(guidance_scale);
-    }
-    if (typeof seed === 'number' && seed >= 0) {
-      payload.seed = seed;
-    }
+    // Reference image via input_references (NOT legacy imageUrl/imageDataUrl)
     if (image_url) {
-      payload.image_url = image_url;
-      payload.imageUrl = image_url;
-      payload.imageDataUrl = image_url;
-      if (typeof denoise === 'number') {
-        payload.strength = denoise;
+      payload.input_references = [image_url];
+    }
+
+    // POST api.nano-gpt.com/api/v1/images
+    const response = await upstreamFetch(
+      { provider: 'nanogpt', route: req.path, model, key: nanoKey },
+      'https://api.nano-gpt.com/api/v1/images',
+      {
+        method: 'POST',
+        headers: { 'x-api-key': nanoKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
       }
-    }
-
-    const civitaiToken =
-      (req.headers['x-civitai-key'] as string) ||
-      cloudSettings['civitaiKey'] ||
-      defaultKeys['civitaiKey'] ||
-      '';
-
-    if (Array.isArray(loras) && loras.length > 0) {
-      payload.loras = loras.map((l: any) => {
-        let resolvedPath = l.path || l.url || l.name;
-        if (l.civitaiId && !resolvedPath.startsWith('http')) {
-          resolvedPath = `https://civitai.com/api/download/models/${l.civitaiId}${
-            civitaiToken ? `?token=${encodeURIComponent(civitaiToken)}` : ''
-          }`;
-        }
-        return {
-          path: resolvedPath,
-          scale: Number(l.scale ?? l.strength ?? l.modelStrength ?? 0.8),
-        };
-      });
-    }
-
-    const response = await fetch('https://nano-gpt.com/api/generate-image', {
-      method: 'POST',
-      headers: {
-        'x-api-key': apiKey,
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
+    );
 
     if (!response.ok) {
       const errorText = await response.text();
-      return res.status(response.status).json({
-        error: `NanoGPT 生图失败 [${response.status}]: ${errorText}`,
-      });
+      keyPoolManager.recordResult('nanogpt', nanoKey, false, Date.now() - startTime, errorText, response.status);
+      return res.status(response.status).json({ error: `NanoGPT 生图失败 [${response.status}]: ${errorText}` });
     }
 
+    keyPoolManager.recordResult('nanogpt', nanoKey, true, Date.now() - startTime);
     const data = await response.json();
-    const imageUrl = data.image_url || data.url || data.images?.[0];
+    const imageUrl = data.data?.[0]?.url || data.image_url || data.url || data.images?.[0];
 
     if (!imageUrl) {
       return res.status(500).json({ error: 'NanoGPT 返回数据中未包含图像输出 URL' });
@@ -5518,18 +5459,12 @@ app.post(['/api/nanogpt/generate', '/api/engine/nanogpt/generate'], async (req, 
 
     const item = recordHistoryItem({
       url: imageUrl,
-      prompt: finalPrompt,
-      negativePrompt: negative_prompt,
+      prompt,
       provider: 'NanoGPT',
       model,
-      seed: seed || 136947637,
-      steps: Number(steps) || 4,
-      cfg: Number(guidance_scale) || 3.5,
-      loras: (loras || []).map((l: any) => ({
-        name: l.name || l.path,
-        strength: Number(l.scale ?? l.strength ?? 0.8),
-        civitaiId: l.civitaiId,
-      })),
+      seed: payload.seed ?? null,
+      steps: null,
+      cfg: null,
     });
 
     return res.json({
@@ -5539,6 +5474,7 @@ app.post(['/api/nanogpt/generate', '/api/engine/nanogpt/generate'], async (req, 
       historyItem: item,
     });
   } catch (error: any) {
+    keyPoolManager.recordResult('nanogpt', nanoKey, false, Date.now() - startTime, error.message);
     return res.status(500).json({ error: `NanoGPT 请求失败: ${error.message}` });
   }
 });
