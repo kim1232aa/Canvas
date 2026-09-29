@@ -2,7 +2,7 @@
 
 ## 0c. F5 — Gemini canvas seed grey (f5-gemini-seed-grey) — 2026-09-29
 
-Tip hash: f4b7063d9a82578abc39bbc1e59c2bad4b26c130 (branch f5-gemini-seed-grey, not pushed)
+Tip hash: 1ad82fa44764056407754f6d72274ca0be02aa1b (branch f5-gemini-seed-grey, not pushed)
 
 ### 完成项
 - [x] Schema：Gemini 生图模型 `seed` → `unsupported`（cite 生图指南 ImageConfig 仅 aspectRatio/imageSize；https://ai.google.dev/gemini-api/docs/image-generation）
