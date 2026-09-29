@@ -2394,7 +2394,11 @@ app.get("/api/models", async (req, res) => {
         }
         const msSort = sortParam.toLowerCase().includes('like') ? 'likes' : sortParam.toLowerCase().includes('new') ? 'created_at' : 'downloads';
         const msUrl = `https://www.modelscope.cn/openapi/v1/models?page_size=${limitParam}&page_number=${pageParam}&sort=${msSort}&search=${encodeURIComponent(msSearch)}`;
-        const msResp = await fetch(msUrl, { headers: { 'User-Agent': 'ComfyCanvas/1.0' }, signal: AbortSignal.timeout(15000) });
+        const msResp = await upstreamFetch(
+          { provider: 'modelscope_cn', route: req.path, model: msSearch },
+          msUrl,
+          { headers: { 'User-Agent': 'ComfyCanvas/1.0' }, signal: AbortSignal.timeout(15000) }
+        );
         if (msResp.ok) {
           const msData = await msResp.json();
           const items = msData?.data?.models || [];
@@ -2461,7 +2465,11 @@ app.get("/api/models", async (req, res) => {
         }
         const msAiSort = sortParam.toLowerCase().includes('like') ? 'likes' : sortParam.toLowerCase().includes('new') ? 'created_at' : 'downloads';
         const msUrl = `https://modelscope.ai/openapi/v1/models?page_size=${limitParam}&page_number=${pageParam}&sort=${msAiSort}&search=${encodeURIComponent(msSearch)}`;
-        const msResp = await fetch(msUrl, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }, signal: AbortSignal.timeout(15000) });
+        const msResp = await upstreamFetch(
+          { provider: 'modelscope_ai', route: req.path, model: msSearch },
+          msUrl,
+          { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }, signal: AbortSignal.timeout(15000) }
+        );
         if (msResp.ok) {
           const msData = await msResp.json();
           const items = msData?.data?.models || [];
@@ -2584,10 +2592,14 @@ app.get("/api/models", async (req, res) => {
         }
 
         const hfUrl = `https://huggingface.co/api/models?${hfParams.toString()}`;
-        const hfResp = await fetch(hfUrl, {
-          headers: hfHeaders,
-          signal: AbortSignal.timeout(15000),
-        });
+        const hfResp = await upstreamFetch(
+          { provider: 'huggingface', route: req.path, model: searchStr || 'list', key: hfToken },
+          hfUrl,
+          {
+            headers: hfHeaders,
+            signal: AbortSignal.timeout(15000),
+          }
+        );
 
         if (hfResp.ok) {
           const linkHeader = hfResp.headers.get("link");
@@ -2605,7 +2617,11 @@ app.get("/api/models", async (req, res) => {
           if (searchStr && searchStr.includes('/') && !rawModelList.some((m) => m.id?.toLowerCase() === searchStr.toLowerCase())) {
             try {
               const exactUrl = `https://huggingface.co/api/models/${searchStr.split('/').map(encodeURIComponent).join('/')}?expand[]=siblings&expand[]=tags&expand[]=likes&expand[]=pipeline_tag&expand[]=author&expand[]=cardData`;
-              const exactResp = await fetch(exactUrl, { headers: hfHeaders, signal: AbortSignal.timeout(8000) });
+              const exactResp = await upstreamFetch(
+                { provider: 'huggingface', route: req.path, model: searchStr, key: hfToken },
+                exactUrl,
+                { headers: hfHeaders, signal: AbortSignal.timeout(8000) }
+              );
               if (exactResp.ok) {
                 const exactModel = await exactResp.json();
                 if (exactModel && exactModel.id) {
@@ -2761,10 +2777,14 @@ app.get("/api/models", async (req, res) => {
             pagination.civitai = { nextCursor: cachedCivitai.nextCursor, hasMore: true };
           }
         } else {
-          const civitaiResp = await fetch(`https://civitai.com/api/v1/models?${params.toString()}`, {
-            headers: civitaiHeaders,
-            signal: AbortSignal.timeout(30000), // Increased to 30s
-          });
+          const civitaiResp = await upstreamFetch(
+            { provider: 'civitai', route: req.path, model: (params.get('query') || params.get('types') || 'list'), key: civitaiToken },
+            `https://civitai.com/api/v1/models?${params.toString()}`,
+            {
+              headers: civitaiHeaders,
+              signal: AbortSignal.timeout(30000), // Increased to 30s
+            }
+          );
           if (civitaiResp.ok) {
             const cData = await civitaiResp.json();
             if (cData.error) {
@@ -2840,7 +2860,13 @@ app.get("/api/models", async (req, res) => {
         }
 
         const responses = await Promise.allSettled(
-          fetchUrls.map((u) => fetch(u, { headers: falHeaders, signal: AbortSignal.timeout(15000) }))
+          fetchUrls.map((u) =>
+            upstreamFetch(
+              { provider: 'fal', route: req.path, model: u.includes('text-to-video') ? 'category:video' : 'category:image', key: falKey },
+              u,
+              { headers: falHeaders, signal: AbortSignal.timeout(15000) }
+            )
+          )
         );
 
         const seenEndpoints = new Set<string>();
@@ -2916,31 +2942,41 @@ app.get("/api/models", async (req, res) => {
           const shouldFetchImage = cat === "all" || cat === "checkpoint" || cat === "edit";
           const shouldFetchVideo = cat === "all" || cat === "video";
 
-          const fetchImageModels = shouldFetchImage ? fetch("https://nano-gpt.com/api/v1/image-models", {
-            headers: { "User-Agent": "ComfyCanvas/1.0" },
-            signal: AbortSignal.timeout(10000),
-          }).catch(() => fetch("https://api.nano-gpt.com/api/v1/image-models", {
-            headers: { "User-Agent": "ComfyCanvas/1.0" },
-            signal: AbortSignal.timeout(10000),
-          })).catch(() => null) : Promise.resolve(null);
+          const fetchImageModels = shouldFetchImage
+            ? upstreamFetch(
+                { provider: 'nanogpt', route: req.path, model: 'image-models' },
+                'https://api.nano-gpt.com/api/v1/image-models',
+                {
+                  headers: { 'User-Agent': 'ComfyCanvas/1.0' },
+                  signal: AbortSignal.timeout(10000),
+                }
+              )
+            : Promise.resolve(null);
 
-          const fetchVideoModels = shouldFetchVideo ? fetch("https://nano-gpt.com/api/v1/video-models", {
-            headers: { "User-Agent": "ComfyCanvas/1.0" },
-            signal: AbortSignal.timeout(10000),
-          }).catch(() => fetch("https://api.nano-gpt.com/api/v1/video-models", {
-            headers: { "User-Agent": "ComfyCanvas/1.0" },
-            signal: AbortSignal.timeout(10000),
-          })).catch(() => null) : Promise.resolve(null);
+          const fetchVideoModels = shouldFetchVideo
+            ? upstreamFetch(
+                { provider: 'nanogpt', route: req.path, model: 'video-models' },
+                'https://api.nano-gpt.com/api/v1/video-models',
+                {
+                  headers: { 'User-Agent': 'ComfyCanvas/1.0' },
+                  signal: AbortSignal.timeout(10000),
+                }
+              )
+            : Promise.resolve(null);
 
           const [imgResp, vidResp] = await Promise.all([fetchImageModels, fetchVideoModels]);
 
-          if (imgResp && imgResp.ok) {
+          if (imgResp) {
+            if (!imgResp.ok) {
+              const errText = await imgResp.text().catch(() => '');
+              throw new Error(`NanoGPT image-models 失败 [${imgResp.status}]: ${errText.slice(0, 200)}`);
+            }
             const nanoData = await imgResp.json();
             const list = Array.isArray(nanoData.data) ? nanoData.data : Array.isArray(nanoData.models) ? nanoData.models : Array.isArray(nanoData) ? nanoData : [];
             for (const m of list) {
               const mId = m.id || m.model_id || "";
               if (!mId) continue;
-              
+
               const isEdit = m.architecture?.modality === 'image->image' || m.capabilities?.inpainting || mId.includes('edit') || mId.includes('remover') || mId.includes('upscal') || mId.includes('birefnet');
               const parsed = extractModelMetadata(
                 mId,
@@ -2976,7 +3012,11 @@ app.get("/api/models", async (req, res) => {
             }
           }
 
-          if (vidResp && vidResp.ok) {
+          if (vidResp) {
+            if (!vidResp.ok) {
+              const errText = await vidResp.text().catch(() => '');
+              throw new Error(`NanoGPT video-models 失败 [${vidResp.status}]: ${errText.slice(0, 200)}`);
+            }
             const vidData = await vidResp.json();
             const list = Array.isArray(vidData.data) ? vidData.data : Array.isArray(vidData.models) ? vidData.models : Array.isArray(vidData) ? vidData : [];
             for (const m of list) {
@@ -3041,10 +3081,17 @@ app.get("/api/models", async (req, res) => {
       try {
         const geminiKey = process.env.GEMINI_API_KEY || cloudSettings['geminiKey'] || defaultKeys['geminiKey'] || '';
         if (geminiKey) {
-          const gResp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${geminiKey}`, {
-            signal: AbortSignal.timeout(4500),
-          }).catch(() => null);
-          if (gResp && gResp.ok) {
+          const gResp = await upstreamFetch(
+            { provider: 'gemini', route: req.path, model: 'models', key: geminiKey },
+            'https://generativelanguage.googleapis.com/v1beta/models',
+            {
+              headers: {
+                'x-goog-api-key': geminiKey,
+              },
+              signal: AbortSignal.timeout(4500),
+            }
+          );
+          if (gResp.ok) {
             const gData = await gResp.json();
             const models = gData.models || [];
             for (const m of models) {
@@ -3064,7 +3111,7 @@ app.get("/api/models", async (req, res) => {
                 geminiItems.push({
                   id: nameClean,
                   name: parsed.cleanDisplayName,
-                  provider: isImage ? "Google Imagen" : "Google Gemini",
+                  provider: "Google Gemini",
                   category: isImage ? "Checkpoint" : "Edit",
                   type: isImage ? "Checkpoint" : "Reasoning",
                   baseModel: parsed.baseModel,
@@ -3196,13 +3243,23 @@ function normalizeFalEndpoint(model: string, isVideo = false): string {
 
   // If in video generation mode, force video endpoints
   if (isVideo) {
-    if (m.includes('kling')) return 'fal-ai/kling-video/v1/standard/text-to-video';
-    if (m.includes('ltx')) return 'fal-ai/ltx-video';
-    if (m.includes('minimax') || m.includes('hailuo')) return 'fal-ai/minimax/video-01';
-    if (m.includes('cogvideo')) return 'fal-ai/cogvideox-5b';
-    if (m.includes('hunyuan')) return 'fal-ai/hunyuan-video';
-    if (m.includes('image-to-video')) return 'fal-ai/wan/v2.1/image-to-video';
-    return 'fal-ai/wan/v2.1/text-to-video';
+    // Full Fal endpoint IDs are passed through verbatim
+    if (m.startsWith('fal-ai/')) return model.trim();
+    if (m === 'kling-video/v1/standard/text-to-video') return 'fal-ai/kling-video/v1/standard/text-to-video';
+    if (m === 'kling-video/v1/standard/image-to-video') return 'fal-ai/kling-video/v1/standard/image-to-video';
+    if (m === 'ltx-video') return 'fal-ai/ltx-video';
+    if (m === 'minimax/video-01') return 'fal-ai/minimax/video-01';
+    if (m === 'cogvideox-5b') return 'fal-ai/cogvideox-5b';
+    if (m === 'hunyuan-video') return 'fal-ai/hunyuan-video';
+    if (m === 'wan/v2.1/image-to-video') return 'fal-ai/wan/v2.1/image-to-video';
+    if (m === 'damo/wan2.1-t2v' || m === 'wan2.1-t2v' || m === 'wan/v2.1/text-to-video') return 'fal-ai/wan/v2.1/text-to-video';
+    // F4: unrecognized video model → empty string signals caller to 400
+    return '';
+  }
+
+  // F3: fal-ai/flux-lora is an independent endpoint, NOT rewritten to fal-ai/flux/dev
+  if (m === 'fal-ai/flux-lora' || m === 'flux-lora') {
+    return 'fal-ai/flux-lora';
   }
 
   if (
