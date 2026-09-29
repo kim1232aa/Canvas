@@ -18,6 +18,8 @@ import {
 import { SpatialFrame, ComfyParameters } from '../types/graph';
 import { refinePromptWithGemini, getRefineModelSelection } from '../services/api';
 import { validateModelCompatibility } from '../utils/baseModelMatcher';
+import { isCanvasFieldUnsupported } from '../utils/resolveCheckpoint';
+import { FieldStatusBadge } from './FieldStatusBadge';
 
 interface SpatialFrameItemProps {
   frame: SpatialFrame;
@@ -79,6 +81,7 @@ export const SpatialFrameItem: React.FC<SpatialFrameItemProps> = ({
   };
 
   const handleRerollSeed = () => {
+    if (isCanvasFieldUnsupported(frame.params.targetProvider, frame.params.checkpoint, 'seed')) return;
     onUpdateFrame(frame.id, {
       params: {
         ...frame.params,
@@ -118,9 +121,21 @@ export const SpatialFrameItem: React.FC<SpatialFrameItemProps> = ({
           <span className="font-bold text-white tracking-wide truncate text-[13px]">
             {frame.title}
           </span>
-          <span className="text-[10px] font-mono text-slate-400 bg-[#1c1d25] px-2 py-0.5 rounded border border-[#2b2d38]">
-            {frame.params.width}×{frame.params.height}
-          </span>
+          {(() => {
+            const whUnsupported =
+              isCanvasFieldUnsupported(frame.params.targetProvider, frame.params.checkpoint, 'width') ||
+              isCanvasFieldUnsupported(frame.params.targetProvider, frame.params.checkpoint, 'height');
+            return whUnsupported ? (
+              <span className="text-[10px] font-mono text-slate-600 bg-[#0d0e12] px-2 py-0.5 rounded border border-[#22242c] flex items-center gap-1" title="该服务商不支持">
+                <span>—</span>
+                <FieldStatusBadge status="unsupported" />
+              </span>
+            ) : (
+              <span className="text-[10px] font-mono text-slate-400 bg-[#1c1d25] px-2 py-0.5 rounded border border-[#2b2d38]">
+                {frame.params.width}×{frame.params.height}
+              </span>
+            );
+          })()}
         </div>
 
         {/* Header Actions */}
@@ -158,19 +173,23 @@ export const SpatialFrameItem: React.FC<SpatialFrameItemProps> = ({
         </div>
         <div className="flex items-center gap-1 shrink-0">
           {(() => {
-            const seedUnsupported =
-              frame.params.targetProvider === 'openai_compat' ||
-              frame.params.targetProvider === 'grok_compat';
+            const seedUnsupported = isCanvasFieldUnsupported(
+              frame.params.targetProvider,
+              frame.params.checkpoint,
+              'seed'
+            );
             return (
               <button
+                type="button"
                 onClick={seedUnsupported ? undefined : handleRerollSeed}
                 disabled={seedUnsupported}
                 className={`flex items-center gap-1 ${
                   seedUnsupported
-                    ? 'text-slate-600 cursor-not-allowed opacity-40'
+                    ? 'text-slate-600 cursor-not-allowed opacity-40 pointer-events-none'
                     : 'text-slate-400 hover:text-white'
                 }`}
                 title={seedUnsupported ? '该服务商不支持' : '摇随机种子'}
+                aria-label={seedUnsupported ? 'seed（该服务商不支持）' : '摇随机种子'}
               >
                 <span>{seedUnsupported ? '—' : frame.params.seed}</span>
                 <Dices className={`w-3 h-3 ${seedUnsupported ? 'text-slate-600' : 'text-cyan-400'}`} />

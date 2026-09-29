@@ -527,12 +527,16 @@ export const Canvas: React.FC<CanvasProps> = ({
                 onOpenCivitaiPicker={onOpenCivitaiPicker}
                 onImageClick={onPreviewImage}
                 currentCheckpoint={
-                  (node.type === 'LoRALoader' || node.type === 'LoraLoader' || node.type === 'LoraLoaderModelOnly' || node.type === 'CivitaiLoRABrowserNode')
+                  (node.type === 'LoRALoader' || node.type === 'LoraLoader' || node.type === 'LoraLoaderModelOnly' || node.type === 'CivitaiLoRABrowserNode'
+                    || node.type === 'KSampler' || node.type === 'EmptyLatentImage'
+                    || node.type === 'CLIPTextEncode' || node.type === 'CLIPTextEncodeNegative')
                     ? (resolveCheckpointForNode(node.id, nodes, connections).checkpoint || currentCheckpoint)
                     : currentCheckpoint
                 }
                 currentProvider={
-                  (node.type === 'LoRALoader' || node.type === 'LoraLoader' || node.type === 'LoraLoaderModelOnly' || node.type === 'CivitaiLoRABrowserNode')
+                  (node.type === 'LoRALoader' || node.type === 'LoraLoader' || node.type === 'LoraLoaderModelOnly' || node.type === 'CivitaiLoRABrowserNode'
+                    || node.type === 'KSampler' || node.type === 'EmptyLatentImage'
+                    || node.type === 'CLIPTextEncode' || node.type === 'CLIPTextEncodeNegative')
                     ? (resolveCheckpointForNode(node.id, nodes, connections).provider || undefined)
                     : undefined
                 }

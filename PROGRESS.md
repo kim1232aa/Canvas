@@ -2,7 +2,7 @@
 
 ## 0. compat-relays（OpenAI 兼容中转 + Grok 兼容中转）— 2026-09-29
 
-Tip hash: 5db7f912dc2e016f945c76b92c9f5057c8ea1ac7 (feat commit e8c763e3615034a3556cadb4d07d4696f7b1bb2c; branch compat-relays, not pushed)
+Tip hash: (pending commit — NodeItem grey + N/size persist + LoRA copy unify)
 
 ### 完成项
 - [x] 新增一等公民 provider：`openai_compat`（仅生图/改图）、`grok_compat`（推理+生图+改图+生视频）
@@ -14,8 +14,12 @@ Tip hash: 5db7f912dc2e016f945c76b92c9f5057c8ea1ac7 (feat commit e8c763e3615034a3
   - OpenAI 兼容：灰 seed / negative / steps / CFG / sampler / LoRA；保留 size / quality / output_format / background / moderation / n
   - Grok 兼容：灰 seed / negative / steps / CFG / LoRA / width·height；保留 aspect_ratio / resolution（图 1k/1.5k/2k，视频 480p/720p/1080p）/ 图生图 / 视频 duration
 - [x] 服务端 `rejectUnsupported` 对上述字段 400；绝不静默丢弃或换商
+- [x] Hard QA：画布 NodeItem 对 KSampler seed(+骰子) / EmptyLatent WH / CLIPTextEncodeNegative 按 providerSchema 灰显「该服务商不支持」（Canvas 传入 resolveCheckpointForNode 的 provider，含 openai_compat/grok_compat）
+- [x] SpatialFrame 种子骰子与宽高徽章同样 schema 灰显
+- [x] Modal N（batchSize→extraParams.n）写入请求；size/quality/aspect/resolution 等 compat 选项回写 CheckpointLoader + frame.params（非 UI-only）
+- [x] Canvas LoRA 文案统一为「该服务商不支持」（原「该端点不支持」）
 - [x] Grok 视频 503 `grok_media_no_eligible_account` 原样返回 status+body；`respect_moderation=false` 无 URL 当失败原样报出
-- [x] `npx tsc --noEmit` 0；`npm test` 47/47 pass
+- [x] `npx tsc --noEmit` 0；`npm test` 49/49 pass
 
 ### QA 配置步骤（勿把真实 key 写进仓库）
 ```bash

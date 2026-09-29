@@ -537,6 +537,10 @@ export default function App() {
       if (p.background) extraParams.background = p.background;
       if (p.moderation) extraParams.moderation = p.moderation;
       if (p.resolution) extraParams.resolution = p.resolution;
+      // Modal N → extraParams.n (must reach request body; not UI-only)
+      if (grokOrOpenAi && p.batchSize != null && Number(p.batchSize) > 0) {
+        extraParams.n = Number(p.batchSize);
+      }
 
       const grokVideoDuration = grokish
         ? (frame.videoDuration ?? p.videoDuration)
@@ -1837,6 +1841,7 @@ export default function App() {
   const videoEngineNode = findFirstNodeOfType(nodes, 'AIVideoNode');
   const ksamplerNode = nodes.find((n) => n.type === 'KSampler' && !n.bypassed);
   const latentNode = nodes.find((n) => n.type === 'EmptyLatentImage' && !n.bypassed);
+  const checkpointLoaderNode = findFirstNodeOfType(nodes, 'CheckpointLoaderSimple');
 
   const selectedNode = selectedNodeId ? nodes.find((n) => n.id === selectedNodeId) : null;
 
@@ -1906,11 +1911,30 @@ export default function App() {
     denoise: ksamplerNode?.values?.denoise !== undefined ? Number(ksamplerNode.values.denoise) : (activeFrame?.params?.denoise ?? 1.0),
     width: latentNode?.values?.width !== undefined ? Number(latentNode.values.width) : (activeFrame?.params?.width ?? 1024),
     height: latentNode?.values?.height !== undefined ? Number(latentNode.values.height) : (activeFrame?.params?.height ?? 1024),
-    batchSize: latentNode?.values?.batch_size !== undefined ? Number(latentNode.values.batch_size) : (activeFrame?.params?.batchSize ?? 1),
+    batchSize: (selectedFrameId && activeFrame?.params?.batchSize != null)
+      ? Number(activeFrame.params.batchSize)
+      : (latentNode?.values?.batch_size !== undefined
+          ? Number(latentNode.values.batch_size)
+          : (activeFrame?.params?.batchSize ?? 1)),
     loras: (selectedFrameId ? activeFrame?.params?.loras : null) || (graphLoras.length > 0 ? graphLoras : (activeFrame?.params?.loras || [])),
     targetProvider: detectedTargetProvider as any,
-    aspectRatio: (googleImagenNode ? googleImagenNode.values?.aspect_ratio : activeFrame?.params?.aspectRatio) || undefined,
+    aspectRatio:
+      (googleImagenNode ? googleImagenNode.values?.aspect_ratio : undefined) ||
+      checkpointLoaderNode?.values?.aspect_ratio ||
+      checkpointLoaderNode?.values?.aspectRatio ||
+      activeFrame?.params?.aspectRatio ||
+      undefined,
     imageSize: (googleImagenNode ? googleImagenNode.values?.image_size : activeFrame?.params?.imageSize) || undefined,
+    size: checkpointLoaderNode?.values?.size || activeFrame?.params?.size || undefined,
+    quality: checkpointLoaderNode?.values?.quality || activeFrame?.params?.quality || undefined,
+    outputFormat:
+      checkpointLoaderNode?.values?.output_format ||
+      checkpointLoaderNode?.values?.outputFormat ||
+      activeFrame?.params?.outputFormat ||
+      undefined,
+    background: checkpointLoaderNode?.values?.background || activeFrame?.params?.background || undefined,
+    moderation: checkpointLoaderNode?.values?.moderation || activeFrame?.params?.moderation || undefined,
+    resolution: checkpointLoaderNode?.values?.resolution || activeFrame?.params?.resolution || undefined,
   };
 
   return (
@@ -2151,6 +2175,15 @@ export default function App() {
                     const updatedValues: Record<string, any> = {
                       ...n.values,
                       ckpt_name: newParams.checkpoint,
+                      // Persist compat options onto checkpoint node so graph/request sees them
+                      size: newParams.size,
+                      quality: newParams.quality,
+                      output_format: newParams.outputFormat,
+                      background: newParams.background,
+                      moderation: newParams.moderation,
+                      resolution: newParams.resolution,
+                      aspect_ratio: newParams.aspectRatio,
+                      n: newParams.batchSize,
                     };
                     // Do not write back inferred targetProvider unless explicitly set on the node
                     if (n.values?.targetProvider) {
@@ -2181,6 +2214,7 @@ export default function App() {
                         ...n.values,
                         width: newParams.width,
                         height: newParams.height,
+                        batch_size: newParams.batchSize ?? n.values?.batch_size ?? 1,
                       },
                     };
                   }

@@ -615,6 +615,9 @@ export function extractWorkflowParameters(
     moderation = execNode.values.moderation || undefined;
     resolution = execNode.values.resolution || undefined;
     aspectRatio = execNode.values.aspect_ratio || execNode.values.aspectRatio || undefined;
+    if (execNode.values.n != null || execNode.values.batch_size != null || execNode.values.batchSize != null) {
+      batchSize = Number(execNode.values.n ?? execNode.values.batch_size ?? execNode.values.batchSize) || 1;
+    }
   } else if (execNode.type === 'KSampler') {
     isVideo = false;
     ksamplerNodeId = execNode.id;
@@ -650,6 +653,9 @@ export function extractWorkflowParameters(
     moderation = ckpt.values.moderation || undefined;
     resolution = ckpt.values.resolution || undefined;
     aspectRatio = ckpt.values.aspect_ratio || ckpt.values.aspectRatio || aspectRatio;
+    if (ckpt.values.n != null || ckpt.values.batch_size != null || ckpt.values.batchSize != null) {
+      batchSize = Number(ckpt.values.n ?? ckpt.values.batch_size ?? ckpt.values.batchSize) || batchSize;
+    }
 
     const latentConn = connections.find((c) => c.toNodeId === execNode.id && c.toSocketId === 'latent_image');
     if (latentConn) {

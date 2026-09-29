@@ -162,6 +162,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
   const greyLoras = isOpenAiCompat || isGrokCompat || fieldUnsupported('loras');
   const greyWidthHeight = isGemini || isOpenAiCompat || isGrokCompat || fieldUnsupported('width') || fieldUnsupported('height');
   const greyNegative = isOpenAiCompat || isGrokCompat || fieldUnsupported('negative_prompt');
+  const greyNumImages = fieldUnsupported('num_images');
   const schemaSelect = (field: FieldKey, value: string, onChange: (v: string) => void, label: string) => {
     if (!schemaProvider || !schemaModel) return null;
     const spec = getFieldSpec(schemaProvider, schemaModel, field);
@@ -891,14 +892,23 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
               {schemaSelect('background', params.background || '', (v) => update({ background: v || undefined }), 'BACKGROUND')}
               {schemaSelect('moderation', params.moderation || '', (v) => update({ moderation: v || undefined }), 'MODERATION')}
               <div className="space-y-1">
-                <label className="text-slate-400 text-[10px] font-mono">N（生成张数）</label>
+                <div className="flex items-center justify-between gap-1.5">
+                  <label className="text-slate-400 text-[10px] font-mono">N（生成张数）</label>
+                  {greyNumImages && <FieldStatusBadge status="unsupported" />}
+                </div>
                 <input
                   type="number"
                   min={1}
                   max={10}
-                  value={params.batchSize ?? 1}
-                  onChange={(e) => update({ batchSize: Math.max(1, Math.min(10, parseInt(e.target.value) || 1)) })}
-                  className="w-full bg-[#111216] border border-[#2b2d38] rounded-lg px-2 py-1.5 text-slate-200 text-[11px] font-mono outline-none"
+                  value={greyNumImages ? '' : (params.batchSize ?? 1)}
+                  disabled={greyNumImages}
+                  title={greyNumImages ? '该服务商不支持' : undefined}
+                  placeholder={greyNumImages ? '该服务商不支持' : undefined}
+                  onChange={(e) => {
+                    if (greyNumImages) return;
+                    update({ batchSize: Math.max(1, Math.min(10, parseInt(e.target.value) || 1)) });
+                  }}
+                  className="w-full bg-[#111216] border border-[#2b2d38] rounded-lg px-2 py-1.5 text-slate-200 text-[11px] font-mono outline-none disabled:opacity-40 disabled:cursor-not-allowed"
                 />
               </div>
             </div>
@@ -909,14 +919,23 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
               {schemaSelect('aspect_ratio', params.aspectRatio || '', (v) => update({ aspectRatio: v || undefined }), 'ASPECT_RATIO')}
               {schemaSelect('resolution', params.resolution || '', (v) => update({ resolution: v || undefined }), 'RESOLUTION')}
               <div className="space-y-1">
-                <label className="text-slate-400 text-[10px] font-mono">N（生成张数）</label>
+                <div className="flex items-center justify-between gap-1.5">
+                  <label className="text-slate-400 text-[10px] font-mono">N（生成张数）</label>
+                  {greyNumImages && <FieldStatusBadge status="unsupported" />}
+                </div>
                 <input
                   type="number"
                   min={1}
                   max={4}
-                  value={params.batchSize ?? 1}
-                  onChange={(e) => update({ batchSize: Math.max(1, Math.min(4, parseInt(e.target.value) || 1)) })}
-                  className="w-full bg-[#111216] border border-[#2b2d38] rounded-lg px-2 py-1.5 text-slate-200 text-[11px] font-mono outline-none"
+                  value={greyNumImages ? '' : (params.batchSize ?? 1)}
+                  disabled={greyNumImages}
+                  title={greyNumImages ? '该服务商不支持' : undefined}
+                  placeholder={greyNumImages ? '该服务商不支持' : undefined}
+                  onChange={(e) => {
+                    if (greyNumImages) return;
+                    update({ batchSize: Math.max(1, Math.min(4, parseInt(e.target.value) || 1)) });
+                  }}
+                  className="w-full bg-[#111216] border border-[#2b2d38] rounded-lg px-2 py-1.5 text-slate-200 text-[11px] font-mono outline-none disabled:opacity-40 disabled:cursor-not-allowed"
                 />
               </div>
             </div>

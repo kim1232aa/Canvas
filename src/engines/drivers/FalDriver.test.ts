@@ -19,7 +19,7 @@ describe('FalDriver LoRA 校验与错误处理', () => {
       ok: false,
       status: 400,
       json: async () => ({
-        error: '该端点不支持 LoRA（Fal.ai 端点 fal-ai/flux/schnell 的官方 schema 无 loras 字段）',
+        error: '该服务商不支持（Fal.ai 端点 fal-ai/flux/schnell 的官方 schema 无 loras 字段）',
         unsupported: ['loras'],
         endpoint: 'fal-ai/flux/schnell',
       }),
@@ -40,7 +40,7 @@ describe('FalDriver LoRA 校验与错误处理', () => {
     };
 
     await expect(driver.generate(params, { falKey: 'test-key' })).rejects.toThrow(
-      /HTTP 400: 该端点不支持 LoRA/
+      /HTTP 400: 该服务商不支持/
     );
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -59,7 +59,7 @@ describe('FalDriver LoRA 校验与错误处理', () => {
       ok: false,
       status: 400,
       json: async () => ({
-        error: '该端点不支持 LoRA（Fal.ai 端点 fal-ai/flux/schnell 的官方 schema 无 loras 字段）',
+        error: '该服务商不支持（Fal.ai 端点 fal-ai/flux/schnell 的官方 schema 无 loras 字段）',
         unsupported: ['loras'],
         endpoint: 'fal-ai/flux/schnell',
       }),
@@ -79,7 +79,7 @@ describe('FalDriver LoRA 校验与错误处理', () => {
     };
 
     await expect(driver.generate(params, { falKey: 'test-key' })).rejects.toThrow(
-      /HTTP 400: 该端点不支持 LoRA/
+      /HTTP 400: 该服务商不支持/
     );
   });
 

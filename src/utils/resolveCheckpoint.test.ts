@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Connection, NodeInstance } from '../types/graph';
 import {
+  isCanvasFieldUnsupported,
   isFalLoraEndpointError,
   isLoraUnsupportedOnEndpoint,
   resolveActiveCheckpoint,
@@ -60,7 +61,7 @@ describe('resolveCheckpoint — B1 Fal schnell + LoRA', () => {
   it('isLoraUnsupportedOnEndpoint: fal-ai/flux/schnell marks loras unsupported', () => {
     const r = isLoraUnsupportedOnEndpoint('fal', 'fal-ai/flux/schnell');
     expect(r.unsupported).toBe(true);
-    expect(r.message).toMatch(/该端点不支持 LoRA/);
+    expect(r.message).toMatch(/该服务商不支持/);
     expect(r.message).toContain('fal-ai/flux/schnell');
   });
 
@@ -73,7 +74,7 @@ describe('resolveCheckpoint — B1 Fal schnell + LoRA', () => {
     );
     expect(compat.isCompatible).toBe(false);
     expect(compat.endpointUnsupported).toBe(true);
-    expect(compat.message).toMatch(/该端点不支持 LoRA/);
+    expect(compat.message).toMatch(/该服务商不支持/);
     expect(compat.message).not.toMatch(/Z-Image|架构不匹配|Tongyi/);
   });
 
@@ -114,14 +115,58 @@ describe('resolveCheckpoint — B1 Fal schnell + LoRA', () => {
 
     const compat = validateLoraCompatibility(forLora.checkpoint, 'Flux.1 D', 'koda', forLora.provider);
     expect(compat.endpointUnsupported).toBe(true);
-    expect(compat.message).toMatch(/该端点不支持 LoRA/);
+    expect(compat.message).toMatch(/该服务商不支持/);
     expect(compat.message).not.toMatch(/Z-Image|架构不匹配|Tongyi/);
   });
 
   it('isFalLoraEndpointError: paints Fal HTTP/endpoint messages, not Hugging Face loras 400', () => {
     expect(isFalLoraEndpointError('HTTP 400: 该端点不支持 LoRA（Fal.ai 端点 fal-ai/flux/schnell 的官方 schema 无 loras 字段）')).toBe(true);
     expect(isFalLoraEndpointError('该端点不支持 LoRA（fal 端点 fal-ai/flux/schnell 的官方 schema 无 loras 字段）')).toBe(true);
+    expect(isFalLoraEndpointError('该服务商不支持（fal / fal-ai/flux/schnell 的官方 schema 无 loras 字段）')).toBe(true);
     expect(isFalLoraEndpointError('该服务商不支持: loras（Hugging Face）')).toBe(false);
     expect(isFalLoraEndpointError('HTTP 400: 该服务商不支持: loras（Hugging Face）')).toBe(false);
+  });
+});
+
+describe('resolveCheckpoint — canvas NodeItem grey (compat)', () => {
+  it('resolveCheckpointForNode: KSampler walks to openai_compat CheckpointLoaderSimple', () => {
+    const nodes = [
+      node('ckpt-1', 'CheckpointLoaderSimple', {
+        ckpt_name: 'gpt-image-2',
+        targetProvider: 'openai_compat',
+      }),
+      node('ks-1', 'KSampler', { seed: 42, steps: 20 }),
+      node('lat-1', 'EmptyLatentImage', { width: 1024, height: 1024 }),
+      node('neg-1', 'CLIPTextEncodeNegative', { text: 'blurry' }),
+    ];
+    const conns: Connection[] = [
+      {
+        id: 'c1',
+        fromNodeId: 'ckpt-1',
+        fromSocketId: 'MODEL',
+        toNodeId: 'ks-1',
+        toSocketId: 'model',
+        type: 'MODEL',
+      },
+    ];
+    const forKs = resolveCheckpointForNode('ks-1', nodes, conns);
+    expect(forKs.checkpoint).toBe('gpt-image-2');
+    expect(forKs.provider).toBe('openai_compat');
+
+    const forLat = resolveCheckpointForNode('lat-1', nodes, conns);
+    expect(forLat.checkpoint).toBe('gpt-image-2');
+    expect(forLat.provider).toBe('openai_compat');
+
+    const forNeg = resolveCheckpointForNode('neg-1', nodes, conns);
+    expect(forNeg.provider).toBe('openai_compat');
+  });
+
+  it('isCanvasFieldUnsupported: openai_compat / grok_compat grey seed/negative/WH', () => {
+    expect(isCanvasFieldUnsupported('openai_compat', 'gpt-image-2', 'seed')).toBe(true);
+    expect(isCanvasFieldUnsupported('openai_compat', 'gpt-image-2', 'negative_prompt')).toBe(true);
+    expect(isCanvasFieldUnsupported('openai_compat', 'gpt-image-2', 'width')).toBe(true);
+    expect(isCanvasFieldUnsupported('grok_compat', 'grok-imagine-image', 'seed')).toBe(true);
+    expect(isCanvasFieldUnsupported('grok_compat', 'grok-imagine-image', 'height')).toBe(true);
+    expect(isCanvasFieldUnsupported('fal', 'fal-ai/flux/dev', 'seed')).toBe(false);
   });
 });

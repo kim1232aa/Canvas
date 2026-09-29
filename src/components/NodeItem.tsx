@@ -25,6 +25,7 @@ import { validateLoraCompatibility } from '../utils/baseModelMatcher';
 import { EngineRegistry } from '../engines/EngineRegistry';
 import { GeminiFieldSelect, GeminiModelBadge } from './GeminiFieldSelect';
 import { FieldStatusBadge } from './FieldStatusBadge';
+import { isCanvasFieldUnsupported } from '../utils/resolveCheckpoint';
 
 interface NodeItemProps {
   node: NodeInstance;
@@ -65,6 +66,12 @@ export const NodeItem: React.FC<NodeItemProps> = ({
   onAutoFixCheckpoint,
   onOpenModelHub,
 }) => {
+  const greySeed = isCanvasFieldUnsupported(currentProvider, currentCheckpoint, 'seed');
+  const greyNegative = isCanvasFieldUnsupported(currentProvider, currentCheckpoint, 'negative_prompt');
+  const greyWidth = isCanvasFieldUnsupported(currentProvider, currentCheckpoint, 'width');
+  const greyHeight = isCanvasFieldUnsupported(currentProvider, currentCheckpoint, 'height');
+  const greyWidthHeight = greyWidth || greyHeight;
+
   const [isRefining, setIsRefining] = React.useState(false);
   const [isReasoning, setIsReasoning] = React.useState(false);
   const [reasoningError, setReasoningError] = React.useState<string | null>(null);
@@ -612,34 +619,50 @@ export const NodeItem: React.FC<NodeItemProps> = ({
 
             if (widget.type === 'textarea') {
               const isPositiveCLIP = node.type === 'CLIPTextEncode';
+              const isNegativeCLIP =
+                node.type === 'CLIPTextEncodeNegative' ||
+                widget.name === 'negative' ||
+                widget.name === 'negative_prompt';
+              const greyThisNegative = isNegativeCLIP && greyNegative;
               return (
                 <div key={widget.name} className="space-y-1">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-1.5">
                     <label className="text-slate-400 font-mono text-[11px]">{widget.label}</label>
-                    {isPositiveCLIP && (
-                      <button
-                        onClick={handleRefinePrompt}
-                        disabled={isRefining}
-                        className="text-[10px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1 bg-cyan-950/40 px-2 py-0.5 rounded border border-cyan-800/40 disabled:opacity-50"
-                      >
-                        {isRefining ? (
-                          <Loader2 className="w-3 h-3 animate-spin" />
-                        ) : (
-                          <Sparkles className="w-3 h-3" />
-                        )}
-                        <span>AI 润色优化</span>
-                      </button>
-                    )}
+                    <div className="flex items-center gap-1.5">
+                      {greyThisNegative && <FieldStatusBadge status="unsupported" />}
+                      {isPositiveCLIP && (
+                        <button
+                          onClick={handleRefinePrompt}
+                          disabled={isRefining}
+                          className="text-[10px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1 bg-cyan-950/40 px-2 py-0.5 rounded border border-cyan-800/40 disabled:opacity-50"
+                        >
+                          {isRefining ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <Sparkles className="w-3 h-3" />
+                          )}
+                          <span>AI 润色优化</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <textarea
                     rows={4}
-                    value={value || ''}
+                    value={greyThisNegative ? '' : (value || '')}
+                    disabled={greyThisNegative}
+                    title={greyThisNegative ? '该服务商不支持' : undefined}
+                    aria-label={greyThisNegative ? 'negative（该服务商不支持）' : widget.label}
                     onMouseDown={(e) => e.stopPropagation()}
                     onPointerDown={(e) => e.stopPropagation()}
                     onKeyDown={(e) => e.stopPropagation()}
-                    onChange={(e) => onUpdateValue(node.id, widget.name, e.target.value)}
-                    placeholder={widget.placeholder}
-                    className="w-full bg-[#121316] border border-[#2d303a] focus:border-cyan-500 rounded-lg p-2.5 text-slate-200 text-xs font-mono leading-relaxed outline-none resize-y select-text cursor-text shadow-inner"
+                    onChange={(e) => {
+                      if (greyThisNegative) return;
+                      onUpdateValue(node.id, widget.name, e.target.value);
+                    }}
+                    placeholder={greyThisNegative ? '该服务商不支持' : widget.placeholder}
+                    className={greyThisNegative
+                      ? 'w-full bg-[#0d0e12] border border-[#22242c] rounded-lg p-2.5 text-slate-600 text-xs font-mono leading-relaxed outline-none resize-y cursor-not-allowed shadow-inner'
+                      : 'w-full bg-[#121316] border border-[#2d303a] focus:border-cyan-500 rounded-lg p-2.5 text-slate-200 text-xs font-mono leading-relaxed outline-none resize-y select-text cursor-text shadow-inner'}
                   />
                 </div>
               );
@@ -648,23 +671,40 @@ export const NodeItem: React.FC<NodeItemProps> = ({
             if (widget.type === 'seed') {
               return (
                 <div key={widget.name} className="space-y-1">
-                  <label className="text-slate-400 font-mono text-[11px] block">{widget.label}</label>
+                  <div className="flex items-center justify-between gap-1.5">
+                    <label className="text-slate-400 font-mono text-[11px] block">{widget.label}</label>
+                    {greySeed && <FieldStatusBadge status="unsupported" />}
+                  </div>
                   <div className="flex items-center gap-1.5">
                     <input
                       type="number"
-                      value={value}
+                      value={greySeed ? '' : value}
+                      disabled={greySeed}
+                      placeholder={greySeed ? '该服务商不支持' : undefined}
+                      title={greySeed ? '该服务商不支持' : undefined}
+                      aria-label={greySeed ? 'seed（该服务商不支持）' : 'seed'}
                       onMouseDown={(e) => e.stopPropagation()}
                       onPointerDown={(e) => e.stopPropagation()}
                       onKeyDown={(e) => e.stopPropagation()}
-                      onChange={(e) => onUpdateValue(node.id, widget.name, parseInt(e.target.value) || 0)}
-                      className="flex-1 bg-[#121316] border border-[#2d303a] focus:border-cyan-500 rounded-lg px-2.5 py-1.5 text-slate-200 font-mono text-xs outline-none select-text cursor-text"
+                      onChange={(e) => {
+                        if (greySeed) return;
+                        onUpdateValue(node.id, widget.name, parseInt(e.target.value) || 0);
+                      }}
+                      className={greySeed
+                        ? 'flex-1 bg-[#0d0e12] border border-[#22242c] rounded-lg px-2.5 py-1.5 text-slate-600 font-mono text-xs cursor-not-allowed outline-none'
+                        : 'flex-1 bg-[#121316] border border-[#2d303a] focus:border-cyan-500 rounded-lg px-2.5 py-1.5 text-slate-200 font-mono text-xs outline-none select-text cursor-text'}
                     />
                     <button
-                      onClick={handleRandomSeed}
-                      className="p-1.5 bg-[#252730] hover:bg-[#30333e] text-slate-300 hover:text-white rounded-lg border border-[#353744] transition-colors"
-                      title="生成随机种子"
+                      type="button"
+                      onClick={greySeed ? undefined : handleRandomSeed}
+                      disabled={greySeed}
+                      className={greySeed
+                        ? 'p-1.5 bg-[#0d0e12] text-slate-600 rounded-lg border border-[#22242c] cursor-not-allowed pointer-events-none'
+                        : 'p-1.5 bg-[#252730] hover:bg-[#30333e] text-slate-300 hover:text-white rounded-lg border border-[#353744] transition-colors'}
+                      title={greySeed ? '该服务商不支持' : '生成随机种子'}
+                      aria-label={greySeed ? '随机种子（该服务商不支持）' : '生成随机种子'}
                     >
-                      <Dices className="w-4 h-4 text-cyan-400" />
+                      <Dices className={`w-4 h-4 ${greySeed ? 'text-slate-600' : 'text-cyan-400'}`} />
                     </button>
                   </div>
                 </div>
@@ -672,17 +712,31 @@ export const NodeItem: React.FC<NodeItemProps> = ({
             }
 
             if (widget.type === 'number') {
+              const isWH = widget.name === 'width' || widget.name === 'height';
+              const greyThisWH = isWH && greyWidthHeight;
               return (
                 <div key={widget.name} className="space-y-1">
-                  <label className="text-slate-400 font-mono text-[11px] block">{widget.label}</label>
+                  <div className="flex items-center justify-between gap-1.5">
+                    <label className="text-slate-400 font-mono text-[11px] block">{widget.label}</label>
+                    {greyThisWH && <FieldStatusBadge status="unsupported" />}
+                  </div>
                   <input
                     type="number"
-                    value={value}
+                    value={greyThisWH ? '' : value}
+                    disabled={greyThisWH}
+                    placeholder={greyThisWH ? '该服务商不支持' : undefined}
+                    title={greyThisWH ? '该服务商不支持' : undefined}
+                    aria-label={greyThisWH ? `${widget.name}（该服务商不支持）` : widget.label}
                     onMouseDown={(e) => e.stopPropagation()}
                     onPointerDown={(e) => e.stopPropagation()}
                     onKeyDown={(e) => e.stopPropagation()}
-                    onChange={(e) => onUpdateValue(node.id, widget.name, parseFloat(e.target.value) || 0)}
-                    className="w-full bg-[#121316] border border-[#2d303a] focus:border-cyan-500 rounded-lg px-2.5 py-1.5 text-slate-200 font-mono text-xs outline-none select-text cursor-text"
+                    onChange={(e) => {
+                      if (greyThisWH) return;
+                      onUpdateValue(node.id, widget.name, parseFloat(e.target.value) || 0);
+                    }}
+                    className={greyThisWH
+                      ? 'w-full bg-[#0d0e12] border border-[#22242c] rounded-lg px-2.5 py-1.5 text-slate-600 font-mono text-xs cursor-not-allowed outline-none'
+                      : 'w-full bg-[#121316] border border-[#2d303a] focus:border-cyan-500 rounded-lg px-2.5 py-1.5 text-slate-200 font-mono text-xs outline-none select-text cursor-text'}
                   />
                 </div>
               );
@@ -763,7 +817,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                   <div className="mt-1 p-2 rounded-xl bg-rose-950/40 border border-rose-500/40 text-[10px] space-y-1.5 animate-in fade-in">
                     <div className="flex items-center gap-1 text-rose-300 font-bold">
                       <AlertCircle className="w-3.5 h-3.5 shrink-0 text-rose-400" />
-                      <span>该端点不支持 LoRA</span>
+                      <span>该服务商不支持</span>
                     </div>
                     <p className="text-rose-200/90 leading-tight font-mono">{compat.message}</p>
                   </div>

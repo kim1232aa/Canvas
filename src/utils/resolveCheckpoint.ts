@@ -39,6 +39,7 @@ export function isFalLoraEndpointError(msg: string | null | undefined): boolean 
   if (!msg) return false;
   if (/该服务商不支持/i.test(msg) && /Hugging\s*Face/i.test(msg)) return false;
   if (/该端点不支持 LoRA/.test(msg)) return true;
+  if (/该服务商不支持/.test(msg) && /loras|LoRA/i.test(msg) && !/Hugging\s*Face/i.test(msg)) return true;
   if (/HTTP\s+\d+/.test(msg) && /Fal/i.test(msg)) return true;
   return false;
 }
@@ -170,6 +171,47 @@ export function resolveCheckpointForNode(
           engineNodeId: upstream.id,
         };
       }
+    }
+  }
+
+  // KSampler / EmptyLatent / CLIP*: resolve via upstream model edge, then sole cloud engine / CheckpointLoader.
+  // Needed so canvas NodeItem can grey seed / negative / width / height like ParameterInspector.
+  if (
+    self.type === 'KSampler' ||
+    self.type === 'EmptyLatentImage' ||
+    self.type === 'CLIPTextEncode' ||
+    self.type === 'CLIPTextEncodeNegative'
+  ) {
+    if (self.type === 'KSampler') {
+      const modelIn = connections.find((x) => x.toNodeId === self.id && x.toSocketId === 'model');
+      if (modelIn) {
+        const upstream = walkToCheckpoint(modelIn.fromNodeId, nodeMap, connections, new Set());
+        if (upstream) {
+          return {
+            checkpoint: getModelFromNode(upstream),
+            provider: getProviderFromNode(upstream),
+            engineNodeId: upstream.id,
+          };
+        }
+      }
+    }
+
+    const sole = findSoleCloudEngine(nodes);
+    if (sole) {
+      return {
+        checkpoint: getModelFromNode(sole),
+        provider: getProviderFromNode(sole),
+        engineNodeId: sole.id,
+      };
+    }
+
+    const ckpts = nodes.filter((n) => !n.bypassed && n.type === 'CheckpointLoaderSimple');
+    if (ckpts.length === 1) {
+      return {
+        checkpoint: getModelFromNode(ckpts[0]),
+        provider: getProviderFromNode(ckpts[0]),
+        engineNodeId: ckpts[0].id,
+      };
     }
   }
 
@@ -324,7 +366,7 @@ export function isLoraUnsupportedOnEndpoint(
   if (spec?.status === 'unsupported') {
     return {
       unsupported: true,
-      message: `该端点不支持 LoRA（${schemaProv} 端点 ${modelId} 的官方 schema 无 loras 字段）`,
+      message: `该服务商不支持（${schemaProv} / ${modelId} 的官方 schema 无 loras 字段）`,
     };
   }
   return { unsupported: false };
@@ -337,4 +379,37 @@ export function findFirstNodeOfType(
   opts?: { includeBypassed?: boolean }
 ): NodeInstance | undefined {
   return nodes.find((n) => n.type === type && (opts?.includeBypassed || !n.bypassed));
+}
+
+/**
+ * Schema-driven: true when provider+model marks field unsupported.
+ * openai_compat / grok_compat always grey seed/negative/width/height (match ParameterInspector).
+ */
+export function isCanvasFieldUnsupported(
+  provider: string | undefined,
+  model: string | undefined,
+  field: 'seed' | 'negative_prompt' | 'width' | 'height' | 'steps' | 'cfg' | 'sampler' | 'scheduler' | 'loras'
+): boolean {
+  const prov = (provider || '').trim();
+  const isOpenAiCompat = prov === 'openai_compat';
+  const isGrokCompat = prov === 'grok_compat';
+  if (
+    (isOpenAiCompat || isGrokCompat) &&
+    (field === 'seed' || field === 'negative_prompt' || field === 'width' || field === 'height' ||
+      field === 'steps' || field === 'cfg' || field === 'sampler' || field === 'scheduler' || field === 'loras')
+  ) {
+    return true;
+  }
+  if (prov === 'gemini' && (field === 'width' || field === 'height' || field === 'negative_prompt' || field === 'steps' || field === 'cfg' || field === 'loras')) {
+    return true;
+  }
+  const schemaProv: Provider | undefined =
+    prov === 'fal' || prov === 'gemini' || prov === 'civitai' || prov === 'openai_compat' || prov === 'grok_compat'
+      ? (prov as Provider)
+      : undefined;
+  const schemaModel =
+    (model || '').trim() ||
+    (isOpenAiCompat ? 'gpt-image-2' : isGrokCompat ? 'grok-imagine-image' : '');
+  if (!schemaProv || !schemaModel) return false;
+  return getFieldSpec(schemaProv, schemaModel, field)?.status === 'unsupported';
 }
