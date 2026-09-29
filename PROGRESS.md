@@ -67,8 +67,10 @@
 | 编号 | 状态 | 内容 | 文件:行 |
 |:---|:---|:---|:---|
 | U-E1 | 已完成（tsc 待跑） | Gemini 取值表抽成唯一共享声明；服务端校验改为读取它（行为不变，unverified 仍 400）；节点与参数面板中 width/height 置灰并标「该服务商不支持」，aspect_ratio/image_size 下拉按模型取值，未选模型时禁用并提示「请先选择模型」；三种状态样式放在一处 | src/shared/providerFieldSpecs.ts:38,82；server.ts:11,5913-5926；src/components/FieldStatusBadge.tsx:7-23；src/components/GeminiFieldSelect.tsx:7；src/components/NodeItem.tsx:553-600；src/components/ParameterInspector.tsx:140,727-797；src/constants/nodes.ts:2,788-795；src/App.tsx:1735,1748-1749,2010-2011 |
-| U-E2 | 已并入 U2 | 见下方 U2 行 | — |
-| U-E3 | 未开始 | 视频节点未选模型时禁用 | — |
+| U-E2 | 已完成（tsc 0 错误，npm test 16 pass） | 视频节点空模型拦截：model === '' 时生成/运行按钮禁用，按钮及旁白可见「请先选择模型」；NodeItem 控件添加空选项及未选警示旁白；TopBar 运行按钮在视频节点未选模型时禁用并显示旁白；SpatialFrameItem 同步禁用与旁白提示；新建 AIVideoNode 控件与 values 默认 model 统一设为 '' | src/components/NodeItem.tsx；src/components/TopBar.tsx；src/components/SpatialFrameItem.tsx；src/App.tsx；src/constants/nodes.ts |
+| U-E3 | 已并入 U-E2 | 视频节点未选模型时禁用与旁白提示 | 见 U-E2 |
+| B3 | 已完成（tsc 0 错误，npm test 16 pass） | Gemini 出现在添加菜单：ModernToolDock 添加「Gemini 生图」精选条目（GoogleImagenNode），描述写明官方 Gemini 图像模型（不是已下线 Imagen），无默认模型预选（model default 为 ''） | src/components/ModernToolDock.tsx |
+| 404端点删除 | 已完成（tsc 0 错误，npm test 16 pass） | 彻底从下拉与预设中删除已核实 Fal 404 的端点 id（fal-ai/wan/t2v、fal-ai/wan/v2.1/text-to-video、fal-ai/wan/v2.1/image-to-video、fal-ai/stable-diffusion-xl-base-1.0、fal-ai/animagine-xl 等），替换为官方存在端点（fal-ai/wan-t2v、fal-ai/wan-i2v、fal-ai/fast-sdxl），保留手填自定义入口，不给模型贴参数专用的「官方未说明是否生效」标签 | src/constants/nodes.ts；src/engines/drivers/VideoDriver.ts；src/constants/presets.ts；src/utils/baseModelMatcher.ts；src/utils/graphEngine.test.ts |
 | U-E4 | 未开始 | 历史面板显示「未填写」 | — |
 | U-E5 | 已并入 G4 | 见下方 G4 行 | — |
 | U-E6 | 已并入 S6 | test-single 加 admin token 和 base URL 限制 | 见 S6 |

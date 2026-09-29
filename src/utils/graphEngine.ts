@@ -131,7 +131,7 @@ function findDownstreamGenerator(
 /**
  * Resolves target node from explicit argument or graph structure
  */
-function resolveTargetNode(
+export function resolveTargetNode(
   nodes: NodeInstance[],
   connections: Connection[],
   targetNodeOrId?: NodeInstance | string

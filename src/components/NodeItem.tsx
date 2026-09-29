@@ -503,6 +503,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                       onChange={(e) => onUpdateValue(node.id, widget.name, e.target.value)}
                       className="w-full bg-[#121316] border border-[#2d303a] hover:border-lime-500/50 focus:border-lime-500 rounded-lg px-2.5 py-1.5 text-slate-200 text-xs font-mono outline-none cursor-pointer select-text"
                     >
+                      <option value="">未选择 (请先选择模型)</option>
                       {isCustom && (
                         <option key={`custom-video-${value}`} value={value}>
                           ★ [自定义视频端点] {value}
@@ -539,7 +540,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                       <input
                         type="text"
                         value={value || ""}
-                        placeholder="或输入任意视频端点 (如 fal-ai/wan/v2.1/text-to-video)"
+                        placeholder="或输入任意视频端点 (如 fal-ai/wan-t2v)"
                         onMouseDown={(e) => e.stopPropagation()}
                         onPointerDown={(e) => e.stopPropagation()}
                         onKeyDown={(e) => e.stopPropagation()}
@@ -548,6 +549,9 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                         title="支持直接输入任意 Fal.ai / Tensor.Art / ModelScope 视频端点"
                       />
                     </div>
+                    {!value && (
+                      <p className="text-[10px] text-amber-400 font-mono mt-1">请先选择模型</p>
+                    )}
                   </div>
                 );
               }
@@ -845,8 +849,8 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                     <p className="text-xs">
                       {node.type === 'SaveVideo' || node.type === 'AIVideoNode' ? '等待渲染动态视频...' : '等待生成图像...'}
                     </p>
-                    <span className="text-[10px] text-slate-600 mt-1 block">
-                      运行工作流后在此显示
+                    <span className={`text-[10px] mt-1 block font-mono ${node.type === 'AIVideoNode' && !node.values?.model ? 'text-amber-400/90' : 'text-slate-600'}`}>
+                      {node.type === 'AIVideoNode' && !node.values?.model ? '请先选择模型' : '运行工作流后在此显示'}
                     </span>
                   </div>
                 )}

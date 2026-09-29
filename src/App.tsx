@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { AlertTriangle, Sparkles } from 'lucide-react';
 import { Canvas } from './components/Canvas';
 import { TopBar } from './components/TopBar';
@@ -36,7 +36,7 @@ import {
 } from './services/api';
 import { EngineRegistry } from './engines/EngineRegistry';
 import { NormalizedGenerateParams } from './engines/types';
-import { executeWorkflow, extractWorkflowParameters } from './utils/graphEngine';
+import { executeWorkflow, extractWorkflowParameters, resolveTargetNode } from './utils/graphEngine';
 import { getRecommendedBaseModelForLora, identifyArchitectureFamily } from './utils/baseModelMatcher';
 
 export default function App() {
@@ -296,12 +296,48 @@ export default function App() {
     });
   }, []);
 
+  // U-E2: Determine if generation/run is disabled due to missing model
+  const runDisabledReason = useMemo(() => {
+    if (canvasMode === 'spatial') {
+      if (selectedFrameId) {
+        const frame = spatialFrames.find((f) => f.id === selectedFrameId);
+        if (frame?.mediaType === 'video' && !(frame.params?.checkpoint || '').trim()) {
+          return '请先选择模型';
+        }
+      }
+      return undefined;
+    }
+
+    if (nodes.length === 0) return undefined;
+
+    try {
+      const targetNode = resolveTargetNode(nodes, connections, selectedNodeId || undefined);
+      if (targetNode.type === 'AIVideoNode' && !(targetNode.values?.model || '').trim()) {
+        return '请先选择模型';
+      }
+      extractWorkflowParameters(nodes, connections, selectedNodeId || undefined);
+    } catch (err: any) {
+      if (err?.message === '请先选择模型') {
+        return '请先选择模型';
+      }
+    }
+    return undefined;
+  }, [canvasMode, selectedFrameId, spatialFrames, nodes, connections, selectedNodeId]);
+
   // Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Ctrl+Enter or Cmd+Enter: Queue Prompt
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault();
+        if (runDisabledReason) {
+          setToast({
+            type: 'warning',
+            title: '无法运行',
+            message: runDisabledReason,
+          });
+          return;
+        }
         if (canvasMode === 'spatial' && selectedFrameId) {
           handleQueueFrame(selectedFrameId);
         } else {
@@ -830,6 +866,14 @@ export default function App() {
   // Run full workflow from node graph
   const handleQueuePrompt = async (overrideNodes?: NodeInstance[], overrideConns?: Connection[], targetNodeId?: string) => {
     if (isExecuting) return;
+    if (!overrideNodes && runDisabledReason) {
+      setToast({
+        type: 'warning',
+        title: '无法运行',
+        message: runDisabledReason,
+      });
+      return;
+    }
     const activeNodes = overrideNodes || nodes;
     const activeConns = overrideConns || connections;
 
@@ -1836,6 +1880,7 @@ export default function App() {
         }}
         isExecuting={isExecuting}
         executionStatusText={executionStatusText}
+        runDisabledReason={runDisabledReason}
         onClearCanvas={handleClearCanvas}
       />
 

@@ -426,21 +426,32 @@ export const SpatialFrameItem: React.FC<SpatialFrameItemProps> = ({
         )}
 
         {/* Queue Frame Button */}
+        {frame.mediaType === 'video' && !frame.params?.checkpoint && (
+          <div className="text-[10px] text-amber-400 font-mono text-center pb-1">
+            请先选择模型
+          </div>
+        )}
         <button
           onClick={() => onQueueFrame(frame.id)}
-          disabled={frame.status === 'generating'}
+          disabled={frame.status === 'generating' || (frame.mediaType === 'video' && !frame.params?.checkpoint)}
           className={`w-full py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-lg transition-all ${
-            frame.status === 'generating'
-              ? 'bg-amber-600/80 text-white cursor-not-allowed'
+            frame.status === 'generating' || (frame.mediaType === 'video' && !frame.params?.checkpoint)
+              ? 'bg-amber-600/50 text-amber-200 cursor-not-allowed'
               : frame.mediaType === 'video'
               ? 'bg-gradient-to-r from-purple-600 via-indigo-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white shadow-purple-600/30 active:scale-[0.98]'
               : 'bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white shadow-cyan-600/25 active:scale-[0.98]'
           }`}
+          title={frame.mediaType === 'video' && !frame.params?.checkpoint ? '请先选择模型' : undefined}
         >
           {frame.status === 'generating' ? (
             <>
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
               <span>{frame.mediaType === 'video' ? 'AI 视频解算渲染中 (5秒)...' : '图像渲染中...'}</span>
+            </>
+          ) : frame.mediaType === 'video' && !frame.params?.checkpoint ? (
+            <>
+              <Play className="w-3.5 h-3.5 fill-current opacity-60" />
+              <span>请先选择模型</span>
             </>
           ) : frame.mediaType === 'video' ? (
             <>

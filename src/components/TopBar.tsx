@@ -43,6 +43,7 @@ interface TopBarProps {
   isExecuting?: boolean;
   executionStatusText?: string;
   executionProgress?: number;
+  runDisabledReason?: string;
   onClearCanvas?: (type: 'all' | 'nodes' | 'frames' | 'reset-default') => void;
 }
 
@@ -70,6 +71,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   isExecuting = false,
   executionStatusText = '',
   executionProgress = 0,
+  runDisabledReason,
   onClearCanvas,
 }) => {
   const [showShortcuts, setShowShortcuts] = useState(false);
@@ -415,16 +417,23 @@ export const TopBar: React.FC<TopBarProps> = ({
 
         {/* Global Primary Run Workflow Button */}
         {onQueuePrompt && (
-          <div className="relative pointer-events-auto">
+          <div className="relative pointer-events-auto flex items-center gap-2">
+            {runDisabledReason && (
+              <span className="text-[11px] text-amber-400 font-mono hidden md:inline">
+                {runDisabledReason}
+              </span>
+            )}
             <button
               onClick={onQueuePrompt}
-              disabled={isExecuting}
-              className={`relative overflow-hidden flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-xs shadow-2xl transition-all active:scale-95 ${
+              disabled={isExecuting || Boolean(runDisabledReason)}
+              className={`relative overflow-hidden flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-xs shadow-2xl transition-all ${
                 isExecuting
                   ? 'bg-[#1b1c25] border border-cyan-500/50 text-white cursor-not-allowed shadow-cyan-500/20'
-                  : 'bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white shadow-emerald-500/30 ring-1 ring-emerald-400/40'
+                  : runDisabledReason
+                  ? 'bg-[#1b1c25] border border-slate-700/50 text-slate-400 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white shadow-emerald-500/30 ring-1 ring-emerald-400/40 active:scale-95'
               }`}
-              title="运行当前 ComfyUI 工作流 (Queue Prompt, 快捷键 Ctrl+Enter)"
+              title={runDisabledReason || "运行当前 ComfyUI 工作流 (Queue Prompt, 快捷键 Ctrl+Enter)"}
             >
               {/* Background Progress Fill */}
               {isExecuting && (
@@ -439,6 +448,12 @@ export const TopBar: React.FC<TopBarProps> = ({
                   <Loader2 className="w-3.5 h-3.5 animate-spin text-cyan-400" />
                   <span className="font-mono text-cyan-300 font-bold">{executionProgress ? `${executionProgress}%` : ''}</span>
                   <span className="truncate max-w-[220px] text-slate-200">{executionStatusText || '运行中...'}</span>
+                </div>
+              ) : runDisabledReason ? (
+                <div className="flex items-center gap-2 text-amber-300/80">
+                  <Play className="w-3.5 h-3.5 fill-current opacity-60" />
+                  <span>{runDisabledReason}</span>
+                  <span className="hidden sm:inline text-[10px] opacity-70 font-mono bg-black/30 px-1 py-0.5 rounded">Ctrl+↵</span>
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
