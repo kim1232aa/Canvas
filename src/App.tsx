@@ -502,7 +502,8 @@ export default function App() {
         image_url: frame.imageUrl, 
         videoDuration: isVideo ? (frame.videoDuration || 5) : undefined,
         videoFps: isVideo ? (frame.videoFps || 16) : undefined,
-        aspectRatio: isVideo ? (frame.videoAspectRatio || '16:9') : `${p.width}:${p.height}`,
+        aspectRatio: isVideo ? (frame.videoAspectRatio || '16:9') : (p.targetProvider === 'gemini' ? (p.aspectRatio || undefined) : undefined),
+        imageSize: p.imageSize || undefined,
         loras: p.loras.map((l) => ({
           name: l.name,
           strength: l.modelStrength,
@@ -734,15 +735,17 @@ export default function App() {
         } : f))
       );
     } else if (targetNode.type === 'GoogleImagenNode' && widgetName === 'aspect_ratio') {
-      let w = 1024, h = 1024;
-      if (value === '16:9') { w = 1280; h = 720; }
-      else if (value === '9:16') { w = 720; h = 1280; }
-      else if (value === '4:3') { w = 1024; h = 768; }
-      else if (value === '3:4') { w = 768; h = 1024; }
       setSpatialFrames((prev) =>
         prev.map((f) => (f.id === activeFrameTargetId ? {
           ...f,
-          params: { ...f.params, width: w, height: h },
+          params: { ...f.params, aspectRatio: value || undefined },
+        } : f))
+      );
+    } else if (targetNode.type === 'GoogleImagenNode' && widgetName === 'image_size') {
+      setSpatialFrames((prev) =>
+        prev.map((f) => (f.id === activeFrameTargetId ? {
+          ...f,
+          params: { ...f.params, imageSize: value || undefined },
         } : f))
       );
     } else if (targetNode.type === 'KSampler') {

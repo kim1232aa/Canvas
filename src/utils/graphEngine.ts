@@ -31,6 +31,8 @@ export interface WorkflowExtraction {
   videoDuration?: number;
   videoFps?: number;
   videoAspectRatio?: string;
+  aspectRatio?: string;
+  imageSize?: string;
   initImageUrl?: string;
   saveImageNodeId?: string;
   saveVideoNodeId?: string;
@@ -98,6 +100,8 @@ export function extractWorkflowParameters(
   let videoDuration = isVideo ? Number(videoNode?.values.duration || 5) : undefined;
   let videoFps = isVideo ? Number(videoNode?.values.fps || 16) : undefined;
   let videoAspectRatio = isVideo ? (videoNode?.values.aspect_ratio || '16:9') : undefined;
+  let aspectRatio: string | undefined = undefined;
+  let imageSize: string | undefined = undefined;
 
   // 严格拓扑反向追踪：图生图 (img2img) 与图生视频 (img2video) 参考源图链路
   let initImageUrl: string | undefined = undefined;
@@ -164,12 +168,12 @@ export function extractWorkflowParameters(
   } else if (googleImagenNode) {
     targetProvider = 'gemini';
     checkpointModel = googleImagenNode.values.model || checkpointModel || '';
-    const aspect = googleImagenNode.values.aspect_ratio || '1:1';
-    if (aspect === '16:9') { width = 1280; height = 720; }
-    else if (aspect === '9:16') { width = 720; height = 1280; }
-    else if (aspect === '4:3') { width = 1024; height = 768; }
-    else if (aspect === '3:4') { width = 768; height = 1024; }
-    else { width = 1024; height = 1024; }
+    if (googleImagenNode.values.aspect_ratio) {
+      aspectRatio = googleImagenNode.values.aspect_ratio;
+    }
+    if (googleImagenNode.values.image_size) {
+      imageSize = googleImagenNode.values.image_size;
+    }
   } else if (
     checkpointModel.includes('gemini') ||
     checkpointModel.includes('imagen') ||
@@ -336,6 +340,8 @@ export function extractWorkflowParameters(
     videoDuration,
     videoFps,
     videoAspectRatio,
+    aspectRatio,
+    imageSize,
     initImageUrl,
     saveImageNodeId: saveNode?.id,
     saveVideoNodeId: saveVideoNode?.id,
@@ -451,10 +457,10 @@ export async function executeWorkflow(
       prompt: params.positivePrompt,
       negative_prompt: params.negativePrompt,
       model: params.checkpointModel,
-      provider: params.videoProvider,
-      targetProvider: params.videoProvider,
-      width: params.width,
-      height: params.height,
+      provider: params.videoProvider || (params.targetProvider === 'gemini' ? 'gemini' : undefined),
+      targetProvider: params.videoProvider || (params.targetProvider === 'gemini' ? 'gemini' : undefined),
+      width: params.targetProvider === 'gemini' ? undefined : params.width,
+      height: params.targetProvider === 'gemini' ? undefined : params.height,
       steps: params.steps,
       cfg: params.cfg,
       seed: params.seed,
@@ -463,12 +469,14 @@ export async function executeWorkflow(
       isVideo: params.isVideo,
       videoDuration: params.videoDuration,
       videoFps: params.videoFps,
-      aspectRatio: params.videoAspectRatio,
+      aspectRatio: params.videoAspectRatio || (params.targetProvider === 'gemini' ? params.aspectRatio : undefined),
+      imageSize: params.imageSize,
       sampler_name: params.sampler,
       scheduler: params.scheduler,
       extraParams: {
         sampler_name: params.sampler,
         scheduler: params.scheduler,
+        ...(params.imageSize ? { image_size: params.imageSize } : {}),
       },
       loras: params.loras.map((l) => ({
         name: l.name,

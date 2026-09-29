@@ -73,18 +73,28 @@ export class GeminiDriver extends BaseEngineDriver {
     if (!params.model) throw new Error('模型为必填项（model is required）');
     const effectiveKey = params.apiKey || keys.geminiKey || '';
 
+    const body: Record<string, any> = {
+      prompt: params.prompt,
+      model: params.model,
+    };
+    if (params.aspectRatio && typeof params.aspectRatio === 'string' && params.aspectRatio.trim() !== '') {
+      body.aspect_ratio = params.aspectRatio.trim();
+    }
+    const imgSize = (params as any).imageSize || (params as any).image_size || params.extraParams?.image_size || params.extraParams?.imageSize;
+    if (imgSize && typeof imgSize === 'string' && imgSize.trim() !== '') {
+      body.image_size = imgSize.trim();
+    }
+    if (params.image_url) {
+      body.image_url = params.image_url;
+    }
+
     const resp = await fetch('/api/gemini/generate', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         ...(effectiveKey ? { 'x-gemini-key': effectiveKey } : {}),
       },
-      body: JSON.stringify({
-        prompt: params.prompt,
-        model: params.model,
-        aspect_ratio: params.aspectRatio,
-        image_url: params.image_url,
-      }),
+      body: JSON.stringify(body),
     });
 
     if (!resp.ok) {

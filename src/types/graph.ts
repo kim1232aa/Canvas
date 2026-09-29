@@ -175,6 +175,8 @@ export interface ComfyParameters {
   targetProvider: 'civitai' | 'fal' | 'agnes' | 'sensenova' | 'huggingface' | 'modelscope' | 'modelscope_ai' | 'nanogpt' | 'gemini' | 'video' | 'tensorart';
   tensorArtInputs?: any[];
   videoDuration?: number;
+  aspectRatio?: string;
+  imageSize?: string;
 }
 
 export interface SpatialFrame {

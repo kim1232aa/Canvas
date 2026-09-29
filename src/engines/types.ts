@@ -49,6 +49,7 @@ export interface NormalizedGenerateParams {
   videoDuration?: number;
   videoFps?: number;
   aspectRatio?: string;
+  imageSize?: string;
   provider?: string;
   targetProvider?: string;
   // 采样器与调度器 (精细控制)

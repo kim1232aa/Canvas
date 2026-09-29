@@ -3431,8 +3431,6 @@ app.post(['/api/fal/generate', '/api/generate'], async (req, res) => {
       return res.status(400).json({ error: 'denoise 仅在提供 image_url（图生图）时有效', unsupported: ['denoise'] });
     }
 
-    const wasAdapted = false;
-    const adaptationNotice = '';
     const actualModel = endpoint;
 
     if (Array.isArray(loras) && loras.length > 0) {
@@ -3529,8 +3527,6 @@ app.post(['/api/fal/generate', '/api/generate'], async (req, res) => {
       requestedModel: model,
       exactEndpointCalled: `https://fal.run/${endpoint}`,
       targetEndpoint: endpoint,
-      wasAdapted,
-      adaptationNotice,
       historyItem: item,
     });
   } catch (error: any) {
@@ -4020,8 +4016,6 @@ app.post(['/api/video/generate', '/api/engine/video/generate'], async (req, res)
     if (!endpoint) {
       return res.status(400).json({ error: `不认识这个模型: ${model}` });
     }
-    const wasAdapted = false;
-    const adaptationNotice = '';
 
     if (image_url) {
       if (
@@ -4098,8 +4092,6 @@ app.post(['/api/video/generate', '/api/engine/video/generate'], async (req, res)
       requestedModel: model,
       exactEndpointCalled: `https://fal.run/${endpoint}`,
       seed: usedVideoSeed,
-      wasAdapted,
-      adaptationNotice,
       historyItem: item,
     });
   } catch (error: any) {
@@ -5815,7 +5807,7 @@ app.post(['/api/gemini/generate', '/api/engine/gemini/generate'], async (req, re
     // E1: 收到 width/height 返回 400
     if (isProvided(req.body.width) || isProvided(req.body.height)) {
       return res.status(400).json({
-        error: '该服务商不支持: width/height。Google Gemini 仅支持 aspect_ratio ("1:1", "3:4", "4:3", "9:16", "16:9") 或 image_size',
+        error: '该服务商不支持: width/height。Google Gemini 仅支持 aspect_ratio 或 image_size（按模型取值表）',
         unsupported: [isProvided(req.body.width) ? 'width' : '', isProvided(req.body.height) ? 'height' : ''].filter(Boolean),
       });
     }
@@ -5827,11 +5819,66 @@ app.post(['/api/gemini/generate', '/api/engine/gemini/generate'], async (req, re
       return res.status(400).json({ error: '该服务商不支持: image_url 为非 data: URL（Google Gemini 仅接受内联 base64 参考图）', unsupported: ['image_url'] });
     }
 
-    const allowedRatios = ['1:1', '3:4', '4:3', '9:16', '16:9'];
-    if (isProvided(aspect_ratio) && !allowedRatios.includes(aspect_ratio)) {
-      return res.status(400).json({
-        error: `该服务商不支持此 aspect_ratio 取值: "${aspect_ratio}"。Google Gemini 官方仅支持: ${allowedRatios.join(', ')}`,
-      });
+    if (model === 'gemini-3.1-flash-image') {
+      const allowedRatios = ['1:1', '1:4', '1:8', '2:3', '3:2', '3:4', '4:1', '4:3', '4:5', '5:4', '8:1', '9:16', '16:9', '21:9'];
+      if (isProvided(aspect_ratio) && !allowedRatios.includes(aspect_ratio)) {
+        return res.status(400).json({
+          error: `该服务商不支持此 aspect_ratio 取值: "${aspect_ratio}"。gemini-3.1-flash-image 官方仅支持: ${allowedRatios.join(', ')}`,
+        });
+      }
+      if (isProvided(image_size)) {
+        if (image_size === '512px' || image_size === '0.5K' || image_size === '512px (0.5K)') {
+          return res.status(400).json({
+            error: '该模型 image_size 的 512px (0.5K) 确切字符串未能核实，暂不支持使用',
+          });
+        }
+        const allowedSizes = ['1K', '2K', '4K'];
+        if (!allowedSizes.includes(image_size)) {
+          return res.status(400).json({
+            error: `该服务商不支持此 image_size 取值: "${image_size}"。gemini-3.1-flash-image 官方仅支持: ${allowedSizes.join(', ')}（大写 K）`,
+          });
+        }
+      }
+    } else if (model === 'gemini-3.1-flash-lite-image') {
+      const allowedRatios = ['1:1', '3:2', '2:3', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9'];
+      if (isProvided(aspect_ratio) && !allowedRatios.includes(aspect_ratio)) {
+        return res.status(400).json({
+          error: `该服务商不支持此 aspect_ratio 取值: "${aspect_ratio}"。gemini-3.1-flash-lite-image 官方仅支持: ${allowedRatios.join(', ')}`,
+        });
+      }
+      if (isProvided(image_size)) {
+        if (image_size !== '1K') {
+          return res.status(400).json({
+            error: `该服务商不支持此 image_size 取值: "${image_size}"。gemini-3.1-flash-lite-image 官方仅支持: 1K`,
+          });
+        }
+      }
+    } else if (model === 'gemini-3-pro-image') {
+      if (isProvided(aspect_ratio)) {
+        return res.status(400).json({
+          error: '未能核实该模型支持的 aspect_ratio',
+        });
+      }
+      if (isProvided(image_size)) {
+        const allowedSizes = ['1K', '2K', '4K'];
+        if (!allowedSizes.includes(image_size)) {
+          return res.status(400).json({
+            error: `该服务商不支持此 image_size 取值: "${image_size}"。gemini-3-pro-image 官方仅支持: ${allowedSizes.join(', ')}（大写 K）`,
+          });
+        }
+      }
+    } else {
+      // 其它模型（如 gemini-2.5-flash-image 及任何带 -preview 后缀的）：取值表未能核实
+      if (isProvided(aspect_ratio)) {
+        return res.status(400).json({
+          error: `未能核实该模型 (${model}) 支持的 aspect_ratio`,
+        });
+      }
+      if (isProvided(image_size)) {
+        return res.status(400).json({
+          error: `未能核实该模型 (${model}) 支持的 image_size`,
+        });
+      }
     }
 
     const customKey = (req.headers['x-gemini-key'] as string) || '';

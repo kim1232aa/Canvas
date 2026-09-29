@@ -348,6 +348,8 @@ export function normalizeForGemini(
     prompt: finalPrompt,
     // ponytail: width/height, negativePrompt, guidanceScale, seed, loras are NOT supported by Gemini generateContent.
     // Official doc accepts aspect_ratio ('1:1', '3:2', '2:3', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9') and image_size ('1K', '2K', '4K').
+    ...(params.aspectRatio ? { aspect_ratio: params.aspectRatio } : {}),
+    ...(params.imageSize ? { image_size: params.imageSize } : {}),
   };
 
   return {
