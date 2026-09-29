@@ -2,7 +2,7 @@
 
 ## 0b. F5 — stop forging seed/sampler defaults (f5-fake-defaults) — 2026-09-29
 
-Tip hash: 3d9bf7c65707f0a3026e49ad4a7dbc64f6627d45 (branch f5-fake-defaults, not pushed)
+Tip hash: 5084ddc03661937ec9680ed4b6843d9f929ac137 (F5 code 8de30250de36664d925687dfd63783138e891ce4; branch f5-fake-defaults, not pushed)
 
 ### 完成项
 - [x] `extractWorkflowParameters` 不再用 `Math.random` / 25 / 5.0 / euler / normal / 1024 初始化所有目标
