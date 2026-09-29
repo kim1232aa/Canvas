@@ -32,8 +32,55 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+// Request body limit configuration:
+// Large limit (50mb) is reserved strictly for routes that legitimately process image/video payloads or full canvas graphs.
+// Default limit (1mb) applies to all other routes.
+const jsonParserDefault = express.json({ limit: '1mb' });
+const jsonParserLarge = express.json({ limit: '50mb' });
+const urlencodedParserDefault = express.urlencoded({ extended: true, limit: '1mb' });
+const urlencodedParserLarge = express.urlencoded({ extended: true, limit: '50mb' });
+
+const LARGE_BODY_ROUTES = new Set([
+  // Generation & editing endpoints with base64 images / init images / video frames
+  '/api/fal/generate',
+  '/api/generate',
+  '/api/video/generate',
+  '/api/engine/video/generate',
+  '/api/engine/civitai/generate',
+  '/api/civitai/generate',
+  '/api/engine/agnes/generate',
+  '/api/agnes/generate',
+  '/api/tensorart/upload',
+  '/api/engine/tensorart/upload',
+  '/api/tensorart/generate',
+  '/api/engine/tensorart/generate',
+  '/api/huggingface/generate',
+  '/api/engine/huggingface/generate',
+  '/api/modelscope/generate',
+  '/api/engine/modelscope/generate',
+  '/api/modelscope_ai/generate',
+  '/api/engine/modelscope_ai/generate',
+  '/api/nanogpt/generate',
+  '/api/engine/nanogpt/generate',
+  '/api/gemini/generate',
+  '/api/engine/gemini/generate',
+  // Canvas project saving (includes embedded frame image data and full canvas state)
+  '/api/cloud/projects',
+]);
+
+const isLargeBodyRoute = (req: express.Request): boolean => {
+  return LARGE_BODY_ROUTES.has(req.path);
+};
+
+app.use((req, res, next) => {
+  const parser = isLargeBodyRoute(req) ? jsonParserLarge : jsonParserDefault;
+  parser(req, res, next);
+});
+
+app.use((req, res, next) => {
+  const parser = isLargeBodyRoute(req) ? urlencodedParserLarge : urlencodedParserDefault;
+  parser(req, res, next);
+});
 
 // Persistent Storage Directories
 const DATA_DIR = path.join(__dirname, 'data');
@@ -6255,15 +6302,126 @@ app.get('/api/history', (_req, res) => {
   return res.json(generationHistory);
 });
 
+const MAX_HISTORY_COUNT = 500;
+const MAX_HISTORY_ITEM_BYTES = 500 * 1024; // 500KB
+
 app.post('/api/history', (req, res) => {
+  if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
+    return res.status(400).json({ error: '请求体必须为有效的 JSON 对象' });
+  }
+
+  // Check total history count limit
+  if (generationHistory.length >= MAX_HISTORY_COUNT) {
+    return res.status(400).json({
+      error: `历史记录总条数已达上限 (${MAX_HISTORY_COUNT} 条)，请清理历史记录后再保存`,
+    });
+  }
+
+  // Check single item payload size limit
+  const bodyString = JSON.stringify(req.body);
+  if (Buffer.byteLength(bodyString, 'utf8') > MAX_HISTORY_ITEM_BYTES) {
+    return res.status(413).json({
+      error: '单条历史记录体积超过上限 (最大 500KB)',
+    });
+  }
+
+  const {
+    url,
+    imageUrl,
+    videoUrl,
+    mediaType,
+    prompt,
+    negativePrompt,
+    provider,
+    model,
+    seed,
+    steps,
+    cfg,
+    loras,
+    workflowSnapshot,
+  } = req.body;
+
+  // Type validation
+  if (url !== undefined && typeof url !== 'string') {
+    return res.status(400).json({ error: '字段 url 必须为字符串' });
+  }
+  if (imageUrl !== undefined && typeof imageUrl !== 'string') {
+    return res.status(400).json({ error: '字段 imageUrl 必须为字符串' });
+  }
+  if (videoUrl !== undefined && typeof videoUrl !== 'string') {
+    return res.status(400).json({ error: '字段 videoUrl 必须为字符串' });
+  }
+
+  const effectiveUrl =
+    (typeof url === 'string' && url.trim()) ||
+    (typeof imageUrl === 'string' && imageUrl.trim()) ||
+    (typeof videoUrl === 'string' && videoUrl.trim());
+
+  if (!effectiveUrl) {
+    return res.status(400).json({ error: '缺少有效的媒体链接 (url / imageUrl / videoUrl)' });
+  }
+
+  if (prompt !== undefined && typeof prompt !== 'string') {
+    return res.status(400).json({ error: '字段 prompt 必须为字符串' });
+  }
+  if (negativePrompt !== undefined && typeof negativePrompt !== 'string') {
+    return res.status(400).json({ error: '字段 negativePrompt 必须为字符串' });
+  }
+  if (provider !== undefined && typeof provider !== 'string') {
+    return res.status(400).json({ error: '字段 provider 必须为字符串' });
+  }
+  if (model !== undefined && typeof model !== 'string') {
+    return res.status(400).json({ error: '字段 model 必须为字符串' });
+  }
+  if (seed !== undefined && typeof seed !== 'number') {
+    return res.status(400).json({ error: '字段 seed 必须为数字' });
+  }
+  if (steps !== undefined && typeof steps !== 'number') {
+    return res.status(400).json({ error: '字段 steps 必须为数字' });
+  }
+  if (cfg !== undefined && typeof cfg !== 'number') {
+    return res.status(400).json({ error: '字段 cfg 必须为数字' });
+  }
+  if (mediaType !== undefined && typeof mediaType !== 'string') {
+    return res.status(400).json({ error: '字段 mediaType 必须为字符串' });
+  }
+  if (loras !== undefined) {
+    if (!Array.isArray(loras)) {
+      return res.status(400).json({ error: '字段 loras 必须为数组' });
+    }
+    for (let i = 0; i < loras.length; i++) {
+      const l = loras[i];
+      if (!l || typeof l !== 'object' || Array.isArray(l)) {
+        return res.status(400).json({ error: `字段 loras[${i}] 必须为对象` });
+      }
+    }
+  }
+  if (workflowSnapshot !== undefined && (typeof workflowSnapshot !== 'object' || workflowSnapshot === null)) {
+    return res.status(400).json({ error: '字段 workflowSnapshot 必须为对象' });
+  }
+
+  // Construct sanitized item with only whitelisted fields
   const item: GeneratedItem = {
     id: `hist_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
     timestamp: Date.now(),
-    ...req.body,
+    url: effectiveUrl,
+    ...(typeof imageUrl === 'string' && imageUrl.trim() ? { imageUrl: imageUrl.trim() } : {}),
+    ...(typeof videoUrl === 'string' && videoUrl.trim() ? { videoUrl: videoUrl.trim() } : {}),
+    mediaType: typeof mediaType === 'string' && mediaType.trim() ? mediaType.trim() : (videoUrl ? 'video' : 'image'),
+    prompt: typeof prompt === 'string' ? prompt.trim() : 'Untitled Generation',
+    ...(typeof negativePrompt === 'string' && negativePrompt.trim() ? { negativePrompt: negativePrompt.trim() } : {}),
+    provider: typeof provider === 'string' && provider.trim() ? provider.trim() : 'Canvas Generated',
+    model: typeof model === 'string' && model.trim() ? model.trim() : 'unknown',
+    seed: typeof seed === 'number' ? seed : 0,
+    steps: typeof steps === 'number' ? steps : 20,
+    cfg: typeof cfg === 'number' ? cfg : 7.0,
+    ...(Array.isArray(loras) ? { loras } : {}),
+    ...(workflowSnapshot && typeof workflowSnapshot === 'object' ? { workflowSnapshot } : {}),
   };
+
   generationHistory.unshift(item);
-  // Keep last 100 items on server
-  if (generationHistory.length > 100) {
+  // Keep last MAX_HISTORY_COUNT items on server
+  if (generationHistory.length > MAX_HISTORY_COUNT) {
     generationHistory.pop();
   }
   writeJsonFile(HISTORY_FILE, generationHistory);
