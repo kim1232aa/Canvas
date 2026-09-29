@@ -601,6 +601,8 @@ class KeyPoolManager {
 
 const keyPoolManager = new KeyPoolManager();
 
+const MAX_HISTORY_COUNT = 500;
+
 // Helper to record history safely both in memory and file
 const recordHistoryItem = (item: Partial<GeneratedItem>): GeneratedItem => {
   const fullItem: GeneratedItem = {
@@ -622,7 +624,9 @@ const recordHistoryItem = (item: Partial<GeneratedItem>): GeneratedItem => {
     ...item,
   };
   generationHistory.unshift(fullItem);
-  if (generationHistory.length > 100) generationHistory.pop();
+  if (generationHistory.length > MAX_HISTORY_COUNT) {
+    generationHistory.splice(MAX_HISTORY_COUNT);
+  }
   writeJsonFile(HISTORY_FILE, generationHistory);
   return fullItem;
 };
@@ -6849,19 +6853,11 @@ app.get('/api/history', (_req, res) => {
   return res.json(generationHistory);
 });
 
-const MAX_HISTORY_COUNT = 500;
 const MAX_HISTORY_ITEM_BYTES = 500 * 1024; // 500KB
 
 app.post('/api/history', (req, res) => {
   if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
     return res.status(400).json({ error: '请求体必须为有效的 JSON 对象' });
-  }
-
-  // Check total history count limit
-  if (generationHistory.length >= MAX_HISTORY_COUNT) {
-    return res.status(400).json({
-      error: `历史记录总条数已达上限 (${MAX_HISTORY_COUNT} 条)，请清理历史记录后再保存`,
-    });
   }
 
   // Check single item payload size limit
@@ -6969,7 +6965,7 @@ app.post('/api/history', (req, res) => {
   generationHistory.unshift(item);
   // Keep last MAX_HISTORY_COUNT items on server
   if (generationHistory.length > MAX_HISTORY_COUNT) {
-    generationHistory.pop();
+    generationHistory.splice(MAX_HISTORY_COUNT);
   }
   writeJsonFile(HISTORY_FILE, generationHistory);
   return res.json(item);
