@@ -4,7 +4,12 @@ import { resolveLoraPathOrUrl } from './engineParameterNormalizer';
 import { getStoredApiKeys, saveToHistory } from '../services/api';
 import { EngineRegistry } from '../engines/EngineRegistry';
 import { NormalizedGenerateParams } from '../engines/types';
-import { isLoraUnsupportedOnEndpoint } from './resolveCheckpoint';
+import {
+  findSoleCloudEngine,
+  isCloudEngineNode,
+  isFalLoraEndpointError,
+  resolveCheckpointForNode,
+} from './resolveCheckpoint';
 
 export interface WorkflowExtraction {
   checkpointModel: string;
@@ -100,6 +105,9 @@ function findDownstreamGenerator(
 ): NodeInstance | undefined {
   const visited = new Set<string>();
   const queue = [startId];
+  let cloud: NodeInstance | undefined;
+  let ksampler: NodeInstance | undefined;
+  let sink: NodeInstance | undefined;
   while (queue.length > 0) {
     const currId = queue.shift()!;
     if (visited.has(currId)) continue;
@@ -109,24 +117,22 @@ function findDownstreamGenerator(
     for (const conn of outConns) {
       const dest = nodeMap.get(conn.toNodeId);
       if (!dest || dest.bypassed) continue;
-      if (
-        dest.type === 'KSampler' ||
-        dest.type === 'AIVideoNode' ||
-        dest.type === 'FalAIEngineNode' ||
-        dest.type === 'GoogleImagenNode' ||
-        dest.type === 'ModelScopeNode' ||
-        dest.type === 'ModelScopeAiNode' ||
-        dest.type === 'NanoGPTNode'
-      ) {
-        return dest;
+      if (isCloudEngineNode(dest)) {
+        if (!cloud) cloud = dest;
+        continue;
+      }
+      if (dest.type === 'KSampler') {
+        if (!ksampler) ksampler = dest;
+        continue;
       }
       if (dest.type === 'SaveVideo' || dest.type === 'SaveImage' || dest.type === 'PreviewImage') {
-        return dest;
+        if (!sink) sink = dest;
+        continue;
       }
       queue.push(dest.id);
     }
   }
-  return undefined;
+  return cloud || ksampler || sink;
 }
 
 /**
@@ -154,21 +160,18 @@ export function resolveTargetNode(
     throw new Error('画布上暂无可执行的节点');
   }
 
+  // Sole cloud engine (Fal/Gemini/…) beats a zombie KSampler + CheckpointLoaderSimple.
+  const sole = findSoleCloudEngine(activeNodes);
+  if (sole) return sole;
+
   // 1. Sinks (SaveVideo, SaveImage, PreviewImage)
   const sink = activeNodes.find((n) => n.type === 'SaveVideo' || n.type === 'SaveImage' || n.type === 'PreviewImage');
   if (sink) return sink;
 
-  // 2. Generators
-  const gen = activeNodes.find(
-    (n) =>
-      n.type === 'AIVideoNode' ||
-      n.type === 'KSampler' ||
-      n.type === 'FalAIEngineNode' ||
-      n.type === 'GoogleImagenNode' ||
-      n.type === 'ModelScopeNode' ||
-      n.type === 'ModelScopeAiNode' ||
-      n.type === 'NanoGPTNode'
-  );
+  // 2. Generators — cloud engines before KSampler (never fall through to HF on a Fal graph)
+  const cloud = activeNodes.find((n) => isCloudEngineNode(n));
+  if (cloud) return cloud;
+  const gen = activeNodes.find((n) => n.type === 'KSampler');
   if (gen) return gen;
 
   // 3. Loaders / Other active nodes
@@ -336,12 +339,21 @@ export function extractWorkflowParameters(
     rootTargetNode.type === 'CLIPTextEncode' ||
     rootTargetNode.type === 'CLIPTextEncodeNegative' ||
     rootTargetNode.type === 'EmptyLatentImage' ||
-    rootTargetNode.type === 'LoRALoader'
+    rootTargetNode.type === 'LoRALoader' ||
+    rootTargetNode.type === 'LoraLoader' ||
+    rootTargetNode.type === 'LoraLoaderModelOnly' ||
+    rootTargetNode.type === 'CivitaiLoRABrowserNode'
   ) {
     const downstreamGen = findDownstreamGenerator(rootTargetNode.id, connections, nodeMap);
     if (downstreamGen) {
       execNode = downstreamGen;
       subgraphNodeIds.add(downstreamGen.id);
+    } else {
+      const sole = findSoleCloudEngine(nodes);
+      if (sole) {
+        execNode = sole;
+        subgraphNodeIds.add(sole.id);
+      }
     }
   }
 
@@ -506,6 +518,40 @@ export function extractWorkflowParameters(
     if (loraConn) {
       traceLorasUpstream(loraConn.fromNodeId, connections, nodeMap, loras, subgraphNodeIds);
     }
+    // Orphan LoRALoader on a Fal-only graph still trips Fal LoRA validation.
+    for (const n of nodes) {
+      if (n.bypassed) continue;
+      if (
+        n.type !== 'LoRALoader' &&
+        n.type !== 'LoraLoader' &&
+        n.type !== 'LoraLoaderModelOnly' &&
+        n.type !== 'CivitaiLoRABrowserNode'
+      ) {
+        continue;
+      }
+      if (subgraphNodeIds.has(n.id)) continue;
+      const resolved = resolveCheckpointForNode(n.id, nodes, connections);
+      if (resolved.engineNodeId !== execNode.id) continue;
+      subgraphNodeIds.add(n.id);
+      if (n.type === 'CivitaiLoRABrowserNode') {
+        if (n.values.selected_model_name) {
+          loras.push({
+            name: n.values.selected_model_name,
+            modelStrength: 0.8,
+            clipStrength: 0.8,
+            triggerWords: n.values.selected_triggers || '',
+          });
+        }
+      } else {
+        loras.push({
+          name: n.values.lora_name || 'LoRA',
+          modelStrength: Number(n.values.strength_model ?? 0.8),
+          clipStrength: Number(n.values.strength_clip ?? 0.8),
+          triggerWords: n.values.trigger_words || '',
+          civitaiId: n.values.civitai_id || '',
+        });
+      }
+    }
   } else if (execNode.type === 'GoogleImagenNode') {
     isVideo = false;
     targetProvider = 'gemini';
@@ -602,17 +648,6 @@ export function extractWorkflowParameters(
   // Denoise ratio for img2img
   if (initImageUrl && !isVideo && denoise === 1.0 && execNode.values.denoise === undefined) {
     denoise = 0.65;
-  }
-
-  // Early fail: Fal (etc.) endpoint with LoRA connected but schema marks loras unsupported
-  if (loras.length > 0) {
-    const check = isLoraUnsupportedOnEndpoint(
-      targetProvider === 'video' ? (videoProvider || 'fal') : targetProvider,
-      checkpointModel
-    );
-    if (check.unsupported && check.message) {
-      throw new Error(`HTTP 400: ${check.message}`);
-    }
   }
 
   return {
@@ -854,8 +889,8 @@ export async function executeWorkflow(
     if (targetErrorNodeId) {
       onNodeStateChange(targetErrorNodeId, 'error', 0, undefined, msg);
     }
-    // Surface LoRA-unsupported on connected LoRA loaders too (Fal engine stays primary)
-    if (/该端点不支持 LoRA|loras/i.test(msg)) {
+    // Surface Fal endpoint-unsupported on connected LoRA loaders; never paint HF loras 400 onto Fal.
+    if (isFalLoraEndpointError(msg)) {
       for (const n of nodes) {
         if (n.bypassed) continue;
         if (n.type === 'LoRALoader' || n.type === 'CivitaiLoRABrowserNode' || n.type === 'LoraLoader') {

@@ -533,7 +533,7 @@ export const Canvas: React.FC<CanvasProps> = ({
                 }
                 currentProvider={
                   (node.type === 'LoRALoader' || node.type === 'LoraLoader' || node.type === 'LoraLoaderModelOnly' || node.type === 'CivitaiLoRABrowserNode')
-                    ? resolveCheckpointForNode(node.id, nodes, connections).provider
+                    ? (resolveCheckpointForNode(node.id, nodes, connections).provider || undefined)
                     : undefined
                 }
                 onAutoFixCheckpoint={onAutoFixCheckpoint}

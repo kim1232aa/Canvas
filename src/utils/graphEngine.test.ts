@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { extractWorkflowParameters, executeWorkflow } from './graphEngine';
+import { extractWorkflowParameters, executeWorkflow, resolveTargetNode } from './graphEngine';
 import { Connection, NodeInstance } from '../types/graph';
 import { EngineRegistry } from '../engines/EngineRegistry';
 import { NormalizedGenerateResult } from '../engines/types';
@@ -337,7 +337,7 @@ describe('graphEngine - B2 & L2a & L2b 拓扑反向追踪与参数抽取隔离�
     expect(errorRecordedNodes).toEqual(['video-node-1']);
   });
 
-  it('B1: FalAIEngineNode fal-ai/flux/schnell + connected LoRA fails early with 该端点不支持 LoRA / HTTP 400', () => {
+  it('B1: Fal schnell + connected LoRA extracts Fal params (no client pre-send throw) so executeWorkflow can POST /api/fal/generate', () => {
     const nodes: NodeInstance[] = [
       createNode('fal-1', 'FalAIEngineNode', {
         model: 'fal-ai/flux/schnell',
@@ -359,9 +359,122 @@ describe('graphEngine - B2 & L2a & L2b 拓扑反向追踪与参数抽取隔离�
         type: 'MODEL',
       },
     ];
-    expect(() => extractWorkflowParameters(nodes, connections, 'fal-1')).toThrow(
-      /HTTP 400:.*该端点不支持 LoRA/
+    const params = extractWorkflowParameters(nodes, connections, 'fal-1');
+    expect(params.targetProvider).toBe('fal');
+    expect(params.checkpointModel).toBe('fal-ai/flux/schnell');
+    expect(params.loras.map((l) => l.name)).toContain('koda');
+  });
+
+  it('B1-r2b: Fal + LoRA + zombie Checkpoint/KSampler auto-detects Fal, never HuggingFace', async () => {
+    const nodes: NodeInstance[] = [
+      createNode('fal-1', 'FalAIEngineNode', {
+        model: 'fal-ai/flux/schnell',
+        prompt: 'a futuristic astronaut',
+      }),
+      createNode('lora-1', 'LoRALoader', {
+        lora_name: 'koda',
+        strength_model: 1.0,
+        strength_clip: 1.0,
+        base_model: 'Flux.1 D',
+      }),
+      createNode('ckpt-zombie', 'CheckpointLoaderSimple', {
+        ckpt_name: 'Tongyi-MAI/Z-Image-Turbo',
+      }),
+      createNode('ksampler-1', 'KSampler', { steps: 20, cfg: 7 }),
+      createNode('clip-1', 'CLIPTextEncode', { text: 'zombie prompt' }),
+      createNode('latent-1', 'EmptyLatentImage', { width: 1024, height: 1024 }),
+    ];
+    const connections: Connection[] = [
+      {
+        id: 'c-ckpt',
+        fromNodeId: 'ckpt-zombie',
+        fromSocketId: 'MODEL',
+        toNodeId: 'ksampler-1',
+        toSocketId: 'model',
+        type: 'MODEL',
+      },
+      {
+        id: 'c-clip',
+        fromNodeId: 'clip-1',
+        fromSocketId: 'CONDITIONING',
+        toNodeId: 'ksampler-1',
+        toSocketId: 'positive',
+        type: 'CONDITIONING',
+      },
+      {
+        id: 'c-latent',
+        fromNodeId: 'latent-1',
+        fromSocketId: 'LATENT',
+        toNodeId: 'ksampler-1',
+        toSocketId: 'latent_image',
+        type: 'LATENT',
+      },
+    ];
+
+    expect(resolveTargetNode(nodes, connections).type).toBe('FalAIEngineNode');
+
+    const params = extractWorkflowParameters(nodes, connections);
+    expect(params.targetProvider).toBe('fal');
+    expect(params.checkpointModel).toBe('fal-ai/flux/schnell');
+    expect(params.checkpointModel).not.toContain('Z-Image');
+    expect(params.loras.map((l) => l.name)).toContain('koda');
+
+    const generateSpy = vi.spyOn(EngineRegistry, 'generate').mockImplementation(async (provider, p): Promise<NormalizedGenerateResult> => ({
+      mediaUrl: 'https://example.com/result.png',
+      provider,
+      providerId: provider as any,
+      model: p.model,
+      seed: 1,
+      mediaType: 'image',
+    }));
+
+    await executeWorkflow(nodes, connections, () => {}, undefined);
+    expect(generateSpy).toHaveBeenCalledWith(
+      'fal',
+      expect.objectContaining({
+        model: 'fal-ai/flux/schnell',
+        loras: expect.arrayContaining([expect.objectContaining({ name: 'koda' })]),
+      }),
+      expect.anything()
     );
+    expect(generateSpy).not.toHaveBeenCalledWith('huggingface', expect.anything(), expect.anything());
+  });
+
+  it('B1-r2b: CLIP connected to Fal prefers Fal over zombie KSampler when CLIP is selected', () => {
+    const nodes: NodeInstance[] = [
+      createNode('fal-1', 'FalAIEngineNode', {
+        model: 'fal-ai/flux/schnell',
+        prompt: '',
+      }),
+      createNode('clip-fal', 'CLIPTextEncode', { text: 'fal prompt' }),
+      createNode('ckpt-zombie', 'CheckpointLoaderSimple', {
+        ckpt_name: 'Tongyi-MAI/Z-Image-Turbo',
+      }),
+      createNode('ksampler-1', 'KSampler', { steps: 20 }),
+      createNode('lora-1', 'LoRALoader', { lora_name: 'koda', strength_model: 1 }),
+    ];
+    const connections: Connection[] = [
+      {
+        id: 'c-clip-fal',
+        fromNodeId: 'clip-fal',
+        fromSocketId: 'CONDITIONING',
+        toNodeId: 'fal-1',
+        toSocketId: 'prompt',
+        type: 'CONDITIONING',
+      },
+      {
+        id: 'c-ckpt',
+        fromNodeId: 'ckpt-zombie',
+        fromSocketId: 'MODEL',
+        toNodeId: 'ksampler-1',
+        toSocketId: 'model',
+        type: 'MODEL',
+      },
+    ];
+    const params = extractWorkflowParameters(nodes, connections, 'clip-fal');
+    expect(params.targetProvider).toBe('fal');
+    expect(params.checkpointModel).toBe('fal-ai/flux/schnell');
+    expect(params.positivePrompt).toBe('fal prompt');
   });
 
 });

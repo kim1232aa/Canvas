@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Connection, NodeInstance } from '../types/graph';
 import {
+  isFalLoraEndpointError,
   isLoraUnsupportedOnEndpoint,
   resolveActiveCheckpoint,
   resolveCheckpointForNode,
@@ -81,5 +82,46 @@ describe('resolveCheckpoint — B1 Fal schnell + LoRA', () => {
     // When checkpoint IS schnell, we get endpoint message.
     const compat = validateLoraCompatibility('fal-ai/flux/schnell', 'Flux.1 D', 'koda', 'fal');
     expect(compat.message).not.toContain('Tongyi-MAI/Z-Image-Turbo');
+  });
+
+  it('B1-r2b: orphan LoRA + sole Fal + zombie Checkpoint uses Fal schnell, never Z-Image', () => {
+    const nodes = [
+      node('lora-1', 'LoRALoader', { lora_name: 'koda', base_model: 'Flux.1 D', strength_model: 1 }),
+      node('fal-1', 'FalAIEngineNode', { model: 'fal-ai/flux/schnell' }),
+      node('ckpt-zombie', 'CheckpointLoaderSimple', { ckpt_name: 'Tongyi-MAI/Z-Image-Turbo' }),
+      node('ksampler-1', 'KSampler', { steps: 20 }),
+    ];
+    const conns: Connection[] = [
+      {
+        id: 'c-ckpt',
+        fromNodeId: 'ckpt-zombie',
+        fromSocketId: 'MODEL',
+        toNodeId: 'ksampler-1',
+        toSocketId: 'model',
+        type: 'MODEL',
+      },
+    ];
+
+    const forLora = resolveCheckpointForNode('lora-1', nodes, conns);
+    expect(forLora.checkpoint).toBe('fal-ai/flux/schnell');
+    expect(forLora.provider).toBe('fal');
+    expect(forLora.engineNodeId).toBe('fal-1');
+    expect(forLora.checkpoint).not.toContain('Z-Image');
+
+    const active = resolveActiveCheckpoint(nodes, conns, 'lora-1');
+    expect(active.checkpoint).toBe('fal-ai/flux/schnell');
+    expect(active.provider).toBe('fal');
+
+    const compat = validateLoraCompatibility(forLora.checkpoint, 'Flux.1 D', 'koda', forLora.provider);
+    expect(compat.endpointUnsupported).toBe(true);
+    expect(compat.message).toMatch(/该端点不支持 LoRA/);
+    expect(compat.message).not.toMatch(/Z-Image|架构不匹配|Tongyi/);
+  });
+
+  it('isFalLoraEndpointError: paints Fal HTTP/endpoint messages, not Hugging Face loras 400', () => {
+    expect(isFalLoraEndpointError('HTTP 400: 该端点不支持 LoRA（Fal.ai 端点 fal-ai/flux/schnell 的官方 schema 无 loras 字段）')).toBe(true);
+    expect(isFalLoraEndpointError('该端点不支持 LoRA（fal 端点 fal-ai/flux/schnell 的官方 schema 无 loras 字段）')).toBe(true);
+    expect(isFalLoraEndpointError('该服务商不支持: loras（Hugging Face）')).toBe(false);
+    expect(isFalLoraEndpointError('HTTP 400: 该服务商不支持: loras（Hugging Face）')).toBe(false);
   });
 });

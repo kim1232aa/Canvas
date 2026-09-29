@@ -8,7 +8,6 @@ import {
   NormalizedChatParams,
   NormalizedChatResult,
 } from './types';
-import { getFieldSpec, Provider } from '../schemas/providerSchema';
 
 /**
  * 统一引擎基础壳类 (BaseEngineDriver)
@@ -118,21 +117,6 @@ export abstract class BaseEngineDriver implements IEngineDriver {
 
     this.assertCapability(requiredCap);
     const normalized = this.normalizeGenerateParams(rawParams);
-
-    // Pre-send validation: 按 providerSchema 拦截不支持 LoRA 的端点，避免无谓发请求与超时等待
-    if (normalized.loras && normalized.loras.length > 0 && normalized.model) {
-      const prov: Provider | undefined =
-        this.id === 'fal' || this.id === 'gemini' || this.id === 'civitai'
-          ? (this.id as Provider)
-          : undefined;
-      if (prov) {
-        const loraSpec = getFieldSpec(prov, normalized.model, 'loras');
-        if (loraSpec?.status === 'unsupported') {
-          throw new Error(`HTTP 400: 该端点不支持 LoRA（${this.name} 端点 ${normalized.model} 的官方 schema 无 loras 字段）`);
-        }
-      }
-    }
-
     return this.executeGenerate(normalized, keys);
   }
 

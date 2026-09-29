@@ -41,6 +41,7 @@ import { getRecommendedBaseModelForLora, identifyArchitectureFamily } from './ut
 import {
   findFirstNodeOfType,
   getProviderFromNode,
+  isFalLoraEndpointError,
   resolveActiveCheckpoint,
   resolveCheckpointForNode,
 } from './utils/resolveCheckpoint';
@@ -970,7 +971,7 @@ export default function App() {
       // Prefer the Fal/engine node the user ran; never leave it idle with empty preview.
       const currentTargetId = targetNodeId || selectedNodeId;
       const errMsg = err.message || '执行遇到错误';
-      const isLoraEndpointErr = /该端点不支持 LoRA|loras/i.test(errMsg);
+      const isLoraEndpointErr = isFalLoraEndpointError(errMsg);
       setNodes((prev) => {
         const falEngines = prev.filter((n) => !n.bypassed && n.type === 'FalAIEngineNode');
         let errorNodeId = currentTargetId;
@@ -995,7 +996,7 @@ export default function App() {
           if (running) errorNodeId = running.id;
         }
         if (!errorNodeId) {
-          const core = prev.find((n) => !n.bypassed && (n.type === 'KSampler' || n.type === 'FalAIEngineNode' || n.type === 'SaveImage' || n.type === 'GoogleImagenNode' || n.type === 'AIVideoNode'));
+          const core = prev.find((n) => !n.bypassed && (n.type === 'FalAIEngineNode' || n.type === 'GoogleImagenNode' || n.type === 'AIVideoNode' || n.type === 'KSampler' || n.type === 'SaveImage'));
           if (core) errorNodeId = core.id;
         }
         if (!errorNodeId && prev.length > 0) {
@@ -1003,8 +1004,19 @@ export default function App() {
         }
 
         const errorIds = new Set<string>();
-        if (errorNodeId) errorIds.add(errorNodeId);
-        if (currentTargetId) errorIds.add(currentTargetId);
+        const isHfLorasErr = /该服务商不支持/i.test(errMsg) && /Hugging\s*Face/i.test(errMsg);
+        if (errorNodeId) {
+          const en = prev.find((n) => n.id === errorNodeId);
+          if (!(en?.type === 'FalAIEngineNode' && isHfLorasErr)) {
+            errorIds.add(errorNodeId);
+          }
+        }
+        if (currentTargetId) {
+          const t = prev.find((n) => n.id === currentTargetId);
+          if (!(t?.type === 'FalAIEngineNode' && isHfLorasErr)) {
+            errorIds.add(currentTargetId);
+          }
+        }
         if (isLoraEndpointErr) {
           for (const n of prev) {
             if (n.bypassed) continue;

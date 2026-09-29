@@ -14,8 +14,16 @@ describe('FalDriver LoRA 校验与错误处理', () => {
     globalThis.fetch = originalFetch;
   });
 
-  it('fal-ai/flux/schnell + LoRA 在发送前按 providerSchema 拦截，不发出请求', async () => {
-    const fetchMock = vi.fn();
+  it('fal-ai/flux/schnell + LoRA POSTs /api/fal/generate and surfaces HTTP 400 from the server', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: async () => ({
+        error: '该端点不支持 LoRA（Fal.ai 端点 fal-ai/flux/schnell 的官方 schema 无 loras 字段）',
+        unsupported: ['loras'],
+        endpoint: 'fal-ai/flux/schnell',
+      }),
+    });
     globalThis.fetch = fetchMock;
 
     const params: NormalizedGenerateParams = {
@@ -32,11 +40,17 @@ describe('FalDriver LoRA 校验与错误处理', () => {
     };
 
     await expect(driver.generate(params, { falKey: 'test-key' })).rejects.toThrow(
-      'HTTP 400: 该端点不支持 LoRA（Fal.ai (GPU 云端加速) 端点 fal-ai/flux/schnell 的官方 schema 无 loras 字段）'
+      /HTTP 400: 该端点不支持 LoRA/
     );
 
-    // 确保绝不发出网络请求
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('/api/fal/generate');
+    const body = JSON.parse(init.body);
+    expect(body.model).toBe('fal-ai/flux/schnell');
+    expect(body.loras).toEqual(
+      expect.arrayContaining([expect.objectContaining({ path: 'https://civitai.com/api/download/models/12345' })])
+    );
   });
 
   it('若到达服务端并返回 400，前端必须暴露 HTTP 状态码与 reason，不许吞错', async () => {

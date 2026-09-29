@@ -46,7 +46,8 @@ export class HuggingFaceDriver extends BaseEngineDriver {
 
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({ error: `Hugging Face 请求失败 (${resp.status})` }));
-      throw new Error(err.error || err.details || `Hugging Face 错误 (${resp.status})`);
+      const reason = err.error || err.details || `Hugging Face 错误`;
+      throw new Error(`HTTP ${resp.status}: ${reason}`);
     }
 
     const data = await resp.json();

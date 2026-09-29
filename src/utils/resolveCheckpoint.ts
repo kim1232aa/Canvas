@@ -15,6 +15,34 @@ export const ENGINE_NODE_TYPES = [
 
 export type EngineNodeType = (typeof ENGINE_NODE_TYPES)[number];
 
+/** Cloud engines — never a zombie CheckpointLoaderSimple / KSampler. */
+export const CLOUD_ENGINE_NODE_TYPES = [
+  'FalAIEngineNode',
+  'GoogleImagenNode',
+  'AIVideoNode',
+  'ModelScopeNode',
+  'ModelScopeAiNode',
+  'NanoGPTNode',
+] as const;
+
+export function isCloudEngineNode(node: NodeInstance | null | undefined): boolean {
+  return !!node && (CLOUD_ENGINE_NODE_TYPES as readonly string[]).includes(node.type);
+}
+
+export function findSoleCloudEngine(nodes: NodeInstance[]): NodeInstance | undefined {
+  const engines = nodes.filter((n) => !n.bypassed && isCloudEngineNode(n));
+  return engines.length === 1 ? engines[0] : undefined;
+}
+
+/** True for Fal/endpoint LoRA errors — not Hugging Face「该服务商不支持: loras」. */
+export function isFalLoraEndpointError(msg: string | null | undefined): boolean {
+  if (!msg) return false;
+  if (/该服务商不支持/i.test(msg) && /Hugging\s*Face/i.test(msg)) return false;
+  if (/该端点不支持 LoRA/.test(msg)) return true;
+  if (/HTTP\s+\d+/.test(msg) && /Fal/i.test(msg)) return true;
+  return false;
+}
+
 /** Extract the model/checkpoint string from a single node (no canvas-wide search). */
 export function getModelFromNode(node: NodeInstance | null | undefined): string {
   if (!node || node.bypassed) return '';
@@ -93,20 +121,28 @@ export function resolveCheckpointForNode(
     for (const c of outConns) {
       const dest = nodeMap.get(c.toNodeId);
       if (!dest || dest.bypassed) continue;
-      if (
-        dest.type === 'FalAIEngineNode' ||
-        dest.type === 'GoogleImagenNode' ||
-        dest.type === 'AIVideoNode' ||
-        dest.type === 'ModelScopeNode' ||
-        dest.type === 'ModelScopeAiNode' ||
-        dest.type === 'NanoGPTNode'
-      ) {
+      if (isCloudEngineNode(dest)) {
         return {
           checkpoint: getModelFromNode(dest),
           provider: getProviderFromNode(dest),
           engineNodeId: dest.id,
         };
       }
+    }
+
+    // Sole cloud engine on canvas wins over an unconnected / zombie Checkpoint+KSampler.
+    const sole = findSoleCloudEngine(nodes);
+    if (sole) {
+      return {
+        checkpoint: getModelFromNode(sole),
+        provider: getProviderFromNode(sole),
+        engineNodeId: sole.id,
+      };
+    }
+
+    for (const c of outConns) {
+      const dest = nodeMap.get(c.toNodeId);
+      if (!dest || dest.bypassed) continue;
       if (dest.type === 'KSampler') {
         // Walk upstream of KSampler for CheckpointLoaderSimple
         const modelIn = connections.find((x) => x.toNodeId === dest.id && x.toSocketId === 'model');
