@@ -478,3 +478,90 @@ describe('graphEngine - B2 & L2a & L2b 拓扑反向追踪与参数抽取隔离�
   });
 
 });
+
+describe('F5 omit unset seed/sampler defaults', () => {
+  const node = (id: string, type: string, values: Record<string, any>): NodeInstance => ({
+    id, type, title: type, pos: { x: 0, y: 0 }, inputs: [], outputs: [], values,
+  });
+  const mockGenerate = (seed: number | null) =>
+    vi.spyOn(EngineRegistry, 'generate').mockImplementation(async (provider, p): Promise<NormalizedGenerateResult> => ({
+      mediaUrl: 'https://example.com/r.png', provider, providerId: provider as any, model: p.model, seed, mediaType: 'image',
+    }));
+  const ksGraph = (ksVals: Record<string, any>) => ({
+    nodes: [
+      node('ckpt', 'CheckpointLoaderSimple', { ckpt_name: 'fal-ai/flux/dev', targetProvider: 'fal' }),
+      node('clip', 'CLIPTextEncode', { text: 'a cat' }),
+      node('ks', 'KSampler', ksVals),
+    ],
+    conns: [
+      { id: 'c1', fromNodeId: 'ckpt', fromSocketId: 'MODEL', toNodeId: 'ks', toSocketId: 'model', type: 'MODEL' },
+      { id: 'c2', fromNodeId: 'clip', fromSocketId: 'CONDITIONING', toNodeId: 'ks', toSocketId: 'positive', type: 'CONDITIONING' },
+    ] as Connection[],
+  });
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.spyOn(api, 'getStoredApiKeys').mockReturnValue({} as any);
+  });
+
+  it('GoogleImagenNode: no seed/steps/cfg/sampler/scheduler invented, generate gets no seed, history seed null', async () => {
+    const rand = vi.spyOn(Math, 'random');
+    const nodes = [node('g', 'GoogleImagenNode', { model: 'gemini-3.1-flash-image', prompt: 'a fox' })];
+    const p = extractWorkflowParameters(nodes, [], 'g');
+    for (const k of ['seed', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'width', 'height'] as const) {
+      expect(p[k]).toBeUndefined();
+    }
+    const spy = mockGenerate(null);
+    const res = await executeWorkflow(nodes, [], () => {}, undefined, 'g');
+    const sent = spy.mock.calls[0][1];
+    expect(sent.seed).toBeUndefined();
+    expect(sent.extraParams).not.toHaveProperty('sampler_name');
+    expect(sent.extraParams).not.toHaveProperty('scheduler');
+    expect(res.seed).toBeNull();
+    expect(rand).not.toHaveBeenCalled();
+  });
+
+  it('FalAIEngineNode with only model+prompt: no forged 28/3.5/1024/seed', async () => {
+    const nodes = [node('f', 'FalAIEngineNode', { model: 'fal-ai/flux/dev', prompt: 'a fox' })];
+    const p = extractWorkflowParameters(nodes, [], 'f');
+    expect([p.steps, p.cfg, p.width, p.height, p.seed, p.sampler, p.scheduler]).toEqual(Array(7).fill(undefined));
+    const spy = mockGenerate(null);
+    await executeWorkflow(nodes, [], () => {}, undefined, 'f');
+    const sent = spy.mock.calls[0][1];
+    expect([sent.steps, sent.cfg, sent.width, sent.height, sent.seed, sent.denoise]).toEqual(Array(6).fill(undefined));
+  });
+
+  it('FalAIEngineNode with explicit steps/guidance/resolution passes them through', () => {
+    const nodes = [node('f', 'FalAIEngineNode', {
+      model: 'fal-ai/flux/dev', prompt: 'a fox', steps: 28, guidance_scale: 3.5, resolution: '1024x1024',
+    })];
+    const p = extractWorkflowParameters(nodes, [], 'f');
+    expect([p.steps, p.cfg, p.width, p.height]).toEqual([28, 3.5, 1024, 1024]);
+  });
+
+  it('KSampler fixed seed 12345 kept; seed 0 kept; unset seed stays undefined', () => {
+    let g = ksGraph({ control_after_generate: 'fixed', seed: 12345 });
+    expect(extractWorkflowParameters(g.nodes, g.conns, 'ks').seed).toBe(12345);
+    g = ksGraph({ control_after_generate: 'fixed', seed: 0 });
+    expect(extractWorkflowParameters(g.nodes, g.conns, 'ks').seed).toBe(0);
+    g = ksGraph({ steps: 20 });
+    const p = extractWorkflowParameters(g.nodes, g.conns, 'ks');
+    expect(p.seed).toBeUndefined();
+    expect(p.steps).toBe(20);
+    expect([p.cfg, p.sampler, p.scheduler, p.denoise, p.width, p.height]).toEqual(Array(6).fill(undefined));
+  });
+
+  it('KSampler + init image: denoise is not forged to 0.65', () => {
+    const g = ksGraph({ steps: 20 });
+    g.nodes.push(node('img', 'LoadImage', { image_url: 'https://example.com/i.png' }));
+    g.conns.push({ id: 'c3', fromNodeId: 'img', fromSocketId: 'IMAGE', toNodeId: 'ks', toSocketId: 'latent_image', type: 'IMAGE' });
+    const p = extractWorkflowParameters(g.nodes, g.conns, 'ks');
+    expect(p.initImageUrl).toBe('https://example.com/i.png');
+    expect(p.denoise).toBeUndefined();
+  });
+
+  it('KSampler randomize → finite seed (user opted in)', () => {
+    const g = ksGraph({ control_after_generate: 'randomize', seed: 1 });
+    expect(Number.isFinite(extractWorkflowParameters(g.nodes, g.conns, 'ks').seed)).toBe(true);
+  });
+});

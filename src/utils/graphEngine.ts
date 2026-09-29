@@ -15,15 +15,16 @@ export interface WorkflowExtraction {
   checkpointModel: string;
   positivePrompt: string;
   negativePrompt: string;
-  width: number;
-  height: number;
+  // F5: undefined = 节点上没填，不发上游、历史记 null
+  width?: number;
+  height?: number;
   batchSize: number;
-  seed: number;
-  steps: number;
-  cfg: number;
-  sampler: string;
-  scheduler: string;
-  denoise: number;
+  seed?: number;
+  steps?: number;
+  cfg?: number;
+  sampler?: string;
+  scheduler?: string;
+  denoise?: number;
   loras: Array<{
     name: string;
     modelStrength: number;
@@ -291,6 +292,17 @@ function traceLorasUpstream(
  * Traces backwards and collects node values according to graph connections,
  * rooted at the current executing node.
  */
+function numOrUndef(v: unknown): number | undefined {
+  if (v === undefined || v === null || v === '') return undefined;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+function strOrUndef(v: unknown): string | undefined {
+  if (v === undefined || v === null || v === '') return undefined;
+  return String(v);
+}
+
 export function extractWorkflowParameters(
   nodes: NodeInstance[],
   connections: Connection[],
@@ -493,15 +505,15 @@ export function extractWorkflowParameters(
   let background: string | undefined = undefined;
   let moderation: string | undefined = undefined;
   let resolution: string | undefined = undefined;
-  let width = 1024;
-  let height = 1024;
+  let width: number | undefined;
+  let height: number | undefined;
   let batchSize = 1;
-  let seed = Math.floor(Math.random() * 1000000000);
-  let steps = 25;
-  let cfg = 5.0;
-  let sampler = 'euler';
-  let scheduler = 'normal';
-  let denoise = 1.0;
+  let seed: number | undefined;
+  let steps: number | undefined;
+  let cfg: number | undefined;
+  let sampler: string | undefined;
+  let scheduler: string | undefined;
+  let denoise: number | undefined;
   const loras: WorkflowExtraction['loras'] = [];
   let ksamplerNodeId: string | undefined = undefined;
 
@@ -533,12 +545,13 @@ export function extractWorkflowParameters(
     if (!checkpointModel) {
       throw new Error('请先选择模型');
     }
-    steps = Number(execNode.values.steps) || 28;
-    cfg = Number(execNode.values.guidance_scale) || 3.5;
-    const resParts = (execNode.values.resolution || '1024x1024').split('x');
+    steps = numOrUndef(execNode.values.steps);
+    cfg = numOrUndef(execNode.values.guidance_scale);
+    const res = strOrUndef(execNode.values.resolution);
+    const resParts = res ? res.split('x') : [];
     if (resParts.length === 2) {
-      width = Number(resParts[0]) || 1024;
-      height = Number(resParts[1]) || 1024;
+      width = numOrUndef(resParts[0]);
+      height = numOrUndef(resParts[1]);
     }
     const loraConn = connections.find((c) => c.toNodeId === execNode.id && c.toSocketId === 'lora');
     if (loraConn) {
@@ -625,13 +638,13 @@ export function extractWorkflowParameters(
     if (vals.control_after_generate === 'randomize') {
       seed = Math.floor(Math.random() * 1000000000);
     } else {
-      seed = Number(vals.seed) || seed;
+      seed = numOrUndef(vals.seed);
     }
-    steps = Number(vals.steps) || 25;
-    cfg = Number(vals.cfg) || 5.0;
-    sampler = vals.sampler_name || sampler;
-    scheduler = vals.scheduler || scheduler;
-    denoise = Number(vals.denoise ?? 1.0);
+    steps = numOrUndef(vals.steps);
+    cfg = numOrUndef(vals.cfg);
+    sampler = strOrUndef(vals.sampler_name);
+    scheduler = strOrUndef(vals.scheduler);
+    denoise = numOrUndef(vals.denoise);
 
     const modelConn = connections.find((c) => c.toNodeId === execNode.id && c.toSocketId === 'model');
     if (!modelConn) {
@@ -662,8 +675,8 @@ export function extractWorkflowParameters(
       const src = nodeMap.get(latentConn.fromNodeId);
       if (src && !src.bypassed && src.type === 'EmptyLatentImage') {
         subgraphNodeIds.add(src.id);
-        width = Number(src.values.width) || 1024;
-        height = Number(src.values.height) || 1024;
+        width = numOrUndef(src.values.width);
+        height = numOrUndef(src.values.height);
         batchSize = Number(src.values.batch_size) || 1;
       }
     }
@@ -689,11 +702,6 @@ export function extractWorkflowParameters(
   let finalPositive = positivePrompt;
   if (triggerWordsAll && !finalPositive.includes(triggerWordsAll)) {
     finalPositive = `${triggerWordsAll}, ${finalPositive}`.trim();
-  }
-
-  // Denoise ratio for img2img
-  if (initImageUrl && !isVideo && denoise === 1.0 && execNode.values.denoise === undefined) {
-    denoise = 0.65;
   }
 
   return {
@@ -743,7 +751,7 @@ export async function executeWorkflow(
   onNodeStateChange: (nodeId: string, state: NodeInstance['state'], progress?: number, output?: any, errorMessage?: string) => void,
   onProgress?: (percent: number, statusText: string) => void,
   targetNodeOrId?: NodeInstance | string
-): Promise<{ imageUrl: string; provider: string; model: string; seed: number; isVideo?: boolean }> {
+): Promise<{ imageUrl: string; provider: string; model: string; seed: number | null; isVideo?: boolean }> {
   let stepInterval: any = null;
   let targetErrorNodeId: string | undefined = typeof targetNodeOrId === 'string' ? targetNodeOrId : targetNodeOrId?.id;
 
@@ -858,8 +866,8 @@ export async function executeWorkflow(
     const grokOrOpenAi = params.targetProvider === 'openai_compat' || params.targetProvider === 'grok_compat' || params.videoProvider === 'grok_compat';
     const grokish = params.targetProvider === 'grok_compat' || params.videoProvider === 'grok_compat';
     const extraParams: Record<string, unknown> = {
-      sampler_name: params.sampler,
-      scheduler: params.scheduler,
+      ...(params.sampler !== undefined ? { sampler_name: params.sampler } : {}),
+      ...(params.scheduler !== undefined ? { scheduler: params.scheduler } : {}),
       ...(params.imageSize ? { image_size: params.imageSize } : {}),
     };
     if (params.size) extraParams.size = params.size;
@@ -945,7 +953,7 @@ export async function executeWorkflow(
       imageUrl: resultMedia,
       provider: usedProvider,
       model: usedModel,
-      seed: params.seed,
+      seed: execResult.seed ?? normParams.seed ?? null,
       isVideo,
     };
   } catch (error: any) {

@@ -1,5 +1,24 @@
 # Canvas Provider API 接线修复进度表
 
+## 0b. F5 — stop forging seed/sampler defaults (f5-fake-defaults) — 2026-09-29
+
+Tip hash: 99261a6fc7e6acad99981a731b8e2520e20871fa (branch f5-fake-defaults, not pushed)
+
+### 完成项
+- [x] `extractWorkflowParameters` 不再用 `Math.random` / 25 / 5.0 / euler / normal / 1024 初始化所有目标
+- [x] GoogleImagenNode：无 seed widget → 不发明 seed；generate body 省略 seed；历史 null
+- [x] FalAIEngineNode：空值不再回填 steps=28 / cfg=3.5 / 1024x1024；仅透传节点上真实有的字段
+- [x] KSampler：仅 `control_after_generate===randomize` 时随机 seed；fixed/unset 不伪造；去掉 img2img denoise=0.65 编造
+- [x] Soft：schema `denoise` FieldKey；gemini / openai_compat / grok_compat 标 unsupported；画布 KSampler denoise + ParameterInspector 灰「该服务商不支持」（Fal/Civitai 未臆造）
+- [x] 单测 F5：unset seed → generate 无 seed / res.seed null；无 Math.random（Gemini）；Fal 空值不伪造；`npx tsc --noEmit` 0；`npm test` 57/57
+
+### 残留（QA）
+- SpatialFrame 无 denoise 控件 → 无需灰显
+- AIVideoNode duration/fps/aspect 默认回填属 F3/F4，本轮未改
+- 资产/预设恢复路径若仍有 random seed，属 F5 范围外残留
+
+---
+
 ## 0. compat-relays（OpenAI 兼容中转 + Grok 兼容中转）— 2026-09-29
 
 Tip hash: 6426ab6e98ff877eba631203cb3ab26dcbf3ca06 (feat commit d4da15d2c41ff9b14a4d4964fc771d78ebd0e7b4; branch compat-relays / staging-local, not pushed)

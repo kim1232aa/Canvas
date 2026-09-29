@@ -982,7 +982,7 @@ export default function App() {
       setToast({
         type: 'success',
         title: '🎉 工作流运行成功！',
-        message: `由 ${result.provider} 渲染完成，种子: ${result.seed}，已保存至生成历史记录`,
+        message: `由 ${result.provider} 渲染完成，种子: ${result.seed ?? '未填写'}，已保存至生成历史记录`,
         imageUrl: result.imageUrl,
       });
     } catch (err: any) {

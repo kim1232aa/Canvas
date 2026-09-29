@@ -16,7 +16,7 @@ export type Provider = 'gemini' | 'fal' | 'civitai' | 'openai_compat' | 'grok_co
 /** 画布侧字段名；上游字段名不同时写在 FieldSpec.wire */
 export type FieldKey =
   | 'width' | 'height' | 'aspect_ratio' | 'image_size' | 'resolution'
-  | 'seed' | 'negative_prompt' | 'steps' | 'cfg' | 'sampler' | 'scheduler' | 'loras' | 'num_images'
+  | 'seed' | 'negative_prompt' | 'steps' | 'cfg' | 'sampler' | 'scheduler' | 'denoise' | 'loras' | 'num_images'
   | 'size' | 'quality' | 'output_format' | 'background' | 'moderation';
 
 export interface FieldValue {
@@ -112,7 +112,7 @@ function gemini(
         type: 'integer',
         note: 'GenerationConfig.seed（int32，「If not set, the request uses a randomly generated seed」）存在；官方未说明对生图是否生效',
       },
-      ...unsupported(G_DOC, ['width', 'height', 'negative_prompt', 'steps', 'cfg', 'loras'], '官方可选配置只有 aspect_ratio / image_size'),
+      ...unsupported(G_DOC, ['width', 'height', 'negative_prompt', 'steps', 'cfg', 'denoise', 'loras'], '官方可选配置只有 aspect_ratio / image_size'),
     },
   };
 }
@@ -389,7 +389,7 @@ const OPENAI_COMPAT_MODELS: ModelSpec[] = [
       background: enumField(OAI_IMG, vals(['transparent', 'opaque', 'auto'], 'supported')),
       moderation: enumField(OAI_IMG, vals(['auto', 'low'], 'supported')),
       num_images: { status: 'supported', source: OAI_IMG, wire: 'n', type: 'integer', min: 1, max: 10 },
-      ...unsupported(OAI_IMG, ['seed', 'negative_prompt', 'steps', 'cfg', 'sampler', 'scheduler', 'loras', 'width', 'height'], '该服务商不支持'),
+      ...unsupported(OAI_IMG, ['seed', 'negative_prompt', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'loras', 'width', 'height'], '该服务商不支持'),
     },
   },
 ];
@@ -409,7 +409,7 @@ function grokImage(id: string, label: string): ModelSpec {
       aspect_ratio: enumField(XAI_IMG, GROK_ASPECT),
       resolution: enumField(XAI_IMG, vals(['1k', '1.5k', '2k'], 'supported')),
       num_images: { status: 'supported', source: XAI_IMG, wire: 'n', type: 'integer', min: 1, max: 4 },
-      ...unsupported(XAI_IMG, ['seed', 'negative_prompt', 'steps', 'cfg', 'loras', 'width', 'height'], '该服务商不支持像素宽高 / seed / 负向 / steps / CFG / LoRA'),
+      ...unsupported(XAI_IMG, ['seed', 'negative_prompt', 'steps', 'cfg', 'denoise', 'loras', 'width', 'height'], '该服务商不支持像素宽高 / seed / 负向 / steps / CFG / LoRA'),
     },
   };
 }
@@ -423,7 +423,7 @@ function grokVideo(id: string, label: string): ModelSpec {
     fields: {
       aspect_ratio: enumField(XAI_VID, GROK_ASPECT),
       resolution: enumField(XAI_VID, vals(['480p', '720p', '1080p'], 'supported')),
-      ...unsupported(XAI_VID, ['seed', 'negative_prompt', 'steps', 'cfg', 'loras', 'width', 'height'], '该服务商不支持像素宽高 / seed / 负向 / steps / CFG / LoRA'),
+      ...unsupported(XAI_VID, ['seed', 'negative_prompt', 'steps', 'cfg', 'denoise', 'loras', 'width', 'height'], '该服务商不支持像素宽高 / seed / 负向 / steps / CFG / LoRA'),
     },
   };
 }

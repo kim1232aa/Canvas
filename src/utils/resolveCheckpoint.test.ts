@@ -179,18 +179,20 @@ describe('resolveCheckpoint — canvas NodeItem grey (compat)', () => {
     expect(canvasWidgetFieldKey('sampler_name')).toBe('sampler');
     expect(canvasWidgetFieldKey('sampler')).toBe('sampler');
     expect(canvasWidgetFieldKey('scheduler')).toBe('scheduler');
-    expect(canvasWidgetFieldKey('denoise')).toBeUndefined();
+    expect(canvasWidgetFieldKey('denoise')).toBe('denoise');
     expect(canvasWidgetFieldKey('control_after_generate')).toBeUndefined();
   });
 
-  it('isCanvasFieldUnsupported: openai_compat / grok_compat grey steps/CFG/sampler/scheduler', () => {
+  it('isCanvasFieldUnsupported: openai_compat / grok_compat grey steps/CFG/sampler/scheduler/denoise', () => {
     expect(isCanvasFieldUnsupported('openai_compat', 'gpt-image-2', 'steps')).toBe(true);
     expect(isCanvasFieldUnsupported('openai_compat', 'gpt-image-2', 'cfg')).toBe(true);
     expect(isCanvasFieldUnsupported('openai_compat', 'gpt-image-2', 'sampler')).toBe(true);
     expect(isCanvasFieldUnsupported('openai_compat', 'gpt-image-2', 'scheduler')).toBe(true);
     expect(isCanvasWidgetUnsupported('openai_compat', 'gpt-image-2', 'sampler_name')).toBe(true);
     expect(isCanvasWidgetUnsupported('openai_compat', 'gpt-image-2', 'cfg_scale')).toBe(true);
-    expect(isCanvasWidgetUnsupported('openai_compat', 'gpt-image-2', 'denoise')).toBe(false);
+    expect(isCanvasWidgetUnsupported('openai_compat', 'gpt-image-2', 'denoise')).toBe(true);
+    expect(isCanvasFieldUnsupported('gemini', 'gemini-3.1-flash-image', 'denoise')).toBe(true);
+    expect(isCanvasFieldUnsupported('fal', 'fal-ai/flux/dev', 'denoise')).toBe(false);
     expect(isCanvasFieldUnsupported('grok_compat', 'grok-imagine-image', 'steps')).toBe(true);
     expect(isCanvasFieldUnsupported('grok_compat', 'grok-imagine-image', 'cfg')).toBe(true);
     expect(isCanvasFieldUnsupported('grok_compat', 'grok-imagine-image', 'sampler')).toBe(true);

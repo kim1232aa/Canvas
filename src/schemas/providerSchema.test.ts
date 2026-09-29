@@ -65,7 +65,7 @@ describe('providerSchema 自检', () => {
   });
 
   it('openai_compat gpt-image-2：不支持 seed/negative/steps/cfg/sampler/LoRA，支持 size/quality/output_format/background/moderation/n', () => {
-    const grey = ['seed', 'negative_prompt', 'steps', 'cfg', 'sampler', 'scheduler', 'loras', 'width', 'height'] as const;
+    const grey = ['seed', 'negative_prompt', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'loras', 'width', 'height'] as const;
     for (const f of grey) {
       expect(getFieldSpec('openai_compat', 'gpt-image-2', f)?.status, f).toBe('unsupported');
     }
@@ -84,7 +84,7 @@ describe('providerSchema 自检', () => {
 
   it('grok_compat imagine：不支持 seed/negative/steps/cfg/LoRA/像素宽高，支持 aspect_ratio 与 resolution', () => {
     for (const id of ['grok-imagine-image', 'grok-imagine-image-2.0', 'grok-imagine-image-quality']) {
-      const grey = ['seed', 'negative_prompt', 'steps', 'cfg', 'loras', 'width', 'height'] as const;
+      const grey = ['seed', 'negative_prompt', 'steps', 'cfg', 'denoise', 'loras', 'width', 'height'] as const;
       for (const f of grey) {
         expect(getFieldSpec('grok_compat', id, f)?.status, `${id}.${f}`).toBe('unsupported');
       }

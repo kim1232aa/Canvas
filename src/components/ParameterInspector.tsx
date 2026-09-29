@@ -159,6 +159,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
   const greyCfg = isOpenAiCompat || isGrokCompat || fieldUnsupported('cfg');
   const greySampler = isOpenAiCompat || isGrokCompat || fieldUnsupported('sampler');
   const greyScheduler = isOpenAiCompat || isGrokCompat || fieldUnsupported('scheduler');
+  const greyDenoise = isOpenAiCompat || isGrokCompat || fieldUnsupported('denoise');
   const greyLoras = isOpenAiCompat || isGrokCompat || fieldUnsupported('loras');
   const greyWidthHeight = isGemini || isOpenAiCompat || isGrokCompat || fieldUnsupported('width') || fieldUnsupported('height');
   const greyNegative = isOpenAiCompat || isGrokCompat || fieldUnsupported('negative_prompt');
@@ -658,17 +659,22 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
           {/* Denoise (img2img) */}
           <div className="space-y-1">
             <div className="flex justify-between text-slate-400 text-[10px] font-mono">
-              <span title="文生图固定为 1.0；图生图与重绘建议 0.35 ~ 0.65">DENOISE (重绘降噪幅度)</span>
-              <span className="text-cyan-400 font-bold">{params.denoise.toFixed(2)}</span>
+              <span className="flex items-center gap-1.5" title="文生图固定为 1.0；图生图与重绘建议 0.35 ~ 0.65">
+                DENOISE (重绘降噪幅度)
+                {greyDenoise && <FieldStatusBadge status="unsupported" />}
+              </span>
+              <span className="text-cyan-400 font-bold">{greyDenoise ? '—' : (params.denoise?.toFixed(2) ?? '未设置')}</span>
             </div>
             <input
               type="range"
               min={0.0}
               max={1.0}
               step={0.01}
-              value={params.denoise}
-              onChange={(e) => update({ denoise: parseFloat(e.target.value) })}
-              className="w-full h-1.5 bg-[#252833] rounded appearance-none cursor-pointer accent-cyan-400"
+              value={greyDenoise ? 0 : (params.denoise ?? 0)}
+              disabled={greyDenoise}
+              onChange={(e) => { if (greyDenoise) return; update({ denoise: parseFloat(e.target.value) }); }}
+              title={greyDenoise ? '该服务商不支持' : undefined}
+              className="w-full h-1.5 bg-[#252833] rounded appearance-none cursor-pointer accent-cyan-400 disabled:opacity-40 disabled:cursor-not-allowed"
             />
           </div>
         </div>

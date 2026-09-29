@@ -420,6 +420,7 @@ export type CanvasGreyField =
   | 'cfg'
   | 'sampler'
   | 'scheduler'
+  | 'denoise'
   | 'loras';
 
 /**
@@ -447,6 +448,8 @@ export function canvasWidgetFieldKey(widgetName: string): CanvasGreyField | unde
       return 'sampler';
     case 'scheduler':
       return 'scheduler';
+    case 'denoise':
+      return 'denoise';
     default:
       return undefined;
   }
@@ -472,11 +475,11 @@ export function isCanvasFieldUnsupported(
   if (
     (isOpenAiCompat || isGrokCompat) &&
     (field === 'seed' || field === 'negative_prompt' || field === 'width' || field === 'height' ||
-      field === 'steps' || field === 'cfg' || field === 'sampler' || field === 'scheduler' || field === 'loras')
+      field === 'steps' || field === 'cfg' || field === 'sampler' || field === 'scheduler' || field === 'denoise' || field === 'loras')
   ) {
     return true;
   }
-  if (prov === 'gemini' && (field === 'width' || field === 'height' || field === 'negative_prompt' || field === 'steps' || field === 'cfg' || field === 'loras')) {
+  if (prov === 'gemini' && (field === 'width' || field === 'height' || field === 'negative_prompt' || field === 'steps' || field === 'cfg' || field === 'denoise' || field === 'loras')) {
     return true;
   }
   const schemaProv: Provider | undefined =
