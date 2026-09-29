@@ -2,7 +2,7 @@
 
 ## 0. compat-relays（OpenAI 兼容中转 + Grok 兼容中转）— 2026-09-29
 
-Tip hash: (pending commit — NodeItem grey + N/size persist + LoRA copy unify)
+Tip hash: 3a2be4b72677e9927de149108e54b524d5e01af2 (feat commit d4da15d2c41ff9b14a4d4964fc771d78ebd0e7b4; branch compat-relays, not pushed)
 
 ### 完成项
 - [x] 新增一等公民 provider：`openai_compat`（仅生图/改图）、`grok_compat`（推理+生图+改图+生视频）
@@ -24,7 +24,7 @@ Tip hash: (pending commit — NodeItem grey + N/size persist + LoRA copy unify)
 ### QA 配置步骤（勿把真实 key 写进仓库）
 ```bash
 cd /workspace/Canvas-ui
-git checkout compat-relays   # tip 5db7f912dc2e016f945c76b92c9f5057c8ea1ac7
+git checkout compat-relays   # tip 3a2be4b72677e9927de149108e54b524d5e01af2
 set -a; source /workspace/canvas-secrets/compat-relays.env; set +a
 # 或在设置面板「OpenAI 兼容中转」「Grok 兼容中转」手填 Base URL + Key
 npm run dev   # 勿占用 3417 / 勿动 Canvas-b1-fix
