@@ -24,6 +24,7 @@ import { refinePromptWithGemini, getStoredApiKeys, getRefineModelSelection } fro
 import { validateLoraCompatibility } from '../utils/baseModelMatcher';
 import { EngineRegistry } from '../engines/EngineRegistry';
 import { GeminiFieldSelect, GeminiModelBadge } from './GeminiFieldSelect';
+import { fieldOptions, resolveSchemaModelId } from '../schemas/providerSchema';
 import { FieldStatusBadge } from './FieldStatusBadge';
 import { isCanvasFieldUnsupported, isCanvasWidgetUnsupported } from '../utils/resolveCheckpoint';
 
@@ -582,6 +583,36 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                     {!value && (
                       <p className="text-[10px] text-amber-400 font-mono mt-1">请先选择模型</p>
                     )}
+                  </div>
+                );
+              }
+
+              // CheckpointLoaderSimple + grok_compat: schema-backed aspect_ratio / resolution
+              if (
+                node.type === 'CheckpointLoaderSimple' &&
+                (widget.name === 'aspect_ratio' || widget.name === 'resolution')
+              ) {
+                const prov = String(node.values?.targetProvider || currentProvider || '').trim();
+                if (prov !== 'grok_compat') return null; // hide for other engines
+                const schemaModel = resolveSchemaModelId('grok_compat', node.values?.ckpt_name || currentCheckpoint);
+                const opts = fieldOptions('grok_compat', schemaModel, widget.name as 'aspect_ratio' | 'resolution');
+                const stop = (e: React.SyntheticEvent) => e.stopPropagation();
+                return (
+                  <div key={widget.name} className="space-y-1">
+                    <label className="text-slate-400 font-mono text-[11px] block">{widget.label}</label>
+                    <select
+                      value={value || ''}
+                      onMouseDown={stop}
+                      onPointerDown={stop}
+                      onKeyDown={stop}
+                      onChange={(e) => onUpdateValue(node.id, widget.name, e.target.value)}
+                      className="w-full bg-[#121316] border border-[#2d303a] focus:border-cyan-500 rounded-lg px-2.5 py-1.5 text-slate-200 text-xs font-mono outline-none cursor-pointer"
+                    >
+                      <option value="">未选择（不传）</option>
+                      {opts.map((v) => (
+                        <option key={v.value} value={v.value}>{v.value}</option>
+                      ))}
+                    </select>
                   </div>
                 );
               }

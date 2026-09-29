@@ -484,3 +484,16 @@ export function modelStatus(provider: Provider, model: string, today: string): F
   if (!spec) return 'unverified';
   return spec.shutdownDate && today >= spec.shutdownDate ? 'deprecated' : 'supported';
 }
+
+/**
+ * Resolve a model id that exists in PROVIDER_SCHEMA for field lookups.
+ * If `model` is missing or not in the table for this provider, fall back to the
+ * first listed model so supported enum selects (e.g. grok aspect_ratio / resolution)
+ * still render instead of disappearing when the checkpoint is empty or leftover
+ * from another provider.
+ */
+export function resolveSchemaModelId(provider: Provider, model: string | undefined | null): string {
+  const id = String(model || '').trim();
+  if (id && getModelSpec(provider, id)) return id;
+  return listModels(provider)[0]?.id ?? id;
+}

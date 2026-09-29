@@ -45,6 +45,7 @@ import {
   resolveActiveCheckpoint,
   resolveCheckpointForNode,
 } from './utils/resolveCheckpoint';
+import { checkpointNodeTitle } from './utils/providerLabels';
 
 export default function App() {
   // Canvas View Mode: 'graph' (ComfyUI Node Flow) vs 'spatial' (Modern Freeform Spatial Board)
@@ -727,7 +728,7 @@ export default function App() {
             n.id === nodeId
               ? {
                   ...n,
-                  title: prov ? `加载底模 (${prov.toUpperCase()})` : '加载底模',
+                  title: checkpointNodeTitle(prov, value),
                   values: { ...(n.values || {}), ckpt_name: value },
                 }
               : n
@@ -754,7 +755,7 @@ export default function App() {
             n.id === nodeId
               ? {
                   ...n,
-                  title: `加载底模 (${String(prov).toUpperCase()})`,
+                  title: checkpointNodeTitle(prov, n.values?.ckpt_name),
                   values: { ...(n.values || {}), targetProvider: prov },
                 }
               : n
@@ -836,6 +837,8 @@ export default function App() {
             ...f.params,
             ...(widgetName === 'ckpt_name' ? { checkpoint: value } : {}),
             ...(widgetName === 'targetProvider' ? { targetProvider: value } : {}),
+            ...(widgetName === 'aspect_ratio' ? { aspectRatio: value || undefined } : {}),
+            ...(widgetName === 'resolution' ? { resolution: value || undefined } : {}),
           },
         } : f))
       );
@@ -1252,7 +1255,7 @@ export default function App() {
         const newCkpt: NodeInstance = {
           id: newCkptId,
           type: 'CheckpointLoaderSimple',
-          title: `加载底模 (${targetProvider.toUpperCase()})`,
+          title: checkpointNodeTitle(targetProvider),
           pos: {
             x: Math.round(-transform.x / transform.scale + 120),
             y: Math.round(-transform.y / transform.scale + 180),
@@ -1269,7 +1272,7 @@ export default function App() {
         n.type === 'CheckpointLoaderSimple'
           ? { 
               ...n, 
-              title: `加载底模 (${targetProvider.toUpperCase()})`,
+              title: checkpointNodeTitle(targetProvider),
               values: { ...n.values, ckpt_name: recModel, targetProvider } 
             }
           : n
@@ -1515,7 +1518,7 @@ export default function App() {
             if (n.type === 'CheckpointLoaderSimple') {
               return {
                 ...n,
-                title: `加载底模 (${provider.toUpperCase()})`,
+                title: checkpointNodeTitle(provider),
                 values: {
                   ...n.values,
                   ckpt_name: modelId,
@@ -1533,7 +1536,7 @@ export default function App() {
         const newNode: NodeInstance = {
           id: newNodeId,
           type: 'CheckpointLoaderSimple',
-          title: `加载底模 (${provider.toUpperCase()})`,
+          title: checkpointNodeTitle(provider),
           pos: {
             x: Math.round(-transform.x / transform.scale + 120),
             y: Math.round(-transform.y / transform.scale + 160),
@@ -1865,20 +1868,21 @@ export default function App() {
        selectedNode.type === 'GoogleImagenNode' ? selectedNode.values?.negative_prompt : null)
     : null;
 
+  // Single source of truth with SpatialFrame: when any frame is active (selected
+  // or fallback first), inspector prompt mirrors frame.prompt / negativePrompt.
+  // Avoid preferring CLIP node text while SpatialFrame shows a different string.
   const activePositivePrompt: string =
-    (selectedFrameId ? activeFrame?.prompt : null) ??
+    (activeFrame != null ? (activeFrame.prompt ?? '') : null) ??
     nodePositiveText ??
     positiveNode?.values?.text ??
     googleImagenNode?.values?.prompt ??
-    activeFrame?.prompt ??
     '';
 
   const activeNegativePrompt: string =
-    (selectedFrameId ? activeFrame?.negativePrompt : null) ??
+    (activeFrame != null ? (activeFrame.negativePrompt ?? '') : null) ??
     nodeNegativeText ??
     negativeNode?.values?.text ??
     googleImagenNode?.values?.negative_prompt ??
-    activeFrame?.negativePrompt ??
     '';
 
   const graphLoras = nodes
@@ -2184,13 +2188,13 @@ export default function App() {
                       resolution: newParams.resolution,
                       aspect_ratio: newParams.aspectRatio,
                       n: newParams.batchSize,
+                      // Always track provider so title and schema selects stay in sync
+                      // (empty-string default previously blocked write-back → stuck GROK_COMPAT title)
+                      targetProvider: newParams.targetProvider || n.values?.targetProvider || '',
                     };
-                    // Do not write back inferred targetProvider unless explicitly set on the node
-                    if (n.values?.targetProvider) {
-                      updatedValues.targetProvider = newParams.targetProvider;
-                    }
                     return {
                       ...n,
+                      title: checkpointNodeTitle(updatedValues.targetProvider, newParams.checkpoint),
                       values: updatedValues,
                     };
                   }

@@ -145,10 +145,15 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
         options: BASE_MODELS,
         placeholder: '输入模型 ID/路径，或点击右上角「模型中心」实时拉取选用',
       },
+      // grok_compat: options filled from providerSchema at render time (NodeItem)
+      { name: 'aspect_ratio', label: 'aspect_ratio', type: 'select', default: '', options: [] },
+      { name: 'resolution', label: 'resolution', type: 'select', default: '', options: [] },
     ],
     defaultValues: {
       targetProvider: '',
       ckpt_name: 'Tongyi-MAI/Z-Image-Turbo',
+      aspect_ratio: '',
+      resolution: '',
     },
   },
 
