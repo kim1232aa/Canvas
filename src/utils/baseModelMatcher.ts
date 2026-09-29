@@ -326,7 +326,7 @@ export function validateModelCompatibility(
     isCompatible: false,
     message:
       `底模架构不匹配：当前底模为【${checkpointName}】（${ckptArch}），但此 LoRA 基于【${loraBase}】（${loraArch}）。` +
-      `请自行选择与该 LoRA 匹配的底模；已保留当前 LoRA / 负向 / seed，不会自动清空或切换。`,
+      `请自行选择与该 LoRA 匹配的底模；保留现有 LoRA / seed；负向与采样器按导入原样（空或「未指定」都算原样）。`,
     recommendedCheckpoint: targetRecCheckpoint,
   };
 }

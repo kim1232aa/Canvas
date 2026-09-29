@@ -328,8 +328,10 @@ describe('Fal / Agnes / HF / NanoGPT grey on engine switch (schema-driven)', () 
     expect(compat.message).toMatch(/Z-Image-Turbo/);
     expect(compat.message).toMatch(/Flux\.1 D|FLUX/);
     expect(compat.message).toMatch(/请自行选择/);
-    expect(compat.message).toMatch(/已保留/);
-    expect(compat.message).toMatch(/不会自动清空/);
+    expect(compat.message).toMatch(/保留现有 LoRA \/ seed/);
+    expect(compat.message).toMatch(/负向与采样器按导入原样/);
+    expect(compat.message).toMatch(/空或「未指定」都算原样/);
+    expect(compat.message).not.toMatch(/已保留当前 LoRA \/ 负向 \/ seed/);
     expect(compat.message).not.toMatch(/已清空|已清除|已删除/);
   });
 

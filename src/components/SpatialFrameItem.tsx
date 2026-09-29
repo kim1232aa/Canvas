@@ -19,6 +19,7 @@ import { SpatialFrame, ComfyParameters } from '../types/graph';
 import { refinePromptWithGemini, getRefineModelSelection } from '../services/api';
 import { validateModelCompatibility } from '../utils/baseModelMatcher';
 import { isCanvasFieldUnsupported } from '../utils/resolveCheckpoint';
+import { getSpatialFrameLoraBanner } from '../utils/spatialFrameLoraBanner';
 import { friendlyProviderLabel,
   isNonComfyCloudProvider,
   spatialFrameModelLabel,
@@ -55,27 +56,16 @@ export const SpatialFrameItem: React.FC<SpatialFrameItemProps> = ({
 }) => {
   const [isRefining, setIsRefining] = useState(false);
 
-  // Soft-3: engines that reject loras must not keep leftover stacks/strength UI.
+  // Soft-3: keep LoRA values when unsupported (grey + omit from payload). Only retitle marketing chrome.
   useEffect(() => {
-    const unsupported = isCanvasFieldUnsupported(
-      frame.params.targetProvider,
-      frame.params.checkpoint,
-      'loras'
-    );
-    const nextLoras = unsupported ? [] : frame.params.loras;
     const nextTitle = sanitizeFrameMarketingTitle(
       frame.params.targetProvider,
       frame.params.checkpoint,
       frame.title,
-      nextLoras.length
+      frame.params.loras.length
     );
-    const clearLoras = unsupported && frame.params.loras.length > 0;
-    const retitle = nextTitle !== frame.title;
-    if (!clearLoras && !retitle) return;
-    onUpdateFrame(frame.id, {
-      ...(retitle ? { title: nextTitle } : {}),
-      ...(clearLoras ? { params: { ...frame.params, loras: [] } } : {}),
-    });
+    if (nextTitle === frame.title) return;
+    onUpdateFrame(frame.id, { title: nextTitle });
   }, [frame.id, frame.title, frame.params.targetProvider, frame.params.checkpoint, frame.params.loras.length]);
 
   const handleRefine = async () => {
@@ -496,15 +486,23 @@ export const SpatialFrameItem: React.FC<SpatialFrameItemProps> = ({
           />
         </div>
 
-        {/* LoRA tag summary — keep values when unsupported; grey + 该服务商不支持 */}
+        {/* LoRA tag summary — keep values when unsupported; grey + full compat.message (same as node) */}
         {frame.params.loras.length > 0 && (() => {
           const lorasUnsupported = isCanvasFieldUnsupported(frame.params.targetProvider, frame.params.checkpoint, 'loras');
+          const banner = getSpatialFrameLoraBanner(
+            frame.params.targetProvider,
+            frame.params.checkpoint,
+            frame.params.loras as Array<{ name: string; baseModel?: string; modelStrength?: number }>
+          );
           return (
           <div className={`space-y-1.5 ${lorasUnsupported ? 'opacity-70' : ''}`}>
             <div className="flex flex-wrap gap-1 items-center">
               <span className="text-[10px] text-slate-400 font-mono">LoRAs:</span>
               {lorasUnsupported && (
-                <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-800/80 text-slate-400 border border-slate-600/50 font-mono" title="该服务商不支持">
+                <span
+                  className="text-[9px] px-1.5 py-0.5 rounded bg-slate-800/80 text-slate-400 border border-slate-600/50 font-mono"
+                  title={banner?.message || '该服务商不支持'}
+                >
                   该服务商不支持
                 </span>
               )}
@@ -513,7 +511,7 @@ export const SpatialFrameItem: React.FC<SpatialFrameItemProps> = ({
                 return (
                   <span
                     key={i}
-                    title={lorasUnsupported ? '该服务商不支持' : (compat.isCompatible ? '与当前底模架构兼容' : compat.message)}
+                    title={lorasUnsupported ? (banner?.message || '该服务商不支持') : (compat.isCompatible ? '与当前底模架构兼容' : compat.message)}
                     className={`text-[10px] font-mono px-1.5 py-0.5 rounded flex items-center gap-1 ${
                       lorasUnsupported
                         ? 'bg-slate-900/60 text-slate-500 border border-slate-700/50'
@@ -529,35 +527,37 @@ export const SpatialFrameItem: React.FC<SpatialFrameItemProps> = ({
               })}
             </div>
 
-            {/* Incompatibility quick warning & fix — skip when engine rejects loras entirely */}
-            {!lorasUnsupported && (() => {
-              const incompatibleLora = frame.params.loras.find((l) => {
-                const compat = validateModelCompatibility(frame.params.checkpoint, (l as any).baseModel, l.name, frame.params.targetProvider);
-                return !compat.isCompatible;
-              });
-              if (!incompatibleLora) return null;
-              const compat = validateModelCompatibility(frame.params.checkpoint, (incompatibleLora as any).baseModel, incompatibleLora.name, frame.params.targetProvider);
-              return (
-                <div className="bg-amber-950/40 border border-amber-500/40 rounded-lg p-2 text-[10px] space-y-1 text-amber-200">
-                  <div className="flex items-center gap-1 text-amber-400 font-semibold">
-                    <AlertTriangle className="w-3 h-3 shrink-0" />
-                    <span>LoRA 架构与底模不匹配</span>
-                  </div>
-                  {compat.recommendedCheckpoint && (
-                    <button
-                      onClick={() =>
-                        onUpdateFrame(frame.id, {
-                          params: { ...frame.params, checkpoint: compat.recommendedCheckpoint! },
-                        })
-                      }
-                      className="w-full py-1 px-2 rounded bg-amber-600/30 hover:bg-amber-600/50 border border-amber-500/40 text-amber-200 font-bold flex items-center justify-center gap-1 transition-colors"
-                    >
-                      <span>一键切换为兼容底模 ({compat.recommendedCheckpoint.split('/').pop()})</span>
-                    </button>
-                  )}
+            {/* Full sentence banners — visible body text, not tooltip-only (matches NodeItem) */}
+            {banner?.kind === 'unsupported' && (
+              <div className="bg-slate-900/50 border border-slate-600/40 rounded-lg p-2 text-[10px] space-y-1 text-slate-300">
+                <div className="flex items-center gap-1 text-slate-400 font-semibold">
+                  <AlertTriangle className="w-3 h-3 shrink-0" />
+                  <span>{banner.title}</span>
                 </div>
-              );
-            })()}
+                <p className="text-slate-400/90 leading-tight font-mono">{banner.message}</p>
+              </div>
+            )}
+            {banner?.kind === 'mismatch' && (
+              <div className="bg-amber-950/40 border border-amber-500/40 rounded-lg p-2 text-[10px] space-y-1 text-amber-200">
+                <div className="flex items-center gap-1 text-amber-400 font-semibold">
+                  <AlertTriangle className="w-3 h-3 shrink-0" />
+                  <span>{banner.title}</span>
+                </div>
+                <p className="text-amber-200/90 leading-tight">{banner.message}</p>
+                {banner.recommendedCheckpoint && (
+                  <button
+                    onClick={() =>
+                      onUpdateFrame(frame.id, {
+                        params: { ...frame.params, checkpoint: banner.recommendedCheckpoint! },
+                      })
+                    }
+                    className="w-full py-1 px-2 rounded bg-amber-600/30 hover:bg-amber-600/50 border border-amber-500/40 text-amber-200 font-bold flex items-center justify-center gap-1 transition-colors"
+                  >
+                    <span>一键切换为兼容底模 ({banner.recommendedCheckpoint.split('/').pop()})</span>
+                  </button>
+                )}
+              </div>
+            )}
           </div>
           );
         })()}
