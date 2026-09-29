@@ -3536,8 +3536,10 @@ app.post(['/api/fal/generate', '/api/generate'], async (req, res) => {
 
     if (Array.isArray(loras) && loras.length > 0) {
       // F8: 所选端点不支持 LoRA 时返回「该端点不支持 LoRA」
-      const LORA_ENDPOINTS = ['fal-ai/flux-lora', 'fal-ai/fast-sdxl', 'fal-ai/lora'];
-      if (!LORA_ENDPOINTS.includes(endpoint)) {
+      const LORA_ENDPOINTS = ['fal-ai/flux-lora', 'fal-ai/fast-sdxl', 'fal-ai/lora', 'fal-ai/stable-diffusion-v35-large'];
+      const loraSpec = getFieldSpec('fal', endpoint, 'loras');
+      const isUnsupported = loraSpec ? loraSpec.status === 'unsupported' : !LORA_ENDPOINTS.includes(endpoint);
+      if (isUnsupported) {
         return res.status(400).json({
           error: `该端点不支持 LoRA（Fal.ai 端点 ${endpoint} 的官方 schema 无 loras 字段）。请显式选择支持 LoRA 的端点：${LORA_ENDPOINTS.join(' / ')}`,
           unsupported: ['loras'],

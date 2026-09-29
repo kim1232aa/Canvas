@@ -1,5 +1,6 @@
 import { BaseEngineDriver } from '../BaseEngineDriver';
 import { NormalizedGenerateParams, NormalizedGenerateResult, ModelSpec } from '../types';
+import { getFieldSpec } from '../../schemas/providerSchema';
 
 export class FalDriver extends BaseEngineDriver {
   readonly id = 'fal';
@@ -30,6 +31,14 @@ export class FalDriver extends BaseEngineDriver {
     // No client-side model swap; the server reports any documented t2v→i2v endpoint mapping via wasAdapted.
     const finalModel = params.model;
 
+    // 发送前按 providerSchema 校验：若该端点 loras 为 unsupported，前端拦截，不发出请求
+    if (params.loras && params.loras.length > 0) {
+      const loraSpec = getFieldSpec('fal', finalModel, 'loras');
+      if (loraSpec?.status === 'unsupported') {
+        throw new Error(`该端点不支持 LoRA（Fal.ai 端点 ${finalModel} 的官方 schema 无 loras 字段）`);
+      }
+    }
+
     if (isVideo) {
       const resp = await fetch('/api/video/generate', {
         method: 'POST',
@@ -46,7 +55,8 @@ export class FalDriver extends BaseEngineDriver {
 
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({ error: 'Fal.ai 视频生成失败' }));
-        throw new Error(err.details || err.error || `Fal 视频失败 (${resp.status})`);
+        const reason = err.details || err.error || (err.unsupported ? `该服务商不支持: ${err.unsupported.join(', ')}` : `Fal 视频失败`);
+        throw new Error(`HTTP ${resp.status}: ${reason}`);
       }
 
       const vData = await resp.json();
@@ -90,7 +100,8 @@ export class FalDriver extends BaseEngineDriver {
 
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({ error: 'Fal.ai 生成失败' }));
-      throw new Error(err.details || err.error || `Fal.ai 错误 (${resp.status})`);
+      const reason = err.details || err.error || (err.unsupported ? `该服务商不支持: ${err.unsupported.join(', ')}` : `Fal.ai 错误`);
+      throw new Error(`HTTP ${resp.status}: ${reason}`);
     }
 
     const data = await resp.json();

@@ -916,6 +916,57 @@ export default function App() {
       console.error('Queue error:', err);
       setExecutionProgress(0);
       setExecutionStatusText(err.message || '执行遇到错误');
+
+      // 确保当前节点显示错误：若指定了 targetNodeId/selectedNodeId，或通过工作流中的活动节点回显错误
+      const currentTargetId = targetNodeId || selectedNodeId;
+      setNodes((prev) => {
+        let errorNodeId = currentTargetId;
+        if (!errorNodeId) {
+          if (/lora/i.test(err.message || '')) {
+            const loraNode = prev.find((n) => !n.bypassed && (n.type === 'LoRALoader' || n.type === 'CivitaiLoRABrowserNode'));
+            if (loraNode) errorNodeId = loraNode.id;
+          }
+        }
+        if (!errorNodeId) {
+          const running = prev.find((n) => n.state === 'running');
+          if (running) errorNodeId = running.id;
+        }
+        if (!errorNodeId) {
+          const core = prev.find((n) => !n.bypassed && (n.type === 'KSampler' || n.type === 'FalAIEngineNode' || n.type === 'SaveImage' || n.type === 'CheckpointLoaderSimple'));
+          if (core) errorNodeId = core.id;
+        }
+        if (!errorNodeId && prev.length > 0) {
+          errorNodeId = prev[0].id;
+        }
+
+        return prev.map((n) => {
+          if (n.id === errorNodeId || (currentTargetId && n.id === currentTargetId)) {
+            return {
+              ...n,
+              state: 'error' as const,
+              executionProgress: 0,
+              errorMessage: err.message || '执行遇到错误',
+            };
+          }
+          if (/lora/i.test(err.message || '') && (n.type === 'LoRALoader' || n.type === 'CivitaiLoRABrowserNode')) {
+            return {
+              ...n,
+              state: 'error' as const,
+              executionProgress: 0,
+              errorMessage: err.message || '执行遇到错误',
+            };
+          }
+          if (n.state === 'running') {
+            return {
+              ...n,
+              state: 'idle' as const,
+              executionProgress: 0,
+            };
+          }
+          return n;
+        });
+      });
+
       setToast({
         type: 'error',
         title: '⚠️ 算力执行异常 (透明报告)',
