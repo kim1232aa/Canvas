@@ -18,6 +18,10 @@ import {
   Cpu,
   Clock,
   Check,
+  Lock,
+  Eye,
+  EyeOff,
+  ShieldAlert,
 } from 'lucide-react';
 import { ApiKeysState, ProviderConfig, ProviderId } from '../types/providers';
 import {
@@ -27,6 +31,10 @@ import {
   updateKeyPoolStrategy,
   testSingleKey,
   fetchCloudBalances,
+  getStoredAdminToken,
+  saveStoredAdminToken,
+  fetchCloudServerSettings,
+  saveCloudServerSettings,
 } from '../services/api';
 
 interface BackendSettingsModalProps {
@@ -43,18 +51,51 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
   onSaveKeys,
 }) => {
   const [keys, setKeys] = React.useState<ApiKeysState>(apiKeys);
-  const [activeMainTab, setActiveMainTab] = React.useState<'providers' | 'pool' | 'balance'>('providers');
+  const [activeMainTab, setActiveMainTab] = React.useState<'providers' | 'pool' | 'balance' | 'admin'>('providers');
   const [activeProviderTab, setActiveProviderTab] = React.useState<ProviderId>('fal');
   const [testResults, setTestResults] = React.useState<Record<string, { status: string; message: string; latency?: number }>>({});
   const [testingProvider, setTestingProvider] = React.useState<string | null>(null);
   const [testingSingleKeyIndex, setTestingSingleKeyIndex] = React.useState<number | null>(null);
   const [testingAll, setTestingAll] = React.useState(false);
 
+  // Cloud Admin Token & Server Settings State
+  const [adminToken, setAdminToken] = React.useState<string>(getStoredAdminToken());
+  const [showAdminToken, setShowAdminToken] = React.useState(false);
+  const [cloudSettings, setCloudSettings] = React.useState<Record<string, any>>({});
+  const [cloudSettingsError, setCloudSettingsError] = React.useState<string | null>(null);
+  const [isLoadingCloudSettings, setIsLoadingCloudSettings] = React.useState(false);
+  const [isSavingCloudSettings, setIsSavingCloudSettings] = React.useState(false);
+  const [cloudSaveMessage, setCloudSaveMessage] = React.useState<string | null>(null);
+
   // Key Pool Stats & Balances State
   const [poolStats, setPoolStats] = React.useState<Record<string, any>>({});
   const [balances, setBalances] = React.useState<Record<string, { status: string; detail: string; amount?: number | string }>>({});
   const [isLoadingBalances, setIsLoadingBalances] = React.useState(false);
   const [newKeyInput, setNewKeyInput] = React.useState('');
+
+  const refreshCloudSettings = React.useCallback(async (tokenOverride?: string) => {
+    setIsLoadingCloudSettings(true);
+    setCloudSettingsError(null);
+    setCloudSaveMessage(null);
+    try {
+      const res = await fetchCloudServerSettings(tokenOverride ?? adminToken);
+      if (res.ok && res.data) {
+        setCloudSettings(res.data);
+      } else {
+        setCloudSettingsError(`HTTP ${res.status}: ${res.error || '获取云端配置失败'}`);
+      }
+    } catch (err: any) {
+      setCloudSettingsError(err.message || '网络连接异常');
+    } finally {
+      setIsLoadingCloudSettings(false);
+    }
+  }, [adminToken]);
+
+  const handleAdminTokenChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setAdminToken(val);
+    saveStoredAdminToken(val);
+  };
 
   const refreshStats = React.useCallback(async () => {
     const stats = await fetchKeyPoolStats();
@@ -114,7 +155,7 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       description: 'Agnes AI 官方高并发聚合接口，提供秒级 Flash 生图、动态运镜视频及 3.0 Flash 深度思考推理大模型。',
       apiUrl: 'https://apihub.agnes-ai.com/v1',
       keyName: 'agnesKey',
-      keyPlaceholder: 'sk-l8Uv51aVIMDhKs6w9Ju6EVZnj2ryBfvaVWZlCAr1iEpgPv6L',
+      keyPlaceholder: 'sk-xxxx',
       status: 'unconfigured',
       popularModels: ['agnes-image-2.5-flash', 'agnes-image-2.1-flash', 'agnes-video-2.5-flash', 'agnes-3.0-flash'],
     },
@@ -126,7 +167,7 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       description: '商汤日日新大模型开放平台，集成 DeepSeek V4 极速推理思考、清华智谱 GLM-5.2、SenseNova 6.8 及多模态视觉理解。',
       apiUrl: 'https://token.sensenova.cn/v1',
       keyName: 'sensenovaKey',
-      keyPlaceholder: 'sk-GcynheMjRQuZTvUd1V9KpJ4OKKx6vao5',
+      keyPlaceholder: 'sk-xxxx',
       status: 'unconfigured',
       popularModels: ['deepseek-v4-flash', 'deepseek-v4-pro', 'glm-5.2', 'sensenova-6.8-flash-lite'],
     },
@@ -425,6 +466,20 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
             >
               <Coins className="w-3.5 h-3.5" />
               <span>余额与额度总览</span>
+            </button>
+            <button
+              onClick={() => {
+                setActiveMainTab('admin');
+                refreshCloudSettings();
+              }}
+              className={`px-3.5 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-all ${
+                activeMainTab === 'admin'
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-[#1f2029]'
+              }`}
+            >
+              <Lock className="w-3.5 h-3.5" />
+              <span>云端管理 (Admin)</span>
             </button>
           </div>
           <div className="text-[10px] text-slate-400 font-mono flex items-center gap-2">
@@ -889,6 +944,149 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
                 );
               })}
             </div>
+          </div>
+        )}
+
+        {/* Cloud Admin Token & Server Settings Tab */}
+        {activeMainTab === 'admin' && (
+          <div className="flex-1 p-6 overflow-y-auto bg-[#171820] space-y-5">
+            <div>
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <Lock className="w-4 h-4 text-amber-400" />
+                云端服务配置管理与接口鉴权 (CANVAS_ADMIN_TOKEN)
+              </h3>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                服务端 /api/cloud/settings 接口受环境变量 <span className="font-mono text-amber-300">CANVAS_ADMIN_TOKEN</span> 保护。管理令牌保存在本地浏览器中，请求时通过 Authorization: Bearer 头传递。
+              </p>
+            </div>
+
+            {/* Token Input Bar */}
+            <div className="bg-[#121318] border border-[#272935] rounded-xl p-4 space-y-3">
+              <label className="block text-xs font-semibold text-slate-300">
+                管理令牌 (Admin Token)
+              </label>
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <input
+                    type={showAdminToken ? 'text' : 'password'}
+                    value={adminToken}
+                    onChange={handleAdminTokenChange}
+                    placeholder="输入服务端配置的 CANVAS_ADMIN_TOKEN..."
+                    className="w-full bg-[#1a1b24] border border-[#313444] rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 font-mono pr-10 focus:outline-none focus:border-amber-500/60"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowAdminToken(!showAdminToken)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                  >
+                    {showAdminToken ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+                <button
+                  onClick={() => refreshCloudSettings()}
+                  disabled={isLoadingCloudSettings}
+                  className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-md shadow-amber-600/20 disabled:opacity-50 transition-all shrink-0"
+                >
+                  {isLoadingCloudSettings ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                  <span>验证并拉取云端配置</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Real Server Error Banner (401 / 503 / Network errors) */}
+            {cloudSettingsError && (
+              <div className="p-4 rounded-xl bg-rose-950/40 border border-rose-500/40 text-rose-300 flex items-start gap-3">
+                <ShieldAlert className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+                <div className="flex-1 text-xs">
+                  <div className="font-bold text-rose-200">服务端鉴权失败或服务异常</div>
+                  <div className="font-mono mt-1 text-[11px] bg-rose-950/70 p-2 rounded border border-rose-800/40 text-rose-200 break-all">
+                    {cloudSettingsError}
+                  </div>
+                  <p className="mt-1.5 text-[11px] text-slate-400">
+                    提示：若状态码为 503 说明服务端未设置 CANVAS_ADMIN_TOKEN 环境变量；若为 401 说明管理令牌不匹配。
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Save Status Banner */}
+            {cloudSaveMessage && (
+              <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/40 text-emerald-300 flex items-center gap-2 text-xs">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>{cloudSaveMessage}</span>
+              </div>
+            )}
+
+            {/* Server Settings Status (Masked Keys) */}
+            {Object.keys(cloudSettings).length > 0 && !cloudSettingsError && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>云端已鉴权：配置状态清单 (明文密钥已脱敏掩码)</span>
+                  </h4>
+                  <button
+                    onClick={async () => {
+                      setIsSavingCloudSettings(true);
+                      setCloudSaveMessage(null);
+                      setCloudSettingsError(null);
+                      try {
+                        const res = await saveCloudServerSettings(keys, adminToken);
+                        if (res.ok && res.data) {
+                          setCloudSettings(res.data);
+                          setCloudSaveMessage('已成功将当前配置同步至云端存储 (POST /api/cloud/settings)');
+                        } else {
+                          setCloudSettingsError(`HTTP ${res.status}: ${res.error || '保存云端配置失败'}`);
+                        }
+                      } finally {
+                        setIsSavingCloudSettings(false);
+                      }
+                    }}
+                    disabled={isSavingCloudSettings}
+                    className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-indigo-600/20 disabled:opacity-50 transition-all"
+                  >
+                    {isSavingCloudSettings ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                    <span>同步本地配置至云端 (POST)</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  {Object.entries(cloudSettings).map(([k, v]) => {
+                    const isKeyObj = typeof v === 'object' && v !== null && 'configured' in v;
+                    const configured = isKeyObj ? v.configured : Boolean(v);
+                    const masked = isKeyObj ? v.masked : '';
+                    return (
+                      <div
+                        key={k}
+                        className="bg-[#121318] border border-[#272935] rounded-xl p-3 flex items-center justify-between"
+                      >
+                        <div className="min-w-0 flex-1 mr-2">
+                          <div className="font-mono font-bold text-slate-200 text-xs truncate">{k}</div>
+                          {masked ? (
+                            <div className="font-mono text-[11px] text-amber-300/80 mt-0.5">
+                              掩码: {masked}
+                            </div>
+                          ) : !isKeyObj && typeof v === 'string' ? (
+                            <div className="font-mono text-[11px] text-slate-400 mt-0.5 truncate">
+                              {v}
+                            </div>
+                          ) : null}
+                        </div>
+                        <span
+                          className={`text-[10px] px-2 py-0.5 rounded-full font-semibold border shrink-0 ${
+                            configured
+                              ? 'bg-emerald-950/80 text-emerald-300 border-emerald-800/50'
+                              : 'bg-slate-800/80 text-slate-400 border-slate-700'
+                          }`}
+                        >
+                          {configured ? '🟢 已配置' : '⚪ 未配置'}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         )}
 

@@ -550,14 +550,94 @@ export const fetchCloudServerHealth = async (): Promise<{
   };
 };
 
-export const fetchCloudServerSettings = async (): Promise<Record<string, string>> => {
+export const ADMIN_TOKEN_STORAGE_KEY = 'canvas_admin_token';
+
+export const getStoredAdminToken = (): string => {
   try {
-    const resp = await fetch('/api/cloud/settings');
-    if (resp.ok) return await resp.json();
-  } catch (e) {
-    console.error('Fetch server settings error:', e);
+    return localStorage.getItem(ADMIN_TOKEN_STORAGE_KEY) || '';
+  } catch {
+    return '';
   }
-  return {};
+};
+
+export const saveStoredAdminToken = (token: string): void => {
+  try {
+    localStorage.setItem(ADMIN_TOKEN_STORAGE_KEY, token.trim());
+  } catch (e) {
+    console.error('Error saving admin token:', e);
+  }
+};
+
+export interface CloudSettingsResponse {
+  ok: boolean;
+  status: number;
+  data?: Record<string, any>;
+  error?: string;
+}
+
+export const fetchCloudServerSettings = async (token?: string): Promise<CloudSettingsResponse> => {
+  const effectiveToken = (token !== undefined ? token : getStoredAdminToken()).trim();
+  const headers: Record<string, string> = {};
+  if (effectiveToken) {
+    headers['Authorization'] = `Bearer ${effectiveToken}`;
+  }
+
+  try {
+    const resp = await fetch('/api/cloud/settings', { headers });
+    if (resp.ok) {
+      const data = await resp.json();
+      return { ok: true, status: resp.status, data };
+    }
+    const errJson = await resp.json().catch(() => ({}));
+    return {
+      ok: false,
+      status: resp.status,
+      error: errJson.error || `请求失败 [HTTP ${resp.status}]: ${resp.statusText}`,
+    };
+  } catch (e: any) {
+    return {
+      ok: false,
+      status: 0,
+      error: e.message || '网络连接异常',
+    };
+  }
+};
+
+export const saveCloudServerSettings = async (
+  settings: Record<string, any>,
+  token?: string
+): Promise<CloudSettingsResponse> => {
+  const effectiveToken = (token !== undefined ? token : getStoredAdminToken()).trim();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (effectiveToken) {
+    headers['Authorization'] = `Bearer ${effectiveToken}`;
+  }
+
+  try {
+    const resp = await fetch('/api/cloud/settings', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(settings),
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      return { ok: true, status: resp.status, data: data.settings };
+    }
+    const errJson = await resp.json().catch(() => ({}));
+    return {
+      ok: false,
+      status: resp.status,
+      error: errJson.error || `保存失败 [HTTP ${resp.status}]: ${resp.statusText}`,
+    };
+  } catch (e: any) {
+    return {
+      ok: false,
+      status: 0,
+      error: e.message || '网络连接异常',
+    };
+  }
 };
 
 export const fetchKeyPoolStats = async (): Promise<Record<string, any>> => {

@@ -1,4 +1,5 @@
 import express from 'express';
+import crypto from 'crypto';
 import dns from 'dns';
 try {
   dns.setServers(['8.8.8.8']);
@@ -6381,17 +6382,92 @@ app.post('/api/cloud/projects/:id/clone', (req, res) => {
 // ==========================================
 // 10. Server-Side Settings / Credentials Storage
 // ==========================================
-app.get('/api/cloud/settings', (_req, res) => {
-  return res.json(cloudSettings);
+function constantTimeCompare(a: string, b: string): boolean {
+  try {
+    const hashA = crypto.createHash('sha256').update(a).digest();
+    const hashB = crypto.createHash('sha256').update(b).digest();
+    return crypto.timingSafeEqual(hashA, hashB);
+  } catch {
+    return false;
+  }
+}
+
+const requireAdminAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const adminToken = process.env.CANVAS_ADMIN_TOKEN?.trim();
+  if (!adminToken) {
+    return res.status(503).json({
+      error: '服务端未配置 CANVAS_ADMIN_TOKEN，拒绝访问',
+    });
+  }
+
+  const authHeader = req.headers['authorization'];
+  if (!authHeader || typeof authHeader !== 'string') {
+    return res.status(401).json({
+      error: '缺少 Authorization 请求头，需提供 Bearer 管理令牌',
+    });
+  }
+
+  const parts = authHeader.trim().split(/\s+/);
+  if (parts.length !== 2 || parts[0].toLowerCase() !== 'bearer') {
+    return res.status(401).json({
+      error: 'Authorization 格式错误，应为 Bearer <token>',
+    });
+  }
+
+  const providedToken = parts[1];
+  if (!constantTimeCompare(providedToken, adminToken)) {
+    return res.status(401).json({
+      error: 'CANVAS_ADMIN_TOKEN 验证失败：管理令牌不匹配',
+    });
+  }
+
+  next();
+};
+
+const isSecretKeyField = (fieldName: string): boolean => {
+  const lower = fieldName.toLowerCase();
+  return (
+    lower.includes('key') ||
+    lower.includes('token') ||
+    lower.includes('secret') ||
+    lower.includes('password')
+  );
+};
+
+const getSanitizedCloudSettings = (settings: Record<string, any>): Record<string, any> => {
+  const sanitized: Record<string, any> = {};
+  for (const [key, value] of Object.entries(settings)) {
+    if (isSecretKeyField(key)) {
+      const valStr = typeof value === 'string' ? value.trim() : '';
+      const isConfigured = valStr.length > 0;
+      sanitized[key] = {
+        masked: isConfigured ? keyPoolManager.maskKey(valStr) : '',
+        configured: isConfigured,
+        isConfigured: isConfigured,
+      };
+    } else {
+      sanitized[key] = value;
+    }
+  }
+  return sanitized;
+};
+
+app.get('/api/cloud/settings', requireAdminAuth, (_req, res) => {
+  return res.json(getSanitizedCloudSettings(cloudSettings));
 });
 
-app.post('/api/cloud/settings', (req, res) => {
+app.post('/api/cloud/settings', requireAdminAuth, (req, res) => {
+  if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
+    return res.status(400).json({ error: '请求体必须为有效的 JSON 对象' });
+  }
+
   cloudSettings = {
     ...cloudSettings,
     ...req.body,
   };
   writeJsonFile(SETTINGS_FILE, cloudSettings);
-  return res.json({ success: true, settings: cloudSettings });
+  keyPoolManager.refreshFromSettings();
+  return res.json({ success: true, settings: getSanitizedCloudSettings(cloudSettings) });
 });
 
 // ==========================================
