@@ -150,7 +150,8 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
     params.targetProvider === 'agnes' ||
     params.targetProvider === 'huggingface' ||
     params.targetProvider === 'nanogpt' ||
-    params.targetProvider === 'tensorart'
+    params.targetProvider === 'tensorart' ||
+    params.targetProvider === 'sensenova'
       ? (params.targetProvider as SchemaProvider)
       : undefined;
   // Prefer checkpoint when it exists in schema; else first model for provider so

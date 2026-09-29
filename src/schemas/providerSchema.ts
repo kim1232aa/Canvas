@@ -11,7 +11,7 @@
 export type FieldStatus = 'supported' | 'unverified' | 'unsupported' | 'deprecated';
 export const FIELD_STATUSES: readonly FieldStatus[] = ['supported', 'unverified', 'unsupported', 'deprecated'];
 
-export type Provider = 'gemini' | 'fal' | 'civitai' | 'openai_compat' | 'grok_compat' | 'agnes' | 'huggingface' | 'nanogpt' | 'tensorart';
+export type Provider = 'gemini' | 'fal' | 'civitai' | 'openai_compat' | 'grok_compat' | 'agnes' | 'huggingface' | 'nanogpt' | 'tensorart' | 'sensenova';
 
 /** 画布侧字段名；上游字段名不同时写在 FieldSpec.wire */
 export type FieldKey =
@@ -590,6 +590,36 @@ const TENSORART_MODELS: ModelSpec[] = [
   taWidthHeightImage('photoreal_studio_z_image', 'Photoreal Studio Z-Image (OpenWorks)'),
 ];
 
+// ---------- SenseNova 商汤日日新 (this app: reasoning / chat only) ----------
+// Official chat API: https://github.com/OpenSenseNova/SenseNova6.8/blob/main/API.md
+// This app's SenseNovaDriver.capabilities = ['reasoning'] only — executeGenerate throws;
+// no /images/generations route is wired. Do not invent text2img here.
+// Canvas image fields (width/height/seed/steps/cfg/sampler/scheduler/denoise/loras/negative) → unsupported.
+const SN_DOC = 'https://github.com/OpenSenseNova/SenseNova6.8/blob/main/API.md';
+
+function senseNovaReasoning(id: string, label: string): ModelSpec {
+  return {
+    provider: 'sensenova',
+    id,
+    label,
+    source: SN_DOC,
+    fields: {
+      ...unsupported(
+        SN_DOC,
+        ['width', 'height', 'seed', 'negative_prompt', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'loras'],
+        '该服务商不支持（本应用 SenseNova 仅 reasoning/chat，无 text2img 路由）',
+      ),
+    },
+  };
+}
+
+const SENSENOVA_MODELS: ModelSpec[] = [
+  senseNovaReasoning('deepseek-v4-flash', 'DeepSeek V4 Flash（商汤日日新）'),
+  senseNovaReasoning('deepseek-v4-pro', 'DeepSeek V4 Pro（商汤日日新）'),
+  senseNovaReasoning('sensenova-6.8-flash-lite', 'SenseNova 6.8 Flash Lite'),
+  senseNovaReasoning('glm-5.2', 'GLM-5.2（商汤日日新）'),
+];
+
 export const PROVIDER_SCHEMA: readonly ModelSpec[] = [
   ...GEMINI_MODELS,
   ...FAL_MODELS,
@@ -600,6 +630,7 @@ export const PROVIDER_SCHEMA: readonly ModelSpec[] = [
   ...HUGGINGFACE_MODELS,
   ...NANOGPT_MODELS,
   ...TENSORART_MODELS,
+  ...SENSENOVA_MODELS,
 ];
 
 const INDEX = new Map(PROVIDER_SCHEMA.map((m) => [`${m.provider}/${m.id}`, m]));

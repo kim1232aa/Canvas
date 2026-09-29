@@ -219,3 +219,16 @@ describe('tensorart OpenWorks schema unsupported fields', () => {
     expect(getFieldSpec('tensorart', id, 'steps')?.status).toBe('unsupported');
   });
 });
+
+
+describe('sensenova schema — app has no text2img route', () => {
+  it('greys all canvas image fields including loras; fallback model is deepseek-v4-flash', () => {
+    for (const id of ['deepseek-v4-flash', 'deepseek-v4-pro', 'sensenova-6.8-flash-lite']) {
+      for (const f of ['width', 'height', 'seed', 'negative_prompt', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'loras'] as const) {
+        expect(getFieldSpec('sensenova', id, f)?.status, `${id}.${f}`).toBe('unsupported');
+      }
+    }
+    expect(resolveSchemaModelId('sensenova', '')).toBe('deepseek-v4-flash');
+    expect(resolveSchemaModelId('sensenova', 'foreign.safetensors')).toBe('deepseek-v4-flash');
+  });
+});

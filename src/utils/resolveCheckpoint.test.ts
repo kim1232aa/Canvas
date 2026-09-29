@@ -295,6 +295,37 @@ describe('Fal / Agnes / HF / NanoGPT grey on engine switch (schema-driven)', () 
     expect(compat.endpointUnsupported).toBe(true);
   });
 
+  it('SenseNova greys loras/WH/seed and kills green 底模兼容 badge path; keeps LoRA values', () => {
+    const left = [{ name: 'koda.safetensors', modelStrength: 0.8 }];
+    for (const model of ['deepseek-v4-flash', '', 'civitai-leftover.safetensors']) {
+      expect(isCanvasFieldUnsupported('sensenova', model, 'loras'), `loras@${model}`).toBe(true);
+      expect(isCanvasFieldUnsupported('sensenova', model, 'width'), `w@${model}`).toBe(true);
+      expect(isCanvasFieldUnsupported('sensenova', model, 'height'), `h@${model}`).toBe(true);
+      expect(isCanvasFieldUnsupported('sensenova', model, 'seed'), `seed@${model}`).toBe(true);
+      expect(isCanvasFieldUnsupported('sensenova', model, 'negative_prompt'), `neg@${model}`).toBe(true);
+    }
+    expect(sanitizeFrameLoras('sensenova', 'deepseek-v4-flash', left)).toEqual(left);
+    const badge = isLoraUnsupportedOnEndpoint('sensenova', 'deepseek-v4-flash');
+    expect(badge.unsupported).toBe(true);
+    expect(badge.message).toMatch(/该服务商不支持/);
+    const compat = validateLoraCompatibility('deepseek-v4-flash', 'Flux.1 D', 'koda', 'sensenova');
+    expect(compat.isCompatible).toBe(false);
+    expect(compat.endpointUnsupported).toBe(true);
+    const omitted = omitUnsupportedGenerateFields('sensenova', 'deepseek-v4-flash', {
+      prompt: 'hi',
+      width: 1024,
+      height: 1024,
+      seed: 1,
+      loras: left,
+      negative_prompt: 'blurry',
+    });
+    expect(omitted.prompt).toBe('hi');
+    expect(omitted.width).toBeUndefined();
+    expect(omitted.seed).toBeUndefined();
+    expect(omitted.loras).toBeUndefined();
+    expect(omitted.negative_prompt).toBeUndefined();
+  });
+
   it('Tensor.Art banana2 greys width/height/seed/steps/cfg/loras; keeps stored LoRAs; omits from payload', () => {
     const left = [{ name: 'koda.safetensors', modelStrength: 0.8 }];
     for (const model of ['strong_text2image_nano_banana2', '', 'civitai-leftover.safetensors']) {
