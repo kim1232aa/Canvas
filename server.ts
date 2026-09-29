@@ -4265,26 +4265,21 @@ function mapBaseModelToEcosystem(rawBase: string): string {
   throw new Error(`无法识别该 Civitai 模型生态 (baseModel: "${rawBase}")，缺少官方映射`);
 }
 
-function normalizeEcosystem(rawEco: string): string {
-  const lower = (rawEco || '').toLowerCase().trim();
-  const matched = BASE_MODEL_TO_ECOSYSTEM[lower];
-  if (matched) return matched;
-  return rawEco || '';
-}
-
 // ==========================================
 // 2.75. Civitai Official Orchestration Engine (Native Generator & Dynamic AIR Resolver)
 // ==========================================
+// C9: 名称/模型 id 无法唯一确定一个版本 → 路由返回 400 + candidates，不替用户挑
+class CivitaiAmbiguousError extends Error {
+  constructor(message: string, public candidates: Array<Record<string, any>>) {
+    super(message);
+  }
+}
+
 async function resolveCivitaiAir(rawInput: string, fallbackType: 'checkpoint' | 'lora' = 'checkpoint', route: string = '/api/civitai'): Promise<string> {
   if (!rawInput) return '';
+  // C9-3: 用户给了完整 AIR → 原样返回，不 normalizeEcosystem、不改写任何段
   if (rawInput.startsWith('urn:air:') || rawInput.startsWith('air:')) {
-    const fullUrn = rawInput.startsWith('air:') ? `urn:${rawInput}` : rawInput;
-    const parts = fullUrn.split(':');
-    if (parts.length >= 3) {
-      parts[2] = normalizeEcosystem(parts[2]);
-      return parts.join(':');
-    }
-    return fullUrn;
+    return rawInput.startsWith('air:') ? `urn:${rawInput}` : rawInput;
   }
 
   const trimmed = rawInput.trim();
@@ -4301,11 +4296,8 @@ async function resolveCivitaiAir(rawInput: string, fallbackType: 'checkpoint' | 
     );
     if (resp.ok) {
       const data = await resp.json();
-      if (data.air) {
-        const parts = data.air.split(':');
-        if (parts.length >= 3) parts[2] = normalizeEcosystem(parts[2]);
-        return parts.join(':');
-      }
+      // C9-3: API 返回的 air 字段原样使用，不 normalizeEcosystem
+      if (data.air) return data.air;
       if (data.modelId && data.id && data.baseModel) {
         const eco = mapBaseModelToEcosystem(data.baseModel);
         const type = (data.model?.type || fallbackType).toLowerCase().includes('lora') ? 'lora' : 'checkpoint';
@@ -4316,9 +4308,10 @@ async function resolveCivitaiAir(rawInput: string, fallbackType: 'checkpoint' | 
     throw new Error(`找不到这个模型 (Civitai API HTTP ${resp.status}): ${errText.slice(0, 300)}`);
   }
 
-  // 2. If input is purely a numeric ID (e.g. versionId 3091481 or modelId 2726029)
+  // 2. If input is purely a numeric ID
   const isPureNumber = /^\d+$/.test(trimmed);
   if (isPureNumber) {
+    // Try as versionId first
     const resp = await upstreamFetch(
       { provider: 'civitai', route, model: trimmed },
       `https://civitai.com/api/v1/model-versions/${trimmed}`,
@@ -4326,11 +4319,7 @@ async function resolveCivitaiAir(rawInput: string, fallbackType: 'checkpoint' | 
     );
     if (resp.ok) {
       const data = await resp.json();
-      if (data.air) {
-        const parts = data.air.split(':');
-        if (parts.length >= 3) parts[2] = normalizeEcosystem(parts[2]);
-        return parts.join(':');
-      }
+      if (data.air) return data.air;
       if (data.modelId && data.id && data.baseModel) {
         const eco = mapBaseModelToEcosystem(data.baseModel);
         const type = (data.model?.type || fallbackType).toLowerCase().includes('lora') ? 'lora' : 'checkpoint';
@@ -4338,7 +4327,7 @@ async function resolveCivitaiAir(rawInput: string, fallbackType: 'checkpoint' | 
       }
     }
 
-    // Try query as modelId
+    // C9-2: Try as modelId — but don't auto-pick first version; list versions and 400
     const modelResp = await upstreamFetch(
       { provider: 'civitai', route, model: trimmed },
       `https://civitai.com/api/v1/models/${trimmed}`,
@@ -4346,16 +4335,17 @@ async function resolveCivitaiAir(rawInput: string, fallbackType: 'checkpoint' | 
     );
     if (modelResp.ok) {
       const modelData = await modelResp.json();
-      const firstVer = modelData.modelVersions?.[0];
-      if (firstVer?.air) {
-        const parts = firstVer.air.split(':');
-        if (parts.length >= 3) parts[2] = normalizeEcosystem(parts[2]);
-        return parts.join(':');
-      }
-      if (modelData.id && firstVer?.id && firstVer?.baseModel) {
-        const eco = mapBaseModelToEcosystem(firstVer.baseModel);
-        const type = (modelData.type || fallbackType).toLowerCase().includes('lora') ? 'lora' : 'checkpoint';
-        return `urn:air:${eco}:${type}:civitai:${modelData.id}@${firstVer.id}`;
+      const versions = modelData.modelVersions ?? [];
+      if (versions.length > 0) {
+        const candidates = versions.slice(0, 10).map((v: any) => ({
+          versionId: v.id,
+          name: v.name,
+          air: v.air || `${modelData.id}@${v.id}`,
+        }));
+        throw new CivitaiAmbiguousError(
+          `只给了模型 ID (${trimmed})，没有版本号。请改用 modelId@versionId 或完整 AIR，从以下版本中选择`,
+          candidates,
+        );
       }
     }
 
@@ -4372,14 +4362,31 @@ async function resolveCivitaiAir(rawInput: string, fallbackType: 'checkpoint' | 
   );
   if (searchResp.ok) {
     const searchData = await searchResp.json();
-    const bestModel = searchData.items?.[0];
-    const bestVersion = bestModel?.modelVersions?.[0];
+    const items = searchData.items ?? [];
+    // C9-1: 搜索结果不唯一 → 400 列出候选，不替用户选 items[0]
+    if (items.length > 1) {
+      const candidates = items.slice(0, 10).map((m: any) => ({
+        modelId: m.id,
+        name: m.name,
+        air: m.modelVersions?.[0]?.air || `${m.id}@${m.modelVersions?.[0]?.id ?? '?'}`,
+      }));
+      throw new CivitaiAmbiguousError(
+        `搜索 "${trimmed}" 返回多个结果，无法确定唯一模型。请从以下候选中选择，或直接使用完整 AIR`,
+        candidates,
+      );
+    }
+    const bestModel = items[0];
+    const versions = bestModel?.modelVersions ?? [];
+    // 唯一模型但有多个版本 → 同样不取 modelVersions[0]
+    if (versions.length > 1) {
+      throw new CivitaiAmbiguousError(
+        `搜索 "${trimmed}" 命中模型 ${bestModel.id}（${bestModel.name}），但它有多个版本。请选择版本`,
+        versions.slice(0, 10).map((v: any) => ({ versionId: v.id, name: v.name, air: v.air || `${bestModel.id}@${v.id}` })),
+      );
+    }
+    const bestVersion = versions[0];
     if (bestVersion) {
-      if (bestVersion.air) {
-        const parts = bestVersion.air.split(':');
-        if (parts.length >= 3) parts[2] = normalizeEcosystem(parts[2]);
-        return parts.join(':');
-      }
+      if (bestVersion.air) return bestVersion.air;
       if (bestModel.id && bestVersion.id && bestVersion.baseModel) {
         const eco = mapBaseModelToEcosystem(bestVersion.baseModel);
         const type = (bestModel.type || fallbackType).toLowerCase().includes('lora') ? 'lora' : 'checkpoint';
@@ -4527,6 +4534,8 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
     let completedMediaUrl = '';
     const usedProvider = 'Civitai 官方原生生成引擎';
     const startTime = Date.now();
+    // C9-4: 实际发出的 AIR（解析后）；历史与响应记它而不是用户原始输入
+    let airModel = String(model);
 
     try {
       if (isVideo) {
@@ -4636,9 +4645,8 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
       }
 
       // --- ImageGen ---
-      let airModel = model;
       if (!airModel.startsWith('urn:air:')) {
-        airModel = await resolveCivitaiAir(model, 'checkpoint', req.path);
+        airModel = await resolveCivitaiAir(airModel, 'checkpoint', req.path);
       }
 
       // Extract ecosystem from the resolved AIR URN
@@ -4792,10 +4800,11 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
           workflowId,
           status: orchData.status || 'processing',
           provider: usedProvider,
-          model,
+          model: airModel,
         });
       }
     } catch (orchErr: any) {
+      if (orchErr instanceof CivitaiAmbiguousError) throw orchErr;
       keyPoolManager.recordResult('civitai', apiKey, false, Date.now() - startTime, orchErr.message);
       return res.status(500).json({ error: `Civitai 网络请求失败: ${orchErr.message}` });
     }
@@ -4806,13 +4815,13 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
 
     keyPoolManager.recordResult('civitai', apiKey, true, Date.now() - startTime);
 
-    // History: only record values actually sent to upstream (C1, C3)
+    // History: only record values actually sent to upstream (C1, C3, C9-4)
     const item = recordHistoryItem({
       url: completedMediaUrl,
       prompt,
       negativePrompt: isProvided(negative_prompt) ? negative_prompt : undefined,
       provider: usedProvider,
-      model,
+      model: airModel,
       seed: isProvided(seed) ? Number(seed) : null,
       steps: isProvided(steps) ? Number(steps) : null,
       cfg: isProvided(cfg) ? Number(cfg) : null,
@@ -4823,10 +4832,13 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
       imageUrl: completedMediaUrl,
       mediaUrl: completedMediaUrl,
       provider: usedProvider,
-      model,
+      model: airModel,
       historyItem: item,
     });
   } catch (error: any) {
+    if (error instanceof CivitaiAmbiguousError) {
+      return res.status(400).json({ error: error.message, candidates: error.candidates });
+    }
     return res.status(500).json({ error: `Civitai 生成失败: ${error.message}` });
   }
 });
