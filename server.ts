@@ -6470,148 +6470,44 @@ app.post('/api/cloud-keys/test-single', async (req, res) => {
   if (!provider || !key) {
     return res.status(400).json({ error: 'Missing provider or key' });
   }
-  const startTime = Date.now();
-  try {
-    if (provider === 'fal') {
-      const resp = await fetch('https://fal.run/fal-ai/flux/schnell', {
-        method: 'POST',
-        headers: { 'Authorization': `Key ${key}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: 'ping', num_inference_steps: 1 }),
-      });
-      const latency = Date.now() - startTime;
-      const text = await resp.text();
-      if (resp.ok) {
-        keyPoolManager.recordResult('fal', key, true, latency);
-        return res.json({ status: 'active', latency, message: 'Fal.ai Key 正常就绪 (200 OK)' });
-      }
-      if (text.includes('TOP_UP') || text.includes('locked')) {
-        keyPoolManager.recordResult('fal', key, false, latency, 'Fal 余额已耗尽', 429);
-        return res.json({ status: 'rate_limited', latency, message: 'Fal.ai 认证有效，但余额不足 (需充值)' });
-      }
-      keyPoolManager.recordResult('fal', key, false, latency, text, resp.status);
-      return res.json({ status: 'invalid', latency, message: `Fal.ai 认证未通过 [${resp.status}]` });
-    }
 
-    if (provider === 'gemini') {
-      const testGen = createGoogleGenAI(key);
-      if (!testGen) return res.json({ status: 'invalid', message: 'Google Gemini 实例初始化失败' });
-      await testGen.client.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: [{ role: 'user', parts: [{ text: 'ping' }] }],
-      });
-      const latency = Date.now() - startTime;
-      keyPoolManager.recordResult('gemini', key, true, latency);
-      return res.json({ status: 'active', latency, message: 'Google Gemini 官方直连正常' });
-    }
+  const prov = String(provider).toLowerCase().trim();
+  const customBaseUrl = prov === 'agnes' ? (req.headers['x-agnes-base-url'] as string) : (req.headers['x-sensenova-base-url'] as string);
+  const keysToTest = keyPoolManager.parseKeyString(key);
 
-    if (provider === 'huggingface') {
-      const resp = await fetch('https://huggingface.co/api/whoami-v2', {
-        headers: { 'Authorization': `Bearer ${key}` },
-      });
-      const latency = Date.now() - startTime;
-      if (resp.ok) {
-        const whoami = await resp.json();
-        keyPoolManager.recordResult('huggingface', key, true, latency);
-        return res.json({ status: 'active', latency, message: `HF 验证成功: @${whoami.name || 'User'}` });
-      }
-      keyPoolManager.recordResult('huggingface', key, false, latency, 'Invalid token', resp.status);
-      return res.json({ status: 'invalid', latency, message: `HF 鉴权未通过 [${resp.status}]` });
-    }
+  if (keysToTest.length === 0) {
+    return res.status(400).json({ error: 'Key 不能为空' });
+  }
 
-    if (provider === 'agnes') {
-      const effectiveBaseUrl = cloudSettings['agnesBaseUrl'] || defaultKeys['agnesBaseUrl'] || 'https://apihub.agnes-ai.com/v1';
-      const resp = await fetch(`${effectiveBaseUrl.replace(/\/+$/, '')}/models`, {
-        headers: { Authorization: `Bearer ${key}` },
-      });
-      const latency = Date.now() - startTime;
-      if (resp.ok) {
-        keyPoolManager.recordResult('agnes', key, true, latency);
-        return res.json({ status: 'active', latency, message: 'Agnes AI (ApiHub) 正常可用' });
-      }
-      keyPoolManager.recordResult('agnes', key, false, latency, 'Unauthorized', resp.status);
-      return res.json({ status: 'invalid', latency, message: `Agnes AI 鉴权失败 [${resp.status}]` });
-    }
+  const results: SingleKeyTestResult[] = [];
+  for (const k of keysToTest) {
+    const r = await testSingleProviderKey(prov, k, req.path, customBaseUrl);
+    const isSuccess = r.status === 'ok' || r.status === 'active' || r.status === 'warning';
+    keyPoolManager.recordResult(prov, k, isSuccess, r.latency, isSuccess ? undefined : r.message);
+    results.push(r);
+  }
 
-    if (provider === 'sensenova') {
-      const effectiveBaseUrl = cloudSettings['sensenovaBaseUrl'] || defaultKeys['sensenovaBaseUrl'] || 'https://token.sensenova.cn/v1';
-      const resp = await fetch(`${effectiveBaseUrl.replace(/\/+$/, '')}/models`, {
-        headers: { Authorization: `Bearer ${key}` },
-      });
-      const latency = Date.now() - startTime;
-      if (resp.ok) {
-        keyPoolManager.recordResult('sensenova', key, true, latency);
-        return res.json({ status: 'active', latency, message: 'SenseNova (商汤日日新) 正常可用' });
-      }
-      keyPoolManager.recordResult('sensenova', key, false, latency, 'Unauthorized', resp.status);
-      return res.json({ status: 'invalid', latency, message: `商汤日日新鉴权失败 [${resp.status}]` });
-    }
-
-    if (provider === 'nanogpt') {
-      const resp = await fetch('https://nano-gpt.com/api/v1/images', {
-        method: 'POST',
-        headers: { 'x-api-key': key, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: 'ping', model: 'flux-schnell' }),
-      });
-      const latency = Date.now() - startTime;
-      if (resp.ok) {
-        keyPoolManager.recordResult('nanogpt', key, true, latency);
-        return res.json({ status: 'active', latency, message: 'NanoGPT 认证正常' });
-      }
-      const text = await resp.text();
-      keyPoolManager.recordResult('nanogpt', key, false, latency, text, resp.status);
-      return res.json({ status: 'invalid', latency, message: `NanoGPT 鉴权失败 [${resp.status}]` });
-    }
-
-    if (provider === 'tensorart') {
-      const tools = await fetchTensorArtToolsList(key);
-      const latency = Date.now() - startTime;
-      keyPoolManager.recordResult('tensorart', key, true, latency);
-      return res.json({ status: 'active', latency, message: `Tensor.Art OpenAPI 正常 (${tools.length} 工具)` });
-    }
-
-    if (provider === 'civitai') {
-      const resp = await fetch('https://civitai.com/api/v1/models?limit=1', {
-        headers: { Authorization: `Bearer ${key}` },
-      });
-      const latency = Date.now() - startTime;
-      if (resp.ok) {
-        keyPoolManager.recordResult('civitai', key, true, latency);
-        return res.json({ status: 'active', latency, message: 'Civitai API 验证成功' });
-      }
-      return res.json({ status: 'invalid', latency, message: `Civitai 返回错误 [${resp.status}]` });
-    }
-
-    if (provider === 'modelscope' || provider === 'modelscope_ai') {
-      const endpoint = provider === 'modelscope' ? 'https://api-inference.modelscope.cn/v1/models' : 'https://api-inference.modelscope.ai/v1/models';
-      const resp = await fetch(endpoint, {
-        headers: { Authorization: `Bearer ${key}` },
-      });
-      const latency = Date.now() - startTime;
-      if (resp.ok) {
-        keyPoolManager.recordResult(provider, key, true, latency);
-        return res.json({ status: 'active', latency, message: `魔搭社区 (${provider}) 验证成功` });
-      }
-      return res.json({ status: 'invalid', latency, message: `魔搭鉴权未通过 [${resp.status}]` });
-    }
-
-    return res.status(400).json({ error: '未知服务商' });
-  } catch (err: any) {
-    const errLower = (err.message || '').toLowerCase();
-    const isRate =
-      errLower.includes('quota') ||
-      errLower.includes('resource_exhausted') ||
-      errLower.includes('overloaded') ||
-      errLower.includes('rate limit') ||
-      errLower.includes('429') ||
-      errLower.includes('503');
-    const statusCode = isRate ? 429 : 400;
-    keyPoolManager.recordResult(provider, key, false, Date.now() - startTime, err.message, statusCode);
+  if (results.length === 1) {
+    const single = results[0];
+    const status = single.status === 'ok' || single.status === 'active' ? 'active' : single.status === 'warning' ? 'warning' : single.status === 'rate_limited' ? 'rate_limited' : 'invalid';
     return res.json({
-      status: isRate ? 'rate_limited' : 'invalid',
-      latency: Date.now() - startTime,
-      message: err.message || '测试异常',
+      status,
+      latency: single.latency,
+      message: single.message,
+      results,
     });
   }
+
+  const allOk = results.every((r) => r.status === 'ok' || r.status === 'active');
+  const hasOk = results.some((r) => r.status === 'ok' || r.status === 'active' || r.status === 'warning');
+  const summaryMsg = `共测试 ${results.length} 个密钥：\n` + results.map((r) => `• [${r.maskedKey}]: ${r.message} (${r.latency}ms)`).join('\n');
+  const avgLatency = Math.round(results.reduce((acc, r) => acc + r.latency, 0) / results.length);
+  return res.json({
+    status: allOk ? 'active' : hasOk ? 'warning' : 'invalid',
+    latency: avgLatency,
+    message: summaryMsg,
+    results,
+  });
 });
 
 // Balance & Quota Query Endpoint
@@ -6625,18 +6521,12 @@ app.get('/api/cloud-keys/balances', async (_req, res) => {
       const falKey = keyPoolManager.getNextKey('fal');
       if (falKey) {
         try {
-          const resp = await fetch('https://fal.run/fal-ai/flux/schnell', {
-            method: 'POST',
-            headers: { 'Authorization': `Key ${falKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt: 'balance_ping', num_inference_steps: 1 }),
-          });
-          const text = await resp.text();
-          if (resp.ok) {
-            balances.fal = { status: 'ok', detail: 'Fal.ai 额度充足 / 按需计费正常' };
-          } else if (text.includes('TOP_UP')) {
-            balances.fal = { status: 'exhausted', detail: 'Fal.ai 账户余额已耗尽 (TOP_UP)' };
+          const falTest = await falReadOnlyKeyCheck(falKey, '/api/cloud-keys/balances');
+          if (falTest.balance) {
+            balances.fal = { status: 'ok', detail: `Fal.ai 余额: ${falTest.balance}` };
           } else {
-            balances.fal = { status: 'unknown', detail: `Fal.ai 状态响应: ${resp.status}` };
+            // Non-admin keys cannot read billing; report honestly instead of claiming "额度充足".
+            balances.fal = { status: 'unknown', detail: falTest.message };
           }
         } catch (e: any) {
           balances.fal = { status: 'error', detail: e.message };
@@ -6651,7 +6541,8 @@ app.get('/api/cloud-keys/balances', async (_req, res) => {
         try {
           const testGen = createGoogleGenAI(geminiKey);
           if (testGen) {
-            balances.gemini = { status: 'ok', detail: 'Google GenAI SDK 官方直连可用 (Imagen 3 & Gemini 3.8)' };
+            // Item 12: no request is made here, so we can't claim 'ok'
+            balances.gemini = { status: 'unknown', detail: 'Gemini Key 已配置（未发起请求，无法确认额度；请用「测试连接」）' };
           }
         } catch (e: any) {
           balances.gemini = { status: 'error', detail: e.message };
@@ -6662,16 +6553,25 @@ app.get('/api/cloud-keys/balances', async (_req, res) => {
     // Agnes AI
     (async () => {
       const agnesKey = keyPoolManager.getNextKey('agnes');
-      const agnesBaseUrl = cloudSettings['agnesBaseUrl'] || defaultKeys['agnesBaseUrl'] || 'https://apihub.agnes-ai.com/v1';
       if (agnesKey) {
+        const { baseUrl, error: urlErr } = getProviderBaseUrl('agnes');
+        if (urlErr) {
+          balances.agnes = { status: 'error', detail: urlErr };
+          return;
+        }
         try {
-          const resp = await fetch(`${agnesBaseUrl.replace(/\/+$/, '')}/models`, {
-            headers: { Authorization: `Bearer ${agnesKey}` },
-          });
+          const resp = await upstreamFetch(
+            { provider: 'agnes', route: '/api/cloud-keys/balances', model: 'models', key: agnesKey },
+            `${baseUrl}/models`,
+            {
+              headers: { Authorization: `Bearer ${agnesKey}` },
+            }
+          );
           if (resp.ok) {
-            balances.agnes = { status: 'ok', detail: 'Agnes AI 高并发聚合接口正常就绪' };
+            balances.agnes = { status: 'ok', detail: 'key 可用（该服务商无余额接口 / 未能核实余额接口）' };
           } else {
-            balances.agnes = { status: 'low', detail: `Agnes AI 状态码: ${resp.status}` };
+            const errBody = await resp.text().catch(() => '');
+            balances.agnes = { status: 'error', detail: `Agnes AI 状态码 [${resp.status}]: ${errBody.slice(0, 150)}` };
           }
         } catch (e: any) {
           balances.agnes = { status: 'error', detail: e.message };
@@ -6682,16 +6582,25 @@ app.get('/api/cloud-keys/balances', async (_req, res) => {
     // SenseNova
     (async () => {
       const snKey = keyPoolManager.getNextKey('sensenova');
-      const snBaseUrl = cloudSettings['sensenovaBaseUrl'] || defaultKeys['sensenovaBaseUrl'] || 'https://token.sensenova.cn/v1';
       if (snKey) {
+        const { baseUrl, error: urlErr } = getProviderBaseUrl('sensenova');
+        if (urlErr) {
+          balances.sensenova = { status: 'error', detail: urlErr };
+          return;
+        }
         try {
-          const resp = await fetch(`${snBaseUrl.replace(/\/+$/, '')}/models`, {
-            headers: { Authorization: `Bearer ${snKey}` },
-          });
+          const resp = await upstreamFetch(
+            { provider: 'sensenova', route: '/api/cloud-keys/balances', model: 'models', key: snKey },
+            `${baseUrl}/models`,
+            {
+              headers: { Authorization: `Bearer ${snKey}` },
+            }
+          );
           if (resp.ok) {
-            balances.sensenova = { status: 'ok', detail: '商汤日日新 Token 账户正常可用' };
+            balances.sensenova = { status: 'ok', detail: 'key 可用（该服务商无余额接口 / 未能核实余额接口）' };
           } else {
-            balances.sensenova = { status: 'low', detail: `商汤 API 状态码: ${resp.status}` };
+            const errBody = await resp.text().catch(() => '');
+            balances.sensenova = { status: 'error', detail: `商汤日日新 状态码 [${resp.status}]: ${errBody.slice(0, 150)}` };
           }
         } catch (e: any) {
           balances.sensenova = { status: 'error', detail: e.message };
@@ -6703,11 +6612,12 @@ app.get('/api/cloud-keys/balances', async (_req, res) => {
     (async () => {
       const msKey = keyPoolManager.getNextKey('modelscope');
       if (msKey) {
-        balances.modelscope = { status: 'ok', detail: '魔搭国内站 (modelscope.cn) 魔粒额度已挂载' };
+        // Item 12: key presence only — no request made, so status is unknown, not ok
+        balances.modelscope = { status: 'unknown', detail: '魔搭国内站 Key 已配置（未查询额度）' };
       }
       const msAiKey = keyPoolManager.getNextKey('modelscope_ai');
       if (msAiKey) {
-        balances.modelscope_ai = { status: 'ok', detail: '魔搭国际站 (modelscope.ai) 国际魔粒已挂载' };
+        balances.modelscope_ai = { status: 'unknown', detail: '魔搭国际站 Key 已配置（未查询额度）' };
       }
     })(),
 
@@ -6716,10 +6626,33 @@ app.get('/api/cloud-keys/balances', async (_req, res) => {
       const taKey = keyPoolManager.getNextKey('tensorart');
       if (taKey) {
         try {
-          const tools = await fetchTensorArtToolsList(taKey);
-          balances.tensorart = { status: 'ok', detail: `Tensor.Art 算力点数就绪 (${tools.length} 个工具可用)` };
+          await fetchTensorArtToolsList(taKey);
+          balances.tensorart = { status: 'ok', detail: 'key 可用（该服务商无余额接口 / 未能核实余额接口）' };
         } catch (e: any) {
           balances.tensorart = { status: 'error', detail: e.message };
+        }
+      }
+    })(),
+
+    // NanoGPT
+    (async () => {
+      const nanoKey = keyPoolManager.getNextKey('nanogpt');
+      if (nanoKey) {
+        try {
+          const resp = await upstreamFetch(
+            { provider: 'nanogpt', route: '/api/cloud-keys/balances', key: nanoKey },
+            'https://api.nano-gpt.com/api/check-balance',
+            { method: 'POST', headers: { 'x-api-key': nanoKey } }
+          );
+          if (resp.ok) {
+            const bal = await resp.json().catch(() => ({}));
+            balances.nanogpt = { status: 'ok', detail: `NanoGPT 余额: $${bal.usd_balance ?? '?'}` };
+          } else {
+            const errBody = await resp.text().catch(() => '');
+            balances.nanogpt = { status: 'error', detail: `NanoGPT 状态码 [${resp.status}]: ${errBody.slice(0, 150)}` };
+          }
+        } catch (e: any) {
+          balances.nanogpt = { status: 'error', detail: e.message };
         }
       }
     })(),
@@ -6729,12 +6662,18 @@ app.get('/api/cloud-keys/balances', async (_req, res) => {
       const hfKey = keyPoolManager.getNextKey('huggingface');
       if (hfKey) {
         try {
-          const resp = await fetch('https://huggingface.co/api/whoami-v2', {
-            headers: { 'Authorization': `Bearer ${hfKey}` },
-          });
+          const resp = await upstreamFetch(
+            { provider: 'huggingface', route: '/api/cloud-keys/balances', model: 'whoami-v2', key: hfKey },
+            'https://huggingface.co/api/whoami-v2',
+            {
+              headers: { 'Authorization': `Bearer ${hfKey}` },
+            }
+          );
           if (resp.ok) {
-            const whoami = await resp.json();
-            balances.huggingface = { status: 'ok', detail: `@${whoami.name || 'User'} (Serverless 推理额度正常)` };
+            balances.huggingface = { status: 'ok', detail: 'key 可用（该服务商无余额接口 / 未能核实余额接口）' };
+          } else {
+            const errBody = await resp.text().catch(() => '');
+            balances.huggingface = { status: 'error', detail: `Hugging Face 状态码 [${resp.status}]: ${errBody.slice(0, 150)}` };
           }
         } catch (e: any) {
           balances.huggingface = { status: 'error', detail: e.message };
