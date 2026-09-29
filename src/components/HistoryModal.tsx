@@ -28,8 +28,13 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
 }) => {
   const [copiedId, setCopiedId] = React.useState<string | null>(null);
   const [selectedImage, setSelectedImage] = React.useState<GenerationHistoryItem | null>(null);
+  const [brokenIds, setBrokenIds] = React.useState<Record<string, true>>({});
 
   if (!isOpen) return null;
+
+  const markBroken = (id: string) => {
+    setBrokenIds((prev) => (prev[id] ? prev : { ...prev, [id]: true }));
+  };
 
   const handleCopyPrompt = (id: string, text: string) => {
     navigator.clipboard.writeText(text);
@@ -103,19 +108,28 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
                   className="bg-[#1e2026] border border-[#2d303a] hover:border-cyan-500/40 rounded-xl overflow-hidden shadow-lg flex flex-col group transition-all"
                 >
                   <div className="relative aspect-square bg-[#111215] overflow-hidden cursor-pointer" onClick={() => setSelectedImage(item)}>
-                    {item.url?.includes('.mp4') || item.model?.includes('video') || item.provider?.includes('Video') ? (
+                    {brokenIds[item.id] || !item.url ? (
+                      <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-slate-400 px-3 text-center">
+                        <ImageIcon className="w-8 h-8 text-slate-600" />
+                        <span className="text-xs font-medium">预览加载失败</span>
+                        <span className="text-[10px] text-slate-500">链接失效或无法拉取，非未生成</span>
+                      </div>
+                    ) : item.url?.includes('.mp4') || item.model?.includes('video') || item.provider?.includes('Video') || item.url.startsWith('data:video') ? (
                       <video
                         src={item.url}
                         autoPlay
                         loop
                         muted
                         playsInline
+                        onError={() => markBroken(item.id)}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                       />
                     ) : (
                       <img
                         src={item.url}
                         alt={item.prompt || ''}
+                        referrerPolicy="no-referrer"
+                        onError={() => markBroken(item.id)}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                       />
                     )}
@@ -211,11 +225,21 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
           onClick={() => setSelectedImage(null)}
         >
           <div className="relative max-w-4xl max-h-[90vh] flex flex-col items-center" onClick={(e) => e.stopPropagation()}>
-            <img
-              src={selectedImage.url}
-              alt={selectedImage.prompt || ''}
-              className="max-h-[75vh] w-auto rounded-lg shadow-2xl object-contain border border-[#333]"
-            />
+            {brokenIds[selectedImage.id] || !selectedImage.url ? (
+              <div className="min-h-[40vh] w-full max-w-xl flex flex-col items-center justify-center gap-2 text-slate-400 border border-[#333] rounded-lg bg-[#111215] px-4">
+                <ImageIcon className="w-10 h-10 text-slate-600" />
+                <span className="text-sm font-medium">预览加载失败</span>
+                <span className="text-xs text-slate-500">链接失效或无法拉取</span>
+              </div>
+            ) : (
+              <img
+                src={selectedImage.url}
+                alt={selectedImage.prompt || ''}
+                referrerPolicy="no-referrer"
+                onError={() => markBroken(selectedImage.id)}
+                className="max-h-[75vh] w-auto rounded-lg shadow-2xl object-contain border border-[#333]"
+              />
+            )}
             <div className="mt-3 bg-[#18191d] border border-[#2e3038] p-4 rounded-xl text-center w-full max-w-2xl text-xs space-y-1.5">
               <p className={`font-medium ${selectedImage.prompt && selectedImage.prompt.trim() ? 'text-white' : 'text-slate-400 italic'}`}>
                 {displayValue(selectedImage.prompt)}

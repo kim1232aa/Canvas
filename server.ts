@@ -16,6 +16,8 @@ import {
   resolveAgainstBaseOrigin,
 } from './src/engines/compatRelay.ts';
 import { enrichPoolStatsWithServerBaseUrl } from './src/utils/poolStatsEnrich.ts';
+import { mapSampler, mapScheduler, resolveImportedNegativePrompt } from './src/utils/civitaiImportMap.ts';
+import { persistRemoteUrlAsDataUrl } from './src/utils/persistMediaAsDataUrl.ts';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -1454,29 +1456,7 @@ app.post('/api/civitai/extract-workflow', async (req, res) => {
     let isVideo = false;
     let videoDuration: number | null = null;
 
-    const mapSampler = (s: string) => {
-      const lower = (s || '').toLowerCase();
-      if (lower.includes('dpm++ 2m') || lower.includes('dpmpp_2m')) return 'dpmpp_2m';
-      if (lower.includes('dpm++ sde') || lower.includes('dpmpp_sde')) return 'dpmpp_sde';
-      if (lower.includes('dpm++ 3m sde') || lower.includes('dpmpp_3m_sde')) return 'dpmpp_3m_sde';
-      if (lower.includes('euler a') || lower.includes('euler_ancestral')) return 'euler_ancestral';
-      if (lower.includes('er_sde_simple')) return 'er_sde_simple';
-      if (lower.includes('er_sde')) return 'er_sde';
-      if (lower.includes('heun')) return 'heun';
-      if (lower.includes('ddim')) return 'ddim';
-      if (lower.includes('euler')) return 'euler';
-      return 'euler';
-    };
-
-    const mapScheduler = (s: string) => {
-      const lower = (s || '').toLowerCase();
-      if (lower.includes('karras')) return 'karras';
-      if (lower.includes('sgm_uniform')) return 'sgm_uniform';
-      if (lower.includes('exponential')) return 'exponential';
-      if (lower.includes('simple')) return 'simple';
-      if (lower.includes('normal')) return 'normal';
-      return 'normal';
-    };
+    // mapSampler / mapScheduler: imported from src/utils/civitaiImportMap.ts
 
     // 1. Raw Generation Parameters Text Parser (WebUI / Civitai Copy Generation Data)
     const isRawParamsText =
@@ -1572,8 +1552,13 @@ app.post('/api/civitai/extract-workflow', async (req, res) => {
             : `https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/${imgGet.url}/original=true/preview.jpeg`;
         }
 
+        // Real image import: never keep template blurry-negative / forged sampler/scheduler
+        negativePrompt = '';
+        sampler = '';
+        scheduler = '';
+
         if (meta.prompt) prompt = meta.prompt;
-        if (meta.negativePrompt) negativePrompt = meta.negativePrompt;
+        negativePrompt = resolveImportedNegativePrompt(meta.negativePrompt, negativePrompt);
 
         rawModelName = meta.Model || meta.baseModel || (meta.models && meta.models[0]) || '';
         
@@ -1592,8 +1577,15 @@ app.post('/api/civitai/extract-workflow', async (req, res) => {
 
         if (meta.steps) steps = meta.steps;
         if (meta.cfgScale) cfg = meta.cfgScale;
-        if (meta.sampler) sampler = mapSampler(meta.sampler);
-        if (meta.scheduler) scheduler = mapScheduler(meta.scheduler || meta.sampler);
+        if (meta.sampler) {
+          const mappedSampler = mapSampler(String(meta.sampler));
+          if (mappedSampler) sampler = mappedSampler;
+        }
+        // Only use an explicit scheduler field — never invent from sampler or forge sgm_uniform
+        if (meta.scheduler) {
+          const mappedScheduler = mapScheduler(String(meta.scheduler));
+          if (mappedScheduler) scheduler = mappedScheduler;
+        }
         if (meta.seed) seed = meta.seed;
         if (meta.denoise !== undefined) denoise = meta.denoise;
 
@@ -2052,8 +2044,8 @@ app.post('/api/civitai/extract-workflow', async (req, res) => {
       baseModel: detectedBaseModel || (isVideo ? 'MiniMax H3' : 'Original'),
       modelFile: rawModelName ? (rawModelName.endsWith('.safetensors') ? rawModelName : `${rawModelName}.safetensors`) : (isVideo ? 'minimax_h3.safetensors' : (checkpoint || 'unknown.safetensors')),
       vae: detectedVae || 'qwen_image_vae.safetensors',
-      sampler: sampler || 'er_sde_simple',
-      scheduler: scheduler || 'sgm_uniform',
+      sampler: sampler || '',
+      scheduler: scheduler || '',
       steps: steps || 8,
       cfgScale: cfg || 1.0,
       seed: seed,
@@ -4597,6 +4589,7 @@ async function resolveCivitaiAir(rawInput: string, fallbackType: 'checkpoint' | 
   throw new Error(`找不到这个模型 (Civitai API 搜索失败 HTTP ${searchResp.status}): ${errText.slice(0, 300)}`);
 }
 
+
 // Helper to extract generated image/video URL from any Civitai Orchestration response structure
 function extractCivitaiBlobUrl(data: any): string {
   if (!data) return '';
@@ -4671,7 +4664,11 @@ app.get('/api/civitai/workflow/:id', async (req, res) => {
     }
 
     const data = await resp.json();
-    const mediaUrl = extractCivitaiBlobUrl(data);
+    let mediaUrl = extractCivitaiBlobUrl(data);
+    if (mediaUrl && !mediaUrl.startsWith('data:')) {
+      const durable = await persistRemoteUrlAsDataUrl(mediaUrl);
+      if (durable) mediaUrl = durable;
+    }
     return res.json({
       id,
       status: data.status,
@@ -4821,6 +4818,15 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
         if (!completedMediaUrl) {
           return res.status(500).json({ error: 'Civitai 视频生成未能按时返回，请稍后在历史记录中查看或重试。' });
         }
+
+        const durableVideoUrl = await persistRemoteUrlAsDataUrl(completedMediaUrl);
+        if (!durableVideoUrl) {
+          return res.status(500).json({
+            error: 'Civitai 视频已生成，但无法下载并持久化为本地历史副本（data URL）。请重试。',
+            transientMediaUrl: completedMediaUrl,
+          });
+        }
+        completedMediaUrl = durableVideoUrl;
 
         const item = recordHistoryItem({
           url: completedMediaUrl,
@@ -5020,6 +5026,16 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
     }
 
     keyPoolManager.recordResult('civitai', apiKey, true, Date.now() - startTime);
+
+    // Durable same-origin copy (data:image/…) — same pattern as OpenAI/fal history; never store blob URL alone
+    const durableImageUrl = await persistRemoteUrlAsDataUrl(completedMediaUrl);
+    if (!durableImageUrl) {
+      return res.status(500).json({
+        error: 'Civitai 图像已生成，但无法下载并持久化为本地历史副本（data URL）。请重试。',
+        transientMediaUrl: completedMediaUrl,
+      });
+    }
+    completedMediaUrl = durableImageUrl;
 
     // History: only record values actually sent to upstream (C1, C3, C9-4)
     const item = recordHistoryItem({
@@ -7223,7 +7239,7 @@ app.get('/api/history', (_req, res) => {
 
 const MAX_HISTORY_ITEM_BYTES = 500 * 1024; // 500KB
 
-app.post('/api/history', (req, res) => {
+app.post('/api/history', async (req, res) => {
   if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
     return res.status(400).json({ error: '请求体必须为有效的 JSON 对象' });
   }
@@ -7272,6 +7288,16 @@ app.post('/api/history', (req, res) => {
     return res.status(400).json({ error: '缺少有效的媒体链接 (url / imageUrl / videoUrl)' });
   }
 
+  let durableUrl = effectiveUrl;
+  if (
+    typeof durableUrl === 'string' &&
+    !durableUrl.startsWith('data:') &&
+    /orchestration[^/]*\.civitai\.com/i.test(durableUrl)
+  ) {
+    const persisted = await persistRemoteUrlAsDataUrl(durableUrl);
+    if (persisted) durableUrl = persisted;
+  }
+
   if (prompt !== undefined && typeof prompt !== 'string') {
     return res.status(400).json({ error: '字段 prompt 必须为字符串' });
   }
@@ -7315,7 +7341,7 @@ app.post('/api/history', (req, res) => {
   const item: GeneratedItem = {
     id: `hist_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
     timestamp: Date.now(),
-    url: effectiveUrl,
+    url: durableUrl,
     ...(typeof imageUrl === 'string' && imageUrl.trim() ? { imageUrl: imageUrl.trim() } : {}),
     ...(typeof videoUrl === 'string' && videoUrl.trim() ? { videoUrl: videoUrl.trim() } : {}),
     mediaType: typeof mediaType === 'string' && mediaType.trim() ? mediaType.trim() : (videoUrl ? 'video' : 'image'),

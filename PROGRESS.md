@@ -1,5 +1,13 @@
 # Canvas Provider API 接线修复进度表
 
+
+## 2026-09-30 — soft-civitai-history-thumb HARD gates
+
+- Civitai 生成成功后服务端把 blob 拉成 `data:image/…` 写入历史（与 OpenAI/fal 同源持久形态）；HistoryModal 坏链显示「预览加载失败」。
+- 图片导入：空负向不填 blurry 模板；Undefined 采样器不映射 euler；缺调度器不伪造 sgm_uniform。
+- 自测报告：`/workspace/canvas-review/civitai-hard-gate-fix-selftest.md`
+- 未推 origin；未动 `/workspace/Canvas`。
+
 ## 0c. F5 — Gemini canvas seed grey (f5-gemini-seed-grey) — 2026-09-29
 
 Tip hash: 1ad82fa44764056407754f6d72274ca0be02aa1b (branch f5-gemini-seed-grey, not pushed)
