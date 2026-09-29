@@ -31,7 +31,7 @@ export const SCHEDULER_OPTIONS = [
 export interface BaseModelOption {
   label: string;
   value: string;
-  provider: 'fal' | 'agnes' | 'civitai' | 'modelscope' | 'modelscope_ai' | 'huggingface' | 'nanogpt' | 'gemini' | 'sensenova' | 'video' | 'tensorart';
+  provider: 'fal' | 'agnes' | 'civitai' | 'modelscope' | 'modelscope_ai' | 'huggingface' | 'nanogpt' | 'gemini' | 'sensenova' | 'video' | 'tensorart' | 'openai_compat' | 'grok_compat';
   category?: 'checkpoint' | 'video' | 'reasoning' | 'edit' | 'lora';
 }
 
@@ -91,6 +91,14 @@ export const BASE_MODELS: BaseModelOption[] = [
   { label: '💎 [Google] Gemini 2.5 Flash Image (gemini-2.5-flash-image)', value: 'gemini-2.5-flash-image', provider: 'gemini', category: 'checkpoint' },
   { label: '🟢 [NanoGPT] FLUX.1 Schnell (flux-schnell)', value: 'flux-schnell', provider: 'nanogpt', category: 'checkpoint' },
   { label: '🟢 [NanoGPT] Qwen Image 2.1 (qwen-image-2.1)', value: 'qwen-image-2.1', provider: 'nanogpt', category: 'checkpoint' },
+
+  // ===================== OPENAI / GROK 兼容中转 =====================
+  { label: '🔁 [OpenAI 兼容中转] GPT Image 2 (gpt-image-2)', value: 'gpt-image-2', provider: 'openai_compat', category: 'checkpoint' },
+  { label: '🔁 [Grok 兼容中转] Imagine Image (grok-imagine-image)', value: 'grok-imagine-image', provider: 'grok_compat', category: 'checkpoint' },
+  { label: '🔁 [Grok 兼容中转] Imagine Image 2.0 (grok-imagine-image-2.0)', value: 'grok-imagine-image-2.0', provider: 'grok_compat', category: 'checkpoint' },
+  { label: '🔁 [Grok 兼容中转] Imagine Image Quality (grok-imagine-image-quality)', value: 'grok-imagine-image-quality', provider: 'grok_compat', category: 'checkpoint' },
+  { label: '🔁 [Grok 兼容中转] Imagine Video (grok-imagine-video)', value: 'grok-imagine-video', provider: 'grok_compat', category: 'video' },
+  { label: '🔁 [Grok 兼容中转] Imagine Video 1.5 (grok-imagine-video-1.5)', value: 'grok-imagine-video-1.5', provider: 'grok_compat', category: 'video' },
 ];
 
 export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
@@ -125,6 +133,8 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
           { label: '🚀 Agnes AI 2.5 Flash', value: 'agnes' },
           { label: '🧠 SenseNova 商汤日日新', value: 'sensenova' },
           { label: '🎬 AI Video 视频引擎', value: 'video' },
+          { label: '🔁 OpenAI 兼容中转', value: 'openai_compat' },
+          { label: '🔁 Grok 兼容中转', value: 'grok_compat' },
         ],
       },
       {
@@ -270,6 +280,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
           { label: 'Google Gemini', value: 'gemini' },
           { label: '商汤日日新 (SenseNova)', value: 'sensenova' },
           { label: 'Agnes AI', value: 'agnes' },
+          { label: 'Grok 兼容中转', value: 'grok_compat' },
         ],
       },
       {
@@ -334,6 +345,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
           { label: '商汤日日新 (SenseNova DeepSeek V4)', value: 'sensenova' },
           { label: 'Agnes AI (ApiHub Agnes 3.0 Flash)', value: 'agnes' },
           { label: 'Google Gemini (Gemini 3.8 Flash)', value: 'gemini' },
+          { label: 'Grok 兼容中转', value: 'grok_compat' },
         ],
       },
       {
@@ -350,6 +362,8 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
           { label: 'agnes-2.5-pro-alpha (Agnes 逻辑分析)', value: 'agnes-2.5-pro-alpha' },
           { label: 'gemini-3.8-flash (Google 旗舰多模态)', value: 'gemini-3.8-flash' },
           { label: 'gemini-3.1-pro-preview (Google 复杂深度推理)', value: 'gemini-3.1-pro-preview' },
+          { label: 'grok-4.3 (Grok 兼容中转)', value: 'grok-4.3' },
+          { label: 'grok-4.5 (Grok 兼容中转)', value: 'grok-4.5' },
         ],
       },
       {
@@ -830,6 +844,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
           { label: '🇨🇳 魔搭社区 (modelscope.cn 阿里官方)', value: 'modelscope' },
           { label: '🟢 NanoGPT 官方视频端点', value: 'nanogpt' },
           { label: '🚀 Agnes AI 2.5 极速视频', value: 'agnes' },
+          { label: '🔁 Grok 兼容中转', value: 'grok_compat' },
         ],
       },
       {
@@ -859,6 +874,8 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
           { label: '🇨🇳 [魔搭] Wan 2.1 官方图生视频 (damo/wan2.1-i2v-480p-14b)', value: 'damo/wan2.1-i2v-480p-14b', provider: 'modelscope' },
           { label: '🇨🇳 [魔搭] CogVideoX-5B 视频模型 (THUDM/CogVideoX-5b)', value: 'THUDM/CogVideoX-5b', provider: 'modelscope' },
           { label: '🚀 [Agnes] Agnes Video 2.5 Flash (agnes-video-2.5-flash)', value: 'agnes-video-2.5-flash', provider: 'agnes' },
+          { label: '🔁 [Grok 兼容中转] Imagine Video (grok-imagine-video)', value: 'grok-imagine-video', provider: 'grok_compat' },
+          { label: '🔁 [Grok 兼容中转] Imagine Video 1.5 (grok-imagine-video-1.5)', value: 'grok-imagine-video-1.5', provider: 'grok_compat' },
         ],
         placeholder: '输入视频大模型端点 ID，或在上方下拉中快速切换',
       },

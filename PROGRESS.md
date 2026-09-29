@@ -1,5 +1,39 @@
 # Canvas Provider API 接线修复进度表
 
+## 0. compat-relays（OpenAI 兼容中转 + Grok 兼容中转）— 2026-09-29
+
+### 完成项
+- [x] 新增一等公民 provider：`openai_compat`（仅生图/改图）、`grok_compat`（推理+生图+改图+生视频）
+- [x] 设置面板标签「兼容中转」；可编辑 Base URL + 掩码 Key（Agnes 同款 `resolveProviderAuth`：header > settings > env；无硬编码域名）
+- [x] Env：`OPENAI_COMPAT_IMAGE_BASE_URL` / `OPENAI_COMPAT_IMAGE_API_KEY`、`GROK_COMPAT_BASE_URL` / `GROK_COMPAT_API_KEY`（见 `.env.example`；测试密钥在仓库外 `/workspace/canvas-secrets/compat-relays.env`，永不提交）
+- [x] Grok Base URL 缺 `/v1` 时服务端补全；相对视频 URL 相对 base origin 解析
+- [x] providerSchema + UI 灰显「该服务商不支持」：
+  - OpenAI 兼容：灰 seed / negative / steps / CFG / sampler / LoRA；保留 size / quality / output_format / background / moderation / n
+  - Grok 兼容：灰 seed / negative / steps / CFG / LoRA / width·height；保留 aspect_ratio / resolution（图 1k/1.5k/2k，视频 480p/720p/1080p）/ 图生图 / 视频 duration
+- [x] 服务端 `rejectUnsupported` 对上述字段 400；绝不静默丢弃或换商
+- [x] Grok 视频 503 `grok_media_no_eligible_account` 原样返回 status+body；`respect_moderation=false` 无 URL 当失败原样报出
+- [x] `npx tsc --noEmit` 0；`npm test` 40/40 pass
+
+### QA 配置步骤（勿把真实 key 写进仓库）
+```bash
+cd /workspace/Canvas-ui
+git checkout compat-relays   # tip 见本节提交后 hash
+set -a; source /workspace/canvas-secrets/compat-relays.env; set +a
+# 或在设置面板「OpenAI 兼容中转」「Grok 兼容中转」手填 Base URL + Key
+npm run dev   # 勿占用 3417 / 勿动 Canvas-b1-fix
+```
+设置面板 → 选对应「兼容中转」→ 填 Base URL（OpenAI 通常以 `/v1` 结尾；Grok host 可无 `/v1`，服务端会补）→ 添加 API Key → 保存 → 连通测试（只读 GET /models）。
+
+### 关键文件
+- `src/engines/drivers/OpenAICompatDriver.ts` / `GrokCompatDriver.ts` + tests
+- `src/engines/compatRelay.ts`（normalize base URL / extract image / resolve relative URL）
+- `server.ts`（auth 扩展、generate/chat/video 路由）
+- `src/schemas/providerSchema.ts` + test
+- `src/components/BackendSettingsModal.tsx` / `ParameterInspector.tsx`
+
+---
+
+
 ## 1. 计划与执行路线
 - [x] 13. 上游请求日志 helper（server.ts `upstreamFetch` / `upstreamSdkCall`，写 logs/upstream.log，key 掩码，URL 去 query 敏感参数；logs/ 已加入 .gitignore）
 - [x] 1. Gemini（删除 Imagen 分支与 imagen-3.0-generate-002 全部默认值；统一 generateContent；model 缺失 400；删除 2.5→3.8 静默换模；negative_prompt/seed/cfg/guidance_scale/steps/loras → 400；非 data: 参考图 → 400；前端节点/预设/面板/normalizer 同步；normalizeForGemini 不再把 LoRA 触发词拼进提示词）

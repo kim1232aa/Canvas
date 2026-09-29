@@ -64,6 +64,46 @@ describe('providerSchema 自检', () => {
     expect(modelStatus('gemini', 'gemini-2.5-flash-image', '2026-10-02')).toBe('deprecated');
   });
 
+  it('openai_compat gpt-image-2：不支持 seed/negative/steps/cfg/sampler/LoRA，支持 size/quality/output_format/background/moderation/n', () => {
+    const grey = ['seed', 'negative_prompt', 'steps', 'cfg', 'sampler', 'scheduler', 'loras'] as const;
+    for (const f of grey) {
+      expect(getFieldSpec('openai_compat', 'gpt-image-2', f)?.status, f).toBe('unsupported');
+    }
+    expect(getFieldSpec('openai_compat', 'gpt-image-2', 'size')?.status).toBe('supported');
+    expect(getFieldSpec('openai_compat', 'gpt-image-2', 'quality')?.status).toBe('supported');
+    expect(getFieldSpec('openai_compat', 'gpt-image-2', 'output_format')?.status).toBe('supported');
+    expect(getFieldSpec('openai_compat', 'gpt-image-2', 'background')?.status).toBe('supported');
+    expect(getFieldSpec('openai_compat', 'gpt-image-2', 'moderation')?.status).toBe('supported');
+    expect(getFieldSpec('openai_compat', 'gpt-image-2', 'num_images')?.status).toBe('supported');
+    expect(valueStatus('openai_compat', 'gpt-image-2', 'quality', 'high')).toBe('supported');
+    expect(valueStatus('openai_compat', 'gpt-image-2', 'quality', 'xhigh')).toBe('unsupported');
+    expect(valueStatus('openai_compat', 'gpt-image-2', 'quality', 'max')).toBe('unsupported');
+    expect(valueStatus('openai_compat', 'gpt-image-2', 'size', '1024x1024')).toBe('supported');
+    expect(valueStatus('openai_compat', 'gpt-image-2', 'size', 'auto')).toBe('supported');
+  });
+
+  it('grok_compat imagine：不支持 seed/negative/steps/cfg/LoRA/像素宽高，支持 aspect_ratio 与 resolution', () => {
+    for (const id of ['grok-imagine-image', 'grok-imagine-image-2.0', 'grok-imagine-image-quality']) {
+      const grey = ['seed', 'negative_prompt', 'steps', 'cfg', 'loras', 'width', 'height'] as const;
+      for (const f of grey) {
+        expect(getFieldSpec('grok_compat', id, f)?.status, `${id}.${f}`).toBe('unsupported');
+      }
+      expect(getFieldSpec('grok_compat', id, 'aspect_ratio')?.status, id).toBe('supported');
+      expect(getFieldSpec('grok_compat', id, 'resolution')?.status, id).toBe('supported');
+      expect(valueStatus('grok_compat', id, 'resolution', '1k')).toBe('supported');
+      expect(valueStatus('grok_compat', id, 'resolution', '1.5k')).toBe('supported');
+      expect(valueStatus('grok_compat', id, 'resolution', '2k')).toBe('supported');
+      expect(valueStatus('grok_compat', id, 'resolution', '4k')).toBe('unsupported');
+    }
+    for (const id of ['grok-imagine-video', 'grok-imagine-video-1.5']) {
+      expect(getFieldSpec('grok_compat', id, 'width')?.status, id).toBe('unsupported');
+      expect(getFieldSpec('grok_compat', id, 'seed')?.status, id).toBe('unsupported');
+      expect(getFieldSpec('grok_compat', id, 'resolution')?.status, id).toBe('supported');
+      expect(valueStatus('grok_compat', id, 'resolution', '720p')).toBe('supported');
+      expect(valueStatus('grok_compat', id, 'resolution', '1k')).toBe('unsupported');
+    }
+  });
+
   it('C10: Civitai 各生态宽高约束与官方 recipe 一致', () => {
     const dim = (id: string) => {
       const s = getFieldSpec('civitai', id, 'width');

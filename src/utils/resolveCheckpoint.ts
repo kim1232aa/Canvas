@@ -315,7 +315,9 @@ export function isLoraUnsupportedOnEndpoint(
   if (prov === 'video' && modelId.startsWith('fal-ai/')) prov = 'fal';
 
   const schemaProv: Provider | undefined =
-    prov === 'fal' || prov === 'gemini' || prov === 'civitai' ? (prov as Provider) : undefined;
+    prov === 'fal' || prov === 'gemini' || prov === 'civitai' || prov === 'openai_compat' || prov === 'grok_compat'
+      ? (prov as Provider)
+      : undefined;
   if (!schemaProv) return { unsupported: false };
 
   const spec = getFieldSpec(schemaProv, modelId, 'loras');

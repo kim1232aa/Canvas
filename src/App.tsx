@@ -528,26 +528,44 @@ export default function App() {
         executionStage: `正在上传配置并计算潜空间特征 (${p.targetProvider.toUpperCase()})...`,
       });
 
+      const grokOrOpenAi = p.targetProvider === 'openai_compat' || p.targetProvider === 'grok_compat';
+      const grokish = p.targetProvider === 'grok_compat';
+      const extraParams: Record<string, unknown> = {};
+      if (p.size) extraParams.size = p.size;
+      if (p.quality) extraParams.quality = p.quality;
+      if (p.outputFormat) extraParams.output_format = p.outputFormat;
+      if (p.background) extraParams.background = p.background;
+      if (p.moderation) extraParams.moderation = p.moderation;
+      if (p.resolution) extraParams.resolution = p.resolution;
+
+      const grokVideoDuration = grokish
+        ? (frame.videoDuration ?? p.videoDuration)
+        : (isVideo ? (frame.videoDuration || 5) : undefined);
+
       const normParams: NormalizedGenerateParams = {
         prompt: finalPrompt,
-        negative_prompt: frame.negativePrompt,
+        negative_prompt: grokOrOpenAi ? undefined : frame.negativePrompt,
         model: p.checkpoint,
         provider: p.targetProvider,
         targetProvider: p.targetProvider,
-        width: p.width,
-        height: p.height,
-        steps: p.steps,
-        cfg: p.cfg,
-        seed: p.seed,
+        width: grokOrOpenAi || p.targetProvider === 'gemini' ? undefined : p.width,
+        height: grokOrOpenAi || p.targetProvider === 'gemini' ? undefined : p.height,
+        steps: grokOrOpenAi ? undefined : p.steps,
+        cfg: grokOrOpenAi ? undefined : p.cfg,
+        seed: grokOrOpenAi ? undefined : p.seed,
         denoise: p.denoise,
-        sampler_name: p.sampler,
-        scheduler: p.scheduler,
-        image_url: frame.imageUrl, 
-        videoDuration: isVideo ? (frame.videoDuration || 5) : undefined,
-        videoFps: isVideo ? (frame.videoFps || 16) : undefined,
-        aspectRatio: isVideo ? (frame.videoAspectRatio || '16:9') : (p.targetProvider === 'gemini' ? (p.aspectRatio || undefined) : undefined),
+        sampler_name: grokOrOpenAi ? undefined : p.sampler,
+        scheduler: grokOrOpenAi ? undefined : p.scheduler,
+        image_url: frame.imageUrl,
+        isVideo,
+        videoDuration: grokish ? grokVideoDuration : (isVideo ? (frame.videoDuration || 5) : undefined),
+        videoFps: grokish ? undefined : (isVideo ? (frame.videoFps || 16) : undefined),
+        aspectRatio: isVideo
+          ? (grokish ? (frame.videoAspectRatio || p.aspectRatio || undefined) : (frame.videoAspectRatio || '16:9'))
+          : (p.aspectRatio || undefined),
         imageSize: p.imageSize || undefined,
-        loras: p.loras.map((l) => ({
+        extraParams,
+        loras: grokOrOpenAi ? undefined : p.loras.map((l) => ({
           name: l.name,
           strength: l.modelStrength,
           modelStrength: l.modelStrength,

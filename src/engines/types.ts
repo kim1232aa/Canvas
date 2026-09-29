@@ -11,7 +11,9 @@ export type ProviderId =
   | 'gemini'
   | 'huggingface'
   | 'tensorart'
-  | 'video';
+  | 'video'
+  | 'openai_compat'
+  | 'grok_compat';
 
 export interface ModelSpec {
   id: string;

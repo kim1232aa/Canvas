@@ -14,6 +14,10 @@ const EMPTY_KEYS: ApiKeysState = {
   nanogptKey: '',
   geminiKey: '',
   tensorartKey: '',
+  openaiCompatKey: '',
+  openaiCompatBaseUrl: '',
+  grokCompatKey: '',
+  grokCompatBaseUrl: '',
 };
 
 export const getStoredApiKeys = (): ApiKeysState => {

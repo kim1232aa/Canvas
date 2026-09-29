@@ -8,7 +8,13 @@ try {
   console.warn('Failed to set custom DNS servers:', e.message);
 }
 import dotenv from 'dotenv';
-import { fieldOptions, getFieldSpec, modelStatus, valueStatus } from './src/schemas/providerSchema.ts';
+import { fieldOptions, getFieldSpec, modelStatus, valueStatus, type FieldKey, type Provider as SchemaProvider } from './src/schemas/providerSchema.ts';
+import {
+  extractCompatImageUrl,
+  normalizeGrokCompatBaseUrl,
+  normalizeOpenAICompatBaseUrl,
+  resolveAgainstBaseOrigin,
+} from './src/engines/compatRelay.ts';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -154,6 +160,10 @@ const LARGE_BODY_ROUTES = new Set([
   '/api/engine/nanogpt/generate',
   '/api/gemini/generate',
   '/api/engine/gemini/generate',
+  '/api/engine/openai_compat/generate',
+  '/api/openai_compat/generate',
+  '/api/engine/grok_compat/generate',
+  '/api/grok_compat/generate',
   // Canvas project saving (includes embedded frame image data and full canvas state)
   '/api/cloud/projects',
 ]);
@@ -361,6 +371,10 @@ const defaultKeys: Record<string, string> = {
   geminiKey: process.env.GEMINI_API_KEY || '',
   agnesBaseUrl: process.env.AGNES_BASE_URL || '',
   sensenovaBaseUrl: process.env.SENSENOVA_BASE_URL || '',
+  openaiCompatKey: process.env.OPENAI_COMPAT_IMAGE_API_KEY || '',
+  openaiCompatBaseUrl: process.env.OPENAI_COMPAT_IMAGE_BASE_URL || '',
+  grokCompatKey: process.env.GROK_COMPAT_API_KEY || '',
+  grokCompatBaseUrl: process.env.GROK_COMPAT_BASE_URL || '',
 };
 
 // Pool key sources per provider: settings.json fields (in order), then the defaultKeys (env) field.
@@ -375,6 +389,8 @@ const POOL_KEY_FIELDS: Record<string, { settings: string[]; env: string }> = {
   nanogpt: { settings: ['nanogptKey'], env: 'nanogptKey' },
   tensorart: { settings: ['tensorartKey'], env: 'tensorartKey' },
   gemini: { settings: ['geminiKey'], env: 'geminiKey' },
+  openai_compat: { settings: ['openaiCompatKey'], env: 'openaiCompatKey' },
+  grok_compat: { settings: ['grokCompatKey'], env: 'grokCompatKey' },
 };
 
 // Multi-Key Pool & High-Availability Round-Robin Load Balancer
@@ -657,16 +673,28 @@ if (!cloudSettings || Object.keys(cloudSettings).length === 0) {
   writeJsonFile(SETTINGS_FILE, cloudSettings);
 }
 
-// Agnes / SenseNova key + base URL resolution (A1/A2).
+// Agnes / SenseNova / OpenAI-compat / Grok-compat key + base URL resolution (A1/A2).
 // Key: header (comma-separated rotates) > pool (settings + env, comma-separated). Base URL: header > settings > env. No hardcoded default.
 // A custom base URL requires a custom key — server keys are never sent to a user-supplied host.
+type AuthProvider = 'agnes' | 'sensenova' | 'openai_compat' | 'grok_compat';
+const AUTH_META: Record<AuthProvider, { headerPrefix: string; settingsBaseName: string; envName: string }> = {
+  agnes: { headerPrefix: 'x-agnes', settingsBaseName: 'agnesBaseUrl', envName: 'AGNES' },
+  sensenova: { headerPrefix: 'x-sensenova', settingsBaseName: 'sensenovaBaseUrl', envName: 'SENSENOVA' },
+  openai_compat: { headerPrefix: 'x-openai-compat', settingsBaseName: 'openaiCompatBaseUrl', envName: 'OPENAI_COMPAT_IMAGE' },
+  grok_compat: { headerPrefix: 'x-grok-compat', settingsBaseName: 'grokCompatBaseUrl', envName: 'GROK_COMPAT' },
+};
+
+function normalizeAuthBaseUrl(provider: AuthProvider, raw: string): string {
+  if (provider === 'openai_compat') return normalizeOpenAICompatBaseUrl(raw);
+  if (provider === 'grok_compat') return normalizeGrokCompatBaseUrl(raw);
+  return String(raw || '').trim().replace(/\/+$/, '');
+}
+
 function resolveProviderAuth(
   req: express.Request,
-  provider: 'agnes' | 'sensenova'
+  provider: AuthProvider
 ): { apiKey: string; baseUrl: string; error?: string } {
-  const headerPrefix = provider === 'agnes' ? 'x-agnes' : 'x-sensenova';
-  const settingsBaseName = provider === 'agnes' ? 'agnesBaseUrl' : 'sensenovaBaseUrl';
-  const envName = provider === 'agnes' ? 'AGNES' : 'SENSENOVA';
+  const { headerPrefix, settingsBaseName, envName } = AUTH_META[provider];
 
   const customBaseUrl = (req.headers[`${headerPrefix}-base-url`] as string)?.trim() || '';
   const customKey = (req.headers[`${headerPrefix}-key`] as string)?.trim() || '';
@@ -674,7 +702,10 @@ function resolveProviderAuth(
   if (customBaseUrl && !customKey) {
     return { apiKey: '', baseUrl: '', error: `使用自定义 base URL (${headerPrefix}-base-url) 时必须同时提供自定义 API Key (${headerPrefix}-key)，禁止回退使用服务端密钥。` };
   }
-  const baseUrl = String(customBaseUrl || cloudSettings[settingsBaseName] || defaultKeys[settingsBaseName] || '').replace(/\/+$/, '');
+  const baseUrl = normalizeAuthBaseUrl(
+    provider,
+    String(customBaseUrl || cloudSettings[settingsBaseName] || defaultKeys[settingsBaseName] || ''),
+  );
   if (!baseUrl) {
     return { apiKey: '', baseUrl: '', error: `未配置 ${provider} Base URL（${envName}_BASE_URL / 设置面板 / ${headerPrefix}-base-url）。` };
   }
@@ -686,14 +717,34 @@ function resolveProviderAuth(
 }
 
 // Server-side base URL only (settings > env) — never from request headers, since callers use pool keys.
-function getProviderBaseUrl(provider: 'agnes' | 'sensenova'): { baseUrl: string; error?: string } {
-  const settingsBaseName = provider === 'agnes' ? 'agnesBaseUrl' : 'sensenovaBaseUrl';
-  const envName = provider === 'agnes' ? 'AGNES' : 'SENSENOVA';
-  const baseUrl = String(cloudSettings[settingsBaseName] || defaultKeys[settingsBaseName] || '').replace(/\/+$/, '');
+function getProviderBaseUrl(provider: AuthProvider): { baseUrl: string; error?: string } {
+  const { settingsBaseName, envName } = AUTH_META[provider];
+  const baseUrl = normalizeAuthBaseUrl(
+    provider,
+    String(cloudSettings[settingsBaseName] || defaultKeys[settingsBaseName] || ''),
+  );
   if (!baseUrl) {
     return { baseUrl: '', error: `未配置 ${provider} Base URL（${envName}_BASE_URL / 设置面板）。` };
   }
   return { baseUrl };
+}
+
+function rejectSchemaEnum(
+  res: express.Response,
+  provider: SchemaProvider,
+  model: string,
+  field: FieldKey,
+  value: unknown,
+): boolean {
+  if (!isProvided(value)) return false;
+  const status = valueStatus(provider, model, field, value as string | number);
+  if (status !== 'unsupported') return false;
+  const listed = fieldOptions(provider, model, field).map((v) => v.value);
+  res.status(400).json({
+    error: `该服务商不支持此 ${field} 取值: "${value}"。${model} 官方仅支持: ${listed.join(', ') || '（官方未列出）'}`,
+    unsupported: [field],
+  });
+  return true;
 }
 
 // Helper to create GoogleGenAI client with key rotation and standard aistudio-build telemetry
@@ -3685,7 +3736,7 @@ app.post(['/api/video/generate', '/api/engine/video/generate'], async (req, res)
     const lowerModel = String(model).toLowerCase().trim();
     const reqProvider = (inputProvider || '').toLowerCase().trim();
     // Item 10: explicit provider is authoritative; model-name inference only when provider is absent.
-    const VIDEO_PROVIDERS = ['tensorart', 'tensor', 'nanogpt', 'agnes', 'modelscope', 'modelscope_ai', 'fal', 'civitai'];
+    const VIDEO_PROVIDERS = ['tensorart', 'tensor', 'nanogpt', 'agnes', 'modelscope', 'modelscope_ai', 'fal', 'civitai', 'grok_compat'];
     if (reqProvider && !VIDEO_PROVIDERS.includes(reqProvider)) {
       return res.status(400).json({ error: `该服务商不支持视频生成: provider=${reqProvider}（支持: ${VIDEO_PROVIDERS.join(', ')}）` });
     }
@@ -4098,6 +4149,127 @@ app.post(['/api/video/generate', '/api/engine/video/generate'], async (req, res)
       } catch (agErr: any) {
         keyPoolManager.recordResult('agnes', agnesKey, false, Date.now() - startTime, agErr.message);
         return res.status(500).json({ error: `Agnes AI 视频请求异常: ${agErr.message}` });
+      }
+    }
+
+    // 3b. Grok / xAI 兼容中转视频：POST /videos/generations → poll GET /videos/{request_id}
+    // 503 grok_media_no_eligible_account 必须原样返回，绝不静默换商。
+    if (reqProvider === 'grok_compat' || (byModel && lowerModel.startsWith('grok-imagine-video'))) {
+      const auth = resolveProviderAuth(req, 'grok_compat');
+      if (auth.error) return res.status(400).json({ error: auth.error });
+      const { apiKey: grokKey, baseUrl: grokBase } = auth;
+      const startTime = Date.now();
+      if (rejectUnsupported(res, 'grok_compat', req.body, ['seed', 'negative_prompt', 'steps', 'cfg', 'guidance_scale', 'loras', 'width', 'height', 'fps'])) return;
+      const grokResolution = req.body.resolution;
+      if (rejectSchemaEnum(res, 'grok_compat', model, 'aspect_ratio', aspect_ratio)) return;
+      if (rejectSchemaEnum(res, 'grok_compat', model, 'resolution', grokResolution)) return;
+
+      const grokPayload: Record<string, unknown> = { model, prompt };
+      if (isProvided(duration)) grokPayload.duration = Number(duration);
+      if (isProvided(aspect_ratio)) grokPayload.aspect_ratio = aspect_ratio;
+      if (isProvided(grokResolution)) grokPayload.resolution = grokResolution;
+      if (image_url) grokPayload.image = { url: image_url };
+
+      try {
+        const submitResp = await upstreamFetch(
+          { provider: 'grok_compat', route: req.path, model, key: grokKey },
+          `${grokBase}/videos/generations`,
+          {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${grokKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(grokPayload),
+          },
+        );
+        if (!submitResp.ok) {
+          const errorText = await submitResp.text();
+          keyPoolManager.recordResult('grok_compat', grokKey, false, Date.now() - startTime, errorText, submitResp.status);
+          return res.status(submitResp.status).json({ error: `Grok 兼容中转视频提交失败 [${submitResp.status}]: ${errorText}` });
+        }
+        const submitData = await submitResp.json();
+        const requestId = submitData.request_id || submitData.id;
+        if (!requestId) {
+          keyPoolManager.recordResult('grok_compat', grokKey, false, Date.now() - startTime, 'No request_id in submit response', 500);
+          return res.status(500).json({ error: 'Grok 兼容中转视频接口未返回 request_id', details: submitData });
+        }
+
+        const pollDeadline = Date.now() + 5 * 60 * 1000;
+        let videoUrl = '';
+        while (Date.now() < pollDeadline) {
+          await new Promise((r) => setTimeout(r, 3000));
+          let pollResp: Response;
+          try {
+            pollResp = await upstreamFetch(
+              { provider: 'grok_compat', route: 'video/poll', model, key: grokKey },
+              `${grokBase}/videos/${encodeURIComponent(requestId)}`,
+              { headers: { Authorization: `Bearer ${grokKey}` } },
+            );
+          } catch (netErr: any) {
+            keyPoolManager.recordResult('grok_compat', grokKey, false, Date.now() - startTime, netErr.message);
+            return res.status(502).json({ error: `Grok 兼容中转视频轮询网络异常: ${netErr.message}`, request_id: requestId });
+          }
+          if (!pollResp.ok) {
+            const errBody = await pollResp.text().catch(() => '');
+            keyPoolManager.recordResult('grok_compat', grokKey, false, Date.now() - startTime, errBody, pollResp.status);
+            return res.status(pollResp.status).json({
+              error: `Grok 兼容中转视频轮询失败 [${pollResp.status}]: ${errBody}`,
+              request_id: requestId,
+            });
+          }
+          const pollData = await pollResp.json();
+          const status = String(pollData.status || '').toLowerCase();
+          if (status === 'failed' || status === 'error') {
+            keyPoolManager.recordResult('grok_compat', grokKey, false, Date.now() - startTime, JSON.stringify(pollData));
+            return res.status(500).json({ error: `Grok 兼容中转视频生成失败: ${JSON.stringify(pollData)}`, request_id: requestId });
+          }
+          const rawUrl = pollData.video?.url || pollData.url;
+          // Spec: respect_moderation === false → url empty → fail with raw body (no silent success)
+          if ((status === 'done' || status === 'completed' || status === 'succeeded') && pollData.video && pollData.video.respect_moderation === false && !rawUrl) {
+            keyPoolManager.recordResult('grok_compat', grokKey, false, Date.now() - startTime, JSON.stringify(pollData));
+            return res.status(500).json({
+              error: `Grok 兼容中转视频被审核拦截（respect_moderation=false）: ${JSON.stringify(pollData)}`,
+              request_id: requestId,
+            });
+          }
+          if ((status === 'done' || status === 'completed' || status === 'succeeded') && rawUrl) {
+            videoUrl = resolveAgainstBaseOrigin(String(rawUrl), grokBase);
+            break;
+          }
+          if ((status === 'done' || status === 'completed' || status === 'succeeded') && !rawUrl) {
+            keyPoolManager.recordResult('grok_compat', grokKey, false, Date.now() - startTime, JSON.stringify(pollData));
+            return res.status(500).json({
+              error: `Grok 兼容中转视频完成但无 URL: ${JSON.stringify(pollData)}`,
+              request_id: requestId,
+            });
+          }
+        }
+        if (!videoUrl) {
+          keyPoolManager.recordResult('grok_compat', grokKey, false, Date.now() - startTime, 'Polling timeout');
+          return res.status(504).json({ error: 'Grok 兼容中转视频生成轮询超时 (5 min)', request_id: requestId });
+        }
+
+        keyPoolManager.recordResult('grok_compat', grokKey, true, Date.now() - startTime);
+        const item = recordHistoryItem({
+          url: videoUrl,
+          prompt,
+          provider: 'Grok 兼容中转',
+          model,
+          seed: null,
+          steps: null,
+          cfg: null,
+        });
+        return res.json({
+          videoUrl,
+          mediaUrl: videoUrl,
+          provider: 'Grok 兼容中转',
+          model,
+          requestedModel: model,
+          exactEndpointCalled: `${grokBase}/videos/generations`,
+          duration: isProvided(duration) ? duration : null,
+          historyItem: item,
+        });
+      } catch (grokErr: any) {
+        keyPoolManager.recordResult('grok_compat', grokKey, false, Date.now() - startTime, grokErr.message);
+        return res.status(500).json({ error: `Grok 兼容中转视频请求异常: ${grokErr.message}` });
       }
     }
 
@@ -5034,6 +5206,204 @@ app.post('/api/engine/sensenova/generate', async (req, res) => {
   return res.status(400).json({
     error: `商汤日日新 (SenseNova) 是专长于深度思考与推理的文本大模型平台 (${model})。若需将概念扩散为图像或视频，请使用画布上的「LLM 推理思考节点」或提示词面板中的「深度思考扩写」，再通过连线将正向条件注入至 FLUX.1、Agnes 2.5 或 Wan 2.1 扩散引擎。`,
   });
+});
+
+// ==========================================
+// 2.9b. OpenAI 兼容中转 (images/generations + images/edits)
+// ==========================================
+app.post(['/api/engine/openai_compat/generate', '/api/openai_compat/generate'], async (req, res) => {
+  const startTime = Date.now();
+  const auth = resolveProviderAuth(req, 'openai_compat');
+  if (auth.error) return res.status(400).json({ error: auth.error });
+  const { apiKey, baseUrl } = auth;
+
+  try {
+    const {
+      prompt,
+      model,
+      image_url,
+      size,
+      quality,
+      output_format,
+      background,
+      moderation,
+      n,
+    } = req.body;
+    if (!model) return res.status(400).json({ error: '模型为必填项（model is required）' });
+    if (rejectUnsupported(res, 'openai_compat', req.body, ['seed', 'negative_prompt', 'steps', 'cfg', 'guidance_scale', 'sampler', 'sampler_name', 'scheduler', 'loras'])) return;
+    if (rejectSchemaEnum(res, 'openai_compat', model, 'size', size)) return;
+    if (rejectSchemaEnum(res, 'openai_compat', model, 'quality', quality)) return;
+    if (rejectSchemaEnum(res, 'openai_compat', model, 'output_format', output_format)) return;
+    if (rejectSchemaEnum(res, 'openai_compat', model, 'background', background)) return;
+    if (rejectSchemaEnum(res, 'openai_compat', model, 'moderation', moderation)) return;
+
+    const payload: Record<string, unknown> = { model, prompt };
+    if (isProvided(size)) payload.size = size;
+    if (isProvided(quality)) payload.quality = quality;
+    if (isProvided(output_format)) payload.output_format = output_format;
+    if (isProvided(background)) payload.background = background;
+    if (isProvided(moderation)) payload.moderation = moderation;
+    if (isProvided(n)) payload.n = n;
+
+    const isEdit = Boolean(image_url);
+    if (isEdit) payload.image = image_url;
+
+    const upstream = await upstreamFetch(
+      { provider: 'openai_compat', route: req.path, model, key: apiKey },
+      `${baseUrl}${isEdit ? '/images/edits' : '/images/generations'}`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      },
+    );
+
+    if (!upstream.ok) {
+      const errorText = await upstream.text();
+      keyPoolManager.recordResult('openai_compat', apiKey, false, Date.now() - startTime, errorText, upstream.status);
+      return res.status(upstream.status).json({ error: `OpenAI 兼容中转失败 [${upstream.status}]: ${errorText}` });
+    }
+
+    const data = await upstream.json();
+    const mediaUrl = extractCompatImageUrl(data.data?.[0]);
+    if (!mediaUrl) {
+      keyPoolManager.recordResult('openai_compat', apiKey, false, Date.now() - startTime, 'No image in response', 500);
+      return res.status(500).json({ error: 'OpenAI 兼容中转返回结果中未包含图像（data[].b64_json / data[].url）' });
+    }
+    keyPoolManager.recordResult('openai_compat', apiKey, true, Date.now() - startTime);
+
+    const item = recordHistoryItem({
+      url: mediaUrl,
+      prompt,
+      provider: 'OpenAI 兼容中转',
+      model,
+      seed: null,
+      steps: null,
+      cfg: null,
+      loras: [],
+    });
+
+    return res.json({
+      imageUrl: mediaUrl,
+      mediaUrl,
+      mediaType: 'image',
+      provider: 'OpenAI 兼容中转',
+      model,
+      historyItem: item,
+    });
+  } catch (error: any) {
+    keyPoolManager.recordResult('openai_compat', apiKey, false, Date.now() - startTime, error.message);
+    return res.status(500).json({ error: `OpenAI 兼容中转请求异常: ${error.message}` });
+  }
+});
+
+// ==========================================
+// 2.9c. Grok / xAI 兼容中转 (chat + images)
+// ==========================================
+app.post(['/api/engine/grok_compat/generate', '/api/grok_compat/generate'], async (req, res) => {
+  const startTime = Date.now();
+  const auth = resolveProviderAuth(req, 'grok_compat');
+  if (auth.error) return res.status(400).json({ error: auth.error });
+  const { apiKey, baseUrl } = auth;
+
+  try {
+    const { prompt, model, image_url, aspect_ratio, resolution, n, response_format } = req.body;
+    if (!model) return res.status(400).json({ error: '模型为必填项（model is required）' });
+    if (rejectUnsupported(res, 'grok_compat', req.body, ['seed', 'negative_prompt', 'steps', 'cfg', 'guidance_scale', 'loras', 'width', 'height', 'sampler', 'sampler_name', 'scheduler'])) return;
+    if (rejectSchemaEnum(res, 'grok_compat', model, 'aspect_ratio', aspect_ratio)) return;
+    if (rejectSchemaEnum(res, 'grok_compat', model, 'resolution', resolution)) return;
+
+    const payload: Record<string, unknown> = { model, prompt };
+    if (isProvided(aspect_ratio)) payload.aspect_ratio = aspect_ratio;
+    if (isProvided(resolution)) payload.resolution = resolution;
+    if (isProvided(n)) payload.n = n;
+    if (isProvided(response_format)) payload.response_format = response_format;
+
+    const isEdit = Boolean(image_url);
+    if (isEdit) payload.image = { url: image_url };
+
+    const upstream = await upstreamFetch(
+      { provider: 'grok_compat', route: req.path, model, key: apiKey },
+      `${baseUrl}${isEdit ? '/images/edits' : '/images/generations'}`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      },
+    );
+
+    if (!upstream.ok) {
+      const errorText = await upstream.text();
+      keyPoolManager.recordResult('grok_compat', apiKey, false, Date.now() - startTime, errorText, upstream.status);
+      return res.status(upstream.status).json({ error: `Grok 兼容中转失败 [${upstream.status}]: ${errorText}` });
+    }
+
+    const data = await upstream.json();
+    const rawUrl = extractCompatImageUrl(data.data?.[0]);
+    const mediaUrl = rawUrl ? resolveAgainstBaseOrigin(rawUrl, baseUrl) : null;
+    if (!mediaUrl) {
+      keyPoolManager.recordResult('grok_compat', apiKey, false, Date.now() - startTime, 'No image in response', 500);
+      return res.status(500).json({ error: 'Grok 兼容中转返回结果中未包含图像（data[].url / data[].b64_json）' });
+    }
+    keyPoolManager.recordResult('grok_compat', apiKey, true, Date.now() - startTime);
+
+    const item = recordHistoryItem({
+      url: mediaUrl,
+      prompt,
+      provider: 'Grok 兼容中转',
+      model,
+      seed: null,
+      steps: null,
+      cfg: null,
+      loras: [],
+    });
+
+    return res.json({
+      imageUrl: mediaUrl,
+      mediaUrl,
+      mediaType: 'image',
+      provider: 'Grok 兼容中转',
+      model,
+      historyItem: item,
+    });
+  } catch (error: any) {
+    keyPoolManager.recordResult('grok_compat', apiKey, false, Date.now() - startTime, error.message);
+    return res.status(500).json({ error: `Grok 兼容中转请求异常: ${error.message}` });
+  }
+});
+
+app.post(['/api/engine/grok_compat/chat', '/api/grok_compat/chat'], async (req, res) => {
+  const startTime = Date.now();
+  const auth = resolveProviderAuth(req, 'grok_compat');
+  if (auth.error) return res.status(400).json({ error: auth.error });
+
+  try {
+    const { messages = [], model, temperature = 0.7, max_tokens = 2048 } = req.body;
+    if (!model) return res.status(400).json({ error: '模型为必填项（model is required）' });
+
+    const upstream = await upstreamFetch(
+      { provider: 'grok_compat', route: req.path, model, key: auth.apiKey },
+      `${auth.baseUrl}/chat/completions`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${auth.apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, messages, temperature, max_tokens }),
+      },
+    );
+
+    if (!upstream.ok) {
+      const errorText = await upstream.text();
+      keyPoolManager.recordResult('grok_compat', auth.apiKey, false, Date.now() - startTime, errorText, upstream.status);
+      return res.status(upstream.status).json({ error: `Grok 兼容中转对话失败 [${upstream.status}]: ${errorText}` });
+    }
+
+    keyPoolManager.recordResult('grok_compat', auth.apiKey, true, Date.now() - startTime);
+    const data = await upstream.json();
+    return res.json({ content: data.choices?.[0]?.message?.content || '', model: data.model || model, usage: data.usage });
+  } catch (error: any) {
+    keyPoolManager.recordResult('grok_compat', auth.apiKey, false, Date.now() - startTime, error.message);
+    return res.status(500).json({ error: `Grok 兼容中转推理异常: ${error.message}` });
+  }
 });
 
 // Helper to determine OpenWorks base URL (TensorArt vs TusiArt)
@@ -6439,6 +6809,37 @@ async function testSingleProviderKey(
       return { maskedKey, status: 'unsupported', latency: 0, message: `${NO_READONLY_TEST}（官方文档仅列出生成/对话接口）` };
     }
 
+    if (prov === 'openai_compat' || prov === 'grok_compat') {
+      if (!singleKey) {
+        return { maskedKey, status: 'error', latency: 0, message: `未配置 ${prov} API 密钥` };
+      }
+      const { baseUrl, error: urlErr } = getProviderBaseUrl(prov);
+      if (urlErr) {
+        return { maskedKey, status: 'error', latency: 0, message: urlErr };
+      }
+      const resp = await upstreamFetch(
+        { provider: prov, route: routePath, model: 'models', key: singleKey },
+        `${baseUrl}/models`,
+        { headers: { Authorization: `Bearer ${singleKey}` } },
+      );
+      const latency = Date.now() - startTime;
+      if (resp.ok) {
+        return {
+          maskedKey,
+          status: 'ok',
+          latency,
+          message: `${prov === 'openai_compat' ? 'OpenAI 兼容中转' : 'Grok 兼容中转'} GET /models 成功（无余额接口）`,
+        };
+      }
+      const errText = await resp.text().catch(() => '');
+      return {
+        maskedKey,
+        status: 'error',
+        latency,
+        message: `${prov} 鉴权失败 [${resp.status}]: ${errText.slice(0, 200)}`,
+      };
+    }
+
     if (prov === 'tensorart') {
       if (!singleKey) {
         return { maskedKey, status: 'error', latency: 0, message: '未配置 Tensor.Art API Key' };
@@ -6543,6 +6944,8 @@ const VALID_STRATEGY_PROVIDERS = new Set([
   'nanogpt',
   'tensorart',
   'gemini',
+  'openai_compat',
+  'grok_compat',
 ]);
 const VALID_STRATEGIES = new Set(['round_robin', 'failover', 'latency_best']);
 
@@ -6714,6 +7117,23 @@ app.post('/api/cloud-keys/balances', requireAdminAuth, checkSecFetchSite, async 
         } catch (e: any) {
           balances.sensenova = { status: 'error', detail: e.message };
         }
+      }
+    })(),
+
+    // OpenAI 兼容中转 / Grok 兼容中转：无官方余额接口 → unknown，不声称 ok。
+    (async () => {
+      for (const [prov, label] of [
+        ['openai_compat', 'OpenAI 兼容中转'],
+        ['grok_compat', 'Grok 兼容中转'],
+      ] as const) {
+        const k = keyPoolManager.getNextKey(prov);
+        if (!k) continue;
+        const { error: urlErr } = getProviderBaseUrl(prov);
+        if (urlErr) {
+          balances[prov] = { status: 'error', detail: urlErr };
+          continue;
+        }
+        balances[prov] = { status: 'unknown', detail: `${label} Key 已配置（该服务商无余额接口 / 未能核实余额接口；请用「测试连接」打 GET /models）` };
       }
     })(),
 
@@ -7075,11 +7495,15 @@ const ALLOWED_SETTINGS_SECRET = new Set([
   'nanogptKey',
   'tensorartKey',
   'geminiKey',
+  'openaiCompatKey',
+  'grokCompatKey',
 ]);
 
 const ALLOWED_SETTINGS_PLAIN = new Set([
   'agnesBaseUrl',
   'sensenovaBaseUrl',
+  'openaiCompatBaseUrl',
+  'grokCompatBaseUrl',
 ]);
 
 const ALLOWED_SETTINGS = new Set([...ALLOWED_SETTINGS_SECRET, ...ALLOWED_SETTINGS_PLAIN]);

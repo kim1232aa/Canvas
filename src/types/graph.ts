@@ -172,11 +172,17 @@ export interface ComfyParameters {
     triggerWords: string;
     civitaiId?: string;
   }>;
-  targetProvider: 'civitai' | 'fal' | 'agnes' | 'sensenova' | 'huggingface' | 'modelscope' | 'modelscope_ai' | 'nanogpt' | 'gemini' | 'video' | 'tensorart';
+  targetProvider: 'civitai' | 'fal' | 'agnes' | 'sensenova' | 'huggingface' | 'modelscope' | 'modelscope_ai' | 'nanogpt' | 'gemini' | 'video' | 'tensorart' | 'openai_compat' | 'grok_compat';
   tensorArtInputs?: any[];
   videoDuration?: number;
   aspectRatio?: string;
   imageSize?: string;
+  size?: string;
+  quality?: string;
+  outputFormat?: string;
+  background?: string;
+  moderation?: string;
+  resolution?: string;
 }
 
 export interface SpatialFrame {

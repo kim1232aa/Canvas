@@ -49,6 +49,10 @@ const ALLOWED_CLOUD_SETTINGS_FIELDS = new Set([
   'geminiKey',
   'agnesBaseUrl',
   'sensenovaBaseUrl',
+  'openaiCompatKey',
+  'openaiCompatBaseUrl',
+  'grokCompatKey',
+  'grokCompatBaseUrl',
 ]);
 
 interface BackendSettingsModalProps {
@@ -160,6 +164,30 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       keyPlaceholder: '系统自动注入环境变量 GEMINI_API_KEY (或填入自定义多 Key)',
       status: 'connected',
       popularModels: ['gemini-2.5-flash-image', 'gemini-3.1-flash-image', 'gemini-3.1-flash-lite-image', 'gemini-3.8-flash', 'gemini-3.1-pro-preview'],
+    },
+    {
+      id: 'openai_compat',
+      name: 'OpenAI 兼容中转',
+      badge: '兼容中转（自填 Base URL，不是官方 OpenAI）',
+      docsUrl: 'https://platform.openai.com/docs/api-reference/images/create',
+      description: 'OpenAI Images 兼容中转：gpt-image-2 文生图 / 图生图。须自填 Base URL（通常以 /v1 结尾）与 API Key。不是官方 OpenAI，不硬编码任何中转域名。',
+      apiUrl: '（用户自填 Base URL）',
+      keyName: 'openaiCompatKey',
+      keyPlaceholder: 'sk-xxxx（兼容中转 Key）',
+      status: 'unconfigured',
+      popularModels: ['gpt-image-2'],
+    },
+    {
+      id: 'grok_compat',
+      name: 'Grok 兼容中转',
+      badge: '兼容中转（自填 Base URL，不是官方 xAI）',
+      docsUrl: 'https://docs.x.ai/docs/guides/image-generations',
+      description: 'Grok / xAI Imagine 兼容中转：生图、图生图、文生视频、图生视频、对话。须自填 Base URL 与 API Key。不是官方 xAI。HTTP 503 grok_media_no_eligible_account 原样暴露，不换商。',
+      apiUrl: '（用户自填 Base URL，缺 /v1 时服务端补 /v1）',
+      keyName: 'grokCompatKey',
+      keyPlaceholder: 'sk-xxxx（兼容中转 Key）',
+      status: 'unconfigured',
+      popularModels: ['grok-imagine-image', 'grok-imagine-image-2.0', 'grok-imagine-video', 'grok-4.3', 'grok-4.5'],
     },
     {
       id: 'agnes',
@@ -588,6 +616,53 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
                   </div>
                 </div>
               </div>
+
+              {(currentProvider.id === 'openai_compat' ||
+                currentProvider.id === 'grok_compat' ||
+                currentProvider.id === 'agnes' ||
+                currentProvider.id === 'sensenova') && (
+                <div className="bg-[#111216] border border-[#252733] rounded-xl p-3 space-y-1.5">
+                  <label className="text-slate-300 text-[11px] font-semibold flex items-center gap-1.5">
+                    Base URL（{currentProvider.id === 'openai_compat' || currentProvider.id === 'grok_compat' ? '兼容中转，必填，不硬编码域名' : '可选自定义端点'}）
+                  </label>
+                  <input
+                    type="text"
+                    value={String(
+                      (keys as any)[
+                        currentProvider.id === 'openai_compat'
+                          ? 'openaiCompatBaseUrl'
+                          : currentProvider.id === 'grok_compat'
+                            ? 'grokCompatBaseUrl'
+                            : currentProvider.id === 'agnes'
+                              ? 'agnesBaseUrl'
+                              : 'sensenovaBaseUrl'
+                      ] || '',
+                    )}
+                    onChange={(e) => {
+                      const field =
+                        currentProvider.id === 'openai_compat'
+                          ? 'openaiCompatBaseUrl'
+                          : currentProvider.id === 'grok_compat'
+                            ? 'grokCompatBaseUrl'
+                            : currentProvider.id === 'agnes'
+                              ? 'agnesBaseUrl'
+                              : 'sensenovaBaseUrl';
+                      setKeys((prev) => ({ ...prev, [field]: e.target.value }));
+                    }}
+                    placeholder={
+                      currentProvider.id === 'openai_compat'
+                        ? 'https://your-relay.example/v1'
+                        : currentProvider.id === 'grok_compat'
+                          ? 'https://your-relay.example  （缺 /v1 时服务端补 /v1）'
+                          : 'https://...'
+                    }
+                    className="w-full bg-[#0d0e12] border border-[#2b2d38] focus:border-cyan-500 rounded-lg px-2.5 py-1.5 text-slate-200 text-[11px] font-mono outline-none"
+                  />
+                  <p className="text-[10px] text-slate-500">
+                    保存在本浏览器；同步至云端时写入 settings.json。自定义 Base URL 必须同时提供自定义 Key，服务端密钥不会发到用户填的主机。
+                  </p>
+                </div>
+              )}
 
               {/* Multi-Key Rotation Strategy Selector */}
               <div className="bg-[#121317] border border-[#272935] rounded-xl p-3 space-y-2">

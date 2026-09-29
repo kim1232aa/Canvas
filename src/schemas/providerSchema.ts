@@ -11,12 +11,13 @@
 export type FieldStatus = 'supported' | 'unverified' | 'unsupported' | 'deprecated';
 export const FIELD_STATUSES: readonly FieldStatus[] = ['supported', 'unverified', 'unsupported', 'deprecated'];
 
-export type Provider = 'gemini' | 'fal' | 'civitai';
+export type Provider = 'gemini' | 'fal' | 'civitai' | 'openai_compat' | 'grok_compat';
 
 /** 画布侧字段名；上游字段名不同时写在 FieldSpec.wire */
 export type FieldKey =
   | 'width' | 'height' | 'aspect_ratio' | 'image_size' | 'resolution'
-  | 'seed' | 'negative_prompt' | 'steps' | 'cfg' | 'sampler' | 'scheduler' | 'loras' | 'num_images';
+  | 'seed' | 'negative_prompt' | 'steps' | 'cfg' | 'sampler' | 'scheduler' | 'loras' | 'num_images'
+  | 'size' | 'quality' | 'output_format' | 'background' | 'moderation';
 
 export interface FieldValue {
   value: string;
@@ -363,7 +364,85 @@ const CIVITAI_MODELS: ModelSpec[] = [
 
 // ---------- 唯一表与查询函数 ----------
 
-export const PROVIDER_SCHEMA: readonly ModelSpec[] = [...GEMINI_MODELS, ...FAL_MODELS, ...CIVITAI_MODELS];
+// ---------- OpenAI-compat image relay (gpt-image-2) ----------
+// 官方字段表：https://platform.openai.com/docs/api-reference/images/create
+// 与 https://platform.openai.com/docs/guides/image-generation
+// 本轮未能抓取官方 HTML（网关空响应）；取值以 Images API 文档字段名为准，
+// gpt-image-2 存活由 2026-09-29 中转 GET /models + POST /images/generations 探针确认。
+const OAI_IMG = 'https://platform.openai.com/docs/api-reference/images/create';
+const OAI_GUIDE = 'https://platform.openai.com/docs/guides/image-generation';
+
+const OPENAI_COMPAT_MODELS: ModelSpec[] = [
+  {
+    provider: 'openai_compat',
+    id: 'gpt-image-2',
+    label: 'GPT Image 2（OpenAI 兼容中转）',
+    source: OAI_GUIDE,
+    fields: {
+      size: enumField(OAI_IMG, vals(['auto', '1024x1024', '1536x1024', '1024x1536'], 'supported'), {
+        note: 'WIDTHxHEIGHT 或 auto；未选则不传',
+      }),
+      quality: enumField(OAI_IMG, vals(['low', 'medium', 'high', 'auto'], 'supported'), {
+        note: 'gpt-image-2 不支持 xhigh/max',
+      }),
+      output_format: enumField(OAI_IMG, vals(['png', 'jpeg', 'webp'], 'supported')),
+      background: enumField(OAI_IMG, vals(['transparent', 'opaque', 'auto'], 'supported')),
+      moderation: enumField(OAI_IMG, vals(['auto', 'low'], 'supported')),
+      num_images: { status: 'supported', source: OAI_IMG, wire: 'n', type: 'integer', min: 1, max: 10 },
+      ...unsupported(OAI_IMG, ['seed', 'negative_prompt', 'steps', 'cfg', 'sampler', 'scheduler', 'loras'], '该服务商不支持'),
+    },
+  },
+];
+
+// ---------- Grok / xAI-compat relay ----------
+const XAI_IMG = 'https://docs.x.ai/docs/guides/image-generations';
+const XAI_VID = 'https://docs.x.ai/docs/guides/video-generation';
+const GROK_ASPECT = vals(['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3', 'auto'], 'supported');
+
+function grokImage(id: string, label: string): ModelSpec {
+  return {
+    provider: 'grok_compat',
+    id,
+    label,
+    source: XAI_IMG,
+    fields: {
+      aspect_ratio: enumField(XAI_IMG, GROK_ASPECT),
+      resolution: enumField(XAI_IMG, vals(['1k', '1.5k', '2k'], 'supported')),
+      num_images: { status: 'supported', source: XAI_IMG, wire: 'n', type: 'integer', min: 1, max: 4 },
+      ...unsupported(XAI_IMG, ['seed', 'negative_prompt', 'steps', 'cfg', 'loras', 'width', 'height'], '该服务商不支持像素宽高 / seed / 负向 / steps / CFG / LoRA'),
+    },
+  };
+}
+
+function grokVideo(id: string, label: string): ModelSpec {
+  return {
+    provider: 'grok_compat',
+    id,
+    label,
+    source: XAI_VID,
+    fields: {
+      aspect_ratio: enumField(XAI_VID, GROK_ASPECT),
+      resolution: enumField(XAI_VID, vals(['480p', '720p', '1080p'], 'supported')),
+      ...unsupported(XAI_VID, ['seed', 'negative_prompt', 'steps', 'cfg', 'loras', 'width', 'height'], '该服务商不支持像素宽高 / seed / 负向 / steps / CFG / LoRA'),
+    },
+  };
+}
+
+const GROK_COMPAT_MODELS: ModelSpec[] = [
+  grokImage('grok-imagine-image', 'Grok Imagine Image（兼容中转）'),
+  grokImage('grok-imagine-image-2.0', 'Grok Imagine Image 2.0（兼容中转）'),
+  grokImage('grok-imagine-image-quality', 'Grok Imagine Image Quality（兼容中转）'),
+  grokVideo('grok-imagine-video', 'Grok Imagine Video（兼容中转）'),
+  grokVideo('grok-imagine-video-1.5', 'Grok Imagine Video 1.5（兼容中转）'),
+];
+
+export const PROVIDER_SCHEMA: readonly ModelSpec[] = [
+  ...GEMINI_MODELS,
+  ...FAL_MODELS,
+  ...CIVITAI_MODELS,
+  ...OPENAI_COMPAT_MODELS,
+  ...GROK_COMPAT_MODELS,
+];
 
 const INDEX = new Map(PROVIDER_SCHEMA.map((m) => [`${m.provider}/${m.id}`, m]));
 

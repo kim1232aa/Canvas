@@ -1,4 +1,4 @@
-export type ProviderId = 'civitai' | 'fal' | 'agnes' | 'sensenova' | 'huggingface' | 'modelscope' | 'modelscope_ai' | 'nanogpt' | 'gemini' | 'tensorart' | 'video';
+export type ProviderId = 'civitai' | 'fal' | 'agnes' | 'sensenova' | 'huggingface' | 'modelscope' | 'modelscope_ai' | 'nanogpt' | 'gemini' | 'tensorart' | 'video' | 'openai_compat' | 'grok_compat';
 
 export interface ProviderConfig {
   id: ProviderId;
@@ -51,6 +51,10 @@ export interface ApiKeysState {
   falKey: string;
   agnesKey?: string;
   agnesBaseUrl?: string;
+  openaiCompatKey?: string;
+  openaiCompatBaseUrl?: string;
+  grokCompatKey?: string;
+  grokCompatBaseUrl?: string;
   sensenovaKey?: string;
   sensenovaBaseUrl?: string;
   hfToken: string;

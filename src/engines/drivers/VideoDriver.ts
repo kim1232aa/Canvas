@@ -237,19 +237,27 @@ export class VideoDriver extends BaseEngineDriver {
     if (keys.modelscopeToken || keys.modelscope) reqHeaders['x-modelscope-token'] = keys.modelscopeToken || keys.modelscope;
     if (keys.tensorartKey || keys.tensorart) reqHeaders['x-tensorart-key'] = keys.tensorartKey || keys.tensorart;
     if (keys.nanogptKey || keys.nanogpt) reqHeaders['x-nanogpt-key'] = keys.nanogptKey || keys.nanogpt;
+    if (keys.grokCompatKey) reqHeaders['x-grok-compat-key'] = keys.grokCompatKey;
+    if (keys.grokCompatBaseUrl) reqHeaders['x-grok-compat-base-url'] = keys.grokCompatBaseUrl;
+
+    const videoProvider = params.targetProvider || params.provider;
+    const extra = params.extraParams || {};
+    const videoBody: Record<string, unknown> = {
+      prompt: params.prompt,
+      model: targetModel,
+      provider: videoProvider,
+      duration: params.videoDuration,
+      aspect_ratio: params.aspectRatio,
+      image_url: params.image_url,
+    };
+    if (extra.resolution) videoBody.resolution = extra.resolution;
+    // Grok 兼容中转不支持 seed；其它视频商仍透传调用方 seed
+    if (videoProvider !== 'grok_compat' && params.seed != null) videoBody.seed = params.seed;
 
     const resp = await fetch('/api/video/generate', {
       method: 'POST',
       headers: reqHeaders,
-      body: JSON.stringify({
-        prompt: params.prompt,
-        model: targetModel,
-        provider: params.targetProvider || params.provider,
-        duration: params.videoDuration,
-        aspect_ratio: params.aspectRatio,
-        image_url: params.image_url,
-        seed: params.seed,
-      }),
+      body: JSON.stringify(videoBody),
     });
 
     if (!resp.ok) {

@@ -31,7 +31,7 @@ export interface WorkflowExtraction {
     triggerWords: string;
     civitaiId?: string;
   }>;
-  targetProvider: 'civitai' | 'fal' | 'agnes' | 'sensenova' | 'huggingface' | 'modelscope' | 'modelscope_ai' | 'nanogpt' | 'gemini' | 'video' | 'tensorart';
+  targetProvider: 'civitai' | 'fal' | 'agnes' | 'sensenova' | 'huggingface' | 'modelscope' | 'modelscope_ai' | 'nanogpt' | 'gemini' | 'video' | 'tensorart' | 'openai_compat' | 'grok_compat';
   videoProvider?: string;
   isVideo?: boolean;
   videoDuration?: number;
@@ -39,6 +39,12 @@ export interface WorkflowExtraction {
   videoAspectRatio?: string;
   aspectRatio?: string;
   imageSize?: string;
+  size?: string;
+  quality?: string;
+  outputFormat?: string;
+  background?: string;
+  moderation?: string;
+  resolution?: string;
   initImageUrl?: string;
   saveImageNodeId?: string;
   saveVideoNodeId?: string;
@@ -80,6 +86,10 @@ function deduceProviderFromModel(checkpointModel: string): WorkflowExtraction['t
     return 'fal';
   } else if (checkpointModel.startsWith('urn:air:') || checkpointModel.includes('civitai')) {
     return 'civitai';
+  } else if (checkpointModel.includes('gpt-image')) {
+    return 'openai_compat';
+  } else if (checkpointModel.startsWith('grok-')) {
+    return 'grok_compat';
   } else if (checkpointModel.includes('agnes')) {
     return 'agnes';
   } else if (checkpointModel.includes('sensenova') || checkpointModel.includes('deepseek') || checkpointModel.includes('glm')) {
@@ -477,6 +487,12 @@ export function extractWorkflowParameters(
   let videoAspectRatio: string | undefined = undefined;
   let aspectRatio: string | undefined = undefined;
   let imageSize: string | undefined = undefined;
+  let size: string | undefined = undefined;
+  let quality: string | undefined = undefined;
+  let outputFormat: string | undefined = undefined;
+  let background: string | undefined = undefined;
+  let moderation: string | undefined = undefined;
+  let resolution: string | undefined = undefined;
   let width = 1024;
   let height = 1024;
   let batchSize = 1;
@@ -497,9 +513,19 @@ export function extractWorkflowParameters(
     if (!checkpointModel) {
       throw new Error('请先选择模型');
     }
-    videoDuration = Number(execNode.values.duration || 5);
-    videoFps = Number(execNode.values.fps || 16);
-    videoAspectRatio = execNode.values.aspect_ratio || '16:9';
+    // Grok 兼容中转：duration 仅透传，不编造 5；其它商沿用节点默认
+    if (videoProvider === 'grok_compat') {
+      videoDuration = execNode.values.duration != null && execNode.values.duration !== ''
+        ? Number(execNode.values.duration)
+        : undefined;
+      videoFps = undefined;
+      videoAspectRatio = execNode.values.aspect_ratio || undefined;
+      resolution = execNode.values.resolution || undefined;
+    } else {
+      videoDuration = Number(execNode.values.duration || 5);
+      videoFps = Number(execNode.values.fps || 16);
+      videoAspectRatio = execNode.values.aspect_ratio || '16:9';
+    }
   } else if (execNode.type === 'FalAIEngineNode') {
     isVideo = false;
     targetProvider = 'fal';
@@ -582,6 +608,13 @@ export function extractWorkflowParameters(
       throw new Error('请先选择模型');
     }
     targetProvider = (execNode.values.targetProvider || '').trim() || deduceProviderFromModel(checkpointModel);
+    size = execNode.values.size || undefined;
+    quality = execNode.values.quality || undefined;
+    outputFormat = execNode.values.output_format || execNode.values.outputFormat || undefined;
+    background = execNode.values.background || undefined;
+    moderation = execNode.values.moderation || undefined;
+    resolution = execNode.values.resolution || undefined;
+    aspectRatio = execNode.values.aspect_ratio || execNode.values.aspectRatio || undefined;
   } else if (execNode.type === 'KSampler') {
     isVideo = false;
     ksamplerNodeId = execNode.id;
@@ -610,6 +643,13 @@ export function extractWorkflowParameters(
       throw new Error('请先选择模型');
     }
     targetProvider = (ckpt.values.targetProvider || '').trim() || deduceProviderFromModel(checkpointModel);
+    size = ckpt.values.size || undefined;
+    quality = ckpt.values.quality || undefined;
+    outputFormat = ckpt.values.output_format || ckpt.values.outputFormat || undefined;
+    background = ckpt.values.background || undefined;
+    moderation = ckpt.values.moderation || undefined;
+    resolution = ckpt.values.resolution || undefined;
+    aspectRatio = ckpt.values.aspect_ratio || ckpt.values.aspectRatio || aspectRatio;
 
     const latentConn = connections.find((c) => c.toNodeId === execNode.id && c.toSocketId === 'latent_image');
     if (latentConn) {
@@ -672,6 +712,12 @@ export function extractWorkflowParameters(
     videoAspectRatio,
     aspectRatio,
     imageSize,
+    size,
+    quality,
+    outputFormat,
+    background,
+    moderation,
+    resolution,
     initImageUrl,
     saveImageNodeId,
     saveVideoNodeId,
@@ -802,31 +848,42 @@ export async function executeWorkflow(
       }
     }
 
+    const omitPx = params.targetProvider === 'gemini' || params.targetProvider === 'openai_compat' || params.targetProvider === 'grok_compat' || params.videoProvider === 'grok_compat';
+    const grokOrOpenAi = params.targetProvider === 'openai_compat' || params.targetProvider === 'grok_compat' || params.videoProvider === 'grok_compat';
+    const grokish = params.targetProvider === 'grok_compat' || params.videoProvider === 'grok_compat';
+    const extraParams: Record<string, unknown> = {
+      sampler_name: params.sampler,
+      scheduler: params.scheduler,
+      ...(params.imageSize ? { image_size: params.imageSize } : {}),
+    };
+    if (params.size) extraParams.size = params.size;
+    if (params.quality) extraParams.quality = params.quality;
+    if (params.outputFormat) extraParams.output_format = params.outputFormat;
+    if (params.background) extraParams.background = params.background;
+    if (params.moderation) extraParams.moderation = params.moderation;
+    if (params.resolution) extraParams.resolution = params.resolution;
+
     const normParams: NormalizedGenerateParams = {
       prompt: params.positivePrompt,
-      negative_prompt: params.negativePrompt,
+      negative_prompt: grokOrOpenAi ? undefined : params.negativePrompt,
       model: params.checkpointModel,
       provider: params.videoProvider || (params.targetProvider === 'gemini' ? 'gemini' : undefined),
       targetProvider: params.videoProvider || (params.targetProvider === 'gemini' ? 'gemini' : undefined),
-      width: params.targetProvider === 'gemini' ? undefined : params.width,
-      height: params.targetProvider === 'gemini' ? undefined : params.height,
-      steps: params.steps,
-      cfg: params.cfg,
-      seed: params.seed,
+      width: omitPx ? undefined : params.width,
+      height: omitPx ? undefined : params.height,
+      steps: grokOrOpenAi ? undefined : params.steps,
+      cfg: grokOrOpenAi ? undefined : params.cfg,
+      seed: grokOrOpenAi ? undefined : params.seed,
       denoise: params.denoise,
       image_url: params.initImageUrl,
       isVideo: params.isVideo,
       videoDuration: params.videoDuration,
-      videoFps: params.videoFps,
-      aspectRatio: params.videoAspectRatio || (params.targetProvider === 'gemini' ? params.aspectRatio : undefined),
+      videoFps: grokish ? undefined : params.videoFps,
+      aspectRatio: params.videoAspectRatio || params.aspectRatio,
       imageSize: params.imageSize,
-      sampler_name: params.sampler,
-      scheduler: params.scheduler,
-      extraParams: {
-        sampler_name: params.sampler,
-        scheduler: params.scheduler,
-        ...(params.imageSize ? { image_size: params.imageSize } : {}),
-      },
+      sampler_name: grokOrOpenAi ? undefined : params.sampler,
+      scheduler: grokOrOpenAi ? undefined : params.scheduler,
+      extraParams,
       loras: params.loras.map((l) => ({
         name: l.name,
         path: resolveLoraPathOrUrl(l),

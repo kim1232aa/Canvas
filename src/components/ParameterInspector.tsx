@@ -25,6 +25,7 @@ import { validateLoraCompatibility } from '../utils/baseModelMatcher';
 import { normalizeForComfyUI } from '../utils/engineParameterNormalizer';
 import { GeminiFieldSelect } from './GeminiFieldSelect';
 import { FieldStatusBadge } from './FieldStatusBadge';
+import { fieldOptions, getFieldSpec, type FieldKey, type Provider as SchemaProvider } from '../schemas/providerSchema';
 
 interface ParameterInspectorProps {
   params: ComfyParameters;
@@ -138,6 +139,51 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
     onChange({ ...params, ...partial });
   };
   const isGemini = params.targetProvider === 'gemini';
+  const isOpenAiCompat = params.targetProvider === 'openai_compat';
+  const isGrokCompat = params.targetProvider === 'grok_compat';
+  const schemaProvider: SchemaProvider | undefined =
+    params.targetProvider === 'gemini' ||
+    params.targetProvider === 'fal' ||
+    params.targetProvider === 'civitai' ||
+    params.targetProvider === 'openai_compat' ||
+    params.targetProvider === 'grok_compat'
+      ? (params.targetProvider as SchemaProvider)
+      : undefined;
+  const schemaModel =
+    params.checkpoint ||
+    (isOpenAiCompat ? 'gpt-image-2' : isGrokCompat ? 'grok-imagine-image' : '');
+  const fieldUnsupported = (field: FieldKey) =>
+    Boolean(schemaProvider && schemaModel && getFieldSpec(schemaProvider, schemaModel, field)?.status === 'unsupported');
+  const greySeed = isOpenAiCompat || isGrokCompat || fieldUnsupported('seed');
+  const greySteps = isOpenAiCompat || isGrokCompat || fieldUnsupported('steps');
+  const greyCfg = isOpenAiCompat || isGrokCompat || fieldUnsupported('cfg');
+  const greySampler = isOpenAiCompat || isGrokCompat || fieldUnsupported('sampler');
+  const greyScheduler = isOpenAiCompat || isGrokCompat || fieldUnsupported('scheduler');
+  const greyLoras = isOpenAiCompat || isGrokCompat || fieldUnsupported('loras');
+  const greyWidthHeight = isGemini || isGrokCompat || fieldUnsupported('width') || fieldUnsupported('height');
+  const greyNegative = isOpenAiCompat || isGrokCompat || fieldUnsupported('negative_prompt');
+  const schemaSelect = (field: FieldKey, value: string, onChange: (v: string) => void, label: string) => {
+    if (!schemaProvider || !schemaModel) return null;
+    const spec = getFieldSpec(schemaProvider, schemaModel, field);
+    if (!spec || spec.status === 'unsupported' || !spec.enum) return null;
+    return (
+      <div className="space-y-1" key={field}>
+        <label className="text-slate-400 text-[10px] font-mono">{label}</label>
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full bg-[#111216] border border-[#2b2d38] rounded-lg px-2 py-1.5 text-slate-200 text-[11px] font-mono outline-none"
+        >
+          <option value="">未选择（不传）</option>
+          {fieldOptions(schemaProvider, schemaModel, field).map((v) => (
+            <option key={v.value} value={v.value}>
+              {v.value}
+            </option>
+          ))}
+        </select>
+      </div>
+    );
+  };
 
   const handleRandomizeSeed = () => {
     update({ seed: Math.floor(Math.random() * 1000000000) });
@@ -256,28 +302,33 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
             {onChangeNegativePrompt && (
               <div className="space-y-1">
                 <div className="flex items-center justify-between text-[10px]">
-                  <label className="text-rose-400 font-mono font-semibold">负向提示词 (Negative Prompt)</label>
+                  <label className="text-rose-400 font-mono font-semibold flex items-center gap-1.5">
+                    负向提示词 (Negative Prompt)
+                    {greyNegative && <FieldStatusBadge status="unsupported" />}
+                  </label>
                   <button
                     onClick={() =>
                       onChangeNegativePrompt(
                         'blurry, distorted, low quality, bad anatomy, deformed limbs, watermark, text, out of focus'
                       )
                     }
-                    className="text-[9px] text-slate-400 hover:text-white font-mono bg-[#121316] px-1.5 py-0.5 rounded border border-[#282a35]"
-                    title="填入通用排畸预设"
+                    disabled={greyNegative}
+                    className="text-[9px] text-slate-400 hover:text-white font-mono bg-[#121316] px-1.5 py-0.5 rounded border border-[#282a35] disabled:opacity-40 disabled:cursor-not-allowed"
+                    title={greyNegative ? '该服务商不支持负向提示词' : '填入通用排畸预设'}
                   >
                     填入通用排畸
                   </button>
                 </div>
                 <textarea
                   rows={2}
-                  value={negativePrompt || ''}
+                  value={greyNegative ? '' : (negativePrompt || '')}
+                  disabled={greyNegative}
                   onMouseDown={(e) => e.stopPropagation()}
                   onPointerDown={(e) => e.stopPropagation()}
                   onKeyDown={(e) => e.stopPropagation()}
                   onChange={(e) => onChangeNegativePrompt(e.target.value)}
-                  placeholder="输入需要避免的瑕疵特征 (如模糊、多肢体、水印等)..."
-                  className="w-full bg-[#111216] border border-[#2b2d38] focus:border-rose-400/80 rounded-lg p-2 text-slate-300 text-[11px] font-mono leading-relaxed outline-none resize-y select-text cursor-text shadow-inner"
+                  placeholder={greyNegative ? '该服务商不支持负向提示词' : '输入需要避免的瑕疵特征 (如模糊、多肢体、水印等)...'}
+                  className="w-full bg-[#111216] border border-[#2b2d38] focus:border-rose-400/80 rounded-lg p-2 text-slate-300 text-[11px] font-mono leading-relaxed outline-none resize-y select-text cursor-text shadow-inner disabled:opacity-40 disabled:cursor-not-allowed"
                 />
               </div>
             )}
@@ -308,6 +359,8 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                 { id: 'nanogpt', label: 'NanoGPT' },
                 { id: 'sensenova', label: '商汤思考(LLM)' },
                 { id: 'tensorart', label: 'Tensor.Art (OpenWorks)' },
+                { id: 'openai_compat', label: 'OpenAI 兼容中转' },
+                { id: 'grok_compat', label: 'Grok 兼容中转' },
               ].map((p) => {
                 const isSelected = params.targetProvider === p.id;
                 return (
@@ -429,6 +482,26 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
             </div>
           )}
 
+          {params.targetProvider === 'openai_compat' && (
+            <div className="p-2.5 bg-emerald-950/20 border border-emerald-500/30 rounded-lg text-[10px] text-emerald-300/90 leading-relaxed flex items-start gap-2">
+              <Info className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold text-emerald-300">OpenAI 兼容中转：</span>
+                <span> 不是官方 OpenAI。支持 size / quality / output_format / background / moderation；seed、负向提示词、steps、CFG、采样器、LoRA 该服务商不支持（灰显，发送会 400）。</span>
+              </div>
+            </div>
+          )}
+
+          {params.targetProvider === 'grok_compat' && (
+            <div className="p-2.5 bg-slate-900/40 border border-slate-400/30 rounded-lg text-[10px] text-slate-200/90 leading-relaxed flex items-start gap-2">
+              <Info className="w-4 h-4 text-slate-300 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold text-slate-100">Grok 兼容中转：</span>
+                <span> 不是官方 xAI。支持 aspect_ratio / resolution；像素宽高、seed、负向、steps、CFG、LoRA 该服务商不支持。HTTP 503 grok_media_no_eligible_account 原样暴露，不换商。</span>
+              </div>
+            </div>
+          )}
+
           {params.targetProvider === 'tensorart' && (
             <div className="p-2.5 bg-purple-950/20 border border-purple-500/30 rounded-lg text-[10px] text-purple-300/90 leading-relaxed flex items-start gap-2">
               <Sparkles className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
@@ -453,7 +526,10 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
           {/* Seed & Seed Control */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between text-slate-400 text-[10px] font-mono">
-              <span>SEED (随机种子与控制模式)</span>
+              <span className="flex items-center gap-1.5">
+                SEED (随机种子与控制模式)
+                {greySeed && <FieldStatusBadge status="unsupported" />}
+              </span>
               <div className="flex items-center gap-1">
                 {(['randomize', 'fixed', 'increment', 'decrement'] as const).map((mode) => (
                   <button
@@ -474,16 +550,18 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
             <div className="flex gap-1.5">
               <input
                 type="number"
-                value={params.seed}
+                value={greySeed ? '' : params.seed}
+                disabled={greySeed}
                 onMouseDown={(e) => e.stopPropagation()}
                 onKeyDown={(e) => e.stopPropagation()}
                 onChange={(e) => update({ seed: parseInt(e.target.value) || 0 })}
-                className="flex-1 bg-[#111216] border border-[#2b2d38] focus:border-cyan-500 rounded-lg px-2.5 py-1.5 font-mono text-cyan-300 text-[11px] outline-none select-text cursor-text"
+                className="flex-1 bg-[#111216] border border-[#2b2d38] focus:border-cyan-500 rounded-lg px-2.5 py-1.5 font-mono text-cyan-300 text-[11px] outline-none select-text cursor-text disabled:opacity-40 disabled:cursor-not-allowed"
               />
               <button
                 type="button"
                 onClick={handleRandomizeSeed}
-                className="p-2 bg-[#23252f] hover:bg-[#2e313e] text-slate-200 rounded-lg border border-[#353846] transition-colors flex items-center gap-1 text-[10px]"
+                disabled={greySeed}
+                className="p-2 bg-[#23252f] hover:bg-[#2e313e] text-slate-200 rounded-lg border border-[#353846] transition-colors flex items-center gap-1 text-[10px] disabled:opacity-40 disabled:cursor-not-allowed"
                 title="骰子重新摇号"
               >
                 <Dices className="w-3.5 h-3.5 text-cyan-400" />
@@ -495,8 +573,11 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
           {/* Steps & CFG Sliders */}
           <div className="space-y-1">
             <div className="flex justify-between text-slate-400 text-[10px] font-mono">
-              <span title="采样步数：FLUX 推荐 4~28 步，SDXL 推荐 25~30 步">STEPS (采样步数)</span>
-              <span className="text-cyan-400 font-bold">{params.steps} 步</span>
+              <span className="flex items-center gap-1.5" title="采样步数：FLUX 推荐 4~28 步，SDXL 推荐 25~30 步">
+                STEPS (采样步数)
+                {greySteps && <FieldStatusBadge status="unsupported" />}
+              </span>
+              <span className="text-cyan-400 font-bold">{greySteps ? '—' : `${params.steps} 步`}</span>
             </div>
             <input
               type="range"
@@ -504,15 +585,19 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
               max={80}
               step={1}
               value={params.steps}
+              disabled={greySteps}
               onChange={(e) => update({ steps: parseInt(e.target.value) })}
-              className="w-full h-1.5 bg-[#252833] rounded appearance-none cursor-pointer accent-cyan-400"
+              className="w-full h-1.5 bg-[#252833] rounded appearance-none cursor-pointer accent-cyan-400 disabled:opacity-40 disabled:cursor-not-allowed"
             />
           </div>
 
           <div className="space-y-1">
             <div className="flex justify-between text-slate-400 text-[10px] font-mono">
-              <span title="提示词引导系数：FLUX 推荐 3.5，SDXL 推荐 7.0~8.0">CFG SCALE (提示词引导系数)</span>
-              <span className="text-cyan-400 font-bold">{params.cfg?.toFixed(1) ?? '未设置'}</span>
+              <span className="flex items-center gap-1.5" title="提示词引导系数：FLUX 推荐 3.5，SDXL 推荐 7.0~8.0">
+                CFG SCALE (提示词引导系数)
+                {greyCfg && <FieldStatusBadge status="unsupported" />}
+              </span>
+              <span className="text-cyan-400 font-bold">{greyCfg ? '—' : (params.cfg?.toFixed(1) ?? '未设置')}</span>
             </div>
             <input
               type="range"
@@ -520,19 +605,24 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
               max={20.0}
               step={0.1}
               value={params.cfg}
+              disabled={greyCfg}
               onChange={(e) => update({ cfg: parseFloat(e.target.value) })}
-              className="w-full h-1.5 bg-[#252833] rounded appearance-none cursor-pointer accent-cyan-400"
+              className="w-full h-1.5 bg-[#252833] rounded appearance-none cursor-pointer accent-cyan-400 disabled:opacity-40 disabled:cursor-not-allowed"
             />
           </div>
 
           {/* Sampler & Scheduler Selection */}
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
-              <label className="text-slate-400 text-[10px] font-mono">SAMPLER (采样算法)</label>
+              <label className="text-slate-400 text-[10px] font-mono flex items-center gap-1.5">
+                SAMPLER (采样算法)
+                {greySampler && <FieldStatusBadge status="unsupported" />}
+              </label>
               <select
                 value={params.sampler}
+                disabled={greySampler}
                 onChange={(e) => update({ sampler: e.target.value })}
-                className="w-full bg-[#111216] border border-[#2b2d38] rounded-lg px-2 py-1.5 text-slate-200 text-[11px] font-mono outline-none"
+                className="w-full bg-[#111216] border border-[#2b2d38] rounded-lg px-2 py-1.5 text-slate-200 text-[11px] font-mono outline-none disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {SAMPLER_OPTIONS.map((s, idx) => (
                   <option key={`sampler-${s.value}-${idx}`} value={s.value}>
@@ -543,11 +633,15 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
             </div>
 
             <div className="space-y-1">
-              <label className="text-slate-400 text-[10px] font-mono">SCHEDULER (调度器)</label>
+              <label className="text-slate-400 text-[10px] font-mono flex items-center gap-1.5">
+                SCHEDULER (调度器)
+                {greyScheduler && <FieldStatusBadge status="unsupported" />}
+              </label>
               <select
                 value={params.scheduler}
+                disabled={greyScheduler}
                 onChange={(e) => update({ scheduler: e.target.value })}
-                className="w-full bg-[#111216] border border-[#2b2d38] rounded-lg px-2 py-1.5 text-slate-200 text-[11px] font-mono outline-none"
+                className="w-full bg-[#111216] border border-[#2b2d38] rounded-lg px-2 py-1.5 text-slate-200 text-[11px] font-mono outline-none disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {SCHEDULER_OPTIONS.map((sc, idx) => (
                   <option key={`scheduler-${sc.value}-${idx}`} value={sc.value}>
@@ -582,12 +676,14 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
             <span className="flex items-center gap-1.5">
               <Layers className="w-3.5 h-3.5 text-purple-400" />
               LoRA 微调模型堆叠 ({params.loras.length})
+              {greyLoras && <FieldStatusBadge status="unsupported" />}
             </span>
             <div className="flex items-center gap-1.5">
               <button
                 onClick={onOpenCivitai || onOpenModelHub}
-                className="text-[10px] text-purple-400 hover:text-purple-300 flex items-center gap-1 bg-purple-950/40 px-2 py-0.5 rounded border border-purple-800/40 transition-colors"
-                title="打开全生态 LoRA 模型中心 (Civitai / Hugging Face / 魔搭 / Fal / Tensor)"
+                disabled={greyLoras}
+                className="text-[10px] text-purple-400 hover:text-purple-300 flex items-center gap-1 bg-purple-950/40 px-2 py-0.5 rounded border border-purple-800/40 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                title={greyLoras ? '该服务商不支持 LoRA' : '打开全生态 LoRA 模型中心 (Civitai / Hugging Face / 魔搭 / Fal / Tensor)'}
               >
                 <Plus className="w-3 h-3" />
                 添加 LoRA
@@ -718,11 +814,11 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
 
           <div className="grid grid-cols-5 gap-1.5">
             {aspectRatios.map((ar) => {
-              const isActive = !isGemini && params.width === ar.w && params.height === ar.h;
+              const isActive = !greyWidthHeight && params.width === ar.w && params.height === ar.h;
               return (
                 <button
                   key={ar.label}
-                  disabled={isGemini}
+                  disabled={greyWidthHeight}
                   onClick={() => handleAspectRatioPreset(ar.w, ar.h)}
                   className={`py-1.5 rounded-lg text-center transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
                     isActive
@@ -741,13 +837,13 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
             <div className="space-y-1">
               <div className="flex items-center justify-between gap-1">
                 <span className="text-slate-400 text-[10px]">宽度 WIDTH (像素)</span>
-                {isGemini && <FieldStatusBadge status="unsupported" />}
+                {greyWidthHeight && <FieldStatusBadge status="unsupported" />}
               </div>
               <input
                 type="number"
                 step={64}
-                disabled={isGemini}
-                value={isGemini ? '' : params.width}
+                disabled={greyWidthHeight}
+                value={greyWidthHeight ? '' : params.width}
                 onChange={(e) => update({ width: parseInt(e.target.value) || 1024 })}
                 className="w-full bg-[#111216] border border-[#2b2d38] rounded-lg px-2.5 py-1 text-slate-200 outline-none font-mono disabled:opacity-40 disabled:cursor-not-allowed"
               />
@@ -755,13 +851,13 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
             <div className="space-y-1">
               <div className="flex items-center justify-between gap-1">
                 <span className="text-slate-400 text-[10px]">高度 HEIGHT (像素)</span>
-                {isGemini && <FieldStatusBadge status="unsupported" />}
+                {greyWidthHeight && <FieldStatusBadge status="unsupported" />}
               </div>
               <input
                 type="number"
                 step={64}
-                disabled={isGemini}
-                value={isGemini ? '' : params.height}
+                disabled={greyWidthHeight}
+                value={greyWidthHeight ? '' : params.height}
                 onChange={(e) => update({ height: parseInt(e.target.value) || 1024 })}
                 className="w-full bg-[#111216] border border-[#2b2d38] rounded-lg px-2.5 py-1 text-slate-200 outline-none font-mono disabled:opacity-40 disabled:cursor-not-allowed"
               />
@@ -782,6 +878,23 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                 value={params.imageSize || ''}
                 onChange={(v) => update({ imageSize: v || undefined })}
               />
+            </div>
+          )}
+
+          {isOpenAiCompat && (
+            <div className="grid grid-cols-2 gap-2">
+              {schemaSelect('size', params.size || '', (v) => update({ size: v || undefined }), 'SIZE')}
+              {schemaSelect('quality', params.quality || '', (v) => update({ quality: v || undefined }), 'QUALITY')}
+              {schemaSelect('output_format', params.outputFormat || '', (v) => update({ outputFormat: v || undefined }), 'OUTPUT_FORMAT')}
+              {schemaSelect('background', params.background || '', (v) => update({ background: v || undefined }), 'BACKGROUND')}
+              {schemaSelect('moderation', params.moderation || '', (v) => update({ moderation: v || undefined }), 'MODERATION')}
+            </div>
+          )}
+
+          {isGrokCompat && (
+            <div className="grid grid-cols-2 gap-2">
+              {schemaSelect('aspect_ratio', params.aspectRatio || '', (v) => update({ aspectRatio: v || undefined }), 'ASPECT_RATIO')}
+              {schemaSelect('resolution', params.resolution || '', (v) => update({ resolution: v || undefined }), 'RESOLUTION')}
             </div>
           )}
         </div>

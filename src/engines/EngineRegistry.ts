@@ -17,6 +17,8 @@ import { HuggingFaceDriver } from './drivers/HuggingFaceDriver';
 import { VideoDriver } from './drivers/VideoDriver';
 import { CivitaiDriver } from './drivers/CivitaiDriver';
 import { TensorArtDriver } from './drivers/TensorArtDriver';
+import { OpenAICompatDriver } from './drivers/OpenAICompatDriver';
+import { GrokCompatDriver } from './drivers/GrokCompatDriver';
 
 /**
  * 引擎注册管理中心 (Central Engine Registry Shell)
@@ -41,6 +43,8 @@ export class EngineRegistryClass {
     this.register(new GeminiDriver());
     this.register(new HuggingFaceDriver());
     this.register(new TensorArtDriver());
+    this.register(new OpenAICompatDriver());
+    this.register(new GrokCompatDriver());
   }
 
   /**
@@ -97,11 +101,11 @@ export class EngineRegistryClass {
   ): Promise<NormalizedChatResult> {
     const driver = this.getDriver(providerId);
     if (!driver) {
-      throw new Error(`未找到文本推理引擎: [${providerId}]。请选择商汤日日新 (SenseNova)、Agnes AI 或 Google Gemini。`);
+      throw new Error(`未找到文本推理引擎: [${providerId}]。请选择商汤日日新 (SenseNova)、Agnes AI、Google Gemini 或 Grok 兼容中转。`);
     }
 
     if (!driver.chat) {
-      throw new Error(`引擎 [${driver.name}] 不支持文本大模型推理能力。支持推理的引擎包括：商汤日日新 (DeepSeek V4)、Agnes AI (Agnes 3.0)、Google Gemini。`);
+      throw new Error(`引擎 [${driver.name}] 不支持文本大模型推理能力。支持推理的引擎包括：商汤日日新 (DeepSeek V4)、Agnes AI (Agnes 3.0)、Google Gemini、Grok 兼容中转。`);
     }
 
     return driver.chat(params, keys || {});

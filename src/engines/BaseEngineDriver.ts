@@ -59,9 +59,13 @@ export abstract class BaseEngineDriver implements IEngineDriver {
       seed: typeof params.seed === 'number' ? params.seed : undefined,
       denoise: typeof params.denoise === 'number' ? Math.max(0.01, Math.min(1.0, params.denoise)) : undefined,
       image_url: params.image_url?.trim() || undefined,
+      isVideo: params.isVideo || isVideo || undefined,
       videoDuration: isVideo && params.videoDuration ? Number(params.videoDuration) : undefined,
       videoFps: isVideo && params.videoFps ? Number(params.videoFps) : undefined,
       aspectRatio: params.aspectRatio || undefined,
+      imageSize: params.imageSize || undefined,
+      sampler_name: params.sampler_name,
+      scheduler: params.scheduler,
       provider: params.provider || params.targetProvider || undefined,
       targetProvider: params.targetProvider || params.provider || undefined,
       loras: (params.loras || []).map((l) => ({
