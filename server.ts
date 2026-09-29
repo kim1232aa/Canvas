@@ -3344,6 +3344,9 @@ function normalizeFalEndpoint(model: string, isVideo = false): string {
 
   // If in video generation mode, force video endpoints
   if (isVideo) {
+    // Rewrite known-dead Wan ids before the fal-ai/ passthrough
+    if (m === 'fal-ai/wan/v2.1/text-to-video' || m === 'fal-ai/wan/t2v') return 'fal-ai/wan-t2v';
+    if (m === 'fal-ai/wan/v2.1/image-to-video') return 'fal-ai/wan-i2v';
     // Full Fal endpoint IDs are passed through verbatim
     if (m.startsWith('fal-ai/')) return model.trim();
     if (m === 'kling-video/v1/standard/text-to-video') return 'fal-ai/kling-video/v1/standard/text-to-video';
@@ -3352,8 +3355,22 @@ function normalizeFalEndpoint(model: string, isVideo = false): string {
     if (m === 'minimax/video-01') return 'fal-ai/minimax/video-01';
     if (m === 'cogvideox-5b') return 'fal-ai/cogvideox-5b';
     if (m === 'hunyuan-video') return 'fal-ai/hunyuan-video';
-    if (m === 'wan/v2.1/image-to-video') return 'fal-ai/wan/v2.1/image-to-video';
-    if (m === 'damo/wan2.1-t2v' || m === 'wan2.1-t2v' || m === 'wan/v2.1/text-to-video') return 'fal-ai/wan/v2.1/text-to-video';
+    if (
+      m === 'wan/v2.1/image-to-video' ||
+      m === 'fal-ai/wan/v2.1/image-to-video' ||
+      m === 'wan-i2v' ||
+      m === 'fal-ai/wan-i2v'
+    ) return 'fal-ai/wan-i2v';
+    if (
+      m === 'damo/wan2.1-t2v' ||
+      m === 'wan2.1-t2v' ||
+      m === 'wan/v2.1/text-to-video' ||
+      m === 'fal-ai/wan/v2.1/text-to-video' ||
+      m === 'wan/t2v' ||
+      m === 'fal-ai/wan/t2v' ||
+      m === 'wan-t2v' ||
+      m === 'fal-ai/wan-t2v'
+    ) return 'fal-ai/wan-t2v';
     // F4: unrecognized video model → empty string signals caller to 400
     return '';
   }
@@ -3411,15 +3428,21 @@ function normalizeFalEndpoint(model: string, isVideo = false): string {
     m === 'damo/wan2.1-t2v' ||
     m === 'wan/v2.1/text-to-video' ||
     m === 'fal-ai/wan/v2.1/text-to-video' ||
-    m === 'wan2.1-t2v'
+    m === 'wan2.1-t2v' ||
+    m === 'wan/t2v' ||
+    m === 'fal-ai/wan/t2v' ||
+    m === 'wan-t2v' ||
+    m === 'fal-ai/wan-t2v'
   ) {
-    return 'fal-ai/wan/v2.1/text-to-video';
+    return 'fal-ai/wan-t2v';
   }
   if (
     m === 'wan/v2.1/image-to-video' ||
-    m === 'fal-ai/wan/v2.1/image-to-video'
+    m === 'fal-ai/wan/v2.1/image-to-video' ||
+    m === 'wan-i2v' ||
+    m === 'fal-ai/wan-i2v'
   ) {
-    return 'fal-ai/wan/v2.1/image-to-video';
+    return 'fal-ai/wan-i2v';
   }
   if (m === 'fal-ai/ltx-video' || m === 'ltx-video') {
     return 'fal-ai/ltx-video';

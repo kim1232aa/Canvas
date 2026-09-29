@@ -22,7 +22,7 @@ export class VideoDriver extends BaseEngineDriver {
 
   readonly supportedModels: ModelSpec[] = [
     {
-      id: 'fal-ai/wan/v2.1/text-to-video',
+      id: 'fal-ai/wan-t2v',
       name: 'Wan 2.1 Text-to-Video (通义万相电影级文生视频)',
       type: 'video',
       description: '阿里通义万相开源电影级视频大模型，支持 1080p 超高清影视运镜与物理动力学模拟',
@@ -31,7 +31,7 @@ export class VideoDriver extends BaseEngineDriver {
       supportsLora: false,
     },
     {
-      id: 'fal-ai/wan/v2.1/image-to-video',
+      id: 'fal-ai/wan-i2v',
       name: 'Wan 2.1 Image-to-Video (通义万相图生动态视频)',
       type: 'video',
       description: '根据输入参考底图进行高保真运镜生成，完美保留首帧构图与人脸细节',
@@ -217,7 +217,9 @@ export class VideoDriver extends BaseEngineDriver {
 
     if (hasImage) {
       if (
-        targetModel === 'fal-ai/wan/v2.1/text-to-video' ||
+        targetModel === 'fal-ai/wan-t2v' ||
+        targetModel === 'fal-ai/wan/v2.1/text-to-video' || // legacy alias
+        targetModel === 'fal-ai/wan/t2v' ||
         targetModel === 'wan2.1-t2v' ||
         targetModel === 'damo/wan2.1-t2v' ||
         targetModel === 'fal-ai/kling-video/v1/standard/text-to-video' ||

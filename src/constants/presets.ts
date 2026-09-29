@@ -775,7 +775,7 @@ export const WORKFLOW_PRESETS: WorkflowPreset[] = [
         width: 280,
         inputs: [],
         outputs: NODE_DEFINITIONS['CheckpointLoaderSimple'].outputs,
-        values: { ckpt_name: 'fal-ai/stable-diffusion-xl-base-1.0', targetProvider: 'fal' },
+        values: { ckpt_name: 'fal-ai/fast-sdxl', targetProvider: 'fal' },
       },
       {
         id: 'node-fa-2',
@@ -1314,7 +1314,7 @@ export const WORKFLOW_PRESETS: WorkflowPreset[] = [
     provider: 'Wan 2.1 (阿里通义万相官方)',
     previewImage: 'https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/0695b6d7-40ad-4df5-b99a-ba27550b9a58/original=true/preview.jpeg',
     tags: ['Wan 2.1', '图生视频', 'Img2Video', '通义万相', '电影运镜', '16fps流畅动态'],
-    description: '通过 LoadImage 输入唯美原画，通过线缆注入 AIVideoNode 的 init_image 端口，自动分流至 fal-ai/wan/v2.1/image-to-video 官方端点，生成 5 秒 1080P 连贯运镜动态视频。',
+    description: '通过 LoadImage 输入唯美原画，通过线缆注入 AIVideoNode 的 init_image 端口，自动分流至 fal-ai/wan-i2v 官方端点，生成 5 秒 1080P 连贯运镜动态视频。',
     nodes: [
       {
         id: 'node-vid-1',
@@ -1361,7 +1361,7 @@ export const WORKFLOW_PRESETS: WorkflowPreset[] = [
         inputs: NODE_DEFINITIONS['AIVideoNode'].inputs,
         outputs: NODE_DEFINITIONS['AIVideoNode'].outputs,
         values: {
-          model: 'fal-ai/wan/v2.1/image-to-video',
+          model: 'fal-ai/wan-i2v',
           duration: 5,
           fps: 16,
           aspect_ratio: '16:9',
@@ -1396,7 +1396,7 @@ export const WORKFLOW_PRESETS: WorkflowPreset[] = [
         prompt: 'cinematic aerial orbit shot, floating castle islands in the sky, painterly clouds drifting slowly, warm golden hour sunlight, petals dancing in the gentle wind, 8k cinematic masterpiece',
         negativePrompt: 'jittery motion, fast sudden cut, blur, morphing distortion, low quality',
         params: {
-          checkpoint: 'fal-ai/wan/v2.1/image-to-video',
+          checkpoint: 'fal-ai/wan-i2v',
           seed: 42,
           seedControl: 'randomize',
           steps: 30,
@@ -2508,7 +2508,7 @@ export const WORKFLOW_PRESETS: WorkflowPreset[] = [
         width: 280,
         inputs: [],
         outputs: NODE_DEFINITIONS['CheckpointLoaderSimple'].outputs,
-        values: { ckpt_name: 'fal-ai/animagine-xl' },
+        values: { ckpt_name: 'fal-ai/fast-sdxl' },
       },
       {
         id: 'node-hb3-2',
@@ -2622,7 +2622,7 @@ export const WORKFLOW_PRESETS: WorkflowPreset[] = [
         prompt: 'sci-fi armor, glowing cyan conduits, mechanical exoskeleton, a heroic female cyber pilot in high tech composite armor standing in hangar bay, volumetric steam, raytracing reflections, cinematic color grading, 8k masterpiece',
         negativePrompt: 'blurry, bad anatomy, deformed armor, low resolution, plastic, oversaturated, text, watermark',
         params: {
-          checkpoint: 'fal-ai/animagine-xl',
+          checkpoint: 'fal-ai/fast-sdxl',
           seed: 536954122,
           seedControl: 'randomize',
           steps: 28,

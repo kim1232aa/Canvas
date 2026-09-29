@@ -26,7 +26,7 @@ describe('graphEngine - B2 & L2a & L2b 拓扑反向追踪与参数抽取隔离�
     const nodes: NodeInstance[] = [
       // 视频节点 1 及专属参考图
       createNode('video-node-1', 'AIVideoNode', {
-        model: 'fal-ai/wan/v2.1/text-to-video',
+        model: 'fal-ai/wan-t2v',
         targetProvider: 'fal',
         prompt: 'flying golden dragon above misty mountains',
         duration: 5,
@@ -105,7 +105,7 @@ describe('graphEngine - B2 & L2a & L2b 拓扑反向追踪与参数抽取隔离�
 
     // 1. 抽取视频节点 1 参数
     const paramsV1 = extractWorkflowParameters(nodes, connections, 'video-node-1');
-    expect(paramsV1.checkpointModel).toBe('fal-ai/wan/v2.1/text-to-video');
+    expect(paramsV1.checkpointModel).toBe('fal-ai/wan-t2v');
     expect(paramsV1.initImageUrl).toBe('https://example.com/assets/dragon-ref.png');
     expect(paramsV1.positivePrompt).toBe('flying golden dragon above misty mountains');
     expect(paramsV1.isVideo).toBe(true);
@@ -122,7 +122,7 @@ describe('graphEngine - B2 & L2a & L2b 拓扑反向追踪与参数抽取隔离�
     expect(paramsV2.initImageUrl).toBe('https://example.com/assets/car-ref.png');
     expect(paramsV2.positivePrompt).toBe('cyberpunk sports car drifting in neon rain');
     expect(paramsV2.isVideo).toBe(true);
-    expect(paramsV2.checkpointModel).not.toBe('fal-ai/wan/v2.1/text-to-video');
+    expect(paramsV2.checkpointModel).not.toBe('fal-ai/wan-t2v');
     expect(paramsV2.checkpointModel).not.toBe('fal-ai/flux/schnell');
     expect(paramsV2.checkpointModel).not.toBe('fal-ai/flux/dev');
     expect(paramsV2.initImageUrl).not.toBe('https://example.com/assets/dragon-ref.png');
@@ -135,7 +135,7 @@ describe('graphEngine - B2 & L2a & L2b 拓扑反向追踪与参数抽取隔离�
     expect(paramsI1.initImageUrl).toBe('https://example.com/assets/cat-ref.png');
     expect(paramsI1.positivePrompt).toBe('macro close-up portrait of an orange cat');
     expect(paramsI1.isVideo).toBe(false);
-    expect(paramsI1.checkpointModel).not.toBe('fal-ai/wan/v2.1/text-to-video');
+    expect(paramsI1.checkpointModel).not.toBe('fal-ai/wan-t2v');
     expect(paramsI1.checkpointModel).not.toBe('fal-ai/ltx-video');
     expect(paramsI1.checkpointModel).not.toBe('fal-ai/flux/dev');
     expect(paramsI1.initImageUrl).not.toBe('https://example.com/assets/dragon-ref.png');
@@ -148,7 +148,7 @@ describe('graphEngine - B2 & L2a & L2b 拓扑反向追踪与参数抽取隔离�
     expect(paramsI2.initImageUrl).toBe('https://example.com/assets/lake-ref.png');
     expect(paramsI2.positivePrompt).toBe('serene oil painting of autumn forest lake');
     expect(paramsI2.isVideo).toBe(false);
-    expect(paramsI2.checkpointModel).not.toBe('fal-ai/wan/v2.1/text-to-video');
+    expect(paramsI2.checkpointModel).not.toBe('fal-ai/wan-t2v');
     expect(paramsI2.checkpointModel).not.toBe('fal-ai/ltx-video');
     expect(paramsI2.checkpointModel).not.toBe('fal-ai/flux/schnell');
     expect(paramsI2.initImageUrl).not.toBe('https://example.com/assets/dragon-ref.png');
@@ -172,11 +172,11 @@ describe('graphEngine - B2 & L2a & L2b 拓扑反向追踪与参数抽取隔离�
 
     // 执行 video-node-1
     const resV1 = await executeWorkflow(nodes, connections, onNodeStateChange, undefined, 'video-node-1');
-    expect(resV1.model).toBe('fal-ai/wan/v2.1/text-to-video');
+    expect(resV1.model).toBe('fal-ai/wan-t2v');
     expect(generateSpy).toHaveBeenLastCalledWith(
       'video',
       expect.objectContaining({
-        model: 'fal-ai/wan/v2.1/text-to-video',
+        model: 'fal-ai/wan-t2v',
         image_url: 'https://example.com/assets/dragon-ref.png',
         prompt: 'flying golden dragon above misty mountains',
         isVideo: true,
@@ -203,7 +203,7 @@ describe('graphEngine - B2 & L2a & L2b 拓扑反向追踪与参数抽取隔离�
     const nodes: NodeInstance[] = [
       // 视频节点
       createNode('video-1', 'AIVideoNode', {
-        model: 'fal-ai/wan/v2.1/text-to-video',
+        model: 'fal-ai/wan-t2v',
         prompt: 'ocean tide at sunset',
       }),
       // Comfy 经典流
@@ -251,7 +251,7 @@ describe('graphEngine - B2 & L2a & L2b 拓扑反向追踪与参数抽取隔离�
 
     // 执行 video-1：绝不能拿到 ckpt-1 的 fal-ai/flux/dev，也不能拿到 load-img-comfy 的参考图
     const videoParams = extractWorkflowParameters(nodes, connections, 'video-1');
-    expect(videoParams.checkpointModel).toBe('fal-ai/wan/v2.1/text-to-video');
+    expect(videoParams.checkpointModel).toBe('fal-ai/wan-t2v');
     expect(videoParams.initImageUrl).toBeUndefined();
     expect(videoParams.positivePrompt).toBe('ocean tide at sunset');
 
@@ -265,7 +265,7 @@ describe('graphEngine - B2 & L2a & L2b 拓扑反向追踪与参数抽取隔离�
   it('L2a: 节点未连接参考图时，画布上即使有别的 LoadImage 节点，initImageUrl 也必须为 undefined', () => {
     const nodes: NodeInstance[] = [
       createNode('video-node', 'AIVideoNode', {
-        model: 'fal-ai/wan/v2.1/text-to-video',
+        model: 'fal-ai/wan-t2v',
         prompt: 'a running horse in desert',
       }),
       createNode('orphan-load-image', 'LoadImage', {
@@ -283,7 +283,7 @@ describe('graphEngine - B2 & L2a & L2b 拓扑反向追踪与参数抽取隔离�
   it('L2b: 提示词为空时不再使用硬编码兜底文案，而是抛出「请填写提示词」错误', () => {
     const nodes: NodeInstance[] = [
       createNode('video-node', 'AIVideoNode', {
-        model: 'fal-ai/wan/v2.1/text-to-video',
+        model: 'fal-ai/wan-t2v',
         prompt: '', // 空提示词
       }),
     ];

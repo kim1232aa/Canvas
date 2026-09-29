@@ -79,8 +79,8 @@ export const BASE_MODELS: BaseModelOption[] = [
   // ===================== FAL.AI =====================
   { label: '⚡ [Fal] FLUX.1 Schnell (fal-ai/flux/schnell)', value: 'fal-ai/flux/schnell', provider: 'fal', category: 'checkpoint' },
   { label: '⚡ [Fal] FLUX.1 [dev] (fal-ai/flux/dev)', value: 'fal-ai/flux/dev', provider: 'fal', category: 'checkpoint' },
-  { label: '⚡ [Fal] SDXL 1.0 (fal-ai/stable-diffusion-xl-base-1.0)', value: 'fal-ai/stable-diffusion-xl-base-1.0', provider: 'fal', category: 'checkpoint' },
-  { label: '⚡ [Fal] Wan 2.1 Video (fal-ai/wan/t2v)', value: 'fal-ai/wan/t2v', provider: 'fal', category: 'video' },
+  { label: '⚡ [Fal] Fast SDXL (fal-ai/fast-sdxl)', value: 'fal-ai/fast-sdxl', provider: 'fal', category: 'checkpoint' },
+  { label: '⚡ [Fal] Wan 2.1 Video (fal-ai/wan-t2v)', value: 'fal-ai/wan-t2v', provider: 'fal', category: 'video' },
 
   // ===================== CIVITAI =====================
   { label: '🌟 [Civitai] Krea 2 Turbo 原生极速 (urn:air:krea2:checkpoint:civitai:2726029@3091481)', value: 'urn:air:krea2:checkpoint:civitai:2726029@3091481', provider: 'civitai', category: 'checkpoint' },
@@ -838,8 +838,9 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
         type: 'select',
         default: '',
         options: [
-          { label: '⚡ [Fal] Wan 2.1 旗舰文生视频 (fal-ai/wan/v2.1/text-to-video)', value: 'fal-ai/wan/v2.1/text-to-video', provider: 'fal' },
-          { label: '⚡ [Fal] Wan 2.1 旗舰图生视频 (fal-ai/wan/v2.1/image-to-video)', value: 'fal-ai/wan/v2.1/image-to-video', provider: 'fal' },
+          { label: '未选择 (请先选择模型)', value: '' },
+          { label: '⚡ [Fal] Wan 2.1 旗舰文生视频 (fal-ai/wan-t2v)', value: 'fal-ai/wan-t2v', provider: 'fal' },
+          { label: '⚡ [Fal] Wan 2.1 旗舰图生视频 (fal-ai/wan-i2v)', value: 'fal-ai/wan-i2v', provider: 'fal' },
           { label: '⚡ [Fal] LTX-Video 极速高清 (fal-ai/ltx-video)', value: 'fal-ai/ltx-video', provider: 'fal' },
           { label: '⚡ [Fal] Kling 1.5 可灵文生视频 (fal-ai/kling-video/v1/standard/text-to-video)', value: 'fal-ai/kling-video/v1/standard/text-to-video', provider: 'fal' },
           { label: '⚡ [Fal] Kling 1.5 可灵图生视频 (fal-ai/kling-video/v1/standard/image-to-video)', value: 'fal-ai/kling-video/v1/standard/image-to-video', provider: 'fal' },

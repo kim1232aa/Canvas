@@ -311,7 +311,7 @@ export function validateModelCompatibility(
   } else if (loraFamily === "sdxl" || loraFamily === "pony" || loraFamily === "illustrious") {
     if (prov === "huggingface") targetRecCheckpoint = "stabilityai/stable-diffusion-xl-base-1.0";
     else if (prov === "modelscope") targetRecCheckpoint = "AI-ModelScope/stable-diffusion-xl-base-1.0";
-    else if (prov === "fal") targetRecCheckpoint = "fal-ai/stable-diffusion-xl-base-1.0";
+    else if (prov === "fal") targetRecCheckpoint = "fal-ai/fast-sdxl";
     else if (prov === "nanogpt") targetRecCheckpoint = "sdxl";
   } else if (loraFamily === "sd15") {
     if (prov === "huggingface") targetRecCheckpoint = "runwayml/stable-diffusion-v1-5";
