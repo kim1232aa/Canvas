@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { DataType, NodeInstance, Socket, SOCKET_COLORS } from '../types/graph';
 import { NODE_DEFINITIONS } from '../constants/nodes';
-import { refinePromptWithGemini, getStoredApiKeys } from '../services/api';
+import { refinePromptWithGemini, getStoredApiKeys, getRefineModelSelection } from '../services/api';
 import { validateModelCompatibility } from '../utils/baseModelMatcher';
 import { EngineRegistry } from '../engines/EngineRegistry';
 
@@ -129,13 +129,24 @@ export const NodeItem: React.FC<NodeItemProps> = ({
   const handleRefinePrompt = async () => {
     const currentPrompt = node.values.text || '';
     if (!currentPrompt) return;
+    const selection = getRefineModelSelection();
+    const provider = node.values.refineProvider || node.values.provider || selection.provider;
+    const model = node.values.refineModel || node.values.model || selection.model;
+    if (!provider || !model) {
+      alert('请先选择润色模型');
+      return;
+    }
     setIsRefining(true);
     try {
-      const refined = await refinePromptWithGemini(currentPrompt, 'cinematic photorealistic 8k');
+      const refined = await refinePromptWithGemini(currentPrompt, {
+        provider,
+        model,
+      });
       if (refined) {
         onUpdateValue(node.id, 'text', refined);
       }
-    } catch (e) {
+    } catch (e: any) {
+      alert(e.message || '润色失败');
       console.error(e);
     } finally {
       setIsRefining(false);

@@ -15,13 +15,14 @@ export class ModelScopeDriver extends BaseEngineDriver {
     params: NormalizedGenerateParams,
     keys: Record<string, string>
   ): Promise<NormalizedGenerateResult> {
+    if (!params.model) throw new Error('模型为必填项（model is required）');
     const effectiveToken = params.apiKey || keys.modelscopeToken;
 
     const resp = await fetch('/api/modelscope/generate', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-modelscope-token': effectiveToken,
+        ...(effectiveToken ? { 'x-modelscope-token': effectiveToken } : {}),
         'x-modelscope-site': 'cn',
       },
       body: JSON.stringify({
@@ -35,12 +36,6 @@ export class ModelScopeDriver extends BaseEngineDriver {
         height: params.height,
         site: 'cn',
         image_url: params.image_url,
-        loras: (params.loras || []).map((l) => ({
-          name: l.name,
-          strength: l.strength ?? l.modelStrength ?? 0.8,
-          civitaiId: l.civitaiId,
-          triggers: l.triggers,
-        })),
       }),
     });
 
@@ -57,8 +52,10 @@ export class ModelScopeDriver extends BaseEngineDriver {
       provider: this.name,
       providerId: this.id,
       model: data.model || params.model,
+      actualModel: data.actualModel || data.model || params.model,
+      actualProvider: data.actualProvider || this.name,
       requestedModel: params.model,
-      seed: data.seed ?? (params.seed || 12345),
+      seed: data.historyItem?.seed ?? null,
       rawResponse: data,
     };
   }

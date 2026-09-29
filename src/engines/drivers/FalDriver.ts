@@ -16,7 +16,9 @@ export class FalDriver extends BaseEngineDriver {
     params: NormalizedGenerateParams,
     keys: Record<string, string>
   ): Promise<NormalizedGenerateResult> {
+    if (!params.model) throw new Error('模型为必填项（model is required）');
     const effectiveKey = params.apiKey || keys.falKey || this.defaultKey;
+    const keyHeader: Record<string, string> = effectiveKey ? { 'x-fal-key': effectiveKey } : {};
     const isVideo = Boolean(
       params.isVideo ||
       params.model.includes('video') ||
@@ -25,29 +27,18 @@ export class FalDriver extends BaseEngineDriver {
       params.model.includes('text-to-video')
     );
 
-    // 图生视频 (img2video) 规范分流
-    let finalModel = params.model;
-    let wasAdapted = false;
-    let adaptationNotice = '';
-    if (isVideo && params.image_url && !finalModel.includes('image-to-video')) {
-      finalModel = 'fal-ai/wan/v2.1/image-to-video';
-      wasAdapted = true;
-      adaptationNotice = '已检测到输入源图，按照官方规范自动适配为 Wan 2.1 Image-to-Video 图生视频端点。';
-    }
+    // No client-side model swap; the server reports any documented t2v→i2v endpoint mapping via wasAdapted.
+    const finalModel = params.model;
 
     if (isVideo) {
       const resp = await fetch('/api/video/generate', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-fal-key': effectiveKey,
-        },
+        headers: { 'Content-Type': 'application/json', ...keyHeader },
         body: JSON.stringify({
           prompt: params.prompt,
           model: finalModel,
-          duration: params.videoDuration || 5,
-          fps: params.videoFps || 16,
-          aspect_ratio: params.aspectRatio || '16:9',
+          provider: 'fal',
+          aspect_ratio: params.aspectRatio,
           image_url: params.image_url,
           seed: params.seed,
         }),
@@ -65,10 +56,12 @@ export class FalDriver extends BaseEngineDriver {
         provider: vData.provider || this.name,
         providerId: this.id,
         model: vData.model || finalModel,
+        actualModel: vData.actualModel || vData.model || finalModel,
+        actualProvider: vData.actualProvider || vData.provider || this.name,
         requestedModel: params.model,
-        seed: vData.seed ?? params.seed ?? 42,
-        wasAdapted: vData.wasAdapted ?? wasAdapted,
-        adaptationNotice: vData.adaptationNotice ?? adaptationNotice,
+        seed: vData.seed ?? null,
+        wasAdapted: vData.wasAdapted,
+        adaptationNotice: vData.adaptationNotice,
         rawResponse: vData,
       };
     }
@@ -76,26 +69,21 @@ export class FalDriver extends BaseEngineDriver {
     // 图像生成（含文生图与图生图）
     const resp = await fetch('/api/fal/generate', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-fal-key': effectiveKey,
-      },
+      headers: { 'Content-Type': 'application/json', ...keyHeader },
       body: JSON.stringify({
         prompt: params.prompt,
         negative_prompt: params.negative_prompt,
         model: finalModel,
-        image_size: { width: params.width || 1024, height: params.height || 1024 },
+        image_size: params.width && params.height ? { width: params.width, height: params.height } : undefined,
         num_inference_steps: params.steps,
         guidance_scale: params.cfg,
         seed: params.seed,
-        sampler_name: params.sampler_name,
-        scheduler: params.scheduler,
         image_url: params.image_url,
-        denoise: params.denoise,
+        denoise: params.image_url ? params.denoise : undefined,
+        // V2: no strength fallback — server 400s if scale/path missing.
         loras: (params.loras || []).map((l) => ({
-          path: l.path || l.url || l.name,
-          scale: l.strength ?? l.modelStrength ?? 0.8,
-          civitaiId: l.civitaiId,
+          path: l.path || l.url,
+          scale: l.strength ?? l.modelStrength,
         })),
       }),
     });
@@ -112,8 +100,10 @@ export class FalDriver extends BaseEngineDriver {
       provider: this.name,
       providerId: this.id,
       model: data.model || finalModel,
+      actualModel: data.actualModel || data.model || finalModel,
+      actualProvider: data.actualProvider || this.name,
       requestedModel: params.model,
-      seed: data.seed ?? (params.seed || 136947637),
+      seed: data.seed ?? null,
       wasAdapted: data.wasAdapted,
       adaptationNotice: data.adaptationNotice,
       timings: data.timings,

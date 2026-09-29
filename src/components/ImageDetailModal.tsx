@@ -29,8 +29,10 @@ export interface ImageDetailModalProps {
     prompt?: string;
     negativePrompt?: string;
     provider?: string;
+    actualProvider?: string | null;
     model?: string;
-    seed?: number;
+    actualModel?: string | null;
+    seed?: number | null;
     steps?: number;
     cfg?: number;
     sampler?: string;
@@ -106,7 +108,7 @@ export const ImageDetailModal: React.FC<ImageDetailModalProps> = ({
               <h3 className="font-bold text-white text-sm flex items-center gap-2">
                 高保真画质与元数据查看器 (Image & Workflow Inspector)
                 <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-cyan-500/10 text-cyan-300 border border-cyan-500/25">
-                  {item.provider || 'ComfyUI 云端渲染引擎'}
+                  {item.actualProvider || item.provider || 'ComfyUI 云端渲染引擎'}
                 </span>
               </h3>
               <p className="text-[11px] text-slate-400">
@@ -173,7 +175,7 @@ export const ImageDetailModal: React.FC<ImageDetailModalProps> = ({
                       negativePrompt: item.negativePrompt,
                       checkpoint: item.model,
                       provider: item.provider,
-                      seed: item.seed,
+                      seed: item.seed != null ? item.seed : undefined,
                       steps: item.steps,
                       cfg: item.cfg,
                       sampler: item.sampler,
@@ -290,25 +292,25 @@ export const ImageDetailModal: React.FC<ImageDetailModalProps> = ({
               <div className="grid grid-cols-2 gap-2 text-[11px] font-mono">
                 <div className="bg-[#111216] p-2 rounded-lg border border-[#242633]">
                   <span className="text-slate-500 text-[10px] block">CHECKPOINT MODEL</span>
-                  <span className="text-cyan-300 font-semibold truncate block" title={item.model}>
-                    {item.model || 'FLUX.1'}
+                  <span className="text-cyan-300 font-semibold truncate block" title={item.actualModel || item.model || 'FLUX.1'}>
+                    {item.actualModel || item.model || 'FLUX.1'}
                   </span>
                 </div>
 
                 <div className="bg-[#111216] p-2 rounded-lg border border-[#242633]">
                   <span className="text-slate-500 text-[10px] block">ENGINE PROVIDER</span>
-                  <span className="text-purple-300 font-semibold truncate block">
-                    {item.provider || 'Fal.ai'}
+                  <span className="text-purple-300 font-semibold truncate block" title={item.actualProvider || item.provider || 'Fal.ai'}>
+                    {item.actualProvider || item.provider || 'Fal.ai'}
                   </span>
                 </div>
 
                 <div className="bg-[#111216] p-2 rounded-lg border border-[#242633] flex items-center justify-between">
                   <div>
                     <span className="text-slate-500 text-[10px] block">SEED (种子)</span>
-                    <span className="text-emerald-300 font-semibold">{item.seed ?? 0}</span>
+                    <span className="text-emerald-300 font-semibold">{item.seed != null ? item.seed : '—'}</span>
                   </div>
                   <button
-                    onClick={() => handleCopy('seed', String(item.seed ?? 0))}
+                    onClick={() => handleCopy('seed', String(item.seed ?? '—'))}
                     className="p-1 hover:text-white text-slate-400"
                     title="复制种子"
                   >
@@ -366,7 +368,7 @@ export const ImageDetailModal: React.FC<ImageDetailModalProps> = ({
                         )}
                       </div>
                       <span className="px-2 py-0.5 rounded bg-purple-950/60 text-purple-300 text-[10px] font-mono border border-purple-800/40 shrink-0">
-                        强度: {(l.modelStrength ?? l.strength ?? 0.8).toFixed(2)}
+                        强度: {(l.modelStrength ?? l.strength) != null ? Number(l.modelStrength ?? l.strength).toFixed(2) : '—'}
                       </span>
                     </div>
                   ))}

@@ -15,13 +15,14 @@ export class HuggingFaceDriver extends BaseEngineDriver {
     params: NormalizedGenerateParams,
     keys: Record<string, string>
   ): Promise<NormalizedGenerateResult> {
+    if (!params.model) throw new Error('模型为必填项（model is required）');
     const effectiveToken = params.apiKey || keys.hfToken;
 
     const resp = await fetch('/api/huggingface/generate', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-hf-token': effectiveToken,
+        ...(effectiveToken ? { 'x-hf-token': effectiveToken } : {}),
       },
       body: JSON.stringify({
         prompt: params.prompt,
@@ -32,13 +33,9 @@ export class HuggingFaceDriver extends BaseEngineDriver {
         steps: params.steps,
         guidance: params.cfg,
         seed: params.seed,
+        // Forwarded so the server can 400 on them (HF text-to-image has no image input / LoRA field).
         image_url: params.image_url,
-        loras: (params.loras || []).map((l) => ({
-          name: l.name,
-          strength: l.strength ?? l.modelStrength ?? 0.8,
-          civitaiId: l.civitaiId,
-          triggers: l.triggers,
-        })),
+        loras: params.loras?.length ? params.loras.map((l) => l.name) : undefined,
       }),
     });
 
@@ -54,8 +51,10 @@ export class HuggingFaceDriver extends BaseEngineDriver {
       provider: this.name,
       providerId: this.id,
       model: data.model || params.model,
+      actualModel: data.actualModel || data.model || params.model,
+      actualProvider: data.actualProvider || this.name,
       requestedModel: params.model,
-      seed: data.seed ?? (params.seed || 12345),
+      seed: data.historyItem?.seed ?? null,
       rawResponse: data,
     };
   }

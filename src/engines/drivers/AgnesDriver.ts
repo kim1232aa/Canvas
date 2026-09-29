@@ -94,17 +94,13 @@ export class AgnesDriver extends BaseEngineDriver {
     params: NormalizedGenerateParams,
     keys: Record<string, string>
   ): Promise<NormalizedGenerateResult> {
-    const effectiveKey = params.apiKey || keys.agnesKey || this.defaultKey;
+    if (!params.model) throw new Error('模型为必填项（model is required）');
+    // No key here → server resolves from its pool (AGNES_KEY / settings)
+    const effectiveKey = params.apiKey || keys.agnesKey || '';
     const effectiveBaseUrl = params.baseUrl || keys.agnesBaseUrl || this.defaultBaseUrl;
 
-    if (!effectiveKey) {
-      throw new Error('未配置 Agnes AI API 密钥 (x-agnes-key)。请在设置面板中配置。');
-    }
-
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'x-agnes-key': effectiveKey,
-    };
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (effectiveKey) headers['x-agnes-key'] = effectiveKey;
     if (params.baseUrl || (keys.agnesBaseUrl && keys.agnesBaseUrl !== this.defaultBaseUrl)) {
       headers['x-agnes-base-url'] = effectiveBaseUrl;
     }
@@ -128,7 +124,7 @@ export class AgnesDriver extends BaseEngineDriver {
       providerId: this.id,
       model: data.model || params.model,
       requestedModel: params.model,
-      seed: data.seed ?? params.seed,
+      seed: null, // Agnes API has no seed support
       wasAdapted: data.wasAdapted,
       adaptationNotice: data.adaptationNotice,
       timings: data.timings,
@@ -140,17 +136,13 @@ export class AgnesDriver extends BaseEngineDriver {
     params: NormalizedChatParams,
     keys: Record<string, string>
   ): Promise<NormalizedChatResult> {
-    const effectiveKey = params.apiKey || keys.agnesKey || this.defaultKey;
+    if (!params.model) throw new Error('模型为必填项（model is required）');
+    // No key here → server resolves from its pool (AGNES_KEY / settings)
+    const effectiveKey = params.apiKey || keys.agnesKey || '';
     const effectiveBaseUrl = params.baseUrl || keys.agnesBaseUrl || this.defaultBaseUrl;
 
-    if (!effectiveKey) {
-      throw new Error('未配置 Agnes AI API 密钥 (x-agnes-key)。请在设置面板中配置。');
-    }
-
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'x-agnes-key': effectiveKey,
-    };
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (effectiveKey) headers['x-agnes-key'] = effectiveKey;
     if (params.baseUrl || (keys.agnesBaseUrl && keys.agnesBaseUrl !== this.defaultBaseUrl)) {
       headers['x-agnes-base-url'] = effectiveBaseUrl;
     }
@@ -168,10 +160,10 @@ export class AgnesDriver extends BaseEngineDriver {
 
     const data = await resp.json();
     return {
-      content: data.content || data.choices?.[0]?.message?.content || '',
+      content: data.content || '',
       provider: this.name,
       providerId: this.id,
-      model: data.model || params.model || 'agnes-3.0-flash',
+      model: data.model || params.model,
       usage: data.usage,
     };
   }

@@ -216,14 +216,14 @@ export class VideoDriver extends BaseEngineDriver {
     let adaptationNotice = '';
 
     if (hasImage) {
-      if (targetModel === 'fal-ai/wan/v2.1/text-to-video' || targetModel === 'wan2.1-t2v') {
-        targetModel = 'fal-ai/wan/v2.1/image-to-video';
-        wasAdapted = true;
-        adaptationNotice = '已检测到输入源图，按照官方规范自动适配为 Wan 2.1 Image-to-Video 图生视频端点。';
-      } else if (targetModel === 'fal-ai/kling-video/v1/standard/text-to-video') {
-        targetModel = 'fal-ai/kling-video/v1/standard/image-to-video';
-        wasAdapted = true;
-        adaptationNotice = '已检测到输入源图，按照官方规范自动适配为 Kling 1.5 Image-to-Video 图生视频端点。';
+      if (
+        targetModel === 'fal-ai/wan/v2.1/text-to-video' ||
+        targetModel === 'wan2.1-t2v' ||
+        targetModel === 'damo/wan2.1-t2v' ||
+        targetModel === 'fal-ai/kling-video/v1/standard/text-to-video' ||
+        targetModel.includes('text-to-video')
+      ) {
+        throw new Error('这个端点不支持参考图');
       }
     }
 
@@ -242,10 +242,9 @@ export class VideoDriver extends BaseEngineDriver {
       body: JSON.stringify({
         prompt: params.prompt,
         model: targetModel,
-        provider: (params as any).provider || (params as any).targetProvider,
-        duration: params.videoDuration || 5,
-        fps: params.videoFps || 16,
-        aspect_ratio: params.aspectRatio || '16:9',
+        provider: params.targetProvider || params.provider,
+        duration: params.videoDuration,
+        aspect_ratio: params.aspectRatio,
         image_url: params.image_url,
         seed: params.seed,
       }),
@@ -263,8 +262,10 @@ export class VideoDriver extends BaseEngineDriver {
       provider: data.provider || this.name,
       providerId: this.id,
       model: data.model || targetModel,
+      actualModel: data.actualModel || data.model || targetModel,
+      actualProvider: data.actualProvider || data.provider || this.name,
       requestedModel: params.model,
-      seed: data.seed ?? params.seed ?? 42,
+      seed: data.seed ?? data.historyItem?.seed ?? null,
       wasAdapted: data.wasAdapted ?? wasAdapted,
       adaptationNotice: data.adaptationNotice ?? adaptationNotice,
       timings: data.timings,

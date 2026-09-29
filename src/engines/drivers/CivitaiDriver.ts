@@ -26,33 +26,35 @@ export class CivitaiDriver extends BaseEngineDriver {
     params: NormalizedGenerateParams,
     keys: Record<string, string>
   ): Promise<NormalizedGenerateResult> {
+    if (!params.model) throw new Error('模型为必填项（model is required）');
     const isVideo =
       params.isVideo === true ||
-      params.model.startsWith('minimax/') ||
-      params.model.startsWith('fal-ai/wan') ||
       params.model.includes('text-to-video') ||
       params.model.includes('image-to-video');
     const civKey = keys.civitai || keys.CIVITAI_API_TOKEN || keys.civitaiKey || '';
 
-    const payload = {
+    // Only send values the caller actually provided — no fabricated defaults.
+    const payload: Record<string, any> = {
       prompt: params.prompt,
-      negative_prompt: params.negative_prompt || '',
       model: params.model,
-      width: params.width || 1024,
-      height: params.height || 1024,
-      steps: params.steps || 25,
-      cfg: params.cfg || 6.0,
-      seed: params.seed || Math.floor(Math.random() * 1000000000),
-      sampler_name: params.sampler_name || params.extraParams?.sampler_name || 'euler',
-      scheduler: params.scheduler || params.extraParams?.scheduler || 'karras',
-      denoise: params.denoise ?? 1.0,
-      image_url: params.image_url,
-      loras: params.loras || [],
       isVideo,
-      videoDuration: isVideo ? params.videoDuration : undefined,
-      aspectRatio: isVideo ? params.aspectRatio : undefined,
-      civitaiKey: civKey,
     };
+    if (params.negative_prompt) payload.negative_prompt = params.negative_prompt;
+    if (params.width) payload.width = params.width;
+    if (params.height) payload.height = params.height;
+    if (params.steps) payload.steps = params.steps;
+    if (params.cfg) payload.cfg = params.cfg;
+    if (params.seed != null) payload.seed = params.seed;
+    if (params.sampler_name || params.extraParams?.sampler_name) payload.sampler_name = params.sampler_name || params.extraParams?.sampler_name;
+    if (params.scheduler || params.extraParams?.scheduler) payload.scheduler = params.scheduler || params.extraParams?.scheduler;
+    if (params.image_url) {
+      payload.image_url = params.image_url;
+      if (params.denoise != null) payload.denoise = params.denoise;
+    }
+    if (params.loras?.length) payload.loras = params.loras;
+    if (isVideo && params.videoDuration) payload.videoDuration = params.videoDuration;
+    if (isVideo && params.aspectRatio) payload.aspectRatio = params.aspectRatio;
+    if (civKey) payload.civitaiKey = civKey;
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -147,10 +149,12 @@ export class CivitaiDriver extends BaseEngineDriver {
       provider: this.name,
       providerId: 'civitai',
       model: params.model,
+      actualModel: data.actualModel || params.model,
+      actualProvider: data.actualProvider || this.name,
       requestedModel: params.model,
-      seed: data.seed || payload.seed,
+      seed: data.historyItem?.seed ?? null,
       wasAdapted: Boolean(data.wasAdapted),
-      adaptationNotice: data.adaptationNotice || 'Civitai 官方原生引擎直连渲染完成',
+      adaptationNotice: data.adaptationNotice,
       timings: data.timings,
       rawResponse: data,
     };

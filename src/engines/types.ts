@@ -49,6 +49,8 @@ export interface NormalizedGenerateParams {
   videoDuration?: number;
   videoFps?: number;
   aspectRatio?: string;
+  provider?: string;
+  targetProvider?: string;
   // 采样器与调度器 (精细控制)
   sampler_name?: string;
   scheduler?: string;
@@ -64,8 +66,10 @@ export interface NormalizedGenerateResult {
   provider: string;
   providerId: ProviderId;
   model: string;
+  actualModel?: string;
+  actualProvider?: string;
   requestedModel?: string;
-  seed: number;
+  seed: number | null; // null = provider does not accept/return a seed
   wasAdapted?: boolean;
   adaptationNotice?: string;
   timings?: any;

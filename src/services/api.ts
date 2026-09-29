@@ -139,13 +139,12 @@ export const generateWithFal = async (params: {
 export const generateWithHuggingFace = async (params: {
   prompt: string;
   negative_prompt?: string;
-  model?: string;
+  model: string;
   width?: number;
   height?: number;
   steps?: number;
   guidance?: number;
   seed?: number;
-  loras?: Array<{ name: string; strength: number; civitaiId?: string; triggers?: string }>;
 }) => {
   const keys = getStoredApiKeys();
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -204,13 +203,9 @@ export const generateWithModelScope = async (params: {
 
 export const generateWithNanoGPT = async (params: {
   prompt: string;
-  negative_prompt?: string;
-  model?: string;
-  size?: string;
-  steps?: number;
-  guidance_scale?: number;
+  model: string;
   seed?: number;
-  loras?: Array<{ name: string; strength: number; civitaiId?: string; triggers?: string }>;
+  image_url?: string;
 }) => {
   const keys = getStoredApiKeys();
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -314,20 +309,88 @@ export const generateWithGemini = async (params: {
   return resp.json();
 };
 
-export const refinePromptWithGemini = async (prompt: string, style?: string, loras: any[] = []) => {
+export interface RefinePromptOptions {
+  provider?: string;
+  model?: string;
+  style?: string;
+  loras?: any[];
+}
+
+export const getRefineModelSelection = (): { provider?: string; model?: string } => {
+  try {
+    const rawKeys = localStorage.getItem('comfycanvas_api_keys');
+    if (rawKeys) {
+      const parsed = JSON.parse(rawKeys);
+      if (parsed.refineModel && parsed.refineProvider) {
+        return { provider: parsed.refineProvider, model: parsed.refineModel };
+      }
+    }
+    const localProvider = localStorage.getItem('comfycanvas_refine_provider');
+    const localModel = localStorage.getItem('comfycanvas_refine_model');
+    if (localModel && localProvider) {
+      return { provider: localProvider, model: localModel };
+    }
+  } catch {}
+  return {};
+};
+
+export const refinePromptWithGemini = async (
+  prompt: string,
+  options?: RefinePromptOptions | string,
+  legacyLoras: any[] = []
+): Promise<string> => {
+  let style: string | undefined;
+  let loras: any[] = [];
+  let provider: string | undefined;
+  let model: string | undefined;
+
+  if (typeof options === 'string') {
+    style = options.trim() ? options.trim() : undefined;
+    loras = legacyLoras || [];
+    const selection = getRefineModelSelection();
+    provider = selection.provider;
+    model = selection.model;
+  } else if (options) {
+    style = options.style?.trim() ? options.style.trim() : undefined;
+    loras = options.loras || [];
+    provider = options.provider;
+    model = options.model;
+    if (!provider || !model) {
+      const selection = getRefineModelSelection();
+      provider = provider || selection.provider;
+      model = model || selection.model;
+    }
+  } else {
+    const selection = getRefineModelSelection();
+    provider = selection.provider;
+    model = selection.model;
+  }
+
+  if (!provider || !model) {
+    throw new Error('请先选择润色模型');
+  }
+
   const keys = getStoredApiKeys();
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (keys.geminiKey) headers['x-gemini-key'] = keys.geminiKey;
+  if (keys.sensenovaKey) headers['x-sensenova-key'] = keys.sensenovaKey;
+  if (keys.agnesKey) headers['x-agnes-key'] = keys.agnesKey;
 
   const resp = await fetch('/api/gemini/refine-prompt', {
     method: 'POST',
     headers,
-    body: JSON.stringify({ prompt, style, loras }),
+    body: JSON.stringify({
+      prompt,
+      provider,
+      model,
+      ...(style ? { style } : {}),
+      loras,
+    }),
   });
 
   if (!resp.ok) {
     const err = await resp.json().catch(() => ({ error: 'Prompt refiner failed' }));
-    throw new Error(err.error || 'Failed to refine prompt');
+    throw new Error(err.upstreamBody || err.error || `润色失败 [${resp.status}]`);
   }
 
   const data = await resp.json();

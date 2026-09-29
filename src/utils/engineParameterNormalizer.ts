@@ -30,13 +30,12 @@ export interface EngineNormalizationResult<T = any> {
  * Resolves a LoRA model reference to an absolute URL or normalized ID.
  * If Civitai ID is present, generates official Civitai download URL.
  */
-export function resolveLoraPathOrUrl(lora: UnifiedLoraInput, civitaiToken?: string): string {
+export function resolveLoraPathOrUrl(lora: UnifiedLoraInput): string {
   if (lora.downloadUrl && lora.downloadUrl.startsWith('http')) {
     return lora.downloadUrl;
   }
   if (lora.civitaiId && /^\d+$/.test(lora.civitaiId.trim())) {
-    const tokenParam = civitaiToken ? `?token=${encodeURIComponent(civitaiToken)}` : '';
-    return `https://civitai.com/api/download/models/${lora.civitaiId.trim()}${tokenParam}`;
+    return `https://civitai.com/api/download/models/${lora.civitaiId.trim()}`;
   }
   if (lora.name.startsWith('http://') || lora.name.startsWith('https://')) {
     return lora.name;
@@ -66,7 +65,7 @@ export function normalizeForFal(
     return {
       path: resolved,
       url: resolved,
-      scale: Number(l.modelStrength ?? 0.8),
+      scale: l.modelStrength != null ? Number(l.modelStrength) : undefined,
       civitaiId: l.civitaiId,
     };
   });
@@ -142,8 +141,8 @@ export function normalizeForComfyUI(
         model: [lastModelNode, lastModelSlot],
         clip: [lastClipNode, lastClipSlot],
         lora_name: lora.name.endsWith('.safetensors') ? lora.name : `${lora.name}.safetensors`,
-        strength_model: Number(lora.modelStrength ?? 0.8),
-        strength_clip: Number(lora.clipStrength ?? 0.8),
+        strength_model: lora.modelStrength != null ? Number(lora.modelStrength) : undefined,
+        strength_clip: lora.clipStrength != null ? Number(lora.clipStrength) : undefined,
       },
     };
     lastModelNode = loraNodeId;
@@ -227,54 +226,37 @@ export function normalizeForComfyUI(
 }
 
 /**
- * 3. ModelScope (魔搭社区) Normalization
- * Shape:
- *   input: { prompt, negative_prompt, steps }
- *   parameters: { loras: [{ lora_model_id: string, lora_weight: number }] }
- *   + Trigger Words automatically injected to prompt
+ * 3. ModelScope (魔搭社区) Normalization — POST /v1/images/generations
+ * Shape (top-level, no `parameters` wrapper):
+ *   { model, prompt, negative_prompt?, num_inference_steps?, guidance_scale?, seed?, width?, height? }
+ *   LoRA: body format unverified against official docs → server rejects with 400.
  */
 export function normalizeForModelScope(
   params: ComfyParameters,
   positivePrompt: string,
   negativePrompt: string
 ): EngineNormalizationResult {
-  const triggers = (params.loras || [])
-    .map((l) => l.triggerWords)
-    .filter(Boolean)
-    .join(', ');
-  let finalPrompt = positivePrompt;
-  if (triggers && !finalPrompt.includes(triggers)) {
-    finalPrompt = `${triggers}, ${finalPrompt}`.trim();
-  }
-
-  const modelscopeLoras = (params.loras || []).map((l) => ({
-    lora_model_id: l.name,
-    lora_weight: Number(l.modelStrength ?? 0.8),
-  }));
-
   const payload = {
-    input: {
-      prompt: finalPrompt,
-      negative_prompt: negativePrompt || '',
-      steps: params.steps || 30,
-    },
-    parameters: {
-      loras: modelscopeLoras.length > 0 ? modelscopeLoras : undefined,
-    },
+    model: params.checkpoint,
+    prompt: positivePrompt,
+    negative_prompt: negativePrompt || undefined,
+    num_inference_steps: params.steps,
+    guidance_scale: params.cfg,
+    seed: params.seed,
+    width: params.width,
+    height: params.height,
   };
 
   return {
     engine: 'modelscope',
     payload,
-    transformedPrompt: finalPrompt,
+    transformedPrompt: positivePrompt,
     transformedNegativePrompt: negativePrompt,
-    loraShapeDescription: 'parameters.loras: [{ lora_model_id: string, lora_weight: float }]',
+    loraShapeDescription: '不支持 (LoRA 格式未经官方文档核实，服务端返回 400)',
     parameterMappings: {
-      steps: 'input.steps',
-      prompt: 'input.prompt (+ triggers)',
-      negativePrompt: 'input.negative_prompt',
-      loraId: 'parameters.loras[].lora_model_id',
-      loraWeight: 'parameters.loras[].lora_weight',
+      steps: 'num_inference_steps',
+      cfg: 'guidance_scale',
+      negativePrompt: 'negative_prompt',
     },
   };
 }
@@ -282,50 +264,37 @@ export function normalizeForModelScope(
 /**
  * 4. Hugging Face Inference API Normalization
  * Shape:
- *   inputs: prompt (+ triggers)
- *   parameters: { negative_prompt, width, height, num_inference_steps, guidance_scale, cross_attention_kwargs: { scale: lora_scale } }
+ *   inputs: prompt
+ *   parameters: { negative_prompt, width, height, num_inference_steps, guidance_scale, seed }
+ *   LoRA: text-to-image task schema has no LoRA field → server rejects with 400.
  */
 export function normalizeForHuggingFace(
   params: ComfyParameters,
   positivePrompt: string,
   negativePrompt: string
 ): EngineNormalizationResult {
-  const triggers = (params.loras || [])
-    .map((l) => l.triggerWords)
-    .filter(Boolean)
-    .join(', ');
-  let finalPrompt = positivePrompt;
-  if (triggers && !finalPrompt.includes(triggers)) {
-    finalPrompt = `${triggers}, ${finalPrompt}`.trim();
-  }
-
-  const maxStrength = (params.loras || []).length > 0
-    ? Math.max(...params.loras.map((l) => l.modelStrength))
-    : 0.8;
-
   const payload = {
-    inputs: finalPrompt,
+    inputs: positivePrompt,
     parameters: {
       negative_prompt: negativePrompt || undefined,
       width: params.width,
       height: params.height,
       num_inference_steps: params.steps,
       guidance_scale: params.cfg,
-      cross_attention_kwargs: (params.loras || []).length > 0 ? { scale: maxStrength } : undefined,
+      seed: params.seed,
     },
   };
 
   return {
     engine: 'huggingface',
     payload,
-    transformedPrompt: finalPrompt,
+    transformedPrompt: positivePrompt,
     transformedNegativePrompt: negativePrompt,
-    loraShapeDescription: 'parameters.cross_attention_kwargs: { scale: float } + prompt triggers',
+    loraShapeDescription: '不支持 (HF text-to-image 任务无 LoRA 字段，服务端返回 400)',
     parameterMappings: {
       steps: 'parameters.num_inference_steps',
       cfg: 'parameters.guidance_scale',
       dimensions: 'parameters.width / height',
-      loraScale: 'parameters.cross_attention_kwargs.scale',
     },
   };
 }
@@ -333,115 +302,60 @@ export function normalizeForHuggingFace(
 /**
  * 5. NanoGPT Normalization
  * Shape:
- *   prompt (+ triggers)
+ *   prompt
  *   model: string
- *   size: "${width}x${height}"
- *   num_inference_steps: number
- *   guidance_scale: number
- *   loras: Array<{ path: string; scale: number }>
+ *   seed: number (optional)
+ *   resolution: "1k" | "2k" | "4k" (optional, model-dependent)
+ *   aspect_ratio: string (optional, model-dependent)
+ *   NanoGPT does NOT support: steps, cfg/guidance_scale, LoRA, negative_prompt, pixel dimensions
  */
 export function normalizeForNanoGPT(
   params: ComfyParameters,
   positivePrompt: string,
   negativePrompt: string
 ): EngineNormalizationResult {
-  const triggers = (params.loras || [])
-    .map((l) => l.triggerWords)
-    .filter(Boolean)
-    .join(', ');
-  let finalPrompt = positivePrompt;
-  if (triggers && !finalPrompt.includes(triggers)) {
-    finalPrompt = `${triggers}, ${finalPrompt}`.trim();
-  }
-
-  const loras = (params.loras || []).map((l) => ({
-    path: resolveLoraPathOrUrl(l),
-    scale: Number(l.modelStrength ?? 0.8),
-  }));
-
-  const payload = {
-    prompt: finalPrompt,
+  const payload: Record<string, any> = {
+    prompt: positivePrompt,
     model: params.checkpoint,
-    size: `${params.width}x${params.height}`,
-    num_inference_steps: params.steps,
-    guidance_scale: params.cfg,
-    loras: loras.length > 0 ? loras : undefined,
+    seed: params.seed,
   };
 
   return {
     engine: 'nanogpt',
     payload,
-    transformedPrompt: finalPrompt,
-    transformedNegativePrompt: negativePrompt,
-    loraShapeDescription: 'loras: [{ path: string, scale: float }]',
+    transformedPrompt: positivePrompt,
+    transformedNegativePrompt: '',
+    loraShapeDescription: '不支持 (NanoGPT 无 LoRA)',
     parameterMappings: {
-      steps: 'num_inference_steps',
-      size: 'size ("WxH")',
-      cfg: 'guidance_scale',
-      loras: 'loras[].{ path, scale }',
+      seed: 'seed',
     },
   };
 }
 
 /**
- * 6. Google Gemini / Imagen 3 Normalization
+ * 6. Google Gemini Normalization
  * Shape:
- *   Prompt semantic concept distillation (LoRA triggers & style weighting injected into prompt text)
- *   config: { aspectRatio, negativePrompt, guidanceScale, seed }
+ *   Prompt only + aspectRatio (Gemini generateContent has no negativePrompt/guidanceScale/seed/LoRA support)
  */
 export function normalizeForGemini(
   params: ComfyParameters,
   positivePrompt: string,
   negativePrompt: string
 ): EngineNormalizationResult {
-  // Calculate closest supported aspect ratio: 1:1, 16:9, 9:16, 4:3, 3:4
-  let aspectRatio: '1:1' | '3:4' | '4:3' | '9:16' | '16:9' = '1:1';
-  const ratio = params.width / (params.height || 1);
-  if (ratio > 1.5) aspectRatio = '16:9';
-  else if (ratio > 1.2) aspectRatio = '4:3';
-  else if (ratio < 0.65) aspectRatio = '9:16';
-  else if (ratio < 0.85) aspectRatio = '3:4';
+  const finalPrompt = positivePrompt;
 
-  // Semantic concept distillation: extract triggers or LoRA name keywords
-  const triggerList = (params.loras || [])
-    .map((l) => {
-      if (l.triggerWords) return l.triggerWords;
-      // Synthesize clean concept from name
-      const cleanName = l.name.replace(/\.safetensors$/i, '').replace(/[-_]/g, ' ');
-      return `${cleanName} style`;
-    })
-    .filter(Boolean);
-
-  let finalPrompt = positivePrompt;
-  if (triggerList.length > 0) {
-    const combined = triggerList.join(', ');
-    if (!finalPrompt.includes(combined)) {
-      finalPrompt = `${combined}, ${finalPrompt}`.trim();
-    }
-  }
-
-  const payload = {
+  const payload: any = {
     prompt: finalPrompt,
-    config: {
-      aspectRatio,
-      negativePrompt: negativePrompt || undefined,
-      guidanceScale: params.cfg || 5.0,
-      seed: params.seed,
-    },
-    loras: params.loras,
+    // ponytail: width/height, negativePrompt, guidanceScale, seed, loras are NOT supported by Gemini generateContent.
+    // Official doc accepts aspect_ratio ('1:1', '3:2', '2:3', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9') and image_size ('1K', '2K', '4K').
   };
 
   return {
     engine: 'gemini',
     payload,
     transformedPrompt: finalPrompt,
-    transformedNegativePrompt: negativePrompt,
-    loraShapeDescription: '语义触发词注入与指导尺度调制 (Semantic Trigger Distillation)',
-    parameterMappings: {
-      dimensions: `aspectRatio ("${aspectRatio}")`,
-      cfg: 'guidanceScale',
-      negativePrompt: 'config.negativePrompt',
-      loras: '提示词前置注入 (Prefix Conditioning)',
-    },
+    transformedNegativePrompt: '',
+    loraShapeDescription: '不支持 (Gemini generateContent 无 LoRA)',
+    parameterMappings: {},
   };
 }

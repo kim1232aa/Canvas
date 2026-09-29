@@ -10,7 +10,7 @@ import {
 /**
  * SenseNova (商汤日日新) 引擎驱动
  * 顶级深度推理思考大模型平台:
- * - DeepSeek V4 Flash (带百万上下文与思维链 reasoning_content)
+ * - DeepSeek V4 Flash (带百万上下文与思维链 message.reasoning)
  * - DeepSeek V4 Pro (满血旗舰架构推演)
  * - GLM-5.2 (清华智谱旗舰通用大模型)
  * - SenseNova 6.8 Flash Lite (商汤自研旗舰多模态)
@@ -42,17 +42,13 @@ export class SenseNovaDriver extends BaseEngineDriver {
     params: NormalizedChatParams,
     keys: Record<string, string> = {}
   ): Promise<NormalizedChatResult> {
-    const effectiveKey = params.apiKey || keys?.sensenovaKey || this.defaultKey;
+    if (!params.model) throw new Error('模型为必填项（model is required）');
+    // No key here → server resolves from its pool (SENSENOVA_KEY / settings)
+    const effectiveKey = params.apiKey || keys?.sensenovaKey || '';
     const effectiveBaseUrl = params.baseUrl || keys?.sensenovaBaseUrl || this.defaultBaseUrl;
 
-    if (!effectiveKey) {
-      throw new Error('未配置商汤日日新 API 密钥 (x-sensenova-key)。请在右上角设置面板中配置。');
-    }
-
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'x-sensenova-key': effectiveKey,
-    };
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (effectiveKey) headers['x-sensenova-key'] = effectiveKey;
     if (params.baseUrl || (keys?.sensenovaBaseUrl && keys.sensenovaBaseUrl !== this.defaultBaseUrl)) {
       headers['x-sensenova-base-url'] = effectiveBaseUrl;
     }
@@ -70,11 +66,11 @@ export class SenseNovaDriver extends BaseEngineDriver {
 
     const data = await resp.json();
     return {
-      content: data.content || data.choices?.[0]?.message?.content || '',
-      reasoningContent: data.reasoningContent || data.choices?.[0]?.message?.reasoning_content || '',
+      content: data.content || '',
+      reasoningContent: data.reasoningContent || '',
       provider: this.name,
       providerId: this.id,
-      model: data.model || params.model || 'deepseek-v4-flash',
+      model: data.model || params.model,
       usage: data.usage,
     };
   }

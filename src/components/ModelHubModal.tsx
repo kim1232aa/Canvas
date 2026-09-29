@@ -350,7 +350,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                 </span>
               </h2>
               <p className="text-[11px] text-slate-400">
-                涵盖 Civitai、Hugging Face、魔搭社区 (ModelScope)、Fal.ai、NanoGPT 及 Google Imagen 3 全量生态模型
+                涵盖 Civitai、Hugging Face、魔搭社区 (ModelScope)、Fal.ai、NanoGPT 及 Google Gemini 全量生态模型
               </p>
             </div>
           </div>
@@ -417,7 +417,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
             { id: 'fal', name: '⚡ Fal.ai (FLUX/Wan2.1/LTX 极速云)' },
             { id: 'nanogpt', name: '🟢 NanoGPT (即开即用官方端点)' },
             { id: 'tensorart', name: '🎨 Tensor.Art / 吐司 (社区模型中心)' },
-            { id: 'gemini', name: '💎 Google Imagen 3 (官方生图)' },
+            { id: 'gemini', name: '💎 Google Gemini (官方生图)' },
           ].map((tab) => {
             const isActive = activeProvider === tab.id;
             return (
@@ -544,7 +544,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                 : activeProvider === 'nanogpt'
                 ? '输入任意 NanoGPT Model ID (如 qwen-image-2.1/text-to-image, flux-pro, birefnet/v2)'
                 : activeProvider === 'gemini'
-                ? '输入 Gemini / Imagen 模型 ID (如 imagen-3.0-generate-002)'
+                ? '输入 Gemini 模型 ID (如 gemini-2.5-flash-image)'
                 : '输入任意 Civitai 模型 ID / AIR URN (如 133005 或 urn:air:...)'}
             </span>
           </div>

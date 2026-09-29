@@ -16,30 +16,35 @@ export class TensorArtDriver extends BaseEngineDriver {
     params: NormalizedGenerateParams,
     keys: Record<string, string>
   ): Promise<NormalizedGenerateResult> {
+    if (!params.model) throw new Error('模型（toolName）为必填项（model is required）');
     const effectiveKey = params.apiKey || keys.tensorartKey || this.defaultKey;
+
+    // Forward only caller-provided values — no width=1024/steps=25/cfg=5 defaults (C5).
+    const body: Record<string, any> = {
+      prompt: params.prompt,
+      model: params.model,
+      toolName: params.model,
+    };
+    if (params.negative_prompt) body.negative_prompt = params.negative_prompt;
+    if (params.width) body.width = params.width;
+    if (params.height) body.height = params.height;
+    if (params.seed != null) body.seed = params.seed;
+    if (params.image_url) body.image_url = params.image_url;
+    if (params.videoDuration) body.duration = params.videoDuration;
+    if (params.aspectRatio) body.ratio = params.aspectRatio;
+    // Steps/cfg/loras: Tensor.Art OpenWorks tools don't have these as named schema fields;
+    // the server will 400 if they don't match an input description keyword (C5).
+    if (params.steps) body.steps = params.steps;
+    if (params.cfg) body.cfg = params.cfg;
+    if (params.loras?.length) body.loras = params.loras;
 
     const resp = await fetch('/api/tensorart/generate', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-tensorart-key': effectiveKey,
+        ...(effectiveKey ? { 'x-tensorart-key': effectiveKey } : {}),
       },
-      body: JSON.stringify({
-        prompt: params.prompt,
-        negative_prompt: params.negative_prompt,
-        model: params.model,
-        toolName: params.model,
-        width: params.width || 1024,
-        height: params.height || 1024,
-        steps: params.steps || 25,
-        cfg: params.cfg || 5.0,
-        seed: params.seed,
-        loras: params.loras,
-        image_url: params.image_url,
-        duration: params.videoDuration || 5,
-        ratio: params.aspectRatio || '16:9',
-        size: params.width && params.width >= 1080 ? '1080P' : '720P',
-      }),
+      body: JSON.stringify(body),
     });
 
     if (!resp.ok) {
@@ -55,7 +60,7 @@ export class TensorArtDriver extends BaseEngineDriver {
       providerId: this.id,
       model: data.toolName || data.model || params.model,
       requestedModel: params.model,
-      seed: data.seed || params.seed || 0,
+      seed: data.historyItem?.seed ?? null,
       rawResponse: data,
     };
   }

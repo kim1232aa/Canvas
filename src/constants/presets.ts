@@ -3553,16 +3553,16 @@ export const WORKFLOW_PRESETS: WorkflowPreset[] = [
     ],
   },
 
-  // 5. Google Imagen 3 零配置官方极速工作流
+  // 5. Google Gemini 零配置官方生图工作流
   {
     id: 'gemini-imagen-zero-config',
-    name: 'Google Imagen 3.0 零门槛免配置极速工作流',
+    name: 'Google Gemini 零门槛免配置生图工作流',
     category: '内置免配置',
     provider: 'Google Gemini (内置服务)',
     previewImage: 'https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/0695b6d7-40ad-4df5-b99a-ba27550b9a58/original=true/preview.jpeg',
-    tags: ['Google Imagen 3', '无需外部Key', '开箱即用', '超高清摄影', '智能扩写'],
-    loraNames: ['Imagen 官方超保真'],
-    description: '无需配置任何第三方 API Key！直接调用系统内嵌的 Google Imagen 3.0 官方大模型，秒级响应，画质惊艳。',
+    tags: ['Google Gemini', '无需外部Key', '开箱即用'],
+    loraNames: [],
+    description: '无需配置任何第三方 API Key！直接调用 Google Gemini 官方生图 (generateContent)。不支持负向提示词/seed/steps/CFG/LoRA。',
     nodes: [
       {
         id: 'node-g1',
@@ -3577,27 +3577,15 @@ export const WORKFLOW_PRESETS: WorkflowPreset[] = [
         },
       },
       {
-        id: 'node-g2',
-        type: 'CLIPTextEncodeNegative',
-        title: 'CLIP 编码器 (负向提示词)',
-        pos: { x: 80, y: 340 },
-        width: 380,
-        inputs: NODE_DEFINITIONS['CLIPTextEncodeNegative'].inputs,
-        outputs: NODE_DEFINITIONS['CLIPTextEncodeNegative'].outputs,
-        values: {
-          text: 'blurry, low quality, deformed anatomy, artifacts, bad lighting',
-        },
-      },
-      {
         id: 'node-g3',
         type: 'GoogleImagenNode',
-        title: 'Google Imagen 3 (官方直连引擎)',
+        title: 'Google Gemini 生图 (官方直连引擎)',
         pos: { x: 520, y: 160 },
         width: 320,
         inputs: NODE_DEFINITIONS['GoogleImagenNode'].inputs,
         outputs: NODE_DEFINITIONS['GoogleImagenNode'].outputs,
         values: {
-          model: 'imagen-3.0-generate-002',
+          model: 'gemini-2.5-flash-image',
           aspect_ratio: '1:1',
         },
       },
@@ -3609,25 +3597,24 @@ export const WORKFLOW_PRESETS: WorkflowPreset[] = [
         width: 360,
         inputs: NODE_DEFINITIONS['SaveImage'].inputs,
         outputs: [],
-        values: { filename_prefix: 'Google_Imagen3_Output' },
+        values: { filename_prefix: 'Google_Gemini_Output' },
       },
     ],
     connections: [
       { id: 'gc-1', fromNodeId: 'node-g1', fromSocketId: 'CONDITIONING', toNodeId: 'node-g3', toSocketId: 'positive', type: 'CONDITIONING' },
-      { id: 'gc-2', fromNodeId: 'node-g2', fromSocketId: 'CONDITIONING', toNodeId: 'node-g3', toSocketId: 'negative', type: 'CONDITIONING' },
       { id: 'gc-3', fromNodeId: 'node-g3', fromSocketId: 'IMAGE', toNodeId: 'node-g4', toSocketId: 'images', type: 'IMAGE' },
     ],
     spatialFrames: [
       {
         id: 'frame-preset-5',
-        title: 'Google Imagen 3 免配取景框',
+        title: 'Google Gemini 免配取景框',
         pos: { x: 260, y: 160 },
         width: 480,
         height: 480,
         prompt: 'A majestic crystal dragon hovering over an emerald mountain lake, morning mist, ray tracing reflections, cinematic lighting, 8k masterpiece',
-        negativePrompt: 'blurry, low quality, deformed anatomy, artifacts',
+        negativePrompt: '',
         params: {
-          checkpoint: 'imagen-3.0-generate-002',
+          checkpoint: 'gemini-2.5-flash-image',
           seed: 1234567,
           seedControl: 'randomize',
           steps: 25,

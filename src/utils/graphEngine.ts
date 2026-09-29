@@ -26,6 +26,7 @@ export interface WorkflowExtraction {
     civitaiId?: string;
   }>;
   targetProvider: 'civitai' | 'fal' | 'agnes' | 'sensenova' | 'huggingface' | 'modelscope' | 'modelscope_ai' | 'nanogpt' | 'gemini' | 'video' | 'tensorart';
+  videoProvider?: string;
   isVideo?: boolean;
   videoDuration?: number;
   videoFps?: number;
@@ -157,7 +158,7 @@ export function extractWorkflowParameters(
     targetProvider = 'video';
     isVideo = true;
     checkpointModel = videoNode?.values.model || checkpointModel || '';
-  } else if (ckptNodes[0]?.values?.targetProvider) {
+  } else if (ckptNodes[0]?.values?.targetProvider && ckptNodes[0].values.targetProvider.trim() !== '') {
     // Explicit provider chosen by user on CheckpointLoaderSimple node
     targetProvider = ckptNodes[0].values.targetProvider;
   } else if (googleImagenNode) {
@@ -310,11 +311,6 @@ export function extractWorkflowParameters(
     finalPositive = `${triggerWordsAll}, ${finalPositive}`.trim();
   }
 
-  // 图生视频 (img2video) 规范端点校准：若存在参考底图，必须使用专门的 image-to-video 端点
-  if (isVideo && initImageUrl && checkpointModel === 'fal-ai/wan/v2.1/text-to-video') {
-    checkpointModel = 'fal-ai/wan/v2.1/image-to-video';
-  }
-
   // 图生图 (img2img) 默认降噪比控制：若有输入参考底图且未手动调整 denoise (仍为 1.0)，建议降为 0.65 变体
   if (initImageUrl && !isVideo && denoise === 1.0 && ksamplerNode?.values.denoise === undefined) {
     denoise = 0.65;
@@ -335,6 +331,7 @@ export function extractWorkflowParameters(
     denoise,
     loras,
     targetProvider,
+    videoProvider: videoNode ? (videoNode.values.targetProvider || videoNode.values.provider) : undefined,
     isVideo,
     videoDuration,
     videoFps,
@@ -454,6 +451,8 @@ export async function executeWorkflow(
       prompt: params.positivePrompt,
       negative_prompt: params.negativePrompt,
       model: params.checkpointModel,
+      provider: params.videoProvider,
+      targetProvider: params.videoProvider,
       width: params.width,
       height: params.height,
       steps: params.steps,

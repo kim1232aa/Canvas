@@ -489,6 +489,8 @@ export default function App() {
         prompt: finalPrompt,
         negative_prompt: frame.negativePrompt,
         model: p.checkpoint,
+        provider: p.targetProvider,
+        targetProvider: p.targetProvider,
         width: p.width,
         height: p.height,
         steps: p.steps,
@@ -653,13 +655,13 @@ export default function App() {
 
     if (targetNode.type === 'CheckpointLoaderSimple') {
       if (widgetName === 'ckpt_name') {
-        const prov = targetNode.values?.targetProvider || 'huggingface';
+        const prov = targetNode.values?.targetProvider || '';
         setNodes((prev) =>
           prev.map((n) =>
             n.id === nodeId
               ? {
                   ...n,
-                  title: `加载底模 (${prov.toUpperCase()})`,
+                  title: prov ? `加载底模 (${prov.toUpperCase()})` : '加载底模',
                   values: { ...(n.values || {}), ckpt_name: value },
                 }
               : n
@@ -1723,11 +1725,11 @@ export default function App() {
     checkpointNode?.values?.targetProvider ||
     (googleImagenNode ? 'gemini' : undefined) ||
     activeFrame?.params?.targetProvider ||
-    'huggingface';
+    '';
 
   const activeParams: ComfyParameters = {
     checkpoint: checkpointNode?.values?.ckpt_name || googleImagenNode?.values?.model || activeFrame?.params?.checkpoint || 'Tongyi-MAI/Z-Image-Turbo',
-    seed: ksamplerNode?.values?.seed !== undefined ? Number(ksamplerNode.values.seed) : (activeFrame?.params?.seed ?? 42),
+    seed: ksamplerNode?.values?.seed !== undefined ? Number(ksamplerNode.values.seed) : (activeFrame?.params?.seed ?? undefined),
     seedControl: (ksamplerNode?.values?.control_after_generate as any) || activeFrame?.params?.seedControl || 'randomize',
     steps: ksamplerNode?.values?.steps !== undefined ? Number(ksamplerNode.values.steps) : (activeFrame?.params?.steps ?? 25),
     cfg: ksamplerNode?.values?.cfg !== undefined ? Number(ksamplerNode.values.cfg) : (activeFrame?.params?.cfg ?? 4.5),
@@ -1978,13 +1980,17 @@ export default function App() {
                     }
                   }
                   if (n.type === 'CheckpointLoaderSimple') {
+                    const updatedValues: Record<string, any> = {
+                      ...n.values,
+                      ckpt_name: newParams.checkpoint,
+                    };
+                    // Do not write back inferred targetProvider unless explicitly set on the node
+                    if (n.values?.targetProvider) {
+                      updatedValues.targetProvider = newParams.targetProvider;
+                    }
                     return {
                       ...n,
-                      values: {
-                        ...n.values,
-                        ckpt_name: newParams.checkpoint,
-                        targetProvider: newParams.targetProvider,
-                      },
+                      values: updatedValues,
                     };
                   }
                   if (n.type === 'GoogleImagenNode') {

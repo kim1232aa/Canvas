@@ -137,15 +137,15 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
     },
     {
       id: 'gemini',
-      name: 'Google Gemini & Imagen',
-      badge: '官方直连 SDK / Imagen 3 / Gemini 3.8',
+      name: 'Google Gemini',
+      badge: '官方直连 SDK / Gemini Image / Gemini 3.8',
       docsUrl: 'https://ai.google.dev',
-      description: 'Google 官方 Imagen 3.0 高保真生图引擎、Gemini 3.1 Flash Image (Nano Banana 2) 及 Gemini 3.8 Flash 提示词/参数重绘器。已完成系统级深度集成与原生 SDK 路由。',
-      apiUrl: 'Google GenAI SDK (Imagen 3 / Gemini 3.8 Flash / Nano Banana)',
+      description: 'Google 官方 Gemini 2.5 Flash Image、Gemini 3.1 Flash Image (Nano Banana 2) 及 Gemini 3.8 Flash 提示词/参数重绘器。已完成系统级深度集成与原生 SDK 路由。',
+      apiUrl: 'Google GenAI SDK (Gemini Image / Gemini 3.8 Flash / Nano Banana)',
       keyName: 'geminiKey',
       keyPlaceholder: '系统自动注入环境变量 GEMINI_API_KEY (或填入自定义多 Key)',
       status: 'connected',
-      popularModels: ['imagen-3.0-generate-002', 'gemini-3.1-flash-image', 'gemini-3.1-flash-lite-image', 'gemini-3.8-flash', 'gemini-3.1-pro-preview'],
+      popularModels: ['gemini-2.5-flash-image', 'gemini-3.1-flash-image', 'gemini-3.1-flash-lite-image', 'gemini-3.8-flash', 'gemini-3.1-pro-preview'],
     },
     {
       id: 'agnes',
@@ -877,7 +877,7 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
                   云端各服务商额度与余额管理
                 </h3>
                 <p className="text-[11px] text-slate-400 mt-0.5">
-                  实时探测魔搭社区魔粒、Fal.ai 算力额度、Google Imagen 3 等各服务商的额度健康状态
+                  实时探测魔搭社区魔粒、Fal.ai 算力额度、Google Gemini 等各服务商的额度健康状态
                 </p>
               </div>
               <button

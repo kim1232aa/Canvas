@@ -172,9 +172,9 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
           timestamp: item.timestamp || Date.now() - idx * 60000,
           width: item.width || 1024,
           height: item.height || 1024,
-          seed: item.seed,
-          steps: item.steps,
-          cfg: item.cfg,
+          seed: item.seed != null ? item.seed : undefined,
+          steps: item.steps != null ? item.steps : undefined,
+          cfg: item.cfg != null ? item.cfg : undefined,
           sampler: item.sampler,
           scheduler: item.scheduler,
           loras: item.loras?.map((l) => (typeof l === 'string' ? { name: l } : l)),
@@ -636,7 +636,7 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
                 <option value="tensor" className="bg-[#1a1b24]">Tensor.Art (OpenWorks)</option>
                 <option value="sensenova" className="bg-[#1a1b24]">SenseNova 商汤</option>
                 <option value="nanogpt" className="bg-[#1a1b24]">NanoGPT</option>
-                <option value="gemini" className="bg-[#1a1b24]">Google Imagen 3</option>
+                <option value="gemini" className="bg-[#1a1b24]">Google Gemini</option>
                 <option value="本地导入" className="bg-[#1a1b24]">本地导入素材</option>
               </select>
             </div>

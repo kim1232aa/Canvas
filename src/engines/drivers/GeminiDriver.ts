@@ -9,20 +9,20 @@ import {
 
 export class GeminiDriver extends BaseEngineDriver {
   readonly id = 'gemini';
-  readonly name = 'Google Imagen 3 (官方直连)';
-  readonly label = 'Google 官方 Imagen 3 / Gemini';
+  readonly name = 'Google Gemini (官方直连)';
+  readonly label = 'Google 官方 Gemini';
   readonly badgeColor = '#10b981';
-  readonly description = 'Google 官方 Imagen 3.0 旗舰高保真模型、Gemini 3.1 Flash Image 及 Gemini 3.8 Flash 深度多模态思考推理模型。系统级免配置直接可用。';
+  readonly description = 'Google 官方 Gemini 2.5 Flash Image、Gemini 3.1 Flash Image 及 Gemini 3.8 Flash 深度多模态思考推理模型。';
   readonly capabilities = ['text2img', 'reasoning'] as const;
 
   readonly supportedModels: ModelSpec[] = [
     {
-      id: 'imagen-3.0-generate-002',
-      name: 'Google Imagen 3.0 (高保真生图)',
+      id: 'gemini-2.5-flash-image',
+      name: 'Gemini 2.5 Flash Image (经典生图)',
       type: 'image',
-      description: 'Google 官方旗舰，顶级光影折射与写实审美',
-      defaultSteps: 25,
-      defaultCfg: 5.0,
+      description: 'Google 官方经典生图模型',
+      defaultSteps: 20,
+      defaultCfg: 4.5,
       supportsLora: false,
     },
     {
@@ -44,6 +44,15 @@ export class GeminiDriver extends BaseEngineDriver {
       supportsLora: false,
     },
     {
+      id: 'gemini-3-pro-image',
+      name: 'Gemini 3 Pro Image (Nano Banana Pro)',
+      type: 'image',
+      description: 'Google 高画质旗舰生图大模型',
+      defaultSteps: 20,
+      defaultCfg: 5.0,
+      supportsLora: false,
+    },
+    {
       id: 'gemini-3.8-flash',
       name: 'Gemini 3.8 Flash (旗舰多模态思考)',
       type: 'reasoning',
@@ -61,6 +70,7 @@ export class GeminiDriver extends BaseEngineDriver {
     params: NormalizedGenerateParams,
     keys: Record<string, string>
   ): Promise<NormalizedGenerateResult> {
+    if (!params.model) throw new Error('模型为必填项（model is required）');
     const effectiveKey = params.apiKey || keys.geminiKey || '';
 
     const resp = await fetch('/api/gemini/generate', {
@@ -71,24 +81,15 @@ export class GeminiDriver extends BaseEngineDriver {
       },
       body: JSON.stringify({
         prompt: params.prompt,
-        negative_prompt: params.negative_prompt,
-        model: params.model || 'imagen-3.0-generate-002',
-        width: params.width || 1024,
-        height: params.height || 1024,
-        cfg: params.cfg,
-        seed: params.seed,
+        model: params.model,
+        aspect_ratio: params.aspectRatio,
         image_url: params.image_url,
-        loras: (params.loras || []).map((l) => ({
-          name: l.name,
-          strength: l.strength ?? l.modelStrength ?? 0.8,
-          triggers: l.triggers,
-        })),
       }),
     });
 
     if (!resp.ok) {
-      const err = await resp.json().catch(() => ({ error: 'Google Imagen 3 生成失败' }));
-      throw new Error(err.details || err.error || `Google Imagen 错误 (${resp.status})`);
+      const err = await resp.json().catch(() => ({ error: 'Google Gemini 生成失败' }));
+      throw new Error(err.details || err.error || `Google Gemini 错误 (${resp.status})`);
     }
 
     const data = await resp.json();
@@ -97,9 +98,11 @@ export class GeminiDriver extends BaseEngineDriver {
       mediaType: 'image',
       provider: this.name,
       providerId: this.id,
-      model: data.model || params.model || 'imagen-3.0-generate-002',
+      model: data.model || params.model,
+      actualModel: data.actualModel || data.model || params.model,
+      actualProvider: data.actualProvider || this.name,
       requestedModel: params.model,
-      seed: data.seed ?? (params.seed || 12345),
+      seed: null, // Gemini generateContent has no seed
       rawResponse: data,
     };
   }
@@ -108,6 +111,7 @@ export class GeminiDriver extends BaseEngineDriver {
     params: NormalizedChatParams,
     keys: Record<string, string>
   ): Promise<NormalizedChatResult> {
+    if (!params.model) throw new Error('模型为必填项（model is required）');
     const effectiveKey = params.apiKey || keys.geminiKey || '';
 
     const resp = await fetch('/api/gemini/chat', {
@@ -118,7 +122,7 @@ export class GeminiDriver extends BaseEngineDriver {
       },
       body: JSON.stringify({
         messages: params.messages,
-        model: params.model || 'gemini-2.5-flash',
+        model: params.model,
         temperature: params.temperature,
       }),
     });
@@ -133,7 +137,7 @@ export class GeminiDriver extends BaseEngineDriver {
       content: data.content || '',
       provider: this.name,
       providerId: this.id,
-      model: data.model || params.model || 'gemini-2.5-flash',
+      model: data.model || params.model,
     };
   }
 }

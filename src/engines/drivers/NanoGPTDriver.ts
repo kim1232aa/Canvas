@@ -16,25 +16,21 @@ export class NanoGPTDriver extends BaseEngineDriver {
     params: NormalizedGenerateParams,
     keys: Record<string, string>
   ): Promise<NormalizedGenerateResult> {
+    if (!params.model) throw new Error('模型为必填项（model is required）');
     const effectiveKey = params.apiKey || keys.nanogptKey || this.defaultKey;
 
+    // NanoGPT image API has no negative_prompt/steps/cfg/LoRA/pixel size; only send what it accepts.
     const resp = await fetch('/api/nanogpt/generate', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-nanogpt-key': effectiveKey,
+        ...(effectiveKey ? { 'x-nanogpt-key': effectiveKey } : {}),
       },
       body: JSON.stringify({
         prompt: params.prompt,
-        negative_prompt: params.negative_prompt,
         model: params.model,
-        width: params.width || 1024,
-        height: params.height || 1024,
-        steps: params.steps || 25,
-        cfg: params.cfg || 5.0,
         seed: params.seed,
         image_url: params.image_url,
-        loras: params.loras,
       }),
     });
 
@@ -51,7 +47,7 @@ export class NanoGPTDriver extends BaseEngineDriver {
       providerId: this.id,
       model: data.model || params.model,
       requestedModel: params.model,
-      seed: data.seed ?? (params.seed || 12345),
+      seed: data.historyItem?.seed ?? null,
       rawResponse: data,
     };
   }

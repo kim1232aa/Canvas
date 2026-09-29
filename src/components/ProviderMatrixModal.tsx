@@ -46,7 +46,7 @@ export const ProviderMatrixModal: React.FC<ProviderMatrixModalProps> = ({
       ],
       loraSupport: '✅ 完全支持 Civitai LoRA 直接挂载，支持多 LoRA 权重动态调节 (0.1 ~ 2.0)',
       promptLanguage: '英文（若输入中文，系统将自动调用 Gemini 扩写翻译为大师级英文）',
-      keyFormat: '格式: KeyID:SecretKey (例: a437ae76-...:438a74c...)',
+      keyFormat: '格式: KeyID:SecretKey (例: xxxxxxxx-...:xxxxxxx...)',
       features: ['支持 Civitai safetensors 直连', '单反级毛孔微距', '最高达 2K 超清分辨率'],
     },
     {
@@ -65,12 +65,14 @@ export const ProviderMatrixModal: React.FC<ProviderMatrixModalProps> = ({
       features: ['原汁原味中文理解', '水墨云海与东方人物极佳', '中国大陆区域极低延迟'],
     },
     {
-      name: 'Google Imagen 3 (系统内置)',
-      badge: '官方直连原生免配',
+      name: 'Google Gemini (官方直连)',
+      badge: '官方直连',
       badgeColor: 'bg-blue-500/20 text-blue-300 border-blue-500/40',
-      description: '系统内嵌 Google 官方 Imagen 3.0 大模型，超高保真写实画质，开箱即用。',
+      description: 'Google 官方 Gemini 生图模型 (generateContent)，不支持负向提示词/seed/steps/CFG/LoRA。',
       models: [
-        { name: 'imagen-3.0-generate-002', steps: '系统自适应', resolution: '1024x1024', speed: '2~3秒' },
+        { name: 'gemini-2.5-flash-image', steps: '不适用', resolution: '按 aspect_ratio', speed: '—' },
+        { name: 'gemini-3.1-flash-image', steps: '不适用', resolution: '按 aspect_ratio', speed: '—' },
+        { name: 'gemini-3-pro-image', steps: '不适用', resolution: '按 aspect_ratio', speed: '—' },
       ],
       loraSupport: '系统集成超高细节写真引擎（无需额外挂载 LoRA）',
       promptLanguage: '中英文双语均可（支持自然语言智能意图扩展）',
@@ -299,7 +301,7 @@ export const ProviderMatrixModal: React.FC<ProviderMatrixModalProps> = ({
                 每个云端服务商有其专属优势：需要极速极致的赛博朋克与写实人像时，优选{' '}
                 <span className="text-cyan-400 font-semibold">Fal.ai (FLUX.1 + Civitai LoRA)</span>；需要纯正中文国风山水仙侠时，优选{' '}
                 <span className="text-emerald-400 font-semibold">ModelScope (阿里魔搭 Wan 2.1)</span>；系统还支持{' '}
-                <span className="text-blue-400 font-semibold">Google Imagen 3 官方直连高保真写真引擎</span>，各引擎严格独立路由，错误透明直传！
+                <span className="text-blue-400 font-semibold">Google Gemini 官方直连高保真写真引擎</span>，各引擎严格独立路由，错误透明直传！
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -448,7 +450,7 @@ export const ProviderMatrixModal: React.FC<ProviderMatrixModalProps> = ({
                       <span>1. 真实节点与服务商优先路由</span>
                     </div>
                     <p className="text-slate-400 text-[11px] leading-relaxed">
-                      系统严格按照画布节点连接的真实服务商路由（Google Imagen 3 / Fal.ai / ModelScope / NanoGPT 等），绝不擅自篡改 Provider 目标，精准应用用户配置的 LoRA 权重与 KSampler 采样参数。
+                      系统严格按照画布节点连接的真实服务商路由（Google Gemini / Fal.ai / ModelScope / NanoGPT 等），绝不擅自篡改 Provider 目标，精准应用用户配置的 LoRA 权重与 KSampler 采样参数。
                     </p>
                   </div>
 
@@ -665,7 +667,7 @@ export const ProviderMatrixModal: React.FC<ProviderMatrixModalProps> = ({
                         <td className="p-3 font-bold text-white">
                           <div className="flex items-center gap-1.5">
                             <span className="w-2 h-2 rounded-full bg-blue-400" />
-                            <span>Google Imagen 3</span>
+                            <span>Google Gemini</span>
                           </div>
                           <span className="text-[10px] text-slate-500 font-mono">官方闭源高保真写真</span>
                         </td>

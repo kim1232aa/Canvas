@@ -87,7 +87,7 @@ export const BASE_MODELS: BaseModelOption[] = [
   { label: '🌟 [Civitai] FLUX.1 [dev] (urn:air:flux1:checkpoint:civitai:618692@691639)', value: 'urn:air:flux1:checkpoint:civitai:618692@691639', provider: 'civitai', category: 'checkpoint' },
 
   // ===================== GOOGLE / NANOGPT =====================
-  { label: '💎 [Google] Imagen 3.0 (imagen-3.0-generate-002)', value: 'imagen-3.0-generate-002', provider: 'gemini', category: 'checkpoint' },
+  { label: '💎 [Google] Gemini 2.5 Flash Image (gemini-2.5-flash-image)', value: 'gemini-2.5-flash-image', provider: 'gemini', category: 'checkpoint' },
   { label: '🟢 [NanoGPT] FLUX.1 Schnell (flux-schnell)', value: 'flux-schnell', provider: 'nanogpt', category: 'checkpoint' },
   { label: '🟢 [NanoGPT] Qwen Image 2.1 (qwen-image-2.1)', value: 'qwen-image-2.1', provider: 'nanogpt', category: 'checkpoint' },
 ];
@@ -111,7 +111,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
         name: 'targetProvider',
         label: '目标执行引擎 (Provider)',
         type: 'select',
-        default: 'huggingface',
+        default: '',
         options: [
           { label: '🤗 Hugging Face Diffusers', value: 'huggingface' },
           { label: '🌟 Civitai 官方原生引擎', value: 'civitai' },
@@ -119,7 +119,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
           { label: '⚡ Fal.ai 极速云引擎', value: 'fal' },
           { label: '🇨🇳 魔搭 CN (modelscope.cn 国内站)', value: 'modelscope' },
           { label: '🌐 魔搭 AI (modelscope.ai 国际站)', value: 'modelscope_ai' },
-          { label: '💎 Google Imagen 3 (内置)', value: 'gemini' },
+          { label: '💎 Google Gemini (内置)', value: 'gemini' },
           { label: '⚡ NanoGPT (按次)', value: 'nanogpt' },
           { label: '🚀 Agnes AI 2.5 Flash', value: 'agnes' },
           { label: '🧠 SenseNova 商汤日日新', value: 'sensenova' },
@@ -136,7 +136,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
       },
     ],
     defaultValues: {
-      targetProvider: 'huggingface',
+      targetProvider: '',
       ckpt_name: 'Tongyi-MAI/Z-Image-Turbo',
     },
   },
@@ -252,13 +252,32 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
 
   PromptRefinerLLM: {
     type: 'PromptRefinerLLM',
-    title: 'AI Prompt Refiner (Gemini)',
+    title: 'AI 提示词润色节点 (Prompt Refiner)',
     category: 'conditioning',
     colorTag: '#10b981',
-    description: 'Expands short concepts into rich, atmospheric prompts optimized for Flux and SDXL.',
+    description: '通过 Gemini / SenseNova / Agnes 大语言模型将简短概念扩写为高精美学提示词。',
     inputs: [],
     outputs: [{ id: 'STRING', name: 'STRING', type: 'STRING', label: 'PROMPT_TEXT' }],
     widgets: [
+      {
+        name: 'provider',
+        label: '润色服务商',
+        type: 'select',
+        default: '',
+        options: [
+          { label: '请选择服务商...', value: '' },
+          { label: 'Google Gemini', value: 'gemini' },
+          { label: '商汤日日新 (SenseNova)', value: 'sensenova' },
+          { label: 'Agnes AI', value: 'agnes' },
+        ],
+      },
+      {
+        name: 'model',
+        label: '润色模型',
+        type: 'text',
+        default: '',
+        placeholder: '请选择或输入模型，例如 gemini-2.5-flash / deepseek-v4-flash',
+      },
       {
         name: 'concept',
         label: 'concept',
@@ -270,8 +289,9 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
         name: 'style',
         label: 'style',
         type: 'select',
-        default: 'cinematic photorealistic',
+        default: '',
         options: [
+          { label: '无特定风格 (默认)', value: '' },
           { label: 'Cinematic Photorealistic', value: 'cinematic photorealistic' },
           { label: 'Anime / Makoto Shinkai', value: 'anime makoto shinkai aesthetic' },
           { label: 'Dark Fantasy Concept Art', value: 'dark fantasy concept art' },
@@ -281,8 +301,10 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
       },
     ],
     defaultValues: {
+      provider: '',
+      model: '',
       concept: 'cyberpunk tea house in Neo-Tokyo rain with glowing lanterns',
-      style: 'cinematic photorealistic',
+      style: '',
     },
   },
 
@@ -744,10 +766,10 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
 
   GoogleImagenNode: {
     type: 'GoogleImagenNode',
-    title: 'Google Imagen 3 (官方直连引擎)',
+    title: 'Google Gemini 生图 (官方直连引擎)',
     category: 'providers',
     colorTag: '#4285F4',
-    description: '直连 Google Imagen 3.0 / Gemini 视觉大模型，官方原生超高保真扩散画质，开箱即用。',
+    description: '直连 Google Gemini 官方生图模型 (generateContent)。不支持负向提示词/seed/steps/CFG/LoRA。',
     inputs: [
       { id: 'positive', name: 'positive', type: 'CONDITIONING', label: 'prompt' },
       { id: 'negative', name: 'negative', type: 'CONDITIONING', label: 'negative' },
@@ -758,10 +780,12 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
         name: 'model',
         label: 'model',
         type: 'select',
-        default: 'imagen-3.0-generate-002',
+        default: 'gemini-2.5-flash-image',
         options: [
-          { label: 'Google Imagen 3.0 (高保真写实旗舰)', value: 'imagen-3.0-generate-002' },
-          { label: 'Gemini 3.8 Flash (视觉扩展)', value: 'gemini-3.8-flash' },
+          { label: 'Gemini 2.5 Flash Image', value: 'gemini-2.5-flash-image' },
+          { label: 'Gemini 3.1 Flash Image', value: 'gemini-3.1-flash-image' },
+          { label: 'Gemini 3.1 Flash Lite Image', value: 'gemini-3.1-flash-lite-image' },
+          { label: 'Gemini 3 Pro Image', value: 'gemini-3-pro-image' },
         ],
       },
       {
@@ -779,7 +803,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
       },
     ],
     defaultValues: {
-      model: 'imagen-3.0-generate-002',
+      model: 'gemini-2.5-flash-image',
       aspect_ratio: '1:1',
     },
   },
@@ -804,7 +828,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
         name: 'targetProvider',
         label: '视频服务商 (Provider)',
         type: 'select',
-        default: 'fal',
+        default: '',
         options: [
           { label: '⚡ Fal.ai 极速云端引擎', value: 'fal' },
           { label: '🎨 Tensor.Art (OpenWorks 官方算力)', value: 'tensorart' },
@@ -817,7 +841,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
         name: 'model',
         label: 'model (AI视频大模型)',
         type: 'select',
-        default: 'fal-ai/wan/v2.1/text-to-video',
+        default: '',
         options: [
           { label: '⚡ [Fal] Wan 2.1 旗舰文生视频 (fal-ai/wan/v2.1/text-to-video)', value: 'fal-ai/wan/v2.1/text-to-video', provider: 'fal' },
           { label: '⚡ [Fal] Wan 2.1 旗舰图生视频 (fal-ai/wan/v2.1/image-to-video)', value: 'fal-ai/wan/v2.1/image-to-video', provider: 'fal' },
@@ -890,8 +914,8 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
       },
     ],
     defaultValues: {
-      targetProvider: 'fal',
-      model: 'fal-ai/wan/v2.1/text-to-video',
+      targetProvider: '',
+      model: '',
       prompt: 'cinematic aerial orbit shot, floating castle islands in the sky, warm golden hour, 8k cinematic masterpiece',
       negative_prompt: 'jittery motion, fast sudden cut, blur, morphing distortion, low quality',
       duration: 5,

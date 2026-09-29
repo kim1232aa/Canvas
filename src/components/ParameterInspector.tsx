@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { ComfyParameters } from '../types/graph';
 import { BASE_MODELS, SAMPLER_OPTIONS, SCHEDULER_OPTIONS } from '../constants/nodes';
-import { refinePromptWithGemini, fetchLiveModels } from '../services/api';
+import { refinePromptWithGemini, fetchLiveModels, getRefineModelSelection } from '../services/api';
 import { validateModelCompatibility } from '../utils/baseModelMatcher';
 import { normalizeForComfyUI } from '../utils/engineParameterNormalizer';
 
@@ -107,13 +107,25 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
 
   const handleRefine = async () => {
     if (!positivePrompt || !onChangePositivePrompt) return;
+    const selection = getRefineModelSelection();
+    const provider = (params as any).refineProvider || selection.provider;
+    const model = (params as any).refineModel || selection.model;
+    if (!provider || !model) {
+      alert('请先选择润色模型');
+      return;
+    }
     setIsRefiningPrompt(true);
     try {
-      const refined = await refinePromptWithGemini(positivePrompt, 'cinematic photorealistic 8k', params.loras);
+      const refined = await refinePromptWithGemini(positivePrompt, {
+        provider,
+        model,
+        loras: params.loras,
+      });
       if (refined) {
         onChangePositivePrompt(refined);
       }
-    } catch (e) {
+    } catch (e: any) {
+      alert(e.message || '润色失败');
       console.error(e);
     } finally {
       setIsRefiningPrompt(false);
@@ -288,7 +300,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                 { id: 'modelscope_ai', label: '魔搭 AI (国际站)' },
                 { id: 'fal', label: 'Fal.ai (GPU加速)' },
                 { id: 'agnes', label: 'Agnes AI (秒级)' },
-                { id: 'gemini', label: 'Google Imagen 3' },
+                { id: 'gemini', label: 'Google Gemini' },
                 { id: 'civitai', label: 'Civitai 原生' },
                 { id: 'nanogpt', label: 'NanoGPT' },
                 { id: 'sensenova', label: '商汤思考(LLM)' },
@@ -301,7 +313,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                     onClick={() => {
                       let defaultModel = params.checkpoint;
                       if (p.id === 'agnes') defaultModel = 'agnes-image-2.5-flash';
-                      else if (p.id === 'gemini') defaultModel = 'imagen-3.0-generate-002';
+                      else if (p.id === 'gemini') defaultModel = 'gemini-2.5-flash-image';
                       else if (p.id === 'sensenova') defaultModel = 'deepseek-v4-flash';
                       else if (p.id === 'huggingface') defaultModel = 'AIImageStudio/RadianceChromeVoluptuous_z_image_turbo_v2.0';
                       else if (p.id === 'modelscope') defaultModel = 'Tongyi-MAI/Z-Image-Turbo';
@@ -408,7 +420,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
             <div className="p-2.5 bg-cyan-950/20 border border-cyan-500/30 rounded-lg text-[10px] text-cyan-300/90 leading-relaxed flex items-start gap-2">
               <Info className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
               <div>
-                <span className="font-bold text-cyan-300">Google Imagen 3.0 官方直连：</span>
+                <span className="font-bold text-cyan-300">Google Gemini 官方直连：</span>
                 <span> 由 Google 前沿多模态大模型直接渲染，支持细腻材质光影与超长文本理解；已自动适配画幅比例与引导系数。</span>
               </div>
             </div>

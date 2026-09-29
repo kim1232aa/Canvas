@@ -297,23 +297,23 @@ export const ComfyGuideModal: React.FC<ComfyGuideModalProps> = ({
                 </h3>
                 <div className="space-y-2 text-xs">
                   <div className="p-3 rounded-lg bg-[#14151c] border border-emerald-900/40 text-slate-300">
-                    <span className="font-bold text-emerald-400 block mb-1">🟢 Civitai 密钥 (29d6...):</span>
-                    <span>100% 验证成功！已直接接入 C 站全网十万级 Checkpoints 和 LoRAs 原始 API，支持触发词、下载量与评分实时拉取。</span>
+                    <span className="font-bold text-emerald-400 block mb-1">🟢 Civitai 密钥:</span>
+                    <span>验证成功后可直接接入 C 站全网十万级 Checkpoints 和 LoRAs 原始 API，支持触发词、下载量与评分实时拉取。</span>
                   </div>
                   <div className="p-3 rounded-lg bg-[#14151c] border border-emerald-900/40 text-slate-300">
-                    <span className="font-bold text-emerald-400 block mb-1">🟢 Hugging Face 密钥 (hf_nw...):</span>
-                    <span>100% 验证成功！认证用户为 @setaub，具备 Serverless 推理与全量开源 Hub 读取权限。</span>
+                    <span className="font-bold text-emerald-400 block mb-1">🟢 Hugging Face 密钥:</span>
+                    <span>验证成功后具备 Serverless 推理与全量开源 Hub 读取权限。</span>
                   </div>
                   <div className="p-3 rounded-lg bg-[#14151c] border border-emerald-900/40 text-slate-300">
-                    <span className="font-bold text-emerald-400 block mb-1">🟢 魔搭社区 ModelScope (ms-b6...):</span>
-                    <span>100% 验证成功！已直连阿里魔搭社区官方推理接口，支持 Wan 2.1 视频与视觉大模型。</span>
+                    <span className="font-bold text-emerald-400 block mb-1">🟢 魔搭社区 ModelScope:</span>
+                    <span>验证成功后直连阿里魔搭社区官方推理接口，支持 Wan 2.1 视频与视觉大模型。</span>
                   </div>
                   <div className="p-3 rounded-lg bg-[#14151c] border border-amber-900/40 text-slate-300">
-                    <span className="font-bold text-amber-400 block mb-1">🟡 Fal.ai 密钥 (a437...):</span>
-                    <span>密钥合法且已被服务器识别，但 Fal.ai 官方返回 <code>User is locked. Reason: TOP_UP</code>（账户余额不足需充值）。在充值前，建议优先使用内置 Google Imagen 3 或魔搭运行！</span>
+                    <span className="font-bold text-amber-400 block mb-1">🟡 Fal.ai 密钥:</span>
+                    <span>密钥合法且已被服务器识别，但 Fal.ai 官方返回 <code>User is locked. Reason: TOP_UP</code>（账户余额不足需充值）。在充值前，建议优先使用内置 Google Gemini 或魔搭运行！</span>
                   </div>
                   <div className="p-3 rounded-lg bg-[#14151c] border border-rose-900/40 text-slate-300">
-                    <span className="font-bold text-rose-400 block mb-1">🔴 NanoGPT 密钥 (sk-nano...):</span>
+                    <span className="font-bold text-rose-400 block mb-1">🔴 NanoGPT 密钥:</span>
                     <span>NanoGPT 官方接口提示 <code>Invalid session/key</code>。如果需要使用 NanoGPT，请前往 nano-gpt.com 个人中心重新复制有效的 API Key。</span>
                   </div>
                 </div>

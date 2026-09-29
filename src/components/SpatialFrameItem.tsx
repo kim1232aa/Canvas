@@ -16,7 +16,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { SpatialFrame, ComfyParameters } from '../types/graph';
-import { refinePromptWithGemini } from '../services/api';
+import { refinePromptWithGemini, getRefineModelSelection } from '../services/api';
 import { validateModelCompatibility } from '../utils/baseModelMatcher';
 
 interface SpatialFrameItemProps {
@@ -50,17 +50,28 @@ export const SpatialFrameItem: React.FC<SpatialFrameItemProps> = ({
 
   const handleRefine = async () => {
     if (!frame.prompt) return;
+    const selection = getRefineModelSelection();
+    const provider = (frame.params as any).refineProvider || selection.provider;
+    const model = (frame.params as any).refineModel || selection.model;
+    if (!provider || !model) {
+      alert('请先选择润色模型');
+      return;
+    }
     setIsRefining(true);
     try {
       const refined = await refinePromptWithGemini(
         frame.prompt,
-        'cinematic photorealistic 8k',
-        frame.params.loras
+        {
+          provider,
+          model,
+          loras: frame.params.loras,
+        }
       );
       if (refined) {
         onUpdateFrame(frame.id, { prompt: refined });
       }
-    } catch (e) {
+    } catch (e: any) {
+      alert(e.message || '润色失败');
       console.error(e);
     } finally {
       setIsRefining(false);
