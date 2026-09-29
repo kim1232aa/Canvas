@@ -12,6 +12,7 @@ const SCHEMA_PROVIDERS: readonly Provider[] = [
   'agnes',
   'huggingface',
   'nanogpt',
+  'tensorart',
 ];
 
 export function toSchemaProvider(provider: string | undefined | null): Provider | undefined {

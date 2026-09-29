@@ -196,3 +196,26 @@ describe('agnes / huggingface / nanogpt schema unsupported fields', () => {
     expect(resolveSchemaModelId('nanogpt', '')).toBe('flux-schnell');
   });
 });
+
+
+describe('tensorart OpenWorks schema unsupported fields', () => {
+  it('strong_text2image_nano_banana2: greys width/height/seed/steps/cfg/loras; keeps size/aspect_ratio', () => {
+    const id = 'strong_text2image_nano_banana2';
+    for (const f of ['width', 'height', 'seed', 'negative_prompt', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'loras'] as const) {
+      expect(getFieldSpec('tensorart', id, f)?.status, f).toBe('unsupported');
+    }
+    expect(getFieldSpec('tensorart', id, 'size')?.status).toBe('supported');
+    expect(getFieldSpec('tensorart', id, 'aspect_ratio')?.status).toBe('supported');
+    expect(resolveSchemaModelId('tensorart', '')).toBe('strong_text2image_nano_banana2');
+    expect(resolveSchemaModelId('tensorart', 'foreign-civitai.safetensors')).toBe('strong_text2image_nano_banana2');
+  });
+
+  it('oc_character_illustration: width/height supported; loras/seed/steps still unsupported', () => {
+    const id = 'oc_character_illustration';
+    expect(getFieldSpec('tensorart', id, 'width')?.status).toBe('supported');
+    expect(getFieldSpec('tensorart', id, 'height')?.status).toBe('supported');
+    expect(getFieldSpec('tensorart', id, 'loras')?.status).toBe('unsupported');
+    expect(getFieldSpec('tensorart', id, 'seed')?.status).toBe('unsupported');
+    expect(getFieldSpec('tensorart', id, 'steps')?.status).toBe('unsupported');
+  });
+});

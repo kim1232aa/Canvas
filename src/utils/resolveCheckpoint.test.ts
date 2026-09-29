@@ -295,6 +295,43 @@ describe('Fal / Agnes / HF / NanoGPT grey on engine switch (schema-driven)', () 
     expect(compat.endpointUnsupported).toBe(true);
   });
 
+  it('Tensor.Art banana2 greys width/height/seed/steps/cfg/loras; keeps stored LoRAs; omits from payload', () => {
+    const left = [{ name: 'koda.safetensors', modelStrength: 0.8 }];
+    for (const model of ['strong_text2image_nano_banana2', '', 'civitai-leftover.safetensors']) {
+      expect(isCanvasFieldUnsupported('tensorart', model, 'loras'), `loras@${model}`).toBe(true);
+      expect(isCanvasFieldUnsupported('tensorart', model, 'width'), `w@${model}`).toBe(true);
+      expect(isCanvasFieldUnsupported('tensorart', model, 'height'), `h@${model}`).toBe(true);
+      expect(isCanvasFieldUnsupported('tensorart', model, 'seed'), `seed@${model}`).toBe(true);
+      expect(isCanvasFieldUnsupported('tensorart', model, 'steps'), `steps@${model}`).toBe(true);
+      expect(isCanvasFieldUnsupported('tensorart', model, 'cfg'), `cfg@${model}`).toBe(true);
+    }
+    expect(sanitizeFrameLoras('tensorart', 'strong_text2image_nano_banana2', left)).toEqual(left);
+    const badge = isLoraUnsupportedOnEndpoint('tensorart', 'strong_text2image_nano_banana2');
+    expect(badge.unsupported).toBe(true);
+    expect(badge.message).toMatch(/该服务商不支持/);
+    const compat = validateLoraCompatibility('strong_text2image_nano_banana2', 'Flux.1 D', 'koda', 'tensorart');
+    expect(compat.isCompatible).toBe(false);
+    expect(compat.endpointUnsupported).toBe(true);
+    const omitted = omitUnsupportedGenerateFields('tensorart', 'strong_text2image_nano_banana2', {
+      prompt: 'hi',
+      width: 1024,
+      height: 1024,
+      seed: 1,
+      steps: 20,
+      cfg: 7,
+      loras: left,
+      negative_prompt: 'blurry',
+    });
+    expect(omitted.prompt).toBe('hi');
+    expect(omitted.width).toBeUndefined();
+    expect(omitted.height).toBeUndefined();
+    expect(omitted.seed).toBeUndefined();
+    expect(omitted.steps).toBeUndefined();
+    expect(omitted.cfg).toBeUndefined();
+    expect(omitted.loras).toBeUndefined();
+    expect(omitted.negative_prompt).toBeUndefined();
+  });
+
   it('omitUnsupportedGenerateFields drops unsupported keys but leaves supported', () => {
     const agnes = omitUnsupportedGenerateFields('agnes', 'agnes-image-2.5-flash', {
       prompt: 'hi',
