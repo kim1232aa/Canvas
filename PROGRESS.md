@@ -56,6 +56,12 @@
 - [x] W8. Agnes 视频参数核实：对照官方文档（https://wiki.agnes-ai.com/en/docs/agnes-video-25-flash.md）核实 `n: 1` 与 `seed` 均为官方支持字段，保留透传；不支持的字段严格 400
 - [x] W9. 余额与可用性接口文案修正：`/api/cloud-keys/balances` 彻底消除非 200 误标 `status: 'low'`，非 200 一律 `status: 'error'` 附带真实状态码与响应体；无余额查询接口的服务商统一返回「key 可用（该服务商无余额接口 / 未能核实余额接口）」
 - [x] W10. ModelScope LoRA 格式与异步头核实：尝试 WebFetch/WebSearch 抓取官方文档；因页面客户端渲染未能独立核实，保持严格 400 明确报错并标记为「未能核实」
+- [x] E1-Finish. Gemini 生图尺寸与比例按模型取值表严格校验：gemini-3.1-flash-image 校验 14 种官方比例与 1K/2K/4K（512px/0.5K 报未能核实 400）；gemini-3.1-flash-lite-image 校验 10 种比例与 1K；gemini-3-pro-image 仅允许 1K/2K/4K，传 aspect_ratio 报未能核实 400；其它模型传尺寸参数一律 400 未能核实；前端移除宽高换算比例逻辑，未选不发；清理视频路由无用 wasAdapted / adaptationNotice 变量与响应字段
+- [x] S1. Express 大小写路径绕过修复：注册路由前配置 `app.set('case sensitive routing', true)`；`isApiPath` 转小写再行匹配；确认绑定回环地址 `127.0.0.1`（server.ts:32, 164, 7234）
+- [x] S2. `GET /api/cloud-keys/stats` 明文密钥移除与鉴权：`getStats()` 移除明文 `key` 字段，前端仅使用 `maskedKey`；挂载 `requireAdminAuth` 管理令牌鉴权，前端同步带 Bearer token；`lastError` 仅保留状态码与简短分类（HTTP xxx, timeout 等），并经 `maskSecret` 过滤；确认 `GET/POST /api/cloud/settings` 挂载 `requireAdminAuth`（server.ts:221, 555, 6587; src/services/api.ts:706; src/components/BackendSettingsModal.tsx:120）
+- [x] S3. `POST /api/cloud/settings` 字段白名单与掩码回写防御：服务端维护 `ALLOWED_SETTINGS_SECRET` 与 `ALLOWED_SETTINGS_PLAIN` 白名单，未知字段 400；值强制 string 类型；空字符串/undefined 视为不修改；拒绝保存掩码值或与当前掩码相同的值；返回对象脱敏掩码（server.ts:7120-7210）
+- [x] S4. `/api/cloud-keys/balances` 防御 CSRF / 跨站 `<img>` 触发：GET 请求返回 405 Method Not Allowed；切换为 POST，挂载 `requireAdminAuth` 与 `checkSecFetchSite`（只允许 same-origin / none，跨站拒绝 403，缺省回退 Origin 校验）；确认余额检查全部为只读，绝不发起生成调用；前端调用改为 POST 并携带 Bearer token（server.ts:253, 6668; src/services/api.ts:758; src/components/BackendSettingsModal.tsx:125）
+- [x] S5. `/api/cloud-keys/strategy` 鉴权校验、历史记录淘汰与云端同步清洗：挂载 `requireAdminAuth`，校验 provider 属于已知列表且 strategy ∈ `['round_robin', 'failover', 'latency_best']`，前端带 Bearer token；历史记录上限改为淘汰最旧的记录 (`splice(MAX_HISTORY_COUNT)`)，移除满 500 条拒绝 400，共用 `MAX_HISTORY_COUNT = 500` 常量；Admin「同步至云端」按钮过滤已知字段，排除空字符串、掩码值及未改动字段（server.ts:604, 6593, 6853, 6965; src/services/api.ts:721; src/components/BackendSettingsModal.tsx:39, 1055）
 
 ## 2. 踩坑记录
 - 行号偏移：旧报告行号基于 909dc26，当前 HEAD 是 35a1566，按代码内容定位。
@@ -84,7 +90,7 @@
 | Civitai 模型与版本查询: /api/v1/model-versions/{id}, /api/v1/models/{id}，返回真实 air、baseModel、type | https://github.com/civitai/civitai/wiki/REST-API-Reference | 已核实 | server.ts `resolveCivitaiAir` |
 | Fal 只读测试: GET api.fal.ai/v1/account/billing 要求 admin API key | https://fal.ai/docs/platform-apis/v1/account/billing | 已核实 | server.ts `falReadOnlyKeyCheck` |
 | Fal 生图请求尺寸: image_size 枚举或 {"width": number, "height": number} 对象 | https://fal.ai/models/fal-ai/flux/dev/api | 已核实 | server.ts `/api/fal/generate` |
-| Gemini generateContent 尺寸参数: imageConfig.aspectRatio ("1:1", "3:4", "4:3", "9:16", "16:9") 或 imageConfig.imageSize ("1k", "2k", "4k")，不支持 width/height/seed/steps | https://ai.google.dev/gemini-api/docs/imagen | 已核实 | server.ts `/api/gemini/generate` |
+| Gemini generateContent 尺寸参数: gemini-3.1-flash-image 支持 14 种比例与 1K/2K/4K；gemini-3.1-flash-lite-image 支持 10 种比例与 1K；gemini-3-pro-image 支持 1K/2K/4K，不支持 width/height/seed/steps | https://ai.google.dev/gemini-api/docs/image-generation | 已核实 | server.ts `/api/gemini/generate` |
 | Gemini 模型列表授权头: x-goog-api-key | https://ai.google.dev/api/rest | 已核实 | server.ts `/api/hub/models` (gemini) |
 | NanoGPT 官方端点: api.nano-gpt.com/api/v1/image-models, video-models，不使用 nano-gpt.com 兜底 | https://docs.nano-gpt.com/ | 已核实 | server.ts `/api/hub/models` (nanogpt) |
 | Tensor.Art OpenWorks OpenAPI: PUT 上传流程、任务状态终态 FINISH, EXCEPTION, CANCELED | https://raw.githubusercontent.com/Tensor-Art/tensorart-skills/master/skills/tensorart-generate/SKILL.md | 已核实 | server.ts `/api/tensorart/*` |
