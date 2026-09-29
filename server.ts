@@ -5597,10 +5597,14 @@ app.post(['/api/nanogpt/generate', '/api/engine/nanogpt/generate'], async (req, 
 // ==========================================
 app.post(['/api/gemini/chat', '/api/engine/gemini/chat'], async (req, res) => {
   const startTime = Date.now();
+  let gen: ReturnType<typeof createGoogleGenAI> | null = null;
   try {
-    const { messages = [], systemInstruction, model = 'gemini-3.8-flash', temperature } = req.body;
+    const { messages = [], systemInstruction, model, temperature } = req.body;
+    if (!model) {
+      return res.status(400).json({ error: '模型为必填项（model is required）' });
+    }
     const customKey = (req.headers['x-gemini-key'] as string) || '';
-    const gen = createGoogleGenAI(customKey);
+    gen = createGoogleGenAI(customKey);
 
     if (!gen) {
       return res.status(400).json({
@@ -5621,22 +5625,19 @@ app.post(['/api/gemini/chat', '/api/engine/gemini/chat'], async (req, res) => {
     if (systemInstruction) config.systemInstruction = systemInstruction;
     if (typeof temperature === 'number') config.temperature = temperature;
 
-    const targetModel = model === 'gemini-2.5-flash' ? 'gemini-3.8-flash' : (model || 'gemini-3.8-flash');
-    const response = await gen.client.models.generateContent({
-      model: targetModel,
-      contents: formattedContents,
-      config,
-    });
+    const response = await upstreamSdkCall(
+      { provider: 'gemini', route: req.path, model, key: gen.apiKey, upstream: `generativelanguage.googleapis.com/v1beta/models/${model}:generateContent` },
+      () => gen!.client.models.generateContent({ model, contents: formattedContents, config })
+    );
 
     const content = response.text || '';
     keyPoolManager.recordResult('gemini', gen.apiKey, true, Date.now() - startTime);
-    return res.json({
-      content,
-      provider: 'Google Gemini 3.8 Flash',
-      model: targetModel,
-    });
+    return res.json({ content, provider: 'Google Gemini', model });
   } catch (error: any) {
-    return res.status(500).json({
+    if (gen?.apiKey) {
+      keyPoolManager.recordResult('gemini', gen.apiKey, false, Date.now() - startTime, error.message, error.status || 500);
+    }
+    return res.status(error.status || 500).json({
       error: `Gemini 聊天推理失败: ${error.message || '未知错误'}`,
     });
   }
@@ -5644,188 +5645,152 @@ app.post(['/api/gemini/chat', '/api/engine/gemini/chat'], async (req, res) => {
 
 app.post(['/api/gemini/generate', '/api/engine/gemini/generate'], async (req, res) => {
   const startTime = Date.now();
+  let gen: ReturnType<typeof createGoogleGenAI> | null = null;
   try {
     const {
       prompt,
       negative_prompt,
-      width = 1024,
-      height = 1024,
+      aspect_ratio,
+      image_size,
       loras = [],
       seed,
       cfg,
       guidance_scale,
       image_url,
-      model = 'imagen-3.0-generate-002',
+      model,
     } = req.body;
-    const effectiveSeed = seed || Math.floor(Math.random() * 1000000000);
+
+    if (!model) {
+      return res.status(400).json({ error: '模型为必填项（model is required）' });
+    }
+
+    // E1: 收到 width/height 返回 400
+    if (isProvided(req.body.width) || isProvided(req.body.height)) {
+      return res.status(400).json({
+        error: '该服务商不支持: width/height。Google Gemini 仅支持 aspect_ratio ("1:1", "3:4", "4:3", "9:16", "16:9") 或 image_size',
+        unsupported: [isProvided(req.body.width) ? 'width' : '', isProvided(req.body.height) ? 'height' : ''].filter(Boolean),
+      });
+    }
+
+    // Imagen is shut down (https://ai.google.dev/gemini-api/docs/imagen); all image models use generateContent,
+    // which has no seed / negative prompt / cfg / steps / LoRA.
+    if (rejectUnsupported(res, 'Google Gemini', req.body, ['negative_prompt', 'seed', 'cfg', 'guidance_scale', 'steps', 'loras'])) return;
+    if (image_url && !(typeof image_url === 'string' && image_url.startsWith('data:'))) {
+      return res.status(400).json({ error: '该服务商不支持: image_url 为非 data: URL（Google Gemini 仅接受内联 base64 参考图）', unsupported: ['image_url'] });
+    }
+
+    const allowedRatios = ['1:1', '3:4', '4:3', '9:16', '16:9'];
+    if (isProvided(aspect_ratio) && !allowedRatios.includes(aspect_ratio)) {
+      return res.status(400).json({
+        error: `该服务商不支持此 aspect_ratio 取值: "${aspect_ratio}"。Google Gemini 官方仅支持: ${allowedRatios.join(', ')}`,
+      });
+    }
+
     const customKey = (req.headers['x-gemini-key'] as string) || '';
-    const gen = createGoogleGenAI(customKey);
+    gen = createGoogleGenAI(customKey);
 
     if (!gen) {
       return res.status(400).json({
-        error: '未配置 Google Gemini API Key。请在右上角设置中配置 GEMINI_API_KEY。',
+        error: '未配置 Google Gemini API Key。请在设置中配置 GEMINI_API_KEY。',
       });
     }
 
-    let aspectRatio: '1:1' | '3:4' | '4:3' | '9:16' | '16:9' = '1:1';
-    const ratio = width / (height || 1);
-    if (ratio > 1.5) aspectRatio = '16:9';
-    else if (ratio > 1.2) aspectRatio = '4:3';
-    else if (ratio < 0.65) aspectRatio = '9:16';
-    else if (ratio < 0.85) aspectRatio = '3:4';
+    const imageConfig: Record<string, any> = {};
+    if (isProvided(aspect_ratio)) imageConfig.aspectRatio = aspect_ratio;
+    if (isProvided(image_size)) imageConfig.imageSize = image_size;
 
-    let finalPrompt = prompt || '';
-    if (Array.isArray(loras) && loras.length > 0) {
-      const triggers = loras
-        .map((l: any) => {
-          if (l.triggers || l.triggerWords) return l.triggers || l.triggerWords;
-          if (l.name) {
-            const clean = l.name.replace(/\.safetensors$/i, '').replace(/[-_]/g, ' ');
-            return `${clean} style`;
-          }
-          return '';
-        })
-        .filter(Boolean)
-        .join(', ');
-      if (triggers && !finalPrompt.includes(triggers)) {
-        finalPrompt = `${triggers}, ${finalPrompt}`;
-      }
-    }
-
-    let generatedImageUrl = '';
-    const targetModel = model || 'imagen-3.0-generate-002';
-
-    if (targetModel.includes('flash-image') || targetModel.includes('flash-lite-image')) {
-      const parts: any[] = [{ text: finalPrompt }];
-      if (image_url && typeof image_url === 'string' && image_url.startsWith('data:')) {
-        const [header, b64] = image_url.split(',');
-        const mimeMatch = header.match(/data:([^;]+);/);
-        parts.unshift({
-          inlineData: {
-            mimeType: mimeMatch ? mimeMatch[1] : 'image/png',
-            data: b64,
-          },
-        });
-      }
-
-      const contentResponse = await gen.client.models.generateContent({
-        model: targetModel,
-        contents: {
-          parts,
-        },
-        config: {
-          imageConfig: {
-            aspectRatio,
-          },
+    const finalPrompt = prompt || '';
+    const parts: any[] = [{ text: finalPrompt }];
+    if (image_url && typeof image_url === 'string' && image_url.startsWith('data:')) {
+      const [header, b64] = image_url.split(',');
+      const mimeMatch = header.match(/data:([^;]+);/);
+      parts.unshift({
+        inlineData: {
+          mimeType: mimeMatch ? mimeMatch[1] : 'image/png',
+          data: b64,
         },
       });
-
-      let base64Bytes = '';
-      let mimeType = 'image/png';
-      for (const part of contentResponse.candidates?.[0]?.content?.parts || []) {
-        if (part.inlineData?.data) {
-          base64Bytes = part.inlineData.data;
-          mimeType = part.inlineData.mimeType || 'image/png';
-          break;
-        }
-      }
-
-      if (!base64Bytes) {
-        keyPoolManager.recordResult('gemini', gen.apiKey, false, Date.now() - startTime, 'No image returned from Gemini', 500);
-        return res.status(500).json({ error: 'Google Gemini 图像模型未返回生成数据' });
-      }
-
-      generatedImageUrl = `data:${mimeType};base64,${base64Bytes}`;
-    } else {
-      const config: any = {
-        numberOfImages: 1,
-        outputMimeType: 'image/jpeg',
-        aspectRatio,
-      };
-      if (negative_prompt) {
-        config.negativePrompt = negative_prompt;
-      }
-      const effectiveCfg = Number(guidance_scale || cfg);
-      if (effectiveCfg && effectiveCfg > 0) {
-        config.guidanceScale = effectiveCfg;
-      }
-      if (typeof effectiveSeed === 'number' && effectiveSeed >= 0) {
-        config.seed = effectiveSeed;
-      }
-
-      const aiResponse = await gen.client.models.generateImages({
-        model: 'imagen-3.0-generate-002',
-        prompt: finalPrompt,
-        config,
-      });
-
-      if (!aiResponse.generatedImages || aiResponse.generatedImages.length === 0 || !aiResponse.generatedImages[0]?.image?.imageBytes) {
-        keyPoolManager.recordResult('gemini', gen.apiKey, false, Date.now() - startTime, 'No image returned', 500);
-        return res.status(500).json({ error: 'Google Imagen 3 API 未返回生成图像数据' });
-      }
-
-      const base64Bytes = aiResponse.generatedImages[0].image.imageBytes;
-      generatedImageUrl = `data:image/jpeg;base64,${base64Bytes}`;
     }
 
+    const config = Object.keys(imageConfig).length > 0 ? { imageConfig } : undefined;
+    const contentResponse = await upstreamSdkCall(
+      { provider: 'gemini', route: req.path, model, key: gen.apiKey, upstream: `generativelanguage.googleapis.com/v1beta/models/${model}:generateContent` },
+      () => gen!.client.models.generateContent({
+        model,
+        contents: { parts },
+        ...(config ? { config } : {}),
+      })
+    );
+
+    let base64Bytes = '';
+    let mimeType = 'image/png';
+    for (const part of contentResponse.candidates?.[0]?.content?.parts || []) {
+      if (part.inlineData?.data) {
+        base64Bytes = part.inlineData.data;
+        mimeType = part.inlineData.mimeType || 'image/png';
+        break;
+      }
+    }
+
+    if (!base64Bytes) {
+      keyPoolManager.recordResult('gemini', gen.apiKey, false, Date.now() - startTime, 'No image returned from Gemini', 500);
+      return res.status(500).json({ error: 'Google Gemini 图像模型未返回生成数据' });
+    }
+
+    const generatedImageUrl = `data:${mimeType};base64,${base64Bytes}`;
     keyPoolManager.recordResult('gemini', gen.apiKey, true, Date.now() - startTime);
 
     const item = recordHistoryItem({
       url: generatedImageUrl,
       prompt,
-      provider: 'Google Imagen 3 (官方直连)',
-      model: targetModel,
-      seed: effectiveSeed,
-      steps: 30,
-      cfg: 5.0,
-      loras: (loras || []).map((l: any) => ({
-        name: l.name || l.path,
-        strength: Number(l.strength || 0.8),
-      })),
+      provider: 'Google Gemini (官方直连)',
+      model,
+      actualModel: model,
+      actualProvider: 'Google Gemini (官方直连)',
+      seed: null,
+      steps: null,
+      cfg: null,
+      loras: [],
     });
 
     return res.json({
       imageUrl: generatedImageUrl,
-      prompt,
-      provider: 'Google Imagen 3 (官方直连)',
-      model: targetModel,
-      seed: effectiveSeed,
+      provider: 'Google Gemini (官方直连)',
+      actualProvider: 'Google Gemini (官方直连)',
+      model,
+      actualModel: model,
+      aspectRatio: aspect_ratio,
       historyItem: item,
     });
   } catch (error: any) {
-    return res.status(500).json({
-      error: `Google Imagen 3 生图接口失败: ${error.message || '未知错误'}`,
+    if (gen?.apiKey) {
+      keyPoolManager.recordResult('gemini', gen.apiKey, false, Date.now() - startTime, error.message, error.status || 500);
+    }
+    return res.status(error.status || 500).json({
+      error: `Google Gemini 图像生成失败: ${error.message || '未知错误'}`,
     });
   }
 });
 
-// Multi-LLM Prompt Refiner endpoint (Gemini 3.8 -> SenseNova DeepSeek V4 -> Agnes AI 3.0 -> Expert Enhancer)
+// Prompt Refiner endpoint (Gemini / SenseNova / Agnes) - explicit provider and model required (W3)
 app.post(['/api/gemini/refine-prompt', '/api/ai/refine-prompt'], async (req, res) => {
   try {
-    const { prompt, style = 'cinematic photorealistic 8k', loras = [] } = req.body;
+    const { prompt, provider, model, style, loras = [] } = req.body;
     if (!prompt || !prompt.trim()) {
-      return res.status(400).json({ error: 'Prompt cannot be empty' });
+      return res.status(400).json({ error: 'Prompt 为必填项' });
+    }
+    if (!provider || typeof provider !== 'string' || !provider.trim()) {
+      return res.status(400).json({ error: 'provider 为必填项' });
+    }
+    if (!model || typeof model !== 'string' || !model.trim()) {
+      return res.status(400).json({ error: '模型为必填项' });
     }
 
-    const customSnBaseUrl = (req.headers['x-sensenova-base-url'] as string)?.trim();
-    const customSnKey = (req.headers['x-sensenova-key'] as string)?.trim();
-    if (customSnBaseUrl && !customSnKey) {
-      return res.status(400).json({
-        error: '使用自定义 base URL (x-sensenova-base-url) 时必须同时提供自定义 API Key (x-sensenova-key)，禁止回退使用服务端密钥。',
-      });
-    }
-
-    const customAgnesBaseUrl = (req.headers['x-agnes-base-url'] as string)?.trim();
-    const customAgnesKey = (req.headers['x-agnes-key'] as string)?.trim();
-    if (customAgnesBaseUrl && !customAgnesKey) {
-      return res.status(400).json({
-        error: '使用自定义 base URL (x-agnes-base-url) 时必须同时提供自定义 API Key (x-agnes-key)，禁止回退使用服务端密钥。',
-      });
-    }
-
+    const targetProvider = provider.toLowerCase().trim();
+    const targetModel = model.trim();
     const rawPrompt = prompt.trim();
     const loraContext = Array.isArray(loras) && loras.length > 0
-      ? `Target LoRA triggers/styles: ${loras.map((l: any) => `${l.name || l.displayName} (strength: ${l.strength ?? l.modelStrength ?? 0.8})`).join(', ')}`
+      ? `Target LoRA triggers/styles: ${loras.map((l: any) => `${l.name || l.displayName}${(l.strength ?? l.modelStrength) != null ? ` (strength: ${l.strength ?? l.modelStrength})` : ''}`).join(', ')}`
       : '';
 
     const systemInstruction = `You are a world-class prompt engineer and AI visual director specializing in Midjourney v6, FLUX.1, and SDXL ComfyUI pipelines.
@@ -5835,118 +5800,143 @@ Your task is to transform the user's initial prompt into an exceptional, visuall
 - Incorporate any requested LoRA triggers naturally.
 - Output ONLY the final expanded prompt in English, with NO conversational filler, NO markdown quotes, and NO preamble.`;
 
-    let refinedText = '';
-
-    // 1. Tier 1: Google Gemini 3.8 Flash
-    try {
-      const geminiKey = (req.headers['x-gemini-key'] as string) || process.env.GEMINI_API_KEY || cloudSettings['geminiKey'] || '';
+    if (targetProvider === 'gemini') {
+      const geminiKey = (req.headers['x-gemini-key'] as string) || '';
       const gen = createGoogleGenAI(geminiKey);
-      if (gen) {
+      if (!gen) {
+        return res.status(400).json({ error: '未配置 Google Gemini API 密钥（GEMINI_API_KEY / x-gemini-key）' });
+      }
+      try {
         const response = await gen.client.models.generateContent({
-          model: 'gemini-3.8-flash',
+          model: targetModel,
           contents: [
             {
               role: 'user',
               parts: [
-                { text: `${systemInstruction}\n\nUser Input Prompt: "${rawPrompt}"\nDesired Visual Style: ${style}\n${loraContext}` }
+                { text: `${systemInstruction}\n\nUser Input Prompt: "${rawPrompt}"\n${style ? `Desired Visual Style: ${style}\n` : ''}${loraContext}` }
               ]
             }
           ]
         });
         const out = response.text?.trim();
-        if (out && out.length > rawPrompt.length) {
-          refinedText = out;
+        if (!out) {
+          return res.status(502).json({ error: 'Gemini 未返回生成内容' });
         }
-      }
-    } catch (gErr) {
-      console.warn('Gemini prompt refine tier skipped:', gErr);
-    }
-
-    // 2. Tier 2: SenseNova (商汤日日新) DeepSeek V4 Reasoning
-    if (!refinedText) {
-      try {
-        const sensenovaKey = customSnBaseUrl
-          ? customSnKey
-          : (customSnKey || cloudSettings['sensenovaKey'] || defaultKeys['sensenovaKey']);
-        const sensenovaBaseUrl = customSnBaseUrl || cloudSettings['sensenovaBaseUrl'] || defaultKeys['sensenovaBaseUrl'] || 'https://token.sensenova.cn/v1';
-        if (sensenovaKey) {
-          const snResp = await fetch(`${sensenovaBaseUrl.replace(/\/+$/, '')}/chat/completions`, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${sensenovaKey}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              model: 'deepseek-v4-flash',
-              messages: [
-                { role: 'system', content: systemInstruction },
-                { role: 'user', content: `Expand prompt: "${rawPrompt}". Desired style: ${style}. ${loraContext}` }
-              ],
-              temperature: 0.6,
-              max_tokens: 1024,
-            }),
-          });
-          if (snResp.ok) {
-            const snData = await snResp.json();
-            const snText = snData.choices?.[0]?.message?.content?.trim();
-            if (snText) refinedText = snText;
-          }
-        }
-      } catch (snErr) {
-        console.warn('SenseNova prompt refine tier skipped:', snErr);
+        const cleaned = out.replace(/^["']|["']$/g, '').replace(/```[\s\S]*?```/g, '').trim();
+        return res.json({
+          success: true,
+          refinedPrompt: cleaned,
+          originalPrompt: rawPrompt,
+          actualProvider: 'gemini',
+          actualModel: targetModel,
+        });
+      } catch (gErr: any) {
+        const statusCode = gErr?.status || gErr?.statusCode || 500;
+        return res.status(statusCode).json({
+          error: `Gemini 调用失败 [${statusCode}]: ${gErr?.message || gErr}`,
+          status: statusCode,
+          details: gErr?.errorDetails || gErr?.toString(),
+        });
       }
     }
 
-    // 3. Tier 3: Agnes AI 3.0 Flash
-    if (!refinedText) {
-      try {
-        const agnesKey = customAgnesBaseUrl
-          ? customAgnesKey
-          : (customAgnesKey || cloudSettings['agnesKey'] || defaultKeys['agnesKey']);
-        const agnesBaseUrl = customAgnesBaseUrl || cloudSettings['agnesBaseUrl'] || defaultKeys['agnesBaseUrl'] || 'https://apihub.agnes-ai.com/v1';
-        if (agnesKey) {
-          const agResp = await fetch(`${agnesBaseUrl.replace(/\/+$/, '')}/chat/completions`, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${agnesKey}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              model: 'agnes-3.0-flash',
-              messages: [
-                { role: 'system', content: systemInstruction },
-                { role: 'user', content: `Expand prompt: "${rawPrompt}". Style: ${style}. ${loraContext}` }
-              ],
-              temperature: 0.6,
-              max_tokens: 1024,
-            }),
-          });
-          if (agResp.ok) {
-            const agData = await agResp.json();
-            const agText = agData.choices?.[0]?.message?.content?.trim();
-            if (agText) refinedText = agText;
-          }
-        }
-      } catch (agErr) {
-        console.warn('Agnes prompt refine tier skipped:', agErr);
+    if (targetProvider === 'sensenova') {
+      const auth = resolveProviderAuth(req, 'sensenova');
+      if (auth.error) {
+        return res.status(400).json({ error: auth.error });
       }
+      const snResp = await upstreamFetch(
+        { provider: 'sensenova', route: req.path, model: targetModel, key: auth.apiKey },
+        `${auth.baseUrl}/chat/completions`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${auth.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: targetModel,
+            messages: [
+              { role: 'system', content: systemInstruction },
+              { role: 'user', content: `Expand prompt: "${rawPrompt}".${style ? ` Desired style: ${style}.` : ''} ${loraContext}`.trim() }
+            ],
+            temperature: 0.6,
+            max_tokens: 1024,
+          }),
+        }
+      );
+      if (!snResp.ok) {
+        const errText = await snResp.text();
+        return res.status(snResp.status).json({
+          error: `SenseNova 调用失败 [${snResp.status}]: ${errText}`,
+          status: snResp.status,
+          upstreamBody: errText,
+        });
+      }
+      const snData = await snResp.json();
+      const snText = snData.choices?.[0]?.message?.content?.trim();
+      if (!snText) {
+        return res.status(502).json({ error: 'SenseNova 未返回有效内容', details: snData });
+      }
+      const cleaned = snText.replace(/^["']|["']$/g, '').replace(/```[\s\S]*?```/g, '').trim();
+      return res.json({
+        success: true,
+        refinedPrompt: cleaned,
+        originalPrompt: rawPrompt,
+        actualProvider: 'sensenova',
+        actualModel: snData.model || targetModel,
+      });
     }
 
-    // 4. Tier 4: Algorithmic Photoreal Enhancer (100% Reliable Offline Safety Net)
-    if (!refinedText) {
-      const triggers = Array.isArray(loras) ? loras.map((l: any) => l.triggers || l.triggerWords).filter(Boolean).join(', ') : '';
-      const visualKeywords = 'masterpiece, 8k resolution, ultra-detailed textures, cinematic volumetric lighting, ray tracing, sharp focus, 35mm photography, high aesthetic';
-      refinedText = `${triggers ? `${triggers}, ` : ''}${rawPrompt}, ${style}, ${visualKeywords}`;
+    if (targetProvider === 'agnes') {
+      const auth = resolveProviderAuth(req, 'agnes');
+      if (auth.error) {
+        return res.status(400).json({ error: auth.error });
+      }
+      const agResp = await upstreamFetch(
+        { provider: 'agnes', route: req.path, model: targetModel, key: auth.apiKey },
+        `${auth.baseUrl}/chat/completions`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${auth.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: targetModel,
+            messages: [
+              { role: 'system', content: systemInstruction },
+              { role: 'user', content: `Expand prompt: "${rawPrompt}".${style ? ` Style: ${style}.` : ''} ${loraContext}`.trim() }
+            ],
+            temperature: 0.6,
+            max_tokens: 1024,
+          }),
+        }
+      );
+      if (!agResp.ok) {
+        const errText = await agResp.text();
+        return res.status(agResp.status).json({
+          error: `Agnes AI 调用失败 [${agResp.status}]: ${errText}`,
+          status: agResp.status,
+          upstreamBody: errText,
+        });
+      }
+      const agData = await agResp.json();
+      const agText = agData.choices?.[0]?.message?.content?.trim();
+      if (!agText) {
+        return res.status(502).json({ error: 'Agnes AI 未返回有效内容', details: agData });
+      }
+      const cleaned = agText.replace(/^["']|["']$/g, '').replace(/```[\s\S]*?```/g, '').trim();
+      return res.json({
+        success: true,
+        refinedPrompt: cleaned,
+        originalPrompt: rawPrompt,
+        actualProvider: 'agnes',
+        actualModel: agData.model || targetModel,
+      });
     }
 
-    // Clean up any remaining quotes or markdown
-    refinedText = refinedText.replace(/^["']|["']$/g, '').replace(/```[\s\S]*?```/g, '').trim();
-
-    return res.json({
-      success: true,
-      refinedPrompt: refinedText,
-      originalPrompt: rawPrompt,
-    });
+    return res.status(400).json({ error: `不支持的润色 provider: ${targetProvider}（仅支持 gemini, sensenova, agnes）` });
   } catch (error: any) {
     return res.status(500).json({ error: error.message || 'Prompt refinement failed' });
   }
