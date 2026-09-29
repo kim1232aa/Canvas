@@ -828,7 +828,7 @@ export default function App() {
   };
 
   // Run full workflow from node graph
-  const handleQueuePrompt = async (overrideNodes?: NodeInstance[], overrideConns?: Connection[]) => {
+  const handleQueuePrompt = async (overrideNodes?: NodeInstance[], overrideConns?: Connection[], targetNodeId?: string) => {
     if (isExecuting) return;
     const activeNodes = overrideNodes || nodes;
     const activeConns = overrideConns || connections;
@@ -878,7 +878,8 @@ export default function App() {
         (percent, statusText) => {
           setExecutionProgress(percent);
           setExecutionStatusText(statusText);
-        }
+        },
+        targetNodeId || selectedNodeId || undefined
       );
       setExecutionStatusText(`成功完成 (${result.provider})`);
       setExecutionProgress(100);
