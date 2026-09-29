@@ -2,7 +2,7 @@
 
 ## 0c. F4 — AIVideoNode provider sync on model select; reject empty/mismatch (f4-video-provider) — 2026-09-29
 
-Tip hash: __TIP_HASH__ (branch f4-video-provider, not pushed)
+Tip hash: 10448d2a6fe3cf63c0030479b626dcb34903b0d1 (branch f4-video-provider, not pushed)
 
 ### 完成项
 - [x] 模型下拉选择：选项带 `provider` 时原子写入 `model` + `targetProvider` + 镜像 `provider`（`applyAIVideoModelSelection`，schema 驱动自 `NODE_DEFINITIONS['AIVideoNode']`）
