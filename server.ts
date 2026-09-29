@@ -17,7 +17,7 @@ import {
 } from './src/engines/compatRelay.ts';
 import { enrichPoolStatsWithServerBaseUrl } from './src/utils/poolStatsEnrich.ts';
 import { mapSampler, mapScheduler, resolveImportedNegativePrompt, resolveImportedCheckpointRef } from './src/utils/civitaiImportMap.ts';
-import { persistRemoteUrlAsDataUrl } from './src/utils/persistMediaAsDataUrl.ts';
+import { persistRemoteUrlAsDataUrl, requireDurableHistoryMediaUrl } from './src/utils/persistMediaAsDataUrl.ts';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -3676,10 +3676,21 @@ app.post(['/api/fal/generate', '/api/generate'], async (req, res) => {
       return res.status(502).json({ error: 'Fal.ai 返回结果中未包含图像输出 URL (images[0].url)' });
     }
 
+    // Durable same-origin copy — never store remote https alone as history.url (UI grey-out untouched)
+    const durable = await requireDurableHistoryMediaUrl(imageUrl);
+    if (!durable.ok) {
+      return res.status(500).json({
+        error: `Fal.ai 图像已生成，但无法下载并持久化为本地历史副本（data URL）: ${durable.message}`,
+        ...(durable.status != null ? { persistStatus: durable.status } : {}),
+        transientMediaUrl: imageUrl,
+      });
+    }
+    const durableUrl = durable.dataUrl;
+
     // Fal output schema returns the actual `seed` used; steps/cfg only if we sent them.
     const usedSeed = typeof result.seed === 'number' ? result.seed : (payload.seed ?? null);
     const item = recordHistoryItem({
-      url: imageUrl,
+      url: durableUrl,
       prompt,
       negativePrompt: negative_prompt,
       provider: 'Fal.ai (GPU 云端加速)',
@@ -3691,7 +3702,7 @@ app.post(['/api/fal/generate', '/api/generate'], async (req, res) => {
     });
 
     return res.json({
-      imageUrl,
+      imageUrl: durableUrl,
       seed: usedSeed,
       timings: result.timings,
       provider: 'Fal.ai (GPU 云端加速)',
@@ -3889,8 +3900,19 @@ app.post(['/api/video/generate', '/api/engine/video/generate'], async (req, res)
           });
         }
 
+        const durableVideo = await requireDurableHistoryMediaUrl(videoResult);
+        if (!durableVideo.ok) {
+          return res.status(500).json({
+            error: `Tensor.Art 视频已生成，但无法下载并持久化为本地历史副本（data URL）: ${durableVideo.message}`,
+            ...(durableVideo.status != null ? { persistStatus: durableVideo.status } : {}),
+            transientMediaUrl: videoResult,
+            taskId,
+            toolName: targetTool.name,
+          });
+        }
+        const durableVideoUrl = durableVideo.dataUrl;
         const item = recordHistoryItem({
-          url: videoResult,
+          url: durableVideoUrl,
           prompt: built.used?.has('prompt') ? prompt : '',
           provider: 'Tensor.Art (OpenWorks Video)',
           model: targetTool.name,
@@ -3900,7 +3922,7 @@ app.post(['/api/video/generate', '/api/engine/video/generate'], async (req, res)
         });
 
         return res.json({
-          videoUrl: videoResult,
+          videoUrl: durableVideoUrl,
           provider: 'Tensor.Art (OpenWorks Video)',
           model: targetTool.name,
           requestedModel: model,
@@ -4005,8 +4027,17 @@ app.post(['/api/video/generate', '/api/engine/video/generate'], async (req, res)
         }
 
         keyPoolManager.recordResult('nanogpt', nanoKey, true, Date.now() - startTime);
+        const durableVideo = await requireDurableHistoryMediaUrl(videoUrl);
+        if (!durableVideo.ok) {
+          return res.status(500).json({
+            error: `NanoGPT 视频已生成，但无法下载并持久化为本地历史副本（data URL）: ${durableVideo.message}`,
+            ...(durableVideo.status != null ? { persistStatus: durableVideo.status } : {}),
+            transientMediaUrl: videoUrl,
+          });
+        }
+        const durableVideoUrl = durableVideo.dataUrl;
         const item = recordHistoryItem({
-          url: videoUrl,
+          url: durableVideoUrl,
           prompt,
           negativePrompt: nanoPayload.negative_prompt,
           provider: 'NanoGPT Video',
@@ -4017,7 +4048,7 @@ app.post(['/api/video/generate', '/api/engine/video/generate'], async (req, res)
         });
 
         return res.json({
-          videoUrl,
+          videoUrl: durableVideoUrl,
           provider: 'NanoGPT Video',
           model,
           requestedModel: model,
@@ -4124,8 +4155,17 @@ app.post(['/api/video/generate', '/api/engine/video/generate'], async (req, res)
         }
 
         keyPoolManager.recordResult('agnes', agnesKey, true, Date.now() - startTime);
+        const durableVideo = await requireDurableHistoryMediaUrl(videoUrl);
+        if (!durableVideo.ok) {
+          return res.status(500).json({
+            error: `Agnes AI 视频已生成，但无法下载并持久化为本地历史副本（data URL）: ${durableVideo.message}`,
+            ...(durableVideo.status != null ? { persistStatus: durableVideo.status } : {}),
+            transientMediaUrl: videoUrl,
+          });
+        }
+        const durableVideoUrl = durableVideo.dataUrl;
         const item = recordHistoryItem({
-          url: videoUrl,
+          url: durableVideoUrl,
           prompt,
           provider: 'Agnes AI Video (ApiHub)',
           model,
@@ -4135,7 +4175,7 @@ app.post(['/api/video/generate', '/api/engine/video/generate'], async (req, res)
         });
 
         return res.json({
-          videoUrl,
+          videoUrl: durableVideoUrl,
           provider: 'Agnes AI Video (ApiHub)',
           model,
           requestedModel: model,
@@ -4245,8 +4285,19 @@ app.post(['/api/video/generate', '/api/engine/video/generate'], async (req, res)
         }
 
         keyPoolManager.recordResult('grok_compat', grokKey, true, Date.now() - startTime);
+        // Durable copy before history — same fail-closed pattern as image generate
+        const durableVideo = await requireDurableHistoryMediaUrl(videoUrl);
+        if (!durableVideo.ok) {
+          return res.status(500).json({
+            error: `Grok 兼容中转视频已生成，但无法下载并持久化为本地历史副本（data URL）: ${durableVideo.message}`,
+            ...(durableVideo.status != null ? { persistStatus: durableVideo.status } : {}),
+            transientMediaUrl: videoUrl,
+            request_id: requestId,
+          });
+        }
+        const durableVideoUrl = durableVideo.dataUrl;
         const item = recordHistoryItem({
-          url: videoUrl,
+          url: durableVideoUrl,
           prompt,
           provider: 'Grok 兼容中转',
           model,
@@ -4255,8 +4306,8 @@ app.post(['/api/video/generate', '/api/engine/video/generate'], async (req, res)
           cfg: null,
         });
         return res.json({
-          videoUrl,
-          mediaUrl: videoUrl,
+          videoUrl: durableVideoUrl,
+          mediaUrl: durableVideoUrl,
           provider: 'Grok 兼容中转',
           model,
           requestedModel: model,
@@ -4392,8 +4443,17 @@ app.post(['/api/video/generate', '/api/engine/video/generate'], async (req, res)
 
     const providerName = `Fal.ai (${endpoint})`;
     const usedVideoSeed = typeof vData.seed === 'number' ? vData.seed : (payload.seed ?? null);
+    const durableVideo = await requireDurableHistoryMediaUrl(videoUrl);
+    if (!durableVideo.ok) {
+      return res.status(500).json({
+        error: `Fal.ai 视频已生成，但无法下载并持久化为本地历史副本（data URL）: ${durableVideo.message}`,
+        ...(durableVideo.status != null ? { persistStatus: durableVideo.status } : {}),
+        transientMediaUrl: videoUrl,
+      });
+    }
+    const durableVideoUrl = durableVideo.dataUrl;
     const item = recordHistoryItem({
-      url: videoUrl,
+      url: durableVideoUrl,
       prompt,
       provider: providerName,
       model: endpoint,
@@ -4403,7 +4463,7 @@ app.post(['/api/video/generate', '/api/engine/video/generate'], async (req, res)
     });
 
     return res.json({
-      videoUrl,
+      videoUrl: durableVideoUrl,
       provider: providerName,
       actualProvider: providerName,
       model: endpoint,
@@ -5119,8 +5179,19 @@ app.post(['/api/engine/agnes/generate', '/api/agnes/generate'], async (req, res)
     }
     keyPoolManager.recordResult('agnes', apiKey, true, Date.now() - startTime);
 
+    // Durable same-origin copy — never store remote https alone as history.url (UI grey-out untouched)
+    const durable = await requireDurableHistoryMediaUrl(mediaUrl);
+    if (!durable.ok) {
+      return res.status(500).json({
+        error: `Agnes AI 图像已生成，但无法下载并持久化为本地历史副本（data URL）: ${durable.message}`,
+        ...(durable.status != null ? { persistStatus: durable.status } : {}),
+        transientMediaUrl: mediaUrl,
+      });
+    }
+    const durableUrl = durable.dataUrl;
+
     const item = recordHistoryItem({
-      url: mediaUrl,
+      url: durableUrl,
       prompt,
       provider: 'Agnes AI (ApiHub)',
       model,
@@ -5131,8 +5202,8 @@ app.post(['/api/engine/agnes/generate', '/api/agnes/generate'], async (req, res)
     });
 
     return res.json({
-      imageUrl: mediaUrl,
-      mediaUrl,
+      imageUrl: durableUrl,
+      mediaUrl: durableUrl,
       mediaType: 'image',
       provider: 'Agnes AI (ApiHub)',
       model,
@@ -5293,8 +5364,19 @@ app.post(['/api/engine/openai_compat/generate', '/api/openai_compat/generate'], 
     }
     keyPoolManager.recordResult('openai_compat', apiKey, true, Date.now() - startTime);
 
+    // Durable copy when upstream returned https URL (b64→data: already durable; pass-through)
+    const durable = await requireDurableHistoryMediaUrl(mediaUrl);
+    if (!durable.ok) {
+      return res.status(500).json({
+        error: `OpenAI 兼容中转图像已生成，但无法下载并持久化为本地历史副本（data URL）: ${durable.message}`,
+        ...(durable.status != null ? { persistStatus: durable.status } : {}),
+        transientMediaUrl: mediaUrl,
+      });
+    }
+    const durableUrl = durable.dataUrl;
+
     const item = recordHistoryItem({
-      url: mediaUrl,
+      url: durableUrl,
       prompt,
       provider: 'OpenAI 兼容中转',
       model,
@@ -5305,8 +5387,8 @@ app.post(['/api/engine/openai_compat/generate', '/api/openai_compat/generate'], 
     });
 
     return res.json({
-      imageUrl: mediaUrl,
-      mediaUrl,
+      imageUrl: durableUrl,
+      mediaUrl: durableUrl,
       mediaType: 'image',
       provider: 'OpenAI 兼容中转',
       model,
@@ -5368,8 +5450,19 @@ app.post(['/api/engine/grok_compat/generate', '/api/grok_compat/generate'], asyn
     }
     keyPoolManager.recordResult('grok_compat', apiKey, true, Date.now() - startTime);
 
+    // Durable same-origin copy (data:image/…) — never store expiring imgen.x.ai / https blob alone
+    const durable = await requireDurableHistoryMediaUrl(mediaUrl);
+    if (!durable.ok) {
+      return res.status(500).json({
+        error: `Grok 兼容中转图像已生成，但无法下载并持久化为本地历史副本（data URL）: ${durable.message}`,
+        ...(durable.status != null ? { persistStatus: durable.status } : {}),
+        transientMediaUrl: mediaUrl,
+      });
+    }
+    const durableUrl = durable.dataUrl;
+
     const item = recordHistoryItem({
-      url: mediaUrl,
+      url: durableUrl,
       prompt,
       provider: 'Grok 兼容中转',
       model,
@@ -5380,8 +5473,8 @@ app.post(['/api/engine/grok_compat/generate', '/api/grok_compat/generate'], asyn
     });
 
     return res.json({
-      imageUrl: mediaUrl,
-      mediaUrl,
+      imageUrl: durableUrl,
+      mediaUrl: durableUrl,
       mediaType: 'image',
       provider: 'Grok 兼容中转',
       model,
@@ -5738,9 +5831,21 @@ app.post(['/api/tensorart/generate', '/api/engine/tensorart/generate'], async (r
       targetTool.outputs?.some((o: any) => o.format === 'video') ||
       targetTool.name.includes('video');
 
+    // Durable copy before history — fail closed on remote http(s)
+    const durable = await requireDurableHistoryMediaUrl(resultOutput);
+    if (!durable.ok) {
+      return res.status(500).json({
+        error: `Tensor.Art 产物已生成，但无法下载并持久化为本地历史副本（data URL）: ${durable.message}`,
+        ...(durable.status != null ? { persistStatus: durable.status } : {}),
+        transientMediaUrl: resultOutput,
+        taskId,
+      });
+    }
+    const durableUrl = durable.dataUrl;
+
     // History: only values actually mapped into tool inputs (C5).
     const item = recordHistoryItem({
-      url: resultOutput,
+      url: durableUrl,
       prompt: built.used?.has('prompt') ? prompt : '',
       negativePrompt: built.used?.has('negative_prompt') ? req.body.negative_prompt : undefined,
       provider: 'Tensor.Art (OpenWorks)',
@@ -5751,9 +5856,9 @@ app.post(['/api/tensorart/generate', '/api/engine/tensorart/generate'], async (r
     });
 
     return res.json({
-      imageUrl: isVideo ? '' : resultOutput,
-      videoUrl: isVideo ? resultOutput : '',
-      mediaUrl: resultOutput,
+      imageUrl: isVideo ? '' : durableUrl,
+      videoUrl: isVideo ? durableUrl : '',
+      mediaUrl: durableUrl,
       mediaType: isVideo ? 'video' : 'image',
       provider: 'Tensor.Art (OpenWorks)',
       actualProvider: 'Tensor.Art (OpenWorks)',
@@ -6202,8 +6307,18 @@ app.post(
       }
 
       const providerName = isAiSite ? 'ModelScope AI (魔搭国际站)' : 'ModelScope CN (魔搭社区)';
+      const durable = await requireDurableHistoryMediaUrl(imageUrl);
+      if (!durable.ok) {
+        return res.status(500).json({
+          error: `魔搭图像已生成，但无法下载并持久化为本地历史副本（data URL）: ${durable.message}`,
+          ...(durable.status != null ? { persistStatus: durable.status } : {}),
+          transientMediaUrl: imageUrl,
+          model,
+        });
+      }
+      const durableUrl = durable.dataUrl;
       const item = recordHistoryItem({
-        url: imageUrl,
+        url: durableUrl,
         prompt: finalPrompt,
         negativePrompt: negative_prompt,
         provider: providerName,
@@ -6214,7 +6329,7 @@ app.post(
       });
 
       return res.json({
-        imageUrl,
+        imageUrl: durableUrl,
         provider: providerName,
         model,
         historyItem: item,
@@ -6279,8 +6394,18 @@ app.post(['/api/nanogpt/generate', '/api/engine/nanogpt/generate'], async (req, 
       return res.status(500).json({ error: 'NanoGPT 返回数据中未包含图像输出 URL' });
     }
 
+    const durable = await requireDurableHistoryMediaUrl(imageUrl);
+    if (!durable.ok) {
+      return res.status(500).json({
+        error: `NanoGPT 图像已生成，但无法下载并持久化为本地历史副本（data URL）: ${durable.message}`,
+        ...(durable.status != null ? { persistStatus: durable.status } : {}),
+        transientMediaUrl: imageUrl,
+      });
+    }
+    const durableUrl = durable.dataUrl;
+
     const item = recordHistoryItem({
-      url: imageUrl,
+      url: durableUrl,
       prompt,
       provider: 'NanoGPT',
       model,
@@ -6290,7 +6415,7 @@ app.post(['/api/nanogpt/generate', '/api/engine/nanogpt/generate'], async (req, 
     });
 
     return res.json({
-      imageUrl,
+      imageUrl: durableUrl,
       provider: 'NanoGPT',
       model,
       historyItem: item,
