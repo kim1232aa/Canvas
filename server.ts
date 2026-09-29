@@ -4440,32 +4440,16 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
 // 2.8. Agnes AI (ApiHub) Image, Video & Reasoning Chat
 // ==========================================
 app.post(['/api/engine/agnes/generate', '/api/agnes/generate'], async (req, res) => {
+  const startTime = Date.now();
+  const auth = resolveProviderAuth(req, 'agnes');
+  if (auth.error) return res.status(400).json({ error: auth.error });
+  const { apiKey, baseUrl } = auth;
+
   try {
-    const {
-      prompt,
-      model = 'agnes-image-2.5-flash',
-      width = 1024,
-      height = 1024,
-      image_url,
-    } = req.body;
-
-    const customAgnesBaseUrl = (req.headers['x-agnes-base-url'] as string)?.trim();
-    const customAgnesKey = (req.headers['x-agnes-key'] as string)?.trim();
-
-    if (customAgnesBaseUrl && !customAgnesKey) {
-      return res.status(400).json({
-        error: '使用自定义 base URL (x-agnes-base-url) 时必须同时提供自定义 API Key (x-agnes-key)，禁止回退使用服务端密钥。',
-      });
-    }
-
-    const apiKey = customAgnesBaseUrl
-      ? customAgnesKey
-      : (customAgnesKey || cloudSettings['agnesKey'] || defaultKeys['agnesKey'] || '');
-    const baseUrl = customAgnesBaseUrl || cloudSettings['agnesBaseUrl'] || defaultKeys['agnesBaseUrl'] || 'https://apihub.agnes-ai.com/v1';
-
-    if (!apiKey) {
-      return res.status(400).json({ error: '未配置 Agnes AI API 密钥 (x-agnes-key)。' });
-    }
+    const { prompt, model, width = 1024, height = 1024, image_url } = req.body;
+    if (!model) return res.status(400).json({ error: '模型为必填项（model is required）' });
+    // Agnes image API has no seed/negative_prompt/steps/cfg/loras
+    if (rejectUnsupported(res, 'Agnes AI', req.body, ['negative_prompt', 'seed', 'cfg', 'guidance_scale', 'steps', 'loras'])) return;
 
     const payload: any = {
       model,
@@ -4473,112 +4457,90 @@ app.post(['/api/engine/agnes/generate', '/api/agnes/generate'], async (req, res)
       n: 1,
       size: `${width}x${height}`,
     };
+    // Reference image via extra_body.image (array of URL / data-URI strings)
     if (image_url) {
-      payload.image_url = image_url;
+      payload.extra_body = { image: [image_url] };
     }
 
-    const upstream = await fetch(`${baseUrl.replace(/\/+$/, '')}/images/generations`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
+    const upstream = await upstreamFetch(
+      { provider: 'agnes', route: req.path, model, key: apiKey },
+      `${baseUrl}/images/generations`,
+      {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }
+    );
 
     if (!upstream.ok) {
       const errorText = await upstream.text();
-      return res.status(upstream.status).json({
-        error: `Agnes AI 接口执行失败 [${upstream.status}]: ${errorText}`,
-      });
+      keyPoolManager.recordResult('agnes', apiKey, false, Date.now() - startTime, errorText, upstream.status);
+      return res.status(upstream.status).json({ error: `Agnes AI 接口执行失败 [${upstream.status}]: ${errorText}` });
     }
 
     const data = await upstream.json();
-    const mediaUrl = data.data?.[0]?.url || data.images?.[0]?.url || data.url;
+    const mediaUrl = data.data?.[0]?.url;
     if (!mediaUrl) {
+      keyPoolManager.recordResult('agnes', apiKey, false, Date.now() - startTime, 'No image in response', 500);
       return res.status(500).json({ error: 'Agnes AI 返回结果中未包含图像输出 URL' });
     }
+    keyPoolManager.recordResult('agnes', apiKey, true, Date.now() - startTime);
 
     const item = recordHistoryItem({
       url: mediaUrl,
       prompt,
       provider: 'Agnes AI (ApiHub)',
       model,
-      seed: Math.floor(Math.random() * 1000000000),
-      steps: 25,
-      cfg: 6.0,
+      seed: null,
+      steps: null,
+      cfg: null,
+      loras: [],
     });
 
     return res.json({
       imageUrl: mediaUrl,
       mediaUrl,
-      mediaType: model.includes('video') ? 'video' : 'image',
+      mediaType: 'image',
       provider: 'Agnes AI (ApiHub)',
       model,
-      seed: item.seed,
       historyItem: item,
     });
   } catch (error: any) {
+    keyPoolManager.recordResult('agnes', apiKey, false, Date.now() - startTime, error.message);
     return res.status(500).json({ error: `Agnes AI 请求异常: ${error.message}` });
   }
 });
 
 app.post(['/api/engine/agnes/chat', '/api/agnes/chat'], async (req, res) => {
+  const startTime = Date.now();
+  const auth = resolveProviderAuth(req, 'agnes');
+  if (auth.error) return res.status(400).json({ error: auth.error });
+
   try {
-    const {
-      messages = [],
-      model = 'agnes-3.0-flash',
-      temperature = 0.7,
-      max_tokens = 2048,
-    } = req.body;
+    const { messages = [], model, temperature = 0.7, max_tokens = 2048 } = req.body;
+    if (!model) return res.status(400).json({ error: '模型为必填项（model is required）' });
 
-    const customAgnesBaseUrl = (req.headers['x-agnes-base-url'] as string)?.trim();
-    const customAgnesKey = (req.headers['x-agnes-key'] as string)?.trim();
-
-    if (customAgnesBaseUrl && !customAgnesKey) {
-      return res.status(400).json({
-        error: '使用自定义 base URL (x-agnes-base-url) 时必须同时提供自定义 API Key (x-agnes-key)，禁止回退使用服务端密钥。',
-      });
-    }
-
-    const apiKey = customAgnesBaseUrl
-      ? customAgnesKey
-      : (customAgnesKey || cloudSettings['agnesKey'] || defaultKeys['agnesKey'] || '');
-    const baseUrl = customAgnesBaseUrl || cloudSettings['agnesBaseUrl'] || defaultKeys['agnesBaseUrl'] || 'https://apihub.agnes-ai.com/v1';
-
-    if (!apiKey) {
-      return res.status(400).json({ error: '未配置 Agnes AI API 密钥 (x-agnes-key)。' });
-    }
-
-    const upstream = await fetch(`${baseUrl.replace(/\/+$/, '')}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model,
-        messages,
-        temperature,
-        max_tokens,
-      }),
-    });
+    const upstream = await upstreamFetch(
+      { provider: 'agnes', route: req.path, model, key: auth.apiKey },
+      `${auth.baseUrl}/chat/completions`,
+      {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${auth.apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, messages, temperature, max_tokens }),
+      }
+    );
 
     if (!upstream.ok) {
       const errorText = await upstream.text();
-      return res.status(upstream.status).json({
-        error: `Agnes AI 对话推理失败 [${upstream.status}]: ${errorText}`,
-      });
+      keyPoolManager.recordResult('agnes', auth.apiKey, false, Date.now() - startTime, errorText, upstream.status);
+      return res.status(upstream.status).json({ error: `Agnes AI 对话推理失败 [${upstream.status}]: ${errorText}` });
     }
 
+    keyPoolManager.recordResult('agnes', auth.apiKey, true, Date.now() - startTime);
     const data = await upstream.json();
-    const content = data.choices?.[0]?.message?.content || '';
-    return res.json({
-      content,
-      model: data.model || model,
-      usage: data.usage,
-    });
+    return res.json({ content: data.choices?.[0]?.message?.content || '', model: data.model || model, usage: data.usage });
   } catch (error: any) {
+    keyPoolManager.recordResult('agnes', auth.apiKey, false, Date.now() - startTime, error.message);
     return res.status(500).json({ error: `Agnes AI 推理异常: ${error.message}` });
   }
 });
@@ -4587,70 +4549,48 @@ app.post(['/api/engine/agnes/chat', '/api/agnes/chat'], async (req, res) => {
 // 2.9. SenseNova (商汤日日新) DeepSeek V4 / Reasoning / Vision
 // ==========================================
 app.post(['/api/engine/sensenova/chat', '/api/sensenova/chat'], async (req, res) => {
+  const startTime = Date.now();
+  const auth = resolveProviderAuth(req, 'sensenova');
+  if (auth.error) return res.status(400).json({ error: auth.error });
+
   try {
-    const {
-      messages = [],
-      model = 'deepseek-v4-flash',
-      temperature = 0.6,
-      max_tokens = 2048,
-    } = req.body;
+    const { messages = [], model, temperature = 0.6, max_tokens = 2048 } = req.body;
+    if (!model) return res.status(400).json({ error: '模型为必填项（model is required）' });
 
-    const customSnBaseUrl = (req.headers['x-sensenova-base-url'] as string)?.trim();
-    const customSnKey = (req.headers['x-sensenova-key'] as string)?.trim();
-
-    if (customSnBaseUrl && !customSnKey) {
-      return res.status(400).json({
-        error: '使用自定义 base URL (x-sensenova-base-url) 时必须同时提供自定义 API Key (x-sensenova-key)，禁止回退使用服务端密钥。',
-      });
-    }
-
-    const apiKey = customSnBaseUrl
-      ? customSnKey
-      : (customSnKey || cloudSettings['sensenovaKey'] || defaultKeys['sensenovaKey'] || '');
-    const baseUrl = customSnBaseUrl || cloudSettings['sensenovaBaseUrl'] || defaultKeys['sensenovaBaseUrl'] || 'https://token.sensenova.cn/v1';
-
-    if (!apiKey) {
-      return res.status(400).json({ error: '未配置商汤日日新 API 密钥 (x-sensenova-key)。' });
-    }
-
-    const upstream = await fetch(`${baseUrl.replace(/\/+$/, '')}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model,
-        messages,
-        temperature,
-        max_tokens,
-      }),
-    });
+    const upstream = await upstreamFetch(
+      { provider: 'sensenova', route: req.path, model, key: auth.apiKey },
+      `${auth.baseUrl}/chat/completions`,
+      {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${auth.apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, messages, temperature, max_tokens }),
+      }
+    );
 
     if (!upstream.ok) {
       const errorText = await upstream.text();
-      return res.status(upstream.status).json({
-        error: `SenseNova 深度推理失败 [${upstream.status}]: ${errorText}`,
-      });
+      keyPoolManager.recordResult('sensenova', auth.apiKey, false, Date.now() - startTime, errorText, upstream.status);
+      return res.status(upstream.status).json({ error: `SenseNova 深度推理失败 [${upstream.status}]: ${errorText}` });
     }
 
+    keyPoolManager.recordResult('sensenova', auth.apiKey, true, Date.now() - startTime);
     const data = await upstream.json();
-    const choice = data.choices?.[0];
-    const content = choice?.message?.content || '';
-    const reasoningContent = choice?.message?.reasoning_content || '';
+    const message = data.choices?.[0]?.message;
     return res.json({
-      content,
-      reasoningContent,
+      content: message?.content || '',
+      // SenseNova returns chain-of-thought in message.reasoning (not reasoning_content)
+      reasoningContent: message?.reasoning || '',
       model: data.model || model,
       usage: data.usage,
     });
   } catch (error: any) {
+    keyPoolManager.recordResult('sensenova', auth.apiKey, false, Date.now() - startTime, error.message);
     return res.status(500).json({ error: `SenseNova 推理异常: ${error.message}` });
   }
 });
 
 app.post('/api/engine/sensenova/generate', async (req, res) => {
-  const { model = 'deepseek-v4-flash' } = req.body;
+  const { model } = req.body;
   return res.status(400).json({
     error: `商汤日日新 (SenseNova) 是专长于深度思考与推理的文本大模型平台 (${model})。若需将概念扩散为图像或视频，请使用画布上的「LLM 推理思考节点」或提示词面板中的「深度思考扩写」，再通过连线将正向条件注入至 FLUX.1、Agnes 2.5 或 Wan 2.1 扩散引擎。`,
   });
