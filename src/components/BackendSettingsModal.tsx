@@ -7,7 +7,6 @@ import {
   Loader2,
   Sparkles,
   ShieldCheck,
-  Zap,
   AlertTriangle,
   RefreshCw,
   Layers,
@@ -26,7 +25,6 @@ import {
 import { ApiKeysState, ProviderConfig, ProviderId } from '../types/providers';
 import {
   testProviderConnection,
-  DEFAULT_TEST_KEYS,
   fetchKeyPoolStats,
   updateKeyPoolStrategy,
   testSingleKey,
@@ -112,9 +110,7 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
     const val = e.target.value;
     setAdminToken(val);
     saveStoredAdminToken(val);
-    refreshCloudSettings(val);
-    fetchKeyPoolStats(val).then(setPoolStats);
-    fetchCloudBalances(val).then(setBalances);
+    // S7: no automatic upstream requests — user clicks "验证并拉取云端配置" to load.
   };
 
   const refreshStats = React.useCallback(async () => {
@@ -132,14 +128,11 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
     }
   }, [adminToken]);
 
+  // S7: opening the modal only syncs local state; stats/balances/settings load on explicit button clicks.
   React.useEffect(() => {
     setKeys(apiKeys);
     initialKeysRef.current = apiKeys;
-    if (isOpen) {
-      refreshStats();
-      refreshBalances();
-    }
-  }, [apiKeys, isOpen, refreshStats, refreshBalances]);
+  }, [apiKeys, isOpen]);
 
   if (!isOpen) return null;
 
@@ -277,6 +270,22 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
 
   const currentStrategy = keys[`${currentProvider.id}_strategy`] || poolStats[currentProvider.id]?.strategy || 'round_robin';
 
+  // S7: server key counts come only from the pool stats (env + settings merged); null = not loaded yet.
+  const poolSummary = (provId: string): { total: number; settings: number; env: number } | null => {
+    const s = poolStats[provId];
+    if (!s || !Array.isArray(s.keys)) return null;
+    const settings = s.keys.filter((k: any) => k.source === 'settings').length;
+    return { total: s.keys.length, settings, env: s.keys.length - settings };
+  };
+  const poolLabel = (provId: string): string => {
+    const p = poolSummary(provId);
+    if (!p) return '服务端：未加载（点击刷新）';
+    return `服务端 ${p.total} 个（设置 ${p.settings} / .env ${p.env}）`;
+  };
+  // settings.json key field -> pool provider id (civitaiToken is a second civitai field).
+  const fieldProvider = (field: string): string | undefined =>
+    field === 'civitaiToken' ? 'civitai' : providers.find((p) => p.keyName === field)?.id;
+
   const handleUpdateKeysForProvider = (newList: string[]) => {
     const joined = newList.join('\n');
     setKeys((prev) => ({
@@ -384,14 +393,6 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
     refreshStats();
   };
 
-  const handleFillTestKeys = () => {
-    const updated = {
-      ...keys,
-      ...DEFAULT_TEST_KEYS,
-    };
-    setKeys(updated);
-  };
-
   const handleSave = () => {
     onSaveKeys(keys);
     onClose();
@@ -421,14 +422,6 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={handleFillTestKeys}
-              className="px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 border border-indigo-500/30 text-[11px] font-bold flex items-center gap-1.5 transition-all"
-              title="一键填入测试环境默认密钥"
-            >
-              <Zap className="w-3.5 h-3.5 text-indigo-400" />
-              <span>载入测试密钥</span>
-            </button>
             <button
               onClick={handleTestAll}
               disabled={testingAll}
@@ -461,10 +454,7 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
               <span>服务商密钥配置</span>
             </button>
             <button
-              onClick={() => {
-                setActiveMainTab('pool');
-                refreshStats();
-              }}
+              onClick={() => setActiveMainTab('pool')}
               className={`px-3.5 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-all ${
                 activeMainTab === 'pool'
                   ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40'
@@ -475,10 +465,7 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
               <span>多 Key 负载监控</span>
             </button>
             <button
-              onClick={() => {
-                setActiveMainTab('balance');
-                refreshBalances();
-              }}
+              onClick={() => setActiveMainTab('balance')}
               className={`px-3.5 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-all ${
                 activeMainTab === 'balance'
                   ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
@@ -489,10 +476,7 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
               <span>余额与额度总览</span>
             </button>
             <button
-              onClick={() => {
-                setActiveMainTab('admin');
-                refreshCloudSettings();
-              }}
+              onClick={() => setActiveMainTab('admin')}
               className={`px-3.5 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-all ${
                 activeMainTab === 'admin'
                   ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
@@ -537,13 +521,11 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
                             内置直连
                           </span>
                         )}
-                        {count > 1 && (
-                          <span className="text-[9px] bg-purple-500/20 text-purple-300 px-1 py-0.2 rounded font-mono font-bold">
-                            {count} Keys
-                          </span>
-                        )}
                       </div>
                       <div className="text-[10px] text-slate-400 truncate">{p.badge}</div>
+                      <div className="text-[9px] text-slate-500 font-mono truncate">
+                        {poolLabel(p.id)}{count > 0 ? ` · 本浏览器 ${count} 个` : ''}
+                      </div>
                     </div>
                     <div>
                       {test?.status === 'ok' ? (
@@ -615,7 +597,7 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
                     多 Key 负载策略 (Rotation Strategy)
                   </span>
                   <span className="text-slate-400 text-[10px] font-mono">
-                    当前配置密钥数: {parsedKeyList.length} 个
+                    {poolLabel(currentProvider.id)}
                   </span>
                 </div>
                 <div className="grid grid-cols-3 gap-2">
@@ -658,8 +640,16 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
                     <Key className="w-3.5 h-3.5 text-cyan-400" />
-                    已挂载的 API 密钥池列表 ({parsedKeyList.length})
+                    本浏览器自定义密钥 ({parsedKeyList.length})
                   </label>
+                  <button
+                    onClick={refreshStats}
+                    className="text-[11px] px-2.5 py-1 rounded bg-[#20222a] hover:bg-[#2c2f3b] text-slate-200 border border-[#313442] flex items-center gap-1 ml-auto mr-2"
+                    title="读取服务端 key 池（仅数量/掩码/来源，不访问上游）"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    <span>刷新服务端 key 池</span>
+                  </button>
                   <button
                     onClick={() => handleTest(currentProvider.id)}
                     disabled={testingProvider === currentProvider.id}
@@ -862,6 +852,9 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
                             className="text-[10px] font-mono bg-[#161720] px-2 py-1 rounded flex items-center justify-between text-slate-300"
                           >
                             <span className="truncate max-w-[150px]">{k.maskedKey}</span>
+                            <span className={`text-[8px] px-1 py-0.2 rounded font-mono ${k.source === 'env' ? 'bg-sky-950 text-sky-400 border border-sky-800/40' : 'bg-violet-950 text-violet-400 border border-violet-800/40'}`}>
+                              {k.source === 'env' ? '服务端：.env' : '服务端：设置'}
+                            </span>
                             <div className="flex items-center gap-2 text-slate-400">
                               <span>调用: {k.totalCalls}次</span>
                               <span>延迟: {k.avgLatencyMs}ms</span>
@@ -1004,7 +997,11 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
                   </button>
                 </div>
                 <button
-                  onClick={() => refreshCloudSettings()}
+                  onClick={() => {
+                    // Both are server-local reads (settings.json masked + pool counts); no upstream calls.
+                    refreshCloudSettings();
+                    refreshStats();
+                  }}
                   disabled={isLoadingCloudSettings}
                   className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-md shadow-amber-600/20 disabled:opacity-50 transition-all shrink-0"
                 >
@@ -1104,6 +1101,7 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
                     const isKeyObj = typeof v === 'object' && v !== null && 'configured' in v;
                     const configured = isKeyObj ? v.configured : Boolean(v);
                     const masked = isKeyObj ? v.masked : '';
+                    const prov = isKeyObj ? fieldProvider(k) : undefined;
                     return (
                       <div
                         key={k}
@@ -1111,11 +1109,16 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
                       >
                         <div className="min-w-0 flex-1 mr-2">
                           <div className="font-mono font-bold text-slate-200 text-xs truncate">{k}</div>
-                          {masked ? (
-                            <div className="font-mono text-[11px] text-amber-300/80 mt-0.5">
-                              掩码: {masked}
-                            </div>
-                          ) : !isKeyObj && typeof v === 'string' ? (
+                          {isKeyObj ? (
+                            <>
+                              <div className="font-mono text-[11px] text-amber-300/80 mt-0.5">
+                                服务端：设置 — {masked ? `掩码 ${masked}` : '未填写'}
+                              </div>
+                              {prov && (
+                                <div className="font-mono text-[10px] text-slate-400 mt-0.5">{poolLabel(prov)}</div>
+                              )}
+                            </>
+                          ) : typeof v === 'string' ? (
                             <div className="font-mono text-[11px] text-slate-400 mt-0.5 truncate">
                               {v}
                             </div>
@@ -1128,7 +1131,7 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
                               : 'bg-slate-800/80 text-slate-400 border-slate-700'
                           }`}
                         >
-                          {configured ? '🟢 已配置' : '⚪ 未配置'}
+                          {configured ? '🟢 设置中已填' : '⚪ 设置中未填'}
                         </span>
                       </div>
                     );

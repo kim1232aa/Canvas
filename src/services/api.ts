@@ -2,13 +2,12 @@ import { ApiKeysState, CivitaiSearchResult, GenerationHistoryItem, ProviderId } 
 
 const API_KEYS_STORAGE_KEY = 'comfycanvas_api_keys';
 
-export const DEFAULT_TEST_KEYS: ApiKeysState = {
+// Browser-local keys only ("本浏览器"); empty when nothing was saved. No placeholder keys or base URLs.
+const EMPTY_KEYS: ApiKeysState = {
   civitaiKey: '',
   falKey: '',
   agnesKey: '',
-  agnesBaseUrl: 'https://apihub.agnes-ai.com/v1',
   sensenovaKey: '',
-  sensenovaBaseUrl: 'https://token.sensenova.cn/v1',
   hfToken: '',
   modelscopeToken: '',
   modelscopeAiToken: '',
@@ -20,28 +19,11 @@ export const DEFAULT_TEST_KEYS: ApiKeysState = {
 export const getStoredApiKeys = (): ApiKeysState => {
   try {
     const raw = localStorage.getItem(API_KEYS_STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      // Merge with defaults so newly provided test keys are present if field was empty
-      return {
-        civitaiKey: parsed.civitaiKey || DEFAULT_TEST_KEYS.civitaiKey,
-        falKey: parsed.falKey || DEFAULT_TEST_KEYS.falKey,
-        agnesKey: parsed.agnesKey || DEFAULT_TEST_KEYS.agnesKey,
-        agnesBaseUrl: parsed.agnesBaseUrl || DEFAULT_TEST_KEYS.agnesBaseUrl,
-        sensenovaKey: parsed.sensenovaKey || DEFAULT_TEST_KEYS.sensenovaKey,
-        sensenovaBaseUrl: parsed.sensenovaBaseUrl || DEFAULT_TEST_KEYS.sensenovaBaseUrl,
-        hfToken: parsed.hfToken || DEFAULT_TEST_KEYS.hfToken,
-        modelscopeToken: parsed.modelscopeToken || DEFAULT_TEST_KEYS.modelscopeToken,
-        modelscopeAiToken: parsed.modelscopeAiToken || DEFAULT_TEST_KEYS.modelscopeAiToken,
-        nanogptKey: parsed.nanogptKey || DEFAULT_TEST_KEYS.nanogptKey,
-        geminiKey: parsed.geminiKey || '',
-        tensorartKey: parsed.tensorartKey || DEFAULT_TEST_KEYS.tensorartKey,
-      };
-    }
+    if (raw) return { ...EMPTY_KEYS, ...JSON.parse(raw) };
   } catch (e) {
     console.error('Error reading stored keys:', e);
   }
-  return { ...DEFAULT_TEST_KEYS };
+  return { ...EMPTY_KEYS };
 };
 
 export const saveStoredApiKeys = (keys: ApiKeysState) => {

@@ -89,6 +89,14 @@ S6 测试接口核实（2026-09-29 WebFetch）：
 
 遗留：balances 路由（server.ts:6562、6591）对 Agnes/SenseNova 仍然调 `${baseUrl}/models`，这个接口未能核实。base URL 只取服务端配置，没有泄露风险。不在 S6 范围内，待后续指派。
 
+| S7 | 已完成（tsc 0 错误，运行时待验证） | ① 设置弹窗不再自动发请求：输入令牌、打开弹窗、切换页签都不触发请求；stats / balances / settings / 测试只在点击按钮时运行（「验证并拉取云端配置」读 settings 和 stats，「刷新服务端 key 池」「刷新监控指标」读 stats，「查询最新余额」查 balances）；② 删除「载入测试密钥」按钮、`handleFillTestKeys`、`DEFAULT_TEST_KEYS`（含写死的 agnes/sensenova base URL），`getStoredApiKeys` 在没有存储时返回空值；③ key 数量统一：服务端数量只读 `/api/cloud-keys/stats`（key 池 = settings.json + .env 合并去重），每个 key 附带 `source: 'settings' \| 'env'`，响应只含掩码、数量和来源；UI 标注「服务端：设置 / 服务端：.env / 本浏览器」 | server.ts:366-379,429-432,593,609-613；src/services/api.ts:5-27；src/components/BackendSettingsModal.tsx:109-114,131-135,273-288,457,468,479,540-542,613-615,642-652,855-857,997-1004,1107-1122,1133 |
+
+S7 三处数量原来的来源：
+- 云端设置列表（Admin 页）：`GET /api/cloud/settings` → 只读 `data/settings.json`。env 里的 FAL_KEY / CIVITAI_API_KEY 不在里面，所以显示「未配置」。
+- 服务商页（Fal 页面「0 个」）：`parsedKeyList` → 弹窗 `keys` 状态 → `getStoredApiKeys()` → 浏览器 localStorage `comfycanvas_api_keys`。
+- stats：`KeyPoolManager.pools` → settings.json 与 .env（`defaultKeys`）合并，所以显示各 1 个。
+现在：服务端数量三处都读 stats 的 key 池并按来源拆分；Admin 列表明确标注「服务端：设置」字段是否已填，旁边附上 key 池总数；本浏览器的 key 单独标「本浏览器」，不再冒充服务端数量。
+
 U-E1 说明：
 - 服务端行为：只有两处错误文案变了，状态码仍是 400。① 对表内模型，不在列表里的值（例如 3.1-flash 传 `0.5K`、2.5 传 `7:3`）现在报「该服务商不支持此取值」，以前报「未能核实」。② 列表内标为 unverified 的值（`512px`、3-pro / 2.5 / preview 的全部候选值）报「未能核实」。
 - 前端下拉里 unverified 选项先设为 disabled，因为服务端现在仍会对它返回 400。U-E2 放开后改为可选。

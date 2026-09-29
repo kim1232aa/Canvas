@@ -363,6 +363,20 @@ const defaultKeys: Record<string, string> = {
   sensenovaBaseUrl: process.env.SENSENOVA_BASE_URL || '',
 };
 
+// Pool key sources per provider: settings.json fields (in order), then the defaultKeys (env) field.
+const POOL_KEY_FIELDS: Record<string, { settings: string[]; env: string }> = {
+  fal: { settings: ['falKey'], env: 'falKey' },
+  agnes: { settings: ['agnesKey'], env: 'agnesKey' },
+  sensenova: { settings: ['sensenovaKey'], env: 'sensenovaKey' },
+  civitai: { settings: ['civitaiToken', 'civitaiKey'], env: 'civitaiKey' },
+  huggingface: { settings: ['hfToken'], env: 'hfToken' },
+  modelscope: { settings: ['modelscopeToken'], env: 'modelscopeToken' },
+  modelscope_ai: { settings: ['modelscopeAiToken'], env: 'modelscopeAiToken' },
+  nanogpt: { settings: ['nanogptKey'], env: 'nanogptKey' },
+  tensorart: { settings: ['tensorartKey'], env: 'tensorartKey' },
+  gemini: { settings: ['geminiKey'], env: 'geminiKey' },
+};
+
 // Multi-Key Pool & High-Availability Round-Robin Load Balancer
 interface KeyStats {
   key: string;
@@ -412,18 +426,10 @@ class KeyPoolManager {
   }
 
   public refreshFromSettings() {
-    const providerKeyMap: Record<string, string[]> = {
-      fal: [...this.parseKeyString(cloudSettings['falKey']), ...this.parseKeyString(defaultKeys['falKey'])],
-      agnes: [...this.parseKeyString(cloudSettings['agnesKey']), ...this.parseKeyString(defaultKeys['agnesKey'])],
-      sensenova: [...this.parseKeyString(cloudSettings['sensenovaKey']), ...this.parseKeyString(defaultKeys['sensenovaKey'])],
-      civitai: [...this.parseKeyString(cloudSettings['civitaiToken']), ...this.parseKeyString(cloudSettings['civitaiKey']), ...this.parseKeyString(defaultKeys['civitaiKey'])],
-      huggingface: [...this.parseKeyString(cloudSettings['hfToken']), ...this.parseKeyString(defaultKeys['hfToken'])],
-      modelscope: [...this.parseKeyString(cloudSettings['modelscopeToken']), ...this.parseKeyString(defaultKeys['modelscopeToken'])],
-      modelscope_ai: [...this.parseKeyString(cloudSettings['modelscopeAiToken']), ...this.parseKeyString(defaultKeys['modelscopeAiToken'])],
-      nanogpt: [...this.parseKeyString(cloudSettings['nanogptKey']), ...this.parseKeyString(defaultKeys['nanogptKey'])],
-      tensorart: [...this.parseKeyString(cloudSettings['tensorartKey']), ...this.parseKeyString(defaultKeys['tensorartKey'])],
-      gemini: [...this.parseKeyString(cloudSettings['geminiKey']), ...this.parseKeyString(defaultKeys['geminiKey'])],
-    };
+    const providerKeyMap: Record<string, string[]> = {};
+    for (const [prov, { settings, env }] of Object.entries(POOL_KEY_FIELDS)) {
+      providerKeyMap[prov] = [...settings.flatMap((f) => this.parseKeyString(cloudSettings[f])), ...this.parseKeyString(defaultKeys[env])];
+    }
 
     Object.entries(providerKeyMap).forEach(([prov, keys]) => {
       const uniqueKeys = Array.from(new Set(keys.filter(Boolean)));
@@ -584,6 +590,7 @@ class KeyPoolManager {
         strategy: this.getStrategy(prov),
         keys: keys.map((k) => ({
           maskedKey: k.maskedKey,
+          source: this.keySource(prov, k.key),
           status: k.status,
           totalCalls: k.totalCalls,
           successfulCalls: k.successfulCalls,
@@ -597,6 +604,12 @@ class KeyPoolManager {
       };
     });
     return summary;
+  }
+
+  // S7: where each pool key came from (settings.json wins when a key is in both).
+  private keySource(prov: string, key: string): 'settings' | 'env' {
+    const fields = POOL_KEY_FIELDS[prov]?.settings || [];
+    return fields.some((f) => this.parseKeyString(cloudSettings[f]).includes(key)) ? 'settings' : 'env';
   }
 }
 
