@@ -1,5 +1,30 @@
 # Canvas Provider API 接线修复进度表
 
+## 0c. F4 — AIVideoNode provider sync on model select; reject empty/mismatch (f4-video-provider) — 2026-09-29
+
+Tip hash: __TIP_HASH__ (branch f4-video-provider, not pushed)
+
+### 完成项
+- [x] 模型下拉选择：选项带 `provider` 时原子写入 `model` + `targetProvider` + 镜像 `provider`（`applyAIVideoModelSelection`，schema 驱动自 `NODE_DEFINITIONS['AIVideoNode']`）
+- [x] `extractWorkflowParameters` 执行前：空 provider → 明确报错；schema 模型 provider 与 `targetProvider` 不一致 → 明确报错；**绝不回退 Fal**
+- [x] `VideoDriver` 防御：空 provider 拒绝发往 `/api/video/generate`
+- [x] `runDisabledReason` 对 AIVideoNode 暴露服务商未设置/不一致文案
+- [x] 单测：model select 设 provider；empty blocked；mismatch blocked；explicit Fal 仍可用；`npx tsc --noEmit` 0；`npm test` 69/69
+
+### 残留（QA / 非 F4）
+- F3 Fal 视频 fps/negative/steps/cfg/loras 转发 — 未改
+- F2 Civitai comfyModel / F1 HF Z-Image — 未改
+- Soft：SpatialFrame Math.random seed / Fal·Civitai denoise — 未改（非 F4）
+- 自定义未在 schema 的视频端点：须用户先显式选 Provider；不会从模型 ID 猜 Fal
+
+### 关键文件
+- `src/utils/videoProvider.ts` + `videoProvider.test.ts`
+- `src/utils/graphEngine.ts` + `graphEngine.test.ts`
+- `src/App.tsx` / `src/engines/drivers/VideoDriver.ts`
+
+---
+
+
 ## 0b. F5 — stop forging seed/sampler defaults (f5-fake-defaults) — 2026-09-29
 
 Tip hash: 5084ddc03661937ec9680ed4b6843d9f929ac137 (F5 code 8de30250de36664d925687dfd63783138e891ce4; branch f5-fake-defaults, not pushed)

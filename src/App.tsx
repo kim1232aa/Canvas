@@ -37,6 +37,7 @@ import {
 import { EngineRegistry } from './engines/EngineRegistry';
 import { NormalizedGenerateParams } from './engines/types';
 import { executeWorkflow, extractWorkflowParameters, resolveTargetNode } from './utils/graphEngine';
+import { applyAIVideoModelSelection } from './utils/videoProvider';
 import { getRecommendedBaseModelForLora, identifyArchitectureFamily } from './utils/baseModelMatcher';
 import {
   findFirstNodeOfType,
@@ -326,6 +327,13 @@ export default function App() {
     } catch (err: any) {
       if (err?.message === '请先选择模型') {
         return '请先选择模型';
+      }
+      // F4: surface empty/mismatch provider before run (never silent Fal fallback)
+      if (
+        typeof err?.message === 'string' &&
+        (err.message.includes('视频服务商') || err.message.includes('服务商不一致'))
+      ) {
+        return err.message;
       }
     }
     return undefined;
@@ -705,11 +713,20 @@ export default function App() {
 
   const handleUpdateNodeValue = (nodeId: string, widgetName: string, value: any) => {
     setNodes((prev) =>
-      prev.map((n) =>
-        n.id === nodeId
-          ? { ...n, values: { ...(n.values || {}), [widgetName]: value } }
-          : n
-      )
+      prev.map((n) => {
+        if (n.id !== nodeId) return n;
+        // F4: AIVideoNode model select atomically syncs targetProvider + provider from schema option
+        if (n.type === 'AIVideoNode' && widgetName === 'model') {
+          return { ...n, values: applyAIVideoModelSelection(n.values || {}, value) };
+        }
+        if (n.type === 'AIVideoNode' && widgetName === 'targetProvider') {
+          return {
+            ...n,
+            values: { ...(n.values || {}), targetProvider: value, provider: value },
+          };
+        }
+        return { ...n, values: { ...(n.values || {}), [widgetName]: value } };
+      })
     );
 
     // Synchronize node value changes to the active spatial frame (preserving other frames)
