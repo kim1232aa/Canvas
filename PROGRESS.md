@@ -2,7 +2,7 @@
 
 ## 0c. F5-soft — grok aspect/title/spatial prompt (f5-soft-grok-title-spatial) — 2026-09-29
 
-Tip hash: (pending commit; branch f5-soft-grok-title-spatial, not pushed)
+Tip hash: bf8e480d840dffc6a1547bd72150c0e2c60bbe4d (branch f5-soft-grok-title-spatial, not pushed)
 
 ### 完成项
 - [x] Grok `aspect_ratio` / `resolution`：`resolveSchemaModelId` 在 checkpoint 为空或非 grok 模型时回退到 schema 首模，ParameterInspector `schemaSelect` 不再因外键模型隐藏；CheckpointLoaderSimple 增加 schema 驱动的 aspect_ratio/resolution 控件（仅 `grok_compat` 显示）
