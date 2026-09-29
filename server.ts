@@ -37,8 +37,6 @@ const PORT = Number(process.env.PORT) || 3000;
 // Default limit (1mb) applies to all other routes.
 const jsonParserDefault = express.json({ limit: '1mb' });
 const jsonParserLarge = express.json({ limit: '50mb' });
-const urlencodedParserDefault = express.urlencoded({ extended: true, limit: '1mb' });
-const urlencodedParserLarge = express.urlencoded({ extended: true, limit: '50mb' });
 
 const LARGE_BODY_ROUTES = new Set([
   // Generation & editing endpoints with base64 images / init images / video frames
@@ -72,13 +70,47 @@ const isLargeBodyRoute = (req: express.Request): boolean => {
   return LARGE_BODY_ROUTES.has(req.path);
 };
 
+const isApiPath = (p: string): boolean => p === '/api' || p.startsWith('/api/');
+
+// Anti CSRF / DNS rebinding: /api only answers requests addressed to this local server.
+const ALLOWED_HOSTS = new Set([`127.0.0.1:${PORT}`, `localhost:${PORT}`]);
+const ALLOWED_ORIGINS = new Set([`http://127.0.0.1:${PORT}`, `http://localhost:${PORT}`]);
+
 app.use((req, res, next) => {
-  const parser = isLargeBodyRoute(req) ? jsonParserLarge : jsonParserDefault;
-  parser(req, res, next);
+  if (!isApiPath(req.path)) return next();
+  const host = req.headers.host;
+  if (!host || !ALLOWED_HOSTS.has(host)) {
+    return res.status(403).json({
+      error: `Host 请求头被拒绝：收到 ${JSON.stringify(host ?? null)}，仅允许 ${[...ALLOWED_HOSTS].join(' / ')}`,
+    });
+  }
+  const origin = req.headers.origin;
+  if (origin !== undefined && !ALLOWED_ORIGINS.has(origin)) {
+    return res.status(403).json({
+      error: `Origin 请求头被拒绝：收到 ${JSON.stringify(origin)}，仅允许 ${[...ALLOWED_ORIGINS].join(' / ')}`,
+    });
+  }
+  next();
+});
+
+// Only application/json request bodies are accepted on mutating /api requests.
+const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+app.use((req, res, next) => {
+  if (!isApiPath(req.path) || !BODY_METHODS.has(req.method)) return next();
+  const hasBody = Number(req.headers['content-length'] || 0) > 0 || req.headers['transfer-encoding'] !== undefined;
+  if (!hasBody) return next();
+  const contentType = req.headers['content-type'];
+  const mediaType = (contentType || '').split(';')[0].trim().toLowerCase();
+  if (mediaType !== 'application/json') {
+    return res.status(415).json({
+      error: `不支持的请求体类型：收到 Content-Type ${JSON.stringify(contentType ?? null)}，/api 仅接受 application/json`,
+    });
+  }
+  next();
 });
 
 app.use((req, res, next) => {
-  const parser = isLargeBodyRoute(req) ? urlencodedParserLarge : urlencodedParserDefault;
+  const parser = isLargeBodyRoute(req) ? jsonParserLarge : jsonParserDefault;
   parser(req, res, next);
 });
 
