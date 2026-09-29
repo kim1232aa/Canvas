@@ -71,7 +71,23 @@
 | U-E3 | 未开始 | 视频节点未选模型时禁用 | — |
 | U-E4 | 未开始 | 历史面板显示「未填写」 | — |
 | U-E5 | 未开始 | ParameterInspector 切换到 gemini 时不再预设默认模型（ParameterInspector.tsx:317 仍会写 gemini-2.5-flash-image） | — |
-| U-E6 | 未开始 | test-single 加 admin token 和 base URL 限制 | — |
+| U-E6 | 已并入 S6 | test-single 加 admin token 和 base URL 限制 | 见 S6 |
+| S6 | 已完成（tsc 0 错误，运行时待验证） | 修复评审 B1：`/api/test-provider` 与 `/api/cloud-keys/test-single` 挂载 `requireAdminAuth`；两路由不再读取 `x-agnes-base-url`/`x-sensenova-base-url`；`getProviderBaseUrl` 删除 `customBaseUrl` 参数，只读 settings/env；测试只打只读接口：Gemini 从 `generateContent` 改为 `models.list`；Agnes/SenseNova/ModelScope 没有可核实的只读接口，返回 `unsupported`「该服务商没有只读测试接口」，不发请求，不记入 key 池；前端两个测试函数带 admin Bearer，失败时显示真实状态码和响应体 | server.ts:675-684,6186-6192,6276-6280,6312-6336,6371,6393-6402,6461,6478-6486；src/services/api.ts:95-121,754-772；src/components/BackendSettingsModal.tsx:317,336,364 |
+
+S6 测试接口核实（2026-09-29 WebFetch）：
+| provider | 测试接口 | 只读 | 官方来源 |
+|:---|:---|:---|:---|
+| civitai | GET https://civitai.com/api/v1/models?limit=1&types=LORA | 是 | https://developer.civitai.com/site/reference/models.md |
+| fal | GET https://api.fal.ai/v1/account/billing | 是（需 admin key） | https://fal.ai/docs/platform-apis/v1/account/billing |
+| huggingface | GET https://huggingface.co/api/whoami-v2 | 是 | https://huggingface.co/.well-known/openapi.md |
+| nanogpt | POST https://api.nano-gpt.com/api/check-balance | 是（查余额） | https://docs.nano-gpt.com/api-reference/endpoint/check-balance.md |
+| gemini | GET https://generativelanguage.googleapis.com/v1beta/models（x-goog-api-key） | 是 | https://ai.google.dev/api/models |
+| tensorart | POST {base}/tool/list，body `{}`，Echo-Access-Key | 是（列出工具） | https://github.com/Tensor-Art/tensorart-skills（scripts/list_tools.py、_api.py） |
+| agnes | 不发请求 → unsupported | — | https://wiki.agnes-ai.com/llms.txt 只有模型/生成页，没有 models/余额接口 |
+| sensenova | 不发请求 → unsupported | — | https://github.com/OpenSenseNova/SenseNova6.8/blob/main/API.md 只有 /v1/chat/completions |
+| modelscope(_cn/_ai) | 不发请求 → unsupported | — | modelscope.cn 文档由 JS 渲染，未能核实 /v1/models |
+
+遗留：balances 路由（server.ts:6562、6591）对 Agnes/SenseNova 仍然调 `${baseUrl}/models`，这个接口未能核实。base URL 只取服务端配置，没有泄露风险。不在 S6 范围内，待后续指派。
 
 U-E1 说明：
 - 服务端行为：只有两处错误文案变了，状态码仍是 400。① 对表内模型，不在列表里的值（例如 3.1-flash 传 `0.5K`、2.5 传 `7:3`）现在报「该服务商不支持此取值」，以前报「未能核实」。② 列表内标为 unverified 的值（`512px`、3-pro / 2.5 / preview 的全部候选值）报「未能核实」。

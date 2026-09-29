@@ -672,16 +672,13 @@ function resolveProviderAuth(
   return { apiKey, baseUrl };
 }
 
-function getProviderBaseUrl(
-  provider: 'agnes' | 'sensenova',
-  customBaseUrl?: string
-): { baseUrl: string; error?: string } {
+// Server-side base URL only (settings > env) — never from request headers, since callers use pool keys.
+function getProviderBaseUrl(provider: 'agnes' | 'sensenova'): { baseUrl: string; error?: string } {
   const settingsBaseName = provider === 'agnes' ? 'agnesBaseUrl' : 'sensenovaBaseUrl';
   const envName = provider === 'agnes' ? 'AGNES' : 'SENSENOVA';
-  const headerPrefix = provider === 'agnes' ? 'x-agnes' : 'x-sensenova';
-  const baseUrl = String(customBaseUrl || cloudSettings[settingsBaseName] || defaultKeys[settingsBaseName] || '').replace(/\/+$/, '');
+  const baseUrl = String(cloudSettings[settingsBaseName] || defaultKeys[settingsBaseName] || '').replace(/\/+$/, '');
   if (!baseUrl) {
-    return { baseUrl: '', error: `未配置 ${provider} Base URL（${envName}_BASE_URL / 设置面板 / ${headerPrefix}-base-url）。` };
+    return { baseUrl: '', error: `未配置 ${provider} Base URL（${envName}_BASE_URL / 设置面板）。` };
   }
   return { baseUrl };
 }
@@ -6186,16 +6183,19 @@ Your task is to transform the user's initial prompt into an exceptional, visuall
 // ==========================================
 interface SingleKeyTestResult {
   maskedKey: string;
-  status: 'ok' | 'error' | 'active' | 'invalid' | 'warning' | 'rate_limited';
+  // 'unsupported' = provider documents no read-only test endpoint; nothing was sent upstream.
+  status: 'ok' | 'error' | 'active' | 'invalid' | 'warning' | 'rate_limited' | 'unsupported';
   latency: number;
   message: string;
 }
 
+const NO_READONLY_TEST = '该服务商没有只读测试接口';
+
+// S6: key tests may only hit read-only account / auth / model-list endpoints — never generation or chat.
 async function testSingleProviderKey(
   provider: string,
   singleKey: string,
-  routePath: string,
-  customBaseUrl?: string
+  routePath: string
 ): Promise<SingleKeyTestResult> {
   const startTime = Date.now();
   const maskedKey = keyPoolManager.maskKey(singleKey);
@@ -6273,62 +6273,10 @@ async function testSingleProviderKey(
       };
     }
 
-    if (prov === 'modelscope' || prov === 'modelscope_cn') {
-      if (!singleKey) {
-        return { maskedKey, status: 'error', latency: 0, message: '未配置魔搭国内站 (ModelScope CN) Token' };
-      }
-      const resp = await upstreamFetch(
-        { provider: 'modelscope_cn', route: routePath, model: 'v1/models', key: singleKey },
-        'https://api-inference.modelscope.cn/v1/models',
-        {
-          headers: { 'Authorization': `Bearer ${singleKey}` },
-        }
-      );
-      const latency = Date.now() - startTime;
-      if (resp.ok) {
-        return {
-          maskedKey,
-          status: 'ok',
-          latency,
-          message: '魔搭国内站 (modelscope.cn) 认证成功，已接入 Wan 2.1、Z-Image-Turbo 与全量微调 LoRA',
-        };
-      }
-      const errText = await resp.text().catch(() => '');
-      return {
-        maskedKey,
-        status: 'error',
-        latency,
-        message: `魔搭国内站鉴权未通过 [${resp.status}]: ${errText.slice(0, 200)}`,
-      };
-    }
-
-    if (prov === 'modelscope_ai') {
-      if (!singleKey) {
-        return { maskedKey, status: 'error', latency: 0, message: '未配置魔搭国际站 (ModelScope AI) Token' };
-      }
-      const resp = await upstreamFetch(
-        { provider: 'modelscope_ai', route: routePath, model: 'v1/models', key: singleKey },
-        'https://api-inference.modelscope.ai/v1/models',
-        {
-          headers: { 'Authorization': `Bearer ${singleKey}` },
-        }
-      );
-      const latency = Date.now() - startTime;
-      if (resp.ok) {
-        return {
-          maskedKey,
-          status: 'ok',
-          latency,
-          message: '魔搭国际站 (modelscope.ai) 认证成功，已接入开源生图与通用推理模型',
-        };
-      }
-      const errText = await resp.text().catch(() => '');
-      return {
-        maskedKey,
-        status: 'error',
-        latency,
-        message: `魔搭国际站鉴权未通过 [${resp.status}]: ${errText.slice(0, 200)}`,
-      };
+    // ponytail: ModelScope docs are JS-rendered; GET /v1/models could not be verified, so nothing is sent.
+    // Restore the model-list call once an official page documents it.
+    if (prov === 'modelscope' || prov === 'modelscope_cn' || prov === 'modelscope_ai') {
+      return { maskedKey, status: 'unsupported', latency: 0, message: `${NO_READONLY_TEST}（未能核实官方只读接口）` };
     }
 
     if (prov === 'nanogpt') {
@@ -6363,95 +6311,28 @@ async function testSingleProviderKey(
       if (!singleKey) {
         return { maskedKey, status: 'error', latency: 0, message: '未配置 Google Gemini API 密钥' };
       }
-      const testGen = new GoogleGenAI({
-        apiKey: singleKey,
-        httpOptions: {
-          headers: {
-            'User-Agent': 'aistudio-build',
-          },
-        },
-      });
-      await testGen.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: [{ role: 'user', parts: [{ text: 'ping' }] }],
-      });
-      const latency = Date.now() - startTime;
-      return {
-        maskedKey,
-        status: 'ok',
-        latency,
-        message: 'Google Gemini 官方服务在线，generateContent 生图与智能提示词扩写就绪',
-      };
-    }
-
-    if (prov === 'agnes') {
-      if (!singleKey) {
-        return { maskedKey, status: 'error', latency: 0, message: '未配置 Agnes AI API 密钥' };
-      }
-      const { baseUrl, error: urlErr } = getProviderBaseUrl('agnes', customBaseUrl);
-      if (urlErr) {
-        return { maskedKey, status: 'error', latency: 0, message: urlErr };
-      }
+      // models.list (GET, read-only): https://ai.google.dev/api/models
       const resp = await upstreamFetch(
-        { provider: 'agnes', route: routePath, model: 'models', key: singleKey },
-        `${baseUrl}/models`,
-        {
-          headers: { Authorization: `Bearer ${singleKey}` },
-        }
+        { provider: 'gemini', route: routePath, model: 'models.list', key: singleKey },
+        'https://generativelanguage.googleapis.com/v1beta/models',
+        { headers: { 'x-goog-api-key': singleKey } }
       );
       const latency = Date.now() - startTime;
       if (resp.ok) {
-        const mData = await resp.json().catch(() => ({}));
-        const count = mData.data?.length || 0;
-        return {
-          maskedKey,
-          status: 'ok',
-          latency,
-          message: `Agnes AI (ApiHub) 认证成功，已就绪 ${count} 个模型 (包含 2.5 Flash 生图、动态视频及 3.0 Flash 深度推理大模型)`,
-        };
+        return { maskedKey, status: 'ok', latency, message: 'Google Gemini 认证成功（models.list）' };
       }
       const errText = await resp.text().catch(() => '');
       return {
         maskedKey,
-        status: 'error',
+        status: resp.status === 429 ? 'rate_limited' : 'error',
         latency,
-        message: `Agnes AI 验证失败 [${resp.status}]: ${errText.slice(0, 200)}`,
+        message: `Google Gemini 鉴权失败 [${resp.status}]: ${errText.slice(0, 200)}`,
       };
     }
 
-    if (prov === 'sensenova') {
-      if (!singleKey) {
-        return { maskedKey, status: 'error', latency: 0, message: '未配置商汤日日新 API 密钥' };
-      }
-      const { baseUrl, error: urlErr } = getProviderBaseUrl('sensenova', customBaseUrl);
-      if (urlErr) {
-        return { maskedKey, status: 'error', latency: 0, message: urlErr };
-      }
-      const resp = await upstreamFetch(
-        { provider: 'sensenova', route: routePath, model: 'models', key: singleKey },
-        `${baseUrl}/models`,
-        {
-          headers: { Authorization: `Bearer ${singleKey}` },
-        }
-      );
-      const latency = Date.now() - startTime;
-      if (resp.ok) {
-        const mData = await resp.json().catch(() => ({}));
-        const count = mData.data?.length || 0;
-        return {
-          maskedKey,
-          status: 'ok',
-          latency,
-          message: `商汤日日新 (SenseNova) 认证成功，已就绪 ${count} 个大模型 (含 DeepSeek V4 深度思考、GLM-5.2、Kimi 及多模态视觉理解)`,
-        };
-      }
-      const errText = await resp.text().catch(() => '');
-      return {
-        maskedKey,
-        status: 'error',
-        latency,
-        message: `商汤日日新 API 验证失败 [${resp.status}]: ${errText.slice(0, 200)}`,
-      };
+    // Official docs list only chat/generation endpoints (Agnes: wiki.agnes-ai.com/llms.txt; SenseNova: OpenSenseNova API.md).
+    if (prov === 'agnes' || prov === 'sensenova') {
+      return { maskedKey, status: 'unsupported', latency: 0, message: `${NO_READONLY_TEST}（官方文档仅列出生成/对话接口）` };
     }
 
     if (prov === 'tensorart') {
@@ -6487,14 +6368,13 @@ async function testSingleProviderKey(
   }
 }
 
-app.post('/api/test-provider', async (req, res) => {
+app.post('/api/test-provider', requireAdminAuth, async (req, res) => {
   const { provider, key } = req.body;
   if (!provider) {
     return res.status(400).json({ error: 'provider 为必填项' });
   }
 
   const prov = String(provider).toLowerCase().trim();
-  const customBaseUrl = prov === 'agnes' ? (req.headers['x-agnes-base-url'] as string) : (req.headers['x-sensenova-base-url'] as string);
   const rawKeys = keyPoolManager.parseKeyString(key);
   const keysToTest = rawKeys.length > 0 ? rawKeys : keyPoolManager.getKeys(prov);
 
@@ -6508,12 +6388,17 @@ app.post('/api/test-provider', async (req, res) => {
 
   const results: SingleKeyTestResult[] = [];
   for (const k of keysToTest) {
-    const r = await testSingleProviderKey(prov, k, req.path, customBaseUrl);
+    const r = await testSingleProviderKey(prov, k, req.path);
     const isSuccess = r.status === 'ok' || r.status === 'active' || r.status === 'warning';
-    if (k) {
+    if (k && r.status !== 'unsupported') {
       keyPoolManager.recordResult(prov, k, isSuccess, r.latency, isSuccess ? undefined : r.message);
     }
     results.push(r);
+  }
+
+  // Unsupported is per-provider, so either every result is unsupported or none is.
+  if (results[0].status === 'unsupported') {
+    return res.json({ status: 'unsupported', latency: 0, message: results[0].message, results });
   }
 
   if (results.length === 1) {
@@ -6573,14 +6458,13 @@ app.post('/api/cloud-keys/strategy', requireAdminAuth, (req, res) => {
 });
 
 // Test single key directly
-app.post('/api/cloud-keys/test-single', async (req, res) => {
+app.post('/api/cloud-keys/test-single', requireAdminAuth, async (req, res) => {
   const { provider, key } = req.body;
   if (!provider || !key) {
     return res.status(400).json({ error: 'Missing provider or key' });
   }
 
   const prov = String(provider).toLowerCase().trim();
-  const customBaseUrl = prov === 'agnes' ? (req.headers['x-agnes-base-url'] as string) : (req.headers['x-sensenova-base-url'] as string);
   const keysToTest = keyPoolManager.parseKeyString(key);
 
   if (keysToTest.length === 0) {
@@ -6589,10 +6473,16 @@ app.post('/api/cloud-keys/test-single', async (req, res) => {
 
   const results: SingleKeyTestResult[] = [];
   for (const k of keysToTest) {
-    const r = await testSingleProviderKey(prov, k, req.path, customBaseUrl);
+    const r = await testSingleProviderKey(prov, k, req.path);
     const isSuccess = r.status === 'ok' || r.status === 'active' || r.status === 'warning';
-    keyPoolManager.recordResult(prov, k, isSuccess, r.latency, isSuccess ? undefined : r.message);
+    if (r.status !== 'unsupported') {
+      keyPoolManager.recordResult(prov, k, isSuccess, r.latency, isSuccess ? undefined : r.message);
+    }
     results.push(r);
+  }
+
+  if (results[0].status === 'unsupported') {
+    return res.json({ status: 'unsupported', latency: 0, message: results[0].message, results });
   }
 
   if (results.length === 1) {

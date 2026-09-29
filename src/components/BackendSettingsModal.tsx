@@ -314,7 +314,7 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
   const handleTestSingle = async (key: string, index: number) => {
     setTestingSingleKeyIndex(index);
     try {
-      const res = await testSingleKey(currentProvider.id, key);
+      const res = await testSingleKey(currentProvider.id, key, adminToken);
       setTestResults((prev) => ({
         ...prev,
         [`${currentProvider.id}_${index}`]: {
@@ -333,7 +333,7 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
     setTestingProvider(providerId);
     const key = (keys as any)[providers.find((p) => p.id === providerId)?.keyName || ''];
     try {
-      const res = await testProviderConnection(providerId, key);
+      const res = await testProviderConnection(providerId, key, adminToken);
       setTestResults((prev) => ({
         ...prev,
         [providerId]: {
@@ -361,7 +361,7 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
     for (const p of providers) {
       const key = (keys as any)[p.keyName] || '';
       try {
-        const res = await testProviderConnection(p.id, key);
+        const res = await testProviderConnection(p.id, key, adminToken);
         setTestResults((prev) => ({
           ...prev,
           [p.id]: {

@@ -94,14 +94,24 @@ export const searchCivitaiModels = async (
 
 export const testProviderConnection = async (
   provider: ProviderId,
-  key: string
-): Promise<{ status: 'ok' | 'error'; latency?: number; message?: string }> => {
+  key: string,
+  token?: string
+): Promise<{ status: 'ok' | 'error' | 'unsupported'; latency?: number; message?: string }> => {
   try {
+    const effectiveToken = (token !== undefined ? token : getStoredAdminToken()).trim();
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (effectiveToken) {
+      headers['Authorization'] = `Bearer ${effectiveToken}`;
+    }
     const resp = await fetch('/api/test-provider', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({ provider, key }),
     });
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => '');
+      return { status: 'error', message: `HTTP ${resp.status}: ${text}` };
+    }
     return await resp.json();
   } catch (err: any) {
     return { status: 'error', message: err.message || 'Connection failed' };
@@ -741,15 +751,21 @@ export const updateKeyPoolStrategy = async (
   return false;
 };
 
-export const testSingleKey = async (provider: string, key: string): Promise<{ status: string; latency?: number; message: string }> => {
+export const testSingleKey = async (provider: string, key: string, token?: string): Promise<{ status: string; latency?: number; message: string }> => {
   try {
+    const effectiveToken = (token !== undefined ? token : getStoredAdminToken()).trim();
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (effectiveToken) {
+      headers['Authorization'] = `Bearer ${effectiveToken}`;
+    }
     const resp = await fetch('/api/cloud-keys/test-single', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({ provider, key }),
     });
     if (resp.ok) return await resp.json();
-    return { status: 'invalid', message: `HTTP ${resp.status}` };
+    const text = await resp.text().catch(() => '');
+    return { status: 'invalid', message: `HTTP ${resp.status}: ${text}` };
   } catch (e: any) {
     return { status: 'invalid', message: e.message || '测试失败' };
   }
