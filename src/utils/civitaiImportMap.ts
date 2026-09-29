@@ -48,3 +48,35 @@ export function resolveImportedNegativePrompt(
   void templateDefault;
   return '';
 }
+
+const isCheckpointType = (t: unknown) => String(t ?? '').toLowerCase() === 'checkpoint';
+const idStr = (v: unknown) => (v == null ? '' : String(v).trim());
+
+/**
+ * Image-import checkpoint ref for resolveCivitaiAir. Prefers unique ids so we never
+ * create ambiguity (e.g. "Flux.1 D") when modelId@versionId existed.
+ * Name/architecture fallbacks may still be ambiguous — resolver reports that honestly.
+ */
+export function resolveImportedCheckpointRef(
+  resources: unknown,
+  meta: any,
+  fallbackName: string,
+  baseModel: string
+): string {
+  const ckpt: any = Array.isArray(resources)
+    ? resources.find((r: any) => r && (isCheckpointType(r.modelType) || isCheckpointType(r.type)))
+    : null;
+  if (ckpt) {
+    const air = idStr(ckpt.air);
+    if (air) return air;
+    const modelId = idStr(ckpt.modelId);
+    const versionId = idStr(ckpt.versionId) || idStr(ckpt.modelVersionId);
+    if (modelId && versionId) return `${modelId}@${versionId}`;
+    if (/^\d+$/.test(versionId)) return versionId;
+  }
+  const metaCkpt: any = Array.isArray(meta?.civitaiResources)
+    ? meta.civitaiResources.find((r: any) => r && isCheckpointType(r.type) && idStr(r.modelVersionId))
+    : null;
+  if (metaCkpt) return idStr(metaCkpt.modelVersionId);
+  return idStr(meta?.Model) || idStr(ckpt?.modelName) || idStr(fallbackName) || idStr(baseModel);
+}

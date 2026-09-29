@@ -1977,8 +1977,9 @@ export default function App() {
     seedControl: (ksamplerNode?.values?.control_after_generate as any) || activeFrame?.params?.seedControl || 'randomize',
     steps: ksamplerNode?.values?.steps !== undefined ? Number(ksamplerNode.values.steps) : (activeFrame?.params?.steps ?? 25),
     cfg: ksamplerNode?.values?.cfg !== undefined ? Number(ksamplerNode.values.cfg) : (activeFrame?.params?.cfg ?? 4.5),
-    sampler: ksamplerNode?.values?.sampler_name || activeFrame?.params?.sampler || 'euler',
-    scheduler: ksamplerNode?.values?.scheduler || activeFrame?.params?.scheduler || 'normal',
+    // ?? not ||: imported '' (未指定) must stay empty, never forge euler/normal
+    sampler: ksamplerNode?.values?.sampler_name ?? activeFrame?.params?.sampler ?? 'euler',
+    scheduler: ksamplerNode?.values?.scheduler ?? activeFrame?.params?.scheduler ?? 'normal',
     denoise: ksamplerNode?.values?.denoise !== undefined ? Number(ksamplerNode.values.denoise) : (activeFrame?.params?.denoise ?? 1.0),
     width: latentNode?.values?.width !== undefined ? Number(latentNode.values.width) : (activeFrame?.params?.width ?? 1024),
     height: latentNode?.values?.height !== undefined ? Number(latentNode.values.height) : (activeFrame?.params?.height ?? 1024),

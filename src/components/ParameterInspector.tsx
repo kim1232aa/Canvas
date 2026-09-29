@@ -637,6 +637,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                 onChange={(e) => update({ sampler: e.target.value })}
                 className="w-full bg-[#111216] border border-[#2b2d38] rounded-lg px-2 py-1.5 text-slate-200 text-[11px] font-mono outline-none disabled:opacity-40 disabled:cursor-not-allowed"
               >
+                <option value="">未指定</option>
                 {SAMPLER_OPTIONS.map((s, idx) => (
                   <option key={`sampler-${s.value}-${idx}`} value={s.value}>
                     {s.label}
@@ -656,6 +657,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                 onChange={(e) => update({ scheduler: e.target.value })}
                 className="w-full bg-[#111216] border border-[#2b2d38] rounded-lg px-2 py-1.5 text-slate-200 text-[11px] font-mono outline-none disabled:opacity-40 disabled:cursor-not-allowed"
               >
+                <option value="">未指定</option>
                 {SCHEDULER_OPTIONS.map((sc, idx) => (
                   <option key={`scheduler-${sc.value}-${idx}`} value={sc.value}>
                     {sc.label}

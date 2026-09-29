@@ -16,7 +16,7 @@ import {
   resolveAgainstBaseOrigin,
 } from './src/engines/compatRelay.ts';
 import { enrichPoolStatsWithServerBaseUrl } from './src/utils/poolStatsEnrich.ts';
-import { mapSampler, mapScheduler, resolveImportedNegativePrompt } from './src/utils/civitaiImportMap.ts';
+import { mapSampler, mapScheduler, resolveImportedNegativePrompt, resolveImportedCheckpointRef } from './src/utils/civitaiImportMap.ts';
 import { persistRemoteUrlAsDataUrl } from './src/utils/persistMediaAsDataUrl.ts';
 import path from 'path';
 import fs from 'fs';
@@ -1439,6 +1439,7 @@ app.post('/api/civitai/extract-workflow', async (req, res) => {
     
     let rawModelName = '';
     let detectedBaseModel = '';
+    let importedCheckpointRef = '';
     let detectedVae = 'qwen_image_vae.safetensors';
     let detectedEngine = 'ComfyUI / Civitai';
     let checkpoint = 'krea2_turbo_fp8_scaled';
@@ -1620,11 +1621,14 @@ app.post('/api/civitai/extract-workflow', async (req, res) => {
                 strength: r.strength || 0.8,
                 baseModel: r.baseModel || detectedBaseModel,
               });
-            } else if (r.modelType === 'CHECKPOINT' && !rawModelName) {
+            } else if (String(r.modelType || r.type || '').toLowerCase() === 'checkpoint' && !rawModelName) {
               rawModelName = r.modelName || '';
             }
           });
         }
+
+        // Unique ref (AIR / modelId@versionId / versionId) beats fuzzy architecture name like "Flux.1 D"
+        importedCheckpointRef = resolveImportedCheckpointRef(genData?.resources, meta, rawModelName, detectedBaseModel);
 
         const rawLorasFromAdditional: any[] = [];
         if (Array.isArray(meta.additionalResources)) {
@@ -1780,7 +1784,7 @@ app.post('/api/civitai/extract-workflow', async (req, res) => {
     } else if (engine === "civitai") {
       targetProvider = "civitai";
       chosenEngineName = "Civitai 官方原生生成引擎";
-      checkpoint = normalizeCkpt(rawModelName, detectedBaseModel);
+      checkpoint = importedCheckpointRef || normalizeCkpt(rawModelName, detectedBaseModel);
       baseModelArchitecture = detectedBaseModel || "";
       engineExplanation = "🌟 Civitai 官方原生引擎：原生支持 Civitai 社区发布的所有模型与全量 LoRA。";
     } else if (engine === "tensorart" || engine === "tensor") {
@@ -1840,7 +1844,7 @@ app.post('/api/civitai/extract-workflow', async (req, res) => {
     } else {
       targetProvider = engine || "civitai";
       chosenEngineName = `${engine || "Civitai"} 引擎`;
-      checkpoint = normalizeCkpt(rawModelName, detectedBaseModel);
+      checkpoint = importedCheckpointRef || normalizeCkpt(rawModelName, detectedBaseModel);
       baseModelArchitecture = detectedBaseModel || "";
       engineExplanation = `已指定跨引擎接入: ${engine}。`;
     }
