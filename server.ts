@@ -3200,23 +3200,19 @@ function normalizeFalEndpoint(model: string, isVideo = false): string {
     m === 'flux.1-dev' ||
     m === 'flux-dev' ||
     m === 'fal-ai/flux/dev' ||
-    m === 'fal-ai/flux-dev' ||
-    m === 'fal-ai/flux-lora'
+    m === 'fal-ai/flux-dev'
   ) {
     return 'fal-ai/flux/dev';
   }
+  // F7: Only standard SDXL 1.0 aliases map to fast-sdxl; SD1.5/Pony/Animagine are NOT replaced
   if (
     m === 'stabilityai/stable-diffusion-xl-base-1.0' ||
     m === 'stable-diffusion-xl-base-1.0' ||
     m === 'sdxl' ||
     m === 'sdxl-1.0' ||
     m === 'fal-ai/stable-diffusion-xl-base-1.0' ||
-    m === 'fal-ai/fast-sdxl' ||
-    m === 'runwayml/stable-diffusion-v1-5' ||
-    m.includes('animagine') ||
-    m.includes('pony')
+    m === 'fal-ai/fast-sdxl'
   ) {
-    // Note: Fal official endpoint for standard SDXL 1.0 is fal-ai/fast-sdxl
     return 'fal-ai/fast-sdxl';
   }
   if (
@@ -3251,10 +3247,10 @@ function normalizeFalEndpoint(model: string, isVideo = false): string {
   if (m === 'fal-ai/ltx-video' || m === 'ltx-video') {
     return 'fal-ai/ltx-video';
   }
-  if (m === 'fal-ai/kling-video/v1/standard/text-to-video' || m === 'kling-video') {
+  if (m === 'fal-ai/kling-video/v1/standard/text-to-video' || m === 'kling-video/v1/standard/text-to-video') {
     return 'fal-ai/kling-video/v1/standard/text-to-video';
   }
-  if (m === 'fal-ai/minimax/video-01' || m === 'minimax-video') {
+  if (m === 'fal-ai/minimax/video-01' || m === 'minimax/video-01') {
     return 'fal-ai/minimax/video-01';
   }
   if (m === 'fal-ai/cogvideox-5b' || m === 'cogvideox-5b') {
@@ -3262,6 +3258,9 @@ function normalizeFalEndpoint(model: string, isVideo = false): string {
   }
   if (m === 'fal-ai/hunyuan-video' || m === 'hunyuan-video') {
     return 'fal-ai/hunyuan-video';
+  }
+  if (m.startsWith('fal-ai/')) {
+    return model.trim();
   }
   if (!m.includes('/')) {
     return `fal-ai/${m}`;
@@ -3273,137 +3272,138 @@ function normalizeFalEndpoint(model: string, isVideo = false): string {
 // 2. Fal.ai Inference (fal.ai / docs.fal.ai)
 // ==========================================
 app.post(['/api/fal/generate', '/api/generate'], async (req, res) => {
+  const startTime = Date.now();
+  const falKey = keyPoolManager.getNextKey('fal', (req.headers['x-fal-key'] as string) || undefined) || '';
   try {
     const {
       prompt,
       negative_prompt,
-      model = 'fal-ai/flux/dev',
-      image_size = { width: 1024, height: 1024 },
-      num_inference_steps = 28,
-      guidance_scale = 3.5,
+      model,
+      image_size,
+      num_inference_steps,
+      guidance_scale,
       seed,
-      sampler_name,
-      scheduler,
       image_url,
       denoise,
       loras = [],
     } = req.body;
-
-    const falKey =
-      (req.headers['x-fal-key'] as string) ||
-      cloudSettings['falKey'] ||
-      defaultKeys['falKey'] ||
-      process.env.FAL_KEY ||
-      '';
 
     if (!falKey) {
       return res.status(400).json({
         error: '未配置 Fal.ai API 密钥。请在右上角「设置」面板中填入您的 Fal.ai API Key (x-fal-key)。',
       });
     }
+    if (!model) return res.status(400).json({ error: '模型为必填项（model is required）' });
+    // sampler_name/scheduler: not in fal-ai/flux/dev, flux-lora or fast-sdxl input schemas.
+    if (rejectUnsupported(res, 'Fal.ai', req.body, ['sampler_name', 'scheduler'])) return;
 
     let endpoint = normalizeFalEndpoint(model);
+    // FLUX endpoints (flux/dev, flux/schnell, flux-lora) have no negative_prompt in their schema.
+    if (endpoint.includes('flux') && rejectUnsupported(res, `Fal.ai ${endpoint}`, req.body, ['negative_prompt'])) return;
 
-    const payload: any = {
-      prompt,
-      image_size,
-      num_inference_steps: Number(num_inference_steps) || 28,
-      guidance_scale: Number(guidance_scale) || 3.5,
-      sampler_name: sampler_name,
-      scheduler: scheduler,
-      enable_safety_checker: false,
-    };
+    // Only send what the caller actually provided; Fal applies its own documented defaults.
+    const payload: any = { prompt, enable_safety_checker: false };
 
-    if (negative_prompt) {
-      payload.negative_prompt = negative_prompt;
+    // F5: image_size must be official enum or { width, height } object
+    let finalImageSize: any = undefined;
+    if (isProvided(image_size)) {
+      if (typeof image_size === 'string') {
+        const allowedEnums = ['square_hd', 'square', 'portrait_4_3', 'portrait_16_9', 'landscape_4_3', 'landscape_16_9'];
+        if (!allowedEnums.includes(image_size)) {
+          return res.status(400).json({
+            error: `该服务商不支持此 image_size 枚举: "${image_size}"。允许值为: ${allowedEnums.join(', ')}，或提供 {width, height} 对象`,
+          });
+        }
+        finalImageSize = image_size;
+      } else if (typeof image_size === 'object' && image_size !== null) {
+        const w = Number(image_size.width);
+        const h = Number(image_size.height);
+        if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0 || w > 14142 || h > 14142) {
+          return res.status(400).json({
+            error: `无法表达的尺寸: image_size { width: ${image_size.width}, height: ${image_size.height} }。宽高必须为 1~14142 之间的正数。`,
+          });
+        }
+        finalImageSize = { width: Math.round(w), height: Math.round(h) };
+      } else {
+        return res.status(400).json({ error: '无效的 image_size 格式，必须为枚举字符串或 {width, height} 对象' });
+      }
+    } else if (isProvided(req.body.width) || isProvided(req.body.height)) {
+      if (!isProvided(req.body.width) || !isProvided(req.body.height)) {
+        return res.status(400).json({ error: '提供尺寸时 width 与 height 必须同时提供' });
+      }
+      const w = Number(req.body.width);
+      const h = Number(req.body.height);
+      if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0 || w > 14142 || h > 14142) {
+        return res.status(400).json({
+          error: `无法表达的尺寸: width=${req.body.width}, height=${req.body.height}。宽高必须为 1~14142 之间的正数。`,
+        });
+      }
+      finalImageSize = { width: Math.round(w), height: Math.round(h) };
     }
-    if (typeof seed === 'number' && seed >= 0) {
-      payload.seed = seed;
-    }
+    if (finalImageSize) payload.image_size = finalImageSize;
+
+    if (isProvided(num_inference_steps)) payload.num_inference_steps = Number(num_inference_steps);
+    if (isProvided(guidance_scale)) payload.guidance_scale = Number(guidance_scale);
+    if (negative_prompt) payload.negative_prompt = negative_prompt;
+    if (isProvided(seed)) payload.seed = Number(seed);
     if (image_url) {
       payload.image_url = image_url;
       if (typeof denoise === 'number') {
         payload.strength = denoise;
       }
+    } else if (isProvided(denoise)) {
+      return res.status(400).json({ error: 'denoise 仅在提供 image_url（图生图）时有效', unsupported: ['denoise'] });
     }
 
-    const civitaiToken =
-      (req.headers['x-civitai-key'] as string) ||
-      cloudSettings['civitaiKey'] ||
-      defaultKeys['civitaiKey'] ||
-      '';
-
-    let wasAdapted = false;
-    let adaptationNotice = '';
-    let actualModel = model;
+    const wasAdapted = false;
+    const adaptationNotice = '';
+    const actualModel = endpoint;
 
     if (Array.isArray(loras) && loras.length > 0) {
-      if (endpoint === 'fal-ai/krea-2/turbo' || endpoint.includes('krea-2')) {
+      // F8: 所选端点不支持 LoRA 时返回「该端点不支持 LoRA」
+      const LORA_ENDPOINTS = ['fal-ai/flux-lora', 'fal-ai/fast-sdxl', 'fal-ai/lora'];
+      if (!LORA_ENDPOINTS.includes(endpoint)) {
         return res.status(400).json({
-          error:
-            'Krea 2 Turbo 官方闭源极速模型原生不支持挂载外置 LoRA (官方接口将报 422 错误)。Civitai 上的各类 Krea 胶片写真风格 LoRA 实质上均基于 SDXL 架构训练。请在左侧「加载底模 (CheckpointLoaderSimple)」节点中将底模切换为 SDXL 1.0 (fal-ai/stable-diffusion-xl-base-1.0) 即可完美挂载运行。',
+          error: `该端点不支持 LoRA（Fal.ai 端点 ${endpoint} 的官方 schema 无 loras 字段）。请显式选择支持 LoRA 的端点：${LORA_ENDPOINTS.join(' / ')}`,
+          unsupported: ['loras'],
+          endpoint,
         });
       }
-
-      // 官方专有 LoRA 端点规范分流：
-      // Fal.ai 官方规范：FLUX 挂载 LoRA 必须调用 fal-ai/flux-lora；SDXL 挂载 LoRA 必须调用 fal-ai/lora 并传递 model_name
-      if (
-        endpoint === 'fal-ai/flux/dev' ||
-        endpoint === 'fal-ai/flux/schnell' ||
-        endpoint === 'black-forest-labs/FLUX.1-dev' ||
-        endpoint === 'black-forest-labs/FLUX.1-schnell' ||
-        endpoint === 'fal-ai/flux-dev' ||
-        endpoint === 'flux/dev'
-      ) {
-        endpoint = 'fal-ai/flux-lora';
-        actualModel = 'fal-ai/flux-lora';
-      } else if (
-        endpoint === 'fal-ai/fast-sdxl' ||
-        endpoint === 'stabilityai/stable-diffusion-xl-base-1.0' ||
-        endpoint === 'fal-ai/stable-diffusion-xl-base-1.0'
-      ) {
-        endpoint = 'fal-ai/lora';
-        actualModel = 'fal-ai/lora (SDXL 1.0)';
-        payload.model_name = 'stabilityai/stable-diffusion-xl-base-1.0';
+      if (endpoint === 'fal-ai/lora' && !req.body.model_name) {
+        return res.status(400).json({ error: 'fal-ai/lora 需要 model_name（底模 URL 或 HF ID），不会代为填写默认值' });
       }
+      if (endpoint === 'fal-ai/lora') payload.model_name = req.body.model_name;
 
-      payload.loras = loras.map((l: any) => {
-        let resolvedPath = l.path || l.url || l.name || '';
-        let civId = l.civitaiId || l.versionId;
-
-        // Auto-extract Civitai model version ID from string/URN if not explicitly provided
-        if (!civId && typeof resolvedPath === 'string') {
-          const match = resolvedPath.match(/@(\d+)|civitai:(\d+)|(\d{6,8})/);
-          if (match) {
-            civId = match[1] || match[2] || match[3];
-          }
-        }
-
-        if (civId && !resolvedPath.startsWith('http')) {
-          resolvedPath = `https://civitai.com/api/download/models/${civId}${
-            civitaiToken ? `?token=${encodeURIComponent(civitaiToken)}` : ''
-          }`;
-        }
-        const scaleVal = Number(l.scale ?? l.strength ?? l.modelStrength ?? 0.8);
-        return {
-          path: resolvedPath,
-          url: resolvedPath, // 兼容 fal-ai/lora (要求 url) 与 fal-ai/flux-lora (要求 path)
-          scale: scaleVal,
-        };
-      });
+      const badLora = loras.find((l: any) => !(l?.path || l?.url) || !isProvided(l?.scale ?? l?.strength ?? l?.modelStrength));
+      if (badLora) {
+        // V2: no `?? 0.8` strength fallback, no Civitai-ID → download-URL rewriting (would leak the Civitai token to Fal).
+        return res.status(400).json({
+          error: '每个 LoRA 必须提供可直接访问的 path/url 与 scale（强度）；服务端不会代填强度，也不会把 Civitai token 拼进下载链接发给 Fal',
+          lora: badLora,
+        });
+      }
+      payload.loras = loras.map((l: any) => ({
+        path: l.path || l.url,
+        scale: Number(l.scale ?? l.strength ?? l.modelStrength),
+      }));
     }
 
-    let response = await fetch(`https://fal.run/${endpoint}`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Key ${falKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
+    const response = await upstreamFetch(
+      { provider: 'fal', route: req.path, model: endpoint, key: falKey },
+      `https://fal.run/${endpoint}`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Key ${falKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      }
+    );
 
     if (!response.ok) {
       const errorText = await response.text();
+      keyPoolManager.recordResult('fal', falKey, false, Date.now() - startTime, errorText, response.status);
       // 若因端点不支持 loras 导致 422，返回清晰的诊断信息，杜绝静默吞掉 LoRA 假装成功的欺瞒行为
       if (response.status === 422 && payload.loras && errorText.includes('loras')) {
         return res.status(422).json({
@@ -3420,35 +3420,36 @@ app.post(['/api/fal/generate', '/api/generate'], async (req, res) => {
       });
     }
 
+    keyPoolManager.recordResult('fal', falKey, true, Date.now() - startTime);
     const result = await response.json();
-    const imageUrl = result.images?.[0]?.url || result.image?.url || result.output?.image_url;
+    const imageUrl = result.images?.[0]?.url;
 
     if (!imageUrl) {
-      return res.status(500).json({ error: 'Fal.ai 返回结果中未包含图像输出 URL' });
+      return res.status(502).json({ error: 'Fal.ai 返回结果中未包含图像输出 URL (images[0].url)' });
     }
 
+    // Fal output schema returns the actual `seed` used; steps/cfg only if we sent them.
+    const usedSeed = typeof result.seed === 'number' ? result.seed : (payload.seed ?? null);
     const item = recordHistoryItem({
       url: imageUrl,
       prompt,
       negativePrompt: negative_prompt,
       provider: 'Fal.ai (GPU 云端加速)',
-      model: wasAdapted ? `${actualModel} (由 ${model} 透明适配)` : actualModel,
-      seed: result.seed || seed || 136947637,
-      steps: payload.num_inference_steps || Number(num_inference_steps) || 28,
-      cfg: payload.guidance_scale || Number(guidance_scale) || 3.5,
-      loras: (loras || []).map((l: any) => ({
-        name: l.path || l.url || l.name,
-        strength: Number(l.scale || l.strength || 0.8),
-        civitaiId: l.civitaiId,
-      })),
+      model: actualModel,
+      seed: usedSeed,
+      steps: payload.num_inference_steps ?? null,
+      cfg: payload.guidance_scale ?? null,
+      loras: (payload.loras || []).map((l: any) => ({ name: l.path, strength: l.scale })),
     });
 
     return res.json({
       imageUrl,
-      seed: result.seed || seed || 136947637,
+      seed: usedSeed,
       timings: result.timings,
       provider: 'Fal.ai (GPU 云端加速)',
+      actualProvider: 'Fal.ai (GPU 云端加速)',
       model: actualModel,
+      actualModel,
       requestedModel: model,
       exactEndpointCalled: `https://fal.run/${endpoint}`,
       targetEndpoint: endpoint,
@@ -3457,6 +3458,7 @@ app.post(['/api/fal/generate', '/api/generate'], async (req, res) => {
       historyItem: item,
     });
   } catch (error: any) {
+    if (falKey) keyPoolManager.recordResult('fal', falKey, false, Date.now() - startTime, error.message);
     return res.status(500).json({ error: `Fal.ai 网络请求失败: ${error.message}` });
   }
 });
