@@ -4,6 +4,7 @@ import { resolveLoraPathOrUrl } from './engineParameterNormalizer';
 import { getStoredApiKeys, saveToHistory } from '../services/api';
 import { EngineRegistry } from '../engines/EngineRegistry';
 import { NormalizedGenerateParams } from '../engines/types';
+import { isLoraUnsupportedOnEndpoint } from './resolveCheckpoint';
 
 export interface WorkflowExtraction {
   checkpointModel: string;
@@ -603,6 +604,17 @@ export function extractWorkflowParameters(
     denoise = 0.65;
   }
 
+  // Early fail: Fal (etc.) endpoint with LoRA connected but schema marks loras unsupported
+  if (loras.length > 0) {
+    const check = isLoraUnsupportedOnEndpoint(
+      targetProvider === 'video' ? (videoProvider || 'fal') : targetProvider,
+      checkpointModel
+    );
+    if (check.unsupported && check.message) {
+      throw new Error(`HTTP 400: ${check.message}`);
+    }
+  }
+
   return {
     checkpointModel,
     positivePrompt: finalPositive,
@@ -838,8 +850,20 @@ export async function executeWorkflow(
   } catch (error: any) {
     if (stepInterval) clearInterval(stepInterval);
     onProgress?.(0, `执行失败: ${error.message}`);
+    const msg = error?.message || '执行遇到错误';
     if (targetErrorNodeId) {
-      onNodeStateChange(targetErrorNodeId, 'error', 0, undefined, error.message);
+      onNodeStateChange(targetErrorNodeId, 'error', 0, undefined, msg);
+    }
+    // Surface LoRA-unsupported on connected LoRA loaders too (Fal engine stays primary)
+    if (/该端点不支持 LoRA|loras/i.test(msg)) {
+      for (const n of nodes) {
+        if (n.bypassed) continue;
+        if (n.type === 'LoRALoader' || n.type === 'CivitaiLoRABrowserNode' || n.type === 'LoraLoader') {
+          if (n.id !== targetErrorNodeId) {
+            onNodeStateChange(n.id, 'error', 0, undefined, msg);
+          }
+        }
+      }
     }
     throw error;
   }

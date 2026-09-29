@@ -21,7 +21,7 @@ import {
 import { ComfyParameters } from '../types/graph';
 import { BASE_MODELS, SAMPLER_OPTIONS, SCHEDULER_OPTIONS } from '../constants/nodes';
 import { refinePromptWithGemini, fetchLiveModels, getRefineModelSelection } from '../services/api';
-import { validateModelCompatibility } from '../utils/baseModelMatcher';
+import { validateLoraCompatibility } from '../utils/baseModelMatcher';
 import { normalizeForComfyUI } from '../utils/engineParameterNormalizer';
 import { GeminiFieldSelect } from './GeminiFieldSelect';
 import { FieldStatusBadge } from './FieldStatusBadge';
@@ -603,7 +603,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
           ) : (
             <div className="space-y-2">
               {params.loras.map((lora, idx) => {
-                const compat = validateModelCompatibility(params.checkpoint, (lora as any).baseModel, lora.name, params.targetProvider);
+                const compat = validateLoraCompatibility(params.checkpoint, (lora as any).baseModel, lora.name, params.targetProvider || (params.checkpoint?.startsWith('fal-ai/') ? 'fal' : undefined));
                 return (
                   <div key={idx} className="bg-[#121318] p-2.5 rounded-lg border border-[#282a35] space-y-2">
                     <div className="flex items-center justify-between">
@@ -635,13 +635,13 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                       </button>
                     </div>
 
-                    {/* Architecture Compatibility Warning Banner */}
+                    {/* Endpoint / architecture compatibility banner */}
                     {!compat.isCompatible && (
-                      <div className="bg-amber-950/30 border border-amber-500/30 rounded-lg p-2 text-[10px] space-y-1.5">
-                        <p className="text-amber-300 leading-tight">
+                      <div className={`${compat.endpointUnsupported ? 'bg-rose-950/30 border-rose-500/40' : 'bg-amber-950/30 border-amber-500/30'} border rounded-lg p-2 text-[10px] space-y-1.5`}>
+                        <p className={`${compat.endpointUnsupported ? 'text-rose-300' : 'text-amber-300'} leading-tight`}>
                           {compat.message}
                         </p>
-                        {compat.recommendedCheckpoint && (
+                        {!compat.endpointUnsupported && compat.recommendedCheckpoint && (
                           <button
                             onClick={() => update({ checkpoint: compat.recommendedCheckpoint })}
                             className="w-full py-1 px-2 rounded bg-amber-600/30 hover:bg-amber-600/50 border border-amber-500/40 text-amber-200 font-bold flex items-center justify-center gap-1 transition-colors text-[10px]"

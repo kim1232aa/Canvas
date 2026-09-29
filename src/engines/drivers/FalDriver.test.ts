@@ -32,7 +32,7 @@ describe('FalDriver LoRA 校验与错误处理', () => {
     };
 
     await expect(driver.generate(params, { falKey: 'test-key' })).rejects.toThrow(
-      '该端点不支持 LoRA（Fal.ai (GPU 云端加速) 端点 fal-ai/flux/schnell 的官方 schema 无 loras 字段）'
+      'HTTP 400: 该端点不支持 LoRA（Fal.ai (GPU 云端加速) 端点 fal-ai/flux/schnell 的官方 schema 无 loras 字段）'
     );
 
     // 确保绝不发出网络请求

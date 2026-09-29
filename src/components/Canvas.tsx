@@ -13,6 +13,7 @@ import { areSocketsCompatible } from '../utils/graphEngine';
 import { NodeItem } from './NodeItem';
 import { SpatialFrameItem } from './SpatialFrameItem';
 import { NODE_DEFINITIONS } from '../constants/nodes';
+import { resolveCheckpointForNode } from '../utils/resolveCheckpoint';
 import { Plus, X, Trash2, RotateCcw } from 'lucide-react';
 
 interface CanvasProps {
@@ -525,7 +526,16 @@ export const Canvas: React.FC<CanvasProps> = ({
                 onEndConnecting={handleEndConnecting}
                 onOpenCivitaiPicker={onOpenCivitaiPicker}
                 onImageClick={onPreviewImage}
-                currentCheckpoint={currentCheckpoint}
+                currentCheckpoint={
+                  (node.type === 'LoRALoader' || node.type === 'LoraLoader' || node.type === 'LoraLoaderModelOnly' || node.type === 'CivitaiLoRABrowserNode')
+                    ? (resolveCheckpointForNode(node.id, nodes, connections).checkpoint || currentCheckpoint)
+                    : currentCheckpoint
+                }
+                currentProvider={
+                  (node.type === 'LoRALoader' || node.type === 'LoraLoader' || node.type === 'LoraLoaderModelOnly' || node.type === 'CivitaiLoRABrowserNode')
+                    ? resolveCheckpointForNode(node.id, nodes, connections).provider
+                    : undefined
+                }
                 onAutoFixCheckpoint={onAutoFixCheckpoint}
                 onOpenModelHub={onOpenModelHub}
               />

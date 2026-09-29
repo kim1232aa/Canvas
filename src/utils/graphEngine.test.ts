@@ -336,4 +336,32 @@ describe('graphEngine - B2 & L2a & L2b 拓扑反向追踪与参数抽取隔离�
     // 只有 video-node-1 被标记了错误，video-node-2 不受任何影响
     expect(errorRecordedNodes).toEqual(['video-node-1']);
   });
+
+  it('B1: FalAIEngineNode fal-ai/flux/schnell + connected LoRA fails early with 该端点不支持 LoRA / HTTP 400', () => {
+    const nodes: NodeInstance[] = [
+      createNode('fal-1', 'FalAIEngineNode', {
+        model: 'fal-ai/flux/schnell',
+        prompt: 'a test astronaut',
+      }),
+      createNode('lora-1', 'LoRALoader', {
+        lora_name: 'koda',
+        strength_model: 1.0,
+        strength_clip: 1.0,
+      }),
+    ];
+    const connections: Connection[] = [
+      {
+        id: 'c-lora',
+        fromNodeId: 'lora-1',
+        fromSocketId: 'MODEL',
+        toNodeId: 'fal-1',
+        toSocketId: 'lora',
+        type: 'MODEL',
+      },
+    ];
+    expect(() => extractWorkflowParameters(nodes, connections, 'fal-1')).toThrow(
+      /HTTP 400:.*该端点不支持 LoRA/
+    );
+  });
+
 });

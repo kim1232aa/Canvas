@@ -72,6 +72,19 @@
 | B3 | 已完成（tsc 0 错误，npm test 16 pass） | Gemini 出现在添加菜单：ModernToolDock 添加「Gemini 生图」精选条目（GoogleImagenNode），描述写明官方 Gemini 图像模型（不是已下线 Imagen），无默认模型预选（model default 为 ''） | src/components/ModernToolDock.tsx |
 | 404端点删除 | 已完成（tsc 0 错误，npm test 16 pass） | 彻底从下拉与预设中删除已核实 Fal 404 的端点 id（fal-ai/wan/t2v、fal-ai/wan/v2.1/text-to-video、fal-ai/wan/v2.1/image-to-video、fal-ai/stable-diffusion-xl-base-1.0、fal-ai/animagine-xl 等），替换为官方存在端点（fal-ai/wan-t2v、fal-ai/wan-i2v、fal-ai/fast-sdxl），保留手填自定义入口，不给模型贴参数专用的「官方未说明是否生效」标签 | src/constants/nodes.ts；src/engines/drivers/VideoDriver.ts；src/constants/presets.ts；src/utils/baseModelMatcher.ts；src/utils/graphEngine.test.ts |
 | Y1-UI (U-E4) | 已完成（tsc 0 错误，npm test 19 pass） | 历史面板空字段显示「未填写」：seed / steps / cfg / model / prompt / negative 等字段若为 null、undefined 或空字符串，显示「未填写」，不要空白，也不把 null 显示成 0；seed 为 0 时如实显示 0；核对服务端 recordHistoryItem 及各 generate 路由，严格存真实发送值，未发送字段记为 null，杜绝假值 | src/components/HistoryModal.tsx；src/components/ImageDetailModal.tsx；src/components/AssetManagerModal.tsx；src/types/providers.ts；server.ts:312,621-645,6902-6908；src/components/HistoryModal.test.ts |
+| B1 | 已完成 | Fal schnell + Koda LoRA：兼容检查只用当前/连线引擎节点的 model，禁止画布级 CheckpointLoaderSimple 当底模（L4）；端点 schema 标 loras unsupported 时显示「该端点不支持 LoRA」而非 Z-Image 架构不匹配；FalDriver/BaseEngineDriver/extractWorkflowParameters 抛 `HTTP 400: 该端点不支持 LoRA…`，executeWorkflow + App catch 写到 FalAIEngineNode（及连线 LoRA）errorMessage；fal-ai/wan-t2v 与 fal-ai/wan-i2v 因官方 schema 存在而保留，slash 形式 fal-ai/wan/t2v、fal-ai/wan/v2.1/* 保持已删。历史空字段种子：`/workspace/canvas-audit/seed-history-weitianxie.sh`（CANVAS_BASE_URL=http://127.0.0.1:3418） | src/utils/resolveCheckpoint.ts；src/utils/baseModelMatcher.ts；src/App.tsx；src/components/Canvas.tsx；src/components/NodeItem.tsx；src/components/ParameterInspector.tsx；src/utils/graphEngine.ts；src/engines/BaseEngineDriver.ts；src/engines/drivers/FalDriver.ts；tests |
+
+### B1 / 历史种子备注（2026-09-29）
+- `fal-ai/wan-t2v` / `fal-ai/wan-i2v` 保留：官方 OpenAPI schema 存在（见 `/workspace/canvas-schema/provider-params.md`）；仅删除无 schema 的 `fal-ai/wan/t2v` 与 `fal-ai/wan/v2.1/*`。
+- 历史「未填写」种子（不提交密钥）：
+  ```bash
+  CANVAS_BASE_URL=http://127.0.0.1:3418 /workspace/canvas-audit/seed-history-weitianxie.sh
+  ```
+  等价 curl（seed/steps/cfg 省略 → 服务端存 null）：
+  ```bash
+  curl -sS -X POST "$CANVAS_BASE_URL/api/history" -H 'Content-Type: application/json' \
+    -d '{"url":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==","mediaType":"image","prompt":"QA seed：空字段应显示未填写","provider":"fal","model":"fal-ai/flux/schnell"}'
+  ```
 | U-E5 | 已并入 G4 | 见下方 G4 行 | — |
 | U-E6 | 已并入 S6 | test-single 加 admin token 和 base URL 限制 | 见 S6 |
 | S6 | 已完成（tsc 0 错误，运行时待验证） | 修复评审 B1：`/api/test-provider` 与 `/api/cloud-keys/test-single` 挂载 `requireAdminAuth`；两路由不再读取 `x-agnes-base-url`/`x-sensenova-base-url`；`getProviderBaseUrl` 删除 `customBaseUrl` 参数，只读 settings/env；测试只打只读接口：Gemini 从 `generateContent` 改为 `models.list`；Agnes/SenseNova/ModelScope 没有可核实的只读接口，返回 `unsupported`「该服务商没有只读测试接口」，不发请求，不记入 key 池；前端两个测试函数带 admin Bearer，失败时显示真实状态码和响应体 | server.ts:675-684,6186-6192,6276-6280,6312-6336,6371,6393-6402,6461,6478-6486；src/services/api.ts:95-121,754-772；src/components/BackendSettingsModal.tsx:317,336,364 |

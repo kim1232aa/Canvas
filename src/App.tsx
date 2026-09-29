@@ -38,6 +38,12 @@ import { EngineRegistry } from './engines/EngineRegistry';
 import { NormalizedGenerateParams } from './engines/types';
 import { executeWorkflow, extractWorkflowParameters, resolveTargetNode } from './utils/graphEngine';
 import { getRecommendedBaseModelForLora, identifyArchitectureFamily } from './utils/baseModelMatcher';
+import {
+  findFirstNodeOfType,
+  getProviderFromNode,
+  resolveActiveCheckpoint,
+  resolveCheckpointForNode,
+} from './utils/resolveCheckpoint';
 
 export default function App() {
   // Canvas View Mode: 'graph' (ComfyUI Node Flow) vs 'spatial' (Modern Freeform Spatial Board)
@@ -961,43 +967,63 @@ export default function App() {
       setExecutionProgress(0);
       setExecutionStatusText(err.message || '执行遇到错误');
 
-      // 确保当前节点显示错误：若指定了 targetNodeId/selectedNodeId，或通过工作流中的活动节点回显错误
+      // Prefer the Fal/engine node the user ran; never leave it idle with empty preview.
       const currentTargetId = targetNodeId || selectedNodeId;
+      const errMsg = err.message || '执行遇到错误';
+      const isLoraEndpointErr = /该端点不支持 LoRA|loras/i.test(errMsg);
       setNodes((prev) => {
+        const falEngines = prev.filter((n) => !n.bypassed && n.type === 'FalAIEngineNode');
         let errorNodeId = currentTargetId;
-        if (!errorNodeId) {
-          if (/lora/i.test(err.message || '')) {
-            const loraNode = prev.find((n) => !n.bypassed && (n.type === 'LoRALoader' || n.type === 'CivitaiLoRABrowserNode'));
-            if (loraNode) errorNodeId = loraNode.id;
+
+        if (errorNodeId) {
+          const target = prev.find((n) => n.id === errorNodeId);
+          if (target && (target.type === 'LoRALoader' || target.type === 'CivitaiLoRABrowserNode' || target.type === 'LoraLoader')) {
+            const resolved = resolveCheckpointForNode(target.id, prev, activeConns);
+            if (resolved.engineNodeId) errorNodeId = resolved.engineNodeId;
           }
+        }
+
+        if (!errorNodeId && falEngines.length === 1) {
+          errorNodeId = falEngines[0].id;
+        }
+        if (!errorNodeId) {
+          const running = prev.find((n) => n.state === 'running' && (n.type === 'FalAIEngineNode' || n.type === 'KSampler' || n.type === 'AIVideoNode' || n.type === 'GoogleImagenNode'));
+          if (running) errorNodeId = running.id;
         }
         if (!errorNodeId) {
           const running = prev.find((n) => n.state === 'running');
           if (running) errorNodeId = running.id;
         }
         if (!errorNodeId) {
-          const core = prev.find((n) => !n.bypassed && (n.type === 'KSampler' || n.type === 'FalAIEngineNode' || n.type === 'SaveImage' || n.type === 'CheckpointLoaderSimple'));
+          const core = prev.find((n) => !n.bypassed && (n.type === 'KSampler' || n.type === 'FalAIEngineNode' || n.type === 'SaveImage' || n.type === 'GoogleImagenNode' || n.type === 'AIVideoNode'));
           if (core) errorNodeId = core.id;
         }
         if (!errorNodeId && prev.length > 0) {
           errorNodeId = prev[0].id;
         }
 
-        return prev.map((n) => {
-          if (n.id === errorNodeId || (currentTargetId && n.id === currentTargetId)) {
-            return {
-              ...n,
-              state: 'error' as const,
-              executionProgress: 0,
-              errorMessage: err.message || '执行遇到错误',
-            };
+        const errorIds = new Set<string>();
+        if (errorNodeId) errorIds.add(errorNodeId);
+        if (currentTargetId) errorIds.add(currentTargetId);
+        if (isLoraEndpointErr) {
+          for (const n of prev) {
+            if (n.bypassed) continue;
+            if (n.type === 'LoRALoader' || n.type === 'CivitaiLoRABrowserNode' || n.type === 'LoraLoader') {
+              errorIds.add(n.id);
+            }
           }
-          if (/lora/i.test(err.message || '') && (n.type === 'LoRALoader' || n.type === 'CivitaiLoRABrowserNode')) {
+          for (const eng of falEngines) {
+            errorIds.add(eng.id);
+          }
+        }
+
+        return prev.map((n) => {
+          if (errorIds.has(n.id)) {
             return {
               ...n,
               state: 'error' as const,
               executionProgress: 0,
-              errorMessage: err.message || '执行遇到错误',
+              errorMessage: errMsg,
             };
           }
           if (n.state === 'running') {
@@ -1163,7 +1189,7 @@ export default function App() {
     // Check if active spatial frame or graph has preferred provider
     const currentProv = selectedFrameId
       ? spatialFrames.find((f) => f.id === selectedFrameId)?.params?.targetProvider
-      : nodes.find((n) => n.type === 'CheckpointLoaderSimple')?.values?.targetProvider;
+      : (findFirstNodeOfType(nodes, 'CheckpointLoaderSimple')?.values?.targetProvider as string | undefined);
 
     const matched = getRecommendedBaseModelForLora(lora.baseModel, lora.name, currentProv || (lora.civitaiId ? 'civitai' : undefined));
     const recModel = matched.recommendedCheckpoint;
@@ -1448,7 +1474,7 @@ export default function App() {
         }
       }
 
-      const existingCkptNode = nodes.find((n) => n.type === 'CheckpointLoaderSimple' && !n.bypassed);
+      const existingCkptNode = findFirstNodeOfType(nodes, 'CheckpointLoaderSimple');
       if (existingCkptNode) {
         setNodes((prev) =>
           prev.map((n) => {
@@ -1776,12 +1802,22 @@ export default function App() {
   const activeFrame = spatialFrames.find((f) => f.id === selectedFrameId) || spatialFrames[0];
   const positiveNode = nodes.find((n) => n.type === 'CLIPTextEncode' && !n.bypassed);
   const negativeNode = nodes.find((n) => n.type === 'CLIPTextEncodeNegative' && !n.bypassed);
-  const googleImagenNode = nodes.find((n) => n.type === 'GoogleImagenNode' && !n.bypassed);
+  const googleImagenNode = findFirstNodeOfType(nodes, 'GoogleImagenNode');
+  const falEngineNode = findFirstNodeOfType(nodes, 'FalAIEngineNode');
+  const videoEngineNode = findFirstNodeOfType(nodes, 'AIVideoNode');
   const ksamplerNode = nodes.find((n) => n.type === 'KSampler' && !n.bypassed);
-  const checkpointNode = nodes.find((n) => n.type === 'CheckpointLoaderSimple' && !n.bypassed);
   const latentNode = nodes.find((n) => n.type === 'EmptyLatentImage' && !n.bypassed);
 
   const selectedNode = selectedNodeId ? nodes.find((n) => n.id === selectedNodeId) : null;
+
+  // LoRA/panel checkpoint: ONLY the selected (or sole) engine node's model — never invent Z-Image-Turbo
+  const resolvedActive = resolveActiveCheckpoint(
+    nodes,
+    connections,
+    selectedNodeId,
+    selectedFrameId ? activeFrame?.params?.checkpoint : undefined,
+    selectedFrameId ? (activeFrame?.params?.targetProvider as string | undefined) : undefined
+  );
 
   const nodePositiveText = selectedNode
     ? (selectedNode.type === 'CLIPTextEncode' ? selectedNode.values?.text :
@@ -1821,14 +1857,16 @@ export default function App() {
     }));
 
   const detectedTargetProvider =
-    checkpointNode?.values?.targetProvider ||
+    resolvedActive.provider ||
     (googleImagenNode ? 'gemini' : undefined) ||
+    (falEngineNode ? 'fal' : undefined) ||
+    (videoEngineNode ? (getProviderFromNode(videoEngineNode) || 'video') : undefined) ||
     activeFrame?.params?.targetProvider ||
     '';
 
   const activeParams: ComfyParameters = {
-    // Gemini 节点在场时 model 可为空（UI 显示「请先选择模型」），不回落到其它模型
-    checkpoint: checkpointNode?.values?.ckpt_name || (googleImagenNode ? (googleImagenNode.values?.model || '') : (activeFrame?.params?.checkpoint || 'Tongyi-MAI/Z-Image-Turbo')),
+    // Use ONLY the current/sole engine node's model — never invent Tongyi-MAI/Z-Image-Turbo
+    checkpoint: resolvedActive.checkpoint || (selectedFrameId ? (activeFrame?.params?.checkpoint || '') : '') || '',
     seed: ksamplerNode?.values?.seed !== undefined ? Number(ksamplerNode.values.seed) : (activeFrame?.params?.seed ?? undefined),
     seedControl: (ksamplerNode?.values?.control_after_generate as any) || activeFrame?.params?.seedControl || 'randomize',
     steps: ksamplerNode?.values?.steps !== undefined ? Number(ksamplerNode.values.steps) : (activeFrame?.params?.steps ?? 25),
@@ -1884,12 +1922,9 @@ export default function App() {
         onClearCanvas={handleClearCanvas}
       />
 
-      {/* Compute current active checkpoint for LoRA compatibility checks */}
+      {/* Per-node checkpoint for LoRA compat: resolved from selected/sole engine or LoRA edges */}
       {(() => {
-        const currentCheckpoint =
-          nodes.find((n) => n.type === 'CheckpointLoaderSimple' && !n.bypassed)?.values?.ckpt_name ||
-          (selectedFrameId ? spatialFrames.find((f) => f.id === selectedFrameId)?.params?.checkpoint : undefined) ||
-          '';
+        const currentCheckpoint = resolvedActive.checkpoint || '';
 
         return (
           <Canvas
@@ -2168,9 +2203,9 @@ export default function App() {
         onClose={() => setIsModelHubOpen(false)}
         initialCategory={modelHubCategory}
         currentCheckpoint={
-          nodes.find((n) => n.type === 'CheckpointLoaderSimple' && !n.bypassed)?.values?.ckpt_name ||
+          resolvedActive.checkpoint ||
           (selectedFrameId ? spatialFrames.find((f) => f.id === selectedFrameId)?.params?.checkpoint : undefined) ||
-          'fal-ai/flux/schnell'
+          ''
         }
         onSelectModel={handleSelectModelFromHub}
         onAddModelNode={(mId, mName, prov, extraData) => {

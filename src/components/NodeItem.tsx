@@ -21,7 +21,7 @@ import {
 import { DataType, NodeInstance, Socket, SOCKET_COLORS } from '../types/graph';
 import { NODE_DEFINITIONS } from '../constants/nodes';
 import { refinePromptWithGemini, getStoredApiKeys, getRefineModelSelection } from '../services/api';
-import { validateModelCompatibility } from '../utils/baseModelMatcher';
+import { validateLoraCompatibility } from '../utils/baseModelMatcher';
 import { EngineRegistry } from '../engines/EngineRegistry';
 import { GeminiFieldSelect, GeminiModelBadge } from './GeminiFieldSelect';
 import { FieldStatusBadge } from './FieldStatusBadge';
@@ -41,6 +41,7 @@ interface NodeItemProps {
   onOpenCivitaiPicker?: (nodeId: string) => void;
   onImageClick?: (url: string) => void;
   currentCheckpoint?: string;
+  currentProvider?: string;
   onAutoFixCheckpoint?: (recommendedCheckpoint: string) => void;
   onOpenModelHub?: (category?: 'all' | 'checkpoint' | 'lora' | 'video' | 'edit') => void;
 }
@@ -60,6 +61,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
   onOpenCivitaiPicker,
   onImageClick,
   currentCheckpoint,
+  currentProvider,
   onAutoFixCheckpoint,
   onOpenModelHub,
 }) => {
@@ -738,8 +740,8 @@ export const NodeItem: React.FC<NodeItemProps> = ({
           {/* LoRA Architecture Compatibility & One-Click Auto-Pairing Banner */}
           {node.type === 'LoRALoader' && node.values.lora_name && currentCheckpoint && (
             (() => {
-              const currentProv = node.values?.targetProvider || (currentCheckpoint.includes("krea-ai") || currentCheckpoint.includes("black-forest") || currentCheckpoint.includes("stabilityai") ? "huggingface" : undefined);
-              const compat = validateModelCompatibility(
+              const currentProv = currentProvider || node.values?.targetProvider || (currentCheckpoint.startsWith('fal-ai/') ? 'fal' : (currentCheckpoint.includes("krea-ai") || currentCheckpoint.includes("black-forest") || currentCheckpoint.includes("stabilityai") ? "huggingface" : undefined));
+              const compat = validateLoraCompatibility(
                 currentCheckpoint,
                 node.values.base_model,
                 node.values.lora_name,
@@ -753,6 +755,17 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                       底模兼容 ({currentCheckpoint.split('/').pop()})
                     </span>
                     <span className="text-[9px] text-emerald-400/80">OK</span>
+                  </div>
+                );
+              }
+              if (compat.endpointUnsupported) {
+                return (
+                  <div className="mt-1 p-2 rounded-xl bg-rose-950/40 border border-rose-500/40 text-[10px] space-y-1.5 animate-in fade-in">
+                    <div className="flex items-center gap-1 text-rose-300 font-bold">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0 text-rose-400" />
+                      <span>该端点不支持 LoRA</span>
+                    </div>
+                    <p className="text-rose-200/90 leading-tight font-mono">{compat.message}</p>
                   </div>
                 );
               }

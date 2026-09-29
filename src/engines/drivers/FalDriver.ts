@@ -35,7 +35,7 @@ export class FalDriver extends BaseEngineDriver {
     if (params.loras && params.loras.length > 0) {
       const loraSpec = getFieldSpec('fal', finalModel, 'loras');
       if (loraSpec?.status === 'unsupported') {
-        throw new Error(`该端点不支持 LoRA（Fal.ai 端点 ${finalModel} 的官方 schema 无 loras 字段）`);
+        throw new Error(`HTTP 400: 该端点不支持 LoRA（Fal.ai 端点 ${finalModel} 的官方 schema 无 loras 字段）`);
       }
     }
 

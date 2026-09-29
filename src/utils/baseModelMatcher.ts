@@ -5,6 +5,8 @@
  * compatible Checkpoint models from the Base Model Library across all providers (Fal.ai, ModelScope, NanoGPT, Gemini).
  */
 
+import { isLoraUnsupportedOnEndpoint } from './resolveCheckpoint';
+
 export type ModelArchitectureFamily =
   | 'flux'
   | 'sdxl'
@@ -334,4 +336,26 @@ export function getRecommendedBaseModelForLora(
   preferredProvider?: string
 ): BaseArchitectureInfo {
   return matchBaseModelFromArchitecture(loraBaseModelRaw, loraName, preferredProvider);
+}
+
+/**
+ * LoRA compatibility for UI banners.
+ * If the *current* node's Fal/Gemini/Civitai endpoint marks loras unsupported,
+ * return that message — never compare against an unrelated canvas checkpoint (e.g. Z-Image-Turbo).
+ */
+export function validateLoraCompatibility(
+  checkpointName: string,
+  loraBaseModelRaw?: string,
+  loraName?: string,
+  preferredProvider?: string
+): { isCompatible: boolean; message: string; recommendedCheckpoint?: string; endpointUnsupported?: boolean } {
+  const endpoint = isLoraUnsupportedOnEndpoint(preferredProvider, checkpointName);
+  if (endpoint.unsupported && endpoint.message) {
+    return {
+      isCompatible: false,
+      message: endpoint.message,
+      endpointUnsupported: true,
+    };
+  }
+  return validateModelCompatibility(checkpointName, loraBaseModelRaw, loraName, preferredProvider);
 }
