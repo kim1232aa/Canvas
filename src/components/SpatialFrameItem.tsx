@@ -19,10 +19,10 @@ import { SpatialFrame, ComfyParameters } from '../types/graph';
 import { refinePromptWithGemini, getRefineModelSelection } from '../services/api';
 import { validateModelCompatibility } from '../utils/baseModelMatcher';
 import { isCanvasFieldUnsupported } from '../utils/resolveCheckpoint';
-import {
-  friendlyProviderLabel,
+import { friendlyProviderLabel,
   isNonComfyCloudProvider,
   spatialFrameModelLabel,
+  sanitizeFrameMarketingTitle,
 } from '../utils/providerLabels';
 import { FieldStatusBadge } from './FieldStatusBadge';
 
@@ -57,10 +57,26 @@ export const SpatialFrameItem: React.FC<SpatialFrameItemProps> = ({
 
   // Soft-3: engines that reject loras must not keep leftover stacks/strength UI.
   useEffect(() => {
-    if (!frame.params.loras.length) return;
-    if (!isCanvasFieldUnsupported(frame.params.targetProvider, frame.params.checkpoint, 'loras')) return;
-    onUpdateFrame(frame.id, { params: { ...frame.params, loras: [] } });
-  }, [frame.id, frame.params.targetProvider, frame.params.checkpoint, frame.params.loras.length]);
+    const unsupported = isCanvasFieldUnsupported(
+      frame.params.targetProvider,
+      frame.params.checkpoint,
+      'loras'
+    );
+    const nextLoras = unsupported ? [] : frame.params.loras;
+    const nextTitle = sanitizeFrameMarketingTitle(
+      frame.params.targetProvider,
+      frame.params.checkpoint,
+      frame.title,
+      nextLoras.length
+    );
+    const clearLoras = unsupported && frame.params.loras.length > 0;
+    const retitle = nextTitle !== frame.title;
+    if (!clearLoras && !retitle) return;
+    onUpdateFrame(frame.id, {
+      ...(retitle ? { title: nextTitle } : {}),
+      ...(clearLoras ? { params: { ...frame.params, loras: [] } } : {}),
+    });
+  }, [frame.id, frame.title, frame.params.targetProvider, frame.params.checkpoint, frame.params.loras.length]);
 
   const handleRefine = async () => {
     if (!frame.prompt) return;

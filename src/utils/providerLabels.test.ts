@@ -8,6 +8,8 @@ import {
   PROVIDER_TITLE_LABEL,
   spatialFrameModelLabel,
   spatialFrameTopBarLabel,
+  paramsDrawerFramePrefix,
+  sanitizeFrameMarketingTitle,
 } from './providerLabels';
 
 describe('checkpointNodeTitle', () => {
@@ -90,3 +92,20 @@ describe('spatialFrameTopBarLabel', () => {
     );
   });
 });
+
+describe('paramsDrawerFramePrefix / sanitizeFrameMarketingTitle', () => {
+  it('cloud engines use 引擎参数 prefix', () => {
+    expect(paramsDrawerFramePrefix('gemini')).toBe('引擎参数');
+    expect(paramsDrawerFramePrefix('openai_compat')).toBe('引擎参数');
+    expect(paramsDrawerFramePrefix('modelscope')).toBe('ComfyUI 参数');
+  });
+
+  it('rewrites marketing LoRA title when stack cleared', () => {
+    const stuck = '魔搭 CN (modelscope.cn): Z-Image-Turbo + 美胸年年 LoRA';
+    expect(sanitizeFrameMarketingTitle('gemini', 'gemini-2.5-flash-image', stuck, 0)).toBe(
+      'Gemini · gemini-2.5-flash-image'
+    );
+    expect(sanitizeFrameMarketingTitle('modelscope', 'Tongyi-MAI/Z-Image-Turbo', stuck, 1)).toBe(stuck);
+  });
+});
+

@@ -121,3 +121,31 @@ export function spatialFrameTopBarLabel(
   if (prov) return friendlyProviderLabel(prov) || prov;
   return '未选择模型';
 }
+
+/** Drawer chrome prefix: cloud engines say 引擎参数, Comfy paths keep ComfyUI 参数. */
+export function paramsDrawerFramePrefix(provider: string | undefined | null): string {
+  return isNonComfyCloudProvider(provider) ? '引擎参数' : 'ComfyUI 参数';
+}
+
+/**
+ * When the LoRA stack is emptied (schema reject / engine switch), drop marketing
+ * titles that still advertise LoRA packs (e.g. 魔搭…Z-Image-Turbo + …LoRA).
+ */
+export function sanitizeFrameMarketingTitle(
+  provider: string | undefined | null,
+  checkpoint: string | undefined | null,
+  title: string | undefined | null,
+  nextLorasLength: number
+): string {
+  const raw = String(title || '').trim();
+  if (nextLorasLength > 0) return raw;
+  const advertisesLoraOrPack =
+    /LoRA/i.test(raw) ||
+    /\+\s*美胸/.test(raw) ||
+    (/魔搭/.test(raw) && /Z-Image-Turbo/i.test(raw));
+  if (!advertisesLoraOrPack) return raw;
+  const rebuilt = spatialFrameTopBarLabel(provider, checkpoint);
+  if (rebuilt && rebuilt !== '未选择模型') return rebuilt;
+  return '取景生成框';
+}
+

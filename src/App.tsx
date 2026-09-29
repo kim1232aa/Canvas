@@ -48,7 +48,12 @@ import {
   isCanvasFieldUnsupported,
   sanitizeFrameLoras,
 } from './utils/resolveCheckpoint';
-import { checkpointNodeTitle, spatialFrameTopBarLabel } from './utils/providerLabels';
+import {
+  checkpointNodeTitle,
+  spatialFrameTopBarLabel,
+  paramsDrawerFramePrefix,
+  sanitizeFrameMarketingTitle,
+} from './utils/providerLabels';
 
 export default function App() {
   // Canvas View Mode: 'graph' (ComfyUI Node Flow) vs 'spatial' (Modern Freeform Spatial Board)
@@ -759,14 +764,23 @@ export default function App() {
           setSpatialFrames((prev) =>
             prev.map((f) =>
               f.id === activeFrameTargetId
-                ? {
-                    ...f,
-                    params: {
-                    ...f.params,
-                    checkpoint: value,
-                    loras: sanitizeFrameLoras(f.params.targetProvider, value, f.params.loras),
-                  },
-                  }
+                ? (() => {
+                    const nextLoras = sanitizeFrameLoras(f.params.targetProvider, value, f.params.loras);
+                    return {
+                      ...f,
+                      title: sanitizeFrameMarketingTitle(
+                        f.params.targetProvider,
+                        value,
+                        f.title,
+                        nextLoras.length
+                      ),
+                      params: {
+                        ...f.params,
+                        checkpoint: value,
+                        loras: nextLoras,
+                      },
+                    };
+                  })()
                 : f
             )
           );
@@ -790,14 +804,18 @@ export default function App() {
           setSpatialFrames((prev) =>
             prev.map((f) =>
               f.id === activeFrameTargetId
-                ? {
-                    ...f,
-                    params: {
-                      ...f.params,
-                      targetProvider: prov,
-                      loras: sanitizeFrameLoras(prov, f.params.checkpoint, f.params.loras),
-                    },
-                  }
+                ? (() => {
+                    const nextLoras = sanitizeFrameLoras(prov, f.params.checkpoint, f.params.loras);
+                    return {
+                      ...f,
+                      title: sanitizeFrameMarketingTitle(prov, f.params.checkpoint, f.title, nextLoras.length),
+                      params: {
+                        ...f.params,
+                        targetProvider: prov,
+                        loras: nextLoras,
+                      },
+                    };
+                  })()
                 : f
             )
           );
@@ -824,15 +842,19 @@ export default function App() {
       );
     } else if (targetNode.type === 'GoogleImagenNode' && widgetName === 'model') {
       setSpatialFrames((prev) =>
-        prev.map((f) => (f.id === activeFrameTargetId ? {
-          ...f,
-          params: {
-          ...f.params,
-          checkpoint: value,
-          targetProvider: 'gemini',
-          loras: sanitizeFrameLoras('gemini', value, f.params.loras),
-        },
-        } : f))
+        prev.map((f) => (f.id === activeFrameTargetId ? (() => {
+          const nextLoras = sanitizeFrameLoras('gemini', value, f.params.loras);
+          return {
+            ...f,
+            title: sanitizeFrameMarketingTitle('gemini', value, f.title, nextLoras.length),
+            params: {
+              ...f.params,
+              checkpoint: value,
+              targetProvider: 'gemini',
+              loras: nextLoras,
+            },
+          };
+        })() : f))
       );
     } else if (targetNode.type === 'GoogleImagenNode' && widgetName === 'aspect_ratio') {
       setSpatialFrames((prev) =>
@@ -865,21 +887,27 @@ export default function App() {
       );
     } else if (targetNode.type === 'CheckpointLoaderSimple') {
       setSpatialFrames((prev) =>
-        prev.map((f) => (f.id === activeFrameTargetId ? {
-          ...f,
-          params: {
-            ...f.params,
-            ...(widgetName === 'ckpt_name' ? { checkpoint: value } : {}),
-            ...(widgetName === 'targetProvider'
-              ? {
-                  targetProvider: value,
-                  loras: sanitizeFrameLoras(value, f.params.checkpoint, f.params.loras),
-                }
-              : {}),
-            ...(widgetName === 'aspect_ratio' ? { aspectRatio: value || undefined } : {}),
-            ...(widgetName === 'resolution' ? { resolution: value || undefined } : {}),
-          },
-        } : f))
+        prev.map((f) => {
+          if (f.id !== activeFrameTargetId) return f;
+          const nextCheckpoint = widgetName === 'ckpt_name' ? value : f.params.checkpoint;
+          const nextProvider = widgetName === 'targetProvider' ? value : f.params.targetProvider;
+          const nextLoras =
+            widgetName === 'targetProvider' || widgetName === 'ckpt_name'
+              ? sanitizeFrameLoras(nextProvider, nextCheckpoint, f.params.loras)
+              : f.params.loras;
+          return {
+            ...f,
+            title: sanitizeFrameMarketingTitle(nextProvider, nextCheckpoint, f.title, nextLoras.length),
+            params: {
+              ...f.params,
+              ...(widgetName === 'ckpt_name' ? { checkpoint: value } : {}),
+              ...(widgetName === 'targetProvider' ? { targetProvider: value, loras: nextLoras } : {}),
+              ...(widgetName === 'ckpt_name' ? { loras: nextLoras } : {}),
+              ...(widgetName === 'aspect_ratio' ? { aspectRatio: value || undefined } : {}),
+              ...(widgetName === 'resolution' ? { resolution: value || undefined } : {}),
+            },
+          };
+        })
       );
     } else if (targetNode.type === 'EmptyLatentImage') {
       setSpatialFrames((prev) =>
@@ -2296,7 +2324,7 @@ export default function App() {
               }
             }}
             onClose={() => setIsParamsDrawerOpen(false)}
-            title={selectedNode ? `节点调试: ${selectedNode.title}` : activeFrame ? `ComfyUI 参数: ${activeFrame.title}` : 'ComfyUI 核心参数总控台'}
+            title={selectedNode ? `节点调试: ${selectedNode.title}` : activeFrame ? `${paramsDrawerFramePrefix(activeFrame.params.targetProvider)}: ${activeFrame.title}` : '参数总控台'}
           />
         </aside>
       )}
