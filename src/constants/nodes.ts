@@ -844,6 +844,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
         type: 'select',
         default: '',
         options: [
+          { label: '未选择 (请先选择模型)', value: '' },
           { label: '⚡ Fal.ai 极速云端引擎', value: 'fal' },
           { label: '🎨 Tensor.Art (OpenWorks 官方算力)', value: 'tensorart' },
           { label: '🇨🇳 魔搭社区 (modelscope.cn 阿里官方)', value: 'modelscope' },
@@ -894,7 +895,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
       {
         name: 'negative_prompt',
         label: '负向排畸词 (Negative Prompt)',
-        type: 'text',
+        type: 'textarea',
         default: 'jittery motion, fast sudden cut, blur, morphing distortion, low quality',
         placeholder: '输入负向排畸特征...',
       },

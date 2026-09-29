@@ -27,6 +27,7 @@ import { GeminiFieldSelect, GeminiModelBadge } from './GeminiFieldSelect';
 import { fieldOptions, resolveSchemaModelId } from '../schemas/providerSchema';
 import { FieldStatusBadge } from './FieldStatusBadge';
 import { isCanvasFieldUnsupported, isCanvasWidgetUnsupported } from '../utils/resolveCheckpoint';
+import { ksamplerNodeTitle } from '../utils/providerLabels';
 
 interface NodeItemProps {
   node: NodeInstance;
@@ -211,9 +212,23 @@ export const NodeItem: React.FC<NodeItemProps> = ({
           >
             {isCollapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
           </button>
-          <span className="font-bold text-[13px] text-white truncate tracking-wide" title={node.title}>
-            {node.title}
-          </span>
+          {(() => {
+            const stepsUnsupported =
+              node.type === 'KSampler' &&
+              isCanvasFieldUnsupported(currentProvider, currentCheckpoint, 'steps');
+            const displayTitle =
+              node.type === 'KSampler'
+                ? ksamplerNodeTitle(node.title, stepsUnsupported)
+                : node.title;
+            return (
+              <span
+                className="font-bold text-[13px] text-white truncate tracking-wide"
+                title={node.title !== displayTitle ? `${displayTitle}（原标题: ${node.title}）` : node.title}
+              >
+                {displayTitle}
+              </span>
+            );
+          })()}
           {node.state === 'running' && (
             <div className="flex items-center gap-1 text-[10px] font-mono text-cyan-400 bg-cyan-950/60 px-1.5 py-0.5 rounded border border-cyan-800/40">
               <Loader2 className="w-3 h-3 animate-spin" />
@@ -499,7 +514,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               }
 
               if (node.type === 'AIVideoNode' && widget.name === 'model') {
-                const currentProv = node.values?.targetProvider || 'fal';
+                const currentProv = String(node.values?.targetProvider || '').trim();
                 const providerOpts = opts.filter((o: any) => o.provider === currentProv);
                 const otherOpts = opts.filter((o: any) => o.provider && o.provider !== currentProv);
                 const isCustom = !opts.some((o) => o.value === value) && Boolean(value);
@@ -527,7 +542,8 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                     </div>
                     {/* Primary Dropdown Select */}
                     <select
-                      value={value}
+                      value={value || ''}
+                      title={(opts.find((o) => o.value === value)?.label as string) || (value ? String(value) : '未选择 (请先选择模型)')}
                       onMouseDown={(e) => e.stopPropagation()}
                       onPointerDown={(e) => e.stopPropagation()}
                       onKeyDown={(e) => e.stopPropagation()}
@@ -540,7 +556,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                           ★ [自定义视频端点] {value}
                         </option>
                       )}
-                      {providerOpts.length > 0 && (
+                      {currentProv && providerOpts.length > 0 && (
                         <optgroup label={`🎬 ${currentProv.toUpperCase()} 官方推荐视频大模型`}>
                           {providerOpts.map((opt, idx) => (
                             <option key={`prov-vid-${(opt as any).provider}-${opt.value}-${idx}`} value={opt.value}>
@@ -549,7 +565,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                           ))}
                         </optgroup>
                       )}
-                      {otherOpts.length > 0 && (
+                      {currentProv && otherOpts.length > 0 && (
                         <optgroup label="🌐 其它视频服务商端点">
                           {otherOpts.map((opt, idx) => (
                             <option key={`other-vid-${(opt as any).provider}-${opt.value}-${idx}`} value={opt.value}>
@@ -558,7 +574,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                           ))}
                         </optgroup>
                       )}
-                      {providerOpts.length === 0 && otherOpts.length === 0 && opts.map((opt, idx) => (
+                      {(!currentProv || (providerOpts.length === 0 && otherOpts.length === 0)) && opts.filter((o) => o.value !== '').map((opt, idx) => (
                         <option key={`fallback-vid-${opt.value}-${idx}`} value={opt.value}>
                           {opt.label}
                         </option>
@@ -676,9 +692,9 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                     {greyThis && <FieldStatusBadge status="unsupported" />}
                   </div>
                   <select
-                    value={greyThis ? '' : value}
+                    value={greyThis ? '' : (value ?? '')}
                     disabled={greyThis}
-                    title={greyThis ? '该服务商不支持' : undefined}
+                    title={greyThis ? '该服务商不支持' : ((opts.find((o) => o.value === value)?.label as string) || (value != null && value !== '' ? String(value) : widget.label))}
                     aria-label={greyThis ? `${widget.name}（该服务商不支持）` : widget.label}
                     onMouseDown={(e) => e.stopPropagation()}
                     onPointerDown={(e) => e.stopPropagation()}

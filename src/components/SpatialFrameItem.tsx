@@ -19,6 +19,11 @@ import { SpatialFrame, ComfyParameters } from '../types/graph';
 import { refinePromptWithGemini, getRefineModelSelection } from '../services/api';
 import { validateModelCompatibility } from '../utils/baseModelMatcher';
 import { isCanvasFieldUnsupported } from '../utils/resolveCheckpoint';
+import {
+  friendlyProviderLabel,
+  isNonComfyCloudProvider,
+  spatialFrameModelLabel,
+} from '../utils/providerLabels';
 import { FieldStatusBadge } from './FieldStatusBadge';
 
 interface SpatialFrameItemProps {
@@ -158,20 +163,51 @@ export const SpatialFrameItem: React.FC<SpatialFrameItemProps> = ({
         </div>
       </div>
 
-      {/* ComfyUI Parameter Quick Bar (Real-time active indicators) */}
+      {/* Parameter Quick Bar — non-Comfy engines never show leftover Comfy sampler badges */}
       <div className="px-3.5 py-1.5 bg-[#181922] border-b border-[#22242e] flex items-center justify-between text-[10px] font-mono text-slate-300 overflow-x-auto gap-2">
         <div className="flex items-center gap-2 truncate">
-          <span className="text-cyan-400 font-semibold truncate max-w-[130px]">
-            {frame.params.checkpoint.split('/').pop()}
-          </span>
-          <span>·</span>
           {(() => {
             const p = frame.params.targetProvider;
             const m = frame.params.checkpoint;
-            const greySampler = isCanvasFieldUnsupported(p, m, 'sampler');
-            const greyScheduler = isCanvasFieldUnsupported(p, m, 'scheduler');
-            const greySteps = isCanvasFieldUnsupported(p, m, 'steps');
-            const greyCfg = isCanvasFieldUnsupported(p, m, 'cfg');
+            const modelLabel = spatialFrameModelLabel(p, m);
+            const nonComfy = isNonComfyCloudProvider(p);
+            if (nonComfy) {
+              const eng = friendlyProviderLabel(p) || p;
+              return (
+                <>
+                  <span className="text-cyan-400 font-semibold truncate max-w-[90px]" title={eng}>
+                    {eng}
+                  </span>
+                  <span>·</span>
+                  <span
+                    className={`font-semibold truncate max-w-[140px] ${modelLabel === '未选择模型' ? 'text-slate-500' : 'text-slate-200'}`}
+                    title={modelLabel === '未选择模型' ? '请选择与当前引擎匹配的模型' : m}
+                  >
+                    {modelLabel}
+                  </span>
+                </>
+              );
+            }
+            return (
+              <span className="text-cyan-400 font-semibold truncate max-w-[130px]" title={m}>
+                {modelLabel}
+              </span>
+            );
+          })()}
+          {!isNonComfyCloudProvider(frame.params.targetProvider) && <span>·</span>}
+          {(() => {
+            const p = frame.params.targetProvider;
+            const m = frame.params.checkpoint;
+            const nonComfy = isNonComfyCloudProvider(p);
+            // Non-Comfy: force-grey leftover Comfy sampler/steps/CFG (never advertise FLUX euler 25步)
+            const greySampler = nonComfy || isCanvasFieldUnsupported(p, m, 'sampler');
+            const greyScheduler = nonComfy || isCanvasFieldUnsupported(p, m, 'scheduler');
+            const greySteps = nonComfy || isCanvasFieldUnsupported(p, m, 'steps');
+            const greyCfg = nonComfy || isCanvasFieldUnsupported(p, m, 'cfg');
+            if (nonComfy) {
+              // Omit Comfy sampler/steps/CFG chips entirely for Gemini/compat — show only seed side
+              return null;
+            }
             const chip = (unsupported: boolean, label: string, field: string) =>
               unsupported ? (
                 <span

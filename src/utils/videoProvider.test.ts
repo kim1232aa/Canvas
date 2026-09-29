@@ -5,7 +5,7 @@ import {
   resolveAIVideoModelProvider,
 } from './videoProvider';
 
-describe('F4 videoProvider — model select sets provider; empty/mismatch blocked', () => {
+describe('F4 / soft-visual-4 videoProvider — model select syncs provider; empty clears; mismatch friendly', () => {
   it('resolveAIVideoModelProvider reads provider from AIVideoNode schema options', () => {
     expect(resolveAIVideoModelProvider('fal-ai/wan-t2v')).toBe('fal');
     expect(resolveAIVideoModelProvider('text2video_wan27')).toBe('tensorart');
@@ -36,13 +36,33 @@ describe('F4 videoProvider — model select sets provider; empty/mismatch blocke
     expect(next.provider).toBe('agnes');
   });
 
+  it('applyAIVideoModelSelection clears provider when model is emptied (no leftover Fal)', () => {
+    const next = applyAIVideoModelSelection(
+      { model: 'fal-ai/wan-t2v', targetProvider: 'fal', provider: 'fal', prompt: 'keep' },
+      ''
+    );
+    expect(next.model).toBe('');
+    expect(next.targetProvider).toBe('');
+    expect(next.provider).toBe('');
+    expect(next.prompt).toBe('keep');
+  });
+
+  it('applyAIVideoModelSelection clears provider on whitespace-only model', () => {
+    const next = applyAIVideoModelSelection(
+      { model: 'text2video_wan27', targetProvider: 'tensorart', provider: 'tensorart' },
+      '   '
+    );
+    expect(next.targetProvider).toBe('');
+    expect(next.provider).toBe('');
+  });
+
   it('applyAIVideoModelSelection does not invent provider for unknown custom model', () => {
     const next = applyAIVideoModelSelection(
       { targetProvider: 'fal', provider: 'fal' },
       'my-custom-video-endpoint'
     );
     expect(next.model).toBe('my-custom-video-endpoint');
-    // leave existing provider as-is when schema has no option provider
+    // leave existing provider as-is when schema has no option provider (non-empty model)
     expect(next.targetProvider).toBe('fal');
     expect(next.provider).toBe('fal');
   });
@@ -53,8 +73,21 @@ describe('F4 videoProvider — model select sets provider; empty/mismatch blocke
     expect(() => assertAIVideoProviderReady('fal-ai/wan-t2v', '   ')).toThrow(/视频服务商/);
   });
 
-  it('assertAIVideoProviderReady rejects schema mismatch', () => {
+  it('assertAIVideoProviderReady rejects schema mismatch with friendly Chinese only', () => {
     expect(() => assertAIVideoProviderReady('text2video_wan27', 'fal')).toThrow(/服务商不一致/);
+    try {
+      assertAIVideoProviderReady('text2video_wan27', 'fal');
+      expect.unreachable('should throw');
+    } catch (e: any) {
+      const msg = String(e.message);
+      expect(msg).not.toMatch(/targetProvider/);
+      expect(msg).toMatch(/Tensor\.Art/);
+      expect(msg).toMatch(/Fal\.ai/);
+      expect(msg).toMatch(/不会回退到 Fal/);
+      // raw underscore / lowercase provider ids must not appear as the house name
+      expect(msg).not.toMatch(/属于\s*tensorart/);
+      expect(msg).not.toMatch(/当前选的是\s*fal[^.]/);
+    }
   });
 
   it('assertAIVideoProviderReady accepts explicit Fal when model is Fal', () => {

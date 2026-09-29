@@ -1,4 +1,5 @@
 import { NODE_DEFINITIONS } from '../constants/nodes';
+import { friendlyProviderLabel } from './providerLabels';
 
 /**
  * F4: Resolve the schema-declared provider for an AIVideoNode model option.
@@ -15,14 +16,21 @@ export function resolveAIVideoModelProvider(modelId: string): string | undefined
 }
 
 /**
- * F4: Atomically apply a model selection — when the option carries a provider,
- * also set targetProvider and mirrored provider on the same values object.
+ * F4 + soft-visual-4: Atomically apply a model selection.
+ * When the option carries a provider, set targetProvider + mirrored provider.
+ * When model is cleared/empty, CLEAR provider too — never leave Fal selected.
  */
 export function applyAIVideoModelSelection(
   currentValues: Record<string, any>,
   modelId: string
 ): Record<string, any> {
+  const trimmed = (modelId || '').trim();
   const next: Record<string, any> = { ...currentValues, model: modelId };
+  if (!trimmed) {
+    next.targetProvider = '';
+    next.provider = '';
+    return next;
+  }
   const schemaProvider = resolveAIVideoModelProvider(modelId);
   if (schemaProvider) {
     next.targetProvider = schemaProvider;
@@ -32,8 +40,8 @@ export function applyAIVideoModelSelection(
 }
 
 /**
- * F4: Before execute — reject empty provider or schema mismatch.
- * Never fall back to Fal. Returns the trimmed provider on success.
+ * F4 / soft-visual-4: Before execute — reject empty provider or schema mismatch.
+ * Never fall back to Fal. User-facing Chinese only (no targetProvider jargon).
  */
 export function assertAIVideoProviderReady(modelId: string, rawProvider: unknown): string {
   const videoProvider = typeof rawProvider === 'string' ? rawProvider.trim() : '';
@@ -44,8 +52,10 @@ export function assertAIVideoProviderReady(modelId: string, rawProvider: unknown
   }
   const schemaProvider = resolveAIVideoModelProvider(modelId);
   if (schemaProvider && schemaProvider !== videoProvider) {
+    const modelHouse = friendlyProviderLabel(schemaProvider) || schemaProvider;
+    const currentHouse = friendlyProviderLabel(videoProvider) || videoProvider;
     throw new Error(
-      `视频模型与服务商不一致：模型「${modelId}」属于 ${schemaProvider}，当前 targetProvider 为 ${videoProvider}。请重新选择模型以同步服务商，或改选匹配的服务商。不会回退到 Fal。`
+      `视频模型与服务商不一致：模型属于 ${modelHouse}，当前选的是 ${currentHouse}。请重选模型以同步服务商，或改成匹配的服务商。不会回退到 Fal。`
     );
   }
   return videoProvider;

@@ -403,10 +403,13 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
               )}
             </div>
             <select
-              value={params.checkpoint}
+              value={params.checkpoint || ''}
               onChange={(e) => update({ checkpoint: e.target.value })}
               className="w-full bg-[#111216] border border-[#2b2d38] focus:border-cyan-500 rounded-lg px-2.5 py-1.5 text-slate-200 text-[11px] font-mono outline-none cursor-pointer"
+              title={params.checkpoint || '未选择 (请先选择模型)'}
             >
+              {/* Empty must be explicit — otherwise browser shows first MODELSCOPE option */}
+              <option value="">未选择 (请先选择模型)</option>
               {/* Dynamically preserve custom or current checkpoint */}
               {params.checkpoint && !allModels.some((m) => m.value === params.checkpoint) && (
                 <option key={`custom-current-${params.checkpoint}`} value={params.checkpoint}>
