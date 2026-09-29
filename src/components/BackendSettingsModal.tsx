@@ -37,6 +37,22 @@ import {
   saveCloudServerSettings,
 } from '../services/api';
 
+const ALLOWED_CLOUD_SETTINGS_FIELDS = new Set([
+  'falKey',
+  'agnesKey',
+  'sensenovaKey',
+  'civitaiToken',
+  'civitaiKey',
+  'hfToken',
+  'modelscopeToken',
+  'modelscopeAiToken',
+  'nanogptKey',
+  'tensorartKey',
+  'geminiKey',
+  'agnesBaseUrl',
+  'sensenovaBaseUrl',
+]);
+
 interface BackendSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -51,6 +67,7 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
   onSaveKeys,
 }) => {
   const [keys, setKeys] = React.useState<ApiKeysState>(apiKeys);
+  const initialKeysRef = React.useRef<ApiKeysState>(apiKeys);
   const [activeMainTab, setActiveMainTab] = React.useState<'providers' | 'pool' | 'balance' | 'admin'>('providers');
   const [activeProviderTab, setActiveProviderTab] = React.useState<ProviderId>('fal');
   const [testResults, setTestResults] = React.useState<Record<string, { status: string; message: string; latency?: number }>>({});
@@ -95,25 +112,29 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
     const val = e.target.value;
     setAdminToken(val);
     saveStoredAdminToken(val);
+    refreshCloudSettings(val);
+    fetchKeyPoolStats(val).then(setPoolStats);
+    fetchCloudBalances(val).then(setBalances);
   };
 
   const refreshStats = React.useCallback(async () => {
-    const stats = await fetchKeyPoolStats();
+    const stats = await fetchKeyPoolStats(adminToken);
     setPoolStats(stats);
-  }, []);
+  }, [adminToken]);
 
   const refreshBalances = React.useCallback(async () => {
     setIsLoadingBalances(true);
     try {
-      const b = await fetchCloudBalances();
+      const b = await fetchCloudBalances(adminToken);
       setBalances(b);
     } finally {
       setIsLoadingBalances(false);
     }
-  }, []);
+  }, [adminToken]);
 
   React.useEffect(() => {
     setKeys(apiKeys);
+    initialKeysRef.current = apiKeys;
     if (isOpen) {
       refreshStats();
       refreshBalances();
@@ -286,7 +307,7 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       ...prev,
       [`${currentProvider.id}_strategy`]: strat,
     }));
-    await updateKeyPoolStrategy(currentProvider.id, strat);
+    await updateKeyPoolStrategy(currentProvider.id, strat, adminToken);
     refreshStats();
   };
 
@@ -1031,10 +1052,38 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
                       setCloudSaveMessage(null);
                       setCloudSettingsError(null);
                       try {
-                        const res = await saveCloudServerSettings(keys, adminToken);
+                        const payload: Record<string, string> = {};
+                        for (const field of ALLOWED_CLOUD_SETTINGS_FIELDS) {
+                          const val = (keys as any)[field];
+                          if (typeof val !== 'string') continue;
+                          const trimmed = val.trim();
+                          if (!trimmed) continue; // 不发空字符串
+                          // 拒绝掩码值
+                          if (/^.{2,4}(\.\.\.|\*\*\*).{2,4}$/.test(trimmed) || trimmed.includes('...') || trimmed.includes('***')) continue;
+
+                          const initialVal = (initialKeysRef.current as any)?.[field];
+                          const trimmedInitial = typeof initialVal === 'string' ? initialVal.trim() : '';
+                          const cloudVal = cloudSettings[field];
+                          const isCloudConfigured = typeof cloudVal === 'object' && cloudVal !== null && 'configured' in cloudVal
+                            ? cloudVal.configured
+                            : Boolean(cloudVal);
+
+                          // 只发非空且有改动的已知字段（相对初次打开有改动，或云端尚未配置）
+                          if (trimmed !== trimmedInitial || !isCloudConfigured) {
+                            payload[field] = trimmed;
+                          }
+                        }
+
+                        if (Object.keys(payload).length === 0) {
+                          setCloudSaveMessage('没有需要同步的新增或改动字段');
+                          return;
+                        }
+
+                        const res = await saveCloudServerSettings(payload, adminToken);
                         if (res.ok && res.data) {
                           setCloudSettings(res.data);
-                          setCloudSaveMessage('已成功将当前配置同步至云端存储 (POST /api/cloud/settings)');
+                          setCloudSaveMessage('已成功将当前改动配置同步至云端存储 (POST /api/cloud/settings)');
+                          initialKeysRef.current = { ...keys };
                         } else {
                           setCloudSettingsError(`HTTP ${res.status}: ${res.error || '保存云端配置失败'}`);
                         }

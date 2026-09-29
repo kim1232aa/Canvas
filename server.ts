@@ -208,6 +208,72 @@ app.use((req, res, next) => {
   parser(req, res, next);
 });
 
+// Admin authentication & CSRF validation helpers
+function constantTimeCompare(a: string, b: string): boolean {
+  try {
+    const hashA = crypto.createHash('sha256').update(a).digest();
+    const hashB = crypto.createHash('sha256').update(b).digest();
+    return crypto.timingSafeEqual(hashA, hashB);
+  } catch {
+    return false;
+  }
+}
+
+const requireAdminAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const adminToken = process.env.CANVAS_ADMIN_TOKEN?.trim();
+  if (!adminToken) {
+    return res.status(503).json({
+      error: '服务端未配置 CANVAS_ADMIN_TOKEN，拒绝访问',
+    });
+  }
+
+  const authHeader = req.headers['authorization'];
+  if (!authHeader || typeof authHeader !== 'string') {
+    return res.status(401).json({
+      error: '缺少 Authorization 请求头，需提供 Bearer 管理令牌',
+    });
+  }
+
+  const parts = authHeader.trim().split(/\s+/);
+  if (parts.length !== 2 || parts[0].toLowerCase() !== 'bearer') {
+    return res.status(401).json({
+      error: 'Authorization 格式错误，应为 Bearer <token>',
+    });
+  }
+
+  const providedToken = parts[1];
+  if (!constantTimeCompare(providedToken, adminToken)) {
+    return res.status(401).json({
+      error: 'CANVAS_ADMIN_TOKEN 验证失败：管理令牌不匹配',
+    });
+  }
+
+  next();
+};
+
+const checkSecFetchSite = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const fetchSite = req.headers['sec-fetch-site'];
+  if (fetchSite && typeof fetchSite === 'string') {
+    const site = fetchSite.toLowerCase();
+    if (site === 'cross-site' || site === 'same-site') {
+      return res.status(403).json({ error: `跨站请求被拒绝: Sec-Fetch-Site 为 ${fetchSite}` });
+    }
+    if (site === 'same-origin' || site === 'none') {
+      return next();
+    }
+    return res.status(403).json({ error: `跨站请求被拒绝: Sec-Fetch-Site 为 ${fetchSite}` });
+  }
+
+  // 缺省时回退到 Origin 判断
+  const origin = req.headers.origin;
+  if (origin !== undefined && !ALLOWED_ORIGINS.has(origin)) {
+    return res.status(403).json({
+      error: `Origin 请求头被拒绝：收到 ${JSON.stringify(origin)}，仅允许 ${[...ALLOWED_ORIGINS].join(' / ')}`,
+    });
+  }
+  next();
+};
+
 // Persistent Storage Directories
 const DATA_DIR = path.join(__dirname, 'data');
 if (!fs.existsSync(DATA_DIR)) {
@@ -458,7 +524,6 @@ class KeyPoolManager {
     } else {
       entry.failedCalls++;
       entry.consecutiveFailures++;
-      entry.lastError = errorMsg;
       const errLower = (errorMsg || '').toLowerCase();
       const isRate =
         statusCode === 429 ||
@@ -480,6 +545,23 @@ class KeyPoolManager {
         errLower.includes('invalid_api_key') ||
         errLower.includes('unauthorized') ||
         errLower.includes('forbidden');
+
+      let errorSummary = 'error';
+      if (errLower.includes('timeout') || errLower.includes('etimedout')) {
+        errorSummary = 'timeout';
+      } else if (errLower.includes('econnrefused') || errLower.includes('econnreset') || errLower.includes('fetch failed')) {
+        errorSummary = 'network_error';
+      } else if (statusCode > 0) {
+        errorSummary = `HTTP ${statusCode}`;
+      } else if (isRate) {
+        errorSummary = 'rate_limited';
+      } else if (isInvalid) {
+        errorSummary = 'invalid_key';
+      }
+      if (key && errorSummary.includes(key)) {
+        errorSummary = errorSummary.replaceAll(key, maskSecret(key));
+      }
+      entry.lastError = errorSummary;
 
       if (isRate) {
         entry.status = 'rate_limited';
@@ -6498,18 +6580,35 @@ app.post('/api/test-provider', async (req, res) => {
 });
 
 // Cloud Multi-Key Pool Stats
-app.get('/api/cloud-keys/stats', (_req, res) => {
+app.get('/api/cloud-keys/stats', requireAdminAuth, (_req, res) => {
   keyPoolManager.refreshFromSettings();
   return res.json(keyPoolManager.getStats());
 });
 
+const VALID_STRATEGY_PROVIDERS = new Set([
+  'fal',
+  'agnes',
+  'sensenova',
+  'civitai',
+  'huggingface',
+  'modelscope',
+  'modelscope_ai',
+  'nanogpt',
+  'tensorart',
+  'gemini',
+]);
+const VALID_STRATEGIES = new Set(['round_robin', 'failover', 'latency_best']);
+
 // Update Key Pool Strategy
-app.post('/api/cloud-keys/strategy', (req, res) => {
+app.post('/api/cloud-keys/strategy', requireAdminAuth, (req, res) => {
   const { provider, strategy } = req.body;
-  if (!provider || !strategy) {
-    return res.status(400).json({ error: 'Missing provider or strategy' });
+  if (!provider || typeof provider !== 'string' || !VALID_STRATEGY_PROVIDERS.has(provider)) {
+    return res.status(400).json({ error: `未知或不支持的 provider: "${provider}"` });
   }
-  keyPoolManager.setStrategy(provider, strategy);
+  if (!strategy || typeof strategy !== 'string' || !VALID_STRATEGIES.has(strategy)) {
+    return res.status(400).json({ error: `不支持的策略: "${strategy}"。仅支持: round_robin, failover, latency_best` });
+  }
+  keyPoolManager.setStrategy(provider, strategy as any);
   cloudSettings[`${provider}_strategy`] = strategy;
   writeJsonFile(SETTINGS_FILE, cloudSettings);
   return res.json({ success: true, provider, strategy });
@@ -6562,7 +6661,14 @@ app.post('/api/cloud-keys/test-single', async (req, res) => {
 });
 
 // Balance & Quota Query Endpoint
-app.get('/api/cloud-keys/balances', async (_req, res) => {
+// Only POST may trigger balance checks (a cross-site <img> can only send GET).
+app.all('/api/cloud-keys/balances', (req, res, next) => {
+  if (req.method === 'POST') return next();
+  res.setHeader('Allow', 'POST');
+  return res.status(405).json({ error: 'Method Not Allowed: /api/cloud-keys/balances 仅接受 POST 请求' });
+});
+
+app.post('/api/cloud-keys/balances', requireAdminAuth, checkSecFetchSite, async (_req, res) => {
   const balances: Record<string, any> = {};
 
   // Parallel checks for providers
@@ -7013,49 +7119,29 @@ app.post('/api/cloud/projects/:id/clone', (req, res) => {
 // ==========================================
 // 10. Server-Side Settings / Credentials Storage
 // ==========================================
-function constantTimeCompare(a: string, b: string): boolean {
-  try {
-    const hashA = crypto.createHash('sha256').update(a).digest();
-    const hashB = crypto.createHash('sha256').update(b).digest();
-    return crypto.timingSafeEqual(hashA, hashB);
-  } catch {
-    return false;
-  }
-}
+const ALLOWED_SETTINGS_SECRET = new Set([
+  'falKey',
+  'agnesKey',
+  'sensenovaKey',
+  'civitaiToken',
+  'civitaiKey',
+  'hfToken',
+  'modelscopeToken',
+  'modelscopeAiToken',
+  'nanogptKey',
+  'tensorartKey',
+  'geminiKey',
+]);
 
-const requireAdminAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-  const adminToken = process.env.CANVAS_ADMIN_TOKEN?.trim();
-  if (!adminToken) {
-    return res.status(503).json({
-      error: '服务端未配置 CANVAS_ADMIN_TOKEN，拒绝访问',
-    });
-  }
+const ALLOWED_SETTINGS_PLAIN = new Set([
+  'agnesBaseUrl',
+  'sensenovaBaseUrl',
+]);
 
-  const authHeader = req.headers['authorization'];
-  if (!authHeader || typeof authHeader !== 'string') {
-    return res.status(401).json({
-      error: '缺少 Authorization 请求头，需提供 Bearer 管理令牌',
-    });
-  }
-
-  const parts = authHeader.trim().split(/\s+/);
-  if (parts.length !== 2 || parts[0].toLowerCase() !== 'bearer') {
-    return res.status(401).json({
-      error: 'Authorization 格式错误，应为 Bearer <token>',
-    });
-  }
-
-  const providedToken = parts[1];
-  if (!constantTimeCompare(providedToken, adminToken)) {
-    return res.status(401).json({
-      error: 'CANVAS_ADMIN_TOKEN 验证失败：管理令牌不匹配',
-    });
-  }
-
-  next();
-};
+const ALLOWED_SETTINGS = new Set([...ALLOWED_SETTINGS_SECRET, ...ALLOWED_SETTINGS_PLAIN]);
 
 const isSecretKeyField = (fieldName: string): boolean => {
+  if (ALLOWED_SETTINGS_SECRET.has(fieldName)) return true;
   const lower = fieldName.toLowerCase();
   return (
     lower.includes('key') ||
@@ -7092,9 +7178,45 @@ app.post('/api/cloud/settings', requireAdminAuth, (req, res) => {
     return res.status(400).json({ error: '请求体必须为有效的 JSON 对象' });
   }
 
+  // 1. 字段白名单校验
+  for (const field of Object.keys(req.body)) {
+    if (!ALLOWED_SETTINGS.has(field)) {
+      return res.status(400).json({ error: `不支持的设置字段: "${field}"` });
+    }
+  }
+
+  // 2. 类型检查：值必须为字符串
+  for (const [field, val] of Object.entries(req.body)) {
+    if (val !== undefined && typeof val !== 'string') {
+      return res.status(400).json({ error: `字段 "${field}" 的值必须为字符串` });
+    }
+  }
+
+  // 3. 处理更新：空字符串/undefined 视为「不修改」；拒绝掩码格式的值或等于当前掩码值的输入
+  const updates: Record<string, string> = {};
+  for (const [field, val] of Object.entries(req.body)) {
+    if (val === undefined || (typeof val === 'string' && val.trim() === '')) {
+      continue; // 空字符串/undefined 视为不修改
+    }
+    const trimmedVal = (val as string).trim();
+    if (ALLOWED_SETTINGS_SECRET.has(field)) {
+      if (/^.{2,4}(\.\.\.|\*\*\*).{2,4}$/.test(trimmedVal) || trimmedVal.includes('...') || trimmedVal.includes('***')) {
+        return res.status(400).json({ error: `拒绝保存掩码值到字段 "${field}"，请提供真实完整密钥或留空表示不修改` });
+      }
+      const currentVal = cloudSettings[field];
+      if (typeof currentVal === 'string' && currentVal.trim()) {
+        const currentMasked = keyPoolManager.maskKey(currentVal.trim());
+        if (trimmedVal === currentMasked) {
+          return res.status(400).json({ error: `拒绝保存与当前掩码相同的值到字段 "${field}"` });
+        }
+      }
+    }
+    updates[field] = trimmedVal;
+  }
+
   cloudSettings = {
     ...cloudSettings,
-    ...req.body,
+    ...updates,
   };
   writeJsonFile(SETTINGS_FILE, cloudSettings);
   keyPoolManager.refreshFromSettings();

@@ -703,9 +703,14 @@ export const saveCloudServerSettings = async (
   }
 };
 
-export const fetchKeyPoolStats = async (): Promise<Record<string, any>> => {
+export const fetchKeyPoolStats = async (token?: string): Promise<Record<string, any>> => {
+  const effectiveToken = (token !== undefined ? token : getStoredAdminToken()).trim();
+  const headers: Record<string, string> = {};
+  if (effectiveToken) {
+    headers['Authorization'] = `Bearer ${effectiveToken}`;
+  }
   try {
-    const resp = await fetch('/api/cloud-keys/stats');
+    const resp = await fetch('/api/cloud-keys/stats', { headers });
     if (resp.ok) return await resp.json();
   } catch (e) {
     console.error('Fetch key pool stats error:', e);
@@ -713,11 +718,20 @@ export const fetchKeyPoolStats = async (): Promise<Record<string, any>> => {
   return {};
 };
 
-export const updateKeyPoolStrategy = async (provider: string, strategy: 'round_robin' | 'failover' | 'latency_best'): Promise<boolean> => {
+export const updateKeyPoolStrategy = async (
+  provider: string,
+  strategy: 'round_robin' | 'failover' | 'latency_best',
+  token?: string
+): Promise<boolean> => {
+  const effectiveToken = (token !== undefined ? token : getStoredAdminToken()).trim();
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (effectiveToken) {
+    headers['Authorization'] = `Bearer ${effectiveToken}`;
+  }
   try {
     const resp = await fetch('/api/cloud-keys/strategy', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({ provider, strategy }),
     });
     return resp.ok;
@@ -741,9 +755,20 @@ export const testSingleKey = async (provider: string, key: string): Promise<{ st
   }
 };
 
-export const fetchCloudBalances = async (): Promise<Record<string, { status: string; detail: string; amount?: number | string }>> => {
+export const fetchCloudBalances = async (token?: string): Promise<Record<string, { status: string; detail: string; amount?: number | string }>> => {
+  const effectiveToken = (token !== undefined ? token : getStoredAdminToken()).trim();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (effectiveToken) {
+    headers['Authorization'] = `Bearer ${effectiveToken}`;
+  }
   try {
-    const resp = await fetch('/api/cloud-keys/balances');
+    const resp = await fetch('/api/cloud-keys/balances', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({}),
+    });
     if (resp.ok) return await resp.json();
   } catch (e) {
     console.error('Fetch cloud balances error:', e);
