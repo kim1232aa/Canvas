@@ -371,13 +371,25 @@ export function isLoraUnsupportedOnEndpoint(
   model: string | undefined
 ): { unsupported: boolean; message?: string } {
   const modelId = (model || '').trim();
-  if (!modelId) return { unsupported: false };
-
   let prov = (provider || '').toLowerCase().trim();
   if (!prov && modelId.startsWith('fal-ai/')) prov = 'fal';
   if (prov === 'video' && modelId.startsWith('fal-ai/')) prov = 'fal';
 
   const schemaProv = toSchemaProvider(prov);
+
+  // Empty / no real checkpoint: do NOT fall back to the first schema model
+  // (Fal's first is fal-ai/flux-lora which supports LoRA — that painted green 兼容).
+  // Grey the same way as 导入即灰; keep stored values; do not send.
+  if (!modelId) {
+    if (schemaProv) {
+      return {
+        unsupported: true,
+        message: `该服务商不支持（未选择具体模型 / checkpoint，无法确认 LoRA 支持）`,
+      };
+    }
+    return { unsupported: false };
+  }
+
   if (!schemaProv) return { unsupported: false };
 
   const schemaModel = resolveSchemaModelId(schemaProv, modelId);
@@ -490,6 +502,10 @@ export function isCanvasFieldUnsupported(
 ): boolean {
   const schemaProv = toSchemaProvider(provider);
   if (!schemaProv) return false;
+  const modelId = String(model || '').trim();
+  // Empty checkpoint + loras: never pretend the first schema model was selected.
+  // Fal's first model is fal-ai/flux-lora (loras supported) — empty must stay grey / not sent.
+  if (!modelId && field === 'loras') return true;
   // resolveSchemaModelId: empty / foreign checkpoint (e.g. after engine switch) → first schema model
   // so Fal/Agnes/HF/Grok/OpenAI grey unsupported fields immediately, matching Grok-compat.
   const schemaModel = resolveSchemaModelId(schemaProv, model);

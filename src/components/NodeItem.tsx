@@ -899,11 +899,12 @@ export const NodeItem: React.FC<NodeItemProps> = ({
           })}
 
           {/* LoRA Architecture Compatibility & One-Click Auto-Pairing Banner */}
-          {node.type === 'LoRALoader' && node.values.lora_name && currentCheckpoint && (
+          {node.type === 'LoRALoader' && node.values.lora_name && (currentCheckpoint || currentProvider) && (
             (() => {
-              const currentProv = currentProvider || node.values?.targetProvider || (currentCheckpoint.startsWith('fal-ai/') ? 'fal' : (currentCheckpoint.includes("krea-ai") || currentCheckpoint.includes("black-forest") || currentCheckpoint.includes("stabilityai") ? "huggingface" : undefined));
+              const ckpt = currentCheckpoint || '';
+              const currentProv = currentProvider || node.values?.targetProvider || (ckpt.startsWith('fal-ai/') ? 'fal' : (ckpt.includes("krea-ai") || ckpt.includes("black-forest") || ckpt.includes("stabilityai") ? "huggingface" : undefined));
               const compat = validateLoraCompatibility(
-                currentCheckpoint,
+                ckpt,
                 node.values.base_model,
                 node.values.lora_name,
                 currentProv
@@ -913,7 +914,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                   <div className="mt-1 px-2 py-1 rounded bg-emerald-950/40 border border-emerald-800/40 text-[10px] text-emerald-300 flex items-center justify-between font-mono">
                     <span className="flex items-center gap-1">
                       <Sparkles className="w-3 h-3 text-emerald-400" />
-                      底模兼容 ({currentCheckpoint.split('/').pop()})
+                      底模兼容 ({ckpt.split('/').pop()})
                     </span>
                     <span className="text-[9px] text-emerald-400/80">OK</span>
                   </div>
@@ -936,14 +937,14 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                     <AlertCircle className="w-3.5 h-3.5 shrink-0 text-amber-400" />
                     <span>底模架构不匹配</span>
                   </div>
-                  <p className="text-amber-300/80 leading-tight">
-                    当前前置底模为 <span className="font-mono text-white">{currentCheckpoint.split('/').pop()}</span>，但此 LoRA 需要 <span className="font-mono text-cyan-300 font-bold">{compat.recommendedCheckpoint?.split('/').pop()}</span> 官方架构。
+                  <p className="text-amber-200/90 leading-tight">
+                    {compat.message}
                   </p>
                   {onAutoFixCheckpoint && compat.recommendedCheckpoint && (
                     <button
                       onClick={() => onAutoFixCheckpoint(compat.recommendedCheckpoint!)}
                       className="w-full py-1.5 px-2 rounded-lg bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold flex items-center justify-center gap-1 transition-all shadow-md text-[10px] active:scale-95"
-                      title="一键将前置 CheckpointLoader 节点的模型切换为匹配底模"
+                      title="一键将前置 CheckpointLoader 节点的模型切换为匹配底模（可选；不会自动触发）"
                     >
                       <Sparkles className="w-3 h-3 text-amber-200" />
                       <span>⚡ 一键自动配对前置底模</span>

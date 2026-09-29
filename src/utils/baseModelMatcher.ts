@@ -319,9 +319,14 @@ export function validateModelCompatibility(
     if (prov === "huggingface") targetRecCheckpoint = "runwayml/stable-diffusion-v1-5";
   }
   
+  const ckptArch = ARCHITECTURE_PROFILES[ckptFamily].displayName;
+  const loraArch = rec.displayName;
+  const loraBase = loraBaseModelRaw || loraArch;
   return {
     isCompatible: false,
-    message: `⚠️ 架构不匹配：当前底模为【${checkpointName}】，但 LoRA 基于【${loraBaseModelRaw || rec.displayName}】。`,
+    message:
+      `底模架构不匹配：当前底模为【${checkpointName}】（${ckptArch}），但此 LoRA 基于【${loraBase}】（${loraArch}）。` +
+      `请自行选择与该 LoRA 匹配的底模；已保留当前 LoRA / 负向 / seed，不会自动清空或切换。`,
     recommendedCheckpoint: targetRecCheckpoint,
   };
 }

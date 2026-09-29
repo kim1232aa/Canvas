@@ -22,6 +22,7 @@ import { ComfyParameters } from '../types/graph';
 import { BASE_MODELS, SAMPLER_OPTIONS, SCHEDULER_OPTIONS } from '../constants/nodes';
 import { refinePromptWithGemini, fetchLiveModels, getRefineModelSelection } from '../services/api';
 import { validateLoraCompatibility } from '../utils/baseModelMatcher';
+import { isLoraUnsupportedOnEndpoint } from '../utils/resolveCheckpoint';
 import { normalizeForComfyUI } from '../utils/engineParameterNormalizer';
 import { GeminiFieldSelect } from './GeminiFieldSelect';
 import { FieldStatusBadge } from './FieldStatusBadge';
@@ -168,7 +169,11 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
   const greySampler = isOpenAiCompat || isGrokCompat || fieldUnsupported('sampler');
   const greyScheduler = isOpenAiCompat || isGrokCompat || fieldUnsupported('scheduler');
   const greyDenoise = isOpenAiCompat || isGrokCompat || fieldUnsupported('denoise');
-  const greyLoras = isOpenAiCompat || isGrokCompat || fieldUnsupported('loras');
+  const endpointLoraUnsupported = isLoraUnsupportedOnEndpoint(
+    params.targetProvider || (params.checkpoint?.startsWith('fal-ai/') ? 'fal' : undefined),
+    params.checkpoint,
+  ).unsupported;
+  const greyLoras = isOpenAiCompat || isGrokCompat || fieldUnsupported('loras') || endpointLoraUnsupported;
   const greyWidthHeight = isGemini || isOpenAiCompat || isGrokCompat || fieldUnsupported('width') || fieldUnsupported('height');
   const greyNegative = isOpenAiCompat || isGrokCompat || fieldUnsupported('negative_prompt');
   const greyNumImages = fieldUnsupported('num_images');

@@ -272,9 +272,65 @@ describe('Fal / Agnes / HF / NanoGPT grey on engine switch (schema-driven)', () 
     expect(isCanvasFieldUnsupported('fal', 'fal-ai/flux/schnell', 'steps')).toBe(false);
     expect(isCanvasFieldUnsupported('fal', 'fal-ai/flux-lora', 'loras')).toBe(false);
     expect(isCanvasFieldUnsupported('fal', 'fal-ai/flux-lora', 'negative_prompt')).toBe(true);
-    // empty / foreign checkpoint falls back to first fal model (flux-lora)
+    // empty / foreign checkpoint falls back to first fal model (flux-lora) for non-lora fields
     expect(isCanvasFieldUnsupported('fal', '', 'sampler')).toBe(true);
+    // empty Fal must NOT treat flux-lora fallback as a real LoRA-capable selection
+    expect(isCanvasFieldUnsupported('fal', '', 'loras')).toBe(true);
     expect(sanitizeFrameLoras('fal', 'fal-ai/flux/schnell', left)).toEqual(left);
+  });
+
+  it('empty Fal checkpoint: LoRA greys 该服务商不支持; values kept; not sent; flux-lora stays usable', () => {
+    const left = [{ name: 'koda.safetensors', modelStrength: 0.8 }];
+
+    const emptyBadge = isLoraUnsupportedOnEndpoint('fal', '');
+    expect(emptyBadge.unsupported).toBe(true);
+    expect(emptyBadge.message).toMatch(/该服务商不支持/);
+
+    const emptyCompat = validateLoraCompatibility('', 'Flux.1 D', 'koda', 'fal');
+    expect(emptyCompat.isCompatible).toBe(false);
+    expect(emptyCompat.endpointUnsupported).toBe(true);
+    expect(emptyCompat.message).toMatch(/该服务商不支持/);
+    expect(emptyCompat.message).not.toMatch(/兼容/);
+
+    // Real fal-ai/flux-lora selection must still allow LoRA
+    const fluxLoraBadge = isLoraUnsupportedOnEndpoint('fal', 'fal-ai/flux-lora');
+    expect(fluxLoraBadge.unsupported).toBe(false);
+    const fluxLoraCompat = validateLoraCompatibility('fal-ai/flux-lora', 'Flux.1 D', 'koda', 'fal');
+    expect(fluxLoraCompat.endpointUnsupported).not.toBe(true);
+    expect(fluxLoraCompat.isCompatible).toBe(true);
+
+    // flux/dev stays unsupported
+    const devBadge = isLoraUnsupportedOnEndpoint('fal', 'fal-ai/flux/dev');
+    expect(devBadge.unsupported).toBe(true);
+    expect(devBadge.message).toMatch(/该服务商不支持/);
+
+    expect(sanitizeFrameLoras('fal', '', left)).toEqual(left);
+    const omitted = omitUnsupportedGenerateFields('fal', '', {
+      prompt: 'hi',
+      loras: left,
+      seed: 1,
+    });
+    expect(omitted.prompt).toBe('hi');
+    expect(omitted.loras).toBeUndefined();
+    expect(omitted.seed).toBe(1); // seed still via flux-lora fallback for non-lora fields
+  });
+
+  it('ModelScope mismatch message states why + next step; does not imply values cleared', () => {
+    const compat = validateLoraCompatibility(
+      'Tongyi-MAI/Z-Image-Turbo',
+      'Flux.1 D',
+      '[Flux1] Asian Mix Lora - Krea/Dev.safetensors',
+      'modelscope_ai'
+    );
+    expect(compat.isCompatible).toBe(false);
+    expect(compat.endpointUnsupported).not.toBe(true);
+    expect(compat.message).toMatch(/底模架构不匹配/);
+    expect(compat.message).toMatch(/Z-Image-Turbo/);
+    expect(compat.message).toMatch(/Flux\.1 D|FLUX/);
+    expect(compat.message).toMatch(/请自行选择/);
+    expect(compat.message).toMatch(/已保留/);
+    expect(compat.message).toMatch(/不会自动清空/);
+    expect(compat.message).not.toMatch(/已清空|已清除|已删除/);
   });
 
   it('NanoGPT flux-schnell greys loras and negative; keeps seed; does not wipe LoRAs', () => {
