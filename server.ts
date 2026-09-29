@@ -1,4 +1,3 @@
-import { HfInference } from '@huggingface/inference';
 import express from 'express';
 import crypto from 'crypto';
 import dns from 'dns';
@@ -697,7 +696,11 @@ app.get('/api/huggingface/model-info', async (req, res) => {
 
     const safeModelPath = modelId.split('/').map(encodeURIComponent).join('/');
     const url = `https://huggingface.co/api/models/${safeModelPath}?expand[]=siblings&expand[]=tags&expand[]=likes&expand[]=pipeline_tag&expand[]=author&expand[]=cardData`;
-    const resp = await fetch(url, { headers, signal: AbortSignal.timeout(15000) });
+    const resp = await upstreamFetch(
+      { provider: 'huggingface', route: req.path, model: modelId, key: hfToken },
+      url,
+      { headers, signal: AbortSignal.timeout(15000) }
+    );
     if (!resp.ok) {
       const errText = await resp.text();
       return res.status(resp.status).json({
@@ -4961,30 +4964,26 @@ app.post(['/api/tensorart/generate', '/api/engine/tensorart/generate'], async (r
 // 3. Hugging Face Inference API (huggingface.co/docs)
 // ==========================================
 app.post(['/api/huggingface/generate', '/api/engine/huggingface/generate'], async (req, res) => {
+  const startTime = Date.now();
   try {
     const {
       prompt,
       negative_prompt,
-      model = 'black-forest-labs/FLUX.1-schnell',
-      width = 960,
-      height = 1440,
-      steps = 8,
-      guidance = 1.0,
+      model,
+      width,
+      height,
+      steps,
+      guidance,
       seed,
-      loras = [],
     } = req.body;
-    const hfToken =
-      (req.headers['x-hf-token'] as string) ||
-      cloudSettings['hfToken'] ||
-      defaultKeys['hfToken'] ||
-      process.env.HF_TOKEN ||
-      '';
+    if (!model) return res.status(400).json({ error: '模型为必填项（model is required）' });
 
+    const hfToken = keyPoolManager.getNextKey('huggingface', (req.headers['x-hf-token'] as string) || undefined) || '';
+
+    const normalizedModel = (model || '').trim().toLowerCase();
     const isZImage =
-      model.toLowerCase().includes('z-image') ||
-      model.toLowerCase().includes('z_image') ||
-      model.toLowerCase().includes('radiancechrome') ||
-      (Array.isArray(loras) && loras.some((l: any) => (l.name || '').toLowerCase().includes('radiancechrome') || (l.name || '').toLowerCase().includes('z-image')));
+      normalizedModel === 'tongyi-mai/z-image-turbo' ||
+      normalizedModel === 'z-image-turbo';
 
     if (!hfToken && !isZImage) {
       return res.status(400).json({
@@ -4992,39 +4991,89 @@ app.post(['/api/huggingface/generate', '/api/engine/huggingface/generate'], asyn
       });
     }
 
-    // Extract triggers and inject into prompt
-    let finalPrompt = prompt || '';
-    if (Array.isArray(loras) && loras.length > 0) {
-      const triggers = loras.map((l: any) => l.triggers || l.triggerWords).filter(Boolean).join(', ');
-      if (triggers && !finalPrompt.includes(triggers)) {
-        finalPrompt = `${triggers}, ${finalPrompt}`.trim();
-      }
-    }
+    // HF text-to-image task schema has no LoRA field; Z-Image Space sends an empty LoRA list. Never silently drop.
+    if (rejectUnsupported(res, 'Hugging Face', req.body, ['loras', 'cfg', 'denoise', 'image_url'])) return;
+    // Z-Image Space inputs: prompt, resolution, seed, steps (shift fixed) — no negative prompt / guidance.
+    if (isZImage && rejectUnsupported(res, 'Hugging Face Z-Image Space', req.body, ['negative_prompt', 'guidance'])) return;
 
+    const finalPrompt = prompt || '';
     let dataUrl = '';
+    let sentSeed: number | null = null;
+    let sentSteps: number | null = null;
+    let sentCfg: number | null = null;
 
     if (isZImage) {
-      // 🌟 Direct integration with verified official Tongyi-MAI/Z-Image-Turbo Gradio Space on Hugging Face (Public Space)
-      const w = Number(width) || 960;
-      const h = Number(height) || 1440;
-      let ratioChoice = '1120x1440 ( 7:9 )';
-      if (Math.abs(w - h) < 100) {
-        ratioChoice = '1024x1024 ( 1:1 )';
-      } else if (w > h) {
-        ratioChoice = '1280x720 ( 16:9 )';
-      } else if (h / w > 1.6) {
-        ratioChoice = '720x1280 ( 9:16 )';
-      } else {
-        ratioChoice = '1120x1440 ( 7:9 )';
+      // H2: 🌟 Direct integration with verified official Tongyi-MAI/Z-Image-Turbo Gradio Space on Hugging Face (Public Space)
+      const Z_IMAGE_RESOLUTIONS = new Set([
+        '1024x1024 ( 1:1 )',
+        '720x1280 ( 9:16 )',
+        '1280x720 ( 16:9 )',
+        '1120x1440 ( 7:9 )',
+        '1440x1120 ( 9:7 )',
+        '960x1440 ( 2:3 )',
+        '1440x960 ( 3:2 )',
+        '864x1536 ( 9:16 )',
+        '1536x864 ( 16:9 )',
+        '768x1344 ( 9:16 )',
+        '1344x768 ( 16:9 )',
+        '896x1152 ( 3:4 )',
+        '1152x896 ( 4:3 )',
+        '704x1408 ( 1:2 )',
+        '1408x704 ( 2:1 )',
+        '640x1536 ( 5:12 )',
+        '1536x640 ( 12:5 )',
+        '1024x1536 ( 2:3 )',
+        '1536x1024 ( 3:2 )',
+        '1024x1280 ( 4:5 )',
+        '1280x1024 ( 5:4 )',
+        '1024x1344 ( 3:4 )',
+        '1344x1024 ( 4:3 )',
+        '1024x1440 ( 5:7 )',
+        '1440x1024 ( 7:5 )',
+        '960x1280 ( 3:4 )',
+        '1280x960 ( 4:3 )',
+        '960x1536 ( 5:8 )',
+        '1536x960 ( 8:5 )',
+        '896x1280 ( 7:10 )',
+        '1280x896 ( 10:7 )',
+        '896x1344 ( 2:3 )',
+        '1344x896 ( 3:2 )',
+      ]);
+
+      if (isProvided(width) || isProvided(height)) {
+        return res.status(400).json({
+          error: 'Tongyi-MAI/Z-Image-Turbo 不支持直接传 width/height，只接受官方接口列出的 resolution 取值（如 "1024x1024 ( 1:1 )"）',
+          unsupported: [isProvided(width) ? 'width' : '', isProvided(height) ? 'height' : ''].filter(Boolean),
+        });
       }
 
-      const seedNum = (typeof seed === 'number' && seed >= 0) ? seed : 876105816987345;
-      const stepsNum = Number(steps) || 8;
+      const resolution = req.body.resolution;
+      if (!resolution || !Z_IMAGE_RESOLUTIONS.has(resolution)) {
+        return res.status(400).json({
+          error: `不支持或缺失的 resolution 取值 "${resolution || ''}"。Tongyi-MAI/Z-Image-Turbo 仅支持 Space 官方列出的 33 种分辨率选项。`,
+        });
+      }
+
+      if (!isProvided(seed)) {
+        return res.status(400).json({
+          error: 'Tongyi-MAI/Z-Image-Turbo 必填 seed 参数（该 Space 位置参数必填，服务端不编造默认值）',
+        });
+      }
+      if (!isProvided(steps)) {
+        return res.status(400).json({
+          error: 'Tongyi-MAI/Z-Image-Turbo 必填 steps 参数（该 Space 位置参数必填，服务端不编造默认值）',
+        });
+      }
+
+      const seedNum = Number(seed);
+      const stepsNum = Number(steps);
+      sentSeed = seedNum;
+      sentSteps = stepsNum;
 
       const gradioPayload = {
         data: [
           finalPrompt,
-          ratioChoice,
+          resolution,
           seedNum,
           stepsNum,
           3.0,
@@ -5036,11 +5085,11 @@ app.post(['/api/huggingface/generate', '/api/engine/huggingface/generate'], asyn
       const gradioHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
       if (hfToken) gradioHeaders['Authorization'] = `Bearer ${hfToken}`;
 
-      const initResp = await fetch('https://tongyi-mai-z-image-turbo.hf.space/gradio_api/call/generate', {
-        method: 'POST',
-        headers: gradioHeaders,
-        body: JSON.stringify(gradioPayload),
-      });
+      const initResp = await upstreamFetch(
+        { provider: 'huggingface', route: '/api/huggingface/generate', model, key: hfToken },
+        'https://tongyi-mai-z-image-turbo.hf.space/gradio_api/call/generate',
+        { method: 'POST', headers: gradioHeaders, body: JSON.stringify(gradioPayload) }
+      );
 
       if (!initResp.ok) {
         const errText = await initResp.text();
@@ -5064,9 +5113,11 @@ app.post(['/api/huggingface/generate', '/api/engine/huggingface/generate'], asyn
       const sseHeaders: Record<string, string> = {};
       if (hfToken) sseHeaders['Authorization'] = `Bearer ${hfToken}`;
 
-      const sseResp = await fetch(`https://tongyi-mai-z-image-turbo.hf.space/gradio_api/call/generate/${eventId}`, {
-        headers: sseHeaders,
-      });
+      const sseResp = await upstreamFetch(
+        { provider: 'huggingface', route: '/api/huggingface/generate', model, key: hfToken },
+        `https://tongyi-mai-z-image-turbo.hf.space/gradio_api/call/generate/${eventId}`,
+        { headers: sseHeaders }
+      );
 
       if (!sseResp.ok) {
         const sseErr = await sseResp.text();
@@ -5099,9 +5150,11 @@ app.post(['/api/huggingface/generate', '/api/engine/huggingface/generate'], asyn
         });
       }
 
-      const imgResp = await fetch(genUrl, {
-        headers: { 'Authorization': `Bearer ${hfToken}` },
-      });
+      const imgResp = await upstreamFetch(
+        { provider: 'huggingface', route: '/api/huggingface/generate', model, key: hfToken },
+        genUrl,
+        { headers: { 'Authorization': `Bearer ${hfToken}` } }
+      );
       if (imgResp.ok) {
         const buf = await imgResp.arrayBuffer();
         const base64 = Buffer.from(buf).toString('base64');
@@ -5111,101 +5164,63 @@ app.post(['/api/huggingface/generate', '/api/engine/huggingface/generate'], asyn
         dataUrl = genUrl;
       }
     } else {
-      const maxScale = Array.isArray(loras) && loras.length > 0
-        ? Math.max(...loras.map((l: any) => Number(l.scale ?? l.strength ?? l.modelStrength ?? 0.8)))
-        : undefined;
+      // HF text-to-image task: only forward what the caller provided; no defaults, no SDK→router retry.
+      const parameters: Record<string, any> = {};
+      if (isProvided(negative_prompt)) parameters.negative_prompt = negative_prompt;
+      if (isProvided(width)) parameters.width = Number(width);
+      if (isProvided(height)) parameters.height = Number(height);
+      if (isProvided(steps)) parameters.num_inference_steps = Number(steps);
+      if (isProvided(guidance)) parameters.guidance_scale = Number(guidance);
+      if (typeof seed === 'number' && seed >= 0) parameters.seed = seed;
 
-      const payload: any = {
-        inputs: finalPrompt,
-        parameters: {
-          negative_prompt: negative_prompt || undefined,
-          width: Number(width) || 1024,
-          height: Number(height) || 1024,
-          num_inference_steps: Number(steps) || 25,
-          guidance_scale: Number(guidance) || 7.5,
-        },
-      };
-
-      if (maxScale !== undefined) {
-        payload.parameters.cross_attention_kwargs = { scale: maxScale };
-      }
-      if (typeof seed === 'number' && seed >= 0) {
-        payload.parameters.seed = seed;
-      }
-
-      try {
-        const hf = new HfInference(hfToken);
-        const blob = await hf.textToImage({
-          model,
-          inputs: finalPrompt,
-          parameters: {
-            negative_prompt: negative_prompt || undefined,
-            num_inference_steps: Number(steps) || 25,
-            guidance_scale: Number(guidance) || 7.5,
-            width: Number(width) || 1024,
-            height: Number(height) || 1024,
-            seed: typeof seed === 'number' ? seed : undefined,
-          },
-        }) as any;
-
-        if (typeof blob === 'string') {
-          throw new Error(`HF returned string instead of blob: ${blob}`);
-        }
-
-        const arrayBuffer = await blob.arrayBuffer();
-        const base64 = Buffer.from(arrayBuffer).toString('base64');
-        const mimeType = blob.type || 'image/jpeg';
-        dataUrl = `data:${mimeType};base64,${base64}`;
-      } catch (sdkErr: any) {
-        console.warn('Hugging Face SDK failed, trying direct router HTTP:', sdkErr.message);
-        const resp = await fetch(`https://router.huggingface.co/hf-inference/models/${model}`, {
+      const resp = await upstreamFetch(
+        { provider: 'huggingface', route: '/api/huggingface/generate', model, key: hfToken },
+        `https://router.huggingface.co/hf-inference/models/${model}`,
+        {
           method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${hfToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(payload),
-        });
-
-        if (!resp.ok) {
-          const errorText = await resp.text();
-          let parsedError;
-          try { parsedError = JSON.parse(errorText); } catch { parsedError = { error: errorText }; }
-          
-          return res.status(resp.status).json({
-            error: `Hugging Face 模型推理失败 [${resp.status}]`,
-            details: parsedError.error || parsedError.message || errorText,
-            model,
-          });
+          headers: { 'Authorization': `Bearer ${hfToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ inputs: finalPrompt, parameters }),
         }
+      );
 
-        const buffer = await resp.arrayBuffer();
-        const base64 = Buffer.from(buffer).toString('base64');
-        const mimeType = resp.headers.get('content-type') || 'image/jpeg';
-        dataUrl = `data:${mimeType};base64,${base64}`;
+      if (!resp.ok) {
+        const errorText = await resp.text();
+        keyPoolManager.recordResult('huggingface', hfToken, false, 0, errorText, resp.status);
+        let parsedError: any;
+        try { parsedError = JSON.parse(errorText); } catch { parsedError = { error: errorText }; }
+        return res.status(resp.status).json({
+          error: `Hugging Face 模型推理失败 [${resp.status}]`,
+          details: parsedError.error || parsedError.message || errorText,
+          model,
+        });
       }
+
+      keyPoolManager.recordResult('huggingface', hfToken, true);
+      const buffer = await resp.arrayBuffer();
+      const mimeType = resp.headers.get('content-type') || 'image/jpeg';
+      dataUrl = `data:${mimeType};base64,${Buffer.from(buffer).toString('base64')}`;
+      sentSeed = parameters.seed ?? null;
+      sentSteps = parameters.num_inference_steps ?? null;
+      sentCfg = parameters.guidance_scale ?? null;
     }
 
     const item = recordHistoryItem({
       url: dataUrl,
       prompt: finalPrompt,
-      negativePrompt: negative_prompt,
+      negativePrompt: isZImage ? undefined : negative_prompt,
       provider: 'Hugging Face',
       model,
-      seed: seed || 876105816987345,
-      steps: Number(steps) || 8,
-      cfg: Number(guidance) || 1.0,
-      loras: (loras || []).map((l: any) => ({
-        name: l.name || l.path,
-        strength: Number(l.scale ?? l.strength ?? 0.7),
-        civitaiId: l.civitaiId,
-      })),
+      seed: sentSeed,
+      steps: sentSteps,
+      cfg: sentCfg,
     });
 
     return res.json({
       imageUrl: dataUrl,
       provider: 'Hugging Face',
+      actualProvider: 'Hugging Face',
       model,
+      actualModel: model,
       historyItem: item,
     });
   } catch (error: any) {
