@@ -36,6 +36,10 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
     setBrokenIds((prev) => (prev[id] ? prev : { ...prev, [id]: true }));
   };
 
+  const markBrokenIfTinyImage = (id: string, img: HTMLImageElement) => {
+    if (img.naturalWidth <= 2 || img.naturalHeight <= 2) markBroken(id);
+  };
+
   const handleCopyPrompt = (id: string, text: string) => {
     navigator.clipboard.writeText(text);
     setCopiedId(id);
@@ -130,6 +134,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
                         alt={item.prompt || ''}
                         referrerPolicy="no-referrer"
                         onError={() => markBroken(item.id)}
+                        onLoad={(e) => markBrokenIfTinyImage(item.id, e.currentTarget)}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                       />
                     )}
@@ -237,6 +242,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
                 alt={selectedImage.prompt || ''}
                 referrerPolicy="no-referrer"
                 onError={() => markBroken(selectedImage.id)}
+                onLoad={(e) => markBrokenIfTinyImage(selectedImage.id, e.currentTarget)}
                 className="max-h-[75vh] w-auto rounded-lg shadow-2xl object-contain border border-[#333]"
               />
             )}

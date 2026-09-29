@@ -188,8 +188,10 @@ export default function App() {
     message: string;
     imageUrl?: string;
   } | null>(null);
+  const [toastThumbBroken, setToastThumbBroken] = useState(false);
 
   useEffect(() => {
+    setToastThumbBroken(false);
     if (toast) {
       const timer = setTimeout(() => setToast(null), 6000);
       return () => clearTimeout(timer);
@@ -2619,12 +2621,17 @@ export default function App() {
                 : 'bg-[#181920]/95 border-amber-500/50 text-white shadow-amber-950/60'
             }`}
           >
-            {toast.imageUrl && (
+            {toast.imageUrl && !toastThumbBroken && (
               <img
                 src={toast.imageUrl}
                 alt="Output Preview"
                 className="w-11 h-11 rounded-lg object-cover border border-white/20 shrink-0 cursor-pointer hover:scale-105 transition-transform shadow-md"
                 onClick={() => setPreviewImageUrl(toast.imageUrl!)}
+                onError={() => setToastThumbBroken(true)}
+                onLoad={(e) => {
+                  const img = e.currentTarget;
+                  if (img.naturalWidth <= 2 || img.naturalHeight <= 2) setToastThumbBroken(true);
+                }}
                 title="点击放大预览原图"
               />
             )}
@@ -2649,7 +2656,7 @@ export default function App() {
               >
                 查看历史
               </button>
-              {toast.imageUrl && (
+              {toast.imageUrl && !toastThumbBroken && (
                 <button
                   onClick={() => setPreviewImageUrl(toast.imageUrl!)}
                   className="px-2 py-1.5 rounded-lg bg-[#272a38] hover:bg-[#34384b] text-slate-300 font-semibold text-xs border border-slate-600 transition-colors shadow-sm"

@@ -100,6 +100,7 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
 
   // Multi-select state
   const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
+  const [brokenIds, setBrokenIds] = useState<Record<string, true>>({});
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
 
   // Starred / Favorite assets persisted in localStorage
@@ -474,6 +475,19 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
     setIsBatchDownloading(false);
   };
 
+
+  const markBroken = (id: string) => {
+    setBrokenIds((prev) => (prev[id] ? prev : { ...prev, [id]: true }));
+  };
+
+  const markBrokenIfTinyImage = (id: string, img: HTMLImageElement) => {
+    if (img.naturalWidth <= 2 || img.naturalHeight <= 2) markBroken(id);
+  };
+
+  const markBrokenIfTinyVideo = (id: string, video: HTMLVideoElement) => {
+    if (video.videoWidth <= 2 || video.videoHeight <= 2) markBroken(id);
+  };
+
   return (
     <div
       className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 select-none animate-in fade-in duration-200"
@@ -776,8 +790,14 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
                       }`}
                     >
                       {/* Media Thumbnail Container */}
-                      <div className="relative aspect-square w-full bg-black overflow-hidden flex items-center justify-center">
-                        {isVideo ? (
+                      <div className="relative aspect-square w-full bg-[#111215] overflow-hidden flex items-center justify-center">
+                        {brokenIds[asset.id] || !asset.url ? (
+                          <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-slate-400 px-3 text-center">
+                            <ImageIcon className="w-8 h-8 text-slate-600" />
+                            <span className="text-xs font-medium">预览加载失败</span>
+                            <span className="text-[10px] text-slate-500">链接失效或无法拉取，非未生成</span>
+                          </div>
+                        ) : isVideo ? (
                           <video
                             src={asset.url}
                             muted
@@ -785,6 +805,8 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
                             playsInline
                             onMouseEnter={(e) => (e.target as HTMLVideoElement).play()}
                             onMouseLeave={(e) => (e.target as HTMLVideoElement).pause()}
+                            onError={() => markBroken(asset.id)}
+                            onLoadedMetadata={(e) => markBrokenIfTinyVideo(asset.id, e.currentTarget)}
                             className="w-full h-full object-cover"
                           />
                         ) : (
@@ -793,6 +815,9 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
                             alt={asset.prompt}
                             className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                             loading="lazy"
+                            referrerPolicy="no-referrer"
+                            onError={() => markBroken(asset.id)}
+                            onLoad={(e) => markBrokenIfTinyImage(asset.id, e.currentTarget)}
                           />
                         )}
 
@@ -1002,14 +1027,22 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
                 </div>
 
                 {/* Media Preview Player/Viewer */}
-                <div className="relative aspect-video w-full rounded-xl bg-black overflow-hidden flex items-center justify-center border border-[#252738]">
-                  {selectedAsset.type === 'video' ? (
+                <div className="relative aspect-video w-full rounded-xl bg-[#111215] overflow-hidden flex items-center justify-center border border-[#252738]">
+                  {brokenIds[selectedAsset.id] || !selectedAsset.url ? (
+                    <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-slate-400 px-3 text-center">
+                      <ImageIcon className="w-8 h-8 text-slate-600" />
+                      <span className="text-xs font-medium">预览加载失败</span>
+                      <span className="text-[10px] text-slate-500">链接失效或无法拉取，非未生成</span>
+                    </div>
+                  ) : selectedAsset.type === 'video' ? (
                     <video
                       src={selectedAsset.url}
                       controls
                       autoPlay
                       loop
                       playsInline
+                      onError={() => markBroken(selectedAsset.id)}
+                      onLoadedMetadata={(e) => markBrokenIfTinyVideo(selectedAsset.id, e.currentTarget)}
                       className="w-full h-full object-contain"
                     />
                   ) : (
@@ -1017,10 +1050,13 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
                       src={selectedAsset.url}
                       alt={selectedAsset.prompt}
                       className="w-full h-full object-contain cursor-pointer"
+                      referrerPolicy="no-referrer"
+                      onError={() => markBroken(selectedAsset.id)}
+                      onLoad={(e) => markBrokenIfTinyImage(selectedAsset.id, e.currentTarget)}
                       onClick={() => onPreviewImage(selectedAsset.url)}
                     />
                   )}
-                  {selectedAsset.type === 'image' && (
+                  {selectedAsset.type === 'image' && !brokenIds[selectedAsset.id] && selectedAsset.url && (
                     <button
                       onClick={() => onPreviewImage(selectedAsset.url)}
                       className="absolute bottom-2 right-2 p-1.5 rounded-lg bg-black/75 hover:bg-black text-white text-[10px] flex items-center gap-1 backdrop-blur-md border border-white/10"

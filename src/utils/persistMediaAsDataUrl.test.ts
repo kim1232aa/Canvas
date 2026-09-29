@@ -3,6 +3,8 @@ import {
   bufferToDataUrl,
   guessMimeFromUrl,
   isAlreadyDurableHistoryUrl,
+  isUndersizedHistoryImageDataUrl,
+  getDataUrlImageDimensions,
   persistRemoteUrlAsDataUrl,
   persistRemoteUrlAsDataUrlResult,
   requireDurableHistoryMediaUrl,
@@ -12,6 +14,12 @@ import { AddressInfo } from 'net';
 
 const TINY_PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+  'base64',
+);
+
+/** Valid 3×3 PNG — large enough to count as a durable history thumb. */
+const REAL_THUMB_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAMAAAADCAIAAADZSiLoAAAAEElEQVR4nGP4z8AAQQxYWACPjgj4kWPEuQAAAABJRU5ErkJggg==',
   'base64',
 );
 
@@ -33,6 +41,24 @@ describe('persistMediaAsDataUrl (history durable copy)', () => {
     expect(isAlreadyDurableHistoryUrl('/media/local.png')).toBe(true);
     expect(isAlreadyDurableHistoryUrl('https://imgen.x.ai/tmp/a.png')).toBe(false);
     expect(isAlreadyDurableHistoryUrl('//cdn.example/a.png')).toBe(false);
+  });
+
+  it('rejects 1×1 data URL as undersized (fal stub thumb)', async () => {
+    const oneByOne = bufferToDataUrl(TINY_PNG, 'image/png');
+    expect(getDataUrlImageDimensions(oneByOne)).toEqual({ width: 1, height: 1 });
+    expect(isUndersizedHistoryImageDataUrl(oneByOne)).toBe(true);
+    const r = await requireDurableHistoryMediaUrl(oneByOne);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.message).toMatch(/2×2|2x2|pixels/i);
+  });
+
+  it('accepts real 3×3 data URL as durable', async () => {
+    const real = bufferToDataUrl(REAL_THUMB_PNG, 'image/png');
+    expect(getDataUrlImageDimensions(real)).toEqual({ width: 3, height: 3 });
+    expect(isUndersizedHistoryImageDataUrl(real)).toBe(false);
+    const r = await requireDurableHistoryMediaUrl(real);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.dataUrl).toBe(real);
   });
 
   it('persistRemoteUrlAsDataUrl downloads fixture bytes into data URL', async () => {
@@ -104,7 +130,7 @@ describe('requireDurableHistoryMediaUrl (grok history write contract)', () => {
   it('success path: persist called and history/response URL is data:image (not remote https)', async () => {
     const server = http.createServer((_req, res) => {
       res.writeHead(200, { 'Content-Type': 'image/png' });
-      res.end(TINY_PNG);
+      res.end(REAL_THUMB_PNG);
     });
     await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
     const { port } = server.address() as AddressInfo;
