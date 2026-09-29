@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FIELD_STATUSES, PROVIDER_SCHEMA, fieldOptions, modelStatus, valueStatus, type FieldSpec } from './providerSchema';
+import { FIELD_STATUSES, PROVIDER_SCHEMA, fieldOptions, getFieldSpec, modelStatus, valueStatus, type FieldSpec } from './providerSchema';
 
 const fields = PROVIDER_SCHEMA.flatMap((m) =>
   Object.entries(m.fields).map(([name, spec]) => [`${m.provider}/${m.id}.${name}`, spec as FieldSpec] as const),
@@ -62,5 +62,20 @@ describe('providerSchema 自检', () => {
     expect(valueStatus('civitai', 'sdcpp:sdxl', 'width', 1024)).toBe('supported');
     expect(modelStatus('gemini', 'gemini-2.5-flash-image', '2026-10-01')).toBe('supported');
     expect(modelStatus('gemini', 'gemini-2.5-flash-image', '2026-10-02')).toBe('deprecated');
+  });
+
+  it('C10: Civitai 各生态宽高约束与官方 recipe 一致', () => {
+    const dim = (id: string) => {
+      const s = getFieldSpec('civitai', id, 'width');
+      return s && [s.min, s.max, s.multipleOf];
+    };
+    expect(dim('sdcpp:flux1')).toEqual([832, 1216, 16]);
+    for (const e of ['sdxl', 'sd1', 'anima', 'zImage']) expect(dim(`sdcpp:${e}`), e).toEqual([64, 2048, 16]);
+    expect(dim('sdcpp:qwen')).toEqual([64, 2048, 8]);
+    expect(dim('sdcpp:flux2Dev')).toEqual([512, 2048, undefined]);
+    expect(dim('sdcpp:flux2Klein')).toEqual([512, 2048, 16]);
+    expect(dim('comfy:flux1')).toEqual([64, 2048, undefined]);
+    expect(dim('comfy:krea2')).toEqual([undefined, undefined, undefined]);
+    expect(dim('sdcpp:ponyV7')).toBeUndefined(); // 不在 schema → 原样发
   });
 });

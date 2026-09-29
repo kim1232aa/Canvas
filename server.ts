@@ -4684,29 +4684,31 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
       const isFlux = ecosystem === 'flux1';
       const isSdcpp = sdcppEcosystems.includes(ecosystem);
 
-      // C7: Validate width / height strictly (must be within official range and multiple of 16)
-      if (isProvided(width)) {
-        const w = Number(width);
-        const minW = isFlux ? 832 : 64;
-        const maxW = isFlux ? 1216 : 2048;
-        if (isNaN(w) || w < minW || w > maxW || w % 16 !== 0) {
+      // C10: 宽高按 providerSchema 中每个生态的约束校验；不在 schema 的生态 → unverified，原样发
+      const engine = isSdcpp ? 'sdcpp' : 'comfy';
+      const schemaId = `${engine}:${ecosystem}`;
+      for (const dim of ['width', 'height'] as const) {
+        if (!isProvided(req.body[dim])) continue;
+        const v = Number(req.body[dim]);
+        const spec = getFieldSpec('civitai', schemaId, dim);
+        if (!spec) continue; // 不在 schema → unverified，原样发
+        // comfy 生态 schema 里只有 min/max、没写 multipleOf（倍数未能核实）→ 只按范围校验；krea2 连范围都没有 → 原样发
+        const { min = -Infinity, max = Infinity, multipleOf } = spec;
+        const checks: string[] = [];
+        if (isNaN(v) || v < min || v > max) checks.push(`允许范围: ${min}–${max}`);
+        if (multipleOf && v % multipleOf !== 0) checks.push(`须为 ${multipleOf} 的倍数`);
+        if (checks.length > 0) {
           return res.status(400).json({
-            error: `宽度超出 Civitai 官方允许范围或未整除 16: width=${width}。允许范围: ${minW}–${maxW} 且为 16 的倍数`,
-          });
-        }
-      }
-      if (isProvided(height)) {
-        const h = Number(height);
-        const minH = isFlux ? 832 : 64;
-        const maxH = isFlux ? 1216 : 2048;
-        if (isNaN(h) || h < minH || h > maxH || h % 16 !== 0) {
-          return res.status(400).json({
-            error: `高度超出 Civitai 官方允许范围或未整除 16: height=${height}。允许范围: ${minH}–${maxH} 且为 16 的倍数`,
+            error: `${dim}=${req.body[dim]} 超出 Civitai 生态 ${ecosystem} 的官方允许范围。${checks.join('，')}`,
           });
         }
       }
 
       let genInput: Record<string, any>;
+      const quantity = req.body.quantity;
+      if (isProvided(quantity) && !Number.isInteger(Number(quantity))) {
+        return res.status(400).json({ error: `quantity 必须为整数（收到 "${quantity}"）` });
+      }
 
       if (isSdcpp) {
         genInput = {
