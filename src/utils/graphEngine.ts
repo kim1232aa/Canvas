@@ -7,7 +7,9 @@ import { NormalizedGenerateParams } from '../engines/types';
 import {
   findSoleCloudEngine,
   isCloudEngineNode,
+  isCanvasFieldUnsupported,
   isFalLoraEndpointError,
+  omitUnsupportedGenerateFields,
   resolveCheckpointForNode,
 } from './resolveCheckpoint';
 import { assertAIVideoProviderReady } from './videoProvider';
@@ -865,13 +867,17 @@ export async function executeWorkflow(
       }
     }
 
-    const omitPx = params.targetProvider === 'gemini' || params.targetProvider === 'openai_compat' || params.targetProvider === 'grok_compat' || params.videoProvider === 'grok_compat';
-    const grokOrOpenAi = params.targetProvider === 'openai_compat' || params.targetProvider === 'grok_compat' || params.videoProvider === 'grok_compat';
-    const omitSeed = params.targetProvider === 'gemini' || grokOrOpenAi;
+    const engProv = params.videoProvider || params.targetProvider;
+    const engModel = params.checkpointModel;
     const grokish = params.targetProvider === 'grok_compat' || params.videoProvider === 'grok_compat';
+    const grokOrOpenAi = params.targetProvider === 'openai_compat' || params.targetProvider === 'grok_compat' || params.videoProvider === 'grok_compat';
     const extraParams: Record<string, unknown> = {
-      ...(params.sampler !== undefined ? { sampler_name: params.sampler } : {}),
-      ...(params.scheduler !== undefined ? { scheduler: params.scheduler } : {}),
+      ...(params.sampler !== undefined && !isCanvasFieldUnsupported(engProv, engModel, 'sampler')
+        ? { sampler_name: params.sampler }
+        : {}),
+      ...(params.scheduler !== undefined && !isCanvasFieldUnsupported(engProv, engModel, 'scheduler')
+        ? { scheduler: params.scheduler }
+        : {}),
       ...(params.imageSize ? { image_size: params.imageSize } : {}),
     };
     if (params.size) extraParams.size = params.size;
@@ -884,17 +890,29 @@ export async function executeWorkflow(
       extraParams.n = Number(params.batchSize);
     }
 
-    const normParams: NormalizedGenerateParams = {
+    const lorasPayload = isCanvasFieldUnsupported(engProv, engModel, 'loras')
+      ? undefined
+      : params.loras.map((l) => ({
+          name: l.name,
+          path: resolveLoraPathOrUrl(l),
+          strength: l.modelStrength,
+          modelStrength: l.modelStrength,
+          clipStrength: l.clipStrength,
+          civitaiId: l.civitaiId,
+          triggers: l.triggerWords,
+        }));
+
+    const normParams: NormalizedGenerateParams = omitUnsupportedGenerateFields(engProv, engModel, {
       prompt: params.positivePrompt,
-      negative_prompt: grokOrOpenAi ? undefined : params.negativePrompt,
+      negative_prompt: params.negativePrompt,
       model: params.checkpointModel,
       provider: params.videoProvider || (params.targetProvider === 'gemini' ? 'gemini' : undefined),
       targetProvider: params.videoProvider || (params.targetProvider === 'gemini' ? 'gemini' : undefined),
-      width: omitPx ? undefined : params.width,
-      height: omitPx ? undefined : params.height,
-      steps: grokOrOpenAi ? undefined : params.steps,
-      cfg: grokOrOpenAi ? undefined : params.cfg,
-      seed: omitSeed ? undefined : params.seed,
+      width: params.width,
+      height: params.height,
+      steps: params.steps,
+      cfg: params.cfg,
+      seed: params.seed,
       denoise: params.denoise,
       image_url: params.initImageUrl,
       isVideo: params.isVideo,
@@ -902,19 +920,11 @@ export async function executeWorkflow(
       videoFps: grokish ? undefined : params.videoFps,
       aspectRatio: params.videoAspectRatio || params.aspectRatio,
       imageSize: params.imageSize,
-      sampler_name: grokOrOpenAi ? undefined : params.sampler,
-      scheduler: grokOrOpenAi ? undefined : params.scheduler,
+      sampler_name: params.sampler,
+      scheduler: params.scheduler,
       extraParams,
-      loras: params.loras.map((l) => ({
-        name: l.name,
-        path: resolveLoraPathOrUrl(l),
-        strength: l.modelStrength,
-        modelStrength: l.modelStrength,
-        clipStrength: l.clipStrength,
-        civitaiId: l.civitaiId,
-        triggers: l.triggerWords,
-      })),
-    };
+      loras: lorasPayload,
+    }) as NormalizedGenerateParams;
 
     // Stage 4: KSampler / Video Generation
     ksamplerNodes.forEach((n) => onNodeStateChange(n.id, 'running', 50));

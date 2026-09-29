@@ -433,11 +433,12 @@ describe('graphEngine - B2 & L2a & L2b 拓扑反向追踪与参数抽取隔离�
     }));
 
     await executeWorkflow(nodes, connections, () => {}, undefined);
+    // Schema marks fal-ai/flux/schnell.loras unsupported → omit from payload (values stay in workflow extract).
     expect(generateSpy).toHaveBeenCalledWith(
       'fal',
       expect.objectContaining({
         model: 'fal-ai/flux/schnell',
-        loras: expect.arrayContaining([expect.objectContaining({ name: 'koda' })]),
+        loras: undefined,
       }),
       expect.anything()
     );

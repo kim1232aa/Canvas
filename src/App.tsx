@@ -46,6 +46,7 @@ import {
   resolveActiveCheckpoint,
   resolveCheckpointForNode,
   isCanvasFieldUnsupported,
+  omitUnsupportedGenerateFields,
   sanitizeFrameLoras,
 } from './utils/resolveCheckpoint';
 import {
@@ -562,20 +563,31 @@ export default function App() {
         ? (frame.videoDuration ?? p.videoDuration)
         : (isVideo ? (frame.videoDuration || 5) : undefined);
 
-      const normParams: NormalizedGenerateParams = {
+      const lorasPayload = isCanvasFieldUnsupported(p.targetProvider, p.checkpoint, 'loras')
+        ? undefined
+        : p.loras.map((l) => ({
+            name: l.name,
+            strength: l.modelStrength,
+            modelStrength: l.modelStrength,
+            clipStrength: l.clipStrength,
+            civitaiId: l.civitaiId,
+            triggers: l.triggerWords,
+          }));
+
+      const normParams: NormalizedGenerateParams = omitUnsupportedGenerateFields(p.targetProvider, p.checkpoint, {
         prompt: finalPrompt,
-        negative_prompt: grokOrOpenAi ? undefined : frame.negativePrompt,
+        negative_prompt: frame.negativePrompt,
         model: p.checkpoint,
         provider: p.targetProvider,
         targetProvider: p.targetProvider,
-        width: grokOrOpenAi || p.targetProvider === 'gemini' ? undefined : p.width,
-        height: grokOrOpenAi || p.targetProvider === 'gemini' ? undefined : p.height,
-        steps: grokOrOpenAi ? undefined : p.steps,
-        cfg: grokOrOpenAi ? undefined : p.cfg,
-        seed: grokOrOpenAi ? undefined : p.seed,
+        width: p.width,
+        height: p.height,
+        steps: p.steps,
+        cfg: p.cfg,
+        seed: p.seed,
         denoise: p.denoise,
-        sampler_name: grokOrOpenAi ? undefined : p.sampler,
-        scheduler: grokOrOpenAi ? undefined : p.scheduler,
+        sampler_name: p.sampler,
+        scheduler: p.scheduler,
         image_url: frame.imageUrl,
         isVideo,
         videoDuration: grokish ? grokVideoDuration : (isVideo ? (frame.videoDuration || 5) : undefined),
@@ -585,17 +597,8 @@ export default function App() {
           : (p.aspectRatio || undefined),
         imageSize: p.imageSize || undefined,
         extraParams,
-        loras: (grokOrOpenAi || isCanvasFieldUnsupported(p.targetProvider, p.checkpoint, 'loras'))
-          ? undefined
-          : p.loras.map((l) => ({
-          name: l.name,
-          strength: l.modelStrength,
-          modelStrength: l.modelStrength,
-          clipStrength: l.clipStrength,
-          civitaiId: l.civitaiId,
-          triggers: l.triggerWords,
-        })),
-      };
+        loras: lorasPayload,
+      }) as NormalizedGenerateParams;
 
       const startTime = Date.now();
       let tracker: any = null;

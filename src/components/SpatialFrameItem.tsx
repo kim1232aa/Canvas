@@ -496,33 +496,41 @@ export const SpatialFrameItem: React.FC<SpatialFrameItemProps> = ({
           />
         </div>
 
-        {/* Civitai LoRAs Tag Summary & Compatibility — hidden when engine rejects loras */}
-        {frame.params.loras.length > 0 &&
-          !isCanvasFieldUnsupported(frame.params.targetProvider, frame.params.checkpoint, 'loras') && (
-          <div className="space-y-1.5">
+        {/* LoRA tag summary — keep values when unsupported; grey + 该服务商不支持 */}
+        {frame.params.loras.length > 0 && (() => {
+          const lorasUnsupported = isCanvasFieldUnsupported(frame.params.targetProvider, frame.params.checkpoint, 'loras');
+          return (
+          <div className={`space-y-1.5 ${lorasUnsupported ? 'opacity-70' : ''}`}>
             <div className="flex flex-wrap gap-1 items-center">
               <span className="text-[10px] text-slate-400 font-mono">LoRAs:</span>
+              {lorasUnsupported && (
+                <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-800/80 text-slate-400 border border-slate-600/50 font-mono" title="该服务商不支持">
+                  该服务商不支持
+                </span>
+              )}
               {frame.params.loras.map((l, i) => {
                 const compat = validateModelCompatibility(frame.params.checkpoint, (l as any).baseModel, l.name, frame.params.targetProvider);
                 return (
                   <span
                     key={i}
-                    title={compat.isCompatible ? '与当前底模架构兼容' : compat.message}
+                    title={lorasUnsupported ? '该服务商不支持' : (compat.isCompatible ? '与当前底模架构兼容' : compat.message)}
                     className={`text-[10px] font-mono px-1.5 py-0.5 rounded flex items-center gap-1 ${
-                      compat.isCompatible
+                      lorasUnsupported
+                        ? 'bg-slate-900/60 text-slate-500 border border-slate-700/50'
+                        : compat.isCompatible
                         ? 'bg-purple-950/50 text-purple-300 border border-purple-800/40'
                         : 'bg-rose-950/60 text-rose-300 border border-rose-700/50'
                     }`}
                   >
-                    {!compat.isCompatible && <AlertTriangle className="w-2.5 h-2.5 text-rose-400 shrink-0" />}
+                    {!lorasUnsupported && !compat.isCompatible && <AlertTriangle className="w-2.5 h-2.5 text-rose-400 shrink-0" />}
                     <span>{l.name.replace('.safetensors', '')} ({l.modelStrength})</span>
                   </span>
                 );
               })}
             </div>
 
-            {/* Incompatibility quick warning & fix */}
-            {(() => {
+            {/* Incompatibility quick warning & fix — skip when engine rejects loras entirely */}
+            {!lorasUnsupported && (() => {
               const incompatibleLora = frame.params.loras.find((l) => {
                 const compat = validateModelCompatibility(frame.params.checkpoint, (l as any).baseModel, l.name, frame.params.targetProvider);
                 return !compat.isCompatible;
@@ -551,7 +559,8 @@ export const SpatialFrameItem: React.FC<SpatialFrameItemProps> = ({
               );
             })()}
           </div>
-        )}
+          );
+        })()}
 
         {/* Queue Frame Button */}
         {frame.mediaType === 'video' && !frame.params?.checkpoint && (

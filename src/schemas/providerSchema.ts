@@ -11,7 +11,7 @@
 export type FieldStatus = 'supported' | 'unverified' | 'unsupported' | 'deprecated';
 export const FIELD_STATUSES: readonly FieldStatus[] = ['supported', 'unverified', 'unsupported', 'deprecated'];
 
-export type Provider = 'gemini' | 'fal' | 'civitai' | 'openai_compat' | 'grok_compat';
+export type Provider = 'gemini' | 'fal' | 'civitai' | 'openai_compat' | 'grok_compat' | 'agnes' | 'huggingface' | 'nanogpt';
 
 /** 画布侧字段名；上游字段名不同时写在 FieldSpec.wire */
 export type FieldKey =
@@ -113,7 +113,7 @@ function gemini(
         type: 'integer',
         note: '生图指南 ImageConfig 仅 aspectRatio/imageSize（https://ai.google.dev/gemini-api/docs/image-generation）；无 imageConfig.seed。GenerationConfig.seed 见于文本例，生图路径不生效 → 灰显且不发上游',
       },
-      ...unsupported(G_DOC, ['width', 'height', 'negative_prompt', 'steps', 'cfg', 'denoise', 'loras'], '官方可选配置只有 aspect_ratio / image_size'),
+      ...unsupported(G_DOC, ['width', 'height', 'negative_prompt', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'loras'], '官方可选配置只有 aspect_ratio / image_size'),
     },
   };
 }
@@ -363,6 +363,82 @@ const CIVITAI_MODELS: ModelSpec[] = [
   }),
 ];
 
+// ---------- Agnes AI (OpenAI-compatible /images/generations) ----------
+// Official docs: https://wiki.agnes-ai.com/en/docs/agnes-image-21-flash
+// Request params: model, prompt, size (tier or WxH), ratio, image, return_base64, extra_body.
+// No seed / negative_prompt / steps / CFG / sampler / scheduler / denoise / loras.
+const AGNES_DOC = 'https://wiki.agnes-ai.com/en/docs/agnes-image-21-flash';
+const AGNES_RATIO = vals(['1:1', '3:4', '4:3', '16:9', '9:16', '2:3', '3:2', '21:9'], 'supported');
+const AGNES_SIZE = vals(['1K', '2K', '3K', '4K'], 'supported');
+
+function agnesImage(id: string, label: string): ModelSpec {
+  return {
+    provider: 'agnes',
+    id,
+    label,
+    source: AGNES_DOC,
+    fields: {
+      // App maps canvas width/height → size "WxH" (legacy exact-size accepted by Agnes).
+      width: { status: 'supported', source: AGNES_DOC, type: 'integer', note: 'mapped to size WxH / tier' },
+      height: { status: 'supported', source: AGNES_DOC, type: 'integer', note: 'mapped to size WxH / tier' },
+      aspect_ratio: enumField(AGNES_DOC, AGNES_RATIO, { wire: 'ratio', providerDefault: '1:1' }),
+      size: enumField(AGNES_DOC, AGNES_SIZE, { note: 'tier 1K–4K or legacy WxH' }),
+      num_images: { status: 'supported', source: AGNES_DOC, wire: 'n', type: 'integer', min: 1, max: 1, providerDefault: 1 },
+      ...unsupported(AGNES_DOC, ['seed', 'negative_prompt', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'loras'], '该服务商不支持'),
+    },
+  };
+}
+
+const AGNES_MODELS: ModelSpec[] = [
+  agnesImage('agnes-image-2.5-flash', 'Agnes Image 2.5 Flash'),
+  agnesImage('agnes-image-2.1-flash', 'Agnes Image 2.1 Flash'),
+  agnesImage('agnes-image-2.0-flash', 'Agnes Image 2.0 Flash'),
+];
+
+// ---------- Hugging Face Inference (text-to-image) ----------
+// Official: https://huggingface.co/docs/inference-providers/main/tasks/text-to-image
+// Supported parameters: guidance_scale, negative_prompt, num_inference_steps, width, height, scheduler, seed.
+// No LoRA / denoise / image_url / Comfy sampler_name on this route (server 400s loras/cfg-key/denoise/image_url).
+const HF_DOC = 'https://huggingface.co/docs/inference-providers/main/tasks/text-to-image';
+
+function hfTextToImage(id: string, label: string): ModelSpec {
+  return {
+    provider: 'huggingface',
+    id,
+    label,
+    source: HF_DOC,
+    fields: {
+      seed: { status: 'supported', source: HF_DOC, type: 'integer' },
+      negative_prompt: { status: 'supported', source: HF_DOC, type: 'string' },
+      steps: { status: 'supported', source: HF_DOC, wire: 'num_inference_steps', type: 'integer', min: 1, max: 150 },
+      cfg: { status: 'supported', source: HF_DOC, wire: 'guidance_scale', type: 'number', note: 'sent as guidance / guidance_scale' },
+      width: { status: 'supported', source: HF_DOC, type: 'integer' },
+      height: { status: 'supported', source: HF_DOC, type: 'integer' },
+      scheduler: { status: 'supported', source: HF_DOC, type: 'string', note: 'HF parameters.scheduler' },
+      ...unsupported(HF_DOC, ['sampler', 'denoise', 'loras'], '该服务商不支持（text-to-image 无 LoRA / denoise / Comfy sampler）'),
+    },
+  };
+}
+
+const HUGGINGFACE_MODELS: ModelSpec[] = [
+  // Canonical row used when checkpoint is empty or leftover from another provider.
+  hfTextToImage('huggingface-text-to-image', 'Hugging Face Text-to-Image'),
+  hfTextToImage('black-forest-labs/FLUX.1-dev', 'FLUX.1 [dev] (HF)'),
+  hfTextToImage('stabilityai/stable-diffusion-xl-base-1.0', 'SDXL 1.0 (HF)'),
+  {
+    provider: 'huggingface',
+    id: 'Tongyi-MAI/Z-Image-Turbo',
+    label: 'Z-Image-Turbo (HF Space)',
+    source: 'https://huggingface.co/spaces/Tongyi-MAI/Z-Image-Turbo',
+    fields: {
+      seed: { status: 'supported', source: 'https://huggingface.co/spaces/Tongyi-MAI/Z-Image-Turbo', type: 'integer' },
+      steps: { status: 'supported', source: 'https://huggingface.co/spaces/Tongyi-MAI/Z-Image-Turbo', type: 'integer' },
+      resolution: { status: 'supported', source: 'https://huggingface.co/spaces/Tongyi-MAI/Z-Image-Turbo', type: 'string' },
+      ...unsupported('https://huggingface.co/spaces/Tongyi-MAI/Z-Image-Turbo', ['negative_prompt', 'cfg', 'width', 'height', 'sampler', 'scheduler', 'denoise', 'loras'], 'Z-Image Space 仅 prompt/resolution/seed/steps'),
+    },
+  },
+];
+
 // ---------- 唯一表与查询函数 ----------
 
 // ---------- OpenAI-compat image relay (gpt-image-2) ----------
@@ -410,7 +486,7 @@ function grokImage(id: string, label: string): ModelSpec {
       aspect_ratio: enumField(XAI_IMG, GROK_ASPECT),
       resolution: enumField(XAI_IMG, vals(['1k', '1.5k', '2k'], 'supported')),
       num_images: { status: 'supported', source: XAI_IMG, wire: 'n', type: 'integer', min: 1, max: 4 },
-      ...unsupported(XAI_IMG, ['seed', 'negative_prompt', 'steps', 'cfg', 'denoise', 'loras', 'width', 'height'], '该服务商不支持像素宽高 / seed / 负向 / steps / CFG / LoRA'),
+      ...unsupported(XAI_IMG, ['seed', 'negative_prompt', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'loras', 'width', 'height'], '该服务商不支持像素宽高 / seed / 负向 / steps / CFG / LoRA'),
     },
   };
 }
@@ -424,7 +500,7 @@ function grokVideo(id: string, label: string): ModelSpec {
     fields: {
       aspect_ratio: enumField(XAI_VID, GROK_ASPECT),
       resolution: enumField(XAI_VID, vals(['480p', '720p', '1080p'], 'supported')),
-      ...unsupported(XAI_VID, ['seed', 'negative_prompt', 'steps', 'cfg', 'denoise', 'loras', 'width', 'height'], '该服务商不支持像素宽高 / seed / 负向 / steps / CFG / LoRA'),
+      ...unsupported(XAI_VID, ['seed', 'negative_prompt', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'loras', 'width', 'height'], '该服务商不支持像素宽高 / seed / 负向 / steps / CFG / LoRA'),
     },
   };
 }
@@ -437,12 +513,43 @@ const GROK_COMPAT_MODELS: ModelSpec[] = [
   grokVideo('grok-imagine-video-1.5', 'Grok Imagine Video 1.5（兼容中转）'),
 ];
 
+// ---------- NanoGPT (/api/v1/images via this app's /api/nanogpt/generate) ----------
+// Official OpenAI-compat image schema: https://docs.nano-gpt.com/api-reference/endpoint/image-generation-openai
+// (no negative_prompt / loras in OpenAPI). This app's route rejects negative_prompt/steps/cfg/denoise/width/height/size
+// and forwards prompt/model/seed/resolution/aspect_ratio (+ optional image_url). LoRA not in official schema → unsupported.
+const NANO_DOC = 'https://docs.nano-gpt.com/api-reference/endpoint/image-generation-openai';
+
+function nanoImage(id: string, label: string): ModelSpec {
+  return {
+    provider: 'nanogpt',
+    id,
+    label,
+    source: NANO_DOC,
+    fields: {
+      seed: { status: 'supported', source: NANO_DOC, type: 'integer', note: 'optional model-specific hint' },
+      aspect_ratio: { status: 'supported', source: NANO_DOC, type: 'string' },
+      resolution: enumField(NANO_DOC, vals(['1k', '2k', '4k'], 'supported'), { note: 'app route uses resolution tiers, not pixel WxH' }),
+      ...unsupported(NANO_DOC, ['negative_prompt', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'loras', 'width', 'height'], '该服务商不支持'),
+    },
+  };
+}
+
+const NANOGPT_MODELS: ModelSpec[] = [
+  nanoImage('flux-schnell', 'FLUX.1 Schnell (NanoGPT)'),
+  nanoImage('flux-dev', 'FLUX.1 Dev (NanoGPT)'),
+  nanoImage('qwen-image-2.1', 'Qwen Image 2.1 (NanoGPT)'),
+  nanoImage('hidream', 'HiDream (NanoGPT)'),
+];
+
 export const PROVIDER_SCHEMA: readonly ModelSpec[] = [
   ...GEMINI_MODELS,
   ...FAL_MODELS,
   ...CIVITAI_MODELS,
   ...OPENAI_COMPAT_MODELS,
   ...GROK_COMPAT_MODELS,
+  ...AGNES_MODELS,
+  ...HUGGINGFACE_MODELS,
+  ...NANOGPT_MODELS,
 ];
 
 const INDEX = new Map(PROVIDER_SCHEMA.map((m) => [`${m.provider}/${m.id}`, m]));

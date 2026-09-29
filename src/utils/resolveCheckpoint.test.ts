@@ -9,6 +9,7 @@ import {
   resolveActiveCheckpoint,
   resolveCheckpointForNode,
   sanitizeFrameLoras,
+  omitUnsupportedGenerateFields,
 } from './resolveCheckpoint';
 import { validateLoraCompatibility } from './baseModelMatcher';
 
@@ -211,13 +212,135 @@ describe('resolveCheckpoint — canvas NodeItem grey (compat)', () => {
 });
 
 describe('sanitizeFrameLoras', () => {
-  it('clears leftover LoRAs under Gemini', () => {
+  it('keeps LoRA values even when schema marks loras unsupported (no silent wipe)', () => {
     const left = [{ name: 'x.safetensors', modelStrength: 0.7 }];
-    expect(sanitizeFrameLoras('gemini', 'gemini-2.5-flash-image', left)).toEqual([]);
+    expect(sanitizeFrameLoras('gemini', 'gemini-2.5-flash-image', left)).toEqual(left);
+    expect(sanitizeFrameLoras('agnes', 'agnes-image-2.5-flash', left)).toEqual(left);
+    expect(sanitizeFrameLoras('huggingface', 'huggingface-text-to-image', left)).toEqual(left);
+    expect(sanitizeFrameLoras('nanogpt', 'flux-schnell', left)).toEqual(left);
+    expect(sanitizeFrameLoras('fal', 'fal-ai/flux/schnell', left)).toEqual(left);
   });
-  it('keeps LoRAs when schema allows (fal schnell is unsupported — use civitai-ish path)', () => {
-    // modelscope is not in schema Provider set → isCanvasFieldUnsupported returns false for unknown
+  it('keeps LoRAs for providers outside schema', () => {
     const left = [{ name: 'x.safetensors', modelStrength: 0.7 }];
     expect(sanitizeFrameLoras('modelscope', 'Tongyi-MAI/Z-Image-Turbo', left)).toEqual(left);
+  });
+});
+
+describe('Fal / Agnes / HF / NanoGPT grey on engine switch (schema-driven)', () => {
+  const left = [{ name: 'koda.safetensors', modelStrength: 0.8 }];
+
+  it('switching to Agnes greys unsupported fields including loras/negative without deleting values', () => {
+    for (const model of ['agnes-image-2.5-flash', '', 'Tongyi-MAI/Z-Image-Turbo']) {
+      expect(isCanvasFieldUnsupported('agnes', model, 'loras'), `loras@${model}`).toBe(true);
+      expect(isCanvasFieldUnsupported('agnes', model, 'negative_prompt'), `neg@${model}`).toBe(true);
+      expect(isCanvasFieldUnsupported('agnes', model, 'seed'), `seed@${model}`).toBe(true);
+      expect(isCanvasFieldUnsupported('agnes', model, 'steps'), `steps@${model}`).toBe(true);
+      expect(isCanvasFieldUnsupported('agnes', model, 'cfg'), `cfg@${model}`).toBe(true);
+      expect(isCanvasFieldUnsupported('agnes', model, 'sampler'), `sampler@${model}`).toBe(true);
+      expect(isCanvasFieldUnsupported('agnes', model, 'scheduler'), `scheduler@${model}`).toBe(true);
+      // width/height stay editable (mapped to Agnes size)
+      expect(isCanvasFieldUnsupported('agnes', model, 'width'), `w@${model}`).toBe(false);
+      expect(isCanvasFieldUnsupported('agnes', model, 'height'), `h@${model}`).toBe(false);
+    }
+    expect(sanitizeFrameLoras('agnes', 'agnes-image-2.5-flash', left)).toEqual(left);
+    const badge = isLoraUnsupportedOnEndpoint('agnes', 'agnes-image-2.5-flash');
+    expect(badge.unsupported).toBe(true);
+    expect(badge.message).toMatch(/该服务商不支持/);
+  });
+
+  it('switching to Hugging Face greys loras (not negative/seed/steps) and keeps values', () => {
+    expect(isCanvasFieldUnsupported('huggingface', '', 'loras')).toBe(true);
+    expect(isCanvasFieldUnsupported('huggingface', 'black-forest-labs/FLUX.1-dev', 'loras')).toBe(true);
+    expect(isCanvasFieldUnsupported('huggingface', 'black-forest-labs/FLUX.1-dev', 'denoise')).toBe(true);
+    expect(isCanvasFieldUnsupported('huggingface', 'black-forest-labs/FLUX.1-dev', 'sampler')).toBe(true);
+    // HF text-to-image docs support these:
+    expect(isCanvasFieldUnsupported('huggingface', 'black-forest-labs/FLUX.1-dev', 'negative_prompt')).toBe(false);
+    expect(isCanvasFieldUnsupported('huggingface', 'black-forest-labs/FLUX.1-dev', 'seed')).toBe(false);
+    expect(isCanvasFieldUnsupported('huggingface', 'black-forest-labs/FLUX.1-dev', 'steps')).toBe(false);
+    expect(isCanvasFieldUnsupported('huggingface', 'black-forest-labs/FLUX.1-dev', 'width')).toBe(false);
+    expect(sanitizeFrameLoras('huggingface', '', left)).toEqual(left);
+    const badge = isLoraUnsupportedOnEndpoint('huggingface', 'Tongyi-MAI/Z-Image-Turbo');
+    expect(badge.unsupported).toBe(true);
+    expect(badge.message).toMatch(/该服务商不支持/);
+  });
+
+  it('Fal flux/schnell greys loras/negative/sampler; flux-lora keeps loras editable', () => {
+    expect(isCanvasFieldUnsupported('fal', 'fal-ai/flux/schnell', 'loras')).toBe(true);
+    expect(isCanvasFieldUnsupported('fal', 'fal-ai/flux/schnell', 'negative_prompt')).toBe(true);
+    expect(isCanvasFieldUnsupported('fal', 'fal-ai/flux/schnell', 'sampler')).toBe(true);
+    expect(isCanvasFieldUnsupported('fal', 'fal-ai/flux/schnell', 'seed')).toBe(false);
+    expect(isCanvasFieldUnsupported('fal', 'fal-ai/flux/schnell', 'steps')).toBe(false);
+    expect(isCanvasFieldUnsupported('fal', 'fal-ai/flux-lora', 'loras')).toBe(false);
+    expect(isCanvasFieldUnsupported('fal', 'fal-ai/flux-lora', 'negative_prompt')).toBe(true);
+    // empty / foreign checkpoint falls back to first fal model (flux-lora)
+    expect(isCanvasFieldUnsupported('fal', '', 'sampler')).toBe(true);
+    expect(sanitizeFrameLoras('fal', 'fal-ai/flux/schnell', left)).toEqual(left);
+  });
+
+  it('NanoGPT flux-schnell greys loras and negative; keeps seed; does not wipe LoRAs', () => {
+    for (const model of ['flux-schnell', '', 'some-civitai-leftover.safetensors']) {
+      expect(isCanvasFieldUnsupported('nanogpt', model, 'loras'), `loras@${model}`).toBe(true);
+      expect(isCanvasFieldUnsupported('nanogpt', model, 'negative_prompt'), `neg@${model}`).toBe(true);
+      expect(isCanvasFieldUnsupported('nanogpt', model, 'steps'), `steps@${model}`).toBe(true);
+      expect(isCanvasFieldUnsupported('nanogpt', model, 'cfg'), `cfg@${model}`).toBe(true);
+      expect(isCanvasFieldUnsupported('nanogpt', model, 'width'), `w@${model}`).toBe(true);
+      expect(isCanvasFieldUnsupported('nanogpt', model, 'seed'), `seed@${model}`).toBe(false);
+    }
+    expect(sanitizeFrameLoras('nanogpt', 'flux-schnell', left)).toEqual(left);
+    const badge = isLoraUnsupportedOnEndpoint('nanogpt', 'flux-schnell');
+    expect(badge.unsupported).toBe(true);
+    expect(badge.message).toMatch(/该服务商不支持/);
+    const compat = validateLoraCompatibility('flux-schnell', 'Flux.1 S', 'koda', 'nanogpt');
+    expect(compat.isCompatible).toBe(false);
+    expect(compat.endpointUnsupported).toBe(true);
+  });
+
+  it('omitUnsupportedGenerateFields drops unsupported keys but leaves supported', () => {
+    const agnes = omitUnsupportedGenerateFields('agnes', 'agnes-image-2.5-flash', {
+      prompt: 'hi',
+      negative_prompt: 'blurry',
+      seed: 42,
+      steps: 20,
+      cfg: 7,
+      width: 1024,
+      height: 1024,
+      loras: left,
+      sampler_name: 'euler',
+    });
+    expect(agnes.prompt).toBe('hi');
+    expect(agnes.width).toBe(1024);
+    expect(agnes.height).toBe(1024);
+    expect(agnes.negative_prompt).toBeUndefined();
+    expect(agnes.seed).toBeUndefined();
+    expect(agnes.steps).toBeUndefined();
+    expect(agnes.cfg).toBeUndefined();
+    expect(agnes.loras).toBeUndefined();
+    expect(agnes.sampler_name).toBeUndefined();
+
+    const nano = omitUnsupportedGenerateFields('nanogpt', 'flux-schnell', {
+      prompt: 'hi',
+      negative_prompt: 'blurry',
+      seed: 99,
+      loras: left,
+      width: 512,
+    });
+    expect(nano.seed).toBe(99);
+    expect(nano.negative_prompt).toBeUndefined();
+    expect(nano.loras).toBeUndefined();
+    expect(nano.width).toBeUndefined();
+
+    const hf = omitUnsupportedGenerateFields('huggingface', 'black-forest-labs/FLUX.1-dev', {
+      prompt: 'hi',
+      negative_prompt: 'blurry',
+      seed: 1,
+      steps: 28,
+      loras: left,
+      sampler_name: 'euler',
+    });
+    expect(hf.negative_prompt).toBe('blurry');
+    expect(hf.seed).toBe(1);
+    expect(hf.steps).toBe(28);
+    expect(hf.loras).toBeUndefined();
+    expect(hf.sampler_name).toBeUndefined();
   });
 });

@@ -162,3 +162,37 @@ describe('resolveSchemaModelId', () => {
     expect(resolveSchemaModelId('openai_compat', 'fal-ai/flux/dev')).toBe('gpt-image-2');
   });
 });
+
+
+describe('agnes / huggingface / nanogpt schema unsupported fields', () => {
+  it('agnes image: greys seed/negative/steps/cfg/sampler/scheduler/denoise/loras; width/height stay', () => {
+    for (const id of ['agnes-image-2.5-flash', 'agnes-image-2.1-flash', 'agnes-image-2.0-flash']) {
+      for (const f of ['seed', 'negative_prompt', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'loras'] as const) {
+        expect(getFieldSpec('agnes', id, f)?.status, `${id}.${f}`).toBe('unsupported');
+      }
+      expect(getFieldSpec('agnes', id, 'width')?.status).toBe('supported');
+      expect(getFieldSpec('agnes', id, 'height')?.status).toBe('supported');
+      expect(resolveSchemaModelId('agnes', '')).toBe('agnes-image-2.5-flash');
+    }
+  });
+
+  it('huggingface text-to-image: greys loras/denoise/sampler; keeps negative/seed/steps/cfg/WH', () => {
+    const id = 'huggingface-text-to-image';
+    expect(getFieldSpec('huggingface', id, 'loras')?.status).toBe('unsupported');
+    expect(getFieldSpec('huggingface', id, 'denoise')?.status).toBe('unsupported');
+    expect(getFieldSpec('huggingface', id, 'sampler')?.status).toBe('unsupported');
+    expect(getFieldSpec('huggingface', id, 'negative_prompt')?.status).toBe('supported');
+    expect(getFieldSpec('huggingface', id, 'seed')?.status).toBe('supported');
+    expect(getFieldSpec('huggingface', id, 'steps')?.status).toBe('supported');
+    expect(resolveSchemaModelId('huggingface', 'foreign-civitai.safetensors')).toBe('huggingface-text-to-image');
+  });
+
+  it('nanogpt flux-schnell: greys negative/loras/steps/cfg/WH; keeps seed', () => {
+    expect(getFieldSpec('nanogpt', 'flux-schnell', 'loras')?.status).toBe('unsupported');
+    expect(getFieldSpec('nanogpt', 'flux-schnell', 'negative_prompt')?.status).toBe('unsupported');
+    expect(getFieldSpec('nanogpt', 'flux-schnell', 'steps')?.status).toBe('unsupported');
+    expect(getFieldSpec('nanogpt', 'flux-schnell', 'width')?.status).toBe('unsupported');
+    expect(getFieldSpec('nanogpt', 'flux-schnell', 'seed')?.status).toBe('supported');
+    expect(resolveSchemaModelId('nanogpt', '')).toBe('flux-schnell');
+  });
+});

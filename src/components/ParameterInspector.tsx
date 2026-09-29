@@ -146,7 +146,10 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
     params.targetProvider === 'fal' ||
     params.targetProvider === 'civitai' ||
     params.targetProvider === 'openai_compat' ||
-    params.targetProvider === 'grok_compat'
+    params.targetProvider === 'grok_compat' ||
+    params.targetProvider === 'agnes' ||
+    params.targetProvider === 'huggingface' ||
+    params.targetProvider === 'nanogpt'
       ? (params.targetProvider as SchemaProvider)
       : undefined;
   // Prefer checkpoint when it exists in schema; else first model for provider so
@@ -718,14 +721,19 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
             <div className="space-y-2">
               {params.loras.map((lora, idx) => {
                 const compat = validateLoraCompatibility(params.checkpoint, (lora as any).baseModel, lora.name, params.targetProvider || (params.checkpoint?.startsWith('fal-ai/') ? 'fal' : undefined));
+                const loraUnsupported = greyLoras || Boolean(compat.endpointUnsupported);
                 return (
-                  <div key={idx} className="bg-[#121318] p-2.5 rounded-lg border border-[#282a35] space-y-2">
+                  <div key={idx} className={`bg-[#121318] p-2.5 rounded-lg border space-y-2 ${loraUnsupported ? 'border-slate-700/60 opacity-70' : 'border-[#282a35]'}`}>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1.5 min-w-0">
-                        <span className="font-semibold text-white truncate max-w-[170px]" title={lora.name}>
+                        <span className={`font-semibold truncate max-w-[170px] ${loraUnsupported ? 'text-slate-500' : 'text-white'}`} title={lora.name}>
                           {lora.name.replace('.safetensors', '')}
                         </span>
-                        {compat.isCompatible ? (
+                        {loraUnsupported ? (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-800/80 text-slate-400 border border-slate-600/50 shrink-0" title="该服务商不支持">
+                            该服务商不支持
+                          </span>
+                        ) : compat.isCompatible ? (
                           <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-950/60 text-emerald-400 border border-emerald-800/40 shrink-0">
                             兼容
                           </span>
@@ -778,13 +786,16 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                       max={2.0}
                       step={0.05}
                       value={lora.modelStrength}
+                      disabled={loraUnsupported}
+                      title={loraUnsupported ? '该服务商不支持' : undefined}
                       onChange={(e) => {
+                        if (loraUnsupported) return;
                         const next = [...params.loras];
                         next[idx].modelStrength = parseFloat(e.target.value);
                         next[idx].clipStrength = parseFloat(e.target.value);
                         update({ loras: next });
                       }}
-                      className="w-full h-1 bg-[#252833] rounded appearance-none cursor-pointer accent-purple-400"
+                      className="w-full h-1 bg-[#252833] rounded appearance-none cursor-pointer accent-purple-400 disabled:opacity-40 disabled:cursor-not-allowed"
                     />
                   </div>
 

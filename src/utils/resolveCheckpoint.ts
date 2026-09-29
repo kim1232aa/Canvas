@@ -1,5 +1,24 @@
 import { Connection, NodeInstance } from '../types/graph';
-import { getFieldSpec, Provider } from '../schemas/providerSchema';
+import { getFieldSpec, resolveSchemaModelId, Provider } from '../schemas/providerSchema';
+
+
+/** Providers that have rows in PROVIDER_SCHEMA (field grey / omit). */
+const SCHEMA_PROVIDERS: readonly Provider[] = [
+  'fal',
+  'gemini',
+  'civitai',
+  'openai_compat',
+  'grok_compat',
+  'agnes',
+  'huggingface',
+  'nanogpt',
+];
+
+export function toSchemaProvider(provider: string | undefined | null): Provider | undefined {
+  const prov = (provider || '').toLowerCase().trim();
+  return (SCHEMA_PROVIDERS as readonly string[]).includes(prov) ? (prov as Provider) : undefined;
+}
+
 
 /** Engine / loader node types that carry an explicit model id. */
 export const ENGINE_NODE_TYPES = [
@@ -356,17 +375,15 @@ export function isLoraUnsupportedOnEndpoint(
   if (!prov && modelId.startsWith('fal-ai/')) prov = 'fal';
   if (prov === 'video' && modelId.startsWith('fal-ai/')) prov = 'fal';
 
-  const schemaProv: Provider | undefined =
-    prov === 'fal' || prov === 'gemini' || prov === 'civitai' || prov === 'openai_compat' || prov === 'grok_compat'
-      ? (prov as Provider)
-      : undefined;
+  const schemaProv = toSchemaProvider(prov);
   if (!schemaProv) return { unsupported: false };
 
-  const spec = getFieldSpec(schemaProv, modelId, 'loras');
+  const schemaModel = resolveSchemaModelId(schemaProv, modelId);
+  const spec = getFieldSpec(schemaProv, schemaModel, 'loras');
   if (spec?.status === 'unsupported') {
     return {
       unsupported: true,
-      message: `该服务商不支持（${schemaProv} / ${modelId} 的官方 schema 无 loras 字段）`,
+      message: `该服务商不支持（${schemaProv} / ${schemaModel} 的官方 schema 无 loras 字段）`,
     };
   }
   return { unsupported: false };
@@ -469,38 +486,51 @@ export function isCanvasFieldUnsupported(
   model: string | undefined,
   field: CanvasGreyField
 ): boolean {
-  const prov = (provider || '').trim();
-  const isOpenAiCompat = prov === 'openai_compat';
-  const isGrokCompat = prov === 'grok_compat';
-  if (
-    (isOpenAiCompat || isGrokCompat) &&
-    (field === 'seed' || field === 'negative_prompt' || field === 'width' || field === 'height' ||
-      field === 'steps' || field === 'cfg' || field === 'sampler' || field === 'scheduler' || field === 'denoise' || field === 'loras')
-  ) {
-    return true;
-  }
-  if (prov === 'gemini' && (field === 'seed' || field === 'width' || field === 'height' || field === 'negative_prompt' || field === 'steps' || field === 'cfg' || field === 'sampler' || field === 'scheduler' || field === 'denoise' || field === 'loras')) {
-    return true;
-  }
-  const schemaProv: Provider | undefined =
-    prov === 'fal' || prov === 'gemini' || prov === 'civitai' || prov === 'openai_compat' || prov === 'grok_compat'
-      ? (prov as Provider)
-      : undefined;
-  const schemaModel =
-    (model || '').trim() ||
-    (isOpenAiCompat ? 'gpt-image-2' : isGrokCompat ? 'grok-imagine-image' : '');
-  if (!schemaProv || !schemaModel) return false;
+  const schemaProv = toSchemaProvider(provider);
+  if (!schemaProv) return false;
+  // resolveSchemaModelId: empty / foreign checkpoint (e.g. after engine switch) → first schema model
+  // so Fal/Agnes/HF/Grok/OpenAI grey unsupported fields immediately, matching Grok-compat.
+  const schemaModel = resolveSchemaModelId(schemaProv, model);
+  if (!schemaModel) return false;
   return getFieldSpec(schemaProv, schemaModel, field)?.status === 'unsupported';
 }
 
-/** Drop leftover LoRA stacks when the active engine/model schema rejects loras. */
+/**
+ * Keep LoRA values on engine switch — never wipe stored stacks.
+ * Unsupported LoRAs stay visible but grey / omitted from the generate payload.
+ */
 export function sanitizeFrameLoras<T>(
-  provider: string | undefined,
-  model: string | undefined,
+  _provider: string | undefined,
+  _model: string | undefined,
   loras: T[] | undefined | null
 ): T[] {
-  const list = Array.isArray(loras) ? loras : [];
-  if (list.length === 0) return list;
-  if (isCanvasFieldUnsupported(provider, model, 'loras')) return [];
-  return list;
+  return Array.isArray(loras) ? loras : [];
+}
+
+/** Omit schema-unsupported fields from a generate payload (UI must not send them). */
+export function omitUnsupportedGenerateFields<T extends Record<string, unknown>>(
+  provider: string | undefined,
+  model: string | undefined,
+  fields: T
+): T {
+  const out: Record<string, unknown> = { ...fields };
+  const pairs: Array<[CanvasGreyField, string[]]> = [
+    ['seed', ['seed']],
+    ['negative_prompt', ['negative_prompt']],
+    ['width', ['width']],
+    ['height', ['height']],
+    ['steps', ['steps', 'num_inference_steps']],
+    ['cfg', ['cfg', 'guidance_scale', 'guidance']],
+    ['sampler', ['sampler', 'sampler_name']],
+    ['scheduler', ['scheduler']],
+    ['denoise', ['denoise']],
+    ['loras', ['loras']],
+  ];
+  for (const [field, keys] of pairs) {
+    if (!isCanvasFieldUnsupported(provider, model, field)) continue;
+    for (const k of keys) {
+      if (k in out) out[k] = undefined;
+    }
+  }
+  return out as T;
 }
