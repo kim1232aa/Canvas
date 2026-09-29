@@ -1731,7 +1731,8 @@ export default function App() {
     '';
 
   const activeParams: ComfyParameters = {
-    checkpoint: checkpointNode?.values?.ckpt_name || googleImagenNode?.values?.model || activeFrame?.params?.checkpoint || 'Tongyi-MAI/Z-Image-Turbo',
+    // Gemini 节点在场时 model 可为空（UI 显示「请先选择模型」），不回落到其它模型
+    checkpoint: checkpointNode?.values?.ckpt_name || (googleImagenNode ? (googleImagenNode.values?.model || '') : (activeFrame?.params?.checkpoint || 'Tongyi-MAI/Z-Image-Turbo')),
     seed: ksamplerNode?.values?.seed !== undefined ? Number(ksamplerNode.values.seed) : (activeFrame?.params?.seed ?? undefined),
     seedControl: (ksamplerNode?.values?.control_after_generate as any) || activeFrame?.params?.seedControl || 'randomize',
     steps: ksamplerNode?.values?.steps !== undefined ? Number(ksamplerNode.values.steps) : (activeFrame?.params?.steps ?? 25),
@@ -1744,6 +1745,8 @@ export default function App() {
     batchSize: latentNode?.values?.batch_size !== undefined ? Number(latentNode.values.batch_size) : (activeFrame?.params?.batchSize ?? 1),
     loras: (selectedFrameId ? activeFrame?.params?.loras : null) || (graphLoras.length > 0 ? graphLoras : (activeFrame?.params?.loras || [])),
     targetProvider: detectedTargetProvider as any,
+    aspectRatio: (googleImagenNode ? googleImagenNode.values?.aspect_ratio : activeFrame?.params?.aspectRatio) || undefined,
+    imageSize: (googleImagenNode ? googleImagenNode.values?.image_size : activeFrame?.params?.imageSize) || undefined,
   };
 
   return (
@@ -2004,6 +2007,8 @@ export default function App() {
                         model: newParams.checkpoint.includes('gemini') || newParams.checkpoint.includes('imagen')
                           ? newParams.checkpoint
                           : n.values.model,
+                        aspect_ratio: newParams.aspectRatio || '',
+                        image_size: newParams.imageSize || '',
                       },
                     };
                   }

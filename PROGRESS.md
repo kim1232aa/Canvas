@@ -63,6 +63,32 @@
 - [x] S4. `/api/cloud-keys/balances` 防御 CSRF / 跨站 `<img>` 触发：GET 请求返回 405 Method Not Allowed；切换为 POST，挂载 `requireAdminAuth` 与 `checkSecFetchSite`（只允许 same-origin / none，跨站拒绝 403，缺省回退 Origin 校验）；确认余额检查全部为只读，绝不发起生成调用；前端调用改为 POST 并携带 Bearer token（server.ts:253, 6668; src/services/api.ts:758; src/components/BackendSettingsModal.tsx:125）
 - [x] S5. `/api/cloud-keys/strategy` 鉴权校验、历史记录淘汰与云端同步清洗：挂载 `requireAdminAuth`，校验 provider 属于已知列表且 strategy ∈ `['round_robin', 'failover', 'latency_best']`，前端带 Bearer token；历史记录上限改为淘汰最旧的记录 (`splice(MAX_HISTORY_COUNT)`)，移除满 500 条拒绝 400，共用 `MAX_HISTORY_COUNT = 500` 常量；Admin「同步至云端」按钮过滤已知字段，排除空字符串、掩码值及未改动字段（server.ts:604, 6593, 6853, 6965; src/services/api.ts:721; src/components/BackendSettingsModal.tsx:39, 1055）
 
+## UI 跟进轮（分支 ui-followup，基于 83f5c23）
+| 编号 | 状态 | 内容 | 文件:行 |
+|:---|:---|:---|:---|
+| U-E1 | 已完成（tsc 待跑） | Gemini 取值表抽成唯一共享声明；服务端校验改为读取它（行为不变，unverified 仍 400）；节点与参数面板中 width/height 置灰并标「该服务商不支持」，aspect_ratio/image_size 下拉按模型取值，未选模型时禁用并提示「请先选择模型」；三种状态样式放在一处 | src/shared/providerFieldSpecs.ts:38,82；server.ts:11,5913-5926；src/components/FieldStatusBadge.tsx:7-23；src/components/GeminiFieldSelect.tsx:7；src/components/NodeItem.tsx:553-600；src/components/ParameterInspector.tsx:140,727-797；src/constants/nodes.ts:2,788-795；src/App.tsx:1735,1748-1749,2010-2011 |
+| U-E2 | 未开始 | unverified 取值透传上游，已下线的模型标「已下线」 | — |
+| U-E3 | 未开始 | 视频节点未选模型时禁用 | — |
+| U-E4 | 未开始 | 历史面板显示「未填写」 | — |
+| U-E5 | 未开始 | ParameterInspector 切换到 gemini 时不再预设默认模型（ParameterInspector.tsx:317 仍会写 gemini-2.5-flash-image） | — |
+| U-E6 | 未开始 | test-single 加 admin token 和 base URL 限制 | — |
+
+U-E1 说明：
+- 服务端行为：只有两处错误文案变了，状态码仍是 400。① 对表内模型，不在列表里的值（例如 3.1-flash 传 `0.5K`、2.5 传 `7:3`）现在报「该服务商不支持此取值」，以前报「未能核实」。② 列表内标为 unverified 的值（`512px`、3-pro / 2.5 / preview 的全部候选值）报「未能核实」。
+- 前端下拉里 unverified 选项先设为 disabled，因为服务端现在仍会对它返回 400。U-E2 放开后改为可选。
+- NodeItem 原来的 select 分支里只有 CheckpointLoaderSimple 和 AIVideoNode 两个特例，没有通用 fallback，所以 GoogleImagenNode 的 model、aspect_ratio、image_size 三个下拉在画布节点上根本没渲染（`return null`）。本项已补上。
+- `-preview` 模型只放进共享表（用于下线日期），暂时不进 model 下拉。
+- 预设 `gemini-imagen-zero-config` 现在是 model=gemini-2.5-flash-image、aspect_ratio=1:1，UI 会给它标「官方未说明是否生效」。服务端仍会 400（与之前一致），留到 U-E2 / U-E5 处理。
+
+事实核实（2026-09-29 WebFetch）：
+| 事实 | URL | 结果 |
+|:---|:---|:---|
+| 3.1-flash-lite-image 的 aspect_ratio 为 1:1 3:2 2:3 3:4 4:3 4:5 5:4 9:16 16:9 21:9，image_size 只有 1K | https://ai.google.dev/gemini-api/docs/image-generation | 已核实 |
+| 3.1-flash-image 的 image_size 为「512px (0.5K)」、1K、2K、4K | 同上 | 已核实；512px 在请求里的确切字符串未能核实 → 标 unverified |
+| 3.1-flash-image 的 14 个 aspect_ratio | 同上 | 本次抓取在比例表之前被截断，未能独立核实，沿用 provider-params.md §6 与 d84076f |
+| 3-pro-image 支持 1K/2K/4K；它和 2.5-flash-image 的 aspect_ratio 均未列出 | 同上 | 已核实（未列出 → 候选值全部标 unverified） |
+| 下线日：2.5-flash-image 为 2026-10-02；3.1-flash-image-preview 与 3-pro-image-preview 为 2026-06-25；3.1-flash-image 与 3-pro-image 未公布 | https://ai.google.dev/gemini-api/docs/deprecations | 已核实（3.1-flash-lite-image 未出现在该页） |
+
 ## 2. 踩坑记录
 - 行号偏移：旧报告行号基于 909dc26，当前 HEAD 是 35a1566，按代码内容定位。
 - .env 里有真实密钥，绝不读取或打印。

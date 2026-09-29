@@ -1,4 +1,5 @@
 import { NodeDefinition } from '../types/graph';
+import { GEMINI_IMAGE_MODELS } from '../shared/providerFieldSpecs';
 
 export const SAMPLER_OPTIONS = [
   { label: 'euler', value: 'euler' },
@@ -783,47 +784,15 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
         default: '',
         options: [
           { label: '未选择 (必须选择模型)', value: '' },
-          { label: 'Gemini 2.5 Flash Image', value: 'gemini-2.5-flash-image' },
-          { label: 'Gemini 3.1 Flash Image', value: 'gemini-3.1-flash-image' },
-          { label: 'Gemini 3.1 Flash Lite Image', value: 'gemini-3.1-flash-lite-image' },
-          { label: 'Gemini 3 Pro Image', value: 'gemini-3-pro-image' },
+          // ponytail: -preview 模型暂不进下拉（与本轮前一致）；U-E2 加「已下线」标注时再放开
+          ...Object.entries(GEMINI_IMAGE_MODELS)
+            .filter(([id]) => !id.endsWith('-preview'))
+            .map(([id, spec]) => ({ label: spec.label, value: id })),
         ],
       },
-      {
-        name: 'aspect_ratio',
-        label: 'aspect_ratio',
-        type: 'select',
-        default: '',
-        options: [
-          { label: '未选择 (不传)', value: '' },
-          { label: '1:1', value: '1:1' },
-          { label: '1:4', value: '1:4' },
-          { label: '1:8', value: '1:8' },
-          { label: '2:3', value: '2:3' },
-          { label: '3:2', value: '3:2' },
-          { label: '3:4', value: '3:4' },
-          { label: '4:1', value: '4:1' },
-          { label: '4:3', value: '4:3' },
-          { label: '4:5', value: '4:5' },
-          { label: '5:4', value: '5:4' },
-          { label: '8:1', value: '8:1' },
-          { label: '9:16', value: '9:16' },
-          { label: '16:9', value: '16:9' },
-          { label: '21:9', value: '21:9' },
-        ],
-      },
-      {
-        name: 'image_size',
-        label: 'image_size',
-        type: 'select',
-        default: '',
-        options: [
-          { label: '未选择 (不传)', value: '' },
-          { label: '1K', value: '1K' },
-          { label: '2K', value: '2K' },
-          { label: '4K', value: '4K' },
-        ],
-      },
+      // aspect_ratio / image_size 的选项按所选模型从 providerFieldSpecs 取，由 GeminiFieldSelect 渲染
+      { name: 'aspect_ratio', label: 'aspect_ratio', type: 'select', default: '', options: [] },
+      { name: 'image_size', label: 'image_size', type: 'select', default: '', options: [] },
     ],
     defaultValues: {
       model: '',

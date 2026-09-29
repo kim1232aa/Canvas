@@ -23,6 +23,8 @@ import { NODE_DEFINITIONS } from '../constants/nodes';
 import { refinePromptWithGemini, getStoredApiKeys, getRefineModelSelection } from '../services/api';
 import { validateModelCompatibility } from '../utils/baseModelMatcher';
 import { EngineRegistry } from '../engines/EngineRegistry';
+import { GeminiFieldSelect } from './GeminiFieldSelect';
+import { FieldStatusBadge } from './FieldStatusBadge';
 
 interface NodeItemProps {
   node: NodeInstance;
@@ -548,6 +550,54 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                     </div>
                   </div>
                 );
+              }
+
+              if (node.type === 'GoogleImagenNode') {
+                const stop = (e: React.SyntheticEvent) => e.stopPropagation();
+                if (widget.name === 'model') {
+                  return (
+                    <div key={widget.name} className="space-y-1">
+                      <label className="text-slate-400 font-mono text-[11px] block">{widget.label}</label>
+                      <select
+                        value={value}
+                        onMouseDown={stop}
+                        onPointerDown={stop}
+                        onKeyDown={stop}
+                        onChange={(e) => onUpdateValue(node.id, widget.name, e.target.value)}
+                        className="w-full bg-[#121316] border border-[#2d303a] focus:border-cyan-500 rounded-lg px-2.5 py-1.5 text-slate-200 text-xs font-mono outline-none cursor-pointer"
+                      >
+                        {!isValueInOpts && value && <option value={value}>{value}</option>}
+                        {opts.map((opt) => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  );
+                }
+                if (widget.name === 'aspect_ratio' || widget.name === 'image_size') {
+                  return (
+                    <div key={widget.name} className="space-y-3">
+                      {widget.name === 'aspect_ratio' && (
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between gap-1.5">
+                            <label className="text-slate-500 font-mono text-[11px]">width / height</label>
+                            <FieldStatusBadge status="unsupported" />
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <input type="number" disabled placeholder="width" aria-label="width（该服务商不支持）" className="w-full bg-[#0d0e12] border border-[#22242c] rounded-lg px-2.5 py-1.5 text-slate-600 font-mono text-xs cursor-not-allowed" />
+                            <input type="number" disabled placeholder="height" aria-label="height（该服务商不支持）" className="w-full bg-[#0d0e12] border border-[#22242c] rounded-lg px-2.5 py-1.5 text-slate-600 font-mono text-xs cursor-not-allowed" />
+                          </div>
+                        </div>
+                      )}
+                      <GeminiFieldSelect
+                        model={node.values?.model || ''}
+                        field={widget.name}
+                        value={value || ''}
+                        onChange={(v) => onUpdateValue(node.id, widget.name, v)}
+                      />
+                    </div>
+                  );
+                }
               }
             }
 

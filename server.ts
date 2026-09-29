@@ -8,6 +8,7 @@ try {
   console.warn('Failed to set custom DNS servers:', e.message);
 }
 import dotenv from 'dotenv';
+import { GEMINI_IMAGE_MODELS, geminiValueStatus } from './src/shared/providerFieldSpecs.ts';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -5909,64 +5910,17 @@ app.post(['/api/gemini/generate', '/api/engine/gemini/generate'], async (req, re
       return res.status(400).json({ error: '该服务商不支持: image_url 为非 data: URL（Google Gemini 仅接受内联 base64 参考图）', unsupported: ['image_url'] });
     }
 
-    if (model === 'gemini-3.1-flash-image') {
-      const allowedRatios = ['1:1', '1:4', '1:8', '2:3', '3:2', '3:4', '4:1', '4:3', '4:5', '5:4', '8:1', '9:16', '16:9', '21:9'];
-      if (isProvided(aspect_ratio) && !allowedRatios.includes(aspect_ratio)) {
+    // 取值表唯一来源: src/shared/providerFieldSpecs.ts。本轮行为不变：unverified 仍 400（U-E2 再改为透传）
+    for (const [field, value] of [['aspect_ratio', aspect_ratio], ['image_size', image_size]] as const) {
+      if (!isProvided(value)) continue;
+      const status = geminiValueStatus(model, field, value);
+      if (status === 'unverified') {
+        return res.status(400).json({ error: `未能核实该模型 (${model}) 的 ${field} 取值 "${value}" 是否生效，暂不支持使用` });
+      }
+      if (status === 'unsupported') {
+        const listed = GEMINI_IMAGE_MODELS[model][field].filter((v) => v.status === 'supported').map((v) => v.value);
         return res.status(400).json({
-          error: `该服务商不支持此 aspect_ratio 取值: "${aspect_ratio}"。gemini-3.1-flash-image 官方仅支持: ${allowedRatios.join(', ')}`,
-        });
-      }
-      if (isProvided(image_size)) {
-        if (image_size === '512px' || image_size === '0.5K' || image_size === '512px (0.5K)') {
-          return res.status(400).json({
-            error: '该模型 image_size 的 512px (0.5K) 确切字符串未能核实，暂不支持使用',
-          });
-        }
-        const allowedSizes = ['1K', '2K', '4K'];
-        if (!allowedSizes.includes(image_size)) {
-          return res.status(400).json({
-            error: `该服务商不支持此 image_size 取值: "${image_size}"。gemini-3.1-flash-image 官方仅支持: ${allowedSizes.join(', ')}（大写 K）`,
-          });
-        }
-      }
-    } else if (model === 'gemini-3.1-flash-lite-image') {
-      const allowedRatios = ['1:1', '3:2', '2:3', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9'];
-      if (isProvided(aspect_ratio) && !allowedRatios.includes(aspect_ratio)) {
-        return res.status(400).json({
-          error: `该服务商不支持此 aspect_ratio 取值: "${aspect_ratio}"。gemini-3.1-flash-lite-image 官方仅支持: ${allowedRatios.join(', ')}`,
-        });
-      }
-      if (isProvided(image_size)) {
-        if (image_size !== '1K') {
-          return res.status(400).json({
-            error: `该服务商不支持此 image_size 取值: "${image_size}"。gemini-3.1-flash-lite-image 官方仅支持: 1K`,
-          });
-        }
-      }
-    } else if (model === 'gemini-3-pro-image') {
-      if (isProvided(aspect_ratio)) {
-        return res.status(400).json({
-          error: '未能核实该模型支持的 aspect_ratio',
-        });
-      }
-      if (isProvided(image_size)) {
-        const allowedSizes = ['1K', '2K', '4K'];
-        if (!allowedSizes.includes(image_size)) {
-          return res.status(400).json({
-            error: `该服务商不支持此 image_size 取值: "${image_size}"。gemini-3-pro-image 官方仅支持: ${allowedSizes.join(', ')}（大写 K）`,
-          });
-        }
-      }
-    } else {
-      // 其它模型（如 gemini-2.5-flash-image 及任何带 -preview 后缀的）：取值表未能核实
-      if (isProvided(aspect_ratio)) {
-        return res.status(400).json({
-          error: `未能核实该模型 (${model}) 支持的 aspect_ratio`,
-        });
-      }
-      if (isProvided(image_size)) {
-        return res.status(400).json({
-          error: `未能核实该模型 (${model}) 支持的 image_size`,
+          error: `该服务商不支持此 ${field} 取值: "${value}"。${model} 官方仅支持: ${listed.join(', ') || '（官方未列出）'}`,
         });
       }
     }

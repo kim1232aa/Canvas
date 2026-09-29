@@ -23,6 +23,8 @@ import { BASE_MODELS, SAMPLER_OPTIONS, SCHEDULER_OPTIONS } from '../constants/no
 import { refinePromptWithGemini, fetchLiveModels, getRefineModelSelection } from '../services/api';
 import { validateModelCompatibility } from '../utils/baseModelMatcher';
 import { normalizeForComfyUI } from '../utils/engineParameterNormalizer';
+import { GeminiFieldSelect } from './GeminiFieldSelect';
+import { FieldStatusBadge } from './FieldStatusBadge';
 
 interface ParameterInspectorProps {
   params: ComfyParameters;
@@ -135,6 +137,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
   const update = (partial: Partial<ComfyParameters>) => {
     onChange({ ...params, ...partial });
   };
+  const isGemini = params.targetProvider === 'gemini';
 
   const handleRandomizeSeed = () => {
     update({ seed: Math.floor(Math.random() * 1000000000) });
@@ -421,7 +424,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
               <Info className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
               <div>
                 <span className="font-bold text-cyan-300">Google Gemini 官方直连：</span>
-                <span> 由 Google 前沿多模态大模型直接渲染，支持细腻材质光影与超长文本理解；已自动适配画幅比例与引导系数。</span>
+                <span> 由 Google 前沿多模态大模型直接渲染（generateContent）。不支持宽高像素，请在下方「画幅」区选择 aspect_ratio / image_size（取值随模型变化，未选择则不传）。</span>
               </div>
             </div>
           )}
@@ -725,12 +728,13 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
 
           <div className="grid grid-cols-5 gap-1.5">
             {aspectRatios.map((ar) => {
-              const isActive = params.width === ar.w && params.height === ar.h;
+              const isActive = !isGemini && params.width === ar.w && params.height === ar.h;
               return (
                 <button
                   key={ar.label}
+                  disabled={isGemini}
                   onClick={() => handleAspectRatioPreset(ar.w, ar.h)}
-                  className={`py-1.5 rounded-lg text-center transition-all ${
+                  className={`py-1.5 rounded-lg text-center transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
                     isActive
                       ? 'bg-cyan-500/20 border border-cyan-500/50 text-cyan-300 font-bold'
                       : 'bg-[#121316] border border-[#272933] text-slate-400 hover:text-white'
@@ -745,26 +749,51 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
 
           <div className="grid grid-cols-2 gap-2 pt-1 font-mono text-[11px]">
             <div className="space-y-1">
-              <span className="text-slate-400 text-[10px]">宽度 WIDTH (像素)</span>
+              <div className="flex items-center justify-between gap-1">
+                <span className="text-slate-400 text-[10px]">宽度 WIDTH (像素)</span>
+                {isGemini && <FieldStatusBadge status="unsupported" />}
+              </div>
               <input
                 type="number"
                 step={64}
-                value={params.width}
+                disabled={isGemini}
+                value={isGemini ? '' : params.width}
                 onChange={(e) => update({ width: parseInt(e.target.value) || 1024 })}
-                className="w-full bg-[#111216] border border-[#2b2d38] rounded-lg px-2.5 py-1 text-slate-200 outline-none font-mono"
+                className="w-full bg-[#111216] border border-[#2b2d38] rounded-lg px-2.5 py-1 text-slate-200 outline-none font-mono disabled:opacity-40 disabled:cursor-not-allowed"
               />
             </div>
             <div className="space-y-1">
-              <span className="text-slate-400 text-[10px]">高度 HEIGHT (像素)</span>
+              <div className="flex items-center justify-between gap-1">
+                <span className="text-slate-400 text-[10px]">高度 HEIGHT (像素)</span>
+                {isGemini && <FieldStatusBadge status="unsupported" />}
+              </div>
               <input
                 type="number"
                 step={64}
-                value={params.height}
+                disabled={isGemini}
+                value={isGemini ? '' : params.height}
                 onChange={(e) => update({ height: parseInt(e.target.value) || 1024 })}
-                className="w-full bg-[#111216] border border-[#2b2d38] rounded-lg px-2.5 py-1 text-slate-200 outline-none font-mono"
+                className="w-full bg-[#111216] border border-[#2b2d38] rounded-lg px-2.5 py-1 text-slate-200 outline-none font-mono disabled:opacity-40 disabled:cursor-not-allowed"
               />
             </div>
           </div>
+
+          {isGemini && (
+            <div className="grid grid-cols-2 gap-2">
+              <GeminiFieldSelect
+                model={params.checkpoint || ''}
+                field="aspect_ratio"
+                value={params.aspectRatio || ''}
+                onChange={(v) => update({ aspectRatio: v || undefined })}
+              />
+              <GeminiFieldSelect
+                model={params.checkpoint || ''}
+                field="image_size"
+                value={params.imageSize || ''}
+                onChange={(v) => update({ imageSize: v || undefined })}
+              />
+            </div>
+          )}
         </div>
       </div>
     </div>
