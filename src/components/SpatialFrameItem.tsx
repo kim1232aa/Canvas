@@ -254,7 +254,7 @@ export const SpatialFrameItem: React.FC<SpatialFrameItemProps> = ({
               <>
                 {chip(
                   greySampler || greyScheduler,
-                  `${frame.params.sampler} (${frame.params.scheduler})`,
+                  `${frame.params.sampler || '未指定'} (${frame.params.scheduler || '未指定'})`,
                   greySampler && !greyScheduler ? 'sampler' : greyScheduler && !greySampler ? 'scheduler' : 'sampler'
                 )}
                 <span>·</span>

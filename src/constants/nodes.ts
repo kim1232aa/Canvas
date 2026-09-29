@@ -2,6 +2,7 @@ import { NodeDefinition } from '../types/graph';
 import { listModels, modelStatus } from '../schemas/providerSchema';
 
 export const SAMPLER_OPTIONS = [
+  { label: '未指定', value: '' },
   { label: 'euler', value: 'euler' },
   { label: 'euler_ancestral', value: 'euler_ancestral' },
   { label: 'dpmpp_2m', value: 'dpmpp_2m' },
@@ -20,6 +21,7 @@ export const SAMPLER_OPTIONS = [
 ];
 
 export const SCHEDULER_OPTIONS = [
+  { label: '未指定', value: '' },
   { label: 'normal', value: 'normal' },
   { label: 'karras', value: 'karras' },
   { label: 'exponential', value: 'exponential' },
