@@ -107,5 +107,15 @@ describe('paramsDrawerFramePrefix / sanitizeFrameMarketingTitle', () => {
     );
     expect(sanitizeFrameMarketingTitle('modelscope', 'Tongyi-MAI/Z-Image-Turbo', stuck, 1)).toBe(stuck);
   });
+
+  it('updates Gemini · 未选择模型 once a real model is chosen', () => {
+    expect(
+      sanitizeFrameMarketingTitle('gemini', 'gemini-2.5-flash-image', 'Gemini · 未选择模型', 0)
+    ).toBe('Gemini · gemini-2.5-flash-image');
+  });
+
+  it('leaves custom human titles alone on cloud engines', () => {
+    expect(sanitizeFrameMarketingTitle('gemini', 'gemini-2.5-flash-image', '我的作品', 0)).toBe('我的作品');
+  });
 });
 

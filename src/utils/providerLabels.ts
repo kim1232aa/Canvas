@@ -128,8 +128,9 @@ export function paramsDrawerFramePrefix(provider: string | undefined | null): st
 }
 
 /**
- * When the LoRA stack is emptied (schema reject / engine switch), drop marketing
- * titles that still advertise LoRA packs (e.g. 魔搭…Z-Image-Turbo + …LoRA).
+ * Drop marketing LoRA titles when the stack is cleared, and keep cloud-engine
+ * auto titles tracking engine · model (so "Gemini · 未选择模型" updates once a
+ * real model is chosen). Custom human titles are left alone.
  */
 export function sanitizeFrameMarketingTitle(
   provider: string | undefined | null,
@@ -138,14 +139,25 @@ export function sanitizeFrameMarketingTitle(
   nextLorasLength: number
 ): string {
   const raw = String(title || '').trim();
-  if (nextLorasLength > 0) return raw;
+  const desired = spatialFrameTopBarLabel(provider, checkpoint);
   const advertisesLoraOrPack =
     /LoRA/i.test(raw) ||
     /\+\s*美胸/.test(raw) ||
     (/魔搭/.test(raw) && /Z-Image-Turbo/i.test(raw));
-  if (!advertisesLoraOrPack) return raw;
-  const rebuilt = spatialFrameTopBarLabel(provider, checkpoint);
-  if (rebuilt && rebuilt !== '未选择模型') return rebuilt;
-  return '取景生成框';
+
+  if (isNonComfyCloudProvider(provider)) {
+    const tracksEngine =
+      advertisesLoraOrPack ||
+      /未选择模型/.test(raw) ||
+      raw === '取景生成框' ||
+      /^(Gemini|Grok 兼容中转|OpenAI 兼容中转)\s*·/.test(raw);
+    if (tracksEngine) return desired;
+  }
+
+  if (nextLorasLength === 0 && advertisesLoraOrPack) {
+    if (desired && desired !== '未选择模型') return desired;
+    return '取景生成框';
+  }
+  return raw;
 }
 
