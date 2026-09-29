@@ -1,5 +1,5 @@
 import { NodeDefinition } from '../types/graph';
-import { listModels } from '../schemas/providerSchema';
+import { listModels, modelStatus } from '../schemas/providerSchema';
 
 export const SAMPLER_OPTIONS = [
   { label: 'euler', value: 'euler' },
@@ -770,7 +770,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
     title: 'Google Gemini 生图 (官方直连引擎)',
     category: 'providers',
     colorTag: '#4285F4',
-    description: '直连 Google Gemini 官方生图模型 (generateContent)。不支持负向提示词/seed/steps/CFG/LoRA。',
+    description: '直连 Google Gemini 官方生图模型 (generateContent)。seed (unverified) 原样发送；不支持负向提示词/steps/CFG/LoRA。',
     inputs: [
       { id: 'positive', name: 'positive', type: 'CONDITIONING', label: 'prompt' },
       { id: 'negative', name: 'negative', type: 'CONDITIONING', label: 'negative' },
@@ -784,10 +784,12 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
         default: '',
         options: [
           { label: '未选择 (必须选择模型)', value: '' },
-          // ponytail: -preview 模型暂不进下拉（与本轮前一致）；U-E2 加「已下线」标注时再放开
-          ...listModels('gemini')
-            .filter(({ id }) => !id.endsWith('-preview'))
-            .map(({ id, label }) => ({ label, value: id })),
+          // U2: 含 -preview；过了下线日的标「（已下线）」，仍可选、原样发送。
+          // ponytail: 标签在页面加载时计算，跨过下线日需刷新页面
+          ...listModels('gemini').map(({ id, label }) => ({
+            label: modelStatus('gemini', id, new Date().toISOString().slice(0, 10)) === 'deprecated' ? `${label}（已下线）` : label,
+            value: id,
+          })),
         ],
       },
       // aspect_ratio / image_size 的选项按所选模型从 providerSchema 取，由 GeminiFieldSelect 渲染

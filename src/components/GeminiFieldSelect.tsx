@@ -1,5 +1,5 @@
 import React from 'react';
-import { fieldOptions, getModelSpec, valueStatus, type GeminiSelectField } from '../schemas/providerSchema';
+import { fieldOptions, getModelSpec, modelStatus, valueStatus, type GeminiSelectField } from '../schemas/providerSchema';
 import { FieldStatusBadge, FIELD_STATUS_LABEL } from './FieldStatusBadge';
 
 // aspect_ratio / image_size 下拉：选项只来自 providerSchema 中当前模型的列表。
@@ -35,8 +35,8 @@ export const GeminiFieldSelect: React.FC<{
           <>
             <option value="">未选择（不传）</option>
             {fieldOptions('gemini', model, field).map((v) => (
-              // U-E1: 服务端仍对 unverified 取值 400，故此处禁用；U-E2 改为可选
-              <option key={v.value} value={v.value} disabled={v.status === 'unverified'}>
+              // U2: unverified 取值可选；选项文字标注状态
+              <option key={v.value} value={v.value}>
                 {v.value}{v.status === 'unverified' ? `（${FIELD_STATUS_LABEL.unverified}）` : ''}
               </option>
             ))}
@@ -47,4 +47,11 @@ export const GeminiFieldSelect: React.FC<{
       {!spec && !model && <p className="text-[10px] text-slate-500">请先选择模型</p>}
     </div>
   );
+};
+
+/** 所选 Gemini 模型的状态徽章：已下线 → deprecated；不在表内 → unverified；正常 → 不显示 */
+export const GeminiModelBadge: React.FC<{ model: string }> = ({ model }) => {
+  if (!model) return null;
+  const s = modelStatus('gemini', model, new Date().toISOString().slice(0, 10));
+  return s === 'supported' ? null : <FieldStatusBadge status={s} />;
 };

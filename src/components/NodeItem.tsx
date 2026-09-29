@@ -23,7 +23,7 @@ import { NODE_DEFINITIONS } from '../constants/nodes';
 import { refinePromptWithGemini, getStoredApiKeys, getRefineModelSelection } from '../services/api';
 import { validateModelCompatibility } from '../utils/baseModelMatcher';
 import { EngineRegistry } from '../engines/EngineRegistry';
-import { GeminiFieldSelect } from './GeminiFieldSelect';
+import { GeminiFieldSelect, GeminiModelBadge } from './GeminiFieldSelect';
 import { FieldStatusBadge } from './FieldStatusBadge';
 
 interface NodeItemProps {
@@ -557,7 +557,10 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                 if (widget.name === 'model') {
                   return (
                     <div key={widget.name} className="space-y-1">
-                      <label className="text-slate-400 font-mono text-[11px] block">{widget.label}</label>
+                      <div className="flex items-center justify-between gap-1.5">
+                        <label className="text-slate-400 font-mono text-[11px]">{widget.label}</label>
+                        <GeminiModelBadge model={value || ''} />
+                      </div>
                       <select
                         value={value}
                         onMouseDown={stop}

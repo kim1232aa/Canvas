@@ -12,7 +12,7 @@ export class GeminiDriver extends BaseEngineDriver {
   readonly name = 'Google Gemini (官方直连)';
   readonly label = 'Google 官方 Gemini';
   readonly badgeColor = '#10b981';
-  readonly description = 'Google 官方 Gemini 2.5 Flash Image、Gemini 3.1 Flash Image 及 Gemini 3.8 Flash 深度多模态思考推理模型。';
+  readonly description = 'Google 官方 Gemini 生图 (generateContent)。seed 属于 unverified，原样发送。不支持 steps/CFG/sampler/LoRA。';
   readonly capabilities = ['text2img', 'reasoning'] as const;
 
   readonly supportedModels: ModelSpec[] = [
@@ -87,6 +87,8 @@ export class GeminiDriver extends BaseEngineDriver {
     if (params.image_url) {
       body.image_url = params.image_url;
     }
+    // U2: seed unverified → 原样发送
+    if (params.seed != null) body.seed = params.seed;
 
     const resp = await fetch('/api/gemini/generate', {
       method: 'POST',
@@ -99,7 +101,9 @@ export class GeminiDriver extends BaseEngineDriver {
 
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({ error: 'Google Gemini 生成失败' }));
-      throw new Error(err.details || err.error || `Google Gemini 错误 (${resp.status})`);
+      // U2: 原样暴露上游 HTTP 状态码和响应体
+      const msg = [err.error, err.upstreamBody ? JSON.stringify(err.upstreamBody) : ''].filter(Boolean).join(' — ');
+      throw new Error(msg || `Google Gemini 错误 (${resp.status})`);
     }
 
     const data = await resp.json();
@@ -112,7 +116,7 @@ export class GeminiDriver extends BaseEngineDriver {
       actualModel: data.actualModel || data.model || params.model,
       actualProvider: data.actualProvider || this.name,
       requestedModel: params.model,
-      seed: null, // Gemini generateContent has no seed
+      seed: data.historyItem?.seed ?? null, // 服务端只在真正发给上游时记录
       rawResponse: data,
     };
   }

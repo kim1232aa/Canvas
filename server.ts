@@ -8,7 +8,7 @@ try {
   console.warn('Failed to set custom DNS servers:', e.message);
 }
 import dotenv from 'dotenv';
-import { fieldOptions, valueStatus } from './src/schemas/providerSchema.ts';
+import { fieldOptions, getFieldSpec, modelStatus, valueStatus } from './src/schemas/providerSchema.ts';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -4130,11 +4130,35 @@ app.post(['/api/video/generate', '/api/engine/video/generate'], async (req, res)
       }
     }
 
-    // Fields this branch does not forward (per-endpoint schemas differ) → 400 instead of silently dropping.
-    if (rejectUnsupported(res, `Fal.ai Video (${endpoint})`, req.body, ['duration', 'fps', 'steps', 'cfg', 'guidance_scale', 'negative_prompt', 'loras'])) return;
+    // U2: 按 providerSchema（fal 端点）判定：unsupported → 400；supported / unverified / 不在表内 → 原样发送；没传不发。
+    // [请求字段, schema 字段, 缺省上游字段名]；上游字段名优先取 schema 的 wire（cfg_scale / guide_scale / num_inference_steps…）
+    const FAL_VIDEO_FIELDS = [
+      ['duration', undefined, 'duration'],
+      ['fps', undefined, 'fps'],
+      ['negative_prompt', 'negative_prompt', 'negative_prompt'],
+      ['steps', 'steps', 'num_inference_steps'],
+      ['cfg', 'cfg', 'guidance_scale'],
+      ['guidance_scale', 'cfg', 'guidance_scale'],
+      ['loras', 'loras', 'loras'],
+    ] as const;
+    const fieldStatus: Record<string, string> = {};
+    const falUnsup: string[] = [];
+    for (const [f, key] of FAL_VIDEO_FIELDS) {
+      if (!isProvided(req.body[f])) continue;
+      const status = (key && getFieldSpec('fal', endpoint, key)?.status) || 'unverified';
+      fieldStatus[f] = status;
+      if (status === 'unsupported') falUnsup.push(f);
+    }
+    if (falUnsup.length > 0) {
+      return res.status(400).json({ error: `该服务商不支持: ${falUnsup.join(', ')}（Fal.ai Video ${endpoint}）`, unsupported: falUnsup });
+    }
     const payload: any = { prompt };
     if (isProvided(req.body.aspect_ratio)) payload.aspect_ratio = aspect_ratio;
     if (isProvided(seed)) payload.seed = Number(seed);
+    for (const [f, key, fallbackWire] of FAL_VIDEO_FIELDS) {
+      if (!isProvided(req.body[f])) continue;
+      payload[(key && getFieldSpec('fal', endpoint, key)?.wire) || fallbackWire] = req.body[f];
+    }
     if (image_url) {
       payload.image_url = image_url;
     }
@@ -5593,9 +5617,9 @@ app.post(
     try {
       const { prompt, negative_prompt, model, steps, guidance, seed, width, height } = req.body;
       if (!model) return res.status(400).json({ error: '模型为必填项（model is required）' });
-      // ponytail: ModelScope LoRA body format could not be verified against official docs → 400 until verified.
-      // image_url: reference-image field unverified → reject instead of silently dropping.
-      if (rejectUnsupported(res, 'ModelScope', req.body, ['loras', 'cfg', 'denoise', 'image_url'])) return;
+      // loras: 官方格式未能核实 → unverified，用户传了就原样放进 payload.loras，失败返回上游原文。
+      // cfg / denoise / image_url: 仍 400（不在本项范围）。
+      if (rejectUnsupported(res, 'ModelScope', req.body, ['cfg', 'denoise', 'image_url'])) return;
 
       const requestedSite = (
         req.body.site ||
@@ -5628,6 +5652,7 @@ app.post(
       if (isProvided(seed)) payload.seed = Number(seed);
       if (isProvided(width)) payload.width = Number(width);
       if (isProvided(height)) payload.height = Number(height);
+      if (isProvided(req.body.loras)) payload.loras = req.body.loras; // unverified，原样透传
 
       const primaryDomain = isAiSite
         ? 'https://api-inference.modelscope.ai/v1'
@@ -5772,11 +5797,13 @@ app.post(['/api/nanogpt/generate', '/api/engine/nanogpt/generate'], async (req, 
   try {
     const { prompt, model, resolution, aspect_ratio, seed, image_url } = req.body;
     if (!model) return res.status(400).json({ error: '模型为必填项（model is required）' });
-    // NanoGPT /api/v1/images: no negative_prompt/steps/cfg/loras/denoise, and no pixel dimensions
+    // NanoGPT /api/v1/images: no negative_prompt/steps/cfg/denoise, and no pixel dimensions
     // (only resolution "1k"/"2k"/"4k" + aspect_ratio, per model — see GET /api/v1/images/models)
-    if (rejectUnsupported(res, 'NanoGPT', req.body, ['negative_prompt', 'steps', 'cfg', 'guidance_scale', 'loras', 'denoise', 'width', 'height', 'size'])) return;
+    // loras: 按模型是否支持未能核实 → unverified，用户传了就原样放进 payload.loras，失败返回上游原文。
+    if (rejectUnsupported(res, 'NanoGPT', req.body, ['negative_prompt', 'steps', 'cfg', 'guidance_scale', 'denoise', 'width', 'height', 'size'])) return;
 
     const payload: any = { prompt: prompt || '', model };
+    if (isProvided(req.body.loras)) payload.loras = req.body.loras;
     if (isProvided(resolution)) payload.resolution = resolution;
     if (isProvided(aspect_ratio)) payload.aspect_ratio = aspect_ratio;
     if (isProvided(seed)) payload.seed = Number(seed);
@@ -5914,21 +5941,25 @@ app.post(['/api/gemini/generate', '/api/engine/gemini/generate'], async (req, re
     }
 
     // Imagen is shut down (https://ai.google.dev/gemini-api/docs/imagen); all image models use generateContent,
-    // which has no seed / negative prompt / cfg / steps / LoRA.
-    if (rejectUnsupported(res, 'Google Gemini', req.body, ['negative_prompt', 'seed', 'cfg', 'guidance_scale', 'steps', 'loras'])) return;
+    // which has no negative prompt / cfg / steps / LoRA. seed: schema unverified → forwarded as generationConfig.seed.
+    if (rejectUnsupported(res, 'Google Gemini', req.body, ['negative_prompt', 'cfg', 'guidance_scale', 'steps', 'loras'])) return;
     if (image_url && !(typeof image_url === 'string' && image_url.startsWith('data:'))) {
       return res.status(400).json({ error: '该服务商不支持: image_url 为非 data: URL（Google Gemini 仅接受内联 base64 参考图）', unsupported: ['image_url'] });
     }
+    if (isProvided(seed) && !Number.isInteger(Number(seed))) {
+      return res.status(400).json({ error: `seed 必须为整数（收到 "${seed}"）` });
+    }
 
-    // 取值表唯一来源: src/schemas/providerSchema.ts。本轮行为不变：unverified 仍 400（U-E2 再改为透传）
+    // 取值表唯一来源: src/schemas/providerSchema.ts。unverified（含未知模型）原样发送，上游失败原样返回；
+    // 已知模型上不在 enum 的取值 → 400。已下线模型不拦截（modelStatus 只随响应返回）。
+    const fieldStatus: Record<string, string> = {};
+    if (isProvided(seed)) fieldStatus.seed = getFieldSpec('gemini', model, 'seed')?.status ?? 'unverified';
     for (const [field, value] of [['aspect_ratio', aspect_ratio], ['image_size', image_size]] as const) {
       if (!isProvided(value)) continue;
       const status = valueStatus('gemini', model, field, value);
-      if (status === 'unverified') {
-        return res.status(400).json({ error: `未能核实该模型 (${model}) 的 ${field} 取值 "${value}" 是否生效，暂不支持使用` });
-      }
+      fieldStatus[field] = status;
       if (status === 'unsupported') {
-        const listed = fieldOptions('gemini', model, field).filter((v) => v.status === 'supported').map((v) => v.value);
+        const listed = fieldOptions('gemini', model, field).map((v) => (v.status === 'supported' ? v.value : `${v.value}(未核实)`));
         return res.status(400).json({
           error: `该服务商不支持此 ${field} 取值: "${value}"。${model} 官方仅支持: ${listed.join(', ') || '（官方未列出）'}`,
         });
@@ -5961,13 +5992,16 @@ app.post(['/api/gemini/generate', '/api/engine/gemini/generate'], async (req, re
       });
     }
 
-    const config = Object.keys(imageConfig).length > 0 ? { imageConfig } : undefined;
+    // 只放用户实际传了的字段；seed → generationConfig.seed（SDK GenerateContentConfig.seed）
+    const config: Record<string, any> = {};
+    if (Object.keys(imageConfig).length > 0) config.imageConfig = imageConfig;
+    if (isProvided(seed)) config.seed = Number(seed);
     const contentResponse = await upstreamSdkCall(
       { provider: 'gemini', route: req.path, model, key: gen.apiKey, upstream: `generativelanguage.googleapis.com/v1beta/models/${model}:generateContent` },
       () => gen!.client.models.generateContent({
         model,
         contents: { parts },
-        ...(config ? { config } : {}),
+        ...(Object.keys(config).length > 0 ? { config } : {}),
       })
     );
 
@@ -5996,12 +6030,13 @@ app.post(['/api/gemini/generate', '/api/engine/gemini/generate'], async (req, re
       model,
       actualModel: model,
       actualProvider: 'Google Gemini (官方直连)',
-      seed: null,
+      seed: isProvided(seed) ? Number(seed) : null,
       steps: null,
       cfg: null,
       loras: [],
     });
 
+    const mStatus = modelStatus('gemini', model, new Date().toISOString().slice(0, 10));
     return res.json({
       imageUrl: generatedImageUrl,
       provider: 'Google Gemini (官方直连)',
@@ -6010,13 +6045,19 @@ app.post(['/api/gemini/generate', '/api/engine/gemini/generate'], async (req, re
       actualModel: model,
       aspectRatio: aspect_ratio,
       historyItem: item,
+      fieldStatus,
+      ...(mStatus !== 'supported' ? { modelStatus: mStatus } : {}),
     });
   } catch (error: any) {
     if (gen?.apiKey) {
       keyPoolManager.recordResult('gemini', gen.apiKey, false, Date.now() - startTime, error.message, error.status || 500);
     }
-    return res.status(error.status || 500).json({
+    // U2: 原样暴露上游 HTTP 状态码和响应体
+    const upstreamStatus = error.status || error.statusCode || error.httpResponse?.status || 500;
+    const upstreamBody = error.errorDetails || error.response?.data || undefined;
+    return res.status(upstreamStatus).json({
       error: `Google Gemini 图像生成失败: ${error.message || '未知错误'}`,
+      ...(upstreamBody ? { upstreamBody } : {}),
     });
   }
 });
