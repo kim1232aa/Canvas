@@ -15,6 +15,7 @@ import {
   normalizeOpenAICompatBaseUrl,
   resolveAgainstBaseOrigin,
 } from './src/engines/compatRelay.ts';
+import { enrichPoolStatsWithServerBaseUrl } from './src/utils/poolStatsEnrich.ts';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -6930,7 +6931,12 @@ app.post('/api/test-provider', requireAdminAuth, async (req, res) => {
 // Cloud Multi-Key Pool Stats
 app.get('/api/cloud-keys/stats', requireAdminAuth, (_req, res) => {
   keyPoolManager.refreshFromSettings();
-  return res.json(keyPoolManager.getStats());
+  const stats = enrichPoolStatsWithServerBaseUrl(keyPoolManager.getStats(), (prov) => {
+    // settings.json wins over env defaultKeys — same resolution as getProviderBaseUrl (no request headers).
+    const { settingsBaseName } = AUTH_META[prov];
+    return String(cloudSettings[settingsBaseName] || defaultKeys[settingsBaseName] || '');
+  });
+  return res.json(stats);
 });
 
 const VALID_STRATEGY_PROVIDERS = new Set([

@@ -389,7 +389,7 @@ const OPENAI_COMPAT_MODELS: ModelSpec[] = [
       background: enumField(OAI_IMG, vals(['transparent', 'opaque', 'auto'], 'supported')),
       moderation: enumField(OAI_IMG, vals(['auto', 'low'], 'supported')),
       num_images: { status: 'supported', source: OAI_IMG, wire: 'n', type: 'integer', min: 1, max: 10 },
-      ...unsupported(OAI_IMG, ['seed', 'negative_prompt', 'steps', 'cfg', 'sampler', 'scheduler', 'loras'], '该服务商不支持'),
+      ...unsupported(OAI_IMG, ['seed', 'negative_prompt', 'steps', 'cfg', 'sampler', 'scheduler', 'loras', 'width', 'height'], '该服务商不支持'),
     },
   },
 ];

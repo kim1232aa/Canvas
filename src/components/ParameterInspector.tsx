@@ -160,7 +160,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
   const greySampler = isOpenAiCompat || isGrokCompat || fieldUnsupported('sampler');
   const greyScheduler = isOpenAiCompat || isGrokCompat || fieldUnsupported('scheduler');
   const greyLoras = isOpenAiCompat || isGrokCompat || fieldUnsupported('loras');
-  const greyWidthHeight = isGemini || isGrokCompat || fieldUnsupported('width') || fieldUnsupported('height');
+  const greyWidthHeight = isGemini || isOpenAiCompat || isGrokCompat || fieldUnsupported('width') || fieldUnsupported('height');
   const greyNegative = isOpenAiCompat || isGrokCompat || fieldUnsupported('negative_prompt');
   const schemaSelect = (field: FieldKey, value: string, onChange: (v: string) => void, label: string) => {
     if (!schemaProvider || !schemaModel) return null;
@@ -535,9 +535,11 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                   <button
                     key={mode}
                     type="button"
-                    onClick={() => update({ seedControl: mode })}
-                    className={`px-1.5 py-0.5 rounded text-[9px] font-mono transition-colors ${
-                      (params.seedControl || 'randomize') === mode
+                    disabled={greySeed}
+                    onClick={() => { if (!greySeed) update({ seedControl: mode }); }}
+                    title={greySeed ? '该服务商不支持' : undefined}
+                    className={`px-1.5 py-0.5 rounded text-[9px] font-mono transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-slate-400 ${
+                      !greySeed && (params.seedControl || 'randomize') === mode
                         ? 'bg-cyan-500/25 text-cyan-300 font-bold border border-cyan-500/50'
                         : 'bg-[#121316] text-slate-400 border border-[#262833] hover:text-slate-200'
                     }`}
@@ -888,6 +890,17 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
               {schemaSelect('output_format', params.outputFormat || '', (v) => update({ outputFormat: v || undefined }), 'OUTPUT_FORMAT')}
               {schemaSelect('background', params.background || '', (v) => update({ background: v || undefined }), 'BACKGROUND')}
               {schemaSelect('moderation', params.moderation || '', (v) => update({ moderation: v || undefined }), 'MODERATION')}
+              <div className="space-y-1">
+                <label className="text-slate-400 text-[10px] font-mono">N（生成张数）</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={params.batchSize ?? 1}
+                  onChange={(e) => update({ batchSize: Math.max(1, Math.min(10, parseInt(e.target.value) || 1)) })}
+                  className="w-full bg-[#111216] border border-[#2b2d38] rounded-lg px-2 py-1.5 text-slate-200 text-[11px] font-mono outline-none"
+                />
+              </div>
             </div>
           )}
 
@@ -895,6 +908,17 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
             <div className="grid grid-cols-2 gap-2">
               {schemaSelect('aspect_ratio', params.aspectRatio || '', (v) => update({ aspectRatio: v || undefined }), 'ASPECT_RATIO')}
               {schemaSelect('resolution', params.resolution || '', (v) => update({ resolution: v || undefined }), 'RESOLUTION')}
+              <div className="space-y-1">
+                <label className="text-slate-400 text-[10px] font-mono">N（生成张数）</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={4}
+                  value={params.batchSize ?? 1}
+                  onChange={(e) => update({ batchSize: Math.max(1, Math.min(4, parseInt(e.target.value) || 1)) })}
+                  className="w-full bg-[#111216] border border-[#2b2d38] rounded-lg px-2 py-1.5 text-slate-200 text-[11px] font-mono outline-none"
+                />
+              </div>
             </div>
           )}
         </div>

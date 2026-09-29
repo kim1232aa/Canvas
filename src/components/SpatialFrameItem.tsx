@@ -157,14 +157,26 @@ export const SpatialFrameItem: React.FC<SpatialFrameItemProps> = ({
           <span>CFG {frame.params.cfg}</span>
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          <button
-            onClick={handleRerollSeed}
-            className="flex items-center gap-1 text-slate-400 hover:text-white"
-            title="摇随机种子"
-          >
-            <span>{frame.params.seed}</span>
-            <Dices className="w-3 h-3 text-cyan-400" />
-          </button>
+          {(() => {
+            const seedUnsupported =
+              frame.params.targetProvider === 'openai_compat' ||
+              frame.params.targetProvider === 'grok_compat';
+            return (
+              <button
+                onClick={seedUnsupported ? undefined : handleRerollSeed}
+                disabled={seedUnsupported}
+                className={`flex items-center gap-1 ${
+                  seedUnsupported
+                    ? 'text-slate-600 cursor-not-allowed opacity-40'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+                title={seedUnsupported ? '该服务商不支持' : '摇随机种子'}
+              >
+                <span>{seedUnsupported ? '—' : frame.params.seed}</span>
+                <Dices className={`w-3 h-3 ${seedUnsupported ? 'text-slate-600' : 'text-cyan-400'}`} />
+              </button>
+            );
+          })()}
         </div>
       </div>
 

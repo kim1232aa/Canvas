@@ -862,6 +862,9 @@ export async function executeWorkflow(
     if (params.background) extraParams.background = params.background;
     if (params.moderation) extraParams.moderation = params.moderation;
     if (params.resolution) extraParams.resolution = params.resolution;
+    if (grokOrOpenAi && params.batchSize != null && Number(params.batchSize) > 0) {
+      extraParams.n = Number(params.batchSize);
+    }
 
     const normParams: NormalizedGenerateParams = {
       prompt: params.positivePrompt,

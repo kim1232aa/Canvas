@@ -661,6 +661,14 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
                   <p className="text-[10px] text-slate-500">
                     保存在本浏览器；同步至云端时写入 settings.json。自定义 Base URL 必须同时提供自定义 Key，服务端密钥不会发到用户填的主机。
                   </p>
+                  <div className="mt-1.5 px-2.5 py-1.5 rounded-lg bg-[#0d0e12] border border-[#252733] text-[10px] font-mono text-slate-300 flex items-start gap-2">
+                    <span className="text-slate-500 shrink-0">当前服务端 Base URL</span>
+                    <span className="text-cyan-300/90 break-all">
+                      {poolStats[currentProvider.id]?.serverBaseUrl
+                        ? String(poolStats[currentProvider.id].serverBaseUrl)
+                        : '（未配置 / 点击刷新服务端 key 池）'}
+                    </span>
+                  </div>
                 </div>
               )}
 
@@ -709,6 +717,60 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
                   ))}
                 </div>
               </div>
+
+              {/* Server key pool (masked) — read-only, above browser custom keys */}
+              {Array.isArray(poolStats[currentProvider.id]?.keys) && (
+                <div className="space-y-2.5">
+                  <label className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+                    <ShieldCheck className="w-3.5 h-3.5 text-sky-400" />
+                    服务端密钥池 ({poolStats[currentProvider.id].keys.length})
+                  </label>
+                  {poolStats[currentProvider.id].keys.length === 0 ? (
+                    <div className="p-3 rounded-xl border border-dashed border-[#2d2f3d] bg-[#121317] text-center text-slate-500 text-[11px]">
+                      服务端暂无密钥（设置 / .env）
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {poolStats[currentProvider.id].keys.map((k: any, idx: number) => (
+                        <div
+                          key={`srv-k-${idx}`}
+                          className="bg-[#121318] border border-[#272935] rounded-xl p-2.5 flex items-center justify-between gap-2"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="w-5 h-5 rounded-full bg-[#20222a] text-slate-400 flex items-center justify-center text-[10px] font-mono shrink-0">
+                              {idx + 1}
+                            </span>
+                            <span className="font-mono text-xs text-slate-200 truncate" title={k.maskedKey || ''}>
+                              {k.maskedKey || '***'}
+                            </span>
+                            <span
+                              className={`text-[8px] px-1.5 py-0.5 rounded font-mono shrink-0 ${
+                                k.source === 'env'
+                                  ? 'bg-sky-950 text-sky-400 border border-sky-800/40'
+                                  : 'bg-violet-950 text-violet-400 border border-violet-800/40'
+                              }`}
+                            >
+                              {k.source === 'env' ? '服务端：.env' : '服务端：设置'}
+                            </span>
+                          </div>
+                          <span
+                            className={`text-[9px] px-1.5 py-0.5 rounded font-mono shrink-0 ${
+                              k.status === 'active'
+                                ? 'bg-emerald-950 text-emerald-400'
+                                : k.status === 'rate_limited'
+                                  ? 'bg-amber-950 text-amber-400'
+                                  : 'bg-rose-950 text-rose-400'
+                            }`}
+                          >
+                            {k.status || 'unknown'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-[10px] text-slate-500">仅显示掩码与来源，永不展示完整密钥。下方可另加本浏览器自定义密钥。</p>
+                </div>
+              )}
 
               {/* Key List & Editor */}
               <div className="space-y-2.5">

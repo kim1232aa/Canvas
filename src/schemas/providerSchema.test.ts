@@ -65,7 +65,7 @@ describe('providerSchema 自检', () => {
   });
 
   it('openai_compat gpt-image-2：不支持 seed/negative/steps/cfg/sampler/LoRA，支持 size/quality/output_format/background/moderation/n', () => {
-    const grey = ['seed', 'negative_prompt', 'steps', 'cfg', 'sampler', 'scheduler', 'loras'] as const;
+    const grey = ['seed', 'negative_prompt', 'steps', 'cfg', 'sampler', 'scheduler', 'loras', 'width', 'height'] as const;
     for (const f of grey) {
       expect(getFieldSpec('openai_compat', 'gpt-image-2', f)?.status, f).toBe('unsupported');
     }
