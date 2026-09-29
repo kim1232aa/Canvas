@@ -36,6 +36,11 @@ export class HuggingFaceDriver extends BaseEngineDriver {
         // Forwarded so the server can 400 on them (HF text-to-image has no image input / LoRA field).
         image_url: params.image_url,
         loras: params.loras?.length ? params.loras.map((l) => l.name) : undefined,
+        // H6: Z-Image Space 位置参数，用户设了才发（缺了服务端 400）
+        resolution: params.extraParams?.resolution,
+        shift: params.extraParams?.shift,
+        random_seed: params.extraParams?.random_seed,
+        gallery_images: params.extraParams?.gallery_images,
       }),
     });
 

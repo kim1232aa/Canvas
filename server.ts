@@ -3478,8 +3478,8 @@ app.post(['/api/fal/generate', '/api/generate'], async (req, res) => {
     // FLUX endpoints (flux/dev, flux/schnell, flux-lora) have no negative_prompt in their schema.
     if (endpoint.includes('flux') && rejectUnsupported(res, `Fal.ai ${endpoint}`, req.body, ['negative_prompt'])) return;
 
-    // Only send what the caller actually provided; Fal applies its own documented defaults.
-    const payload: any = { prompt, enable_safety_checker: false };
+    // H6: 只发用户传了的字段；不写死 enable_safety_checker 等
+    const payload: any = { prompt };
 
     // F5: image_size must be official enum or { width, height } object
     let finalImageSize: any = undefined;
@@ -4716,7 +4716,6 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
           ecosystem,
           operation: isProvided(image_url) ? 'createVariant' : 'createImage',
           prompt,
-          quantity: 1,
         };
         // flux1 uses diffuserModel; other sdcpp ecosystems use model
         if (isFlux) {
@@ -4741,14 +4740,19 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
         }
       } else {
         // comfy engine for other ecosystems (krea2 etc.)
+        // H6: comfy 的 model 变体（如 turbo / base）由用户指定，不按生态猜
+        if (!isProvided(req.body.comfyModel)) {
+          return res.status(400).json({
+            error: `Civitai comfy 引擎（生态 ${ecosystem}）需要指定 comfyModel（上游字段 model，如 "turbo" / "base"），服务端不猜测`,
+          });
+        }
         genInput = {
           engine: 'comfy',
           ecosystem,
-          model: ecosystem === 'krea2' ? 'turbo' : 'base',
+          model: req.body.comfyModel,
           operation: isProvided(image_url) ? 'createVariant' : 'createImage',
           diffusionModel: airModel,
           prompt,
-          quantity: 1,
         };
         if (isProvided(negative_prompt)) genInput.negativePrompt = negative_prompt;
         if (isProvided(width)) genInput.width = Number(width);
@@ -4765,6 +4769,8 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
           if (isProvided(denoise)) genInput.denoiseStrength = Number(denoise);
         }
       }
+      // H6: quantity 非必填（recipe 默认 1），用户没传不发
+      if (isProvided(quantity)) genInput.quantity = Number(quantity);
 
       // POST /v2/consumer/workflows?wait=100 (integer seconds, max 100)
       const orchResp = await upstreamFetch(
@@ -5453,21 +5459,26 @@ app.post(['/api/huggingface/generate', '/api/engine/huggingface/generate'], asyn
         });
       }
 
+      // H6: Space /generate 位置参数 shift / random_seed / gallery_images（gradio_api/info 2026-09-29）不再写死；
+      // 未标注是否可省略 → 缺了就 400
+      const { shift, random_seed, gallery_images } = req.body;
+      const missing = [
+        !isProvided(shift) && 'shift（1.0–10.0）',
+        typeof random_seed !== 'boolean' && 'random_seed（布尔值；true 时 Space 忽略传入的 seed）',
+        !Array.isArray(gallery_images) && 'gallery_images（数组，可为 []）',
+      ].filter(Boolean);
+      if (missing.length > 0) {
+        return res.status(400).json({ error: `Tongyi-MAI/Z-Image-Turbo 缺少必填参数: ${missing.join('、')}（服务端不编造默认值）` });
+      }
+
       const seedNum = Number(seed);
       const stepsNum = Number(steps);
-      sentSeed = seedNum;
+      // random_seed=true 时上游不用这个 seed → 不记进历史
+      sentSeed = random_seed ? null : seedNum;
       sentSteps = stepsNum;
 
       const gradioPayload = {
-        data: [
-          finalPrompt,
-          resolution,
-          seedNum,
-          stepsNum,
-          3.0,
-          false,
-          []
-        ]
+        data: [finalPrompt, resolution, seedNum, stepsNum, Number(shift), random_seed, gallery_images],
       };
 
       const gradioHeaders: Record<string, string> = { 'Content-Type': 'application/json' };

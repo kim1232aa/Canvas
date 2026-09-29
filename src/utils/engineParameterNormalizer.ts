@@ -88,7 +88,7 @@ export function normalizeForFal(
     guidance_scale: params.cfg,
     seed: params.seed,
     loras: loras.length > 0 ? loras : undefined,
-    enable_safety_checker: false,
+    // H6: enable_safety_checker 不再写死；用户没传则不发，Fal 用自身默认值
   };
 
   return {

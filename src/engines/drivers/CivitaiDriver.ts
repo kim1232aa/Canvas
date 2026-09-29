@@ -52,6 +52,9 @@ export class CivitaiDriver extends BaseEngineDriver {
       if (params.denoise != null) payload.denoise = params.denoise;
     }
     if (params.loras?.length) payload.loras = params.loras;
+    // H6: comfy 变体 / 张数由用户指定，没设不发
+    if (params.extraParams?.comfyModel) payload.comfyModel = params.extraParams.comfyModel;
+    if (params.extraParams?.quantity != null) payload.quantity = params.extraParams.quantity;
     if (isVideo && params.videoDuration) payload.videoDuration = params.videoDuration;
     if (isVideo && params.aspectRatio) payload.aspectRatio = params.aspectRatio;
     if (civKey) payload.civitaiKey = civKey;
