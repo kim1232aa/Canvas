@@ -2001,10 +2001,14 @@ async function resolveModelScopeRealImage(modelId: string, isCn = true): Promise
   const baseUrl = isCn ? 'https://www.modelscope.cn' : 'https://modelscope.ai';
   // 1. Try detail API for Data.MuseInfo, Data.CoverImages, Data.NEXA
   try {
-    const detailRes = await fetch(`${baseUrl}/api/v1/models/${modelId}`, {
-      headers: { 'User-Agent': 'ComfyCanvas/1.0' },
-      signal: AbortSignal.timeout(3500),
-    });
+    const detailRes = await upstreamFetch(
+      { provider: isCn ? 'modelscope_cn' : 'modelscope_ai', route: 'model-detail', model: modelId },
+      `${baseUrl}/api/v1/models/${modelId}`,
+      {
+        headers: { 'User-Agent': 'ComfyCanvas/1.0' },
+        signal: AbortSignal.timeout(3500),
+      }
+    );
     if (detailRes.ok) {
       const detailData = await detailRes.json();
       const data = detailData.Data || {};
@@ -2042,10 +2046,14 @@ async function resolveModelScopeRealImage(modelId: string, isCn = true): Promise
 
   // 2. Try repo files for showcase / cover assets
   try {
-    const filesRes = await fetch(`${baseUrl}/api/v1/models/${modelId}/repo/files?Recursive=true`, {
-      headers: { 'User-Agent': 'ComfyCanvas/1.0' },
-      signal: AbortSignal.timeout(3500),
-    });
+    const filesRes = await upstreamFetch(
+      { provider: isCn ? 'modelscope_cn' : 'modelscope_ai', route: 'repo-files', model: modelId },
+      `${baseUrl}/api/v1/models/${modelId}/repo/files?Recursive=true`,
+      {
+        headers: { 'User-Agent': 'ComfyCanvas/1.0' },
+        signal: AbortSignal.timeout(3500),
+      }
+    );
     if (filesRes.ok) {
       const filesData = await filesRes.json();
       const files = filesData.Data?.Files || [];
@@ -5214,16 +5222,13 @@ app.post(
     '/api/engine/modelscope_ai/generate',
   ],
   async (req, res) => {
+    const startTime = Date.now();
     try {
-      const {
-        prompt,
-        negative_prompt,
-        model = 'Tongyi-MAI/Z-Image-Turbo',
-        steps = 8,
-        loras = [],
-        guidance = 1.0,
-        seed,
-      } = req.body;
+      const { prompt, negative_prompt, model, steps, guidance, seed, width, height } = req.body;
+      if (!model) return res.status(400).json({ error: '模型为必填项（model is required）' });
+      // ponytail: ModelScope LoRA body format could not be verified against official docs → 400 until verified.
+      // image_url: reference-image field unverified → reject instead of silently dropping.
+      if (rejectUnsupported(res, 'ModelScope', req.body, ['loras', 'cfg', 'denoise', 'image_url'])) return;
 
       const requestedSite = (
         req.body.site ||
@@ -5234,22 +5239,11 @@ app.post(
         .toLowerCase();
       const isAiSite = requestedSite === 'ai';
 
-      let token = '';
-      if (isAiSite) {
-        token =
-          (req.headers['x-modelscope-ai-token'] as string) ||
-          (req.headers['x-modelscope-token'] as string) ||
-          cloudSettings['modelscopeAiToken'] ||
-          defaultKeys['modelscopeAiToken'] ||
-          '';
-      } else {
-        token =
-          (req.headers['x-modelscope-token'] as string) ||
-          cloudSettings['modelscopeToken'] ||
-          defaultKeys['modelscopeToken'] ||
-          process.env.MODELSCOPE_API_TOKEN ||
-          '';
-      }
+      const poolName = isAiSite ? 'modelscope_ai' : 'modelscope';
+      const headerToken = isAiSite
+        ? (req.headers['x-modelscope-ai-token'] as string) || (req.headers['x-modelscope-token'] as string)
+        : (req.headers['x-modelscope-token'] as string);
+      const token = keyPoolManager.getNextKey(poolName, headerToken || undefined) || '';
 
       if (!token) {
         return res.status(400).json({
@@ -5257,48 +5251,16 @@ app.post(
         });
       }
 
-      // Extract triggers and inject into prompt
-      let finalPrompt = prompt || '';
-      if (Array.isArray(loras) && loras.length > 0) {
-        const triggers = loras.map((l: any) => l.triggers || l.triggerWords).filter(Boolean).join(', ');
-        if (triggers && !finalPrompt.includes(triggers)) {
-          finalPrompt = `${triggers}, ${finalPrompt}`.trim();
-        }
-      }
-
-      const targetModel = model || 'Tongyi-MAI/Z-Image-Turbo';
-
-      const payload: any = {
-        model: targetModel,
-        prompt: finalPrompt,
-      };
-
-      if (negative_prompt) {
-        payload.negative_prompt = negative_prompt;
-      }
-
-      const params: Record<string, any> = {};
-      if (steps) params.steps = Number(steps);
-      if (guidance) params.guidance_scale = Number(guidance);
-      if (seed !== undefined && seed !== null) params.seed = Number(seed);
-      if (req.body.width) params.width = Number(req.body.width);
-      if (req.body.height) params.height = Number(req.body.height);
-
-      if (Array.isArray(loras) && loras.length > 0) {
-        const primaryLora = loras[0];
-        const loraId = typeof primaryLora === 'string' ? primaryLora : (primaryLora.name || primaryLora.path || primaryLora.id || primaryLora.civitaiId);
-        const loraWeight = Number(primaryLora.scale ?? primaryLora.strength ?? primaryLora.modelStrength ?? 0.7);
-        
-        params.lora_model_id = loraId;
-        params.lora_scale = loraWeight;
-        payload.loras = loras
-          .map((l: any) => (typeof l === 'string' ? l : (l.name || l.path || l.id || l.civitaiId)))
-          .filter(Boolean);
-      }
-
-      if (Object.keys(params).length > 0) {
-        payload.parameters = params;
-      }
+      // Build payload — top-level fields, no `parameters` wrapper (M1)
+      const finalPrompt = prompt || '';
+      const payload: any = { model, prompt: finalPrompt };
+      if (negative_prompt) payload.negative_prompt = negative_prompt;
+      // M1: field is num_inference_steps, not steps
+      if (isProvided(steps)) payload.num_inference_steps = Number(steps);
+      if (isProvided(guidance)) payload.guidance_scale = Number(guidance);
+      if (isProvided(seed)) payload.seed = Number(seed);
+      if (isProvided(width)) payload.width = Number(width);
+      if (isProvided(height)) payload.height = Number(height);
 
       const primaryDomain = isAiSite
         ? 'https://api-inference.modelscope.ai/v1'
@@ -5306,18 +5268,23 @@ app.post(
 
       let submitResp;
       try {
-        submitResp = await fetch(`${primaryDomain}/images/generations`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-            'X-ModelScope-Async': 'enable',
-          },
-          body: JSON.stringify(payload),
-        });
+        submitResp = await upstreamFetch(
+          { provider: poolName, route: req.path, model, key: token },
+          `${primaryDomain}/images/generations`,
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+              'X-ModelScope-Async-Mode': 'true',
+            },
+            body: JSON.stringify(payload),
+          }
+        );
 
         if (!submitResp.ok) {
           const errorText = await submitResp.text();
+          keyPoolManager.recordResult(poolName, token, false, Date.now() - startTime, errorText, submitResp.status);
           let errObj: any = null;
           try { errObj = JSON.parse(errorText); } catch {}
           const errMsg = errObj?.Message || errObj?.message || errorText;
@@ -5330,7 +5297,7 @@ app.post(
           return res.status(submitResp.status).json({
             error: friendlyErr,
             details: errorText,
-            model: targetModel,
+            model,
             provider: isAiSite ? 'ModelScope AI' : 'ModelScope CN',
           });
         }
@@ -5340,39 +5307,64 @@ app.post(
         });
       }
 
+      keyPoolManager.recordResult(poolName, token, true, Date.now() - startTime);
       const submitData = await submitResp.json();
-      let imageUrl = submitData.output_images?.[0] || submitData.image_url || submitData.output_img;
+      let imageUrl = submitData.output_images?.[0];
 
       if (!imageUrl && submitData.task_id) {
         const taskId = submitData.task_id;
         for (let i = 0; i < 45; i++) {
           await new Promise((r) => setTimeout(r, 2500));
-          const pollResp = await fetch(`${primaryDomain}/tasks/${taskId}`, {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'X-ModelScope-Task-Type': 'image_generation',
-            },
-          });
-          if (pollResp.ok) {
-            const pollData = await pollResp.json();
+          let pollResp: Response;
+          try {
+            pollResp = await upstreamFetch(
+              { provider: poolName, route: req.path, model, key: token },
+              `${primaryDomain}/tasks/${taskId}`,
+              {
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'X-ModelScope-Task-Type': 'image_generation',
+                },
+              }
+            );
+          } catch (netErr: any) {
+            keyPoolManager.recordResult(poolName, token, false, Date.now() - startTime, netErr.message);
+            return res.status(502).json({
+              error: `魔搭${isAiSite ? '国际站' : '国内站'}任务状态查询网络异常: ${netErr.message}`,
+              taskId,
+              model,
+            });
+          }
+          if (!pollResp.ok) {
+            const errText = await pollResp.text().catch(() => '');
+            keyPoolManager.recordResult(poolName, token, false, Date.now() - startTime, errText, pollResp.status);
+            return res.status(pollResp.status).json({
+              error: `魔搭${isAiSite ? '国际站' : '国内站'}任务状态查询失败 [${pollResp.status}]: ${errText}`,
+              taskId,
+              model,
+            });
+          }
+          const pollData = await pollResp.json();
             if (pollData.task_status === 'SUCCEED') {
-              imageUrl = pollData.output_images?.[0] || pollData.outputs?.output_images?.[0] || pollData.outputs?.image_url;
+              imageUrl = pollData.output_images?.[0];
+              if (!imageUrl) {
+                return res.status(502).json({ error: '魔搭任务成功但响应中无 output_images', details: pollData, model });
+              }
               break;
             } else if (pollData.task_status === 'FAILED') {
-              return res.status(500).json({
+              return res.status(502).json({
                 error: `魔搭${isAiSite ? '国际站' : '国内站'}任务失败: ${pollData.errors?.message || 'Task failed on ModelScope'}`,
                 details: pollData.errors,
-                model: targetModel,
+                model,
               });
             }
           }
         }
-      }
 
       if (!imageUrl) {
-        return res.status(500).json({
-          error: `魔搭${isAiSite ? '国际站' : '国内站'}排队生成超时 (120s 未完成)，请稍后重试`,
-          model: targetModel,
+        return res.status(504).json({
+          error: `魔搭${isAiSite ? '国际站' : '国内站'}排队生成超时 (~112s 未完成)，请稍后重试`,
+          model,
         });
       }
 
@@ -5382,21 +5374,16 @@ app.post(
         prompt: finalPrompt,
         negativePrompt: negative_prompt,
         provider: providerName,
-        model: targetModel,
-        seed: seed || 876105816987345,
-        steps: Number(steps) || 8,
-        cfg: Number(guidance) || 1.0,
-        loras: (loras || []).map((l: any) => ({
-          name: l.name || l.path,
-          strength: Number(l.scale ?? l.strength ?? 0.7),
-          civitaiId: l.civitaiId,
-        })),
+        model,
+        seed: payload.seed ?? null,
+        steps: payload.num_inference_steps ?? null,
+        cfg: payload.guidance_scale ?? null,
       });
 
       return res.json({
         imageUrl,
         provider: providerName,
-        model: targetModel,
+        model,
         historyItem: item,
       });
     } catch (error: any) {
