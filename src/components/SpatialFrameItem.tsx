@@ -165,11 +165,40 @@ export const SpatialFrameItem: React.FC<SpatialFrameItemProps> = ({
             {frame.params.checkpoint.split('/').pop()}
           </span>
           <span>·</span>
-          <span>{frame.params.sampler} ({frame.params.scheduler})</span>
-          <span>·</span>
-          <span>{frame.params.steps}步</span>
-          <span>·</span>
-          <span>CFG {frame.params.cfg}</span>
+          {(() => {
+            const p = frame.params.targetProvider;
+            const m = frame.params.checkpoint;
+            const greySampler = isCanvasFieldUnsupported(p, m, 'sampler');
+            const greyScheduler = isCanvasFieldUnsupported(p, m, 'scheduler');
+            const greySteps = isCanvasFieldUnsupported(p, m, 'steps');
+            const greyCfg = isCanvasFieldUnsupported(p, m, 'cfg');
+            const chip = (unsupported: boolean, label: string, field: string) =>
+              unsupported ? (
+                <span
+                  className="text-slate-600 flex items-center gap-1"
+                  title="该服务商不支持"
+                  aria-label={`${field}（该服务商不支持）`}
+                >
+                  <span>—</span>
+                  <FieldStatusBadge status="unsupported" />
+                </span>
+              ) : (
+                <span>{label}</span>
+              );
+            return (
+              <>
+                {chip(
+                  greySampler || greyScheduler,
+                  `${frame.params.sampler} (${frame.params.scheduler})`,
+                  greySampler && !greyScheduler ? 'sampler' : greyScheduler && !greySampler ? 'scheduler' : 'sampler'
+                )}
+                <span>·</span>
+                {chip(greySteps, `${frame.params.steps}步`, 'steps')}
+                <span>·</span>
+                {chip(greyCfg, `CFG ${frame.params.cfg}`, 'cfg')}
+              </>
+            );
+          })()}
         </div>
         <div className="flex items-center gap-1 shrink-0">
           {(() => {

@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { Connection, NodeInstance } from '../types/graph';
 import {
+  canvasWidgetFieldKey,
   isCanvasFieldUnsupported,
+  isCanvasWidgetUnsupported,
   isFalLoraEndpointError,
   isLoraUnsupportedOnEndpoint,
   resolveActiveCheckpoint,
@@ -168,5 +170,32 @@ describe('resolveCheckpoint — canvas NodeItem grey (compat)', () => {
     expect(isCanvasFieldUnsupported('grok_compat', 'grok-imagine-image', 'seed')).toBe(true);
     expect(isCanvasFieldUnsupported('grok_compat', 'grok-imagine-image', 'height')).toBe(true);
     expect(isCanvasFieldUnsupported('fal', 'fal-ai/flux/dev', 'seed')).toBe(false);
+  });
+
+  it('canvasWidgetFieldKey maps KSampler widgets to schema FieldKeys', () => {
+    expect(canvasWidgetFieldKey('steps')).toBe('steps');
+    expect(canvasWidgetFieldKey('cfg')).toBe('cfg');
+    expect(canvasWidgetFieldKey('cfg_scale')).toBe('cfg');
+    expect(canvasWidgetFieldKey('sampler_name')).toBe('sampler');
+    expect(canvasWidgetFieldKey('sampler')).toBe('sampler');
+    expect(canvasWidgetFieldKey('scheduler')).toBe('scheduler');
+    expect(canvasWidgetFieldKey('denoise')).toBeUndefined();
+    expect(canvasWidgetFieldKey('control_after_generate')).toBeUndefined();
+  });
+
+  it('isCanvasFieldUnsupported: openai_compat / grok_compat grey steps/CFG/sampler/scheduler', () => {
+    expect(isCanvasFieldUnsupported('openai_compat', 'gpt-image-2', 'steps')).toBe(true);
+    expect(isCanvasFieldUnsupported('openai_compat', 'gpt-image-2', 'cfg')).toBe(true);
+    expect(isCanvasFieldUnsupported('openai_compat', 'gpt-image-2', 'sampler')).toBe(true);
+    expect(isCanvasFieldUnsupported('openai_compat', 'gpt-image-2', 'scheduler')).toBe(true);
+    expect(isCanvasWidgetUnsupported('openai_compat', 'gpt-image-2', 'sampler_name')).toBe(true);
+    expect(isCanvasWidgetUnsupported('openai_compat', 'gpt-image-2', 'cfg_scale')).toBe(true);
+    expect(isCanvasWidgetUnsupported('openai_compat', 'gpt-image-2', 'denoise')).toBe(false);
+    expect(isCanvasFieldUnsupported('grok_compat', 'grok-imagine-image', 'steps')).toBe(true);
+    expect(isCanvasFieldUnsupported('grok_compat', 'grok-imagine-image', 'cfg')).toBe(true);
+    expect(isCanvasFieldUnsupported('grok_compat', 'grok-imagine-image', 'sampler')).toBe(true);
+    expect(isCanvasFieldUnsupported('grok_compat', 'grok-imagine-image', 'scheduler')).toBe(true);
+    expect(isCanvasFieldUnsupported('fal', 'fal-ai/flux/dev', 'steps')).toBe(false);
+    expect(isCanvasFieldUnsupported('fal', 'fal-ai/flux/dev', 'sampler')).toBe(true);
   });
 });

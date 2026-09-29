@@ -372,6 +372,32 @@ export function isLoraUnsupportedOnEndpoint(
   return { unsupported: false };
 }
 
+/**
+ * KSampler widget 名 → providerSchema 字段映射。只对 KSampler 节点生效，
+ * 其它节点的同名 widget（如 EmptyLatentImage 的 steps）不受影响。
+ */
+const KSAMPLER_WIDGET_FIELD: Record<string, 'steps' | 'cfg' | 'sampler' | 'scheduler'> = {
+  steps: 'steps',
+  cfg: 'cfg',
+  cfg_scale: 'cfg',
+  sampler_name: 'sampler',
+  sampler: 'sampler',
+  scheduler: 'scheduler',
+};
+
+/** Schema-driven：仅当节点是 KSampler 且该 widget 对应字段被官方 schema 标记 unsupported 时为 true。 */
+export function isKSamplerWidgetUnsupported(
+  nodeType: string | null | undefined,
+  widgetName: string,
+  provider: string | undefined,
+  model: string | undefined
+): boolean {
+  if (nodeType !== 'KSampler') return false;
+  const field = KSAMPLER_WIDGET_FIELD[widgetName];
+  if (!field) return false;
+  return isCanvasFieldUnsupported(provider, model, field);
+}
+
 /** Find first non-bypassed node of a given type (for hub/selection helpers — not LoRA compat). */
 export function findFirstNodeOfType(
   nodes: NodeInstance[],
@@ -385,10 +411,60 @@ export function findFirstNodeOfType(
  * Schema-driven: true when provider+model marks field unsupported.
  * openai_compat / grok_compat always grey seed/negative/width/height (match ParameterInspector).
  */
+export type CanvasGreyField =
+  | 'seed'
+  | 'negative_prompt'
+  | 'width'
+  | 'height'
+  | 'steps'
+  | 'cfg'
+  | 'sampler'
+  | 'scheduler'
+  | 'loras';
+
+/**
+ * Map canvas widget names to providerSchema FieldKeys
+ * (same aliases ParameterInspector uses: cfg_scale→cfg, sampler_name→sampler).
+ */
+export function canvasWidgetFieldKey(widgetName: string): CanvasGreyField | undefined {
+  switch ((widgetName || '').trim()) {
+    case 'seed':
+      return 'seed';
+    case 'negative':
+    case 'negative_prompt':
+      return 'negative_prompt';
+    case 'width':
+      return 'width';
+    case 'height':
+      return 'height';
+    case 'steps':
+      return 'steps';
+    case 'cfg':
+    case 'cfg_scale':
+      return 'cfg';
+    case 'sampler':
+    case 'sampler_name':
+      return 'sampler';
+    case 'scheduler':
+      return 'scheduler';
+    default:
+      return undefined;
+  }
+}
+
+export function isCanvasWidgetUnsupported(
+  provider: string | undefined,
+  model: string | undefined,
+  widgetName: string
+): boolean {
+  const field = canvasWidgetFieldKey(widgetName);
+  return field ? isCanvasFieldUnsupported(provider, model, field) : false;
+}
+
 export function isCanvasFieldUnsupported(
   provider: string | undefined,
   model: string | undefined,
-  field: 'seed' | 'negative_prompt' | 'width' | 'height' | 'steps' | 'cfg' | 'sampler' | 'scheduler' | 'loras'
+  field: CanvasGreyField
 ): boolean {
   const prov = (provider || '').trim();
   const isOpenAiCompat = prov === 'openai_compat';

@@ -25,7 +25,7 @@ import { validateLoraCompatibility } from '../utils/baseModelMatcher';
 import { EngineRegistry } from '../engines/EngineRegistry';
 import { GeminiFieldSelect, GeminiModelBadge } from './GeminiFieldSelect';
 import { FieldStatusBadge } from './FieldStatusBadge';
-import { isCanvasFieldUnsupported } from '../utils/resolveCheckpoint';
+import { isCanvasFieldUnsupported, isCanvasWidgetUnsupported } from '../utils/resolveCheckpoint';
 
 interface NodeItemProps {
   node: NodeInstance;
@@ -355,21 +355,34 @@ export const NodeItem: React.FC<NodeItemProps> = ({
             const value = node.values[widget.name] ?? widget.default;
 
             if (widget.type === 'slider') {
+              const greyThis = isCanvasWidgetUnsupported(currentProvider, currentCheckpoint, widget.name);
               return (
                 <div key={widget.name} className="space-y-1">
-                  <div className="flex items-center justify-between text-slate-400 font-mono text-[11px]">
-                    <span>{widget.label}</span>
+                  <div className="flex items-center justify-between text-slate-400 font-mono text-[11px] gap-1.5">
+                    <span className="flex items-center gap-1.5">
+                      {widget.label}
+                      {greyThis && <FieldStatusBadge status="unsupported" />}
+                    </span>
                     <input
                       type="number"
                       step={widget.step || 0.1}
                       min={widget.min}
                       max={widget.max}
-                      value={value}
+                      value={greyThis ? '' : value}
+                      disabled={greyThis}
+                      placeholder={greyThis ? '该服务商不支持' : undefined}
+                      title={greyThis ? '该服务商不支持' : undefined}
+                      aria-label={greyThis ? `${widget.name}（该服务商不支持）` : widget.label}
                       onMouseDown={(e) => e.stopPropagation()}
                       onPointerDown={(e) => e.stopPropagation()}
                       onKeyDown={(e) => e.stopPropagation()}
-                      onChange={(e) => onUpdateValue(node.id, widget.name, parseFloat(e.target.value) || 0)}
-                      className="w-16 bg-[#121316] border border-[#2b2d35] focus:border-cyan-500 rounded px-1.5 py-0.5 text-right text-cyan-400 font-mono text-[11px] outline-none select-text cursor-text"
+                      onChange={(e) => {
+                        if (greyThis) return;
+                        onUpdateValue(node.id, widget.name, parseFloat(e.target.value) || 0);
+                      }}
+                      className={greyThis
+                        ? 'w-16 bg-[#0d0e12] border border-[#22242c] rounded px-1.5 py-0.5 text-right text-slate-600 font-mono text-[11px] outline-none cursor-not-allowed'
+                        : 'w-16 bg-[#121316] border border-[#2b2d35] focus:border-cyan-500 rounded px-1.5 py-0.5 text-right text-cyan-400 font-mono text-[11px] outline-none select-text cursor-text'}
                     />
                   </div>
                   <input
@@ -377,11 +390,19 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                     min={widget.min}
                     max={widget.max}
                     step={widget.step || 0.1}
-                    value={value}
+                    value={greyThis ? (widget.min ?? 0) : value}
+                    disabled={greyThis}
+                    title={greyThis ? '该服务商不支持' : undefined}
+                    aria-label={greyThis ? `${widget.name}（该服务商不支持）` : widget.label}
                     onMouseDown={(e) => e.stopPropagation()}
                     onPointerDown={(e) => e.stopPropagation()}
-                    onChange={(e) => onUpdateValue(node.id, widget.name, parseFloat(e.target.value))}
-                    className="w-full h-1.5 bg-[#262832] rounded-lg appearance-none cursor-pointer accent-cyan-400"
+                    onChange={(e) => {
+                      if (greyThis) return;
+                      onUpdateValue(node.id, widget.name, parseFloat(e.target.value));
+                    }}
+                    className={greyThis
+                      ? 'w-full h-1.5 bg-[#0d0e12] rounded-lg appearance-none cursor-not-allowed pointer-events-none opacity-40 accent-slate-600'
+                      : 'w-full h-1.5 bg-[#262832] rounded-lg appearance-none cursor-pointer accent-cyan-400'}
                   />
                 </div>
               );
@@ -615,6 +636,45 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                   );
                 }
               }
+
+              const greyThis = isCanvasWidgetUnsupported(currentProvider, currentCheckpoint, widget.name);
+              return (
+                <div key={widget.name} className="space-y-1">
+                  <div className="flex items-center justify-between gap-1.5">
+                    <label className="text-slate-400 font-mono text-[11px] block">{widget.label}</label>
+                    {greyThis && <FieldStatusBadge status="unsupported" />}
+                  </div>
+                  <select
+                    value={greyThis ? '' : value}
+                    disabled={greyThis}
+                    title={greyThis ? '该服务商不支持' : undefined}
+                    aria-label={greyThis ? `${widget.name}（该服务商不支持）` : widget.label}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
+                    onChange={(e) => {
+                      if (greyThis) return;
+                      onUpdateValue(node.id, widget.name, e.target.value);
+                    }}
+                    className={greyThis
+                      ? 'w-full bg-[#0d0e12] border border-[#22242c] rounded-lg px-2.5 py-1.5 text-slate-600 text-xs font-mono outline-none cursor-not-allowed pointer-events-none'
+                      : 'w-full bg-[#121316] border border-[#2d303a] hover:border-cyan-500/50 focus:border-cyan-500 rounded-lg px-2.5 py-1.5 text-slate-200 text-xs font-mono outline-none cursor-pointer select-text'}
+                  >
+                    {greyThis ? (
+                      <option value="">该服务商不支持</option>
+                    ) : (
+                      <>
+                        {!isValueInOpts && value && <option value={value}>{value}</option>}
+                        {opts.map((opt, idx) => (
+                          <option key={`${widget.name}-${opt.value}-${idx}`} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </>
+                    )}
+                  </select>
+                </div>
+              );
             }
 
             if (widget.type === 'textarea') {
@@ -713,28 +773,28 @@ export const NodeItem: React.FC<NodeItemProps> = ({
 
             if (widget.type === 'number') {
               const isWH = widget.name === 'width' || widget.name === 'height';
-              const greyThisWH = isWH && greyWidthHeight;
+              const greyThis = (isWH && greyWidthHeight) || isCanvasWidgetUnsupported(currentProvider, currentCheckpoint, widget.name);
               return (
                 <div key={widget.name} className="space-y-1">
                   <div className="flex items-center justify-between gap-1.5">
                     <label className="text-slate-400 font-mono text-[11px] block">{widget.label}</label>
-                    {greyThisWH && <FieldStatusBadge status="unsupported" />}
+                    {greyThis && <FieldStatusBadge status="unsupported" />}
                   </div>
                   <input
                     type="number"
-                    value={greyThisWH ? '' : value}
-                    disabled={greyThisWH}
-                    placeholder={greyThisWH ? '该服务商不支持' : undefined}
-                    title={greyThisWH ? '该服务商不支持' : undefined}
-                    aria-label={greyThisWH ? `${widget.name}（该服务商不支持）` : widget.label}
+                    value={greyThis ? '' : value}
+                    disabled={greyThis}
+                    placeholder={greyThis ? '该服务商不支持' : undefined}
+                    title={greyThis ? '该服务商不支持' : undefined}
+                    aria-label={greyThis ? `${widget.name}（该服务商不支持）` : widget.label}
                     onMouseDown={(e) => e.stopPropagation()}
                     onPointerDown={(e) => e.stopPropagation()}
                     onKeyDown={(e) => e.stopPropagation()}
                     onChange={(e) => {
-                      if (greyThisWH) return;
+                      if (greyThis) return;
                       onUpdateValue(node.id, widget.name, parseFloat(e.target.value) || 0);
                     }}
-                    className={greyThisWH
+                    className={greyThis
                       ? 'w-full bg-[#0d0e12] border border-[#22242c] rounded-lg px-2.5 py-1.5 text-slate-600 font-mono text-xs cursor-not-allowed outline-none'
                       : 'w-full bg-[#121316] border border-[#2d303a] focus:border-cyan-500 rounded-lg px-2.5 py-1.5 text-slate-200 font-mono text-xs outline-none select-text cursor-text'}
                   />
