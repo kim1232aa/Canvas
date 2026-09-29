@@ -652,10 +652,14 @@ app.get('/api/civitai/models', async (req, res) => {
       headers['Authorization'] = `Bearer ${apiKey}`;
     }
 
-    const response = await fetch(`https://civitai.com/api/v1/models?${params.toString()}`, {
-      headers,
-      signal: AbortSignal.timeout(30000), // Increased to 30s
-    });
+    const response = await upstreamFetch(
+      { provider: 'civitai', route: req.path, key: apiKey },
+      `https://civitai.com/api/v1/models?${params.toString()}`,
+      {
+        headers,
+        signal: AbortSignal.timeout(30000), // Increased to 30s
+      }
+    );
 
     if (!response.ok) {
       const errText = await response.text();
@@ -1032,7 +1036,11 @@ app.get('/api/civitai/model/:id', async (req, res) => {
       headers['Authorization'] = `Bearer ${apiKey}`;
     }
 
-    const response = await fetch(`https://civitai.com/api/v1/models/${id}`, { headers });
+    const response = await upstreamFetch(
+      { provider: 'civitai', route: req.path, model: id, key: apiKey },
+      `https://civitai.com/api/v1/models/${id}`,
+      { headers }
+    );
     if (!response.ok) {
       return res.status(response.status).json({ error: `Civitai model not found or error: ${response.status}` });
     }
@@ -1210,13 +1218,17 @@ function resolveArchitectureAndBaseModel(baseModelRaw?: string, modelNameHint?: 
 // Helper to fetch real, authentic Civitai image generation metadata via __NEXT_DATA__
 async function fetchCivitaiRealImageMeta(imageId: string) {
   try {
-    const resp = await fetch(`https://civitai.com/images/${imageId}`, {
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      },
-    });
+    const resp = await upstreamFetch(
+      { provider: 'civitai', route: 'image-metadata', model: imageId },
+      `https://civitai.com/images/${imageId}`,
+      {
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        },
+      }
+    );
     if (!resp.ok) {
       const errText = await resp.text();
       return { error: `Civitai 上游响应 HTTP ${resp.status}: ${errText.slice(0, 500)}`, status: resp.status };
@@ -1282,7 +1294,7 @@ app.post('/api/civitai/extract-workflow', async (req, res) => {
     let sampler = 'er_sde_simple';
     let scheduler = 'sgm_uniform';
     let denoise = 1.0;
-    let seed = Math.floor(Math.random() * 1000000000);
+    let seed: number | null = null;
     let width = 1024;
     let height = 1024;
     let extractSource = 'Civitai 热门图库';
@@ -1523,9 +1535,13 @@ app.post('/api/civitai/extract-workflow', async (req, res) => {
     } else if (targetVersionId) {
       // 2.5. Civitai Model Version ID Extractor (GET /api/v1/model-versions/:id)
       try {
-        const vResp = await fetch(`https://civitai.com/api/v1/model-versions/${targetVersionId}`, {
-          headers: apiKey ? { Authorization: `Bearer ${apiKey}`, 'User-Agent': 'ComfyCanvas/1.0' } : { 'User-Agent': 'ComfyCanvas/1.0' },
-        });
+        const vResp = await upstreamFetch(
+          { provider: 'civitai', route: 'workflow-extract-version', model: String(targetVersionId), key: apiKey },
+          `https://civitai.com/api/v1/model-versions/${targetVersionId}`,
+          {
+            headers: apiKey ? { Authorization: `Bearer ${apiKey}`, 'User-Agent': 'ComfyCanvas/1.0' } : { 'User-Agent': 'ComfyCanvas/1.0' },
+          }
+        );
         if (vResp.ok) {
           const vData = await vResp.json();
           presetTitle = `Civitai 模型版本：${vData.model?.name || vData.name || 'LoRA 微调'}`;
@@ -1553,9 +1569,13 @@ app.post('/api/civitai/extract-workflow', async (req, res) => {
     } else if (targetModelId) {
       // 3. Civitai Model ID Extractor
       try {
-        const mResp = await fetch(`https://civitai.com/api/v1/models/${targetModelId}`, {
-          headers: apiKey ? { Authorization: `Bearer ${apiKey}`, 'User-Agent': 'ComfyCanvas/1.0' } : { 'User-Agent': 'ComfyCanvas/1.0' },
-        });
+        const mResp = await upstreamFetch(
+          { provider: 'civitai', route: 'workflow-extract-model', model: String(targetModelId), key: apiKey },
+          `https://civitai.com/api/v1/models/${targetModelId}`,
+          {
+            headers: apiKey ? { Authorization: `Bearer ${apiKey}`, 'User-Agent': 'ComfyCanvas/1.0' } : { 'User-Agent': 'ComfyCanvas/1.0' },
+          }
+        );
         if (mResp.ok) {
           const mData = await mResp.json();
           presetTitle = `Civitai 模型定制：${mData.name}`;
@@ -1662,10 +1682,10 @@ app.post('/api/civitai/extract-workflow', async (req, res) => {
       engineExplanation = "🤗 Hugging Face Diffusers 引擎：直连 Hugging Face Hub。";
     } else if (engine === "gemini") {
       targetProvider = "gemini";
-      chosenEngineName = "Google Imagen 3.0 生图引擎";
-      checkpoint = "imagen-3.0-generate-002";
-      baseModelArchitecture = "Imagen 3";
-      engineExplanation = "🌟 Google Imagen 3.0：已适配系统内置免配置高保真生图引擎。";
+      chosenEngineName = "Google Gemini 生图引擎";
+      checkpoint = rawModelName;
+      baseModelArchitecture = "Gemini Image";
+      engineExplanation = "🌟 Google Gemini 官方生图（generateContent）。";
     } else if (engine === "video") {
       targetProvider = "video";
       chosenEngineName = "AI Video 视频生成引擎 (MiniMax / Wan 2.1)";
@@ -1883,7 +1903,7 @@ app.post('/api/civitai/extract-workflow', async (req, res) => {
       scheduler: scheduler || 'sgm_uniform',
       steps: steps || 8,
       cfgScale: cfg || 1.0,
-      seed: seed || 727217537163565,
+      seed: seed,
       denoise: denoise ?? 1.0,
       width: width || 1024,
       height: height || 1024,
@@ -1967,7 +1987,7 @@ app.post('/api/civitai/extract-workflow', async (req, res) => {
         { id: "sensenova", name: "SenseNova 日日新", badge: "CoT 推理", description: "商汤大模型思维链生图" },
         { id: "huggingface", name: "Hugging Face", badge: "Diffusers", description: "开源 Diffusers 生态权重直挂" },
         { id: "agnes", name: "Agnes AI 极速生图", badge: "秒级出片", description: "极速生成通道 (agnes-image-2.5-flash)" },
-        { id: "gemini", name: "Google Imagen 3", badge: "官方内置", description: "系统内置免配置高写实生图" },
+        { id: "gemini", name: "Google Gemini", badge: "官方直连", description: "Gemini 官方生图 (generateContent)" },
         ...(isVideo ? [{ id: "video", name: "AI Video 视频生成引擎", badge: "电影级视频", recommended: true, description: "MiniMax H3 / Wan 2.1 视频管线" }] : [])
       ],
       selectedEngine: targetProvider,
@@ -2253,8 +2273,6 @@ function extractModelMetadata(
     baseModel = 'Hunyuan';
   } else if (s.includes('cogvideo')) {
     baseModel = 'CogVideoX';
-  } else if (s.includes('imagen-3') || s.includes('imagen 3') || s.includes('imagen')) {
-    baseModel = 'Imagen 3.0';
   } else if (s.includes('gemini-2.5') || s.includes('gemini-3') || s.includes('gemini')) {
     baseModel = 'Gemini Vision';
   } else if (s.includes('nano_banana') || s.includes('banana')) {
@@ -2279,8 +2297,6 @@ function extractModelMetadata(
     cleanDisplayName = 'Google Gemini 3 Pro Image';
   } else if (idLower === 'gemini-3.1-flash-image-preview' || idLower === 'gemini-3.1-flash-image') {
     cleanDisplayName = 'Google Gemini 3.1 Flash Image';
-  } else if (idLower.includes('imagen-3.0-generate-002') || idLower === 'imagen-3.0') {
-    cleanDisplayName = 'Google Imagen 3.0 旗舰生图';
   } else if (idLower === 'strong_text2image_wan27') {
     cleanDisplayName = 'Wan 2.7 旗舰大模型 (官方工作流)';
   } else if (idLower === 'strong_text2image_nano_banana2') {
@@ -2309,7 +2325,7 @@ function extractModelMetadata(
   } else if (providerName === 'Tensor.Art') {
     badge = isLora ? 'Tensor.Art LoRA / 微调工具' : isVideo ? 'OpenWorks 视频生成' : isEdit ? 'OpenWorks 图像处理' : 'OpenWorks 官方工作流';
   } else if (providerName.includes('Google')) {
-    badge = category === 'Checkpoint' ? 'Imagen 旗舰' : 'Gemini 原生';
+    badge = category === 'Checkpoint' ? 'Gemini Image' : 'Gemini 原生';
   }
 
   return { baseModel, category, type, badge, cleanDisplayName };
@@ -3476,35 +3492,42 @@ app.post(['/api/video/generate', '/api/engine/video/generate'], async (req, res)
   try {
     const {
       prompt,
-      model = 'fal-ai/wan/v2.1/text-to-video',
-      duration = 5,
-      fps = 16,
-      aspect_ratio = '16:9',
+      model,
+      duration,
+      fps,
+      aspect_ratio,
       image_url,
       seed,
       steps,
       provider: inputProvider,
     } = req.body;
 
-    const lowerModel = (model || '').toLowerCase().trim();
+    if (!model) return res.status(400).json({ error: '模型为必填项（model is required）' });
+    const lowerModel = String(model).toLowerCase().trim();
     const reqProvider = (inputProvider || '').toLowerCase().trim();
+    // Item 10: explicit provider is authoritative; model-name inference only when provider is absent.
+    const VIDEO_PROVIDERS = ['tensorart', 'tensor', 'nanogpt', 'agnes', 'modelscope', 'modelscope_ai', 'fal', 'civitai'];
+    if (reqProvider && !VIDEO_PROVIDERS.includes(reqProvider)) {
+      return res.status(400).json({ error: `该服务商不支持视频生成: provider=${reqProvider}（支持: ${VIDEO_PROVIDERS.join(', ')}）` });
+    }
+    if (reqProvider === 'civitai') {
+      return res.status(400).json({ error: 'Civitai 视频请走 /api/civitai/generate（isVideo: true），本路由不代理。' });
+    }
+    const byModel = !reqProvider;
 
     // 1. Tensor.Art (OpenWorks Video Generation Tools)
     const isTensorArtTarget =
       reqProvider === 'tensorart' ||
       reqProvider === 'tensor' ||
-      lowerModel.startsWith('text2video_') ||
-      lowerModel.startsWith('image2video_') ||
-      lowerModel === 'live_wallpaper' ||
-      lowerModel.includes('tensor');
+      (byModel && (
+        lowerModel.startsWith('text2video_') ||
+        lowerModel.startsWith('image2video_') ||
+        lowerModel === 'live_wallpaper' ||
+        lowerModel.includes('tensor')));
 
     if (isTensorArtTarget) {
-      const taKey =
-        (req.headers['x-tensorart-key'] as string) ||
-        cloudSettings['tensorartKey'] ||
-        defaultKeys['tensorartKey'] ||
-        process.env.TENSORART_API_KEY ||
-        '';
+      const startTime = Date.now();
+      const taKey = resolveTensorArtKey(req);
 
       if (!taKey) {
         return res.status(400).json({
@@ -3512,33 +3535,35 @@ app.post(['/api/video/generate', '/api/engine/video/generate'], async (req, res)
         });
       }
 
-      const targetToolName = (model || 'text2video_wan27').trim();
+      const targetToolName = (model || '').trim();
+      if (!targetToolName) return res.status(400).json({ error: '模型为必填项（Tensor.Art 视频工具需要 toolName / model）' });
       const baseUrl = getTensorArtBaseUrl(taKey);
 
       try {
         const tools = await fetchTensorArtToolsList(taKey);
-        const targetTool = tools.find((t: any) => t.name === targetToolName) || { name: targetToolName, inputs: [] };
+        // Exact match only (Item 3).
+        const targetTool = tools.find((t: any) => t.name === targetToolName);
+        if (!targetTool) {
+          return res.status(400).json({
+            error: `未找到指定的 Tensor.Art 工具: ${targetToolName}（需与 /tool/list 返回的 name 完全一致）`,
+            availableTools: tools.map((t: any) => t.name),
+          });
+        }
 
-        const formattedInputs = buildTensorArtInputs(targetTool.inputs || [], {
-          prompt,
-          image_url,
-          duration: String(duration || 5),
-          ratio: aspect_ratio || '16:9',
-          size: aspect_ratio === '9:16' ? '720P' : '720P',
-          ...req.body,
-        });
+        const built = buildTensorArtInputs(targetTool.inputs || [], req.body);
+        if (built.error) {
+          return res.status(400).json({ error: built.error, unsupported: built.unsupported, toolName: targetTool.name, toolInputs: targetTool.inputs });
+        }
 
-        const submitRes = await fetch(`${baseUrl}/task`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Echo-Access-Key': taKey,
-          },
-          body: JSON.stringify({
-            toolName: targetTool.name,
-            inputs: formattedInputs,
-          }),
-        });
+        const submitRes = await upstreamFetch(
+          { provider: 'tensorart', route: req.path, model: targetTool.name, key: taKey },
+          `${baseUrl}/task`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Echo-Access-Key': taKey },
+            body: JSON.stringify({ toolName: targetTool.name, inputs: built.inputs }),
+          }
+        );
 
         if (!submitRes.ok) {
           const errText = await submitRes.text();
@@ -3570,18 +3595,45 @@ app.post(['/api/video/generate', '/api/engine/video/generate'], async (req, res)
         const maxPolls = 80;
         for (let i = 0; i < maxPolls; i++) {
           await new Promise((r) => setTimeout(r, 2500));
-          const qRes = await fetch(`${baseUrl}/task/query`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Echo-Access-Key': taKey,
-            },
-            body: JSON.stringify({ taskIds: [String(taskId)] }),
-          });
+          let qRes: Response;
+          try {
+            qRes = await upstreamFetch(
+              { provider: 'tensorart', route: req.path, model: targetTool.name, key: taKey },
+              `${baseUrl}/task/query`,
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Echo-Access-Key': taKey,
+                },
+                body: JSON.stringify({ taskIds: [String(taskId)] }),
+              }
+            );
+          } catch (netErr: any) {
+            keyPoolManager.recordResult('tensorart', taKey, false, Date.now() - startTime, netErr.message);
+            return res.status(502).json({
+              error: `Tensor.Art 任务状态查询网络异常: ${netErr.message}`,
+              taskId,
+              toolName: targetTool.name,
+            });
+          }
 
-          if (!qRes.ok) continue;
+          if (!qRes.ok) {
+            const errText = await qRes.text();
+            return res.status(qRes.status).json({
+              error: `Tensor.Art 任务状态查询失败 [${qRes.status}]: ${errText}`,
+              taskId,
+              toolName: targetTool.name,
+            });
+          }
           const qData = await qRes.json();
-          if (qData.code !== '0' && qData.code !== 0) continue;
+          if (qData.code !== '0' && qData.code !== 0) {
+            return res.status(500).json({
+              error: `Tensor.Art 任务状态查询返回错误: [${qData.code}] ${qData.message || '系统错误'}`,
+              taskId,
+              toolName: targetTool.name,
+            });
+          }
 
           const task = qData.data?.tasks?.[0] || qData.data?.[0];
           if (!task) continue;
@@ -3593,7 +3645,7 @@ app.post(['/api/video/generate', '/api/engine/video/generate'], async (req, res)
             break;
           }
 
-          if (status === 'FAILED' || status === 'EXCEPTION') {
+          if (status === 'FAILED' || status === 'EXCEPTION' || status === 'CANCELED') {
             return res.status(500).json({
               error: `Tensor.Art 视频任务处理异常 (${status}): ${task.message || task.error || '运行失败'}`,
               taskId,
@@ -3612,12 +3664,12 @@ app.post(['/api/video/generate', '/api/engine/video/generate'], async (req, res)
 
         const item = recordHistoryItem({
           url: videoResult,
-          prompt,
+          prompt: built.used?.has('prompt') ? prompt : '',
           provider: 'Tensor.Art (OpenWorks Video)',
           model: targetTool.name,
-          seed: Math.floor(Math.random() * 1000000000),
-          steps: 30,
-          cfg: 5.0,
+          seed: built.used?.has('seed') ? Number(req.body.seed) : null,
+          steps: null,
+          cfg: null,
         });
 
         return res.json({
@@ -3626,8 +3678,6 @@ app.post(['/api/video/generate', '/api/engine/video/generate'], async (req, res)
           model: targetTool.name,
           requestedModel: model,
           exactEndpointCalled: `${baseUrl}/task`,
-          duration: duration || 5,
-          fps: fps || 24,
           taskId,
           historyItem: item,
         });
@@ -3639,109 +3689,104 @@ app.post(['/api/video/generate', '/api/engine/video/generate'], async (req, res)
     // 2. NanoGPT Video API (https://api.nano-gpt.com/api/generate-video)
     const isNanoGptTarget =
       reqProvider === 'nanogpt' ||
-      lowerModel.includes('nanogpt') ||
-      (lowerModel.includes('wan') && !lowerModel.includes('fal') && !lowerModel.includes('damo') && !lowerModel.includes('text2video')) ||
-      (lowerModel.includes('kling') && !lowerModel.includes('fal'));
+      (byModel && (
+        lowerModel.includes('nanogpt') ||
+        (lowerModel.includes('wan') && !lowerModel.includes('fal') && !lowerModel.includes('damo') && !lowerModel.includes('text2video')) ||
+        (lowerModel.includes('kling') && !lowerModel.includes('fal'))));
 
     if (isNanoGptTarget) {
-      const nanoKey =
-        (req.headers['x-nanogpt-key'] as string) ||
-        cloudSettings['nanogptKey'] ||
-        defaultKeys['nanogptKey'] ||
-        process.env.NANOGPT_API_KEY ||
-        '';
-
+      const nanoKey = keyPoolManager.getNextKey('nanogpt', (req.headers['x-nanogpt-key'] as string) || undefined);
       if (!nanoKey) {
-        return res.status(400).json({
-          error: '未配置 NanoGPT API Key (x-nanogpt-key)。请在右上角设置中填写您的 NanoGPT API Key。',
-        });
+        return res.status(400).json({ error: '未配置 NanoGPT API Key (x-nanogpt-key)。' });
       }
+      const startTime = Date.now();
 
       try {
-        const nanoPayload: any = {
-          model,
-          prompt,
-          duration: Number(duration) || 5,
-          aspect_ratio: aspect_ratio || '16:9',
-        };
+        // NanoGPT video submit: POST api.nano-gpt.com/api/generate-video
+        // duration is a STRING, seed/negative_prompt are passed through
+        if (rejectUnsupported(res, 'NanoGPT Video', req.body, ['steps', 'cfg', 'guidance_scale', 'loras'])) return;
+        const nanoPayload: any = { model, prompt };
+        if (isProvided(duration)) nanoPayload.duration = String(duration);
+        if (isProvided(aspect_ratio)) nanoPayload.aspect_ratio = aspect_ratio;
+        if (isProvided(seed)) nanoPayload.seed = Number(seed);
+        if (isProvided(req.body.negative_prompt)) nanoPayload.negative_prompt = req.body.negative_prompt;
         if (image_url) {
-          nanoPayload.imageUrl = image_url;
-          nanoPayload.imageDataUrl = image_url;
+          if (image_url.startsWith('data:')) nanoPayload.imageDataUrl = image_url;
+          else nanoPayload.imageUrl = image_url;
         }
 
-        const submitRes = await fetch('https://api.nano-gpt.com/api/generate-video', {
-          method: 'POST',
-          headers: {
-            'x-api-key': nanoKey,
-            'Authorization': `Bearer ${nanoKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(nanoPayload),
-        }).catch(() =>
-          fetch('https://nano-gpt.com/api/generate-video', {
+        const submitRes = await upstreamFetch(
+          { provider: 'nanogpt', route: req.path, model, key: nanoKey },
+          'https://api.nano-gpt.com/api/generate-video',
+          {
             method: 'POST',
-            headers: {
-              'x-api-key': nanoKey,
-              'Authorization': `Bearer ${nanoKey}`,
-              'Content-Type': 'application/json',
-            },
+            headers: { 'x-api-key': nanoKey, 'Content-Type': 'application/json' },
             body: JSON.stringify(nanoPayload),
-          })
+          }
         );
 
         if (!submitRes.ok) {
           const errText = await submitRes.text();
-          return res.status(submitRes.status).json({
-            error: `NanoGPT 视频任务提交失败 [${submitRes.status}]: ${errText}`,
-            model,
-          });
+          keyPoolManager.recordResult('nanogpt', nanoKey, false, Date.now() - startTime, errText, submitRes.status);
+          return res.status(submitRes.status).json({ error: `NanoGPT 视频任务提交失败 [${submitRes.status}]: ${errText}` });
         }
 
         const submitData = await submitRes.json();
-        let videoUrl = submitData.videoUrl || submitData.url || submitData.video_url;
-        const runId = submitData.runId || submitData.id || submitData.taskId;
+        let videoUrl = '';
+        const runId = submitData.runId || submitData.id;
 
-        if (!videoUrl && runId) {
-          // Poll NanoGPT video status
+        if (runId) {
+          // Poll: GET /api/video/status?requestId= → data.status → COMPLETED/FAILED, data.output.video.url
           for (let i = 0; i < 70; i++) {
             await new Promise((r) => setTimeout(r, 2500));
-            const statusRes = await fetch(`https://api.nano-gpt.com/api/generate-video/status?runId=${encodeURIComponent(runId)}`, {
-              headers: {
-                'x-api-key': nanoKey,
-                'Authorization': `Bearer ${nanoKey}`,
-              },
-            }).catch(() => null);
+            let statusRes: Response;
+            try {
+              statusRes = await upstreamFetch(
+                { provider: 'nanogpt', route: 'video/poll', model, key: nanoKey },
+                `https://api.nano-gpt.com/api/video/status?requestId=${encodeURIComponent(runId)}`,
+                { headers: { 'x-api-key': nanoKey } }
+              );
+            } catch (netErr: any) {
+              keyPoolManager.recordResult('nanogpt', nanoKey, false, Date.now() - startTime, netErr.message);
+              return res.status(502).json({ error: `NanoGPT 视频状态查询网络异常: ${netErr.message}`, runId });
+            }
 
-            if (statusRes && statusRes.ok) {
-              const statusData = await statusRes.json();
-              if (statusData.status === 'completed' || statusData.status === 'success' || statusData.videoUrl || statusData.url) {
-                videoUrl = statusData.videoUrl || statusData.url || statusData.video_url;
-                break;
-              } else if (statusData.status === 'failed' || statusData.status === 'error') {
-                return res.status(500).json({
-                  error: `NanoGPT 视频生成失败: ${statusData.error || statusData.message || 'Run failed'}`,
-                  model,
-                });
-              }
+            if (!statusRes.ok) {
+              const errBody = await statusRes.text().catch(() => '');
+              keyPoolManager.recordResult('nanogpt', nanoKey, false, Date.now() - startTime, errBody, statusRes.status);
+              return res.status(statusRes.status).json({
+                error: `NanoGPT 视频状态查询失败 [${statusRes.status}]: ${errBody}`,
+                runId,
+              });
+            }
+
+            const statusData = await statusRes.json();
+            const st = String(statusData.data?.status || statusData.status || '').toUpperCase();
+            if (st === 'COMPLETED') {
+              videoUrl = statusData.data?.output?.video?.url || statusData.data?.output?.url || '';
+              break;
+            } else if (st === 'FAILED' || st === 'CANCELED' || st === 'CANCELLED') {
+              keyPoolManager.recordResult('nanogpt', nanoKey, false, Date.now() - startTime, statusData.data?.error || 'FAILED');
+              return res.status(500).json({ error: `NanoGPT 视频生成失败: ${statusData.data?.error || statusData.data?.userFriendlyError || st}` });
             }
           }
         }
 
         if (!videoUrl) {
-          return res.status(504).json({
-            error: 'NanoGPT 视频生成超时 (180s 未完成)，请稍后重试。',
-            model,
-          });
+          keyPoolManager.recordResult('nanogpt', nanoKey, false, Date.now() - startTime, 'Polling timeout');
+          return res.status(504).json({ error: 'NanoGPT 视频生成超时 (175s 未完成)，请稍后重试。' });
         }
 
+        keyPoolManager.recordResult('nanogpt', nanoKey, true, Date.now() - startTime);
         const item = recordHistoryItem({
           url: videoUrl,
           prompt,
+          negativePrompt: nanoPayload.negative_prompt,
           provider: 'NanoGPT Video',
           model,
-          seed: Math.floor(Math.random() * 1000000000),
-          steps: 25,
-          cfg: 4.5,
+          seed: nanoPayload.seed ?? null,
+          steps: null,
+          cfg: null,
         });
 
         return res.json({
@@ -3750,175 +3795,153 @@ app.post(['/api/video/generate', '/api/engine/video/generate'], async (req, res)
           model,
           requestedModel: model,
           exactEndpointCalled: 'https://api.nano-gpt.com/api/generate-video',
-          duration: duration || 5,
-          fps: fps || 24,
+          duration,
           historyItem: item,
         });
       } catch (nanoErr: any) {
+        keyPoolManager.recordResult('nanogpt', nanoKey, false, Date.now() - startTime, nanoErr.message);
         return res.status(500).json({ error: `NanoGPT 视频接口请求异常: ${nanoErr.message}` });
       }
     }
 
-    // 3. Agnes AI Video support (agnes-video-2.5-flash / agnes-video-2.5)
-    if (lowerModel.includes('agnes-video') || lowerModel.startsWith('agnes-video')) {
-      const customAgnesBaseUrl = (req.headers['x-agnes-base-url'] as string)?.trim();
-      const customAgnesKey = (req.headers['x-agnes-key'] as string)?.trim();
+    // 3. Agnes AI Video: POST /v1/videos → poll GET /agnesapi?video_id=&model_name=
+    if (reqProvider === 'agnes' || (byModel && lowerModel.startsWith('agnes-video'))) {
+      const auth = resolveProviderAuth(req, 'agnes');
+      if (auth.error) return res.status(400).json({ error: auth.error });
+      const { apiKey: agnesKey, baseUrl: agnesBaseUrl } = auth;
+      const startTime = Date.now();
+      if (rejectUnsupported(res, 'Agnes AI Video', req.body, ['negative_prompt', 'steps', 'cfg', 'guidance_scale', 'loras'])) return;
 
-      if (customAgnesBaseUrl && !customAgnesKey) {
-        return res.status(400).json({
-          error: '使用自定义 base URL (x-agnes-base-url) 时必须同时提供自定义 API Key (x-agnes-key)，禁止回退使用服务端密钥。',
-        });
-      }
-
-      const agnesKey = customAgnesBaseUrl
-        ? customAgnesKey
-        : (customAgnesKey || cloudSettings['agnesKey'] || defaultKeys['agnesKey'] || '');
-      const agnesBaseUrl = customAgnesBaseUrl || cloudSettings['agnesBaseUrl'] || defaultKeys['agnesBaseUrl'] || 'https://apihub.agnes-ai.com/v1';
-
-      if (!agnesKey) {
-        return res.status(400).json({ error: '未配置 Agnes AI 密钥 (x-agnes-key)。' });
-      }
-
+      // mode: text (no image) or keyframe (image as first_frame)
       const agnesPayload: any = {
         model,
         prompt,
         n: 1,
-        size: aspect_ratio === '9:16' ? '720x1280' : '1280x720',
+        size: '720P',
       };
-      if (image_url) agnesPayload.image_url = image_url;
+      if (isProvided(duration)) agnesPayload.seconds = String(duration);
+      if (isProvided(aspect_ratio)) agnesPayload.aspect_ratio = aspect_ratio;
+      if (isProvided(seed)) agnesPayload.seed = Number(seed);
+      if (image_url) {
+        agnesPayload.mode = 'keyframe';
+        agnesPayload.first_frame = image_url;
+      } else {
+        agnesPayload.mode = 'text';
+      }
 
-      const upstream = await fetch(`${agnesBaseUrl.replace(/\/+$/, '')}/images/generations`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${agnesKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(agnesPayload),
-      });
+      try {
+        // Submit
+        const submitResp = await upstreamFetch(
+          { provider: 'agnes', route: req.path, model, key: agnesKey },
+          `${agnesBaseUrl}/videos`,
+          {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${agnesKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(agnesPayload),
+          }
+        );
 
-      if (!upstream.ok) {
-        const errorText = await upstream.text();
-        return res.status(upstream.status).json({
-          error: `Agnes AI 视频生成失败 [${upstream.status}]: ${errorText}`,
+        if (!submitResp.ok) {
+          const errorText = await submitResp.text();
+          keyPoolManager.recordResult('agnes', agnesKey, false, Date.now() - startTime, errorText, submitResp.status);
+          return res.status(submitResp.status).json({ error: `Agnes AI 视频提交失败 [${submitResp.status}]: ${errorText}` });
+        }
+
+        const submitData = await submitResp.json();
+        const videoId = submitData.video_id || submitData.id;
+        if (!videoId) {
+          keyPoolManager.recordResult('agnes', agnesKey, false, Date.now() - startTime, 'No video_id in submit response', 500);
+          return res.status(500).json({ error: 'Agnes AI 视频接口未返回 video_id' });
+        }
+
+        // Poll until completed or failed (max 5 min)
+        // Agnes polling lives at the domain root, not under /v1
+        const agnesOrigin = new URL(agnesBaseUrl).origin;
+        const pollUrl = `${agnesOrigin}/agnesapi?video_id=${encodeURIComponent(videoId)}&model_name=${encodeURIComponent(model)}`;
+        const pollDeadline = Date.now() + 5 * 60 * 1000;
+        let videoUrl = '';
+        while (Date.now() < pollDeadline) {
+          await new Promise((r) => setTimeout(r, 5000));
+          let pollResp: Response;
+          try {
+            pollResp = await upstreamFetch(
+              { provider: 'agnes', route: 'video/poll', model, key: agnesKey },
+              pollUrl,
+              { headers: { 'Authorization': `Bearer ${agnesKey}` } }
+            );
+          } catch (netErr: any) {
+            keyPoolManager.recordResult('agnes', agnesKey, false, Date.now() - startTime, netErr.message);
+            return res.status(502).json({ error: `Agnes AI 视频轮询网络异常: ${netErr.message}`, videoId });
+          }
+          if (!pollResp.ok) {
+            const errBody = await pollResp.text().catch(() => '');
+            keyPoolManager.recordResult('agnes', agnesKey, false, Date.now() - startTime, errBody, pollResp.status);
+            return res.status(pollResp.status).json({
+              error: `Agnes AI 视频轮询失败 [${pollResp.status}]: ${errBody}`,
+              videoId,
+            });
+          }
+          const pollData = await pollResp.json();
+          if (pollData.status === 'failed') {
+            keyPoolManager.recordResult('agnes', agnesKey, false, Date.now() - startTime, 'Video generation failed');
+            return res.status(500).json({ error: `Agnes AI 视频生成失败: ${JSON.stringify(pollData)}`, videoId });
+          }
+          if (pollData.status === 'completed' && pollData.url) {
+            videoUrl = pollData.url;
+            break;
+          }
+        }
+        if (!videoUrl) {
+          keyPoolManager.recordResult('agnes', agnesKey, false, Date.now() - startTime, 'Polling timeout');
+          return res.status(504).json({ error: 'Agnes AI 视频生成轮询超时 (5 min)' });
+        }
+
+        keyPoolManager.recordResult('agnes', agnesKey, true, Date.now() - startTime);
+        const item = recordHistoryItem({
+          url: videoUrl,
+          prompt,
+          provider: 'Agnes AI Video (ApiHub)',
+          model,
+          seed: agnesPayload.seed ?? null,
+          steps: null,
+          cfg: null,
         });
+
+        return res.json({
+          videoUrl,
+          provider: 'Agnes AI Video (ApiHub)',
+          model,
+          requestedModel: model,
+          exactEndpointCalled: `${agnesBaseUrl}/videos`,
+          duration,
+          historyItem: item,
+        });
+      } catch (agErr: any) {
+        keyPoolManager.recordResult('agnes', agnesKey, false, Date.now() - startTime, agErr.message);
+        return res.status(500).json({ error: `Agnes AI 视频请求异常: ${agErr.message}` });
       }
-
-      const agData = await upstream.json();
-      const videoUrl = agData.data?.[0]?.url || agData.images?.[0]?.url || agData.url;
-      if (!videoUrl) {
-        return res.status(500).json({ error: 'Agnes AI 视频接口返回数据中未包含有效视频 URL' });
-      }
-
-      const item = recordHistoryItem({
-        url: videoUrl,
-        prompt,
-        provider: 'Agnes AI Video (ApiHub)',
-        model,
-        seed: Math.floor(Math.random() * 1000000000),
-        steps: 25,
-        cfg: 4.5,
-      });
-
-      return res.json({
-        videoUrl,
-        provider: 'Agnes AI Video (ApiHub)',
-        model,
-        requestedModel: model,
-        exactEndpointCalled: `${agnesBaseUrl}/images/generations`,
-        duration: duration || 5,
-        fps: fps || 24,
-        historyItem: item,
-      });
     }
 
     // 4. ModelScope Wan 2.1 Video support
     const isModelScopeTarget =
       reqProvider === 'modelscope' ||
       reqProvider === 'modelscope_ai' ||
-      lowerModel.startsWith('damo/') ||
-      lowerModel.startsWith('modelscope') ||
-      lowerModel.includes('cogvideox') ||
-      (lowerModel.includes('wan2.1-t2v') && !lowerModel.includes('fal-ai')) ||
-      (lowerModel.includes('wan2.1-i2v') && !lowerModel.includes('fal-ai'));
+      (byModel && (
+        lowerModel.startsWith('damo/') ||
+        lowerModel.startsWith('modelscope') ||
+        lowerModel.includes('cogvideox') ||
+        (lowerModel.includes('wan2.1-t2v') && !lowerModel.includes('fal-ai')) ||
+        (lowerModel.includes('wan2.1-i2v') && !lowerModel.includes('fal-ai'))));
 
+    // ModelScope API-Inference has no video generation endpoint (Item 6) → explicit 400, never fall through to another provider.
     if (isModelScopeTarget) {
-      const msToken =
-        (req.headers['x-modelscope-token'] as string) ||
-        process.env.MODELSCOPE_TOKEN ||
-        cloudSettings['modelscopeToken'] ||
-        defaultKeys['modelscopeToken'] ||
-        '';
-
-      if (!msToken) {
-        return res.status(400).json({
-          error: '未配置 ModelScope 访问令牌 (x-modelscope-token)。请在设置面板中配置 ModelScope Access Token。',
-        });
-      }
-
-      const effectiveSeed = typeof seed === 'number' && seed >= 0 ? seed : Math.floor(Math.random() * 1000000000);
-      const targetEndpointModel = image_url && !lowerModel.includes('i2v') ? 'damo/wan2.1-i2v-480p-14b' : (model || 'damo/wan2.1-t2v');
-      
-      const msPayload: any = {
-        input: {
-          prompt,
-          steps: 25,
-          seed: effectiveSeed,
-        },
-      };
-      if (image_url) msPayload.input.image_url = image_url;
-
-      const msResp = await fetch(`https://api-inference.modelscope.cn/v1/models/${targetEndpointModel}`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${msToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(msPayload),
-      });
-
-      if (!msResp.ok) {
-        const errorText = await msResp.text();
-        return res.status(msResp.status).json({
-          error: `ModelScope 视频生成失败 [${msResp.status}]: ${errorText}`,
-          model: targetEndpointModel,
-        });
-      }
-
-      const msData = await msResp.json();
-      const vUrl = msData.output_video || msData.video_url || msData.data?.output_video || msData.data?.video_url;
-      if (!vUrl) {
-        return res.status(500).json({
-          error: 'ModelScope 视频接口响应数据中未包含有效视频 URL',
-          details: JSON.stringify(msData),
-          model: targetEndpointModel,
-        });
-      }
-
-      const item = recordHistoryItem({
-        url: vUrl,
-        prompt,
-        provider: 'ModelScope Wan 2.1 Video (原生)',
-        model: targetEndpointModel,
-        seed: effectiveSeed,
-        steps: 25,
-        cfg: 5.0,
-      });
-
-      return res.json({
-        videoUrl: vUrl,
-        provider: 'ModelScope Wan 2.1 Video (原生)',
-        model: targetEndpointModel,
-        requestedModel: model,
-        exactEndpointCalled: `https://api-inference.modelscope.cn/v1/models/${targetEndpointModel}`,
-        duration: duration || 5,
-        fps: fps || 16,
-        seed: effectiveSeed,
-        historyItem: item,
+      return res.status(400).json({
+        error: `ModelScope API-Inference 不提供视频生成接口（model: ${model || '(空)'}）。该服务商不支持视频生成，请改用 Fal / NanoGPT / Agnes / Civitai 视频引擎。`,
       });
     }
 
-    // 5. Fal.ai Video Engine (Wan 2.1, LTX, Kling, MiniMax, CogVideoX, Hunyuan)
-    const falKey = (req.headers['x-fal-key'] as string) || cloudSettings['falKey'] || defaultKeys['falKey'] || process.env.FAL_KEY || '';
+    // 5. Fal.ai Video Engine — default for reqProvider=fal or when no other provider matched (Wan 2.1, LTX, Kling, MiniMax, CogVideoX, Hunyuan)
+    const falKey = keyPoolManager.getNextKey('fal', (req.headers['x-fal-key'] as string) || undefined) || '';
 
     if (!falKey) {
       return res.status(400).json({
@@ -3937,42 +3960,50 @@ app.post(['/api/video/generate', '/api/engine/video/generate'], async (req, res)
     }
 
     let endpoint = normalizeFalEndpoint(model, true);
-    let wasAdapted = false;
-    let adaptationNotice = '';
+    if (!endpoint) {
+      return res.status(400).json({ error: `不认识这个模型: ${model}` });
+    }
+    const wasAdapted = false;
+    const adaptationNotice = '';
 
     if (image_url) {
-      if (endpoint === 'fal-ai/wan/v2.1/text-to-video' || endpoint === 'wan/v2.1/text-to-video' || endpoint === 'damo/wan2.1-t2v') {
-        endpoint = 'fal-ai/wan/v2.1/image-to-video';
-        wasAdapted = true;
-        adaptationNotice = '已检测到输入源图，按照官方接口规范自动匹配 Wan 2.1 图生视频 (image-to-video) 端点。';
-      } else if (endpoint === 'fal-ai/kling-video/v1/standard/text-to-video') {
-        endpoint = 'fal-ai/kling-video/v1/standard/image-to-video';
-        wasAdapted = true;
-        adaptationNotice = '已检测到输入源图，按照官方接口规范自动匹配 Kling 1.5 图生视频 (image-to-video) 端点。';
+      if (
+        endpoint === 'fal-ai/wan/v2.1/text-to-video' ||
+        endpoint === 'wan/v2.1/text-to-video' ||
+        endpoint === 'damo/wan2.1-t2v' ||
+        endpoint === 'fal-ai/kling-video/v1/standard/text-to-video' ||
+        endpoint.includes('text-to-video')
+      ) {
+        return res.status(400).json({ error: '这个端点不支持参考图' });
       }
     }
 
-    const effectiveFalVideoSeed = typeof seed === 'number' && seed >= 0 ? seed : Math.floor(Math.random() * 1000000000);
-    const payload: any = {
-      prompt,
-      aspect_ratio: aspect_ratio || '16:9',
-      seed: effectiveFalVideoSeed,
-    };
+    // Fields this branch does not forward (per-endpoint schemas differ) → 400 instead of silently dropping.
+    if (rejectUnsupported(res, `Fal.ai Video (${endpoint})`, req.body, ['duration', 'fps', 'steps', 'cfg', 'guidance_scale', 'negative_prompt', 'loras'])) return;
+    const payload: any = { prompt };
+    if (isProvided(req.body.aspect_ratio)) payload.aspect_ratio = aspect_ratio;
+    if (isProvided(seed)) payload.seed = Number(seed);
     if (image_url) {
       payload.image_url = image_url;
     }
 
-    const upstreamResp = await fetch(`https://fal.run/${endpoint}`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Key ${falKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
+    const falVideoStart = Date.now();
+    const upstreamResp = await upstreamFetch(
+      { provider: 'fal', route: req.path, model: endpoint, key: falKey },
+      `https://fal.run/${endpoint}`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Key ${falKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      }
+    );
 
     if (!upstreamResp.ok) {
       const errorText = await upstreamResp.text();
+      keyPoolManager.recordResult('fal', falKey, false, Date.now() - falVideoStart, errorText, upstreamResp.status);
       let friendlyError = `AI 视频服务商执行失败 [${upstreamResp.status}]: ${errorText}`;
       if (upstreamResp.status === 403 || errorText.includes('Exhausted balance')) {
         friendlyError = `Fal.ai 接口执行失败 [403]: 账户额度已耗尽 (Exhausted balance)。请在设置面板中填入新的 Fal API Key，或切换使用 Tensor.Art / NanoGPT / Agnes AI Video / ModelScope 引擎。`;
@@ -3982,32 +4013,34 @@ app.post(['/api/video/generate', '/api/engine/video/generate'], async (req, res)
       });
     }
 
+    keyPoolManager.recordResult('fal', falKey, true, Date.now() - falVideoStart);
     const vData = await upstreamResp.json();
-    const videoUrl = vData.video?.url || vData.video_url || vData.output?.video_url;
+    const videoUrl = vData.video?.url;
     if (!videoUrl) {
-      return res.status(500).json({ error: 'AI 视频接口返回数据中未包含视频 URL' });
+      return res.status(502).json({ error: 'AI 视频接口返回数据中未包含视频 URL (video.url)' });
     }
 
     const providerName = `Fal.ai (${endpoint})`;
+    const usedVideoSeed = typeof vData.seed === 'number' ? vData.seed : (payload.seed ?? null);
     const item = recordHistoryItem({
       url: videoUrl,
       prompt,
       provider: providerName,
       model: endpoint,
-      seed: effectiveFalVideoSeed,
-      steps: 25,
-      cfg: 4.5,
+      seed: usedVideoSeed,
+      steps: null,
+      cfg: null,
     });
 
     return res.json({
       videoUrl,
       provider: providerName,
+      actualProvider: providerName,
       model: endpoint,
+      actualModel: endpoint,
       requestedModel: model,
       exactEndpointCalled: `https://fal.run/${endpoint}`,
-      duration: duration || 5,
-      fps: fps || 16,
-      seed: effectiveFalVideoSeed,
+      seed: usedVideoSeed,
       wasAdapted,
       adaptationNotice,
       historyItem: item,
@@ -4017,25 +4050,58 @@ app.post(['/api/video/generate', '/api/engine/video/generate'], async (req, res)
   }
 });
 
+// Verified mapping from Civitai official baseModel to Orchestration ecosystem enum
+// Source: https://orchestration.civitai.com/openapi/v2-consumers.json and https://developer.civitai.com/orchestration/recipes/
+const BASE_MODEL_TO_ECOSYSTEM: Record<string, string> = {
+  'sd 1.5': 'sd1',
+  'sd 1.4': 'sd1',
+  'sd1': 'sd1',
+  'sd15': 'sd1',
+  'sdxl 1.0': 'sdxl',
+  'sdxl': 'sdxl',
+  'pony': 'sdxl',
+  'illustrious': 'sdxl',
+  'flux.1 d': 'flux1',
+  'flux.1 dev': 'flux1',
+  'flux.1 s': 'flux1',
+  'flux.1 schnell': 'flux1',
+  'flux1': 'flux1',
+  'flux2 dev': 'flux2Dev',
+  'flux2dev': 'flux2Dev',
+  'flux2 klein': 'flux2Klein',
+  'flux2klein': 'flux2Klein',
+  'krea': 'krea2',
+  'krea 2': 'krea2',
+  'krea2': 'krea2',
+  'qwen': 'qwen',
+  'qwen 2': 'qwen',
+  'qwen2': 'qwen',
+  'anima': 'anima',
+  'pony v7': 'ponyV7',
+  'ponyv7': 'ponyV7',
+  'zimage': 'zImage',
+  'zimageturbo': 'zImage',
+  'z-image': 'zImage',
+};
+
+function mapBaseModelToEcosystem(rawBase: string): string {
+  const clean = (rawBase || '').toLowerCase().trim();
+  const matched = BASE_MODEL_TO_ECOSYSTEM[clean];
+  if (matched) return matched;
+  throw new Error(`无法识别该 Civitai 模型生态 (baseModel: "${rawBase}")，缺少官方映射`);
+}
+
 function normalizeEcosystem(rawEco: string): string {
   const lower = (rawEco || '').toLowerCase().trim();
-  if (lower === 'zimage' || lower === 'zimageturbo') return 'zImage';
-  if (lower === 'flux2dev') return 'flux2Dev';
-  if (lower === 'flux2klein') return 'flux2Klein';
-  if (lower === 'flux' || lower === 'flux1') return 'flux1';
-  if (lower === 'krea' || lower === 'krea2') return 'krea2';
-  if (lower === 'sd1' || lower === 'sd15' || lower === 'sd1.5') return 'sd1';
-  if (lower === 'qwen' || lower === 'qwen2') return 'qwen';
-  if (lower === 'anima') return 'anima';
-  if (lower === 'ponyv7') return 'ponyV7';
-  if (lower === 'sdxl' || lower === 'pony' || lower === 'illustrious') return 'sdxl';
-  return rawEco || 'sdxl';
+  const matched = BASE_MODEL_TO_ECOSYSTEM[lower];
+  if (matched) return matched;
+  return rawEco || '';
 }
 
 // ==========================================
 // 2.75. Civitai Official Orchestration Engine (Native Generator & Dynamic AIR Resolver)
 // ==========================================
-async function resolveCivitaiAir(rawInput: string, fallbackEcosystem: string = 'sdxl', fallbackType: 'checkpoint' | 'lora' = 'checkpoint'): Promise<string> {
+async function resolveCivitaiAir(rawInput: string, fallbackType: 'checkpoint' | 'lora' = 'checkpoint', route: string = '/api/civitai'): Promise<string> {
   if (!rawInput) return '';
   if (rawInput.startsWith('urn:air:') || rawInput.startsWith('air:')) {
     const fullUrn = rawInput.startsWith('air:') ? `urn:${rawInput}` : rawInput;
@@ -4048,72 +4114,108 @@ async function resolveCivitaiAir(rawInput: string, fallbackEcosystem: string = '
   }
 
   const trimmed = rawInput.trim();
-  const lower = trimmed.toLowerCase();
 
   // 1. If input is modelId@versionId (e.g. 2726029@3091481)
-  const isModelAndVersion = /^\d+@\d+$/.test(trimmed);
+  const isModelAndVersion = /^(\d+)@(\d+)$/.test(trimmed);
   if (isModelAndVersion) {
-    const eco = normalizeEcosystem(lower.includes('flux') ? 'flux1' : lower.includes('krea') ? 'krea2' : fallbackEcosystem);
-    return `urn:air:${eco}:${fallbackType}:civitai:${trimmed}`;
+    const match = trimmed.match(/^(\d+)@(\d+)$/);
+    const versionId = match![2];
+    const resp = await upstreamFetch(
+      { provider: 'civitai', route, model: trimmed },
+      `https://civitai.com/api/v1/model-versions/${versionId}`,
+      { headers: { 'User-Agent': 'ComfyCanvas/1.0' } }
+    );
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data.air) {
+        const parts = data.air.split(':');
+        if (parts.length >= 3) parts[2] = normalizeEcosystem(parts[2]);
+        return parts.join(':');
+      }
+      if (data.modelId && data.id && data.baseModel) {
+        const eco = mapBaseModelToEcosystem(data.baseModel);
+        const type = (data.model?.type || fallbackType).toLowerCase().includes('lora') ? 'lora' : 'checkpoint';
+        return `urn:air:${eco}:${type}:civitai:${data.modelId}@${data.id}`;
+      }
+    }
+    const errText = await resp.text().catch(() => '');
+    throw new Error(`找不到这个模型 (Civitai API HTTP ${resp.status}): ${errText.slice(0, 300)}`);
   }
 
   // 2. If input is purely a numeric ID (e.g. versionId 3091481 or modelId 2726029)
   const isPureNumber = /^\d+$/.test(trimmed);
   if (isPureNumber) {
-    try {
-      const resp = await fetch(`https://civitai.com/api/v1/model-versions/${trimmed}`, {
-        headers: { 'User-Agent': 'ComfyCanvas/1.0' },
-      });
-      if (resp.ok) {
-        const data = await resp.json();
-        if (data.air) {
-          const parts = data.air.split(':');
-          if (parts.length >= 3) parts[2] = normalizeEcosystem(parts[2]);
-          return parts.join(':');
-        }
-        if (data.modelId && data.id) {
-          const rawBase = data.baseModel || fallbackEcosystem;
-          const eco = normalizeEcosystem(rawBase);
-          const type = (data.model?.type || fallbackType).toLowerCase().includes('lora') ? 'lora' : 'checkpoint';
-          return `urn:air:${eco}:${type}:civitai:${data.modelId}@${data.id}`;
-        }
+    const resp = await upstreamFetch(
+      { provider: 'civitai', route, model: trimmed },
+      `https://civitai.com/api/v1/model-versions/${trimmed}`,
+      { headers: { 'User-Agent': 'ComfyCanvas/1.0' } }
+    );
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data.air) {
+        const parts = data.air.split(':');
+        if (parts.length >= 3) parts[2] = normalizeEcosystem(parts[2]);
+        return parts.join(':');
       }
-    } catch (e) {
-      console.warn(`Failed to query Civitai AIR for versionId ${trimmed}:`, e);
+      if (data.modelId && data.id && data.baseModel) {
+        const eco = mapBaseModelToEcosystem(data.baseModel);
+        const type = (data.model?.type || fallbackType).toLowerCase().includes('lora') ? 'lora' : 'checkpoint';
+        return `urn:air:${eco}:${type}:civitai:${data.modelId}@${data.id}`;
+      }
     }
+
+    // Try query as modelId
+    const modelResp = await upstreamFetch(
+      { provider: 'civitai', route, model: trimmed },
+      `https://civitai.com/api/v1/models/${trimmed}`,
+      { headers: { 'User-Agent': 'ComfyCanvas/1.0' } }
+    );
+    if (modelResp.ok) {
+      const modelData = await modelResp.json();
+      const firstVer = modelData.modelVersions?.[0];
+      if (firstVer?.air) {
+        const parts = firstVer.air.split(':');
+        if (parts.length >= 3) parts[2] = normalizeEcosystem(parts[2]);
+        return parts.join(':');
+      }
+      if (modelData.id && firstVer?.id && firstVer?.baseModel) {
+        const eco = mapBaseModelToEcosystem(firstVer.baseModel);
+        const type = (modelData.type || fallbackType).toLowerCase().includes('lora') ? 'lora' : 'checkpoint';
+        return `urn:air:${eco}:${type}:civitai:${modelData.id}@${firstVer.id}`;
+      }
+    }
+
+    const errText = await modelResp.text().catch(() => '');
+    throw new Error(`找不到这个模型 (Civitai API HTTP ${modelResp.status}): ${errText.slice(0, 300)}`);
   }
 
   // 3. Search Civitai API dynamically by model/LoRA string name
-  try {
-    const cleanSearchName = trimmed.replace(/\.safetensors$/i, '').replace(/_/g, ' ');
-    const searchResp = await fetch(`https://civitai.com/api/v1/models?query=${encodeURIComponent(cleanSearchName)}&limit=3`, {
-      headers: { 'User-Agent': 'ComfyCanvas/1.0' },
-    });
-    if (searchResp.ok) {
-      const searchData = await searchResp.json();
-      const bestModel = searchData.items?.[0];
-      const bestVersion = bestModel?.modelVersions?.[0];
-      if (bestVersion) {
-        if (bestVersion.air) {
-          const parts = bestVersion.air.split(':');
-          if (parts.length >= 3) parts[2] = normalizeEcosystem(parts[2]);
-          return parts.join(':');
-        }
-        if (bestModel.id && bestVersion.id) {
-          const rawBase = bestVersion.baseModel || fallbackEcosystem;
-          const eco = normalizeEcosystem(rawBase);
-          const type = (bestModel.type || fallbackType).toLowerCase().includes('lora') ? 'lora' : 'checkpoint';
-          return `urn:air:${eco}:${type}:civitai:${bestModel.id}@${bestVersion.id}`;
-        }
+  const cleanSearchName = trimmed.replace(/\.safetensors$/i, '').replace(/_/g, ' ');
+  const searchResp = await upstreamFetch(
+    { provider: 'civitai', route, model: trimmed },
+    `https://civitai.com/api/v1/models?query=${encodeURIComponent(cleanSearchName)}&limit=3`,
+    { headers: { 'User-Agent': 'ComfyCanvas/1.0' } }
+  );
+  if (searchResp.ok) {
+    const searchData = await searchResp.json();
+    const bestModel = searchData.items?.[0];
+    const bestVersion = bestModel?.modelVersions?.[0];
+    if (bestVersion) {
+      if (bestVersion.air) {
+        const parts = bestVersion.air.split(':');
+        if (parts.length >= 3) parts[2] = normalizeEcosystem(parts[2]);
+        return parts.join(':');
+      }
+      if (bestModel.id && bestVersion.id && bestVersion.baseModel) {
+        const eco = mapBaseModelToEcosystem(bestVersion.baseModel);
+        const type = (bestModel.type || fallbackType).toLowerCase().includes('lora') ? 'lora' : 'checkpoint';
+        return `urn:air:${eco}:${type}:civitai:${bestModel.id}@${bestVersion.id}`;
       }
     }
-  } catch (e) {
-    console.warn(`Failed to search Civitai AIR for name "${trimmed}":`, e);
   }
 
-  // Fallback to URN format with normalized ecosystem
-  const eco = normalizeEcosystem(lower.includes('flux') ? 'flux1' : lower.includes('krea') ? 'krea2' : fallbackEcosystem);
-  return `urn:air:${eco}:${fallbackType}:civitai:${trimmed}`;
+  const errText = await searchResp.text().catch(() => '');
+  throw new Error(`找不到这个模型 (Civitai API 搜索失败 HTTP ${searchResp.status}): ${errText.slice(0, 300)}`);
 }
 
 // Helper to extract generated image/video URL from any Civitai Orchestration response structure
@@ -4122,27 +4224,16 @@ function extractCivitaiBlobUrl(data: any): string {
   if (typeof data.url === 'string' && data.url.startsWith('http')) return data.url;
   if (typeof data.blobUrl === 'string' && data.blobUrl.startsWith('http')) return data.blobUrl;
 
-  // Check images array
-  if (Array.isArray(data.images) && data.images.length > 0) {
-    const img = data.images[0];
-    if (typeof img === 'string' && img.startsWith('http')) return img;
-    if (img?.url && typeof img.url === 'string') return img.url;
-    if (img?.previewUrl && typeof img.previewUrl === 'string') return img.previewUrl;
-  }
-
-  // Check output blobs
-  if (Array.isArray(data.output?.blobs) && data.output.blobs.length > 0) {
-    const b = data.output.blobs[0];
-    if (b?.url && typeof b.url === 'string') return b.url;
-  }
-  if (Array.isArray(data.blobs) && data.blobs.length > 0) {
-    const b = data.blobs[0];
-    if (b?.url && typeof b.url === 'string') return b.url;
-  }
-
-  // Check steps array
+  // Canonical output: steps[].output.images[].url (imageGen) or steps[].output.video.url (videoGen)
   if (Array.isArray(data.steps)) {
     for (const step of data.steps) {
+      // imageGen output
+      if (Array.isArray(step.output?.images) && step.output.images.length > 0) {
+        if (step.output.images[0]?.url) return step.output.images[0].url;
+      }
+      // videoGen output
+      if (step.output?.video?.url) return step.output.video.url;
+      // Fallback: blobs array
       if (Array.isArray(step.output?.blobs) && step.output.blobs.length > 0) {
         if (step.output.blobs[0]?.url) return step.output.blobs[0].url;
       }
@@ -4160,6 +4251,21 @@ function extractCivitaiBlobUrl(data: any): string {
     }
   }
 
+  // Legacy flat shapes
+  if (Array.isArray(data.images) && data.images.length > 0) {
+    const img = data.images[0];
+    if (typeof img === 'string' && img.startsWith('http')) return img;
+    if (img?.url && typeof img.url === 'string') return img.url;
+  }
+  if (Array.isArray(data.output?.blobs) && data.output.blobs.length > 0) {
+    const b = data.output.blobs[0];
+    if (b?.url && typeof b.url === 'string') return b.url;
+  }
+  if (Array.isArray(data.blobs) && data.blobs.length > 0) {
+    const b = data.blobs[0];
+    if (b?.url && typeof b.url === 'string') return b.url;
+  }
+
   return '';
 }
 
@@ -4172,9 +4278,13 @@ app.get('/api/civitai/workflow/:id', async (req, res) => {
       return res.status(400).json({ error: 'Civitai API key is required' });
     }
 
-    const resp = await fetch(`https://orchestration.civitai.com/v2/consumer/workflows/${id}`, {
-      headers: { Authorization: `Bearer ${apiKey}` },
-    });
+    const resp = await upstreamFetch(
+      { provider: 'civitai', route: req.path, model: id, key: apiKey },
+      `https://orchestration.civitai.com/v2/consumer/workflows/${id}`,
+      {
+        headers: { Authorization: `Bearer ${apiKey}` },
+      }
+    );
 
     if (!resp.ok) {
       const errText = await resp.text();
@@ -4202,25 +4312,27 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
   try {
     const {
       prompt,
-      negative_prompt = '',
-      model = '',
-      width = 1024,
-      height = 1024,
-      steps = 28,
-      cfg = 6.0,
-      seed = Math.floor(Math.random() * 1000000000),
-      sampler_name = 'dpmpp_2m',
-      scheduler = 'karras',
-      denoise = 1.0,
+      negative_prompt,
+      model,
+      width,
+      height,
+      steps,
+      cfg,
+      seed,
+      sampler_name,
+      scheduler,
+      denoise,
       image_url,
-      loras = [],
+      loras,
       videoDuration,
       civitaiKey = '',
     } = req.body;
+    if (!model) return res.status(400).json({ error: '模型为必填项（model is required）' });
 
     const apiKey =
-      civitaiKey ||
       (req.headers['x-civitai-key'] as string) ||
+      civitaiKey ||
+      keyPoolManager.getNextKey('civitai') ||
       cloudSettings['civitaiKey'] ||
       defaultKeys['civitaiKey'] ||
       '';
@@ -4235,47 +4347,46 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
     const isVideo =
       req.body.isVideo === true ||
       (typeof model === 'string' &&
-        (model.startsWith('minimax/') ||
-          model.startsWith('fal-ai/wan') ||
-          model.includes('text-to-video') ||
+        (model.includes('text-to-video') ||
           model.includes('image-to-video')));
 
     let completedMediaUrl = '';
-    let usedProvider = 'Civitai 官方原生生成引擎';
+    const usedProvider = 'Civitai 官方原生生成引擎';
+    const startTime = Date.now();
 
     try {
-      let airModel = model;
-      if (!airModel.startsWith('urn:air:')) {
-        // Resolve model using 'sdxl' as fallback type but keep it fully dynamic
-        airModel = await resolveCivitaiAir(model, 'sdxl', 'checkpoint');
-      }
-
-      // Dynamically extract ecosystem from the resolved AIR URN
-      let ecosystem = 'sdxl';
-      if (airModel.startsWith('urn:air:')) {
-        const parts = airModel.split(':');
-        if (parts.length >= 3) {
-          ecosystem = parts[2];
-        }
-      }
-
       if (isVideo) {
-        // Civitai VideoGen recipe with wait=true parameter
-        const videoPayload: any = {
-          engine: 'minimax',
-          prompt: prompt,
-        };
-        const orchResp = await fetch('https://orchestration.civitai.com/v2/consumer/recipes/videoGen?wait=true', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${apiKey}`,
-          },
-          body: JSON.stringify(videoPayload),
-        });
+        // videoGen: engine/version/provider/operation are recipe-specific (e.g. wan: v2.1…v3.0) — caller must choose, no forced engine.
+        const { engine: vEngine, version: vVersion, provider: vProvider, operation: vOperation } = req.body;
+        if (!isProvided(vEngine)) {
+          return res.status(400).json({ error: 'Civitai 视频生成需要显式指定 engine（如 "wan"），服务端不再默认任何引擎。' });
+        }
+        const videoInput: Record<string, any> = { engine: vEngine, prompt };
+        if (isProvided(vVersion)) videoInput.version = vVersion;
+        if (isProvided(vProvider)) videoInput.provider = vProvider;
+        if (isProvided(vOperation)) videoInput.operation = vOperation;
+        if (isProvided(videoDuration)) videoInput.duration = videoDuration;
+        if (isProvided(seed)) videoInput.seed = Number(seed);
+        if (isProvided(image_url)) videoInput.startImage = image_url;
+
+        const orchResp = await upstreamFetch(
+          { provider: 'civitai', route: req.path, model, key: apiKey },
+          'https://orchestration.civitai.com/v2/consumer/workflows?wait=100',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify({
+              steps: [{ $type: 'videoGen', input: videoInput }],
+            }),
+          }
+        );
 
         if (!orchResp.ok) {
           const errText = await orchResp.text();
+          keyPoolManager.recordResult('civitai', apiKey, false, Date.now() - startTime, errText, orchResp.status);
           return res.status(orchResp.status).json({
             error: `Civitai 视频生成接口返回错误 [${orchResp.status}]: ${errText}`,
           });
@@ -4286,12 +4397,36 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
         if (!completedMediaUrl && (orchData.id || orchData.token)) {
           const workflowId = orchData.id || orchData.token;
           for (let i = 0; i < 20; i++) {
-            await new Promise((r) => setTimeout(r, 2000));
-            const pollResp = await fetch(`https://orchestration.civitai.com/v2/consumer/workflows/${workflowId}`, {
-              headers: { Authorization: `Bearer ${apiKey}` },
-            });
-            if (pollResp.ok) {
-              const pollData = await pollResp.json();
+            await new Promise((r) => setTimeout(r, 3000));
+            let pollResp: Response;
+            try {
+              pollResp = await upstreamFetch(
+                { provider: 'civitai', route: '/api/civitai/generate/poll', model: String(workflowId), key: apiKey },
+                `https://orchestration.civitai.com/v2/consumer/workflows/${workflowId}`,
+                {
+                  headers: { Authorization: `Bearer ${apiKey}` },
+                }
+              );
+            } catch (netErr: any) {
+              keyPoolManager.recordResult('civitai', apiKey, false, Date.now() - startTime, netErr.message);
+              return res.status(502).json({ error: `Civitai 视频轮询网络异常: ${netErr.message}`, workflowId });
+            }
+            if (!pollResp.ok) {
+              const errBody = await pollResp.text().catch(() => '');
+              keyPoolManager.recordResult('civitai', apiKey, false, Date.now() - startTime, errBody, pollResp.status);
+              return res.status(pollResp.status).json({
+                error: `Civitai 视频状态查询失败 [${pollResp.status}]: ${errBody}`,
+                workflowId,
+              });
+            }
+            const pollData = await pollResp.json();
+            const status = (pollData.status || '').toLowerCase();
+              if (status === 'failed' || status === 'expired' || status === 'canceled') {
+                keyPoolManager.recordResult('civitai', apiKey, false, Date.now() - startTime, `Status: ${pollData.status}`);
+                return res.status(500).json({
+                  error: `Civitai 视频任务渲染失败 [状态: ${pollData.status}]: ${pollData.error || pollData.reason || 'Job failed on Civitai cluster'}`,
+                });
+              }
               const url = extractCivitaiBlobUrl(pollData);
               if (url) {
                 completedMediaUrl = url;
@@ -4299,147 +4434,214 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
               }
             }
           }
+
+        // History for video: only record what was actually sent
+        keyPoolManager.recordResult('civitai', apiKey, !!completedMediaUrl, Date.now() - startTime);
+        if (!completedMediaUrl) {
+          return res.status(500).json({ error: 'Civitai 视频生成未能按时返回，请稍后在历史记录中查看或重试。' });
         }
-      } else {
-        // Civitai ImageGen recipe (sdcpp for SD C++ ecosystems, comfy for other custom ecosystems like krea2) + wait=true parameter
-        const resources: any[] = [];
-        if (Array.isArray(loras) && loras.length > 0) {
-          for (const l of loras) {
-            const rawId = l.civitaiId || l.versionId || l.id || l.name;
-            if (rawId) {
-              const loraUrn = await resolveCivitaiAir(String(rawId), ecosystem, 'lora');
-              resources.push({
-                model: loraUrn,
-                strength: Number(l.strength || l.modelStrength || 0.8),
+
+        const item = recordHistoryItem({
+          url: completedMediaUrl,
+          prompt,
+          provider: usedProvider,
+          model,
+          seed: isProvided(seed) ? Number(seed) : null,
+          steps: null,
+          cfg: null,
+        });
+
+        return res.json({
+          success: true,
+          mediaUrl: completedMediaUrl,
+          videoUrl: completedMediaUrl,
+          provider: usedProvider,
+          model,
+          historyItem: item,
+        });
+      }
+
+      // --- ImageGen ---
+      let airModel = model;
+      if (!airModel.startsWith('urn:air:')) {
+        airModel = await resolveCivitaiAir(model, 'checkpoint', req.path);
+      }
+
+      // Extract ecosystem from the resolved AIR URN
+      let ecosystem = '';
+      if (airModel.startsWith('urn:air:')) {
+        const parts = airModel.split(':');
+        if (parts.length >= 3) ecosystem = parts[2];
+      }
+      if (!ecosystem) {
+        return res.status(400).json({ error: `无法确定模型 ${model} 的 ecosystem 生态` });
+      }
+
+      // Build LoRA map { urn: strength } — Civitai uses map format for both sdcpp and comfy
+      const loraMap: Record<string, number> = {};
+      if (Array.isArray(loras) && loras.length > 0) {
+        for (const l of loras) {
+          const rawId = l.civitaiId || l.versionId || l.id || l.name;
+          if (rawId) {
+            const loraUrn = await resolveCivitaiAir(String(rawId), 'lora', req.path);
+            const strength = Number(l.strength ?? l.modelStrength);
+            if (!isFinite(strength)) {
+              return res.status(400).json({
+                error: `LoRA strength 为必填项（缺少 strength / modelStrength）: ${rawId}`,
               });
             }
+            loraMap[loraUrn] = strength;
           }
         }
+      }
 
-        const safeWidth = Math.max(256, Math.min(2048, Math.round((Number(width) || 1024) / 16) * 16));
-        const safeHeight = Math.max(256, Math.min(2048, Math.round((Number(height) || 1024) / 16) * 16));
+      if (isProvided(denoise) && !isProvided(image_url)) {
+        return res.status(400).json({ error: '该服务商不支持: denoise（Civitai 仅在图生图 createVariant 时接受 strength，需同时提供 image_url）', unsupported: ['denoise'] });
+      }
+      const sdcppEcosystems = ['sd1', 'sdxl', 'flux1', 'flux2Dev', 'flux2Klein', 'qwen', 'zImage', 'anima'];
+      const isFlux = ecosystem === 'flux1';
+      const isSdcpp = sdcppEcosystems.includes(ecosystem);
 
-        // Use the OpenAPI consumer schemas to choose the correct orchestrator engine
-        const sdcppEcosystems = ['sd1', 'sdxl', 'flux1', 'flux2Dev', 'flux2Klein', 'qwen', 'zImage', 'anima'];
-        const isSdcpp = sdcppEcosystems.includes(ecosystem);
+      // C7: Validate width / height strictly (must be within official range and multiple of 16)
+      if (isProvided(width)) {
+        const w = Number(width);
+        const minW = isFlux ? 832 : 64;
+        const maxW = isFlux ? 1216 : 2048;
+        if (isNaN(w) || w < minW || w > maxW || w % 16 !== 0) {
+          return res.status(400).json({
+            error: `宽度超出 Civitai 官方允许范围或未整除 16: width=${width}。允许范围: ${minW}–${maxW} 且为 16 的倍数`,
+          });
+        }
+      }
+      if (isProvided(height)) {
+        const h = Number(height);
+        const minH = isFlux ? 832 : 64;
+        const maxH = isFlux ? 1216 : 2048;
+        if (isNaN(h) || h < minH || h > maxH || h % 16 !== 0) {
+          return res.status(400).json({
+            error: `高度超出 Civitai 官方允许范围或未整除 16: height=${height}。允许范围: ${minH}–${maxH} 且为 16 的倍数`,
+          });
+        }
+      }
 
-        let recipePayload: any;
+      let genInput: Record<string, any>;
 
-        if (isSdcpp) {
-          recipePayload = {
-            engine: 'sdcpp',
-            ecosystem: ecosystem,
-            model: airModel,
-            prompt,
-            negativePrompt: negative_prompt || '',
-            width: safeWidth,
-            height: safeHeight,
-            steps: Number(steps) || 25,
-            cfgScale: Number(cfg) ?? 6.0,
-            sampler: sampler_name || 'euler',
-            scheduler: scheduler || 'simple',
-            quantity: 1,
-          };
-
-          if (resources.length > 0) {
-            recipePayload.resources = resources;
-          }
+      if (isSdcpp) {
+        genInput = {
+          engine: 'sdcpp',
+          ecosystem,
+          operation: isProvided(image_url) ? 'createVariant' : 'createImage',
+          prompt,
+          quantity: 1,
+        };
+        // flux1 uses diffuserModel; other sdcpp ecosystems use model
+        if (isFlux) {
+          genInput.diffuserModel = airModel;
         } else {
-          // Fall back transparently to 'comfy' engine for other architectures (like 'krea2' or custom user models)
-          recipePayload = {
-            engine: 'comfy',
-            ecosystem: ecosystem,
-            model: ecosystem === 'krea2' ? 'turbo' : 'base', // Map correct model discriminator value
-            operation: 'createImage',
-            diffusionModel: airModel,
-            prompt,
-            negativePrompt: negative_prompt || '',
-            width: safeWidth,
-            height: safeHeight,
-            steps: Number(steps) || 25,
-            cfgScale: Number(cfg) ?? 6.0,
-            sampler: sampler_name || 'euler',
-            scheduler: scheduler || 'simple',
-            quantity: 1,
-          };
-
-          if (resources.length > 0) {
-            const loraMap: Record<string, number> = {};
-            for (const r of resources) {
-              loraMap[r.model] = r.strength;
-            }
-            recipePayload.loras = loraMap;
-          }
+          genInput.model = airModel;
         }
+        // Only send parameters the caller actually provided (C3)
+        if (isProvided(negative_prompt)) genInput.negativePrompt = negative_prompt;
+        if (isProvided(width)) genInput.width = Number(width);
+        if (isProvided(height)) genInput.height = Number(height);
+        if (isProvided(steps)) genInput.steps = Number(steps);
+        if (isProvided(cfg)) genInput.cfgScale = Number(cfg);
+        if (isProvided(seed)) genInput.seed = Number(seed);
+        // sdcpp field names: sampleMethod / schedule (C2)
+        if (isProvided(sampler_name)) genInput.sampleMethod = sampler_name;
+        if (isProvided(scheduler)) genInput.schedule = scheduler;
+        if (Object.keys(loraMap).length > 0) genInput.loras = loraMap;
+        if (isProvided(image_url)) {
+          genInput.image = image_url;
+          if (isProvided(denoise)) genInput.strength = Number(denoise);
+        }
+      } else {
+        // comfy engine for other ecosystems (krea2 etc.)
+        genInput = {
+          engine: 'comfy',
+          ecosystem,
+          model: ecosystem === 'krea2' ? 'turbo' : 'base',
+          operation: isProvided(image_url) ? 'createVariant' : 'createImage',
+          diffusionModel: airModel,
+          prompt,
+          quantity: 1,
+        };
+        if (isProvided(negative_prompt)) genInput.negativePrompt = negative_prompt;
+        if (isProvided(width)) genInput.width = Number(width);
+        if (isProvided(height)) genInput.height = Number(height);
+        if (isProvided(steps)) genInput.steps = Number(steps);
+        if (isProvided(cfg)) genInput.cfgScale = Number(cfg);
+        if (isProvided(seed)) genInput.seed = Number(seed);
+        // comfy uses sampler / scheduler (not sampleMethod / schedule)
+        if (isProvided(sampler_name)) genInput.sampler = sampler_name;
+        if (isProvided(scheduler)) genInput.scheduler = scheduler;
+        if (Object.keys(loraMap).length > 0) genInput.loras = loraMap;
+        if (isProvided(image_url)) {
+          genInput.image = image_url;
+          if (isProvided(denoise)) genInput.denoiseStrength = Number(denoise);
+        }
+      }
 
-        const orchResp = await fetch('https://orchestration.civitai.com/v2/consumer/recipes/imageGen?wait=true', {
+      // POST /v2/consumer/workflows?wait=100 (integer seconds, max 100)
+      const orchResp = await upstreamFetch(
+        { provider: 'civitai', route: req.path, model, key: apiKey },
+        'https://orchestration.civitai.com/v2/consumer/workflows?wait=100',
+        {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${apiKey}`,
           },
-          body: JSON.stringify(recipePayload),
+          body: JSON.stringify({
+            steps: [{ $type: 'imageGen', input: genInput }],
+          }),
+        }
+      );
+
+      if (!orchResp.ok) {
+        const errText = await orchResp.text();
+        keyPoolManager.recordResult('civitai', apiKey, false, Date.now() - startTime, errText, orchResp.status);
+        return res.status(orchResp.status).json({
+          error: `Civitai Orchestration 官方算力返回错误 [${orchResp.status}]: ${errText}`,
         });
+      }
 
-        if (!orchResp.ok) {
-          const errText = await orchResp.text();
-          return res.status(orchResp.status).json({
-            error: `Civitai Orchestration 官方算力返回错误 [${orchResp.status}]: ${errText}`,
-          });
-        }
+      const orchData = await orchResp.json();
+      completedMediaUrl = extractCivitaiBlobUrl(orchData);
 
-        const orchData = await orchResp.json();
-        completedMediaUrl = extractCivitaiBlobUrl(orchData);
-
-        // Quick check (2s) in case it completes immediately
-        if (!completedMediaUrl && (orchData.id || orchData.token)) {
-          const workflowId = orchData.id || orchData.token;
-          await new Promise((r) => setTimeout(r, 2000));
-          const pollResp = await fetch(`https://orchestration.civitai.com/v2/consumer/workflows/${workflowId}`, {
-            headers: { Authorization: `Bearer ${apiKey}` },
-          });
-          if (pollResp.ok) {
-            const pollData = await pollResp.json();
-            completedMediaUrl = extractCivitaiBlobUrl(pollData);
-            const status = (pollData.status || '').toLowerCase();
-            if (status === 'failed' || status === 'expired' || status === 'canceled') {
-              return res.status(500).json({
-                error: `Civitai 任务渲染失败 [状态: ${pollData.status}]: ${pollData.error || pollData.reason || 'Job failed on Civitai cluster'}`,
-              });
-            }
-          }
-
-          // If still in progress after 2s, return pending status and workflowId immediately to prevent proxy timeouts
-          if (!completedMediaUrl) {
-            return res.json({
-              pending: true,
-              workflowId,
-              status: orchData.status || 'processing',
-              provider: usedProvider,
-              model,
-              seed,
-            });
-          }
-        }
+      // If not completed in wait=100, return pending + workflowId for client-side polling
+      if (!completedMediaUrl && (orchData.id || orchData.token)) {
+        const workflowId = orchData.id || orchData.token;
+        keyPoolManager.recordResult('civitai', apiKey, true, Date.now() - startTime);
+        return res.json({
+          pending: true,
+          workflowId,
+          status: orchData.status || 'processing',
+          provider: usedProvider,
+          model,
+        });
       }
     } catch (orchErr: any) {
+      keyPoolManager.recordResult('civitai', apiKey, false, Date.now() - startTime, orchErr.message);
       return res.status(500).json({ error: `Civitai 网络请求失败: ${orchErr.message}` });
     }
 
     if (!completedMediaUrl) {
-      return res.status(500).json({ error: 'Civitai 原生算力未能按时返回有效图像/视频，可能由于排队超时，请稍后在历史记录中查看或重试。' });
+      return res.status(500).json({ error: 'Civitai 原生算力未能按时返回有效图像，可能由于排队超时，请稍后在历史记录中查看或重试。' });
     }
 
+    keyPoolManager.recordResult('civitai', apiKey, true, Date.now() - startTime);
+
+    // History: only record values actually sent to upstream (C1, C3)
     const item = recordHistoryItem({
       url: completedMediaUrl,
       prompt,
-      negativePrompt: negative_prompt,
+      negativePrompt: isProvided(negative_prompt) ? negative_prompt : undefined,
       provider: usedProvider,
       model,
-      seed,
-      steps,
-      cfg,
-      loras,
+      seed: isProvided(seed) ? Number(seed) : null,
+      steps: isProvided(steps) ? Number(steps) : null,
+      cfg: isProvided(cfg) ? Number(cfg) : null,
     });
 
     return res.json({
@@ -4448,8 +4650,6 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
       mediaUrl: completedMediaUrl,
       provider: usedProvider,
       model,
-      seed,
-      wasAdapted: false,
       historyItem: item,
     });
   } catch (error: any) {
