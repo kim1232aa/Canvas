@@ -790,13 +790,17 @@ async function fetchTensorArtModelInfo(modelId: string) {
     throw new Error('未提供有效的 Tensor.Art 模型 ID');
   }
   const url = `https://tusiart.com/models/${cleanId}`;
-  const res = await fetch(url, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-    },
-    signal: AbortSignal.timeout(15000),
-  });
+  const res = await upstreamFetch(
+    { provider: 'tensorart', route: 'model-info', model: cleanId },
+    url,
+    {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      },
+      signal: AbortSignal.timeout(15000),
+    }
+  );
 
   if (!res.ok) {
     throw new Error(`Tensor.Art 模型 #${cleanId} 请求失败 [HTTP ${res.status}]`);
@@ -895,13 +899,17 @@ async function fetchTensorArtModelsList({
   }
 
   const url = `https://tusiart.com/models?${queryParams.toString()}`;
-  const res = await fetch(url, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-    },
-    signal: AbortSignal.timeout(15000),
-  });
+  const res = await upstreamFetch(
+    { provider: 'tensorart', route: 'models-scrape', model: arch || searchStr || 'list' },
+    url,
+    {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      },
+      signal: AbortSignal.timeout(15000),
+    }
+  );
 
   if (!res.ok) {
     throw new Error(`Tensor.Art API 响应异常 [HTTP ${res.status}]`);
@@ -4613,15 +4621,19 @@ async function fetchTensorArtToolsList(apiKey: string) {
   }
 
   const baseUrl = getTensorArtBaseUrl(apiKey);
-  const res = await fetch(`${baseUrl}/tool/list`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Echo-Access-Key': apiKey,
-    },
-    body: JSON.stringify({}),
-    signal: AbortSignal.timeout(15000),
-  });
+  const res = await upstreamFetch(
+    { provider: 'tensorart', route: '/tool/list', model: 'tool/list', key: apiKey },
+    `${baseUrl}/tool/list`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Echo-Access-Key': apiKey,
+      },
+      body: JSON.stringify({}),
+      signal: AbortSignal.timeout(15000),
+    }
+  );
   if (!res.ok) {
     const errText = await res.text();
     throw new Error(`Tensor.Art API Error [${res.status}]: ${errText}`);
@@ -4635,60 +4647,72 @@ async function fetchTensorArtToolsList(apiKey: string) {
   return tools;
 }
 
-// Helper to dynamically build inputs according to tool schema
-function buildTensorArtInputs(toolInputs: any[], userParams: any) {
-  if (Array.isArray(userParams.inputs) && userParams.inputs.length === toolInputs.length) {
-    return userParams.inputs;
-  }
-  const {
-    prompt = '',
-    width = 1024,
-    height = 1024,
-    count = 1,
-    image_url = '',
-    duration = '5',
-    ratio = '16:9',
-    size = '720P',
-  } = userParams;
+// Key priority: request header > env > saved settings (Item 3).
+function resolveTensorArtKey(req: express.Request): string {
+  return (req.headers['x-tensorart-key'] as string) || process.env.TENSORART_API_KEY || cloudSettings['tensorartKey'] || '';
+}
 
-  return toolInputs.map((inp: any) => {
+// Request fields that can be mapped onto an OpenWorks tool input, matched by keywords in the input's description.
+// Order matters: 'negative' must win over 'prompt'.
+const TENSORART_FIELD_KEYWORDS: Array<[string, string[]]> = [
+  ['negative_prompt', ['negative']],
+  ['width', ['width']],
+  ['height', ['height']],
+  ['seed', ['seed']],
+  ['count', ['count', 'number']],
+  ['duration', ['duration', 'seconds']],
+  ['ratio', ['ratio', 'aspect']],
+  ['size', ['size']],
+  ['prompt', ['prompt', 'text', 'description', 'motion']],
+];
+const TENSORART_GENERIC_FIELDS = [
+  'prompt', 'negative_prompt', 'width', 'height', 'seed', 'count', 'duration', 'ratio', 'size', 'image_url',
+  'steps', 'cfg', 'guidance_scale', 'loras', 'denoise', 'sampler_name', 'scheduler',
+];
+
+// Map request fields onto the tool's input schema. No defaults: unfilled tool inputs and unmapped request fields → error (C5).
+function buildTensorArtInputs(toolInputs: any[], body: any): { inputs?: any[]; used?: Set<string>; error?: string; unsupported?: string[] } {
+  if (Array.isArray(body.inputs)) {
+    if (body.inputs.length !== toolInputs.length) {
+      return { error: `inputs 数量 (${body.inputs.length}) 与工具输入 schema 数量 (${toolInputs.length}) 不一致` };
+    }
+    return { inputs: body.inputs, used: new Set() };
+  }
+
+  const used = new Set<string>();
+  const missing: string[] = [];
+  const inputs = toolInputs.map((inp: any, i: number) => {
     const desc = (inp.description || '').toLowerCase();
     const type = (inp.type || 'STRING').toUpperCase();
-
-    if (type === 'FILE') return { type: inp.type, value: image_url };
-    if (type === 'ARRAY') return { type: inp.type, value: image_url ? [image_url] : [] };
-
-    if (desc.includes('width')) return { type: inp.type, value: Number(width) || 1024 };
-    if (desc.includes('height')) return { type: inp.type, value: Number(height) || 1024 };
-    if (desc.includes('count') || desc.includes('number')) return { type: inp.type, value: Number(count) || 1 };
-    if (desc.includes('duration') || desc.includes('seconds')) return { type: inp.type, value: String(duration || '5') };
-    if (desc.includes('ratio') || desc.includes('aspect')) {
-      let r = String(ratio || '16:9');
-      if ((desc.includes('921600') || desc.includes('pixel')) && !r.includes('921600')) {
-        if (r === '16:9' || r === '9:16' || r === '1:1') r = `${r}-921600`;
-        else r = '16:9-921600';
-      }
-      return { type: inp.type, value: r };
+    const field = type === 'FILE' || type === 'ARRAY'
+      ? 'image_url'
+      : TENSORART_FIELD_KEYWORDS.find(([, kws]) => kws.some((k) => desc.includes(k)))?.[0];
+    if (!field || !isProvided(body[field])) {
+      missing.push(inp.description || `#${i} (${inp.type})`);
+      return null;
     }
-    if (desc.includes('size')) return { type: inp.type, value: String(size || '720P') };
-    if (desc.includes('prompt') || desc.includes('text') || desc.includes('description') || desc.includes('motion')) {
-      return { type: inp.type, value: String(prompt || 'high quality, masterpiece') };
-    }
-
-    if (type === 'INTEGER' || type === 'NUMBER') return { type: inp.type, value: 1 };
-    if (type === 'BOOLEAN') return { type: inp.type, value: false };
-    return { type: inp.type, value: String(prompt || '') };
+    used.add(field);
+    const v = body[field];
+    if (type === 'ARRAY') return { type: inp.type, value: Array.isArray(v) ? v : [v] };
+    if (type === 'INTEGER' || type === 'NUMBER') return { type: inp.type, value: Number(v) };
+    if (type === 'STRING') return { type: inp.type, value: String(v) };
+    return { type: inp.type, value: v };
   });
+
+  const unsupported = TENSORART_GENERIC_FIELDS.filter((f) => isProvided(body[f]) && !used.has(f));
+  if (unsupported.length > 0) {
+    return { error: `该服务商不支持: ${unsupported.join(', ')}（所选 Tensor.Art 工具的输入 schema 中没有对应项）`, unsupported };
+  }
+  if (missing.length > 0) {
+    return { error: `Tensor.Art 工具缺少必需输入: ${missing.join('; ')}。请提供对应字段，或直接传入与 schema 等长的 inputs 数组。` };
+  }
+  return { inputs, used };
 }
 
 // 2.95. Tensor.Art / TusiArt OpenWorks OpenAPI (tool/list, task, file/upload)
 app.all(['/api/tensorart/tools', '/api/engine/tensorart/tools'], async (req, res) => {
   try {
-    const apiKey =
-      (req.headers['x-tensorart-key'] as string) ||
-      cloudSettings['tensorartKey'] ||
-      process.env.TENSORART_API_KEY ||
-      '';
+    const apiKey = resolveTensorArtKey(req);
     if (!apiKey) {
       return res.status(400).json({ error: '未配置 Tensor.Art API Key (x-tensorart-key)。' });
     }
@@ -4701,26 +4725,28 @@ app.all(['/api/tensorart/tools', '/api/engine/tensorart/tools'], async (req, res
 
 app.post(['/api/tensorart/upload', '/api/engine/tensorart/upload'], async (req, res) => {
   try {
-    const apiKey =
-      (req.headers['x-tensorart-key'] as string) ||
-      cloudSettings['tensorartKey'] ||
-      process.env.TENSORART_API_KEY ||
-      '';
+    const apiKey = resolveTensorArtKey(req);
     if (!apiKey) {
       return res.status(400).json({ error: '未配置 Tensor.Art API Key。' });
     }
     const baseUrl = getTensorArtBaseUrl(apiKey);
-    const upstreamRes = await fetch(`${baseUrl}/file/upload`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Echo-Access-Key': apiKey,
-      },
-      body: JSON.stringify({}),
-    });
+    // ponytail: OpenWorks /file/upload body schema unverified (docs unreachable) — forward the caller's body verbatim instead of discarding it.
+    const upstreamRes = await upstreamFetch(
+      { provider: 'tensorart', route: req.path, model: 'file/upload', key: apiKey },
+      `${baseUrl}/file/upload`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Echo-Access-Key': apiKey },
+        body: JSON.stringify(req.body ?? {}),
+      }
+    );
+    if (!upstreamRes.ok) {
+      const errText = await upstreamRes.text();
+      return res.status(upstreamRes.status).json({ error: `Tensor.Art 文件上传 HTTP 失败 [${upstreamRes.status}]: ${errText}` });
+    }
     const upstreamData = await upstreamRes.json();
     if (upstreamData.code !== '0' && upstreamData.code !== 0) {
-      return res.status(400).json({ error: `Tensor.Art 预领文件上传链接失败: ${upstreamData.message}` });
+      return res.status(400).json({ error: `Tensor.Art 预领文件上传链接失败: [${upstreamData.code}] ${upstreamData.message}` });
     }
     return res.json(upstreamData);
   } catch (error: any) {
@@ -4733,91 +4759,45 @@ app.post(['/api/tensorart/generate', '/api/engine/tensorart/generate'], async (r
   res.setTimeout(180000);
 
   try {
-    const apiKey =
-      (req.headers['x-tensorart-key'] as string) ||
-      cloudSettings['tensorartKey'] ||
-      process.env.TENSORART_API_KEY ||
-      '';
+    const startTime = Date.now();
+    const apiKey = resolveTensorArtKey(req);
 
     if (!apiKey) {
       return res.status(400).json({
-        error: '未配置 Tensor.Art API Key，请在右上角设置中填写您的 API Key (ak_tensor_... / ak_tusi_...)。',
+        error: '未配置 Tensor.Art API Key，请在右上角设置中填写您的 API Key。',
       });
     }
 
-    const {
-      prompt,
-      model,
-      toolName: inputToolName,
-      width = 1024,
-      height = 1024,
-      count = 1,
-      image_url,
-      duration,
-      ratio,
-      size,
-      inputs,
-    } = req.body;
-
-    const rawModel = (inputToolName || model || 'strong_text2image_nano_banana2').trim();
+    const { prompt, model, toolName: inputToolName } = req.body;
+    const rawModel = String(inputToolName || model || '').trim();
+    if (!rawModel) return res.status(400).json({ error: '模型为必填项（model / toolName is required）' });
     const baseUrl = getTensorArtBaseUrl(apiKey);
 
-    // Fetch tool list to inspect input schema
+    // Exact tool-name match only — no fuzzy / substring / tools[0] fallback (Item 3).
     const tools = await fetchTensorArtToolsList(apiKey);
-    
-    // Transparent tool matching hierarchy:
-    let targetTool = tools.find((t: any) => t.name === rawModel);
-    let wasAdapted = false;
-    let adaptationNotice = '';
-
+    const targetTool = tools.find((t: any) => t.name === rawModel);
     if (!targetTool) {
-      // 1. Prefix / Substring match (e.g. strong_text2image -> strong_text2image_nano_banana2)
-      targetTool = tools.find((t: any) => t.name.startsWith(rawModel) || rawModel.startsWith(t.name) || t.name.includes(rawModel));
+      return res.status(400).json({
+        error: `未找到指定的 Tensor.Art 工具: ${rawModel}（需与 /tool/list 返回的 name 完全一致）`,
+        availableTools: tools.map((t: any) => t.name),
+      });
     }
 
-    if (!targetTool) {
-      // 2. Specialized intent resolution
-      if (image_url && (rawModel.includes('video') || rawModel.includes('wan') || rawModel.includes('ltx'))) {
-        targetTool = tools.find((t: any) => t.name.includes('image2video_wan') || t.name.includes('image2video')) || tools[0];
-        wasAdapted = true;
-        adaptationNotice = `检测到输入源图与视频需求，已自动对齐至 Tensor.Art 官方图生视频工具 (${targetTool.name})。`;
-      } else if (rawModel.includes('video') || rawModel.includes('wan') || rawModel.includes('ltx')) {
-        targetTool = tools.find((t: any) => t.name.includes('text2video_wan') || t.name.includes('text2video')) || tools[0];
-        wasAdapted = true;
-        adaptationNotice = `已自动对齐至 Tensor.Art 官方文生视频算力工具 (${targetTool.name})。`;
-      } else if (rawModel.includes('photo') || rawModel.includes('real')) {
-        targetTool = tools.find((t: any) => t.name.includes('photoreal_studio')) || tools.find((t: any) => t.name.includes('strong_text2image')) || tools[0];
-        wasAdapted = true;
-        adaptationNotice = `已通过 Tensor.Art 官方写实工作室算力 (${targetTool.name}) 驱动运行。`;
-      } else if (rawModel.includes('anime') || rawModel.includes('illust') || rawModel.includes('wai')) {
-        targetTool = tools.find((t: any) => t.name.includes('anime_lab') || t.name.includes('oc_character')) || tools.find((t: any) => t.name.includes('strong_text2image')) || tools[0];
-        wasAdapted = true;
-        adaptationNotice = `已通过 Tensor.Art 官方二次元动漫算力 (${targetTool.name}) 驱动运行。`;
-      } else {
-        targetTool = tools.find((t: any) => t.name.includes('strong_text2image')) || tools[0];
-        wasAdapted = true;
-        adaptationNotice = `您选用了 Tensor.Art 社区模型 (${rawModel})，已通过 Tensor.Art OpenWorks 通用生图算力 (${targetTool.name}) 挂载驱动执行。`;
+    const built = buildTensorArtInputs(targetTool.inputs || [], req.body);
+    if (built.error) {
+      return res.status(400).json({ error: built.error, unsupported: built.unsupported, toolName: targetTool.name, toolInputs: targetTool.inputs });
+    }
+    const formattedInputs = built.inputs;
+
+    const submitRes = await upstreamFetch(
+      { provider: 'tensorart', route: req.path, model: targetTool.name, key: apiKey },
+      `${baseUrl}/task`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Echo-Access-Key': apiKey },
+        body: JSON.stringify({ toolName: targetTool.name, inputs: formattedInputs }),
       }
-    }
-
-    if (!targetTool) {
-      return res.status(400).json({ error: `未找到指定的 Tensor.Art 工具: ${rawModel}` });
-    }
-
-    const formattedInputs = buildTensorArtInputs(targetTool.inputs || [], req.body);
-
-    // Submit task to POST /task with Echo-Access-Key
-    const submitRes = await fetch(`${baseUrl}/task`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Echo-Access-Key': apiKey,
-      },
-      body: JSON.stringify({
-        toolName: targetTool.name,
-        inputs: formattedInputs,
-      }),
-    });
+    );
 
     if (!submitRes.ok) {
       const errText = await submitRes.text();
@@ -4855,19 +4835,49 @@ app.post(['/api/tensorart/generate', '/api/engine/tensorart/generate'], async (r
     const maxPolls = 60;
     for (let i = 0; i < maxPolls; i++) {
       await new Promise((r) => setTimeout(r, 2000));
-      const qRes = await fetch(`${baseUrl}/task/query`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Echo-Access-Key': apiKey,
-        },
-        body: JSON.stringify({ taskIds: [String(taskId)] }),
-      });
+      let qRes: Response;
+      try {
+        qRes = await upstreamFetch(
+          { provider: 'tensorart', route: req.path, model: targetTool.name, key: apiKey },
+          `${baseUrl}/task/query`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Echo-Access-Key': apiKey,
+            },
+            body: JSON.stringify({ taskIds: [String(taskId)] }),
+          }
+        );
+      } catch (netErr: any) {
+        keyPoolManager.recordResult('tensorart', apiKey, false, Date.now() - startTime, netErr.message);
+        return res.status(502).json({
+          error: `Tensor.Art 任务状态查询网络异常: ${netErr.message}`,
+          taskId,
+          toolName: targetTool.name,
+          requestedModel: rawModel,
+        });
+      }
 
-      if (!qRes.ok) continue;
+      if (!qRes.ok) {
+        const errText = await qRes.text();
+        return res.status(qRes.status).json({
+          error: `Tensor.Art 任务状态查询失败 [${qRes.status}]: ${errText}`,
+          taskId,
+          toolName: targetTool.name,
+          requestedModel: rawModel,
+        });
+      }
 
       const qData = await qRes.json();
-      if (qData.code !== '0' && qData.code !== 0) continue;
+      if (qData.code !== '0' && qData.code !== 0) {
+        return res.status(500).json({
+          error: `Tensor.Art 任务状态查询返回错误: [${qData.code}] ${qData.message || '系统错误'}`,
+          taskId,
+          toolName: targetTool.name,
+          requestedModel: rawModel,
+        });
+      }
 
       const task = qData.data?.tasks?.[0] || qData.data?.[0];
       if (!task) continue;
@@ -4879,7 +4889,7 @@ app.post(['/api/tensorart/generate', '/api/engine/tensorart/generate'], async (r
         break;
       }
 
-      if (status === 'FAILED' || status === 'EXCEPTION') {
+      if (status === 'FAILED' || status === 'EXCEPTION' || status === 'CANCELED') {
         return res.status(500).json({
           error: `Tensor.Art 任务处理异常 (${status}): ${task.message || task.error || '运行失败'}`,
           taskId,
@@ -4905,15 +4915,16 @@ app.post(['/api/tensorart/generate', '/api/engine/tensorart/generate'], async (r
       targetTool.outputs?.some((o: any) => o.format === 'video') ||
       targetTool.name.includes('video');
 
+    // History: only values actually mapped into tool inputs (C5).
     const item = recordHistoryItem({
       url: resultOutput,
-      prompt: prompt || targetTool.description || targetTool.name,
+      prompt: built.used?.has('prompt') ? prompt : '',
+      negativePrompt: built.used?.has('negative_prompt') ? req.body.negative_prompt : undefined,
       provider: 'Tensor.Art (OpenWorks)',
       model: targetTool.name,
-      seed: Math.floor(Math.random() * 1000000),
-      steps: 25,
-      cfg: 5.0,
-      loras: [],
+      seed: built.used?.has('seed') ? Number(req.body.seed) : null,
+      steps: null,
+      cfg: null,
     });
 
     return res.json({
@@ -4922,12 +4933,12 @@ app.post(['/api/tensorart/generate', '/api/engine/tensorart/generate'], async (r
       mediaUrl: resultOutput,
       mediaType: isVideo ? 'video' : 'image',
       provider: 'Tensor.Art (OpenWorks)',
+      actualProvider: 'Tensor.Art (OpenWorks)',
       model: targetTool.name,
+      actualModel: targetTool.name,
       toolName: targetTool.name,
       requestedModel: rawModel,
       taskId,
-      wasAdapted,
-      adaptationNotice,
       exactEndpointCalled: `${baseUrl}/task`,
       historyItem: item,
     });
