@@ -1,5 +1,5 @@
 import { NodeDefinition } from '../types/graph';
-import { GEMINI_IMAGE_MODELS } from '../shared/providerFieldSpecs';
+import { listModels } from '../schemas/providerSchema';
 
 export const SAMPLER_OPTIONS = [
   { label: 'euler', value: 'euler' },
@@ -785,12 +785,12 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
         options: [
           { label: '未选择 (必须选择模型)', value: '' },
           // ponytail: -preview 模型暂不进下拉（与本轮前一致）；U-E2 加「已下线」标注时再放开
-          ...Object.entries(GEMINI_IMAGE_MODELS)
-            .filter(([id]) => !id.endsWith('-preview'))
-            .map(([id, spec]) => ({ label: spec.label, value: id })),
+          ...listModels('gemini')
+            .filter(({ id }) => !id.endsWith('-preview'))
+            .map(({ id, label }) => ({ label, value: id })),
         ],
       },
-      // aspect_ratio / image_size 的选项按所选模型从 providerFieldSpecs 取，由 GeminiFieldSelect 渲染
+      // aspect_ratio / image_size 的选项按所选模型从 providerSchema 取，由 GeminiFieldSelect 渲染
       { name: 'aspect_ratio', label: 'aspect_ratio', type: 'select', default: '', options: [] },
       { name: 'image_size', label: 'image_size', type: 'select', default: '', options: [] },
     ],

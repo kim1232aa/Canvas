@@ -8,7 +8,7 @@ try {
   console.warn('Failed to set custom DNS servers:', e.message);
 }
 import dotenv from 'dotenv';
-import { GEMINI_IMAGE_MODELS, geminiValueStatus } from './src/shared/providerFieldSpecs.ts';
+import { fieldOptions, valueStatus } from './src/schemas/providerSchema.ts';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -5920,15 +5920,15 @@ app.post(['/api/gemini/generate', '/api/engine/gemini/generate'], async (req, re
       return res.status(400).json({ error: '该服务商不支持: image_url 为非 data: URL（Google Gemini 仅接受内联 base64 参考图）', unsupported: ['image_url'] });
     }
 
-    // 取值表唯一来源: src/shared/providerFieldSpecs.ts。本轮行为不变：unverified 仍 400（U-E2 再改为透传）
+    // 取值表唯一来源: src/schemas/providerSchema.ts。本轮行为不变：unverified 仍 400（U-E2 再改为透传）
     for (const [field, value] of [['aspect_ratio', aspect_ratio], ['image_size', image_size]] as const) {
       if (!isProvided(value)) continue;
-      const status = geminiValueStatus(model, field, value);
+      const status = valueStatus('gemini', model, field, value);
       if (status === 'unverified') {
         return res.status(400).json({ error: `未能核实该模型 (${model}) 的 ${field} 取值 "${value}" 是否生效，暂不支持使用` });
       }
       if (status === 'unsupported') {
-        const listed = GEMINI_IMAGE_MODELS[model][field].filter((v) => v.status === 'supported').map((v) => v.value);
+        const listed = fieldOptions('gemini', model, field).filter((v) => v.status === 'supported').map((v) => v.value);
         return res.status(400).json({
           error: `该服务商不支持此 ${field} 取值: "${value}"。${model} 官方仅支持: ${listed.join(', ') || '（官方未列出）'}`,
         });

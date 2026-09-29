@@ -1,5 +1,5 @@
 import React from 'react';
-import type { FieldStatus } from '../shared/providerFieldSpecs';
+import type { FieldStatus } from '../schemas/providerSchema';
 
 type BadgeStatus = Exclude<FieldStatus, 'supported'>;
 
@@ -7,13 +7,13 @@ type BadgeStatus = Exclude<FieldStatus, 'supported'>;
 export const FIELD_STATUS_LABEL: Record<BadgeStatus, string> = {
   unsupported: '该服务商不支持',
   unverified: '官方未说明是否生效',
-  shutdown: '已下线',
+  deprecated: '已下线',
 };
 
 const FIELD_STATUS_CLASS: Record<BadgeStatus, string> = {
   unsupported: 'bg-rose-950/40 border-rose-500/50 text-rose-300',
   unverified: 'bg-amber-950/40 border-amber-500/50 text-amber-300',
-  shutdown: 'bg-slate-800/60 border-slate-500/50 text-slate-400 line-through',
+  deprecated: 'bg-slate-800/60 border-slate-500/50 text-slate-400 line-through',
 };
 
 export const FieldStatusBadge: React.FC<{ status: BadgeStatus }> = ({ status }) => (

@@ -1,0 +1,66 @@
+import { describe, expect, it } from 'vitest';
+import { FIELD_STATUSES, PROVIDER_SCHEMA, fieldOptions, modelStatus, valueStatus, type FieldSpec } from './providerSchema';
+
+const fields = PROVIDER_SCHEMA.flatMap((m) =>
+  Object.entries(m.fields).map(([name, spec]) => [`${m.provider}/${m.id}.${name}`, spec as FieldSpec] as const),
+);
+
+describe('providerSchema 自检', () => {
+  it('模型 id 不重复', () => {
+    const ids = PROVIDER_SCHEMA.map((m) => `${m.provider}/${m.id}`);
+    expect(ids.filter((id, i) => ids.indexOf(id) !== i)).toEqual([]);
+  });
+
+  it('每个模型、字段、取值级 source 都是 https:// URL', () => {
+    for (const m of PROVIDER_SCHEMA) {
+      expect(m.source, m.id).toMatch(/^https:\/\//);
+      if (m.shutdownDate) expect(m.shutdownSource, m.id).toMatch(/^https:\/\//);
+    }
+    for (const [key, f] of fields) {
+      expect(f.source, key).toMatch(/^https:\/\//);
+      for (const v of f.enum ?? []) if (v.source) expect(v.source, `${key}=${v.value}`).toMatch(/^https:\/\//);
+    }
+  });
+
+  it('status 只能是四个值之一', () => {
+    for (const [key, f] of fields) expect(FIELD_STATUSES, key).toContain(f.status);
+  });
+
+  it('min <= max，enum 非空且无重复', () => {
+    for (const [key, f] of fields) {
+      if (f.min !== undefined && f.max !== undefined) expect(f.min, key).toBeLessThanOrEqual(f.max);
+      if (f.enum) {
+        const values = f.enum.map((v) => v.value);
+        expect(values.length, key).toBeGreaterThan(0);
+        expect(new Set(values).size, key).toBe(values.length);
+      }
+    }
+  });
+
+  it('每个 providerDefault 都在 enum 内且满足 min/max/multipleOf', () => {
+    for (const [key, f] of fields) {
+      const d = f.providerDefault;
+      if (d === undefined) continue;
+      if (f.enum) expect(f.enum.map((v) => v.value), key).toContain(String(d));
+      if (typeof d === 'number') {
+        if (f.min !== undefined) expect(d, key).toBeGreaterThanOrEqual(f.min);
+        if (f.max !== undefined) expect(d, key).toBeLessThanOrEqual(f.max);
+        if (f.exclusiveMin !== undefined) expect(d, key).toBeGreaterThan(f.exclusiveMin);
+        if (f.multipleOf !== undefined) expect(d % f.multipleOf, key).toBe(0);
+      }
+    }
+  });
+
+  it('查询函数：沿用原 geminiValueStatus 语义', () => {
+    expect(valueStatus('gemini', 'gemini-3.1-flash-image', 'aspect_ratio', '8:1')).toBe('supported');
+    expect(valueStatus('gemini', 'gemini-3.1-flash-lite-image', 'aspect_ratio', '8:1')).toBe('unsupported');
+    expect(valueStatus('gemini', 'gemini-3-pro-image', 'aspect_ratio', '16:9')).toBe('unverified');
+    expect(valueStatus('gemini', 'gemini-3.1-flash-image', 'image_size', '512')).toBe('unverified');
+    expect(valueStatus('gemini', 'no-such-model', 'aspect_ratio', '1:1')).toBe('unverified');
+    expect(fieldOptions('gemini', 'no-such-model', 'aspect_ratio')).toEqual([]);
+    expect(valueStatus('civitai', 'sdcpp:sdxl', 'width', 1000)).toBe('unsupported'); // 非 16 倍数
+    expect(valueStatus('civitai', 'sdcpp:sdxl', 'width', 1024)).toBe('supported');
+    expect(modelStatus('gemini', 'gemini-2.5-flash-image', '2026-10-01')).toBe('supported');
+    expect(modelStatus('gemini', 'gemini-2.5-flash-image', '2026-10-02')).toBe('deprecated');
+  });
+});

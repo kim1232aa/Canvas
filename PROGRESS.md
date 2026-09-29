@@ -90,6 +90,7 @@ S6 测试接口核实（2026-09-29 WebFetch）：
 遗留：balances 路由（server.ts:6562、6591）对 Agnes/SenseNova 仍然调 `${baseUrl}/models`，这个接口未能核实。base URL 只取服务端配置，没有泄露风险。不在 S6 范围内，待后续指派。
 
 | S7 | 已完成（tsc 0 错误，运行时待验证） | ① 设置弹窗不再自动发请求：输入令牌、打开弹窗、切换页签都不触发请求；stats / balances / settings / 测试只在点击按钮时运行（「验证并拉取云端配置」读 settings 和 stats，「刷新服务端 key 池」「刷新监控指标」读 stats，「查询最新余额」查 balances）；② 删除「载入测试密钥」按钮、`handleFillTestKeys`、`DEFAULT_TEST_KEYS`（含写死的 agnes/sensenova base URL），`getStoredApiKeys` 在没有存储时返回空值；③ key 数量统一：服务端数量只读 `/api/cloud-keys/stats`（key 池 = settings.json + .env 合并去重），每个 key 附带 `source: 'settings' \| 'env'`，响应只含掩码、数量和来源；UI 标注「服务端：设置 / 服务端：.env / 本浏览器」 | server.ts:366-379,429-432,593,609-613；src/services/api.ts:5-27；src/components/BackendSettingsModal.tsx:109-114,131-135,273-288,457,468,479,540-542,613-615,642-652,855-857,997-1004,1107-1122,1133 |
+| P | 已完成（tsc 0 错误，npm test 6 tests pass） | providerSchema 唯一声明模块：src/shared/providerFieldSpecs.ts → src/schemas/providerSchema.ts，覆盖 Gemini（6 模型）、Fal（15 端点）、Civitai（10 生态，sdcpp 8 + comfy 2）。每个字段有 status/source/constraints/providerDefault。导出 valueStatus / modelStatus / getFieldSpec / fieldOptions / listModels 等查询函数。server.ts 和前端 import 已全部迁移。旧文件已删除。vitest 自检：id 不重复、source 都是 https://、providerDefault 在合法范围内、min≤max、查询函数语义正确。 | src/schemas/providerSchema.ts；src/schemas/providerSchema.test.ts；server.ts:11,5923-5931；src/constants/nodes.ts:2,788-790；src/components/GeminiFieldSelect.tsx:2,13-14,37；src/components/FieldStatusBadge.tsx:2,7-16 |
 
 S7 三处数量原来的来源：
 - 云端设置列表（Admin 页）：`GET /api/cloud/settings` → 只读 `data/settings.json`。env 里的 FAL_KEY / CIVITAI_API_KEY 不在里面，所以显示「未配置」。
@@ -112,6 +113,24 @@ U-E1 说明：
 | 3.1-flash-image 的 14 个 aspect_ratio | 同上 | 本次抓取在比例表之前被截断，未能独立核实，沿用 provider-params.md §6 与 d84076f |
 | 3-pro-image 支持 1K/2K/4K；它和 2.5-flash-image 的 aspect_ratio 均未列出 | 同上 | 已核实（未列出 → 候选值全部标 unverified） |
 | 下线日：2.5-flash-image 为 2026-10-02；3.1-flash-image-preview 与 3-pro-image-preview 为 2026-06-25；3.1-flash-image 与 3-pro-image 未公布 | https://ai.google.dev/gemini-api/docs/deprecations | 已核实（3.1-flash-lite-image 未出现在该页） |
+
+P 说明：
+- 状态第四个值由 `shutdown` 改名为 `deprecated`（按 P 规格）；FieldStatusBadge 的 key 同步改名，现有代码没有传这个值，所以显示不变。
+- 服务端行为差异（仍然全部是 400，只是分类变了）：① `gemini-2.5-flash-image` 的 10 个比例 1:1 2:3 3:2 3:4 4:3 4:5 5:4 9:16 16:9 21:9 由 unverified 改为 supported → 这些值现在会通过校验；1:4 1:8 4:1 8:1 由「未能核实」改为「该服务商不支持」。2.5 的 image_size 只剩候选 1K（unverified），2K/4K 改为「不支持」。② `gemini-3-pro-image` 与 `-preview` 的比例候选由 14 个缩减为 10 个，1:4 1:8 4:1 8:1 改为「不支持」。③ `3.1-flash-image` 的 512 档新增候选值 `512`（与 `512px` 一样是 unverified）。
+- 预设 `gemini-imagen-zero-config`（2.5-flash-image + 1:1）现在能通过服务端校验。
+- Civitai 采样器/调度器的枚举成员：OpenAPI 抓取被截断，未能核实，所以不写 enum，只写 recipe 页给出的默认值。
+- providerDefault 目前没有代码读取；它只用于界面显示，绝不发给上游。
+
+P 事实表（2026-09-29 抓取）：
+| 范围 | 事实 | 来源 | 结果 |
+|:---|:---|:---|:---|
+| Gemini 比例 | 3.1-flash 14 个；3.1-flash-lite / 2.5-flash 各 10 个；「3.1 Pro Image」表 10 个 | https://ai.google.dev/gemini-api/docs/image-generation | 已核实；3-pro-image 与该表的对应关系有歧义 → unverified |
+| Gemini image_size | 3.1-flash 1K/2K/4K；lite 只有 1K；3-pro 1K/2K/4K；2.5 未列出 | 同上 | 已核实；512 档的确切字符串未能核实（v1 discovery 写 `512`，https://ai.google.dev/api/generate-content 抓取时没有 ImageConfig 段）|
+| Gemini seed | GenerationConfig.seed int32 | https://generativelanguage.googleapis.com/$discovery/rest?version=v1beta | 字段存在；对生图是否生效未能核实 → unverified |
+| Fal 15 端点 | flux-lora、flux/dev、flux/schnell、fast-sdxl、lora、stable-diffusion-v35-large、krea-2/turbo、wan-t2v、wan-i2v、kling v1 standard t2v/i2v、minimax/video-01、ltx-video、hunyuan-video、cogvideox-5b 的 seed/steps/cfg/image_size/枚举/默认值 | https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=<id> | 已核实；wan 默认负向词被截断，未逐字核实 |
+| Fal 排除 | fal-ai/wan/t2v、wan/v2.1/*、flux-dev、flux-schnell、stable-diffusion-xl-base-1.0、animagine-xl | 同上 | 404，未收录 |
+| Civitai sdcpp 尺寸 | flux1 832–1216 且为 16 的倍数；sd1/sdxl/anima/zImage 64–2048 且为 16 的倍数；qwen 64–2048 且为 8 的倍数；flux2 512–2048，只有 Klein 要求 16 的倍数 | https://developer.civitai.com/orchestration/recipes/{flux1,sdxl,sd1,qwen,flux2,anima,zimage}.md | 已核实；flux2 页描述的是 engine "flux2"，它和 sdcpp 下的 steps/cfg 是否一致未能核实 → unverified |
+| Civitai comfy | flux1 steps 1–150、cfg 0–30、quantity 1–12；尺寸倍数官方未写 | https://orchestration.civitai.com/v2/consumer/recipes/imageGen/openapi.yaml | 尺寸 unverified；krea2 的 recipe 返回 404 → 全部 unverified |
 
 ## 2. 踩坑记录
 - 行号偏移：旧报告行号基于 909dc26，当前 HEAD 是 35a1566，按代码内容定位。

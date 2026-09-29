@@ -1,8 +1,8 @@
 import React from 'react';
-import { GEMINI_IMAGE_MODELS, geminiValueStatus, type GeminiSelectField } from '../shared/providerFieldSpecs';
+import { fieldOptions, getModelSpec, valueStatus, type GeminiSelectField } from '../schemas/providerSchema';
 import { FieldStatusBadge, FIELD_STATUS_LABEL } from './FieldStatusBadge';
 
-// aspect_ratio / image_size 下拉：选项只来自 providerFieldSpecs 中当前模型的列表。
+// aspect_ratio / image_size 下拉：选项只来自 providerSchema 中当前模型的列表。
 // 首项「未选择（不传）」值为空 → 不发送。未选模型时禁用。
 export const GeminiFieldSelect: React.FC<{
   model: string;
@@ -10,8 +10,8 @@ export const GeminiFieldSelect: React.FC<{
   value: string;
   onChange: (value: string) => void;
 }> = ({ model, field, value, onChange }) => {
-  const spec = model ? GEMINI_IMAGE_MODELS[model] : undefined;
-  const status = value && model ? geminiValueStatus(model, field, value) : 'supported';
+  const spec = model ? getModelSpec('gemini', model) : undefined;
+  const status = value && model ? valueStatus('gemini', model, field, value) : 'supported';
   const stop = (e: React.SyntheticEvent) => e.stopPropagation();
 
   return (
@@ -34,7 +34,7 @@ export const GeminiFieldSelect: React.FC<{
         ) : (
           <>
             <option value="">未选择（不传）</option>
-            {spec[field].map((v) => (
+            {fieldOptions('gemini', model, field).map((v) => (
               // U-E1: 服务端仍对 unverified 取值 400，故此处禁用；U-E2 改为可选
               <option key={v.value} value={v.value} disabled={v.status === 'unverified'}>
                 {v.value}{v.status === 'unverified' ? `（${FIELD_STATUS_LABEL.unverified}）` : ''}
