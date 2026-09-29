@@ -84,6 +84,7 @@ export const ModernToolDock: React.FC<ModernToolDockProps> = ({
         { type: 'LoRALoader', label: 'Load LoRA 风格微调', desc: '调节模型与CLIP权重强度', tag: 'LoRA' },
         { type: 'CivitaiLoRABrowserNode', label: 'Civitai LoRA 浏览器', desc: '搜索并一键导入社区模型', tag: '社区' },
         { type: 'FalAIEngineNode', label: 'Fal.ai GPU 加速引擎', desc: '极速 FLUX / SDXL 云端直出', tag: '加速' },
+        { type: 'GoogleImagenNode', label: 'Gemini 生图', desc: '官方 Gemini 图像模型（不是已下线 Imagen）', tag: 'Gemini' },
       ],
     },
     {
