@@ -19,6 +19,24 @@ Tip hash: 1ad82fa44764056407754f6d72274ca0be02aa1b (branch f5-gemini-seed-grey, 
 
 ---
 
+## 0c. F5-soft — grok aspect/title/spatial prompt (f5-soft-grok-title-spatial) — 2026-09-29
+
+Tip hash: 1f7adb7c273fccda4730e2b4b150211e85adc20d (code bf8e480; branch f5-soft-grok-title-spatial, not pushed)
+
+### 完成项
+- [x] Grok `aspect_ratio` / `resolution`：`resolveSchemaModelId` 在 checkpoint 为空或非 grok 模型时回退到 schema 首模，ParameterInspector `schemaSelect` 不再因外键模型隐藏；CheckpointLoaderSimple 增加 schema 驱动的 aspect_ratio/resolution 控件（仅 `grok_compat` 显示）
+- [x] 节点标题：`checkpointNodeTitle` 友好标签（Grok/OpenAI 兼容中转…），ParameterInspector 切换 provider 时写回 `targetProvider` + 更新 title，不再卡在 `GROK_COMPAT`
+- [x] SpatialFrame ↔ ParameterInspector 提示词：activeFrame 存在时以 `frame.prompt` / `negativePrompt` 为唯一读源，消除 CLIP 节点优先导致的双状态
+- [x] 单测：resolveSchemaModelId + checkpointNodeTitle；`npx tsc --noEmit` 0；`npm test` 63/63
+
+### 残留
+- 官方 xAI Imagine 2.0 文档另列更多 aspect（21:9 等）与部分来源仅列 resolution `1k`/`2k`；本轮按既有 providerSchema / jev-router-xai-imagine（含 `1.5k`）不改枚举
+- SpatialFrame 卡片本身无 aspect/resolution 快捷条（走 Inspector / CheckpointLoader 节点）
+- 未 push
+
+---
+
+
 ## 0b. F5 — stop forging seed/sampler defaults (f5-fake-defaults) — 2026-09-29
 
 Tip hash: 5084ddc03661937ec9680ed4b6843d9f929ac137 (F5 code 8de30250de36664d925687dfd63783138e891ce4; branch f5-fake-defaults, not pushed)

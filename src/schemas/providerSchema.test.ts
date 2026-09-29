@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FIELD_STATUSES, PROVIDER_SCHEMA, fieldOptions, getFieldSpec, modelStatus, valueStatus, type FieldSpec } from './providerSchema';
+import { FIELD_STATUSES, PROVIDER_SCHEMA, fieldOptions, getFieldSpec, modelStatus, resolveSchemaModelId, valueStatus, type FieldSpec } from './providerSchema';
 
 const fields = PROVIDER_SCHEMA.flatMap((m) =>
   Object.entries(m.fields).map(([name, spec]) => [`${m.provider}/${m.id}.${name}`, spec as FieldSpec] as const),
@@ -136,5 +136,29 @@ describe('providerSchema 自检', () => {
     expect(dim('comfy:flux1')).toEqual([64, 2048, undefined]);
     expect(dim('comfy:krea2')).toEqual([undefined, undefined, undefined]);
     expect(dim('sdcpp:ponyV7')).toBeUndefined(); // 不在 schema → 原样发
+  });
+});
+
+
+describe('resolveSchemaModelId', () => {
+  it('keeps known grok model id', () => {
+    expect(resolveSchemaModelId('grok_compat', 'grok-imagine-image-2.0')).toBe('grok-imagine-image-2.0');
+    expect(resolveSchemaModelId('grok_compat', 'grok-imagine-video')).toBe('grok-imagine-video');
+  });
+
+  it('falls back to first grok model when checkpoint empty or foreign', () => {
+    const fallback = resolveSchemaModelId('grok_compat', '');
+    expect(fallback).toBe('grok-imagine-image');
+    expect(getFieldSpec('grok_compat', fallback, 'aspect_ratio')?.status).toBe('supported');
+    expect(getFieldSpec('grok_compat', fallback, 'resolution')?.enum?.map((v) => v.value)).toEqual(['1k', '1.5k', '2k']);
+
+    const foreign = resolveSchemaModelId('grok_compat', 'Tongyi-MAI/Z-Image-Turbo');
+    expect(foreign).toBe('grok-imagine-image');
+    expect(fieldOptions('grok_compat', foreign, 'aspect_ratio').length).toBeGreaterThan(0);
+  });
+
+  it('falls back for openai_compat so size/quality enums stay available', () => {
+    expect(resolveSchemaModelId('openai_compat', '')).toBe('gpt-image-2');
+    expect(resolveSchemaModelId('openai_compat', 'fal-ai/flux/dev')).toBe('gpt-image-2');
   });
 });

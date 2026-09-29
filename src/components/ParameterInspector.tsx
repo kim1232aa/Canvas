@@ -25,7 +25,7 @@ import { validateLoraCompatibility } from '../utils/baseModelMatcher';
 import { normalizeForComfyUI } from '../utils/engineParameterNormalizer';
 import { GeminiFieldSelect } from './GeminiFieldSelect';
 import { FieldStatusBadge } from './FieldStatusBadge';
-import { fieldOptions, getFieldSpec, type FieldKey, type Provider as SchemaProvider } from '../schemas/providerSchema';
+import { fieldOptions, getFieldSpec, resolveSchemaModelId, type FieldKey, type Provider as SchemaProvider } from '../schemas/providerSchema';
 
 interface ParameterInspectorProps {
   params: ComfyParameters;
@@ -149,9 +149,12 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
     params.targetProvider === 'grok_compat'
       ? (params.targetProvider as SchemaProvider)
       : undefined;
-  const schemaModel =
-    params.checkpoint ||
-    (isOpenAiCompat ? 'gpt-image-2' : isGrokCompat ? 'grok-imagine-image' : '');
+  // Prefer checkpoint when it exists in schema; else first model for provider so
+  // grok/openai enum selects (aspect_ratio/resolution/size/…) still render when
+  // checkpoint is empty or leftover from another provider.
+  const schemaModel = schemaProvider
+    ? resolveSchemaModelId(schemaProvider, params.checkpoint)
+    : (params.checkpoint || '');
   const fieldUnsupported = (field: FieldKey) =>
     Boolean(schemaProvider && schemaModel && getFieldSpec(schemaProvider, schemaModel, field)?.status === 'unsupported');
   const greySeed = isGemini || isOpenAiCompat || isGrokCompat || fieldUnsupported('seed');
