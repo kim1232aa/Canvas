@@ -241,6 +241,12 @@ export class VideoDriver extends BaseEngineDriver {
     if (keys.grokCompatBaseUrl) reqHeaders['x-grok-compat-base-url'] = keys.grokCompatBaseUrl;
 
     const videoProvider = params.targetProvider || params.provider;
+    // F4: never send empty provider (server must not default to Fal)
+    if (!videoProvider || !String(videoProvider).trim()) {
+      throw new Error(
+        '视频服务商 (Provider) 未设置，拒绝回退到 Fal。请先选择服务商或从带服务商标注的模型列表中选择模型。'
+      );
+    }
     const extra = params.extraParams || {};
     const videoBody: Record<string, unknown> = {
       prompt: params.prompt,

@@ -10,6 +10,7 @@ import {
   isFalLoraEndpointError,
   resolveCheckpointForNode,
 } from './resolveCheckpoint';
+import { assertAIVideoProviderReady } from './videoProvider';
 
 export interface WorkflowExtraction {
   checkpointModel: string;
@@ -525,6 +526,8 @@ export function extractWorkflowParameters(
     if (!checkpointModel) {
       throw new Error('请先选择模型');
     }
+    // F4: reject empty / schema-mismatched provider — never fall back to Fal
+    videoProvider = assertAIVideoProviderReady(checkpointModel, videoProvider);
     // Grok 兼容中转：duration 仅透传，不编造 5；其它商沿用节点默认
     if (videoProvider === 'grok_compat') {
       videoDuration = execNode.values.duration != null && execNode.values.duration !== ''

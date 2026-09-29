@@ -34,6 +34,28 @@ Tip hash: 1f7adb7c273fccda4730e2b4b150211e85adc20d (code bf8e480; branch f5-soft
 - SpatialFrame 卡片本身无 aspect/resolution 快捷条（走 Inspector / CheckpointLoader 节点）
 - 未 push
 
+## 0c. F4 — AIVideoNode provider sync on model select; reject empty/mismatch (f4-video-provider) — 2026-09-29
+
+Tip hash: 10448d2a6fe3cf63c0030479b626dcb34903b0d1 (branch f4-video-provider, not pushed)
+
+### 完成项
+- [x] 模型下拉选择：选项带 `provider` 时原子写入 `model` + `targetProvider` + 镜像 `provider`（`applyAIVideoModelSelection`，schema 驱动自 `NODE_DEFINITIONS['AIVideoNode']`）
+- [x] `extractWorkflowParameters` 执行前：空 provider → 明确报错；schema 模型 provider 与 `targetProvider` 不一致 → 明确报错；**绝不回退 Fal**
+- [x] `VideoDriver` 防御：空 provider 拒绝发往 `/api/video/generate`
+- [x] `runDisabledReason` 对 AIVideoNode 暴露服务商未设置/不一致文案
+- [x] 单测：model select 设 provider；empty blocked；mismatch blocked；explicit Fal 仍可用；`npx tsc --noEmit` 0；`npm test` 69/69
+
+### 残留（QA / 非 F4）
+- F3 Fal 视频 fps/negative/steps/cfg/loras 转发 — 未改
+- F2 Civitai comfyModel / F1 HF Z-Image — 未改
+- Soft：SpatialFrame Math.random seed / Fal·Civitai denoise — 未改（非 F4）
+- 自定义未在 schema 的视频端点：须用户先显式选 Provider；不会从模型 ID 猜 Fal
+
+### 关键文件
+- `src/utils/videoProvider.ts` + `videoProvider.test.ts`
+- `src/utils/graphEngine.ts` + `graphEngine.test.ts`
+- `src/App.tsx` / `src/engines/drivers/VideoDriver.ts`
+
 ---
 
 

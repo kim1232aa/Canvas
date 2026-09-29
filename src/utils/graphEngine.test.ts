@@ -205,6 +205,7 @@ describe('graphEngine - B2 & L2a & L2b 拓扑反向追踪与参数抽取隔离�
       // 视频节点
       createNode('video-1', 'AIVideoNode', {
         model: 'fal-ai/wan-t2v',
+        targetProvider: 'fal',
         prompt: 'ocean tide at sunset',
       }),
       // Comfy 经典流
@@ -267,6 +268,7 @@ describe('graphEngine - B2 & L2a & L2b 拓扑反向追踪与参数抽取隔离�
     const nodes: NodeInstance[] = [
       createNode('video-node', 'AIVideoNode', {
         model: 'fal-ai/wan-t2v',
+        targetProvider: 'fal',
         prompt: 'a running horse in desert',
       }),
       createNode('orphan-load-image', 'LoadImage', {
@@ -285,6 +287,7 @@ describe('graphEngine - B2 & L2a & L2b 拓扑反向追踪与参数抽取隔离�
     const nodes: NodeInstance[] = [
       createNode('video-node', 'AIVideoNode', {
         model: 'fal-ai/wan-t2v',
+        targetProvider: 'fal',
         prompt: '', // 空提示词
       }),
     ];
@@ -585,5 +588,68 @@ describe('F5 omit unset seed/sampler defaults', () => {
   it('KSampler randomize → finite seed (user opted in)', () => {
     const g = ksGraph({ control_after_generate: 'randomize', seed: 1 });
     expect(Number.isFinite(extractWorkflowParameters(g.nodes, g.conns, 'ks').seed)).toBe(true);
+  });
+});
+
+
+describe('graphEngine - F4 AIVideoNode provider sync / reject empty & mismatch', () => {
+  const createNode = (id: string, type: string, values: Record<string, any>): NodeInstance => ({
+    id,
+    type,
+    title: type,
+    pos: { x: 0, y: 0 },
+    inputs: [],
+    outputs: [],
+    values,
+  });
+
+  it('F4: empty targetProvider/provider is rejected (never Fal fallback)', () => {
+    const nodes: NodeInstance[] = [
+      createNode('video-node', 'AIVideoNode', {
+        model: 'fal-ai/wan-t2v',
+        prompt: 'cinematic orbit',
+        // no targetProvider / provider
+      }),
+    ];
+    expect(() => extractWorkflowParameters(nodes, [], 'video-node')).toThrow(/视频服务商|不会回退到 Fal/);
+  });
+
+  it('F4: schema model provider mismatch with targetProvider is rejected', () => {
+    const nodes: NodeInstance[] = [
+      createNode('video-node', 'AIVideoNode', {
+        model: 'text2video_wan27', // tensorart in schema
+        targetProvider: 'fal',
+        prompt: 'cinematic orbit',
+      }),
+    ];
+    expect(() => extractWorkflowParameters(nodes, [], 'video-node')).toThrow(/服务商不一致|不会回退到 Fal/);
+  });
+
+  it('F4: explicit Fal provider with matching Fal model still works', () => {
+    const nodes: NodeInstance[] = [
+      createNode('video-node', 'AIVideoNode', {
+        model: 'fal-ai/wan-t2v',
+        targetProvider: 'fal',
+        prompt: 'cinematic orbit',
+        duration: 5,
+      }),
+    ];
+    const params = extractWorkflowParameters(nodes, [], 'video-node');
+    expect(params.isVideo).toBe(true);
+    expect(params.videoProvider).toBe('fal');
+    expect(params.checkpointModel).toBe('fal-ai/wan-t2v');
+    expect(params.targetProvider).toBe('video');
+  });
+
+  it('F4: mirrored provider field alone is accepted when targetProvider empty', () => {
+    const nodes: NodeInstance[] = [
+      createNode('video-node', 'AIVideoNode', {
+        model: 'agnes-video-2.5-flash',
+        provider: 'agnes',
+        prompt: 'cinematic orbit',
+      }),
+    ];
+    const params = extractWorkflowParameters(nodes, [], 'video-node');
+    expect(params.videoProvider).toBe('agnes');
   });
 });
