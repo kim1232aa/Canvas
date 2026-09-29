@@ -49,13 +49,17 @@ export class SenseNovaDriver extends BaseEngineDriver {
       throw new Error('未配置商汤日日新 API 密钥 (x-sensenova-key)。请在右上角设置面板中配置。');
     }
 
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'x-sensenova-key': effectiveKey,
+    };
+    if (params.baseUrl || (keys?.sensenovaBaseUrl && keys.sensenovaBaseUrl !== this.defaultBaseUrl)) {
+      headers['x-sensenova-base-url'] = effectiveBaseUrl;
+    }
+
     const resp = await fetch('/api/engine/sensenova/chat', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-sensenova-key': effectiveKey,
-        'x-sensenova-base-url': effectiveBaseUrl,
-      },
+      headers,
       body: JSON.stringify(params),
     });
 

@@ -101,13 +101,17 @@ export class AgnesDriver extends BaseEngineDriver {
       throw new Error('未配置 Agnes AI API 密钥 (x-agnes-key)。请在设置面板中配置。');
     }
 
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'x-agnes-key': effectiveKey,
+    };
+    if (params.baseUrl || (keys.agnesBaseUrl && keys.agnesBaseUrl !== this.defaultBaseUrl)) {
+      headers['x-agnes-base-url'] = effectiveBaseUrl;
+    }
+
     const resp = await fetch('/api/engine/agnes/generate', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-agnes-key': effectiveKey,
-        'x-agnes-base-url': effectiveBaseUrl,
-      },
+      headers,
       body: JSON.stringify(params),
     });
 
@@ -143,13 +147,17 @@ export class AgnesDriver extends BaseEngineDriver {
       throw new Error('未配置 Agnes AI API 密钥 (x-agnes-key)。请在设置面板中配置。');
     }
 
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'x-agnes-key': effectiveKey,
+    };
+    if (params.baseUrl || (keys.agnesBaseUrl && keys.agnesBaseUrl !== this.defaultBaseUrl)) {
+      headers['x-agnes-base-url'] = effectiveBaseUrl;
+    }
+
     const resp = await fetch('/api/engine/agnes/chat', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-agnes-key': effectiveKey,
-        'x-agnes-base-url': effectiveBaseUrl,
-      },
+      headers,
       body: JSON.stringify(params),
     });
 

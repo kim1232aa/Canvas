@@ -3492,16 +3492,19 @@ app.post(['/api/video/generate', '/api/engine/video/generate'], async (req, res)
 
     // 3. Agnes AI Video support (agnes-video-2.5-flash / agnes-video-2.5)
     if (lowerModel.includes('agnes-video') || lowerModel.startsWith('agnes-video')) {
-      const agnesKey =
-        (req.headers['x-agnes-key'] as string) ||
-        cloudSettings['agnesKey'] ||
-        defaultKeys['agnesKey'] ||
-        '';
-      const agnesBaseUrl =
-        (req.headers['x-agnes-base-url'] as string) ||
-        cloudSettings['agnesBaseUrl'] ||
-        defaultKeys['agnesBaseUrl'] ||
-        'https://apihub.agnes-ai.com/v1';
+      const customAgnesBaseUrl = (req.headers['x-agnes-base-url'] as string)?.trim();
+      const customAgnesKey = (req.headers['x-agnes-key'] as string)?.trim();
+
+      if (customAgnesBaseUrl && !customAgnesKey) {
+        return res.status(400).json({
+          error: '使用自定义 base URL (x-agnes-base-url) 时必须同时提供自定义 API Key (x-agnes-key)，禁止回退使用服务端密钥。',
+        });
+      }
+
+      const agnesKey = customAgnesBaseUrl
+        ? customAgnesKey
+        : (customAgnesKey || cloudSettings['agnesKey'] || defaultKeys['agnesKey'] || '');
+      const agnesBaseUrl = customAgnesBaseUrl || cloudSettings['agnesBaseUrl'] || defaultKeys['agnesBaseUrl'] || 'https://apihub.agnes-ai.com/v1';
 
       if (!agnesKey) {
         return res.status(400).json({ error: '未配置 Agnes AI 密钥 (x-agnes-key)。' });
@@ -4198,16 +4201,19 @@ app.post(['/api/engine/agnes/generate', '/api/agnes/generate'], async (req, res)
       image_url,
     } = req.body;
 
-    const apiKey =
-      (req.headers['x-agnes-key'] as string) ||
-      cloudSettings['agnesKey'] ||
-      defaultKeys['agnesKey'] ||
-      '';
-    const baseUrl =
-      (req.headers['x-agnes-base-url'] as string) ||
-      cloudSettings['agnesBaseUrl'] ||
-      defaultKeys['agnesBaseUrl'] ||
-      'https://apihub.agnes-ai.com/v1';
+    const customAgnesBaseUrl = (req.headers['x-agnes-base-url'] as string)?.trim();
+    const customAgnesKey = (req.headers['x-agnes-key'] as string)?.trim();
+
+    if (customAgnesBaseUrl && !customAgnesKey) {
+      return res.status(400).json({
+        error: '使用自定义 base URL (x-agnes-base-url) 时必须同时提供自定义 API Key (x-agnes-key)，禁止回退使用服务端密钥。',
+      });
+    }
+
+    const apiKey = customAgnesBaseUrl
+      ? customAgnesKey
+      : (customAgnesKey || cloudSettings['agnesKey'] || defaultKeys['agnesKey'] || '');
+    const baseUrl = customAgnesBaseUrl || cloudSettings['agnesBaseUrl'] || defaultKeys['agnesBaseUrl'] || 'https://apihub.agnes-ai.com/v1';
 
     if (!apiKey) {
       return res.status(400).json({ error: '未配置 Agnes AI API 密钥 (x-agnes-key)。' });
@@ -4278,16 +4284,19 @@ app.post(['/api/engine/agnes/chat', '/api/agnes/chat'], async (req, res) => {
       max_tokens = 2048,
     } = req.body;
 
-    const apiKey =
-      (req.headers['x-agnes-key'] as string) ||
-      cloudSettings['agnesKey'] ||
-      defaultKeys['agnesKey'] ||
-      '';
-    const baseUrl =
-      (req.headers['x-agnes-base-url'] as string) ||
-      cloudSettings['agnesBaseUrl'] ||
-      defaultKeys['agnesBaseUrl'] ||
-      'https://apihub.agnes-ai.com/v1';
+    const customAgnesBaseUrl = (req.headers['x-agnes-base-url'] as string)?.trim();
+    const customAgnesKey = (req.headers['x-agnes-key'] as string)?.trim();
+
+    if (customAgnesBaseUrl && !customAgnesKey) {
+      return res.status(400).json({
+        error: '使用自定义 base URL (x-agnes-base-url) 时必须同时提供自定义 API Key (x-agnes-key)，禁止回退使用服务端密钥。',
+      });
+    }
+
+    const apiKey = customAgnesBaseUrl
+      ? customAgnesKey
+      : (customAgnesKey || cloudSettings['agnesKey'] || defaultKeys['agnesKey'] || '');
+    const baseUrl = customAgnesBaseUrl || cloudSettings['agnesBaseUrl'] || defaultKeys['agnesBaseUrl'] || 'https://apihub.agnes-ai.com/v1';
 
     if (!apiKey) {
       return res.status(400).json({ error: '未配置 Agnes AI API 密钥 (x-agnes-key)。' });
@@ -4338,16 +4347,19 @@ app.post(['/api/engine/sensenova/chat', '/api/sensenova/chat'], async (req, res)
       max_tokens = 2048,
     } = req.body;
 
-    const apiKey =
-      (req.headers['x-sensenova-key'] as string) ||
-      cloudSettings['sensenovaKey'] ||
-      defaultKeys['sensenovaKey'] ||
-      '';
-    const baseUrl =
-      (req.headers['x-sensenova-base-url'] as string) ||
-      cloudSettings['sensenovaBaseUrl'] ||
-      defaultKeys['sensenovaBaseUrl'] ||
-      'https://token.sensenova.cn/v1';
+    const customSnBaseUrl = (req.headers['x-sensenova-base-url'] as string)?.trim();
+    const customSnKey = (req.headers['x-sensenova-key'] as string)?.trim();
+
+    if (customSnBaseUrl && !customSnKey) {
+      return res.status(400).json({
+        error: '使用自定义 base URL (x-sensenova-base-url) 时必须同时提供自定义 API Key (x-sensenova-key)，禁止回退使用服务端密钥。',
+      });
+    }
+
+    const apiKey = customSnBaseUrl
+      ? customSnKey
+      : (customSnKey || cloudSettings['sensenovaKey'] || defaultKeys['sensenovaKey'] || '');
+    const baseUrl = customSnBaseUrl || cloudSettings['sensenovaBaseUrl'] || defaultKeys['sensenovaBaseUrl'] || 'https://token.sensenova.cn/v1';
 
     if (!apiKey) {
       return res.status(400).json({ error: '未配置商汤日日新 API 密钥 (x-sensenova-key)。' });
@@ -5547,6 +5559,22 @@ app.post(['/api/gemini/refine-prompt', '/api/ai/refine-prompt'], async (req, res
       return res.status(400).json({ error: 'Prompt cannot be empty' });
     }
 
+    const customSnBaseUrl = (req.headers['x-sensenova-base-url'] as string)?.trim();
+    const customSnKey = (req.headers['x-sensenova-key'] as string)?.trim();
+    if (customSnBaseUrl && !customSnKey) {
+      return res.status(400).json({
+        error: '使用自定义 base URL (x-sensenova-base-url) 时必须同时提供自定义 API Key (x-sensenova-key)，禁止回退使用服务端密钥。',
+      });
+    }
+
+    const customAgnesBaseUrl = (req.headers['x-agnes-base-url'] as string)?.trim();
+    const customAgnesKey = (req.headers['x-agnes-key'] as string)?.trim();
+    if (customAgnesBaseUrl && !customAgnesKey) {
+      return res.status(400).json({
+        error: '使用自定义 base URL (x-agnes-base-url) 时必须同时提供自定义 API Key (x-agnes-key)，禁止回退使用服务端密钥。',
+      });
+    }
+
     const rawPrompt = prompt.trim();
     const loraContext = Array.isArray(loras) && loras.length > 0
       ? `Target LoRA triggers/styles: ${loras.map((l: any) => `${l.name || l.displayName} (strength: ${l.strength ?? l.modelStrength ?? 0.8})`).join(', ')}`
@@ -5589,8 +5617,10 @@ Your task is to transform the user's initial prompt into an exceptional, visuall
     // 2. Tier 2: SenseNova (商汤日日新) DeepSeek V4 Reasoning
     if (!refinedText) {
       try {
-        const sensenovaKey = (req.headers['x-sensenova-key'] as string) || cloudSettings['sensenovaKey'] || defaultKeys['sensenovaKey'];
-        const sensenovaBaseUrl = (req.headers['x-sensenova-base-url'] as string) || cloudSettings['sensenovaBaseUrl'] || defaultKeys['sensenovaBaseUrl'] || 'https://token.sensenova.cn/v1';
+        const sensenovaKey = customSnBaseUrl
+          ? customSnKey
+          : (customSnKey || cloudSettings['sensenovaKey'] || defaultKeys['sensenovaKey']);
+        const sensenovaBaseUrl = customSnBaseUrl || cloudSettings['sensenovaBaseUrl'] || defaultKeys['sensenovaBaseUrl'] || 'https://token.sensenova.cn/v1';
         if (sensenovaKey) {
           const snResp = await fetch(`${sensenovaBaseUrl.replace(/\/+$/, '')}/chat/completions`, {
             method: 'POST',
@@ -5622,8 +5652,10 @@ Your task is to transform the user's initial prompt into an exceptional, visuall
     // 3. Tier 3: Agnes AI 3.0 Flash
     if (!refinedText) {
       try {
-        const agnesKey = (req.headers['x-agnes-key'] as string) || cloudSettings['agnesKey'] || defaultKeys['agnesKey'];
-        const agnesBaseUrl = (req.headers['x-agnes-base-url'] as string) || cloudSettings['agnesBaseUrl'] || defaultKeys['agnesBaseUrl'] || 'https://apihub.agnes-ai.com/v1';
+        const agnesKey = customAgnesBaseUrl
+          ? customAgnesKey
+          : (customAgnesKey || cloudSettings['agnesKey'] || defaultKeys['agnesKey']);
+        const agnesBaseUrl = customAgnesBaseUrl || cloudSettings['agnesBaseUrl'] || defaultKeys['agnesBaseUrl'] || 'https://apihub.agnes-ai.com/v1';
         if (agnesKey) {
           const agResp = await fetch(`${agnesBaseUrl.replace(/\/+$/, '')}/chat/completions`, {
             method: 'POST',
