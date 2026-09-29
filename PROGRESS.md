@@ -2,6 +2,8 @@
 
 ## 0. compat-relays（OpenAI 兼容中转 + Grok 兼容中转）— 2026-09-29
 
+Tip hash:  (branch , not pushed)
+
 ### 完成项
 - [x] 新增一等公民 provider：`openai_compat`（仅生图/改图）、`grok_compat`（推理+生图+改图+生视频）
 - [x] 设置面板标签「兼容中转」；可编辑 Base URL + 掩码 Key（Agnes 同款 `resolveProviderAuth`：header > settings > env；无硬编码域名）
@@ -17,7 +19,7 @@
 ### QA 配置步骤（勿把真实 key 写进仓库）
 ```bash
 cd /workspace/Canvas-ui
-git checkout compat-relays   # tip 见本节提交后 hash
+git checkout compat-relays   # tip b28930bd605c4e4800970ca4f8a446143b5774ff
 set -a; source /workspace/canvas-secrets/compat-relays.env; set +a
 # 或在设置面板「OpenAI 兼容中转」「Grok 兼容中转」手填 Base URL + Key
 npm run dev   # 勿占用 3417 / 勿动 Canvas-b1-fix
