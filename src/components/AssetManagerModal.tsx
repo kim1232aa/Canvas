@@ -889,13 +889,21 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
 
                               {onAddNodeFromAsset && (
                                 <button
+                                  type="button"
+                                  disabled={applyDisabled}
+                                  aria-disabled={applyDisabled}
                                   onClick={(e) => {
                                     e.stopPropagation();
+                                    if (applyDisabled) return;
                                     onAddNodeFromAsset(asset);
                                     onClose();
                                   }}
-                                  className="p-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-[10px] flex items-center gap-1 shadow-lg shadow-cyan-600/30 transition-all"
-                                  title="在 ComfyUI 节点图中添加此资产节点"
+                                  className={`p-1.5 rounded-lg font-bold text-[10px] flex items-center gap-1 shadow-lg transition-all ${
+                                    applyDisabled
+                                      ? 'bg-slate-700/50 text-slate-400 cursor-not-allowed opacity-50 shadow-none'
+                                      : 'bg-cyan-600 hover:bg-cyan-500 text-white shadow-cyan-600/30'
+                                  }`}
+                                  title={applyDisabled ? '预览加载失败，无法添加至节点图' : '在 ComfyUI 节点图中添加此资产节点'}
                                 >
                                   <Layers className="w-3.5 h-3.5" />
                                   <span>加节点</span>
@@ -1147,11 +1155,20 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
 
                 {onAddNodeFromAsset && (
                   <button
+                    type="button"
+                    disabled={isAssetApplyDisabled(selectedAsset)}
+                    aria-disabled={isAssetApplyDisabled(selectedAsset)}
                     onClick={() => {
+                      if (isAssetApplyDisabled(selectedAsset)) return;
                       onAddNodeFromAsset(selectedAsset);
                       onClose();
                     }}
-                    className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-500 hover:to-teal-500 text-white font-bold flex items-center justify-center gap-1.5 shadow-md shadow-cyan-600/20 text-xs active:scale-98 transition-all"
+                    className={`w-full py-2 px-3 rounded-xl font-bold flex items-center justify-center gap-1.5 text-xs transition-all ${
+                      isAssetApplyDisabled(selectedAsset)
+                        ? 'bg-slate-800/60 text-slate-500 cursor-not-allowed opacity-50 shadow-none'
+                        : 'bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-500 hover:to-teal-500 text-white shadow-md shadow-cyan-600/20 active:scale-98'
+                    }`}
+                    title={isAssetApplyDisabled(selectedAsset) ? '预览加载失败，无法添加至节点图' : undefined}
                   >
                     <Layers className="w-4 h-4" />
                     <span>添加至 ComfyUI 节点图</span>

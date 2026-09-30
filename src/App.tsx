@@ -1868,6 +1868,34 @@ export default function App() {
     setSelectedFrameId(newId);
   };
 
+  /** Asset library → ComfyUI node graph: reuse LoadImage add path (no new store). */
+  const handleAddNodeFromAsset = (asset: MediaAsset) => {
+    if (!asset?.url) return;
+    const def = NODE_DEFINITIONS['LoadImage'];
+    if (!def) {
+      handleAddNode('LoadImage');
+      return;
+    }
+    const newNodeId = `node-${Date.now()}`;
+    const defaultPos = {
+      x: Math.round(-transform.x / transform.scale + 300),
+      y: Math.round(-transform.y / transform.scale + 200),
+    };
+    const newNode: NodeInstance = {
+      id: newNodeId,
+      type: 'LoadImage',
+      title: def.title,
+      pos: defaultPos,
+      width: 300,
+      inputs: def.inputs,
+      outputs: def.outputs,
+      values: { ...def.defaultValues, image_url: asset.url },
+      state: 'idle',
+    };
+    setNodes((prev) => [...prev, newNode]);
+    setSelectedNodeId(newNodeId);
+  };
+
   const handleUseAsReference = (asset: MediaAsset) => {
     if (selectedFrameId) {
       handleUpdateFrame(selectedFrameId, {
@@ -2642,6 +2670,7 @@ export default function App() {
         onClose={() => setIsAssetManagerOpen(false)}
         history={history}
         onAddToCanvasAsFrame={handleAddToCanvasAsFrame}
+        onAddNodeFromAsset={handleAddNodeFromAsset}
         onUseAsReference={handleUseAsReference}
         onPreviewImage={setPreviewImageUrl}
         onDeleteAsset={handleDeleteHistoryItem}

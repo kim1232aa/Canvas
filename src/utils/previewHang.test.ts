@@ -10,6 +10,7 @@ import {
   previewShowsMedia,
   previewKeepMediaMounted,
   isApplyToCanvasDisabled,
+  isAddToNodeGraphDisabled,
   type PreviewSettleState,
 } from './previewHang';
 
@@ -145,6 +146,23 @@ describe('apply-to-canvas disabled only on settled failure', () => {
     const states: PreviewSettleState[] = ['loading', 'ok', 'failed_hang', 'failed_hard'];
     for (const s of states) {
       expect(isApplyToCanvasDisabled(s)).toBe(previewShowsFailure(s));
+    }
+  });
+});
+
+describe('node-graph add disabled uses same failure predicate', () => {
+  it('disables for failed_hang and failed_hard; not for loading or ok', () => {
+    expect(isAddToNodeGraphDisabled('failed_hang')).toBe(true);
+    expect(isAddToNodeGraphDisabled('failed_hard')).toBe(true);
+    expect(isAddToNodeGraphDisabled('loading')).toBe(false);
+    expect(isAddToNodeGraphDisabled('ok')).toBe(false);
+  });
+
+  it('matches isApplyToCanvasDisabled for every settle state', () => {
+    const states: PreviewSettleState[] = ['loading', 'ok', 'failed_hang', 'failed_hard'];
+    for (const s of states) {
+      expect(isAddToNodeGraphDisabled(s)).toBe(isApplyToCanvasDisabled(s));
+      expect(isAddToNodeGraphDisabled(s)).toBe(previewShowsFailure(s));
     }
   });
 });

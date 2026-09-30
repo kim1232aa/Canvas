@@ -88,10 +88,16 @@ export function previewKeepMediaMounted(
 }
 
 /**
- * History 「应用到画布」 / asset 「送入画板」: grey + no-op only when the
- * shared preview settle has already shown the failure placeholder.
+ * History 「应用到画布」 / asset 「送入画板」 / 「加节点」 /
+ * 「添加至 ComfyUI 节点图」: grey + no-op only when the shared preview
+ * settle has already shown the failure placeholder.
  * Reuses previewShowsFailure — loading must stay enabled (may still become ok).
  */
 export function isApplyToCanvasDisabled(settle: PreviewSettleState): boolean {
   return previewShowsFailure(settle);
+}
+
+/** Node-graph add uses the same failure predicate as apply-to-canvas. */
+export function isAddToNodeGraphDisabled(settle: PreviewSettleState): boolean {
+  return isApplyToCanvasDisabled(settle);
 }
