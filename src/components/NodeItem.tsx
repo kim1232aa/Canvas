@@ -27,7 +27,7 @@ import { GeminiFieldSelect, GeminiModelBadge } from './GeminiFieldSelect';
 import { fieldOptions, resolveSchemaModelId } from '../schemas/providerSchema';
 import { FieldStatusBadge } from './FieldStatusBadge';
 import { isCanvasFieldUnsupported, isCanvasWidgetUnsupported } from '../utils/resolveCheckpoint';
-import { ksamplerNodeTitle } from '../utils/providerLabels';
+import { ksamplerNodeTitle, loraLoaderNodeTitle, LORA_LOADER_TYPES } from '../utils/providerLabels';
 
 interface NodeItemProps {
   node: NodeInstance;
@@ -219,7 +219,9 @@ export const NodeItem: React.FC<NodeItemProps> = ({
             const displayTitle =
               node.type === 'KSampler'
                 ? ksamplerNodeTitle(node.title, stepsUnsupported)
-                : node.title;
+                : LORA_LOADER_TYPES.has(node.type)
+                  ? loraLoaderNodeTitle(node.title, node.values?.lora_name)
+                  : node.title;
             return (
               <span
                 className="font-bold text-[13px] text-white truncate tracking-wide"

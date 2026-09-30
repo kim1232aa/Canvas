@@ -5,12 +5,15 @@ import {
   friendlyProviderLabel,
   isNonComfyCloudProvider,
   ksamplerNodeTitle,
+  loraLoaderNodeTitle,
+  LORA_LOADER_EMPTY_TITLE,
   PROVIDER_TITLE_LABEL,
   spatialFrameModelLabel,
   spatialFrameTopBarLabel,
   paramsDrawerFramePrefix,
   sanitizeFrameMarketingTitle,
 } from './providerLabels';
+import { NODE_DEFINITIONS } from '../constants/nodes';
 
 describe('checkpointNodeTitle', () => {
   it('uses friendly labels — never raw GROK_COMPAT / OPENAI_COMPAT', () => {
@@ -79,6 +82,32 @@ describe('ksamplerNodeTitle — omit step advertising when steps unsupported', (
   it('keeps non-step titles even when steps unsupported', () => {
     expect(ksamplerNodeTitle('KSampler (Tensor.Art 调度)', true)).toBe('KSampler (Tensor.Art 调度)');
     expect(ksamplerNodeTitle('KSampler', true)).toBe('KSampler');
+  });
+});
+
+describe('loraLoaderNodeTitle — header tracks current lora_name', () => {
+  it('empty constant matches the node definition default title', () => {
+    expect(LORA_LOADER_EMPTY_TITLE).toBe(NODE_DEFINITIONS.LoRALoader.title);
+  });
+
+  it('cleared/empty lora_name drops stale imported or preset name', () => {
+    for (const stale of ['加载 LoRA ([Flux1] Asian Mix ...)', 'LoRA: [Flux1] Asian Mix v2']) {
+      for (const empty of ['', '   ', undefined, null]) {
+        const t = loraLoaderNodeTitle(stale, empty);
+        expect(t).toBe(LORA_LOADER_EMPTY_TITLE);
+        expect(t).not.toMatch(/Asian Mix|Flux1|\.\.\./);
+      }
+    }
+  });
+
+  it('real LoRA literally named "LoRA" still shows in the header', () => {
+    expect(loraLoaderNodeTitle(LORA_LOADER_EMPTY_TITLE, 'LoRA')).toBe('LoRA: LoRA');
+    expect(loraLoaderNodeTitle('', 'LoRA')).toBe('LoRA: LoRA');
+  });
+
+  it('real name replaces stale other-name title; keeps a title already naming it', () => {
+    expect(loraLoaderNodeTitle('加载 LoRA ([Flux1] Asian Mix ...)', 'shinkai.safetensors')).toBe('LoRA: shinkai');
+    expect(loraLoaderNodeTitle('加载 LoRA (shinkai)', 'shinkai.safetensors')).toBe('加载 LoRA (shinkai)');
   });
 });
 

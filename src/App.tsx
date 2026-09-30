@@ -65,6 +65,8 @@ import {
   spatialFrameTopBarLabel,
   paramsDrawerFramePrefix,
   sanitizeFrameMarketingTitle,
+  loraLoaderNodeTitle,
+  LORA_LOADER_TYPES,
 } from './utils/providerLabels';
 
 export default function App() {
@@ -785,6 +787,13 @@ export default function App() {
             values: { ...(n.values || {}), targetProvider: value, provider: value },
           };
         }
+        if (LORA_LOADER_TYPES.has(n.type) && widgetName === 'lora_name') {
+          return {
+            ...n,
+            title: loraLoaderNodeTitle(n.title, value),
+            values: { ...(n.values || {}), lora_name: value },
+          };
+        }
         return { ...n, values: { ...(n.values || {}), [widgetName]: value } };
       })
     );
@@ -1285,6 +1294,7 @@ export default function App() {
           n.id === targetLoRANodeId
             ? {
                 ...n,
+                title: loraLoaderNodeTitle(n.title, lora.name),
                 values: {
                   ...n.values,
                   lora_name: lora.name,
@@ -1311,7 +1321,7 @@ export default function App() {
     const newNode: NodeInstance = {
       id: newNodeId,
       type: 'LoRALoader',
-      title: `LoRA: ${lora.name.replace('.safetensors', '')}`,
+      title: loraLoaderNodeTitle(undefined, lora.name),
       pos: {
         x: Math.round(-transform.x / transform.scale + 420),
         y: Math.round(-transform.y / transform.scale + 220),
@@ -1421,7 +1431,7 @@ export default function App() {
           n.id === targetLoRANodeId
             ? {
                 ...n,
-                title: `LoRA: ${lora.name.replace('.safetensors', '')}`,
+                title: loraLoaderNodeTitle(n.title, lora.name),
                 values: {
                   ...n.values,
                   lora_name: lora.name,
@@ -2316,16 +2326,26 @@ export default function App() {
                       },
                     };
                   }
-                  if (n.type === 'LoRALoader') {
+                  if (LORA_LOADER_TYPES.has(n.type)) {
                     const matchingLora = (newParams.loras || []).find((l) => l.name === n.values?.lora_name);
                     if (matchingLora) {
                       return {
                         ...n,
+                        title: loraLoaderNodeTitle(n.title, n.values?.lora_name),
                         values: {
                           ...n.values,
                           strength_model: matchingLora.modelStrength,
                           strength_clip: matchingLora.clipStrength,
                         },
+                      };
+                    }
+                    // Removed from inspector stack: clear name + title so header matches empty state.
+                    // NodeItem also derives the header from values.lora_name (defense in depth).
+                    if (n.values?.lora_name && !(newParams.loras || []).some((l) => l.name === n.values?.lora_name)) {
+                      return {
+                        ...n,
+                        title: loraLoaderNodeTitle(n.title, ''),
+                        values: { ...n.values, lora_name: '' },
                       };
                     }
                   }

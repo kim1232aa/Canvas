@@ -106,6 +106,28 @@ export function ksamplerNodeTitle(
   return cleaned || 'KSampler';
 }
 
+/** Must equal NODE_DEFINITIONS.LoRALoader.title (asserted in providerLabels.test.ts). */
+export const LORA_LOADER_EMPTY_TITLE = 'Load LoRA (Civitai / Local)';
+
+export const LORA_LOADER_TYPES = new Set(['LoRALoader', 'LoraLoader', 'LoraLoaderModelOnly']);
+
+/**
+ * LoRA loader header derived from the current lora_name. Empty name → generic unmounted
+ * title (never a stale "加载 LoRA (...)" / "LoRA: ..." leftover). A real name — including
+ * the literal "LoRA" — keeps an existing title that mentions it, else "LoRA: <short>".
+ */
+export function loraLoaderNodeTitle(
+  existingTitle: string | undefined | null,
+  loraName: string | undefined | null
+): string {
+  const name = String(loraName ?? '').trim();
+  if (!name) return LORA_LOADER_EMPTY_TITLE;
+  const short = name.replace('.safetensors', '');
+  const raw = String(existingTitle || '').trim();
+  if (raw && raw !== LORA_LOADER_EMPTY_TITLE && raw.includes(short)) return raw;
+  return `LoRA: ${short}`;
+}
+
 /** Global top-bar pill when a SpatialFrame is active — must match the frame header chips. */
 export function spatialFrameTopBarLabel(
   provider: string | undefined | null,
