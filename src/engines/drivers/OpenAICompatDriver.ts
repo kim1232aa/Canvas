@@ -54,6 +54,9 @@ export class OpenAICompatDriver extends BaseEngineDriver {
     if (extra.background) body.background = extra.background;
     if (extra.moderation) body.moderation = extra.moderation;
     if (extra.n != null) body.n = extra.n;
+    if (params.loras && params.loras.length > 0) {
+      body.loras = params.loras;
+    }
 
     const resp = await fetch('/api/engine/openai_compat/generate', {
       method: 'POST',

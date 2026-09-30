@@ -26,7 +26,7 @@ describe('OpenAICompatDriver', () => {
     );
   });
 
-  it('转发 key/baseUrl 头，不把 seed/negative/steps/cfg/loras 写入请求体', async () => {
+  it('转发 key/baseUrl 头；有真实 LoRA 时写入 loras，仍不写 seed/negative/steps/cfg', async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -63,6 +63,43 @@ describe('OpenAICompatDriver', () => {
     expect(body.negative_prompt).toBeUndefined();
     expect(body.steps).toBeUndefined();
     expect(body.cfg).toBeUndefined();
+    expect(body.loras).toHaveLength(1);
+    expect(body.loras[0]).toEqual(expect.objectContaining({ name: 'x', strength: 1 }));
+  });
+
+  it('loras: [] 时请求体不含 loras 键', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ imageUrl: 'data:image/png;base64,aaa', model: 'gpt-image-2' }),
+    });
+
+    await driver.generate(
+      { prompt: 'tiny red square', model: 'gpt-image-2', loras: [] },
+      { openaiCompatKey: 'sk-test' },
+    );
+
+    const [, init] = (globalThis.fetch as any).mock.calls[0];
+    const body = JSON.parse(init.body);
+    expect(Object.prototype.hasOwnProperty.call(body, 'loras')).toBe(false);
+    expect(body.loras).toBeUndefined();
+  });
+
+  it('省略 loras 时请求体不含 loras 键', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ imageUrl: 'data:image/png;base64,aaa', model: 'gpt-image-2' }),
+    });
+
+    await driver.generate(
+      { prompt: 'tiny red square', model: 'gpt-image-2' },
+      { openaiCompatKey: 'sk-test' },
+    );
+
+    const [, init] = (globalThis.fetch as any).mock.calls[0];
+    const body = JSON.parse(init.body);
+    expect(Object.prototype.hasOwnProperty.call(body, 'loras')).toBe(false);
     expect(body.loras).toBeUndefined();
   });
 
