@@ -28,3 +28,61 @@ export function shouldGiveUpOnPreviewHang(args: {
   if (args.hasSettled) return false;
   return args.elapsedMs >= (args.hangMs ?? PREVIEW_HANG_MS);
 }
+
+/**
+ * Shared settle state for toast + history/asset thumbs (one rule, no drift).
+ * - loading: remote waiting for load/error (show 「预览加载中…」)
+ * - ok: real >2px media visible
+ * - failed_hang: hang deadline hit; media stays mountable for a late real load
+ * - failed_hard: onError / ≤2px — terminal, never flips back to a picture
+ */
+export type PreviewSettleState = 'loading' | 'ok' | 'failed_hang' | 'failed_hard';
+
+export type PreviewSettleEvent =
+  | { type: 'reset' }
+  | { type: 'hang_timeout' }
+  | { type: 'real_media' }
+  | { type: 'hard_fail' };
+
+export function reducePreviewSettle(
+  state: PreviewSettleState,
+  event: PreviewSettleEvent,
+): PreviewSettleState {
+  switch (event.type) {
+    case 'reset':
+      return 'loading';
+    case 'hard_fail':
+      return 'failed_hard';
+    case 'real_media':
+      // Late real load may clear hang failure; hard fail / tiny stay failed.
+      if (state === 'failed_hard') return 'failed_hard';
+      return 'ok';
+    case 'hang_timeout':
+      // Only the still-waiting remote gives up; settled/error are not overridden.
+      if (state === 'loading') return 'failed_hang';
+      return state;
+    default:
+      return state;
+  }
+}
+
+export function previewShowsWaiting(state: PreviewSettleState, remote: boolean): boolean {
+  return remote && state === 'loading';
+}
+
+export function previewShowsFailure(state: PreviewSettleState): boolean {
+  return state === 'failed_hang' || state === 'failed_hard';
+}
+
+export function previewShowsMedia(state: PreviewSettleState): boolean {
+  return state === 'ok';
+}
+
+/** Hang keeps media mounted (hidden) so a late CDN load can still appear. */
+export function previewKeepMediaMounted(
+  state: PreviewSettleState,
+  hasUrl: boolean,
+): boolean {
+  if (!hasUrl) return false;
+  return state !== 'failed_hard';
+}

@@ -37,6 +37,15 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
     setBrokenIds((prev) => (prev[id] ? prev : { ...prev, [id]: true }));
   };
 
+  const clearBroken = (id: string) => {
+    setBrokenIds((prev) => {
+      if (!prev[id]) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  };
+
   const handleCopyPrompt = (id: string, text: string) => {
     navigator.clipboard.writeText(text);
     setCopiedId(id);
@@ -114,6 +123,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
                       url={item.url}
                       broken={!!brokenIds[item.id]}
                       onBroken={markBroken}
+                      onRecovered={clearBroken}
                       kind={
                         item.url?.includes('.mp4') ||
                         item.model?.includes('video') ||
@@ -224,6 +234,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
                 url={selectedImage.url}
                 broken={!!brokenIds[selectedImage.id]}
                 onBroken={markBroken}
+                onRecovered={clearBroken}
                 kind="image"
                 alt={selectedImage.prompt || ''}
                 mediaClassName="max-h-[75vh] w-auto rounded-lg shadow-2xl object-contain border border-[#333]"

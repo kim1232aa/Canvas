@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { AlertTriangle, Sparkles } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { AlertTriangle, Sparkles, Image as ImageIcon } from 'lucide-react';
 import { Canvas } from './components/Canvas';
 import { TopBar } from './components/TopBar';
 import { ModernToolDock } from './components/ModernToolDock';
@@ -38,6 +38,17 @@ import { EngineRegistry } from './engines/EngineRegistry';
 import { NormalizedGenerateParams } from './engines/types';
 import { executeWorkflow, extractWorkflowParameters, resolveTargetNode } from './utils/graphEngine';
 import { applyAIVideoModelSelection } from './utils/videoProvider';
+import {
+  PREVIEW_HANG_MS,
+  isRemotePreviewUrl,
+  isRealMediaSize,
+  reducePreviewSettle,
+  previewShowsWaiting,
+  previewShowsFailure,
+  previewShowsMedia,
+  previewKeepMediaMounted,
+  type PreviewSettleState,
+} from './utils/previewHang';
 import { getRecommendedBaseModelForLora, identifyArchitectureFamily } from './utils/baseModelMatcher';
 import {
   findFirstNodeOfType,
@@ -188,15 +199,47 @@ export default function App() {
     message: string;
     imageUrl?: string;
   } | null>(null);
-  const [toastThumbBroken, setToastThumbBroken] = useState(false);
+  const [toastThumbSettle, setToastThumbSettle] = useState<PreviewSettleState>('loading');
+  const toastThumbSettleRef = useRef<PreviewSettleState>('loading');
 
   useEffect(() => {
-    setToastThumbBroken(false);
-    if (toast) {
-      const timer = setTimeout(() => setToast(null), 6000);
-      return () => clearTimeout(timer);
+    toastThumbSettleRef.current = 'loading';
+    setToastThumbSettle('loading');
+    if (!toast) return;
+    const closeTimer = setTimeout(() => setToast(null), 6000);
+    const thumbUrl = toast.imageUrl;
+    const remote = isRemotePreviewUrl(thumbUrl);
+    let hangTimer: number | undefined;
+    if (thumbUrl && remote) {
+      hangTimer = window.setTimeout(() => {
+        const prev = toastThumbSettleRef.current;
+        const next = reducePreviewSettle(prev, { type: 'hang_timeout' });
+        toastThumbSettleRef.current = next;
+        setToastThumbSettle(next);
+      }, PREVIEW_HANG_MS);
     }
+    return () => {
+      clearTimeout(closeTimer);
+      if (hangTimer !== undefined) window.clearTimeout(hangTimer);
+    };
   }, [toast]);
+
+  // Dev-only QA: /?preview-soft=1 shows toast with never-responding thumb (no paid generate).
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('preview-soft') !== '1') return;
+      setToast({
+        type: 'info',
+        title: '预览软验收',
+        message: 'toast 远程缩略图挂起夹具（无需付费生图）',
+        imageUrl: 'http://127.0.0.1:3999/preview-hang.jpg',
+      });
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   // Modals & Panels
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -2623,20 +2666,66 @@ export default function App() {
                 : 'bg-[#181920]/95 border-amber-500/50 text-white shadow-amber-950/60'
             }`}
           >
-            {toast.imageUrl && !toastThumbBroken && (
-              <img
-                src={toast.imageUrl}
-                alt="Output Preview"
-                className="w-11 h-11 rounded-lg object-cover border border-white/20 shrink-0 cursor-pointer hover:scale-105 transition-transform shadow-md"
-                onClick={() => setPreviewImageUrl(toast.imageUrl!)}
-                onError={() => setToastThumbBroken(true)}
-                onLoad={(e) => {
-                  const img = e.currentTarget;
-                  if (img.naturalWidth <= 2 || img.naturalHeight <= 2) setToastThumbBroken(true);
-                }}
-                title="点击放大预览原图"
-              />
-            )}
+            {toast.imageUrl && (() => {
+              const remote = isRemotePreviewUrl(toast.imageUrl);
+              const showWaiting = previewShowsWaiting(toastThumbSettle, remote);
+              const showFailure = previewShowsFailure(toastThumbSettle);
+              const showMedia = previewShowsMedia(toastThumbSettle);
+              const keepMounted = previewKeepMediaMounted(toastThumbSettle, true);
+              const mediaHidden = remote && !showMedia;
+              const slotClass =
+                'min-w-[2.75rem] w-[4.5rem] h-11 rounded-lg border border-white/20 shrink-0 relative overflow-hidden bg-[#111215] flex flex-col items-center justify-center text-slate-400';
+              const applyThumb = (event: { type: 'real_media' } | { type: 'hard_fail' }) => {
+                const prev = toastThumbSettleRef.current;
+                const next = reducePreviewSettle(prev, event);
+                toastThumbSettleRef.current = next;
+                setToastThumbSettle(next);
+              };
+              if (!keepMounted && showFailure) {
+                return (
+                  <div className={slotClass} title="预览加载失败">
+                    <ImageIcon className="w-4 h-4 text-slate-600" />
+                    <span className="text-[9px] font-medium leading-tight text-center px-0.5 whitespace-nowrap">预览加载失败</span>
+                  </div>
+                );
+              }
+              return (
+                <div
+                  className={slotClass + (showMedia ? ' cursor-pointer hover:scale-105 transition-transform shadow-md' : '')}
+                  onClick={showMedia ? () => setPreviewImageUrl(toast.imageUrl!) : undefined}
+                  title={showMedia ? '点击放大预览原图' : showFailure ? '预览加载失败' : '预览加载中…'}
+                >
+                  {showWaiting && (
+                    <div className="absolute inset-0 z-[1] flex flex-col items-center justify-center gap-0.5 bg-[#111215] pointer-events-none">
+                      <ImageIcon className="w-4 h-4 text-slate-600" />
+                      <span className="text-[9px] font-medium leading-tight text-center px-0.5 whitespace-nowrap">预览加载中…</span>
+                    </div>
+                  )}
+                  {showFailure && (
+                    <div className="absolute inset-0 z-[1] flex flex-col items-center justify-center gap-0.5 bg-[#111215] pointer-events-none">
+                      <ImageIcon className="w-4 h-4 text-slate-600" />
+                      <span className="text-[9px] font-medium leading-tight text-center px-0.5 whitespace-nowrap">预览加载失败</span>
+                    </div>
+                  )}
+                  {keepMounted && (
+                    <img
+                      src={toast.imageUrl}
+                      alt="Output Preview"
+                      className={`w-full h-full object-cover ${mediaHidden ? 'opacity-0' : ''}`}
+                      onError={() => applyThumb({ type: 'hard_fail' })}
+                      onLoad={(e) => {
+                        const img = e.currentTarget;
+                        if (!isRealMediaSize(img.naturalWidth, img.naturalHeight)) {
+                          applyThumb({ type: 'hard_fail' });
+                        } else {
+                          applyThumb({ type: 'real_media' });
+                        }
+                      }}
+                    />
+                  )}
+                </div>
+              );
+            })()}
             <div className="max-w-md text-xs">
               <div className="font-bold text-sm tracking-wide flex items-center gap-2">
                 <span>{toast.title}</span>
@@ -2658,7 +2747,7 @@ export default function App() {
               >
                 查看历史
               </button>
-              {toast.imageUrl && !toastThumbBroken && (
+              {toast.imageUrl && previewShowsMedia(toastThumbSettle) && (
                 <button
                   onClick={() => setPreviewImageUrl(toast.imageUrl!)}
                   className="px-2 py-1.5 rounded-lg bg-[#272a38] hover:bg-[#34384b] text-slate-300 font-semibold text-xs border border-slate-600 transition-colors shadow-sm"

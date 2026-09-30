@@ -481,6 +481,15 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
     setBrokenIds((prev) => (prev[id] ? prev : { ...prev, [id]: true }));
   };
 
+  const clearBroken = (id: string) => {
+    setBrokenIds((prev) => {
+      if (!prev[id]) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  };
+
   return (
     <div
       className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 select-none animate-in fade-in duration-200"
@@ -789,6 +798,7 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
                           url={asset.url}
                           broken={!!brokenIds[asset.id]}
                           onBroken={markBroken}
+                    onRecovered={clearBroken}
                           kind={isVideo ? 'video' : 'image'}
                           alt={asset.prompt}
                           mediaClassName={
@@ -1017,6 +1027,7 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
                     url={selectedAsset.url}
                     broken={!!brokenIds[selectedAsset.id]}
                     onBroken={markBroken}
+                    onRecovered={clearBroken}
                     kind={selectedAsset.type === 'video' ? 'video' : 'image'}
                     alt={selectedAsset.prompt}
                     mediaClassName={

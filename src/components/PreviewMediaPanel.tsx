@@ -4,6 +4,12 @@ import {
   PREVIEW_HANG_MS,
   isRemotePreviewUrl,
   isRealMediaSize,
+  reducePreviewSettle,
+  previewShowsWaiting,
+  previewShowsFailure,
+  previewShowsMedia,
+  previewKeepMediaMounted,
+  type PreviewSettleState,
 } from '../utils/previewHang';
 
 export type PreviewMediaPanelProps = {
@@ -11,6 +17,8 @@ export type PreviewMediaPanelProps = {
   url: string | undefined | null;
   broken: boolean;
   onBroken: (id: string) => void;
+  /** Clear parent broken id when a late real load recovers after hang. */
+  onRecovered?: (id: string) => void;
   kind: 'image' | 'video';
   alt?: string;
   /** Classes on the img/video element once shown. */
@@ -33,14 +41,16 @@ export type PreviewMediaPanelProps = {
 
 /**
  * History / asset gallery thumb: remote http(s) that never load must not sit as a
- * near-black #111215 slab. After PREVIEW_HANG_MS, show the failure placeholder.
- * Real media (both sides >2) still shows; data: / same-origin keep existing path.
+ * near-black #111215 slab. After PREVIEW_HANG_MS, show the failure placeholder
+ * locally while keeping media mounted (hidden) so a late real load can still appear.
+ * Hard fail (onError / ≤2px) stays failed. data: / same-origin keep existing path.
  */
 export const PreviewMediaPanel: React.FC<PreviewMediaPanelProps> = ({
   id,
   url,
-  broken,
+  broken: _broken,
   onBroken,
+  onRecovered,
   kind,
   alt = '',
   mediaClassName = 'w-full h-full object-cover',
@@ -50,39 +60,49 @@ export const PreviewMediaPanel: React.FC<PreviewMediaPanelProps> = ({
   failureHint = '链接失效或无法拉取，非未生成',
   waitingLabel = '预览加载中…',
 }) => {
-  const [loadedOk, setLoadedOk] = React.useState(false);
-  const settledRef = React.useRef(false);
+  const [settle, setSettle] = React.useState<PreviewSettleState>('loading');
+  const settleRef = React.useRef<PreviewSettleState>('loading');
   const onBrokenRef = React.useRef(onBroken);
+  const onRecoveredRef = React.useRef(onRecovered);
   onBrokenRef.current = onBroken;
+  onRecoveredRef.current = onRecovered;
 
   const remote = isRemotePreviewUrl(url);
+  const hasUrl = !!url;
 
-  React.useEffect(() => {
-    settledRef.current = broken;
-    if (broken) setLoadedOk(false);
-  }, [broken]);
-
-  React.useEffect(() => {
-    settledRef.current = false;
-    setLoadedOk(false);
-    if (!url || !remote || broken) return;
-    const t = window.setTimeout(() => {
-      if (!settledRef.current) onBrokenRef.current(id);
-    }, PREVIEW_HANG_MS);
-    return () => window.clearTimeout(t);
-  }, [url, remote, broken, id]);
-
-  const markFail = React.useCallback(() => {
-    settledRef.current = true;
-    onBrokenRef.current(id);
+  const apply = React.useCallback((event: Parameters<typeof reducePreviewSettle>[1]) => {
+    const prev = settleRef.current;
+    const next = reducePreviewSettle(prev, event);
+    settleRef.current = next;
+    setSettle(next);
+    if (next === 'failed_hang' || next === 'failed_hard') {
+      if (prev !== next) onBrokenRef.current(id);
+    }
+    if (next === 'ok' && prev === 'failed_hang') {
+      onRecoveredRef.current?.(id);
+    }
   }, [id]);
 
-  const markOk = React.useCallback(() => {
-    settledRef.current = true;
-    setLoadedOk(true);
-  }, []);
+  React.useEffect(() => {
+    settleRef.current = 'loading';
+    setSettle('loading');
+    if (!url || !remote) return;
+    const t = window.setTimeout(() => {
+      // Mirror shouldGiveUpOnPreviewHang: only give up while still loading.
+      apply({ type: 'hang_timeout' });
+    }, PREVIEW_HANG_MS);
+    return () => window.clearTimeout(t);
+  }, [url, remote, id, apply]);
 
-  if (broken || !url) {
+  const markFail = React.useCallback(() => {
+    apply({ type: 'hard_fail' });
+  }, [apply]);
+
+  const markOk = React.useCallback(() => {
+    apply({ type: 'real_media' });
+  }, [apply]);
+
+  if (!hasUrl) {
     return (
       <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-slate-400 px-3 text-center">
         <ImageIcon className="w-8 h-8 text-slate-600" />
@@ -92,7 +112,23 @@ export const PreviewMediaPanel: React.FC<PreviewMediaPanelProps> = ({
     );
   }
 
-  const showWaiting = remote && !loadedOk;
+  const showWaiting = previewShowsWaiting(settle, remote);
+  const showFailure = previewShowsFailure(settle);
+  const showMedia = previewShowsMedia(settle);
+  const keepMounted = previewKeepMediaMounted(settle, hasUrl);
+  // Remote: hide until ok (waiting/hang overlay). data:/same-origin: keep today's visible path.
+  const mediaHidden = remote && !showMedia;
+
+  // Hard-fail only: unmount media (terminal). Hang keeps media mounted & hidden.
+  if (!keepMounted) {
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-slate-400 px-3 text-center">
+        <ImageIcon className="w-8 h-8 text-slate-600" />
+        <span className="text-xs font-medium">{failureTitle}</span>
+        <span className="text-[10px] text-slate-500">{failureHint}</span>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -100,6 +136,13 @@ export const PreviewMediaPanel: React.FC<PreviewMediaPanelProps> = ({
         <div className="absolute inset-0 z-[1] flex flex-col items-center justify-center gap-2 bg-[#111215] text-slate-400 px-3 text-center pointer-events-none">
           <ImageIcon className="w-8 h-8 text-slate-600" />
           <span className="text-xs font-medium">{waitingLabel}</span>
+        </div>
+      )}
+      {showFailure && (
+        <div className="absolute inset-0 z-[1] flex flex-col items-center justify-center gap-2 bg-[#111215] text-slate-400 px-3 text-center pointer-events-none">
+          <ImageIcon className="w-8 h-8 text-slate-600" />
+          <span className="text-xs font-medium">{failureTitle}</span>
+          <span className="text-[10px] text-slate-500">{failureHint}</span>
         </div>
       )}
       {kind === 'video' ? (
@@ -113,7 +156,7 @@ export const PreviewMediaPanel: React.FC<PreviewMediaPanelProps> = ({
             if (!isRealMediaSize(v.videoWidth, v.videoHeight)) markFail();
             else markOk();
           }}
-          className={`${mediaClassName}${showWaiting ? ' opacity-0' : ''}`}
+          className={`${mediaClassName}${mediaHidden ? ' opacity-0' : ''}`}
         />
       ) : (
         <img
@@ -127,7 +170,7 @@ export const PreviewMediaPanel: React.FC<PreviewMediaPanelProps> = ({
             if (!isRealMediaSize(img.naturalWidth, img.naturalHeight)) markFail();
             else markOk();
           }}
-          className={`${mediaClassName}${showWaiting ? ' opacity-0' : ''}`}
+          className={`${mediaClassName}${mediaHidden ? ' opacity-0' : ''}`}
         />
       )}
     </>

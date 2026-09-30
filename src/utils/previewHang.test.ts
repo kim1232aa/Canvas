@@ -4,6 +4,12 @@ import {
   isRemotePreviewUrl,
   isRealMediaSize,
   shouldGiveUpOnPreviewHang,
+  reducePreviewSettle,
+  previewShowsWaiting,
+  previewShowsFailure,
+  previewShowsMedia,
+  previewKeepMediaMounted,
+  type PreviewSettleState,
 } from './previewHang';
 
 describe('preview hang decision', () => {
@@ -59,5 +65,69 @@ describe('preview hang decision', () => {
     expect(isRealMediaSize(2, 2)).toBe(false);
     expect(isRealMediaSize(1, 1)).toBe(false);
     expect(isRealMediaSize(0, 100)).toBe(false);
+  });
+});
+
+describe('shared preview settle rule (toast + history/asset)', () => {
+  it('late real load wins over the hang deadline', () => {
+    let s: PreviewSettleState = 'loading';
+    s = reducePreviewSettle(s, { type: 'hang_timeout' });
+    expect(s).toBe('failed_hang');
+    expect(previewShowsFailure(s)).toBe(true);
+    expect(previewKeepMediaMounted(s, true)).toBe(true);
+    expect(previewShowsMedia(s)).toBe(false);
+
+    s = reducePreviewSettle(s, { type: 'real_media' });
+    expect(s).toBe('ok');
+    expect(previewShowsFailure(s)).toBe(false);
+    expect(previewShowsMedia(s)).toBe(true);
+    expect(previewShowsWaiting(s, true)).toBe(false);
+  });
+
+  it('never-settled remote still gives up at the hang deadline', () => {
+    let s: PreviewSettleState = 'loading';
+    expect(previewShowsWaiting(s, true)).toBe(true);
+    expect(shouldGiveUpOnPreviewHang({
+      url: 'https://cdn.example/hang.jpg',
+      hasSettled: false,
+      elapsedMs: PREVIEW_HANG_MS,
+    })).toBe(true);
+    s = reducePreviewSettle(s, { type: 'hang_timeout' });
+    expect(s).toBe('failed_hang');
+    expect(previewShowsFailure(s)).toBe(true);
+    expect(previewShowsWaiting(s, true)).toBe(false);
+    // stays failed until a real load; without one, failure remains
+    expect(previewShowsMedia(s)).toBe(false);
+    expect(previewKeepMediaMounted(s, true)).toBe(true);
+  });
+
+  it('settled/error does not get overridden by the timer', () => {
+    const afterOk = reducePreviewSettle('ok', { type: 'hang_timeout' });
+    expect(afterOk).toBe('ok');
+    expect(previewShowsMedia(afterOk)).toBe(true);
+
+    const afterHard = reducePreviewSettle('failed_hard', { type: 'hang_timeout' });
+    expect(afterHard).toBe('failed_hard');
+
+    // hard fail / tiny must not flip back to a picture on a later load event
+    const hardThenLoad = reducePreviewSettle('failed_hard', { type: 'real_media' });
+    expect(hardThenLoad).toBe('failed_hard');
+    expect(previewShowsMedia(hardThenLoad)).toBe(false);
+    expect(previewKeepMediaMounted(hardThenLoad, true)).toBe(false);
+
+    // error path: loading → hard_fail is terminal
+    let s: PreviewSettleState = 'loading';
+    s = reducePreviewSettle(s, { type: 'hard_fail' });
+    expect(s).toBe('failed_hard');
+    s = reducePreviewSettle(s, { type: 'hang_timeout' });
+    expect(s).toBe('failed_hard');
+    s = reducePreviewSettle(s, { type: 'real_media' });
+    expect(s).toBe('failed_hard');
+  });
+
+  it('reset returns to loading; soft hang is recoverable, hard is not', () => {
+    expect(reducePreviewSettle('failed_hang', { type: 'reset' })).toBe('loading');
+    expect(reducePreviewSettle('ok', { type: 'reset' })).toBe('loading');
+    expect(reducePreviewSettle('failed_hard', { type: 'hard_fail' })).toBe('failed_hard');
   });
 });
