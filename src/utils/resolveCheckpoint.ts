@@ -526,16 +526,15 @@ export function sanitizeFrameLoras<T>(
 }
 
 /**
- * Graph mapping uses `name: lora_name || "LoRA"`; cleared / missing names become that sentinel.
- * A real outbound entry needs a trimmed name that is non-empty and not the placeholder "LoRA"
- * (case-insensitive). Whitespace-only counts as empty. Does not mutate stored canvas nodes.
+ * A real outbound entry needs a trimmed name that is non-empty.
+ * Whitespace-only counts as empty. A name that is literally "LoRA" IS valid
+ * (the user may have selected a real model with that name).
+ * Does not mutate stored canvas nodes.
  */
 export function isRealLoraEntry(entry: unknown): boolean {
   if (!entry || typeof entry !== 'object') return false;
   const name = String((entry as { name?: unknown }).name ?? '').trim();
-  if (!name) return false;
-  if (name.toLowerCase() === 'lora') return false;
-  return true;
+  return name.length > 0;
 }
 
 /** Keep only real LoRA entries (shared by openai_compat payload paths). */
@@ -547,7 +546,7 @@ export function filterRealLoraEntries<T>(list: T[] | undefined | null): T[] {
 /**
  * Build the loras field for a generate payload.
  * openai_compat: keep real entries so they reach the driver/server for an honest
- * 「该服务商不支持」 reject; placeholder "LoRA" / empty name / missing → undefined
+ * 「该服务商不支持」 reject; empty/whitespace name / missing → undefined
  * (no loras key on the wire). Other providers: unchanged — wipe when schema marks
  * loras unsupported (full list kept as-is when supported).
  */
@@ -589,7 +588,7 @@ export function omitUnsupportedGenerateFields<T extends Record<string, unknown>>
   for (const [field, keys] of pairs) {
     if (!isCanvasFieldUnsupported(provider, model, field)) continue;
     // openai_compat: keep real LoRA entries for honest server reject (not a silent drop).
-    // Placeholder "LoRA" / empty names are filtered out so the key is omitted.
+    // Empty / whitespace-only names are filtered out so the key is omitted.
     if (field === 'loras' && toSchemaProvider(provider) === 'openai_compat') {
       const cur = out.loras;
       if (Array.isArray(cur)) {

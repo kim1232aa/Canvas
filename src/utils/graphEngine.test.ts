@@ -482,6 +482,43 @@ describe('graphEngine - B2 & L2a & L2b 拓扑反向追踪与参数抽取隔离�
     expect(params.positivePrompt).toBe('fal prompt');
   });
 
+  it.each([
+    [undefined, []],
+    ['', []],
+    ['   ', []],
+    ['LoRA', ['LoRA']],
+  ])('LoRA name %j: never forge "LoRA", keep a real one (Fal lora socket)', (loraName, expected) => {
+    const nodes: NodeInstance[] = [
+      createNode('fal-1', 'FalAIEngineNode', { model: 'fal-ai/flux/schnell', prompt: 'p' }),
+      createNode('lora-1', 'LoRALoader', { lora_name: loraName, strength_model: 1 }),
+    ];
+    const connections: Connection[] = [
+      { id: 'c', fromNodeId: 'lora-1', fromSocketId: 'MODEL', toNodeId: 'fal-1', toSocketId: 'lora', type: 'MODEL' },
+    ];
+    const params = extractWorkflowParameters(nodes, connections, 'fal-1');
+    expect(params.loras.map((l) => l.name)).toEqual(expected);
+  });
+
+  it.each([
+    ['', []],
+    ['LoRA', ['LoRA']],
+  ])('LoRA name %j on KSampler model chain: still reach checkpoint, no forged name', (loraName, expected) => {
+    const nodes: NodeInstance[] = [
+      createNode('ckpt', 'CheckpointLoaderSimple', { ckpt_name: 'fal-ai/flux/dev', targetProvider: 'fal' }),
+      createNode('lora-1', 'LoRALoader', { lora_name: loraName }),
+      createNode('clip', 'CLIPTextEncode', { text: 'a cat' }),
+      createNode('ks', 'KSampler', {}),
+    ];
+    const connections: Connection[] = [
+      { id: 'c1', fromNodeId: 'ckpt', fromSocketId: 'MODEL', toNodeId: 'lora-1', toSocketId: 'model', type: 'MODEL' },
+      { id: 'c2', fromNodeId: 'lora-1', fromSocketId: 'MODEL', toNodeId: 'ks', toSocketId: 'model', type: 'MODEL' },
+      { id: 'c3', fromNodeId: 'clip', fromSocketId: 'CONDITIONING', toNodeId: 'ks', toSocketId: 'positive', type: 'CONDITIONING' },
+    ];
+    const params = extractWorkflowParameters(nodes, connections, 'ks');
+    expect(params.checkpointModel).toBe('fal-ai/flux/dev');
+    expect(params.loras.map((l) => l.name)).toEqual(expected);
+  });
+
 });
 
 describe('F5 omit unset seed/sampler defaults', () => {

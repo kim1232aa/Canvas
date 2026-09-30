@@ -85,7 +85,7 @@ describe('OpenAICompatDriver', () => {
     expect(body.loras).toBeUndefined();
   });
 
-  it('placeholder name "LoRA" → 请求体不含 loras 键（仍带 path/civitaiId 也不发）', async () => {
+  it('真实名为 "LoRA" 的条目 → 请求体保留 loras（不当作占位符剥离）', async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -108,8 +108,8 @@ describe('OpenAICompatDriver', () => {
 
     const [, init] = (globalThis.fetch as any).mock.calls[0];
     const body = JSON.parse(init.body);
-    expect(Object.prototype.hasOwnProperty.call(body, 'loras')).toBe(false);
-    expect(body.loras).toBeUndefined();
+    expect(body.loras).toHaveLength(1);
+    expect(body.loras[0].name).toBe('LoRA');
   });
 
   it('empty / whitespace-only LoRA name → 请求体不含 loras 键', async () => {

@@ -2033,12 +2033,13 @@ export default function App() {
   const graphLoras = nodes
     .filter((n) => (n.type === 'LoRALoader' || n.type === 'LoraLoader' || n.type === 'LoraLoaderModelOnly') && !n.bypassed)
     .map((n) => ({
-      name: n.values?.lora_name || 'LoRA',
+      name: String(n.values?.lora_name ?? '').trim(),
       modelStrength: Number(n.values?.strength_model ?? 0.8),
       clipStrength: Number(n.values?.strength_clip ?? 0.8),
       triggerWords: n.values?.trigger_words || '',
       civitaiId: n.values?.civitai_id || '',
-    }));
+    }))
+    .filter((l) => l.name.length > 0);
 
   const detectedTargetProvider =
     resolvedActive.provider ||

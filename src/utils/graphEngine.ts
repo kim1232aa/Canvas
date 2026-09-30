@@ -219,13 +219,16 @@ function traceModelAndLorasUpstream(
       return n;
     }
     if (n.type === 'LoRALoader') {
-      loras.push({
-        name: n.values.lora_name || 'LoRA',
-        modelStrength: Number(n.values.strength_model ?? 0.8),
-        clipStrength: Number(n.values.strength_clip ?? 0.8),
-        triggerWords: n.values.trigger_words || '',
-        civitaiId: n.values.civitai_id || '',
-      });
+      // Unselected / cleared lora_name: keep walking the chain but push nothing (never forge a name).
+      if (String(n.values.lora_name ?? '').trim()) {
+        loras.push({
+          name: String(n.values.lora_name).trim(),
+          modelStrength: Number(n.values.strength_model ?? 0.8),
+          clipStrength: Number(n.values.strength_clip ?? 0.8),
+          triggerWords: n.values.trigger_words || '',
+          civitaiId: n.values.civitai_id || '',
+        });
+      }
       const inConn = connections.find((c) => c.toNodeId === n.id && c.toSocketId === 'model');
       currId = inConn?.fromNodeId;
     } else if (n.type === 'CivitaiLoRABrowserNode') {
@@ -266,13 +269,16 @@ function traceLorasUpstream(
     subgraphNodeIds.add(n.id);
 
     if (n.type === 'LoRALoader') {
-      loras.push({
-        name: n.values.lora_name || 'LoRA',
-        modelStrength: Number(n.values.strength_model ?? 0.8),
-        clipStrength: Number(n.values.strength_clip ?? 0.8),
-        triggerWords: n.values.trigger_words || '',
-        civitaiId: n.values.civitai_id || '',
-      });
+      // Unselected / cleared lora_name: keep walking the chain but push nothing (never forge a name).
+      if (String(n.values.lora_name ?? '').trim()) {
+        loras.push({
+          name: String(n.values.lora_name).trim(),
+          modelStrength: Number(n.values.strength_model ?? 0.8),
+          clipStrength: Number(n.values.strength_clip ?? 0.8),
+          triggerWords: n.values.trigger_words || '',
+          civitaiId: n.values.civitai_id || '',
+        });
+      }
       const inConn = connections.find((c) => c.toNodeId === n.id && c.toSocketId === 'model');
       currId = inConn?.fromNodeId;
     } else if (n.type === 'CivitaiLoRABrowserNode') {
@@ -587,9 +593,9 @@ export function extractWorkflowParameters(
             triggerWords: n.values.selected_triggers || '',
           });
         }
-      } else {
+      } else if (String(n.values.lora_name ?? '').trim()) {
         loras.push({
-          name: n.values.lora_name || 'LoRA',
+          name: String(n.values.lora_name).trim(),
           modelStrength: Number(n.values.strength_model ?? 0.8),
           clipStrength: Number(n.values.strength_clip ?? 0.8),
           triggerWords: n.values.trigger_words || '',

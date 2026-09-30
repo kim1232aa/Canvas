@@ -476,14 +476,17 @@ describe('Fal / Agnes / HF / NanoGPT grey on engine switch (schema-driven)', () 
 
 
 describe('isRealLoraEntry / filterRealLoraEntries', () => {
-  it('rejects empty, whitespace-only, and placeholder "LoRA" (case-insensitive)', () => {
+  it('rejects empty, whitespace-only, and missing-name entries', () => {
     expect(isRealLoraEntry({ name: '' })).toBe(false);
     expect(isRealLoraEntry({ name: '   ' })).toBe(false);
-    expect(isRealLoraEntry({ name: 'LoRA' })).toBe(false);
-    expect(isRealLoraEntry({ name: 'lora' })).toBe(false);
-    expect(isRealLoraEntry({ name: 'LORA' })).toBe(false);
-    expect(isRealLoraEntry({ name: ' LoRA ' })).toBe(false);
     expect(isRealLoraEntry({ path: 'https://x', civitaiId: '1' })).toBe(false);
+  });
+
+  it('accepts name "LoRA" (case variants) as a legitimate real name', () => {
+    expect(isRealLoraEntry({ name: 'LoRA' })).toBe(true);
+    expect(isRealLoraEntry({ name: 'lora' })).toBe(true);
+    expect(isRealLoraEntry({ name: 'LORA' })).toBe(true);
+    expect(isRealLoraEntry({ name: ' LoRA ' })).toBe(true);
   });
 
   it('accepts a real trimmed name even when path/civitaiId also exist', () => {
@@ -498,7 +501,7 @@ describe('isRealLoraEntry / filterRealLoraEntries', () => {
 
 describe('resolveGenerateLorasPayload — openai_compat App/graph path', () => {
   const real = [{ name: 'x', strength: 1, modelStrength: 1, clipStrength: 1 }];
-  const placeholder = [{
+  const namedLoRA = [{
     name: 'LoRA',
     path: 'https://civitai.com/api/download/models/854154',
     strength: 1,
@@ -537,20 +540,21 @@ describe('resolveGenerateLorasPayload — openai_compat App/graph path', () => {
     expect(omitted.cfg).toBeUndefined();
   });
 
-  it('placeholder name "LoRA" → omit loras key (even with path/civitaiId)', () => {
-    expect(filterRealLoraEntries(placeholder)).toEqual([]);
-    const lorasPayload = resolveGenerateLorasPayload('openai_compat', 'gpt-image-2', placeholder);
-    expect(lorasPayload).toBeUndefined();
+  it('real entry named exactly "LoRA" → kept through filter / payload / omit', () => {
+    expect(filterRealLoraEntries(namedLoRA)).toEqual(namedLoRA);
+    const lorasPayload = resolveGenerateLorasPayload('openai_compat', 'gpt-image-2', namedLoRA);
+    expect(lorasPayload).toEqual(namedLoRA);
     const omitted = omitUnsupportedGenerateFields('openai_compat', 'gpt-image-2', {
       prompt: 'hi',
       model: 'gpt-image-2',
-      loras: placeholder,
+      loras: lorasPayload,
     });
-    expect(omitted.loras).toBeUndefined();
-    expect(Object.prototype.hasOwnProperty.call(
-      JSON.parse(JSON.stringify(omitted)),
-      'loras',
-    )).toBe(false);
+    expect(omitted.loras).toEqual(namedLoRA);
+  });
+
+  it('mixed empty + real → only real survive', () => {
+    const mixed = [...emptyName, ...namedLoRA];
+    expect(resolveGenerateLorasPayload('openai_compat', 'gpt-image-2', mixed)).toEqual(namedLoRA);
   });
 
   it('empty / whitespace-only name → omit loras key', () => {
@@ -589,8 +593,8 @@ describe('resolveGenerateLorasPayload — openai_compat App/graph path', () => {
     expect(omitted.cfg).toBeUndefined();
   });
 
-  it('mix of placeholder + real → keep only real entries', () => {
-    const mixed = [...placeholder, ...real];
+  it('mix of empty-name + real → keep only real entries', () => {
+    const mixed = [...emptyName, ...real];
     const lorasPayload = resolveGenerateLorasPayload('openai_compat', 'gpt-image-2', mixed);
     expect(lorasPayload).toEqual(real);
     const omitted = omitUnsupportedGenerateFields('openai_compat', 'gpt-image-2', {
@@ -611,9 +615,9 @@ describe('resolveGenerateLorasPayload — openai_compat App/graph path', () => {
     expect(omitted.loras).toBeUndefined();
   });
 
-  it('other providers keep placeholder-named entries when loras are supported (unchanged)', () => {
-    // fal-ai/flux-lora supports loras — must not strip placeholder names for non-openai_compat
-    const kept = resolveGenerateLorasPayload('fal', 'fal-ai/flux-lora', placeholder);
-    expect(kept).toEqual(placeholder);
+  it('other providers keep named "LoRA" entries when loras are supported (unchanged)', () => {
+    // fal-ai/flux-lora supports loras — must not strip a real name "LoRA" for non-openai_compat
+    const kept = resolveGenerateLorasPayload('fal', 'fal-ai/flux-lora', namedLoRA);
+    expect(kept).toEqual(namedLoRA);
   });
 });
