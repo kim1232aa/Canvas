@@ -525,6 +525,27 @@ export function sanitizeFrameLoras<T>(
   return Array.isArray(loras) ? loras : [];
 }
 
+/**
+ * Build the loras field for a generate payload.
+ * openai_compat: keep real entries so they reach the driver/server for an honest
+ * 「该服务商不支持」 reject; empty / missing → undefined (no loras key on the wire).
+ * Other providers: unchanged — wipe when schema marks loras unsupported.
+ */
+export function resolveGenerateLorasPayload<T>(
+  provider: string | undefined,
+  model: string | undefined,
+  mappedLoras: T[] | undefined | null
+): T[] | undefined {
+  const list = Array.isArray(mappedLoras) ? mappedLoras : [];
+  if (toSchemaProvider(provider) === 'openai_compat') {
+    return list.length > 0 ? list : undefined;
+  }
+  if (isCanvasFieldUnsupported(provider, model, 'loras')) {
+    return undefined;
+  }
+  return list;
+}
+
 /** Omit schema-unsupported fields from a generate payload (UI must not send them). */
 export function omitUnsupportedGenerateFields<T extends Record<string, unknown>>(
   provider: string | undefined,
@@ -546,6 +567,11 @@ export function omitUnsupportedGenerateFields<T extends Record<string, unknown>>
   ];
   for (const [field, keys] of pairs) {
     if (!isCanvasFieldUnsupported(provider, model, field)) continue;
+    // openai_compat: keep real LoRA entries for honest server reject (not a silent drop).
+    if (field === 'loras' && toSchemaProvider(provider) === 'openai_compat') {
+      const cur = out.loras;
+      if (Array.isArray(cur) && cur.length > 0) continue;
+    }
     for (const k of keys) {
       if (k in out) out[k] = undefined;
     }

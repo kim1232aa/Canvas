@@ -45,8 +45,8 @@ import {
   isFalLoraEndpointError,
   resolveActiveCheckpoint,
   resolveCheckpointForNode,
-  isCanvasFieldUnsupported,
   omitUnsupportedGenerateFields,
+  resolveGenerateLorasPayload,
   sanitizeFrameLoras,
 } from './utils/resolveCheckpoint';
 import {
@@ -565,16 +565,18 @@ export default function App() {
         ? (frame.videoDuration ?? p.videoDuration)
         : (isVideo ? (frame.videoDuration || 5) : undefined);
 
-      const lorasPayload = isCanvasFieldUnsupported(p.targetProvider, p.checkpoint, 'loras')
-        ? undefined
-        : p.loras.map((l) => ({
-            name: l.name,
-            strength: l.modelStrength,
-            modelStrength: l.modelStrength,
-            clipStrength: l.clipStrength,
-            civitaiId: l.civitaiId,
-            triggers: l.triggerWords,
-          }));
+      const lorasPayload = resolveGenerateLorasPayload(
+        p.targetProvider,
+        p.checkpoint,
+        p.loras.map((l) => ({
+          name: l.name,
+          strength: l.modelStrength,
+          modelStrength: l.modelStrength,
+          clipStrength: l.clipStrength,
+          civitaiId: l.civitaiId,
+          triggers: l.triggerWords,
+        })),
+      );
 
       const normParams: NormalizedGenerateParams = omitUnsupportedGenerateFields(p.targetProvider, p.checkpoint, {
         prompt: finalPrompt,

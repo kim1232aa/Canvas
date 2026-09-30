@@ -10,6 +10,7 @@ import {
   resolveCheckpointForNode,
   sanitizeFrameLoras,
   omitUnsupportedGenerateFields,
+  resolveGenerateLorasPayload,
 } from './resolveCheckpoint';
 import { validateLoraCompatibility } from './baseModelMatcher';
 
@@ -468,5 +469,64 @@ describe('Fal / Agnes / HF / NanoGPT grey on engine switch (schema-driven)', () 
     expect(hf.steps).toBe(28);
     expect(hf.loras).toBeUndefined();
     expect(hf.sampler_name).toBeUndefined();
+  });
+});
+
+
+describe('resolveGenerateLorasPayload — openai_compat App/graph path', () => {
+  const real = [{ name: 'x', strength: 1, modelStrength: 1, clipStrength: 1 }];
+
+  it('empty list → no loras after omit (POST body must not contain loras)', () => {
+    const lorasPayload = resolveGenerateLorasPayload('openai_compat', 'gpt-image-2', []);
+    expect(lorasPayload).toBeUndefined();
+    const omitted = omitUnsupportedGenerateFields('openai_compat', 'gpt-image-2', {
+      prompt: 'hi',
+      model: 'gpt-image-2',
+      seed: 123,
+      negative_prompt: 'blur',
+      steps: 20,
+      cfg: 7,
+      loras: lorasPayload,
+    });
+    expect(omitted.loras).toBeUndefined();
+    expect(Object.prototype.hasOwnProperty.call(
+      JSON.parse(JSON.stringify(omitted)),
+      'loras',
+    )).toBe(false);
+    expect(omitted.seed).toBeUndefined();
+    expect(omitted.negative_prompt).toBeUndefined();
+    expect(omitted.steps).toBeUndefined();
+    expect(omitted.cfg).toBeUndefined();
+  });
+
+  it('one real LoRA → name/strength survive omit to reach OpenAICompatDriver', () => {
+    expect(isCanvasFieldUnsupported('openai_compat', 'gpt-image-2', 'loras')).toBe(true);
+    const lorasPayload = resolveGenerateLorasPayload('openai_compat', 'gpt-image-2', real);
+    expect(lorasPayload).toEqual(real);
+    const omitted = omitUnsupportedGenerateFields('openai_compat', 'gpt-image-2', {
+      prompt: 'hi',
+      model: 'gpt-image-2',
+      seed: 123,
+      negative_prompt: 'blur',
+      steps: 20,
+      cfg: 7,
+      loras: lorasPayload,
+    });
+    expect(omitted.loras).toEqual(real);
+    expect(omitted.loras![0]).toEqual(expect.objectContaining({ name: 'x', strength: 1 }));
+    expect(omitted.seed).toBeUndefined();
+    expect(omitted.negative_prompt).toBeUndefined();
+    expect(omitted.steps).toBeUndefined();
+    expect(omitted.cfg).toBeUndefined();
+  });
+
+  it('other providers still wipe unsupported loras (Fal schnell)', () => {
+    const wiped = resolveGenerateLorasPayload('fal', 'fal-ai/flux/schnell', real);
+    expect(wiped).toBeUndefined();
+    const omitted = omitUnsupportedGenerateFields('fal', 'fal-ai/flux/schnell', {
+      prompt: 'hi',
+      loras: real,
+    });
+    expect(omitted.loras).toBeUndefined();
   });
 });

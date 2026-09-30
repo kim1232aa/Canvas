@@ -11,6 +11,7 @@ import {
   isFalLoraEndpointError,
   omitUnsupportedGenerateFields,
   resolveCheckpointForNode,
+  resolveGenerateLorasPayload,
 } from './resolveCheckpoint';
 import { assertAIVideoProviderReady } from './videoProvider';
 
@@ -890,17 +891,19 @@ export async function executeWorkflow(
       extraParams.n = Number(params.batchSize);
     }
 
-    const lorasPayload = isCanvasFieldUnsupported(engProv, engModel, 'loras')
-      ? undefined
-      : params.loras.map((l) => ({
-          name: l.name,
-          path: resolveLoraPathOrUrl(l),
-          strength: l.modelStrength,
-          modelStrength: l.modelStrength,
-          clipStrength: l.clipStrength,
-          civitaiId: l.civitaiId,
-          triggers: l.triggerWords,
-        }));
+    const lorasPayload = resolveGenerateLorasPayload(
+      engProv,
+      engModel,
+      params.loras.map((l) => ({
+        name: l.name,
+        path: resolveLoraPathOrUrl(l),
+        strength: l.modelStrength,
+        modelStrength: l.modelStrength,
+        clipStrength: l.clipStrength,
+        civitaiId: l.civitaiId,
+        triggers: l.triggerWords,
+      })),
+    );
 
     const normParams: NormalizedGenerateParams = omitUnsupportedGenerateFields(engProv, engModel, {
       prompt: params.positivePrompt,
