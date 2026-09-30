@@ -36,6 +36,7 @@ import {
 } from 'lucide-react';
 import { GenerationHistoryItem } from '../types/providers';
 import { displayValue } from './HistoryModal';
+import { PreviewMediaPanel } from './PreviewMediaPanel';
 
 export interface MediaAsset {
   id: string;
@@ -480,14 +481,6 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
     setBrokenIds((prev) => (prev[id] ? prev : { ...prev, [id]: true }));
   };
 
-  const markBrokenIfTinyImage = (id: string, img: HTMLImageElement) => {
-    if (img.naturalWidth <= 2 || img.naturalHeight <= 2) markBroken(id);
-  };
-
-  const markBrokenIfTinyVideo = (id: string, video: HTMLVideoElement) => {
-    if (video.videoWidth <= 2 || video.videoHeight <= 2) markBroken(id);
-  };
-
   return (
     <div
       className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 select-none animate-in fade-in duration-200"
@@ -791,35 +784,26 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
                     >
                       {/* Media Thumbnail Container */}
                       <div className="relative aspect-square w-full bg-[#111215] overflow-hidden flex items-center justify-center">
-                        {brokenIds[asset.id] || !asset.url ? (
-                          <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-slate-400 px-3 text-center">
-                            <ImageIcon className="w-8 h-8 text-slate-600" />
-                            <span className="text-xs font-medium">预览加载失败</span>
-                            <span className="text-[10px] text-slate-500">链接失效或无法拉取，非未生成</span>
-                          </div>
-                        ) : isVideo ? (
-                          <video
-                            src={asset.url}
-                            muted
-                            loop
-                            playsInline
-                            onMouseEnter={(e) => (e.target as HTMLVideoElement).play()}
-                            onMouseLeave={(e) => (e.target as HTMLVideoElement).pause()}
-                            onError={() => markBroken(asset.id)}
-                            onLoadedMetadata={(e) => markBrokenIfTinyVideo(asset.id, e.currentTarget)}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <img
-                            src={asset.url}
-                            alt={asset.prompt}
-                            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                            loading="lazy"
-                            referrerPolicy="no-referrer"
-                            onError={() => markBroken(asset.id)}
-                            onLoad={(e) => markBrokenIfTinyImage(asset.id, e.currentTarget)}
-                          />
-                        )}
+                        <PreviewMediaPanel
+                          id={asset.id}
+                          url={asset.url}
+                          broken={!!brokenIds[asset.id]}
+                          onBroken={markBroken}
+                          kind={isVideo ? 'video' : 'image'}
+                          alt={asset.prompt}
+                          mediaClassName={
+                            isVideo
+                              ? 'w-full h-full object-cover'
+                              : 'w-full h-full object-cover transition-transform duration-300 group-hover:scale-105'
+                          }
+                          videoProps={{
+                            muted: true,
+                            loop: true,
+                            onMouseEnter: (e) => (e.target as HTMLVideoElement).play(),
+                            onMouseLeave: (e) => (e.target as HTMLVideoElement).pause(),
+                          }}
+                          imgProps={{ loading: 'lazy' }}
+                        />
 
                         {/* Top-Left Badges */}
                         <div className="absolute top-2 left-2 flex items-center gap-1.5 z-10">
@@ -1028,34 +1012,21 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
 
                 {/* Media Preview Player/Viewer */}
                 <div className="relative aspect-video w-full rounded-xl bg-[#111215] overflow-hidden flex items-center justify-center border border-[#252738]">
-                  {brokenIds[selectedAsset.id] || !selectedAsset.url ? (
-                    <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-slate-400 px-3 text-center">
-                      <ImageIcon className="w-8 h-8 text-slate-600" />
-                      <span className="text-xs font-medium">预览加载失败</span>
-                      <span className="text-[10px] text-slate-500">链接失效或无法拉取，非未生成</span>
-                    </div>
-                  ) : selectedAsset.type === 'video' ? (
-                    <video
-                      src={selectedAsset.url}
-                      controls
-                      autoPlay
-                      loop
-                      playsInline
-                      onError={() => markBroken(selectedAsset.id)}
-                      onLoadedMetadata={(e) => markBrokenIfTinyVideo(selectedAsset.id, e.currentTarget)}
-                      className="w-full h-full object-contain"
-                    />
-                  ) : (
-                    <img
-                      src={selectedAsset.url}
-                      alt={selectedAsset.prompt}
-                      className="w-full h-full object-contain cursor-pointer"
-                      referrerPolicy="no-referrer"
-                      onError={() => markBroken(selectedAsset.id)}
-                      onLoad={(e) => markBrokenIfTinyImage(selectedAsset.id, e.currentTarget)}
-                      onClick={() => onPreviewImage(selectedAsset.url)}
-                    />
-                  )}
+                  <PreviewMediaPanel
+                    id={selectedAsset.id}
+                    url={selectedAsset.url}
+                    broken={!!brokenIds[selectedAsset.id]}
+                    onBroken={markBroken}
+                    kind={selectedAsset.type === 'video' ? 'video' : 'image'}
+                    alt={selectedAsset.prompt}
+                    mediaClassName={
+                      selectedAsset.type === 'video'
+                        ? 'w-full h-full object-contain'
+                        : 'w-full h-full object-contain cursor-pointer'
+                    }
+                    videoProps={{ controls: true, autoPlay: true, loop: true }}
+                    imgProps={{ onClick: () => onPreviewImage(selectedAsset.url) }}
+                  />
                   {selectedAsset.type === 'image' && !brokenIds[selectedAsset.id] && selectedAsset.url && (
                     <button
                       onClick={() => onPreviewImage(selectedAsset.url)}

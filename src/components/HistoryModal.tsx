@@ -1,6 +1,7 @@
 import React from 'react';
 import { Download, Clock, Copy, Sparkles, Check, Image as ImageIcon, Trash2 } from 'lucide-react';
 import { GenerationHistoryItem } from '../types/providers';
+import { PreviewMediaPanel } from './PreviewMediaPanel';
 
 export const displayValue = (val: any): string | number => {
   if (val === null || val === undefined) return '未填写';
@@ -34,10 +35,6 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
 
   const markBroken = (id: string) => {
     setBrokenIds((prev) => (prev[id] ? prev : { ...prev, [id]: true }));
-  };
-
-  const markBrokenIfTinyImage = (id: string, img: HTMLImageElement) => {
-    if (img.naturalWidth <= 2 || img.naturalHeight <= 2) markBroken(id);
   };
 
   const handleCopyPrompt = (id: string, text: string) => {
@@ -112,32 +109,23 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
                   className="bg-[#1e2026] border border-[#2d303a] hover:border-cyan-500/40 rounded-xl overflow-hidden shadow-lg flex flex-col group transition-all"
                 >
                   <div className="relative aspect-square bg-[#111215] overflow-hidden cursor-pointer" onClick={() => setSelectedImage(item)}>
-                    {brokenIds[item.id] || !item.url ? (
-                      <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-slate-400 px-3 text-center">
-                        <ImageIcon className="w-8 h-8 text-slate-600" />
-                        <span className="text-xs font-medium">预览加载失败</span>
-                        <span className="text-[10px] text-slate-500">链接失效或无法拉取，非未生成</span>
-                      </div>
-                    ) : item.url?.includes('.mp4') || item.model?.includes('video') || item.provider?.includes('Video') || item.url.startsWith('data:video') ? (
-                      <video
-                        src={item.url}
-                        autoPlay
-                        loop
-                        muted
-                        playsInline
-                        onError={() => markBroken(item.id)}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      />
-                    ) : (
-                      <img
-                        src={item.url}
-                        alt={item.prompt || ''}
-                        referrerPolicy="no-referrer"
-                        onError={() => markBroken(item.id)}
-                        onLoad={(e) => markBrokenIfTinyImage(item.id, e.currentTarget)}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      />
-                    )}
+                    <PreviewMediaPanel
+                      id={item.id}
+                      url={item.url}
+                      broken={!!brokenIds[item.id]}
+                      onBroken={markBroken}
+                      kind={
+                        item.url?.includes('.mp4') ||
+                        item.model?.includes('video') ||
+                        item.provider?.includes('Video') ||
+                        !!item.url?.startsWith('data:video')
+                          ? 'video'
+                          : 'image'
+                      }
+                      alt={item.prompt || ''}
+                      mediaClassName="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      videoProps={{ autoPlay: true, loop: true, muted: true }}
+                    />
                     <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-md px-2 py-0.5 rounded text-[11px] font-mono text-cyan-300 border border-cyan-500/30">
                       {displayValue(item.actualProvider || item.provider)}
                     </div>
@@ -230,22 +218,18 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
           onClick={() => setSelectedImage(null)}
         >
           <div className="relative max-w-4xl max-h-[90vh] flex flex-col items-center" onClick={(e) => e.stopPropagation()}>
-            {brokenIds[selectedImage.id] || !selectedImage.url ? (
-              <div className="min-h-[40vh] w-full max-w-xl flex flex-col items-center justify-center gap-2 text-slate-400 border border-[#333] rounded-lg bg-[#111215] px-4">
-                <ImageIcon className="w-10 h-10 text-slate-600" />
-                <span className="text-sm font-medium">预览加载失败</span>
-                <span className="text-xs text-slate-500">链接失效或无法拉取</span>
-              </div>
-            ) : (
-              <img
-                src={selectedImage.url}
+            <div className="relative min-h-[40vh] w-full max-w-xl flex items-center justify-center border border-[#333] rounded-lg bg-[#111215] overflow-hidden">
+              <PreviewMediaPanel
+                id={selectedImage.id}
+                url={selectedImage.url}
+                broken={!!brokenIds[selectedImage.id]}
+                onBroken={markBroken}
+                kind="image"
                 alt={selectedImage.prompt || ''}
-                referrerPolicy="no-referrer"
-                onError={() => markBroken(selectedImage.id)}
-                onLoad={(e) => markBrokenIfTinyImage(selectedImage.id, e.currentTarget)}
-                className="max-h-[75vh] w-auto rounded-lg shadow-2xl object-contain border border-[#333]"
+                mediaClassName="max-h-[75vh] w-auto rounded-lg shadow-2xl object-contain border border-[#333]"
+                failureHint="链接失效或无法拉取"
               />
-            )}
+            </div>
             <div className="mt-3 bg-[#18191d] border border-[#2e3038] p-4 rounded-xl text-center w-full max-w-2xl text-xs space-y-1.5">
               <p className={`font-medium ${selectedImage.prompt && selectedImage.prompt.trim() ? 'text-white' : 'text-slate-400 italic'}`}>
                 {displayValue(selectedImage.prompt)}
