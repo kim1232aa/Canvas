@@ -86,3 +86,12 @@ export function previewKeepMediaMounted(
   if (!hasUrl) return false;
   return state !== 'failed_hard';
 }
+
+/**
+ * History 「应用到画布」 / asset 「送入画板」: grey + no-op only when the
+ * shared preview settle has already shown the failure placeholder.
+ * Reuses previewShowsFailure — loading must stay enabled (may still become ok).
+ */
+export function isApplyToCanvasDisabled(settle: PreviewSettleState): boolean {
+  return previewShowsFailure(settle);
+}

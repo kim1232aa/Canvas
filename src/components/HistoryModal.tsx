@@ -2,6 +2,7 @@ import React from 'react';
 import { Download, Clock, Copy, Sparkles, Check, Image as ImageIcon, Trash2 } from 'lucide-react';
 import { GenerationHistoryItem } from '../types/providers';
 import { PreviewMediaPanel } from './PreviewMediaPanel';
+import { isApplyToCanvasDisabled, type PreviewSettleState } from '../utils/previewHang';
 
 export const displayValue = (val: any): string | number => {
   if (val === null || val === undefined) return '未填写';
@@ -112,7 +113,12 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {history.map((item) => (
+              {history.map((item) => {
+                const settleForApply: PreviewSettleState = !item.url || brokenIds[item.id]
+                  ? 'failed_hard'
+                  : 'ok';
+                const applyDisabled = isApplyToCanvasDisabled(settleForApply);
+                return (
                 <div
                   key={item.id}
                   className="bg-[#1e2026] border border-[#2d303a] hover:border-cyan-500/40 rounded-xl overflow-hidden shadow-lg flex flex-col group transition-all"
@@ -203,11 +209,20 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
                       </div>
 
                       <button
+                        type="button"
+                        disabled={applyDisabled}
+                        aria-disabled={applyDisabled}
                         onClick={() => {
+                          if (applyDisabled) return;
                           onApplyPrompt(item.prompt || '', item.negativePrompt || undefined);
                           onClose();
                         }}
-                        className="px-2.5 py-1 rounded bg-cyan-600/20 text-cyan-400 hover:bg-cyan-600/30 text-[11px] font-semibold border border-cyan-500/30 transition-colors flex items-center gap-1"
+                        className={`px-2.5 py-1 rounded text-[11px] font-semibold border transition-colors flex items-center gap-1 ${
+                          applyDisabled
+                            ? 'bg-slate-800/40 text-slate-500 border-slate-700/40 cursor-not-allowed opacity-50'
+                            : 'bg-cyan-600/20 text-cyan-400 hover:bg-cyan-600/30 border-cyan-500/30'
+                        }`}
+                        title={applyDisabled ? '预览加载失败，无法应用到画布' : undefined}
                       >
                         <Sparkles className="w-3 h-3" />
                         应用到画布
@@ -215,7 +230,8 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
                     </div>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

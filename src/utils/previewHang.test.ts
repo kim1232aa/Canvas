@@ -9,6 +9,7 @@ import {
   previewShowsFailure,
   previewShowsMedia,
   previewKeepMediaMounted,
+  isApplyToCanvasDisabled,
   type PreviewSettleState,
 } from './previewHang';
 
@@ -129,5 +130,21 @@ describe('shared preview settle rule (toast + history/asset)', () => {
     expect(reducePreviewSettle('failed_hang', { type: 'reset' })).toBe('loading');
     expect(reducePreviewSettle('ok', { type: 'reset' })).toBe('loading');
     expect(reducePreviewSettle('failed_hard', { type: 'hard_fail' })).toBe('failed_hard');
+  });
+});
+
+describe('apply-to-canvas disabled only on settled failure', () => {
+  it('disables for failed_hang and failed_hard; not for loading or ok', () => {
+    expect(isApplyToCanvasDisabled('failed_hang')).toBe(true);
+    expect(isApplyToCanvasDisabled('failed_hard')).toBe(true);
+    expect(isApplyToCanvasDisabled('loading')).toBe(false);
+    expect(isApplyToCanvasDisabled('ok')).toBe(false);
+  });
+
+  it('tracks previewShowsFailure (no second timeout rule)', () => {
+    const states: PreviewSettleState[] = ['loading', 'ok', 'failed_hang', 'failed_hard'];
+    for (const s of states) {
+      expect(isApplyToCanvasDisabled(s)).toBe(previewShowsFailure(s));
+    }
   });
 });

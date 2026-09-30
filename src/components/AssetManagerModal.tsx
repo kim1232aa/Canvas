@@ -37,6 +37,7 @@ import {
 import { GenerationHistoryItem } from '../types/providers';
 import { displayValue } from './HistoryModal';
 import { PreviewMediaPanel } from './PreviewMediaPanel';
+import { isApplyToCanvasDisabled, type PreviewSettleState } from '../utils/previewHang';
 
 export interface MediaAsset {
   id: string;
@@ -490,6 +491,11 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
     });
   };
 
+  const isAssetApplyDisabled = (asset: { id: string; url?: string | null }) => {
+    const settle: PreviewSettleState = !asset.url || brokenIds[asset.id] ? 'failed_hard' : 'ok';
+    return isApplyToCanvasDisabled(settle);
+  };
+
   return (
     <div
       className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 select-none animate-in fade-in duration-200"
@@ -772,6 +778,7 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
                   const isSelected = selectedAsset?.id === asset.id;
                   const isChecked = selectedAssetIds.has(asset.id);
                   const isStarred = starredIds.has(asset.id);
+                  const applyDisabled = isAssetApplyDisabled(asset);
 
                   return (
                     <div
@@ -860,13 +867,21 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
                           <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1.5 p-2 z-20">
                             <div className="flex items-center gap-1.5">
                               <button
+                                type="button"
+                                disabled={applyDisabled}
+                                aria-disabled={applyDisabled}
                                 onClick={(e) => {
                                   e.stopPropagation();
+                                  if (applyDisabled) return;
                                   onAddToCanvasAsFrame(asset);
                                   onClose();
                                 }}
-                                className="p-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-bold text-[10px] flex items-center gap-1 shadow-lg shadow-purple-600/30 transition-all"
-                                title="在无限画布上放置空间画板取景框"
+                                className={`p-1.5 rounded-lg font-bold text-[10px] flex items-center gap-1 shadow-lg transition-all ${
+                                  applyDisabled
+                                    ? 'bg-slate-700/50 text-slate-400 cursor-not-allowed opacity-50 shadow-none'
+                                    : 'bg-purple-600 hover:bg-purple-500 text-white shadow-purple-600/30'
+                                }`}
+                                title={applyDisabled ? '预览加载失败，无法送入画板' : '在无限画布上放置空间画板取景框'}
                               >
                                 <Plus className="w-3.5 h-3.5" />
                                 <span>送入画板</span>
@@ -1111,11 +1126,20 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
               {/* Action Buttons Hub */}
               <div className="p-4 bg-[#0e0f14] border-t border-[#20222e] space-y-2">
                 <button
+                  type="button"
+                  disabled={isAssetApplyDisabled(selectedAsset)}
+                  aria-disabled={isAssetApplyDisabled(selectedAsset)}
                   onClick={() => {
+                    if (isAssetApplyDisabled(selectedAsset)) return;
                     onAddToCanvasAsFrame(selectedAsset);
                     onClose();
                   }}
-                  className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold flex items-center justify-center gap-1.5 shadow-md shadow-purple-600/20 text-xs active:scale-98 transition-all"
+                  className={`w-full py-2 px-3 rounded-xl font-bold flex items-center justify-center gap-1.5 text-xs transition-all ${
+                    isAssetApplyDisabled(selectedAsset)
+                      ? 'bg-slate-800/60 text-slate-500 cursor-not-allowed opacity-50 shadow-none'
+                      : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-md shadow-purple-600/20 active:scale-98'
+                  }`}
+                  title={isAssetApplyDisabled(selectedAsset) ? '预览加载失败，无法送入画板' : undefined}
                 >
                   <Plus className="w-4 h-4" />
                   <span>送入空间画板取景框</span>
