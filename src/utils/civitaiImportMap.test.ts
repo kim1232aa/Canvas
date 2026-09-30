@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mapSampler, mapScheduler, resolveImportedNegativePrompt, resolveImportedCheckpointRef } from './civitaiImportMap';
+import { mapSampler, mapScheduler, resolveImportedNegativePrompt, resolveImportedCheckpointRef, resolveRawImportNegativeSamplerScheduler } from './civitaiImportMap';
 
 describe('civitai import mappers (hard gates)', () => {
   it('empty negative stays empty — never fills blurry template', () => {
@@ -88,5 +88,66 @@ describe('resolveImportedCheckpointRef', () => {
     expect(resolveImportedCheckpointRef(null, {}, '', 'Flux.1 D')).toBe('Flux.1 D');
     expect(resolveImportedCheckpointRef([], {}, 'MyModel', '')).toBe('MyModel');
     expect(resolveImportedCheckpointRef([], {}, '', '')).toBe('');
+  });
+});
+
+describe('resolveRawImportNegativeSamplerScheduler (plain-text import)', () => {
+  const template = 'blurry, bad anatomy, deformed fingers, low resolution, poorly drawn face, plastic skin, oversaturated, text, watermark';
+
+  it('blank / missing negative stays empty — never the blurry template', () => {
+    const noNeg = 'masterpiece, 1girl\nSteps: 20, CFG scale: 7, Seed: 1, Size: 512x512';
+    expect(resolveRawImportNegativeSamplerScheduler(noNeg).negativePrompt).toBe('');
+    expect(resolveRawImportNegativeSamplerScheduler(noNeg).negativePrompt).not.toContain('blurry');
+
+    const blankNeg = 'masterpiece, 1girl\nNegative prompt:\nSteps: 20, Sampler: Euler, CFG scale: 7';
+    expect(resolveRawImportNegativeSamplerScheduler(blankNeg).negativePrompt).toBe('');
+    expect(resolveRawImportNegativeSamplerScheduler(blankNeg).negativePrompt).not.toBe(template);
+  });
+
+  it('real non-empty source negative is kept as written', () => {
+    const text = 'a cat\nNegative prompt: soft focus, low contrast\nSteps: 20, Sampler: Euler';
+    expect(resolveRawImportNegativeSamplerScheduler(text).negativePrompt).toBe('soft focus, low contrast');
+  });
+
+  it('missing sampler stays empty — no er_sde_simple / euler / sgm_uniform forge', () => {
+    const text = 'a dog\nNegative prompt:\nSteps: 28, CFG scale: 5, Seed: 42, Size: 1024x1024';
+    const r = resolveRawImportNegativeSamplerScheduler(text);
+    expect(r.sampler).toBe('');
+    expect(r.scheduler).toBe('');
+    expect(r.sampler).not.toBe('er_sde_simple');
+    expect(r.sampler).not.toBe('euler');
+    expect(r.scheduler).not.toBe('sgm_uniform');
+    expect(r.scheduler).not.toBe('karras');
+  });
+
+  it('explicit Euler stays Euler; does not invent scheduler from sampler name', () => {
+    const text = 'portrait\nNegative prompt: bad hands\nSteps: 20, Sampler: Euler, CFG scale: 7';
+    const r = resolveRawImportNegativeSamplerScheduler(text);
+    expect(r.sampler).toBe('euler');
+    expect(r.scheduler).toBe(''); // no explicit Schedule/Scheduler field
+    expect(r.negativePrompt).toBe('bad hands');
+  });
+
+  it('explicit Schedule type is mapped; Unknown/Undefined stay empty', () => {
+    const withKarras = 'x\nSteps: 20, Sampler: DPM++ 2M, Schedule type: Karras, CFG scale: 7';
+    expect(resolveRawImportNegativeSamplerScheduler(withKarras).sampler).toBe('dpmpp_2m');
+    expect(resolveRawImportNegativeSamplerScheduler(withKarras).scheduler).toBe('karras');
+
+    const undefinedSched = 'x\nSteps: 20, Sampler: Undefined, Schedule type: Undefined';
+    const u = resolveRawImportNegativeSamplerScheduler(undefinedSched);
+    expect(u.sampler).toBe('');
+    expect(u.scheduler).toBe('');
+
+    // Karras embedded in sampler name must NOT become scheduler
+    const embedded = 'x\nSteps: 20, Sampler: DPM++ 2M Karras, CFG scale: 7';
+    const e = resolveRawImportNegativeSamplerScheduler(embedded);
+    expect(e.sampler).toBe('dpmpp_2m');
+    expect(e.scheduler).toBe('');
+  });
+
+  it('image-import empty negative still empty (resolveImportedNegativePrompt unchanged)', () => {
+    expect(resolveImportedNegativePrompt(undefined, template)).toBe('');
+    expect(resolveImportedNegativePrompt('', template)).toBe('');
+    expect(resolveImportedNegativePrompt(null, template)).toBe('');
   });
 });

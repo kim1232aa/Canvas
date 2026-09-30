@@ -80,3 +80,38 @@ export function resolveImportedCheckpointRef(
   if (metaCkpt) return idStr(metaCkpt.modelVersionId);
   return idStr(meta?.Model) || idStr(ckpt?.modelName) || idStr(fallbackName) || idStr(baseModel);
 }
+
+/**
+ * Plain-text / WebUI "Copy Generation Data" field resolution.
+ * Never keeps template blurry-negative or forged sampler/scheduler defaults.
+ * Scheduler only from an explicit Schedule/Scheduler field — never from Sampler name.
+ */
+export function resolveRawImportNegativeSamplerScheduler(fullText: string): {
+  negativePrompt: string;
+  sampler: string;
+  scheduler: string;
+} {
+  const text = fullText || '';
+
+  // Missing "Negative prompt:" line → undefined → ''; blank line → ''
+  const negMatch = text.match(/Negative prompt:\s*([\s\S]*?)(?=(?:Steps:|$))/i);
+  const negativePrompt = resolveImportedNegativePrompt(
+    negMatch ? negMatch[1].trim() : undefined,
+    ''
+  );
+
+  let sampler = '';
+  const samplerMatch = text.match(/Sampler:\s*([^,\n]+)/i);
+  if (samplerMatch) {
+    sampler = mapSampler(samplerMatch[1]);
+  }
+
+  // Explicit schedule/scheduler only — do not derive from Sampler token
+  let scheduler = '';
+  const scheduleMatch = text.match(/(?:Schedule type|Scheduler|Schedule):\s*([^,\n]+)/i);
+  if (scheduleMatch) {
+    scheduler = mapScheduler(scheduleMatch[1]);
+  }
+
+  return { negativePrompt, sampler, scheduler };
+}

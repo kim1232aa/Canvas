@@ -16,7 +16,7 @@ import {
   resolveAgainstBaseOrigin,
 } from './src/engines/compatRelay.ts';
 import { enrichPoolStatsWithServerBaseUrl } from './src/utils/poolStatsEnrich.ts';
-import { mapSampler, mapScheduler, resolveImportedNegativePrompt, resolveImportedCheckpointRef } from './src/utils/civitaiImportMap.ts';
+import { mapSampler, mapScheduler, resolveImportedNegativePrompt, resolveImportedCheckpointRef, resolveRawImportNegativeSamplerScheduler } from './src/utils/civitaiImportMap.ts';
 import { persistRemoteUrlAsDataUrl, requireDurableHistoryMediaUrl } from './src/utils/persistMediaAsDataUrl.ts';
 import path from 'path';
 import fs from 'fs';
@@ -1473,12 +1473,10 @@ app.post('/api/civitai/extract-workflow', async (req, res) => {
 
       const fullText = rawText || inputContent;
 
-      // Extract Negative Prompt
+      // Split positive prompt text (negative/sampler/scheduler resolved below via util)
       let posText = fullText;
-      let negText = '';
       const negMatch = fullText.match(/Negative prompt:\s*([\s\S]*?)(?=(?:Steps:|$))/i);
       if (negMatch) {
-        negText = negMatch[1].trim();
         posText = fullText.substring(0, fullText.indexOf(negMatch[0])).replace(/^Prompt:\s*/i, '').trim();
       } else {
         const stepsIdx = fullText.search(/Steps:\s*\d+/i);
@@ -1503,19 +1501,18 @@ app.post('/api/civitai/extract-workflow', async (req, res) => {
       // Clean positive prompt (strip lora tags for pure text encoding)
       const cleanedPos = posText.replace(loraRegex, '').replace(/\s+,/g, ',').replace(/,\s*,/g, ',').trim();
       if (cleanedPos) prompt = cleanedPos;
-      if (negText) negativePrompt = negText;
       if (detectedLoras.length > 0) loras = detectedLoras;
+
+      // Plain-text import: never keep template blurry-negative / forged sampler/scheduler
+      // (match image-import phenomenon — empty source stays empty; no er_sde_simple/sgm_uniform)
+      const rawResolved = resolveRawImportNegativeSamplerScheduler(fullText);
+      negativePrompt = rawResolved.negativePrompt;
+      sampler = rawResolved.sampler;
+      scheduler = rawResolved.scheduler;
 
       // Extract Steps
       const stepsMatch = fullText.match(/Steps:\s*(\d+)/i);
       if (stepsMatch) steps = parseInt(stepsMatch[1], 10);
-
-      // Extract Sampler & Scheduler
-      const samplerMatch = fullText.match(/Sampler:\s*([^,\n]+)/i);
-      if (samplerMatch) {
-        sampler = mapSampler(samplerMatch[1]);
-        scheduler = mapScheduler(samplerMatch[1]);
-      }
 
       // Extract CFG
       const cfgMatch = fullText.match(/CFG scale:\s*([\d.]+)/i);
