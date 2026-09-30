@@ -9,6 +9,8 @@ import {
   resolveActiveCheckpoint,
   resolveCheckpointForNode,
   sanitizeFrameLoras,
+  filterRealLoraEntries,
+  isRealLoraEntry,
   omitUnsupportedGenerateFields,
   resolveGenerateLorasPayload,
 } from './resolveCheckpoint';
@@ -473,8 +475,44 @@ describe('Fal / Agnes / HF / NanoGPT grey on engine switch (schema-driven)', () 
 });
 
 
+describe('isRealLoraEntry / filterRealLoraEntries', () => {
+  it('rejects empty, whitespace-only, and placeholder "LoRA" (case-insensitive)', () => {
+    expect(isRealLoraEntry({ name: '' })).toBe(false);
+    expect(isRealLoraEntry({ name: '   ' })).toBe(false);
+    expect(isRealLoraEntry({ name: 'LoRA' })).toBe(false);
+    expect(isRealLoraEntry({ name: 'lora' })).toBe(false);
+    expect(isRealLoraEntry({ name: 'LORA' })).toBe(false);
+    expect(isRealLoraEntry({ name: ' LoRA ' })).toBe(false);
+    expect(isRealLoraEntry({ path: 'https://x', civitaiId: '1' })).toBe(false);
+  });
+
+  it('accepts a real trimmed name even when path/civitaiId also exist', () => {
+    expect(isRealLoraEntry({
+      name: '[Flux1] Asian Mix Lora - Krea/Dev.safetensors',
+      path: 'https://civitai.com/api/download/models/854154',
+      civitaiId: '854154',
+    })).toBe(true);
+    expect(isRealLoraEntry({ name: 'x' })).toBe(true);
+  });
+});
+
 describe('resolveGenerateLorasPayload — openai_compat App/graph path', () => {
   const real = [{ name: 'x', strength: 1, modelStrength: 1, clipStrength: 1 }];
+  const placeholder = [{
+    name: 'LoRA',
+    path: 'https://civitai.com/api/download/models/854154',
+    strength: 1,
+    modelStrength: 1,
+    clipStrength: 1,
+    civitaiId: '854154',
+    triggers: [] as string[],
+  }];
+  const emptyName = [{
+    name: '   ',
+    path: 'https://civitai.com/api/download/models/854154',
+    strength: 1,
+    civitaiId: '854154',
+  }];
 
   it('empty list → no loras after omit (POST body must not contain loras)', () => {
     const lorasPayload = resolveGenerateLorasPayload('openai_compat', 'gpt-image-2', []);
@@ -499,6 +537,37 @@ describe('resolveGenerateLorasPayload — openai_compat App/graph path', () => {
     expect(omitted.cfg).toBeUndefined();
   });
 
+  it('placeholder name "LoRA" → omit loras key (even with path/civitaiId)', () => {
+    expect(filterRealLoraEntries(placeholder)).toEqual([]);
+    const lorasPayload = resolveGenerateLorasPayload('openai_compat', 'gpt-image-2', placeholder);
+    expect(lorasPayload).toBeUndefined();
+    const omitted = omitUnsupportedGenerateFields('openai_compat', 'gpt-image-2', {
+      prompt: 'hi',
+      model: 'gpt-image-2',
+      loras: placeholder,
+    });
+    expect(omitted.loras).toBeUndefined();
+    expect(Object.prototype.hasOwnProperty.call(
+      JSON.parse(JSON.stringify(omitted)),
+      'loras',
+    )).toBe(false);
+  });
+
+  it('empty / whitespace-only name → omit loras key', () => {
+    const lorasPayload = resolveGenerateLorasPayload('openai_compat', 'gpt-image-2', emptyName);
+    expect(lorasPayload).toBeUndefined();
+    const omitted = omitUnsupportedGenerateFields('openai_compat', 'gpt-image-2', {
+      prompt: 'hi',
+      model: 'gpt-image-2',
+      loras: emptyName,
+    });
+    expect(omitted.loras).toBeUndefined();
+    expect(Object.prototype.hasOwnProperty.call(
+      JSON.parse(JSON.stringify(omitted)),
+      'loras',
+    )).toBe(false);
+  });
+
   it('one real LoRA → name/strength survive omit to reach OpenAICompatDriver', () => {
     expect(isCanvasFieldUnsupported('openai_compat', 'gpt-image-2', 'loras')).toBe(true);
     const lorasPayload = resolveGenerateLorasPayload('openai_compat', 'gpt-image-2', real);
@@ -520,6 +589,18 @@ describe('resolveGenerateLorasPayload — openai_compat App/graph path', () => {
     expect(omitted.cfg).toBeUndefined();
   });
 
+  it('mix of placeholder + real → keep only real entries', () => {
+    const mixed = [...placeholder, ...real];
+    const lorasPayload = resolveGenerateLorasPayload('openai_compat', 'gpt-image-2', mixed);
+    expect(lorasPayload).toEqual(real);
+    const omitted = omitUnsupportedGenerateFields('openai_compat', 'gpt-image-2', {
+      prompt: 'hi',
+      model: 'gpt-image-2',
+      loras: mixed,
+    });
+    expect(omitted.loras).toEqual(real);
+  });
+
   it('other providers still wipe unsupported loras (Fal schnell)', () => {
     const wiped = resolveGenerateLorasPayload('fal', 'fal-ai/flux/schnell', real);
     expect(wiped).toBeUndefined();
@@ -528,5 +609,11 @@ describe('resolveGenerateLorasPayload — openai_compat App/graph path', () => {
       loras: real,
     });
     expect(omitted.loras).toBeUndefined();
+  });
+
+  it('other providers keep placeholder-named entries when loras are supported (unchanged)', () => {
+    // fal-ai/flux-lora supports loras — must not strip placeholder names for non-openai_compat
+    const kept = resolveGenerateLorasPayload('fal', 'fal-ai/flux-lora', placeholder);
+    expect(kept).toEqual(placeholder);
   });
 });

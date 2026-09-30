@@ -85,6 +85,54 @@ describe('OpenAICompatDriver', () => {
     expect(body.loras).toBeUndefined();
   });
 
+  it('placeholder name "LoRA" → 请求体不含 loras 键（仍带 path/civitaiId 也不发）', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ imageUrl: 'data:image/png;base64,aaa', model: 'gpt-image-2' }),
+    });
+
+    await driver.generate(
+      {
+        prompt: 'tiny red square',
+        model: 'gpt-image-2',
+        loras: [{
+          name: 'LoRA',
+          path: 'https://civitai.com/api/download/models/854154',
+          strength: 1,
+          civitaiId: '854154',
+        }],
+      },
+      { openaiCompatKey: 'sk-test' },
+    );
+
+    const [, init] = (globalThis.fetch as any).mock.calls[0];
+    const body = JSON.parse(init.body);
+    expect(Object.prototype.hasOwnProperty.call(body, 'loras')).toBe(false);
+    expect(body.loras).toBeUndefined();
+  });
+
+  it('empty / whitespace-only LoRA name → 请求体不含 loras 键', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ imageUrl: 'data:image/png;base64,aaa', model: 'gpt-image-2' }),
+    });
+
+    await driver.generate(
+      {
+        prompt: 'tiny red square',
+        model: 'gpt-image-2',
+        loras: [{ name: '  ', strength: 1, path: 'https://x' }],
+      },
+      { openaiCompatKey: 'sk-test' },
+    );
+
+    const [, init] = (globalThis.fetch as any).mock.calls[0];
+    const body = JSON.parse(init.body);
+    expect(Object.prototype.hasOwnProperty.call(body, 'loras')).toBe(false);
+  });
+
   it('省略 loras 时请求体不含 loras 键', async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,

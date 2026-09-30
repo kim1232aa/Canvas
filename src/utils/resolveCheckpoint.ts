@@ -526,10 +526,30 @@ export function sanitizeFrameLoras<T>(
 }
 
 /**
+ * Graph mapping uses `name: lora_name || "LoRA"`; cleared / missing names become that sentinel.
+ * A real outbound entry needs a trimmed name that is non-empty and not the placeholder "LoRA"
+ * (case-insensitive). Whitespace-only counts as empty. Does not mutate stored canvas nodes.
+ */
+export function isRealLoraEntry(entry: unknown): boolean {
+  if (!entry || typeof entry !== 'object') return false;
+  const name = String((entry as { name?: unknown }).name ?? '').trim();
+  if (!name) return false;
+  if (name.toLowerCase() === 'lora') return false;
+  return true;
+}
+
+/** Keep only real LoRA entries (shared by openai_compat payload paths). */
+export function filterRealLoraEntries<T>(list: T[] | undefined | null): T[] {
+  if (!Array.isArray(list)) return [];
+  return list.filter((e) => isRealLoraEntry(e));
+}
+
+/**
  * Build the loras field for a generate payload.
  * openai_compat: keep real entries so they reach the driver/server for an honest
- * 「该服务商不支持」 reject; empty / missing → undefined (no loras key on the wire).
- * Other providers: unchanged — wipe when schema marks loras unsupported.
+ * 「该服务商不支持」 reject; placeholder "LoRA" / empty name / missing → undefined
+ * (no loras key on the wire). Other providers: unchanged — wipe when schema marks
+ * loras unsupported (full list kept as-is when supported).
  */
 export function resolveGenerateLorasPayload<T>(
   provider: string | undefined,
@@ -538,7 +558,8 @@ export function resolveGenerateLorasPayload<T>(
 ): T[] | undefined {
   const list = Array.isArray(mappedLoras) ? mappedLoras : [];
   if (toSchemaProvider(provider) === 'openai_compat') {
-    return list.length > 0 ? list : undefined;
+    const real = filterRealLoraEntries(list);
+    return real.length > 0 ? real : undefined;
   }
   if (isCanvasFieldUnsupported(provider, model, 'loras')) {
     return undefined;
@@ -568,9 +589,16 @@ export function omitUnsupportedGenerateFields<T extends Record<string, unknown>>
   for (const [field, keys] of pairs) {
     if (!isCanvasFieldUnsupported(provider, model, field)) continue;
     // openai_compat: keep real LoRA entries for honest server reject (not a silent drop).
+    // Placeholder "LoRA" / empty names are filtered out so the key is omitted.
     if (field === 'loras' && toSchemaProvider(provider) === 'openai_compat') {
       const cur = out.loras;
-      if (Array.isArray(cur) && cur.length > 0) continue;
+      if (Array.isArray(cur)) {
+        const real = filterRealLoraEntries(cur);
+        if (real.length > 0) {
+          out.loras = real;
+          continue;
+        }
+      }
     }
     for (const k of keys) {
       if (k in out) out[k] = undefined;

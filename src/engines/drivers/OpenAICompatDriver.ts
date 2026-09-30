@@ -1,6 +1,7 @@
 import { BaseEngineDriver } from '../BaseEngineDriver';
 import { NormalizedGenerateParams, NormalizedGenerateResult, ModelSpec } from '../types';
 import { httpErrorMessage } from '../compatRelay';
+import { filterRealLoraEntries } from '../../utils/resolveCheckpoint';
 
 /**
  * OpenAI 兼容中转（images/generations + images/edits）。
@@ -54,8 +55,9 @@ export class OpenAICompatDriver extends BaseEngineDriver {
     if (extra.background) body.background = extra.background;
     if (extra.moderation) body.moderation = extra.moderation;
     if (extra.n != null) body.n = extra.n;
-    if (params.loras && params.loras.length > 0) {
-      body.loras = params.loras;
+    const realLoras = filterRealLoraEntries(params.loras);
+    if (realLoras.length > 0) {
+      body.loras = realLoras;
     }
 
     const resp = await fetch('/api/engine/openai_compat/generate', {
