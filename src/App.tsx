@@ -92,7 +92,7 @@ export default function App() {
       negativePrompt: '',
       params: {
         checkpoint: 'Tongyi-MAI/Z-Image-Turbo',
-        seed: 876105816987345,
+        seed: 42,
         seedControl: 'fixed',
         steps: 8,
         cfg: 1.0,
@@ -127,7 +127,7 @@ export default function App() {
       negativePrompt: '',
       params: {
         checkpoint: 'Tongyi-MAI/Z-Image-Turbo',
-        seed: 876105816987345,
+        seed: 42,
         seedControl: 'fixed',
         steps: 8,
         cfg: 1.0,
@@ -149,7 +149,7 @@ export default function App() {
         targetProvider: 'modelscope_ai',
       },
       status: 'idle',
-      imageUrl: '', 
+      imageUrl: '',
       createdAt: Date.now(),
     },
     {
@@ -162,7 +162,7 @@ export default function App() {
       negativePrompt: '',
       params: {
         checkpoint: 'AIImageStudio/RadianceChromeVoluptuous_z_image_turbo_v2.0',
-        seed: 876105816987345,
+        seed: 42,
         seedControl: 'fixed',
         steps: 8,
         cfg: 1.0,
@@ -635,7 +635,8 @@ export default function App() {
         steps: p.steps,
         cfg: p.cfg,
         seed: p.seed,
-        denoise: p.denoise,
+        // ponytail: text2img 绝不传 denoise，仅在提供底图 (img2img/img2video) 时透传，避免 Fal/Civitai 400
+        denoise: frame.imageUrl ? p.denoise : undefined,
         sampler_name: p.sampler,
         scheduler: p.scheduler,
         image_url: frame.imageUrl,
