@@ -70,15 +70,15 @@ Tip hash: 10448d2a6fe3cf63c0030479b626dcb34903b0d1 (branch f4-video-provider, no
 - [x] 单测：model select 设 provider；empty blocked；mismatch blocked；explicit Fal 仍可用；`npx tsc --noEmit` 0；`npm test` 69/69
 
 ### 残留（QA / 非 F4）
-- F3 Fal 视频 fps/negative/steps/cfg/loras 转发 — 未改
-- F2 Civitai comfyModel / F1 HF Z-Image — 未改
+- [x] F3 Fal 视频 fps/negative/steps/cfg/loras 转发 — 已完成（VideoDriver 完整转发，BaseEngineDriver 识别 isVideo，单测覆盖）
+- F2 Civitai comfyModel / F1 HF Z-Image — F1 已于 10-02 完成；F2 待后续安排
 - Soft：SpatialFrame Math.random seed / Fal·Civitai denoise — 未改（非 F4）
 - 自定义未在 schema 的视频端点：须用户先显式选 Provider；不会从模型 ID 猜 Fal
 
 ### 关键文件
 - `src/utils/videoProvider.ts` + `videoProvider.test.ts`
 - `src/utils/graphEngine.ts` + `graphEngine.test.ts`
-- `src/App.tsx` / `src/engines/drivers/VideoDriver.ts`
+- `src/App.tsx` / `src/engines/drivers/VideoDriver.ts` + `VideoDriver.test.ts`
 
 ---
 

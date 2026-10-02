@@ -257,6 +257,16 @@ export class VideoDriver extends BaseEngineDriver {
       image_url: params.image_url,
     };
     if (extra.resolution) videoBody.resolution = extra.resolution;
+    const fpsVal = params.videoFps ?? extra.fps;
+    if (fpsVal != null) videoBody.fps = fpsVal;
+    const negVal = params.negative_prompt ?? extra.negative_prompt;
+    if (negVal) videoBody.negative_prompt = negVal;
+    const stepsVal = params.steps ?? extra.steps;
+    if (stepsVal != null) videoBody.steps = stepsVal;
+    const cfgVal = params.cfg ?? extra.cfg;
+    if (cfgVal != null) videoBody.cfg = cfgVal;
+    const lorasVal = params.loras ?? extra.loras;
+    if (Array.isArray(lorasVal) && lorasVal.length > 0) videoBody.loras = lorasVal;
     // Grok 兼容中转不支持 seed；其它视频商仍透传调用方 seed
     if (videoProvider !== 'grok_compat' && params.seed != null) videoBody.seed = params.seed;
 

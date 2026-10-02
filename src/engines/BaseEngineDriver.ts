@@ -41,6 +41,7 @@ export abstract class BaseEngineDriver implements IEngineDriver {
    */
   protected normalizeGenerateParams(params: NormalizedGenerateParams): NormalizedGenerateParams {
     const isVideo = Boolean(
+      params.isVideo ||
       params.videoDuration ||
       params.model.includes('video') ||
       params.model.includes('wan2.1-t2v') ||
@@ -110,6 +111,7 @@ export abstract class BaseEngineDriver implements IEngineDriver {
   ): Promise<NormalizedGenerateResult> {
     const hasImage = Boolean(rawParams.image_url);
     const isVideo = Boolean(
+      rawParams.isVideo ||
       rawParams.videoDuration ||
       rawParams.model.includes('video') ||
       rawParams.model.includes('wan2.1-t2v')
