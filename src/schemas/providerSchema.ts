@@ -11,7 +11,7 @@
 export type FieldStatus = 'supported' | 'unverified' | 'unsupported' | 'deprecated';
 export const FIELD_STATUSES: readonly FieldStatus[] = ['supported', 'unverified', 'unsupported', 'deprecated'];
 
-export type Provider = 'gemini' | 'fal' | 'civitai' | 'openai_compat' | 'grok_compat' | 'agnes' | 'huggingface' | 'nanogpt' | 'tensorart' | 'sensenova';
+export type Provider = 'gemini' | 'fal' | 'civitai' | 'openai_compat' | 'grok_compat' | 'agnes' | 'huggingface' | 'nanogpt' | 'tensorart' | 'sensenova' | 'modelscope' | 'modelscope_ai';
 
 /** 画布侧字段名；上游字段名不同时写在 FieldSpec.wire */
 export type FieldKey =
@@ -620,6 +620,52 @@ const SENSENOVA_MODELS: ModelSpec[] = [
   senseNovaReasoning('glm-5.2', 'GLM-5.2（商汤日日新）'),
 ];
 
+// ---------- ModelScope (魔搭社区) ----------
+// Official API docs: https://modelscope.cn/docs/model-service/API-Inference/intro
+// Endpoint POST /v1/images/generations supports prompt, negative_prompt, seed,
+// num_inference_steps, guidance_scale, width, height, and loras.
+const MODELSCOPE_DOC = 'https://modelscope.cn/docs/model-service/API-Inference/intro';
+
+function modelScopeImage(provider: 'modelscope' | 'modelscope_ai', id: string, label: string): ModelSpec {
+  return {
+    provider,
+    id,
+    label,
+    source: MODELSCOPE_DOC,
+    fields: {
+      negative_prompt: { status: 'supported', source: MODELSCOPE_DOC, type: 'string' },
+      seed: { status: 'supported', source: MODELSCOPE_DOC, type: 'integer', min: -1, max: 2147483647 },
+      steps: { status: 'supported', source: MODELSCOPE_DOC, wire: 'num_inference_steps', type: 'integer', min: 1, max: 100 },
+      cfg: { status: 'supported', source: MODELSCOPE_DOC, wire: 'guidance_scale', type: 'number', min: 1, max: 20 },
+      width: { status: 'supported', source: MODELSCOPE_DOC, type: 'integer', min: 256, max: 2048, multipleOf: 8 },
+      height: { status: 'supported', source: MODELSCOPE_DOC, type: 'integer', min: 256, max: 2048, multipleOf: 8 },
+      loras: { status: 'supported', source: MODELSCOPE_DOC, wire: 'loras', note: 'ModelScope API 原生支持单/多 LoRA 挂载' },
+      ...unsupported(
+        MODELSCOPE_DOC,
+        ['sampler', 'scheduler', 'denoise'],
+        '该服务商不支持（ModelScope 文生图 API 无独立采样器/调度器参数）'
+      ),
+    },
+  };
+}
+
+const MODELSCOPE_MODELS: ModelSpec[] = [
+  // First = resolveSchemaModelId fallback when checkpoint empty / leftover from another provider.
+  modelScopeImage('modelscope', 'Tongyi-MAI/Z-Image-Turbo', 'Tongyi-MAI Z-Image-Turbo（魔搭社区）'),
+  modelScopeImage('modelscope', 'AI-ModelScope/stable-diffusion-xl-base-1.0', 'SDXL 1.0 官方基模（魔搭社区）'),
+  modelScopeImage('modelscope', 'AI-ModelScope/flux.1-dev', 'FLUX.1 [dev]（魔搭社区）'),
+  modelScopeImage('modelscope', 'damo/wan2.1-t2i-1.3b', 'Wan 2.1 文生图（魔搭社区）'),
+  modelScopeImage('modelscope', 'Kwai-Kolors/Kolors', 'Kolors 旗舰基模（魔搭社区）'),
+];
+
+const MODELSCOPE_AI_MODELS: ModelSpec[] = [
+  modelScopeImage('modelscope_ai', 'Tongyi-MAI/Z-Image-Turbo', 'Tongyi-MAI Z-Image-Turbo (ModelScope.ai)'),
+  modelScopeImage('modelscope_ai', 'AI-ModelScope/stable-diffusion-xl-base-1.0', 'SDXL 1.0 (ModelScope.ai)'),
+  modelScopeImage('modelscope_ai', 'AI-ModelScope/flux.1-dev', 'FLUX.1 [dev] (ModelScope.ai)'),
+  modelScopeImage('modelscope_ai', 'damo/wan2.1-t2i-1.3b', 'Wan 2.1 Text-to-Image (ModelScope.ai)'),
+  modelScopeImage('modelscope_ai', 'Kwai-Kolors/Kolors', 'Kolors (ModelScope.ai)'),
+];
+
 export const PROVIDER_SCHEMA: readonly ModelSpec[] = [
   ...GEMINI_MODELS,
   ...FAL_MODELS,
@@ -631,6 +677,8 @@ export const PROVIDER_SCHEMA: readonly ModelSpec[] = [
   ...NANOGPT_MODELS,
   ...TENSORART_MODELS,
   ...SENSENOVA_MODELS,
+  ...MODELSCOPE_MODELS,
+  ...MODELSCOPE_AI_MODELS,
 ];
 
 const INDEX = new Map(PROVIDER_SCHEMA.map((m) => [`${m.provider}/${m.id}`, m]));

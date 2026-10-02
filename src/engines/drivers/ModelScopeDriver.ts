@@ -35,6 +35,7 @@ export class ModelScopeDriver extends BaseEngineDriver {
         width: params.width,
         height: params.height,
         site: 'cn',
+        loras: params.loras,
         image_url: params.image_url,
       }),
     });

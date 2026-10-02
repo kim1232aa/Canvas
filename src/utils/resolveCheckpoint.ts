@@ -1,5 +1,6 @@
 import { Connection, NodeInstance } from '../types/graph';
 import { getFieldSpec, resolveSchemaModelId, Provider } from '../schemas/providerSchema';
+import { BASE_MODELS } from '../constants/nodes';
 
 
 /** Providers that have rows in PROVIDER_SCHEMA (field grey / omit). */
@@ -14,11 +15,36 @@ const SCHEMA_PROVIDERS: readonly Provider[] = [
   'nanogpt',
   'tensorart',
   'sensenova',
+  'modelscope',
+  'modelscope_ai',
 ];
 
 export function toSchemaProvider(provider: string | undefined | null): Provider | undefined {
   const prov = (provider || '').toLowerCase().trim();
   return (SCHEMA_PROVIDERS as readonly string[]).includes(prov) ? (prov as Provider) : undefined;
+}
+
+export function resolveCheckpointModelProvider(modelId: string | undefined | null): Provider | undefined {
+  if (!modelId) return undefined;
+  const match = BASE_MODELS.find((m) => m.value === modelId);
+  if (match?.provider) {
+    return toSchemaProvider(match.provider);
+  }
+  if (modelId.startsWith('fal-ai/')) return 'fal';
+  if (modelId.includes('gemini')) return 'gemini';
+  return undefined;
+}
+
+export function applyCheckpointModelSelection(
+  currentValues: Record<string, any>,
+  modelId: string
+): Record<string, any> {
+  const next: Record<string, any> = { ...currentValues, ckpt_name: modelId };
+  const prov = resolveCheckpointModelProvider(modelId);
+  if (prov) {
+    next.targetProvider = prov;
+  }
+  return next;
 }
 
 

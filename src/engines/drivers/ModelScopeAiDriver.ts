@@ -35,6 +35,7 @@ export class ModelScopeAiDriver extends BaseEngineDriver {
         width: params.width,
         height: params.height,
         site: 'ai',
+        loras: params.loras,
         image_url: params.image_url,
       }),
     });

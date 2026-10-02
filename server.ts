@@ -6161,8 +6161,8 @@ app.post(
       const { prompt, negative_prompt, model, steps, guidance, seed, width, height } = req.body;
       if (!model) return res.status(400).json({ error: '模型为必填项（model is required）' });
       // loras: 官方格式未能核实 → unverified，用户传了就原样放进 payload.loras，失败返回上游原文。
-      // cfg / denoise / image_url: 仍 400（不在本项范围）。
-      if (rejectUnsupported(res, 'ModelScope', req.body, ['cfg', 'denoise', 'image_url'])) return;
+      // denoise / image_url / sampler / scheduler: 仍 400（ModelScope 官方文生图接口无独立采样器/调度器/降噪参数）。
+      if (rejectUnsupported(res, 'ModelScope', req.body, ['denoise', 'image_url', 'sampler', 'scheduler'])) return;
 
       const requestedSite = (
         req.body.site ||
@@ -6191,11 +6191,22 @@ app.post(
       if (negative_prompt) payload.negative_prompt = negative_prompt;
       // M1: field is num_inference_steps, not steps
       if (isProvided(steps)) payload.num_inference_steps = Number(steps);
-      if (isProvided(guidance)) payload.guidance_scale = Number(guidance);
+      const effectiveGuidance = req.body.guidance ?? req.body.guidance_scale ?? req.body.cfg;
+      if (isProvided(effectiveGuidance)) payload.guidance_scale = Number(effectiveGuidance);
       if (isProvided(seed)) payload.seed = Number(seed);
       if (isProvided(width)) payload.width = Number(width);
       if (isProvided(height)) payload.height = Number(height);
-      if (isProvided(req.body.loras)) payload.loras = req.body.loras; // unverified，原样透传
+      if (isProvided(req.body.loras)) {
+        if (Array.isArray(req.body.loras)) {
+          payload.loras = req.body.loras
+            .map((l: any) => (typeof l === 'string' ? l.trim() : String(l?.name || l?.id || l?.model || l?.path || '').trim()))
+            .filter(Boolean);
+        } else if (typeof req.body.loras === 'string') {
+          payload.loras = req.body.loras.trim();
+        } else {
+          payload.loras = req.body.loras;
+        }
+      }
 
       const primaryDomain = isAiSite
         ? 'https://api-inference.modelscope.ai/v1'

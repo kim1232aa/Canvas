@@ -2,15 +2,15 @@ import { WorkflowPreset } from '../types/graph';
 import { NODE_DEFINITIONS } from './nodes';
 
 export const WORKFLOW_PRESETS: WorkflowPreset[] = [
-  // 0.0 Z-Image-Turbo 极速直连 (免 Token 公开算力 - Hugging Face)
+  // 0.0 Z-Image-Turbo 极速直连 (ModelScope 魔搭社区)
   {
     id: 'zimage-turbo-public',
-    name: '极速直连：Z-Image-Turbo (免 Token 公开算力 - HF 直连)',
+    name: '极速直连：Z-Image-Turbo (ModelScope 魔搭社区)',
     category: '免配置体验',
-    provider: 'Hugging Face (Public)',
+    provider: 'ModelScope (魔搭社区)',
     previewImage: 'https://www.modelscope.cn/models/Tongyi-MAI/Z-Image-Turbo/resolve/master/assets/showcase_realistic.png',
     tags: ['Z-Image-Turbo', '免配置', '极速', '139784521'],
-    description: '无需任何 API Key 即可体验 120 亿参数极致真实感底模。采用 Hugging Face 官方公开 Gradio 空间算力。',
+    description: '直连阿里魔搭社区官方端点，驱动 120 亿参数极致真实感底模，原生支持东方人像 LoRA 与反向排畸词。',
     nodes: [
       {
         id: 'node-public-zimg-1',
@@ -20,7 +20,7 @@ export const WORKFLOW_PRESETS: WorkflowPreset[] = [
         width: 280,
         inputs: [],
         outputs: NODE_DEFINITIONS['CheckpointLoaderSimple'].outputs,
-        values: { ckpt_name: 'Tongyi-MAI/Z-Image-Turbo', targetProvider: 'huggingface' },
+        values: { ckpt_name: 'Tongyi-MAI/Z-Image-Turbo', targetProvider: 'modelscope' },
       },
       {
         id: 'node-public-zimg-lora',
@@ -78,7 +78,7 @@ export const WORKFLOW_PRESETS: WorkflowPreset[] = [
         inputs: NODE_DEFINITIONS['KSampler'].inputs,
         outputs: NODE_DEFINITIONS['KSampler'].outputs,
         values: {
-          seed: 876105816987345,
+          seed: 42,
           steps: 8,
           cfg: 1.0,
           sampler_name: 'euler',

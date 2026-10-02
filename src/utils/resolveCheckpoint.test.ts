@@ -13,6 +13,8 @@ import {
   isRealLoraEntry,
   omitUnsupportedGenerateFields,
   resolveGenerateLorasPayload,
+  resolveCheckpointModelProvider,
+  applyCheckpointModelSelection,
 } from './resolveCheckpoint';
 import { validateLoraCompatibility } from './baseModelMatcher';
 
@@ -619,5 +621,52 @@ describe('resolveGenerateLorasPayload — openai_compat App/graph path', () => {
     // fal-ai/flux-lora supports loras — must not strip a real name "LoRA" for non-openai_compat
     const kept = resolveGenerateLorasPayload('fal', 'fal-ai/flux-lora', namedLoRA);
     expect(kept).toEqual(namedLoRA);
+  });
+});
+
+describe('ModelScope / ModelScope AI provider resolution & capabilities', () => {
+  it('resolveCheckpointModelProvider maps ModelScope models to modelscope', () => {
+    expect(resolveCheckpointModelProvider('Tongyi-MAI/Z-Image-Turbo')).toBe('modelscope');
+    expect(resolveCheckpointModelProvider('AI-ModelScope/stable-diffusion-xl-base-1.0')).toBe('modelscope');
+    expect(resolveCheckpointModelProvider('AI-ModelScope/flux.1-dev')).toBe('modelscope');
+    expect(resolveCheckpointModelProvider('damo/wan2.1-t2i-1.3b')).toBe('modelscope');
+    expect(resolveCheckpointModelProvider('Kwai-Kolors/Kolors')).toBe('modelscope');
+    expect(resolveCheckpointModelProvider('fal-ai/flux/schnell')).toBe('fal');
+    expect(resolveCheckpointModelProvider('gemini-2.5-flash-image')).toBe('gemini');
+    expect(resolveCheckpointModelProvider('')).toBeUndefined();
+  });
+
+  it('applyCheckpointModelSelection atomically updates ckpt_name and targetProvider', () => {
+    const updated = applyCheckpointModelSelection({ someVal: 123 }, 'Tongyi-MAI/Z-Image-Turbo');
+    expect(updated.ckpt_name).toBe('Tongyi-MAI/Z-Image-Turbo');
+    expect(updated.targetProvider).toBe('modelscope');
+    expect(updated.someVal).toBe(123);
+  });
+
+  it('isLoraUnsupportedOnEndpoint returns false for ModelScope Z-Image-Turbo but true for HF Space', () => {
+    const msBadge = isLoraUnsupportedOnEndpoint('modelscope', 'Tongyi-MAI/Z-Image-Turbo');
+    expect(msBadge.unsupported).toBe(false);
+
+    const msAiBadge = isLoraUnsupportedOnEndpoint('modelscope_ai', 'Tongyi-MAI/Z-Image-Turbo');
+    expect(msAiBadge.unsupported).toBe(false);
+
+    const hfBadge = isLoraUnsupportedOnEndpoint('huggingface', 'Tongyi-MAI/Z-Image-Turbo');
+    expect(hfBadge.unsupported).toBe(true);
+    expect(hfBadge.message).toMatch(/该服务商不支持/);
+  });
+
+  it('ModelScope canvas fields: keeps negative/seed/steps/cfg/width/height/loras, greys sampler/scheduler/denoise', () => {
+    const model = 'Tongyi-MAI/Z-Image-Turbo';
+    expect(isCanvasFieldUnsupported('modelscope', model, 'negative_prompt')).toBe(false);
+    expect(isCanvasFieldUnsupported('modelscope', model, 'seed')).toBe(false);
+    expect(isCanvasFieldUnsupported('modelscope', model, 'steps')).toBe(false);
+    expect(isCanvasFieldUnsupported('modelscope', model, 'cfg')).toBe(false);
+    expect(isCanvasFieldUnsupported('modelscope', model, 'width')).toBe(false);
+    expect(isCanvasFieldUnsupported('modelscope', model, 'height')).toBe(false);
+    expect(isCanvasFieldUnsupported('modelscope', model, 'loras')).toBe(false);
+
+    expect(isCanvasFieldUnsupported('modelscope', model, 'sampler')).toBe(true);
+    expect(isCanvasFieldUnsupported('modelscope', model, 'scheduler')).toBe(true);
+    expect(isCanvasFieldUnsupported('modelscope', model, 'denoise')).toBe(true);
   });
 });

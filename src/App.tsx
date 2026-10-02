@@ -59,6 +59,7 @@ import {
   omitUnsupportedGenerateFields,
   resolveGenerateLorasPayload,
   sanitizeFrameLoras,
+  resolveCheckpointModelProvider,
 } from './utils/resolveCheckpoint';
 import {
   checkpointNodeTitle,
@@ -807,14 +808,19 @@ export default function App() {
 
     if (targetNode.type === 'CheckpointLoaderSimple') {
       if (widgetName === 'ckpt_name') {
-        const prov = targetNode.values?.targetProvider || '';
+        const resolvedProv = resolveCheckpointModelProvider(value);
+        const prov = resolvedProv || targetNode.values?.targetProvider || '';
         setNodes((prev) =>
           prev.map((n) =>
             n.id === nodeId
               ? {
                   ...n,
                   title: checkpointNodeTitle(prov, value),
-                  values: { ...(n.values || {}), ckpt_name: value },
+                  values: {
+                    ...(n.values || {}),
+                    ckpt_name: value,
+                    ...(resolvedProv ? { targetProvider: resolvedProv } : {}),
+                  },
                 }
               : n
           )
@@ -824,11 +830,12 @@ export default function App() {
             prev.map((f) =>
               f.id === activeFrameTargetId
                 ? (() => {
-                    const nextLoras = sanitizeFrameLoras(f.params.targetProvider, value, f.params.loras);
+                    const effectiveProv = resolvedProv || f.params.targetProvider;
+                    const nextLoras = sanitizeFrameLoras(effectiveProv, value, f.params.loras);
                     return {
                       ...f,
                       title: sanitizeFrameMarketingTitle(
-                        f.params.targetProvider,
+                        effectiveProv,
                         value,
                         f.title,
                         nextLoras.length
@@ -836,6 +843,7 @@ export default function App() {
                       params: {
                         ...f.params,
                         checkpoint: value,
+                        targetProvider: effectiveProv,
                         loras: nextLoras,
                       },
                     };

@@ -1,6 +1,22 @@
 # Canvas Provider API 接线修复进度表
 
 
+## 2026-10-02 — ModelScope 原生服务商能力接入与 Z-Image-Turbo 拓扑对齐
+
+### 根因与背景
+- 截图报错排查：画布载入「极速直连：Z-Image-Turbo」预设时，由于预设硬编码 `targetProvider: 'huggingface'`，而 Hugging Face 上该模型仅为 Gradio Demo Space（官方 schema 无 loras/negative/width/height/cfg），导致整张画布大面积标红「该服务商不支持」。
+- 修复方案：按官方文档规范将 `Tongyi-MAI/Z-Image-Turbo` 及其原生平台 ModelScope (魔搭社区) 完整纳入 Schema 体系，并在节点选模时实现 Provider 自动对齐。
+
+### 完成项
+- [x] Schema: 在 `src/schemas/providerSchema.ts` 中注册 `modelscope` 与 `modelscope_ai`，登记 `Tongyi-MAI/Z-Image-Turbo` 等 5 款官方基模，声明 `prompt`, `negative_prompt`, `seed` (min -1, max 2147483647), `steps` (`num_inference_steps`), `cfg` (`guidance_scale`), `width`, `height`, `loras` 为 supported；`sampler`, `scheduler`, `denoise` 为 unsupported。
+- [x] Checkpoint 选模联动: 在 `src/utils/resolveCheckpoint.ts` 中增加 `resolveCheckpointModelProvider` 与 `applyCheckpointModelSelection`；在 `src/App.tsx` 和 `src/components/ParameterInspector.tsx` 中切换模型时原子同步 `targetProvider`，消除遗留引擎残留。
+- [x] 预设拓扑对齐: `src/constants/presets.ts` 中的 `zimage-turbo-public` 预设 `targetProvider` 对齐为 `'modelscope'`，消除节点能力与底层服务商的冲突；seed 规范为 32 位整型 (42)。
+- [x] 后端与驱动转发: `server.ts` 接收 `cfg` 别名映射为 `guidance_scale` 并从 `rejectUnsupported` 移除；`payload.loras` 将画布对象数组自动归一化为字符串数组；`ModelScopeDriver.ts` 与 `ModelScopeAiDriver.ts` 透传 `loras` 与 `guidance` (从 cfg)。
+- [x] 单测验证: 新增 `ModelScopeDriver.test.ts` 及 schema/checkpoint 单元测试，`bun test` 198/198 全绿，`npx tsc --noEmit` 保持 0 错误。
+- [x] 真实端到端验证: Playwright 自动化验证通过，截屏确认画布全部节点恢复绿色「就绪」状态，底层 API 透传成功到达 ModelScope 官方端点（透明报告 429 insufficient balance 真实响应，无 mock 伪造）。
+
+---
+
 ## 2026-09-30 — soft-civitai-history-thumb HARD gates
 
 - Civitai 生成成功后服务端把 blob 拉成 `data:image/…` 写入历史（与 OpenAI/fal 同源持久形态）；HistoryModal 坏链显示「预览加载失败」。

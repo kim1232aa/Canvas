@@ -232,3 +232,30 @@ describe('sensenova schema — app has no text2img route', () => {
     expect(resolveSchemaModelId('sensenova', 'foreign.safetensors')).toBe('deepseek-v4-flash');
   });
 });
+
+describe('modelscope & modelscope_ai schema — native image generation capabilities', () => {
+  it('modelscope Tongyi-MAI/Z-Image-Turbo: supports negative_prompt/seed/steps/cfg/width/height/loras; sampler/scheduler/denoise unsupported', () => {
+    const id = 'Tongyi-MAI/Z-Image-Turbo';
+    for (const p of ['modelscope', 'modelscope_ai'] as const) {
+      expect(getFieldSpec(p, id, 'negative_prompt')?.status).toBe('supported');
+      expect(getFieldSpec(p, id, 'seed')?.status).toBe('supported');
+      expect(getFieldSpec(p, id, 'steps')?.status).toBe('supported');
+      expect(getFieldSpec(p, id, 'steps')?.wire).toBe('num_inference_steps');
+      expect(getFieldSpec(p, id, 'cfg')?.status).toBe('supported');
+      expect(getFieldSpec(p, id, 'cfg')?.wire).toBe('guidance_scale');
+      expect(getFieldSpec(p, id, 'width')?.status).toBe('supported');
+      expect(getFieldSpec(p, id, 'height')?.status).toBe('supported');
+      expect(getFieldSpec(p, id, 'loras')?.status).toBe('supported');
+      expect(getFieldSpec(p, id, 'sampler')?.status).toBe('unsupported');
+      expect(getFieldSpec(p, id, 'scheduler')?.status).toBe('unsupported');
+      expect(getFieldSpec(p, id, 'denoise')?.status).toBe('unsupported');
+    }
+  });
+
+  it('fallback models for modelscope and modelscope_ai are Tongyi-MAI/Z-Image-Turbo', () => {
+    expect(resolveSchemaModelId('modelscope', '')).toBe('Tongyi-MAI/Z-Image-Turbo');
+    expect(resolveSchemaModelId('modelscope', 'unknown-model')).toBe('Tongyi-MAI/Z-Image-Turbo');
+    expect(resolveSchemaModelId('modelscope_ai', '')).toBe('Tongyi-MAI/Z-Image-Turbo');
+    expect(resolveSchemaModelId('modelscope_ai', 'unknown-model')).toBe('Tongyi-MAI/Z-Image-Turbo');
+  });
+});

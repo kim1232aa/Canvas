@@ -22,7 +22,7 @@ import { ComfyParameters } from '../types/graph';
 import { BASE_MODELS, SAMPLER_OPTIONS, SCHEDULER_OPTIONS } from '../constants/nodes';
 import { refinePromptWithGemini, fetchLiveModels, getRefineModelSelection } from '../services/api';
 import { validateLoraCompatibility } from '../utils/baseModelMatcher';
-import { isLoraUnsupportedOnEndpoint } from '../utils/resolveCheckpoint';
+import { isLoraUnsupportedOnEndpoint, toSchemaProvider, resolveCheckpointModelProvider } from '../utils/resolveCheckpoint';
 import { normalizeForComfyUI } from '../utils/engineParameterNormalizer';
 import { GeminiFieldSelect } from './GeminiFieldSelect';
 import { FieldStatusBadge } from './FieldStatusBadge';
@@ -142,19 +142,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
   const isGemini = params.targetProvider === 'gemini';
   const isOpenAiCompat = params.targetProvider === 'openai_compat';
   const isGrokCompat = params.targetProvider === 'grok_compat';
-  const schemaProvider: SchemaProvider | undefined =
-    params.targetProvider === 'gemini' ||
-    params.targetProvider === 'fal' ||
-    params.targetProvider === 'civitai' ||
-    params.targetProvider === 'openai_compat' ||
-    params.targetProvider === 'grok_compat' ||
-    params.targetProvider === 'agnes' ||
-    params.targetProvider === 'huggingface' ||
-    params.targetProvider === 'nanogpt' ||
-    params.targetProvider === 'tensorart' ||
-    params.targetProvider === 'sensenova'
-      ? (params.targetProvider as SchemaProvider)
-      : undefined;
+  const schemaProvider: SchemaProvider | undefined = toSchemaProvider(params.targetProvider);
   // Prefer checkpoint when it exists in schema; else first model for provider so
   // grok/openai enum selects (aspect_ratio/resolution/size/…) still render when
   // checkpoint is empty or leftover from another provider.
@@ -414,7 +402,16 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
             </div>
             <select
               value={params.checkpoint || ''}
-              onChange={(e) => update({ checkpoint: e.target.value })}
+              onChange={(e) => {
+                const val = e.target.value;
+                const matchedModel = allModels.find((m) => m.value === val);
+                const prov = matchedModel?.provider || resolveCheckpointModelProvider(val);
+                if (prov) {
+                  update({ checkpoint: val, targetProvider: prov });
+                } else {
+                  update({ checkpoint: val });
+                }
+              }}
               className="w-full bg-[#111216] border border-[#2b2d38] focus:border-cyan-500 rounded-lg px-2.5 py-1.5 text-slate-200 text-[11px] font-mono outline-none cursor-pointer"
               title={params.checkpoint || '未选择 (请先选择模型)'}
             >
