@@ -298,6 +298,8 @@ P 事实表（2026-09-29 抓取）：
 
 ## 3. 当前进度
 - 当前状态：全部接线项与增补项修复完成（F1–F9、V4、E1、E2、L1、T1–T4、H2、Y1 及前期全部项）；`npx tsc --noEmit` 保持 0 错误。
+- 软锁死项（LoRA 清空与标题同态）：
+  - `c0e0c2d`（禁止伪造占位名「LoRA」、空 loras omit）与 `8c111d5`（清空/卸挂后节点头部清除旧截断名，回到 `Load LoRA (Civitai / Local)` 并与检查器「当前未挂载 LoRA 模型」同态；真名「LoRA」如实保留）已全部完成 Playwright 真实浏览器点验、两阶段 PR 审查并合入主干 `staging-local`。
 - 最终扫尾结果：
   - `upstreamFetch` 全面覆盖所有外部 provider 请求（包括各模型列表获取、Civitai 轮询与 REST 查询、Tensor.Art OpenWorks 上传与任务轮询、HF 模型卡与 Gradio、NanoGPT 列表与余额、Gemini 列表等），且自动捕获并传递 `actualModel` 与 `actualProvider`；
   - 彻底清理直接 `fetch` 调用（除 `upstreamFetch` 内部底层调用外）；
