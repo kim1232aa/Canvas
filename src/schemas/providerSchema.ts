@@ -425,6 +425,9 @@ const HUGGINGFACE_MODELS: ModelSpec[] = [
   hfTextToImage('huggingface-text-to-image', 'Hugging Face Text-to-Image'),
   hfTextToImage('black-forest-labs/FLUX.1-dev', 'FLUX.1 [dev] (HF)'),
   hfTextToImage('stabilityai/stable-diffusion-xl-base-1.0', 'SDXL 1.0 (HF)'),
+  hfTextToImage('stabilityai/stable-diffusion-3.5-large', 'Stable Diffusion 3.5 Large (HF)'),
+  hfTextToImage('Kwai-Kolors/Kolors', 'Kolors (HF)'),
+  hfTextToImage('runwayml/stable-diffusion-v1-5', 'SD 1.5 (HF)'),
   {
     provider: 'huggingface',
     id: 'Tongyi-MAI/Z-Image-Turbo',

@@ -5904,9 +5904,10 @@ app.post(['/api/huggingface/generate', '/api/engine/huggingface/generate'], asyn
     }
 
     // HF text-to-image task schema has no LoRA field; Z-Image Space sends an empty LoRA list. Never silently drop.
-    if (rejectUnsupported(res, 'Hugging Face', req.body, ['loras', 'cfg', 'denoise', 'image_url'])) return;
+    // HF 官方文生图原生支持 guidance_scale (cfg) 与 scheduler，不支持 ComfyUI sampler / loras / denoise / image_url
+    if (rejectUnsupported(res, 'Hugging Face', req.body, ['loras', 'sampler', 'denoise', 'image_url'])) return;
     // Z-Image Space inputs: prompt, resolution, seed, steps (shift fixed) — no negative prompt / guidance.
-    if (isZImage && rejectUnsupported(res, 'Hugging Face Z-Image Space', req.body, ['negative_prompt', 'guidance'])) return;
+    if (isZImage && rejectUnsupported(res, 'Hugging Face Z-Image Space', req.body, ['negative_prompt', 'guidance', 'cfg'])) return;
 
     const finalPrompt = prompt || '';
     let dataUrl = '';
@@ -6087,7 +6088,9 @@ app.post(['/api/huggingface/generate', '/api/engine/huggingface/generate'], asyn
       if (isProvided(width)) parameters.width = Number(width);
       if (isProvided(height)) parameters.height = Number(height);
       if (isProvided(steps)) parameters.num_inference_steps = Number(steps);
-      if (isProvided(guidance)) parameters.guidance_scale = Number(guidance);
+      const effectiveGuidance = req.body.guidance ?? req.body.guidance_scale ?? req.body.cfg;
+      if (isProvided(effectiveGuidance)) parameters.guidance_scale = Number(effectiveGuidance);
+      if (isProvided(req.body.scheduler)) parameters.scheduler = String(req.body.scheduler);
       if (typeof seed === 'number' && seed >= 0) parameters.seed = seed;
 
       const resp = await upstreamFetch(

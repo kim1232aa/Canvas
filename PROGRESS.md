@@ -1,20 +1,26 @@
 # Canvas Provider API 接线修复进度表
 
 
-## 2026-10-02 — ModelScope 原生服务商能力接入与 Z-Image-Turbo 拓扑对齐
+## 2026-10-02 — ModelScope 与 Hugging Face 全供应商 API 接入规范化与端点能力对齐
 
 ### 根因与背景
-- 截图报错排查：画布载入「极速直连：Z-Image-Turbo」预设时，由于预设硬编码 `targetProvider: 'huggingface'`，而 Hugging Face 上该模型仅为 Gradio Demo Space（官方 schema 无 loras/negative/width/height/cfg），导致整张画布大面积标红「该服务商不支持」。
-- 修复方案：按官方文档规范将 `Tongyi-MAI/Z-Image-Turbo` 及其原生平台 ModelScope (魔搭社区) 完整纳入 Schema 体系，并在节点选模时实现 Provider 自动对齐。
+- 用户指出：「不能只对一个模型做优化，这个是整个供应商的 API 接入问题」。
+- 排查确认不仅是单个 Z-Image-Turbo 模型的特例问题，而是整个 Hugging Face 与 ModelScope 供应商层级的接入缺陷：
+  1. Hugging Face 路由将 `cfg` 误入 `rejectUnsupported` 黑名单，导致合法 CFG 请求被拦截，且未转发官方支持的 `scheduler`。
+  2. Hugging Face Schema 仅登记了 2 款基模，遗漏了 `SD 3.5 Large`、`SD 1.5`、`Kolors` 等官方模型，导致切模时 Fallback 异常。
+  3. ModelScope 原生 API 缺失 Schema，且选模时未与 Provider 联动。
 
 ### 完成项
+- [x] Hugging Face 官方能力对齐: 在 `server.ts` 中修正 `/api/huggingface/generate`，将 `cfg` 移出 `rejectUnsupported`，支持 `guidance` / `guidance_scale` / `cfg` 别名映射，透传官方 `scheduler`，仅对真正不支持的 `loras`, `sampler`, `denoise`, `image_url` 报错。
+- [x] Hugging Face Schema 补全: 在 `src/schemas/providerSchema.ts` 的 `HUGGINGFACE_MODELS` 中完整注册 `stabilityai/stable-diffusion-3.5-large`、`Kwai-Kolors/Kolors`、`runwayml/stable-diffusion-v1-5`。
+- [x] Hugging Face 驱动透传: 在 `HuggingFaceDriver.ts` 中补齐 `scheduler` 与 `cfg` 转发。
 - [x] Schema: 在 `src/schemas/providerSchema.ts` 中注册 `modelscope` 与 `modelscope_ai`，登记 `Tongyi-MAI/Z-Image-Turbo` 等 5 款官方基模，声明 `prompt`, `negative_prompt`, `seed` (min -1, max 2147483647), `steps` (`num_inference_steps`), `cfg` (`guidance_scale`), `width`, `height`, `loras` 为 supported；`sampler`, `scheduler`, `denoise` 为 unsupported。
 - [x] Checkpoint 选模联动: 在 `src/utils/resolveCheckpoint.ts` 中增加 `resolveCheckpointModelProvider` 与 `applyCheckpointModelSelection`；在 `src/App.tsx` 和 `src/components/ParameterInspector.tsx` 中切换模型时原子同步 `targetProvider`，消除遗留引擎残留。
 - [x] 空间帧规范化与 denoise 保护: `src/App.tsx` 中空间帧默认 seed 规范为有效 int32 (42)；`handleQueueFrame` 对 `denoise` 进行卫语句保护 (`frame.imageUrl ? p.denoise : undefined`)，防止纯文本生图请求携带 denoise 触发 Fal/Civitai 400 拦截。
 - [x] 视频驱动增强 (F3/F4): `VideoDriver.ts` 完整透传 `fps`, `negative_prompt`, `steps`, `cfg`, `loras` 到 `/api/video/generate`；严禁空 provider 静默回退 Fal。
 - [x] 预设拓扑对齐: `src/constants/presets.ts` 中的 `zimage-turbo-public` 预设 `targetProvider` 对齐为 `'modelscope'`，消除节点能力与底层服务商的冲突；seed 规范为 32 位整型 (42)。
 - [x] 后端与驱动转发: `server.ts` 接收 `cfg` 别名映射为 `guidance_scale` 并从 `rejectUnsupported` 移除；`payload.loras` 将画布对象数组自动归一化为字符串数组；`ModelScopeDriver.ts` 与 `ModelScopeAiDriver.ts` 透传 `loras` 与 `guidance` (从 cfg)。
-- [x] 单测验证: 新增 `ModelScopeDriver.test.ts` 及 schema/checkpoint 单元测试，`bun test` 202/202 全绿，`npx tsc --noEmit` 保持 0 错误。
+- [x] 单测验证: 新增 `ModelScopeDriver.test.ts`、`HuggingFaceDriver.test.ts` 及 schema/checkpoint 单元测试，`bun test` 203/203 全绿，`npx tsc --noEmit` 保持 0 错误。
 - [x] 真实端到端验证: Playwright 自动化验证通过，截屏确认画布全部节点恢复绿色「就绪」状态，底层 API 透传成功到达 ModelScope 官方端点（透明报告 429 insufficient balance 真实响应，无 mock 伪造）。
 
 ---

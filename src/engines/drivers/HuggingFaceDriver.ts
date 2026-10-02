@@ -32,6 +32,8 @@ export class HuggingFaceDriver extends BaseEngineDriver {
         height: params.height,
         steps: params.steps,
         guidance: params.cfg,
+        cfg: params.cfg,
+        scheduler: params.scheduler,
         seed: params.seed,
         // Forwarded so the server can 400 on them (HF text-to-image has no image input / LoRA field).
         image_url: params.image_url,

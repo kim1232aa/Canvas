@@ -184,7 +184,25 @@ describe('agnes / huggingface / nanogpt schema unsupported fields', () => {
     expect(getFieldSpec('huggingface', id, 'negative_prompt')?.status).toBe('supported');
     expect(getFieldSpec('huggingface', id, 'seed')?.status).toBe('supported');
     expect(getFieldSpec('huggingface', id, 'steps')?.status).toBe('supported');
+    expect(getFieldSpec('huggingface', id, 'cfg')?.status).toBe('supported');
+    expect(getFieldSpec('huggingface', id, 'scheduler')?.status).toBe('supported');
     expect(resolveSchemaModelId('huggingface', 'foreign-civitai.safetensors')).toBe('huggingface-text-to-image');
+
+    // 检查所有 HF 基模全部具备统一的官方标准能力
+    for (const hfModel of [
+      'black-forest-labs/FLUX.1-dev',
+      'stabilityai/stable-diffusion-xl-base-1.0',
+      'stabilityai/stable-diffusion-3.5-large',
+      'Kwai-Kolors/Kolors',
+      'runwayml/stable-diffusion-v1-5',
+    ]) {
+      expect(getFieldSpec('huggingface', hfModel, 'cfg')?.status, `${hfModel}.cfg`).toBe('supported');
+      expect(getFieldSpec('huggingface', hfModel, 'negative_prompt')?.status, `${hfModel}.negative_prompt`).toBe('supported');
+      expect(getFieldSpec('huggingface', hfModel, 'width')?.status, `${hfModel}.width`).toBe('supported');
+      expect(getFieldSpec('huggingface', hfModel, 'height')?.status, `${hfModel}.height`).toBe('supported');
+      expect(getFieldSpec('huggingface', hfModel, 'loras')?.status, `${hfModel}.loras`).toBe('unsupported');
+      expect(getFieldSpec('huggingface', hfModel, 'sampler')?.status, `${hfModel}.sampler`).toBe('unsupported');
+    }
   });
 
   it('nanogpt flux-schnell: greys negative/loras/steps/cfg/WH; keeps seed', () => {
