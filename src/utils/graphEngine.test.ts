@@ -387,7 +387,7 @@ describe('graphEngine - B2 & L2a & L2b 拓扑反向追踪与参数抽取隔离�
     expect(params.loras.map((l) => l.name)).toContain('koda');
   });
 
-  it('B1-r2b: Fal + LoRA + zombie Checkpoint/KSampler auto-detects Fal, never HuggingFace', async () => {
+  it('B1-r2b: Fal + connected LoRA + zombie Checkpoint/KSampler auto-detects Fal, never HuggingFace', async () => {
     const nodes: NodeInstance[] = [
       createNode('fal-1', 'FalAIEngineNode', {
         model: 'fal-ai/flux/schnell',
@@ -434,6 +434,10 @@ describe('graphEngine - B2 & L2a & L2b 拓扑反向追踪与参数抽取隔离�
     ];
 
     expect(resolveTargetNode(nodes, connections).type).toBe('FalAIEngineNode');
+
+    // An independent LoRA is not applied by a guessed sole-engine association.
+    expect(extractWorkflowParameters(nodes, connections).loras).toEqual([]);
+    connections.push({id:'mounted-lora',fromNodeId:'lora-1',fromSocketId:'MODEL',toNodeId:'fal-1',toSocketId:'lora',type:'MODEL'});
 
     const params = extractWorkflowParameters(nodes, connections);
     expect(params.targetProvider).toBe('fal');

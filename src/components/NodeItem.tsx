@@ -1,3 +1,4 @@
+import {ProviderModelSelect} from './ProviderModelSelect';
 import React from 'react';
 import {
   ChevronDown,
@@ -475,7 +476,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               const isValueInOpts = opts.some((o) => o.value === value);
 
               if (node.type === 'CheckpointLoaderSimple' && widget.name === 'ckpt_name') {
-                const currentProv = node.values?.targetProvider || 'civitai';
+                const currentProv = node.values?.targetProvider || '';
                 const providerOpts = opts.filter((o: any) => o.provider === currentProv);
                 const otherOpts = [] as typeof opts;
                 const isCustom = !providerOpts.some((o) => o.value === value) && Boolean(value);
@@ -501,45 +502,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                         )}
                       </div>
                     </div>
-                    {/* Primary Dropdown Select */}
-                    <select
-                      value={value ?? ''}
-                      onMouseDown={(e) => e.stopPropagation()}
-                      onPointerDown={(e) => e.stopPropagation()}
-                      onKeyDown={(e) => e.stopPropagation()}
-                      onChange={(e) => onUpdateValue(node.id, widget.name, e.target.value)}
-                      className="w-full bg-[#121316] border border-[#2d303a] hover:border-cyan-500/50 focus:border-cyan-500 rounded-lg px-2.5 py-1.5 text-slate-200 text-xs font-mono outline-none cursor-pointer select-text"
-                    >
-                      <option value="">请选择模型</option>
-                      {isCustom && (
-                        <option key={`custom-input-${value}`} value={value}>
-                          ★ [自定义输入模型] {value}
-                        </option>
-                      )}
-                      {providerOpts.length > 0 && (
-                        <optgroup label={`🎯 ${currentProv.toUpperCase()} 已核实模型 ID（更多模型见模型中心）`}>
-                          {providerOpts.map((opt, idx) => (
-                            <option key={`prov-${(opt as any).provider}-${opt.value}-${idx}`} value={opt.value}>
-                              {opt.label}
-                            </option>
-                          ))}
-                        </optgroup>
-                      )}
-                      {otherOpts.length > 0 && (
-                        <optgroup label="🌐 其他模型 ID（仍使用当前引擎）">
-                          {otherOpts.map((opt, idx) => (
-                            <option key={`other-${(opt as any).provider}-${opt.value}-${idx}`} value={opt.value}>
-                              [{(opt as any).provider?.toUpperCase()}] {opt.label}
-                            </option>
-                          ))}
-                        </optgroup>
-                      )}
-                      {providerOpts.length === 0 && otherOpts.length === 0 && opts.map((opt, idx) => (
-                        <option key={`fallback-${opt.value}-${idx}`} value={opt.value}>
-                          {opt.label}
-                        </option>
-                      ))}
-                    </select>
+                    <ProviderModelSelect provider={currentProv} value={String(value || '')} onChange={next=>onUpdateValue(node.id,widget.name,next)} />
 
                     {/* Secondary Custom Path Input */}
                     <div className="flex items-center gap-1.5 pt-0.5">

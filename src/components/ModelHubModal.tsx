@@ -1,3 +1,4 @@
+import {TENSOR_CATALOG_TAGS} from '../schemas/tensorCatalog';
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Search,
@@ -44,7 +45,7 @@ interface ModelHubModalProps {
     triggerWords?: string;
     baseModel?: string;
   }) => void;
-  onAddLoraNode?: (loraName: string, triggerWords?: string, baseModel?: string) => void;
+  onAddLoraNode?: (loraName: string, triggerWords?: string, baseModel?: string, resource?: {provider:string;civitaiId?:string}) => void;
   onSelectLoRAWithBaseModel?: (lora: {
     name: string;
     provider?: string;
@@ -55,6 +56,8 @@ interface ModelHubModalProps {
   onQuickTestModel?: (modelId: string, modelName: string, providerHint?: string) => void;
   onOpenDedicatedLoRAHub?: () => void;
   initialCategory?: CategoryFilter;
+  initialProvider?: string;
+  isSpatialMode?: boolean;
   currentCheckpoint?: string;
 }
 
@@ -86,12 +89,15 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
   onQuickTestModel,
   onOpenDedicatedLoRAHub,
   initialCategory = 'all',
+  initialProvider,
+  isSpatialMode = false,
 }) => {
   const [activeProvider, setActiveProvider] = useState<ProviderTab>('all');
   const [activeCategory, setActiveCategory] = useState<CategoryFilter>(initialCategory);
   const [sortOption, setSortOption] = useState<ModelSortOption>('downloads');
   const [selectedArch, setSelectedArch] = useState<string>('all');
   const [query, setQuery] = useState('');
+  const [tensorTag,setTensorTag]=useState('all');
   const requestVersion = useRef(0);
   const morePending = useRef(false);
   const [customId, setCustomId] = useState('');
@@ -131,7 +137,8 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
     searchTerm = query,
     sort = sortOption,
     arch = selectedArch,
-    isLoadMore = false
+    isLoadMore = false,
+    catalogTag = tensorTag
   ) => {
     if (isLoadMore && morePending.current) return;
     const version = isLoadMore ? requestVersion.current : ++requestVersion.current;
@@ -165,7 +172,8 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
         liveCursor,
         livePage,
         40,
-        archQuery
+        archQuery,
+        prov === 'tensorart' ? catalogTag : ''
       );
 
       if (version !== requestVersion.current) return;
@@ -260,11 +268,13 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       const targetCat = initialCategory || 'all';
+      const targetProvider = ['civitai','fal','tensorart','modelscope','modelscope_ai','huggingface','nanogpt','gemini'].includes(initialProvider || '') ? initialProvider as ProviderTab : activeProvider;
+      setActiveProvider(targetProvider);
       setActiveCategory(targetCat);
-      loadModels(activeProvider, targetCat, query, sortOption, selectedArch, false);
+      loadModels(targetProvider, targetCat, query, sortOption, selectedArch, false);
     }
     return () => { requestVersion.current += 1; };
-  }, [isOpen, initialCategory]);
+  }, [isOpen, initialCategory, initialProvider]);
 
   if (!isOpen) return null;
 
@@ -701,7 +711,8 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
               ))}
             </div>
           )}
-          {activeProvider === 'tensorart' && <p className="mb-4 text-sm text-slate-300">此处展示 TusiArt 公共目录当前页面；模型 API 没有已核实的全量列表接口。<a href="https://tensor.art/models" target="_blank" rel="noopener noreferrer" className="ml-2 text-cyan-300 underline">浏览完整 Tensor.Art 模型 / LoRA 目录</a>，复制任意资源 ID 到上方查询。生成需 TAMS 模型 API Key，OpenWorks key 不能代用。</p>}
+          {activeProvider === 'tensorart' && <label className="mb-4 flex items-center gap-3 text-sm text-slate-300">公开目录分类<select aria-label="Tensor 模型中心目录分类" value={tensorTag} onChange={e=>{setTensorTag(e.target.value);loadModels(activeProvider,activeCategory,query,sortOption,selectedArch,false,e.target.value);}} className="rounded-lg border border-slate-700 bg-[#111216] p-2">{TENSOR_CATALOG_TAGS.map(([tag,label])=><option key={tag} value={tag}>{label}</option>)}</select></label>}
+          {activeProvider === 'tensorart' && <p className="mb-4 text-sm text-slate-300">此处加载 Tensor 公共分类目录，支持底模与 LoRA 分类切换；TAMS 官方暂不提供全量列表接口。<a href="https://tusi.cn/models" target="_blank" rel="noopener noreferrer" className="ml-2 text-cyan-300 underline">浏览完整 Tensor.Art 模型 / LoRA 目录</a>，复制任意资源 ID 到上方查询。生成需 TAMS 模型 API Key，OpenWorks key 不能代用。</p>}
           {activeProvider === 'all' && !loading && <p className="mb-4 text-sm text-slate-400">当前展示各服务商目录摘要。选择单个服务商后继续检索或翻页。</p>}
           {loading ? (
             <div className="h-64 flex flex-col items-center justify-center gap-3 text-slate-400">
@@ -1031,7 +1042,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                               )}
 
                               <div className="grid grid-cols-2 gap-1.5">
-                                {onAddLora && (
+                                {onAddLora && isSpatialMode && (
                                   <button
                                     onClick={() => {
                                       onAddLora({
@@ -1056,7 +1067,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                                 {onAddLoraNode && (
                                   <button
                                     onClick={() => {
-                                      onAddLoraNode(['huggingface','modelscope','modelscope_ai','tensorart','tensor'].includes(providerKey) ? modelId : displayName, trainedWords.join(', '), baseArch);
+                                      onAddLoraNode(['huggingface','modelscope','modelscope_ai','tensorart','tensor'].includes(providerKey) ? modelId : displayName, trainedWords.join(', '), baseArch, {provider:providerKey,civitaiId:providerKey==='civitai' ? String(m.id) : undefined});
                                       onClose();
                                     }}
                                     className="py-1.5 px-2 rounded-lg bg-[#22242e] hover:bg-[#2c303d] text-purple-300 hover:text-purple-200 font-medium flex items-center justify-center gap-1 border border-purple-500/30 transition-colors text-[10px]"

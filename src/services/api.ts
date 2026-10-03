@@ -414,7 +414,8 @@ export const fetchLiveModels = async (
   cursor = '',
   page = 1,
   limit = 50,
-  architecture = ''
+  architecture = '',
+  catalogTag = ''
 ): Promise<Record<string, any[]> & { _pagination?: Record<string, { nextCursor?: string | null; page?: number; hasMore: boolean }> }> => {
   const keys = getStoredApiKeys();
   const headers: Record<string, string> = {};
@@ -433,6 +434,7 @@ export const fetchLiveModels = async (
   if (page) params.append('page', String(page));
   if (limit) params.append('limit', String(limit));
   if (architecture) params.append('architecture', architecture);
+  if (catalogTag) params.append('catalogTag',catalogTag);
 
   const resp = await fetch(`/api/models?${params.toString()}`, { headers });
   

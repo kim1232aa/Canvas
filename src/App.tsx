@@ -1,3 +1,5 @@
+import {attachLoraToBranch,findLoraTarget} from './utils/attachLora';
+import {isInvalidTensorModel} from './utils/modelCatalog';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {loadWorkspaceCache, BOARDS_KEY, ACTIVE_BOARD_KEY, MODE_KEY, isCanvasProject} from './utils/workspaceCache';
 import {generationReadiness} from './utils/generationReadiness';
@@ -60,6 +62,7 @@ import {
   findFirstNodeOfType,
   getProviderFromNode,
   isFalLoraEndpointError,
+  isLoraUnsupportedOnEndpoint,
   resolveActiveCheckpoint,
   resolveCheckpointForNode,
   omitUnsupportedGenerateFields,
@@ -1137,8 +1140,8 @@ export default function App() {
     triggerWords: string;
     baseModel?: string;
   }) => {
-    // If a spatial frame is active, append LoRA to its params
-    if (selectedFrameId) {
+    // A remembered spatial selection must not redirect graph-mode mounting.
+    if (canvasMode === 'spatial' && selectedFrameId) {
       const frame = spatialFrames.find((f) => f.id === selectedFrameId);
       if (frame) {
         const nextLoras = [
@@ -1158,8 +1161,10 @@ export default function App() {
       }
     }
 
+    if (canvasMode === 'graph' && !targetLoRANodeId) {handleSelectLoRAWithBaseModel({...lora,provider:'civitai'});return;}
+
     // Also update any targeted LoRALoader node if present
-    if (targetLoRANodeId) {
+    if (canvasMode === 'graph' && targetLoRANodeId) {
       setNodes((prev) =>
         prev.map((n) =>
           n.id === targetLoRANodeId
@@ -1185,7 +1190,10 @@ export default function App() {
     civitaiId?: string;
     triggerWords?: string;
     baseModel?: string;
-  }) => {
+    provider?: string;
+    modelStrength?: number;
+    clipStrength?: number;
+  }, attach = false) => {
     const newNodeId = `node-lora-${Date.now()}`;
     const def = NODE_DEFINITIONS['LoRALoader'];
 
@@ -1206,31 +1214,47 @@ export default function App() {
         civitai_id: lora.civitaiId || '',
         trigger_words: lora.triggerWords || '',
         base_model: lora.baseModel || '',
+        source_provider: lora.provider || '',
+        strength_model: lora.modelStrength ?? 0.8,
+        strength_clip: lora.clipStrength ?? 0.8,
       },
       state: 'idle',
     };
 
-    setNodes((prev) => [...prev, newNode]);
+    if (attach) {
+      try {
+        const mounted=attachLoraToBranch(nodes,connections,newNode,selectedNodeId);
+        setNodes(mounted.nodes);setConnections(mounted.connections);
+      } catch(error:any) {setToast({type:'error',title:'LoRA 未挂载',message:error.message});return false;}
+    } else setNodes((prev) => [...prev, newNode]);
     setSelectedNodeId(newNodeId);
+    return true;
   };
 
   // Attach to the explicitly selected provider/model; architecture is verified by its API.
-  const handleSelectLoRAWithBaseModel = (lora: {name:string;provider?:string;civitaiId?:string;triggerWords?:string;baseModel?:string}) => {
-    const checkpointNode = findFirstNodeOfType(nodes,'CheckpointLoaderSimple');
-    const frame = spatialFrames.find(f=>f.id===selectedFrameId);
-    const provider = frame?.params.targetProvider || checkpointNode?.values.targetProvider;
-    const model = frame?.params.checkpoint || checkpointNode?.values.ckpt_name;
-    const sourceProvider = lora.provider === 'tensor' ? 'tensorart' : lora.provider;
-    if (!provider || !model || (sourceProvider && provider!==sourceProvider)) {
-      setToast({type:'error',title:'请先选择同平台底模',message:'先选择目标供应商和真实模型，再挂载 LoRA；不会自动改供应商、模型或采样参数。'});
-      return;
-    }
-    if (provider==='tensorart' && !/^\d{10,25}$/.test(String(model))) {
-      setToast({type:'error',title:'需要 Tensor.Art 模型 ID',message:'OpenWorks 工具名不能挂载模型 LoRA。'});return;
-    }
-    const selected={...lora,triggerWords:lora.triggerWords || '',civitaiId:provider==='civitai'?lora.civitaiId:undefined};
-    handleSelectLoRAFromCivitai(selected);
-    if (!selectedFrameId && !targetLoRANodeId) handleAddLoRANodeToCanvas(selected);
+  const handleSelectLoRAWithBaseModel = (lora: {name:string;provider?:string;civitaiId?:string;triggerWords?:string;baseModel?:string;modelStrength?:number;clipStrength?:number}) => {
+    const frame=canvasMode==='spatial' ? spatialFrames.find(f=>f.id===selectedFrameId) : undefined;
+    let chosen: {checkpoint:string;provider:string};
+    try {
+      if (canvasMode==='spatial') {
+        if(!frame)throw new Error('请先选择目标空间画板');
+        chosen={checkpoint:frame.params.checkpoint,provider:frame.params.targetProvider};
+      } else {
+        const target=findLoraTarget(nodes,connections,selectedNodeId);
+        chosen=resolveCheckpointForNode(target.id,nodes,connections);
+      }
+      const source=lora.provider==='tensor'?'tensorart':lora.provider;
+      if(!chosen.provider || !chosen.checkpoint || (source && source!==chosen.provider))throw new Error('请先选择同平台底模，LoRA 不会自动修改供应商或底模');
+      if(isInvalidTensorModel(chosen.provider,chosen.checkpoint))throw new Error('旧 OpenWorks 工具不能挂载模型 LoRA，请先选择真实 Tensor 模型 ID');
+      const unsupported=isLoraUnsupportedOnEndpoint(chosen.provider,chosen.checkpoint);
+      if(unsupported.unsupported)throw new Error(unsupported.message || '所选端点不支持 LoRA');
+    } catch(error:any) {setToast({type:'error',title:'LoRA 未挂载',message:error.message});return;}
+    const selected={...lora,triggerWords:lora.triggerWords || '',civitaiId:chosen.provider==='civitai'?lora.civitaiId:undefined};
+    if (canvasMode==='spatial') {
+      const strength=lora.modelStrength ?? 0.8;
+      handleUpdateFrame(frame!.id,{params:{...frame!.params,loras:[...frame!.params.loras.filter(row=>row.name!==lora.name),{...selected,modelStrength:strength,clipStrength:lora.clipStrength ?? strength}]}});
+    } else if(!handleAddLoRANodeToCanvas(selected,true))return;
+    setToast({type:'success',title:'LoRA 已挂载',message:`${lora.name} × ${lora.modelStrength ?? 0.8}；已接入当前${canvasMode==='graph'?'生成分支':'空间画板'}，生成前继续核实模型架构与权限。`});
   };
 
   // Live Model Hub selection
@@ -1764,8 +1788,8 @@ export default function App() {
     nodes,
     connections,
     selectedNodeId,
-    selectedFrameId ? activeFrame?.params?.checkpoint : undefined,
-    selectedFrameId ? (activeFrame?.params?.targetProvider as string | undefined) : undefined
+    canvasMode === 'spatial' ? activeFrame?.params?.checkpoint : undefined,
+    canvasMode === 'spatial' ? (activeFrame?.params?.targetProvider as string | undefined) : undefined
   );
 
   const nodePositiveText = selectedNode
@@ -2209,6 +2233,8 @@ export default function App() {
         isOpen={isModelHubOpen}
         onClose={() => setIsModelHubOpen(false)}
         initialCategory={modelHubCategory}
+        initialProvider={canvasMode === 'spatial' ? activeFrame?.params.targetProvider : resolvedActive.provider}
+        isSpatialMode={canvasMode === 'spatial'}
         currentCheckpoint={
           resolvedActive.checkpoint ||
           (selectedFrameId ? spatialFrames.find((f) => f.id === selectedFrameId)?.params?.checkpoint : undefined) ||
@@ -2315,36 +2341,12 @@ export default function App() {
             setSelectedNodeId(newNodeId);
           }
         }}
-        onAddLora={(lora) => {
-          if (selectedFrameId) {
-            const frame = spatialFrames.find((f) => f.id === selectedFrameId);
-            if (frame) {
-              const existingLoras = frame.params.loras || [];
-              const updatedLoras = [
-                ...existingLoras,
-                {
-                  name: lora.name,
-                  civitaiId: lora.civitaiId,
-                  modelStrength: lora.modelStrength,
-                  clipStrength: lora.clipStrength,
-                  triggerWords: lora.triggerWords || '',
-                },
-              ];
-              let updatedPrompt = frame.prompt;
-              if (lora.triggerWords && !frame.prompt.includes(lora.triggerWords)) {
-                updatedPrompt = `${lora.triggerWords}, ${frame.prompt}`;
-              }
-              handleUpdateFrame(selectedFrameId, {
-                prompt: updatedPrompt,
-                params: { ...frame.params, loras: updatedLoras },
-              });
-            }
-          }
-        }}
-        onAddLoraNode={(loraName, triggerWords, baseModel) => {
+        onAddLora={handleSelectLoRAWithBaseModel}
+        onAddLoraNode={(loraName, triggerWords, baseModel, resource) => {
           handleAddLoRANodeToCanvas({
             name: loraName,
-            civitaiId: '',
+            civitaiId: resource?.civitaiId,
+            provider: resource?.provider,
             triggerWords: triggerWords || '',
             baseModel,
           });

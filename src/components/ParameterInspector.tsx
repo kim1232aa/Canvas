@@ -1,3 +1,4 @@
+import {ProviderModelSelect} from './ProviderModelSelect';
 import React from 'react';
 import {
   Sliders,
@@ -19,8 +20,8 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { ComfyParameters } from '../types/graph';
-import { BASE_MODELS, SAMPLER_OPTIONS, SCHEDULER_OPTIONS } from '../constants/nodes';
-import { refinePromptWithGemini, fetchLiveModels, getRefineModelSelection } from '../services/api';
+import { SAMPLER_OPTIONS, SCHEDULER_OPTIONS } from '../constants/nodes';
+import { refinePromptWithGemini, getRefineModelSelection } from '../services/api';
 import { validateLoraCompatibility } from '../utils/baseModelMatcher';
 import { isLoraUnsupportedOnEndpoint } from '../utils/resolveCheckpoint';
 import { normalizeForComfyUI } from '../utils/engineParameterNormalizer';
@@ -62,58 +63,6 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
   const [copiedComfyJson, setCopiedComfyJson] = React.useState(false);
   const [copiedTrigger, setCopiedTrigger] = React.useState<string | null>(null);
   const [isRefiningPrompt, setIsRefiningPrompt] = React.useState(false);
-  const [liveModels, setLiveModels] = React.useState<Array<{ label: string; value: string; provider: string }>>([]);
-  const [isLoadingModels, setIsLoadingModels] = React.useState(false);
-  const [modelLoadError, setModelLoadError] = React.useState<string | null>(null);
-
-  // Merge static BASE_MODELS with dynamically fetched liveModels
-  const allModels = React.useMemo(() => {
-    const list = [...BASE_MODELS.map(m => ({ label: m.label, value: m.value, provider: m.provider as any }))];
-    liveModels.forEach(lm => {
-      if (!list.some(m => m.value === lm.value && m.provider === lm.provider)) {
-        list.push(lm);
-      }
-    });
-    return list as Array<{ label: string; value: string; provider: any }>;
-  }, [liveModels]);
-
-  React.useEffect(() => {
-    let active = true;
-    setIsLoadingModels(true);
-    setModelLoadError(null);
-    setLiveModels([]);
-    fetchLiveModels(params.targetProvider || 'all', '', 'Checkpoint', 'checkpoint')
-      .then((data) => {
-        if (!active) return;
-        const providerResult: any = data[params.targetProvider];
-        if (providerResult?.error) setModelLoadError(`${providerResult.error}${providerResult.details ? ': ' + providerResult.details : ''}`);
-        const list: Array<{ label: string; value: string; provider: string }> = [];
-        Object.entries(data).forEach(([prov, items]) => {
-          if (Array.isArray(items)) {
-            items.forEach((item: any) => {
-              if (item.id || item.name) {
-                list.push({
-                  label: item.name ? `${item.name} (${item.id})` : item.id,
-                  value: item.id || item.name,
-                  provider: prov,
-                });
-              }
-            });
-          }
-        });
-        setLiveModels(list);
-      })
-      .catch((err) => {
-        if (active) setModelLoadError(err.message || '目录加载失败');
-      })
-      .finally(() => {
-        if (active) setIsLoadingModels(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [params.targetProvider]);
-
   const handleRefine = async () => {
     if (!positivePrompt || !onChangePositivePrompt) return;
     const selection = getRefineModelSelection();
@@ -418,39 +367,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                 </button>
               )}
             </div>
-            <select
-              value={params.checkpoint || ''}
-              onChange={(e) => update({ checkpoint: e.target.value })}
-              className="w-full bg-[#111216] border border-[#2b2d38] focus:border-cyan-500 rounded-lg px-2.5 py-1.5 text-slate-200 text-[11px] font-mono outline-none cursor-pointer"
-              title={params.checkpoint || '未选择 (请先选择模型)'}
-            >
-              {/* Empty must be explicit — otherwise browser shows first MODELSCOPE option */}
-              <option value="">未选择 (请先选择模型)</option>
-              {/* Dynamically preserve custom or current checkpoint */}
-              {params.checkpoint && !allModels.some((m) => m.value === params.checkpoint && m.provider === params.targetProvider) && (
-                <option key={`custom-current-${params.checkpoint}`} value={params.checkpoint}>
-                  ★ [当前生效模型] {params.checkpoint}
-                </option>
-              )}
-              {/* Active Provider Models Group */}
-              {allModels.filter((m) => m.provider === params.targetProvider).length > 0 && (
-                <optgroup label={`当前服务商目录模型 (${params.targetProvider.toUpperCase()})`}>
-                  {allModels
-                    .filter((m) => m.provider === params.targetProvider)
-                    .map((m, idx) => (
-                      <option key={`cur-${m.provider}-${m.value}-${idx}`} value={m.value}>
-                        {m.label}
-                      </option>
-                    ))}
-                </optgroup>
-              )}
-              {allModels.length === 0 && (
-                <option value={params.checkpoint || ''}>
-                  {isLoadingModels ? '正在从云端实时拉取最新模型列表...' : (params.checkpoint || '点击右上角「模型中心」实时拉取选用')}
-                </option>
-              )}
-            </select>
-            {modelLoadError && <p role="alert" className="text-sm text-amber-300 break-words">目录加载失败：{modelLoadError}。仍可核对后手填模型 ID。</p>}
+            <ProviderModelSelect provider={params.targetProvider || ''} value={params.checkpoint || ''} onChange={checkpoint=>update({checkpoint})} />
             <p className="text-sm text-slate-400 break-all">提交服务商：{params.targetProvider || '未选择'} · 模型：{params.checkpoint || '未选择'}</p>
             {/* Custom Model ID input */}
             <div className="pt-1">

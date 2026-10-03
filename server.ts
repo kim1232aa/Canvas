@@ -1,3 +1,4 @@
+import {tensorCatalogUrl} from './src/schemas/tensorCatalog.ts';
 import {buildCivitaiVideoInput} from './src/schemas/civitaiVideo.ts';
 import express from 'express';
 import { AsyncLocalStorage } from 'node:async_hooks';
@@ -995,6 +996,8 @@ async function fetchTensorArtModelInfo(modelId: string, apiKey?: string) {
   return {id:raw.id,name:raw.name,provider:'Tensor.Art',category:isLora?'LoRA':raw.modelType==='CHECKPOINT'?'Checkpoint':raw.modelType,type:raw.modelType,baseModel:raw.baseModel,imageUrl:raw.showcaseImageUrls?.[0] || '',trainedWords:raw.triggerWords ? [raw.triggerWords] : [],externalUrl:`https://tensor.art/models/${raw.id}`,description:raw.description,generationStatus:'metadata_verified',tags:['tensorart',isLora?'lora':'checkpoint',raw.baseModel.toLowerCase()]};
 }
 
+const tensorCatalogCache = new Map<string,{html:string;expiry:number}>();
+
 // Dedicated Real Live Community Models Discovery for Tensor.Art / 吐司
 async function fetchTensorArtModelsList({
   cat = 'all',
@@ -1002,15 +1005,21 @@ async function fetchTensorArtModelsList({
   sortOption = 'downloads',
   page = 1,
   arch = '',
+  catalogTag = '',
 }: {
   cat?: string;
   searchStr?: string;
   sortOption?: string;
   page?: number;
   arch?: string;
+  catalogTag?: string;
 } = {}) {
-  // Public SSR snapshot. No documented model-list API / pagination contract.
-  const url = 'https://tusiart.com/models';
+  // Public category snapshots use verified published links. No TAMS list/pagination API.
+  const tag=catalogTag && catalogTag!=='all' ? catalogTag : (['flux','illustrious'].includes(arch)?arch:'all');
+  const url = tensorCatalogUrl(tag);
+  const cached=tensorCatalogCache.get(url);
+  let html=cached && cached.expiry>Date.now() ? cached.html : '';
+  if(!html) {
   const res = await upstreamFetch(
     { provider: 'tensorart', route: 'models-scrape', model: arch || searchStr || 'list' },
     url,
@@ -1027,7 +1036,9 @@ async function fetchTensorArtModelsList({
     throw new Error(`Tensor.Art API 响应异常 [HTTP ${res.status}]`);
   }
 
-  const html = await res.text();
+  html = await res.text();
+  tensorCatalogCache.set(url,{html,expiry:Date.now()+60000});
+  }
   const articleRegex = /<a[^>]+href="\/models\/(\d+)"[^>]*>.*?<article>(.*?)<\/article>/gs;
   const items: any[] = [];
   let match;
@@ -3245,7 +3256,7 @@ app.get("/api/models", async (req, res) => {
         const numericSearch = searchStr.match(/(?:^|\/models\/)(\d{10,25})(?:$|[/?#])/);
         const taItems = numericSearch
           ? [await fetchTensorArtModelInfo(numericSearch[1],resolveTensorArtKey(req))]
-          : await fetchTensorArtModelsList({cat,searchStr,sortOption:sortParam,page:pageParam,arch:archFilter});
+          : await fetchTensorArtModelsList({cat,searchStr,sortOption:sortParam,page:pageParam,arch:archFilter,catalogTag:String(req.query.catalogTag || '')});
         const filteredTensorItems = taItems.filter((m:any)=> (!searchStr || numericSearch || `${m.name} ${m.baseModel}`.toLowerCase().includes(searchStr.toLowerCase())) && (!archFilter || archFilter==='all' || m.baseModel.toLowerCase().includes(archFilter.toLowerCase())));
         results.tensorart = filteredTensorItems.filter((m: any) => matchCategory(m));
         pagination.tensorart = {

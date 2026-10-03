@@ -10,7 +10,6 @@ import {
   isCanvasFieldUnsupported,
   isFalLoraEndpointError,
   omitUnsupportedGenerateFields,
-  resolveCheckpointForNode,
   resolveGenerateLorasPayload,
 } from './resolveCheckpoint';
 import { assertAIVideoProviderReady } from './videoProvider';
@@ -548,40 +547,6 @@ export function extractWorkflowParameters(
     const loraConn = connections.find((c) => c.toNodeId === execNode.id && c.toSocketId === 'lora');
     if (loraConn) {
       traceLorasUpstream(loraConn.fromNodeId, connections, nodeMap, loras, subgraphNodeIds);
-    }
-    // Orphan LoRALoader on a Fal-only graph still trips Fal LoRA validation.
-    for (const n of nodes) {
-      if (n.bypassed) continue;
-      if (
-        n.type !== 'LoRALoader' &&
-        n.type !== 'LoraLoader' &&
-        n.type !== 'LoraLoaderModelOnly' &&
-        n.type !== 'CivitaiLoRABrowserNode'
-      ) {
-        continue;
-      }
-      if (subgraphNodeIds.has(n.id)) continue;
-      const resolved = resolveCheckpointForNode(n.id, nodes, connections);
-      if (resolved.engineNodeId !== execNode.id) continue;
-      subgraphNodeIds.add(n.id);
-      if (n.type === 'CivitaiLoRABrowserNode') {
-        if (n.values.selected_model_name) {
-          loras.push({
-            name: n.values.selected_model_name,
-            modelStrength: 0.8,
-            clipStrength: 0.8,
-            triggerWords: n.values.selected_triggers || '',
-          });
-        }
-      } else if (String(n.values.lora_name ?? '').trim()) {
-        loras.push({
-          name: String(n.values.lora_name).trim(),
-          modelStrength: Number(n.values.strength_model ?? 0.8),
-          clipStrength: Number(n.values.strength_clip ?? 0.8),
-          triggerWords: n.values.trigger_words || '',
-          civitaiId: n.values.civitai_id || '',
-        });
-      }
     }
   } else if (execNode.type === 'GoogleImagenNode') {
     isVideo = false;

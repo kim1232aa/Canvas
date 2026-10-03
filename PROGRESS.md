@@ -436,3 +436,12 @@ P 事实表（2026-09-29 抓取）：
 - Fal SD LoRA model_name UI、Wan 帧数/帧率、空视频参数、Civitai 显式 Wan2.1 recipe 校验、Qwen Edit image_url 已补齐。
 - 29 个测试文件、236 个测试通过；TypeScript 0 错误。Worker 构建、所有者访问、CSRF、项目/图片/历史持久化、加密设置、重启恢复和删除均通过。
 - 真实调用与账户限制见 public/verification/provider-audit.html 和 results.json。未实际生成视频，未做浏览器逐按钮视觉 QA，不作全模型成功承诺。
+
+## 2026-10-03 用户追查：目录仍只有几个、LoRA 未挂载
+- 截图确认节点底模下拉框仍使用 3 个 Tensor 静态快捷项，参数检查器与模型中心未共用目录。已统一接入当前供应商目录查询，提供搜索、刷新、已加载数量及有文档依据的分页；旧 OpenWorks 工具标成无效底模。
+- TAMS 官方 FAQ 明确没有模型列表接口；本轮读取 https://tams-docs.tusiart.com/docs/api/guide/integration-faq/ 及 https://tusi.cn/models ，接入后者 26 个已发布分类链接。真实公共页返回 32 个资源（14 底模、17 LoRA/LYCORIS、1 视频）；FLUX 分类另返回 32 个资源（4 底模、28 LoRA）。不将公共页声称为全量 API 或已授权生成。
+- 图形模式先前误用残留 selectedFrameId，且新增 LoRA 节点没有接线。已限制空间画板只在空间模式使用；图形模式向选定生成分支插入 LoRALoader，维持既有 LoRA 链并接通 CLIP。主挂载按钮与明确的“添加独立节点”分开；跨平台、无底模连线、多个目标分支均明确报错。
+- 回归测试验证目录超过 3 个、供应商隔离、失败展示、分类 URL 白名单，以及“底模 → LoRA → 采样器 → 参数提取 → Tensor Job”保留资源 ID、权重与零值，第二个 LoRA 不覆盖第一个、其他分支不变。
+- 本次没有追加生成调用；真实出图与账户限制仍以既有 verification 记录为准。TAMS 两把 key 的鉴权限制尚在，不能将 UI 挂载修复声称为 Tensor 真实出图。
+- Fal 图只执行已连入 lora 输入的适配器，去掉由孤立节点猜测唯一引擎后强行加载的逻辑；回归同时覆盖两个串联 LoRA 与独立节点隔离。
+- 最终验证：31 个测试文件、243 个测试通过；TypeScript 0 错误。生产 Worker 构建通过，访问控制与持久化检查通过。额外的公共页快照 Worker 夹具因本地运行器未完成而中止，不列作通过；真实公共页面计数与解析已检查，未做浏览器逐按钮 QA。
