@@ -1,3 +1,4 @@
+import {explicitProvider,graphBranch,catalogModelTarget} from './utils/graphEditing';
 import {attachLoraToBranch,findLoraTarget} from './utils/attachLora';
 import {isInvalidTensorModel} from './utils/modelCatalog';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
@@ -61,7 +62,6 @@ import { identifyArchitectureFamily } from './utils/baseModelMatcher';
 import {
   findFirstNodeOfType,
   getProviderFromNode,
-  isFalLoraEndpointError,
   isLoraUnsupportedOnEndpoint,
   resolveActiveCheckpoint,
   resolveCheckpointForNode,
@@ -668,6 +668,8 @@ export default function App() {
       })
     );
 
+    if (canvasMode !== 'spatial') return;
+
     // Synchronize node value changes to the active spatial frame (preserving other frames)
     const targetNode = nodes.find((n) => n.id === nodeId);
     if (!targetNode) return;
@@ -971,9 +973,9 @@ export default function App() {
         executionProgress: 100,
         executionStage: '生成完成',
       };
-      if (selectedFrameId) {
+      if (canvasMode==='spatial' && selectedFrameId) {
         handleUpdateFrame(selectedFrameId, frameSyncData);
-      } else if (spatialFrames.length > 0) {
+      } else if (canvasMode==='spatial' && spatialFrames.length > 0) {
         handleUpdateFrame(spatialFrames[0].id, frameSyncData);
       }
 
@@ -996,83 +998,8 @@ export default function App() {
       // Prefer the Fal/engine node the user ran; never leave it idle with empty preview.
       const currentTargetId = targetNodeId || selectedNodeId;
       const errMsg = err.message || '执行遇到错误';
-      const isLoraEndpointErr = isFalLoraEndpointError(errMsg);
-      setNodes((prev) => {
-        const falEngines = prev.filter((n) => !n.bypassed && n.type === 'FalAIEngineNode');
-        let errorNodeId = currentTargetId;
-
-        if (errorNodeId) {
-          const target = prev.find((n) => n.id === errorNodeId);
-          if (target && (target.type === 'LoRALoader' || target.type === 'CivitaiLoRABrowserNode' || target.type === 'LoraLoader')) {
-            const resolved = resolveCheckpointForNode(target.id, prev, activeConns);
-            if (resolved.engineNodeId) errorNodeId = resolved.engineNodeId;
-          }
-        }
-
-        if (!errorNodeId && falEngines.length === 1) {
-          errorNodeId = falEngines[0].id;
-        }
-        if (!errorNodeId) {
-          const running = prev.find((n) => n.state === 'running' && (n.type === 'FalAIEngineNode' || n.type === 'KSampler' || n.type === 'AIVideoNode' || n.type === 'GoogleImagenNode'));
-          if (running) errorNodeId = running.id;
-        }
-        if (!errorNodeId) {
-          const running = prev.find((n) => n.state === 'running');
-          if (running) errorNodeId = running.id;
-        }
-        if (!errorNodeId) {
-          const core = prev.find((n) => !n.bypassed && (n.type === 'FalAIEngineNode' || n.type === 'GoogleImagenNode' || n.type === 'AIVideoNode' || n.type === 'KSampler' || n.type === 'SaveImage'));
-          if (core) errorNodeId = core.id;
-        }
-        if (!errorNodeId && prev.length > 0) {
-          errorNodeId = prev[0].id;
-        }
-
-        const errorIds = new Set<string>();
-        const isHfLorasErr = /该服务商不支持/i.test(errMsg) && /Hugging\s*Face/i.test(errMsg);
-        if (errorNodeId) {
-          const en = prev.find((n) => n.id === errorNodeId);
-          if (!(en?.type === 'FalAIEngineNode' && isHfLorasErr)) {
-            errorIds.add(errorNodeId);
-          }
-        }
-        if (currentTargetId) {
-          const t = prev.find((n) => n.id === currentTargetId);
-          if (!(t?.type === 'FalAIEngineNode' && isHfLorasErr)) {
-            errorIds.add(currentTargetId);
-          }
-        }
-        if (isLoraEndpointErr) {
-          for (const n of prev) {
-            if (n.bypassed) continue;
-            if (n.type === 'LoRALoader' || n.type === 'CivitaiLoRABrowserNode' || n.type === 'LoraLoader') {
-              errorIds.add(n.id);
-            }
-          }
-          for (const eng of falEngines) {
-            errorIds.add(eng.id);
-          }
-        }
-
-        return prev.map((n) => {
-          if (errorIds.has(n.id)) {
-            return {
-              ...n,
-              state: 'error' as const,
-              executionProgress: 0,
-              errorMessage: errMsg,
-            };
-          }
-          if (n.state === 'running') {
-            return {
-              ...n,
-              state: 'idle' as const,
-              executionProgress: 0,
-            };
-          }
-          return n;
-        });
-      });
+      const branch=graphBranch(activeNodes,activeConns,currentTargetId);
+      setNodes(prev=>prev.map(n=>branch.ids.has(n.id) ? {...n,state:'error' as const,executionProgress:0,errorMessage:errMsg} : n));
 
       setToast({
         type: 'error',
@@ -1259,18 +1186,9 @@ export default function App() {
 
   // Live Model Hub selection
   const handleSelectModelFromHub = (modelId: string, modelName: string, providerHint?: string, extraData?: any) => {
-    let provider: any = (providerHint || 'civitai').toLowerCase();
-
-    const lowerProv = (providerHint || '').toLowerCase();
-    const lowerId = (modelId || '').toLowerCase();
-
-    const isTaTool = [
-      'strong_text2image', 'photoreal_studio', 'anime_lab', 'oc_character',
-      'text2video_wan', 'text2video_ltx', 'image2video_wan', 'image2video_ltx',
-      'smart_edit', 'image_upscaler', 'background_remover', 'extend_image_sd15',
-      'live_wallpaper', 'old_photo_restore', 'three_view_flux_kontext', 'watermark_remove',
-      'oc_garment'
-    ].some((prefix) => lowerId.includes(prefix));
+    const provider = explicitProvider(providerHint);
+    if (!provider) {setToast({type:'error',title:'未应用模型',message:'模型目录缺少明确供应商，请先选择供应商'});return;}
+    const lowerId = modelId.toLowerCase();
 
     const isVideoModel =
       extraData?.category === 'Video' ||
@@ -1288,53 +1206,24 @@ export default function App() {
       lowerId.includes('cogvideo') ||
       lowerId.includes('hunyuan-video');
 
-    if (lowerProv.includes('tensor') || lowerId.includes('tensor') || isTaTool || /^\d{10,25}$/.test(lowerId)) {
-      provider = 'tensorart';
-    } else if (lowerProv.includes('agnes') || lowerId.includes('agnes')) {
-      provider = 'agnes';
-    } else if (lowerProv.includes('sensenova') || lowerProv.includes('商汤') || lowerId.includes('sensenova') || lowerId.includes('deepseek') || lowerId.includes('glm')) {
-      provider = 'sensenova';
-    } else if (lowerProv.includes('civitai') || lowerId.includes('civitai') || lowerId.includes('krea2') || lowerId.startsWith('urn:air:')) {
-      provider = 'civitai';
-    } else if (lowerProv === 'modelscope_ai' || lowerProv.includes('international') || lowerProv.includes('国际站')) {
-      provider = 'modelscope_ai';
-    } else if (lowerProv.includes('modelscope') || lowerProv.includes('魔搭') || lowerId.startsWith('damo/') || lowerId.includes('qwen')) {
-      provider = 'modelscope';
-    } else if (lowerProv.includes('hugging') || lowerProv.includes('hf')) {
-      provider = 'huggingface';
-    } else if (lowerProv.includes('nanogpt')) {
-      provider = 'nanogpt';
-    } else if (lowerProv.includes('gemini') || lowerProv.includes('imagen') || lowerId.includes('imagen')) {
-      provider = 'gemini';
-    } else if (lowerProv.includes('video') || isVideoModel) {
-      provider = lowerProv.includes('tensor') ? 'tensorart' : lowerProv.includes('modelscope') ? 'modelscope' : 'fal';
-    } else if (lowerProv.includes('fal')) {
-      provider = 'fal';
+    if (canvasMode === 'spatial') {
+      const frame=spatialFrames.find(f=>f.id===selectedFrameId);
+      if(!frame){setToast({type:'error',title:'未应用模型',message:'请先选择目标空间画板'});return;}
+      handleUpdateFrame(frame.id,{mediaType:isVideoModel?'video':'image',params:{...frame.params,checkpoint:modelId,targetProvider:provider as ComfyParameters['targetProvider']}});
+      setToast({type:'success',title:'模型已应用',message:`${modelName} · ${provider}`});return;
     }
+    let targetModelNode:NodeInstance|undefined;
+    try {
+      targetModelNode=catalogModelTarget(nodes,connections,selectedNodeId,isVideoModel);
+      if(targetModelNode && targetModelNode.type!=='CheckpointLoaderSimple' && targetModelNode.type!=='AIVideoNode' && getProviderFromNode(targetModelNode)!==provider)throw new Error('此引擎节点固定供应商，请选择对应平台的模型加载器');
+    }catch(error:any){setToast({type:'error',title:'未应用模型',message:error.message});return;}
 
     if (isVideoModel) {
-      // 1. Update active spatial frame for video
-      if (selectedFrameId) {
-        const frame = spatialFrames.find((f) => f.id === selectedFrameId);
-        if (frame) {
-          handleUpdateFrame(selectedFrameId, {
-            mediaType: 'video',
-            params: {
-              ...frame.params,
-              checkpoint: modelId,
-              targetProvider: provider,
-              tensorArtInputs: provider === 'tensorart' ? (extraData?.inputs || []) : undefined,
-            },
-          });
-        }
-      }
-
-      // 2. Update existing AIVideoNode or create new one if not exists
-      const existingVideoNode = nodes.find((n) => n.type === 'AIVideoNode' && !n.bypassed);
+      const existingVideoNode = targetModelNode;
       if (existingVideoNode) {
         setNodes((prev) =>
           prev.map((n) => {
-            if (n.type === 'AIVideoNode') {
+            if (n.id === existingVideoNode.id) {
               return {
                 ...n,
                 title: `AI 视频 (${modelName.split('/').pop()})`,
@@ -1384,33 +1273,17 @@ export default function App() {
         message: `已切换至【${modelName}】(服务商: ${provider.toUpperCase()})，已同步至画布与活跃选区`,
       });
     } else {
-      // Base Model (Checkpoint)
-      if (selectedFrameId) {
-        const frame = spatialFrames.find((f) => f.id === selectedFrameId);
-        if (frame) {
-          handleUpdateFrame(selectedFrameId, {
-            mediaType: 'image',
-            params: {
-              ...frame.params,
-              checkpoint: modelId,
-              targetProvider: provider,
-              tensorArtInputs: provider === 'tensorart' ? (extraData?.inputs || []) : undefined,
-            },
-          });
-        }
-      }
-
-      const existingCkptNode = findFirstNodeOfType(nodes, 'CheckpointLoaderSimple');
+      const existingCkptNode = targetModelNode;
       if (existingCkptNode) {
         setNodes((prev) =>
           prev.map((n) => {
-            if (n.type === 'CheckpointLoaderSimple') {
+            if (n.id === existingCkptNode.id) {
               return {
                 ...n,
                 title: checkpointNodeTitle(provider),
                 values: {
                   ...n.values,
-                  ckpt_name: modelId,
+                  ...(n.type==='CheckpointLoaderSimple'?{ckpt_name:modelId}:n.type==='ModelScopeNode'||n.type==='ModelScopeAiNode'?{model_endpoint:modelId}:{model:modelId}),
                   targetProvider: provider,
                   tensorArtInputs: provider === 'tensorart' ? (extraData?.inputs || []) : undefined,
                 },
@@ -1621,6 +1494,8 @@ export default function App() {
   };
 
   const handleAddToCanvasAsFrame = (asset: MediaAsset) => {
+    const provider=explicitProvider(asset.provider);
+    if(!provider){setToast({type:'error',title:'未导入资产',message:'资产缺少明确供应商，请先核对其生成来源'});return;}
     const newId = `frame-asset-${Date.now()}`;
     const newFrame: SpatialFrame = {
       id: newId,
@@ -1632,21 +1507,21 @@ export default function App() {
       width: 480,
       height: 480,
       prompt: asset.prompt,
-      negativePrompt: 'blurry, bad anatomy, low quality',
+      negativePrompt: asset.negativePrompt || '',
       params: {
         checkpoint: asset.model,
-        seed: asset.seed || Math.floor(Math.random() * 1000000000),
-        seedControl: 'randomize',
-        steps: 25,
-        cfg: 4.5,
-        sampler: 'euler',
-        scheduler: 'normal',
+        seed: asset.seed ?? undefined,
+        seedControl: 'fixed',
+        steps: asset.steps ?? undefined,
+        cfg: asset.cfg ?? undefined,
+        sampler: asset.sampler,
+        scheduler: asset.scheduler,
         denoise: 1.0,
-        width: 1024,
-        height: 1024,
+        width: asset.width ?? 1024,
+        height: asset.height ?? 1024,
         batchSize: 1,
-        loras: [],
-        targetProvider: (asset.provider.toLowerCase().includes('modelscope') ? 'modelscope' : 'fal') as any,
+        loras: (asset.loras || []).map(l=>({name:l.name,modelStrength:l.strength ?? 0.8,clipStrength:l.strength ?? 0.8,triggerWords:''})),
+        targetProvider: provider as any,
       },
       imageUrl: asset.type === 'image' ? asset.url : undefined,
       videoUrl: asset.type === 'video' ? asset.url : undefined,
@@ -1772,55 +1647,46 @@ export default function App() {
 
   // Active parameters and prompts dynamically derived from nodes and active frame
   const activeFrame = spatialFrames.find((f) => f.id === selectedFrameId) || spatialFrames[0];
-  const positiveNode = nodes.find((n) => n.type === 'CLIPTextEncode' && !n.bypassed);
-  const negativeNode = nodes.find((n) => n.type === 'CLIPTextEncodeNegative' && !n.bypassed);
-  const googleImagenNode = findFirstNodeOfType(nodes, 'GoogleImagenNode');
-  const falEngineNode = findFirstNodeOfType(nodes, 'FalAIEngineNode');
-  const videoEngineNode = findFirstNodeOfType(nodes, 'AIVideoNode');
-  const ksamplerNode = nodes.find((n) => n.type === 'KSampler' && !n.bypassed);
-  const latentNode = nodes.find((n) => n.type === 'EmptyLatentImage' && !n.bypassed);
-  const checkpointLoaderNode = findFirstNodeOfType(nodes, 'CheckpointLoaderSimple');
+  const inspectorBranch=graphBranch(nodes,connections,selectedNodeId);
+  const inspectorNodes=nodes.filter(n=>inspectorBranch.ids.has(n.id));
+  const googleImagenNode=findFirstNodeOfType(inspectorNodes,'GoogleImagenNode');
+  const inspectorFrame=canvasMode==='spatial'?activeFrame:undefined;
+  const falEngineNode = findFirstNodeOfType(inspectorNodes, 'FalAIEngineNode');
+  const videoEngineNode = findFirstNodeOfType(inspectorNodes, 'AIVideoNode');
+  const ksamplerNode = inspectorNodes.find((n) => n.type === 'KSampler' && !n.bypassed);
+  const latentNode = inspectorNodes.find((n) => n.type === 'EmptyLatentImage' && !n.bypassed);
+  const checkpointLoaderNode = findFirstNodeOfType(inspectorNodes, 'CheckpointLoaderSimple');
 
   const selectedNode = selectedNodeId ? nodes.find((n) => n.id === selectedNodeId) : null;
 
   // LoRA/panel checkpoint: ONLY the selected (or sole) engine node's model — never invent Z-Image-Turbo
-  const resolvedActive = resolveActiveCheckpoint(
-    nodes,
-    connections,
-    selectedNodeId,
-    canvasMode === 'spatial' ? activeFrame?.params?.checkpoint : undefined,
-    canvasMode === 'spatial' ? (activeFrame?.params?.targetProvider as string | undefined) : undefined
-  );
-
-  const nodePositiveText = selectedNode
-    ? (selectedNode.type === 'CLIPTextEncode' ? selectedNode.values?.text :
-       selectedNode.type === 'GoogleImagenNode' ? selectedNode.values?.prompt :
-       selectedNode.type === 'PromptRefinerLLM' ? selectedNode.values?.concept : null)
-    : null;
-
-  const nodeNegativeText = selectedNode
-    ? (selectedNode.type === 'CLIPTextEncodeNegative' ? selectedNode.values?.text :
-       selectedNode.type === 'GoogleImagenNode' ? selectedNode.values?.negative_prompt : null)
-    : null;
+  const resolvedActive = canvasMode==='spatial'
+    ? {checkpoint:inspectorFrame?.params.checkpoint || '',provider:inspectorFrame?.params.targetProvider || ''}
+    : resolveActiveCheckpoint(inspectorNodes,connections,inspectorBranch.target?.id);
+  let graphExtraction:ReturnType<typeof extractWorkflowParameters>|undefined;
+  try {if(inspectorBranch.target)graphExtraction=extractWorkflowParameters(inspectorNodes,connections,inspectorBranch.target.id);}catch{/* Incomplete graphs stay editable; generation exposes validation. */}
+  const promptNode=(socket:string)=>inspectorNodes.find(n=>connections.some(c=>c.fromNodeId===n.id && c.toNodeId===inspectorBranch.target?.id && c.toSocketId===socket));
+  const nodePositiveText=promptNode('positive')?.values.text ?? promptNode('prompt')?.values.text ?? inspectorBranch.target?.values.prompt;
+  const nodeNegativeText=promptNode('negative')?.values.text ?? inspectorBranch.target?.values.negative_prompt;
 
   // Single source of truth with SpatialFrame: when any frame is active (selected
   // or fallback first), inspector prompt mirrors frame.prompt / negativePrompt.
   // Avoid preferring CLIP node text while SpatialFrame shows a different string.
   const activePositivePrompt: string =
-    (activeFrame != null ? (activeFrame.prompt ?? '') : null) ??
+    (inspectorFrame != null ? (inspectorFrame.prompt ?? '') : null) ??
     nodePositiveText ??
-    positiveNode?.values?.text ??
-    googleImagenNode?.values?.prompt ??
+    inspectorNodes.find(n=>n.type==='CLIPTextEncode')?.values?.text ??
+    inspectorNodes.find(n=>n.type==='GoogleImagenNode')?.values?.prompt ??
     '';
 
   const activeNegativePrompt: string =
-    (activeFrame != null ? (activeFrame.negativePrompt ?? '') : null) ??
+    (inspectorFrame != null ? (inspectorFrame.negativePrompt ?? '') : null) ??
     nodeNegativeText ??
-    negativeNode?.values?.text ??
-    googleImagenNode?.values?.negative_prompt ??
+    inspectorNodes.find(n=>n.type==='CLIPTextEncodeNegative')?.values?.text ??
+    inspectorNodes.find(n=>n.type==='GoogleImagenNode')?.values?.negative_prompt ??
     '';
 
-  const graphLoras = nodes
+  const graphLoras = inspectorNodes
     .filter((n) => (n.type === 'LoRALoader' || n.type === 'LoraLoader' || n.type === 'LoraLoaderModelOnly') && !n.bypassed)
     .map((n) => ({
       name: String(n.values?.lora_name ?? '').trim(),
@@ -1833,53 +1699,55 @@ export default function App() {
 
   const detectedTargetProvider =
     resolvedActive.provider ||
-    (googleImagenNode ? 'gemini' : undefined) ||
+    (inspectorNodes.some(n=>n.type==='GoogleImagenNode') ? 'gemini' : undefined) ||
     (falEngineNode ? 'fal' : undefined) ||
     (videoEngineNode ? (getProviderFromNode(videoEngineNode) || 'video') : undefined) ||
-    activeFrame?.params?.targetProvider ||
+    inspectorFrame?.params?.targetProvider ||
     '';
 
-  const activeParams: ComfyParameters = {
+  const graphParams: ComfyParameters = {
     // Use ONLY the current/sole engine node's model — never invent Tongyi-MAI/Z-Image-Turbo
-    checkpoint: resolvedActive.checkpoint || (selectedFrameId ? (activeFrame?.params?.checkpoint || '') : '') || '',
-    seed: ksamplerNode?.values?.seed !== undefined ? Number(ksamplerNode.values.seed) : (activeFrame?.params?.seed ?? undefined),
-    seedControl: (ksamplerNode?.values?.control_after_generate as any) || activeFrame?.params?.seedControl || 'randomize',
-    steps: ksamplerNode?.values?.steps !== undefined ? Number(ksamplerNode.values.steps) : (activeFrame?.params?.steps ?? 25),
-    cfg: ksamplerNode?.values?.cfg !== undefined ? Number(ksamplerNode.values.cfg) : (activeFrame?.params?.cfg ?? 4.5),
+    checkpoint: resolvedActive.checkpoint || (selectedFrameId ? (inspectorFrame?.params?.checkpoint || '') : '') || '',
+    seed: graphExtraction?.seed,
+    seedControl: (inspectorBranch.target?.values.control_after_generate as any) || 'fixed',
+    steps: graphExtraction?.steps,
+    cfg: graphExtraction?.cfg,
     // ?? not ||: imported '' (未指定) must stay empty, never forge euler/normal
-    sampler: ksamplerNode?.values?.sampler_name ?? activeFrame?.params?.sampler ?? 'euler',
-    scheduler: ksamplerNode?.values?.scheduler ?? activeFrame?.params?.scheduler ?? 'normal',
-    denoise: ksamplerNode?.values?.denoise !== undefined ? Number(ksamplerNode.values.denoise) : (activeFrame?.params?.denoise ?? 1.0),
-    width: latentNode?.values?.width !== undefined ? Number(latentNode.values.width) : (activeFrame?.params?.width ?? 1024),
-    height: latentNode?.values?.height !== undefined ? Number(latentNode.values.height) : (activeFrame?.params?.height ?? 1024),
-    batchSize: (selectedFrameId && activeFrame?.params?.batchSize != null)
-      ? Number(activeFrame.params.batchSize)
+    sampler: graphExtraction?.sampler,
+    scheduler: graphExtraction?.scheduler,
+    denoise: ksamplerNode?.values?.denoise !== undefined ? Number(ksamplerNode.values.denoise) : (inspectorFrame?.params?.denoise ?? 1.0),
+    width: graphExtraction?.width ?? (Number(latentNode?.values.width) || 0),
+    height: graphExtraction?.height ?? (Number(latentNode?.values.height) || 0),
+    batchSize: (selectedFrameId && inspectorFrame?.params?.batchSize != null)
+      ? Number(inspectorFrame.params.batchSize)
       : (latentNode?.values?.batch_size !== undefined
           ? Number(latentNode.values.batch_size)
-          : (activeFrame?.params?.batchSize ?? 1)),
-    loras: (selectedFrameId ? activeFrame?.params?.loras : null) || (graphLoras.length > 0 ? graphLoras : (activeFrame?.params?.loras || [])),
+          : (inspectorFrame?.params?.batchSize ?? 1)),
+    loras: inspectorFrame ? inspectorFrame.params.loras : graphLoras,
     targetProvider: detectedTargetProvider as any,
     aspectRatio:
       (googleImagenNode ? googleImagenNode.values?.aspect_ratio : undefined) ||
       checkpointLoaderNode?.values?.aspect_ratio ||
       checkpointLoaderNode?.values?.aspectRatio ||
-      activeFrame?.params?.aspectRatio ||
+      inspectorFrame?.params?.aspectRatio ||
       undefined,
-    imageSize: (googleImagenNode ? googleImagenNode.values?.image_size : activeFrame?.params?.imageSize) || undefined,
-    size: checkpointLoaderNode?.values?.size || activeFrame?.params?.size || undefined,
-    quality: checkpointLoaderNode?.values?.quality || activeFrame?.params?.quality || undefined,
+    imageSize: (googleImagenNode ? googleImagenNode.values?.image_size : inspectorFrame?.params?.imageSize) || undefined,
+    size: checkpointLoaderNode?.values?.size || inspectorFrame?.params?.size || undefined,
+    quality: checkpointLoaderNode?.values?.quality || inspectorFrame?.params?.quality || undefined,
     outputFormat:
       checkpointLoaderNode?.values?.output_format ||
       checkpointLoaderNode?.values?.outputFormat ||
-      activeFrame?.params?.outputFormat ||
+      inspectorFrame?.params?.outputFormat ||
       undefined,
-    background: checkpointLoaderNode?.values?.background || activeFrame?.params?.background || undefined,
-    moderation: checkpointLoaderNode?.values?.moderation || activeFrame?.params?.moderation || undefined,
-    resolution: checkpointLoaderNode?.values?.resolution || activeFrame?.params?.resolution || undefined,
-    shift: checkpointLoaderNode?.values?.shift ?? activeFrame?.params?.shift,
-    randomSeed: checkpointLoaderNode?.values?.random_seed ?? activeFrame?.params?.randomSeed,
-    galleryImages: checkpointLoaderNode?.values?.gallery_images ?? activeFrame?.params?.galleryImages,
+    background: checkpointLoaderNode?.values?.background || inspectorFrame?.params?.background || undefined,
+    moderation: checkpointLoaderNode?.values?.moderation || inspectorFrame?.params?.moderation || undefined,
+    resolution: checkpointLoaderNode?.values?.resolution || inspectorFrame?.params?.resolution || undefined,
+    shift: checkpointLoaderNode?.values?.shift ?? inspectorFrame?.params?.shift,
+    randomSeed: checkpointLoaderNode?.values?.random_seed ?? inspectorFrame?.params?.randomSeed,
+    galleryImages: checkpointLoaderNode?.values?.gallery_images ?? inspectorFrame?.params?.galleryImages,
   };
+
+  const activeParams = inspectorFrame ? inspectorFrame.params : graphParams;
 
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-[#0c0d11] select-none font-sans">
@@ -2041,10 +1909,12 @@ export default function App() {
             params={activeParams}
             positivePrompt={activePositivePrompt}
             onChangePositivePrompt={(newPrompt) => {
+              if(canvasMode==='graph' && inspectorBranch.error){setToast({type:'error',title:'未修改提示词',message:inspectorBranch.error});return;}
               // Update CLIPTextEncode, GoogleImagenNode, and PromptRefinerLLM in graph
               setNodes((prev) =>
                 prev.map((n) => {
-                  if (n.type === 'CLIPTextEncode') {
+                  if(canvasMode!=='graph' || !inspectorBranch.ids.has(n.id))return n;
+                  if (n.type === 'CLIPTextEncode' && connections.some(c=>c.fromNodeId===n.id && c.toNodeId===inspectorBranch.target?.id && ['positive','prompt'].includes(c.toSocketId))) {
                     return { ...n, values: { ...(n.values || {}), text: newPrompt } };
                   }
                   if (n.type === 'GoogleImagenNode') {
@@ -2058,7 +1928,7 @@ export default function App() {
               );
               // Update active spatial frame ONLY
               const targetFrameId = selectedFrameId || (spatialFrames.length > 0 ? spatialFrames[0].id : null);
-              if (targetFrameId) {
+              if (canvasMode==='spatial' && targetFrameId) {
                 setSpatialFrames((prev) =>
                   prev.map((f) => (f.id === targetFrameId ? { ...f, prompt: newPrompt } : f))
                 );
@@ -2066,10 +1936,12 @@ export default function App() {
             }}
             negativePrompt={activeNegativePrompt}
             onChangeNegativePrompt={(newPrompt) => {
+              if(canvasMode==='graph' && inspectorBranch.error){setToast({type:'error',title:'未修改提示词',message:inspectorBranch.error});return;}
               // Update CLIPTextEncodeNegative and GoogleImagenNode in graph
               setNodes((prev) =>
                 prev.map((n) => {
-                  if (n.type === 'CLIPTextEncodeNegative') {
+                  if(canvasMode!=='graph' || !inspectorBranch.ids.has(n.id))return n;
+                  if (n.type === 'CLIPTextEncodeNegative' || (n.type==='CLIPTextEncode' && connections.some(c=>c.fromNodeId===n.id && c.toNodeId===inspectorBranch.target?.id && c.toSocketId==='negative'))) {
                     return { ...n, values: { ...(n.values || {}), text: newPrompt } };
                   }
                   if (n.type === 'GoogleImagenNode') {
@@ -2080,16 +1952,17 @@ export default function App() {
               );
               // Update active spatial frame ONLY
               const targetFrameId = selectedFrameId || (spatialFrames.length > 0 ? spatialFrames[0].id : null);
-              if (targetFrameId) {
+              if (canvasMode==='spatial' && targetFrameId) {
                 setSpatialFrames((prev) =>
                   prev.map((f) => (f.id === targetFrameId ? { ...f, negativePrompt: newPrompt } : f))
                 );
               }
             }}
             onChange={(newParams) => {
+              if(canvasMode==='graph' && inspectorBranch.error){setToast({type:'error',title:'未修改参数',message:inspectorBranch.error});return;}
               // Update active spatial frame ONLY
               const targetFrameId = selectedFrameId || (spatialFrames.length > 0 ? spatialFrames[0].id : null);
-              if (targetFrameId) {
+              if (canvasMode==='spatial' && targetFrameId) {
                 setSpatialFrames((prev) =>
                   prev.map((f) => (f.id === targetFrameId ? { ...f, params: { ...f.params, ...newParams } } : f))
                 );
@@ -2097,6 +1970,7 @@ export default function App() {
               // Update matching graph nodes
               setNodes((prev) =>
                 prev.map((n) => {
+                  if(canvasMode!=='graph' || !inspectorBranch.ids.has(n.id))return n;
                   if (n.type === 'KSampler') {
                     return {
                       ...n,
@@ -2161,14 +2035,19 @@ export default function App() {
                       values: updatedValues,
                     };
                   }
+                  if (n.type === 'FalAIEngineNode') {
+                    return {...n,values:{...n.values,model:newParams.checkpoint,steps:newParams.steps,guidance_scale:newParams.cfg,seed:newParams.seed,
+                      ...(newParams.width>0 && newParams.height>0 ? {resolution:`${newParams.width}x${newParams.height}`} : {})}};
+                  }
+                  if (n.type === 'ModelScopeNode' || n.type === 'ModelScopeAiNode')return {...n,values:{...n.values,model_endpoint:newParams.checkpoint}};
+                  if (n.type === 'NanoGPTNode')return {...n,values:{...n.values,model:newParams.checkpoint}};
+                  if (n.type === 'AIVideoNode')return {...n,values:{...n.values,model:newParams.checkpoint,targetProvider:newParams.targetProvider}};
                   if (n.type === 'GoogleImagenNode') {
                     return {
                       ...n,
                       values: {
                         ...n.values,
-                        model: newParams.checkpoint.includes('gemini') || newParams.checkpoint.includes('imagen')
-                          ? newParams.checkpoint
-                          : n.values.model,
+                        model: newParams.checkpoint,
                         aspect_ratio: newParams.aspectRatio || '',
                         image_size: newParams.imageSize || '',
                       },
@@ -2193,10 +2072,12 @@ export default function App() {
             onOpenModelHub={() => setIsModelHubOpen(true)}
             onOpenGuide={() => setIsGuideOpen(true)}
             onInsertTriggerWords={(words) => {
+              if(canvasMode==='graph' && inspectorBranch.error){setToast({type:'error',title:'未修改提示词',message:inspectorBranch.error});return;}
               const newPrompt = activePositivePrompt ? `${words}, ${activePositivePrompt}` : words;
               setNodes((prev) =>
                 prev.map((n) => {
-                  if (n.type === 'CLIPTextEncode') {
+                  if(canvasMode!=='graph' || !inspectorBranch.ids.has(n.id))return n;
+                  if (n.type === 'CLIPTextEncode' && connections.some(c=>c.fromNodeId===n.id && c.toNodeId===inspectorBranch.target?.id && ['positive','prompt'].includes(c.toSocketId))) {
                     return { ...n, values: { ...(n.values || {}), text: newPrompt } };
                   }
                   if (n.type === 'GoogleImagenNode') {
@@ -2206,14 +2087,14 @@ export default function App() {
                 })
               );
               const targetFrameId = selectedFrameId || (spatialFrames.length > 0 ? spatialFrames[0].id : null);
-              if (targetFrameId) {
+              if (canvasMode==='spatial' && targetFrameId) {
                 setSpatialFrames((prev) =>
                   prev.map((f) => (f.id === targetFrameId ? { ...f, prompt: newPrompt } : f))
                 );
               }
             }}
             onClose={() => setIsParamsDrawerOpen(false)}
-            title={selectedNode ? `节点调试: ${selectedNode.title}` : activeFrame ? `${paramsDrawerFramePrefix(activeFrame.params.targetProvider)}: ${activeFrame.title}` : '参数总控台'}
+            title={canvasMode==='graph' && selectedNode ? `节点调试: ${selectedNode.title}` : inspectorFrame ? `${paramsDrawerFramePrefix(inspectorFrame.params.targetProvider)}: ${inspectorFrame.title}` : '参数总控台'}
           />
         </aside>
       )}
@@ -2237,45 +2118,14 @@ export default function App() {
         isSpatialMode={canvasMode === 'spatial'}
         currentCheckpoint={
           resolvedActive.checkpoint ||
-          (selectedFrameId ? spatialFrames.find((f) => f.id === selectedFrameId)?.params?.checkpoint : undefined) ||
+          (canvasMode==='spatial' && selectedFrameId ? spatialFrames.find((f) => f.id === selectedFrameId)?.params?.checkpoint : undefined) ||
           ''
         }
         onSelectModel={handleSelectModelFromHub}
         onAddModelNode={(mId, mName, prov, extraData) => {
-          let detectedProvider = prov;
-          const lowerId = mId.toLowerCase();
-          const lowerProv = (prov || '').toLowerCase();
-          const isTa = [
-            'strong_text2image', 'photoreal_studio', 'anime_lab', 'oc_character',
-            'text2video_wan', 'text2video_ltx', 'image2video_wan', 'image2video_ltx',
-            'smart_edit', 'image_upscaler', 'background_remover', 'extend_image_sd15',
-            'live_wallpaper', 'old_photo_restore', 'three_view_flux_kontext', 'watermark_remove',
-            'oc_garment'
-          ].some((prefix) => lowerId.includes(prefix));
-
-          if (!detectedProvider || detectedProvider === 'Cloud API') {
-            if (lowerProv.includes('tensor') || lowerId.includes('tensor') || /^\d{10,25}$/.test(mId) || isTa) {
-              detectedProvider = 'tensorart';
-            } else if (lowerProv.includes('civitai') || lowerId.includes('civitai') || lowerId.includes('krea2') || lowerId.startsWith('urn:air:')) {
-              detectedProvider = 'civitai';
-            } else if (lowerProv.includes('agnes') || lowerId.includes('agnes')) {
-              detectedProvider = 'agnes';
-            } else if (lowerProv.includes('modelscope') || lowerId.includes('damo/') || lowerId.includes('wan2.1') || lowerId.includes('qwen')) {
-              detectedProvider = 'modelscope';
-            } else if (lowerProv.includes('sensenova') || lowerId.includes('deepseek') || lowerId.includes('sensenova') || lowerId.includes('glm')) {
-              detectedProvider = 'sensenova';
-            } else if (lowerProv.includes('gemini') || lowerId.includes('imagen') || lowerId.includes('gemini')) {
-              detectedProvider = 'gemini';
-            } else if (lowerProv.includes('hugging') || lowerId.includes('black-forest-labs') || lowerId.includes('stabilityai') || lowerId.includes('runwayml')) {
-              detectedProvider = 'huggingface';
-            } else if (lowerProv.includes('nanogpt') || lowerId.includes('flux-schnell') || lowerId.includes('sdxl-turbo')) {
-              detectedProvider = 'nanogpt';
-            } else if (lowerProv.includes('fal') || lowerId.includes('fal-ai')) {
-              detectedProvider = 'fal';
-            } else {
-              detectedProvider = 'civitai';
-            }
-          }
+          const detectedProvider = explicitProvider(prov);
+          if(!detectedProvider){setToast({type:'error',title:'未添加节点',message:'缺少明确供应商，请从对应平台目录选择模型'});return;}
+          const lowerId=mId.toLowerCase();
 
           const isVideoModel =
             extraData?.category === 'Video' ||

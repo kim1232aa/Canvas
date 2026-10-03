@@ -1,4 +1,5 @@
 import {tensorCatalogUrl} from './src/schemas/tensorCatalog.ts';
+import {isHuggingFaceLora} from './src/utils/hfResource.ts';
 import {buildCivitaiVideoInput} from './src/schemas/civitaiVideo.ts';
 import express from 'express';
 import { AsyncLocalStorage } from 'node:async_hooks';
@@ -957,10 +958,12 @@ app.get('/api/huggingface/model-info', async (req, res) => {
     return res.json({
       id: m.id,
       name: m.id.split('/').pop(),
+      type:isHuggingFaceLora(m)?'LORA':'Checkpoint',
+      category:isHuggingFaceLora(m)?'LoRA':'Checkpoint',
       author: m.author || m.id.split('/')[0],
       downloads: m.downloads || 0,
       likes: m.likes || 0,
-      baseModel: baseModel || 'FLUX.1 / SDXL',
+      baseModel,
       triggerWords: uniqueTriggers,
       pipelineTag: m.pipeline_tag || '',
       imageUrl,
@@ -2798,7 +2801,7 @@ app.get("/api/models", async (req, res) => {
               }
             }
 
-            const isLoraModel = cat === 'lora' || (m.tags && (m.tags.includes('lora') || m.tags.includes('LoRA'))) || m.id.toLowerCase().includes('lora');
+            const isLoraModel = isHuggingFaceLora(m);
 
             return {
               id: m.id,
@@ -2820,7 +2823,6 @@ app.get("/api/models", async (req, res) => {
           });
 
           results.huggingface = fetchedItems.filter((m: any) => {
-            if (cat === 'lora') return true;
             return matchCategory(m) && matchSearch(m);
           });
         } else {

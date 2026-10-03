@@ -8,7 +8,6 @@ import {
   findSoleCloudEngine,
   isCloudEngineNode,
   isCanvasFieldUnsupported,
-  isFalLoraEndpointError,
   omitUnsupportedGenerateFields,
   resolveGenerateLorasPayload,
 } from './resolveCheckpoint';
@@ -728,11 +727,13 @@ export async function executeWorkflow(
   targetNodeOrId?: NodeInstance | string
 ): Promise<{ imageUrl: string; provider: string; model: string; seed: number | null; isVideo?: boolean; executingNodeId?: string; historyWarning?: string }> {
   let stepInterval: any = null;
+  let executingIds = new Set<string>();
   let targetErrorNodeId: string | undefined = typeof targetNodeOrId === 'string' ? targetNodeOrId : targetNodeOrId?.id;
 
   try {
     const params = extractWorkflowParameters(nodes, connections, targetNodeOrId);
     targetErrorNodeId = params.executingNodeId || targetErrorNodeId;
+    executingIds = new Set(params.subgraphNodeIds);
 
     const subgraphSet = new Set(params.subgraphNodeIds || []);
     const activeNodes = nodes.filter((n) => !n.bypassed && (subgraphSet.size === 0 || subgraphSet.has(n.id)));
@@ -962,20 +963,8 @@ export async function executeWorkflow(
     if (stepInterval) clearInterval(stepInterval);
     onProgress?.(0, `执行失败: ${error.message}`);
     const msg = error?.message || '执行遇到错误';
-    if (targetErrorNodeId) {
-      onNodeStateChange(targetErrorNodeId, 'error', 0, undefined, msg);
-    }
-    // Surface Fal endpoint-unsupported on connected LoRA loaders; never paint HF loras 400 onto Fal.
-    if (isFalLoraEndpointError(msg)) {
-      for (const n of nodes) {
-        if (n.bypassed) continue;
-        if (n.type === 'LoRALoader' || n.type === 'CivitaiLoRABrowserNode' || n.type === 'LoraLoader') {
-          if (n.id !== targetErrorNodeId) {
-            onNodeStateChange(n.id, 'error', 0, undefined, msg);
-          }
-        }
-      }
-    }
+    if (targetErrorNodeId) executingIds.add(targetErrorNodeId);
+    for(const id of executingIds)onNodeStateChange(id,'error',0,undefined,msg);
     throw error;
   }
 }

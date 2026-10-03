@@ -7,6 +7,13 @@ import type {Connection,NodeInstance} from '../types/graph';
 const node=(id:string,type:string,values:Record<string,any>):NodeInstance=>({id,type,title:type,pos:{x:0,y:0},inputs:NODE_DEFINITIONS[type].inputs,outputs:NODE_DEFINITIONS[type].outputs,values});
 const fixture=()=>({nodes:[node('base','CheckpointLoaderSimple',{targetProvider:'tensorart',ckpt_name:'672797109289765558'}),node('sampler','KSampler',{seed:42,steps:12,cfg:7}),node('prompt','CLIPTextEncode',{text:'robot'}),node('latent','EmptyLatentImage',{width:512,height:512,batch_size:1})],connections:[{id:'m',fromNodeId:'base',fromSocketId:'MODEL',toNodeId:'sampler',toSocketId:'model',type:'MODEL'},{id:'p',fromNodeId:'prompt',fromSocketId:'CONDITIONING',toNodeId:'sampler',toSocketId:'positive',type:'CONDITIONING'},{id:'c',fromNodeId:'base',fromSocketId:'CLIP',toNodeId:'prompt',toSocketId:'clip',type:'CLIP'},{id:'l',fromNodeId:'latent',fromSocketId:'LATENT',toNodeId:'sampler',toSocketId:'latent_image',type:'LATENT'}] as Connection[]});
 describe('LoRA mounting modifies the executing branch, not just the node palette',()=>{
+ it('rejects shared prompt CLIP changes rather than contaminating another execution branch',()=>{
+  const graph=fixture();graph.nodes.push(node('other','KSampler',{}));
+  graph.connections.push({id:'shared-prompt',fromNodeId:'prompt',fromSocketId:'CONDITIONING',toNodeId:'other',toSocketId:'positive',type:'CONDITIONING'});
+  expect(()=>attachLoraToBranch(graph.nodes,graph.connections,node('adapter','LoRALoader',{lora_name:'672390779613802167'}),'sampler')).toThrow(/共用/);
+  expect(graph.connections.find(edge=>edge.id==='c')?.fromNodeId).toBe('base');
+  expect(graph.nodes.some(n=>n.id==='adapter')).toBe(false);
+ });
  it('connects both adapters to a Fal engine without applying independent palette nodes',()=>{
   const nodes=[node('fal','FalAIEngineNode',{model:'fal-ai/flux-lora',prompt:'robot'}),node('independent','LoRALoader',{lora_name:'not-mounted'})];
   const first=attachLoraToBranch(nodes,[],node('a','LoRALoader',{lora_name:'https://example.test/a.safetensors',strength_model:0.5}),'fal');

@@ -22,6 +22,15 @@ describe('graphEngine - B2 & L2a & L2b 拓扑反向追踪与参数抽取隔离�
     values,
   });
 
+  it('marks the failed executing subgraph consistently and leaves other branches untouched',async()=>{
+    const nodes=[createNode('fal','FalAIEngineNode',{model:'fal-ai/flux-lora',prompt:'actual prompt'}),createNode('adapter','LoRALoader',{lora_name:'https://example.test/adapter.safetensors',strength_model:0.5}),createNode('other','FalAIEngineNode',{model:'fal-ai/flux/dev',prompt:'unrelated'})];
+    const connections:Connection[]=[{id:'mounted',fromNodeId:'adapter',fromSocketId:'MODEL',toNodeId:'fal',toSocketId:'lora',type:'MODEL'}];
+    vi.spyOn(EngineRegistry,'generate').mockRejectedValue(new Error('Fal HTTP 403 TOP_UP'));
+    const states=new Map<string,string>();
+    await expect(executeWorkflow(nodes,connections,(id,state)=>{if(state)states.set(id,state);},undefined,'fal')).rejects.toThrow(/403/);
+    expect(states.get('fal')).toBe('error');expect(states.get('adapter')).toBe('error');expect(states.has('other')).toBe(false);
+  });
+
   it('keeps HF Z-Image resolution and shift from the upstream checkpoint', () => {
     const nodes = [
       createNode('checkpoint', 'CheckpointLoaderSimple', {targetProvider: 'huggingface', ckpt_name: 'Tongyi-MAI/Z-Image-Turbo', resolution: '1152x896 ( 9:7 )', shift: 3.2}),

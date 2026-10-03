@@ -28,6 +28,7 @@ export function attachLoraToBranch(nodes:NodeInstance[],connections:Connection[]
     if(source?.outputs.some(port=>port.id==='CLIP')){
       edges.push({id:`${lora.id}-clip-in`,fromNodeId:source.id,fromSocketId:'CLIP',toNodeId:lora.id,toSocketId:'clip',type:'CLIP'});
       const promptIds=connections.filter(edge=>edge.toNodeId===target.id && ['positive','negative'].includes(edge.toSocketId)).map(edge=>edge.fromNodeId);
+      if(promptIds.some(id=>connections.some(edge=>edge.fromNodeId===id && edge.toNodeId!==target.id)))throw new Error('当前提示词节点被其他分支共用，请为此分支复制独立提示词节点后挂载 LoRA');
       for(let i=0;i<edges.length;i++)if(edges[i].fromNodeId===source.id && edges[i].fromSocketId==='CLIP' && promptIds.includes(edges[i].toNodeId))edges[i]={...edges[i],fromNodeId:lora.id};
     }
   }

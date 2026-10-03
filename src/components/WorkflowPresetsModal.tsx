@@ -1,3 +1,4 @@
+import {workflowFrame} from '../utils/workflowFrame';
 import React, { useState, useRef } from 'react';
 import {
   Sparkles,
@@ -178,27 +179,31 @@ export const WorkflowPresetsModal: React.FC<WorkflowPresetsModalProps> = ({
             break;
           case 'LoRALoader':
             if (widgets[0] !== undefined) res.lora_name = String(widgets[0]);
-            if (widgets[1] !== undefined) res.strength_model = Number(widgets[1]) || 0.8;
-            if (widgets[2] !== undefined) res.strength_clip = Number(widgets[2]) || 0.8;
+            if (widgets[1] !== undefined) res.strength_model = Number(widgets[1]);
+            if (widgets[2] !== undefined) res.strength_clip = Number(widgets[2]);
             break;
           case 'CLIPTextEncode':
           case 'CLIPTextEncodeNegative':
             if (widgets[0] !== undefined) res.text = String(widgets[0]);
             break;
           case 'EmptyLatentImage':
-            if (widgets[0] !== undefined) res.width = Number(widgets[0]) || 1024;
-            if (widgets[1] !== undefined) res.height = Number(widgets[1]) || 1024;
-            if (widgets[2] !== undefined) res.batch_size = Number(widgets[2]) || 1;
+            if (widgets[0] !== undefined) res.width = Number(widgets[0]);
+            if (widgets[1] !== undefined) res.height = Number(widgets[1]);
+            if (widgets[2] !== undefined) res.batch_size = Number(widgets[2]);
             break;
           case 'KSampler':
-          case 'KSamplerAdvanced':
-            if (widgets[0] !== undefined) res.seed = Number(widgets[0]) || 0;
+            if (widgets[0] !== undefined) res.seed = Number(widgets[0]);
             if (widgets[1] !== undefined) res.control_after_generate = String(widgets[1]);
-            if (widgets[2] !== undefined) res.steps = Number(widgets[2]) || 20;
-            if (widgets[3] !== undefined) res.cfg = Number(widgets[3]) || 6.0;
+            if (widgets[2] !== undefined) res.steps = Number(widgets[2]);
+            if (widgets[3] !== undefined) res.cfg = Number(widgets[3]);
             if (widgets[4] !== undefined) res.sampler_name = String(widgets[4]);
             if (widgets[5] !== undefined) res.scheduler = String(widgets[5]);
-            if (widgets[6] !== undefined) res.denoise = Number(widgets[6]) || 1.0;
+            if (widgets[6] !== undefined) res.denoise = Number(widgets[6]);
+            break;
+          case 'KSamplerAdvanced':
+            // Preserve the source widgets; their layout differs from KSampler.
+            res.imported_widgets_values=[...widgets];
+            res.unsupported_import='KSamplerAdvanced 尚未适配云端执行，请使用已支持的采样器';
             break;
           case 'SaveImage':
             if (widgets[0] !== undefined) res.filename_prefix = String(widgets[0]);
@@ -211,85 +216,11 @@ export const WorkflowPresetsModal: React.FC<WorkflowPresetsModalProps> = ({
         return res;
       };
 
-      // Helper: Synthesize ready-to-run SpatialFrame from parsed nodes
-      const synthesizeSpatialFrameFromNodes = (nodes: NodeInstance[]): SpatialFrame => {
-        const ckptNode = nodes.find((n) => n.type === 'CheckpointLoaderSimple');
-        const positivePromptNode =
-          nodes.find((n) => n.type === 'CLIPTextEncode') ||
-          nodes.find((n) => n.title.includes('正向') || n.title.includes('Positive'));
-        const negativePromptNode =
-          nodes.find((n) => n.type === 'CLIPTextEncodeNegative') ||
-          nodes.find((n) => n.title.includes('负向') || n.title.includes('Negative'));
-        const latentNode = nodes.find((n) => n.type === 'EmptyLatentImage');
-        const samplerNode = nodes.find((n) => n.type === 'KSampler' || n.type === 'KSamplerAdvanced');
-        const loraNodes = nodes.filter((n) => n.type === 'LoRALoader' && n.values?.lora_name);
-
-        const rawCkpt = (ckptNode?.values?.ckpt_name as string) || '';
-        const width = Number(latentNode?.values?.width) || 1024;
-        const height = Number(latentNode?.values?.height) || 1024;
-        const steps = Number(samplerNode?.values?.steps) || 28;
-        const cfg = Number(samplerNode?.values?.cfg) || 6.0;
-        const sampler = (samplerNode?.values?.sampler_name as string) || 'dpmpp_2m';
-        const scheduler = (samplerNode?.values?.scheduler as string) || 'karras';
-        const seed = Number(samplerNode?.values?.seed) || Math.floor(Math.random() * 1000000000);
-
-        const targetLoras = loraNodes.map((l) => ({
-          name: l.values.lora_name,
-          modelStrength: Number(l.values.strength_model ?? 0.8),
-          clipStrength: Number(l.values.strength_clip ?? 0.8),
-          triggerWords: l.values.trigger_words || '',
-          civitaiId: l.values.civitai_id || '',
-        }));
-
-        const rawCkptLower = rawCkpt.toLowerCase();
-        const targetProvider =
-          rawCkptLower.includes('tensor') || rawCkptLower.includes('banana') || rawCkptLower.includes('oc_character') || rawCkptLower.includes('openworks')
-            ? 'tensorart'
-            : rawCkptLower.includes('nanogpt')
-            ? 'nanogpt'
-            : rawCkptLower.includes('damo') || rawCkptLower.includes('modelscope')
-            ? 'modelscope'
-            : rawCkptLower.includes('sensenova')
-            ? 'sensenova'
-            : rawCkptLower.includes('agnes')
-            ? 'agnes'
-            : rawCkptLower.includes('civitai') || rawCkptLower.startsWith('urn:air:')
-            ? 'civitai'
-            : 'fal';
-
-        return {
-          id: `frame-imported-${Date.now()}`,
-          title: '工作流导入取景框 (已智能配对拓扑参数)',
-          pos: { x: 260, y: 160 },
-          width: 480,
-          height: 480,
-          prompt: (positivePromptNode?.values?.text as string) || 'masterpiece, highly detailed, photorealistic',
-          negativePrompt: (negativePromptNode?.values?.text as string) || 'blurry, low quality, deformed, extra limbs',
-          params: {
-            checkpoint: rawCkpt,
-            seed,
-            seedControl: 'randomize',
-            steps,
-            cfg,
-            sampler,
-            scheduler,
-            denoise: 1.0,
-            width,
-            height,
-            batchSize: 1,
-            loras: targetLoras,
-            targetProvider,
-          },
-          status: 'idle',
-          createdAt: Date.now(),
-        };
-      };
-
       // Format 1: ComfyCanvas native format
-      if (parsed.nodes && Array.isArray(parsed.nodes)) {
+      if (parsed.nodes && Array.isArray(parsed.nodes) && parsed.nodes.every((n:any)=>n.pos && !Array.isArray(n.pos) && n.values && typeof n.values==='object')) {
         const frames = Array.isArray(parsed.spatialFrames) && parsed.spatialFrames.length > 0
           ? parsed.spatialFrames
-          : [synthesizeSpatialFrameFromNodes(parsed.nodes)];
+          : (()=>{const frame=workflowFrame(parsed.nodes,parsed.connections || []);return frame?[frame]:[];})();
 
         setImportSummary({
           nodesCount: parsed.nodes.length,
@@ -363,19 +294,19 @@ export const WorkflowPresetsModal: React.FC<WorkflowPresetsModalProps> = ({
           });
         }
 
-        const generatedFrame = synthesizeSpatialFrameFromNodes(convertedNodes);
+        const generatedFrame = workflowFrame(convertedNodes,convertedConnections);
 
         setImportSummary({
           nodesCount: convertedNodes.length,
           connectionsCount: convertedConnections.length,
-          framesCount: 1,
+          framesCount: generatedFrame ? 1 : 0,
           format: '原生 ComfyUI 工作流 (已转换适配 + 自动生成取景框)',
         });
 
         return {
           nodes: convertedNodes,
           connections: convertedConnections,
-          spatialFrames: [generatedFrame],
+          spatialFrames: generatedFrame ? [generatedFrame] : [],
         };
       }
 
@@ -428,19 +359,19 @@ export const WorkflowPresetsModal: React.FC<WorkflowPresetsModalProps> = ({
           });
         });
 
-        const generatedFrame = synthesizeSpatialFrameFromNodes(convertedNodes);
+        const generatedFrame = workflowFrame(convertedNodes,convertedConnections);
 
         setImportSummary({
           nodesCount: convertedNodes.length,
           connectionsCount: convertedConnections.length,
-          framesCount: 1,
+          framesCount: generatedFrame ? 1 : 0,
           format: 'ComfyUI API Prompt 格式 (已解析转换为节点 + 自动生成取景框)',
         });
 
         return {
           nodes: convertedNodes,
           connections: convertedConnections,
-          spatialFrames: [generatedFrame],
+          spatialFrames: generatedFrame ? [generatedFrame] : [],
         };
       }
 
@@ -1472,6 +1403,7 @@ Steps: 28, Sampler: DPM++ 2M Karras, CFG scale: 4.5, Seed: 136947637, Size: 1024
                         <span>空间取景框: {importSummary.framesCount}</span>
                       )}
                     </div>
+                    {importSummary.framesCount===0 && <p>保留原工作流节点。多分支、尺寸未指定、云端专用节点或 Advanced 采样器未转换成空间画板，请在图形模式查看并补齐参数。</p>}
                   </div>
                 )}
 

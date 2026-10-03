@@ -623,7 +623,9 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                   if (activeProvider === 'tensorart') info = await fetchTensorArtModelInfo(rawId);
                   if (version !== requestVersion.current) return;
                   if (!info?.id) throw new Error('查询未返回模型 ID，请核对资源 ID 后重试。');
-                  const isLora = activeCategory === 'lora' || String(info.category || info.type || '').toLowerCase() === 'lora';
+                  const verifiedType=String(info.category || info.type || '').toLowerCase();
+                  if(activeCategory==='lora' && ['huggingface','tensorart'].includes(activeProvider) && !['lora','locon','lycoris','dora'].includes(verifiedType))throw new Error('资源元数据未标明为 LoRA，不能按当前分类把底模当作 LoRA 挂载');
+                  const isLora = ['lora','locon','lycoris','dora'].includes(verifiedType) || (activeCategory==='lora' && !['huggingface','tensorart'].includes(activeProvider));
                   if (isLora) {
                     const words = info.triggerWords || info.trainedWords || [];
                     const lora = { name: String(info.id), provider: activeProvider,
