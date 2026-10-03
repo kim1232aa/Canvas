@@ -105,10 +105,12 @@ export class AgnesDriver extends BaseEngineDriver {
       headers['x-agnes-base-url'] = effectiveBaseUrl;
     }
 
-    const resp = await fetch('/api/engine/agnes/generate', {
+    const isVideo=Boolean(params.isVideo || params.model.includes('video'));
+    const requestBody=isVideo ? {workflowSnapshot:params.workflowSnapshot,provider:'agnes',model:params.model,prompt:params.prompt,duration:params.videoDuration,aspect_ratio:params.aspectRatio,image_url:params.image_url,seed:params.seed,steps:params.steps,cfg:params.cfg,loras:params.loras,size:params.extraParams?.size || params.imageSize} : params;
+    const resp = await fetch(isVideo ? '/api/video/generate' : '/api/engine/agnes/generate', {
       method: 'POST',
       headers,
-      body: JSON.stringify(params),
+      body: JSON.stringify(requestBody),
     });
 
     if (!resp.ok) {

@@ -1,3 +1,5 @@
+> 当前状态（2026-10-03）：下文含历史实现与历史验收描述，不能作为本次能力保证。以 CLAUDE.md 固定规则、PROGRESS.md 最新验收、public/verification/results.json 真实响应为准；禁止未经核实的自动模型/端点替换。
+
 # 引擎与 LoRA 规范说明 (ENGINE_LORA_SPECIFICATION.md)
 
 ## 一、全量支持引擎驱动列表 (All 9 Engine Drivers)

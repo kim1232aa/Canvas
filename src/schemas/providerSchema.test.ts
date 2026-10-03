@@ -53,7 +53,7 @@ describe('providerSchema 自检', () => {
 
   it('查询函数：沿用原 geminiValueStatus 语义', () => {
     expect(valueStatus('gemini', 'gemini-3.1-flash-image', 'aspect_ratio', '8:1')).toBe('supported');
-    expect(valueStatus('gemini', 'gemini-3.1-flash-lite-image', 'aspect_ratio', '8:1')).toBe('unsupported');
+    expect(valueStatus('gemini', 'gemini-3.1-flash-lite-image', 'aspect_ratio', '8:1')).toBe('unverified');
     expect(valueStatus('gemini', 'gemini-3-pro-image', 'aspect_ratio', '16:9')).toBe('unverified');
     expect(valueStatus('gemini', 'gemini-3.1-flash-image', 'image_size', '512')).toBe('unverified');
     expect(valueStatus('gemini', 'no-such-model', 'aspect_ratio', '1:1')).toBe('unverified');
@@ -67,7 +67,6 @@ describe('providerSchema 自检', () => {
   it('gemini 生图模型：seed 该服务商不支持（ImageConfig 无 seed），宽高/负向/steps/CFG/denoise/LoRA 同灰', () => {
     for (const id of [
       'gemini-3.1-flash-image',
-      'gemini-3.1-flash-lite-image',
       'gemini-3-pro-image',
       'gemini-2.5-flash-image',
     ]) {
@@ -178,39 +177,21 @@ describe('agnes / huggingface / nanogpt schema unsupported fields', () => {
 
   it('huggingface text-to-image: greys loras/denoise/sampler; keeps negative/seed/steps/cfg/WH', () => {
     const id = 'huggingface-text-to-image';
-    expect(getFieldSpec('huggingface', id, 'loras')?.status).toBe('unsupported');
+    expect(getFieldSpec('huggingface', id, 'loras')?.status).toBe('unverified');
     expect(getFieldSpec('huggingface', id, 'denoise')?.status).toBe('unsupported');
     expect(getFieldSpec('huggingface', id, 'sampler')?.status).toBe('unsupported');
     expect(getFieldSpec('huggingface', id, 'negative_prompt')?.status).toBe('supported');
     expect(getFieldSpec('huggingface', id, 'seed')?.status).toBe('supported');
     expect(getFieldSpec('huggingface', id, 'steps')?.status).toBe('supported');
-    expect(getFieldSpec('huggingface', id, 'cfg')?.status).toBe('supported');
-    expect(getFieldSpec('huggingface', id, 'scheduler')?.status).toBe('supported');
     expect(resolveSchemaModelId('huggingface', 'foreign-civitai.safetensors')).toBe('huggingface-text-to-image');
-
-    // 检查所有 HF 基模全部具备统一的官方标准能力
-    for (const hfModel of [
-      'black-forest-labs/FLUX.1-dev',
-      'stabilityai/stable-diffusion-xl-base-1.0',
-      'stabilityai/stable-diffusion-3.5-large',
-      'Kwai-Kolors/Kolors',
-      'runwayml/stable-diffusion-v1-5',
-    ]) {
-      expect(getFieldSpec('huggingface', hfModel, 'cfg')?.status, `${hfModel}.cfg`).toBe('supported');
-      expect(getFieldSpec('huggingface', hfModel, 'negative_prompt')?.status, `${hfModel}.negative_prompt`).toBe('supported');
-      expect(getFieldSpec('huggingface', hfModel, 'width')?.status, `${hfModel}.width`).toBe('supported');
-      expect(getFieldSpec('huggingface', hfModel, 'height')?.status, `${hfModel}.height`).toBe('supported');
-      expect(getFieldSpec('huggingface', hfModel, 'loras')?.status, `${hfModel}.loras`).toBe('unsupported');
-      expect(getFieldSpec('huggingface', hfModel, 'sampler')?.status, `${hfModel}.sampler`).toBe('unsupported');
-    }
   });
 
   it('nanogpt flux-schnell: greys negative/loras/steps/cfg/WH; keeps seed', () => {
     expect(getFieldSpec('nanogpt', 'flux-schnell', 'loras')?.status).toBe('unsupported');
     expect(getFieldSpec('nanogpt', 'flux-schnell', 'negative_prompt')?.status).toBe('unsupported');
     expect(getFieldSpec('nanogpt', 'flux-schnell', 'steps')?.status).toBe('unsupported');
-    expect(getFieldSpec('nanogpt', 'flux-schnell', 'width')?.status).toBe('unsupported');
-    expect(getFieldSpec('nanogpt', 'flux-schnell', 'seed')?.status).toBe('supported');
+    expect(getFieldSpec('nanogpt', 'flux-schnell', 'width')?.status).toBe('unverified');
+    expect(getFieldSpec('nanogpt', 'flux-schnell', 'seed')?.status).toBe('unsupported');
     expect(resolveSchemaModelId('nanogpt', '')).toBe('flux-schnell');
   });
 });
@@ -224,8 +205,8 @@ describe('tensorart OpenWorks schema unsupported fields', () => {
     }
     expect(getFieldSpec('tensorart', id, 'size')?.status).toBe('supported');
     expect(getFieldSpec('tensorart', id, 'aspect_ratio')?.status).toBe('supported');
-    expect(resolveSchemaModelId('tensorart', '')).toBe('strong_text2image_nano_banana2');
-    expect(resolveSchemaModelId('tensorart', 'foreign-civitai.safetensors')).toBe('strong_text2image_nano_banana2');
+    expect(resolveSchemaModelId('tensorart', '')).toBe('tensorart-model-api');
+    expect(resolveSchemaModelId('tensorart', 'foreign-civitai.safetensors')).toBe('foreign-civitai.safetensors');
   });
 
   it('oc_character_illustration: width/height supported; loras/seed/steps still unsupported', () => {
@@ -240,40 +221,13 @@ describe('tensorart OpenWorks schema unsupported fields', () => {
 
 
 describe('sensenova schema — app has no text2img route', () => {
-  it('greys all canvas image fields including loras; fallback model is deepseek-v4-flash', () => {
-    for (const id of ['deepseek-v4-flash', 'deepseek-v4-pro', 'sensenova-6.8-flash-lite']) {
+  it('greys all canvas image fields including loras; reasoning fields use the verified SenseNova model', () => {
+    for (const id of ['sensenova-6.8-flash-lite']) {
       for (const f of ['width', 'height', 'seed', 'negative_prompt', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'loras'] as const) {
         expect(getFieldSpec('sensenova', id, f)?.status, `${id}.${f}`).toBe('unsupported');
       }
     }
-    expect(resolveSchemaModelId('sensenova', '')).toBe('deepseek-v4-flash');
-    expect(resolveSchemaModelId('sensenova', 'foreign.safetensors')).toBe('deepseek-v4-flash');
-  });
-});
-
-describe('modelscope & modelscope_ai schema — native image generation capabilities', () => {
-  it('modelscope Tongyi-MAI/Z-Image-Turbo: supports negative_prompt/seed/steps/cfg/width/height/loras; sampler/scheduler/denoise unsupported', () => {
-    const id = 'Tongyi-MAI/Z-Image-Turbo';
-    for (const p of ['modelscope', 'modelscope_ai'] as const) {
-      expect(getFieldSpec(p, id, 'negative_prompt')?.status).toBe('supported');
-      expect(getFieldSpec(p, id, 'seed')?.status).toBe('supported');
-      expect(getFieldSpec(p, id, 'steps')?.status).toBe('supported');
-      expect(getFieldSpec(p, id, 'steps')?.wire).toBe('num_inference_steps');
-      expect(getFieldSpec(p, id, 'cfg')?.status).toBe('supported');
-      expect(getFieldSpec(p, id, 'cfg')?.wire).toBe('guidance_scale');
-      expect(getFieldSpec(p, id, 'width')?.status).toBe('supported');
-      expect(getFieldSpec(p, id, 'height')?.status).toBe('supported');
-      expect(getFieldSpec(p, id, 'loras')?.status).toBe('supported');
-      expect(getFieldSpec(p, id, 'sampler')?.status).toBe('unsupported');
-      expect(getFieldSpec(p, id, 'scheduler')?.status).toBe('unsupported');
-      expect(getFieldSpec(p, id, 'denoise')?.status).toBe('unsupported');
-    }
-  });
-
-  it('fallback models for modelscope and modelscope_ai are Tongyi-MAI/Z-Image-Turbo', () => {
-    expect(resolveSchemaModelId('modelscope', '')).toBe('Tongyi-MAI/Z-Image-Turbo');
-    expect(resolveSchemaModelId('modelscope', 'unknown-model')).toBe('Tongyi-MAI/Z-Image-Turbo');
-    expect(resolveSchemaModelId('modelscope_ai', '')).toBe('Tongyi-MAI/Z-Image-Turbo');
-    expect(resolveSchemaModelId('modelscope_ai', 'unknown-model')).toBe('Tongyi-MAI/Z-Image-Turbo');
+    expect(resolveSchemaModelId('sensenova', '')).toBe('sensenova-6.8-flash-lite');
+    expect(resolveSchemaModelId('sensenova', 'foreign.safetensors')).toBe('sensenova-6.8-flash-lite');
   });
 });

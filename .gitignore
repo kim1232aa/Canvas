@@ -12,3 +12,7 @@ data/*
 !data/.gitkeep
 .compat-probe/
 .superpowers/
+.sites-runtime/
+.wrangler/
+hosting/server.generated.ts
+hosting/assets.generated.ts

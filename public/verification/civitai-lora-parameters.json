@@ -1,0 +1,62 @@
+{
+  "request": {
+    "model": "urn:air:sd1:checkpoint:civitai:4384@128713",
+    "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering",
+    "negative_prompt": "blurry, low quality",
+    "width": 512,
+    "height": 512,
+    "steps": 12,
+    "cfg": 7,
+    "seed": 42,
+    "sampler_name": "euler",
+    "scheduler": "discrete",
+    "loras": [
+      {
+        "name": "Add More Details - Detail Enhancer / Tweaker (细节调整) LoRA",
+        "civitaiId": "urn:air:sd1:lora:civitai:82098@87153",
+        "strength": 0.7
+      }
+    ]
+  },
+  "requestMetadata": {
+    "route": "/api/civitai/generate",
+    "submissions": [
+      {
+        "endpoint": "https://orchestration.civitai.com/v2/consumer/workflows?wait=100",
+        "parameters": {
+          "steps": [
+            {
+              "$type": "imageGen",
+              "input": {
+                "engine": "sdcpp",
+                "ecosystem": "sd1",
+                "operation": "createImage",
+                "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering",
+                "model": "urn:air:sd1:checkpoint:civitai:4384@128713",
+                "negativePrompt": "blurry, low quality",
+                "width": 512,
+                "height": 512,
+                "steps": 12,
+                "cfgScale": 7,
+                "seed": 42,
+                "sampleMethod": "euler",
+                "schedule": "discrete",
+                "loras": {
+                  "urn:air:sd1:lora:civitai:82098@87153": 0.7
+                }
+              }
+            }
+          ]
+        },
+        "status": 200
+      }
+    ]
+  },
+  "seed": 42,
+  "loras": [
+    {
+      "name": "urn:air:sd1:lora:civitai:82098@87153",
+      "strength": 0.7
+    }
+  ]
+}

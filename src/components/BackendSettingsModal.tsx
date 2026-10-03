@@ -75,6 +75,8 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
   const [testResults, setTestResults] = React.useState<Record<string, { status: string; message: string; latency?: number }>>({});
   const [testingProvider, setTestingProvider] = React.useState<string | null>(null);
   const [testingSingleKeyIndex, setTestingSingleKeyIndex] = React.useState<number | null>(null);
+  const [isSavingAll, setIsSavingAll] = React.useState(false);
+  const [saveError, setSaveError] = React.useState<string | null>(null);
   const [testingAll, setTestingAll] = React.useState(false);
 
   // Cloud Admin Token & Server Settings State
@@ -90,6 +92,8 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
   const [poolStats, setPoolStats] = React.useState<Record<string, any>>({});
   const [balances, setBalances] = React.useState<Record<string, { status: string; detail: string; amount?: number | string }>>({});
   const [isLoadingBalances, setIsLoadingBalances] = React.useState(false);
+  const [isLoadingStats, setIsLoadingStats] = React.useState(false);
+  const [readError, setReadError] = React.useState<string | null>(null);
   const [newKeyInput, setNewKeyInput] = React.useState('');
 
   const refreshCloudSettings = React.useCallback(async (tokenOverride?: string) => {
@@ -118,15 +122,26 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
   };
 
   const refreshStats = React.useCallback(async () => {
-    const stats = await fetchKeyPoolStats(adminToken);
-    setPoolStats(stats);
+    setIsLoadingStats(true);
+    setReadError(null);
+    try {
+      const data = await fetchKeyPoolStats(adminToken);
+      if (!Object.keys(data).length) throw new Error('密钥池未返回数据，请检查网站连接与访问权限后重试。');
+      setPoolStats(data);
+    }
+    catch (err) { setReadError(err instanceof Error ? err.message : '密钥池读取失败'); }
+    finally { setIsLoadingStats(false); }
   }, [adminToken]);
 
   const refreshBalances = React.useCallback(async () => {
     setIsLoadingBalances(true);
+    setReadError(null);
     try {
       const b = await fetchCloudBalances(adminToken);
+      if (!Object.keys(b).length) throw new Error('余额查询未返回数据，请检查网站连接与访问权限后重试。');
       setBalances(b);
+    } catch (err) {
+      setReadError(err instanceof Error ? err.message : '余额读取失败');
     } finally {
       setIsLoadingBalances(false);
     }
@@ -144,9 +159,9 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
     {
       id: 'fal',
       name: 'Fal.ai',
-      badge: 'FLUX & SDXL 极速云 (多 Key 轮询)',
+      badge: '模型端点 / 多密钥',
       docsUrl: 'https://docs.fal.ai',
-      description: '极速无服务器 (Serverless) 推理平台，支持 FLUX.1 dev/schnell 和 SDXL 以及多 LoRA 栈式加载。支持多 Key 负载均衡与并发轮询。',
+      description: '每个 Fal 模型使用独立端点。LoRA 等参数须由该端点支持；选择端点后再配置参数。',
       apiUrl: 'https://fal.run',
       keyName: 'falKey',
       keyPlaceholder: 'fal_key_xxxxxxxxxxxxxxxxxxxxxxxx (支持换行/逗号输入多个 Key)',
@@ -156,14 +171,14 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
     {
       id: 'gemini',
       name: 'Google Gemini',
-      badge: '官方直连 SDK / Gemini Image / Gemini 3.8',
+      badge: 'Google GenAI SDK',
       docsUrl: 'https://ai.google.dev',
-      description: 'Google 官方 Gemini 2.5 Flash Image、Gemini 3.1 Flash Image (Nano Banana 2) 及 Gemini 3.8 Flash 提示词/参数重绘器。已完成系统级深度集成与原生 SDK 路由。',
-      apiUrl: 'Google GenAI SDK (Gemini Image / Gemini 3.8 Flash / Nano Banana)',
+      description: '图像生成与提示词推理分别使用用户选定的模型。请核对模型 ID 与账户权限。',
+      apiUrl: 'Google GenAI SDK / generateContent',
       keyName: 'geminiKey',
       keyPlaceholder: '系统自动注入环境变量 GEMINI_API_KEY (或填入自定义多 Key)',
-      status: 'connected',
-      popularModels: ['gemini-2.5-flash-image', 'gemini-3.1-flash-image', 'gemini-3.1-flash-lite-image', 'gemini-3.8-flash', 'gemini-3.1-pro-preview'],
+      status: 'unconfigured',
+      popularModels: ['gemini-2.5-flash-image', 'gemini-3.1-flash-image', 'gemini-3-pro-image'],
     },
     {
       id: 'openai_compat',
@@ -194,7 +209,7 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       name: 'Agnes AI (ApiHub)',
       badge: '聚合引擎 / 2.5 Flash / 3.0 推理',
       docsUrl: 'https://apihub.agnes-ai.com',
-      description: 'Agnes AI 官方高并发聚合接口，提供秒级 Flash 生图、动态运镜视频及 3.0 Flash 深度思考推理大模型。',
+      description: '配置 Agnes API 地址与密钥。图像、视频与推理任务分别按选定模型提交。',
       apiUrl: 'https://apihub.agnes-ai.com/v1',
       keyName: 'agnesKey',
       keyPlaceholder: 'sk-xxxx',
@@ -204,14 +219,14 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
     {
       id: 'sensenova',
       name: 'SenseNova (商汤日日新)',
-      badge: '商汤科技 / DeepSeek V4 / GLM-5.2',
+      badge: '提示词推理',
       docsUrl: 'https://token.sensenova.cn',
-      description: '商汤日日新大模型开放平台，集成 DeepSeek V4 极速推理思考、清华智谱 GLM-5.2、SenseNova 6.8 及多模态视觉理解。',
+      description: '用于提示词推理与扩写。需显式选择模型，推理结果可连接至图像生成工作流。',
       apiUrl: 'https://token.sensenova.cn/v1',
       keyName: 'sensenovaKey',
       keyPlaceholder: 'sk-xxxx',
       status: 'unconfigured',
-      popularModels: ['deepseek-v4-flash', 'deepseek-v4-pro', 'glm-5.2', 'sensenova-6.8-flash-lite'],
+      popularModels: ['sensenova-6.8-flash-lite'],
     },
     {
       id: 'civitai',
@@ -230,10 +245,10 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       name: 'Hugging Face',
       badge: '抱脸开源大模型社区',
       docsUrl: 'https://huggingface.co/docs',
-      description: 'Hugging Face 官方推理接口与模型 Hub，覆盖全量开源 Diffusers、SafeTensors 与 PEFT LoRA。',
-      apiUrl: 'https://api-inference.huggingface.co',
+      description: '模型仓库与在线推理不同。请在模型节点中明确选择 HF Inference 或 fal-ai 路由；fal-ai 会产生对应推理费用。Space 的能力单独核实。',
+      apiUrl: 'https://router.huggingface.co（所选路由）',
       keyName: 'hfToken',
-      keyPlaceholder: 'hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+      keyPlaceholder: 'YOUR_API_KEY',
       status: 'unconfigured',
       popularModels: ['black-forest-labs/FLUX.1-schnell', 'stabilityai/stable-diffusion-xl-base-1.0'],
     },
@@ -242,7 +257,7 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       name: 'ModelScope CN (魔搭国内站)',
       badge: '国内站 / 消耗国内魔粒',
       docsUrl: 'https://modelscope.cn/docs',
-      description: '魔搭社区国内站 (modelscope.cn) 官方推理接口，消耗国内魔粒额度，支持 Wan 2.1、Z-Image-Turbo 及国内全量微调 LoRA。',
+      description: '国内站密钥与额度独立于国际站。目录中的资源是否可在线推理，以及 LoRA 能力，需按所选模型核实。',
       apiUrl: 'https://api-inference.modelscope.cn/v1',
       keyName: 'modelscopeToken',
       keyPlaceholder: '国内站 Access Token (ms-xxxxxxxx，从 modelscope.cn 获取)',
@@ -264,26 +279,26 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
     {
       id: 'nanogpt',
       name: 'NanoGPT',
-      badge: '按张计费极速 API',
+      badge: '模型能力动态校验',
       docsUrl: 'https://docs.nano-gpt.com',
-      description: 'NanoGPT.com 图像生成接口，提供超低延迟单次生图，无需维护 GPU 服务器。',
-      apiUrl: 'https://nano-gpt.com/api',
+      description: '生成前读取选定模型的能力。resolution 与像素宽高须按该模型要求填写，不支持的字段会明确报错。',
+      apiUrl: 'https://api.nano-gpt.com/api/v1/images',
       keyName: 'nanogptKey',
       keyPlaceholder: 'NanoGPT API Key (sk-nano-xxxxxxxx)',
       status: 'unconfigured',
-      popularModels: ['flux-schnell', 'flux-dev', 'sdxl-turbo', 'midjourney-v6'],
+      popularModels: [],
     },
     {
       id: 'tensorart',
       name: 'Tensor.Art / TusiArt',
       badge: '吐司 AI 模型中心',
       docsUrl: 'https://tensor.art',
-      description: 'Tensor.Art / 吐司 AI 模型社区，集成 FLUX.1、SDXL、Pony、Illustrious、Wan 2.1 等海量真实开源模型与微调 LoRA。',
-      apiUrl: 'https://openapi.tensor.art/openworks/v1 (或 openapi.tusiart.cn)',
+      description: '模型目录用于资源发现。在线生成使用 TAMS 模型 API；OpenWorks 工具与模型 API 是两套接口，密钥不能混用。',
+      apiUrl: 'https://tams-api.tensor.art/v1（模型 API）',
       keyName: 'tensorartKey',
-      keyPlaceholder: 'Tensor.Art / 吐司 API Key (ak_tensor_... / ak_tusi_...)',
+      keyPlaceholder: 'TAMS 模型 API 的 Bearer Key；OpenWorks ak_tensor 仅用于工具',
       status: 'unconfigured',
-      popularModels: ['FLUX.1 [dev]', 'SDXL 1.0 Base', 'Pony Diffusion V6 XL', 'Illustrious-XL', 'Wan 2.1 Cinematic Video'],
+      popularModels: ['936101665537308499', '990778216270553015', '1015578945501842388'],
     },
   ];
 
@@ -344,8 +359,9 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       ...prev,
       [`${currentProvider.id}_strategy`]: strat,
     }));
-    await updateKeyPoolStrategy(currentProvider.id, strat, adminToken);
-    refreshStats();
+    const saved = await updateKeyPoolStrategy(currentProvider.id, strat, adminToken);
+    if (!saved) setSaveError('轮询策略未保存到网站，请重试。');
+    else {setSaveError(null); refreshStats();}
   };
 
   const handleTestSingle = async (key: string, index: number) => {
@@ -355,12 +371,14 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       setTestResults((prev) => ({
         ...prev,
         [`${currentProvider.id}_${index}`]: {
-          status: res.status === 'active' || res.status === 'ok' ? 'ok' : 'error',
+          status: res.status === 'active' || res.status === 'ok' ? 'ok' : res.status === 'warning' || res.status === 'unsupported' ? 'warning' : 'error',
           message: res.message,
           latency: res.latency,
         },
       }));
       refreshStats();
+    } catch (err) {
+      setTestResults((prev) => ({ ...prev, [`${currentProvider.id}_${index}`]: { status: 'error', message: err instanceof Error ? err.message : '密钥测试失败' } }));
     } finally {
       setTestingSingleKeyIndex(null);
     }
@@ -421,14 +439,32 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
     refreshStats();
   };
 
-  const handleSave = () => {
-    onSaveKeys(keys);
-    onClose();
+  const handleSave = async () => {
+    if (isSavingAll) return;
+    setIsSavingAll(true); setSaveError(null);
+    try {
+      const payload: Record<string, string> = {};
+      for (const field of ALLOWED_CLOUD_SETTINGS_FIELDS) {
+        const value = (keys as any)[field];
+        if (typeof value === 'string' && value.trim() && !value.includes('...') && !value.includes('***')) payload[field] = value.trim();
+      }
+      const result = await saveCloudServerSettings(payload, adminToken);
+      if (!result.ok) throw new Error(result.error || `HTTP ${result.status}: 保存未完成`);
+      for (const provider of providers) {
+        const strategy = keys[`${provider.id}_strategy`];
+        if (strategy && strategy !== poolStats[provider.id]?.strategy) {
+          if (!await updateKeyPoolStrategy(provider.id, strategy, adminToken)) throw new Error(`${provider.name} 的轮询策略保存失败`);
+        }
+      }
+      onSaveKeys(keys);
+      onClose();
+    } catch (error: any) {setSaveError(error.message || '保存失败，请重试');}
+    finally {setIsSavingAll(false);}
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-in fade-in duration-200">
-      <div className="bg-[#181920] border border-[#2e303c] rounded-2xl w-full max-w-5xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden text-xs">
+      <div role="dialog" aria-modal="true" aria-labelledby="api-settings-title" className="studio-readable api-settings bg-[#181920] border border-[#2e303c] rounded-2xl w-full max-w-5xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden text-xs">
         {/* Modal Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#272935] bg-[#121318]">
           <div className="flex items-center space-x-3">
@@ -437,28 +473,29 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-base font-bold text-white tracking-wide">
-                  云端 API 接入管理 & 多 Key 轮询总控台
+                <h2 id="api-settings-title" className="text-base font-bold text-white tracking-wide">
+                  API 与密钥设置
                 </h2>
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 font-mono">
-                  Multi-Key Rotation & Balances
+                  连接配置
                 </span>
               </div>
               <p className="text-[11px] text-slate-400">
-                支持多 Key 轮询分发、故障平滑切换 (Failover)、额度余额实时查询与 Google Gemini 官方引擎直连
+                管理服务商地址、密钥和余额。只读测试通过不代表某个模型已获生成权限。
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={handleTestAll}
-              disabled={testingAll}
+              disabled={testingAll || Boolean(testingProvider) || testingSingleKeyIndex !== null || isSavingAll}
               className="px-3.5 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-[11px] font-bold flex items-center gap-1.5 shadow-md shadow-cyan-600/20 disabled:opacity-50 transition-all"
             >
               {testingAll ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-              <span>全量连通测试</span>
+              <span>测试已配置连接</span>
             </button>
             <button
+              aria-label="关闭 API 设置"
               onClick={onClose}
               className="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-[#252731] transition-colors"
             >
@@ -516,15 +553,16 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
             </button>
           </div>
           <div className="text-[10px] text-slate-400 font-mono flex items-center gap-2">
-            <span>当前可用引擎: {providers.length} 处</span>
+            <span>已接入服务商: {providers.length} 处</span>
           </div>
         </div>
 
+        {readError && <div role="alert" className="px-6 py-3 bg-rose-950/40 text-rose-200 break-words">读取失败：{readError}</div>}
         {/* Modal Body */}
         {activeMainTab === 'providers' && (
-          <div className="flex-1 flex overflow-hidden">
+          <div className="settings-body flex-1 flex min-h-0 overflow-hidden">
             {/* Provider Sidebar */}
-            <div className="w-64 border-r border-[#242631] bg-[#121318] p-3 space-y-1.5 overflow-y-auto">
+            <div className="settings-providers w-64 shrink-0 border-r border-[#242631] bg-[#121318] p-3 space-y-1.5 overflow-y-auto">
               {providers.map((p) => {
                 const test = testResults[p.id];
                 const keyStr = String((keys as any)[p.keyName] || '');
@@ -574,7 +612,7 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
             </div>
 
             {/* Provider Details & Multi-Key Editor */}
-            <div className="flex-1 p-6 overflow-y-auto bg-[#171820] space-y-4">
+            <div className="min-w-0 flex-1 p-6 overflow-y-auto bg-[#171820] space-y-4">
               {/* Header Details */}
               <div className="flex items-start justify-between">
                 <div>
@@ -603,7 +641,7 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
                   <span className="text-cyan-400 font-semibold truncate mt-0.5">{currentProvider.apiUrl}</span>
                 </div>
                 <div className="bg-[#111216] border border-[#252733] rounded-xl p-2.5 text-xs">
-                  <span className="text-slate-400 text-[10px] block mb-1">支持与常用模型列表:</span>
+                  <span className="text-slate-400 text-[10px] block mb-1">模型 ID 参考（可用性以目录与账户权限为准）:</span>
                   <div className="flex flex-wrap gap-1">
                     {currentProvider.popularModels.map((m, mIdx) => (
                       <span
@@ -781,6 +819,7 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
                   </label>
                   <button
                     onClick={refreshStats}
+                    disabled={isLoadingStats}
                     className="text-[11px] px-2.5 py-1 rounded bg-[#20222a] hover:bg-[#2c2f3b] text-slate-200 border border-[#313442] flex items-center gap-1 ml-auto mr-2"
                     title="读取服务端 key 池（仅数量/掩码/来源，不访问上游）"
                   >
@@ -789,7 +828,7 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
                   </button>
                   <button
                     onClick={() => handleTest(currentProvider.id)}
-                    disabled={testingProvider === currentProvider.id}
+                    disabled={testingAll || Boolean(testingProvider) || testingSingleKeyIndex !== null || isSavingAll}
                     className="text-[11px] px-2.5 py-1 rounded bg-cyan-600/20 hover:bg-cyan-600/40 text-cyan-300 border border-cyan-500/30 flex items-center gap-1"
                   >
                     {testingProvider === currentProvider.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
@@ -834,7 +873,7 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
                             <button
                               type="button"
                               onClick={() => handleTestSingle(k, kIdx)}
-                              disabled={testingSingleKeyIndex === kIdx}
+                              disabled={testingAll || Boolean(testingProvider) || testingSingleKeyIndex !== null || isSavingAll}
                               className="px-2 py-1 rounded bg-[#1e2029] hover:bg-[#282a36] text-[10px] text-cyan-300 flex items-center gap-1 border border-[#313342] transition-colors"
                               title="对当前单个 Key 进行连通测试"
                             >
@@ -920,7 +959,7 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
 
         {/* Multi-Key Pool Dashboard Tab */}
         {activeMainTab === 'pool' && (
-          <div className="flex-1 p-6 overflow-y-auto bg-[#171820] space-y-4">
+          <div className="min-w-0 flex-1 p-6 overflow-y-auto bg-[#171820] space-y-4">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
@@ -933,6 +972,7 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
               </div>
               <button
                 onClick={refreshStats}
+                    disabled={isLoadingStats}
                 className="px-3 py-1.5 rounded-lg bg-[#20222a] hover:bg-[#2c2f3b] text-slate-200 text-xs font-semibold flex items-center gap-1.5 border border-[#313442]"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
@@ -1020,7 +1060,7 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
 
         {/* Balances & Quota Overview Tab */}
         {activeMainTab === 'balance' && (
-          <div className="flex-1 p-6 overflow-y-auto bg-[#171820] space-y-4">
+          <div className="min-w-0 flex-1 p-6 overflow-y-auto bg-[#171820] space-y-4">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
@@ -1100,29 +1140,30 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
 
         {/* Cloud Admin Token & Server Settings Tab */}
         {activeMainTab === 'admin' && (
-          <div className="flex-1 p-6 overflow-y-auto bg-[#171820] space-y-5">
+          <div className="min-w-0 flex-1 p-6 overflow-y-auto bg-[#171820] space-y-5">
             <div>
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
                 <Lock className="w-4 h-4 text-amber-400" />
-                云端服务配置管理与接口鉴权 (CANVAS_ADMIN_TOKEN)
+                云端服务配置管理
               </h3>
               <p className="text-[11px] text-slate-400 mt-0.5">
-                服务端 /api/cloud/settings 接口受环境变量 <span className="font-mono text-amber-300">CANVAS_ADMIN_TOKEN</span> 保护。管理令牌保存在本地浏览器中，请求时通过 Authorization: Bearer 头传递。
+                {import.meta.env.VITE_SITES_DEPLOYMENT === 'true' ? '已通过你的 ChatGPT 账号验证，仅网站所有者可以管理云端设置。' : '云端配置需要管理令牌，令牌保存在当前浏览器中。'}
               </p>
             </div>
 
             {/* Token Input Bar */}
             <div className="bg-[#121318] border border-[#272935] rounded-xl p-4 space-y-3">
               <label className="block text-xs font-semibold text-slate-300">
-                管理令牌 (Admin Token)
+                {import.meta.env.VITE_SITES_DEPLOYMENT === 'true' ? '账号访问验证' : '管理令牌 (Admin Token)'}
               </label>
               <div className="flex items-center gap-2">
                 <div className="relative flex-1">
                   <input
                     type={showAdminToken ? 'text' : 'password'}
-                    value={adminToken}
+                    value={import.meta.env.VITE_SITES_DEPLOYMENT === 'true' ? '' : adminToken}
+                    disabled={import.meta.env.VITE_SITES_DEPLOYMENT === 'true'}
                     onChange={handleAdminTokenChange}
-                    placeholder="输入服务端配置的 CANVAS_ADMIN_TOKEN..."
+                    placeholder={import.meta.env.VITE_SITES_DEPLOYMENT === 'true' ? '已通过 ChatGPT 账号登录，无需另填令牌' : '输入服务端配置的 CANVAS_ADMIN_TOKEN...'}
                     className="w-full bg-[#1a1b24] border border-[#313444] rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 font-mono pr-10 focus:outline-none focus:border-amber-500/60"
                   />
                   <button
@@ -1158,7 +1199,7 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
                     {cloudSettingsError}
                   </div>
                   <p className="mt-1.5 text-[11px] text-slate-400">
-                    提示：若状态码为 503 说明服务端未设置 CANVAS_ADMIN_TOKEN 环境变量；若为 401 说明管理令牌不匹配。
+                    {import.meta.env.VITE_SITES_DEPLOYMENT === 'true' ? '请确认使用网站所属的 ChatGPT 账号登录，然后重试。' : '请检查服务端管理令牌是否配置，以及当前令牌是否匹配。'}
                   </p>
                 </div>
               </div>
@@ -1279,10 +1320,11 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
           </div>
         )}
 
+        {saveError && <p role="alert" className="px-6 py-3 text-rose-300 text-sm bg-rose-950/30">{saveError}</p>}
         {/* Modal Footer */}
         <div className="px-6 py-3.5 border-t border-[#242631] bg-[#121318] flex items-center justify-between">
           <span className="text-[11px] text-slate-400 font-mono">
-            所有密钥与轮询策略均实时同步至本地及服务端安全存储中
+            点击保存后加密同步到网站；留空保留已有网站密钥
           </span>
           <div className="flex items-center gap-3">
             <button
@@ -1293,9 +1335,10 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
             </button>
             <button
               onClick={handleSave}
+              disabled={isSavingAll || testingAll || Boolean(testingProvider) || testingSingleKeyIndex !== null}
               className="px-5 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-xs font-bold text-white shadow-lg shadow-cyan-600/20 transition-all"
             >
-              保存所有配置与密钥池
+              {isSavingAll ? '正在保存到网站…' : '保存配置到网站'}
             </button>
           </div>
         </div>

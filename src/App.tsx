@@ -1,4 +1,10 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import {loadWorkspaceCache, BOARDS_KEY, ACTIVE_BOARD_KEY, MODE_KEY, isCanvasProject} from './utils/workspaceCache';
+import {generationReadiness} from './utils/generationReadiness';
+import {nextSeedAfterGeneration} from './utils/seedControl';
+import {CloudProjectModal} from './components/CloudProjectModal';
+import {saveCloudProject} from './services/api';
+import { useCanvasTools } from './useCanvasTools';
 import { AlertTriangle, Sparkles, Image as ImageIcon } from 'lucide-react';
 import { Canvas } from './components/Canvas';
 import { TopBar } from './components/TopBar';
@@ -49,7 +55,7 @@ import {
   previewKeepMediaMounted,
   type PreviewSettleState,
 } from './utils/previewHang';
-import { getRecommendedBaseModelForLora, identifyArchitectureFamily } from './utils/baseModelMatcher';
+import { identifyArchitectureFamily } from './utils/baseModelMatcher';
 import {
   findFirstNodeOfType,
   getProviderFromNode,
@@ -59,7 +65,6 @@ import {
   omitUnsupportedGenerateFields,
   resolveGenerateLorasPayload,
   sanitizeFrameLoras,
-  resolveCheckpointModelProvider,
 } from './utils/resolveCheckpoint';
 import {
   checkpointNodeTitle,
@@ -71,124 +76,17 @@ import {
 } from './utils/providerLabels';
 
 export default function App() {
-  // Canvas View Mode: 'graph' (ComfyUI Node Flow) vs 'spatial' (Modern Freeform Spatial Board)
-  const [canvasMode, setCanvasMode] = useState<CanvasMode>('graph');
-  const [transform, setTransform] = useState<CanvasTransform>({ x: 80, y: 80, scale: 0.8 });
-
-  // Graph States
-  const [nodes, setNodes] = useState<NodeInstance[]>([]);
-  const [connections, setConnections] = useState<Connection[]>([]);
+  const [initialWorkspace] = useState(() => loadWorkspaceCache([
+    {id: 'canvas-zimage', name: 'Z-Image 创作画布', description: 'Hugging Face 官方 Space 文生图', updatedAt: Date.now(), nodes: WORKFLOW_PRESETS[0].nodes, connections: WORKFLOW_PRESETS[0].connections, spatialFrames: WORKFLOW_PRESETS[0].spatialFrames || []},
+  ]));
+  const [canvasMode, setCanvasMode] = useState<CanvasMode>(initialWorkspace.mode);
+  const [transform, setTransform] = useState<CanvasTransform>(initialWorkspace.active.transform || {x: 80, y: 80, scale: 0.8});
+  const [nodes, setNodes] = useState<NodeInstance[]>(initialWorkspace.active.nodes);
+  const [connections, setConnections] = useState<Connection[]>(initialWorkspace.active.connections);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-
-  // Modern Spatial Generation Frames (Infinite Canvas Region Frames)
-  const [spatialFrames, setSpatialFrames] = useState<SpatialFrame[]>([
-    {
-      id: 'frame-ms-cn-1',
-      title: '魔搭 CN (modelscope.cn): Z-Image-Turbo + 美胸年年 LoRA',
-      pos: { x: 50, y: 160 },
-      width: 460,
-      height: 640,
-      prompt: 'A highly textured, impressionistic digital painting capturing a solitary young woman crouching under a translucent umbrella on a wet city street during a light rain shower; she gazes down pensively, her hair slightly damp, wearing a light top and dark shorts, while a sleek black cat sits nearby in the foreground, mirroring the reflections in the slick pavement. The scene is dominated by a cool, desaturated palette of pale blues, creams, and muted grays, punctuated by deep blacks in the shadows and the cat\'s form. The rendering employs thick, visible brushstrokes and a distressed, almost watercolor-like texture across the entire canvas, giving it a gritty, atmospheric quality. Strong ambient light filters through the umbrella and the urban backdrop, creating high contrast between the bright, washed-out sky and the deep, reflective puddles on the ground. The composition is vertical, drawing the eye from the foreground reflection up to the central figure against the towering, abstractly rendered cityscape.',
-      negativePrompt: '',
-      params: {
-        checkpoint: 'Tongyi-MAI/Z-Image-Turbo',
-        seed: 42,
-        seedControl: 'fixed',
-        steps: 8,
-        cfg: 1.0,
-        sampler: 'euler',
-        scheduler: 'bong_tangent',
-        denoise: 1.0,
-        width: 960,
-        height: 1440,
-        batchSize: 1,
-        loras: [
-          {
-            name: 'laonansheng/meixiong-niannian-Z-Image-Turbo-Tongyi-MAI-v1.0',
-            modelStrength: 0.7,
-            clipStrength: 0.7,
-            triggerWords: 'reversal film slide film style',
-            civitaiId: '139784521',
-          },
-        ],
-        targetProvider: 'modelscope',
-      },
-      status: 'idle',
-      imageUrl: '', 
-      createdAt: Date.now(),
-    },
-    {
-      id: 'frame-ms-ai-1',
-      title: '魔搭 AI (modelscope.ai): Z-Image-Turbo + 美胸年年 LoRA',
-      pos: { x: 540, y: 160 },
-      width: 460,
-      height: 640,
-      prompt: 'A highly textured, impressionistic digital painting capturing a solitary young woman crouching under a translucent umbrella on a wet city street during a light rain shower; she gazes down pensively, her hair slightly damp, wearing a light top and dark shorts, while a sleek black cat sits nearby in the foreground, mirroring the reflections in the slick pavement. The scene is dominated by a cool, desaturated palette of pale blues, creams, and muted grays, punctuated by deep blacks in the shadows and the cat\'s form. The rendering employs thick, visible brushstrokes and a distressed, almost watercolor-like texture across the entire canvas, giving it a gritty, atmospheric quality. Strong ambient light filters through the umbrella and the urban backdrop, creating high contrast between the bright, washed-out sky and the deep, reflective puddles on the ground. The composition is vertical, drawing the eye from the foreground reflection up to the central figure against the towering, abstractly rendered cityscape.',
-      negativePrompt: '',
-      params: {
-        checkpoint: 'Tongyi-MAI/Z-Image-Turbo',
-        seed: 42,
-        seedControl: 'fixed',
-        steps: 8,
-        cfg: 1.0,
-        sampler: 'euler',
-        scheduler: 'bong_tangent',
-        denoise: 1.0,
-        width: 960,
-        height: 1440,
-        batchSize: 1,
-        loras: [
-          {
-            name: 'laonansheng/meixiong-niannian-Z-Image-Turbo-Tongyi-MAI-v1.0',
-            modelStrength: 0.7,
-            clipStrength: 0.7,
-            triggerWords: 'reversal film slide film style',
-            civitaiId: '139784521',
-          },
-        ],
-        targetProvider: 'modelscope_ai',
-      },
-      status: 'idle',
-      imageUrl: '',
-      createdAt: Date.now(),
-    },
-    {
-      id: 'frame-hf-1',
-      title: 'Hugging Face: RadianceChromeVoluptuous Z-Image-Turbo',
-      pos: { x: 1030, y: 160 },
-      width: 460,
-      height: 640,
-      prompt: 'A highly textured, impressionistic digital painting capturing a solitary young woman crouching under a translucent umbrella on a wet city street during a light rain shower; she gazes down pensively, her hair slightly damp, wearing a light top and dark shorts, while a sleek black cat sits nearby in the foreground, mirroring the reflections in the slick pavement. The scene is dominated by a cool, desaturated palette of pale blues, creams, and muted grays, punctuated by deep blacks in the shadows and the cat\'s form. The rendering employs thick, visible brushstrokes and a distressed, almost watercolor-like texture across the entire canvas, giving it a gritty, atmospheric quality. Strong ambient light filters through the umbrella and the urban backdrop, creating high contrast between the bright, washed-out sky and the deep, reflective puddles on the ground. The composition is vertical, drawing the eye from the foreground reflection up to the central figure against the towering, abstractly rendered cityscape.',
-      negativePrompt: '',
-      params: {
-        checkpoint: 'AIImageStudio/RadianceChromeVoluptuous_z_image_turbo_v2.0',
-        seed: 42,
-        seedControl: 'fixed',
-        steps: 8,
-        cfg: 1.0,
-        sampler: 'euler',
-        scheduler: 'bong_tangent',
-        denoise: 1.0,
-        width: 960,
-        height: 1440,
-        batchSize: 1,
-        loras: [
-          {
-            name: 'AIImageStudio/RadianceChromeVoluptuous_z_image_turbo_v2.0',
-            modelStrength: 0.7,
-            clipStrength: 0.7,
-            triggerWords: 'reversal film slide film style, masterpiece',
-            civitaiId: '139784521',
-          }
-        ],
-        targetProvider: 'huggingface',
-      },
-      status: 'idle',
-      imageUrl: '',
-      createdAt: Date.now(),
-    },
-  ]);
-  const [selectedFrameId, setSelectedFrameId] = useState<string | null>('frame-ms-1');
+  const [spatialFrames, setSpatialFrames] = useState<SpatialFrame[]>(initialWorkspace.active.spatialFrames);
+  useCanvasTools({canvasMode, nodeCount: nodes.length, connectionCount: connections.length, frameCount: spatialFrames.length}, setCanvasMode);
+  const [selectedFrameId, setSelectedFrameId] = useState<string | null>(initialWorkspace.active.spatialFrames[0]?.id || null);
 
   // Execution States
   const [isExecuting, setIsExecuting] = useState(false);
@@ -284,43 +182,10 @@ export default function App() {
   };
 
   // Multi-Canvas Boards Management
-  const [canvases, setCanvases] = useState<CanvasProject[]>(() => {
-    try {
-      const raw = localStorage.getItem('comfycanvas_boards_v2');
-      if (raw) return JSON.parse(raw);
-    } catch (e) {}
-    return [
-      {
-        id: 'canvas-zimage',
-        name: 'Z-Image-Turbo 极致真实画作工作室 (139784521)',
-        description: '对齐 Civitai 139784521，挂载 Z-Image-Turbo 官方底模与微调 LoRA (魔搭 / Hugging Face)',
-        updatedAt: Date.now(),
-        nodes: WORKFLOW_PRESETS[0].nodes,
-        connections: WORKFLOW_PRESETS[0].connections,
-        spatialFrames: WORKFLOW_PRESETS[0].spatialFrames || [],
-      },
-      {
-        id: 'canvas-anime',
-        name: '吉卜力唯美日系动漫水彩 (SDXL)',
-        description: 'Animagine XL 动漫底模，串联吉卜力光影与新海诚治愈云彩',
-        updatedAt: Date.now() - 3600000,
-        nodes: WORKFLOW_PRESETS[1].nodes,
-        connections: WORKFLOW_PRESETS[1].connections,
-        spatialFrames: WORKFLOW_PRESETS[1].spatialFrames || [],
-      },
-      {
-        id: 'canvas-wan',
-        name: '阿里魔搭 Wan 2.1 国风水墨仙侠与视频',
-        description: '通义万相纯中文自然语言大模型，东方仙侠神话与电影级视频',
-        updatedAt: Date.now() - 7200000,
-        nodes: WORKFLOW_PRESETS[2].nodes,
-        connections: WORKFLOW_PRESETS[2].connections,
-        spatialFrames: WORKFLOW_PRESETS[2].spatialFrames || [],
-      },
-    ];
-  });
-  const [currentCanvasId, setCurrentCanvasId] = useState<string>('canvas-zimage');
-
+  const [canvases, setCanvases] = useState<CanvasProject[]>(initialWorkspace.projects);
+  const [currentCanvasId, setCurrentCanvasId] = useState<string>(initialWorkspace.active.id);
+  const [isCloudProjectsOpen, setIsCloudProjectsOpen] = useState(false);
+  const [isSavingProject, setIsSavingProject] = useState(false);
   // Sync current work back to the canvases list (Auto-Save to project)
   useEffect(() => {
     setCanvases((prev) =>
@@ -342,9 +207,13 @@ export default function App() {
   // Sync canvases to localStorage
   useEffect(() => {
     try {
-      localStorage.setItem('comfycanvas_boards_v2', JSON.stringify(canvases));
-    } catch (e) {}
-  }, [canvases]);
+      localStorage.setItem(BOARDS_KEY, JSON.stringify(canvases));
+      localStorage.setItem(ACTIVE_BOARD_KEY, currentCanvasId);
+      localStorage.setItem(MODE_KEY, canvasMode);
+    } catch (e) {
+      setToast({type: 'warning', title: '本机保存未完成', message: '浏览器存储空间不足或不可用，请使用「保存到云端」保留项目。'});
+    }
+  }, [canvases, currentCanvasId, canvasMode]);
 
   // API Keys & History
   const [apiKeys, setApiKeys] = useState<ApiKeysState>(getStoredApiKeys());
@@ -352,53 +221,32 @@ export default function App() {
 
   // Initialize with Default Preset for node view
   useEffect(() => {
-    const defaultPreset = WORKFLOW_PRESETS[0];
-    setNodes(JSON.parse(JSON.stringify(defaultPreset.nodes)));
-    setConnections(JSON.parse(JSON.stringify(defaultPreset.connections)));
-
     fetchHistory().then((items) => {
       if (items) setHistory(items);
-    });
+    }).catch((err) => setToast({type: 'error', title: '历史记录读取失败', message: err.message}));
   }, []);
 
   // U-E2: Determine if generation/run is disabled due to missing model
   const runDisabledReason = useMemo(() => {
     if (canvasMode === 'spatial') {
-      if (selectedFrameId) {
-        const frame = spatialFrames.find((f) => f.id === selectedFrameId);
-        if (frame?.mediaType === 'video' && !(frame.params?.checkpoint || '').trim()) {
-          return '请先选择模型';
-        }
-      }
-      return undefined;
+      const frame = spatialFrames.find(f => f.id === selectedFrameId);
+      if (!frame) return '请选择要生成的画板';
+      const p = frame.params;
+      return generationReadiness({hfProvider:p.hfProvider, provider: p.targetProvider, model: p.checkpoint, prompt: frame.prompt, loras: p.loras, resolution: p.resolution, shift: p.shift, randomSeed: p.randomSeed, galleryImages: p.galleryImages, seed: p.seedControl === 'randomize' ? 1 : p.seed, steps: p.steps});
     }
-
-    if (nodes.length === 0) return undefined;
-
+    if (!nodes.length) return undefined;
     try {
-      const targetNode = resolveTargetNode(nodes, connections, selectedNodeId || undefined);
-      if (targetNode.type === 'AIVideoNode' && !(targetNode.values?.model || '').trim()) {
-        return '请先选择模型';
-      }
-      extractWorkflowParameters(nodes, connections, selectedNodeId || undefined);
-    } catch (err: any) {
-      if (err?.message === '请先选择模型') {
-        return '请先选择模型';
-      }
-      // F4: surface empty/mismatch provider before run (never silent Fal fallback)
-      if (
-        typeof err?.message === 'string' &&
-        (err.message.includes('视频服务商') || err.message.includes('服务商不一致'))
-      ) {
-        return err.message;
-      }
-    }
-    return undefined;
+      const p = extractWorkflowParameters(nodes, connections, selectedNodeId || undefined);
+      return generationReadiness({hfProvider:p.hfProvider, provider: p.videoProvider || p.targetProvider, model: p.checkpointModel, prompt: p.positivePrompt, loras: p.loras, resolution: p.resolution, shift: p.shift, randomSeed: p.randomSeed, galleryImages: p.galleryImages, seed: p.seed, steps: p.steps});
+    } catch (error: any) { return error.message || '工作流连接不完整'; }
   }, [canvasMode, selectedFrameId, spatialFrames, nodes, connections, selectedNodeId]);
 
   // Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (e.key !== 'Escape' && (isSettingsOpen || isCanvasManagerOpen || isCloudProjectsOpen || isModelHubOpen || isCivitaiOpen || isHistoryOpen || isWorkflowPresetsOpen || isProviderMatrixOpen || isAssetManagerOpen || isGuideOpen)) return;
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {e.preventDefault(); handleSaveProject().catch(() => {}); return;}
       // Ctrl+Enter or Cmd+Enter: Queue Prompt
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault();
@@ -421,7 +269,7 @@ export default function App() {
       // Delete or Backspace to delete selected element
       if (
         (e.key === 'Delete' || e.key === 'Backspace') &&
-        !['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement).tagName)
+        !['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) && !target.isContentEditable
       ) {
         if (selectedFrameId) {
           e.preventDefault();
@@ -436,12 +284,15 @@ export default function App() {
       if (e.key === 'Escape') {
         setPreviewImageUrl(null);
         setIsParamsDrawerOpen(false);
+        setIsSettingsOpen(false); setIsCanvasManagerOpen(false); setIsCloudProjectsOpen(false);
+        setIsModelHubOpen(false); setIsCivitaiOpen(false); setIsHistoryOpen(false);
+        setIsWorkflowPresetsOpen(false); setIsProviderMatrixOpen(false); setIsAssetManagerOpen(false); setIsGuideOpen(false);
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedNodeId, selectedFrameId, canvasMode, spatialFrames, nodes, connections, isExecuting]);
+  }, [selectedNodeId, selectedFrameId, canvasMode, spatialFrames, nodes, connections, isExecuting, isSettingsOpen, isCanvasManagerOpen, isCloudProjectsOpen, isModelHubOpen, isCivitaiOpen, isHistoryOpen, isWorkflowPresetsOpen, isProviderMatrixOpen, isAssetManagerOpen, isGuideOpen, runDisabledReason]);
 
   // Spatial Frame Operations
   const handleAddSpatialFrame = () => {
@@ -548,7 +399,9 @@ export default function App() {
   // Queue Generation for a Spatial Frame using its full ComfyUI parameters
   const handleQueueFrame = async (frameId: string) => {
     const frame = spatialFrames.find((f) => f.id === frameId);
-    if (!frame || frame.status === 'generating') return;
+    if (!frame || frame.status === 'generating' || isExecuting) return;
+    const issue = generationReadiness({hfProvider:frame.params.hfProvider, provider: frame.params.targetProvider, model: frame.params.checkpoint, prompt: frame.prompt, loras: frame.params.loras, resolution: frame.params.resolution, shift: frame.params.shift, randomSeed: frame.params.randomSeed, galleryImages: frame.params.galleryImages, seed: frame.params.seedControl === 'randomize' ? 1 : frame.params.seed, steps: frame.params.steps});
+    if (issue) {setToast({type: 'warning', title: '无法生成', message: issue}); return;}
 
     handleUpdateFrame(frameId, {
       status: 'generating',
@@ -602,10 +455,20 @@ export default function App() {
       if (p.background) extraParams.background = p.background;
       if (p.moderation) extraParams.moderation = p.moderation;
       if (p.resolution) extraParams.resolution = p.resolution;
+      if (p.targetProvider === 'huggingface') {
+        if (p.hfProvider) extraParams.hf_provider=p.hfProvider;
+        if (p.shift !== undefined) extraParams.shift = p.shift;
+        if (p.randomSeed !== undefined) extraParams.random_seed = p.randomSeed;
+        if (p.galleryImages !== undefined) extraParams.gallery_images = p.galleryImages;
+      }
       // Modal N → extraParams.n (must reach request body; not UI-only)
       if (grokOrOpenAi && p.batchSize != null && Number(p.batchSize) > 0) {
         extraParams.n = Number(p.batchSize);
       }
+      if (p.targetProvider === 'tensorart' && p.batchSize !== undefined) extraParams.count = p.batchSize;
+      if (['fal','nanogpt'].includes(p.targetProvider) && p.batchSize!==undefined) extraParams.n=p.batchSize;
+      if (p.falModelName) extraParams.model_name=p.falModelName;
+      const falWan=p.targetProvider==='fal' && /wan-t2v|wan-i2v|wan\/v2\.1/.test(p.checkpoint);
 
       const grokVideoDuration = grokish
         ? (frame.videoDuration ?? p.videoDuration)
@@ -625,6 +488,7 @@ export default function App() {
       );
 
       const normParams: NormalizedGenerateParams = omitUnsupportedGenerateFields(p.targetProvider, p.checkpoint, {
+        workflowSnapshot: { format: 'comfycanvas', version: 1, canvasMode: 'spatial', frame },
         prompt: finalPrompt,
         negative_prompt: frame.negativePrompt,
         model: p.checkpoint,
@@ -634,15 +498,15 @@ export default function App() {
         height: p.height,
         steps: p.steps,
         cfg: p.cfg,
-        seed: p.seed,
-        // ponytail: text2img 绝不传 denoise，仅在提供底图 (img2img/img2video) 时透传，避免 Fal/Civitai 400
+        seed: p.seedControl === 'randomize' ? Math.floor(Math.random() * 1000000000) : p.seed,
         denoise: frame.imageUrl ? p.denoise : undefined,
         sampler_name: p.sampler,
         scheduler: p.scheduler,
         image_url: frame.imageUrl,
         isVideo,
-        videoDuration: grokish ? grokVideoDuration : (isVideo ? (frame.videoDuration || 5) : undefined),
-        videoFps: grokish ? undefined : (isVideo ? (frame.videoFps || 16) : undefined),
+        videoDuration: falWan ? undefined : grokish ? grokVideoDuration : (isVideo ? (frame.videoDuration ?? p.videoDuration) : undefined),
+        videoFps: grokish ? undefined : (isVideo ? (p.videoFps ?? frame.videoFps) : undefined),
+        videoFrames: isVideo ? p.videoFrames : undefined,
         aspectRatio: isVideo
           ? (grokish ? (frame.videoAspectRatio || p.aspectRatio || undefined) : (frame.videoAspectRatio || '16:9'))
           : (p.aspectRatio || undefined),
@@ -693,6 +557,7 @@ export default function App() {
 
         handleUpdateFrame(frameId, {
           status: 'success',
+          params: {...p, seed: nextSeedAfterGeneration(execResult.seed, p.seedControl) ?? p.seed},
           executionProgress: 100,
           executionStage: '渲染成功，已回填画布',
           imageUrl: generatedImageUrl || frame.imageUrl,
@@ -700,8 +565,8 @@ export default function App() {
           mediaType: generatedVideoUrl ? 'video' : 'image',
         });
 
-        const updatedHistory = await fetchHistory();
-        setHistory(updatedHistory);
+        await fetchHistory().then(setHistory).catch((err) => setToast({type: 'warning', title: '图像已生成，历史记录读取失败', message: err.message}));
+        if (execResult.historyWarning) setToast({type:'warning', title:'图像已生成', message:execResult.historyWarning, imageUrl:generatedImageUrl});
         setExecutionStatusText(`生成完成 (${usedProvider})`);
       } catch (err: any) {
         if (tracker) clearInterval(tracker);
@@ -809,19 +674,14 @@ export default function App() {
 
     if (targetNode.type === 'CheckpointLoaderSimple') {
       if (widgetName === 'ckpt_name') {
-        const resolvedProv = resolveCheckpointModelProvider(value);
-        const prov = resolvedProv || targetNode.values?.targetProvider || '';
+        const prov = targetNode.values?.targetProvider || '';
         setNodes((prev) =>
           prev.map((n) =>
             n.id === nodeId
               ? {
                   ...n,
                   title: checkpointNodeTitle(prov, value),
-                  values: {
-                    ...(n.values || {}),
-                    ckpt_name: value,
-                    ...(resolvedProv ? { targetProvider: resolvedProv } : {}),
-                  },
+                  values: { ...(n.values || {}), ckpt_name: value },
                 }
               : n
           )
@@ -831,12 +691,11 @@ export default function App() {
             prev.map((f) =>
               f.id === activeFrameTargetId
                 ? (() => {
-                    const effectiveProv = resolvedProv || f.params.targetProvider;
-                    const nextLoras = sanitizeFrameLoras(effectiveProv, value, f.params.loras);
+                    const nextLoras = sanitizeFrameLoras(f.params.targetProvider, value, f.params.loras);
                     return {
                       ...f,
                       title: sanitizeFrameMarketingTitle(
-                        effectiveProv,
+                        f.params.targetProvider,
                         value,
                         f.title,
                         nextLoras.length
@@ -844,7 +703,6 @@ export default function App() {
                       params: {
                         ...f.params,
                         checkpoint: value,
-                        targetProvider: effectiveProv,
                         loras: nextLoras,
                       },
                     };
@@ -973,6 +831,9 @@ export default function App() {
               ...(widgetName === 'ckpt_name' ? { loras: nextLoras } : {}),
               ...(widgetName === 'aspect_ratio' ? { aspectRatio: value || undefined } : {}),
               ...(widgetName === 'resolution' ? { resolution: value || undefined } : {}),
+              ...(widgetName === 'shift' ? { shift: value } : {}),
+              ...(widgetName === 'random_seed' ? { randomSeed: value } : {}),
+              ...(widgetName === 'gallery_images' ? { galleryImages: value } : {}),
             },
           };
         })
@@ -1094,6 +955,7 @@ export default function App() {
       );
       setExecutionStatusText(`成功完成 (${result.provider})`);
       setExecutionProgress(100);
+      setNodes(prev => prev.map(node => node.id === result.executingNodeId ? {...node, values: {...node.values, seed: nextSeedAfterGeneration(result.seed, node.values.control_after_generate) ?? node.values.seed}} : node));
 
       // Sync output to active Spatial Frame so infinite canvas updates simultaneously
       const isVid = Boolean(result.isVideo || result.imageUrl?.includes('.mp4') || result.model?.includes('video'));
@@ -1113,14 +975,14 @@ export default function App() {
       }
 
       // Refresh generation history from server
-      const updatedHistory = await fetchHistory();
-      setHistory(updatedHistory);
+      let historyLoaded = true;
+      await fetchHistory().then(setHistory).catch(() => { historyLoaded = false; });
 
       // Trigger high visibility toast
       setToast({
-        type: 'success',
+        type: result.historyWarning ? 'warning' : 'success',
         title: '🎉 工作流运行成功！',
-        message: `由 ${result.provider} 渲染完成，种子: ${result.seed ?? '未填写'}，已保存至生成历史记录`,
+        message: result.historyWarning || `由 ${result.provider} 渲染完成，种子: ${result.seed ?? '未返回'}。${historyLoaded ? '可在历史记录查看实际参数和工作流' : '历史记录读取失败，请重新打开历史记录'}`,
         imageUrl: result.imageUrl,
       });
     } catch (err: any) {
@@ -1214,7 +1076,7 @@ export default function App() {
         title: '⚠️ 算力执行异常 (透明报告)',
         message: err.message || '上游服务商返回错误，请检查对应服务商 Key 或模型状态',
       });
-      fetchHistory().then(setHistory);
+      fetchHistory().then(setHistory).catch((err) => console.error('History refresh failed:', err.message));
     } finally {
       setTimeout(() => {
         setIsExecuting(false);
@@ -1352,156 +1214,23 @@ export default function App() {
     setSelectedNodeId(newNodeId);
   };
 
-  // User-requested core feature: Select LoRA and auto-pair matching base model onto graph nodes
-  const handleSelectLoRAWithBaseModel = (lora: {
-    name: string;
-    civitaiId?: string;
-    triggerWords?: string;
-    baseModel?: string;
-  }) => {
-    // Check if active spatial frame or graph has preferred provider
-    const currentProv = selectedFrameId
-      ? spatialFrames.find((f) => f.id === selectedFrameId)?.params?.targetProvider
-      : (findFirstNodeOfType(nodes, 'CheckpointLoaderSimple')?.values?.targetProvider as string | undefined);
-
-    const matched = getRecommendedBaseModelForLora(lora.baseModel, lora.name, currentProv || (lora.civitaiId ? 'civitai' : undefined));
-    const recModel = matched.recommendedCheckpoint;
-    
-    // Determine target provider: respect currentProv if it exists, otherwise use a safe default
-    let targetProvider = currentProv || (lora.civitaiId ? 'civitai' : 'fal');
-    
-    // Smart provider matching: if model ID looks like ModelScope or HF, use that
-    if (recModel.includes('/') && !recModel.startsWith('fal-ai/')) {
-      if (recModel.startsWith('stabilityai/') || recModel.startsWith('black-forest-labs/') || recModel.startsWith('runwayml/')) {
-         // Keep existing provider if it's likely to support these (fal, civitai, hf)
-         if (!['fal', 'civitai', 'huggingface'].includes(targetProvider)) {
-           targetProvider = 'huggingface';
-         }
-      } else if (recModel.startsWith('damo/') || recModel.startsWith('AI-ModelScope/')) {
-         targetProvider = 'modelscope';
-      }
+  // Attach to the explicitly selected provider/model; architecture is verified by its API.
+  const handleSelectLoRAWithBaseModel = (lora: {name:string;provider?:string;civitaiId?:string;triggerWords?:string;baseModel?:string}) => {
+    const checkpointNode = findFirstNodeOfType(nodes,'CheckpointLoaderSimple');
+    const frame = spatialFrames.find(f=>f.id===selectedFrameId);
+    const provider = frame?.params.targetProvider || checkpointNode?.values.targetProvider;
+    const model = frame?.params.checkpoint || checkpointNode?.values.ckpt_name;
+    const sourceProvider = lora.provider === 'tensor' ? 'tensorart' : lora.provider;
+    if (!provider || !model || (sourceProvider && provider!==sourceProvider)) {
+      setToast({type:'error',title:'请先选择同平台底模',message:'先选择目标供应商和真实模型，再挂载 LoRA；不会自动改供应商、模型或采样参数。'});
+      return;
     }
-
-    // 1. Update or auto-create CheckpointLoaderSimple node on the canvas
-    setNodes((prev) => {
-      const hasCkpt = prev.some((n) => n.type === 'CheckpointLoaderSimple');
-      if (!hasCkpt) {
-        const ckptDef = NODE_DEFINITIONS['CheckpointLoaderSimple'];
-        const newCkptId = `node-ckpt-${Date.now()}`;
-        const newCkpt: NodeInstance = {
-          id: newCkptId,
-          type: 'CheckpointLoaderSimple',
-          title: checkpointNodeTitle(targetProvider),
-          pos: {
-            x: Math.round(-transform.x / transform.scale + 120),
-            y: Math.round(-transform.y / transform.scale + 180),
-          },
-          width: 280,
-          inputs: ckptDef.inputs,
-          outputs: ckptDef.outputs,
-          values: { ...ckptDef.defaultValues, ckpt_name: recModel, targetProvider },
-          state: 'idle',
-        };
-        return [...prev, newCkpt];
-      }
-      return prev.map((n) =>
-        n.type === 'CheckpointLoaderSimple'
-          ? { 
-              ...n, 
-              title: checkpointNodeTitle(targetProvider),
-              values: { ...n.values, ckpt_name: recModel, targetProvider } 
-            }
-          : n
-      );
-    });
-
-    // 2. Synchronize KSampler to optimal steps & cfg for this architecture family
-    setNodes((prev) =>
-      prev.map((n) =>
-        n.type === 'KSampler'
-          ? {
-              ...n,
-              values: {
-                ...n.values,
-                steps: matched.recommendedSteps,
-                cfg: matched.recommendedCfg,
-                sampler_name: matched.recommendedSampler,
-                scheduler: matched.recommendedScheduler,
-              },
-            }
-          : n
-      )
-    );
-
-    // 3. Update target LoRA node or add a new one
-    if (targetLoRANodeId) {
-      setNodes((prev) =>
-        prev.map((n) =>
-          n.id === targetLoRANodeId
-            ? {
-                ...n,
-                title: loraLoaderNodeTitle(n.title, lora.name),
-                values: {
-                  ...n.values,
-                  lora_name: lora.name,
-                  civitai_id: lora.civitaiId || '',
-                  trigger_words: lora.triggerWords || '',
-                  base_model: lora.baseModel || matched.displayName,
-                },
-              }
-            : n
-        )
-      );
-    } else {
-      handleAddLoRANodeToCanvas({
-        name: lora.name,
-        civitaiId: lora.civitaiId || '',
-        triggerWords: lora.triggerWords || '',
-        baseModel: lora.baseModel || matched.displayName,
-      });
+    if (provider==='tensorart' && !/^\d{10,25}$/.test(String(model))) {
+      setToast({type:'error',title:'需要 Tensor.Art 模型 ID',message:'OpenWorks 工具名不能挂载模型 LoRA。'});return;
     }
-
-    // 4. If spatial frame is active, update checkpoint & append LoRA
-    if (selectedFrameId) {
-      const frame = spatialFrames.find((f) => f.id === selectedFrameId);
-      if (frame) {
-        let updatedPrompt = frame.prompt;
-        if (lora.triggerWords && !frame.prompt.includes(lora.triggerWords)) {
-          updatedPrompt = `${lora.triggerWords}, ${frame.prompt}`;
-        }
-        const nextLoras = [
-          ...frame.params.loras.filter((l) => l.name !== lora.name),
-          {
-            name: lora.name,
-            modelStrength: 0.8,
-            clipStrength: 0.8,
-            triggerWords: lora.triggerWords || '',
-            civitaiId: lora.civitaiId || '',
-            baseModel: lora.baseModel || matched.displayName,
-          },
-        ];
-        handleUpdateFrame(selectedFrameId, {
-          prompt: updatedPrompt,
-          params: {
-            ...frame.params,
-            checkpoint: recModel,
-            targetProvider: targetProvider as any,
-            steps: matched.recommendedSteps,
-            cfg: matched.recommendedCfg,
-            sampler: matched.recommendedSampler,
-            scheduler: matched.recommendedScheduler,
-            loras: nextLoras,
-          },
-        });
-      }
-    }
-
-    // 5. Success toast
-    setToast({
-      type: 'success',
-      title: '🎯 LoRA 与适配底模已一键同步！',
-      message: `已选用【${lora.name.replace('.safetensors', '')}】，前置底模已自动配对为【${recModel}】(推荐步数: ${matched.recommendedSteps}, CFG: ${matched.recommendedCfg})`,
-    });
+    const selected={...lora,triggerWords:lora.triggerWords || '',civitaiId:provider==='civitai'?lora.civitaiId:undefined};
+    handleSelectLoRAFromCivitai(selected);
+    if (!selectedFrameId && !targetLoRANodeId) handleAddLoRANodeToCanvas(selected);
   };
 
   // Live Model Hub selection
@@ -1614,8 +1343,8 @@ export default function App() {
             targetProvider: provider,
             prompt: 'Cinematic dynamic scene, high quality, 4k ultra-detailed, photorealistic motion',
             aspect_ratio: '16:9',
-            duration: 5,
-            fps: 16,
+            duration: '',
+            fps: '',
             steps: 30,
             cfg: 5.0,
           },
@@ -1702,8 +1431,26 @@ export default function App() {
     setConnections(JSON.parse(JSON.stringify(canvas.connections || [])));
     setSpatialFrames(JSON.parse(JSON.stringify(canvas.spatialFrames || [])));
     if (canvas.transform) setTransform(canvas.transform);
-    if (canvas.spatialFrames?.[0]) setSelectedFrameId(canvas.spatialFrames[0].id);
-    setTimeout(handleResetView, 60);
+    setSelectedFrameId(canvas.spatialFrames?.[0]?.id || null);
+    setSelectedNodeId(null);
+    if (!canvas.transform) setTimeout(handleResetView, 60);
+  };
+
+  const handleSaveProject = async (name?: string, asNew = false) => {
+    if (isSavingProject) return;
+    setIsSavingProject(true);
+    try {
+      const existing = canvases.find(c => c.id === currentCanvasId);
+      const result = await saveCloudProject({...existing, id: asNew ? crypto.randomUUID() : currentCanvasId, name: name || existing?.name || '我的创作画布', canvasMode, nodes, connections, spatialFrames, transform});
+      if (!result.success || !isCanvasProject(result.project)) throw new Error('网站未确认项目保存成功');
+      const project = result.project as CanvasProject;
+      setCanvases(prev => [project, ...prev.filter(p => p.id !== project.id)]);
+      setCurrentCanvasId(project.id);
+      setToast({type: 'success', title: '已保存到云端', message: project.name});
+    } catch (error: any) {
+      setToast({type: 'error', title: '云端保存失败', message: error.message});
+      throw error;
+    } finally {setIsSavingProject(false);}
   };
 
   const handleCreateNewCanvas = (name: string, description: string, templateType: 'empty' | 'flux' | 'ghibli' | 'wan') => {
@@ -2105,6 +1852,9 @@ export default function App() {
     background: checkpointLoaderNode?.values?.background || activeFrame?.params?.background || undefined,
     moderation: checkpointLoaderNode?.values?.moderation || activeFrame?.params?.moderation || undefined,
     resolution: checkpointLoaderNode?.values?.resolution || activeFrame?.params?.resolution || undefined,
+    shift: checkpointLoaderNode?.values?.shift ?? activeFrame?.params?.shift,
+    randomSeed: checkpointLoaderNode?.values?.random_seed ?? activeFrame?.params?.randomSeed,
+    galleryImages: checkpointLoaderNode?.values?.gallery_images ?? activeFrame?.params?.galleryImages,
   };
 
   return (
@@ -2136,6 +1886,9 @@ export default function App() {
         onOpenCivitaiImport={handleOpenCivitaiImport}
         onOpenProviderMatrix={() => setIsProviderMatrixOpen(true)}
         onOpenCanvasManager={() => setIsCanvasManagerOpen(true)}
+        onOpenCloudProjects={() => setIsCloudProjectsOpen(true)}
+        onSaveProject={() => {handleSaveProject().catch(() => {});}}
+        isSavingProject={isSavingProject}
         onOpenAssetManager={() => setIsAssetManagerOpen(true)}
         onOpenHistory={() => setIsHistoryOpen(true)}
         onOpenParamsDrawer={() => setIsParamsDrawerOpen(!isParamsDrawerOpen)}
@@ -2259,7 +2012,7 @@ export default function App() {
 
       {/* Floating ComfyUI Parameter Inspector Drawer */}
       {isParamsDrawerOpen && (
-        <aside className="fixed top-16 right-4 bottom-4 w-96 z-40 animate-in slide-in-from-right-4 duration-200">
+        <aside className="fixed top-[168px] right-4 bottom-4 w-96 max-w-[calc(100vw-2rem)] z-40 animate-in slide-in-from-right-4 duration-200">
           <ParameterInspector
             params={activeParams}
             positivePrompt={activePositivePrompt}
@@ -2369,6 +2122,9 @@ export default function App() {
                       background: newParams.background,
                       moderation: newParams.moderation,
                       resolution: newParams.resolution,
+                      shift: newParams.shift,
+                      random_seed: newParams.randomSeed,
+                      gallery_images: newParams.galleryImages,
                       aspect_ratio: newParams.aspectRatio,
                       n: newParams.batchSize,
                       // Always track provider so title and schema selects stay in sync
@@ -2529,7 +2285,7 @@ export default function App() {
                 targetProvider: detectedProvider,
                 prompt: 'Cinematic dynamic scene, high quality, 4k ultra-detailed, photorealistic motion',
                 aspect_ratio: '16:9',
-                duration: 5,
+                duration: '',
                 fps: 24,
                 steps: 30,
                 cfg: 6.0,
@@ -2599,6 +2355,14 @@ export default function App() {
           setIsCivitaiOpen(true);
         }}
       />
+
+      <CloudProjectModal isOpen={isCloudProjectsOpen} onClose={() => setIsCloudProjectsOpen(false)} currentProjectId={currentCanvasId}
+        onSaveCurrentToCloud={(name) => handleSaveProject(name, true)}
+        onLoadProject={(project) => {
+          if (!isCanvasProject(project)) {setToast({type: 'error', title: '无法载入项目', message: '项目格式不完整'}); return;}
+          setCanvases(prev => [project, ...prev.filter(p => p.id !== project.id)]);
+          handleSelectCanvas(project); setCanvasMode(project.canvasMode || 'graph');
+        }} />
 
       {/* Backend Settings Modal */}
       <BackendSettingsModal

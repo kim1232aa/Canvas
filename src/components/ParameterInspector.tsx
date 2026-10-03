@@ -22,7 +22,7 @@ import { ComfyParameters } from '../types/graph';
 import { BASE_MODELS, SAMPLER_OPTIONS, SCHEDULER_OPTIONS } from '../constants/nodes';
 import { refinePromptWithGemini, fetchLiveModels, getRefineModelSelection } from '../services/api';
 import { validateLoraCompatibility } from '../utils/baseModelMatcher';
-import { isLoraUnsupportedOnEndpoint, toSchemaProvider, resolveCheckpointModelProvider } from '../utils/resolveCheckpoint';
+import { isLoraUnsupportedOnEndpoint } from '../utils/resolveCheckpoint';
 import { normalizeForComfyUI } from '../utils/engineParameterNormalizer';
 import { GeminiFieldSelect } from './GeminiFieldSelect';
 import { FieldStatusBadge } from './FieldStatusBadge';
@@ -64,12 +64,13 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
   const [isRefiningPrompt, setIsRefiningPrompt] = React.useState(false);
   const [liveModels, setLiveModels] = React.useState<Array<{ label: string; value: string; provider: string }>>([]);
   const [isLoadingModels, setIsLoadingModels] = React.useState(false);
+  const [modelLoadError, setModelLoadError] = React.useState<string | null>(null);
 
   // Merge static BASE_MODELS with dynamically fetched liveModels
   const allModels = React.useMemo(() => {
     const list = [...BASE_MODELS.map(m => ({ label: m.label, value: m.value, provider: m.provider as any }))];
     liveModels.forEach(lm => {
-      if (!list.some(m => m.value === lm.value)) {
+      if (!list.some(m => m.value === lm.value && m.provider === lm.provider)) {
         list.push(lm);
       }
     });
@@ -79,9 +80,13 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
   React.useEffect(() => {
     let active = true;
     setIsLoadingModels(true);
+    setModelLoadError(null);
+    setLiveModels([]);
     fetchLiveModels(params.targetProvider || 'all', '', 'Checkpoint', 'checkpoint')
       .then((data) => {
         if (!active) return;
+        const providerResult: any = data[params.targetProvider];
+        if (providerResult?.error) setModelLoadError(`${providerResult.error}${providerResult.details ? ': ' + providerResult.details : ''}`);
         const list: Array<{ label: string; value: string; provider: string }> = [];
         Object.entries(data).forEach(([prov, items]) => {
           if (Array.isArray(items)) {
@@ -99,7 +104,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
         setLiveModels(list);
       })
       .catch((err) => {
-        console.warn('[ParameterInspector] Live models fetch error:', err.message);
+        if (active) setModelLoadError(err.message || '目录加载失败');
       })
       .finally(() => {
         if (active) setIsLoadingModels(false);
@@ -142,7 +147,19 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
   const isGemini = params.targetProvider === 'gemini';
   const isOpenAiCompat = params.targetProvider === 'openai_compat';
   const isGrokCompat = params.targetProvider === 'grok_compat';
-  const schemaProvider: SchemaProvider | undefined = toSchemaProvider(params.targetProvider);
+  const schemaProvider: SchemaProvider | undefined =
+    params.targetProvider === 'gemini' ||
+    params.targetProvider === 'fal' ||
+    params.targetProvider === 'civitai' ||
+    params.targetProvider === 'openai_compat' ||
+    params.targetProvider === 'grok_compat' ||
+    params.targetProvider === 'agnes' ||
+    params.targetProvider === 'huggingface' ||
+    params.targetProvider === 'nanogpt' ||
+    params.targetProvider === 'tensorart' ||
+    params.targetProvider === 'sensenova'
+      ? (params.targetProvider as SchemaProvider)
+      : undefined;
   // Prefer checkpoint when it exists in schema; else first model for provider so
   // grok/openai enum selects (aspect_ratio/resolution/size/…) still render when
   // checkpoint is empty or leftover from another provider.
@@ -151,6 +168,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
     : (params.checkpoint || '');
   const fieldUnsupported = (field: FieldKey) =>
     Boolean(schemaProvider && schemaModel && getFieldSpec(schemaProvider, schemaModel, field)?.status === 'unsupported');
+  const isFalWan = params.targetProvider === 'fal' && ['fal-ai/wan-t2v', 'fal-ai/wan-i2v'].includes(params.checkpoint || '');
   const greySeed = isGemini || isOpenAiCompat || isGrokCompat || fieldUnsupported('seed');
   const greySteps = isOpenAiCompat || isGrokCompat || fieldUnsupported('steps');
   const greyCfg = isOpenAiCompat || isGrokCompat || fieldUnsupported('cfg');
@@ -196,13 +214,13 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
     update({ width: w, height: h });
   };
 
-  const handleCopyComfyJSON = () => {
+  const handleCopyComfyJSON = async () => {
     const comfyPromptApiFormat = normalizeForComfyUI(
       params,
-      positivePrompt || 'masterpiece, high detail portrait',
-      negativePrompt || 'blurry, low quality, bad anatomy'
+      positivePrompt || '',
+      negativePrompt || ''
     );
-    navigator.clipboard.writeText(JSON.stringify(comfyPromptApiFormat, null, 2));
+    try { await navigator.clipboard.writeText(JSON.stringify(comfyPromptApiFormat, null, 2)); } catch { alert("复制失败，请检查剪贴板权限"); return; }
     setCopiedComfyJson(true);
     setTimeout(() => setCopiedComfyJson(false), 2000);
   };
@@ -217,7 +235,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
 
   return (
     <div
-      className={`bg-[#16171d]/98 backdrop-blur-2xl border border-[#2b2d37] rounded-2xl shadow-2xl flex flex-col text-xs overflow-hidden ${
+      className={`studio-readable parameter-inspector bg-[#16171d]/98 backdrop-blur-2xl border border-[#2b2d37] rounded-2xl shadow-2xl flex flex-col text-xs overflow-hidden ${
         isFloatingDrawer ? 'w-full h-full' : 'w-full'
       }`}
     >
@@ -229,7 +247,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
           </div>
           <div>
             <h3 className="font-bold text-white text-xs tracking-wide">{title}</h3>
-            <span className="text-[10px] text-slate-400 font-mono">完整遵循 ComfyUI 参数体系</span>
+            <span className="text-[10px] text-slate-400 font-mono">按所选端点核实参数能力</span>
           </div>
         </div>
         <div className="flex items-center gap-1.5">
@@ -350,18 +368,18 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
           {/* Cloud Provider Routing */}
           <div className="space-y-1">
             <label className="text-slate-400 text-[10px] font-mono">云端推理引擎 (ENGINE PROVIDER)</label>
-            <div className="grid grid-cols-3 gap-1.5">
+            <div className="grid grid-cols-2 gap-1.5">
               {[
                 { id: 'huggingface', label: 'Hugging Face' },
                 { id: 'modelscope', label: '魔搭 CN (国内站)' },
                 { id: 'modelscope_ai', label: '魔搭 AI (国际站)' },
                 { id: 'fal', label: 'Fal.ai (GPU加速)' },
-                { id: 'agnes', label: 'Agnes AI (秒级)' },
+                { id: 'agnes', label: 'Agnes AI' },
                 { id: 'gemini', label: 'Google Gemini' },
                 { id: 'civitai', label: 'Civitai 原生' },
                 { id: 'nanogpt', label: 'NanoGPT' },
                 { id: 'sensenova', label: '商汤思考(LLM)' },
-                { id: 'tensorart', label: 'Tensor.Art (OpenWorks)' },
+                { id: 'tensorart', label: 'Tensor.Art 模型 API' },
                 { id: 'openai_compat', label: 'OpenAI 兼容中转' },
                 { id: 'grok_compat', label: 'Grok 兼容中转' },
               ].map((p) => {
@@ -371,7 +389,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                     key={p.id}
                     onClick={() => {
                       // G4: 切换 provider 时不自动填默认模型 → 清空 checkpoint
-                      update({ targetProvider: p.id as any, checkpoint: '' });
+                      if (!isSelected) update({ targetProvider: p.id as any, checkpoint: '' });
                     }}
                     className={`py-1.5 px-1 rounded-lg text-center font-mono text-[10px] transition-all truncate ${
                       isSelected
@@ -402,47 +420,26 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
             </div>
             <select
               value={params.checkpoint || ''}
-              onChange={(e) => {
-                const val = e.target.value;
-                const matchedModel = allModels.find((m) => m.value === val);
-                const prov = matchedModel?.provider || resolveCheckpointModelProvider(val);
-                if (prov) {
-                  update({ checkpoint: val, targetProvider: prov });
-                } else {
-                  update({ checkpoint: val });
-                }
-              }}
+              onChange={(e) => update({ checkpoint: e.target.value })}
               className="w-full bg-[#111216] border border-[#2b2d38] focus:border-cyan-500 rounded-lg px-2.5 py-1.5 text-slate-200 text-[11px] font-mono outline-none cursor-pointer"
               title={params.checkpoint || '未选择 (请先选择模型)'}
             >
               {/* Empty must be explicit — otherwise browser shows first MODELSCOPE option */}
               <option value="">未选择 (请先选择模型)</option>
               {/* Dynamically preserve custom or current checkpoint */}
-              {params.checkpoint && !allModels.some((m) => m.value === params.checkpoint) && (
+              {params.checkpoint && !allModels.some((m) => m.value === params.checkpoint && m.provider === params.targetProvider) && (
                 <option key={`custom-current-${params.checkpoint}`} value={params.checkpoint}>
                   ★ [当前生效模型] {params.checkpoint}
                 </option>
               )}
               {/* Active Provider Models Group */}
               {allModels.filter((m) => m.provider === params.targetProvider).length > 0 && (
-                <optgroup label={`当前引擎官方推荐/已检索模型 (${params.targetProvider.toUpperCase()})`}>
+                <optgroup label={`当前服务商目录模型 (${params.targetProvider.toUpperCase()})`}>
                   {allModels
                     .filter((m) => m.provider === params.targetProvider)
                     .map((m, idx) => (
                       <option key={`cur-${m.provider}-${m.value}-${idx}`} value={m.value}>
                         {m.label}
-                      </option>
-                    ))}
-                </optgroup>
-              )}
-              {/* All Other Ecosystem Models Group */}
-              {allModels.filter((m) => m.provider !== params.targetProvider).length > 0 && (
-                <optgroup label="全生态其他引擎推荐模型">
-                  {allModels
-                    .filter((m) => m.provider !== params.targetProvider)
-                    .map((m, idx) => (
-                      <option key={`eco-${m.provider}-${m.value}-${idx}`} value={m.value}>
-                        [{m.provider.toUpperCase()}] {m.label}
                       </option>
                     ))}
                 </optgroup>
@@ -453,6 +450,8 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                 </option>
               )}
             </select>
+            {modelLoadError && <p role="alert" className="text-sm text-amber-300 break-words">目录加载失败：{modelLoadError}。仍可核对后手填模型 ID。</p>}
+            <p className="text-sm text-slate-400 break-all">提交服务商：{params.targetProvider || '未选择'} · 模型：{params.checkpoint || '未选择'}</p>
             {/* Custom Model ID input */}
             <div className="pt-1">
               <input
@@ -466,13 +465,30 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
             </div>
           </div>
 
+          {params.targetProvider === 'fal' && params.checkpoint === 'fal-ai/lora' && <label className="block text-sm text-slate-300">SD LoRA 底模 model_name<input className="mt-1 w-full bg-[#111216] border border-slate-700 rounded-lg p-2" value={params.falModelName || ''} onChange={e => update({falModelName:e.target.value})} placeholder="必填：底模仓库 ID 或 URL" /></label>}
+
+          {params.targetProvider === 'huggingface' && params.checkpoint !== 'Tongyi-MAI/Z-Image-Turbo' && (
+            <div className="space-y-2 rounded-lg border border-amber-800/40 bg-amber-950/20 p-3">
+              <label className="block text-sm text-amber-200">HF 在线推理路由
+                <select aria-label="HF 在线推理路由" value={params.hfProvider || ''} onChange={e => update({ hfProvider: (e.target.value || undefined) as ComfyParameters['hfProvider'] })} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2 text-slate-200">
+                  <option value="">未显式指定（使用模型绑定路由）</option>
+                  <option value="hf-inference">HF Inference</option>
+                  <option value="fal-ai">HF → fal-ai（计费推理）</option>
+                </select>
+              </label>
+              <p className="text-sm text-slate-400">模型仓库可下载不代表可在线推理。选择 fal-ai 会通过 HF Router 提交至该服务商并计费；LoRA 能力由模型与路由决定。</p>
+              {params.checkpoint === 'XLabs-AI/flux-RealismLora' && !params.hfProvider && <p className="text-sm text-amber-200">当前模型绑定：HF → fal-ai。</p>}
+            </div>
+          )}
+
+          {(params.targetProvider === 'modelscope' || params.targetProvider === 'modelscope_ai') && <p role="note" className="rounded-lg border border-amber-800/40 p-3 text-sm text-amber-200">魔搭云端已核实提示词、模型与 LoRA 格式；步数、CFG、种子、宽高及负向词尚未核实，请清空后提交。Qwen Image Edit 支持参考图。模型目录中的仓库不保证已开通在线推理。</p>}
           {/* Engine Parameter Notice Banner */}
           {params.targetProvider === 'agnes' && (
             <div className="p-2.5 bg-rose-950/20 border border-rose-500/30 rounded-lg text-[10px] text-rose-300/90 leading-relaxed flex items-start gap-2">
               <Info className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
               <div>
                 <span className="font-bold text-rose-300">Agnes AI 官方原生架构：</span>
-                <span> Agnes 采用自研端到端秒级扩散与超分管线 (agnes-image-2.5-flash / 2.1-flash)，支持秒级出片与图生图；无需也不依赖 ComfyUI 本地 Sampler/Scheduler 与 LoRA safetensors，参数已由云端接口原生智能适配。</span>
+                <span> 使用当前选择的 Agnes 模型。界面中禁用的参数不会生效；实际提交字段与上游响应可在生成历史中查看。</span>
               </div>
             </div>
           )}
@@ -491,7 +507,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
             <div className="p-2.5 bg-amber-950/20 border border-amber-500/30 rounded-lg text-[10px] text-amber-300/90 leading-relaxed flex items-start gap-2">
               <Info className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
               <div>
-                <span className="font-bold text-amber-300">商汤日日新 (DeepSeek V4) 思考推理：</span>
+                <span className="font-bold text-amber-300">商汤日日新 · 提示词推理：</span>
                 <span> SenseNova 专长于思维链 (CoT)深度构思与 Prompt 扩写。请在提示词面板中点击「AI 润色」或使用画布上的「LLM 推理思考节点」构思后，连线至 FLUX.1 或 SDXL 扩散引擎出片。</span>
               </div>
             </div>
@@ -521,8 +537,8 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
             <div className="p-2.5 bg-purple-950/20 border border-purple-500/30 rounded-lg text-[10px] text-purple-300/90 leading-relaxed flex items-start gap-2">
               <Sparkles className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
               <div>
-                <span className="font-bold text-purple-300">Tensor.Art / 吐司 (OpenWorks) 原生算力：</span>
-                <span> 官方 OpenAPI 直连，涵盖 Wan 2.7、Wan 2.2、Z-Image Ultra 与 Illustrious 等前沿生图与生视频大模型；画幅、采样步数与提示词参数已由引擎原生自动适配。</span>
+                <span className="font-bold text-purple-300">Tensor.Art / 吐司模型 API：</span>
+                <span> 使用 TAMS 模型 ID 与模型 API Key。OpenWorks 工具名和密钥不能代用；LoRA 需与所选底模架构兼容。</span>
               </div>
             </div>
           )}
@@ -535,7 +551,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
               <Sliders className="w-3.5 h-3.5 text-blue-400" />
               KSampler 采样器核心参数
             </span>
-            <span className="text-[10px] text-slate-500 font-mono">ComfyUI 规范</span>
+            <span className="text-[10px] text-slate-500 font-mono">端点能力</span>
           </div>
 
           {/* Seed & Seed Control */}
@@ -839,6 +855,20 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
           )}
         </div>
 
+        {isFalWan && <section className="bg-[#1a1b22] border border-[#272933] rounded-xl p-3 space-y-3">
+          <h4 className="font-semibold text-slate-200">Wan 视频参数</h4>
+          <p className="text-sm text-amber-200">此端点不接收秒数 duration。请按帧数与帧率设置；不会将秒数换算为帧数。</p>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="text-sm text-slate-400">帧数 num_frames
+              <input aria-label="视频帧数" type="number" min={81} max={100} step={1} value={params.videoFrames ?? ''} placeholder="未填写" onChange={e => update({videoFrames: e.target.value === '' ? undefined : Number(e.target.value)})} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2 text-slate-200" />
+            </label>
+            <label className="text-sm text-slate-400">帧率 frames_per_second
+              <input aria-label="视频帧率" type="number" min={5} max={24} step={1} value={params.videoFps ?? ''} placeholder="未填写" onChange={e => update({videoFps: e.target.value === '' ? undefined : Number(e.target.value)})} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2 text-slate-200" />
+            </label>
+          </div>
+          {params.videoDuration !== undefined && <p className="text-sm text-amber-200">画布保留的时长 {params.videoDuration} 秒不适用于此端点。<button type="button" className="ml-2 text-cyan-300 underline" onClick={() => update({videoDuration: undefined})}>清除此时长</button></p>}
+        </section>}
+
         {/* Section 4: Latent Geometry & Aspect Ratio */}
         <div className="bg-[#1a1b22] border border-[#272933] rounded-xl p-3 space-y-2.5">
           <span className="font-semibold text-slate-200 text-[11px] block">
@@ -897,6 +927,14 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
             </div>
           </div>
 
+          {params.targetProvider === 'nanogpt' && <div className="space-y-2 rounded-lg border border-cyan-800/40 bg-cyan-950/20 p-3">
+            <label className="block text-sm text-slate-300">模型分辨率 resolution
+              <input aria-label="NanoGPT resolution" type="text" value={params.resolution || ''} placeholder="留空使用上方像素宽高" onChange={e => update({resolution: e.target.value || undefined})} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2 text-slate-200" />
+            </label>
+            <p className="text-sm text-slate-400">允许值由选定模型的实时能力决定，不通用。若同时保留宽高，resolution 必须与 {params.width}x{params.height} 一致，否则提交会报冲突。</p>
+            {params.resolution && params.resolution !== `${params.width}x${params.height}` && <p role="alert" className="text-sm text-amber-200">尺寸冲突：resolution 与当前像素宽高不同。请清空 resolution，或修改为一致的值。</p>}
+          </div>}
+
           {isGemini && (
             <div className="grid grid-cols-2 gap-2">
               <GeminiFieldSelect
@@ -941,6 +979,34 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                   className="w-full bg-[#111216] border border-[#2b2d38] rounded-lg px-2 py-1.5 text-slate-200 text-[11px] font-mono outline-none disabled:opacity-40 disabled:cursor-not-allowed"
                 />
               </div>
+            </div>
+          )}
+
+          {schemaProvider === 'huggingface' && getFieldSpec('huggingface', schemaModel, 'shift') && (
+            <div className="grid grid-cols-2 gap-2">
+              {schemaSelect('resolution', params.resolution || '', (v) => update({ resolution: v || undefined }), 'RESOLUTION')}
+              <div className="space-y-1">
+                <label className="text-slate-400 text-[10px] font-mono">SHIFT（时间偏移）</label>
+                <input type="number" min={1} max={10} step={0.1} value={params.shift ?? ''}
+                  placeholder="必填；官方默认 3.0"
+                  onChange={(e) => update({shift: e.target.value === '' ? undefined : Number(e.target.value)})}
+                  className="w-full bg-[#111216] border border-[#2b2d38] rounded-lg px-2 py-1.5 text-slate-200 text-[11px] font-mono outline-none" />
+              </div>
+            </div>
+          )}
+
+          {schemaProvider === 'huggingface' && getFieldSpec('huggingface', schemaModel, 'shift') && (
+            <div className="grid grid-cols-2 gap-2">
+              <label className="text-sm text-slate-400">种子策略
+                <select value={typeof params.randomSeed === 'boolean' ? String(params.randomSeed) : ''} onChange={e => update({randomSeed: e.target.value === '' ? undefined : e.target.value === 'true'})} className="w-full mt-1 bg-[#111216] border border-slate-700 rounded-lg p-2 text-slate-200">
+                  <option value="">请选择</option><option value="false">使用画布种子</option><option value="true">由 Space 随机选择</option>
+                </select>
+              </label>
+              <label className="text-sm text-slate-400">结果集
+                <select value={Array.isArray(params.galleryImages) ? 'new' : ''} onChange={e => update({galleryImages: e.target.value ? [] : undefined})} className="w-full mt-1 bg-[#111216] border border-slate-700 rounded-lg p-2 text-slate-200">
+                  <option value="">请选择</option><option value="new">新建本次结果集</option>
+                </select>
+              </label>
             </div>
           )}
 

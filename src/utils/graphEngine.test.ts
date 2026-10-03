@@ -22,6 +22,23 @@ describe('graphEngine - B2 & L2a & L2b 拓扑反向追踪与参数抽取隔离�
     values,
   });
 
+  it('keeps HF Z-Image resolution and shift from the upstream checkpoint', () => {
+    const nodes = [
+      createNode('checkpoint', 'CheckpointLoaderSimple', {targetProvider: 'huggingface', ckpt_name: 'Tongyi-MAI/Z-Image-Turbo', resolution: '1152x896 ( 9:7 )', shift: 3.2}),
+      createNode('sampler', 'KSampler', {seed: 42, control_after_generate: 'fixed', steps: 8}),
+      createNode('prompt', 'CLIPTextEncode', {text: 'test prompt'}),
+    ];
+    const connections: Connection[] = [{id: 'model', fromNodeId: 'checkpoint', fromSocketId: 'MODEL', toNodeId: 'sampler', toSocketId: 'model', type: 'MODEL'}];
+    connections.push({id: 'prompt', fromNodeId: 'prompt', fromSocketId: 'CONDITIONING', toNodeId: 'sampler', toSocketId: 'positive', type: 'CONDITIONING'});
+    const extracted = extractWorkflowParameters(nodes, connections, 'sampler');
+    expect(extracted).toMatchObject({targetProvider: 'huggingface', checkpointModel: 'Tongyi-MAI/Z-Image-Turbo', resolution: '1152x896 ( 9:7 )', shift: 3.2, seed: 42, steps: 8});
+  });
+  it('requires an explicit provider even when the model name contains fal-ai', () => {
+    const nodes = [createNode('ckpt', 'CheckpointLoaderSimple', {ckpt_name:'fal-ai/flux/dev'}), createNode('sampler', 'KSampler', {}), createNode('prompt', 'CLIPTextEncode', {text:'a tree'})];
+    const edges: Connection[] = [{id:'m',fromNodeId:'ckpt',fromSocketId:'MODEL',toNodeId:'sampler',toSocketId:'model',type:'MODEL'}, {id:'p',fromNodeId:'prompt',fromSocketId:'CONDITIONING',toNodeId:'sampler',toSocketId:'positive',type:'CONDITIONING'}];
+    expect(() => extractWorkflowParameters(nodes, edges, 'sampler')).toThrow(/不会从模型名称猜测/);
+  });
+
   it('一个画布上两个 AIVideoNode + 两个图片节点，各自带自己的 model 且不会拿到另一节点的参考图', async () => {
     // 构造单张画布：包含 2 个视频节点 + 2 个图片节点，各自带有各自的 LoadImage 参考图
     const nodes: NodeInstance[] = [
@@ -211,6 +228,7 @@ describe('graphEngine - B2 & L2a & L2b 拓扑反向追踪与参数抽取隔离�
       // Comfy 经典流
       createNode('ckpt-1', 'CheckpointLoaderSimple', {
         ckpt_name: 'fal-ai/flux/dev',
+        targetProvider: 'fal',
       }),
       createNode('clip-1', 'CLIPTextEncode', {
         text: 'photorealistic mountain peaks',
@@ -432,17 +450,9 @@ describe('graphEngine - B2 & L2a & L2b 拓扑反向追踪与参数抽取隔离�
       mediaType: 'image',
     }));
 
-    await executeWorkflow(nodes, connections, () => {}, undefined);
-    // Schema marks fal-ai/flux/schnell.loras unsupported → omit from payload (values stay in workflow extract).
-    expect(generateSpy).toHaveBeenCalledWith(
-      'fal',
-      expect.objectContaining({
-        model: 'fal-ai/flux/schnell',
-        loras: undefined,
-      }),
-      expect.anything()
-    );
-    expect(generateSpy).not.toHaveBeenCalledWith('huggingface', expect.anything(), expect.anything());
+    await expect(executeWorkflow(nodes, connections, () => {}, undefined)).rejects.toThrow('该服务商不支持 LoRA');
+    expect(generateSpy).not.toHaveBeenCalled();
+
   });
 
   it('B1-r2b: CLIP connected to Fal prefers Fal over zombie KSampler when CLIP is selected', () => {
@@ -655,7 +665,7 @@ describe('graphEngine - F4 AIVideoNode provider sync / reject empty & mismatch',
   it('F4: schema model provider mismatch with targetProvider is rejected', () => {
     const nodes: NodeInstance[] = [
       createNode('video-node', 'AIVideoNode', {
-        model: 'text2video_wan27', // tensorart in schema
+        model: 'agnes-video-2.5-flash', // explicit Agnes endpoint
         targetProvider: 'fal',
         prompt: 'cinematic orbit',
       }),

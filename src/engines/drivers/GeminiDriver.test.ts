@@ -19,7 +19,7 @@ describe('GeminiDriver', () => {
     expect(EngineRegistry.getDriver('gemini')?.id).toBe('gemini');
   });
 
-  it('即使 params 带 Civitai 导入 seed 也不写入请求体，结果 seed 恒为 null', async () => {
+  it('按调用者提供的画幅和图像尺寸发送，结果不捏造 seed', async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -33,7 +33,6 @@ describe('GeminiDriver', () => {
     const params: NormalizedGenerateParams = {
       prompt: 'a fox',
       model: 'gemini-3.1-flash-image',
-      seed: 1847392847561,
       aspectRatio: '16:9',
       imageSize: '1K',
     };
@@ -52,3 +51,11 @@ describe('GeminiDriver', () => {
     expect(res.seed).toBeNull();
   });
 });
+
+ it('explicit unsupported seed is sent for a visible API rejection', async () => {
+   const fetchMock=vi.fn().mockResolvedValue({ok:false,status:400,json:async()=>({error:'该服务商不支持: seed'})});
+   vi.stubGlobal('fetch',fetchMock);
+   await expect(new GeminiDriver().generate({model:'gemini-3.1-flash-image',prompt:'fox',seed:42},{})).rejects.toThrow(/seed/);
+   expect(JSON.parse(fetchMock.mock.calls[0][1].body).seed).toBe(42);
+   vi.unstubAllGlobals();
+ });

@@ -8,7 +8,37 @@
 5. `npx tsc --noEmit` 必须保持 0 错误。
 6. 仓库根目录的 `CLAUDE.md`（上述固定项目规则）和 `PROGRESS.md`（计划、进度、踩坑记录、下一步）必须持续更新；不存在就创建。
 
+## 本次用户授权例外（2026-10-03，北京时间）
+- 用户明确授权：有需要可直接调用真实生成，欠费不作为集成失败；可用接口须实际出图，附实际参数、工作流和 LoRA 记录，并符合端点真实能力。该授权仅覆盖本次验证，优先于第 4 条；固定规则原文保留，今后没有同等用户授权时仍执行第 4 条。
+- 使用真实 key 前核实官方端点；不在源码、产物或日志中写入完整 key。Sites 运行环境使用加密 secret，浏览器只看到掩码。
+
 ## 参数处理规则（适用于所有路由）
 - 请求里带了服务商官方不支持的参数（LoRA、seed、负向提示词、steps、CFG、尺寸等）时，返回明确的 400，写出字段名并注明「该服务商不支持」，不许静默丢弃。
 - 绝不许把负向提示词合并进正向提示词。
 - 绝不许把没有真正发给上游的值（随机 seed、默认 steps/cfg 等）写进历史记录。
+
+## Sites 部署副本
+- 原始服务商处理逻辑保留在 `server.ts`；在线环境适配由 `hosting/build.mjs` 生成，生成文件不提交。
+- D1 仅保存索引与加密设置，媒体及项目正文使用 R2。数据库变更通过 Drizzle 迁移进行。
+- 生产环境通过 Sites 转发的认证邮箱匹配原生 Sites 所有者元数据，并绑定固定账号 ID；不依赖缺失的 user-id 请求头。没有固定邮箱配置的旧部署保留首次访问原子绑定逻辑。保持网站私有访问。
+- 运行环境的 `CANVAS_SETTINGS_SECRET` 不得写入源码或日志。
+
+## 当前验收范围
+- 完整参数与工作流记录来自请求上下文；实际上游提交 JSON 与画布快照分别保存，不能用 UI 默认值冒充已发送参数。
+- 真实图片与验收记录在 `public/verification/`；可复用工作流另存，经拓扑参数提取检查。
+- 不支持 LoRA 的接口必须拦截非空 LoRA；不允许静默移除。Civitai 模型可下载不等于已启用在线生成。
+- 历史文档中的「100% 支持」「自动切换模型/端点」「全量验证」不代表当前实现或验收结论，以本文件、最新 PROGRESS 和本轮真实响应为准。
+
+## 本轮供应商复核（2026-10-03）
+- Tensor.Art 模型 API（TAMS /v1/models、/v1/jobs）与 OpenWorks 工具 API 是不同产品。模型目录不可填工具名，OpenWorks key 不代表模型 API 已鉴权。两把现有 key 对 TAMS 返回 404 unauthorized / app not found。
+- TAMS 没有已核实的全量模型列表接口；公共目录仅作资源发现，不承诺在线生成能力。任意真实模型或 LoRA ID 可经详情 API 核实。
+- Hugging Face 下载仓库、HF Inference、Space 和 HF Inference Providers 是不同执行路径；必须明确路由。HF → fal-ai 已真实生成 FLUX.1-dev + XLabs Realism LoRA（0.8），禁止把失败 Space 标成成功或静默生成底模。
+- NanoGPT 当前使用官方归一化 Image API /api/v1/images；每次提交先读选定模型 endpoint 元数据，按真实 supported_parameters 校验。禁止把 1k/2k/4k 套用于所有模型。
+- LoRA 挂载不再根据名称改供应商、底模或采样参数，架构兼容性由对应供应商元数据核实。
+
+
+### 最终审计约束（2026-10-03）
+- ModelScope 本地 Diffusers kwargs 不等于云 REST 契约；当前 width/height/steps/guidance/seed/negative_prompt 标注未核实，显式提交返回 400。Qwen Image Edit 输入图按版本映射。
+- 模型发现与在线能力分离。OpenWorks 工具不得再进入模型下拉框；TAMS 经典 DIFFUSION 仅允许已核实架构，不猜测其他架构。
+- 多图逐张持久化；批量未返回的逐图 seed 为 null，不按起始 seed 编造。
+- 本次出图证明限于 verification/results.json 所列请求；余额不足单独分类。

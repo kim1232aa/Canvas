@@ -257,23 +257,16 @@ export class VideoDriver extends BaseEngineDriver {
       image_url: params.image_url,
     };
     if (extra.resolution) videoBody.resolution = extra.resolution;
-    const fpsVal = params.videoFps ?? extra.fps;
-    if (fpsVal != null) videoBody.fps = fpsVal;
-    const negVal = params.negative_prompt ?? extra.negative_prompt;
-    if (negVal) videoBody.negative_prompt = negVal;
-    const stepsVal = params.steps ?? extra.steps;
-    if (stepsVal != null) videoBody.steps = stepsVal;
-    const cfgVal = params.cfg ?? extra.cfg;
-    if (cfgVal != null) videoBody.cfg = cfgVal;
-    const lorasVal = params.loras ?? extra.loras;
-    if (Array.isArray(lorasVal) && lorasVal.length > 0) videoBody.loras = lorasVal;
+    for (const [key, value] of Object.entries({fps: params.videoFps ?? extra.fps, num_frames: params.videoFrames, negative_prompt: params.negative_prompt, steps: params.steps, cfg: params.cfg, loras: params.loras?.length ? params.loras : undefined})) {
+      if (value !== undefined && value !== '') videoBody[key] = value;
+    }
     // Grok 兼容中转不支持 seed；其它视频商仍透传调用方 seed
     if (videoProvider !== 'grok_compat' && params.seed != null) videoBody.seed = params.seed;
 
     const resp = await fetch('/api/video/generate', {
       method: 'POST',
       headers: reqHeaders,
-      body: JSON.stringify(videoBody),
+      body: JSON.stringify({ ...videoBody, workflowSnapshot: params.workflowSnapshot }),
     });
 
     if (!resp.ok) {

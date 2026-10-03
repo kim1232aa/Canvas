@@ -1,0 +1,34 @@
+{
+  "request": {
+    "model": "Tongyi-MAI/Z-Image-Turbo",
+    "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering",
+    "resolution": "1024x1024 ( 1:1 )",
+    "seed": 42,
+    "steps": 8,
+    "shift": 3,
+    "random_seed": false,
+    "gallery_images": []
+  },
+  "requestMetadata": {
+    "route": "/api/huggingface/generate",
+    "submissions": [
+      {
+        "endpoint": "https://tongyi-mai-z-image-turbo.hf.space/gradio_api/call/generate",
+        "parameters": {
+          "data": [
+            "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering",
+            "1024x1024 ( 1:1 )",
+            42,
+            8,
+            3,
+            false,
+            []
+          ]
+        },
+        "status": 200
+      }
+    ]
+  },
+  "seed": 42,
+  "loras": []
+}

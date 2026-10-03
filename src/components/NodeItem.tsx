@@ -24,7 +24,7 @@ import { refinePromptWithGemini, getStoredApiKeys, getRefineModelSelection } fro
 import { validateLoraCompatibility } from '../utils/baseModelMatcher';
 import { EngineRegistry } from '../engines/EngineRegistry';
 import { GeminiFieldSelect, GeminiModelBadge } from './GeminiFieldSelect';
-import { fieldOptions, resolveSchemaModelId } from '../schemas/providerSchema';
+import { fieldOptions, getFieldSpec, resolveSchemaModelId } from '../schemas/providerSchema';
 import { FieldStatusBadge } from './FieldStatusBadge';
 import { isCanvasFieldUnsupported, isCanvasWidgetUnsupported } from '../utils/resolveCheckpoint';
 import { ksamplerNodeTitle, loraLoaderNodeTitle, LORA_LOADER_TYPES } from '../utils/providerLabels';
@@ -68,6 +68,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
   onAutoFixCheckpoint,
   onOpenModelHub,
 }) => {
+  const [showUnsupported, setShowUnsupported] = React.useState(false);
   const greySeed = isCanvasFieldUnsupported(currentProvider, currentCheckpoint, 'seed');
   const greyNegative = isCanvasFieldUnsupported(currentProvider, currentCheckpoint, 'negative_prompt');
   const greyWidth = isCanvasFieldUnsupported(currentProvider, currentCheckpoint, 'width');
@@ -86,8 +87,10 @@ export const NodeItem: React.FC<NodeItemProps> = ({
     setIsReasoning(true);
     setReasoningError(null);
     try {
-      const provider = node.values.provider || 'sensenova';
-      const model = node.values.model || 'deepseek-v4-flash';
+      const provider = node.values.provider;
+      const model = node.values.model;
+      if (!provider) throw new Error('请明确选择推理供应商');
+      if (!model?.trim()) throw new Error('模型为必填项（model is required）');
       const taskType = node.values.task_type || 'cinematic_photoreal';
 
       let taskPrompt = 'Expand into a rich, detailed photorealistic prompt with lighting, 8k resolution, camera details.';
@@ -179,7 +182,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
         width: node.width || 300,
       }}
       onClick={onSelect}
-      className={`absolute rounded-xl border transition-shadow text-xs ${
+      className={`canvas-node absolute rounded-xl border transition-shadow text-xs ${
         isBypassed ? 'opacity-50 grayscale' : 'opacity-100'
       } ${
         isSelected
@@ -369,8 +372,34 @@ export const NodeItem: React.FC<NodeItemProps> = ({
           )}
 
           {/* Widgets according to definition */}
-          {def.widgets?.map((widget) => {
-            const value = node.values[widget.name] ?? widget.default;
+          {def.widgets?.filter(widget => showUnsupported || !(isCanvasWidgetUnsupported(currentProvider, currentCheckpoint, widget.name) || (node.type === 'CLIPTextEncodeNegative' && widget.name === 'text' && greyNegative))).map((widget) => {
+            const value = node.values[widget.name];
+            if (widget.name === 'fal_model_name' && !((node.values.targetProvider || currentProvider) === 'fal' && node.values.ckpt_name === 'fal-ai/lora')) return null;
+            if (node.type === 'AIVideoNode') {
+              const wan = node.values.targetProvider === 'fal' && /wan-t2v|wan-i2v|wan\/v2\.1/.test(node.values.model || '');
+              if ((widget.name === 'duration' && wan) || (widget.name === 'num_frames' && !wan)) return null;
+            }
+            if (widget.name === 'hf_provider') {
+              if ((node.values.targetProvider || currentProvider) !== 'huggingface') return null;
+              return <label key={widget.name} className="block text-sm text-slate-400">HF 推理端点<select value={value || (node.values.ckpt_name === 'XLabs-AI/flux-RealismLora' ? 'fal-ai' : '')} onChange={e=>onUpdateValue(node.id,'hf_provider',e.target.value)} onMouseDown={e=>e.stopPropagation()} className="mt-1 w-full bg-[#121316] rounded-lg border border-[#2d303a] p-2 text-slate-200"><option value="">模型绑定端点（Z-Image 官方 Space / HF Inference）</option><option value="hf-inference">HF Inference</option><option value="fal-ai">HF Inference Providers → fal-ai（HF Token 计费）</option></select></label>;
+            }
+            if (LORA_LOADER_TYPES.has(node.type) && widget.name === 'strength_clip' && ['civitai', 'fal', 'modelscope', 'modelscope_ai', 'tensorart', 'huggingface'].includes(currentProvider || '')) return <p key={widget.name} className="text-xs text-slate-400">此 API 只接受单一 LoRA 强度；CLIP 强度不独立发送。</p>;
+
+            if (node.type === 'CheckpointLoaderSimple' && widget.name === 'shift') {
+              const prov = String(node.values?.targetProvider || currentProvider || '');
+              const model = node.values?.ckpt_name || currentCheckpoint;
+              if (prov !== 'huggingface' || !getFieldSpec('huggingface', resolveSchemaModelId('huggingface', model), 'shift')) return null;
+              return (
+                <div key={widget.name} className="space-y-1">
+                  <label className="text-slate-400 font-mono text-[11px] block">{widget.label}</label>
+                  <input type="number" min={1} max={10} step={0.1} value={value ?? ''}
+                    placeholder="必填；官方默认 3.0"
+                    onMouseDown={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}
+                    onChange={(e) => onUpdateValue(node.id, 'shift', e.target.value === '' ? undefined : Number(e.target.value))}
+                    className="w-full bg-[#121316] border border-[#2d303a] rounded-lg px-2.5 py-1.5 text-slate-200 text-xs font-mono outline-none" />
+                </div>
+              );
+            }
 
             if (widget.type === 'slider') {
               const greyThis = isCanvasWidgetUnsupported(currentProvider, currentCheckpoint, widget.name);
@@ -426,6 +455,21 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               );
             }
 
+            if (node.type === 'CheckpointLoaderSimple' && (widget.name === 'random_seed' || widget.name === 'gallery_images')) {
+              const prov = node.values.targetProvider || currentProvider;
+              if (prov !== 'huggingface' || !getFieldSpec('huggingface', resolveSchemaModelId('huggingface', node.values.ckpt_name), 'shift')) return null;
+              const selected = widget.name === 'random_seed' ? typeof value === 'boolean' ? String(value) : '' : Array.isArray(value) ? 'new' : '';
+              return <div key={widget.name} className="space-y-1">
+                <label className="text-slate-400 font-mono block">{widget.label}</label>
+                <select value={selected} onMouseDown={e => e.stopPropagation()} onPointerDown={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}
+                  onChange={e => onUpdateValue(node.id, widget.name, e.target.value === '' ? undefined : widget.name === 'random_seed' ? e.target.value === 'true' : [])}
+                  className="w-full bg-[#121316] border border-[#2d303a] rounded-lg px-2.5 py-1.5 text-slate-200 outline-none">
+                  <option value="">请选择</option>
+                  {widget.name === 'random_seed' ? <><option value="false">使用 KSampler 种子</option><option value="true">由 Space 随机选择</option></> : <option value="new">新建本次结果集</option>}
+                </select>
+              </div>;
+            }
+
             if (widget.type === 'select') {
               const opts = widget.options || [];
               const isValueInOpts = opts.some((o) => o.value === value);
@@ -433,8 +477,8 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               if (node.type === 'CheckpointLoaderSimple' && widget.name === 'ckpt_name') {
                 const currentProv = node.values?.targetProvider || 'civitai';
                 const providerOpts = opts.filter((o: any) => o.provider === currentProv);
-                const otherOpts = opts.filter((o: any) => o.provider && o.provider !== currentProv);
-                const isCustom = !opts.some((o) => o.value === value) && Boolean(value);
+                const otherOpts = [] as typeof opts;
+                const isCustom = !providerOpts.some((o) => o.value === value) && Boolean(value);
 
                 return (
                   <div key={widget.name} className="space-y-1.5">
@@ -459,20 +503,21 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                     </div>
                     {/* Primary Dropdown Select */}
                     <select
-                      value={value}
+                      value={value ?? ''}
                       onMouseDown={(e) => e.stopPropagation()}
                       onPointerDown={(e) => e.stopPropagation()}
                       onKeyDown={(e) => e.stopPropagation()}
                       onChange={(e) => onUpdateValue(node.id, widget.name, e.target.value)}
                       className="w-full bg-[#121316] border border-[#2d303a] hover:border-cyan-500/50 focus:border-cyan-500 rounded-lg px-2.5 py-1.5 text-slate-200 text-xs font-mono outline-none cursor-pointer select-text"
                     >
+                      <option value="">请选择模型</option>
                       {isCustom && (
                         <option key={`custom-input-${value}`} value={value}>
                           ★ [自定义输入模型] {value}
                         </option>
                       )}
                       {providerOpts.length > 0 && (
-                        <optgroup label={`🎯 ${currentProv.toUpperCase()} 官方推荐底模列表 (点击直选)`}>
+                        <optgroup label={`🎯 ${currentProv.toUpperCase()} 已核实模型 ID（更多模型见模型中心）`}>
                           {providerOpts.map((opt, idx) => (
                             <option key={`prov-${(opt as any).provider}-${opt.value}-${idx}`} value={opt.value}>
                               {opt.label}
@@ -481,7 +526,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                         </optgroup>
                       )}
                       {otherOpts.length > 0 && (
-                        <optgroup label="🌐 其它生态引擎底模 (点击将自动切换引擎)">
+                        <optgroup label="🌐 其他模型 ID（仍使用当前引擎）">
                           {otherOpts.map((opt, idx) => (
                             <option key={`other-${(opt as any).provider}-${opt.value}-${idx}`} value={opt.value}>
                               [{(opt as any).provider?.toUpperCase()}] {opt.label}
@@ -502,13 +547,13 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                       <input
                         type="text"
                         value={value || ""}
-                        placeholder="或输入任意开源 Repo ID (如 stabilityai/sdxl-turbo)"
+                        placeholder={currentProv === 'tensorart' ? '输入模型 ID 或 tensor.art/models/… 链接' : '输入当前服务商的模型 ID / Repo ID'}
                         onMouseDown={(e) => e.stopPropagation()}
                         onPointerDown={(e) => e.stopPropagation()}
                         onKeyDown={(e) => e.stopPropagation()}
                         onChange={(e) => onUpdateValue(node.id, widget.name, e.target.value)}
                         className="w-full bg-[#0d0e12] border border-[#22242c] focus:border-cyan-500 rounded px-2 py-0.5 text-[10px] text-cyan-300 font-mono placeholder:text-slate-600 outline-none select-text cursor-text"
-                        title="支持直接输入任意 Hugging Face / ModelScope / Civitai 模型路径"
+                        title="须使用当前服务商真实可调用的模型 ID，不会自动切换供应商"
                       />
                     </div>
                   </div>
@@ -518,8 +563,8 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               if (node.type === 'AIVideoNode' && widget.name === 'model') {
                 const currentProv = String(node.values?.targetProvider || '').trim();
                 const providerOpts = opts.filter((o: any) => o.provider === currentProv);
-                const otherOpts = opts.filter((o: any) => o.provider && o.provider !== currentProv);
-                const isCustom = !opts.some((o) => o.value === value) && Boolean(value);
+                const otherOpts = [] as typeof opts;
+                const isCustom = !providerOpts.some((o) => o.value === value) && Boolean(value);
 
                 return (
                   <div key={widget.name} className="space-y-1.5">
@@ -611,9 +656,13 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                 (widget.name === 'aspect_ratio' || widget.name === 'resolution')
               ) {
                 const prov = String(node.values?.targetProvider || currentProvider || '').trim();
-                if (prov !== 'grok_compat') return null; // hide for other engines
-                const schemaModel = resolveSchemaModelId('grok_compat', node.values?.ckpt_name || currentCheckpoint);
-                const opts = fieldOptions('grok_compat', schemaModel, widget.name as 'aspect_ratio' | 'resolution');
+                if (prov === 'nanogpt' && widget.name === 'resolution') {
+                  return <label key={widget.name} className="block text-sm text-slate-400">NanoGPT resolution<input value={value || ''} placeholder="按模型填写，如 1024x1024 / 1k" onChange={e=>onUpdateValue(node.id,'resolution',e.target.value)} onMouseDown={e=>e.stopPropagation()} className="mt-1 w-full bg-[#121316] border border-[#2d303a] rounded-lg p-2 text-slate-200"/><span className="text-xs">提交前查询所选模型支持值；与潜空间尺寸冲突时会提示。</span></label>;
+                }
+                if (prov !== 'grok_compat' && prov !== 'huggingface') return null;
+                const schemaModel = resolveSchemaModelId(prov, node.values?.ckpt_name || currentCheckpoint);
+                const opts = fieldOptions(prov, schemaModel, widget.name as 'aspect_ratio' | 'resolution');
+                if (!opts.length) return null;
                 const stop = (e: React.SyntheticEvent) => e.stopPropagation();
                 return (
                   <div key={widget.name} className="space-y-1">
@@ -900,6 +949,15 @@ export const NodeItem: React.FC<NodeItemProps> = ({
             return null;
           })}
 
+          {(def.widgets || []).some(widget => isCanvasWidgetUnsupported(currentProvider, currentCheckpoint, widget.name) || (node.type === 'CLIPTextEncodeNegative' && widget.name === 'text' && greyNegative)) && (
+            <div className="pt-2 border-t border-slate-700/40">
+              <button type="button" onClick={(event) => {event.stopPropagation(); setShowUnsupported(!showUnsupported);}} aria-expanded={showUnsupported} className="text-xs text-slate-400 hover:text-slate-200 text-left">
+                {showUnsupported ? '收起接口不使用的参数' : '查看此接口不使用的参数'}
+              </button>
+              {!showUnsupported && <p className="text-xs text-slate-500 mt-1">按所选模型接口运行，已有参数仍保留在画布中。</p>}
+            </div>
+          )}
+
           {/* LoRA Architecture Compatibility & One-Click Auto-Pairing Banner */}
           {node.type === 'LoRALoader' && node.values.lora_name && (currentCheckpoint || currentProvider) && (
             (() => {
@@ -930,6 +988,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                       <span>该服务商不支持</span>
                     </div>
                     <p className="text-rose-200/90 leading-tight font-mono">{compat.message}</p>
+                    {!node.bypassed && <button type="button" onClick={(e) => {e.stopPropagation(); onToggleBypass(node.id);}} className="px-2 py-1 rounded-lg border border-rose-400/30 text-rose-200 hover:bg-rose-900/40 text-xs">旁路此 LoRA 节点</button>}
                   </div>
                 );
               }

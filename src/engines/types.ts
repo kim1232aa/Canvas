@@ -50,6 +50,7 @@ export interface NormalizedGenerateParams {
   isVideo?: boolean;
   videoDuration?: number;
   videoFps?: number;
+  videoFrames?: number;
   aspectRatio?: string;
   imageSize?: string;
   provider?: string;
@@ -61,6 +62,7 @@ export interface NormalizedGenerateParams {
   apiKey?: string;
   baseUrl?: string;
   extraParams?: Record<string, any>;
+  workflowSnapshot?: Record<string, unknown>;
 }
 
 export interface NormalizedGenerateResult {
@@ -77,6 +79,7 @@ export interface NormalizedGenerateResult {
   adaptationNotice?: string;
   timings?: any;
   rawResponse?: any;
+  historyWarning?: string;
 }
 
 export interface NormalizedChatParams {

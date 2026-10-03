@@ -1,0 +1,366 @@
+[
+  {
+    "url": "https://fal.run/fal-ai/flux-lora",
+    "method": "POST",
+    "parameters": {
+      "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering",
+      "image_size": {
+        "width": 512,
+        "height": 512
+      },
+      "num_inference_steps": 12,
+      "guidance_scale": 3.5,
+      "seed": 42,
+      "loras": [
+        {
+          "path": "https://huggingface.co/XLabs-AI/flux-RealismLora/resolve/main/lora.safetensors",
+          "scale": 0.8
+        }
+      ]
+    },
+    "status": 403,
+    "body": "{\"detail\":\"User is locked. Reason: TOP_UP.\"}"
+  },
+  {
+    "url": "https://orchestration.civitai.com/v2/consumer/workflows",
+    "method": "POST",
+    "parameters": {
+      "steps": [
+        {
+          "$type": "imageGen",
+          "input": {
+            "engine": "sdcpp",
+            "ecosystem": "sd1",
+            "operation": "createImage",
+            "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering",
+            "model": "urn:air:sd1:checkpoint:civitai:4384@128713",
+            "negativePrompt": "blurry, low quality",
+            "width": 512,
+            "height": 512,
+            "steps": 12,
+            "cfgScale": 7,
+            "seed": 42,
+            "sampleMethod": "euler",
+            "schedule": "discrete"
+          }
+        }
+      ]
+    },
+    "status": 200
+  },
+  {
+    "url": "https://orchestration-new.civitai.com/v2/consumer/blobs/f2b3aa0d-cfd7-4656-9ee8-b710244a8870-0.jpg",
+    "method": "GET",
+    "status": 200
+  },
+  {
+    "url": "https://api-inference.modelscope.ai/v1/images/generations",
+    "method": "POST",
+    "parameters": {
+      "model": "Tongyi-MAI/Z-Image-Turbo",
+      "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering"
+    },
+    "status": 429,
+    "body": "{\"errors\":{\"message\":\"insufficient balance\"},\"request_id\":\"1a159186-e923-4733-9f3e-8994822dc044\"}"
+  },
+  {
+    "url": "https://api-inference.modelscope.ai/v1/images/generations",
+    "method": "POST",
+    "parameters": {
+      "model": "Tongyi-MAI/Z-Image-Turbo",
+      "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering"
+    },
+    "status": 401,
+    "body": "{\"errors\":{\"message\":\"Please bind your Alibaba Cloud account before use. You can bind it at: https://modelscope.ai/my/settings/account\"},\"request_id\":\"0f9db2d2-ba0d-4e9a-b552-2d0e287f1b44\"}"
+  },
+  {
+    "url": "https://api-inference.modelscope.cn/v1/images/generations",
+    "method": "POST",
+    "parameters": {
+      "model": "Tongyi-MAI/Z-Image-Turbo",
+      "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering"
+    },
+    "status": 429,
+    "body": "{\"errors\":{\"message\":\"insufficient balance\"},\"request_id\":\"87ddbd60-37ed-4970-a136-dbdf6082bdb6\"}"
+  },
+  {
+    "url": "https://tongyi-mai-z-image-turbo.hf.space/gradio_api/call/generate",
+    "method": "POST",
+    "parameters": {
+      "data": [
+        "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering",
+        "1024x1024 ( 1:1 )",
+        42,
+        8,
+        3,
+        false,
+        []
+      ]
+    },
+    "status": 200
+  },
+  {
+    "url": "https://tongyi-mai-z-image-turbo.hf.space/gradio_api/call/generate/fb6302f860c245a8891815d9acf319e7",
+    "method": "GET",
+    "status": 200
+  },
+  {
+    "url": "https://tongyi-mai-z-image-turbo.hf.space/gradio_api/file=/tmp/gradio/0ff199d9f19bba2cd408996a45a432fd64ad146f0a6308d83860575518d7081e/image.png",
+    "method": "GET",
+    "status": 200
+  },
+  {
+    "url": "https://api.nano-gpt.com/api/v1/images",
+    "method": "POST",
+    "parameters": {
+      "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering",
+      "model": "flux-schnell"
+    },
+    "status": 401,
+    "body": "{\"error\":{\"message\":\"Invalid session\",\"type\":\"invalid_request_error\",\"code\":\"invalid_api_key\"}}"
+  },
+  {
+    "url": "https://openapi.tensor.art/openworks/v1/tool/list",
+    "method": "POST",
+    "parameters": {},
+    "status": 200
+  },
+  {
+    "url": "https://openapi.tensor.art/openworks/v1/task",
+    "method": "POST",
+    "parameters": {
+      "toolName": "photoreal_studio_z_image",
+      "inputs": [
+        {
+          "type": "STRING",
+          "value": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering"
+        },
+        {
+          "type": "INTEGER",
+          "value": 512
+        },
+        {
+          "type": "INTEGER",
+          "value": 512
+        },
+        {
+          "type": "INTEGER",
+          "value": 1
+        }
+      ]
+    },
+    "status": 200
+  },
+  {
+    "url": "https://openapi.tensor.art/openworks/v1/task/query",
+    "method": "POST",
+    "parameters": {
+      "taskIds": [
+        "1051020032080915705"
+      ]
+    },
+    "status": 200
+  },
+  {
+    "url": "https://openapi.tensor.art/openworks/v1/task/query",
+    "method": "POST",
+    "parameters": {
+      "taskIds": [
+        "1051020032080915705"
+      ]
+    },
+    "status": 200
+  },
+  {
+    "url": "https://openapi.tensor.art/openworks/v1/task/query",
+    "method": "POST",
+    "parameters": {
+      "taskIds": [
+        "1051020032080915705"
+      ]
+    },
+    "status": 200
+  },
+  {
+    "url": "https://openapi.tensor.art/openworks/v1/task/query",
+    "method": "POST",
+    "parameters": {
+      "taskIds": [
+        "1051020032080915705"
+      ]
+    },
+    "status": 200
+  },
+  {
+    "url": "https://openapi.tensor.art/openworks/v1/task/query",
+    "method": "POST",
+    "parameters": {
+      "taskIds": [
+        "1051020032080915705"
+      ]
+    },
+    "status": 200
+  },
+  {
+    "url": "https://openapi.tensor.art/openworks/v1/task/query",
+    "method": "POST",
+    "parameters": {
+      "taskIds": [
+        "1051020032080915705"
+      ]
+    },
+    "status": 200
+  },
+  {
+    "url": "https://openapi.tensor.art/openworks/v1/task/query",
+    "method": "POST",
+    "parameters": {
+      "taskIds": [
+        "1051020032080915705"
+      ]
+    },
+    "status": 200
+  },
+  {
+    "url": "https://openapi.tensor.art/openworks/v1/task/query",
+    "method": "POST",
+    "parameters": {
+      "taskIds": [
+        "1051020032080915705"
+      ]
+    },
+    "status": 200
+  },
+  {
+    "url": "https://openapi.tensor.art/openworks/v1/task/query",
+    "method": "POST",
+    "parameters": {
+      "taskIds": [
+        "1051020032080915705"
+      ]
+    },
+    "status": 200
+  },
+  {
+    "url": "https://openapi.tensor.art/openworks/v1/task/query",
+    "method": "POST",
+    "parameters": {
+      "taskIds": [
+        "1051020032080915705"
+      ]
+    },
+    "status": 200
+  },
+  {
+    "url": "https://tensor-sf-sig.7022ae40757f8d53295a57619de9b364.r2.cloudflarestorage.com/workspace/generation/1048723019146487792/2026-10-02/976e9270-029d-4620-b029-b9d772909aba.png",
+    "method": "GET",
+    "status": 200
+  },
+  {
+    "url": "https://openapi.tensor.art/openworks/v1/tool/list",
+    "method": "POST",
+    "parameters": {},
+    "status": 200
+  },
+  {
+    "url": "https://openapi.tensor.art/openworks/v1/task",
+    "method": "POST",
+    "parameters": {
+      "toolName": "photoreal_studio_z_image",
+      "inputs": [
+        {
+          "type": "STRING",
+          "value": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering"
+        },
+        {
+          "type": "INTEGER",
+          "value": 512
+        },
+        {
+          "type": "INTEGER",
+          "value": 512
+        },
+        {
+          "type": "INTEGER",
+          "value": 1
+        }
+      ]
+    },
+    "status": 200
+  },
+  {
+    "url": "https://openapi.tensor.art/openworks/v1/task/query",
+    "method": "POST",
+    "parameters": {
+      "taskIds": [
+        "1051020215690751546"
+      ]
+    },
+    "status": 200
+  },
+  {
+    "url": "https://openapi.tensor.art/openworks/v1/task/query",
+    "method": "POST",
+    "parameters": {
+      "taskIds": [
+        "1051020215690751546"
+      ]
+    },
+    "status": 200
+  },
+  {
+    "url": "https://openapi.tensor.art/openworks/v1/task/query",
+    "method": "POST",
+    "parameters": {
+      "taskIds": [
+        "1051020215690751546"
+      ]
+    },
+    "status": 200
+  },
+  {
+    "url": "https://openapi.tensor.art/openworks/v1/task/query",
+    "method": "POST",
+    "parameters": {
+      "taskIds": [
+        "1051020215690751546"
+      ]
+    },
+    "status": 200
+  },
+  {
+    "url": "https://openapi.tensor.art/openworks/v1/task/query",
+    "method": "POST",
+    "parameters": {
+      "taskIds": [
+        "1051020215690751546"
+      ]
+    },
+    "status": 200
+  },
+  {
+    "url": "https://openapi.tensor.art/openworks/v1/task/query",
+    "method": "POST",
+    "parameters": {
+      "taskIds": [
+        "1051020215690751546"
+      ]
+    },
+    "status": 200
+  },
+  {
+    "url": "https://openapi.tensor.art/openworks/v1/task/query",
+    "method": "POST",
+    "parameters": {
+      "taskIds": [
+        "1051020215690751546"
+      ]
+    },
+    "status": 200
+  },
+  {
+    "url": "https://tensor-sf-sig.7022ae40757f8d53295a57619de9b364.r2.cloudflarestorage.com/workspace/generation/1048822696747526210/2026-10-02/9454392c-a65a-4314-8bfd-0ebcc846dc6b.png",
+    "method": "GET",
+    "status": 200
+  }
+]

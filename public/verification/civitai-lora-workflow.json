@@ -1,0 +1,278 @@
+{
+  "format": "comfycanvas",
+  "version": 1,
+  "nodes": [
+    {
+      "id": "checkpoint",
+      "type": "CheckpointLoaderSimple",
+      "title": "Load Checkpoint",
+      "pos": {
+        "x": 20,
+        "y": 20
+      },
+      "width": 300,
+      "inputs": [],
+      "outputs": [
+        {
+          "id": "MODEL",
+          "name": "MODEL",
+          "type": "MODEL",
+          "label": "MODEL"
+        },
+        {
+          "id": "CLIP",
+          "name": "CLIP",
+          "type": "CLIP",
+          "label": "CLIP"
+        },
+        {
+          "id": "VAE",
+          "name": "VAE",
+          "type": "VAE",
+          "label": "VAE"
+        }
+      ],
+      "values": {
+        "ckpt_name": "urn:air:sd1:checkpoint:civitai:4384@128713",
+        "targetProvider": "civitai"
+      },
+      "state": "idle"
+    },
+    {
+      "id": "prompt",
+      "type": "CLIPTextEncode",
+      "title": "CLIP Text Encode (Positive Prompt)",
+      "pos": {
+        "x": 350,
+        "y": 20
+      },
+      "width": 300,
+      "inputs": [
+        {
+          "id": "clip",
+          "name": "clip",
+          "type": "CLIP",
+          "label": "CLIP"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "CONDITIONING",
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "label": "CONDITIONING"
+        }
+      ],
+      "values": {
+        "text": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering"
+      },
+      "state": "idle"
+    },
+    {
+      "id": "sampler",
+      "type": "KSampler",
+      "title": "KSampler",
+      "pos": {
+        "x": 700,
+        "y": 20
+      },
+      "width": 300,
+      "inputs": [
+        {
+          "id": "model",
+          "name": "model",
+          "type": "MODEL",
+          "label": "MODEL"
+        },
+        {
+          "id": "positive",
+          "name": "positive",
+          "type": "CONDITIONING",
+          "label": "positive"
+        },
+        {
+          "id": "negative",
+          "name": "negative",
+          "type": "CONDITIONING",
+          "label": "negative"
+        },
+        {
+          "id": "latent_image",
+          "name": "latent_image",
+          "type": "LATENT",
+          "label": "latent_image"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "LATENT",
+          "name": "LATENT",
+          "type": "LATENT",
+          "label": "LATENT"
+        }
+      ],
+      "values": {
+        "seed": 42,
+        "control_after_generate": "fixed",
+        "steps": 12,
+        "cfg": 7,
+        "sampler_name": "euler",
+        "scheduler": "discrete"
+      },
+      "state": "idle"
+    },
+    {
+      "id": "latent",
+      "type": "EmptyLatentImage",
+      "title": "Empty Latent Image",
+      "pos": {
+        "x": 350,
+        "y": 400
+      },
+      "width": 300,
+      "inputs": [],
+      "outputs": [
+        {
+          "id": "LATENT",
+          "name": "LATENT",
+          "type": "LATENT",
+          "label": "LATENT"
+        }
+      ],
+      "values": {
+        "width": 512,
+        "height": 512,
+        "batch_size": 1
+      },
+      "state": "idle"
+    },
+    {
+      "id": "negative",
+      "type": "CLIPTextEncodeNegative",
+      "title": "CLIP Text Encode (Negative Prompt)",
+      "pos": {
+        "x": 20,
+        "y": 650
+      },
+      "width": 300,
+      "inputs": [
+        {
+          "id": "clip",
+          "name": "clip",
+          "type": "CLIP",
+          "label": "CLIP"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "CONDITIONING",
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "label": "CONDITIONING"
+        }
+      ],
+      "values": {
+        "text": "blurry, low quality"
+      },
+      "state": "idle"
+    },
+    {
+      "id": "lora-0",
+      "type": "LoRALoader",
+      "title": "Load LoRA (Civitai / Local)",
+      "pos": {
+        "x": 20,
+        "y": 350
+      },
+      "width": 300,
+      "inputs": [
+        {
+          "id": "model",
+          "name": "model",
+          "type": "MODEL",
+          "label": "MODEL"
+        },
+        {
+          "id": "clip",
+          "name": "clip",
+          "type": "CLIP",
+          "label": "CLIP"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "MODEL",
+          "name": "MODEL",
+          "type": "MODEL",
+          "label": "MODEL"
+        },
+        {
+          "id": "CLIP",
+          "name": "CLIP",
+          "type": "CLIP",
+          "label": "CLIP"
+        }
+      ],
+      "values": {
+        "lora_name": "Add More Details - Detail Enhancer / Tweaker (细节调整) LoRA",
+        "civitai_id": "urn:air:sd1:lora:civitai:82098@87153",
+        "strength_model": 0.7,
+        "strength_clip": 0.7
+      },
+      "state": "idle"
+    }
+  ],
+  "connections": [
+    {
+      "id": "model",
+      "fromNodeId": "lora-0",
+      "fromSocketId": "MODEL",
+      "toNodeId": "sampler",
+      "toSocketId": "model",
+      "type": "MODEL"
+    },
+    {
+      "id": "positive",
+      "fromNodeId": "prompt",
+      "fromSocketId": "CONDITIONING",
+      "toNodeId": "sampler",
+      "toSocketId": "positive",
+      "type": "CONDITIONING"
+    },
+    {
+      "id": "clip",
+      "fromNodeId": "checkpoint",
+      "fromSocketId": "CLIP",
+      "toNodeId": "prompt",
+      "toSocketId": "clip",
+      "type": "CLIP"
+    },
+    {
+      "id": "latent",
+      "fromNodeId": "latent",
+      "fromSocketId": "LATENT",
+      "toNodeId": "sampler",
+      "toSocketId": "latent_image",
+      "type": "LATENT"
+    },
+    {
+      "id": "negative",
+      "fromNodeId": "negative",
+      "fromSocketId": "CONDITIONING",
+      "toNodeId": "sampler",
+      "toSocketId": "negative",
+      "type": "CONDITIONING"
+    },
+    {
+      "id": "lora-model-0",
+      "fromNodeId": "checkpoint",
+      "fromSocketId": "MODEL",
+      "toNodeId": "lora-0",
+      "toSocketId": "model",
+      "type": "MODEL"
+    }
+  ],
+  "canvasMode": "graph",
+  "spatialFrames": [],
+  "executingNodeId": "sampler"
+}

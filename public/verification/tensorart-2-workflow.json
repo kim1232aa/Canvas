@@ -1,0 +1,129 @@
+{
+  "kind": "openworks-tool-request",
+  "request": {
+    "model": "photoreal_studio_z_image",
+    "inputs": [
+      {
+        "type": "STRING",
+        "value": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering"
+      },
+      {
+        "type": "INTEGER",
+        "value": 512
+      },
+      {
+        "type": "INTEGER",
+        "value": 512
+      },
+      {
+        "type": "INTEGER",
+        "value": 1
+      }
+    ]
+  },
+  "submittedWorkflow": {
+    "format": "comfycanvas",
+    "version": 1,
+    "nodes": [
+      {
+        "id": "checkpoint",
+        "type": "CheckpointLoaderSimple",
+        "pos": {
+          "x": 40,
+          "y": 40
+        },
+        "values": {
+          "ckpt_name": "photoreal_studio_z_image",
+          "targetProvider": "tensorart",
+          "model": "photoreal_studio_z_image",
+          "inputs": [
+            {
+              "type": "STRING",
+              "value": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering"
+            },
+            {
+              "type": "INTEGER",
+              "value": 512
+            },
+            {
+              "type": "INTEGER",
+              "value": 512
+            },
+            {
+              "type": "INTEGER",
+              "value": 1
+            }
+          ]
+        }
+      },
+      {
+        "id": "prompt",
+        "type": "CLIPTextEncode",
+        "pos": {
+          "x": 40,
+          "y": 310
+        },
+        "values": {
+          "text": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering"
+        }
+      },
+      {
+        "id": "sampler",
+        "type": "KSampler",
+        "pos": {
+          "x": 430,
+          "y": 80
+        },
+        "values": {}
+      }
+    ],
+    "connections": [
+      {
+        "id": "model",
+        "fromNodeId": "checkpoint",
+        "fromSocketId": "MODEL",
+        "toNodeId": "sampler",
+        "toSocketId": "model",
+        "type": "MODEL"
+      },
+      {
+        "id": "positive",
+        "fromNodeId": "prompt",
+        "fromSocketId": "CONDITIONING",
+        "toNodeId": "sampler",
+        "toSocketId": "positive",
+        "type": "CONDITIONING"
+      }
+    ]
+  },
+  "requestMetadata": {
+    "route": "/api/tensorart/generate",
+    "submissions": [
+      {
+        "endpoint": "https://openapi.tensor.art/openworks/v1/task",
+        "parameters": {
+          "toolName": "photoreal_studio_z_image",
+          "inputs": [
+            {
+              "type": "STRING",
+              "value": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering"
+            },
+            {
+              "type": "INTEGER",
+              "value": 512
+            },
+            {
+              "type": "INTEGER",
+              "value": 512
+            },
+            {
+              "type": "INTEGER",
+              "value": 1
+            }
+          ]
+        },
+        "status": 200
+      }
+    ]
+  }
+}

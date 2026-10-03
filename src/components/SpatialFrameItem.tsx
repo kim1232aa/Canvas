@@ -449,15 +449,14 @@ export const SpatialFrameItem: React.FC<SpatialFrameItemProps> = ({
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              🎥 动态视频 (Wan 2.1)
+              🎥 动态视频
             </button>
           </div>
 
           {frame.mediaType === 'video' && (
             <div className="flex items-center gap-1 text-[10px] text-purple-300 font-mono">
-              <span className="px-1.5 py-0.5 rounded bg-purple-950/60 border border-purple-800/40">5秒</span>
-              <span className="px-1.5 py-0.5 rounded bg-purple-950/60 border border-purple-800/40">16 fps</span>
-              <span className="px-1.5 py-0.5 rounded bg-purple-950/60 border border-purple-800/40">16:9</span>
+              <button type="button" onClick={() => onOpenInspector(frame.id)} className="text-sm text-purple-200 underline">查看视频参数</button>
+              <span className="text-sm text-slate-400">{frame.params.checkpoint || '未选择模型'}</span>
             </div>
           )}
         </div>
@@ -583,7 +582,7 @@ export const SpatialFrameItem: React.FC<SpatialFrameItemProps> = ({
           {frame.status === 'generating' ? (
             <>
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              <span>{frame.mediaType === 'video' ? 'AI 视频解算渲染中 (5秒)...' : '图像渲染中...'}</span>
+              <span>{frame.mediaType === 'video' ? '视频生成中…' : '图像渲染中...'}</span>
             </>
           ) : frame.mediaType === 'video' && !frame.params?.checkpoint ? (
             <>

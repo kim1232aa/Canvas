@@ -1,0 +1,72 @@
+{
+  "date": "2026-10-03",
+  "providers": [
+    {
+      "provider": "Civitai",
+      "status": "真实出图：底模 + LoRA",
+      "details": "Orchestration workflow / AIR，按 recipe 提交；验证图附强度与实际参数。视频仅核实 Wan v2.1 Civitai recipe，未实际生成视频。",
+      "source": "https://developer.civitai.com/orchestration/recipes/"
+    },
+    {
+      "provider": "Hugging Face",
+      "status": "真实出图：Space + FLUX LoRA",
+      "details": "区分 Hub 仓库、Space 和 Inference Providers。FLUX.1-dev + XLabs Realism LoRA 0.8 经 HF Router → fal-ai，512×512、12 steps、guidance 3.5、seed 42。执行前查询在线 provider mapping。",
+      "source": "https://huggingface.co/docs/inference-providers/main/tasks/text-to-image"
+    },
+    {
+      "provider": "Tensor.Art",
+      "status": "TAMS 鉴权被拒绝",
+      "details": "改用真实模型 ID、/v1/models/:id、/v1/jobs，验证 checkpoint / LoRA 类型和架构。现有两把 key 均返回 unauthorized / app not found。旧 OpenWorks 两张图仅是工具接口证据。当前经典 DIFFUSION Job 仅核实 SD1.5 / SDXL 等已列架构；其他架构明确报未核实。公共目录不是全量清单，可粘贴其他真实 ID。",
+      "source": "https://github.com/Tensor-Art/tams-sdk.js"
+    },
+    {
+      "provider": "Fal.ai",
+      "status": "真实调用：计费受限",
+      "details": "FLUX LoRA 返回 403 TOP_UP，归类计费限制。修正 model_name、尺寸、LoRA path/scale、num_images；Wan 用 num_frames / frames_per_second，不把秒数冒充帧数。flux-lora Input 未声明 negative_prompt，拒绝误传。",
+      "source": "https://fal.ai/models/fal-ai/flux-lora/api"
+    },
+    {
+      "provider": "ModelScope CN",
+      "status": "真实调用：额度不足",
+      "details": "正确 CN 域名、异步任务和 LoRA 格式。REST 示例不能证明本地 Diffusers kwargs 可用，宽高/seed/steps/CFG/negative 标记未核实并明确拒绝显式提交。Qwen Image Edit 的 image_url 按版本使用字符串/数组。",
+      "source": "https://www.modelscope.cn/models/Tongyi-MAI/Z-Image-Turbo"
+    },
+    {
+      "provider": "ModelScope AI",
+      "status": "真实调用：额度 / 账户设置",
+      "details": "使用 AI 域名，不与 CN Token 混用。一个 key 额度不足，一个需绑定阿里云账户。图像参数限制与 CN 相同；模型目录不等于开放在线推理权限。",
+      "source": "https://www.modelscope.ai/models/Qwen/Qwen-Image-Edit-2511"
+    },
+    {
+      "provider": "NanoGPT",
+      "status": "真实调用：401 invalid_api_key",
+      "details": "使用 /api/v1/images 与单模型 endpoints 能力元数据，校验实际尺寸、图像输入和输出张数。图片输入为 input_references；没有能力证据不启用 LoRA/seed。此 key 未完成出图验收。",
+      "source": "https://docs.nano-gpt.com/api-reference/image-generation"
+    },
+    {
+      "provider": "Agnes",
+      "status": "文档与代码验证；无实测 key",
+      "details": "修复视频错走图片接口、遗漏 size/ratio、硬编码尺寸；视频采用 /v1/videos 和官方参数，图片不假装支持 diffusion 参数/LoRA。",
+      "source": "https://wiki.agnes-ai.com/en/docs/agnes-image-21-flash"
+    },
+    {
+      "provider": "Gemini",
+      "status": "文档与代码验证；无实测 key",
+      "details": "按所选模型校验 imageConfig，停用已下线快捷模型；历史记录实际 SDK payload，不编造 seed、steps、CFG。",
+      "source": "https://ai.google.dev/gemini-api/docs/image-generation"
+    },
+    {
+      "provider": "SenseNova",
+      "status": "文档与代码验证；无实测 key",
+      "details": "只保留核实过的 SenseNova 6.8 chat 集成，删除错误标成商汤的模型与图像能力承诺。",
+      "source": "https://github.com/OpenSenseNova/SenseNova6.8/blob/main/API.md"
+    },
+    {
+      "provider": "OpenAI / Grok 兼容中转",
+      "status": "文档与代码验证；无实测 key",
+      "details": "使用用户显式配置的服务地址；修正 JSON 编辑输入及 Grok image 对象。兼容中转的实际覆盖以其响应为准，未自动替换供应商。",
+      "source": "https://platform.openai.com/docs/api-reference/images"
+    }
+  ],
+  "scope": "Endpoint and parameter audit; generation evidence is limited to the exact requests in results.json. Browser click-through visual QA was not performed."
+}

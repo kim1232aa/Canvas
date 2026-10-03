@@ -41,6 +41,8 @@ export interface WorkflowExtraction {
   isVideo?: boolean;
   videoDuration?: number;
   videoFps?: number;
+  videoFrames?: number;
+  falModelName?: string;
   videoAspectRatio?: string;
   aspectRatio?: string;
   imageSize?: string;
@@ -50,6 +52,10 @@ export interface WorkflowExtraction {
   background?: string;
   moderation?: string;
   resolution?: string;
+  shift?: number;
+  randomSeed?: boolean;
+  galleryImages?: unknown[];
+  hfProvider?: string;
   initImageUrl?: string;
   saveImageNodeId?: string;
   saveVideoNodeId?: string;
@@ -74,41 +80,7 @@ export function areSocketsCompatible(fromType: DataType, toType: DataType): bool
 /**
  * Deduces provider faithfully based on model naming format
  */
-function deduceProviderFromModel(checkpointModel: string): WorkflowExtraction['targetProvider'] {
-  const isTaTool = [
-    'strong_text2image', 'photoreal_studio', 'anime_lab', 'oc_character',
-    'text2video_wan', 'text2video_ltx', 'image2video_wan', 'image2video_ltx',
-    'smart_edit', 'image_upscaler', 'background_remover', 'extend_image_sd15',
-    'live_wallpaper', 'old_photo_restore', 'three_view_flux_kontext', 'watermark_remove',
-    'oc_garment'
-  ].some((prefix) => checkpointModel.includes(prefix));
 
-  if (checkpointModel.includes('tensor') || /^\d{10,25}$/.test(checkpointModel) || isTaTool) {
-    return 'tensorart';
-  } else if (checkpointModel.startsWith('damo/') || checkpointModel.startsWith('AI-ModelScope/') || checkpointModel.includes('modelscope')) {
-    return 'modelscope';
-  } else if (checkpointModel.startsWith('fal-ai/')) {
-    return 'fal';
-  } else if (checkpointModel.startsWith('urn:air:') || checkpointModel.includes('civitai')) {
-    return 'civitai';
-  } else if (checkpointModel.includes('gpt-image')) {
-    return 'openai_compat';
-  } else if (checkpointModel.startsWith('grok-')) {
-    return 'grok_compat';
-  } else if (checkpointModel.includes('agnes')) {
-    return 'agnes';
-  } else if (checkpointModel.includes('sensenova') || checkpointModel.includes('deepseek') || checkpointModel.includes('glm')) {
-    return 'sensenova';
-  } else if (checkpointModel.includes('nanogpt')) {
-    return 'nanogpt';
-  } else if (checkpointModel.includes('imagen') || checkpointModel.includes('gemini')) {
-    return 'gemini';
-  } else if (checkpointModel.includes('/')) {
-    return 'huggingface';
-  } else {
-    return 'civitai';
-  }
-}
 
 /**
  * Finds downstream generator node if an upstream node was selected
@@ -506,6 +478,8 @@ export function extractWorkflowParameters(
   let isVideo = false;
   let videoDuration: number | undefined = undefined;
   let videoFps: number | undefined = undefined;
+  let videoFrames: number | undefined;
+  let falModelName: string | undefined;
   let videoAspectRatio: string | undefined = undefined;
   let aspectRatio: string | undefined = undefined;
   let imageSize: string | undefined = undefined;
@@ -515,6 +489,10 @@ export function extractWorkflowParameters(
   let background: string | undefined = undefined;
   let moderation: string | undefined = undefined;
   let resolution: string | undefined = undefined;
+  let shift: number | undefined;
+  let randomSeed: boolean | undefined;
+  let galleryImages: unknown[] | undefined;
+  let hfProvider: string | undefined;
   let width: number | undefined;
   let height: number | undefined;
   let batchSize = 1;
@@ -537,6 +515,7 @@ export function extractWorkflowParameters(
     }
     // F4: reject empty / schema-mismatched provider — never fall back to Fal
     videoProvider = assertAIVideoProviderReady(checkpointModel, videoProvider);
+    videoFrames=numOrUndef(execNode.values.num_frames);
     // Grok 兼容中转：duration 仅透传，不编造 5；其它商沿用节点默认
     if (videoProvider === 'grok_compat') {
       videoDuration = execNode.values.duration != null && execNode.values.duration !== ''
@@ -546,9 +525,10 @@ export function extractWorkflowParameters(
       videoAspectRatio = execNode.values.aspect_ratio || undefined;
       resolution = execNode.values.resolution || undefined;
     } else {
-      videoDuration = Number(execNode.values.duration || 5);
-      videoFps = Number(execNode.values.fps || 16);
-      videoAspectRatio = execNode.values.aspect_ratio || '16:9';
+      const falWan=videoProvider==='fal' && /wan-t2v|wan-i2v|wan\/v2\.1/.test(checkpointModel);
+      videoDuration = falWan ? undefined : numOrUndef(execNode.values.duration);
+      videoFps = numOrUndef(execNode.values.fps);
+      videoAspectRatio = execNode.values.aspect_ratio || undefined;
     }
   } else if (execNode.type === 'FalAIEngineNode') {
     isVideo = false;
@@ -632,13 +612,18 @@ export function extractWorkflowParameters(
     if (!checkpointModel) {
       throw new Error('请先选择模型');
     }
-    targetProvider = (execNode.values.targetProvider || '').trim() || deduceProviderFromModel(checkpointModel);
+    targetProvider = (execNode.values.targetProvider || '').trim();
+    if (!targetProvider) throw new Error('请选择执行服务商；不会从模型名称猜测引擎');
     size = execNode.values.size || undefined;
     quality = execNode.values.quality || undefined;
     outputFormat = execNode.values.output_format || execNode.values.outputFormat || undefined;
     background = execNode.values.background || undefined;
     moderation = execNode.values.moderation || undefined;
     resolution = execNode.values.resolution || undefined;
+    shift = numOrUndef(execNode.values.shift);
+    randomSeed = typeof execNode.values.random_seed === 'boolean' ? execNode.values.random_seed : undefined;
+    galleryImages = Array.isArray(execNode.values.gallery_images) ? execNode.values.gallery_images : undefined;
+    hfProvider = execNode.values.hf_provider || undefined;
     aspectRatio = execNode.values.aspect_ratio || execNode.values.aspectRatio || undefined;
     if (execNode.values.n != null || execNode.values.batch_size != null || execNode.values.batchSize != null) {
       batchSize = Number(execNode.values.n ?? execNode.values.batch_size ?? execNode.values.batchSize) || 1;
@@ -670,13 +655,19 @@ export function extractWorkflowParameters(
     if (!checkpointModel) {
       throw new Error('请先选择模型');
     }
-    targetProvider = (ckpt.values.targetProvider || '').trim() || deduceProviderFromModel(checkpointModel);
+    targetProvider = (ckpt.values.targetProvider || '').trim();
+    if (!targetProvider) throw new Error('请选择执行服务商；不会从模型名称猜测引擎');
     size = ckpt.values.size || undefined;
     quality = ckpt.values.quality || undefined;
     outputFormat = ckpt.values.output_format || ckpt.values.outputFormat || undefined;
     background = ckpt.values.background || undefined;
     moderation = ckpt.values.moderation || undefined;
     resolution = ckpt.values.resolution || undefined;
+    shift = numOrUndef(ckpt.values.shift);
+    randomSeed = typeof ckpt.values.random_seed === 'boolean' ? ckpt.values.random_seed : undefined;
+    galleryImages = Array.isArray(ckpt.values.gallery_images) ? ckpt.values.gallery_images : undefined;
+    hfProvider = ckpt.values.hf_provider || undefined;
+    falModelName=ckpt.values.fal_model_name || undefined;
     aspectRatio = ckpt.values.aspect_ratio || ckpt.values.aspectRatio || aspectRatio;
     if (ckpt.values.n != null || ckpt.values.batch_size != null || ckpt.values.batchSize != null) {
       batchSize = Number(ckpt.values.n ?? ckpt.values.batch_size ?? ckpt.values.batchSize) || batchSize;
@@ -697,7 +688,8 @@ export function extractWorkflowParameters(
     if (!checkpointModel) {
       throw new Error('请先选择模型');
     }
-    targetProvider = deduceProviderFromModel(checkpointModel);
+    targetProvider = (execNode.values.targetProvider || '').trim();
+    if (!targetProvider) throw new Error('请选择执行服务商；不会从模型名称猜测引擎');
   }
 
   // 4. Validate mandatory positive prompt (L2b: NO fallback to hardcoded string!)
@@ -735,6 +727,8 @@ export function extractWorkflowParameters(
     isVideo,
     videoDuration,
     videoFps,
+    videoFrames,
+    falModelName,
     videoAspectRatio,
     aspectRatio,
     imageSize,
@@ -744,6 +738,10 @@ export function extractWorkflowParameters(
     background,
     moderation,
     resolution,
+    shift,
+    randomSeed,
+    galleryImages,
+    hfProvider,
     initImageUrl,
     saveImageNodeId,
     saveVideoNodeId,
@@ -763,7 +761,7 @@ export async function executeWorkflow(
   onNodeStateChange: (nodeId: string, state: NodeInstance['state'], progress?: number, output?: any, errorMessage?: string) => void,
   onProgress?: (percent: number, statusText: string) => void,
   targetNodeOrId?: NodeInstance | string
-): Promise<{ imageUrl: string; provider: string; model: string; seed: number | null; isVideo?: boolean }> {
+): Promise<{ imageUrl: string; provider: string; model: string; seed: number | null; isVideo?: boolean; executingNodeId?: string; historyWarning?: string }> {
   let stepInterval: any = null;
   let targetErrorNodeId: string | undefined = typeof targetNodeOrId === 'string' ? targetNodeOrId : targetNodeOrId?.id;
 
@@ -806,7 +804,7 @@ export async function executeWorkflow(
 
     // Stage 2: CLIP Text Embeddings
     if (clipNodes.length > 0) {
-      onProgress?.(25, `[2/5] 正在计算正负向提示词特征语义潜向量...`);
+      onProgress?.(25, `[2/5] 正在整理已连接的提示词...`);
       clipNodes.forEach((n) => onNodeStateChange(n.id, 'running', 70));
       await new Promise((r) => setTimeout(r, 100));
       clipNodes.forEach((n) => onNodeStateChange(n.id, 'success', 100));
@@ -815,7 +813,7 @@ export async function executeWorkflow(
     // Stage 3: LoRA & Latent Initialization
     if (loraNodes.length > 0 || latentNodes.length > 0) {
       const loraDesc = params.loras.length > 0 ? `已装载 ${params.loras.length} 组 LoRA 适配层` : '纯底模无外挂权重';
-      onProgress?.(40, `[3/5] 拓扑张量与 LoRA 适配层融合 (${loraDesc})...`);
+      onProgress?.(40, `[3/5] 正在整理 LoRA 与尺寸请求参数 (${loraDesc})...`);
       loraNodes.forEach((n) => onNodeStateChange(n.id, 'running', 80));
       latentNodes.forEach((n) => onNodeStateChange(n.id, 'running', 80));
       await new Promise((r) => setTimeout(r, 100));
@@ -835,8 +833,10 @@ export async function executeWorkflow(
     if (llmNode && (llmNode.values.prompt || llmNode.values.input_text)) {
       onNodeStateChange(llmNode.id, 'running', 40);
       try {
-        const reasoningProvider = llmNode.values.provider || 'sensenova';
-        const reasoningModel = llmNode.values.model || 'deepseek-v4-flash';
+        const reasoningProvider = llmNode.values.provider;
+        if (!reasoningProvider) throw new Error('请先选择推理服务商');
+        const reasoningModel = String(llmNode.values.model || '').trim();
+        if (!reasoningModel) throw new Error('模型为必填项（推理节点）');
         const taskType = llmNode.values.task_type || 'cinematic_photoreal';
 
         let sysPrompt = 'You are an elite prompt engineer and AI visual director. Expand the user concept into a rich, detailed photorealistic prompt with lighting, 8k resolution, camera details. Output ONLY the final expanded prompt in English, with no meta preamble.';
@@ -869,8 +869,8 @@ export async function executeWorkflow(
           });
         }
       } catch (reasoningErr: any) {
-        console.warn('LLM reasoning node non-fatal fallback:', reasoningErr);
         onNodeStateChange(llmNode.id, 'error', 0, undefined, reasoningErr.message);
+        throw reasoningErr;
       }
     }
 
@@ -893,9 +893,19 @@ export async function executeWorkflow(
     if (params.background) extraParams.background = params.background;
     if (params.moderation) extraParams.moderation = params.moderation;
     if (params.resolution) extraParams.resolution = params.resolution;
+    if (params.falModelName) extraParams.model_name=params.falModelName;
+    if (params.targetProvider === 'huggingface') {
+      if (params.hfProvider) extraParams.hf_provider = params.hfProvider;
+      if (params.shift !== undefined) extraParams.shift = params.shift;
+      if (params.randomSeed !== undefined) extraParams.random_seed = params.randomSeed;
+      if (params.galleryImages !== undefined) extraParams.gallery_images = params.galleryImages;
+    }
     if (grokOrOpenAi && params.batchSize != null && Number(params.batchSize) > 0) {
       extraParams.n = Number(params.batchSize);
     }
+    if (engProv === 'tensorart' && params.batchSize !== undefined) extraParams.count = params.batchSize;
+    if (engProv === 'nanogpt' && params.batchSize !== undefined) extraParams.n=params.batchSize;
+    if (engProv === 'fal' && params.batchSize !== undefined) extraParams.n=params.batchSize;
 
     const lorasPayload = resolveGenerateLorasPayload(
       engProv,
@@ -912,6 +922,7 @@ export async function executeWorkflow(
     );
 
     const normParams: NormalizedGenerateParams = omitUnsupportedGenerateFields(engProv, engModel, {
+      workflowSnapshot: { format: 'comfycanvas', version: 1, nodes: activeNodes, connections, executingNodeId: params.executingNodeId },
       prompt: params.positivePrompt,
       negative_prompt: params.negativePrompt,
       model: params.checkpointModel,
@@ -927,6 +938,7 @@ export async function executeWorkflow(
       isVideo: params.isVideo,
       videoDuration: params.videoDuration,
       videoFps: grokish ? undefined : params.videoFps,
+      videoFrames: params.videoFrames,
       aspectRatio: params.videoAspectRatio || params.aspectRatio,
       imageSize: params.imageSize,
       sampler_name: params.sampler,
@@ -976,7 +988,9 @@ export async function executeWorkflow(
       imageUrl: resultMedia,
       provider: usedProvider,
       model: usedModel,
-      seed: execResult.seed ?? normParams.seed ?? null,
+      seed: execResult.seed ?? null,
+      executingNodeId: params.executingNodeId,
+      historyWarning: execResult.historyWarning,
       isVideo,
     };
   } catch (error: any) {

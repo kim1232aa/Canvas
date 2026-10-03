@@ -40,6 +40,7 @@ export abstract class BaseEngineDriver implements IEngineDriver {
    * 生成参数异构归一化 (Normalization Filter)
    */
   protected normalizeGenerateParams(params: NormalizedGenerateParams): NormalizedGenerateParams {
+    if (!params.model?.trim()) throw new Error('模型为必填项（model is required）');
     const isVideo = Boolean(
       params.isVideo ||
       params.videoDuration ||
@@ -53,16 +54,17 @@ export abstract class BaseEngineDriver implements IEngineDriver {
       negative_prompt: params.negative_prompt?.trim() || undefined,
       model: params.model,
       // V2: pass through only caller-provided values; server decides what's required per provider
-      width: params.width ? Number(params.width) : undefined,
-      height: params.height ? Number(params.height) : undefined,
-      steps: params.steps ? Number(params.steps) : undefined,
-      cfg: params.cfg ? Number(params.cfg) : undefined,
+      width: params.width !== undefined ? Number(params.width) : undefined,
+      height: params.height !== undefined ? Number(params.height) : undefined,
+      steps: params.steps !== undefined ? Number(params.steps) : undefined,
+      cfg: params.cfg !== undefined ? Number(params.cfg) : undefined,
       seed: typeof params.seed === 'number' ? params.seed : undefined,
-      denoise: typeof params.denoise === 'number' ? Math.max(0.01, Math.min(1.0, params.denoise)) : undefined,
+      denoise: typeof params.denoise === 'number' ? params.denoise : undefined,
       image_url: params.image_url?.trim() || undefined,
       isVideo: params.isVideo || isVideo || undefined,
-      videoDuration: isVideo && params.videoDuration ? Number(params.videoDuration) : undefined,
-      videoFps: isVideo && params.videoFps ? Number(params.videoFps) : undefined,
+      videoDuration: isVideo && params.videoDuration !== undefined ? Number(params.videoDuration) : undefined,
+      videoFps: isVideo && params.videoFps !== undefined ? Number(params.videoFps) : undefined,
+      videoFrames: isVideo && params.videoFrames !== undefined ? Number(params.videoFrames) : undefined,
       aspectRatio: params.aspectRatio || undefined,
       imageSize: params.imageSize || undefined,
       sampler_name: params.sampler_name,
@@ -82,6 +84,7 @@ export abstract class BaseEngineDriver implements IEngineDriver {
       apiKey: params.apiKey,
       baseUrl: params.baseUrl,
       extraParams: params.extraParams,
+      workflowSnapshot: params.workflowSnapshot,
     };
   }
 
@@ -109,6 +112,7 @@ export abstract class BaseEngineDriver implements IEngineDriver {
     rawParams: NormalizedGenerateParams,
     keys: Record<string, string>
   ): Promise<NormalizedGenerateResult> {
+    if (!rawParams.model?.trim()) throw new Error('模型为必填项（model is required）');
     const hasImage = Boolean(rawParams.image_url);
     const isVideo = Boolean(
       rawParams.isVideo ||

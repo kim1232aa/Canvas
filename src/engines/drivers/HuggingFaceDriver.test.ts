@@ -31,52 +31,22 @@ describe('HuggingFaceDriver error prefix', () => {
     );
   });
 
-  it('forwards cfg, scheduler, steps, and negative_prompt to /api/huggingface/generate', async () => {
-    let interceptedBody: any = null;
-    let interceptedHeaders: any = null;
+  it('forwards the Space controls with an explicit seed and a new empty gallery', async () => {
+    const request = vi.fn().mockResolvedValue({ok: false, status: 503, json: async () => ({error: 'Space unavailable', details: 'GPU quota exceeded'})});
+    globalThis.fetch = request;
+    await expect(driver.generate({prompt: 'test', model: 'Tongyi-MAI/Z-Image-Turbo', seed: 42, steps: 8, extraParams: {resolution: '1024x1024 ( 1:1 )', shift: 3, random_seed: false, gallery_images: []}}, {})).rejects.toThrow('HTTP 503: Space unavailable: GPU quota exceeded');
+    expect(JSON.parse(request.mock.calls[0][1].body)).toMatchObject({seed: 42, steps: 8, resolution: '1024x1024 ( 1:1 )', shift: 3, random_seed: false, gallery_images: []});
+  });
 
-    globalThis.fetch = vi.fn().mockImplementation(async (_url: string, init: any) => {
-      interceptedBody = JSON.parse(init.body);
-      interceptedHeaders = init.headers;
-      return {
-        ok: true,
-        status: 200,
-        json: async () => ({
-          imageUrl: 'data:image/png;base64,fake-data',
-          model: 'stabilityai/stable-diffusion-xl-base-1.0',
-          provider: 'Hugging Face',
-          historyItem: { seed: 12345 },
-        }),
-      };
-    });
-
-    const params: NormalizedGenerateParams = {
-      prompt: 'a scenic landscape',
-      negative_prompt: 'ugly, blurry',
-      model: 'stabilityai/stable-diffusion-xl-base-1.0',
-      width: 1024,
-      height: 1024,
-      steps: 30,
-      cfg: 7.5,
-      scheduler: 'DPMSolverMultistepScheduler',
-      seed: 12345,
-    };
-
-    const res = await driver.generate(params, { hfToken: 'hf-test-token' });
-
-    expect(interceptedHeaders['x-hf-token']).toBe('hf-test-token');
-    expect(interceptedBody.prompt).toBe('a scenic landscape');
-    expect(interceptedBody.negative_prompt).toBe('ugly, blurry');
-    expect(interceptedBody.model).toBe('stabilityai/stable-diffusion-xl-base-1.0');
-    expect(interceptedBody.width).toBe(1024);
-    expect(interceptedBody.height).toBe(1024);
-    expect(interceptedBody.steps).toBe(30);
-    expect(interceptedBody.cfg).toBe(7.5);
-    expect(interceptedBody.guidance).toBe(7.5);
-    expect(interceptedBody.scheduler).toBe('DPMSolverMultistepScheduler');
-    expect(interceptedBody.seed).toBe(12345);
-
-    expect(res.mediaUrl).toBe('data:image/png;base64,fake-data');
-    expect(res.seed).toBe(12345);
+  it('forwards the documented generic HF scheduler', async () => {
+    const request = vi.fn().mockResolvedValue({ok: false, status: 400, json: async () => ({error: 'test boundary'})});
+    globalThis.fetch = request;
+    await expect(driver.generate({prompt: 'test', model: 'huggingface-text-to-image', scheduler: 'test-scheduler'}, {})).rejects.toThrow('HTTP 400');
+    expect(JSON.parse(request.mock.calls[0][1].body).scheduler).toBe('test-scheduler');
+  });
+  it('keeps LoRA repository, explicit strength and the HF billing route', async()=>{
+    const request=vi.fn().mockResolvedValue({ok:false,status:402,json:async()=>({error:'Payment required'})});globalThis.fetch=request;
+    await expect(driver.generate({model:'XLabs-AI/flux-RealismLora',prompt:'robot',width:512,height:512,seed:42,steps:12,cfg:3.5,loras:[{name:'XLabs-AI/flux-RealismLora',strength:0.8}]},{})).rejects.toThrow('HTTP 402');
+    expect(JSON.parse(request.mock.calls[0][1].body)).toMatchObject({inference_provider:'fal-ai',loras:[{name:'XLabs-AI/flux-RealismLora',strength:0.8}],width:512,height:512,guidance:3.5,seed:42});
   });
 });

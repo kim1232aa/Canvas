@@ -1,6 +1,5 @@
 import { Connection, NodeInstance } from '../types/graph';
 import { getFieldSpec, resolveSchemaModelId, Provider } from '../schemas/providerSchema';
-import { BASE_MODELS } from '../constants/nodes';
 
 
 /** Providers that have rows in PROVIDER_SCHEMA (field grey / omit). */
@@ -22,29 +21,6 @@ const SCHEMA_PROVIDERS: readonly Provider[] = [
 export function toSchemaProvider(provider: string | undefined | null): Provider | undefined {
   const prov = (provider || '').toLowerCase().trim();
   return (SCHEMA_PROVIDERS as readonly string[]).includes(prov) ? (prov as Provider) : undefined;
-}
-
-export function resolveCheckpointModelProvider(modelId: string | undefined | null): Provider | undefined {
-  if (!modelId) return undefined;
-  const match = BASE_MODELS.find((m) => m.value === modelId);
-  if (match?.provider) {
-    return toSchemaProvider(match.provider);
-  }
-  if (modelId.startsWith('fal-ai/')) return 'fal';
-  if (modelId.includes('gemini')) return 'gemini';
-  return undefined;
-}
-
-export function applyCheckpointModelSelection(
-  currentValues: Record<string, any>,
-  modelId: string
-): Record<string, any> {
-  const next: Record<string, any> = { ...currentValues, ckpt_name: modelId };
-  const prov = resolveCheckpointModelProvider(modelId);
-  if (prov) {
-    next.targetProvider = prov;
-  }
-  return next;
 }
 
 
@@ -541,7 +517,7 @@ export function isCanvasFieldUnsupported(
 
 /**
  * Keep LoRA values on engine switch — never wipe stored stacks.
- * Unsupported LoRAs stay visible but grey / omitted from the generate payload.
+ * Unsupported LoRAs stay visible and prevent generation until explicitly removed.
  */
 export function sanitizeFrameLoras<T>(
   _provider: string | undefined,
@@ -573,8 +549,7 @@ export function filterRealLoraEntries<T>(list: T[] | undefined | null): T[] {
  * Build the loras field for a generate payload.
  * openai_compat: keep real entries so they reach the driver/server for an honest
  * 「该服务商不支持」 reject; empty/whitespace name / missing → undefined
- * (no loras key on the wire). Other providers: unchanged — wipe when schema marks
- * loras unsupported (full list kept as-is when supported).
+ * (no loras key on the wire). Other providers reject real unsupported entries.
  */
 export function resolveGenerateLorasPayload<T>(
   provider: string | undefined,
@@ -587,6 +562,7 @@ export function resolveGenerateLorasPayload<T>(
     return real.length > 0 ? real : undefined;
   }
   if (isCanvasFieldUnsupported(provider, model, 'loras')) {
+    if (filterRealLoraEntries(list).length) throw new Error(`该服务商不支持 LoRA（${provider} / ${model}）；请旁路或移除 LoRA，或选择支持 LoRA 的接口`);
     return undefined;
   }
   return list;
@@ -599,6 +575,9 @@ export function omitUnsupportedGenerateFields<T extends Record<string, unknown>>
   fields: T
 ): T {
   const out: Record<string, unknown> = { ...fields };
+  if (toSchemaProvider(provider) !== 'openai_compat' && isCanvasFieldUnsupported(provider, model, 'loras') && filterRealLoraEntries(Array.isArray(out.loras) ? out.loras : []).length) {
+    throw new Error('该服务商不支持 LoRA；请旁路或移除已挂载的 LoRA，不能静默丢弃');
+  }
   const pairs: Array<[CanvasGreyField, string[]]> = [
     ['seed', ['seed']],
     ['negative_prompt', ['negative_prompt']],

@@ -38,6 +38,7 @@ export const CloudProjectModal: React.FC<CloudProjectModalProps> = ({
   onLoadProject,
   onSaveCurrentToCloud,
 }) => {
+  const [error, setError] = useState<string | null>(null);
   const [projects, setProjects] = useState<CloudProjectSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
@@ -45,6 +46,7 @@ export const CloudProjectModal: React.FC<CloudProjectModalProps> = ({
   const [serverHealth, setServerHealth] = useState<any>(null);
 
   const refreshList = async () => {
+    setError(null);
     setLoading(true);
     try {
       const [list, health] = await Promise.all([
@@ -53,8 +55,8 @@ export const CloudProjectModal: React.FC<CloudProjectModalProps> = ({
       ]);
       setProjects(list);
       setServerHealth(health);
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      setError(e.message || '云端操作失败');
     } finally {
       setLoading(false);
     }
@@ -75,14 +77,15 @@ export const CloudProjectModal: React.FC<CloudProjectModalProps> = ({
       await onSaveCurrentToCloud(newProjectName.trim());
       setNewProjectName('');
       await refreshList();
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      setError(e.message || '云端操作失败');
     } finally {
       setIsSavingNew(false);
     }
   };
 
   const handleSelectProject = async (id: string) => {
+    setError(null);
     setLoading(true);
     try {
       const fullProject = await loadCloudProject(id);
@@ -90,8 +93,8 @@ export const CloudProjectModal: React.FC<CloudProjectModalProps> = ({
         onLoadProject(fullProject);
         onClose();
       }
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      setError(e.message || '云端操作失败');
     } finally {
       setLoading(false);
     }
@@ -99,13 +102,17 @@ export const CloudProjectModal: React.FC<CloudProjectModalProps> = ({
 
   const handleDelete = async (id: string, name: string) => {
     if (!window.confirm(`确定从云端服务器永久删除项目「${name}」吗？`)) return;
-    await deleteCloudProject(id);
-    await refreshList();
+    setLoading(true); setError(null);
+    try {await deleteCloudProject(id); await refreshList();}
+    catch (e: any) {setError(e.message);}
+    finally {setLoading(false);}
   };
 
   const handleClone = async (id: string) => {
-    await cloneCloudProject(id);
-    await refreshList();
+    setLoading(true); setError(null);
+    try {await cloneCloudProject(id); await refreshList();}
+    catch (e: any) {setError(e.message);}
+    finally {setLoading(false);}
   };
 
   return (
@@ -119,14 +126,14 @@ export const CloudProjectModal: React.FC<CloudProjectModalProps> = ({
             </div>
             <div>
               <h2 className="text-base font-bold text-white flex items-center gap-2">
-                云端项目与服务器持久化 (Cloud Server Sync)
+                云端项目
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  服务器持久化在线
+                  {loading ? '正在连接' : serverHealth?.status === 'online' ? '已连接' : '等待连接'}
                 </span>
               </h2>
               <p className="text-[11px] text-slate-400">
-                不再受限于单一浏览器 localStorage；工作流、画布选区与 ComfyUI 参数全量保存在云端服务器
+                保存到云端的项目可在其他设备登录后继续编辑。
               </p>
             </div>
           </div>
@@ -138,6 +145,7 @@ export const CloudProjectModal: React.FC<CloudProjectModalProps> = ({
           </button>
         </div>
 
+        {error && <p role="alert" className="mx-6 mt-3 p-3 rounded-lg bg-rose-950/40 text-rose-300 text-sm">{error}</p>}
         {/* Server Status Strip */}
         {serverHealth && (
           <div className="px-6 py-2.5 bg-[#1a1b23] border-b border-[#262833] flex items-center justify-between text-[11px] text-slate-300 font-mono">
@@ -251,6 +259,7 @@ export const CloudProjectModal: React.FC<CloudProjectModalProps> = ({
 
                       <div className="pt-2 border-t border-[#252733] flex items-center justify-between gap-2">
                         <button
+                          disabled={loading || isSavingNew}
                           onClick={() => handleSelectProject(p.id)}
                           className={`flex-1 py-1.5 rounded-lg font-bold text-[11px] flex items-center justify-center gap-1 transition-all ${
                             isCurrent
@@ -263,6 +272,7 @@ export const CloudProjectModal: React.FC<CloudProjectModalProps> = ({
                         </button>
 
                         <button
+                          disabled={loading || isSavingNew}
                           onClick={() => handleClone(p.id)}
                           className="p-1.5 rounded-lg bg-[#22242e] hover:bg-[#2d303d] text-slate-300 hover:text-white"
                           title="在云端复制副本"
@@ -271,6 +281,7 @@ export const CloudProjectModal: React.FC<CloudProjectModalProps> = ({
                         </button>
 
                         <button
+                          disabled={loading || isSavingNew}
                           onClick={() => handleDelete(p.id, p.name)}
                           className="p-1.5 rounded-lg bg-[#22242e] hover:bg-rose-950/40 text-slate-400 hover:text-rose-400"
                           title="从服务器永久删除"

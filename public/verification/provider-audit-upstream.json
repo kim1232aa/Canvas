@@ -1,0 +1,268 @@
+[
+  {
+    "url": "https://huggingface.co/api/models/XLabs-AI/flux-RealismLora",
+    "method": "GET",
+    "status": 200
+  },
+  {
+    "url": "https://router.huggingface.co/fal-ai/fal-ai/flux-lora",
+    "method": "POST",
+    "parameters": {
+      "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering",
+      "image_size": {
+        "width": 512,
+        "height": 512
+      },
+      "num_inference_steps": 12,
+      "guidance_scale": 3.5,
+      "seed": 42,
+      "loras": [
+        {
+          "path": "https://huggingface.co/XLabs-AI/flux-RealismLora/resolve/main/lora.safetensors",
+          "scale": 0.8
+        }
+      ]
+    },
+    "status": 200
+  },
+  {
+    "url": "https://router.huggingface.co/fal-ai/fal-ai/flux-lora/requests/01a0ff2a-c162-7bb1-8ded-91302bce6eed/status",
+    "method": "GET",
+    "status": 202
+  },
+  {
+    "url": "https://router.huggingface.co/fal-ai/fal-ai/flux-lora/requests/01a0ff2a-c162-7bb1-8ded-91302bce6eed/status",
+    "method": "GET",
+    "status": 202
+  },
+  {
+    "url": "https://router.huggingface.co/fal-ai/fal-ai/flux-lora/requests/01a0ff2a-c162-7bb1-8ded-91302bce6eed/status",
+    "method": "GET",
+    "status": 202
+  },
+  {
+    "url": "https://router.huggingface.co/fal-ai/fal-ai/flux-lora/requests/01a0ff2a-c162-7bb1-8ded-91302bce6eed/status",
+    "method": "GET",
+    "status": 202
+  },
+  {
+    "url": "https://router.huggingface.co/fal-ai/fal-ai/flux-lora/requests/01a0ff2a-c162-7bb1-8ded-91302bce6eed/status",
+    "method": "GET",
+    "status": 202
+  },
+  {
+    "url": "https://router.huggingface.co/fal-ai/fal-ai/flux-lora/requests/01a0ff2a-c162-7bb1-8ded-91302bce6eed/status",
+    "method": "GET",
+    "status": 202
+  },
+  {
+    "url": "https://router.huggingface.co/fal-ai/fal-ai/flux-lora/requests/01a0ff2a-c162-7bb1-8ded-91302bce6eed/status",
+    "method": "GET",
+    "status": 202
+  },
+  {
+    "url": "https://router.huggingface.co/fal-ai/fal-ai/flux-lora/requests/01a0ff2a-c162-7bb1-8ded-91302bce6eed/status",
+    "method": "GET",
+    "status": 202
+  },
+  {
+    "url": "https://router.huggingface.co/fal-ai/fal-ai/flux-lora/requests/01a0ff2a-c162-7bb1-8ded-91302bce6eed/status",
+    "method": "GET",
+    "status": 202
+  },
+  {
+    "url": "https://router.huggingface.co/fal-ai/fal-ai/flux-lora/requests/01a0ff2a-c162-7bb1-8ded-91302bce6eed/status",
+    "method": "GET",
+    "status": 202
+  },
+  {
+    "url": "https://router.huggingface.co/fal-ai/fal-ai/flux-lora/requests/01a0ff2a-c162-7bb1-8ded-91302bce6eed/status",
+    "method": "GET",
+    "status": 202
+  },
+  {
+    "url": "https://router.huggingface.co/fal-ai/fal-ai/flux-lora/requests/01a0ff2a-c162-7bb1-8ded-91302bce6eed/status",
+    "method": "GET",
+    "status": 202
+  },
+  {
+    "url": "https://router.huggingface.co/fal-ai/fal-ai/flux-lora/requests/01a0ff2a-c162-7bb1-8ded-91302bce6eed/status",
+    "method": "GET",
+    "status": 202
+  },
+  {
+    "url": "https://router.huggingface.co/fal-ai/fal-ai/flux-lora/requests/01a0ff2a-c162-7bb1-8ded-91302bce6eed/status",
+    "method": "GET",
+    "status": 202
+  },
+  {
+    "url": "https://router.huggingface.co/fal-ai/fal-ai/flux-lora/requests/01a0ff2a-c162-7bb1-8ded-91302bce6eed/status",
+    "method": "GET",
+    "status": 202
+  },
+  {
+    "url": "https://router.huggingface.co/fal-ai/fal-ai/flux-lora/requests/01a0ff2a-c162-7bb1-8ded-91302bce6eed/status",
+    "method": "GET",
+    "status": 202
+  },
+  {
+    "url": "https://router.huggingface.co/fal-ai/fal-ai/flux-lora/requests/01a0ff2a-c162-7bb1-8ded-91302bce6eed/status",
+    "method": "GET",
+    "status": 202
+  },
+  {
+    "url": "https://router.huggingface.co/fal-ai/fal-ai/flux-lora/requests/01a0ff2a-c162-7bb1-8ded-91302bce6eed/status",
+    "method": "GET",
+    "status": 202
+  },
+  {
+    "url": "https://router.huggingface.co/fal-ai/fal-ai/flux-lora/requests/01a0ff2a-c162-7bb1-8ded-91302bce6eed/status",
+    "method": "GET",
+    "status": 202
+  },
+  {
+    "url": "https://router.huggingface.co/fal-ai/fal-ai/flux-lora/requests/01a0ff2a-c162-7bb1-8ded-91302bce6eed/status",
+    "method": "GET",
+    "status": 202
+  },
+  {
+    "url": "https://router.huggingface.co/fal-ai/fal-ai/flux-lora/requests/01a0ff2a-c162-7bb1-8ded-91302bce6eed/status",
+    "method": "GET",
+    "status": 202
+  },
+  {
+    "url": "https://router.huggingface.co/fal-ai/fal-ai/flux-lora/requests/01a0ff2a-c162-7bb1-8ded-91302bce6eed/status",
+    "method": "GET",
+    "status": 202
+  },
+  {
+    "url": "https://router.huggingface.co/fal-ai/fal-ai/flux-lora/requests/01a0ff2a-c162-7bb1-8ded-91302bce6eed/status",
+    "method": "GET",
+    "status": 202
+  },
+  {
+    "url": "https://router.huggingface.co/fal-ai/fal-ai/flux-lora/requests/01a0ff2a-c162-7bb1-8ded-91302bce6eed/status",
+    "method": "GET",
+    "status": 202
+  },
+  {
+    "url": "https://router.huggingface.co/fal-ai/fal-ai/flux-lora/requests/01a0ff2a-c162-7bb1-8ded-91302bce6eed/status",
+    "method": "GET",
+    "status": 202
+  },
+  {
+    "url": "https://router.huggingface.co/fal-ai/fal-ai/flux-lora/requests/01a0ff2a-c162-7bb1-8ded-91302bce6eed/status",
+    "method": "GET",
+    "status": 202
+  },
+  {
+    "url": "https://router.huggingface.co/fal-ai/fal-ai/flux-lora/requests/01a0ff2a-c162-7bb1-8ded-91302bce6eed/status",
+    "method": "GET",
+    "status": 202
+  },
+  {
+    "url": "https://router.huggingface.co/fal-ai/fal-ai/flux-lora/requests/01a0ff2a-c162-7bb1-8ded-91302bce6eed/status",
+    "method": "GET",
+    "status": 202
+  },
+  {
+    "url": "https://router.huggingface.co/fal-ai/fal-ai/flux-lora/requests/01a0ff2a-c162-7bb1-8ded-91302bce6eed/status",
+    "method": "GET",
+    "status": 202
+  },
+  {
+    "url": "https://router.huggingface.co/fal-ai/fal-ai/flux-lora/requests/01a0ff2a-c162-7bb1-8ded-91302bce6eed/status",
+    "method": "GET",
+    "status": 202
+  },
+  {
+    "url": "https://router.huggingface.co/fal-ai/fal-ai/flux-lora/requests/01a0ff2a-c162-7bb1-8ded-91302bce6eed/status",
+    "method": "GET",
+    "status": 202
+  },
+  {
+    "url": "https://router.huggingface.co/fal-ai/fal-ai/flux-lora/requests/01a0ff2a-c162-7bb1-8ded-91302bce6eed/status",
+    "method": "GET",
+    "status": 202
+  },
+  {
+    "url": "https://router.huggingface.co/fal-ai/fal-ai/flux-lora/requests/01a0ff2a-c162-7bb1-8ded-91302bce6eed/status",
+    "method": "GET",
+    "status": 202
+  },
+  {
+    "url": "https://router.huggingface.co/fal-ai/fal-ai/flux-lora/requests/01a0ff2a-c162-7bb1-8ded-91302bce6eed/status",
+    "method": "GET",
+    "status": 202
+  },
+  {
+    "url": "https://router.huggingface.co/fal-ai/fal-ai/flux-lora/requests/01a0ff2a-c162-7bb1-8ded-91302bce6eed/status",
+    "method": "GET",
+    "status": 202
+  },
+  {
+    "url": "https://router.huggingface.co/fal-ai/fal-ai/flux-lora/requests/01a0ff2a-c162-7bb1-8ded-91302bce6eed/status",
+    "method": "GET",
+    "status": 200
+  },
+  {
+    "url": "https://router.huggingface.co/fal-ai/fal-ai/flux-lora/requests/01a0ff2a-c162-7bb1-8ded-91302bce6eed",
+    "method": "GET",
+    "status": 200
+  },
+  {
+    "url": "https://v3b.fal.media/files/b/0aacd476/gvDPllYqk4ViOHbPiOlRt.jpg",
+    "method": "GET",
+    "status": 200
+  },
+  {
+    "url": "https://tams-api.tensor.art/v1/models/672797109289765558",
+    "method": "GET",
+    "status": 404,
+    "body": "{\"code\":100001,\"message\":\"unauthorized\",\"tips\":\"app not found\"}"
+  },
+  {
+    "url": "https://tams-api.tensor.art/v1/models/672797109289765558",
+    "method": "GET",
+    "status": 404,
+    "body": "{\"code\":100001,\"message\":\"unauthorized\",\"tips\":\"app not found\"}"
+  },
+  {
+    "url": "https://api.nano-gpt.com/api/v1/images/models/flux-schnell/endpoints",
+    "method": "GET",
+    "status": 200
+  },
+  {
+    "url": "https://api.nano-gpt.com/api/v1/images",
+    "method": "POST",
+    "parameters": {
+      "model": "flux-schnell",
+      "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering",
+      "resolution": "1024x1024"
+    },
+    "status": 401,
+    "body": "{\"error\":{\"message\":\"Invalid session\",\"type\":\"invalid_request_error\",\"code\":\"invalid_api_key\"}}"
+  },
+  {
+    "url": "https://fal.run/fal-ai/flux-lora",
+    "method": "POST",
+    "parameters": {
+      "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering",
+      "image_size": {
+        "width": 512,
+        "height": 512
+      },
+      "num_inference_steps": 12,
+      "guidance_scale": 3.5,
+      "seed": 42,
+      "loras": [
+        {
+          "path": "https://huggingface.co/XLabs-AI/flux-RealismLora/resolve/main/lora.safetensors",
+          "scale": 0.8
+        }
+      ]
+    },
+    "status": 403,
+    "body": "{\"detail\":\"User is locked. Reason: TOP_UP.\"}"
+  }
+]

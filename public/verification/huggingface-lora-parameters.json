@@ -1,0 +1,50 @@
+{
+  "request": {
+    "model": "XLabs-AI/flux-RealismLora",
+    "inference_provider": "fal-ai",
+    "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering",
+    "width": 512,
+    "height": 512,
+    "steps": 12,
+    "guidance": 3.5,
+    "seed": 42,
+    "loras": [
+      {
+        "name": "XLabs-AI/flux-RealismLora",
+        "strength": 0.8
+      }
+    ]
+  },
+  "requestMetadata": {
+    "route": "/api/huggingface/generate",
+    "submissions": [
+      {
+        "endpoint": "https://router.huggingface.co/fal-ai/fal-ai/flux-lora?_subdomain=queue",
+        "parameters": {
+          "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering",
+          "image_size": {
+            "width": 512,
+            "height": 512
+          },
+          "num_inference_steps": 12,
+          "guidance_scale": 3.5,
+          "seed": 42,
+          "loras": [
+            {
+              "path": "https://huggingface.co/XLabs-AI/flux-RealismLora/resolve/main/lora.safetensors",
+              "scale": 0.8
+            }
+          ]
+        },
+        "status": 200
+      }
+    ]
+  },
+  "seed": 42,
+  "loras": [
+    {
+      "name": "XLabs-AI/flux-RealismLora",
+      "strength": 0.8
+    }
+  ]
+}

@@ -63,7 +63,7 @@ export class OpenAICompatDriver extends BaseEngineDriver {
     const resp = await fetch('/api/engine/openai_compat/generate', {
       method: 'POST',
       headers,
-      body: JSON.stringify(body),
+      body: JSON.stringify({ ...body, workflowSnapshot: params.workflowSnapshot }),
     });
 
     if (!resp.ok) {

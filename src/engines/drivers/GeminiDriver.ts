@@ -13,34 +13,14 @@ export class GeminiDriver extends BaseEngineDriver {
   readonly label = 'Google 官方 Gemini';
   readonly badgeColor = '#10b981';
   readonly description = 'Google 官方 Gemini 生图 (generateContent)。seed 该服务商不支持（ImageConfig 无 seed），不发送。不支持 steps/CFG/sampler/LoRA。';
-  readonly capabilities = ['text2img', 'reasoning'] as const;
+  readonly capabilities = ['text2img', 'img2img', 'reasoning'] as const;
 
   readonly supportedModels: ModelSpec[] = [
-    {
-      id: 'gemini-2.5-flash-image',
-      name: 'Gemini 2.5 Flash Image (经典生图)',
-      type: 'image',
-      description: 'Google 官方经典生图模型',
-      defaultSteps: 20,
-      defaultCfg: 4.5,
-      supportsLora: false,
-    },
     {
       id: 'gemini-3.1-flash-image',
       name: 'Gemini 3.1 Flash Image (高清图像生成)',
       type: 'image',
       description: 'Google 新一代 Nano Banana 2 高清多画幅图像生成大模型',
-      defaultSteps: 20,
-      defaultCfg: 4.5,
-      supportsLora: false,
-    },
-    {
-      id: 'gemini-3.1-flash-lite-image',
-      name: 'Gemini 3.1 Flash Lite Image (极速生图)',
-      type: 'image',
-      description: '极低延迟快速生图与概念渲染',
-      defaultSteps: 15,
-      defaultCfg: 4.0,
       supportsLora: false,
     },
     {
@@ -48,8 +28,6 @@ export class GeminiDriver extends BaseEngineDriver {
       name: 'Gemini 3 Pro Image (Nano Banana Pro)',
       type: 'image',
       description: 'Google 高画质旗舰生图大模型',
-      defaultSteps: 20,
-      defaultCfg: 5.0,
       supportsLora: false,
     },
     {
@@ -87,14 +65,17 @@ export class GeminiDriver extends BaseEngineDriver {
     if (params.image_url) {
       body.image_url = params.image_url;
     }
-    // seed：生图指南 ImageConfig 仅 aspectRatio/imageSize → 不发上游（即使 params 残留 Civitai 导入 seed）
+    // Preserve explicit caller values so the API can reject unsupported parameters visibly.
+    for (const key of ['seed','width','height','negative_prompt','steps','cfg','sampler_name','scheduler','denoise','loras'] as const) {
+      if (params[key] !== undefined) body[key]=params[key];
+    }
     const resp = await fetch('/api/gemini/generate', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         ...(effectiveKey ? { 'x-gemini-key': effectiveKey } : {}),
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ ...body, workflowSnapshot: params.workflowSnapshot }),
     });
 
     if (!resp.ok) {

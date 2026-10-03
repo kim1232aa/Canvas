@@ -56,6 +56,7 @@ export class GrokCompatDriver extends BaseEngineDriver {
         method: 'POST',
         headers,
         body: JSON.stringify({
+        workflowSnapshot: params.workflowSnapshot,
           prompt: params.prompt,
           model: params.model,
           provider: 'grok_compat',
@@ -96,7 +97,7 @@ export class GrokCompatDriver extends BaseEngineDriver {
     const resp = await fetch('/api/engine/grok_compat/generate', {
       method: 'POST',
       headers,
-      body: JSON.stringify(body),
+      body: JSON.stringify({ ...body, workflowSnapshot: params.workflowSnapshot }),
     });
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({ error: `Grok 兼容中转失败 (${resp.status})` }));

@@ -82,7 +82,7 @@ export const testProviderConnection = async (
   provider: ProviderId,
   key: string,
   token?: string
-): Promise<{ status: 'ok' | 'error' | 'unsupported'; latency?: number; message?: string }> => {
+): Promise<{ status: 'ok' | 'error' | 'warning' | 'unsupported'; latency?: number; message?: string }> => {
   try {
     const effectiveToken = (token !== undefined ? token : getStoredAdminToken()).trim();
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -393,63 +393,17 @@ export const refinePromptWithGemini = async (
   return data.refinedPrompt;
 };
 
-export const fetchHistory = async (): Promise<GenerationHistoryItem[]> => {
-  try {
-    const resp = await fetch('/api/history');
-    if (resp.ok) return await resp.json();
-  } catch (e) {
-    console.error('History fetch error:', e);
-  }
-  return [];
-};
-
-export const saveToHistory = async (item: Partial<GenerationHistoryItem>) => {
-  try {
-    const resp = await fetch('/api/history', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(item),
-    });
-    if (resp.ok) return await resp.json();
-  } catch (e) {
-    console.error('History save error:', e);
-  }
-};
-
-export const deleteHistoryItem = async (id: string) => {
-  try {
-    const encodedId = encodeURIComponent(id);
-    const resp = await fetch(`/api/history/${encodedId}`, { method: 'DELETE' });
-    return resp.ok;
-  } catch (e) {
-    console.error('History delete error:', e);
-  }
-  return false;
-};
-
-export const deleteHistoryBatch = async (ids: string[]) => {
-  try {
-    const resp = await fetch('/api/history/delete-batch', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ids }),
-    });
-    return resp.ok;
-  } catch (e) {
-    console.error('History batch delete error:', e);
-  }
-  return false;
-};
-
-export const clearHistory = async () => {
-  try {
-    const resp = await fetch('/api/history', { method: 'DELETE' });
-    return resp.ok;
-  } catch (e) {
-    console.error('History clear error:', e);
-  }
-  return false;
-};
+async function historyRequest(path: string, init?: RequestInit) {
+  const response = await fetch(path, init);
+  const body = await response.text();
+  if (!response.ok) throw new Error(`HTTP ${response.status}: ${body}`);
+  return body ? JSON.parse(body) : undefined;
+}
+export const fetchHistory = async (): Promise<GenerationHistoryItem[]> => historyRequest('/api/history');
+export const saveToHistory = async (item: Partial<GenerationHistoryItem>) => historyRequest('/api/history', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(item)});
+export const deleteHistoryItem = async (id: string) => {await historyRequest(`/api/history/${encodeURIComponent(id)}`, {method: 'DELETE'}); return true;};
+export const deleteHistoryBatch = async (ids: string[]) => {await historyRequest('/api/history/delete-batch', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ids})}); return true;};
+export const clearHistory = async () => {await historyRequest('/api/history', {method: 'DELETE'}); return true;};
 
 export const fetchLiveModels = async (
   provider: 'all' | 'civitai' | 'fal' | 'modelscope' | 'agnes' | 'sensenova' | 'huggingface' | 'nanogpt' | 'gemini' | string = 'all',
@@ -531,59 +485,19 @@ export interface CloudProjectSummary {
   createdAt: number;
 }
 
-export const fetchCloudProjects = async (): Promise<CloudProjectSummary[]> => {
-  try {
-    const resp = await fetch('/api/cloud/projects');
-    if (resp.ok) return await resp.json();
-  } catch (e) {
-    console.error('Fetch cloud projects error:', e);
-  }
-  return [];
-};
-
-export const loadCloudProject = async (id: string): Promise<any> => {
-  try {
-    const resp = await fetch(`/api/cloud/projects/${id}`);
-    if (resp.ok) return await resp.json();
-  } catch (e) {
-    console.error(`Load cloud project ${id} error:`, e);
-  }
-  return null;
-};
-
-export const saveCloudProject = async (projectData: any): Promise<{ success: boolean; project?: any }> => {
-  try {
-    const resp = await fetch('/api/cloud/projects', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(projectData),
-    });
-    if (resp.ok) return await resp.json();
-  } catch (e) {
-    console.error('Save cloud project error:', e);
-  }
-  return { success: false };
-};
-
+export async function cloudProjectRequest(url: string, init?: RequestInit) {
+  const response = await fetch(url, init);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(`HTTP ${response.status}: ${data.error || data.details || response.statusText}`);
+  return data;
+}
+export const fetchCloudProjects = async (): Promise<CloudProjectSummary[]> => cloudProjectRequest('/api/cloud/projects');
+export const loadCloudProject = async (id: string): Promise<any> => cloudProjectRequest(`/api/cloud/projects/${encodeURIComponent(id)}`);
+export const saveCloudProject = async (projectData: any): Promise<{success: boolean; project?: any}> => cloudProjectRequest('/api/cloud/projects', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(projectData)});
 export const deleteCloudProject = async (id: string): Promise<boolean> => {
-  try {
-    const resp = await fetch(`/api/cloud/projects/${id}`, { method: 'DELETE' });
-    if (resp.ok) return true;
-  } catch (e) {
-    console.error(`Delete cloud project ${id} error:`, e);
-  }
-  return false;
+  await cloudProjectRequest(`/api/cloud/projects/${encodeURIComponent(id)}`, {method: 'DELETE'}); return true;
 };
-
-export const cloneCloudProject = async (id: string): Promise<any> => {
-  try {
-    const resp = await fetch(`/api/cloud/projects/${id}/clone`, { method: 'POST' });
-    if (resp.ok) return await resp.json();
-  } catch (e) {
-    console.error(`Clone cloud project ${id} error:`, e);
-  }
-  return null;
-};
+export const cloneCloudProject = async (id: string): Promise<any> => cloudProjectRequest(`/api/cloud/projects/${encodeURIComponent(id)}/clone`, {method: 'POST'});
 
 export const fetchCloudServerHealth = async (): Promise<{
   status: string;
@@ -705,13 +619,9 @@ export const fetchKeyPoolStats = async (token?: string): Promise<Record<string, 
   if (effectiveToken) {
     headers['Authorization'] = `Bearer ${effectiveToken}`;
   }
-  try {
-    const resp = await fetch('/api/cloud-keys/stats', { headers });
-    if (resp.ok) return await resp.json();
-  } catch (e) {
-    console.error('Fetch key pool stats error:', e);
-  }
-  return {};
+  const resp = await fetch('/api/cloud-keys/stats', { headers });
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
+  return resp.json();
 };
 
 export const updateKeyPoolStrategy = async (
@@ -765,18 +675,12 @@ export const fetchCloudBalances = async (token?: string): Promise<Record<string,
   if (effectiveToken) {
     headers['Authorization'] = `Bearer ${effectiveToken}`;
   }
-  try {
     const resp = await fetch('/api/cloud-keys/balances', {
       method: 'POST',
       headers,
       body: JSON.stringify({}),
     });
-    if (resp.ok) return await resp.json();
-  } catch (e) {
-    console.error('Fetch cloud balances error:', e);
-  }
-  return {};
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
+    return resp.json();
 };
-
-
 

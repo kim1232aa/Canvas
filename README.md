@@ -1,6 +1,17 @@
 # ComfyUI Web Studio (AI 节点式工作流全栈生成平台)
 
-基于 React 18 + TypeScript + Tailwind CSS 构建的下一代 Web 版 ComfyUI 节点式 AI 图像/视频/推理生成工作流平台。支持专业级可视化节点连线、ComfyUI 原生拓扑调度、多渠道后端统一引擎驱动（Google Imagen 3 / Gemini、Fal.ai FLUX / SDXL、Tensor.Art OpenWorks、Agnes AI 极速生图、SenseNova 商汤日日新深度思考、Wan 2.1 电影级视频、Civitai 权重、ModelScope 魔搭社区、Hugging Face、NanoGPT）以及丰富的社区经典预设工作流一键载入与全透明执行。
+## Sites 在线部署
+
+本部署副本保留原始 `server.ts` 和 React 界面，通过 `hosting/build.mjs` 将 Express 接口适配为 Cloudflare Worker。运行 `npm run build` 生成前端及 Worker；`npm run dev` 仍可运行原始本地服务。
+
+- 网站保持仅所有者可访问；在线管理使用 ChatGPT 登录身份，无需另填管理令牌。生产认证邮箱与原生网站所有者匹配，固定所有者账号；旧部署才使用首次绑定。
+- 云端项目与生成历史接口使用 D1 保存索引、R2 保存项目和媒体文件；多画布浏览器缓存保留，并提供真实云端保存 / 加载按钮。
+- 云端服务商设置通过 `CANVAS_SETTINGS_SECRET` 加密保存。该值只能配置为运行环境密钥，不得写入源码。
+- AI 服务商模型、端点与参数处理逻辑沿用仓库。提供的测试 key 保存在 Sites 加密运行环境；可在设置中覆盖。实际生成验证见网站「真实生成验收」，未验证的模型和视频不代表已通过。
+- `node hosting/check-hosting.mjs` 使用本地 Worker 验证数据保存、重启恢复及访问限制，禁止测试时调用外部服务商。
+
+
+基于 React 19 + TypeScript + Tailwind CSS 构建的下一代 Web 版 ComfyUI 节点式 AI 图像/视频/推理生成工作流平台。支持专业级可视化节点连线、ComfyUI 原生拓扑调度、多渠道后端统一引擎驱动（Google Imagen 3 / Gemini、Fal.ai FLUX / SDXL、Tensor.Art OpenWorks、Agnes AI 极速生图、SenseNova 商汤日日新深度思考、Wan 2.1 电影级视频、Civitai 权重、ModelScope 魔搭社区、Hugging Face、NanoGPT）以及丰富的社区经典预设工作流一键载入与全透明执行。
 
 ---
 

@@ -6,8 +6,8 @@ export class HuggingFaceDriver extends BaseEngineDriver {
   readonly name = 'Hugging Face (Serverless)';
   readonly label = 'Hugging Face 开源平台';
   readonly badgeColor = '#ffbb00';
-  readonly description = '全球最大开源 AI 模型社区，直连 Hugging Face Inference API，支持海量开源微调底模。';
-  readonly capabilities = ['text2img', 'img2img'] as const;
+  readonly description = 'HF Inference、官方 Z-Image Space，以及显式选择的 HF → fal-ai 路由；目录资源不等于在线推理能力。';
+  readonly capabilities = ['text2img'] as const;
 
   readonly supportedModels: ModelSpec[] = [];
 
@@ -25,6 +25,7 @@ export class HuggingFaceDriver extends BaseEngineDriver {
         ...(effectiveToken ? { 'x-hf-token': effectiveToken } : {}),
       },
       body: JSON.stringify({
+        workflowSnapshot: params.workflowSnapshot,
         prompt: params.prompt,
         negative_prompt: params.negative_prompt,
         model: params.model,
@@ -32,13 +33,14 @@ export class HuggingFaceDriver extends BaseEngineDriver {
         height: params.height,
         steps: params.steps,
         guidance: params.cfg,
-        cfg: params.cfg,
-        scheduler: params.scheduler,
         seed: params.seed,
-        // Forwarded so the server can 400 on them (HF text-to-image has no image input / LoRA field).
+        scheduler: params.scheduler ?? params.extraParams?.scheduler,
+        sampler_name: params.sampler_name,
+        denoise: params.denoise,
+        inference_provider: params.extraParams?.hf_provider || (params.model === 'XLabs-AI/flux-RealismLora' ? 'fal-ai' : undefined),
         image_url: params.image_url,
-        loras: params.loras?.length ? params.loras.map((l) => l.name) : undefined,
-        // H6: Z-Image Space 位置参数，用户设了才发（缺了服务端 400）
+        loras: params.loras?.length ? params.loras : undefined,
+        // All seven Space arguments come from explicit canvas state.
         resolution: params.extraParams?.resolution,
         shift: params.extraParams?.shift,
         random_seed: params.extraParams?.random_seed,
@@ -48,7 +50,8 @@ export class HuggingFaceDriver extends BaseEngineDriver {
 
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({ error: `Hugging Face 请求失败 (${resp.status})` }));
-      const reason = err.error || err.details || `Hugging Face 错误`;
+      const details = typeof err.details === 'string' ? err.details : err.details ? JSON.stringify(err.details) : '';
+      const reason = [err.error, details].filter(Boolean).join(': ') || 'Hugging Face 错误';
       throw new Error(`HTTP ${resp.status}: ${reason}`);
     }
 

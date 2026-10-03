@@ -7,21 +7,13 @@ import {
   ModelSpec,
 } from '../types';
 
-/**
- * SenseNova (商汤日日新) 引擎驱动
- * 顶级深度推理思考大模型平台:
- * - DeepSeek V4 Flash (带百万上下文与思维链 message.reasoning)
- * - DeepSeek V4 Pro (满血旗舰架构推演)
- * - GLM-5.2 (清华智谱旗舰通用大模型)
- * - SenseNova 6.8 Flash Lite (商汤自研旗舰多模态)
- * - Kimi K3 (长文本推理)
- */
+/** Official SenseNova chat contract. Model availability is not inferred from other vendors. */
 export class SenseNovaDriver extends BaseEngineDriver {
   readonly id = 'sensenova';
   readonly name = 'SenseNova (商汤日日新)';
   readonly label = '商汤日日新官方平台';
   readonly badgeColor = '#6366f1';
-  readonly description = '商汤科技 SenseTime 旗舰大模型平台，集成 DeepSeek V4 深度思考推理、GLM-5.2、SenseNova 6.8 及多模态视觉理解。';
+  readonly description = 'SenseNova 6.8 官方聊天与多模态理解；本应用不提供生图。';
   readonly capabilities = ['reasoning'] as const;
   readonly defaultBaseUrl = 'https://token.sensenova.cn/v1';
   readonly defaultKey = '';

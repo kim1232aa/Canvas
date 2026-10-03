@@ -183,6 +183,13 @@ export interface ComfyParameters {
   background?: string;
   moderation?: string;
   resolution?: string;
+  hfProvider?: 'hf-inference' | 'fal-ai';
+  videoFrames?: number;
+  videoFps?: number;
+  falModelName?: string;
+  shift?: number;
+  randomSeed?: boolean;
+  galleryImages?: unknown[];
 }
 
 export interface SpatialFrame {
@@ -207,4 +214,3 @@ export interface SpatialFrame {
   historyImages?: string[];
   createdAt: number;
 }
-

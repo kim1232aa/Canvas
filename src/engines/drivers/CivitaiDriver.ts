@@ -9,7 +9,7 @@ import {
  * Civitai 官方原生生成引擎驱动 (CivitaiDriver)
  * 职责：
  * 1. 官方原生直连 Civitai Orchestration / Generator 平台
- * 2. 100% 原生完美支持 Civitai 平台全部模型（Krea 2 Turbo, SDXL, FLUX, MiniMax H3 视频）与全部 Civitai LoRA
+ * 2. 按模型生态与官方 recipe 提交请求；在线生成权限以服务商响应为准
  * 3. 绝无跨平台不兼容报错，原汁原味执行 Civitai 官方参数
  */
 export class CivitaiDriver extends BaseEngineDriver {
@@ -17,7 +17,7 @@ export class CivitaiDriver extends BaseEngineDriver {
   readonly name = 'Civitai 官方原生生成引擎';
   readonly label = 'Civitai 官方原生';
   readonly badgeColor = '#2563eb';
-  readonly description = 'Civitai 官方生成服务 (Orchestration API)，原生 100% 完美支持 Civitai 平台全部模型 (Krea 2 Turbo, SDXL, FLUX, MiniMax H3) 与全部 Civitai LoRA，无需任何转译或降级。';
+  readonly description = 'Civitai 官方生成服务 (Orchestration API)，按官方 recipe 提交所选模型与 LoRA；模型须启用在线生成，具体能力与权限以服务商响应为准。';
   readonly capabilities = ['text2img', 'img2img', 'text2video'] as const;
 
     readonly supportedModels: ModelSpec[] = [];
@@ -31,7 +31,7 @@ export class CivitaiDriver extends BaseEngineDriver {
       params.isVideo === true ||
       params.model.includes('text-to-video') ||
       params.model.includes('image-to-video');
-    const civKey = keys.civitai || keys.CIVITAI_API_TOKEN || keys.civitaiKey || '';
+    const civKey = params.apiKey || keys.civitai || keys.CIVITAI_API_TOKEN || keys.civitaiKey || '';
 
     // Only send values the caller actually provided — no fabricated defaults.
     const payload: Record<string, any> = {
@@ -43,7 +43,7 @@ export class CivitaiDriver extends BaseEngineDriver {
     if (params.width) payload.width = params.width;
     if (params.height) payload.height = params.height;
     if (params.steps) payload.steps = params.steps;
-    if (params.cfg) payload.cfg = params.cfg;
+    if (params.cfg !== undefined) payload.cfg = params.cfg;
     if (params.seed != null) payload.seed = params.seed;
     if (params.sampler_name || params.extraParams?.sampler_name) payload.sampler_name = params.sampler_name || params.extraParams?.sampler_name;
     if (params.scheduler || params.extraParams?.scheduler) payload.scheduler = params.scheduler || params.extraParams?.scheduler;
@@ -55,6 +55,10 @@ export class CivitaiDriver extends BaseEngineDriver {
     // H6: comfy 变体 / 张数由用户指定，没设不发
     if (params.extraParams?.comfyModel) payload.comfyModel = params.extraParams.comfyModel;
     if (params.extraParams?.quantity != null) payload.quantity = params.extraParams.quantity;
+    if (isVideo) {
+      for (const field of ['engine','version','provider','operation']) if (params.extraParams?.[field] !== undefined) payload[field]=params.extraParams[field];
+      if (params.videoFps !== undefined) payload.fps=params.videoFps;
+    }
     if (isVideo && params.videoDuration) payload.videoDuration = params.videoDuration;
     if (isVideo && params.aspectRatio) payload.aspectRatio = params.aspectRatio;
     if (civKey) payload.civitaiKey = civKey;
@@ -69,7 +73,7 @@ export class CivitaiDriver extends BaseEngineDriver {
     const response = await fetch('/api/engine/civitai/generate', {
       method: 'POST',
       headers,
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ ...payload, workflowSnapshot: params.workflowSnapshot }),
     });
 
     if (!response.ok) {
@@ -145,6 +149,13 @@ export class CivitaiDriver extends BaseEngineDriver {
     if (!mediaUrl) {
       throw new Error('Civitai 任务未能在规定时间内返回生成结果，请在历史记录中查看或稍后重试。');
     }
+    if (data.pending) {
+      try {
+        const saved = await fetch('/api/history', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({...data.pendingHistory, url:mediaUrl, workflowSnapshot:params.workflowSnapshot, requestMetadata:data.requestMetadata})});
+        if (!saved.ok) throw new Error(`HTTP ${saved.status}: ${await saved.text()}`);
+        data.historyItem = await saved.json();
+      } catch (error: any) {data.historyWarning = `图像已生成，但历史记录保存失败：${error.message}`;}
+    }
 
     return {
       mediaUrl,
@@ -160,6 +171,7 @@ export class CivitaiDriver extends BaseEngineDriver {
       adaptationNotice: data.adaptationNotice,
       timings: data.timings,
       rawResponse: data,
+      historyWarning: data.historyWarning,
     };
   }
 }

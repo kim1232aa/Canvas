@@ -1,0 +1,3199 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>真实生成验收 · ComfyCanvas</title><style>*{box-sizing:border-box}body{margin:0;background:#10141b;color:#e7edf5;font:15px/1.6 system-ui,sans-serif}main{max-width:1220px;margin:auto;padding:36px 24px}h1{font-size:30px;margin:8px 0}h2{font-size:17px;margin:0}header{margin-bottom:30px}a{color:#67e8f9}header p{max-width:850px;color:#b4c2d3}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,350px),1fr));gap:20px}article{background:#1a202b;border:1px solid #334155;border-radius:18px;padding:18px;overflow:hidden}.head{display:flex;justify-content:space-between;gap:8px;align-items:center}.badge{font-size:12px;padding:3px 8px;border-radius:6px;white-space:nowrap}.ok{background:#164e42;color:#a7f3d0}.limited{background:#493717;color:#fde68a}.model{color:#b4c2d3;word-break:break-all;font-size:13px;min-height:42px}img{width:100%;aspect-ratio:1;object-fit:contain;background:#0b1018;border-radius:10px}article p{font-size:12px;word-break:break-word;color:#b4c2d3}.error{padding:16px;background:#211f23;border-radius:10px;min-height:100px}.actions{display:flex;flex-wrap:wrap;gap:8px}.actions a,button{font:inherit;font-size:12px;color:#cffafe;background:#163743;border:1px solid #2c687d;border-radius:7px;padding:7px 9px;text-decoration:none;cursor:pointer}details{margin-top:14px}summary{cursor:pointer;color:#93c5fd;font-size:13px}pre{max-height:350px;overflow:auto;white-space:pre-wrap;word-break:break-all;font:11px/1.6 monospace;background:#10141b;padding:12px;border-radius:9px}a:focus-visible,button:focus-visible{outline:2px solid #67e8f9;outline-offset:3px}</style><main><header><a href="/">← 返回工作室</a><h1>真实生成验收</h1><p>验收记录通过与网站相同的 Worker 后端调用真实服务商，共返回 6 张图片。计费限制、账户设置和接口拒绝分别记录。图片附实际发送的参数、端点与提交时的工作流快照；可复用的画布工作流另附下载。其中 Tensor 的两张旧结果来自 OpenWorks 工具，不能证明 TAMS 模型 API 已打通。未实测的视频、图生图与其他模型不在出图验收范围。</p><p>模型 / 参数官方依据：<a href="https://developer.civitai.com/orchestration/recipes/sd1.md">Civitai</a> · <a href="https://huggingface.co/spaces/Tongyi-MAI/Z-Image-Turbo">Hugging Face Space</a> · <a href="https://github.com/Tensor-Art/tensorart-skills">Tensor.Art</a> · <a href="results.json" download>完整记录 JSON</a></p><p><a href="provider-audit.html">查看全部供应商审计与当前限制</a></p><p id="notice" role="status"></p></header><section class="grid"><article><div class="head"><h2>fal-lora</h2><span class="badge limited">计费 / 额度限制</span></div><p class="model">fal-ai/flux-lora</p><p class="error">Fal.ai 接口执行失败 [403]: {&quot;detail&quot;:&quot;User is locked. Reason: TOP_UP.&quot;}</p><p>HTTP 403 · 2026-10-02T22:53:07.917Z</p><details><summary>请求、端点与工作流记录</summary><pre>{
+  &quot;request&quot;: {
+    &quot;model&quot;: &quot;fal-ai/flux-lora&quot;,
+    &quot;prompt&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;,
+    &quot;image_size&quot;: {
+      &quot;width&quot;: 512,
+      &quot;height&quot;: 512
+    },
+    &quot;num_inference_steps&quot;: 12,
+    &quot;guidance_scale&quot;: 3.5,
+    &quot;seed&quot;: 42,
+    &quot;loras&quot;: [
+      {
+        &quot;path&quot;: &quot;https://huggingface.co/XLabs-AI/flux-RealismLora/resolve/main/lora.safetensors&quot;,
+        &quot;scale&quot;: 0.8
+      }
+    ]
+  },
+  &quot;submittedWorkflow&quot;: {
+    &quot;format&quot;: &quot;comfycanvas&quot;,
+    &quot;version&quot;: 1,
+    &quot;nodes&quot;: [
+      {
+        &quot;id&quot;: &quot;checkpoint&quot;,
+        &quot;type&quot;: &quot;CheckpointLoaderSimple&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 40,
+          &quot;y&quot;: 40
+        },
+        &quot;values&quot;: {
+          &quot;ckpt_name&quot;: &quot;fal-ai/flux-lora&quot;,
+          &quot;targetProvider&quot;: &quot;fal&quot;,
+          &quot;model&quot;: &quot;fal-ai/flux-lora&quot;,
+          &quot;prompt&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;,
+          &quot;image_size&quot;: {
+            &quot;width&quot;: 512,
+            &quot;height&quot;: 512
+          },
+          &quot;num_inference_steps&quot;: 12,
+          &quot;guidance_scale&quot;: 3.5,
+          &quot;seed&quot;: 42,
+          &quot;loras&quot;: [
+            {
+              &quot;path&quot;: &quot;https://huggingface.co/XLabs-AI/flux-RealismLora/resolve/main/lora.safetensors&quot;,
+              &quot;scale&quot;: 0.8
+            }
+          ]
+        }
+      },
+      {
+        &quot;id&quot;: &quot;prompt&quot;,
+        &quot;type&quot;: &quot;CLIPTextEncode&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 40,
+          &quot;y&quot;: 310
+        },
+        &quot;values&quot;: {
+          &quot;text&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;
+        }
+      },
+      {
+        &quot;id&quot;: &quot;sampler&quot;,
+        &quot;type&quot;: &quot;KSampler&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 430,
+          &quot;y&quot;: 80
+        },
+        &quot;values&quot;: {
+          &quot;seed&quot;: 42,
+          &quot;steps&quot;: 12,
+          &quot;cfg&quot;: 3.5
+        }
+      }
+    ],
+    &quot;connections&quot;: [
+      {
+        &quot;id&quot;: &quot;model&quot;,
+        &quot;fromNodeId&quot;: &quot;checkpoint&quot;,
+        &quot;fromSocketId&quot;: &quot;MODEL&quot;,
+        &quot;toNodeId&quot;: &quot;sampler&quot;,
+        &quot;toSocketId&quot;: &quot;model&quot;,
+        &quot;type&quot;: &quot;MODEL&quot;
+      },
+      {
+        &quot;id&quot;: &quot;positive&quot;,
+        &quot;fromNodeId&quot;: &quot;prompt&quot;,
+        &quot;fromSocketId&quot;: &quot;CONDITIONING&quot;,
+        &quot;toNodeId&quot;: &quot;sampler&quot;,
+        &quot;toSocketId&quot;: &quot;positive&quot;,
+        &quot;type&quot;: &quot;CONDITIONING&quot;
+      }
+    ]
+  },
+  &quot;response&quot;: {
+    &quot;error&quot;: &quot;Fal.ai 接口执行失败 [403]: {\&quot;detail\&quot;:\&quot;User is locked. Reason: TOP_UP.\&quot;}&quot;
+  }
+}</pre></details></article><article><div class="head"><h2>civitai</h2><span class="badge ok">已实际出图</span></div><p class="model">urn:air:sd1:checkpoint:civitai:4384@128713</p><a href="/verification/civitai.jpg"><img src="/verification/civitai.jpg" alt="civitai 的真实生成结果" loading="lazy"></a><p>HTTP 200 · 2026-10-02T22:53:16.928Z</p><div class="actions"><a href="/verification/civitai.jpg" download>下载图片</a><a href="civitai-parameters.json" download>实际参数</a><a href="civitai-workflow.json" download>工作流 JSON</a><button data-open="1">在画布打开</button></div><p>LoRA: 未使用</p><details><summary>请求、端点与工作流记录</summary><pre>{
+  &quot;request&quot;: {
+    &quot;model&quot;: &quot;urn:air:sd1:checkpoint:civitai:4384@128713&quot;,
+    &quot;prompt&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;,
+    &quot;negative_prompt&quot;: &quot;blurry, low quality&quot;,
+    &quot;width&quot;: 512,
+    &quot;height&quot;: 512,
+    &quot;steps&quot;: 12,
+    &quot;cfg&quot;: 7,
+    &quot;seed&quot;: 42,
+    &quot;sampler_name&quot;: &quot;euler&quot;,
+    &quot;scheduler&quot;: &quot;discrete&quot;
+  },
+  &quot;upstream&quot;: {
+    &quot;route&quot;: &quot;/api/civitai/generate&quot;,
+    &quot;submissions&quot;: [
+      {
+        &quot;endpoint&quot;: &quot;https://orchestration.civitai.com/v2/consumer/workflows?wait=100&quot;,
+        &quot;parameters&quot;: {
+          &quot;steps&quot;: [
+            {
+              &quot;$type&quot;: &quot;imageGen&quot;,
+              &quot;input&quot;: {
+                &quot;engine&quot;: &quot;sdcpp&quot;,
+                &quot;ecosystem&quot;: &quot;sd1&quot;,
+                &quot;operation&quot;: &quot;createImage&quot;,
+                &quot;prompt&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;,
+                &quot;model&quot;: &quot;urn:air:sd1:checkpoint:civitai:4384@128713&quot;,
+                &quot;negativePrompt&quot;: &quot;blurry, low quality&quot;,
+                &quot;width&quot;: 512,
+                &quot;height&quot;: 512,
+                &quot;steps&quot;: 12,
+                &quot;cfgScale&quot;: 7,
+                &quot;seed&quot;: 42,
+                &quot;sampleMethod&quot;: &quot;euler&quot;,
+                &quot;schedule&quot;: &quot;discrete&quot;
+              }
+            }
+          ]
+        },
+        &quot;status&quot;: 200
+      }
+    ]
+  },
+  &quot;submittedWorkflow&quot;: {
+    &quot;format&quot;: &quot;comfycanvas&quot;,
+    &quot;version&quot;: 1,
+    &quot;nodes&quot;: [
+      {
+        &quot;id&quot;: &quot;checkpoint&quot;,
+        &quot;type&quot;: &quot;CheckpointLoaderSimple&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 40,
+          &quot;y&quot;: 40
+        },
+        &quot;values&quot;: {
+          &quot;ckpt_name&quot;: &quot;urn:air:sd1:checkpoint:civitai:4384@128713&quot;,
+          &quot;targetProvider&quot;: &quot;civitai&quot;,
+          &quot;model&quot;: &quot;urn:air:sd1:checkpoint:civitai:4384@128713&quot;,
+          &quot;prompt&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;,
+          &quot;negative_prompt&quot;: &quot;blurry, low quality&quot;,
+          &quot;width&quot;: 512,
+          &quot;height&quot;: 512,
+          &quot;steps&quot;: 12,
+          &quot;cfg&quot;: 7,
+          &quot;seed&quot;: 42,
+          &quot;sampler_name&quot;: &quot;euler&quot;,
+          &quot;scheduler&quot;: &quot;discrete&quot;
+        }
+      },
+      {
+        &quot;id&quot;: &quot;prompt&quot;,
+        &quot;type&quot;: &quot;CLIPTextEncode&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 40,
+          &quot;y&quot;: 310
+        },
+        &quot;values&quot;: {
+          &quot;text&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;
+        }
+      },
+      {
+        &quot;id&quot;: &quot;sampler&quot;,
+        &quot;type&quot;: &quot;KSampler&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 430,
+          &quot;y&quot;: 80
+        },
+        &quot;values&quot;: {
+          &quot;seed&quot;: 42,
+          &quot;steps&quot;: 12
+        }
+      }
+    ],
+    &quot;connections&quot;: [
+      {
+        &quot;id&quot;: &quot;model&quot;,
+        &quot;fromNodeId&quot;: &quot;checkpoint&quot;,
+        &quot;fromSocketId&quot;: &quot;MODEL&quot;,
+        &quot;toNodeId&quot;: &quot;sampler&quot;,
+        &quot;toSocketId&quot;: &quot;model&quot;,
+        &quot;type&quot;: &quot;MODEL&quot;
+      },
+      {
+        &quot;id&quot;: &quot;positive&quot;,
+        &quot;fromNodeId&quot;: &quot;prompt&quot;,
+        &quot;fromSocketId&quot;: &quot;CONDITIONING&quot;,
+        &quot;toNodeId&quot;: &quot;sampler&quot;,
+        &quot;toSocketId&quot;: &quot;positive&quot;,
+        &quot;type&quot;: &quot;CONDITIONING&quot;
+      }
+    ]
+  },
+  &quot;replayWorkflow&quot;: {
+    &quot;format&quot;: &quot;comfycanvas&quot;,
+    &quot;version&quot;: 1,
+    &quot;nodes&quot;: [
+      {
+        &quot;id&quot;: &quot;checkpoint&quot;,
+        &quot;type&quot;: &quot;CheckpointLoaderSimple&quot;,
+        &quot;title&quot;: &quot;Load Checkpoint&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 20,
+          &quot;y&quot;: 20
+        },
+        &quot;width&quot;: 300,
+        &quot;inputs&quot;: [],
+        &quot;outputs&quot;: [
+          {
+            &quot;id&quot;: &quot;MODEL&quot;,
+            &quot;name&quot;: &quot;MODEL&quot;,
+            &quot;type&quot;: &quot;MODEL&quot;,
+            &quot;label&quot;: &quot;MODEL&quot;
+          },
+          {
+            &quot;id&quot;: &quot;CLIP&quot;,
+            &quot;name&quot;: &quot;CLIP&quot;,
+            &quot;type&quot;: &quot;CLIP&quot;,
+            &quot;label&quot;: &quot;CLIP&quot;
+          },
+          {
+            &quot;id&quot;: &quot;VAE&quot;,
+            &quot;name&quot;: &quot;VAE&quot;,
+            &quot;type&quot;: &quot;VAE&quot;,
+            &quot;label&quot;: &quot;VAE&quot;
+          }
+        ],
+        &quot;values&quot;: {
+          &quot;ckpt_name&quot;: &quot;urn:air:sd1:checkpoint:civitai:4384@128713&quot;,
+          &quot;targetProvider&quot;: &quot;civitai&quot;
+        },
+        &quot;state&quot;: &quot;idle&quot;
+      },
+      {
+        &quot;id&quot;: &quot;prompt&quot;,
+        &quot;type&quot;: &quot;CLIPTextEncode&quot;,
+        &quot;title&quot;: &quot;CLIP Text Encode (Positive Prompt)&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 350,
+          &quot;y&quot;: 20
+        },
+        &quot;width&quot;: 300,
+        &quot;inputs&quot;: [
+          {
+            &quot;id&quot;: &quot;clip&quot;,
+            &quot;name&quot;: &quot;clip&quot;,
+            &quot;type&quot;: &quot;CLIP&quot;,
+            &quot;label&quot;: &quot;CLIP&quot;
+          }
+        ],
+        &quot;outputs&quot;: [
+          {
+            &quot;id&quot;: &quot;CONDITIONING&quot;,
+            &quot;name&quot;: &quot;CONDITIONING&quot;,
+            &quot;type&quot;: &quot;CONDITIONING&quot;,
+            &quot;label&quot;: &quot;CONDITIONING&quot;
+          }
+        ],
+        &quot;values&quot;: {
+          &quot;text&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;
+        },
+        &quot;state&quot;: &quot;idle&quot;
+      },
+      {
+        &quot;id&quot;: &quot;sampler&quot;,
+        &quot;type&quot;: &quot;KSampler&quot;,
+        &quot;title&quot;: &quot;KSampler&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 700,
+          &quot;y&quot;: 20
+        },
+        &quot;width&quot;: 300,
+        &quot;inputs&quot;: [
+          {
+            &quot;id&quot;: &quot;model&quot;,
+            &quot;name&quot;: &quot;model&quot;,
+            &quot;type&quot;: &quot;MODEL&quot;,
+            &quot;label&quot;: &quot;MODEL&quot;
+          },
+          {
+            &quot;id&quot;: &quot;positive&quot;,
+            &quot;name&quot;: &quot;positive&quot;,
+            &quot;type&quot;: &quot;CONDITIONING&quot;,
+            &quot;label&quot;: &quot;positive&quot;
+          },
+          {
+            &quot;id&quot;: &quot;negative&quot;,
+            &quot;name&quot;: &quot;negative&quot;,
+            &quot;type&quot;: &quot;CONDITIONING&quot;,
+            &quot;label&quot;: &quot;negative&quot;
+          },
+          {
+            &quot;id&quot;: &quot;latent_image&quot;,
+            &quot;name&quot;: &quot;latent_image&quot;,
+            &quot;type&quot;: &quot;LATENT&quot;,
+            &quot;label&quot;: &quot;latent_image&quot;
+          }
+        ],
+        &quot;outputs&quot;: [
+          {
+            &quot;id&quot;: &quot;LATENT&quot;,
+            &quot;name&quot;: &quot;LATENT&quot;,
+            &quot;type&quot;: &quot;LATENT&quot;,
+            &quot;label&quot;: &quot;LATENT&quot;
+          }
+        ],
+        &quot;values&quot;: {
+          &quot;seed&quot;: 42,
+          &quot;control_after_generate&quot;: &quot;fixed&quot;,
+          &quot;steps&quot;: 12,
+          &quot;cfg&quot;: 7,
+          &quot;sampler_name&quot;: &quot;euler&quot;,
+          &quot;scheduler&quot;: &quot;discrete&quot;
+        },
+        &quot;state&quot;: &quot;idle&quot;
+      },
+      {
+        &quot;id&quot;: &quot;latent&quot;,
+        &quot;type&quot;: &quot;EmptyLatentImage&quot;,
+        &quot;title&quot;: &quot;Empty Latent Image&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 350,
+          &quot;y&quot;: 400
+        },
+        &quot;width&quot;: 300,
+        &quot;inputs&quot;: [],
+        &quot;outputs&quot;: [
+          {
+            &quot;id&quot;: &quot;LATENT&quot;,
+            &quot;name&quot;: &quot;LATENT&quot;,
+            &quot;type&quot;: &quot;LATENT&quot;,
+            &quot;label&quot;: &quot;LATENT&quot;
+          }
+        ],
+        &quot;values&quot;: {
+          &quot;width&quot;: 512,
+          &quot;height&quot;: 512,
+          &quot;batch_size&quot;: 1
+        },
+        &quot;state&quot;: &quot;idle&quot;
+      },
+      {
+        &quot;id&quot;: &quot;negative&quot;,
+        &quot;type&quot;: &quot;CLIPTextEncodeNegative&quot;,
+        &quot;title&quot;: &quot;CLIP Text Encode (Negative Prompt)&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 20,
+          &quot;y&quot;: 650
+        },
+        &quot;width&quot;: 300,
+        &quot;inputs&quot;: [
+          {
+            &quot;id&quot;: &quot;clip&quot;,
+            &quot;name&quot;: &quot;clip&quot;,
+            &quot;type&quot;: &quot;CLIP&quot;,
+            &quot;label&quot;: &quot;CLIP&quot;
+          }
+        ],
+        &quot;outputs&quot;: [
+          {
+            &quot;id&quot;: &quot;CONDITIONING&quot;,
+            &quot;name&quot;: &quot;CONDITIONING&quot;,
+            &quot;type&quot;: &quot;CONDITIONING&quot;,
+            &quot;label&quot;: &quot;CONDITIONING&quot;
+          }
+        ],
+        &quot;values&quot;: {
+          &quot;text&quot;: &quot;blurry, low quality&quot;
+        },
+        &quot;state&quot;: &quot;idle&quot;
+      }
+    ],
+    &quot;connections&quot;: [
+      {
+        &quot;id&quot;: &quot;model&quot;,
+        &quot;fromNodeId&quot;: &quot;checkpoint&quot;,
+        &quot;fromSocketId&quot;: &quot;MODEL&quot;,
+        &quot;toNodeId&quot;: &quot;sampler&quot;,
+        &quot;toSocketId&quot;: &quot;model&quot;,
+        &quot;type&quot;: &quot;MODEL&quot;
+      },
+      {
+        &quot;id&quot;: &quot;positive&quot;,
+        &quot;fromNodeId&quot;: &quot;prompt&quot;,
+        &quot;fromSocketId&quot;: &quot;CONDITIONING&quot;,
+        &quot;toNodeId&quot;: &quot;sampler&quot;,
+        &quot;toSocketId&quot;: &quot;positive&quot;,
+        &quot;type&quot;: &quot;CONDITIONING&quot;
+      },
+      {
+        &quot;id&quot;: &quot;clip&quot;,
+        &quot;fromNodeId&quot;: &quot;checkpoint&quot;,
+        &quot;fromSocketId&quot;: &quot;CLIP&quot;,
+        &quot;toNodeId&quot;: &quot;prompt&quot;,
+        &quot;toSocketId&quot;: &quot;clip&quot;,
+        &quot;type&quot;: &quot;CLIP&quot;
+      },
+      {
+        &quot;id&quot;: &quot;latent&quot;,
+        &quot;fromNodeId&quot;: &quot;latent&quot;,
+        &quot;fromSocketId&quot;: &quot;LATENT&quot;,
+        &quot;toNodeId&quot;: &quot;sampler&quot;,
+        &quot;toSocketId&quot;: &quot;latent_image&quot;,
+        &quot;type&quot;: &quot;LATENT&quot;
+      },
+      {
+        &quot;id&quot;: &quot;negative&quot;,
+        &quot;fromNodeId&quot;: &quot;negative&quot;,
+        &quot;fromSocketId&quot;: &quot;CONDITIONING&quot;,
+        &quot;toNodeId&quot;: &quot;sampler&quot;,
+        &quot;toSocketId&quot;: &quot;negative&quot;,
+        &quot;type&quot;: &quot;CONDITIONING&quot;
+      }
+    ],
+    &quot;canvasMode&quot;: &quot;graph&quot;,
+    &quot;spatialFrames&quot;: [],
+    &quot;executingNodeId&quot;: &quot;sampler&quot;
+  },
+  &quot;response&quot;: {
+    &quot;success&quot;: true,
+    &quot;imageUrl&quot;: &quot;/verification/civitai.jpg&quot;,
+    &quot;mediaUrl&quot;: &quot;/verification/civitai.jpg&quot;,
+    &quot;provider&quot;: &quot;Civitai 官方原生生成引擎&quot;,
+    &quot;model&quot;: &quot;urn:air:sd1:checkpoint:civitai:4384@128713&quot;,
+    &quot;historyItem&quot;: {
+      &quot;url&quot;: &quot;/verification/civitai.jpg&quot;,
+      &quot;prompt&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;,
+      &quot;negativePrompt&quot;: &quot;blurry, low quality&quot;,
+      &quot;provider&quot;: &quot;Civitai 官方原生生成引擎&quot;,
+      &quot;model&quot;: &quot;urn:air:sd1:checkpoint:civitai:4384@128713&quot;,
+      &quot;seed&quot;: 42,
+      &quot;steps&quot;: 12,
+      &quot;cfg&quot;: 7,
+      &quot;workflowSnapshot&quot;: {
+        &quot;format&quot;: &quot;comfycanvas&quot;,
+        &quot;version&quot;: 1,
+        &quot;nodes&quot;: [
+          {
+            &quot;id&quot;: &quot;checkpoint&quot;,
+            &quot;type&quot;: &quot;CheckpointLoaderSimple&quot;,
+            &quot;pos&quot;: {
+              &quot;x&quot;: 40,
+              &quot;y&quot;: 40
+            },
+            &quot;values&quot;: {
+              &quot;ckpt_name&quot;: &quot;urn:air:sd1:checkpoint:civitai:4384@128713&quot;,
+              &quot;targetProvider&quot;: &quot;civitai&quot;,
+              &quot;model&quot;: &quot;urn:air:sd1:checkpoint:civitai:4384@128713&quot;,
+              &quot;prompt&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;,
+              &quot;negative_prompt&quot;: &quot;blurry, low quality&quot;,
+              &quot;width&quot;: 512,
+              &quot;height&quot;: 512,
+              &quot;steps&quot;: 12,
+              &quot;cfg&quot;: 7,
+              &quot;seed&quot;: 42,
+              &quot;sampler_name&quot;: &quot;euler&quot;,
+              &quot;scheduler&quot;: &quot;discrete&quot;
+            }
+          },
+          {
+            &quot;id&quot;: &quot;prompt&quot;,
+            &quot;type&quot;: &quot;CLIPTextEncode&quot;,
+            &quot;pos&quot;: {
+              &quot;x&quot;: 40,
+              &quot;y&quot;: 310
+            },
+            &quot;values&quot;: {
+              &quot;text&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;
+            }
+          },
+          {
+            &quot;id&quot;: &quot;sampler&quot;,
+            &quot;type&quot;: &quot;KSampler&quot;,
+            &quot;pos&quot;: {
+              &quot;x&quot;: 430,
+              &quot;y&quot;: 80
+            },
+            &quot;values&quot;: {
+              &quot;seed&quot;: 42,
+              &quot;steps&quot;: 12
+            }
+          }
+        ],
+        &quot;connections&quot;: [
+          {
+            &quot;id&quot;: &quot;model&quot;,
+            &quot;fromNodeId&quot;: &quot;checkpoint&quot;,
+            &quot;fromSocketId&quot;: &quot;MODEL&quot;,
+            &quot;toNodeId&quot;: &quot;sampler&quot;,
+            &quot;toSocketId&quot;: &quot;model&quot;,
+            &quot;type&quot;: &quot;MODEL&quot;
+          },
+          {
+            &quot;id&quot;: &quot;positive&quot;,
+            &quot;fromNodeId&quot;: &quot;prompt&quot;,
+            &quot;fromSocketId&quot;: &quot;CONDITIONING&quot;,
+            &quot;toNodeId&quot;: &quot;sampler&quot;,
+            &quot;toSocketId&quot;: &quot;positive&quot;,
+            &quot;type&quot;: &quot;CONDITIONING&quot;
+          }
+        ]
+      },
+      &quot;requestMetadata&quot;: {
+        &quot;route&quot;: &quot;/api/civitai/generate&quot;,
+        &quot;submissions&quot;: [
+          {
+            &quot;endpoint&quot;: &quot;https://orchestration.civitai.com/v2/consumer/workflows?wait=100&quot;,
+            &quot;parameters&quot;: {
+              &quot;steps&quot;: [
+                {
+                  &quot;$type&quot;: &quot;imageGen&quot;,
+                  &quot;input&quot;: {
+                    &quot;engine&quot;: &quot;sdcpp&quot;,
+                    &quot;ecosystem&quot;: &quot;sd1&quot;,
+                    &quot;operation&quot;: &quot;createImage&quot;,
+                    &quot;prompt&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;,
+                    &quot;model&quot;: &quot;urn:air:sd1:checkpoint:civitai:4384@128713&quot;,
+                    &quot;negativePrompt&quot;: &quot;blurry, low quality&quot;,
+                    &quot;width&quot;: 512,
+                    &quot;height&quot;: 512,
+                    &quot;steps&quot;: 12,
+                    &quot;cfgScale&quot;: 7,
+                    &quot;seed&quot;: 42,
+                    &quot;sampleMethod&quot;: &quot;euler&quot;,
+                    &quot;schedule&quot;: &quot;discrete&quot;
+                  }
+                }
+              ]
+            },
+            &quot;status&quot;: 200
+          }
+        ]
+      },
+      &quot;id&quot;: &quot;hist_1790981621909_7n9cp&quot;,
+      &quot;timestamp&quot;: 1790981621909,
+      &quot;actualProvider&quot;: &quot;Civitai 官方原生生成引擎&quot;,
+      &quot;actualModel&quot;: &quot;urn:air:sd1:checkpoint:civitai:4384@128713&quot;,
+      &quot;loras&quot;: []
+    }
+  }
+}</pre></details></article><article><div class="head"><h2>modelscope_ai-1</h2><span class="badge limited">计费 / 额度限制</span></div><p class="model">Tongyi-MAI/Z-Image-Turbo</p><p class="error">魔搭国际站 (modelscope.ai) 账户额度不足 [429]: {&quot;errors&quot;:{&quot;message&quot;:&quot;insufficient balance&quot;},&quot;request_id&quot;:&quot;1a159186-e923-4733-9f3e-8994822dc044&quot;}</p><p>HTTP 429 · 2026-10-02T22:53:41.933Z</p><details><summary>请求、端点与工作流记录</summary><pre>{
+  &quot;request&quot;: {
+    &quot;model&quot;: &quot;Tongyi-MAI/Z-Image-Turbo&quot;,
+    &quot;prompt&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;,
+    &quot;site&quot;: &quot;ai&quot;
+  },
+  &quot;submittedWorkflow&quot;: {
+    &quot;format&quot;: &quot;comfycanvas&quot;,
+    &quot;version&quot;: 1,
+    &quot;nodes&quot;: [
+      {
+        &quot;id&quot;: &quot;checkpoint&quot;,
+        &quot;type&quot;: &quot;CheckpointLoaderSimple&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 40,
+          &quot;y&quot;: 40
+        },
+        &quot;values&quot;: {
+          &quot;ckpt_name&quot;: &quot;Tongyi-MAI/Z-Image-Turbo&quot;,
+          &quot;targetProvider&quot;: &quot;modelscope_ai&quot;,
+          &quot;model&quot;: &quot;Tongyi-MAI/Z-Image-Turbo&quot;,
+          &quot;prompt&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;,
+          &quot;site&quot;: &quot;ai&quot;
+        }
+      },
+      {
+        &quot;id&quot;: &quot;prompt&quot;,
+        &quot;type&quot;: &quot;CLIPTextEncode&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 40,
+          &quot;y&quot;: 310
+        },
+        &quot;values&quot;: {
+          &quot;text&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;
+        }
+      },
+      {
+        &quot;id&quot;: &quot;sampler&quot;,
+        &quot;type&quot;: &quot;KSampler&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 430,
+          &quot;y&quot;: 80
+        },
+        &quot;values&quot;: {}
+      }
+    ],
+    &quot;connections&quot;: [
+      {
+        &quot;id&quot;: &quot;model&quot;,
+        &quot;fromNodeId&quot;: &quot;checkpoint&quot;,
+        &quot;fromSocketId&quot;: &quot;MODEL&quot;,
+        &quot;toNodeId&quot;: &quot;sampler&quot;,
+        &quot;toSocketId&quot;: &quot;model&quot;,
+        &quot;type&quot;: &quot;MODEL&quot;
+      },
+      {
+        &quot;id&quot;: &quot;positive&quot;,
+        &quot;fromNodeId&quot;: &quot;prompt&quot;,
+        &quot;fromSocketId&quot;: &quot;CONDITIONING&quot;,
+        &quot;toNodeId&quot;: &quot;sampler&quot;,
+        &quot;toSocketId&quot;: &quot;positive&quot;,
+        &quot;type&quot;: &quot;CONDITIONING&quot;
+      }
+    ]
+  },
+  &quot;response&quot;: {
+    &quot;error&quot;: &quot;魔搭国际站 (modelscope.ai) 账户额度不足 [429]: {\&quot;errors\&quot;:{\&quot;message\&quot;:\&quot;insufficient balance\&quot;},\&quot;request_id\&quot;:\&quot;1a159186-e923-4733-9f3e-8994822dc044\&quot;}&quot;,
+    &quot;details&quot;: &quot;{\&quot;errors\&quot;:{\&quot;message\&quot;:\&quot;insufficient balance\&quot;},\&quot;request_id\&quot;:\&quot;1a159186-e923-4733-9f3e-8994822dc044\&quot;}&quot;,
+    &quot;model&quot;: &quot;Tongyi-MAI/Z-Image-Turbo&quot;,
+    &quot;provider&quot;: &quot;ModelScope AI&quot;
+  }
+}</pre></details></article><article><div class="head"><h2>modelscope_ai-2</h2><span class="badge limited">账户需设置</span></div><p class="model">Tongyi-MAI/Z-Image-Turbo</p><p class="error">魔搭国际站 (modelscope.ai) API 提交失败 [401]: {&quot;errors&quot;:{&quot;message&quot;:&quot;Please bind your Alibaba Cloud account before use. You can bind it at: https://modelscope.ai/my/settings/account&quot;},&quot;request_id&quot;:&quot;0f9db2d2-ba0d-4e9a-b552-2d0e287f1b44&quot;}</p><p>HTTP 401 · 2026-10-02T22:53:50.826Z</p><details><summary>请求、端点与工作流记录</summary><pre>{
+  &quot;request&quot;: {
+    &quot;model&quot;: &quot;Tongyi-MAI/Z-Image-Turbo&quot;,
+    &quot;prompt&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;,
+    &quot;site&quot;: &quot;ai&quot;
+  },
+  &quot;submittedWorkflow&quot;: {
+    &quot;format&quot;: &quot;comfycanvas&quot;,
+    &quot;version&quot;: 1,
+    &quot;nodes&quot;: [
+      {
+        &quot;id&quot;: &quot;checkpoint&quot;,
+        &quot;type&quot;: &quot;CheckpointLoaderSimple&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 40,
+          &quot;y&quot;: 40
+        },
+        &quot;values&quot;: {
+          &quot;ckpt_name&quot;: &quot;Tongyi-MAI/Z-Image-Turbo&quot;,
+          &quot;targetProvider&quot;: &quot;modelscope_ai&quot;,
+          &quot;model&quot;: &quot;Tongyi-MAI/Z-Image-Turbo&quot;,
+          &quot;prompt&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;,
+          &quot;site&quot;: &quot;ai&quot;
+        }
+      },
+      {
+        &quot;id&quot;: &quot;prompt&quot;,
+        &quot;type&quot;: &quot;CLIPTextEncode&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 40,
+          &quot;y&quot;: 310
+        },
+        &quot;values&quot;: {
+          &quot;text&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;
+        }
+      },
+      {
+        &quot;id&quot;: &quot;sampler&quot;,
+        &quot;type&quot;: &quot;KSampler&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 430,
+          &quot;y&quot;: 80
+        },
+        &quot;values&quot;: {}
+      }
+    ],
+    &quot;connections&quot;: [
+      {
+        &quot;id&quot;: &quot;model&quot;,
+        &quot;fromNodeId&quot;: &quot;checkpoint&quot;,
+        &quot;fromSocketId&quot;: &quot;MODEL&quot;,
+        &quot;toNodeId&quot;: &quot;sampler&quot;,
+        &quot;toSocketId&quot;: &quot;model&quot;,
+        &quot;type&quot;: &quot;MODEL&quot;
+      },
+      {
+        &quot;id&quot;: &quot;positive&quot;,
+        &quot;fromNodeId&quot;: &quot;prompt&quot;,
+        &quot;fromSocketId&quot;: &quot;CONDITIONING&quot;,
+        &quot;toNodeId&quot;: &quot;sampler&quot;,
+        &quot;toSocketId&quot;: &quot;positive&quot;,
+        &quot;type&quot;: &quot;CONDITIONING&quot;
+      }
+    ]
+  },
+  &quot;response&quot;: {
+    &quot;error&quot;: &quot;魔搭国际站 (modelscope.ai) API 提交失败 [401]: {\&quot;errors\&quot;:{\&quot;message\&quot;:\&quot;Please bind your Alibaba Cloud account before use. You can bind it at: https://modelscope.ai/my/settings/account\&quot;},\&quot;request_id\&quot;:\&quot;0f9db2d2-ba0d-4e9a-b552-2d0e287f1b44\&quot;}&quot;,
+    &quot;details&quot;: &quot;{\&quot;errors\&quot;:{\&quot;message\&quot;:\&quot;Please bind your Alibaba Cloud account before use. You can bind it at: https://modelscope.ai/my/settings/account\&quot;},\&quot;request_id\&quot;:\&quot;0f9db2d2-ba0d-4e9a-b552-2d0e287f1b44\&quot;}&quot;,
+    &quot;model&quot;: &quot;Tongyi-MAI/Z-Image-Turbo&quot;,
+    &quot;provider&quot;: &quot;ModelScope AI&quot;
+  }
+}</pre></details></article><article><div class="head"><h2>modelscope</h2><span class="badge limited">计费 / 额度限制</span></div><p class="model">Tongyi-MAI/Z-Image-Turbo</p><p class="error">魔搭国内站 (modelscope.cn) 账户额度不足 [429]: {&quot;errors&quot;:{&quot;message&quot;:&quot;insufficient balance&quot;},&quot;request_id&quot;:&quot;87ddbd60-37ed-4970-a136-dbdf6082bdb6&quot;}</p><p>HTTP 429 · 2026-10-02T22:53:51.244Z</p><details><summary>请求、端点与工作流记录</summary><pre>{
+  &quot;request&quot;: {
+    &quot;model&quot;: &quot;Tongyi-MAI/Z-Image-Turbo&quot;,
+    &quot;prompt&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;,
+    &quot;site&quot;: &quot;cn&quot;
+  },
+  &quot;submittedWorkflow&quot;: {
+    &quot;format&quot;: &quot;comfycanvas&quot;,
+    &quot;version&quot;: 1,
+    &quot;nodes&quot;: [
+      {
+        &quot;id&quot;: &quot;checkpoint&quot;,
+        &quot;type&quot;: &quot;CheckpointLoaderSimple&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 40,
+          &quot;y&quot;: 40
+        },
+        &quot;values&quot;: {
+          &quot;ckpt_name&quot;: &quot;Tongyi-MAI/Z-Image-Turbo&quot;,
+          &quot;targetProvider&quot;: &quot;modelscope&quot;,
+          &quot;model&quot;: &quot;Tongyi-MAI/Z-Image-Turbo&quot;,
+          &quot;prompt&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;,
+          &quot;site&quot;: &quot;cn&quot;
+        }
+      },
+      {
+        &quot;id&quot;: &quot;prompt&quot;,
+        &quot;type&quot;: &quot;CLIPTextEncode&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 40,
+          &quot;y&quot;: 310
+        },
+        &quot;values&quot;: {
+          &quot;text&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;
+        }
+      },
+      {
+        &quot;id&quot;: &quot;sampler&quot;,
+        &quot;type&quot;: &quot;KSampler&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 430,
+          &quot;y&quot;: 80
+        },
+        &quot;values&quot;: {}
+      }
+    ],
+    &quot;connections&quot;: [
+      {
+        &quot;id&quot;: &quot;model&quot;,
+        &quot;fromNodeId&quot;: &quot;checkpoint&quot;,
+        &quot;fromSocketId&quot;: &quot;MODEL&quot;,
+        &quot;toNodeId&quot;: &quot;sampler&quot;,
+        &quot;toSocketId&quot;: &quot;model&quot;,
+        &quot;type&quot;: &quot;MODEL&quot;
+      },
+      {
+        &quot;id&quot;: &quot;positive&quot;,
+        &quot;fromNodeId&quot;: &quot;prompt&quot;,
+        &quot;fromSocketId&quot;: &quot;CONDITIONING&quot;,
+        &quot;toNodeId&quot;: &quot;sampler&quot;,
+        &quot;toSocketId&quot;: &quot;positive&quot;,
+        &quot;type&quot;: &quot;CONDITIONING&quot;
+      }
+    ]
+  },
+  &quot;response&quot;: {
+    &quot;error&quot;: &quot;魔搭国内站 (modelscope.cn) 账户额度不足 [429]: {\&quot;errors\&quot;:{\&quot;message\&quot;:\&quot;insufficient balance\&quot;},\&quot;request_id\&quot;:\&quot;87ddbd60-37ed-4970-a136-dbdf6082bdb6\&quot;}&quot;,
+    &quot;details&quot;: &quot;{\&quot;errors\&quot;:{\&quot;message\&quot;:\&quot;insufficient balance\&quot;},\&quot;request_id\&quot;:\&quot;87ddbd60-37ed-4970-a136-dbdf6082bdb6\&quot;}&quot;,
+    &quot;model&quot;: &quot;Tongyi-MAI/Z-Image-Turbo&quot;,
+    &quot;provider&quot;: &quot;ModelScope CN&quot;
+  }
+}</pre></details></article><article><div class="head"><h2>huggingface</h2><span class="badge ok">已实际出图</span></div><p class="model">Tongyi-MAI/Z-Image-Turbo</p><a href="/verification/huggingface.png"><img src="/verification/huggingface.png" alt="huggingface 的真实生成结果" loading="lazy"></a><p>HTTP 200 · 2026-10-02T22:54:00.492Z</p><div class="actions"><a href="/verification/huggingface.png" download>下载图片</a><a href="huggingface-parameters.json" download>实际参数</a><a href="huggingface-workflow.json" download>工作流 JSON</a><button data-open="5">在画布打开</button></div><p>LoRA: 未使用</p><details><summary>请求、端点与工作流记录</summary><pre>{
+  &quot;request&quot;: {
+    &quot;model&quot;: &quot;Tongyi-MAI/Z-Image-Turbo&quot;,
+    &quot;prompt&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;,
+    &quot;resolution&quot;: &quot;1024x1024 ( 1:1 )&quot;,
+    &quot;seed&quot;: 42,
+    &quot;steps&quot;: 8,
+    &quot;shift&quot;: 3,
+    &quot;random_seed&quot;: false,
+    &quot;gallery_images&quot;: []
+  },
+  &quot;upstream&quot;: {
+    &quot;route&quot;: &quot;/api/huggingface/generate&quot;,
+    &quot;submissions&quot;: [
+      {
+        &quot;endpoint&quot;: &quot;https://tongyi-mai-z-image-turbo.hf.space/gradio_api/call/generate&quot;,
+        &quot;parameters&quot;: {
+          &quot;data&quot;: [
+            &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;,
+            &quot;1024x1024 ( 1:1 )&quot;,
+            42,
+            8,
+            3,
+            false,
+            []
+          ]
+        },
+        &quot;status&quot;: 200
+      }
+    ]
+  },
+  &quot;submittedWorkflow&quot;: {
+    &quot;format&quot;: &quot;comfycanvas&quot;,
+    &quot;version&quot;: 1,
+    &quot;nodes&quot;: [
+      {
+        &quot;id&quot;: &quot;checkpoint&quot;,
+        &quot;type&quot;: &quot;CheckpointLoaderSimple&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 40,
+          &quot;y&quot;: 40
+        },
+        &quot;values&quot;: {
+          &quot;ckpt_name&quot;: &quot;Tongyi-MAI/Z-Image-Turbo&quot;,
+          &quot;targetProvider&quot;: &quot;huggingface&quot;,
+          &quot;model&quot;: &quot;Tongyi-MAI/Z-Image-Turbo&quot;,
+          &quot;prompt&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;,
+          &quot;resolution&quot;: &quot;1024x1024 ( 1:1 )&quot;,
+          &quot;seed&quot;: 42,
+          &quot;steps&quot;: 8,
+          &quot;shift&quot;: 3,
+          &quot;random_seed&quot;: false,
+          &quot;gallery_images&quot;: []
+        }
+      },
+      {
+        &quot;id&quot;: &quot;prompt&quot;,
+        &quot;type&quot;: &quot;CLIPTextEncode&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 40,
+          &quot;y&quot;: 310
+        },
+        &quot;values&quot;: {
+          &quot;text&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;
+        }
+      },
+      {
+        &quot;id&quot;: &quot;sampler&quot;,
+        &quot;type&quot;: &quot;KSampler&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 430,
+          &quot;y&quot;: 80
+        },
+        &quot;values&quot;: {
+          &quot;seed&quot;: 42,
+          &quot;steps&quot;: 8
+        }
+      }
+    ],
+    &quot;connections&quot;: [
+      {
+        &quot;id&quot;: &quot;model&quot;,
+        &quot;fromNodeId&quot;: &quot;checkpoint&quot;,
+        &quot;fromSocketId&quot;: &quot;MODEL&quot;,
+        &quot;toNodeId&quot;: &quot;sampler&quot;,
+        &quot;toSocketId&quot;: &quot;model&quot;,
+        &quot;type&quot;: &quot;MODEL&quot;
+      },
+      {
+        &quot;id&quot;: &quot;positive&quot;,
+        &quot;fromNodeId&quot;: &quot;prompt&quot;,
+        &quot;fromSocketId&quot;: &quot;CONDITIONING&quot;,
+        &quot;toNodeId&quot;: &quot;sampler&quot;,
+        &quot;toSocketId&quot;: &quot;positive&quot;,
+        &quot;type&quot;: &quot;CONDITIONING&quot;
+      }
+    ]
+  },
+  &quot;replayWorkflow&quot;: {
+    &quot;format&quot;: &quot;comfycanvas&quot;,
+    &quot;version&quot;: 1,
+    &quot;nodes&quot;: [
+      {
+        &quot;id&quot;: &quot;checkpoint&quot;,
+        &quot;type&quot;: &quot;CheckpointLoaderSimple&quot;,
+        &quot;title&quot;: &quot;Load Checkpoint&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 20,
+          &quot;y&quot;: 20
+        },
+        &quot;width&quot;: 300,
+        &quot;inputs&quot;: [],
+        &quot;outputs&quot;: [
+          {
+            &quot;id&quot;: &quot;MODEL&quot;,
+            &quot;name&quot;: &quot;MODEL&quot;,
+            &quot;type&quot;: &quot;MODEL&quot;,
+            &quot;label&quot;: &quot;MODEL&quot;
+          },
+          {
+            &quot;id&quot;: &quot;CLIP&quot;,
+            &quot;name&quot;: &quot;CLIP&quot;,
+            &quot;type&quot;: &quot;CLIP&quot;,
+            &quot;label&quot;: &quot;CLIP&quot;
+          },
+          {
+            &quot;id&quot;: &quot;VAE&quot;,
+            &quot;name&quot;: &quot;VAE&quot;,
+            &quot;type&quot;: &quot;VAE&quot;,
+            &quot;label&quot;: &quot;VAE&quot;
+          }
+        ],
+        &quot;values&quot;: {
+          &quot;ckpt_name&quot;: &quot;Tongyi-MAI/Z-Image-Turbo&quot;,
+          &quot;targetProvider&quot;: &quot;huggingface&quot;,
+          &quot;resolution&quot;: &quot;1024x1024 ( 1:1 )&quot;,
+          &quot;shift&quot;: 3,
+          &quot;random_seed&quot;: false,
+          &quot;gallery_images&quot;: []
+        },
+        &quot;state&quot;: &quot;idle&quot;
+      },
+      {
+        &quot;id&quot;: &quot;prompt&quot;,
+        &quot;type&quot;: &quot;CLIPTextEncode&quot;,
+        &quot;title&quot;: &quot;CLIP Text Encode (Positive Prompt)&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 350,
+          &quot;y&quot;: 20
+        },
+        &quot;width&quot;: 300,
+        &quot;inputs&quot;: [
+          {
+            &quot;id&quot;: &quot;clip&quot;,
+            &quot;name&quot;: &quot;clip&quot;,
+            &quot;type&quot;: &quot;CLIP&quot;,
+            &quot;label&quot;: &quot;CLIP&quot;
+          }
+        ],
+        &quot;outputs&quot;: [
+          {
+            &quot;id&quot;: &quot;CONDITIONING&quot;,
+            &quot;name&quot;: &quot;CONDITIONING&quot;,
+            &quot;type&quot;: &quot;CONDITIONING&quot;,
+            &quot;label&quot;: &quot;CONDITIONING&quot;
+          }
+        ],
+        &quot;values&quot;: {
+          &quot;text&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;
+        },
+        &quot;state&quot;: &quot;idle&quot;
+      },
+      {
+        &quot;id&quot;: &quot;sampler&quot;,
+        &quot;type&quot;: &quot;KSampler&quot;,
+        &quot;title&quot;: &quot;KSampler&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 700,
+          &quot;y&quot;: 20
+        },
+        &quot;width&quot;: 300,
+        &quot;inputs&quot;: [
+          {
+            &quot;id&quot;: &quot;model&quot;,
+            &quot;name&quot;: &quot;model&quot;,
+            &quot;type&quot;: &quot;MODEL&quot;,
+            &quot;label&quot;: &quot;MODEL&quot;
+          },
+          {
+            &quot;id&quot;: &quot;positive&quot;,
+            &quot;name&quot;: &quot;positive&quot;,
+            &quot;type&quot;: &quot;CONDITIONING&quot;,
+            &quot;label&quot;: &quot;positive&quot;
+          },
+          {
+            &quot;id&quot;: &quot;negative&quot;,
+            &quot;name&quot;: &quot;negative&quot;,
+            &quot;type&quot;: &quot;CONDITIONING&quot;,
+            &quot;label&quot;: &quot;negative&quot;
+          },
+          {
+            &quot;id&quot;: &quot;latent_image&quot;,
+            &quot;name&quot;: &quot;latent_image&quot;,
+            &quot;type&quot;: &quot;LATENT&quot;,
+            &quot;label&quot;: &quot;latent_image&quot;
+          }
+        ],
+        &quot;outputs&quot;: [
+          {
+            &quot;id&quot;: &quot;LATENT&quot;,
+            &quot;name&quot;: &quot;LATENT&quot;,
+            &quot;type&quot;: &quot;LATENT&quot;,
+            &quot;label&quot;: &quot;LATENT&quot;
+          }
+        ],
+        &quot;values&quot;: {
+          &quot;seed&quot;: 42,
+          &quot;control_after_generate&quot;: &quot;fixed&quot;,
+          &quot;steps&quot;: 8
+        },
+        &quot;state&quot;: &quot;idle&quot;
+      }
+    ],
+    &quot;connections&quot;: [
+      {
+        &quot;id&quot;: &quot;model&quot;,
+        &quot;fromNodeId&quot;: &quot;checkpoint&quot;,
+        &quot;fromSocketId&quot;: &quot;MODEL&quot;,
+        &quot;toNodeId&quot;: &quot;sampler&quot;,
+        &quot;toSocketId&quot;: &quot;model&quot;,
+        &quot;type&quot;: &quot;MODEL&quot;
+      },
+      {
+        &quot;id&quot;: &quot;positive&quot;,
+        &quot;fromNodeId&quot;: &quot;prompt&quot;,
+        &quot;fromSocketId&quot;: &quot;CONDITIONING&quot;,
+        &quot;toNodeId&quot;: &quot;sampler&quot;,
+        &quot;toSocketId&quot;: &quot;positive&quot;,
+        &quot;type&quot;: &quot;CONDITIONING&quot;
+      },
+      {
+        &quot;id&quot;: &quot;clip&quot;,
+        &quot;fromNodeId&quot;: &quot;checkpoint&quot;,
+        &quot;fromSocketId&quot;: &quot;CLIP&quot;,
+        &quot;toNodeId&quot;: &quot;prompt&quot;,
+        &quot;toSocketId&quot;: &quot;clip&quot;,
+        &quot;type&quot;: &quot;CLIP&quot;
+      }
+    ],
+    &quot;canvasMode&quot;: &quot;graph&quot;,
+    &quot;spatialFrames&quot;: [],
+    &quot;executingNodeId&quot;: &quot;sampler&quot;
+  },
+  &quot;response&quot;: {
+    &quot;imageUrl&quot;: &quot;/verification/huggingface.png&quot;,
+    &quot;provider&quot;: &quot;Hugging Face&quot;,
+    &quot;actualProvider&quot;: &quot;Hugging Face&quot;,
+    &quot;model&quot;: &quot;Tongyi-MAI/Z-Image-Turbo&quot;,
+    &quot;actualModel&quot;: &quot;Tongyi-MAI/Z-Image-Turbo&quot;,
+    &quot;historyItem&quot;: {
+      &quot;url&quot;: &quot;/verification/huggingface.png&quot;,
+      &quot;prompt&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;,
+      &quot;negativePrompt&quot;: null,
+      &quot;provider&quot;: &quot;Hugging Face&quot;,
+      &quot;model&quot;: &quot;Tongyi-MAI/Z-Image-Turbo&quot;,
+      &quot;seed&quot;: 42,
+      &quot;steps&quot;: 8,
+      &quot;cfg&quot;: null,
+      &quot;workflowSnapshot&quot;: {
+        &quot;format&quot;: &quot;comfycanvas&quot;,
+        &quot;version&quot;: 1,
+        &quot;nodes&quot;: [
+          {
+            &quot;id&quot;: &quot;checkpoint&quot;,
+            &quot;type&quot;: &quot;CheckpointLoaderSimple&quot;,
+            &quot;pos&quot;: {
+              &quot;x&quot;: 40,
+              &quot;y&quot;: 40
+            },
+            &quot;values&quot;: {
+              &quot;ckpt_name&quot;: &quot;Tongyi-MAI/Z-Image-Turbo&quot;,
+              &quot;targetProvider&quot;: &quot;huggingface&quot;,
+              &quot;model&quot;: &quot;Tongyi-MAI/Z-Image-Turbo&quot;,
+              &quot;prompt&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;,
+              &quot;resolution&quot;: &quot;1024x1024 ( 1:1 )&quot;,
+              &quot;seed&quot;: 42,
+              &quot;steps&quot;: 8,
+              &quot;shift&quot;: 3,
+              &quot;random_seed&quot;: false,
+              &quot;gallery_images&quot;: []
+            }
+          },
+          {
+            &quot;id&quot;: &quot;prompt&quot;,
+            &quot;type&quot;: &quot;CLIPTextEncode&quot;,
+            &quot;pos&quot;: {
+              &quot;x&quot;: 40,
+              &quot;y&quot;: 310
+            },
+            &quot;values&quot;: {
+              &quot;text&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;
+            }
+          },
+          {
+            &quot;id&quot;: &quot;sampler&quot;,
+            &quot;type&quot;: &quot;KSampler&quot;,
+            &quot;pos&quot;: {
+              &quot;x&quot;: 430,
+              &quot;y&quot;: 80
+            },
+            &quot;values&quot;: {
+              &quot;seed&quot;: 42,
+              &quot;steps&quot;: 8
+            }
+          }
+        ],
+        &quot;connections&quot;: [
+          {
+            &quot;id&quot;: &quot;model&quot;,
+            &quot;fromNodeId&quot;: &quot;checkpoint&quot;,
+            &quot;fromSocketId&quot;: &quot;MODEL&quot;,
+            &quot;toNodeId&quot;: &quot;sampler&quot;,
+            &quot;toSocketId&quot;: &quot;model&quot;,
+            &quot;type&quot;: &quot;MODEL&quot;
+          },
+          {
+            &quot;id&quot;: &quot;positive&quot;,
+            &quot;fromNodeId&quot;: &quot;prompt&quot;,
+            &quot;fromSocketId&quot;: &quot;CONDITIONING&quot;,
+            &quot;toNodeId&quot;: &quot;sampler&quot;,
+            &quot;toSocketId&quot;: &quot;positive&quot;,
+            &quot;type&quot;: &quot;CONDITIONING&quot;
+          }
+        ]
+      },
+      &quot;requestMetadata&quot;: {
+        &quot;route&quot;: &quot;/api/huggingface/generate&quot;,
+        &quot;submissions&quot;: [
+          {
+            &quot;endpoint&quot;: &quot;https://tongyi-mai-z-image-turbo.hf.space/gradio_api/call/generate&quot;,
+            &quot;parameters&quot;: {
+              &quot;data&quot;: [
+                &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;,
+                &quot;1024x1024 ( 1:1 )&quot;,
+                42,
+                8,
+                3,
+                false,
+                []
+              ]
+            },
+            &quot;status&quot;: 200
+          }
+        ]
+      },
+      &quot;id&quot;: &quot;hist_1790981656276_pj18b&quot;,
+      &quot;timestamp&quot;: 1790981656276,
+      &quot;actualProvider&quot;: &quot;Hugging Face&quot;,
+      &quot;actualModel&quot;: &quot;Tongyi-MAI/Z-Image-Turbo&quot;,
+      &quot;loras&quot;: []
+    }
+  }
+}</pre></details></article><article><div class="head"><h2>nanogpt</h2><span class="badge limited">模型 API 鉴权失败</span></div><p class="model">flux-schnell</p><p class="error">NanoGPT 生图失败 [401]: {&quot;error&quot;:{&quot;message&quot;:&quot;Invalid session&quot;,&quot;type&quot;:&quot;invalid_request_error&quot;,&quot;code&quot;:&quot;invalid_api_key&quot;}}</p><p>HTTP 401 · 2026-10-02T22:54:16.397Z</p><details><summary>请求、端点与工作流记录</summary><pre>{
+  &quot;request&quot;: {
+    &quot;model&quot;: &quot;flux-schnell&quot;,
+    &quot;prompt&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;
+  },
+  &quot;submittedWorkflow&quot;: {
+    &quot;format&quot;: &quot;comfycanvas&quot;,
+    &quot;version&quot;: 1,
+    &quot;nodes&quot;: [
+      {
+        &quot;id&quot;: &quot;checkpoint&quot;,
+        &quot;type&quot;: &quot;CheckpointLoaderSimple&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 40,
+          &quot;y&quot;: 40
+        },
+        &quot;values&quot;: {
+          &quot;ckpt_name&quot;: &quot;flux-schnell&quot;,
+          &quot;targetProvider&quot;: &quot;nanogpt&quot;,
+          &quot;model&quot;: &quot;flux-schnell&quot;,
+          &quot;prompt&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;
+        }
+      },
+      {
+        &quot;id&quot;: &quot;prompt&quot;,
+        &quot;type&quot;: &quot;CLIPTextEncode&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 40,
+          &quot;y&quot;: 310
+        },
+        &quot;values&quot;: {
+          &quot;text&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;
+        }
+      },
+      {
+        &quot;id&quot;: &quot;sampler&quot;,
+        &quot;type&quot;: &quot;KSampler&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 430,
+          &quot;y&quot;: 80
+        },
+        &quot;values&quot;: {}
+      }
+    ],
+    &quot;connections&quot;: [
+      {
+        &quot;id&quot;: &quot;model&quot;,
+        &quot;fromNodeId&quot;: &quot;checkpoint&quot;,
+        &quot;fromSocketId&quot;: &quot;MODEL&quot;,
+        &quot;toNodeId&quot;: &quot;sampler&quot;,
+        &quot;toSocketId&quot;: &quot;model&quot;,
+        &quot;type&quot;: &quot;MODEL&quot;
+      },
+      {
+        &quot;id&quot;: &quot;positive&quot;,
+        &quot;fromNodeId&quot;: &quot;prompt&quot;,
+        &quot;fromSocketId&quot;: &quot;CONDITIONING&quot;,
+        &quot;toNodeId&quot;: &quot;sampler&quot;,
+        &quot;toSocketId&quot;: &quot;positive&quot;,
+        &quot;type&quot;: &quot;CONDITIONING&quot;
+      }
+    ]
+  },
+  &quot;response&quot;: {
+    &quot;error&quot;: &quot;NanoGPT 生图失败 [401]: {\&quot;error\&quot;:{\&quot;message\&quot;:\&quot;Invalid session\&quot;,\&quot;type\&quot;:\&quot;invalid_request_error\&quot;,\&quot;code\&quot;:\&quot;invalid_api_key\&quot;}}&quot;
+  }
+}</pre></details></article><article><div class="head"><h2>tensorart-1</h2><span class="badge ok">已实际出图</span></div><p class="model">photoreal_studio_z_image</p><a href="/verification/tensorart-1.png"><img src="/verification/tensorart-1.png" alt="tensorart-1 的真实生成结果" loading="lazy"></a><p>HTTP 200 · 2026-10-02T22:54:30.558Z</p><div class="actions"><a href="/verification/tensorart-1.png" download>下载图片</a><a href="tensorart-1-parameters.json" download>实际参数</a><a href="tensorart-1-workflow.json" download>工作流 JSON</a><span>旧 OpenWorks 工具记录，不作为模型工作流导入</span></div><p>LoRA: 未使用</p><details><summary>请求、端点与工作流记录</summary><pre>{
+  &quot;request&quot;: {
+    &quot;model&quot;: &quot;photoreal_studio_z_image&quot;,
+    &quot;inputs&quot;: [
+      {
+        &quot;type&quot;: &quot;STRING&quot;,
+        &quot;value&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;
+      },
+      {
+        &quot;type&quot;: &quot;INTEGER&quot;,
+        &quot;value&quot;: 512
+      },
+      {
+        &quot;type&quot;: &quot;INTEGER&quot;,
+        &quot;value&quot;: 512
+      },
+      {
+        &quot;type&quot;: &quot;INTEGER&quot;,
+        &quot;value&quot;: 1
+      }
+    ]
+  },
+  &quot;upstream&quot;: {
+    &quot;route&quot;: &quot;/api/tensorart/generate&quot;,
+    &quot;submissions&quot;: [
+      {
+        &quot;endpoint&quot;: &quot;https://openapi.tensor.art/openworks/v1/task&quot;,
+        &quot;parameters&quot;: {
+          &quot;toolName&quot;: &quot;photoreal_studio_z_image&quot;,
+          &quot;inputs&quot;: [
+            {
+              &quot;type&quot;: &quot;STRING&quot;,
+              &quot;value&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;
+            },
+            {
+              &quot;type&quot;: &quot;INTEGER&quot;,
+              &quot;value&quot;: 512
+            },
+            {
+              &quot;type&quot;: &quot;INTEGER&quot;,
+              &quot;value&quot;: 512
+            },
+            {
+              &quot;type&quot;: &quot;INTEGER&quot;,
+              &quot;value&quot;: 1
+            }
+          ]
+        },
+        &quot;status&quot;: 200
+      }
+    ]
+  },
+  &quot;submittedWorkflow&quot;: {
+    &quot;format&quot;: &quot;comfycanvas&quot;,
+    &quot;version&quot;: 1,
+    &quot;nodes&quot;: [
+      {
+        &quot;id&quot;: &quot;checkpoint&quot;,
+        &quot;type&quot;: &quot;CheckpointLoaderSimple&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 40,
+          &quot;y&quot;: 40
+        },
+        &quot;values&quot;: {
+          &quot;ckpt_name&quot;: &quot;photoreal_studio_z_image&quot;,
+          &quot;targetProvider&quot;: &quot;tensorart&quot;,
+          &quot;model&quot;: &quot;photoreal_studio_z_image&quot;,
+          &quot;inputs&quot;: [
+            {
+              &quot;type&quot;: &quot;STRING&quot;,
+              &quot;value&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;
+            },
+            {
+              &quot;type&quot;: &quot;INTEGER&quot;,
+              &quot;value&quot;: 512
+            },
+            {
+              &quot;type&quot;: &quot;INTEGER&quot;,
+              &quot;value&quot;: 512
+            },
+            {
+              &quot;type&quot;: &quot;INTEGER&quot;,
+              &quot;value&quot;: 1
+            }
+          ]
+        }
+      },
+      {
+        &quot;id&quot;: &quot;prompt&quot;,
+        &quot;type&quot;: &quot;CLIPTextEncode&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 40,
+          &quot;y&quot;: 310
+        },
+        &quot;values&quot;: {
+          &quot;text&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;
+        }
+      },
+      {
+        &quot;id&quot;: &quot;sampler&quot;,
+        &quot;type&quot;: &quot;KSampler&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 430,
+          &quot;y&quot;: 80
+        },
+        &quot;values&quot;: {}
+      }
+    ],
+    &quot;connections&quot;: [
+      {
+        &quot;id&quot;: &quot;model&quot;,
+        &quot;fromNodeId&quot;: &quot;checkpoint&quot;,
+        &quot;fromSocketId&quot;: &quot;MODEL&quot;,
+        &quot;toNodeId&quot;: &quot;sampler&quot;,
+        &quot;toSocketId&quot;: &quot;model&quot;,
+        &quot;type&quot;: &quot;MODEL&quot;
+      },
+      {
+        &quot;id&quot;: &quot;positive&quot;,
+        &quot;fromNodeId&quot;: &quot;prompt&quot;,
+        &quot;fromSocketId&quot;: &quot;CONDITIONING&quot;,
+        &quot;toNodeId&quot;: &quot;sampler&quot;,
+        &quot;toSocketId&quot;: &quot;positive&quot;,
+        &quot;type&quot;: &quot;CONDITIONING&quot;
+      }
+    ]
+  },
+  &quot;response&quot;: {
+    &quot;imageUrl&quot;: &quot;/verification/tensorart-1.png&quot;,
+    &quot;videoUrl&quot;: &quot;&quot;,
+    &quot;mediaUrl&quot;: &quot;/verification/tensorart-1.png&quot;,
+    &quot;mediaType&quot;: &quot;image&quot;,
+    &quot;provider&quot;: &quot;Tensor.Art (OpenWorks)&quot;,
+    &quot;actualProvider&quot;: &quot;Tensor.Art (OpenWorks)&quot;,
+    &quot;model&quot;: &quot;photoreal_studio_z_image&quot;,
+    &quot;actualModel&quot;: &quot;photoreal_studio_z_image&quot;,
+    &quot;toolName&quot;: &quot;photoreal_studio_z_image&quot;,
+    &quot;requestedModel&quot;: &quot;photoreal_studio_z_image&quot;,
+    &quot;taskId&quot;: &quot;1051020032080915705&quot;,
+    &quot;exactEndpointCalled&quot;: &quot;https://openapi.tensor.art/openworks/v1/task&quot;,
+    &quot;historyItem&quot;: {
+      &quot;url&quot;: &quot;/verification/tensorart-1.png&quot;,
+      &quot;prompt&quot;: null,
+      &quot;negativePrompt&quot;: null,
+      &quot;provider&quot;: &quot;Tensor.Art (OpenWorks)&quot;,
+      &quot;model&quot;: &quot;photoreal_studio_z_image&quot;,
+      &quot;seed&quot;: null,
+      &quot;steps&quot;: null,
+      &quot;cfg&quot;: null,
+      &quot;workflowSnapshot&quot;: {
+        &quot;format&quot;: &quot;comfycanvas&quot;,
+        &quot;version&quot;: 1,
+        &quot;nodes&quot;: [
+          {
+            &quot;id&quot;: &quot;checkpoint&quot;,
+            &quot;type&quot;: &quot;CheckpointLoaderSimple&quot;,
+            &quot;pos&quot;: {
+              &quot;x&quot;: 40,
+              &quot;y&quot;: 40
+            },
+            &quot;values&quot;: {
+              &quot;ckpt_name&quot;: &quot;photoreal_studio_z_image&quot;,
+              &quot;targetProvider&quot;: &quot;tensorart&quot;,
+              &quot;model&quot;: &quot;photoreal_studio_z_image&quot;,
+              &quot;inputs&quot;: [
+                {
+                  &quot;type&quot;: &quot;STRING&quot;,
+                  &quot;value&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;
+                },
+                {
+                  &quot;type&quot;: &quot;INTEGER&quot;,
+                  &quot;value&quot;: 512
+                },
+                {
+                  &quot;type&quot;: &quot;INTEGER&quot;,
+                  &quot;value&quot;: 512
+                },
+                {
+                  &quot;type&quot;: &quot;INTEGER&quot;,
+                  &quot;value&quot;: 1
+                }
+              ]
+            }
+          },
+          {
+            &quot;id&quot;: &quot;prompt&quot;,
+            &quot;type&quot;: &quot;CLIPTextEncode&quot;,
+            &quot;pos&quot;: {
+              &quot;x&quot;: 40,
+              &quot;y&quot;: 310
+            },
+            &quot;values&quot;: {
+              &quot;text&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;
+            }
+          },
+          {
+            &quot;id&quot;: &quot;sampler&quot;,
+            &quot;type&quot;: &quot;KSampler&quot;,
+            &quot;pos&quot;: {
+              &quot;x&quot;: 430,
+              &quot;y&quot;: 80
+            },
+            &quot;values&quot;: {}
+          }
+        ],
+        &quot;connections&quot;: [
+          {
+            &quot;id&quot;: &quot;model&quot;,
+            &quot;fromNodeId&quot;: &quot;checkpoint&quot;,
+            &quot;fromSocketId&quot;: &quot;MODEL&quot;,
+            &quot;toNodeId&quot;: &quot;sampler&quot;,
+            &quot;toSocketId&quot;: &quot;model&quot;,
+            &quot;type&quot;: &quot;MODEL&quot;
+          },
+          {
+            &quot;id&quot;: &quot;positive&quot;,
+            &quot;fromNodeId&quot;: &quot;prompt&quot;,
+            &quot;fromSocketId&quot;: &quot;CONDITIONING&quot;,
+            &quot;toNodeId&quot;: &quot;sampler&quot;,
+            &quot;toSocketId&quot;: &quot;positive&quot;,
+            &quot;type&quot;: &quot;CONDITIONING&quot;
+          }
+        ]
+      },
+      &quot;requestMetadata&quot;: {
+        &quot;route&quot;: &quot;/api/tensorart/generate&quot;,
+        &quot;submissions&quot;: [
+          {
+            &quot;endpoint&quot;: &quot;https://openapi.tensor.art/openworks/v1/task&quot;,
+            &quot;parameters&quot;: {
+              &quot;toolName&quot;: &quot;photoreal_studio_z_image&quot;,
+              &quot;inputs&quot;: [
+                {
+                  &quot;type&quot;: &quot;STRING&quot;,
+                  &quot;value&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;
+                },
+                {
+                  &quot;type&quot;: &quot;INTEGER&quot;,
+                  &quot;value&quot;: 512
+                },
+                {
+                  &quot;type&quot;: &quot;INTEGER&quot;,
+                  &quot;value&quot;: 512
+                },
+                {
+                  &quot;type&quot;: &quot;INTEGER&quot;,
+                  &quot;value&quot;: 1
+                }
+              ]
+            },
+            &quot;status&quot;: 200
+          }
+        ]
+      },
+      &quot;id&quot;: &quot;hist_1790981704672_s1v1r&quot;,
+      &quot;timestamp&quot;: 1790981704672,
+      &quot;actualProvider&quot;: &quot;Tensor.Art (OpenWorks)&quot;,
+      &quot;actualModel&quot;: &quot;photoreal_studio_z_image&quot;,
+      &quot;loras&quot;: []
+    }
+  }
+}</pre></details></article><article><div class="head"><h2>tensorart-2</h2><span class="badge ok">已实际出图</span></div><p class="model">photoreal_studio_z_image</p><a href="/verification/tensorart-2.png"><img src="/verification/tensorart-2.png" alt="tensorart-2 的真实生成结果" loading="lazy"></a><p>HTTP 200 · 2026-10-02T22:55:12.684Z</p><div class="actions"><a href="/verification/tensorart-2.png" download>下载图片</a><a href="tensorart-2-parameters.json" download>实际参数</a><a href="tensorart-2-workflow.json" download>工作流 JSON</a><span>旧 OpenWorks 工具记录，不作为模型工作流导入</span></div><p>LoRA: 未使用</p><details><summary>请求、端点与工作流记录</summary><pre>{
+  &quot;request&quot;: {
+    &quot;model&quot;: &quot;photoreal_studio_z_image&quot;,
+    &quot;inputs&quot;: [
+      {
+        &quot;type&quot;: &quot;STRING&quot;,
+        &quot;value&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;
+      },
+      {
+        &quot;type&quot;: &quot;INTEGER&quot;,
+        &quot;value&quot;: 512
+      },
+      {
+        &quot;type&quot;: &quot;INTEGER&quot;,
+        &quot;value&quot;: 512
+      },
+      {
+        &quot;type&quot;: &quot;INTEGER&quot;,
+        &quot;value&quot;: 1
+      }
+    ]
+  },
+  &quot;upstream&quot;: {
+    &quot;route&quot;: &quot;/api/tensorart/generate&quot;,
+    &quot;submissions&quot;: [
+      {
+        &quot;endpoint&quot;: &quot;https://openapi.tensor.art/openworks/v1/task&quot;,
+        &quot;parameters&quot;: {
+          &quot;toolName&quot;: &quot;photoreal_studio_z_image&quot;,
+          &quot;inputs&quot;: [
+            {
+              &quot;type&quot;: &quot;STRING&quot;,
+              &quot;value&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;
+            },
+            {
+              &quot;type&quot;: &quot;INTEGER&quot;,
+              &quot;value&quot;: 512
+            },
+            {
+              &quot;type&quot;: &quot;INTEGER&quot;,
+              &quot;value&quot;: 512
+            },
+            {
+              &quot;type&quot;: &quot;INTEGER&quot;,
+              &quot;value&quot;: 1
+            }
+          ]
+        },
+        &quot;status&quot;: 200
+      }
+    ]
+  },
+  &quot;submittedWorkflow&quot;: {
+    &quot;format&quot;: &quot;comfycanvas&quot;,
+    &quot;version&quot;: 1,
+    &quot;nodes&quot;: [
+      {
+        &quot;id&quot;: &quot;checkpoint&quot;,
+        &quot;type&quot;: &quot;CheckpointLoaderSimple&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 40,
+          &quot;y&quot;: 40
+        },
+        &quot;values&quot;: {
+          &quot;ckpt_name&quot;: &quot;photoreal_studio_z_image&quot;,
+          &quot;targetProvider&quot;: &quot;tensorart&quot;,
+          &quot;model&quot;: &quot;photoreal_studio_z_image&quot;,
+          &quot;inputs&quot;: [
+            {
+              &quot;type&quot;: &quot;STRING&quot;,
+              &quot;value&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;
+            },
+            {
+              &quot;type&quot;: &quot;INTEGER&quot;,
+              &quot;value&quot;: 512
+            },
+            {
+              &quot;type&quot;: &quot;INTEGER&quot;,
+              &quot;value&quot;: 512
+            },
+            {
+              &quot;type&quot;: &quot;INTEGER&quot;,
+              &quot;value&quot;: 1
+            }
+          ]
+        }
+      },
+      {
+        &quot;id&quot;: &quot;prompt&quot;,
+        &quot;type&quot;: &quot;CLIPTextEncode&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 40,
+          &quot;y&quot;: 310
+        },
+        &quot;values&quot;: {
+          &quot;text&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;
+        }
+      },
+      {
+        &quot;id&quot;: &quot;sampler&quot;,
+        &quot;type&quot;: &quot;KSampler&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 430,
+          &quot;y&quot;: 80
+        },
+        &quot;values&quot;: {}
+      }
+    ],
+    &quot;connections&quot;: [
+      {
+        &quot;id&quot;: &quot;model&quot;,
+        &quot;fromNodeId&quot;: &quot;checkpoint&quot;,
+        &quot;fromSocketId&quot;: &quot;MODEL&quot;,
+        &quot;toNodeId&quot;: &quot;sampler&quot;,
+        &quot;toSocketId&quot;: &quot;model&quot;,
+        &quot;type&quot;: &quot;MODEL&quot;
+      },
+      {
+        &quot;id&quot;: &quot;positive&quot;,
+        &quot;fromNodeId&quot;: &quot;prompt&quot;,
+        &quot;fromSocketId&quot;: &quot;CONDITIONING&quot;,
+        &quot;toNodeId&quot;: &quot;sampler&quot;,
+        &quot;toSocketId&quot;: &quot;positive&quot;,
+        &quot;type&quot;: &quot;CONDITIONING&quot;
+      }
+    ]
+  },
+  &quot;response&quot;: {
+    &quot;imageUrl&quot;: &quot;/verification/tensorart-2.png&quot;,
+    &quot;videoUrl&quot;: &quot;&quot;,
+    &quot;mediaUrl&quot;: &quot;/verification/tensorart-2.png&quot;,
+    &quot;mediaType&quot;: &quot;image&quot;,
+    &quot;provider&quot;: &quot;Tensor.Art (OpenWorks)&quot;,
+    &quot;actualProvider&quot;: &quot;Tensor.Art (OpenWorks)&quot;,
+    &quot;model&quot;: &quot;photoreal_studio_z_image&quot;,
+    &quot;actualModel&quot;: &quot;photoreal_studio_z_image&quot;,
+    &quot;toolName&quot;: &quot;photoreal_studio_z_image&quot;,
+    &quot;requestedModel&quot;: &quot;photoreal_studio_z_image&quot;,
+    &quot;taskId&quot;: &quot;1051020215690751546&quot;,
+    &quot;exactEndpointCalled&quot;: &quot;https://openapi.tensor.art/openworks/v1/task&quot;,
+    &quot;historyItem&quot;: {
+      &quot;url&quot;: &quot;/verification/tensorart-2.png&quot;,
+      &quot;prompt&quot;: null,
+      &quot;negativePrompt&quot;: null,
+      &quot;provider&quot;: &quot;Tensor.Art (OpenWorks)&quot;,
+      &quot;model&quot;: &quot;photoreal_studio_z_image&quot;,
+      &quot;seed&quot;: null,
+      &quot;steps&quot;: null,
+      &quot;cfg&quot;: null,
+      &quot;workflowSnapshot&quot;: {
+        &quot;format&quot;: &quot;comfycanvas&quot;,
+        &quot;version&quot;: 1,
+        &quot;nodes&quot;: [
+          {
+            &quot;id&quot;: &quot;checkpoint&quot;,
+            &quot;type&quot;: &quot;CheckpointLoaderSimple&quot;,
+            &quot;pos&quot;: {
+              &quot;x&quot;: 40,
+              &quot;y&quot;: 40
+            },
+            &quot;values&quot;: {
+              &quot;ckpt_name&quot;: &quot;photoreal_studio_z_image&quot;,
+              &quot;targetProvider&quot;: &quot;tensorart&quot;,
+              &quot;model&quot;: &quot;photoreal_studio_z_image&quot;,
+              &quot;inputs&quot;: [
+                {
+                  &quot;type&quot;: &quot;STRING&quot;,
+                  &quot;value&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;
+                },
+                {
+                  &quot;type&quot;: &quot;INTEGER&quot;,
+                  &quot;value&quot;: 512
+                },
+                {
+                  &quot;type&quot;: &quot;INTEGER&quot;,
+                  &quot;value&quot;: 512
+                },
+                {
+                  &quot;type&quot;: &quot;INTEGER&quot;,
+                  &quot;value&quot;: 1
+                }
+              ]
+            }
+          },
+          {
+            &quot;id&quot;: &quot;prompt&quot;,
+            &quot;type&quot;: &quot;CLIPTextEncode&quot;,
+            &quot;pos&quot;: {
+              &quot;x&quot;: 40,
+              &quot;y&quot;: 310
+            },
+            &quot;values&quot;: {
+              &quot;text&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;
+            }
+          },
+          {
+            &quot;id&quot;: &quot;sampler&quot;,
+            &quot;type&quot;: &quot;KSampler&quot;,
+            &quot;pos&quot;: {
+              &quot;x&quot;: 430,
+              &quot;y&quot;: 80
+            },
+            &quot;values&quot;: {}
+          }
+        ],
+        &quot;connections&quot;: [
+          {
+            &quot;id&quot;: &quot;model&quot;,
+            &quot;fromNodeId&quot;: &quot;checkpoint&quot;,
+            &quot;fromSocketId&quot;: &quot;MODEL&quot;,
+            &quot;toNodeId&quot;: &quot;sampler&quot;,
+            &quot;toSocketId&quot;: &quot;model&quot;,
+            &quot;type&quot;: &quot;MODEL&quot;
+          },
+          {
+            &quot;id&quot;: &quot;positive&quot;,
+            &quot;fromNodeId&quot;: &quot;prompt&quot;,
+            &quot;fromSocketId&quot;: &quot;CONDITIONING&quot;,
+            &quot;toNodeId&quot;: &quot;sampler&quot;,
+            &quot;toSocketId&quot;: &quot;positive&quot;,
+            &quot;type&quot;: &quot;CONDITIONING&quot;
+          }
+        ]
+      },
+      &quot;requestMetadata&quot;: {
+        &quot;route&quot;: &quot;/api/tensorart/generate&quot;,
+        &quot;submissions&quot;: [
+          {
+            &quot;endpoint&quot;: &quot;https://openapi.tensor.art/openworks/v1/task&quot;,
+            &quot;parameters&quot;: {
+              &quot;toolName&quot;: &quot;photoreal_studio_z_image&quot;,
+              &quot;inputs&quot;: [
+                {
+                  &quot;type&quot;: &quot;STRING&quot;,
+                  &quot;value&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;
+                },
+                {
+                  &quot;type&quot;: &quot;INTEGER&quot;,
+                  &quot;value&quot;: 512
+                },
+                {
+                  &quot;type&quot;: &quot;INTEGER&quot;,
+                  &quot;value&quot;: 512
+                },
+                {
+                  &quot;type&quot;: &quot;INTEGER&quot;,
+                  &quot;value&quot;: 1
+                }
+              ]
+            },
+            &quot;status&quot;: 200
+          }
+        ]
+      },
+      &quot;id&quot;: &quot;hist_1790981738200_evaf8&quot;,
+      &quot;timestamp&quot;: 1790981738200,
+      &quot;actualProvider&quot;: &quot;Tensor.Art (OpenWorks)&quot;,
+      &quot;actualModel&quot;: &quot;photoreal_studio_z_image&quot;,
+      &quot;loras&quot;: []
+    }
+  }
+}</pre></details></article><article><div class="head"><h2>civitai-lora-disabled-1</h2><span class="badge limited">上游明确拒绝</span></div><p class="model">urn:air:sd1:checkpoint:civitai:4384@128713</p><p class="error">Civitai Orchestration 官方算力返回错误 [400]: {&quot;title&quot;:&quot;One or more validation errors occurred.&quot;,&quot;status&quot;:400,&quot;errors&quot;:{&quot;messages&quot;:[&quot;Detail Tweaker LoRA (细节调整LoRA) - v1.0 is not enabled for generation. Please contact support@civitai.com if you believe this to be an error.&quot;]}}</p><p>HTTP 400 · 2026-10-02T22:57:15.260Z</p><details><summary>请求、端点与工作流记录</summary><pre>{
+  &quot;request&quot;: {
+    &quot;model&quot;: &quot;urn:air:sd1:checkpoint:civitai:4384@128713&quot;,
+    &quot;prompt&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;,
+    &quot;negative_prompt&quot;: &quot;blurry, low quality&quot;,
+    &quot;width&quot;: 512,
+    &quot;height&quot;: 512,
+    &quot;steps&quot;: 12,
+    &quot;cfg&quot;: 7,
+    &quot;seed&quot;: 42,
+    &quot;sampler_name&quot;: &quot;euler&quot;,
+    &quot;scheduler&quot;: &quot;discrete&quot;,
+    &quot;loras&quot;: [
+      {
+        &quot;name&quot;: &quot;Detail Tweaker LoRA (细节调整LoRA)&quot;,
+        &quot;civitaiId&quot;: &quot;urn:air:sd1:lora:civitai:58390@62833&quot;,
+        &quot;strength&quot;: 0.7
+      }
+    ]
+  },
+  &quot;submittedWorkflow&quot;: {
+    &quot;format&quot;: &quot;comfycanvas&quot;,
+    &quot;version&quot;: 1,
+    &quot;nodes&quot;: [
+      {
+        &quot;id&quot;: &quot;checkpoint&quot;,
+        &quot;type&quot;: &quot;CheckpointLoaderSimple&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 40,
+          &quot;y&quot;: 40
+        },
+        &quot;values&quot;: {
+          &quot;ckpt_name&quot;: &quot;urn:air:sd1:checkpoint:civitai:4384@128713&quot;,
+          &quot;targetProvider&quot;: &quot;civitai&quot;,
+          &quot;model&quot;: &quot;urn:air:sd1:checkpoint:civitai:4384@128713&quot;,
+          &quot;prompt&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;,
+          &quot;negative_prompt&quot;: &quot;blurry, low quality&quot;,
+          &quot;width&quot;: 512,
+          &quot;height&quot;: 512,
+          &quot;steps&quot;: 12,
+          &quot;cfg&quot;: 7,
+          &quot;seed&quot;: 42,
+          &quot;sampler_name&quot;: &quot;euler&quot;,
+          &quot;scheduler&quot;: &quot;discrete&quot;,
+          &quot;loras&quot;: [
+            {
+              &quot;name&quot;: &quot;Detail Tweaker LoRA (细节调整LoRA)&quot;,
+              &quot;civitaiId&quot;: &quot;urn:air:sd1:lora:civitai:58390@62833&quot;,
+              &quot;strength&quot;: 0.7
+            }
+          ]
+        }
+      },
+      {
+        &quot;id&quot;: &quot;prompt&quot;,
+        &quot;type&quot;: &quot;CLIPTextEncode&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 40,
+          &quot;y&quot;: 310
+        },
+        &quot;values&quot;: {
+          &quot;text&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;
+        }
+      },
+      {
+        &quot;id&quot;: &quot;sampler&quot;,
+        &quot;type&quot;: &quot;KSampler&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 430,
+          &quot;y&quot;: 80
+        },
+        &quot;values&quot;: {
+          &quot;seed&quot;: 42,
+          &quot;steps&quot;: 12
+        }
+      }
+    ],
+    &quot;connections&quot;: [
+      {
+        &quot;id&quot;: &quot;model&quot;,
+        &quot;fromNodeId&quot;: &quot;checkpoint&quot;,
+        &quot;fromSocketId&quot;: &quot;MODEL&quot;,
+        &quot;toNodeId&quot;: &quot;sampler&quot;,
+        &quot;toSocketId&quot;: &quot;model&quot;,
+        &quot;type&quot;: &quot;MODEL&quot;
+      },
+      {
+        &quot;id&quot;: &quot;positive&quot;,
+        &quot;fromNodeId&quot;: &quot;prompt&quot;,
+        &quot;fromSocketId&quot;: &quot;CONDITIONING&quot;,
+        &quot;toNodeId&quot;: &quot;sampler&quot;,
+        &quot;toSocketId&quot;: &quot;positive&quot;,
+        &quot;type&quot;: &quot;CONDITIONING&quot;
+      }
+    ]
+  },
+  &quot;response&quot;: {
+    &quot;error&quot;: &quot;Civitai Orchestration 官方算力返回错误 [400]: {\&quot;title\&quot;:\&quot;One or more validation errors occurred.\&quot;,\&quot;status\&quot;:400,\&quot;errors\&quot;:{\&quot;messages\&quot;:[\&quot;Detail Tweaker LoRA (细节调整LoRA) - v1.0 is not enabled for generation. Please contact support@civitai.com if you believe this to be an error.\&quot;]}}&quot;
+  }
+}</pre></details></article><article><div class="head"><h2>civitai-lora</h2><span class="badge ok">已实际出图</span></div><p class="model">urn:air:sd1:checkpoint:civitai:4384@128713</p><a href="/verification/civitai-lora.jpg"><img src="/verification/civitai-lora.jpg" alt="civitai-lora 的真实生成结果" loading="lazy"></a><p>HTTP 200 · 2026-10-02T23:00:31.965Z</p><div class="actions"><a href="/verification/civitai-lora.jpg" download>下载图片</a><a href="civitai-lora-parameters.json" download>实际参数</a><a href="civitai-lora-workflow.json" download>工作流 JSON</a><button data-open="10">在画布打开</button></div><p>LoRA: urn:air:sd1:lora:civitai:82098@87153 × 0.7</p><details><summary>请求、端点与工作流记录</summary><pre>{
+  &quot;request&quot;: {
+    &quot;model&quot;: &quot;urn:air:sd1:checkpoint:civitai:4384@128713&quot;,
+    &quot;prompt&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;,
+    &quot;negative_prompt&quot;: &quot;blurry, low quality&quot;,
+    &quot;width&quot;: 512,
+    &quot;height&quot;: 512,
+    &quot;steps&quot;: 12,
+    &quot;cfg&quot;: 7,
+    &quot;seed&quot;: 42,
+    &quot;sampler_name&quot;: &quot;euler&quot;,
+    &quot;scheduler&quot;: &quot;discrete&quot;,
+    &quot;loras&quot;: [
+      {
+        &quot;name&quot;: &quot;Add More Details - Detail Enhancer / Tweaker (细节调整) LoRA&quot;,
+        &quot;civitaiId&quot;: &quot;urn:air:sd1:lora:civitai:82098@87153&quot;,
+        &quot;strength&quot;: 0.7
+      }
+    ]
+  },
+  &quot;upstream&quot;: {
+    &quot;route&quot;: &quot;/api/civitai/generate&quot;,
+    &quot;submissions&quot;: [
+      {
+        &quot;endpoint&quot;: &quot;https://orchestration.civitai.com/v2/consumer/workflows?wait=100&quot;,
+        &quot;parameters&quot;: {
+          &quot;steps&quot;: [
+            {
+              &quot;$type&quot;: &quot;imageGen&quot;,
+              &quot;input&quot;: {
+                &quot;engine&quot;: &quot;sdcpp&quot;,
+                &quot;ecosystem&quot;: &quot;sd1&quot;,
+                &quot;operation&quot;: &quot;createImage&quot;,
+                &quot;prompt&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;,
+                &quot;model&quot;: &quot;urn:air:sd1:checkpoint:civitai:4384@128713&quot;,
+                &quot;negativePrompt&quot;: &quot;blurry, low quality&quot;,
+                &quot;width&quot;: 512,
+                &quot;height&quot;: 512,
+                &quot;steps&quot;: 12,
+                &quot;cfgScale&quot;: 7,
+                &quot;seed&quot;: 42,
+                &quot;sampleMethod&quot;: &quot;euler&quot;,
+                &quot;schedule&quot;: &quot;discrete&quot;,
+                &quot;loras&quot;: {
+                  &quot;urn:air:sd1:lora:civitai:82098@87153&quot;: 0.7
+                }
+              }
+            }
+          ]
+        },
+        &quot;status&quot;: 200
+      }
+    ]
+  },
+  &quot;submittedWorkflow&quot;: {
+    &quot;format&quot;: &quot;comfycanvas&quot;,
+    &quot;version&quot;: 1,
+    &quot;nodes&quot;: [
+      {
+        &quot;id&quot;: &quot;checkpoint&quot;,
+        &quot;type&quot;: &quot;CheckpointLoaderSimple&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 40,
+          &quot;y&quot;: 40
+        },
+        &quot;values&quot;: {
+          &quot;ckpt_name&quot;: &quot;urn:air:sd1:checkpoint:civitai:4384@128713&quot;,
+          &quot;targetProvider&quot;: &quot;civitai&quot;,
+          &quot;model&quot;: &quot;urn:air:sd1:checkpoint:civitai:4384@128713&quot;,
+          &quot;prompt&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;,
+          &quot;negative_prompt&quot;: &quot;blurry, low quality&quot;,
+          &quot;width&quot;: 512,
+          &quot;height&quot;: 512,
+          &quot;steps&quot;: 12,
+          &quot;cfg&quot;: 7,
+          &quot;seed&quot;: 42,
+          &quot;sampler_name&quot;: &quot;euler&quot;,
+          &quot;scheduler&quot;: &quot;discrete&quot;,
+          &quot;loras&quot;: [
+            {
+              &quot;name&quot;: &quot;Add More Details - Detail Enhancer / Tweaker (细节调整) LoRA&quot;,
+              &quot;civitaiId&quot;: &quot;urn:air:sd1:lora:civitai:82098@87153&quot;,
+              &quot;strength&quot;: 0.7
+            }
+          ]
+        }
+      },
+      {
+        &quot;id&quot;: &quot;prompt&quot;,
+        &quot;type&quot;: &quot;CLIPTextEncode&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 40,
+          &quot;y&quot;: 310
+        },
+        &quot;values&quot;: {
+          &quot;text&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;
+        }
+      },
+      {
+        &quot;id&quot;: &quot;sampler&quot;,
+        &quot;type&quot;: &quot;KSampler&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 430,
+          &quot;y&quot;: 80
+        },
+        &quot;values&quot;: {
+          &quot;seed&quot;: 42,
+          &quot;steps&quot;: 12
+        }
+      }
+    ],
+    &quot;connections&quot;: [
+      {
+        &quot;id&quot;: &quot;model&quot;,
+        &quot;fromNodeId&quot;: &quot;checkpoint&quot;,
+        &quot;fromSocketId&quot;: &quot;MODEL&quot;,
+        &quot;toNodeId&quot;: &quot;sampler&quot;,
+        &quot;toSocketId&quot;: &quot;model&quot;,
+        &quot;type&quot;: &quot;MODEL&quot;
+      },
+      {
+        &quot;id&quot;: &quot;positive&quot;,
+        &quot;fromNodeId&quot;: &quot;prompt&quot;,
+        &quot;fromSocketId&quot;: &quot;CONDITIONING&quot;,
+        &quot;toNodeId&quot;: &quot;sampler&quot;,
+        &quot;toSocketId&quot;: &quot;positive&quot;,
+        &quot;type&quot;: &quot;CONDITIONING&quot;
+      }
+    ]
+  },
+  &quot;replayWorkflow&quot;: {
+    &quot;format&quot;: &quot;comfycanvas&quot;,
+    &quot;version&quot;: 1,
+    &quot;nodes&quot;: [
+      {
+        &quot;id&quot;: &quot;checkpoint&quot;,
+        &quot;type&quot;: &quot;CheckpointLoaderSimple&quot;,
+        &quot;title&quot;: &quot;Load Checkpoint&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 20,
+          &quot;y&quot;: 20
+        },
+        &quot;width&quot;: 300,
+        &quot;inputs&quot;: [],
+        &quot;outputs&quot;: [
+          {
+            &quot;id&quot;: &quot;MODEL&quot;,
+            &quot;name&quot;: &quot;MODEL&quot;,
+            &quot;type&quot;: &quot;MODEL&quot;,
+            &quot;label&quot;: &quot;MODEL&quot;
+          },
+          {
+            &quot;id&quot;: &quot;CLIP&quot;,
+            &quot;name&quot;: &quot;CLIP&quot;,
+            &quot;type&quot;: &quot;CLIP&quot;,
+            &quot;label&quot;: &quot;CLIP&quot;
+          },
+          {
+            &quot;id&quot;: &quot;VAE&quot;,
+            &quot;name&quot;: &quot;VAE&quot;,
+            &quot;type&quot;: &quot;VAE&quot;,
+            &quot;label&quot;: &quot;VAE&quot;
+          }
+        ],
+        &quot;values&quot;: {
+          &quot;ckpt_name&quot;: &quot;urn:air:sd1:checkpoint:civitai:4384@128713&quot;,
+          &quot;targetProvider&quot;: &quot;civitai&quot;
+        },
+        &quot;state&quot;: &quot;idle&quot;
+      },
+      {
+        &quot;id&quot;: &quot;prompt&quot;,
+        &quot;type&quot;: &quot;CLIPTextEncode&quot;,
+        &quot;title&quot;: &quot;CLIP Text Encode (Positive Prompt)&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 350,
+          &quot;y&quot;: 20
+        },
+        &quot;width&quot;: 300,
+        &quot;inputs&quot;: [
+          {
+            &quot;id&quot;: &quot;clip&quot;,
+            &quot;name&quot;: &quot;clip&quot;,
+            &quot;type&quot;: &quot;CLIP&quot;,
+            &quot;label&quot;: &quot;CLIP&quot;
+          }
+        ],
+        &quot;outputs&quot;: [
+          {
+            &quot;id&quot;: &quot;CONDITIONING&quot;,
+            &quot;name&quot;: &quot;CONDITIONING&quot;,
+            &quot;type&quot;: &quot;CONDITIONING&quot;,
+            &quot;label&quot;: &quot;CONDITIONING&quot;
+          }
+        ],
+        &quot;values&quot;: {
+          &quot;text&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;
+        },
+        &quot;state&quot;: &quot;idle&quot;
+      },
+      {
+        &quot;id&quot;: &quot;sampler&quot;,
+        &quot;type&quot;: &quot;KSampler&quot;,
+        &quot;title&quot;: &quot;KSampler&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 700,
+          &quot;y&quot;: 20
+        },
+        &quot;width&quot;: 300,
+        &quot;inputs&quot;: [
+          {
+            &quot;id&quot;: &quot;model&quot;,
+            &quot;name&quot;: &quot;model&quot;,
+            &quot;type&quot;: &quot;MODEL&quot;,
+            &quot;label&quot;: &quot;MODEL&quot;
+          },
+          {
+            &quot;id&quot;: &quot;positive&quot;,
+            &quot;name&quot;: &quot;positive&quot;,
+            &quot;type&quot;: &quot;CONDITIONING&quot;,
+            &quot;label&quot;: &quot;positive&quot;
+          },
+          {
+            &quot;id&quot;: &quot;negative&quot;,
+            &quot;name&quot;: &quot;negative&quot;,
+            &quot;type&quot;: &quot;CONDITIONING&quot;,
+            &quot;label&quot;: &quot;negative&quot;
+          },
+          {
+            &quot;id&quot;: &quot;latent_image&quot;,
+            &quot;name&quot;: &quot;latent_image&quot;,
+            &quot;type&quot;: &quot;LATENT&quot;,
+            &quot;label&quot;: &quot;latent_image&quot;
+          }
+        ],
+        &quot;outputs&quot;: [
+          {
+            &quot;id&quot;: &quot;LATENT&quot;,
+            &quot;name&quot;: &quot;LATENT&quot;,
+            &quot;type&quot;: &quot;LATENT&quot;,
+            &quot;label&quot;: &quot;LATENT&quot;
+          }
+        ],
+        &quot;values&quot;: {
+          &quot;seed&quot;: 42,
+          &quot;control_after_generate&quot;: &quot;fixed&quot;,
+          &quot;steps&quot;: 12,
+          &quot;cfg&quot;: 7,
+          &quot;sampler_name&quot;: &quot;euler&quot;,
+          &quot;scheduler&quot;: &quot;discrete&quot;
+        },
+        &quot;state&quot;: &quot;idle&quot;
+      },
+      {
+        &quot;id&quot;: &quot;latent&quot;,
+        &quot;type&quot;: &quot;EmptyLatentImage&quot;,
+        &quot;title&quot;: &quot;Empty Latent Image&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 350,
+          &quot;y&quot;: 400
+        },
+        &quot;width&quot;: 300,
+        &quot;inputs&quot;: [],
+        &quot;outputs&quot;: [
+          {
+            &quot;id&quot;: &quot;LATENT&quot;,
+            &quot;name&quot;: &quot;LATENT&quot;,
+            &quot;type&quot;: &quot;LATENT&quot;,
+            &quot;label&quot;: &quot;LATENT&quot;
+          }
+        ],
+        &quot;values&quot;: {
+          &quot;width&quot;: 512,
+          &quot;height&quot;: 512,
+          &quot;batch_size&quot;: 1
+        },
+        &quot;state&quot;: &quot;idle&quot;
+      },
+      {
+        &quot;id&quot;: &quot;negative&quot;,
+        &quot;type&quot;: &quot;CLIPTextEncodeNegative&quot;,
+        &quot;title&quot;: &quot;CLIP Text Encode (Negative Prompt)&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 20,
+          &quot;y&quot;: 650
+        },
+        &quot;width&quot;: 300,
+        &quot;inputs&quot;: [
+          {
+            &quot;id&quot;: &quot;clip&quot;,
+            &quot;name&quot;: &quot;clip&quot;,
+            &quot;type&quot;: &quot;CLIP&quot;,
+            &quot;label&quot;: &quot;CLIP&quot;
+          }
+        ],
+        &quot;outputs&quot;: [
+          {
+            &quot;id&quot;: &quot;CONDITIONING&quot;,
+            &quot;name&quot;: &quot;CONDITIONING&quot;,
+            &quot;type&quot;: &quot;CONDITIONING&quot;,
+            &quot;label&quot;: &quot;CONDITIONING&quot;
+          }
+        ],
+        &quot;values&quot;: {
+          &quot;text&quot;: &quot;blurry, low quality&quot;
+        },
+        &quot;state&quot;: &quot;idle&quot;
+      },
+      {
+        &quot;id&quot;: &quot;lora-0&quot;,
+        &quot;type&quot;: &quot;LoRALoader&quot;,
+        &quot;title&quot;: &quot;Load LoRA (Civitai / Local)&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 20,
+          &quot;y&quot;: 350
+        },
+        &quot;width&quot;: 300,
+        &quot;inputs&quot;: [
+          {
+            &quot;id&quot;: &quot;model&quot;,
+            &quot;name&quot;: &quot;model&quot;,
+            &quot;type&quot;: &quot;MODEL&quot;,
+            &quot;label&quot;: &quot;MODEL&quot;
+          },
+          {
+            &quot;id&quot;: &quot;clip&quot;,
+            &quot;name&quot;: &quot;clip&quot;,
+            &quot;type&quot;: &quot;CLIP&quot;,
+            &quot;label&quot;: &quot;CLIP&quot;
+          }
+        ],
+        &quot;outputs&quot;: [
+          {
+            &quot;id&quot;: &quot;MODEL&quot;,
+            &quot;name&quot;: &quot;MODEL&quot;,
+            &quot;type&quot;: &quot;MODEL&quot;,
+            &quot;label&quot;: &quot;MODEL&quot;
+          },
+          {
+            &quot;id&quot;: &quot;CLIP&quot;,
+            &quot;name&quot;: &quot;CLIP&quot;,
+            &quot;type&quot;: &quot;CLIP&quot;,
+            &quot;label&quot;: &quot;CLIP&quot;
+          }
+        ],
+        &quot;values&quot;: {
+          &quot;lora_name&quot;: &quot;Add More Details - Detail Enhancer / Tweaker (细节调整) LoRA&quot;,
+          &quot;civitai_id&quot;: &quot;urn:air:sd1:lora:civitai:82098@87153&quot;,
+          &quot;strength_model&quot;: 0.7,
+          &quot;strength_clip&quot;: 0.7
+        },
+        &quot;state&quot;: &quot;idle&quot;
+      }
+    ],
+    &quot;connections&quot;: [
+      {
+        &quot;id&quot;: &quot;model&quot;,
+        &quot;fromNodeId&quot;: &quot;lora-0&quot;,
+        &quot;fromSocketId&quot;: &quot;MODEL&quot;,
+        &quot;toNodeId&quot;: &quot;sampler&quot;,
+        &quot;toSocketId&quot;: &quot;model&quot;,
+        &quot;type&quot;: &quot;MODEL&quot;
+      },
+      {
+        &quot;id&quot;: &quot;positive&quot;,
+        &quot;fromNodeId&quot;: &quot;prompt&quot;,
+        &quot;fromSocketId&quot;: &quot;CONDITIONING&quot;,
+        &quot;toNodeId&quot;: &quot;sampler&quot;,
+        &quot;toSocketId&quot;: &quot;positive&quot;,
+        &quot;type&quot;: &quot;CONDITIONING&quot;
+      },
+      {
+        &quot;id&quot;: &quot;clip&quot;,
+        &quot;fromNodeId&quot;: &quot;checkpoint&quot;,
+        &quot;fromSocketId&quot;: &quot;CLIP&quot;,
+        &quot;toNodeId&quot;: &quot;prompt&quot;,
+        &quot;toSocketId&quot;: &quot;clip&quot;,
+        &quot;type&quot;: &quot;CLIP&quot;
+      },
+      {
+        &quot;id&quot;: &quot;latent&quot;,
+        &quot;fromNodeId&quot;: &quot;latent&quot;,
+        &quot;fromSocketId&quot;: &quot;LATENT&quot;,
+        &quot;toNodeId&quot;: &quot;sampler&quot;,
+        &quot;toSocketId&quot;: &quot;latent_image&quot;,
+        &quot;type&quot;: &quot;LATENT&quot;
+      },
+      {
+        &quot;id&quot;: &quot;negative&quot;,
+        &quot;fromNodeId&quot;: &quot;negative&quot;,
+        &quot;fromSocketId&quot;: &quot;CONDITIONING&quot;,
+        &quot;toNodeId&quot;: &quot;sampler&quot;,
+        &quot;toSocketId&quot;: &quot;negative&quot;,
+        &quot;type&quot;: &quot;CONDITIONING&quot;
+      },
+      {
+        &quot;id&quot;: &quot;lora-model-0&quot;,
+        &quot;fromNodeId&quot;: &quot;checkpoint&quot;,
+        &quot;fromSocketId&quot;: &quot;MODEL&quot;,
+        &quot;toNodeId&quot;: &quot;lora-0&quot;,
+        &quot;toSocketId&quot;: &quot;model&quot;,
+        &quot;type&quot;: &quot;MODEL&quot;
+      }
+    ],
+    &quot;canvasMode&quot;: &quot;graph&quot;,
+    &quot;spatialFrames&quot;: [],
+    &quot;executingNodeId&quot;: &quot;sampler&quot;
+  },
+  &quot;response&quot;: {
+    &quot;success&quot;: true,
+    &quot;imageUrl&quot;: &quot;/verification/civitai-lora.jpg&quot;,
+    &quot;mediaUrl&quot;: &quot;/verification/civitai-lora.jpg&quot;,
+    &quot;provider&quot;: &quot;Civitai 官方原生生成引擎&quot;,
+    &quot;model&quot;: &quot;urn:air:sd1:checkpoint:civitai:4384@128713&quot;,
+    &quot;historyItem&quot;: {
+      &quot;url&quot;: &quot;/verification/civitai-lora.jpg&quot;,
+      &quot;prompt&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;,
+      &quot;negativePrompt&quot;: &quot;blurry, low quality&quot;,
+      &quot;provider&quot;: &quot;Civitai 官方原生生成引擎&quot;,
+      &quot;model&quot;: &quot;urn:air:sd1:checkpoint:civitai:4384@128713&quot;,
+      &quot;seed&quot;: 42,
+      &quot;steps&quot;: 12,
+      &quot;cfg&quot;: 7,
+      &quot;loras&quot;: [
+        {
+          &quot;name&quot;: &quot;urn:air:sd1:lora:civitai:82098@87153&quot;,
+          &quot;strength&quot;: 0.7
+        }
+      ],
+      &quot;workflowSnapshot&quot;: {
+        &quot;format&quot;: &quot;comfycanvas&quot;,
+        &quot;version&quot;: 1,
+        &quot;nodes&quot;: [
+          {
+            &quot;id&quot;: &quot;checkpoint&quot;,
+            &quot;type&quot;: &quot;CheckpointLoaderSimple&quot;,
+            &quot;pos&quot;: {
+              &quot;x&quot;: 40,
+              &quot;y&quot;: 40
+            },
+            &quot;values&quot;: {
+              &quot;ckpt_name&quot;: &quot;urn:air:sd1:checkpoint:civitai:4384@128713&quot;,
+              &quot;targetProvider&quot;: &quot;civitai&quot;,
+              &quot;model&quot;: &quot;urn:air:sd1:checkpoint:civitai:4384@128713&quot;,
+              &quot;prompt&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;,
+              &quot;negative_prompt&quot;: &quot;blurry, low quality&quot;,
+              &quot;width&quot;: 512,
+              &quot;height&quot;: 512,
+              &quot;steps&quot;: 12,
+              &quot;cfg&quot;: 7,
+              &quot;seed&quot;: 42,
+              &quot;sampler_name&quot;: &quot;euler&quot;,
+              &quot;scheduler&quot;: &quot;discrete&quot;,
+              &quot;loras&quot;: [
+                {
+                  &quot;name&quot;: &quot;Add More Details - Detail Enhancer / Tweaker (细节调整) LoRA&quot;,
+                  &quot;civitaiId&quot;: &quot;urn:air:sd1:lora:civitai:82098@87153&quot;,
+                  &quot;strength&quot;: 0.7
+                }
+              ]
+            }
+          },
+          {
+            &quot;id&quot;: &quot;prompt&quot;,
+            &quot;type&quot;: &quot;CLIPTextEncode&quot;,
+            &quot;pos&quot;: {
+              &quot;x&quot;: 40,
+              &quot;y&quot;: 310
+            },
+            &quot;values&quot;: {
+              &quot;text&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;
+            }
+          },
+          {
+            &quot;id&quot;: &quot;sampler&quot;,
+            &quot;type&quot;: &quot;KSampler&quot;,
+            &quot;pos&quot;: {
+              &quot;x&quot;: 430,
+              &quot;y&quot;: 80
+            },
+            &quot;values&quot;: {
+              &quot;seed&quot;: 42,
+              &quot;steps&quot;: 12
+            }
+          }
+        ],
+        &quot;connections&quot;: [
+          {
+            &quot;id&quot;: &quot;model&quot;,
+            &quot;fromNodeId&quot;: &quot;checkpoint&quot;,
+            &quot;fromSocketId&quot;: &quot;MODEL&quot;,
+            &quot;toNodeId&quot;: &quot;sampler&quot;,
+            &quot;toSocketId&quot;: &quot;model&quot;,
+            &quot;type&quot;: &quot;MODEL&quot;
+          },
+          {
+            &quot;id&quot;: &quot;positive&quot;,
+            &quot;fromNodeId&quot;: &quot;prompt&quot;,
+            &quot;fromSocketId&quot;: &quot;CONDITIONING&quot;,
+            &quot;toNodeId&quot;: &quot;sampler&quot;,
+            &quot;toSocketId&quot;: &quot;positive&quot;,
+            &quot;type&quot;: &quot;CONDITIONING&quot;
+          }
+        ]
+      },
+      &quot;requestMetadata&quot;: {
+        &quot;route&quot;: &quot;/api/civitai/generate&quot;,
+        &quot;submissions&quot;: [
+          {
+            &quot;endpoint&quot;: &quot;https://orchestration.civitai.com/v2/consumer/workflows?wait=100&quot;,
+            &quot;parameters&quot;: {
+              &quot;steps&quot;: [
+                {
+                  &quot;$type&quot;: &quot;imageGen&quot;,
+                  &quot;input&quot;: {
+                    &quot;engine&quot;: &quot;sdcpp&quot;,
+                    &quot;ecosystem&quot;: &quot;sd1&quot;,
+                    &quot;operation&quot;: &quot;createImage&quot;,
+                    &quot;prompt&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;,
+                    &quot;model&quot;: &quot;urn:air:sd1:checkpoint:civitai:4384@128713&quot;,
+                    &quot;negativePrompt&quot;: &quot;blurry, low quality&quot;,
+                    &quot;width&quot;: 512,
+                    &quot;height&quot;: 512,
+                    &quot;steps&quot;: 12,
+                    &quot;cfgScale&quot;: 7,
+                    &quot;seed&quot;: 42,
+                    &quot;sampleMethod&quot;: &quot;euler&quot;,
+                    &quot;schedule&quot;: &quot;discrete&quot;,
+                    &quot;loras&quot;: {
+                      &quot;urn:air:sd1:lora:civitai:82098@87153&quot;: 0.7
+                    }
+                  }
+                }
+              ]
+            },
+            &quot;status&quot;: 200
+          }
+        ]
+      },
+      &quot;id&quot;: &quot;hist_1790982073828_68yhi&quot;,
+      &quot;timestamp&quot;: 1790982073828,
+      &quot;actualProvider&quot;: &quot;Civitai 官方原生生成引擎&quot;,
+      &quot;actualModel&quot;: &quot;urn:air:sd1:checkpoint:civitai:4384@128713&quot;
+    }
+  }
+}</pre></details></article><article><div class="head"><h2>huggingface-lora</h2><span class="badge ok">已实际出图</span></div><p class="model">XLabs-AI/flux-RealismLora</p><a href="/verification/huggingface-lora.png"><img src="/verification/huggingface-lora.png" alt="huggingface-lora 的真实生成结果" loading="lazy"></a><p>HTTP 200 · 2026-10-03T00:29:34.116Z</p><div class="actions"><a href="/verification/huggingface-lora.png" download>下载图片</a><a href="huggingface-lora-parameters.json" download>实际参数</a><a href="huggingface-lora-workflow.json" download>工作流 JSON</a><button data-open="11">在画布打开</button></div><p>LoRA: XLabs-AI/flux-RealismLora × 0.8</p><details><summary>请求、端点与工作流记录</summary><pre>{
+  &quot;request&quot;: {
+    &quot;model&quot;: &quot;XLabs-AI/flux-RealismLora&quot;,
+    &quot;inference_provider&quot;: &quot;fal-ai&quot;,
+    &quot;prompt&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;,
+    &quot;width&quot;: 512,
+    &quot;height&quot;: 512,
+    &quot;steps&quot;: 12,
+    &quot;guidance&quot;: 3.5,
+    &quot;seed&quot;: 42,
+    &quot;loras&quot;: [
+      {
+        &quot;name&quot;: &quot;XLabs-AI/flux-RealismLora&quot;,
+        &quot;strength&quot;: 0.8
+      }
+    ]
+  },
+  &quot;upstream&quot;: {
+    &quot;route&quot;: &quot;/api/huggingface/generate&quot;,
+    &quot;submissions&quot;: [
+      {
+        &quot;endpoint&quot;: &quot;https://router.huggingface.co/fal-ai/fal-ai/flux-lora?_subdomain=queue&quot;,
+        &quot;parameters&quot;: {
+          &quot;prompt&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;,
+          &quot;image_size&quot;: {
+            &quot;width&quot;: 512,
+            &quot;height&quot;: 512
+          },
+          &quot;num_inference_steps&quot;: 12,
+          &quot;guidance_scale&quot;: 3.5,
+          &quot;seed&quot;: 42,
+          &quot;loras&quot;: [
+            {
+              &quot;path&quot;: &quot;https://huggingface.co/XLabs-AI/flux-RealismLora/resolve/main/lora.safetensors&quot;,
+              &quot;scale&quot;: 0.8
+            }
+          ]
+        },
+        &quot;status&quot;: 200
+      }
+    ]
+  },
+  &quot;submittedWorkflow&quot;: {
+    &quot;format&quot;: &quot;comfycanvas&quot;,
+    &quot;version&quot;: 1,
+    &quot;nodes&quot;: [
+      {
+        &quot;id&quot;: &quot;checkpoint&quot;,
+        &quot;type&quot;: &quot;CheckpointLoaderSimple&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 40,
+          &quot;y&quot;: 40
+        },
+        &quot;values&quot;: {
+          &quot;ckpt_name&quot;: &quot;XLabs-AI/flux-RealismLora&quot;,
+          &quot;targetProvider&quot;: &quot;huggingface&quot;,
+          &quot;model&quot;: &quot;XLabs-AI/flux-RealismLora&quot;,
+          &quot;inference_provider&quot;: &quot;fal-ai&quot;,
+          &quot;prompt&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;,
+          &quot;width&quot;: 512,
+          &quot;height&quot;: 512,
+          &quot;steps&quot;: 12,
+          &quot;guidance&quot;: 3.5,
+          &quot;seed&quot;: 42,
+          &quot;loras&quot;: [
+            {
+              &quot;name&quot;: &quot;XLabs-AI/flux-RealismLora&quot;,
+              &quot;strength&quot;: 0.8
+            }
+          ]
+        }
+      },
+      {
+        &quot;id&quot;: &quot;prompt&quot;,
+        &quot;type&quot;: &quot;CLIPTextEncode&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 40,
+          &quot;y&quot;: 310
+        },
+        &quot;values&quot;: {
+          &quot;text&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;
+        }
+      },
+      {
+        &quot;id&quot;: &quot;sampler&quot;,
+        &quot;type&quot;: &quot;KSampler&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 430,
+          &quot;y&quot;: 80
+        },
+        &quot;values&quot;: {
+          &quot;seed&quot;: 42,
+          &quot;steps&quot;: 12
+        }
+      }
+    ],
+    &quot;connections&quot;: [
+      {
+        &quot;id&quot;: &quot;model&quot;,
+        &quot;fromNodeId&quot;: &quot;checkpoint&quot;,
+        &quot;fromSocketId&quot;: &quot;MODEL&quot;,
+        &quot;toNodeId&quot;: &quot;sampler&quot;,
+        &quot;toSocketId&quot;: &quot;model&quot;,
+        &quot;type&quot;: &quot;MODEL&quot;
+      },
+      {
+        &quot;id&quot;: &quot;positive&quot;,
+        &quot;fromNodeId&quot;: &quot;prompt&quot;,
+        &quot;fromSocketId&quot;: &quot;CONDITIONING&quot;,
+        &quot;toNodeId&quot;: &quot;sampler&quot;,
+        &quot;toSocketId&quot;: &quot;positive&quot;,
+        &quot;type&quot;: &quot;CONDITIONING&quot;
+      }
+    ]
+  },
+  &quot;replayWorkflow&quot;: {
+    &quot;format&quot;: &quot;comfycanvas&quot;,
+    &quot;version&quot;: 1,
+    &quot;nodes&quot;: [
+      {
+        &quot;id&quot;: &quot;checkpoint&quot;,
+        &quot;type&quot;: &quot;CheckpointLoaderSimple&quot;,
+        &quot;title&quot;: &quot;Load Checkpoint&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 20,
+          &quot;y&quot;: 20
+        },
+        &quot;width&quot;: 300,
+        &quot;inputs&quot;: [],
+        &quot;outputs&quot;: [
+          {
+            &quot;id&quot;: &quot;MODEL&quot;,
+            &quot;name&quot;: &quot;MODEL&quot;,
+            &quot;type&quot;: &quot;MODEL&quot;,
+            &quot;label&quot;: &quot;MODEL&quot;
+          },
+          {
+            &quot;id&quot;: &quot;CLIP&quot;,
+            &quot;name&quot;: &quot;CLIP&quot;,
+            &quot;type&quot;: &quot;CLIP&quot;,
+            &quot;label&quot;: &quot;CLIP&quot;
+          },
+          {
+            &quot;id&quot;: &quot;VAE&quot;,
+            &quot;name&quot;: &quot;VAE&quot;,
+            &quot;type&quot;: &quot;VAE&quot;,
+            &quot;label&quot;: &quot;VAE&quot;
+          }
+        ],
+        &quot;values&quot;: {
+          &quot;ckpt_name&quot;: &quot;XLabs-AI/flux-RealismLora&quot;,
+          &quot;targetProvider&quot;: &quot;huggingface&quot;,
+          &quot;hf_provider&quot;: &quot;fal-ai&quot;
+        },
+        &quot;state&quot;: &quot;idle&quot;
+      },
+      {
+        &quot;id&quot;: &quot;prompt&quot;,
+        &quot;type&quot;: &quot;CLIPTextEncode&quot;,
+        &quot;title&quot;: &quot;CLIP Text Encode (Positive Prompt)&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 350,
+          &quot;y&quot;: 20
+        },
+        &quot;width&quot;: 300,
+        &quot;inputs&quot;: [
+          {
+            &quot;id&quot;: &quot;clip&quot;,
+            &quot;name&quot;: &quot;clip&quot;,
+            &quot;type&quot;: &quot;CLIP&quot;,
+            &quot;label&quot;: &quot;CLIP&quot;
+          }
+        ],
+        &quot;outputs&quot;: [
+          {
+            &quot;id&quot;: &quot;CONDITIONING&quot;,
+            &quot;name&quot;: &quot;CONDITIONING&quot;,
+            &quot;type&quot;: &quot;CONDITIONING&quot;,
+            &quot;label&quot;: &quot;CONDITIONING&quot;
+          }
+        ],
+        &quot;values&quot;: {
+          &quot;text&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;
+        },
+        &quot;state&quot;: &quot;idle&quot;
+      },
+      {
+        &quot;id&quot;: &quot;sampler&quot;,
+        &quot;type&quot;: &quot;KSampler&quot;,
+        &quot;title&quot;: &quot;KSampler&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 700,
+          &quot;y&quot;: 20
+        },
+        &quot;width&quot;: 300,
+        &quot;inputs&quot;: [
+          {
+            &quot;id&quot;: &quot;model&quot;,
+            &quot;name&quot;: &quot;model&quot;,
+            &quot;type&quot;: &quot;MODEL&quot;,
+            &quot;label&quot;: &quot;MODEL&quot;
+          },
+          {
+            &quot;id&quot;: &quot;positive&quot;,
+            &quot;name&quot;: &quot;positive&quot;,
+            &quot;type&quot;: &quot;CONDITIONING&quot;,
+            &quot;label&quot;: &quot;positive&quot;
+          },
+          {
+            &quot;id&quot;: &quot;negative&quot;,
+            &quot;name&quot;: &quot;negative&quot;,
+            &quot;type&quot;: &quot;CONDITIONING&quot;,
+            &quot;label&quot;: &quot;negative&quot;
+          },
+          {
+            &quot;id&quot;: &quot;latent_image&quot;,
+            &quot;name&quot;: &quot;latent_image&quot;,
+            &quot;type&quot;: &quot;LATENT&quot;,
+            &quot;label&quot;: &quot;latent_image&quot;
+          }
+        ],
+        &quot;outputs&quot;: [
+          {
+            &quot;id&quot;: &quot;LATENT&quot;,
+            &quot;name&quot;: &quot;LATENT&quot;,
+            &quot;type&quot;: &quot;LATENT&quot;,
+            &quot;label&quot;: &quot;LATENT&quot;
+          }
+        ],
+        &quot;values&quot;: {
+          &quot;seed&quot;: 42,
+          &quot;control_after_generate&quot;: &quot;fixed&quot;,
+          &quot;steps&quot;: 12,
+          &quot;cfg&quot;: 3.5
+        },
+        &quot;state&quot;: &quot;idle&quot;
+      },
+      {
+        &quot;id&quot;: &quot;latent&quot;,
+        &quot;type&quot;: &quot;EmptyLatentImage&quot;,
+        &quot;title&quot;: &quot;Empty Latent Image&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 350,
+          &quot;y&quot;: 400
+        },
+        &quot;width&quot;: 300,
+        &quot;inputs&quot;: [],
+        &quot;outputs&quot;: [
+          {
+            &quot;id&quot;: &quot;LATENT&quot;,
+            &quot;name&quot;: &quot;LATENT&quot;,
+            &quot;type&quot;: &quot;LATENT&quot;,
+            &quot;label&quot;: &quot;LATENT&quot;
+          }
+        ],
+        &quot;values&quot;: {
+          &quot;width&quot;: 512,
+          &quot;height&quot;: 512,
+          &quot;batch_size&quot;: 1
+        },
+        &quot;state&quot;: &quot;idle&quot;
+      },
+      {
+        &quot;id&quot;: &quot;lora-0&quot;,
+        &quot;type&quot;: &quot;LoRALoader&quot;,
+        &quot;title&quot;: &quot;Load LoRA (Civitai / Local)&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 20,
+          &quot;y&quot;: 350
+        },
+        &quot;width&quot;: 300,
+        &quot;inputs&quot;: [
+          {
+            &quot;id&quot;: &quot;model&quot;,
+            &quot;name&quot;: &quot;model&quot;,
+            &quot;type&quot;: &quot;MODEL&quot;,
+            &quot;label&quot;: &quot;MODEL&quot;
+          },
+          {
+            &quot;id&quot;: &quot;clip&quot;,
+            &quot;name&quot;: &quot;clip&quot;,
+            &quot;type&quot;: &quot;CLIP&quot;,
+            &quot;label&quot;: &quot;CLIP&quot;
+          }
+        ],
+        &quot;outputs&quot;: [
+          {
+            &quot;id&quot;: &quot;MODEL&quot;,
+            &quot;name&quot;: &quot;MODEL&quot;,
+            &quot;type&quot;: &quot;MODEL&quot;,
+            &quot;label&quot;: &quot;MODEL&quot;
+          },
+          {
+            &quot;id&quot;: &quot;CLIP&quot;,
+            &quot;name&quot;: &quot;CLIP&quot;,
+            &quot;type&quot;: &quot;CLIP&quot;,
+            &quot;label&quot;: &quot;CLIP&quot;
+          }
+        ],
+        &quot;values&quot;: {
+          &quot;lora_name&quot;: &quot;XLabs-AI/flux-RealismLora&quot;,
+          &quot;strength_model&quot;: 0.8,
+          &quot;strength_clip&quot;: 0.8
+        },
+        &quot;state&quot;: &quot;idle&quot;
+      }
+    ],
+    &quot;connections&quot;: [
+      {
+        &quot;id&quot;: &quot;model&quot;,
+        &quot;fromNodeId&quot;: &quot;lora-0&quot;,
+        &quot;fromSocketId&quot;: &quot;MODEL&quot;,
+        &quot;toNodeId&quot;: &quot;sampler&quot;,
+        &quot;toSocketId&quot;: &quot;model&quot;,
+        &quot;type&quot;: &quot;MODEL&quot;
+      },
+      {
+        &quot;id&quot;: &quot;positive&quot;,
+        &quot;fromNodeId&quot;: &quot;prompt&quot;,
+        &quot;fromSocketId&quot;: &quot;CONDITIONING&quot;,
+        &quot;toNodeId&quot;: &quot;sampler&quot;,
+        &quot;toSocketId&quot;: &quot;positive&quot;,
+        &quot;type&quot;: &quot;CONDITIONING&quot;
+      },
+      {
+        &quot;id&quot;: &quot;clip&quot;,
+        &quot;fromNodeId&quot;: &quot;checkpoint&quot;,
+        &quot;fromSocketId&quot;: &quot;CLIP&quot;,
+        &quot;toNodeId&quot;: &quot;prompt&quot;,
+        &quot;toSocketId&quot;: &quot;clip&quot;,
+        &quot;type&quot;: &quot;CLIP&quot;
+      },
+      {
+        &quot;id&quot;: &quot;latent&quot;,
+        &quot;fromNodeId&quot;: &quot;latent&quot;,
+        &quot;fromSocketId&quot;: &quot;LATENT&quot;,
+        &quot;toNodeId&quot;: &quot;sampler&quot;,
+        &quot;toSocketId&quot;: &quot;latent_image&quot;,
+        &quot;type&quot;: &quot;LATENT&quot;
+      },
+      {
+        &quot;id&quot;: &quot;lora-model-0&quot;,
+        &quot;fromNodeId&quot;: &quot;checkpoint&quot;,
+        &quot;fromSocketId&quot;: &quot;MODEL&quot;,
+        &quot;toNodeId&quot;: &quot;lora-0&quot;,
+        &quot;toSocketId&quot;: &quot;model&quot;,
+        &quot;type&quot;: &quot;MODEL&quot;
+      }
+    ],
+    &quot;canvasMode&quot;: &quot;graph&quot;,
+    &quot;spatialFrames&quot;: [],
+    &quot;executingNodeId&quot;: &quot;sampler&quot;
+  },
+  &quot;response&quot;: {
+    &quot;imageUrl&quot;: &quot;/verification/huggingface-lora.png&quot;,
+    &quot;provider&quot;: &quot;Hugging Face&quot;,
+    &quot;actualProvider&quot;: &quot;Hugging Face Inference Providers → fal-ai&quot;,
+    &quot;model&quot;: &quot;XLabs-AI/flux-RealismLora&quot;,
+    &quot;actualModel&quot;: &quot;black-forest-labs/FLUX.1-dev&quot;,
+    &quot;endpoint&quot;: &quot;fal-ai/flux-lora&quot;,
+    &quot;historyItem&quot;: {
+      &quot;url&quot;: &quot;/verification/huggingface-lora.png&quot;,
+      &quot;prompt&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;,
+      &quot;negativePrompt&quot;: null,
+      &quot;provider&quot;: &quot;Hugging Face → fal-ai&quot;,
+      &quot;model&quot;: &quot;black-forest-labs/FLUX.1-dev&quot;,
+      &quot;seed&quot;: 42,
+      &quot;steps&quot;: 12,
+      &quot;cfg&quot;: 3.5,
+      &quot;loras&quot;: [
+        {
+          &quot;name&quot;: &quot;XLabs-AI/flux-RealismLora&quot;,
+          &quot;strength&quot;: 0.8
+        }
+      ],
+      &quot;workflowSnapshot&quot;: {
+        &quot;format&quot;: &quot;comfycanvas&quot;,
+        &quot;version&quot;: 1,
+        &quot;nodes&quot;: [
+          {
+            &quot;id&quot;: &quot;checkpoint&quot;,
+            &quot;type&quot;: &quot;CheckpointLoaderSimple&quot;,
+            &quot;pos&quot;: {
+              &quot;x&quot;: 40,
+              &quot;y&quot;: 40
+            },
+            &quot;values&quot;: {
+              &quot;ckpt_name&quot;: &quot;XLabs-AI/flux-RealismLora&quot;,
+              &quot;targetProvider&quot;: &quot;huggingface&quot;,
+              &quot;model&quot;: &quot;XLabs-AI/flux-RealismLora&quot;,
+              &quot;inference_provider&quot;: &quot;fal-ai&quot;,
+              &quot;prompt&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;,
+              &quot;width&quot;: 512,
+              &quot;height&quot;: 512,
+              &quot;steps&quot;: 12,
+              &quot;guidance&quot;: 3.5,
+              &quot;seed&quot;: 42,
+              &quot;loras&quot;: [
+                {
+                  &quot;name&quot;: &quot;XLabs-AI/flux-RealismLora&quot;,
+                  &quot;strength&quot;: 0.8
+                }
+              ]
+            }
+          },
+          {
+            &quot;id&quot;: &quot;prompt&quot;,
+            &quot;type&quot;: &quot;CLIPTextEncode&quot;,
+            &quot;pos&quot;: {
+              &quot;x&quot;: 40,
+              &quot;y&quot;: 310
+            },
+            &quot;values&quot;: {
+              &quot;text&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;
+            }
+          },
+          {
+            &quot;id&quot;: &quot;sampler&quot;,
+            &quot;type&quot;: &quot;KSampler&quot;,
+            &quot;pos&quot;: {
+              &quot;x&quot;: 430,
+              &quot;y&quot;: 80
+            },
+            &quot;values&quot;: {
+              &quot;seed&quot;: 42,
+              &quot;steps&quot;: 12
+            }
+          }
+        ],
+        &quot;connections&quot;: [
+          {
+            &quot;id&quot;: &quot;model&quot;,
+            &quot;fromNodeId&quot;: &quot;checkpoint&quot;,
+            &quot;fromSocketId&quot;: &quot;MODEL&quot;,
+            &quot;toNodeId&quot;: &quot;sampler&quot;,
+            &quot;toSocketId&quot;: &quot;model&quot;,
+            &quot;type&quot;: &quot;MODEL&quot;
+          },
+          {
+            &quot;id&quot;: &quot;positive&quot;,
+            &quot;fromNodeId&quot;: &quot;prompt&quot;,
+            &quot;fromSocketId&quot;: &quot;CONDITIONING&quot;,
+            &quot;toNodeId&quot;: &quot;sampler&quot;,
+            &quot;toSocketId&quot;: &quot;positive&quot;,
+            &quot;type&quot;: &quot;CONDITIONING&quot;
+          }
+        ]
+      },
+      &quot;requestMetadata&quot;: {
+        &quot;route&quot;: &quot;/api/huggingface/generate&quot;,
+        &quot;submissions&quot;: [
+          {
+            &quot;endpoint&quot;: &quot;https://router.huggingface.co/fal-ai/fal-ai/flux-lora?_subdomain=queue&quot;,
+            &quot;parameters&quot;: {
+              &quot;prompt&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;,
+              &quot;image_size&quot;: {
+                &quot;width&quot;: 512,
+                &quot;height&quot;: 512
+              },
+              &quot;num_inference_steps&quot;: 12,
+              &quot;guidance_scale&quot;: 3.5,
+              &quot;seed&quot;: 42,
+              &quot;loras&quot;: [
+                {
+                  &quot;path&quot;: &quot;https://huggingface.co/XLabs-AI/flux-RealismLora/resolve/main/lora.safetensors&quot;,
+                  &quot;scale&quot;: 0.8
+                }
+              ]
+            },
+            &quot;status&quot;: 200
+          }
+        ]
+      },
+      &quot;id&quot;: &quot;hist_1790987436167_v6hsr&quot;,
+      &quot;timestamp&quot;: 1790987436167,
+      &quot;actualProvider&quot;: &quot;Hugging Face → fal-ai&quot;,
+      &quot;actualModel&quot;: &quot;black-forest-labs/FLUX.1-dev&quot;
+    }
+  }
+}</pre></details></article><article><div class="head"><h2>tensorart-model-api-1</h2><span class="badge limited">模型 API 鉴权失败</span></div><p class="model">672797109289765558</p><p class="error">Tensor.Art 模型 API 鉴权 / 模型查询失败 [404]</p><p>HTTP 404 · 2026-10-03T00:30:36.196Z</p><details><summary>请求、端点与工作流记录</summary><pre>{
+  &quot;request&quot;: {
+    &quot;model&quot;: &quot;672797109289765558&quot;,
+    &quot;prompt&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;,
+    &quot;width&quot;: 512,
+    &quot;height&quot;: 512,
+    &quot;steps&quot;: 12,
+    &quot;cfg&quot;: 7,
+    &quot;seed&quot;: 42,
+    &quot;loras&quot;: [
+      {
+        &quot;name&quot;: &quot;672390779613802167&quot;,
+        &quot;strength&quot;: 0.8
+      }
+    ]
+  },
+  &quot;submittedWorkflow&quot;: {
+    &quot;format&quot;: &quot;comfycanvas&quot;,
+    &quot;version&quot;: 1,
+    &quot;nodes&quot;: [
+      {
+        &quot;id&quot;: &quot;checkpoint&quot;,
+        &quot;type&quot;: &quot;CheckpointLoaderSimple&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 40,
+          &quot;y&quot;: 40
+        },
+        &quot;values&quot;: {
+          &quot;ckpt_name&quot;: &quot;672797109289765558&quot;,
+          &quot;targetProvider&quot;: &quot;tensorart&quot;,
+          &quot;model&quot;: &quot;672797109289765558&quot;,
+          &quot;prompt&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;,
+          &quot;width&quot;: 512,
+          &quot;height&quot;: 512,
+          &quot;steps&quot;: 12,
+          &quot;cfg&quot;: 7,
+          &quot;seed&quot;: 42,
+          &quot;loras&quot;: [
+            {
+              &quot;name&quot;: &quot;672390779613802167&quot;,
+              &quot;strength&quot;: 0.8
+            }
+          ]
+        }
+      },
+      {
+        &quot;id&quot;: &quot;prompt&quot;,
+        &quot;type&quot;: &quot;CLIPTextEncode&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 40,
+          &quot;y&quot;: 310
+        },
+        &quot;values&quot;: {
+          &quot;text&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;
+        }
+      },
+      {
+        &quot;id&quot;: &quot;sampler&quot;,
+        &quot;type&quot;: &quot;KSampler&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 430,
+          &quot;y&quot;: 80
+        },
+        &quot;values&quot;: {
+          &quot;seed&quot;: 42,
+          &quot;steps&quot;: 12
+        }
+      }
+    ],
+    &quot;connections&quot;: [
+      {
+        &quot;id&quot;: &quot;model&quot;,
+        &quot;fromNodeId&quot;: &quot;checkpoint&quot;,
+        &quot;fromSocketId&quot;: &quot;MODEL&quot;,
+        &quot;toNodeId&quot;: &quot;sampler&quot;,
+        &quot;toSocketId&quot;: &quot;model&quot;,
+        &quot;type&quot;: &quot;MODEL&quot;
+      },
+      {
+        &quot;id&quot;: &quot;positive&quot;,
+        &quot;fromNodeId&quot;: &quot;prompt&quot;,
+        &quot;fromSocketId&quot;: &quot;CONDITIONING&quot;,
+        &quot;toNodeId&quot;: &quot;sampler&quot;,
+        &quot;toSocketId&quot;: &quot;positive&quot;,
+        &quot;type&quot;: &quot;CONDITIONING&quot;
+      }
+    ]
+  },
+  &quot;response&quot;: {
+    &quot;error&quot;: &quot;Tensor.Art 模型 API 鉴权 / 模型查询失败 [404]&quot;,
+    &quot;details&quot;: &quot;{\&quot;code\&quot;:100001,\&quot;message\&quot;:\&quot;unauthorized\&quot;,\&quot;tips\&quot;:\&quot;app not found\&quot;}&quot;,
+    &quot;exactEndpointCalled&quot;: &quot;https://tams-api.tensor.art/v1/models/672797109289765558&quot;,
+    &quot;requestedModel&quot;: &quot;672797109289765558&quot;,
+    &quot;credentialHint&quot;: &quot;模型 API 使用 TAMS Bearer Key；OpenWorks ak_tensor 工具 key 不代表模型 API 授权&quot;
+  }
+}</pre></details></article><article><div class="head"><h2>tensorart-model-api-2</h2><span class="badge limited">模型 API 鉴权失败</span></div><p class="model">672797109289765558</p><p class="error">Tensor.Art 模型 API 鉴权 / 模型查询失败 [404]</p><p>HTTP 404 · 2026-10-03T00:30:47.702Z</p><details><summary>请求、端点与工作流记录</summary><pre>{
+  &quot;request&quot;: {
+    &quot;model&quot;: &quot;672797109289765558&quot;,
+    &quot;prompt&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;,
+    &quot;width&quot;: 512,
+    &quot;height&quot;: 512,
+    &quot;steps&quot;: 12,
+    &quot;cfg&quot;: 7,
+    &quot;seed&quot;: 42,
+    &quot;loras&quot;: [
+      {
+        &quot;name&quot;: &quot;672390779613802167&quot;,
+        &quot;strength&quot;: 0.8
+      }
+    ]
+  },
+  &quot;submittedWorkflow&quot;: {
+    &quot;format&quot;: &quot;comfycanvas&quot;,
+    &quot;version&quot;: 1,
+    &quot;nodes&quot;: [
+      {
+        &quot;id&quot;: &quot;checkpoint&quot;,
+        &quot;type&quot;: &quot;CheckpointLoaderSimple&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 40,
+          &quot;y&quot;: 40
+        },
+        &quot;values&quot;: {
+          &quot;ckpt_name&quot;: &quot;672797109289765558&quot;,
+          &quot;targetProvider&quot;: &quot;tensorart&quot;,
+          &quot;model&quot;: &quot;672797109289765558&quot;,
+          &quot;prompt&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;,
+          &quot;width&quot;: 512,
+          &quot;height&quot;: 512,
+          &quot;steps&quot;: 12,
+          &quot;cfg&quot;: 7,
+          &quot;seed&quot;: 42,
+          &quot;loras&quot;: [
+            {
+              &quot;name&quot;: &quot;672390779613802167&quot;,
+              &quot;strength&quot;: 0.8
+            }
+          ]
+        }
+      },
+      {
+        &quot;id&quot;: &quot;prompt&quot;,
+        &quot;type&quot;: &quot;CLIPTextEncode&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 40,
+          &quot;y&quot;: 310
+        },
+        &quot;values&quot;: {
+          &quot;text&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;
+        }
+      },
+      {
+        &quot;id&quot;: &quot;sampler&quot;,
+        &quot;type&quot;: &quot;KSampler&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 430,
+          &quot;y&quot;: 80
+        },
+        &quot;values&quot;: {
+          &quot;seed&quot;: 42,
+          &quot;steps&quot;: 12
+        }
+      }
+    ],
+    &quot;connections&quot;: [
+      {
+        &quot;id&quot;: &quot;model&quot;,
+        &quot;fromNodeId&quot;: &quot;checkpoint&quot;,
+        &quot;fromSocketId&quot;: &quot;MODEL&quot;,
+        &quot;toNodeId&quot;: &quot;sampler&quot;,
+        &quot;toSocketId&quot;: &quot;model&quot;,
+        &quot;type&quot;: &quot;MODEL&quot;
+      },
+      {
+        &quot;id&quot;: &quot;positive&quot;,
+        &quot;fromNodeId&quot;: &quot;prompt&quot;,
+        &quot;fromSocketId&quot;: &quot;CONDITIONING&quot;,
+        &quot;toNodeId&quot;: &quot;sampler&quot;,
+        &quot;toSocketId&quot;: &quot;positive&quot;,
+        &quot;type&quot;: &quot;CONDITIONING&quot;
+      }
+    ]
+  },
+  &quot;response&quot;: {
+    &quot;error&quot;: &quot;Tensor.Art 模型 API 鉴权 / 模型查询失败 [404]&quot;,
+    &quot;details&quot;: &quot;{\&quot;code\&quot;:100001,\&quot;message\&quot;:\&quot;unauthorized\&quot;,\&quot;tips\&quot;:\&quot;app not found\&quot;}&quot;,
+    &quot;exactEndpointCalled&quot;: &quot;https://tams-api.tensor.art/v1/models/672797109289765558&quot;,
+    &quot;requestedModel&quot;: &quot;672797109289765558&quot;,
+    &quot;credentialHint&quot;: &quot;模型 API 使用 TAMS Bearer Key；OpenWorks ak_tensor 工具 key 不代表模型 API 授权&quot;
+  }
+}</pre></details></article><article><div class="head"><h2>nanogpt-model-capabilities</h2><span class="badge limited">模型 API 鉴权失败</span></div><p class="model">flux-schnell</p><p class="error">NanoGPT 生图失败 [401]: {&quot;error&quot;:{&quot;message&quot;:&quot;Invalid session&quot;,&quot;type&quot;:&quot;invalid_request_error&quot;,&quot;code&quot;:&quot;invalid_api_key&quot;}}</p><p>HTTP 401 · 2026-10-03T00:30:48.014Z</p><details><summary>请求、端点与工作流记录</summary><pre>{
+  &quot;request&quot;: {
+    &quot;model&quot;: &quot;flux-schnell&quot;,
+    &quot;prompt&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;,
+    &quot;width&quot;: 1024,
+    &quot;height&quot;: 1024
+  },
+  &quot;submittedWorkflow&quot;: {
+    &quot;format&quot;: &quot;comfycanvas&quot;,
+    &quot;version&quot;: 1,
+    &quot;nodes&quot;: [
+      {
+        &quot;id&quot;: &quot;checkpoint&quot;,
+        &quot;type&quot;: &quot;CheckpointLoaderSimple&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 40,
+          &quot;y&quot;: 40
+        },
+        &quot;values&quot;: {
+          &quot;ckpt_name&quot;: &quot;flux-schnell&quot;,
+          &quot;targetProvider&quot;: &quot;nanogpt&quot;,
+          &quot;model&quot;: &quot;flux-schnell&quot;,
+          &quot;prompt&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;,
+          &quot;width&quot;: 1024,
+          &quot;height&quot;: 1024
+        }
+      },
+      {
+        &quot;id&quot;: &quot;prompt&quot;,
+        &quot;type&quot;: &quot;CLIPTextEncode&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 40,
+          &quot;y&quot;: 310
+        },
+        &quot;values&quot;: {
+          &quot;text&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;
+        }
+      },
+      {
+        &quot;id&quot;: &quot;sampler&quot;,
+        &quot;type&quot;: &quot;KSampler&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 430,
+          &quot;y&quot;: 80
+        },
+        &quot;values&quot;: {}
+      }
+    ],
+    &quot;connections&quot;: [
+      {
+        &quot;id&quot;: &quot;model&quot;,
+        &quot;fromNodeId&quot;: &quot;checkpoint&quot;,
+        &quot;fromSocketId&quot;: &quot;MODEL&quot;,
+        &quot;toNodeId&quot;: &quot;sampler&quot;,
+        &quot;toSocketId&quot;: &quot;model&quot;,
+        &quot;type&quot;: &quot;MODEL&quot;
+      },
+      {
+        &quot;id&quot;: &quot;positive&quot;,
+        &quot;fromNodeId&quot;: &quot;prompt&quot;,
+        &quot;fromSocketId&quot;: &quot;CONDITIONING&quot;,
+        &quot;toNodeId&quot;: &quot;sampler&quot;,
+        &quot;toSocketId&quot;: &quot;positive&quot;,
+        &quot;type&quot;: &quot;CONDITIONING&quot;
+      }
+    ]
+  },
+  &quot;response&quot;: {
+    &quot;error&quot;: &quot;NanoGPT 生图失败 [401]: {\&quot;error\&quot;:{\&quot;message\&quot;:\&quot;Invalid session\&quot;,\&quot;type\&quot;:\&quot;invalid_request_error\&quot;,\&quot;code\&quot;:\&quot;invalid_api_key\&quot;}}&quot;
+  }
+}</pre></details></article><article><div class="head"><h2>fal-parameter-audit</h2><span class="badge limited">计费 / 额度限制</span></div><p class="model">fal-ai/flux-lora</p><p class="error">Fal.ai 接口执行失败 [403]: {&quot;detail&quot;:&quot;User is locked. Reason: TOP_UP.&quot;}</p><p>HTTP 403 · 2026-10-03T00:30:56.016Z</p><details><summary>请求、端点与工作流记录</summary><pre>{
+  &quot;request&quot;: {
+    &quot;model&quot;: &quot;fal-ai/flux-lora&quot;,
+    &quot;prompt&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;,
+    &quot;image_size&quot;: {
+      &quot;width&quot;: 512,
+      &quot;height&quot;: 512
+    },
+    &quot;num_inference_steps&quot;: 12,
+    &quot;guidance_scale&quot;: 3.5,
+    &quot;seed&quot;: 42,
+    &quot;loras&quot;: [
+      {
+        &quot;path&quot;: &quot;https://huggingface.co/XLabs-AI/flux-RealismLora/resolve/main/lora.safetensors&quot;,
+        &quot;scale&quot;: 0.8
+      }
+    ]
+  },
+  &quot;submittedWorkflow&quot;: {
+    &quot;format&quot;: &quot;comfycanvas&quot;,
+    &quot;version&quot;: 1,
+    &quot;nodes&quot;: [
+      {
+        &quot;id&quot;: &quot;checkpoint&quot;,
+        &quot;type&quot;: &quot;CheckpointLoaderSimple&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 40,
+          &quot;y&quot;: 40
+        },
+        &quot;values&quot;: {
+          &quot;ckpt_name&quot;: &quot;fal-ai/flux-lora&quot;,
+          &quot;targetProvider&quot;: &quot;fal&quot;,
+          &quot;model&quot;: &quot;fal-ai/flux-lora&quot;,
+          &quot;prompt&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;,
+          &quot;image_size&quot;: {
+            &quot;width&quot;: 512,
+            &quot;height&quot;: 512
+          },
+          &quot;num_inference_steps&quot;: 12,
+          &quot;guidance_scale&quot;: 3.5,
+          &quot;seed&quot;: 42,
+          &quot;loras&quot;: [
+            {
+              &quot;path&quot;: &quot;https://huggingface.co/XLabs-AI/flux-RealismLora/resolve/main/lora.safetensors&quot;,
+              &quot;scale&quot;: 0.8
+            }
+          ]
+        }
+      },
+      {
+        &quot;id&quot;: &quot;prompt&quot;,
+        &quot;type&quot;: &quot;CLIPTextEncode&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 40,
+          &quot;y&quot;: 310
+        },
+        &quot;values&quot;: {
+          &quot;text&quot;: &quot;A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering&quot;
+        }
+      },
+      {
+        &quot;id&quot;: &quot;sampler&quot;,
+        &quot;type&quot;: &quot;KSampler&quot;,
+        &quot;pos&quot;: {
+          &quot;x&quot;: 430,
+          &quot;y&quot;: 80
+        },
+        &quot;values&quot;: {
+          &quot;seed&quot;: 42,
+          &quot;steps&quot;: 12,
+          &quot;cfg&quot;: 3.5
+        }
+      }
+    ],
+    &quot;connections&quot;: [
+      {
+        &quot;id&quot;: &quot;model&quot;,
+        &quot;fromNodeId&quot;: &quot;checkpoint&quot;,
+        &quot;fromSocketId&quot;: &quot;MODEL&quot;,
+        &quot;toNodeId&quot;: &quot;sampler&quot;,
+        &quot;toSocketId&quot;: &quot;model&quot;,
+        &quot;type&quot;: &quot;MODEL&quot;
+      },
+      {
+        &quot;id&quot;: &quot;positive&quot;,
+        &quot;fromNodeId&quot;: &quot;prompt&quot;,
+        &quot;fromSocketId&quot;: &quot;CONDITIONING&quot;,
+        &quot;toNodeId&quot;: &quot;sampler&quot;,
+        &quot;toSocketId&quot;: &quot;positive&quot;,
+        &quot;type&quot;: &quot;CONDITIONING&quot;
+      }
+    ]
+  },
+  &quot;response&quot;: {
+    &quot;error&quot;: &quot;Fal.ai 接口执行失败 [403]: {\&quot;detail\&quot;:\&quot;User is locked. Reason: TOP_UP.\&quot;}&quot;
+  }
+}</pre></details></article></section></main><script type="module">const results=await (await fetch('results.json')).json();document.querySelectorAll('[data-open]').forEach(button=>button.addEventListener('click',()=>{try{const r=results[Number(button.dataset.open)],key='comfycanvas_boards_v2';const boards=JSON.parse(localStorage.getItem(key)||'[]');const id='verification-'+r.name;const project={...r.replayWorkflow,id,name:'验收 · '+r.name,createdAt:Date.now(),updatedAt:Date.now(),transform:{x:80,y:160,scale:.7}};localStorage.setItem(key,JSON.stringify([...boards.filter(b=>b.id!==id),project]));localStorage.setItem('comfycanvas_active_board_v2',id);localStorage.setItem('comfycanvas_mode_v2','graph');location.href='/';}catch(error){document.getElementById('notice').textContent='打开工作流失败：'+error.message;}}));</script></html>

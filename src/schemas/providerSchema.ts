@@ -7,6 +7,9 @@
  * 绝不许发给上游、绝不许写进历史；文档没写就是 undefined。
  */
 
+import { Z_IMAGE_RESOLUTIONS, Z_IMAGE_SOURCE } from './zImageSpace';
+import {TENSOR_JOB_DOC} from './tensorModelApi';
+
 /** supported = 官方列出；unverified = 官方未说明是否生效；unsupported = 该服务商不支持；deprecated = 已下线 */
 export type FieldStatus = 'supported' | 'unverified' | 'unsupported' | 'deprecated';
 export const FIELD_STATUSES: readonly FieldStatus[] = ['supported', 'unverified', 'unsupported', 'deprecated'];
@@ -15,7 +18,7 @@ export type Provider = 'gemini' | 'fal' | 'civitai' | 'openai_compat' | 'grok_co
 
 /** 画布侧字段名；上游字段名不同时写在 FieldSpec.wire */
 export type FieldKey =
-  | 'width' | 'height' | 'aspect_ratio' | 'image_size' | 'resolution'
+  | 'width' | 'height' | 'aspect_ratio' | 'image_size' | 'resolution' | 'shift'
   | 'seed' | 'negative_prompt' | 'steps' | 'cfg' | 'sampler' | 'scheduler' | 'denoise' | 'loras' | 'num_images'
   | 'size' | 'quality' | 'output_format' | 'background' | 'moderation';
 
@@ -123,7 +126,6 @@ const GEMINI_MODELS: ModelSpec[] = [
     sizeDefault: '1K',
     sizeNote: '必须大写 K；512 档确切字符串未能核实（512 / 512px）',
   }),
-  gemini('gemini-3.1-flash-lite-image', 'Gemini 3.1 Flash Lite Image', vals(RATIOS_10, 'supported'), vals(['1K'], 'supported'), { sizeDefault: '1K' }),
   gemini('gemini-3-pro-image', 'Gemini 3 Pro Image', vals(RATIOS_10, 'unverified'), vals(SIZES, 'supported'), {
     sizeDefault: '1K',
     ratioNote: '官方表标题为「3.1 Pro Image」，是否对应此 id 有歧义 → unverified',
@@ -415,19 +417,19 @@ function hfTextToImage(id: string, label: string): ModelSpec {
       width: { status: 'supported', source: HF_DOC, type: 'integer' },
       height: { status: 'supported', source: HF_DOC, type: 'integer' },
       scheduler: { status: 'supported', source: HF_DOC, type: 'string', note: 'HF parameters.scheduler' },
-      ...unsupported(HF_DOC, ['sampler', 'denoise', 'loras'], '该服务商不支持（text-to-image 无 LoRA / denoise / Comfy sampler）'),
+      ...unsupported(HF_DOC, ['sampler', 'denoise'], 'HF text-to-image 不接受这些字段'),
+      loras:{status:'unverified',source:'https://huggingface.co/docs/inference-providers/en/providers/fal-ai',note:'须显式选择 HF → fal-ai；服务器核实模型映射、LoRA 文件和底模架构'},
     },
   };
 }
 
 const HUGGINGFACE_MODELS: ModelSpec[] = [
+
   // Canonical row used when checkpoint is empty or leftover from another provider.
   hfTextToImage('huggingface-text-to-image', 'Hugging Face Text-to-Image'),
+  {...hfTextToImage('XLabs-AI/flux-RealismLora','HF → fal-ai · FLUX.1-dev + XLabs Realism LoRA'),fields:{...hfTextToImage('XLabs-AI/flux-RealismLora','').fields,negative_prompt:{status:'unsupported',source:'https://fal.ai/models/fal-ai/flux-lora/api'},scheduler:{status:'unsupported',source:'https://fal.ai/models/fal-ai/flux-lora/api'},loras:{status:'supported',source:'https://huggingface.co/XLabs-AI/flux-RealismLora',note:'HF → fal-ai，FLUX.1-dev LoRA；必须提供仓库 ID 和实际强度'}}},
   hfTextToImage('black-forest-labs/FLUX.1-dev', 'FLUX.1 [dev] (HF)'),
   hfTextToImage('stabilityai/stable-diffusion-xl-base-1.0', 'SDXL 1.0 (HF)'),
-  hfTextToImage('stabilityai/stable-diffusion-3.5-large', 'Stable Diffusion 3.5 Large (HF)'),
-  hfTextToImage('Kwai-Kolors/Kolors', 'Kolors (HF)'),
-  hfTextToImage('runwayml/stable-diffusion-v1-5', 'SD 1.5 (HF)'),
   {
     provider: 'huggingface',
     id: 'Tongyi-MAI/Z-Image-Turbo',
@@ -436,8 +438,9 @@ const HUGGINGFACE_MODELS: ModelSpec[] = [
     fields: {
       seed: { status: 'supported', source: 'https://huggingface.co/spaces/Tongyi-MAI/Z-Image-Turbo', type: 'integer' },
       steps: { status: 'supported', source: 'https://huggingface.co/spaces/Tongyi-MAI/Z-Image-Turbo', type: 'integer' },
-      resolution: { status: 'supported', source: 'https://huggingface.co/spaces/Tongyi-MAI/Z-Image-Turbo', type: 'string' },
-      ...unsupported('https://huggingface.co/spaces/Tongyi-MAI/Z-Image-Turbo', ['negative_prompt', 'cfg', 'width', 'height', 'sampler', 'scheduler', 'denoise', 'loras'], 'Z-Image Space 仅 prompt/resolution/seed/steps'),
+      resolution: enumField(Z_IMAGE_SOURCE, vals(Z_IMAGE_RESOLUTIONS, 'supported')),
+      shift: {status: 'supported', source: Z_IMAGE_SOURCE, type: 'number', min: 1, max: 10, providerDefault: 3},
+      ...unsupported('https://huggingface.co/spaces/Tongyi-MAI/Z-Image-Turbo', ['negative_prompt', 'cfg', 'width', 'height', 'sampler', 'scheduler', 'denoise', 'loras'], 'Z-Image Space 使用 prompt/resolution/seed/steps/shift/random_seed/gallery_images'),
     },
   },
 ];
@@ -520,7 +523,7 @@ const GROK_COMPAT_MODELS: ModelSpec[] = [
 // Official OpenAI-compat image schema: https://docs.nano-gpt.com/api-reference/endpoint/image-generation-openai
 // (no negative_prompt / loras in OpenAPI). This app's route rejects negative_prompt/steps/cfg/denoise/width/height/size
 // and forwards prompt/model/seed/resolution/aspect_ratio (+ optional image_url). LoRA not in official schema → unsupported.
-const NANO_DOC = 'https://docs.nano-gpt.com/api-reference/endpoint/image-generation-openai';
+const NANO_DOC = 'https://docs.nano-gpt.com/api-reference/image-generation';
 
 function nanoImage(id: string, label: string): ModelSpec {
   return {
@@ -529,18 +532,21 @@ function nanoImage(id: string, label: string): ModelSpec {
     label,
     source: NANO_DOC,
     fields: {
-      seed: { status: 'supported', source: NANO_DOC, type: 'integer', note: 'optional model-specific hint' },
-      aspect_ratio: { status: 'supported', source: NANO_DOC, type: 'string' },
-      resolution: enumField(NANO_DOC, vals(['1k', '2k', '4k'], 'supported'), { note: 'app route uses resolution tiers, not pixel WxH' }),
-      ...unsupported(NANO_DOC, ['negative_prompt', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'loras', 'width', 'height'], '该服务商不支持'),
+      resolution:{status:'unverified',source:NANO_DOC,type:'string',note:'使用该模型实时 supported_parameters.resolutions；服务端按模型核实'},
+      width:{status:'unverified',source:NANO_DOC,type:'integer',note:'仅当 WxH 位于该模型实时 resolutions 时可用'},
+      height:{status:'unverified',source:NANO_DOC,type:'integer'},
+      aspect_ratio:{status:'unverified',source:NANO_DOC,type:'string',note:'按模型实时元数据校验'},
+      seed:{status:'unverified',source:NANO_DOC,type:'integer',note:'仅部分模型提供 seed；服务端核实'},
+      num_images:{status:'supported',source:NANO_DOC,wire:'n',type:'integer',min:1},
+      ...unsupported(NANO_DOC,['negative_prompt','steps','cfg','sampler','scheduler','denoise','loras'],'当前归一化接口未核实这些参数；不会转发未知字段'),
     },
   };
 }
 
 const NANOGPT_MODELS: ModelSpec[] = [
-  nanoImage('flux-schnell', 'FLUX.1 Schnell (NanoGPT)'),
+  {...nanoImage('flux-schnell','FLUX.1 Schnell (NanoGPT)'),fields:{...nanoImage('flux-schnell','').fields,seed:{status:'unsupported',source:NANO_DOC,note:'本次实时元数据未提供 seed'},resolution:enumField(NANO_DOC,vals(['1024x1024','1024x768','1024x576','768x1024','576x1024'],'supported'))}},
   nanoImage('flux-dev', 'FLUX.1 Dev (NanoGPT)'),
-  nanoImage('qwen-image-2.1', 'Qwen Image 2.1 (NanoGPT)'),
+  nanoImage('qwen-image-2512', 'Qwen Image 2512 (NanoGPT)'),
   nanoImage('hidream', 'HiDream (NanoGPT)'),
 ];
 
@@ -585,6 +591,22 @@ function taWidthHeightImage(id: string, label: string): ModelSpec {
 }
 
 const TENSORART_MODELS: ModelSpec[] = [
+  {
+    provider:'tensorart', id:'tensorart-model-api', label:'Tensor.Art 模型 API（真实模型 ID）', source:TENSOR_JOB_DOC,
+    fields: {
+      width:{status:'supported',source:TENSOR_JOB_DOC,type:'integer',min:512,max:1536,multipleOf:64},
+      height:{status:'supported',source:TENSOR_JOB_DOC,type:'integer',min:512,max:1536,multipleOf:64},
+      seed:{status:'supported',source:TENSOR_JOB_DOC,type:'integer',min:-1,max:4294967295,note:'0 / -1 由上游随机；不会写成确定种子'},
+      steps:{status:'supported',source:TENSOR_JOB_DOC,type:'integer',min:1,max:60},
+      cfg:{status:'supported',source:TENSOR_JOB_DOC,type:'number',min:0,max:30},
+      negative_prompt:{status:'supported',source:TENSOR_JOB_DOC,type:'string'},
+      sampler:{status:'supported',source:TENSOR_JOB_DOC,type:'string',wire:'sampler'},
+      scheduler:{status:'supported',source:TENSOR_JOB_DOC,type:'string',wire:'scheduleName'},
+      loras:{status:'supported',source:TENSOR_JOB_DOC,type:'object',wire:'diffusion.lora.items',note:'真实 LoRA ID + weight；提交前查询类型与 baseModel 匹配'},
+      num_images:{status:'supported',source:TENSOR_JOB_DOC,type:'integer',min:1,max:4,wire:'count'},
+      ...unsupported(TENSOR_JOB_DOC,['denoise','size','resolution','aspect_ratio'],'当前接入的模型路由是文生图；其他任务须指定工作流'),
+    },
+  },
   // First = resolveSchemaModelId fallback when checkpoint empty / leftover from another provider.
   taSizeRatioImage('strong_text2image_nano_banana2', 'Nano Banana 2 文生图 (OpenWorks)', TA_SIZE_124),
   taSizeRatioImage('strong_text2image_wan27', 'Wan 2.7 文生图 (OpenWorks)', TA_SIZE_12),
@@ -617,59 +639,22 @@ function senseNovaReasoning(id: string, label: string): ModelSpec {
 }
 
 const SENSENOVA_MODELS: ModelSpec[] = [
-  senseNovaReasoning('deepseek-v4-flash', 'DeepSeek V4 Flash（商汤日日新）'),
-  senseNovaReasoning('deepseek-v4-pro', 'DeepSeek V4 Pro（商汤日日新）'),
   senseNovaReasoning('sensenova-6.8-flash-lite', 'SenseNova 6.8 Flash Lite'),
-  senseNovaReasoning('glm-5.2', 'GLM-5.2（商汤日日新）'),
 ];
 
-// ---------- ModelScope (魔搭社区) ----------
-// Official API docs: https://modelscope.cn/docs/model-service/API-Inference/intro
-// Endpoint POST /v1/images/generations supports prompt, negative_prompt, seed,
-// num_inference_steps, guidance_scale, width, height, and loras.
-const MODELSCOPE_DOC = 'https://modelscope.cn/docs/model-service/API-Inference/intro';
-
-function modelScopeImage(provider: 'modelscope' | 'modelscope_ai', id: string, label: string): ModelSpec {
-  return {
-    provider,
-    id,
-    label,
-    source: MODELSCOPE_DOC,
-    fields: {
-      negative_prompt: { status: 'supported', source: MODELSCOPE_DOC, type: 'string' },
-      seed: { status: 'supported', source: MODELSCOPE_DOC, type: 'integer', min: -1, max: 2147483647 },
-      steps: { status: 'supported', source: MODELSCOPE_DOC, wire: 'num_inference_steps', type: 'integer', min: 1, max: 100 },
-      cfg: { status: 'supported', source: MODELSCOPE_DOC, wire: 'guidance_scale', type: 'number', min: 1, max: 20 },
-      width: { status: 'supported', source: MODELSCOPE_DOC, type: 'integer', min: 256, max: 2048, multipleOf: 8 },
-      height: { status: 'supported', source: MODELSCOPE_DOC, type: 'integer', min: 256, max: 2048, multipleOf: 8 },
-      loras: { status: 'supported', source: MODELSCOPE_DOC, wire: 'loras', note: 'ModelScope API 原生支持单/多 LoRA 挂载' },
-      ...unsupported(
-        MODELSCOPE_DOC,
-        ['sampler', 'scheduler', 'denoise'],
-        '该服务商不支持（ModelScope 文生图 API 无独立采样器/调度器参数）'
-      ),
-    },
-  };
-}
-
-const MODELSCOPE_MODELS: ModelSpec[] = [
-  // First = resolveSchemaModelId fallback when checkpoint empty / leftover from another provider.
-  modelScopeImage('modelscope', 'Tongyi-MAI/Z-Image-Turbo', 'Tongyi-MAI Z-Image-Turbo（魔搭社区）'),
-  modelScopeImage('modelscope', 'AI-ModelScope/stable-diffusion-xl-base-1.0', 'SDXL 1.0 官方基模（魔搭社区）'),
-  modelScopeImage('modelscope', 'AI-ModelScope/flux.1-dev', 'FLUX.1 [dev]（魔搭社区）'),
-  modelScopeImage('modelscope', 'damo/wan2.1-t2i-1.3b', 'Wan 2.1 文生图（魔搭社区）'),
-  modelScopeImage('modelscope', 'Kwai-Kolors/Kolors', 'Kolors 旗舰基模（魔搭社区）'),
-];
-
-const MODELSCOPE_AI_MODELS: ModelSpec[] = [
-  modelScopeImage('modelscope_ai', 'Tongyi-MAI/Z-Image-Turbo', 'Tongyi-MAI Z-Image-Turbo (ModelScope.ai)'),
-  modelScopeImage('modelscope_ai', 'AI-ModelScope/stable-diffusion-xl-base-1.0', 'SDXL 1.0 (ModelScope.ai)'),
-  modelScopeImage('modelscope_ai', 'AI-ModelScope/flux.1-dev', 'FLUX.1 [dev] (ModelScope.ai)'),
-  modelScopeImage('modelscope_ai', 'damo/wan2.1-t2i-1.3b', 'Wan 2.1 Text-to-Image (ModelScope.ai)'),
-  modelScopeImage('modelscope_ai', 'Kwai-Kolors/Kolors', 'Kolors (ModelScope.ai)'),
-];
+// Model cards show a minimal hosted REST contract, not the local Diffusers parameter schema.
+const MODELSCOPE_DOC = 'https://www.modelscope.cn/models/Tongyi-MAI/Z-Image-Turbo';
+const MODELSCOPE_MODELS: ModelSpec[] = (['modelscope','modelscope_ai'] as const).map(provider=>({
+  provider,id:'modelscope-hosted-image',label:'ModelScope 云端图像 API（模型能力需核实）',source:MODELSCOPE_DOC,
+  fields:{
+    ...Object.fromEntries(['negative_prompt','seed','steps','cfg','width','height'].map(key=>[key,{status:'unverified' as const,source:MODELSCOPE_DOC,note:'本地 Diffusers 参数不能证明云端 REST 支持；显式提交将提示未核实'}])),
+    loras:{status:'supported',source:MODELSCOPE_DOC,note:'单一仓库 ID 或最多六项权重映射，总和 1；底模兼容性仍由所选模型决定'},
+    ...unsupported(MODELSCOPE_DOC,['sampler','scheduler','denoise'],'该云端图像路由无已核实的对应字段'),
+  },
+}));
 
 export const PROVIDER_SCHEMA: readonly ModelSpec[] = [
+  ...MODELSCOPE_MODELS,
   ...GEMINI_MODELS,
   ...FAL_MODELS,
   ...CIVITAI_MODELS,
@@ -680,8 +665,6 @@ export const PROVIDER_SCHEMA: readonly ModelSpec[] = [
   ...NANOGPT_MODELS,
   ...TENSORART_MODELS,
   ...SENSENOVA_MODELS,
-  ...MODELSCOPE_MODELS,
-  ...MODELSCOPE_AI_MODELS,
 ];
 
 const INDEX = new Map(PROVIDER_SCHEMA.map((m) => [`${m.provider}/${m.id}`, m]));
@@ -735,5 +718,8 @@ export function modelStatus(provider: Provider, model: string, today: string): F
 export function resolveSchemaModelId(provider: Provider, model: string | undefined | null): string {
   const id = String(model || '').trim();
   if (id && getModelSpec(provider, id)) return id;
+  if (provider === 'modelscope' || provider === 'modelscope_ai') return 'modelscope-hosted-image';
+  if (provider === 'nanogpt' && id) return id;
+  if (provider === 'tensorart' && id) return /^\d{10,25}$/.test(id) || /^https:\/\/(?:www\.)?(?:tensor\.art|tusiart\.com)\/models\//.test(id) ? 'tensorart-model-api' : id;
   return listModels(provider)[0]?.id ?? id;
 }

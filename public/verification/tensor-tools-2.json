@@ -1,0 +1,1009 @@
+{
+  "http": 200,
+  "data": {
+    "code": "0",
+    "message": "success",
+    "data": {
+      "tools": [
+        {
+          "name": "oc_character_illustration",
+          "description": "text to image, semi realistic asian guy generation based on Illustration model",
+          "taskType": "TENSOR_ART_V1",
+          "inputs": [
+            {
+              "type": "STRING",
+              "description": "prompt",
+              "format": "",
+              "schema": null
+            },
+            {
+              "type": "INTEGER",
+              "description": "image width",
+              "format": "",
+              "schema": null
+            },
+            {
+              "type": "INTEGER",
+              "description": "image height",
+              "format": "",
+              "schema": null
+            },
+            {
+              "type": "INTEGER",
+              "description": "result image count",
+              "format": "",
+              "schema": null
+            }
+          ],
+          "outputs": [
+            {
+              "type": "FILE",
+              "description": "result image",
+              "format": "image"
+            }
+          ],
+          "estimatedCost": "1.00",
+          "tags": [
+            "niji",
+            "oc",
+            "asian guy",
+            "semi realistic"
+          ]
+        },
+        {
+          "name": "oc_garment_template",
+          "description": "Image editing — a model with extremely powerful control capabilities.",
+          "taskType": "TENSOR_ART_V1",
+          "inputs": [
+            {
+              "type": "STRING",
+              "description": "提示词",
+              "format": "",
+              "schema": null
+            },
+            {
+              "type": "STRING",
+              "description": "图片尺寸",
+              "format": "",
+              "schema": null
+            },
+            {
+              "type": "STRING",
+              "description": "quality",
+              "format": "",
+              "schema": null
+            },
+            {
+              "type": "ARRAY",
+              "description": "url, mimeType, assetId, type, assetUri",
+              "format": "json",
+              "schema": {
+                "items": {
+                  "properties": {
+                    "assetId": {
+                      "type": "string"
+                    },
+                    "assetUri": {
+                      "type": "string"
+                    },
+                    "mimeType": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "format": "url",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "url",
+                    "mimeType",
+                    "assetId",
+                    "type",
+                    "assetUri"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            }
+          ],
+          "outputs": [
+            {
+              "type": "FILE",
+              "description": "图片结果",
+              "format": "image"
+            }
+          ],
+          "estimatedCost": "2.50",
+          "tags": []
+        },
+        {
+          "name": "anime_lab_wai_illustrious",
+          "description": "text to image, anime style generation based on Wai Illustrious model",
+          "taskType": "TENSOR_ART_V1",
+          "inputs": [
+            {
+              "type": "STRING",
+              "description": "prompt",
+              "format": "",
+              "schema": null
+            },
+            {
+              "type": "INTEGER",
+              "description": "image width",
+              "format": "",
+              "schema": null
+            },
+            {
+              "type": "INTEGER",
+              "description": "image height",
+              "format": "",
+              "schema": null
+            },
+            {
+              "type": "INTEGER",
+              "description": "result image count",
+              "format": "",
+              "schema": null
+            }
+          ],
+          "outputs": [
+            {
+              "type": "FILE",
+              "description": "image result",
+              "format": "image"
+            }
+          ],
+          "estimatedCost": "1.33",
+          "tags": [
+            "anime",
+            "illustrious",
+            "weapon",
+            "sketch"
+          ]
+        },
+        {
+          "name": "photoreal_studio_z_image",
+          "description": "text to image, photoreal image generation based on Z Image Ultra model",
+          "taskType": "TENSOR_ART_V1",
+          "inputs": [
+            {
+              "type": "STRING",
+              "description": "prompt",
+              "format": "",
+              "schema": null
+            },
+            {
+              "type": "INTEGER",
+              "description": "image width",
+              "format": "",
+              "schema": null
+            },
+            {
+              "type": "INTEGER",
+              "description": "image height",
+              "format": "",
+              "schema": null
+            },
+            {
+              "type": "INTEGER",
+              "description": "result image count",
+              "format": "",
+              "schema": null
+            }
+          ],
+          "outputs": [
+            {
+              "type": "FILE",
+              "description": "image result",
+              "format": "image"
+            }
+          ],
+          "estimatedCost": "0.36",
+          "tags": [
+            "photoreal",
+            "enhance",
+            "HD",
+            "portrait",
+            "realistic"
+          ]
+        },
+        {
+          "name": "text2video_wan22",
+          "description": "general text to video generate based on Wan2.2 model",
+          "taskType": "TENSOR_ART_V1",
+          "inputs": [
+            {
+              "type": "STRING",
+              "description": "prompt",
+              "format": "",
+              "schema": null
+            },
+            {
+              "type": "STRING",
+              "description": "duration of the target video, value can choose one of [3, 4, 5], the unit is seconds.",
+              "format": "",
+              "schema": null
+            },
+            {
+              "type": "STRING",
+              "description": "ratio with total pixel number: only support \"9:16-921600\", \"1:1-921600\", 16:9-921600\" supported. 921600 means 720P.",
+              "format": "",
+              "schema": null
+            }
+          ],
+          "outputs": [
+            {
+              "type": "FILE",
+              "description": "result video",
+              "format": "video"
+            }
+          ],
+          "estimatedCost": "18.32",
+          "tags": [
+            "video",
+            "text2video"
+          ]
+        },
+        {
+          "name": "text2video_wan27",
+          "description": "general text to video generate based on Wan 2.7 model",
+          "taskType": "TENSOR_ART_V1",
+          "inputs": [
+            {
+              "type": "STRING",
+              "description": "prompt",
+              "format": "",
+              "schema": null
+            },
+            {
+              "type": "STRING",
+              "description": "target video aspect ratio: only \"16:9\", \"4:3\", \"1:1\", \"9:16\", \"3:4\" supported",
+              "format": "",
+              "schema": null
+            },
+            {
+              "type": "STRING",
+              "description": "target video size: only \"720P\", \"1080P\" supported",
+              "format": "",
+              "schema": null
+            },
+            {
+              "type": "STRING",
+              "description": "The duration of the target video ranges from \"2\" to \"15\" seconds.",
+              "format": "",
+              "schema": null
+            }
+          ],
+          "outputs": [
+            {
+              "type": "FILE",
+              "description": "video result",
+              "format": "video"
+            }
+          ],
+          "estimatedCost": "193.00",
+          "tags": [
+            "video",
+            "text2video",
+            "strong",
+            "general"
+          ]
+        },
+        {
+          "name": "image2video_wan22",
+          "description": "general image to video generate based on Wan2.2 model",
+          "taskType": "TENSOR_ART_V1",
+          "inputs": [
+            {
+              "type": "STRING",
+              "description": "prompt",
+              "format": "",
+              "schema": null
+            },
+            {
+              "type": "FILE",
+              "description": "first frame of the target video",
+              "format": "",
+              "schema": null
+            },
+            {
+              "type": "STRING",
+              "description": "duration of the target video, value can choose one of [3, 4, 5, 6, 7, 8], the unit is seconds.",
+              "format": "",
+              "schema": null
+            }
+          ],
+          "outputs": [
+            {
+              "type": "FILE",
+              "description": "result video",
+              "format": "video"
+            }
+          ],
+          "estimatedCost": "18.32",
+          "tags": [
+            "video",
+            "image2video"
+          ]
+        },
+        {
+          "name": "image2video_wan25",
+          "description": "Generate a video from a reference image using the Wan 2.5 image-to-video model. The uploaded image will be used as the first frame of the generated video.",
+          "taskType": "TENSOR_ART_V1",
+          "inputs": [
+            {
+              "type": "STRING",
+              "description": "Text prompt describing the desired motion, scene changes, camera movement, and visual effects in the generated video.",
+              "format": "",
+              "schema": null
+            },
+            {
+              "type": "FILE",
+              "description": "Reference image used as the first frame of the generated video.",
+              "format": "",
+              "schema": null
+            },
+            {
+              "type": "STRING",
+              "description": "Duration of the generated video in seconds. The value can choose one of [5, 10].",
+              "format": "",
+              "schema": null
+            }
+          ],
+          "outputs": [
+            {
+              "type": "FILE",
+              "description": "the result video",
+              "format": "video"
+            }
+          ],
+          "estimatedCost": "193.00",
+          "tags": [
+            "video",
+            "image2video",
+            "wan2.5",
+            "general"
+          ]
+        },
+        {
+          "name": "image2video_ltx23",
+          "description": "Generate a video from a reference image using the LTX 2.3 image-to-video model. The uploaded image will be used as the first frame of the generated video.",
+          "taskType": "TENSOR_ART_V1",
+          "inputs": [
+            {
+              "type": "STRING",
+              "description": "Text prompt describing the desired motion, scene changes, camera movement, and visual effects in the generated video.",
+              "format": "",
+              "schema": null
+            },
+            {
+              "type": "FILE",
+              "description": "Reference image used as the first frame of the generated video.",
+              "format": "",
+              "schema": null
+            },
+            {
+              "type": "STRING",
+              "description": "target video ratio and pixel, format \"{ratio}-{totalPixels}\". Ratio supports \"keep\", \"9:16\", \"1:1\", \"16:9\"; totalPixels is the resolution tier: 921600 = 720P, 399360 = 480P. Only these 8 values   supported: \"keep-921600\", \"9:16-921600\", \"1:1-921600\", \"16:9-921600\", \"keep-399360\", \"9:16-399360\", \"1:1-399360\", \"16:9-399360\".",
+              "format": "",
+              "schema": null
+            },
+            {
+              "type": "STRING",
+              "description": "Duration of the generated video in seconds. The value can choose one of [3, 4, 5, 6, 7, 8, 9, 10].",
+              "format": "",
+              "schema": null
+            }
+          ],
+          "outputs": [
+            {
+              "type": "FILE",
+              "description": "result video",
+              "format": "video"
+            }
+          ],
+          "estimatedCost": "15.00",
+          "tags": [
+            "video",
+            "image2video",
+            "ltx2.3",
+            "general"
+          ]
+        },
+        {
+          "name": "text2video_ltx23",
+          "description": "Generate a video from a reference image using the LTX 2.3 text-to-video model. ",
+          "taskType": "TENSOR_ART_V1",
+          "inputs": [
+            {
+              "type": "STRING",
+              "description": "Text prompt describing the desired motion, scene changes, camera movement, and visual effects in the generated video.",
+              "format": "",
+              "schema": null
+            },
+            {
+              "type": "STRING",
+              "description": "target video ratio and pixel, format \"{ratio}-{totalPixels}\". Ratio supports \"keep\", \"9:16\", \"1:1\", \"16:9\"; totalPixels is the resolution tier: 921600 = 720P, 399360 = 480P. Only these 8 values   supported: \"keep-921600\", \"9:16-921600\", \"1:1-921600\", \"16:9-921600\", \"keep-399360\", \"9:16-399360\", \"1:1-399360\", \"16:9-399360\".",
+              "format": "",
+              "schema": null
+            },
+            {
+              "type": "STRING",
+              "description": "Duration of the generated video in seconds. The value can choose one of [3, 4, 5, 6, 7, 8, 9, 10].",
+              "format": "",
+              "schema": null
+            }
+          ],
+          "outputs": [
+            {
+              "type": "FILE",
+              "description": "the result video",
+              "format": "video"
+            }
+          ],
+          "estimatedCost": "15.00",
+          "tags": [
+            "video",
+            "text2video",
+            "ltx2.3",
+            "general"
+          ]
+        },
+        {
+          "name": "image2video_wan27",
+          "description": "general image to video generate based on Wan 2.7 model",
+          "taskType": "TENSOR_ART_V1",
+          "inputs": [
+            {
+              "type": "STRING",
+              "description": "prompt",
+              "format": "",
+              "schema": null
+            },
+            {
+              "type": "STRING",
+              "description": "target video size: only \"720P\", \"1080P\" supported",
+              "format": "",
+              "schema": null
+            },
+            {
+              "type": "STRING",
+              "description": "The duration of the target video ranges from \"2\" to \"15\" seconds",
+              "format": "",
+              "schema": null
+            },
+            {
+              "type": "ARRAY",
+              "description": "source image's url and mimeType",
+              "format": "json",
+              "schema": {
+                "items": {
+                  "properties": {
+                    "mimeType": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "format": "url",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "url",
+                    "mimeType"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            }
+          ],
+          "outputs": [
+            {
+              "type": "FILE",
+              "description": "video result",
+              "format": "video"
+            }
+          ],
+          "estimatedCost": "193.00",
+          "tags": [
+            "video",
+            "image2video",
+            "strong",
+            "general"
+          ]
+        },
+        {
+          "name": "smart_edit_nano_banana2",
+          "description": "image editing, general image editing task based on Nano Banana 2 model",
+          "taskType": "TENSOR_ART_V1",
+          "inputs": [
+            {
+              "type": "STRING",
+              "description": "editing prompt",
+              "format": "",
+              "schema": null
+            },
+            {
+              "type": "STRING",
+              "description": "target image aspect ratio: only \"auto\", \"21:9\", \"16:9\", \"4:3\", \"3:2\", \"1:1\", \"9:16\", \"3:4\", \"2:3\", \"5:4\", \"4:5\" supported",
+              "format": "",
+              "schema": null
+            },
+            {
+              "type": "STRING",
+              "description": "target image size: only \"1K\", \"2K\", \"4K\" supported",
+              "format": "",
+              "schema": null
+            },
+            {
+              "type": "ARRAY",
+              "description": "source image's url and mimeType",
+              "format": "json",
+              "schema": {
+                "items": {
+                  "properties": {
+                    "mimeType": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "format": "url",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "url",
+                    "mimeType"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            }
+          ],
+          "outputs": [
+            {
+              "type": "FILE",
+              "description": "result image",
+              "format": "image"
+            }
+          ],
+          "estimatedCost": "54.20",
+          "tags": [
+            "editing",
+            "multi-image editing",
+            "strong",
+            "general"
+          ]
+        },
+        {
+          "name": "smart_edit_wan27",
+          "description": "image editing, general image editing task based on Wan 2.7 model",
+          "taskType": "TENSOR_ART_V1",
+          "inputs": [
+            {
+              "type": "STRING",
+              "description": "editing prompt",
+              "format": "",
+              "schema": null
+            },
+            {
+              "type": "STRING",
+              "description": "target image aspect ratio: only \"21:9\", \"16:9\", \"4:3\", \"3:2\", \"1:1\", \"9:16\", \"3:4\", \"2:3\", \"5:4\", \"4:5\", \"Keep\" supported",
+              "format": "",
+              "schema": null
+            },
+            {
+              "type": "STRING",
+              "description": "target image size: only \"1K\", \"2K\" supported",
+              "format": "",
+              "schema": null
+            },
+            {
+              "type": "ARRAY",
+              "description": "source image's url and mimeType",
+              "format": "json",
+              "schema": {
+                "items": {
+                  "properties": {
+                    "mimeType": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "format": "url",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "url",
+                    "mimeType"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            }
+          ],
+          "outputs": [
+            {
+              "type": "FILE",
+              "description": "result image",
+              "format": "image"
+            }
+          ],
+          "estimatedCost": "11.00",
+          "tags": [
+            "editing",
+            "multi-image editing",
+            "strong",
+            "general"
+          ]
+        },
+        {
+          "name": "smart_edit_wan27_pro",
+          "description": "image editing, general image editing task based on Wan 2.7 Image Pro model",
+          "taskType": "TENSOR_ART_V1",
+          "inputs": [
+            {
+              "type": "STRING",
+              "description": "editing prompt",
+              "format": "",
+              "schema": null
+            },
+            {
+              "type": "STRING",
+              "description": "target image aspect ratio: only \\\"21:9\\\", \\\"16:9\\\", \\\"4:3\\\", \\\"3:2\\\", \\\"1:1\\\", \\\"9:16\\\", \\\"3:4\\\", \\\"2:3\\\", \\\"5:4\\\", \\\"4:5\\\", \\\"Keep\\\" supported",
+              "format": "",
+              "schema": null
+            },
+            {
+              "type": "STRING",
+              "description": "target image size: only \\\"1K\\\", \\\"2K\\\" supported",
+              "format": "",
+              "schema": null
+            },
+            {
+              "type": "ARRAY",
+              "description": "source image's url and mimeType",
+              "format": "json",
+              "schema": {
+                "items": {
+                  "properties": {
+                    "mimeType": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "format": "url",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "url",
+                    "mimeType"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            }
+          ],
+          "outputs": [
+            {
+              "type": "FILE",
+              "description": "the result image",
+              "format": "image"
+            }
+          ],
+          "estimatedCost": "28.00",
+          "tags": [
+            "editing",
+            "multi-image editing",
+            "strong",
+            "general",
+            "Wan2.7 Image Pro"
+          ]
+        },
+        {
+          "name": "strong_text2image_wan27",
+          "description": "text to image, general text to image generation task based on Wan 2.7 model",
+          "taskType": "TENSOR_ART_V1",
+          "inputs": [
+            {
+              "type": "STRING",
+              "description": "prompt",
+              "format": "",
+              "schema": null
+            },
+            {
+              "type": "STRING",
+              "description": "target image size: only \"1K\", \"2K\" supported",
+              "format": "",
+              "schema": null
+            },
+            {
+              "type": "STRING",
+              "description": "target image aspect ratio: only \"auto\", \"21:9\", \"16:9\", \"4:3\", \"3:2\", \"1:1\", \"9:16\", \"3:4\", \"2:3\", \"5:4\", \"4:5\", \"Keep\" supported",
+              "format": "",
+              "schema": null
+            }
+          ],
+          "outputs": [
+            {
+              "type": "FILE",
+              "description": "image result",
+              "format": "image"
+            }
+          ],
+          "estimatedCost": "11.00",
+          "tags": [
+            "text2image",
+            "strong",
+            "general"
+          ]
+        },
+        {
+          "name": "strong_text2image_nano_banana2",
+          "description": "text to image, general text to image generation task based on Nano Banana 2 model",
+          "taskType": "TENSOR_ART_V1",
+          "inputs": [
+            {
+              "type": "STRING",
+              "description": "prompt",
+              "format": "",
+              "schema": null
+            },
+            {
+              "type": "STRING",
+              "description": "target image size: only \"1K\", \"2K\", \"4K\" supported",
+              "format": "",
+              "schema": null
+            },
+            {
+              "type": "STRING",
+              "description": "target image aspect ratio: only \"auto\", \"21:9\", \"16:9\", \"4:3\", \"3:2\", \"1:1\", \"9:16\", \"3:4\", \"2:3\", \"5:4\", \"4:5\" supported",
+              "format": "",
+              "schema": null
+            }
+          ],
+          "outputs": [
+            {
+              "type": "FILE",
+              "description": "result image",
+              "format": "image"
+            }
+          ],
+          "estimatedCost": "54.20",
+          "tags": [
+            "text2image",
+            "strong",
+            "general"
+          ]
+        },
+        {
+          "name": "background_remover",
+          "description": "Remove the background from an image while keeping the main subject intact.",
+          "taskType": "TOOLS",
+          "inputs": [
+            {
+              "type": "FILE",
+              "description": "source image to be processed",
+              "format": "",
+              "schema": null
+            }
+          ],
+          "outputs": [
+            {
+              "type": "FILE",
+              "description": "image results, the first image is Mask (black and white image, with the subject in white and the background in black), the second image is extracted subject (PNG with transparent background, retaining the original image's colors and alpha channel)",
+              "format": "image"
+            }
+          ],
+          "estimatedCost": "0.90",
+          "tags": [
+            "background removal",
+            "subject extraction"
+          ]
+        },
+        {
+          "name": "image_upscaler",
+          "description": "Enhance the resolution and optimize image quality. If input image's resolution is smaller than 768, upscale by 4×; if larger than 768, upscale by 2×.",
+          "taskType": "TOOLS",
+          "inputs": [
+            {
+              "type": "FILE",
+              "description": "source image to be processed",
+              "format": "",
+              "schema": null
+            }
+          ],
+          "outputs": [
+            {
+              "type": "FILE",
+              "description": "image result",
+              "format": "image"
+            }
+          ],
+          "estimatedCost": "7.60",
+          "tags": [
+            "upscale",
+            "super-resolution",
+            "SR",
+            "HD"
+          ]
+        },
+        {
+          "name": "extend_image_sd15",
+          "description": "expand image by SD1.5 model",
+          "taskType": "TOOLS",
+          "inputs": [
+            {
+              "type": "FILE",
+              "description": "source image to be processed",
+              "format": "",
+              "schema": null
+            },
+            {
+              "type": "STRING",
+              "description": "prompt shows how to extend the image",
+              "format": "",
+              "schema": null
+            },
+            {
+              "type": "STRING",
+              "description": "How many pixels to extend to the left of the input image",
+              "format": "",
+              "schema": null
+            },
+            {
+              "type": "STRING",
+              "description": "How many pixels to extend to the top of the input image",
+              "format": "",
+              "schema": null
+            },
+            {
+              "type": "STRING",
+              "description": "How many pixels to extend to the right of the input image",
+              "format": "",
+              "schema": null
+            },
+            {
+              "type": "STRING",
+              "description": "How many pixels to extend to the bottom of the input image",
+              "format": "",
+              "schema": null
+            },
+            {
+              "type": "STRING",
+              "description": "feathering size",
+              "format": "",
+              "schema": null
+            }
+          ],
+          "outputs": [
+            {
+              "type": "FILE",
+              "description": "image result",
+              "format": "image"
+            }
+          ],
+          "estimatedCost": "1.70",
+          "tags": [
+            "outpainting",
+            "extend",
+            "expand"
+          ]
+        },
+        {
+          "name": "live_wallpaper",
+          "description": "Live Wallpaper Generator. Make your masterpiece image into live wallpapers that are rich in fluidity and motion. 🥰 Super stable result ! No prompts needed ! Performs best with images containing human subjects. Let's go! 💗",
+          "taskType": "TOOLS",
+          "inputs": [
+            {
+              "type": "FILE",
+              "description": "source image to be processed",
+              "format": "",
+              "schema": null
+            },
+            {
+              "type": "STRING",
+              "description": "select the type of target video size: input 1 for 9:16, input 2 for 16:9, input 3 for 1:1",
+              "format": "",
+              "schema": null
+            }
+          ],
+          "outputs": [
+            {
+              "type": "FILE",
+              "description": "result video",
+              "format": "video"
+            }
+          ],
+          "estimatedCost": "27.45",
+          "tags": [
+            "wallpaper"
+          ]
+        },
+        {
+          "name": "old_photo_restore",
+          "description": "Restore Old And Damaged Photos",
+          "taskType": "TOOLS",
+          "inputs": [
+            {
+              "type": "FILE",
+              "description": "source image",
+              "format": "",
+              "schema": null
+            }
+          ],
+          "outputs": [
+            {
+              "type": "FILE",
+              "description": "result image",
+              "format": "image"
+            }
+          ],
+          "estimatedCost": "4.50",
+          "tags": [
+            "restore",
+            "old",
+            "damaged",
+            "photo"
+          ]
+        },
+        {
+          "name": "three_view_flux_kontext",
+          "description": "Flux-Kontext Universal Three-View, suitable for OC",
+          "taskType": "TOOLS",
+          "inputs": [
+            {
+              "type": "FILE",
+              "description": "source image",
+              "format": "",
+              "schema": null
+            }
+          ],
+          "outputs": [
+            {
+              "type": "FILE",
+              "description": "result image",
+              "format": "image"
+            }
+          ],
+          "estimatedCost": "4.00",
+          "tags": [
+            "three-view",
+            "original character",
+            "OC"
+          ]
+        },
+        {
+          "name": "watermark_remove",
+          "description": "Watermark Remove",
+          "taskType": "TOOLS",
+          "inputs": [
+            {
+              "type": "FILE",
+              "description": "source image with watermark",
+              "format": "",
+              "schema": null
+            }
+          ],
+          "outputs": [
+            {
+              "type": "FILE",
+              "description": "result image. The first picture is a comparison of input and output, while the second picture is the final result.",
+              "format": "image"
+            }
+          ],
+          "estimatedCost": "2.00",
+          "tags": [
+            "watermark"
+          ]
+        }
+      ]
+    }
+  }
+}

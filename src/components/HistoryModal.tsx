@@ -31,6 +31,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
   const [copiedId, setCopiedId] = React.useState<string | null>(null);
   const [selectedImage, setSelectedImage] = React.useState<GenerationHistoryItem | null>(null);
   const [brokenIds, setBrokenIds] = React.useState<Record<string, true>>({});
+  const [copyError, setCopyError] = React.useState('');
 
   if (!isOpen) return null;
 
@@ -47,10 +48,19 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
     });
   };
 
-  const handleCopyPrompt = (id: string, text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 1500);
+  const handleCopyPrompt = async (id: string, text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopyError('');
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 1500);
+    } catch { setCopyError('复制失败，请检查浏览器剪贴板权限'); }
+  };
+  const downloadProvenance = (item: GenerationHistoryItem) => {
+    const body = {format: 'comfycanvas-generation', version: 1, provider: item.actualProvider || item.provider, model: item.actualModel || item.model, seed: item.seed, steps: item.steps, cfg: item.cfg, loras: item.loras, requestMetadata: item.requestMetadata, workflowSnapshot: item.workflowSnapshot};
+    const url = URL.createObjectURL(new Blob([JSON.stringify(body, null, 2)], {type: 'application/json'}));
+    handleDownload(url, `generation-${item.id}.json`);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   const handleDownload = (url: string, filename = 'comfycanvas_output.jpg') => {
@@ -79,7 +89,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
                 </span>
               </h2>
               <p className="text-xs text-slate-400">
-                查看之前生成的所有图像，一键回填提示词、种子和 LoRA 参数
+                查看生成结果、实际发送的参数与工作流，导出 JSON 以便复用
               </p>
             </div>
           </div>
@@ -106,6 +116,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
 
         {/* Content */}
         <div className="flex-1 p-6 overflow-y-auto bg-[#141518]">
+          {copyError && <p role="alert" className="mb-3 text-sm text-rose-300">{copyError}</p>}
           {history.length === 0 ? (
             <div className="h-64 flex flex-col items-center justify-center gap-3 text-slate-400">
               <ImageIcon className="w-12 h-12 text-slate-600" />
@@ -210,6 +221,13 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
 
                       <button
                         type="button"
+                        onClick={() => downloadProvenance(item)}
+                        disabled={!item.requestMetadata && !item.workflowSnapshot}
+                        className="px-2.5 py-1 rounded text-[11px] border border-slate-600 text-slate-300 disabled:opacity-40"
+                        title={!item.requestMetadata && !item.workflowSnapshot ? '旧记录未保存完整参数与工作流' : '导出实际参数、LoRA 与工作流'}
+                      >参数与工作流</button>
+                      <button
+                        type="button"
                         disabled={applyDisabled}
                         aria-disabled={applyDisabled}
                         onClick={() => {
@@ -267,6 +285,11 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
               <p className="text-slate-400 font-mono text-[11px]">
                 {displayValue(selectedImage.actualProvider || selectedImage.provider)} | Model: {displayValue(selectedImage.actualModel || selectedImage.model)} | Seed: {displayValue(selectedImage.seed)} | Steps: {selectedImage.steps != null ? `${selectedImage.steps} 步` : '未填写'} | CFG: {displayValue(selectedImage.cfg)}
               </p>
+              <p className="text-slate-300">LoRA: {selectedImage.loras?.length ? selectedImage.loras.map(l => `${l.name} × ${l.strength}`).join('；') : '未使用'}</p>
+              <details className="text-left">
+                <summary className="cursor-pointer text-cyan-300 py-2">实际请求参数与工作流</summary>
+                <pre className="max-h-60 overflow-auto whitespace-pre-wrap text-[11px] text-slate-300">{JSON.stringify({requestMetadata: selectedImage.requestMetadata ?? '旧记录未保存', workflowSnapshot: selectedImage.workflowSnapshot ?? '旧记录未保存'}, null, 2)}</pre>
+              </details>
             </div>
             <button
               onClick={() => setSelectedImage(null)}

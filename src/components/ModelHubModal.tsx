@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Search,
   Download,
@@ -37,6 +37,7 @@ interface ModelHubModalProps {
   onAddModelNode?: (modelId: string, modelName: string, providerHint?: string, extraData?: any) => void;
   onAddLora?: (lora: {
     name: string;
+    provider?: string;
     civitaiId?: string;
     modelStrength: number;
     clipStrength: number;
@@ -46,6 +47,7 @@ interface ModelHubModalProps {
   onAddLoraNode?: (loraName: string, triggerWords?: string, baseModel?: string) => void;
   onSelectLoRAWithBaseModel?: (lora: {
     name: string;
+    provider?: string;
     civitaiId?: string;
     triggerWords?: string;
     baseModel?: string;
@@ -70,6 +72,7 @@ const ARCHITECTURE_TAGS = [
   { id: 'illustrious', label: 'Illustrious' },
   { id: 'qwen', label: 'Qwen-Image' },
   { id: 'z-image', label: 'Z-Image' },
+  {id:'krea',label:'Krea'}, {id:'chroma',label:'Chroma'}, {id:'hunyuan',label:'Hunyuan'}, {id:'kolors',label:'Kolors'}, {id:'pixart',label:'PixArt'}, {id:'auraflow',label:'AuraFlow'}, {id:'anima',label:'Anima'}, {id:'ernie',label:'ERNIE'}, {id:'hidream',label:'HiDream'},
 ];
 
 export const ModelHubModal: React.FC<ModelHubModalProps> = ({
@@ -89,6 +92,11 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
   const [sortOption, setSortOption] = useState<ModelSortOption>('downloads');
   const [selectedArch, setSelectedArch] = useState<string>('all');
   const [query, setQuery] = useState('');
+  const requestVersion = useRef(0);
+  const morePending = useRef(false);
+  const [customId, setCustomId] = useState('');
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
@@ -125,10 +133,15 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
     arch = selectedArch,
     isLoadMore = false
   ) => {
+    if (isLoadMore && morePending.current) return;
+    const version = isLoadMore ? requestVersion.current : ++requestVersion.current;
+    morePending.current = isLoadMore;
+    setError(null);
     if (isLoadMore) {
       setLoadingMore(true);
     } else {
       setLoading(true);
+      setLoadingMore(false);
       setError(null);
       setModelsData({});
       setProviderErrors({});
@@ -155,6 +168,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
         archQuery
       );
 
+      if (version !== requestVersion.current) return;
       const errors: Record<string, string> = {};
       const validData: Record<string, any[]> = {};
 
@@ -175,7 +189,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
 
       let anyHasMore = false;
       Object.values(pag).forEach((p: any) => {
-        if (p?.hasMore) anyHasMore = true;
+        if (p?.hasMore === true) anyHasMore = true;
       });
 
       Object.entries(data).forEach(([key, val]) => {
@@ -184,7 +198,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
           errors[key] = (val as any).error + ((val as any).details ? `: ${(val as any).details}` : '');
         } else if (Array.isArray(val)) {
           validData[key] = val;
-          if (val.length >= 15) anyHasMore = true;
+          // A full directory page does not establish that another page exists.
         }
       });
 
@@ -203,18 +217,26 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
         setModelsData(validData);
       }
 
-      setProviderErrors((prev) => isLoadMore ? { ...prev, ...errors } : errors);
-      setHasMore(anyHasMore);
+      setProviderErrors((prev) => {
+        if (!isLoadMore) return errors;
+        const next = { ...prev, ...errors };
+        Object.keys(validData).forEach((key) => { delete next[key]; });
+        return next;
+      });
+      setHasMore(prov !== 'all' && anyHasMore);
 
       if (prov !== 'all' && errors[prov]) {
         setError(errors[prov]);
       }
     } catch (e: any) {
-      console.error('Failed to load models:', e);
+      if (version !== requestVersion.current) return;
       setError(e.message || '模型拉取失败');
     } finally {
-      setLoading(false);
-      setLoadingMore(false);
+      if (version === requestVersion.current) {
+        morePending.current = false;
+        setLoading(false);
+        setLoadingMore(false);
+      }
     }
   };
 
@@ -225,6 +247,8 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
 
   const handleProviderChange = (newProv: ProviderTab) => {
     setActiveProvider(newProv);
+    setCustomId('');
+    setImportError(null);
     loadModels(newProv, activeCategory, query, sortOption, selectedArch, false);
   };
 
@@ -239,6 +263,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
       setActiveCategory(targetCat);
       loadModels(activeProvider, targetCat, query, sortOption, selectedArch, false);
     }
+    return () => { requestVersion.current += 1; };
   }, [isOpen, initialCategory]);
 
   if (!isOpen) return null;
@@ -327,15 +352,15 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
     return 0;
   });
 
-  const handleCopyText = (key: string, text: string) => {
-    navigator.clipboard.writeText(text);
+  const handleCopyText = async (key: string, text: string) => {
+    try { await navigator.clipboard.writeText(text); } catch { alert("复制失败，请检查剪贴板权限"); return; }
     setCopiedKey(key);
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-in fade-in duration-200">
-      <div className="bg-[#171820] border border-[#2b2d39] rounded-2xl w-full max-w-6xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden text-xs">
+      <div role="dialog" aria-modal="true" aria-labelledby="model-hub-title" className="studio-readable model-hub bg-[#171820] border border-[#2b2d39] rounded-2xl w-full max-w-6xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden text-xs">
         {/* Header */}
         <div className="px-6 py-4 border-b border-[#262834] bg-[#121318] flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
@@ -343,14 +368,14 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
               <Cpu className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-white flex items-center gap-2">
-                全生态模型与 LoRA 枢纽中心 (Live Model & LoRA Hub)
+              <h2 id="model-hub-title" className="text-base font-bold text-white flex items-center gap-2">
+                模型与 LoRA 目录
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
-                  真实 API 实时拉取
+                  资源目录
                 </span>
               </h2>
               <p className="text-[11px] text-slate-400">
-                涵盖 Civitai、Hugging Face、魔搭社区 (ModelScope)、Fal.ai、NanoGPT 及 Google Gemini 全量生态模型
+                选择服务商、核对资源 ID，再应用到当前工作流。在线能力以所选端点为准。
               </p>
             </div>
           </div>
@@ -360,6 +385,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
               onClick={onClose}
               className="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-[#252731] transition-colors text-sm"
               title="关闭"
+              aria-label="关闭模型目录"
             >
               ✕
             </button>
@@ -371,14 +397,14 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-slate-400 font-medium text-[11px] flex items-center gap-1 mr-1">
               <Filter className="w-3.5 h-3.5 text-cyan-400" />
-              枢纽分类:
+              资源类型
             </span>
             {[
               { id: 'all', label: '全部模型', icon: Sparkles },
-              { id: 'checkpoint', label: '🏛️ 基础底模 (Checkpoints)', icon: Cpu },
-              { id: 'video', label: '🎥 AI 视频大模型 (Wan / LTX / Kling)', icon: Video },
-              { id: 'lora', label: '🎨 微调 LoRA 枢纽 (LoRA Weights)', icon: Layers },
-              { id: 'edit', label: '🪄 图像编辑与控制 (Edit & Control)', icon: Wand2 },
+              { id: 'checkpoint', label: '基础模型', icon: Cpu },
+              { id: 'video', label: '视频模型', icon: Video },
+              { id: 'lora', label: 'LoRA', icon: Layers },
+              { id: 'edit', label: '编辑与控制', icon: Wand2 },
             ].map((cat) => {
               const isSelected = activeCategory === cat.id;
               const Icon = cat.icon;
@@ -402,22 +428,22 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
           <div className="text-[11px] text-slate-400 flex items-center gap-1 font-mono shrink-0">
             <span>找到</span>
             <span className="text-cyan-400 font-bold">{displayList.length}</span>
-            <span>个可用模型与权重</span>
+            <span>项目录资源</span>
           </div>
         </div>
 
         {/* Provider Tabs */}
         <div className="px-6 pt-3 pb-1 bg-[#111216] border-b border-[#22242f] flex items-center gap-2 overflow-x-auto shrink-0 min-h-[44px]">
           {[
-            { id: 'all', name: '全部服务商 (All Providers)' },
-            { id: 'civitai', name: '🌟 Civitai (C站微调/视频/底模)' },
-            { id: 'huggingface', name: '🤗 Hugging Face (开源生态)' },
-            { id: 'modelscope', name: '🇨🇳 魔搭 CN (国内站)' },
-            { id: 'modelscope_ai', name: '🌐 魔搭 AI (国际站)' },
-            { id: 'fal', name: '⚡ Fal.ai (FLUX/Wan2.1/LTX 极速云)' },
-            { id: 'nanogpt', name: '🟢 NanoGPT (即开即用官方端点)' },
-            { id: 'tensorart', name: '🎨 Tensor.Art / 吐司 (社区模型中心)' },
-            { id: 'gemini', name: '💎 Google Gemini (官方生图)' },
+            { id: 'all', name: '全部服务商' },
+            { id: 'civitai', name: 'Civitai' },
+            { id: 'huggingface', name: 'Hugging Face' },
+            { id: 'modelscope', name: '魔搭 CN' },
+            { id: 'modelscope_ai', name: '魔搭 AI' },
+            { id: 'fal', name: 'Fal.ai' },
+            { id: 'nanogpt', name: 'NanoGPT' },
+            { id: 'tensorart', name: 'Tensor.Art / 吐司' },
+            { id: 'gemini', name: 'Google Gemini' },
           ].map((tab) => {
             const isActive = activeProvider === tab.id;
             return (
@@ -469,7 +495,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
           <div className="mx-6 mt-3 px-4 py-2.5 rounded-xl bg-purple-950/40 border border-purple-500/40 flex items-center justify-between gap-3 text-purple-200 text-xs shrink-0">
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-purple-400 shrink-0" />
-              <span>想要探索更多全生态 LoRA？可直接开启专用 LoRA 枢纽（包含多平台海量直拉、官方触发词复制、自动配对底模）</span>
+              <span>浏览 LoRA 资源；在线加载能力由所选模型和端点决定。</span>
             </div>
             <button
               onClick={onOpenDedicatedLoRAHub}
@@ -532,7 +558,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
           <div className="flex items-center gap-2 text-purple-300">
             <Zap className="w-4 h-4 text-purple-400 shrink-0" />
             <span>
-              <strong>自定义模型 / 端点泛化导入：</strong>
+              <strong>按 ID 选用：</strong>
               {activeProvider === 'tensorart'
                 ? '输入 Tensor.Art / 吐司 模型 ID 或链接 (如 958694016000505570, 672390779613802167)'
                 : activeProvider === 'huggingface'
@@ -545,7 +571,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                 ? '输入任意 NanoGPT Model ID (如 qwen-image-2.1/text-to-image, flux-pro, birefnet/v2)'
                 : activeProvider === 'gemini'
                 ? '输入 Gemini 模型 ID (如 gemini-2.5-flash-image)'
-                : '输入任意 Civitai 模型 ID / AIR URN (如 133005 或 urn:air:...)'}
+                : activeProvider === 'all' ? '请先在上方选择服务商，避免将 ID 发往错误平台。' : '输入 Civitai 模型 ID / AIR URN'}
             </span>
           </div>
           <div className="flex items-center gap-2 flex-1 max-w-md">
@@ -562,119 +588,59 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                   ? '输入 Fal.ai Endpoint (如 fal-ai/...)...'
                   : activeProvider === 'nanogpt'
                   ? '输入 NanoGPT Model ID (如 qwen-image-2.1/text-to-image)...'
+                  : activeProvider === 'gemini' ? '输入 Gemini 模型 ID...'
+                  : activeProvider === 'all' ? '请先选择服务商'
                   : '输入 Civitai ID (如 133005) 或 URN...'
               }
               id="custom-tensor-template-input-modelhub"
+              aria-label="自定义模型或 LoRA ID"
+              value={customId}
+              disabled={activeProvider === 'all' || importing}
+              onChange={(event) => { setCustomId(event.target.value); setImportError(null); }}
               className="flex-1 bg-[#100d1c] border border-purple-800/50 rounded-lg px-3 py-1.5 text-xs text-purple-100 placeholder-purple-400/50 outline-none focus:border-purple-400"
             />
             <button
+              disabled={importing || activeProvider === 'all' || !customId.trim()}
               onClick={async () => {
-                const inputEl = document.getElementById('custom-tensor-template-input-modelhub') as HTMLInputElement;
-                const rawVal = inputEl?.value?.trim() || '';
-                if (!rawVal) return;
-                const matchedId = rawVal.match(/\d{10,25}/)?.[0] || rawVal;
-                const displayName = rawVal.includes('/') ? rawVal.split('/').pop()! : rawVal;
-
-                if (rawVal.includes('/') && !rawVal.includes('tensor.art') && !rawVal.includes('tusiart.com') && (activeProvider === 'huggingface' || activeProvider === 'all')) {
-                  try {
-                    const hfInfo = await fetchHuggingFaceModelInfo(rawVal);
-                    if (hfInfo && hfInfo.id) {
-                      const triggerStr = Array.isArray(hfInfo.triggerWords) ? hfInfo.triggerWords.join(', ') : '';
-                      const baseModel = hfInfo.baseModel || 'FLUX.1 / SDXL';
-                      if (activeCategory === 'lora') {
-                        if (onSelectLoRAWithBaseModel) {
-                          onSelectLoRAWithBaseModel({
-                            name: hfInfo.id,
-                            triggerWords: triggerStr,
-                            baseModel,
-                          });
-                        } else if (onAddLoraNode) {
-                          onAddLoraNode(hfInfo.id, triggerStr, baseModel);
-                        } else if (onAddLora) {
-                          onAddLora({
-                            name: hfInfo.id,
-                            modelStrength: 0.8,
-                            clipStrength: 0.8,
-                            triggerWords: triggerStr,
-                            baseModel,
-                          });
-                        }
-                        onClose();
-                        return;
-                      } else {
-                        onSelectModel(hfInfo.id, hfInfo.name || displayName, 'huggingface', hfInfo);
-                        onClose();
-                        return;
-                      }
-                    }
-                  } catch (e) {
-                    console.warn('Direct HF info lookup failed, continuing with direct input:', e);
+                if (importing || activeProvider === 'all' || !customId.trim()) return;
+                const version = requestVersion.current;
+                setImporting(true);
+                setImportError(null);
+                try {
+                  const rawId = customId.trim();
+                  let info: any = { id: rawId, name: rawId };
+                  if (activeProvider === 'huggingface') info = await fetchHuggingFaceModelInfo(rawId);
+                  if (activeProvider === 'tensorart') info = await fetchTensorArtModelInfo(rawId);
+                  if (version !== requestVersion.current) return;
+                  if (!info?.id) throw new Error('查询未返回模型 ID，请核对资源 ID 后重试。');
+                  const isLora = activeCategory === 'lora' || String(info.category || info.type || '').toLowerCase() === 'lora';
+                  if (isLora) {
+                    const words = info.triggerWords || info.trainedWords || [];
+                    const lora = { name: String(info.id), provider: activeProvider,
+                      civitaiId: activeProvider === 'civitai' ? String(info.id) : undefined,
+                      triggerWords: Array.isArray(words) ? words.join(', ') : String(words),
+                      baseModel: info.baseModel || undefined };
+                    if (onSelectLoRAWithBaseModel) onSelectLoRAWithBaseModel(lora);
+                    else if (onAddLora) onAddLora({ ...lora, modelStrength: 0.8, clipStrength: 0.8 });
+                    else throw new Error('当前画布没有可挂载 LoRA 的入口，请先选择底模。');
+                  } else {
+                    onSelectModel(String(info.id), info.name || String(info.id), activeProvider, info);
                   }
+                  onClose();
+                } catch (err) {
+                  if (version === requestVersion.current) setImportError(err instanceof Error ? err.message : String(err));
+                } finally {
+                  setImporting(false);
                 }
-
-                if (activeProvider === 'tensorart' || rawVal.includes('tensor.art') || rawVal.includes('tusiart.com')) {
-                  try {
-                    const taInfo = await fetchTensorArtModelInfo(rawVal);
-                    if (taInfo && taInfo.id) {
-                      const triggerStr = Array.isArray(taInfo.trainedWords) ? taInfo.trainedWords.join(', ') : '';
-                      const baseModel = taInfo.baseModel || 'SD 1.5';
-                      if (activeCategory === 'lora' || taInfo.category === 'LoRA') {
-                        if (onSelectLoRAWithBaseModel) {
-                          onSelectLoRAWithBaseModel({
-                            name: `${taInfo.name || rawVal}.safetensors`,
-                            civitaiId: taInfo.id,
-                            triggerWords: triggerStr,
-                            baseModel,
-                          });
-                        } else if (onAddLoraNode) {
-                          onAddLoraNode(`${taInfo.name || rawVal}.safetensors`, triggerStr, baseModel);
-                        } else if (onAddLora) {
-                          onAddLora({
-                            name: `${taInfo.name || rawVal}.safetensors`,
-                            civitaiId: taInfo.id,
-                            modelStrength: 0.8,
-                            clipStrength: 0.8,
-                            triggerWords: triggerStr,
-                            baseModel,
-                          });
-                        }
-                        onClose();
-                        return;
-                      } else {
-                        onSelectModel(taInfo.id, taInfo.name, 'tensorart', taInfo);
-                        onClose();
-                        return;
-                      }
-                    }
-                  } catch (e) {
-                    console.warn('Direct Tensor.Art lookup failed, continuing with direct input:', e);
-                  }
-                }
-
-                if (activeCategory === 'lora') {
-                  if (onAddLoraNode) {
-                    onAddLoraNode(displayName, '', 'FLUX.1 / SDXL');
-                  } else if (onAddLora) {
-                    onAddLora({
-                      name: displayName,
-                      civitaiId: matchedId,
-                      modelStrength: 0.8,
-                      clipStrength: 0.8,
-                      baseModel: 'FLUX.1 / SDXL',
-                    });
-                  }
-                  onSelectModel(matchedId, `[${activeProvider.toUpperCase()} LoRA] ${displayName}`, activeProvider === 'all' ? undefined : activeProvider);
-                } else {
-                  onSelectModel(matchedId, `[${activeProvider.toUpperCase()}] ${displayName}`, activeProvider === 'all' ? undefined : activeProvider);
-                }
-                onClose();
               }}
               className="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs whitespace-nowrap shadow-sm active:scale-95 transition-all cursor-pointer"
             >
-              动态解析并选用
+              {importing ? '正在查询…' : activeProvider === 'all' ? '先选择服务商' : '选用此 ID'}
             </button>
           </div>
         </div>
+
+        {importError && <div role="alert" className="px-6 py-3 bg-rose-950/40 text-rose-200 border-b border-rose-800/40 break-words">ID 查询 / 选用失败：{importError}</div>}
 
         {/* Category Description Banner */}
         <div className="px-6 py-2 bg-gradient-to-r from-cyan-950/30 via-purple-950/30 to-indigo-950/30 border-b border-cyan-900/20 flex items-center justify-between text-[11px] text-cyan-300">
@@ -688,17 +654,17 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                 activeProvider === 'nanogpt' ? (
                   <>ℹ️ <strong>引擎特性提示:</strong> NanoGPT 为即开即用聚合模型推理端点，非独立的 LoRA 权重社区仓库。如需挂载社区 LoRA，请切换至 Civitai、Hugging Face、魔搭 (ModelScope) 或 Tensor.Art (吐司) 标签页。</>
                 ) : (
-                  <>🎨 <strong>LoRA 枢纽 (LoRA Hub):</strong> 点击「🎯 选用 LoRA 并自动配对底模」可智能校准底模架构；点击「挂载到当前取景框」可加入叠加矩阵。</>
+                  <>🎨 <strong>LoRA 枢纽 (LoRA Hub):</strong> 按资源 ID 挂载 LoRA；Tensor.Art 需先选同架构底模，Hugging Face 需选支持 LoRA 的端点；点击「挂载到当前取景框」可加入叠加矩阵。</>
                 )
               )}
               {activeCategory === 'video' && (
-                <>🎥 <strong>AI 视频大模型 (Video Model Hub):</strong> 支持阿里 Wan 2.1、LTX-Video、快手可灵等影视运镜模型，支持文生视频与图生视频。</>
+                <>视频资源目录：任务类型、输入图片与时长能力由所选端点决定。</>
               )}
               {activeCategory === 'all' && (
-                <>✨ <strong>全生态大模型矩阵:</strong> 完整支持各平台原生模型与 LoRA 互联互通，点击对应卡片按钮即可直接应用或在画布上新增节点。</>
+                <>✨ <strong>全生态大模型矩阵:</strong> 目录展示模型资源；在线生成和 LoRA 兼容性由所选端点核实，下载能力不代表 API 可生成。</>
               )}
               {activeCategory === 'edit' && (
-                <>🪄 <strong>图像编辑与控制模型:</strong> 支持 Qwen-Image-Edit、ControlNet、SDXL Inpaint 与高清超分辨率放大。</>
+                <>编辑与控制资源：选择前请核对端点要求的输入图片与参数。</>
               )}
             </span>
           </div>
@@ -735,32 +701,37 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
               ))}
             </div>
           )}
+          {activeProvider === 'tensorart' && <p className="mb-4 text-sm text-slate-300">此处展示 TusiArt 公共目录当前页面；模型 API 没有已核实的全量列表接口。<a href="https://tensor.art/models" target="_blank" rel="noopener noreferrer" className="ml-2 text-cyan-300 underline">浏览完整 Tensor.Art 模型 / LoRA 目录</a>，复制任意资源 ID 到上方查询。生成需 TAMS 模型 API Key，OpenWorks key 不能代用。</p>}
+          {activeProvider === 'all' && !loading && <p className="mb-4 text-sm text-slate-400">当前展示各服务商目录摘要。选择单个服务商后继续检索或翻页。</p>}
           {loading ? (
             <div className="h-64 flex flex-col items-center justify-center gap-3 text-slate-400">
               <Loader2 className="w-8 h-8 animate-spin text-cyan-400" />
-              <p className="font-medium text-xs">正在从官方 API 检索真实模型与参数信息...</p>
+              <p className="font-medium text-xs">正在读取所选平台目录...</p>
             </div>
           ) : displayList.length === 0 ? (
             <div className="h-72 flex flex-col items-center justify-center text-slate-400 space-y-3 p-6 bg-[#161720] rounded-2xl border border-[#262834]">
               <Sparkles className="w-10 h-10 text-cyan-400/60" />
               <div className="text-center">
                 <p className="text-sm font-bold text-white">
-                  当前服务商下暂无【{activeCategory === 'video' ? 'AI 视频大模型' : activeCategory === 'checkpoint' ? '基础底模' : activeCategory === 'lora' ? '微调 LoRA' : '当前分类'}】
+                  当前目录页下暂无【{activeCategory === 'video' ? 'AI 视频大模型' : activeCategory === 'checkpoint' ? '基础底模' : activeCategory === 'lora' ? '微调 LoRA' : '当前分类'}】
                 </p>
                 <p className="text-xs text-slate-400 mt-1">
-                  {error ? `错误原因: ${error}` : '请尝试切换分类、服务商或输入更精准的关键词进行全网实时拉取'}
+                  {error ? `错误原因: ${error}` : '请尝试切换分类、服务商或输入更精准的关键词进行查询所选目录'}
                 </p>
               </div>
               <div className="flex items-center gap-2 mt-2">
                 <button
                   onClick={() => {
                     setQuery('');
+                    setActiveCategory('all');
+                    setSelectedArch('all');
                     setActiveProvider('all');
+                    loadModels('all', 'all', '', sortOption, 'all');
                   }}
                   className="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-cyan-600/30 transition-all flex items-center gap-1.5"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
-                  <span>重置并查看全服务商模型 (All Providers)</span>
+                  <span>清除筛选并重新加载</span>
                 </button>
                 {error && (
                   <button
@@ -842,7 +813,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                               {displayName}
                             </span>
                             <span className="text-[9px] font-mono text-slate-400">
-                              [官方原生权重 · 接口未附预览图]
+                              [目录未附预览图]
                             </span>
                           </div>
                         </div>
@@ -981,6 +952,8 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                             ) : null}
                           </div>
 
+                          <p className="mt-2 text-sm text-slate-400 font-mono break-all" title={String(modelId)}>{isLora ? 'LoRA ID' : '模型 ID'} · {modelId}</p>
+                          <p className="mt-2 text-sm text-slate-400">目录资源 · 生成权限与参数能力需由所选端点核实</p>
                           {/* Stats Tags */}
                           <div className="flex flex-wrap gap-1.5 mt-2">
                             {typeof m.downloads === 'number' && m.downloads > 0 && (
@@ -1038,18 +1011,19 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                                 <button
                                   onClick={() => {
                                     onSelectLoRAWithBaseModel({
-                                      name: displayName,
-                                      civitaiId: m.id ? String(m.id) : undefined,
+                                      name: ['huggingface','modelscope','modelscope_ai','tensorart','tensor'].includes(providerKey) ? modelId : displayName,
+                                      provider: providerKey,
+                                      civitaiId: providerKey === 'civitai' && m.id ? String(m.id) : undefined,
                                       triggerWords: trainedWords.join(', '),
                                       baseModel: baseArch,
                                     });
                                     onClose();
                                   }}
                                   className="w-full py-1.5 px-2.5 rounded-xl bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-600 hover:from-purple-500 hover:to-cyan-500 text-white font-bold transition-all shadow-md shadow-purple-600/30 flex items-center justify-center gap-1.5 text-[11px] active:scale-98"
-                                  title={`选用此 LoRA 并自动将前置底模同步为兼容的 ${baseArch} 官方架构`}
+                                  title={`挂载到当前同平台底模；生成前核实 ${baseArch} 架构`}
                                 >
                                   <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                                  <span>🎯 选用 LoRA 并自动配对底模</span>
+                                  <span>挂载到所选底模</span>
                                   <span className="text-[10px] px-1 py-0.2 rounded bg-black/30 font-mono text-cyan-200">
                                     {baseArch}
                                   </span>
@@ -1061,8 +1035,9 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                                   <button
                                     onClick={() => {
                                       onAddLora({
-                                        name: displayName,
-                                        civitaiId: m.id ? String(m.id) : undefined,
+                                        name: ['huggingface','modelscope','modelscope_ai','tensorart','tensor'].includes(providerKey) ? modelId : displayName,
+                                        provider: providerKey,
+                                        civitaiId: providerKey === 'civitai' && m.id ? String(m.id) : undefined,
                                         modelStrength: 0.8,
                                         clipStrength: 0.8,
                                         triggerWords: trainedWords.join(', '),
@@ -1081,7 +1056,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                                 {onAddLoraNode && (
                                   <button
                                     onClick={() => {
-                                      onAddLoraNode(displayName, trainedWords.join(', '), baseArch);
+                                      onAddLoraNode(['huggingface','modelscope','modelscope_ai','tensorart','tensor'].includes(providerKey) ? modelId : displayName, trainedWords.join(', '), baseArch);
                                       onClose();
                                     }}
                                     className="py-1.5 px-2 rounded-lg bg-[#22242e] hover:bg-[#2c303d] text-purple-300 hover:text-purple-200 font-medium flex items-center justify-center gap-1 border border-purple-500/30 transition-colors text-[10px]"
@@ -1094,6 +1069,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                               </div>
 
                               <button
+                                title="本地提示词语法，云端接口仍需独立传入 LoRA ID 与权重"
                                 onClick={() => handleCopyText(`lora-syntax-${modelId}`, `<lora:${displayName}:0.8>`)}
                                 className="w-full py-1 rounded bg-[#13141a] hover:bg-[#1c1d25] text-slate-400 hover:text-slate-200 font-mono text-[10px] flex items-center justify-center gap-1 border border-[#242633]"
                               >
@@ -1105,7 +1081,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                                 ) : (
                                   <>
                                     <Copy className="w-3 h-3" />
-                                    <span>复制语法 &lt;lora:{displayName}:0.8&gt;</span>
+                                    <span>复制本地 LoRA 语法</span>
                                   </>
                                 )}
                               </button>
@@ -1115,21 +1091,21 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                             <div className="space-y-1.5">
                               <button
                                 onClick={() => {
-                                  onSelectModel(modelId, displayName, providerName, m);
+                                  onSelectModel(modelId, displayName, providerKey, m);
                                   onClose();
                                 }}
                                 className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold transition-all shadow-md shadow-emerald-600/30 flex items-center justify-center gap-1.5 text-[11px] active:scale-98"
                                 title="将当前画板切换为此 AI视频生成模型"
                               >
                                 <Video className="w-3.5 h-3.5 text-emerald-200" />
-                                <span>🎬 应用为活跃视频模型 (Apply Video Model)</span>
+                                <span>应用为视频模型</span>
                               </button>
 
                               <div className="grid grid-cols-2 gap-1.5">
                                 {onAddModelNode && (
                                   <button
                                     onClick={() => {
-                                      onAddModelNode(modelId, displayName, providerName, m);
+                                      onAddModelNode(modelId, displayName, providerKey, m);
                                       onClose();
                                     }}
                                     className="py-1.5 px-2 rounded-lg bg-[#22242e] hover:bg-[#2c303d] text-emerald-300 font-medium flex items-center justify-center gap-1 border border-[#323544] transition-colors text-[10px]"
@@ -1164,21 +1140,21 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                             <div className="space-y-1.5">
                               <button
                                 onClick={() => {
-                                  onSelectModel(modelId, displayName, providerName, m);
+                                  onSelectModel(modelId, displayName, providerKey, m);
                                   onClose();
                                 }}
                                 className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-bold transition-all shadow-md shadow-cyan-600/30 flex items-center justify-center gap-1.5 text-[11px] active:scale-98"
                                 title="将当前画板前置 Checkpoint 或活跃取景框切换为本底模"
                               >
                                 <Check className="w-3.5 h-3.5 text-cyan-200" />
-                                <span>🎯 应用为活跃底模 (Apply Base Model)</span>
+                                <span>应用为底模</span>
                               </button>
 
                               <div className="grid grid-cols-2 gap-1.5">
                                 {onAddModelNode && (
                                   <button
                                     onClick={() => {
-                                      onAddModelNode(modelId, displayName, providerName, m);
+                                      onAddModelNode(modelId, displayName, providerKey, m);
                                       onClose();
                                     }}
                                     className="py-1.5 px-2 rounded-lg bg-[#22242e] hover:bg-[#2c303d] text-cyan-300 font-medium flex items-center justify-center gap-1 border border-[#323544] transition-colors text-[10px]"
@@ -1236,7 +1212,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                     )}
                   </button>
                   <p className="text-[10px] text-slate-500">
-                    基于官方 API Cursor 与分页无缝追加，直连 Hugging Face / ModelScope / Civitai 全库
+                    仅在目录接口明确提供下一页时继续加载。
                   </p>
                 </div>
               )}

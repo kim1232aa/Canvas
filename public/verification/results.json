@@ -1,0 +1,3148 @@
+[
+  {
+    "name": "fal-lora",
+    "startedAt": "2026-10-02T22:53:07.917Z",
+    "finishedAt": "2026-10-02T22:53:16.927Z",
+    "status": "billing_or_quota",
+    "http": 403,
+    "model": "fal-ai/flux-lora",
+    "request": {
+      "model": "fal-ai/flux-lora",
+      "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering",
+      "image_size": {
+        "width": 512,
+        "height": 512
+      },
+      "num_inference_steps": 12,
+      "guidance_scale": 3.5,
+      "seed": 42,
+      "loras": [
+        {
+          "path": "https://huggingface.co/XLabs-AI/flux-RealismLora/resolve/main/lora.safetensors",
+          "scale": 0.8
+        }
+      ]
+    },
+    "workflowSnapshot": {
+      "format": "comfycanvas",
+      "version": 1,
+      "nodes": [
+        {
+          "id": "checkpoint",
+          "type": "CheckpointLoaderSimple",
+          "pos": {
+            "x": 40,
+            "y": 40
+          },
+          "values": {
+            "ckpt_name": "fal-ai/flux-lora",
+            "targetProvider": "fal",
+            "model": "fal-ai/flux-lora",
+            "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering",
+            "image_size": {
+              "width": 512,
+              "height": 512
+            },
+            "num_inference_steps": 12,
+            "guidance_scale": 3.5,
+            "seed": 42,
+            "loras": [
+              {
+                "path": "https://huggingface.co/XLabs-AI/flux-RealismLora/resolve/main/lora.safetensors",
+                "scale": 0.8
+              }
+            ]
+          }
+        },
+        {
+          "id": "prompt",
+          "type": "CLIPTextEncode",
+          "pos": {
+            "x": 40,
+            "y": 310
+          },
+          "values": {
+            "text": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering"
+          }
+        },
+        {
+          "id": "sampler",
+          "type": "KSampler",
+          "pos": {
+            "x": 430,
+            "y": 80
+          },
+          "values": {
+            "seed": 42,
+            "steps": 12,
+            "cfg": 3.5
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "model",
+          "fromNodeId": "checkpoint",
+          "fromSocketId": "MODEL",
+          "toNodeId": "sampler",
+          "toSocketId": "model",
+          "type": "MODEL"
+        },
+        {
+          "id": "positive",
+          "fromNodeId": "prompt",
+          "fromSocketId": "CONDITIONING",
+          "toNodeId": "sampler",
+          "toSocketId": "positive",
+          "type": "CONDITIONING"
+        }
+      ]
+    },
+    "response": {
+      "error": "Fal.ai 接口执行失败 [403]: {\"detail\":\"User is locked. Reason: TOP_UP.\"}"
+    }
+  },
+  {
+    "name": "civitai",
+    "startedAt": "2026-10-02T22:53:16.928Z",
+    "finishedAt": "2026-10-02T22:53:41.933Z",
+    "status": "generated",
+    "http": 200,
+    "model": "urn:air:sd1:checkpoint:civitai:4384@128713",
+    "mediaUrl": "/verification/civitai.jpg",
+    "request": {
+      "model": "urn:air:sd1:checkpoint:civitai:4384@128713",
+      "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering",
+      "negative_prompt": "blurry, low quality",
+      "width": 512,
+      "height": 512,
+      "steps": 12,
+      "cfg": 7,
+      "seed": 42,
+      "sampler_name": "euler",
+      "scheduler": "discrete"
+    },
+    "workflowSnapshot": {
+      "format": "comfycanvas",
+      "version": 1,
+      "nodes": [
+        {
+          "id": "checkpoint",
+          "type": "CheckpointLoaderSimple",
+          "pos": {
+            "x": 40,
+            "y": 40
+          },
+          "values": {
+            "ckpt_name": "urn:air:sd1:checkpoint:civitai:4384@128713",
+            "targetProvider": "civitai",
+            "model": "urn:air:sd1:checkpoint:civitai:4384@128713",
+            "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering",
+            "negative_prompt": "blurry, low quality",
+            "width": 512,
+            "height": 512,
+            "steps": 12,
+            "cfg": 7,
+            "seed": 42,
+            "sampler_name": "euler",
+            "scheduler": "discrete"
+          }
+        },
+        {
+          "id": "prompt",
+          "type": "CLIPTextEncode",
+          "pos": {
+            "x": 40,
+            "y": 310
+          },
+          "values": {
+            "text": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering"
+          }
+        },
+        {
+          "id": "sampler",
+          "type": "KSampler",
+          "pos": {
+            "x": 430,
+            "y": 80
+          },
+          "values": {
+            "seed": 42,
+            "steps": 12
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "model",
+          "fromNodeId": "checkpoint",
+          "fromSocketId": "MODEL",
+          "toNodeId": "sampler",
+          "toSocketId": "model",
+          "type": "MODEL"
+        },
+        {
+          "id": "positive",
+          "fromNodeId": "prompt",
+          "fromSocketId": "CONDITIONING",
+          "toNodeId": "sampler",
+          "toSocketId": "positive",
+          "type": "CONDITIONING"
+        }
+      ]
+    },
+    "response": {
+      "success": true,
+      "imageUrl": "/verification/civitai.jpg",
+      "mediaUrl": "/verification/civitai.jpg",
+      "provider": "Civitai 官方原生生成引擎",
+      "model": "urn:air:sd1:checkpoint:civitai:4384@128713",
+      "historyItem": {
+        "url": "/verification/civitai.jpg",
+        "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering",
+        "negativePrompt": "blurry, low quality",
+        "provider": "Civitai 官方原生生成引擎",
+        "model": "urn:air:sd1:checkpoint:civitai:4384@128713",
+        "seed": 42,
+        "steps": 12,
+        "cfg": 7,
+        "workflowSnapshot": {
+          "format": "comfycanvas",
+          "version": 1,
+          "nodes": [
+            {
+              "id": "checkpoint",
+              "type": "CheckpointLoaderSimple",
+              "pos": {
+                "x": 40,
+                "y": 40
+              },
+              "values": {
+                "ckpt_name": "urn:air:sd1:checkpoint:civitai:4384@128713",
+                "targetProvider": "civitai",
+                "model": "urn:air:sd1:checkpoint:civitai:4384@128713",
+                "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering",
+                "negative_prompt": "blurry, low quality",
+                "width": 512,
+                "height": 512,
+                "steps": 12,
+                "cfg": 7,
+                "seed": 42,
+                "sampler_name": "euler",
+                "scheduler": "discrete"
+              }
+            },
+            {
+              "id": "prompt",
+              "type": "CLIPTextEncode",
+              "pos": {
+                "x": 40,
+                "y": 310
+              },
+              "values": {
+                "text": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering"
+              }
+            },
+            {
+              "id": "sampler",
+              "type": "KSampler",
+              "pos": {
+                "x": 430,
+                "y": 80
+              },
+              "values": {
+                "seed": 42,
+                "steps": 12
+              }
+            }
+          ],
+          "connections": [
+            {
+              "id": "model",
+              "fromNodeId": "checkpoint",
+              "fromSocketId": "MODEL",
+              "toNodeId": "sampler",
+              "toSocketId": "model",
+              "type": "MODEL"
+            },
+            {
+              "id": "positive",
+              "fromNodeId": "prompt",
+              "fromSocketId": "CONDITIONING",
+              "toNodeId": "sampler",
+              "toSocketId": "positive",
+              "type": "CONDITIONING"
+            }
+          ]
+        },
+        "requestMetadata": {
+          "route": "/api/civitai/generate",
+          "submissions": [
+            {
+              "endpoint": "https://orchestration.civitai.com/v2/consumer/workflows?wait=100",
+              "parameters": {
+                "steps": [
+                  {
+                    "$type": "imageGen",
+                    "input": {
+                      "engine": "sdcpp",
+                      "ecosystem": "sd1",
+                      "operation": "createImage",
+                      "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering",
+                      "model": "urn:air:sd1:checkpoint:civitai:4384@128713",
+                      "negativePrompt": "blurry, low quality",
+                      "width": 512,
+                      "height": 512,
+                      "steps": 12,
+                      "cfgScale": 7,
+                      "seed": 42,
+                      "sampleMethod": "euler",
+                      "schedule": "discrete"
+                    }
+                  }
+                ]
+              },
+              "status": 200
+            }
+          ]
+        },
+        "id": "hist_1790981621909_7n9cp",
+        "timestamp": 1790981621909,
+        "actualProvider": "Civitai 官方原生生成引擎",
+        "actualModel": "urn:air:sd1:checkpoint:civitai:4384@128713",
+        "loras": []
+      }
+    },
+    "replayWorkflow": {
+      "format": "comfycanvas",
+      "version": 1,
+      "nodes": [
+        {
+          "id": "checkpoint",
+          "type": "CheckpointLoaderSimple",
+          "title": "Load Checkpoint",
+          "pos": {
+            "x": 20,
+            "y": 20
+          },
+          "width": 300,
+          "inputs": [],
+          "outputs": [
+            {
+              "id": "MODEL",
+              "name": "MODEL",
+              "type": "MODEL",
+              "label": "MODEL"
+            },
+            {
+              "id": "CLIP",
+              "name": "CLIP",
+              "type": "CLIP",
+              "label": "CLIP"
+            },
+            {
+              "id": "VAE",
+              "name": "VAE",
+              "type": "VAE",
+              "label": "VAE"
+            }
+          ],
+          "values": {
+            "ckpt_name": "urn:air:sd1:checkpoint:civitai:4384@128713",
+            "targetProvider": "civitai"
+          },
+          "state": "idle"
+        },
+        {
+          "id": "prompt",
+          "type": "CLIPTextEncode",
+          "title": "CLIP Text Encode (Positive Prompt)",
+          "pos": {
+            "x": 350,
+            "y": 20
+          },
+          "width": 300,
+          "inputs": [
+            {
+              "id": "clip",
+              "name": "clip",
+              "type": "CLIP",
+              "label": "CLIP"
+            }
+          ],
+          "outputs": [
+            {
+              "id": "CONDITIONING",
+              "name": "CONDITIONING",
+              "type": "CONDITIONING",
+              "label": "CONDITIONING"
+            }
+          ],
+          "values": {
+            "text": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering"
+          },
+          "state": "idle"
+        },
+        {
+          "id": "sampler",
+          "type": "KSampler",
+          "title": "KSampler",
+          "pos": {
+            "x": 700,
+            "y": 20
+          },
+          "width": 300,
+          "inputs": [
+            {
+              "id": "model",
+              "name": "model",
+              "type": "MODEL",
+              "label": "MODEL"
+            },
+            {
+              "id": "positive",
+              "name": "positive",
+              "type": "CONDITIONING",
+              "label": "positive"
+            },
+            {
+              "id": "negative",
+              "name": "negative",
+              "type": "CONDITIONING",
+              "label": "negative"
+            },
+            {
+              "id": "latent_image",
+              "name": "latent_image",
+              "type": "LATENT",
+              "label": "latent_image"
+            }
+          ],
+          "outputs": [
+            {
+              "id": "LATENT",
+              "name": "LATENT",
+              "type": "LATENT",
+              "label": "LATENT"
+            }
+          ],
+          "values": {
+            "seed": 42,
+            "control_after_generate": "fixed",
+            "steps": 12,
+            "cfg": 7,
+            "sampler_name": "euler",
+            "scheduler": "discrete"
+          },
+          "state": "idle"
+        },
+        {
+          "id": "latent",
+          "type": "EmptyLatentImage",
+          "title": "Empty Latent Image",
+          "pos": {
+            "x": 350,
+            "y": 400
+          },
+          "width": 300,
+          "inputs": [],
+          "outputs": [
+            {
+              "id": "LATENT",
+              "name": "LATENT",
+              "type": "LATENT",
+              "label": "LATENT"
+            }
+          ],
+          "values": {
+            "width": 512,
+            "height": 512,
+            "batch_size": 1
+          },
+          "state": "idle"
+        },
+        {
+          "id": "negative",
+          "type": "CLIPTextEncodeNegative",
+          "title": "CLIP Text Encode (Negative Prompt)",
+          "pos": {
+            "x": 20,
+            "y": 650
+          },
+          "width": 300,
+          "inputs": [
+            {
+              "id": "clip",
+              "name": "clip",
+              "type": "CLIP",
+              "label": "CLIP"
+            }
+          ],
+          "outputs": [
+            {
+              "id": "CONDITIONING",
+              "name": "CONDITIONING",
+              "type": "CONDITIONING",
+              "label": "CONDITIONING"
+            }
+          ],
+          "values": {
+            "text": "blurry, low quality"
+          },
+          "state": "idle"
+        }
+      ],
+      "connections": [
+        {
+          "id": "model",
+          "fromNodeId": "checkpoint",
+          "fromSocketId": "MODEL",
+          "toNodeId": "sampler",
+          "toSocketId": "model",
+          "type": "MODEL"
+        },
+        {
+          "id": "positive",
+          "fromNodeId": "prompt",
+          "fromSocketId": "CONDITIONING",
+          "toNodeId": "sampler",
+          "toSocketId": "positive",
+          "type": "CONDITIONING"
+        },
+        {
+          "id": "clip",
+          "fromNodeId": "checkpoint",
+          "fromSocketId": "CLIP",
+          "toNodeId": "prompt",
+          "toSocketId": "clip",
+          "type": "CLIP"
+        },
+        {
+          "id": "latent",
+          "fromNodeId": "latent",
+          "fromSocketId": "LATENT",
+          "toNodeId": "sampler",
+          "toSocketId": "latent_image",
+          "type": "LATENT"
+        },
+        {
+          "id": "negative",
+          "fromNodeId": "negative",
+          "fromSocketId": "CONDITIONING",
+          "toNodeId": "sampler",
+          "toSocketId": "negative",
+          "type": "CONDITIONING"
+        }
+      ],
+      "canvasMode": "graph",
+      "spatialFrames": [],
+      "executingNodeId": "sampler"
+    }
+  },
+  {
+    "name": "modelscope_ai-1",
+    "startedAt": "2026-10-02T22:53:41.933Z",
+    "finishedAt": "2026-10-02T22:53:50.825Z",
+    "status": "billing_or_quota",
+    "http": 429,
+    "model": "Tongyi-MAI/Z-Image-Turbo",
+    "request": {
+      "model": "Tongyi-MAI/Z-Image-Turbo",
+      "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering",
+      "site": "ai"
+    },
+    "workflowSnapshot": {
+      "format": "comfycanvas",
+      "version": 1,
+      "nodes": [
+        {
+          "id": "checkpoint",
+          "type": "CheckpointLoaderSimple",
+          "pos": {
+            "x": 40,
+            "y": 40
+          },
+          "values": {
+            "ckpt_name": "Tongyi-MAI/Z-Image-Turbo",
+            "targetProvider": "modelscope_ai",
+            "model": "Tongyi-MAI/Z-Image-Turbo",
+            "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering",
+            "site": "ai"
+          }
+        },
+        {
+          "id": "prompt",
+          "type": "CLIPTextEncode",
+          "pos": {
+            "x": 40,
+            "y": 310
+          },
+          "values": {
+            "text": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering"
+          }
+        },
+        {
+          "id": "sampler",
+          "type": "KSampler",
+          "pos": {
+            "x": 430,
+            "y": 80
+          },
+          "values": {}
+        }
+      ],
+      "connections": [
+        {
+          "id": "model",
+          "fromNodeId": "checkpoint",
+          "fromSocketId": "MODEL",
+          "toNodeId": "sampler",
+          "toSocketId": "model",
+          "type": "MODEL"
+        },
+        {
+          "id": "positive",
+          "fromNodeId": "prompt",
+          "fromSocketId": "CONDITIONING",
+          "toNodeId": "sampler",
+          "toSocketId": "positive",
+          "type": "CONDITIONING"
+        }
+      ]
+    },
+    "response": {
+      "error": "魔搭国际站 (modelscope.ai) 账户额度不足 [429]: {\"errors\":{\"message\":\"insufficient balance\"},\"request_id\":\"1a159186-e923-4733-9f3e-8994822dc044\"}",
+      "details": "{\"errors\":{\"message\":\"insufficient balance\"},\"request_id\":\"1a159186-e923-4733-9f3e-8994822dc044\"}",
+      "model": "Tongyi-MAI/Z-Image-Turbo",
+      "provider": "ModelScope AI"
+    }
+  },
+  {
+    "name": "modelscope_ai-2",
+    "startedAt": "2026-10-02T22:53:50.826Z",
+    "finishedAt": "2026-10-02T22:53:51.243Z",
+    "status": "account_setup",
+    "http": 401,
+    "model": "Tongyi-MAI/Z-Image-Turbo",
+    "request": {
+      "model": "Tongyi-MAI/Z-Image-Turbo",
+      "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering",
+      "site": "ai"
+    },
+    "workflowSnapshot": {
+      "format": "comfycanvas",
+      "version": 1,
+      "nodes": [
+        {
+          "id": "checkpoint",
+          "type": "CheckpointLoaderSimple",
+          "pos": {
+            "x": 40,
+            "y": 40
+          },
+          "values": {
+            "ckpt_name": "Tongyi-MAI/Z-Image-Turbo",
+            "targetProvider": "modelscope_ai",
+            "model": "Tongyi-MAI/Z-Image-Turbo",
+            "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering",
+            "site": "ai"
+          }
+        },
+        {
+          "id": "prompt",
+          "type": "CLIPTextEncode",
+          "pos": {
+            "x": 40,
+            "y": 310
+          },
+          "values": {
+            "text": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering"
+          }
+        },
+        {
+          "id": "sampler",
+          "type": "KSampler",
+          "pos": {
+            "x": 430,
+            "y": 80
+          },
+          "values": {}
+        }
+      ],
+      "connections": [
+        {
+          "id": "model",
+          "fromNodeId": "checkpoint",
+          "fromSocketId": "MODEL",
+          "toNodeId": "sampler",
+          "toSocketId": "model",
+          "type": "MODEL"
+        },
+        {
+          "id": "positive",
+          "fromNodeId": "prompt",
+          "fromSocketId": "CONDITIONING",
+          "toNodeId": "sampler",
+          "toSocketId": "positive",
+          "type": "CONDITIONING"
+        }
+      ]
+    },
+    "response": {
+      "error": "魔搭国际站 (modelscope.ai) API 提交失败 [401]: {\"errors\":{\"message\":\"Please bind your Alibaba Cloud account before use. You can bind it at: https://modelscope.ai/my/settings/account\"},\"request_id\":\"0f9db2d2-ba0d-4e9a-b552-2d0e287f1b44\"}",
+      "details": "{\"errors\":{\"message\":\"Please bind your Alibaba Cloud account before use. You can bind it at: https://modelscope.ai/my/settings/account\"},\"request_id\":\"0f9db2d2-ba0d-4e9a-b552-2d0e287f1b44\"}",
+      "model": "Tongyi-MAI/Z-Image-Turbo",
+      "provider": "ModelScope AI"
+    }
+  },
+  {
+    "name": "modelscope",
+    "startedAt": "2026-10-02T22:53:51.244Z",
+    "finishedAt": "2026-10-02T22:54:00.491Z",
+    "status": "billing_or_quota",
+    "http": 429,
+    "model": "Tongyi-MAI/Z-Image-Turbo",
+    "request": {
+      "model": "Tongyi-MAI/Z-Image-Turbo",
+      "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering",
+      "site": "cn"
+    },
+    "workflowSnapshot": {
+      "format": "comfycanvas",
+      "version": 1,
+      "nodes": [
+        {
+          "id": "checkpoint",
+          "type": "CheckpointLoaderSimple",
+          "pos": {
+            "x": 40,
+            "y": 40
+          },
+          "values": {
+            "ckpt_name": "Tongyi-MAI/Z-Image-Turbo",
+            "targetProvider": "modelscope",
+            "model": "Tongyi-MAI/Z-Image-Turbo",
+            "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering",
+            "site": "cn"
+          }
+        },
+        {
+          "id": "prompt",
+          "type": "CLIPTextEncode",
+          "pos": {
+            "x": 40,
+            "y": 310
+          },
+          "values": {
+            "text": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering"
+          }
+        },
+        {
+          "id": "sampler",
+          "type": "KSampler",
+          "pos": {
+            "x": 430,
+            "y": 80
+          },
+          "values": {}
+        }
+      ],
+      "connections": [
+        {
+          "id": "model",
+          "fromNodeId": "checkpoint",
+          "fromSocketId": "MODEL",
+          "toNodeId": "sampler",
+          "toSocketId": "model",
+          "type": "MODEL"
+        },
+        {
+          "id": "positive",
+          "fromNodeId": "prompt",
+          "fromSocketId": "CONDITIONING",
+          "toNodeId": "sampler",
+          "toSocketId": "positive",
+          "type": "CONDITIONING"
+        }
+      ]
+    },
+    "response": {
+      "error": "魔搭国内站 (modelscope.cn) 账户额度不足 [429]: {\"errors\":{\"message\":\"insufficient balance\"},\"request_id\":\"87ddbd60-37ed-4970-a136-dbdf6082bdb6\"}",
+      "details": "{\"errors\":{\"message\":\"insufficient balance\"},\"request_id\":\"87ddbd60-37ed-4970-a136-dbdf6082bdb6\"}",
+      "model": "Tongyi-MAI/Z-Image-Turbo",
+      "provider": "ModelScope CN"
+    }
+  },
+  {
+    "name": "huggingface",
+    "startedAt": "2026-10-02T22:54:00.492Z",
+    "finishedAt": "2026-10-02T22:54:16.397Z",
+    "status": "generated",
+    "http": 200,
+    "model": "Tongyi-MAI/Z-Image-Turbo",
+    "mediaUrl": "/verification/huggingface.png",
+    "request": {
+      "model": "Tongyi-MAI/Z-Image-Turbo",
+      "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering",
+      "resolution": "1024x1024 ( 1:1 )",
+      "seed": 42,
+      "steps": 8,
+      "shift": 3,
+      "random_seed": false,
+      "gallery_images": []
+    },
+    "workflowSnapshot": {
+      "format": "comfycanvas",
+      "version": 1,
+      "nodes": [
+        {
+          "id": "checkpoint",
+          "type": "CheckpointLoaderSimple",
+          "pos": {
+            "x": 40,
+            "y": 40
+          },
+          "values": {
+            "ckpt_name": "Tongyi-MAI/Z-Image-Turbo",
+            "targetProvider": "huggingface",
+            "model": "Tongyi-MAI/Z-Image-Turbo",
+            "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering",
+            "resolution": "1024x1024 ( 1:1 )",
+            "seed": 42,
+            "steps": 8,
+            "shift": 3,
+            "random_seed": false,
+            "gallery_images": []
+          }
+        },
+        {
+          "id": "prompt",
+          "type": "CLIPTextEncode",
+          "pos": {
+            "x": 40,
+            "y": 310
+          },
+          "values": {
+            "text": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering"
+          }
+        },
+        {
+          "id": "sampler",
+          "type": "KSampler",
+          "pos": {
+            "x": 430,
+            "y": 80
+          },
+          "values": {
+            "seed": 42,
+            "steps": 8
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "model",
+          "fromNodeId": "checkpoint",
+          "fromSocketId": "MODEL",
+          "toNodeId": "sampler",
+          "toSocketId": "model",
+          "type": "MODEL"
+        },
+        {
+          "id": "positive",
+          "fromNodeId": "prompt",
+          "fromSocketId": "CONDITIONING",
+          "toNodeId": "sampler",
+          "toSocketId": "positive",
+          "type": "CONDITIONING"
+        }
+      ]
+    },
+    "response": {
+      "imageUrl": "/verification/huggingface.png",
+      "provider": "Hugging Face",
+      "actualProvider": "Hugging Face",
+      "model": "Tongyi-MAI/Z-Image-Turbo",
+      "actualModel": "Tongyi-MAI/Z-Image-Turbo",
+      "historyItem": {
+        "url": "/verification/huggingface.png",
+        "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering",
+        "negativePrompt": null,
+        "provider": "Hugging Face",
+        "model": "Tongyi-MAI/Z-Image-Turbo",
+        "seed": 42,
+        "steps": 8,
+        "cfg": null,
+        "workflowSnapshot": {
+          "format": "comfycanvas",
+          "version": 1,
+          "nodes": [
+            {
+              "id": "checkpoint",
+              "type": "CheckpointLoaderSimple",
+              "pos": {
+                "x": 40,
+                "y": 40
+              },
+              "values": {
+                "ckpt_name": "Tongyi-MAI/Z-Image-Turbo",
+                "targetProvider": "huggingface",
+                "model": "Tongyi-MAI/Z-Image-Turbo",
+                "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering",
+                "resolution": "1024x1024 ( 1:1 )",
+                "seed": 42,
+                "steps": 8,
+                "shift": 3,
+                "random_seed": false,
+                "gallery_images": []
+              }
+            },
+            {
+              "id": "prompt",
+              "type": "CLIPTextEncode",
+              "pos": {
+                "x": 40,
+                "y": 310
+              },
+              "values": {
+                "text": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering"
+              }
+            },
+            {
+              "id": "sampler",
+              "type": "KSampler",
+              "pos": {
+                "x": 430,
+                "y": 80
+              },
+              "values": {
+                "seed": 42,
+                "steps": 8
+              }
+            }
+          ],
+          "connections": [
+            {
+              "id": "model",
+              "fromNodeId": "checkpoint",
+              "fromSocketId": "MODEL",
+              "toNodeId": "sampler",
+              "toSocketId": "model",
+              "type": "MODEL"
+            },
+            {
+              "id": "positive",
+              "fromNodeId": "prompt",
+              "fromSocketId": "CONDITIONING",
+              "toNodeId": "sampler",
+              "toSocketId": "positive",
+              "type": "CONDITIONING"
+            }
+          ]
+        },
+        "requestMetadata": {
+          "route": "/api/huggingface/generate",
+          "submissions": [
+            {
+              "endpoint": "https://tongyi-mai-z-image-turbo.hf.space/gradio_api/call/generate",
+              "parameters": {
+                "data": [
+                  "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering",
+                  "1024x1024 ( 1:1 )",
+                  42,
+                  8,
+                  3,
+                  false,
+                  []
+                ]
+              },
+              "status": 200
+            }
+          ]
+        },
+        "id": "hist_1790981656276_pj18b",
+        "timestamp": 1790981656276,
+        "actualProvider": "Hugging Face",
+        "actualModel": "Tongyi-MAI/Z-Image-Turbo",
+        "loras": []
+      }
+    },
+    "replayWorkflow": {
+      "format": "comfycanvas",
+      "version": 1,
+      "nodes": [
+        {
+          "id": "checkpoint",
+          "type": "CheckpointLoaderSimple",
+          "title": "Load Checkpoint",
+          "pos": {
+            "x": 20,
+            "y": 20
+          },
+          "width": 300,
+          "inputs": [],
+          "outputs": [
+            {
+              "id": "MODEL",
+              "name": "MODEL",
+              "type": "MODEL",
+              "label": "MODEL"
+            },
+            {
+              "id": "CLIP",
+              "name": "CLIP",
+              "type": "CLIP",
+              "label": "CLIP"
+            },
+            {
+              "id": "VAE",
+              "name": "VAE",
+              "type": "VAE",
+              "label": "VAE"
+            }
+          ],
+          "values": {
+            "ckpt_name": "Tongyi-MAI/Z-Image-Turbo",
+            "targetProvider": "huggingface",
+            "resolution": "1024x1024 ( 1:1 )",
+            "shift": 3,
+            "random_seed": false,
+            "gallery_images": []
+          },
+          "state": "idle"
+        },
+        {
+          "id": "prompt",
+          "type": "CLIPTextEncode",
+          "title": "CLIP Text Encode (Positive Prompt)",
+          "pos": {
+            "x": 350,
+            "y": 20
+          },
+          "width": 300,
+          "inputs": [
+            {
+              "id": "clip",
+              "name": "clip",
+              "type": "CLIP",
+              "label": "CLIP"
+            }
+          ],
+          "outputs": [
+            {
+              "id": "CONDITIONING",
+              "name": "CONDITIONING",
+              "type": "CONDITIONING",
+              "label": "CONDITIONING"
+            }
+          ],
+          "values": {
+            "text": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering"
+          },
+          "state": "idle"
+        },
+        {
+          "id": "sampler",
+          "type": "KSampler",
+          "title": "KSampler",
+          "pos": {
+            "x": 700,
+            "y": 20
+          },
+          "width": 300,
+          "inputs": [
+            {
+              "id": "model",
+              "name": "model",
+              "type": "MODEL",
+              "label": "MODEL"
+            },
+            {
+              "id": "positive",
+              "name": "positive",
+              "type": "CONDITIONING",
+              "label": "positive"
+            },
+            {
+              "id": "negative",
+              "name": "negative",
+              "type": "CONDITIONING",
+              "label": "negative"
+            },
+            {
+              "id": "latent_image",
+              "name": "latent_image",
+              "type": "LATENT",
+              "label": "latent_image"
+            }
+          ],
+          "outputs": [
+            {
+              "id": "LATENT",
+              "name": "LATENT",
+              "type": "LATENT",
+              "label": "LATENT"
+            }
+          ],
+          "values": {
+            "seed": 42,
+            "control_after_generate": "fixed",
+            "steps": 8
+          },
+          "state": "idle"
+        }
+      ],
+      "connections": [
+        {
+          "id": "model",
+          "fromNodeId": "checkpoint",
+          "fromSocketId": "MODEL",
+          "toNodeId": "sampler",
+          "toSocketId": "model",
+          "type": "MODEL"
+        },
+        {
+          "id": "positive",
+          "fromNodeId": "prompt",
+          "fromSocketId": "CONDITIONING",
+          "toNodeId": "sampler",
+          "toSocketId": "positive",
+          "type": "CONDITIONING"
+        },
+        {
+          "id": "clip",
+          "fromNodeId": "checkpoint",
+          "fromSocketId": "CLIP",
+          "toNodeId": "prompt",
+          "toSocketId": "clip",
+          "type": "CLIP"
+        }
+      ],
+      "canvasMode": "graph",
+      "spatialFrames": [],
+      "executingNodeId": "sampler"
+    }
+  },
+  {
+    "name": "nanogpt",
+    "startedAt": "2026-10-02T22:54:16.397Z",
+    "finishedAt": "2026-10-02T22:54:23.108Z",
+    "status": "credentials_rejected",
+    "http": 401,
+    "model": "flux-schnell",
+    "request": {
+      "model": "flux-schnell",
+      "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering"
+    },
+    "workflowSnapshot": {
+      "format": "comfycanvas",
+      "version": 1,
+      "nodes": [
+        {
+          "id": "checkpoint",
+          "type": "CheckpointLoaderSimple",
+          "pos": {
+            "x": 40,
+            "y": 40
+          },
+          "values": {
+            "ckpt_name": "flux-schnell",
+            "targetProvider": "nanogpt",
+            "model": "flux-schnell",
+            "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering"
+          }
+        },
+        {
+          "id": "prompt",
+          "type": "CLIPTextEncode",
+          "pos": {
+            "x": 40,
+            "y": 310
+          },
+          "values": {
+            "text": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering"
+          }
+        },
+        {
+          "id": "sampler",
+          "type": "KSampler",
+          "pos": {
+            "x": 430,
+            "y": 80
+          },
+          "values": {}
+        }
+      ],
+      "connections": [
+        {
+          "id": "model",
+          "fromNodeId": "checkpoint",
+          "fromSocketId": "MODEL",
+          "toNodeId": "sampler",
+          "toSocketId": "model",
+          "type": "MODEL"
+        },
+        {
+          "id": "positive",
+          "fromNodeId": "prompt",
+          "fromSocketId": "CONDITIONING",
+          "toNodeId": "sampler",
+          "toSocketId": "positive",
+          "type": "CONDITIONING"
+        }
+      ]
+    },
+    "response": {
+      "error": "NanoGPT 生图失败 [401]: {\"error\":{\"message\":\"Invalid session\",\"type\":\"invalid_request_error\",\"code\":\"invalid_api_key\"}}"
+    }
+  },
+  {
+    "name": "tensorart-1",
+    "startedAt": "2026-10-02T22:54:30.558Z",
+    "finishedAt": "2026-10-02T22:55:04.706Z",
+    "status": "generated",
+    "http": 200,
+    "model": "photoreal_studio_z_image",
+    "mediaUrl": "/verification/tensorart-1.png",
+    "request": {
+      "model": "photoreal_studio_z_image",
+      "inputs": [
+        {
+          "type": "STRING",
+          "value": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering"
+        },
+        {
+          "type": "INTEGER",
+          "value": 512
+        },
+        {
+          "type": "INTEGER",
+          "value": 512
+        },
+        {
+          "type": "INTEGER",
+          "value": 1
+        }
+      ]
+    },
+    "workflowSnapshot": {
+      "format": "comfycanvas",
+      "version": 1,
+      "nodes": [
+        {
+          "id": "checkpoint",
+          "type": "CheckpointLoaderSimple",
+          "pos": {
+            "x": 40,
+            "y": 40
+          },
+          "values": {
+            "ckpt_name": "photoreal_studio_z_image",
+            "targetProvider": "tensorart",
+            "model": "photoreal_studio_z_image",
+            "inputs": [
+              {
+                "type": "STRING",
+                "value": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering"
+              },
+              {
+                "type": "INTEGER",
+                "value": 512
+              },
+              {
+                "type": "INTEGER",
+                "value": 512
+              },
+              {
+                "type": "INTEGER",
+                "value": 1
+              }
+            ]
+          }
+        },
+        {
+          "id": "prompt",
+          "type": "CLIPTextEncode",
+          "pos": {
+            "x": 40,
+            "y": 310
+          },
+          "values": {
+            "text": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering"
+          }
+        },
+        {
+          "id": "sampler",
+          "type": "KSampler",
+          "pos": {
+            "x": 430,
+            "y": 80
+          },
+          "values": {}
+        }
+      ],
+      "connections": [
+        {
+          "id": "model",
+          "fromNodeId": "checkpoint",
+          "fromSocketId": "MODEL",
+          "toNodeId": "sampler",
+          "toSocketId": "model",
+          "type": "MODEL"
+        },
+        {
+          "id": "positive",
+          "fromNodeId": "prompt",
+          "fromSocketId": "CONDITIONING",
+          "toNodeId": "sampler",
+          "toSocketId": "positive",
+          "type": "CONDITIONING"
+        }
+      ]
+    },
+    "response": {
+      "imageUrl": "/verification/tensorart-1.png",
+      "videoUrl": "",
+      "mediaUrl": "/verification/tensorart-1.png",
+      "mediaType": "image",
+      "provider": "Tensor.Art (OpenWorks)",
+      "actualProvider": "Tensor.Art (OpenWorks)",
+      "model": "photoreal_studio_z_image",
+      "actualModel": "photoreal_studio_z_image",
+      "toolName": "photoreal_studio_z_image",
+      "requestedModel": "photoreal_studio_z_image",
+      "taskId": "1051020032080915705",
+      "exactEndpointCalled": "https://openapi.tensor.art/openworks/v1/task",
+      "historyItem": {
+        "url": "/verification/tensorart-1.png",
+        "prompt": null,
+        "negativePrompt": null,
+        "provider": "Tensor.Art (OpenWorks)",
+        "model": "photoreal_studio_z_image",
+        "seed": null,
+        "steps": null,
+        "cfg": null,
+        "workflowSnapshot": {
+          "format": "comfycanvas",
+          "version": 1,
+          "nodes": [
+            {
+              "id": "checkpoint",
+              "type": "CheckpointLoaderSimple",
+              "pos": {
+                "x": 40,
+                "y": 40
+              },
+              "values": {
+                "ckpt_name": "photoreal_studio_z_image",
+                "targetProvider": "tensorart",
+                "model": "photoreal_studio_z_image",
+                "inputs": [
+                  {
+                    "type": "STRING",
+                    "value": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering"
+                  },
+                  {
+                    "type": "INTEGER",
+                    "value": 512
+                  },
+                  {
+                    "type": "INTEGER",
+                    "value": 512
+                  },
+                  {
+                    "type": "INTEGER",
+                    "value": 1
+                  }
+                ]
+              }
+            },
+            {
+              "id": "prompt",
+              "type": "CLIPTextEncode",
+              "pos": {
+                "x": 40,
+                "y": 310
+              },
+              "values": {
+                "text": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering"
+              }
+            },
+            {
+              "id": "sampler",
+              "type": "KSampler",
+              "pos": {
+                "x": 430,
+                "y": 80
+              },
+              "values": {}
+            }
+          ],
+          "connections": [
+            {
+              "id": "model",
+              "fromNodeId": "checkpoint",
+              "fromSocketId": "MODEL",
+              "toNodeId": "sampler",
+              "toSocketId": "model",
+              "type": "MODEL"
+            },
+            {
+              "id": "positive",
+              "fromNodeId": "prompt",
+              "fromSocketId": "CONDITIONING",
+              "toNodeId": "sampler",
+              "toSocketId": "positive",
+              "type": "CONDITIONING"
+            }
+          ]
+        },
+        "requestMetadata": {
+          "route": "/api/tensorart/generate",
+          "submissions": [
+            {
+              "endpoint": "https://openapi.tensor.art/openworks/v1/task",
+              "parameters": {
+                "toolName": "photoreal_studio_z_image",
+                "inputs": [
+                  {
+                    "type": "STRING",
+                    "value": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering"
+                  },
+                  {
+                    "type": "INTEGER",
+                    "value": 512
+                  },
+                  {
+                    "type": "INTEGER",
+                    "value": 512
+                  },
+                  {
+                    "type": "INTEGER",
+                    "value": 1
+                  }
+                ]
+              },
+              "status": 200
+            }
+          ]
+        },
+        "id": "hist_1790981704672_s1v1r",
+        "timestamp": 1790981704672,
+        "actualProvider": "Tensor.Art (OpenWorks)",
+        "actualModel": "photoreal_studio_z_image",
+        "loras": []
+      }
+    }
+  },
+  {
+    "name": "tensorart-2",
+    "startedAt": "2026-10-02T22:55:12.684Z",
+    "finishedAt": "2026-10-02T22:55:38.242Z",
+    "status": "generated",
+    "http": 200,
+    "model": "photoreal_studio_z_image",
+    "mediaUrl": "/verification/tensorart-2.png",
+    "request": {
+      "model": "photoreal_studio_z_image",
+      "inputs": [
+        {
+          "type": "STRING",
+          "value": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering"
+        },
+        {
+          "type": "INTEGER",
+          "value": 512
+        },
+        {
+          "type": "INTEGER",
+          "value": 512
+        },
+        {
+          "type": "INTEGER",
+          "value": 1
+        }
+      ]
+    },
+    "workflowSnapshot": {
+      "format": "comfycanvas",
+      "version": 1,
+      "nodes": [
+        {
+          "id": "checkpoint",
+          "type": "CheckpointLoaderSimple",
+          "pos": {
+            "x": 40,
+            "y": 40
+          },
+          "values": {
+            "ckpt_name": "photoreal_studio_z_image",
+            "targetProvider": "tensorart",
+            "model": "photoreal_studio_z_image",
+            "inputs": [
+              {
+                "type": "STRING",
+                "value": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering"
+              },
+              {
+                "type": "INTEGER",
+                "value": 512
+              },
+              {
+                "type": "INTEGER",
+                "value": 512
+              },
+              {
+                "type": "INTEGER",
+                "value": 1
+              }
+            ]
+          }
+        },
+        {
+          "id": "prompt",
+          "type": "CLIPTextEncode",
+          "pos": {
+            "x": 40,
+            "y": 310
+          },
+          "values": {
+            "text": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering"
+          }
+        },
+        {
+          "id": "sampler",
+          "type": "KSampler",
+          "pos": {
+            "x": 430,
+            "y": 80
+          },
+          "values": {}
+        }
+      ],
+      "connections": [
+        {
+          "id": "model",
+          "fromNodeId": "checkpoint",
+          "fromSocketId": "MODEL",
+          "toNodeId": "sampler",
+          "toSocketId": "model",
+          "type": "MODEL"
+        },
+        {
+          "id": "positive",
+          "fromNodeId": "prompt",
+          "fromSocketId": "CONDITIONING",
+          "toNodeId": "sampler",
+          "toSocketId": "positive",
+          "type": "CONDITIONING"
+        }
+      ]
+    },
+    "response": {
+      "imageUrl": "/verification/tensorart-2.png",
+      "videoUrl": "",
+      "mediaUrl": "/verification/tensorart-2.png",
+      "mediaType": "image",
+      "provider": "Tensor.Art (OpenWorks)",
+      "actualProvider": "Tensor.Art (OpenWorks)",
+      "model": "photoreal_studio_z_image",
+      "actualModel": "photoreal_studio_z_image",
+      "toolName": "photoreal_studio_z_image",
+      "requestedModel": "photoreal_studio_z_image",
+      "taskId": "1051020215690751546",
+      "exactEndpointCalled": "https://openapi.tensor.art/openworks/v1/task",
+      "historyItem": {
+        "url": "/verification/tensorart-2.png",
+        "prompt": null,
+        "negativePrompt": null,
+        "provider": "Tensor.Art (OpenWorks)",
+        "model": "photoreal_studio_z_image",
+        "seed": null,
+        "steps": null,
+        "cfg": null,
+        "workflowSnapshot": {
+          "format": "comfycanvas",
+          "version": 1,
+          "nodes": [
+            {
+              "id": "checkpoint",
+              "type": "CheckpointLoaderSimple",
+              "pos": {
+                "x": 40,
+                "y": 40
+              },
+              "values": {
+                "ckpt_name": "photoreal_studio_z_image",
+                "targetProvider": "tensorart",
+                "model": "photoreal_studio_z_image",
+                "inputs": [
+                  {
+                    "type": "STRING",
+                    "value": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering"
+                  },
+                  {
+                    "type": "INTEGER",
+                    "value": 512
+                  },
+                  {
+                    "type": "INTEGER",
+                    "value": 512
+                  },
+                  {
+                    "type": "INTEGER",
+                    "value": 1
+                  }
+                ]
+              }
+            },
+            {
+              "id": "prompt",
+              "type": "CLIPTextEncode",
+              "pos": {
+                "x": 40,
+                "y": 310
+              },
+              "values": {
+                "text": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering"
+              }
+            },
+            {
+              "id": "sampler",
+              "type": "KSampler",
+              "pos": {
+                "x": 430,
+                "y": 80
+              },
+              "values": {}
+            }
+          ],
+          "connections": [
+            {
+              "id": "model",
+              "fromNodeId": "checkpoint",
+              "fromSocketId": "MODEL",
+              "toNodeId": "sampler",
+              "toSocketId": "model",
+              "type": "MODEL"
+            },
+            {
+              "id": "positive",
+              "fromNodeId": "prompt",
+              "fromSocketId": "CONDITIONING",
+              "toNodeId": "sampler",
+              "toSocketId": "positive",
+              "type": "CONDITIONING"
+            }
+          ]
+        },
+        "requestMetadata": {
+          "route": "/api/tensorart/generate",
+          "submissions": [
+            {
+              "endpoint": "https://openapi.tensor.art/openworks/v1/task",
+              "parameters": {
+                "toolName": "photoreal_studio_z_image",
+                "inputs": [
+                  {
+                    "type": "STRING",
+                    "value": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering"
+                  },
+                  {
+                    "type": "INTEGER",
+                    "value": 512
+                  },
+                  {
+                    "type": "INTEGER",
+                    "value": 512
+                  },
+                  {
+                    "type": "INTEGER",
+                    "value": 1
+                  }
+                ]
+              },
+              "status": 200
+            }
+          ]
+        },
+        "id": "hist_1790981738200_evaf8",
+        "timestamp": 1790981738200,
+        "actualProvider": "Tensor.Art (OpenWorks)",
+        "actualModel": "photoreal_studio_z_image",
+        "loras": []
+      }
+    }
+  },
+  {
+    "name": "civitai-lora-disabled-1",
+    "startedAt": "2026-10-02T22:57:15.260Z",
+    "finishedAt": "2026-10-02T22:57:22.603Z",
+    "status": "rejected",
+    "http": 400,
+    "model": "urn:air:sd1:checkpoint:civitai:4384@128713",
+    "request": {
+      "model": "urn:air:sd1:checkpoint:civitai:4384@128713",
+      "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering",
+      "negative_prompt": "blurry, low quality",
+      "width": 512,
+      "height": 512,
+      "steps": 12,
+      "cfg": 7,
+      "seed": 42,
+      "sampler_name": "euler",
+      "scheduler": "discrete",
+      "loras": [
+        {
+          "name": "Detail Tweaker LoRA (细节调整LoRA)",
+          "civitaiId": "urn:air:sd1:lora:civitai:58390@62833",
+          "strength": 0.7
+        }
+      ]
+    },
+    "workflowSnapshot": {
+      "format": "comfycanvas",
+      "version": 1,
+      "nodes": [
+        {
+          "id": "checkpoint",
+          "type": "CheckpointLoaderSimple",
+          "pos": {
+            "x": 40,
+            "y": 40
+          },
+          "values": {
+            "ckpt_name": "urn:air:sd1:checkpoint:civitai:4384@128713",
+            "targetProvider": "civitai",
+            "model": "urn:air:sd1:checkpoint:civitai:4384@128713",
+            "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering",
+            "negative_prompt": "blurry, low quality",
+            "width": 512,
+            "height": 512,
+            "steps": 12,
+            "cfg": 7,
+            "seed": 42,
+            "sampler_name": "euler",
+            "scheduler": "discrete",
+            "loras": [
+              {
+                "name": "Detail Tweaker LoRA (细节调整LoRA)",
+                "civitaiId": "urn:air:sd1:lora:civitai:58390@62833",
+                "strength": 0.7
+              }
+            ]
+          }
+        },
+        {
+          "id": "prompt",
+          "type": "CLIPTextEncode",
+          "pos": {
+            "x": 40,
+            "y": 310
+          },
+          "values": {
+            "text": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering"
+          }
+        },
+        {
+          "id": "sampler",
+          "type": "KSampler",
+          "pos": {
+            "x": 430,
+            "y": 80
+          },
+          "values": {
+            "seed": 42,
+            "steps": 12
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "model",
+          "fromNodeId": "checkpoint",
+          "fromSocketId": "MODEL",
+          "toNodeId": "sampler",
+          "toSocketId": "model",
+          "type": "MODEL"
+        },
+        {
+          "id": "positive",
+          "fromNodeId": "prompt",
+          "fromSocketId": "CONDITIONING",
+          "toNodeId": "sampler",
+          "toSocketId": "positive",
+          "type": "CONDITIONING"
+        }
+      ]
+    },
+    "response": {
+      "error": "Civitai Orchestration 官方算力返回错误 [400]: {\"title\":\"One or more validation errors occurred.\",\"status\":400,\"errors\":{\"messages\":[\"Detail Tweaker LoRA (细节调整LoRA) - v1.0 is not enabled for generation. Please contact support@civitai.com if you believe this to be an error.\"]}}"
+    }
+  },
+  {
+    "name": "civitai-lora",
+    "startedAt": "2026-10-02T23:00:31.965Z",
+    "finishedAt": "2026-10-02T23:01:13.854Z",
+    "status": "generated",
+    "http": 200,
+    "model": "urn:air:sd1:checkpoint:civitai:4384@128713",
+    "mediaUrl": "/verification/civitai-lora.jpg",
+    "request": {
+      "model": "urn:air:sd1:checkpoint:civitai:4384@128713",
+      "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering",
+      "negative_prompt": "blurry, low quality",
+      "width": 512,
+      "height": 512,
+      "steps": 12,
+      "cfg": 7,
+      "seed": 42,
+      "sampler_name": "euler",
+      "scheduler": "discrete",
+      "loras": [
+        {
+          "name": "Add More Details - Detail Enhancer / Tweaker (细节调整) LoRA",
+          "civitaiId": "urn:air:sd1:lora:civitai:82098@87153",
+          "strength": 0.7
+        }
+      ]
+    },
+    "workflowSnapshot": {
+      "format": "comfycanvas",
+      "version": 1,
+      "nodes": [
+        {
+          "id": "checkpoint",
+          "type": "CheckpointLoaderSimple",
+          "pos": {
+            "x": 40,
+            "y": 40
+          },
+          "values": {
+            "ckpt_name": "urn:air:sd1:checkpoint:civitai:4384@128713",
+            "targetProvider": "civitai",
+            "model": "urn:air:sd1:checkpoint:civitai:4384@128713",
+            "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering",
+            "negative_prompt": "blurry, low quality",
+            "width": 512,
+            "height": 512,
+            "steps": 12,
+            "cfg": 7,
+            "seed": 42,
+            "sampler_name": "euler",
+            "scheduler": "discrete",
+            "loras": [
+              {
+                "name": "Add More Details - Detail Enhancer / Tweaker (细节调整) LoRA",
+                "civitaiId": "urn:air:sd1:lora:civitai:82098@87153",
+                "strength": 0.7
+              }
+            ]
+          }
+        },
+        {
+          "id": "prompt",
+          "type": "CLIPTextEncode",
+          "pos": {
+            "x": 40,
+            "y": 310
+          },
+          "values": {
+            "text": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering"
+          }
+        },
+        {
+          "id": "sampler",
+          "type": "KSampler",
+          "pos": {
+            "x": 430,
+            "y": 80
+          },
+          "values": {
+            "seed": 42,
+            "steps": 12
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "model",
+          "fromNodeId": "checkpoint",
+          "fromSocketId": "MODEL",
+          "toNodeId": "sampler",
+          "toSocketId": "model",
+          "type": "MODEL"
+        },
+        {
+          "id": "positive",
+          "fromNodeId": "prompt",
+          "fromSocketId": "CONDITIONING",
+          "toNodeId": "sampler",
+          "toSocketId": "positive",
+          "type": "CONDITIONING"
+        }
+      ]
+    },
+    "response": {
+      "success": true,
+      "imageUrl": "/verification/civitai-lora.jpg",
+      "mediaUrl": "/verification/civitai-lora.jpg",
+      "provider": "Civitai 官方原生生成引擎",
+      "model": "urn:air:sd1:checkpoint:civitai:4384@128713",
+      "historyItem": {
+        "url": "/verification/civitai-lora.jpg",
+        "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering",
+        "negativePrompt": "blurry, low quality",
+        "provider": "Civitai 官方原生生成引擎",
+        "model": "urn:air:sd1:checkpoint:civitai:4384@128713",
+        "seed": 42,
+        "steps": 12,
+        "cfg": 7,
+        "loras": [
+          {
+            "name": "urn:air:sd1:lora:civitai:82098@87153",
+            "strength": 0.7
+          }
+        ],
+        "workflowSnapshot": {
+          "format": "comfycanvas",
+          "version": 1,
+          "nodes": [
+            {
+              "id": "checkpoint",
+              "type": "CheckpointLoaderSimple",
+              "pos": {
+                "x": 40,
+                "y": 40
+              },
+              "values": {
+                "ckpt_name": "urn:air:sd1:checkpoint:civitai:4384@128713",
+                "targetProvider": "civitai",
+                "model": "urn:air:sd1:checkpoint:civitai:4384@128713",
+                "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering",
+                "negative_prompt": "blurry, low quality",
+                "width": 512,
+                "height": 512,
+                "steps": 12,
+                "cfg": 7,
+                "seed": 42,
+                "sampler_name": "euler",
+                "scheduler": "discrete",
+                "loras": [
+                  {
+                    "name": "Add More Details - Detail Enhancer / Tweaker (细节调整) LoRA",
+                    "civitaiId": "urn:air:sd1:lora:civitai:82098@87153",
+                    "strength": 0.7
+                  }
+                ]
+              }
+            },
+            {
+              "id": "prompt",
+              "type": "CLIPTextEncode",
+              "pos": {
+                "x": 40,
+                "y": 310
+              },
+              "values": {
+                "text": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering"
+              }
+            },
+            {
+              "id": "sampler",
+              "type": "KSampler",
+              "pos": {
+                "x": 430,
+                "y": 80
+              },
+              "values": {
+                "seed": 42,
+                "steps": 12
+              }
+            }
+          ],
+          "connections": [
+            {
+              "id": "model",
+              "fromNodeId": "checkpoint",
+              "fromSocketId": "MODEL",
+              "toNodeId": "sampler",
+              "toSocketId": "model",
+              "type": "MODEL"
+            },
+            {
+              "id": "positive",
+              "fromNodeId": "prompt",
+              "fromSocketId": "CONDITIONING",
+              "toNodeId": "sampler",
+              "toSocketId": "positive",
+              "type": "CONDITIONING"
+            }
+          ]
+        },
+        "requestMetadata": {
+          "route": "/api/civitai/generate",
+          "submissions": [
+            {
+              "endpoint": "https://orchestration.civitai.com/v2/consumer/workflows?wait=100",
+              "parameters": {
+                "steps": [
+                  {
+                    "$type": "imageGen",
+                    "input": {
+                      "engine": "sdcpp",
+                      "ecosystem": "sd1",
+                      "operation": "createImage",
+                      "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering",
+                      "model": "urn:air:sd1:checkpoint:civitai:4384@128713",
+                      "negativePrompt": "blurry, low quality",
+                      "width": 512,
+                      "height": 512,
+                      "steps": 12,
+                      "cfgScale": 7,
+                      "seed": 42,
+                      "sampleMethod": "euler",
+                      "schedule": "discrete",
+                      "loras": {
+                        "urn:air:sd1:lora:civitai:82098@87153": 0.7
+                      }
+                    }
+                  }
+                ]
+              },
+              "status": 200
+            }
+          ]
+        },
+        "id": "hist_1790982073828_68yhi",
+        "timestamp": 1790982073828,
+        "actualProvider": "Civitai 官方原生生成引擎",
+        "actualModel": "urn:air:sd1:checkpoint:civitai:4384@128713"
+      }
+    },
+    "replayWorkflow": {
+      "format": "comfycanvas",
+      "version": 1,
+      "nodes": [
+        {
+          "id": "checkpoint",
+          "type": "CheckpointLoaderSimple",
+          "title": "Load Checkpoint",
+          "pos": {
+            "x": 20,
+            "y": 20
+          },
+          "width": 300,
+          "inputs": [],
+          "outputs": [
+            {
+              "id": "MODEL",
+              "name": "MODEL",
+              "type": "MODEL",
+              "label": "MODEL"
+            },
+            {
+              "id": "CLIP",
+              "name": "CLIP",
+              "type": "CLIP",
+              "label": "CLIP"
+            },
+            {
+              "id": "VAE",
+              "name": "VAE",
+              "type": "VAE",
+              "label": "VAE"
+            }
+          ],
+          "values": {
+            "ckpt_name": "urn:air:sd1:checkpoint:civitai:4384@128713",
+            "targetProvider": "civitai"
+          },
+          "state": "idle"
+        },
+        {
+          "id": "prompt",
+          "type": "CLIPTextEncode",
+          "title": "CLIP Text Encode (Positive Prompt)",
+          "pos": {
+            "x": 350,
+            "y": 20
+          },
+          "width": 300,
+          "inputs": [
+            {
+              "id": "clip",
+              "name": "clip",
+              "type": "CLIP",
+              "label": "CLIP"
+            }
+          ],
+          "outputs": [
+            {
+              "id": "CONDITIONING",
+              "name": "CONDITIONING",
+              "type": "CONDITIONING",
+              "label": "CONDITIONING"
+            }
+          ],
+          "values": {
+            "text": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering"
+          },
+          "state": "idle"
+        },
+        {
+          "id": "sampler",
+          "type": "KSampler",
+          "title": "KSampler",
+          "pos": {
+            "x": 700,
+            "y": 20
+          },
+          "width": 300,
+          "inputs": [
+            {
+              "id": "model",
+              "name": "model",
+              "type": "MODEL",
+              "label": "MODEL"
+            },
+            {
+              "id": "positive",
+              "name": "positive",
+              "type": "CONDITIONING",
+              "label": "positive"
+            },
+            {
+              "id": "negative",
+              "name": "negative",
+              "type": "CONDITIONING",
+              "label": "negative"
+            },
+            {
+              "id": "latent_image",
+              "name": "latent_image",
+              "type": "LATENT",
+              "label": "latent_image"
+            }
+          ],
+          "outputs": [
+            {
+              "id": "LATENT",
+              "name": "LATENT",
+              "type": "LATENT",
+              "label": "LATENT"
+            }
+          ],
+          "values": {
+            "seed": 42,
+            "control_after_generate": "fixed",
+            "steps": 12,
+            "cfg": 7,
+            "sampler_name": "euler",
+            "scheduler": "discrete"
+          },
+          "state": "idle"
+        },
+        {
+          "id": "latent",
+          "type": "EmptyLatentImage",
+          "title": "Empty Latent Image",
+          "pos": {
+            "x": 350,
+            "y": 400
+          },
+          "width": 300,
+          "inputs": [],
+          "outputs": [
+            {
+              "id": "LATENT",
+              "name": "LATENT",
+              "type": "LATENT",
+              "label": "LATENT"
+            }
+          ],
+          "values": {
+            "width": 512,
+            "height": 512,
+            "batch_size": 1
+          },
+          "state": "idle"
+        },
+        {
+          "id": "negative",
+          "type": "CLIPTextEncodeNegative",
+          "title": "CLIP Text Encode (Negative Prompt)",
+          "pos": {
+            "x": 20,
+            "y": 650
+          },
+          "width": 300,
+          "inputs": [
+            {
+              "id": "clip",
+              "name": "clip",
+              "type": "CLIP",
+              "label": "CLIP"
+            }
+          ],
+          "outputs": [
+            {
+              "id": "CONDITIONING",
+              "name": "CONDITIONING",
+              "type": "CONDITIONING",
+              "label": "CONDITIONING"
+            }
+          ],
+          "values": {
+            "text": "blurry, low quality"
+          },
+          "state": "idle"
+        },
+        {
+          "id": "lora-0",
+          "type": "LoRALoader",
+          "title": "Load LoRA (Civitai / Local)",
+          "pos": {
+            "x": 20,
+            "y": 350
+          },
+          "width": 300,
+          "inputs": [
+            {
+              "id": "model",
+              "name": "model",
+              "type": "MODEL",
+              "label": "MODEL"
+            },
+            {
+              "id": "clip",
+              "name": "clip",
+              "type": "CLIP",
+              "label": "CLIP"
+            }
+          ],
+          "outputs": [
+            {
+              "id": "MODEL",
+              "name": "MODEL",
+              "type": "MODEL",
+              "label": "MODEL"
+            },
+            {
+              "id": "CLIP",
+              "name": "CLIP",
+              "type": "CLIP",
+              "label": "CLIP"
+            }
+          ],
+          "values": {
+            "lora_name": "Add More Details - Detail Enhancer / Tweaker (细节调整) LoRA",
+            "civitai_id": "urn:air:sd1:lora:civitai:82098@87153",
+            "strength_model": 0.7,
+            "strength_clip": 0.7
+          },
+          "state": "idle"
+        }
+      ],
+      "connections": [
+        {
+          "id": "model",
+          "fromNodeId": "lora-0",
+          "fromSocketId": "MODEL",
+          "toNodeId": "sampler",
+          "toSocketId": "model",
+          "type": "MODEL"
+        },
+        {
+          "id": "positive",
+          "fromNodeId": "prompt",
+          "fromSocketId": "CONDITIONING",
+          "toNodeId": "sampler",
+          "toSocketId": "positive",
+          "type": "CONDITIONING"
+        },
+        {
+          "id": "clip",
+          "fromNodeId": "checkpoint",
+          "fromSocketId": "CLIP",
+          "toNodeId": "prompt",
+          "toSocketId": "clip",
+          "type": "CLIP"
+        },
+        {
+          "id": "latent",
+          "fromNodeId": "latent",
+          "fromSocketId": "LATENT",
+          "toNodeId": "sampler",
+          "toSocketId": "latent_image",
+          "type": "LATENT"
+        },
+        {
+          "id": "negative",
+          "fromNodeId": "negative",
+          "fromSocketId": "CONDITIONING",
+          "toNodeId": "sampler",
+          "toSocketId": "negative",
+          "type": "CONDITIONING"
+        },
+        {
+          "id": "lora-model-0",
+          "fromNodeId": "checkpoint",
+          "fromSocketId": "MODEL",
+          "toNodeId": "lora-0",
+          "toSocketId": "model",
+          "type": "MODEL"
+        }
+      ],
+      "canvasMode": "graph",
+      "spatialFrames": [],
+      "executingNodeId": "sampler"
+    }
+  },
+  {
+    "name": "huggingface-lora",
+    "startedAt": "2026-10-03T00:29:34.116Z",
+    "finishedAt": "2026-10-03T00:30:36.194Z",
+    "status": "generated",
+    "http": 200,
+    "model": "XLabs-AI/flux-RealismLora",
+    "mediaUrl": "/verification/huggingface-lora.png",
+    "request": {
+      "model": "XLabs-AI/flux-RealismLora",
+      "inference_provider": "fal-ai",
+      "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering",
+      "width": 512,
+      "height": 512,
+      "steps": 12,
+      "guidance": 3.5,
+      "seed": 42,
+      "loras": [
+        {
+          "name": "XLabs-AI/flux-RealismLora",
+          "strength": 0.8
+        }
+      ]
+    },
+    "workflowSnapshot": {
+      "format": "comfycanvas",
+      "version": 1,
+      "nodes": [
+        {
+          "id": "checkpoint",
+          "type": "CheckpointLoaderSimple",
+          "pos": {
+            "x": 40,
+            "y": 40
+          },
+          "values": {
+            "ckpt_name": "XLabs-AI/flux-RealismLora",
+            "targetProvider": "huggingface",
+            "model": "XLabs-AI/flux-RealismLora",
+            "inference_provider": "fal-ai",
+            "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering",
+            "width": 512,
+            "height": 512,
+            "steps": 12,
+            "guidance": 3.5,
+            "seed": 42,
+            "loras": [
+              {
+                "name": "XLabs-AI/flux-RealismLora",
+                "strength": 0.8
+              }
+            ]
+          }
+        },
+        {
+          "id": "prompt",
+          "type": "CLIPTextEncode",
+          "pos": {
+            "x": 40,
+            "y": 310
+          },
+          "values": {
+            "text": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering"
+          }
+        },
+        {
+          "id": "sampler",
+          "type": "KSampler",
+          "pos": {
+            "x": 430,
+            "y": 80
+          },
+          "values": {
+            "seed": 42,
+            "steps": 12
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "model",
+          "fromNodeId": "checkpoint",
+          "fromSocketId": "MODEL",
+          "toNodeId": "sampler",
+          "toSocketId": "model",
+          "type": "MODEL"
+        },
+        {
+          "id": "positive",
+          "fromNodeId": "prompt",
+          "fromSocketId": "CONDITIONING",
+          "toNodeId": "sampler",
+          "toSocketId": "positive",
+          "type": "CONDITIONING"
+        }
+      ]
+    },
+    "response": {
+      "imageUrl": "/verification/huggingface-lora.png",
+      "provider": "Hugging Face",
+      "actualProvider": "Hugging Face Inference Providers → fal-ai",
+      "model": "XLabs-AI/flux-RealismLora",
+      "actualModel": "black-forest-labs/FLUX.1-dev",
+      "endpoint": "fal-ai/flux-lora",
+      "historyItem": {
+        "url": "/verification/huggingface-lora.png",
+        "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering",
+        "negativePrompt": null,
+        "provider": "Hugging Face → fal-ai",
+        "model": "black-forest-labs/FLUX.1-dev",
+        "seed": 42,
+        "steps": 12,
+        "cfg": 3.5,
+        "loras": [
+          {
+            "name": "XLabs-AI/flux-RealismLora",
+            "strength": 0.8
+          }
+        ],
+        "workflowSnapshot": {
+          "format": "comfycanvas",
+          "version": 1,
+          "nodes": [
+            {
+              "id": "checkpoint",
+              "type": "CheckpointLoaderSimple",
+              "pos": {
+                "x": 40,
+                "y": 40
+              },
+              "values": {
+                "ckpt_name": "XLabs-AI/flux-RealismLora",
+                "targetProvider": "huggingface",
+                "model": "XLabs-AI/flux-RealismLora",
+                "inference_provider": "fal-ai",
+                "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering",
+                "width": 512,
+                "height": 512,
+                "steps": 12,
+                "guidance": 3.5,
+                "seed": 42,
+                "loras": [
+                  {
+                    "name": "XLabs-AI/flux-RealismLora",
+                    "strength": 0.8
+                  }
+                ]
+              }
+            },
+            {
+              "id": "prompt",
+              "type": "CLIPTextEncode",
+              "pos": {
+                "x": 40,
+                "y": 310
+              },
+              "values": {
+                "text": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering"
+              }
+            },
+            {
+              "id": "sampler",
+              "type": "KSampler",
+              "pos": {
+                "x": 430,
+                "y": 80
+              },
+              "values": {
+                "seed": 42,
+                "steps": 12
+              }
+            }
+          ],
+          "connections": [
+            {
+              "id": "model",
+              "fromNodeId": "checkpoint",
+              "fromSocketId": "MODEL",
+              "toNodeId": "sampler",
+              "toSocketId": "model",
+              "type": "MODEL"
+            },
+            {
+              "id": "positive",
+              "fromNodeId": "prompt",
+              "fromSocketId": "CONDITIONING",
+              "toNodeId": "sampler",
+              "toSocketId": "positive",
+              "type": "CONDITIONING"
+            }
+          ]
+        },
+        "requestMetadata": {
+          "route": "/api/huggingface/generate",
+          "submissions": [
+            {
+              "endpoint": "https://router.huggingface.co/fal-ai/fal-ai/flux-lora?_subdomain=queue",
+              "parameters": {
+                "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering",
+                "image_size": {
+                  "width": 512,
+                  "height": 512
+                },
+                "num_inference_steps": 12,
+                "guidance_scale": 3.5,
+                "seed": 42,
+                "loras": [
+                  {
+                    "path": "https://huggingface.co/XLabs-AI/flux-RealismLora/resolve/main/lora.safetensors",
+                    "scale": 0.8
+                  }
+                ]
+              },
+              "status": 200
+            }
+          ]
+        },
+        "id": "hist_1790987436167_v6hsr",
+        "timestamp": 1790987436167,
+        "actualProvider": "Hugging Face → fal-ai",
+        "actualModel": "black-forest-labs/FLUX.1-dev"
+      }
+    },
+    "replayWorkflow": {
+      "format": "comfycanvas",
+      "version": 1,
+      "nodes": [
+        {
+          "id": "checkpoint",
+          "type": "CheckpointLoaderSimple",
+          "title": "Load Checkpoint",
+          "pos": {
+            "x": 20,
+            "y": 20
+          },
+          "width": 300,
+          "inputs": [],
+          "outputs": [
+            {
+              "id": "MODEL",
+              "name": "MODEL",
+              "type": "MODEL",
+              "label": "MODEL"
+            },
+            {
+              "id": "CLIP",
+              "name": "CLIP",
+              "type": "CLIP",
+              "label": "CLIP"
+            },
+            {
+              "id": "VAE",
+              "name": "VAE",
+              "type": "VAE",
+              "label": "VAE"
+            }
+          ],
+          "values": {
+            "ckpt_name": "XLabs-AI/flux-RealismLora",
+            "targetProvider": "huggingface",
+            "hf_provider": "fal-ai"
+          },
+          "state": "idle"
+        },
+        {
+          "id": "prompt",
+          "type": "CLIPTextEncode",
+          "title": "CLIP Text Encode (Positive Prompt)",
+          "pos": {
+            "x": 350,
+            "y": 20
+          },
+          "width": 300,
+          "inputs": [
+            {
+              "id": "clip",
+              "name": "clip",
+              "type": "CLIP",
+              "label": "CLIP"
+            }
+          ],
+          "outputs": [
+            {
+              "id": "CONDITIONING",
+              "name": "CONDITIONING",
+              "type": "CONDITIONING",
+              "label": "CONDITIONING"
+            }
+          ],
+          "values": {
+            "text": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering"
+          },
+          "state": "idle"
+        },
+        {
+          "id": "sampler",
+          "type": "KSampler",
+          "title": "KSampler",
+          "pos": {
+            "x": 700,
+            "y": 20
+          },
+          "width": 300,
+          "inputs": [
+            {
+              "id": "model",
+              "name": "model",
+              "type": "MODEL",
+              "label": "MODEL"
+            },
+            {
+              "id": "positive",
+              "name": "positive",
+              "type": "CONDITIONING",
+              "label": "positive"
+            },
+            {
+              "id": "negative",
+              "name": "negative",
+              "type": "CONDITIONING",
+              "label": "negative"
+            },
+            {
+              "id": "latent_image",
+              "name": "latent_image",
+              "type": "LATENT",
+              "label": "latent_image"
+            }
+          ],
+          "outputs": [
+            {
+              "id": "LATENT",
+              "name": "LATENT",
+              "type": "LATENT",
+              "label": "LATENT"
+            }
+          ],
+          "values": {
+            "seed": 42,
+            "control_after_generate": "fixed",
+            "steps": 12,
+            "cfg": 3.5
+          },
+          "state": "idle"
+        },
+        {
+          "id": "latent",
+          "type": "EmptyLatentImage",
+          "title": "Empty Latent Image",
+          "pos": {
+            "x": 350,
+            "y": 400
+          },
+          "width": 300,
+          "inputs": [],
+          "outputs": [
+            {
+              "id": "LATENT",
+              "name": "LATENT",
+              "type": "LATENT",
+              "label": "LATENT"
+            }
+          ],
+          "values": {
+            "width": 512,
+            "height": 512,
+            "batch_size": 1
+          },
+          "state": "idle"
+        },
+        {
+          "id": "lora-0",
+          "type": "LoRALoader",
+          "title": "Load LoRA (Civitai / Local)",
+          "pos": {
+            "x": 20,
+            "y": 350
+          },
+          "width": 300,
+          "inputs": [
+            {
+              "id": "model",
+              "name": "model",
+              "type": "MODEL",
+              "label": "MODEL"
+            },
+            {
+              "id": "clip",
+              "name": "clip",
+              "type": "CLIP",
+              "label": "CLIP"
+            }
+          ],
+          "outputs": [
+            {
+              "id": "MODEL",
+              "name": "MODEL",
+              "type": "MODEL",
+              "label": "MODEL"
+            },
+            {
+              "id": "CLIP",
+              "name": "CLIP",
+              "type": "CLIP",
+              "label": "CLIP"
+            }
+          ],
+          "values": {
+            "lora_name": "XLabs-AI/flux-RealismLora",
+            "strength_model": 0.8,
+            "strength_clip": 0.8
+          },
+          "state": "idle"
+        }
+      ],
+      "connections": [
+        {
+          "id": "model",
+          "fromNodeId": "lora-0",
+          "fromSocketId": "MODEL",
+          "toNodeId": "sampler",
+          "toSocketId": "model",
+          "type": "MODEL"
+        },
+        {
+          "id": "positive",
+          "fromNodeId": "prompt",
+          "fromSocketId": "CONDITIONING",
+          "toNodeId": "sampler",
+          "toSocketId": "positive",
+          "type": "CONDITIONING"
+        },
+        {
+          "id": "clip",
+          "fromNodeId": "checkpoint",
+          "fromSocketId": "CLIP",
+          "toNodeId": "prompt",
+          "toSocketId": "clip",
+          "type": "CLIP"
+        },
+        {
+          "id": "latent",
+          "fromNodeId": "latent",
+          "fromSocketId": "LATENT",
+          "toNodeId": "sampler",
+          "toSocketId": "latent_image",
+          "type": "LATENT"
+        },
+        {
+          "id": "lora-model-0",
+          "fromNodeId": "checkpoint",
+          "fromSocketId": "MODEL",
+          "toNodeId": "lora-0",
+          "toSocketId": "model",
+          "type": "MODEL"
+        }
+      ],
+      "canvasMode": "graph",
+      "spatialFrames": [],
+      "executingNodeId": "sampler"
+    }
+  },
+  {
+    "name": "tensorart-model-api-1",
+    "startedAt": "2026-10-03T00:30:36.196Z",
+    "finishedAt": "2026-10-03T00:30:47.701Z",
+    "status": "credentials_rejected",
+    "http": 404,
+    "model": "672797109289765558",
+    "request": {
+      "model": "672797109289765558",
+      "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering",
+      "width": 512,
+      "height": 512,
+      "steps": 12,
+      "cfg": 7,
+      "seed": 42,
+      "loras": [
+        {
+          "name": "672390779613802167",
+          "strength": 0.8
+        }
+      ]
+    },
+    "workflowSnapshot": {
+      "format": "comfycanvas",
+      "version": 1,
+      "nodes": [
+        {
+          "id": "checkpoint",
+          "type": "CheckpointLoaderSimple",
+          "pos": {
+            "x": 40,
+            "y": 40
+          },
+          "values": {
+            "ckpt_name": "672797109289765558",
+            "targetProvider": "tensorart",
+            "model": "672797109289765558",
+            "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering",
+            "width": 512,
+            "height": 512,
+            "steps": 12,
+            "cfg": 7,
+            "seed": 42,
+            "loras": [
+              {
+                "name": "672390779613802167",
+                "strength": 0.8
+              }
+            ]
+          }
+        },
+        {
+          "id": "prompt",
+          "type": "CLIPTextEncode",
+          "pos": {
+            "x": 40,
+            "y": 310
+          },
+          "values": {
+            "text": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering"
+          }
+        },
+        {
+          "id": "sampler",
+          "type": "KSampler",
+          "pos": {
+            "x": 430,
+            "y": 80
+          },
+          "values": {
+            "seed": 42,
+            "steps": 12
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "model",
+          "fromNodeId": "checkpoint",
+          "fromSocketId": "MODEL",
+          "toNodeId": "sampler",
+          "toSocketId": "model",
+          "type": "MODEL"
+        },
+        {
+          "id": "positive",
+          "fromNodeId": "prompt",
+          "fromSocketId": "CONDITIONING",
+          "toNodeId": "sampler",
+          "toSocketId": "positive",
+          "type": "CONDITIONING"
+        }
+      ]
+    },
+    "response": {
+      "error": "Tensor.Art 模型 API 鉴权 / 模型查询失败 [404]",
+      "details": "{\"code\":100001,\"message\":\"unauthorized\",\"tips\":\"app not found\"}",
+      "exactEndpointCalled": "https://tams-api.tensor.art/v1/models/672797109289765558",
+      "requestedModel": "672797109289765558",
+      "credentialHint": "模型 API 使用 TAMS Bearer Key；OpenWorks ak_tensor 工具 key 不代表模型 API 授权"
+    }
+  },
+  {
+    "name": "tensorart-model-api-2",
+    "startedAt": "2026-10-03T00:30:47.702Z",
+    "finishedAt": "2026-10-03T00:30:48.012Z",
+    "status": "credentials_rejected",
+    "http": 404,
+    "model": "672797109289765558",
+    "request": {
+      "model": "672797109289765558",
+      "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering",
+      "width": 512,
+      "height": 512,
+      "steps": 12,
+      "cfg": 7,
+      "seed": 42,
+      "loras": [
+        {
+          "name": "672390779613802167",
+          "strength": 0.8
+        }
+      ]
+    },
+    "workflowSnapshot": {
+      "format": "comfycanvas",
+      "version": 1,
+      "nodes": [
+        {
+          "id": "checkpoint",
+          "type": "CheckpointLoaderSimple",
+          "pos": {
+            "x": 40,
+            "y": 40
+          },
+          "values": {
+            "ckpt_name": "672797109289765558",
+            "targetProvider": "tensorart",
+            "model": "672797109289765558",
+            "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering",
+            "width": 512,
+            "height": 512,
+            "steps": 12,
+            "cfg": 7,
+            "seed": 42,
+            "loras": [
+              {
+                "name": "672390779613802167",
+                "strength": 0.8
+              }
+            ]
+          }
+        },
+        {
+          "id": "prompt",
+          "type": "CLIPTextEncode",
+          "pos": {
+            "x": 40,
+            "y": 310
+          },
+          "values": {
+            "text": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering"
+          }
+        },
+        {
+          "id": "sampler",
+          "type": "KSampler",
+          "pos": {
+            "x": 430,
+            "y": 80
+          },
+          "values": {
+            "seed": 42,
+            "steps": 12
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "model",
+          "fromNodeId": "checkpoint",
+          "fromSocketId": "MODEL",
+          "toNodeId": "sampler",
+          "toSocketId": "model",
+          "type": "MODEL"
+        },
+        {
+          "id": "positive",
+          "fromNodeId": "prompt",
+          "fromSocketId": "CONDITIONING",
+          "toNodeId": "sampler",
+          "toSocketId": "positive",
+          "type": "CONDITIONING"
+        }
+      ]
+    },
+    "response": {
+      "error": "Tensor.Art 模型 API 鉴权 / 模型查询失败 [404]",
+      "details": "{\"code\":100001,\"message\":\"unauthorized\",\"tips\":\"app not found\"}",
+      "exactEndpointCalled": "https://tams-api.tensor.art/v1/models/672797109289765558",
+      "requestedModel": "672797109289765558",
+      "credentialHint": "模型 API 使用 TAMS Bearer Key；OpenWorks ak_tensor 工具 key 不代表模型 API 授权"
+    }
+  },
+  {
+    "name": "nanogpt-model-capabilities",
+    "startedAt": "2026-10-03T00:30:48.014Z",
+    "finishedAt": "2026-10-03T00:30:56.014Z",
+    "status": "credentials_rejected",
+    "http": 401,
+    "model": "flux-schnell",
+    "request": {
+      "model": "flux-schnell",
+      "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering",
+      "width": 1024,
+      "height": 1024
+    },
+    "workflowSnapshot": {
+      "format": "comfycanvas",
+      "version": 1,
+      "nodes": [
+        {
+          "id": "checkpoint",
+          "type": "CheckpointLoaderSimple",
+          "pos": {
+            "x": 40,
+            "y": 40
+          },
+          "values": {
+            "ckpt_name": "flux-schnell",
+            "targetProvider": "nanogpt",
+            "model": "flux-schnell",
+            "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering",
+            "width": 1024,
+            "height": 1024
+          }
+        },
+        {
+          "id": "prompt",
+          "type": "CLIPTextEncode",
+          "pos": {
+            "x": 40,
+            "y": 310
+          },
+          "values": {
+            "text": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering"
+          }
+        },
+        {
+          "id": "sampler",
+          "type": "KSampler",
+          "pos": {
+            "x": 430,
+            "y": 80
+          },
+          "values": {}
+        }
+      ],
+      "connections": [
+        {
+          "id": "model",
+          "fromNodeId": "checkpoint",
+          "fromSocketId": "MODEL",
+          "toNodeId": "sampler",
+          "toSocketId": "model",
+          "type": "MODEL"
+        },
+        {
+          "id": "positive",
+          "fromNodeId": "prompt",
+          "fromSocketId": "CONDITIONING",
+          "toNodeId": "sampler",
+          "toSocketId": "positive",
+          "type": "CONDITIONING"
+        }
+      ]
+    },
+    "response": {
+      "error": "NanoGPT 生图失败 [401]: {\"error\":{\"message\":\"Invalid session\",\"type\":\"invalid_request_error\",\"code\":\"invalid_api_key\"}}"
+    }
+  },
+  {
+    "name": "fal-parameter-audit",
+    "startedAt": "2026-10-03T00:30:56.016Z",
+    "finishedAt": "2026-10-03T00:31:02.558Z",
+    "status": "billing_or_quota",
+    "http": 403,
+    "model": "fal-ai/flux-lora",
+    "request": {
+      "model": "fal-ai/flux-lora",
+      "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering",
+      "image_size": {
+        "width": 512,
+        "height": 512
+      },
+      "num_inference_steps": 12,
+      "guidance_scale": 3.5,
+      "seed": 42,
+      "loras": [
+        {
+          "path": "https://huggingface.co/XLabs-AI/flux-RealismLora/resolve/main/lora.safetensors",
+          "scale": 0.8
+        }
+      ]
+    },
+    "workflowSnapshot": {
+      "format": "comfycanvas",
+      "version": 1,
+      "nodes": [
+        {
+          "id": "checkpoint",
+          "type": "CheckpointLoaderSimple",
+          "pos": {
+            "x": 40,
+            "y": 40
+          },
+          "values": {
+            "ckpt_name": "fal-ai/flux-lora",
+            "targetProvider": "fal",
+            "model": "fal-ai/flux-lora",
+            "prompt": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering",
+            "image_size": {
+              "width": 512,
+              "height": 512
+            },
+            "num_inference_steps": 12,
+            "guidance_scale": 3.5,
+            "seed": 42,
+            "loras": [
+              {
+                "path": "https://huggingface.co/XLabs-AI/flux-RealismLora/resolve/main/lora.safetensors",
+                "scale": 0.8
+              }
+            ]
+          }
+        },
+        {
+          "id": "prompt",
+          "type": "CLIPTextEncode",
+          "pos": {
+            "x": 40,
+            "y": 310
+          },
+          "values": {
+            "text": "A small ceramic robot tending a bonsai tree on a clean wooden desk, warm morning window light, teal and amber details, product photography, sharp focus, no lettering"
+          }
+        },
+        {
+          "id": "sampler",
+          "type": "KSampler",
+          "pos": {
+            "x": 430,
+            "y": 80
+          },
+          "values": {
+            "seed": 42,
+            "steps": 12,
+            "cfg": 3.5
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "model",
+          "fromNodeId": "checkpoint",
+          "fromSocketId": "MODEL",
+          "toNodeId": "sampler",
+          "toSocketId": "model",
+          "type": "MODEL"
+        },
+        {
+          "id": "positive",
+          "fromNodeId": "prompt",
+          "fromSocketId": "CONDITIONING",
+          "toNodeId": "sampler",
+          "toSocketId": "positive",
+          "type": "CONDITIONING"
+        }
+      ]
+    },
+    "response": {
+      "error": "Fal.ai 接口执行失败 [403]: {\"detail\":\"User is locked. Reason: TOP_UP.\"}"
+    }
+  }
+]

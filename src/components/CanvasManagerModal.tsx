@@ -29,6 +29,7 @@ export interface CanvasProject {
   connections: Connection[];
   spatialFrames: SpatialFrame[];
   transform?: CanvasTransform;
+  canvasMode?: 'graph' | 'spatial';
 }
 
 interface CanvasManagerModalProps {

@@ -2,15 +2,15 @@ import { WorkflowPreset } from '../types/graph';
 import { NODE_DEFINITIONS } from './nodes';
 
 export const WORKFLOW_PRESETS: WorkflowPreset[] = [
-  // 0.0 Z-Image-Turbo 极速直连 (ModelScope 魔搭社区)
+  // 0.0 Z-Image-Turbo 极速直连 (免 Token 公开算力 - Hugging Face)
   {
     id: 'zimage-turbo-public',
-    name: '极速直连：Z-Image-Turbo (ModelScope 魔搭社区)',
-    category: '免配置体验',
-    provider: 'ModelScope (魔搭社区)',
+    name: 'Hugging Face Z-Image · 文生图',
+    category: '文生图入门',
+    provider: 'Hugging Face (Public)',
     previewImage: 'https://www.modelscope.cn/models/Tongyi-MAI/Z-Image-Turbo/resolve/master/assets/showcase_realistic.png',
-    tags: ['Z-Image-Turbo', '免配置', '极速', '139784521'],
-    description: '直连阿里魔搭社区官方端点，驱动 120 亿参数极致真实感底模，原生支持东方人像 LoRA 与反向排畸词。',
+    tags: ['Z-Image-Turbo', '官方 Space', '文生图'],
+    description: '使用 Hugging Face 官方 Z-Image Space；按接口支持的分辨率与 shift 生成。访问权限与可用额度以服务商返回为准。',
     nodes: [
       {
         id: 'node-public-zimg-1',
@@ -20,28 +20,13 @@ export const WORKFLOW_PRESETS: WorkflowPreset[] = [
         width: 280,
         inputs: [],
         outputs: NODE_DEFINITIONS['CheckpointLoaderSimple'].outputs,
-        values: { ckpt_name: 'Tongyi-MAI/Z-Image-Turbo', targetProvider: 'modelscope' },
-      },
-      {
-        id: 'node-public-zimg-lora',
-        type: 'LoRALoader',
-        title: 'LoRA 加载器 (RadianceChrome Voluptuous)',
-        pos: { x: 380, y: 150 },
-        width: 320,
-        inputs: NODE_DEFINITIONS['LoRALoader'].inputs,
-        outputs: NODE_DEFINITIONS['LoRALoader'].outputs,
-        values: {
-          lora_name: 'AIImageStudio/RadianceChromeVoluptuous_z_image_turbo_v2.0',
-          strength_model: 0.7,
-          strength_clip: 0.7,
-          trigger_words: 'reversal film slide film style, masterpiece',
-        },
+        values: { ckpt_name: 'Tongyi-MAI/Z-Image-Turbo', targetProvider: 'huggingface', resolution: '1024x1024 ( 1:1 )', shift: 3, random_seed: false, gallery_images: [] },
       },
       {
         id: 'node-public-zimg-2',
         type: 'CLIPTextEncode',
         title: '正向提示词 (Prompt)',
-        pos: { x: 740, y: 80 },
+        pos: { x: 390, y: 150 },
         width: 440,
         inputs: NODE_DEFINITIONS['CLIPTextEncode'].inputs,
         outputs: NODE_DEFINITIONS['CLIPTextEncode'].outputs,
@@ -50,47 +35,22 @@ export const WORKFLOW_PRESETS: WorkflowPreset[] = [
         },
       },
       {
-        id: 'node-public-zimg-neg',
-        type: 'CLIPTextEncodeNegative',
-        title: '反向提示词',
-        pos: { x: 740, y: 340 },
-        width: 440,
-        inputs: NODE_DEFINITIONS['CLIPTextEncodeNegative'].inputs,
-        outputs: NODE_DEFINITIONS['CLIPTextEncodeNegative'].outputs,
-        values: { text: 'low quality, blurry, distorted, extra limbs' },
-      },
-      {
-        id: 'node-public-zimg-3',
-        type: 'EmptyLatentImage',
-        title: '画板尺寸',
-        pos: { x: 740, y: 520 },
-        width: 280,
-        inputs: [],
-        outputs: NODE_DEFINITIONS['EmptyLatentImage'].outputs,
-        values: { width: 960, height: 1440, batch_size: 1 },
-      },
-      {
         id: 'node-public-zimg-4',
         type: 'KSampler',
         title: 'KSampler (8 步极速)',
-        pos: { x: 1220, y: 150 },
+        pos: { x: 870, y: 150 },
         width: 300,
         inputs: NODE_DEFINITIONS['KSampler'].inputs,
         outputs: NODE_DEFINITIONS['KSampler'].outputs,
         values: {
-          seed: 42,
-          steps: 8,
-          cfg: 1.0,
-          sampler_name: 'euler',
-          scheduler: 'bong_tangent',
-          denoise: 1.0,
+          seed: 42, control_after_generate: 'fixed', steps: 8,
         },
       },
       {
         id: 'node-public-zimg-vae',
         type: 'VAEDecode',
         title: 'VAE 解码',
-        pos: { x: 1560, y: 150 },
+        pos: { x: 1210, y: 150 },
         width: 260,
         inputs: NODE_DEFINITIONS['VAEDecode'].inputs,
         outputs: NODE_DEFINITIONS['VAEDecode'].outputs,
@@ -100,7 +60,7 @@ export const WORKFLOW_PRESETS: WorkflowPreset[] = [
         id: 'node-public-zimg-5',
         type: 'SaveImage',
         title: '保存图像',
-        pos: { x: 1860, y: 150 },
+        pos: { x: 1510, y: 150 },
         width: 300,
         inputs: NODE_DEFINITIONS['SaveImage'].inputs,
         outputs: [],
@@ -108,14 +68,9 @@ export const WORKFLOW_PRESETS: WorkflowPreset[] = [
       },
     ],
     connections: [
-      { id: 'pub-zc-1', fromNodeId: 'node-public-zimg-1', fromSocketId: 'MODEL', toNodeId: 'node-public-zimg-lora', toSocketId: 'model', type: 'MODEL' },
-      { id: 'pub-zc-2', fromNodeId: 'node-public-zimg-1', fromSocketId: 'CLIP', toNodeId: 'node-public-zimg-lora', toSocketId: 'clip', type: 'CLIP' },
-      { id: 'pub-zc-3', fromNodeId: 'node-public-zimg-lora', fromSocketId: 'MODEL', toNodeId: 'node-public-zimg-4', toSocketId: 'model', type: 'MODEL' },
-      { id: 'pub-zc-4', fromNodeId: 'node-public-zimg-lora', fromSocketId: 'CLIP', toNodeId: 'node-public-zimg-2', toSocketId: 'clip', type: 'CLIP' },
-      { id: 'pub-zc-5', fromNodeId: 'node-public-zimg-lora', fromSocketId: 'CLIP', toNodeId: 'node-public-zimg-neg', toSocketId: 'clip', type: 'CLIP' },
+      { id: 'pub-zc-3', fromNodeId: 'node-public-zimg-1', fromSocketId: 'MODEL', toNodeId: 'node-public-zimg-4', toSocketId: 'model', type: 'MODEL' },
+      { id: 'pub-zc-4', fromNodeId: 'node-public-zimg-1', fromSocketId: 'CLIP', toNodeId: 'node-public-zimg-2', toSocketId: 'clip', type: 'CLIP' },
       { id: 'pub-zc-6', fromNodeId: 'node-public-zimg-2', fromSocketId: 'CONDITIONING', toNodeId: 'node-public-zimg-4', toSocketId: 'positive', type: 'CONDITIONING' },
-      { id: 'pub-zc-7', fromNodeId: 'node-public-zimg-neg', fromSocketId: 'CONDITIONING', toNodeId: 'node-public-zimg-4', toSocketId: 'negative', type: 'CONDITIONING' },
-      { id: 'pub-zc-8', fromNodeId: 'node-public-zimg-3', fromSocketId: 'LATENT', toNodeId: 'node-public-zimg-4', toSocketId: 'latent_image', type: 'LATENT' },
       { id: 'pub-zc-9', fromNodeId: 'node-public-zimg-4', fromSocketId: 'LATENT', toNodeId: 'node-public-zimg-vae', toSocketId: 'samples', type: 'LATENT' },
       { id: 'pub-zc-10', fromNodeId: 'node-public-zimg-1', fromSocketId: 'VAE', toNodeId: 'node-public-zimg-vae', toSocketId: 'vae', type: 'VAE' },
       { id: 'pub-zc-11', fromNodeId: 'node-public-zimg-vae', fromSocketId: 'IMAGE', toNodeId: 'node-public-zimg-5', toSocketId: 'images', type: 'IMAGE' },
@@ -873,27 +828,27 @@ export const WORKFLOW_PRESETS: WorkflowPreset[] = [
       { id: 'hf-c4', fromNodeId: 'node-hf-3', fromSocketId: 'LATENT', toNodeId: 'node-hf-4', toSocketId: 'images', type: 'LATENT' },
     ],
   },
-  // 1. 商汤日日新 (SenseNova DeepSeek V4) 深度思考推理 + FLUX.1 终极出片
+  // 1. 商汤日日新 (SenseNova SenseNova 6.8 Flash Lite) 深度思考推理 + FLUX.1 终极出片
   {
     id: 'sensenova-deepseek-flux-thinking',
-    name: '商汤日日新 (DeepSeek V4) 深度推理思考 + FLUX.1 终极出片',
+    name: '商汤日日新 (SenseNova 6.8 Flash Lite) 深度推理思考 + FLUX.1 终极出片',
     category: '大模型推理思考 (Reasoning)',
-    provider: '商汤日日新 (DeepSeek V4) + Agnes AI 扩散',
+    provider: '商汤日日新 (SenseNova 6.8 Flash Lite) + Agnes AI 扩散',
     previewImage: 'https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/0695b6d7-40ad-4df5-b99a-ba27550b9a58/original=true/preview.jpeg',
-    tags: ['商汤日日新', 'DeepSeek V4', '百万上下文', '思维链 CoT', 'FLUX.1', '提示词深度思考'],
-    description: '通过商汤日日新官方平台 (token.sensenova.cn) 驱动 DeepSeek V4 展开思维链 (CoT) 深度构思，将初始词扩写为电影级 8K 光影提示词，再无缝注入 FLUX.1 扩散引擎完成高精出片。',
+    tags: ['商汤日日新', 'SenseNova 6.8 Flash Lite', '百万上下文', '思维链 CoT', 'FLUX.1', '提示词深度思考'],
+    description: '通过商汤日日新官方平台 (token.sensenova.cn) 驱动 SenseNova 6.8 Flash Lite 展开思维链 (CoT) 深度构思，将初始词扩写为电影级 8K 光影提示词，再无缝注入 FLUX.1 扩散引擎完成高精出片。',
     nodes: [
       {
         id: 'node-sn-1',
         type: 'LLMReasoningNode',
-        title: '商汤日日新深度推理思考 (DeepSeek V4)',
+        title: '商汤日日新深度推理思考 (SenseNova 6.8 Flash Lite)',
         pos: { x: 60, y: 120 },
         width: 380,
         inputs: NODE_DEFINITIONS['LLMReasoningNode'].inputs,
         outputs: NODE_DEFINITIONS['LLMReasoningNode'].outputs,
         values: {
           provider: 'sensenova',
-          model: 'deepseek-v4-flash',
+          model: 'sensenova-6.8-flash-lite',
           task_type: 'cinematic_photoreal',
           prompt: 'a futuristic cyberpunk samurai warrior standing in the rain under holographic neon billboards, dramatic reflections',
           reasoning_output: '',
@@ -998,7 +953,7 @@ export const WORKFLOW_PRESETS: WorkflowPreset[] = [
     spatialFrames: [
       {
         id: 'frame-sn-1',
-        title: '商汤日日新 DeepSeek V4 深度思考取景框',
+        title: '商汤日日新 SenseNova 6.8 Flash Lite 深度思考取景框',
         pos: { x: 260, y: 160 },
         width: 480,
         height: 480,
@@ -2039,16 +1994,16 @@ export const WORKFLOW_PRESETS: WorkflowPreset[] = [
     ],
   },
 
-  // 0.2 商汤日日新 DeepSeek V4 深度推理思考 + FLUX.1 扩散生成全链路
+  // 0.2 商汤日日新 SenseNova 6.8 Flash Lite 深度推理思考 + FLUX.1 扩散生成全链路
   {
     id: 'sensenova-deepseek-v4-flux',
-    name: '商汤日日新 DeepSeek V4 深度推理思考 + FLUX.1 扩散全链路',
+    name: '商汤日日新 SenseNova 6.8 Flash Lite 深度推理思考 + FLUX.1 扩散全链路',
     category: '国产大模型 / 国风',
-    provider: 'SenseNova (DeepSeek V4) + FLUX.1',
+    provider: 'SenseNova (SenseNova 6.8 Flash Lite) + FLUX.1',
     previewImage: 'https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/0695b6d7-40ad-4df5-b99a-ba27550b9a58/original=true/preview.jpeg',
-    tags: ['商汤日日新', 'DeepSeek V4', '百万上下文', '思维链 CoT', 'FLUX.1 扩散', '提示词深度思考'],
+    tags: ['商汤日日新', 'SenseNova 6.8 Flash Lite', '百万上下文', '思维链 CoT', 'FLUX.1 扩散', '提示词深度思考'],
     loraNames: [],
-    description: '采用商汤日日新旗舰 DeepSeek V4 深度思考推理大模型进行思维链反推与视觉构图扩写，将经过百万级参数推导后的顶级提示词无缝注入 FLUX.1 扩散引擎，实现高智商 AI 与画质巅峰的合体。',
+    description: '使用 SenseNova 6.8 Flash Lite 扩写提示词，再由所选 Fal FLUX 端点生成图片。两次调用分别使用对应供应商凭据。',
     nodes: [
       {
         id: 'node-sn-1',
@@ -2063,14 +2018,14 @@ export const WORKFLOW_PRESETS: WorkflowPreset[] = [
       {
         id: 'node-sn-2',
         type: 'LLMReasoningNode',
-        title: '商汤 DeepSeek V4 深度推理节点',
+        title: '商汤 SenseNova 6.8 Flash Lite 深度推理节点',
         pos: { x: 380, y: 60 },
         width: 360,
         inputs: NODE_DEFINITIONS['LLMReasoningNode'].inputs,
         outputs: NODE_DEFINITIONS['LLMReasoningNode'].outputs,
         values: {
           provider: 'sensenova',
-          model: 'deepseek-v4-flash',
+          model: 'sensenova-6.8-flash-lite',
           task_type: 'cinematic_photoreal',
           prompt: 'a futuristic cyber warrior with glowing katana standing on Neo-Shanghai skyscraper rooftop in dense rain, volumetric lens flare',
         },
@@ -2163,7 +2118,7 @@ export const WORKFLOW_PRESETS: WorkflowPreset[] = [
     spatialFrames: [
       {
         id: 'frame-sensenova-1',
-        title: '商汤 DeepSeek V4 深度推理取景框',
+        title: '商汤 SenseNova 6.8 Flash Lite 深度推理取景框',
         pos: { x: 260, y: 160 },
         width: 480,
         height: 480,

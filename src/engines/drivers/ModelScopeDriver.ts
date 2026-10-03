@@ -26,6 +26,7 @@ export class ModelScopeDriver extends BaseEngineDriver {
         'x-modelscope-site': 'cn',
       },
       body: JSON.stringify({
+        workflowSnapshot: params.workflowSnapshot,
         prompt: params.prompt,
         negative_prompt: params.negative_prompt,
         model: params.model,
@@ -35,8 +36,11 @@ export class ModelScopeDriver extends BaseEngineDriver {
         width: params.width,
         height: params.height,
         site: 'cn',
-        loras: params.loras,
+        loras: params.loras?.length ? params.loras : undefined,
         image_url: params.image_url,
+        sampler_name: params.sampler_name,
+        scheduler: params.scheduler,
+        denoise: params.denoise,
       }),
     });
 

@@ -30,3 +30,64 @@ canvas, svg {
   user-select: none;
   -webkit-user-select: none;
 }
+
+.studio-toolbar { background: rgba(19,22,30,.96); border: 1px solid rgba(148,163,184,.2); border-radius: 16px; padding: 12px 14px; backdrop-filter: blur(18px); box-shadow: 0 8px 30px #0006; }
+.studio-action { display: inline-flex; align-items: center; justify-content: center; gap: .45rem; padding: .5rem .7rem; color: #cbd5e1; border: 1px solid transparent; border-radius: 8px; font-size: .875rem; line-height: 1.25; transition: background .15s; min-height: 36px; }
+.studio-action span { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.studio-action:hover { background: #ffffff0d; color: white; }
+.studio-action-active { background: #22d3ee18; border-color: #22d3ee40; color: #67e8f9; }
+.studio-run { display: inline-flex; align-items: center; gap: .5rem; background: #0891b2; padding: .65rem .9rem; border-radius: 9px; color: white; font-size: .875rem; font-weight: 600; min-height: 40px; }
+.studio-run:hover { background: #06a1c4; }
+.studio-action:disabled, .studio-run:disabled { opacity: .5; cursor: not-allowed; }
+.studio-action:focus-visible, .studio-run:focus-visible { outline: 2px solid #67e8f9; outline-offset: 2px; }
+@media (max-width: 640px) { .studio-toolbar {padding: 10px;} .studio-action {padding: .4rem .5rem;} }
+
+.canvas-node { box-shadow: 0 10px 24px #0004; background: #181c25f5; }
+.canvas-node label, .canvas-node input, .canvas-node select, .canvas-node textarea { font-size: .875rem; line-height: 1.5; }
+.canvas-node select, .canvas-node input[type="text"], .canvas-node input[type="number"] { min-height: 34px; }
+.canvas-node input:focus-visible, .canvas-node select:focus-visible, .canvas-node textarea:focus-visible { border-color: #22d3ee; outline: 1px solid #22d3ee55; }
+.canvas-node textarea { padding: .75rem; }
+
+/* Readable controls for the studio's dense configuration surfaces. */
+.studio-readable { font-size: 14px; line-height: 1.55; color: #cbd5e1; }
+.studio-readable :is(button, input, select, textarea, label, p, h4),
+.studio-readable [class*="text-["], .studio-readable .text-xs { font-size: 14px; }
+.studio-readable h2 { font-size: 18px; line-height: 1.4; }
+.studio-readable :is(button, input:not([type="checkbox"]):not([type="range"]), select) { min-height: 36px; }
+.studio-readable :is(button, a, input, select, textarea):focus-visible { outline: 2px solid #67e8f9; outline-offset: 3px; }
+.studio-readable :is(button, input, select):disabled { cursor: not-allowed; opacity: .5; }
+.studio-readable :is(input, select, textarea) { min-width: 0; }
+.studio-readable button { line-height: 1.4; }
+.studio-readable [role="alert"] { overflow-wrap: anywhere; }
+.model-hub > div:first-child { gap: 12px; }
+.model-hub h2 { flex-wrap: wrap; }
+.model-hub h4 { font-size: 16px; }
+.model-hub .aspect-video { aspect-ratio: 16 / 8; }
+.api-settings > div:first-child { flex-wrap: wrap; gap: 12px; }
+.api-settings > div:nth-child(2) { gap: 10px; flex-wrap: wrap; }
+.api-settings > div:nth-child(2) > div:first-child { flex-wrap: wrap; }
+.parameter-inspector label { color: #a8b4c5; }
+.parameter-inspector .truncate { white-space: normal; overflow-wrap: anywhere; }
+@media (max-width: 767px) {
+  .model-hub, .api-settings { max-height: 94dvh; }
+  .model-hub { overflow-y: auto; }
+  .model-hub > div { flex-shrink: 0; }
+  .model-hub > div:last-child { overflow-y: visible; }
+  .model-hub > div, .api-settings > div:first-child, .api-settings > div:nth-child(2) { padding-left: 16px; padding-right: 16px; }
+  .model-hub > div:first-child > div:first-child { align-items: flex-start; }
+  .model-hub > div:first-child > div:first-child > div:first-child { display: none; }
+  .model-hub .max-w-md { max-width: none; width: 100%; flex-basis: 100%; }
+  .api-settings .settings-body { flex-direction: column; }
+  .api-settings .settings-providers { display: flex; gap: 6px; width: 100%; overflow-x: auto; max-height: 88px; border-right: 0; border-bottom: 1px solid #242631; }
+  .api-settings .settings-providers > button { flex: 0 0 180px; margin: 0; }
+  .api-settings .settings-providers > button > div:first-child > div:not(:first-child) { display: none; }
+  .api-settings .settings-body > div:last-child { padding: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .studio-readable *, .studio-toolbar * { transition: none !important; }
+}
+
+@media (max-width: 767px) {
+  .api-settings > div:last-child { flex-wrap: wrap; gap: 10px; }
+  .model-hub input + button { flex-shrink: 0; }
+}

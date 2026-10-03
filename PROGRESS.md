@@ -1,30 +1,6 @@
 # Canvas Provider API 接线修复进度表
 
 
-## 2026-10-02 — ModelScope 与 Hugging Face 全供应商 API 接入规范化与端点能力对齐
-
-### 根因与背景
-- 用户指出：「不能只对一个模型做优化，这个是整个供应商的 API 接入问题」。
-- 排查确认不仅是单个 Z-Image-Turbo 模型的特例问题，而是整个 Hugging Face 与 ModelScope 供应商层级的接入缺陷：
-  1. Hugging Face 路由将 `cfg` 误入 `rejectUnsupported` 黑名单，导致合法 CFG 请求被拦截，且未转发官方支持的 `scheduler`。
-  2. Hugging Face Schema 仅登记了 2 款基模，遗漏了 `SD 3.5 Large`、`SD 1.5`、`Kolors` 等官方模型，导致切模时 Fallback 异常。
-  3. ModelScope 原生 API 缺失 Schema，且选模时未与 Provider 联动。
-
-### 完成项
-- [x] Hugging Face 官方能力对齐: 在 `server.ts` 中修正 `/api/huggingface/generate`，将 `cfg` 移出 `rejectUnsupported`，支持 `guidance` / `guidance_scale` / `cfg` 别名映射，透传官方 `scheduler`，仅对真正不支持的 `loras`, `sampler`, `denoise`, `image_url` 报错。
-- [x] Hugging Face Schema 补全: 在 `src/schemas/providerSchema.ts` 的 `HUGGINGFACE_MODELS` 中完整注册 `stabilityai/stable-diffusion-3.5-large`、`Kwai-Kolors/Kolors`、`runwayml/stable-diffusion-v1-5`。
-- [x] Hugging Face 驱动透传: 在 `HuggingFaceDriver.ts` 中补齐 `scheduler` 与 `cfg` 转发。
-- [x] Schema: 在 `src/schemas/providerSchema.ts` 中注册 `modelscope` 与 `modelscope_ai`，登记 `Tongyi-MAI/Z-Image-Turbo` 等 5 款官方基模，声明 `prompt`, `negative_prompt`, `seed` (min -1, max 2147483647), `steps` (`num_inference_steps`), `cfg` (`guidance_scale`), `width`, `height`, `loras` 为 supported；`sampler`, `scheduler`, `denoise` 为 unsupported。
-- [x] Checkpoint 选模联动: 在 `src/utils/resolveCheckpoint.ts` 中增加 `resolveCheckpointModelProvider` 与 `applyCheckpointModelSelection`；在 `src/App.tsx` 和 `src/components/ParameterInspector.tsx` 中切换模型时原子同步 `targetProvider`，消除遗留引擎残留。
-- [x] 空间帧规范化与 denoise 保护: `src/App.tsx` 中空间帧默认 seed 规范为有效 int32 (42)；`handleQueueFrame` 对 `denoise` 进行卫语句保护 (`frame.imageUrl ? p.denoise : undefined`)，防止纯文本生图请求携带 denoise 触发 Fal/Civitai 400 拦截。
-- [x] 视频驱动增强 (F3/F4): `VideoDriver.ts` 完整透传 `fps`, `negative_prompt`, `steps`, `cfg`, `loras` 到 `/api/video/generate`；严禁空 provider 静默回退 Fal。
-- [x] 预设拓扑对齐: `src/constants/presets.ts` 中的 `zimage-turbo-public` 预设 `targetProvider` 对齐为 `'modelscope'`，消除节点能力与底层服务商的冲突；seed 规范为 32 位整型 (42)。
-- [x] 后端与驱动转发: `server.ts` 接收 `cfg` 别名映射为 `guidance_scale` 并从 `rejectUnsupported` 移除；`payload.loras` 将画布对象数组自动归一化为字符串数组；`ModelScopeDriver.ts` 与 `ModelScopeAiDriver.ts` 透传 `loras` 与 `guidance` (从 cfg)。
-- [x] 单测验证: 新增 `ModelScopeDriver.test.ts`、`HuggingFaceDriver.test.ts` 及 schema/checkpoint 单元测试，`bun test` 203/203 全绿，`npx tsc --noEmit` 保持 0 错误。
-- [x] 真实端到端验证: Playwright 自动化验证通过，截屏确认画布全部节点恢复绿色「就绪」状态，底层 API 透传成功到达 ModelScope 官方端点（透明报告 429 insufficient balance 真实响应，无 mock 伪造）。
-
----
-
 ## 2026-09-30 — soft-civitai-history-thumb HARD gates
 
 - Civitai 生成成功后服务端把 blob 拉成 `data:image/…` 写入历史（与 OpenAI/fal 同源持久形态）；HistoryModal 坏链显示「预览加载失败」。
@@ -78,15 +54,15 @@ Tip hash: 10448d2a6fe3cf63c0030479b626dcb34903b0d1 (branch f4-video-provider, no
 - [x] 单测：model select 设 provider；empty blocked；mismatch blocked；explicit Fal 仍可用；`npx tsc --noEmit` 0；`npm test` 69/69
 
 ### 残留（QA / 非 F4）
-- [x] F3 Fal 视频 fps/negative/steps/cfg/loras 转发 — 已完成（VideoDriver 完整转发，BaseEngineDriver 识别 isVideo，单测覆盖）
-- F2 Civitai comfyModel / F1 HF Z-Image — F1 已于 10-02 完成；F2 待后续安排
+- F3 Fal 视频 fps/negative/steps/cfg/loras 转发 — 未改
+- F2 Civitai comfyModel / F1 HF Z-Image — 未改
 - Soft：SpatialFrame Math.random seed / Fal·Civitai denoise — 未改（非 F4）
 - 自定义未在 schema 的视频端点：须用户先显式选 Provider；不会从模型 ID 猜 Fal
 
 ### 关键文件
 - `src/utils/videoProvider.ts` + `videoProvider.test.ts`
 - `src/utils/graphEngine.ts` + `graphEngine.test.ts`
-- `src/App.tsx` / `src/engines/drivers/VideoDriver.ts` + `VideoDriver.test.ts`
+- `src/App.tsx` / `src/engines/drivers/VideoDriver.ts`
 
 ---
 
@@ -377,3 +353,86 @@ P 事实表（2026-09-29 抓取）：
 | HF text-to-image: 返回原始图像字节, inputs/parameters 格式 | https://huggingface.co/docs/inference-providers/tasks/text-to-image | 已核实 | server.ts /api/huggingface/generate |
 | Tensor.Art OpenWorks: /tool/list、/task、/task/query、/file/upload，Echo-Access-Key 头，FINISH/SUCCESS/FAILED/EXCEPTION 状态 | tensor.art 下 /openworks、/openworks/docs、/docs/openworks 与 docs.tensor.art/openworks 均 404 | 未能核实（需人工对照官方文档）；代码只做「精确匹配 + 不丢参 + 不编造」，端点与字段沿用原实现 | server.ts /api/tensorart/*、/api/video/generate Tensor.Art 分支 |
 | Tensor.Art /file/upload 请求体字段 | 同上 | 未能核实 → 服务端原样转发调用方请求体，不再发送空 {} | server.ts /api/tensorart/upload |
+
+## 2026-10-02 Sites deployment
+
+- Imported upstream commit `a9d46082ea7a37fb4dcabb9a997848900911e803` into a separate Site source checkout; original GitHub repository is unchanged.
+- Retained React UI and original provider handlers; added an Express-to-Worker build adapter, platform owner authentication, AES-GCM encrypted settings, D1 indexes, R2 project/media/history storage, and a site favicon.
+- Kept the original multi-canvas manager's browser-local save behavior. Cloud project APIs and generation history persist across Worker restarts.
+- Retained the Bun lockfile; selected npm for this environment because Bun was unavailable, added npm lockfile, and corrected the Vite/esbuild peer dependency conflict needed for a successful build.
+- Compatibility fixes verified locally: Node built-in ESM mapping, internal HTTP bridge origin validation, and platform-managed request lifetime instead of unsupported Node socket timeout methods.
+- Validation: TypeScript passes; all 188 existing tests pass; local Worker checks pass for assets, owner-only access, CSRF, project/media/history operations, encrypted settings, key-pool strategy, restart persistence, deletion, and missing-key/model errors. No provider generation endpoints or real provider keys were used.
+- Browser UI/WebMCP runtime QA is unavailable in this workflow. Core data operations and Worker startup were tested directly.
+- Publishing through Sites with private owner access. Provider generation still requires user-supplied API keys.
+
+## 2026-10-03 Sites 全面检查、UI 重构与授权真实生成验收
+
+- 先重读 CLAUDE / HANDOVER / ENGINE_LORA_SPECIFICATION / PITFALLS / UNRESOLVED_ISSUES，发现历史文档与铁律存在冲突，明确当前固定规则优先。用户随后明确授权本次使用真实 key 与生成端点，保留固定第 4 条并单列本次例外。
+- 修复生产访问：实际 Sites 认证头仅含邮箱，旧版要求 user-id 导致 `/api/history` 401。固定原生所有者邮箱和账号 ID 后，邮箱单独转发的本地 Worker 回归通过；不同邮箱仍 403。
+- 重构两行工作室工具栏、模型下拉去重、HF Space 必填控件、参数抽屉、错误提示。保留不支持参数的原始画布值，默认隐藏并可展开查看；不支持 LoRA 时拦截并允许用户显式旁路。
+- 修复刷新覆盖本地多画布、云端保存假成功、设置保存未等待服务端、空 provider 按模型猜测、推理模型默认值及推理失败后继续生成。种子 0 保留，空间画板随机种子实际发送；递增/递减在成功后按实际 seed 更新。
+- 所有生成驱动携带工作流快照；服务端记录实际上游提交参数与端点，递归剔除凭据。历史记录可查看 / 导出参数、LoRA 与工作流；历史失败不伪装为空记录。
+- HF Z-Image live `/gradio_api/info` 本轮核实 33 个分辨率及七个位置参数：prompt/resolution/seed/steps/shift/random_seed/gallery_images。seed=-1 或 random_seed=true 为随机；seed=0 是固定值。公开 Space 不支持 LoRA / 负向 / CFG / 像素宽高 / 采样器。已实测固定 seed=42、8 steps、shift=3、1024x1024 出图。
+- ModelScope 官方模型页本轮核实 LoRA 形式：单仓库 ID 或至多 6 个仓库权重映射、权重和为 1。驱动补上 LoRA 传输，拒绝文件名、错误总权重和隐式归一化。测试采用最小官方请求；通用参数的逐模型能力未全量核实。
+- Tensor.Art 官方仓库 scripts 与本轮实时工具列表核实 `/tool/list`、`/task`、`/task/query`、Echo-Access-Key 与按位置传入 inputs。`photoreal_studio_z_image` 输入为 prompt、width、height、count，无独立 steps/cfg/seed/LoRA。修复前端 count/size 未传输。
+- 真实验收共 5 张图：Civitai SD1.5 基础图；Civitai 加 `urn:air:sd1:lora:civitai:82098@87153`、强度 0.7 的图；HF 官方 Z-Image Space；Tensor.Art 两把 key 各一张 512x512 图。图片均下载并检查内容，附实际请求、快照与可复用工作流。
+- Fal flux-lora 返回 403 `User is locked. Reason: TOP_UP.`，列为计费限制。魔搭 AI 第一把与 CN key 返回 429 insufficient balance，列为计费限制；AI 第二把返回 401 要求绑定 Alibaba Cloud，列为账户设置。NanoGPT 返回 401 invalid_api_key，列为鉴权拒绝。不会把这些条件说成所有接口集成失败或全部已通过。
+- 第一个 Civitai LoRA 可下载但未启用在线生成，提交被真实 400 拒绝并保留记录。再次从官方目录选择 supportsGeneration=true 且 SD1.5 匹配的 LoRA，成功出图。应用不做模型 / LoRA 自动替换。
+- 只读测试先前 HF 四把 Token whoami 成功，Civitai 公共模型查询成功不证明生成权限；Fal 普通 key 无 billing Admin 权限。与上述真实生成结果分别记录。
+- 验证：TypeScript 0 错误，219 个单元 / 组件结构测试通过；本地 Worker 检查鉴权、CSRF、D1/R2 持久化、加密设置、删除、重启恢复通过。最终构建与发布状态另记。
+- 限制：没有浏览器操作 QA 能力，未完成人工式全按钮点击验收；没有测试所有模型、图生图和视频。不得沿用旧文档全量 100% 已验证说法。
+
+### 本轮官方依据
+- https://tongyi-mai-z-image-turbo.hf.space/gradio_api/info
+- https://huggingface.co/spaces/Tongyi-MAI/Z-Image-Turbo/raw/main/app.py
+- https://huggingface.co/docs/inference-providers/en/tasks/text-to-image
+- https://fal.ai/models/fal-ai/flux-lora/api
+- https://developer.civitai.com/orchestration/recipes/sd1.md
+- https://orchestration.civitai.com/openapi/v2-consumers.json
+- https://www.modelscope.cn/models/Tongyi-MAI/Z-Image-Turbo
+- https://docs.nano-gpt.com/api-reference/image-generation
+- https://github.com/Tensor-Art/tensorart-skills
+
+- 最后审查追加修复：Tensor.Art 多 key 通过池逐次选择单个 key，避免把含换行的整段 key 作为 HTTP 头；Civitai 长任务在客户端轮询结束后补存参数、LoRA 和工作流，保存失败显示警告但仍回传真实图片；明确视频模式参与驱动能力判断，0 值不再被真值判断吞掉。
+
+## 2026-10-03 供应商全面复核（历史中间记录，见最终记录）
+已核实官方文档：TAMS 模型/Job/LoRA、HF Inference Providers 与官方 SDK、NanoGPT 归一化 Image API、Agnes image/video、SenseNova chat、xAI images，以及既有 Civitai/Fal/魔搭/Google 契约。
+已修：Tensor 工具/模型目录混用及跨平台 ID；HF 显式 fal-ai 路由与 LoRA 参数；Nano 尺寸和模型能力校验；Fal 尺寸枚举/model_name/视频时长；魔搭采样器字段显式拒绝；Agnes 视频错误走图片路由、图片 size/ratio 遗漏及硬编码尺寸；Grok image.type；Gemini SDK 参数历史；LoRA 自动改供应商/底模的逻辑。
+实际结果：HF 第一把测试 token 已通过官方 router + fal-ai 真正返回带 LoRA 的 512×512 图片，seed 42，steps 12，guidance 3.5，LoRA 0.8；现已完成同一 Worker 后端验收并持久化，见 verification/huggingface-lora 记录。TAMS 两把现有 key 均 unauthorized/app not found；HF Explorer / Lab 生成失败原文保留；未采用会静默丢 LoRA 的 Z-Image DLC Space。
+下一步：回归用例与 Worker 实际验收，补齐逐供应商报告、参数与工作流，再发布原私有网站。
+
+
+## GitHub main 既有进度（合并保留；参数结论以本次审计为准）
+# Canvas Provider API 接线修复进度表
+
+
+## 2026-10-02 — ModelScope 与 Hugging Face 全供应商 API 接入规范化与端点能力对齐
+
+### 根因与背景
+- 用户指出：「不能只对一个模型做优化，这个是整个供应商的 API 接入问题」。
+- 排查确认不仅是单个 Z-Image-Turbo 模型的特例问题，而是整个 Hugging Face 与 ModelScope 供应商层级的接入缺陷：
+  1. Hugging Face 路由将 `cfg` 误入 `rejectUnsupported` 黑名单，导致合法 CFG 请求被拦截，且未转发官方支持的 `scheduler`。
+  2. Hugging Face Schema 仅登记了 2 款基模，遗漏了 `SD 3.5 Large`、`SD 1.5`、`Kolors` 等官方模型，导致切模时 Fallback 异常。
+  3. ModelScope 原生 API 缺失 Schema，且选模时未与 Provider 联动。
+
+### 完成项
+- [x] Hugging Face 官方能力对齐: 在 `server.ts` 中修正 `/api/huggingface/generate`，将 `cfg` 移出 `rejectUnsupported`，支持 `guidance` / `guidance_scale` / `cfg` 别名映射，透传官方 `scheduler`，仅对真正不支持的 `loras`, `sampler`, `denoise`, `image_url` 报错。
+- [x] Hugging Face Schema 补全: 在 `src/schemas/providerSchema.ts` 的 `HUGGINGFACE_MODELS` 中完整注册 `stabilityai/stable-diffusion-3.5-large`、`Kwai-Kolors/Kolors`、`runwayml/stable-diffusion-v1-5`。
+- [x] Hugging Face 驱动透传: 在 `HuggingFaceDriver.ts` 中补齐 `scheduler` 与 `cfg` 转发。
+- [x] Schema: 在 `src/schemas/providerSchema.ts` 中注册 `modelscope` 与 `modelscope_ai`，登记 `Tongyi-MAI/Z-Image-Turbo` 等 5 款官方基模，声明 `prompt`, `negative_prompt`, `seed` (min -1, max 2147483647), `steps` (`num_inference_steps`), `cfg` (`guidance_scale`), `width`, `height`, `loras` 为 supported；`sampler`, `scheduler`, `denoise` 为 unsupported。
+- [x] Checkpoint 选模联动: 在 `src/utils/resolveCheckpoint.ts` 中增加 `resolveCheckpointModelProvider` 与 `applyCheckpointModelSelection`；在 `src/App.tsx` 和 `src/components/ParameterInspector.tsx` 中切换模型时原子同步 `targetProvider`，消除遗留引擎残留。
+- [x] 空间帧规范化与 denoise 保护: `src/App.tsx` 中空间帧默认 seed 规范为有效 int32 (42)；`handleQueueFrame` 对 `denoise` 进行卫语句保护 (`frame.imageUrl ? p.denoise : undefined`)，防止纯文本生图请求携带 denoise 触发 Fal/Civitai 400 拦截。
+- [x] 视频驱动增强 (F3/F4): `VideoDriver.ts` 完整透传 `fps`, `negative_prompt`, `steps`, `cfg`, `loras` 到 `/api/video/generate`；严禁空 provider 静默回退 Fal。
+- [x] 预设拓扑对齐: `src/constants/presets.ts` 中的 `zimage-turbo-public` 预设 `targetProvider` 对齐为 `'modelscope'`，消除节点能力与底层服务商的冲突；seed 规范为 32 位整型 (42)。
+- [x] 后端与驱动转发: `server.ts` 接收 `cfg` 别名映射为 `guidance_scale` 并从 `rejectUnsupported` 移除；`payload.loras` 将画布对象数组自动归一化为字符串数组；`ModelScopeDriver.ts` 与 `ModelScopeAiDriver.ts` 透传 `loras` 与 `guidance` (从 cfg)。
+- [x] 单测验证: 新增 `ModelScopeDriver.test.ts`、`HuggingFaceDriver.test.ts` 及 schema/checkpoint 单元测试，`bun test` 203/203 全绿，`npx tsc --noEmit` 保持 0 错误。
+- [x] 真实端到端验证: Playwright 自动化验证通过，截屏确认画布全部节点恢复绿色「就绪」状态，底层 API 透传成功到达 ModelScope 官方端点（透明报告 429 insufficient balance 真实响应，无 mock 伪造）。
+
+
+## 2026-10-03 最终修复与验证
+- 审阅 GitHub main 03ddcda 的 4 次新增提交，保留视频参数转发、显式视频能力、文本生成 denoise 保护、驱动测试及旧进度记录。根据官方文档纠正其中将本地 Diffusers 参数当 ModelScope REST、由重复模型名自动改供应商的旧逻辑；HF/魔搭始终保持用户显式选择。
+- Tensor 模型/LoRA 使用真实 ID 与 TAMS；OpenWorks 工具移出底模/视频模型选项，旧工具结果不导入成模型工作流。
+- HF FLUX LoRA 真实 Worker 图、参数、工作流已保存。Fal/Tensor/Nano 批量输出逐张保存历史；额外图片保存失败保留 URL 和警告。
+- Fal SD LoRA model_name UI、Wan 帧数/帧率、空视频参数、Civitai 显式 Wan2.1 recipe 校验、Qwen Edit image_url 已补齐。
+- 29 个测试文件、236 个测试通过；TypeScript 0 错误。Worker 构建、所有者访问、CSRF、项目/图片/历史持久化、加密设置、重启恢复和删除均通过。
+- 真实调用与账户限制见 public/verification/provider-audit.html 和 results.json。未实际生成视频，未做浏览器逐按钮视觉 QA，不作全模型成功承诺。

@@ -122,4 +122,6 @@ export interface GenerationHistoryItem {
   height?: number | null;
   timestamp: number;
   loras?: Array<{ name: string; strength: number; civitaiId?: string }>;
+  workflowSnapshot?: Record<string, unknown>;
+  requestMetadata?: { route: string; submissions: Array<{ endpoint: string; parameters: unknown; status: number }> };
 }
