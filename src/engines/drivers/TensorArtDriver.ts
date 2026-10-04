@@ -24,7 +24,6 @@ export class TensorArtDriver extends BaseEngineDriver {
     const body: Record<string, any> = {
       prompt: params.prompt,
       model: params.model,
-      ...(!/^\d{10,25}$/.test(params.model) && !params.model.startsWith('https://') ? {toolName:params.model} : {}),
     };
     if (params.negative_prompt) body.negative_prompt = params.negative_prompt;
     if (params.width) body.width = params.width;
@@ -37,8 +36,7 @@ export class TensorArtDriver extends BaseEngineDriver {
     if (params.extraParams?.size !== undefined) body.size = params.extraParams.size;
     if (params.extraParams?.count !== undefined) body.count = params.extraParams.count;
     if (params.extraParams?.inputs !== undefined) body.inputs = params.extraParams.inputs;
-    // Steps/cfg/loras: Tensor.Art OpenWorks tools don't have these as named schema fields;
-    // the server will 400 if they don't match an input description keyword (C5).
+    // Forward explicit model-job parameters; model IDs never select the tool API.
     if (params.steps) body.steps = params.steps;
     if (params.cfg !== undefined) body.cfg = params.cfg;
     if (params.loras?.length) body.loras = params.loras;
@@ -63,7 +61,7 @@ export class TensorArtDriver extends BaseEngineDriver {
     return {
       mediaUrl: data.mediaUrl || data.imageUrl || data.videoUrl,
       mediaType: data.mediaType || 'image',
-      provider: data.provider || 'Tensor.Art (OpenWorks)',
+      provider: data.provider || 'Tensor.Art (模型 API)',
       providerId: this.id,
       model: data.toolName || data.model || params.model,
       requestedModel: params.model,

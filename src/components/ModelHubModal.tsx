@@ -1,4 +1,4 @@
-import {TENSOR_CATALOG_TAGS} from '../schemas/tensorCatalog';
+import {TensorCatalogNotice} from './TensorCatalogNotice';
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Search,
@@ -97,7 +97,6 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
   const [sortOption, setSortOption] = useState<ModelSortOption>('downloads');
   const [selectedArch, setSelectedArch] = useState<string>('all');
   const [query, setQuery] = useState('');
-  const [tensorTag,setTensorTag]=useState('all');
   const requestVersion = useRef(0);
   const morePending = useRef(false);
   const [customId, setCustomId] = useState('');
@@ -138,7 +137,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
     sort = sortOption,
     arch = selectedArch,
     isLoadMore = false,
-    catalogTag = tensorTag
+    catalogTag = ''
   ) => {
     if (isLoadMore && morePending.current) return;
     const version = isLoadMore ? requestVersion.current : ++requestVersion.current;
@@ -716,8 +715,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
               ))}
             </div>
           )}
-          {activeProvider === 'tensorart' && <label className="mb-4 flex items-center gap-3 text-sm text-slate-300">公开目录分类<select aria-label="Tensor 模型中心目录分类" value={tensorTag} onChange={e=>{setTensorTag(e.target.value);loadModels(activeProvider,activeCategory,query,sortOption,selectedArch,false,e.target.value);}} className="rounded-lg border border-slate-700 bg-[#111216] p-2">{TENSOR_CATALOG_TAGS.map(([tag,label])=><option key={tag} value={tag}>{label}</option>)}</select></label>}
-          {activeProvider === 'tensorart' && <p className="mb-4 text-sm text-slate-300">此处加载 Tensor 公共分类目录，支持底模与 LoRA 分类切换；TAMS 官方暂不提供全量列表接口。<a href="https://tusi.cn/models" target="_blank" rel="noopener noreferrer" className="ml-2 text-cyan-300 underline">浏览完整 Tensor.Art 模型 / LoRA 目录</a>，复制任意资源 ID 到上方查询。生成需 TAMS 模型 API Key，OpenWorks key 不能代用。</p>}
+          {activeProvider === 'tensorart' && <TensorCatalogNotice />}
           {activeProvider === 'all' && !loading && <p className="mb-4 text-sm text-slate-400">当前展示各服务商目录摘要。选择单个服务商后继续检索或翻页。</p>}
           {loading ? (
             <div className="h-64 flex flex-col items-center justify-center gap-3 text-slate-400">
@@ -729,10 +727,10 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
               <Sparkles className="w-10 h-10 text-cyan-400/60" />
               <div className="text-center">
                 <p className="text-sm font-bold text-white">
-                  当前目录页下暂无【{activeCategory === 'video' ? 'AI 视频大模型' : activeCategory === 'checkpoint' ? '基础底模' : activeCategory === 'lora' ? '微调 LoRA' : '当前分类'}】
+                  {activeProvider === 'tensorart' ? '按模型 / LoRA ID 查询' : `当前目录页暂无所选分类资源`}
                 </p>
                 <p className="text-xs text-slate-400 mt-1">
-                  {error ? `错误原因: ${error}` : '请尝试切换分类、服务商或输入更精准的关键词进行查询所选目录'}
+                  {error ? `错误原因: ${error}` : activeProvider === 'tensorart' ? 'TAMS 没有列表 API；在上方输入真实资源 ID 查询详情。' : '请尝试切换分类、服务商或输入更精准的关键词进行查询所选目录'}
                 </p>
               </div>
               <div className="flex items-center gap-2 mt-2">

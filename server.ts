@@ -1028,146 +1028,16 @@ async function fetchTensorArtModelInfo(modelId: string, apiKey?: string) {
   const key = apiKey || keyPoolManager.getNextKey('tensorart') || '';
   if (!key) throw Object.assign(new Error('缺少 TAMS 模型 API Key'), {status:400});
   const response = await upstreamFetch({provider:'tensorart',route:'model-info',model:cleanId,key}, `${TENSOR_MODEL_API}/v1/models/${cleanId}`, {headers:{Authorization:`Bearer ${key}`},signal:AbortSignal.timeout(15000)});
-  if (!response.ok) throw Object.assign(new Error(`Tensor.Art 模型 API [${response.status}]: ${await response.text()}。需要 TAMS 模型 API Key，OpenWorks 工具 key 不能作为模型授权`),{status:response.status});
+  if (!response.ok) {
+    const details=await response.text();
+    throw Object.assign(new Error(`Tensor.Art 模型查询 HTTP ${response.status}`),{status:response.status,details,exactEndpointCalled:`${TENSOR_MODEL_API}/v1/models/${modelId}`});
+  }
   const raw = (await response.json()).model;
   if (!raw?.id || !raw.modelType || !raw.baseModel) throw Object.assign(new Error('Tensor.Art 模型 API 未返回完整模型 ID、类型或架构'),{status:502});
   const isLora = ['LORA','LOCON','LYCORIS','DORA'].includes(raw.modelType);
   return {id:raw.id,name:raw.name,provider:'Tensor.Art',category:isLora?'LoRA':raw.modelType==='CHECKPOINT'?'Checkpoint':raw.modelType,type:raw.modelType,baseModel:raw.baseModel,imageUrl:raw.showcaseImageUrls?.[0] || '',trainedWords:raw.triggerWords ? [raw.triggerWords] : [],externalUrl:`https://tensor.art/models/${raw.id}`,description:raw.description,generationStatus:'metadata_verified',tags:['tensorart',isLora?'lora':'checkpoint',raw.baseModel.toLowerCase()]};
 }
 
-
-// Dedicated Real Live Community Models Discovery for Tensor.Art / 吐司
-async function fetchTensorArtModelsList({
-  cat = 'all',
-  searchStr = '',
-  sortOption = 'downloads',
-  page = 1,
-  arch = '',
-  catalogTag = '',
-  cursor = '',
-}: {
-  cat?: string;
-  searchStr?: string;
-  sortOption?: string;
-  page?: number;
-  arch?: string;
-  catalogTag?: string;
-  cursor?: string;
-} = {}) {
-  const pageUrl=new URL('https://tensor.art/models/');
-  if(catalogTag && catalogTag!=='all')pageUrl.searchParams.set('tag',catalogTag);
-  if(arch && arch!=='all')pageUrl.searchParams.set('base_models',arch);
-  if(cat==='lora')pageUrl.searchParams.set('model_types','LORA');
-  if(cat==='checkpoint')pageUrl.searchParams.set('model_types','CHECKPOINT');
-  if(cursor)pageUrl.searchParams.set('cursor',cursor);
-  const url=pageUrl.href;
-  const res = await upstreamFetch(
-    { provider: 'tensorart', route: 'models-scrape', model: arch || searchStr || 'list' },
-    url,
-    {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      },
-      signal: AbortSignal.timeout(15000),
-    }
-  );
-
-  if (!res.ok) {
-    throw Object.assign(new Error(`Tensor.Art 官方网页目录 HTTP ${res.status}: ${await res.text()}`),{status:res.status});
-  }
-
-  const html = await res.text();
-  const articleRegex = /<a[^>]+href="\/models\/(\d+)(?:\/[^"\s]*)?"[^>]*>.*?<article>(.*?)<\/article>/gs;
-  const items: any[] = [];
-  let match;
-
-  while ((match = articleRegex.exec(html)) !== null) {
-    const id = match[1];
-    const cardHtml = match[2];
-
-    const imgMatch = cardHtml.match(/<img[^>]+src="([^">]+)"/);
-    const imageUrl = imgMatch ? imgMatch[1] : '';
-
-    const titleMatch = cardHtml.match(/<h3[^>]+title="([^">]+)"/) || cardHtml.match(/<h3[^>]*>([^<]+)<\/h3>/);
-    const name = titleMatch ? titleMatch[1].trim() : `Tensor.Art #${id}`;
-
-    const tagMatch = cardHtml.match(/<!--\[-->\s*([A-Z0-9_\-]+)\s*<!--\[-->.*?bg-white\/30"><\/span>\s*([^<]+)<!--\]-->/s);
-    if (!tagMatch) continue;
-    const rawType = tagMatch[1].trim().toUpperCase();
-    const rawBaseModel = tagMatch[2].trim().replace(/^基础模型\s*/, '');
-
-    const isLora = rawType.includes('LORA') || rawType.includes('LOCON') || rawType.includes('LYCORIS');
-    const isVideo = rawType.includes('VIDEO') || rawType.includes('MOTION');
-    const category = isVideo ? 'Video' : (isLora ? 'LoRA' : 'Checkpoint');
-
-    const authorMatch = cardHtml.match(/<p[^>]+title="([^">]+)"/);
-    const author = authorMatch ? authorMatch[1].trim() : 'Tensor.Art 创作者';
-
-    const runsMatch = cardHtml.match(/icon-id="play"><\/iconpark-icon>\s*([^<]+)<\/span>/);
-    const runs = runsMatch ? runsMatch[1].trim() : '';
-    const runCount = parseCountNumber(runs);
-
-    const starsMatch = cardHtml.match(/icon-id="star"><\/iconpark-icon>\s*([^<]+)<\/span>/);
-    const stars = starsMatch ? starsMatch[1].trim() : '';
-    const likes = parseCountNumber(stars);
-
-    const tags = ['tensorart', isVideo ? 'video' : (isLora ? 'lora' : 'checkpoint'), rawBaseModel.toLowerCase()];
-    const normBase = rawBaseModel.toLowerCase();
-    if (normBase.includes('f.1') || normBase.includes('flux')) {
-      tags.push('flux', 'flux.1');
-    }
-    if (normBase.includes('xl')) {
-      tags.push('sdxl');
-    }
-    if (normBase.includes('1.5')) {
-      tags.push('sd15', 'sd 1.5');
-    }
-    if (normBase.includes('wan') || isVideo) {
-      tags.push('wan', 'video', 'motion');
-    }
-    if (isLora) {
-      tags.push('lora');
-    }
-    if (normBase.includes('illustrious')) {
-      tags.push('illustrious');
-    }
-    if (normBase.includes('pony')) {
-      tags.push('pony');
-    }
-    if (normBase.includes('z-image')) {
-      tags.push('z-image');
-    }
-    if (searchStr) {
-      tags.push(searchStr);
-    }
-
-    items.push({
-      id,
-      name,
-      provider: 'Tensor.Art 官方网页目录',
-      catalogSource: url,
-      generationStatus: 'unverified',
-      category,
-      type: isLora ? 'LORA' : (isVideo ? 'MotionModule' : 'Checkpoint'),
-      baseModel: rawBaseModel,
-      author,
-      runCount,
-      likes,
-      speed: 'Tensor.Art 社区直拉',
-      badge: isVideo ? (isLora ? 'TENSOR 视频 LORA' : 'TENSOR 视频大模型') : (isLora ? 'TENSOR LORA' : 'TENSOR CHECKPOINT'),
-      imageUrl,
-      externalUrl: `https://tensor.art/models/${id}`,
-      description: `${name} - ${category} ${rawBaseModel} by ${author}`,
-      tags,
-      trainedWords: [],
-    });
-  }
-
-  const nextLink=[...html.matchAll(/href="([^"]*cursor=[^"]*)"/g)].map(m=>m[1].replaceAll('&amp;','&')).map(h=>new URL(h,url)).find(u=>u.origin==='https://tensor.art' && u.searchParams.get('cursor')!==cursor);
-  if(!items.length && /<article>/.test(html))throw Object.assign(new Error('官方目录页面结构已变化，未能解析模型；没有替换目录来源'),{status:502});
-  return {items,nextCursor:nextLink?.searchParams.get('cursor') || null,sourceUrl:url};
-}
 
 // Endpoint: Dedicated Real Tensor.Art Model Info
 app.get('/api/tensorart/model-info', async (req, res) => {
@@ -1180,7 +1050,7 @@ app.get('/api/tensorart/model-info', async (req, res) => {
     const info = await fetchTensorArtModelInfo(cleanId, resolveTensorArtKey(req));
     return res.json(info);
   } catch (err: any) {
-    return res.status(err.status || 500).json({ error: `获取 Tensor.Art 模型详情失败: ${err.message}` });
+    return res.status(err.status || 500).json({error:err.message,details:err.details,upstreamStatus:err.status ?? null,exactEndpointCalled:err.exactEndpointCalled,stack:err.stack});
   }
 });
 
@@ -1281,21 +1151,6 @@ function resolveArchitectureAndBaseModel(baseModelRaw?: string, modelNameHint?: 
       provider: 'Detected Illustrious XL',
       targetProvider: 'fal',
       architectureExplanation: '检测到 Illustrious-XL / NoobAI 二次元旗舰架构。',
-    };
-  }
-  if (combined.includes('tensor') || combined.includes('openworks') || combined.includes('banana') || combined.includes('oc_character')) {
-    return {
-      family: 'wan21',
-      checkpoint: combined.includes('video') ? 'text2video_wan27' : 'strong_text2image_nano_banana2',
-      steps: 30,
-      cfg: 6.0,
-      sampler: 'euler',
-      scheduler: 'normal',
-      width: 1024,
-      height: 1024,
-      provider: 'Detected Tensor.Art OpenWorks',
-      targetProvider: 'tensorart',
-      architectureExplanation: '检测到 Tensor.Art / 吐司 OpenWorks 官方模型与工作流工具。',
     };
   }
   if (combined.includes('nanogpt')) {
@@ -1794,7 +1649,7 @@ app.post('/api/civitai/extract-workflow', async (req, res) => {
       chosenEngineName = "Tensor.Art 官方原生生成引擎";
       checkpoint = rawModelName || "strong_text2image_nano_banana2";
       baseModelArchitecture = detectedBaseModel || "Nano Banana 2";
-      engineExplanation = "🎨 Tensor.Art 官方原生引擎：直连吐司 AI / OpenWorks 接口，按选定工具与模型实时调用。";
+      engineExplanation = "Tensor.Art 模型 API：使用用户选择的真实模型 ID；执行与授权状态以上游响应为准。";
     } else if (engine === "fal") {
       targetProvider = "fal";
       chosenEngineName = "Fal.ai 极速云引擎";
@@ -2131,7 +1986,7 @@ app.post('/api/civitai/extract-workflow', async (req, res) => {
       otherMetadata,
       availableEngines: [
         { id: "civitai", name: "Civitai 官方原生引擎", badge: "最完美原生适配", recommended: !isVideo, description: "100% 原生支持 Civitai 资源与 Krea 2 Turbo / LoRA" },
-        { id: "tensorart", name: "Tensor.Art 官方原生引擎", badge: "OpenWorks 原生", description: "直连吐司 AI / OpenWorks 开放平台，Wan 2.7 / Banana / FLUX / SDXL 原生解算" },
+        { id: "tensorart", name: "Tensor.Art 官方原生引擎", badge: "TAMS 模型 API", description: "按真实模型 ID 查询和提交；模型与 LoRA 能力以上游为准" },
         { id: "nanogpt", name: "NanoGPT 极速", badge: "239+ 现货模型", description: "按需秒级生图，覆盖 FLUX、Qwen Image 2.1、SDXL、Krea 2 Turbo" },
         { id: "fal", name: "Fal.ai 极速云引擎", badge: "GPU Serverless", description: "FLUX.1 / SDXL 1.0 / Krea 2 官方端点" },
         { id: "modelscope", name: "ModelScope 魔搭社区", badge: "阿里万相", description: "通义万相 Wan 2.1 / Krea 2 开源生态" },
@@ -3293,13 +3148,13 @@ app.get("/api/models", async (req, res) => {
       }
     }
 
-    // 9. Tensor.Art (Real Community Model Center Discovery & Live Ecosystem)
+    // 9. TAMS has no list API (official Integration FAQ); only explicit ID lookup.
     if (provider === "all" || provider === "tensorart" || provider === "tensor") {
       try {
         const numericSearch = searchStr.match(/(?:^|\/models\/)(\d{10,25})(?:$|[/?#])/);
         const taCatalog = numericSearch
           ? {items:[await fetchTensorArtModelInfo(numericSearch[1],resolveTensorArtKey(req))],nextCursor:null,sourceUrl:TENSOR_MODEL_API}
-          : await fetchTensorArtModelsList({cat,searchStr,sortOption:sortParam,page:pageParam,arch:String(req.query.architecture || req.query.arch || ''),catalogTag:String(req.query.catalogTag || ''),cursor:cursorParam});
+          : {items:[],nextCursor:null,sourceUrl:'https://tams-docs.tensor.art/docs/api/guide/integration-faq/'};
         const taItems=taCatalog.items;
         const filteredTensorItems = taItems.filter((m:any)=> (!searchStr || numericSearch || `${m.name} ${m.baseModel}`.toLowerCase().includes(searchStr.toLowerCase())) && (!archFilter || archFilter==='all' || m.baseModel.toLowerCase().includes(archFilter.toLowerCase())));
         results.tensorart = filteredTensorItems.filter((m: any) => matchCategory(m));
@@ -3308,11 +3163,14 @@ app.get("/api/models", async (req, res) => {
           hasMore: !!taCatalog.nextCursor,
           nextCursor:taCatalog.nextCursor,
           sourceUrl:taCatalog.sourceUrl,
-          paging:'official-public-webpage',
+          paging:numericSearch ? 'model-id-lookup' : 'lookup-only',
+          catalogAvailable:false,
+          message:'TAMS 官方不提供模型列表 API；请在官方模型库选择底模或 LoRA，复制 ID 查询。未发起网页抓取。',
         } as any;
       } catch (taErr: any) {
         console.error("Tensor.Art live models fetch error:", taErr.message);
-        results.tensorart = { error: `Tensor.Art 模型中心获取失败: ${taErr.message}`,status:taErr.status,stack:taErr.stack } as any;
+        results.tensorart = { error: taErr.message,status:taErr.status,details:taErr.details,exactEndpointCalled:taErr.exactEndpointCalled,stack:taErr.stack } as any;
+        if(provider !== 'all') return res.status(taErr.status >= 400 && taErr.status <= 599 ? taErr.status : 502).json({ok:false,error:taErr.message,details:taErr.details,upstreamStatus:taErr.status ?? null,exactEndpointCalled:taErr.exactEndpointCalled,stack:taErr.stack});
       }
 
       if (provider === "tensor") {

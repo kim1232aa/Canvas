@@ -1,3 +1,4 @@
+import {describeApiFailure} from '../utils/apiFailure';
 import {sanitizeGenerationMetadata} from '../utils/generationMetadata';
 export interface ExecutionRecord { id:number; time:string; route:string; method:string; request:unknown; status:number|null; response:unknown; state:'pending'|'complete'|'error'; stack?:string }
 let records:ExecutionRecord[]=[];
@@ -18,7 +19,7 @@ export async function tracedFetch(input:RequestInfo|URL,init?:RequestInit):Promi
     record.status=response.status;record.response=data;record.state=response.ok && data?.ok!==false?'complete':'error';
     records=[...records];emit();
     if(!response.ok || data?.ok===false){
-      const error=new Error(`HTTP ${response.status} · ${data?.errorSource || 'API'} · ${route}\n${typeof data==='object'?JSON.stringify(data,null,2):raw}`);
+      const error=new Error(`${describeApiFailure(response.status,data,route)}\n${raw}`);
       record.stack=error.stack;
       throw error;
     }

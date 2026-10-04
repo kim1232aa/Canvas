@@ -550,46 +550,7 @@ const NANOGPT_MODELS: ModelSpec[] = [
   nanoImage('hidream', 'HiDream (NanoGPT)'),
 ];
 
-// ---------- Tensor.Art OpenWorks (tool/list → /task) ----------
-// Official OpenWorks API: POST https://openapi.tensor.art/openworks/v1/tool/list
-// Field support is per-tool input descriptions (verified 2026-09-30 live list).
-// strong_text2image_nano_banana2 inputs: prompt, size (1K/2K/4K), aspect ratio — NO width/height/seed/steps/cfg/loras.
-const TA_DOC = 'https://openapi.tensor.art/openworks/v1/tool/list';
-const TA_RATIO = vals(['auto', '21:9', '16:9', '4:3', '3:2', '1:1', '9:16', '3:4', '2:3', '5:4', '4:5'], 'supported');
-const TA_SIZE_124 = vals(['1K', '2K', '4K'], 'supported');
-const TA_SIZE_12 = vals(['1K', '2K'], 'supported');
-
-/** Banana / Wan text2image tools: size + aspect_ratio only (pixel WxH / seed / steps / cfg / LoRA unsupported). */
-function taSizeRatioImage(id: string, label: string, sizes: FieldValue[]): ModelSpec {
-  return {
-    provider: 'tensorart',
-    id,
-    label,
-    source: TA_DOC,
-    fields: {
-      aspect_ratio: enumField(TA_DOC, TA_RATIO, { wire: 'ratio' }),
-      size: enumField(TA_DOC, sizes, { note: 'OpenWorks size tier — not pixel width/height' }),
-      ...unsupported(TA_DOC, ['width', 'height', 'seed', 'negative_prompt', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'loras'], '该服务商不支持（所选 OpenWorks 工具 input schema 无对应项）'),
-    },
-  };
-}
-
-/** Classic OpenWorks tools that expose image width / height (+ count). Still no seed/steps/cfg/LoRA. */
-function taWidthHeightImage(id: string, label: string): ModelSpec {
-  return {
-    provider: 'tensorart',
-    id,
-    label,
-    source: TA_DOC,
-    fields: {
-      width: { status: 'supported', source: TA_DOC, type: 'integer', note: 'tool input: image width' },
-      height: { status: 'supported', source: TA_DOC, type: 'integer', note: 'tool input: image height' },
-      num_images: { status: 'supported', source: TA_DOC, wire: 'count', type: 'integer', note: 'result image count' },
-      ...unsupported(TA_DOC, ['seed', 'negative_prompt', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'loras'], '该服务商不支持（所选 OpenWorks 工具 input schema 无对应项）'),
-    },
-  };
-}
-
+// ---------- Tensor.Art TAMS model API (tools are not models) ----------
 const TENSORART_MODELS: ModelSpec[] = [
   {
     provider:'tensorart', id:'tensorart-model-api', label:'Tensor.Art 模型 API（真实模型 ID）', source:TENSOR_JOB_DOC,
@@ -607,12 +568,7 @@ const TENSORART_MODELS: ModelSpec[] = [
       ...unsupported(TENSOR_JOB_DOC,['denoise','size','resolution','aspect_ratio'],'当前接入的模型路由是文生图；其他任务须指定工作流'),
     },
   },
-  // First = resolveSchemaModelId fallback when checkpoint empty / leftover from another provider.
-  taSizeRatioImage('strong_text2image_nano_banana2', 'Nano Banana 2 文生图 (OpenWorks)', TA_SIZE_124),
-  taSizeRatioImage('strong_text2image_wan27', 'Wan 2.7 文生图 (OpenWorks)', TA_SIZE_12),
-  taWidthHeightImage('oc_character_illustration', 'OC Character Illustration (OpenWorks)'),
-  taWidthHeightImage('anime_lab_wai_illustrious', 'Anime Lab WAI Illustrious (OpenWorks)'),
-  taWidthHeightImage('photoreal_studio_z_image', 'Photoreal Studio Z-Image (OpenWorks)'),
+
 ];
 
 // ---------- SenseNova 商汤日日新 (this app: reasoning / chat only) ----------

@@ -153,6 +153,7 @@ export interface DraggingWire {
 export type CanvasMode = 'spatial' | 'graph';
 
 export interface ComfyParameters {
+  retiredToolSelection?: Record<string,string>;
   checkpoint: string;
   vae?: string;
   seed?: number;

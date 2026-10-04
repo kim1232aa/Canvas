@@ -1,3 +1,4 @@
+import {TensorCatalogNotice} from './TensorCatalogNotice';
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Search,
@@ -46,9 +47,9 @@ export interface UnifiedLoRAItem {
 export interface CivitaiModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSelectLoRA: (lora: { name: string; civitaiId?: string; triggerWords: string; baseModel?: string }) => void;
-  onAddLoRANodeToCanvas: (lora: { name: string; civitaiId?: string; triggerWords: string; baseModel?: string }) => void;
-  onSelectLoRAWithBaseModel?: (lora: { name: string; civitaiId?: string; triggerWords: string; baseModel?: string }) => void;
+  onSelectLoRA: (lora: { name: string; provider?: string; civitaiId?: string; triggerWords: string; baseModel?: string }) => void;
+  onAddLoRANodeToCanvas: (lora: { name: string; provider?: string; civitaiId?: string; triggerWords: string; baseModel?: string }) => void;
+  onSelectLoRAWithBaseModel?: (lora: { name: string; provider?: string; civitaiId?: string; triggerWords: string; baseModel?: string }) => void;
   initialProvider?: LoraProviderFilter;
 }
 
@@ -326,7 +327,9 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
         const triggerStr = Array.isArray(info.triggerWords) && info.triggerWords.length > 0
           ? info.triggerWords.join(', ')
           : '';
+        if (!/lora|locon|lycoris|dora/i.test(info.type || info.category || '')) throw new Error('查询返回的资源不是 LoRA');
         onSelectLoRA({
+          provider:'huggingface',
           name: info.id || rawVal,
           civitaiId: undefined,
           triggerWords: triggerStr,
@@ -335,7 +338,8 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
         onClose();
         return;
       } catch (e: any) {
-        console.warn('Failed to resolve HF custom model info:', e.message);
+        setErrorMsg(`${e.message}\n${e.stack || ''}`);
+        return;
       } finally {
         setLoading(false);
       }
@@ -354,18 +358,19 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
         const triggerStr = Array.isArray(info.trainedWords) && info.trainedWords.length > 0
           ? info.trainedWords.join(', ')
           : '';
-        const baseArch = info.baseModel || 'FLUX.1 / SDXL';
+        if (!/lora|locon|lycoris|dora/i.test(info.type || info.category || '')) throw new Error('查询返回的资源不是 LoRA');
+        const baseArch = info.baseModel;
         if (onSelectLoRAWithBaseModel) {
           onSelectLoRAWithBaseModel({
-            name: `${info.name || rawVal}.safetensors`,
-            civitaiId: info.id || rawVal,
+            name: String(info.id),
+            provider:'tensorart',
             triggerWords: triggerStr,
             baseModel: baseArch,
           });
         } else {
           onSelectLoRA({
-            name: `${info.name || rawVal}.safetensors`,
-            civitaiId: info.id || rawVal,
+            name: String(info.id),
+            provider:'tensorart',
             triggerWords: triggerStr,
             baseModel: baseArch,
           });
@@ -373,7 +378,8 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
         onClose();
         return;
       } catch (e: any) {
-        console.warn('Failed to resolve Tensor.Art custom model info:', e.message);
+        setErrorMsg(`${e.message}\n${e.stack || ''}`);
+        return;
       } finally {
         setLoading(false);
       }
@@ -571,6 +577,7 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
           </div>
         </div>
 
+        {activeProvider === 'tensorart' && <TensorCatalogNotice />}
         {errorMsg && (
           <div className="px-6 py-2 bg-red-950/20 border-b border-red-800/20 text-red-300 text-xs flex items-center justify-between shrink-0 animate-in slide-in-from-top-1 duration-200">
             <div className="flex items-center gap-2">
@@ -735,10 +742,11 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
                         <div className="space-y-1.5 pt-1">
                           <button
                             onClick={() => {
-                              const cleanName = `${model.name.replace(/\.safetensors$/i, '')}.safetensors`;
+                              const cleanName = model.providerKey==='civitai' ? `${model.name.replace(/\.safetensors$/i, '')}.safetensors` : model.id;
                               if (onSelectLoRAWithBaseModel) {
                                 onSelectLoRAWithBaseModel({
                                   name: cleanName,
+                                  provider: model.providerKey,
                                   civitaiId: model.civitaiId,
                                   triggerWords: model.triggerWords,
                                   baseModel: baseArch,
@@ -746,6 +754,7 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
                               } else {
                                 onSelectLoRA({
                                   name: cleanName,
+                                  provider: model.providerKey,
                                   civitaiId: model.civitaiId,
                                   triggerWords: model.triggerWords,
                                   baseModel: baseArch,
@@ -754,10 +763,10 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
                               onClose();
                             }}
                             className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-600 hover:from-purple-500 hover:to-cyan-500 text-xs font-bold text-white transition-all shadow-md shadow-purple-600/30 flex items-center justify-center gap-1.5 active:scale-98"
-                            title={`选用此 LoRA 并自动将前置底模同步为兼容的 ${baseArch} 官方架构`}
+                            title={`将此 LoRA 接入当前生成分支；保留已选底模，架构要求 ${baseArch}`}
                           >
                             <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
-                            <span>🎯 选用 LoRA 并自动配对底模</span>
+                            <span>选用 LoRA · 保留当前底模</span>
                             <span className="text-[10px] px-1.5 py-0.2 rounded bg-black/30 font-mono text-cyan-200">
                               {baseArch}
                             </span>
@@ -767,7 +776,8 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
                             <button
                               onClick={() => {
                                 onSelectLoRA({
-                                  name: `${model.name.replace(/\.safetensors$/i, '')}.safetensors`,
+                                  name: model.providerKey==='civitai' ? `${model.name.replace(/\.safetensors$/i, '')}.safetensors` : model.id,
+                                  provider: model.providerKey,
                                   civitaiId: model.civitaiId,
                                   triggerWords: model.triggerWords,
                                   baseModel: baseArch,
@@ -782,7 +792,8 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
                             <button
                               onClick={() => {
                                 onAddLoRANodeToCanvas({
-                                  name: `${model.name.replace(/\.safetensors$/i, '')}.safetensors`,
+                                  name: model.providerKey==='civitai' ? `${model.name.replace(/\.safetensors$/i, '')}.safetensors` : model.id,
+                                  provider: model.providerKey,
                                   civitaiId: model.civitaiId,
                                   triggerWords: model.triggerWords,
                                   baseModel: baseArch,

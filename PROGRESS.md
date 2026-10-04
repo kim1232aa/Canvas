@@ -1,3 +1,14 @@
+# 2026-10-04 Tensor catalog / legacy-tool correction
+
+- Production evidence: `/api/models?provider=tensorart` fetched a Tensor HTML page and received HTTP 403 Cloudflare challenge, not a billing response; app wrapped it in HTTP 200 and selector truncated the body.
+- Official TAMS FAQ confirms no model-list API. Removed HTML scraper; explicit lookup-only catalog state with official-library link and model/LoRA ID lookup. No cached/static model list and no route substitution.
+- Removed wrong OpenWorks checkpoint presets, model schemas and automatic toolName conversion; saved/imported workflows clear known retired tools and retain original selection metadata. Stable preset IDs replace brittle new-board array offsets.
+- Tensor LoRA selection now preserves actual resource ID and provider; failed lookup stops instead of creating a placeholder. Parameters, LoRA weights and existing graph connections are preserved.
+- Upstream status, raw details, endpoint, trace and stack are retained, with separate website/upstream status labels and an expandable error panel.
+- Verification: TypeScript passed; 35 test files / 267 tests passed after replacing obsolete OpenWorks-as-model expectations. Publishing build is the remaining gate.
+- Browser QA action was not executed: automatic approval review failed due to usage quota. No new frontend image or successful generation is claimed. Account balance and TAMS generation authorization are unverified in this repair.
+- Evidence: `docs/evidence/tensor-catalog-repair-2026-10-04.md`.
+
 # Canvas Provider API 接线修复进度表
 
 ## 2026-10-04 最新状态：三家新供应商与透明执行

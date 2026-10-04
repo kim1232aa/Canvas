@@ -1,3 +1,4 @@
+import {migrateTensorWorkflow} from './legacyTensorWorkflow';
 import type {CanvasProject} from '../components/CanvasManagerModal';
 import type {CanvasMode} from '../types/graph';
 
@@ -17,6 +18,7 @@ export function loadWorkspaceCache(fallback: CanvasProject[], storage: Pick<Stor
     currentId = storage.getItem(ACTIVE_BOARD_KEY);
     mode = storage.getItem(MODE_KEY) === 'spatial' ? 'spatial' : 'graph';
   } catch { /* Keep a usable workspace when an older cache cannot be read. */ }
+  projects = projects.map(migrateTensorWorkflow);
   const active = projects.find(p => p.id === currentId) || projects[0];
   return {projects, active, mode};
 }

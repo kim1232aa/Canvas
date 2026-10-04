@@ -506,6 +506,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                         )}
                       </div>
                     </div>
+                    {node.values.retiredToolSelection && !value && <details className="rounded border border-amber-900/50 p-2 text-xs text-amber-200"><summary>已清除误放在底模位置的旧工具，请选择模型</summary><p className="mt-2">原始选择保留在工作流中；提示词、连线和 LoRA 没有替换。</p><pre className="mt-2 whitespace-pre-wrap break-all">{JSON.stringify(node.values.retiredToolSelection,null,2)}</pre></details>}
                     <ProviderModelSelect provider={currentProv} value={String(value || '')} onChange={next=>onUpdateValue(node.id,widget.name,next)} />
 
                     {/* Secondary Custom Path Input */}

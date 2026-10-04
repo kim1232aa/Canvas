@@ -1,3 +1,4 @@
+import {migrateTensorWorkflow} from './utils/legacyTensorWorkflow';
 import {ExecutionLog} from './components/ExecutionLog';
 import {explicitProvider,graphBranch,catalogModelTarget} from './utils/graphEditing';
 import {attachLoraToBranch,findLoraTarget} from './utils/attachLora';
@@ -1019,6 +1020,7 @@ export default function App() {
 
   // One-click load preset and immediately run workflow
   const handleLoadAndRunPreset = (preset: WorkflowPreset) => {
+    preset = migrateTensorWorkflow(preset);
     const newNodes = JSON.parse(JSON.stringify(preset.nodes));
     const newConns = JSON.parse(JSON.stringify(preset.connections));
     setNodes(newNodes);
@@ -1064,10 +1066,12 @@ export default function App() {
   // Civitai / Multi-Hub LoRA selection
   const handleSelectLoRAFromCivitai = (lora: {
     name: string;
+    provider?: string;
     civitaiId?: string;
     triggerWords: string;
     baseModel?: string;
   }) => {
+    if(lora.provider && lora.provider!=='civitai') {handleSelectLoRAWithBaseModel(lora);return;}
     // A remembered spatial selection must not redirect graph-mode mounting.
     if (canvasMode === 'spatial' && selectedFrameId) {
       const frame = spatialFrames.find((f) => f.id === selectedFrameId);
@@ -1324,6 +1328,7 @@ export default function App() {
 
   // Canvas Board Operations
   const handleSelectCanvas = (canvas: CanvasProject) => {
+    canvas = migrateTensorWorkflow(canvas);
     setCurrentCanvasId(canvas.id);
     setNodes(JSON.parse(JSON.stringify(canvas.nodes || [])));
     setConnections(JSON.parse(JSON.stringify(canvas.connections || [])));
@@ -1356,18 +1361,12 @@ export default function App() {
     let baseConns: Connection[] = [];
     let baseFrames: SpatialFrame[] = [];
 
-    if (templateType === 'flux') {
-      baseNodes = JSON.parse(JSON.stringify(WORKFLOW_PRESETS[0].nodes));
-      baseConns = JSON.parse(JSON.stringify(WORKFLOW_PRESETS[0].connections));
-      baseFrames = JSON.parse(JSON.stringify(WORKFLOW_PRESETS[0].spatialFrames || []));
-    } else if (templateType === 'ghibli') {
-      baseNodes = JSON.parse(JSON.stringify(WORKFLOW_PRESETS[1].nodes));
-      baseConns = JSON.parse(JSON.stringify(WORKFLOW_PRESETS[1].connections));
-      baseFrames = JSON.parse(JSON.stringify(WORKFLOW_PRESETS[1].spatialFrames || []));
-    } else if (templateType === 'wan') {
-      baseNodes = JSON.parse(JSON.stringify(WORKFLOW_PRESETS[2].nodes));
-      baseConns = JSON.parse(JSON.stringify(WORKFLOW_PRESETS[2].connections));
-      baseFrames = JSON.parse(JSON.stringify(WORKFLOW_PRESETS[2].spatialFrames || []));
+    const templateId = ({flux:'fal-flux-schnell-native',ghibli:'sdxl-anime-dual-lora',wan:'modelscope-wan-workflow'} as Record<string,string>)[templateType];
+    const template = WORKFLOW_PRESETS.find(p=>p.id===templateId);
+    if(template) {
+      baseNodes=structuredClone(template.nodes);
+      baseConns=structuredClone(template.connections);
+      baseFrames=structuredClone(template.spatialFrames || []);
     }
 
     const newCanvas: CanvasProject = {
@@ -1431,6 +1430,7 @@ export default function App() {
 
   // Workflow Preset Loading
   const handleLoadPreset = (preset: WorkflowPreset, mode: 'replace' | 'append') => {
+    preset = migrateTensorWorkflow(preset);
     if (mode === 'replace') {
       setNodes(JSON.parse(JSON.stringify(preset.nodes)));
       setConnections(JSON.parse(JSON.stringify(preset.connections)));

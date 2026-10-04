@@ -379,33 +379,16 @@ describe('Fal / Agnes / HF / NanoGPT grey on engine switch (schema-driven)', () 
     })).toMatchObject({ prompt: 'hi', width: 1024, height: 1024, seed: 1, loras: left, negative_prompt: 'blurry' });
   });
 
-  it('Tensor.Art banana2 greys width/height/seed/steps/cfg/loras; keeps stored LoRAs; omits from payload', () => {
-    const left = [{ name: 'koda.safetensors', modelStrength: 0.8 }];
-    for (const model of ['strong_text2image_nano_banana2']) {
-      expect(isCanvasFieldUnsupported('tensorart', model, 'loras'), `loras@${model}`).toBe(true);
-      expect(isCanvasFieldUnsupported('tensorart', model, 'width'), `w@${model}`).toBe(true);
-      expect(isCanvasFieldUnsupported('tensorart', model, 'height'), `h@${model}`).toBe(true);
-      expect(isCanvasFieldUnsupported('tensorart', model, 'seed'), `seed@${model}`).toBe(true);
-      expect(isCanvasFieldUnsupported('tensorart', model, 'steps'), `steps@${model}`).toBe(true);
-      expect(isCanvasFieldUnsupported('tensorart', model, 'cfg'), `cfg@${model}`).toBe(true);
+  it('Tensor model IDs retain LoRA and sampler parameters through the canvas payload', () => {
+    const model='613045163490732233';
+    const loras=[{name:'672797109289765558',modelStrength:0.8}];
+    for(const field of ['loras','width','height','seed','steps','cfg'] as const) {
+      expect(isCanvasFieldUnsupported('tensorart',model,field)).toBe(false);
     }
-    expect(sanitizeFrameLoras('tensorart', 'strong_text2image_nano_banana2', left)).toEqual(left);
-    const badge = isLoraUnsupportedOnEndpoint('tensorart', 'strong_text2image_nano_banana2');
-    expect(badge.unsupported).toBe(true);
-    expect(badge.message).toMatch(/该服务商不支持/);
-    const compat = validateLoraCompatibility('strong_text2image_nano_banana2', 'Flux.1 D', 'koda', 'tensorart');
-    expect(compat.isCompatible).toBe(false);
-    expect(compat.endpointUnsupported).toBe(true);
-    expect(omitUnsupportedGenerateFields('tensorart', 'strong_text2image_nano_banana2', {
-      prompt: 'hi',
-      width: 1024,
-      height: 1024,
-      seed: 1,
-      steps: 20,
-      cfg: 7,
-      loras: left,
-      negative_prompt: 'blurry',
-    })).toMatchObject({ prompt: 'hi', width: 1024, height: 1024, seed: 1, steps: 20, cfg: 7, loras: left, negative_prompt: 'blurry' });
+    expect(sanitizeFrameLoras('tensorart',model,loras)).toEqual(loras);
+    expect(isLoraUnsupportedOnEndpoint('tensorart',model).unsupported).toBe(false);
+    const input={prompt:'hi',width:1024,height:1024,seed:1,steps:20,cfg:7,loras,negative_prompt:'blurry'};
+    expect(omitUnsupportedGenerateFields('tensorart',model,input)).toEqual(input);
   });
 
   it('omitUnsupportedGenerateFields preserves all explicitly supplied values for runtime validation', () => {

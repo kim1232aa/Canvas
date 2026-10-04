@@ -898,7 +898,7 @@ Steps: 28, Sampler: DPM++ 2M Karras, CFG scale: 4.5, Seed: 136947637, Size: 1024
                     <span className="text-[11px] font-mono text-cyan-400">
                       {selectedEngine === 'civitai' && '🌟 Civitai 官方原生生成引擎 (最优适配)'}
                       {selectedEngine === 'fal' && '⚡ Fal.ai 极速云引擎 (官方端点)'}
-                      {selectedEngine === 'tensorart' && '🎨 Tensor.Art 官方原生引擎 (OpenWorks)'}
+                      {selectedEngine === 'tensorart' && '🎨 Tensor.Art 模型 API'}
                       {selectedEngine === 'nanogpt' && '🟢 NanoGPT 极速生图引擎 (按需即付)'}
                       {selectedEngine === 'video' && '🎬 AI Video 视频引擎 (MiniMax / Wan 2.1)'}
                       {selectedEngine === 'agnes' && '🚀 Agnes AI 2.5 Flash 极速生图'}

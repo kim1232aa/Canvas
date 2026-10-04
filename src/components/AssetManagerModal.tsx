@@ -656,7 +656,7 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
                 <option value="agnes" className="bg-[#1a1b24]">Agnes AI 2.5 Flash</option>
                 <option value="modelscope" className="bg-[#1a1b24]">ModelScope 魔搭</option>
                 <option value="huggingface" className="bg-[#1a1b24]">Hugging Face</option>
-                <option value="tensor" className="bg-[#1a1b24]">Tensor.Art (OpenWorks)</option>
+                <option value="tensor" className="bg-[#1a1b24]">Tensor.Art 模型 API</option>
                 <option value="sensenova" className="bg-[#1a1b24]">SenseNova 商汤</option>
                 <option value="nanogpt" className="bg-[#1a1b24]">NanoGPT</option>
                 <option value="gemini" className="bg-[#1a1b24]">Google Gemini</option>

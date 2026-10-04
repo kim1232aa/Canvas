@@ -371,6 +371,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                 </button>
               )}
             </div>
+            {params.retiredToolSelection && !params.checkpoint && <details className="text-xs text-amber-200"><summary>旧工具选择已清除，请选择模型</summary><pre className="whitespace-pre-wrap break-all">{JSON.stringify(params.retiredToolSelection,null,2)}</pre></details>}
             <ProviderModelSelect provider={params.targetProvider || ''} value={params.checkpoint || ''} onChange={checkpoint=>update({checkpoint})} />
             <p className="text-sm text-slate-400 break-all">提交服务商：{params.targetProvider || '未选择'} · 模型：{params.checkpoint || '未选择'}</p>
             {/* Custom Model ID input */}

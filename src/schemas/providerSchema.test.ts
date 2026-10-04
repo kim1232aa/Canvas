@@ -197,37 +197,11 @@ describe('agnes / huggingface / nanogpt schema unsupported fields', () => {
 });
 
 
-describe('tensorart OpenWorks schema unsupported fields', () => {
-  it('strong_text2image_nano_banana2: greys width/height/seed/steps/cfg/loras; keeps size/aspect_ratio', () => {
-    const id = 'strong_text2image_nano_banana2';
-    for (const f of ['width', 'height', 'seed', 'negative_prompt', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'loras'] as const) {
-      expect(getFieldSpec('tensorart', id, f)?.status, f).toBe('unsupported');
-    }
-    expect(getFieldSpec('tensorart', id, 'size')?.status).toBe('supported');
-    expect(getFieldSpec('tensorart', id, 'aspect_ratio')?.status).toBe('supported');
-    expect(resolveSchemaModelId('tensorart', '')).toBe('tensorart-model-api');
-    expect(resolveSchemaModelId('tensorart', 'foreign-civitai.safetensors')).toBe('foreign-civitai.safetensors');
-  });
-
-  it('oc_character_illustration: width/height supported; loras/seed/steps still unsupported', () => {
-    const id = 'oc_character_illustration';
-    expect(getFieldSpec('tensorart', id, 'width')?.status).toBe('supported');
-    expect(getFieldSpec('tensorart', id, 'height')?.status).toBe('supported');
-    expect(getFieldSpec('tensorart', id, 'loras')?.status).toBe('unsupported');
-    expect(getFieldSpec('tensorart', id, 'seed')?.status).toBe('unsupported');
-    expect(getFieldSpec('tensorart', id, 'steps')?.status).toBe('unsupported');
-  });
-});
-
-
-describe('sensenova schema — app has no text2img route', () => {
-  it('greys all canvas image fields including loras; reasoning fields use the verified SenseNova model', () => {
-    for (const id of ['sensenova-6.8-flash-lite']) {
-      for (const f of ['width', 'height', 'seed', 'negative_prompt', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'loras'] as const) {
-        expect(getFieldSpec('sensenova', id, f)?.status, `${id}.${f}`).toBe('unsupported');
-      }
-    }
-    expect(resolveSchemaModelId('sensenova', '')).toBe('sensenova-6.8-flash-lite');
-    expect(resolveSchemaModelId('sensenova', 'foreign.safetensors')).toBe('sensenova-6.8-flash-lite');
+describe('Tensor models exclude OpenWorks tools', () => {
+  it('only registers the TAMS model-job schema', () => {
+    expect(PROVIDER_SCHEMA.filter(m=>m.provider==='tensorart').map(m=>m.id)).toEqual(['tensorart-model-api']);
+    expect(getFieldSpec('tensorart','strong_text2image_nano_banana2','loras')).toBeUndefined();
+    expect(getFieldSpec('tensorart','tensorart-model-api','loras')?.status).toBe('supported');
+    expect(resolveSchemaModelId('tensorart','613045163490732233')).toBe('tensorart-model-api');
   });
 });
