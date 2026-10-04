@@ -6136,8 +6136,9 @@ app.post(['/api/nanogpt/generate', '/api/engine/nanogpt/generate'], async (req, 
     if (!capabilityResponse.ok) return res.status(capabilityResponse.status).json({error:`NanoGPT 模型能力查询失败 [${capabilityResponse.status}]`,details:await capabilityResponse.text()});
     const capabilities = await capabilityResponse.json();
     if (capabilities.id!==model || capabilities.endpoints?.length!==1) return res.status(400).json({error:'NanoGPT 模型能力元数据未能核实',details:capabilities});
-    let payload;
-    try {payload=buildNanoImagePayload(req.body,capabilities.endpoints[0]);} catch (error:any) {return res.status(400).json({error:error.message});}
+    let built;
+    try {built=buildNanoImagePayload(req.body,capabilities.endpoints[0]);} catch (error:any) {return res.status(400).json({error:error.message});}
+    const {payload,capabilityNotes}=built;
 
     // POST api.nano-gpt.com/api/v1/images
     const response = await upstreamFetch(
@@ -6190,6 +6191,8 @@ app.post(['/api/nanogpt/generate', '/api/engine/nanogpt/generate'], async (req, 
       provider: 'NanoGPT',
       model,
       historyItem: item,
+      capabilityNotes,
+      actualRequest: { endpoint: 'https://api.nano-gpt.com/api/v1/images', parameters: payload },
       ...await recordAdditionalImages(data.data || data.images || [],item),
     });
   } catch (error: any) {
