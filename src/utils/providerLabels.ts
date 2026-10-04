@@ -13,6 +13,9 @@ export const PROVIDER_TITLE_LABEL: Record<string, string> = {
   sensenova: 'SenseNova',
   tensorart: 'Tensor.Art',
   video: 'AI Video',
+  muapi: 'MuAPI',
+  wavespeed: 'WaveSpeed',
+  sogni: 'Sogni',
 };
 
 /** Closed-source / non-Comfy cloud engines that must not show leftover Comfy sampler badges. */
@@ -182,4 +185,3 @@ export function sanitizeFrameMarketingTitle(
   }
   return raw;
 }
-

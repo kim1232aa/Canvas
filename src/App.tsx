@@ -1,3 +1,4 @@
+import {ExecutionLog} from './components/ExecutionLog';
 import {explicitProvider,graphBranch,catalogModelTarget} from './utils/graphEditing';
 import {attachLoraToBranch,findLoraTarget} from './utils/attachLora';
 import {isInvalidTensorModel} from './utils/modelCatalog';
@@ -446,12 +447,13 @@ export default function App() {
 
       handleUpdateFrame(frameId, {
         executionProgress: 30,
-        executionStage: `正在上传配置并计算潜空间特征 (${p.targetProvider.toUpperCase()})...`,
+        executionStage: `正在整理请求参数 (${p.targetProvider.toUpperCase()})...`,
       });
 
       const grokOrOpenAi = p.targetProvider === 'openai_compat' || p.targetProvider === 'grok_compat';
       const grokish = p.targetProvider === 'grok_compat';
       const extraParams: Record<string, unknown> = {};
+      if(p.customParameters) extraParams.custom_parameters=JSON.parse(p.customParameters);
       if (p.size) extraParams.size = p.size;
       if (p.quality) extraParams.quality = p.quality;
       if (p.outputFormat) extraParams.output_format = p.outputFormat;
@@ -647,6 +649,7 @@ export default function App() {
     setNodes((prev) =>
       prev.map((n) => {
         if (n.id !== nodeId) return n;
+        if(widgetName==='targetProvider' && value!==n.values?.targetProvider) return {...n,values:{...n.values,targetProvider:value,provider:value,ckpt_name:'',model:'',model_endpoint:'',hf_provider:'',custom_parameters:undefined},state:'idle',errorMessage:undefined};
         // F4: AIVideoNode model select atomically syncs targetProvider + provider from schema option
         if (n.type === 'AIVideoNode' && widgetName === 'model') {
           return { ...n, values: applyAIVideoModelSelection(n.values || {}, value) };
@@ -820,7 +823,7 @@ export default function App() {
       setSpatialFrames((prev) =>
         prev.map((f) => {
           if (f.id !== activeFrameTargetId) return f;
-          const nextCheckpoint = widgetName === 'ckpt_name' ? value : f.params.checkpoint;
+          const nextCheckpoint = widgetName === 'targetProvider' ? '' : widgetName === 'ckpt_name' ? value : f.params.checkpoint;
           const nextProvider = widgetName === 'targetProvider' ? value : f.params.targetProvider;
           const nextLoras =
             widgetName === 'targetProvider' || widgetName === 'ckpt_name'
@@ -832,7 +835,7 @@ export default function App() {
             params: {
               ...f.params,
               ...(widgetName === 'ckpt_name' ? { checkpoint: value } : {}),
-              ...(widgetName === 'targetProvider' ? { targetProvider: value, loras: nextLoras } : {}),
+              ...(widgetName === 'targetProvider' ? { targetProvider: value,checkpoint:'',hfProvider:undefined,customParameters:undefined,loras:f.params.loras } : {}),
               ...(widgetName === 'ckpt_name' ? { loras: nextLoras } : {}),
               ...(widgetName === 'aspect_ratio' ? { aspectRatio: value || undefined } : {}),
               ...(widgetName === 'resolution' ? { resolution: value || undefined } : {}),
@@ -993,26 +996,24 @@ export default function App() {
     } catch (err: any) {
       console.error('Queue error:', err);
       setExecutionProgress(0);
-      setExecutionStatusText(err.message || '执行遇到错误');
+      setExecutionStatusText('请求失败，查看执行记录');
 
       // Prefer the Fal/engine node the user ran; never leave it idle with empty preview.
       const currentTargetId = targetNodeId || selectedNodeId;
       const errMsg = err.message || '执行遇到错误';
       const branch=graphBranch(activeNodes,activeConns,currentTargetId);
-      setNodes(prev=>prev.map(n=>branch.ids.has(n.id) ? {...n,state:'error' as const,executionProgress:0,errorMessage:errMsg} : n));
+      setNodes(prev=>prev.map(n=>branch.ids.has(n.id) ? {...n,state:n.id===branch.target?.id?'error' as const:'idle' as const,executionProgress:0,errorMessage:n.id===branch.target?.id?'请求失败，查看执行记录':undefined} : n));
 
       setToast({
         type: 'error',
-        title: '⚠️ 算力执行异常 (透明报告)',
-        message: err.message || '上游服务商返回错误，请检查对应服务商 Key 或模型状态',
+        title: '请求未完成',
+        message: `${String(err.message).split('\n')[0]}；完整响应见执行记录。`,
       });
       fetchHistory().then(setHistory).catch((err) => console.error('History refresh failed:', err.message));
     } finally {
-      setTimeout(() => {
-        setIsExecuting(false);
-        setExecutionProgress(0);
-        setExecutionStatusText('');
-      }, 1500);
+      setIsExecuting(false);
+      setExecutionProgress(0);
+      setExecutionStatusText('');
     }
   };
 
@@ -1744,6 +1745,8 @@ export default function App() {
     resolution: checkpointLoaderNode?.values?.resolution || inspectorFrame?.params?.resolution || undefined,
     shift: checkpointLoaderNode?.values?.shift ?? inspectorFrame?.params?.shift,
     randomSeed: checkpointLoaderNode?.values?.random_seed ?? inspectorFrame?.params?.randomSeed,
+    customParameters: checkpointLoaderNode?.values?.custom_parameters,
+    hfProvider: checkpointLoaderNode?.values?.hf_provider,
     galleryImages: checkpointLoaderNode?.values?.gallery_images ?? inspectorFrame?.params?.galleryImages,
   };
 
@@ -1751,6 +1754,7 @@ export default function App() {
 
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-[#0c0d11] select-none font-sans">
+      <ExecutionLog />
       {/* Top Header Bar */}
       <TopBar
         nodeCount={nodes.length}
@@ -2023,6 +2027,8 @@ export default function App() {
                       shift: newParams.shift,
                       random_seed: newParams.randomSeed,
                       gallery_images: newParams.galleryImages,
+                      hf_provider: newParams.hfProvider,
+                      custom_parameters: newParams.customParameters,
                       aspect_ratio: newParams.aspectRatio,
                       n: newParams.batchSize,
                       // Always track provider so title and schema selects stay in sync

@@ -1,3 +1,4 @@
+import {tracedFetch} from './executionTrace';
 import { ApiKeysState, CivitaiSearchResult, GenerationHistoryItem, ProviderId } from '../types/providers';
 
 const API_KEYS_STORAGE_KEY = 'comfycanvas_api_keys';
@@ -18,6 +19,9 @@ const EMPTY_KEYS: ApiKeysState = {
   openaiCompatBaseUrl: '',
   grokCompatKey: '',
   grokCompatBaseUrl: '',
+  muapiKey: '',
+  wavespeedKey: '',
+  sogniKey: '',
 };
 
 export const getStoredApiKeys = (): ApiKeysState => {
@@ -424,7 +428,7 @@ export const fetchLiveModels = async (
   if (keys.falKey) headers['x-fal-key'] = keys.falKey;
   if (keys.hfToken) headers['x-hf-token'] = keys.hfToken;
   if (keys.modelscopeToken) headers['x-modelscope-token'] = keys.modelscopeToken;
-  if (keys.modelscopeAiToken) headers['x-modelscope-site'] = 'ai';
+  if (keys.modelscopeAiToken) headers['x-modelscope-ai-token'] = keys.modelscopeAiToken;
   if (keys.nanogptKey) headers['x-nanogpt-key'] = keys.nanogptKey;
   if (keys.sensenovaKey) headers['x-sensenova-key'] = keys.sensenovaKey;
   if (keys.agnesKey) headers['x-agnes-key'] = keys.agnesKey;
@@ -436,7 +440,7 @@ export const fetchLiveModels = async (
   if (architecture) params.append('architecture', architecture);
   if (catalogTag) params.append('catalogTag',catalogTag);
 
-  const resp = await fetch(`/api/models?${params.toString()}`, { headers });
+  const resp = await tracedFetch(`/api/models?${params.toString()}`, { headers });
   
   if (!resp.ok) {
     const errorData = await resp.json().catch(() => ({ error: `HTTP ${resp.status}` }));
@@ -685,4 +689,3 @@ export const fetchCloudBalances = async (token?: string): Promise<Record<string,
     if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
     return resp.json();
 };
-

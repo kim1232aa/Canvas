@@ -27,11 +27,7 @@ describe('OpenAICompatDriver', () => {
   });
 
   it('转发 key/baseUrl 头；有真实 LoRA 时写入 loras，仍不写 seed/negative/steps/cfg', async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => ({ imageUrl: 'data:image/png;base64,aaa', model: 'gpt-image-2' }),
-    });
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ imageUrl: 'data:image/png;base64,aaa', model: 'gpt-image-2' }), { status: 200 }));
 
     const params: NormalizedGenerateParams = {
       prompt: 'tiny red square',
@@ -68,11 +64,7 @@ describe('OpenAICompatDriver', () => {
   });
 
   it('loras: [] 时请求体不含 loras 键', async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => ({ imageUrl: 'data:image/png;base64,aaa', model: 'gpt-image-2' }),
-    });
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ imageUrl: 'data:image/png;base64,aaa', model: 'gpt-image-2' }), { status: 200 }));
 
     await driver.generate(
       { prompt: 'tiny red square', model: 'gpt-image-2', loras: [] },
@@ -86,11 +78,7 @@ describe('OpenAICompatDriver', () => {
   });
 
   it('真实名为 "LoRA" 的条目 → 请求体保留 loras（不当作占位符剥离）', async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => ({ imageUrl: 'data:image/png;base64,aaa', model: 'gpt-image-2' }),
-    });
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ imageUrl: 'data:image/png;base64,aaa', model: 'gpt-image-2' }), { status: 200 }));
 
     await driver.generate(
       {
@@ -113,11 +101,7 @@ describe('OpenAICompatDriver', () => {
   });
 
   it('empty / whitespace-only LoRA name → 请求体不含 loras 键', async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => ({ imageUrl: 'data:image/png;base64,aaa', model: 'gpt-image-2' }),
-    });
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ imageUrl: 'data:image/png;base64,aaa', model: 'gpt-image-2' }), { status: 200 }));
 
     await driver.generate(
       {
@@ -134,11 +118,7 @@ describe('OpenAICompatDriver', () => {
   });
 
   it('省略 loras 时请求体不含 loras 键', async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => ({ imageUrl: 'data:image/png;base64,aaa', model: 'gpt-image-2' }),
-    });
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ imageUrl: 'data:image/png;base64,aaa', model: 'gpt-image-2' }), { status: 200 }));
 
     await driver.generate(
       { prompt: 'tiny red square', model: 'gpt-image-2' },
@@ -152,14 +132,10 @@ describe('OpenAICompatDriver', () => {
   });
 
   it('上游 400 moderation_blocked 必须带状态码与响应体', async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: false,
-      status: 400,
-      json: async () => ({ error: 'OpenAI 兼容中转失败 [400]: {"error":{"code":"moderation_blocked"}}' }),
-    });
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: 'OpenAI 兼容中转失败 [400]: {"error":{"code":"moderation_blocked"}}' }), { status: 400 }));
 
     await expect(
       driver.generate({ prompt: 'x', model: 'gpt-image-2' }, { openaiCompatKey: 'sk-test' }),
-    ).rejects.toThrow(/HTTP 400:.*moderation_blocked/);
+    ).rejects.toThrow(/HTTP 400[\s\S]*moderation_blocked/);
   });
 });

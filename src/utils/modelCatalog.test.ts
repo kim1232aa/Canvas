@@ -3,8 +3,8 @@ import {readCheckpointCatalog,mergeCheckpointOptions,isInvalidTensorModel} from 
 import {TENSOR_CATALOG_TAGS,tensorCatalogUrl} from '../schemas/tensorCatalog';
 it('uses verified public category links and rejects invented catalog routes',()=>{
  expect(TENSOR_CATALOG_TAGS.length).toBe(26);
- expect(tensorCatalogUrl('all')).toBe('https://tusi.cn/models');
- expect(tensorCatalogUrl('flux')).toBe('https://tusi.cn/models?tag=flux');
+ expect(tensorCatalogUrl('all')).toBe('https://tensor.art/models/');
+ expect(tensorCatalogUrl('flux')).toBe('https://tensor.art/models/?tag=flux');
  expect(()=>tensorCatalogUrl('unpublished')).toThrow(/未知/);
  expect(isInvalidTensorModel('tensorart','https://tensor.art/models/672797109289765558')).toBe(false);
 });

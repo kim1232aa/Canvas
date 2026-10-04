@@ -172,7 +172,7 @@ export interface ComfyParameters {
     triggerWords: string;
     civitaiId?: string;
   }>;
-  targetProvider: 'civitai' | 'fal' | 'agnes' | 'sensenova' | 'huggingface' | 'modelscope' | 'modelscope_ai' | 'nanogpt' | 'gemini' | 'video' | 'tensorart' | 'openai_compat' | 'grok_compat';
+  targetProvider: 'civitai' | 'fal' | 'agnes' | 'sensenova' | 'huggingface' | 'modelscope' | 'modelscope_ai' | 'nanogpt' | 'gemini' | 'video' | 'tensorart' | 'openai_compat' | 'grok_compat' | 'muapi' | 'wavespeed' | 'sogni';
   tensorArtInputs?: any[];
   videoDuration?: number;
   aspectRatio?: string;
@@ -183,7 +183,8 @@ export interface ComfyParameters {
   background?: string;
   moderation?: string;
   resolution?: string;
-  hfProvider?: 'hf-inference' | 'fal-ai';
+  customParameters?: string;
+  hfProvider?: 'hf-inference' | 'fal-ai' | 'z-image-space';
   videoFrames?: number;
   videoFps?: number;
   falModelName?: string;

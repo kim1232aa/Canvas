@@ -1,3 +1,4 @@
+import {tracedFetch as fetch} from '../../services/executionTrace';
 import { BaseEngineDriver } from '../BaseEngineDriver';
 import { NormalizedGenerateParams, NormalizedGenerateResult, ModelSpec } from '../types';
 
@@ -27,6 +28,7 @@ export class ModelScopeDriver extends BaseEngineDriver {
       },
       body: JSON.stringify({
         workflowSnapshot: params.workflowSnapshot,
+        custom_parameters: params.extraParams?.custom_parameters,
         prompt: params.prompt,
         negative_prompt: params.negative_prompt,
         model: params.model,

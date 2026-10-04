@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx server.ts",
+    "dev": "tsx watch --clear-screen=false server.ts",
     "build": "node hosting/build.mjs",
     "start": "tsx server.ts",
     "clean": "rm -rf dist server.js",
@@ -15,6 +15,7 @@
   "dependencies": {
     "@google/genai": "^2.4.0",
     "@huggingface/inference": "^4.13.30",
+    "@sogni-ai/sogni-protocol": "1.0.0-alpha.46",
     "@tailwindcss/vite": "^4.3.3",
     "@vitejs/plugin-react": "^6.1.1",
     "dotenv": "^17.2.3",

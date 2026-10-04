@@ -62,7 +62,7 @@ interface ModelHubModalProps {
 }
 
 export type CategoryFilter = 'all' | 'checkpoint' | 'lora' | 'video' | 'edit';
-export type ProviderTab = 'all' | 'civitai' | 'fal' | 'tensorart' | 'modelscope' | 'modelscope_ai' | 'huggingface' | 'nanogpt' | 'gemini';
+export type ProviderTab = 'all' | 'civitai' | 'fal' | 'tensorart' | 'modelscope' | 'modelscope_ai' | 'huggingface' | 'nanogpt' | 'gemini' | 'muapi' | 'wavespeed' | 'sogni';
 export type ModelSortOption = 'downloads' | 'rating' | 'likes' | 'name_asc' | 'name_desc' | 'bookmarked';
 
 const ARCHITECTURE_TAGS = [
@@ -268,7 +268,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       const targetCat = initialCategory || 'all';
-      const targetProvider = ['civitai','fal','tensorart','modelscope','modelscope_ai','huggingface','nanogpt','gemini'].includes(initialProvider || '') ? initialProvider as ProviderTab : activeProvider;
+      const targetProvider = ['civitai','fal','tensorart','modelscope','modelscope_ai','huggingface','nanogpt','gemini','muapi','wavespeed','sogni'].includes(initialProvider || '') ? initialProvider as ProviderTab : activeProvider;
       setActiveProvider(targetProvider);
       setActiveCategory(targetCat);
       loadModels(targetProvider, targetCat, query, sortOption, selectedArch, false);
@@ -454,6 +454,9 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
             { id: 'nanogpt', name: 'NanoGPT' },
             { id: 'tensorart', name: 'Tensor.Art / 吐司' },
             { id: 'gemini', name: 'Google Gemini' },
+            { id: 'muapi', name: 'MuAPI' },
+            { id: 'wavespeed', name: 'WaveSpeed' },
+            { id: 'sogni', name: 'Sogni' },
           ].map((tab) => {
             const isActive = activeProvider === tab.id;
             return (

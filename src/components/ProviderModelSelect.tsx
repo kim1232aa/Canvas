@@ -20,11 +20,11 @@ export function ProviderModelSelect({provider,value,onChange}:{provider:string;v
     if (!provider) {setLoading(false);return;}
     setLoading(true);
     const timer=setTimeout(()=>{
-      fetchLiveModels(provider,query,'Checkpoint','checkpoint','downloads','',1,100,'',provider==='tensorart'?tensorTag:'').then(data=>{
+      fetchLiveModels(provider,query,'Checkpoint','checkpoint','downloads','',1,50,'',provider==='tensorart'?tensorTag:'').then(data=>{
         if(id!==request.current)return;
         const result=readCheckpointCatalog(data,provider);
         setLive(result.options);setPage(result.page);setCursor(result.nextCursor);setHasMore(result.hasMore);
-      }).catch(error=>{if(id===request.current)setError(error.message);}).finally(()=>{if(id===request.current)setLoading(false);});
+      }).catch(error=>{if(id===request.current)setError(String(error.message).split("\n")[0]);}).finally(()=>{if(id===request.current)setLoading(false);});
     },query ? 300 : 0);
     return ()=>{clearTimeout(timer);++request.current;};
   },[provider,query,reload,tensorTag]);
@@ -32,10 +32,10 @@ export function ProviderModelSelect({provider,value,onChange}:{provider:string;v
     if(loading||!hasMore)return;
     const id=request.current;setLoading(true);setError('');
     try {
-      const result=readCheckpointCatalog(await fetchLiveModels(provider,query,'Checkpoint','checkpoint','downloads',cursor,page+1,100),provider);
+      const result=readCheckpointCatalog(await fetchLiveModels(provider,query,'Checkpoint','checkpoint','downloads',cursor,page+1,50,'',provider==='tensorart'?tensorTag:''),provider);
       if(id!==request.current)return;
       setLive(old=>[...old,...result.options]);setPage(page+1);setCursor(result.nextCursor);setHasMore(result.hasMore);
-    }catch(error:any){if(id===request.current)setError(error.message);}finally{if(id===request.current)setLoading(false);}
+    }catch(error:any){if(id===request.current)setError(String(error.message).split("\n")[0]);}finally{if(id===request.current)setLoading(false);}
   };
   const all=mergeCheckpointOptions(provider,live);
   const options=query ? all.filter(row=>`${row.label} ${row.value}`.toLowerCase().includes(query.toLowerCase())) : all;
@@ -53,7 +53,7 @@ export function ProviderModelSelect({provider,value,onChange}:{provider:string;v
       </optgroup>
     </select>
     <div className="flex items-center justify-between gap-2 text-xs text-slate-400" role="status">
-      <span>{loading ? '正在查询模型目录…' : live.length ? `目录已返回 ${live.length} 个模型` : error ? '目录查询失败；仅显示快捷项' : query ? '未找到匹配模型' : '当前目录页暂无底模；可切换分类或输入 ID'}</span>
+      <span>{loading ? '正在查询模型目录…' : live.length ? `目录已返回 ${live.length} 个模型` : error ? '目录查询失败' : query ? '未找到匹配模型' : '当前目录页暂无底模；可切换分类或输入 ID'}</span>
       <button type="button" disabled={loading} onClick={()=>setReload(x=>x+1)} className="text-cyan-300 disabled:opacity-40">刷新目录</button>
     </div>
     {hasMore && <button type="button" disabled={loading} onClick={loadMore} className="w-full rounded-lg border border-cyan-900 p-2 text-sm text-cyan-300 disabled:opacity-40">加载更多模型</button>}

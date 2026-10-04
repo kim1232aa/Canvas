@@ -7,7 +7,6 @@ import { NormalizedGenerateParams } from '../engines/types';
 import {
   findSoleCloudEngine,
   isCloudEngineNode,
-  isCanvasFieldUnsupported,
   omitUnsupportedGenerateFields,
   resolveGenerateLorasPayload,
 } from './resolveCheckpoint';
@@ -34,7 +33,7 @@ export interface WorkflowExtraction {
     triggerWords: string;
     civitaiId?: string;
   }>;
-  targetProvider: 'civitai' | 'fal' | 'agnes' | 'sensenova' | 'huggingface' | 'modelscope' | 'modelscope_ai' | 'nanogpt' | 'gemini' | 'video' | 'tensorart' | 'openai_compat' | 'grok_compat';
+  targetProvider: string;
   videoProvider?: string;
   isVideo?: boolean;
   videoDuration?: number;
@@ -53,6 +52,7 @@ export interface WorkflowExtraction {
   shift?: number;
   randomSeed?: boolean;
   galleryImages?: unknown[];
+  customParameters?: string;
   hfProvider?: string;
   initImageUrl?: string;
   saveImageNodeId?: string;
@@ -490,6 +490,7 @@ export function extractWorkflowParameters(
   let shift: number | undefined;
   let randomSeed: boolean | undefined;
   let galleryImages: unknown[] | undefined;
+  let customParameters: string | undefined;
   let hfProvider: string | undefined;
   let width: number | undefined;
   let height: number | undefined;
@@ -587,6 +588,7 @@ export function extractWorkflowParameters(
     shift = numOrUndef(execNode.values.shift);
     randomSeed = typeof execNode.values.random_seed === 'boolean' ? execNode.values.random_seed : undefined;
     galleryImages = Array.isArray(execNode.values.gallery_images) ? execNode.values.gallery_images : undefined;
+    customParameters=execNode.values.custom_parameters;
     hfProvider = execNode.values.hf_provider || undefined;
     aspectRatio = execNode.values.aspect_ratio || execNode.values.aspectRatio || undefined;
     if (execNode.values.n != null || execNode.values.batch_size != null || execNode.values.batchSize != null) {
@@ -630,6 +632,7 @@ export function extractWorkflowParameters(
     shift = numOrUndef(ckpt.values.shift);
     randomSeed = typeof ckpt.values.random_seed === 'boolean' ? ckpt.values.random_seed : undefined;
     galleryImages = Array.isArray(ckpt.values.gallery_images) ? ckpt.values.gallery_images : undefined;
+    customParameters=ckpt.values.custom_parameters;
     hfProvider = ckpt.values.hf_provider || undefined;
     falModelName=ckpt.values.fal_model_name || undefined;
     aspectRatio = ckpt.values.aspect_ratio || ckpt.values.aspectRatio || aspectRatio;
@@ -705,6 +708,7 @@ export function extractWorkflowParameters(
     shift,
     randomSeed,
     galleryImages,
+    customParameters,
     hfProvider,
     initImageUrl,
     saveImageNodeId,
@@ -760,32 +764,8 @@ export async function executeWorkflow(
         n.id === params.executingNodeId
     );
 
-    // Stage 1: Checkpoint Model Setup
-    if (ckptNodes.length > 0) {
-      onProgress?.(10, `[1/5] 正在调度底模架构权重 (${params.targetProvider.toUpperCase()}: ${params.checkpointModel.split('/').pop()})...`);
-      ckptNodes.forEach((n) => onNodeStateChange(n.id, 'running', 60));
-      await new Promise((r) => setTimeout(r, 120));
-      ckptNodes.forEach((n) => onNodeStateChange(n.id, 'success', 100));
-    }
-
-    // Stage 2: CLIP Text Embeddings
-    if (clipNodes.length > 0) {
-      onProgress?.(25, `[2/5] 正在整理已连接的提示词...`);
-      clipNodes.forEach((n) => onNodeStateChange(n.id, 'running', 70));
-      await new Promise((r) => setTimeout(r, 100));
-      clipNodes.forEach((n) => onNodeStateChange(n.id, 'success', 100));
-    }
-
-    // Stage 3: LoRA & Latent Initialization
-    if (loraNodes.length > 0 || latentNodes.length > 0) {
-      const loraDesc = params.loras.length > 0 ? `已装载 ${params.loras.length} 组 LoRA 适配层` : '纯底模无外挂权重';
-      onProgress?.(40, `[3/5] 正在整理 LoRA 与尺寸请求参数 (${loraDesc})...`);
-      loraNodes.forEach((n) => onNodeStateChange(n.id, 'running', 80));
-      latentNodes.forEach((n) => onNodeStateChange(n.id, 'running', 80));
-      await new Promise((r) => setTimeout(r, 100));
-      loraNodes.forEach((n) => onNodeStateChange(n.id, 'success', 100));
-      latentNodes.forEach((n) => onNodeStateChange(n.id, 'success', 100));
-    }
+    onProgress?.(15, `已整理工作流参数：${params.targetProvider} / ${params.checkpointModel}；${params.loras.length} 个 LoRA 请求参数，尚未提交上游`);
+    [...ckptNodes,...clipNodes,...loraNodes,...latentNodes].forEach(n=>onNodeStateChange(n.id,'idle',0,undefined,''));
 
     let resultMedia = '';
     let usedProvider: string = params.targetProvider;
@@ -845,14 +825,11 @@ export async function executeWorkflow(
     const grokish = params.targetProvider === 'grok_compat' || params.videoProvider === 'grok_compat';
     const grokOrOpenAi = params.targetProvider === 'openai_compat' || params.targetProvider === 'grok_compat' || params.videoProvider === 'grok_compat';
     const extraParams: Record<string, unknown> = {
-      ...(params.sampler !== undefined && !isCanvasFieldUnsupported(engProv, engModel, 'sampler')
-        ? { sampler_name: params.sampler }
-        : {}),
-      ...(params.scheduler !== undefined && !isCanvasFieldUnsupported(engProv, engModel, 'scheduler')
-        ? { scheduler: params.scheduler }
-        : {}),
+      ...(params.sampler !== undefined ? { sampler_name: params.sampler } : {}),
+      ...(params.scheduler !== undefined ? { scheduler: params.scheduler } : {}),
       ...(params.imageSize ? { image_size: params.imageSize } : {}),
     };
+    if(params.customParameters) extraParams.custom_parameters=JSON.parse(params.customParameters);
     if (params.size) extraParams.size = params.size;
     if (params.quality) extraParams.quality = params.quality;
     if (params.outputFormat) extraParams.output_format = params.outputFormat;
@@ -922,7 +899,7 @@ export async function executeWorkflow(
       const elapsedSec = Math.floor((Date.now() - startTime) / 1000);
       onProgress?.(
         65,
-        `[4/5] ${params.targetProvider.toUpperCase()} 云端计算中 (已耗时 ${elapsedSec}s，等待产物就绪)...`
+        `[4/5] ${params.targetProvider.toUpperCase()} 请求进行中 (已耗时 ${elapsedSec}s，等待上游确认状态)...`
       );
     }, 1000);
 
@@ -941,10 +918,8 @@ export async function executeWorkflow(
     // Stage 5: VAE Decode and Final Save
     ksamplerNodes.forEach((n) => onNodeStateChange(n.id, 'success', 100));
     if (vaeNodes.length > 0) {
-      onProgress?.(92, `[5/5] VAE 潜空间解码与图像产物回传...`);
-      vaeNodes.forEach((n) => onNodeStateChange(n.id, 'running', 80));
-      await new Promise((r) => setTimeout(r, 120));
-      vaeNodes.forEach((n) => onNodeStateChange(n.id, 'success', 100));
+      onProgress?.(92, `[5/5] 已收到上游图片；整理输出...`);
+      vaeNodes.forEach((n) => onNodeStateChange(n.id, 'idle', 0));
     }
 
     saveNodes.forEach((n) => onNodeStateChange(n.id, 'success', 100, resultMedia));
@@ -964,7 +939,7 @@ export async function executeWorkflow(
     onProgress?.(0, `执行失败: ${error.message}`);
     const msg = error?.message || '执行遇到错误';
     if (targetErrorNodeId) executingIds.add(targetErrorNodeId);
-    for(const id of executingIds)onNodeStateChange(id,'error',0,undefined,msg);
+    for(const id of executingIds)onNodeStateChange(id,id===targetErrorNodeId?'error':'idle',0,undefined,id===targetErrorNodeId?'请求失败，查看执行记录':'');
     throw error;
   }
 }

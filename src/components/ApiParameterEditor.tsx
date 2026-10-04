@@ -1,0 +1,20 @@
+import React from 'react';
+import {getStoredApiKeys} from '../services/api';
+import {tracedFetch} from '../services/executionTrace';
+export function ApiParameterEditor({provider,model,value,onChange}:{provider:string;model:string;value?:string;onChange:(value:string)=>void}){
+ const [schema,setSchema]=React.useState<any>(); const [error,setError]=React.useState('');
+ const load=async()=>{setError('');try{const r=await tracedFetch(`/api/model-schema?provider=${encodeURIComponent(provider)}&model=${encodeURIComponent(model)}`,{headers:(()=>{const keys:any=getStoredApiKeys();const field=({fal:'falKey',muapi:'muapiKey',wavespeed:'wavespeedKey',sogni:'sogniKey'} as any)[provider];return keys[field]?{['x-'+provider+'-key']:keys[field]}:{};})()});setSchema(await r.json());}catch(e:any){setError(String(e.message).split('\n')[0]);}};
+ let invalid='';try{if(value){const p=JSON.parse(value);if(!p||Array.isArray(p)||typeof p!=='object')invalid='请求参数必须为 JSON 对象';}}catch{invalid='JSON 尚未完成，提交前请修正';}
+ return <details className="rounded-xl border border-slate-700 bg-[#111620] p-3 text-sm text-slate-200" onPointerDown={e=>e.stopPropagation()} onMouseDown={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()}>
+  <summary className="cursor-pointer">API 参数 · JSON / Schema</summary>
+  <p className="my-3 text-slate-400">这里的字段会覆盖适配后的同名请求参数并直接提交。空值也保留。实际请求与响应见执行记录。</p>
+  {provider==='sogni'&&<p className="my-2 text-slate-400">图生图通过工作流 media_references 引用图片。外层参数可写在 _canvas.workflowOptions 中；需要上游能访问的图片 URL。LoRA 使用官方资源 ID 与 loraStrengths，图片生成成功不代表 LoRA 已生效。</p>}
+  <textarea aria-label="自定义 API 参数 JSON" value={value || ''} onChange={e=>onChange(e.target.value)} placeholder={'{\n  "seed": 42\n}'} spellCheck={false} className="w-full min-h-32 rounded-lg border border-slate-600 bg-black/30 p-3 font-mono text-sm" />
+  {['muapi','wavespeed','sogni'].includes(provider)&&<label className="my-2 flex items-center gap-2"><input type="checkbox" aria-label="仅提交 JSON 与提示词" checked={(()=>{try{return JSON.parse(value || '{}')._canvas?.parametersOnly===true}catch{return false}})()} onChange={e=>{try{const p=JSON.parse(value || '{}');p._canvas={...p._canvas,parametersOnly:e.target.checked};onChange(JSON.stringify(p,null,2));}catch{setError('请先修正 JSON')}}}/>仅提交 JSON 与提示词（其他画布参数与 LoRA 节点不加入请求）</label>}
+  {['muapi','wavespeed','sogni'].includes(provider)&&<label className="my-2 flex items-center gap-2"><input type="checkbox" aria-label="画布参数匹配官方 Schema" checked={(()=>{try{return JSON.parse(value || '{}')._canvas?.schemaFieldsOnly!==false}catch{return true}})()} onChange={e=>{try{const p=JSON.parse(value || '{}');p._canvas={...p._canvas,schemaFieldsOnly:e.target.checked};onChange(JSON.stringify(p,null,2));}catch{setError('请先修正 JSON')}}}/>画布参数只提交官方 Schema 声明的字段；未提交项列入执行记录。手写 JSON 原样提交，LoRA 保留。</label>}
+  {invalid&&<p role="alert" className="text-amber-200">{invalid}</p>}
+  <button type="button" onClick={load} className="mt-3 text-cyan-300">读取所选模型的官方 Schema</button>
+  {error&&<p role="alert" className="text-rose-300 mt-2">{error} · 完整错误见执行记录</p>}
+  {schema&&<div className="mt-3"><p className="text-slate-400 break-all">来源：{schema.sourceUrl || schema.source || schema.endpoint}</p>{schema.inputSchema?.properties && <div className="flex flex-wrap gap-2 my-2">{Object.entries(schema.inputSchema.properties).filter(([key])=>!['model','provider','endpoint','inference_provider'].includes(key)).map(([key,spec]:[string,any])=><button key={key} type="button" title={spec.description} onClick={()=>{try{const body=JSON.parse(value || '{}');if(!(key in body))body[key]=spec.default ?? (spec.type==='boolean'?false:spec.type==='number'||spec.type==='integer'?0:spec.type==='array'?[]:spec.type==='object'?{}:'');onChange(JSON.stringify(body,null,2));}catch{setError('先修正 JSON，再添加 Schema 字段');}}} className="rounded border border-slate-600 px-2 py-1 text-cyan-200">{key}</button>)}</div>}<pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(schema,null,2)}</pre></div>}
+ </details>;
+}

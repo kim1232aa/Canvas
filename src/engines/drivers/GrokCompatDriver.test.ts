@@ -21,11 +21,7 @@ describe('GrokCompatDriver', () => {
   });
 
   it('图像请求不转发 seed/negative/steps/cfg/loras/width/height', async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => ({ imageUrl: 'https://cdn.example/a.png', model: 'grok-imagine-image' }),
-    });
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ imageUrl: 'https://cdn.example/a.png', model: 'grok-imagine-image' }), { status: 200 }));
 
     const params: NormalizedGenerateParams = {
       prompt: 'cat',
@@ -61,11 +57,7 @@ describe('GrokCompatDriver', () => {
   });
 
   it('视频模型走 /api/video/generate 且 provider=grok_compat，不静默换商', async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => ({ videoUrl: 'https://relay.example/v1/videos/1/content', model: 'grok-imagine-video' }),
-    });
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ videoUrl: 'https://relay.example/v1/videos/1/content', model: 'grok-imagine-video' }), { status: 200 }));
 
     await driver.generate(
       { prompt: 'orbit', model: 'grok-imagine-video', videoDuration: 4, aspectRatio: '16:9' },
@@ -81,16 +73,12 @@ describe('GrokCompatDriver', () => {
   });
 
   it('HTTP 503 grok_media_no_eligible_account 原样抛出，不换 provider', async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: false,
-      status: 503,
-      json: async () => ({
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({
         error: 'Grok 兼容中转失败 [503]: {"error":{"code":"grok_media_no_eligible_account"}}',
-      }),
-    });
+      }), { status: 503 }));
 
     await expect(
       driver.generate({ prompt: 'x', model: 'grok-imagine-image' }, { grokCompatKey: 'sk-grok' }),
-    ).rejects.toThrow(/HTTP 503:.*grok_media_no_eligible_account/);
+    ).rejects.toThrow(/HTTP 503[\s\S]*grok_media_no_eligible_account/);
   });
 });

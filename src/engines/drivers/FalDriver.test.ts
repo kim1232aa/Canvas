@@ -15,15 +15,11 @@ describe('FalDriver LoRA 校验与错误处理', () => {
   });
 
   it('fal-ai/flux/schnell + LoRA POSTs /api/fal/generate and surfaces HTTP 400 from the server', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: false,
-      status: 400,
-      json: async () => ({
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
         error: '该服务商不支持（Fal.ai 端点 fal-ai/flux/schnell 的官方 schema 无 loras 字段）',
         unsupported: ['loras'],
         endpoint: 'fal-ai/flux/schnell',
-      }),
-    });
+      }), { status: 400 }));
     globalThis.fetch = fetchMock;
 
     const params: NormalizedGenerateParams = {
@@ -40,7 +36,7 @@ describe('FalDriver LoRA 校验与错误处理', () => {
     };
 
     await expect(driver.generate(params, { falKey: 'test-key' })).rejects.toThrow(
-      /HTTP 400: 该服务商不支持/
+      /HTTP 400[\s\S]*该服务商不支持/
     );
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -55,15 +51,11 @@ describe('FalDriver LoRA 校验与错误处理', () => {
 
   it('若到达服务端并返回 400，前端必须暴露 HTTP 状态码与 reason，不许吞错', async () => {
     // 模拟服务端返回 400
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: false,
-      status: 400,
-      json: async () => ({
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({
         error: '该服务商不支持（Fal.ai 端点 fal-ai/flux/schnell 的官方 schema 无 loras 字段）',
         unsupported: ['loras'],
         endpoint: 'fal-ai/flux/schnell',
-      }),
-    });
+      }), { status: 400 }));
 
     // 直接调用 executeGenerate（绕过 BaseEngineDriver 前置拦截），模拟穿透至服务端后的场景
     const params: NormalizedGenerateParams = {
@@ -79,20 +71,16 @@ describe('FalDriver LoRA 校验与错误处理', () => {
     };
 
     await expect(driver.generate(params, { falKey: 'test-key' })).rejects.toThrow(
-      /HTTP 400: 该服务商不支持/
+      /HTTP 400[\s\S]*该服务商不支持/
     );
   });
 
   it('支持 LoRA 的端点（如 fal-ai/flux-lora）正常发起请求', async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => ({
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({
         imageUrl: 'https://fal.media/files/test.png',
         model: 'fal-ai/flux-lora',
         seed: 42,
-      }),
-    });
+      }), { status: 200 }));
 
     const params: NormalizedGenerateParams = {
       prompt: 'a test image',

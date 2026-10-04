@@ -20,7 +20,7 @@ export const WORKFLOW_PRESETS: WorkflowPreset[] = [
         width: 280,
         inputs: [],
         outputs: NODE_DEFINITIONS['CheckpointLoaderSimple'].outputs,
-        values: { ckpt_name: 'Tongyi-MAI/Z-Image-Turbo', targetProvider: 'huggingface', resolution: '1024x1024 ( 1:1 )', shift: 3, random_seed: false, gallery_images: [] },
+        values: { ckpt_name: 'Tongyi-MAI/Z-Image-Turbo', targetProvider: 'huggingface', hf_provider:'z-image-space', resolution: '1024x1024 ( 1:1 )', shift: 3, random_seed: false, gallery_images: [] },
       },
       {
         id: 'node-public-zimg-2',
@@ -253,7 +253,7 @@ export const WORKFLOW_PRESETS: WorkflowPreset[] = [
     provider: '阿里魔搭 ModelScope.ai',
     previewImage: 'https://www.modelscope.cn/models/Tongyi-MAI/Z-Image-Turbo/resolve/master/assets/showcase_realistic.png',
     tags: ['ModelScope.ai', 'Z-Image-Turbo', 'laonansheng', '美胸年美', '139784521', '国际站'],
-    description: '直连阿里魔搭国际站 (modelscope.ai) 官方端点：底模挂载 Tongyi-MAI/Z-Image-Turbo，LoRA 挂载 laonansheng/meixiong-niannian-Z-Image-Turbo-Tongyi-MAI-v1.0，提示词与参数 100% 对齐 Civitai 139784521。',
+    description: '直连阿里魔搭国际站 (modelscope.ai) 官方端点：底模挂载 Tongyi-MAI/Z-Image-Turbo，LoRA 挂载 laonansheng/meixiong-niannian-Z-Image-Turbo-Tongyi-MAI-v1.0，请求参数保存在工作流中，实际能力以上游结果为准。',
     nodes: [
       {
         id: 'node-msai-zimg-1',

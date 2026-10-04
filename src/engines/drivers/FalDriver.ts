@@ -1,3 +1,4 @@
+import {tracedFetch as fetch} from '../../services/executionTrace';
 import { BaseEngineDriver } from '../BaseEngineDriver';
 import { NormalizedGenerateParams, NormalizedGenerateResult, ModelSpec } from '../types';
 
@@ -36,6 +37,7 @@ export class FalDriver extends BaseEngineDriver {
         headers: { 'Content-Type': 'application/json', ...keyHeader },
         body: JSON.stringify({
         workflowSnapshot: params.workflowSnapshot,
+        custom_parameters: params.extraParams?.custom_parameters,
           prompt: params.prompt,
           model: finalModel,
           provider: 'fal',
@@ -84,6 +86,7 @@ export class FalDriver extends BaseEngineDriver {
       headers: { 'Content-Type': 'application/json', ...keyHeader },
       body: JSON.stringify({
         workflowSnapshot: params.workflowSnapshot,
+        custom_parameters: params.extraParams?.custom_parameters,
         prompt: params.prompt,
         negative_prompt: params.negative_prompt,
         model: finalModel,

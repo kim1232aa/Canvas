@@ -1,3 +1,4 @@
+import {tracedFetch as fetch} from '../../services/executionTrace';
 import { BaseEngineDriver } from '../BaseEngineDriver';
 import { NormalizedGenerateParams, NormalizedGenerateResult, ModelSpec } from '../types';
 

@@ -30,15 +30,30 @@ export function isAlreadyDurableHistoryUrl(url: string): boolean {
 
 export type PersistRemoteResult =
   | { ok: true; dataUrl: string }
-  | { ok: false; status?: number; message: string };
+  | {
+      ok: false;
+      status?: number;
+      message: string;
+      rawResponse?: string;
+      errorSource: 'local' | 'network' | 'upstream';
+      stack?: string;
+      cause?: { name?: string; message: string; code?: string };
+    };
+
+function errorCause(error: unknown) {
+  if (!(error instanceof Error)) return { message: String(error) };
+  const code = (error as NodeJS.ErrnoException).code;
+  return { name: error.name, message: error.message, ...(code ? { code } : {}) };
+}
 
 /**
- * Download remote media into a data: URL. Surfaces HTTP status + body snippet on failure
+ * Download remote media into a data: URL. Surfaces the full HTTP status + body on failure
  * so generate handlers can fail closed instead of storing expiring https URLs.
  */
 export async function persistRemoteUrlAsDataUrlResult(remoteUrl: string): Promise<PersistRemoteResult> {
   if (!remoteUrl || typeof remoteUrl !== 'string') {
-    return { ok: false, message: 'empty or invalid remote URL' };
+    const error = new Error('empty or invalid remote URL');
+    return { ok: false, message: error.message, errorSource: 'local', stack: error.stack };
   }
   if (remoteUrl.startsWith('data:')) {
     return { ok: true, dataUrl: remoteUrl };
@@ -46,25 +61,59 @@ export async function persistRemoteUrlAsDataUrlResult(remoteUrl: string): Promis
   try {
     const resp = await fetch(remoteUrl);
     if (!resp.ok) {
-      const body = await resp.text().catch(() => '');
-      const snippet = body ? body.slice(0, 500) : '';
-      const message = snippet
-        ? `HTTP ${resp.status}: ${snippet}`
-        : `HTTP ${resp.status}`;
-      console.error(`[persistRemoteUrlAsDataUrl] ${message} for ${remoteUrl.slice(0, 120)}`);
-      return { ok: false, status: resp.status, message };
+      try {
+        const rawResponse = await resp.text();
+        const message = rawResponse ? `HTTP ${resp.status}: ${rawResponse}` : `HTTP ${resp.status}`;
+        return {
+          ok: false,
+          status: resp.status,
+          message,
+          rawResponse,
+          errorSource: 'upstream',
+          stack: new Error(message).stack,
+        };
+      } catch (cause) {
+        const error = new Error(`HTTP ${resp.status}: failed to read the complete response body`, { cause });
+        return {
+          ok: false,
+          status: resp.status,
+          message: error.message,
+          errorSource: 'upstream',
+          stack: error.stack,
+          cause: errorCause(cause),
+        };
+      }
     }
-    const buf = Buffer.from(await resp.arrayBuffer());
+    let buf: Buffer;
+    try {
+      buf = Buffer.from(await resp.arrayBuffer());
+    } catch (cause) {
+      const error = new Error(`HTTP ${resp.status}: failed to read the complete media response`, { cause });
+      return {
+        ok: false,
+        status: resp.status,
+        message: error.message,
+        rawResponse: '',
+        errorSource: 'upstream',
+        stack: error.stack,
+        cause: errorCause(cause),
+      };
+    }
     if (!buf.length) {
-      console.error('[persistRemoteUrlAsDataUrl] empty body');
-      return { ok: false, message: 'empty body' };
+      const error = new Error('empty body');
+      return { ok: false, status: resp.status, message: error.message, rawResponse: '', errorSource: 'upstream', stack: error.stack };
     }
     const mimeType = guessMimeFromUrl(remoteUrl, resp.headers.get('content-type'));
     return { ok: true, dataUrl: bufferToDataUrl(buf, mimeType) };
   } catch (err: any) {
     const message = err?.message || String(err);
-    console.error(`[persistRemoteUrlAsDataUrl] ${message}`);
-    return { ok: false, message };
+    return {
+      ok: false,
+      message,
+      errorSource: 'network',
+      stack: err instanceof Error ? err.stack : undefined,
+      cause: errorCause(err),
+    };
   }
 }
 
@@ -156,13 +205,17 @@ export function isUndersizedHistoryImageDataUrl(url: string): boolean {
  */
 export async function requireDurableHistoryMediaUrl(remoteUrl: string): Promise<PersistRemoteResult> {
   if (!remoteUrl || typeof remoteUrl !== 'string') {
-    return { ok: false, message: 'empty or invalid media URL' };
+    const error = new Error('empty or invalid media URL');
+    return { ok: false, message: error.message, errorSource: 'local', stack: error.stack };
   }
   if (isAlreadyDurableHistoryUrl(remoteUrl)) {
     if (isUndersizedHistoryImageDataUrl(remoteUrl)) {
+      const error = new Error('image is at most 2×2 pixels — not a durable history thumbnail');
       return {
         ok: false,
-        message: 'image is at most 2×2 pixels — not a durable history thumbnail',
+        message: error.message,
+        errorSource: 'local',
+        stack: error.stack,
       };
     }
     return { ok: true, dataUrl: remoteUrl };
@@ -172,6 +225,8 @@ export async function requireDurableHistoryMediaUrl(remoteUrl: string): Promise<
     return {
       ok: false,
       message: 'image is at most 2×2 pixels — not a durable history thumbnail',
+      errorSource: 'local',
+      stack: new Error('image is at most 2×2 pixels — not a durable history thumbnail').stack,
     };
   }
   return persisted;

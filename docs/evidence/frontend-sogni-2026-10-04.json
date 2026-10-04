@@ -1,0 +1,366 @@
+{
+  "source": "observed frontend DOM after clicking Run workflow",
+  "outcome": "network-blocked; no generated image",
+  "clientRequest": {
+    "model": "krea-2-turbo",
+    "prompt": "A highly textured, impressionistic digital painting of a solitary young woman crouching under an umbrella on a wet city street; black cat nearby, reflections in puddles, cool palette, thick brushstrokes, cinematic lighting, 8k",
+    "steps": 8,
+    "seed": 42,
+    "loras": [],
+    "custom_parameters": {
+      "seed": 42,
+      "loras": [
+        "krea2-realism"
+      ],
+      "loraStrengths": [
+        0.8
+      ]
+    },
+    "workflowSnapshot": {
+      "format": "comfycanvas",
+      "version": 1,
+      "nodes": [
+        {
+          "id": "node-public-zimg-1",
+          "type": "CheckpointLoaderSimple",
+          "title": "加载底模 (Z-Image-Turbo)",
+          "pos": {
+            "x": 50,
+            "y": 150
+          },
+          "width": 280,
+          "inputs": [],
+          "outputs": [
+            {
+              "id": "MODEL",
+              "name": "MODEL",
+              "type": "MODEL",
+              "label": "MODEL"
+            },
+            {
+              "id": "CLIP",
+              "name": "CLIP",
+              "type": "CLIP",
+              "label": "CLIP"
+            },
+            {
+              "id": "VAE",
+              "name": "VAE",
+              "type": "VAE",
+              "label": "VAE"
+            }
+          ],
+          "values": {
+            "ckpt_name": "krea-2-turbo",
+            "targetProvider": "sogni",
+            "hf_provider": "",
+            "resolution": "1024x1024 ( 1:1 )",
+            "shift": 3,
+            "random_seed": false,
+            "gallery_images": [],
+            "provider": "sogni",
+            "model": "",
+            "model_endpoint": "",
+            "custom_parameters": "{\n  \"seed\": 42,\n  \"loras\": [\"krea2-realism\"],\n  \"loraStrengths\": [0.8]\n}"
+          },
+          "state": "idle",
+          "executionProgress": 0
+        },
+        {
+          "id": "node-public-zimg-2",
+          "type": "CLIPTextEncode",
+          "title": "正向提示词 (Prompt)",
+          "pos": {
+            "x": 390,
+            "y": 150
+          },
+          "width": 440,
+          "inputs": [
+            {
+              "id": "clip",
+              "name": "clip",
+              "type": "CLIP",
+              "label": "CLIP"
+            }
+          ],
+          "outputs": [
+            {
+              "id": "CONDITIONING",
+              "name": "CONDITIONING",
+              "type": "CONDITIONING",
+              "label": "CONDITIONING"
+            }
+          ],
+          "values": {
+            "text": "A highly textured, impressionistic digital painting of a solitary young woman crouching under an umbrella on a wet city street; black cat nearby, reflections in puddles, cool palette, thick brushstrokes, cinematic lighting, 8k"
+          },
+          "state": "idle",
+          "executionProgress": 0
+        },
+        {
+          "id": "node-public-zimg-4",
+          "type": "KSampler",
+          "title": "KSampler (8 步极速)",
+          "pos": {
+            "x": 870,
+            "y": 150
+          },
+          "width": 300,
+          "inputs": [
+            {
+              "id": "model",
+              "name": "model",
+              "type": "MODEL",
+              "label": "MODEL"
+            },
+            {
+              "id": "positive",
+              "name": "positive",
+              "type": "CONDITIONING",
+              "label": "positive"
+            },
+            {
+              "id": "negative",
+              "name": "negative",
+              "type": "CONDITIONING",
+              "label": "negative"
+            },
+            {
+              "id": "latent_image",
+              "name": "latent_image",
+              "type": "LATENT",
+              "label": "latent_image"
+            }
+          ],
+          "outputs": [
+            {
+              "id": "LATENT",
+              "name": "LATENT",
+              "type": "LATENT",
+              "label": "LATENT"
+            }
+          ],
+          "values": {
+            "seed": 42,
+            "control_after_generate": "fixed",
+            "steps": 8
+          },
+          "state": "error",
+          "executionProgress": 0,
+          "errorMessage": "请求失败，查看执行记录"
+        },
+        {
+          "id": "node-public-zimg-vae",
+          "type": "VAEDecode",
+          "title": "VAE 解码",
+          "pos": {
+            "x": 1210,
+            "y": 150
+          },
+          "width": 260,
+          "inputs": [
+            {
+              "id": "samples",
+              "name": "samples",
+              "type": "LATENT",
+              "label": "samples"
+            },
+            {
+              "id": "vae",
+              "name": "vae",
+              "type": "VAE",
+              "label": "vae"
+            }
+          ],
+          "outputs": [
+            {
+              "id": "IMAGE",
+              "name": "IMAGE",
+              "type": "IMAGE",
+              "label": "IMAGE"
+            }
+          ],
+          "values": {},
+          "state": "idle",
+          "executionProgress": 0,
+          "errorMessage": ""
+        },
+        {
+          "id": "node-public-zimg-5",
+          "type": "SaveImage",
+          "title": "保存图像",
+          "pos": {
+            "x": 1510,
+            "y": 150
+          },
+          "width": 300,
+          "inputs": [
+            {
+              "id": "images",
+              "name": "images",
+              "type": "IMAGE",
+              "label": "images"
+            }
+          ],
+          "outputs": [],
+          "values": {},
+          "state": "idle",
+          "executionProgress": 0,
+          "errorMessage": ""
+        }
+      ],
+      "connections": [
+        {
+          "id": "pub-zc-3",
+          "fromNodeId": "node-public-zimg-1",
+          "fromSocketId": "MODEL",
+          "toNodeId": "node-public-zimg-4",
+          "toSocketId": "model",
+          "type": "MODEL"
+        },
+        {
+          "id": "pub-zc-4",
+          "fromNodeId": "node-public-zimg-1",
+          "fromSocketId": "CLIP",
+          "toNodeId": "node-public-zimg-2",
+          "toSocketId": "clip",
+          "type": "CLIP"
+        },
+        {
+          "id": "pub-zc-6",
+          "fromNodeId": "node-public-zimg-2",
+          "fromSocketId": "CONDITIONING",
+          "toNodeId": "node-public-zimg-4",
+          "toSocketId": "positive",
+          "type": "CONDITIONING"
+        },
+        {
+          "id": "pub-zc-9",
+          "fromNodeId": "node-public-zimg-4",
+          "fromSocketId": "LATENT",
+          "toNodeId": "node-public-zimg-vae",
+          "toSocketId": "samples",
+          "type": "LATENT"
+        },
+        {
+          "id": "pub-zc-10",
+          "fromNodeId": "node-public-zimg-1",
+          "fromSocketId": "VAE",
+          "toNodeId": "node-public-zimg-vae",
+          "toSocketId": "vae",
+          "type": "VAE"
+        },
+        {
+          "id": "pub-zc-11",
+          "fromNodeId": "node-public-zimg-vae",
+          "fromSocketId": "IMAGE",
+          "toNodeId": "node-public-zimg-5",
+          "toSocketId": "images",
+          "type": "IMAGE"
+        }
+      ],
+      "executingNodeId": "node-public-zimg-4"
+    }
+  },
+  "apiResponse": {
+    "ok": false,
+    "error": "fetch failed",
+    "errorSource": "network",
+    "stack": "TypeError: fetch failed",
+    "cause": {
+      "name": "Error",
+      "message": "connect ECONNREFUSED 127.0.0.1:37827",
+      "code": "ECONNREFUSED",
+      "stack": "Error: connect ECONNREFUSED 127.0.0.1:37827\n    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1864:16)"
+    },
+    "actualRequest": {
+      "endpoint": "https://api.sogni.ai/v1/creative-agent/workflows",
+      "parameters": {
+        "input": {
+          "title": "Canvas · krea-2-turbo",
+          "steps": [
+            {
+              "id": "image1",
+              "toolName": "generate_image",
+              "arguments": {
+                "prompt": "A highly textured, impressionistic digital painting of a solitary young woman crouching under an umbrella on a wet city street; black cat nearby, reflections in puddles, cool palette, thick brushstrokes, cinematic lighting, 8k",
+                "seed": 42,
+                "loras": [
+                  "krea2-realism"
+                ],
+                "loraStrengths": [
+                  0.8
+                ],
+                "model": "krea-2-turbo"
+              }
+            }
+          ]
+        }
+      },
+      "mapping": [
+        {
+          "from": "steps",
+          "to": null,
+          "value": 8,
+          "sent": false,
+          "reason": "画布参数没有对应的官方 Schema 字段；界面的 Schema 匹配模式已启用。可取消此模式，或在 JSON 中显式提交。"
+        },
+        {
+          "from": "seed",
+          "to": "seed",
+          "value": 42,
+          "schemaDeclared": true,
+          "finalValue": 42
+        },
+        {
+          "from": "custom_parameters.seed",
+          "to": "seed",
+          "value": 42,
+          "overrides": 42,
+          "schemaDeclared": true,
+          "finalValue": 42
+        },
+        {
+          "from": "custom_parameters.loras",
+          "to": "loras",
+          "value": [
+            "krea2-realism"
+          ],
+          "schemaDeclared": true,
+          "finalValue": [
+            "krea2-realism"
+          ]
+        },
+        {
+          "from": "custom_parameters.loraStrengths",
+          "to": "loraStrengths",
+          "value": [
+            0.8
+          ],
+          "schemaDeclared": true,
+          "finalValue": [
+            0.8
+          ]
+        }
+      ],
+      "parametersOnly": false,
+      "schemaFieldsOnly": true
+    },
+    "executionTrace": [
+      {
+        "provider": "sogni",
+        "model": "krea-2-turbo",
+        "endpoint": "https://api.sogni.ai/v1/creative-agent/workflows",
+        "method": "POST",
+        "status": null,
+        "error": "fetch failed",
+        "stack": "TypeError: fetch failed",
+        "cause": {
+          "message": "connect ECONNREFUSED 127.0.0.1:37827",
+          "code": "ECONNREFUSED"
+        },
+        "durationMs": 3
+      }
+    ]
+  }
+}

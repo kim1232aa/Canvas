@@ -22,13 +22,13 @@ describe('graphEngine - B2 & L2a & L2b 拓扑反向追踪与参数抽取隔离�
     values,
   });
 
-  it('marks the failed executing subgraph consistently and leaves other branches untouched',async()=>{
+  it('marks only the failed execution target and leaves its input subgraph and other branches untouched',async()=>{
     const nodes=[createNode('fal','FalAIEngineNode',{model:'fal-ai/flux-lora',prompt:'actual prompt'}),createNode('adapter','LoRALoader',{lora_name:'https://example.test/adapter.safetensors',strength_model:0.5}),createNode('other','FalAIEngineNode',{model:'fal-ai/flux/dev',prompt:'unrelated'})];
     const connections:Connection[]=[{id:'mounted',fromNodeId:'adapter',fromSocketId:'MODEL',toNodeId:'fal',toSocketId:'lora',type:'MODEL'}];
     vi.spyOn(EngineRegistry,'generate').mockRejectedValue(new Error('Fal HTTP 403 TOP_UP'));
     const states=new Map<string,string>();
     await expect(executeWorkflow(nodes,connections,(id,state)=>{if(state)states.set(id,state);},undefined,'fal')).rejects.toThrow(/403/);
-    expect(states.get('fal')).toBe('error');expect(states.get('adapter')).toBe('error');expect(states.has('other')).toBe(false);
+    expect(states.get('fal')).toBe('error');expect(states.get('adapter')).toBe('idle');expect(states.has('other')).toBe(false);
   });
 
   it('keeps HF Z-Image resolution and shift from the upstream checkpoint', () => {
@@ -463,8 +463,12 @@ describe('graphEngine - B2 & L2a & L2b 拓扑反向追踪与参数抽取隔离�
       mediaType: 'image',
     }));
 
-    await expect(executeWorkflow(nodes, connections, () => {}, undefined)).rejects.toThrow('该服务商不支持 LoRA');
-    expect(generateSpy).not.toHaveBeenCalled();
+    const result = await executeWorkflow(nodes, connections, () => {}, undefined);
+    expect(result.provider).toBe('fal');
+    expect(generateSpy).toHaveBeenCalledTimes(1);
+    expect(generateSpy.mock.calls[0][1].loras).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'koda', path: 'koda', strength: 1 }),
+    ]));
 
   });
 
@@ -586,7 +590,7 @@ describe('F5 omit unset seed/sampler defaults', () => {
     expect(rand).not.toHaveBeenCalled();
   });
 
-  it('KSampler + CheckpointLoader gemini: imported long seed omitted from generate; history seed null', async () => {
+  it('KSampler + CheckpointLoader gemini: imported long seed is forwarded; returned history seed stays null', async () => {
     const nodes = [
       node('ckpt', 'CheckpointLoaderSimple', { ckpt_name: 'gemini-3.1-flash-image', targetProvider: 'gemini' }),
       node('clip', 'CLIPTextEncode', { text: 'a fox' }),
@@ -603,7 +607,7 @@ describe('F5 omit unset seed/sampler defaults', () => {
     const spy = mockGenerate(null);
     const res = await executeWorkflow(nodes, conns, () => {}, undefined, 'ks');
     const sent = spy.mock.calls[0][1];
-    expect(sent.seed).toBeUndefined();
+    expect(sent.seed).toBe(1847392847561);
     expect(res.seed).toBeNull();
   });
 

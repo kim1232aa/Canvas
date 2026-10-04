@@ -16,8 +16,8 @@ const removeRange = (start, end, replacement = '') => {
   if (from < 0 || to < 0) throw new Error(`Canvas adapter source mismatch: ${start}`);
   source = source.slice(0, from) + replacement + source.slice(to);
 };
-removeRange("import dns from 'dns';", "import { fieldOptions");
-for (const line of ["import path from 'path';\n", "import fs from 'fs';\n", "import { fileURLToPath } from 'url';\n", "import { Agent, setGlobalDispatcher } from 'undici';\n"]) replace(line, '');
+removeRange("import dotenv from 'dotenv';", "import { fieldOptions");
+for (const line of ["import path from 'path';\n", "import fs from 'fs';\n", "import { fileURLToPath } from 'url';\n", "import { EnvHttpProxyAgent, setGlobalDispatcher } from 'undici';\n"]) replace(line, '');
 removeRange('dotenv.config();', 'const app = express();');
 replace('const app = express();', "const app = express();\napp.disable('x-powered-by');");
 replace("app.disable('x-powered-by');", `app.disable('x-powered-by');
@@ -49,6 +49,16 @@ replace("const adminToken = process.env.CANVAS_ADMIN_TOKEN?.trim();", "if (curre
 removeRange('// Persistent Storage Directories', '// Cloud Canvas Project Schema');
 removeRange('// Helper methods to read/write JSON files safely', 'const defaultKeys:');
 source = source.replaceAll('cloudSettings', 'currentSettings()');
+// Preserve the full HTTP body and classify a failed durable media copy as a
+// storage-stage failure, while retaining the actual media-fetch source/status.
+source = source.replaceAll(
+  '...(durable.status != null ? { persistStatus: durable.status } : {}),',
+  "errorSource: 'storage',\n        rawResponse: durable.rawResponse,\n        stack: durable.stack || new Error(durable.message).stack,\n        cause: durable.cause,\n        persistErrorSource: durable.errorSource,\n        persistRawResponse: durable.rawResponse,\n        persistStack: durable.stack,\n        persistCause: durable.cause,\n        ...(durable.status != null ? { persistStatus: durable.status } : {}),"
+);
+source = source.replaceAll(
+  '...(durableVideo.status != null ? { persistStatus: durableVideo.status } : {}),',
+  "errorSource: 'storage',\n            rawResponse: durableVideo.rawResponse,\n            stack: durableVideo.stack || new Error(durableVideo.message).stack,\n            cause: durableVideo.cause,\n            persistErrorSource: durableVideo.errorSource,\n            persistRawResponse: durableVideo.rawResponse,\n            persistStack: durableVideo.stack,\n            persistCause: durableVideo.cause,\n            ...(durableVideo.status != null ? { persistStatus: durableVideo.status } : {}),"
+);
 // Workers manages request lifetime and has no Node socket timeout methods.
 // Provider polling deadlines and upstream validation remain unchanged.
 source = source.replace(/\s*(?:req|res)\.setTimeout\(\d+\);/g, '');
@@ -68,7 +78,7 @@ source = source.slice(0, source.indexOf('startServer().catch'));
 // any provider call, since upstream providers cannot access private media URLs.
 const mediaMiddleware = `
 app.use((req, res, next) => {
-  if (!/^\\/api\\/(?:engine\\/)?(?:[^/]+\\/)?(?:generate|chat|refine-prompt|upload)$/.test(req.path)) return next();
+  if (!/^\\/api\\/(?:engine\\/)?(?:[^/]+\\/)?(?:generate|chat|refine-prompt|upload|submit)$/.test(req.path)) return next();
   currentRequest().store.resolveInputMedia(req.body).then(body => { req.body = body; next(); }).catch(next);
 });
 `;
@@ -77,8 +87,29 @@ source = `import { currentRequest, currentSettings } from './context';\nimport {
 source = source.replaceAll("from './src/", "from '../src/");
 source += `\napp.use((req, res) => res.status(404).json({error: 'API route not found'}));
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error('Canvas API failed:', err?.message);
-  res.status(err?.status || 500).json({error: err?.message || '云端服务暂不可用'});
+  const status = Number.isInteger(err?.status) && err.status >= 400 && err.status <= 599 ? err.status : 500;
+  const errorSource = err?.errorSource || (err?.rawResponse !== undefined || err?.rawBody !== undefined ? 'upstream' : 'local');
+  const describeCause = (value: any, depth = 0): any => {
+    if (value == null || depth >= 8) return undefined;
+    if (!(value instanceof Error)) return typeof value === 'object' ? value : {message: String(value)};
+    return {
+      name: value.name,
+      message: value.message,
+      ...(value.stack ? {stack: value.stack} : {}),
+      ...((value as any).code ? {code: (value as any).code} : {}),
+      ...(value.cause !== undefined ? {cause: describeCause(value.cause, depth + 1)} : {}),
+    };
+  };
+  const cause = describeCause(err?.cause);
+  // Do not log exception text or any request/response data; those may contain secrets.
+  console.error(JSON.stringify({route: _req.path, status, errorSource}));
+  res.status(status).json({
+    error: err?.message || '云端服务暂不可用',
+    errorSource,
+    ...(err?.rawResponse !== undefined ? {rawResponse: err.rawResponse} : err?.rawBody !== undefined ? {rawResponse: err.rawBody} : err?.body !== undefined ? {rawResponse: err.body} : {}),
+    ...(err?.stack ? {stack: err.stack} : {}),
+    ...(cause !== undefined ? {cause} : {}),
+  });
 });
 export { app };
 export function refreshHostedKeyPool() { keyPoolManager.refreshFromSettings(); }

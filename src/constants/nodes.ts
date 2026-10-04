@@ -33,7 +33,7 @@ export const SCHEDULER_OPTIONS = [
 export interface BaseModelOption {
   label: string;
   value: string;
-  provider: 'fal' | 'agnes' | 'civitai' | 'modelscope' | 'modelscope_ai' | 'huggingface' | 'nanogpt' | 'gemini' | 'sensenova' | 'video' | 'tensorart' | 'openai_compat' | 'grok_compat';
+  provider: 'fal' | 'agnes' | 'civitai' | 'modelscope' | 'modelscope_ai' | 'huggingface' | 'nanogpt' | 'gemini' | 'sensenova' | 'video' | 'tensorart' | 'openai_compat' | 'grok_compat' | 'muapi' | 'wavespeed' | 'sogni';
   category?: 'checkpoint' | 'video' | 'reasoning' | 'edit' | 'lora';
 }
 
@@ -121,6 +121,9 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
           { label: '🎬 AI Video 视频引擎', value: 'video' },
           { label: '🔁 OpenAI 兼容中转', value: 'openai_compat' },
           { label: '🔁 Grok 兼容中转', value: 'grok_compat' },
+          { label: 'MuAPI', value: 'muapi' },
+          { label: 'WaveSpeed', value: 'wavespeed' },
+          { label: 'Sogni', value: 'sogni' },
         ],
       },
       {
@@ -142,7 +145,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
     ],
     defaultValues: {
       targetProvider: '',
-      ckpt_name: 'Tongyi-MAI/Z-Image-Turbo',
+      ckpt_name: '',
       aspect_ratio: '',
       resolution: '',
     },

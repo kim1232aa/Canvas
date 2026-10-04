@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   bufferToDataUrl,
   guessMimeFromUrl,
@@ -49,7 +49,11 @@ describe('persistMediaAsDataUrl (history durable copy)', () => {
     expect(isUndersizedHistoryImageDataUrl(oneByOne)).toBe(true);
     const r = await requireDurableHistoryMediaUrl(oneByOne);
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.message).toMatch(/2×2|2x2|pixels/i);
+    if (!r.ok) {
+      expect(r.message).toMatch(/2×2|2x2|pixels/i);
+      expect(r.errorSource).toBe('local');
+      expect(r.stack).toContain('not a durable history thumbnail');
+    }
   });
 
   it('accepts real 3×3 data URL as durable', async () => {
@@ -97,7 +101,7 @@ describe('persistMediaAsDataUrl (history durable copy)', () => {
 describe('requireDurableHistoryMediaUrl (grok history write contract)', () => {
   type FailOut = {
     status: 500;
-    body: { error: string; persistStatus?: number; transientMediaUrl: string };
+    body: { error: string; errorSource: string; persistErrorSource: string; persistStatus?: number; persistRawResponse?: string; persistStack?: string; persistCause?: unknown; transientMediaUrl: string };
     historyUrl: null;
     responseImageUrl: null;
   };
@@ -113,9 +117,14 @@ describe('requireDurableHistoryMediaUrl (grok history write contract)', () => {
     if (!durable.ok) {
       const body: FailOut['body'] = {
         error: `Grok 兼容中转图像已生成，但无法下载并持久化为本地历史副本（data URL）: ${durable.message}`,
+        errorSource: 'storage',
+        persistErrorSource: durable.errorSource,
         transientMediaUrl: remoteUrl,
       };
       if (durable.status != null) body.persistStatus = durable.status;
+      if (durable.rawResponse !== undefined) body.persistRawResponse = durable.rawResponse;
+      if (durable.stack) body.persistStack = durable.stack;
+      if (durable.cause !== undefined) body.persistCause = durable.cause;
       return { status: 500, body, historyUrl: null, responseImageUrl: null };
     }
     const historyItem = { url: durable.dataUrl, provider: 'Grok 兼容中转' };
@@ -165,6 +174,10 @@ describe('requireDurableHistoryMediaUrl (grok history write contract)', () => {
       expect(out.responseImageUrl).toBeNull();
       expect(out.body.transientMediaUrl).toBe(remote);
       expect(out.body.persistStatus).toBe(403);
+      expect(out.body.errorSource).toBe('storage');
+      expect(out.body.persistErrorSource).toBe('upstream');
+      expect(out.body.persistRawResponse).toBe('Forbidden: signed URL expired');
+      expect(out.body.persistStack).toContain('HTTP 403');
       expect(out.body.error).toMatch(/403/);
       expect(out.body.error).toMatch(/Forbidden|expired|持久化/i);
       // Must not pretend success with remote URL in history
@@ -188,10 +201,57 @@ describe('requireDurableHistoryMediaUrl (grok history write contract)', () => {
         expect(r.status).toBe(403);
         expect(r.message).toContain('403');
         expect(r.message).toContain('denied');
+        expect(r.rawResponse).toBe('{"error":"denied"}');
+        expect(r.errorSource).toBe('upstream');
+        expect(r.stack).toContain('HTTP 403');
       }
       expect(await persistRemoteUrlAsDataUrl(`http://127.0.0.1:${port}/x`)).toBeNull();
     } finally {
       await new Promise<void>((r) => server.close(() => r()));
+    }
+  });
+
+  it('retains the complete long HTTP body and never logs signed URLs or response contents', async () => {
+    const fullBody = `provider error: ${'x'.repeat(1800)} end-marker`;
+    const server = http.createServer((_req, res) => {
+      res.writeHead(502, { 'Content-Type': 'text/plain' });
+      res.end(fullBody);
+    });
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+    const { port } = server.address() as AddressInfo;
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const signedUrl = `http://127.0.0.1:${port}/private?signature=do-not-log`;
+    try {
+      const result = await persistRemoteUrlAsDataUrlResult(signedUrl);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.status).toBe(502);
+        expect(result.rawResponse).toBe(fullBody);
+        expect(result.message).toBe(`HTTP 502: ${fullBody}`);
+        expect(result.errorSource).toBe('upstream');
+      }
+      expect(log).not.toHaveBeenCalled();
+    } finally {
+      log.mockRestore();
+      await new Promise<void>((r) => server.close(() => r()));
+    }
+  });
+
+  it('labels a fetch exception as network and retains its stack and cause without inventing HTTP status', async () => {
+    const originalFetch = globalThis.fetch;
+    const networkError = Object.assign(new Error('fixture connection reset'), {code: 'ECONNRESET'});
+    globalThis.fetch = vi.fn().mockRejectedValue(networkError);
+    try {
+      const result = await persistRemoteUrlAsDataUrlResult('https://media.invalid/fixture');
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.status).toBeUndefined();
+        expect(result.errorSource).toBe('network');
+        expect(result.stack).toContain('fixture connection reset');
+        expect(result.cause).toMatchObject({message: 'fixture connection reset', code: 'ECONNRESET'});
+      }
+    } finally {
+      globalThis.fetch = originalFetch;
     }
   });
 

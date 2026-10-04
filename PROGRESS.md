@@ -1,5 +1,18 @@
 # Canvas Provider API 接线修复进度表
 
+## 2026-10-04 最新状态：三家新供应商与透明执行
+
+- 新增 MuAPI / WaveSpeed / Sogni：密钥设置、模型中心、模型下拉框、JSON / 官方 Schema 参数面板、画布驱动、异步提交与轮询、参数/工作流历史和多图持久化。三项官方文档调查分别交给三个 Luna，无重复开工；根代理统一实现与发布。
+- MuAPI 用目录实际 endpoint_url 对照 OpenAPI，不把显示名称拼成路径；Flux LoRA 正确使用 `{model,weight}`，其他 LoRA 结构按所选 Schema。WaveSpeed 查询完整原生模型目录，并明确本地切页。Sogni 使用固定版本官方工具 Schema 的 27 个 workflow selector，不混用实时 worker ID；LoRA ID/权重保留顺序，参考图通过工作流 media_references 传入。
+- 画布匹配官方 Schema 的模式在 UI 明示，可关闭；未提交参数及 JSON 覆盖后的最终值均记录。LoRA 请求没有被默认过滤。独立 CLIP 强度和上游实际应用 LoRA 的确认不能编造。缺乏权重目录时不把生成端点/工具当权重。
+- 目录不再失败后填静态模型，旧 Tensor OpenWorks 工具不作为底模。Tensor 公共模型页面使用其真实 cursor 链接，不把封面媒体 ID 当模型版本 ID。HF 目录保留真实 inferenceProviderMapping，魔搭目录分页符合实际参数；Fal 保持所选原生路径，删除自动模型/端点别名替换。
+- 前端执行记录与服务端追踪包含实际端点、完整 HTTP 响应、参数转换、异常 stack/cause。网络无响应、本地错误、上游 HTTP / 协议错误与 storage 失败分别标明。去掉本地模型/LoRA 加载的虚假成功动画，失败只标本次实际请求节点。运行按钮在完成/失败后立即可再次使用。
+- **前端出图未通过**：已从网页选择 Sogni krea-2-turbo，设置 LoRA 参数并真实点击运行。预览环境在上游 HTTP 响应之前拒绝网络连接（ECONNREFUSED）；本轮没有新图。不能把它称为上游 500、欠费，或用直调 API / 测试夹具声称网页出图成功。旧验收入口改为“历史 API 调用样本”。
+- 三家 key 已以 Sites secret 配置，未写入 GitHub 源码、构建产物或文档。Sogni 只读 workflows / LoRA 请求的实测 403 原文保留，原因未确认，不猜测余额或 key 有效性。
+- 截至最终回归：33 个测试文件、262 个测试通过。当前类型与生产构建须在发布流水线再次确认；这里的单测通过不代表真实生成通过。
+- 官方资料、准确端点与已知边界详见 `docs/providers/schema-providers.md`。仍待验证：可用网络中的网页真实图片生成、每家账户生成权限、实际 LoRA 效果和输出持久化的完整前端闭环。
+
+以下是历史进度，旧“已完成”“100%”等结论不能替代上面的当前验证状态。
 
 ## 2026-09-30 — soft-civitai-history-thumb HARD gates
 

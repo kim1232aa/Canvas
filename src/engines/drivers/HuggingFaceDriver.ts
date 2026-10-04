@@ -1,3 +1,4 @@
+import {tracedFetch as fetch} from '../../services/executionTrace';
 import { BaseEngineDriver } from '../BaseEngineDriver';
 import { NormalizedGenerateParams, NormalizedGenerateResult, ModelSpec } from '../types';
 
@@ -26,6 +27,7 @@ export class HuggingFaceDriver extends BaseEngineDriver {
       },
       body: JSON.stringify({
         workflowSnapshot: params.workflowSnapshot,
+        custom_parameters: params.extraParams?.custom_parameters,
         prompt: params.prompt,
         negative_prompt: params.negative_prompt,
         model: params.model,
@@ -37,7 +39,7 @@ export class HuggingFaceDriver extends BaseEngineDriver {
         scheduler: params.scheduler ?? params.extraParams?.scheduler,
         sampler_name: params.sampler_name,
         denoise: params.denoise,
-        inference_provider: params.extraParams?.hf_provider || (params.model === 'XLabs-AI/flux-RealismLora' ? 'fal-ai' : undefined),
+        inference_provider: params.extraParams?.hf_provider,
         image_url: params.image_url,
         loras: params.loras?.length ? params.loras : undefined,
         // All seven Space arguments come from explicit canvas state.

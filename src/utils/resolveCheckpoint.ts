@@ -546,67 +546,26 @@ export function filterRealLoraEntries<T>(list: T[] | undefined | null): T[] {
 }
 
 /**
- * Build the loras field for a generate payload.
- * openai_compat: keep real entries so they reach the driver/server for an honest
- * 「该服务商不支持」 reject; empty/whitespace name / missing → undefined
- * (no loras key on the wire). Other providers reject real unsupported entries.
+ * Keep LoRA values in the request. Runtime endpoint validation is authoritative;
+ * local catalog hints must not prevent the provider returning its actual response.
  */
 export function resolveGenerateLorasPayload<T>(
   provider: string | undefined,
   model: string | undefined,
   mappedLoras: T[] | undefined | null
 ): T[] | undefined {
-  const list = Array.isArray(mappedLoras) ? mappedLoras : [];
-  if (toSchemaProvider(provider) === 'openai_compat') {
-    const real = filterRealLoraEntries(list);
-    return real.length > 0 ? real : undefined;
-  }
-  if (isCanvasFieldUnsupported(provider, model, 'loras')) {
-    if (filterRealLoraEntries(list).length) throw new Error(`该服务商不支持 LoRA（${provider} / ${model}）；请旁路或移除 LoRA，或选择支持 LoRA 的接口`);
-    return undefined;
-  }
-  return list;
+  void provider;
+  void model;
+  return Array.isArray(mappedLoras) ? mappedLoras : [];
 }
 
-/** Omit schema-unsupported fields from a generate payload (UI must not send them). */
+/** Preserve explicit canvas values; endpoint schema validation and its response are authoritative. */
 export function omitUnsupportedGenerateFields<T extends Record<string, unknown>>(
   provider: string | undefined,
   model: string | undefined,
   fields: T
 ): T {
-  const out: Record<string, unknown> = { ...fields };
-  if (toSchemaProvider(provider) !== 'openai_compat' && isCanvasFieldUnsupported(provider, model, 'loras') && filterRealLoraEntries(Array.isArray(out.loras) ? out.loras : []).length) {
-    throw new Error('该服务商不支持 LoRA；请旁路或移除已挂载的 LoRA，不能静默丢弃');
-  }
-  const pairs: Array<[CanvasGreyField, string[]]> = [
-    ['seed', ['seed']],
-    ['negative_prompt', ['negative_prompt']],
-    ['width', ['width']],
-    ['height', ['height']],
-    ['steps', ['steps', 'num_inference_steps']],
-    ['cfg', ['cfg', 'guidance_scale', 'guidance']],
-    ['sampler', ['sampler', 'sampler_name']],
-    ['scheduler', ['scheduler']],
-    ['denoise', ['denoise']],
-    ['loras', ['loras']],
-  ];
-  for (const [field, keys] of pairs) {
-    if (!isCanvasFieldUnsupported(provider, model, field)) continue;
-    // openai_compat: keep real LoRA entries for honest server reject (not a silent drop).
-    // Empty / whitespace-only names are filtered out so the key is omitted.
-    if (field === 'loras' && toSchemaProvider(provider) === 'openai_compat') {
-      const cur = out.loras;
-      if (Array.isArray(cur)) {
-        const real = filterRealLoraEntries(cur);
-        if (real.length > 0) {
-          out.loras = real;
-          continue;
-        }
-      }
-    }
-    for (const k of keys) {
-      if (k in out) out[k] = undefined;
-    }
-  }
-  return out as T;
+  void provider;
+  void model;
+  return { ...fields };
 }

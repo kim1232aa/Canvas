@@ -21,14 +21,11 @@ describe('ModelScopeDriver & ModelScopeAiDriver', () => {
       interceptedUrl = url;
       interceptedBody = JSON.parse(init.body);
       interceptedHeaders = init.headers;
-      return {
-        ok: true,
-        json: async () => ({
+      return new Response(JSON.stringify({
           imageUrl: 'https://example.com/ms-image.png',
           model: 'Tongyi-MAI/Z-Image-Turbo',
           historyItem: { seed: 12345 },
-        }),
-      };
+        }), { status: 200 });
     }) as any;
 
     try {
@@ -78,14 +75,11 @@ describe('ModelScopeDriver & ModelScopeAiDriver', () => {
       interceptedUrl = url;
       interceptedBody = JSON.parse(init.body);
       interceptedHeaders = init.headers;
-      return {
-        ok: true,
-        json: async () => ({
+      return new Response(JSON.stringify({
           imageUrl: 'https://example.com/ms-ai-image.png',
           model: 'Tongyi-MAI/Z-Image-Turbo',
           historyItem: { seed: 999 },
-        }),
-      };
+        }), { status: 200 });
     }) as any;
 
     try {
@@ -115,11 +109,7 @@ describe('ModelScopeDriver & ModelScopeAiDriver', () => {
     const originalFetch = global.fetch;
 
     global.fetch = vi.fn().mockImplementation(async () => {
-      return {
-        ok: false,
-        status: 400,
-        json: async () => ({ error: '该服务商不支持: sampler（ModelScope）' }),
-      };
+      return new Response(JSON.stringify({ error: '该服务商不支持: sampler（ModelScope）' }), { status: 400 });
     }) as any;
 
     try {

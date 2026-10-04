@@ -308,11 +308,11 @@ describe('Fal / Agnes / HF / NanoGPT grey on engine switch (schema-driven)', () 
     expect(devBadge.message).toMatch(/该服务商不支持/);
 
     expect(sanitizeFrameLoras('fal', '', left)).toEqual(left);
-    expect(() => omitUnsupportedGenerateFields('fal', '', {
+    expect(omitUnsupportedGenerateFields('fal', '', {
       prompt: 'hi',
       loras: left,
       seed: 1,
-    })).toThrow(/不支持 LoRA/);
+    })).toMatchObject({ prompt: 'hi', loras: left, seed: 1 });
   });
 
   it('ModelScope mismatch message states why + next step; does not imply values cleared', () => {
@@ -369,14 +369,14 @@ describe('Fal / Agnes / HF / NanoGPT grey on engine switch (schema-driven)', () 
     const compat = validateLoraCompatibility('deepseek-v4-flash', 'Flux.1 D', 'koda', 'sensenova');
     expect(compat.isCompatible).toBe(false);
     expect(compat.endpointUnsupported).toBe(true);
-    expect(() => omitUnsupportedGenerateFields('sensenova', 'deepseek-v4-flash', {
+    expect(omitUnsupportedGenerateFields('sensenova', 'deepseek-v4-flash', {
       prompt: 'hi',
       width: 1024,
       height: 1024,
       seed: 1,
       loras: left,
       negative_prompt: 'blurry',
-    })).toThrow(/不支持 LoRA/);
+    })).toMatchObject({ prompt: 'hi', width: 1024, height: 1024, seed: 1, loras: left, negative_prompt: 'blurry' });
   });
 
   it('Tensor.Art banana2 greys width/height/seed/steps/cfg/loras; keeps stored LoRAs; omits from payload', () => {
@@ -396,7 +396,7 @@ describe('Fal / Agnes / HF / NanoGPT grey on engine switch (schema-driven)', () 
     const compat = validateLoraCompatibility('strong_text2image_nano_banana2', 'Flux.1 D', 'koda', 'tensorart');
     expect(compat.isCompatible).toBe(false);
     expect(compat.endpointUnsupported).toBe(true);
-    expect(() => omitUnsupportedGenerateFields('tensorart', 'strong_text2image_nano_banana2', {
+    expect(omitUnsupportedGenerateFields('tensorart', 'strong_text2image_nano_banana2', {
       prompt: 'hi',
       width: 1024,
       height: 1024,
@@ -405,10 +405,10 @@ describe('Fal / Agnes / HF / NanoGPT grey on engine switch (schema-driven)', () 
       cfg: 7,
       loras: left,
       negative_prompt: 'blurry',
-    })).toThrow(/不支持 LoRA/);
+    })).toMatchObject({ prompt: 'hi', width: 1024, height: 1024, seed: 1, steps: 20, cfg: 7, loras: left, negative_prompt: 'blurry' });
   });
 
-  it('omitUnsupportedGenerateFields drops unsupported keys but leaves supported', () => {
+  it('omitUnsupportedGenerateFields preserves all explicitly supplied values for runtime validation', () => {
     const agnes = omitUnsupportedGenerateFields('agnes', 'agnes-image-2.5-flash', {
       prompt: 'hi',
       negative_prompt: 'blurry',
@@ -423,12 +423,12 @@ describe('Fal / Agnes / HF / NanoGPT grey on engine switch (schema-driven)', () 
     expect(agnes.prompt).toBe('hi');
     expect(agnes.width).toBe(1024);
     expect(agnes.height).toBe(1024);
-    expect(agnes.negative_prompt).toBeUndefined();
-    expect(agnes.seed).toBeUndefined();
-    expect(agnes.steps).toBeUndefined();
-    expect(agnes.cfg).toBeUndefined();
-    expect(agnes.loras).toBeUndefined();
-    expect(agnes.sampler_name).toBeUndefined();
+    expect(agnes.negative_prompt).toBe('blurry');
+    expect(agnes.seed).toBe(42);
+    expect(agnes.steps).toBe(20);
+    expect(agnes.cfg).toBe(7);
+    expect(agnes.loras).toEqual([]);
+    expect(agnes.sampler_name).toBe('euler');
 
     const nano = omitUnsupportedGenerateFields('nanogpt', 'flux-schnell', {
       prompt: 'hi',
@@ -437,9 +437,9 @@ describe('Fal / Agnes / HF / NanoGPT grey on engine switch (schema-driven)', () 
       loras: [],
       width: 512,
     });
-    expect(nano.seed).toBeUndefined();
-    expect(nano.negative_prompt).toBeUndefined();
-    expect(nano.loras).toBeUndefined();
+    expect(nano.seed).toBe(99);
+    expect(nano.negative_prompt).toBe('blurry');
+    expect(nano.loras).toEqual([]);
     expect(nano.width).toBe(512);
 
     const hf = omitUnsupportedGenerateFields('huggingface', 'black-forest-labs/FLUX.1-dev', {
@@ -454,7 +454,7 @@ describe('Fal / Agnes / HF / NanoGPT grey on engine switch (schema-driven)', () 
     expect(hf.seed).toBe(1);
     expect(hf.steps).toBe(28);
     expect(hf.loras).toEqual([]);
-    expect(hf.sampler_name).toBeUndefined();
+    expect(hf.sampler_name).toBe('euler');
   });
 });
 
@@ -483,7 +483,7 @@ describe('isRealLoraEntry / filterRealLoraEntries', () => {
   });
 });
 
-describe('resolveGenerateLorasPayload — openai_compat App/graph path', () => {
+describe('schema-agnostic payload preservation', () => {
   const real = [{ name: 'x', strength: 1, modelStrength: 1, clipStrength: 1 }];
   const namedLoRA = [{
     name: 'LoRA',
@@ -501,9 +501,9 @@ describe('resolveGenerateLorasPayload — openai_compat App/graph path', () => {
     civitaiId: '854154',
   }];
 
-  it('empty list → no loras after omit (POST body must not contain loras)', () => {
+  it('preserves an explicitly supplied empty LoRA array and other explicit fields', () => {
     const lorasPayload = resolveGenerateLorasPayload('openai_compat', 'gpt-image-2', []);
-    expect(lorasPayload).toBeUndefined();
+    expect(lorasPayload).toEqual([]);
     const omitted = omitUnsupportedGenerateFields('openai_compat', 'gpt-image-2', {
       prompt: 'hi',
       model: 'gpt-image-2',
@@ -513,15 +513,11 @@ describe('resolveGenerateLorasPayload — openai_compat App/graph path', () => {
       cfg: 7,
       loras: lorasPayload,
     });
-    expect(omitted.loras).toBeUndefined();
-    expect(Object.prototype.hasOwnProperty.call(
-      JSON.parse(JSON.stringify(omitted)),
-      'loras',
-    )).toBe(false);
-    expect(omitted.seed).toBeUndefined();
-    expect(omitted.negative_prompt).toBeUndefined();
-    expect(omitted.steps).toBeUndefined();
-    expect(omitted.cfg).toBeUndefined();
+    expect(omitted.loras).toEqual([]);
+    expect(omitted.seed).toBe(123);
+    expect(omitted.negative_prompt).toBe('blur');
+    expect(omitted.steps).toBe(20);
+    expect(omitted.cfg).toBe(7);
   });
 
   it('real entry named exactly "LoRA" → kept through filter / payload / omit', () => {
@@ -536,24 +532,20 @@ describe('resolveGenerateLorasPayload — openai_compat App/graph path', () => {
     expect(omitted.loras).toEqual(namedLoRA);
   });
 
-  it('mixed empty + real → only real survive', () => {
+  it('preserves mixed empty-name and real LoRA entries exactly as supplied', () => {
     const mixed = [...emptyName, ...namedLoRA];
-    expect(resolveGenerateLorasPayload('openai_compat', 'gpt-image-2', mixed)).toEqual(namedLoRA);
+    expect(resolveGenerateLorasPayload('openai_compat', 'gpt-image-2', mixed)).toEqual(mixed);
   });
 
-  it('empty / whitespace-only name → omit loras key', () => {
+  it('preserves whitespace-name entries for endpoint validation', () => {
     const lorasPayload = resolveGenerateLorasPayload('openai_compat', 'gpt-image-2', emptyName);
-    expect(lorasPayload).toBeUndefined();
+    expect(lorasPayload).toEqual(emptyName);
     const omitted = omitUnsupportedGenerateFields('openai_compat', 'gpt-image-2', {
       prompt: 'hi',
       model: 'gpt-image-2',
       loras: emptyName,
     });
-    expect(omitted.loras).toBeUndefined();
-    expect(Object.prototype.hasOwnProperty.call(
-      JSON.parse(JSON.stringify(omitted)),
-      'loras',
-    )).toBe(false);
+    expect(omitted.loras).toEqual(emptyName);
   });
 
   it('one real LoRA → name/strength survive omit to reach OpenAICompatDriver', () => {
@@ -571,27 +563,27 @@ describe('resolveGenerateLorasPayload — openai_compat App/graph path', () => {
     });
     expect(omitted.loras).toEqual(real);
     expect(omitted.loras![0]).toEqual(expect.objectContaining({ name: 'x', strength: 1 }));
-    expect(omitted.seed).toBeUndefined();
-    expect(omitted.negative_prompt).toBeUndefined();
-    expect(omitted.steps).toBeUndefined();
-    expect(omitted.cfg).toBeUndefined();
+    expect(omitted.seed).toBe(123);
+    expect(omitted.negative_prompt).toBe('blur');
+    expect(omitted.steps).toBe(20);
+    expect(omitted.cfg).toBe(7);
   });
 
-  it('mix of empty-name + real → keep only real entries', () => {
+  it('preserves mixed LoRA entries through payload and omission helpers', () => {
     const mixed = [...emptyName, ...real];
     const lorasPayload = resolveGenerateLorasPayload('openai_compat', 'gpt-image-2', mixed);
-    expect(lorasPayload).toEqual(real);
+    expect(lorasPayload).toEqual(mixed);
     const omitted = omitUnsupportedGenerateFields('openai_compat', 'gpt-image-2', {
       prompt: 'hi',
       model: 'gpt-image-2',
       loras: mixed,
     });
-    expect(omitted.loras).toEqual(real);
+    expect(omitted.loras).toEqual(mixed);
   });
 
-  it('rejects real unsupported LoRAs instead of silently changing the requested workflow', () => {
-    expect(() => resolveGenerateLorasPayload('fal', 'fal-ai/flux/schnell', real)).toThrow('该服务商不支持 LoRA');
-    expect(() => omitUnsupportedGenerateFields('fal', 'fal-ai/flux/schnell', {prompt: 'hi', loras: real})).toThrow(/不支持 LoRA/);
+  it('passes LoRA to even statically marked unsupported endpoints for runtime validation', () => {
+    expect(resolveGenerateLorasPayload('fal', 'fal-ai/flux/schnell', real)).toEqual(real);
+    expect(omitUnsupportedGenerateFields('fal', 'fal-ai/flux/schnell', {prompt: 'hi', loras: real})).toEqual({prompt: 'hi', loras: real});
   });
 
   it('other providers keep named "LoRA" entries when loras are supported (unchanged)', () => {

@@ -18,17 +18,13 @@ describe('VideoDriver (F3/F4) 参数转发与错误处理', () => {
     let interceptedBody: any = null;
     const fetchMock = vi.fn().mockImplementation(async (_url: string, init: any) => {
       interceptedBody = JSON.parse(init.body);
-      return {
-        ok: true,
-        status: 200,
-        json: async () => ({
+      return new Response(JSON.stringify({
           videoUrl: 'https://cdn.fal.media/output.mp4',
           provider: 'Fal.ai (fal-ai/wan-t2v)',
           model: 'fal-ai/wan-t2v',
           seed: 42,
           historyItem: { seed: 42 },
-        }),
-      };
+        }), { status: 200 });
     });
     globalThis.fetch = fetchMock;
 
@@ -94,15 +90,11 @@ describe('VideoDriver (F3/F4) 参数转发与错误处理', () => {
     let interceptedBody: any = null;
     const fetchMock = vi.fn().mockImplementation(async (_url: string, init: any) => {
       interceptedBody = JSON.parse(init.body);
-      return {
-        ok: true,
-        status: 200,
-        json: async () => ({
+      return new Response(JSON.stringify({
           videoUrl: 'https://example.com/grok.mp4',
           provider: 'Grok 兼容中转',
           model: 'grok-imagine-video',
-        }),
-      };
+        }), { status: 200 });
     });
     globalThis.fetch = fetchMock;
 
@@ -119,13 +111,9 @@ describe('VideoDriver (F3/F4) 参数转发与错误处理', () => {
   });
 
   it('零虚假成功: 上游报错原样透传状态码与错误信息', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: false,
-      status: 400,
-      json: async () => ({
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
         error: '该服务商不支持: loras（Fal.ai Video fal-ai/kling-video/v1/standard/text-to-video）',
-      }),
-    });
+      }), { status: 400 }));
     globalThis.fetch = fetchMock;
 
     const params: NormalizedGenerateParams = {

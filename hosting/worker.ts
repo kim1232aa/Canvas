@@ -12,9 +12,26 @@ interface Env {
   CANVAS_OWNER_USER_ID?: string;
   CANVAS_OWNER_EMAIL?: string;
   CANVAS_PROVIDER_KEYS?: string;
+  MUAPI_KEY?: string;
+  WAVESPEED_KEY?: string;
+  SOGNI_KEY?: string;
 }
 const server = createServer(app);
 server.listen(3000);
+
+function describeCause(error: unknown, depth = 0): unknown {
+  if (error == null || depth >= 8) return undefined;
+  if (!(error instanceof Error)) return {message: String(error)};
+  const cause = (error as Error & { cause?: unknown }).cause;
+  const code = (error as NodeJS.ErrnoException).code;
+  return {
+    name: error.name,
+    message: error.message,
+    ...(error.stack ? { stack: error.stack } : {}),
+    ...(code ? { code } : {}),
+    ...(cause !== undefined ? { cause: describeCause(cause, depth + 1) } : {}),
+  };
+}
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -38,7 +55,7 @@ export default {
         // Sites keeps the supplied provider keys encrypted as one secret. User
         // settings override it; source and browser bundles never contain keys.
         const configuredKeys = env.CANVAS_PROVIDER_KEYS ? JSON.parse(env.CANVAS_PROVIDER_KEYS) : {};
-        settings = {...configuredKeys, ...settings};
+        settings = {...configuredKeys, ...(env.MUAPI_KEY?{muapiKey:env.MUAPI_KEY}:{}), ...(env.WAVESPEED_KEY?{wavespeedKey:env.WAVESPEED_KEY}:{}), ...(env.SOGNI_KEY?{sogniKey:env.SOGNI_KEY}:{}), ...settings};
         let ownerId = env.CANVAS_OWNER_USER_ID || settings['__sites_owner_user_id'];
         if (!ownerId) {
           await store.claimOwner(userId);
@@ -55,14 +72,33 @@ export default {
           refreshHostedKeyPool();
           const result = await handleAsNodeRequest(3000, request);
           const {currentRequest} = await import('./context');
-          await Promise.all(currentRequest().pending);
+          try {
+            await Promise.all(currentRequest().pending);
+          } catch (cause) {
+            throw Object.assign(new Error('Cloud storage persistence failed', {cause}), {
+              errorSource: 'storage',
+              status: 500,
+              ...((cause as any)?.rawResponse !== undefined ? {rawResponse: (cause as any).rawResponse} : {}),
+              cause: describeCause(cause),
+            });
+          }
           const headers = new Headers(result.headers);
           headers.set('Cache-Control', 'private, no-store');
           return new Response(result.body, {status: result.status, statusText: result.statusText, headers});
         });
       } catch (error: any) {
-        console.error('Canvas request failed:', error?.message);
-        return Response.json({error: error?.message || '云端服务暂不可用，请稍后重试'}, {status: 500});
+        const status = Number.isInteger(error?.status) && error.status >= 400 && error.status <= 599 ? error.status : 500;
+        const errorSource = error?.errorSource || 'local';
+        // Never log exception text, request URLs, response bodies, or credentials.
+        console.error(JSON.stringify({route: url.pathname, status, errorSource}));
+        const body: Record<string, unknown> = {
+          error: error?.message || '云端服务暂不可用，请稍后重试',
+          errorSource,
+          ...(error?.rawResponse !== undefined ? {rawResponse: error.rawResponse} : {}),
+          ...(error?.stack ? {stack: error.stack} : {}),
+          ...(error?.cause !== undefined ? {cause: describeCause(error.cause)} : {}),
+        };
+        return Response.json(body, {status});
       }
     }
     if (!['GET', 'HEAD'].includes(request.method)) return new Response('Method not allowed', {status: 405});

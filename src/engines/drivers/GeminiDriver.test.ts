@@ -20,15 +20,11 @@ describe('GeminiDriver', () => {
   });
 
   it('按调用者提供的画幅和图像尺寸发送，结果不捏造 seed', async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => ({
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({
         imageUrl: 'data:image/png;base64,aaa',
         model: 'gemini-3.1-flash-image',
         historyItem: { seed: 999 },
-      }),
-    });
+      }), { status: 200 }));
 
     const params: NormalizedGenerateParams = {
       prompt: 'a fox',
@@ -53,7 +49,7 @@ describe('GeminiDriver', () => {
 });
 
  it('explicit unsupported seed is sent for a visible API rejection', async () => {
-   const fetchMock=vi.fn().mockResolvedValue({ok:false,status:400,json:async()=>({error:'该服务商不支持: seed'})});
+   const fetchMock=vi.fn().mockResolvedValue(new Response(JSON.stringify({error:'该服务商不支持: seed'}), { status: 400 }));
    vi.stubGlobal('fetch',fetchMock);
    await expect(new GeminiDriver().generate({model:'gemini-3.1-flash-image',prompt:'fox',seed:42},{})).rejects.toThrow(/seed/);
    expect(JSON.parse(fetchMock.mock.calls[0][1].body).seed).toBe(42);

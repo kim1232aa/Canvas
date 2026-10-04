@@ -1,4 +1,4 @@
-import {tensorCatalogUrl} from './src/schemas/tensorCatalog.ts';
+import {registerSchemaProviderRoutes} from './src/server/schemaProviders.ts';
 import {isHuggingFaceLora} from './src/utils/hfResource.ts';
 import {buildCivitaiVideoInput} from './src/schemas/civitaiVideo.ts';
 import express from 'express';
@@ -9,13 +9,6 @@ import { buildModelScopeLoras } from './src/schemas/modelScopeLoras.ts';
 import { buildTensorModelJob, tensorModelId, validateTensorModelDimensions, TENSOR_MODEL_API } from './src/schemas/tensorModelApi.ts';
 import {buildNanoImagePayload} from './src/schemas/nanoImageApi.ts';
 import crypto from 'crypto';
-import dns from 'dns';
-try {
-  dns.setServers(['8.8.8.8']);
-  console.log('Successfully set global DNS servers to 8.8.8.8');
-} catch (e: any) {
-  console.warn('Failed to set custom DNS servers:', e.message);
-}
 import dotenv from 'dotenv';
 import { fieldOptions, getFieldSpec, modelStatus, valueStatus, type FieldKey, type Provider as SchemaProvider } from './src/schemas/providerSchema.ts';
 import {
@@ -31,16 +24,17 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { GoogleGenAI } from '@google/genai';
-import { Agent, setGlobalDispatcher } from 'undici';
+import { EnvHttpProxyAgent, setGlobalDispatcher } from 'undici';
 
 dotenv.config();
 
 // Configure undici global dispatcher to extend headersTimeout to 5 minutes (prevents UND_ERR_HEADERS_TIMEOUT on long Civitai GPU renders)
 setGlobalDispatcher(
-  new Agent({
+  new EnvHttpProxyAgent({
     headersTimeout: 300000,
     bodyTimeout: 300000,
     connectTimeout: 30000,
+    ...(process.env.CANVAS_PROXY_CA ? {requestTls:{ca:fs.readFileSync(process.env.CANVAS_PROXY_CA)}} : {}),
   })
 );
 
@@ -48,8 +42,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const generationContext = new AsyncLocalStorage<{ workflowSnapshot?: Record<string, unknown>; route: string; submissions: Array<{ endpoint: string; parameters: unknown; status: number }> }>();
+const generationContext = new AsyncLocalStorage<{ workflowSnapshot?: Record<string, unknown>; route: string; traces: any[]; submissions: Array<{ endpoint: string; parameters: unknown; status: number }> }>();
 app.set('case sensitive routing', true);
+const cliPortIndex=process.argv.indexOf('--port');
+if(cliPortIndex>=0) process.env.PORT=process.argv[cliPortIndex+1];
 const PORT = Number(process.env.PORT) || 3000;
 
 // ==========================================
@@ -107,8 +103,17 @@ const logUpstream = (meta: UpstreamMeta, upstream: string, status: number, start
 async function upstreamFetch(meta: UpstreamMeta, url: string, init?: RequestInit): Promise<Response> {
   const startedAt = Date.now();
   const upstream = sanitizeUpstreamUrl(url);
+  let receivedStatus:number | undefined;
   try {
     const res = await fetch(url, init);
+    receivedStatus=res.status;
+    const trace = generationContext.getStore();
+    if (trace) {
+      const contentType = res.headers.get('content-type') || '';
+      const responseBody = !res.ok || /json|text|event-stream/.test(contentType)
+        ? await res.clone().text() : `[${contentType || 'binary'}]`;
+      trace.traces.push({provider:meta.provider, model:meta.model, method:init?.method || 'GET', endpoint:sanitizeGenerationMetadata(url), requestBody:typeof init?.body==='string' ? sanitizeGenerationMetadata((()=>{try{return JSON.parse(init.body as string)}catch{return init.body}})()) : undefined, status:res.status, statusText:res.statusText, responseBody:meta.key?responseBody.split(meta.key).join('[credential redacted]'):responseBody,maskedKey:meta.key?maskSecret(meta.key):undefined, durationMs:Date.now()-startedAt});
+    }
     const provenance = generationContext.getStore();
     if (provenance && init?.method === 'POST' && typeof init.body === 'string' && !/\/tool\/list|\/task\/query|\/file\//.test(url)) {
       try { provenance.submissions.push({endpoint: sanitizeGenerationMetadata(url), parameters: sanitizeGenerationMetadata(JSON.parse(init.body)), status: res.status}); } catch { /* Non-JSON bodies have no verified parameter metadata. */ }
@@ -120,7 +125,9 @@ async function upstreamFetch(meta: UpstreamMeta, url: string, init?: RequestInit
     logUpstream(meta, upstream, res.status, startedAt, error);
     return res;
   } catch (e: any) {
-    logUpstream(meta, upstream, 0, startedAt, e?.message || String(e));
+    if(receivedStatus!==undefined){e.status=receivedStatus;e.errorSource='upstream-protocol';}
+    generationContext.getStore()?.traces.push({provider:meta.provider,model:meta.model,endpoint:sanitizeGenerationMetadata(url),method:init?.method || 'GET',status:receivedStatus ?? null,error:e?.message,stack:e?.stack,cause:e?.cause?{message:e.cause.message,code:e.cause.code}:undefined,durationMs:Date.now()-startedAt});
+    logUpstream(meta, upstream, receivedStatus ?? 0, startedAt, e?.message || String(e));
     throw e;
   }
 }
@@ -156,6 +163,12 @@ const jsonParserLarge = express.json({ limit: '50mb' });
 
 const LARGE_BODY_ROUTES = new Set([
   // Generation & editing endpoints with base64 images / init images / video frames
+  '/api/schema-provider/muapi/submit',
+  '/api/schema-provider/wavespeed/submit',
+  '/api/schema-provider/sogni/submit',
+  '/api/schema-provider/muapi/save-result',
+  '/api/schema-provider/wavespeed/save-result',
+  '/api/schema-provider/sogni/save-result',
   '/api/fal/generate',
   '/api/generate',
   '/api/video/generate',
@@ -196,8 +209,8 @@ const isApiPath = (p: string): boolean => {
 };
 
 // Anti CSRF / DNS rebinding: /api only answers requests addressed to this local server.
-const ALLOWED_HOSTS = new Set([`127.0.0.1:${PORT}`, `localhost:${PORT}`]);
-const ALLOWED_ORIGINS = new Set([`http://127.0.0.1:${PORT}`, `http://localhost:${PORT}`]);
+const ALLOWED_HOSTS = new Set([`127.0.0.1:${PORT}`, `localhost:${PORT}`, ...(PORT===4173?[`terminal.local:${PORT}`]:[])]);
+const ALLOWED_ORIGINS = new Set([`http://127.0.0.1:${PORT}`, `http://localhost:${PORT}`, ...(PORT===4173?[`http://terminal.local:${PORT}`]:[])]);
 
 app.use((req, res, next) => {
   if (!isApiPath(req.path)) return next();
@@ -237,10 +250,26 @@ app.use((req, res, next) => {
   parser(req, res, next);
 });
 app.use((req, res, next) => {
-  if (req.method !== 'POST' || !/\/generate$/.test(req.path)) return next();
+  if (!isApiPath(req.path)) return next();
+  const custom=req.body?.custom_parameters;
+  if(custom!==undefined && (!custom || typeof custom!=='object' || Array.isArray(custom)))return res.status(400).json({error:'自定义参数必须为 JSON 对象',errorSource:'local'});
+  if(custom && ['model','provider','endpoint','inference_provider'].some(k=>Object.hasOwn(custom,k)))return res.status(400).json({error:'模型和路由请使用对应选择器修改；参数 JSON 不可覆盖模型或供应商',errorSource:'local'});
   const snapshot = req.body?.workflowSnapshot;
-  if (snapshot !== undefined && (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot))) return res.status(400).json({error: 'workflowSnapshot 必须为对象'});
-  return generationContext.run({route: req.path, submissions: [], workflowSnapshot: snapshot ? sanitizeGenerationMetadata(snapshot) : undefined}, next);
+  if (snapshot !== undefined && (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot))) return res.status(400).json({error: 'workflowSnapshot 必须为对象',errorSource:'local'});
+  const context = {route:req.path,submissions:[],traces:[],workflowSnapshot:snapshot ? sanitizeGenerationMetadata(snapshot) : undefined};
+  const json = res.json.bind(res);
+  res.json = ((body:any) => {
+    if (body && typeof body==='object' && !Array.isArray(body)) {
+      body.executionTrace=context.traces;
+      if(Object.entries(body).some(([k,v]:any)=>k!=='executionTrace' && v?.error))body.ok=false;
+      if (res.statusCode>=400 || body.ok===false) {
+        body.errorSource ||= context.traces.some((t:any)=>t.status>=400) ? 'upstream' : context.traces.some((t:any)=>t.status===null) ? 'network' : 'local';
+        body.stack ||= new Error(body.error || 'Request failed').stack;
+      }
+    }
+    return json(body);
+  }) as typeof res.json;
+  return generationContext.run(context,next);
 });
 
 // Admin authentication & CSRF validation helpers
@@ -384,6 +413,9 @@ let generationHistory: GeneratedItem[] = readJsonFile<GeneratedItem[]>(HISTORY_F
 let cloudSettings: Record<string, any> = readJsonFile<Record<string, any>>(SETTINGS_FILE, {});
 
 const defaultKeys: Record<string, string> = {
+  muapiKey: process.env.MUAPI_KEY || '',
+  wavespeedKey: process.env.WAVESPEED_KEY || '',
+  sogniKey: process.env.SOGNI_KEY || '',
   tensorartKey: process.env.TENSORART_API_KEY || '',
   agnesKey: process.env.AGNES_KEY || '',
   sensenovaKey: process.env.SENSENOVA_KEY || '',
@@ -404,6 +436,9 @@ const defaultKeys: Record<string, string> = {
 
 // Pool key sources per provider: settings.json fields (in order), then the defaultKeys (env) field.
 const POOL_KEY_FIELDS: Record<string, { settings: string[]; env: string }> = {
+  muapi: {settings:['muapiKey'],env:'muapiKey'},
+  wavespeed: {settings:['wavespeedKey'],env:'wavespeedKey'},
+  sogni: {settings:['sogniKey'],env:'sogniKey'},
   fal: { settings: ['falKey'], env: 'falKey' },
   agnes: { settings: ['agnesKey'], env: 'agnesKey' },
   sensenova: { settings: ['sensenovaKey'], env: 'sensenovaKey' },
@@ -663,7 +698,7 @@ const recordHistoryItem = (item: Partial<GeneratedItem>): GeneratedItem => {
   const provenance = generationContext.getStore();
   const fullItem: GeneratedItem = {
     ...item,
-    ...(provenance ? {workflowSnapshot: provenance.workflowSnapshot, requestMetadata: {route: provenance.route, submissions: provenance.submissions}} : {}),
+    ...(provenance ? {workflowSnapshot: provenance.workflowSnapshot, requestMetadata: {...item.requestMetadata,route: provenance.route, submissions: provenance.submissions,executionTrace:provenance.traces}} : {}),
     id: item.id || `hist_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
     timestamp: item.timestamp || Date.now(),
     url: item.url || '',
@@ -960,7 +995,8 @@ app.get('/api/huggingface/model-info', async (req, res) => {
       name: m.id.split('/').pop(),
       type:isHuggingFaceLora(m)?'LORA':'Checkpoint',
       category:isHuggingFaceLora(m)?'LoRA':'Checkpoint',
-      author: m.author || m.id.split('/')[0],
+      inferenceProviderMapping:m.inferenceProviderMapping,
+              author: m.author || m.id.split('/')[0],
       downloads: m.downloads || 0,
       likes: m.likes || 0,
       baseModel,
@@ -999,7 +1035,6 @@ async function fetchTensorArtModelInfo(modelId: string, apiKey?: string) {
   return {id:raw.id,name:raw.name,provider:'Tensor.Art',category:isLora?'LoRA':raw.modelType==='CHECKPOINT'?'Checkpoint':raw.modelType,type:raw.modelType,baseModel:raw.baseModel,imageUrl:raw.showcaseImageUrls?.[0] || '',trainedWords:raw.triggerWords ? [raw.triggerWords] : [],externalUrl:`https://tensor.art/models/${raw.id}`,description:raw.description,generationStatus:'metadata_verified',tags:['tensorart',isLora?'lora':'checkpoint',raw.baseModel.toLowerCase()]};
 }
 
-const tensorCatalogCache = new Map<string,{html:string;expiry:number}>();
 
 // Dedicated Real Live Community Models Discovery for Tensor.Art / 吐司
 async function fetchTensorArtModelsList({
@@ -1009,6 +1044,7 @@ async function fetchTensorArtModelsList({
   page = 1,
   arch = '',
   catalogTag = '',
+  cursor = '',
 }: {
   cat?: string;
   searchStr?: string;
@@ -1016,13 +1052,15 @@ async function fetchTensorArtModelsList({
   page?: number;
   arch?: string;
   catalogTag?: string;
+  cursor?: string;
 } = {}) {
-  // Public category snapshots use verified published links. No TAMS list/pagination API.
-  const tag=catalogTag && catalogTag!=='all' ? catalogTag : (['flux','illustrious'].includes(arch)?arch:'all');
-  const url = tensorCatalogUrl(tag);
-  const cached=tensorCatalogCache.get(url);
-  let html=cached && cached.expiry>Date.now() ? cached.html : '';
-  if(!html) {
+  const pageUrl=new URL('https://tensor.art/models/');
+  if(catalogTag && catalogTag!=='all')pageUrl.searchParams.set('tag',catalogTag);
+  if(arch && arch!=='all')pageUrl.searchParams.set('base_models',arch);
+  if(cat==='lora')pageUrl.searchParams.set('model_types','LORA');
+  if(cat==='checkpoint')pageUrl.searchParams.set('model_types','CHECKPOINT');
+  if(cursor)pageUrl.searchParams.set('cursor',cursor);
+  const url=pageUrl.href;
   const res = await upstreamFetch(
     { provider: 'tensorart', route: 'models-scrape', model: arch || searchStr || 'list' },
     url,
@@ -1036,13 +1074,11 @@ async function fetchTensorArtModelsList({
   );
 
   if (!res.ok) {
-    throw new Error(`Tensor.Art API 响应异常 [HTTP ${res.status}]`);
+    throw Object.assign(new Error(`Tensor.Art 官方网页目录 HTTP ${res.status}: ${await res.text()}`),{status:res.status});
   }
 
-  html = await res.text();
-  tensorCatalogCache.set(url,{html,expiry:Date.now()+60000});
-  }
-  const articleRegex = /<a[^>]+href="\/models\/(\d+)"[^>]*>.*?<article>(.*?)<\/article>/gs;
+  const html = await res.text();
+  const articleRegex = /<a[^>]+href="\/models\/(\d+)(?:\/[^"\s]*)?"[^>]*>.*?<article>(.*?)<\/article>/gs;
   const items: any[] = [];
   let match;
 
@@ -1109,7 +1145,7 @@ async function fetchTensorArtModelsList({
     items.push({
       id,
       name,
-      provider: 'Tensor.Art / TusiArt 公共目录',
+      provider: 'Tensor.Art 官方网页目录',
       catalogSource: url,
       generationStatus: 'unverified',
       category,
@@ -1121,14 +1157,16 @@ async function fetchTensorArtModelsList({
       speed: 'Tensor.Art 社区直拉',
       badge: isVideo ? (isLora ? 'TENSOR 视频 LORA' : 'TENSOR 视频大模型') : (isLora ? 'TENSOR LORA' : 'TENSOR CHECKPOINT'),
       imageUrl,
-      externalUrl: `https://tusiart.com/models/${id}`,
+      externalUrl: `https://tensor.art/models/${id}`,
       description: `${name} - ${category} ${rawBaseModel} by ${author}`,
       tags,
       trainedWords: [],
     });
   }
 
-  return items;
+  const nextLink=[...html.matchAll(/href="([^"]*cursor=[^"]*)"/g)].map(m=>m[1].replaceAll('&amp;','&')).map(h=>new URL(h,url)).find(u=>u.origin==='https://tensor.art' && u.searchParams.get('cursor')!==cursor);
+  if(!items.length && /<article>/.test(html))throw Object.assign(new Error('官方目录页面结构已变化，未能解析模型；没有替换目录来源'),{status:502});
+  return {items,nextCursor:nextLink?.searchParams.get('cursor') || null,sourceUrl:url};
 }
 
 // Endpoint: Dedicated Real Tensor.Art Model Info
@@ -2447,10 +2485,31 @@ function extractModelMetadata(
 // ==========================================
 // 1.5. Dynamic Model List Pulling (Direct from Original APIs)
 // ==========================================
+registerSchemaProviderRoutes(app,{fetch:upstreamFetch,key:(p,k)=>keyPoolManager.getNextKey(p,k),record:recordHistoryItem,durable:requireDurableHistoryMediaUrl});
+
+app.get('/api/model-schema', async (req,res)=>{
+  try {
+    const provider=String(req.query.provider || ''),model=String(req.query.model || '');
+    if(!model)return res.status(400).json({error:'请选择模型'});
+    if(provider!=='fal')return res.json({provider,model,source:provider==='huggingface'?'https://huggingface.co/docs/inference-providers/tasks/text-to-image':'https://www.modelscope.cn/docs/model-service/API-Inference/intro',inputSchema:null,note:'此处尚未取得该模型的机器可读 Schema；自定义 JSON 会原样提交，由上游返回参数结果。'});
+    const endpoint=`https://api.fal.ai/v1/models?endpoint_id=${encodeURIComponent(model)}&expand=openapi-3.0`;
+    const key=keyPoolManager.getNextKey('fal',req.headers['x-fal-key'] as string);
+    const response=await upstreamFetch({provider,route:req.path,model,key},endpoint,{headers:key?{Authorization:`Key ${key}`}:{},signal:AbortSignal.timeout(30000)});
+    if(!response.ok)return res.status(response.status).json({error:`HTTP ${response.status}`,details:await response.text(),endpoint});
+    const data=await response.json();const record=data.models?.find((m:any)=>m.endpoint_id===model);
+    const schema=record?.openapi || record?.['openapi-3.0'] || record?.openapi_schema;
+    if(!schema)return res.status(502).json({error:'上游未返回所选模型的 OpenAPI',details:data,endpoint});
+    const input:any=Object.values(schema.paths || {}).map((p:any)=>p.post?.requestBody?.content?.['application/json']?.schema).find(Boolean);
+    const inputSchema=input?.$ref ? schema.components?.schemas?.[input.$ref.split('/').pop()] : input;
+    res.json({provider,model,source:endpoint,inputSchema,openapi:schema});
+  }catch(error:any){res.status(500).json({error:error.message,stack:error.stack});}
+});
+
 app.get("/api/models", async (req, res) => {
   const { provider = "all", query = "", type = "" } = req.query;
   const rawCat = (req.query.category || req.query.cat || "").toString().toLowerCase();
-  const searchStr = (query || "").toString().trim().toLowerCase();
+  const rawSearch = (query || "").toString().trim();
+  const searchStr = rawSearch.toLowerCase();
   const reqType = (type || "").toString().toLowerCase();
   const sortParam = (req.query.sort || "downloads").toString();
   const cursorParam = (req.query.cursor || "").toString().trim();
@@ -2501,16 +2560,16 @@ app.get("/api/models", async (req, res) => {
     if (provider === "all" || provider === "modelscope") {
       const msCnCatalog: any[] = [];
       try {
-        let msSearch = searchStr || (cat === 'lora' ? 'lora' : cat === 'video' ? 'wan' : 'diffusion');
+        let msSearch = rawSearch;
         if (archFilter && !msSearch.includes(archFilter)) {
           msSearch = `${msSearch} ${archFilter}`;
         }
-        const msSort = sortParam.toLowerCase().includes('like') ? 'likes' : sortParam.toLowerCase().includes('new') ? 'created_at' : 'downloads';
-        const msUrl = `https://www.modelscope.cn/openapi/v1/models?page_size=${limitParam}&page_number=${pageParam}&sort=${msSort}&search=${encodeURIComponent(msSearch)}`;
+        const msSort = sortParam.toLowerCase().includes('like') ? 'likes' : sortParam.toLowerCase().includes('new') ? 'last_modified' : 'downloads';
+        const msUrl = `https://modelscope.cn/openapi/v1/models?page_size=${Math.min(limitParam,50)}&page_number=${pageParam}&sort=${msSort}&search=${encodeURIComponent(msSearch)}`;
         const msResp = await upstreamFetch(
           { provider: 'modelscope_cn', route: req.path, model: msSearch },
           msUrl,
-          { headers: { 'User-Agent': 'ComfyCanvas/1.0' }, signal: AbortSignal.timeout(15000) }
+          { headers: {Authorization:`Bearer ${keyPoolManager.getNextKey('modelscope',req.headers['x-modelscope-token'] as string) || ''}`}, signal: AbortSignal.timeout(30000) }
         );
         if (msResp.ok) {
           const msData = await msResp.json();
@@ -2518,16 +2577,14 @@ app.get("/api/models", async (req, res) => {
 
           pagination.modelscope = {
             page: pageParam,
-            hasMore: items.length >= limitParam,
+            hasMore: pageParam*Math.min(limitParam,50)<Math.min(msData?.data?.total_count ?? Infinity,3000) && items.length>=Math.min(limitParam,50),
           };
           
-          // Resolve real cover images in parallel
-          const imagePromises = items.map((m: any) => resolveModelScopeRealImage(m.id, true));
-          const resolvedImages = await Promise.allSettled(imagePromises);
+
 
           items.forEach((m: any, idx: number) => {
             const meta = extractModelMetadata(m.id, m.display_name, m.tags || [], m.description || '', (m.tasks || []).join(' '), 'ModelScope CN');
-            const realImg = resolvedImages[idx].status === 'fulfilled' ? resolvedImages[idx].value : '';
+            const realImg = m.cover || m.image_url || '';
 
             // Extract real trigger words if present in tags, else empty
             const triggers: string[] = [];
@@ -2556,7 +2613,7 @@ app.get("/api/models", async (req, res) => {
             });
           });
         } else {
-          results.modelscope = { error: `ModelScope CN 接口响应异常 (HTTP ${msResp.status})` } as any;
+          results.modelscope = { error: `HTTP ${msResp.status}`, status:msResp.status, details:await msResp.text(),endpoint:msUrl } as any;
         }
       } catch (err: any) {
         console.error("ModelScope CN OpenAPI real-time fetch error:", err);
@@ -2572,16 +2629,16 @@ app.get("/api/models", async (req, res) => {
     if (provider === "all" || provider === "modelscope_ai") {
       const msAiCatalog: any[] = [];
       try {
-        let msSearch = searchStr || (cat === 'lora' ? 'lora' : cat === 'video' ? 'wan' : 'diffusion');
+        let msSearch = rawSearch;
         if (archFilter && !msSearch.includes(archFilter)) {
           msSearch = `${msSearch} ${archFilter}`;
         }
-        const msAiSort = sortParam.toLowerCase().includes('like') ? 'likes' : sortParam.toLowerCase().includes('new') ? 'created_at' : 'downloads';
-        const msUrl = `https://modelscope.ai/openapi/v1/models?page_size=${limitParam}&page_number=${pageParam}&sort=${msAiSort}&search=${encodeURIComponent(msSearch)}`;
+        const msAiSort = sortParam.toLowerCase().includes('like') ? 'likes' : sortParam.toLowerCase().includes('new') ? 'last_modified' : 'downloads';
+        const msUrl = `https://www.modelscope.ai/openapi/v1/models?page_size=${Math.min(limitParam,50)}&page_number=${pageParam}&sort=${msAiSort}&search=${encodeURIComponent(msSearch)}`;
         const msResp = await upstreamFetch(
           { provider: 'modelscope_ai', route: req.path, model: msSearch },
           msUrl,
-          { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }, signal: AbortSignal.timeout(15000) }
+          { headers: {Authorization:`Bearer ${keyPoolManager.getNextKey('modelscope_ai',req.headers['x-modelscope-ai-token'] as string) || ''}`}, signal: AbortSignal.timeout(30000) }
         );
         if (msResp.ok) {
           const msData = await msResp.json();
@@ -2589,16 +2646,14 @@ app.get("/api/models", async (req, res) => {
 
           pagination.modelscope_ai = {
             page: pageParam,
-            hasMore: items.length >= limitParam,
+            hasMore: pageParam*Math.min(limitParam,50)<Math.min(msData?.data?.total_count ?? Infinity,3000) && items.length>=Math.min(limitParam,50),
           };
 
-          // Resolve real cover images in parallel
-          const imagePromises = items.map((m: any) => resolveModelScopeRealImage(m.id, false));
-          const resolvedImages = await Promise.allSettled(imagePromises);
+
 
           items.forEach((m: any, idx: number) => {
             const meta = extractModelMetadata(m.id, m.display_name, m.tags || [], m.description || '', (m.tasks || []).join(' '), 'ModelScope AI');
-            const realImg = resolvedImages[idx].status === 'fulfilled' ? resolvedImages[idx].value : '';
+            const realImg = m.cover || m.image_url || '';
 
             const triggers: string[] = [];
             if (Array.isArray(m.tags)) {
@@ -2626,7 +2681,7 @@ app.get("/api/models", async (req, res) => {
             });
           });
         } else {
-          results.modelscope_ai = { error: `ModelScope AI 接口响应异常 (HTTP ${msResp.status})` } as any;
+          results.modelscope_ai = { error: `HTTP ${msResp.status}`, status:msResp.status, details:await msResp.text(),endpoint:msUrl } as any;
         }
       } catch (err: any) {
         const isTimeout = err.name === 'TimeoutError' || err.message?.includes('timeout') || err.message?.includes('aborted');
@@ -2661,6 +2716,8 @@ app.get("/api/models", async (req, res) => {
         hfParams.append("expand[]", "pipeline_tag");
         hfParams.append("expand[]", "author");
         hfParams.append("expand[]", "cardData");
+        hfParams.append("expand[]", "inferenceProviderMapping");
+        if(req.query.inferenceProvider) hfParams.set("inference_provider",String(req.query.inferenceProvider));
 
         if (cursorParam) {
           hfParams.append("cursor", cursorParam);
@@ -2679,7 +2736,8 @@ app.get("/api/models", async (req, res) => {
         } else if (cat === "lora") {
           if (!effectiveSearch) {
             // When browsing LoRAs generally without search keyword, prioritize image/video diffusers LoRAs
-            hfParams.append("filter", "lora,diffusers");
+            hfParams.append("filter", "lora");
+            hfParams.append("filter", "diffusers");
           } else {
             // When searching by keyword or architecture, search broadly across all LoRAs
             hfParams.append("filter", "lora");
@@ -2690,12 +2748,7 @@ app.get("/api/models", async (req, res) => {
           hfParams.append("pipeline_tag", "text-to-image");
         }
 
-        const hfToken =
-          (req.headers['x-hf-token'] as string) ||
-          cloudSettings['hfToken'] ||
-          defaultKeys['hfToken'] ||
-          process.env.HF_TOKEN ||
-          '';
+        const hfToken = keyPoolManager.getNextKey('huggingface',req.headers['x-hf-token'] as string) || '';
 
         const hfHeaders: Record<string, string> = {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
@@ -2729,7 +2782,7 @@ app.get("/api/models", async (req, res) => {
           // If user searched for an exact repo path (e.g. username/repo-name), fetch that exact model directly if not present
           if (searchStr && searchStr.includes('/') && !rawModelList.some((m) => m.id?.toLowerCase() === searchStr.toLowerCase())) {
             try {
-              const exactUrl = `https://huggingface.co/api/models/${searchStr.split('/').map(encodeURIComponent).join('/')}?expand[]=siblings&expand[]=tags&expand[]=likes&expand[]=pipeline_tag&expand[]=author&expand[]=cardData`;
+              const exactUrl = `https://huggingface.co/api/models/${rawSearch.split('/').map(encodeURIComponent).join('/')}?expand[]=siblings&expand[]=tags&expand[]=likes&expand[]=pipeline_tag&expand[]=author&expand[]=cardData`;
               const exactResp = await upstreamFetch(
                 { provider: 'huggingface', route: req.path, model: searchStr, key: hfToken },
                 exactUrl,
@@ -2807,6 +2860,7 @@ app.get("/api/models", async (req, res) => {
               id: m.id,
               name: meta.cleanDisplayName,
               provider: "Hugging Face",
+              inferenceProviderMapping: m.inferenceProviderMapping,
               category: isLoraModel ? "LoRA" : meta.category,
               type: isLoraModel ? "LORA" : meta.type,
               baseModel: realBaseModel || meta.baseModel,
@@ -2826,7 +2880,7 @@ app.get("/api/models", async (req, res) => {
             return matchCategory(m) && matchSearch(m);
           });
         } else {
-          results.huggingface = { error: `Hugging Face 接口异常 (HTTP ${hfResp.status})` } as any;
+          results.huggingface = { error: `HTTP ${hfResp.status}`,status:hfResp.status,details:await hfResp.text(),endpoint:hfUrl } as any;
         }
       } catch (err: any) {
         const isTimeout = err.name === 'TimeoutError' || err.message?.includes('timeout') || err.message?.includes('aborted');
@@ -2935,12 +2989,7 @@ app.get("/api/models", async (req, res) => {
     if (provider === "all" || provider === "fal") {
       const falItems: any[] = [];
       try {
-        const falKey =
-          (req.headers['x-fal-key'] as string) ||
-          cloudSettings['falKey'] ||
-          defaultKeys['falKey'] ||
-          process.env.FAL_KEY ||
-          '';
+        const falKey = keyPoolManager.getNextKey('fal',req.headers['x-fal-key'] as string) || '';
 
         const falHeaders: Record<string, string> = {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
@@ -2952,24 +3001,14 @@ app.get("/api/models", async (req, res) => {
 
         // Determine live Fal.ai query URLs based on requested category & search string
         // Official Fal.ai API: search uses `?q=`, category uses `?category=`
-        const fetchUrls: string[] = [];
-        if (searchStr) {
-          fetchUrls.push(`https://api.fal.ai/v1/models?q=${encodeURIComponent(searchStr)}`);
-        } else if (cat === 'checkpoint') {
-          fetchUrls.push("https://api.fal.ai/v1/models?category=text-to-image");
-        } else if (cat === 'video') {
-          fetchUrls.push("https://api.fal.ai/v1/models?category=text-to-video");
-          fetchUrls.push("https://api.fal.ai/v1/models?category=image-to-video");
-        } else if (cat === 'edit') {
-          fetchUrls.push("https://api.fal.ai/v1/models?category=image-to-image");
-        } else if (cat === 'lora') {
-          fetchUrls.push("https://api.fal.ai/v1/models?q=lora");
-        } else {
-          // 'all'
-          fetchUrls.push("https://api.fal.ai/v1/models?category=text-to-image");
-          fetchUrls.push("https://api.fal.ai/v1/models?category=text-to-video");
-          fetchUrls.push("https://api.fal.ai/v1/models?q=lora");
-        }
+        const falParams=new URLSearchParams({limit:String(limitParam),status:'active'});
+        if(cursorParam) falParams.set('cursor',cursorParam);
+        if(rawSearch) falParams.set('q',rawSearch);
+        if(cat==='checkpoint') falParams.set('category','text-to-image');
+        if(cat==='video') falParams.set('category','text-to-video');
+        if(cat==='edit') falParams.set('category','image-to-image');
+        if(cat==='lora' && !rawSearch) falParams.set('q','lora');
+        const fetchUrls=[`https://api.fal.ai/v1/models?${falParams}`];
 
         const responses = await Promise.allSettled(
           fetchUrls.map((u) =>
@@ -2988,7 +3027,8 @@ app.get("/api/models", async (req, res) => {
         for (const respResult of responses) {
           if (respResult.status === 'fulfilled' && respResult.value.ok) {
             hadSuccessfulResponse = true;
-            const falData = await respResult.value.json().catch(() => ({}));
+            const falData = await respResult.value.json();
+            pagination.fal={page:pageParam,nextCursor:falData.next_cursor,hasMore:falData.has_more===true};
             const list = Array.isArray(falData.models) ? falData.models : Array.isArray(falData) ? falData : [];
             for (const m of list) {
               const endpointId = m.endpoint_id || m.id || "";
@@ -3026,10 +3066,11 @@ app.get("/api/models", async (req, res) => {
             }
           } else if (respResult.status === 'fulfilled') {
             lastErrorStatus = respResult.value.status;
+            results.fal={error:`HTTP ${lastErrorStatus}`,status:lastErrorStatus,details:await respResult.value.text(),endpoint:fetchUrls[0]} as any;
           }
         }
 
-        if (!hadSuccessfulResponse && responses.length > 0 && lastErrorStatus > 0) {
+        if (!results.fal && !hadSuccessfulResponse && responses.length > 0 && lastErrorStatus > 0) {
           results.fal = { error: `Fal.ai 接口响应异常 (HTTP ${lastErrorStatus})` } as any;
         }
       } catch (err: any) {
@@ -3256,18 +3297,22 @@ app.get("/api/models", async (req, res) => {
     if (provider === "all" || provider === "tensorart" || provider === "tensor") {
       try {
         const numericSearch = searchStr.match(/(?:^|\/models\/)(\d{10,25})(?:$|[/?#])/);
-        const taItems = numericSearch
-          ? [await fetchTensorArtModelInfo(numericSearch[1],resolveTensorArtKey(req))]
-          : await fetchTensorArtModelsList({cat,searchStr,sortOption:sortParam,page:pageParam,arch:archFilter,catalogTag:String(req.query.catalogTag || '')});
+        const taCatalog = numericSearch
+          ? {items:[await fetchTensorArtModelInfo(numericSearch[1],resolveTensorArtKey(req))],nextCursor:null,sourceUrl:TENSOR_MODEL_API}
+          : await fetchTensorArtModelsList({cat,searchStr,sortOption:sortParam,page:pageParam,arch:String(req.query.architecture || req.query.arch || ''),catalogTag:String(req.query.catalogTag || ''),cursor:cursorParam});
+        const taItems=taCatalog.items;
         const filteredTensorItems = taItems.filter((m:any)=> (!searchStr || numericSearch || `${m.name} ${m.baseModel}`.toLowerCase().includes(searchStr.toLowerCase())) && (!archFilter || archFilter==='all' || m.baseModel.toLowerCase().includes(archFilter.toLowerCase())));
         results.tensorart = filteredTensorItems.filter((m: any) => matchCategory(m));
         pagination.tensorart = {
           page: pageParam,
-          hasMore: false,
-        };
+          hasMore: !!taCatalog.nextCursor,
+          nextCursor:taCatalog.nextCursor,
+          sourceUrl:taCatalog.sourceUrl,
+          paging:'official-public-webpage',
+        } as any;
       } catch (taErr: any) {
         console.error("Tensor.Art live models fetch error:", taErr.message);
-        results.tensorart = { error: `Tensor.Art 模型中心获取失败: ${taErr.message}` } as any;
+        results.tensorart = { error: `Tensor.Art 模型中心获取失败: ${taErr.message}`,status:taErr.status,stack:taErr.stack } as any;
       }
 
       if (provider === "tensor") {
@@ -3335,133 +3380,9 @@ async function falReadOnlyKeyCheck(key: string, route: string): Promise<{ status
   return { status: 'error', message: `Fal.ai 账单接口返回 [${resp.status}]: ${errBody.slice(0, 300)}` };
 }
 
-function normalizeFalEndpoint(model: string, isVideo = false): string {
-  const m = (model || '').toLowerCase().trim();
-
-  // If in video generation mode, force video endpoints
-  if (isVideo) {
-    // Rewrite known-dead Wan ids before the fal-ai/ passthrough
-    if (m === 'fal-ai/wan/v2.1/text-to-video' || m === 'fal-ai/wan/t2v') return 'fal-ai/wan-t2v';
-    if (m === 'fal-ai/wan/v2.1/image-to-video') return 'fal-ai/wan-i2v';
-    // Full Fal endpoint IDs are passed through verbatim
-    if (m.startsWith('fal-ai/')) return model.trim();
-    if (m === 'kling-video/v1/standard/text-to-video') return 'fal-ai/kling-video/v1/standard/text-to-video';
-    if (m === 'kling-video/v1/standard/image-to-video') return 'fal-ai/kling-video/v1/standard/image-to-video';
-    if (m === 'ltx-video') return 'fal-ai/ltx-video';
-    if (m === 'minimax/video-01') return 'fal-ai/minimax/video-01';
-    if (m === 'cogvideox-5b') return 'fal-ai/cogvideox-5b';
-    if (m === 'hunyuan-video') return 'fal-ai/hunyuan-video';
-    if (
-      m === 'wan/v2.1/image-to-video' ||
-      m === 'fal-ai/wan/v2.1/image-to-video' ||
-      m === 'wan-i2v' ||
-      m === 'fal-ai/wan-i2v'
-    ) return 'fal-ai/wan-i2v';
-    if (
-      m === 'damo/wan2.1-t2v' ||
-      m === 'wan2.1-t2v' ||
-      m === 'wan/v2.1/text-to-video' ||
-      m === 'fal-ai/wan/v2.1/text-to-video' ||
-      m === 'wan/t2v' ||
-      m === 'fal-ai/wan/t2v' ||
-      m === 'wan-t2v' ||
-      m === 'fal-ai/wan-t2v'
-    ) return 'fal-ai/wan-t2v';
-    // F4: unrecognized video model → empty string signals caller to 400
-    return '';
-  }
-
-  // F3: fal-ai/flux-lora is an independent endpoint, NOT rewritten to fal-ai/flux/dev
-  if (m === 'fal-ai/flux-lora' || m === 'flux-lora') {
-    return 'fal-ai/flux-lora';
-  }
-
-  if (
-    m === 'black-forest-labs/flux.1-schnell' ||
-    m === 'flux.1-schnell' ||
-    m === 'flux-schnell' ||
-    m === 'fal-ai/flux/schnell' ||
-    m === 'fal-ai/flux-schnell'
-  ) {
-    return 'fal-ai/flux/schnell';
-  }
-  if (
-    m === 'black-forest-labs/flux.1-dev' ||
-    m === 'flux.1-dev' ||
-    m === 'flux-dev' ||
-    m === 'fal-ai/flux/dev' ||
-    m === 'fal-ai/flux-dev'
-  ) {
-    return 'fal-ai/flux/dev';
-  }
-  // F7: Only standard SDXL 1.0 aliases map to fast-sdxl; SD1.5/Pony/Animagine are NOT replaced
-  if (
-    m === 'stabilityai/stable-diffusion-xl-base-1.0' ||
-    m === 'stable-diffusion-xl-base-1.0' ||
-    m === 'sdxl' ||
-    m === 'sdxl-1.0' ||
-    m === 'fal-ai/stable-diffusion-xl-base-1.0' ||
-    m === 'fal-ai/fast-sdxl'
-  ) {
-    return 'fal-ai/fast-sdxl';
-  }
-  if (
-    m === 'stabilityai/stable-diffusion-3.5-large' ||
-    m === 'sd3.5-large' ||
-    m === 'fal-ai/stable-diffusion-v35-large'
-  ) {
-    return 'fal-ai/stable-diffusion-v35-large';
-  }
-  if (
-    m === 'krea-ai/krea2-turbo' ||
-    m === 'krea-ai/krea-2-turbo' ||
-    m === 'fal-ai/krea-2/turbo' ||
-    m === 'krea2_turbo_fp8_scaled'
-  ) {
-    return 'fal-ai/krea-2/turbo';
-  }
-  if (
-    m === 'damo/wan2.1-t2v' ||
-    m === 'wan/v2.1/text-to-video' ||
-    m === 'fal-ai/wan/v2.1/text-to-video' ||
-    m === 'wan2.1-t2v' ||
-    m === 'wan/t2v' ||
-    m === 'fal-ai/wan/t2v' ||
-    m === 'wan-t2v' ||
-    m === 'fal-ai/wan-t2v'
-  ) {
-    return 'fal-ai/wan-t2v';
-  }
-  if (
-    m === 'wan/v2.1/image-to-video' ||
-    m === 'fal-ai/wan/v2.1/image-to-video' ||
-    m === 'wan-i2v' ||
-    m === 'fal-ai/wan-i2v'
-  ) {
-    return 'fal-ai/wan-i2v';
-  }
-  if (m === 'fal-ai/ltx-video' || m === 'ltx-video') {
-    return 'fal-ai/ltx-video';
-  }
-  if (m === 'fal-ai/kling-video/v1/standard/text-to-video' || m === 'kling-video/v1/standard/text-to-video') {
-    return 'fal-ai/kling-video/v1/standard/text-to-video';
-  }
-  if (m === 'fal-ai/minimax/video-01' || m === 'minimax/video-01') {
-    return 'fal-ai/minimax/video-01';
-  }
-  if (m === 'fal-ai/cogvideox-5b' || m === 'cogvideox-5b') {
-    return 'fal-ai/cogvideox-5b';
-  }
-  if (m === 'fal-ai/hunyuan-video' || m === 'hunyuan-video') {
-    return 'fal-ai/hunyuan-video';
-  }
-  if (m.startsWith('fal-ai/')) {
-    return model.trim();
-  }
-  if (!m.includes('/')) {
-    return `fal-ai/${m}`;
-  }
-  return model;
+function normalizeFalEndpoint(model: string, _isVideo = false): string {
+  // The selected native endpoint is the route. Never replace aliases or dead IDs.
+  return (model || '').trim();
 }
 
 // ==========================================
@@ -3490,23 +3411,7 @@ app.post(['/api/fal/generate', '/api/generate'], async (req, res) => {
       });
     }
     if (!model) return res.status(400).json({ error: '模型为必填项（model is required）' });
-    // sampler_name/scheduler: not in fal-ai/flux/dev, flux-lora or fast-sdxl input schemas.
-    if (rejectUnsupported(res, 'Fal.ai', req.body, ['sampler_name'])) return;
-
-    let endpoint = normalizeFalEndpoint(model);
-    const providedFields: [string, FieldKey][] = [['scheduler','scheduler'],['num_images','num_images'],['num_inference_steps','steps'],['guidance_scale','cfg'],['seed','seed'],['negative_prompt','negative_prompt'],['image_size','image_size']];
-    for (const [wire, field] of providedFields) {
-      if (!isProvided(req.body[wire])) continue;
-      const spec=getFieldSpec('fal',endpoint,field);
-      if (!spec || spec.status!=='supported') return res.status(400).json({error:`Fal.ai ${endpoint} ${wire} ${spec?.status==='unsupported'?'该服务商不支持':'能力未能核实'}`,unsupported:[wire],endpoint});
-      if (field!=='image_size' && valueStatus('fal',endpoint,field,req.body[wire])!=='supported') return res.status(400).json({error:`Fal.ai ${endpoint} ${wire} 超出官方取值范围`,field:wire,allowed:spec.enum?.map(v=>v.value),min:spec.min,max:spec.max});
-    }
-    if (isProvided(image_url)) return res.status(400).json({error:`Fal.ai ${endpoint} 图生图字段契约未能核实，请显式使用已核实的图生图端点`,unsupported:['image_url'],endpoint});
-    if (endpoint==='fal-ai/lora' && !req.body.model_name) return res.status(400).json({error:'fal-ai/lora 需要 model_name（底模 URL 或 HF ID），不会代为填写默认值'});
-    // FLUX endpoints (flux/dev, flux/schnell, flux-lora) have no negative_prompt in their schema.
-    if (endpoint.includes('flux') && rejectUnsupported(res, `Fal.ai ${endpoint}`, req.body, ['negative_prompt'])) return;
-
-    // H6: 只发用户传了的字段；不写死 enable_safety_checker 等
+    const endpoint = String(model).trim();
     const payload: any = { prompt };
     if (endpoint==='fal-ai/lora') payload.model_name=req.body.model_name;
     if (isProvided(req.body.num_images)) payload.num_images=Number(req.body.num_images);
@@ -3567,16 +3472,6 @@ app.post(['/api/fal/generate', '/api/generate'], async (req, res) => {
 
     if (Array.isArray(loras) && loras.length > 0) {
       // F8: 所选端点不支持 LoRA 时返回「该服务商不支持」
-      const LORA_ENDPOINTS = ['fal-ai/flux-lora', 'fal-ai/fast-sdxl', 'fal-ai/lora', 'fal-ai/stable-diffusion-v35-large'];
-      const loraSpec = getFieldSpec('fal', endpoint, 'loras');
-      const isUnsupported = loraSpec ? loraSpec.status === 'unsupported' : !LORA_ENDPOINTS.includes(endpoint);
-      if (isUnsupported) {
-        return res.status(400).json({
-          error: `该服务商不支持（Fal.ai 端点 ${endpoint} 的官方 schema 无 loras 字段）。请显式选择支持 LoRA 的端点：${LORA_ENDPOINTS.join(' / ')}`,
-          unsupported: ['loras'],
-          endpoint,
-        });
-      }
       const badLora = loras.find((l: any) => !(l?.path || l?.url) || !isProvided(l?.scale ?? l?.strength ?? l?.modelStrength));
       if (badLora) {
         // V2: no `?? 0.8` strength fallback, no Civitai-ID → download-URL rewriting (would leak the Civitai token to Fal).
@@ -3590,6 +3485,8 @@ app.post(['/api/fal/generate', '/api/generate'], async (req, res) => {
         scale: Number(l.scale ?? l.strength ?? l.modelStrength),
       }));
     }
+
+    if(req.body.custom_parameters) Object.assign(payload,req.body.custom_parameters);
 
     const response = await upstreamFetch(
       { provider: 'fal', route: req.path, model: endpoint, key: falKey },
@@ -5902,10 +5799,8 @@ app.post(['/api/huggingface/generate', '/api/engine/huggingface/generate'], asyn
 
     const normalizedModel = (model || '').trim().toLowerCase();
     const hfProvider = req.body.inference_provider;
-    if (hfProvider && !['hf-inference','fal-ai'].includes(hfProvider)) return res.status(400).json({error:'未核实的 HF 推理端点，请选择 hf-inference 或 fal-ai'});
-    const isZImage = (!hfProvider) && (
-      normalizedModel === 'tongyi-mai/z-image-turbo' ||
-      normalizedModel === 'z-image-turbo');
+    if (!['hf-inference','fal-ai','z-image-space'].includes(hfProvider)) return res.status(400).json({error:'请选择 HF 实际执行路由',errorSource:'local'});
+    const isZImage = hfProvider==='z-image-space';
 
     if (!hfToken && !isZImage) {
       return res.status(400).json({
@@ -6051,8 +5946,6 @@ app.post(['/api/huggingface/generate', '/api/engine/huggingface/generate'], asyn
       }
       if (mapping?.status !== 'live' || mapping?.task !== 'text-to-image') return res.status(400).json({error:`HF 未给 ${model} 提供 fal-ai 生图映射`});
       const endpoint = mapping.providerId;
-      if (!['fal-ai/flux-lora','fal-ai/flux/dev','fal-ai/flux/schnell','fal-ai/fast-sdxl'].includes(endpoint)) return res.status(400).json({error:`端点 ${endpoint} 的参数契约未能核实，请选择已核实的 FLUX.1 / SDXL 端点`});
-      if (endpoint.includes('flux') && rejectUnsupported(res,endpoint,req.body,['negative_prompt'])) return;
       const payload: any = {prompt:finalPrompt};
       if (isProvided(width) || isProvided(height)) {
         if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0) return res.status(400).json({error:'width / height 必须同时为正整数'});
@@ -6063,6 +5956,7 @@ app.post(['/api/huggingface/generate', '/api/engine/huggingface/generate'], asyn
       if (isProvided(seed) && seed>=0) payload.seed=seed;
       if (isProvided(negative_prompt)) payload.negative_prompt=negative_prompt;
       if (loraFiles.length) payload.loras=loraFiles;
+      if(req.body.custom_parameters) Object.assign(payload,req.body.custom_parameters);
       const headers={Authorization:`Bearer ${hfToken}`,'Content-Type':'application/json'};
       const url=`https://router.huggingface.co/fal-ai/${endpoint}?_subdomain=queue`;
       const submit=await upstreamFetch({provider:'huggingface',route:req.path,model:baseModel,key:hfToken},url,{method:'POST',headers,body:JSON.stringify(payload)});
@@ -6174,7 +6068,7 @@ app.post(
       if (!model) return res.status(400).json({ error: '模型为必填项（model is required）' });
     // LoRA repository ID / weighted map format verified from the official model example.
       // cfg / denoise / image_url: 仍 400（不在本项范围）。
-      if (rejectUnsupported(res, 'ModelScope', req.body, ['cfg', 'denoise','sampler_name','scheduler'])) return;
+
 
       const requestedSite = (
         req.body.site ||
@@ -6197,16 +6091,10 @@ app.post(
         });
       }
 
-      // Hosted REST examples do not establish Diffusers kwargs as API parameters.
-      const unverified = ['negative_prompt','steps','guidance','seed','width','height'].filter(k=>isProvided(req.body[k]));
-      if (unverified.length) return res.status(400).json({error:`未能核实 ModelScope 所选模型的云 API 参数：${unverified.join(', ')}。模型卡本地 Diffusers 参数不等于 REST 契约。`,unverified});
       const finalPrompt = prompt || '';
-      const payload: any = { model, prompt: finalPrompt };
-      if (isProvided(req.body.image_url)) {
-        if (/^qwen\/qwen-image-edit-2511$/i.test(model)) payload.image_url=Array.isArray(req.body.image_url)?req.body.image_url:[req.body.image_url];
-        else if (/^qwen\/qwen-image-edit$/i.test(model) && typeof req.body.image_url==='string') payload.image_url=req.body.image_url;
-        else return res.status(400).json({error:'该模型的 image_url 云端接口契约未能核实；当前核实 Qwen/Qwen-Image-Edit 与 Qwen/Qwen-Image-Edit-2511'});
-      } else if (/^qwen\/qwen-image-edit(?:-2511)?$/i.test(model)) return res.status(400).json({error:'所选图像编辑模型需要 image_url'});
+      const payload: any = {model,prompt:finalPrompt};
+      for(const field of ['negative_prompt','steps','guidance','seed','width','height','image_url','cfg','denoise','sampler_name','scheduler']) if(isProvided(req.body[field])) payload[field]=req.body[field];
+      if(req.body.custom_parameters) Object.assign(payload,req.body.custom_parameters);
       try {
         const mappedLoras = buildModelScopeLoras(req.body.loras);
         if (mappedLoras !== undefined) payload.loras = mappedLoras;
@@ -6336,8 +6224,8 @@ app.post(
         provider: providerName,
         model,
         seed: payload.seed ?? null,
-        steps: payload.num_inference_steps ?? null,
-        cfg: payload.guidance_scale ?? null,
+        steps: payload.steps ?? null,
+        cfg: payload.guidance ?? null,
         loras: typeof payload.loras === 'string' ? [{name: payload.loras, strength: 1}] : Object.entries(payload.loras || {}).map(([name, strength]) => ({name, strength: Number(strength)})),
       });
 
@@ -6822,6 +6710,12 @@ async function testSingleProviderKey(
   const prov = provider.toLowerCase().trim();
 
   try {
+    if (['muapi','wavespeed','sogni'].includes(prov)) {
+      const urls:Record<string,string>={muapi:'https://api.muapi.ai/api/v1/models',wavespeed:'https://api.wavespeed.ai/api/v3/models',sogni:'https://api.sogni.ai/v1/creative-agent/workflows?limit=1'};
+      const resp=await upstreamFetch({provider:prov,route:routePath,key:singleKey},urls[prov],{headers:prov==='muapi'?{'x-api-key':singleKey}:{Authorization:`Bearer ${singleKey}`}});
+      const raw=await resp.text();
+      return {maskedKey,status:resp.ok?(prov==='muapi'?'warning':'ok'):'error',latency:Date.now()-startTime,message:`HTTP ${resp.status} · ${urls[prov]} · ${resp.ok?'只读接口可访问；尚未验证生成权限':'原始响应：'+raw}`};
+    }
     if (prov === 'civitai') {
       const headers: Record<string, string> = { 'User-Agent': 'ComfyCanvas-AI/1.0' };
       if (singleKey) headers['Authorization'] = `Bearer ${singleKey}`;
@@ -7640,6 +7534,7 @@ app.post('/api/cloud/projects/:id/clone', (req, res) => {
 // 10. Server-Side Settings / Credentials Storage
 // ==========================================
 const ALLOWED_SETTINGS_SECRET = new Set([
+  'muapiKey', 'wavespeedKey', 'sogniKey',
   'falKey',
   'agnesKey',
   'sensenovaKey',
@@ -7780,7 +7675,7 @@ async function startServer() {
   }
 
   const HOST = '127.0.0.1';
-  app.listen(PORT, '127.0.0.1', () => {
+  app.listen(PORT, process.argv.includes('--host') ? process.argv[process.argv.indexOf('--host')+1] : '127.0.0.1', () => {
     console.log(`[ComfyCanvas Studio] Server listening on 127.0.0.1:${PORT}`);
   });
 }

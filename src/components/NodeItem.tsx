@@ -1,3 +1,4 @@
+import {ApiParameterEditor} from './ApiParameterEditor';
 import {ProviderModelSelect} from './ProviderModelSelect';
 import React from 'react';
 import {
@@ -28,7 +29,7 @@ import { GeminiFieldSelect, GeminiModelBadge } from './GeminiFieldSelect';
 import { fieldOptions, getFieldSpec, resolveSchemaModelId } from '../schemas/providerSchema';
 import { FieldStatusBadge } from './FieldStatusBadge';
 import { isCanvasFieldUnsupported, isCanvasWidgetUnsupported } from '../utils/resolveCheckpoint';
-import { ksamplerNodeTitle, loraLoaderNodeTitle, LORA_LOADER_TYPES } from '../utils/providerLabels';
+import { checkpointNodeTitle, ksamplerNodeTitle, loraLoaderNodeTitle, LORA_LOADER_TYPES } from '../utils/providerLabels';
 
 interface NodeItemProps {
   node: NodeInstance;
@@ -222,7 +223,9 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               isCanvasFieldUnsupported(currentProvider, currentCheckpoint, 'steps');
             const displayTitle =
               node.type === 'KSampler'
-                ? ksamplerNodeTitle(node.title, stepsUnsupported)
+                ? ksamplerNodeTitle(node.title, stepsUnsupported || ['muapi','wavespeed','sogni'].includes(currentProvider || ''))
+                : node.type === 'CheckpointLoaderSimple'
+                  ? checkpointNodeTitle(node.values.targetProvider,node.values.ckpt_name)
                 : LORA_LOADER_TYPES.has(node.type)
                   ? loraLoaderNodeTitle(node.title, node.values?.lora_name)
                   : node.title;
@@ -372,6 +375,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
             </div>
           )}
 
+          {node.type==='CheckpointLoaderSimple' && ['fal','modelscope','modelscope_ai','huggingface','muapi','wavespeed','sogni'].includes(node.values.targetProvider) && <ApiParameterEditor provider={node.values.targetProvider} model={node.values.ckpt_name} value={node.values.custom_parameters} onChange={value=>onUpdateValue(node.id,'custom_parameters',value)} />}
           {/* Widgets according to definition */}
           {def.widgets?.filter(widget => showUnsupported || !(isCanvasWidgetUnsupported(currentProvider, currentCheckpoint, widget.name) || (node.type === 'CLIPTextEncodeNegative' && widget.name === 'text' && greyNegative))).map((widget) => {
             const value = node.values[widget.name];
@@ -382,9 +386,9 @@ export const NodeItem: React.FC<NodeItemProps> = ({
             }
             if (widget.name === 'hf_provider') {
               if ((node.values.targetProvider || currentProvider) !== 'huggingface') return null;
-              return <label key={widget.name} className="block text-sm text-slate-400">HF 推理端点<select value={value || (node.values.ckpt_name === 'XLabs-AI/flux-RealismLora' ? 'fal-ai' : '')} onChange={e=>onUpdateValue(node.id,'hf_provider',e.target.value)} onMouseDown={e=>e.stopPropagation()} className="mt-1 w-full bg-[#121316] rounded-lg border border-[#2d303a] p-2 text-slate-200"><option value="">模型绑定端点（Z-Image 官方 Space / HF Inference）</option><option value="hf-inference">HF Inference</option><option value="fal-ai">HF Inference Providers → fal-ai（HF Token 计费）</option></select></label>;
+              return <label key={widget.name} className="block text-sm text-slate-400">HF 推理端点<select value={value || ''} onChange={e=>onUpdateValue(node.id,'hf_provider',e.target.value)} onMouseDown={e=>e.stopPropagation()} className="mt-1 w-full bg-[#121316] rounded-lg border border-[#2d303a] p-2 text-slate-200"><option value="">请选择实际执行路由</option><option value="hf-inference">HF Inference</option><option value="z-image-space">Z-Image 官方 Space</option><option value="fal-ai">HF Inference Providers → fal-ai（HF Token 计费）</option></select></label>;
             }
-            if (LORA_LOADER_TYPES.has(node.type) && widget.name === 'strength_clip' && ['civitai', 'fal', 'modelscope', 'modelscope_ai', 'tensorart', 'huggingface'].includes(currentProvider || '')) return <p key={widget.name} className="text-xs text-slate-400">此 API 只接受单一 LoRA 强度；CLIP 强度不独立发送。</p>;
+            if (LORA_LOADER_TYPES.has(node.type) && widget.name === 'strength_clip' && ['civitai', 'fal', 'modelscope', 'modelscope_ai', 'tensorart', 'huggingface','muapi','wavespeed','sogni'].includes(currentProvider || '')) return <p key={widget.name} className="text-xs text-slate-400">此 API 只接受单一 LoRA 强度；CLIP 强度不独立发送。</p>;
 
             if (node.type === 'CheckpointLoaderSimple' && widget.name === 'shift') {
               const prov = String(node.values?.targetProvider || currentProvider || '');

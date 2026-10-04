@@ -13,7 +13,10 @@ export type ProviderId =
   | 'tensorart'
   | 'video'
   | 'openai_compat'
-  | 'grok_compat';
+  | 'grok_compat'
+  | 'muapi'
+  | 'wavespeed'
+  | 'sogni';
 
 export interface ModelSpec {
   id: string;
@@ -79,6 +82,9 @@ export interface NormalizedGenerateResult {
   adaptationNotice?: string;
   timings?: any;
   rawResponse?: any;
+  actualRequest?: any;
+  inputSchema?: any;
+  executionTrace?: any;
   historyWarning?: string;
 }
 

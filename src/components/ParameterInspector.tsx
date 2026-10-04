@@ -1,3 +1,4 @@
+import {ApiParameterEditor} from './ApiParameterEditor';
 import {ProviderModelSelect} from './ProviderModelSelect';
 import React from 'react';
 import {
@@ -331,6 +332,9 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                 { id: 'tensorart', label: 'Tensor.Art 模型 API' },
                 { id: 'openai_compat', label: 'OpenAI 兼容中转' },
                 { id: 'grok_compat', label: 'Grok 兼容中转' },
+                { id: 'muapi', label: 'MuAPI' },
+                { id: 'wavespeed', label: 'WaveSpeed' },
+                { id: 'sogni', label: 'Sogni' },
               ].map((p) => {
                 const isSelected = params.targetProvider === p.id;
                 return (
@@ -384,21 +388,23 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
 
           {params.targetProvider === 'fal' && params.checkpoint === 'fal-ai/lora' && <label className="block text-sm text-slate-300">SD LoRA 底模 model_name<input className="mt-1 w-full bg-[#111216] border border-slate-700 rounded-lg p-2" value={params.falModelName || ''} onChange={e => update({falModelName:e.target.value})} placeholder="必填：底模仓库 ID 或 URL" /></label>}
 
-          {params.targetProvider === 'huggingface' && params.checkpoint !== 'Tongyi-MAI/Z-Image-Turbo' && (
+          {params.targetProvider === 'huggingface' && (
             <div className="space-y-2 rounded-lg border border-amber-800/40 bg-amber-950/20 p-3">
               <label className="block text-sm text-amber-200">HF 在线推理路由
                 <select aria-label="HF 在线推理路由" value={params.hfProvider || ''} onChange={e => update({ hfProvider: (e.target.value || undefined) as ComfyParameters['hfProvider'] })} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2 text-slate-200">
-                  <option value="">未显式指定（使用模型绑定路由）</option>
-                  <option value="hf-inference">HF Inference</option>
+                  <option value="">请选择实际执行路由</option>
+                  <option value="hf-inference">HF Inference</option><option value="z-image-space">Z-Image 官方 Space</option>
                   <option value="fal-ai">HF → fal-ai（计费推理）</option>
                 </select>
               </label>
               <p className="text-sm text-slate-400">模型仓库可下载不代表可在线推理。选择 fal-ai 会通过 HF Router 提交至该服务商并计费；LoRA 能力由模型与路由决定。</p>
-              {params.checkpoint === 'XLabs-AI/flux-RealismLora' && !params.hfProvider && <p className="text-sm text-amber-200">当前模型绑定：HF → fal-ai。</p>}
+
             </div>
           )}
 
-          {(params.targetProvider === 'modelscope' || params.targetProvider === 'modelscope_ai') && <p role="note" className="rounded-lg border border-amber-800/40 p-3 text-sm text-amber-200">魔搭云端已核实提示词、模型与 LoRA 格式；步数、CFG、种子、宽高及负向词尚未核实，请清空后提交。Qwen Image Edit 支持参考图。模型目录中的仓库不保证已开通在线推理。</p>}
+          {(params.targetProvider === 'modelscope' || params.targetProvider === 'modelscope_ai') && <p role="note" className="rounded-lg border border-amber-800/40 p-3 text-sm text-amber-200">魔搭云端已核实提示词、模型与 LoRA 格式；其余参数按请求原样发送，是否接受以本次上游响应为准。Qwen Image Edit 支持参考图。模型目录中的仓库不保证已开通在线推理。</p>}
+          {['muapi','wavespeed','sogni'].includes(params.targetProvider)&&<p role="note" className="rounded-lg border border-cyan-800/40 p-3 text-sm text-cyan-200">按所选模型的官方 Schema 转换画布参数；没有对应字段的参数会在执行记录中标明未提交。可在 API 参数面板关闭此模式，或用 JSON 直接指定字段。LoRA 始终保留请求意图，实际兼容性以官方能力和本次上游响应为准。</p>}
+          {['fal','modelscope','modelscope_ai','huggingface','muapi','wavespeed','sogni'].includes(params.targetProvider) && <ApiParameterEditor provider={params.targetProvider} model={params.checkpoint} value={params.customParameters} onChange={customParameters=>update({customParameters})} />}
           {/* Engine Parameter Notice Banner */}
           {params.targetProvider === 'agnes' && (
             <div className="p-2.5 bg-rose-950/20 border border-rose-500/30 rounded-lg text-[10px] text-rose-300/90 leading-relaxed flex items-start gap-2">

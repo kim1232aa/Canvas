@@ -53,6 +53,9 @@ const ALLOWED_CLOUD_SETTINGS_FIELDS = new Set([
   'openaiCompatBaseUrl',
   'grokCompatKey',
   'grokCompatBaseUrl',
+  'muapiKey',
+  'wavespeedKey',
+  'sogniKey',
 ]);
 
 interface BackendSettingsModalProps {
@@ -299,6 +302,42 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       keyPlaceholder: 'TAMS 模型 API 的 Bearer Key；OpenWorks ak_tensor 仅用于工具',
       status: 'unconfigured',
       popularModels: ['936101665537308499', '990778216270553015', '1015578945501842388'],
+    },
+    {
+      id: 'muapi',
+      name: 'MuAPI',
+      badge: '动态模型目录',
+      docsUrl: 'https://muapi.ai',
+      description: '使用 MuAPI API Key。模型选择来自供应商目录，不预设模型；目录或连通性失败时显示真实错误。',
+      apiUrl: 'MuAPI Models API',
+      keyName: 'muapiKey',
+      keyPlaceholder: 'MuAPI API Key',
+      status: 'unconfigured',
+      popularModels: [],
+    },
+    {
+      id: 'wavespeed',
+      name: 'WaveSpeed',
+      badge: '动态模型目录',
+      docsUrl: 'https://wavespeed.ai/docs',
+      description: '使用 WaveSpeed API Key。模型选择来自供应商目录，不预设模型；目录或连通性失败时显示真实错误。',
+      apiUrl: 'WaveSpeed Models API',
+      keyName: 'wavespeedKey',
+      keyPlaceholder: 'WaveSpeed API Key',
+      status: 'unconfigured',
+      popularModels: [],
+    },
+    {
+      id: 'sogni',
+      name: 'Sogni',
+      badge: 'REST Creative Workflows',
+      docsUrl: 'https://docs.sogni.ai',
+      description: '使用 Sogni API Key 与 Creative Workflows。模型从 Sogni 目录动态读取，不预设快捷模型。',
+      apiUrl: 'https://api.sogni.ai',
+      keyName: 'sogniKey',
+      keyPlaceholder: 'Sogni API Key',
+      status: 'unconfigured',
+      popularModels: [],
     },
   ];
 

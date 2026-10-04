@@ -19,6 +19,7 @@ import { CivitaiDriver } from './drivers/CivitaiDriver';
 import { TensorArtDriver } from './drivers/TensorArtDriver';
 import { OpenAICompatDriver } from './drivers/OpenAICompatDriver';
 import { GrokCompatDriver } from './drivers/GrokCompatDriver';
+import { SchemaProviderDriver } from './drivers/SchemaProviderDriver';
 
 /**
  * 引擎注册管理中心 (Central Engine Registry Shell)
@@ -45,6 +46,9 @@ export class EngineRegistryClass {
     this.register(new TensorArtDriver());
     this.register(new OpenAICompatDriver());
     this.register(new GrokCompatDriver());
+    this.register(new SchemaProviderDriver('muapi'));
+    this.register(new SchemaProviderDriver('wavespeed'));
+    this.register(new SchemaProviderDriver('sogni'));
   }
 
   /**

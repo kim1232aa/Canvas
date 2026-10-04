@@ -1,4 +1,3 @@
-import {BASE_MODELS} from '../constants/nodes';
 import {tensorModelId} from '../schemas/tensorModelApi';
 
 export interface CatalogOption {value:string;label:string;provider:string}
@@ -15,7 +14,7 @@ export function readCheckpointCatalog(data:Record<string,any>,provider:string) {
   return {options,nextCursor:pagination.nextCursor || '',hasMore:pagination.hasMore===true,page:Number(pagination.page)||1};
 }
 export function mergeCheckpointOptions(provider:string,live:CatalogOption[]) {
-  const rows=[...live.filter(row=>row.provider===provider),...BASE_MODELS.filter(row=>row.provider===provider && (!row.category || row.category==='checkpoint')).map(row=>({label:row.label,value:row.value,provider:row.provider}))];
+  const rows=live.filter(row=>row.provider===provider);
   const seen=new Set<string>();
   return rows.filter(row=>!seen.has(row.value) && !!seen.add(row.value));
 }

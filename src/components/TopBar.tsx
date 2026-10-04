@@ -119,7 +119,7 @@ export const TopBar: React.FC<TopBarProps> = ({
           {button('参数', <Sliders className="w-4 h-4" />, onOpenParamsDrawer, isParamsDrawerOpen)}
           {button('历史', <Clock className="w-4 h-4" />, onOpenHistory)}
           {button('云端项目', <Cloud className="w-4 h-4" />, onOpenCloudProjects)}
-          <a href="/verification/index.html" target="_blank" rel="noopener noreferrer" title="在新标签页查看真实生成验收" className="studio-action"><CheckCircle2 className="w-4 h-4" /><span>真实生成验收</span></a>
+          <a href="/verification/index.html" target="_blank" rel="noopener noreferrer" title="在新标签页查看历史 API 调用样本" className="studio-action"><CheckCircle2 className="w-4 h-4" /><span>历史 API 调用样本</span></a>
           <div className="relative sm:ml-auto" ref={toolsRef}>
             <button type="button" className="studio-action" aria-expanded={showTools} aria-controls="studio-more-tools" onClick={() => setShowTools(!showTools)}><MoreHorizontal className="w-4 h-4" /><span>更多</span></button>
             {showTools && <div id="studio-more-tools" className="absolute right-0 top-full mt-2 bg-[#181b24] border border-white/15 p-2 rounded-xl w-56 shadow-2xl grid gap-1">
