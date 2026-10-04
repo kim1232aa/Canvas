@@ -1,4 +1,4 @@
-import {registerSchemaProviderRoutes} from './src/server/schemaProviders.ts';
+import {registerSchemaProviderRoutes,makeSchemaProviderReader,fetchSchemaProviderRows,normalizeSchemaProviderItems} from './src/server/schemaProviders.ts';
 import {isHuggingFaceLora} from './src/utils/hfResource.ts';
 import {buildCivitaiVideoInput} from './src/schemas/civitaiVideo.ts';
 import express from 'express';
@@ -3198,6 +3198,26 @@ app.get("/api/models", async (req, res) => {
         return (b.downloads || 0) - (a.downloads || 0);
       });
     };
+
+    // Schema-driven providers (MuAPI / WaveSpeed / Sogni) join the "all" aggregation.
+    // Each keeps its own source and error; one provider's failure never drops the others.
+    if (provider === "all") {
+      for (const sp of ['muapi','wavespeed','sogni'] as const) {
+        try {
+          const spKey = keyPoolManager.getNextKey(sp, undefined) || '';
+          const spRead = makeSchemaProviderReader(sp, upstreamFetch, spKey, req.path);
+          const wantsLora = cat === 'lora';
+          const { rows, sourceUrl, notice } = await fetchSchemaProviderRows(sp, spRead, { lora: wantsLora });
+          const spItems = normalizeSchemaProviderItems(sp, rows, { lora: wantsLora, sourceUrl, category: cat === 'all' ? 'checkpoint' : cat, query: '' });
+          const filtered = spItems.filter((m: any) => matchCategory(m) && matchSearch(m));
+          results[sp] = filtered.slice((pageParam - 1) * limitParam, pageParam * limitParam);
+          pagination[sp] = { page: pageParam, hasMore: pageParam * limitParam < filtered.length };
+          if (notice) (results as any)[`${sp}Notice`] = notice;
+        } catch (spErr: any) {
+          results[sp] = { error: spErr.message, status: spErr.status ?? null, details: typeof spErr.rawResponse === 'string' ? spErr.rawResponse.slice(0, 500) : spErr.rawResponse, endpoint: spErr.endpoint } as any;
+        }
+      }
+    }
 
     for (const k of Object.keys(results)) {
       if (Array.isArray(results[k])) {

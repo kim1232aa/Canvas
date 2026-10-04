@@ -1,4 +1,4 @@
-import { tracedFetch as fetch } from '../../services/executionTrace';
+import { tracedFetch as fetch, isApiTraceError } from '../../services/executionTrace';
 import { BaseEngineDriver } from '../BaseEngineDriver';
 import { ModelSpec, NormalizedGenerateParams, NormalizedGenerateResult } from '../types';
 
@@ -31,8 +31,9 @@ async function request(url: string, init: RequestInit, context: string): Promise
   try {
     return await fetch(url, init);
   } catch (cause) {
-    // tracedFetch reports HTTP failures as thrown errors containing the real status/body.
-    if (cause instanceof Error && /^HTTP\s+\d+\s+·/.test(cause.message)) throw cause;
+    // tracedFetch reports HTTP failures as structured ApiTraceError; rethrow with the
+    // real status/body intact. Only genuine connection failures become network errors.
+    if (isApiTraceError(cause)) throw cause;
     const detail = cause instanceof Error ? `${cause.name}: ${cause.message}\n${cause.stack || ''}` : String(cause);
     const error = new Error(`Network error during ${context}; no HTTP response was received. Original exception: ${detail}`);
     error.name = 'SchemaProviderNetworkError';

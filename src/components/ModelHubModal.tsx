@@ -1025,7 +1025,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                                 <button
                                   onClick={() => {
                                     onSelectLoRAWithBaseModel({
-                                      name: ['huggingface','modelscope','modelscope_ai','tensorart','tensor'].includes(providerKey) ? modelId : displayName,
+                                      name: ['huggingface','modelscope','modelscope_ai','tensorart','tensor','muapi','wavespeed','sogni'].includes(providerKey) ? modelId : displayName,
                                       provider: providerKey,
                                       civitaiId: providerKey === 'civitai' && m.id ? String(m.id) : undefined,
                                       triggerWords: trainedWords.join(', '),
@@ -1049,7 +1049,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                                   <button
                                     onClick={() => {
                                       onAddLora({
-                                        name: ['huggingface','modelscope','modelscope_ai','tensorart','tensor'].includes(providerKey) ? modelId : displayName,
+                                        name: ['huggingface','modelscope','modelscope_ai','tensorart','tensor','muapi','wavespeed','sogni'].includes(providerKey) ? modelId : displayName,
                                         provider: providerKey,
                                         civitaiId: providerKey === 'civitai' && m.id ? String(m.id) : undefined,
                                         modelStrength: 0.8,
@@ -1070,7 +1070,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                                 {onAddLoraNode && (
                                   <button
                                     onClick={() => {
-                                      onAddLoraNode(['huggingface','modelscope','modelscope_ai','tensorart','tensor'].includes(providerKey) ? modelId : displayName, trainedWords.join(', '), baseArch, {provider:providerKey,civitaiId:providerKey==='civitai' ? String(m.id) : undefined});
+                                      onAddLoraNode(['huggingface','modelscope','modelscope_ai','tensorart','tensor','muapi','wavespeed','sogni'].includes(providerKey) ? modelId : displayName, trainedWords.join(', '), baseArch, {provider:providerKey,civitaiId:providerKey==='civitai' ? String(m.id) : undefined});
                                       onClose();
                                     }}
                                     className="py-1.5 px-2 rounded-lg bg-[#22242e] hover:bg-[#2c303d] text-purple-300 hover:text-purple-200 font-medium flex items-center justify-center gap-1 border border-purple-500/30 transition-colors text-[10px]"

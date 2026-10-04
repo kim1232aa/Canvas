@@ -24,12 +24,14 @@ import { CivitaiModelItem } from '../types/providers';
 import { searchCivitaiModels, fetchLiveModels, fetchHuggingFaceModelInfo, fetchTensorArtModelInfo } from '../services/api';
 import { identifyArchitectureFamily, ARCHITECTURE_PROFILES } from '../utils/baseModelMatcher';
 
-export type LoraProviderFilter = 'all' | 'civitai' | 'huggingface' | 'modelscope' | 'modelscope_ai' | 'fal' | 'tensorart';
+export type LoraProviderFilter = 'all' | 'civitai' | 'huggingface' | 'modelscope' | 'modelscope_ai' | 'fal' | 'tensorart' | 'muapi' | 'wavespeed' | 'sogni';
 
 export interface UnifiedLoRAItem {
   id: string;
+  /** Raw provider-side resource ID/URL without the `${provider}-` display prefix. */
+  resourceId?: string;
   name: string;
-  provider: 'Civitai' | 'Hugging Face' | 'ModelScope CN' | 'ModelScope AI' | 'Fal.ai' | 'Tensor.Art';
+  provider: 'Civitai' | 'Hugging Face' | 'ModelScope CN' | 'ModelScope AI' | 'Fal.ai' | 'Tensor.Art' | 'MuAPI' | 'WaveSpeed' | 'Sogni';
   providerKey: LoraProviderFilter;
   baseModel: string;
   creator: string;
@@ -86,6 +88,7 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
   const [msPage, setMsPage] = useState<number>(1);
   const [copiedTrigger, setCopiedTrigger] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [catalogNotice, setCatalogNotice] = useState<string | null>(null);
   const activeReqIdRef = useRef(0);
 
   const fetchModels = async (
@@ -174,6 +177,8 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
         );
 
         const pag = liveData._pagination || {};
+        const noticeEntry = Object.entries(liveData as Record<string, unknown>).find(([k, v]) => (k === 'catalogNotice' || k.endsWith('Notice')) && typeof v === 'string');
+        setCatalogNotice(noticeEntry ? (noticeEntry[1] as string) : null);
         if (pag.huggingface?.nextCursor) {
           setHfCursor(pag.huggingface.nextCursor);
         } else if (prov === 'huggingface') {
@@ -207,13 +212,16 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
                   provKey === 'modelscope' ? 'ModelScope CN' :
                   provKey === 'modelscope_ai' ? 'ModelScope AI' :
                   provKey === 'fal' ? 'Fal.ai' :
+                  provKey === 'muapi' ? 'MuAPI' :
+                  provKey === 'wavespeed' ? 'WaveSpeed' :
+                  provKey === 'sogni' ? 'Sogni' :
                   (provKey === 'tensorart' || provKey === 'tensor') ? 'Tensor.Art' : 'Civitai';
                 
                 // Avoid duplicating civitai items already fetched
                 if (provKey === 'civitai' && items.some((it) => it.id === `civitai-${m.id}`)) return;
 
                 const normalizedProvKey: LoraProviderFilter =
-                  provKey === 'huggingface' || provKey === 'modelscope' || provKey === 'modelscope_ai' || provKey === 'fal' || provKey === 'tensorart' || provKey === 'tensor'
+                  ['huggingface','modelscope','modelscope_ai','fal','muapi','wavespeed','sogni','tensorart','tensor'].includes(provKey)
                     ? (provKey === 'tensor' ? 'tensorart' : (provKey as LoraProviderFilter))
                     : 'civitai';
 
@@ -238,6 +246,7 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
 
                 items.push({
                   id: `${provKey}-${m.id}`,
+                  resourceId: String(m.id),
                   name: m.name || m.id,
                   provider: pName as any,
                   providerKey: normalizedProvKey,
@@ -434,13 +443,16 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
         {/* Engine Provider Tabs */}
         <div className="px-6 pt-3 pb-1 bg-[#15161d] border-b border-[#242630] flex items-center gap-2 overflow-x-auto shrink-0 min-h-[44px]">
           {[
-            { id: 'all', name: '🌐 全生态聚合 (Civitai/HF/魔搭/Fal/Tensor)' },
+            { id: 'all', name: '🌐 全生态聚合 (Civitai/HF/魔搭/Fal/Tensor/MuAPI/WaveSpeed/Sogni)' },
             { id: 'civitai', name: '🌟 Civitai (C站社区 LoRA)' },
             { id: 'huggingface', name: '🤗 Hugging Face (开源 LoRA 库)' },
             { id: 'modelscope', name: '🇨🇳 魔搭 CN (国内站 LoRA)' },
             { id: 'modelscope_ai', name: '🌐 魔搭 AI (国际站 LoRA)' },
             { id: 'fal', name: '⚡ Fal.ai (云端托管 LoRA 端点)' },
             { id: 'tensorart', name: '🎨 Tensor.Art (吐司 LoRA & 工作流)' },
+            { id: 'muapi', name: '🟣 MuAPI (LoRA 端点，URL 挂载)' },
+            { id: 'wavespeed', name: '🌊 WaveSpeed (LoRA 端点，URL 挂载)' },
+            { id: 'sogni', name: '🧡 Sogni (官方 LoRA 资源)' },
           ].map((tab) => {
             const isActive = activeProvider === tab.id;
             return (
@@ -610,6 +622,11 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
                 <p className="text-xs text-slate-500 mt-1">
                   请尝试清空筛选关键词、切换底模架构或直接在上方输入任意模型 ID 动态载入
                 </p>
+                {catalogNotice && (
+                  <p className="text-[11px] text-amber-300/90 mt-2 max-w-md mx-auto leading-relaxed">
+                    {catalogNotice}
+                  </p>
+                )}
               </div>
             </div>
           ) : (
@@ -742,7 +759,7 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
                         <div className="space-y-1.5 pt-1">
                           <button
                             onClick={() => {
-                              const cleanName = model.providerKey==='civitai' ? `${model.name.replace(/\.safetensors$/i, '')}.safetensors` : model.id;
+                              const cleanName = model.providerKey==='civitai' ? `${model.name.replace(/\.safetensors$/i, '')}.safetensors` : (model.resourceId || model.id);
                               if (onSelectLoRAWithBaseModel) {
                                 onSelectLoRAWithBaseModel({
                                   name: cleanName,
@@ -776,7 +793,7 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
                             <button
                               onClick={() => {
                                 onSelectLoRA({
-                                  name: model.providerKey==='civitai' ? `${model.name.replace(/\.safetensors$/i, '')}.safetensors` : model.id,
+                                  name: model.providerKey==='civitai' ? `${model.name.replace(/\.safetensors$/i, '')}.safetensors` : (model.resourceId || model.id),
                                   provider: model.providerKey,
                                   civitaiId: model.civitaiId,
                                   triggerWords: model.triggerWords,
@@ -792,7 +809,7 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
                             <button
                               onClick={() => {
                                 onAddLoRANodeToCanvas({
-                                  name: model.providerKey==='civitai' ? `${model.name.replace(/\.safetensors$/i, '')}.safetensors` : model.id,
+                                  name: model.providerKey==='civitai' ? `${model.name.replace(/\.safetensors$/i, '')}.safetensors` : (model.resourceId || model.id),
                                   provider: model.providerKey,
                                   civitaiId: model.civitaiId,
                                   triggerWords: model.triggerWords,

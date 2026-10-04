@@ -16,6 +16,59 @@ interface Dependencies {
   record:(item:any)=>any;
   durable:(url:string)=>Promise<any>;
 }
+
+/** Authenticated upstream reader for one provider. Throws structured errors with
+ *  status/rawResponse/endpoint/errorSource — classification lives in fields. */
+export function makeSchemaProviderReader(provider:Provider,depFetch:Dependencies['fetch'],key:string,route:string) {
+  const headers=key?{[schemaProviders[provider].auth]:provider==='muapi'?key:`Bearer ${key}`}:{};
+  return async(url:string,init?:RequestInit)=>{
+    const r=await depFetch({provider,route,key},url,{...init,headers:{...headers,...init?.headers},signal:AbortSignal.timeout(60000)});
+    const raw=await r.text();let data:any;try{data=JSON.parse(raw);}catch{}
+    if(!r.ok || !data || data.status==='error' || (typeof data.code==='number' && data.code!==200)) {
+      throw Object.assign(new Error(`HTTP ${r.status}: ${raw}`),{status:r.status,rawResponse:raw,endpoint:url,errorSource:r.ok?'upstream-protocol':'upstream'});
+    }
+    return {data,status:r.status,raw};
+  };
+}
+
+/** Live catalog rows for a provider (or schema-enum selectors for Sogni hosted tools). */
+export async function fetchSchemaProviderRows(provider:Provider,read:ReturnType<typeof makeSchemaProviderReader>,opts:{lora?:boolean;model?:string;catalog?:string}={}) {
+  if(opts.lora && provider==='sogni') {
+    const sourceUrl=schemaProviders.sogni.root+'/v1/loras/comfy'+(opts.model?'?modelId='+encodeURIComponent(opts.model):'');
+    const {data}=await read(sourceUrl);
+    const rows=Array.isArray(data.data)?data.data:data.data?.loras || data.loras;
+    if(!Array.isArray(rows))throw Object.assign(new Error('LoRA 目录没有返回数组'),{status:502,rawResponse:data,endpoint:sourceUrl});
+    return {rows,sourceUrl};
+  }
+  if(opts.lora) {
+    return {rows:[],sourceUrl:schemaProviders[provider].root+schemaProviders[provider].catalog,
+      notice:'此供应商模型目录返回的是生成端点，未提供 LoRA 权重目录；请在 LoRA 节点输入资源 URL，并选择支持 LoRA 的模型端点。'};
+  }
+  if(provider==='sogni' && opts.catalog!=='workers') {
+    return {rows:sogniImageSchema.properties.model.enum.map((id:string)=>({id,name:id,parameters:sogniImageSchema,namespace:'hosted-tool-selector'})),sourceUrl:sogniSchemaSource};
+  }
+  const sourceUrl=schemaProviders[provider].root+schemaProviders[provider].catalog;
+  const {data}=await read(sourceUrl);
+  const rows=provider==='muapi'?data.models:provider==='wavespeed'?data.data:data.data?.models;
+  if(!Array.isArray(rows))throw Object.assign(new Error('上游目录响应未包含模型数组'),{status:502,rawResponse:data,endpoint:sourceUrl,errorSource:'upstream-protocol'});
+  return {rows,sourceUrl};
+}
+
+/** Normalize raw catalog rows into the shared model-hub item shape. */
+export function normalizeSchemaProviderItems(provider:Provider,rows:any[],opts:{lora?:boolean;sourceUrl:string;category?:string;query?:string}) {
+  const wantsLora=opts.lora===true;
+  const category=(opts.category || 'checkpoint').toLowerCase();
+  let filtered=rows;
+  if(!wantsLora && category==='checkpoint' && provider!=='sogni')filtered=filtered.filter((m:any)=>provider==='muapi'?m.group_of==='image':/^(text.to.image|image.to.image|lora.support)$/i.test(m.category || m.type || ''));
+  if(!wantsLora && category==='video')filtered=filtered.filter((m:any)=>/video/i.test(m.category || m.type || ''));
+  const query=(opts.query || '').toLowerCase();
+  return filtered.map((m:any)=>({id:wantsLora?(m.loraId || m.slug):(m.model_id || m.id || m.endpoint_url || m.name),name:m.name || m.ui?.label || m.model_id,
+    provider:schemaProviders[provider].name,category:wantsLora?'LoRA':/video/i.test(m.category || m.type || '')?'Video':'Checkpoint',type:wantsLora?'LoRA':'Checkpoint',
+    baseModel:m.family || m.tierId || '',description:m.description || '',tags:m.tags || [],imageUrl:m.image_url || m.thumbnail || '',
+    sourceUrl:opts.sourceUrl,metadata:m,modelIds:m.modelIds,loraStrength:m.ui?.default,supportsLora:JSON.stringify(m.input_fields || m.api_schema || m.parameters || '').includes('lora'),
+    badge:wantsLora?'官方 LoRA 资源':'官方模型端点',resourceKind:wantsLora?'adapter':'model-endpoint'}))
+    .filter((m:any)=>m.id && (!query || (m.id+' '+m.name+' '+m.description).toLowerCase().includes(query)));
+}
 export function resolveSchemaRefs(value:any,document:any,seen:string[]=[]):any {
   if(!value || typeof value!=='object')return value;
   if(value.$ref?.startsWith('#/') && !seen.includes(value.$ref)) {
@@ -79,26 +132,12 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
     const provider=String(req.query.provider || '');if(!valid(provider))return next();
     try {
       const wantsLora=String(req.query.type || req.query.category).toLowerCase()==='lora' || String(req.query.category).toLowerCase()==='lora';
-      let sourceUrl:string,rows:any[];
-      if(wantsLora && provider==='sogni') {
-        sourceUrl=schemaProviders.sogni.root+'/v1/loras/comfy'+(req.query.model?'?modelId='+encodeURIComponent(String(req.query.model)):'');
-        const {data}=await read(req,provider,sourceUrl);rows=Array.isArray(data.data)?data.data:data.data?.loras || data.loras;
-        if(!Array.isArray(rows))throw Object.assign(new Error('LoRA 目录没有返回数组'),{status:502,rawResponse:data,endpoint:sourceUrl});
-      } else if(wantsLora) {sourceUrl=schemaProviders[provider].root+schemaProviders[provider].catalog;rows=[];}
-      else if(provider==='sogni' && req.query.catalog!=='workers') {sourceUrl=sogniSchemaSource;rows=sogniImageSchema.properties.model.enum.map(id=>({id,name:id,parameters:sogniImageSchema,namespace:'hosted-tool-selector'}));}
-      else ({rows,sourceUrl}=await list(req,provider));
-      const query=String(req.query.query || '').toLowerCase();
-      const category=String(req.query.category || 'checkpoint').toLowerCase();
-      if(!wantsLora && category==='checkpoint' && provider!=='sogni')rows=rows.filter((m:any)=>provider==='muapi'?m.group_of==='image':/^(text.to.image|image.to.image|lora.support)$/i.test(m.category || m.type || ''));
-      if(!wantsLora && category==='video')rows=rows.filter((m:any)=>/video/i.test(m.category || m.type || ''));
-      const items=rows.map((m:any)=>({id:wantsLora?(m.loraId || m.slug):(m.model_id || m.id || m.endpoint_url || m.name),name:m.name || m.ui?.label || m.model_id,
-        provider:schemaProviders[provider].name,category:wantsLora?'LoRA':/video/i.test(m.category || m.type || '')?'Video':'Checkpoint',type:wantsLora?'LoRA':'Checkpoint',
-        baseModel:m.family || m.tierId || '',description:m.description || '',tags:m.tags || [],imageUrl:m.image_url || m.thumbnail || '',
-        sourceUrl,metadata:m,modelIds:m.modelIds,loraStrength:m.ui?.default,supportsLora:JSON.stringify(m.input_fields || m.api_schema || m.parameters || '').includes('lora'),
-        badge:wantsLora?'官方 LoRA 资源':'官方模型端点',resourceKind:wantsLora?'adapter':'model-endpoint'}))
-        .filter((m:any)=>m.id && (!query || (m.id+' '+m.name+' '+m.description).toLowerCase().includes(query)));
+      const key=dep.key(provider,req.headers[schemaProviders[provider].header] as string);
+      const read=makeSchemaProviderReader(provider,dep.fetch,key,req.path);
+      const {rows,sourceUrl,notice}=await fetchSchemaProviderRows(provider,read,{lora:wantsLora,model:req.query.model as string,catalog:req.query.catalog as string});
+      const items=normalizeSchemaProviderItems(provider,rows,{lora:wantsLora,sourceUrl,category:String(req.query.category || 'checkpoint'),query:String(req.query.query || '')});
       const page=Math.max(1,Number(req.query.page)||1),limit=Math.min(100,Math.max(1,Number(req.query.limit)||50));
-      res.json({[provider]:items.slice((page-1)*limit,page*limit),_pagination:{[provider]:{page,hasMore:page*limit<items.length,total:items.length,paging:'local-slice-of-live-catalog',sourceUrl}},catalogNotice:wantsLora && provider!=='sogni'?'此供应商模型目录返回的是生成端点，未提供 LoRA 权重目录；请在 LoRA 节点输入资源 URL，并选择支持 LoRA 的模型端点。':undefined});
+      res.json({[provider]:items.slice((page-1)*limit,page*limit),_pagination:{[provider]:{page,hasMore:page*limit<items.length,total:items.length,paging:provider==='sogni' && !wantsLora && req.query.catalog!=='workers'?'versioned-official-schema-selectors':'local-slice-of-live-catalog',sourceUrl}},catalogNotice:notice});
     }catch(e){fail(res,e);}
   });
   app.post('/api/schema-provider/:provider/submit',async(req,res)=>{
