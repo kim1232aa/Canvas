@@ -1,3 +1,11 @@
+# 交接状态更新（用户于 2026-10-04 要求）
+
+完整交接见 [HANDOFF.md](HANDOFF.md)：先列用户铁律，再列 16 个产品板块、10 个主要供应商与其他驱动的验收状态、模型中心/LoRA 中心缺口和后续工单。当前没有全家前端验收通过的证据；Civitai 相对完善，有历史底模与 LoRA 图片，仍需补本轮网页闭环。
+
+21:28:26（北京时间）重新从前端点击 HF Z-Image Space 工作流：网站 HTTP 500，上游 status=null，ECONNREFUSED；只验证前端提交与错误透明展示，记 BLOCKED_ENV，非欠费、非出图成功。截图、完整页面记录与结构化请求/响应见 docs/evidence/handoff-frontend-2026-10-04.*。
+
+上一节 Tensor 修复的生产构建和部署实际已成功（部署 appgdep_6ac22888c5708191ab2bb63304361b66）；旧段落的“remaining gate”是当时中间状态。本次仅追加交接文档和证据，不改应用代码。
+
 # 2026-10-04 Tensor catalog / legacy-tool correction
 
 - Production evidence: `/api/models?provider=tensorart` fetched a Tensor HTML page and received HTTP 403 Cloudflare challenge, not a billing response; app wrapped it in HTTP 200 and selector truncated the body.

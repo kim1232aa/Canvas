@@ -1,0 +1,604 @@
+Browser tab: 2, Title: "ComfyCanvas AI - Multi-Provider Node Studio", URL: "http://terminal.local:4173/".
+The following is a diff from the previous accessibility tree with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
+Removed element IDs: 216
++		215 container 执行记录
++			216 heading 请求与执行记录, Value: 2
++				217 text 请求与执行记录
++			218 button 关闭
++			219 text 逐次展示客户端请求、实际端点、参数转换和上游响应。凭证不显示。HTTP 200 只表示请求返回，是否出图以生成结果为准。
++			220 container
++				221 button (expanded) HTTP 500 · POST /api/huggingface/generate, Secondary Actions: Collapse
++					222 text HTTP 500
++					223 text  · 
++					224 text POST
++					225 text /api/huggingface/generate
++				226 text 2026-10-04T13:28:26.023Z  · 客户端请求 {
+  "workflowSnapshot": {
+    "format": "comfycanvas",
+    "version": 1,
+    "nodes": [
+      {
+        "id": "node-public-zimg-1",
+        "type": "CheckpointLoaderSimple",
+        "title": "加载底模 (Z-Image-Turbo)",
+        "pos": {
+          "x": 50,
+          "y": 150
+        },
+        "width": 280,
+        "inputs": [],
+        "outputs": [
+          {
+            "id": "MODEL",
+            "name": "MODEL",
+            "type": "MODEL",
+            "label": "MODEL"
+          },
+          {
+            "id": "CLIP",
+            "name": "CLIP",
+            "type": "CLIP",
+            "label": "CLIP"
+          },
+          {
+            "id": "VAE",
+            "name": "VAE",
+            "type": "VAE",
+            "label": "VAE"
+          }
+        ],
+        "values": {
+          "ckpt_name": "Tongyi-MAI/Z-Image-Turbo",
+          "targetProvider": "huggingface",
+          "hf_provider": "z-image-space",
+          "resolution": "1024x1024 ( 1:1 )",
+          "shift": 3,
+          "random_seed": false,
+          "gallery_images": []
+        },
+        "state": "idle",
+        "executionProgress": 0
+      },
+      {
+        "id": "node-public-zimg-2",
+        "type": "CLIPTextEncode",
+        "title": "正向提示词 (Prompt)",
+        "pos": {
+          "x": 390,
+          "y": 150
+        },
+        "width": 440,
+        "inputs": [
+          {
+            "id": "clip",
+            "name": "clip",
+            "type": "CLIP",
+            "label": "CLIP"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "CONDITIONING",
+            "name": "CONDITIONING",
+            "type": "CONDITIONING",
+            "label": "CONDITIONING"
+          }
+        ],
+        "values": {
+          "text": "A highly textured, impressionistic digital painting of a solitary young woman crouching under an umbrella on a wet city street; black cat nearby, reflections in puddles, cool palette, thick brushstrokes, cinematic lighting, 8k"
+        },
+        "state": "idle",
+        "executionProgress": 0
+      },
+      {
+        "id": "node-public-zimg-4",
+        "type": "KSampler",
+        "title": "KSampler (8 步极速)",
+        "pos": {
+          "x": 870,
+          "y": 150
+        },
+        "width": 300,
+        "inputs": [
+          {
+            "id": "model",
+            "name": "model",
+            "type": "MODEL",
+            "label": "MODEL"
+          },
+          {
+            "id": "positive",
+            "name": "positive",
+            "type": "CONDITIONING",
+            "label": "positive"
+          },
+          {
+            "id": "negative",
+            "name": "negative",
+            "type": "CONDITIONING",
+            "label": "negative"
+          },
+          {
+            "id": "latent_image",
+            "name": "latent_image",
+            "type": "LATENT",
+            "label": "latent_image"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "LATENT",
+            "name": "LATENT",
+            "type": "LATENT",
+            "label": "LATENT"
+          }
+        ],
+        "values": {
+          "seed": 42,
+          "control_after_generate": "fixed",
+          "steps": 8
+        },
+        "state": "error",
+        "executionProgress": 0,
+        "errorMessage": "请求失败，查看执行记录"
+      },
+      {
+        "id": "node-public-zimg-vae",
+        "type": "VAEDecode",
+        "title": "VAE 解码",
+        "pos": {
+          "x": 1210,
+          "y": 150
+        },
+        "width": 260,
+        "inputs": [
+          {
+            "id": "samples",
+            "name": "samples",
+            "type": "LATENT",
+            "label": "samples"
+          },
+          {
+            "id": "vae",
+            "name": "vae",
+            "type": "VAE",
+            "label": "vae"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "IMAGE",
+            "name": "IMAGE",
+            "type": "IMAGE",
+            "label": "IMAGE"
+          }
+        ],
+        "values": {},
+        "state": "idle",
+        "executionProgress": 0,
+        "errorMessage": ""
+      },
+      {
+        "id": "node-public-zimg-5",
+        "type": "SaveImage",
+        "title": "保存图像",
+        "pos": {
+          "x": 1510,
+          "y": 150
+        },
+        "width": 300,
+        "inputs": [
+          {
+            "id": "images",
+            "name": "images",
+            "type": "IMAGE",
+            "label": "images"
+          }
+        ],
+        "outputs": [],
+        "values": {},
+        "state": "idle",
+        "executionProgress": 0,
+        "errorMessage": ""
+      }
+    ],
+    "connections": [
+      {
+        "id": "pub-zc-3",
+        "fromNodeId": "node-public-zimg-1",
+        "fromSocketId": "MODEL",
+        "toNodeId": "node-public-zimg-4",
+        "toSocketId": "model",
+        "type": "MODEL"
+      },
+      {
+        "id": "pub-zc-4",
+        "fromNodeId": "node-public-zimg-1",
+        "fromSocketId": "CLIP",
+        "toNodeId": "node-public-zimg-2",
+        "toSocketId": "clip",
+        "type": "CLIP"
+      },
+      {
+        "id": "pub-zc-6",
+        "fromNodeId": "node-public-zimg-2",
+        "fromSocketId": "CONDITIONING",
+        "toNodeId": "node-public-zimg-4",
+        "toSocketId": "positive",
+        "type": "CONDITIONING"
+      },
+      {
+        "id": "pub-zc-9",
+        "fromNodeId": "node-public-zimg-4",
+        "fromSocketId": "LATENT",
+        "toNodeId": "node-public-zimg-vae",
+        "toSocketId": "samples",
+        "type": "LATENT"
+      },
+      {
+        "id": "pub-zc-10",
+        "fromNodeId": "node-public-zimg-1",
+        "fromSocketId": "VAE",
+        "toNodeId": "node-public-zimg-vae",
+        "toSocketId": "vae",
+        "type": "VAE"
+      },
+      {
+        "id": "pub-zc-11",
+        "fromNodeId": "node-public-zimg-vae",
+        "fromSocketId": "IMAGE",
+        "toNodeId": "node-public-zimg-5",
+        "toSocketId": "images",
+        "type": "IMAGE"
+      }
+    ],
+    "executingNodeId": "node-public-zimg-4"
+  },
+  "prompt": "A highly textured, impressionistic digital painting of a solitary young woman crouching under an umbrella on a wet city street; black cat nearby, reflections in puddles, cool palette, thick brushstrokes, cinematic lighting, 8k",
+  "model": "Tongyi-MAI/Z-Image-Turbo",
+  "steps": 8,
+  "seed": 42,
+  "inference_provider": "z-image-space",
+  "resolution": "1024x1024 ( 1:1 )",
+  "shift": 3,
+  "random_seed": false,
+  "gallery_images": []
+} 完整响应与上游调用链 {
+  "error": "Hugging Face 调用失败: fetch failed",
+  "executionTrace": [
+    {
+      "provider": "huggingface",
+      "model": "Tongyi-MAI/Z-Image-Turbo",
+      "endpoint": "https://tongyi-mai-z-image-turbo.hf.space/gradio_api/call/generate",
+      "method": "POST",
+      "status": null,
+      "error": "fetch failed",
+      "stack": "TypeError: fetch failed",
+      "cause": {
+        "message": "connect ECONNREFUSED 127.0.0.1:40013",
+        "code": "ECONNREFUSED"
+      },
+      "durationMs": 13
+    }
+  ],
+  "errorSource": "network",
+  "stack": "Error: Hugging Face 调用失败: fetch failed\n    at ServerResponse.json (/site/server.ts:267:24)\n    at <anonymous> (/site/server.ts:5908:44)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)"
+}
++				227 button (collapsed) 查看完整异常堆栈, Secondary Actions: Expand
++					228 text 查看完整异常堆栈
++			229 container
++				230 button (expanded) HTTP 500 · POST /api/huggingface/generate, Secondary Actions: Collapse
++					231 text HTTP 500
++					232 text  · 
++					233 text POST
++					234 text /api/huggingface/generate
++				235 text 2026-10-04T13:24:06.859Z  · 客户端请求 {
+  "workflowSnapshot": {
+    "format": "comfycanvas",
+    "version": 1,
+    "nodes": [
+      {
+        "id": "node-public-zimg-1",
+        "type": "CheckpointLoaderSimple",
+        "title": "加载底模 (Z-Image-Turbo)",
+        "pos": {
+          "x": 50,
+          "y": 150
+        },
+        "width": 280,
+        "inputs": [],
+        "outputs": [
+          {
+            "id": "MODEL",
+            "name": "MODEL",
+            "type": "MODEL",
+            "label": "MODEL"
+          },
+          {
+            "id": "CLIP",
+            "name": "CLIP",
+            "type": "CLIP",
+            "label": "CLIP"
+          },
+          {
+            "id": "VAE",
+            "name": "VAE",
+            "type": "VAE",
+            "label": "VAE"
+          }
+        ],
+        "values": {
+          "ckpt_name": "Tongyi-MAI/Z-Image-Turbo",
+          "targetProvider": "huggingface",
+          "hf_provider": "z-image-space",
+          "resolution": "1024x1024 ( 1:1 )",
+          "shift": 3,
+          "random_seed": false,
+          "gallery_images": []
+        },
+        "state": "idle",
+        "executionProgress": 0
+      },
+      {
+        "id": "node-public-zimg-2",
+        "type": "CLIPTextEncode",
+        "title": "正向提示词 (Prompt)",
+        "pos": {
+          "x": 390,
+          "y": 150
+        },
+        "width": 440,
+        "inputs": [
+          {
+            "id": "clip",
+            "name": "clip",
+            "type": "CLIP",
+            "label": "CLIP"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "CONDITIONING",
+            "name": "CONDITIONING",
+            "type": "CONDITIONING",
+            "label": "CONDITIONING"
+          }
+        ],
+        "values": {
+          "text": "A highly textured, impressionistic digital painting of a solitary young woman crouching under an umbrella on a wet city street; black cat nearby, reflections in puddles, cool palette, thick brushstrokes, cinematic lighting, 8k"
+        },
+        "state": "idle",
+        "executionProgress": 0
+      },
+      {
+        "id": "node-public-zimg-4",
+        "type": "KSampler",
+        "title": "KSampler (8 步极速)",
+        "pos": {
+          "x": 870,
+          "y": 150
+        },
+        "width": 300,
+        "inputs": [
+          {
+            "id": "model",
+            "name": "model",
+            "type": "MODEL",
+            "label": "MODEL"
+          },
+          {
+            "id": "positive",
+            "name": "positive",
+            "type": "CONDITIONING",
+            "label": "positive"
+          },
+          {
+            "id": "negative",
+            "name": "negative",
+            "type": "CONDITIONING",
+            "label": "negative"
+          },
+          {
+            "id": "latent_image",
+            "name": "latent_image",
+            "type": "LATENT",
+            "label": "latent_image"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "LATENT",
+            "name": "LATENT",
+            "type": "LATENT",
+            "label": "LATENT"
+          }
+        ],
+        "values": {
+          "seed": 42,
+          "control_after_generate": "fixed",
+          "steps": 8
+        },
+        "state": "error",
+        "executionProgress": 0,
+        "errorMessage": "请求失败，查看执行记录"
+      },
+      {
+        "id": "node-public-zimg-vae",
+        "type": "VAEDecode",
+        "title": "VAE 解码",
+        "pos": {
+          "x": 1210,
+          "y": 150
+        },
+        "width": 260,
+        "inputs": [
+          {
+            "id": "samples",
+            "name": "samples",
+            "type": "LATENT",
+            "label": "samples"
+          },
+          {
+            "id": "vae",
+            "name": "vae",
+            "type": "VAE",
+            "label": "vae"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "IMAGE",
+            "name": "IMAGE",
+            "type": "IMAGE",
+            "label": "IMAGE"
+          }
+        ],
+        "values": {},
+        "state": "idle",
+        "executionProgress": 0,
+        "errorMessage": ""
+      },
+      {
+        "id": "node-public-zimg-5",
+        "type": "SaveImage",
+        "title": "保存图像",
+        "pos": {
+          "x": 1510,
+          "y": 150
+        },
+        "width": 300,
+        "inputs": [
+          {
+            "id": "images",
+            "name": "images",
+            "type": "IMAGE",
+            "label": "images"
+          }
+        ],
+        "outputs": [],
+        "values": {},
+        "state": "idle",
+        "executionProgress": 0,
+        "errorMessage": ""
+      }
+    ],
+    "connections": [
+      {
+        "id": "pub-zc-3",
+        "fromNodeId": "node-public-zimg-1",
+        "fromSocketId": "MODEL",
+        "toNodeId": "node-public-zimg-4",
+        "toSocketId": "model",
+        "type": "MODEL"
+      },
+      {
+        "id": "pub-zc-4",
+        "fromNodeId": "node-public-zimg-1",
+        "fromSocketId": "CLIP",
+        "toNodeId": "node-public-zimg-2",
+        "toSocketId": "clip",
+        "type": "CLIP"
+      },
+      {
+        "id": "pub-zc-6",
+        "fromNodeId": "node-public-zimg-2",
+        "fromSocketId": "CONDITIONING",
+        "toNodeId": "node-public-zimg-4",
+        "toSocketId": "positive",
+        "type": "CONDITIONING"
+      },
+      {
+        "id": "pub-zc-9",
+        "fromNodeId": "node-public-zimg-4",
+        "fromSocketId": "LATENT",
+        "toNodeId": "node-public-zimg-vae",
+        "toSocketId": "samples",
+        "type": "LATENT"
+      },
+      {
+        "id": "pub-zc-10",
+        "fromNodeId": "node-public-zimg-1",
+        "fromSocketId": "VAE",
+        "toNodeId": "node-public-zimg-vae",
+        "toSocketId": "vae",
+        "type": "VAE"
+      },
+      {
+        "id": "pub-zc-11",
+        "fromNodeId": "node-public-zimg-vae",
+        "fromSocketId": "IMAGE",
+        "toNodeId": "node-public-zimg-5",
+        "toSocketId": "images",
+        "type": "IMAGE"
+      }
+    ],
+    "executingNodeId": "node-public-zimg-4"
+  },
+  "prompt": "A highly textured, impressionistic digital painting of a solitary young woman crouching under an umbrella on a wet city street; black cat nearby, reflections in puddles, cool palette, thick brushstrokes, cinematic lighting, 8k",
+  "model": "Tongyi-MAI/Z-Image-Turbo",
+  "steps": 8,
+  "seed": 42,
+  "inference_provider": "z-image-space",
+  "resolution": "1024x1024 ( 1:1 )",
+  "shift": 3,
+  "random_seed": false,
+  "gallery_images": []
+} 完整响应与上游调用链 {
+  "error": "Hugging Face 调用失败: fetch failed",
+  "executionTrace": [
+    {
+      "provider": "huggingface",
+      "model": "Tongyi-MAI/Z-Image-Turbo",
+      "endpoint": "https://tongyi-mai-z-image-turbo.hf.space/gradio_api/call/generate",
+      "method": "POST",
+      "status": null,
+      "error": "fetch failed",
+      "stack": "TypeError: fetch failed",
+      "cause": {
+        "message": "connect ECONNREFUSED 127.0.0.1:40013",
+        "code": "ECONNREFUSED"
+      },
+      "durationMs": 2
+    }
+  ],
+  "errorSource": "network",
+  "stack": "Error: Hugging Face 调用失败: fetch failed\n    at ServerResponse.json (/site/server.ts:267:24)\n    at <anonymous> (/site/server.ts:5908:44)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)"
+}
++				236 button (collapsed) 查看完整异常堆栈, Secondary Actions: Expand
++					237 text 查看完整异常堆栈
++			238 container
++				239 button (expanded) Secondary Actions: Collapse, HTTP 200 · GET /api/models?provider=huggingface&query=&type=Checkpoint&category=checkpoint&sort=downloads&page=1&limit=50
++					240 text HTTP 200
++					241 text  · 
++					242 text GET
++					243 text /api/models?provider=huggingface&query=&type=Checkpoint&category=checkpoint&sort=downloads&page=1&limit=50
++				244 text 2026-10-04T13:24:00.592Z  · 客户端请求 完整响应与上游调用链 {
+  "huggingface": {
+    "error": "Hugging Face 连接失败: fetch failed"
+  },
+  "_pagination": {},
+  "executionTrace": [
+    {
+      "provider": "huggingface",
+      "model": "list",
+      "endpoint": "https://huggingface.co/api/models?sort=downloads&direction=-1&limit=50&expand%5B%5D=siblings&expand%5B%5D=tags&expand%5B%5D=likes&expand%5B%5D=pipeline_tag&expand%5B%5D=author&expand%5B%5D=cardData&expand%5B%5D=inferenceProviderMapping&pipeline_tag=text-to-image",
+      "method": "GET",
+      "status": null,
+      "error": "fetch failed",
+      "stack": "TypeError: fetch failed",
+      "cause": {
+        "message": "connect ECONNREFUSED 127.0.0.1:40013",
+        "code": "ECONNREFUSED"
+      },
+      "durationMs": 8
+    }
+  ],
+  "ok": false,
+  "errorSource": "network",
+  "stack": "Error: Request failed\n    at ServerResponse.json (/site/server.ts:267:24)\n    at <anonymous> (/site/server.ts:3208:16)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)"
+}
++				245 button (collapsed) 查看完整异常堆栈, Secondary Actions: Expand
++					246 text 查看完整异常堆栈
++				247 text 异常
++				248 text 请求失败，查看执行记录
+The focused UI element is 3 button 执行记录 · 3
