@@ -2,6 +2,28 @@
 
 完整交接见 [HANDOFF.md](HANDOFF.md)：先列用户铁律，再列 16 个产品板块、10 个主要供应商与其他驱动的验收状态、模型中心/LoRA 中心缺口和后续工单。当前没有全家前端验收通过的证据；Civitai 相对完善，有历史底模与 LoRA 图片，仍需补本轮网页闭环。
 
+## 2026-10-05 前端验收进展（最新，以此为准）
+
+按用户验收标准（前端跑通出图才算通过，欠费记 PASS_BILLING）逐家实测，完成一家 push 一家：
+
+| 供应商 | 判定 | 证据 | 提交 |
+|---|---|---|---|
+| WaveSpeed | **PASS_GENERATION** | krea-v2/turbo-lora 带 LoRA 真实出图×2，同 seed 复现证明 seed/steps/尺寸参数生效；目录 1054 个模型实时分页 | fcea7d3，docs/evidence/t7-wavespeed-acceptance.md |
+| MuAPI | **PASS_BILLING** | 余额核实 0.0000 USD（响应头 X-Account-Balance）；提交返回 HTTP 402 INSUFFICIENT_CREDITS，前端原样透传状态码+完整响应体+topup_url；目录 147 个与官方一致 | 0cbd126，docs/evidence/t7-muapi-acceptance.md |
+| Sogni | **PASS_BILLING** | 底模下拉 27 个 selector = 官方 @sogni-ai/sogni-protocol schema 枚举；LoRA Hub 32 个 = 官方 `/v1/loras/comfy` 实时数量；连线 LoRA（krea2-detail-enhancer, 0.8）经 actualRequest 透传为 `loras:["krea2-detail-enhancer"]` + `loraStrengths:[0.8]`；提交 HTTP 201；任务因欠费停 waiting_for_user/insufficient_credit，toast 原样展示完整响应体 | 858f4db，docs/evidence/t7-sogni-acceptance.md |
+
+代码修复（e2c9987，各附 vitest 用例）：
+- B01 密钥保存本地优先：`/api/cloud/settings` 需 CANVAS_ADMIN_TOKEN，云端 503 曾静默阻塞本地保存 → `src/services/settingsSave.ts` 本地先存、云端失败原样报错不阻塞。
+- B02 「AI 润色优化」控件补齐：正向提示词节点新增 `refineProvider`/`refineModel`（gemini/sensenova/agnes/grok_compat），此前全库只读无写、永远无法配置。
+
+进行中：Fal（底模 fal-ai/flux-lora 已接入画布，LoRA 权重供给方式待决策，见 docs/HANDOVER-2026-10-05.md §8 F01~F03）。未验收：Civitai、ModelScope CN/AI、NanoGPT、Tensor.Art、HuggingFace（3 路由）、SenseNova（chat 已实测 200，生图按设计走 OpenAI 兼容中转通道待验）。
+
+文档修正记录（2026-10-05）：`docs/providers/schema-providers.md` 第 44~45 行 Sogni「ECONNREFUSED / 403 error code 1010」为 10-04 旧网络环境下的结果，已被 10-05 实测（HTTP 201 + insufficient_credit）取代；HANDOFF.md §3.2 三家状态同步更新。修正理由均注于对应段落。
+
+---
+
+以下是 2026-10-04 及更早的历史进度，旧"已完成""100%"等结论不能替代上面的当前验证状态。
+
 21:28:26（北京时间）重新从前端点击 HF Z-Image Space 工作流：网站 HTTP 500，上游 status=null，ECONNREFUSED；只验证前端提交与错误透明展示，记 BLOCKED_ENV，非欠费、非出图成功。截图、完整页面记录与结构化请求/响应见 docs/evidence/handoff-frontend-2026-10-04.*。
 
 上一节 Tensor 修复的生产构建和部署实际已成功（部署 appgdep_6ac22888c5708191ab2bb63304361b66）；旧段落的“remaining gate”是当时中间状态。本次仅追加交接文档和证据，不改应用代码。
@@ -30,8 +52,6 @@
 - 三家 key 已以 Sites secret 配置，未写入 GitHub 源码、构建产物或文档。Sogni 只读 workflows / LoRA 请求的实测 403 原文保留，原因未确认，不猜测余额或 key 有效性。
 - 截至最终回归：33 个测试文件、262 个测试通过。当前类型与生产构建须在发布流水线再次确认；这里的单测通过不代表真实生成通过。
 - 官方资料、准确端点与已知边界详见 `docs/providers/schema-providers.md`。仍待验证：可用网络中的网页真实图片生成、每家账户生成权限、实际 LoRA 效果和输出持久化的完整前端闭环。
-
-以下是历史进度，旧“已完成”“100%”等结论不能替代上面的当前验证状态。
 
 ## 2026-09-30 — soft-civitai-history-thumb HARD gates
 

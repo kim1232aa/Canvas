@@ -41,8 +41,9 @@ Sogni 参考图位于工作流外层 `media_references:[{kind:"image",url:"https
 
 ## 本轮验证边界
 
-- 前端已实际选择 Sogni `krea-2-turbo`、配置 LoRA 参数并点击“运行工作流”。目录加载、参数编辑、提交路由及失败状态已观察。预览执行在上游返回 HTTP 之前遇到 `ECONNREFUSED`；没有新图，网页出图验收未通过。
-- 执行环境直接只读请求 Sogni workflows 与公开 LoRA 目录返回 HTTP 403，其中 workflows 正文为 `error code: 1010`。无法由此确定是余额、key 权限、边缘规则还是其他限制，不能写成欠费或错误 key。
+> **2026-10-05 修正**：以下两条 Sogni 结论（ECONNREFUSED、403 error code 1010）是 2026-10-04 旧网络环境下的结果，**已被 10-05 前端实测取代**：同一账号经完整 UI 流程提交返回 HTTP 201 created，欠费表现为任务 `waiting_for_user` / `insufficient_credit`（Sogni 的欠费不是 HTTP 错误码），LoRA 参数按 `loras` 字符串 ID 数组 + `loraStrengths` 平行数组透传成功。最新证据：[`../evidence/t7-sogni-acceptance.md`](../evidence/t7-sogni-acceptance.md)。修正理由：旧记录的网络阻断与 403 在当时环境下属实，但环境恢复后实测证明 key 有效、协议正确，旧结论不应再作为 Sogni 集成状态的依据。
+- （历史，已被取代）前端已实际选择 Sogni `krea-2-turbo`、配置 LoRA 参数并点击“运行工作流”。目录加载、参数编辑、提交路由及失败状态已观察。预览执行在上游返回 HTTP 之前遇到 `ECONNREFUSED`；没有新图，网页出图验收未通过。
+- （历史，已被取代）执行环境直接只读请求 Sogni workflows 与公开 LoRA 目录返回 HTTP 403，其中 workflows 正文为 `error code: 1010`。无法由此确定是余额、key 权限、边缘规则还是其他限制，不能写成欠费或错误 key。
 - 旧 `public/verification/` 图片是历史 API 调用样本，已更正入口文案，不能用来替代本轮前端验收。
 - 单元契约夹具只验证路由、映射与错误处理，明确不是上游真实生成证据。
 - 网页实测记录：[`frontend-sogni-2026-10-04.json`](../evidence/frontend-sogni-2026-10-04.json)；界面截图：[`frontend-sogni-2026-10-04.jpg`](../evidence/frontend-sogni-2026-10-04.jpg)。文件来自真实网页执行 DOM 与截图，不是夹具。

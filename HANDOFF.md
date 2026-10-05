@@ -132,7 +132,7 @@
 - `BLOCKED_AUTH`：真实鉴权/账户配置问题，原文已核对；不能说欠费，也不能声明生成可用。
 - `NOT_TESTED`：本轮未测试。不要填写“可能通过”。
 
-**按用户最新的前端标准，目前没有足够证据把任何一家在本轮直接勾为完整 PASS_GENERATION 或 PASS_BILLING。** Civitai 的相对完善和历史出图是真的有记录；差的是按此标准补一次当前网页闭环证据。
+~~**按用户最新的前端标准，目前没有足够证据把任何一家在本轮直接勾为完整 PASS_GENERATION 或 PASS_BILLING。**~~（2026-10-05 修正：此句已被推翻——WaveSpeed/MuAPI/Sogni 已按该标准完成前端验收，见下行修正说明与 PROGRESS.md 2026-10-05 节。修正理由：本句写于 10-04，当时三家仅 CODE_ONLY/BLOCKED_ENV；10-05 已补齐真实前端证据。）Civitai 的相对完善和历史出图是真的有记录；差的是按此标准补一次当前网页闭环证据。
 
 ### 3.2 用户提供 Key 的 10 个集成目标
 
@@ -145,9 +145,9 @@
 | **ModelScope AI** | AI 域名独立路由；历史一把 Key 额度/限额，另一把账户配置 401 | **DIRECT_EVIDENCE；前端 NOT_TESTED** | CN/AI 不混 Key、不换域名；分别验证用户指定账户。绑定账户问题是 BLOCKED_AUTH，不是欠费；完善目录→选择→实际 task 链路 |
 | **NanoGPT** | `/api/v1/images`、模型 endpoint 元数据、尺寸/输入转换；历史 401 `invalid_api_key` | **DIRECT_EVIDENCE；前端 NOT_TESTED** | 当前授权未通过。`nanoImageApi.ts` 仍把“未核实”写成“不支持”并拦截一批字段，须查官方能力后整改；LoRA 不能一概声称可用或不支持 |
 | **Tensor.Art / TAMS** | 真实数字模型 ID、模型详情、job、LoRA ID/weight；删除工具底模预设与 HTML 抓取；历史 TAMS 404 unauthorized/app not found | **DIRECT_EVIDENCE；TAMS 前端 NOT_TESTED** | 列表 API 缺失与生成授权分开处理。当前按 ID 查询；不能抓被挑战页面冒充稳定目录。旧 OpenWorks 图片不证明 TAMS 模型或 LoRA 成功；需要正确 TAMS 应用授权并复核端点/鉴权 |
-| **MuAPI** | 设置、模型单家标签、目录/OpenAPI、通用 submit/poll/save-result、Schema 参数与 LoRA 映射 | **CODE_ONLY；前端 NOT_TESTED** | all 聚合、独立 LoRA 中心、工作流入口、资产/能力矩阵覆盖不足；先修错误分类，再选真实 LoRA 端点和权重 URL 做前端生成或真实欠费验收 |
-| **WaveSpeed** | 单家目录及 model_run Schema、原生端点、Bearer、任务轮询、LoRA path/scale | **CODE_ONLY；前端 NOT_TESTED** | 同 MuAPI 的产品入口缺口；没有 model_run 定义时仍有拼接路径分支，须核实其契约与可见性；不能静默以猜测路径“补齐”接口 |
-| **Sogni** | 固定版本官方工具 Schema selectors、Creative Agent workflow、轮询、LoRA ID/strengths；此前前端提交被网络阻塞 | **BLOCKED_ENV（历史本会话）；本次未重跑** | 独立 LoRA 中心缺入口；ModelHub 卡片用显示名而非 ID 的供应商白名单没有 Sogni，需修复；worker ID 与 hosted selector 必须分开；私有参考图自动上传未实现；直接读取曾 403，原因未确认，不能称欠费 |
+| **MuAPI** | 设置、模型单家标签、目录/OpenAPI、通用 submit/poll/save-result、Schema 参数与 LoRA 映射 | **PASS_BILLING（2026-10-05 前端实测）** | 目录 147 个与官方一致；余额 0.0000 USD；提交 HTTP 402 INSUFFICIENT_CREDITS 原样透传。证据：docs/evidence/t7-muapi-acceptance.md。LoRA 真实出图待账户充值后复测 |
+| **WaveSpeed** | 单家目录及 model_run Schema、原生端点、Bearer、任务轮询、LoRA path/scale | **PASS_GENERATION（2026-10-05 前端实测）** | krea-v2/turbo-lora 带 LoRA 出图×2，同 seed 复现。证据：docs/evidence/t7-wavespeed-acceptance.md |
+| **Sogni** | 固定版本官方工具 Schema selectors、Creative Agent workflow、轮询、LoRA ID/strengths | **PASS_BILLING（2026-10-05 前端实测重做）** | 27 selector=官方 schema enum；LoRA 目录 32 个=官方实时数；loras+loraStrengths 协议透传；201 created；欠费 waiting_for_user/insufficient_credit 原样展示。证据：docs/evidence/t7-sogni-acceptance.md。历史 403（error code 1010）为旧网络环境结果，已被取代 |
 
 历史记录来源：[`public/verification/results.json`](public/verification/results.json) 和 [`provider-audit.json`](public/verification/provider-audit.json)。后者自己声明没有浏览器点击验收。`billing_or_quota` 等历史标签必须连原始响应一起复核。历史时间、Key 权限、账户余额都不能当成现在的事实。
 
