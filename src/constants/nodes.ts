@@ -232,9 +232,33 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
         default: 'A futuristic cybernetic city at twilight, neon reflections on wet asphalt, volumetric mist, intricate architectural details, photorealistic, 8k resolution',
         placeholder: 'Enter positive prompt...',
       },
+      // 「AI 润色优化」的服务商与模型选择（NodeItem handleRefinePrompt 读取 node.values.refineProvider/refineModel）。
+      // 此前这两个值无任何 UI/存储写入路径，润色按钮永远提示「请先选择润色模型」——此处补齐配置入口。
+      {
+        name: 'refineProvider',
+        label: '润色服务商（AI 润色用）',
+        type: 'select',
+        default: '',
+        options: [
+          { label: '未选择（禁用润色）', value: '' },
+          { label: 'Google Gemini', value: 'gemini' },
+          { label: '商汤日日新 (SenseNova)', value: 'sensenova' },
+          { label: 'Agnes AI', value: 'agnes' },
+          { label: 'Grok 兼容中转', value: 'grok_compat' },
+        ],
+      },
+      {
+        name: 'refineModel',
+        label: '润色模型（AI 润色用）',
+        type: 'text',
+        default: '',
+        placeholder: '例如 sensenova-6.8-flash-lite / gemini-2.5-flash',
+      },
     ],
     defaultValues: {
       text: 'A futuristic cybernetic city at twilight, neon reflections on wet asphalt, volumetric mist, intricate architectural details, photorealistic, 8k resolution',
+      refineProvider: '',
+      refineModel: '',
     },
   },
 

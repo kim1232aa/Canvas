@@ -23,6 +23,7 @@ import {
   ShieldAlert,
 } from 'lucide-react';
 import { ApiKeysState, ProviderConfig, ProviderId } from '../types/providers';
+import { saveKeysLocalFirst } from '../services/settingsSave';
 import {
   testProviderConnection,
   fetchKeyPoolStats,
@@ -482,22 +483,33 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
     if (isSavingAll) return;
     setIsSavingAll(true); setSaveError(null);
     try {
-      const payload: Record<string, string> = {};
-      for (const field of ALLOWED_CLOUD_SETTINGS_FIELDS) {
-        const value = (keys as any)[field];
-        if (typeof value === 'string' && value.trim() && !value.includes('...') && !value.includes('***')) payload[field] = value.trim();
+      const { cloud } = await saveKeysLocalFirst({
+        // 浏览器本地密钥是主存储（逐请求从 localStorage 读取），必须先保存；
+        // 云端同步需管理令牌，失败不阻塞本地、不静默，错误原样展示。
+        saveLocal: () => onSaveKeys(keys),
+        syncCloud: async () => {
+          const payload: Record<string, string> = {};
+          for (const field of ALLOWED_CLOUD_SETTINGS_FIELDS) {
+            const value = (keys as any)[field];
+            if (typeof value === 'string' && value.trim() && !value.includes('...') && !value.includes('***')) payload[field] = value.trim();
+          }
+          const result = await saveCloudServerSettings(payload, adminToken);
+          if (!result.ok) return { ok: false, status: result.status, error: result.error || `HTTP ${result.status}: 保存未完成` };
+          for (const provider of providers) {
+            const strategy = keys[`${provider.id}_strategy`];
+            if (strategy && strategy !== poolStats[provider.id]?.strategy) {
+              if (!await updateKeyPoolStrategy(provider.id, strategy, adminToken)) return { ok: false, error: `${provider.name} 的轮询策略保存失败` };
+            }
+          }
+          return { ok: true };
+        },
+      });
+      if (cloud.ok) {
+        onClose();
+      } else {
+        setSaveError(`浏览器本地密钥已保存（可用于生成）；云端同步未完成：${cloud.error}`);
       }
-      const result = await saveCloudServerSettings(payload, adminToken);
-      if (!result.ok) throw new Error(result.error || `HTTP ${result.status}: 保存未完成`);
-      for (const provider of providers) {
-        const strategy = keys[`${provider.id}_strategy`];
-        if (strategy && strategy !== poolStats[provider.id]?.strategy) {
-          if (!await updateKeyPoolStrategy(provider.id, strategy, adminToken)) throw new Error(`${provider.name} 的轮询策略保存失败`);
-        }
-      }
-      onSaveKeys(keys);
-      onClose();
-    } catch (error: any) {setSaveError(error.message || '保存失败，请重试');}
+    } catch (error: any) {setSaveError(`浏览器本地密钥已保存（可用于生成）；云端同步异常：${error.message || '保存失败，请重试'}`);}
     finally {setIsSavingAll(false);}
   };
 
