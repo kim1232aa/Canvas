@@ -47,7 +47,7 @@ import {
 } from './services/api';
 import { EngineRegistry } from './engines/EngineRegistry';
 import { NormalizedGenerateParams } from './engines/types';
-import { executeWorkflow, extractWorkflowParameters, resolveTargetNode } from './utils/graphEngine';
+import { executeWorkflow, extractWorkflowParameters, resolveTargetNode, shouldClearExecutionOutput } from './utils/graphEngine';
 import { applyAIVideoModelSelection } from './utils/videoProvider';
 import {
   PREVIEW_HANG_MS,
@@ -942,7 +942,13 @@ export default function App() {
               ...n,
               state,
               executionProgress: progress ?? n.executionProgress,
-              outputData: output !== undefined ? output : n.outputData,
+              // A new run or failed run must never keep showing a previous image/video as if it were this request's result.
+              outputData:
+                output !== undefined
+                  ? output
+                  : shouldClearExecutionOutput(n.type, state, output, errorMessage)
+                    ? undefined
+                    : n.outputData,
               errorMessage: errorMessage !== undefined ? errorMessage : n.errorMessage,
             };
           }
