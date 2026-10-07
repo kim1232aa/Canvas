@@ -1,12 +1,34 @@
 import { isCanvasFieldUnsupported } from './resolveCheckpoint';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { extractWorkflowParameters, executeWorkflow, resolveTargetNode } from './graphEngine';
+import { extractWorkflowParameters, executeWorkflow, resolveTargetNode, sanitizeExecutionSnapshotNodes, shouldClearExecutionOutput } from './graphEngine';
 import { Connection, NodeInstance } from '../types/graph';
 import { EngineRegistry } from '../engines/EngineRegistry';
 import { NormalizedGenerateResult } from '../engines/types';
 import * as api from '../services/api';
 
 describe('graphEngine - B2 & L2a & L2b 拓扑反向追踪与参数抽取隔离测试', () => {
+  it('clears stale media outputs when a generation branch starts or fails, but not on non-media nodes', () => {
+    expect(shouldClearExecutionOutput('KSampler', 'running', undefined)).toBe(true);
+    expect(shouldClearExecutionOutput('SaveImage', 'idle', undefined, '')).toBe(true);
+    expect(shouldClearExecutionOutput('KSampler', 'error', undefined, 'request failed')).toBe(true);
+    expect(shouldClearExecutionOutput('KSampler', 'success', 'data:image/png;base64,abc')).toBe(false);
+    expect(shouldClearExecutionOutput('CLIPTextEncode', 'running', undefined)).toBe(false);
+  });
+
+  it('removes previous output/error state from the workflow snapshot sent with a new request', () => {
+    const stale = createNode('sampler', 'KSampler', { seed: 7 });
+    stale.state = 'error';
+    stale.executionProgress = 100;
+    stale.errorMessage = 'previous request failed';
+    stale.outputData = 'data:image/jpeg;base64,old-result';
+    const [clean] = sanitizeExecutionSnapshotNodes([stale]);
+    expect(clean.state).toBe('idle');
+    expect(clean.executionProgress).toBe(0);
+    expect(clean).not.toHaveProperty('outputData');
+    expect(clean).not.toHaveProperty('errorMessage');
+    expect(clean.values).toEqual({ seed: 7 });
+  });
+
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.spyOn(api, 'getStoredApiKeys').mockReturnValue({} as any);
