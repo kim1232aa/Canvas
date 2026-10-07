@@ -12,6 +12,22 @@ import {
 } from './resolveCheckpoint';
 import { assertAIVideoProviderReady } from './videoProvider';
 
+const MEDIA_OUTPUT_NODE_TYPES = new Set([
+  'KSampler','AIVideoNode','FalAIEngineNode','GoogleImagenNode','ModelScopeNode','ModelScopeAiNode','NanoGPTNode','VAEDecode','SaveImage','SaveVideo','PreviewImage',
+]);
+
+export function shouldClearExecutionOutput(nodeType: string, state: NodeInstance['state'], output: unknown, errorMessage?: string): boolean {
+  return output === undefined && MEDIA_OUTPUT_NODE_TYPES.has(nodeType) && (state === 'running' || state === 'error' || (state === 'idle' && errorMessage === ''));
+}
+
+export function sanitizeExecutionSnapshotNodes(nodes: NodeInstance[]): NodeInstance[] {
+  return nodes.map(({ outputData: _outputData, errorMessage: _errorMessage, executionProgress: _executionProgress, ...node }) => ({
+    ...node,
+    state: 'idle',
+    executionProgress: 0,
+  }));
+}
+
 export interface WorkflowExtraction {
   checkpointModel: string;
   positivePrompt: string;
@@ -765,7 +781,8 @@ export async function executeWorkflow(
     );
 
     onProgress?.(15, `已整理工作流参数：${params.targetProvider} / ${params.checkpointModel}；${params.loras.length} 个 LoRA 请求参数，尚未提交上游`);
-    [...ckptNodes,...clipNodes,...loraNodes,...latentNodes].forEach(n=>onNodeStateChange(n.id,'idle',0,undefined,''));
+    // Reset prior media outputs on the branch before a new request so stale previews cannot survive a failed rerun.
+    [...ckptNodes,...clipNodes,...loraNodes,...latentNodes,...saveNodes].forEach(n=>onNodeStateChange(n.id,'idle',0,undefined,''));
 
     let resultMedia = '';
     let usedProvider: string = params.targetProvider;
@@ -865,7 +882,7 @@ export async function executeWorkflow(
     );
 
     const normParams: NormalizedGenerateParams = omitUnsupportedGenerateFields(engProv, engModel, {
-      workflowSnapshot: { format: 'comfycanvas', version: 1, nodes: activeNodes, connections, executingNodeId: params.executingNodeId },
+      workflowSnapshot: { format: 'comfycanvas', version: 1, nodes: sanitizeExecutionSnapshotNodes(activeNodes), connections, executingNodeId: params.executingNodeId },
       prompt: params.positivePrompt,
       negative_prompt: params.negativePrompt,
       model: params.checkpointModel,
