@@ -126,5 +126,13 @@ export interface GenerationHistoryItem {
   timestamp: number;
   loras?: Array<{ name: string; strength: number; civitaiId?: string }>;
   workflowSnapshot?: Record<string, unknown>;
-  requestMetadata?: { route: string; submissions: Array<{ endpoint: string; parameters: unknown; status: number }> };
+  requestMetadata?: {
+    route?: string;
+    submissions?: Array<{ endpoint: string; parameters: unknown; status: number }>;
+    executionTrace?: unknown[];
+    requestedParameters?: Record<string, unknown>;
+    actualParameters?: Record<string, unknown>;
+    effectiveParameters?: Record<string, unknown>;
+    [key: string]: unknown;
+  };
 }
