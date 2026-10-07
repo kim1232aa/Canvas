@@ -855,13 +855,17 @@ export async function executeWorkflow(
     if (params.outputFormat) extraParams.output_format = params.outputFormat;
     if (params.background) extraParams.background = params.background;
     if (params.moderation) extraParams.moderation = params.moderation;
-    if (params.resolution) extraParams.resolution = params.resolution;
+    if (params.resolution && !(params.targetProvider === 'huggingface' && params.hfProvider !== 'z-image-space')) extraParams.resolution = params.resolution;
     if (params.falModelName) extraParams.model_name=params.falModelName;
     if (params.targetProvider === 'huggingface') {
       if (params.hfProvider) extraParams.hf_provider = params.hfProvider;
-      if (params.shift !== undefined) extraParams.shift = params.shift;
-      if (params.randomSeed !== undefined) extraParams.random_seed = params.randomSeed;
-      if (params.galleryImages !== undefined) extraParams.gallery_images = params.galleryImages;
+      // resolution / shift / random_seed / gallery_images belong to the verified Z-Image Space contract only.
+      // Keeping them on HF Inference or HF→fal-ai causes a local reject before the real provider is reached.
+      if (params.hfProvider === 'z-image-space') {
+        if (params.shift !== undefined) extraParams.shift = params.shift;
+        if (params.randomSeed !== undefined) extraParams.random_seed = params.randomSeed;
+        if (params.galleryImages !== undefined) extraParams.gallery_images = params.galleryImages;
+      }
     }
     if (grokOrOpenAi && params.batchSize != null && Number(params.batchSize) > 0) {
       extraParams.n = Number(params.batchSize);
