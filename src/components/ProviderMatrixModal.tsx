@@ -34,103 +34,126 @@ export const ProviderMatrixModal: React.FC<ProviderMatrixModalProps> = ({
 
   const providerData = [
     {
-      name: 'Fal.ai',
-      badge: '首选商业推理引擎',
+      name: 'Civitai',
+      badge: 'PASS_GENERATION',
+      badgeColor: 'bg-rose-500/20 text-rose-300 border-rose-500/40',
+      description: '公开 API 可读取模型/版本/作品元数据；当前已用特定 SD1 Checkpoint AIR + LoRA AIR 从前端真实生成。不能外推全部 Civitai 资源。',
+      models: [
+        { name: 'urn:air:sd1:checkpoint:civitai:4384@128713', steps: '按请求/recipe', resolution: '按请求/recipe', speed: '已实测' },
+        { name: 'urn:air:sd1:lora:civitai:82098@87153 · 0.7', steps: '同工作流', resolution: '同工作流', speed: '已实测' },
+      ],
+      loraSupport: '保留真实 AIR / version / 权重。缺失字段不猜；目录可见不代表在线生成可用。',
+      promptLanguage: '由所选模型决定',
+      keyFormat: 'Civitai API Key；秘密值不进入日志/工作流',
+      features: ['公开资源元数据', 'AIR/version 保真', '真实前端生成'],
+    },
+    {
+      name: 'WaveSpeed',
+      badge: 'PASS_GENERATION',
       badgeColor: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40',
-      description: '提供当今业界最顶尖的极速 GPU 推理，原生深度支持 FLUX.1 全系列与 SDXL 1.0。',
-      models: [
-        { name: 'FLUX.1-schnell', steps: '4 ~ 8 步', resolution: '512 ~ 2048', speed: '1~2秒' },
-        { name: 'FLUX.1-dev', steps: '25 ~ 50 步', resolution: '1024 ~ 2048', speed: '5~8秒' },
-        { name: 'SDXL 1.0 Base', steps: '25 ~ 35 步', resolution: '1024x1024', speed: '3~4秒' },
-        { name: 'Animagine XL 3.1', steps: '28 ~ 35 步', resolution: '1152x768', speed: '3~4秒' },
-      ],
-      loraSupport: '✅ 完全支持 Civitai LoRA 直接挂载，支持多 LoRA 权重动态调节 (0.1 ~ 2.0)',
-      promptLanguage: '英文（若输入中文，系统将自动调用 Gemini 扩写翻译为大师级英文）',
-      keyFormat: '格式: KeyID:SecretKey (例: xxxxxxxx-...:xxxxxxx...)',
-      features: ['支持 Civitai safetensors 直连', '单反级毛孔微距', '最高达 2K 超清分辨率'],
+      description: '按实时目录 model_id 执行；只有目录实际提供 model_run Schema 时才把字段标为已核实。已有带 LoRA 的真实前端生成证据。',
+      models: [{ name: '实时 model_id', steps: 'model_run Schema', resolution: 'model_run Schema', speed: '已有真实生成' }],
+      loraSupport: '按具体端点 Schema 透传 path / scale；目录缺失 Schema 时保持 unknown。',
+      promptLanguage: '由所选模型决定',
+      keyFormat: 'WaveSpeed Bearer Key',
+      features: ['实时目录', 'model_run Schema', '生成结果持久化'],
     },
     {
-      name: 'ModelScope (阿里魔搭社区)',
-      badge: '国产大模型第一极',
+      name: 'MuAPI',
+      badge: 'PASS_BILLING',
+      badgeColor: 'bg-violet-500/20 text-violet-300 border-violet-500/40',
+      description: '执行使用真实 endpoint_url；普通路由和 LoRA 专用路由均到达真实上游，当前账户返回 INSUFFICIENT_CREDITS。',
+      models: [{ name: 'flux-1-dev-style-lora-inference', steps: 'OpenAPI Schema', resolution: 'OpenAPI Schema', speed: '当前余额不足' }],
+      loraSupport: 'LoRA 专用端点已验证 lora_url + lora_weight=0.65；不把目录展示名当执行 ID。',
+      promptLanguage: '由所选端点决定',
+      keyFormat: 'MuAPI API Key',
+      features: ['endpoint_url 保真', 'OpenAPI Schema', 'LoRA 402 真实证据'],
+    },
+    {
+      name: 'Sogni',
+      badge: 'PASS_BILLING',
+      badgeColor: 'bg-orange-500/20 text-orange-300 border-orange-500/40',
+      description: 'selector 来自固定版本官方工具 Schema；worker namespace 与 hosted selector 不自动互换。真实 task 已创建，当前账户 insufficient_credit。',
+      models: [{ name: '官方工具 Schema selector', steps: 'Schema', resolution: 'Schema', speed: '当前余额不足' }],
+      loraSupport: '已核实 loras + loraStrengths 协议；LoRA 顺序与权重保持原样。',
+      promptLanguage: '由所选 selector 决定',
+      keyFormat: 'Sogni Bearer Key',
+      features: ['版本化工具 Schema', 'LoRA ID/strengths', '任务轮询'],
+    },
+    {
+      name: 'Fal.ai',
+      badge: 'PASS_BILLING',
+      badgeColor: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40',
+      description: '每个 Fal 端点有独立 Schema。当前 fal-ai/flux-lora 已验证 LoRA path/scale 接线；账户返回 TOP_UP。',
+      models: [
+        { name: 'fal-ai/flux-lora', steps: '端点 Schema', resolution: '端点 Schema', speed: '已到上游 · TOP_UP' },
+        { name: '其他 Fal 端点', steps: '实时 Schema', resolution: '实时 Schema', speed: '逐端点验收' },
+      ],
+      loraSupport: '仅当端点 Schema 声明 LoRA 时发送；不把 Civitai ID 无依据转换成 Fal 路径。',
+      promptLanguage: '按所选端点；不自动调用其他供应商翻译/扩写',
+      keyFormat: 'Fal API Key；实际格式以上游设置为准',
+      features: ['端点级 Schema', 'LoRA path/scale', 'TOP_UP 原文可见'],
+    },
+    {
+      name: 'ModelScope CN / AI',
+      badge: '账户分离',
       badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
-      description: '阿里巴巴官方开源社区生态，全面支持通义万相 Wan 2.1 与 Qwen 图像编辑模型。',
+      description: 'CN 与 AI 国际站使用不同域名与账户。当前 CN 图像路由为 PASS_BILLING；AI 国际站为 BLOCKED_AUTH。',
       models: [
-        { name: 'damo/wan2.1-t2i', steps: '25 ~ 35 步', resolution: '720p / 1080p', speed: '4~8秒' },
-        { name: 'MusePublic/Qwen-Image-Edit', steps: '20 ~ 30 步', resolution: '1024x1024', speed: '5秒' },
-        { name: 'damo/cv_diffusion_text-to-image', steps: '25 步', resolution: '768x768', speed: '3秒' },
+        { name: 'Tongyi-MAI/Z-Image-Turbo · CN', steps: '按端点', resolution: '按端点', speed: 'insufficient balance' },
+        { name: 'Tongyi-MAI/Z-Image-Turbo · AI', steps: '按端点', resolution: '按端点', speed: '账户绑定阻塞' },
       ],
-      loraSupport: '✅ 内置 Wan 2.1 顶级东方写意水墨国风与东方仙侠风格算法',
-      promptLanguage: '✅ 原生完美支持纯正中文自然语言提示词，无需任何翻译！',
-      keyFormat: '格式: ms-xxxxxxxx-... (阿里魔搭 Access Token)',
-      features: ['原汁原味中文理解', '水墨云海与东方人物极佳', '中国大陆区域极低延迟'],
+      loraSupport: '无统一 LoRA 载荷；只有所选在线端点契约明确支持时才发送。',
+      promptLanguage: '由所选模型/端点决定；不自动翻译 Prompt',
+      keyFormat: 'CN / AI 独立 Token',
+      features: ['CN/AI 路由隔离', '真实 endpoint 可见', '账户/额度分开分类'],
     },
     {
-      name: 'Google Gemini (官方直连)',
-      badge: '官方直连',
-      badgeColor: 'bg-blue-500/20 text-blue-300 border-blue-500/40',
-      description: 'Google 官方 Gemini 生图模型 (generateContent)，不支持负向提示词/seed/steps/CFG/LoRA。',
-      models: [
-        { name: 'gemini-2.5-flash-image', steps: '不适用', resolution: '按 aspect_ratio', speed: '—' },
-        { name: 'gemini-3.1-flash-image', steps: '不适用', resolution: '按 aspect_ratio', speed: '—' },
-        { name: 'gemini-3-pro-image', steps: '不适用', resolution: '按 aspect_ratio', speed: '—' },
-      ],
-      loraSupport: '系统集成超高细节写真引擎（无需额外挂载 LoRA）',
-      promptLanguage: '中英文双语均可（支持自然语言智能意图扩展）',
-      keyFormat: '无需用户提供！由 AI Studio 服务端原生代理与配额直供',
-      features: ['零门槛开箱即用', 'Google 官方原生高精度生成引擎', '超逼真微距质感'],
-    },
-    {
-      name: 'Hugging Face Hub',
-      badge: '开源社区旗舰',
+      name: 'Hugging Face',
+      badge: 'Hub ≠ 在线推理',
       badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
-      description: '全球最大 AI 开源社区，支持通过 Inference API 直接调用各类开源 Checkpoint。',
+      description: 'Hub 用于资源和元数据；在线推理必须存在明确的 HF Inference / Inference Provider / Space 路由。旧 Z-Image Space 证据为 BLOCKED_ENV，当前仍待复验。',
       models: [
-        { name: 'black-forest-labs/FLUX.1-schnell', steps: '4 步', resolution: '1024x1024', speed: '4秒' },
-        { name: 'stabilityai/stable-diffusion-xl-base-1.0', steps: '30 步', resolution: '1024x1024', speed: '5秒' },
+        { name: 'Hub 模型', steps: '由推理路由决定', resolution: '由推理路由决定', speed: 'Hub 可见 ≠ 可推理' },
+        { name: 'Inference Provider / Space', steps: '路由契约', resolution: '路由契约', speed: '逐路由验收' },
       ],
-      loraSupport: '支持 Hugging Face Hub 上的 LoRA 权重映射',
-      promptLanguage: '英文提示词',
-      keyFormat: '格式: hf_xxxxxxxxxxxxxxxxxxxxx (Hugging Face User Access Token)',
-      features: ['开源模型生态最全', '支持私有与微调权重', '全球分发节点'],
+      loraSupport: '只在明确 adapter/provider mapping 或目标端点支持时发送；保留原 repo ID / URL。',
+      promptLanguage: '由所选模型/路由决定',
+      keyFormat: 'Hugging Face User Access Token',
+      features: ['Hub 元数据', 'Inference mapping', '显式路由选择'],
     },
     {
       name: 'NanoGPT',
-      badge: '按量极速 API',
+      badge: 'BLOCKED_AUTH',
       badgeColor: 'bg-purple-500/20 text-purple-300 border-purple-500/40',
-      description: '聚合多种顶尖生成模型的极速轻量 API，按次计费。',
-      models: [
-        { name: 'flux-schnell', steps: '4 步', resolution: '1024x1024', speed: '2秒' },
-        { name: 'flux-dev', steps: '28 步', resolution: '1024x1024', speed: '6秒' },
-      ],
-      loraSupport: '基础模型渲染',
-      promptLanguage: '英文',
-      keyFormat: '格式: sk-nano-xxxxxxxxxxxxxxxx (NanoGPT API Key)',
-      features: ['极速响应', '支持 flux-dev 深度解算'],
-    },
-    {
-      name: 'Tensor.Art 模型 API',
-      badge: 'TAMS',
-      badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
-      description: '按真实模型 ID 查询底模或 LoRA。官方暂不提供全量模型列表 API，网页目录不能作为稳定 API。',
-      models: [],
-      loraSupport: '模型任务支持 LoRA ID 与权重，需匹配底模架构',
+      description: '模型级 endpoint 元数据决定可用字段。当前真实前端请求已到达 NanoGPT，但凭据返回 Invalid session / invalid_api_key。',
+      models: [{ name: 'qwen-image-2.1/text-to-image', steps: 'endpoint 元数据', resolution: '1k / endpoint 元数据', speed: '当前凭据 401' }],
+      loraSupport: '不声明全局 LoRA 支持；以具体模型 endpoint 能力元数据或真实响应为准。',
       promptLanguage: '由所选模型决定',
-      keyFormat: 'TAMS 模型 API 凭据；授权状态以上游响应为准',
-      features: ['模型 ID 查询', '实际请求与错误可见', '与 OpenWorks 工具接口分开'],
+      keyFormat: 'NanoGPT API Key',
+      features: ['endpoint 元数据', '模型级参数校验', '401 原文可见'],
     },
     {
-      name: 'Civitai (C 站模型中心)',
-      badge: '全球最大 LoRA 库',
-      badgeColor: 'bg-rose-500/20 text-rose-300 border-rose-500/40',
-      description: '数十万社区创作者共享的风格、人物、艺术 LoRA 宝库，提供权重与触发词。',
-      models: [
-        { name: 'Checkpoint 底模库', steps: '-', resolution: '各类', speed: '实时检索' },
-        { name: 'LoRA 风格适配器', steps: '-', resolution: '各类', speed: '实时挂载' },
-      ],
-      loraSupport: '⭐ 核心定位：LoRA 资产发源地，一键抽取触发词与权重',
-      promptLanguage: '各类提示词',
-      keyFormat: '格式: 32位十六进制字符串 (Civitai API Key)',
-      features: ['海量二次元/写实LoRA', '一键提取 Trigger Words 触发词', '精美样例作品对比'],
+      name: 'Tensor.Art / TAMS',
+      badge: 'BLOCKED_AUTH',
+      badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+      description: '按真实模型 ID 查询；不抓 HTML 目录，不用 OpenWorks 工具结果冒充 TAMS。当前应用授权返回 unauthorized / app not found。',
+      models: [{ name: '真实 TAMS 模型 ID', steps: '待授权后核实', resolution: '待授权后核实', speed: '当前 app 未授权' }],
+      loraSupport: 'TAMS LoRA ID/weight 要等正确应用授权后做真实生成验收。',
+      promptLanguage: '由所选模型决定',
+      keyFormat: 'TAMS 应用凭据',
+      features: ['模型 ID 查询', 'OpenWorks/TAMS 分离', '鉴权业务体保留'],
+    },
+    {
+      name: 'Google Gemini',
+      badge: '待当前前端验收',
+      badgeColor: 'bg-blue-500/20 text-blue-300 border-blue-500/40',
+      description: '图像生成走 Gemini 原生 generateContent / imageConfig 语义；不要把 ComfyUI 的 Sampler、Steps、CFG、LoRA 伪装成 Gemini 已接收字段。',
+      models: [{ name: '当前模型选择器中的 Gemini Image 模型', steps: '不适用', resolution: 'imageConfig', speed: '待当前凭据实测' }],
+      loraSupport: '当前 Gemini 路由不映射 LoRA；画布 LoRA 节点不能假称已生效。',
+      promptLanguage: '自然语言 Prompt；是否润色由用户显式选择',
+      keyFormat: '当前运行环境实际配置的 Gemini 凭据',
+      features: ['原生图像接口', 'imageConfig', '不伪造扩散参数'],
     },
   ];
 
@@ -293,11 +316,8 @@ export const ProviderMatrixModal: React.FC<ProviderMatrixModalProps> = ({
           {activeTab === 'providers' && (
             <div className="space-y-6">
               <div className="bg-[#171822] border border-[#272936] rounded-xl p-4 text-slate-300 leading-relaxed">
-                <span className="font-bold text-white">💡 核心一览：</span>
-                每个云端服务商有其专属优势：需要极速极致的赛博朋克与写实人像时，优选{' '}
-                <span className="text-cyan-400 font-semibold">Fal.ai (FLUX.1 + Civitai LoRA)</span>；需要纯正中文国风山水仙侠时，优选{' '}
-                <span className="text-emerald-400 font-semibold">ModelScope (阿里魔搭 Wan 2.1)</span>；系统还支持{' '}
-                <span className="text-blue-400 font-semibold">Google Gemini 官方直连高保真写真引擎</span>，各引擎严格独立路由，错误透明直传！
+                <span className="font-bold text-white">💡 核心规则：</span>
+                供应商由用户明确选择，系统不根据画风、语言、余额或失败原因自动改 Provider。模型目录只用于选择真实目标；LoRA、Steps、CFG、Sampler、参考图等字段是否可用，以具体模型/端点 Schema 或真实上游响应为准。
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -482,11 +502,10 @@ export const ProviderMatrixModal: React.FC<ProviderMatrixModalProps> = ({
                   <span className="p-1 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
                     <Table className="w-4 h-4" />
                   </span>
-                  <span>官方 API 深度实证：各引擎 LoRA 载荷形状与参数规范对比矩阵</span>
+                  <span>已核实路由与未核实字段边界：LoRA / 参数映射对比</span>
                 </div>
                 <p className="text-slate-400 text-[11px] leading-relaxed">
-                  不同云端服务商和原生 ComfyUI 对 LoRA 的承载形状各不相同。我们经过真实网络搜索与接口规范核实，设计了统一的{' '}
-                  <code className="text-cyan-300 font-mono">EngineParameterNormalizer</code> 归一化层，抹平参数异构：
+                  不同供应商、甚至同一供应商的不同端点，都可能使用不同 LoRA 与参数 Schema。下表只把已核实字段写成确定值；其余保持 route-specific / unknown，不用统一归一化层把未知字段猜成已支持。
                 </p>
               </div>
 
@@ -532,7 +551,7 @@ export const ProviderMatrixModal: React.FC<ProviderMatrixModalProps> = ({
                         </td>
                         <td className="p-3 text-slate-300">
                           <span className="inline-block px-1.5 py-0.5 rounded bg-cyan-950/60 text-cyan-300 border border-cyan-800/40 font-mono text-[10px]">
-                            Civitai ID ➔ 真实下载直链 + scale 映射
+                            仅接受该端点可读取的真实 LoRA path / URL + scale
                           </span>
                         </td>
                       </tr>
@@ -578,8 +597,8 @@ export const ProviderMatrixModal: React.FC<ProviderMatrixModalProps> = ({
                           <span className="text-[10px] text-slate-500 font-mono">Wan 2.1 / DAMO 扩散</span>
                         </td>
                         <td className="p-3 font-mono text-purple-300 text-[10px]">
-                          <code>parameters.loras: [&#123; lora_model_id, lora_weight &#125;]</code>
-                          <div className="text-slate-500 text-[9px] mt-0.5">+ 提示词触发词条件注入</div>
+                          <code>无统一 LoRA 载荷</code>
+                          <div className="text-slate-500 text-[9px] mt-0.5">按具体 ModelScope 在线端点契约核实后才发送</div>
                         </td>
                         <td className="p-3 font-mono text-cyan-300">
                           <code>lora_weight: float</code>
@@ -608,8 +627,8 @@ export const ProviderMatrixModal: React.FC<ProviderMatrixModalProps> = ({
                           <span className="text-[10px] text-slate-500 font-mono">Serverless Inference</span>
                         </td>
                         <td className="p-3 font-mono text-purple-300 text-[10px]">
-                          <code>parameters.cross_attention_kwargs: &#123; scale &#125;</code>
-                          <div className="text-slate-500 text-[9px] mt-0.5">配合 LoRA 触发词前置</div>
+                          <code>无 Hub 全局 LoRA Schema</code>
+                          <div className="text-slate-500 text-[9px] mt-0.5">由 adapter mapping / Inference Provider / Space 端点决定</div>
                         </td>
                         <td className="p-3 font-mono text-cyan-300">
                           <code>scale: float (0.0~1.0)</code>
@@ -623,7 +642,7 @@ export const ProviderMatrixModal: React.FC<ProviderMatrixModalProps> = ({
                         </td>
                         <td className="p-3 text-slate-300">
                           <span className="inline-block px-1.5 py-0.5 rounded bg-amber-950/60 text-amber-300 border border-amber-800/40 font-mono text-[10px]">
-                            折算最大标量注入 cross_attention + 触发词合成
+                            保留 repo / adapter / provider 路由，不猜统一映射
                           </span>
                         </td>
                       </tr>
@@ -639,7 +658,7 @@ export const ProviderMatrixModal: React.FC<ProviderMatrixModalProps> = ({
                         </td>
                         <td className="p-3 font-mono text-purple-300 text-[10px]">
                           <code>loras: [&#123; path, scale &#125;]</code>
-                          <div className="text-slate-500 text-[9px] mt-0.5">支持 Anima LoRA 与 FLUX 系列</div>
+                          <div className="text-slate-500 text-[9px] mt-0.5">按单模型 endpoint 能力元数据核实</div>
                         </td>
                         <td className="p-3 font-mono text-cyan-300">
                           <code>scale: float</code>
@@ -668,14 +687,14 @@ export const ProviderMatrixModal: React.FC<ProviderMatrixModalProps> = ({
                           <span className="text-[10px] text-slate-500 font-mono">官方闭源高保真写真</span>
                         </td>
                         <td className="p-3 font-mono text-purple-300 text-[10px]">
-                          <code>语义触发词注入与意图蒸馏 (Prompt Distillation)</code>
-                          <div className="text-slate-500 text-[9px] mt-0.5">大模型直接解析 LoRA 特征提示词</div>
+                          <code>当前 Gemini 路由不映射 LoRA</code>
+                          <div className="text-slate-500 text-[9px] mt-0.5">LoRA 节点不能假装转成 Gemini 风格权重</div>
                         </td>
                         <td className="p-3 font-mono text-cyan-300">
-                          <code>语义权重 + 风格关键词加权</code>
+                          <code>不适用</code>
                         </td>
                         <td className="p-3 font-mono text-amber-300">
-                          <code>config.guidanceScale</code>
+                          <code>不伪造 CFG</code>
                         </td>
                         <td className="p-3 font-mono text-emerald-300 text-[10px]">
                           <div>自适应扩散算法</div>
@@ -683,7 +702,7 @@ export const ProviderMatrixModal: React.FC<ProviderMatrixModalProps> = ({
                         </td>
                         <td className="p-3 text-slate-300">
                           <span className="inline-block px-1.5 py-0.5 rounded bg-blue-950/60 text-blue-300 border border-blue-800/40 font-mono text-[10px]">
-                            提取触发词/风格词注入 + 宽高折算为原生比例
+                            只映射官方图像配置；不合成 LoRA/Steps/Sampler
                           </span>
                         </td>
                       </tr>
@@ -697,20 +716,20 @@ export const ProviderMatrixModal: React.FC<ProviderMatrixModalProps> = ({
                 <div className="bg-[#14161f] border border-[#232635] p-4 rounded-xl space-y-2">
                   <div className="font-bold text-white flex items-center gap-2">
                     <span className="text-cyan-400 font-mono text-xs">01</span>
-                    <span>双强度到单标量的智能折算</span>
+                    <span>双强度只在有真实目标字段时映射</span>
                   </div>
                   <p className="text-slate-400 text-[11px] leading-relaxed">
-                    ComfyUI 支持 <code className="text-yellow-300">strength_model</code> 和 <code className="text-yellow-300">strength_clip</code> 独立微调。当向外部单标量引擎（Fal / NanoGPT / HuggingFace）分发时，系统优先保持模型主干权重，并同步增强提示词语义。
+                    ComfyUI 可以同时保存 <code className="text-yellow-300">strength_model</code> 和 <code className="text-yellow-300">strength_clip</code>。外部端点若只声明一个 LoRA 强度，只发送那个已核实字段；没有对应字段时不把另一条强度偷偷折算、塞进 Prompt 或假称已生效。
                   </p>
                 </div>
 
                 <div className="bg-[#14161f] border border-[#232635] p-4 rounded-xl space-y-2">
                   <div className="font-bold text-white flex items-center gap-2">
                     <span className="text-purple-400 font-mono text-xs">02</span>
-                    <span>Civitai ID ➔ 真实下载直链</span>
+                    <span>Civitai ID / AIR 与外部 URL 不自动互换</span>
                   </div>
                   <p className="text-slate-400 text-[11px] leading-relaxed">
-                    在云端引擎中挂载第三方 LoRA 时，不能仅传文件名。系统自动将 Civitai Model Version ID 解析为官方直链 <code className="text-purple-300">https://civitai.com/api/download/models/&#123;id&#125;</code>，确保云端容器能实时拉取。
+                    Civitai 的 AIR、Model Version ID 和下载 URL 是不同资源表示。只有目标供应商明确接受某种 URL/ID 且项目实际完成了解析时才转换；否则保留来源标识并要求用户在目标供应商 LoRA 中心重新选择。
                   </p>
                 </div>
 
