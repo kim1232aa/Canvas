@@ -1,44 +1,40 @@
 # 交接状态更新（用户于 2026-10-04 要求）
 
-完整交接见 [HANDOFF.md](HANDOFF.md)。**当前最新收尾以 HANDOFF §0.7 与 [docs/evidence/handoff-closeout-2026-10-08.md](docs/evidence/handoff-closeout-2026-10-08.md) 为准。** 下面 2026-10-05 及更早内容保留作历史追溯，不得覆盖后续真实前端证据。
+完整交接见 [HANDOFF.md](HANDOFF.md)：先列用户铁律，再列 16 个产品板块、主要供应商与其他驱动的验收状态、模型中心/LoRA 中心缺口和后续工单。**当前状态必须看下面 2026-10-06/10-05 前端实测，不再沿用 10-04 的“Civitai/Fal 未测”结论。**
 
-## 2026-10-08 收尾状态
+## 2026-10-06 前端验收进展（最新，以此为准）
 
-| 供应商 | 判定 | 当前证据 |
-|---|---|---|
-| Civitai | **PASS_GENERATION** | 当前网页基础图 + LoRA 图真实生成；历史 provenance 已补强 |
-| WaveSpeed | **PASS_GENERATION** | krea-v2/turbo-lora 带 LoRA 真出图 |
-| MuAPI | **PASS_BILLING** | 普通路由 + LoRA 专用路由真实上游 402；`lora_url + lora_weight=0.65` 已进入 actualRequest |
-| Sogni | **PASS_BILLING** | LoRA ID/strengths 透传；task created；insufficient_credit 原样展示 |
-| Fal.ai | **PASS_BILLING** | fal-ai/flux-lora 到真实上游，403 TOP_UP |
-| ModelScope CN | **PASS_BILLING** | 429 响应体明确 insufficient balance |
-| ModelScope AI | **BLOCKED_AUTH** | 401 要求绑定 Alibaba Cloud account |
-| NanoGPT | **BLOCKED_AUTH** | 真实上游 401 Invalid session / invalid_api_key |
-| Tensor.Art / TAMS | **BLOCKED_AUTH** | 真实模型 ID 查询业务体 unauthorized / app not found |
-| Hugging Face | **PASS_BILLING** | 2026-10-08 前端显式 HF→fal-ai：FLUX.1-dev + HF LoRA 0.55 到达 HF Router，HTTP 402 no remaining credits；旧 Z-Image Space BLOCKED_ENV 仅是旧路由历史证据 |
-
-工程收尾：
-- A03 已关闭：MuAPI LoRA 专用端点已用真实前端验证 URL + weight 映射，余额不足按 PASS_BILLING 处理。
-- 失败重跑不再保留上一张图；workflowSnapshot 会剔除旧 `outputData/errorMessage/executionProgress`。
-- History 已增加 requested / sent / upstream/effective 参数 provenance；“未发送 / 上游未返回 / 旧记录未保存”分开显示。
-- A09 的多图持久化契约已补回归：部分图片保存失败只产生 `historyWarning + transientOutputs`，不把上游生成成功改写成失败。仍缺有额度情况下的真实外部前端场景证据。
-- 已有明确终态的 provider 不再重复刷调用。Hugging Face HF→fal-ai 已加入明确终态；后续未验 provider 每次都换不同参考作品的 Prompt、Negative Prompt、LoRA、权重、底模、Steps、CFG、Sampler、Scheduler、Seed、尺寸，并在成功出图后和参考原图做视觉对比。
-
-## 2026-10-05 前端验收进展（历史，以下不再是最新）
-
-按用户验收标准（前端跑通出图才算通过，欠费记 PASS_BILLING）逐家实测，完成一家 push 一家：
+按用户验收标准逐家实测：真实前端出图记 `PASS_GENERATION`；真实上游明确额度/余额不足且前端准确展示记 `PASS_BILLING`；真实账户/鉴权阻塞记 `BLOCKED_AUTH`。**已有明确终态的不重复刷调用。2026-10-06 起，新供应商每次必须换不同参考作品的 Prompt / Negative Prompt / LoRA / 权重 / 底模 / Steps / CFG / Sampler 等，并在成功出图后与参考原图做视觉对比。**
 
 | 供应商 | 判定 | 证据 | 提交 |
 |---|---|---|---|
 | WaveSpeed | **PASS_GENERATION** | krea-v2/turbo-lora 带 LoRA 真实出图×2，同 seed 复现证明 seed/steps/尺寸参数生效；目录 1054 个模型实时分页 | fcea7d3，docs/evidence/t7-wavespeed-acceptance.md |
-| MuAPI | **PASS_BILLING** | 余额核实 0.0000 USD（响应头 X-Account-Balance）；提交返回 HTTP 402 INSUFFICIENT_CREDITS，前端原样透传状态码+完整响应体+topup_url；目录 147 个与官方一致 | 0cbd126，docs/evidence/t7-muapi-acceptance.md |
+| MuAPI | **PASS_BILLING** | 余额 0.0000 USD；普通模型与 LoRA 专用 `flux-1-dev-style-lora-inference` 都从真实前端到达上游 402。LoRA 补验收的 actualRequest 明确为 `lora_url=<anime_lora.safetensors>` + `lora_weight=0.65`，没有静默改路 | 0cbd126 + 2026-10-06 工作树，docs/evidence/t7-muapi-acceptance.md |
 | Sogni | **PASS_BILLING** | 底模下拉 27 个 selector = 官方 @sogni-ai/sogni-protocol schema 枚举；LoRA Hub 32 个 = 官方 `/v1/loras/comfy` 实时数量；连线 LoRA（krea2-detail-enhancer, 0.8）经 actualRequest 透传为 `loras:["krea2-detail-enhancer"]` + `loraStrengths:[0.8]`；提交 HTTP 201；任务因欠费停 waiting_for_user/insufficient_credit，toast 原样展示完整响应体 | 858f4db，docs/evidence/t7-sogni-acceptance.md |
+| Civitai | **PASS_GENERATION** | 当前网页基础图真实生成；随后 Checkpoint AIR `4384@128713` + LoRA AIR `82098@87153` / 0.7 再次真实生成完成 | 当前工作树，docs/evidence/t7-civitai-acceptance.md |
+| Fal.ai | **PASS_BILLING** | `fal-ai/flux-lora` + 完整 HF safetensors URL / 0.8 从网页提交；上游 403 原文 `User is locked. Reason: TOP_UP.` | 当前工作树，docs/evidence/t7-fal-acceptance.md |
+| ModelScope CN | **PASS_BILLING** | `Tongyi-MAI/Z-Image-Turbo` 到 CN 上游；429 响应体明确 `insufficient balance` | 当前工作树，docs/evidence/t7-modelscope-cn-acceptance.md |
+| ModelScope AI | **BLOCKED_AUTH** | AI 国际站 401，原文要求绑定 Alibaba Cloud account；不是欠费 | 当前工作树，docs/evidence/t7-modelscope-ai-acceptance.md |
+| NanoGPT | **BLOCKED_AUTH** | `qwen-image-2.1/text-to-image` 按 endpoint resolution 改为 `1k` 后到真实上游；401 `Invalid session` / `invalid_api_key` | 当前工作树，docs/evidence/t7-nanogpt-acceptance.md |
+| Tensor.Art / TAMS | **BLOCKED_AUTH** | 真实模型 ID `672797109289765558` 查询到 TAMS；业务体 `unauthorized / app not found` | 当前工作树，docs/evidence/t7-tensorart-acceptance.md |
+| Hugging Face | **PASS_BILLING** | 2026-10-08 前端显式 HF→fal-ai：FLUX.1-dev + HF LoRA 0.55 到达 HF Router，HTTP 402 no remaining credits；旧 Z-Image Space BLOCKED_ENV 仅是旧路由历史证据 | 当前工作树，docs/evidence/t7-huggingface-acceptance.md |
+| Google Gemini | **BLOCKED_CONFIG** | 真实前端到 `/api/gemini/generate`，本地 HTTP 400：未配置 `GEMINI_API_KEY`；没有上游响应，不能记欠费或出图 | 当前工作树，docs/evidence/t7-gemini-acceptance.md |
+| Agnes AI | **BLOCKED_CONFIG** | 真实前端到 `/api/engine/agnes/generate`，本地 HTTP 400：未配置 `AGNES_BASE_URL` / x-agnes-base-url；没有上游响应，不能记欠费或出图 | 当前工作树，docs/evidence/t7-agnes-acceptance.md |
 
-代码修复（e2c9987，各附 vitest 用例）：
+代码修复（e2c9987 及 2026-10-06 当前工作树）：
 - B01 密钥保存本地优先：`/api/cloud/settings` 需 CANVAS_ADMIN_TOKEN，云端 503 曾静默阻塞本地保存 → `src/services/settingsSave.ts` 本地先存、云端失败原样报错不阻塞。
 - B02 「AI 润色优化」控件补齐：正向提示词节点新增 `refineProvider`/`refineModel`（gemini/sensenova/agnes/grok_compat），此前全库只读无写、永远无法配置。
 
-进行中：Fal（底模 fal-ai/flux-lora 已接入画布，LoRA 权重供给方式待决策，见 docs/HANDOVER-2026-10-05.md §8 F01~F03）。未验收：Civitai、ModelScope CN/AI、NanoGPT、Tensor.Art、HuggingFace（3 路由）、SenseNova（chat 已实测 200，生图按设计走 OpenAI 兼容中转通道待验）。
+### 2026-10-06 HANDOFF A01–A12 收尾
+
+- A01–A08、A10–A12 已按当前范围完成；A03 于 2026-10-06 追加 MuAPI LoRA 专用端点前端验收后关闭。现在仅 A09 保留 PARTIAL；详细逐项证据见 `docs/evidence/handoff-closeout-2026-10-06.md`。
+- 修正运行版本问题：原 3000 服务是 02:33 启动的 `tsx server.ts`（非 watch），客户端 HMR 会更新但服务端路由不会。已受控重启 3000，使当前 `server.ts` 真正加载；重启后失效 `credentialRef` 实测 HTTP 409 / local / `executionTrace=[]`，不再打上游或暗换 Key。
+- Generation History 参数来源重做：旧 Civitai 图现在能从上游响应和 JPEG 嵌入元数据恢复 Seed/Steps/CFG/Sampler/Scheduler/尺寸，并标注 `上游实际 / 图像元数据 / 实际发送 / 未发送 / 旧记录未保存`。两张旧图真实 Seed 为 `1021568893` 与 `951383495`，因此不能作为 LoRA A/B 效果对比证据。另修复失败重跑保留旧图片的问题：新请求开始即清空本分支旧 media output，workflowSnapshot 也剔除旧 `outputData/errorMessage/progress`；MuAPI 402 真实前端复测中 KSampler/SaveImage 全程无旧图，执行记录不再含旧 Civitai base64。
+- 历史导出 provenance 升级为 version 2；未来 Civitai 历史保存 requestedParameters / actualParameters 及 sampler/scheduler/width/height。
+- 供应商矩阵/指南/历史 preset 清掉 100% 复现、自动切换、未验证 LoRA/速度等宣传；资产库 Provider 筛选改为真实资产动态生成，不再维护静态供应商白名单。
+- 最终回归：`npm run lint` PASS；`npm run build` PASS（含 frontend + hosting worker 构建）；`npm test` **40 个测试文件 / 290 个测试全部 PASS**。测试绿仍只作为回归保护，真实前端验收证据见上述 closeout 文档。
+
+**仍需前端新样本验收：** SenseNova 的实际产品边界、OpenAI/Grok 兼容中转（仅用户显式 Base URL）、Video 聚合入口。Hugging Face HF→fal-ai 已取得 `PASS_BILLING`；Gemini / Agnes 当前为 `BLOCKED_CONFIG`，配置对应 Key / Base URL 后再复验。已经有明确终态的供应商不为凑数量重复调用。
 
 文档修正记录（2026-10-05）：`docs/providers/schema-providers.md` 第 44~45 行 Sogni「ECONNREFUSED / 403 error code 1010」为 10-04 旧网络环境下的结果，已被 10-05 实测（HTTP 201 + insufficient_credit）取代；HANDOFF.md §3.2 三家状态同步更新。修正理由均注于对应段落。
 
