@@ -107,7 +107,6 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
     for(const [ref,entry] of credentialRefs)if(entry.createdAt<cutoff)credentialRefs.delete(ref);
   };
   const makeCredentialRef=(provider:Provider,key:string)=>{
-    if(!key)return '';
     cleanupCredentialRefs();
     const ref=randomUUID();
     credentialRefs.set(ref,{provider,key,createdAt:Date.now()});
