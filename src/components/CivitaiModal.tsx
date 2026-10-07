@@ -375,7 +375,7 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
       }
     }
 
-    // Tensor.Art model/LoRA resources require an actual resource lookup.
+    // If user enters a Tensor.Art / 吐司 model ID or URL
     if (
       activeProvider === 'tensorart' ||
       rawVal.includes('tensor.art') ||
@@ -391,9 +391,19 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
         if (!/lora|locon|lycoris|dora/i.test(info.type || info.category || '')) throw new Error('查询返回的资源不是 LoRA');
         const baseArch = info.baseModel;
         if (onSelectLoRAWithBaseModel) {
-          onSelectLoRAWithBaseModel({name:String(info.id),provider:'tensorart',triggerWords:triggerStr,baseModel:baseArch});
+          onSelectLoRAWithBaseModel({
+            name: String(info.id),
+            provider:'tensorart',
+            triggerWords: triggerStr,
+            baseModel: baseArch,
+          });
         } else {
-          onSelectLoRA({name:String(info.id),provider:'tensorart',triggerWords:triggerStr,baseModel:baseArch});
+          onSelectLoRA({
+            name: String(info.id),
+            provider:'tensorart',
+            triggerWords: triggerStr,
+            baseModel: baseArch,
+          });
         }
         onClose();
         return;
@@ -454,7 +464,7 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
                 </span>
               </h2>
               <p className="text-[11px] text-slate-400">
-                Civitai/Hugging Face/Tensor 等按真实资源目录展示；MuAPI/WaveSpeed 使用目标端点可读取的 URL，Sogni 保留真实资源 ID。目录可见不代表在线生成已通过。
+                涵盖 Civitai、Hugging Face、魔搭社区 (ModelScope)、Fal.ai、Tensor.Art 全网海量开源与微调 LoRA，支持架构筛选与海量翻页
               </p>
             </div>
           </div>
