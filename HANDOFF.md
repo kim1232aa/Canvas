@@ -262,20 +262,20 @@
 
 | 编号 | 优先级 / 证据 | 要做什么 | 完成条件 |
 | --- | --- | --- | --- |
-| A01 | P0，已读代码确认 | `SchemaProviderDriver.request()` 仍用 `/^HTTP\s+\d+\s+·/` 判断 tracedFetch 错误，而 `executionTrace.ts` 已改成 reason-first 文本。改为结构化异常（appStatus/upstreamStatus/source/rawBody/endpoint/cause），禁止按文案猜分类 | 前端真实 401/403/欠费/HTTP200业务失败分别正确显示；无响应才称 network；补针对性回归测试 |
-| A02 | P0，模型中心 | 把新三家加入 all 聚合，单家独立状态；去掉前端散落 provider 白名单 | all 与单家结果可对账；一家的失败不丢其他家的结果；无静态补数 |
-| A03 | P0，LoRA 产品链 | 补独立 LoRA 中心新三家入口；Sogni 保留原 ID；MuAPI/WaveSpeed 区分端点与权重 URL，显示无目录说明 | 从 LoRA 中心选用/新增节点，实际 submit JSON 里 ID/URL、权重完全一致 |
-| A04 | P0，真实前端验收环境 | 先在有合法网络的运行环境完成一个只读请求和一个生成请求；明确预览/生产身份与 Key 是否配置 | 能看到真实上游 HTTP；不要继续将环境网络失败当供应商失败 |
-| A05 | P1，任务凭据一致性风险 | Key 池多次 getNextKey 可能让 Schema、提交、轮询用不同账户；审查并绑定单次任务的凭据引用 | 不暴露 Key；同一任务的账户可追踪且一致；失效不暗换 Key 重提生成 |
-| A06 | P1，老适配能力规则 | NanoGPT 等“未核实=不支持”本地 gate、静态名单和历史否定能力声明逐项复核 | unknown 不再伪装 unsupported；有官方证据时才禁用，用户显式参数不静默丢弃 |
-| A07 | P1，模型选择/Schema | MuAPI endpoint_url、WaveSpeed model_run 缺失分支、Sogni selector/worker namespace 与来源版本 | 明确实际目标；自定义 ID 不自动转其他模型；Schema 不全时不装作已完整核实 |
-| A08 | P1，工作流入口 | WorkflowPresetsModal 的引擎选择枚举覆盖、导入/导出/历史复用中新三家信息保留 | 导出→导入后实际请求语义一致；没有旧工具复活或 provider 被猜测覆盖 |
-| A09 | P1，存储与图生图 | 新三家逐图输出、暂存 URL、私有参考图可访问性，Sogni 上传流程缺失 | 每张图可刷新恢复；生成成功/保存失败分开；外部不能读取的私有 URL 不假称已上传 |
-| A10 | P1，UI状态 | 执行日志长端点溢出、旧营销标题、账单/鉴权/参数提示、运行按钮恢复 | 用户能读懂哪里失败，可展开原文，不挡主操作；修复后重新点击验证 |
-| A11 | P2，附属产品面 | 资产筛选、供应商矩阵、指南、环境示例与新供应商覆盖 | 所有展示来自共享定义或明确来源，不再各处漏名字/写假能力 |
-| A12 | P2，历史文档 | README 中 failover、自愈、全量余额、旧验收链接等宣传仍有残留；PROGRESS 历史结论保留但加清楚时间与范围 | 首屏链接到本交接；旧证据不覆盖当前状态；不能把历史产品数量当实时数量 |
+| A01 | ✅ **DONE 2026-10-08** | SchemaProviderDriver 使用结构化 `ApiTraceError`；真实前端已分别看到 Fal 403/TOP_UP、ModelScope AI 401/account bind、ModelScope CN 429/insufficient balance、Sogni 201 + waiting_for_user、HF status=null/ECONNRESET；失败重跑不再保留上一张图 | 执行记录保留 endpoint/status/body/source/cause/stack；HTTP 200 网站状态不等于生成成功。新 workflowSnapshot 剔除旧 `outputData/errorMessage/executionProgress` |
+| A02 | ✅ **DONE 2026-10-08** | MuAPI/WaveSpeed/Sogni 已进入共享模型聚合；单家目录与 per-provider error 保持独立 | all 聚合不以静态模型补数；某家失败不吞其他家成功结果 |
+| A03 | ✅ **DONE 2026-10-08** | LoRA 中心已含 MuAPI/WaveSpeed/Sogni；Sogni 保留真实 ID；MuAPI/WaveSpeed 无权重目录时只接受真实 URL；MuAPI `flux-1-dev-style-lora-inference` 已把 LoRA URL + `0.65` 映射为 `lora_url + lora_weight` 并真实到达上游 | MuAPI 返回 402 `INSUFFICIENT_CREDITS`，按用户规则属于 PASS_BILLING；充值后出图只用于视觉效果确认，不再是接线缺口 |
+| A04 | ✅ **DONE 2026-10-08** | 当前前端已到达 Civitai/Fal/ModelScope/NanoGPT/TAMS/MuAPI/WaveSpeed/Sogni 等真实上游，且 Civitai/WaveSpeed 已真实出图 | 单个 HF 路由网络失败只记该 route 的 network，不外推整个环境/供应商 |
+| A05 | ✅ **DONE 2026-10-08** | Schema provider 使用 opaque `credentialRef` 绑定 schema→submit→poll；同一 task 绑定原始引用，driver 自动沿用 | 引用缺失/失效本地 409，明确“未自动切换 Key”，不再为同一任务重新 `getNextKey()` |
+| A06 | ✅ **DONE 2026-10-08** | NanoGPT 等能力处理已改为 `unknown ≠ unsupported`；未声明字段不再统一当“不支持” | 只有明确 enum/range/false 才本地拒绝；用户显式参数与 capability note 保持可追溯 |
+| A07 | ✅ **DONE 2026-10-08** | MuAPI 使用真实 `endpoint_url`；WaveSpeed 只有目录提供 `model_run` 才将 Schema 标成已核实；Sogni hosted-tool selector 与 worker namespace 分离 | 自定义 ID 不替换成其他模型；Schema 缺失保持 unknown，不装作完整 |
+| A08 | ✅ **DONE 2026-10-08** | 工作流导入/导出保留 MuAPI/WaveSpeed/Sogni provider；外部 JSON 缺 provider 时保持未指定，不按模型名猜供应商 | 原生工程 round-trip 保留 nodes/connections/spatialFrames；旧 Tensor/OpenWorks 工具不会复活 |
+| A09 | 🟡 **PARTIAL** | `save-result` 已逐图持久化；部分失败返回 `historyWarning + transientOutputs`，不改写上游生成成功；Sogni 对 data/blob/local/private URL 本地拒绝；历史参数 provenance 已可追溯 | 代码契约与回归已补。剩余仅真实有额度情况下的“多图 + 某图持久化失败”前端实景证据；不能故意制造生产故障冒充验收 |
+| A10 | ✅ **DONE 2026-10-08** | 执行日志支持长 endpoint/完整 body/stack；History 区分 requested/sent/upstream；失败重跑清旧图，MuAPI 402 请求快照不再夹带旧 Civitai base64 | 欠费/鉴权/网络/参数错误分开；“未发送/上游未返回/旧记录未保存”不再混成“未填写” |
+| A11 | ✅ **DONE 2026-10-08（当前范围）** | 资产 Provider 筛选已按真实历史动态生成；LoRA/模型入口新三家已覆盖；矩阵/指南需持续以 Schema/实测同步 | 后续新增 provider 不再维护静态资产白名单；任何新能力必须有来源/实测，不写假速度、假支持 |
+| A12 | ✅ **DONE 2026-10-08（文档口径）** | HANDOFF 顶部与 PROGRESS 已以 2026-10-08 为最新；旧段落明确标历史；README/矩阵/指南正在按本收尾同步去除 failover、自愈、100%复现与未核实能力宣传 | 最新状态区优先级最高；旧证据不能覆盖当前实测；动态目录数量不写成永久承诺 |
 
-本次交接没有替接手人悄悄修这些新发现的产品缺口。它们仍在代码中，不能因为写了工单就标为完成。
+**2026-10-08 状态说明：** A01–A08、A10–A12 已按当前范围关闭；A09 仅剩真实有额度外部场景证据。DONE 不代表“所有供应商所有模型/视频/图生图都通过”，具体 provider 等级仍以 §0.7 为准。
 
 ## 7. 统一验收标准——逐家、逐路由，不按供应商名字一勾了之
 
@@ -283,7 +283,7 @@
 
 每个实际执行路由至少选择一个有官方文档的图像生成端点。支持 LoRA 的另选一个确实支持 LoRA 的模型/端点和可访问的兼容权重。一个模型成功不代表该供应商所有模型、视频或图生图均通过。
 
-优先顺序建议：Civitai 补当前网页基线 → Fal 重现真实 TOP_UP → 有可用额度的 HF/新三家出图 → 魔搭 CN/AI 分账户核对 → NanoGPT/TAMS 处理授权。供应商可并行调查，前端修改/集成最好一个负责人避免冲突。
+优先顺序建议：**不要重测已取得明确终态的 Civitai/WaveSpeed/MuAPI/Sogni/Fal/ModelScope/NanoGPT/TAMS**；优先补 Hugging Face 当前明确推理路由，其次 Gemini/Agnes/兼容中转/Video 等尚未取得当前终态的路由。供应商可并行调查，前端修改/集成最好一个负责人避免冲突。
 
 不要强制套用所有端点统一的 512×512、steps=20、CFG=7。尺寸和参数取当前模型官方允许的值；未提供 seed 的端点历史 seed 应为 null，不能编造。
 
@@ -293,13 +293,13 @@
 2. 在页面 API 设置确认所选服务商已配置，仅记录掩码。多个 Key 的情况先显式固定本次用哪个，不依靠隐藏轮换“碰成功”。
 3. 从**模型中心**进入：先看单家、搜索/分类/分页，再检查 all 入口。记录资源 ID、版本、显示名、目录来源、是否执行端点。
 4. 从模型中心点击“选用”或“新建节点”，确认节点与参数检查器中的 provider/ID 一致。切换到另一画布再回来，检查没有串状态。
-5. 输入一个简单、可比较的提示词。普通参数按 Schema 设置；有 LoRA 的必须从 LoRA 中心/真实 ID 或 URL 入口添加，设置明确权重，例如 0.8（仅当该端点允许）。
+5. 为该供应商选择**一套未在其他供应商复用的参考作品参数**。Prompt、Negative Prompt、底模、LoRA、LoRA 权重、Steps、CFG、Sampler/Scheduler、Seed、尺寸等来源可得字段全部记录；缺失字段标缺失，不补猜。有 LoRA 的必须从 LoRA 中心/真实 ID 或 URL 入口添加。
 6. 检查连线：LoRA 接入当前生成分支；现有底模、其他 LoRA、提示词及其他分支不被重写。共享 CLIP 分支不得误改其他任务。
 7. 查看 Schema 匹配模式和“仅 JSON”模式。记录哪些画布字段不提交、哪些被 JSON 覆盖；LoRA 节点未参与时必须用户明确选过该模式。
 8. **点击网页运行按钮一次**。记录浏览器请求、本网站处理、实际上游请求；不能直接用 curl/脚本替代该步骤。
 9. 成功时等待真实图像；异步时继续到真实终态。不能把 taskId/accepted、排队或 waiting_for_user 当图像完成。
 10. 错误时展开详情，核对上游 status/body/endpoint/stack/cause。账单分类必须来自真实响应，不根据状态码、中文猜测或 UI 自造提示。
-11. 有图时打开图像详情和历史，逐项检查最终参数、实际 LoRA ID/URL 与强度、画布快照、提交和轮询元数据；确认多图不丢失。
+11. 有图时打开图像详情和历史，逐项检查最终参数、实际 LoRA ID/URL 与强度、画布快照、提交和轮询元数据；确认多图不丢失。随后与参考原图比较主体、构图、镜头、服装/材质、色调、光影和 LoRA 特征；同模型/LoRA/Seed/Sampler 等复现条件齐全却偏差明显时，不能只因 HTTP 200 或“出了图”就算完整复现通过。
 12. 刷新页面，再从历史打开图片；保存并加载云端项目；再次复用前检查参数一致。必要时下载输出并检查实际文件可读。
 13. 对支持的模式补一次空间画板操作。视频、图生图、多图、LoRA 分别单列验收，不能用基础文生图替代。
 14. 保存截图、脱敏请求/响应、workflow JSON 和验收结论。测试截图要包含实际结果或明确错误，不用旧样图占位。
