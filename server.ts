@@ -381,6 +381,10 @@ interface GeneratedItem {
   seed: number | null;
   steps: number | null;
   cfg: number | null;
+  sampler?: string | null;
+  scheduler?: string | null;
+  width?: number | null;
+  height?: number | null;
   loras?: Array<{ name: string; strength: number; civitaiId?: string }>;
   timestamp: number;
   workflowSnapshot?: any;
@@ -713,6 +717,10 @@ const recordHistoryItem = (item: Partial<GeneratedItem>): GeneratedItem => {
     seed: typeof item.seed === 'number' ? item.seed : null,
     steps: typeof item.steps === 'number' ? item.steps : null,
     cfg: typeof item.cfg === 'number' ? item.cfg : null,
+    sampler: typeof item.sampler === 'string' && item.sampler.trim() ? item.sampler.trim() : null,
+    scheduler: typeof item.scheduler === 'string' && item.scheduler.trim() ? item.scheduler.trim() : null,
+    width: typeof item.width === 'number' ? item.width : null,
+    height: typeof item.height === 'number' ? item.height : null,
     loras: Array.isArray(item.loras) ? item.loras : [],
   };
   generationHistory.unshift(fullItem);
@@ -4531,6 +4539,7 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
           model.includes('image-to-video')));
 
     let completedMediaUrl = '';
+    let effectiveParameters: Record<string, any> | undefined;
     const usedProvider = 'Civitai 官方原生生成引擎';
     const startTime = Date.now();
     // C9-4: 实际发出的 AIR（解析后）；历史与响应记它而不是用户原始输入
@@ -4796,6 +4805,8 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
 
       const orchData = await orchResp.json();
       completedMediaUrl = extractCivitaiBlobUrl(orchData);
+      const upstreamInput = orchData?.steps?.[0]?.input;
+      if (upstreamInput && typeof upstreamInput === 'object' && !Array.isArray(upstreamInput)) effectiveParameters = upstreamInput;
 
       // If not completed in wait=100, return pending + workflowId for client-side polling
       if (!completedMediaUrl && (orchData.id || orchData.token)) {
@@ -4807,8 +4818,35 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
           status: orchData.status || 'processing',
           provider: usedProvider,
           model: airModel,
-          pendingHistory: {prompt, negativePrompt: negative_prompt, provider: usedProvider, model: airModel, seed: isProvided(seed) ? Number(seed) : null, steps: isProvided(steps) ? Number(steps) : null, cfg: isProvided(cfg) ? Number(cfg) : null, loras: Object.entries(loraMap).map(([name, strength]) => ({name, strength}))},
-          requestMetadata: {route: req.path, submissions: generationContext.getStore()?.submissions || []},
+          pendingHistory: {
+            prompt,
+            negativePrompt: isProvided(negative_prompt) ? negative_prompt : undefined,
+            provider: usedProvider,
+            model: airModel,
+            seed: isProvided(seed) ? Number(seed) : null,
+            steps: isProvided(steps) ? Number(steps) : null,
+            cfg: isProvided(cfg) ? Number(cfg) : null,
+            sampler: isProvided(sampler_name) ? String(sampler_name) : null,
+            scheduler: isProvided(scheduler) ? String(scheduler) : null,
+            width: isProvided(width) ? Number(width) : null,
+            height: isProvided(height) ? Number(height) : null,
+            loras: Object.entries(loraMap).map(([name, strength]) => ({name, strength})),
+          },
+          requestMetadata: {
+            route: req.path,
+            submissions: generationContext.getStore()?.submissions || [],
+            requestedParameters: {
+              ...(isProvided(seed) ? {seed:Number(seed)} : {}),
+              ...(isProvided(steps) ? {steps:Number(steps)} : {}),
+              ...(isProvided(cfg) ? {cfg:Number(cfg)} : {}),
+              ...(isProvided(sampler_name) ? {sampler_name:String(sampler_name)} : {}),
+              ...(isProvided(scheduler) ? {scheduler:String(scheduler)} : {}),
+              ...(isProvided(width) ? {width:Number(width)} : {}),
+              ...(isProvided(height) ? {height:Number(height)} : {}),
+              ...(isProvided(negative_prompt) ? {negative_prompt:String(negative_prompt)} : {}),
+            },
+            actualParameters: genInput,
+          },
         });
       }
     } catch (orchErr: any) {
@@ -4840,10 +4878,28 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
       negativePrompt: isProvided(negative_prompt) ? negative_prompt : undefined,
       provider: usedProvider,
       model: airModel,
-      seed: isProvided(seed) ? Number(seed) : null,
-      steps: isProvided(steps) ? Number(steps) : null,
-      cfg: isProvided(cfg) ? Number(cfg) : null,
+      seed: typeof effectiveParameters?.seed === 'number' ? effectiveParameters.seed : (isProvided(seed) ? Number(seed) : null),
+      steps: typeof effectiveParameters?.steps === 'number' ? effectiveParameters.steps : (isProvided(steps) ? Number(steps) : null),
+      cfg: typeof effectiveParameters?.cfgScale === 'number' ? effectiveParameters.cfgScale : (isProvided(cfg) ? Number(cfg) : null),
+      sampler: typeof effectiveParameters?.sampleMethod === 'string' ? effectiveParameters.sampleMethod : typeof effectiveParameters?.sampler === 'string' ? effectiveParameters.sampler : (isProvided(sampler_name) ? String(sampler_name) : null),
+      scheduler: typeof effectiveParameters?.schedule === 'string' ? effectiveParameters.schedule : typeof effectiveParameters?.scheduler === 'string' ? effectiveParameters.scheduler : (isProvided(scheduler) ? String(scheduler) : null),
+      width: typeof effectiveParameters?.width === 'number' ? effectiveParameters.width : (isProvided(width) ? Number(width) : null),
+      height: typeof effectiveParameters?.height === 'number' ? effectiveParameters.height : (isProvided(height) ? Number(height) : null),
       loras: Object.entries((generationContext.getStore()?.submissions.at(-1)?.parameters as any)?.steps?.[0]?.input?.loras || {}).map(([name, strength]) => ({name, strength: Number(strength)})),
+      requestMetadata: {
+        requestedParameters: {
+          ...(isProvided(seed) ? {seed:Number(seed)} : {}),
+          ...(isProvided(steps) ? {steps:Number(steps)} : {}),
+          ...(isProvided(cfg) ? {cfg:Number(cfg)} : {}),
+          ...(isProvided(sampler_name) ? {sampler_name:String(sampler_name)} : {}),
+          ...(isProvided(scheduler) ? {scheduler:String(scheduler)} : {}),
+          ...(isProvided(width) ? {width:Number(width)} : {}),
+          ...(isProvided(height) ? {height:Number(height)} : {}),
+          ...(isProvided(negative_prompt) ? {negative_prompt:String(negative_prompt)} : {}),
+        },
+        actualParameters: (generationContext.getStore()?.submissions.at(-1)?.parameters as any)?.steps?.[0]?.input,
+        effectiveParameters,
+      },
     });
 
     return res.json({
@@ -7166,6 +7222,10 @@ app.post('/api/history', async (req, res) => {
     seed,
     steps,
     cfg,
+    sampler,
+    scheduler: historyScheduler,
+    width: historyWidth,
+    height: historyHeight,
     loras,
     workflowSnapshot,
     requestMetadata,
@@ -7222,6 +7282,18 @@ app.post('/api/history', async (req, res) => {
   if (cfg != null && typeof cfg !== 'number') {
     return res.status(400).json({ error: '字段 cfg 必须为数字' });
   }
+  if (sampler != null && typeof sampler !== 'string') {
+    return res.status(400).json({ error: '字段 sampler 必须为字符串' });
+  }
+  if (historyScheduler != null && typeof historyScheduler !== 'string') {
+    return res.status(400).json({ error: '字段 scheduler 必须为字符串' });
+  }
+  if (historyWidth != null && typeof historyWidth !== 'number') {
+    return res.status(400).json({ error: '字段 width 必须为数字' });
+  }
+  if (historyHeight != null && typeof historyHeight !== 'number') {
+    return res.status(400).json({ error: '字段 height 必须为数字' });
+  }
   if (mediaType !== undefined && typeof mediaType !== 'string') {
     return res.status(400).json({ error: '字段 mediaType 必须为字符串' });
   }
@@ -7256,6 +7328,10 @@ app.post('/api/history', async (req, res) => {
     seed: typeof seed === 'number' ? seed : null,
     steps: typeof steps === 'number' ? steps : null,
     cfg: typeof cfg === 'number' ? cfg : null,
+    sampler: typeof sampler === 'string' && sampler.trim() ? sampler.trim() : null,
+    scheduler: typeof historyScheduler === 'string' && historyScheduler.trim() ? historyScheduler.trim() : null,
+    width: typeof historyWidth === 'number' ? historyWidth : null,
+    height: typeof historyHeight === 'number' ? historyHeight : null,
     ...(Array.isArray(loras) ? { loras } : {}),
     ...(workflowSnapshot && typeof workflowSnapshot === 'object' ? { workflowSnapshot: sanitizeGenerationMetadata(workflowSnapshot) } : {}),
     ...(requestMetadata ? {requestMetadata: sanitizeGenerationMetadata(requestMetadata)} : {}),
