@@ -265,12 +265,12 @@ export const WORKFLOW_PRESETS: WorkflowPreset[] = [
   // 0.3 Civitai #129705858 复现：ZImage Turbo + [Z Image Turbo] Asian Mix Lokr
   {
     id: 'civitai-129705858-zimage-asianmix',
-    name: 'Civitai #129705858：Z Image Turbo + Asian Mix Lokr (原版复现)',
-    category: 'Civitai 真实复现',
+    name: 'Civitai #129705858：Z Image Turbo + Asian Mix Lokr（历史参数模板）',
+    category: 'Civitai 参数模板',
     provider: 'Z Image Turbo 原生工作流',
     previewImage: 'https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/0beefdf2-0ede-4547-936b-ca0d7e1d323f/original=true/0beefdf2-0ede-4547-936b-ca0d7e1d323f.jpeg',
     tags: ['ZImage Turbo', 'Asian Mix Lokr', 'Civitai 129705858', '条纹毛衣', '丸子头', '极速蒸馏'],
-    description: '100% 忠实还原 Civitai 作品 #129705858 原生工作流拓扑结构：底模加载器挂载 Z Image Turbo，LoRA 加载器挂载 [Z Image Turbo] Asian Mix Lokr (v7.0 fp32 权重 0.8)，8 步极速采样。',
+    description: '按历史记录整理的 Civitai #129705858 工作流参数模板：保留当时记录的底模、LoRA（v7.0 fp32，权重 0.8）和 8 步采样设置。它用于复用参数，不承诺当前模型版本或上游能够像素级复现原作品；实际结果需与参考图重新验收。',
     nodes: [
       {
         id: 'node-zimg-1',
@@ -511,12 +511,12 @@ export const WORKFLOW_PRESETS: WorkflowPreset[] = [
   // 0.4 Fal.ai 旗舰 SDXL 高清工作流
   {
     id: 'fal-sdxl-high-fidelity',
-    name: 'Fal.ai 旗舰 SDXL 1.0 高清高保真',
-    category: 'Fal.ai 旗舰引擎',
+    name: 'Fal.ai SDXL 历史工作流模板',
+    category: 'Fal.ai 历史模板',
     provider: 'Fal.ai (GPU 云端加速)',
     previewImage: 'https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/0695b6d7-40ad-4df5-b99a-ba27550b9a58/original=true/preview.jpeg',
     tags: ['Fal.ai', 'SDXL', '高保真', 'GPU加速'],
-    description: '通过 Fal.ai 官方旗舰端点驱动 SDXL 1.0，提供极速响应与超高画质，支持高分辨率去噪与复杂提示词遵循。',
+    description: '历史 Fal.ai / SDXL 节点模板。加载后仍必须按当前 Fal 模型目录和端点 Schema 重新确认模型、Steps/CFG/Sampler/尺寸等字段；模板存在不代表当前端点已通过生成验收。',
     nodes: [
       {
         id: 'node-fa-1',
