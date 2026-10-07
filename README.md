@@ -139,7 +139,7 @@ npm run build
 | **ModelScope AI** | `BLOCKED_AUTH` | 国际站账户要求绑定 Alibaba Cloud |
 | **NanoGPT** | `BLOCKED_AUTH` | 当前真实前端请求 `Invalid session / invalid_api_key` |
 | **Tensor.Art / TAMS** | `BLOCKED_AUTH` | 真实模型 ID 查询为 `unauthorized / app not found` |
-| **Hugging Face / Gemini / Agnes / SenseNova / 兼容中转 / Video** | 见 HANDOFF / PROGRESS | 必须按具体路由与当前凭据逐项验收 |
+| **Hugging Face** | `PASS_BILLING` | HF→fal-ai + FLUX.1-dev + HF LoRA 已到真实 HF Router，当前账户 HTTP 402 no remaining credits；旧 Space 结论不外推 |\n| **Gemini / Agnes / SenseNova / 兼容中转 / Video** | 见 HANDOFF / PROGRESS | 必须按具体路由与当前凭据逐项验收 |
 
 ---
 
