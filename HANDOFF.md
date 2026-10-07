@@ -52,32 +52,11 @@
 - 用户已授权完成后 commit/push 到 GitHub `main`，以及此前的 Sites 私有发布；不得擅自扩大网站访问范围。
 - 如需并行代理：杂项/调查用 Luna，任务必须互不重叠，不盲目开多个代理。当前交接没有新开代理。
 
-### 0.7 2026-10-08 最新状态——后文旧结论与本节冲突时，以本节为准
-
-完整收尾证据：[`docs/evidence/handoff-closeout-2026-10-08.md`](docs/evidence/handoff-closeout-2026-10-08.md)。
-
-当前明确终态：
-
-| Provider | 当前等级 | 边界 |
-| --- | --- | --- |
-| Civitai | **PASS_GENERATION** | 当前网页基础图与 LoRA 图真实生成；只证明已测 AIR/LoRA 组合 |
-| WaveSpeed | **PASS_GENERATION** | krea-v2/turbo-lora 带 LoRA 真出图 |
-| MuAPI | **PASS_BILLING** | 普通路由和 LoRA 专用路由都到真实上游 402；LoRA URL + 0.65 已进入 actualRequest |
-| Sogni | **PASS_BILLING** | LoRA ID/strengths 透传，task created，insufficient_credit 原样展示 |
-| Fal.ai | **PASS_BILLING** | fal-ai/flux-lora 到真实上游，403 TOP_UP 原样展示 |
-| ModelScope CN | **PASS_BILLING** | 429 响应体明确 insufficient balance |
-| ModelScope AI | **BLOCKED_AUTH** | 401 原文要求绑定 Alibaba Cloud account |
-| NanoGPT | **BLOCKED_AUTH** | 真实上游 401 Invalid session / invalid_api_key |
-| Tensor.Art / TAMS | **BLOCKED_AUTH** | 真实模型 ID 查询返回 unauthorized / app not found |
-| Hugging Face | **PASS_BILLING** | 2026-10-08 前端显式 HF→fal-ai：FLUX.1-dev + HF LoRA 0.55 真实到 HF Router，HTTP 402 no remaining credits；旧 Z-Image Space BLOCKED_ENV 仅保留为该旧路由历史证据 |
-
-**已取得明确终态的供应商不再为了“刷测试”重复消耗。** Hugging Face 的 HF→fal-ai 路由现已取得 PASS_BILLING；后续未验供应商必须换一套参考作品参数，不复用上一家的 Prompt；有图时必须与参考原图比较主体、构图、材质/服装、色调、光影和 LoRA 特征。Prompt、Negative Prompt、底模、LoRA、权重、Steps、CFG、Sampler、Scheduler、Seed、尺寸等来源缺字段不得猜。公网参考元数据优先直接走公开 API；CDP 只用于本地 Canvas 前端工作流或确实需要浏览器登录态的场景。
-
-本轮另外完成：失败重跑不再残留上一张图片；workflowSnapshot 不再携带旧 outputData/errorMessage/progress；History 已区分 requested / sent / upstream/effective 参数来源，未发送/上游未返回/旧记录未保存不再统一显示“未填写”；A03 MuAPI LoRA 接线缺口已关闭。A09 代码契约和回归已补，剩余只是真实有额度的多图/持久化失败外部场景证据。
-
 ## 1. 交接结论：不是已经完整集成
 
-**仍不能宣称“所有供应商、所有模型、所有模式都完成前端验收”。** 但 2026-10-08 已不再是“只有 Civitai 有证据”的状态；具体等级以 0.7 最新状态表为准。下面 2026-10-04/10-05 的记录保留用于追溯，不得覆盖后续更高优先级证据。
+**截至 2026-10-08，仍不能宣称“所有供应商、所有模型、所有模式都完成前端验收”。** 但已经不是“只有 Civitai 有证据”的状态：Civitai 与 WaveSpeed 已有当前网页真实出图；MuAPI、Sogni、Fal.ai、ModelScope CN、Hugging Face HF→fal-ai 已拿到明确计费/额度终态；ModelScope AI、NanoGPT、Tensor.Art/TAMS 已拿到明确鉴权/账户阻塞；Gemini 与 Agnes 当前被本地配置缺失阻塞。
+
+接手时必须以本文件 **3.2 供应商状态表** 和 **6. 工单状态表** 的 2026-10-06 结论为准。前面的 2026-10-04 环境记录与更早历史只用于追溯，不能覆盖后续更高优先级证据。
 
 本文件中的“已实现”仅表示亲自读到相应代码；“历史证据”表示仓库已有记录；“本轮前端实测”只指本次从页面点击产生的记录。三者严格分开。
 
@@ -86,16 +65,18 @@
 | 项目 | 交接基线 |
 | --- | --- |
 | GitHub | https://github.com/kim1232aa/Canvas ，分支 `main` |
-| 本次交接前 GitHub 提交 | `af68228241e335a53d560e92c750a945949777e1` |
-| 对应 Sites 源提交 | `2b986c9cb58132f6107fc630e4860f1a36781f67` |
-| 两者相同的源码 tree | `70e0f5e5370173b75754d0c748c725b88ce18550` |
-| 网站 | https://comfycanvas-studio.quilts-nock-0mb.chatgpt.site |
+| 2026-10-04 交接历史 GitHub 提交 | `af68228241e335a53d560e92c750a945949777e1`（仅历史追溯，不是当前 HEAD） |
+| 2026-10-04 对应 Sites 源提交 | `2b986c9cb58132f6107fc630e4860f1a36781f67`（仅历史追溯） |
+| 当时两者相同的源码 tree | `70e0f5e5370173b75754d0c748c725b88ce18550` |
+| 历史 Sites 地址 | https://comfycanvas-studio.quilts-nock-0mb.chatgpt.site |
 | Sites project_id | `appgprj_6abf7823b9648191aed7e4c4f10bbea8` |
-| 已成功发布的部署 | `appgdep_6ac22888c5708191ab2bb63304361b66`，环境 revision 4 |
-| 活跃工作目录 | `/workspace/scratch/41e4078474ce/comfycanvas-resume` |
-| 历史验证 | 35 个测试文件、267 个测试通过；TypeScript 与生产构建通过，均不是出图验收 |
+| 历史已成功发布部署 | `appgdep_6ac22888c5708191ab2bb63304361b66`，环境 revision 4 |
+| 2026-10-06 收尾前本地 HEAD | `d75d1d4`；本轮收尾提交完成后以 `git log -1` / `origin/main` 为准，不再把此哈希当最终版本 |
+| 当前活跃工作目录 | `/home/ubuntu/Canvas` |
+| 历史验证（2026-10-04 前） | 35 个测试文件、267 个测试通过；仅作历史追溯 |
+| 2026-10-06 当前回归 | `npm run lint` PASS；`npm test` 40 files / 290 tests PASS；`npm run build` PASS（含 frontend + hosting worker 构建）。仍不替代真实前端/上游验收 |
 
-旧 `canvas/`、`canvas-source/` 副本不是当前代码。接手人在新环境应以 GitHub 最新 main 为起点。Site 与 GitHub 使用独立 Git 提交历史，不能仅比较 commit SHA 判断内容不同，应比较 tree 或具体文件。此次交接只追加文档和真实证据，不改产品代码、不因文档更新重新发布网站。
+旧 `canvas/`、`canvas-source/` 副本不是当前代码。接手人在新环境应以 GitHub 最新 main 为起点。Site 与 GitHub 使用独立 Git 提交历史，不能仅比较 commit SHA 判断内容不同，应比较 tree 或具体文件。2026-10-06 收尾已经包含产品代码、前端文案、测试与证据修复；是否发布 Sites 必须单独核对部署源与权限，不能因为本地/GitHub 更新就声称生产站已同步。
 
 ### 1.2 本次再次走前端验收的结果
 
@@ -125,18 +106,18 @@
 | 2 | 空间画板 | `SpatialFrameItem.tsx`、`App.tsx` | 独立提示词、参数、图像结果 | 与节点模式不能交叉修改；每家至少检查一次空间模式；图生图媒体可访问性未全验 |
 | 3 | 多画布管理 | `CanvasManagerModal.tsx`、`workspaceCache.ts` | 新建、切换、本地恢复、模板 | 新旧工作流迁移、切换后 provider/ID/LoRA 保留；不能用数组位置挑错模板 |
 | 4 | **模型中心** | `ModelHubModal.tsx`、`ProviderModelSelect.tsx`、`/api/models` | 单家标签、搜索、分类、分页、自定义 ID；MuAPI/WaveSpeed/Sogni 已进入 all 聚合 | 新增 provider 继续走共享聚合入口；模型/工具/资源身份必须保持来源与执行 ID 可追溯，目录可见不等于在线推理通过 |
-| 5 | **独立 LoRA 中心** | `CivitaiModal.tsx`、`attachLora.ts` | Civitai/HF/Tensor/魔搭/Fal/MuAPI/WaveSpeed/Sogni 入口；URL/ID 与目录资源分开处理 | MuAPI/WaveSpeed 无已核实权重目录时只接受目标端点可读取的 URL；Sogni 保留真实资源 ID；all 标签不猜供应商 |
+| 5 | **独立 LoRA 中心** | `CivitaiModal.tsx`、`attachLora.ts` | Civitai/HF/Tensor/魔搭/Fal/MuAPI/WaveSpeed/Sogni 入口；URL/ID 与目录资源分开处理 | MuAPI/WaveSpeed 当前没有已核实 LoRA 权重目录，只允许目标端点可读取的 URL；Sogni 使用真实资源 ID；`all` 标签不再猜供应商。A03 仅剩 MuAPI 有额度后的真实 LoRA 生成证据 |
 | 6 | 视频模型与视频生成 | `ModelHubModal.tsx`、`VideoDriver.ts`、`/api/video/generate` | 独立分类入口和旧驱动 | 新三家的图像驱动不等于视频已接入；目录出现视频端点不等于执行、参数、轮询已正确 |
 | 7 | 参数检查器 / JSON Schema | `ParameterInspector.tsx`、`ApiParameterEditor.tsx`、`providerSchema.ts` | 新三家动态 Schema、JSON、映射模式 | 老供应商还有静态规范与“未核实即不支持”；完整 Schema 组合字段、oneOf 等覆盖未全验 |
-| 8 | API 设置 / Key 池 | `BackendSettingsModal.tsx`、`server.ts` KeyPoolManager | 新三家 Key 项、服务端环境与加密设置 | 连接测试不等于生成；Key 池在 schema/submit/poll 各次选 Key，任务凭据绑定需审计；环境示例过时 |
-| 9 | 工作流预设 / 导入 / 导出 | `WorkflowPresetsModal.tsx`、`presets.ts`、导入函数 | 预设、图像参数提取、保存和导入拓扑 | `selectedEngine`/部分按钮枚举遗漏新三家；现有通用 JSON 导入能力与专属提取入口必须分别验证 |
+| 8 | API 设置 / Key 池 | `BackendSettingsModal.tsx`、`server.ts` KeyPoolManager | 新三家 Key 项、服务端环境与加密设置；Schema provider 已用 credentialRef 绑定 schema→submit→poll | 连接测试仍不等于生成；引用失效必须本地报错，不能静默取下一把 Key。当前 A05 已实测 409 截断且无上游调用 |
+| 9 | 工作流预设 / 导入 / 导出 | `WorkflowPresetsModal.tsx`、`presets.ts`、导入函数 | 预设、图像参数提取、保存和导入拓扑；MuAPI/WaveSpeed/Sogni 已纳入显式 provider 处理 | 原生工程 round-trip 与外部 ComfyUI JSON 仍按不同格式处理；外部 JSON 缺 provider 时保持未指定，不按模型名猜供应商 |
 | 10 | 生成历史 | `HistoryModal.tsx`、`recordHistoryItem`、`hosting/store.ts` | 参数、快照、多图记录和媒体保存 | 每家真实输出、逐图参数、刷新恢复、复用后请求一致未全验；历史样图不是本轮通过证明 |
 | 11 | 云端项目 | `CloudProjectModal.tsx`、`hosting/store.ts` | 保存、加载、克隆、D1/R2 | 所有新参数/ID/LoRA 能否无损 round-trip；私有身份和环境差异须验 |
-| 12 | 资产管理 / 复用 | `AssetManagerModal.tsx`、`App.tsx` | 媒体与参数复用、筛选 | 未找到新三家完整专属筛选项；跨画布复用不能重新猜 provider，不能将资源名代 ID |
-| 13 | 供应商能力矩阵 | `ProviderMatrixModal.tsx` | 旧供应商说明，Tensor 文案已修 | 新三家尚未完整列入；静态宣传式能力和速度不应当事实，需来源与实测状态 |
-| 14 | 执行记录 / 错误详情 | `ExecutionLog.tsx`、`executionTrace.ts`、`apiFailure.ts` | 真实路由、请求、响应、stack/cause | 新三家驱动错误分类与新异常格式不兼容；部分老目录仍 HTTP 200 包错误；长端点 UI 仍有溢出 |
-| 15 | 图像详情 / 参数查看 | `ImageDetailModal.tsx` | 图像与元信息查看 | 逐图 seed、实际提交参数、LoRA 与工作流是否完整，原请求与展示值是否一致 |
-| 16 | 使用指南 / 说明 | `ComfyGuideModal.tsx`、README、CLAUDE、PROGRESS | 指南和历史审计 | 历史自动回退、全量模型、全支持、验收完成等说法仍有残留；不能直接照旧文档实施 |
+| 12 | 资产管理 / 复用 | `AssetManagerModal.tsx`、`App.tsx` | 媒体与参数复用、筛选；Provider 筛选已改为从真实资产历史动态生成 | 跨画布复用继续禁止重新猜 provider 或将资源名替代真实 ID；没有真实资产的 provider 不显示静态占位筛选 |
+| 13 | 供应商能力矩阵 | `ProviderMatrixModal.tsx` | 已补 MuAPI/WaveSpeed/Sogni，并按路由/Schema/实测状态收紧 Fal/HF/Gemini/ModelScope/NanoGPT/Civitai 等文案 | 后续新增能力只能以具体模型/端点 Schema 或真实响应为依据；unknown 不得宣传为 supported，也不能因未核实写成 unsupported |
+| 14 | 执行记录 / 错误详情 | `ExecutionLog.tsx`、`executionTrace.ts`、`apiFailure.ts` | 真实路由、请求、响应、stack/cause；长 endpoint、status=null、ECONNRESET、计费/鉴权分类已在当前页面实测 | 后续新异常格式继续保留 website HTTP / upstream HTTP / errorSource / body / cause / stack；不得把 HTTP 200 包错误写成生成成功 |
+| 15 | 图像详情 / 参数查看 | `ImageDetailModal.tsx`、`HistoryModal.tsx`、`historyParameters.ts` | 历史现可区分 requested / sent / upstream / image-metadata，并恢复旧 Civitai 的 Seed/Steps/CFG/Sampler/Scheduler/尺寸 | 新供应商仍需逐图核对实际参数、LoRA、工作流和多图持久化；“未发送 / 上游未返回 / 旧记录未保存”不得混成“未填写” |
+| 16 | 使用指南 / 说明 | `ComfyGuideModal.tsx`、README、CLAUDE、PROGRESS | 指南和历史审计；README/矩阵/指南已在 2026-10-06 收紧旧宣传 | 后续文案仍必须和真实 Schema / 前端验收状态同步；不得重新引入自动换 Provider、100% 复现、全平台余额、全量支持等无证据说法 |
 
 关键教训：**“加一家供应商”是上述整条用户路径的贯通，不是设置页多一栏、Driver 多一项就完成。**
 
@@ -153,20 +134,20 @@
 - `BLOCKED_AUTH`：真实鉴权/账户配置问题，原文已核对；不能说欠费，也不能声明生成可用。
 - `NOT_TESTED`：本轮未测试。不要填写“可能通过”。
 
-~~**按用户最新的前端标准，目前没有足够证据把任何一家在本轮直接勾为完整 PASS_GENERATION 或 PASS_BILLING。**~~（2026-10-05 修正：此句已被推翻——WaveSpeed/MuAPI/Sogni 已按该标准完成前端验收，见下行修正说明与 PROGRESS.md 2026-10-05 节。修正理由：本句写于 10-04，当时三家仅 CODE_ONLY/BLOCKED_ENV；10-05 已补齐真实前端证据。）Civitai 的相对完善和历史出图是真的有记录；差的是按此标准补一次当前网页闭环证据。
+**2026-10-08 最新修正：** WaveSpeed、Civitai 已有当前网页真实出图，分别记 `PASS_GENERATION`；MuAPI、Sogni、Fal.ai、ModelScope CN、Hugging Face HF→fal-ai 已拿到明确真实计费/额度终态，按各自路由记 `PASS_BILLING`；ModelScope AI、NanoGPT、Tensor.Art/TAMS 已到达真实上游但被账户/鉴权阻塞，记 `BLOCKED_AUTH`；Gemini 与 Agnes 当前只到本地配置检查，记 `BLOCKED_CONFIG`。
 
 ### 3.2 用户提供 Key 的 10 个集成目标
 
 | 供应商 | 当前已有实现 / 历史证据 | 现行前端验收等级 | 具体缺口和下一步 |
 | --- | --- | --- | --- |
-| **Civitai** | 目录、版本/AIR、Orchestration recipe、底模+LoRA、参数与工作流；历史 `civitai`、`civitai-lora` 为 generated 并有图片 | **相对最完善；DIRECT_EVIDENCE；本轮前端 NOT_TESTED** | 先保留已有实现，用历史已成功的确切 AIR/LoRA 组合从网页复验；核对版本 ID、权重、持久化和历史复用。不能假定所有下载模型都允许在线生成 |
+| **Civitai** | 目录、版本/AIR、Orchestration recipe、底模+LoRA、参数与工作流；2026-10-06 已用当前网页复验基础图与 LoRA | **PASS_GENERATION（2026-10-06 前端实测）** | Checkpoint `urn:air:sd1:checkpoint:civitai:4384@128713` + LoRA `urn:air:sd1:lora:civitai:82098@87153` / 0.7 真实生成完成。证据：`docs/evidence/t7-civitai-acceptance.md`。只证明该组合，不外推所有 Civitai 资源 |
 | **Hugging Face** | Hub 目录；显式 HF Inference / Z-Image Space / HF→fal-ai；2026-10-08 前端复验 FLUX.1-dev + HF LoRA | **PASS_BILLING（HF→fal-ai）** | 实际请求到 HF Router `fal-ai/flux-lora`，LoRA safetensors URL + 0.55、Steps 24、CFG 3.2、Seed 314159 进入请求，上游 402 no remaining credits。旧 Z-Image Space BLOCKED_ENV 只代表旧 Space 路由；证据：docs/evidence/t7-huggingface-acceptance.md |
-| **Fal.ai** | 原生端点、图像尺寸/LoRA 参数、目录/Schema；历史 `fal-ai/flux-lora` 返回 403 `TOP_UP` | **DIRECT_EVIDENCE；前端 NOT_TESTED** | 优先从前端重现同路由。若仍是原文 `User is locked. Reason: TOP_UP.` 且界面正确显示，即可记 PASS_BILLING；不得因为旧直调曾欠费直接勾通过 |
-| **ModelScope CN** | CN 域名、Token、异步任务、LoRA 映射；历史 429 记录 | **DIRECT_EVIDENCE；前端 NOT_TESTED** | 核对响应体是否明确额度，不能只看 429；前端提交字段与云 REST 契约复核；模型目录与在线权限分离；按当前代码核验，不照旧文档“全部不支持”处理 |
-| **ModelScope AI** | AI 域名独立路由；历史一把 Key 额度/限额，另一把账户配置 401 | **DIRECT_EVIDENCE；前端 NOT_TESTED** | CN/AI 不混 Key、不换域名；分别验证用户指定账户。绑定账户问题是 BLOCKED_AUTH，不是欠费；完善目录→选择→实际 task 链路 |
-| **NanoGPT** | `/api/v1/images`、模型 endpoint 元数据、尺寸/输入转换；历史 401 `invalid_api_key` | **DIRECT_EVIDENCE；前端 NOT_TESTED** | 当前授权未通过。`nanoImageApi.ts` 仍把“未核实”写成“不支持”并拦截一批字段，须查官方能力后整改；LoRA 不能一概声称可用或不支持 |
-| **Tensor.Art / TAMS** | 真实数字模型 ID、模型详情、job、LoRA ID/weight；删除工具底模预设与 HTML 抓取；历史 TAMS 404 unauthorized/app not found | **DIRECT_EVIDENCE；TAMS 前端 NOT_TESTED** | 列表 API 缺失与生成授权分开处理。当前按 ID 查询；不能抓被挑战页面冒充稳定目录。旧 OpenWorks 图片不证明 TAMS 模型或 LoRA 成功；需要正确 TAMS 应用授权并复核端点/鉴权 |
-| **MuAPI** | 设置、实时目录/OpenAPI、submit/poll/save-result、Schema 参数与 LoRA 映射；2026-10-06 补测 LoRA 专用端点 | **PASS_BILLING** | 普通路由与 `flux-1-dev-style-lora-inference` 均真实到上游 402；LoRA actualRequest 为 `lora_url + lora_weight=0.65`。充值后出图只用于视觉效果确认，不再是接线缺口 |
+| **Fal.ai** | 原生端点、图像尺寸/LoRA 参数、目录/Schema；`fal-ai/flux-lora` 已从当前网页重现 | **PASS_BILLING（2026-10-06 前端实测）** | 完整 HF safetensors URL + 0.8 原样进入 `loras:[{path,scale}]`，真实上游 403 `User is locked. Reason: TOP_UP.`。证据：`docs/evidence/t7-fal-acceptance.md` |
+| **ModelScope CN** | CN 域名与独立 Token；当前网页已真实提交 `Tongyi-MAI/Z-Image-Turbo` | **PASS_BILLING（2026-10-06 前端实测）** | 上游 `https://api-inference.modelscope.cn/v1/images/generations` 返回 429，响应体明确 `insufficient balance`。证据：`docs/evidence/t7-modelscope-cn-acceptance.md` |
+| **ModelScope AI** | AI 域名独立路由；当前网页已真实提交 `Tongyi-MAI/Z-Image-Turbo` | **BLOCKED_AUTH（2026-10-06 前端实测）** | 上游 `api-inference.modelscope.ai` 返回 401，原文要求先绑定 Alibaba Cloud 账户；不是欠费。证据：`docs/evidence/t7-modelscope-ai-acceptance.md` |
+| **NanoGPT** | `/api/v1/images`、模型 endpoint 元数据、尺寸/输入转换；当前网页已按模型元数据把 resolution 改为 `1k` 后真实提交 | **BLOCKED_AUTH（2026-10-06 前端实测）** | 上游 401 `Invalid session` / `invalid_api_key`。unknown 能力不再统一当 unsupported；凭据修复后需用新的完整参考作品参数重测。证据：`docs/evidence/t7-nanogpt-acceptance.md` |
+| **Tensor.Art / TAMS** | 真实数字模型 ID 查询；不抓 HTML 目录、不用 OpenWorks 图片冒充 TAMS | **BLOCKED_AUTH（2026-10-06 前端实测）** | 查询 `672797109289765558` 到真实 TAMS endpoint，业务体 `unauthorized / app not found`；HTTP 404 不能写成模型不存在。证据：`docs/evidence/t7-tensorart-acceptance.md` |
+| **MuAPI** | 设置、模型单家标签、目录/OpenAPI、通用 submit/poll/save-result、Schema 参数与 LoRA 映射 | **PASS_BILLING（2026-10-05 前端实测）** | 目录 147 个与官方一致；余额 0.0000 USD；提交 HTTP 402 INSUFFICIENT_CREDITS 原样透传。证据：docs/evidence/t7-muapi-acceptance.md。LoRA 真实出图待账户充值后复测 |
 | **WaveSpeed** | 单家目录及 model_run Schema、原生端点、Bearer、任务轮询、LoRA path/scale | **PASS_GENERATION（2026-10-05 前端实测）** | krea-v2/turbo-lora 带 LoRA 出图×2，同 seed 复现。证据：docs/evidence/t7-wavespeed-acceptance.md |
 | **Sogni** | 固定版本官方工具 Schema selectors、Creative Agent workflow、轮询、LoRA ID/strengths | **PASS_BILLING（2026-10-05 前端实测重做）** | 27 selector=官方 schema enum；LoRA 目录 32 个=官方实时数；loras+loraStrengths 协议透传；201 created；欠费 waiting_for_user/insufficient_credit 原样展示。证据：docs/evidence/t7-sogni-acceptance.md。历史 403（error code 1010）为旧网络环境结果，已被取代 |
 
@@ -178,8 +159,8 @@
 
 | 入口 | 当前边界 |
 | --- | --- |
-| Gemini | 有图像/文本代码和历史规范检查；本轮无真实 Key 的前端验收 |
-| Agnes | 有图像/视频/文本相关旧代码；本轮未验，不承诺能力或模型仍有效 |
+| Gemini | 有图像/文本代码和历史规范检查；2026-10-08 前端到 `/api/gemini/generate`，本地配置返回 HTTP 400 `未配置 GEMINI_API_KEY`，记 `BLOCKED_CONFIG`。配置 Key 后再复验真实上游 |
+| Agnes | 有图像/视频/文本相关旧代码；2026-10-08 前端到 `/api/engine/agnes/generate`，本地配置返回 HTTP 400 `未配置 agnes Base URL`，记 `BLOCKED_CONFIG`。配置 Base URL / Key 后再复验真实上游 |
 | SenseNova | 主要为 chat/reasoning；不能当已经支持图片生成 |
 | OpenAI / Grok 兼容中转 | 必须使用用户明确配置的 Base URL；兼容不等于官方；本轮未验 |
 | Video | 聚合执行入口，不能当独立供应商；新三家图像集成不能自动算视频支持 |
@@ -262,20 +243,20 @@
 
 | 编号 | 优先级 / 证据 | 要做什么 | 完成条件 |
 | --- | --- | --- | --- |
-| A01 | ✅ **DONE 2026-10-08** | SchemaProviderDriver 使用结构化 `ApiTraceError`；真实前端已分别看到 Fal 403/TOP_UP、ModelScope AI 401/account bind、ModelScope CN 429/insufficient balance、Sogni 201 + waiting_for_user、HF status=null/ECONNRESET；失败重跑不再保留上一张图 | 执行记录保留 endpoint/status/body/source/cause/stack；HTTP 200 网站状态不等于生成成功。新 workflowSnapshot 剔除旧 `outputData/errorMessage/executionProgress` |
-| A02 | ✅ **DONE 2026-10-08** | MuAPI/WaveSpeed/Sogni 已进入共享模型聚合；单家目录与 per-provider error 保持独立 | all 聚合不以静态模型补数；某家失败不吞其他家成功结果 |
-| A03 | ✅ **DONE 2026-10-08** | LoRA 中心已含 MuAPI/WaveSpeed/Sogni；Sogni 保留真实 ID；MuAPI/WaveSpeed 无权重目录时只接受真实 URL；MuAPI `flux-1-dev-style-lora-inference` 已把 LoRA URL + `0.65` 映射为 `lora_url + lora_weight` 并真实到达上游 | MuAPI 返回 402 `INSUFFICIENT_CREDITS`，按用户规则属于 PASS_BILLING；充值后出图只用于视觉效果确认，不再是接线缺口 |
-| A04 | ✅ **DONE 2026-10-08** | 当前前端已到达 Civitai/Fal/ModelScope/NanoGPT/TAMS/MuAPI/WaveSpeed/Sogni 等真实上游，且 Civitai/WaveSpeed 已真实出图 | 单个 HF 路由网络失败只记该 route 的 network，不外推整个环境/供应商 |
-| A05 | ✅ **DONE 2026-10-08** | Schema provider 使用 opaque `credentialRef` 绑定 schema→submit→poll；同一 task 绑定原始引用，driver 自动沿用 | 引用缺失/失效本地 409，明确“未自动切换 Key”，不再为同一任务重新 `getNextKey()` |
-| A06 | ✅ **DONE 2026-10-08** | NanoGPT 等能力处理已改为 `unknown ≠ unsupported`；未声明字段不再统一当“不支持” | 只有明确 enum/range/false 才本地拒绝；用户显式参数与 capability note 保持可追溯 |
-| A07 | ✅ **DONE 2026-10-08** | MuAPI 使用真实 `endpoint_url`；WaveSpeed 只有目录提供 `model_run` 才将 Schema 标成已核实；Sogni hosted-tool selector 与 worker namespace 分离 | 自定义 ID 不替换成其他模型；Schema 缺失保持 unknown，不装作完整 |
-| A08 | ✅ **DONE 2026-10-08** | 工作流导入/导出保留 MuAPI/WaveSpeed/Sogni provider；外部 JSON 缺 provider 时保持未指定，不按模型名猜供应商 | 原生工程 round-trip 保留 nodes/connections/spatialFrames；旧 Tensor/OpenWorks 工具不会复活 |
-| A09 | 🟡 **PARTIAL** | `save-result` 已逐图持久化；部分失败返回 `historyWarning + transientOutputs`，不改写上游生成成功；Sogni 对 data/blob/local/private URL 本地拒绝；历史参数 provenance 已可追溯 | 代码契约与回归已补。剩余仅真实有额度情况下的“多图 + 某图持久化失败”前端实景证据；不能故意制造生产故障冒充验收 |
-| A10 | ✅ **DONE 2026-10-08** | 执行日志支持长 endpoint/完整 body/stack；History 区分 requested/sent/upstream；失败重跑清旧图，MuAPI 402 请求快照不再夹带旧 Civitai base64 | 欠费/鉴权/网络/参数错误分开；“未发送/上游未返回/旧记录未保存”不再混成“未填写” |
-| A11 | ✅ **DONE 2026-10-08（当前范围）** | 资产 Provider 筛选已按真实历史动态生成；LoRA/模型入口新三家已覆盖；矩阵/指南需持续以 Schema/实测同步 | 后续新增 provider 不再维护静态资产白名单；任何新能力必须有来源/实测，不写假速度、假支持 |
-| A12 | ✅ **DONE 2026-10-08（文档口径）** | HANDOFF 顶部与 PROGRESS 已以 2026-10-08 为最新；旧段落明确标历史；README/矩阵/指南正在按本收尾同步去除 failover、自愈、100%复现与未核实能力宣传 | 最新状态区优先级最高；旧证据不能覆盖当前实测；动态目录数量不写成永久承诺 |
+| A01 | ✅ **DONE 2026-10-06** | SchemaProviderDriver 已使用结构化 `ApiTraceError`；真实前端已分别看到 Fal 403/TOP_UP、ModelScope AI 401/account bind、ModelScope CN 429/insufficient balance、Sogni HTTP201 + waiting_for_user，以及 HF `status=null`/ECONNRESET 网络错误；失败重跑不再保留上一张图片冒充本次结果 | 执行记录保留 endpoint/status/body/source/cause/stack；HTTP 200 网站状态不等于生成成功。新请求的 workflowSnapshot 会剔除旧 `outputData/errorMessage/progress`，失败后 KSampler/SaveImage 保持无图 |
+| A02 | ✅ **DONE 2026-10-06** | `provider=all` 已真实从当前前端返回 `muapi / wavespeed / sogni`，各自独立数组；本地实测 limit=3 时三家均存在且各 3 条 | 聚合失败信息与成功数组并存；没有用静态模型补数。新增供应商仍应走共享聚合入口 |
+| A03 | ✅ **DONE 2026-10-06** | 独立 LoRA 中心已含 MuAPI/WaveSpeed/Sogni；Sogni 真实前端已验证 ID + `loraStrengths` 顺序/权重，WaveSpeed 已带真实 URL/scale 出图；MuAPI 专用 `flux-1-dev-style-lora-inference` 也已从前端把真实 URL + `0.65` 映射为 `lora_url + lora_weight` 并到达上游 | MuAPI 返回 402 `INSUFFICIENT_CREDITS`，按用户规则记 PASS_BILLING；充值后如需判断 LoRA 视觉效果再补出图，不再属于接线缺口。证据：`docs/evidence/t7-muapi-acceptance.md` |
+| A04 | ✅ **DONE 2026-10-08** | 当前 `127.0.0.1:3000` 已能从前端到达 Civitai/Fal/ModelScope/NanoGPT/TAMS/MuAPI/WaveSpeed/Sogni/HF Router 等真实上游；Civitai/WaveSpeed 已真实出图 | 旧 HF Space 网络失败仍只记该次 route 的 network；Gemini 是本地缺 Key，不能归因上游 |
+| A05 | ✅ **DONE 2026-10-06** | Schema provider 通过 `credentialRef` 绑定 schema→submit→poll，同一 task 记录原始引用；引用失效直接本地 409 | 2026-10-06 重启最新 server 后，用伪造过期 ref 实测：HTTP 409、`errorSource=local`、`executionTrace=[]`、原文“未自动切换 Key”，没有上游调用 |
+| A06 | ✅ **DONE 2026-10-06** | NanoGPT 等能力处理已改为 `unknown ≠ unsupported`；`nanoImageApi.ts` 对未声明的用户显式字段透传并写 capability note，只有官方 enum/range/明确 false 才本地拒绝 | 当前 NanoGPT 前端还因凭据 401 阻塞；凭据恢复后再验证实际接受字段，不回退为静态猜测 |
+| A07 | ✅ **DONE 2026-10-06** | MuAPI 执行目标使用真实 `endpoint_url`；WaveSpeed 只有目录实际提供 `model_run` 才标记 request Schema 已核实，否则保持 unknown；Sogni hosted-tool selector 与 worker namespace 分离并记录固定包版本来源 | 自定义 ID 不自动替换其他模型；Schema 来源和 unknown 状态在 UI/请求记录中可见 |
+| A08 | ✅ **DONE 2026-10-06** | 工作流导入目标包含 MuAPI/WaveSpeed/Sogni；ComfyCanvas 原生导入导出完整保留 nodes/connections/spatialFrames；ComfyUI 外部 JSON 缺 provider 时保持空值，不根据模型名猜供应商 | `explicitProvider()` 已覆盖新三家并补回归；`graphEditing.test.ts` 通过 |
+| A09 | 🟡 **PARTIAL** | Schema provider `save-result` 逐输出保存，保存失败返回 `historyWarning/transientOutputs` 而不改写上游生成结果；WaveSpeed 已真实生成并写历史；Sogni 对 data/local/private URL 明确拒绝，不假称上传；历史参数现可追溯 requested/sent/upstream | **剩余：有额度后补 Sogni/其他新三家的真实多图与“生成成功但持久化失败”前端场景**。私有上传流程仍没有就明确写没有 |
+| A10 | ✅ **DONE 2026-10-06** | 执行日志已限制 viewport、`break-all/overflow-auto`，真实前端验证可显示长 HF endpoint、status=null、ECONNRESET cause、完整响应与 stack；账单/鉴权/网络分开；MuAPI 402 重跑已验证日志快照不再夹带旧 Civitai base64/outputData | HistoryModal 同步修复：旧 Civitai 记录现显示 Seed/Steps/CFG/Sampler/Scheduler/尺寸及来源，不再统一“未填写”；失败请求不会继续显示旧生成图 |
+| A11 | ✅ **DONE 2026-10-06（当前范围）** | 供应商矩阵/指南已去掉自动切换、100%复现、未核实 LoRA/速度等宣传并补 MuAPI/WaveSpeed/Sogni；工具栏 LoRA 提示覆盖新三家；资产库 Provider 筛选改为从真实资产历史动态生成，不再手写白名单 | 后续新增 provider 不应再单独修改资产筛选；任何新能力仍以 Schema/真实验收为来源 |
+| A12 | ✅ **DONE 2026-10-06（当前文档）** | README 首屏指向 HANDOFF；Failover/自愈/全平台余额/固定历史模型宣传已删除或收紧；PROGRESS 顶部更新当前状态并保留旧历史时间范围；历史 preset 改名为参数模板，不再声称 100%/旗舰/极速 | README 当前搜索已无 `Failover/自愈/全平台余额/自动平滑/100%/旗舰/极速` 残留 |
 
-**2026-10-08 状态说明：** A01–A08、A10–A12 已按当前范围关闭；A09 仅剩真实有额度外部场景证据。DONE 不代表“所有供应商所有模型/视频/图生图都通过”，具体 provider 等级仍以 §0.7 为准。
+**2026-10-06 状态说明：** 上表已经按当前代码、真实前端和针对性回归重新核对。A03 已用 MuAPI LoRA 专用端点的前端 402 真实请求关闭；现在仅 A09 明确保留为 PARTIAL。其余标 DONE 的项目都有对应代码或当前页面证据。完整收尾证据见 [`docs/evidence/handoff-closeout-2026-10-06.md`](docs/evidence/handoff-closeout-2026-10-06.md)。仍不能把 DONE 外推为“所有供应商所有模型/视频/图生图都通过”。
 
 ## 7. 统一验收标准——逐家、逐路由，不按供应商名字一勾了之
 
@@ -283,7 +264,9 @@
 
 每个实际执行路由至少选择一个有官方文档的图像生成端点。支持 LoRA 的另选一个确实支持 LoRA 的模型/端点和可访问的兼容权重。一个模型成功不代表该供应商所有模型、视频或图生图均通过。
 
-优先顺序建议：**不要重测已取得明确终态的 Civitai/WaveSpeed/MuAPI/Sogni/Fal/ModelScope/NanoGPT/TAMS**；优先补 Hugging Face 当前明确推理路由，其次 Gemini/Agnes/兼容中转/Video 等尚未取得当前终态的路由。供应商可并行调查，前端修改/集成最好一个负责人避免冲突。
+**2026-10-06 用户新增样本规则：** 每个尚未取得明确终态的供应商都必须换一套参考作品和参数，不复用上一家的 Prompt。优先从 Civitai 等公开结构化 API/元数据取得参考图 URL、Prompt、Negative Prompt、底模、LoRA、权重、Steps、CFG、Sampler、Scheduler、Seed、尺寸；缺字段不能猜。真实生成后必须和参考原图比较主体、构图、服装/材质、色调、光影和 LoRA 特征。已经取得 `PASS_GENERATION` / `PASS_BILLING` / `BLOCKED_AUTH` 的供应商不为“刷测试”重复消耗，除非专门验证新修复。公网元数据/API 直接用公网请求；Aki/CDP 只用于本地 Canvas 真实前端操作或必须依赖本地登录态的场景。
+
+后续优先顺序：**SenseNova 实际产品边界 → 用户明确配置的 OpenAI/Grok 兼容中转 → Video → 配置 GEMINI_API_KEY / AGNES_BASE_URL 后再复验 Gemini / Agnes**。已取得明确终态的 Civitai/Fal/ModelScope/NanoGPT/TAMS/MuAPI/WaveSpeed/Sogni/Hugging Face 不为“刷覆盖率”重复调用；只有修具体缺口时才复测。
 
 不要强制套用所有端点统一的 512×512、steps=20、CFG=7。尺寸和参数取当前模型官方允许的值；未提供 seed 的端点历史 seed 应为 null，不能编造。
 
@@ -293,13 +276,13 @@
 2. 在页面 API 设置确认所选服务商已配置，仅记录掩码。多个 Key 的情况先显式固定本次用哪个，不依靠隐藏轮换“碰成功”。
 3. 从**模型中心**进入：先看单家、搜索/分类/分页，再检查 all 入口。记录资源 ID、版本、显示名、目录来源、是否执行端点。
 4. 从模型中心点击“选用”或“新建节点”，确认节点与参数检查器中的 provider/ID 一致。切换到另一画布再回来，检查没有串状态。
-5. 为该供应商选择**一套未在其他供应商复用的参考作品参数**。Prompt、Negative Prompt、底模、LoRA、LoRA 权重、Steps、CFG、Sampler/Scheduler、Seed、尺寸等来源可得字段全部记录；缺失字段标缺失，不补猜。有 LoRA 的必须从 LoRA 中心/真实 ID 或 URL 入口添加。
+5. 为该供应商选择**一套未在其他供应商复用的参考作品参数**：Prompt、Negative Prompt、底模、LoRA、权重、Steps、CFG、Sampler/Scheduler、Seed、尺寸等能从来源取得的字段全部记录；缺失字段标记缺失，不能补猜。有 LoRA 的必须从 LoRA 中心/真实 ID 或 URL 入口添加。
 6. 检查连线：LoRA 接入当前生成分支；现有底模、其他 LoRA、提示词及其他分支不被重写。共享 CLIP 分支不得误改其他任务。
 7. 查看 Schema 匹配模式和“仅 JSON”模式。记录哪些画布字段不提交、哪些被 JSON 覆盖；LoRA 节点未参与时必须用户明确选过该模式。
 8. **点击网页运行按钮一次**。记录浏览器请求、本网站处理、实际上游请求；不能直接用 curl/脚本替代该步骤。
 9. 成功时等待真实图像；异步时继续到真实终态。不能把 taskId/accepted、排队或 waiting_for_user 当图像完成。
 10. 错误时展开详情，核对上游 status/body/endpoint/stack/cause。账单分类必须来自真实响应，不根据状态码、中文猜测或 UI 自造提示。
-11. 有图时打开图像详情和历史，逐项检查最终参数、实际 LoRA ID/URL 与强度、画布快照、提交和轮询元数据；确认多图不丢失。随后与参考原图比较主体、构图、镜头、服装/材质、色调、光影和 LoRA 特征；同模型/LoRA/Seed/Sampler 等复现条件齐全却偏差明显时，不能只因 HTTP 200 或“出了图”就算完整复现通过。
+11. 有图时打开图像详情和历史，逐项检查最终参数、实际 LoRA ID/URL 与强度、画布快照、提交和轮询元数据；确认多图不丢失。随后与参考原图做视觉对比：主体/人物特征、构图、镜头、服装/材质、色调、光影、LoRA 特征是否一致；在同模型、LoRA、Seed、Sampler 等可复现条件齐全时偏差明显，不能只因为 HTTP 200 或“出了图”就算完整复现通过。
 12. 刷新页面，再从历史打开图片；保存并加载云端项目；再次复用前检查参数一致。必要时下载输出并检查实际文件可读。
 13. 对支持的模式补一次空间画板操作。视频、图生图、多图、LoRA 分别单列验收，不能用基础文生图替代。
 14. 保存截图、脱敏请求/响应、workflow JSON 和验收结论。测试截图要包含实际结果或明确错误，不用旧样图占位。
