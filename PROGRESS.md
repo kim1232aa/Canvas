@@ -1,8 +1,30 @@
 # 交接状态更新（用户于 2026-10-04 要求）
 
-完整交接见 [HANDOFF.md](HANDOFF.md)：先列用户铁律，再列 16 个产品板块、10 个主要供应商与其他驱动的验收状态、模型中心/LoRA 中心缺口和后续工单。当前没有全家前端验收通过的证据；Civitai 相对完善，有历史底模与 LoRA 图片，仍需补本轮网页闭环。
+完整交接见 [HANDOFF.md](HANDOFF.md)。**当前最新收尾以 HANDOFF §0.7 与 [docs/evidence/handoff-closeout-2026-10-08.md](docs/evidence/handoff-closeout-2026-10-08.md) 为准。** 下面 2026-10-05 及更早内容保留作历史追溯，不得覆盖后续真实前端证据。
 
-## 2026-10-05 前端验收进展（最新，以此为准）
+## 2026-10-08 收尾状态
+
+| 供应商 | 判定 | 当前证据 |
+|---|---|---|
+| Civitai | **PASS_GENERATION** | 当前网页基础图 + LoRA 图真实生成；历史 provenance 已补强 |
+| WaveSpeed | **PASS_GENERATION** | krea-v2/turbo-lora 带 LoRA 真出图 |
+| MuAPI | **PASS_BILLING** | 普通路由 + LoRA 专用路由真实上游 402；`lora_url + lora_weight=0.65` 已进入 actualRequest |
+| Sogni | **PASS_BILLING** | LoRA ID/strengths 透传；task created；insufficient_credit 原样展示 |
+| Fal.ai | **PASS_BILLING** | fal-ai/flux-lora 到真实上游，403 TOP_UP |
+| ModelScope CN | **PASS_BILLING** | 429 响应体明确 insufficient balance |
+| ModelScope AI | **BLOCKED_AUTH** | 401 要求绑定 Alibaba Cloud account |
+| NanoGPT | **BLOCKED_AUTH** | 真实上游 401 Invalid session / invalid_api_key |
+| Tensor.Art / TAMS | **BLOCKED_AUTH** | 真实模型 ID 查询业务体 unauthorized / app not found |
+| Hugging Face | **待当前环境复验** | 旧 Z-Image Space 仅证明当时 BLOCKED_ENV |
+
+工程收尾：
+- A03 已关闭：MuAPI LoRA 专用端点已用真实前端验证 URL + weight 映射，余额不足按 PASS_BILLING 处理。
+- 失败重跑不再保留上一张图；workflowSnapshot 会剔除旧 `outputData/errorMessage/executionProgress`。
+- History 已增加 requested / sent / upstream/effective 参数 provenance；“未发送 / 上游未返回 / 旧记录未保存”分开显示。
+- A09 的多图持久化契约已补回归：部分图片保存失败只产生 `historyWarning + transientOutputs`，不把上游生成成功改写成失败。仍缺有额度情况下的真实外部前端场景证据。
+- 已有明确终态的 provider 不再重复刷调用。后续未验 provider 每次都换不同参考作品的 Prompt、Negative Prompt、LoRA、权重、底模、Steps、CFG、Sampler、Scheduler、Seed、尺寸，并在成功出图后和参考原图做视觉对比。
+
+## 2026-10-05 前端验收进展（历史，以下不再是最新）
 
 按用户验收标准（前端跑通出图才算通过，欠费记 PASS_BILLING）逐家实测，完成一家 push 一家：
 
