@@ -107,7 +107,29 @@ export class AgnesDriver extends BaseEngineDriver {
     }
 
     const isVideo=Boolean(params.isVideo || params.model.includes('video'));
-    const requestBody=isVideo ? {workflowSnapshot:params.workflowSnapshot,provider:'agnes',model:params.model,prompt:params.prompt,duration:params.videoDuration,aspect_ratio:params.aspectRatio,image_url:params.image_url,seed:params.seed,steps:params.steps,cfg:params.cfg,loras:params.loras,size:params.extraParams?.size || params.imageSize} : params;
+    const omissionEntries = [
+      ['negative_prompt', params.negative_prompt],
+      ['seed', params.seed],
+      ['steps', params.steps],
+      ['cfg', params.cfg],
+      ['sampler_name', params.sampler_name],
+      ['scheduler', params.scheduler],
+      ['denoise', params.denoise],
+      ['resolution', params.extraParams?.resolution],
+    ].filter(([, value]) => value !== undefined && value !== null && value !== '');
+    const imageRequestBody = {
+      workflowSnapshot: params.workflowSnapshot,
+      model: params.model,
+      prompt: params.prompt,
+      width: params.width,
+      height: params.height,
+      image_url: params.image_url,
+      aspect_ratio: params.aspectRatio,
+      size: params.extraParams?.size || params.imageSize,
+      ...(Array.isArray(params.loras) && params.loras.length > 0 ? { loras: params.loras } : {}),
+      parameterOmissions: omissionEntries.map(([field, value]) => ({field,value,reason:'Agnes image endpoint schema does not accept this canvas field'})),
+    };
+    const requestBody=isVideo ? {workflowSnapshot:params.workflowSnapshot,provider:'agnes',model:params.model,prompt:params.prompt,duration:params.videoDuration,aspect_ratio:params.aspectRatio,image_url:params.image_url,seed:params.seed,steps:params.steps,cfg:params.cfg,loras:params.loras,size:params.extraParams?.size || params.imageSize} : imageRequestBody;
     const resp = await fetch(isVideo ? '/api/video/generate' : '/api/engine/agnes/generate', {
       method: 'POST',
       headers,
