@@ -48,6 +48,7 @@ export interface WorkflowExtraction {
     clipStrength: number;
     triggerWords: string;
     civitaiId?: string;
+    unresolvedResource?: boolean;
   }>;
   targetProvider: string;
   videoProvider?: string;
@@ -213,6 +214,7 @@ function traceModelAndLorasUpstream(
           clipStrength: Number(n.values.strength_clip ?? 0.8),
           triggerWords: n.values.trigger_words || '',
           civitaiId: n.values.civitai_id || '',
+          unresolvedResource: n.values.import_unresolved_resource === true,
         });
       }
       const inConn = connections.find((c) => c.toNodeId === n.id && c.toSocketId === 'model');
@@ -263,6 +265,7 @@ function traceLorasUpstream(
           clipStrength: Number(n.values.strength_clip ?? 0.8),
           triggerWords: n.values.trigger_words || '',
           civitaiId: n.values.civitai_id || '',
+          unresolvedResource: n.values.import_unresolved_resource === true,
         });
       }
       const inConn = connections.find((c) => c.toNodeId === n.id && c.toSocketId === 'model');
