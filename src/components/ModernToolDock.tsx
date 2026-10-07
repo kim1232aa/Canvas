@@ -166,7 +166,7 @@ export const ModernToolDock: React.FC<ModernToolDockProps> = ({
         <button
           onClick={onOpenCivitai}
           className="px-2.5 py-1.5 rounded-xl bg-[#1e202a] hover:bg-[#262835] border border-[#2c2f3d] text-purple-300 hover:text-white font-semibold flex items-center gap-1.5 transition-colors"
-          title="打开全生态 LoRA 模型中心 (Civitai / Hugging Face / 魔搭社区 / Fal.ai)"
+          title="打开 LoRA 中心；按供应商标签选择 Civitai / Hugging Face / ModelScope / Fal.ai / Tensor.Art / MuAPI / WaveSpeed / Sogni 资源"
         >
           <Sparkles className="w-3.5 h-3.5 text-purple-400" />
           <span>LoRA 模型中心</span>
