@@ -1,7 +1,7 @@
 import {migrateTensorWorkflow} from './utils/legacyTensorWorkflow';
 import {ExecutionLog} from './components/ExecutionLog';
 import {explicitProvider,graphBranch,catalogModelTarget} from './utils/graphEditing';
-import {attachLoraToBranch,findLoraTarget} from './utils/attachLora';
+import {attachLoraToBranch,findLoraTarget,removeLoraFromBranch} from './utils/attachLora';
 import {isInvalidTensorModel} from './utils/modelCatalog';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {loadWorkspaceCache, BOARDS_KEY, ACTIVE_BOARD_KEY, MODE_KEY, isCanvasProject} from './utils/workspaceCache';
@@ -625,8 +625,9 @@ export default function App() {
   };
 
   const handleDeleteNode = (nodeId: string) => {
-    setNodes((prev) => prev.filter((n) => n.id !== nodeId));
-    setConnections((prev) => prev.filter((c) => c.fromNodeId !== nodeId && c.toNodeId !== nodeId));
+    const next=removeLoraFromBranch(nodes,connections,nodeId);
+    setNodes(next.nodes);
+    setConnections(next.connections);
     if (selectedNodeId === nodeId) setSelectedNodeId(null);
   };
 
