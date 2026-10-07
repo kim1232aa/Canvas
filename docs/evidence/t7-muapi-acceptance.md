@@ -30,7 +30,25 @@
 - t7-muapi-14-submitted.png 提交后;t7-muapi-15-final.png 最终状态
 - t7-muapi-16-trace.png / t7-muapi-17-trace402.png 执行记录面板 402 透传详情
 
+## 2026-10-06 LoRA 中心补验收
+
+为关闭 HANDOFF A03，在不重复测试普通模型的前提下，只补跑了一次 **MuAPI LoRA 专用端点**：
+
+- 前端显式选择 provider `muapi`、模型 `flux-1-dev-style-lora-inference`。
+- Prompt 更换为独立样本：`A cute corgi living inside a house made of sushi, vibrant anime illustration, playful expression, crisp cel shading`。
+- 从 LoRA 中心的 MuAPI 标签粘贴真实 HTTP(S) LoRA URL：`https://huggingface.co/XLabs-AI/flux-lora-collection/resolve/main/anime_lora.safetensors`。
+- LoRA model strength 设置为 `0.65`；独立 CLIP strength 没有目标字段，因此执行记录明确显示它未独立发送。
+- 画布真实请求的 actualRequest：
+  - endpoint：`https://api.muapi.ai/api/v1/flux-1-dev-style-lora-inference`
+  - `prompt`：上述独立 Prompt
+  - `lora_url`：上述 safetensors URL
+  - `lora_weight`: `0.65`
+  - mapping 明确为 `loras -> lora_url + lora_weight`
+- 上游仍返回 HTTP 402 `INSUFFICIENT_CREDITS`，前端原样展示 endpoint、状态码、响应体和 topup_url；没有换 Provider / 模型 / Key。
+
+因此 **MuAPI LoRA 接线也满足用户的 PASS_BILLING 标准**：真实前端已经证明 LoRA URL 与权重按该端点 Schema 映射到实际请求；账户余额阻止的是生成结果，不再把 A03 保留为“LoRA 接线未验证”。充值后若要判断 LoRA 视觉效果，仍需真实出图并与参考图比较。
+
 ## 备注
 
-- 本次提交携带了上一 WaveSpeed 用例遗留的 custom_parameters(loras 等);402 发生在参数校验之前,不影响计费结论。
-  MuAPI 的 LoRA 真实出图需账户充值后复测(欠费不作为失败,按用户规则记 PASS_BILLING)。
+- 2026-10-05 第一条普通模型请求曾携带上一 WaveSpeed 用例遗留的 custom_parameters；该旧记录只用于普通路由计费结论。
+- 2026-10-06 的专用 LoRA 补验收使用全新的 Prompt / LoRA / 权重与 `flux-1-dev-style-lora-inference`，actualRequest 已证明 LoRA 字段映射，不再依赖旧残留参数。
