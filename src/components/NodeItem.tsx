@@ -420,7 +420,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                       step={widget.step || 0.1}
                       min={widget.min}
                       max={widget.max}
-                      value={greyThis ? '' : value}
+                      value={greyThis ? '' : (value ?? '')}
                       disabled={greyThis}
                       placeholder={greyThis ? '该服务商不支持' : undefined}
                       title={greyThis ? '该服务商不支持' : undefined}
@@ -430,7 +430,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                       onKeyDown={(e) => e.stopPropagation()}
                       onChange={(e) => {
                         if (greyThis) return;
-                        onUpdateValue(node.id, widget.name, parseFloat(e.target.value) || 0);
+                        onUpdateValue(node.id, widget.name, e.target.value === '' ? undefined : parseFloat(e.target.value));
                       }}
                       className={greyThis
                         ? 'w-16 bg-[#0d0e12] border border-[#22242c] rounded px-1.5 py-0.5 text-right text-slate-600 font-mono text-[11px] outline-none cursor-not-allowed'
@@ -442,7 +442,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                     min={widget.min}
                     max={widget.max}
                     step={widget.step || 0.1}
-                    value={greyThis ? (widget.min ?? 0) : value}
+                    value={greyThis ? (widget.min ?? 0) : (value ?? widget.min ?? 0)}
                     disabled={greyThis}
                     title={greyThis ? '该服务商不支持' : undefined}
                     aria-label={greyThis ? `${widget.name}（该服务商不支持）` : widget.label}
@@ -804,7 +804,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                   <div className="flex items-center gap-1.5">
                     <input
                       type="number"
-                      value={greySeed ? '' : value}
+                      value={greySeed ? '' : (value ?? '')}
                       disabled={greySeed}
                       placeholder={greySeed ? '该服务商不支持' : undefined}
                       title={greySeed ? '该服务商不支持' : undefined}
@@ -814,7 +814,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                       onKeyDown={(e) => e.stopPropagation()}
                       onChange={(e) => {
                         if (greySeed) return;
-                        onUpdateValue(node.id, widget.name, parseInt(e.target.value) || 0);
+                        onUpdateValue(node.id, widget.name, e.target.value === '' ? undefined : parseInt(e.target.value));
                       }}
                       className={greySeed
                         ? 'flex-1 bg-[#0d0e12] border border-[#22242c] rounded-lg px-2.5 py-1.5 text-slate-600 font-mono text-xs cursor-not-allowed outline-none'
@@ -848,7 +848,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                   </div>
                   <input
                     type="number"
-                    value={greyThis ? '' : value}
+                    value={greyThis ? '' : (value ?? '')}
                     disabled={greyThis}
                     placeholder={greyThis ? '该服务商不支持' : undefined}
                     title={greyThis ? '该服务商不支持' : undefined}
@@ -858,7 +858,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                     onKeyDown={(e) => e.stopPropagation()}
                     onChange={(e) => {
                       if (greyThis) return;
-                      onUpdateValue(node.id, widget.name, parseFloat(e.target.value) || 0);
+                      onUpdateValue(node.id, widget.name, e.target.value === '' ? undefined : parseFloat(e.target.value));
                     }}
                     className={greyThis
                       ? 'w-full bg-[#0d0e12] border border-[#22242c] rounded-lg px-2.5 py-1.5 text-slate-600 font-mono text-xs cursor-not-allowed outline-none'
