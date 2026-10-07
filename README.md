@@ -13,7 +13,7 @@
 - `node hosting/check-hosting.mjs` 使用本地 Worker 验证数据保存、重启恢复及访问限制，禁止测试时调用外部服务商。
 
 
-基于 React 19 + TypeScript + Tailwind CSS 构建的下一代 Web 版 ComfyUI 节点式 AI 图像/视频/推理生成工作流平台。支持专业级可视化节点连线、ComfyUI 原生拓扑调度、多渠道后端统一引擎驱动（Google Imagen 3 / Gemini、Fal.ai FLUX / SDXL、Tensor.Art OpenWorks、Agnes AI 极速生图、SenseNova 商汤日日新深度思考、Wan 2.1 电影级视频、Civitai 权重、ModelScope 魔搭社区、Hugging Face、NanoGPT）以及丰富的社区经典预设工作流一键载入与全透明执行。
+基于 React 19 + TypeScript + Tailwind CSS 构建的 Web 版 ComfyUI 节点式图像/视频/推理工作流平台。项目包含多供应商模型中心、LoRA、参数面板、工作流导入导出、执行记录与持久化。**具体供应商、模型和参数是否可用，以 HANDOFF.md、PROGRESS.md 及当前上游真实响应为准；目录可见、代码已接线或历史成功都不等于当前已经通过前端验收。**
 
 ---
 
@@ -24,27 +24,18 @@
 - **强类型端口安全连接**：贝塞尔曲线连接端口（支持 `MODEL`、`CLIP`、`LATENT`、`IMAGE`、`CONDITIONING`、`STRING`、`VIDEO` 等强类型检测与拓扑兼容转换）。
 - **节点状态与操作**：支持节点折叠、跳过 (Bypass)、克隆、快速重命名、实时执行进度条与状态光晕。
 
-### 2. ⚡ 多 Key 轮询与负载均衡总控 (Multi-Key Pool & Rotation)
-- **多 Key 密钥池管理**：各服务商支持一次性配置多个 API Key（换行/逗号/分号批量录入），提供独立 Key 卡片与单项连通测速。
-- **三种高可用轮询策略**：
-  - **🔄 顺序轮询 (Round-Robin)**：在可用 Key 之间均匀循环分发，最大化并发吞吐与配额利用。
-  - **🛡️ 主备故障切换 (Failover)**：优先使用首个主 Key，遭遇 429 限流或异常时自动平滑切换至备用 Key。
-  - **⚡ 最优低延迟 (Best Latency)**：自动统计近期网络响应耗时，优先调用延迟最低的高速 Key。
-- **实时限流冷却与自愈**：遇到 429 或配额耗尽错误时自动标记 `rate_limited` 并进入 60 秒冷却，冷却结束后自动恢复。
-- **多 Key 负载监控面板 (Pool Monitor)**：可视化展示全平台各服务商 Key 总数、活跃数、限流数、鉴权异常数、调用频次与平均耗时。
+### 2. 🔐 多 Key 配置与任务凭据一致性
+- **多 Key 密钥池管理**：设置页可保存多个凭据；是否支持余额/健康查询取决于该供应商当前真实接口，不能把“有 Key”写成“账户可用”。
+- **禁止失败后静默换 Key 重提生成**：一次生成任务使用已选定的凭据；Schema → 提交 → 轮询需要保持同一账户语义。引用失效时直接报错，不自动换另一把 Key。
+- **不按状态码猜业务原因**：只有上游响应体明确给出鉴权、账户绑定、额度/余额信息时才做对应分类；网络无响应单独记为网络问题。
 
-### 3. 💰 服务商额度与余额实时管理 (Balances & Quotas)
-- **全平台余额一键探测**：支持一键查询并展示阿里魔搭社区（魔粒状态）、Fal.ai（算力余额与 TOP_UP 状态）、NanoGPT、Agnes AI、SenseNova 商汤日日新、Tensor.Art 算力点数、Hugging Face 与 Google Gemini 的实时账户健康状态。
-- **透明额度警报**：额度耗尽或余额不足时以原状态码及详细信息直接提示，绝不隐瞒或静默失败。
+### 3. 💰 账户状态与错误透明度
+- **余额能力按供应商实际接口核实**：只有已经核实存在余额/额度接口或上游明确返回额度信息的供应商才展示对应事实；没有接口就不虚构“实时余额”。
+- **透明错误记录**：执行记录保留真实 endpoint、网站 HTTP、上游 HTTP、响应体和错误来源；欠费、鉴权、参数错误和网络失败分开记录。
 
-### 4. 💎 Google Gemini & Imagen 3 官方直连引擎
-- **全系前沿模型接入**：
-  - **Google Imagen 3.0** (`imagen-3.0-generate-002`)：顶级光影折射与高写实高保真艺术生图。
-  - **Gemini 3.1 Flash Image** (`gemini-3.1-flash-image`)：新一代 Nano Banana 2 高清图像生成大模型，支持 1:1、16:9、9:16、4:3 等自适应画幅。
-  - **Gemini 3.1 Flash Lite Image** (`gemini-3.1-flash-lite-image`)：极低延迟快速生图。
-  - **Gemini 3.8 Flash** (`gemini-3.8-flash`)：旗舰多模态视觉理解与深度思考推理。
-  - **Gemini 3.1 Pro** (`gemini-3.1-pro-preview`)：复杂逻辑与长链提示词推演。
-- **官方 GenAI SDK 深度集成**：严格遵循服务端调用规范，支持智能画幅比例换算、引导系数（CFG）与多模态 Prompt 扩写。
+### 4. 💎 Google Gemini 图像路线
+- 模型列表与图像能力以当前 Gemini 官方接口和项目模型选择器为准，不在 README 固定承诺某个历史模型仍在线。
+- Gemini 图像生成使用其原生自然语言 / 图像配置能力；**不要把 ComfyUI 的 Sampler、Steps、CFG、LoRA 等扩散参数假装成 Gemini 已接收字段**。未经过真实前端请求验证的能力不标记为通过。
 
 ### 5. 🎛️ ComfyUI 核心参数总控台 (Parameter Inspector)
 - **全要素参数双向绑定**：实时同步 CLIP 正向/负向提示词、基底大模型 (Checkpoint)、云端推理引擎 (Provider)、采样步数 (Steps)、引导系数 (CFG Scale)、采样算法 (Sampler)、调度器 (Scheduler)、重绘降噪幅度 (Denoise) 与潜空间画幅比例 (Latent Canvas Dimensions)。
@@ -79,7 +70,7 @@ cp .env.example .env
 npm run dev
 ```
 开发服务器将运行在 `http://localhost:3000`。
-前台为 Vite 驱动的 React SPA，后台由 `server.ts` 提供统一引擎分发、多 Key 轮询管理、余额探测与端点审计服务。
+前台为 Vite 驱动的 React SPA，后台由 `server.ts` 提供供应商路由、任务凭据、已核实的账户状态查询与端点审计服务。
 
 ### 5. 代码质量检查与构建
 ```bash
@@ -137,17 +128,18 @@ npm run build
 
 ## 📡 支持的云端算力与大模型生态
 
-| 服务商 (Provider) | 核心模型与能力 | 典型应用场景 |
+| 服务商 / 路由 | 当前前端验收状态 | 边界 |
 | :--- | :--- | :--- |
-| **Google Gemini** | `imagen-3.0-generate-002`, `gemini-3.1-flash-image`, `gemini-3.8-flash` | 高保真光影生图、多模态视觉推理与提示词重构扩写 |
-| **Fal.ai** | `fal-ai/flux/dev`, `fal-ai/flux/schnell`, `fal-ai/fast-sdxl` | FLUX.1 与 SDXL 极速 GPU 扩散生成与多 LoRA 栈式推理 |
-| **Tensor.Art** | FLUX.1, SDXL 1.0, Pony V6, Illustrious-XL, Wan 2.1 | OpenWorks OpenAPI 海量开源模型与二次元/写实微调 |
-| **Agnes AI** | `agnes-image-2.5-flash`, `agnes-3.0-flash` | 秒级极速生成、动态运镜视频与思维链大模型推演 |
-| **SenseNova (商汤)** | `deepseek-v4-flash`, `deepseek-v4-pro`, `glm-5.2` | 百万上下文深度思维链 (CoT) 构图与提示词工程 |
-| **ModelScope (魔搭)** | `Tongyi-MAI/Z-Image-Turbo`, `damo/wan2.1-t2i`, 国潮 LoRA | 阿里开源前沿生图与视频模型 (支持国内站与国际站) |
-| **Hugging Face** | `FLUX.1-schnell`, `stable-diffusion-xl-base-1.0` | 开源 Diffusers 与 Serverless 社区扩散生态 |
-| **NanoGPT** | `flux-schnell`, `sdxl-turbo` | 按张计费轻量化极速通道 |
-| **Civitai** | 100,000+ 社区 LoRA、Checkpoints 与微调模型 | 社区模型检索与一键逆向提取工作流 |
+| **Civitai** | `PASS_GENERATION` | 当前网页已真实基础图 + LoRA 出图；不外推所有资源 |
+| **WaveSpeed** | `PASS_GENERATION` | 已有带 LoRA 的真实前端生成证据 |
+| **MuAPI** | `PASS_BILLING` | 普通 + LoRA 专用路由均真实到上游，当前 `INSUFFICIENT_CREDITS` |
+| **Sogni** | `PASS_BILLING` | task created 后上游明确 `insufficient_credit` |
+| **Fal.ai** | `PASS_BILLING` | `fal-ai/flux-lora` 已到达上游，当前 `TOP_UP` |
+| **ModelScope CN** | `PASS_BILLING` | 当前图像路由明确 `insufficient balance` |
+| **ModelScope AI** | `BLOCKED_AUTH` | 国际站账户要求绑定 Alibaba Cloud |
+| **NanoGPT** | `BLOCKED_AUTH` | 当前真实前端请求 `Invalid session / invalid_api_key` |
+| **Tensor.Art / TAMS** | `BLOCKED_AUTH` | 真实模型 ID 查询为 `unauthorized / app not found` |
+| **Hugging Face / Gemini / Agnes / SenseNova / 兼容中转 / Video** | 见 HANDOFF / PROGRESS | 必须按具体路由与当前凭据逐项验收 |
 
 ---
 
