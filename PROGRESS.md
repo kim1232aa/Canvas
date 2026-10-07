@@ -15,14 +15,14 @@
 | ModelScope AI | **BLOCKED_AUTH** | 401 要求绑定 Alibaba Cloud account |
 | NanoGPT | **BLOCKED_AUTH** | 真实上游 401 Invalid session / invalid_api_key |
 | Tensor.Art / TAMS | **BLOCKED_AUTH** | 真实模型 ID 查询业务体 unauthorized / app not found |
-| Hugging Face | **待当前环境复验** | 旧 Z-Image Space 仅证明当时 BLOCKED_ENV |
+| Hugging Face | **PASS_BILLING** | 2026-10-08 前端显式 HF→fal-ai：FLUX.1-dev + HF LoRA 0.55 到达 HF Router，HTTP 402 no remaining credits；旧 Z-Image Space BLOCKED_ENV 仅是旧路由历史证据 |
 
 工程收尾：
 - A03 已关闭：MuAPI LoRA 专用端点已用真实前端验证 URL + weight 映射，余额不足按 PASS_BILLING 处理。
 - 失败重跑不再保留上一张图；workflowSnapshot 会剔除旧 `outputData/errorMessage/executionProgress`。
 - History 已增加 requested / sent / upstream/effective 参数 provenance；“未发送 / 上游未返回 / 旧记录未保存”分开显示。
 - A09 的多图持久化契约已补回归：部分图片保存失败只产生 `historyWarning + transientOutputs`，不把上游生成成功改写成失败。仍缺有额度情况下的真实外部前端场景证据。
-- 已有明确终态的 provider 不再重复刷调用。后续未验 provider 每次都换不同参考作品的 Prompt、Negative Prompt、LoRA、权重、底模、Steps、CFG、Sampler、Scheduler、Seed、尺寸，并在成功出图后和参考原图做视觉对比。
+- 已有明确终态的 provider 不再重复刷调用。Hugging Face HF→fal-ai 已加入明确终态；后续未验 provider 每次都换不同参考作品的 Prompt、Negative Prompt、LoRA、权重、底模、Steps、CFG、Sampler、Scheduler、Seed、尺寸，并在成功出图后和参考原图做视觉对比。
 
 ## 2026-10-05 前端验收进展（历史，以下不再是最新）
 
