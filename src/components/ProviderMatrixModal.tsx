@@ -63,15 +63,15 @@ export const ProviderMatrixModal: React.FC<ProviderMatrixModalProps> = ({
     },
     {
       name: 'Google Gemini (官方直连)',
-      badge: '官方直连',
+      badge: 'BLOCKED_CONFIG',
       badgeColor: 'bg-blue-500/20 text-blue-300 border-blue-500/40',
-      description: 'Google Gemini 图像生成走原生 generateContent / imageConfig 语义。不要把 ComfyUI 的 Sampler、Steps、CFG、LoRA 等扩散参数伪装成 Gemini 已接收字段。',
+      description: 'Google Gemini 图像生成走原生 generateContent / imageConfig 语义。2026-10-08 前端已到本站 /api/gemini/generate，但本地未配置 GEMINI_API_KEY，尚未到达上游。不要把 ComfyUI 的 Sampler、Steps、CFG、LoRA 等扩散参数伪装成 Gemini 已接收字段。',
       models: [
-        { name: '当前模型选择器中的 Gemini Image 模型', steps: '不适用', resolution: 'imageConfig', speed: '待当前凭据实测' },
+        { name: 'gemini-3.1-flash-image', steps: '不适用', resolution: 'aspect_ratio=4:3 / image_size=1K 已提交到本地路由', speed: '本地缺 Key · HTTP 400' },
       ],
       loraSupport: '当前 Gemini 路由不映射 LoRA；LoRA 节点不能因为存在于画布就假称已生效。',
       promptLanguage: '自然语言 Prompt；是否扩写由用户明确启用的润色功能决定。',
-      keyFormat: '使用当前运行环境实际配置的 Gemini 凭据；是否可用以真实上游响应为准',
+      keyFormat: '需要 GEMINI_API_KEY；配置后才能真实上游复验',
       features: ['原生图像接口', 'imageConfig / Prompt', '不伪造扩散参数'],
     },
     {
