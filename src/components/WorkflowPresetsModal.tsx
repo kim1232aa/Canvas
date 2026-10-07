@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import { WORKFLOW_PRESETS } from '../constants/presets';
 import { NODE_DEFINITIONS } from '../constants/nodes';
-import { WorkflowPreset, NodeInstance, Connection, SpatialFrame } from '../types/graph';
+import { WorkflowPreset, NodeInstance, Connection, SpatialFrame, ComfyParameters } from '../types/graph';
 
 interface WorkflowPresetsModalProps {
   isOpen: boolean;
@@ -43,6 +43,26 @@ interface WorkflowPresetsModalProps {
   onClearCanvas: (type: 'all' | 'nodes' | 'frames' | 'reset-default') => void;
   initialTab?: 'presets' | 'civitai-extract' | 'import' | 'export' | 'clear';
 }
+
+type ImportTargetProvider = ComfyParameters['targetProvider'];
+const CIVITAI_IMPORT_TARGETS: Array<{id:ImportTargetProvider;name:string;badge:string;desc:string;badgeColor:string;activeBorder:string}> = [
+  {id:'civitai',name:'Civitai',badge:'保留原始引用',desc:'保留 Civitai 原始模型/版本引用；权限与能力以上游响应为准',badgeColor:'bg-blue-500/20 text-blue-300 border-blue-500/30',activeBorder:'border-blue-500 bg-blue-950/30 text-white'},
+  {id:'fal',name:'Fal.ai',badge:'需重选模型',desc:'从 Fal 模型目录重新选择真实端点和 LoRA URL',badgeColor:'bg-purple-500/20 text-purple-300 border-purple-500/30',activeBorder:'border-purple-500 bg-purple-950/30 text-white'},
+  {id:'tensorart',name:'Tensor.Art',badge:'需重选模型',desc:'从 TAMS 目录选择真实模型 ID；不把来源名称转换成 Tensor ID',badgeColor:'bg-purple-600/20 text-purple-300 border-purple-500/30',activeBorder:'border-purple-500 bg-purple-950/30 text-white'},
+  {id:'nanogpt',name:'NanoGPT',badge:'需重选模型',desc:'从当前 NanoGPT 模型元数据中选择执行模型',badgeColor:'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',activeBorder:'border-emerald-500 bg-emerald-950/30 text-white'},
+  {id:'modelscope',name:'ModelScope CN',badge:'需重选模型',desc:'国内站单独选择真实模型，不与 Civitai 资源名互换',badgeColor:'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',activeBorder:'border-cyan-500 bg-cyan-950/30 text-white'},
+  {id:'modelscope_ai',name:'ModelScope AI',badge:'需重选模型',desc:'国际站单独选择真实模型与账户，不与国内站互换',badgeColor:'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',activeBorder:'border-cyan-500 bg-cyan-950/30 text-white'},
+  {id:'huggingface',name:'Hugging Face',badge:'需重选模型',desc:'明确选择 Hub 模型及实际在线推理路由',badgeColor:'bg-slate-500/20 text-slate-300 border-slate-500/30',activeBorder:'border-slate-400 bg-slate-800/40 text-white'},
+  {id:'muapi',name:'MuAPI',badge:'需重选端点',desc:'从 MuAPI 目录选择真实 endpoint_url；不映射来源模型名',badgeColor:'bg-violet-500/20 text-violet-300 border-violet-500/30',activeBorder:'border-violet-500 bg-violet-950/30 text-white'},
+  {id:'wavespeed',name:'WaveSpeed',badge:'需重选端点',desc:'从 WaveSpeed 目录选择完整 model_id；参数按该模型 Schema 核实',badgeColor:'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',activeBorder:'border-cyan-500 bg-cyan-950/30 text-white'},
+  {id:'sogni',name:'Sogni',badge:'需重选 selector',desc:'从当前官方工具 Schema selector 选择；worker ID 不自动转换',badgeColor:'bg-orange-500/20 text-orange-300 border-orange-500/30',activeBorder:'border-orange-500 bg-orange-950/30 text-white'},
+  {id:'gemini',name:'Google Gemini',badge:'需重选模型',desc:'明确选择当前 Gemini 生图模型，不套来源模型名',badgeColor:'bg-blue-500/20 text-blue-300 border-blue-500/30',activeBorder:'border-blue-500 bg-blue-950/30 text-white'},
+  {id:'agnes',name:'Agnes AI',badge:'需重选模型',desc:'按当前接口配置明确选择模型，不自动套默认值',badgeColor:'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',activeBorder:'border-emerald-500 bg-emerald-950/30 text-white'},
+  {id:'sensenova',name:'SenseNova',badge:'需重选模型',desc:'按当前商汤接口配置明确选择模型，不使用来源名称替代',badgeColor:'bg-amber-500/20 text-amber-300 border-amber-500/30',activeBorder:'border-amber-500 bg-amber-950/30 text-white'},
+  {id:'openai_compat',name:'OpenAI 兼容中转',badge:'需重选模型',desc:'使用用户配置的兼容地址和模型，不假定官方 OpenAI 契约',badgeColor:'bg-slate-500/20 text-slate-300 border-slate-500/30',activeBorder:'border-slate-400 bg-slate-800/40 text-white'},
+  {id:'grok_compat',name:'Grok 兼容中转',badge:'需重选模型',desc:'使用用户配置的兼容地址和模型，不假定官方 xAI 契约',badgeColor:'bg-slate-500/20 text-slate-300 border-slate-500/30',activeBorder:'border-slate-400 bg-slate-800/40 text-white'},
+  {id:'video',name:'AI Video',badge:'需重选供应商/模型',desc:'保留视频来源元数据，但不猜实际视频供应商模型',badgeColor:'bg-rose-500/20 text-rose-300 border-rose-500/30',activeBorder:'border-rose-500 bg-rose-950/30 text-white'},
+];
 
 export const WorkflowPresetsModal: React.FC<WorkflowPresetsModalProps> = ({
   isOpen,
@@ -63,7 +83,7 @@ export const WorkflowPresetsModal: React.FC<WorkflowPresetsModalProps> = ({
 
   // Civitai URL Extract State
   const [civitaiUrlInput, setCivitaiUrlInput] = useState<string>('https://civitai.red/images/136947637');
-  const [selectedEngine, setSelectedEngine] = useState<'civitai' | 'fal' | 'video' | 'agnes' | 'sensenova' | 'modelscope' | 'huggingface' | 'tensorart' | 'nanogpt'>('civitai');
+  const [selectedEngine, setSelectedEngine] = useState<ImportTargetProvider>('civitai');
   const [showOtherMetadata, setShowOtherMetadata] = useState<boolean>(true);
   const [isExtractingCivitai, setIsExtractingCivitai] = useState<boolean>(false);
   const [civitaiExtractError, setCivitaiExtractError] = useState<string | null>(null);
@@ -107,7 +127,7 @@ export const WorkflowPresetsModal: React.FC<WorkflowPresetsModalProps> = ({
 
   const handleExtractCivitaiWorkflow = async (
     targetUrl = civitaiUrlInput,
-    engineToUse: 'civitai' | 'fal' | 'video' | 'agnes' | 'sensenova' | 'modelscope' | 'huggingface' | 'tensorart' | 'nanogpt' = selectedEngine
+    engineToUse: ImportTargetProvider = selectedEngine
   ) => {
     if (!targetUrl.trim()) return;
     setIsExtractingCivitai(true);
@@ -892,106 +912,25 @@ Steps: 28, Sampler: DPM++ 2M Karras, CFG scale: 4.5, Seed: 136947637, Size: 1024
                       <Cpu className="w-3.5 h-3.5 text-cyan-400" />
                       <span>选择目标执行引擎 (Target Execution Engine):</span>
                       <span className="text-[10px] text-slate-400 font-normal">
-                        (Civitai 帖子默认推荐使用 Civitai 官方原生引擎，完美适配底模与全量 LoRA)
+                        (切换到其他供应商时只保留来源元数据，必须重新选择目标模型与 LoRA 资源)
                       </span>
                     </label>
                     <span className="text-[11px] font-mono text-cyan-400">
-                      {selectedEngine === 'civitai' && '🌟 Civitai 官方原生生成引擎 (最优适配)'}
-                      {selectedEngine === 'fal' && '⚡ Fal.ai 极速云引擎 (官方端点)'}
-                      {selectedEngine === 'tensorart' && '🎨 Tensor.Art 模型 API'}
-                      {selectedEngine === 'nanogpt' && '🟢 NanoGPT 极速生图引擎 (按需即付)'}
-                      {selectedEngine === 'video' && '🎬 AI Video 视频引擎 (MiniMax / Wan 2.1)'}
-                      {selectedEngine === 'agnes' && '🚀 Agnes AI 2.5 Flash 极速生图'}
-                      {selectedEngine === 'sensenova' && '🧠 SenseNova 日日新 CoT 引擎'}
-                      {selectedEngine === 'modelscope' && '🌌 ModelScope 魔搭社区'}
-                      {selectedEngine === 'huggingface' && '🤗 Hugging Face Diffusers'}
+                      {CIVITAI_IMPORT_TARGETS.find((item)=>item.id===selectedEngine)?.name || selectedEngine}
                     </span>
                   </div>
 
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
-                    {[
-                      {
-                        id: 'civitai',
-                        name: 'Civitai 原生引擎',
-                        badge: '最优适配',
-                        badgeColor: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
-                        desc: '100% 原生直连 C 站算力，Krea 2 Turbo、MiniMax 与全量 LoRA 零转译出片',
-                        activeBorder: 'border-blue-500 bg-blue-950/30 text-white',
-                      },
-                      {
-                        id: 'fal',
-                        name: 'Fal.ai 极速引擎',
-                        badge: '云端端点',
-                        badgeColor: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
-                        desc: '官方 Fal 端点 (Krea 闭源端点无法挂载 safetensors 时自动匹配兼容 SDXL 底模)',
-                        activeBorder: 'border-purple-500 bg-purple-950/30 text-white',
-                      },
-                      {
-                        id: 'tensorart',
-                        name: 'Tensor.Art 吐司',
-                        badge: '原生云端模型',
-                        badgeColor: 'bg-purple-600/20 text-purple-300 border-purple-500/30',
-                        desc: '直连 Tensor.Art / 吐司 AI 模型中心，FLUX.1、SDXL、Pony、Illustrious 原生云端解算',
-                        activeBorder: 'border-purple-500 bg-purple-950/30 text-white',
-                      },
-                      {
-                        id: 'nanogpt',
-                        name: 'NanoGPT 极速',
-                        badge: '239+ 现货',
-                        badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
-                        desc: '直连 NanoGPT 按需推理引擎，FLUX.1、Qwen Image 2.1、SDXL 极速按次即付',
-                        activeBorder: 'border-emerald-500 bg-emerald-950/30 text-white',
-                      },
-                      {
-                        id: 'video',
-                        name: 'AI Video 视频',
-                        badge: '电影运镜',
-                        badgeColor: 'bg-rose-500/20 text-rose-300 border-rose-500/30',
-                        desc: '自动生成 AIVideoNode，直连 MiniMax H3 / Wan 2.1 电影级动态动作视频通道',
-                        activeBorder: 'border-rose-500 bg-rose-950/30 text-white',
-                      },
-                      {
-                        id: 'agnes',
-                        name: 'Agnes AI 极速',
-                        badge: '2.5 Flash',
-                        badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
-                        desc: '秒级极速生图通道，自动适配极速画质与自然语言提示词',
-                        activeBorder: 'border-emerald-500 bg-emerald-950/30 text-white',
-                      },
-                      {
-                        id: 'sensenova',
-                        name: 'SenseNova 日日新',
-                        badge: 'CoT 推理',
-                        badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
-                        desc: '商汤大模型思维链与深度推理增强，呈现电影级空间构图',
-                        activeBorder: 'border-amber-500 bg-amber-950/30 text-white',
-                      },
-                      {
-                        id: 'modelscope',
-                        name: 'ModelScope 魔搭',
-                        badge: '阿里万相',
-                        badgeColor: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
-                        desc: '阿里通义万相 Wan 2.1 开源生态与中文大模型直连',
-                        activeBorder: 'border-cyan-500 bg-cyan-950/30 text-white',
-                      },
-                      {
-                        id: 'huggingface',
-                        name: 'Hugging Face',
-                        badge: 'Diffusers',
-                        badgeColor: 'bg-slate-500/20 text-slate-300 border-slate-500/30',
-                        desc: '开源社区 Diffusers 拓扑，全球海量开源权重直挂',
-                        activeBorder: 'border-slate-400 bg-slate-800/40 text-white',
-                      },
-                    ].map((eng) => {
+                    {CIVITAI_IMPORT_TARGETS.map((eng) => {
                       const isSelected = selectedEngine === eng.id;
                       return (
                         <button
                           key={eng.id}
                           type="button"
                           onClick={() => {
-                            setSelectedEngine(eng.id as any);
+                            setSelectedEngine(eng.id);
                             if (extractedPreset) {
-                              handleExtractCivitaiWorkflow(civitaiUrlInput, eng.id as any);
+                              handleExtractCivitaiWorkflow(civitaiUrlInput, eng.id);
                             }
                           }}
                           className={`p-2.5 rounded-xl border text-left transition-all ${
