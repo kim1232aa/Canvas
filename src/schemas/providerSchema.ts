@@ -605,7 +605,7 @@ const MODELSCOPE_MODELS: ModelSpec[] = (['modelscope','modelscope_ai'] as const)
   fields:{
     ...Object.fromEntries(['negative_prompt','seed','steps','cfg','width','height'].map(key=>[key,{status:'unverified' as const,source:MODELSCOPE_DOC,note:'本地 Diffusers 参数不能证明云端 REST 支持；显式提交将提示未核实'}])),
     loras:{status:'supported',source:MODELSCOPE_DOC,note:'单一仓库 ID 或最多六项权重映射，总和 1；底模兼容性仍由所选模型决定'},
-    ...unsupported(MODELSCOPE_DOC,['sampler','scheduler','denoise'],'该云端图像路由无已核实的对应字段'),
+    ...Object.fromEntries(['sampler','scheduler','denoise'].map(key=>[key,{status:'unverified' as const,source:MODELSCOPE_DOC,note:'当前官方云端 REST 资料未核实对应字段；未知能力不按 unsupported 本地拦截'}])),
   },
 }));
 
