@@ -209,8 +209,10 @@ const isApiPath = (p: string): boolean => {
 };
 
 // Anti CSRF / DNS rebinding: /api only answers requests addressed to this local server.
-const ALLOWED_HOSTS = new Set([`127.0.0.1:${PORT}`, `localhost:${PORT}`, ...(PORT===4173?[`terminal.local:${PORT}`]:[])]);
-const ALLOWED_ORIGINS = new Set([`http://127.0.0.1:${PORT}`, `http://localhost:${PORT}`, ...(PORT===4173?[`http://terminal.local:${PORT}`]:[])]);
+const EXTRA_HOSTS = (process.env.ALLOWED_HOSTS || 'canvas.alibb123.ccwu.cc').split(',').map(s => s.trim()).filter(Boolean);
+const EXTRA_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://canvas.alibb123.ccwu.cc,http://canvas.alibb123.ccwu.cc').split(',').map(s => s.trim()).filter(Boolean);
+const ALLOWED_HOSTS = new Set([`127.0.0.1:${PORT}`, `localhost:${PORT}`, ...EXTRA_HOSTS, ...(PORT===4173?[`terminal.local:${PORT}`]:[])]);
+const ALLOWED_ORIGINS = new Set([`http://127.0.0.1:${PORT}`, `http://localhost:${PORT}`, ...EXTRA_ORIGINS, ...(PORT===4173?[`http://terminal.local:${PORT}`]:[])]);
 
 app.use((req, res, next) => {
   if (!isApiPath(req.path)) return next();
@@ -1625,13 +1627,6 @@ app.post('/api/civitai/extract-workflow', async (req, res) => {
     const hasLora = loras.length > 0;
     const primaryLora = hasLora ? loras[0] : null;
 
-    // Helper to normalize raw model names to our internal library IDs
-    const normalizeCkpt = (raw: string, base: string) => {
-      const lower = (raw || '').toLowerCase() + ' ' + (base || '').toLowerCase();
-      // Return raw or base directly for non-hardcoded models
-      return raw || base || 'unknown_model';
-    };
-
     // ==========================================
     // Multi-Engine Adapter & Resolution (User Choice Supported!)
     // ==========================================
@@ -1639,79 +1634,25 @@ app.post('/api/civitai/extract-workflow', async (req, res) => {
     let chosenEngineName = "Civitai 官方原生生成引擎";
     let engineExplanation = "";
 
-    const l = (rawModelName || "").toLowerCase() + " " + (detectedBaseModel || "").toLowerCase() + " " + (loras || []).map((lor: any) => (lor.name || "") + " " + (lor.baseModel || "")).join(" ").toLowerCase();
-
+    const sourceModelReference = importedCheckpointRef || rawModelName || detectedBaseModel || "";
     if (isVideo && (engine === "video" || engine === "civitai")) {
       targetProvider = "video";
       chosenEngineName = "AI Video 视频生成引擎";
-      checkpoint = rawModelName || "wan2.1-video";
-      engineExplanation = "检测到视频作品。已为您组装专用 AI 视频工作流管线。";
+      checkpoint = "";
+      baseModelArchitecture = detectedBaseModel || "";
+      engineExplanation = `检测到视频来源；已保留来源模型“${sourceModelReference || "未提供"}”，但不会把 Civitai 模型名猜成其他视频供应商 ID。请在视频节点明确选择实际供应商与模型后再运行。`;
     } else if (engine === "civitai") {
       targetProvider = "civitai";
       chosenEngineName = "Civitai 官方原生生成引擎";
-      checkpoint = importedCheckpointRef || normalizeCkpt(rawModelName, detectedBaseModel);
+      checkpoint = sourceModelReference;
       baseModelArchitecture = detectedBaseModel || "";
-      engineExplanation = "🌟 Civitai 官方原生引擎：原生支持 Civitai 社区发布的所有模型与全量 LoRA。";
-    } else if (engine === "tensorart" || engine === "tensor") {
-      targetProvider = "tensorart";
-      chosenEngineName = "Tensor.Art 官方原生生成引擎";
-      checkpoint = rawModelName || "strong_text2image_nano_banana2";
-      baseModelArchitecture = detectedBaseModel || "Nano Banana 2";
-      engineExplanation = "Tensor.Art 模型 API：使用用户选择的真实模型 ID；执行与授权状态以上游响应为准。";
-    } else if (engine === "fal") {
-      targetProvider = "fal";
-      chosenEngineName = "Fal.ai 极速云引擎";
-      checkpoint = rawModelName || detectedBaseModel || "flux-dev";
-      baseModelArchitecture = detectedBaseModel || "FLUX.1";
-      engineExplanation = `⚡ Fal.ai 极速云引擎：请求模型: ${checkpoint}。`;
-    } else if (engine === "nanogpt") {
-      targetProvider = "nanogpt";
-      chosenEngineName = "NanoGPT 极速按需引擎";
-      checkpoint = rawModelName || detectedBaseModel || "flux-dev";
-      baseModelArchitecture = detectedBaseModel || "FLUX.1";
-      engineExplanation = "⚡ NanoGPT 极速引擎：直连 NanoGPT 官方按需推理通道。";
-    } else if (engine === "agnes") {
-      targetProvider = "agnes";
-      chosenEngineName = "Agnes AI 极速生图引擎";
-      checkpoint = rawModelName || detectedBaseModel || "agnes-image-2.5-flash";
-      baseModelArchitecture = detectedBaseModel || "Agnes 2.5 Flash";
-      engineExplanation = "🚀 Agnes AI 极速生图引擎：已为您适配 Agnes AI 秒级极速生成通道。";
-    } else if (engine === "sensenova") {
-      targetProvider = "sensenova";
-      chosenEngineName = "SenseNova 商汤日日新引擎";
-      checkpoint = "sensenova-v5";
-      baseModelArchitecture = "SenseNova V5 CoT";
-      engineExplanation = "🧠 SenseNova 商汤日日新引擎：直连商汤大模型思维链生图。";
-    } else if (engine === "modelscope") {
-      targetProvider = "modelscope";
-      chosenEngineName = "ModelScope 魔搭社区引擎";
-      checkpoint = rawModelName || detectedBaseModel || "wan2.1-t2i";
-      baseModelArchitecture = detectedBaseModel || "ModelScope Wan / SD";
-      engineExplanation = "🌌 ModelScope 魔搭社区引擎：直连通义万相与魔搭社区开源通道。";
-    } else if (engine === "huggingface") {
-      targetProvider = "huggingface";
-      chosenEngineName = "Hugging Face Diffusers 引擎";
-      checkpoint = rawModelName || detectedBaseModel || "stabilityai/stable-diffusion-xl-base-1.0";
-      baseModelArchitecture = detectedBaseModel || "SDXL 1.0";
-      engineExplanation = "🤗 Hugging Face Diffusers 引擎：直连 Hugging Face Hub。";
-    } else if (engine === "gemini") {
-      targetProvider = "gemini";
-      chosenEngineName = "Google Gemini 生图引擎";
-      checkpoint = rawModelName;
-      baseModelArchitecture = "Gemini Image";
-      engineExplanation = "🌟 Google Gemini 官方生图（generateContent）。";
-    } else if (engine === "video") {
-      targetProvider = "video";
-      chosenEngineName = "AI Video 视频生成引擎 (MiniMax / Wan 2.1)";
-      checkpoint = rawModelName || "damo/wan2.1-i2v";
-      isVideo = true;
-      engineExplanation = "🎬 AI Video 视频引擎：已自动为您组装专用 AI 视频工作流管线 (AIVideoNode + VideoDriver)。";
+      engineExplanation = "保留 Civitai 解析出的原始模型/版本引用；是否具备在线生成权限以本次上游响应为准。";
     } else {
-      targetProvider = engine || "civitai";
-      chosenEngineName = `${engine || "Civitai"} 引擎`;
-      checkpoint = importedCheckpointRef || normalizeCkpt(rawModelName, detectedBaseModel);
+      targetProvider = engine || "";
+      chosenEngineName = `${engine || "未选择"} 目标引擎`;
+      checkpoint = "";
       baseModelArchitecture = detectedBaseModel || "";
-      engineExplanation = `已指定跨引擎接入: ${engine}。`;
+      engineExplanation = `已保留 Civitai 来源模型“${sourceModelReference || "未提供"}”和 LoRA 意图，但不会跨供应商猜测模型 ID、端点或 LoRA 资源。请先从 ${engine || "目标供应商"} 的模型中心选择真实执行模型；来源 LoRA 也必须在该供应商重新解析后才能运行。`;
     }
 
     // Build Nodes & Connections
@@ -1775,7 +1716,7 @@ app.post('/api/civitai/extract-workflow', async (req, res) => {
           { id: 'CLIP', name: 'CLIP', type: 'CLIP' },
           { id: 'VAE', name: 'VAE', type: 'VAE' },
         ],
-        values: { ckpt_name: checkpoint, targetProvider },
+        values: { ckpt_name: checkpoint, targetProvider, import_source_provider: 'civitai', import_source_model: sourceModelReference, import_requires_model_selection: targetProvider !== 'civitai' && !checkpoint },
       });
 
       if (hasLora && primaryLora) {
@@ -1799,6 +1740,8 @@ app.post('/api/civitai/extract-workflow', async (req, res) => {
             strength_clip: primaryLora.strength,
             trigger_words: primaryLora.triggers || '',
             civitai_id: primaryLora.civitaiId,
+            import_source_provider: 'civitai',
+            import_unresolved_resource: targetProvider !== 'civitai',
           },
         });
 
@@ -1977,6 +1920,7 @@ app.post('/api/civitai/extract-workflow', async (req, res) => {
               clipStrength: l.strength,
               triggerWords: l.triggers || '',
               civitaiId: l.civitaiId,
+              unresolvedResource: targetProvider !== 'civitai',
             })),
             targetProvider,
             videoDuration: isVideo ? (videoDuration || 10) : undefined,
@@ -1993,16 +1937,20 @@ app.post('/api/civitai/extract-workflow', async (req, res) => {
       preset,
       otherMetadata,
       availableEngines: [
-        { id: "civitai", name: "Civitai 官方原生引擎", badge: "最完美原生适配", recommended: !isVideo, description: "100% 原生支持 Civitai 资源与 Krea 2 Turbo / LoRA" },
-        { id: "tensorart", name: "Tensor.Art 官方原生引擎", badge: "TAMS 模型 API", description: "按真实模型 ID 查询和提交；模型与 LoRA 能力以上游为准" },
-        { id: "nanogpt", name: "NanoGPT 极速", badge: "239+ 现货模型", description: "按需秒级生图，覆盖 FLUX、Qwen Image 2.1、SDXL、Krea 2 Turbo" },
-        { id: "fal", name: "Fal.ai 极速云引擎", badge: "GPU Serverless", description: "FLUX.1 / SDXL 1.0 / Krea 2 官方端点" },
-        { id: "modelscope", name: "ModelScope 魔搭社区", badge: "阿里万相", description: "通义万相 Wan 2.1 / Krea 2 开源生态" },
-        { id: "sensenova", name: "SenseNova 日日新", badge: "CoT 推理", description: "商汤大模型思维链生图" },
-        { id: "huggingface", name: "Hugging Face", badge: "Diffusers", description: "开源 Diffusers 生态权重直挂" },
-        { id: "agnes", name: "Agnes AI 极速生图", badge: "秒级出片", description: "极速生成通道 (agnes-image-2.5-flash)" },
-        { id: "gemini", name: "Google Gemini", badge: "官方直连", description: "Gemini 官方生图 (generateContent)" },
-        ...(isVideo ? [{ id: "video", name: "AI Video 视频生成引擎", badge: "电影级视频", recommended: true, description: "MiniMax H3 / Wan 2.1 视频管线" }] : [])
+        { id: "civitai", name: "Civitai 官方原生引擎", badge: "保留原始引用", recommended: !isVideo, description: "保留解析出的 Civitai 模型/版本引用；生成权限和 LoRA 能力以上游响应为准" },
+        { id: "fal", name: "Fal.ai", badge: "需重选模型", description: "只保留来源元数据；请从 Fal 目录选择真实端点和 LoRA URL" },
+        { id: "tensorart", name: "Tensor.Art", badge: "需重选模型", description: "请从 TAMS 目录选择真实模型 ID；不会把 Civitai 名称转换成 Tensor ID" },
+        { id: "nanogpt", name: "NanoGPT", badge: "需重选模型", description: "请从 NanoGPT 当前目录选择执行模型，参数能力按端点元数据与响应核实" },
+        { id: "modelscope", name: "ModelScope CN", badge: "需重选模型", description: "国内站与来源 Civitai 不是同一资源命名空间" },
+        { id: "modelscope_ai", name: "ModelScope AI", badge: "需重选模型", description: "国际站单独选择真实模型与账户，不与国内站互换" },
+        { id: "huggingface", name: "Hugging Face", badge: "需重选模型", description: "请明确选择 Hub 模型及实际在线推理路由" },
+        { id: "muapi", name: "MuAPI", badge: "需重选端点", description: "请从 MuAPI 目录选择真实 endpoint_url；不映射 Civitai 模型名" },
+        { id: "wavespeed", name: "WaveSpeed", badge: "需重选端点", description: "请从 WaveSpeed 目录选择完整 model_id；不映射 Civitai 模型名" },
+        { id: "sogni", name: "Sogni", badge: "需重选 selector", description: "请从当前官方工具 Schema selector 选择模型；worker ID 不自动转换" },
+        { id: "sensenova", name: "SenseNova", badge: "需重选模型", description: "请按当前商汤接口配置选择模型；不使用导入来源名替代" },
+        { id: "agnes", name: "Agnes AI", badge: "需重选模型", description: "请按当前 Agnes 接口配置选择模型；不自动套默认模型" },
+        { id: "gemini", name: "Google Gemini", badge: "需重选模型", description: "请从 Gemini 模型选项明确选择实际生图模型" },
+        ...(isVideo ? [{ id: "video", name: "AI Video 视频生成引擎", badge: "需重选供应商/模型", recommended: true, description: "保留视频来源元数据，但不把 Civitai 模型名猜成其他视频供应商模型" }] : [])
       ],
       selectedEngine: targetProvider,
       parsedMeta: {
@@ -4517,6 +4465,24 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
     } = req.body;
     if (!model) return res.status(400).json({ error: '模型为必填项（model is required）' });
 
+    const requestedParameters = Object.fromEntries(Object.entries({
+      prompt,
+      negative_prompt,
+      model,
+      width,
+      height,
+      steps,
+      cfg,
+      seed,
+      sampler_name,
+      scheduler,
+      denoise,
+      image_url,
+      loras,
+      comfyModel: req.body.comfyModel,
+      quantity: req.body.quantity,
+    }).filter(([, value]) => value !== undefined && value !== null && value !== ''));
+
     const apiKey =
       (req.headers['x-civitai-key'] as string) ||
       civitaiKey ||
@@ -4818,35 +4784,8 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
           status: orchData.status || 'processing',
           provider: usedProvider,
           model: airModel,
-          pendingHistory: {
-            prompt,
-            negativePrompt: isProvided(negative_prompt) ? negative_prompt : undefined,
-            provider: usedProvider,
-            model: airModel,
-            seed: isProvided(seed) ? Number(seed) : null,
-            steps: isProvided(steps) ? Number(steps) : null,
-            cfg: isProvided(cfg) ? Number(cfg) : null,
-            sampler: isProvided(sampler_name) ? String(sampler_name) : null,
-            scheduler: isProvided(scheduler) ? String(scheduler) : null,
-            width: isProvided(width) ? Number(width) : null,
-            height: isProvided(height) ? Number(height) : null,
-            loras: Object.entries(loraMap).map(([name, strength]) => ({name, strength})),
-          },
-          requestMetadata: {
-            route: req.path,
-            submissions: generationContext.getStore()?.submissions || [],
-            requestedParameters: {
-              ...(isProvided(seed) ? {seed:Number(seed)} : {}),
-              ...(isProvided(steps) ? {steps:Number(steps)} : {}),
-              ...(isProvided(cfg) ? {cfg:Number(cfg)} : {}),
-              ...(isProvided(sampler_name) ? {sampler_name:String(sampler_name)} : {}),
-              ...(isProvided(scheduler) ? {scheduler:String(scheduler)} : {}),
-              ...(isProvided(width) ? {width:Number(width)} : {}),
-              ...(isProvided(height) ? {height:Number(height)} : {}),
-              ...(isProvided(negative_prompt) ? {negative_prompt:String(negative_prompt)} : {}),
-            },
-            actualParameters: genInput,
-          },
+          pendingHistory: {prompt, negativePrompt: negative_prompt, provider: usedProvider, model: airModel, seed: isProvided(seed) ? Number(seed) : null, steps: isProvided(steps) ? Number(steps) : null, cfg: isProvided(cfg) ? Number(cfg) : null, sampler: isProvided(sampler_name) ? String(sampler_name) : null, scheduler: isProvided(scheduler) ? String(scheduler) : null, width: isProvided(width) ? Number(width) : null, height: isProvided(height) ? Number(height) : null, loras: Object.entries(loraMap).map(([name, strength]) => ({name, strength}))},
+          requestMetadata: {route: req.path, requestedParameters, actualParameters: genInput, submissions: generationContext.getStore()?.submissions || []},
         });
       }
     } catch (orchErr: any) {
@@ -4886,20 +4825,7 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
       width: typeof effectiveParameters?.width === 'number' ? effectiveParameters.width : (isProvided(width) ? Number(width) : null),
       height: typeof effectiveParameters?.height === 'number' ? effectiveParameters.height : (isProvided(height) ? Number(height) : null),
       loras: Object.entries((generationContext.getStore()?.submissions.at(-1)?.parameters as any)?.steps?.[0]?.input?.loras || {}).map(([name, strength]) => ({name, strength: Number(strength)})),
-      requestMetadata: {
-        requestedParameters: {
-          ...(isProvided(seed) ? {seed:Number(seed)} : {}),
-          ...(isProvided(steps) ? {steps:Number(steps)} : {}),
-          ...(isProvided(cfg) ? {cfg:Number(cfg)} : {}),
-          ...(isProvided(sampler_name) ? {sampler_name:String(sampler_name)} : {}),
-          ...(isProvided(scheduler) ? {scheduler:String(scheduler)} : {}),
-          ...(isProvided(width) ? {width:Number(width)} : {}),
-          ...(isProvided(height) ? {height:Number(height)} : {}),
-          ...(isProvided(negative_prompt) ? {negative_prompt:String(negative_prompt)} : {}),
-        },
-        actualParameters: (generationContext.getStore()?.submissions.at(-1)?.parameters as any)?.steps?.[0]?.input,
-        effectiveParameters,
-      },
+      requestMetadata: {requestedParameters, actualParameters: (generationContext.getStore()?.submissions.at(-1)?.parameters as any)?.steps?.[0]?.input, effectiveParameters},
     });
 
     return res.json({
@@ -7223,9 +7149,9 @@ app.post('/api/history', async (req, res) => {
     steps,
     cfg,
     sampler,
-    scheduler: historyScheduler,
-    width: historyWidth,
-    height: historyHeight,
+    scheduler,
+    width,
+    height,
     loras,
     workflowSnapshot,
     requestMetadata,
@@ -7282,18 +7208,10 @@ app.post('/api/history', async (req, res) => {
   if (cfg != null && typeof cfg !== 'number') {
     return res.status(400).json({ error: '字段 cfg 必须为数字' });
   }
-  if (sampler != null && typeof sampler !== 'string') {
-    return res.status(400).json({ error: '字段 sampler 必须为字符串' });
-  }
-  if (historyScheduler != null && typeof historyScheduler !== 'string') {
-    return res.status(400).json({ error: '字段 scheduler 必须为字符串' });
-  }
-  if (historyWidth != null && typeof historyWidth !== 'number') {
-    return res.status(400).json({ error: '字段 width 必须为数字' });
-  }
-  if (historyHeight != null && typeof historyHeight !== 'number') {
-    return res.status(400).json({ error: '字段 height 必须为数字' });
-  }
+  if (sampler != null && typeof sampler !== 'string') return res.status(400).json({error:'字段 sampler 必须为字符串'});
+  if (scheduler != null && typeof scheduler !== 'string') return res.status(400).json({error:'字段 scheduler 必须为字符串'});
+  if (width != null && typeof width !== 'number') return res.status(400).json({error:'字段 width 必须为数字'});
+  if (height != null && typeof height !== 'number') return res.status(400).json({error:'字段 height 必须为数字'});
   if (mediaType !== undefined && typeof mediaType !== 'string') {
     return res.status(400).json({ error: '字段 mediaType 必须为字符串' });
   }
@@ -7329,9 +7247,9 @@ app.post('/api/history', async (req, res) => {
     steps: typeof steps === 'number' ? steps : null,
     cfg: typeof cfg === 'number' ? cfg : null,
     sampler: typeof sampler === 'string' && sampler.trim() ? sampler.trim() : null,
-    scheduler: typeof historyScheduler === 'string' && historyScheduler.trim() ? historyScheduler.trim() : null,
-    width: typeof historyWidth === 'number' ? historyWidth : null,
-    height: typeof historyHeight === 'number' ? historyHeight : null,
+    scheduler: typeof scheduler === 'string' && scheduler.trim() ? scheduler.trim() : null,
+    width: typeof width === 'number' ? width : null,
+    height: typeof height === 'number' ? height : null,
     ...(Array.isArray(loras) ? { loras } : {}),
     ...(workflowSnapshot && typeof workflowSnapshot === 'object' ? { workflowSnapshot: sanitizeGenerationMetadata(workflowSnapshot) } : {}),
     ...(requestMetadata ? {requestMetadata: sanitizeGenerationMetadata(requestMetadata)} : {}),
