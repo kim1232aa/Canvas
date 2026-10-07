@@ -1,5 +1,5 @@
-import type express from 'express';
 import { randomUUID } from 'node:crypto';
+import type express from 'express';
 import sogniImageSchema from '@sogni-ai/sogni-protocol/schemas/tools/generate_image.schema.json' with {type:'json'};
 const sogniSchemaSource='@sogni-ai/sogni-protocol@1.0.0-alpha.46/schemas/tools/generate_image.schema.json';
 
@@ -70,6 +70,15 @@ export function normalizeSchemaProviderItems(provider:Provider,rows:any[],opts:{
     badge:wantsLora?'官方 LoRA 资源':'官方模型端点',resourceKind:wantsLora?'adapter':'model-endpoint'}))
     .filter((m:any)=>m.id && (!query || (m.id+' '+m.name+' '+m.description).toLowerCase().includes(query)));
 }
+export function upstreamReferenceUrlIssue(value:string):string|undefined {
+  let parsed:URL;
+  try{parsed=new URL(value);}catch{return '参考图必须是绝对 HTTP(S) URL';}
+  if(!['http:','https:'].includes(parsed.protocol))return '参考图必须是绝对 HTTP(S) URL';
+  const host=parsed.hostname.toLowerCase().replace(/^\[|\]$/g,'');
+  if(host==='localhost' || host.endsWith('.localhost') || host.endsWith('.local') || host==='0.0.0.0' || host==='::1' || host.startsWith('127.'))return '参考图地址指向本机或本地域名，上游无法直接读取';
+  if(/^10\./.test(host) || /^127\./.test(host) || /^169\.254\./.test(host) || /^192\.168\./.test(host) || /^172\.(1[6-9]|2\d|3[01])\./.test(host) || /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(host) || /^(?:fc|fd|fe8|fe9|fea|feb)/i.test(host))return '参考图地址位于私有或链路本地网络，上游无法直接读取';
+}
+
 export function resolveSchemaRefs(value:any,document:any,seen:string[]=[]):any {
   if(!value || typeof value!=='object')return value;
   if(value.$ref?.startsWith('#/') && !seen.includes(value.$ref)) {
@@ -79,59 +88,31 @@ export function resolveSchemaRefs(value:any,document:any,seen:string[]=[]):any {
   if(Array.isArray(value))return value.map(v=>resolveSchemaRefs(v,document,seen));
   return Object.fromEntries(Object.entries(value).map(([k,v])=>[k,resolveSchemaRefs(v,document,seen)]));
 }
-export function upstreamReferenceUrlIssue(raw: string): string | undefined {
-  const value=String(raw || '').trim();
-  if(!value)return undefined;
-  if(/^data:|^blob:/i.test(value))return '参考图是浏览器本地 data/blob 地址，上游无法直接读取';
-  let url:URL;
-  try{url=new URL(value);}catch{return '参考图必须是上游可访问的绝对 HTTP(S) URL';}
-  if(!/^https?:$/.test(url.protocol))return '参考图只支持 HTTP(S) URL';
-  const host=url.hostname.toLowerCase();
-  if(host==='localhost' || host.endsWith('.localhost') || host.endsWith('.local') || host==='0.0.0.0' || host==='::1' || host.startsWith('127.'))return '参考图地址指向本机或本地域名，上游无法直接读取';
-  const ipv4=host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
-  if(ipv4){
-    const [,a,b]=ipv4.map(Number);
-    if(a===10 || (a===172 && b>=16 && b<=31) || (a===192 && b===168) || (a===169 && b===254))return '参考图地址位于私有/链路本地网络，上游无法直接读取';
-  }
-  if(host.startsWith('fc') || host.startsWith('fd') || host.startsWith('fe80:'))return '参考图地址位于私有/链路本地 IPv6 网络，上游无法直接读取';
-  return undefined;
-}
-
 export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencies) {
   const valid=(value:string):value is Provider=>Object.hasOwn(schemaProviders,value);
-  const credentialRefs=new Map<string,{provider:Provider;key:string;createdAt:number}>();
+  const credentialHeader='x-canvas-credential-ref';
+  const credentialTtlMs=15*60*1000;
+  const credentialRefs=new Map<string,{provider:Provider;key:string;expiresAt:number}>();
   const taskCredentialRefs=new Map<string,string>();
-  const requestCredentialCache=new WeakMap<object,Map<Provider,{key:string;credentialRef:string;headers:Record<string,string>}>>();
-  const cleanupCredentialRefs=()=>{
-    const cutoff=Date.now()-60*60*1000;
-    for(const [ref,entry] of credentialRefs)if(entry.createdAt<cutoff)credentialRefs.delete(ref);
-  };
-  const makeCredentialRef=(provider:Provider,key:string)=>{
-    cleanupCredentialRefs();
-    const ref=randomUUID();
-    credentialRefs.set(ref,{provider,key,createdAt:Date.now()});
-    return ref;
-  };
-  const credentials=(req:express.Request,provider:Provider)=>{
-    let cache=requestCredentialCache.get(req as object);if(!cache){cache=new Map();requestCredentialCache.set(req as object,cache);}
-    const cached=cache.get(provider);if(cached)return cached;
-    const suppliedRef=String(req.headers['x-canvas-credential-ref'] || '').trim();
-    let key='';
-    let credentialRef=suppliedRef;
-    if(suppliedRef){
-      const bound=credentialRefs.get(suppliedRef);
-      if(!bound || bound.provider!==provider)throw Object.assign(new Error('任务凭据引用已失效或不属于当前供应商；未自动切换 Key'),{status:409,errorSource:'local'});
-      key=bound.key;
-    }else{
-      key=dep.key(provider,req.headers[schemaProviders[provider].header] as string);
-      credentialRef=makeCredentialRef(provider,key);
+  const purgeCredentials=()=>{const now=Date.now();for(const [ref,binding] of credentialRefs)if(binding.expiresAt<=now)credentialRefs.delete(ref);};
+  const credentials=(req:express.Request,provider:Provider,options:{create?:boolean;fallbackRef?:string}={})=>{
+    purgeCredentials();
+    const requestedRef=String(req.headers[credentialHeader] || options.fallbackRef || '').trim();
+    if(requestedRef) {
+      const binding=credentialRefs.get(requestedRef);
+      if(!binding || binding.provider!==provider)throw Object.assign(new Error('凭据引用已失效或不属于当前供应商；请重新读取模型 Schema 后重试，未自动切换 Key'),{status:409,errorSource:'local'});
+      binding.expiresAt=Date.now()+credentialTtlMs;
+      const key=binding.key;
+      return {key,credentialRef:requestedRef,headers:key?{[schemaProviders[provider].auth]:provider==='muapi'?key:`Bearer ${key}`}:{}};
     }
-    const resolved={key,credentialRef,headers:key?{[schemaProviders[provider].auth]:provider==='muapi'?key:`Bearer ${key}`}:{}};
-    cache.set(provider,resolved);
-    return resolved;
+    const key=dep.key(provider,req.headers[schemaProviders[provider].header] as string);
+    const credentialRef=options.create?randomUUID():undefined;
+    if(credentialRef)credentialRefs.set(credentialRef,{provider,key,expiresAt:Date.now()+credentialTtlMs});
+    return {key,credentialRef,headers:key?{[schemaProviders[provider].auth]:provider==='muapi'?key:`Bearer ${key}`}:{}};
   };
-  const read=async(req:express.Request,provider:Provider,url:string,init?:RequestInit)=>{
-    const {key,headers}=credentials(req,provider);
+  type Credential=ReturnType<typeof credentials>;
+  const read=async(req:express.Request,provider:Provider,url:string,init?:RequestInit,credential?:Credential)=>{
+    const {key,headers}=credential || credentials(req,provider);
     const r=await dep.fetch({provider,route:req.path,model:req.body?.model || req.query.model,key},url,{...init,headers:{...headers,...init?.headers},signal:AbortSignal.timeout(60000)});
     const raw=await r.text();let data:any;try{data=JSON.parse(raw);}catch{}
     if(!r.ok || !data || data.status==='error' || (typeof data.code==='number' && data.code!==200)) {
@@ -140,17 +121,17 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
     return {data,status:r.status,raw};
   };
   const fail=(res:express.Response,e:any)=>res.status(e.status || 500).json({ok:false,error:e.message,rawResponse:e.rawResponse,endpoint:e.endpoint,errorSource:e.errorSource || 'network',stack:e.stack,cause:e.cause?{name:e.cause.name,message:e.cause.message,code:e.cause.code,stack:e.cause.stack}:undefined,actualRequest:e.actualRequest});
-  const list=async(req:express.Request,provider:Provider)=>{
+  const list=async(req:express.Request,provider:Provider,credential?:Credential)=>{
     const sourceUrl=schemaProviders[provider].root+schemaProviders[provider].catalog;
-    const {data}=await read(req,provider,sourceUrl);
+    const {data}=await read(req,provider,sourceUrl,undefined,credential);
     const rows=provider==='muapi'?data.models:provider==='wavespeed'?data.data:data.data?.models;
     if(!Array.isArray(rows))throw Object.assign(new Error('上游目录响应未包含模型数组'),{status:502,rawResponse:data,endpoint:sourceUrl,errorSource:'upstream-protocol'});
     return {rows,sourceUrl};
   };
-  const modelSchema=async(req:express.Request,provider:Provider,model:string)=>{
+  const modelSchema=async(req:express.Request,provider:Provider,model:string,credential?:Credential)=>{
     if(provider==='muapi') {
       const sourceUrl=schemaProviders.muapi.root+'/openapi.json';
-      const [{data:document},{rows,catalogUrl}]=await Promise.all([read(req,provider,sourceUrl),list(req,provider).then(x=>({...x,catalogUrl:x.sourceUrl}))]);
+      const [{data:document},{rows,catalogUrl}]=await Promise.all([read(req,provider,sourceUrl,undefined,credential),list(req,provider,credential).then(x=>({...x,catalogUrl:x.sourceUrl}))]);
       const entry=rows.find((x:any)=>[x.name,x.endpoint_url,x.endpoint].includes(model));
       // endpoint_url is the execution identifier. The catalog's display name and
       // endpoint can differ from the OpenAPI operation (e.g. flux_dev_lora_image).
@@ -160,23 +141,19 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
       return {provider,model,sourceUrl,catalogUrl,endpoint:schemaProviders.muapi.root+endpoint,inputSchema:input?resolveSchemaRefs(input,document):null,modelMetadata:entry};
     }
     if(provider==='sogni')return {provider,model,sourceUrl:sogniSchemaSource,endpoint:schemaProviders.sogni.root+'/v1/creative-agent/workflows',inputSchema:sogniImageSchema,schemaVersion:sogniImageSchema.schemaVersion,note:'模型 selector 来自固定版本的官方工具 Schema；实时 worker 目录属于另一种 ID，不会自动转换。'};
-    const {rows,sourceUrl}=await list(req,provider);
+    const {rows,sourceUrl}=await list(req,provider,credential);
     const entry=rows.find((x:any)=>(provider==='wavespeed'?x.model_id:x.id)===model);
     if(provider==='wavespeed') {
       const definition=entry?.api_schema?.api_schemas?.find((s:any)=>s.type==='model_run' && s.method==='POST');
       const endpoint=definition ? new URL(definition.api_path,definition.server).href : schemaProviders.wavespeed.root+'/api/v3/'+model;
       if(new URL(endpoint).origin!==schemaProviders.wavespeed.root)throw Object.assign(new Error('目录端点的主机不属于所选供应商，未发送密钥'),{status:400,errorSource:'local',endpoint});
-      return {provider,model,sourceUrl,endpoint,inputSchema:definition?.request_schema || null,modelMetadata:entry};
+      return {provider,model,sourceUrl,endpoint,inputSchema:definition?.request_schema || null,modelMetadata:entry,schemaStatus:definition?'catalog-model_run':'unknown',note:definition?undefined:'官方通用执行端点为 /api/v3/{model_id}；当前目录项未提供 model_run request_schema，因此只核实执行目标，参数能力保持未核实并由上游响应裁决。'};
     }
     throw new Error('Missing provider schema');
   };
   app.get('/api/model-schema',async(req,res,next)=>{
     const provider=String(req.query.provider || '');if(!valid(provider))return next();
-    try{
-      const definition=await modelSchema(req,provider,String(req.query.model || ''));
-      const {credentialRef}=credentials(req,provider);
-      res.json({...definition,credentialRef});
-    }catch(e){fail(res,e);}
+    try{const credential=credentials(req,provider,{create:true});res.json({...await modelSchema(req,provider,String(req.query.model || ''),credential),credentialRef:credential.credentialRef});}catch(e){fail(res,e);}
   });
   app.get('/api/models',async(req,res,next)=>{
     const provider=String(req.query.provider || '');if(!valid(provider))return next();
@@ -195,7 +172,8 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
     let actualRequest:any;
     try {
       const model=String(req.body.model || '').trim();if(!model)return res.status(400).json({error:'请选择模型',errorSource:'local'});
-      const definition=await modelSchema(req,provider,model);
+      const credential=credentials(req,provider,{create:true});
+      const definition=await modelSchema(req,provider,model,credential);
       const custom={...req.body.custom_parameters};const canvas=custom._canvas || {};const only=canvas.parametersOnly===true;const schemaFieldsOnly=canvas.schemaFieldsOnly!==false;delete custom._canvas;
       const payload:any={prompt:req.body.prompt};const mapping:any[]=[];
       const workflowOptions=provider==='sogni'?{...canvas.workflowOptions}:{};
@@ -206,7 +184,7 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
         const value=req.body[name];if(value===undefined || value===null || value==='')continue;
         if(provider==='sogni' && name==='image_url') {
           const issue=upstreamReferenceUrlIssue(String(value));
-          if(issue)throw Object.assign(new Error(issue),{status:400,errorSource:'local'});
+          if(issue)throw Object.assign(new Error(`Sogni 当前集成没有已核实的私有图片上传流程：${issue}。请提供上游可访问的公网图片 URL；未发送该参考图。`),{status:400,errorSource:'local'});
           if(!Object.hasOwn(workflowOptions,'media_references'))workflowOptions.media_references=[{kind:'image',url:value}];payload.sourceImageIndex=-1;
           mapping.push({from:name,to:'media_references + sourceImageIndex',value,scope:'workflow'});continue;
         }
@@ -237,29 +215,27 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
       if(only)mapping.push({from:'canvas parameters and LoRA nodes',to:null,reason:'用户选择了仅提交 JSON 与提示词'});
       const requestBody=provider==='sogni'?{...workflowOptions,input:{title:'Canvas · '+model,steps:[{id:'image1',toolName:'generate_image',arguments:payload}]}}:payload;
       actualRequest={endpoint:definition.endpoint,parameters:requestBody,mapping:mapping.map(m=>({...m,finalValue:Object.hasOwn(payload,m.to)?payload[m.to]:m.scope==='workflow'?workflowOptions.media_references:undefined})),parametersOnly:only,schemaFieldsOnly};
-      const {data,status}=await read(req,provider,definition.endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(requestBody)});
+      const {data,status}=await read(req,provider,definition.endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(requestBody)},credential);
       const taskId=provider==='muapi'?data.request_id:provider==='wavespeed'?data.data?.id:data.data?.workflow?.workflowId;
       if(!taskId)throw Object.assign(new Error('上游提交响应没有任务 ID'),{status,rawResponse:data,endpoint:definition.endpoint,errorSource:'upstream-protocol'});
-      const {credentialRef}=credentials(req,provider);
-      if(credentialRef)taskCredentialRefs.set(`${provider}:${taskId}`,credentialRef);
-      res.status(status).json({taskId,pollUrl:`/api/schema-provider/${provider}/tasks/${encodeURIComponent(taskId)}`,credentialRef,actualRequest,inputSchema:definition.inputSchema,rawResponse:data});
+      taskCredentialRefs.set(`${provider}:${taskId}`,credential.credentialRef!);
+      res.status(status).json({taskId,pollUrl:`/api/schema-provider/${provider}/tasks/${encodeURIComponent(taskId)}`,credentialRef:credential.credentialRef,actualRequest,inputSchema:definition.inputSchema,rawResponse:data});
     }catch(e:any){e.actualRequest=actualRequest;fail(res,e);}
   });
   app.get('/api/schema-provider/:provider/tasks/:taskId',async(req,res)=>{
     const provider=req.params.provider;if(!valid(provider))return res.status(400).json({error:'未知供应商',errorSource:'local'});
     try {
       const taskKey=`${provider}:${req.params.taskId}`;
-      const expectedRef=taskCredentialRefs.get(taskKey);
-      const suppliedRef=String(req.headers['x-canvas-credential-ref'] || '').trim();
-      if(!expectedRef || !suppliedRef || suppliedRef!==expectedRef)throw Object.assign(new Error('任务原始凭据引用缺失或失效；为避免跨账户轮询，未自动切换 Key'),{status:409,errorSource:'local'});
-      credentials(req,provider);
+      const requestedRef=String(req.headers[credentialHeader] || taskCredentialRefs.get(taskKey) || '').trim();
+      if(!requestedRef)throw Object.assign(new Error('任务缺少原始凭据引用；为避免切换账户，不会使用新的 Key 继续轮询'),{status:409,errorSource:'local'});
+      const credential=credentials(req,provider,{fallbackRef:requestedRef});
       const suffix=provider==='muapi'?'/api/v1/predictions/':provider==='wavespeed'?'/api/v3/predictions/':'/v1/creative-agent/workflows/';
       const endpoint=schemaProviders[provider].root+suffix+encodeURIComponent(req.params.taskId)+(provider==='sogni'?'':'/result');
-      const {data,status:upstreamStatus}=await read(req,provider,endpoint);
+      const {data,status:upstreamStatus}=await read(req,provider,endpoint,undefined,credential);
       const task=provider==='muapi'?data:provider==='wavespeed'?data.data:data.data?.workflow;
       const status=task?.status;const outputs=provider==='sogni'?task?.steps?.flatMap((s:any)=>s.artifacts || []).map((a:any)=>a.url).filter(Boolean):task?.outputs || [];
       if(!status)throw Object.assign(new Error('上游任务响应没有状态字段'),{status:upstreamStatus,rawResponse:data,endpoint,errorSource:'upstream-protocol'});
-      res.json({status,outputs,waitingReason:task?.waitingReason,error:task?.error,rawResponse:data,upstreamStatus,endpoint});
+      res.json({status,outputs,waitingReason:task?.waitingReason,error:task?.error,rawResponse:data,upstreamStatus,endpoint,credentialRef:credential.credentialRef});
     }catch(e){fail(res,e);}
   });
   // Persistence is a separate explicit stage; a storage failure never changes the
