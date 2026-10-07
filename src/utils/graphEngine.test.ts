@@ -55,14 +55,34 @@ describe('graphEngine - B2 & L2a & L2b 拓扑反向追踪与参数抽取隔离�
 
   it('keeps HF Z-Image resolution and shift from the upstream checkpoint', () => {
     const nodes = [
-      createNode('checkpoint', 'CheckpointLoaderSimple', {targetProvider: 'huggingface', ckpt_name: 'Tongyi-MAI/Z-Image-Turbo', resolution: '1152x896 ( 9:7 )', shift: 3.2}),
+      createNode('checkpoint', 'CheckpointLoaderSimple', {targetProvider: 'huggingface', ckpt_name: 'Tongyi-MAI/Z-Image-Turbo', hf_provider: 'z-image-space', resolution: '1152x896 ( 9:7 )', shift: 3.2}),
       createNode('sampler', 'KSampler', {seed: 42, control_after_generate: 'fixed', steps: 8}),
       createNode('prompt', 'CLIPTextEncode', {text: 'test prompt'}),
     ];
     const connections: Connection[] = [{id: 'model', fromNodeId: 'checkpoint', fromSocketId: 'MODEL', toNodeId: 'sampler', toSocketId: 'model', type: 'MODEL'}];
     connections.push({id: 'prompt', fromNodeId: 'prompt', fromSocketId: 'CONDITIONING', toNodeId: 'sampler', toSocketId: 'positive', type: 'CONDITIONING'});
     const extracted = extractWorkflowParameters(nodes, connections, 'sampler');
-    expect(extracted).toMatchObject({targetProvider: 'huggingface', checkpointModel: 'Tongyi-MAI/Z-Image-Turbo', resolution: '1152x896 ( 9:7 )', shift: 3.2, seed: 42, steps: 8});
+    expect(extracted).toMatchObject({targetProvider: 'huggingface', checkpointModel: 'Tongyi-MAI/Z-Image-Turbo', hfProvider: 'z-image-space', resolution: '1152x896 ( 9:7 )', shift: 3.2, seed: 42, steps: 8});
+  });
+
+  it('does not send Z-Image-only fields when HF explicitly routes through fal-ai', async () => {
+    const nodes = [
+      createNode('checkpoint', 'CheckpointLoaderSimple', {targetProvider: 'huggingface', ckpt_name: 'black-forest-labs/FLUX.1-dev', hf_provider: 'fal-ai', resolution: '1k', shift: 3, random_seed: false, gallery_images: []}),
+      createNode('sampler', 'KSampler', {seed: 314159, control_after_generate: 'fixed', steps: 24, cfg: 3.2}),
+      createNode('prompt', 'CLIPTextEncode', {text: 'alpine observatory'}),
+    ];
+    const connections: Connection[] = [
+      {id: 'model', fromNodeId: 'checkpoint', fromSocketId: 'MODEL', toNodeId: 'sampler', toSocketId: 'model', type: 'MODEL'},
+      {id: 'prompt', fromNodeId: 'prompt', fromSocketId: 'CONDITIONING', toNodeId: 'sampler', toSocketId: 'positive', type: 'CONDITIONING'},
+    ];
+    const generateSpy = vi.spyOn(EngineRegistry, 'generate').mockResolvedValue({mediaUrl:'data:image/png;base64,abc',mediaType:'image',provider:'Hugging Face',providerId:'huggingface',model:'black-forest-labs/FLUX.1-dev',seed:314159});
+    await executeWorkflow(nodes, connections, () => {}, undefined, 'sampler');
+    const sent = generateSpy.mock.calls[0][1];
+    expect(sent.extraParams).toMatchObject({hf_provider:'fal-ai'});
+    expect(sent.extraParams).not.toHaveProperty('resolution');
+    expect(sent.extraParams).not.toHaveProperty('shift');
+    expect(sent.extraParams).not.toHaveProperty('random_seed');
+    expect(sent.extraParams).not.toHaveProperty('gallery_images');
   });
   it('requires an explicit provider even when the model name contains fal-ai', () => {
     const nodes = [createNode('ckpt', 'CheckpointLoaderSimple', {ckpt_name:'fal-ai/flux/dev'}), createNode('sampler', 'KSampler', {}), createNode('prompt', 'CLIPTextEncode', {text:'a tree'})];
