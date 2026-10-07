@@ -155,7 +155,7 @@ export class CivitaiDriver extends BaseEngineDriver {
     }
     if (data.pending) {
       try {
-        const effective = effectiveParameters && typeof effectiveParameters === 'object' ? effectiveParameters : undefined;
+        const effective = typeof effectiveParameters === 'object' && effectiveParameters ? effectiveParameters : undefined;
         const historyFields = effective ? {
           seed: typeof effective.seed === 'number' ? effective.seed : data.pendingHistory?.seed ?? null,
           steps: typeof effective.steps === 'number' ? effective.steps : data.pendingHistory?.steps ?? null,
@@ -165,17 +165,7 @@ export class CivitaiDriver extends BaseEngineDriver {
           width: typeof effective.width === 'number' ? effective.width : data.pendingHistory?.width ?? null,
           height: typeof effective.height === 'number' ? effective.height : data.pendingHistory?.height ?? null,
         } : {};
-        const saved = await fetch('/api/history', {
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({
-            ...data.pendingHistory,
-            ...historyFields,
-            url:mediaUrl,
-            workflowSnapshot:params.workflowSnapshot,
-            requestMetadata:{...data.requestMetadata, effectiveParameters: effective},
-          }),
-        });
+        const saved = await fetch('/api/history', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({...data.pendingHistory, ...historyFields, url:mediaUrl, workflowSnapshot:params.workflowSnapshot, requestMetadata:{...data.requestMetadata, effectiveParameters: effective}})});
         if (!saved.ok) throw new Error(`HTTP ${saved.status}: ${await saved.text()}`);
         data.historyItem = await saved.json();
       } catch (error: any) {data.historyWarning = `图像已生成，但历史记录保存失败：${error.message}`;}
