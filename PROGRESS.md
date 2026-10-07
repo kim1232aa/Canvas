@@ -32,7 +32,7 @@
 - Generation History 参数来源重做：旧 Civitai 图现在能从上游响应和 JPEG 嵌入元数据恢复 Seed/Steps/CFG/Sampler/Scheduler/尺寸，并标注 `上游实际 / 图像元数据 / 实际发送 / 未发送 / 旧记录未保存`。两张旧图真实 Seed 为 `1021568893` 与 `951383495`，因此不能作为 LoRA A/B 效果对比证据。另修复失败重跑保留旧图片的问题：新请求开始即清空本分支旧 media output，workflowSnapshot 也剔除旧 `outputData/errorMessage/progress`；MuAPI 402 真实前端复测中 KSampler/SaveImage 全程无旧图，执行记录不再含旧 Civitai base64。
 - 历史导出 provenance 升级为 version 2；未来 Civitai 历史保存 requestedParameters / actualParameters 及 sampler/scheduler/width/height。
 - 供应商矩阵/指南/历史 preset 清掉 100% 复现、自动切换、未验证 LoRA/速度等宣传；资产库 Provider 筛选改为真实资产动态生成，不再维护静态供应商白名单。
-- 最终回归：`npm run lint` PASS；`npm run build` PASS（含 frontend + hosting worker 构建）；`npm test` **40 个测试文件 / 290 个测试全部 PASS**。测试绿仍只作为回归保护，真实前端验收证据见上述 closeout 文档。
+- 最终回归：`npm run lint` PASS；`npm run build` PASS（含 frontend + hosting worker 构建）；`npm test` **40 个测试文件 / 295 个测试全部 PASS**。测试绿仍只作为回归保护，真实前端验收证据见上述 closeout 文档。
 
 **仍需前端新样本验收：** SenseNova 的实际产品边界、OpenAI/Grok 兼容中转（仅用户显式 Base URL）、Video 聚合入口。Hugging Face HF→fal-ai 已取得 `PASS_BILLING`；Gemini / Agnes 当前为 `BLOCKED_CONFIG`，配置对应 Key / Base URL 后再复验。已经有明确终态的供应商不为凑数量重复调用。
 
