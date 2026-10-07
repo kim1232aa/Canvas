@@ -6,6 +6,7 @@ import { registerSchemaProviderRoutes, resolveSchemaRefs } from './schemaProvide
 async function withFixture(
   upstream: (url: string, init?: RequestInit) => Promise<Response>,
   run: (baseUrl: string, calls: Array<{ url: string; init?: RequestInit }>) => Promise<void>,
+  durable: (url: string) => Promise<any> = async (url) => ({ ok: true, dataUrl: url }),
 ) {
   const calls: Array<{ url: string; init?: RequestInit }> = [];
   const app = express();
@@ -17,7 +18,7 @@ async function withFixture(
     },
     key: () => '',
     record: (item) => item,
-    durable: async (url) => ({ ok: true, dataUrl: url }),
+    durable,
   });
   const server = app.listen(0, '127.0.0.1');
   await once(server, 'listening');
@@ -100,6 +101,38 @@ describe('schema provider server contract', () => {
       expect(body).not.toHaveProperty('taskId');
       expect(calls.filter((call) => call.init?.method === 'POST')).toHaveLength(1);
     });
+  });
+
+  it('keeps upstream generation success while reporting partial multi-image persistence failures', async () => {
+    const saved: string[] = [];
+    await withFixture(
+      async () => { throw new Error('upstream must not be called during save-result'); },
+      async (baseUrl, calls) => {
+        const response = await fetch(`${baseUrl}/api/schema-provider/wavespeed/save-result`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            outputs: ['https://fixture.invalid/one.png', 'https://fixture.invalid/two.png'],
+            metadata: { model: 'fixture-model', prompt: 'fixture' },
+          }),
+        });
+        expect(response.status).toBe(200);
+        const body = await response.json() as any;
+        expect(body.historyItems).toHaveLength(1);
+        expect(body.historyItems[0]).toMatchObject({ url: 'data:image/png;base64,one', provider: 'WaveSpeed' });
+        expect(body.historyWarning).toContain('部分图片保存失败');
+        expect(body.transientOutputs).toHaveLength(1);
+        expect(body.transientOutputs[0]).toMatchObject({ url: 'https://fixture.invalid/two.png', error: 'fixture storage denied' });
+        expect(saved).toEqual(['https://fixture.invalid/one.png', 'https://fixture.invalid/two.png']);
+        expect(calls).toHaveLength(0);
+      },
+      async (url) => {
+        saved.push(url);
+        return url.endsWith('/one.png')
+          ? { ok: true, dataUrl: 'data:image/png;base64,one' }
+          : { ok: false, status: 403, message: 'fixture storage denied', errorSource: 'upstream' };
+      },
+    );
   });
 
   it('maps Sogni LoRAs in original order and parametersOnly submits only custom JSON, prompt, and model', async () => {
