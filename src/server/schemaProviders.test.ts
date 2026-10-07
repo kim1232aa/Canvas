@@ -1,6 +1,6 @@
 import express from 'express';
 import { describe, expect, it } from 'vitest';
-import { registerSchemaProviderRoutes, resolveSchemaRefs } from './schemaProviders';
+import { registerSchemaProviderRoutes, resolveSchemaRefs, upstreamReferenceUrlIssue } from './schemaProviders';
 
 async function withFixture(
   upstream: (url: string, init?: RequestInit) => Promise<Response>,
@@ -22,7 +22,7 @@ async function withFixture(
 
   const baseUrl = 'http://schema-provider.fixture';
   const originalFetch = globalThis.fetch;
-  const router = (app as any).router || (app as any)._router;
+  const router = (app as any)._router;
   const layers: any[] = router?.stack || [];
   const matchRoute = (pattern: string, pathname: string) => {
     const expected = pattern.split('/').filter(Boolean);
@@ -36,7 +36,7 @@ async function withFixture(
     return params;
   };
 
-  globalThis.fetch = async (input: string | URL | Request, init: RequestInit = {}) => {
+  const fixtureFetch: typeof fetch = async (input: string | URL | Request, init: RequestInit = {}) => {
     const raw = typeof input === 'string' || input instanceof URL ? String(input) : input.url;
     const url = new URL(raw, baseUrl);
     if (url.origin !== baseUrl) return originalFetch(input as any, init);
@@ -64,12 +64,11 @@ async function withFixture(
         return this;
       },
     };
-    const next = () => {
-      if (!response) response = new Response(JSON.stringify({ error: 'Fixture route passed to next()' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
-    };
+    const next = () => { if (!response) response = new Response(JSON.stringify({ error: 'Fixture route passed to next()' }), { status: 404, headers: { 'Content-Type': 'application/json' } }); };
     for (const routeLayer of layer.route.stack) await routeLayer.handle(req, res, next);
     return response || new Response(null, { status: res.statusCode || 204 });
-  } as typeof fetch;
+  };
+  globalThis.fetch = fixtureFetch;
 
   try {
     await run(baseUrl, calls);
@@ -83,61 +82,6 @@ function json(body: unknown, status = 200): Response {
 }
 
 describe('schema provider server contract', () => {
-  it('binds schema, submit, and poll to one credential reference and rejects an expired reference locally', async () => {
-    let keyCalls = 0;
-    const seenAuth: string[] = [];
-    await withFixture(async (url, init) => {
-      const headers = new Headers(init?.headers);
-      const auth = headers.get('x-api-key') || headers.get('authorization') || '';
-      if (auth) seenAuth.push(auth);
-      if (url.endsWith('/api/v1/models')) return json({models:[{name:'fixture',endpoint_url:'fixture_image',group_of:'image'}]});
-      if (url.endsWith('/openapi.json')) return json({paths:{'/api/v1/fixture_image':{post:{requestBody:{content:{'application/json':{schema:{type:'object',properties:{prompt:{type:'string'}}}}}}}}}});
-      if (init?.method==='POST' && url.endsWith('/api/v1/fixture_image')) return json({request_id:'task-1'});
-      if (url.endsWith('/api/v1/predictions/task-1/result')) return json({status:'completed',outputs:['https://fixture.invalid/out.png']});
-      throw new Error(`Unexpected fixture route: ${url}`);
-    }, async (baseUrl, calls) => {
-      const schemaResponse=await fetch(`${baseUrl}/api/model-schema?provider=muapi&model=fixture_image`);
-      expect(schemaResponse.status).toBe(200);
-      const schema=await schemaResponse.json() as any;
-      expect(schema.credentialRef).toMatch(/[0-9a-f-]{20,}/i);
-
-      const headers={'Content-Type':'application/json','x-canvas-credential-ref':schema.credentialRef};
-      const submitResponse=await fetch(`${baseUrl}/api/schema-provider/muapi/submit`,{method:'POST',headers,body:JSON.stringify({model:'fixture_image',prompt:'credential fixture'})});
-      expect(submitResponse.status).toBe(200);
-      const submit=await submitResponse.json() as any;
-      expect(submit.credentialRef).toBe(schema.credentialRef);
-
-      const pollResponse=await fetch(`${baseUrl}${submit.pollUrl}`,{headers:{'x-canvas-credential-ref':schema.credentialRef}});
-      expect(pollResponse.status).toBe(200);
-      const poll=await pollResponse.json() as any;
-      expect(poll.status).toBe('completed');
-
-      const before=calls.length;
-      const expired=await fetch(`${baseUrl}/api/schema-provider/muapi/submit`,{method:'POST',headers:{'Content-Type':'application/json','x-canvas-credential-ref':'expired-ref'},body:JSON.stringify({model:'fixture_image',prompt:'must stop locally'})});
-      expect(expired.status).toBe(409);
-      expect((await expired.json() as any).error).toMatch(/未自动切换 Key|凭据引用/);
-      expect(calls).toHaveLength(before);
-      expect(keyCalls).toBe(1);
-      expect(new Set(seenAuth)).toEqual(new Set(['fixture-key-1']));
-    }, () => `fixture-key-${++keyCalls}`);
-  });
-
-  it('rejects private Sogni reference URLs before any upstream submission', async () => {
-    await withFixture(async (url) => {
-      throw new Error(`Upstream must not be called for private reference: ${url}`);
-    }, async (baseUrl, calls) => {
-      const response=await fetch(`${baseUrl}/api/schema-provider/sogni/submit`,{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({model:'krea-2-turbo',prompt:'private reference',image_url:'http://127.0.0.1:3000/private.png'}),
-      });
-      expect(response.status).toBe(400);
-      const body=await response.json() as any;
-      expect(body.error).toMatch(/本机|本地域名|上游无法直接读取/);
-      expect(calls).toHaveLength(0);
-    });
-  });
-
   it('uses the MuAPI execution identifier rather than the display alias, with weighted model objects', async () => {
     await withFixture(async (url, init) => {
       if (url.endsWith('/api/v1/models')) return json({models:[{name:'flux-dev-lora',endpoint:'/api/v1/flux-dev-lora',endpoint_url:'flux_dev_lora_image',group_of:'image',category:'Training'}]});
@@ -166,6 +110,53 @@ describe('schema provider server contract', () => {
       expect(body.actualRequest.parameters).toEqual({token_type:'spark',media_references:[{kind:'image',url:'https://fixture.invalid/reference.png'}],input:{title:'Canvas · krea-2-turbo',steps:[{id:'image1',toolName:'generate_image',arguments:{prompt:'reference portrait',model:'krea-2-turbo',sourceImageIndex:-1,starting_image_strength:0.6,seed:0}}]}});
       expect(body.actualRequest.mapping.find((x:any)=>x.from==='steps').sent).toBe(false);
     });
+  });
+
+  it('binds schema, submit, and poll to one credential reference instead of rotating accounts', async () => {
+    let keyCalls = 0;
+    const selectedKeys = ['account-a', 'account-b', 'account-c'];
+    await withFixture(async (url, init) => {
+      if (url.endsWith('/api/v1/models')) return json({models:[{name:'flux-dev-lora',endpoint:'/api/v1/flux-dev-lora',endpoint_url:'flux_dev_lora_image',group_of:'image',category:'Training'}]});
+      if (url.endsWith('/openapi.json')) return json({paths:{'/api/v1/flux_dev_lora_image':{post:{requestBody:{content:{'application/json':{schema:{type:'object',properties:{prompt:{type:'string'}}}}}}}}}});
+      if (init?.method==='POST' && url.endsWith('/api/v1/flux_dev_lora_image')) return json({request_id:'bound-task'});
+      if (url.endsWith('/api/v1/predictions/bound-task/result')) return json({status:'completed',outputs:['https://fixture.invalid/output.png']});
+      throw new Error(`Unexpected fixture route: ${url}`);
+    }, async (baseUrl,calls) => {
+      const schemaResponse=await fetch(`${baseUrl}/api/model-schema?provider=muapi&model=flux_dev_lora_image`);
+      const schema=await schemaResponse.json() as any;
+      expect(schema.credentialRef).toMatch(/^[0-9a-f-]{36}$/i);
+
+      const submitResponse=await fetch(`${baseUrl}/api/schema-provider/muapi/submit`,{method:'POST',headers:{'Content-Type':'application/json','x-canvas-credential-ref':schema.credentialRef},body:JSON.stringify({model:'flux_dev_lora_image',prompt:'bound account'})});
+      const submitted=await submitResponse.json() as any;
+      expect(submitted.credentialRef).toBe(schema.credentialRef);
+
+      const pollResponse=await fetch(`${baseUrl}${submitted.pollUrl}`,{headers:{'x-canvas-credential-ref':schema.credentialRef}});
+      const polled=await pollResponse.json() as any;
+      expect(polled).toMatchObject({status:'completed',credentialRef:schema.credentialRef});
+      expect(keyCalls).toBe(1);
+      expect(calls.length).toBeGreaterThanOrEqual(6);
+      for (const call of calls) expect((call.init?.headers as Record<string,string> | undefined)?.['x-api-key']).toBe('account-a');
+    }, (_provider,override) => override || selectedKeys[keyCalls++ % selectedKeys.length]);
+  });
+
+  it('refuses an unknown credential reference instead of silently choosing another key', async () => {
+    let keyCalls=0;
+    await withFixture(async () => { throw new Error('upstream must not be called'); }, async (baseUrl) => {
+      const response=await fetch(`${baseUrl}/api/schema-provider/muapi/submit`,{method:'POST',headers:{'Content-Type':'application/json','x-canvas-credential-ref':'expired-ref'},body:JSON.stringify({model:'flux_dev_lora_image',prompt:'must not rotate'})});
+      const body=await response.json() as any;
+      expect(response.status).toBe(409);
+      expect(body.errorSource).toBe('local');
+      expect(body.error).toContain('未自动切换 Key');
+      expect(keyCalls).toBe(0);
+    },()=>{keyCalls++;return 'fallback-key';});
+  });
+
+  it('rejects private Sogni reference URLs without pretending they were uploaded', () => {
+    expect(upstreamReferenceUrlIssue('data:image/png;base64,abc')).toContain('HTTP');
+    expect(upstreamReferenceUrlIssue('/private/history.png')).toContain('HTTP');
+    expect(upstreamReferenceUrlIssue('http://127.0.0.1:3000/private.png')).toContain('本机');
+    expect(upstreamReferenceUrlIssue('http://192.168.1.20/ref.png')).toContain('私有');
+    expect(upstreamReferenceUrlIssue('https://cdn.example.com/ref.png')).toBeUndefined();
   });
 
   it('resolves nested and escaped JSON Schema $refs while retaining sibling properties', () => {
@@ -206,35 +197,26 @@ describe('schema provider server contract', () => {
 
   it('keeps upstream generation success while reporting partial multi-image persistence failures', async () => {
     const saved: string[] = [];
-    await withFixture(
-      async () => { throw new Error('upstream must not be called during save-result'); },
-      async (baseUrl, calls) => {
-        const response = await fetch(`${baseUrl}/api/schema-provider/wavespeed/save-result`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            outputs: ['https://fixture.invalid/one.png', 'https://fixture.invalid/two.png'],
-            metadata: { model: 'fixture-model', prompt: 'fixture' },
-          }),
-        });
-        expect(response.status).toBe(200);
-        const body = await response.json() as any;
-        expect(body.historyItems).toHaveLength(1);
-        expect(body.historyItems[0]).toMatchObject({ url: 'data:image/png;base64,one', provider: 'WaveSpeed' });
-        expect(body.historyWarning).toContain('部分图片保存失败');
-        expect(body.transientOutputs).toHaveLength(1);
-        expect(body.transientOutputs[0]).toMatchObject({ url: 'https://fixture.invalid/two.png', error: 'fixture storage denied' });
-        expect(saved).toEqual(['https://fixture.invalid/one.png', 'https://fixture.invalid/two.png']);
-        expect(calls).toHaveLength(0);
-      },
-      undefined,
-      async (url) => {
-        saved.push(url);
-        return url.endsWith('/one.png')
-          ? { ok: true, dataUrl: 'data:image/png;base64,one' }
-          : { ok: false, status: 403, message: 'fixture storage denied', errorSource: 'upstream' };
-      },
-    );
+    await withFixture(async () => { throw new Error('upstream must not be called during save-result'); }, async (baseUrl, calls) => {
+      const response = await fetch(`${baseUrl}/api/schema-provider/wavespeed/save-result`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ outputs: ['https://fixture.invalid/one.png', 'https://fixture.invalid/two.png'], metadata: { model: 'fixture-model', prompt: 'fixture' } }),
+      });
+      expect(response.status).toBe(200);
+      const body = await response.json() as any;
+      expect(body.historyItems).toHaveLength(1);
+      expect(body.historyItems[0]).toMatchObject({ url: 'data:image/png;base64,one', provider: 'WaveSpeed' });
+      expect(body.historyWarning).toContain('部分图片保存失败');
+      expect(body.transientOutputs).toHaveLength(1);
+      expect(body.transientOutputs[0]).toMatchObject({ url: 'https://fixture.invalid/two.png', error: 'fixture storage denied' });
+      expect(saved).toEqual(['https://fixture.invalid/one.png', 'https://fixture.invalid/two.png']);
+      expect(calls).toHaveLength(0);
+    }, undefined, async (url) => {
+      saved.push(url);
+      return url.endsWith('/one.png')
+        ? { ok: true, dataUrl: 'data:image/png;base64,one' }
+        : { ok: false, status: 403, message: 'fixture storage denied', errorSource: 'upstream' };
+    });
   });
 
   it('maps Sogni LoRAs in original order and parametersOnly submits only custom JSON, prompt, and model', async () => {
@@ -286,7 +268,7 @@ describe('schema provider server contract', () => {
       expect(exact.actualRequest.parametersOnly).toBe(true);
       expect(JSON.stringify(submittedBodies[1])).not.toContain('parametersOnly');
 
-      const taskResponse = await fetch(`${baseUrl}${standard.pollUrl}`, {headers:{'x-canvas-credential-ref':standard.credentialRef}});
+      const taskResponse = await fetch(`${baseUrl}${standard.pollUrl}`);
       const task = await taskResponse.json() as any;
       expect(task).toMatchObject({ status: 'completed', outputs: ['https://fixture.invalid/output.png'], upstreamStatus: 200 });
       expect(task.rawResponse.data.workflow.status).toBe('completed');
