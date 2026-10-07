@@ -121,7 +121,7 @@ export const ComfyGuideModal: React.FC<ComfyGuideModalProps> = ({
               <div className="bg-[#1b1c24] border border-[#282a35] rounded-xl p-4 space-y-3">
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
                   <Zap className="w-4 h-4 text-amber-400" />
-                  在本项目中，如何极速添加各个 LoRA？
+                  在本项目中，如何添加并核对各个 LoRA？
                 </h3>
                 <div className="space-y-3 text-xs">
                   <div className="flex items-start gap-3 bg-[#13141a] p-3.5 rounded-lg border border-[#252733]">
