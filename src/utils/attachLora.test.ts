@@ -1,6 +1,6 @@
 import {describe,it,expect} from 'vitest';
 import {NODE_DEFINITIONS} from '../constants/nodes';
-import {attachLoraToBranch,findLoraTarget} from './attachLora';
+import {attachLoraToBranch,findLoraTarget,removeLoraFromBranch} from './attachLora';
 import {extractWorkflowParameters} from './graphEngine';
 import {buildTensorModelJob} from '../schemas/tensorModelApi';
 import type {Connection,NodeInstance} from '../types/graph';
@@ -40,6 +40,23 @@ describe('LoRA mounting modifies the executing branch, not just the node palette
   expect(values.loras.map(row=>[row.name,row.modelStrength])).toEqual([['672390779613802168',1],['672390779613802167',0]]);
   expect(second.connections.find(edge=>edge.id==='other-edge')?.fromNodeId).toBe('base');
   expect(()=>findLoraTarget(graph.nodes,graph.connections,'base')).toThrow(/多个生成分支/);
+ });
+ it('removing a mounted LoRA reconnects model and CLIP without disturbing the branch',()=>{
+  const graph=fixture();
+  const mounted=attachLoraToBranch(graph.nodes,graph.connections,node('adapter','LoRALoader',{lora_name:'https://example.test/a.safetensors',strength_model:0.8}),'sampler');
+  const removed=removeLoraFromBranch(mounted.nodes,mounted.connections,'adapter');
+  expect(removed.nodes.some(row=>row.id==='adapter')).toBe(false);
+  expect(removed.connections.find(edge=>edge.toNodeId==='sampler'&&edge.toSocketId==='model')).toMatchObject({fromNodeId:'base',fromSocketId:'MODEL'});
+  expect(removed.connections.find(edge=>edge.toNodeId==='prompt'&&edge.toSocketId==='clip')).toMatchObject({fromNodeId:'base',fromSocketId:'CLIP'});
+  expect(extractWorkflowParameters(removed.nodes,removed.connections,'sampler').checkpointModel).toBe('672797109289765558');
+ });
+ it('removing the newest LoRA in a chain reconnects the previous LoRA to the sampler',()=>{
+  const graph=fixture();
+  const first=attachLoraToBranch(graph.nodes,graph.connections,node('a','LoRALoader',{lora_name:'a',strength_model:0.4}),'sampler');
+  const second=attachLoraToBranch(first.nodes,first.connections,node('b','LoRALoader',{lora_name:'b',strength_model:0.9}),'sampler');
+  const removed=removeLoraFromBranch(second.nodes,second.connections,'b');
+  expect(removed.connections.find(edge=>edge.toNodeId==='sampler'&&edge.toSocketId==='model')).toMatchObject({fromNodeId:'a',fromSocketId:'MODEL'});
+  expect(extractWorkflowParameters(removed.nodes,removed.connections,'sampler').loras.map(row=>row.name)).toEqual(['a']);
  });
  it('rejects an unconnected sampler instead of claiming the LoRA is mounted',()=>{
   const graph=fixture();expect(()=>attachLoraToBranch(graph.nodes,[],node('a','LoRALoader',{lora_name:'id'}),'sampler')).toThrow(/底模连线/);
