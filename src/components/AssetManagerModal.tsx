@@ -190,10 +190,9 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
     );
   }, [history, customUploads, deletedIds]);
 
-  const providerOptions = useMemo(
-    () => Array.from(new Set(allAssets.map((asset) => asset.provider?.trim()).filter((provider): provider is string => Boolean(provider)))).sort((a, b) => a.localeCompare(b)),
-    [allAssets]
-  );
+  const providerOptions = useMemo(() =>
+    Array.from(new Set(allAssets.map((asset) => (asset.provider || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b)),
+  [allAssets]);
 
   // Filtering & Sorting
   const filteredAssets = useMemo(() => {
@@ -205,8 +204,8 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
         if (activeType === 'starred' && !starredIds.has(asset.id)) return false;
 
         if (selectedProvider !== 'all') {
-          const p = (asset.provider || '').toLowerCase();
-          if (!p.includes(selectedProvider.toLowerCase())) return false;
+          const p = (asset.provider || '').trim().toLowerCase();
+          if (p !== selectedProvider.trim().toLowerCase()) return false;
         }
 
         if (selectedRatio !== 'all' && asset.width && asset.height) {
