@@ -328,7 +328,29 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
     const rawVal = inputEl?.value?.trim() || '';
     if (!rawVal) return;
 
-    // If user enters a Hugging Face repo ID (e.g. Shakker-Labs/FLUX.1-Dev-LoRA-Realism)
+    const isCivitaiAirInput = /^urn:air:/i.test(rawVal);
+    if (isCivitaiAirInput) {
+      if (activeProvider !== 'civitai' && activeProvider !== 'all') {
+        setErrorMsg('Civitai AIR 只能挂到 Civitai 执行分支；请先切换到 Civitai 标签。');
+        return;
+      }
+      onSelectLoRA({provider:'civitai',name:rawVal,civitaiId:rawVal,triggerWords:'',baseModel:undefined});
+      onClose();
+      return;
+    }
+
+    const isHttpUrl = /^https?:\/\//i.test(rawVal);
+    if (isHttpUrl) {
+      if (activeProvider === 'all') {
+        setErrorMsg('URL 不携带执行供应商信息；请先切换到实际执行供应商标签，再导入该 LoRA URL。');
+        return;
+      }
+      onSelectLoRA({provider:activeProvider,name:rawVal,civitaiId:undefined,triggerWords:'',baseModel:undefined});
+      onClose();
+      return;
+    }
+
+    // A user-entered HF repo ID is explicit LoRA intent. Hub tags are evidence, not an exhaustive adapter contract.
     if (activeProvider === 'huggingface' || (rawVal.includes('/') && !rawVal.includes('tensor.art') && !rawVal.includes('tusiart.com'))) {
       try {
         setLoading(true);
@@ -336,13 +358,12 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
         const triggerStr = Array.isArray(info.triggerWords) && info.triggerWords.length > 0
           ? info.triggerWords.join(', ')
           : '';
-        if (!/lora|locon|lycoris|dora/i.test(info.type || info.category || '')) throw new Error('查询返回的资源不是 LoRA');
         onSelectLoRA({
-          provider:'huggingface',
+          provider: activeProvider === 'all' ? 'huggingface' : activeProvider,
           name: info.id || rawVal,
           civitaiId: undefined,
           triggerWords: triggerStr,
-          baseModel: info.baseModel || 'FLUX.1 / SDXL',
+          baseModel: info.baseModel || undefined,
         });
         onClose();
         return;
@@ -354,7 +375,7 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
       }
     }
 
-    // If user enters a Tensor.Art / 吐司 model ID or URL
+    // Tensor.Art model/LoRA resources require an actual resource lookup.
     if (
       activeProvider === 'tensorart' ||
       rawVal.includes('tensor.art') ||
@@ -370,19 +391,9 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
         if (!/lora|locon|lycoris|dora/i.test(info.type || info.category || '')) throw new Error('查询返回的资源不是 LoRA');
         const baseArch = info.baseModel;
         if (onSelectLoRAWithBaseModel) {
-          onSelectLoRAWithBaseModel({
-            name: String(info.id),
-            provider:'tensorart',
-            triggerWords: triggerStr,
-            baseModel: baseArch,
-          });
+          onSelectLoRAWithBaseModel({name:String(info.id),provider:'tensorart',triggerWords:triggerStr,baseModel:baseArch});
         } else {
-          onSelectLoRA({
-            name: String(info.id),
-            provider:'tensorart',
-            triggerWords: triggerStr,
-            baseModel: baseArch,
-          });
+          onSelectLoRA({name:String(info.id),provider:'tensorart',triggerWords:triggerStr,baseModel:baseArch});
         }
         onClose();
         return;
@@ -394,13 +405,29 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
       }
     }
 
+    if (activeProvider === 'muapi' || activeProvider === 'wavespeed') {
+      setErrorMsg(`${activeProvider === 'muapi' ? 'MuAPI' : 'WaveSpeed'} 当前没有已核实的 LoRA 权重目录；请粘贴目标端点实际可读取的 HTTP(S) LoRA URL。`);
+      return;
+    }
+    if (activeProvider === 'sogni') {
+      onSelectLoRA({provider:'sogni',name:rawVal,civitaiId:undefined,triggerWords:'',baseModel:undefined});
+      onClose();
+      return;
+    }
+    if (activeProvider === 'all') {
+      setErrorMsg('无法从任意字符串可靠判断 LoRA 所属供应商；请先选择具体供应商标签。');
+      return;
+    }
+
     const isCivitaiId = /^\d+$/.test(rawVal);
+    const isCivitaiAir = activeProvider === 'civitai' && /^urn:air:[^:]+:(?:lora|lycoris|locon|dora):civitai:\d+@\d+$/i.test(rawVal);
     const modelName = rawVal.includes('/') ? rawVal.split('/').pop()! : rawVal;
     onSelectLoRA({
-      name: `[${activeProvider.toUpperCase()}] ${modelName}`,
-      civitaiId: isCivitaiId ? rawVal : undefined,
+      name: isCivitaiAir ? rawVal : `[${activeProvider.toUpperCase()}] ${modelName}`,
+      provider: activeProvider,
+      civitaiId: isCivitaiId || isCivitaiAir ? rawVal : undefined,
       triggerWords: '',
-      baseModel: 'FLUX.1 / SDXL',
+      baseModel: isCivitaiAir ? 'SD 1.5' : 'FLUX.1 / SDXL',
     });
     onClose();
   };
@@ -427,7 +454,7 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
                 </span>
               </h2>
               <p className="text-[11px] text-slate-400">
-                涵盖 Civitai、Hugging Face、魔搭社区 (ModelScope)、Fal.ai、Tensor.Art 全网海量开源与微调 LoRA，支持架构筛选与海量翻页
+                Civitai/Hugging Face/Tensor 等按真实资源目录展示；MuAPI/WaveSpeed 使用目标端点可读取的 URL，Sogni 保留真实资源 ID。目录可见不代表在线生成已通过。
               </p>
             </div>
           </div>
