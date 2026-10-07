@@ -1,4 +1,3 @@
-import { once } from 'node:events';
 import express from 'express';
 import { describe, expect, it } from 'vitest';
 import { registerSchemaProviderRoutes, resolveSchemaRefs } from './schemaProviders';
@@ -6,29 +5,76 @@ import { registerSchemaProviderRoutes, resolveSchemaRefs } from './schemaProvide
 async function withFixture(
   upstream: (url: string, init?: RequestInit) => Promise<Response>,
   run: (baseUrl: string, calls: Array<{ url: string; init?: RequestInit }>) => Promise<void>,
+  key: (provider: string, override?: string) => string = () => '',
   durable: (url: string) => Promise<any> = async (url) => ({ ok: true, dataUrl: url }),
 ) {
   const calls: Array<{ url: string; init?: RequestInit }> = [];
   const app = express();
-  app.use(express.json());
   registerSchemaProviderRoutes(app, {
     fetch: async (_meta, url, init) => {
       calls.push({ url, init });
       return upstream(url, init);
     },
-    key: () => '',
+    key,
     record: (item) => item,
     durable,
   });
-  const server = app.listen(0, '127.0.0.1');
-  await once(server, 'listening');
-  const address = server.address();
-  if (!address || typeof address === 'string') throw new Error('Fixture server did not bind a TCP port');
+
+  const baseUrl = 'http://schema-provider.fixture';
+  const originalFetch = globalThis.fetch;
+  const router = (app as any).router || (app as any)._router;
+  const layers: any[] = router?.stack || [];
+  const matchRoute = (pattern: string, pathname: string) => {
+    const expected = pattern.split('/').filter(Boolean);
+    const actual = pathname.split('/').filter(Boolean);
+    if (expected.length !== actual.length) return undefined;
+    const params: Record<string, string> = {};
+    for (let i = 0; i < expected.length; i++) {
+      if (expected[i].startsWith(':')) params[expected[i].slice(1)] = decodeURIComponent(actual[i]);
+      else if (expected[i] !== actual[i]) return undefined;
+    }
+    return params;
+  };
+
+  globalThis.fetch = async (input: string | URL | Request, init: RequestInit = {}) => {
+    const raw = typeof input === 'string' || input instanceof URL ? String(input) : input.url;
+    const url = new URL(raw, baseUrl);
+    if (url.origin !== baseUrl) return originalFetch(input as any, init);
+    const method = String(init.method || (input instanceof Request ? input.method : 'GET')).toLowerCase();
+    const layer = layers.find((candidate) => {
+      const route = candidate.route;
+      return route && route.methods?.[method] && typeof route.path === 'string' && matchRoute(route.path, url.pathname);
+    });
+    if (!layer) return new Response(JSON.stringify({ error: `Fixture route not found: ${method.toUpperCase()} ${url.pathname}` }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+
+    const params = matchRoute(layer.route.path, url.pathname) || {};
+    const headers = Object.fromEntries(new Headers(init.headers || (input instanceof Request ? input.headers : undefined)).entries());
+    let body: any = undefined;
+    const rawBody = init.body ?? (input instanceof Request ? await input.clone().text() : undefined);
+    if (typeof rawBody === 'string' && rawBody) {
+      try { body = JSON.parse(rawBody); } catch { body = rawBody; }
+    }
+    const req: any = { method: method.toUpperCase(), path: url.pathname, params, query: Object.fromEntries(url.searchParams.entries()), headers, body };
+    let response: Response | undefined;
+    const res: any = {
+      statusCode: 200,
+      status(code: number) { this.statusCode = code; return this; },
+      json(payload: unknown) {
+        response = new Response(JSON.stringify(payload), { status: this.statusCode, headers: { 'Content-Type': 'application/json' } });
+        return this;
+      },
+    };
+    const next = () => {
+      if (!response) response = new Response(JSON.stringify({ error: 'Fixture route passed to next()' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+    };
+    for (const routeLayer of layer.route.stack) await routeLayer.handle(req, res, next);
+    return response || new Response(null, { status: res.statusCode || 204 });
+  } as typeof fetch;
+
   try {
-    await run(`http://127.0.0.1:${address.port}`, calls);
+    await run(baseUrl, calls);
   } finally {
-    server.close();
-    await once(server, 'close');
+    globalThis.fetch = originalFetch;
   }
 }
 
@@ -37,6 +83,61 @@ function json(body: unknown, status = 200): Response {
 }
 
 describe('schema provider server contract', () => {
+  it('binds schema, submit, and poll to one credential reference and rejects an expired reference locally', async () => {
+    let keyCalls = 0;
+    const seenAuth: string[] = [];
+    await withFixture(async (url, init) => {
+      const headers = new Headers(init?.headers);
+      const auth = headers.get('x-api-key') || headers.get('authorization') || '';
+      if (auth) seenAuth.push(auth);
+      if (url.endsWith('/api/v1/models')) return json({models:[{name:'fixture',endpoint_url:'fixture_image',group_of:'image'}]});
+      if (url.endsWith('/openapi.json')) return json({paths:{'/api/v1/fixture_image':{post:{requestBody:{content:{'application/json':{schema:{type:'object',properties:{prompt:{type:'string'}}}}}}}}}});
+      if (init?.method==='POST' && url.endsWith('/api/v1/fixture_image')) return json({request_id:'task-1'});
+      if (url.endsWith('/api/v1/predictions/task-1/result')) return json({status:'completed',outputs:['https://fixture.invalid/out.png']});
+      throw new Error(`Unexpected fixture route: ${url}`);
+    }, async (baseUrl, calls) => {
+      const schemaResponse=await fetch(`${baseUrl}/api/model-schema?provider=muapi&model=fixture_image`);
+      expect(schemaResponse.status).toBe(200);
+      const schema=await schemaResponse.json() as any;
+      expect(schema.credentialRef).toMatch(/[0-9a-f-]{20,}/i);
+
+      const headers={'Content-Type':'application/json','x-canvas-credential-ref':schema.credentialRef};
+      const submitResponse=await fetch(`${baseUrl}/api/schema-provider/muapi/submit`,{method:'POST',headers,body:JSON.stringify({model:'fixture_image',prompt:'credential fixture'})});
+      expect(submitResponse.status).toBe(200);
+      const submit=await submitResponse.json() as any;
+      expect(submit.credentialRef).toBe(schema.credentialRef);
+
+      const pollResponse=await fetch(`${baseUrl}${submit.pollUrl}`,{headers:{'x-canvas-credential-ref':schema.credentialRef}});
+      expect(pollResponse.status).toBe(200);
+      const poll=await pollResponse.json() as any;
+      expect(poll.status).toBe('completed');
+
+      const before=calls.length;
+      const expired=await fetch(`${baseUrl}/api/schema-provider/muapi/submit`,{method:'POST',headers:{'Content-Type':'application/json','x-canvas-credential-ref':'expired-ref'},body:JSON.stringify({model:'fixture_image',prompt:'must stop locally'})});
+      expect(expired.status).toBe(409);
+      expect((await expired.json() as any).error).toMatch(/未自动切换 Key|凭据引用/);
+      expect(calls).toHaveLength(before);
+      expect(keyCalls).toBe(1);
+      expect(new Set(seenAuth)).toEqual(new Set(['fixture-key-1']));
+    }, () => `fixture-key-${++keyCalls}`);
+  });
+
+  it('rejects private Sogni reference URLs before any upstream submission', async () => {
+    await withFixture(async (url) => {
+      throw new Error(`Upstream must not be called for private reference: ${url}`);
+    }, async (baseUrl, calls) => {
+      const response=await fetch(`${baseUrl}/api/schema-provider/sogni/submit`,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({model:'krea-2-turbo',prompt:'private reference',image_url:'http://127.0.0.1:3000/private.png'}),
+      });
+      expect(response.status).toBe(400);
+      const body=await response.json() as any;
+      expect(body.error).toMatch(/本机|本地域名|上游无法直接读取/);
+      expect(calls).toHaveLength(0);
+    });
+  });
+
   it('uses the MuAPI execution identifier rather than the display alias, with weighted model objects', async () => {
     await withFixture(async (url, init) => {
       if (url.endsWith('/api/v1/models')) return json({models:[{name:'flux-dev-lora',endpoint:'/api/v1/flux-dev-lora',endpoint_url:'flux_dev_lora_image',group_of:'image',category:'Training'}]});
@@ -126,6 +227,7 @@ describe('schema provider server contract', () => {
         expect(saved).toEqual(['https://fixture.invalid/one.png', 'https://fixture.invalid/two.png']);
         expect(calls).toHaveLength(0);
       },
+      undefined,
       async (url) => {
         saved.push(url);
         return url.endsWith('/one.png')
@@ -184,7 +286,7 @@ describe('schema provider server contract', () => {
       expect(exact.actualRequest.parametersOnly).toBe(true);
       expect(JSON.stringify(submittedBodies[1])).not.toContain('parametersOnly');
 
-      const taskResponse = await fetch(`${baseUrl}${standard.pollUrl}`);
+      const taskResponse = await fetch(`${baseUrl}${standard.pollUrl}`, {headers:{'x-canvas-credential-ref':standard.credentialRef}});
       const task = await taskResponse.json() as any;
       expect(task).toMatchObject({ status: 'completed', outputs: ['https://fixture.invalid/output.png'], upstreamStatus: 200 });
       expect(task.rawResponse.data.workflow.status).toBe('completed');
