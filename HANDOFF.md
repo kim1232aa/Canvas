@@ -69,9 +69,9 @@
 | ModelScope AI | **BLOCKED_AUTH** | 401 原文要求绑定 Alibaba Cloud account |
 | NanoGPT | **BLOCKED_AUTH** | 真实上游 401 Invalid session / invalid_api_key |
 | Tensor.Art / TAMS | **BLOCKED_AUTH** | 真实模型 ID 查询返回 unauthorized / app not found |
-| Hugging Face | **待当前环境复验** | 旧 Z-Image Space 仅证明当时 BLOCKED_ENV，不能外推其他 HF 路由 |
+| Hugging Face | **PASS_BILLING** | 2026-10-08 前端显式 HF→fal-ai：FLUX.1-dev + HF LoRA 0.55 真实到 HF Router，HTTP 402 no remaining credits；旧 Z-Image Space BLOCKED_ENV 仅保留为该旧路由历史证据 |
 
-**已取得明确终态的供应商不再为了“刷测试”重复消耗。** 后续未验供应商必须换一套参考作品参数，不复用上一家的 Prompt；有图时必须与参考原图比较主体、构图、材质/服装、色调、光影和 LoRA 特征。Prompt、Negative Prompt、底模、LoRA、权重、Steps、CFG、Sampler、Scheduler、Seed、尺寸等来源缺字段不得猜。公网参考元数据优先直接走公开 API；CDP 只用于本地 Canvas 前端工作流或确实需要浏览器登录态的场景。
+**已取得明确终态的供应商不再为了“刷测试”重复消耗。** Hugging Face 的 HF→fal-ai 路由现已取得 PASS_BILLING；后续未验供应商必须换一套参考作品参数，不复用上一家的 Prompt；有图时必须与参考原图比较主体、构图、材质/服装、色调、光影和 LoRA 特征。Prompt、Negative Prompt、底模、LoRA、权重、Steps、CFG、Sampler、Scheduler、Seed、尺寸等来源缺字段不得猜。公网参考元数据优先直接走公开 API；CDP 只用于本地 Canvas 前端工作流或确实需要浏览器登录态的场景。
 
 本轮另外完成：失败重跑不再残留上一张图片；workflowSnapshot 不再携带旧 outputData/errorMessage/progress；History 已区分 requested / sent / upstream/effective 参数来源，未发送/上游未返回/旧记录未保存不再统一显示“未填写”；A03 MuAPI LoRA 接线缺口已关闭。A09 代码契约和回归已补，剩余只是真实有额度的多图/持久化失败外部场景证据。
 
@@ -160,7 +160,7 @@
 | 供应商 | 当前已有实现 / 历史证据 | 现行前端验收等级 | 具体缺口和下一步 |
 | --- | --- | --- | --- |
 | **Civitai** | 目录、版本/AIR、Orchestration recipe、底模+LoRA、参数与工作流；历史 `civitai`、`civitai-lora` 为 generated 并有图片 | **相对最完善；DIRECT_EVIDENCE；本轮前端 NOT_TESTED** | 先保留已有实现，用历史已成功的确切 AIR/LoRA 组合从网页复验；核对版本 ID、权重、持久化和历史复用。不能假定所有下载模型都允许在线生成 |
-| **Hugging Face** | Hub 目录；显式 HF Inference / Z-Image Space / HF→fal-ai；历史 Space 图与 FLUX LoRA 图 | **BLOCKED_ENV**，本次 HF Space 点击已实测 | 首先解决合法验收环境。随后分别验证三种路由；仓库可下载不等于被选路由支持。HF→fal-ai 须用户显式选定，不能自动回退。LoRA 使用原 ID/URL |
+| **Hugging Face** | Hub 目录；显式 HF Inference / Z-Image Space / HF→fal-ai；2026-10-08 前端复验 FLUX.1-dev + HF LoRA | **PASS_BILLING（HF→fal-ai）** | 实际请求到 HF Router `fal-ai/flux-lora`，LoRA safetensors URL + 0.55、Steps 24、CFG 3.2、Seed 314159 进入请求，上游 402 no remaining credits。旧 Z-Image Space BLOCKED_ENV 只代表旧 Space 路由；证据：docs/evidence/t7-huggingface-acceptance.md |
 | **Fal.ai** | 原生端点、图像尺寸/LoRA 参数、目录/Schema；历史 `fal-ai/flux-lora` 返回 403 `TOP_UP` | **DIRECT_EVIDENCE；前端 NOT_TESTED** | 优先从前端重现同路由。若仍是原文 `User is locked. Reason: TOP_UP.` 且界面正确显示，即可记 PASS_BILLING；不得因为旧直调曾欠费直接勾通过 |
 | **ModelScope CN** | CN 域名、Token、异步任务、LoRA 映射；历史 429 记录 | **DIRECT_EVIDENCE；前端 NOT_TESTED** | 核对响应体是否明确额度，不能只看 429；前端提交字段与云 REST 契约复核；模型目录与在线权限分离；按当前代码核验，不照旧文档“全部不支持”处理 |
 | **ModelScope AI** | AI 域名独立路由；历史一把 Key 额度/限额，另一把账户配置 401 | **DIRECT_EVIDENCE；前端 NOT_TESTED** | CN/AI 不混 Key、不换域名；分别验证用户指定账户。绑定账户问题是 BLOCKED_AUTH，不是欠费；完善目录→选择→实际 task 链路 |
