@@ -74,7 +74,7 @@
 | 2026-10-06 收尾前本地 HEAD | `d75d1d4`；本轮收尾提交完成后以 `git log -1` / `origin/main` 为准，不再把此哈希当最终版本 |
 | 当前活跃工作目录 | `/home/ubuntu/Canvas` |
 | 历史验证（2026-10-04 前） | 35 个测试文件、267 个测试通过；仅作历史追溯 |
-| 2026-10-06 当前回归 | `npm run lint` PASS；`npm test` 40 files / 290 tests PASS；`npm run build` PASS（含 frontend + hosting worker 构建）。仍不替代真实前端/上游验收 |
+| 2026-10-08 当前回归 | `npm run lint` PASS；`npm test` 40 files / 295 tests PASS；`npm run build` PASS（含 frontend + hosting worker 构建）。仍不替代真实前端/上游验收 |
 
 旧 `canvas/`、`canvas-source/` 副本不是当前代码。接手人在新环境应以 GitHub 最新 main 为起点。Site 与 GitHub 使用独立 Git 提交历史，不能仅比较 commit SHA 判断内容不同，应比较 tree 或具体文件。2026-10-06 收尾已经包含产品代码、前端文案、测试与证据修复；是否发布 Sites 必须单独核对部署源与权限，不能因为本地/GitHub 更新就声称生产站已同步。
 
