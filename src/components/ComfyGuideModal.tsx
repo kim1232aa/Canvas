@@ -121,7 +121,7 @@ export const ComfyGuideModal: React.FC<ComfyGuideModalProps> = ({
               <div className="bg-[#1b1c24] border border-[#282a35] rounded-xl p-4 space-y-3">
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
                   <Zap className="w-4 h-4 text-amber-400" />
-                  在本项目中，如何添加并核对各个 LoRA？
+                  在本项目中，如何极速添加各个 LoRA？
                 </h3>
                 <div className="space-y-3 text-xs">
                   <div className="flex items-start gap-3 bg-[#13141a] p-3.5 rounded-lg border border-[#252733]">
@@ -134,7 +134,7 @@ export const ComfyGuideModal: React.FC<ComfyGuideModalProps> = ({
                         在无限画布上点击任意生图帧，在右侧参数总控台的<strong>「LoRA 堆叠」</strong>区域，点击<strong>「添加 LoRA」</strong>。
                       </p>
                       <p className="text-slate-400">
-                        系统会打开 LoRA / 模型中心。选择资源后只保留该来源能够明确提供的 ID、URL、触发词与建议权重；<strong>不同供应商的 LoRA 命名空间不能互相猜测转换</strong>。目标供应商要求 URL、模型 ID 或 selector 时，需要在对应标签选择真实资源。
+                        系统会打开 LoRA / 模型中心。选择资源后只保留该来源能够明确提供的 ID、URL、触发词与建议权重；<strong>不同供应商的 LoRA 命名空间不能互相猜测转换</strong>。如果目标供应商要求 URL、模型 ID 或 selector，需要在对应标签重新选择真实资源。
                       </p>
                     </div>
                   </div>
@@ -234,7 +234,7 @@ export const ComfyGuideModal: React.FC<ComfyGuideModalProps> = ({
                       <span className="text-[10px] text-slate-500 font-mono">整数</span>
                     </div>
                     <p className="text-slate-300 text-[11px]">
-                      初始噪波的随机编号。固定 Seed 可以降低同一路由、同模型、同参数下的随机差异，便于做 A/B 对比；<strong>不能承诺跨后端或跨版本像素级 100% 复现</strong>。想探索不同构图时再使用随机 Seed。
+                      初始噪波的随机编号。固定 Seed 能减少随机差异，是做 A/B 对比的重要条件；但跨供应商、模型版本、后端实现或硬件时仍可能存在差异，不能承诺 100% 像素级复现。想主动改变构图时可使用 🎲 随机种子。
                     </p>
                   </div>
                 </div>
@@ -297,7 +297,7 @@ export const ComfyGuideModal: React.FC<ComfyGuideModalProps> = ({
                 <div className="space-y-2 text-xs">
                   <div className="p-3 rounded-lg bg-[#14151c] border border-emerald-900/40 text-slate-300">
                     <span className="font-bold text-emerald-400 block mb-1">🟢 Civitai 密钥:</span>
-                    <span>Civitai API 可读取公开资源与作品元数据；目录可见不代表对应资源一定允许当前 Orchestration 路由在线生成。当前已有特定 Checkpoint + LoRA 的真实前端出图证据。</span>
+                    <span>Civitai API 可读取公开资源与作品元数据；目录可见不代表对应资源一定允许当前 Orchestration 路由在线生成。当前已用特定 SD1 Checkpoint + LoRA 从网页真实出图，其余资源仍按实际版本与上游响应验收。</span>
                   </div>
                   <div className="p-3 rounded-lg bg-[#14151c] border border-emerald-900/40 text-slate-300">
                     <span className="font-bold text-emerald-400 block mb-1">🟢 Hugging Face 密钥:</span>
@@ -305,11 +305,11 @@ export const ComfyGuideModal: React.FC<ComfyGuideModalProps> = ({
                   </div>
                   <div className="p-3 rounded-lg bg-[#14151c] border border-emerald-900/40 text-slate-300">
                     <span className="font-bold text-emerald-400 block mb-1">🟢 魔搭社区 ModelScope:</span>
-                    <span>ModelScope CN 与 AI 国际站分别使用独立域名和账户。当前 CN 图像路由为余额不足；AI 国际站当前账户被账户绑定要求阻塞。其他图像/视频能力不由这两条结果自动证明。</span>
+                    <span>ModelScope CN 与 AI 国际站分别使用独立域名和账户。当前 CN 图像路由已真实到达上游但额度不足；AI 国际站当前账户需绑定 Alibaba Cloud。其他图像/视频能力不由这两条结果自动证明。</span>
                   </div>
                   <div className="p-3 rounded-lg bg-[#14151c] border border-amber-900/40 text-slate-300">
                     <span className="font-bold text-amber-400 block mb-1">🟡 Fal.ai 密钥:</span>
-                    <span>当前 <code>fal-ai/flux-lora</code> 前端真实请求收到 <code>User is locked. Reason: TOP_UP</code>。这是该路由的计费限制证据；系统不会因此自动切换到 Gemini、ModelScope 或其他供应商，是否改用其他路由由用户明确选择。</span>
+                    <span>当前 `fal-ai/flux-lora` 前端真实请求收到 <code>User is locked. Reason: TOP_UP</code>。这是该路由的计费限制证据；系统不会因此自动切换到 Gemini、ModelScope 或其他供应商，是否改用其他路由由用户明确选择。</span>
                   </div>
                   <div className="p-3 rounded-lg bg-[#14151c] border border-rose-900/40 text-slate-300">
                     <span className="font-bold text-rose-400 block mb-1">🔴 NanoGPT 密钥:</span>
