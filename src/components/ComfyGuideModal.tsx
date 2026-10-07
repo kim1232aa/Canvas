@@ -134,7 +134,7 @@ export const ComfyGuideModal: React.FC<ComfyGuideModalProps> = ({
                         在无限画布上点击任意生图帧，在右侧参数总控台的<strong>「LoRA 堆叠」</strong>区域，点击<strong>「添加 LoRA」</strong>。
                       </p>
                       <p className="text-slate-400">
-                        系统会打开模型中心，浏览 Civitai、Hugging Face 或 ModelScope，点击<strong>「挂载至当前 LoRA 栈」</strong>，模型即可挂载，推荐权重 (0.8) 和触发词会自动填充！
+                        系统会打开 LoRA / 模型中心。选择资源后只保留该来源能够明确提供的 ID、URL、触发词与建议权重；<strong>不同供应商的 LoRA 命名空间不能互相猜测转换</strong>。目标供应商要求 URL、模型 ID 或 selector 时，需要在对应标签选择真实资源。
                       </p>
                     </div>
                   </div>
@@ -166,8 +166,7 @@ export const ComfyGuideModal: React.FC<ComfyGuideModalProps> = ({
                   什么是触发词 (Trigger Words)？为什么要写进 Prompt？
                 </h3>
                 <p className="text-slate-300 leading-relaxed text-xs">
-                  LoRA 在训练时绑定了特定的关键词。例如某旗袍 LoRA 的触发词是 <code className="text-purple-300 font-mono bg-purple-950/40 px-1 py-0.5 rounded">qipao, traditional dress</code>。
-                  在模型中心中，每个 LoRA 都有<strong>「一键复制触发词」</strong>按钮，粘贴到你的提示词开头，AI 就能 100% 准确命中该 LoRA 的特征！
+                  部分 LoRA 会公开训练触发词，例如某服装 LoRA 可能给出 <code className="text-purple-300 font-mono bg-purple-950/40 px-1 py-0.5 rounded">qipao, traditional dress</code>。如果来源确实提供了触发词，可以复制到 Prompt；<strong>触发词只是一项生成条件，不能保证 100% 复现 LoRA 特征</strong>，最终仍要结合底模、权重、Seed、采样参数和实际生成结果验收。
                 </p>
               </div>
             </div>
@@ -235,7 +234,7 @@ export const ComfyGuideModal: React.FC<ComfyGuideModalProps> = ({
                       <span className="text-[10px] text-slate-500 font-mono">整数</span>
                     </div>
                     <p className="text-slate-300 text-[11px]">
-                      初始噪波的随机编号。相同的种子搭配相同参数，100% 能复现一模一样的画面；想每次换张脸或构图，点击 🎲 骰子摇号随机即可。
+                      初始噪波的随机编号。固定 Seed 可以降低同一路由、同模型、同参数下的随机差异，便于做 A/B 对比；<strong>不能承诺跨后端或跨版本像素级 100% 复现</strong>。想探索不同构图时再使用随机 Seed。
                     </p>
                   </div>
                 </div>
@@ -298,19 +297,19 @@ export const ComfyGuideModal: React.FC<ComfyGuideModalProps> = ({
                 <div className="space-y-2 text-xs">
                   <div className="p-3 rounded-lg bg-[#14151c] border border-emerald-900/40 text-slate-300">
                     <span className="font-bold text-emerald-400 block mb-1">🟢 Civitai 密钥:</span>
-                    <span>验证成功后可直接接入 C 站全网十万级 Checkpoints 和 LoRAs 原始 API，支持触发词、下载量与评分实时拉取。</span>
+                    <span>Civitai API 可读取公开资源与作品元数据；目录可见不代表对应资源一定允许当前 Orchestration 路由在线生成。当前已有特定 Checkpoint + LoRA 的真实前端出图证据。</span>
                   </div>
                   <div className="p-3 rounded-lg bg-[#14151c] border border-emerald-900/40 text-slate-300">
                     <span className="font-bold text-emerald-400 block mb-1">🟢 Hugging Face 密钥:</span>
-                    <span>验证成功后具备 Serverless 推理与全量开源 Hub 读取权限。</span>
+                    <span>Hub 资源读取与在线推理是两件事。模型必须存在可用的 Inference Provider / Space / 明确推理路由，不能因为仓库可下载就标记为可在线生成。</span>
                   </div>
                   <div className="p-3 rounded-lg bg-[#14151c] border border-emerald-900/40 text-slate-300">
                     <span className="font-bold text-emerald-400 block mb-1">🟢 魔搭社区 ModelScope:</span>
-                    <span>验证成功后直连阿里魔搭社区官方推理接口，支持 Wan 2.1 视频与视觉大模型。</span>
+                    <span>ModelScope CN 与 AI 国际站分别使用独立域名和账户。当前 CN 图像路由为余额不足；AI 国际站当前账户被账户绑定要求阻塞。其他图像/视频能力不由这两条结果自动证明。</span>
                   </div>
                   <div className="p-3 rounded-lg bg-[#14151c] border border-amber-900/40 text-slate-300">
                     <span className="font-bold text-amber-400 block mb-1">🟡 Fal.ai 密钥:</span>
-                    <span>密钥合法且已被服务器识别，但 Fal.ai 官方返回 <code>User is locked. Reason: TOP_UP</code>（账户余额不足需充值）。在充值前，建议优先使用内置 Google Gemini 或魔搭运行！</span>
+                    <span>当前 <code>fal-ai/flux-lora</code> 前端真实请求收到 <code>User is locked. Reason: TOP_UP</code>。这是该路由的计费限制证据；系统不会因此自动切换到 Gemini、ModelScope 或其他供应商，是否改用其他路由由用户明确选择。</span>
                   </div>
                   <div className="p-3 rounded-lg bg-[#14151c] border border-rose-900/40 text-slate-300">
                     <span className="font-bold text-rose-400 block mb-1">🔴 NanoGPT 密钥:</span>
