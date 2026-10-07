@@ -52,11 +52,32 @@
 - 用户已授权完成后 commit/push 到 GitHub `main`，以及此前的 Sites 私有发布；不得擅自扩大网站访问范围。
 - 如需并行代理：杂项/调查用 Luna，任务必须互不重叠，不盲目开多个代理。当前交接没有新开代理。
 
+### 0.7 2026-10-08 最新状态——后文旧结论与本节冲突时，以本节为准
+
+完整收尾证据：[`docs/evidence/handoff-closeout-2026-10-08.md`](docs/evidence/handoff-closeout-2026-10-08.md)。
+
+当前明确终态：
+
+| Provider | 当前等级 | 边界 |
+| --- | --- | --- |
+| Civitai | **PASS_GENERATION** | 当前网页基础图与 LoRA 图真实生成；只证明已测 AIR/LoRA 组合 |
+| WaveSpeed | **PASS_GENERATION** | krea-v2/turbo-lora 带 LoRA 真出图 |
+| MuAPI | **PASS_BILLING** | 普通路由和 LoRA 专用路由都到真实上游 402；LoRA URL + 0.65 已进入 actualRequest |
+| Sogni | **PASS_BILLING** | LoRA ID/strengths 透传，task created，insufficient_credit 原样展示 |
+| Fal.ai | **PASS_BILLING** | fal-ai/flux-lora 到真实上游，403 TOP_UP 原样展示 |
+| ModelScope CN | **PASS_BILLING** | 429 响应体明确 insufficient balance |
+| ModelScope AI | **BLOCKED_AUTH** | 401 原文要求绑定 Alibaba Cloud account |
+| NanoGPT | **BLOCKED_AUTH** | 真实上游 401 Invalid session / invalid_api_key |
+| Tensor.Art / TAMS | **BLOCKED_AUTH** | 真实模型 ID 查询返回 unauthorized / app not found |
+| Hugging Face | **待当前环境复验** | 旧 Z-Image Space 仅证明当时 BLOCKED_ENV，不能外推其他 HF 路由 |
+
+**已取得明确终态的供应商不再为了“刷测试”重复消耗。** 后续未验供应商必须换一套参考作品参数，不复用上一家的 Prompt；有图时必须与参考原图比较主体、构图、材质/服装、色调、光影和 LoRA 特征。Prompt、Negative Prompt、底模、LoRA、权重、Steps、CFG、Sampler、Scheduler、Seed、尺寸等来源缺字段不得猜。公网参考元数据优先直接走公开 API；CDP 只用于本地 Canvas 前端工作流或确实需要浏览器登录态的场景。
+
+本轮另外完成：失败重跑不再残留上一张图片；workflowSnapshot 不再携带旧 outputData/errorMessage/progress；History 已区分 requested / sent / upstream/effective 参数来源，未发送/上游未返回/旧记录未保存不再统一显示“未填写”；A03 MuAPI LoRA 接线缺口已关闭。A09 代码契约和回归已补，剩余只是真实有额度的多图/持久化失败外部场景证据。
+
 ## 1. 交接结论：不是已经完整集成
 
-**截至本交接，不能宣称各家供应商均已达到用户的前端验收标准。** Civitai 是实现和历史证据相对完整的一家；其他家有代码实现、历史直调证据或失败记录，但没有全家逐一前端验收通过的证据。
-
-用户明确认为 Civitai 比较完善，其他家尚未测试。不要推翻已经有证据的 Civitai 工作，也不要把它的成熟度套用到所有供应商。优先补齐产品入口遗漏和错误分类，再按本文件逐家补验收。
+**仍不能宣称“所有供应商、所有模型、所有模式都完成前端验收”。** 但 2026-10-08 已不再是“只有 Civitai 有证据”的状态；具体等级以 0.7 最新状态表为准。下面 2026-10-04/10-05 的记录保留用于追溯，不得覆盖后续更高优先级证据。
 
 本文件中的“已实现”仅表示亲自读到相应代码；“历史证据”表示仓库已有记录；“本轮前端实测”只指本次从页面点击产生的记录。三者严格分开。
 
@@ -103,8 +124,8 @@
 | 1 | 节点画布 | `App.tsx`、`Canvas.tsx`、`NodeItem.tsx`、`graphEngine.ts` | 节点、连线、分支提取、执行、模型与 LoRA 入口 | 各供应商从真实节点提交的参数和选中分支要验收；节点字样不能冒充上游已加载 |
 | 2 | 空间画板 | `SpatialFrameItem.tsx`、`App.tsx` | 独立提示词、参数、图像结果 | 与节点模式不能交叉修改；每家至少检查一次空间模式；图生图媒体可访问性未全验 |
 | 3 | 多画布管理 | `CanvasManagerModal.tsx`、`workspaceCache.ts` | 新建、切换、本地恢复、模板 | 新旧工作流迁移、切换后 provider/ID/LoRA 保留；不能用数组位置挑错模板 |
-| 4 | **模型中心** | `ModelHubModal.tsx`、`ProviderModelSelect.tsx`、`/api/models` | 单家标签、搜索、分类、分页、自定义 ID | 新三家未进入 all 聚合；模型/工具/资源身份不统一；静态 Schema 列表来源文案、分页与覆盖率仍需修正 |
-| 5 | **独立 LoRA 中心** | `CivitaiModal.tsx`、`attachLora.ts` | Civitai/HF/Tensor/魔搭/Fal 入口、选用与新节点 | **缺 MuAPI/WaveSpeed/Sogni 供应商入口**；不能把支持 LoRA 的端点当权重；缺目录时明确 URL/ID 输入能力 |
+| 4 | **模型中心** | `ModelHubModal.tsx`、`ProviderModelSelect.tsx`、`/api/models` | 单家标签、搜索、分类、分页、自定义 ID；MuAPI/WaveSpeed/Sogni 已进入 all 聚合 | 新增 provider 继续走共享聚合入口；模型/工具/资源身份必须保持来源与执行 ID 可追溯，目录可见不等于在线推理通过 |
+| 5 | **独立 LoRA 中心** | `CivitaiModal.tsx`、`attachLora.ts` | Civitai/HF/Tensor/魔搭/Fal/MuAPI/WaveSpeed/Sogni 入口；URL/ID 与目录资源分开处理 | MuAPI/WaveSpeed 无已核实权重目录时只接受目标端点可读取的 URL；Sogni 保留真实资源 ID；all 标签不猜供应商 |
 | 6 | 视频模型与视频生成 | `ModelHubModal.tsx`、`VideoDriver.ts`、`/api/video/generate` | 独立分类入口和旧驱动 | 新三家的图像驱动不等于视频已接入；目录出现视频端点不等于执行、参数、轮询已正确 |
 | 7 | 参数检查器 / JSON Schema | `ParameterInspector.tsx`、`ApiParameterEditor.tsx`、`providerSchema.ts` | 新三家动态 Schema、JSON、映射模式 | 老供应商还有静态规范与“未核实即不支持”；完整 Schema 组合字段、oneOf 等覆盖未全验 |
 | 8 | API 设置 / Key 池 | `BackendSettingsModal.tsx`、`server.ts` KeyPoolManager | 新三家 Key 项、服务端环境与加密设置 | 连接测试不等于生成；Key 池在 schema/submit/poll 各次选 Key，任务凭据绑定需审计；环境示例过时 |
@@ -145,7 +166,7 @@
 | **ModelScope AI** | AI 域名独立路由；历史一把 Key 额度/限额，另一把账户配置 401 | **DIRECT_EVIDENCE；前端 NOT_TESTED** | CN/AI 不混 Key、不换域名；分别验证用户指定账户。绑定账户问题是 BLOCKED_AUTH，不是欠费；完善目录→选择→实际 task 链路 |
 | **NanoGPT** | `/api/v1/images`、模型 endpoint 元数据、尺寸/输入转换；历史 401 `invalid_api_key` | **DIRECT_EVIDENCE；前端 NOT_TESTED** | 当前授权未通过。`nanoImageApi.ts` 仍把“未核实”写成“不支持”并拦截一批字段，须查官方能力后整改；LoRA 不能一概声称可用或不支持 |
 | **Tensor.Art / TAMS** | 真实数字模型 ID、模型详情、job、LoRA ID/weight；删除工具底模预设与 HTML 抓取；历史 TAMS 404 unauthorized/app not found | **DIRECT_EVIDENCE；TAMS 前端 NOT_TESTED** | 列表 API 缺失与生成授权分开处理。当前按 ID 查询；不能抓被挑战页面冒充稳定目录。旧 OpenWorks 图片不证明 TAMS 模型或 LoRA 成功；需要正确 TAMS 应用授权并复核端点/鉴权 |
-| **MuAPI** | 设置、模型单家标签、目录/OpenAPI、通用 submit/poll/save-result、Schema 参数与 LoRA 映射 | **PASS_BILLING（2026-10-05 前端实测）** | 目录 147 个与官方一致；余额 0.0000 USD；提交 HTTP 402 INSUFFICIENT_CREDITS 原样透传。证据：docs/evidence/t7-muapi-acceptance.md。LoRA 真实出图待账户充值后复测 |
+| **MuAPI** | 设置、实时目录/OpenAPI、submit/poll/save-result、Schema 参数与 LoRA 映射；2026-10-06 补测 LoRA 专用端点 | **PASS_BILLING** | 普通路由与 `flux-1-dev-style-lora-inference` 均真实到上游 402；LoRA actualRequest 为 `lora_url + lora_weight=0.65`。充值后出图只用于视觉效果确认，不再是接线缺口 |
 | **WaveSpeed** | 单家目录及 model_run Schema、原生端点、Bearer、任务轮询、LoRA path/scale | **PASS_GENERATION（2026-10-05 前端实测）** | krea-v2/turbo-lora 带 LoRA 出图×2，同 seed 复现。证据：docs/evidence/t7-wavespeed-acceptance.md |
 | **Sogni** | 固定版本官方工具 Schema selectors、Creative Agent workflow、轮询、LoRA ID/strengths | **PASS_BILLING（2026-10-05 前端实测重做）** | 27 selector=官方 schema enum；LoRA 目录 32 个=官方实时数；loras+loraStrengths 协议透传；201 created；欠费 waiting_for_user/insufficient_credit 原样展示。证据：docs/evidence/t7-sogni-acceptance.md。历史 403（error code 1010）为旧网络环境结果，已被取代 |
 
