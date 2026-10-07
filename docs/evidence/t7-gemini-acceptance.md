@@ -4,7 +4,7 @@
 
 ## 结论
 
-**BLOCKED_CONFIG**。前端真实提交到了本地 `/api/gemini/generate` 路由，但服务端在本地配置阶段返回 HTTP 400：`未配置 Google Gemini API Key。请在设置中配置 GEMINI_API_KEY。`。
+**BLOCKED_CONFIG**。前端真实提交到了本地 `/api/gemini/generate` 路由，但服务端在本地配置阶段返回 HTTP 400：`未配置 Google Gemini API Key。请在设置中配置 GEMINI_API_KEY。`
 
 这不是上游 Gemini 的 HTTP 响应，不是余额不足，也不是图片生成成功。它证明的是：当前前端能选中 Gemini 生图节点、能提交 prompt / model / aspect_ratio / image_size，且本地错误被透明显示；但在配置 GEMINI_API_KEY 前不能判定 Gemini 上游接线或生成能力。
 
