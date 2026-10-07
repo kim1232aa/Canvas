@@ -1,121 +1,248 @@
 import type { GenerationHistoryItem } from '../types/providers';
 
+export type HistoryParameterKey =
+  | 'negativePrompt'
+  | 'seed'
+  | 'steps'
+  | 'cfg'
+  | 'sampler'
+  | 'scheduler'
+  | 'width'
+  | 'height';
+
 export type HistoryParameterSource =
   | 'upstream'
+  | 'image-metadata'
   | 'sent'
-  | 'requested-not-sent'
+  | 'requested'
   | 'legacy'
-  | 'missing';
+  | 'not-sent'
+  | 'unknown';
 
-export interface ResolvedHistoryParameter<T = unknown> {
-  value: T | null | undefined;
+export interface ResolvedHistoryParameter {
+  key: HistoryParameterKey;
+  value: unknown;
   source: HistoryParameterSource;
-  emptyLabel: '未发送' | '上游未返回' | '旧记录未保存';
+  requested?: unknown;
+  sent?: unknown;
+  upstream?: unknown;
 }
 
-export interface ResolvedHistoryParameters {
-  seed: ResolvedHistoryParameter<number>;
-  steps: ResolvedHistoryParameter<number>;
-  cfg: ResolvedHistoryParameter<number>;
-  sampler: ResolvedHistoryParameter<string>;
-  scheduler: ResolvedHistoryParameter<string>;
-  width: ResolvedHistoryParameter<number>;
-  height: ResolvedHistoryParameter<number>;
-  negativePrompt: ResolvedHistoryParameter<string>;
-}
+type AnyRecord = Record<string, any>;
 
-const isPresent = (value: unknown) =>
-  value !== undefined && value !== null && !(typeof value === 'string' && value.trim() === '');
+const isRecord = (value: unknown): value is AnyRecord =>
+  !!value && typeof value === 'object' && !Array.isArray(value);
 
-function asRecord(value: unknown): Record<string, any> {
-  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, any> : {};
-}
-
-function unwrapProviderParameters(value: unknown): Record<string, any> {
-  const record = asRecord(value);
-  const civitai = asRecord(record.steps?.[0]?.input);
-  if (Object.keys(civitai).length) return civitai;
-  const sogni = asRecord(record.input?.steps?.[0]?.arguments);
-  if (Object.keys(sogni).length) return sogni;
-  return record;
-}
-
-function parseJson(value: unknown): unknown {
+const parseJson = (value: unknown): unknown => {
   if (typeof value !== 'string') return value;
-  try { return JSON.parse(value); } catch { return undefined; }
-}
+  const text = value.trim();
+  if (!text || (text[0] !== '{' && text[0] !== '[')) return value;
+  try { return JSON.parse(text); } catch { return value; }
+};
 
-function effectiveFromTrace(metadata: Record<string, any>): Record<string, any> {
-  const traces = Array.isArray(metadata.executionTrace) ? metadata.executionTrace : [];
-  for (let i = traces.length - 1; i >= 0; i--) {
-    const parsed = parseJson(traces[i]?.responseBody);
-    const direct = unwrapProviderParameters(parsed);
-    if (Object.keys(direct).length && ('steps' in direct || 'cfgScale' in direct || 'sampleMethod' in direct || 'width' in direct || 'seed' in direct)) return direct;
-    const raw = unwrapProviderParameters(asRecord(parsed).raw);
-    if (Object.keys(raw).length) return raw;
+const unwrapGenerationParameters = (value: unknown): AnyRecord => {
+  const body = parseJson(value);
+  if (!isRecord(body)) return {};
+
+  const directStep = Array.isArray(body.steps) ? body.steps[0] : undefined;
+  if (isRecord(directStep?.input)) return directStep.input;
+  if (isRecord(directStep?.arguments)) return directStep.arguments;
+
+  const workflow = isRecord(body.data) && isRecord(body.data.workflow) ? body.data.workflow : undefined;
+  const workflowStep = Array.isArray(workflow?.steps) ? workflow.steps[0] : undefined;
+  if (isRecord(workflowStep?.input)) return workflowStep.input;
+  if (isRecord(workflowStep?.arguments)) return workflowStep.arguments;
+
+  const inputStep = isRecord(body.input) && Array.isArray(body.input.steps) ? body.input.steps[0] : undefined;
+  if (isRecord(inputStep?.arguments)) return inputStep.arguments;
+  if (isRecord(inputStep?.input)) return inputStep.input;
+
+  return body;
+};
+
+const last = <T,>(items: T[] | undefined): T | undefined =>
+  Array.isArray(items) && items.length ? items[items.length - 1] : undefined;
+
+const readKeys = (obj: AnyRecord | undefined, keys: string[]): unknown => {
+  if (!obj) return undefined;
+  for (const key of keys) {
+    if (Object.prototype.hasOwnProperty.call(obj, key)) return obj[key];
   }
-  return {};
+  return undefined;
+};
+
+const FIELD_KEYS: Record<HistoryParameterKey, string[]> = {
+  negativePrompt: ['negativePrompt', 'negative_prompt'],
+  seed: ['seed'],
+  steps: ['steps', 'num_inference_steps'],
+  cfg: ['cfgScale', 'guidance_scale', 'guidance', 'cfg'],
+  sampler: ['sampleMethod', 'sampler', 'sampler_name'],
+  scheduler: ['schedule', 'scheduler'],
+  width: ['width'],
+  height: ['height'],
+};
+
+const legacyValue = (item: GenerationHistoryItem, key: HistoryParameterKey): unknown => {
+  if (key === 'negativePrompt') return item.negativePrompt;
+  return item[key];
+};
+
+const hasMeaningfulValue = (value: unknown): boolean =>
+  value !== undefined && value !== null && value !== '' && !(typeof value === 'number' && Number.isNaN(value));
+
+function dataUrlBytes(url: string): Uint8Array | null {
+  const match = /^data:[^;,]+;base64,([A-Za-z0-9+/=\r\n]+)$/i.exec(url || '');
+  if (!match) return null;
+  try {
+    const binary = globalThis.atob(match[1].replace(/\s+/g, ''));
+    const out = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
+    return out;
+  } catch {
+    return null;
+  }
 }
 
-function first(record: Record<string, any>, keys: string[]) {
-  for (const key of keys) if (isPresent(record[key])) return record[key];
+function readEmbeddedLabel(bytes: Uint8Array, label: string): string | undefined {
+  const ascii = Array.from(label, (c) => c.charCodeAt(0));
+  const utf16 = ascii.flatMap((b) => [b, 0]);
+
+  const find = (needle: number[]): number => {
+    outer: for (let i = 0; i <= bytes.length - needle.length; i++) {
+      for (let j = 0; j < needle.length; j++) if (bytes[i + j] !== needle[j]) continue outer;
+      return i + needle.length;
+    }
+    return -1;
+  };
+
+  let pos = find(utf16);
+  if (pos >= 0) {
+    let text = '';
+    for (let i = pos; i + 1 < bytes.length && text.length < 160; i += 2) {
+      if (bytes[i + 1] !== 0) break;
+      const ch = String.fromCharCode(bytes[i]);
+      if (ch === '\0' || ch === '\n' || ch === '\r' || ch === ',') break;
+      text += ch;
+    }
+    return text.trim() || undefined;
+  }
+
+  pos = find(ascii);
+  if (pos >= 0) {
+    let text = '';
+    for (let i = pos; i < bytes.length && text.length < 160; i++) {
+      const ch = String.fromCharCode(bytes[i]);
+      if (ch === '\0' || ch === '\n' || ch === '\r' || ch === ',') break;
+      if (bytes[i] < 32 || bytes[i] > 126) break;
+      text += ch;
+    }
+    return text.trim() || undefined;
+  }
   return undefined;
 }
 
-function resolveOne<T>(
-  metadataExists: boolean,
-  effective: Record<string, any>,
-  actual: Record<string, any>,
-  requested: Record<string, any>,
-  keys: string[],
-  legacy: T | null | undefined,
-): ResolvedHistoryParameter<T> {
-  const upstream = first(effective, keys);
-  if (isPresent(upstream)) return { value: upstream as T, source: 'upstream', emptyLabel: '上游未返回' };
+export function extractEmbeddedGenerationParameters(url: string): Partial<Record<HistoryParameterKey, unknown>> {
+  const bytes = dataUrlBytes(url);
+  if (!bytes) return {};
+  const result: Partial<Record<HistoryParameterKey, unknown>> = {};
 
-  const sent = first(actual, keys);
-  if (isPresent(sent)) return { value: sent as T, source: 'sent', emptyLabel: '上游未返回' };
+  const seed = Number(readEmbeddedLabel(bytes, 'Seed: '));
+  if (Number.isFinite(seed)) result.seed = seed;
 
-  const requestedValue = first(requested, keys);
-  if (isPresent(requestedValue)) return { value: requestedValue as T, source: 'requested-not-sent', emptyLabel: '未发送' };
+  const steps = Number(readEmbeddedLabel(bytes, 'Steps: '));
+  if (Number.isFinite(steps)) result.steps = steps;
 
-  if (isPresent(legacy)) return { value: legacy as T, source: 'legacy', emptyLabel: metadataExists ? '上游未返回' : '旧记录未保存' };
+  const cfg = Number(readEmbeddedLabel(bytes, 'CFG scale: '));
+  if (Number.isFinite(cfg)) result.cfg = cfg;
 
-  return { value: undefined, source: 'missing', emptyLabel: metadataExists ? '未发送' : '旧记录未保存' };
+  const sampler = readEmbeddedLabel(bytes, 'Sampler: ');
+  if (sampler) result.sampler = sampler;
+
+  const scheduler =
+    readEmbeddedLabel(bytes, 'Schedule type: ') ||
+    readEmbeddedLabel(bytes, 'Scheduler: ') ||
+    readEmbeddedLabel(bytes, 'Schedule: ');
+  if (scheduler) result.scheduler = scheduler;
+
+  const size = readEmbeddedLabel(bytes, 'Size: ');
+  const sizeMatch = size?.match(/^(\d+)\s*x\s*(\d+)$/i);
+  if (sizeMatch) {
+    result.width = Number(sizeMatch[1]);
+    result.height = Number(sizeMatch[2]);
+  }
+
+  return result;
 }
 
-export function resolveHistoryParameters(item: GenerationHistoryItem): ResolvedHistoryParameters {
-  const metadata = asRecord(item.requestMetadata);
-  const metadataExists = Object.keys(metadata).length > 0;
+export function resolveHistoryParameters(item: GenerationHistoryItem): Record<HistoryParameterKey, ResolvedHistoryParameter> {
+  const metadata = isRecord(item.requestMetadata) ? item.requestMetadata : {};
+  const requested = isRecord(metadata.requestedParameters) ? metadata.requestedParameters : undefined;
 
-  const submissions = Array.isArray(metadata.submissions) ? metadata.submissions : [];
-  const lastSubmission = submissions.length ? asRecord(submissions[submissions.length - 1]) : {};
-  const requested = unwrapProviderParameters(metadata.requestedParameters);
-  const actual = unwrapProviderParameters(metadata.actualParameters ?? lastSubmission.parameters);
-  const effective = unwrapProviderParameters(metadata.effectiveParameters);
-  const tracedEffective = Object.keys(effective).length ? effective : effectiveFromTrace(metadata);
+  const submission = last(Array.isArray(metadata.submissions) ? metadata.submissions : undefined);
+  const sent = isRecord(metadata.actualParameters)
+    ? unwrapGenerationParameters(metadata.actualParameters)
+    : unwrapGenerationParameters(isRecord(submission) ? submission.parameters : undefined);
 
-  return {
-    seed: resolveOne(metadataExists, tracedEffective, actual, requested, ['seed', 'random_seed'], item.seed),
-    steps: resolveOne(metadataExists, tracedEffective, actual, requested, ['steps', 'num_inference_steps'], item.steps),
-    cfg: resolveOne(metadataExists, tracedEffective, actual, requested, ['cfgScale', 'cfg', 'guidance_scale', 'guidance'], item.cfg),
-    sampler: resolveOne(metadataExists, tracedEffective, actual, requested, ['sampleMethod', 'sampler', 'sampler_name'], item.sampler),
-    scheduler: resolveOne(metadataExists, tracedEffective, actual, requested, ['schedule', 'scheduler'], item.scheduler),
-    width: resolveOne(metadataExists, tracedEffective, actual, requested, ['width'], item.width),
-    height: resolveOne(metadataExists, tracedEffective, actual, requested, ['height'], item.height),
-    negativePrompt: resolveOne(metadataExists, tracedEffective, actual, requested, ['negativePrompt', 'negative_prompt'], item.negativePrompt),
-  };
+  const trace = last(Array.isArray(metadata.executionTrace) ? metadata.executionTrace : undefined);
+  const upstream = isRecord(metadata.effectiveParameters)
+    ? unwrapGenerationParameters(metadata.effectiveParameters)
+    : unwrapGenerationParameters(isRecord(trace) ? trace.responseBody : undefined);
+
+  const embedded = extractEmbeddedGenerationParameters(item.url || '');
+  const hasSentEvidence = Object.keys(sent).length > 0 || !!submission;
+  const hasAnyMetadata = Object.keys(metadata).length > 0;
+
+  const result = {} as Record<HistoryParameterKey, ResolvedHistoryParameter>;
+  (Object.keys(FIELD_KEYS) as HistoryParameterKey[]).forEach((key) => {
+    const requestedValue = readKeys(requested, FIELD_KEYS[key]);
+    const sentValue = readKeys(sent, FIELD_KEYS[key]);
+    const upstreamValue = readKeys(upstream, FIELD_KEYS[key]);
+    const embeddedValue = embedded[key];
+    const legacy = legacyValue(item, key);
+
+    if (hasMeaningfulValue(upstreamValue)) {
+      result[key] = { key, value: upstreamValue, source: 'upstream', requested: requestedValue, sent: sentValue, upstream: upstreamValue };
+      return;
+    }
+    if (hasMeaningfulValue(embeddedValue)) {
+      result[key] = { key, value: embeddedValue, source: 'image-metadata', requested: requestedValue, sent: sentValue, upstream: upstreamValue };
+      return;
+    }
+    if (hasMeaningfulValue(sentValue)) {
+      result[key] = { key, value: sentValue, source: 'sent', requested: requestedValue, sent: sentValue, upstream: upstreamValue };
+      return;
+    }
+    if (hasSentEvidence) {
+      result[key] = { key, value: undefined, source: 'not-sent', requested: requestedValue, sent: sentValue, upstream: upstreamValue };
+      return;
+    }
+    if (hasMeaningfulValue(requestedValue)) {
+      result[key] = { key, value: requestedValue, source: 'requested', requested: requestedValue };
+      return;
+    }
+    if (hasMeaningfulValue(legacy)) {
+      result[key] = { key, value: legacy, source: 'legacy' };
+      return;
+    }
+    result[key] = { key, value: undefined, source: hasAnyMetadata ? 'not-sent' : 'unknown' };
+  });
+
+  return result;
 }
 
-export function historySourceLabel(source: HistoryParameterSource): string {
-  if (source === 'upstream') return '上游实际';
-  if (source === 'sent') return '实际发送';
-  if (source === 'requested-not-sent') return '请求值 · 未发送';
-  if (source === 'legacy') return '旧记录';
-  return '';
-}
+export const historyParameterSourceLabel = (source: HistoryParameterSource): string => {
+  switch (source) {
+    case 'upstream': return '上游实际';
+    case 'image-metadata': return '图像元数据';
+    case 'sent': return '实际发送';
+    case 'requested': return '仅请求值';
+    case 'legacy': return '旧记录';
+    case 'not-sent': return '未发送';
+    default: return '旧记录未保存';
+  }
+};
 
-export function displayResolvedParameter(param: ResolvedHistoryParameter, suffix = ''): string {
-  if (!isPresent(param.value)) return param.emptyLabel;
+export function formatResolvedHistoryParameter(param: ResolvedHistoryParameter, suffix = ''): string {
+  if (!hasMeaningfulValue(param.value)) return historyParameterSourceLabel(param.source);
   return `${String(param.value)}${suffix}`;
 }
