@@ -98,6 +98,7 @@ export class CivitaiDriver extends BaseEngineDriver {
     }
 
     let mediaUrl = data.mediaUrl || data.imageUrl || data.videoUrl;
+    let effectiveParameters: Record<string, any> | undefined;
 
     if (!mediaUrl && data.pending && data.workflowId) {
       const workflowId = data.workflowId;
@@ -133,6 +134,8 @@ export class CivitaiDriver extends BaseEngineDriver {
         const status = (statusData.status || '').toLowerCase();
 
         if (foundUrl || status === 'succeeded') {
+          const upstreamInput = statusData?.raw?.steps?.[0]?.input ?? statusData?.steps?.[0]?.input;
+          if (upstreamInput && typeof upstreamInput === 'object' && !Array.isArray(upstreamInput)) effectiveParameters = upstreamInput;
           mediaUrl = foundUrl || statusData.mediaUrl;
           if (mediaUrl) break;
         }
@@ -152,7 +155,27 @@ export class CivitaiDriver extends BaseEngineDriver {
     }
     if (data.pending) {
       try {
-        const saved = await fetch('/api/history', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({...data.pendingHistory, url:mediaUrl, workflowSnapshot:params.workflowSnapshot, requestMetadata:data.requestMetadata})});
+        const effective = effectiveParameters && typeof effectiveParameters === 'object' ? effectiveParameters : undefined;
+        const historyFields = effective ? {
+          seed: typeof effective.seed === 'number' ? effective.seed : data.pendingHistory?.seed ?? null,
+          steps: typeof effective.steps === 'number' ? effective.steps : data.pendingHistory?.steps ?? null,
+          cfg: typeof effective.cfgScale === 'number' ? effective.cfgScale : data.pendingHistory?.cfg ?? null,
+          sampler: typeof effective.sampleMethod === 'string' ? effective.sampleMethod : typeof effective.sampler === 'string' ? effective.sampler : data.pendingHistory?.sampler ?? null,
+          scheduler: typeof effective.schedule === 'string' ? effective.schedule : typeof effective.scheduler === 'string' ? effective.scheduler : data.pendingHistory?.scheduler ?? null,
+          width: typeof effective.width === 'number' ? effective.width : data.pendingHistory?.width ?? null,
+          height: typeof effective.height === 'number' ? effective.height : data.pendingHistory?.height ?? null,
+        } : {};
+        const saved = await fetch('/api/history', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({
+            ...data.pendingHistory,
+            ...historyFields,
+            url:mediaUrl,
+            workflowSnapshot:params.workflowSnapshot,
+            requestMetadata:{...data.requestMetadata, effectiveParameters: effective},
+          }),
+        });
         if (!saved.ok) throw new Error(`HTTP ${saved.status}: ${await saved.text()}`);
         data.historyItem = await saved.json();
       } catch (error: any) {data.historyWarning = `图像已生成，但历史记录保存失败：${error.message}`;}
