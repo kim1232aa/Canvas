@@ -3,13 +3,28 @@ import { Download, Clock, Copy, Sparkles, Check, Image as ImageIcon, Trash2 } fr
 import { GenerationHistoryItem } from '../types/providers';
 import { PreviewMediaPanel } from './PreviewMediaPanel';
 import { isApplyToCanvasDisabled, type PreviewSettleState } from '../utils/previewHang';
-import { displayResolvedParameter, historySourceLabel, resolveHistoryParameters } from '../utils/historyParameters';
+import { formatResolvedHistoryParameter, historyParameterSourceLabel, resolveHistoryParameters, type ResolvedHistoryParameter } from '../utils/historyParameters';
 
 export const displayValue = (val: any): string | number => {
   if (val === null || val === undefined) return '未填写';
   if (typeof val === 'string' && (val.trim() === '' || val.trim() === 'null' || val.trim() === 'undefined')) return '未填写';
   if (typeof val === 'number' && isNaN(val)) return '未填写';
   return val;
+};
+
+const sourceClass: Record<ResolvedHistoryParameter['source'], string> = {
+  upstream: 'text-emerald-300',
+  'image-metadata': 'text-cyan-300',
+  sent: 'text-sky-300',
+  requested: 'text-amber-300',
+  legacy: 'text-slate-400',
+  'not-sent': 'text-rose-300',
+  unknown: 'text-slate-500',
+};
+
+const sourceBadge = (param: ResolvedHistoryParameter) => {
+  if (param.value === undefined || param.value === null || param.value === '') return null;
+  return <span className={`ml-1 text-[9px] ${sourceClass[param.source]}`}>· {historyParameterSourceLabel(param.source)}</span>;
 };
 
 interface HistoryModalProps {
@@ -58,7 +73,8 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
     } catch { setCopyError('复制失败，请检查浏览器剪贴板权限'); }
   };
   const downloadProvenance = (item: GenerationHistoryItem) => {
-    const body = {format: 'comfycanvas-generation', version: 2, provider: item.actualProvider || item.provider, model: item.actualModel || item.model, resolvedParameters: resolveHistoryParameters(item), seed: item.seed, steps: item.steps, cfg: item.cfg, sampler: item.sampler, scheduler: item.scheduler, width: item.width, height: item.height, loras: item.loras, requestMetadata: item.requestMetadata, workflowSnapshot: item.workflowSnapshot};
+    const resolved = resolveHistoryParameters(item);
+    const body = {format: 'comfycanvas-generation', version: 2, provider: item.actualProvider || item.provider, model: item.actualModel || item.model, parameters: Object.fromEntries(Object.entries(resolved).map(([key,value])=>[key,{value:value.value ?? null,source:value.source,requested:value.requested ?? null,sent:value.sent ?? null,upstream:value.upstream ?? null}])), loras: item.loras, requestMetadata: item.requestMetadata, workflowSnapshot: item.workflowSnapshot};
     const url = URL.createObjectURL(new Blob([JSON.stringify(body, null, 2)], {type: 'application/json'}));
     handleDownload(url, `generation-${item.id}.json`);
     setTimeout(() => URL.revokeObjectURL(url), 1000);
@@ -72,6 +88,8 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
     a.click();
     document.body.removeChild(a);
   };
+
+  const selectedResolved = selectedImage ? resolveHistoryParameters(selectedImage) : null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
@@ -127,10 +145,6 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
               {history.map((item) => {
                 const resolved = resolveHistoryParameters(item);
-                const sourceBadge = (source: Parameters<typeof historySourceLabel>[0]) => {
-                  const label = historySourceLabel(source);
-                  return label ? <span className="ml-1 text-[9px] text-slate-500">· {label}</span> : null;
-                };
                 const settleForApply: PreviewSettleState = !item.url || brokenIds[item.id]
                   ? 'failed_hard'
                   : 'ok';
@@ -163,7 +177,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
                       {displayValue(item.actualProvider || item.provider)}
                     </div>
                     <div className="absolute bottom-2 right-2 bg-black/70 backdrop-blur-md px-2 py-0.5 rounded text-[10px] font-mono text-slate-300">
-                      Seed: {displayResolvedParameter(resolved.seed)}{sourceBadge(resolved.seed.source)}
+                      Seed: {formatResolvedHistoryParameter(resolved.seed)}{sourceBadge(resolved.seed)}
                     </div>
                   </div>
 
@@ -174,16 +188,15 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
                       </p>
                       <div className="text-[11px] text-slate-400 font-mono flex flex-wrap gap-x-3 gap-y-0.5">
                         <span>模型: {displayValue(item.actualModel || item.model)}</span>
-                        <span>步数: {displayResolvedParameter(resolved.steps, ' 步')}{sourceBadge(resolved.steps.source)}</span>
-                        <span>CFG: {displayResolvedParameter(resolved.cfg)}{sourceBadge(resolved.cfg.source)}</span>
+                        <span>步数: {formatResolvedHistoryParameter(resolved.steps, ' 步')}{sourceBadge(resolved.steps)}</span>
+                        <span>CFG: {formatResolvedHistoryParameter(resolved.cfg)}{sourceBadge(resolved.cfg)}</span>
+                      </div>
+                      <div className="text-[11px] text-slate-400 font-mono flex flex-wrap gap-x-3 gap-y-0.5">
+                        <span>采样: {formatResolvedHistoryParameter(resolved.sampler)}{sourceBadge(resolved.sampler)} / {formatResolvedHistoryParameter(resolved.scheduler)}{sourceBadge(resolved.scheduler)}</span>
+                        <span>尺寸: {resolved.width.value != null && resolved.height.value != null ? `${resolved.width.value}×${resolved.height.value}` : (resolved.width.source === 'not-sent' && resolved.height.source === 'not-sent' ? '未发送' : '旧记录未保存')}{resolved.width.value != null && resolved.height.value != null && resolved.width.source === resolved.height.source ? sourceBadge(resolved.width) : null}</span>
                       </div>
                       <p className="text-[11px] text-slate-400 font-mono line-clamp-1">
-                        负向: {displayResolvedParameter(resolved.negativePrompt)}{sourceBadge(resolved.negativePrompt.source)}
-                      </p>
-                      <p className="text-[10px] text-slate-500 font-mono line-clamp-2">
-                        Sampler: {displayResolvedParameter(resolved.sampler)}{sourceBadge(resolved.sampler.source)}
-                        {' · '}Scheduler: {displayResolvedParameter(resolved.scheduler)}{sourceBadge(resolved.scheduler.source)}
-                        {' · '}尺寸: {displayResolvedParameter(resolved.width)}×{displayResolvedParameter(resolved.height)}
+                        负向: {formatResolvedHistoryParameter(resolved.negativePrompt)}{sourceBadge(resolved.negativePrompt)}
                       </p>
                       {item.loras && item.loras.length > 0 && (
                         <div className="mt-1.5 flex flex-wrap gap-1">
@@ -290,34 +303,29 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
               <p className={`font-medium ${selectedImage.prompt && selectedImage.prompt.trim() ? 'text-white' : 'text-slate-400 italic'}`}>
                 {displayValue(selectedImage.prompt)}
               </p>
-              {(() => {
-                const resolved = resolveHistoryParameters(selectedImage);
-                return (
-                  <>
-                    <p className="text-slate-300 font-mono text-[11px]">
-                      负向: {displayResolvedParameter(resolved.negativePrompt)} {historySourceLabel(resolved.negativePrompt.source)}
-                    </p>
-                    <p className="text-slate-400 font-mono text-[11px]">
-                      {displayValue(selectedImage.actualProvider || selectedImage.provider)} | Model: {displayValue(selectedImage.actualModel || selectedImage.model)}
-                    </p>
-                    <p className="text-slate-400 font-mono text-[11px]">
-                      Seed: {displayResolvedParameter(resolved.seed)} {historySourceLabel(resolved.seed.source)}
-                      {' | '}Steps: {displayResolvedParameter(resolved.steps, ' 步')} {historySourceLabel(resolved.steps.source)}
-                      {' | '}CFG: {displayResolvedParameter(resolved.cfg)} {historySourceLabel(resolved.cfg.source)}
-                    </p>
-                    <p className="text-slate-500 font-mono text-[11px]">
-                      Sampler: {displayResolvedParameter(resolved.sampler)} {historySourceLabel(resolved.sampler.source)}
-                      {' | '}Scheduler: {displayResolvedParameter(resolved.scheduler)} {historySourceLabel(resolved.scheduler.source)}
-                      {' | '}尺寸: {displayResolvedParameter(resolved.width)}×{displayResolvedParameter(resolved.height)}
-                    </p>
-                  </>
-                );
-              })()}
+              {selectedResolved && <>
+                <p className="text-slate-300 font-mono text-[11px]">
+                  负向: {formatResolvedHistoryParameter(selectedResolved.negativePrompt)}{sourceBadge(selectedResolved.negativePrompt)}
+                </p>
+                <p className="text-slate-400 font-mono text-[11px]">
+                  {displayValue(selectedImage.actualProvider || selectedImage.provider)} | Model: {displayValue(selectedImage.actualModel || selectedImage.model)}
+                </p>
+                <p className="text-slate-300 font-mono text-[11px]">
+                  Seed: {formatResolvedHistoryParameter(selectedResolved.seed)}{sourceBadge(selectedResolved.seed)} · Steps: {formatResolvedHistoryParameter(selectedResolved.steps, ' 步')}{sourceBadge(selectedResolved.steps)} · CFG: {formatResolvedHistoryParameter(selectedResolved.cfg)}{sourceBadge(selectedResolved.cfg)}
+                </p>
+                <p className="text-slate-300 font-mono text-[11px]">
+                  Sampler: {formatResolvedHistoryParameter(selectedResolved.sampler)}{sourceBadge(selectedResolved.sampler)} · Scheduler: {formatResolvedHistoryParameter(selectedResolved.scheduler)}{sourceBadge(selectedResolved.scheduler)} · Size: {selectedResolved.width.value != null && selectedResolved.height.value != null ? `${selectedResolved.width.value}×${selectedResolved.height.value}` : '未确认'}
+                </p>
+              </>}
               <p className="text-slate-300">LoRA: {selectedImage.loras?.length ? selectedImage.loras.map(l => `${l.name} × ${l.strength}`).join('；') : '未使用'}</p>
-              <details className="text-left">
-                <summary className="cursor-pointer text-cyan-300 py-2">实际请求参数与工作流</summary>
-                <pre className="max-h-60 overflow-auto whitespace-pre-wrap text-[11px] text-slate-300">{JSON.stringify({requestMetadata: selectedImage.requestMetadata ?? '旧记录未保存', workflowSnapshot: selectedImage.workflowSnapshot ?? '旧记录未保存'}, null, 2)}</pre>
-              </details>
+              {selectedResolved && <details className="text-left">
+                <summary className="cursor-pointer text-cyan-300 py-2">请求值 / 实际发送 / 上游实际</summary>
+                <pre className="max-h-60 overflow-auto whitespace-pre-wrap text-[11px] text-slate-300">{JSON.stringify({
+                  parameters: Object.fromEntries(Object.entries(selectedResolved).map(([key, value]) => [key, {requested: value.requested ?? null, sent: value.sent ?? null, upstream: value.upstream ?? null, resolved: value.value ?? null, source: value.source}])),
+                  requestMetadata: selectedImage.requestMetadata ?? '旧记录未保存',
+                  workflowSnapshot: selectedImage.workflowSnapshot ?? '旧记录未保存',
+                }, null, 2)}</pre>
+              </details>}
             </div>
             <button
               onClick={() => setSelectedImage(null)}
