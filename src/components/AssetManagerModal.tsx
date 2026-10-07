@@ -190,6 +190,11 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
     );
   }, [history, customUploads, deletedIds]);
 
+  const providerOptions = useMemo(
+    () => Array.from(new Set(allAssets.map((asset) => asset.provider?.trim()).filter((provider): provider is string => Boolean(provider)))).sort((a, b) => a.localeCompare(b)),
+    [allAssets]
+  );
+
   // Filtering & Sorting
   const filteredAssets = useMemo(() => {
     return allAssets
@@ -651,16 +656,9 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
                 className="bg-transparent text-slate-200 outline-none cursor-pointer font-mono"
               >
                 <option value="all" className="bg-[#1a1b24]">全服务商 (All)</option>
-                <option value="civitai" className="bg-[#1a1b24]">Civitai 官方原生</option>
-                <option value="fal" className="bg-[#1a1b24]">Fal.ai 极速云</option>
-                <option value="agnes" className="bg-[#1a1b24]">Agnes AI 2.5 Flash</option>
-                <option value="modelscope" className="bg-[#1a1b24]">ModelScope 魔搭</option>
-                <option value="huggingface" className="bg-[#1a1b24]">Hugging Face</option>
-                <option value="tensor" className="bg-[#1a1b24]">Tensor.Art 模型 API</option>
-                <option value="sensenova" className="bg-[#1a1b24]">SenseNova 商汤</option>
-                <option value="nanogpt" className="bg-[#1a1b24]">NanoGPT</option>
-                <option value="gemini" className="bg-[#1a1b24]">Google Gemini</option>
-                <option value="本地导入" className="bg-[#1a1b24]">本地导入素材</option>
+                {providerOptions.map((provider) => (
+                  <option key={provider} value={provider} className="bg-[#1a1b24]">{provider}</option>
+                ))}
               </select>
             </div>
 
