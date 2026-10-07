@@ -18,7 +18,7 @@ it('selects one branch for catalog and inspector edits and refuses an ambiguous 
  expect(explicitProvider('Qwen/Qwen-Image')).toBe('');
  expect(catalogModelTarget([...nodes,node('video','AIVideoNode')],edges,'video',false)).toBeUndefined();
 });
-it.each([['Fal.ai (GPU 云端加速)','fal'],['ModelScope AI','modelscope_ai'],['ModelScope CN','modelscope'],['Hugging Face → fal-ai','huggingface'],['Tensor.Art (模型 API)','tensorart'],['Agnes AI (ApiHub)','agnes'],['Google Gemini (官方直连)','gemini']])('preserves recorded provider %s as %s', (label,id)=>expect(explicitProvider(label)).toBe(id));
+it.each([['Fal.ai (GPU 云端加速)','fal'],['ModelScope AI','modelscope_ai'],['ModelScope CN','modelscope'],['Hugging Face → fal-ai','huggingface'],['Tensor.Art (模型 API)','tensorart'],['Agnes AI (ApiHub)','agnes'],['Google Gemini (官方直连)','gemini'],['MuAPI','muapi'],['WaveSpeed','wavespeed'],['Sogni','sogni']])('preserves recorded provider %s as %s', (label,id)=>expect(explicitProvider(label)).toBe(id));
 it('imports actual workflow parameters, seed/strength zero and connected prompts without inventing provider or scheduler',()=>{
  const nodes=[node('base','CheckpointLoaderSimple',{ckpt_name:'Qwen/Qwen-Image'}),node('lora','LoRALoader',{lora_name:'adapter',strength_model:0,strength_clip:0}),node('sampler','KSampler',{seed:0,steps:12,cfg:0}),node('latent','EmptyLatentImage',{width:512,height:768,batch_size:1}),node('pos','CLIPTextEncode',{text:'actual prompt'}),node('neg','CLIPTextEncode',{text:'actual negative'}),node('unused','CLIPTextEncode',{text:'unrelated'})];
  const edges=[edge('base','lora','model'),edge('lora','sampler','model'),edge('latent','sampler','latent_image'),edge('pos','sampler','positive'),edge('neg','sampler','negative')];
