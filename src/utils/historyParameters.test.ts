@@ -1,70 +1,89 @@
 import { describe, expect, it } from 'vitest';
-import { displayResolvedParameter, historySourceLabel, resolveHistoryParameters } from './historyParameters';
 import type { GenerationHistoryItem } from '../types/providers';
+import { extractEmbeddedGenerationParameters, resolveHistoryParameters } from './historyParameters';
 
-const base = (overrides: Partial<GenerationHistoryItem> = {}): GenerationHistoryItem => ({
-  id: 'hist',
-  url: 'data:image/png;base64,abc',
-  prompt: 'prompt',
-  provider: 'Civitai',
-  model: 'model',
+const baseItem = (): GenerationHistoryItem => ({
+  id: 'hist-1',
+  url: '',
+  prompt: 'robot',
+  negativePrompt: null,
+  provider: 'Civitai 官方原生生成引擎',
+  model: 'urn:air:sd1:checkpoint:civitai:4384@128713',
   seed: null,
   steps: null,
   cfg: null,
   timestamp: 1,
-  ...overrides,
+  loras: [],
 });
 
-describe('history parameter provenance', () => {
-  it('prefers upstream effective values over sent/requested/legacy values', () => {
-    const resolved = resolveHistoryParameters(base({
-      steps: 8,
-      cfg: 2,
-      requestMetadata: {
-        requestedParameters: { steps: 10, cfg: 3 },
-        actualParameters: { steps: 12, cfgScale: 4, sampleMethod: 'dpmpp_2m' },
-        effectiveParameters: { steps: 20, cfgScale: 7, sampleMethod: 'euler', schedule: 'discrete', width: 512, height: 512 },
-      },
-    }));
-    expect(resolved.steps).toMatchObject({ value: 20, source: 'upstream' });
-    expect(resolved.cfg).toMatchObject({ value: 7, source: 'upstream' });
-    expect(resolved.sampler).toMatchObject({ value: 'euler', source: 'upstream' });
-    expect(resolved.scheduler).toMatchObject({ value: 'discrete', source: 'upstream' });
-    expect(displayResolvedParameter(resolved.width)).toBe('512');
-    expect(historySourceLabel(resolved.steps.source)).toBe('上游实际');
+function utf16DataUrl(text: string): string {
+  const bytes = new Uint8Array(text.length * 2);
+  for (let i = 0; i < text.length; i++) {
+    bytes[i * 2] = text.charCodeAt(i);
+    bytes[i * 2 + 1] = 0;
+  }
+  let binary = '';
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return `data:image/jpeg;base64,${btoa(binary)}`;
+}
+
+describe('history generation parameter provenance', () => {
+  it('uses Civitai upstream effective defaults instead of calling them unfilled', () => {
+    const item = baseItem();
+    item.requestMetadata = {
+      route: '/api/engine/civitai/generate',
+      submissions: [{
+        endpoint: 'https://orchestration.civitai.com/v2/consumer/workflows?wait=100',
+        parameters: { steps: [{ $type: 'imageGen', input: { engine: 'sdcpp', prompt: 'robot', model: item.model } }] },
+        status: 200,
+      }],
+      executionTrace: [{
+        endpoint: 'https://orchestration.civitai.com/v2/consumer/workflows?wait=100',
+        responseBody: JSON.stringify({
+          status: 'succeeded',
+          steps: [{ input: { width: 512, height: 512, sampleMethod: 'euler', schedule: 'discrete', steps: 20, cfgScale: 7 } }],
+        }),
+      }],
+    } as any;
+
+    const params = resolveHistoryParameters(item);
+    expect(params.steps).toMatchObject({ value: 20, source: 'upstream' });
+    expect(params.cfg).toMatchObject({ value: 7, source: 'upstream' });
+    expect(params.sampler).toMatchObject({ value: 'euler', source: 'upstream' });
+    expect(params.scheduler).toMatchObject({ value: 'discrete', source: 'upstream' });
+    expect(params.width).toMatchObject({ value: 512, source: 'upstream' });
+    expect(params.height).toMatchObject({ value: 512, source: 'upstream' });
+    expect(params.negativePrompt.source).toBe('not-sent');
   });
 
-  it('marks requested-but-not-sent fields instead of calling them blank', () => {
-    const resolved = resolveHistoryParameters(base({
-      requestMetadata: {
-        requestedParameters: { negative_prompt: 'blurry', steps: 18 },
-        actualParameters: { prompt: 'prompt' },
-      },
-    }));
-    expect(resolved.negativePrompt).toMatchObject({ value: 'blurry', source: 'requested-not-sent', emptyLabel: '未发送' });
-    expect(resolved.steps).toMatchObject({ value: 18, source: 'requested-not-sent' });
+  it('recovers seed and WebUI-style fields from embedded image generation metadata', () => {
+    const url = utf16DataUrl('Prompt text\nSteps: 20, Sampler: Euler, CFG scale: 7, Seed: 1021568893, Size: 512x512');
+    const params = extractEmbeddedGenerationParameters(url);
+    expect(params).toMatchObject({
+      seed: 1021568893,
+      steps: 20,
+      sampler: 'Euler',
+      cfg: 7,
+      width: 512,
+      height: 512,
+    });
   });
 
-  it('labels missing provenance in old records separately from a known unsent field', () => {
-    const old = resolveHistoryParameters(base());
-    expect(displayResolvedParameter(old.sampler)).toBe('旧记录未保存');
+  it('distinguishes a requested value that was not sent from an upstream-confirmed value', () => {
+    const item = baseItem();
+    item.requestMetadata = {
+      requestedParameters: { steps: 30, negative_prompt: 'bad hands' },
+      submissions: [{ endpoint: 'https://example.test', parameters: { prompt: 'robot' }, status: 200 }],
+    } as any;
 
-    const current = resolveHistoryParameters(base({ requestMetadata: { requestedParameters: {}, actualParameters: {} } }));
-    expect(displayResolvedParameter(current.sampler)).toBe('未发送');
+    const params = resolveHistoryParameters(item);
+    expect(params.steps).toMatchObject({ source: 'not-sent', requested: 30 });
+    expect(params.negativePrompt).toMatchObject({ source: 'not-sent', requested: 'bad hands' });
   });
 
-  it('can recover Civitai effective parameters from a structured execution trace body', () => {
-    const resolved = resolveHistoryParameters(base({
-      requestMetadata: {
-        executionTrace: [{
-          responseBody: JSON.stringify({
-            steps: [{ input: { steps: 20, cfgScale: 7, sampleMethod: 'euler', schedule: 'discrete', width: 512, height: 512 } }],
-          }),
-        }],
-      },
-    }));
-    expect(resolved.steps.value).toBe(20);
-    expect(resolved.cfg.value).toBe(7);
-    expect(resolved.sampler.value).toBe('euler');
+  it('labels metadata-less old records separately instead of pretending they were not sent', () => {
+    const params = resolveHistoryParameters(baseItem());
+    expect(params.seed.source).toBe('unknown');
+    expect(params.steps.source).toBe('unknown');
   });
 });
