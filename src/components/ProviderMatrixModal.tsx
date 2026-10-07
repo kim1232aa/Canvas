@@ -454,7 +454,7 @@ export const ProviderMatrixModal: React.FC<ProviderMatrixModalProps> = ({
                   <div>
                     <h3 className="text-sm font-bold text-white">严格意图遵从与透明报错体系 (Zero Fake Fallback & Strict Execution)</h3>
                     <p className="text-xs text-slate-400">
-                      拒绝假图欺骗与静默降级：100% 遵从用户的编排意图，错误透明直观透传
+                      拒绝假图与静默降级：按用户显式选择的 provider / model / route 执行，错误透明直传
                     </p>
                   </div>
                 </div>
@@ -466,7 +466,7 @@ export const ProviderMatrixModal: React.FC<ProviderMatrixModalProps> = ({
                       <span>1. 真实节点与服务商优先路由</span>
                     </div>
                     <p className="text-slate-400 text-[11px] leading-relaxed">
-                      系统严格按照画布节点连接的真实服务商路由（Google Gemini / Fal.ai / ModelScope / NanoGPT 等），绝不擅自篡改 Provider 目标，精准应用用户配置的 LoRA 权重与 KSampler 采样参数。
+                      系统严格按照画布节点连接的真实服务商路由（Google Gemini / Fal.ai / ModelScope / NanoGPT 等），绝不擅自篡改 Provider 目标，仅把目标端点明确支持的 LoRA / KSampler 参数映射到请求；不支持或未核实的字段保持可追溯。
                     </p>
                   </div>
 
