@@ -105,6 +105,16 @@ export interface CivitaiSearchResult {
   };
 }
 
+export interface GenerationHistoryRequestMetadata {
+  route?: string;
+  submissions?: Array<{ endpoint: string; parameters: unknown; status: number }>;
+  executionTrace?: Array<Record<string, unknown>>;
+  requestedParameters?: Record<string, unknown>;
+  actualParameters?: Record<string, unknown>;
+  effectiveParameters?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
 export interface GenerationHistoryItem {
   id: string;
   url: string;
@@ -126,13 +136,5 @@ export interface GenerationHistoryItem {
   timestamp: number;
   loras?: Array<{ name: string; strength: number; civitaiId?: string }>;
   workflowSnapshot?: Record<string, unknown>;
-  requestMetadata?: {
-    route?: string;
-    submissions?: Array<{ endpoint: string; parameters: unknown; status: number }>;
-    executionTrace?: unknown[];
-    requestedParameters?: Record<string, unknown>;
-    actualParameters?: Record<string, unknown>;
-    effectiveParameters?: Record<string, unknown>;
-    [key: string]: unknown;
-  };
+  requestMetadata?: GenerationHistoryRequestMetadata;
 }
