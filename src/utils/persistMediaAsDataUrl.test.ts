@@ -9,8 +9,6 @@ import {
   persistRemoteUrlAsDataUrlResult,
   requireDurableHistoryMediaUrl,
 } from './persistMediaAsDataUrl';
-import http from 'http';
-import { AddressInfo } from 'net';
 
 const TINY_PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
@@ -66,21 +64,17 @@ describe('persistMediaAsDataUrl (history durable copy)', () => {
   });
 
   it('persistRemoteUrlAsDataUrl downloads fixture bytes into data URL', async () => {
-    const server = http.createServer((_req, res) => {
-      res.writeHead(200, { 'Content-Type': 'image/png' });
-      res.end(TINY_PNG);
-    });
-    await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
-    const { port } = server.address() as AddressInfo;
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response(TINY_PNG, { status: 200, headers: { 'Content-Type': 'image/png' } }));
     try {
-      const dataUrl = await persistRemoteUrlAsDataUrl(`http://127.0.0.1:${port}/fixture.png`);
+      const dataUrl = await persistRemoteUrlAsDataUrl('https://fixture.invalid/fixture.png');
       expect(dataUrl).toBeTruthy();
       expect(dataUrl!.startsWith('data:image/png;base64,')).toBe(true);
       const historyItem = { url: dataUrl!, provider: 'Civitai 官方原生' };
       expect(historyItem.url.startsWith('data:')).toBe(true);
       expect(historyItem.url.includes('orchestration')).toBe(false);
     } finally {
-      await new Promise<void>((r) => server.close(() => r()));
+      globalThis.fetch = originalFetch;
     }
   });
 
@@ -137,35 +131,27 @@ describe('requireDurableHistoryMediaUrl (grok history write contract)', () => {
   }
 
   it('success path: persist called and history/response URL is data:image (not remote https)', async () => {
-    const server = http.createServer((_req, res) => {
-      res.writeHead(200, { 'Content-Type': 'image/png' });
-      res.end(REAL_THUMB_PNG);
-    });
-    await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
-    const { port } = server.address() as AddressInfo;
-    const remote = `http://127.0.0.1:${port}/imgen-like/tmp.png`;
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response(REAL_THUMB_PNG, { status: 200, headers: { 'Content-Type': 'image/png' } }));
+    const remote = 'https://fixture.invalid/imgen-like/tmp.png';
     try {
       const out = await simulateGrokHistoryWrite(remote);
       expect(out.status).toBe(200);
       if (out.status !== 200) throw new Error('expected 200');
       expect(out.historyUrl.startsWith('data:image/')).toBe(true);
       expect(out.responseImageUrl.startsWith('data:image/')).toBe(true);
-      expect(out.historyUrl.includes('127.0.0.1')).toBe(false);
+      expect(out.historyUrl.includes('fixture.invalid')).toBe(false);
       expect(out.historyUrl.includes('imgen')).toBe(false);
       expect(out.body.historyItem.url).toBe(out.historyUrl);
     } finally {
-      await new Promise<void>((r) => server.close(() => r()));
+      globalThis.fetch = originalFetch;
     }
   });
 
   it('persist failure (HTTP 403): does not store remote URL; surfaces status + body', async () => {
-    const server = http.createServer((_req, res) => {
-      res.writeHead(403, { 'Content-Type': 'text/plain' });
-      res.end('Forbidden: signed URL expired');
-    });
-    await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
-    const { port } = server.address() as AddressInfo;
-    const remote = `http://127.0.0.1:${port}/imgen.x.ai/expired.png`;
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response('Forbidden: signed URL expired', { status: 403, headers: { 'Content-Type': 'text/plain' } }));
+    const remote = 'https://fixture.invalid/imgen.x.ai/expired.png';
     try {
       const out = await simulateGrokHistoryWrite(remote);
       expect(out.status).toBe(500);
@@ -180,22 +166,17 @@ describe('requireDurableHistoryMediaUrl (grok history write contract)', () => {
       expect(out.body.persistStack).toContain('HTTP 403');
       expect(out.body.error).toMatch(/403/);
       expect(out.body.error).toMatch(/Forbidden|expired|持久化/i);
-      // Must not pretend success with remote URL in history
-      expect(JSON.stringify(out)).not.toMatch(/"url":\s*"http:\/\/127\.0\.0\.1/);
+      expect(JSON.stringify(out)).not.toMatch(/"url":\s*"https:\/\/fixture\.invalid/);
     } finally {
-      await new Promise<void>((r) => server.close(() => r()));
+      globalThis.fetch = originalFetch;
     }
   });
 
   it('persistRemoteUrlAsDataUrlResult returns status+message on 403', async () => {
-    const server = http.createServer((_req, res) => {
-      res.writeHead(403, { 'Content-Type': 'application/json' });
-      res.end('{"error":"denied"}');
-    });
-    await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
-    const { port } = server.address() as AddressInfo;
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn().mockImplementation(async () => new Response('{"error":"denied"}', { status: 403, headers: { 'Content-Type': 'application/json' } }));
     try {
-      const r = await persistRemoteUrlAsDataUrlResult(`http://127.0.0.1:${port}/x`);
+      const r = await persistRemoteUrlAsDataUrlResult('https://fixture.invalid/x');
       expect(r.ok).toBe(false);
       if (!r.ok) {
         expect(r.status).toBe(403);
@@ -205,22 +186,18 @@ describe('requireDurableHistoryMediaUrl (grok history write contract)', () => {
         expect(r.errorSource).toBe('upstream');
         expect(r.stack).toContain('HTTP 403');
       }
-      expect(await persistRemoteUrlAsDataUrl(`http://127.0.0.1:${port}/x`)).toBeNull();
+      expect(await persistRemoteUrlAsDataUrl('https://fixture.invalid/x')).toBeNull();
     } finally {
-      await new Promise<void>((r) => server.close(() => r()));
+      globalThis.fetch = originalFetch;
     }
   });
 
   it('retains the complete long HTTP body and never logs signed URLs or response contents', async () => {
     const fullBody = `provider error: ${'x'.repeat(1800)} end-marker`;
-    const server = http.createServer((_req, res) => {
-      res.writeHead(502, { 'Content-Type': 'text/plain' });
-      res.end(fullBody);
-    });
-    await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
-    const { port } = server.address() as AddressInfo;
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response(fullBody, { status: 502, headers: { 'Content-Type': 'text/plain' } }));
     const log = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const signedUrl = `http://127.0.0.1:${port}/private?signature=do-not-log`;
+    const signedUrl = 'https://fixture.invalid/private?signature=do-not-log';
     try {
       const result = await persistRemoteUrlAsDataUrlResult(signedUrl);
       expect(result.ok).toBe(false);
@@ -233,7 +210,7 @@ describe('requireDurableHistoryMediaUrl (grok history write contract)', () => {
       expect(log).not.toHaveBeenCalled();
     } finally {
       log.mockRestore();
-      await new Promise<void>((r) => server.close(() => r()));
+      globalThis.fetch = originalFetch;
     }
   });
 
