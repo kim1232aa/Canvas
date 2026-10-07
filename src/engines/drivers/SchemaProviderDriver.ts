@@ -70,6 +70,8 @@ export class SchemaProviderDriver extends BaseEngineDriver {
     const schemaResponse = await request(schemaUrl, { method: 'GET', headers }, `${this.name} schema lookup`);
     const schemaBody = await readBody(schemaResponse);
     if (!schemaResponse.ok) throw failure(`${this.name} model schema lookup failed`, schemaResponse, schemaBody);
+    const credentialRef = String(asRecord(schemaBody).credentialRef || '').trim();
+    if (credentialRef) headers['x-canvas-credential-ref'] = credentialRef;
     const workflowSnapshot = params.workflowSnapshot;
     const extra = asRecord(params.extraParams);
     const custom = asRecord(extra.custom_parameters);
