@@ -12,12 +12,14 @@
 | Sogni | PASS_BILLING | 真实 task created，LoRA ID/strengths 透传；insufficient_credit 原样展示 |
 | Fal.ai | PASS_BILLING | fal-ai/flux-lora 到真实上游，403 TOP_UP 原样展示 |
 | ModelScope CN | PASS_BILLING | CN 图像接口 429，响应体明确 insufficient balance |
+| Hugging Face | PASS_BILLING | 2026-10-08 前端显式 HF→fal-ai：FLUX.1-dev + HF LoRA 0.55 到达 HF Router，HTTP 402 no remaining credits |
 | ModelScope AI | BLOCKED_AUTH | AI 国际站 401，原文要求绑定 Alibaba Cloud account |
 | NanoGPT | BLOCKED_AUTH | qwen-image-2.1/text-to-image 真实上游 401 Invalid session / invalid_api_key |
 | Tensor.Art / TAMS | BLOCKED_AUTH | 真实模型 ID 查询到 TAMS，业务体 unauthorized / app not found |
-| Hugging Face | 待当前环境复验 | 旧 Z-Image Space 证据为网络 BLOCKED_ENV；不能外推当前所有 HF 路由 |
+| Google Gemini | BLOCKED_CONFIG | 前端真实到 /api/gemini/generate，本地未配置 GEMINI_API_KEY；未到上游 |
+| Agnes AI | BLOCKED_CONFIG | 前端真实到 /api/engine/agnes/generate，本地未配置 Agnes Base URL / Key；未到上游 |
 
-已取得明确终态的供应商不再为了“刷测试”重复消耗。
+已取得明确终态的供应商不再为了“刷测试”重复消耗。BLOCKED_CONFIG 只代表当前本地运行环境缺少必要配置，不能外推为上游不可用。
 
 ## 2. 用户新增的验收规则
 
@@ -69,11 +71,34 @@ MuAPI LoRA 专用端点 `flux-1-dev-style-lora-inference` 已从真实前端验�
 
 因此 A03 接线缺口关闭；充值后再出图只用于视觉效果确认。
 
+### 3.5 Hugging Face HF→fal-ai 路由
+
+本轮新样本：
+- Base model：`black-forest-labs/FLUX.1-dev`
+- LoRA：`Shakker-Labs/FLUX.1-dev-LoRA-add-details`
+- LoRA scale：`0.55`
+- Seed：`314159`
+- Steps：`24`
+- CFG：`3.2`
+- Negative Prompt：独立发送
+
+第一次运行发现旧 Z-Image Space 的 `resolution / shift / random_seed / gallery_images` 污染了 HF→fal-ai，导致本站 400。修复后这些字段只在显式 `z-image-space` 路由发送；第二次真实前端请求到达 Hugging Face Router 的 `fal-ai/flux-lora`，上游返回 HTTP 402 `You have no remaining credits`。按用户规则记 PASS_BILLING。
+
+### 3.6 Gemini / Agnes 当前配置阻塞
+
+- Gemini：前端真实请求包含 `gemini-3.1-flash-image`、`4:3`、`1K` 与独立 Prompt；本站返回 HTTP 400 `未配置 GEMINI_API_KEY`，`errorSource=local`、`executionTrace=[]`。记 BLOCKED_CONFIG。
+- Agnes：前端真实到 `/api/engine/agnes/generate`；本站返回 HTTP 400 未配置 Agnes Base URL / Key。记 BLOCKED_CONFIG。
+- 两者都没有上游 HTTP 响应，因此不能记欠费、鉴权失败或生成成功。
+
 ## 4. 当前真正剩余
 
 A01–A08、A10–A12 按当前交接范围关闭。A09 的代码契约与回归已补齐；仍缺的是“有额度情况下真实多图 + 某图持久化失败”的外部前端实景证据，不能靠故意制造生产故障来伪造。
 
-Hugging Face / Gemini / Agnes / SenseNova / 兼容中转 / Video 等尚未取得当前明确终态的路由，继续按用户的新样本规则逐路由验收；不能从代码存在、目录存在或其他 provider 成功推断为通过。
+供应商方面：
+- SenseNova 仍需按其实际产品边界做当前前端验收；它在本产品中是 chat/reasoning，而不是图片生成供应商。
+- OpenAI/Grok 兼容中转必须使用用户明确配置的 Base URL，不能拿兼容性当官方能力。
+- Video 聚合入口仍需单独按实际模型/供应商验收。
+- Gemini / Agnes 只需在配置缺失项补齐后复验，不为刷覆盖率重复调用其他已终态 provider。
 
 ## 5. 回归原则
 
@@ -96,4 +121,3 @@ Aki 本地工作区在恢复后重新执行完整回归：
 - Vite 生产构建：1732 modules transformed；仅保留已有 `__dirname` native-loader 与 chunk-size warning，没有构建失败。
 
 这组回归只证明当前代码没有破坏既有契约；不替代任何 provider 的真实前端/上游验收。
-
