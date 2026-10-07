@@ -85,3 +85,15 @@ Hugging Face / Gemini / Agnes / SenseNova / 兼容中转 / Video 等尚未取得
 4. 有图则真实持久化并保留参数 provenance；
 5. 无图则保留真实上游状态码、响应体、cause/stack；
 6. PASS_BILLING 只在响应体明确余额/额度原因时成立。
+
+## 6. 2026-10-08 本地回归
+
+Aki 本地工作区在恢复后重新执行完整回归：
+
+- `npm test` — **40/40 test files、293/293 tests PASS**
+- `npm run lint` — **PASS**
+- `npm run build` — **PASS**
+- Vite 生产构建：1732 modules transformed；仅保留已有 `__dirname` native-loader 与 chunk-size warning，没有构建失败。
+
+这组回归只证明当前代码没有破坏既有契约；不替代任何 provider 的真实前端/上游验收。
+
