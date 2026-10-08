@@ -164,15 +164,17 @@ describe('resolveSchemaModelId', () => {
 
 
 describe('agnes / huggingface / nanogpt schema unsupported fields', () => {
-  it('agnes image: greys seed/negative/steps/cfg/sampler/scheduler/denoise/loras; width/height stay', () => {
-    for (const id of ['agnes-image-2.5-flash', 'agnes-image-2.1-flash', 'agnes-image-2.0-flash']) {
-      for (const f of ['seed', 'negative_prompt', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'loras'] as const) {
-        expect(getFieldSpec('agnes', id, f)?.status, `${id}.${f}`).toBe('unsupported');
-      }
-      expect(getFieldSpec('agnes', id, 'width')?.status).toBe('supported');
-      expect(getFieldSpec('agnes', id, 'height')?.status).toBe('supported');
-      expect(resolveSchemaModelId('agnes', '')).toBe('agnes-image-2.5-flash');
+  it('agnes image 2.5 uses size/ratio, while legacy image models stay unverified', () => {
+    for (const f of ['width', 'height', 'seed', 'negative_prompt', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'loras'] as const) {
+      expect(getFieldSpec('agnes', 'agnes-image-2.5-flash', f)?.status, `agnes-image-2.5-flash.${f}`).toBe('unsupported');
     }
+    expect(getFieldSpec('agnes', 'agnes-image-2.5-flash', 'aspect_ratio')?.status).toBe('supported');
+    expect(getFieldSpec('agnes', 'agnes-image-2.5-flash', 'size')?.status).toBe('supported');
+    for (const id of ['agnes-image-2.1-flash', 'agnes-image-2.0-flash']) {
+      expect(getFieldSpec('agnes', id, 'width')?.status, `${id}.width`).toBe('unverified');
+      expect(getFieldSpec('agnes', id, 'loras')?.status, `${id}.loras`).toBe('unverified');
+    }
+    expect(resolveSchemaModelId('agnes', '')).toBe('agnes-image-2.5-flash');
   });
 
   it('huggingface text-to-image: greys loras/denoise/sampler; keeps negative/seed/steps/cfg/WH', () => {
