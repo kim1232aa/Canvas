@@ -478,7 +478,7 @@ interface KeyStats {
 class KeyPoolManager {
   private pools: Map<string, KeyStats[]> = new Map();
   private roundRobinPointers: Map<string, number> = new Map();
-  private strategies: Map<string, 'round_robin' | 'failover' | 'latency_best'> = new Map();
+  private strategies: Map<string, 'round_robin'> = new Map();
 
   constructor() {
     this.refreshFromSettings();
@@ -499,12 +499,12 @@ class KeyPoolManager {
       .filter((k) => k.length > 0);
   }
 
-  public setStrategy(prov: string, strategy: 'round_robin' | 'failover' | 'latency_best') {
+  public setStrategy(prov: string, strategy: 'round_robin') {
     this.strategies.set(prov, strategy);
   }
 
-  public getStrategy(prov: string): 'round_robin' | 'failover' | 'latency_best' {
-    return this.strategies.get(prov) || (cloudSettings[`${prov}_strategy`] as any) || 'round_robin';
+  public getStrategy(prov: string): 'round_robin' {
+    return 'round_robin';
   }
 
   public refreshFromSettings() {
@@ -554,7 +554,6 @@ class KeyPoolManager {
     const pool = this.pools.get(prov) || [];
     if (pool.length === 0) return '';
 
-    // Recover rate limited keys if cool-down passed (60 seconds)
     const now = Date.now();
     pool.forEach((k) => {
       if (k.status === 'rate_limited' && k.rateLimitResetAt && now > k.rateLimitResetAt) {
@@ -563,31 +562,11 @@ class KeyPoolManager {
       }
     });
 
-    const activeKeys = pool.filter((k) => k.status === 'active');
-    const targetPool = activeKeys.length > 0 ? activeKeys : pool;
-    if (targetPool.length === 0) return '';
-
-    const strategy = this.getStrategy(prov);
-    let selected: KeyStats;
-
-    if (strategy === 'failover') {
-      // Always pick the first healthy active key
-      selected = targetPool[0];
-    } else if (strategy === 'latency_best') {
-      // Pick key with lowest recorded average latency, or untested first
-      selected = [...targetPool].sort((a, b) => {
-        const aLat = a.latencyHistory.length > 0 ? a.latencyHistory.reduce((x, y) => x + y, 0) / a.latencyHistory.length : 0;
-        const bLat = b.latencyHistory.length > 0 ? b.latencyHistory.reduce((x, y) => x + y, 0) / b.latencyHistory.length : 0;
-        if (aLat === 0) return -1;
-        if (bLat === 0) return 1;
-        return aLat - bLat;
-      })[0];
-    } else {
-      // Round-Robin
-      let ptr = this.roundRobinPointers.get(prov) || 0;
-      selected = targetPool[ptr % targetPool.length];
-      this.roundRobinPointers.set(prov, (ptr + 1) % targetPool.length);
-    }
+    // Selection is deliberately independent of prior failures. A failed/limited key may remain marked in stats,
+    // but the system must not silently route a later request to a different account because of that failure.
+    let ptr = this.roundRobinPointers.get(prov) || 0;
+    const selected = pool[ptr % pool.length];
+    this.roundRobinPointers.set(prov, (ptr + 1) % pool.length);
 
     selected.lastUsed = now;
     selected.totalCalls++;
@@ -761,11 +740,11 @@ if (!cloudSettings || Object.keys(cloudSettings).length === 0) {
 }
 
 // Agnes / SenseNova / OpenAI-compat / Grok-compat key + base URL resolution (A1/A2).
-// Key: header (comma-separated rotates) > pool (settings + env, comma-separated). Base URL: header > settings > env. No hardcoded default.
+// Key: header (comma-separated rotates) > pool (settings + env, comma-separated). Base URL: header > settings > env > verified official default (only where declared below).
 // A custom base URL requires a custom key — server keys are never sent to a user-supplied host.
 type AuthProvider = 'agnes' | 'sensenova' | 'openai_compat' | 'grok_compat';
-const AUTH_META: Record<AuthProvider, { headerPrefix: string; settingsBaseName: string; envName: string }> = {
-  agnes: { headerPrefix: 'x-agnes', settingsBaseName: 'agnesBaseUrl', envName: 'AGNES' },
+const AUTH_META: Record<AuthProvider, { headerPrefix: string; settingsBaseName: string; envName: string; defaultBaseUrl?: string }> = {
+  agnes: { headerPrefix: 'x-agnes', settingsBaseName: 'agnesBaseUrl', envName: 'AGNES', defaultBaseUrl: 'https://apihub.agnes-ai.com/v1' },
   sensenova: { headerPrefix: 'x-sensenova', settingsBaseName: 'sensenovaBaseUrl', envName: 'SENSENOVA' },
   openai_compat: { headerPrefix: 'x-openai-compat', settingsBaseName: 'openaiCompatBaseUrl', envName: 'OPENAI_COMPAT_IMAGE' },
   grok_compat: { headerPrefix: 'x-grok-compat', settingsBaseName: 'grokCompatBaseUrl', envName: 'GROK_COMPAT' },
@@ -781,7 +760,7 @@ function resolveProviderAuth(
   req: express.Request,
   provider: AuthProvider
 ): { apiKey: string; baseUrl: string; error?: string } {
-  const { headerPrefix, settingsBaseName, envName } = AUTH_META[provider];
+  const { headerPrefix, settingsBaseName, envName, defaultBaseUrl } = AUTH_META[provider];
 
   const customBaseUrl = (req.headers[`${headerPrefix}-base-url`] as string)?.trim() || '';
   const customKey = (req.headers[`${headerPrefix}-key`] as string)?.trim() || '';
@@ -791,7 +770,7 @@ function resolveProviderAuth(
   }
   const baseUrl = normalizeAuthBaseUrl(
     provider,
-    String(customBaseUrl || cloudSettings[settingsBaseName] || defaultKeys[settingsBaseName] || ''),
+    String(customBaseUrl || cloudSettings[settingsBaseName] || defaultKeys[settingsBaseName] || defaultBaseUrl || ''),
   );
   if (!baseUrl) {
     return { apiKey: '', baseUrl: '', error: `未配置 ${provider} Base URL（${envName}_BASE_URL / 设置面板 / ${headerPrefix}-base-url）。` };
@@ -805,10 +784,10 @@ function resolveProviderAuth(
 
 // Server-side base URL only (settings > env) — never from request headers, since callers use pool keys.
 function getProviderBaseUrl(provider: AuthProvider): { baseUrl: string; error?: string } {
-  const { settingsBaseName, envName } = AUTH_META[provider];
+  const { settingsBaseName, envName, defaultBaseUrl } = AUTH_META[provider];
   const baseUrl = normalizeAuthBaseUrl(
     provider,
-    String(cloudSettings[settingsBaseName] || defaultKeys[settingsBaseName] || ''),
+    String(cloudSettings[settingsBaseName] || defaultKeys[settingsBaseName] || defaultBaseUrl || ''),
   );
   if (!baseUrl) {
     return { baseUrl: '', error: `未配置 ${provider} Base URL（${envName}_BASE_URL / 设置面板）。` };
@@ -4854,22 +4833,22 @@ app.post(['/api/engine/agnes/generate', '/api/agnes/generate'], async (req, res)
   const { apiKey, baseUrl } = auth;
 
   try {
-    const { prompt, model, width, height, image_url } = req.body;
+    const { prompt, model, image_url } = req.body;
     if (!model) return res.status(400).json({ error: '模型为必填项（model is required）' });
-    // Agnes image API has no seed/negative_prompt/steps/cfg/loras
-    if (rejectUnsupported(res, 'Agnes AI', req.body, ['negative_prompt', 'seed', 'cfg', 'guidance_scale', 'steps', 'loras','sampler_name','scheduler','denoise'])) return;
+    if (model === 'agnes-image-2.5-flash' && rejectUnsupported(res, 'Agnes AI', req.body, ['width', 'height', 'negative_prompt', 'seed', 'cfg', 'guidance_scale', 'steps', 'loras','sampler_name','scheduler','denoise'])) return;
+    if (model !== 'agnes-image-2.5-flash' && rejectUnsupported(res, 'Agnes AI', req.body, ['negative_prompt', 'seed', 'cfg', 'guidance_scale', 'steps', 'loras','sampler_name','scheduler','denoise'])) return;
 
     const payload: any = {
       model,
       prompt,
-      size: req.body.extraParams?.size || req.body.size || (isProvided(width) && isProvided(height) ? `${width}x${height}` : undefined),
+      size: req.body.extraParams?.size || req.body.size,
     };
-    if (!payload.size) return res.status(400).json({error:'Agnes size 为必填项：请选择 1K–4K 或明确的 width / height'});
-    if (isProvided(req.body.aspectRatio || req.body.aspect_ratio)) payload.ratio=req.body.aspectRatio || req.body.aspect_ratio;
-    // Reference image via extra_body.image (array of URL / data-URI strings)
-    if (image_url) {
-      payload.extra_body = { image: [image_url] };
-    }
+    if (!payload.size) return res.status(400).json({error:'Agnes size 为必填项：当前 Image 2.5 Flash 请选择 1K / 2K / 3K / 4K'});
+    const extraBody: Record<string, unknown> = {};
+    if (isProvided(req.body.aspectRatio || req.body.aspect_ratio)) extraBody.ratio=req.body.aspectRatio || req.body.aspect_ratio;
+    if (image_url) extraBody.image = [image_url];
+    if (isProvided(req.body.response_format)) extraBody.response_format = req.body.response_format;
+    if (Object.keys(extraBody).length) payload.extra_body = extraBody;
 
     const upstream = await upstreamFetch(
       { provider: 'agnes', route: req.path, model, key: apiKey },
@@ -4888,7 +4867,7 @@ app.post(['/api/engine/agnes/generate', '/api/agnes/generate'], async (req, res)
     }
 
     const data = await upstream.json();
-    const mediaUrl = data.data?.[0]?.url;
+    const mediaUrl = extractCompatImageUrl(data.data?.[0]);
     if (!mediaUrl) {
       keyPoolManager.recordResult('agnes', apiKey, false, Date.now() - startTime, 'No image in response', 500);
       return res.status(500).json({ error: 'Agnes AI 返回结果中未包含图像输出 URL' });
@@ -5011,8 +4990,10 @@ app.post(['/api/engine/sensenova/chat', '/api/sensenova/chat'], async (req, res)
 
 app.post('/api/engine/sensenova/generate', async (req, res) => {
   const { model } = req.body;
-  return res.status(400).json({
-    error: `商汤日日新 (SenseNova) 是专长于深度思考与推理的文本大模型平台 (${model})。若需将概念扩散为图像或视频，请使用画布上的「LLM 推理思考节点」或提示词面板中的「深度思考扩写」，再通过连线将正向条件注入至 FLUX.1、Agnes 2.5 或 Wan 2.1 扩散引擎。`,
+  return res.status(501).json({
+    error: `SenseNova 官方平台存在独立图像生成/编辑模型，但当前 Canvas 尚未核实并接入其图像 OpenAPI Schema（当前模型: ${model || '未指定'}）。此路由不会自动改用 FLUX、Agnes、Gemini 或其他供应商。`,
+    errorSource: 'local',
+    integrationStatus: 'not_implemented',
   });
 });
 
@@ -6847,7 +6828,7 @@ const VALID_STRATEGY_PROVIDERS = new Set([
   'openai_compat',
   'grok_compat',
 ]);
-const VALID_STRATEGIES = new Set(['round_robin', 'failover', 'latency_best']);
+const VALID_STRATEGIES = new Set(['round_robin']);
 
 // Update Key Pool Strategy
 app.post('/api/cloud-keys/strategy', requireAdminAuth, (req, res) => {
@@ -6856,7 +6837,7 @@ app.post('/api/cloud-keys/strategy', requireAdminAuth, (req, res) => {
     return res.status(400).json({ error: `未知或不支持的 provider: "${provider}"` });
   }
   if (!strategy || typeof strategy !== 'string' || !VALID_STRATEGIES.has(strategy)) {
-    return res.status(400).json({ error: `不支持的策略: "${strategy}"。仅支持: round_robin, failover, latency_best` });
+    return res.status(400).json({ error: `不支持的策略: "${strategy}"。为避免失败后自动换 Key，当前只允许 round_robin` });
   }
   keyPoolManager.setStrategy(provider, strategy as any);
   cloudSettings[`${provider}_strategy`] = strategy;
