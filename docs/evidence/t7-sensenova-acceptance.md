@@ -45,3 +45,14 @@
 2. 用动态 Schema 接入，不把旧 chat API 字段硬套到图像 API。
 3. 配置真实 SenseNova 图像服务凭据后，从前端换新的独立参考样本执行。
 4. 只有真实图片返回并完成历史/参数/持久化闭环才可记 PASS_GENERATION；若上游明确欠费才可记 PASS_BILLING。
+
+
+## 2026-10-08 后续前端复验：本地 HTTP 501
+
+修正原先“客户端未发送”的验收层级：后续实际从 Canvas 选中 KSampler 并点击运行，执行记录出现 **HTTP 501 · POST /api/engine/sensenova/generate**。请求包含不同于其他供应商的 Prompt：`A biomechanical koi pond inside a brutalist museum atrium, mirrored black water, copper fins, skylight reflections, architectural photography, restrained monochrome palette`，模型为 `sensenova-6.8-flash-lite`，尺寸为 `1024×1024`。Negative Prompt / Seed / Steps / CFG 被逐项记在 parameterOmissions 中，明确没有发送给该未实现的图像端点。
+
+响应体明确：
+
+`integrationStatus: "not_implemented"`、`errorSource: "local"`、`executionTrace: []`。
+
+错误说明 SenseNova 官方有图像生成/编辑能力，但当前 Canvas 未核实和接入图像 OpenAPI Schema；**没有上游图像调用，也没有自动改用 FLUX/Agnes/Gemini**。因此图像路由继续是 **FAIL_INTEGRATION / NOT_IMPLEMENTED**，不是 PASS_BILLING，也不是 SenseNova 官方不支持生图。后续需要官方图像端点与鉴权/参数契约，再完成真正的前端上游验收。
