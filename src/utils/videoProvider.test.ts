@@ -7,7 +7,7 @@ import {
 
 describe('F4 / soft-visual-4 videoProvider — model select syncs provider; empty clears; mismatch friendly', () => {
   it('resolveAIVideoModelProvider reads provider from AIVideoNode schema options', () => {
-    expect(resolveAIVideoModelProvider('fal-ai/wan-t2v')).toBeUndefined();
+    expect(resolveAIVideoModelProvider('fal-ai/wan-t2v')).toBe('fal');
     expect(resolveAIVideoModelProvider('fal-ai/wan/v2.7/text-to-video')).toBe('fal');
     expect(resolveAIVideoModelProvider('text2video_wan27')).toBeUndefined();
     expect(()=>assertAIVideoProviderReady('text2video_wan27','tensorart')).toThrow(/工具不是视频模型/);
@@ -64,6 +64,7 @@ describe('F4 / soft-visual-4 videoProvider — model select syncs provider; empt
       'my-custom-video-endpoint'
     );
     expect(next.model).toBe('my-custom-video-endpoint');
+    // leave existing provider as-is when schema has no option provider (non-empty model)
     expect(next.targetProvider).toBe('fal');
     expect(next.provider).toBe('fal');
   });
@@ -85,6 +86,7 @@ describe('F4 / soft-visual-4 videoProvider — model select syncs provider; empt
       expect(msg).toMatch(/Agnes/);
       expect(msg).toMatch(/Fal\.ai/);
       expect(msg).toMatch(/不会回退到 Fal/);
+      // raw underscore / lowercase provider ids must not appear as the house name
       expect(msg).not.toMatch(/属于\s*agnes/);
       expect(msg).not.toMatch(/当前选的是\s*fal[^.]/);
     }
