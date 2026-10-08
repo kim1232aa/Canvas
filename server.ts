@@ -8,6 +8,7 @@ import { buildZImagePayload } from './src/schemas/zImageSpace.ts';
 import { buildModelScopeLoras } from './src/schemas/modelScopeLoras.ts';
 import { buildTensorModelJob, tensorModelId, validateTensorModelDimensions, TENSOR_MODEL_API } from './src/schemas/tensorModelApi.ts';
 import {buildNanoImagePayload} from './src/schemas/nanoImageApi.ts';
+import {buildSenseNovaImageRequest} from './src/server/senseNovaImageContract.ts';
 import crypto from 'crypto';
 import dotenv from 'dotenv';
 import { fieldOptions, getFieldSpec, modelStatus, valueStatus, type FieldKey, type Provider as SchemaProvider } from './src/schemas/providerSchema.ts';
@@ -745,7 +746,7 @@ if (!cloudSettings || Object.keys(cloudSettings).length === 0) {
 type AuthProvider = 'agnes' | 'sensenova' | 'openai_compat' | 'grok_compat';
 const AUTH_META: Record<AuthProvider, { headerPrefix: string; settingsBaseName: string; envName: string; defaultBaseUrl?: string }> = {
   agnes: { headerPrefix: 'x-agnes', settingsBaseName: 'agnesBaseUrl', envName: 'AGNES', defaultBaseUrl: 'https://apihub.agnes-ai.com/v1' },
-  sensenova: { headerPrefix: 'x-sensenova', settingsBaseName: 'sensenovaBaseUrl', envName: 'SENSENOVA' },
+  sensenova: { headerPrefix: 'x-sensenova', settingsBaseName: 'sensenovaBaseUrl', envName: 'SENSENOVA', defaultBaseUrl: 'https://token.sensenova.cn/v1' },
   openai_compat: { headerPrefix: 'x-openai-compat', settingsBaseName: 'openaiCompatBaseUrl', envName: 'OPENAI_COMPAT_IMAGE' },
   grok_compat: { headerPrefix: 'x-grok-compat', settingsBaseName: 'grokCompatBaseUrl', envName: 'GROK_COMPAT' },
 };
@@ -3154,6 +3155,19 @@ app.get("/api/models", async (req, res) => {
       }
     }
 
+    if (provider === 'all' || provider === 'sensenova') {
+      const officialImageModels = [{
+        id:'sensenova-u1.5-lite',name:'SenseNova U1.5 Lite · 官方图像生成/编辑',provider:'SenseNova',
+        category:'checkpoint',type:'Checkpoint',baseModel:'SenseNova U1.5 Lite',
+        tags:['text-to-image','image-editing'],
+        source:'https://www.sensetime.com/cn/news/sensenova-u1-5-lite-token-plan-20260911-1741',
+        description:'官方已公开 images/generations 与 images/edits。目录可见不代表当前账户拥有 API Key 或额度。',
+      }];
+      const filtered = officialImageModels.filter(m=>matchCategory(m) && matchSearch(m));
+      results.sensenova = cat === 'lora' || cat === 'video' ? [] : filtered.slice((pageParam-1)*limitParam,pageParam*limitParam);
+      pagination.sensenova = {page:pageParam,hasMore:pageParam*limitParam<filtered.length};
+    }
+
     for (const k of Object.keys(results)) {
       if (Array.isArray(results[k])) {
         results[k] = sortList(results[k]);
@@ -4989,12 +5003,59 @@ app.post(['/api/engine/sensenova/chat', '/api/sensenova/chat'], async (req, res)
 });
 
 app.post('/api/engine/sensenova/generate', async (req, res) => {
-  const { model } = req.body;
-  return res.status(501).json({
-    error: `SenseNova 官方平台存在独立图像生成/编辑模型，但当前 Canvas 尚未核实并接入其图像 OpenAPI Schema（当前模型: ${model || '未指定'}）。此路由不会自动改用 FLUX、Agnes、Gemini 或其他供应商。`,
-    errorSource: 'local',
-    integrationStatus: 'not_implemented',
-  });
+  const startTime = Date.now();
+  let mapped: ReturnType<typeof buildSenseNovaImageRequest>;
+  try {
+    mapped = buildSenseNovaImageRequest(req.body || {});
+  } catch (error: any) {
+    return res.status(400).json({error: error.message, errorSource:'local', unsupported: 'see error'});
+  }
+  const auth = resolveProviderAuth(req, 'sensenova');
+  if (auth.error) return res.status(400).json({error:auth.error,errorSource:'local'});
+  const {apiKey,baseUrl} = auth;
+  const endpoint = `${baseUrl}${mapped.endpoint}`;
+  try {
+    const upstream = await upstreamFetch(
+      {provider:'sensenova',route:req.path,model:String(mapped.payload.model),key:apiKey},
+      endpoint,
+      {method:'POST',headers:{Authorization:`Bearer ${apiKey}`,'Content-Type':'application/json'},body:JSON.stringify(mapped.payload)},
+    );
+    if (!upstream.ok) {
+      const rawResponse = await upstream.text();
+      keyPoolManager.recordResult('sensenova',apiKey,false,Date.now()-startTime,rawResponse,upstream.status);
+      return res.status(upstream.status).json({error:`SenseNova 图像接口上游 HTTP ${upstream.status}: ${rawResponse}`,upstreamStatus:upstream.status,errorSource:'upstream',endpoint,rawResponse,actualRequest:mapped.payload});
+    }
+    const data = await upstream.json();
+    const first = data?.data?.[0];
+    const encoded = typeof first?.b64_json === 'string' && first.b64_json ? first.b64_json : '';
+    const imageFormat = mapped.payload.output_format === 'jpeg' ? 'jpeg' : mapped.payload.output_format === 'webp' ? 'webp' : 'png';
+    const mediaUrl = encoded ? (encoded.startsWith('data:') ? encoded : `data:image/${imageFormat};base64,${encoded}`) : (typeof first?.url === 'string' ? first.url : '');
+    if (!mediaUrl) {
+      keyPoolManager.recordResult('sensenova',apiKey,false,Date.now()-startTime,'upstream response missing image',502);
+      return res.status(502).json({error:'SenseNova 上游返回成功状态但 data[0] 不含 b64_json / url；不记图片成功',errorSource:'upstream',endpoint,rawResponse:data,actualRequest:mapped.payload});
+    }
+    const durable = await requireDurableHistoryMediaUrl(mediaUrl);
+    if (!durable.ok) {
+      return res.status(500).json({error:`SenseNova 图片已生成但持久化失败：${durable.message}`,errorSource:'storage',persistStatus:durable.status ?? null,persistRawResponse:durable.rawResponse,transientMediaUrl:mediaUrl,actualRequest:mapped.payload,endpoint});
+    }
+    keyPoolManager.recordResult('sensenova',apiKey,true,Date.now()-startTime);
+    const item = recordHistoryItem({
+      url:durable.dataUrl,
+      prompt:String(mapped.payload.prompt),
+      provider:'SenseNova U1.5 Lite',
+      model:String(mapped.payload.model),
+      seed:null,steps:null,cfg:null,
+      width:typeof req.body.width==='number'?req.body.width:null,
+      height:typeof req.body.height==='number'?req.body.height:null,
+      loras:[],
+      workflowSnapshot:req.body.workflowSnapshot,
+      requestMetadata:{requestedParameters:req.body,actualParameters:mapped.payload,upstreamEndpoint:endpoint},
+    });
+    return res.json({imageUrl:durable.dataUrl,mediaUrl:durable.dataUrl,mediaType:'image',provider:'SenseNova',model:mapped.payload.model,seed:null,actualRequest:mapped.payload,historyItem:item,upstreamEndpoint:endpoint,parameterOmissions:req.body.parameterOmissions || []});
+  } catch (error:any) {
+    keyPoolManager.recordResult('sensenova',apiKey,false,Date.now()-startTime,error.message);
+    return res.status(502).json({error:`SenseNova 图像接口网络/协议错误：${error.message}`,errorSource:'network',endpoint,stack:error.stack});
+  }
 });
 
 // ==========================================
