@@ -5039,7 +5039,9 @@ app.post('/api/engine/sensenova/generate', async (req, res) => {
       return res.status(500).json({error:`SenseNova 图片已生成但持久化失败：${durable.message}`,errorSource:'storage',persistStatus:durable.status ?? null,persistRawResponse:durable.rawResponse,transientMediaUrl:mediaUrl,actualRequest:mapped.payload,endpoint});
     }
     keyPoolManager.recordResult('sensenova',apiKey,true,Date.now()-startTime);
-    const item = recordHistoryItem({
+    let item: ReturnType<typeof recordHistoryItem>;
+    try {
+      item = recordHistoryItem({
       url:durable.dataUrl,
       prompt:String(mapped.payload.prompt),
       provider:'SenseNova U1.5 Lite',
@@ -5050,7 +5052,10 @@ app.post('/api/engine/sensenova/generate', async (req, res) => {
       loras:[],
       workflowSnapshot:req.body.workflowSnapshot,
       requestMetadata:{requestedParameters:req.body,actualParameters:mapped.payload,upstreamEndpoint:endpoint},
-    });
+      });
+    } catch (persistError:any) {
+      return res.status(500).json({error:`SenseNova 图片已生成但历史写入失败：${persistError.message}`,errorSource:'storage',transientMediaUrl:durable.dataUrl,endpoint,stack:persistError.stack});
+    }
     return res.json({imageUrl:durable.dataUrl,mediaUrl:durable.dataUrl,mediaType:'image',provider:'SenseNova',model:mapped.payload.model,seed:null,actualRequest:mapped.payload,historyItem:item,upstreamEndpoint:endpoint,parameterOmissions:req.body.parameterOmissions || []});
   } catch (error:any) {
     keyPoolManager.recordResult('sensenova',apiKey,false,Date.now()-startTime,error.message);
