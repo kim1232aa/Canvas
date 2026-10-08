@@ -19,7 +19,7 @@
 | Tensor.Art / TAMS | **BLOCKED_AUTH** | 真实模型 ID `672797109289765558` 查询到 TAMS；业务体 `unauthorized / app not found` | 当前工作树，docs/evidence/t7-tensorart-acceptance.md |
 | Hugging Face | **PASS_BILLING** | 2026-10-08 前端显式 HF→fal-ai：FLUX.1-dev + HF LoRA 0.55 到达 HF Router，HTTP 402 no remaining credits；旧 Z-Image Space BLOCKED_ENV 仅是旧路由历史证据 | 当前工作树，docs/evidence/t7-huggingface-acceptance.md |
 | Google Gemini | **BLOCKED_CONFIG** | 真实前端到 `/api/gemini/generate`，本地 HTTP 400：未配置 `GEMINI_API_KEY`；没有上游响应，不能记欠费或出图 | 当前工作树，docs/evidence/t7-gemini-acceptance.md |
-| Agnes AI | **BLOCKED_CONFIG** | 真实前端到 `/api/engine/agnes/generate`，本地 HTTP 400：未配置 `AGNES_BASE_URL` / x-agnes-base-url；没有上游响应，不能记欠费或出图 | 当前工作树，docs/evidence/t7-agnes-acceptance.md |
+| Agnes AI | **BLOCKED_CONFIG** | 真实前端到 `/api/engine/agnes/generate`，当前本地 HTTP 400：未配置 `AGNES_KEY`；没有上游响应。官方当前 Image 2.5 Flash 使用 `size + ratio`，旧 width/height 假设已修正 | 当前工作树，docs/evidence/t7-agnes-acceptance.md |
 
 代码修复（e2c9987 及 2026-10-06 当前工作树）：
 - B01 密钥保存本地优先：`/api/cloud/settings` 需 CANVAS_ADMIN_TOKEN，云端 503 曾静默阻塞本地保存 → `src/services/settingsSave.ts` 本地先存、云端失败原样报错不阻塞。
@@ -27,14 +27,14 @@
 
 ### 2026-10-06 HANDOFF A01–A12 收尾
 
-- A01–A08、A10–A12 已按当前范围完成；A03 于 2026-10-06 追加 MuAPI LoRA 专用端点前端验收后关闭。现在仅 A09 保留 PARTIAL；详细逐项证据见 `docs/evidence/handoff-closeout-2026-10-06.md`。
+- A01–A08、A10–A12 已按当前范围完成；A03 于 2026-10-06 追加 MuAPI LoRA 专用端点前端验收后关闭。A05 进一步收紧：Key 池删除 Failover / Best Latency，失败状态不再改变后续请求选 Key；异步任务继续绑定原始 credentialRef。现在仅 A09 保留 PARTIAL；详细逐项证据见 `docs/evidence/handoff-closeout-2026-10-08.md`。
 - 修正运行版本问题：原 3000 服务是 02:33 启动的 `tsx server.ts`（非 watch），客户端 HMR 会更新但服务端路由不会。已受控重启 3000，使当前 `server.ts` 真正加载；重启后失效 `credentialRef` 实测 HTTP 409 / local / `executionTrace=[]`，不再打上游或暗换 Key。
 - Generation History 参数来源重做：旧 Civitai 图现在能从上游响应和 JPEG 嵌入元数据恢复 Seed/Steps/CFG/Sampler/Scheduler/尺寸，并标注 `上游实际 / 图像元数据 / 实际发送 / 未发送 / 旧记录未保存`。两张旧图真实 Seed 为 `1021568893` 与 `951383495`，因此不能作为 LoRA A/B 效果对比证据。另修复失败重跑保留旧图片的问题：新请求开始即清空本分支旧 media output，workflowSnapshot 也剔除旧 `outputData/errorMessage/progress`；MuAPI 402 真实前端复测中 KSampler/SaveImage 全程无旧图，执行记录不再含旧 Civitai base64。
 - 历史导出 provenance 升级为 version 2；未来 Civitai 历史保存 requestedParameters / actualParameters 及 sampler/scheduler/width/height。
 - 供应商矩阵/指南/历史 preset 清掉 100% 复现、自动切换、未验证 LoRA/速度等宣传；资产库 Provider 筛选改为真实资产动态生成，不再维护静态供应商白名单。
 - 最终回归：`npm run lint` PASS；`npm run build` PASS（含 frontend + hosting worker 构建）；`npm test` **40 个测试文件 / 295 个测试全部 PASS**。测试绿仍只作为回归保护，真实前端验收证据见上述 closeout 文档。
 
-**仍需前端新样本验收：** SenseNova 的实际产品边界、OpenAI/Grok 兼容中转（仅用户显式 Base URL）、Video 聚合入口。Hugging Face HF→fal-ai 已取得 `PASS_BILLING`；Gemini / Agnes 当前为 `BLOCKED_CONFIG`，配置对应 Key / Base URL 后再复验。已经有明确终态的供应商不为凑数量重复调用。
+**仍需处理：** SenseNova 图像路由已判 `FAIL_INTEGRATION`：官方当前已有图像生成/编辑模型，但 Canvas 尚未取得并接入完整图像 OpenAPI Schema；不得拿 chat API 冒充。OpenAI/Grok 兼容中转只在用户显式 Base URL 已配置时验收；Video 聚合入口仍待逐路由验收。Gemini / Agnes 当前为 `BLOCKED_CONFIG`，配置对应 Key 后再复验。已经有明确终态的供应商不为凑数量重复调用。
 
 文档修正记录（2026-10-05）：`docs/providers/schema-providers.md` 第 44~45 行 Sogni「ECONNREFUSED / 403 error code 1010」为 10-04 旧网络环境下的结果，已被 10-05 实测（HTTP 201 + insufficient_credit）取代；HANDOFF.md §3.2 三家状态同步更新。修正理由均注于对应段落。
 
