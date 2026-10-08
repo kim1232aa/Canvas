@@ -31,7 +31,7 @@ export abstract class BaseEngineDriver implements IEngineDriver {
   protected assertCapability(capability: EngineCapability): void {
     if (!this.capabilities.includes(capability)) {
       throw new Error(
-        `引擎 [${this.name}] 不支持 [${capability}] 能力。当前支持的能力清单: [${this.capabilities.join(', ')}]。`
+        `当前 Canvas 驱动 [${this.name}] 尚未接入 [${capability}] 能力。当前驱动已接入: [${this.capabilities.join(', ')}]。这不等于上游平台官方不支持该能力。`
       );
     }
   }
