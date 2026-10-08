@@ -106,10 +106,10 @@
 | 2 | 空间画板 | `SpatialFrameItem.tsx`、`App.tsx` | 独立提示词、参数、图像结果 | 与节点模式不能交叉修改；每家至少检查一次空间模式；图生图媒体可访问性未全验 |
 | 3 | 多画布管理 | `CanvasManagerModal.tsx`、`workspaceCache.ts` | 新建、切换、本地恢复、模板 | 新旧工作流迁移、切换后 provider/ID/LoRA 保留；不能用数组位置挑错模板 |
 | 4 | **模型中心** | `ModelHubModal.tsx`、`ProviderModelSelect.tsx`、`/api/models` | 单家标签、搜索、分类、分页、自定义 ID；MuAPI/WaveSpeed/Sogni 已进入 all 聚合 | 新增 provider 继续走共享聚合入口；模型/工具/资源身份必须保持来源与执行 ID 可追溯，目录可见不等于在线推理通过 |
-| 5 | **独立 LoRA 中心** | `CivitaiModal.tsx`、`attachLora.ts` | Civitai/HF/Tensor/魔搭/Fal/MuAPI/WaveSpeed/Sogni 入口；URL/ID 与目录资源分开处理 | MuAPI/WaveSpeed 当前没有已核实 LoRA 权重目录，只允许目标端点可读取的 URL；Sogni 使用真实资源 ID；`all` 标签不再猜供应商。A03 仅剩 MuAPI 有额度后的真实 LoRA 生成证据 |
+| 5 | **独立 LoRA 中心** | `CivitaiModal.tsx`、`attachLora.ts` | Civitai/HF/Tensor/魔搭/Fal/MuAPI/WaveSpeed/Sogni 入口；URL/ID 与目录资源分开处理 | MuAPI/WaveSpeed 当前没有已核实 LoRA 权重目录，只允许目标端点可读取的 URL；Sogni 使用真实资源 ID；`all` 标签不再猜供应商。A03 已用 MuAPI LoRA 专用路由的真实前端 402 请求关闭接线缺口 |
 | 6 | 视频模型与视频生成 | `ModelHubModal.tsx`、`VideoDriver.ts`、`/api/video/generate` | 独立分类入口和旧驱动 | 新三家的图像驱动不等于视频已接入；目录出现视频端点不等于执行、参数、轮询已正确 |
 | 7 | 参数检查器 / JSON Schema | `ParameterInspector.tsx`、`ApiParameterEditor.tsx`、`providerSchema.ts` | 新三家动态 Schema、JSON、映射模式 | 老供应商还有静态规范与“未核实即不支持”；完整 Schema 组合字段、oneOf 等覆盖未全验 |
-| 8 | API 设置 / Key 池 | `BackendSettingsModal.tsx`、`server.ts` KeyPoolManager | 新三家 Key 项、服务端环境与加密设置；Schema provider 已用 credentialRef 绑定 schema→submit→poll | 连接测试仍不等于生成；引用失效必须本地报错，不能静默取下一把 Key。当前 A05 已实测 409 截断且无上游调用 |
+| 8 | API 设置 / Key 池 | `BackendSettingsModal.tsx`、`server.ts` KeyPoolManager | 新三家 Key 项、服务端环境与加密设置；Schema provider 已用 credentialRef 绑定 schema→submit→poll；失败状态不再触发 Failover / Best Latency 换 Key，UI 只保留独立新请求的 Round-Robin | 连接测试仍不等于生成；异步任务引用失效必须本地报错，不能静默取下一把 Key。当前 A05 已实测 409 截断且无上游调用 |
 | 9 | 工作流预设 / 导入 / 导出 | `WorkflowPresetsModal.tsx`、`presets.ts`、导入函数 | 预设、图像参数提取、保存和导入拓扑；MuAPI/WaveSpeed/Sogni 已纳入显式 provider 处理 | 原生工程 round-trip 与外部 ComfyUI JSON 仍按不同格式处理；外部 JSON 缺 provider 时保持未指定，不按模型名猜供应商 |
 | 10 | 生成历史 | `HistoryModal.tsx`、`recordHistoryItem`、`hosting/store.ts` | 参数、快照、多图记录和媒体保存 | 每家真实输出、逐图参数、刷新恢复、复用后请求一致未全验；历史样图不是本轮通过证明 |
 | 11 | 云端项目 | `CloudProjectModal.tsx`、`hosting/store.ts` | 保存、加载、克隆、D1/R2 | 所有新参数/ID/LoRA 能否无损 round-trip；私有身份和环境差异须验 |
@@ -160,8 +160,8 @@
 | 入口 | 当前边界 |
 | --- | --- |
 | Gemini | 有图像/文本代码和历史规范检查；2026-10-08 前端到 `/api/gemini/generate`，本地配置返回 HTTP 400 `未配置 GEMINI_API_KEY`，记 `BLOCKED_CONFIG`。配置 Key 后再复验真实上游 |
-| Agnes | 有图像/视频/文本相关旧代码；2026-10-08 前端到 `/api/engine/agnes/generate`，本地配置返回 HTTP 400 `未配置 agnes Base URL`，记 `BLOCKED_CONFIG`。配置 Base URL / Key 后再复验真实上游 |
-| SenseNova | 主要为 chat/reasoning；不能当已经支持图片生成 |
+| Agnes | 有图像/视频/文本代码；2026-10-08 前端到 `/api/engine/agnes/generate`，当前本地配置返回 HTTP 400 `未配置 agnes API 密钥`，记 `BLOCKED_CONFIG`。官方当前 Image 2.5 Flash 使用 `size + ratio`；配置 Key 后用当前模型重新验真实上游 |
+| SenseNova | **FAIL_INTEGRATION（图像路由）**：官方当前平台已有独立图像生成/编辑模型，但 Canvas 只接入 chat/reasoning；前端生图被当前驱动能力检查本地阻止。未取得完整官方图像 OpenAPI Schema 前不猜 endpoint，不自动改用其他供应商。证据：`docs/evidence/t7-sensenova-acceptance.md` |
 | OpenAI / Grok 兼容中转 | 必须使用用户明确配置的 Base URL；兼容不等于官方；本轮未验 |
 | Video | 聚合执行入口，不能当独立供应商；新三家图像集成不能自动算视频支持 |
 
@@ -247,7 +247,7 @@
 | A02 | ✅ **DONE 2026-10-06** | `provider=all` 已真实从当前前端返回 `muapi / wavespeed / sogni`，各自独立数组；本地实测 limit=3 时三家均存在且各 3 条 | 聚合失败信息与成功数组并存；没有用静态模型补数。新增供应商仍应走共享聚合入口 |
 | A03 | ✅ **DONE 2026-10-06** | 独立 LoRA 中心已含 MuAPI/WaveSpeed/Sogni；Sogni 真实前端已验证 ID + `loraStrengths` 顺序/权重，WaveSpeed 已带真实 URL/scale 出图；MuAPI 专用 `flux-1-dev-style-lora-inference` 也已从前端把真实 URL + `0.65` 映射为 `lora_url + lora_weight` 并到达上游 | MuAPI 返回 402 `INSUFFICIENT_CREDITS`，按用户规则记 PASS_BILLING；充值后如需判断 LoRA 视觉效果再补出图，不再属于接线缺口。证据：`docs/evidence/t7-muapi-acceptance.md` |
 | A04 | ✅ **DONE 2026-10-08** | 当前 `127.0.0.1:3000` 已能从前端到达 Civitai/Fal/ModelScope/NanoGPT/TAMS/MuAPI/WaveSpeed/Sogni/HF Router 等真实上游；Civitai/WaveSpeed 已真实出图 | 旧 HF Space 网络失败仍只记该次 route 的 network；Gemini 是本地缺 Key，不能归因上游 |
-| A05 | ✅ **DONE 2026-10-06** | Schema provider 通过 `credentialRef` 绑定 schema→submit→poll，同一 task 记录原始引用；引用失效直接本地 409 | 2026-10-06 重启最新 server 后，用伪造过期 ref 实测：HTTP 409、`errorSource=local`、`executionTrace=[]`、原文“未自动切换 Key”，没有上游调用 |
+| A05 | ✅ **DONE 2026-10-08** | Schema provider 通过 `credentialRef` 绑定 schema→submit→poll，同一 task 记录原始引用；引用失效直接本地 409。Key 池已移除 Failover / Best Latency，仅保留独立新请求的 Round-Robin；历史失败状态不再改变后续选 Key | 过期 ref 实测 HTTP 409 / local / `executionTrace=[]`，没有上游调用；异步任务不会拿下一把 Key 续轮询 |
 | A06 | ✅ **DONE 2026-10-06** | NanoGPT 等能力处理已改为 `unknown ≠ unsupported`；`nanoImageApi.ts` 对未声明的用户显式字段透传并写 capability note，只有官方 enum/range/明确 false 才本地拒绝 | 当前 NanoGPT 前端还因凭据 401 阻塞；凭据恢复后再验证实际接受字段，不回退为静态猜测 |
 | A07 | ✅ **DONE 2026-10-06** | MuAPI 执行目标使用真实 `endpoint_url`；WaveSpeed 只有目录实际提供 `model_run` 才标记 request Schema 已核实，否则保持 unknown；Sogni hosted-tool selector 与 worker namespace 分离并记录固定包版本来源 | 自定义 ID 不自动替换其他模型；Schema 来源和 unknown 状态在 UI/请求记录中可见 |
 | A08 | ✅ **DONE 2026-10-06** | 工作流导入目标包含 MuAPI/WaveSpeed/Sogni；ComfyCanvas 原生导入导出完整保留 nodes/connections/spatialFrames；ComfyUI 外部 JSON 缺 provider 时保持空值，不根据模型名猜供应商 | `explicitProvider()` 已覆盖新三家并补回归；`graphEditing.test.ts` 通过 |
@@ -266,7 +266,7 @@
 
 **2026-10-06 用户新增样本规则：** 每个尚未取得明确终态的供应商都必须换一套参考作品和参数，不复用上一家的 Prompt。优先从 Civitai 等公开结构化 API/元数据取得参考图 URL、Prompt、Negative Prompt、底模、LoRA、权重、Steps、CFG、Sampler、Scheduler、Seed、尺寸；缺字段不能猜。真实生成后必须和参考原图比较主体、构图、服装/材质、色调、光影和 LoRA 特征。已经取得 `PASS_GENERATION` / `PASS_BILLING` / `BLOCKED_AUTH` 的供应商不为“刷测试”重复消耗，除非专门验证新修复。公网元数据/API 直接用公网请求；Aki/CDP 只用于本地 Canvas 真实前端操作或必须依赖本地登录态的场景。
 
-后续优先顺序：**SenseNova 实际产品边界 → 用户明确配置的 OpenAI/Grok 兼容中转 → Video → 配置 GEMINI_API_KEY / AGNES_BASE_URL 后再复验 Gemini / Agnes**。已取得明确终态的 Civitai/Fal/ModelScope/NanoGPT/TAMS/MuAPI/WaveSpeed/Sogni/Hugging Face 不为“刷覆盖率”重复调用；只有修具体缺口时才复测。
+后续优先顺序：**取得 SenseNova 官方图像 OpenAPI 完整 Schema 后补图像接线 → 用户明确配置的 OpenAI/Grok 兼容中转 → Video → 配置 GEMINI_API_KEY / AGNES_KEY 后再复验 Gemini / Agnes**。已取得明确终态的 Civitai/Fal/ModelScope/NanoGPT/TAMS/MuAPI/WaveSpeed/Sogni/Hugging Face 不为“刷覆盖率”重复调用；只有修具体缺口时才复测。
 
 不要强制套用所有端点统一的 512×512、steps=20、CFG=7。尺寸和参数取当前模型官方允许的值；未提供 seed 的端点历史 seed 应为 null，不能编造。
 
