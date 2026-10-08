@@ -366,35 +366,43 @@ const CIVITAI_MODELS: ModelSpec[] = [
 ];
 
 // ---------- Agnes AI (OpenAI-compatible /images/generations) ----------
-// Official docs: https://wiki.agnes-ai.com/en/docs/agnes-image-21-flash
-// Request params: model, prompt, size (tier or WxH), ratio, image, return_base64, extra_body.
-// No seed / negative_prompt / steps / CFG / sampler / scheduler / denoise / loras.
-const AGNES_DOC = 'https://wiki.agnes-ai.com/en/docs/agnes-image-21-flash';
+// Current official AgnesAI-Labs reference (2026-09-24):
+// https://github.com/AgnesAI-Labs/skills/blob/main/agnes-ai-models/references/model_catalog.md
+// Image 2.5 Flash requires model + prompt + size tier; ratio/image refs are carried in extra_body.
+const AGNES_DOC = 'https://agnes-ai.com/en/docs/agnes-image-25-flash';
+const AGNES_CATALOG = 'https://github.com/AgnesAI-Labs/skills/blob/main/agnes-ai-models/references/model_catalog.md';
 const AGNES_RATIO = vals(['1:1', '3:4', '4:3', '16:9', '9:16', '2:3', '3:2', '21:9'], 'supported');
 const AGNES_SIZE = vals(['1K', '2K', '3K', '4K'], 'supported');
 
-function agnesImage(id: string, label: string): ModelSpec {
-  return {
-    provider: 'agnes',
-    id,
-    label,
-    source: AGNES_DOC,
-    fields: {
-      // App maps canvas width/height → size "WxH" (legacy exact-size accepted by Agnes).
-      width: { status: 'supported', source: AGNES_DOC, type: 'integer', note: 'mapped to size WxH / tier' },
-      height: { status: 'supported', source: AGNES_DOC, type: 'integer', note: 'mapped to size WxH / tier' },
-      aspect_ratio: enumField(AGNES_DOC, AGNES_RATIO, { wire: 'ratio', providerDefault: '1:1' }),
-      size: enumField(AGNES_DOC, AGNES_SIZE, { note: 'tier 1K–4K or legacy WxH' }),
-      num_images: { status: 'supported', source: AGNES_DOC, wire: 'n', type: 'integer', min: 1, max: 1, providerDefault: 1 },
-      ...unsupported(AGNES_DOC, ['seed', 'negative_prompt', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'loras'], '该服务商不支持'),
-    },
-  };
-}
+const agnesUnsupported = () => unsupported(AGNES_DOC, ['width', 'height', 'seed', 'negative_prompt', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'loras'], 'Agnes Image 2.5 Flash 当前文档未接受这些画布字段');
 
 const AGNES_MODELS: ModelSpec[] = [
-  agnesImage('agnes-image-2.5-flash', 'Agnes Image 2.5 Flash'),
-  agnesImage('agnes-image-2.1-flash', 'Agnes Image 2.1 Flash'),
-  agnesImage('agnes-image-2.0-flash', 'Agnes Image 2.0 Flash'),
+  {
+    provider: 'agnes',
+    id: 'agnes-image-2.5-flash',
+    label: 'Agnes Image 2.5 Flash',
+    source: AGNES_DOC,
+    fields: {
+      aspect_ratio: enumField(AGNES_DOC, AGNES_RATIO, { wire: 'extra_body.ratio' }),
+      size: enumField(AGNES_DOC, AGNES_SIZE, { note: '必填输出档位 1K / 2K / 3K / 4K' }),
+      num_images: { status: 'unverified', source: AGNES_DOC, wire: 'n', type: 'integer', note: '当前 2.5 图像页未在本次核实中确认 n；不主动发送默认值' },
+      ...agnesUnsupported(),
+    },
+  },
+  {
+    provider: 'agnes',
+    id: 'agnes-image-2.1-flash',
+    label: 'Agnes Image 2.1 Flash（legacy compatibility）',
+    source: AGNES_CATALOG,
+    fields: unv(AGNES_CATALOG, ['width', 'height', 'aspect_ratio', 'size', 'num_images', 'seed', 'negative_prompt', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'loras'], '官方当前目录仅标记为 legacy compatibility；字段需按旧模型文档或真实上游再核实'),
+  },
+  {
+    provider: 'agnes',
+    id: 'agnes-image-2.0-flash',
+    label: 'Agnes Image 2.0 Flash（legacy compatibility）',
+    source: AGNES_CATALOG,
+    fields: unv(AGNES_CATALOG, ['width', 'height', 'aspect_ratio', 'size', 'num_images', 'seed', 'negative_prompt', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'loras'], '官方当前目录仅标记为 legacy compatibility；字段需按旧模型文档或真实上游再核实'),
+  },
 ];
 
 // ---------- Hugging Face Inference (text-to-image) ----------
@@ -571,12 +579,9 @@ const TENSORART_MODELS: ModelSpec[] = [
 
 ];
 
-// ---------- SenseNova 商汤日日新 (this app: reasoning / chat only) ----------
-// Official chat API: https://github.com/OpenSenseNova/SenseNova6.8/blob/main/API.md
-// This app's SenseNovaDriver.capabilities = ['reasoning'] only — executeGenerate throws;
-// no /images/generations route is wired. Do not invent text2img here.
-// Canvas image fields (width/height/seed/steps/cfg/sampler/scheduler/denoise/loras/negative) → unsupported.
+// ---------- SenseNova 商汤日日新：官方 U1.5 Lite 生图与 6.8 推理分离 ----------
 const SN_DOC = 'https://github.com/OpenSenseNova/SenseNova6.8/blob/main/API.md';
+const SN_IMAGE_DOC = 'https://www.sensetime.com/cn/news/sensenova-u1-5-lite-token-plan-20260911-1741';
 
 function senseNovaReasoning(id: string, label: string): ModelSpec {
   return {
@@ -588,14 +593,23 @@ function senseNovaReasoning(id: string, label: string): ModelSpec {
       ...unsupported(
         SN_DOC,
         ['width', 'height', 'seed', 'negative_prompt', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'loras'],
-        '该服务商不支持（本应用 SenseNova 仅 reasoning/chat，无 text2img 路由）',
+        '当前 SenseNova 6.8 Flash Lite 仅用于 reasoning/chat；文生图请明确选择 sensenova-u1.5-lite',
       ),
     },
   };
 }
 
 const SENSENOVA_MODELS: ModelSpec[] = [
-  senseNovaReasoning('sensenova-6.8-flash-lite', 'SenseNova 6.8 Flash Lite'),
+  senseNovaReasoning('sensenova-6.8-flash-lite', 'SenseNova 6.8 Flash Lite (推理/对话)'),
+  {
+    provider: 'sensenova',id:'sensenova-u1.5-lite',label:'SenseNova U1.5 Lite (图片生成/编辑)',source:SN_IMAGE_DOC,
+    fields:{
+      width:{status:'supported',source:SN_IMAGE_DOC,type:'integer',wire:'size (width×height)',note:'512–4096，须为 32 的倍数，最大长宽比 3:1'},
+      height:{status:'supported',source:SN_IMAGE_DOC,type:'integer',wire:'size (width×height)',note:'宽高必须同时填写'},
+      size:{status:'supported',source:SN_IMAGE_DOC,type:'string',wire:'size',note:'auto / 2K / 4K / 512–4096 宽×高'},
+      ...unsupported(SN_IMAGE_DOC,['seed','negative_prompt','steps','cfg','sampler','scheduler','denoise','loras'],'U1.5 Lite 图片接口没有这些 ComfyUI 扩散字段；不发送上游'),
+    },
+  },
 ];
 
 // Model cards show a minimal hosted REST contract, not the local Diffusers parameter schema.
