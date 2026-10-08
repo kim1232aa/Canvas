@@ -26,8 +26,8 @@
 
 ### 2. 🔐 多 Key 配置与任务凭据一致性
 - **多 Key 密钥池管理**：设置页可保存多个凭据；是否支持余额/健康查询取决于该供应商当前真实接口，不能把“有 Key”写成“账户可用”。
-- **禁止失败后静默换 Key 重提生成**：一次生成任务使用已选定的凭据；Schema → 提交 → 轮询需要保持同一账户语义。引用失效时直接报错，不自动换另一把 Key。
-- **不按状态码猜业务原因**：只有上游响应体明确给出鉴权、账户绑定、额度/余额信息时才做对应分类；网络无响应单独记为网络问题。
+- **禁止失败后静默换 Key 重提生成**：一次生成任务使用已选定的凭据；Schema → 提交 → 轮询需要保持同一账户语义。对支持任务凭据引用的路由，引用失效时直接报错，不自动换另一把 Key。
+- **不把 401/403/429 按状态码猜业务原因**：只有上游响应体明确给出鉴权、账户绑定、额度/余额信息时才做对应分类；网络无响应单独记为网络问题。
 
 ### 3. 💰 账户状态与错误透明度
 - **余额能力按供应商实际接口核实**：只有已经核实存在余额/额度接口或上游明确返回额度信息的供应商才展示对应事实；没有接口就不虚构“实时余额”。
@@ -70,7 +70,7 @@ cp .env.example .env
 npm run dev
 ```
 开发服务器将运行在 `http://localhost:3000`。
-前台为 Vite 驱动的 React SPA，后台由 `server.ts` 提供供应商路由、任务凭据、已核实的账户状态查询与端点审计服务。
+前台为 Vite 驱动的 React SPA，后台由 `server.ts` 提供统一引擎分发、多 Key 轮询管理、余额探测与端点审计服务。
 
 ### 5. 代码质量检查与构建
 ```bash
@@ -130,16 +130,20 @@ npm run build
 
 | 服务商 / 路由 | 当前前端验收状态 | 边界 |
 | :--- | :--- | :--- |
-| **Civitai** | `PASS_GENERATION` | 当前网页已真实基础图 + LoRA 出图；不外推所有资源 |
+| **Civitai** | `PASS_GENERATION` | 已有当前网页真实基础图与 LoRA 生成；不外推为“所有 Civitai 模型都可在线生成” |
+| **Fal.ai** | `PASS_BILLING` | `fal-ai/flux-lora` 已真实到达上游，当前账户返回 `TOP_UP`；未证明其他端点生成成功 |
+| **ModelScope CN** | `PASS_BILLING` | 当前图像路由上游明确 `insufficient balance` |
+| **ModelScope AI** | `BLOCKED_AUTH` | 国际站独立账户返回需绑定 Alibaba Cloud |
+| **NanoGPT** | `BLOCKED_AUTH` | 当前真实前端请求返回 `invalid_api_key` / `Invalid session` |
+| **Tensor.Art / TAMS** | `BLOCKED_AUTH` | 真实模型 ID 查询返回 `unauthorized / app not found`；旧 OpenWorks 图片不算 TAMS 验收 |
 | **WaveSpeed** | `PASS_GENERATION` | 已有带 LoRA 的真实前端生成证据 |
-| **MuAPI** | `PASS_BILLING` | 普通 + LoRA 专用路由均真实到上游，当前 `INSUFFICIENT_CREDITS` |
-| **Sogni** | `PASS_BILLING` | task created 后上游明确 `insufficient_credit` |
-| **Fal.ai** | `PASS_BILLING` | `fal-ai/flux-lora` 已到达上游，当前 `TOP_UP` |
-| **ModelScope CN** | `PASS_BILLING` | 当前图像路由明确 `insufficient balance` |
-| **ModelScope AI** | `BLOCKED_AUTH` | 国际站账户要求绑定 Alibaba Cloud |
-| **NanoGPT** | `BLOCKED_AUTH` | 当前真实前端请求 `Invalid session / invalid_api_key` |
-| **Tensor.Art / TAMS** | `BLOCKED_AUTH` | 真实模型 ID 查询为 `unauthorized / app not found` |
-| **Hugging Face** | `PASS_BILLING` | HF→fal-ai + FLUX.1-dev + HF LoRA 已到真实 HF Router，当前账户 HTTP 402 no remaining credits；旧 Space 结论不外推 |\n| **Gemini / Agnes / SenseNova / 兼容中转 / Video** | 见 HANDOFF / PROGRESS | 必须按具体路由与当前凭据逐项验收 |
+| **MuAPI** | `PASS_BILLING` | 真实提交返回 `INSUFFICIENT_CREDITS` |
+| **Sogni** | `PASS_BILLING` | 真实任务创建后上游明确 `insufficient_credit` |
+| **Hugging Face** | `PASS_BILLING` | HF→fal-ai + FLUX.1-dev + HF LoRA 已到真实 HF Router，当前账户 HTTP 402 no remaining credits；旧 Space 结论不外推 |
+| **Google Gemini** | `BLOCKED_CONFIG` | 真实前端到 `/api/gemini/generate`，本地未配置 `GEMINI_API_KEY`；没有上游响应，不记欠费或出图 |
+| **Agnes AI** | `BLOCKED_CONFIG` | 真实前端到 `/api/engine/agnes/generate`，当前本地未配置 `AGNES_KEY`；官方当前 Image 2.5 Flash 使用 `size + ratio`，尚未到上游 |
+| **SenseNova 图像** | `FAIL_INTEGRATION` | 官方当前平台已有图像生成/编辑模型，但 Canvas 只接入 chat/reasoning；未取得完整官方图像 OpenAPI Schema 前不猜 endpoint、不自动换供应商 |
+| **兼容中转 / Video** | 见 `HANDOFF.md` / `PROGRESS.md` | 兼容中转只使用用户显式 Base URL；Video 必须按具体 provider/model 路由逐项验收 |
 
 ---
 
