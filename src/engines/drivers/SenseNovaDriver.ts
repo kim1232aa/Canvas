@@ -14,7 +14,7 @@ export class SenseNovaDriver extends BaseEngineDriver {
   readonly name = 'SenseNova (商汤日日新)';
   readonly label = '商汤日日新官方平台';
   readonly badgeColor = '#6366f1';
-  readonly description = 'SenseNova 6.8 官方聊天与多模态理解；本应用不提供生图。';
+  readonly description = '当前 Canvas 只接入 SenseNova chat/reasoning。SenseNova 官方平台已提供独立图像生成/编辑模型，但本项目尚未核实并接入其图像 OpenAPI Schema，因此生图路由必须明确报未接入，不能伪装成“平台不支持生图”。';
   readonly capabilities = ['reasoning'] as const;
   readonly defaultBaseUrl = 'https://token.sensenova.cn/v1';
   readonly defaultKey = '';
@@ -25,9 +25,8 @@ export class SenseNovaDriver extends BaseEngineDriver {
     params: NormalizedGenerateParams,
     _keys: Record<string, string>
   ): Promise<NormalizedGenerateResult> {
-    // 严格意图遵从：绝不未经允许暗中切换至第三方服务商
     throw new Error(
-      `商汤日日新 (SenseNova) 是专长于深度思考与推理的文本大模型平台 (${params.model || 'DeepSeek V4'})。若需将概念扩散为图像或视频，请使用画布上的「LLM 推理思考节点」或提示词面板中的「深度思考扩写」，再通过连线将正向条件注入至 FLUX.1、Agnes 2.5 或 Wan 2.1 扩散引擎。`
+      `SenseNova 官方平台存在独立图像生成/编辑模型，但当前 Canvas 尚未核实并接入其图像 OpenAPI Schema（当前模型: ${params.model || '未指定'}）。此处不会自动改用 FLUX、Agnes、Gemini 或其他供应商；请在完成官方图像端点与字段接线后再从 SenseNova 生图分支执行。`
     );
   }
 
