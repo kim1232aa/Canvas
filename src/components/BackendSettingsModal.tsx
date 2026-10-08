@@ -230,7 +230,7 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       keyName: 'sensenovaKey',
       keyPlaceholder: 'sk-xxxx',
       status: 'unconfigured',
-      popularModels: ['sensenova-6.8-flash-lite'],
+      popularModels: ['sensenova-u1.5-lite', 'sensenova-6.8-flash-lite'],
     },
     {
       id: 'civitai',
