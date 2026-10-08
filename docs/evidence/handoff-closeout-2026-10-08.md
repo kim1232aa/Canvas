@@ -124,7 +124,7 @@ A01–A08、A10–A12 按当前交接范围关闭。A09 的代码契约与回归
 
 Aki 本地工作区在恢复后重新执行完整回归：
 
-- `npm test` — **40/40 test files、295/295 tests PASS**
+- `npm test` — **41/41 test files、300/300 tests PASS**
 - `npm run lint` — **PASS**
 - `npm run build` — **PASS**
 - Vite 生产构建：1732 modules transformed；仅保留已有 `__dirname` native-loader 与 chunk-size warning，没有构建失败。
