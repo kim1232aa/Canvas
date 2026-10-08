@@ -17,9 +17,10 @@
 | NanoGPT | BLOCKED_AUTH | qwen-image-2.1/text-to-image 真实上游 401 Invalid session / invalid_api_key |
 | Tensor.Art / TAMS | BLOCKED_AUTH | 真实模型 ID 查询到 TAMS，业务体 unauthorized / app not found |
 | Google Gemini | BLOCKED_CONFIG | 前端真实到 /api/gemini/generate，本地未配置 GEMINI_API_KEY；未到上游 |
-| Agnes AI | BLOCKED_CONFIG | 前端真实到 /api/engine/agnes/generate，本地未配置 Agnes Base URL / Key；未到上游 |
+| Agnes AI | BLOCKED_CONFIG | 前端真实到 /api/engine/agnes/generate，当前本地未配置 AGNES_KEY；未到上游。官方当前 Image 2.5 Flash 使用 size + ratio |
+| SenseNova 图像 | FAIL_INTEGRATION | 官方当前平台已有图像生成/编辑模型，但 Canvas 驱动只接入 chat/reasoning；前端 text2img 在本地能力检查阶段被阻止，尚未接入官方图像 OpenAPI Schema |
 
-已取得明确终态的供应商不再为了“刷测试”重复消耗。BLOCKED_CONFIG 只代表当前本地运行环境缺少必要配置，不能外推为上游不可用。
+已取得明确终态的供应商不再为了“刷测试”重复消耗。BLOCKED_CONFIG 只代表当前本地运行环境缺少必要配置，不能外推为上游不可用；FAIL_INTEGRATION 表示当前产品接线缺口，不代表上游平台没有该能力。
 
 ## 2. 用户新增的验收规则
 
@@ -87,15 +88,23 @@ MuAPI LoRA 专用端点 `flux-1-dev-style-lora-inference` 已从真实前端验�
 ### 3.6 Gemini / Agnes 当前配置阻塞
 
 - Gemini：前端真实请求包含 `gemini-3.1-flash-image`、`4:3`、`1K` 与独立 Prompt；本站返回 HTTP 400 `未配置 GEMINI_API_KEY`，`errorSource=local`、`executionTrace=[]`。记 BLOCKED_CONFIG。
-- Agnes：前端真实到 `/api/engine/agnes/generate`；本站返回 HTTP 400 未配置 Agnes Base URL / Key。记 BLOCKED_CONFIG。
+- Agnes：前端真实到 `/api/engine/agnes/generate`；当前本站返回 HTTP 400 `未配置 agnes API 密钥`。官方当前 Image 2.5 Flash 使用 `size + ratio`，旧测试中 width/height 直接可编辑的假设已经修正。记 BLOCKED_CONFIG。
 - 两者都没有上游 HTTP 响应，因此不能记欠费、鉴权失败或生成成功。
+
+### 3.7 SenseNova 图像边界纠正
+
+官方当前模型/产品页已经存在图像生成与编辑能力，因此旧代码把 SenseNova 整个平台描述成“只做文本推理、不支持生图”是错误外推。当前 Canvas 只接入 SenseNova chat/reasoning，真实前端选择 SenseNova 后执行 text2img 被驱动能力检查本地阻止，没有发上游请求。当前结论为 `FAIL_INTEGRATION`：在取得完整官方图像 endpoint、鉴权、字段与返回 Schema 前不猜 API，也不自动改用其他 provider。服务端未实现的生图入口现在明确返回 501 / local / `not_implemented`。
+
+### 3.8 Key 池取消失败后自动换 Key
+
+设置页删除 Failover / Best Latency，只保留 Round-Robin 用于**彼此独立的新请求**。Key 的 rate_limited / invalid / latency 等状态仍用于可见性统计，但不会因为上一请求失败而改变下一请求的选 Key 路径；异步 schema-provider 任务继续通过 `credentialRef` 固定提交时的原始凭据。
 
 ## 4. 当前真正剩余
 
 A01–A08、A10–A12 按当前交接范围关闭。A09 的代码契约与回归已补齐；仍缺的是“有额度情况下真实多图 + 某图持久化失败”的外部前端实景证据，不能靠故意制造生产故障来伪造。
 
 供应商方面：
-- SenseNova 仍需按其实际产品边界做当前前端验收；它在本产品中是 chat/reasoning，而不是图片生成供应商。
+- SenseNova 图像已确认是当前产品的 `FAIL_INTEGRATION`：官方平台有图像能力，但 Canvas 尚未核实并接入完整图像 OpenAPI Schema。下一步是取得官方 endpoint/字段/返回契约后实现，再做新的前端样本验收。
 - OpenAI/Grok 兼容中转必须使用用户明确配置的 Base URL，不能拿兼容性当官方能力。
 - Video 聚合入口仍需单独按实际模型/供应商验收。
 - Gemini / Agnes 只需在配置缺失项补齐后复验，不为刷覆盖率重复调用其他已终态 provider。
