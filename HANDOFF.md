@@ -161,7 +161,7 @@
 | --- | --- |
 | Gemini | 有图像/文本代码和历史规范检查；2026-10-08 前端到 `/api/gemini/generate`，本地配置返回 HTTP 400 `未配置 GEMINI_API_KEY`，记 `BLOCKED_CONFIG`。配置 Key 后再复验真实上游 |
 | Agnes | 有图像/视频/文本代码；2026-10-08 前端到 `/api/engine/agnes/generate`，当前本地配置返回 HTTP 400 `未配置 agnes API 密钥`，记 `BLOCKED_CONFIG`。官方当前 Image 2.5 Flash 使用 `size + ratio`；配置 Key 后用当前模型重新验真实上游 |
-| SenseNova | **FAIL_INTEGRATION（图像路由）**：官方当前平台已有独立图像生成/编辑模型，但 Canvas 只接入 chat/reasoning；前端生图被当前驱动能力检查本地阻止。未取得完整官方图像 OpenAPI Schema 前不猜 endpoint，不自动改用其他供应商。证据：`docs/evidence/t7-sensenova-acceptance.md` |
+| SenseNova | **CODE_INTEGRATED / 上游终态待验收**：已按商汤官方 U1.5 Lite 图像生成/编辑协议接入 `https://token.sensenova.cn/v1/images/generations` 与 `/images/edits`，保留 6.8 chat。模型中心已展示 `sensenova-u1.5-lite`；不支持的扩散参数明确标记未发送。本地回归 42 files / 302 tests PASS，但尚无新图像路由真实上游结果，不记 PASS_GENERATION/PASS_BILLING。证据：`docs/evidence/t7-sensenova-u1-5-integration.md` |
 | OpenAI / Grok 兼容中转 | 必须使用用户明确配置的 Base URL；兼容不等于官方；本轮未验 |
 | Video | 聚合执行入口，不能当独立供应商；新三家图像集成不能自动算视频支持 |
 
@@ -266,7 +266,7 @@
 
 **2026-10-06 用户新增样本规则：** 每个尚未取得明确终态的供应商都必须换一套参考作品和参数，不复用上一家的 Prompt。优先从 Civitai 等公开结构化 API/元数据取得参考图 URL、Prompt、Negative Prompt、底模、LoRA、权重、Steps、CFG、Sampler、Scheduler、Seed、尺寸；缺字段不能猜。真实生成后必须和参考原图比较主体、构图、服装/材质、色调、光影和 LoRA 特征。已经取得 `PASS_GENERATION` / `PASS_BILLING` / `BLOCKED_AUTH` 的供应商不为“刷测试”重复消耗，除非专门验证新修复。公网元数据/API 直接用公网请求；Aki/CDP 只用于本地 Canvas 真实前端操作或必须依赖本地登录态的场景。
 
-后续优先顺序：**取得 SenseNova 官方图像 OpenAPI 完整 Schema 后补图像接线 → 用户明确配置的 OpenAI/Grok 兼容中转 → Video → 配置 GEMINI_API_KEY / AGNES_KEY 后再复验 Gemini / Agnes**。已取得明确终态的 Civitai/Fal/ModelScope/NanoGPT/TAMS/MuAPI/WaveSpeed/Sogni/Hugging Face 不为“刷覆盖率”重复调用；只有修具体缺口时才复测。
+后续优先顺序：**在有效 SenseNova Key 下做 U1.5 Lite 前端真实上游生成/欠费验收与参考原图对照 → 用户明确配置的 OpenAI/Grok 兼容中转 → Video → 配置 GEMINI_API_KEY / AGNES_KEY 后再复验 Gemini / Agnes**。SenseNova 图像路由已经代码接线，但本地目录成功与单测通过不代表上游验收。已取得明确终态的 Civitai/Fal/ModelScope/NanoGPT/TAMS/MuAPI/WaveSpeed/Sogni/Hugging Face 不为“刷覆盖率”重复调用。
 
 不要强制套用所有端点统一的 512×512、steps=20、CFG=7。尺寸和参数取当前模型官方允许的值；未提供 seed 的端点历史 seed 应为 null，不能编造。
 
