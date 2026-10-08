@@ -130,3 +130,10 @@ Aki 本地工作区在恢复后重新执行完整回归：
 - Vite 生产构建：1732 modules transformed；仅保留已有 `__dirname` native-loader 与 chunk-size warning，没有构建失败。
 
 这组回归只证明当前代码没有破坏既有契约；不替代任何 provider 的真实前端/上游验收。
+## 7. Fal Wan 2.1 视频模型入口一致性
+
+Fal 官方端点文档目前仍列有 `fal-ai/wan-t2v`（Wan 2.1 Text-to-Video）：https://fal.ai/models/fal-ai/wan-t2v/api 。此前全局 `MODEL_PRESETS` 包含该端点，但 `AIVideoNode` 模型下拉和 `VideoDriver.supportedModels` 漏掉它，导致 `videoProvider.test.ts` 对 `resolveAIVideoModelProvider` 的旧预期与当前 Schema 不一致。
+
+2026-10-08 已把该官方端点作为明确标记 `legacy` 的视频模型加入两处，恢复 Schema 的 provider=`fal` 映射，并保留当前 Wan 2.7 等预置。已在真实本地前端新增 AI 视频节点，选择 `fal-ai/wan-t2v` 后检查到节点 `provider=fal`、`model=fal-ai/wan-t2v`，没有自动跨服务商切换。完整回归结果为 41 个测试文件 / 300 个测试 PASS、TypeScript lint PASS、前后端 build PASS。
+
+**这只是模型选用与路由字段的一致性验证，不是视频生成验收**；Fal 账户先前已明确 `TOP_UP`，本轮不为重复验证耗费视频额度。该端点的视频实际输出、参数与原视频一致性仍未验证。
