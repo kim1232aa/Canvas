@@ -351,7 +351,7 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
     .map((k) => k.trim())
     .filter(Boolean);
 
-  const currentStrategy = keys[`${currentProvider.id}_strategy`] || poolStats[currentProvider.id]?.strategy || 'round_robin';
+  const currentStrategy: 'round_robin' = 'round_robin';
 
   // S7: server key counts come only from the pool stats (env + settings merged); null = not loaded yet.
   const poolSummary = (provId: string): { total: number; settings: number; env: number } | null => {
@@ -394,7 +394,7 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
     handleUpdateKeysForProvider(copy);
   };
 
-  const handleStrategyChange = async (strat: 'round_robin' | 'failover' | 'latency_best') => {
+  const handleStrategyChange = async (strat: 'round_robin') => {
     setKeys((prev) => ({
       ...prev,
       [`${currentProvider.id}_strategy`]: strat,
@@ -761,50 +761,25 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
                 </div>
               )}
 
-              {/* Multi-Key Rotation Strategy Selector */}
               <div className="bg-[#121317] border border-[#272935] rounded-xl p-3 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-slate-300 font-bold flex items-center gap-1.5">
                     <Layers className="w-4 h-4 text-purple-400" />
-                    多 Key 负载策略 (Rotation Strategy)
+                    多 Key 分配策略
                   </span>
                   <span className="text-slate-400 text-[10px] font-mono">
                     {poolLabel(currentProvider.id)}
                   </span>
                 </div>
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    {
-                      id: 'round_robin',
-                      title: '🔄 顺序轮询 (Round-Robin)',
-                      desc: '按序在多 Key 间轮流分发，最大化并发吞吐与配额利用',
-                    },
-                    {
-                      id: 'failover',
-                      title: '🛡️ 主备故障切换 (Failover)',
-                      desc: '优先使用首个主 Key，遭遇 429 限流或异常时自动切换备用 Key',
-                    },
-                    {
-                      id: 'latency_best',
-                      title: '⚡ 最优低延迟 (Best Latency)',
-                      desc: '自动测速并优先选择近期响应耗时最低的高速 Key',
-                    },
-                  ].map((st) => (
-                    <button
-                      key={st.id}
-                      type="button"
-                      onClick={() => handleStrategyChange(st.id as any)}
-                      className={`p-2.5 rounded-lg text-left transition-all border ${
-                        currentStrategy === st.id
-                          ? 'bg-purple-500/20 border-purple-500/60 text-purple-200 shadow-sm'
-                          : 'bg-[#181921] border-[#292b37] text-slate-400 hover:text-slate-200'
-                      }`}
-                    >
-                      <div className="font-bold text-[11px]">{st.title}</div>
-                      <div className="text-[10px] text-slate-400 mt-1 leading-tight">{st.desc}</div>
-                    </button>
-                  ))}
-                </div>
+                <button
+                  type="button"
+                  onClick={() => handleStrategyChange('round_robin')}
+                  className={`w-full p-2.5 rounded-lg text-left transition-all border ${currentStrategy === 'round_robin' ? 'bg-purple-500/20 border-purple-500/60 text-purple-200 shadow-sm' : 'bg-[#181921] border-[#292b37] text-slate-400 hover:text-slate-200'}`}
+                >
+                  <div className="font-bold text-[11px]">🔄 顺序轮询 (Round-Robin)</div>
+                  <div className="text-[10px] text-slate-400 mt-1 leading-tight">每个独立新请求按配置顺序选择 Key；历史失败状态只用于展示，不会触发故障切换、低延迟改路或自动重试。</div>
+                </button>
+                <p className="text-[10px] text-amber-300/80 leading-relaxed">已禁用 Failover / Best Latency：失败请求不会因为 401/403/429/网络错误自动换另一把 Key。异步任务仍必须使用提交时绑定的凭据引用继续轮询。</p>
               </div>
 
               {/* Server key pool (masked) — read-only, above browser custom keys */}
