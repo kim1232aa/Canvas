@@ -14,20 +14,52 @@ export class SenseNovaDriver extends BaseEngineDriver {
   readonly name = 'SenseNova (商汤日日新)';
   readonly label = '商汤日日新官方平台';
   readonly badgeColor = '#6366f1';
-  readonly description = '当前 Canvas 只接入 SenseNova chat/reasoning。SenseNova 官方平台已提供独立图像生成/编辑模型，但本项目尚未核实并接入其图像 OpenAPI Schema，因此生图路由必须明确报未接入，不能伪装成“平台不支持生图”。';
-  readonly capabilities = ['reasoning'] as const;
+  readonly description = 'SenseNova 6.8 文本推理与 U1.5 Lite 官方图像生成/编辑，分别使用 chat 与 images 路由；图像端点不接受 ComfyUI 扩散参数。';
+  readonly capabilities = ['reasoning', 'text2img', 'img2img'] as const;
   readonly defaultBaseUrl = 'https://token.sensenova.cn/v1';
   readonly defaultKey = '';
 
-  readonly supportedModels: ModelSpec[] = [];
+  readonly supportedModels: ModelSpec[] = [{id:'sensenova-u1.5-lite',name:'SenseNova U1.5 Lite (文生图/图像编辑)',type:'image',supportsLora:false,description:'官方 images/generations 与 images/edits JSON 协议'}];
 
   protected async executeGenerate(
     params: NormalizedGenerateParams,
-    _keys: Record<string, string>
+    keys: Record<string, string>
   ): Promise<NormalizedGenerateResult> {
-    throw new Error(
-      `SenseNova 官方平台存在独立图像生成/编辑模型，但当前 Canvas 尚未核实并接入其图像 OpenAPI Schema（当前模型: ${params.model || '未指定'}）。此处不会自动改用 FLUX、Agnes、Gemini 或其他供应商；请在完成官方图像端点与字段接线后再从 SenseNova 生图分支执行。`
-    );
+    const effectiveKey = params.apiKey || keys.sensenovaKey || '';
+    const headers: Record<string, string> = {'Content-Type':'application/json'};
+    if (effectiveKey) headers['x-sensenova-key'] = effectiveKey;
+    if (params.baseUrl) headers['x-sensenova-base-url'] = params.baseUrl;
+
+    const unsupported: Array<[string, unknown]> = [
+      ['negative_prompt',params.negative_prompt],['seed',params.seed],['steps',params.steps],['cfg',params.cfg],
+      ['sampler_name',params.sampler_name],['scheduler',params.scheduler],['denoise',params.denoise],
+      ['loras',params.loras?.length ? params.loras : undefined],
+    ];
+    const parameterOmissions=unsupported.filter(([,value])=>value !== undefined && value !== null && value !== '').map(([field,value])=>({field,value,reason:'SenseNova U1.5 Lite 图像接口没有该扩散字段；未发送上游'}));
+    const extra=params.extraParams || {};
+    const body={
+      model:params.model,prompt:params.prompt,image_url:params.image_url,
+      width:params.width,height:params.height,
+      ...(extra.size ? {size:extra.size} : {}),
+      ...(extra.watermark !== undefined ? {watermark:extra.watermark} : {}),
+      ...(extra.prompt_extend !== undefined ? {prompt_extend:extra.prompt_extend} : {}),
+      ...(extra.output_format !== undefined ? {output_format:extra.output_format} : {}),
+      response_format:'b64_json',
+      workflowSnapshot:params.workflowSnapshot,
+      parameterOmissions,
+    };
+    const resp=await fetch('/api/engine/sensenova/generate',{method:'POST',headers,body:JSON.stringify(body)});
+    if (!resp.ok) {
+      const raw=await resp.text();
+      throw new Error(`SenseNova 图像路由 HTTP ${resp.status}: ${raw}`);
+    }
+    const data=await resp.json();
+    if (!data.mediaUrl && !data.imageUrl) throw new Error('SenseNova 图像接口成功响应缺少图像，不记成功');
+    return {
+      mediaUrl:data.mediaUrl || data.imageUrl,mediaType:'image',provider:this.name,providerId:this.id,
+      model:data.model || params.model,requestedModel:params.model,seed:null,
+      rawResponse:data,actualRequest:data.actualRequest,
+    };
   }
 
   protected async executeChat(
