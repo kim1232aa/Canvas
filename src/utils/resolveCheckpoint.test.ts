@@ -241,9 +241,8 @@ describe('Fal / Agnes / HF / NanoGPT grey on engine switch (schema-driven)', () 
       expect(isCanvasFieldUnsupported('agnes', model, 'cfg'), `cfg@${model}`).toBe(true);
       expect(isCanvasFieldUnsupported('agnes', model, 'sampler'), `sampler@${model}`).toBe(true);
       expect(isCanvasFieldUnsupported('agnes', model, 'scheduler'), `scheduler@${model}`).toBe(true);
-      // width/height stay editable (mapped to Agnes size)
-      expect(isCanvasFieldUnsupported('agnes', model, 'width'), `w@${model}`).toBe(false);
-      expect(isCanvasFieldUnsupported('agnes', model, 'height'), `h@${model}`).toBe(false);
+      expect(isCanvasFieldUnsupported('agnes', model, 'width'), `w@${model}`).toBe(true);
+      expect(isCanvasFieldUnsupported('agnes', model, 'height'), `h@${model}`).toBe(true);
     }
     expect(sanitizeFrameLoras('agnes', 'agnes-image-2.5-flash', left)).toEqual(left);
     const badge = isLoraUnsupportedOnEndpoint('agnes', 'agnes-image-2.5-flash');
