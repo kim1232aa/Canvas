@@ -632,7 +632,7 @@ export const fetchKeyPoolStats = async (token?: string): Promise<Record<string, 
 
 export const updateKeyPoolStrategy = async (
   provider: string,
-  strategy: 'round_robin' | 'failover' | 'latency_best',
+  strategy: 'round_robin',
   token?: string
 ): Promise<boolean> => {
   const effectiveToken = (token !== undefined ? token : getStoredAdminToken()).trim();
