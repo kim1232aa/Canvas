@@ -1,4 +1,6 @@
-# T7 SenseNova 图像路由验收报告 — FAIL_INTEGRATION
+# T7 SenseNova 旧图像路由验收报告 — 历史 FAIL_INTEGRATION
+> **时序说明（2026-10-08）**：以上 HTTP 501 是旧 `sensenova-6.8-flash-lite` 图像路由尚未接入时的前端记录。后续同日已经新增独立的 `sensenova-u1.5-lite` 文生图/编辑路由，见 [SenseNova U1.5 Lite 接线审计](t7-sensenova-u1-5-integration.md)。因此旧 HTTP 501 **不能代表新 U1.5 Lite 当前实现状态**。新路由仍未拿到真实上游终态，不得将代码集成等同 PASS_GENERATION/PASS_BILLING。
+
 
 日期：2026-10-08。验收方式：真实本地前端 + 官方文档复核。
 
