@@ -35,7 +35,7 @@ export interface ProviderPoolStats {
   activeKeys: number;
   rateLimitedKeys: number;
   invalidKeys: number;
-  strategy: 'round_robin' | 'failover' | 'latency_best';
+  strategy: 'round_robin';
   keys: KeyPoolItemStats[];
 }
 
