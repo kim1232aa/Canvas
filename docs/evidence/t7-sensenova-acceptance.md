@@ -1,0 +1,47 @@
+# T7 SenseNova 图像路由验收报告 — FAIL_INTEGRATION
+
+日期：2026-10-08。验收方式：真实本地前端 + 官方文档复核。
+
+## 结论
+
+**FAIL_INTEGRATION（图像路由）**。当前 Canvas 的 SenseNova 驱动只声明 `reasoning`，从 KSampler 选择 SenseNova 后点击真实网页“运行工作流”，客户端直接返回：
+
+`当前 Canvas 驱动 [SenseNova (商汤日日新)] 尚未接入 [text2img] 能力。当前驱动已接入: [reasoning]。`
+
+没有生成请求到达 SenseNova 上游，因此不能记 PASS_BILLING / PASS_GENERATION / BLOCKED_AUTH。
+
+## 为什么这是集成缺口，而不是“官方不支持生图”
+
+2026-10-08 重新检索 SenseNova 官方站点后，旧代码里的“SenseNova 是文本推理平台 / 不提供生图”已经过时：
+
+- 官方模型页：https://www.sensenova.cn/models
+  - `SenseNova U1.5 Lite` 被官方描述为“生成与编辑一体模型”，支持图片创作与修改。
+- 官方开放平台：https://platform.sensenova.cn/product
+  - 当前产品能力明确列出“文生图模型 SenseNova V6.5 Miaohua”。
+- 官方开放平台文档中心：https://platform.sensenova.cn/product/APIService/document
+  - 文档中心导航明确包含“文生图模型 SenseNova V6.5 Miaohua”。
+
+本轮没有找到足够完整、可直接编码的当前图像 OpenAPI 请求地址 + 请求字段 + 异步/同步返回 Schema，因此没有猜 endpoint，也没有拿 chat-completions 冒充生图接口。
+
+## 本轮前端样本
+
+- Provider：`sensenova`
+- 自定义模型输入：`sensenova-6.8-flash-lite`
+- Prompt：`A biomechanical koi pond inside a brutalist museum atrium, mirrored black water, copper fins, skylight reflections, architectural photography, restrained monochrome palette`
+- 前端结果：在客户端能力检查阶段被明确阻止，执行记录没有新增 SenseNova 上游请求。
+- 没有自动改用 Gemini / Agnes / Fal / ModelScope / 其他 provider。
+
+## 已修正的错误表达
+
+代码不再宣称“SenseNova 官方平台不支持生图”。当前语义改为：
+
+- SenseNova 官方平台**存在图像生成/编辑模型**；
+- 当前 Canvas **尚未核实并接入 SenseNova 图像 OpenAPI Schema**；
+- 在官方图像 endpoint 与字段未核实前，SenseNova 生图路由明确返回“未接入”，禁止自动换供应商。
+
+## 下一步验收条件
+
+1. 从 SenseNova / SenseCore 官方文档取得当前文生图 endpoint、模型 ID、鉴权方式、请求字段与结果解析契约。
+2. 用动态 Schema 接入，不把旧 chat API 字段硬套到图像 API。
+3. 配置真实 SenseNova 图像服务凭据后，从前端换新的独立参考样本执行。
+4. 只有真实图片返回并完成历史/参数/持久化闭环才可记 PASS_GENERATION；若上游明确欠费才可记 PASS_BILLING。
