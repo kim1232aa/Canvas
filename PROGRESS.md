@@ -34,7 +34,7 @@
 - 供应商矩阵/指南/历史 preset 清掉 100% 复现、自动切换、未验证 LoRA/速度等宣传；资产库 Provider 筛选改为真实资产动态生成，不再维护静态供应商白名单。
 - 最终回归：`npm run lint` PASS；`npm run build` PASS（含 frontend + hosting worker 构建）；`npm test` **40 个测试文件 / 295 个测试全部 PASS**。测试绿仍只作为回归保护，真实前端验收证据见上述 closeout 文档。
 
-**仍需处理：** SenseNova 图像路由已判 `FAIL_INTEGRATION`：官方当前已有图像生成/编辑模型，但 Canvas 尚未取得并接入完整图像 OpenAPI Schema；不得拿 chat API 冒充。OpenAI/Grok 兼容中转只在用户显式 Base URL 已配置时验收；Video 聚合入口仍待逐路由验收。Gemini / Agnes 当前为 `BLOCKED_CONFIG`，配置对应 Key 后再复验。已经有明确终态的供应商不为凑数量重复调用。
+**仍需处理：** SenseNova U1.5 Lite 图像协议已按商汤官方文档完成代码接线与模型中心入口，详见 `docs/evidence/t7-sensenova-u1-5-integration.md`；目前仅有模型目录、本地字段校验与 42 files / 302 tests，尚缺真实前端生成/上游额度终态及与原图视觉对比，不能判 PASS。OpenAI/Grok 兼容中转只在用户显式 Base URL 已配置时验收；Video 聚合入口仍待逐路由验收。Gemini / Agnes 当前为 `BLOCKED_CONFIG`，配置对应 Key 后再复验。已经有明确终态的供应商不为凑数量重复调用。
 
 文档修正记录（2026-10-05）：`docs/providers/schema-providers.md` 第 44~45 行 Sogni「ECONNREFUSED / 403 error code 1010」为 10-04 旧网络环境下的结果，已被 10-05 实测（HTTP 201 + insufficient_credit）取代；HANDOFF.md §3.2 三家状态同步更新。修正理由均注于对应段落。
 
