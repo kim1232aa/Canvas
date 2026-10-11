@@ -47,6 +47,8 @@ app.use((req, res, next) => {
 \n`);
 replace("const adminToken = process.env.CANVAS_ADMIN_TOKEN?.trim();", "if (currentRequest().authenticatedUserId === currentRequest().ownerUserId) return next();\n  const adminToken = process.env.CANVAS_ADMIN_TOKEN?.trim();");
 removeRange('// Persistent Storage Directories', '// Cloud Canvas Project Schema');
+replace("import { createMediaStore } from './src/server/mediaStore.ts';\n", '');
+removeRange('// MEDIA-STORE-BEGIN', '// MEDIA-STORE-END', `const externalizeMedia = async <T,>(value: T): Promise<T> => currentRequest().store.persistMedia(value);\n`);
 removeRange('// Helper methods to read/write JSON files safely', 'const defaultKeys:');
 source = source.replaceAll('cloudSettings', 'currentSettings()');
 // Preserve the full HTTP body and classify a failed durable media copy as a
@@ -62,12 +64,12 @@ source = source.replaceAll(
 // Workers manages request lifetime and has no Node socket timeout methods.
 // Provider polling deadlines and upstream validation remain unchanged.
 source = source.replace(/\s*(?:req|res)\.setTimeout\(\d+\);/g, '');
-replace('  generationHistory.unshift(fullItem);\n  if (generationHistory.length > MAX_HISTORY_COUNT) {\n    generationHistory.splice(MAX_HISTORY_COUNT);\n  }\n  writeJsonFile(HISTORY_FILE, generationHistory);', "  currentRequest().pending.push(currentRequest().store.put('history', fullItem));");
+replace('  const nextHistory = [fullItem,...generationHistory].slice(0,MAX_HISTORY_COUNT);\n  writeJsonFile(HISTORY_FILE,nextHistory);\n  generationHistory = nextHistory;\n  return fullItem;', "  return await currentRequest().store.put('history', fullItem);");
 removeRange('// Seed initial history if empty', '// Agnes / SenseNova');
 replace("app.post('/api/cloud-keys/strategy', requireAdminAuth, (req, res) => {", "app.post('/api/cloud-keys/strategy', requireAdminAuth, async (req, res) => {");
 replace('  writeJsonFile(SETTINGS_FILE, currentSettings());', '  await currentRequest().store.updateSettings({[`${provider}_strategy`]: strategy});');
 removeRange("app.get('/api/history',", 'const MAX_HISTORY_ITEM_BYTES');
-replace('  generationHistory.unshift(item);\n  // Keep last MAX_HISTORY_COUNT items on server\n  if (generationHistory.length > MAX_HISTORY_COUNT) {\n    generationHistory.splice(MAX_HISTORY_COUNT);\n  }\n  writeJsonFile(HISTORY_FILE, generationHistory);\n  return res.json(item);', "  const stored = await currentRequest().store.put('history', item);\n  return res.json(stored);");
+replace('  const nextHistory = [item,...generationHistory].slice(0,MAX_HISTORY_COUNT);\n  writeJsonFile(HISTORY_FILE,nextHistory);\n  generationHistory = nextHistory;\n  return res.json(item);', "  const stored = await currentRequest().store.put('history', item);\n  return res.json(stored);");
 removeRange("app.delete('/api/history/:id'", '// ==========================================\n// 10. Server-Side Settings', 'registerStorageRoutes(app);\n\n');
 replace("app.post('/api/cloud/settings', requireAdminAuth, (req, res) => {", "app.post('/api/cloud/settings', requireAdminAuth, async (req, res) => {");
 replace('  currentSettings() = {\n    ...currentSettings(),\n    ...updates,\n  };\n  writeJsonFile(SETTINGS_FILE, currentSettings());', '  await currentRequest().store.updateSettings(updates);\n  Object.assign(currentSettings(), updates);');
@@ -78,7 +80,7 @@ source = source.slice(0, source.indexOf('startServer().catch'));
 // any provider call, since upstream providers cannot access private media URLs.
 const mediaMiddleware = `
 app.use((req, res, next) => {
-  if (!/^\\/api\\/(?:engine\\/)?(?:[^/]+\\/)?(?:generate|chat|refine-prompt|upload|submit)$/.test(req.path)) return next();
+  if (req.method !== 'POST' || !MEDIA_INPUT_ROUTES.test(req.path)) return next();
   currentRequest().store.resolveInputMedia(req.body).then(body => { req.body = body; next(); }).catch(next);
 });
 `;

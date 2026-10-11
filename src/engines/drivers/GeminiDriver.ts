@@ -55,6 +55,7 @@ export class GeminiDriver extends BaseEngineDriver {
     const body: Record<string, any> = {
       prompt: params.prompt,
       model: params.model,
+      parameterOmissions: params.extraParams?.omissions,
     };
     if (params.aspectRatio && typeof params.aspectRatio === 'string' && params.aspectRatio.trim() !== '') {
       body.aspect_ratio = params.aspectRatio.trim();

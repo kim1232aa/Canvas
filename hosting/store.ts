@@ -1,3 +1,5 @@
+import {decodeMediaData, MEDIA_DATA, MEDIA_REF, MEDIA_SANDBOX_CSP, mediaContainer, mediaField, mediaInputError, rawReference, safeEntries, storageError} from '../src/server/mediaContract';
+
 type D1 = import('@cloudflare/workers-types').D1Database;
 type Bucket = import('@cloudflare/workers-types').R2Bucket;
 type Entry = { id: string; object_key: string; summary: string; updated_at: number };
@@ -48,41 +50,42 @@ export class CanvasStore {
     await this.db.batch(statements);
   }
 
-  async persistMedia(value: any): Promise<any> {
-    if (typeof value === 'string' && /^data:(image|video|audio)\/[\w.+-]+;base64,/.test(value)) {
-      const comma = value.indexOf(',');
-      const type = value.slice(5, value.indexOf(';'));
-      const bytes = Buffer.from(value.slice(comma + 1), 'base64');
+  async persistMedia(value: any, field = ''): Promise<any> {
+    if (typeof value === 'string') {
+      const raw = field === 'responseBody';
+      if (!raw && !MEDIA_DATA.test(value)) return value;
+      const {bytes,contentType} = raw ? {bytes:Buffer.from(value,'utf8'),contentType:'application/octet-stream'} : decodeMediaData(value);
       const hash = Buffer.from(await crypto.subtle.digest('SHA-256', bytes)).toString('hex');
-      await this.bucket.put(`media/${hash}`, bytes, {httpMetadata: {contentType: type}});
-      return `/api/media/${hash}`;
+      try {await this.bucket.put(`${raw ? 'raw' : 'media'}/${hash}`,bytes,{httpMetadata:{contentType},customMetadata:{sha256:hash,size:String(bytes.length)}});} catch (error) {throw storageError(error);}
+      return raw ? rawReference(hash,bytes.length,value) : `/api/media/${hash}`;
     }
-    if (Array.isArray(value)) {
-      const result = [];
-      for (const item of value) result.push(await this.persistMedia(item));
-      return result;
-    }
+    if (Array.isArray(value)) return Promise.all(value.map(item => this.persistMedia(item,field)));
     if (value && typeof value === 'object') {
-      const result: Record<string, any> = {};
-      for (const [key, item] of Object.entries(value)) result[key] = await this.persistMedia(item);
-      return result;
+      if (field === 'inlineData' && typeof value.data === 'string' && typeof value.mimeType === 'string' && !MEDIA_REF.test(value.data)) return {...value,data:await this.persistMedia(`data:${value.mimeType};base64,${value.data}`)};
+      return Object.fromEntries(await Promise.all(safeEntries(value).map(async ([key,item]) => [key,await this.persistMedia(item,key)])));
     }
     return value;
   }
 
-  async resolveInputMedia(value: any): Promise<any> {
-    if (typeof value === 'string' && /^\/api\/media\/[a-f0-9]{64}$/.test(value)) {
-      const object = await this.bucket.get(value.slice(5));
-      if (!object) throw new Error('输入媒体文件已不可用，请重新上传');
-      const data = Buffer.from(await object.arrayBuffer()).toString('base64');
-      return `data:${object.httpMetadata?.contentType || 'application/octet-stream'};base64,${data}`;
+  async resolveInputMedia(value: any, media = false): Promise<any> {
+    if (typeof value === 'string') {
+      const match = media && MEDIA_REF.exec(value);
+      if (!match) return value;
+      let object;
+      try {object = await this.bucket.get(`media/${match[1]}`);} catch (error) {throw storageError(error);}
+      if (!object) throw mediaInputError('输入媒体文件已不可用，请重新上传');
+      try {
+        const bytes = Buffer.from(await object.arrayBuffer());
+        const hash = Buffer.from(await crypto.subtle.digest('SHA-256',bytes)).toString('hex');
+        if (hash !== match[1]) throw new Error('媒体损坏: SHA-256 不匹配');
+        return `data:${object.httpMetadata?.contentType || 'application/octet-stream'};base64,${bytes.toString('base64')}`;
+      } catch (error) {throw storageError(error);}
     }
-    if (Array.isArray(value)) return Promise.all(value.map(v => this.resolveInputMedia(v)));
-    if (value && typeof value === 'object') {
-      const result: Record<string, any> = {};
-      for (const [key, item] of Object.entries(value)) result[key] = await this.resolveInputMedia(item);
-      return result;
-    }
+    if (Array.isArray(value)) return Promise.all(value.map(item => this.resolveInputMedia(item,media)));
+    if (value && typeof value === 'object') return Object.fromEntries(await Promise.all(safeEntries(value).map(async ([key,item]) => {
+      const active = mediaField(key) || (media && (key === 'url' || key === 'data'));
+      return [key,active || mediaContainer(key) ? await this.resolveInputMedia(item,active) : item];
+    })));
     return value;
   }
 
@@ -153,13 +156,29 @@ export class CanvasStore {
     return row?.count ?? 0;
   }
 
-  async media(hash: string): Promise<Response> {
-    if (!/^[a-f0-9]{64}$/.test(hash)) return Response.json({error: '无效的媒体地址'}, {status: 400});
-    const object = await this.bucket.get(`media/${hash}`);
-    if (!object) return Response.json({error: '媒体不存在'}, {status: 404});
-    const headers = new Headers({'Cache-Control': 'private, max-age=86400', 'X-Content-Type-Options': 'nosniff'});
-    object.writeHttpMetadata(headers as any);
-    headers.set('etag', object.httpEtag);
-    return new Response(object.body as any, {headers});
+  async media(hash: string, range?: string, raw = false): Promise<Response> {
+    if (!/^[a-f0-9]{64}$/.test(hash)) return Response.json({error:'无效的媒体地址',errorSource:'local'},{status:400});
+    try {
+      const key = `${raw ? 'raw' : 'media'}/${hash}`;
+      const object = await this.bucket.get(key);
+      if (!object) return Response.json({error:'媒体不存在',errorSource:'local'},{status:404});
+      const headers = new Headers({'Cache-Control':'private, max-age=86400','X-Content-Type-Options':'nosniff','Content-Security-Policy':MEDIA_SANDBOX_CSP,'Accept-Ranges':'bytes'});
+      object.writeHttpMetadata(headers as any);
+      if (raw) {headers.set('Content-Type','application/octet-stream');headers.set('Content-Disposition','attachment');}
+      headers.set('etag',object.httpEtag);
+      if (range) {
+        const match = /^bytes=(\d*)-(\d*)$/.exec(range);
+        const start = match?.[1] ? Number(match[1]) : Math.max(0,object.size-Number(match?.[2]));
+        const end = match?.[1] ? (match[2] ? Math.min(Number(match[2]),object.size-1) : object.size-1) : object.size-1;
+        if (!match || start > end || start >= object.size || !Number.isFinite(start)) return new Response(null,{status:416,headers:{'Content-Range':`bytes */${object.size}`}});
+        const part = await this.bucket.get(key,{range:{offset:start,length:end-start+1}});
+        if (!part) throw new Error('媒体读取期间消失');
+        headers.set('Content-Range',`bytes ${start}-${end}/${object.size}`);
+        headers.set('Content-Length',String(end-start+1));
+        return new Response(part.body as any,{status:206,headers});
+      }
+      headers.set('Content-Length',String(object.size));
+      return new Response(object.body as any,{headers});
+    } catch (error) {throw storageError(error);}
   }
 }

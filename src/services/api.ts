@@ -403,6 +403,11 @@ async function historyRequest(path: string, init?: RequestInit) {
   if (!response.ok) throw new Error(`HTTP ${response.status}: ${body}`);
   return body ? JSON.parse(body) : undefined;
 }
+export const uploadMedia = async (dataUrl: string): Promise<string> => {
+  const body = await historyRequest('/api/media', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({dataUrl})});
+  if (!body || typeof body.url !== 'string') throw new Error('媒体上传响应缺少 url');
+  return body.url;
+};
 export const fetchHistory = async (): Promise<GenerationHistoryItem[]> => historyRequest('/api/history');
 export const saveToHistory = async (item: Partial<GenerationHistoryItem>) => historyRequest('/api/history', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(item)});
 export const deleteHistoryItem = async (id: string) => {await historyRequest(`/api/history/${encodeURIComponent(id)}`, {method: 'DELETE'}); return true;};
@@ -432,6 +437,11 @@ export const fetchLiveModels = async (
   if (keys.nanogptKey) headers['x-nanogpt-key'] = keys.nanogptKey;
   if (keys.sensenovaKey) headers['x-sensenova-key'] = keys.sensenovaKey;
   if (keys.agnesKey) headers['x-agnes-key'] = keys.agnesKey;
+  if (keys.runwareKey) headers['x-runware-key'] = keys.runwareKey;
+  if (keys.modelslabKey) headers['x-modelslab-key'] = keys.modelslabKey;
+  if (keys.muapiKey) headers['x-muapi-key'] = keys.muapiKey;
+  if (keys.wavespeedKey) headers['x-wavespeed-key'] = keys.wavespeedKey;
+  if (keys.sogniKey) headers['x-sogni-key'] = keys.sogniKey;
 
   const params = new URLSearchParams({ provider, query, type, category, sort });
   if (cursor) params.append('cursor', cursor);
@@ -447,7 +457,15 @@ export const fetchLiveModels = async (
     throw new Error(errorData.details || errorData.error || `Failed to fetch models (Status: ${resp.status})`);
   }
   
-  return await resp.json();
+  const raw = await resp.json();
+  const results = raw.results && typeof raw.results === 'object' && !Array.isArray(raw.results) ? raw.results : raw;
+  const pagination = raw.pagination || raw._pagination || {};
+  return {
+    ...raw,
+    ...results,
+    _pagination: pagination,
+    catalogNotices: raw.catalogNotices || {},
+  };
 };
 
 export const fetchHuggingFaceModelInfo = async (modelId: string) => {

@@ -38,6 +38,8 @@ import { GenerationHistoryItem } from '../types/providers';
 import { displayValue } from './HistoryModal';
 import { PreviewMediaPanel } from './PreviewMediaPanel';
 import { isApplyToCanvasDisabled, type PreviewSettleState } from '../utils/previewHang';
+import { uploadMedia } from '../services/api';
+import { migrateInlineAssets } from '../utils/legacyAssetMigration';
 
 export interface MediaAsset {
   id: string;
@@ -97,6 +99,7 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [selectedAsset, setSelectedAsset] = useState<MediaAsset | null>(null);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const [storageWarning, setStorageWarning] = useState('');
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [isBatchDownloading, setIsBatchDownloading] = useState(false);
 
@@ -137,8 +140,22 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
   useEffect(() => {
     try {
       localStorage.setItem('comfycanvas_user_assets_v2', JSON.stringify(customUploads));
-    } catch (e) {}
+      setStorageWarning('');
+    } catch (error) {
+      setStorageWarning(`浏览器保存失败：${error instanceof Error ? error.message : String(error)}`);
+    }
   }, [customUploads]);
+
+  useEffect(() => {
+    if (!isOpen || !customUploads.some((asset) => asset.url.startsWith('data:'))) return;
+    let cancelled = false;
+    migrateInlineAssets(customUploads, uploadMedia).then((result) => {
+      if (cancelled) return;
+      setCustomUploads(result.assets);
+      if (result.failures.length) setStorageWarning(`旧素材迁移未完成：${result.failures.join('；')}`);
+    });
+    return () => { cancelled = true; };
+  }, [isOpen, customUploads]);
 
   useEffect(() => {
     try {
@@ -279,7 +296,8 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
       const isVideo = file.type.includes('video') || file.name.endsWith('.mp4') || file.name.endsWith('.webm');
       const reader = new FileReader();
       reader.onload = (evt) => {
-        const url = evt.target?.result as string;
+        const dataUrl = evt.target?.result as string;
+        uploadMedia(dataUrl).then((url) => {
         const newAsset: MediaAsset = {
           id: `upload-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
           url,
@@ -294,6 +312,7 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
           height: 1024,
         };
         setCustomUploads((prev) => [newAsset, ...prev]);
+        }).catch((error: Error) => alert(`素材上传失败：${error.message}`));
       };
       reader.readAsDataURL(file);
     });
@@ -511,6 +530,7 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
       onDrop={handleDropFiles}
     >
       <div className="bg-[#14151c] border border-[#272938] rounded-2xl w-full max-w-7xl h-[92vh] flex flex-col shadow-2xl overflow-hidden text-xs relative">
+        {storageWarning && <div role="alert" className="border-b border-amber-700/50 bg-amber-950/50 px-4 py-2 text-amber-100">{storageWarning}</div>}
         {/* Drag & Drop Overlay */}
         {isDraggingOver && (
           <div className="absolute inset-0 bg-purple-950/85 border-2 border-dashed border-purple-400 z-50 flex flex-col items-center justify-center text-purple-200 gap-3 backdrop-blur-sm pointer-events-none">

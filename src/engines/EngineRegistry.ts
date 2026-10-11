@@ -20,6 +20,8 @@ import { TensorArtDriver } from './drivers/TensorArtDriver';
 import { OpenAICompatDriver } from './drivers/OpenAICompatDriver';
 import { GrokCompatDriver } from './drivers/GrokCompatDriver';
 import { SchemaProviderDriver } from './drivers/SchemaProviderDriver';
+import { RunwareDriver } from './drivers/RunwareDriver';
+import { ModelsLabDriver } from './drivers/ModelsLabDriver';
 
 /**
  * 引擎注册管理中心 (Central Engine Registry Shell)
@@ -49,6 +51,8 @@ export class EngineRegistryClass {
     this.register(new SchemaProviderDriver('muapi'));
     this.register(new SchemaProviderDriver('wavespeed'));
     this.register(new SchemaProviderDriver('sogni'));
+    this.register(new RunwareDriver());
+    this.register(new ModelsLabDriver());
   }
 
   /**
@@ -87,7 +91,8 @@ export class EngineRegistryClass {
     params: NormalizedGenerateParams,
     keys: Record<string, string> = {}
   ): Promise<NormalizedGenerateResult> {
-    const driver = this.getDriver(providerId);
+    const explicitProvider = params.targetProvider || params.provider;
+    const driver = this.getDriver(providerId === 'video' && explicitProvider && explicitProvider !== 'video' ? explicitProvider : providerId);
     if (!driver) {
       throw new Error(`未找到执行引擎驱动: [${providerId}]。请确认引擎标识或前往右上角设置面板配置。`);
     }

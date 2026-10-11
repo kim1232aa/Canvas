@@ -1,8 +1,7 @@
 /**
  * ComfyCanvas - Intelligent Base Model & LoRA Architecture Matching Engine
  * 
- * Accurately normalizes Civitai/HuggingFace base models and dynamically matches
- * compatible Checkpoint models from the Base Model Library across all providers (Fal.ai, ModelScope, NanoGPT, Gemini).
+ * Family labels support UI hints; compatibility requires upstream or resource metadata verification.
  */
 
 import { isLoraUnsupportedOnEndpoint } from './resolveCheckpoint';
@@ -62,7 +61,7 @@ export const ARCHITECTURE_PROFILES: Record<ModelArchitectureFamily, BaseArchitec
     recommendedScheduler: 'karras',
     defaultWidth: 1024,
     defaultHeight: 1024,
-    description: 'Stability AI SDXL 1.0 标准架构，兼容万款 SDXL 系列 LoRA',
+    description: 'Stability AI SDXL 1.0 架构标签；具体 LoRA 兼容性待 metadata 或上游验证',
   },
   pony: {
     family: 'pony',
@@ -190,7 +189,7 @@ export const ARCHITECTURE_PROFILES: Record<ModelArchitectureFamily, BaseArchitec
 export function identifyArchitectureFamily(baseModelRaw?: string, modelNameHint?: string): ModelArchitectureFamily {
   const raw = `${baseModelRaw || ''} ${modelNameHint || ''}`.toLowerCase();
 
-  if (raw.includes('flux') || raw.includes('bfl') || raw.includes('schnell') || raw.includes('dev') || raw.includes('618692') || raw.includes('613730')) {
+  if (raw.includes('flux') || raw.includes('bfl') || raw.includes('schnell') || raw.includes('618692') || raw.includes('613730')) {
     return 'flux';
   }
   if (raw.includes('krea') || raw.includes('krea2') || raw.includes('krea-2') || raw.includes('zimage') || raw.includes('z-image') || raw.includes('z_image') || raw.includes('3290120')) {
@@ -260,26 +259,27 @@ export function validateModelCompatibility(
   loraBaseModelRaw?: string,
   loraName?: string,
   preferredProvider?: string
-): { isCompatible: boolean; message: string; recommendedCheckpoint?: string } {
+): { isCompatible: boolean; verification:'verified'|'unverified'|'incompatible'; message: string; recommendedCheckpoint?: string } {
   const ckptLower = (checkpointName || '').toLowerCase();
   const loraLower = (loraBaseModelRaw || '').toLowerCase();
 
-  // 1. Direct string match or containment means 100% compatible
-  if (ckptLower && loraLower && (ckptLower === loraLower || ckptLower.includes(loraLower) || loraLower.includes(ckptLower))) {
+  if (ckptLower && loraLower && ckptLower === loraLower) {
     return {
       isCompatible: true,
-      message: `底模与 LoRA 架构精准匹配 (${loraBaseModelRaw || checkpointName})`,
+      verification: 'unverified',
+      message: `底模名称相同，兼容性待上游或 metadata 验证 (${loraBaseModelRaw || checkpointName})`,
     };
   }
 
   const ckptFamily = identifyArchitectureFamily(checkpointName, checkpointName);
   const loraFamily = identifyArchitectureFamily(loraBaseModelRaw, loraName);
 
-  // 2. Unknown architecture or matching family is compatible
+  // Family labels alone do not verify checkpoint/adapter compatibility.
   if (ckptFamily === 'unknown' || loraFamily === 'unknown' || ckptFamily === loraFamily) {
     return {
       isCompatible: true,
-      message: `底模与 LoRA 架构已知兼容 (${loraBaseModelRaw || checkpointName})`,
+      verification: 'unverified',
+      message: `底模与 LoRA 兼容性待上游或 metadata 验证 (${loraBaseModelRaw || checkpointName})`,
     };
   }
 
@@ -292,42 +292,22 @@ export function validateModelCompatibility(
   if (isSdxlCross) {
     return {
       isCompatible: true,
-      message: `底模与 LoRA 架构衍生兼容 (${ARCHITECTURE_PROFILES[ckptFamily].displayName})`,
+      verification: 'unverified',
+      message: `SDXL 衍生家族兼容性待上游或 metadata 验证 (${ARCHITECTURE_PROFILES[ckptFamily].displayName})`,
     };
   }
 
   const rec = ARCHITECTURE_PROFILES[loraFamily];
-  let targetRecCheckpoint = rec.recommendedCheckpoint;
-  const prov = (preferredProvider || "").toLowerCase();
-  
-  // Dynamic mapping based on provider if possible, but don't force a provider switch here
-  if (loraFamily === "krea2") {
-    if (prov === "huggingface") targetRecCheckpoint = "krea-ai/krea-2-turbo";
-    else if (prov === "fal") targetRecCheckpoint = "fal-ai/krea-2/turbo";
-    else if (prov === "modelscope") targetRecCheckpoint = "damo/krea2_turbo_fp8_scaled";
-  } else if (loraFamily === "flux") {
-    if (prov === "huggingface") targetRecCheckpoint = "black-forest-labs/FLUX.1-dev";
-    else if (prov === "modelscope") targetRecCheckpoint = "AI-ModelScope/flux.1-dev";
-    else if (prov === "nanogpt") targetRecCheckpoint = "flux-dev";
-    else if (prov === "fal") targetRecCheckpoint = "fal-ai/flux/dev";
-  } else if (loraFamily === "sdxl" || loraFamily === "pony" || loraFamily === "illustrious") {
-    if (prov === "huggingface") targetRecCheckpoint = "stabilityai/stable-diffusion-xl-base-1.0";
-    else if (prov === "modelscope") targetRecCheckpoint = "AI-ModelScope/stable-diffusion-xl-base-1.0";
-    else if (prov === "fal") targetRecCheckpoint = "fal-ai/fast-sdxl";
-    else if (prov === "nanogpt") targetRecCheckpoint = "sdxl";
-  } else if (loraFamily === "sd15") {
-    if (prov === "huggingface") targetRecCheckpoint = "runwayml/stable-diffusion-v1-5";
-  }
   
   const ckptArch = ARCHITECTURE_PROFILES[ckptFamily].displayName;
   const loraArch = rec.displayName;
   const loraBase = loraBaseModelRaw || loraArch;
   return {
     isCompatible: false,
+      verification:'incompatible',
     message:
       `底模架构不匹配：当前底模为【${checkpointName}】（${ckptArch}），但此 LoRA 基于【${loraBase}】（${loraArch}）。` +
       `请自行选择与该 LoRA 匹配的底模；保留现有 LoRA / seed；负向与采样器按导入原样（空或「未指定」都算原样）。`,
-    recommendedCheckpoint: targetRecCheckpoint,
   };
 }
 
@@ -353,11 +333,12 @@ export function validateLoraCompatibility(
   loraBaseModelRaw?: string,
   loraName?: string,
   preferredProvider?: string
-): { isCompatible: boolean; message: string; recommendedCheckpoint?: string; endpointUnsupported?: boolean } {
+): { isCompatible: boolean; verification:'verified'|'unverified'|'incompatible'; message: string; recommendedCheckpoint?: string; endpointUnsupported?: boolean } {
   const endpoint = isLoraUnsupportedOnEndpoint(preferredProvider, checkpointName);
   if (endpoint.unsupported && endpoint.message) {
     return {
       isCompatible: false,
+      verification:'incompatible',
       message: endpoint.message,
       endpointUnsupported: true,
     };

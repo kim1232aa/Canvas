@@ -103,6 +103,7 @@ export class FalDriver extends BaseEngineDriver {
         // V2: no strength fallback — server 400s if scale/path missing.
         loras: (params.loras || []).map((l) => ({
           path: l.path || l.url,
+          ...(!l.path && !l.url ? {name:l.name,civitaiId:l.civitaiId} : {}),
           scale: l.strength ?? l.modelStrength,
         })),
       }),

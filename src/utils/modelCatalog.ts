@@ -3,6 +3,7 @@ import {tensorModelId} from '../schemas/tensorModelApi';
 export interface CatalogOption {value:string;label:string;provider:string}
 export function isInvalidTensorModel(provider:string,value:string) {
   if (provider !== 'tensorart' || !value) return false;
+  if (/^[a-zA-Z0-9_-]+$/.test(value)) return false;
   try {tensorModelId(value);return false;} catch {return true;}
 }
 export function readCheckpointCatalog(data:Record<string,any>,provider:string) {

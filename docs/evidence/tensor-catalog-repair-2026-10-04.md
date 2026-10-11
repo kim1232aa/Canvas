@@ -1,5 +1,15 @@
 # Tensor catalog / legacy tools repair
 
+## 2026-10-12 current-worktree recheck
+
+This document records the 10-04 repair, not a guarantee about today's code. The official FAQ body successfully read by agent-116 still says `Can you provide an interface for listing models? Currently not available.` (https://tams-docs.tensor.art/docs/api/guide/integration-faq/).
+
+The current worktree has regressed: `server.ts:3193–3214` returns static featured items, including three OpenWorks tool names labeled CHECKPOINT and all items labeled metadata_verified; `src/engines/drivers/TensorArtDriver.ts:14–36` advertises the same tools as models. `server.ts:3189–3191` catches an explicit ID lookup failure and converts it into a notice rather than propagating the actual HTTP status/body. `server.ts:1099` selects other pool keys or a literal `test` token for model-info. These findings require serial code repair; no production code was changed in this review, and existing selections must not be silently replaced.
+
+The official SDK body (https://raw.githubusercontent.com/Tensor-Art/tams-sdk.js/6fdf0d1f91b0ed7c1027f2e843ee317086c19e3f/src/index.ts) confirms Bearer token authentication and default host tams-api.tensor.art. Its RSA strategy separately embeds app_id; missing appId is not a proved explanation for every Bearer 404. TAMS upload requires create-resource-image followed by PUT to putUrl with returned headers. The current OpenWorks file/upload proxy is not that implementation.
+
+No paid generation/upload calls, new images, configuration changes, service restart, or acceptance upgrade occurred. See t7-tensorart-acceptance.md for exact official evidence and unresolved OpenWorks documentation.
+
 ## Observed production failure
 
 Sites Worker logs for project appgprj_6abf7823b9648191aed7e4c4f10bbea8:

@@ -118,6 +118,8 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
           { label: '⚡ NanoGPT (按次)', value: 'nanogpt' },
           { label: '🚀 Agnes AI 2.5 Flash', value: 'agnes' },
           { label: '🧠 SenseNova 商汤日日新', value: 'sensenova' },
+          { label: '⚡ Runware 极速云平台', value: 'runware' },
+          { label: '🧪 ModelsLab 开放模型库', value: 'modelslab' },
           { label: '🎬 AI Video 视频引擎', value: 'video' },
           { label: '🔁 OpenAI 兼容中转', value: 'openai_compat' },
           { label: '🔁 Grok 兼容中转', value: 'grok_compat' },
@@ -130,7 +132,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
         name: 'ckpt_name',
         label: 'ckpt_name (模型名称/路径/ID)',
         type: 'select',
-        default: 'Tongyi-MAI/Z-Image-Turbo',
+        default: '',
         options: BASE_MODELS,
         placeholder: '输入模型 ID/路径，或点击右上角「模型中心」实时拉取选用',
       },
@@ -222,7 +224,10 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
     category: 'conditioning',
     colorTag: '#ff8800',
     description: 'Encodes text into a conditioning tensor to guide the diffusion process.',
-    inputs: [{ id: 'clip', name: 'clip', type: 'CLIP', label: 'CLIP' }],
+    inputs: [
+      { id: 'clip', name: 'clip', type: 'CLIP', label: 'CLIP' },
+      { id: 'image', name: 'image', type: 'IMAGE', label: 'image' },
+    ],
     outputs: [{ id: 'CONDITIONING', name: 'CONDITIONING', type: 'CONDITIONING', label: 'CONDITIONING' }],
     widgets: [
       {
@@ -649,7 +654,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
         name: 'model_endpoint',
         label: 'model_endpoint',
         type: 'text',
-        default: 'Tongyi-MAI/Z-Image-Turbo',
+        default: '',
         placeholder: '输入 ModelScope 模型 ID (如 damo/wan2.1-t2i)',
       },
       {
@@ -663,7 +668,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
       },
     ],
     defaultValues: {
-      model_endpoint: 'Tongyi-MAI/Z-Image-Turbo',
+      model_endpoint: '',
       steps: 8,
     },
   },
@@ -684,7 +689,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
         name: 'model_endpoint',
         label: 'model_endpoint',
         type: 'text',
-        default: 'Tongyi-MAI/Z-Image-Turbo',
+        default: '',
         placeholder: '输入 ModelScope AI 模型 ID',
       },
       {
@@ -698,7 +703,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
       },
     ],
     defaultValues: {
-      model_endpoint: 'Tongyi-MAI/Z-Image-Turbo',
+      model_endpoint: '',
       steps: 8,
     },
   },
@@ -718,7 +723,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
         name: 'model',
         label: 'model',
         type: 'text',
-        default: 'flux-schnell',
+        default: '',
         placeholder: 'NanoGPT 模型 ID',
       },
       {
@@ -734,7 +739,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
       },
     ],
     defaultValues: {
-      model: 'flux-schnell',
+      model: '',
       resolution: '1024x1024',
     },
   },
@@ -756,7 +761,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
         name: 'model',
         label: 'model',
         type: 'text',
-        default: 'fal-ai/flux/dev',
+        default: '',
         placeholder: '从模型枢纽中选用端点 ID',
       },
       {
@@ -792,7 +797,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
       },
     ],
     defaultValues: {
-      model: 'fal-ai/flux/dev',
+      model: '',
       steps: 28,
       guidance_scale: 3.5,
       resolution: '1024x1024',
@@ -907,8 +912,6 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
         label: '视频时长 (秒)',
         type: 'number',
         default: '',
-        min: 3,
-        max: 10,
         step: 1,
       },
       {

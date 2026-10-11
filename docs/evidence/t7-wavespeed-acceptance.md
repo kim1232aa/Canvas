@@ -1,5 +1,25 @@
 # T7 WaveSpeed 验收报告 — PASS_GENERATION
 
+## 2026-10-12 官方契约复审（未调用生成/上传）
+
+旧 agent-115 最后停在匿名目录 GET 的 HTTP401，不是成功目录；没有 Edit/Write/最终交付。旧成功官方正文可继承，当前历史 PASS_GENERATION 只限原 Krea 请求；本轮不证明当前代码重新出图。
+
+- 继承成功正文 https://wavespeed.ai/docs/api-authentication ：“`Authorization: Bearer YOUR_API_KEY`”；https://wavespeed.ai/docs/submit-task ：`POST https://api.wavespeed.ai/api/v3/{model_id}`；https://wavespeed.ai/docs/get-result ：`GET .../api/v3/predictions/{task-id}/result`，completed 返回 outputs，failed/cancelled/timeout/deleted 终止。`schemaProviders.ts:9-10,235-238,325-345` 与 `SchemaProviderDriver.ts:108-158` 匹配主协议与终态。
+- 新读 https://wavespeed.ai/models/wavespeed-ai/krea-v2/turbo-lora ：“`Up to 3 LoRA objects. Each object uses {path, scale}`”；resolution 为 1k/2k，image 为参考图 URL，strength 0–1；`schemaProviders.ts:289-317` 在 Schema 可取时的 image_url→image、denoise→strength、LoRA 映射匹配。新读 https://wavespeed.ai/docs/docs-api/wavespeed-ai/krea-v2-turbo-lora 示例使用 `TASK = body.data ?? body` 与 result 同样归一化。
+- 旧匿名 https://api.wavespeed.ai/api/v3/models HTTP401 原文：“`Missing API key. Send it as: Authorization: Bearer <your API key>.`” 只证明匿名请求缺鉴权；不判定已配置账户目录失败。未使用真实 key 重新读取目录，当前 catalog model_run Schema 仍未完整网络重验。
+
+串行待修：
+
+- HIGH（MuAPI 共用）：`server.ts:2359` 注入 async recordHistoryItem，`schemaProviders.ts:357` 却 saved.push(dep.record(...)) 未 await，Promise 序列化成 `{}`。本轮无网络 fixture 实测 save-result 返回 `{"historyItems":[{}],"transientOutputs":[]}`。建议改 `saved.push(await dep.record(...))`，同时对 record 失败保持 transient URL / warning；`SchemaProviderDriver.ts:131-135` 因此不能取得持久化 URL。
+- MEDIUM：官方模型页/参考示例同时容纳 wrapped/flat response，当前 `schemaProviders.ts:326,342` 只读取 data.data.id / data.data。无网络实际 route fixture 上游 `{id:'official-flat-task'}` 导致本站 HTTP200 + upstream-protocol error “上游提交响应没有任务 ID”。建议 WaveSpeed `task=data.data ?? data`，submit/poll 共用归一化；真实异常结构仍报告，不伪造 ID。
+- MEDIUM：`SchemaProviderDriver.ts:51,136` 仅图像能力/固定 mediaType=image，但 `schemaProviders.ts:64` 可列视频；目录可选不等于视频链路已接通。建议串行确认视频分发与媒体类型，不把视频 URL 当图片。
+
+历史第23条“同 seed 风格一致证明 LoRA 生效”证据不足：只能证明请求包含 LoRA、输出存在；缺无 LoRA 对照或上游应用证据，不能独立证明权重实际应用。原记录保留但以此收窄。
+
+定向既有 5 files / 31 tests PASS，不覆盖上述 async record/flat 响应缺口；仍待当前版本前端重新出图、LoRA 对照、图生图、历史刷新/复用/云项目。
+
+## 以下为保留的历史记录
+
 日期:2026-10-05(UTC+8)。验收方式:真实前端(ComfyCanvas Studio @ 127.0.0.1:3000)+ 真实 WaveSpeed API,
 由 browser-harness(CDP)自动化驱动完整 UI 流程,非直连 API 测试。
 

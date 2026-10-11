@@ -7,6 +7,7 @@ async function withFixture(
   run: (baseUrl: string, calls: Array<{ url: string; init?: RequestInit }>) => Promise<void>,
   key: (provider: string, override?: string) => string = () => '',
   durable: (url: string) => Promise<any> = async (url) => ({ ok: true, dataUrl: url }),
+  record: (item: any) => any = (item) => item,
 ) {
   const calls: Array<{ url: string; init?: RequestInit }> = [];
   const app = express();
@@ -16,7 +17,7 @@ async function withFixture(
       return upstream(url, init);
     },
     key,
-    record: (item) => item,
+    record,
     durable,
   });
 
@@ -192,6 +193,25 @@ describe('schema provider server contract', () => {
       expect(JSON.parse(String(body.rawResponse))).toMatchObject({ code: 403 });
       expect(body).not.toHaveProperty('taskId');
       expect(calls.filter((call) => call.init?.method === 'POST')).toHaveLength(1);
+    });
+  });
+
+  it('awaits an asynchronous history record instead of returning an unresolved promise', async () => {
+    const recorded: unknown[] = [];
+    await withFixture(async () => { throw new Error('upstream must not be called during save-result'); }, async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/api/schema-provider/wavespeed/save-result`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ outputs: ['https://fixture.invalid/one.png'], metadata: { model: 'fixture-model', prompt: 'fixture' } }),
+      });
+      expect(response.status).toBe(200);
+      const body = await response.json() as any;
+      expect(body.historyItems).toEqual([{ id: 'recorded-fixture', url: 'https://fixture.invalid/one.png' }]);
+      expect(body.transientOutputs).toEqual([]);
+      expect(recorded).toHaveLength(1);
+    }, undefined, async (url) => ({ ok: true, dataUrl: url }), async (item) => {
+      await Promise.resolve();
+      recorded.push(item);
+      return { id: 'recorded-fixture', url: item.url };
     });
   });
 

@@ -34,4 +34,8 @@ it('does not classify a base repo as LoRA because the search category or name sa
  expect(isHuggingFaceLora({tags:['diffusers','LoRA']})).toBe(true);
  expect(isHuggingFaceLora({tags:['LYCORIS']})).toBe(true);
  expect(isHuggingFaceLora({})).toBe(false);
+ expect(explicitProvider('runware 极速云平台')).toBe('runware');
+ expect(explicitProvider('runware')).toBe('runware');
+ expect(explicitProvider('modelslab 开放模型库')).toBe('modelslab');
+ expect(explicitProvider('modelslab')).toBe('modelslab');
 });

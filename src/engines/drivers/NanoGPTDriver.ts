@@ -29,6 +29,7 @@ export class NanoGPTDriver extends BaseEngineDriver {
       },
       body: JSON.stringify({
         workflowSnapshot: params.workflowSnapshot,
+        custom_parameters: params.extraParams?.custom_parameters,
         prompt: params.prompt,
         model: params.model,
         seed: params.seed,

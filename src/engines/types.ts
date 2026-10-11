@@ -16,7 +16,9 @@ export type ProviderId =
   | 'grok_compat'
   | 'muapi'
   | 'wavespeed'
-  | 'sogni';
+  | 'sogni'
+  | 'runware'
+  | 'modelslab';
 
 export interface ModelSpec {
   id: string;

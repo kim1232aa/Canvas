@@ -1,4 +1,5 @@
 import {ApiParameterEditor} from './ApiParameterEditor';
+import {videoDurationBounds} from '../utils/frontendParameters';
 import {ProviderModelSelect} from './ProviderModelSelect';
 import React from 'react';
 import {
@@ -19,10 +20,11 @@ import {
   Copy,
   Check,
   Edit3,
+  Upload,
 } from 'lucide-react';
 import { DataType, NodeInstance, Socket, SOCKET_COLORS } from '../types/graph';
 import { NODE_DEFINITIONS } from '../constants/nodes';
-import { refinePromptWithGemini, getStoredApiKeys, getRefineModelSelection } from '../services/api';
+import { refinePromptWithGemini, getStoredApiKeys, getRefineModelSelection, uploadMedia } from '../services/api';
 import { validateLoraCompatibility } from '../utils/baseModelMatcher';
 import { EngineRegistry } from '../engines/EngineRegistry';
 import { GeminiFieldSelect, GeminiModelBadge } from './GeminiFieldSelect';
@@ -70,6 +72,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
   onAutoFixCheckpoint,
   onOpenModelHub,
 }) => {
+  const uploadInput = React.useRef<HTMLInputElement>(null);
   const [showUnsupported, setShowUnsupported] = React.useState(false);
   const greySeed = isCanvasFieldUnsupported(currentProvider, currentCheckpoint, 'seed');
   const greyNegative = isCanvasFieldUnsupported(currentProvider, currentCheckpoint, 'negative_prompt');
@@ -367,6 +370,14 @@ export const NodeItem: React.FC<NodeItemProps> = ({
       {/* Node Body & Widgets (hidden if collapsed) */}
       {!isCollapsed && (
         <div className="px-3 pb-3 pt-1 space-y-3 border-t border-[#252730]">
+          {node.values.execution_blocked_reason && <p role="alert" className="text-amber-200">{node.values.execution_blocked_reason} · 仅载入，不能立即运行；请保留来源，创建新的显式生成分支。</p>}
+          {(node.values.import_unresolved_resource === true || node.values.unresolvedResource === true) && <p role="alert" className="text-amber-200">资源尚未核实，请从目录或公开 metadata 查验后重新选择。</p>}
+          {node.values.require_reference_image === true && <p role="note" className="text-amber-200">编辑输入需要明确参考图；展示样图不作为输入。</p>}
+          {currentProvider === 'agnes' && !currentCheckpoint?.includes('video') && ['KSampler', 'EmptyLatentImage', 'CLIPTextEncodeNegative'].includes(node.type) && (
+            <p role="alert" className="p-2 rounded bg-rose-950/40 border border-rose-800/40 text-rose-300 text-[11px] leading-relaxed">
+              Agnes AI 图像模型为云端简易接口，不使用 {node.type === 'KSampler' ? 'KSampler 采样器' : node.type === 'EmptyLatentImage' ? '空潜空间' : '负向提示词'}；请直接连接「加载底模 -&gt; CLIP 正向提示词 -&gt; 保存图像」。
+            </p>
+          )}
           {/* Node Error Banner */}
           {node.state === 'error' && node.errorMessage && (
             <div className="p-2 rounded bg-rose-950/40 border border-rose-800/40 text-rose-300 text-[11px] flex items-center gap-1.5">
@@ -375,7 +386,22 @@ export const NodeItem: React.FC<NodeItemProps> = ({
             </div>
           )}
 
-          {node.type==='CheckpointLoaderSimple' && ['fal','modelscope','modelscope_ai','huggingface','muapi','wavespeed','sogni'].includes(node.values.targetProvider) && <ApiParameterEditor provider={node.values.targetProvider} model={node.values.ckpt_name} value={node.values.custom_parameters} onChange={value=>onUpdateValue(node.id,'custom_parameters',value)} />}
+          {node.type==='CheckpointLoaderSimple' && ['civitai','fal','modelscope','modelscope_ai','huggingface','muapi','wavespeed','sogni'].includes(node.values.targetProvider) && <ApiParameterEditor provider={node.values.targetProvider} model={node.values.ckpt_name} value={node.values.custom_parameters} onChange={value=>onUpdateValue(node.id,'custom_parameters',value)} />}
+          {['FalAIEngineNode','ModelScopeNode','ModelScopeAiNode','NanoGPTNode'].includes(node.type) && <ApiParameterEditor provider={({FalAIEngineNode:'fal',ModelScopeNode:'modelscope',ModelScopeAiNode:'modelscope_ai',NanoGPTNode:'nanogpt'} as Record<string,string>)[node.type]} model={node.values.model_endpoint || node.values.model || ''} value={node.values.custom_parameters} onChange={value=>onUpdateValue(node.id,'custom_parameters',value)} />}
+          {node.type === 'CheckpointLoaderSimple' && node.values.targetProvider === 'sensenova' && <div className="space-y-2">
+            <label className="block text-slate-300">SenseNova size<input type="text" aria-label="SenseNova size" aria-describedby={`sensenova-size-note-${node.id}`} value={node.values.size ?? ''} onMouseDown={e=>e.stopPropagation()} onPointerDown={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()} onChange={e=>onUpdateValue(node.id,'size',e.target.value === '' ? undefined : e.target.value)} placeholder="auto / 2048x2048；留空时按画布宽高(如1024x1024)发送，无宽高则 auto" className="mt-1 w-full rounded border border-slate-700 bg-[#121316] p-2 focus-visible:outline-2 focus-visible:outline-cyan-400" /></label>
+            <p id={`sensenova-size-note-${node.id}`} role="note" className="text-amber-200">官方文档写 2K/4K 常量，但本次上游对这两个值返回 400：invalid size, should be auto or WIDTHxHEIGHT。建议明确填写像素尺寸或 auto；原值保留，不自动转换，也不在此限制提交。</p>
+            <label className="block text-slate-300">SenseNova output_format<input type="text" aria-label="SenseNova output_format" value={node.values.output_format ?? ''} onMouseDown={e=>e.stopPropagation()} onPointerDown={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()} onChange={e=>onUpdateValue(node.id,'output_format',e.target.value === '' ? undefined : e.target.value)} placeholder="png / jpeg / webp；留空不显式传" className="mt-1 w-full rounded border border-slate-700 bg-[#121316] p-2 focus-visible:outline-2 focus-visible:outline-cyan-400" /><span className="text-slate-400">本站支持 png/jpeg/webp；官方编辑文档也列 jpg，但本站尚未接通。自定义原值保留。</span></label>
+            {(['watermark', 'prompt_extend'] as const).map(field => <label key={field} className="block text-slate-300">SenseNova {field}<select aria-label={`SenseNova ${field}`} value={typeof node.values[field] === 'boolean' ? String(node.values[field]) : ''} onMouseDown={e=>e.stopPropagation()} onPointerDown={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()} onChange={e=>onUpdateValue(node.id,field,e.target.value === '' ? undefined : e.target.value === 'true')} className="mt-1 w-full rounded border border-slate-700 bg-[#121316] p-2 focus-visible:outline-2 focus-visible:outline-cyan-400"><option value="">未设置（不显式传）</option><option value="false">false（关闭）</option><option value="true">true（开启）</option></select></label>)}
+          </div>}
+          {['CheckpointLoaderSimple','AIVideoNode'].includes(node.type) && node.values.targetProvider === 'civitai' && <div className="space-y-2">
+            <label className="block text-slate-300">Civitai engine<select aria-label="Civitai engine" value={node.values.civitai_engine || ''} onMouseDown={e=>e.stopPropagation()} onChange={e=>onUpdateValue(node.id,'civitai_engine',e.target.value)} className="w-full rounded border border-slate-700 bg-[#121316] p-2"><option value="">请选择引擎</option><option value="sdcpp">sdcpp</option><option value="comfy">comfy</option>{node.values.civitai_engine && !['sdcpp','comfy'].includes(node.values.civitai_engine) && <option value={node.values.civitai_engine}>{node.values.civitai_engine}</option>}</select></label>
+            <label className="block text-slate-300">Civitai ecosystem<input aria-label="Civitai ecosystem" value={node.values.civitai_ecosystem || ''} onMouseDown={e=>e.stopPropagation()} onChange={e=>onUpdateValue(node.id,'civitai_ecosystem',e.target.value)} placeholder="显式填写生态，如 sdxl；自定义值保留" className="w-full rounded border border-slate-700 bg-[#121316] p-2" /></label>
+            <label className="block text-slate-300">Civitai model<input aria-label="Civitai model" value={node.values.civitai_model || ''} onMouseDown={e=>e.stopPropagation()} onChange={e=>onUpdateValue(node.id,'civitai_model',e.target.value)} placeholder="按所选引擎填写 model selector" className="w-full rounded border border-slate-700 bg-[#121316] p-2" /></label>
+            <p className="text-slate-400">引擎和生态必须显式选择；AIR、sampler/scheduler 与引擎是否兼容由上游验证。</p>
+          </div>}
+          {node.type === 'AIVideoNode' && <label className="block text-slate-300">视频 resolution<input aria-label="视频 resolution" value={node.values.resolution || ''} onMouseDown={e=>e.stopPropagation()} onChange={e=>onUpdateValue(node.id,'resolution',e.target.value)} placeholder="未填写；按端点 Schema 指定" className="w-full rounded border border-slate-700 bg-[#121316] p-2" /></label>}
+          {node.type === 'AIVideoNode' && <label className="block text-slate-300">视频自定义参数 JSON<textarea aria-label="视频自定义参数 JSON" value={node.values.custom_parameters || ''} onMouseDown={e=>e.stopPropagation()} onChange={e=>onUpdateValue(node.id,'custom_parameters',e.target.value)} placeholder='{"generate_audio":false}' className="w-full rounded border border-slate-700 bg-[#121316] p-2" /><span className="text-slate-400">对象字段在服务端展开，显式 false/0 保留。</span></label>}
           {/* Widgets according to definition */}
           {def.widgets?.filter(widget => showUnsupported || !(isCanvasWidgetUnsupported(currentProvider, currentCheckpoint, widget.name) || (node.type === 'CLIPTextEncodeNegative' && widget.name === 'text' && greyNegative))).map((widget) => {
             const value = node.values[widget.name];
@@ -515,7 +541,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                       <input
                         type="text"
                         value={value || ""}
-                        placeholder={currentProv === 'tensorart' ? '输入模型 ID 或 tensor.art/models/… 链接' : '输入当前服务商的模型 ID / Repo ID'}
+                        placeholder={currentProv === 'civitai' ? '完整 AIR 或 modelId@versionId' : currentProv === 'tensorart' ? '输入模型 ID 或 tensor.art/models/… 链接' : '输入当前服务商的模型 ID / Repo ID'}
                         onMouseDown={(e) => e.stopPropagation()}
                         onPointerDown={(e) => e.stopPropagation()}
                         onKeyDown={(e) => e.stopPropagation()}
@@ -631,6 +657,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                 const schemaModel = resolveSchemaModelId(prov, node.values?.ckpt_name || currentCheckpoint);
                 const opts = fieldOptions(prov, schemaModel, widget.name as 'aspect_ratio' | 'resolution');
                 if (!opts.length) return null;
+                const staleValue = value && !opts.some((option) => option.value === value);
                 const stop = (e: React.SyntheticEvent) => e.stopPropagation();
                 return (
                   <div key={widget.name} className="space-y-1">
@@ -644,10 +671,12 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                       className="w-full bg-[#121316] border border-[#2d303a] focus:border-cyan-500 rounded-lg px-2.5 py-1.5 text-slate-200 text-xs font-mono outline-none cursor-pointer"
                     >
                       <option value="">未选择（不传）</option>
+                      {staleValue && <option value={value}>旧值与当前模型不兼容：{value}</option>}
                       {opts.map((v) => (
                         <option key={v.value} value={v.value}>{v.value}</option>
                       ))}
                     </select>
+                    {staleValue && <p role="alert" className="text-amber-300 text-xs">旧值与当前模型不兼容；提交会被拒绝，请选择支持值或明确清空。</p>}
                   </div>
                 );
               }
@@ -848,6 +877,9 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                   </div>
                   <input
                     type="number"
+                    min={node.type === 'AIVideoNode' ? widget.name === 'duration' ? videoDurationBounds(node.values.targetProvider, node.values.model || '').min : ['fal-ai/wan-t2v','fal-ai/wan-i2v'].includes(node.values.model) ? widget.min : undefined : widget.min}
+                    max={node.type === 'AIVideoNode' ? widget.name === 'duration' ? videoDurationBounds(node.values.targetProvider, node.values.model || '').max : ['fal-ai/wan-t2v','fal-ai/wan-i2v'].includes(node.values.model) ? widget.max : undefined : widget.max}
+                    step={widget.step}
                     value={greyThis ? '' : (value ?? '')}
                     disabled={greyThis}
                     placeholder={greyThis ? '该服务商不支持' : undefined}
@@ -922,7 +954,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               <button type="button" onClick={(event) => {event.stopPropagation(); setShowUnsupported(!showUnsupported);}} aria-expanded={showUnsupported} className="text-xs text-slate-400 hover:text-slate-200 text-left">
                 {showUnsupported ? '收起接口不使用的参数' : '查看此接口不使用的参数'}
               </button>
-              {!showUnsupported && <p className="text-xs text-slate-500 mt-1">按所选模型接口运行，已有参数仍保留在画布中。</p>}
+              {!showUnsupported && <p className="text-xs text-slate-500 mt-1">当前服务商接口不接收这些字段；保留在画布中供切换其他兼容模型时使用。</p>}
             </div>
           )}
 
@@ -937,7 +969,8 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                 node.values.lora_name,
                 currentProv
               );
-              if (compat.isCompatible) {
+              if (compat.verification === 'unverified') return <p className="text-slate-400 text-xs" role="note">兼容性待验证：{compat.message}</p>;
+              if (compat.verification === 'verified') {
                 return (
                   <div className="mt-1 px-2 py-1 rounded bg-emerald-950/40 border border-emerald-800/40 text-[10px] text-emerald-300 flex items-center justify-between font-mono">
                     <span className="flex items-center gap-1">
@@ -1076,6 +1109,30 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                   <span className="text-slate-500 text-[10px]">输入图片 URL 或选择参考图</span>
                 )}
               </div>
+              <button type="button" onClick={e=>{e.stopPropagation();uploadInput.current?.click();}} className="w-full py-1.5 px-2.5 rounded-lg bg-[#1e202b] hover:bg-[#2b2e3e] text-slate-300 hover:text-white text-xs font-medium border border-[#2d303a] flex items-center justify-center gap-1.5 cursor-pointer transition-colors focus-visible:outline-2 focus-visible:outline-cyan-400">
+                <Upload className="w-3.5 h-3.5 text-cyan-400" />
+                <span>上传本地图片</span>
+              </button>
+                <input
+                  ref={uploadInput}
+                  aria-label="上传本地图片文件"
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                      const dataUrl = ev.target?.result as string;
+                      if (!dataUrl) return;
+                      uploadMedia(dataUrl)
+                        .then((url) => onUpdateValue(node.id, 'image_url', url))
+                        .catch((error: Error) => alert(`参考图上传失败：${error.message}`));
+                    };
+                    reader.readAsDataURL(file);
+                  }}
+                />
             </div>
           )}
 

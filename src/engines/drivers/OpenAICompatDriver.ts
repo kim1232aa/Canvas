@@ -56,6 +56,7 @@ export class OpenAICompatDriver extends BaseEngineDriver {
     if (extra.background) body.background = extra.background;
     if (extra.moderation) body.moderation = extra.moderation;
     if (extra.n != null) body.n = extra.n;
+    if (extra.custom_parameters && typeof extra.custom_parameters === 'object') body.custom_parameters = extra.custom_parameters;
     const realLoras = filterRealLoraEntries(params.loras);
     if (realLoras.length > 0) {
       body.loras = realLoras;

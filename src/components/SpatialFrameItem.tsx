@@ -341,8 +341,9 @@ export const SpatialFrameItem: React.FC<SpatialFrameItemProps> = ({
                 <span>衍生新分支</span>
               </button>
               <button
+                type="button"
                 onClick={() => {
-                  onUpdateFrame(frame.id, { mediaType: 'video' });
+                  onUpdateFrame(frame.id, { mediaType: 'video', referenceImageUrl: frame.imageUrl });
                 }}
                 className="px-3 py-2 rounded-full bg-purple-600 hover:bg-purple-500 text-white font-semibold text-xs flex items-center gap-1.5 shadow-lg shadow-purple-600/30"
                 title="以此图为首帧生成 AI 动态视频 (Image to Video)"
@@ -506,21 +507,25 @@ export const SpatialFrameItem: React.FC<SpatialFrameItemProps> = ({
                 </span>
               )}
               {frame.params.loras.map((l, i) => {
-                const compat = validateModelCompatibility(frame.params.checkpoint, (l as any).baseModel, l.name, frame.params.targetProvider);
+                const compat: ReturnType<typeof validateModelCompatibility> & { verification?: 'verified' | 'unverified' | 'incompatible' } = validateModelCompatibility(frame.params.checkpoint, (l as any).baseModel, l.name, frame.params.targetProvider);
+                const verification = compat.verification ?? (compat.isCompatible ? 'unverified' : 'incompatible');
                 return (
                   <span
                     key={i}
-                    title={lorasUnsupported ? (banner?.message || '该服务商不支持') : (compat.isCompatible ? '与当前底模架构兼容' : compat.message)}
+                    title={lorasUnsupported ? (banner?.message || '该服务商不支持') : compat.message}
                     className={`text-[10px] font-mono px-1.5 py-0.5 rounded flex items-center gap-1 ${
                       lorasUnsupported
                         ? 'bg-slate-900/60 text-slate-500 border border-slate-700/50'
-                        : compat.isCompatible
+                        : verification === 'verified'
                         ? 'bg-purple-950/50 text-purple-300 border border-purple-800/40'
-                        : 'bg-rose-950/60 text-rose-300 border border-rose-700/50'
+                        : verification === 'incompatible'
+                        ? 'bg-rose-950/60 text-rose-300 border border-rose-700/50'
+                        : 'bg-slate-900/60 text-slate-400 border border-slate-700/50'
                     }`}
                   >
-                    {!lorasUnsupported && !compat.isCompatible && <AlertTriangle className="w-2.5 h-2.5 text-rose-400 shrink-0" />}
+                    {!lorasUnsupported && verification === 'incompatible' && <AlertTriangle className="w-2.5 h-2.5 text-rose-400 shrink-0" />}
                     <span>{l.name.replace('.safetensors', '')} ({l.modelStrength})</span>
+                    {!lorasUnsupported && verification === 'unverified' && <span>待验证</span>}
                   </span>
                 );
               })}

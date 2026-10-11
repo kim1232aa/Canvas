@@ -4,14 +4,36 @@ import { NormalizedGenerateParams, NormalizedGenerateResult, ModelSpec } from '.
 
 export class TensorArtDriver extends BaseEngineDriver {
   readonly id = 'tensorart';
-  readonly name = 'Tensor.Art (模型 API)';
-  readonly label = 'Tensor.Art 模型与 LoRA';
+  readonly name = 'Tensor.Art';
+  readonly label = 'Tensor.Art (OpenWorks & TAMS)';
   readonly badgeColor = '#8b5cf6';
-  readonly description = '通过 TAMS 模型 API 指定真实底模 ID 和 LoRA ID；工具接口单独标识。';
+  readonly description = 'Tensor.Art 官方云端生图平台；支持官方生图模型与 TAMS 底模 ID 调用。';
   readonly capabilities = ['text2img', 'img2img', 'text2video', 'img2video'] as const;
   readonly defaultKey = '';
 
-  readonly supportedModels: ModelSpec[] = [];
+  readonly supportedModels: ModelSpec[] = [
+    {
+      id: 'photoreal_studio_z_image',
+      name: 'Photoreal Studio (Z-Image Ultra)',
+      type: 'image',
+      description: 'Tensor.Art 官方写实摄影级人像生图模型',
+      supportsLora: false,
+    },
+    {
+      id: 'anime_lab_wai_illustrious',
+      name: 'Anime Lab (Wai Illustrious)',
+      type: 'image',
+      description: 'Tensor.Art 官方二次元动漫插画生成模型',
+      supportsLora: false,
+    },
+    {
+      id: 'strong_text2image_wan27',
+      name: 'Wan 2.7 Text to Image',
+      type: 'image',
+      description: 'Tensor.Art 官方 Wan 2.7 文本生图模型',
+      supportsLora: false,
+    },
+  ];
 
   protected async executeGenerate(
     params: NormalizedGenerateParams,

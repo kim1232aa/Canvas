@@ -14,7 +14,7 @@ import {TENSOR_JOB_DOC} from './tensorModelApi';
 export type FieldStatus = 'supported' | 'unverified' | 'unsupported' | 'deprecated';
 export const FIELD_STATUSES: readonly FieldStatus[] = ['supported', 'unverified', 'unsupported', 'deprecated'];
 
-export type Provider = 'gemini' | 'fal' | 'civitai' | 'openai_compat' | 'grok_compat' | 'agnes' | 'huggingface' | 'nanogpt' | 'tensorart' | 'sensenova' | 'modelscope' | 'modelscope_ai';
+export type Provider = 'gemini' | 'fal' | 'civitai' | 'openai_compat' | 'grok_compat' | 'agnes' | 'huggingface' | 'nanogpt' | 'tensorart' | 'sensenova' | 'modelscope' | 'modelscope_ai' | 'runware' | 'modelslab';
 
 /** 画布侧字段名；上游字段名不同时写在 FieldSpec.wire */
 export type FieldKey =
@@ -131,7 +131,7 @@ const GEMINI_MODELS: ModelSpec[] = [
     ratioNote: '官方表标题为「3.1 Pro Image」，是否对应此 id 有歧义 → unverified',
   }),
   gemini('gemini-2.5-flash-image', 'Gemini 2.5 Flash Image', vals(RATIOS_10, 'supported'), vals(['1K'], 'unverified'), {
-    shutdownDate: '2026-10-02',
+    shutdownDate: '2027-03-15',
     sizeNote: '官方表未列 image_size（正文：generates images at 1024px）→ 候选 1K，unverified',
   }),
   // preview：只有下线日期经核实，取值官方未单独列出 → 以正式版为候选，全部 unverified
@@ -235,6 +235,15 @@ const FAL_MODELS: ModelSpec[] = [
     negative_prompt: falNeg(s, 'blur, distort, and low quality', 'maxLength 2500'), cfg: falCfg(s, 'cfg_scale', 0, 1, 0.5),
     ...unsupported(s, ['seed', 'steps', 'sampler', 'scheduler', 'loras', 'num_images', 'aspect_ratio', 'image_size']),
   })),
+  fal('fal-ai/kling-video/v3/standard/text-to-video', 'Kling V3 Standard 文生视频', (s) => ({
+    negative_prompt: falNeg(s, 'blur, distort, and low quality'), cfg: falCfg(s, 'cfg_scale', 0, 1, 0.5),
+    aspect_ratio: enumField(s, vals(['16:9', '9:16', '1:1'], 'supported'), { providerDefault: '16:9' }),
+    ...unsupported(s, ['seed', 'steps', 'sampler', 'scheduler', 'loras', 'num_images']),
+  })),
+  fal('fal-ai/kling-video/v3/standard/image-to-video', 'Kling V3 Standard 图生视频', (s) => ({
+    negative_prompt: falNeg(s, 'blur, distort, and low quality'), cfg: falCfg(s, 'cfg_scale', 0, 1, 0.5),
+    ...unsupported(s, ['seed', 'steps', 'sampler', 'scheduler', 'loras', 'num_images', 'aspect_ratio', 'image_size']),
+  })),
   fal('fal-ai/minimax/video-01', 'MiniMax Video-01', (s) => ({
     ...unsupported(s, ['seed', 'negative_prompt', 'steps', 'cfg', 'sampler', 'scheduler', 'loras', 'aspect_ratio', 'image_size', 'num_images'], '官方 input 只有 prompt / prompt_optimizer'),
   })),
@@ -260,12 +269,14 @@ const FAL_MODELS: ModelSpec[] = [
 ];
 
 // ---------- Civitai ----------
-// 采样器/调度器枚举成员：本次 OpenAPI 抓取在 components.schemas 之前截断，未能核实 → 不写 enum，只写 recipe 页的默认值。
+// Engine-specific sampler/scheduler enums verified against the full imageGen OpenAPI.
 
-const CV_OPENAPI = 'https://orchestration.civitai.com/openapi/v2-consumers.json';
 const CV_YAML = 'https://orchestration.civitai.com/v2/consumer/recipes/imageGen/openapi.yaml';
 const cvRecipe = (r: string) => `https://developer.civitai.com/orchestration/recipes/${r}.md`;
-const ENUM_NOTE = '枚举成员未能从 OpenAPI 核实（抓取截断），不列取值';
+const CV_SDCPP_SAMPLERS = ['euler', 'heun', 'dpm2', 'dpm++2s_a', 'dpm++2m', 'dpm++2mv2', 'ipndm', 'ipndm_v', 'ddim_trailing', 'euler_a', 'lcm', 'res_multistep', 'res_2s', 'tcd', 'er_sde'];
+const CV_SDCPP_SCHEDULES = ['simple', 'discrete', 'karras', 'exponential', 'ays', 'bong_tangent', 'gits', 'sgm_uniform', 'smoothstep', 'kl_optimal', 'lcm'];
+const CV_COMFY_SAMPLERS = ['euler', 'euler_ancestral', 'euler_cfg_pp', 'euler_ancestral_cfg_pp', 'heun', 'heunpp2', 'dpm_2', 'dpm_2_ancestral', 'lms', 'dpm_fast', 'dpm_adaptive', 'dpmpp_2s_ancestral', 'dpmpp_2s_ancestral_cfg_pp', 'dpmpp_sde', 'dpmpp_sde_gpu', 'dpmpp_2m', 'dpmpp_2m_cfg_pp', 'dpmpp_2m_sde', 'dpmpp_2m_sde_gpu', 'dpmpp_3m_sde', 'dpmpp_3m_sde_gpu', 'ddpm', 'lcm', 'ipndm', 'ipndm_v', 'deis', 'ddim', 'uni_pc', 'uni_pc_bh2', 'res_multistep', 'er_sde'];
+const CV_COMFY_SCHEDULES = ['normal', 'karras', 'exponential', 'sgm_uniform', 'simple', 'ddim_uniform', 'beta'];
 
 function civitai(engine: 'sdcpp' | 'comfy', ecosystem: string, label: string, source: string, fields: ModelSpec['fields']): ModelSpec {
   return { provider: 'civitai', id: `${engine}:${ecosystem}`, label, source, fields };
@@ -277,8 +288,8 @@ const cvInt = (source: string, wire: string, min: number, max: number, providerD
   ({ status, source, wire, type: 'integer', min, max, providerDefault, ...(note ? { note } : {}) });
 const cvNum = (source: string, min: number, max: number, providerDefault?: number, status: FieldStatus = 'supported', note?: string): FieldSpec =>
   ({ status, source, wire: 'cfgScale', type: 'number', min, max, providerDefault, ...(note ? { note } : {}) });
-const cvEnum = (source: string, wire: string, providerDefault?: string, status: FieldStatus = 'supported'): FieldSpec =>
-  ({ status, source, wire, type: 'string', providerDefault, note: ENUM_NOTE });
+const cvEnum = (_source: string, wire: string, providerDefault?: string, status: FieldStatus = 'supported'): FieldSpec =>
+  enumField(CV_YAML, vals(wire === 'sampleMethod' ? CV_SDCPP_SAMPLERS : wire === 'schedule' ? CV_SDCPP_SCHEDULES : wire === 'sampler' ? CV_COMFY_SAMPLERS : CV_COMFY_SCHEDULES, status === 'supported' ? 'supported' : 'unverified'), { status, wire, providerDefault });
 const cvSeed = (source: string, status: FieldStatus = 'supported'): FieldSpec =>
   ({ status, source, type: 'integer', note: 'int64；不传 = 随机' });
 const cvNeg = (source: string, status: FieldStatus = 'supported'): FieldSpec =>
@@ -358,10 +369,17 @@ const CIVITAI_MODELS: ModelSpec[] = [
     loras: cvLoras(CV_YAML, 'unverified'),
     ...unsupported(cvRecipe('flux1'), ['negative_prompt'], 'Comfy Flux1 不暴露 negativePrompt'),
   }),
-  // recipes/krea2.md 404；OpenAPI 抓取截断，未见 krea2 schema → 全部 unverified
-  civitai('comfy', 'krea2', 'Krea 2（comfy）', CV_OPENAPI, {
-    ...unv(CV_OPENAPI, ['width', 'height', 'steps', 'cfg', 'sampler', 'scheduler', 'seed', 'negative_prompt', 'loras', 'num_images'],
-      '官方 recipe 页 404，OpenAPI 未能核实'),
+  civitai('comfy', 'sdxl', 'SDXL（comfy）', CV_YAML, {
+    ...cvDim(CV_YAML, 64, 2048, undefined, 1024),
+    steps: cvInt(CV_YAML, 'steps', 1, 150, 30), cfg: cvNum(CV_YAML, 0, 30, 7),
+    sampler: cvEnum(CV_YAML, 'sampler'), scheduler: cvEnum(CV_YAML, 'scheduler'),
+    seed: cvSeed(CV_YAML), negative_prompt: cvNeg(CV_YAML), loras: cvLoras(CV_YAML), num_images: cvInt(CV_YAML, 'quantity', 1, 12, 1),
+  }),
+  civitai('comfy', 'krea2', 'Krea 2 Turbo（comfy）', CV_YAML, {
+    ...cvDim(CV_YAML, 64, 2048, undefined, 1024),
+    steps: cvInt(CV_YAML, 'steps', 1, 150, 8), cfg: cvNum(CV_YAML, 0, 30, 1),
+    sampler: cvEnum(CV_YAML, 'sampler'), scheduler: cvEnum(CV_YAML, 'scheduler'),
+    seed: cvSeed(CV_YAML), negative_prompt: cvNeg(CV_YAML), loras: cvLoras(CV_YAML), num_images: cvInt(CV_YAML, 'quantity', 1, 12, 1),
   }),
 ];
 
@@ -383,7 +401,7 @@ const AGNES_MODELS: ModelSpec[] = [
     label: 'Agnes Image 2.5 Flash',
     source: AGNES_DOC,
     fields: {
-      aspect_ratio: enumField(AGNES_DOC, AGNES_RATIO, { wire: 'extra_body.ratio' }),
+      aspect_ratio: enumField(AGNES_DOC, AGNES_RATIO, { wire: 'ratio' }),
       size: enumField(AGNES_DOC, AGNES_SIZE, { note: '必填输出档位 1K / 2K / 3K / 4K' }),
       num_images: { status: 'unverified', source: AGNES_DOC, wire: 'n', type: 'integer', note: '当前 2.5 图像页未在本次核实中确认 n；不主动发送默认值' },
       ...agnesUnsupported(),
@@ -470,9 +488,12 @@ const OPENAI_COMPAT_MODELS: ModelSpec[] = [
     label: 'GPT Image 2（OpenAI 兼容中转）',
     source: OAI_GUIDE,
     fields: {
-      size: enumField(OAI_IMG, vals(['auto', '1024x1024', '1536x1024', '1024x1536'], 'supported'), {
-        note: 'WIDTHxHEIGHT 或 auto；未选则不传',
-      }),
+      size: {
+        status: 'supported',
+        source: OAI_IMG,
+        type: 'string',
+        note: '官方支持 auto 与 WIDTHxHEIGHT；1536x864 为官方示例，不能限制为四个固定值',
+      },
       quality: enumField(OAI_IMG, vals(['low', 'medium', 'high', 'auto'], 'supported'), {
         note: 'gpt-image-2 不支持 xhigh/max',
       }),
@@ -488,7 +509,8 @@ const OPENAI_COMPAT_MODELS: ModelSpec[] = [
 // ---------- Grok / xAI-compat relay ----------
 const XAI_IMG = 'https://docs.x.ai/docs/guides/image-generations';
 const XAI_VID = 'https://docs.x.ai/docs/guides/video-generation';
-const GROK_ASPECT = vals(['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3', 'auto'], 'supported');
+const GROK_IMAGE_ASPECT = vals(['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3', '21:9', '5:2', 'auto'], 'supported');
+const GROK_VIDEO_ASPECT = vals(['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3'], 'supported');
 
 function grokImage(id: string, label: string): ModelSpec {
   return {
@@ -497,9 +519,9 @@ function grokImage(id: string, label: string): ModelSpec {
     label,
     source: XAI_IMG,
     fields: {
-      aspect_ratio: enumField(XAI_IMG, GROK_ASPECT),
+      aspect_ratio: enumField(XAI_IMG, GROK_IMAGE_ASPECT),
       resolution: enumField(XAI_IMG, vals(['1k', '1.5k', '2k'], 'supported')),
-      num_images: { status: 'supported', source: XAI_IMG, wire: 'n', type: 'integer', min: 1, max: 4 },
+      num_images: { status: 'supported', source: XAI_IMG, wire: 'n', type: 'integer', min: 1, max: 10 },
       ...unsupported(XAI_IMG, ['seed', 'negative_prompt', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'loras', 'width', 'height'], '该服务商不支持像素宽高 / seed / 负向 / steps / CFG / LoRA'),
     },
   };
@@ -512,7 +534,7 @@ function grokVideo(id: string, label: string): ModelSpec {
     label,
     source: XAI_VID,
     fields: {
-      aspect_ratio: enumField(XAI_VID, GROK_ASPECT),
+      aspect_ratio: enumField(XAI_VID, GROK_VIDEO_ASPECT),
       resolution: enumField(XAI_VID, vals(['480p', '720p', '1080p'], 'supported')),
       ...unsupported(XAI_VID, ['seed', 'negative_prompt', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'loras', 'width', 'height'], '该服务商不支持像素宽高 / seed / 负向 / steps / CFG / LoRA'),
     },
@@ -623,6 +645,89 @@ const MODELSCOPE_MODELS: ModelSpec[] = (['modelscope','modelscope_ai'] as const)
   },
 }));
 
+const RUNWARE_DOC = 'https://runware.ai/docs/';
+const RUNWARE_COMMON_FIELDS = {
+  width: { status: 'supported' as const, source: RUNWARE_DOC, type: 'integer' as const, min: 256, max: 2048 },
+  height: { status: 'supported' as const, source: RUNWARE_DOC, type: 'integer' as const, min: 256, max: 2048 },
+  negative_prompt: { status: 'supported' as const, source: RUNWARE_DOC, wire: 'negativePrompt' },
+  seed: { status: 'supported' as const, source: RUNWARE_DOC, type: 'integer' as const },
+  steps: { status: 'supported' as const, source: RUNWARE_DOC, type: 'integer' as const, min: 1, max: 100 },
+  cfg: { status: 'supported' as const, source: RUNWARE_DOC, type: 'number' as const, wire: 'CFGScale' },
+  loras: { status: 'supported' as const, source: RUNWARE_DOC, note: '支持 LoRA 数组 (model, weight)' },
+  ...Object.fromEntries(['aspect_ratio', 'image_size', 'resolution', 'shift', 'sampler', 'scheduler', 'denoise', 'num_images', 'size', 'quality', 'output_format', 'background', 'moderation'].map(k => [k, { status: 'unsupported' as const, source: RUNWARE_DOC }])),
+};
+
+const RUNWARE_MODELS: ModelSpec[] = [
+  {
+    provider: 'runware',
+    id: 'runware:100@1',
+    label: 'FLUX.1 Schnell (Runware 官方托管)',
+    source: RUNWARE_DOC,
+    fields: { ...RUNWARE_COMMON_FIELDS },
+  },
+  {
+    provider: 'runware',
+    id: 'runware:101@1',
+    label: 'FLUX.1 Dev (Runware 官方托管)',
+    source: RUNWARE_DOC,
+    fields: { ...RUNWARE_COMMON_FIELDS },
+  },
+  {
+    provider: 'runware',
+    id: 'civitai:101055@128078',
+    label: 'SDXL 1.0 Base (Runware Civitai)',
+    source: RUNWARE_DOC,
+    fields: { ...RUNWARE_COMMON_FIELDS },
+  },
+  {
+    provider: 'runware',
+    id: 'alibaba:qwen-image@3.0',
+    label: 'Qwen-Image-3.0 (Runware)',
+    source: RUNWARE_DOC,
+    fields: {
+      ...RUNWARE_COMMON_FIELDS,
+      loras: { status: 'unsupported' as const, source: RUNWARE_DOC, note: 'Qwen 暂不支持挂载 LoRA' },
+    },
+  },
+];
+
+const MODELSLAB_DOC = 'https://docs.modelslab.com';
+const MODELSLAB_COMMON_FIELDS = {
+  width: { status: 'supported' as const, source: MODELSLAB_DOC, type: 'integer' as const, min: 256, max: 1024 },
+  height: { status: 'supported' as const, source: MODELSLAB_DOC, type: 'integer' as const, min: 256, max: 1024 },
+  seed: { status: 'supported' as const, source: MODELSLAB_DOC, type: 'integer' as const },
+  steps: { status: 'supported' as const, source: MODELSLAB_DOC, type: 'integer' as const, min: 1, max: 50, wire: 'num_inference_steps' },
+  cfg: { status: 'supported' as const, source: MODELSLAB_DOC, type: 'number' as const, wire: 'guidance_scale' },
+  scheduler: { status: 'supported' as const, source: MODELSLAB_DOC },
+  loras: { status: 'supported' as const, source: MODELSLAB_DOC, note: '支持逗号分隔 lora_model 与 lora_strength' },
+  negative_prompt: { status: 'supported' as const, source: MODELSLAB_DOC },
+  ...Object.fromEntries(['aspect_ratio', 'image_size', 'resolution', 'shift', 'sampler', 'denoise', 'num_images', 'size', 'quality', 'output_format', 'background', 'moderation'].map(k => [k, { status: 'unsupported' as const, source: MODELSLAB_DOC }])),
+};
+
+const MODELSLAB_MODELS: ModelSpec[] = [
+  {
+    provider: 'modelslab',
+    id: 'flux',
+    label: 'ModelsLab FLUX.1',
+    source: MODELSLAB_DOC,
+    fields: { ...MODELSLAB_COMMON_FIELDS },
+  },
+  {
+    provider: 'modelslab',
+    id: 'sdxl',
+    label: 'ModelsLab SDXL Base',
+    source: MODELSLAB_DOC,
+    fields: { ...MODELSLAB_COMMON_FIELDS },
+  },
+  {
+    provider: 'modelslab',
+    id: 'dream-shaper-v8',
+    label: 'ModelsLab DreamShaper V8',
+    source: MODELSLAB_DOC,
+    fields: { ...MODELSLAB_COMMON_FIELDS },
+  },
+];
+
 export const PROVIDER_SCHEMA: readonly ModelSpec[] = [
   ...MODELSCOPE_MODELS,
   ...GEMINI_MODELS,
@@ -635,6 +740,8 @@ export const PROVIDER_SCHEMA: readonly ModelSpec[] = [
   ...NANOGPT_MODELS,
   ...TENSORART_MODELS,
   ...SENSENOVA_MODELS,
+  ...RUNWARE_MODELS,
+  ...MODELSLAB_MODELS,
 ];
 
 const INDEX = new Map(PROVIDER_SCHEMA.map((m) => [`${m.provider}/${m.id}`, m]));

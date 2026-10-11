@@ -73,7 +73,7 @@ export abstract class BaseEngineDriver implements IEngineDriver {
       targetProvider: params.targetProvider || params.provider || undefined,
       loras: (params.loras || []).map((l) => ({
         name: l.name,
-        path: l.path || l.url || l.name,
+        path: l.path || l.url,
         url: l.url,
         strength: l.strength != null || l.modelStrength != null ? Number(l.strength ?? l.modelStrength) : undefined,
         modelStrength: l.modelStrength != null || l.strength != null ? Number(l.modelStrength ?? l.strength) : undefined,

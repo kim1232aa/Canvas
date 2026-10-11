@@ -1,6 +1,5 @@
 import { Connection, DataType, NodeInstance, Socket } from '../types/graph';
 import { ApiKeysState } from '../types/providers';
-import { resolveLoraPathOrUrl } from './engineParameterNormalizer';
 import { getStoredApiKeys, saveToHistory } from '../services/api';
 import { EngineRegistry } from '../engines/EngineRegistry';
 import { NormalizedGenerateParams } from '../engines/types';
@@ -11,6 +10,8 @@ import {
   resolveGenerateLorasPayload,
 } from './resolveCheckpoint';
 import { assertAIVideoProviderReady } from './videoProvider';
+import {modelCheckpoint} from './inspectorParameters';
+import { assertResolvedResources, parseCustomParameters, explicitLoraPath } from './frontendParameters';
 
 const MEDIA_OUTPUT_NODE_TYPES = new Set([
   'KSampler','AIVideoNode','FalAIEngineNode','GoogleImagenNode','ModelScopeNode','ModelScopeAiNode','NanoGPTNode','VAEDecode','SaveImage','SaveVideo','PreviewImage',
@@ -49,6 +50,7 @@ export interface WorkflowExtraction {
     triggerWords: string;
     civitaiId?: string;
     unresolvedResource?: boolean;
+    downloadUrl?: string;
   }>;
   targetProvider: string;
   videoProvider?: string;
@@ -63,6 +65,8 @@ export interface WorkflowExtraction {
   size?: string;
   quality?: string;
   outputFormat?: string;
+  watermark?: boolean;
+  promptExtend?: boolean;
   background?: string;
   moderation?: string;
   resolution?: string;
@@ -70,6 +74,13 @@ export interface WorkflowExtraction {
   randomSeed?: boolean;
   galleryImages?: unknown[];
   customParameters?: string;
+  requireReferenceImage?: boolean;
+  unresolvedModel?: boolean;
+  executionBlockedReason?: string;
+  sourceLoraAir?: string;
+  civitaiEngine?: string;
+  civitaiEcosystem?: string;
+  civitaiModel?: string;
   hfProvider?: string;
   initImageUrl?: string;
   saveImageNodeId?: string;
@@ -89,6 +100,10 @@ export function areSocketsCompatible(fromType: DataType, toType: DataType): bool
   // 智能拓扑兼容：允许图像直连潜空间（自动插入虚拟 VAE 编码器），或文本大模型输出直连 Conditioning
   if (fromType === 'IMAGE' && toType === 'LATENT') return true;
   if (fromType === 'STRING' && toType === 'CONDITIONING') return true;
+  // 智能拓扑兼容：允许提示词 Conditioning 直连 SaveImage（云端大模型生图，免除本地采样扩散链路）
+  if (fromType === 'CONDITIONING' && toType === 'IMAGE') return true;
+  // 智能拓扑兼容：允许潜空间 LATENT 直连 SaveImage（云端生图服务直接产出像素，虚拟 VAE 解码）
+  if (fromType === 'LATENT' && toType === 'IMAGE') return true;
   return fromType === toType;
 }
 
@@ -213,8 +228,9 @@ function traceModelAndLorasUpstream(
           modelStrength: Number(n.values.strength_model ?? 0.8),
           clipStrength: Number(n.values.strength_clip ?? 0.8),
           triggerWords: n.values.trigger_words || '',
-          civitaiId: n.values.civitai_id || '',
-          unresolvedResource: n.values.import_unresolved_resource === true,
+          civitaiId: n.values.civitai_id || n.values.civitaiId || '',
+          unresolvedResource: n.values.import_unresolved_resource === true || n.values.unresolvedResource === true,
+          downloadUrl: n.values.download_url || n.values.downloadUrl,
         });
       }
       const inConn = connections.find((c) => c.toNodeId === n.id && c.toSocketId === 'model');
@@ -264,8 +280,9 @@ function traceLorasUpstream(
           modelStrength: Number(n.values.strength_model ?? 0.8),
           clipStrength: Number(n.values.strength_clip ?? 0.8),
           triggerWords: n.values.trigger_words || '',
-          civitaiId: n.values.civitai_id || '',
-          unresolvedResource: n.values.import_unresolved_resource === true,
+          civitaiId: n.values.civitai_id || n.values.civitaiId || '',
+          unresolvedResource: n.values.import_unresolved_resource === true || n.values.unresolvedResource === true,
+          downloadUrl: n.values.download_url || n.values.downloadUrl,
         });
       }
       const inConn = connections.find((c) => c.toNodeId === n.id && c.toSocketId === 'model');
@@ -367,8 +384,34 @@ export function extractWorkflowParameters(
   ) {
     const downstreamGen = findDownstreamGenerator(rootTargetNode.id, connections, nodeMap);
     if (downstreamGen) {
-      execNode = downstreamGen;
-      subgraphNodeIds.add(downstreamGen.id);
+      if (downstreamGen.type === 'SaveImage' || downstreamGen.type === 'PreviewImage') {
+        saveImageNodeId = downstreamGen.id;
+        subgraphNodeIds.add(downstreamGen.id);
+        const inConn = connections.find(
+          (c) => c.toNodeId === downstreamGen.id && (c.toSocketId === 'images' || c.toSocketId === 'image')
+        );
+        if (inConn) {
+          const src = nodeMap.get(inConn.fromNodeId);
+          if (src && !src.bypassed) {
+            subgraphNodeIds.add(src.id);
+            if (src.type === 'VAEDecode') {
+              const sampleConn = connections.find((c) => c.toNodeId === src.id && c.toSocketId === 'samples');
+              if (sampleConn) {
+                const ksampler = nodeMap.get(sampleConn.fromNodeId);
+                if (ksampler && !ksampler.bypassed) {
+                  execNode = ksampler;
+                  subgraphNodeIds.add(ksampler.id);
+                }
+              }
+            } else {
+              execNode = src;
+            }
+          }
+        }
+      } else {
+        execNode = downstreamGen;
+        subgraphNodeIds.add(downstreamGen.id);
+      }
     } else {
       const sole = findSoleCloudEngine(nodes);
       if (sole) {
@@ -488,6 +531,11 @@ export function extractWorkflowParameters(
     }
   }
 
+  const pendingNodes = Array.from(subgraphNodeIds).map(id=>nodeMap.get(id)).filter((n):n is NodeInstance=>Boolean(n));
+  for(const n of pendingNodes) {
+    if(n.values.execution_blocked_reason)throw new Error(String(n.values.execution_blocked_reason));
+    if(n.values.source_lora_air)throw new Error('来源 LoRA 执行链尚未接入；请保留此历史档案，创建新的显式生成分支');
+  }
   // 3. Node-specific parameter extraction
   let checkpointModel = '';
   let targetProvider: WorkflowExtraction['targetProvider'] = 'civitai';
@@ -533,21 +581,17 @@ export function extractWorkflowParameters(
     }
     // F4: reject empty / schema-mismatched provider — never fall back to Fal
     videoProvider = assertAIVideoProviderReady(checkpointModel, videoProvider);
+    batchSize = numOrUndef(execNode.values.n ?? execNode.values.batch_size ?? execNode.values.batchSize) as number;
     videoFrames=numOrUndef(execNode.values.num_frames);
-    // Grok 兼容中转：duration 仅透传，不编造 5；其它商沿用节点默认
-    if (videoProvider === 'grok_compat') {
-      videoDuration = execNode.values.duration != null && execNode.values.duration !== ''
-        ? Number(execNode.values.duration)
-        : undefined;
-      videoFps = undefined;
-      videoAspectRatio = execNode.values.aspect_ratio || undefined;
-      resolution = execNode.values.resolution || undefined;
-    } else {
-      const falWan=videoProvider==='fal' && /wan-t2v|wan-i2v|wan\/v2\.1/.test(checkpointModel);
-      videoDuration = falWan ? undefined : numOrUndef(execNode.values.duration);
-      videoFps = numOrUndef(execNode.values.fps);
-      videoAspectRatio = execNode.values.aspect_ratio || undefined;
-    }
+    videoDuration = numOrUndef(execNode.values.duration);
+    videoFps = numOrUndef(execNode.values.fps);
+    videoAspectRatio = strOrUndef(execNode.values.aspect_ratio);
+    resolution = strOrUndef(execNode.values.resolution);
+    size = strOrUndef(execNode.values.size);
+    seed = (execNode.values.control_after_generate ?? execNode.values.seedControl) === 'randomize'
+      ? Math.floor(Math.random() * 1000000000)
+      : numOrUndef(execNode.values.seed);
+    customParameters = execNode.values.custom_parameters;
   } else if (execNode.type === 'FalAIEngineNode') {
     isVideo = false;
     targetProvider = 'fal';
@@ -567,6 +611,7 @@ export function extractWorkflowParameters(
     if (loraConn) {
       traceLorasUpstream(loraConn.fromNodeId, connections, nodeMap, loras, subgraphNodeIds);
     }
+    customParameters = execNode.values.custom_parameters;
   } else if (execNode.type === 'GoogleImagenNode') {
     isVideo = false;
     targetProvider = 'gemini';
@@ -583,7 +628,9 @@ export function extractWorkflowParameters(
     if (!checkpointModel) {
       throw new Error('请先选择模型');
     }
+    customParameters = execNode.values.custom_parameters;
   } else if (execNode.type === 'NanoGPTNode') {
+    customParameters = execNode.values.custom_parameters;
     isVideo = false;
     targetProvider = 'nanogpt';
     checkpointModel = (execNode.values.model || '').trim();
@@ -611,7 +658,7 @@ export function extractWorkflowParameters(
     hfProvider = execNode.values.hf_provider || undefined;
     aspectRatio = execNode.values.aspect_ratio || execNode.values.aspectRatio || undefined;
     if (execNode.values.n != null || execNode.values.batch_size != null || execNode.values.batchSize != null) {
-      batchSize = Number(execNode.values.n ?? execNode.values.batch_size ?? execNode.values.batchSize) || 1;
+      batchSize = numOrUndef(execNode.values.n ?? execNode.values.batch_size ?? execNode.values.batchSize) ?? batchSize;
     }
   } else if (execNode.type === 'KSampler') {
     isVideo = false;
@@ -656,7 +703,7 @@ export function extractWorkflowParameters(
     falModelName=ckpt.values.fal_model_name || undefined;
     aspectRatio = ckpt.values.aspect_ratio || ckpt.values.aspectRatio || aspectRatio;
     if (ckpt.values.n != null || ckpt.values.batch_size != null || ckpt.values.batchSize != null) {
-      batchSize = Number(ckpt.values.n ?? ckpt.values.batch_size ?? ckpt.values.batchSize) || batchSize;
+      batchSize = numOrUndef(ckpt.values.n ?? ckpt.values.batch_size ?? ckpt.values.batchSize) ?? batchSize;
     }
 
     const latentConn = connections.find((c) => c.toNodeId === execNode.id && c.toSocketId === 'latent_image');
@@ -666,15 +713,46 @@ export function extractWorkflowParameters(
         subgraphNodeIds.add(src.id);
         width = numOrUndef(src.values.width);
         height = numOrUndef(src.values.height);
-        batchSize = Number(src.values.batch_size) || 1;
+        batchSize = numOrUndef(src.values.batch_size) ?? batchSize;
       }
     }
   } else {
     checkpointModel = (execNode.values.model || execNode.values.ckpt_name || '').trim();
+    targetProvider = (execNode.values.targetProvider || '').trim();
+
+    // 智能拓扑反向追踪：若执行节点本身无模型配置（例如正向提示词节点直连 SaveImage），沿 clip/model 上游追踪 CheckpointLoaderSimple
+    if (!checkpointModel) {
+      const upstreamConn = connections.find(
+        (c) => c.toNodeId === execNode.id && (c.toSocketId === 'clip' || c.toSocketId === 'model')
+      );
+      if (upstreamConn) {
+        const src = nodeMap.get(upstreamConn.fromNodeId);
+        if (src && !src.bypassed && src.type === 'CheckpointLoaderSimple') {
+          subgraphNodeIds.add(src.id);
+          checkpointModel = (src.values.ckpt_name || src.values.model || '').trim();
+          targetProvider = (src.values.targetProvider || '').trim();
+          size = src.values.size || undefined;
+          quality = src.values.quality || undefined;
+          outputFormat = src.values.output_format || src.values.outputFormat || undefined;
+          background = src.values.background || undefined;
+          moderation = src.values.moderation || undefined;
+          resolution = src.values.resolution || undefined;
+          shift = numOrUndef(src.values.shift);
+          randomSeed = typeof src.values.random_seed === 'boolean' ? src.values.random_seed : undefined;
+          galleryImages = Array.isArray(src.values.gallery_images) ? src.values.gallery_images : undefined;
+          customParameters = src.values.custom_parameters;
+          hfProvider = src.values.hf_provider || undefined;
+          aspectRatio = src.values.aspect_ratio || src.values.aspectRatio || aspectRatio;
+          if (src.values.n != null || src.values.batch_size != null || src.values.batchSize != null) {
+            batchSize = numOrUndef(src.values.n ?? src.values.batch_size ?? src.values.batchSize) ?? batchSize;
+          }
+        }
+      }
+    }
+
     if (!checkpointModel) {
       throw new Error('请先选择模型');
     }
-    targetProvider = (execNode.values.targetProvider || '').trim();
     if (!targetProvider) throw new Error('请选择执行服务商；不会从模型名称猜测引擎');
   }
 
@@ -694,7 +772,24 @@ export function extractWorkflowParameters(
     finalPositive = `${triggerWordsAll}, ${finalPositive}`.trim();
   }
 
+  const recipeNode = modelCheckpoint(nodes,connections,execNode.id) || Array.from(subgraphNodeIds).map(id=>nodeMap.get(id)).find(n=>n?.type==='CheckpointLoaderSimple' && n.values.ckpt_name===checkpointModel) || execNode;
+  const recipeValues = recipeNode.values;
+  if (recipeValues.import_unresolved_resource === true || recipeValues.unresolvedResource === true) throw new Error(`底模 ${checkpointModel || '未指定'} 尚未核实，请重新选择已核实资源`);
+  if (recipeValues.execution_blocked_reason) throw new Error(String(recipeValues.execution_blocked_reason));
+  if (recipeValues.source_lora_air) throw new Error('来源 LoRA 执行链尚未接入；请保留此历史档案，创建新的显式生成分支');
+  if (recipeValues.require_reference_image === true && !initImageUrl) throw new Error('编辑输入需要明确参考图，请选择或上传参考图');
+  const recipe = recipeNode.values;
+  assertResolvedResources(loras);
   return {
+    requireReferenceImage: recipe.require_reference_image === true,
+    unresolvedModel: recipe.import_unresolved_resource === true || recipe.unresolvedResource === true,
+    executionBlockedReason: strOrUndef(recipe.execution_blocked_reason),
+    sourceLoraAir: strOrUndef(recipe.source_lora_air),
+    watermark: targetProvider === 'sensenova' && typeof recipe.watermark === 'boolean' ? recipe.watermark : undefined,
+    promptExtend: targetProvider === 'sensenova' && typeof recipe.prompt_extend === 'boolean' ? recipe.prompt_extend : undefined,
+    civitaiEngine: strOrUndef(recipe.civitai_engine),
+    civitaiEcosystem: strOrUndef(recipe.civitai_ecosystem),
+    civitaiModel: strOrUndef(recipe.civitai_model),
     checkpointModel,
     positivePrompt: finalPositive,
     negativePrompt,
@@ -751,6 +846,7 @@ export async function executeWorkflow(
 ): Promise<{ imageUrl: string; provider: string; model: string; seed: number | null; isVideo?: boolean; executingNodeId?: string; historyWarning?: string }> {
   let stepInterval: any = null;
   let executingIds = new Set<string>();
+  let outputIds = new Set<string>();
   let targetErrorNodeId: string | undefined = typeof targetNodeOrId === 'string' ? targetNodeOrId : targetNodeOrId?.id;
 
   try {
@@ -775,13 +871,8 @@ export async function executeWorkflow(
         n.type === 'NanoGPTNode'
     );
     const vaeNodes = activeNodes.filter((n) => n.type === 'VAEDecode');
-    const saveNodes = activeNodes.filter(
-      (n) =>
-        n.type === 'SaveImage' ||
-        n.type === 'SaveVideo' ||
-        n.type === 'PreviewImage' ||
-        n.id === params.executingNodeId
-    );
+    const saveNodes = activeNodes.filter(n => n.id === params.executingNodeId || n.id === params.saveImageNodeId || n.id === params.saveVideoNodeId);
+    outputIds = new Set(saveNodes.map(n=>n.id));
 
     onProgress?.(15, `已整理工作流参数：${params.targetProvider} / ${params.checkpointModel}；${params.loras.length} 个 LoRA 请求参数，尚未提交上游`);
     // Reset prior media outputs on the branch before a new request so stale previews cannot survive a failed rerun.
@@ -849,10 +940,17 @@ export async function executeWorkflow(
       ...(params.scheduler !== undefined ? { scheduler: params.scheduler } : {}),
       ...(params.imageSize ? { image_size: params.imageSize } : {}),
     };
-    if(params.customParameters) extraParams.custom_parameters=JSON.parse(params.customParameters);
+    if(params.customParameters) extraParams.custom_parameters=parseCustomParameters(params.customParameters);
+    if (engProv === 'civitai') {
+      for (const [key,value] of Object.entries({engine:params.civitaiEngine,ecosystem:params.civitaiEcosystem,comfyModel:params.civitaiModel,quantity:params.batchSize})) if (value !== undefined && value !== '') extraParams[key] = value;
+    }
     if (params.size) extraParams.size = params.size;
     if (params.quality) extraParams.quality = params.quality;
     if (params.outputFormat) extraParams.output_format = params.outputFormat;
+    if (params.targetProvider === 'sensenova') {
+      if (typeof params.watermark === 'boolean') extraParams.watermark = params.watermark;
+      if (typeof params.promptExtend === 'boolean') extraParams.prompt_extend = params.promptExtend;
+    }
     if (params.background) extraParams.background = params.background;
     if (params.moderation) extraParams.moderation = params.moderation;
     if (params.resolution && !(params.targetProvider === 'huggingface' && params.hfProvider !== 'z-image-space')) extraParams.resolution = params.resolution;
@@ -879,7 +977,7 @@ export async function executeWorkflow(
       engModel,
       params.loras.map((l) => ({
         name: l.name,
-        path: resolveLoraPathOrUrl(l),
+        path: explicitLoraPath(l),
         strength: l.modelStrength,
         modelStrength: l.modelStrength,
         clipStrength: l.clipStrength,
@@ -962,8 +1060,8 @@ export async function executeWorkflow(
     if (stepInterval) clearInterval(stepInterval);
     onProgress?.(0, `执行失败: ${error.message}`);
     const msg = error?.message || '执行遇到错误';
-    if (targetErrorNodeId) executingIds.add(targetErrorNodeId);
-    for(const id of executingIds)onNodeStateChange(id,id===targetErrorNodeId?'error':'idle',0,undefined,id===targetErrorNodeId?'请求失败，查看执行记录':'');
+    if (targetErrorNodeId) outputIds.add(targetErrorNodeId);
+    for(const id of outputIds)onNodeStateChange(id,id===targetErrorNodeId?'error':'idle',0,undefined,id===targetErrorNodeId?'请求失败，查看执行记录':'');
     throw error;
   }
 }

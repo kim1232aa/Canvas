@@ -631,7 +631,12 @@ export const WorkflowPresetsModal: React.FC<WorkflowPresetsModalProps> = ({
                   const checkpoint =
                     frame?.params.checkpoint ||
                     (preset.nodes.find((n) => n.type === 'CheckpointLoaderSimple')?.values.ckpt_name as string) ||
-                    'FLUX / SDXL';
+                    '模型未选择/待重选';
+                  const blockedReason = preset.nodes.find(n => n.values.execution_blocked_reason)?.values.execution_blocked_reason
+                    || preset.spatialFrames?.find(f => f.params.executionBlockedReason)?.params.executionBlockedReason
+                    || (preset.nodes.some(n => n.values.import_unresolved_resource) || preset.spatialFrames?.some(f => f.params.unresolvedModel || f.params.loras.some(l => l.unresolvedResource)) ? '存在未核实资源或底模，请先载入并显式重选。' : '')
+                    || (checkpoint === '模型未选择/待重选' ? '请先载入并选择模型。' : '')
+                    || (preset.nodes.some(n => n.values.require_reference_image) || preset.spatialFrames?.some(f => f.params.requireReferenceImage && !f.referenceImageUrl) ? '请先载入并选择参考图。' : '');
 
                   return (
                     <div
@@ -748,29 +753,33 @@ export const WorkflowPresetsModal: React.FC<WorkflowPresetsModalProps> = ({
                           </div>
                         )}
 
+                        {blockedReason && <p id={`preset-blocked-${preset.id}`} className="text-[11px] text-amber-300">待配置：{blockedReason}</p>}
                         {/* Action Buttons */}
                         <div className="pt-2 border-t border-[#232532] flex items-center gap-2">
                           {onLoadAndRunPreset && (
                             <button
+                              disabled={Boolean(blockedReason)}
+                              aria-describedby={blockedReason ? `preset-blocked-${preset.id}` : undefined}
                               onClick={() => {
+                                if (blockedReason) return;
                                 onLoadAndRunPreset(preset);
                                 onClose();
                               }}
                               className="flex-1 py-2 px-3 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/25 active:scale-95 transition-all ring-1 ring-emerald-400/40"
-                              title="一键载入画布并立即运行工作流出片"
+                              title={blockedReason || '载入画布并运行工作流'}
                             >
                               <Play className="w-3.5 h-3.5 fill-white" />
-                              <span>⚡ 载入并立即运行</span>
+                              <span>{blockedReason ? '待配置，不能立即运行' : '载入并立即运行'}</span>
                             </button>
                           )}
 
                           <button
                             onClick={() => {
-                              onLoadPreset(preset, 'replace');
+                              onLoadPreset(preset, blockedReason ? 'append' : 'replace');
                               onClose();
                             }}
                             className={`${onLoadAndRunPreset ? 'px-3' : 'flex-1'} py-2 rounded-xl bg-[#222430] hover:bg-[#2d3040] text-slate-200 hover:text-white border border-[#313444] font-semibold text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all`}
-                            title="清空当前画布并载入此工作流"
+                            title={blockedReason ? '仅追加载入待配置模板，不覆盖已有画布' : '清空当前画布并载入此工作流'}
                           >
                             <Play className="w-3.5 h-3.5 fill-cyan-400" />
                             <span>{onLoadAndRunPreset ? '仅载入' : '载入画布 (覆盖)'}</span>

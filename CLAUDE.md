@@ -7,6 +7,32 @@
 6. 本次用户授权真实生成，按前端完整链路验收。直调 API 和单元测试不能替代网页生成验收。余额不足单独记录，不算出图成功也不据此判定集成失败。
 7. Schema 匹配模式必须在 UI 明示并可关闭，未提交的普通画布字段逐项记录值与原因；手写 JSON 保留字段与覆盖值，非空 LoRA 意图不删除。当前模式是请求前的公开协议映射，不是错误后的回退。只有真实上游图片返回才能进入图像成功状态。
 
+### 2026-10-12 接线修复边界
+- Runware `lora`、ModelsLab 图生图、ModelScope `size`、异步历史保存、Tensor 目录和兼容中转字段限制已有代码与测试修复。真实上游复验仍受余额或订阅状态阻断，不升级为 PASS_GENERATION。
+- 当前本地验证为 75 个测试文件 / 640 个测试通过，类型检查 0 错误。测试通过不代表所有供应商网页生成已验收。
+
+### 2026-10-10 当前验收与禁止误判（优先于下文历史状态）
+- 用户已明确授权真实生图，并要求优先 HF → Sogni → MuAPI；生成必须前端点击。仅为 SenseNova size 文档分歧，用户另允许本站端口诊断；诊断不替代网页验收。
+- Agnes Video 官方字段为 size，不是 resolution。已见真实上游400拒绝空loras和resolution字段；节点resolution→size修复后真实wire正确，但Flash text仍503 video_queue_full。没有video_id/视频，不记PASS_GENERATION/PASS_BILLING。视频seed、size完整节点提取和映射来源仍在独立复审/修复中。
+- SenseNova官方参数表写2K/4K，而本次上游拒绝字面2K和4K，auto与显式2048x2048成功。保留官方与实测分歧；不得静默改参数/端点重试。仓库没有U1.5图像预设写2K，相关失败值来自从Agnes切provider后的旧size残留。Agnes合法2K预设不能因此被改掉。
+- SenseNova本次网页文生图和>1MB参考图编辑出图，Agnes图像文生图/相关人物编辑有成功产物；Fal图生图与KlingV3只到403 TOP_UP。精确证据分别在现有t7文档顶节，不扩大为所有模式/所有模型已集成。
+- 4个HF token逐个whoami有效；把逗号分隔整个池当单Token的只读401是错误探针，不能当HF账户无效证据。HF Space的status:null/ECONNRESET与Router计费路由必须分开记录，禁止暗切路由。
+- 媒体迁移与本轮新增Agnes修复必须独立评审。npm测试通过不等于运行所有供应商；旧记录/磁盘备份/画布参数不得未经授权清除，不能为了迁移或比较版本使用git stash/reset覆盖未知既有改动。
+
+### 2026-10-09 本轮连接域修复与验收边界（优先于下文历史结论）
+- 用户要求由 `sub/gpt-6.1-sol` 分任务修确定错误；授权范围是下列连接域，不等于其他供应商全量已修。本轮文档负责人仅更新六份既有文档，不改代码、配置或 keys，不执行 API 测试、浏览器、PM2、commit/push。
+- 当前新增修复记 `CODE_ONLY / CONTRACT_TESTED`，生成验收仍 PARTIAL，不记 `PASS_GENERATION`。主 agent 最终 fresh 回传：`npm run lint` 退出 0；`npm test` 61 files / 497 tests 全 PASS，无 localStorage stderr；frontend + hosting Worker build 成功；`git diff --check` 退出 0。既有 Vite `__dirname`、dynamic import 无效、>500KB chunk 警告保留。49/383、55/453 仅为早期历史回归，不作最终数字。
+- 独立复审：review42 已关闭；review53（Agnes/Gemini metadata + strict field types）原 2 MEDIUM 全 close；review54 原 final 3 HIGH + quantity MEDIUM 全 close；review55 最后 3 must-fix 闭环，定向 24+4 tests PASS。旧 review43 指定 scope 已闭，不宣称 hooks ESLint 验证。此前待修的 Civitai video dispatch、Agnes video advanced/resolution、专用 cloud JSON UI→extract、上传键盘可达、duration/FPS legacy clear 与空 video entry provider 不猜、Gemini omissions history metadata 合并现为本地契约修复/独立复审关闭，不再列为待修；仍不能外推真实上游通过。
+- Kling 图生视频：Driver→本站统一传 `image_url`；server builder 兼容 `image_url` 与旧 `start_image_url`，二者冲突拒绝；最终 Fal Kling V3 wire 使用官方 `start_image_url`。custom video JSON 透传与覆盖必须记录前后值，不可覆盖路由；unknown 字段不是 unsupported。Fal 官方同步 `fal.run` 合法，未使用 queue 不能单独判接线错误。
+- Civitai：区分 modelId / versionId / 资源 type，resolver 与 builder 保留完整 AIR，显式记录 engine / ecosystem / modelSelector（站内 `comfyModel`）。Comfy 的 sampler / scheduler 与 sdcpp 的 sampleMethod / schedule 不混用。Face Detailer、Detail Tweaker、Krea 预设使用完整 AIR；2758 是 Checkpoint 而非 LoRA。旧 LoRA 身份不明保留原意图并标待目录重选，不换其他模型。
+- ZImage 请求生态为 `zImage`，资源 AIR 的 `zimageturbo` namespace 不改写；请求映射与资源身份分开，未实测 LoCon 推理。Gemini 错误 Imagen 默认不再填入 generateContent 模板，要求用户显式选模型。
+- 空间帧 `imageUrl` 是展示结果，不自动作为 input；`referenceImageUrl` 是显式参考源。只有用户明确点击「图生视频」等输入意图操作，才将 result 设为首帧。Agnes 省略 width / height 时由 `extra.omissions` 与 Driver 合并保留原值和原因；不得把未发送字段记作实际生效。
+- 主 agent Chrome 154 / CDP 9224 新建「接线修复检查-20261009」保留原 board；仅载入 Krea2 显示 explicit comfy/krea2/turbo 与完整 AIR。初测 positive/negative/latent 重叠，修新 preset row y=80/620/1000 后，重新仅载入 Krea2 8 nodes actual DOM overlaps=[]，append Agnes i2i 4 nodes 后 12 nodes actual DOM overlaps=[]；截图 `temp/repair-browser/krea-layout-fixed.png`、`temp/repair-browser/krea-agnes-layout-fixed.png`。仅代表模板，31 个预设实际 DOM 未全验；明确撤销估算 0 collision/31 抽取成功即全修好的推论。
+- 菜单失模型/未核实/缺参考/来源未接通项显示「待配置，不能立即运行」并 disabled；browser performance 只读检索 `generationRequests=[]`。本轮没有生成请求、没有 source 付费；源码新增上传控件不自动解除旧 `BLOCKED_UI`。历史 payload false、10-09 未生成记录保留；10-06 SD1 `4384@128713` + LoRA `82098@87153` / 0.7 的 PASS 只限该组合。
+- 主 agent 最终 pm2 restart canvas 成功，PID 176587 / restarts 11；fresh 本地 health online / uptime 14s / history 8 / executionTrace=[]、主页 HTTP 200。旧 process id 2/未 restart 为中间状态；未公开 deploy、未 commit/push，不声明公开站同步。Chrome 154 / CDP 9224 refresh 最新 loaded，代表 12 nodes 保留；此前 actual DOM overlaps=[]，最终刷新未重测 geometry。原 native upload focus @ref 实测 activeElement BUTTON / label「上传本地图片」/ tabIndex 0，只确认焦点可达，不是上传生成。
+- 本地补修还包括 AIR canonical/file format metadata 匹配、单版本 modelId shape、多版本不 first、不可解析 AIR reject、入口 metadata verified≠generation ready；SaveImage fail 不清 source、Agnes checkpoint sink/检查器共享 owner、Fal 9:16→720×1280、quantity 3/0 三路径一致；Gemini omissions history metadata 不进 SDK wire；Agnes mode explicit、/videos media 严格类型先拒绝 false/array/object、URL-like sanitize 不抛 InvalidURL。详见 HANDOFF。
+- 真正待验：前端上游生成/明确余额终态、reference/图生视频整链、历史刷新/复用/云、31 DOM 全验、unknown resource owner 选择、官方矛盾与 unknown resolution 上游接受性、Krea/ZImage LoCon 推理及视觉效果。测试绿不升 PASS_GENERATION，剩余不裁范围。官方原文与待验清单见三份 `docs/evidence/t7-{fal,civitai,agnes}-acceptance.md`。
+
 ### 2026-10-04 Tensor 目录纠正
 - TAMS 官方 FAQ 明确暂无模型列表 API。不得继续抓取被 Cloudflare 403 拒绝的网页来伪装目录；当前为明确标注的 ID 单项查询，空列表必须附 lookup-only / catalogAvailable:false。
 - OpenWorks 不得作为底模预设或模型 Schema 项。旧选择迁移保留原值，不替换成其他模型；底模驱动禁止按名称自动转工具 API。

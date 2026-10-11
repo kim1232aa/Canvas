@@ -1,4 +1,4 @@
-export type ProviderId = 'civitai' | 'fal' | 'agnes' | 'sensenova' | 'huggingface' | 'modelscope' | 'modelscope_ai' | 'nanogpt' | 'gemini' | 'tensorart' | 'video' | 'openai_compat' | 'grok_compat' | 'muapi' | 'wavespeed' | 'sogni';
+export type ProviderId = 'civitai' | 'fal' | 'agnes' | 'sensenova' | 'huggingface' | 'modelscope' | 'modelscope_ai' | 'nanogpt' | 'gemini' | 'tensorart' | 'video' | 'openai_compat' | 'grok_compat' | 'muapi' | 'wavespeed' | 'sogni' | 'runware' | 'modelslab';
 
 export interface ProviderConfig {
   id: ProviderId;
@@ -66,6 +66,10 @@ export interface ApiKeysState {
   muapiKey?: string;
   wavespeedKey?: string;
   sogniKey?: string;
+  runwareKey?: string;
+  runwareBaseUrl?: string;
+  modelslabKey?: string;
+  modelslabBaseUrl?: string;
   [key: string]: any;
 }
 
@@ -119,6 +123,7 @@ export interface GenerationHistoryItem {
   id: string;
   url: string;
   imageUrl?: string;
+  videoUrl?: string;
   mediaType?: 'image' | 'video';
   prompt: string | null;
   negativePrompt?: string | null;

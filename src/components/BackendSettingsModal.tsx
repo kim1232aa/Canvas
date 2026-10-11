@@ -57,6 +57,10 @@ const ALLOWED_CLOUD_SETTINGS_FIELDS = new Set([
   'muapiKey',
   'wavespeedKey',
   'sogniKey',
+  'runwareKey',
+  'runwareBaseUrl',
+  'modelslabKey',
+  'modelslabBaseUrl',
 ]);
 
 interface BackendSettingsModalProps {
@@ -297,12 +301,12 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       name: 'Tensor.Art / TusiArt',
       badge: '吐司 AI 模型中心',
       docsUrl: 'https://tensor.art',
-      description: '模型目录用于资源发现。在线生成使用 TAMS 模型 API；OpenWorks 工具与模型 API 是两套接口，密钥不能混用。',
-      apiUrl: 'https://tams-api.tensor.art/v1（模型 API）',
+      description: 'Tensor.Art 官方云端生图平台；支持官方生图模型与 TAMS 底模 ID。',
+      apiUrl: 'https://openapi.tensor.art/openworks/v1',
       keyName: 'tensorartKey',
-      keyPlaceholder: 'TAMS 模型 API 的 Bearer Key；OpenWorks ak_tensor 仅用于工具',
+      keyPlaceholder: 'Tensor.Art 访问密钥 (ak_tensor_... / TAMS Key)',
       status: 'unconfigured',
-      popularModels: ['936101665537308499', '990778216270553015', '1015578945501842388'],
+      popularModels: ['photoreal_studio_z_image', 'anime_lab_wai_illustrious', '672797109289765558'],
     },
     {
       id: 'muapi',
@@ -339,6 +343,30 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       keyPlaceholder: 'Sogni API Key',
       status: 'unconfigured',
       popularModels: [],
+    },
+    {
+      id: 'runware',
+      name: 'Runware',
+      badge: '极速统一 API',
+      docsUrl: 'https://runware.ai/docs/',
+      description: '使用 Runware API Key。统一高性能推理端点，支持 FLUX、SDXL、Qwen 等模型与 LoRA。',
+      apiUrl: 'https://api.runware.ai/v1',
+      keyName: 'runwareKey',
+      keyPlaceholder: 'Runware API Key',
+      status: 'unconfigured',
+      popularModels: ['runware:100@1', 'bfl:flux@1-schnell', 'bfl:flux@1-dev', 'alibaba:qwen-image@3.0'],
+    },
+    {
+      id: 'modelslab',
+      name: 'ModelsLab',
+      badge: '开放模型库',
+      docsUrl: 'https://docs.modelslab.com',
+      description: '使用 ModelsLab API Key。支持 Flux、SDXL 等 10,000+ 社区模型生图与 LoRA 融合。',
+      apiUrl: 'https://modelslab.com/api/v6/images/text2img',
+      keyName: 'modelslabKey',
+      keyPlaceholder: 'ModelsLab API Key',
+      status: 'unconfigured',
+      popularModels: ['flux', 'sdxl', 'dream-shaper-v8'],
     },
   ];
 
@@ -709,7 +737,9 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
               {(currentProvider.id === 'openai_compat' ||
                 currentProvider.id === 'grok_compat' ||
                 currentProvider.id === 'agnes' ||
-                currentProvider.id === 'sensenova') && (
+                currentProvider.id === 'sensenova' ||
+                currentProvider.id === 'runware' ||
+                currentProvider.id === 'modelslab') && (
                 <div className="bg-[#111216] border border-[#252733] rounded-xl p-3 space-y-1.5">
                   <label className="text-slate-300 text-[11px] font-semibold flex items-center gap-1.5">
                     Base URL（{currentProvider.id === 'openai_compat' || currentProvider.id === 'grok_compat' ? '兼容中转，必填，不硬编码域名' : '可选自定义端点'}）
@@ -724,7 +754,11 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
                             ? 'grokCompatBaseUrl'
                             : currentProvider.id === 'agnes'
                               ? 'agnesBaseUrl'
-                              : 'sensenovaBaseUrl'
+                              : currentProvider.id === 'sensenova'
+                                ? 'sensenovaBaseUrl'
+                                : currentProvider.id === 'runware'
+                                  ? 'runwareBaseUrl'
+                                  : 'modelslabBaseUrl'
                       ] || '',
                     )}
                     onChange={(e) => {
@@ -735,7 +769,11 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
                             ? 'grokCompatBaseUrl'
                             : currentProvider.id === 'agnes'
                               ? 'agnesBaseUrl'
-                              : 'sensenovaBaseUrl';
+                              : currentProvider.id === 'sensenova'
+                                ? 'sensenovaBaseUrl'
+                                : currentProvider.id === 'runware'
+                                  ? 'runwareBaseUrl'
+                                  : 'modelslabBaseUrl';
                       setKeys((prev) => ({ ...prev, [field]: e.target.value }));
                     }}
                     placeholder={
@@ -743,7 +781,11 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
                         ? 'https://your-relay.example/v1'
                         : currentProvider.id === 'grok_compat'
                           ? 'https://your-relay.example  （缺 /v1 时服务端补 /v1）'
-                          : 'https://...'
+                          : currentProvider.id === 'runware'
+                            ? 'https://api.runware.ai/v1'
+                            : currentProvider.id === 'modelslab'
+                              ? 'https://modelslab.com'
+                              : 'https://...'
                     }
                     className="w-full bg-[#0d0e12] border border-[#2b2d38] focus:border-cyan-500 rounded-lg px-2.5 py-1.5 text-slate-200 text-[11px] font-mono outline-none"
                   />

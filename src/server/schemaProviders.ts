@@ -14,7 +14,7 @@ type Provider=keyof typeof schemaProviders;
 interface Dependencies {
   fetch:(meta:any,url:string,init?:RequestInit)=>Promise<Response>;
   key:(provider:string,override?:string)=>string;
-  record:(item:any)=>any;
+  record:(item:any)=>any | Promise<any>;
   durable:(url:string)=>Promise<any>;
 }
 
@@ -88,6 +88,94 @@ export function resolveSchemaRefs(value:any,document:any,seen:string[]=[]):any {
   if(Array.isArray(value))return value.map(v=>resolveSchemaRefs(v,document,seen));
   return Object.fromEntries(Object.entries(value).map(([k,v])=>[k,resolveSchemaRefs(v,document,seen)]));
 }
+export function getSchemaProviderCatalog(
+  provider: Provider,
+  options: { query?: string; type?: string; page?: number; limit?: number } = {}
+) {
+  const query = String(options.query || '').trim().toLowerCase();
+  const type = String(options.type || '').trim().toLowerCase();
+  let catalogNotice: string | undefined;
+  if (type === 'lora') {
+    if (provider === 'muapi') {
+      catalogNotice = 'MuAPI 目前未提供公开 LoRA 实时检索目录；如需使用自定义 LoRA，请在生成节点中直接填入 Civitai / HuggingFace 下载直链。';
+    } else if (provider === 'wavespeed') {
+      catalogNotice = 'WaveSpeed 目前未提供公开 LoRA 实时检索目录；如需使用自定义 LoRA，请在生成节点中直接填入可公开访问的模型权重 URL。';
+    } else if (provider === 'sogni') {
+      catalogNotice = 'Sogni 暂无公共 LoRA 实时搜索接口；如需使用 LoRA，请在生成节点中直接填入 Sogni 协议支持的 LoRA 标识符或下载直链。';
+    }
+  }
+
+  const providerMeta = schemaProviders[provider] as any;
+  const sourceUrl = providerMeta.sourceUrl || `${providerMeta.root || ''}${providerMeta.catalog || ''}`;
+  let sourceNotice: string;
+  if (provider === 'sogni') {
+    sourceNotice = 'versioned-protocol-schema (@sogni-ai/sogni-protocol@1.0.0-alpha.46)';
+  } else if (provider === 'muapi') {
+    sourceNotice = 'openapi-spec-schema (@muapi/openapi-spec)';
+  } else if (provider === 'wavespeed') {
+    sourceNotice = 'openapi-spec-schema (wavespeed)';
+  } else {
+    sourceNotice = 'versioned-schema';
+  }
+
+  const definition = providerMeta.document?.paths
+    ? providerMeta.document.components?.schemas?.ModelType?.enum
+      ? undefined
+      : undefined
+    : undefined;
+
+  const catalog =
+    type === 'lora'
+      ? []
+      : provider === 'sogni'
+      ? sogniImageSchema.properties.model.enum.map((v: string) => ({
+          id: v,
+          name: v,
+          category: 'model',
+          provider: 'sogni',
+          sourceUrl,
+          type: 'checkpoint',
+        }))
+      : definition
+      ? Object.keys(definition).map((v) => ({
+          id: v,
+          name: v,
+          category: 'model',
+          provider,
+          sourceUrl,
+          type: 'checkpoint',
+        }))
+      : Array.isArray(providerMeta.catalog)
+      ? providerMeta.catalog.map((v: any) => ({
+          id: v.id || v.name,
+          name: v.name || v.id,
+          category: 'model',
+          provider,
+          sourceUrl,
+          type: 'checkpoint',
+        }))
+      : [];
+
+  const filtered = catalog.filter(
+    (item: any) => !query || item.id.toLowerCase().includes(query) || item.name.toLowerCase().includes(query)
+  );
+  const page = Math.max(1, options.page || 1);
+  const limit = Math.max(1, Math.min(100, options.limit || 20));
+  const offset = (page - 1) * limit;
+  const sliced = filtered.slice(offset, offset + limit);
+
+  return {
+    items: sliced,
+    total: catalog.length,
+    hasMore: offset + limit < catalog.length,
+    sourceUrl,
+    sourceNotice,
+    catalogNotice,
+    page,
+    limit,
+  };
+}
+
 export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencies) {
   const valid=(value:string):value is Provider=>Object.hasOwn(schemaProviders,value);
   const credentialHeader='x-canvas-credential-ref';
@@ -164,7 +252,26 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
       const {rows,sourceUrl,notice}=await fetchSchemaProviderRows(provider,read,{lora:wantsLora,model:req.query.model as string,catalog:req.query.catalog as string});
       const items=normalizeSchemaProviderItems(provider,rows,{lora:wantsLora,sourceUrl,category:String(req.query.category || 'checkpoint'),query:String(req.query.query || '')});
       const page=Math.max(1,Number(req.query.page)||1),limit=Math.min(100,Math.max(1,Number(req.query.limit)||50));
-      res.json({[provider]:items.slice((page-1)*limit,page*limit),_pagination:{[provider]:{page,hasMore:page*limit<items.length,total:items.length,paging:provider==='sogni' && !wantsLora && req.query.catalog!=='workers'?'versioned-official-schema-selectors':'local-slice-of-live-catalog',sourceUrl}},catalogNotice:notice});
+      const pagingNotice = provider === 'sogni' && !wantsLora && req.query.catalog !== 'workers'
+        ? 'versioned-official-schema-selectors (@sogni-ai/sogni-protocol@1.0.0-alpha.46)'
+        : 'local-slice-of-live-upstream-catalog';
+      const paginationData = {
+        page,
+        hasMore: page * limit < items.length,
+        total: items.length,
+        paging: pagingNotice,
+        sourceNotice: pagingNotice,
+        sourceUrl,
+      };
+      const sliced = items.slice((page - 1) * limit, page * limit);
+      res.json({
+        results: { [provider]: sliced },
+        [provider]: sliced,
+        pagination: { [provider]: paginationData },
+        _pagination: { [provider]: paginationData },
+        catalogNotices: notice ? { [provider]: notice } : undefined,
+        catalogNotice: notice,
+      });
     }catch(e){fail(res,e);}
   });
   app.post('/api/schema-provider/:provider/submit',async(req,res)=>{
@@ -247,7 +354,7 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
       for(const url of req.body.outputs || []) {
         const durable=await dep.durable(typeof url==='string'?url:url?.url);
         if(!durable.ok){failures.push({url,error:durable.message,details:durable});continue;}
-        saved.push(dep.record({...req.body.metadata,url:durable.dataUrl,provider:schemaProviders[provider].name,actualProvider:schemaProviders[provider].name}));
+        saved.push(await dep.record({...req.body.metadata,url:durable.dataUrl,provider:schemaProviders[provider].name,actualProvider:schemaProviders[provider].name}));
       }
       res.json({historyItems:saved,historyWarning:failures.length?'部分图片保存失败，生成结果仍可用':undefined,transientOutputs:failures});
     }catch(e){fail(res,e);}

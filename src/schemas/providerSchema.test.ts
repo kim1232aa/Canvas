@@ -60,8 +60,15 @@ describe('providerSchema 自检', () => {
     expect(fieldOptions('gemini', 'no-such-model', 'aspect_ratio')).toEqual([]);
     expect(valueStatus('civitai', 'sdcpp:sdxl', 'width', 1000)).toBe('unsupported'); // 非 16 倍数
     expect(valueStatus('civitai', 'sdcpp:sdxl', 'width', 1024)).toBe('supported');
-    expect(modelStatus('gemini', 'gemini-2.5-flash-image', '2026-10-01')).toBe('supported');
-    expect(modelStatus('gemini', 'gemini-2.5-flash-image', '2026-10-02')).toBe('deprecated');
+    expect(modelStatus('gemini', 'gemini-2.5-flash-image', '2027-03-14')).toBe('supported');
+    expect(modelStatus('gemini', 'gemini-2.5-flash-image', '2027-03-15')).toBe('deprecated');
+  });
+
+  it('OpenAI 兼容中转允许官方示例尺寸，Grok 图像允许官方 21:9 且数量到 10', () => {
+    expect(valueStatus('openai_compat', 'gpt-image-2', 'size', '1536x864')).toBe('supported');
+    expect(valueStatus('grok_compat', 'grok-imagine-image', 'aspect_ratio', '21:9')).toBe('supported');
+    expect(getFieldSpec('grok_compat', 'grok-imagine-image', 'num_images')?.max).toBe(10);
+    expect(getFieldSpec('grok_compat', 'grok-imagine-video', 'aspect_ratio')?.enum?.map((v) => v.value)).not.toContain('auto');
   });
 
   it('gemini 生图模型：seed 该服务商不支持（ImageConfig 无 seed），宽高/负向/steps/CFG/denoise/LoRA 同灰', () => {
@@ -133,8 +140,17 @@ describe('providerSchema 自检', () => {
     expect(dim('sdcpp:flux2Dev')).toEqual([512, 2048, undefined]);
     expect(dim('sdcpp:flux2Klein')).toEqual([512, 2048, 16]);
     expect(dim('comfy:flux1')).toEqual([64, 2048, undefined]);
-    expect(dim('comfy:krea2')).toEqual([undefined, undefined, undefined]);
+    expect(dim('comfy:krea2')).toEqual([64, 2048, undefined]);
     expect(dim('sdcpp:ponyV7')).toBeUndefined(); // 不在 schema → 原样发
+  });
+  it('Civitai engine enums remain distinct for SDXL and Flux', () => {
+    for (const ecosystem of ['sdxl', 'flux1']) {
+      expect(valueStatus('civitai', `comfy:${ecosystem}`, 'sampler', 'dpmpp_2m')).toBe('supported');
+      expect(valueStatus('civitai', `sdcpp:${ecosystem}`, 'sampler', 'dpmpp_2m')).toBe('unsupported');
+      expect(valueStatus('civitai', `sdcpp:${ecosystem}`, 'sampler', 'dpm++2m')).toBe('supported');
+      expect(valueStatus('civitai', `comfy:${ecosystem}`, 'scheduler', 'normal')).toBe('supported');
+      expect(valueStatus('civitai', `sdcpp:${ecosystem}`, 'scheduler', 'normal')).toBe('unsupported');
+    }
   });
 });
 
@@ -199,10 +215,10 @@ describe('agnes / huggingface / nanogpt schema unsupported fields', () => {
 });
 
 
-describe('Tensor models exclude OpenWorks tools', () => {
-  it('only registers the TAMS model-job schema', () => {
-    expect(PROVIDER_SCHEMA.filter(m=>m.provider==='tensorart').map(m=>m.id)).toEqual(['tensorart-model-api']);
-    expect(getFieldSpec('tensorart','strong_text2image_nano_banana2','loras')).toBeUndefined();
+describe('Tensor.Art model API schema', () => {
+  it('registers the TAMS model-job schema', () => {
+    const ids = PROVIDER_SCHEMA.filter(m=>m.provider==='tensorart').map(m=>m.id);
+    expect(ids).toEqual(['tensorart-model-api']);
     expect(getFieldSpec('tensorart','tensorart-model-api','loras')?.status).toBe('supported');
     expect(resolveSchemaModelId('tensorart','613045163490732233')).toBe('tensorart-model-api');
   });

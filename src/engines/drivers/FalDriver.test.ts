@@ -3,6 +3,12 @@ import { FalDriver } from './FalDriver';
 import { NormalizedGenerateParams } from '../types';
 
 describe('FalDriver LoRA 校验与错误处理', () => {
+  it('preserves a resource identifier without fabricating a path from its display label', async () => {
+    const bodies: any[]=[];
+    globalThis.fetch=vi.fn(async (_url,init)=>{bodies.push(JSON.parse(String(init?.body)));return new Response(JSON.stringify({imageUrl:'https://example.test/output.png'}));});
+    await new FalDriver().generate({prompt:'test',model:'fal-ai/flux-lora',loras:[{name:'Display label',civitaiId:'123',strength:0}]},{});
+    expect(bodies[0].loras[0]).toEqual({civitaiId:'123',name:'Display label',scale:0});
+  });
   const driver = new FalDriver();
   const originalFetch = globalThis.fetch;
 

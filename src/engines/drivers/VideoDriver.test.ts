@@ -3,6 +3,32 @@ import { VideoDriver } from './VideoDriver';
 import { NormalizedGenerateParams } from '../types';
 
 describe('VideoDriver (F3/F4) 参数转发与错误处理', () => {
+  it('joins the browser contract to the server mapper without leaking Fal wire names into site JSON', async () => {
+    const {buildFalVideoRequest} = await import('../../server/falVideoContract');
+    let upstream: Record<string, unknown> = {};
+    globalThis.fetch = vi.fn(async (url, init) => {
+      expect(url).toBe('/api/video/generate');
+      const body=JSON.parse(String(init?.body));
+      expect(body.image_url).toBe('https://example.test/reference.png');
+      expect(body).not.toHaveProperty('start_image_url');
+      upstream=buildFalVideoRequest(body.model,body).payload;
+      return new Response(JSON.stringify({videoUrl:'https://example.test/result.mp4'}));
+    });
+    await new VideoDriver().generate({prompt:'orbit',model:'fal-ai/kling-video/v3/standard/image-to-video',targetProvider:'fal',image_url:'https://example.test/reference.png',videoDuration:12,extraParams:{custom_parameters:{generate_audio:false,cfg_scale:0}}},{});
+    expect(upstream).toMatchObject({start_image_url:'https://example.test/reference.png',duration:'12',generate_audio:false,cfg_scale:0});
+    expect(upstream).not.toHaveProperty('image_url');
+    expect(upstream).not.toHaveProperty('aspect_ratio');
+  });
+  it('spatial video framework reaches the registry and site JSON with its explicit upstream provider', async()=>{
+    const {spatialRequestParameters}=await import('../../utils/frontendParameters');
+    const {EngineRegistry}=await import('../EngineRegistry');
+    const bodies:Record<string,unknown>[]=[];
+    globalThis.fetch=vi.fn(async (_url,init)=>{bodies.push(JSON.parse(String(init?.body)));return new Response(JSON.stringify({videoUrl:'https://example.test/out.mp4'}));});
+    const params=spatialRequestParameters({id:'f',title:'video',pos:{x:0,y:0},width:400,height:400,prompt:'orbit',negativePrompt:'',status:'idle',createdAt:0,referenceImageUrl:'https://example.test/ref.png',imageUrl:'https://example.test/old.png',params:{targetProvider:'video',videoProvider:'fal',checkpoint:'fal-ai/wan/v2.7/image-to-video',width:1024,height:1024,batchSize:1,denoise:0,seed:0,seedControl:'fixed',loras:[],resolution:'720p',customParameters:'{"enable_prompt_expansion":false}'}});
+    await EngineRegistry.generate('video',params,{});
+    expect(bodies[0]).toMatchObject({provider:'fal',image_url:'https://example.test/ref.png',seed:0,resolution:'720p',custom_parameters:{enable_prompt_expansion:false}});
+    expect(bodies[0]).not.toHaveProperty('aspect_ratio');expect(bodies[0]).not.toHaveProperty('duration');
+  });
   const driver = new VideoDriver();
   const originalFetch = globalThis.fetch;
 
@@ -14,7 +40,28 @@ describe('VideoDriver (F3/F4) 参数转发与错误处理', () => {
     globalThis.fetch = originalFetch;
   });
 
-  it('F3: 完整转发 fps, negative_prompt, steps, cfg, loras 到 /api/video/generate', async () => {
+  it('Kling V3 图生视频发送本站 image_url 契约，并拒绝文生视频端点带图', async () => {
+  const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ videoUrl: 'https://cdn.fal.media/out.mp4', model: 'fal-ai/kling-video/v3/standard/image-to-video' }), { status: 200 }));
+  globalThis.fetch = fetchMock;
+  await new VideoDriver().generate({
+    prompt: 'orbit',
+    model: 'fal-ai/kling-video/v3/standard/image-to-video',
+    targetProvider: 'fal',
+    image_url: 'https://example.com/start.png',
+    videoDuration: 5,
+  }, { falKey: 'k' });
+  const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+  expect(body.image_url).toBe('https://example.com/start.png');
+  expect(body).not.toHaveProperty('start_image_url');
+  await expect(new VideoDriver().generate({
+    prompt: 'orbit',
+    model: 'fal-ai/kling-video/v3/standard/text-to-video',
+    targetProvider: 'fal',
+    image_url: 'https://example.com/start.png',
+  }, {})).rejects.toThrow('这个端点不支持参考图');
+});
+
+it('F3: 完整转发 fps, negative_prompt, steps, cfg, loras 到 /api/video/generate', async () => {
     let interceptedBody: any = null;
     const fetchMock = vi.fn().mockImplementation(async (_url: string, init: any) => {
       interceptedBody = JSON.parse(init.body);
@@ -124,7 +171,7 @@ describe('VideoDriver (F3/F4) 参数转发与错误处理', () => {
     };
 
     await expect(driver.generate(params, { falKey: 'test-key' })).rejects.toThrow(
-      /该服务商不支持: loras/
+      /该服务商不支持: loras[\s\S]*HTTP 400/
     );
   });
 });

@@ -63,7 +63,10 @@ export default {
           ownerId = settings['__sites_owner_user_id'];
         }
         if (ownerId !== userId) return Response.json({error: '仅网站所有者可以访问此工作室'}, {status: 403});
-        if (url.pathname.startsWith('/api/media/')) return store.media(url.pathname.slice('/api/media/'.length));
+        if (request.method === 'GET' && url.pathname.startsWith('/api/media/')) {
+          const raw = url.pathname.startsWith('/api/media/raw/');
+          return await store.media(url.pathname.slice(raw ? '/api/media/raw/'.length : '/api/media/'.length),request.headers.get('range') || undefined,raw);
+        }
         const origin = request.headers.get('origin');
         if (origin && origin !== url.origin) return Response.json({error: '跨站请求被拒绝'}, {status: 403});
         const site = request.headers.get('sec-fetch-site');

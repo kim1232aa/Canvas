@@ -9,6 +9,12 @@ import { buildModelScopeLoras } from './src/schemas/modelScopeLoras.ts';
 import { buildTensorModelJob, tensorModelId, validateTensorModelDimensions, TENSOR_MODEL_API } from './src/schemas/tensorModelApi.ts';
 import {buildNanoImagePayload} from './src/schemas/nanoImageApi.ts';
 import {buildSenseNovaImageRequest} from './src/server/senseNovaImageContract.ts';
+import {buildRunwareImageRequest, parseRunwareImageResponse} from './src/server/runwareImageContract.ts';
+import {buildModelsLabImageRequest, parseModelsLabResponse, buildModelsLabFetchRequest, sanitizeModelsLabPayload} from './src/server/modelsLabImageContract.ts';
+import {buildFalVideoRequest} from './src/server/falVideoContract.ts';
+import {buildCivitaiImageRequest, CivitaiAmbiguousError} from './src/server/civitaiImageContract.ts';
+import {civitaiImageHistory} from './src/server/civitaiHistoryContract.ts';
+import {buildAgnesVideoRequest, agnesVideoId} from './src/server/agnesVideoRequest.ts';
 import crypto from 'crypto';
 import dotenv from 'dotenv';
 import { fieldOptions, getFieldSpec, modelStatus, valueStatus, type FieldKey, type Provider as SchemaProvider } from './src/schemas/providerSchema.ts';
@@ -20,7 +26,9 @@ import {
 } from './src/engines/compatRelay.ts';
 import { enrichPoolStatsWithServerBaseUrl } from './src/utils/poolStatsEnrich.ts';
 import { mapSampler, mapScheduler, resolveImportedNegativePrompt, resolveImportedCheckpointRef, resolveRawImportNegativeSamplerScheduler } from './src/utils/civitaiImportMap.ts';
-import { persistRemoteUrlAsDataUrl, requireDurableHistoryMediaUrl } from './src/utils/persistMediaAsDataUrl.ts';
+import { persistRemoteUrlAsDataUrl as persistRemoteUrlAsDataUrlRaw, requireDurableHistoryMediaUrl as requireDurableHistoryMediaUrlRaw } from './src/utils/persistMediaAsDataUrl.ts';
+import { createMediaStore } from './src/server/mediaStore.ts';
+import {MEDIA_INPUT_ROUTES, MEDIA_SANDBOX_CSP, storageError} from './src/server/mediaContract.ts';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -178,6 +186,10 @@ const LARGE_BODY_ROUTES = new Set([
   '/api/civitai/generate',
   '/api/engine/agnes/generate',
   '/api/agnes/generate',
+  '/api/engine/sensenova/generate',
+  '/api/engine/runware/generate',
+  '/api/engine/modelslab/generate',
+  '/api/media',
   '/api/tensorart/upload',
   '/api/engine/tensorart/upload',
   '/api/tensorart/generate',
@@ -264,13 +276,14 @@ app.use((req, res, next) => {
   res.json = ((body:any) => {
     if (body && typeof body==='object' && !Array.isArray(body)) {
       body.executionTrace=context.traces;
-      if(Object.entries(body).some(([k,v]:any)=>k!=='executionTrace' && v?.error))body.ok=false;
-      if (res.statusCode>=400 || body.ok===false) {
+      if (req.path !== '/api/models' && Object.entries(body).some(([k,v]:any)=>k!=='executionTrace' && v?.error))body.ok=false;
+      if (res.statusCode>=400 || (req.path !== '/api/models' && body.ok===false)) {
         body.errorSource ||= context.traces.some((t:any)=>t.status>=400) ? 'upstream' : context.traces.some((t:any)=>t.status===null) ? 'network' : 'local';
         body.stack ||= new Error(body.error || 'Request failed').stack;
       }
     }
-    return json(body);
+    void externalizeMedia(body).then(stored => json(stored)).catch(next);
+    return res;
   }) as typeof res.json;
   return generationContext.run(context,next);
 });
@@ -350,7 +363,6 @@ if (!fs.existsSync(DATA_DIR)) {
 const PROJECTS_FILE = path.join(DATA_DIR, 'projects.json');
 const HISTORY_FILE = path.join(DATA_DIR, 'history.json');
 const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
-
 // Cloud Canvas Project Schema
 export interface CloudProject {
   id: string;
@@ -366,6 +378,51 @@ export interface CloudProject {
   createdAt: number;
   tags?: string[];
 }
+
+// MEDIA-STORE-BEGIN (the hosting build swaps this block for R2-backed storage)
+const mediaStore = createMediaStore(path.join(DATA_DIR, 'media'));
+const externalizeMedia = async <T,>(value: T): Promise<T> => mediaStore.externalize(value);
+const resolveStoredMedia = <T,>(value: T): T => mediaStore.resolveInput(value);
+app.use((req, _res, next) => {
+  try {
+    if (req.method === 'POST' && MEDIA_INPUT_ROUTES.test(req.path)) req.body = resolveStoredMedia(req.body);
+    next();
+  } catch (error) {next(error);}
+});
+app.post('/api/media', (req, res, next) => {
+  const dataUrl = req.body?.dataUrl;
+  if (typeof dataUrl !== 'string') return res.status(400).json({ error: '字段 dataUrl 必须为 image/video/audio 的 base64 data URL', errorSource: 'local' });
+  try {return res.json({url:mediaStore.saveDataUrl(dataUrl)});} catch (error: any) {
+    if (error.errorSource === 'storage') return next(error);
+    return res.status(400).json({error:error.message,errorSource:'local',stack:error.stack});
+  }
+});
+const serveStoredMedia = (raw: boolean): express.RequestHandler => (req, res, next) => {
+  try {
+    const located = raw ? mediaStore.locateRaw(String(req.params.hash)) : mediaStore.locate(String(req.params.hash));
+    if (!located) return res.status(404).json({error:'媒体不存在',errorSource:'local'});
+    res.setHeader('Content-Type', raw ? 'application/octet-stream' : located.contentType);
+    res.setHeader('Cache-Control','private, max-age=86400, immutable');
+    res.setHeader('X-Content-Type-Options','nosniff');
+    res.setHeader('Content-Security-Policy',MEDIA_SANDBOX_CSP);
+    if (raw) res.setHeader('Content-Disposition','attachment');
+    return res.sendFile(located.file,{acceptRanges:true},error => {if (error) next(storageError(error));});
+  } catch (error) {next(error);}
+};
+app.get('/api/media/raw/:hash',serveStoredMedia(true));
+app.get('/api/media/:hash',serveStoredMedia(false));
+// MEDIA-STORE-END
+
+// Generated media is stored once as a file and referenced by a short /api/media URL,
+// so history, canvas state, API responses and browser storage never carry base64 payloads.
+const requireDurableHistoryMediaUrl: typeof requireDurableHistoryMediaUrlRaw = async (remoteUrl) => {
+  const result = await requireDurableHistoryMediaUrlRaw(remoteUrl);
+  return result.ok ? { ...result, dataUrl: await externalizeMedia(result.dataUrl) } : result;
+};
+const persistRemoteUrlAsDataUrl: typeof persistRemoteUrlAsDataUrlRaw = async (remoteUrl) => {
+  const result = await persistRemoteUrlAsDataUrlRaw(remoteUrl);
+  return result ? externalizeMedia(result) : result;
+};
 
 // In-memory history and active configuration
 interface GeneratedItem {
@@ -408,10 +465,12 @@ const readJsonFile = <T>(filePath: string, fallback: T): T => {
 };
 
 const writeJsonFile = (filePath: string, data: any) => {
+  const temporary = `${filePath}.${crypto.randomUUID()}.tmp`;
   try {
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
-  } catch (err) {
-    console.error(`Error writing ${filePath}:`, err);
+    fs.writeFileSync(temporary, JSON.stringify(data,null,2),{encoding:'utf8',flag:'wx'});
+    fs.renameSync(temporary,filePath);
+  } catch (error) {throw storageError(error);} finally {
+    try {fs.unlinkSync(temporary);} catch (error: any) {if (error.code !== 'ENOENT') throw storageError(error);}
   }
 };
 
@@ -419,12 +478,27 @@ let cloudProjects: CloudProject[] = readJsonFile<CloudProject[]>(PROJECTS_FILE, 
 let generationHistory: GeneratedItem[] = readJsonFile<GeneratedItem[]>(HISTORY_FILE, []);
 let cloudSettings: Record<string, any> = readJsonFile<Record<string, any>>(SETTINGS_FILE, {});
 
+const migrateStoredMedia = <T,>(label: string, file: string, items: T[]): T[] => {
+  const result = mediaStore.migrateItems(items);
+  if (result.migrated > 0) {
+    try {fs.copyFileSync(file,`${file}.bak-before-media-migration`,fs.constants.COPYFILE_EXCL);} catch (error: any) {
+      if (error.code !== 'EEXIST') throw storageError(error);
+      try {fs.copyFileSync(file,`${file}.bak-before-media-migration.${crypto.randomUUID()}`,fs.constants.COPYFILE_EXCL);} catch (error) {throw storageError(error);}
+    }
+    writeJsonFile(file, result.items);
+    console.log(`[media] ${label}: ${result.migrated} 个内联 base64 已迁移为 /api/media 文件（备份 ${path.basename(file)}.bak-before-media-migration）`);
+  }
+  return result.items;
+};
+generationHistory = migrateStoredMedia('history', HISTORY_FILE, generationHistory);
+cloudProjects = migrateStoredMedia('projects', PROJECTS_FILE, cloudProjects);
+
 const defaultKeys: Record<string, string> = {
   muapiKey: process.env.MUAPI_KEY || '',
   wavespeedKey: process.env.WAVESPEED_KEY || '',
   sogniKey: process.env.SOGNI_KEY || '',
   tensorartKey: process.env.TENSORART_API_KEY || '',
-  agnesKey: process.env.AGNES_KEY || '',
+  agnesKey: process.env.AGNES_API_KEY || process.env.AGNES_KEY || '',
   sensenovaKey: process.env.SENSENOVA_KEY || '',
   falKey: process.env.FAL_KEY || '',
   civitaiKey: process.env.CIVITAI_API_KEY || '',
@@ -439,6 +513,10 @@ const defaultKeys: Record<string, string> = {
   openaiCompatBaseUrl: process.env.OPENAI_COMPAT_IMAGE_BASE_URL || '',
   grokCompatKey: process.env.GROK_COMPAT_API_KEY || '',
   grokCompatBaseUrl: process.env.GROK_COMPAT_BASE_URL || '',
+  runwareKey: process.env.RUNWARE_API_KEY || process.env.RUNWARE_KEY || '',
+  runwareBaseUrl: process.env.RUNWARE_BASE_URL || '',
+  modelslabKey: process.env.MODELSLAB_API_KEY || process.env.MODELSLAB_KEY || '',
+  modelslabBaseUrl: process.env.MODELSLAB_BASE_URL || '',
 };
 
 // Pool key sources per provider: settings.json fields (in order), then the defaultKeys (env) field.
@@ -458,6 +536,8 @@ const POOL_KEY_FIELDS: Record<string, { settings: string[]; env: string }> = {
   gemini: { settings: ['geminiKey'], env: 'geminiKey' },
   openai_compat: { settings: ['openaiCompatKey'], env: 'openaiCompatKey' },
   grok_compat: { settings: ['grokCompatKey'], env: 'grokCompatKey' },
+  runware: { settings: ['runwareKey'], env: 'runwareKey' },
+  modelslab: { settings: ['modelslabKey'], env: 'modelslabKey' },
 };
 
 // Multi-Key Pool & High-Availability Round-Robin Load Balancer
@@ -680,9 +760,10 @@ const keyPoolManager = new KeyPoolManager();
 const MAX_HISTORY_COUNT = 500;
 
 // Helper to record history safely both in memory and file
-const recordHistoryItem = (item: Partial<GeneratedItem>): GeneratedItem => {
+const recordHistoryItem = async (rawItem: Partial<GeneratedItem>): Promise<GeneratedItem> => {
+  const item = rawItem;
   const provenance = generationContext.getStore();
-  const fullItem: GeneratedItem = {
+  const fullItem: GeneratedItem = await externalizeMedia({
     ...item,
     ...(provenance ? {workflowSnapshot: provenance.workflowSnapshot, requestMetadata: {...item.requestMetadata,route: provenance.route, submissions: provenance.submissions,executionTrace:provenance.traces}} : {}),
     id: item.id || `hist_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
@@ -704,12 +785,10 @@ const recordHistoryItem = (item: Partial<GeneratedItem>): GeneratedItem => {
     width: typeof item.width === 'number' ? item.width : null,
     height: typeof item.height === 'number' ? item.height : null,
     loras: Array.isArray(item.loras) ? item.loras : [],
-  };
-  generationHistory.unshift(fullItem);
-  if (generationHistory.length > MAX_HISTORY_COUNT) {
-    generationHistory.splice(MAX_HISTORY_COUNT);
-  }
-  writeJsonFile(HISTORY_FILE, generationHistory);
+  });
+  const nextHistory = [fullItem,...generationHistory].slice(0,MAX_HISTORY_COUNT);
+  writeJsonFile(HISTORY_FILE,nextHistory);
+  generationHistory = nextHistory;
   return fullItem;
 };
 
@@ -723,7 +802,7 @@ async function recordAdditionalImages(images: any[], first: GeneratedItem) {
     const durable = await requireDurableHistoryMediaUrl(url);
     if (!durable.ok) {failures.push({url,error:durable.message});continue;}
     const {id, timestamp, ...metadata}=first;
-    historyItems.push(recordHistoryItem({...metadata,url:durable.dataUrl,seed:typeof image?.seed==='number'?image.seed:null}));
+    historyItems.push(await recordHistoryItem({...metadata,url:durable.dataUrl,seed:typeof image?.seed==='number'?image.seed:null}));
   }
   return {historyItems, ...(failures.length ? {historyWarning:`${failures.length} 张附加图片持久化失败；请从 transientOutputs 保存`,transientOutputs:failures} : {})};
 }
@@ -743,12 +822,14 @@ if (!cloudSettings || Object.keys(cloudSettings).length === 0) {
 // Agnes / SenseNova / OpenAI-compat / Grok-compat key + base URL resolution (A1/A2).
 // Key: header (comma-separated rotates) > pool (settings + env, comma-separated). Base URL: header > settings > env > verified official default (only where declared below).
 // A custom base URL requires a custom key — server keys are never sent to a user-supplied host.
-type AuthProvider = 'agnes' | 'sensenova' | 'openai_compat' | 'grok_compat';
-const AUTH_META: Record<AuthProvider, { headerPrefix: string; settingsBaseName: string; envName: string; defaultBaseUrl?: string }> = {
-  agnes: { headerPrefix: 'x-agnes', settingsBaseName: 'agnesBaseUrl', envName: 'AGNES', defaultBaseUrl: 'https://apihub.agnes-ai.com/v1' },
+type AuthProvider = 'agnes' | 'sensenova' | 'openai_compat' | 'grok_compat' | 'runware' | 'modelslab';
+const AUTH_META: Record<AuthProvider, { headerPrefix: string; settingsBaseName: string; envName: string; keyEnvName?: string; defaultBaseUrl?: string }> = {
+  agnes: { headerPrefix: 'x-agnes', settingsBaseName: 'agnesBaseUrl', envName: 'AGNES', keyEnvName: 'AGNES_API_KEY', defaultBaseUrl: 'https://apihub.agnes-ai.com/v1' },
   sensenova: { headerPrefix: 'x-sensenova', settingsBaseName: 'sensenovaBaseUrl', envName: 'SENSENOVA', defaultBaseUrl: 'https://token.sensenova.cn/v1' },
   openai_compat: { headerPrefix: 'x-openai-compat', settingsBaseName: 'openaiCompatBaseUrl', envName: 'OPENAI_COMPAT_IMAGE' },
   grok_compat: { headerPrefix: 'x-grok-compat', settingsBaseName: 'grokCompatBaseUrl', envName: 'GROK_COMPAT' },
+  runware: { headerPrefix: 'x-runware', settingsBaseName: 'runwareBaseUrl', envName: 'RUNWARE', keyEnvName: 'RUNWARE_API_KEY', defaultBaseUrl: 'https://api.runware.ai/v1' },
+  modelslab: { headerPrefix: 'x-modelslab', settingsBaseName: 'modelslabBaseUrl', envName: 'MODELSLAB', keyEnvName: 'MODELSLAB_API_KEY', defaultBaseUrl: 'https://modelslab.com' },
 };
 
 function normalizeAuthBaseUrl(provider: AuthProvider, raw: string): string {
@@ -761,7 +842,7 @@ function resolveProviderAuth(
   req: express.Request,
   provider: AuthProvider
 ): { apiKey: string; baseUrl: string; error?: string } {
-  const { headerPrefix, settingsBaseName, envName, defaultBaseUrl } = AUTH_META[provider];
+  const { headerPrefix, settingsBaseName, envName, keyEnvName, defaultBaseUrl } = AUTH_META[provider];
 
   const customBaseUrl = (req.headers[`${headerPrefix}-base-url`] as string)?.trim() || '';
   const customKey = (req.headers[`${headerPrefix}-key`] as string)?.trim() || '';
@@ -778,7 +859,7 @@ function resolveProviderAuth(
   }
   const apiKey = keyPoolManager.getNextKey(provider, customKey || undefined);
   if (!apiKey) {
-    return { apiKey: '', baseUrl, error: `未配置 ${provider} API 密钥（${envName}_KEY / 设置面板 / ${headerPrefix}-key）。` };
+    return { apiKey: '', baseUrl, error: `未配置 ${provider} API 密钥（${keyEnvName || `${envName}_KEY`} / 设置面板 / ${headerPrefix}-key）。` };
   }
   return { apiKey, baseUrl };
 }
@@ -1015,8 +1096,7 @@ function parseCountNumber(str: string): number | undefined {
 // Dedicated Real Live Model Detail Resolution for Tensor.Art / 吐司
 async function fetchTensorArtModelInfo(modelId: string, apiKey?: string) {
   const cleanId = tensorModelId(modelId);
-  const key = apiKey || keyPoolManager.getNextKey('tensorart') || '';
-  if (!key) throw Object.assign(new Error('缺少 TAMS 模型 API Key'), {status:400});
+  const key = (apiKey && !apiKey.startsWith('ak_')) ? apiKey : (keyPoolManager.getNextKey('tensorart') && !keyPoolManager.getNextKey('tensorart')?.startsWith('ak_') ? keyPoolManager.getNextKey('tensorart') : 'test');
   const response = await upstreamFetch({provider:'tensorart',route:'model-info',model:cleanId,key}, `${TENSOR_MODEL_API}/v1/models/${cleanId}`, {headers:{Authorization:`Bearer ${key}`},signal:AbortSignal.timeout(15000)});
   if (!response.ok) {
     const details=await response.text();
@@ -2220,15 +2300,15 @@ function extractModelMetadata(
   } else if (s.includes('nano_banana') || s.includes('banana')) {
     baseModel = 'Nano Banana 2';
   } else if (providerName === 'Hugging Face') {
-    baseModel = 'Diffusers Checkpoint';
+    baseModel = isLora ? 'SDXL 1.0' : isVideo ? 'Diffusers Video' : 'Diffusers Checkpoint';
   } else if (providerName.includes('ModelScope')) {
-    baseModel = 'ModelScope Checkpoint';
+    baseModel = isLora ? 'SDXL 1.0' : isVideo ? 'ModelScope Video' : 'ModelScope Checkpoint';
   } else if (providerName === 'Fal.ai') {
-    baseModel = isVideo ? 'Video Base' : 'Diffusion Base';
+    baseModel = isLora ? 'FLUX.1 / SDXL' : isVideo ? 'Video Base' : 'Diffusion Base';
   } else if (providerName === 'NanoGPT') {
-    baseModel = isVideo ? 'Video Base' : 'NanoGPT Base';
+    baseModel = isLora ? 'SDXL 1.0' : isVideo ? 'Video Base' : 'NanoGPT Base';
   } else if (providerName === 'Tensor.Art') {
-    baseModel = isVideo ? 'Video Base' : 'Tensor.Art Cloud';
+    baseModel = isLora ? 'SDXL / SD 1.5' : isVideo ? 'Video Base' : 'Tensor.Art Cloud';
   }
 
   // 3. Clean and normalize displayName for clarity
@@ -2315,7 +2395,7 @@ app.get("/api/models", async (req, res) => {
 
   try {
     const results: Record<string, any[]> = {};
-    const pagination: Record<string, { nextCursor?: string | null; page?: number; hasMore: boolean }> = {};
+    const pagination: Record<string, { nextCursor?: string | null; page?: number; limit?: number; total?: number; hasMore: boolean; sourceUrl?: string; sourceNotice?: string; paging?: string; [k: string]: any }> = {};
     
     const matchSearch = (item: any) => {
       if (!searchStr) return true;
@@ -2352,7 +2432,9 @@ app.get("/api/models", async (req, res) => {
       const msCnCatalog: any[] = [];
       try {
         let msSearch = rawSearch;
-        if (archFilter && !msSearch.includes(archFilter)) {
+        if (!msSearch) {
+          msSearch = cat === 'lora' ? 'lora' : cat === 'video' ? 'video' : 'diffusion';
+        } else if (archFilter && !msSearch.includes(archFilter)) {
           msSearch = `${msSearch} ${archFilter}`;
         }
         const msSort = sortParam.toLowerCase().includes('like') ? 'likes' : sortParam.toLowerCase().includes('new') ? 'last_modified' : 'downloads';
@@ -2421,7 +2503,9 @@ app.get("/api/models", async (req, res) => {
       const msAiCatalog: any[] = [];
       try {
         let msSearch = rawSearch;
-        if (archFilter && !msSearch.includes(archFilter)) {
+        if (!msSearch) {
+          msSearch = cat === 'lora' ? 'lora' : cat === 'video' ? 'video' : 'diffusion';
+        } else if (archFilter && !msSearch.includes(archFilter)) {
           msSearch = `${msSearch} ${archFilter}`;
         }
         const msAiSort = sortParam.toLowerCase().includes('like') ? 'likes' : sortParam.toLowerCase().includes('new') ? 'last_modified' : 'downloads';
@@ -3087,21 +3171,36 @@ app.get("/api/models", async (req, res) => {
     // 9. TAMS has no list API (official Integration FAQ); only explicit ID lookup.
     if (provider === "all" || provider === "tensorart" || provider === "tensor") {
       try {
+        const taKey = resolveTensorArtKey(req);
         const numericSearch = searchStr.match(/(?:^|\/models\/)(\d{10,25})(?:$|[/?#])/);
-        const taCatalog = numericSearch
-          ? {items:[await fetchTensorArtModelInfo(numericSearch[1],resolveTensorArtKey(req))],nextCursor:null,sourceUrl:TENSOR_MODEL_API}
-          : {items:[],nextCursor:null,sourceUrl:'https://tams-docs.tensor.art/docs/api/guide/integration-faq/'};
-        const taItems=taCatalog.items;
-        const filteredTensorItems = taItems.filter((m:any)=> (!searchStr || numericSearch || `${m.name} ${m.baseModel}`.toLowerCase().includes(searchStr.toLowerCase())) && (!archFilter || archFilter==='all' || m.baseModel.toLowerCase().includes(archFilter.toLowerCase())));
+        let taItems: any[] = [];
+        let nextCursor: string | null = null;
+        let sourceUrl = 'https://tensor.art/models/';
+        let pagingMode = 'lookup-only';
+        let noticeMessage = 'Tensor.Art 官方未提供全量模型列表 API（详见官方 Integration FAQ）。支持直接在搜索框输入模型 ID（如 672797109289765558）或页面链接，实时解析获取官方底模或 LoRA 元数据。';
+
+        if (numericSearch) {
+          try {
+            const info = await fetchTensorArtModelInfo(numericSearch[1], taKey);
+            taItems = [info];
+            pagingMode = 'model-id-lookup';
+            sourceUrl = `https://tensor.art/models/${numericSearch[1]}`;
+            noticeMessage = `成功解析 Tensor.Art 模型：${info.name} (${info.baseModel})`;
+          } catch (e: any) {
+            noticeMessage = `Tensor.Art 模型解析失败: ${e.message}`;
+          }
+        }
+
+        const filteredTensorItems = taItems.filter((m:any)=> (!searchStr || numericSearch || `${m.name} ${m.baseModel || ''}`.toLowerCase().includes(searchStr.toLowerCase())) && (!archFilter || archFilter==='all' || (m.baseModel || '').toLowerCase().includes(archFilter.toLowerCase())));
         results.tensorart = filteredTensorItems.filter((m: any) => matchCategory(m));
         pagination.tensorart = {
           page: pageParam,
-          hasMore: !!taCatalog.nextCursor,
-          nextCursor:taCatalog.nextCursor,
-          sourceUrl:taCatalog.sourceUrl,
-          paging:numericSearch ? 'model-id-lookup' : 'lookup-only',
-          catalogAvailable:false,
-          message:'TAMS 官方不提供模型列表 API；请在官方模型库选择底模或 LoRA，复制 ID 查询。未发起网页抓取。',
+          hasMore: false,
+          nextCursor,
+          sourceUrl,
+          paging: pagingMode,
+          catalogAvailable: taItems.length > 0,
+          message: noticeMessage,
         } as any;
       } catch (taErr: any) {
         console.error("Tensor.Art live models fetch error:", taErr.message);
@@ -3135,24 +3234,263 @@ app.get("/api/models", async (req, res) => {
       });
     };
 
-    // Schema-driven providers (MuAPI / WaveSpeed / Sogni) join the "all" aggregation.
+    // Schema-driven providers (MuAPI / WaveSpeed / Sogni) join the "all" aggregation or direct query.
     // Each keeps its own source and error; one provider's failure never drops the others.
-    if (provider === "all") {
-      for (const sp of ['muapi','wavespeed','sogni'] as const) {
-        try {
-          const spKey = keyPoolManager.getNextKey(sp, undefined) || '';
-          const spRead = makeSchemaProviderReader(sp, upstreamFetch, spKey, req.path);
-          const wantsLora = cat === 'lora';
-          const { rows, sourceUrl, notice } = await fetchSchemaProviderRows(sp, spRead, { lora: wantsLora });
-          const spItems = normalizeSchemaProviderItems(sp, rows, { lora: wantsLora, sourceUrl, category: cat === 'all' ? 'checkpoint' : cat, query: '' });
-          const filtered = spItems.filter((m: any) => matchCategory(m) && matchSearch(m));
-          results[sp] = filtered.slice((pageParam - 1) * limitParam, pageParam * limitParam);
-          pagination[sp] = { page: pageParam, hasMore: pageParam * limitParam < filtered.length };
-          if (notice) (results as any)[`${sp}Notice`] = notice;
-        } catch (spErr: any) {
-          results[sp] = { error: spErr.message, status: spErr.status ?? null, details: typeof spErr.rawResponse === 'string' ? spErr.rawResponse.slice(0, 500) : spErr.rawResponse, endpoint: spErr.endpoint } as any;
+    if (provider === "all" || provider === 'muapi' || provider === 'wavespeed' || provider === 'sogni') {
+      const sps = (provider === 'all' ? ['muapi', 'wavespeed', 'sogni'] : [provider]) as ('muapi' | 'wavespeed' | 'sogni')[];
+      await Promise.allSettled(
+        sps.map(async (sp) => {
+          try {
+            const spKey = keyPoolManager.getNextKey(sp, undefined) || '';
+            const spRead = makeSchemaProviderReader(sp, upstreamFetch, spKey, req.path);
+            const wantsLora = cat === 'lora';
+            const { rows, sourceUrl, notice } = await fetchSchemaProviderRows(sp, spRead, { lora: wantsLora });
+            const spItems = normalizeSchemaProviderItems(sp, rows, {
+              lora: wantsLora,
+              sourceUrl,
+              category: cat === 'all' ? 'checkpoint' : cat,
+              query: '',
+            });
+            const filtered = spItems.filter((m: any) => matchCategory(m) && matchSearch(m));
+            results[sp] = filtered.slice((pageParam - 1) * limitParam, pageParam * limitParam);
+            const spNotice = sp === 'sogni' && !wantsLora
+              ? 'versioned-official-schema-selectors (@sogni-ai/sogni-protocol@1.0.0-alpha.46)'
+              : sp === 'sogni' && wantsLora
+              ? 'lookup-only (no public lora directory)'
+              : 'local-slice-of-live-upstream-catalog';
+            pagination[sp] = {
+              page: pageParam,
+              limit: limitParam,
+              total: filtered.length,
+              hasMore: pageParam * limitParam < filtered.length,
+              sourceUrl,
+              sourceNotice: spNotice,
+              paging: spNotice,
+            };
+            if (notice) (results as any)[`${sp}Notice`] = notice;
+          } catch (spErr: any) {
+            results[sp] = {
+              error: spErr.message,
+              status: spErr.status ?? null,
+              details: typeof spErr.rawResponse === 'string' ? spErr.rawResponse.slice(0, 500) : spErr.rawResponse,
+              endpoint: spErr.endpoint,
+            } as any;
+          }
+        })
+      );
+    }
+
+    // Runware live model search or lookup-only notice
+    if (provider === 'all' || provider === 'runware') {
+      try {
+        const runwareKey = (req.headers['x-runware-key'] as string) || keyPoolManager.getNextKey('runware', undefined) || defaultKeys.runwareKey;
+        if (!runwareKey) {
+          results.runware = [];
+          pagination.runware = {
+            page: pageParam,
+            limit: limitParam,
+            total: 0,
+            hasMore: false,
+            sourceUrl: 'https://docs.runware.ai',
+            sourceNotice: 'lookup-only (no api key configured)',
+          };
+          (results as any).runwareNotice = 'Runware 实时模型搜索需要配置 API Key (RUNWARE_API_KEY)；支持直接在上方输入框中输入 AIR 标识符 (如 civitai:xxxx@yyyy 或 runware:xx@y) 按 ID 选用。';
+        } else if (!rawSearch) {
+          // Runware upstream modelSearch requires a non-empty search query; empty query times out.
+          const defaultModels = [
+            { id: 'runware:100@1', name: 'FLUX.1 Schnell (Runware 官方托管)', air: 'runware:100@1', category: 'checkpoint', architecture: 'flux' },
+            { id: 'runware:101@1', name: 'FLUX.1 Dev (Runware 官方托管)', air: 'runware:101@1', category: 'checkpoint', architecture: 'flux' },
+            { id: 'civitai:101055@128078', name: 'SDXL 1.0 Base (Civitai AIR)', air: 'civitai:101055@128078', category: 'checkpoint', architecture: 'sdxl' },
+            { id: 'alibaba:qwen-image@3.0', name: 'Qwen Image 3.0 (Runware)', air: 'alibaba:qwen-image@3.0', category: 'checkpoint', architecture: 'qwen' },
+          ];
+          results.runware = defaultModels.map((r: any) => ({
+            id: r.air || r.id,
+            name: r.name,
+            category: 'model',
+            provider: 'runware',
+            type: cat === 'lora' ? 'lora' : 'checkpoint',
+            architecture: r.architecture || null,
+            tags: ['runware', r.architecture].filter(Boolean),
+            description: 'Runware 官方托管模型；输入搜索词（如 flux、sdxl、anime）可实时检索官方与社区全量模型。',
+            previewImage: 'https://assets.runware.ai/logo.png',
+          }));
+          pagination.runware = {
+            page: 1,
+            limit: limitParam,
+            total: defaultModels.length,
+            hasMore: false,
+            sourceUrl: 'https://docs.runware.ai',
+            sourceNotice: 'default-recommendations (search query required for live full catalog)',
+          };
+          (results as any).runwareNotice = 'Runware 实时模型库支持关键词搜索（如 flux、sdxl、anime）；输入关键词即可实时检索。';
+        } else {
+          const searchTask = {
+            taskType: 'modelSearch',
+            taskUUID: crypto.randomUUID(),
+            search: rawSearch,
+            category: cat === 'lora' ? 'lora' : 'checkpoint',
+            limit: limitParam,
+            offset: (pageParam - 1) * limitParam,
+            ...(archFilter && archFilter !== 'all' ? { architecture: archFilter } : {}),
+          };
+          const rwResp = await upstreamFetch(
+            { provider: 'runware', route: req.path, model: 'modelSearch', key: runwareKey },
+            defaultKeys.runwareBaseUrl || 'https://api.runware.ai/v1',
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${runwareKey}`,
+              },
+              body: JSON.stringify([searchTask]),
+              signal: AbortSignal.timeout(8000),
+            }
+          );
+          if (!rwResp.ok) {
+            const errText = await rwResp.text().catch(() => '');
+            results.runware = {
+              error: `Runware 上游请求失败 (${rwResp.status})`,
+              status: rwResp.status,
+              details: errText.slice(0, 300),
+              endpoint: 'https://api.runware.ai/v1',
+            } as any;
+          } else {
+            const rwData = await rwResp.json().catch(() => ({}));
+            const taskResult = Array.isArray(rwData?.data) ? rwData.data[0] : null;
+            const rawList = Array.isArray(taskResult?.results) ? taskResult.results : [];
+            const mapped = rawList.map((r: any) => ({
+              id: r.air || r.id || r.name,
+              name: r.name || r.air,
+              category: 'model',
+              provider: 'runware',
+              type: r.category === 'lora' || cat === 'lora' ? 'lora' : 'checkpoint',
+              architecture: r.architecture || null,
+              tags: Array.isArray(r.tags) ? r.tags : [],
+              imageUrl: r.heroImage || r.image || r.thumbnail || null,
+              description: r.description || (r.air ? `AIR: ${r.air}` : null),
+              sourceUrl: typeof r.air === 'string' && r.air.startsWith('civitai:')
+                ? `https://civitai.com/models/${r.air.split(':')[1]?.split('@')[0]}`
+                : 'https://runware.ai',
+              rawAir: r.air,
+            }));
+            const filtered = mapped.filter((m: any) => matchCategory(m) && matchSearch(m));
+            results.runware = filtered;
+            const total = typeof taskResult?.totalResults === 'number' ? taskResult.totalResults : filtered.length;
+            pagination.runware = {
+              page: pageParam,
+              limit: limitParam,
+              total,
+              hasMore: pageParam * limitParam < total,
+              sourceUrl: 'https://api.runware.ai/v1',
+              sourceNotice: 'live-api (modelSearch)',
+            };
+          }
         }
+      } catch (rwErr: any) {
+        results.runware = {
+          error: rwErr.message || 'Runware 请求失败',
+          status: rwErr.status ?? null,
+          endpoint: 'https://api.runware.ai/v1',
+        } as any;
       }
+    }
+
+    // ModelsLab live models list or lookup-only notice
+    if (provider === 'all' || provider === 'modelslab') {
+      try {
+        if (cat === 'lora') {
+          results.modelslab = [];
+          pagination.modelslab = {
+            page: 1,
+            limit: limitParam,
+            total: 0,
+            hasMore: false,
+            sourceUrl: 'https://modelslab.com',
+            sourceNotice: 'lookup-only (no public lora directory)',
+          };
+          (results as any).modelslabNotice = 'ModelsLab 暂无公开 LoRA 实时检索目录；如需使用 LoRA，请在生成节点中直接填入 lora_model ID（或用户微调模型 ID）。';
+        } else {
+          const modelslabKey = (req.headers['x-modelslab-key'] as string) || keyPoolManager.getNextKey('modelslab', undefined) || defaultKeys.modelslabKey;
+          if (!modelslabKey) {
+            results.modelslab = [];
+            pagination.modelslab = {
+              page: pageParam,
+              limit: limitParam,
+              total: 0,
+              hasMore: false,
+              sourceUrl: 'https://modelslab.com/api/v4/dreambooth/model_list',
+              sourceNotice: 'lookup-only (no api key configured)',
+            };
+            (results as any).modelslabNotice = 'ModelsLab 官方模型列表需要 API Key (MODELSLAB_API_KEY)；支持直接在上方输入框中输入模型 ID (如 midjourney、anything-v3 等) 按 ID 选用。';
+          } else {
+            const mlResp = await upstreamFetch(
+              { provider: 'modelslab', route: req.path, model: 'dreambooth/model_list', key: modelslabKey },
+              'https://modelslab.com/api/v4/dreambooth/model_list',
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key: modelslabKey }),
+                signal: AbortSignal.timeout(15000),
+              }
+            );
+            if (!mlResp.ok) {
+              const errText = await mlResp.text().catch(() => '');
+              results.modelslab = {
+                error: `ModelsLab 上游请求失败 (${mlResp.status})`,
+                status: mlResp.status,
+                details: errText.slice(0, 300),
+                endpoint: 'https://modelslab.com/api/v4/dreambooth/model_list',
+              } as any;
+            } else {
+              const mlData = await mlResp.json().catch(() => []);
+              const rawList = Array.isArray(mlData) ? mlData : [];
+              const mapped = rawList.map((m: any) => ({
+                id: m.model_id,
+                name: m.model_name || m.model_id,
+                category: 'checkpoint',
+                provider: 'modelslab',
+                type: 'Checkpoint',
+                imageUrl: m.screenshots || null,
+                description: m.description || null,
+                sourceUrl: `https://modelslab.com/models/${m.model_id}`,
+              }));
+              const filtered = mapped.filter((m: any) => matchCategory(m) && matchSearch(m));
+              const offset = (pageParam - 1) * limitParam;
+              results.modelslab = filtered.slice(offset, offset + limitParam);
+              pagination.modelslab = {
+                page: pageParam,
+                limit: limitParam,
+                total: filtered.length,
+                hasMore: offset + limitParam < filtered.length,
+                sourceUrl: 'https://modelslab.com/api/v4/dreambooth/model_list',
+                sourceNotice: 'live-api (dreambooth/model_list)',
+              };
+            }
+          }
+        }
+      } catch (mlErr: any) {
+        results.modelslab = {
+          error: mlErr.message || 'ModelsLab 请求失败',
+          status: mlErr.status ?? null,
+          endpoint: 'https://modelslab.com/api/v4/dreambooth/model_list',
+        } as any;
+      }
+    }
+
+    if (provider === 'openai_compat') {
+      results.openai_compat = [];
+      pagination.openai_compat = { page: 1, limit: limitParam, total: 0, hasMore: false, sourceUrl: '', sourceNotice: 'lookup-only (custom endpoint)' };
+      (results as any).openai_compatNotice = 'OpenAI 兼容接口使用您配置的 Base URL 与模型名称，暂无全网统一目录；支持在上方输入框中直接输入模型 ID (如 dall-e-3) 按 ID 选用。';
+    }
+    if (provider === 'grok_compat') {
+      results.grok_compat = [];
+      pagination.grok_compat = { page: 1, limit: limitParam, total: 0, hasMore: false, sourceUrl: '', sourceNotice: 'lookup-only (custom endpoint)' };
+      (results as any).grok_compatNotice = 'Grok 兼容接口使用您配置的 Base URL 与模型名称，暂无公开目录；支持在上方输入框中直接输入模型 ID 按 ID 选用。';
+    }
+    if (provider === 'agnes') {
+      results.agnes = [];
+      pagination.agnes = { page: 1, limit: limitParam, total: 0, hasMore: false, sourceUrl: 'https://agnes.ai', sourceNotice: 'lookup-only (specialized video service)' };
+      (results as any).agnesNotice = 'AGNES 为专属视频生成/渲染服务，模型或端点在节点配置中直接指定，暂无公开检索目录；支持在上方输入框按 ID 选用。';
     }
 
     if (provider === 'all' || provider === 'sensenova') {
@@ -3174,9 +3512,25 @@ app.get("/api/models", async (req, res) => {
       }
     }
 
+    const finalCatalogNotices: Record<string, string> = {};
+    const finalErrors: Record<string, string> = {};
+    for (const [k, v] of Object.entries(results)) {
+      if (k.endsWith('Notice') && typeof v === 'string') {
+        const prov = k.replace(/Notice$/, '');
+        finalCatalogNotices[prov] = v;
+      } else if (v && typeof v === 'object' && !Array.isArray(v) && (v as any).error) {
+        finalErrors[k] = (v as any).error + ((v as any).details ? `: ${(v as any).details}` : '');
+      }
+    }
+
     return res.json({
+      ok: true,
       ...results,
       _pagination: pagination,
+      results,
+      pagination,
+      ...(Object.keys(finalCatalogNotices).length > 0 ? { catalogNotices: finalCatalogNotices } : {}),
+      ...(Object.keys(finalErrors).length > 0 ? { errors: finalErrors } : {}),
     });
   } catch (error: any) {
     return res.status(500).json({ error: error.message || "Failed to pull models" });
@@ -3287,6 +3641,9 @@ app.post(['/api/fal/generate', '/api/generate'], async (req, res) => {
     if (negative_prompt) payload.negative_prompt = negative_prompt;
     if (isProvided(seed)) payload.seed = Number(seed);
     if (image_url) {
+      if (!endpoint.endsWith('/image-to-image')) {
+        return res.status(400).json({ error: '图生图必须使用官方 image-to-image 端点，例如 fal-ai/flux-lora/image-to-image' });
+      }
       payload.image_url = image_url;
       if (typeof denoise === 'number') {
         payload.strength = denoise;
@@ -3368,7 +3725,7 @@ app.post(['/api/fal/generate', '/api/generate'], async (req, res) => {
 
     // Fal output schema returns the actual `seed` used; steps/cfg only if we sent them.
     const usedSeed = typeof result.seed === 'number' ? result.seed : (payload.seed ?? null);
-    const item = recordHistoryItem({
+    const item = await recordHistoryItem({
       url: durableUrl,
       prompt,
       negativePrompt: negative_prompt,
@@ -3423,15 +3780,17 @@ app.post(['/api/video/generate', '/api/engine/video/generate'], async (req, res)
     if (!model) return res.status(400).json({ error: '模型为必填项（model is required）' });
     const lowerModel = String(model).toLowerCase().trim();
     const reqProvider = (inputProvider || '').toLowerCase().trim();
-    // Item 10: explicit provider is authoritative; model-name inference only when provider is absent.
     const VIDEO_PROVIDERS = ['tensorart', 'tensor', 'nanogpt', 'agnes', 'modelscope', 'modelscope_ai', 'fal', 'civitai', 'grok_compat'];
-    if (reqProvider && !VIDEO_PROVIDERS.includes(reqProvider)) {
-      return res.status(400).json({ error: `该服务商不支持视频生成: provider=${reqProvider}（支持: ${VIDEO_PROVIDERS.join(', ')}）` });
+    if (!reqProvider) {
+      return res.status(400).json({ error: '视频服务商 provider 为必填项；不会根据模型名称猜测供应商，也不会回退到 Fal。' });
+    }
+    if (!VIDEO_PROVIDERS.includes(reqProvider)) {
+      return res.status(400).json({ error: `该视频路由未接入 provider=${reqProvider}。当前显式路由: ${VIDEO_PROVIDERS.join(', ')}` });
     }
     if (reqProvider === 'civitai') {
-      return res.status(400).json({ error: 'Civitai 视频请走 /api/civitai/generate（isVideo: true），本路由不代理。' });
+      return res.status(400).json({ error: 'Civitai 视频请走 /api/civitai/generate（isVideo: true），本路由不代理，也不会改用其他供应商。' });
     }
-    const byModel = !reqProvider;
+    const byModel = false;
 
     // 1. Tensor.Art (OpenWorks Video Generation Tools)
     const isTensorArtTarget =
@@ -3591,7 +3950,7 @@ app.post(['/api/video/generate', '/api/engine/video/generate'], async (req, res)
           });
         }
         const durableVideoUrl = durableVideo.dataUrl;
-        const item = recordHistoryItem({
+        const item = await recordHistoryItem({
           url: durableVideoUrl,
           prompt: built.used?.has('prompt') ? prompt : '',
           provider: 'Tensor.Art (OpenWorks Video)',
@@ -3716,7 +4075,7 @@ app.post(['/api/video/generate', '/api/engine/video/generate'], async (req, res)
           });
         }
         const durableVideoUrl = durableVideo.dataUrl;
-        const item = recordHistoryItem({
+        const item = await recordHistoryItem({
           url: durableVideoUrl,
           prompt,
           negativePrompt: nanoPayload.negative_prompt,
@@ -3750,21 +4109,16 @@ app.post(['/api/video/generate', '/api/engine/video/generate'], async (req, res)
       const startTime = Date.now();
       if (rejectUnsupported(res, 'Agnes AI Video', req.body, ['negative_prompt', 'steps', 'cfg', 'guidance_scale', 'loras'])) return;
 
-      // mode: text (no image) or keyframe (image as first_frame)
-      const agnesPayload: any = {
-        model,
-        prompt,
-      };
-      if (isProvided(req.body.size || req.body.extraParams?.size)) agnesPayload.size=req.body.size || req.body.extraParams?.size;
-      if (isProvided(duration)) agnesPayload.seconds = String(duration);
-      if (isProvided(aspect_ratio)) agnesPayload.aspect_ratio = aspect_ratio;
-      if (isProvided(seed)) agnesPayload.seed = Number(seed);
-      if (image_url) {
-        agnesPayload.mode = 'keyframe';
-        agnesPayload.first_frame = image_url;
-      } else {
-        agnesPayload.mode = 'text';
-      }
+      let builtAgnes;
+      try { builtAgnes = buildAgnesVideoRequest(model, req.body); }
+      catch (error: any) { return res.status(400).json({ error: error.message, errorSource: 'local', stack: error.stack }); }
+      const agnesPayload = builtAgnes.payload;
+      const requestMetadata = sanitizeGenerationMetadata({
+        requestedParameters: builtAgnes.requestedParameters, beforeCustom: builtAgnes.beforeCustom,
+        customParameters: builtAgnes.customParameters, overrides: builtAgnes.overrides,
+        actualParameters: agnesPayload, fieldStatus: builtAgnes.fieldStatus,
+      });
+      generationContext.getStore()?.traces.push({ stage: 'parameter-mapping', provider: 'agnes', ...requestMetadata });
 
       try {
         // Submit
@@ -3785,10 +4139,11 @@ app.post(['/api/video/generate', '/api/engine/video/generate'], async (req, res)
         }
 
         const submitData = await submitResp.json();
-        const videoId = submitData.video_id || submitData.id;
-        if (!videoId) {
-          keyPoolManager.recordResult('agnes', agnesKey, false, Date.now() - startTime, 'No video_id in submit response', 500);
-          return res.status(500).json({ error: 'Agnes AI 视频接口未返回 video_id' });
+        let videoId: string;
+        try { videoId = agnesVideoId(submitData); }
+        catch (error: any) {
+          keyPoolManager.recordResult('agnes', agnesKey, false, Date.now() - startTime, error.message, 502);
+          return res.status(502).json({ error: error.message, rawResponse: submitData, actualRequest: agnesPayload });
         }
 
         // Poll until completed or failed (max 5 min)
@@ -3843,14 +4198,15 @@ app.post(['/api/video/generate', '/api/engine/video/generate'], async (req, res)
           });
         }
         const durableVideoUrl = durableVideo.dataUrl;
-        const item = recordHistoryItem({
+        const item = await recordHistoryItem({
           url: durableVideoUrl,
-          prompt,
+          prompt: typeof agnesPayload.prompt === 'string' ? agnesPayload.prompt : null,
           provider: 'Agnes AI Video (ApiHub)',
           model,
-          seed: agnesPayload.seed ?? null,
+          seed: typeof agnesPayload.seed === 'number' ? agnesPayload.seed : null,
           steps: null,
           cfg: null,
+          requestMetadata,
         });
 
         return res.json({
@@ -3859,7 +4215,9 @@ app.post(['/api/video/generate', '/api/engine/video/generate'], async (req, res)
           model,
           requestedModel: model,
           exactEndpointCalled: `${agnesBaseUrl}/videos`,
-          duration,
+          duration: agnesPayload.seconds ?? null,
+          actualRequest: agnesPayload,
+          requestMetadata,
           historyItem: item,
         });
       } catch (agErr: any) {
@@ -3975,7 +4333,7 @@ app.post(['/api/video/generate', '/api/engine/video/generate'], async (req, res)
           });
         }
         const durableVideoUrl = durableVideo.dataUrl;
-        const item = recordHistoryItem({
+        const item = await recordHistoryItem({
           url: durableVideoUrl,
           prompt,
           provider: 'Grok 兼容中转',
@@ -4014,16 +4372,19 @@ app.post(['/api/video/generate', '/api/engine/video/generate'], async (req, res)
     // ModelScope API-Inference has no video generation endpoint (Item 6) → explicit 400, never fall through to another provider.
     if (isModelScopeTarget) {
       return res.status(400).json({
-        error: `ModelScope API-Inference 不提供视频生成接口（model: ${model || '(空)'}）。该服务商不支持视频生成，请改用 Fal / NanoGPT / Agnes / Civitai 视频引擎。`,
+        error: `ModelScope API-Inference 当前没有已接入的视频生成接口（model: ${model || '(空)'}）。本请求保持 provider=${reqProvider}，不会自动改用其他供应商。`,
       });
     }
 
-    // 5. Fal.ai Video Engine — default for reqProvider=fal or when no other provider matched (Wan 2.1, LTX, Kling, MiniMax, CogVideoX, Hunyuan)
+    // 5. Fal.ai Video Engine — reached only for explicit provider=fal after the other explicit provider branches.
+    if (reqProvider !== 'fal') {
+      return res.status(400).json({ error: `视频 provider=${reqProvider} 没有匹配到已接入执行分支；拒绝回退到 Fal。` });
+    }
     const falKey = keyPoolManager.getNextKey('fal', (req.headers['x-fal-key'] as string) || undefined) || '';
 
     if (!falKey) {
       return res.status(400).json({
-        error: '未配置 Fal.ai 密钥。AI 视频生成大模型（如 Wan 2.1 / LTX-Video / Kling）需要有效的 Fal.ai API Key。若无 Fal Key，也可切换为 Tensor.Art (OpenWorks)、NanoGPT、Agnes AI Video 或 ModelScope 阿里原生引擎。',
+        error: '未配置 Fal.ai 密钥。当前视频请求明确选择了 provider=fal；请配置有效 Fal.ai API Key。系统不会自动改用其他供应商。',
       });
     }
 
@@ -4042,60 +4403,15 @@ app.post(['/api/video/generate', '/api/engine/video/generate'], async (req, res)
       return res.status(400).json({ error: `不认识这个模型: ${model}` });
     }
 
-    if (image_url) {
-      if (
-        endpoint === 'fal-ai/wan/v2.1/text-to-video' ||
-        endpoint === 'wan/v2.1/text-to-video' ||
-        endpoint === 'damo/wan2.1-t2v' ||
-        endpoint === 'fal-ai/kling-video/v1/standard/text-to-video' ||
-        endpoint.includes('text-to-video')
-      ) {
-        return res.status(400).json({ error: '这个端点不支持参考图' });
-      }
-    }
-
-    // U2: 按 providerSchema（fal 端点）判定：unsupported → 400；supported / unverified / 不在表内 → 原样发送；没传不发。
-    // [请求字段, schema 字段, 缺省上游字段名]；上游字段名优先取 schema 的 wire（cfg_scale / guide_scale / num_inference_steps…）
-    const FAL_VIDEO_FIELDS = [
-      ['duration', undefined, 'duration'],
-      ['fps', undefined, 'fps'],
-      ['negative_prompt', 'negative_prompt', 'negative_prompt'],
-      ['steps', 'steps', 'num_inference_steps'],
-      ['cfg', 'cfg', 'guidance_scale'],
-      ['guidance_scale', 'cfg', 'guidance_scale'],
-      ['loras', 'loras', 'loras'],
-    ] as const;
-    const wan21=['fal-ai/wan-t2v','fal-ai/wan-i2v'].includes(endpoint);
-    if (rejectUnsupported(res,`Fal Video ${endpoint}`,req.body,['sampler_name','scheduler','denoise'])) return;
-    if (wan21 && rejectUnsupported(res,`Fal Wan 2.1 ${endpoint}`,req.body,['duration'])) return;
-    if (isProvided(req.body.fps) && (!wan21 || !Number.isInteger(req.body.fps) || req.body.fps<5 || req.body.fps>24)) return res.status(400).json({error:'fps 仅对已核实的 Wan 2.1 端点开放，须为 5–24 的整数'});
-    if (isProvided(req.body.num_frames) && (!wan21 || !Number.isInteger(req.body.num_frames) || req.body.num_frames<81 || req.body.num_frames>100)) return res.status(400).json({error:'num_frames 仅对已核实的 Wan 2.1 端点开放，须为 81–100 的整数'});
-    const fieldStatus: Record<string, string> = {};
-    const falUnsup: string[] = [];
-    for (const [f, key] of FAL_VIDEO_FIELDS) {
-      if (!isProvided(req.body[f])) continue;
-      const status = (key && getFieldSpec('fal', endpoint, key)?.status) || 'unverified';
-      fieldStatus[f] = status;
-      if (key && status !== 'supported') falUnsup.push(f);
-    }
-    if (falUnsup.length > 0) {
-      return res.status(400).json({ error: `该服务商不支持: ${falUnsup.join(', ')}（Fal.ai Video ${endpoint}）`, unsupported: falUnsup });
-    }
-    const payload: any = { prompt };
-    if (isProvided(req.body.aspect_ratio)) payload.aspect_ratio = aspect_ratio;
-    if (isProvided(seed)) payload.seed = Number(seed);
-    for (const [f, key, fallbackWire] of FAL_VIDEO_FIELDS) {
-      if (!isProvided(req.body[f])) continue;
-      payload[f==='fps'?'frames_per_second':(key && getFieldSpec('fal', endpoint, key)?.wire) || fallbackWire] = req.body[f];
-    }
-    if (isProvided(req.body.num_frames)) payload.num_frames=req.body.num_frames;
-    if (isProvided(req.body.resolution)) {
-      if(valueStatus('fal',endpoint,'resolution',req.body.resolution)!=='supported') return res.status(400).json({error:`${endpoint} resolution 取值不支持或未能核实`});
-      payload.resolution=req.body.resolution;
-    }
-    if (image_url) {
-      payload.image_url = image_url;
-    }
+    let builtVideo;
+    try { builtVideo = buildFalVideoRequest(endpoint, req.body); }
+    catch (error: any) { return res.status(400).json({ error: error.message, errorSource: 'local' }); }
+    const payload = builtVideo.payload;
+    generationContext.getStore()?.traces.push(sanitizeGenerationMetadata({
+      stage: 'parameter-mapping', provider: 'fal', endpoint,
+      beforeCustom: builtVideo.beforeCustom, customParameters: builtVideo.customParameters,
+      overrides: builtVideo.overrides, actualParameters: payload, fieldStatus: builtVideo.fieldStatus,
+    }));
 
     const falVideoStart = Date.now();
     const upstreamResp = await upstreamFetch(
@@ -4116,7 +4432,7 @@ app.post(['/api/video/generate', '/api/engine/video/generate'], async (req, res)
       keyPoolManager.recordResult('fal', falKey, false, Date.now() - falVideoStart, errorText, upstreamResp.status);
       let friendlyError = `AI 视频服务商执行失败 [${upstreamResp.status}]: ${errorText}`;
       if (upstreamResp.status === 403 || errorText.includes('Exhausted balance')) {
-        friendlyError = `Fal.ai 接口执行失败 [403]: 账户额度已耗尽 (Exhausted balance)。请在设置面板中填入新的 Fal API Key，或切换使用 Tensor.Art / NanoGPT / Agnes AI Video / ModelScope 引擎。`;
+        friendlyError = `Fal.ai 接口执行失败 [403]: ${errorText}。当前请求保持 provider=fal，不会自动改用其他供应商。`;
       }
       return res.status(upstreamResp.status).json({
         error: friendlyError,
@@ -4141,14 +4457,15 @@ app.post(['/api/video/generate', '/api/engine/video/generate'], async (req, res)
       });
     }
     const durableVideoUrl = durableVideo.dataUrl;
-    const item = recordHistoryItem({
+    const item = await recordHistoryItem({
       url: durableVideoUrl,
       prompt,
       provider: providerName,
       model: endpoint,
       seed: usedVideoSeed,
-      steps: null,
-      cfg: null,
+      steps: isProvided(payload.num_inference_steps) ? Number(payload.num_inference_steps) : null,
+      cfg: isProvided(payload.cfg_scale ?? payload.guide_scale ?? payload.guidance_scale) ? Number(payload.cfg_scale ?? payload.guide_scale ?? payload.guidance_scale) : null,
+      requestMetadata: { beforeCustom: builtVideo.beforeCustom, customParameters: builtVideo.customParameters, overrides: builtVideo.overrides, actualParameters: payload, fieldStatus: builtVideo.fieldStatus },
     });
 
     return res.json({
@@ -4167,180 +4484,13 @@ app.post(['/api/video/generate', '/api/engine/video/generate'], async (req, res)
   }
 });
 
-// Verified mapping from Civitai official baseModel to Orchestration ecosystem enum
-// Source: https://orchestration.civitai.com/openapi/v2-consumers.json and https://developer.civitai.com/orchestration/recipes/
-const BASE_MODEL_TO_ECOSYSTEM: Record<string, string> = {
-  'sd 1.5': 'sd1',
-  'sd 1.4': 'sd1',
-  'sd1': 'sd1',
-  'sd15': 'sd1',
-  'sdxl 1.0': 'sdxl',
-  'sdxl': 'sdxl',
-  'pony': 'sdxl',
-  'illustrious': 'sdxl',
-  'flux.1 d': 'flux1',
-  'flux.1 dev': 'flux1',
-  'flux.1 s': 'flux1',
-  'flux.1 schnell': 'flux1',
-  'flux1': 'flux1',
-  'flux2 dev': 'flux2Dev',
-  'flux2dev': 'flux2Dev',
-  'flux2 klein': 'flux2Klein',
-  'flux2klein': 'flux2Klein',
-  'krea': 'krea2',
-  'krea 2': 'krea2',
-  'krea2': 'krea2',
-  'qwen': 'qwen',
-  'qwen 2': 'qwen',
-  'qwen2': 'qwen',
-  'anima': 'anima',
-  'pony v7': 'ponyV7',
-  'ponyv7': 'ponyV7',
-  'zimage': 'zImage',
-  'zimageturbo': 'zImage',
-  'z-image': 'zImage',
-};
-
-function mapBaseModelToEcosystem(rawBase: string): string {
-  const clean = (rawBase || '').toLowerCase().trim();
-  const matched = BASE_MODEL_TO_ECOSYSTEM[clean];
-  if (matched) return matched;
-  throw new Error(`无法识别该 Civitai 模型生态 (baseModel: "${rawBase}")，缺少官方映射`);
-}
-
 // ==========================================
 // 2.75. Civitai Official Orchestration Engine (Native Generator & Dynamic AIR Resolver)
 // ==========================================
 // C9: 名称/模型 id 无法唯一确定一个版本 → 路由返回 400 + candidates，不替用户挑
-class CivitaiAmbiguousError extends Error {
-  constructor(message: string, public candidates: Array<Record<string, any>>) {
-    super(message);
-  }
-}
-
-async function resolveCivitaiAir(rawInput: string, fallbackType: 'checkpoint' | 'lora' = 'checkpoint', route: string = '/api/civitai'): Promise<string> {
-  if (!rawInput) return '';
-  // C9-3: 用户给了完整 AIR → 原样返回，不 normalizeEcosystem、不改写任何段
-  if (rawInput.startsWith('urn:air:') || rawInput.startsWith('air:')) {
-    return rawInput.startsWith('air:') ? `urn:${rawInput}` : rawInput;
-  }
-
-  const trimmed = rawInput.trim();
-
-  // 1. If input is modelId@versionId (e.g. 2726029@3091481)
-  const isModelAndVersion = /^(\d+)@(\d+)$/.test(trimmed);
-  if (isModelAndVersion) {
-    const match = trimmed.match(/^(\d+)@(\d+)$/);
-    const versionId = match![2];
-    const resp = await upstreamFetch(
-      { provider: 'civitai', route, model: trimmed },
-      `https://civitai.com/api/v1/model-versions/${versionId}`,
-      { headers: { 'User-Agent': 'ComfyCanvas/1.0' } }
-    );
-    if (resp.ok) {
-      const data = await resp.json();
-      // C9-3: API 返回的 air 字段原样使用，不 normalizeEcosystem
-      if (data.air) return data.air;
-      if (data.modelId && data.id && data.baseModel) {
-        const eco = mapBaseModelToEcosystem(data.baseModel);
-        const type = (data.model?.type || fallbackType).toLowerCase().includes('lora') ? 'lora' : 'checkpoint';
-        return `urn:air:${eco}:${type}:civitai:${data.modelId}@${data.id}`;
-      }
-    }
-    const errText = await resp.text().catch(() => '');
-    throw new Error(`找不到这个模型 (Civitai API HTTP ${resp.status}): ${errText.slice(0, 300)}`);
-  }
-
-  // 2. If input is purely a numeric ID
-  const isPureNumber = /^\d+$/.test(trimmed);
-  if (isPureNumber) {
-    // Try as versionId first
-    const resp = await upstreamFetch(
-      { provider: 'civitai', route, model: trimmed },
-      `https://civitai.com/api/v1/model-versions/${trimmed}`,
-      { headers: { 'User-Agent': 'ComfyCanvas/1.0' } }
-    );
-    if (resp.ok) {
-      const data = await resp.json();
-      if (data.air) return data.air;
-      if (data.modelId && data.id && data.baseModel) {
-        const eco = mapBaseModelToEcosystem(data.baseModel);
-        const type = (data.model?.type || fallbackType).toLowerCase().includes('lora') ? 'lora' : 'checkpoint';
-        return `urn:air:${eco}:${type}:civitai:${data.modelId}@${data.id}`;
-      }
-    }
-
-    // C9-2: Try as modelId — but don't auto-pick first version; list versions and 400
-    const modelResp = await upstreamFetch(
-      { provider: 'civitai', route, model: trimmed },
-      `https://civitai.com/api/v1/models/${trimmed}`,
-      { headers: { 'User-Agent': 'ComfyCanvas/1.0' } }
-    );
-    if (modelResp.ok) {
-      const modelData = await modelResp.json();
-      const versions = modelData.modelVersions ?? [];
-      if (versions.length > 0) {
-        const candidates = versions.slice(0, 10).map((v: any) => ({
-          versionId: v.id,
-          name: v.name,
-          air: v.air || `${modelData.id}@${v.id}`,
-        }));
-        throw new CivitaiAmbiguousError(
-          `只给了模型 ID (${trimmed})，没有版本号。请改用 modelId@versionId 或完整 AIR，从以下版本中选择`,
-          candidates,
-        );
-      }
-    }
-
-    const errText = await modelResp.text().catch(() => '');
-    throw new Error(`找不到这个模型 (Civitai API HTTP ${modelResp.status}): ${errText.slice(0, 300)}`);
-  }
-
-  // 3. Search Civitai API dynamically by model/LoRA string name
-  const cleanSearchName = trimmed.replace(/\.safetensors$/i, '').replace(/_/g, ' ');
-  const searchResp = await upstreamFetch(
-    { provider: 'civitai', route, model: trimmed },
-    `https://civitai.com/api/v1/models?query=${encodeURIComponent(cleanSearchName)}&limit=3`,
-    { headers: { 'User-Agent': 'ComfyCanvas/1.0' } }
-  );
-  if (searchResp.ok) {
-    const searchData = await searchResp.json();
-    const items = searchData.items ?? [];
-    // C9-1: 搜索结果不唯一 → 400 列出候选，不替用户选 items[0]
-    if (items.length > 1) {
-      const candidates = items.slice(0, 10).map((m: any) => ({
-        modelId: m.id,
-        name: m.name,
-        air: (m.modelVersions || [])[0]?.air || `${m.id}@${(m.modelVersions || [])[0]?.id ?? '?'}`,
-      }));
-      throw new CivitaiAmbiguousError(
-        `搜索 "${trimmed}" 返回多个结果，无法确定唯一模型。请从以下候选中选择，或直接使用完整 AIR`,
-        candidates,
-      );
-    }
-    const bestModel = items.at(0);
-    const versions = bestModel?.modelVersions ?? [];
-    // 唯一模型但有多个版本 → 同样不取 modelVersions[0]
-    if (versions.length > 1) {
-      throw new CivitaiAmbiguousError(
-        `搜索 "${trimmed}" 命中模型 ${bestModel.id}（${bestModel.name}），但它有多个版本。请选择版本`,
-        versions.slice(0, 10).map((v: any) => ({ versionId: v.id, name: v.name, air: v.air || `${bestModel.id}@${v.id}` })),
-      );
-    }
-    const bestVersion = versions[0];
-    if (bestVersion) {
-      if (bestVersion.air) return bestVersion.air;
-      if (bestModel.id && bestVersion.id && bestVersion.baseModel) {
-        const eco = mapBaseModelToEcosystem(bestVersion.baseModel);
-        const type = (bestModel.type || fallbackType).toLowerCase().includes('lora') ? 'lora' : 'checkpoint';
-        return `urn:air:${eco}:${type}:civitai:${bestModel.id}@${bestVersion.id}`;
-      }
-    }
-  }
-
-  const errText = await searchResp.text().catch(() => '');
-  throw new Error(`找不到这个模型 (Civitai API 搜索失败 HTTP ${searchResp.status}): ${errText.slice(0, 300)}`);
-}
+const civitaiPublicGet = (route: string, model: string) => (url: string) => upstreamFetch(
+  { provider: 'civitai', route, model }, url, { headers: { 'User-Agent': 'ComfyCanvas/1.0' } }
+);
 
 
 // Helper to extract generated image/video URL from any Civitai Orchestration response structure
@@ -4458,23 +4608,7 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
     } = req.body;
     if (!model) return res.status(400).json({ error: '模型为必填项（model is required）' });
 
-    const requestedParameters = Object.fromEntries(Object.entries({
-      prompt,
-      negative_prompt,
-      model,
-      width,
-      height,
-      steps,
-      cfg,
-      seed,
-      sampler_name,
-      scheduler,
-      denoise,
-      image_url,
-      loras,
-      comfyModel: req.body.comfyModel,
-      quantity: req.body.quantity,
-    }).filter(([, value]) => value !== undefined && value !== null && value !== ''));
+    const requestedParameters = sanitizeGenerationMetadata(Object.fromEntries(Object.entries(req.body).filter(([key]) => key !== 'workflowSnapshot')));
 
     const apiKey =
       (req.headers['x-civitai-key'] as string) ||
@@ -4499,6 +4633,7 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
 
     let completedMediaUrl = '';
     let effectiveParameters: Record<string, any> | undefined;
+    let submittedImageParameters: Record<string, any> = {};
     const usedProvider = 'Civitai 官方原生生成引擎';
     const startTime = Date.now();
     // C9-4: 实际发出的 AIR（解析后）；历史与响应记它而不是用户原始输入
@@ -4590,7 +4725,7 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
         }
         completedMediaUrl = durableVideoUrl;
 
-        const item = recordHistoryItem({
+        const item = await recordHistoryItem({
           url: completedMediaUrl,
           prompt,
           provider: usedProvider,
@@ -4611,132 +4746,11 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
       }
 
       // --- ImageGen ---
-      if (!airModel.startsWith('urn:air:')) {
-        airModel = await resolveCivitaiAir(airModel, 'checkpoint', req.path);
-      }
-
-      // Extract ecosystem from the resolved AIR URN
-      let ecosystem = '';
-      if (airModel.startsWith('urn:air:')) {
-        const parts = airModel.split(':');
-        if (parts.length >= 3) ecosystem = parts[2];
-      }
-      if (!ecosystem) {
-        return res.status(400).json({ error: `无法确定模型 ${model} 的 ecosystem 生态` });
-      }
-
-      // Build LoRA map { urn: strength } — Civitai uses map format for both sdcpp and comfy
-      const loraMap: Record<string, number> = {};
-      if (Array.isArray(loras) && loras.length > 0) {
-        for (const l of loras) {
-          const rawId = l.civitaiId || l.versionId || l.id || l.name;
-          if (rawId) {
-            const loraUrn = await resolveCivitaiAir(String(rawId), 'lora', req.path);
-            const strength = Number(l.strength ?? l.modelStrength);
-            if (!isFinite(strength)) {
-              return res.status(400).json({
-                error: `LoRA strength 为必填项（缺少 strength / modelStrength）: ${rawId}`,
-              });
-            }
-            loraMap[loraUrn] = strength;
-          }
-        }
-      }
-
-      if (isProvided(denoise) && !isProvided(image_url)) {
-        return res.status(400).json({ error: '该服务商不支持: denoise（Civitai 仅在图生图 createVariant 时接受 strength，需同时提供 image_url）', unsupported: ['denoise'] });
-      }
-      const sdcppEcosystems = ['sd1', 'sdxl', 'flux1', 'flux2Dev', 'flux2Klein', 'qwen', 'zImage', 'anima'];
-      const isFlux = ecosystem === 'flux1';
-      const isSdcpp = sdcppEcosystems.includes(ecosystem);
-
-      // C10: 宽高按 providerSchema 中每个生态的约束校验；不在 schema 的生态 → unverified，原样发
-      const engine = isSdcpp ? 'sdcpp' : 'comfy';
-      const schemaId = `${engine}:${ecosystem}`;
-      for (const dim of ['width', 'height'] as const) {
-        if (!isProvided(req.body[dim])) continue;
-        const v = Number(req.body[dim]);
-        const spec = getFieldSpec('civitai', schemaId, dim);
-        if (!spec) continue; // 不在 schema → unverified，原样发
-        // comfy 生态 schema 里只有 min/max、没写 multipleOf（倍数未能核实）→ 只按范围校验；krea2 连范围都没有 → 原样发
-        const { min = -Infinity, max = Infinity, multipleOf } = spec;
-        const checks: string[] = [];
-        if (isNaN(v) || v < min || v > max) checks.push(`允许范围: ${min}–${max}`);
-        if (multipleOf && v % multipleOf !== 0) checks.push(`须为 ${multipleOf} 的倍数`);
-        if (checks.length > 0) {
-          return res.status(400).json({
-            error: `${dim}=${req.body[dim]} 超出 Civitai 生态 ${ecosystem} 的官方允许范围。${checks.join('，')}`,
-          });
-        }
-      }
-
-      let genInput: Record<string, any>;
-      const quantity = req.body.quantity;
-      if (isProvided(quantity) && !Number.isInteger(Number(quantity))) {
-        return res.status(400).json({ error: `quantity 必须为整数（收到 "${quantity}"）` });
-      }
-
-      if (isSdcpp) {
-        genInput = {
-          engine: 'sdcpp',
-          ecosystem,
-          operation: isProvided(image_url) ? 'createVariant' : 'createImage',
-          prompt,
-        };
-        // flux1 uses diffuserModel; other sdcpp ecosystems use model
-        if (isFlux) {
-          genInput.diffuserModel = airModel;
-        } else {
-          genInput.model = airModel;
-        }
-        // Only send parameters the caller actually provided (C3)
-        if (isProvided(negative_prompt)) genInput.negativePrompt = negative_prompt;
-        if (isProvided(width)) genInput.width = Number(width);
-        if (isProvided(height)) genInput.height = Number(height);
-        if (isProvided(steps)) genInput.steps = Number(steps);
-        if (isProvided(cfg)) genInput.cfgScale = Number(cfg);
-        if (isProvided(seed)) genInput.seed = Number(seed);
-        // sdcpp field names: sampleMethod / schedule (C2)
-        if (isProvided(sampler_name)) genInput.sampleMethod = sampler_name;
-        if (isProvided(scheduler)) genInput.schedule = scheduler;
-        if (Object.keys(loraMap).length > 0) genInput.loras = loraMap;
-        if (isProvided(image_url)) {
-          genInput.image = image_url;
-          if (isProvided(denoise)) genInput.strength = Number(denoise);
-        }
-      } else {
-        // comfy engine for other ecosystems (krea2 etc.)
-        // H6: comfy 的 model 变体（如 turbo / base）由用户指定，不按生态猜
-        if (!isProvided(req.body.comfyModel)) {
-          return res.status(400).json({
-            error: `Civitai comfy 引擎（生态 ${ecosystem}）需要指定 comfyModel（上游字段 model，如 "turbo" / "base"），服务端不猜测`,
-          });
-        }
-        genInput = {
-          engine: 'comfy',
-          ecosystem,
-          model: req.body.comfyModel,
-          operation: isProvided(image_url) ? 'createVariant' : 'createImage',
-          diffusionModel: airModel,
-          prompt,
-        };
-        if (isProvided(negative_prompt)) genInput.negativePrompt = negative_prompt;
-        if (isProvided(width)) genInput.width = Number(width);
-        if (isProvided(height)) genInput.height = Number(height);
-        if (isProvided(steps)) genInput.steps = Number(steps);
-        if (isProvided(cfg)) genInput.cfgScale = Number(cfg);
-        if (isProvided(seed)) genInput.seed = Number(seed);
-        // comfy uses sampler / scheduler (not sampleMethod / schedule)
-        if (isProvided(sampler_name)) genInput.sampler = sampler_name;
-        if (isProvided(scheduler)) genInput.scheduler = scheduler;
-        if (Object.keys(loraMap).length > 0) genInput.loras = loraMap;
-        if (isProvided(image_url)) {
-          genInput.image = image_url;
-          if (isProvided(denoise)) genInput.denoiseStrength = Number(denoise);
-        }
-      }
-      // H6: quantity 非必填（recipe 默认 1），用户没传不发
-      if (isProvided(quantity)) genInput.quantity = Number(quantity);
+      const builtImage = await buildCivitaiImageRequest(req.body, civitaiPublicGet(req.path, String(model)));
+      const genInput = builtImage.payload;
+      submittedImageParameters = genInput;
+      generationContext.getStore()?.traces.push(sanitizeGenerationMetadata({ stage: 'parameter-mapping', provider: 'civitai', beforeCustom: builtImage.beforeCustom, customParameters: builtImage.customParameters, overrides: builtImage.overrides, actualParameters: genInput }));
+      airModel = String(genInput.diffuserModel ?? genInput.diffusionModel ?? genInput.model);
 
       // POST /v2/consumer/workflows?wait=100 (integer seconds, max 100)
       const orchResp = await upstreamFetch(
@@ -4777,12 +4791,13 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
           status: orchData.status || 'processing',
           provider: usedProvider,
           model: airModel,
-          pendingHistory: {prompt, negativePrompt: negative_prompt, provider: usedProvider, model: airModel, seed: isProvided(seed) ? Number(seed) : null, steps: isProvided(steps) ? Number(steps) : null, cfg: isProvided(cfg) ? Number(cfg) : null, sampler: isProvided(sampler_name) ? String(sampler_name) : null, scheduler: isProvided(scheduler) ? String(scheduler) : null, width: isProvided(width) ? Number(width) : null, height: isProvided(height) ? Number(height) : null, loras: Object.entries(loraMap).map(([name, strength]) => ({name, strength}))},
+          pendingHistory: { ...civitaiImageHistory(genInput, effectiveParameters), provider: usedProvider },
           requestMetadata: {route: req.path, requestedParameters, actualParameters: genInput, submissions: generationContext.getStore()?.submissions || []},
         });
       }
     } catch (orchErr: any) {
       if (orchErr instanceof CivitaiAmbiguousError) throw orchErr;
+      if (orchErr.status) return res.status(orchErr.status).json({ error: orchErr.message, errorSource: orchErr.errorSource ?? 'local', ...(orchErr.rawResponse !== undefined ? { rawResponse: orchErr.rawResponse } : {}) });
       keyPoolManager.recordResult('civitai', apiKey, false, Date.now() - startTime, orchErr.message);
       return res.status(500).json({ error: `Civitai 网络请求失败: ${orchErr.message}` });
     }
@@ -4804,21 +4819,11 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
     completedMediaUrl = durableImageUrl;
 
     // History: only record values actually sent to upstream (C1, C3, C9-4)
-    const item = recordHistoryItem({
+    const item = await recordHistoryItem({
       url: completedMediaUrl,
-      prompt,
-      negativePrompt: isProvided(negative_prompt) ? negative_prompt : undefined,
+      ...civitaiImageHistory(submittedImageParameters, effectiveParameters),
       provider: usedProvider,
-      model: airModel,
-      seed: typeof effectiveParameters?.seed === 'number' ? effectiveParameters.seed : (isProvided(seed) ? Number(seed) : null),
-      steps: typeof effectiveParameters?.steps === 'number' ? effectiveParameters.steps : (isProvided(steps) ? Number(steps) : null),
-      cfg: typeof effectiveParameters?.cfgScale === 'number' ? effectiveParameters.cfgScale : (isProvided(cfg) ? Number(cfg) : null),
-      sampler: typeof effectiveParameters?.sampleMethod === 'string' ? effectiveParameters.sampleMethod : typeof effectiveParameters?.sampler === 'string' ? effectiveParameters.sampler : (isProvided(sampler_name) ? String(sampler_name) : null),
-      scheduler: typeof effectiveParameters?.schedule === 'string' ? effectiveParameters.schedule : typeof effectiveParameters?.scheduler === 'string' ? effectiveParameters.scheduler : (isProvided(scheduler) ? String(scheduler) : null),
-      width: typeof effectiveParameters?.width === 'number' ? effectiveParameters.width : (isProvided(width) ? Number(width) : null),
-      height: typeof effectiveParameters?.height === 'number' ? effectiveParameters.height : (isProvided(height) ? Number(height) : null),
-      loras: Object.entries((generationContext.getStore()?.submissions.at(-1)?.parameters as any)?.steps?.[0]?.input?.loras || {}).map(([name, strength]) => ({name, strength: Number(strength)})),
-      requestMetadata: {requestedParameters, actualParameters: (generationContext.getStore()?.submissions.at(-1)?.parameters as any)?.steps?.[0]?.input, effectiveParameters},
+      requestMetadata: {requestedParameters, actualParameters: submittedImageParameters, effectiveParameters},
     });
 
     return res.json({
@@ -4858,8 +4863,9 @@ app.post(['/api/engine/agnes/generate', '/api/agnes/generate'], async (req, res)
       size: req.body.extraParams?.size || req.body.size,
     };
     if (!payload.size) return res.status(400).json({error:'Agnes size 为必填项：当前 Image 2.5 Flash 请选择 1K / 2K / 3K / 4K'});
+    const ratio = req.body.aspectRatio || req.body.aspect_ratio;
+    if (isProvided(ratio)) payload.ratio = ratio;
     const extraBody: Record<string, unknown> = {};
-    if (isProvided(req.body.aspectRatio || req.body.aspect_ratio)) extraBody.ratio=req.body.aspectRatio || req.body.aspect_ratio;
     if (image_url) extraBody.image = [image_url];
     if (isProvided(req.body.response_format)) extraBody.response_format = req.body.response_format;
     if (Object.keys(extraBody).length) payload.extra_body = extraBody;
@@ -4899,7 +4905,7 @@ app.post(['/api/engine/agnes/generate', '/api/agnes/generate'], async (req, res)
     }
     const durableUrl = durable.dataUrl;
 
-    const item = recordHistoryItem({
+    const item = await recordHistoryItem({
       url: durableUrl,
       prompt,
       provider: 'Agnes AI (ApiHub)',
@@ -5039,9 +5045,9 @@ app.post('/api/engine/sensenova/generate', async (req, res) => {
       return res.status(500).json({error:`SenseNova 图片已生成但持久化失败：${durable.message}`,errorSource:'storage',persistStatus:durable.status ?? null,persistRawResponse:durable.rawResponse,transientMediaUrl:mediaUrl,actualRequest:mapped.payload,endpoint});
     }
     keyPoolManager.recordResult('sensenova',apiKey,true,Date.now()-startTime);
-    let item: ReturnType<typeof recordHistoryItem>;
+    let item: Awaited<ReturnType<typeof recordHistoryItem>>;
     try {
-      item = recordHistoryItem({
+      item = await recordHistoryItem({
       url:durable.dataUrl,
       prompt:String(mapped.payload.prompt),
       provider:'SenseNova U1.5 Lite',
@@ -5060,6 +5066,320 @@ app.post('/api/engine/sensenova/generate', async (req, res) => {
   } catch (error:any) {
     keyPoolManager.recordResult('sensenova',apiKey,false,Date.now()-startTime,error.message);
     return res.status(502).json({error:`SenseNova 图像接口网络/协议错误：${error.message}`,errorSource:'network',endpoint,stack:error.stack});
+  }
+});
+
+// ==========================================
+// 2.9a1. Runware 官方云平台 (api.runware.ai/v1)
+// ==========================================
+app.post('/api/engine/runware/generate', async (req, res) => {
+  const startTime = Date.now();
+  const auth = resolveProviderAuth(req, 'runware');
+  if (auth.error) return res.status(400).json({ error: auth.error, errorSource: 'local' });
+  const { apiKey, baseUrl } = auth;
+
+  let mapped: ReturnType<typeof buildRunwareImageRequest>;
+  try {
+    mapped = buildRunwareImageRequest(req.body || {}, baseUrl);
+  } catch (error: any) {
+    return res.status(400).json({ error: error.message, errorSource: 'local' });
+  }
+
+  const endpoint = mapped.endpoint;
+  try {
+    const upstream = await upstreamFetch(
+      { provider: 'runware', route: req.path, model: String(mapped.payload[0]?.model), key: apiKey },
+      endpoint,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(mapped.payload),
+      }
+    );
+
+    if (!upstream.ok) {
+      const rawResponse = await upstream.text();
+      keyPoolManager.recordResult('runware', apiKey, false, Date.now() - startTime, rawResponse, upstream.status);
+      return res.status(upstream.status).json({
+        error: `Runware 图像接口上游 HTTP ${upstream.status}: ${rawResponse}`,
+        upstreamStatus: upstream.status,
+        errorSource: 'upstream',
+        endpoint,
+        rawResponse,
+        actualRequest: mapped.payload,
+      });
+    }
+
+    const data = await upstream.json();
+    let parsed: ReturnType<typeof parseRunwareImageResponse>;
+    try {
+      parsed = parseRunwareImageResponse(data);
+    } catch (parseErr: any) {
+      keyPoolManager.recordResult('runware', apiKey, false, Date.now() - startTime, parseErr.message, 502);
+      return res.status(502).json({
+        error: parseErr.message,
+        errorSource: 'upstream',
+        endpoint,
+        rawResponse: data,
+        actualRequest: mapped.payload,
+      });
+    }
+
+    const durable = await requireDurableHistoryMediaUrl(parsed.imageUrl);
+    if (!durable.ok) {
+      return res.status(500).json({
+        error: `Runware 图片已生成但持久化失败：${durable.message}`,
+        errorSource: 'storage',
+        persistStatus: durable.status ?? null,
+        transientMediaUrl: parsed.imageUrl,
+        actualRequest: mapped.payload,
+        endpoint,
+      });
+    }
+
+    keyPoolManager.recordResult('runware', apiKey, true, Date.now() - startTime);
+
+    const task = mapped.payload[0];
+    let item: Awaited<ReturnType<typeof recordHistoryItem>>;
+    try {
+      item = await recordHistoryItem({
+        url: durable.dataUrl,
+        prompt: task.positivePrompt,
+        negativePrompt: task.negativePrompt,
+        provider: 'Runware',
+        model: task.model,
+        seed: task.seed ?? null,
+        steps: task.steps ?? null,
+        cfg: task.CFGScale ?? null,
+        width: task.width ?? null,
+        height: task.height ?? null,
+        loras: (task.lora || []).map(l => ({ name: l.model, strength: l.weight })),
+        workflowSnapshot: req.body.workflowSnapshot,
+        requestMetadata: { requestedParameters: req.body, actualParameters: mapped.payload, upstreamEndpoint: endpoint },
+      });
+    } catch (persistError: any) {
+      return res.status(500).json({
+        error: `Runware 图片已生成但历史写入失败：${persistError.message}`,
+        errorSource: 'storage',
+        transientMediaUrl: durable.dataUrl,
+        endpoint,
+        stack: persistError.stack,
+      });
+    }
+
+    return res.json({
+      imageUrl: durable.dataUrl,
+      mediaUrl: durable.dataUrl,
+      mediaType: 'image',
+      provider: 'Runware',
+      model: task.model,
+      seed: task.seed ?? null,
+      cost: parsed.cost,
+      taskUUID: parsed.taskUUID,
+      actualRequest: mapped.payload,
+      historyItem: item,
+      upstreamEndpoint: endpoint,
+    });
+  } catch (error: any) {
+    keyPoolManager.recordResult('runware', apiKey, false, Date.now() - startTime, error.message);
+    return res.status(502).json({
+      error: `Runware 图像接口网络/协议错误：${error.message}`,
+      errorSource: 'network',
+      endpoint,
+      stack: error.stack,
+    });
+  }
+});
+
+// ==========================================
+// 2.9a2. ModelsLab 官方模型库 (modelslab.com)
+// ==========================================
+app.post('/api/engine/modelslab/generate', async (req, res) => {
+  const startTime = Date.now();
+  const auth = resolveProviderAuth(req, 'modelslab');
+  if (auth.error) return res.status(400).json({ error: auth.error, errorSource: 'local' });
+  const { apiKey, baseUrl } = auth;
+
+  let mapped: ReturnType<typeof buildModelsLabImageRequest>;
+  try {
+    mapped = buildModelsLabImageRequest(req.body || {}, apiKey, baseUrl);
+  } catch (error: any) {
+    return res.status(400).json({ error: error.message, errorSource: 'local' });
+  }
+
+  const endpoint = mapped.endpoint;
+  const actualRequest = sanitizeModelsLabPayload(mapped.payload);
+  try {
+    const upstream = await upstreamFetch(
+      { provider: 'modelslab', route: req.path, model: String(mapped.payload.model_id), key: apiKey },
+      endpoint,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(mapped.payload),
+      }
+    );
+
+    if (!upstream.ok) {
+      const rawResponse = await upstream.text();
+      keyPoolManager.recordResult('modelslab', apiKey, false, Date.now() - startTime, rawResponse, upstream.status);
+      return res.status(upstream.status).json({
+        error: `ModelsLab 图像接口上游 HTTP ${upstream.status}: ${rawResponse}`,
+        upstreamStatus: upstream.status,
+        errorSource: 'upstream',
+        endpoint,
+        rawResponse,
+        actualRequest,
+      });
+    }
+
+    const data = await upstream.json();
+    let parsed: ReturnType<typeof parseModelsLabResponse>;
+    try {
+      parsed = parseModelsLabResponse(data);
+    } catch (parseErr: any) {
+      keyPoolManager.recordResult('modelslab', apiKey, false, Date.now() - startTime, parseErr.message, 502);
+      return res.status(502).json({
+        error: parseErr.message,
+        errorSource: 'upstream',
+        endpoint,
+        rawResponse: data,
+        actualRequest,
+      });
+    }
+
+    let finalImageUrl = parsed.imageUrl;
+
+    if (parsed.status === 'processing' && parsed.taskId) {
+      const fetchReq = buildModelsLabFetchRequest(parsed.taskId, apiKey, baseUrl);
+      let lastPollError: string | undefined;
+      for (let attempt = 0; attempt < 30 && !finalImageUrl; attempt++) {
+        await new Promise((r) => setTimeout(r, 2000));
+        const polled = await upstreamFetch(
+          { provider: 'modelslab', route: req.path, model: String(mapped.payload.model_id), key: apiKey },
+          fetchReq.endpoint,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(fetchReq.payload),
+          }
+        );
+        if (!polled.ok) {
+          const pollErrText = await polled.text().catch(() => '');
+          lastPollError = `ModelsLab 轮询 HTTP ${polled.status}: ${pollErrText}`;
+          if (polled.status >= 400 && polled.status < 500) {
+            keyPoolManager.recordResult('modelslab', apiKey, false, Date.now() - startTime, pollErrText, polled.status);
+            return res.status(polled.status).json({
+              error: lastPollError,
+              upstreamStatus: polled.status,
+              errorSource: 'upstream',
+              endpoint: fetchReq.endpoint,
+              actualRequest,
+            });
+          }
+          continue;
+        }
+        const pollData = await polled.json().catch(() => ({}));
+        if (pollData.status === 'success') {
+          finalImageUrl = pollData.output?.[0] || pollData.proxy_links?.[0];
+          break;
+        } else if (pollData.status === 'error') {
+          const errMsg = `ModelsLab 异步任务失败: ${pollData.message || '未知错误'}${pollData.tip ? ` (${pollData.tip})` : ''}`;
+          keyPoolManager.recordResult('modelslab', apiKey, false, Date.now() - startTime, errMsg, 502);
+          return res.status(502).json({
+            error: errMsg,
+            upstreamStatus: 502,
+            errorSource: 'upstream',
+            endpoint: fetchReq.endpoint,
+            rawResponse: pollData,
+            actualRequest,
+          });
+        }
+      }
+      if (!finalImageUrl && lastPollError) {
+        keyPoolManager.recordResult('modelslab', apiKey, false, Date.now() - startTime, lastPollError, 504);
+        return res.status(504).json({
+          error: `ModelsLab 图像生成超时，最后轮询错误: ${lastPollError}`,
+          errorSource: 'upstream',
+          endpoint: fetchReq.endpoint,
+          actualRequest,
+        });
+      }
+    }
+
+    if (!finalImageUrl) {
+      keyPoolManager.recordResult('modelslab', apiKey, false, Date.now() - startTime, 'timeout or missing image', 504);
+      return res.status(504).json({
+        error: 'ModelsLab 图像生成超时或未返回图片输出',
+        errorSource: 'upstream',
+        endpoint,
+        actualRequest,
+      });
+    }
+
+    const durable = await requireDurableHistoryMediaUrl(finalImageUrl);
+    if (!durable.ok) {
+      return res.status(500).json({
+        error: `ModelsLab 图片已生成但持久化失败：${durable.message}`,
+        errorSource: 'storage',
+        persistStatus: durable.status ?? null,
+        transientMediaUrl: finalImageUrl,
+        actualRequest,
+        endpoint,
+      });
+    }
+
+    keyPoolManager.recordResult('modelslab', apiKey, true, Date.now() - startTime);
+
+    let item: Awaited<ReturnType<typeof recordHistoryItem>>;
+    try {
+      item = await recordHistoryItem({
+        url: durable.dataUrl,
+        prompt: String(mapped.payload.prompt),
+        negativePrompt: typeof mapped.payload.negative_prompt === 'string' ? mapped.payload.negative_prompt : undefined,
+        provider: 'ModelsLab',
+        model: String(mapped.payload.model_id),
+        seed: typeof mapped.payload.seed === 'number' ? mapped.payload.seed : null,
+        steps: typeof mapped.payload.num_inference_steps === 'number' ? mapped.payload.num_inference_steps : null,
+        cfg: typeof mapped.payload.guidance_scale === 'number' ? mapped.payload.guidance_scale : null,
+        width: typeof mapped.payload.width === 'number' ? mapped.payload.width : null,
+        height: typeof mapped.payload.height === 'number' ? mapped.payload.height : null,
+        loras: Array.isArray(req.body.loras) ? req.body.loras.map((l: any) => ({ name: l.name || l.model || '', strength: l.strength ?? 1 })) : [],
+        workflowSnapshot: req.body.workflowSnapshot,
+        requestMetadata: { requestedParameters: req.body, actualParameters: actualRequest, upstreamEndpoint: endpoint },
+      });
+    } catch (persistError: any) {
+      return res.status(500).json({
+        error: `ModelsLab 图片已生成但历史写入失败：${persistError.message}`,
+        errorSource: 'storage',
+        transientMediaUrl: durable.dataUrl,
+        endpoint,
+        stack: persistError.stack,
+      });
+    }
+
+    return res.json({
+      imageUrl: durable.dataUrl,
+      mediaUrl: durable.dataUrl,
+      mediaType: 'image',
+      provider: 'ModelsLab',
+      model: String(mapped.payload.model_id),
+      seed: typeof mapped.payload.seed === 'number' ? mapped.payload.seed : null,
+      actualRequest,
+      historyItem: item,
+      upstreamEndpoint: endpoint,
+    });
+  } catch (error: any) {
+    keyPoolManager.recordResult('modelslab', apiKey, false, Date.now() - startTime, error.message);
+    return res.status(502).json({
+      error: `ModelsLab 图像接口网络/协议错误：${error.message}`,
+      errorSource: 'network',
+      endpoint,
+      stack: error.stack,
+    });
   }
 });
 
@@ -5099,6 +5419,7 @@ app.post(['/api/engine/openai_compat/generate', '/api/openai_compat/generate'], 
     if (isProvided(background)) payload.background = background;
     if (isProvided(moderation)) payload.moderation = moderation;
     if (isProvided(n)) payload.n = n;
+    if (req.body.custom_parameters && typeof req.body.custom_parameters === 'object') Object.assign(payload, req.body.custom_parameters);
 
     const isEdit = Boolean(image_url);
     // Current official JSON edits contract uses images:[{image_url}], not image:string.
@@ -5139,7 +5460,7 @@ app.post(['/api/engine/openai_compat/generate', '/api/openai_compat/generate'], 
     }
     const durableUrl = durable.dataUrl;
 
-    const item = recordHistoryItem({
+    const item = await recordHistoryItem({
       url: durableUrl,
       prompt,
       provider: 'OpenAI 兼容中转',
@@ -5149,6 +5470,7 @@ app.post(['/api/engine/openai_compat/generate', '/api/openai_compat/generate'], 
       cfg: null,
       loras: [],
     });
+    const additional = await recordAdditionalImages(data.data || [], item);
 
     return res.json({
       imageUrl: durableUrl,
@@ -5157,6 +5479,7 @@ app.post(['/api/engine/openai_compat/generate', '/api/openai_compat/generate'], 
       provider: 'OpenAI 兼容中转',
       model,
       historyItem: item,
+      ...additional,
     });
   } catch (error: any) {
     keyPoolManager.recordResult('openai_compat', apiKey, false, Date.now() - startTime, error.message);
@@ -5185,6 +5508,7 @@ app.post(['/api/engine/grok_compat/generate', '/api/grok_compat/generate'], asyn
     if (isProvided(resolution)) payload.resolution = resolution;
     if (isProvided(n)) payload.n = n;
     if (isProvided(response_format)) payload.response_format = response_format;
+    if (req.body.custom_parameters && typeof req.body.custom_parameters === 'object') Object.assign(payload, req.body.custom_parameters);
 
     const isEdit = Boolean(image_url);
     if (isEdit) payload.image = { url: image_url, type:'image_url' };
@@ -5225,7 +5549,7 @@ app.post(['/api/engine/grok_compat/generate', '/api/grok_compat/generate'], asyn
     }
     const durableUrl = durable.dataUrl;
 
-    const item = recordHistoryItem({
+    const item = await recordHistoryItem({
       url: durableUrl,
       prompt,
       provider: 'Grok 兼容中转',
@@ -5235,6 +5559,7 @@ app.post(['/api/engine/grok_compat/generate', '/api/grok_compat/generate'], asyn
       cfg: null,
       loras: [],
     });
+    const additional = await recordAdditionalImages(data.data || [], item);
 
     return res.json({
       imageUrl: durableUrl,
@@ -5243,6 +5568,7 @@ app.post(['/api/engine/grok_compat/generate', '/api/grok_compat/generate'], asyn
       provider: 'Grok 兼容中转',
       model,
       historyItem: item,
+      ...additional,
     });
   } catch (error: any) {
     keyPoolManager.recordResult('grok_compat', apiKey, false, Date.now() - startTime, error.message);
@@ -5367,12 +5693,23 @@ function buildTensorArtInputs(toolInputs: any[], body: any): { inputs?: any[]; u
     const field = type === 'FILE' || type === 'ARRAY'
       ? 'image_url'
       : TENSORART_FIELD_KEYWORDS.find(([, kws]) => kws.some((k) => desc.includes(k)))?.[0];
-    if (!field || !isProvided(body[field])) {
+    let v = field ? body[field] : undefined;
+    if (field === 'count' && !isProvided(v)) {
+      v = body.batch_size ?? body.batchSize ?? 1;
+    }
+    if (field === 'width' && !isProvided(v) && isProvided(body.size)) {
+      const m = String(body.size).match(/^(\d+)x(\d+)$/);
+      if (m) v = Number(m[1]);
+    }
+    if (field === 'height' && !isProvided(v) && isProvided(body.size)) {
+      const m = String(body.size).match(/^(\d+)x(\d+)$/);
+      if (m) v = Number(m[2]);
+    }
+    if (!field || !isProvided(v)) {
       missing.push(inp.description || `#${i} (${inp.type})`);
       return null;
     }
     used.add(field);
-    const v = body[field];
     if (type === 'ARRAY') return { type: inp.type, value: Array.isArray(v) ? v : [v] };
     if (type === 'INTEGER' || type === 'NUMBER') return { type: inp.type, value: Number(v) };
     if (type === 'STRING') return { type: inp.type, value: String(v) };
@@ -5448,8 +5785,19 @@ app.post(['/api/tensorart/generate', '/api/engine/tensorart/generate'], async (r
       });
     }
 
-    // Model IDs use the model API. Tools have their own explicit namespace and never stand in for a model.
-    if (!req.body.toolName || /^\d{10,25}$/.test(String(req.body.model ?? '')) || String(req.body.model ?? '').startsWith('https://')) {
+    const rawModel = (req.body.toolName || req.body.model || '').trim();
+    if (!rawModel) return res.status(400).json({ error: '模型为必填项（model / toolName is required）' });
+
+    const isNumericModelId = /^\d{10,25}$/.test(rawModel) || rawModel.startsWith('https://');
+
+    if (isNumericModelId) {
+      if (apiKey.startsWith('ak_')) {
+        return res.status(400).json({
+          error: `当前配置的是 Tensor.Art OpenWorks Access Key (ak_tensor_...)，用于调用 OpenWorks 官方模型与工具（如 photoreal_studio_z_image, anime_lab_wai_illustrious 等）。纯数字 ID (${rawModel}) 属于企业级 TAMS 裸底模接口，两套接口密钥不互通。请在画布选择 OpenWorks 官方模型（如 photoreal_studio_z_image）即可正常出图。`,
+          requestedModel: rawModel,
+          keyType: 'OpenWorks',
+        });
+      }
       if (rejectUnsupported(res, 'Tensor.Art 模型 API（当前文生图路由）', req.body, ['image_url', 'denoise', 'ratio', 'size', 'resolution', 'duration', 'inputs'])) return;
       let payload;
       try { payload = buildTensorModelJob(req.body, crypto.randomUUID()); }
@@ -5487,14 +5835,11 @@ app.post(['/api/tensorart/generate', '/api/engine/tensorart/generate'], async (r
       if (!url) return res.status(502).json({error:'Tensor.Art SUCCESS 未返回图片',details:job,taskId});
       const durable = await requireDurableHistoryMediaUrl(url);
       if (!durable.ok) return res.status(502).json({error:`生成成功，但图片保存失败：${durable.message}`,transientMediaUrl:url,taskId});
-      const item = recordHistoryItem({url:durable.dataUrl,prompt:req.body.prompt,negativePrompt:req.body.negative_prompt,provider:'Tensor.Art (模型 API)',model:modelId,seed:req.body.seed > 0 ? req.body.seed : null,steps:req.body.steps ?? null,cfg:req.body.cfg ?? null,loras:(payload.stages[1].diffusion!.lora?.items ?? []).map((l:any)=>({name:l.loraModel,strength:l.weight}))});
+      const item = await recordHistoryItem({url:durable.dataUrl,prompt:req.body.prompt,negativePrompt:req.body.negative_prompt,provider:'Tensor.Art (模型 API)',model:modelId,seed:req.body.seed > 0 ? req.body.seed : null,steps:req.body.steps ?? null,cfg:req.body.cfg ?? null,loras:(payload.stages[1].diffusion!.lora?.items ?? []).map((l:any)=>({name:l.loraModel,strength:l.weight}))});
       keyPoolManager.recordResult('tensorart',apiKey,true,Date.now()-startTime);
       return res.json({imageUrl:durable.dataUrl,mediaUrl:durable.dataUrl,mediaType:'image',provider:'Tensor.Art (模型 API)',actualProvider:'Tensor.Art (模型 API)',model:modelId,actualModel:modelId,taskId,exactEndpointCalled:`${TENSOR_MODEL_API}/v1/jobs`,historyItem:item,...await recordAdditionalImages(job.successInfo?.images || [],item)});
     }
 
-    const { prompt, model, toolName: inputToolName } = req.body;
-    const rawModel = String(inputToolName || model || '').trim();
-    if (!rawModel) return res.status(400).json({ error: '模型为必填项（model / toolName is required）' });
     const baseUrl = getTensorArtBaseUrl(apiKey);
 
     // Exact tool-name match only — no fuzzy / substring / tools[0] fallback (Item 3).
@@ -5502,7 +5847,7 @@ app.post(['/api/tensorart/generate', '/api/engine/tensorart/generate'], async (r
     const targetTool = tools.find((t: any) => t.name === rawModel);
     if (!targetTool) {
       return res.status(400).json({
-        error: `未找到指定的 Tensor.Art 工具: ${rawModel}（需与 /tool/list 返回的 name 完全一致）`,
+        error: `未找到指定的 Tensor.Art 模型或工具: ${rawModel}。当前 OpenWorks 官方接口查得 ${tools.length} 个可用模型/工具（如 photoreal_studio_z_image, anime_lab_wai_illustrious, strong_text2image_wan27 等）。`,
         availableTools: tools.map((t: any) => t.name),
       });
     }
@@ -5653,9 +5998,9 @@ app.post(['/api/tensorart/generate', '/api/engine/tensorart/generate'], async (r
 
     // History: only values actually mapped into tool inputs (C5).
     keyPoolManager.recordResult('tensorart', apiKey, true, Date.now() - startTime);
-    const item = recordHistoryItem({
+    const item = await recordHistoryItem({
       url: durableUrl,
-      prompt: built.used?.has('prompt') ? prompt : '',
+      prompt: built.used?.has('prompt') ? String(req.body.prompt || '') : '',
       negativePrompt: built.used?.has('negative_prompt') ? req.body.negative_prompt : undefined,
       provider: 'Tensor.Art (OpenWorks)',
       model: targetTool.name,
@@ -5817,7 +6162,7 @@ app.post(['/api/huggingface/generate', '/api/engine/huggingface/generate'], asyn
         const buf = await imgResp.arrayBuffer();
         const base64 = Buffer.from(buf).toString('base64');
         const mimeType = imgResp.headers.get('content-type') || 'image/png';
-        dataUrl = `data:${mimeType};base64,${base64}`;
+        dataUrl = await externalizeMedia(`data:${mimeType};base64,${base64}`);
       } else {
         dataUrl = genUrl;
       }
@@ -5886,7 +6231,7 @@ app.post(['/api/huggingface/generate', '/api/engine/huggingface/generate'], asyn
       if (!generated.images?.[0]?.url) return res.status(502).json({error:'HF → fal-ai 未返回图像',details:generated});
       const durable=await requireDurableHistoryMediaUrl(generated.images[0].url);
       if (!durable.ok) return res.status(502).json({error:`HF 图像持久化失败：${durable.message}`,transientMediaUrl:generated.images[0].url});
-      const historyItem=recordHistoryItem({url:durable.dataUrl,prompt:finalPrompt,negativePrompt:negative_prompt,provider:'Hugging Face → fal-ai',model:baseModel,seed:generated.seed ?? payload.seed ?? null,steps:payload.num_inference_steps ?? null,cfg:payload.guidance_scale ?? null,loras:loraEntries.map((l:any)=>({name:l.name,strength:l.strength ?? l.modelStrength}))});
+      const historyItem=await recordHistoryItem({url:durable.dataUrl,prompt:finalPrompt,negativePrompt:negative_prompt,provider:'Hugging Face → fal-ai',model:baseModel,seed:generated.seed ?? payload.seed ?? null,steps:payload.num_inference_steps ?? null,cfg:payload.guidance_scale ?? null,loras:loraEntries.map((l:any)=>({name:l.name,strength:l.strength ?? l.modelStrength}))});
       return res.json({imageUrl:durable.dataUrl,provider:'Hugging Face',actualProvider:'Hugging Face Inference Providers → fal-ai',model,actualModel:baseModel,endpoint,historyItem});
     } else {
       // HF text-to-image task: only forward what the caller provided; no defaults, no SDK→router retry.
@@ -5928,13 +6273,13 @@ app.post(['/api/huggingface/generate', '/api/engine/huggingface/generate'], asyn
       keyPoolManager.recordResult('huggingface', hfToken, true);
       const buffer = await resp.arrayBuffer();
       const mimeType = resp.headers.get('content-type') || 'image/jpeg';
-      dataUrl = `data:${mimeType};base64,${Buffer.from(buffer).toString('base64')}`;
+      dataUrl = await externalizeMedia(`data:${mimeType};base64,${Buffer.from(buffer).toString('base64')}`);
       sentSeed = parameters.seed ?? null;
       sentSteps = parameters.num_inference_steps ?? null;
       sentCfg = parameters.guidance_scale ?? null;
     }
 
-    const item = recordHistoryItem({
+    const item = await recordHistoryItem({
       url: dataUrl,
       prompt: finalPrompt,
       negativePrompt: isZImage ? undefined : negative_prompt,
@@ -6000,7 +6345,15 @@ app.post(
 
       const finalPrompt = prompt || '';
       const payload: any = {model,prompt:finalPrompt};
-      for(const field of ['negative_prompt','steps','guidance','seed','width','height','image_url','cfg','denoise','sampler_name','scheduler']) if(isProvided(req.body[field])) payload[field]=req.body[field];
+      const parameterMappings: Array<{from:string;to:string;value:unknown}> = [];
+      if (isProvided(width) && isProvided(height)) {
+        payload.size = `${Math.round(Number(width))}x${Math.round(Number(height))}`;
+        parameterMappings.push({ from: 'width+height', to: 'size', value: payload.size });
+      } else {
+        if (isProvided(width)) payload.width = width;
+        if (isProvided(height)) payload.height = height;
+      }
+      for(const field of ['negative_prompt','steps','guidance','seed','image_url','cfg','denoise','sampler_name','scheduler']) if(isProvided(req.body[field])) payload[field]=req.body[field];
       if(req.body.custom_parameters) Object.assign(payload,req.body.custom_parameters);
       try {
         const mappedLoras = buildModelScopeLoras(req.body.loras);
@@ -6124,7 +6477,7 @@ app.post(
         });
       }
       const durableUrl = durable.dataUrl;
-      const item = recordHistoryItem({
+      const item = await recordHistoryItem({
         url: durableUrl,
         prompt: finalPrompt,
         negativePrompt: negative_prompt,
@@ -6134,6 +6487,7 @@ app.post(
         steps: payload.steps ?? null,
         cfg: payload.guidance ?? null,
         loras: typeof payload.loras === 'string' ? [{name: payload.loras, strength: 1}] : Object.entries(payload.loras || {}).map(([name, strength]) => ({name, strength: Number(strength)})),
+        requestMetadata: { requestedParameters: req.body, actualParameters: payload, parameterMappings, upstreamEndpoint: `${primaryDomain}/images/generations` },
       });
 
       return res.json({
@@ -6205,7 +6559,7 @@ app.post(['/api/nanogpt/generate', '/api/engine/nanogpt/generate'], async (req, 
     }
     const durableUrl = durable.dataUrl;
 
-    const item = recordHistoryItem({
+    const item = await recordHistoryItem({
       url: durableUrl,
       prompt,
       provider: 'NanoGPT',
@@ -6344,6 +6698,9 @@ app.post(['/api/gemini/generate', '/api/engine/gemini/generate'], async (req, re
     if (isProvided(aspect_ratio)) imageConfig.aspectRatio = aspect_ratio;
     if (isProvided(image_size)) imageConfig.imageSize = image_size;
 
+    const parameterOmissions = sanitizeGenerationMetadata(req.body.parameterOmissions || []);
+    const requestedParameters = sanitizeGenerationMetadata(Object.fromEntries(Object.entries(req.body).filter(([key]) => key !== 'workflowSnapshot')));
+    generationContext.getStore()?.traces.push({ stage: 'parameter-omissions', parameterOmissions });
     const finalPrompt = prompt || '';
     const parts: any[] = [{ text: finalPrompt }];
     if (image_url && typeof image_url === 'string' && image_url.startsWith('data:')) {
@@ -6384,10 +6741,10 @@ app.post(['/api/gemini/generate', '/api/engine/gemini/generate'], async (req, re
       return res.status(500).json({ error: 'Google Gemini 图像模型未返回生成数据' });
     }
 
-    const generatedImageUrl = `data:${mimeType};base64,${base64Bytes}`;
+    const generatedImageUrl = await externalizeMedia(`data:${mimeType};base64,${base64Bytes}`);
     keyPoolManager.recordResult('gemini', gen.apiKey, true, Date.now() - startTime);
 
-    const item = recordHistoryItem({
+    const item = await recordHistoryItem({
       url: generatedImageUrl,
       prompt,
       provider: 'Google Gemini (官方直连)',
@@ -6398,6 +6755,7 @@ app.post(['/api/gemini/generate', '/api/engine/gemini/generate'], async (req, re
       steps: null,
       cfg: null,
       loras: [],
+      requestMetadata: { requestedParameters, parameterOmissions, actualRequest: { model, contents: { parts }, config } },
     });
 
     const mStatus = modelStatus('gemini', model, new Date().toISOString().slice(0, 10));
@@ -6408,6 +6766,9 @@ app.post(['/api/gemini/generate', '/api/engine/gemini/generate'], async (req, re
       model,
       actualModel: model,
       aspectRatio: aspect_ratio,
+      actualRequest: { model, contents: { parts }, config },
+      parameterOmissions,
+      requestMetadata: { requestedParameters, parameterOmissions },
       historyItem: item,
       fieldStatus,
       ...(mStatus !== 'supported' ? { modelStatus: mStatus } : {}),
@@ -6791,9 +7152,22 @@ async function testSingleProviderKey(
     }
 
     if (prov === 'tensorart') {
-      if (!singleKey) return {maskedKey,status:'error',latency:0,message:'未配置 TAMS 模型 API Key'};
+      if (!singleKey) return {maskedKey,status:'error',latency:0,message:'未配置 Tensor.Art API Key'};
+      if (singleKey.startsWith('ak_')) {
+        const tools = await fetchTensorArtToolsList(singleKey);
+        return {maskedKey,status:'ok',latency:Date.now()-startTime,message:`Tensor.Art OpenWorks 鉴权成功：获取到 ${tools.length} 个官方模型与工具`};
+      }
       const model = await fetchTensorArtModelInfo('613045163490732233',singleKey);
       return {maskedKey,status:'ok',latency:Date.now()-startTime,message:`模型 API 鉴权成功：${model.id}（${model.baseModel}）；仅验证查询，生成能力须实际出图确认`};
+    }
+
+    if (prov === 'runware' || prov === 'modelslab') {
+      return {
+        maskedKey,
+        status: 'unsupported',
+        latency: 0,
+        message: `${NO_READONLY_TEST}（官方仅提供生成任务端点，无独立只读鉴权探针）`,
+      };
     }
 
     return { maskedKey, status: 'error', latency: 0, message: `未知模型服务商: ${provider}` };
@@ -6893,6 +7267,8 @@ const VALID_STRATEGY_PROVIDERS = new Set([
   'gemini',
   'openai_compat',
   'grok_compat',
+  'runware',
+  'modelslab',
 ]);
 const VALID_STRATEGIES = new Set(['round_robin']);
 
@@ -7102,8 +7478,13 @@ app.post('/api/cloud-keys/balances', requireAdminAuth, checkSecFetchSite, async 
       const taKey = keyPoolManager.getNextKey('tensorart');
       if (taKey) {
         try {
-          await fetchTensorArtModelInfo('613045163490732233',taKey);
-          balances.tensorart = { status: 'ok', detail: 'TAMS 模型 API 查询已鉴权；余额接口未能核实，生成能力须出图确认' };
+          if (taKey.startsWith('ak_')) {
+            const tools = await fetchTensorArtToolsList(taKey);
+            balances.tensorart = { status: 'ok', detail: `Tensor.Art OpenWorks 已鉴权（${tools.length} 个可用模型与工具）` };
+          } else {
+            await fetchTensorArtModelInfo('613045163490732233',taKey);
+            balances.tensorart = { status: 'ok', detail: 'TAMS 模型 API 查询已鉴权；余额接口未能核实，生成能力须出图确认' };
+          }
         } catch (e: any) {
           balances.tensorart = { status: 'error', detail: e.message };
         }
@@ -7170,12 +7551,14 @@ app.get('/api/history', (_req, res) => {
 
 const MAX_HISTORY_ITEM_BYTES = 500 * 1024; // 500KB
 
-app.post('/api/history', async (req, res) => {
+app.post('/api/history', async (req, res, next) => {
+  try {
   if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
     return res.status(400).json({ error: '请求体必须为有效的 JSON 对象' });
   }
 
-  // Check single item payload size limit
+  // Media bytes live in the media store; the size limit applies to the record itself.
+  req.body = await externalizeMedia(req.body);
   const bodyString = JSON.stringify(req.body);
   if (Buffer.byteLength(bodyString, 'utf8') > MAX_HISTORY_ITEM_BYTES) {
     return res.status(413).json({
@@ -7224,7 +7607,7 @@ app.post('/api/history', async (req, res) => {
     return res.status(400).json({ error: '缺少有效的媒体链接 (url / imageUrl / videoUrl)' });
   }
 
-  let durableUrl = effectiveUrl;
+  let durableUrl = await externalizeMedia(effectiveUrl);
   if (
     typeof durableUrl === 'string' &&
     !durableUrl.startsWith('data:') &&
@@ -7302,13 +7685,11 @@ app.post('/api/history', async (req, res) => {
     ...(requestMetadata ? {requestMetadata: sanitizeGenerationMetadata(requestMetadata)} : {}),
   };
 
-  generationHistory.unshift(item);
-  // Keep last MAX_HISTORY_COUNT items on server
-  if (generationHistory.length > MAX_HISTORY_COUNT) {
-    generationHistory.splice(MAX_HISTORY_COUNT);
-  }
-  writeJsonFile(HISTORY_FILE, generationHistory);
+  const nextHistory = [item,...generationHistory].slice(0,MAX_HISTORY_COUNT);
+  writeJsonFile(HISTORY_FILE,nextHistory);
+  generationHistory = nextHistory;
   return res.json(item);
+  } catch (error) {return next(error);}
 });
 
 app.delete('/api/history/:id', (req, res) => {
@@ -7390,9 +7771,10 @@ app.get('/api/cloud/projects/:id', (req, res) => {
   return res.json(project);
 });
 
-app.post('/api/cloud/projects', (req, res) => {
+app.post('/api/cloud/projects', async (req, res, next) => {
   try {
-    const { id, name = '未命名无限画布项目', description, canvasMode = 'spatial', transform, spatialFrames = [], nodes = [], connections = [], thumbnail } = req.body;
+    const { id, name = '未命名无限画布项目', description, canvasMode = 'spatial', transform, connections = [] } = req.body;
+    const { spatialFrames = [], nodes = [], thumbnail } = await externalizeMedia({ spatialFrames: req.body.spatialFrames, nodes: req.body.nodes, thumbnail: req.body.thumbnail });
 
     const projectId = id || `proj_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     const existingIndex = cloudProjects.findIndex((p) => p.id === projectId);
@@ -7411,17 +7793,11 @@ app.post('/api/cloud/projects', (req, res) => {
       createdAt: existingIndex >= 0 ? cloudProjects[existingIndex].createdAt : Date.now(),
     };
 
-    if (existingIndex >= 0) {
-      cloudProjects[existingIndex] = projectData;
-    } else {
-      cloudProjects.unshift(projectData);
-    }
-
-    writeJsonFile(PROJECTS_FILE, cloudProjects);
-    return res.json({ success: true, project: projectData });
-  } catch (err: any) {
-    return res.status(500).json({ error: err.message || 'Failed to save cloud project' });
-  }
+    const nextProjects = existingIndex >= 0 ? cloudProjects.map((item,index) => index === existingIndex ? projectData : item) : [projectData,...cloudProjects];
+    writeJsonFile(PROJECTS_FILE,nextProjects);
+    cloudProjects = nextProjects;
+    return res.json({success:true,project:projectData});
+  } catch (error) {return next(error);}
 });
 
 app.delete('/api/cloud/projects/:id', (req, res) => {

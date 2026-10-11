@@ -1,8 +1,83 @@
 # 交接状态更新（用户于 2026-10-04 要求）
 
-完整交接见 [HANDOFF.md](HANDOFF.md)：先列用户铁律，再列 16 个产品板块、主要供应商与其他驱动的验收状态、模型中心/LoRA 中心缺口和后续工单。**当前状态必须看下面 2026-10-06/10-05 前端实测，不再沿用 10-04 的“Civitai/Fal 未测”结论。**
+完整交接见 [HANDOFF.md](HANDOFF.md)：先列用户铁律，再列 16 个产品板块、主要供应商与其他驱动的验收状态、模型中心/LoRA 中心缺口和后续工单。**按下面各日期及路由范围读取验收事实，不再沿用 10-04 的“Civitai/Fal 未测”结论，也不以历史通过替代新修复的真实复验。**
 
-## 2026-10-06 前端验收进展（最新，以此为准）
+**合并范围说明**：保留 origin/main 已有的验收事实与功能说明，以及本地 incoming `72f5372` 的 2026-10-12 接线修复记录。10-10 Runware 的 `PASS_GENERATION` 仅指当时实测路径；10-12 `lora` 字段修复尚未上游复验，余额不足不是生成成功。ModelsLab 的订阅限制仍只记 `PASS_BILLING`，参考图 `/img2img` 修复未完成真实复验。10-09 资产库旧 base64 不自动迁移是当时状态，10-12 新增打开资产库时上传的接线记录，不代表已逐项真实验收。下文 10-06/10-05 的状态及待验项限各自当时范围，后续 SenseNova、Fal、媒体架构进展按 10-10/10-09 记录并列保留，不提升任何验收等级。
+
+## 2026-10-12 接线修复状态：契约已修，真实复验未完成
+
+- Runware 请求字段改为官方 `lora`；Schnell 的 `CFGScale=0` 保留。网页真实提交曾发送旧字段 `loras`，上游先返回余额不足，因此新字段尚未得到上游复验。
+- ModelsLab 有参考图时改走 `/img2img`，发送 `init_image` 与 `strength`。网页曾复现参考图丢失并误走 `text2img`；订阅不足阻断了修复后的真实复验。
+- MuAPI、WaveSpeed、Sogni 的历史保存已 `await`；ModelScope 宽高映射为官方 `size`；Tensor 模型中心不再把 OpenWorks 工具显示为底模。
+- Gemini 2.5 Flash Image 下线日按官方表改为 2027-03-15；OpenAI 兼容尺寸不再限制为四个固定值；Grok 图像比例加入官方值，数量上限改为 10。OpenAI/Grok 多图结果改为逐张保存，并合并自定义 JSON。
+- 打开资产库时，旧的浏览器 base64 素材会上传到 `/api/media`；失败保留原素材并提示。
+- 本地验证：`npx vitest run` 为 75 files / 640 tests PASS；`npx tsc --noEmit` 为 0 error。以上不是全供应商网页生成验收。
+
+## 2026-10-10 当前状态：HF/Sogni/MuAPI 前端实测完成，媒体架构闭环
+
+用户明确要求：重试 Agnes 视频、WebSearch 核对 video resolution、搜索或本站端口验证 SenseNova 2K、完成后优先 HF/Sogni/MuAPI，并更新文档。
+
+- 已先读 CLAUDE 最高规则与 HANDOFF；不提交、不部署、不修改/读取密钥配置，不进行 Git stash/reset。已有工作区改动严格保留。
+- **媒体存储架构安全闭环（APPROVE）**：针对 5 HIGH / 4 MED 安全与契约审查项已全部修复（SVG 沙箱 CSP 隔离、备份排他保护、原子替换写、残缺校验自愈、原始响应 UTF-8 raw 存取、Hosting 异步短路径返回等），经独立审查确认 APPROVE，`node hosting/check-hosting.mjs` 测试通过。
+- **SenseNova UI 与参数合同修复**：
+  1. `src/server/senseNovaImageContract.ts`：watermark 未设置时不向上游发送 `watermark: true` 默认值，严格遵循 `isProvided` 判断；同步更新单元测试断言。
+  2. `NodeItem.tsx` 与 `ParameterInspector.tsx`：澄清 size 占位文案为 `auto / 2048x2048；留空时按画布宽高(如1024x1024)发送，无宽高则 auto`。
+  3. 单元测试（6 tests + 13 UI tests）全绿。
+- **优先三家真实前端验收终态矩阵**：
+  1. **Hugging Face**：`black-forest-labs/FLUX.1-dev` 经 fal-ai 推理路由上游返回 HTTP 402 `no remaining credits`，前端执行记录面板完整展示，记 **`PASS_BILLING`**。Space 路由网络表现为 ECONNRESET，如实记录。详见 `docs/evidence/t7-huggingface-acceptance.md`。
+  2. **Sogni**：`krea-2-turbo` + LoRA `krea2-detail-enhancer` (0.8) 提交上游返回 HTTP 201 Created，轮询终态为 `waiting_for_user`，等待原因 `insufficient_credit`，前端原样透传，记 **`PASS_BILLING`**。详见 `docs/evidence/t7-sogni-acceptance.md`。
+  3. **MuAPI**：`qwen-text-to-image-2512` 提交上游返回 HTTP 402 `INSUFFICIENT_CREDITS`，前端原样展示错误代码、topup_url 与余额端点，记 **`PASS_BILLING`**。详见 `docs/evidence/t7-muapi-acceptance.md`。
+- **新增两家供应商完整集成 (Runware & ModelsLab)**：
+  1. **Runware**：遵循官方 `/v1` 统一任务数组协议实现驱动与服务端路由，上游调用返回 HTTP 200，成功生成真实图像并外部化存储，记 **`PASS_GENERATION`**。详见 `docs/evidence/t7-runware-acceptance.md`。
+  2. **ModelsLab**：遵循官方 `/api/v6/images/text2img` 协议实现驱动、服务端路由与异步轮询机制，上游调用返回订阅限制，透传真实响应，记 **`PASS_BILLING`**。详见 `docs/evidence/t7-modelslab-acceptance.md`。
+- **Agnes 视频**：合同与字段补修完成并 APPROVE，真实请求 wire 正确，上游 503 `video_queue_full`。
+- **Fal.ai**：F1 图生图与 K1 KlingV3 图生视频真实上游 403 `TOP_UP`，记 **`PASS_BILLING`**。
+- **SenseNova**：大图编辑与文生图真实生成 HTTP 200，实际图片与媒体文件已核对，记 **`PASS_GENERATION`**。常量 2K/4K 上游返回 400，保留分歧不隐式改写。
+
+
+## 2026-10-09 媒体存储架构迁移（优先于下文所有“base64 / data URL 历史”描述）
+
+**问题**：生成图以 `data:...;base64` 内联进历史、画布节点、项目和浏览器 localStorage，同一张图存多份；`data/history.json` 达 44MB，出图后 localStorage 写入失败并弹“本机保存未完成”。
+
+**现在**：
+- 服务端媒体存为 `data/media/<sha256>` 文件（内容寻址，旁带 `.json` 记录 Content-Type），对外只给短 URL `/api/media/<sha256>`。Sites 部署沿用其已有 R2 同名路径。实现见 `src/server/mediaStore.ts`（`createMediaStore`）及测试 `mediaStore.test.ts`。
+- `GET /api/media/:hash` 支持 Range、`nosniff`、不可变缓存；非法哈希/不存在返回 404 JSON。`POST /api/media` 接收 `{dataUrl}` 并返回 `{url}`，仅接受 image/video/audio。
+- 生成链路：`requireDurableHistoryMediaUrl`、`persistRemoteUrlAsDataUrl`、HF/Gemini 直拼 base64 处、`recordHistoryItem`、`POST /api/history`、云项目保存都会先外部化；调用上游前，请求体里的 `/api/media/...` 在 `MEDIA_INPUT_ROUTES` 中还原成 data URL（上游读不到本机路径）。API 响应字段名不变（`imageUrl` / `mediaUrl` 仍存在），值变为短 URL。
+- 历史 `requestMetadata.executionTrace[].responseBody` 里的大段 `b64_json` 也外部化，其余字段原样保留。
+- 启动时自动迁移已有 `history.json` / `projects.json`；有改动才写入，并先生成 `*.bak-before-media-migration` 备份。本机实测 `history.json` 44MB→约 97KB，10 条历史、15 处引用，无缺失文件，内联 data URL 为 0。备份文件仍保留，确认无误后由用户决定是否删除。
+- 前端：`saveWorkspaceCache` 写 localStorage 前去掉所有内联媒体（不修改运行态），载入旧缓存时也清理；`写入失败仍会抛出并提示，不吞错`。参考图/素材本地上传改为先 `uploadMedia` 再存短 URL。
+- `hosting/build.mjs` 用 `// MEDIA-STORE-BEGIN/END` 锚点在 Sites 构建里换成直通实现；`hosting/routes.ts` 新增 `POST /api/media`（走 `persistMedia`）。Worker 构建已通过，**Sites 线上未部署、未实测**。
+
+**真实验证（本机，真实 Chrome 154 + Agnes）**：节点 `image_url` 填公网 URL，提示词“保持同一人物与构图，改成水彩画”，点击运行：`/api/engine/agnes/generate` 200，上游请求体 `extra_body.image=[参考图URL]`，历史新增 1 条，`url=/api/media/<hash>`，前端取图 `/api/media/...` 200（约 3MB），浏览器画板缓存 15KB、内联媒体 0、无“本机保存未完成”提示。输出与参考图人物、构图一致并转为水彩风格（对比图 `temp/repair-browser/compare.jpg`）。这只证明该 Agnes 图生图路径和存储链路，不代表其他供应商。
+
+**遗留 / 未验证**：
+- 其他供应商（Civitai、Fal、HF、Gemini、视频）的新存储链路只有代码路径和单元测试，没有逐个真实出图。
+- 视频文件很大时直接落盘并经 `/api/media` 发送；未测大视频。
+- `data/history.json.bak-before-media-migration` 与旧 base64 内容仍在磁盘，未删除。
+- 资产库(`comfycanvas_user_assets_v2`)旧的本机 base64 记录不会被自动迁移，只有新上传走服务端。
+- 本机生产站点上云后，`/api/media` 的访问控制沿用现有鉴权，未单独做权限测试。
+- 全量：lint 通过，`npm test` 62 files / 513 tests 通过，frontend + hosting build 成功，`git diff --check` 通过；既有的三条构建警告未变。
+
+## 2026-10-09 本轮当前状态（优先于下文历史进展）
+
+**`CODE_ONLY / CONTRACT_TESTED`；本轮没有新的 `PASS_GENERATION`。** 用户要求 `sub/gpt-6.1-sol` 分任务修确定连接错误；不宣称其他供应商全量已修。完整当前交接见 [HANDOFF.md](HANDOFF.md) 开头，旧请求、旧 payload false 和此前明确终态均保留各自时间/路由范围。
+
+- Kling Driver→本站 `image_url`，server builder 兼容旧 `start_image_url`、冲突拒绝，最终 wire 才生成 `start_image_url`；Fal 同步 `fal.run` 官方合法，未 queue 不等于接线错。custom video JSON 透传和覆盖可追踪，unknown 不写 unsupported。
+- Civitai resolver + builder 分清 modelId/versionId/type、engine/ecosystem/modelSelector 及 sampler/scheduler 协议；Face Detailer、Detail Tweaker、Krea 用完整 AIR。2758 是 Checkpoint，不是 LoRA；未知旧资源保留原意图待目录重选，不换别模型。ZImage `zimageturbo` AIR 原文与请求 `zImage` 映射分开，LoCon 推理未实测；Gemini 错误 Imagen 默认移除并要求显式选模型。
+- 空间 `frame.imageUrl` 仅展示，`referenceImageUrl` 显式输入；「图生视频」明确点击才把 result 设首帧。Agnes 省略 width/height 的原值由 `extra.omissions` 与 Driver 合并保留。源码上传控件新增不自动解除旧 F1/K1 `BLOCKED_UI`。
+- **代表模板真实 DOM（主 agent 回传）**：Chrome 154 / CDP 9224 新建「接线修复检查-20261009」保留原 board；仅载入 Krea2 显示 explicit comfy/krea2/turbo 与完整 AIR。初测 positive/negative/latent 重叠，修新 preset row y=80/620/1000 后，重新仅载入 Krea2 8 nodes actual DOM overlaps=[]；append Agnes i2i 4 nodes 后 12 nodes actual DOM overlaps=[]。截图 `temp/repair-browser/krea-layout-fixed.png`、`temp/repair-browser/krea-agnes-layout-fixed.png`。**仅为代表模板，31 个实际 DOM 未全验；估算 0 collision/31 抽取成功不是全量布局证据。**
+- 失模型/未核实/缺参考/来源未接通的菜单项实际显示「待配置，不能立即运行」并 disabled；browser performance 只读检索 `generationRequests=[]`。本轮没有生成请求、没有 source 付费，未生成路径仍 unknown。
+- **最终 fresh 回归（主 agent 回传）**：`npm run lint` 退出 0；`npm test` 61 files / 497 tests 全 PASS，无 localStorage stderr；frontend + hosting Worker build 成功；`git diff --check` 退出 0。既有 Vite `__dirname`、dynamic import 无效、>500KB chunk 警告保留；49/383、55/453 只为历史轮次。仍非前端生成验收。
+- **指定 scope 修复/独立复审关闭**：review42 已 close；review53 Agnes/Gemini metadata + strict field types 原 2 MEDIUM 全 close；review54 final 3 HIGH + quantity MEDIUM 全 close；review55 最后 3 must-fix 闭环，定向 24+4 PASS。此前 type44/React43 待修项已由后续修复/复审关闭；旧 review43 scope close，不宣称 hooks ESLint 验证。
+- **本地契约补修**：合法 urn/air/bare canonical AIR、file format 核 metadata 匹配、单版本 modelId shape、多版本不 first、不可解析 AIR reject；入口 metadata verified≠generation ready。SaveImage fail 不清 source、Agnes checkpoint sink/检查器共享 owner、Fal 9:16→720×1280、quantity 3/0 三路径一致；EngineRegistry 根据显式 provider 分派 Civitai video/Agnes advanced；专用 cloud JSON、unknown compatibility 中性、上传键盘、duration/FPS legacy clear、空 video provider 不猜已修。Gemini omissions 合并 history metadata 不进 SDK wire；Agnes advanced mode explicit、/videos media 约束与严格类型先拒绝 false/array/object；URL-like sanitize 不抛 InvalidURL。inspector 原值+差异 patch、branch variation result 优先保留。详见 HANDOFF，不能外推上游效果。
+- **本地运行已更新（主 agent 回传）**：pm2 restart canvas 成功，PID 176587 / restarts 11；fresh health online / uptime 14s / history 8 / executionTrace=[]，主页 HTTP 200。旧 PM2/未 restart 仅为中间状态；未公开 deploy、未 commit/push，不宣称公开站同步。
+- Chrome 154 / CDP 9224 refresh 最新 loaded，代表 12 nodes 保留；此前 actual DOM overlaps=[]，最终刷新没重测 geometry。原 native upload focus @ref 实测 activeElement BUTTON / label「上传本地图片」/ tabIndex 0；仅焦点可达，非上传生成。performance generationRequests=[]，本轮无生成/付费。
+- **真正待验（生成验收 PARTIAL，不裁范围）**：当前前端上游生成/明确余额终态、reference/图生视频整链、历史刷新/复用/云、31 DOM 全验、unknown resource owner 选择、官方矛盾与未知 resolution 上游接受性、Krea/ZImage LoCon 推理及视觉效果。
+- 2026-10-06 Civitai SD1 `4384@128713` + LoRA `82098@87153` / 0.7 的历史 PASS 保持只限该组合；10-09 新修复未生成事实不被旧 PASS 覆盖。官方原文与待验细节见三份 `docs/evidence/t7-{fal,civitai,agnes}-acceptance.md`。
+
+完整历史交接见 [HANDOFF.md](HANDOFF.md)。下面保留 2026-10-06/10-05 的前端实测，不沿用 10-04 的“Civitai/Fal 未测”覆盖它们，也不以这些历史结果替代 10-09 新改动验收。
+
+## 2026-10-06 前端验收进展（历史，限当时实测范围）
 
 按用户验收标准逐家实测：真实前端出图记 `PASS_GENERATION`；真实上游明确额度/余额不足且前端准确展示记 `PASS_BILLING`；真实账户/鉴权阻塞记 `BLOCKED_AUTH`。**已有明确终态的不重复刷调用。2026-10-06 起，新供应商每次必须换不同参考作品的 Prompt / Negative Prompt / LoRA / 权重 / 底模 / Steps / CFG / Sampler 等，并在成功出图后与参考原图做视觉对比。**
 

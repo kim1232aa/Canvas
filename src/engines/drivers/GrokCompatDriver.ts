@@ -94,6 +94,7 @@ export class GrokCompatDriver extends BaseEngineDriver {
     if (extra.resolution || params.imageSize) body.resolution = extra.resolution || params.imageSize;
     if (extra.n != null) body.n = extra.n;
     if (extra.response_format) body.response_format = extra.response_format;
+    if (extra.custom_parameters && typeof extra.custom_parameters === 'object') body.custom_parameters = extra.custom_parameters;
 
     const resp = await fetch('/api/engine/grok_compat/generate', {
       method: 'POST',

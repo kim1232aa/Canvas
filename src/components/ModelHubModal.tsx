@@ -1,4 +1,5 @@
 import {TensorCatalogNotice} from './TensorCatalogNotice';
+import {selectionFromMetadata,verifyCivitaiSelection,type ResourceSelection} from '../utils/resourceSelection';
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Search,
@@ -28,6 +29,7 @@ import {
   Flame,
   RefreshCw,
   ArrowDown,
+  Box,
 } from 'lucide-react';
 import { fetchLiveModels, fetchHuggingFaceModelInfo, fetchTensorArtModelInfo } from '../services/api';
 
@@ -45,7 +47,7 @@ interface ModelHubModalProps {
     triggerWords?: string;
     baseModel?: string;
   }) => void;
-  onAddLoraNode?: (loraName: string, triggerWords?: string, baseModel?: string, resource?: {provider:string;civitaiId?:string}) => void;
+  onAddLoraNode?: (loraName: string, triggerWords?: string, baseModel?: string, resource?: Partial<ResourceSelection> & {provider:string}) => void;
   onSelectLoRAWithBaseModel?: (lora: {
     name: string;
     provider?: string;
@@ -62,7 +64,7 @@ interface ModelHubModalProps {
 }
 
 export type CategoryFilter = 'all' | 'checkpoint' | 'lora' | 'video' | 'edit';
-export type ProviderTab = 'all' | 'civitai' | 'fal' | 'tensorart' | 'modelscope' | 'modelscope_ai' | 'huggingface' | 'nanogpt' | 'gemini' | 'muapi' | 'wavespeed' | 'sogni';
+export type ProviderTab = 'all' | 'civitai' | 'fal' | 'tensorart' | 'modelscope' | 'modelscope_ai' | 'huggingface' | 'nanogpt' | 'gemini' | 'muapi' | 'wavespeed' | 'sogni' | 'runware' | 'modelslab' | 'agnes' | 'sensenova' | 'openai_compat' | 'grok_compat';
 export type ModelSortOption = 'downloads' | 'rating' | 'likes' | 'name_asc' | 'name_desc' | 'bookmarked';
 
 const ARCHITECTURE_TAGS = [
@@ -77,6 +79,54 @@ const ARCHITECTURE_TAGS = [
   { id: 'z-image', label: 'Z-Image' },
   {id:'krea',label:'Krea'}, {id:'chroma',label:'Chroma'}, {id:'hunyuan',label:'Hunyuan'}, {id:'kolors',label:'Kolors'}, {id:'pixart',label:'PixArt'}, {id:'auraflow',label:'AuraFlow'}, {id:'anima',label:'Anima'}, {id:'ernie',label:'ERNIE'}, {id:'hidream',label:'HiDream'},
 ];
+
+interface ArchitectureFields { baseModel?: unknown; id?: unknown; name?: unknown; description?: unknown; tags?: unknown }
+
+function matchesArchitecture(m: ArchitectureFields, arch: string): boolean {
+  if (!arch || arch === 'all') return true;
+  const target = arch.toLowerCase();
+  const baseModel = String(m.baseModel || '').toLowerCase();
+  const id = String(m.id || '').toLowerCase();
+  const name = String(m.name || '').toLowerCase();
+  const desc = String(m.description || '').toLowerCase();
+  const tags = Array.isArray(m.tags) ? m.tags.map((t: unknown) => String(t).toLowerCase()) : [];
+
+  if (target === 'flux') {
+    return baseModel.includes('flux') || id.includes('flux') || name.includes('flux') || tags.some(t => t.includes('flux'));
+  }
+  if (target === 'sdxl') {
+    return baseModel.includes('sdxl') || id.includes('sdxl') || name.includes('sdxl') || tags.some(t => t.includes('sdxl'));
+  }
+  if (target === 'wan') {
+    return baseModel.includes('wan') || id.includes('wan') || name.includes('wan') || tags.some(t => t.includes('wan'));
+  }
+  if (target === 'sd15' || target === 'sd 1.5') {
+    return (
+      baseModel.includes('sd 1.5') ||
+      baseModel.includes('sd1.5') ||
+      baseModel.includes('sd 1') ||
+      id.includes('sd15') ||
+      id.includes('sd-1-5') ||
+      id.includes('sd1.5') ||
+      name.includes('sd 1.5') ||
+      name.includes('sd1.5') ||
+      tags.some(t => t.includes('sd 1.5') || t.includes('sd15'))
+    );
+  }
+  if (target === 'pony') {
+    return baseModel.includes('pony') || id.includes('pony') || name.includes('pony') || tags.some(t => t.includes('pony'));
+  }
+  if (target === 'illustrious') {
+    return baseModel.includes('illustrious') || id.includes('illustrious') || name.includes('illustrious') || tags.some(t => t.includes('illustrious'));
+  }
+  if (target === 'qwen') {
+    return baseModel.includes('qwen') || id.includes('qwen') || name.includes('qwen') || tags.some(t => t.includes('qwen'));
+  }
+  if (target === 'z-image') {
+    return baseModel.includes('z-image') || id.includes('z-image') || name.includes('z-image') || tags.some(t => t.includes('z-image'));
+  }
+  return baseModel.includes(target) || id.includes(target) || name.includes(target) || desc.includes(target) || tags.some(t => t.includes(target));
+}
 
 export const ModelHubModal: React.FC<ModelHubModalProps> = ({
   isOpen,
@@ -111,6 +161,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [modelsData, setModelsData] = useState<Record<string, any[]>>({});
   const [providerErrors, setProviderErrors] = useState<Record<string, string>>({});
+  const [catalogNotices, setCatalogNotices] = useState<Record<string, string>>({});
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [bookmarks, setBookmarks] = useState<Record<string, boolean>>(() => {
     try {
@@ -120,9 +171,35 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
     return {};
   });
 
-  const toggleBookmark = (id: string) => {
+  const isModelBookmarked = (m: any) => {
+    if (!m) return false;
+    const id = String(m.id || m.name || '');
+    const name = String(m.name || m.id || '');
+    const prov = String(m.provider || m._sourceProvider || activeProvider || '').toLowerCase();
+    return Boolean(
+      bookmarks[id] ||
+      bookmarks[name] ||
+      bookmarks[`${prov}:${id}`] ||
+      bookmarks[`${activeProvider}:${id}`]
+    );
+  };
+
+  const toggleBookmark = (m: any) => {
+    const id = typeof m === 'string' ? m : String(m.id || m.name || '');
+    const name = typeof m === 'string' ? m : String(m.name || m.id || '');
+    const prov = typeof m === 'object' ? String(m.provider || m._sourceProvider || activeProvider || '').toLowerCase() : activeProvider;
+    const key = `${prov}:${id}`;
     setBookmarks((prev) => {
-      const next = { ...prev, [id]: !prev[id] };
+      const currentlyBookmarked = Boolean(prev[id] || prev[name] || prev[key]);
+      const next = { ...prev };
+      if (currentlyBookmarked) {
+        delete next[id];
+        delete next[name];
+        delete next[key];
+      } else {
+        next[key] = true;
+        next[id] = true;
+      }
       try {
         localStorage.setItem('comfycanvas_model_bookmarks', JSON.stringify(next));
       } catch (e) {}
@@ -151,6 +228,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
       setError(null);
       setModelsData({});
       setProviderErrors({});
+      setCatalogNotices({});
       setHfCursor(null);
       setCivitaiCursor(null);
       setPage(1);
@@ -162,12 +240,13 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
       const livePage = isLoadMore ? page + 1 : 1;
       const archQuery = arch === 'all' ? '' : arch;
 
+      const backendSort = sort === 'bookmarked' ? 'downloads' : sort;
       const data = await fetchLiveModels(
         prov,
         searchTerm,
         typeParam,
         cat,
-        sort,
+        backendSort,
         liveCursor,
         livePage,
         40,
@@ -199,8 +278,12 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
         if (p?.hasMore === true) anyHasMore = true;
       });
 
-      Object.entries(data).forEach(([key, val]) => {
-        if (key === '_pagination') return;
+      const sourceMap: Record<string, any> = (data as any).results && typeof (data as any).results === 'object' && !Array.isArray((data as any).results)
+        ? { ...data, ...(data as any).results }
+        : data;
+
+      Object.entries(sourceMap).forEach(([key, val]) => {
+        if (key === '_pagination' || key === 'pagination' || key === 'catalogNotices' || key === 'errors' || key === 'results') return;
         if (val && typeof val === 'object' && !Array.isArray(val) && (val as any).error) {
           errors[key] = (val as any).error + ((val as any).details ? `: ${(val as any).details}` : '');
         } else if (Array.isArray(val)) {
@@ -208,6 +291,17 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
           // A full directory page does not establish that another page exists.
         }
       });
+
+      const extractedNotices: Record<string, string> = {};
+      if (data.catalogNotices && typeof data.catalogNotices === 'object') {
+        Object.assign(extractedNotices, data.catalogNotices);
+      }
+      Object.entries(data).forEach(([key, val]) => {
+        if (key.endsWith('Notice') && typeof val === 'string') {
+          extractedNotices[key.replace(/Notice$/, '')] = val;
+        }
+      });
+      setCatalogNotices((prev) => (isLoadMore ? { ...prev, ...extractedNotices } : extractedNotices));
 
       if (isLoadMore) {
         setModelsData((prev) => {
@@ -267,7 +361,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       const targetCat = initialCategory || 'all';
-      const targetProvider = ['civitai','fal','tensorart','modelscope','modelscope_ai','huggingface','nanogpt','gemini','muapi','wavespeed','sogni'].includes(initialProvider || '') ? initialProvider as ProviderTab : activeProvider;
+      const targetProvider = (initialProvider && !['openai_compat', 'grok_compat', 'agnes'].includes(initialProvider) && ['civitai','fal','tensorart','modelscope','modelscope_ai','huggingface','nanogpt','gemini','muapi','wavespeed','sogni','runware','modelslab','sensenova'].includes(initialProvider)) ? initialProvider as ProviderTab : 'civitai';
       setActiveProvider(targetProvider);
       setActiveCategory(targetCat);
       loadModels(targetProvider, targetCat, query, sortOption, selectedArch, false);
@@ -335,11 +429,29 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
     });
   }
 
+  // Filter by selected architecture
+  if (selectedArch && selectedArch !== 'all') {
+    displayList = displayList.filter((m) => matchesArchitecture(m, selectedArch));
+  }
+
+  // Real-time keyword filter if query is entered
+  if (query && query.trim()) {
+    const q = query.trim().toLowerCase();
+    displayList = displayList.filter((m) => {
+      const name = String(m.name || '').toLowerCase();
+      const id = String(m.id || '').toLowerCase();
+      const baseModel = String(m.baseModel || '').toLowerCase();
+      const desc = String(m.description || '').toLowerCase();
+      const tags = Array.isArray(m.tags) ? m.tags.map((t: any) => String(t).toLowerCase()) : [];
+      return name.includes(q) || id.includes(q) || baseModel.includes(q) || desc.includes(q) || tags.some((t: string) => t.includes(q));
+    });
+  }
+
   // Sort displayList
   displayList.sort((a, b) => {
     if (sortOption === 'bookmarked') {
-      const aBm = Boolean(bookmarks[a.id || a.name]);
-      const bBm = Boolean(bookmarks[b.id || b.name]);
+      const aBm = isModelBookmarked(a);
+      const bBm = isModelBookmarked(b);
       if (aBm !== bBm) return bBm ? 1 : -1;
       return (b.downloads || 0) - (a.downloads || 0);
     }
@@ -456,6 +568,12 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
             { id: 'muapi', name: 'MuAPI' },
             { id: 'wavespeed', name: 'WaveSpeed' },
             { id: 'sogni', name: 'Sogni' },
+            { id: 'runware', name: 'Runware' },
+            { id: 'modelslab', name: 'ModelsLab' },
+            { id: 'agnes', name: 'Agnes AI' },
+            { id: 'sensenova', name: 'SenseNova' },
+            { id: 'openai_compat', name: 'OpenAI 兼容中转' },
+            { id: 'grok_compat', name: 'Grok 兼容中转' },
           ].map((tab) => {
             const isActive = activeProvider === tab.id;
             return (
@@ -545,12 +663,12 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                 }}
                 className="bg-transparent text-cyan-300 font-semibold outline-none cursor-pointer pr-1"
               >
-                <option value="downloads" className="bg-[#181922] text-white">🔥 最多下载 (Downloads)</option>
-                <option value="rating" className="bg-[#181922] text-white">⭐ 最高评分 (Highest Rated)</option>
-                <option value="likes" className="bg-[#181922] text-white">❤️ 最多点赞 (Most Liked)</option>
-                <option value="name_asc" className="bg-[#181922] text-white">🔤 名称排序 (A → Z)</option>
-                <option value="name_desc" className="bg-[#181922] text-white">🔤 逆序排列 (Z → A)</option>
-                <option value="bookmarked" className="bg-[#181922] text-white">📌 我的收藏置顶 (Bookmarked)</option>
+                <option value="downloads" className="bg-[#181922] text-white">最多下载 (Downloads)</option>
+                <option value="rating" className="bg-[#181922] text-white">最高评分 (Highest Rated)</option>
+                <option value="likes" className="bg-[#181922] text-white">最多点赞 (Most Liked)</option>
+                <option value="name_asc" className="bg-[#181922] text-white">名称排序 (A → Z)</option>
+                <option value="name_desc" className="bg-[#181922] text-white">逆序排列 (Z → A)</option>
+                <option value="bookmarked" className="bg-[#181922] text-white">我的收藏置顶 (Bookmarked)</option>
               </select>
             </div>
 
@@ -583,6 +701,16 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                 ? '输入任意 NanoGPT Model ID (如 qwen-image-2.1/text-to-image, flux-pro, birefnet/v2)'
                 : activeProvider === 'gemini'
                 ? '输入 Gemini 模型 ID (如 gemini-2.5-flash-image)'
+                : activeProvider === 'runware'
+                ? '输入 Runware AIR 标识符 (如 civitai:12345@67890 或 runware:100@1)'
+                : activeProvider === 'modelslab'
+                ? '输入 ModelsLab 模型 ID (如 midjourney, anything-v3 或 lora_model ID)'
+                : activeProvider === 'muapi'
+                ? '输入 MuAPI 模型端点/模型 ID'
+                : activeProvider === 'wavespeed'
+                ? '输入 WaveSpeed 模型端点/模型 ID'
+                : activeProvider === 'sogni'
+                ? '输入 Sogni 协议模型标识或 LoRA 标识'
                 : activeProvider === 'all' ? '请先在上方选择服务商，避免将 ID 发往错误平台。' : '输入 Civitai 模型 ID / AIR URN'}
             </span>
           </div>
@@ -601,6 +729,14 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                   : activeProvider === 'nanogpt'
                   ? '输入 NanoGPT Model ID (如 qwen-image-2.1/text-to-image)...'
                   : activeProvider === 'gemini' ? '输入 Gemini 模型 ID...'
+                  : activeProvider === 'runware' ? '输入 Runware AIR (如 civitai:xxxx@yyyy)...'
+                  : activeProvider === 'modelslab' ? '输入 ModelsLab 模型 ID (如 midjourney)...'
+                  : activeProvider === 'muapi' ? '输入 MuAPI 模型端点 ID...'
+                  : activeProvider === 'wavespeed' ? '输入 WaveSpeed 模型端点 ID...'
+                  : activeProvider === 'sogni' ? '输入 Sogni 模型 ID...'
+                  : activeProvider === 'sensenova' ? '输入官方 SenseNova 图像模型 ID（如 sensenova-u1.5-lite）...'
+                  : activeProvider === 'agnes' ? '输入 Agnes 模型 ID...'
+                  : activeProvider === 'openai_compat' || activeProvider === 'grok_compat' ? '输入已配置中转实际支持的模型 ID...'
                   : activeProvider === 'all' ? '请先选择服务商'
                   : '输入 Civitai ID (如 133005) 或 URN...'
               }
@@ -620,6 +756,15 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                 setImportError(null);
                 try {
                   const rawId = customId.trim();
+                  if(activeProvider==='civitai') {
+                    const resource=await verifyCivitaiSelection(rawId,activeCategory==='lora'?'lora':'checkpoint');
+                    if(version !== requestVersion.current)return;
+                    if(activeCategory==='lora') {
+                      if(onSelectLoRAWithBaseModel)onSelectLoRAWithBaseModel(resource);
+                      else if(onAddLora)onAddLora({...resource,modelStrength:0.8,clipStrength:0.8});
+                    } else onSelectModel(resource.name,resource.name,activeProvider,resource);
+                    onClose();return;
+                  }
                   let info: any = { id: rawId, name: rawId };
                   if (activeProvider === 'huggingface') info = await fetchHuggingFaceModelInfo(rawId);
                   if (activeProvider === 'tensorart') info = await fetchTensorArtModelInfo(rawId);
@@ -631,14 +776,14 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                   if (isLora) {
                     const words = info.triggerWords || info.trainedWords || [];
                     const lora = { name: String(info.id), provider: activeProvider,
-                      civitaiId: activeProvider === 'civitai' ? String(info.id) : undefined,
+                      civitaiId: undefined,
                       triggerWords: Array.isArray(words) ? words.join(', ') : String(words),
-                      baseModel: info.baseModel || undefined };
+                      baseModel: info.baseModel || undefined,resourceVerified:['huggingface','tensorart'].includes(activeProvider),resource_source:activeProvider,resource_kind:verifiedType,downloadUrl:info.downloadUrl };
                     if (onSelectLoRAWithBaseModel) onSelectLoRAWithBaseModel(lora);
                     else if (onAddLora) onAddLora({ ...lora, modelStrength: 0.8, clipStrength: 0.8 });
                     else throw new Error('当前画布没有可挂载 LoRA 的入口，请先选择底模。');
                   } else {
-                    onSelectModel(String(info.id), info.name || String(info.id), activeProvider, info);
+                    onSelectModel(String(info.id), info.name || String(info.id), activeProvider, {...info,resourceVerified:['huggingface','tensorart'].includes(activeProvider),resource_source:activeProvider,resource_kind:verifiedType});
                   }
                   onClose();
                 } catch (err) {
@@ -662,30 +807,30 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
             <Info className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
             <span>
               {activeCategory === 'checkpoint' && (
-                <>🏛️ <strong>底模中心 (Base Model Hub):</strong> 点击「应用为活跃底模」可将当前画板前置 Checkpoint 切换为此模型；点击「添加到画布」可创建 Load Checkpoint 节点。</>
+                <><strong>底模中心 (Base Model Hub):</strong> 点击「应用为底模」可将当前画板前置 Checkpoint 切换为此模型；点击「添加底模节点」可创建 Load Checkpoint 节点。</>
               )}
               {activeCategory === 'lora' && (
                 activeProvider === 'nanogpt' ? (
-                  <>ℹ️ <strong>引擎特性提示:</strong> NanoGPT 为即开即用聚合模型推理端点，非独立的 LoRA 权重社区仓库。如需挂载社区 LoRA，请切换至 Civitai、Hugging Face、魔搭 (ModelScope) 或 Tensor.Art (吐司) 标签页。</>
+                  <><strong>引擎特性提示:</strong> NanoGPT 为即开即用聚合模型推理端点，非独立的 LoRA 权重社区仓库。如需挂载社区 LoRA，请切换至 Civitai、Hugging Face、魔搭 (ModelScope) 或 Tensor.Art (吐司) 标签页。</>
                 ) : (
-                  <>🎨 <strong>LoRA 枢纽 (LoRA Hub):</strong> 按资源 ID 挂载 LoRA；Tensor.Art 需先选同架构底模，Hugging Face 需选支持 LoRA 的端点；点击「挂载到当前取景框」可加入叠加矩阵。</>
+                  <><strong>LoRA 枢纽 (LoRA Hub):</strong> 按资源 ID 挂载 LoRA；Tensor.Art 需先选同架构底模，Hugging Face 需选支持 LoRA 的端点；点击「挂载到当前取景框」可加入叠加矩阵。</>
                 )
               )}
               {activeCategory === 'video' && (
-                <>视频资源目录：任务类型、输入图片与时长能力由所选端点决定。</>
+                <><strong>视频模型目录:</strong> 任务类型、输入图片与时长能力由所选端点决定；可直接在画布中创建视频生成节点。</>
               )}
               {activeCategory === 'all' && (
-                <>✨ <strong>全生态大模型矩阵:</strong> 目录展示模型资源；在线生成和 LoRA 兼容性由所选端点核实，下载能力不代表 API 可生成。</>
+                <><strong>全生态大模型矩阵:</strong> 目录展示模型资源；在线生成和 LoRA 兼容性由所选端点核实，下载能力不代表 API 可生成。</>
               )}
               {activeCategory === 'edit' && (
-                <>编辑与控制资源：选择前请核对端点要求的输入图片与参数。</>
+                <><strong>编辑与控制资源:</strong> 选择前请核对端点要求的输入图片与参数。</>
               )}
             </span>
           </div>
         </div>
 
         {/* Models Grid */}
-        <div className="flex-1 p-6 overflow-y-auto bg-[#121318]">
+        <div className="flex-1 p-6 pb-24 overflow-y-auto bg-[#121318] scrollbar-thin scrollbar-thumb-white/10 hover:scrollbar-thumb-white/20">
           {error && (
             <div className="mb-6 p-4 rounded-xl bg-red-950/30 border border-red-500/30 text-red-300 flex items-center gap-3 animate-in slide-in-from-top-2 duration-200">
               <ShieldCheck className="w-5 h-5 text-red-500 shrink-0" />
@@ -716,6 +861,14 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
             </div>
           )}
           {activeProvider === 'tensorart' && <TensorCatalogNotice />}
+          {activeProvider !== 'all' && catalogNotices[activeProvider] && (
+            <div className="mb-4 px-4 py-2.5 rounded-lg bg-cyan-950/20 border border-cyan-500/30 text-cyan-300 text-xs flex items-start gap-2.5">
+              <Info className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
+              <div className="flex-1 leading-relaxed">
+                <span>{catalogNotices[activeProvider]}</span>
+              </div>
+            </div>
+          )}
           {activeProvider === 'all' && !loading && <p className="mb-4 text-sm text-slate-400">当前展示各服务商目录摘要。选择单个服务商后继续检索或翻页。</p>}
           {loading ? (
             <div className="h-64 flex flex-col items-center justify-center gap-3 text-slate-400">
@@ -767,8 +920,10 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                 const isVideo = m.category === 'Video' || modelId.toLowerCase().includes('video') || modelId.toLowerCase().includes('wan2.1-t2v');
                 const providerName = m.provider || m._sourceProvider || 'Cloud API';
                 const providerKey = (m._sourceProvider || m.provider || '').toLowerCase();
+                let resource:ResourceSelection={name:String(modelId),provider:providerKey,resourceVerified:false};
+                try {resource=selectionFromMetadata(providerKey,m,isLora?'lora':'checkpoint');}catch{/* Incomplete catalog metadata does not clear unresolved imports. */}
                 const trainedWords = m.trainedWords || [];
-                const isBookmarked = Boolean(bookmarks[modelId]);
+                const isBookmarked = isModelBookmarked(m);
                 const baseArch = m.baseModel || '未知底模';
                 const coverImage = m.imageUrl || '';
 
@@ -793,6 +948,11 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                           />
                         ) : null}
 
+                        {/* Subtle protective gradient over cover image for badge contrast */}
+                        {coverImage && (
+                          <div className="absolute inset-0 bg-gradient-to-t from-[#1a1b23]/80 via-transparent to-black/35 pointer-events-none" />
+                        )}
+
                         {/* Transparent genuine provider-themed fallback banner */}
                         <div
                           className={`modelhub-card-fallback-banner w-full h-full p-4 flex flex-col justify-between items-center text-center ${
@@ -811,14 +971,6 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                               : 'bg-gradient-to-br from-[#1a122e] via-[#141220] to-[#12131a]'
                           }`}
                         >
-                          <div className="w-full flex justify-between items-center opacity-80">
-                            <span className="text-[10px] font-mono font-bold text-slate-300">
-                              {providerName}
-                            </span>
-                            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/10 text-slate-200">
-                              {baseArch}
-                            </span>
-                          </div>
                           <div className="my-auto flex flex-col items-center gap-1.5 px-2">
                             <div className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-slate-300 shadow-inner">
                               <Cpu className="w-6 h-6 text-cyan-400" />
@@ -843,7 +995,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
 
                         {/* Bookmark button */}
                         <button
-                          onClick={() => toggleBookmark(modelId)}
+                          onClick={() => toggleBookmark(m)}
                           className="absolute top-2 right-2 bg-black/75 backdrop-blur-md p-1.5 rounded-lg text-amber-300 hover:text-amber-200 border border-amber-500/30 transition-colors z-10"
                           title={isBookmarked ? '取消收藏' : '收藏此模型'}
                         >
@@ -864,7 +1016,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                                 : 'bg-cyan-600/90 text-white shadow'
                             }`}
                           >
-                            {isLora ? '🎨 微调 LoRA' : isVideo ? '🎥 AI 视频模型' : '🏛️ Checkpoint 底模'}
+                            {isLora ? 'LoRA 微调' : isVideo ? '视频模型' : 'Checkpoint 底模'}
                           </span>
                         </div>
 
@@ -1024,13 +1176,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                               {onSelectLoRAWithBaseModel && (
                                 <button
                                   onClick={() => {
-                                    onSelectLoRAWithBaseModel({
-                                      name: ['huggingface','modelscope','modelscope_ai','tensorart','tensor','muapi','wavespeed','sogni'].includes(providerKey) ? modelId : displayName,
-                                      provider: providerKey,
-                                      civitaiId: providerKey === 'civitai' && m.id ? String(m.id) : undefined,
-                                      triggerWords: trainedWords.join(', '),
-                                      baseModel: baseArch,
-                                    });
+                                    onSelectLoRAWithBaseModel({...resource,triggerWords:resource.triggerWords || trainedWords.join(', '),baseModel:resource.baseModel || baseArch});
                                     onClose();
                                   }}
                                   className="w-full py-1.5 px-2.5 rounded-xl bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-600 hover:from-purple-500 hover:to-cyan-500 text-white font-bold transition-all shadow-md shadow-purple-600/30 flex items-center justify-center gap-1.5 text-[11px] active:scale-98"
@@ -1049,13 +1195,13 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                                   <button
                                     onClick={() => {
                                       onAddLora({
-                                        name: ['huggingface','modelscope','modelscope_ai','tensorart','tensor','muapi','wavespeed','sogni'].includes(providerKey) ? modelId : displayName,
                                         provider: providerKey,
                                         civitaiId: providerKey === 'civitai' && m.id ? String(m.id) : undefined,
                                         modelStrength: 0.8,
                                         clipStrength: 0.8,
                                         triggerWords: trainedWords.join(', '),
                                         baseModel: baseArch,
+                                        ...resource,
                                       });
                                       onClose();
                                     }}
@@ -1070,7 +1216,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                                 {onAddLoraNode && (
                                   <button
                                     onClick={() => {
-                                      onAddLoraNode(['huggingface','modelscope','modelscope_ai','tensorart','tensor','muapi','wavespeed','sogni'].includes(providerKey) ? modelId : displayName, trainedWords.join(', '), baseArch, {provider:providerKey,civitaiId:providerKey==='civitai' ? String(m.id) : undefined});
+                                      onAddLoraNode(resource.name, trainedWords.join(', '), baseArch, {...resource,provider:providerKey});
                                       onClose();
                                     }}
                                     className="py-1.5 px-2 rounded-lg bg-[#22242e] hover:bg-[#2c303d] text-purple-300 hover:text-purple-200 font-medium flex items-center justify-center gap-1 border border-purple-500/30 transition-colors text-[10px]"
@@ -1105,7 +1251,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                             <div className="space-y-1.5">
                               <button
                                 onClick={() => {
-                                  onSelectModel(modelId, displayName, providerKey, m);
+                                  onSelectModel(resource.name, displayName, providerKey, {...m,...resource});
                                   onClose();
                                 }}
                                 className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold transition-all shadow-md shadow-emerald-600/30 flex items-center justify-center gap-1.5 text-[11px] active:scale-98"
@@ -1119,7 +1265,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                                 {onAddModelNode && (
                                   <button
                                     onClick={() => {
-                                      onAddModelNode(modelId, displayName, providerKey, m);
+                                      onAddModelNode(resource.name, displayName, providerKey, {...m,...resource});
                                       onClose();
                                     }}
                                     className="py-1.5 px-2 rounded-lg bg-[#22242e] hover:bg-[#2c303d] text-emerald-300 font-medium flex items-center justify-center gap-1 border border-[#323544] transition-colors text-[10px]"
@@ -1154,7 +1300,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                             <div className="space-y-1.5">
                               <button
                                 onClick={() => {
-                                  onSelectModel(modelId, displayName, providerKey, m);
+                                  onSelectModel(resource.name, displayName, providerKey, {...m,...resource});
                                   onClose();
                                 }}
                                 className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-bold transition-all shadow-md shadow-cyan-600/30 flex items-center justify-center gap-1.5 text-[11px] active:scale-98"
@@ -1168,7 +1314,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                                 {onAddModelNode && (
                                   <button
                                     onClick={() => {
-                                      onAddModelNode(modelId, displayName, providerKey, m);
+                                      onAddModelNode(resource.name, displayName, providerKey, {...m,...resource});
                                       onClose();
                                     }}
                                     className="py-1.5 px-2 rounded-lg bg-[#22242e] hover:bg-[#2c303d] text-cyan-300 font-medium flex items-center justify-center gap-1 border border-[#323544] transition-colors text-[10px]"

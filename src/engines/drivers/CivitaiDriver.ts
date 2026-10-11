@@ -11,7 +11,7 @@ import {
  * 职责：
  * 1. 官方原生直连 Civitai Orchestration / Generator 平台
  * 2. 按模型生态与官方 recipe 提交请求；在线生成权限以服务商响应为准
- * 3. 绝无跨平台不兼容报错，原汁原味执行 Civitai 官方参数
+ * 3. 保留用户显式引擎和资源选择，兼容性与执行结果以服务商响应为准
  */
 export class CivitaiDriver extends BaseEngineDriver {
   readonly id = 'civitai';
@@ -41,9 +41,10 @@ export class CivitaiDriver extends BaseEngineDriver {
       isVideo,
     };
     if (params.negative_prompt) payload.negative_prompt = params.negative_prompt;
-    if (params.width) payload.width = params.width;
-    if (params.height) payload.height = params.height;
-    if (params.steps) payload.steps = params.steps;
+    if (params.width !== undefined) payload.width = params.width;
+    if (params.height !== undefined) payload.height = params.height;
+    if (params.steps !== undefined) payload.steps = params.steps;
+    for (const field of ['engine','ecosystem','comfyModel']) if (params.extraParams?.[field] !== undefined) payload[field] = params.extraParams[field];
     if (params.cfg !== undefined) payload.cfg = params.cfg;
     if (params.seed != null) payload.seed = params.seed;
     if (params.sampler_name || params.extraParams?.sampler_name) payload.sampler_name = params.sampler_name || params.extraParams?.sampler_name;
@@ -53,6 +54,7 @@ export class CivitaiDriver extends BaseEngineDriver {
       if (params.denoise != null) payload.denoise = params.denoise;
     }
     if (params.loras?.length) payload.loras = params.loras;
+    if (params.extraParams?.custom_parameters !== undefined) payload.custom_parameters = params.extraParams.custom_parameters;
     // H6: comfy 变体 / 张数由用户指定，没设不发
     if (params.extraParams?.comfyModel) payload.comfyModel = params.extraParams.comfyModel;
     if (params.extraParams?.quantity != null) payload.quantity = params.extraParams.quantity;
@@ -60,7 +62,7 @@ export class CivitaiDriver extends BaseEngineDriver {
       for (const field of ['engine','version','provider','operation']) if (params.extraParams?.[field] !== undefined) payload[field]=params.extraParams[field];
       if (params.videoFps !== undefined) payload.fps=params.videoFps;
     }
-    if (isVideo && params.videoDuration) payload.videoDuration = params.videoDuration;
+    if (isVideo && params.videoDuration !== undefined) payload.videoDuration = params.videoDuration;
     if (isVideo && params.aspectRatio) payload.aspectRatio = params.aspectRatio;
     if (civKey) payload.civitaiKey = civKey;
 

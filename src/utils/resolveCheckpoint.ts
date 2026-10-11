@@ -16,6 +16,8 @@ const SCHEMA_PROVIDERS: readonly Provider[] = [
   'sensenova',
   'modelscope',
   'modelscope_ai',
+  'runware',
+  'modelslab',
 ];
 
 export function toSchemaProvider(provider: string | undefined | null): Provider | undefined {

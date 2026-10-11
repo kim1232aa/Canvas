@@ -1,4 +1,5 @@
 import {TensorCatalogNotice} from './TensorCatalogNotice';
+import {isCivitaiAir,selectionFromMetadata,verifiedSelectionOrExplicitIntent,verifyCivitaiSelection,type ResourceSelection} from '../utils/resourceSelection';
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Search,
@@ -24,14 +25,15 @@ import { CivitaiModelItem } from '../types/providers';
 import { searchCivitaiModels, fetchLiveModels, fetchHuggingFaceModelInfo, fetchTensorArtModelInfo } from '../services/api';
 import { identifyArchitectureFamily, ARCHITECTURE_PROFILES } from '../utils/baseModelMatcher';
 
-export type LoraProviderFilter = 'all' | 'civitai' | 'huggingface' | 'modelscope' | 'modelscope_ai' | 'fal' | 'tensorart' | 'muapi' | 'wavespeed' | 'sogni';
+export type LoraProviderFilter = 'all' | 'civitai' | 'huggingface' | 'modelscope' | 'modelscope_ai' | 'fal' | 'tensorart' | 'muapi' | 'wavespeed' | 'sogni' | 'runware' | 'modelslab';
 
 export interface UnifiedLoRAItem {
   id: string;
   /** Raw provider-side resource ID/URL without the `${provider}-` display prefix. */
   resourceId?: string;
+  selection?: ResourceSelection;
   name: string;
-  provider: 'Civitai' | 'Hugging Face' | 'ModelScope CN' | 'ModelScope AI' | 'Fal.ai' | 'Tensor.Art' | 'MuAPI' | 'WaveSpeed' | 'Sogni';
+  provider: 'Civitai' | 'Hugging Face' | 'ModelScope CN' | 'ModelScope AI' | 'Fal.ai' | 'Tensor.Art' | 'MuAPI' | 'WaveSpeed' | 'Sogni' | 'Runware' | 'ModelsLab';
   providerKey: LoraProviderFilter;
   baseModel: string;
   creator: string;
@@ -49,9 +51,9 @@ export interface UnifiedLoRAItem {
 export interface CivitaiModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSelectLoRA: (lora: { name: string; provider?: string; civitaiId?: string; triggerWords: string; baseModel?: string }) => void;
-  onAddLoRANodeToCanvas: (lora: { name: string; provider?: string; civitaiId?: string; triggerWords: string; baseModel?: string }) => void;
-  onSelectLoRAWithBaseModel?: (lora: { name: string; provider?: string; civitaiId?: string; triggerWords: string; baseModel?: string }) => void;
+  onSelectLoRA: (lora: ResourceSelection & {triggerWords:string}) => void;
+  onAddLoRANodeToCanvas: (lora: ResourceSelection & {triggerWords:string}) => void;
+  onSelectLoRAWithBaseModel?: (lora: ResourceSelection & {triggerWords:string}) => void;
   initialProvider?: LoraProviderFilter;
 }
 
@@ -137,7 +139,10 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
               const fam = identifyArchitectureFamily(rawBase, m.name);
               const displayBase = ARCHITECTURE_PROFILES[fam]?.displayName.split(' ')[0] || rawBase;
 
+              let selection:ResourceSelection|undefined;
+              try {selection=selectionFromMetadata('civitai',m,'lora');}catch{/* Catalog entries with incomplete metadata remain explicitly unverified. */}
               items.push({
+                selection,
                 id: `civitai-${m.id}`,
                 name: m.name,
                 provider: 'Civitai',
@@ -199,8 +204,12 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
           }
         }
 
-        Object.entries(liveData).forEach(([provKey, list]) => {
-          if (provKey === '_pagination') return;
+        const sourceMap: Record<string, any> = (liveData as any).results && typeof (liveData as any).results === 'object' && !Array.isArray((liveData as any).results)
+          ? { ...liveData, ...(liveData as any).results }
+          : liveData;
+
+        Object.entries(sourceMap).forEach(([provKey, list]) => {
+          if (provKey === '_pagination' || provKey === 'pagination' || provKey === 'catalogNotices' || provKey === 'errors' || provKey === 'results') return;
           if (Array.isArray(list)) {
             list.forEach((m: any) => {
               const isLoraItem = m.category === "LoRA" || m.type === "LORA" || (m.tags && m.tags.includes("lora")) || (m.id && m.id.toLowerCase().includes("lora")) || (m.name && m.name.toLowerCase().includes("lora"));
@@ -215,13 +224,15 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
                   provKey === 'muapi' ? 'MuAPI' :
                   provKey === 'wavespeed' ? 'WaveSpeed' :
                   provKey === 'sogni' ? 'Sogni' :
+                  provKey === 'runware' ? 'Runware' :
+                  provKey === 'modelslab' ? 'ModelsLab' :
                   (provKey === 'tensorart' || provKey === 'tensor') ? 'Tensor.Art' : 'Civitai';
                 
                 // Avoid duplicating civitai items already fetched
                 if (provKey === 'civitai' && items.some((it) => it.id === `civitai-${m.id}`)) return;
 
                 const normalizedProvKey: LoraProviderFilter =
-                  ['huggingface','modelscope','modelscope_ai','fal','muapi','wavespeed','sogni','tensorart','tensor'].includes(provKey)
+                  ['huggingface','modelscope','modelscope_ai','fal','muapi','wavespeed','sogni','runware','modelslab','tensorart','tensor'].includes(provKey)
                     ? (provKey === 'tensor' ? 'tensorart' : (provKey as LoraProviderFilter))
                     : 'civitai';
 
@@ -236,6 +247,10 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
                     ? `https://modelscope.ai/models/${m.id}`
                     : (provKey === 'tensorart' || provKey === 'tensor')
                     ? (/^\d+$/.test(m.id) ? `https://tensor.art/models/${m.id}` : `https://tensor.art/models?search=${encodeURIComponent(m.name || m.id)}`)
+                    : provKey === 'runware'
+                    ? (typeof m.air === 'string' && m.air.startsWith('civitai:') ? `https://civitai.com/models/${m.air.split(':')[1]?.split('@')[0]}` : 'https://runware.ai')
+                    : provKey === 'modelslab'
+                    ? `https://modelslab.com/models/${m.id}`
                     : provKey === 'civitai'
                     ? `https://civitai.com/models/${m.id}`
                     : undefined;
@@ -244,7 +259,22 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
                   ? m.trainedWords.join(', ')
                   : (m.triggers || '');
 
+                let selection:ResourceSelection|undefined;
+                try {
+                  selection=selectionFromMetadata(normalizedProvKey,m,'lora');
+                } catch {
+                  selection = {
+                    name: String(m.id || m.name || ''),
+                    provider: normalizedProvKey,
+                    triggerWords: triggerStr,
+                    baseModel: m.baseModel || m.family,
+                    resourceVerified: false,
+                    resource_source: normalizedProvKey,
+                    resource_kind: 'lora',
+                  };
+                }
                 items.push({
+                  selection,
                   id: `${provKey}-${m.id}`,
                   resourceId: String(m.id),
                   name: m.name || m.id,
@@ -328,14 +358,18 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
     const rawVal = inputEl?.value?.trim() || '';
     if (!rawVal) return;
 
-    const isCivitaiAirInput = /^urn:air:/i.test(rawVal);
-    if (isCivitaiAirInput) {
+    const isCivitaiAirInput = isCivitaiAir(rawVal);
+    if (isCivitaiAirInput || ((activeProvider === 'civitai' || activeProvider === 'all') && /^\d+(?:@\d+)?$/.test(rawVal) && rawVal.length < 15)) {
       if (activeProvider !== 'civitai' && activeProvider !== 'all') {
         setErrorMsg('Civitai AIR 只能挂到 Civitai 执行分支；请先切换到 Civitai 标签。');
         return;
       }
-      onSelectLoRA({provider:'civitai',name:rawVal,civitaiId:rawVal,triggerWords:'',baseModel:undefined});
-      onClose();
+      try {
+        setLoading(true);
+        const selection=await verifyCivitaiSelection(rawVal,'lora');
+        onSelectLoRA({...selection,triggerWords:selection.triggerWords || ''});
+        onClose();
+      } catch(error:any) {setErrorMsg(error.message);} finally {setLoading(false);}
       return;
     }
 
@@ -364,6 +398,7 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
           civitaiId: undefined,
           triggerWords: triggerStr,
           baseModel: info.baseModel || undefined,
+          ...verifiedSelectionOrExplicitIntent(activeProvider === 'all' ? 'huggingface' : activeProvider,info),
         });
         onClose();
         return;
@@ -390,21 +425,9 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
           : '';
         if (!/lora|locon|lycoris|dora/i.test(info.type || info.category || '')) throw new Error('查询返回的资源不是 LoRA');
         const baseArch = info.baseModel;
-        if (onSelectLoRAWithBaseModel) {
-          onSelectLoRAWithBaseModel({
-            name: String(info.id),
-            provider:'tensorart',
-            triggerWords: triggerStr,
-            baseModel: baseArch,
-          });
-        } else {
-          onSelectLoRA({
-            name: String(info.id),
-            provider:'tensorart',
-            triggerWords: triggerStr,
-            baseModel: baseArch,
-          });
-        }
+        const resource={...selectionFromMetadata('tensorart',info,'lora'),triggerWords:triggerStr,baseModel:baseArch};
+        if (onSelectLoRAWithBaseModel) onSelectLoRAWithBaseModel(resource);
+        else onSelectLoRA(resource);
         onClose();
         return;
       } catch (e: any) {
@@ -424,20 +447,48 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
       onClose();
       return;
     }
+    if (activeProvider === 'runware') {
+      const civitaiMatch = rawVal.startsWith('civitai:') ? rawVal.split(':')[1]?.split('@')[0] : undefined;
+      onSelectLoRA({
+        provider: 'runware',
+        name: rawVal,
+        civitaiId: civitaiMatch,
+        triggerWords: '',
+        baseModel: undefined,
+        resourceVerified: false,
+        resource_source: 'runware',
+        resource_kind: 'lora',
+      });
+      onClose();
+      return;
+    }
+    if (activeProvider === 'modelslab') {
+      onSelectLoRA({
+        provider: 'modelslab',
+        name: rawVal,
+        civitaiId: undefined,
+        triggerWords: '',
+        baseModel: undefined,
+        resourceVerified: false,
+        resource_source: 'modelslab',
+        resource_kind: 'lora',
+      });
+      onClose();
+      return;
+    }
     if (activeProvider === 'all') {
       setErrorMsg('无法从任意字符串可靠判断 LoRA 所属供应商；请先选择具体供应商标签。');
       return;
     }
 
     const isCivitaiId = /^\d+$/.test(rawVal);
-    const isCivitaiAir = activeProvider === 'civitai' && /^urn:air:[^:]+:(?:lora|lycoris|locon|dora):civitai:\d+@\d+$/i.test(rawVal);
     const modelName = rawVal.includes('/') ? rawVal.split('/').pop()! : rawVal;
     onSelectLoRA({
-      name: isCivitaiAir ? rawVal : `[${activeProvider.toUpperCase()}] ${modelName}`,
+      name: `[${activeProvider.toUpperCase()}] ${modelName}`,
       provider: activeProvider,
-      civitaiId: isCivitaiId || isCivitaiAir ? rawVal : undefined,
+      civitaiId: isCivitaiId ? rawVal : undefined,
       triggerWords: '',
-      baseModel: isCivitaiAir ? 'SD 1.5' : 'FLUX.1 / SDXL',
+      baseModel: undefined,
     });
     onClose();
   };
@@ -478,18 +529,20 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
         </div>
 
         {/* Engine Provider Tabs */}
-        <div className="px-6 pt-3 pb-1 bg-[#15161d] border-b border-[#242630] flex items-center gap-2 overflow-x-auto shrink-0 min-h-[44px]">
+        <div className="px-6 pt-3 pb-2 bg-[#15161d] border-b border-[#242630] flex items-center gap-2 overflow-x-auto shrink-0 min-h-[46px] scrollbar-thin scrollbar-thumb-white/10 hover:scrollbar-thumb-white/20">
           {[
-            { id: 'all', name: '🌐 全生态聚合 (Civitai/HF/魔搭/Fal/Tensor/MuAPI/WaveSpeed/Sogni)' },
-            { id: 'civitai', name: '🌟 Civitai (C站社区 LoRA)' },
-            { id: 'huggingface', name: '🤗 Hugging Face (开源 LoRA 库)' },
-            { id: 'modelscope', name: '🇨🇳 魔搭 CN (国内站 LoRA)' },
-            { id: 'modelscope_ai', name: '🌐 魔搭 AI (国际站 LoRA)' },
-            { id: 'fal', name: '⚡ Fal.ai (云端托管 LoRA 端点)' },
-            { id: 'tensorart', name: '🎨 Tensor.Art (吐司 LoRA & 工作流)' },
-            { id: 'muapi', name: '🟣 MuAPI (LoRA 端点，URL 挂载)' },
-            { id: 'wavespeed', name: '🌊 WaveSpeed (LoRA 端点，URL 挂载)' },
-            { id: 'sogni', name: '🧡 Sogni (官方 LoRA 资源)' },
+            { id: 'all', name: '全生态聚合' },
+            { id: 'civitai', name: 'Civitai (C站社区)' },
+            { id: 'huggingface', name: 'Hugging Face (开源库)' },
+            { id: 'modelscope', name: '魔搭 CN (国内站)' },
+            { id: 'modelscope_ai', name: '魔搭 AI (国际站)' },
+            { id: 'fal', name: 'Fal.ai (云端端点)' },
+            { id: 'tensorart', name: 'Tensor.Art (吐司)' },
+            { id: 'muapi', name: 'MuAPI' },
+            { id: 'wavespeed', name: 'WaveSpeed' },
+            { id: 'sogni', name: 'Sogni' },
+            { id: 'runware', name: 'Runware' },
+            { id: 'modelslab', name: 'ModelsLab' },
           ].map((tab) => {
             const isActive = activeProvider === tab.id;
             return (
@@ -514,7 +567,7 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
         </div>
 
         {/* Architecture Family Filter Bar */}
-        <div className="px-6 py-2 bg-[#121319] border-b border-[#20222d] flex items-center gap-2 overflow-x-auto shrink-0">
+        <div className="px-6 py-2 bg-[#121319] border-b border-[#20222d] flex items-center gap-2 overflow-x-auto shrink-0 scrollbar-thin scrollbar-thumb-white/10 hover:scrollbar-thumb-white/20">
           <span className="text-[11px] text-slate-400 font-medium flex items-center gap-1 shrink-0 mr-1">
             <Filter className="w-3.5 h-3.5 text-purple-400" />
             底模架构筛选:
@@ -566,11 +619,11 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
             }}
             className="bg-[#111216] border border-[#2b2d38] text-[11px] font-semibold text-slate-300 rounded-xl px-3 py-2 outline-none cursor-pointer shrink-0"
           >
-            <option value="Highest Rated">⭐ 最高评分 (Highest Rated)</option>
-            <option value="Most Downloaded">🔥 最多下载 (Most Downloaded)</option>
-            <option value="Most Liked">❤️ 最多点赞 (Most Liked)</option>
-            <option value="Newest">⚡ 最新发布 (Newest)</option>
-            <option value="Name A-Z">🔤 名称排序 (A → Z)</option>
+            <option value="Highest Rated">最高评分 (Highest Rated)</option>
+            <option value="Most Downloaded">最多下载 (Most Downloaded)</option>
+            <option value="Most Liked">最多点赞 (Most Liked)</option>
+            <option value="Newest">最新发布 (Newest)</option>
+            <option value="Name A-Z">名称排序 (A → Z)</option>
           </select>
 
           <button
@@ -597,6 +650,14 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
                 ? '输入任意 Fal.ai LoRA 路径或 Endpoint'
                 : activeProvider === 'tensorart'
                 ? '输入 Tensor.Art / 吐司 Model ID (如 672390779613802167) 或主页链接'
+                : activeProvider === 'runware'
+                ? '输入 Runware LoRA AIR 标识符 (如 civitai:xxxx@yyyy)'
+                : activeProvider === 'modelslab'
+                ? '输入 ModelsLab lora_model ID 或公开 LoRA 权重 URL'
+                : activeProvider === 'muapi' || activeProvider === 'wavespeed'
+                ? '输入公开可访问的 LoRA 权重 URL (如 Civitai / HF 下载直链)'
+                : activeProvider === 'sogni'
+                ? '输入 Sogni 协议支持的 LoRA 标识符或下载直链'
                 : '输入任意 Civitai 模型 ID / AIR URN (如 138944 或 urn:air:...)'}
             </span>
           </div>
@@ -612,6 +673,14 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
                   ? '输入 Fal.ai LoRA path / Endpoint...'
                   : activeProvider === 'tensorart'
                   ? '输入 Tensor.Art / 吐司 Model ID (如 672390779613802167)...'
+                  : activeProvider === 'runware'
+                  ? '输入 Runware AIR (如 civitai:xxxx@yyyy)...'
+                  : activeProvider === 'modelslab'
+                  ? '输入 ModelsLab lora_model ID...'
+                  : activeProvider === 'muapi' || activeProvider === 'wavespeed'
+                  ? '输入 LoRA 权重下载直链 URL...'
+                  : activeProvider === 'sogni'
+                  ? '输入 Sogni LoRA 标识符...'
                   : '输入 Civitai ID (如 138944) 或 URN...'
               }
               id="custom-universal-lora-input"
@@ -643,7 +712,7 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
         )}
 
         {/* Models Grid */}
-        <div className="flex-1 p-6 overflow-y-auto bg-[#141518]">
+        <div className="flex-1 p-6 pb-24 overflow-y-auto bg-[#141518] scrollbar-thin scrollbar-thumb-white/10 hover:scrollbar-thumb-white/20">
           {loading ? (
             <div className="h-64 flex flex-col items-center justify-center gap-3 text-slate-400">
               <Loader2 className="w-8 h-8 animate-spin text-purple-400" />
@@ -679,12 +748,15 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
                       {/* Image Preview Container */}
                       <div className="relative aspect-[3/4] bg-[#0f1015] overflow-hidden">
                         {model.previewImg ? (
-                          <img
-                            src={model.previewImg}
-                            alt={model.name}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                            loading="lazy"
-                          />
+                          <>
+                            <img
+                              src={model.previewImg}
+                              alt={model.name}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              loading="lazy"
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-t from-[#191a24]/90 via-transparent to-black/35 pointer-events-none" />
+                          </>
                         ) : (
                           <div className="w-full h-full flex flex-col items-center justify-center text-slate-600 gap-2 p-4 text-center">
                             <Layers className="w-10 h-10 text-purple-400/40" />
@@ -754,7 +826,7 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
                       </div>
 
                       {/* Content Card Body */}
-                      <div className="p-3 flex-1 flex flex-col justify-between space-y-2.5">
+                      <div className="p-3.5 pb-4 flex-1 flex flex-col justify-between space-y-2.5">
                         <div>
                           <h3 className="font-bold text-white text-xs line-clamp-1 group-hover:text-purple-300 transition-colors" title={model.name}>
                             {model.name}
@@ -794,73 +866,82 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
 
                         {/* Action buttons with Auto-pair Base Model */}
                         <div className="space-y-1.5 pt-1">
-                          <button
-                            onClick={() => {
-                              const cleanName = model.providerKey==='civitai' ? `${model.name.replace(/\.safetensors$/i, '')}.safetensors` : (model.resourceId || model.id);
-                              if (onSelectLoRAWithBaseModel) {
-                                onSelectLoRAWithBaseModel({
-                                  name: cleanName,
-                                  provider: model.providerKey,
-                                  civitaiId: model.civitaiId,
-                                  triggerWords: model.triggerWords,
-                                  baseModel: baseArch,
-                                });
-                              } else {
-                                onSelectLoRA({
-                                  name: cleanName,
-                                  provider: model.providerKey,
-                                  civitaiId: model.civitaiId,
-                                  triggerWords: model.triggerWords,
-                                  baseModel: baseArch,
-                                });
-                              }
-                              onClose();
-                            }}
-                            className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-600 hover:from-purple-500 hover:to-cyan-500 text-xs font-bold text-white transition-all shadow-md shadow-purple-600/30 flex items-center justify-center gap-1.5 active:scale-98"
-                            title={`将此 LoRA 接入当前生成分支；保留已选底模，架构要求 ${baseArch}`}
-                          >
-                            <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
-                            <span>选用 LoRA · 保留当前底模</span>
-                            <span className="text-[10px] px-1.5 py-0.2 rounded bg-black/30 font-mono text-cyan-200">
-                              {baseArch}
-                            </span>
-                          </button>
+                          {(() => {
+                            const cleanName = model.resourceId || model.selection?.name || (model.civitaiId ? String(model.civitaiId) : model.id.replace(new RegExp(`^${model.providerKey}-`), ''));
+                            return (
+                              <>
+                                <button
+                                  onClick={() => {
+                                    if (onSelectLoRAWithBaseModel) {
+                                      onSelectLoRAWithBaseModel({
+                                        ...(model.selection || {}),
+                                        name: cleanName,
+                                        provider: model.selection?.provider || (model.providerKey as any),
+                                        civitaiId: model.civitaiId,
+                                        triggerWords: model.triggerWords,
+                                        baseModel: model.baseModel,
+                                      });
+                                    } else {
+                                      onSelectLoRA({
+                                        ...(model.selection || {}),
+                                        name: cleanName,
+                                        provider: model.selection?.provider || (model.providerKey as any),
+                                        triggerWords: model.triggerWords,
+                                        baseModel: model.baseModel,
+                                      });
+                                    }
+                                    onClose();
+                                  }}
+                                  className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-600 hover:from-purple-500 hover:to-cyan-500 text-xs font-bold text-white transition-all shadow-md shadow-purple-600/30 flex items-center justify-center gap-1.5 active:scale-98"
+                                  title={`将此 LoRA 接入当前生成分支；保留已选底模，架构要求 ${baseArch}`}
+                                >
+                                  <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
+                                  <span>选用 LoRA</span>
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-black/40 font-mono text-cyan-200">
+                                    兼容 {baseArch}
+                                  </span>
+                                </button>
 
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => {
-                                onSelectLoRA({
-                                  name: model.providerKey==='civitai' ? `${model.name.replace(/\.safetensors$/i, '')}.safetensors` : (model.resourceId || model.id),
-                                  provider: model.providerKey,
-                                  civitaiId: model.civitaiId,
-                                  triggerWords: model.triggerWords,
-                                  baseModel: baseArch,
-                                });
-                                onClose();
-                              }}
-                              className="flex-1 py-1.5 px-2 rounded-lg bg-[#242630] hover:bg-[#2e313e] text-[11px] font-semibold text-slate-300 transition-colors flex items-center justify-center gap-1 border border-[#353846]"
-                              title="仅更新当前节点的 LoRA，不更改前置底模"
-                            >
-                              仅填入当前节点
-                            </button>
-                            <button
-                              onClick={() => {
-                                onAddLoRANodeToCanvas({
-                                  name: model.providerKey==='civitai' ? `${model.name.replace(/\.safetensors$/i, '')}.safetensors` : (model.resourceId || model.id),
-                                  provider: model.providerKey,
-                                  civitaiId: model.civitaiId,
-                                  triggerWords: model.triggerWords,
-                                  baseModel: baseArch,
-                                });
-                                onClose();
-                              }}
-                              className="py-1.5 px-2.5 rounded-lg bg-[#242630] hover:bg-[#2e313e] text-[11px] font-semibold text-purple-300 hover:text-white transition-colors flex items-center gap-1 border border-[#353846]"
-                              title="在画布上放置独立的 LoRALoader 节点"
-                            >
-                              <Plus className="w-3 h-3" />
-                              <span>新建节点</span>
-                            </button>
-                          </div>
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => {
+                                      onSelectLoRA({
+                                        ...(model.selection || {}),
+                                        name: cleanName,
+                                        provider: model.selection?.provider || model.providerKey,
+                                        civitaiId: model.selection?.civitaiId || model.civitaiId,
+                                        triggerWords: model.triggerWords,
+                                        baseModel: baseArch,
+                                      });
+                                      onClose();
+                                    }}
+                                    className="flex-1 py-1.5 px-2 rounded-lg bg-[#242630] hover:bg-[#2e313e] text-[11px] font-semibold text-slate-300 transition-colors flex items-center justify-center gap-1 border border-[#353846]"
+                                    title="仅更新当前节点的 LoRA，不更改前置底模"
+                                  >
+                                    仅填入当前节点
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      onAddLoRANodeToCanvas({
+                                        ...(model.selection || {}),
+                                        name: cleanName,
+                                        provider: model.selection?.provider || model.providerKey,
+                                        civitaiId: model.selection?.civitaiId || model.civitaiId,
+                                        triggerWords: model.triggerWords,
+                                        baseModel: baseArch,
+                                      });
+                                      onClose();
+                                    }}
+                                    className="py-1.5 px-2.5 rounded-lg bg-[#242630] hover:bg-[#2e313e] text-[11px] font-semibold text-purple-300 hover:text-white transition-colors flex items-center gap-1 border border-[#353846]"
+                                    title="在画布上放置独立的 LoRALoader 节点"
+                                  >
+                                    <Plus className="w-3 h-3" />
+                                    <span>新建节点</span>
+                                  </button>
+                                </div>
+                              </>
+                            );
+                          })()}
                         </div>
                       </div>
                     </div>

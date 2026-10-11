@@ -2,6 +2,34 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CivitaiDriver } from './CivitaiDriver';
 
 describe('CivitaiDriver history provenance', () => {
+  it('sends explicit engine/ecosystem/model and quantity for image recipes without dropping zero', async () => {
+    const requests: any[] = [];
+    globalThis.fetch = vi.fn(async (_url, init) => {
+      requests.push(JSON.parse(String(init?.body)));
+      return new Response(JSON.stringify({imageUrl:'https://example.test/output.png'}));
+    });
+    await new CivitaiDriver().generate({prompt:'test',model:'urn:air:sdxl:checkpoint:civitai:123@456',steps:0,cfg:0,seed:0,extraParams:{engine:'comfy',ecosystem:'sdxl',comfyModel:'custom',quantity:0}}, {});
+    expect(requests[0]).toMatchObject({engine:'comfy',ecosystem:'sdxl',comfyModel:'custom',quantity:0,steps:0,cfg:0,seed:0});
+  });
+  it('forwards advanced JSON as a separate object without changing routing or LoRA intent', async () => {
+    const bodies: any[]=[];
+    globalThis.fetch=vi.fn(async (_url,init)=>{bodies.push(JSON.parse(String(init?.body)));return new Response(JSON.stringify({imageUrl:'https://example.test/out.png'}));});
+    const custom={unknown_flag:true,enable_safety_checker:false,cfgScale:0,model:'explicit-override',loras:{'urn:air:sdxl:lora:civitai:789@123':0}};
+    await new CivitaiDriver().generate({prompt:'test',model:'urn:air:sdxl:checkpoint:civitai:123@456',loras:[{name:'urn:air:sdxl:lora:civitai:789@123',strength:0}],extraParams:{engine:'comfy',custom_parameters:custom}},{});
+    expect(bodies[0].custom_parameters).toEqual(custom);
+    expect(bodies[0].model).toBe('urn:air:sdxl:checkpoint:civitai:123@456');
+    expect(bodies[0].loras).toEqual([expect.objectContaining({name:'urn:air:sdxl:lora:civitai:789@123',strength:0})]);
+  });
+  it('carries spatial advanced JSON to the site body and rejects non-object JSON before HTTP', async()=>{
+    const {spatialRequestParameters}=await import('../../utils/frontendParameters');
+    const bodies:any[]=[];
+    globalThis.fetch=vi.fn(async (_url,init)=>{bodies.push(JSON.parse(String(init?.body)));return new Response(JSON.stringify({imageUrl:'https://example.test/out.png'}));});
+    const frame={id:'f',title:'test',pos:{x:0,y:0},width:400,height:400,prompt:'test',negativePrompt:'',createdAt:0,status:'idle' as const,params:{checkpoint:'urn:air:sdxl:checkpoint:civitai:123@456',targetProvider:'civitai' as const,seedControl:'fixed' as const,width:1024,height:1024,batchSize:1,denoise:0,loras:[],customParameters:'{"unknown_flag":true,"safety":false,"cfgScale":0}'}};
+    await new CivitaiDriver().generate(spatialRequestParameters(frame),{});
+    expect(bodies[0].custom_parameters).toEqual({unknown_flag:true,safety:false,cfgScale:0});
+    expect(()=>spatialRequestParameters({...frame,params:{...frame.params,customParameters:'[]'}})).toThrow(/JSON 对象/);
+    expect(bodies).toHaveLength(1);
+  });
   const originalFetch = globalThis.fetch;
   const originalSetTimeout = globalThis.setTimeout;
 

@@ -16,6 +16,8 @@ export const PROVIDER_TITLE_LABEL: Record<string, string> = {
   muapi: 'MuAPI',
   wavespeed: 'WaveSpeed',
   sogni: 'Sogni',
+  runware: 'Runware',
+  modelslab: 'ModelsLab',
 };
 
 /** Closed-source / non-Comfy cloud engines that must not show leftover Comfy sampler badges. */

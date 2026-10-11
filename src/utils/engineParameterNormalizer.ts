@@ -28,14 +28,11 @@ export interface EngineNormalizationResult<T = any> {
 
 /**
  * Resolves a LoRA model reference to an absolute URL or normalized ID.
- * If Civitai ID is present, generates official Civitai download URL.
+ * Preserve resource identifiers; a model ID is not a model version download ID.
  */
 export function resolveLoraPathOrUrl(lora: UnifiedLoraInput): string {
   if (lora.downloadUrl && lora.downloadUrl.startsWith('http')) {
     return lora.downloadUrl;
-  }
-  if (lora.civitaiId && /^\d+$/.test(lora.civitaiId.trim())) {
-    return `https://civitai.com/api/download/models/${lora.civitaiId.trim()}`;
   }
   if (lora.name.startsWith('http://') || lora.name.startsWith('https://')) {
     return lora.name;

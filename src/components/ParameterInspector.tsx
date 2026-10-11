@@ -1,4 +1,5 @@
 import {ApiParameterEditor} from './ApiParameterEditor';
+import {videoDurationBounds} from '../utils/frontendParameters';
 import {ProviderModelSelect} from './ProviderModelSelect';
 import React from 'react';
 import {
@@ -126,7 +127,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
   const greyScheduler = isOpenAiCompat || isGrokCompat || fieldUnsupported('scheduler');
   const greyDenoise = isOpenAiCompat || isGrokCompat || fieldUnsupported('denoise');
   const endpointLoraUnsupported = isLoraUnsupportedOnEndpoint(
-    params.targetProvider || (params.checkpoint?.startsWith('fal-ai/') ? 'fal' : undefined),
+    params.targetProvider,
     params.checkpoint,
   ).unsupported;
   const greyLoras = isOpenAiCompat || isGrokCompat || fieldUnsupported('loras') || endpointLoraUnsupported;
@@ -328,7 +329,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                 { id: 'gemini', label: 'Google Gemini' },
                 { id: 'civitai', label: 'Civitai 原生' },
                 { id: 'nanogpt', label: 'NanoGPT' },
-                { id: 'sensenova', label: '商汤思考(LLM)' },
+                { id: 'sensenova', label: '商汤日日新 (SenseNova)' },
                 { id: 'tensorart', label: 'Tensor.Art 模型 API' },
                 { id: 'openai_compat', label: 'OpenAI 兼容中转' },
                 { id: 'grok_compat', label: 'Grok 兼容中转' },
@@ -387,6 +388,21 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
             </div>
           </div>
 
+          {params.executionBlockedReason && <p role="alert" className="text-sm text-amber-200">{params.executionBlockedReason} · 仅载入，不能立即运行；请保留来源，创建新的显式生成分支。</p>}
+          {params.unresolvedModel && <p role="alert" className="text-sm text-amber-200">底模尚未核实，必须重新选择已核实资源。</p>}
+          {params.requireReferenceImage && <p role="note" className="text-sm text-amber-200">编辑输入需要明确参考图；展示样图不作为输入。</p>}
+          {params.targetProvider === 'video' && <label className="block text-sm text-slate-300">实际视频服务商<select aria-label="实际视频服务商" value={params.videoProvider || ''} onChange={e=>update({videoProvider:e.target.value || undefined})} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2"><option value="">请选择实际 provider</option><option value="fal">Fal</option><option value="agnes">Agnes</option><option value="grok_compat">Grok 兼容中转</option>{params.videoProvider && !['fal','agnes','grok_compat'].includes(params.videoProvider) && <option value={params.videoProvider}>{params.videoProvider}</option>}</select></label>}
+          {(params.targetProvider === 'civitai' || (params.targetProvider === 'video' && params.videoProvider === 'civitai')) && <div className="space-y-2 rounded-lg border border-slate-700 p-3">
+            <label className="block text-sm text-slate-300">Civitai engine<select aria-label="Civitai engine" value={params.civitaiEngine || ''} onChange={e=>update({civitaiEngine:e.target.value || undefined})} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2"><option value="">请选择引擎</option><option value="sdcpp">sdcpp</option><option value="comfy">comfy</option>{params.civitaiEngine && !['sdcpp','comfy'].includes(params.civitaiEngine) && <option value={params.civitaiEngine}>{params.civitaiEngine}</option>}</select></label>
+            <label className="block text-sm text-slate-300">Civitai ecosystem<input aria-label="Civitai ecosystem" value={params.civitaiEcosystem || ''} onChange={e=>update({civitaiEcosystem:e.target.value || undefined})} placeholder="显式填写生态；未知生态保留" className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2" /></label>
+            <label className="block text-sm text-slate-300">Civitai model<input aria-label="Civitai model" value={params.civitaiModel || ''} onChange={e=>update({civitaiModel:e.target.value || undefined})} placeholder="按官方 recipe 填写 model selector" className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2" /></label>
+            <p className="text-sm text-slate-400">不自动填写引擎或更换模型。AIR 和引擎兼容性以 metadata / 上游响应为准。</p>
+          </div>}
+          {(params.targetProvider === 'video' || params.videoProvider || params.checkpoint?.includes('video')) && <div className="space-y-2">
+            <label className="block text-sm text-slate-300">视频时长 (秒)<input aria-label="视频时长 (秒)" type="number" {...videoDurationBounds(params.videoProvider || params.targetProvider,params.checkpoint)} step={1} value={params.videoDuration ?? ''} onChange={e=>update({videoDuration:e.target.value === '' ? undefined : Number(e.target.value)})} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2" /><span className="text-sm text-slate-400">仅核实的端点显示范围；未填写不提交默认时长。</span></label>
+            <label className="block text-sm text-slate-300">视频 resolution<input aria-label="视频 resolution" value={params.resolution || ''} onChange={e=>update({resolution:e.target.value || undefined})} placeholder="按所选端点填写；未设置保留空" className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2" /></label>
+          </div>}
+          {(params.targetProvider === 'video' || params.videoProvider || params.checkpoint?.includes('video')) && <label className="block text-sm text-slate-300">视频自定义参数 JSON<textarea aria-label="视频自定义参数 JSON" value={params.customParameters || ''} onChange={e=>update({customParameters:e.target.value || undefined})} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2" /><span className="text-sm text-slate-400">JSON 对象字段在服务端展开，false/0 保留。</span></label>}
           {params.targetProvider === 'fal' && params.checkpoint === 'fal-ai/lora' && <label className="block text-sm text-slate-300">SD LoRA 底模 model_name<input className="mt-1 w-full bg-[#111216] border border-slate-700 rounded-lg p-2" value={params.falModelName || ''} onChange={e => update({falModelName:e.target.value})} placeholder="必填：底模仓库 ID 或 URL" /></label>}
 
           {params.targetProvider === 'huggingface' && (
@@ -405,7 +421,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
 
           {(params.targetProvider === 'modelscope' || params.targetProvider === 'modelscope_ai') && <p role="note" className="rounded-lg border border-amber-800/40 p-3 text-sm text-amber-200">魔搭云端已核实提示词、模型与 LoRA 格式；其余参数按请求原样发送，是否接受以本次上游响应为准。Qwen Image Edit 支持参考图。模型目录中的仓库不保证已开通在线推理。</p>}
           {['muapi','wavespeed','sogni'].includes(params.targetProvider)&&<p role="note" className="rounded-lg border border-cyan-800/40 p-3 text-sm text-cyan-200">按所选模型的官方 Schema 转换画布参数；没有对应字段的参数会在执行记录中标明未提交。可在 API 参数面板关闭此模式，或用 JSON 直接指定字段。LoRA 始终保留请求意图，实际兼容性以官方能力和本次上游响应为准。</p>}
-          {['fal','modelscope','modelscope_ai','huggingface','muapi','wavespeed','sogni'].includes(params.targetProvider) && <ApiParameterEditor provider={params.targetProvider} model={params.checkpoint} value={params.customParameters} onChange={customParameters=>update({customParameters})} />}
+          {['civitai','fal','modelscope','modelscope_ai','huggingface','muapi','wavespeed','sogni'].includes(params.targetProvider) && <ApiParameterEditor provider={params.targetProvider} model={params.checkpoint} value={params.customParameters} onChange={customParameters=>update({customParameters})} />}
           {/* Engine Parameter Notice Banner */}
           {params.targetProvider === 'agnes' && (
             <div className="p-2.5 bg-rose-950/20 border border-rose-500/30 rounded-lg text-[10px] text-rose-300/90 leading-relaxed flex items-start gap-2">
@@ -428,12 +444,11 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
           )}
 
           {params.targetProvider === 'sensenova' && (
-            <div className="p-2.5 bg-amber-950/20 border border-amber-500/30 rounded-lg text-[10px] text-amber-300/90 leading-relaxed flex items-start gap-2">
-              <Info className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-              <div>
-                <span className="font-bold text-amber-300">商汤日日新 · 提示词推理：</span>
-                <span> SenseNova 专长于思维链 (CoT)深度构思与 Prompt 扩写。请在提示词面板中点击「AI 润色」或使用画布上的「LLM 推理思考节点」构思后，连线至 FLUX.1 或 SDXL 扩散引擎出片。</span>
-              </div>
+            <div className="space-y-2 rounded-lg border border-amber-500/30 bg-amber-950/20 p-3">
+              <p className="text-amber-200">商汤日日新 · 图像生成与编辑：U 系列使用图像接口，不作为 Chat 模型。LLM 提示词润色使用另行选择的对话模型，与图像生成分开。</p>
+              <label className="block text-sm text-slate-300">SenseNova size<input type="text" aria-label="SenseNova size" value={params.size ?? ''} onChange={e=>update({size:e.target.value === '' ? undefined : e.target.value})} placeholder="auto / 2048x2048；留空时按画布宽高(如1024x1024)发送，无宽高则 auto" className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2 focus-visible:outline-2 focus-visible:outline-cyan-400" /><span className="text-amber-200">官方文档写 2K/4K 常量，但本次上游对这两个值返回 400：invalid size, should be auto or WIDTHxHEIGHT。建议明确填写像素尺寸或 auto；原值保留，不自动转换，也不在此限制提交。</span></label>
+              <label className="block text-sm text-slate-300">SenseNova output_format<input type="text" aria-label="SenseNova output_format" value={params.outputFormat ?? ''} onChange={e=>update({outputFormat:e.target.value === '' ? undefined : e.target.value})} placeholder="png / jpeg / webp；留空不显式传" className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2 focus-visible:outline-2 focus-visible:outline-cyan-400" /><span className="text-slate-400">本站支持 png/jpeg/webp；官方编辑文档也列 jpg，但本站尚未接通。自定义原值保留。</span></label>
+              {([['watermark', 'watermark'], ['prompt_extend', 'promptExtend']] as const).map(([field, param]) => <label key={field} className="block text-sm text-slate-300">SenseNova {field}<select aria-label={`SenseNova ${field}`} value={typeof params[param] === 'boolean' ? String(params[param]) : ''} onChange={e=>update({[param]:e.target.value === '' ? undefined : e.target.value === 'true'})} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2 focus-visible:outline-2 focus-visible:outline-cyan-400"><option value="">未设置（不显式传）</option><option value="false">false（关闭）</option><option value="true">true（开启）</option></select></label>)}
             </div>
           )}
 
@@ -664,7 +679,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
           ) : (
             <div className="space-y-2">
               {params.loras.map((lora, idx) => {
-                const compat = validateLoraCompatibility(params.checkpoint, (lora as any).baseModel, lora.name, params.targetProvider || (params.checkpoint?.startsWith('fal-ai/') ? 'fal' : undefined));
+                const compat = validateLoraCompatibility(params.checkpoint, (lora as any).baseModel, lora.name, params.targetProvider);
                 const loraUnsupported = greyLoras || Boolean(compat.endpointUnsupported);
                 return (
                   <div key={idx} className={`bg-[#121318] p-2.5 rounded-lg border space-y-2 ${loraUnsupported ? 'border-slate-700/60 opacity-70' : 'border-[#282a35]'}`}>
@@ -677,7 +692,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                           <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-800/80 text-slate-400 border border-slate-600/50 shrink-0" title="该服务商不支持">
                             该服务商不支持
                           </span>
-                        ) : compat.isCompatible ? (
+                        ) : compat.verification === 'unverified' ? (<span className="text-[9px] px-1.5 py-0.5 rounded border border-slate-600 text-slate-400" title={compat.message}>待验证</span>) : compat.verification === 'verified' ? (
                           <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-950/60 text-emerald-400 border border-emerald-800/40 shrink-0">
                             兼容
                           </span>

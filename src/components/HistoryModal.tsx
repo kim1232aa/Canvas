@@ -162,6 +162,8 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
                       onBroken={markBroken}
                       onRecovered={clearBroken}
                       kind={
+                        item.mediaType === 'video' ||
+                        !!item.videoUrl ||
                         item.url?.includes('.mp4') ||
                         item.model?.includes('video') ||
                         item.provider?.includes('Video') ||

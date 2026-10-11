@@ -45,7 +45,11 @@ try {
   const mediaUrl = saved.data.project.spatialFrames[0].imageUrl;
   assert.match(mediaUrl, /^\/api\/media\/[a-f0-9]{64}$/);
   const media = await runtime.dispatchFetch(`https://canvas.test${mediaUrl}`, {headers: userHeaders});
-  assert.equal(media.status, 200); assert.equal(media.headers.get('content-type'), 'image/png'); assert.ok((await media.arrayBuffer()).byteLength > 0);
+  assert.equal(media.status, 200);
+  assert.equal(media.headers.get('content-type'), 'image/png');
+  assert.match(media.headers.get('content-security-policy') || '', /sandbox/);
+  assert.equal(media.headers.get('x-content-type-options'), 'nosniff');
+  assert.ok((await media.arrayBuffer()).byteLength > 0);
   assert.equal((await call('/api/cloud/projects')).data[0].nodeCount, 1);
   assert.equal((await call('/api/cloud/projects/qa-project/clone', 'POST')).data.success, true);
   const history = await call('/api/history', 'POST', {url: image, prompt: 'local storage QA', provider: 'local', model: 'local'});
@@ -53,7 +57,8 @@ try {
   assert.equal((await call('/api/history')).data.length, 1);
   assert.equal((await call('/api/cloud/settings', 'POST', {agnesBaseUrl: 'https://test.invalid'})).data.success, true);
   assert.equal((await call('/api/cloud/settings', 'POST', {unknown: 'invalid'})).status, 400);
-  assert.equal((await call('/api/cloud-keys/strategy', 'POST', {provider: 'fal', strategy: 'failover'})).status, 200);
+  assert.equal((await call('/api/cloud-keys/strategy', 'POST', {provider: 'fal', strategy: 'failover'})).status, 400);
+  assert.equal((await call('/api/cloud-keys/strategy', 'POST', {provider: 'fal', strategy: 'round_robin'})).data.success, true);
   const raw = await db.prepare('SELECT encrypted_value FROM canvas_settings WHERE field = ?').bind('agnesBaseUrl').first();
   assert.ok(!raw.encrypted_value.includes('test.invalid'));
   await runtime.dispose();
@@ -61,7 +66,7 @@ try {
   assert.equal((await call('/api/cloud/projects/qa-project')).data.nodes[0].id, 'node-1');
   assert.equal((await call('/api/history')).data[0].id, historyId);
   assert.equal((await call('/api/cloud/settings')).data.agnesBaseUrl, 'https://test.invalid');
-  assert.equal((await call('/api/cloud-keys/stats')).data.fal.strategy, 'failover');
+  assert.equal((await call('/api/cloud-keys/stats')).data.fal.strategy, 'round_robin');
   assert.equal((await call('/api/history/delete-batch', 'POST', {ids: [historyId]})).data.remaining, 0);
   assert.equal((await call('/api/cloud/projects/qa-project', 'DELETE')).data.success, true);
   assert.equal((await call('/api/cloud/projects/qa-project')).status, 404);

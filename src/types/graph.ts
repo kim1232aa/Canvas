@@ -154,25 +154,38 @@ export type CanvasMode = 'spatial' | 'graph';
 
 export interface ComfyParameters {
   retiredToolSelection?: Record<string,string>;
+  requireReferenceImage?: boolean;
+  unresolvedModel?: boolean;
+  executionBlockedReason?: string;
+  sourceLoraAir?: string;
   checkpoint: string;
   vae?: string;
   seed?: number;
-  seedControl: 'randomize' | 'fixed' | 'increment' | 'decrement';
+  seedControl?: 'randomize' | 'fixed' | 'increment' | 'decrement';
   steps?: number;
   cfg?: number;
   sampler?: string;
   scheduler?: string;
-  denoise: number;
-  width: number;
-  height: number;
-  batchSize: number;
+  denoise?: number;
+  width?: number;
+  height?: number;
+  batchSize?: number;
   loras: Array<{
     name: string;
     modelStrength: number;
     clipStrength: number;
     triggerWords: string;
     civitaiId?: string;
+    downloadUrl?: string;
+    unresolvedResource?: boolean;
+    resourceVerified?: boolean;
+    resource_source?: string;
+    resource_kind?: string;
   }>;
+  videoProvider?: string;
+  civitaiEngine?: string;
+  civitaiEcosystem?: string;
+  civitaiModel?: string;
   targetProvider: 'civitai' | 'fal' | 'agnes' | 'sensenova' | 'huggingface' | 'modelscope' | 'modelscope_ai' | 'nanogpt' | 'gemini' | 'video' | 'tensorart' | 'openai_compat' | 'grok_compat' | 'muapi' | 'wavespeed' | 'sogni';
   tensorArtInputs?: any[];
   videoDuration?: number;
@@ -181,6 +194,8 @@ export interface ComfyParameters {
   size?: string;
   quality?: string;
   outputFormat?: string;
+  watermark?: boolean;
+  promptExtend?: boolean;
   background?: string;
   moderation?: string;
   resolution?: string;
@@ -208,6 +223,7 @@ export interface SpatialFrame {
   executionProgress?: number; // 0 - 100
   executionStage?: string; // Staged phase description
   imageUrl?: string;
+  referenceImageUrl?: string;
   videoUrl?: string; // Output MP4 video URL
   mediaType?: 'image' | 'video'; // Toggle between static image & AI video
   videoDuration?: number; // Video length in seconds (e.g. 3, 5)

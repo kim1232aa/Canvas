@@ -8,19 +8,13 @@ import {
   ModelSpec,
 } from '../types';
 
-/**
- * Agnes AI (ApiHub) 引擎驱动
- * 聚合中心提供:
- * 1. 2.5 Flash / 2.1 Flash / 2.0 Flash 极速文生图与图生图 (通过 /images/generations)
- * 2. 2.5 Flash / 2.5 / v2.0 动态视频 (支持图生视频)
- * 3. 3.0 Flash / 2.5 Pro / 2.5 Flash 深度推理文本大模型 (通过 /chat/completions)
- */
+/** Agnes AI (ApiHub) driver. Model/field claims are limited to the current AgnesAI-Labs catalog and per-model docs. */
 export class AgnesDriver extends BaseEngineDriver {
   readonly id = 'agnes';
   readonly name = 'Agnes AI (ApiHub)';
-  readonly label = 'Agnes AI 官方聚合中心';
+  readonly label = 'Agnes AI';
   readonly badgeColor = '#f43f5e';
-  readonly description = 'Agnes AI 高并发模型聚合中心，支持 2.5 Flash 极速生图、动态运镜视频及 3.0 Flash 深度推理大模型。';
+  readonly description = 'Agnes AI 图像、视频与文本路由；具体字段以所选模型当前官方契约为准。';
   readonly capabilities = ['text2img', 'img2img', 'text2video', 'img2video', 'reasoning'] as const;
   readonly defaultBaseUrl = 'https://apihub.agnes-ai.com/v1';
   readonly defaultKey = '';
@@ -28,29 +22,23 @@ export class AgnesDriver extends BaseEngineDriver {
   readonly supportedModels: ModelSpec[] = [
     {
       id: 'agnes-image-2.5-flash',
-      name: 'Agnes Image 2.5 Flash (秒级闪电生图)',
+      name: 'Agnes Image 2.5 Flash',
       type: 'image',
-      description: '次世代极速扩散模型，画质细腻，极速 1.5 秒出片，支持图生图',
-      defaultSteps: 20,
-      defaultCfg: 6.0,
+      description: '当前 Agnes 图像生成/编辑模型；使用 size 1K–4K 与可选 ratio，参考图通过 extra_body.image。',
       supportsLora: false,
     },
     {
       id: 'agnes-image-2.1-flash',
-      name: 'Agnes Image 2.1 Flash (通用旗舰写实)',
+      name: 'Agnes Image 2.1 Flash (legacy)',
       type: 'image',
-      description: '通用稳定写实出图，平衡速度与毛孔细节',
-      defaultSteps: 25,
-      defaultCfg: 5.5,
+      description: '官方当前模型目录标记为 legacy compatibility；运行字段需按旧模型契约或真实响应核实。',
       supportsLora: false,
     },
     {
       id: 'agnes-image-2.0-flash',
-      name: 'Agnes Image 2.0 Flash (经典轻量)',
+      name: 'Agnes Image 2.0 Flash (legacy)',
       type: 'image',
-      description: '经典轻量级扩散生图',
-      defaultSteps: 20,
-      defaultCfg: 5.0,
+      description: '官方当前模型目录标记为 legacy compatibility；运行字段需按旧模型契约或真实响应核实。',
       supportsLora: false,
     },
     {
@@ -108,6 +96,8 @@ export class AgnesDriver extends BaseEngineDriver {
 
     const isVideo=Boolean(params.isVideo || params.model.includes('video'));
     const omissionEntries = [
+      ['width', params.width],
+      ['height', params.height],
       ['negative_prompt', params.negative_prompt],
       ['seed', params.seed],
       ['steps', params.steps],
@@ -117,19 +107,29 @@ export class AgnesDriver extends BaseEngineDriver {
       ['denoise', params.denoise],
       ['resolution', params.extraParams?.resolution],
     ].filter(([, value]) => value !== undefined && value !== null && value !== '');
+    const upstreamOmissions = Array.isArray(params.extraParams?.omissions) ? params.extraParams.omissions : [];
+    const parameterOmissions = [
+      ...upstreamOmissions,
+      ...omissionEntries.map(([field, value]) => ({field,value,reason:'Agnes image endpoint schema does not accept this canvas field'})),
+    ].filter((entry, index, entries) => entries.findIndex(candidate => candidate.field === entry.field) === index);
     const imageRequestBody = {
       workflowSnapshot: params.workflowSnapshot,
       model: params.model,
       prompt: params.prompt,
-      width: params.width,
-      height: params.height,
       image_url: params.image_url,
       aspect_ratio: params.aspectRatio,
       size: params.extraParams?.size || params.imageSize,
       ...(Array.isArray(params.loras) && params.loras.length > 0 ? { loras: params.loras } : {}),
-      parameterOmissions: omissionEntries.map(([field, value]) => ({field,value,reason:'Agnes image endpoint schema does not accept this canvas field'})),
+      parameterOmissions,
     };
-    const requestBody=isVideo ? {workflowSnapshot:params.workflowSnapshot,provider:'agnes',model:params.model,prompt:params.prompt,duration:params.videoDuration,aspect_ratio:params.aspectRatio,image_url:params.image_url,seed:params.seed,steps:params.steps,cfg:params.cfg,loras:params.loras,size:params.extraParams?.size || params.imageSize} : imageRequestBody;
+    const videoResolution = params.extraParams?.resolution;
+    const videoSizeField = params.extraParams?.size ?? params.imageSize;
+    if (isVideo && videoResolution !== undefined && videoResolution !== '' && videoSizeField !== undefined && videoSizeField !== '' && String(videoResolution) !== String(videoSizeField)) {
+      throw new Error(`Agnes Video 的分辨率档位官方字段是 size；节点 resolution="${videoResolution}" 与 size="${videoSizeField}" 不一致，请只保留一个`);
+    }
+    const videoSize = videoSizeField !== undefined && videoSizeField !== '' ? videoSizeField : (videoResolution !== undefined && videoResolution !== '' ? videoResolution : undefined);
+    const videoSizeSources = {resolution:videoResolution,size:params.extraParams?.size,imageSize:params.imageSize};
+    const requestBody=isVideo ? {workflowSnapshot:params.workflowSnapshot,provider:'agnes',model:params.model,prompt:params.prompt,duration:params.videoDuration,aspect_ratio:params.aspectRatio,image_url:params.image_url,seed:params.seed,steps:params.steps,cfg:params.cfg,...(Array.isArray(params.loras) && params.loras.length > 0 ? {loras:params.loras} : {}),size:videoSize,extraParams:videoSizeSources,custom_parameters:params.extraParams?.custom_parameters,fps:params.videoFps,num_frames:params.videoFrames,negative_prompt:params.negative_prompt} : imageRequestBody;
     const resp = await fetch(isVideo ? '/api/video/generate' : '/api/engine/agnes/generate', {
       method: 'POST',
       headers,
@@ -142,14 +142,15 @@ export class AgnesDriver extends BaseEngineDriver {
     }
 
     const data = await resp.json();
+    const videoSeed = [data.actualRequest?.seed,data.historyItem?.seed,data.seed].find(value=>typeof value === 'number' && Number.isFinite(value));
     return {
       mediaUrl: data.mediaUrl || data.imageUrl || data.videoUrl,
-      mediaType: data.mediaType || (params.model.includes('video') ? 'video' : 'image'),
+      mediaType: data.mediaType || (isVideo ? 'video' : 'image'),
       provider: this.name,
       providerId: this.id,
       model: data.model || params.model,
       requestedModel: params.model,
-      seed: null, // Agnes API has no seed support
+      seed: isVideo ? videoSeed ?? null : null,
       wasAdapted: data.wasAdapted,
       adaptationNotice: data.adaptationNotice,
       timings: data.timings,

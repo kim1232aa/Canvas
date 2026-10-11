@@ -69,8 +69,8 @@ export function buildSenseNovaImageRequest(body: Json): SenseNovaImageRequest {
     n,
     output_format: outputFormat,
     response_format: responseFormat,
-    watermark: body.watermark ?? true,
-    prompt_extend: body.prompt_extend ?? false,
+    ...(isProvided(body.watermark) ? { watermark: Boolean(body.watermark) } : {}),
+    ...(isProvided(body.prompt_extend) ? { prompt_extend: Boolean(body.prompt_extend) } : {}),
   };
   return {
     endpoint: imageUrl ? '/images/edits' : '/images/generations',

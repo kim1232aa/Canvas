@@ -7,6 +7,66 @@ import { NormalizedGenerateResult } from '../engines/types';
 import * as api from '../services/api';
 
 describe('graphEngine - B2 & L2a & L2b 拓扑反向追踪与参数抽取隔离测试', () => {
+  it('takes recipe and guards from the model-chain checkpoint rather than CLIP-source checkpoint',()=>{
+    const a=createNode('a','CheckpointLoaderSimple',{ckpt_name:'A',targetProvider:'civitai',civitai_engine:'sdcpp',import_unresolved_resource:true});
+    const b=createNode('b','CheckpointLoaderSimple',{ckpt_name:'B',targetProvider:'civitai',civitai_engine:'comfy'});
+    const p=createNode('p','CLIPTextEncode',{text:'test'}),k=createNode('k','KSampler',{});
+    const edges:Connection[]=[{id:'ap',fromNodeId:'a',fromSocketId:'CLIP',toNodeId:'p',toSocketId:'clip',type:'CLIP'},{id:'pk',fromNodeId:'p',fromSocketId:'CONDITIONING',toNodeId:'k',toSocketId:'positive',type:'CONDITIONING'},{id:'bk',fromNodeId:'b',fromSocketId:'MODEL',toNodeId:'k',toSocketId:'model',type:'MODEL'}];
+    expect(extractWorkflowParameters([a,b,p,k],edges,'a')).toMatchObject({checkpointModel:'B',civitaiEngine:'comfy'});
+  });
+  it('never clears or overwrites a SaveImage used as upstream video input',async()=>{
+    const input={...createNode('input','SaveImage',{}),outputData:'https://example.test/input.png'};
+    const video=createNode('v','AIVideoNode',{model:'fal-ai/wan/v2.7/image-to-video',targetProvider:'fal',prompt:'test'});
+    const edges:Connection[]=[{id:'i',fromNodeId:'input',fromSocketId:'images',toNodeId:'v',toSocketId:'init_image',type:'IMAGE'}];
+    vi.spyOn(EngineRegistry,'generate').mockResolvedValue({mediaUrl:'https://example.test/out.mp4',mediaType:'video',provider:'fal',providerId:'video',model:video.values.model,seed:null});
+    const touched:string[]=[];await executeWorkflow([input,video],edges,id=>touched.push(id),undefined,'v');
+    expect(touched).not.toContain('input');
+  });
+  it('guards unresolved models and pending video source chains independently of connected LoRAs',()=>{
+    expect(()=>extractWorkflowParameters([createNode('c','CheckpointLoaderSimple',{ckpt_name:'original',targetProvider:'civitai',prompt:'test',import_unresolved_resource:true})],[])).toThrow(/底模.*重新选择/);
+    expect(()=>extractWorkflowParameters([createNode('v','AIVideoNode',{model:'fal-ai/minimax/video-01',targetProvider:'fal',prompt:'test',source_lora_air:'original-source',execution_blocked_reason:'来源执行链尚未接入'})],[])).toThrow(/来源执行链尚未接入/);
+    expect(()=>extractWorkflowParameters([createNode('v','AIVideoNode',{model:'fal-ai/minimax/video-01',targetProvider:'fal',prompt:'test',source_lora_air:'original-source'})],[])).toThrow(/来源.*执行链/);
+  });
+  it('requires explicit reference input for editing checkpoints even when a thumbnail exists',()=>{
+    const c=createNode('c','CheckpointLoaderSimple',{ckpt_name:'agnes-image-2.5',targetProvider:'agnes',prompt:'test',require_reference_image:true});
+    expect(()=>extractWorkflowParameters([c],[])).toThrow(/编辑输入.*参考图/);
+    const k=createNode('k','KSampler',{prompt:'test'}),image=createNode('i','LoadImage',{image_url:'reference.png'});
+    const edges:Connection[]=[{id:'m',fromNodeId:'c',fromSocketId:'MODEL',toNodeId:'k',toSocketId:'model',type:'MODEL'},{id:'i',fromNodeId:'i',fromSocketId:'IMAGE',toNodeId:'k',toSocketId:'latent_image',type:'LATENT'}];
+    expect(extractWorkflowParameters([c,k,image],edges,'k')).toMatchObject({requireReferenceImage:true,initImageUrl:'reference.png'});
+  });
+  it('carries explicit Civitai recipe values from checkpoint to the driver contract', async () => {
+    const node=createNode('c','CheckpointLoaderSimple',{ckpt_name:'urn:air:sdxl:checkpoint:civitai:123@456',targetProvider:'civitai',prompt:'test',civitai_engine:'comfy',civitai_ecosystem:'sdxl',civitai_model:'sdxl',batch_size:0});
+    const spy=vi.spyOn(EngineRegistry,'generate').mockResolvedValue({mediaUrl:'https://example.test/out.png',mediaType:'image',provider:'civitai',providerId:'civitai',model:node.values.ckpt_name,seed:null});
+    await executeWorkflow([node],[],()=>{},undefined,'c');
+    expect(spy.mock.calls[0][1].extraParams).toMatchObject({engine:'comfy',ecosystem:'sdxl',comfyModel:'sdxl',quantity:0});
+  });
+  it('submits Civitai advanced objects through graph extraction and the real driver without pre-merging model', async()=>{
+    const {CivitaiDriver}=await import('../engines/drivers/CivitaiDriver');
+    const originalFetch=globalThis.fetch;
+    const bodies:any[]=[];
+    globalThis.fetch=vi.fn(async (_url,init)=>{bodies.push(JSON.parse(String(init?.body)));return new Response(JSON.stringify({imageUrl:'https://example.test/out.png'}));});
+    vi.spyOn(EngineRegistry,'generate').mockImplementation((_provider,params,keys)=>new CivitaiDriver().generate(params,keys || {}));
+    const custom={unknown_flag:true,safety:false,cfgScale:0,model:'advanced-model',loras:{'urn:air:sdxl:lora:civitai:789@123':0}};
+    const node=createNode('c','CheckpointLoaderSimple',{ckpt_name:'urn:air:sdxl:checkpoint:civitai:123@456',targetProvider:'civitai',prompt:'test',civitai_engine:'comfy',custom_parameters:JSON.stringify(custom)});
+    try {
+      await executeWorkflow([node],[],()=>{},undefined,'c');
+      expect(bodies[0].custom_parameters).toEqual(custom);
+      expect(bodies[0].model).toBe(node.values.ckpt_name);
+    } finally {globalThis.fetch=originalFetch;}
+  });
+  it('extracts video advanced parameters and resolution independently of provider', async () => {
+    const node=createNode('v','AIVideoNode',{model:'fal-ai/wan/v2.7/image-to-video',targetProvider:'fal',prompt:'test',resolution:'720p',custom_parameters:'{"enable_prompt_expansion":false,"seed":0}'});
+    const spy=vi.spyOn(EngineRegistry,'generate').mockResolvedValue({mediaUrl:'https://example.test/out.mp4',mediaType:'video',provider:'fal',providerId:'video',model:node.values.model,seed:null});
+    await executeWorkflow([node],[],()=>{},undefined,'v');
+    expect(spy.mock.calls[0][1].extraParams).toMatchObject({resolution:'720p',custom_parameters:{enable_prompt_expansion:false,seed:0}});
+  });
+  it('lists unresolved graph resources and never submits a fabricated path', async () => {
+    const nodes=[createNode('c','CheckpointLoaderSimple',{ckpt_name:'model',targetProvider:'civitai'}),createNode('l','LoRALoader',{lora_name:'original',civitai_id:'123',import_unresolved_resource:true}),createNode('k','KSampler',{prompt:'test'})];
+    const edges:Connection[]=[{id:'a',fromNodeId:'c',fromSocketId:'MODEL',toNodeId:'l',toSocketId:'model',type:'MODEL'},{id:'b',fromNodeId:'l',fromSocketId:'MODEL',toNodeId:'k',toSocketId:'model',type:'MODEL'}];
+    const spy=vi.spyOn(EngineRegistry,'generate');
+    await expect(executeWorkflow(nodes,edges,()=>{},undefined,'k')).rejects.toThrow(/123.*重新选择/);
+    expect(spy).not.toHaveBeenCalled();
+  });
   it('clears stale media outputs when a generation branch starts or fails, but not on non-media nodes', () => {
     expect(shouldClearExecutionOutput('KSampler', 'running', undefined)).toBe(true);
     expect(shouldClearExecutionOutput('SaveImage', 'idle', undefined, '')).toBe(true);
@@ -42,6 +102,90 @@ describe('graphEngine - B2 & L2a & L2b 拓扑反向追踪与参数抽取隔离�
     inputs: [],
     outputs: [],
     values,
+  });
+
+  it.each([false,true,undefined])('submits SenseNova graph booleans %j through executeWorkflow, the real registry and driver for checkpoint, sampler and CLIP-sink branches',async value=>{
+    const originalFetch=globalThis.fetch;
+    const submitted:Array<{url:string;body:Record<string,unknown>}>=[];
+    globalThis.fetch=vi.fn(async(url,init)=>{
+      submitted.push({url:String(url),body:JSON.parse(String(init?.body))});
+      return new Response(JSON.stringify({imageUrl:'https://example.test/result.png'}));
+    });
+    const registry=vi.spyOn(EngineRegistry,'generate');
+    try {
+      for(const branch of ['checkpoint','sampler','clip'] as const){
+        const checkpoint=createNode('c','CheckpointLoaderSimple',{targetProvider:'sensenova',ckpt_name:'custom-image-model',prompt:'keep prompt',size:'auto',watermark:value,prompt_extend:value});
+        const sampler=createNode('k','KSampler',{prompt:'keep prompt'});
+        const clip=createNode('p','CLIPTextEncode',{text:'keep prompt'});
+        const sink=createNode('s','SaveImage',{});
+        const nodes=branch==='checkpoint'?[checkpoint]:branch==='sampler'?[checkpoint,sampler]:[checkpoint,clip,sink];
+        const connections:Connection[]=branch==='sampler'?[{id:'m',fromNodeId:'c',fromSocketId:'MODEL',toNodeId:'k',toSocketId:'model',type:'MODEL'}]:branch==='clip'?[{id:'cp',fromNodeId:'c',fromSocketId:'CLIP',toNodeId:'p',toSocketId:'clip',type:'CLIP'},{id:'ps',fromNodeId:'p',fromSocketId:'CONDITIONING',toNodeId:'s',toSocketId:'images',type:'IMAGE'}]:[];
+        const target=branch==='checkpoint'?'c':branch==='sampler'?'k':'s';
+        const extracted=extractWorkflowParameters(nodes,connections,target);
+        expect(extracted).toMatchObject({watermark:value,promptExtend:value,targetProvider:'sensenova',checkpointModel:'custom-image-model'});
+        await executeWorkflow(nodes,connections,()=>{},undefined,target);
+        const sent=submitted.at(-1)!;
+        expect(sent.url).toBe('/api/engine/sensenova/generate');
+        expect(sent.body).toMatchObject({model:'custom-image-model',prompt:'keep prompt',size:'auto'});
+        const extra=registry.mock.calls.at(-1)![1].extraParams;
+        for(const field of ['watermark','prompt_extend']){
+          if(value===undefined){expect(sent.body).not.toHaveProperty(field);expect(extra).not.toHaveProperty(field);}
+          else {expect(sent.body[field]).toBe(value);expect(extra?.[field]).toBe(value);}
+        }
+        expect(checkpoint.values).toMatchObject({watermark:value,prompt_extend:value,size:'auto'});
+      }
+      expect(submitted).toHaveLength(3);
+    } finally {globalThis.fetch=originalFetch;}
+  });
+
+  it('submits SenseNova spatial booleans through the real registry and driver without manufacturing unset fields',async()=>{
+    const {spatialRequestParameters}=await import('./frontendParameters');
+    const originalFetch=globalThis.fetch;
+    const submitted:Record<string,unknown>[]=[];
+    globalThis.fetch=vi.fn(async(_url,init)=>{submitted.push(JSON.parse(String(init?.body)));return new Response(JSON.stringify({imageUrl:'https://example.test/result.png'}));});
+    try {
+      for(const value of [false,true,undefined]){
+        const frame:any={id:'f',prompt:'keep prompt',negativePrompt:'',params:{targetProvider:'sensenova',checkpoint:'custom-image-model',size:'auto',loras:[],seedControl:'fixed',watermark:value,promptExtend:value}};
+        const request=spatialRequestParameters(frame);
+        await EngineRegistry.generate('sensenova',request,{});
+        const sent=submitted.at(-1)!;
+        expect(sent).toMatchObject({model:'custom-image-model',prompt:'keep prompt',size:'auto'});
+        for(const field of ['watermark','prompt_extend']){
+          if(value===undefined)expect(sent).not.toHaveProperty(field);else expect(sent[field]).toBe(value);
+        }
+      }
+      expect(submitted).toHaveLength(3);
+    } finally {globalThis.fetch=originalFetch;}
+  });
+
+  it('keeps each SenseNova boolean independent and never coerces string values into booleans at submission',async()=>{
+    const originalFetch=globalThis.fetch;
+    const submitted:Record<string,unknown>[]=[];
+    globalThis.fetch=vi.fn(async(_url,init)=>{submitted.push(JSON.parse(String(init?.body)));return new Response(JSON.stringify({imageUrl:'https://example.test/result.png'}));});
+    try {
+      for(const [watermark,prompt_extend] of [[false,true],[true,false],['false','true']]){
+        const checkpoint=createNode('c','CheckpointLoaderSimple',{targetProvider:'sensenova',ckpt_name:'custom-image-model',prompt:'keep prompt',watermark,prompt_extend});
+        await executeWorkflow([checkpoint],[],()=>{},undefined,'c');
+        const sent=submitted.at(-1)!;
+        if(typeof watermark==='boolean'){
+          expect(sent.watermark).toBe(watermark);
+          expect(sent.prompt_extend).toBe(prompt_extend);
+        } else {
+          expect(sent).not.toHaveProperty('watermark');
+          expect(sent).not.toHaveProperty('prompt_extend');
+        }
+        expect(checkpoint.values).toMatchObject({watermark,prompt_extend});
+      }
+    } finally {globalThis.fetch=originalFetch;}
+  });
+
+  it.each(['agnes','fal','gemini'])('never adds retained SenseNova booleans to %s graph extra fields',async targetProvider=>{
+    const checkpoint=createNode('c','CheckpointLoaderSimple',{targetProvider,ckpt_name:'custom-image-model',prompt:'keep prompt',watermark:false,prompt_extend:true});
+    const registry=vi.spyOn(EngineRegistry,'generate').mockResolvedValue({mediaUrl:'https://example.test/result.png',mediaType:'image',provider:targetProvider,providerId:targetProvider as any,model:'custom-image-model',seed:null});
+    await executeWorkflow([checkpoint],[],()=>{},undefined,'c');
+    expect(registry.mock.calls[0][1].extraParams).not.toHaveProperty('watermark');
+    expect(registry.mock.calls[0][1].extraParams).not.toHaveProperty('prompt_extend');
+    expect(checkpoint.values).toMatchObject({watermark:false,prompt_extend:true});
   });
 
   it('marks only the failed execution target and leaves its input subgraph and other branches untouched',async()=>{
@@ -509,7 +653,7 @@ describe('graphEngine - B2 & L2a & L2b 拓扑反向追踪与参数抽取隔离�
     expect(result.provider).toBe('fal');
     expect(generateSpy).toHaveBeenCalledTimes(1);
     expect(generateSpy.mock.calls[0][1].loras).toEqual(expect.arrayContaining([
-      expect.objectContaining({ name: 'koda', path: 'koda', strength: 1 }),
+      expect.objectContaining({ name: 'koda', path: undefined, strength: 1 }),
     ]));
 
   });
@@ -758,5 +902,55 @@ describe('graphEngine - F4 AIVideoNode provider sync / reject empty & mismatch',
     ];
     const params = extractWorkflowParameters(nodes, [], 'video-node');
     expect(params.videoProvider).toBe('agnes');
+  });
+
+  it('supports 3-node direct cloud generation (CheckpointLoaderSimple -> CLIPTextEncode -> SaveImage)', () => {
+    const nodes: NodeInstance[] = [
+      createNode('ckpt-1', 'CheckpointLoaderSimple', {
+        ckpt_name: 'agnes-image-2.5-flash',
+        targetProvider: 'agnes',
+        size: '2K',
+        aspect_ratio: '1:1',
+      }),
+      createNode('prompt-1', 'CLIPTextEncode', {
+        text: 'a majestic ethereal snow leopard',
+      }),
+      createNode('save-1', 'SaveImage', {
+        filename_prefix: 'Agnes_Image_25_Flash',
+      }),
+    ];
+    const connections: Connection[] = [
+      { id: 'c1', fromNodeId: 'ckpt-1', fromSocketId: 'CLIP', toNodeId: 'prompt-1', toSocketId: 'clip', type: 'CLIP' },
+      { id: 'c2', fromNodeId: 'prompt-1', fromSocketId: 'CONDITIONING', toNodeId: 'save-1', toSocketId: 'images', type: 'CONDITIONING' },
+    ];
+
+    const target = resolveTargetNode(nodes, connections);
+    expect(target.id).toBe('save-1');
+
+    const params = extractWorkflowParameters(nodes, connections, target);
+    expect(params.checkpointModel).toBe('agnes-image-2.5-flash');
+    expect(params.targetProvider).toBe('agnes');
+    expect(params.positivePrompt).toBe('a majestic ethereal snow leopard');
+    expect(params.size).toBe('2K');
+    expect(params.aspectRatio).toBe('1:1');
+    expect(params.saveImageNodeId).toBe('save-1');
+    expect(params.steps).toBeUndefined();
+    expect(params.seed).toBeUndefined();
+    expect(params.cfg).toBeUndefined();
+    expect(params.sampler).toBeUndefined();
+    expect(params.scheduler).toBeUndefined();
+    expect(params.width).toBeUndefined();
+    expect(params.height).toBeUndefined();
+
+    // Also verify triggering directly from ckpt-1 or prompt-1 resolves to the same execution
+    const paramsFromCkpt = extractWorkflowParameters(nodes, connections, 'ckpt-1');
+    expect(paramsFromCkpt.checkpointModel).toBe('agnes-image-2.5-flash');
+    expect(paramsFromCkpt.positivePrompt).toBe('a majestic ethereal snow leopard');
+    expect(paramsFromCkpt.saveImageNodeId).toBe('save-1');
+
+    const paramsFromPrompt = extractWorkflowParameters(nodes, connections, 'prompt-1');
+    expect(paramsFromPrompt.checkpointModel).toBe('agnes-image-2.5-flash');
+    expect(paramsFromPrompt.positivePrompt).toBe('a majestic ethereal snow leopard');
+    expect(paramsFromPrompt.saveImageNodeId).toBe('save-1');
   });
 });

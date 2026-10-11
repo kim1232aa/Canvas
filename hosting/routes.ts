@@ -6,6 +6,14 @@ const route = (handler: RequestHandler): RequestHandler => (req, res, next) => {
 };
 
 export function registerStorageRoutes(app: Express) {
+  app.post('/api/media', route(async (req, res) => {
+    const dataUrl = req.body?.dataUrl;
+    if (typeof dataUrl !== 'string' || !/^data:(image|video|audio)\/[\w.+-]+;base64,./.test(dataUrl)) {
+      res.status(400).json({error: '字段 dataUrl 必须为 image/video/audio 的 base64 data URL', errorSource: 'local'}); return;
+    }
+    res.json({url: await currentRequest().store.persistMedia(dataUrl)});
+  }));
+
   app.get('/api/history', route(async (_req, res) => {
     res.json(await currentRequest().store.history());
   }));

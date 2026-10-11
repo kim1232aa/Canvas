@@ -1,10 +1,13 @@
 import {migrateTensorWorkflow} from './utils/legacyTensorWorkflow';
 import {ExecutionLog} from './components/ExecutionLog';
+import {spatialRequestParameters} from './utils/frontendParameters';
+import {replaceSelectedResource,type ResourceSelection} from './utils/resourceSelection';
+import {readInspectorParameters,patchInspectorBranchNode,patchSpatialParameters,variationReference,modelCheckpoint} from './utils/inspectorParameters';
 import {explicitProvider,graphBranch,catalogModelTarget} from './utils/graphEditing';
 import {attachLoraToBranch,findLoraTarget,removeLoraFromBranch} from './utils/attachLora';
 import {isInvalidTensorModel} from './utils/modelCatalog';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import {loadWorkspaceCache, BOARDS_KEY, ACTIVE_BOARD_KEY, MODE_KEY, isCanvasProject} from './utils/workspaceCache';
+import {loadWorkspaceCache, saveWorkspaceCache, BOARDS_KEY, ACTIVE_BOARD_KEY, MODE_KEY, isCanvasProject} from './utils/workspaceCache';
 import {generationReadiness} from './utils/generationReadiness';
 import {nextSeedAfterGeneration} from './utils/seedControl';
 import {CloudProjectModal} from './components/CloudProjectModal';
@@ -67,8 +70,6 @@ import {
   isLoraUnsupportedOnEndpoint,
   resolveActiveCheckpoint,
   resolveCheckpointForNode,
-  omitUnsupportedGenerateFields,
-  resolveGenerateLorasPayload,
   sanitizeFrameLoras,
 } from './utils/resolveCheckpoint';
 import {
@@ -212,9 +213,7 @@ export default function App() {
   // Sync canvases to localStorage
   useEffect(() => {
     try {
-      localStorage.setItem(BOARDS_KEY, JSON.stringify(canvases));
-      localStorage.setItem(ACTIVE_BOARD_KEY, currentCanvasId);
-      localStorage.setItem(MODE_KEY, canvasMode);
+      saveWorkspaceCache(canvases, currentCanvasId, canvasMode);
     } catch (e) {
       setToast({type: 'warning', title: '本机保存未完成', message: '浏览器存储空间不足或不可用，请使用「保存到云端」保留项目。'});
     }
@@ -237,12 +236,47 @@ export default function App() {
       const frame = spatialFrames.find(f => f.id === selectedFrameId);
       if (!frame) return '请选择要生成的画板';
       const p = frame.params;
-      return generationReadiness({hfProvider:p.hfProvider, provider: p.targetProvider, model: p.checkpoint, prompt: frame.prompt, loras: p.loras, resolution: p.resolution, shift: p.shift, randomSeed: p.randomSeed, galleryImages: p.galleryImages, seed: p.seedControl === 'randomize' ? 1 : p.seed, steps: p.steps});
+      return generationReadiness({
+        ...p,
+        referenceImageUrl: frame.referenceImageUrl,
+        hfProvider: p.hfProvider,
+        provider: p.targetProvider === 'video' ? p.videoProvider : p.targetProvider,
+        model: p.checkpoint,
+        prompt: frame.prompt,
+        loras: p.loras,
+        resolution: p.resolution,
+        shift: p.shift,
+        randomSeed: p.randomSeed,
+        galleryImages: p.galleryImages,
+        seed: p.seedControl === 'randomize' ? 1 : p.seed,
+        steps: p.steps,
+        cfg: p.cfg,
+        negativePrompt: frame.negativePrompt,
+        width: p.width,
+        height: p.height,
+      });
     }
     if (!nodes.length) return undefined;
     try {
       const p = extractWorkflowParameters(nodes, connections, selectedNodeId || undefined);
-      return generationReadiness({hfProvider:p.hfProvider, provider: p.videoProvider || p.targetProvider, model: p.checkpointModel, prompt: p.positivePrompt, loras: p.loras, resolution: p.resolution, shift: p.shift, randomSeed: p.randomSeed, galleryImages: p.galleryImages, seed: p.seed, steps: p.steps});
+      return generationReadiness({
+        hfProvider: p.hfProvider,
+        provider: p.videoProvider || p.targetProvider,
+        model: p.checkpointModel,
+        prompt: p.positivePrompt,
+        loras: p.loras,
+        resolution: p.resolution,
+        shift: p.shift,
+        randomSeed: p.randomSeed,
+        galleryImages: p.galleryImages,
+        seed: p.seed,
+        steps: p.steps,
+        cfg: p.cfg,
+        negativePrompt: p.negativePrompt,
+        width: p.width,
+        height: p.height,
+        ksamplerNodeId: p.ksamplerNodeId,
+      });
     } catch (error: any) { return error.message || '工作流连接不完整'; }
   }, [canvasMode, selectedFrameId, spatialFrames, nodes, connections, selectedNodeId]);
 
@@ -389,6 +423,7 @@ export default function App() {
       ...frame,
       id: newId,
       title: `${frame.title} (衍生变体)`,
+      referenceImageUrl: variationReference(frame),
       pos: { x: frame.pos.x + 520, y: frame.pos.y },
       params: {
         ...frame.params,
@@ -405,7 +440,25 @@ export default function App() {
   const handleQueueFrame = async (frameId: string) => {
     const frame = spatialFrames.find((f) => f.id === frameId);
     if (!frame || frame.status === 'generating' || isExecuting) return;
-    const issue = generationReadiness({hfProvider:frame.params.hfProvider, provider: frame.params.targetProvider, model: frame.params.checkpoint, prompt: frame.prompt, loras: frame.params.loras, resolution: frame.params.resolution, shift: frame.params.shift, randomSeed: frame.params.randomSeed, galleryImages: frame.params.galleryImages, seed: frame.params.seedControl === 'randomize' ? 1 : frame.params.seed, steps: frame.params.steps});
+    const issue = generationReadiness({
+      ...frame.params,
+      referenceImageUrl: frame.referenceImageUrl,
+      hfProvider: frame.params.hfProvider,
+      provider: frame.params.targetProvider === 'video' ? frame.params.videoProvider : frame.params.targetProvider,
+      model: frame.params.checkpoint,
+      prompt: frame.prompt,
+      loras: frame.params.loras,
+      resolution: frame.params.resolution,
+      shift: frame.params.shift,
+      randomSeed: frame.params.randomSeed,
+      galleryImages: frame.params.galleryImages,
+      seed: frame.params.seedControl === 'randomize' ? 1 : frame.params.seed,
+      steps: frame.params.steps,
+      cfg: frame.params.cfg,
+      negativePrompt: frame.negativePrompt,
+      width: frame.params.width,
+      height: frame.params.height,
+    });
     if (issue) {setToast({type: 'warning', title: '无法生成', message: issue}); return;}
 
     handleUpdateFrame(frameId, {
@@ -451,75 +504,13 @@ export default function App() {
         executionStage: `正在整理请求参数 (${p.targetProvider.toUpperCase()})...`,
       });
 
-      const grokOrOpenAi = p.targetProvider === 'openai_compat' || p.targetProvider === 'grok_compat';
-      const grokish = p.targetProvider === 'grok_compat';
-      const extraParams: Record<string, unknown> = {};
-      if(p.customParameters) extraParams.custom_parameters=JSON.parse(p.customParameters);
-      if (p.size) extraParams.size = p.size;
-      if (p.quality) extraParams.quality = p.quality;
-      if (p.outputFormat) extraParams.output_format = p.outputFormat;
-      if (p.background) extraParams.background = p.background;
-      if (p.moderation) extraParams.moderation = p.moderation;
-      if (p.resolution) extraParams.resolution = p.resolution;
-      if (p.targetProvider === 'huggingface') {
-        if (p.hfProvider) extraParams.hf_provider=p.hfProvider;
-        if (p.shift !== undefined) extraParams.shift = p.shift;
-        if (p.randomSeed !== undefined) extraParams.random_seed = p.randomSeed;
-        if (p.galleryImages !== undefined) extraParams.gallery_images = p.galleryImages;
-      }
-      // Modal N → extraParams.n (must reach request body; not UI-only)
-      if (grokOrOpenAi && p.batchSize != null && Number(p.batchSize) > 0) {
-        extraParams.n = Number(p.batchSize);
-      }
-      if (p.targetProvider === 'tensorart' && p.batchSize !== undefined) extraParams.count = p.batchSize;
-      if (['fal','nanogpt'].includes(p.targetProvider) && p.batchSize!==undefined) extraParams.n=p.batchSize;
-      if (p.falModelName) extraParams.model_name=p.falModelName;
-      const falWan=p.targetProvider==='fal' && /wan-t2v|wan-i2v|wan\/v2\.1/.test(p.checkpoint);
-
-      const grokVideoDuration = grokish
-        ? (frame.videoDuration ?? p.videoDuration)
-        : (isVideo ? (frame.videoDuration || 5) : undefined);
-
-      const lorasPayload = resolveGenerateLorasPayload(
-        p.targetProvider,
-        p.checkpoint,
-        p.loras.map((l) => ({
-          name: l.name,
-          strength: l.modelStrength,
-          modelStrength: l.modelStrength,
-          clipStrength: l.clipStrength,
-          civitaiId: l.civitaiId,
-          triggers: l.triggerWords,
-        })),
-      );
-
-      const normParams: NormalizedGenerateParams = omitUnsupportedGenerateFields(p.targetProvider, p.checkpoint, {
+      const normParams: NormalizedGenerateParams = {
+        ...spatialRequestParameters({...frame, mediaType: isVideo ? 'video' : 'image'}),
         workflowSnapshot: { format: 'comfycanvas', version: 1, canvasMode: 'spatial', frame },
         prompt: finalPrompt,
-        negative_prompt: frame.negativePrompt,
-        model: p.checkpoint,
-        provider: p.targetProvider,
-        targetProvider: p.targetProvider,
-        width: p.width,
-        height: p.height,
-        steps: p.steps,
-        cfg: p.cfg,
-        seed: p.seedControl === 'randomize' ? Math.floor(Math.random() * 1000000000) : p.seed,
-        denoise: frame.imageUrl ? p.denoise : undefined,
-        sampler_name: p.sampler,
-        scheduler: p.scheduler,
-        image_url: frame.imageUrl,
-        isVideo,
-        videoDuration: falWan ? undefined : grokish ? grokVideoDuration : (isVideo ? (frame.videoDuration ?? p.videoDuration) : undefined),
-        videoFps: grokish ? undefined : (isVideo ? (p.videoFps ?? frame.videoFps) : undefined),
-        videoFrames: isVideo ? p.videoFrames : undefined,
-        aspectRatio: isVideo
-          ? (grokish ? (frame.videoAspectRatio || p.aspectRatio || undefined) : (frame.videoAspectRatio || '16:9'))
-          : (p.aspectRatio || undefined),
-        imageSize: p.imageSize || undefined,
-        extraParams,
-        loras: lorasPayload,
-      }) as NormalizedGenerateParams;
+      };
+      const omissions = normParams.extraParams?.omissions;
+      if (Array.isArray(omissions) && omissions.length) setToast({type:'warning', title:'请求参数未提交项', message:omissions.map(item => `${item.field}=${item.value}：${item.reason}`).join('；')});
 
       const startTime = Date.now();
       let tracker: any = null;
@@ -556,7 +547,7 @@ export default function App() {
         if (execResult.wasAdapted && execResult.adaptationNotice) {
           setToast({
             type: 'info',
-            title: '💡 引擎适配提示',
+            title: '引擎适配提示',
             message: execResult.adaptationNotice,
           });
         }
@@ -997,7 +988,7 @@ export default function App() {
       // Trigger high visibility toast
       setToast({
         type: result.historyWarning ? 'warning' : 'success',
-        title: '🎉 工作流运行成功！',
+        title: '工作流运行成功！',
         message: result.historyWarning || `由 ${result.provider} 渲染完成，种子: ${result.seed ?? '未返回'}。${historyLoaded ? '可在历史记录查看实际参数和工作流' : '历史记录读取失败，请重新打开历史记录'}`,
         imageUrl: result.imageUrl,
       });
@@ -1071,13 +1062,7 @@ export default function App() {
   };
 
   // Civitai / Multi-Hub LoRA selection
-  const handleSelectLoRAFromCivitai = (lora: {
-    name: string;
-    provider?: string;
-    civitaiId?: string;
-    triggerWords: string;
-    baseModel?: string;
-  }) => {
+  const handleSelectLoRAFromCivitai = (lora: ResourceSelection & {triggerWords:string}) => {
     if(lora.provider && lora.provider!=='civitai') {handleSelectLoRAWithBaseModel(lora);return;}
     // A remembered spatial selection must not redirect graph-mode mounting.
     if (canvasMode === 'spatial' && selectedFrameId) {
@@ -1086,6 +1071,7 @@ export default function App() {
         const nextLoras = [
           ...frame.params.loras.filter((l) => l.name !== lora.name),
           {
+            ...lora,
             name: lora.name,
             modelStrength: 0.8,
             clipStrength: 0.8,
@@ -1110,13 +1096,7 @@ export default function App() {
             ? {
                 ...n,
                 title: loraLoaderNodeTitle(n.title, lora.name),
-                values: {
-                  ...n.values,
-                  lora_name: lora.name,
-                  civitai_id: lora.civitaiId || '',
-                  trigger_words: lora.triggerWords,
-                  base_model: lora.baseModel || '',
-                },
+                values: {...replaceSelectedResource(n.values,lora,'lora_name'),civitai_id:lora.civitaiId,trigger_words:lora.triggerWords,base_model:lora.baseModel || ''},
               }
             : n
         )
@@ -1124,15 +1104,7 @@ export default function App() {
     }
   };
 
-  const handleAddLoRANodeToCanvas = (lora: {
-    name: string;
-    civitaiId?: string;
-    triggerWords?: string;
-    baseModel?: string;
-    provider?: string;
-    modelStrength?: number;
-    clipStrength?: number;
-  }, attach = false) => {
+  const handleAddLoRANodeToCanvas = (lora: ResourceSelection & {modelStrength?:number;clipStrength?:number}, attach = false) => {
     const newNodeId = `node-lora-${Date.now()}`;
     const def = NODE_DEFINITIONS['LoRALoader'];
 
@@ -1148,7 +1120,7 @@ export default function App() {
       inputs: def.inputs,
       outputs: def.outputs,
       values: {
-        ...def.defaultValues,
+        ...replaceSelectedResource(def.defaultValues,lora,'lora_name'),
         lora_name: lora.name,
         civitai_id: lora.civitaiId || '',
         trigger_words: lora.triggerWords || '',
@@ -1171,7 +1143,7 @@ export default function App() {
   };
 
   // Attach to the explicitly selected provider/model; architecture is verified by its API.
-  const handleSelectLoRAWithBaseModel = (lora: {name:string;provider?:string;civitaiId?:string;triggerWords?:string;baseModel?:string;modelStrength?:number;clipStrength?:number}) => {
+  const handleSelectLoRAWithBaseModel = (lora: ResourceSelection & {modelStrength?:number;clipStrength?:number}) => {
     const frame=canvasMode==='spatial' ? spatialFrames.find(f=>f.id===selectedFrameId) : undefined;
     let chosen: {checkpoint:string;provider:string};
     try {
@@ -1221,7 +1193,7 @@ export default function App() {
     if (canvasMode === 'spatial') {
       const frame=spatialFrames.find(f=>f.id===selectedFrameId);
       if(!frame){setToast({type:'error',title:'未应用模型',message:'请先选择目标空间画板'});return;}
-      handleUpdateFrame(frame.id,{mediaType:isVideoModel?'video':'image',params:{...frame.params,checkpoint:modelId,targetProvider:provider as ComfyParameters['targetProvider']}});
+      handleUpdateFrame(frame.id,{mediaType:isVideoModel?'video':'image',params:{...frame.params,checkpoint:modelId,targetProvider:provider as ComfyParameters['targetProvider'],...(extraData?.resourceVerified ? {unresolvedModel:false} : {})}});
       setToast({type:'success',title:'模型已应用',message:`${modelName} · ${provider}`});return;
     }
     let targetModelNode:NodeInstance|undefined;
@@ -1240,7 +1212,7 @@ export default function App() {
                 ...n,
                 title: `AI 视频 (${modelName.split('/').pop()})`,
                 values: {
-                  ...n.values,
+                  ...replaceSelectedResource(n.values,{...extraData,name:modelId},'model'),
                   model: modelId,
                   targetProvider: provider,
                 },
@@ -1267,7 +1239,7 @@ export default function App() {
             model: modelId,
             targetProvider: provider,
             prompt: 'Cinematic dynamic scene, high quality, 4k ultra-detailed, photorealistic motion',
-            aspect_ratio: '16:9',
+            aspect_ratio: undefined,
             duration: '',
             fps: '',
             steps: 30,
@@ -1281,7 +1253,7 @@ export default function App() {
 
       setToast({
         type: 'success',
-        title: '🎬 已成功应用 AI 视频大模型',
+        title: '已成功应用 AI 视频大模型',
         message: `已切换至【${modelName}】(服务商: ${provider.toUpperCase()})，已同步至画布与活跃选区`,
       });
     } else {
@@ -1294,7 +1266,7 @@ export default function App() {
                 ...n,
                 title: checkpointNodeTitle(provider),
                 values: {
-                  ...n.values,
+                  ...replaceSelectedResource(n.values,{...extraData,name:modelId},n.type==='CheckpointLoaderSimple'?'ckpt_name':n.type==='ModelScopeNode'||n.type==='ModelScopeAiNode'?'model_endpoint':'model'),
                   ...(n.type==='CheckpointLoaderSimple'?{ckpt_name:modelId}:n.type==='ModelScopeNode'||n.type==='ModelScopeAiNode'?{model_endpoint:modelId}:{model:modelId}),
                   targetProvider: provider,
                   tensorArtInputs: provider === 'tensorart' ? (extraData?.inputs || []) : undefined,
@@ -1327,7 +1299,7 @@ export default function App() {
 
       setToast({
         type: 'success',
-        title: '🎯 已成功应用图像底模 (Checkpoint)',
+        title: '已成功应用图像底模 (Checkpoint)',
         message: `已切换至【${modelName}】(服务商: ${provider.toUpperCase()})，已同步至画布与前置加载器`,
       });
     }
@@ -1572,7 +1544,7 @@ export default function App() {
   const handleUseAsReference = (asset: MediaAsset) => {
     if (selectedFrameId) {
       handleUpdateFrame(selectedFrameId, {
-        imageUrl: asset.url,
+        referenceImageUrl: asset.url,
         prompt: asset.prompt ? `${asset.prompt}, variation` : 'variation',
       });
     }
@@ -1702,6 +1674,11 @@ export default function App() {
       clipStrength: Number(n.values?.strength_clip ?? 0.8),
       triggerWords: n.values?.trigger_words || '',
       civitaiId: n.values?.civitai_id || '',
+      downloadUrl: n.values?.download_url || n.values?.downloadUrl,
+      unresolvedResource: n.values?.import_unresolved_resource === true || n.values?.unresolvedResource === true,
+      resourceVerified: n.values?.resourceVerified,
+      resource_source: n.values?.resource_source,
+      resource_kind: n.values?.resource_kind,
     }))
     .filter((l) => l.name.length > 0);
 
@@ -1734,6 +1711,7 @@ export default function App() {
     loras: inspectorFrame ? inspectorFrame.params.loras : graphLoras,
     targetProvider: detectedTargetProvider as any,
     aspectRatio:
+      graphExtraction?.videoAspectRatio || graphExtraction?.aspectRatio ||
       (googleImagenNode ? googleImagenNode.values?.aspect_ratio : undefined) ||
       checkpointLoaderNode?.values?.aspect_ratio ||
       checkpointLoaderNode?.values?.aspectRatio ||
@@ -1749,15 +1727,27 @@ export default function App() {
       undefined,
     background: checkpointLoaderNode?.values?.background || inspectorFrame?.params?.background || undefined,
     moderation: checkpointLoaderNode?.values?.moderation || inspectorFrame?.params?.moderation || undefined,
-    resolution: checkpointLoaderNode?.values?.resolution || inspectorFrame?.params?.resolution || undefined,
+    resolution: graphExtraction?.resolution ?? checkpointLoaderNode?.values?.resolution ?? inspectorFrame?.params?.resolution,
     shift: checkpointLoaderNode?.values?.shift ?? inspectorFrame?.params?.shift,
     randomSeed: checkpointLoaderNode?.values?.random_seed ?? inspectorFrame?.params?.randomSeed,
-    customParameters: checkpointLoaderNode?.values?.custom_parameters,
+    customParameters: graphExtraction?.customParameters ?? checkpointLoaderNode?.values?.custom_parameters,
+    requireReferenceImage: graphExtraction?.requireReferenceImage ?? checkpointLoaderNode?.values.require_reference_image ?? videoEngineNode?.values.require_reference_image,
+    unresolvedModel: graphExtraction?.unresolvedModel ?? (checkpointLoaderNode?.values.import_unresolved_resource === true || videoEngineNode?.values.import_unresolved_resource === true),
+    executionBlockedReason: graphExtraction?.executionBlockedReason ?? checkpointLoaderNode?.values.execution_blocked_reason ?? videoEngineNode?.values.execution_blocked_reason,
+    sourceLoraAir: graphExtraction?.sourceLoraAir ?? videoEngineNode?.values.source_lora_air,
+    civitaiEngine: graphExtraction?.civitaiEngine ?? checkpointLoaderNode?.values.civitai_engine,
+    civitaiEcosystem: graphExtraction?.civitaiEcosystem ?? checkpointLoaderNode?.values.civitai_ecosystem,
+    civitaiModel: graphExtraction?.civitaiModel ?? checkpointLoaderNode?.values.civitai_model,
+    videoProvider: graphExtraction?.videoProvider ?? videoEngineNode?.values.targetProvider,
+    videoDuration: graphExtraction?.videoDuration ?? videoEngineNode?.values.duration,
+    videoFps: graphExtraction?.videoFps ?? videoEngineNode?.values.fps,
+    videoFrames: graphExtraction?.videoFrames ?? videoEngineNode?.values.num_frames,
     hfProvider: checkpointLoaderNode?.values?.hf_provider,
     galleryImages: checkpointLoaderNode?.values?.gallery_images ?? inspectorFrame?.params?.galleryImages,
   };
 
-  const activeParams = inspectorFrame ? inspectorFrame.params : graphParams;
+  const rawInspectorParams = readInspectorParameters(inspectorNodes,connections,inspectorBranch.target?.id);
+  const activeParams = inspectorFrame ? inspectorFrame.params : {...graphParams,...rawInspectorParams,loras:graphLoras};
 
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-[#0c0d11] select-none font-sans">
@@ -1975,28 +1965,14 @@ export default function App() {
               const targetFrameId = selectedFrameId || (spatialFrames.length > 0 ? spatialFrames[0].id : null);
               if (canvasMode==='spatial' && targetFrameId) {
                 setSpatialFrames((prev) =>
-                  prev.map((f) => (f.id === targetFrameId ? { ...f, params: { ...f.params, ...newParams } } : f))
+                  prev.map((f) => (f.id === targetFrameId ? patchSpatialParameters(f,newParams) : f))
                 );
               }
               // Update matching graph nodes
               setNodes((prev) =>
                 prev.map((n) => {
                   if(canvasMode!=='graph' || !inspectorBranch.ids.has(n.id))return n;
-                  if (n.type === 'KSampler') {
-                    return {
-                      ...n,
-                      values: {
-                        ...n.values,
-                        steps: newParams.steps,
-                        cfg: newParams.cfg,
-                        sampler_name: newParams.sampler,
-                        scheduler: newParams.scheduler,
-                        seed: newParams.seed,
-                        control_after_generate: newParams.seedControl || n.values.control_after_generate,
-                        denoise: newParams.denoise,
-                      },
-                    };
-                  }
+                  if (!LORA_LOADER_TYPES.has(n.type)) return patchInspectorBranchNode(n,prev,connections,inspectorBranch.target?.id,activeParams,newParams);
                   if (LORA_LOADER_TYPES.has(n.type)) {
                     const matchingLora = (newParams.loras || []).find((l) => l.name === n.values?.lora_name);
                     if (matchingLora) {
@@ -2036,6 +2012,9 @@ export default function App() {
                       gallery_images: newParams.galleryImages,
                       hf_provider: newParams.hfProvider,
                       custom_parameters: newParams.customParameters,
+                      civitai_engine: newParams.civitaiEngine,
+                      civitai_ecosystem: newParams.civitaiEcosystem,
+                      civitai_model: newParams.civitaiModel,
                       aspect_ratio: newParams.aspectRatio,
                       n: newParams.batchSize,
                       // Always track provider so title and schema selects stay in sync
@@ -2050,11 +2029,11 @@ export default function App() {
                   }
                   if (n.type === 'FalAIEngineNode') {
                     return {...n,values:{...n.values,model:newParams.checkpoint,steps:newParams.steps,guidance_scale:newParams.cfg,seed:newParams.seed,
-                      ...(newParams.width>0 && newParams.height>0 ? {resolution:`${newParams.width}x${newParams.height}`} : {})}};
+                      ...(((newParams.width ?? 0) > 0 && (newParams.height ?? 0) > 0) ? {resolution:`${newParams.width}x${newParams.height}`} : {})}};
                   }
                   if (n.type === 'ModelScopeNode' || n.type === 'ModelScopeAiNode')return {...n,values:{...n.values,model_endpoint:newParams.checkpoint}};
                   if (n.type === 'NanoGPTNode')return {...n,values:{...n.values,model:newParams.checkpoint}};
-                  if (n.type === 'AIVideoNode')return {...n,values:{...n.values,model:newParams.checkpoint,targetProvider:newParams.targetProvider}};
+                  if (n.type === 'AIVideoNode')return {...n,values:{...n.values,model:newParams.checkpoint,targetProvider:newParams.videoProvider || newParams.targetProvider,duration:newParams.videoDuration,fps:newParams.videoFps,num_frames:newParams.videoFrames,resolution:newParams.resolution,aspect_ratio:newParams.aspectRatio,custom_parameters:newParams.customParameters}};
                   if (n.type === 'GoogleImagenNode') {
                     return {
                       ...n,
@@ -2173,7 +2152,7 @@ export default function App() {
                 model: mId,
                 targetProvider: detectedProvider,
                 prompt: 'Cinematic dynamic scene, high quality, 4k ultra-detailed, photorealistic motion',
-                aspect_ratio: '16:9',
+                aspect_ratio: undefined,
                 duration: '',
                 fps: 24,
                 steps: 30,
@@ -2207,7 +2186,8 @@ export default function App() {
         onAddLora={handleSelectLoRAWithBaseModel}
         onAddLoraNode={(loraName, triggerWords, baseModel, resource) => {
           handleAddLoRANodeToCanvas({
-            name: loraName,
+            ...resource,
+            name: resource?.name || loraName,
             civitaiId: resource?.civitaiId,
             provider: resource?.provider,
             triggerWords: triggerWords || '',
@@ -2495,7 +2475,7 @@ export default function App() {
               height: 512,
               prompt: prompt || activeFrame?.prompt || '',
               negativePrompt: activeFrame?.negativePrompt || '',
-              imageUrl: imageUrl,
+              referenceImageUrl: imageUrl,
               status: 'idle',
               params: activeFrame?.params || {
                 checkpoint: '',
@@ -2517,30 +2497,27 @@ export default function App() {
           onSendToImg2Video={(imageUrl, prompt) => {
             const newFrame: SpatialFrame = {
               id: `frame-video-${Date.now()}`,
-              title: 'Wan 2.1 动态视频取景框',
+              title: '图生视频 · 待选择服务商与模型',
               createdAt: Date.now(),
               pos: { x: (activeFrame?.pos?.x || 200) + 520, y: activeFrame?.pos?.y || 200 },
               width: 540,
               height: 540,
               prompt: prompt || activeFrame?.prompt || '',
               negativePrompt: activeFrame?.negativePrompt || '',
-              imageUrl: imageUrl,
+              referenceImageUrl: imageUrl,
               mediaType: 'video',
               status: 'idle',
               params: {
-                checkpoint: 'Wan-AI/Wan2.1-T2V-1.3B',
-                seed: Math.floor(Math.random() * 10000000),
-                seedControl: 'randomize',
-                steps: 30,
-                cfg: 6.0,
-                sampler: 'euler',
-                scheduler: 'normal',
+                checkpoint: '',
+                seedControl: 'fixed',
                 denoise: 1.0,
                 width: 832,
                 height: 480,
                 batchSize: 1,
                 loras: [],
-                targetProvider: 'modelscope',
+                targetProvider: 'video',
+                videoProvider: undefined,
+                requireReferenceImage: true,
               },
             };
             setSpatialFrames((prev) => [...prev, newFrame]);

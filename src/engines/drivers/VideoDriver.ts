@@ -15,191 +15,95 @@ import {
  */
 export class VideoDriver extends BaseEngineDriver {
   readonly id = 'video';
-  readonly name = 'AI 电影级视频引擎 (Wan 2.1 / LTX / Kling)';
-  readonly label = 'AI 视频官方聚合引擎';
+  readonly name = 'AI 视频生成路由';
+  readonly label = 'AI 视频多供应商路由';
   readonly badgeColor = '#a3e635';
-  readonly description = '阿里通义万相 Wan 2.1、快手可灵 Kling 1.5、Lightricks LTX-Video 与海螺 MiniMax 电影级视频大模型平台。';
+  readonly description = '视频执行必须显式选择 provider 与 model；当前预置只保留已重新核实的 Fal 与 Agnes 视频端点，以及用户显式配置的 Grok 兼容中转。';
   readonly capabilities = ['text2video', 'img2video'] as const;
 
   readonly supportedModels: ModelSpec[] = [
     {
       id: 'fal-ai/wan-t2v',
-      name: 'Wan 2.1 Text-to-Video (通义万相电影级文生视频)',
+      name: 'Fal · Wan 2.1 Text-to-Video (legacy)',
       type: 'video',
-      description: '阿里通义万相开源电影级视频大模型，支持 1080p 超高清影视运镜与物理动力学模拟',
-      defaultSteps: 30,
-      defaultCfg: 5.0,
+      description: 'Fal 官方仍提供的 Wan 2.1 文生视频端点；仅按其独立 Schema 发送参数。',
       supportsLora: false,
     },
     {
-      id: 'fal-ai/wan-i2v',
-      name: 'Wan 2.1 Image-to-Video (通义万相图生动态视频)',
+      id: 'fal-ai/wan/v2.7/text-to-video',
+      name: 'Fal · Wan 2.7 Text-to-Video',
       type: 'video',
-      description: '根据输入参考底图进行高保真运镜生成，完美保留首帧构图与人脸细节',
-      defaultSteps: 30,
-      defaultCfg: 5.0,
+      description: 'Fal 官方当前 Wan 2.7 文生视频端点。',
       supportsLora: false,
     },
     {
-      id: 'fal-ai/ltx-video',
-      name: 'LTX-Video (Lightricks 极速AI视频生成)',
+      id: 'fal-ai/wan/v2.7/image-to-video',
+      name: 'Fal · Wan 2.7 Image-to-Video',
       type: 'video',
-      description: '次世代极速视频扩散模型，高帧率流畅运动',
-      defaultSteps: 25,
-      defaultCfg: 4.0,
+      description: 'Fal 官方当前 Wan 2.7 图生视频端点。',
       supportsLora: false,
     },
     {
-      id: 'fal-ai/kling-video/v1/standard/text-to-video',
-      name: 'Kling 1.5 Video (快手可灵标准文生视频)',
+      id: 'fal-ai/kling-video/v3/standard/text-to-video',
+      name: 'Fal · Kling V3 Standard Text-to-Video',
       type: 'video',
-      description: '快手可灵 1.5 电影级大动作幅度生成',
-      defaultSteps: 30,
-      defaultCfg: 5.0,
+      description: 'Fal 官方 Kling V3 Standard 文生视频端点。',
       supportsLora: false,
     },
     {
-      id: 'fal-ai/kling-video/v1/standard/image-to-video',
-      name: 'Kling 1.5 Video (快手可灵标准图生视频)',
+      id: 'fal-ai/kling-video/v3/standard/image-to-video',
+      name: 'Fal · Kling V3 Standard Image-to-Video',
       type: 'video',
-      description: '快手可灵 1.5 基于单张图片生成 5 秒连贯动作运镜',
-      defaultSteps: 30,
-      defaultCfg: 5.0,
+      description: 'Fal 官方 Kling V3 Standard 图生视频端点。',
       supportsLora: false,
     },
     {
       id: 'fal-ai/minimax/video-01',
-      name: 'MiniMax Hailuo Video-01 (海螺影视运镜)',
+      name: 'Fal · MiniMax Video-01 Text-to-Video',
       type: 'video',
-      description: '电影级镜头语言与光影变换',
-      defaultSteps: 25,
-      defaultCfg: 4.5,
+      description: 'Fal 官方 MiniMax Video-01 文生视频端点。',
       supportsLora: false,
     },
     {
-      id: 'fal-ai/cogvideox-5b',
-      name: 'CogVideoX 5B (智谱清言开源视频大模型)',
+      id: 'fal-ai/minimax/video-01/image-to-video',
+      name: 'Fal · MiniMax Video-01 Image-to-Video',
       type: 'video',
-      description: '清华智谱开源高精度视频生成模型',
-      defaultSteps: 28,
-      defaultCfg: 6.0,
+      description: 'Fal 官方 MiniMax Video-01 图生视频端点。',
       supportsLora: false,
     },
     {
-      id: 'fal-ai/hunyuan-video',
-      name: 'HunyuanVideo (腾讯混元开源视频大模型)',
+      id: 'fal-ai/ltx-video',
+      name: 'Fal · LTX Video (research-only endpoint)',
       type: 'video',
-      description: '腾讯混元自研视频扩散大模型，高质感物理碰撞与复杂动态',
-      defaultSteps: 30,
-      defaultCfg: 5.0,
+      description: 'Fal 当前仍提供的 LTX Video 端点；官方页面标记 Research only。',
       supportsLora: false,
     },
     {
-      id: 'damo/wan2.1-t2v',
-      name: 'Wan 2.1 Video (ModelScope 魔搭阿里官方直连)',
+      id: 'agnes-video-2.5',
+      name: 'Agnes Video 2.5',
       type: 'video',
-      description: '通过 ModelScope 官方通道直连调用的通义万相 2.1 文生视频',
-      defaultSteps: 30,
-      defaultCfg: 6.0,
-      supportsLora: false,
-    },
-    {
-      id: 'damo/wan2.1-i2v-480p-14b',
-      name: 'Wan 2.1 Image-to-Video (ModelScope 魔搭官方图生视频)',
-      type: 'video',
-      description: '通过 ModelScope 官方通道直连调用的通义万相 2.1 图生视频',
-      defaultSteps: 30,
-      defaultCfg: 6.0,
-      supportsLora: false,
-    },
-    {
-      id: 'THUDM/CogVideoX-5b',
-      name: 'CogVideoX 5B (ModelScope 魔搭清言开源)',
-      type: 'video',
-      description: '清华智谱 CogVideoX 5B 开源高清视频模型',
-      defaultSteps: 28,
-      defaultCfg: 6.0,
-      supportsLora: false,
-    },
-    {
-      id: 'text2video_wan27',
-      name: 'Wan 2.7 旗舰文生视频 (Tensor.Art OpenWorks)',
-      type: 'video',
-      description: 'Tensor.Art OpenWorks 原生 Wan 2.7 电影级文生视频官方算力',
-      defaultSteps: 30,
-      defaultCfg: 5.0,
-      supportsLora: false,
-    },
-    {
-      id: 'image2video_wan27',
-      name: 'Wan 2.7 旗舰图生视频 (Tensor.Art OpenWorks)',
-      type: 'video',
-      description: 'Tensor.Art OpenWorks 原生 Wan 2.7 官方图生视频',
-      defaultSteps: 30,
-      defaultCfg: 5.0,
-      supportsLora: false,
-    },
-    {
-      id: 'image2video_wan25',
-      name: 'Wan 2.5 官方图生视频 (Tensor.Art OpenWorks)',
-      type: 'video',
-      description: 'Tensor.Art OpenWorks 原生 Wan 2.5 官方图生视频',
-      defaultSteps: 30,
-      defaultCfg: 5.0,
-      supportsLora: false,
-    },
-    {
-      id: 'text2video_wan22',
-      name: 'Wan 2.2 官方文生视频 (Tensor.Art OpenWorks)',
-      type: 'video',
-      description: 'Tensor.Art OpenWorks 原生 Wan 2.2 官方文生视频',
-      defaultSteps: 30,
-      defaultCfg: 5.0,
-      supportsLora: false,
-    },
-    {
-      id: 'image2video_wan22',
-      name: 'Wan 2.2 官方图生视频 (Tensor.Art OpenWorks)',
-      type: 'video',
-      description: 'Tensor.Art OpenWorks 原生 Wan 2.2 官方图生视频',
-      defaultSteps: 30,
-      defaultCfg: 5.0,
-      supportsLora: false,
-    },
-    {
-      id: 'text2video_ltx23',
-      name: 'LTX 2.3 官方文生视频 (Tensor.Art OpenWorks)',
-      type: 'video',
-      description: 'Tensor.Art OpenWorks 原生 LTX 2.3 官方文生视频',
-      defaultSteps: 25,
-      defaultCfg: 4.0,
-      supportsLora: false,
-    },
-    {
-      id: 'image2video_ltx23',
-      name: 'LTX 2.3 官方图生视频 (Tensor.Art OpenWorks)',
-      type: 'video',
-      description: 'Tensor.Art OpenWorks 原生 LTX 2.3 官方图生视频',
-      defaultSteps: 25,
-      defaultCfg: 4.0,
-      supportsLora: false,
-    },
-    {
-      id: 'live_wallpaper',
-      name: '动态壁纸生成 (Tensor.Art OpenWorks)',
-      type: 'video',
-      description: 'Tensor.Art OpenWorks 动态循环壁纸生成工具',
-      defaultSteps: 25,
-      defaultCfg: 4.0,
+      description: 'Agnes 官方当前视频模型；POST /v1/videos，支持 720P–2K。',
       supportsLora: false,
     },
     {
       id: 'agnes-video-2.5-flash',
-      name: 'Agnes AI Video 2.5 Flash (ApiHub 极速视频)',
+      name: 'Agnes Video 2.5 Flash',
       type: 'video',
-      description: 'Agnes AI ApiHub 极速动态视频生成端点',
-      defaultSteps: 25,
-      defaultCfg: 4.5,
+      description: 'Agnes 官方当前快速视频模型；POST /v1/videos，Flash 仅 720P。',
+      supportsLora: false,
+    },
+    {
+      id: 'grok-imagine-video',
+      name: 'Grok 兼容中转 · Imagine Video',
+      type: 'video',
+      description: '仅在用户明确配置兼容 Base URL 时使用；兼容中转不等于官方 xAI 路由。',
+      supportsLora: false,
+    },
+    {
+      id: 'grok-imagine-video-1.5',
+      name: 'Grok 兼容中转 · Imagine Video 1.5',
+      type: 'video',
+      description: '仅在用户明确配置兼容 Base URL 时使用；模型 ID 是否可用由该中转实际 /models 或响应决定。',
       supportsLora: false,
     },
   ];
@@ -255,9 +159,11 @@ export class VideoDriver extends BaseEngineDriver {
       provider: videoProvider,
       duration: params.videoDuration,
       aspect_ratio: params.aspectRatio,
-      image_url: params.image_url,
+      ...(params.image_url ? { image_url: params.image_url } : {}),
+      custom_parameters: extra.custom_parameters,
     };
-    if (extra.resolution) videoBody.resolution = extra.resolution;
+    if (extra.resolution !== undefined) videoBody.resolution = extra.resolution;
+    if (extra.size !== undefined || params.imageSize !== undefined) videoBody.size = extra.size ?? params.imageSize;
     for (const [key, value] of Object.entries({fps: params.videoFps ?? extra.fps, num_frames: params.videoFrames, negative_prompt: params.negative_prompt, steps: params.steps, cfg: params.cfg, loras: params.loras?.length ? params.loras : undefined})) {
       if (value !== undefined && value !== '') videoBody[key] = value;
     }
@@ -272,7 +178,7 @@ export class VideoDriver extends BaseEngineDriver {
 
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({ error: 'AI 视频生成服务商响应失败' }));
-      throw new Error(err.details || err.error || `视频生成失败 (${resp.status})`);
+      throw new Error(`HTTP ${resp.status}: ${err.details || err.error || '视频生成失败'}`);
     }
 
     const data = await resp.json();

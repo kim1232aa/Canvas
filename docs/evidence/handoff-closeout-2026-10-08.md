@@ -124,12 +124,14 @@ A01–A08、A10–A12 按当前交接范围关闭。A09 的代码契约与回归
 
 Aki 本地工作区在恢复后重新执行完整回归：
 
-- `npm test` — **41/41 test files、300/300 tests PASS**
+- `npm test`（origin/main / HEAD 的 2026-10-08 收尾记录，含下述 Fal 视频入口一致性回归）— **41/41 test files、300/300 tests PASS**
+- `npm test`（本地 incoming `72f5372` 保留的 2026-10-08 本节回归记录）— **40/40 test files、295/295 tests PASS**；仅记录该侧当时的测试数量，不替代 origin/main 上述回归记录，也不据此推断 2026-10-12 的验收结果。
 - `npm run lint` — **PASS**
 - `npm run build` — **PASS**
 - Vite 生产构建：1732 modules transformed；仅保留已有 `__dirname` native-loader 与 chunk-size warning，没有构建失败。
 
 这组回归只证明当前代码没有破坏既有契约；不替代任何 provider 的真实前端/上游验收。
+
 ## 7. Fal Wan 2.1 视频模型入口一致性
 
 Fal 官方端点文档目前仍列有 `fal-ai/wan-t2v`（Wan 2.1 Text-to-Video）：https://fal.ai/models/fal-ai/wan-t2v/api 。此前全局 `MODEL_PRESETS` 包含该端点，但 `AIVideoNode` 模型下拉和 `VideoDriver.supportedModels` 漏掉它，导致 `videoProvider.test.ts` 对 `resolveAIVideoModelProvider` 的旧预期与当前 Schema 不一致。
