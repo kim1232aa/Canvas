@@ -4869,6 +4869,15 @@ app.post(['/api/engine/agnes/generate', '/api/agnes/generate'], async (req, res)
     if (image_url) extraBody.image = [image_url];
     if (isProvided(req.body.response_format)) extraBody.response_format = req.body.response_format;
     if (Object.keys(extraBody).length) payload.extra_body = extraBody;
+    const agnesCustom = req.body.custom_parameters;
+    const agnesOverrides: Array<{field:string;requested:unknown;custom:unknown;applied:boolean}> = [];
+    if (agnesCustom && typeof agnesCustom === 'object' && !Array.isArray(agnesCustom)) {
+      for (const [field, value] of Object.entries(agnesCustom)) {
+        const protectedField = ['model', 'endpoint'].includes(field);
+        if (payload[field] !== undefined && JSON.stringify(payload[field]) !== JSON.stringify(value)) agnesOverrides.push({ field, requested: payload[field], custom: value, applied: !protectedField });
+        if (!protectedField) payload[field] = value;
+      }
+    }
 
     const upstream = await upstreamFetch(
       { provider: 'agnes', route: req.path, model, key: apiKey },
@@ -4914,7 +4923,9 @@ app.post(['/api/engine/agnes/generate', '/api/agnes/generate'], async (req, res)
       steps: null,
       cfg: null,
       loras: [],
+      requestMetadata: { requestedParameters: req.body, actualParameters: payload, overrides: agnesOverrides },
     });
+    const additional = await recordAdditionalImages(data.data || [], item);
 
     return res.json({
       imageUrl: durableUrl,
@@ -4923,6 +4934,7 @@ app.post(['/api/engine/agnes/generate', '/api/agnes/generate'], async (req, res)
       provider: 'Agnes AI (ApiHub)',
       model,
       historyItem: item,
+      ...additional,
     });
   } catch (error: any) {
     keyPoolManager.recordResult('agnes', apiKey, false, Date.now() - startTime, error.message);
@@ -5057,7 +5069,7 @@ app.post('/api/engine/sensenova/generate', async (req, res) => {
       height:typeof req.body.height==='number'?req.body.height:null,
       loras:[],
       workflowSnapshot:req.body.workflowSnapshot,
-      requestMetadata:{requestedParameters:req.body,actualParameters:mapped.payload,upstreamEndpoint:endpoint},
+      requestMetadata:{requestedParameters:req.body,actualParameters:mapped.payload,overrides:mapped.overrides,upstreamEndpoint:endpoint},
       });
     } catch (persistError:any) {
       return res.status(500).json({error:`SenseNova 图片已生成但历史写入失败：${persistError.message}`,errorSource:'storage',transientMediaUrl:durable.dataUrl,endpoint,stack:persistError.stack});
@@ -5181,6 +5193,7 @@ app.post('/api/engine/runware/generate', async (req, res) => {
       taskUUID: parsed.taskUUID,
       actualRequest: mapped.payload,
       historyItem: item,
+      ...(await recordAdditionalImages(parsed.imageUrls || [parsed.imageUrl], item)),
       upstreamEndpoint: endpoint,
     });
   } catch (error: any) {
@@ -5284,7 +5297,8 @@ app.post('/api/engine/modelslab/generate', async (req, res) => {
         }
         const pollData = await polled.json().catch(() => ({}));
         if (pollData.status === 'success') {
-          finalImageUrl = pollData.output?.[0] || pollData.proxy_links?.[0];
+          parsed = parseModelsLabResponse(pollData);
+          finalImageUrl = parsed.imageUrl;
           break;
         } else if (pollData.status === 'error') {
           const errMsg = `ModelsLab 异步任务失败: ${pollData.message || '未知错误'}${pollData.tip ? ` (${pollData.tip})` : ''}`;
@@ -5370,6 +5384,7 @@ app.post('/api/engine/modelslab/generate', async (req, res) => {
       seed: typeof mapped.payload.seed === 'number' ? mapped.payload.seed : null,
       actualRequest,
       historyItem: item,
+      ...(await recordAdditionalImages(parsed.imageUrls || (finalImageUrl ? [finalImageUrl] : []), item)),
       upstreamEndpoint: endpoint,
     });
   } catch (error: any) {
@@ -6407,7 +6422,8 @@ app.post(
 
       keyPoolManager.recordResult(poolName, token, true, Date.now() - startTime);
       const submitData = await submitResp.json();
-      let imageUrl = submitData.output_images?.[0];
+      let outputImages: string[] = Array.isArray(submitData.output_images) ? submitData.output_images : [];
+      let imageUrl = outputImages[0];
 
       if (!imageUrl && submitData.task_id) {
         const taskId = submitData.task_id;
@@ -6444,7 +6460,8 @@ app.post(
           }
           const pollData = await pollResp.json();
             if (pollData.task_status === 'SUCCEED') {
-              imageUrl = pollData.output_images?.[0];
+              outputImages = Array.isArray(pollData.output_images) ? pollData.output_images : [];
+              imageUrl = outputImages[0];
               if (!imageUrl) {
                 return res.status(502).json({ error: '魔搭任务成功但响应中无 output_images', details: pollData, model });
               }
@@ -6487,14 +6504,17 @@ app.post(
         steps: payload.steps ?? null,
         cfg: payload.guidance ?? null,
         loras: typeof payload.loras === 'string' ? [{name: payload.loras, strength: 1}] : Object.entries(payload.loras || {}).map(([name, strength]) => ({name, strength: Number(strength)})),
-        requestMetadata: { requestedParameters: req.body, actualParameters: payload, parameterMappings, upstreamEndpoint: `${primaryDomain}/images/generations` },
+        requestMetadata: { requestedParameters: req.body, actualParameters: payload, actualModel: payload.model, parameterMappings, upstreamEndpoint: `${primaryDomain}/images/generations` },
       });
+      const additional = await recordAdditionalImages(outputImages, item);
 
       return res.json({
         imageUrl: durableUrl,
         provider: providerName,
-        model,
+        model: payload.model,
+        requestedModel: model,
         historyItem: item,
+        ...additional,
       });
     } catch (error: any) {
       return res.status(500).json({ error: `魔搭社区调用失败: ${error.message}` });
@@ -6717,6 +6737,24 @@ app.post(['/api/gemini/generate', '/api/engine/gemini/generate'], async (req, re
     // 只放用户实际传了的字段；seed 该服务商不支持（不写入 generationConfig）
     const config: Record<string, any> = {};
     if (Object.keys(imageConfig).length > 0) config.imageConfig = imageConfig;
+    const geminiCustom = req.body.custom_parameters;
+    const geminiOverrides: Array<{field:string;requested:unknown;custom:unknown}> = [];
+    if (geminiCustom && typeof geminiCustom === 'object' && !Array.isArray(geminiCustom)) {
+      const generationConfig = geminiCustom.generationConfig && typeof geminiCustom.generationConfig === 'object' ? geminiCustom.generationConfig : {};
+      for (const [field, value] of Object.entries(generationConfig)) {
+        if (field === 'imageConfig' && value && typeof value === 'object' && !Array.isArray(value)) {
+          const current = config.imageConfig && typeof config.imageConfig === 'object' ? config.imageConfig : {};
+          for (const [imageField, imageValue] of Object.entries(value as Record<string, unknown>)) {
+            if (current[imageField] !== undefined && JSON.stringify(current[imageField]) !== JSON.stringify(imageValue)) geminiOverrides.push({ field: `imageConfig.${imageField}`, requested: current[imageField], custom: imageValue });
+            current[imageField] = imageValue;
+          }
+          config.imageConfig = current;
+          continue;
+        }
+        if (config[field] !== undefined && JSON.stringify(config[field]) !== JSON.stringify(value)) geminiOverrides.push({ field, requested: config[field], custom: value });
+        config[field] = value;
+      }
+    }
     const contentResponse = await upstreamSdkCall(
       { provider: 'gemini', route: req.path, model, key: gen.apiKey, upstream: `generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, parameters:{model,contents:{parts},config} },
       () => gen!.client.models.generateContent({
@@ -6726,15 +6764,10 @@ app.post(['/api/gemini/generate', '/api/engine/gemini/generate'], async (req, re
       })
     );
 
-    let base64Bytes = '';
-    let mimeType = 'image/png';
-    for (const part of contentResponse.candidates?.[0]?.content?.parts || []) {
-      if (part.inlineData?.data) {
-        base64Bytes = part.inlineData.data;
-        mimeType = part.inlineData.mimeType || 'image/png';
-        break;
-      }
-    }
+    const imageParts = (contentResponse.candidates?.[0]?.content?.parts || []).filter((part: any) => part.inlineData?.data);
+    const firstPart = imageParts[0];
+    let base64Bytes = firstPart?.inlineData?.data || '';
+    let mimeType = firstPart?.inlineData?.mimeType || 'image/png';
 
     if (!base64Bytes) {
       keyPoolManager.recordResult('gemini', gen.apiKey, false, Date.now() - startTime, 'No image returned from Gemini', 500);
@@ -6755,8 +6788,9 @@ app.post(['/api/gemini/generate', '/api/engine/gemini/generate'], async (req, re
       steps: null,
       cfg: null,
       loras: [],
-      requestMetadata: { requestedParameters, parameterOmissions, actualRequest: { model, contents: { parts }, config } },
+      requestMetadata: { requestedParameters, parameterOmissions, overrides: geminiOverrides, actualRequest: { model, contents: { parts }, config } },
     });
+    const additional = await recordAdditionalImages(imageParts.map((part: any) => `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`), item);
 
     const mStatus = modelStatus('gemini', model, new Date().toISOString().slice(0, 10));
     return res.json({
@@ -6770,6 +6804,7 @@ app.post(['/api/gemini/generate', '/api/engine/gemini/generate'], async (req, re
       parameterOmissions,
       requestMetadata: { requestedParameters, parameterOmissions },
       historyItem: item,
+      ...additional,
       fieldStatus,
       ...(mStatus !== 'supported' ? { modelStatus: mStatus } : {}),
     });

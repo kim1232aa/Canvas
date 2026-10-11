@@ -45,6 +45,7 @@ export class SenseNovaDriver extends BaseEngineDriver {
       ...(extra.prompt_extend !== undefined ? {prompt_extend:extra.prompt_extend} : {}),
       ...(extra.output_format !== undefined ? {output_format:extra.output_format} : {}),
       response_format:'b64_json',
+      ...(extra.custom_parameters && typeof extra.custom_parameters === 'object' ? { custom_parameters: extra.custom_parameters } : {}),
       workflowSnapshot:params.workflowSnapshot,
       parameterOmissions,
     };

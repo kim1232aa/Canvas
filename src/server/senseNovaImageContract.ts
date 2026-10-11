@@ -3,6 +3,7 @@ type Json = Record<string, unknown>;
 export interface SenseNovaImageRequest {
   endpoint: '/images/generations' | '/images/edits';
   payload: Json;
+  overrides: Array<{ field: string; requested: unknown; custom: unknown }>;
 }
 
 const isProvided = (value: unknown): boolean => value !== undefined && value !== null && value !== '';
@@ -72,8 +73,15 @@ export function buildSenseNovaImageRequest(body: Json): SenseNovaImageRequest {
     ...(isProvided(body.watermark) ? { watermark: Boolean(body.watermark) } : {}),
     ...(isProvided(body.prompt_extend) ? { prompt_extend: Boolean(body.prompt_extend) } : {}),
   };
+  const custom = body.custom_parameters && typeof body.custom_parameters === 'object' && !Array.isArray(body.custom_parameters)
+    ? body.custom_parameters as Json : {};
+  const overrides = Object.entries(custom)
+    .filter(([field, value]) => payload[field] !== undefined && JSON.stringify(payload[field]) !== JSON.stringify(value))
+    .map(([field, value]) => ({ field, requested: payload[field], custom: value, applied: !['model', 'endpoint'].includes(field) }));
+  const safeCustom = Object.fromEntries(Object.entries(custom).filter(([field]) => !['model', 'endpoint'].includes(field)));
   return {
     endpoint: imageUrl ? '/images/edits' : '/images/generations',
-    payload: imageUrl ? { ...payload, images: [{image_url:imageUrl}] } : payload,
+    payload: { ...(imageUrl ? { ...payload, images: [{image_url:imageUrl}] } : payload), ...safeCustom },
+    overrides,
   };
 }

@@ -51,5 +51,15 @@ export function buildZImagePayload(input: Record<string, unknown>) {
   }
   if (typeof input.random_seed !== 'boolean') throw new Error('Z-Image 必须提供 random_seed 布尔值');
   if (!Array.isArray(input.gallery_images)) throw new Error('Z-Image 必须提供 gallery_images 数组');
-  return {data: [input.prompt ?? '', input.resolution, input.seed, input.steps, input.shift, input.random_seed, input.gallery_images]};
+  const data = [input.prompt ?? '', input.resolution, input.seed, input.steps, input.shift, input.random_seed, input.gallery_images];
+  const custom = input.custom_parameters;
+  const notes: Array<{field:string;note:string}> = [];
+  if (custom && typeof custom === 'object' && !Array.isArray(custom)) {
+    const values = Object.values(custom);
+    if (values.length) {
+      data.push(...values);
+      notes.push(...Object.keys(custom).map((field) => ({ field, note: 'Z-Image Space 使用固定位置参数；自定义值按追加参数提交，上游是否接受以其响应为准。' })));
+    }
+  }
+  return { data, capabilityNotes: notes };
 }

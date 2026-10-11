@@ -77,5 +77,16 @@ export function buildNanoImagePayload(body:Record<string,any>,endpoint:Record<st
     if (endpoint.capabilities?.image_to_image===false && !(max>=1)) throw new Error('该模型 capabilities.image_to_image=false，官方元数据不支持图生图');
     payload.input_references=[{type:'image_url',image_url:{url:body.image_url}}];
   }
+  if (body.custom_parameters && typeof body.custom_parameters === 'object' && !Array.isArray(body.custom_parameters)) {
+    for (const [key, value] of Object.entries(body.custom_parameters)) {
+      if (['model', 'endpoint'].includes(key)) {
+        capabilityNotes.push({ field: key, value, capability: 'protected', note: '自定义 JSON 不得覆盖模型或端点。' });
+        continue;
+      }
+      if (payload[key] !== undefined && JSON.stringify(payload[key]) !== JSON.stringify(value)) capabilityNotes.push({ field: key, requested: payload[key], value, capability: 'override', note: '手写 JSON 覆盖画布值。' });
+      payload[key] = value;
+      capabilityNotes.push({ field: key, value, capability: 'custom-json', note: '按手写 JSON 原样提交。' });
+    }
+  }
   return {payload,capabilityNotes};
 }

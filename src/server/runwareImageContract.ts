@@ -123,19 +123,21 @@ export function buildRunwareImageRequest(body: Record<string, unknown>, baseUrl 
   };
 }
 
-export function parseRunwareImageResponse(response: RunwareImageResponse): { imageUrl: string; cost?: number; taskUUID: string } {
+export function parseRunwareImageResponse(response: RunwareImageResponse): { imageUrl: string; imageUrls: string[]; cost?: number; taskUUID: string } {
   if (Array.isArray(response.errors) && response.errors.length > 0) {
     const firstErr = response.errors[0];
     throw new Error(`Runware 上游错误: ${firstErr.message || firstErr.code || '未知错误'}`);
   }
 
-  const item = response.data?.[0];
+  const items = (response.data || []).filter((item) => item.imageURL);
+  const item = items[0];
   if (!item || !item.imageURL) {
     throw new Error('Runware 未返回图像 URL');
   }
 
   return {
     imageUrl: item.imageURL,
+    imageUrls: items.map((entry) => entry.imageURL!),
     cost: item.cost,
     taskUUID: item.taskUUID,
   };

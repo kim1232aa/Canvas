@@ -56,6 +56,7 @@ export class GeminiDriver extends BaseEngineDriver {
       prompt: params.prompt,
       model: params.model,
       parameterOmissions: params.extraParams?.omissions,
+      ...(params.extraParams?.custom_parameters && typeof params.extraParams.custom_parameters === 'object' ? { custom_parameters: params.extraParams.custom_parameters } : {}),
     };
     if (params.aspectRatio && typeof params.aspectRatio === 'string' && params.aspectRatio.trim() !== '') {
       body.aspect_ratio = params.aspectRatio.trim();

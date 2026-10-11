@@ -132,7 +132,7 @@ export function sanitizeModelsLabPayload(payload: Record<string, unknown>): Reco
   return sanitized;
 }
 
-export function parseModelsLabResponse(data: unknown): { status: 'success' | 'processing'; imageUrl?: string; taskId?: string | number; eta?: number } {
+export function parseModelsLabResponse(data: unknown): { status: 'success' | 'processing'; imageUrl?: string; imageUrls?: string[]; taskId?: string | number; eta?: number } {
   if (!data || typeof data !== 'object') {
     throw new Error('ModelsLab 响应格式无效');
   }
@@ -151,13 +151,15 @@ export function parseModelsLabResponse(data: unknown): { status: 'success' | 'pr
   }
 
   if (res.status === 'success') {
-    const url = res.output?.[0] || res.proxy_links?.[0];
+    const urls = [...(res.output || []), ...(res.output?.length ? [] : res.proxy_links || [])].filter(Boolean);
+    const url = urls[0];
     if (!url) {
       throw new Error('ModelsLab 响应成功但未返回图像 URL');
     }
     return {
       status: 'success',
       imageUrl: url,
+      imageUrls: urls,
       taskId: res.id,
     };
   }

@@ -121,6 +121,7 @@ export class AgnesDriver extends BaseEngineDriver {
       size: params.extraParams?.size || params.imageSize,
       ...(Array.isArray(params.loras) && params.loras.length > 0 ? { loras: params.loras } : {}),
       parameterOmissions,
+      ...(params.extraParams?.custom_parameters && typeof params.extraParams.custom_parameters === 'object' ? { custom_parameters: params.extraParams.custom_parameters } : {}),
     };
     const videoResolution = params.extraParams?.resolution;
     const videoSizeField = params.extraParams?.size ?? params.imageSize;

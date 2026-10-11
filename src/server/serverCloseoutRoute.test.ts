@@ -24,6 +24,13 @@ describe('server closeout wiring contracts', () => {
     }
   });
 
+  it('Agnes image route preserves custom JSON and every returned image', () => {
+    const start = serverSource.indexOf("app.post(['/api/engine/agnes/generate'");
+    const route = serverSource.slice(start, serverSource.indexOf('app.post', start + 20));
+    expect(route).toContain('custom_parameters');
+    expect(route).toContain('recordAdditionalImages(data.data');
+  });
+
   it('Gemini route records omissions without putting them in the SDK request', () => {
     expect(serverSource).toContain('const parameterOmissions = sanitizeGenerationMetadata(req.body.parameterOmissions || []);');
     expect(serverSource).toContain('stage: \'parameter-omissions\'');

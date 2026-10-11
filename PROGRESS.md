@@ -11,7 +11,10 @@
 - MuAPI、WaveSpeed、Sogni 的历史保存已 `await`；ModelScope 宽高映射为官方 `size`；Tensor 模型中心不再把 OpenWorks 工具显示为底模。
 - Gemini 2.5 Flash Image 下线日按官方表改为 2027-03-15；OpenAI 兼容尺寸不再限制为四个固定值；Grok 图像比例加入官方值，数量上限改为 10。OpenAI/Grok 多图结果改为逐张保存，并合并自定义 JSON。
 - 打开资产库时，旧的浏览器 base64 素材会上传到 `/api/media`；失败保留原素材并提示。
-- 本地验证：`npx vitest run` 为 75 files / 640 tests PASS；`npx tsc --noEmit` 为 0 error。以上不是全供应商网页生成验收。
+- 本地验证：`npx vitest run` 为 75 files / 642 tests PASS；`npx tsc --noEmit` 为 0 error。以上不是全供应商网页生成验收。
+- 自定义 JSON 已进入 Agnes、SenseNova、Gemini、NanoGPT、OpenAI/Grok 请求；`model`、`endpoint` 受保护，实际字段覆盖会记录。Gemini 多图不再重复跳过首张。ModelScope、Runware、ModelsLab 多图响应逐张进入历史。
+- OpenAI 当前文档已重新读取：`size` 支持 `auto` 与 `WIDTHxHEIGHT`，官方示例包含 `1536x864`。来源：https://developers.openai.com/api/reference/resources/images/methods/generate。
+- 独立审查发现的 Gemini 双切片、imageConfig 浅合并、覆盖记录缺失和 NanoGPT 参考图被回写，均已修复并重跑检查。修复后的真实上游复验仍未完成。
 
 ## 2026-10-10 当前状态：HF/Sogni/MuAPI 前端实测完成，媒体架构闭环
 
