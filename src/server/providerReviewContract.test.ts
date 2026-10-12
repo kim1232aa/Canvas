@@ -20,8 +20,9 @@ describe('reviewed provider contracts', () => {
     expect(built.overrides.loras).toEqual({ before: { [lora]: 1 }, after: {} });
     expect(built.payload.loras).toEqual({});
   });
-  it('Civitai custom cannot alter routing, source model or credentials and is an object', async () => {
-    for (const custom_parameters of [null, [], 'bad', { engine: 'sdcpp' }, { ecosystem: 'flux1' }, { model: 'other' }, { diffuserModel: 'other' }, { diffusionModel: 'other' }, { apiKey: 'secret' }, { Authorization: 'secret' }, { provider: 'fal' }]) await expect(buildCivitaiImageInput({ model, engine: 'comfy', custom_parameters }, get)).rejects.toThrow(/对象|边界/);
+  it('Civitai custom cannot alter network routing or credentials and is an object', async () => {
+    for (const custom_parameters of [[], 'bad', { apiKey: 'secret' }, { Authorization: 'secret' }, { provider: 'fal' }, { endpoint: 'https://example.test' }]) await expect(buildCivitaiImageInput({ model, engine: 'comfy', custom_parameters }, get)).rejects.toThrow(/对象|路由|凭据/);
+    expect(await buildCivitaiImageInput({ model, engine: 'comfy', custom_parameters: { engine: 'sdcpp' } }, get)).toMatchObject({ engine: 'sdcpp' });
     await expect(buildCivitaiImageInput({ model, engine: 'comfy', custom_parameters: { loras: { [model]: 1 } } }, get)).rejects.toThrow(/LoRA/);
   });
   it('Fal retains explicit advanced fields and checks all declared unsupported schema fields', () => {

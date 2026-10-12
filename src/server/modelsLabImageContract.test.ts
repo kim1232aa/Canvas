@@ -7,6 +7,19 @@ import {
 } from './modelsLabImageContract';
 
 describe('ModelsLab Image Contract', () => {
+  it('chooses img2img from JSON-only reference after merging final wire fields', () => {
+    const built = buildModelsLabImageRequest({ model: 'canvas', prompt: 'a', custom_parameters: { model_id: 'json-model', samples: 2, init_image: 'https://example.invalid/ref.png', strength: 0.5 } }, 'fixture-key', 'https://relay.example.invalid/api/v6/images/text2img');
+    expect(built.endpoint).toBe('https://relay.example.invalid/api/v6/images/img2img');
+    expect(built.payload).toMatchObject({ model_id: 'json-model', samples: 2, init_image: 'https://example.invalid/ref.png', strength: 0.5 });
+    expect(built.actualModel).toBe('json-model');
+    expect(buildModelsLabFetchRequest('job', 'fixture-key', built.endpoint).endpoint).toBe('https://relay.example.invalid/api/v6/images/fetch');
+  });
+  it('chooses text2img when JSON explicitly clears a normal reference image', () => {
+    const built = buildModelsLabImageRequest({ model: 'canvas', prompt: 'a', image_url: 'https://example.invalid/ref.png', custom_parameters: { init_image: '', model_id: 'json-model', samples: 2 } }, 'fixture-key', 'https://relay.example.invalid/api/v6/images/img2img');
+    expect(built.endpoint).toBe('https://relay.example.invalid/api/v6/images/text2img');
+    expect(built.payload).toMatchObject({ init_image: '', model_id: 'json-model', samples: 2 });
+    expect(buildModelsLabFetchRequest('job', 'fixture-key', built.endpoint).endpoint).toBe('https://relay.example.invalid/api/v6/images/fetch');
+  });
   it('builds a valid text2img request body', () => {
     const req = buildModelsLabImageRequest(
       {
@@ -97,5 +110,24 @@ describe('ModelsLab Image Contract', () => {
       message: 'Invalid API key',
       tip: 'Check your key in dashboard',
     })).toThrow(/Invalid API key.*Check your key/);
+  });
+
+  it('fetch endpoint never nests the generation route, whichever route base URL was configured', () => {
+    for (const base of ['https://modelslab.com/api/v6/images/img2img', 'https://modelslab.com/api/v6/images/text2img', 'https://modelslab.com/']) {
+      expect(buildModelsLabFetchRequest(1, 'k', base).endpoint).toBe('https://modelslab.com/api/v6/images/fetch');
+    }
+  });
+
+  it('merges custom JSON (including explicit model_id and samples) and records overrides without exposing the key', () => {
+    const req = buildModelsLabImageRequest({ model: 'flux', prompt: 'p', custom_parameters: { model_id: 'sdxl', samples: 2, enhance_prompt: 'yes' } }, 'secret-key');
+    expect(req.payload).toMatchObject({ model_id: 'sdxl', samples: 2, enhance_prompt: 'yes', key: 'secret-key' });
+    expect(req.actualModel).toBe('sdxl');
+    expect(req.overrides.map((o) => o.field)).toEqual(['model_id', 'samples']);
+    expect(() => buildModelsLabImageRequest({ model: 'flux', prompt: 'p', custom_parameters: { key: 'other' } }, 'secret-key')).toThrow(/凭据/);
+  });
+
+  it('keeps the processing future_links so queued multi-image results are not lost', () => {
+    const parsed = parseModelsLabResponse({ status: 'processing', id: 9, eta: 3, future_links: ['https://a/1.png', 'https://a/2.png'] });
+    expect(parsed).toMatchObject({ status: 'processing', taskId: 9, futureLinks: ['https://a/1.png', 'https://a/2.png'] });
   });
 });

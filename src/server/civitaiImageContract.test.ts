@@ -2,12 +2,19 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { CivitaiDriver } from '../engines/drivers/CivitaiDriver';
 const originalFetch = globalThis.fetch;
 afterEach(() => { globalThis.fetch = originalFetch; });
-import { buildCivitaiImageInput, resolveCivitaiResource } from './civitaiImageContract';
+import { buildCivitaiImageInput, buildCivitaiImageRequest, resolveCivitaiResource } from './civitaiImageContract';
 
 const air = 'urn:air:sdxl:checkpoint:civitai:12@34';
 const api = (rows: Record<string, unknown>) => async (url: string) => new Response(JSON.stringify(rows[url.split('/').pop()!] ?? {}), { status: url.includes('model-versions') ? 200 : 404 });
 
 describe('Civitai resource identity', () => {
+  it('resolves explicit JSON model override and records the actual resource', async () => {
+    const actual = 'urn:air:sdxl:checkpoint:civitai:56@78';
+    const built = await buildCivitaiImageRequest({ model: air, prompt: 'a', custom_parameters: { model: actual, cfgScale: 0 } }, api({}));
+    expect(built.payload.model).toBe(actual);
+    expect(built.payload.cfgScale).toBe(0);
+    await expect(buildCivitaiImageRequest({ model: air, custom_parameters: { headers: { authorization: 'x' } } }, api({}))).rejects.toThrow();
+  });
   it('keeps API AIR including ecosystem, file and resource kind intact', async () => {
     const exact = 'urn:air:illustrious:diffusionmodel:civitai:12@34+56';
     expect(await resolveCivitaiResource('12@34', api({34: { id: 34, modelId: 12, air: exact }}))).toBe(exact);

@@ -4,6 +4,9 @@ import {buildCivitaiVideoInput} from './src/schemas/civitaiVideo.ts';
 import express from 'express';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { sanitizeGenerationMetadata } from './src/utils/generationMetadata.ts';
+import { applyCustomParameters, parseCustomObject } from './src/server/customParameters.ts';
+import { persistGeneratedImages, normalizeGeneratedImages } from './src/server/multiImageHistory.ts';
+import { collectCivitaiImageOutputs } from './src/server/civitaiOutputs.ts';
 import { buildZImagePayload } from './src/schemas/zImageSpace.ts';
 import { buildModelScopeLoras } from './src/schemas/modelScopeLoras.ts';
 import { buildTensorModelJob, tensorModelId, validateTensorModelDimensions, TENSOR_MODEL_API } from './src/schemas/tensorModelApi.ts';
@@ -266,9 +269,8 @@ app.use((req, res, next) => {
 });
 app.use((req, res, next) => {
   if (!isApiPath(req.path)) return next();
-  const custom=req.body?.custom_parameters;
-  if(custom!==undefined && (!custom || typeof custom!=='object' || Array.isArray(custom)))return res.status(400).json({error:'自定义参数必须为 JSON 对象',errorSource:'local'});
-  if(custom && ['model','provider','endpoint','inference_provider'].some(k=>Object.hasOwn(custom,k)))return res.status(400).json({error:'模型和路由请使用对应选择器修改；参数 JSON 不可覆盖模型或供应商',errorSource:'local'});
+  try { parseCustomObject(req.body?.custom_parameters); }
+  catch (error: any) { return res.status(400).json({error:error.message,errorSource:'local'}); }
   const snapshot = req.body?.workflowSnapshot;
   if (snapshot !== undefined && (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot))) return res.status(400).json({error: 'workflowSnapshot 必须为对象',errorSource:'local'});
   const context = {route:req.path,submissions:[],traces:[],workflowSnapshot:snapshot ? sanitizeGenerationMetadata(snapshot) : undefined};
@@ -793,18 +795,43 @@ const recordHistoryItem = async (rawItem: Partial<GeneratedItem>): Promise<Gener
 };
 
 // Persist every returned image; the canvas shows the first, history retains the entire batch.
-async function recordAdditionalImages(images: any[], first: GeneratedItem) {
-  const historyItems: GeneratedItem[] = [first];
-  const failures: Array<{url:string;error:string}> = [];
-  for (const image of images.slice(1)) {
-    const url = typeof image === 'string' ? image : image?.url || (image?.b64_json ? `data:image/png;base64,${image.b64_json}` : '');
-    if (!url) { failures.push({url:'',error:'上游返回的附加图片缺少 URL / b64_json'}); continue; }
-    const durable = await requireDurableHistoryMediaUrl(url);
-    if (!durable.ok) {failures.push({url,error:durable.message});continue;}
-    const {id, timestamp, ...metadata}=first;
-    historyItems.push(await recordHistoryItem({...metadata,url:durable.dataUrl,seed:typeof image?.seed==='number'?image.seed:null}));
+// Persist the full upstream image list (each with its own format, seed and model), show the first on the canvas,
+// and report every image that could not be stored with its real stage and source instead of failing the batch.
+async function respondWithGeneratedImages(
+  res: express.Response,
+  images: unknown[],
+  metadata: Partial<GeneratedItem> & Record<string, any>,
+  options: { label: string; outputFormat?: string; response?: Record<string, unknown> },
+) {
+  const result = await persistGeneratedImages(images, metadata, {persist: requireDurableHistoryMediaUrl, record: recordHistoryItem}, {outputFormat: options.outputFormat});
+  if (!result.first) {
+    const failure = result.transientOutputs[0];
+    const status = failure?.stage === 'response' ? 502 : failure?.errorSource === 'storage' || failure?.errorSource === 'local' ? 500 : 502;
+    return res.status(status).json({
+      error: `${options.label} 返回 ${images.length} 张图片，但没有任何一张保存成功：${failure?.error || '未返回图片'}`,
+      errorSource: failure?.errorSource || 'upstream',
+      ...(failure?.status != null ? {persistStatus: failure.status} : {}),
+      ...(failure?.url ? {transientMediaUrl: failure.url} : {}),
+      transientOutputs: result.transientOutputs,
+      ...options.response,
+    });
   }
-  return {historyItems, ...(failures.length ? {historyWarning:`${failures.length} 张附加图片持久化失败；请从 transientOutputs 保存`,transientOutputs:failures} : {})};
+  return res.json({
+    ...options.response,
+    imageUrl: result.first.url,
+    mediaUrl: result.first.url,
+    mediaType: 'image',
+    historyItem: result.first,
+    historyItems: result.historyItems,
+    transientOutputs: result.transientOutputs,
+    ...(result.historyWarning ? {historyWarning: result.historyWarning} : {}),
+  });
+}
+
+async function recordAdditionalImages(images: any[], first: GeneratedItem, options: { outputFormat?: string } = {}) {
+  const {id, timestamp, url, ...metadata} = first;
+  const rest = await persistGeneratedImages(images, metadata, {persist: requireDurableHistoryMediaUrl, record: recordHistoryItem}, {...options, skipIndexes: [0]});
+  return {historyItems: [first, ...rest.historyItems], transientOutputs: rest.transientOutputs, ...(rest.historyWarning ? {historyWarning: rest.historyWarning} : {})};
 }
 
 // Seed initial history if empty so user has starting history items
@@ -1096,7 +1123,8 @@ function parseCountNumber(str: string): number | undefined {
 // Dedicated Real Live Model Detail Resolution for Tensor.Art / 吐司
 async function fetchTensorArtModelInfo(modelId: string, apiKey?: string) {
   const cleanId = tensorModelId(modelId);
-  const key = (apiKey && !apiKey.startsWith('ak_')) ? apiKey : (keyPoolManager.getNextKey('tensorart') && !keyPoolManager.getNextKey('tensorart')?.startsWith('ak_') ? keyPoolManager.getNextKey('tensorart') : 'test');
+  const key = apiKey || keyPoolManager.getNextKey('tensorart') || '';
+  if (!key) throw Object.assign(new Error('缺少 TAMS 模型 API Key'), {status:400});
   const response = await upstreamFetch({provider:'tensorart',route:'model-info',model:cleanId,key}, `${TENSOR_MODEL_API}/v1/models/${cleanId}`, {headers:{Authorization:`Bearer ${key}`},signal:AbortSignal.timeout(15000)});
   if (!response.ok) {
     const details=await response.text();
@@ -3171,36 +3199,21 @@ app.get("/api/models", async (req, res) => {
     // 9. TAMS has no list API (official Integration FAQ); only explicit ID lookup.
     if (provider === "all" || provider === "tensorart" || provider === "tensor") {
       try {
-        const taKey = resolveTensorArtKey(req);
         const numericSearch = searchStr.match(/(?:^|\/models\/)(\d{10,25})(?:$|[/?#])/);
-        let taItems: any[] = [];
-        let nextCursor: string | null = null;
-        let sourceUrl = 'https://tensor.art/models/';
-        let pagingMode = 'lookup-only';
-        let noticeMessage = 'Tensor.Art 官方未提供全量模型列表 API（详见官方 Integration FAQ）。支持直接在搜索框输入模型 ID（如 672797109289765558）或页面链接，实时解析获取官方底模或 LoRA 元数据。';
-
-        if (numericSearch) {
-          try {
-            const info = await fetchTensorArtModelInfo(numericSearch[1], taKey);
-            taItems = [info];
-            pagingMode = 'model-id-lookup';
-            sourceUrl = `https://tensor.art/models/${numericSearch[1]}`;
-            noticeMessage = `成功解析 Tensor.Art 模型：${info.name} (${info.baseModel})`;
-          } catch (e: any) {
-            noticeMessage = `Tensor.Art 模型解析失败: ${e.message}`;
-          }
-        }
-
-        const filteredTensorItems = taItems.filter((m:any)=> (!searchStr || numericSearch || `${m.name} ${m.baseModel || ''}`.toLowerCase().includes(searchStr.toLowerCase())) && (!archFilter || archFilter==='all' || (m.baseModel || '').toLowerCase().includes(archFilter.toLowerCase())));
+        const taCatalog = numericSearch
+          ? {items:[await fetchTensorArtModelInfo(numericSearch[1],resolveTensorArtKey(req))],nextCursor:null,sourceUrl:TENSOR_MODEL_API}
+          : {items:[],nextCursor:null,sourceUrl:'https://tams-docs.tensor.art/docs/api/guide/integration-faq/'};
+        const taItems=taCatalog.items;
+        const filteredTensorItems = taItems.filter((m:any)=> (!searchStr || numericSearch || `${m.name} ${m.baseModel}`.toLowerCase().includes(searchStr.toLowerCase())) && (!archFilter || archFilter==='all' || m.baseModel.toLowerCase().includes(archFilter.toLowerCase())));
         results.tensorart = filteredTensorItems.filter((m: any) => matchCategory(m));
         pagination.tensorart = {
           page: pageParam,
-          hasMore: false,
-          nextCursor,
-          sourceUrl,
-          paging: pagingMode,
-          catalogAvailable: taItems.length > 0,
-          message: noticeMessage,
+          hasMore: !!taCatalog.nextCursor,
+          nextCursor:taCatalog.nextCursor,
+          sourceUrl:taCatalog.sourceUrl,
+          paging:numericSearch ? 'model-id-lookup' : 'lookup-only',
+          catalogAvailable:false,
+          message:'TAMS 官方不提供模型列表 API；请在官方模型库选择底模或 LoRA，复制 ID 查询。未发起网页抓取。',
         } as any;
       } catch (taErr: any) {
         console.error("Tensor.Art live models fetch error:", taErr.message);
@@ -3670,7 +3683,8 @@ app.post(['/api/fal/generate', '/api/generate'], async (req, res) => {
       }));
     }
 
-    if(req.body.custom_parameters) Object.assign(payload,req.body.custom_parameters);
+    const custom = applyCustomParameters(payload, req.body.custom_parameters);
+    const sentPayload = custom.payload as Record<string, any>;
 
     const response = await upstreamFetch(
       { provider: 'fal', route: req.path, model: endpoint, key: falKey },
@@ -3681,7 +3695,7 @@ app.post(['/api/fal/generate', '/api/generate'], async (req, res) => {
           'Authorization': `Key ${falKey}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(sentPayload),
       }
     );
 
@@ -3689,7 +3703,7 @@ app.post(['/api/fal/generate', '/api/generate'], async (req, res) => {
       const errorText = await response.text();
       keyPoolManager.recordResult('fal', falKey, false, Date.now() - startTime, errorText, response.status);
       // 若因端点不支持 loras 导致 422，返回清晰的诊断信息，杜绝静默吞掉 LoRA 假装成功的欺瞒行为
-      if (response.status === 422 && payload.loras && errorText.includes('loras')) {
+      if (response.status === 422 && sentPayload.loras && errorText.includes('loras')) {
         return res.status(422).json({
           error: `Fal.ai 端点调用错误 [422]: ${endpoint}`,
           details: errorText,
@@ -3706,50 +3720,38 @@ app.post(['/api/fal/generate', '/api/generate'], async (req, res) => {
 
     keyPoolManager.recordResult('fal', falKey, true, Date.now() - startTime);
     const result = await response.json();
-    const imageUrl = result.images?.[0]?.url;
-
-    if (!imageUrl) {
-      return res.status(502).json({ error: 'Fal.ai 返回结果中未包含图像输出 URL (images[0].url)' });
+    const images = Array.isArray(result.images) ? result.images : [];
+    if (!images.some((image: any) => image?.url)) {
+      return res.status(502).json({ error: 'Fal.ai 返回结果中未包含图像输出 URL (images[].url)', errorSource: 'upstream', rawResponse: result });
     }
 
-    // Durable same-origin copy — never store remote https alone as history.url (UI grey-out untouched)
-    const durable = await requireDurableHistoryMediaUrl(imageUrl);
-    if (!durable.ok) {
-      return res.status(500).json({
-        error: `Fal.ai 图像已生成，但无法下载并持久化为本地历史副本（data URL）: ${durable.message}`,
-        ...(durable.status != null ? { persistStatus: durable.status } : {}),
-        transientMediaUrl: imageUrl,
-      });
-    }
-    const durableUrl = durable.dataUrl;
-
-    // Fal output schema returns the actual `seed` used; steps/cfg only if we sent them.
-    const usedSeed = typeof result.seed === 'number' ? result.seed : (payload.seed ?? null);
-    const item = await recordHistoryItem({
-      url: durableUrl,
-      prompt,
-      negativePrompt: negative_prompt,
+    // Fal output schema returns the actual `seed` used for the request; steps/cfg only if we sent them.
+    const usedSeed = typeof result.seed === 'number' ? result.seed : (sentPayload.seed ?? null);
+    return await respondWithGeneratedImages(res, images, {
+      prompt: typeof sentPayload.prompt === 'string' ? sentPayload.prompt : prompt,
+      negativePrompt: typeof sentPayload.negative_prompt === 'string' ? sentPayload.negative_prompt : negative_prompt,
       provider: 'Fal.ai (GPU 云端加速)',
-      model: actualModel,
-      seed: usedSeed,
-      steps: payload.num_inference_steps ?? null,
-      cfg: payload.guidance_scale ?? null,
-      loras: (payload.loras || []).map((l: any) => ({ name: l.path, strength: l.scale })),
-    });
-
-    return res.json({
-      imageUrl: durableUrl,
-      seed: usedSeed,
-      timings: result.timings,
-      provider: 'Fal.ai (GPU 云端加速)',
-      actualProvider: 'Fal.ai (GPU 云端加速)',
       model: actualModel,
       actualModel,
-      requestedModel: model,
-      exactEndpointCalled: `https://fal.run/${endpoint}`,
-      targetEndpoint: endpoint,
-      historyItem: item,
-      ...await recordAdditionalImages(result.images || [], item),
+      seed: usedSeed,
+      steps: sentPayload.num_inference_steps ?? null,
+      cfg: sentPayload.guidance_scale ?? null,
+      loras: (sentPayload.loras || []).map((l: any) => ({ name: l.path, strength: l.scale })),
+      requestMetadata: { requestedParameters: sanitizeGenerationMetadata(Object.fromEntries(Object.entries(req.body).filter(([key]) => key !== 'workflowSnapshot'))), customParameters: custom.customParameters, overrides: custom.overrides, actualParameters: sentPayload, upstreamSeed: result.seed ?? null },
+    }, {
+      label: 'Fal.ai',
+      response: {
+        seed: usedSeed,
+        timings: result.timings,
+        provider: 'Fal.ai (GPU 云端加速)',
+        actualProvider: 'Fal.ai (GPU 云端加速)',
+        model: actualModel,
+        actualModel,
+        requestedModel: model,
+        exactEndpointCalled: `https://fal.run/${endpoint}`,
+        targetEndpoint: endpoint,
+        overrides: custom.overrides,
+      },
     });
   } catch (error: any) {
     if (falKey) keyPoolManager.recordResult('fal', falKey, false, Date.now() - startTime, error.message);
@@ -4567,15 +4569,30 @@ app.get('/api/civitai/workflow/:id', async (req, res) => {
     }
 
     const data = await resp.json();
-    let mediaUrl = extractCivitaiBlobUrl(data);
-    if (mediaUrl && !mediaUrl.startsWith('data:')) {
-      const durable = await persistRemoteUrlAsDataUrl(mediaUrl);
-      if (durable) mediaUrl = durable;
+    const images = collectCivitaiImageOutputs(data);
+    const durableImages: Array<{ url: string; seed?: number }> = [];
+    const transientOutputs: Array<Record<string, unknown>> = [];
+    for (const [index, image] of images.entries()) {
+      const durable = await requireDurableHistoryMediaUrl(image.url);
+      if (durable.ok) durableImages.push({ ...image, url: durable.dataUrl });
+      else transientOutputs.push({ index, url: image.url, error: durable.message, errorSource: durable.errorSource });
+    }
+    let mediaUrl = durableImages[0]?.url || '';
+    if (!images.length) {
+      const videoUrl = extractCivitaiBlobUrl(data);
+      if (videoUrl) {
+        const durable = await requireDurableHistoryMediaUrl(videoUrl);
+        if (durable.ok) mediaUrl = durable.dataUrl;
+        else transientOutputs.push({ index: 0, url: videoUrl, error: durable.message, errorSource: durable.errorSource });
+      }
     }
     return res.json({
       id,
       status: data.status,
       mediaUrl,
+      images: durableImages,
+      transientOutputs,
+      ...(transientOutputs.length ? { historyWarning: `${transientOutputs.length} 项生成结果保存失败，临时地址已保留`, error: !mediaUrl ? '生成完成，但全部结果持久化失败' : undefined } : {}),
       raw: data,
     });
   } catch (err: any) {
@@ -4632,6 +4649,7 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
           model.includes('image-to-video')));
 
     let completedMediaUrl = '';
+    let completedImages: Array<{ url: string; seed?: number }> = [];
     let effectiveParameters: Record<string, any> | undefined;
     let submittedImageParameters: Record<string, any> = {};
     const usedProvider = 'Civitai 官方原生生成引擎';
@@ -4777,7 +4795,8 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
       }
 
       const orchData = await orchResp.json();
-      completedMediaUrl = extractCivitaiBlobUrl(orchData);
+      completedImages = collectCivitaiImageOutputs(orchData);
+      completedMediaUrl = completedImages[0]?.url || extractCivitaiBlobUrl(orchData);
       const upstreamInput = orchData?.steps?.[0]?.input;
       if (upstreamInput && typeof upstreamInput === 'object' && !Array.isArray(upstreamInput)) effectiveParameters = upstreamInput;
 
@@ -4791,8 +4810,10 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
           status: orchData.status || 'processing',
           provider: usedProvider,
           model: airModel,
+          actualModel: civitaiImageHistory(genInput, effectiveParameters).model,
+          requestedModel: model,
           pendingHistory: { ...civitaiImageHistory(genInput, effectiveParameters), provider: usedProvider },
-          requestMetadata: {route: req.path, requestedParameters, actualParameters: genInput, submissions: generationContext.getStore()?.submissions || []},
+          requestMetadata: {route: req.path, requestedParameters, customParameters: req.body.custom_parameters, actualParameters: genInput, submissions: generationContext.getStore()?.submissions || []},
         });
       }
     } catch (orchErr: any) {
@@ -4808,32 +4829,11 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
 
     keyPoolManager.recordResult('civitai', apiKey, true, Date.now() - startTime);
 
-    // Durable same-origin copy (data:image/…) — same pattern as OpenAI/fal history; never store blob URL alone
-    const durableImageUrl = await persistRemoteUrlAsDataUrl(completedMediaUrl);
-    if (!durableImageUrl) {
-      return res.status(500).json({
-        error: 'Civitai 图像已生成，但无法下载并持久化为本地历史副本（data URL）。请重试。',
-        transientMediaUrl: completedMediaUrl,
-      });
-    }
-    completedMediaUrl = durableImageUrl;
-
-    // History: only record values actually sent to upstream (C1, C3, C9-4)
-    const item = await recordHistoryItem({
-      url: completedMediaUrl,
-      ...civitaiImageHistory(submittedImageParameters, effectiveParameters),
-      provider: usedProvider,
-      requestMetadata: {requestedParameters, actualParameters: submittedImageParameters, effectiveParameters},
-    });
-
-    return res.json({
-      success: true,
-      imageUrl: completedMediaUrl,
-      mediaUrl: completedMediaUrl,
-      provider: usedProvider,
-      model: airModel,
-      historyItem: item,
-    });
+    const actualHistory = civitaiImageHistory(submittedImageParameters, effectiveParameters);
+    return await respondWithGeneratedImages(res, completedImages.length ? completedImages : [completedMediaUrl], {
+      ...actualHistory, provider: usedProvider, actualModel: actualHistory.model,
+      requestMetadata: {requestedParameters, customParameters: req.body.custom_parameters, actualParameters: submittedImageParameters, effectiveParameters},
+    }, { label: 'Civitai', response: { success: true, provider: usedProvider, model: actualHistory.model, actualModel: actualHistory.model, requestedModel: model } });
   } catch (error: any) {
     if (error instanceof CivitaiAmbiguousError) {
       return res.status(400).json({ error: error.message, candidates: error.candidates });
@@ -4862,30 +4862,25 @@ app.post(['/api/engine/agnes/generate', '/api/agnes/generate'], async (req, res)
       prompt,
       size: req.body.extraParams?.size || req.body.size,
     };
-    if (!payload.size) return res.status(400).json({error:'Agnes size 为必填项：当前 Image 2.5 Flash 请选择 1K / 2K / 3K / 4K'});
     const ratio = req.body.aspectRatio || req.body.aspect_ratio;
     if (isProvided(ratio)) payload.ratio = ratio;
     const extraBody: Record<string, unknown> = {};
     if (image_url) extraBody.image = [image_url];
     if (isProvided(req.body.response_format)) extraBody.response_format = req.body.response_format;
     if (Object.keys(extraBody).length) payload.extra_body = extraBody;
-    const agnesCustom = req.body.custom_parameters;
-    const agnesOverrides: Array<{field:string;requested:unknown;custom:unknown;applied:boolean}> = [];
-    if (agnesCustom && typeof agnesCustom === 'object' && !Array.isArray(agnesCustom)) {
-      for (const [field, value] of Object.entries(agnesCustom)) {
-        const protectedField = ['model', 'endpoint'].includes(field);
-        if (payload[field] !== undefined && JSON.stringify(payload[field]) !== JSON.stringify(value)) agnesOverrides.push({ field, requested: payload[field], custom: value, applied: !protectedField });
-        if (!protectedField) payload[field] = value;
-      }
-    }
+    const custom = applyCustomParameters(payload, req.body.custom_parameters);
+    const sentPayload = custom.payload;
+    const actualModel = custom.actualModel || model;
+    if (!sentPayload.size) return res.status(400).json({error:'Agnes size 为必填项：当前 Image 2.5 Flash 请选择 1K / 2K / 3K / 4K',errorSource:'local'});
+    const requestedParameters = sanitizeGenerationMetadata(Object.fromEntries(Object.entries(req.body).filter(([key]) => key !== 'workflowSnapshot')));
 
     const upstream = await upstreamFetch(
-      { provider: 'agnes', route: req.path, model, key: apiKey },
+      { provider: 'agnes', route: req.path, model: actualModel, key: apiKey },
       `${baseUrl}/images/generations`,
       {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(sentPayload),
       }
     );
 
@@ -4896,45 +4891,26 @@ app.post(['/api/engine/agnes/generate', '/api/agnes/generate'], async (req, res)
     }
 
     const data = await upstream.json();
-    const mediaUrl = extractCompatImageUrl(data.data?.[0]);
-    if (!mediaUrl) {
+    const images = Array.isArray(data.data) ? data.data : [];
+    if (!images.some((image: any) => extractCompatImageUrl(image))) {
       keyPoolManager.recordResult('agnes', apiKey, false, Date.now() - startTime, 'No image in response', 500);
-      return res.status(500).json({ error: 'Agnes AI 返回结果中未包含图像输出 URL' });
+      return res.status(502).json({ error: 'Agnes AI 返回结果中未包含图像输出 URL', errorSource: 'upstream', rawResponse: data });
     }
     keyPoolManager.recordResult('agnes', apiKey, true, Date.now() - startTime);
 
-    // Durable same-origin copy — never store remote https alone as history.url (UI grey-out untouched)
-    const durable = await requireDurableHistoryMediaUrl(mediaUrl);
-    if (!durable.ok) {
-      return res.status(500).json({
-        error: `Agnes AI 图像已生成，但无法下载并持久化为本地历史副本（data URL）: ${durable.message}`,
-        ...(durable.status != null ? { persistStatus: durable.status } : {}),
-        transientMediaUrl: mediaUrl,
-      });
-    }
-    const durableUrl = durable.dataUrl;
-
-    const item = await recordHistoryItem({
-      url: durableUrl,
-      prompt,
+    return await respondWithGeneratedImages(res, images, {
+      prompt: typeof sentPayload.prompt === 'string' ? sentPayload.prompt : prompt,
       provider: 'Agnes AI (ApiHub)',
-      model,
+      model: actualModel,
+      actualModel,
       seed: null,
       steps: null,
       cfg: null,
       loras: [],
-      requestMetadata: { requestedParameters: req.body, actualParameters: payload, overrides: agnesOverrides },
-    });
-    const additional = await recordAdditionalImages(data.data || [], item);
-
-    return res.json({
-      imageUrl: durableUrl,
-      mediaUrl: durableUrl,
-      mediaType: 'image',
-      provider: 'Agnes AI (ApiHub)',
-      model,
-      historyItem: item,
-      ...additional,
+      requestMetadata: { requestedParameters, customParameters: custom.customParameters, overrides: custom.overrides, actualParameters: sentPayload },
+    }, {
+      label: 'Agnes AI',
+      response: { provider: 'Agnes AI (ApiHub)', model: actualModel, requestedModel: model, actualModel, overrides: custom.overrides },
     });
   } catch (error: any) {
     keyPoolManager.recordResult('agnes', apiKey, false, Date.now() - startTime, error.message);
@@ -5044,37 +5020,27 @@ app.post('/api/engine/sensenova/generate', async (req, res) => {
       return res.status(upstream.status).json({error:`SenseNova 图像接口上游 HTTP ${upstream.status}: ${rawResponse}`,upstreamStatus:upstream.status,errorSource:'upstream',endpoint,rawResponse,actualRequest:mapped.payload});
     }
     const data = await upstream.json();
-    const first = data?.data?.[0];
-    const encoded = typeof first?.b64_json === 'string' && first.b64_json ? first.b64_json : '';
-    const imageFormat = mapped.payload.output_format === 'jpeg' ? 'jpeg' : mapped.payload.output_format === 'webp' ? 'webp' : 'png';
-    const mediaUrl = encoded ? (encoded.startsWith('data:') ? encoded : `data:image/${imageFormat};base64,${encoded}`) : (typeof first?.url === 'string' ? first.url : '');
-    if (!mediaUrl) {
+    const images = Array.isArray(data?.data) ? data.data : [];
+    if (!images.some((image: any) => (typeof image?.b64_json === 'string' && image.b64_json) || (typeof image?.url === 'string' && image.url))) {
       keyPoolManager.recordResult('sensenova',apiKey,false,Date.now()-startTime,'upstream response missing image',502);
-      return res.status(502).json({error:'SenseNova 上游返回成功状态但 data[0] 不含 b64_json / url；不记图片成功',errorSource:'upstream',endpoint,rawResponse:data,actualRequest:mapped.payload});
-    }
-    const durable = await requireDurableHistoryMediaUrl(mediaUrl);
-    if (!durable.ok) {
-      return res.status(500).json({error:`SenseNova 图片已生成但持久化失败：${durable.message}`,errorSource:'storage',persistStatus:durable.status ?? null,persistRawResponse:durable.rawResponse,transientMediaUrl:mediaUrl,actualRequest:mapped.payload,endpoint});
+      return res.status(502).json({error:'SenseNova 上游返回成功状态但 data[] 不含 b64_json / url；不记图片成功',errorSource:'upstream',endpoint,rawResponse:data});
     }
     keyPoolManager.recordResult('sensenova',apiKey,true,Date.now()-startTime);
-    let item: Awaited<ReturnType<typeof recordHistoryItem>>;
-    try {
-      item = await recordHistoryItem({
-      url:durable.dataUrl,
+    return await respondWithGeneratedImages(res, images, {
       prompt:String(mapped.payload.prompt),
       provider:'SenseNova U1.5 Lite',
-      model:String(mapped.payload.model),
+      model:mapped.actualModel,
+      actualModel:mapped.actualModel,
       seed:null,steps:null,cfg:null,
       width:typeof req.body.width==='number'?req.body.width:null,
       height:typeof req.body.height==='number'?req.body.height:null,
       loras:[],
-      workflowSnapshot:req.body.workflowSnapshot,
-      requestMetadata:{requestedParameters:req.body,actualParameters:mapped.payload,overrides:mapped.overrides,upstreamEndpoint:endpoint},
-      });
-    } catch (persistError:any) {
-      return res.status(500).json({error:`SenseNova 图片已生成但历史写入失败：${persistError.message}`,errorSource:'storage',transientMediaUrl:durable.dataUrl,endpoint,stack:persistError.stack});
-    }
-    return res.json({imageUrl:durable.dataUrl,mediaUrl:durable.dataUrl,mediaType:'image',provider:'SenseNova',model:mapped.payload.model,seed:null,actualRequest:mapped.payload,historyItem:item,upstreamEndpoint:endpoint,parameterOmissions:req.body.parameterOmissions || []});
+      requestMetadata:{requestedParameters:sanitizeGenerationMetadata(Object.fromEntries(Object.entries(req.body).filter(([key]) => key !== 'workflowSnapshot'))),actualParameters:mapped.payload,overrides:mapped.overrides,upstreamEndpoint:endpoint},
+    }, {
+      label:'SenseNova',
+      outputFormat:typeof mapped.payload.output_format === 'string' ? mapped.payload.output_format : 'png',
+      response:{provider:'SenseNova',model:mapped.actualModel,requestedModel:req.body.model,actualModel:mapped.actualModel,seed:null,actualRequest:mapped.payload,overrides:mapped.overrides,upstreamEndpoint:endpoint},
+    });
   } catch (error:any) {
     keyPoolManager.recordResult('sensenova',apiKey,false,Date.now()-startTime,error.message);
     return res.status(502).json({error:`SenseNova 图像接口网络/协议错误：${error.message}`,errorSource:'network',endpoint,stack:error.stack});
@@ -5100,7 +5066,7 @@ app.post('/api/engine/runware/generate', async (req, res) => {
   const endpoint = mapped.endpoint;
   try {
     const upstream = await upstreamFetch(
-      { provider: 'runware', route: req.path, model: String(mapped.payload[0]?.model), key: apiKey },
+      { provider: 'runware', route: req.path, model: mapped.actualModel, key: apiKey },
       endpoint,
       {
         method: 'POST',
@@ -5128,7 +5094,7 @@ app.post('/api/engine/runware/generate', async (req, res) => {
     const data = await upstream.json();
     let parsed: ReturnType<typeof parseRunwareImageResponse>;
     try {
-      parsed = parseRunwareImageResponse(data);
+      parsed = parseRunwareImageResponse(data, mapped.payload[0]?.outputFormat);
     } catch (parseErr: any) {
       keyPoolManager.recordResult('runware', apiKey, false, Date.now() - startTime, parseErr.message, 502);
       return res.status(502).json({
@@ -5140,61 +5106,25 @@ app.post('/api/engine/runware/generate', async (req, res) => {
       });
     }
 
-    const durable = await requireDurableHistoryMediaUrl(parsed.imageUrl);
-    if (!durable.ok) {
-      return res.status(500).json({
-        error: `Runware 图片已生成但持久化失败：${durable.message}`,
-        errorSource: 'storage',
-        persistStatus: durable.status ?? null,
-        transientMediaUrl: parsed.imageUrl,
-        actualRequest: mapped.payload,
-        endpoint,
-      });
-    }
-
     keyPoolManager.recordResult('runware', apiKey, true, Date.now() - startTime);
 
     const task = mapped.payload[0];
-    let item: Awaited<ReturnType<typeof recordHistoryItem>>;
-    try {
-      item = await recordHistoryItem({
-        url: durable.dataUrl,
-        prompt: task.positivePrompt,
-        negativePrompt: task.negativePrompt,
-        provider: 'Runware',
-        model: task.model,
-        seed: task.seed ?? null,
-        steps: task.steps ?? null,
-        cfg: task.CFGScale ?? null,
-        width: task.width ?? null,
-        height: task.height ?? null,
-        loras: (task.lora || []).map(l => ({ name: l.model, strength: l.weight })),
-        workflowSnapshot: req.body.workflowSnapshot,
-        requestMetadata: { requestedParameters: req.body, actualParameters: mapped.payload, upstreamEndpoint: endpoint },
-      });
-    } catch (persistError: any) {
-      return res.status(500).json({
-        error: `Runware 图片已生成但历史写入失败：${persistError.message}`,
-        errorSource: 'storage',
-        transientMediaUrl: durable.dataUrl,
-        endpoint,
-        stack: persistError.stack,
-      });
-    }
-
-    return res.json({
-      imageUrl: durable.dataUrl,
-      mediaUrl: durable.dataUrl,
-      mediaType: 'image',
+    return await respondWithGeneratedImages(res, parsed.images, {
+      prompt: task.positivePrompt,
+      negativePrompt: task.negativePrompt,
       provider: 'Runware',
-      model: task.model,
+      model: mapped.actualModel,
+      actualModel: mapped.actualModel,
       seed: task.seed ?? null,
-      cost: parsed.cost,
-      taskUUID: parsed.taskUUID,
-      actualRequest: mapped.payload,
-      historyItem: item,
-      ...(await recordAdditionalImages(parsed.imageUrls || [parsed.imageUrl], item)),
-      upstreamEndpoint: endpoint,
+      steps: task.steps ?? null,
+      cfg: task.CFGScale ?? null,
+      width: task.width ?? null,
+      height: task.height ?? null,
+      loras: (task.lora || []).map(l => ({ name: l.model, strength: l.weight })),
+      requestMetadata: { requestedParameters: sanitizeGenerationMetadata(Object.fromEntries(Object.entries(req.body).filter(([key]) => key !== 'workflowSnapshot'))), actualParameters: mapped.payload, overrides: mapped.overrides, upstreamEndpoint: endpoint },
+    }, {
+      label: 'Runware',
+      response: { provider: 'Runware', model: mapped.actualModel, requestedModel: req.body.model, actualModel: mapped.actualModel, seed: task.seed ?? null, cost: parsed.cost, taskUUID: parsed.taskUUID, actualRequest: mapped.payload, overrides: mapped.overrides, upstreamEndpoint: endpoint },
     });
   } catch (error: any) {
     keyPoolManager.recordResult('runware', apiKey, false, Date.now() - startTime, error.message);
@@ -5227,7 +5157,7 @@ app.post('/api/engine/modelslab/generate', async (req, res) => {
   const actualRequest = sanitizeModelsLabPayload(mapped.payload);
   try {
     const upstream = await upstreamFetch(
-      { provider: 'modelslab', route: req.path, model: String(mapped.payload.model_id), key: apiKey },
+      { provider: 'modelslab', route: req.path, model: mapped.actualModel, key: apiKey },
       endpoint,
       {
         method: 'POST',
@@ -5272,7 +5202,7 @@ app.post('/api/engine/modelslab/generate', async (req, res) => {
       for (let attempt = 0; attempt < 30 && !finalImageUrl; attempt++) {
         await new Promise((r) => setTimeout(r, 2000));
         const polled = await upstreamFetch(
-          { provider: 'modelslab', route: req.path, model: String(mapped.payload.model_id), key: apiKey },
+          { provider: 'modelslab', route: req.path, model: mapped.actualModel, key: apiKey },
           fetchReq.endpoint,
           {
             method: 'POST',
@@ -5334,58 +5264,25 @@ app.post('/api/engine/modelslab/generate', async (req, res) => {
       });
     }
 
-    const durable = await requireDurableHistoryMediaUrl(finalImageUrl);
-    if (!durable.ok) {
-      return res.status(500).json({
-        error: `ModelsLab 图片已生成但持久化失败：${durable.message}`,
-        errorSource: 'storage',
-        persistStatus: durable.status ?? null,
-        transientMediaUrl: finalImageUrl,
-        actualRequest,
-        endpoint,
-      });
-    }
-
     keyPoolManager.recordResult('modelslab', apiKey, true, Date.now() - startTime);
-
-    let item: Awaited<ReturnType<typeof recordHistoryItem>>;
-    try {
-      item = await recordHistoryItem({
-        url: durable.dataUrl,
-        prompt: String(mapped.payload.prompt),
-        negativePrompt: typeof mapped.payload.negative_prompt === 'string' ? mapped.payload.negative_prompt : undefined,
-        provider: 'ModelsLab',
-        model: String(mapped.payload.model_id),
-        seed: typeof mapped.payload.seed === 'number' ? mapped.payload.seed : null,
-        steps: typeof mapped.payload.num_inference_steps === 'number' ? mapped.payload.num_inference_steps : null,
-        cfg: typeof mapped.payload.guidance_scale === 'number' ? mapped.payload.guidance_scale : null,
-        width: typeof mapped.payload.width === 'number' ? mapped.payload.width : null,
-        height: typeof mapped.payload.height === 'number' ? mapped.payload.height : null,
-        loras: Array.isArray(req.body.loras) ? req.body.loras.map((l: any) => ({ name: l.name || l.model || '', strength: l.strength ?? 1 })) : [],
-        workflowSnapshot: req.body.workflowSnapshot,
-        requestMetadata: { requestedParameters: req.body, actualParameters: actualRequest, upstreamEndpoint: endpoint },
-      });
-    } catch (persistError: any) {
-      return res.status(500).json({
-        error: `ModelsLab 图片已生成但历史写入失败：${persistError.message}`,
-        errorSource: 'storage',
-        transientMediaUrl: durable.dataUrl,
-        endpoint,
-        stack: persistError.stack,
-      });
-    }
-
-    return res.json({
-      imageUrl: durable.dataUrl,
-      mediaUrl: durable.dataUrl,
-      mediaType: 'image',
+    const imageUrls = parsed.imageUrls?.length ? parsed.imageUrls : [finalImageUrl];
+    const sent = mapped.payload as Record<string, any>;
+    return await respondWithGeneratedImages(res, imageUrls, {
+      prompt: String(sent.prompt),
+      negativePrompt: typeof sent.negative_prompt === 'string' ? sent.negative_prompt : undefined,
       provider: 'ModelsLab',
-      model: String(mapped.payload.model_id),
-      seed: typeof mapped.payload.seed === 'number' ? mapped.payload.seed : null,
-      actualRequest,
-      historyItem: item,
-      ...(await recordAdditionalImages(parsed.imageUrls || (finalImageUrl ? [finalImageUrl] : []), item)),
-      upstreamEndpoint: endpoint,
+      model: mapped.actualModel,
+      actualModel: mapped.actualModel,
+      seed: typeof sent.seed === 'number' ? sent.seed : null,
+      steps: typeof sent.num_inference_steps === 'number' ? sent.num_inference_steps : null,
+      cfg: typeof sent.guidance_scale === 'number' ? sent.guidance_scale : null,
+      width: typeof sent.width === 'number' ? sent.width : null,
+      height: typeof sent.height === 'number' ? sent.height : null,
+      loras: typeof sent.lora_model === 'string' && sent.lora_model ? sent.lora_model.split(',').map((name: string, index: number) => ({ name, strength: Number(String(sent.lora_strength ?? '').split(',')[index] ?? sent.lora_strength) })) : [],
+      requestMetadata: { requestedParameters: sanitizeGenerationMetadata(Object.fromEntries(Object.entries(req.body).filter(([key]) => key !== 'workflowSnapshot'))), actualParameters: actualRequest, overrides: mapped.overrides, upstreamEndpoint: endpoint },
+    }, {
+      label: 'ModelsLab',
+      response: { provider: 'ModelsLab', model: mapped.actualModel, requestedModel: req.body.model ?? req.body.model_id, actualModel: mapped.actualModel, taskId: parsed.taskId ?? null, actualRequest, overrides: mapped.overrides, upstreamEndpoint: endpoint },
     });
   } catch (error: any) {
     keyPoolManager.recordResult('modelslab', apiKey, false, Date.now() - startTime, error.message);
@@ -5434,19 +5331,21 @@ app.post(['/api/engine/openai_compat/generate', '/api/openai_compat/generate'], 
     if (isProvided(background)) payload.background = background;
     if (isProvided(moderation)) payload.moderation = moderation;
     if (isProvided(n)) payload.n = n;
-    if (req.body.custom_parameters && typeof req.body.custom_parameters === 'object') Object.assign(payload, req.body.custom_parameters);
-
     const isEdit = Boolean(image_url);
     // Current official JSON edits contract uses images:[{image_url}], not image:string.
     if (isEdit) payload.images = [{image_url}];
+    const custom = applyCustomParameters(payload, req.body.custom_parameters);
+    const sentPayload = custom.payload;
+    const actualModel = custom.actualModel || model;
+    const requestedParameters = sanitizeGenerationMetadata(Object.fromEntries(Object.entries(req.body).filter(([key]) => key !== 'workflowSnapshot')));
 
     const upstream = await upstreamFetch(
-      { provider: 'openai_compat', route: req.path, model, key: apiKey },
+      { provider: 'openai_compat', route: req.path, model: actualModel, key: apiKey },
       `${baseUrl}${isEdit ? '/images/edits' : '/images/generations'}`,
       {
         method: 'POST',
         headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(sentPayload),
       },
     );
 
@@ -5457,44 +5356,27 @@ app.post(['/api/engine/openai_compat/generate', '/api/openai_compat/generate'], 
     }
 
     const data = await upstream.json();
-    const mediaUrl = extractCompatImageUrl(data.data?.[0]);
-    if (!mediaUrl) {
+    const images = Array.isArray(data.data) ? data.data : [];
+    if (!images.some((image: any) => extractCompatImageUrl(image))) {
       keyPoolManager.recordResult('openai_compat', apiKey, false, Date.now() - startTime, 'No image in response', 500);
-      return res.status(500).json({ error: 'OpenAI 兼容中转返回结果中未包含图像（data[].b64_json / data[].url）' });
+      return res.status(502).json({ error: 'OpenAI 兼容中转返回结果中未包含图像（data[].b64_json / data[].url）', errorSource: 'upstream', rawResponse: data });
     }
     keyPoolManager.recordResult('openai_compat', apiKey, true, Date.now() - startTime);
 
-    // Durable copy when upstream returned https URL (b64→data: already durable; pass-through)
-    const durable = await requireDurableHistoryMediaUrl(mediaUrl);
-    if (!durable.ok) {
-      return res.status(500).json({
-        error: `OpenAI 兼容中转图像已生成，但无法下载并持久化为本地历史副本（data URL）: ${durable.message}`,
-        ...(durable.status != null ? { persistStatus: durable.status } : {}),
-        transientMediaUrl: mediaUrl,
-      });
-    }
-    const durableUrl = durable.dataUrl;
-
-    const item = await recordHistoryItem({
-      url: durableUrl,
-      prompt,
+    return await respondWithGeneratedImages(res, images, {
+      prompt: typeof sentPayload.prompt === 'string' ? sentPayload.prompt : prompt,
       provider: 'OpenAI 兼容中转',
-      model,
+      model: actualModel,
+      actualModel,
       seed: null,
       steps: null,
       cfg: null,
       loras: [],
-    });
-    const additional = await recordAdditionalImages(data.data || [], item);
-
-    return res.json({
-      imageUrl: durableUrl,
-      mediaUrl: durableUrl,
-      mediaType: 'image',
-      provider: 'OpenAI 兼容中转',
-      model,
-      historyItem: item,
-      ...additional,
+      requestMetadata: { requestedParameters, customParameters: custom.customParameters, overrides: custom.overrides, actualParameters: sentPayload },
+    }, {
+      label: 'OpenAI 兼容中转',
+      outputFormat: typeof sentPayload.output_format === 'string' ? sentPayload.output_format : undefined,
+      response: { provider: 'OpenAI 兼容中转', model: actualModel, requestedModel: model, actualModel, overrides: custom.overrides },
     });
   } catch (error: any) {
     keyPoolManager.recordResult('openai_compat', apiKey, false, Date.now() - startTime, error.message);
@@ -5523,18 +5405,20 @@ app.post(['/api/engine/grok_compat/generate', '/api/grok_compat/generate'], asyn
     if (isProvided(resolution)) payload.resolution = resolution;
     if (isProvided(n)) payload.n = n;
     if (isProvided(response_format)) payload.response_format = response_format;
-    if (req.body.custom_parameters && typeof req.body.custom_parameters === 'object') Object.assign(payload, req.body.custom_parameters);
-
     const isEdit = Boolean(image_url);
     if (isEdit) payload.image = { url: image_url, type:'image_url' };
+    const custom = applyCustomParameters(payload, req.body.custom_parameters);
+    const sentPayload = custom.payload;
+    const actualModel = custom.actualModel || model;
+    const requestedParameters = sanitizeGenerationMetadata(Object.fromEntries(Object.entries(req.body).filter(([key]) => key !== 'workflowSnapshot')));
 
     const upstream = await upstreamFetch(
-      { provider: 'grok_compat', route: req.path, model, key: apiKey },
+      { provider: 'grok_compat', route: req.path, model: actualModel, key: apiKey },
       `${baseUrl}${isEdit ? '/images/edits' : '/images/generations'}`,
       {
         method: 'POST',
         headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(sentPayload),
       },
     );
 
@@ -5545,45 +5429,28 @@ app.post(['/api/engine/grok_compat/generate', '/api/grok_compat/generate'], asyn
     }
 
     const data = await upstream.json();
-    const rawUrl = extractCompatImageUrl(data.data?.[0]);
-    const mediaUrl = rawUrl ? resolveAgainstBaseOrigin(rawUrl, baseUrl) : null;
-    if (!mediaUrl) {
+    // Relative URLs from a relay are resolved against the configured base origin only; b64 stays inline.
+    const images = (Array.isArray(data.data) ? data.data : []).map((image: any) =>
+      image && typeof image === 'object' && typeof image.url === 'string' && image.url ? { ...image, url: resolveAgainstBaseOrigin(image.url, baseUrl) } : image);
+    if (!images.some((image: any) => extractCompatImageUrl(image))) {
       keyPoolManager.recordResult('grok_compat', apiKey, false, Date.now() - startTime, 'No image in response', 500);
-      return res.status(500).json({ error: 'Grok 兼容中转返回结果中未包含图像（data[].url / data[].b64_json）' });
+      return res.status(502).json({ error: 'Grok 兼容中转返回结果中未包含图像（data[].url / data[].b64_json）', errorSource: 'upstream', rawResponse: data });
     }
     keyPoolManager.recordResult('grok_compat', apiKey, true, Date.now() - startTime);
 
-    // Durable same-origin copy (data:image/…) — never store expiring imgen.x.ai / https blob alone
-    const durable = await requireDurableHistoryMediaUrl(mediaUrl);
-    if (!durable.ok) {
-      return res.status(500).json({
-        error: `Grok 兼容中转图像已生成，但无法下载并持久化为本地历史副本（data URL）: ${durable.message}`,
-        ...(durable.status != null ? { persistStatus: durable.status } : {}),
-        transientMediaUrl: mediaUrl,
-      });
-    }
-    const durableUrl = durable.dataUrl;
-
-    const item = await recordHistoryItem({
-      url: durableUrl,
-      prompt,
+    return await respondWithGeneratedImages(res, images, {
+      prompt: typeof sentPayload.prompt === 'string' ? sentPayload.prompt : prompt,
       provider: 'Grok 兼容中转',
-      model,
+      model: actualModel,
+      actualModel,
       seed: null,
       steps: null,
       cfg: null,
       loras: [],
-    });
-    const additional = await recordAdditionalImages(data.data || [], item);
-
-    return res.json({
-      imageUrl: durableUrl,
-      mediaUrl: durableUrl,
-      mediaType: 'image',
-      provider: 'Grok 兼容中转',
-      model,
-      historyItem: item,
-      ...additional,
+      requestMetadata: { requestedParameters, customParameters: custom.customParameters, overrides: custom.overrides, actualParameters: sentPayload },
+    }, {
+      label: 'Grok 兼容中转',
+      response: { provider: 'Grok 兼容中转', model: actualModel, requestedModel: model, actualModel, overrides: custom.overrides },
     });
   } catch (error: any) {
     keyPoolManager.recordResult('grok_compat', apiKey, false, Date.now() - startTime, error.message);
@@ -5800,19 +5667,8 @@ app.post(['/api/tensorart/generate', '/api/engine/tensorart/generate'], async (r
       });
     }
 
-    const rawModel = (req.body.toolName || req.body.model || '').trim();
-    if (!rawModel) return res.status(400).json({ error: '模型为必填项（model / toolName is required）' });
-
-    const isNumericModelId = /^\d{10,25}$/.test(rawModel) || rawModel.startsWith('https://');
-
-    if (isNumericModelId) {
-      if (apiKey.startsWith('ak_')) {
-        return res.status(400).json({
-          error: `当前配置的是 Tensor.Art OpenWorks Access Key (ak_tensor_...)，用于调用 OpenWorks 官方模型与工具（如 photoreal_studio_z_image, anime_lab_wai_illustrious 等）。纯数字 ID (${rawModel}) 属于企业级 TAMS 裸底模接口，两套接口密钥不互通。请在画布选择 OpenWorks 官方模型（如 photoreal_studio_z_image）即可正常出图。`,
-          requestedModel: rawModel,
-          keyType: 'OpenWorks',
-        });
-      }
+    // Model IDs use the model API. Tools have their own explicit namespace and never stand in for a model.
+    if (!req.body.toolName || /^\d{10,25}$/.test(String(req.body.model ?? '')) || String(req.body.model ?? '').startsWith('https://')) {
       if (rejectUnsupported(res, 'Tensor.Art 模型 API（当前文生图路由）', req.body, ['image_url', 'denoise', 'ratio', 'size', 'resolution', 'duration', 'inputs'])) return;
       let payload;
       try { payload = buildTensorModelJob(req.body, crypto.randomUUID()); }
@@ -5823,7 +5679,7 @@ app.post(['/api/tensorart/generate', '/api/engine/tensorart/generate'], async (r
       if (!metadata.ok) return res.status(metadata.status).json({error:`Tensor.Art 模型 API 鉴权 / 模型查询失败 [${metadata.status}]`, details:await metadata.text(), exactEndpointCalled:`${TENSOR_MODEL_API}/v1/models/${modelId}`, requestedModel:modelId, credentialHint:'模型 API 使用 TAMS Bearer Key；OpenWorks ak_tensor 工具 key 不代表模型 API 授权'});
       const checkpoint = (await metadata.json()).model;
       if (checkpoint?.modelType !== 'CHECKPOINT') return res.status(400).json({error:'所选模型不是 CHECKPOINT，不能作为底模', model:checkpoint});
-      try {validateTensorModelDimensions(req.body,checkpoint.baseModel);} catch(error:any) {return res.status(400).json({error:error.message});}
+      try {validateTensorModelDimensions(payload.stages[1].diffusion!,checkpoint.baseModel);} catch(error:any) {return res.status(400).json({error:error.message});}
       for (const lora of payload.stages[1].diffusion!.lora?.items ?? []) {
         const lookup = await upstreamFetch({provider:'tensorart',route:req.path,model:lora.loraModel,key:apiKey},`${TENSOR_MODEL_API}/v1/models/${lora.loraModel}`,{headers});
         if (!lookup.ok) return res.status(lookup.status).json({error:`Tensor.Art LoRA 查询失败 [${lookup.status}]`, details:await lookup.text()});
@@ -5846,15 +5702,23 @@ app.post(['/api/tensorart/generate', '/api/engine/tensorart/generate'], async (r
         if (!job) return res.status(502).json({error:'Tensor.Art 查询缺少 job',taskId});
       }
       if (job.status !== 'SUCCESS') return res.status(job.status==='FAILED'||job.status==='CANCELED'?502:504).json({error:`Tensor.Art 任务 ${job.status}`,details:job,taskId});
-      const url = job.successInfo?.images?.[0]?.url;
-      if (!url) return res.status(502).json({error:'Tensor.Art SUCCESS 未返回图片',details:job,taskId});
-      const durable = await requireDurableHistoryMediaUrl(url);
-      if (!durable.ok) return res.status(502).json({error:`生成成功，但图片保存失败：${durable.message}`,transientMediaUrl:url,taskId});
-      const item = await recordHistoryItem({url:durable.dataUrl,prompt:req.body.prompt,negativePrompt:req.body.negative_prompt,provider:'Tensor.Art (模型 API)',model:modelId,seed:req.body.seed > 0 ? req.body.seed : null,steps:req.body.steps ?? null,cfg:req.body.cfg ?? null,loras:(payload.stages[1].diffusion!.lora?.items ?? []).map((l:any)=>({name:l.loraModel,strength:l.weight}))});
+      const actualDiffusion = payload.stages[1].diffusion!;
+      const actualInitialize = payload.stages[0].inputInitialize!;
       keyPoolManager.recordResult('tensorart',apiKey,true,Date.now()-startTime);
-      return res.json({imageUrl:durable.dataUrl,mediaUrl:durable.dataUrl,mediaType:'image',provider:'Tensor.Art (模型 API)',actualProvider:'Tensor.Art (模型 API)',model:modelId,actualModel:modelId,taskId,exactEndpointCalled:`${TENSOR_MODEL_API}/v1/jobs`,historyItem:item,...await recordAdditionalImages(job.successInfo?.images || [],item)});
+      return await respondWithGeneratedImages(res, job.successInfo?.images || [], {
+        prompt: actualDiffusion.prompts?.[0]?.text ?? req.body.prompt,
+        negativePrompt: actualDiffusion.negativePrompts?.[0]?.text,
+        provider: 'Tensor.Art (模型 API)', model: modelId, actualModel: modelId,
+        seed: actualInitialize.seed !== undefined ? Number(actualInitialize.seed) : null,
+        steps: actualDiffusion.steps ?? null, cfg: actualDiffusion.cfgScale ?? null,
+        loras: (actualDiffusion.lora?.items ?? []).map((l:any)=>({name:l.loraModel,strength:l.weight})),
+        requestMetadata: { requestedParameters: sanitizeGenerationMetadata(req.body), customParameters: req.body.custom_parameters, actualParameters: payload },
+      }, { label: 'Tensor.Art 模型 API', response: { provider:'Tensor.Art (模型 API)',actualProvider:'Tensor.Art (模型 API)',model:modelId,actualModel:modelId,requestedModel:req.body.model,taskId,exactEndpointCalled:`${TENSOR_MODEL_API}/v1/jobs` } });
     }
 
+    const { prompt, model, toolName: inputToolName } = req.body;
+    const rawModel = String(inputToolName || model || '').trim();
+    if (!rawModel) return res.status(400).json({ error: '模型为必填项（model / toolName is required）' });
     const baseUrl = getTensorArtBaseUrl(apiKey);
 
     // Exact tool-name match only — no fuzzy / substring / tools[0] fallback (Item 3).
@@ -5862,7 +5726,7 @@ app.post(['/api/tensorart/generate', '/api/engine/tensorart/generate'], async (r
     const targetTool = tools.find((t: any) => t.name === rawModel);
     if (!targetTool) {
       return res.status(400).json({
-        error: `未找到指定的 Tensor.Art 模型或工具: ${rawModel}。当前 OpenWorks 官方接口查得 ${tools.length} 个可用模型/工具（如 photoreal_studio_z_image, anime_lab_wai_illustrious, strong_text2image_wan27 等）。`,
+        error: `未找到指定的 Tensor.Art 工具: ${rawModel}（需与 /tool/list 返回的 name 完全一致）`,
         availableTools: tools.map((t: any) => t.name),
       });
     }
@@ -5916,6 +5780,7 @@ app.post(['/api/tensorart/generate', '/api/engine/tensorart/generate'], async (r
 
     // Poll task/query
     let resultOutput = '';
+    let resultOutputs: string[] = [];
     const maxPolls = 60;
     for (let i = 0; i < maxPolls; i++) {
       await new Promise((r) => setTimeout(r, 2000));
@@ -5968,8 +5833,8 @@ app.post(['/api/tensorart/generate', '/api/engine/tensorart/generate'], async (r
 
       const status = (task.status || '').toUpperCase();
       if (status === 'FINISH' || status === 'SUCCESS') {
-        const out = task.outputs?.[0];
-        resultOutput = typeof out === 'string' ? out : out?.value || out?.url || '';
+        resultOutputs = (task.outputs || []).map((out:any) => typeof out === 'string' ? out : out?.value || out?.url || '').filter(Boolean);
+        resultOutput = resultOutputs[0] || '';
         break;
       }
 
@@ -5999,7 +5864,13 @@ app.post(['/api/tensorart/generate', '/api/engine/tensorart/generate'], async (r
       targetTool.outputs?.some((o: any) => o.format === 'video') ||
       targetTool.name.includes('video');
 
-    // Durable copy before history — fail closed on remote http(s)
+    if (!isVideo) return await respondWithGeneratedImages(res, resultOutputs, {
+      prompt: built.used?.has('prompt') ? String(req.body.prompt || '') : '',
+      negativePrompt: built.used?.has('negative_prompt') ? req.body.negative_prompt : undefined,
+      provider: 'Tensor.Art (OpenWorks)', model: targetTool.name, actualModel: targetTool.name,
+      seed: built.used?.has('seed') ? Number(req.body.seed) : null, steps: null, cfg: null,
+      requestMetadata: { requestedParameters: sanitizeGenerationMetadata(req.body), actualParameters: {toolName: targetTool.name, inputs: formattedInputs} },
+    }, { label: 'Tensor.Art OpenWorks', response: { provider:'Tensor.Art (OpenWorks)', actualProvider:'Tensor.Art (OpenWorks)', model:targetTool.name,actualModel:targetTool.name,requestedModel:rawModel,toolName:targetTool.name,taskId,exactEndpointCalled:`${baseUrl}/task` } });
     const durable = await requireDurableHistoryMediaUrl(resultOutput);
     if (!durable.ok) {
       return res.status(500).json({
@@ -6086,6 +5957,8 @@ app.post(['/api/huggingface/generate', '/api/engine/huggingface/generate'], asyn
     let sentSeed: number | null = null;
     let sentSteps: number | null = null;
     let sentCfg: number | null = null;
+    let zImageRequest: { actualParameters: Record<string, unknown>; overrides: unknown[] } | undefined;
+    let hfInferenceRequest: { actualParameters: Record<string, unknown>; overrides: unknown[]; customParameters?: unknown } | undefined;
 
     if (isZImage) {
       // H2: 🌟 Direct integration with verified official Tongyi-MAI/Z-Image-Turbo Gradio Space on Hugging Face (Public Space)
@@ -6096,8 +5969,10 @@ app.post(['/api/huggingface/generate', '/api/engine/huggingface/generate'], asyn
       } catch (error: any) {
         return res.status(400).json({error: error.message});
       }
-      sentSeed = req.body.random_seed || seed === -1 ? null : seed;
-      sentSteps = steps;
+      const zActual = gradioPayload.actualParameters as Record<string, any>;
+      sentSeed = zActual.random_seed || zActual.seed === -1 ? null : zActual.seed;
+      sentSteps = zActual.steps;
+      zImageRequest = { actualParameters: zActual, overrides: gradioPayload.overrides };
 
       const gradioHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
       if (hfToken) gradioHeaders['Authorization'] = `Bearer ${hfToken}`;
@@ -6105,7 +5980,7 @@ app.post(['/api/huggingface/generate', '/api/engine/huggingface/generate'], asyn
       const initResp = await upstreamFetch(
         { provider: 'huggingface', route: '/api/huggingface/generate', model, key: hfToken },
         'https://tongyi-mai-z-image-turbo.hf.space/gradio_api/call/generate',
-        { method: 'POST', headers: gradioHeaders, body: JSON.stringify(gradioPayload) }
+        { method: 'POST', headers: gradioHeaders, body: JSON.stringify({ data: gradioPayload.data }) }
       );
 
       if (!initResp.ok) {
@@ -6223,10 +6098,11 @@ app.post(['/api/huggingface/generate', '/api/engine/huggingface/generate'], asyn
       if (isProvided(seed) && seed>=0) payload.seed=seed;
       if (isProvided(negative_prompt)) payload.negative_prompt=negative_prompt;
       if (loraFiles.length) payload.loras=loraFiles;
-      if(req.body.custom_parameters) Object.assign(payload,req.body.custom_parameters);
+      const hfCustom = applyCustomParameters(payload, req.body.custom_parameters);
+      const sentPayload = hfCustom.payload as Record<string, any>;
       const headers={Authorization:`Bearer ${hfToken}`,'Content-Type':'application/json'};
       const url=`https://router.huggingface.co/fal-ai/${endpoint}?_subdomain=queue`;
-      const submit=await upstreamFetch({provider:'huggingface',route:req.path,model:baseModel,key:hfToken},url,{method:'POST',headers,body:JSON.stringify(payload)});
+      const submit=await upstreamFetch({provider:'huggingface',route:req.path,model:baseModel,key:hfToken},url,{method:'POST',headers,body:JSON.stringify(sentPayload)});
       if (!submit.ok) return res.status(submit.status).json({error:`HF → fal-ai 提交失败 [${submit.status}]`,details:await submit.text(),endpoint});
       let result=await submit.json();
       if (!result.request_id || !result.response_url) return res.status(502).json({error:'HF → fal-ai 未返回任务 ID / 结果地址',details:result});
@@ -6243,11 +6119,23 @@ app.post(['/api/huggingface/generate', '/api/engine/huggingface/generate'], asyn
       const output=await upstreamFetch({provider:'huggingface',route:'HF fal-ai result',model:baseModel,key:hfToken},resultUrl,{headers});
       if (!output.ok) return res.status(output.status).json({error:`HF → fal-ai 获取结果失败 [${output.status}]`,details:await output.text()});
       const generated=await output.json();
-      if (!generated.images?.[0]?.url) return res.status(502).json({error:'HF → fal-ai 未返回图像',details:generated});
-      const durable=await requireDurableHistoryMediaUrl(generated.images[0].url);
-      if (!durable.ok) return res.status(502).json({error:`HF 图像持久化失败：${durable.message}`,transientMediaUrl:generated.images[0].url});
-      const historyItem=await recordHistoryItem({url:durable.dataUrl,prompt:finalPrompt,negativePrompt:negative_prompt,provider:'Hugging Face → fal-ai',model:baseModel,seed:generated.seed ?? payload.seed ?? null,steps:payload.num_inference_steps ?? null,cfg:payload.guidance_scale ?? null,loras:loraEntries.map((l:any)=>({name:l.name,strength:l.strength ?? l.modelStrength}))});
-      return res.json({imageUrl:durable.dataUrl,provider:'Hugging Face',actualProvider:'Hugging Face Inference Providers → fal-ai',model,actualModel:baseModel,endpoint,historyItem});
+      const generatedImages = Array.isArray(generated.images) ? generated.images : [];
+      if (!generatedImages.some((image: any) => image?.url)) return res.status(502).json({error:'HF → fal-ai 未返回图像',errorSource:'upstream',details:generated});
+      return await respondWithGeneratedImages(res, generatedImages, {
+        prompt: typeof sentPayload.prompt === 'string' ? sentPayload.prompt : finalPrompt,
+        negativePrompt: typeof sentPayload.negative_prompt === 'string' ? sentPayload.negative_prompt : negative_prompt,
+        provider: 'Hugging Face → fal-ai',
+        model: baseModel,
+        actualModel: baseModel,
+        seed: generated.seed ?? sentPayload.seed ?? null,
+        steps: sentPayload.num_inference_steps ?? null,
+        cfg: sentPayload.guidance_scale ?? null,
+        loras: loraEntries.map((l:any)=>({name:l.name,strength:l.strength ?? l.modelStrength})),
+        requestMetadata: { requestedParameters: sanitizeGenerationMetadata(Object.fromEntries(Object.entries(req.body).filter(([key]) => key !== 'workflowSnapshot'))), customParameters: hfCustom.customParameters, overrides: hfCustom.overrides, actualParameters: sentPayload, upstreamEndpoint: url },
+      }, {
+        label: 'HF → fal-ai',
+        response: { provider:'Hugging Face', actualProvider:'Hugging Face Inference Providers → fal-ai', model, actualModel: baseModel, endpoint, overrides: hfCustom.overrides },
+      });
     } else {
       // HF text-to-image task: only forward what the caller provided; no defaults, no SDK→router retry.
       const metadata=await upstreamFetch({provider:'huggingface',route:'hf-inference capabilities',model,key:hfToken},`https://huggingface.co/api/models/${model}?expand=inferenceProviderMapping`,{headers:{Authorization:`Bearer ${hfToken}`}});
@@ -6262,6 +6150,11 @@ app.post(['/api/huggingface/generate', '/api/engine/huggingface/generate'], asyn
       if (isProvided(guidance)) parameters.guidance_scale = Number(guidance);
       if (typeof seed === 'number' && seed >= 0) parameters.seed = seed;
       if (isProvided(req.body.scheduler)) parameters.scheduler = req.body.scheduler;
+      // Official HF text-to-image task body is {inputs, parameters}; custom JSON may set either level and nested
+      // parameters are deep-merged so canvas fields not mentioned in JSON are still sent.
+      const hfCustom = applyCustomParameters({ inputs: finalPrompt, parameters }, req.body.custom_parameters);
+      const hfBody = hfCustom.payload as { inputs: unknown; parameters?: Record<string, any> };
+      hfInferenceRequest = { actualParameters: hfBody, overrides: hfCustom.overrides, customParameters: hfCustom.customParameters };
 
       const resp = await upstreamFetch(
         { provider: 'huggingface', route: '/api/huggingface/generate', model, key: hfToken },
@@ -6269,7 +6162,7 @@ app.post(['/api/huggingface/generate', '/api/engine/huggingface/generate'], asyn
         {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${hfToken}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ inputs: finalPrompt, parameters }),
+          body: JSON.stringify(hfBody),
         }
       );
 
@@ -6289,20 +6182,26 @@ app.post(['/api/huggingface/generate', '/api/engine/huggingface/generate'], asyn
       const buffer = await resp.arrayBuffer();
       const mimeType = resp.headers.get('content-type') || 'image/jpeg';
       dataUrl = await externalizeMedia(`data:${mimeType};base64,${Buffer.from(buffer).toString('base64')}`);
-      sentSeed = parameters.seed ?? null;
-      sentSteps = parameters.num_inference_steps ?? null;
-      sentCfg = parameters.guidance_scale ?? null;
+      sentSeed = hfBody.parameters?.seed ?? null;
+      sentSteps = hfBody.parameters?.num_inference_steps ?? null;
+      sentCfg = hfBody.parameters?.guidance_scale ?? null;
     }
 
+    const hfActual = (zImageRequest || hfInferenceRequest)?.actualParameters as Record<string, any> | undefined;
+    const sentPrompt = isZImage ? hfActual?.prompt : hfActual?.inputs;
+    const hfOverrides = (zImageRequest || hfInferenceRequest)?.overrides || [];
     const item = await recordHistoryItem({
       url: dataUrl,
-      prompt: finalPrompt,
-      negativePrompt: isZImage ? undefined : negative_prompt,
+      prompt: typeof sentPrompt === 'string' ? sentPrompt : finalPrompt,
+      negativePrompt: isZImage ? undefined : (hfActual?.parameters?.negative_prompt ?? negative_prompt),
       provider: 'Hugging Face',
       model,
       seed: sentSeed,
       steps: sentSteps,
       cfg: sentCfg,
+      width: typeof hfActual?.parameters?.width === 'number' ? hfActual.parameters.width : null,
+      height: typeof hfActual?.parameters?.height === 'number' ? hfActual.parameters.height : null,
+      requestMetadata: { requestedParameters: sanitizeGenerationMetadata(Object.fromEntries(Object.entries(req.body).filter(([key]) => key !== 'workflowSnapshot'))), actualParameters: hfActual, overrides: hfOverrides, route: isZImage ? 'z-image-space /gradio_api/call/generate' : 'hf-inference' },
     });
 
     return res.json({
@@ -6312,6 +6211,7 @@ app.post(['/api/huggingface/generate', '/api/engine/huggingface/generate'], asyn
       model,
       actualModel: model,
       historyItem: item,
+      overrides: hfOverrides,
     });
   } catch (error: any) {
     return res.status(error.status || 500).json({ error: `Hugging Face 调用失败: ${error.message}` });
@@ -6369,11 +6269,13 @@ app.post(
         if (isProvided(height)) payload.height = height;
       }
       for(const field of ['negative_prompt','steps','guidance','seed','image_url','cfg','denoise','sampler_name','scheduler']) if(isProvided(req.body[field])) payload[field]=req.body[field];
-      if(req.body.custom_parameters) Object.assign(payload,req.body.custom_parameters);
       try {
         const mappedLoras = buildModelScopeLoras(req.body.loras);
         if (mappedLoras !== undefined) payload.loras = mappedLoras;
       } catch (error: any) { return res.status(400).json({error: error.message}); }
+      const msCustom = applyCustomParameters(payload, req.body.custom_parameters);
+      const msPayload = msCustom.payload as Record<string, any>;
+      const msActualModel = String(msCustom.actualModel || model);
 
       const primaryDomain = isAiSite
         ? 'https://api-inference.modelscope.ai/v1'
@@ -6382,7 +6284,7 @@ app.post(
       let submitResp;
       try {
         submitResp = await upstreamFetch(
-          { provider: poolName, route: req.path, model, key: token },
+          { provider: poolName, route: req.path, model: msActualModel, key: token },
           `${primaryDomain}/images/generations`,
           {
             method: 'POST',
@@ -6391,7 +6293,7 @@ app.post(
               'Content-Type': 'application/json',
               'X-ModelScope-Async-Mode': 'true',
             },
-            body: JSON.stringify(payload),
+            body: JSON.stringify(msPayload),
           }
         );
 
@@ -6432,7 +6334,7 @@ app.post(
           let pollResp: Response;
           try {
             pollResp = await upstreamFetch(
-              { provider: poolName, route: req.path, model, key: token },
+              { provider: poolName, route: req.path, model: msActualModel, key: token },
               `${primaryDomain}/tasks/${taskId}`,
               {
                 headers: {
@@ -6484,37 +6386,20 @@ app.post(
       }
 
       const providerName = isAiSite ? 'ModelScope AI (魔搭国际站)' : 'ModelScope CN (魔搭社区)';
-      const durable = await requireDurableHistoryMediaUrl(imageUrl);
-      if (!durable.ok) {
-        return res.status(500).json({
-          error: `魔搭图像已生成，但无法下载并持久化为本地历史副本（data URL）: ${durable.message}`,
-          ...(durable.status != null ? { persistStatus: durable.status } : {}),
-          transientMediaUrl: imageUrl,
-          model,
-        });
-      }
-      const durableUrl = durable.dataUrl;
-      const item = await recordHistoryItem({
-        url: durableUrl,
-        prompt: finalPrompt,
-        negativePrompt: negative_prompt,
+      return await respondWithGeneratedImages(res, outputImages.length ? outputImages : [imageUrl], {
+        prompt: typeof msPayload.prompt === 'string' ? msPayload.prompt : finalPrompt,
+        negativePrompt: typeof msPayload.negative_prompt === 'string' ? msPayload.negative_prompt : negative_prompt,
         provider: providerName,
-        model,
-        seed: payload.seed ?? null,
-        steps: payload.steps ?? null,
-        cfg: payload.guidance ?? null,
-        loras: typeof payload.loras === 'string' ? [{name: payload.loras, strength: 1}] : Object.entries(payload.loras || {}).map(([name, strength]) => ({name, strength: Number(strength)})),
-        requestMetadata: { requestedParameters: req.body, actualParameters: payload, actualModel: payload.model, parameterMappings, upstreamEndpoint: `${primaryDomain}/images/generations` },
-      });
-      const additional = await recordAdditionalImages(outputImages, item);
-
-      return res.json({
-        imageUrl: durableUrl,
-        provider: providerName,
-        model: payload.model,
-        requestedModel: model,
-        historyItem: item,
-        ...additional,
+        model: msActualModel,
+        actualModel: msActualModel,
+        seed: msPayload.seed ?? null,
+        steps: msPayload.steps ?? null,
+        cfg: msPayload.guidance ?? null,
+        loras: typeof msPayload.loras === 'string' ? [{name: msPayload.loras, strength: 1}] : Object.entries(msPayload.loras || {}).map(([name, strength]) => ({name, strength: Number(strength)})),
+        requestMetadata: { requestedParameters: sanitizeGenerationMetadata(Object.fromEntries(Object.entries(req.body).filter(([key]) => key !== 'workflowSnapshot'))), actualParameters: msPayload, actualModel: msActualModel, customParameters: msCustom.customParameters, overrides: msCustom.overrides, parameterMappings, upstreamEndpoint: `${primaryDomain}/images/generations` },
+      }, {
+        label: `魔搭${isAiSite ? '国际站' : '国内站'}`,
+        response: { provider: providerName, model: msActualModel, requestedModel: model, actualModel: msActualModel, overrides: msCustom.overrides, parameterMappings },
       });
     } catch (error: any) {
       return res.status(500).json({ error: `魔搭社区调用失败: ${error.message}` });
@@ -6562,42 +6447,13 @@ app.post(['/api/nanogpt/generate', '/api/engine/nanogpt/generate'], async (req, 
 
     keyPoolManager.recordResult('nanogpt', nanoKey, true, Date.now() - startTime);
     const data = await response.json();
-    const firstImage=data.data?.[0];
-    const imageUrl = firstImage?.url || (firstImage?.b64_json ? `data:image/png;base64,${firstImage.b64_json}` : undefined) || data.image_url || data.url || data.images?.[0];
-
-    if (!imageUrl) {
-      return res.status(500).json({ error: 'NanoGPT 返回数据中未包含图像输出 URL' });
-    }
-
-    const durable = await requireDurableHistoryMediaUrl(imageUrl);
-    if (!durable.ok) {
-      return res.status(500).json({
-        error: `NanoGPT 图像已生成，但无法下载并持久化为本地历史副本（data URL）: ${durable.message}`,
-        ...(durable.status != null ? { persistStatus: durable.status } : {}),
-        transientMediaUrl: imageUrl,
-      });
-    }
-    const durableUrl = durable.dataUrl;
-
-    const item = await recordHistoryItem({
-      url: durableUrl,
-      prompt,
-      provider: 'NanoGPT',
-      model,
-      seed: payload.seed ?? null,
-      steps: null,
-      cfg: null,
-    });
-
-    return res.json({
-      imageUrl: durableUrl,
-      provider: 'NanoGPT',
-      model,
-      historyItem: item,
-      capabilityNotes,
-      actualRequest: { endpoint: 'https://api.nano-gpt.com/api/v1/images', parameters: payload },
-      ...await recordAdditionalImages(data.data || data.images || [],item),
-    });
+    const images = Array.isArray(data.data) ? data.data : Array.isArray(data.images) ? data.images : [data.image_url || data.url].filter(Boolean);
+    const actualModel = String(payload.model || model);
+    return await respondWithGeneratedImages(res, images, {
+      prompt: payload.prompt ?? prompt, provider: 'NanoGPT', model: actualModel, actualModel,
+      seed: payload.seed ?? null, steps: payload.steps ?? null, cfg: payload.guidance_scale ?? null,
+      requestMetadata: { requestedParameters: sanitizeGenerationMetadata(req.body), customParameters: req.body.custom_parameters, actualParameters: payload, capabilityNotes },
+    }, { label: 'NanoGPT', response: { provider: 'NanoGPT', model: actualModel, actualModel, requestedModel: model, capabilityNotes, actualRequest: { endpoint: 'https://api.nano-gpt.com/api/v1/images', parameters: payload } } });
   } catch (error: any) {
     keyPoolManager.recordResult('nanogpt', nanoKey, false, Date.now() - startTime, error.message);
     return res.status(500).json({ error: `NanoGPT 请求失败: ${error.message}` });
@@ -6737,76 +6593,63 @@ app.post(['/api/gemini/generate', '/api/engine/gemini/generate'], async (req, re
     // 只放用户实际传了的字段；seed 该服务商不支持（不写入 generationConfig）
     const config: Record<string, any> = {};
     if (Object.keys(imageConfig).length > 0) config.imageConfig = imageConfig;
-    const geminiCustom = req.body.custom_parameters;
-    const geminiOverrides: Array<{field:string;requested:unknown;custom:unknown}> = [];
-    if (geminiCustom && typeof geminiCustom === 'object' && !Array.isArray(geminiCustom)) {
-      const generationConfig = geminiCustom.generationConfig && typeof geminiCustom.generationConfig === 'object' ? geminiCustom.generationConfig : {};
-      for (const [field, value] of Object.entries(generationConfig)) {
-        if (field === 'imageConfig' && value && typeof value === 'object' && !Array.isArray(value)) {
-          const current = config.imageConfig && typeof config.imageConfig === 'object' ? config.imageConfig : {};
-          for (const [imageField, imageValue] of Object.entries(value as Record<string, unknown>)) {
-            if (current[imageField] !== undefined && JSON.stringify(current[imageField]) !== JSON.stringify(imageValue)) geminiOverrides.push({ field: `imageConfig.${imageField}`, requested: current[imageField], custom: imageValue });
-            current[imageField] = imageValue;
-          }
-          config.imageConfig = current;
-          continue;
-        }
-        if (config[field] !== undefined && JSON.stringify(config[field]) !== JSON.stringify(value)) geminiOverrides.push({ field, requested: config[field], custom: value });
-        config[field] = value;
-      }
-    }
+    // Custom JSON accepts the REST shape (generationConfig) or SDK shape (config); other top-level fields are
+    // SDK config fields too. Nested objects such as imageConfig are deep-merged so unedited fields survive.
+    const geminiCustom = parseCustomObject(req.body.custom_parameters) || {};
+    const { model: customModel, generationConfig: customGenerationConfig, config: customConfig, ...customTopLevel } = geminiCustom as Record<string, any>;
+    const geminiCustomRequest = {
+      ...(customModel !== undefined ? { model: customModel } : {}),
+      config: { ...customTopLevel, ...(customConfig || {}), ...(customGenerationConfig || {}) },
+    };
+    const custom = applyCustomParameters({ model, config }, Object.keys(geminiCustomRequest.config).length || customModel !== undefined ? geminiCustomRequest : undefined);
+    const actualModel = String(custom.actualModel || model);
+    const sentConfig = (custom.payload.config || {}) as Record<string, any>;
+    const geminiOverrides = custom.overrides;
+    const actualRequest = { model: actualModel, contents: { parts }, config: sentConfig };
     const contentResponse = await upstreamSdkCall(
-      { provider: 'gemini', route: req.path, model, key: gen.apiKey, upstream: `generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, parameters:{model,contents:{parts},config} },
+      { provider: 'gemini', route: req.path, model: actualModel, key: gen.apiKey, upstream: `generativelanguage.googleapis.com/v1beta/models/${actualModel}:generateContent`, parameters: actualRequest },
       () => gen!.client.models.generateContent({
-        model,
+        model: actualModel,
         contents: { parts },
-        ...(Object.keys(config).length > 0 ? { config } : {}),
+        ...(Object.keys(sentConfig).length > 0 ? { config: sentConfig } : {}),
       })
     );
 
     const imageParts = (contentResponse.candidates?.[0]?.content?.parts || []).filter((part: any) => part.inlineData?.data);
-    const firstPart = imageParts[0];
-    let base64Bytes = firstPart?.inlineData?.data || '';
-    let mimeType = firstPart?.inlineData?.mimeType || 'image/png';
-
-    if (!base64Bytes) {
+    if (!imageParts.length) {
       keyPoolManager.recordResult('gemini', gen.apiKey, false, Date.now() - startTime, 'No image returned from Gemini', 500);
-      return res.status(500).json({ error: 'Google Gemini 图像模型未返回生成数据' });
+      return res.status(502).json({ error: 'Google Gemini 图像模型未返回生成数据', errorSource: 'upstream', rawResponse: sanitizeGenerationMetadata(contentResponse) });
     }
-
-    const generatedImageUrl = await externalizeMedia(`data:${mimeType};base64,${base64Bytes}`);
     keyPoolManager.recordResult('gemini', gen.apiKey, true, Date.now() - startTime);
 
-    const item = await recordHistoryItem({
-      url: generatedImageUrl,
+    const mStatus = modelStatus('gemini', actualModel, new Date().toISOString().slice(0, 10));
+    return await respondWithGeneratedImages(res, imageParts, {
       prompt,
       provider: 'Google Gemini (官方直连)',
-      model,
-      actualModel: model,
+      model: actualModel,
+      actualModel,
       actualProvider: 'Google Gemini (官方直连)',
       seed: null, // ImageConfig 无 seed；历史 Seed: 未填写
       steps: null,
       cfg: null,
       loras: [],
-      requestMetadata: { requestedParameters, parameterOmissions, overrides: geminiOverrides, actualRequest: { model, contents: { parts }, config } },
-    });
-    const additional = await recordAdditionalImages(imageParts.map((part: any) => `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`), item);
-
-    const mStatus = modelStatus('gemini', model, new Date().toISOString().slice(0, 10));
-    return res.json({
-      imageUrl: generatedImageUrl,
-      provider: 'Google Gemini (官方直连)',
-      actualProvider: 'Google Gemini (官方直连)',
-      model,
-      actualModel: model,
-      aspectRatio: aspect_ratio,
-      actualRequest: { model, contents: { parts }, config },
-      parameterOmissions,
-      requestMetadata: { requestedParameters, parameterOmissions },
-      historyItem: item,
-      ...additional,
-      fieldStatus,
-      ...(mStatus !== 'supported' ? { modelStatus: mStatus } : {}),
+      requestMetadata: { requestedParameters, parameterOmissions, customParameters: custom.customParameters, overrides: geminiOverrides, actualRequest },
+    }, {
+      label: 'Google Gemini',
+      response: {
+        provider: 'Google Gemini (官方直连)',
+        actualProvider: 'Google Gemini (官方直连)',
+        model: actualModel,
+        requestedModel: model,
+        actualModel,
+        aspectRatio: sentConfig.imageConfig?.aspectRatio ?? aspect_ratio,
+        actualRequest,
+        parameterOmissions,
+        overrides: geminiOverrides,
+        requestMetadata: { requestedParameters, parameterOmissions, overrides: geminiOverrides },
+        fieldStatus,
+        ...(mStatus !== 'supported' ? { modelStatus: mStatus } : {}),
+      },
     });
   } catch (error: any) {
     if (gen?.apiKey) {
@@ -7190,7 +7033,7 @@ async function testSingleProviderKey(
       if (!singleKey) return {maskedKey,status:'error',latency:0,message:'未配置 Tensor.Art API Key'};
       if (singleKey.startsWith('ak_')) {
         const tools = await fetchTensorArtToolsList(singleKey);
-        return {maskedKey,status:'ok',latency:Date.now()-startTime,message:`Tensor.Art OpenWorks 鉴权成功：获取到 ${tools.length} 个官方模型与工具`};
+        return {maskedKey,status:'ok',latency:Date.now()-startTime,message:`Tensor.Art OpenWorks 工具 API 鉴权成功：获取到 ${tools.length} 个工具；该 Key 不代表 TAMS 模型 API 已鉴权`};
       }
       const model = await fetchTensorArtModelInfo('613045163490732233',singleKey);
       return {maskedKey,status:'ok',latency:Date.now()-startTime,message:`模型 API 鉴权成功：${model.id}（${model.baseModel}）；仅验证查询，生成能力须实际出图确认`};
@@ -7515,7 +7358,7 @@ app.post('/api/cloud-keys/balances', requireAdminAuth, checkSecFetchSite, async 
         try {
           if (taKey.startsWith('ak_')) {
             const tools = await fetchTensorArtToolsList(taKey);
-            balances.tensorart = { status: 'ok', detail: `Tensor.Art OpenWorks 已鉴权（${tools.length} 个可用模型与工具）` };
+            balances.tensorart = { status: 'ok', detail: `Tensor.Art OpenWorks 工具 API 已鉴权（${tools.length} 个工具）；不代表 TAMS 模型 API 可用` };
           } else {
             await fetchTensorArtModelInfo('613045163490732233',taKey);
             balances.tensorart = { status: 'ok', detail: 'TAMS 模型 API 查询已鉴权；余额接口未能核实，生成能力须出图确认' };

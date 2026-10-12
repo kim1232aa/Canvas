@@ -1,6 +1,10 @@
+import { applyCustomParameters, parseCustomObject, type CustomOverride } from './customParameters';
+
 export interface ModelsLabImageRequest {
   endpoint: string; // 'https://modelslab.com/api/v6/images/text2img'
   payload: Record<string, unknown>;
+  overrides: CustomOverride[];
+  actualModel: string;
 }
 
 export interface ModelsLabSuccessResponse {
@@ -17,6 +21,7 @@ export interface ModelsLabProcessingResponse {
   id: number | string;
   eta?: number;
   message?: string;
+  future_links?: string[];
 }
 
 export interface ModelsLabErrorResponse {
@@ -94,14 +99,19 @@ export function buildModelsLabImageRequest(
     const strength = body.strength ?? body.denoise;
     if (typeof strength === 'number' && Number.isFinite(strength)) payload.strength = Number(strength);
   }
-  const route = initImage ? 'img2img' : 'text2img';
+  const customObject = parseCustomObject(body.custom_parameters);
+  if (customObject && Object.hasOwn(customObject, 'key')) throw new Error('自定义 JSON 不可修改路由/凭据字段：key；请在供应商设置中修改');
+  const custom = applyCustomParameters(payload, customObject);
+  const route = String(custom.payload.init_image ?? '').trim() ? 'img2img' : 'text2img';
   const endpoint = baseUrl.includes(`/api/v6/images/${route}`)
     ? baseUrl
     : `${baseUrl.replace(/\/api\/v6\/images\/(?:text2img|img2img)$/, '').replace(/\/+$/, '')}/api/v6/images/${route}`;
 
   return {
     endpoint,
-    payload,
+    payload: custom.payload,
+    overrides: custom.overrides,
+    actualModel: String(custom.payload.model_id),
   };
 }
 
@@ -111,7 +121,7 @@ export function buildModelsLabFetchRequest(
   baseUrl = 'https://modelslab.com'
 ): { endpoint: string; payload: { key: string; request_id: string } } {
   if (!apiKey) throw new Error('ModelsLab API Key 必填');
-  const base = baseUrl.replace(/\/api\/v6\/images\/text2img$/, '').replace(/\/+$/, '');
+  const base = baseUrl.replace(/\/+$/, '').replace(/\/api\/v6\/images\/(?:text2img|img2img|fetch)$/, '');
   const endpoint = `${base}/api/v6/images/fetch`;
   return {
     endpoint,
@@ -132,7 +142,7 @@ export function sanitizeModelsLabPayload(payload: Record<string, unknown>): Reco
   return sanitized;
 }
 
-export function parseModelsLabResponse(data: unknown): { status: 'success' | 'processing'; imageUrl?: string; imageUrls?: string[]; taskId?: string | number; eta?: number } {
+export function parseModelsLabResponse(data: unknown): { status: 'success' | 'processing'; imageUrl?: string; imageUrls?: string[]; futureLinks?: string[]; taskId?: string | number; eta?: number } {
   if (!data || typeof data !== 'object') {
     throw new Error('ModelsLab 响应格式无效');
   }
@@ -147,6 +157,7 @@ export function parseModelsLabResponse(data: unknown): { status: 'success' | 'pr
       status: 'processing',
       taskId: res.id,
       eta: res.eta,
+      ...(Array.isArray(res.future_links) && res.future_links.length ? { futureLinks: res.future_links } : {}),
     };
   }
 

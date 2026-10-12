@@ -27,11 +27,20 @@ it('uses the official edits images array and leaves source URL intact', () => {
     expect(r.payload.images).toEqual([{image_url:'https://example.org/source.png'}]);
     expect(r.payload.size).toBe('2K');
   });
-  it('keeps unknown custom JSON while protecting model and endpoint fields', () => {
+  it('keeps unknown custom JSON and applies an explicit model override transparently', () => {
     const result = buildSenseNovaImageRequest({ ...base, custom_parameters: { future_knob: 123, model: 'OVERRIDDEN' } });
     expect(result.payload.future_knob).toBe(123);
-    expect(result.payload.model).toBe('sensenova-u1.5-lite');
-    expect(result.overrides).toEqual([{ field: 'model', requested: 'sensenova-u1.5-lite', custom: 'OVERRIDDEN', applied: false }]);
+    expect(result.payload.model).toBe('OVERRIDDEN');
+    expect(result.actualModel).toBe('OVERRIDDEN');
+    expect(result.overrides).toEqual([{ field: 'model', requested: 'sensenova-u1.5-lite', custom: 'OVERRIDDEN', applied: true }]);
+  });
+  it('lets custom JSON override the edit images array but never the endpoint or credentials', () => {
+    const edited = buildSenseNovaImageRequest({ ...base, image_url: 'https://example.org/a.png', custom_parameters: { images: [{ image_url: 'https://example.org/b.png' }], prompt: 'json prompt' } });
+    expect(edited.payload.images).toEqual([{ image_url: 'https://example.org/b.png' }]);
+    expect(edited.payload.prompt).toBe('json prompt');
+    expect(edited.endpoint).toBe('/images/edits');
+    expect(() => buildSenseNovaImageRequest({ ...base, custom_parameters: { endpoint: '/images/edits' } })).toThrow(/路由|凭据/);
+    expect(() => buildSenseNovaImageRequest({ ...base, custom_parameters: { api_key: 'x' } })).toThrow(/路由|凭据/);
   });
   it('does not quietly drop unsupported diffusion params or LoRA', () => {
     expect(()=>buildSenseNovaImageRequest({...base,steps:20,loras:[{name:'x'}]})).toThrow(/steps, loras/);

@@ -1,4 +1,4 @@
-// Verified this run against Tensor-Art/tams-sdk.js and the official TAMS job/model schemas.
+import { applyCustomParameters, parseCustomObject } from '../server/customParameters';
 export const TENSOR_MODEL_API = 'https://tams-api.tensor.art';
 export const TENSOR_JOB_DOC = 'https://tams-docs.tensor.art/zh/docs/api/apis/tams-api-v-1-service-create-job/';
 export function tensorModelId(value: unknown): string {
@@ -52,5 +52,8 @@ export function buildTensorModelJob(body: Record<string, any>, requestId: string
       return {loraModel: id, weight};
     })};
   }
-  return {requestId, stages: [{type:'INPUT_INITIALIZE', inputInitialize}, {type:'DIFFUSION', diffusion}]};
+  const custom = parseCustomObject(body.custom_parameters);
+  const { model: customModel, ...jobCustom } = custom || {};
+  if (customModel !== undefined) diffusion.sdModel = tensorModelId(customModel);
+  return applyCustomParameters({requestId, stages: [{type:'INPUT_INITIALIZE', inputInitialize}, {type:'DIFFUSION', diffusion}]}, jobCustom).payload;
 }

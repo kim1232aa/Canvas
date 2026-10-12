@@ -39,7 +39,9 @@ import { displayValue } from './HistoryModal';
 import { PreviewMediaPanel } from './PreviewMediaPanel';
 import { isApplyToCanvasDisabled, type PreviewSettleState } from '../utils/previewHang';
 import { uploadMedia } from '../services/api';
-import { migrateInlineAssets } from '../utils/legacyAssetMigration';
+import { createInlineAssetMigrator, mergeMigratedAssets, parseAssetCache } from '../utils/legacyAssetMigration';
+
+const migrateAssets = createInlineAssetMigrator(uploadMedia);
 
 export interface MediaAsset {
   id: string;
@@ -108,66 +110,74 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
   const [brokenIds, setBrokenIds] = useState<Record<string, true>>({});
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
 
-  // Starred / Favorite assets persisted in localStorage
-  const [starredIds, setStarredIds] = useState<Set<string>>(() => {
+  const cacheErrors = useRef<Record<string, string>>({});
+  const [cacheWarnings, setCacheWarnings] = useState<Record<string, string>>({});
+  const [migrationWarning, setMigrationWarning] = useState('');
+  const [retryRevision, setRetryRevision] = useState(0);
+  const consumedRetry = useRef(0);
+  const readCache = <T,>(key: string, fallback: T, parse: (value: string) => T): T => {
     try {
-      const raw = localStorage.getItem('comfycanvas_starred_assets_v2');
-      if (raw) return new Set(JSON.parse(raw));
-    } catch (e) {}
-    return new Set();
-  });
-
-  // Persistent user uploads
-  const [customUploads, setCustomUploads] = useState<MediaAsset[]>(() => {
-    try {
-      const raw = localStorage.getItem('comfycanvas_user_assets_v2');
-      if (raw) return JSON.parse(raw);
-    } catch (e) {}
-    return [];
-  });
-
-  // Persistent deleted ID blacklist so deleted assets never ghost-reappear
-  const [deletedIds, setDeletedIds] = useState<Set<string>>(() => {
-    try {
-      const raw = localStorage.getItem('comfycanvas_deleted_assets_v2');
-      if (raw) return new Set(JSON.parse(raw));
-    } catch (e) {}
-    return new Set();
-  });
-
+      const raw = localStorage.getItem(key);
+      return raw ? parse(raw) : fallback;
+    } catch (error) {
+      cacheErrors.current[key] = `读取失败，原缓存已保留：${error instanceof Error ? error.message : String(error)}`;
+      return fallback;
+    }
+  };
+  const parseIds = (raw: string) => {
+    const values: unknown = JSON.parse(raw);
+    if (!Array.isArray(values) || values.some(value => typeof value !== 'string')) throw new Error('ID 缓存格式无效');
+    return new Set<string>(values);
+  };
+  const [starredIds, setStarredIds] = useState<Set<string>>(() => readCache('comfycanvas_starred_assets_v2', new Set<string>(), parseIds));
+  const [customUploads, setCustomUploads] = useState<MediaAsset[]>(() => readCache('comfycanvas_user_assets_v2', [], parseAssetCache));
+  const [deletedIds, setDeletedIds] = useState<Set<string>>(() => readCache('comfycanvas_deleted_assets_v2', new Set<string>(), parseIds));
+  const uploadsRef = useRef(customUploads);
+  uploadsRef.current = customUploads;
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
+  const persistCache = (key: string, value: unknown): boolean => {
     try {
-      localStorage.setItem('comfycanvas_user_assets_v2', JSON.stringify(customUploads));
-      setStorageWarning('');
+      if (cacheErrors.current[key]) throw new Error(cacheErrors.current[key]);
+      localStorage.setItem(key, JSON.stringify(value));
+      setCacheWarnings(current => ({ ...current, [key]: '' }));
+      return true;
     } catch (error) {
-      setStorageWarning(`浏览器保存失败：${error instanceof Error ? error.message : String(error)}`);
+      setCacheWarnings(current => ({ ...current, [key]: `浏览器保存失败：${error instanceof Error ? error.message : String(error)}` }));
+      return false;
     }
-  }, [customUploads]);
+  };
+  useEffect(() => {
+    persistCache('comfycanvas_user_assets_v2', customUploads);
+  }, [customUploads, retryRevision]);
 
   useEffect(() => {
-    if (!isOpen || !customUploads.some((asset) => asset.url.startsWith('data:'))) return;
+    if (!isOpen || cacheErrors.current.comfycanvas_user_assets_v2 || !customUploads.some(asset => asset.url.startsWith('data:'))) return;
     let cancelled = false;
-    migrateInlineAssets(customUploads, uploadMedia).then((result) => {
+    const original = customUploads;
+    const retry = retryRevision !== consumedRetry.current;
+    consumedRetry.current = retryRevision;
+    migrateAssets(original, retry).then(result => {
       if (cancelled) return;
-      setCustomUploads(result.assets);
-      if (result.failures.length) setStorageWarning(`旧素材迁移未完成：${result.failures.join('；')}`);
+      setMigrationWarning(result.failures.length ? `旧素材迁移未完成：${result.failures.join('；')}` : '');
+      const current = uploadsRef.current;
+      const merged = mergeMigratedAssets(current, original, result.assets);
+      if (merged.some((asset, index) => asset !== current[index]) && persistCache('comfycanvas_user_assets_v2', merged)) {
+        setCustomUploads(merged);
+      }
+    }).catch(error => {
+      if (!cancelled) setMigrationWarning(`旧素材迁移失败：${error instanceof Error ? error.message : String(error)}`);
     });
     return () => { cancelled = true; };
-  }, [isOpen, customUploads]);
+  }, [isOpen, customUploads, retryRevision]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem('comfycanvas_starred_assets_v2', JSON.stringify(Array.from(starredIds)));
-    } catch (e) {}
-  }, [starredIds]);
+    persistCache('comfycanvas_starred_assets_v2', Array.from(starredIds));
+  }, [starredIds, retryRevision]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem('comfycanvas_deleted_assets_v2', JSON.stringify(Array.from(deletedIds)));
-    } catch (e) {}
-  }, [deletedIds]);
+    persistCache('comfycanvas_deleted_assets_v2', Array.from(deletedIds));
+  }, [deletedIds, retryRevision]);
 
   // Convert history items + user uploads into unified MediaAsset list
   const allAssets: MediaAsset[] = useMemo(() => {
@@ -530,7 +540,10 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
       onDrop={handleDropFiles}
     >
       <div className="bg-[#14151c] border border-[#272938] rounded-2xl w-full max-w-7xl h-[92vh] flex flex-col shadow-2xl overflow-hidden text-xs relative">
-        {storageWarning && <div role="alert" className="border-b border-amber-700/50 bg-amber-950/50 px-4 py-2 text-amber-100">{storageWarning}</div>}
+        {(storageWarning || migrationWarning || Object.values(cacheWarnings).some(Boolean)) && <div role="alert" className="border-b border-amber-700/50 bg-amber-950/50 px-4 py-2 text-amber-100">
+          {[storageWarning, migrationWarning, ...Object.values(cacheWarnings)].filter(Boolean).join('；')}
+          <button type="button" className="ml-3 underline" onClick={() => setRetryRevision(value => value + 1)}>重试迁移与保存</button>
+        </div>}
         {/* Drag & Drop Overlay */}
         {isDraggingOver && (
           <div className="absolute inset-0 bg-purple-950/85 border-2 border-dashed border-purple-400 z-50 flex flex-col items-center justify-center text-purple-200 gap-3 backdrop-blur-sm pointer-events-none">

@@ -101,6 +101,7 @@ export class CivitaiDriver extends BaseEngineDriver {
 
     let mediaUrl = data.mediaUrl || data.imageUrl || data.videoUrl;
     let effectiveParameters: Record<string, any> | undefined;
+    let polledImages: Array<{ url: string; seed?: number }> = [];
 
     if (!mediaUrl && data.pending && data.workflowId) {
       const workflowId = data.workflowId;
@@ -135,7 +136,13 @@ export class CivitaiDriver extends BaseEngineDriver {
         const foundUrl = statusData.mediaUrl;
         const status = (statusData.status || '').toLowerCase();
 
+        if (statusData.transientOutputs?.length) {
+          data.transientOutputs = statusData.transientOutputs;
+          data.historyWarning = statusData.historyWarning;
+          if (!foundUrl) throw new Error(statusData.error || statusData.historyWarning);
+        }
         if (foundUrl || status === 'succeeded') {
+          polledImages = Array.isArray(statusData.images) ? statusData.images : [];
           const upstreamInput = statusData?.raw?.steps?.[0]?.input ?? statusData?.steps?.[0]?.input;
           if (upstreamInput && typeof upstreamInput === 'object' && !Array.isArray(upstreamInput)) effectiveParameters = upstreamInput;
           mediaUrl = foundUrl || statusData.mediaUrl;
@@ -167,9 +174,18 @@ export class CivitaiDriver extends BaseEngineDriver {
           width: typeof effective.width === 'number' ? effective.width : data.pendingHistory?.width ?? null,
           height: typeof effective.height === 'number' ? effective.height : data.pendingHistory?.height ?? null,
         } : {};
-        const saved = await fetch('/api/history', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({...data.pendingHistory, ...historyFields, url:mediaUrl, workflowSnapshot:params.workflowSnapshot, requestMetadata:{...data.requestMetadata, effectiveParameters: effective}})});
-        if (!saved.ok) throw new Error(`HTTP ${saved.status}: ${await saved.text()}`);
-        data.historyItem = await saved.json();
+        data.historyItems = [];
+        const historyFailures: string[] = [];
+        const images: Array<{ url: string; seed?: number }> = polledImages.length ? polledImages : [{ url: mediaUrl }];
+        for (const image of images) {
+          try {
+            const saved = await fetch('/api/history', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({...data.pendingHistory, ...historyFields, ...(image.seed !== undefined ? {seed:image.seed} : {}), url:image.url, workflowSnapshot:params.workflowSnapshot, requestMetadata:{...data.requestMetadata, effectiveParameters: effective}})});
+            if (!saved.ok) throw new Error(`HTTP ${saved.status}: ${await saved.text()}`);
+            data.historyItems.push(await saved.json());
+          } catch (error) { historyFailures.push(error instanceof Error ? error.message : String(error)); }
+        }
+        data.historyItem = data.historyItems[0];
+        if (historyFailures.length) data.historyWarning = [data.historyWarning, `历史保存失败：${historyFailures.join('；')}`].filter(Boolean).join('；');
       } catch (error: any) {data.historyWarning = `图像已生成，但历史记录保存失败：${error.message}`;}
     }
 

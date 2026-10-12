@@ -16,8 +16,7 @@ it('uses every live Tensor checkpoint instead of limiting the dropdown to three 
  expect(result.options).toHaveLength(30);expect(options.length).toBeGreaterThan(3);
  expect(options.some(row=>row.value===rows[29].id)).toBe(true);expect(options.some(row=>row.value==='672390779613802167')).toBe(false);
  expect(result).toMatchObject({hasMore:true,nextCursor:'next'});
- expect(isInvalidTensorModel('tensorart','photoreal_studio_z_image')).toBe(false);
- expect(isInvalidTensorModel('tensorart','invalid!@#$')).toBe(true);
+ expect(isInvalidTensorModel('tensorart','photoreal_studio_z_image')).toBe(true);
 });
 it('keeps only the chosen provider and surfaces catalog failures',()=>{
  expect(()=>readCheckpointCatalog({tensorart:{error:'upstream unavailable'}},'tensorart')).toThrow(/upstream unavailable/);

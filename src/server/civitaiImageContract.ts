@@ -1,4 +1,5 @@
 import { getFieldSpec, valueStatus } from '../schemas/providerSchema';
+import { parseCustomObject } from './customParameters';
 
 type Body = Record<string, any>;
 export type CivitaiPublicGet = (url: string) => Promise<Response>;
@@ -128,10 +129,8 @@ async function buildCivitaiBaseInput(body: Body, get: CivitaiPublicGet): Promise
 }
 
 export async function buildCivitaiImageRequest(body: Body, get: CivitaiPublicGet) {
-  const custom = body.custom_parameters ?? {};
-  if ('custom_parameters' in body && (!body.custom_parameters || typeof custom !== 'object' || Array.isArray(custom))) fail('custom_parameters 必须为 JSON 对象');
-  const boundary = /^(?:model|comfyModel|engine|ecosystem|provider|endpoint|base_?url|url|inference_provider|diffuserModel|diffusionModel|workflowSnapshot|operation)$|api.?key|authorization|credential|password|secret|token/i;
-  for (const key of Object.keys(custom)) if (boundary.test(key)) fail(`custom_parameters 不可修改路由/模型/凭据边界: ${key}`);
+  const custom = parseCustomObject(body.custom_parameters) ?? {};
+  for (const key of ['workflowSnapshot', 'operation']) if (key in custom) fail(`custom_parameters 不可修改应用控制字段: ${key}`);
   const aliases: Record<string, string> = { cfgScale: 'cfg', negativePrompt: 'negative_prompt', sampler: 'sampler_name', sampleMethod: 'sampler_name', schedule: 'scheduler', image: 'image_url', strength: 'denoise', denoiseStrength: 'denoise' };
   const normalize = (source: Body) => {
     const normalized: Body = {};
@@ -150,6 +149,7 @@ export async function buildCivitaiImageRequest(body: Body, get: CivitaiPublicGet
   const normalizedCustom = normalize(custom);
   const effective: Body = { ...topLevel, ...normalizedCustom };
   const translated = new Set([...Object.values(aliases), 'loras', 'prompt', 'width', 'height', 'steps', 'seed', 'quantity']);
+  const boundary = /^(?:model|comfyModel|engine|ecosystem|provider|endpoint|base_?url|url|inference_provider|diffuserModel|diffusionModel|workflowSnapshot|operation)$/i;
   const controls = /^(?:custom_parameters|isVideo|targetProvider|videoDuration|duration|fps)$|api.?key|authorization|credential|password|secret|token/i;
   const advanced = (source: Body) => Object.fromEntries(Object.entries(source).filter(([key]) => !translated.has(key) && !boundary.test(key) && !controls.test(key)));
   const beforeCustom = { ...await buildCivitaiBaseInput(topLevel, get), ...advanced(topLevel) };

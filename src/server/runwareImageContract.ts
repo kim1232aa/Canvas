@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { applyCustomParameters, type CustomOverride } from './customParameters';
 
 export interface RunwareLora {
   model: string;
@@ -27,6 +28,8 @@ export interface RunwareTask {
 export interface RunwareImageRequest {
   endpoint: string; // 'https://api.runware.ai/v1' or custom baseUrl
   payload: RunwareTask[];
+  overrides: CustomOverride[];
+  actualModel: string;
 }
 
 export interface RunwareImageResponse {
@@ -35,6 +38,9 @@ export interface RunwareImageResponse {
     taskUUID: string;
     imageUUID?: string;
     imageURL?: string;
+    imageBase64Data?: string;
+    imageDataURI?: string;
+    seed?: number;
     cost?: number;
   }>;
   errors?: Array<{
@@ -117,28 +123,37 @@ export function buildRunwareImageRequest(body: Record<string, unknown>, baseUrl 
 
   const endpoint = baseUrl.endsWith('/v1') ? baseUrl : `${baseUrl.replace(/\/+$/, '')}/v1`;
 
+  const custom = applyCustomParameters(task as unknown as Record<string, unknown>, body.custom_parameters);
+  const sentTask = custom.payload as unknown as RunwareTask;
+  if (sentTask.taskType !== 'imageInference') throw new Error('Runware 自定义 JSON 不能修改 taskType；当前路由只执行 imageInference');
+
   return {
     endpoint,
-    payload: [task],
+    payload: [sentTask],
+    overrides: custom.overrides,
+    actualModel: String(sentTask.model),
   };
 }
 
-export function parseRunwareImageResponse(response: RunwareImageResponse): { imageUrl: string; imageUrls: string[]; cost?: number; taskUUID: string } {
+export function parseRunwareImageResponse(response: RunwareImageResponse, outputFormat = 'PNG'): { imageUrl: string; imageUrls: string[]; images: Array<{ url: string; seed?: number }>; cost?: number; taskUUID: string } {
   if (Array.isArray(response.errors) && response.errors.length > 0) {
     const firstErr = response.errors[0];
     throw new Error(`Runware 上游错误: ${firstErr.message || firstErr.code || '未知错误'}`);
   }
 
-  const items = (response.data || []).filter((item) => item.imageURL);
-  const item = items[0];
-  if (!item || !item.imageURL) {
+  const images = (response.data || [])
+    .map((item) => ({ url: item.imageURL || item.imageDataURI || (item.imageBase64Data ? `data:image/${String(outputFormat).toLowerCase() === 'jpg' ? 'jpeg' : String(outputFormat).toLowerCase()};base64,${item.imageBase64Data}` : ''), ...(typeof item.seed === 'number' ? { seed: item.seed } : {}) }))
+    .filter((image) => image.url);
+  const first = (response.data || []).find((item) => item.imageURL || item.imageDataURI || item.imageBase64Data);
+  if (!first || !images.length) {
     throw new Error('Runware 未返回图像 URL');
   }
 
   return {
-    imageUrl: item.imageURL,
-    imageUrls: items.map((entry) => entry.imageURL!),
-    cost: item.cost,
-    taskUUID: item.taskUUID,
+    imageUrl: images[0].url,
+    imageUrls: images.map((image) => image.url),
+    images,
+    cost: (response.data || []).reduce<number | undefined>((sum, item) => typeof item.cost === 'number' ? (sum ?? 0) + item.cost : sum, undefined),
+    taskUUID: first.taskUUID,
   };
 }

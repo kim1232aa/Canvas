@@ -78,6 +78,7 @@ export class RunwareDriver extends BaseEngineDriver {
       cfg: params.cfg,
       seed: params.seed,
       loras: params.loras,
+      custom_parameters: params.extraParams?.custom_parameters,
       workflowSnapshot: params.workflowSnapshot,
     };
 

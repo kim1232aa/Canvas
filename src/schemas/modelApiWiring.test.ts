@@ -11,6 +11,11 @@ describe('real model APIs cannot use tool / foreign resource IDs',()=>{
     expect(()=>tensorModelId('photoreal_studio_z_image')).toThrow(/工具名/);
     expect(()=>buildTensorModelJob({model:'672797109289765558',prompt:'x',width:512,height:512,loras:[{name:'foreign.safetensors',civitaiId:'672390779613802167',strength:.8}]},'x')).toThrow();
   });
+  it('Tensor preserves explicit custom job fields, including an actual model override',()=>{
+    const job=buildTensorModelJob({model:'672797109289765558',prompt:'robot',width:512,height:512,custom_parameters:{model:'672390779613802167',stages:[{type:'INPUT_INITIALIZE',inputInitialize:{seed:'0'}},{type:'DIFFUSION',diffusion:{sdModel:'672390779613802167',width:768,height:512,cfgScale:0,prompts:[{text:'custom'}]}}]}},'request-1');
+    expect(job.stages[1].diffusion).toMatchObject({sdModel:'672390779613802167',width:768,cfgScale:0});
+    expect(()=>buildTensorModelJob({model:'672797109289765558',prompt:'robot',width:512,height:512,custom_parameters:{headers:{authorization:'x'}}},'r')).toThrow();
+  });
   it('Tensor dropdown uses real IDs; any additional ID gets model API fields',()=>{
     expect(BASE_MODELS.filter(x=>x.provider==='tensorart').every(x=>/^\d{10,25}$/.test(x.value))).toBe(true);
     expect(resolveSchemaModelId('tensorart','1047478620018236183')).toBe('tensorart-model-api');
@@ -42,6 +47,10 @@ describe('Nano normalized API uses live per-model capabilities',()=>{
     expect(declared.payload.loras).toEqual([{path:'https://cdn.example.com/b.safetensors',scale:0.6}]);
     expect(declared.capabilityNotes).toEqual([expect.objectContaining({field:'loras',capability:'supported'})]);
     expect(()=>buildNanoImagePayload({model:'minimax-h3/text-to-image',prompt:'x',loras:[{name:'local-file',strength:1}]},loraEndpoint)).toThrow(/HTTPS/);
+  });
+  it('Nano explicit model override wins and credential overrides are rejected',()=>{
+    expect(buildNanoImagePayload({model:'flux-schnell',prompt:'x',custom_parameters:{model:'custom-model'}},endpoint).payload.model).toBe('custom-model');
+    expect(()=>buildNanoImagePayload({model:'flux-schnell',prompt:'x',custom_parameters:{endpoint:'https://evil.test'}},endpoint)).toThrow();
   });
   it('only enables image input when that model advertises it',()=>{
     expect(()=>buildNanoImagePayload({model:'flux-schnell',image_url:'https://example.test/image.png'},endpoint)).toThrow(/图生图/);

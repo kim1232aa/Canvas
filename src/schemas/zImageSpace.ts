@@ -1,4 +1,4 @@
-// Verified from the live official /gradio_api/info on 2026-10-02.
+// Verified from the live official /gradio_api/info on 2026-10-02 and rechecked 2026-10-12 (seven named /generate parameters).
 // Shared by the UI schema and server; no generated defaults are injected.
 export const Z_IMAGE_SOURCE = 'https://tongyi-mai-z-image-turbo.hf.space/gradio_api/info';
 export const Z_IMAGE_RESOLUTIONS: string[] = [
@@ -37,7 +37,17 @@ export const Z_IMAGE_RESOLUTIONS: string[] = [
   "864x2016 ( 9:21 )"
 ];
 
-export function buildZImagePayload(input: Record<string, unknown>) {
+export const Z_IMAGE_PARAMETERS = ['prompt', 'resolution', 'seed', 'steps', 'shift', 'random_seed', 'gallery_images'] as const;
+
+export function buildZImagePayload(rawInput: Record<string, unknown>) {
+  const custom = rawInput.custom_parameters;
+  const customEntries = custom && typeof custom === 'object' && !Array.isArray(custom) ? Object.entries(custom) : [];
+  const unknown = customEntries.map(([field]) => field).filter((field) => !(Z_IMAGE_PARAMETERS as readonly string[]).includes(field));
+  if (unknown.length) {
+    throw new Error(`Z-Image Space /generate 按位置提交，自定义 JSON 字段 ${unknown.join(', ')} 不在官方签名中（${Z_IMAGE_PARAMETERS.join(', ')}）；无法确定位置，未提交`);
+  }
+  const overrides = customEntries.map(([field, value]) => ({ field, requested: rawInput[field], custom: value, applied: true }));
+  const input: Record<string, unknown> = { ...rawInput, ...Object.fromEntries(customEntries) };
   if (typeof input.resolution !== 'string' || !Z_IMAGE_RESOLUTIONS.includes(input.resolution)) {
     throw new Error('请为 Z-Image 选择官方 resolution 分辨率选项');
   }
@@ -51,15 +61,6 @@ export function buildZImagePayload(input: Record<string, unknown>) {
   }
   if (typeof input.random_seed !== 'boolean') throw new Error('Z-Image 必须提供 random_seed 布尔值');
   if (!Array.isArray(input.gallery_images)) throw new Error('Z-Image 必须提供 gallery_images 数组');
-  const data = [input.prompt ?? '', input.resolution, input.seed, input.steps, input.shift, input.random_seed, input.gallery_images];
-  const custom = input.custom_parameters;
-  const notes: Array<{field:string;note:string}> = [];
-  if (custom && typeof custom === 'object' && !Array.isArray(custom)) {
-    const values = Object.values(custom);
-    if (values.length) {
-      data.push(...values);
-      notes.push(...Object.keys(custom).map((field) => ({ field, note: 'Z-Image Space 使用固定位置参数；自定义值按追加参数提交，上游是否接受以其响应为准。' })));
-    }
-  }
-  return { data, capabilityNotes: notes };
+  const data = Z_IMAGE_PARAMETERS.map((field) => field === 'prompt' ? input.prompt ?? '' : input[field]);
+  return { data, overrides, actualParameters: Object.fromEntries(Z_IMAGE_PARAMETERS.map((field, index) => [field, data[index]])) };
 }

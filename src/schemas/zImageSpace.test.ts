@@ -17,3 +17,21 @@ describe('official Z-Image Space contract', () => {
     expect(() => buildZImagePayload({...input, ...invalid})).toThrow();
   });
 });
+
+describe('Z-Image custom JSON maps by live Gradio parameter name', () => {
+  it('overrides named positions and records the override instead of appending values', () => {
+    const built = buildZImagePayload({...input, custom_parameters: {steps: 12, prompt: 'advanced prompt'}});
+    expect(built.data).toEqual(['advanced prompt', '1152x896 ( 9:7 )', 42, 12, 3, false, []]);
+    expect(built.data).toHaveLength(7);
+    expect(built.overrides).toEqual([
+      {field: 'steps', requested: 8, custom: 12, applied: true},
+      {field: 'prompt', requested: 'test', custom: 'advanced prompt', applied: true},
+    ]);
+  });
+  it('validates overridden values with the same live contract', () => {
+    expect(() => buildZImagePayload({...input, custom_parameters: {steps: 500}})).toThrow(/steps/);
+  });
+  it('rejects names absent from the live /generate signature rather than guessing a position', () => {
+    expect(() => buildZImagePayload({...input, custom_parameters: {guidance_scale: 4}})).toThrow(/guidance_scale.*prompt, resolution, seed, steps, shift, random_seed, gallery_images/);
+  });
+});

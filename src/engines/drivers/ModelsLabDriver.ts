@@ -64,6 +64,7 @@ export class ModelsLabDriver extends BaseEngineDriver {
       denoise: params.denoise,
       scheduler: params.scheduler,
       loras: params.loras,
+      custom_parameters: params.extraParams?.custom_parameters,
       workflowSnapshot: params.workflowSnapshot,
     };
 

@@ -86,4 +86,26 @@ describe('Runware Image Contract', () => {
       errors: [{ code: 'INSUFFICIENT_CREDITS', message: 'You have no balance remaining' }],
     })).toThrow(/You have no balance remaining/);
   });
+
+  it('merges custom JSON into the task, keeps explicit model and numberResults, and records overrides', () => {
+    const { payload, overrides, actualModel } = buildRunwareImageRequest({
+      model: 'runware:100@1', prompt: 'p', cfg: 0, loras: [{ name: 'civitai:1@2', strength: 0.5 }],
+      custom_parameters: { model: 'runware:101@1', numberResults: 3, outputFormat: 'WEBP', CFGScale: 0 },
+    });
+    expect(payload[0]).toMatchObject({ model: 'runware:101@1', numberResults: 3, outputFormat: 'WEBP', CFGScale: 0, lora: [{ model: 'civitai:1@2', weight: 0.5 }] });
+    expect(actualModel).toBe('runware:101@1');
+    expect(overrides.map((o) => o.field)).toEqual(['model', 'numberResults', 'outputFormat']);
+  });
+
+  it('refuses custom JSON that would change taskType or credentials', () => {
+    expect(() => buildRunwareImageRequest({ model: 'm', prompt: 'p', custom_parameters: { apiKey: 'x' } })).toThrow(/凭据/);
+  });
+
+  it('returns every image with its own seed and cost', () => {
+    const parsed = parseRunwareImageResponse({ data: [
+      { taskType: 'imageInference', taskUUID: 't', imageURL: 'https://im.runware.ai/a.webp', seed: 1, cost: 0.1 },
+      { taskType: 'imageInference', taskUUID: 't', imageURL: 'https://im.runware.ai/b.webp', seed: 2, cost: 0.1 },
+    ] } as any);
+    expect(parsed.images).toEqual([{ url: 'https://im.runware.ai/a.webp', seed: 1 }, { url: 'https://im.runware.ai/b.webp', seed: 2 }]);
+  });
 });

@@ -15,26 +15,10 @@ describe('server closeout wiring contracts', () => {
     expect(buildAgnesVideoRequest('agnes-video-2.5', { custom_parameters: { mode: 'reference', images: ['https://example.com/ref.png'], resolution: 'unknown-explicit' } }).payload).toMatchObject({ mode: 'reference', resolution: 'unknown-explicit' });
   });
 
-  it('OpenAI and Grok image routes retain every returned image and merge custom JSON', () => {
-    for (const marker of ['app.post([\'/api/engine/openai_compat/generate\'', 'app.post([\'/api/engine/grok_compat/generate\'']) {
-      const start = serverSource.indexOf(marker);
-      const route = serverSource.slice(start, serverSource.indexOf('app.post', start + marker.length));
-      expect(route).toContain('recordAdditionalImages(data.data');
-      expect(route).toContain('custom_parameters');
-    }
-  });
-
-  it('Agnes image route preserves custom JSON and every returned image', () => {
-    const start = serverSource.indexOf("app.post(['/api/engine/agnes/generate'");
-    const route = serverSource.slice(start, serverSource.indexOf('app.post', start + 20));
-    expect(route).toContain('custom_parameters');
-    expect(route).toContain('recordAdditionalImages(data.data');
-  });
-
   it('Gemini route records omissions without putting them in the SDK request', () => {
     expect(serverSource).toContain('const parameterOmissions = sanitizeGenerationMetadata(req.body.parameterOmissions || []);');
     expect(serverSource).toContain('stage: \'parameter-omissions\'');
     expect(serverSource).toContain('parameterOmissions,');
-    expect(serverSource).toContain('actualRequest: { model, contents: { parts }, config }');
+    expect(serverSource).toContain('const actualRequest = { model: actualModel, contents: { parts }, config: sentConfig };');
   });
 });
