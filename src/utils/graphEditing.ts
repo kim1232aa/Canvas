@@ -2,12 +2,12 @@ import type {Connection,NodeInstance} from '../types/graph';
 import {isCloudEngineNode} from './resolveCheckpoint';
 
 // Provider provenance comes from the catalog/history, never from a model name.
-export function explicitProvider(value?:string) {
- const raw=String(value || '').trim().toLowerCase();
- const aliases:Record<string,string>={'hugging face':'huggingface','hugging face → fal-ai':'huggingface','tensor.art':'tensorart','tensor':'tensorart','tensor.art (模型 api)':'tensorart','tensor.art (openworks)':'tensorart','tensor.art (openworks video)':'tensorart','google gemini':'gemini','google gemini (官方直连)':'gemini','fal.ai':'fal','fal.ai (gpu 云端加速)':'fal','modelscope cn':'modelscope','modelscope_cn':'modelscope','modelscope cn (魔搭社区)':'modelscope','modelscope ai':'modelscope_ai','modelscope ai (魔搭国际站)':'modelscope_ai','agnes ai (apihub)':'agnes','agnes ai video (apihub)':'agnes','nanogpt video':'nanogpt','openai 兼容中转':'openai_compat','grok 兼容中转':'grok_compat','runware 极速云平台':'runware','modelslab 开放模型库':'modelslab'};
- const provider=aliases[raw] || raw;
- return ['civitai','fal','agnes','sensenova','huggingface','modelscope','modelscope_ai','nanogpt','gemini','tensorart','openai_compat','grok_compat','muapi','wavespeed','sogni','runware','modelslab'].includes(provider) ? provider : '';
-}
+ export function explicitProvider(value?:string) {
+  const raw=String(value || '').trim().toLowerCase();
+  const aliases:Record<string,string>={'hugging face':'huggingface','hugging face → fal-ai':'huggingface','tensor.art':'tensorart','tensor':'tensorart','tensor.art (模型 api)':'tensorart','tensor.art (openworks)':'tensorart','tensor.art (openworks video)':'tensorart','google gemini':'gemini','google gemini (官方直连)':'gemini','fal.ai':'fal','fal.ai (gpu 云端加速)':'fal','modelscope cn':'modelscope','modelscope_cn':'modelscope','modelscope cn (魔搭社区)':'modelscope','modelscope ai':'modelscope_ai','modelscope ai (魔搭国际站)':'modelscope_ai','agnes ai (apihub)':'agnes','agnes ai video (apihub)':'agnes','nanogpt video':'nanogpt','openai 兼容中转':'openai_compat','grok 兼容中转':'grok_compat','runware 极速云平台':'runware','modelslab 开放模型库':'modelslab','replicate':'replicate','replicate 官方':'replicate','replicate 官方云平台':'replicate'};
+  const provider=aliases[raw] || raw;
+  return ['civitai','fal','agnes','sensenova','huggingface','modelscope','modelscope_ai','nanogpt','gemini','tensorart','openai_compat','grok_compat','muapi','wavespeed','sogni','runware','modelslab','replicate'].includes(provider) ? provider : '';
+ }
 
 export function graphBranch(nodes:NodeInstance[],connections:Connection[],selectedId?:string|null,video?:boolean) {
  const active=nodes.filter(node=>!node.bypassed);

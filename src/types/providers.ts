@@ -1,4 +1,4 @@
-export type ProviderId = 'civitai' | 'fal' | 'agnes' | 'sensenova' | 'huggingface' | 'modelscope' | 'modelscope_ai' | 'nanogpt' | 'gemini' | 'tensorart' | 'video' | 'openai_compat' | 'grok_compat' | 'muapi' | 'wavespeed' | 'sogni' | 'runware' | 'modelslab';
+export type ProviderId = 'civitai' | 'fal' | 'agnes' | 'sensenova' | 'huggingface' | 'modelscope' | 'modelscope_ai' | 'nanogpt' | 'gemini' | 'tensorart' | 'video' | 'openai_compat' | 'grok_compat' | 'muapi' | 'wavespeed' | 'sogni' | 'runware' | 'modelslab' | 'replicate';
 
 export interface ProviderConfig {
   id: ProviderId;
@@ -70,6 +70,7 @@ export interface ApiKeysState {
   runwareBaseUrl?: string;
   modelslabKey?: string;
   modelslabBaseUrl?: string;
+  replicateKey?: string;
   [key: string]: any;
 }
 

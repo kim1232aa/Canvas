@@ -114,6 +114,10 @@ export function normalizeForComfyUI(
   positivePrompt: string,
   negativePrompt: string
 ): Record<string, any> {
+  if (!params.sampler || !params.scheduler) {
+    throw new Error('请先选择采样器与调度器，否则复制的 JSON 会包含你未选择的参数');
+  }
+
   const promptGraph: Record<string, any> = {};
 
   // 1. Checkpoint Loader
@@ -195,8 +199,8 @@ export function normalizeForComfyUI(
       seed: params.seed,
       steps: params.steps,
       cfg: params.cfg,
-      sampler_name: params.sampler || 'euler',
-      scheduler: params.scheduler || 'normal',
+      sampler_name: params.sampler,
+      scheduler: params.scheduler,
       denoise: params.denoise ?? 1.0,
     },
   };

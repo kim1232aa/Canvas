@@ -12,8 +12,8 @@ export function videoDurationBounds(provider: string | undefined, model: string)
   return {};
 }
 
-export function assertResolvedResources(loras: Array<{name: string; civitaiId?: string; unresolvedResource?: boolean}>) {
-  const unresolved = loras.filter(l => l.unresolvedResource).map(l => l.civitaiId || l.name);
+export function assertResolvedResources(loras: Array<{name: string; civitaiId?: string; unresolvedResource?: boolean; resourceVerified?: boolean}>) {
+  const unresolved = loras.filter(l => l.unresolvedResource && l.resourceVerified !== true).map(l => l.civitaiId || l.name);
   if (unresolved.length) throw new Error(`未核实资源 ID：${unresolved.join('、')}；请重新选择资源后运行`);
 }
 

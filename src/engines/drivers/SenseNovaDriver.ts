@@ -25,7 +25,8 @@ export class SenseNovaDriver extends BaseEngineDriver {
     params: NormalizedGenerateParams,
     keys: Record<string, string>
   ): Promise<NormalizedGenerateResult> {
-    const effectiveKey = params.apiKey || keys.sensenovaKey || '';
+    const rawKey = params.apiKey || keys.sensenovaKey || '';
+    const effectiveKey = (rawKey || '').split(/[\r\n,]/)[0].trim();
     const headers: Record<string, string> = {'Content-Type':'application/json'};
     if (effectiveKey) headers['x-sensenova-key'] = effectiveKey;
     if (params.baseUrl) headers['x-sensenova-base-url'] = params.baseUrl;
@@ -68,8 +69,8 @@ export class SenseNovaDriver extends BaseEngineDriver {
     keys: Record<string, string> = {}
   ): Promise<NormalizedChatResult> {
     if (!params.model) throw new Error('模型为必填项（model is required）');
-    // No key here → server resolves from its pool (SENSENOVA_KEY / settings)
-    const effectiveKey = params.apiKey || keys?.sensenovaKey || '';
+    const rawKey = params.apiKey || keys?.sensenovaKey || '';
+    const effectiveKey = (rawKey || '').split(/[\r\n,]/)[0].trim();
     const effectiveBaseUrl = params.baseUrl || keys?.sensenovaBaseUrl || this.defaultBaseUrl;
 
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };

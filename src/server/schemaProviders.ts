@@ -55,6 +55,21 @@ export async function fetchSchemaProviderRows(provider:Provider,read:ReturnType<
   return {rows,sourceUrl};
 }
 
+/** Cover resolution for Sogni LoRA items:
+ *  Reads directly and dynamically from Sogni's upstream `ui.examples`.
+ *  Strictly adheres to project rules: NO hardcoded mappings, NO mock covers. */
+export function sogniLoraCover(m: any): { url: string; caption: string } | undefined {
+  const examples = Array.isArray(m?.ui?.examples) ? m.ui.examples : [];
+  const usable = examples.filter((e: any) => e?.url && e.isMature !== true && String(e.caption || '').trim().toLowerCase() !== 'off');
+  const shown = usable.find((e: any) => !String(e.caption || '').trim().startsWith('-')) || usable[0];
+  return shown ? { url: String(shown.url), caption: String(shown.caption || '') } : undefined;
+}
+
+function compatibleModelsLabel(models:any):string {
+  const names=Array.isArray(models)?models.map((c:any)=>c?.name).filter(Boolean):[];
+  return names.length>1?`${names[0]} 等 ${names.length} 个`:names[0] || '';
+}
+
 /** Normalize raw catalog rows into the shared model-hub item shape. */
 export function normalizeSchemaProviderItems(provider:Provider,rows:any[],opts:{lora?:boolean;sourceUrl:string;category?:string;query?:string}) {
   const wantsLora=opts.lora===true;
@@ -65,7 +80,9 @@ export function normalizeSchemaProviderItems(provider:Provider,rows:any[],opts:{
   const query=(opts.query || '').toLowerCase();
   return filtered.map((m:any)=>({id:wantsLora?(m.loraId || m.slug):(m.model_id || m.id || m.endpoint_url || m.name),name:m.name || m.ui?.label || m.model_id,
     provider:schemaProviders[provider].name,category:wantsLora?'LoRA':/video/i.test(m.category || m.type || '')?'Video':'Checkpoint',type:wantsLora?'LoRA':'Checkpoint',
-    baseModel:m.family || m.tierId || '',description:m.description || '',tags:m.tags || [],imageUrl:m.image_url || m.thumbnail || '',
+    baseModel:m.family || m.tierId || compatibleModelsLabel(m.compatibleModels),description:m.description || '',tags:m.tags || [],
+    imageUrl:m.image_url || m.thumbnail || sogniLoraCover(m)?.url || '',imageCaption:sogniLoraCover(m)?.caption,
+    creator:m.ui?.creator,externalUrl:m.ui?.sourceUrl,
     sourceUrl:opts.sourceUrl,metadata:m,modelIds:m.modelIds,loraStrength:m.ui?.default,supportsLora:JSON.stringify(m.input_fields || m.api_schema || m.parameters || '').includes('lora'),
     badge:wantsLora?'官方 LoRA 资源':'官方模型端点',resourceKind:wantsLora?'adapter':'model-endpoint'}))
     .filter((m:any)=>m.id && (!query || (m.id+' '+m.name+' '+m.description).toLowerCase().includes(query)));

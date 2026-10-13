@@ -106,3 +106,52 @@ it('clears old verified markers when a replacement is unverified',()=>{
  expect(next).not.toHaveProperty('resource_kind');
  expect(next).not.toHaveProperty('download_url');
 });
+
+it('verifies catalog Civitai model with multiple versions only when explicit version is provided',()=>{
+ const catalogItem = {
+   id: 101055,
+   name: 'SDXL 1.0 Base',
+   provider: 'Civitai',
+   _sourceProvider: 'civitai',
+   type: 'Checkpoint',
+   category: 'Checkpoint',
+   modelVersions: [
+     { id: 128078, baseModel: 'SDXL 1.0', files: [{ primary: true, downloadUrl: 'https://example.com/sdxl.safetensors' }] },
+     { id: 128079, baseModel: 'SDXL 1.0' },
+   ],
+ };
+ expect(()=>selectionFromMetadata('civitai',catalogItem,'checkpoint')).toThrow(/version|版本/);
+ const sel = selectionFromMetadata('civitai', {...catalogItem,versionId:128078}, 'checkpoint');
+ expect(sel.resourceVerified).toBe(true);
+ expect(sel.name).toBe('101055@128078');
+
+ const prevNodeValues = { ckpt_name: 'old', import_unresolved_resource: true, unresolvedResource: true };
+ const updated = replaceSelectedResource(prevNodeValues, sel, 'ckpt_name');
+ expect(updated.ckpt_name).toBe('101055@128078');
+ expect(updated.resourceVerified).toBe(true);
+ expect(updated.import_unresolved_resource).toBeUndefined();
+ expect(updated.unresolvedResource).toBeUndefined();
+});
+
+it('verifies catalog Replicate model and sets resourceVerified true cleanly',()=>{
+ const replicateCatalogItem = {
+   id: 'black-forest-labs/flux-schnell',
+   name: 'FLUX.1 [schnell]',
+   provider: 'replicate',
+   _sourceProvider: 'replicate',
+   category: 'checkpoint',
+   fromCatalog: true,
+ };
+ const sel = selectionFromMetadata('replicate', replicateCatalogItem, 'checkpoint');
+ expect(sel.resourceVerified).toBe(true);
+ expect(sel.name).toBe('black-forest-labs/flux-schnell');
+ expect(sel.provider).toBe('replicate');
+
+ const prevNodeValues = { model: 'old', import_unresolved_resource: true, unresolvedResource: true };
+ const updated = replaceSelectedResource(prevNodeValues, sel, 'model');
+ expect(updated.model).toBe('black-forest-labs/flux-schnell');
+ expect(updated.resourceVerified).toBe(true);
+ expect(updated.import_unresolved_resource).toBeUndefined();
+ expect(updated.unresolvedResource).toBeUndefined();
+});
+

@@ -18,7 +18,8 @@ export type ProviderId =
   | 'wavespeed'
   | 'sogni'
   | 'runware'
-  | 'modelslab';
+  | 'modelslab'
+  | 'replicate';
 
 export interface ModelSpec {
   id: string;
@@ -68,6 +69,7 @@ export interface NormalizedGenerateParams {
   baseUrl?: string;
   extraParams?: Record<string, any>;
   workflowSnapshot?: Record<string, unknown>;
+  parameterOmissions?: Array<{ field: string; value: unknown; reason: string }>;
 }
 
 export interface NormalizedGenerateResult {

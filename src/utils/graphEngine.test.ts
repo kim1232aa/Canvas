@@ -222,12 +222,111 @@ describe('graphEngine - B2 & L2a & L2b 拓扑反向追踪与参数抽取隔离�
     const generateSpy = vi.spyOn(EngineRegistry, 'generate').mockResolvedValue({mediaUrl:'data:image/png;base64,abc',mediaType:'image',provider:'Hugging Face',providerId:'huggingface',model:'black-forest-labs/FLUX.1-dev',seed:314159});
     await executeWorkflow(nodes, connections, () => {}, undefined, 'sampler');
     const sent = generateSpy.mock.calls[0][1];
-    expect(sent.extraParams).toMatchObject({hf_provider:'fal-ai'});
+    expect(sent.extraParams).toMatchObject({
+      hf_provider:'fal-ai',
+      omissions:[
+        {field:'resolution',value:'1k',reason:'Hugging Face 该路由（hfProvider=fal-ai）未采用像素分辨率字段；保留原值不作为请求参数'},
+        {field:'shift',value:3,reason:'非 z-image-space 的 HF 路由不支持 shift 字段；保留原值不作为请求参数'},
+        {field:'random_seed',value:false,reason:'非 z-image-space 的 HF 路由不支持 random_seed 字段；保留原值不作为请求参数'},
+        {field:'gallery_images',value:[],reason:'非 z-image-space 的 HF 路由不支持 gallery_images 字段；保留原值不作为请求参数'},
+      ],
+    });
     expect(sent.extraParams).not.toHaveProperty('resolution');
     expect(sent.extraParams).not.toHaveProperty('shift');
     expect(sent.extraParams).not.toHaveProperty('random_seed');
     expect(sent.extraParams).not.toHaveProperty('gallery_images');
   });
+  it('records grok videoFps omission without sending the unsupported field', async () => {
+    const node = createNode('video', 'AIVideoNode', {model:'grok-video-model', targetProvider:'grok_compat', prompt:'a moving scene', fps:24});
+    const spy = vi.spyOn(EngineRegistry, 'generate').mockResolvedValue({mediaUrl:'https://example.test/out.mp4',mediaType:'video',provider:'grok_compat',providerId:'grok_compat',model:'grok-video-model',seed:null});
+    await executeWorkflow([node], [], () => {}, undefined, 'video');
+    expect(spy.mock.calls[0][1].videoFps).toBeUndefined();
+    expect(spy.mock.calls[0][1].extraParams).toMatchObject({omissions:[{field:'videoFps',value:24,reason:'Grok 兼容中转的视频契约没有 videoFps 字段；保留原值不作为请求参数'}]});
+  });
+
+  it('records the local LoRA trigger prompt transformation in the workflow metadata', async () => {
+    const checkpoint = createNode('checkpoint', 'CheckpointLoaderSimple', {ckpt_name:'model', targetProvider:'fal', prompt:'a portrait'});
+    const lora = createNode('lora', 'LoRALoader', {lora_name:'style.safetensors', trigger_words:'style-token', strength_model:0.8});
+    const sampler = createNode('sampler', 'KSampler', {});
+    const prompt = createNode('prompt', 'CLIPTextEncode', {text:'a portrait'});
+    const spy = vi.spyOn(EngineRegistry, 'generate').mockResolvedValue({mediaUrl:'https://example.test/out.png',mediaType:'image',provider:'fal',providerId:'fal',model:'model',seed:null});
+    await executeWorkflow([checkpoint, lora, sampler, prompt], [{id:'mount',fromNodeId:'checkpoint',fromSocketId:'MODEL',toNodeId:'lora',toSocketId:'model',type:'MODEL'},{id:'sample',fromNodeId:'lora',fromSocketId:'MODEL',toNodeId:'sampler',toSocketId:'model',type:'MODEL'},{id:'positive',fromNodeId:'prompt',fromSocketId:'CONDITIONING',toNodeId:'sampler',toSocketId:'positive',type:'CONDITIONING'}], () => {}, undefined, 'sampler');
+    expect(spy.mock.calls[0][1]).toMatchObject({prompt:'style-token, a portrait', workflowSnapshot:{requestMetadata:{promptTransform:{prependedTriggerWords:'style-token',originalPrompt:'a portrait',finalPrompt:'style-token, a portrait'}}}});
+    expect((spy.mock.calls[0][1] as any).workflowSnapshot.requestMetadata.promptTransform.llmPrompt).toBeUndefined();
+  });
+
+  it('preserves LoRA trigger words and records metadata when LLMReasoningNode rewrites prompt', async () => {
+    const checkpoint = createNode('checkpoint', 'CheckpointLoaderSimple', {ckpt_name:'model', targetProvider:'fal'});
+    const lora = createNode('lora', 'LoRALoader', {lora_name:'style.safetensors', trigger_words:'cat-style', strength_model:0.8});
+    const sampler = createNode('sampler', 'KSampler', {});
+    const llm = createNode('llm', 'LLMReasoningNode', {provider:'openai_compat', model:'gpt-4o', prompt:'a cute cat'});
+    const chatSpy = vi.spyOn(EngineRegistry, 'chat').mockResolvedValue({
+      content: 'A high detailed cinematic photography of a cute cat with dramatic lighting',
+      reasoningContent: 'thinking about photoreal cat',
+      provider: 'openai_compat',
+      providerId: 'openai_compat',
+      model: 'gpt-4o',
+    });
+    const generateSpy = vi.spyOn(EngineRegistry, 'generate').mockResolvedValue({mediaUrl:'https://example.test/out.png',mediaType:'image',provider:'fal',providerId:'fal',model:'model',seed:null});
+
+    await executeWorkflow(
+      [checkpoint, lora, sampler, llm],
+      [
+        {id:'mount',fromNodeId:'checkpoint',fromSocketId:'MODEL',toNodeId:'lora',toSocketId:'model',type:'MODEL'},
+        {id:'sample',fromNodeId:'lora',fromSocketId:'MODEL',toNodeId:'sampler',toSocketId:'model',type:'MODEL'},
+        {id:'positive',fromNodeId:'llm',fromSocketId:'CONDITIONING',toNodeId:'sampler',toSocketId:'positive',type:'CONDITIONING'},
+      ],
+      () => {},
+      undefined,
+      'sampler'
+    );
+
+    expect(chatSpy).toHaveBeenCalled();
+    const sent: any = generateSpy.mock.calls[0][1];
+    expect(sent.prompt).toBe('cat-style, A high detailed cinematic photography of a cute cat with dramatic lighting');
+    expect(sent.workflowSnapshot.requestMetadata.promptTransform).toEqual({
+      prependedTriggerWords: 'cat-style',
+      originalPrompt: 'a cute cat',
+      llmPrompt: 'A high detailed cinematic photography of a cute cat with dramatic lighting',
+      finalPrompt: 'cat-style, A high detailed cinematic photography of a cute cat with dramatic lighting',
+    });
+  });
+
+  it('does not duplicate trigger words if LLM prompt already contains them', async () => {
+    const checkpoint = createNode('checkpoint', 'CheckpointLoaderSimple', {ckpt_name:'model', targetProvider:'fal'});
+    const lora = createNode('lora', 'LoRALoader', {lora_name:'style.safetensors', trigger_words:'cat-style', strength_model:0.8});
+    const sampler = createNode('sampler', 'KSampler', {});
+    const llm = createNode('llm', 'LLMReasoningNode', {provider:'openai_compat', model:'gpt-4o', prompt:'a cute cat'});
+    vi.spyOn(EngineRegistry, 'chat').mockResolvedValue({
+      content: 'cat-style, masterpiece photograph of a cat',
+      provider: 'openai_compat',
+      providerId: 'openai_compat',
+      model: 'gpt-4o',
+    });
+    const generateSpy = vi.spyOn(EngineRegistry, 'generate').mockResolvedValue({mediaUrl:'https://example.test/out.png',mediaType:'image',provider:'fal',providerId:'fal',model:'model',seed:null});
+
+    await executeWorkflow(
+      [checkpoint, lora, sampler, llm],
+      [
+        {id:'mount',fromNodeId:'checkpoint',fromSocketId:'MODEL',toNodeId:'lora',toSocketId:'model',type:'MODEL'},
+        {id:'sample',fromNodeId:'lora',fromSocketId:'MODEL',toNodeId:'sampler',toSocketId:'model',type:'MODEL'},
+        {id:'positive',fromNodeId:'llm',fromSocketId:'CONDITIONING',toNodeId:'sampler',toSocketId:'positive',type:'CONDITIONING'},
+      ],
+      () => {},
+      undefined,
+      'sampler'
+    );
+
+    const sent: any = generateSpy.mock.calls[0][1];
+    expect(sent.prompt).toBe('cat-style, masterpiece photograph of a cat');
+    expect(sent.workflowSnapshot.requestMetadata.promptTransform).toEqual({
+      prependedTriggerWords: 'cat-style',
+      originalPrompt: 'a cute cat',
+      llmPrompt: 'cat-style, masterpiece photograph of a cat',
+      finalPrompt: 'cat-style, masterpiece photograph of a cat',
+    });
+  });
+
   it('requires an explicit provider even when the model name contains fal-ai', () => {
     const nodes = [createNode('ckpt', 'CheckpointLoaderSimple', {ckpt_name:'fal-ai/flux/dev'}), createNode('sampler', 'KSampler', {}), createNode('prompt', 'CLIPTextEncode', {text:'a tree'})];
     const edges: Connection[] = [{id:'m',fromNodeId:'ckpt',fromSocketId:'MODEL',toNodeId:'sampler',toSocketId:'model',type:'MODEL'}, {id:'p',fromNodeId:'prompt',fromSocketId:'CONDITIONING',toNodeId:'sampler',toSocketId:'positive',type:'CONDITIONING'}];
@@ -952,5 +1051,224 @@ describe('graphEngine - F4 AIVideoNode provider sync / reject empty & mismatch',
     expect(paramsFromPrompt.checkpointModel).toBe('agnes-image-2.5-flash');
     expect(paramsFromPrompt.positivePrompt).toBe('a majestic ethereal snow leopard');
     expect(paramsFromPrompt.saveImageNodeId).toBe('save-1');
+  });
+
+  it('extracts parameters for ReplicateEngineNode and executes through Replicate provider cleanly', async () => {
+    const nodes = [
+      createNode('rep-1', 'ReplicateEngineNode', {
+        model: 'black-forest-labs/flux-schnell',
+        prompt: 'a futuristic cyberpunk cityscape',
+        steps: 4,
+        guidance_scale: 3.5,
+        resolution: '1024x1024',
+      }),
+    ];
+    const params = extractWorkflowParameters(nodes, [], 'rep-1');
+    expect(params.targetProvider).toBe('replicate');
+    expect(params.checkpointModel).toBe('black-forest-labs/flux-schnell');
+    expect(params.steps).toBe(4);
+    expect(params.cfg).toBe(3.5);
+    expect(params.width).toBe(1024);
+    expect(params.height).toBe(1024);
+
+    const spy = vi.spyOn(EngineRegistry, 'generate').mockResolvedValueOnce({
+      mediaUrl: 'https://replicate.delivery/pbxt/cyberpunk.png',
+      mediaType: 'image',
+      provider: 'Replicate',
+      providerId: 'replicate',
+      model: 'black-forest-labs/flux-schnell',
+      seed: 1234,
+    });
+
+    const res = await executeWorkflow(nodes, [], () => {}, undefined, 'rep-1');
+    expect(res.imageUrl).toBe('https://replicate.delivery/pbxt/cyberpunk.png');
+    expect(res.provider).toBe('Replicate');
+    expect(res.model).toBe('black-forest-labs/flux-schnell');
+    expect(res.seed).toBe(1234);
+    expect(spy).toHaveBeenCalledWith('replicate', expect.objectContaining({
+      model: 'black-forest-labs/flux-schnell',
+      prompt: 'a futuristic cyberpunk cityscape',
+    }), expect.anything());
+  });
+
+  it('executes CheckpointLoaderSimple when targetProvider is replicate without unresolved dead-end', async () => {
+    const nodes = [
+      createNode('ckpt-rep', 'CheckpointLoaderSimple', {
+        ckpt_name: 'black-forest-labs/flux-dev',
+        targetProvider: 'replicate',
+        resourceVerified: true,
+      }),
+      createNode('prompt-rep', 'CLIPTextEncode', {
+        text: 'photorealistic neon portrait',
+      }),
+      createNode('save-rep', 'SaveImage', {}),
+    ];
+    const conns: Connection[] = [
+      { id: 'c1', fromNodeId: 'ckpt-rep', fromSocketId: 'CLIP', toNodeId: 'prompt-rep', toSocketId: 'clip', type: 'CLIP' },
+      { id: 'c2', fromNodeId: 'prompt-rep', fromSocketId: 'CONDITIONING', toNodeId: 'save-rep', toSocketId: 'images', type: 'CONDITIONING' },
+    ];
+
+    const spy = vi.spyOn(EngineRegistry, 'generate').mockResolvedValueOnce({
+      mediaUrl: 'https://replicate.delivery/pbxt/portrait.png',
+      mediaType: 'image',
+      provider: 'Replicate',
+      providerId: 'replicate',
+      model: 'black-forest-labs/flux-dev',
+      seed: 999,
+    });
+
+    const res = await executeWorkflow(nodes, conns, () => {}, undefined, 'save-rep');
+    expect(res.imageUrl).toBe('https://replicate.delivery/pbxt/portrait.png');
+    expect(res.provider).toBe('Replicate');
+    expect(spy).toHaveBeenCalledWith('replicate', expect.anything(), expect.anything());
+  });
+
+  it('rejects execution and marks LoRA node with error on FLUX + Krea2 Turbo mismatch', async () => {
+    const nodes = [
+      createNode('lora-1', 'LoRALoader', {
+        lora_name: '[Krea2 Turbo] AsianMix Lora',
+        base_model: 'Krea2 Turbo',
+        strength_model: 0.8,
+      }),
+      createNode('rep-1', 'ReplicateEngineNode', {
+        model: 'black-forest-labs/flux-dev',
+        prompt: 'a stylish portrait',
+      }),
+    ];
+    const connections: Connection[] = [
+      {
+        id: 'c1',
+        fromNodeId: 'lora-1',
+        fromSocketId: 'MODEL',
+        toNodeId: 'rep-1',
+        toSocketId: 'lora',
+        type: 'MODEL',
+      },
+    ];
+
+    const nodeStates: Array<{ nodeId: string; state: any; error?: string }> = [];
+    const spy = vi.spyOn(EngineRegistry, 'generate').mockResolvedValueOnce({
+      mediaUrl: 'https://replicate.delivery/pbxt/out.png',
+      mediaType: 'image',
+      provider: 'Replicate',
+      providerId: 'replicate',
+      model: 'black-forest-labs/flux-dev',
+      seed: 123,
+    });
+
+    await expect(
+      executeWorkflow(
+        nodes,
+        connections,
+        (nodeId, state, _progress, _data, error) => {
+          nodeStates.push({ nodeId, state, error });
+        },
+        undefined,
+        'rep-1'
+      )
+    ).rejects.toThrow(/LoRA .* 与底模 .* 架构不兼容，拒绝静默丢弃执行/);
+
+    // Generation must NOT be triggered upstream when LoRA is incompatible
+    expect(spy).not.toHaveBeenCalled();
+
+    // LoRA node must receive error state with the exact reason
+    const loraError = nodeStates.find((s) => s.nodeId === 'lora-1' && s.state === 'error');
+    expect(loraError).toBeDefined();
+    expect(loraError?.error).toContain('架构不兼容，拒绝静默丢弃执行');
+  });
+
+  it('retains LoRA trigger words when LLMReasoningNode rewrites prompt without them', async () => {
+    const nodes = [
+      createNode('ckpt-1', 'CheckpointLoaderSimple', {
+        ckpt_name: 'black-forest-labs/flux-dev',
+        targetProvider: 'fal',
+      }),
+      createNode('lora-1', 'LoRALoader', {
+        lora_name: 'flux-asian-beauty',
+        base_model: 'Flux.1 D',
+        trigger_words: 'asian girl, cinematic lighting',
+        strength_model: 1.0,
+      }),
+      createNode('llm-1', 'LLMReasoningNode', {
+        provider: 'gemini',
+        model: 'gemini-2.5-flash',
+        prompt: 'a portrait on the street',
+        task_type: 'cinematic_photoreal',
+      }),
+      createNode('k-1', 'KSampler', {}),
+      createNode('save-1', 'SaveImage', {}),
+    ];
+    const connections: Connection[] = [
+      { id: 'c1', fromNodeId: 'ckpt-1', fromSocketId: 'MODEL', toNodeId: 'lora-1', toSocketId: 'model', type: 'MODEL' },
+      { id: 'c2', fromNodeId: 'lora-1', fromSocketId: 'MODEL', toNodeId: 'k-1', toSocketId: 'model', type: 'MODEL' },
+      { id: 'c3', fromNodeId: 'llm-1', fromSocketId: 'TEXT', toNodeId: 'k-1', toSocketId: 'positive', type: 'CONDITIONING' },
+      { id: 'c4', fromNodeId: 'k-1', fromSocketId: 'LATENT', toNodeId: 'save-1', toSocketId: 'images', type: 'IMAGE' },
+    ];
+
+    vi.spyOn(EngineRegistry, 'chat').mockResolvedValueOnce({
+      content: 'A high-definition street portrait with shallow depth of field, 8k resolution',
+    } as any);
+
+    const genSpy = vi.spyOn(EngineRegistry, 'generate').mockResolvedValueOnce({
+      mediaUrl: 'https://example.test/out.png',
+      mediaType: 'image',
+      provider: 'fal',
+      providerId: 'fal',
+      model: 'black-forest-labs/flux-dev',
+      seed: 42,
+    });
+
+    await executeWorkflow(nodes, connections, () => {}, undefined, 'save-1');
+
+    expect(genSpy).toHaveBeenCalled();
+    const calledPrompt = genSpy.mock.calls[0][1].prompt;
+    expect(calledPrompt).toContain('asian girl');
+    expect(calledPrompt).toContain('cinematic lighting');
+    expect(calledPrompt).toContain('A high-definition street portrait');
+    const snapshot = genSpy.mock.calls[0][1].workflowSnapshot as any;
+    expect(snapshot?.requestMetadata?.promptTransform).toBeDefined();
+    expect(snapshot?.requestMetadata?.promptTransform?.prependedTriggerWords).toContain('asian girl');
+  });
+
+  it('records parameter omissions for shift, random_seed, gallery_images, and resolution on HF non-z-image route', async () => {
+    const nodes = [
+      createNode('hf-ckpt', 'CheckpointLoaderSimple', {
+        ckpt_name: 'stabilityai/stable-diffusion-xl-base-1.0',
+        targetProvider: 'huggingface',
+        hf_provider: 'hf-inference',
+        prompt: 'a mountain landscape',
+        shift: 3.0,
+        random_seed: true,
+        gallery_images: ['https://example.test/img1.png'],
+        resolution: '1024x1024',
+      }),
+      createNode('save-1', 'SaveImage', {}),
+    ];
+    const connections: Connection[] = [
+      { id: 'c1', fromNodeId: 'hf-ckpt', fromSocketId: 'MODEL', toNodeId: 'save-1', toSocketId: 'images', type: 'IMAGE' },
+    ];
+
+    const genSpy = vi.spyOn(EngineRegistry, 'generate').mockResolvedValueOnce({
+      mediaUrl: 'https://example.test/out.png',
+      mediaType: 'image',
+      provider: 'Hugging Face',
+      providerId: 'huggingface',
+      model: 'stabilityai/stable-diffusion-xl-base-1.0',
+      seed: 123,
+    });
+
+    await executeWorkflow(nodes, connections, () => {}, undefined, 'hf-ckpt');
+
+    expect(genSpy).toHaveBeenCalled();
+    const extra = genSpy.mock.calls[0][1].extraParams;
+    const omissions = extra?.parameterOmissions || extra?.omissions;
+    expect(omissions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ field: 'resolution', value: '1024x1024' }),
+        expect.objectContaining({ field: 'shift', value: 3.0 }),
+        expect.objectContaining({ field: 'random_seed', value: true }),
+        expect.objectContaining({ field: 'gallery_images', value: ['https://example.test/img1.png'] }),
+      ])
+    );
   });
 });

@@ -639,8 +639,20 @@ export default function App() {
   };
 
   const handleUpdateNodeValue = (nodeId: string, widgetName: string, value: any) => {
+    const targetNode = nodes.find((n) => n.id === nodeId);
     setNodes((prev) =>
       prev.map((n) => {
+        if (targetNode?.type === 'CheckpointLoaderSimple' && (widgetName === 'ckpt_name' || widgetName === 'targetProvider') && n.type === 'SaveImage') {
+          const prov = widgetName === 'targetProvider' ? value : (targetNode.values?.targetProvider || '');
+          const model = widgetName === 'ckpt_name' ? value : (targetNode.values?.ckpt_name || '');
+          const cleanModel = String(model).split('/').pop()?.replace(/[^a-zA-Z0-9_-]/g, '_') || '';
+          const cleanProv = prov ? prov.charAt(0).toUpperCase() + prov.slice(1) : '';
+          const prefix = cleanModel ? `${cleanProv ? cleanProv + '_' : ''}${cleanModel}` : cleanProv || 'ComfyCanvas';
+          return {
+            ...n,
+            values: { ...n.values, filename_prefix: prefix },
+          };
+        }
         if (n.id !== nodeId) return n;
         if(widgetName==='targetProvider' && value!==n.values?.targetProvider) return {...n,values:{...n.values,targetProvider:value,provider:value,ckpt_name:'',model:'',model_endpoint:'',hf_provider:'',custom_parameters:undefined},state:'idle',errorMessage:undefined};
         // F4: AIVideoNode model select atomically syncs targetProvider + provider from schema option
@@ -667,7 +679,6 @@ export default function App() {
     if (canvasMode !== 'spatial') return;
 
     // Synchronize node value changes to the active spatial frame (preserving other frames)
-    const targetNode = nodes.find((n) => n.id === nodeId);
     if (!targetNode) return;
 
     const activeFrameTargetId = selectedFrameId || (spatialFrames.length > 0 ? spatialFrames[0].id : null);
@@ -949,14 +960,19 @@ export default function App() {
       );
     };
 
+    let workflowOmissions: Array<{field: string; value: unknown; reason: string}> = [];
     try {
       const result = await executeWorkflow(
         activeNodes,
         activeConns,
         handleNodeStateChange,
-        (percent, statusText) => {
+        (percent, statusText, details) => {
           setExecutionProgress(percent);
           setExecutionStatusText(statusText);
+          if (Array.isArray(details?.omissions) && details.omissions.length) {
+            workflowOmissions = details.omissions;
+            setToast({type:'warning', title:'请求参数未提交项', message:workflowOmissions.map(item => `${item.field}=${item.value}：${item.reason}`).join('；')});
+          }
         },
         targetNodeId || selectedNodeId || undefined
       );
@@ -987,9 +1003,13 @@ export default function App() {
 
       // Trigger high visibility toast
       setToast({
-        type: result.historyWarning ? 'warning' : 'success',
+        type: result.historyWarning || workflowOmissions.length ? 'warning' : 'success',
         title: '工作流运行成功！',
-        message: result.historyWarning || `由 ${result.provider} 渲染完成，种子: ${result.seed ?? '未返回'}。${historyLoaded ? '可在历史记录查看实际参数和工作流' : '历史记录读取失败，请重新打开历史记录'}`,
+        message: [
+          result.historyWarning,
+          workflowOmissions.length ? `请求参数未提交项：${workflowOmissions.map(item => `${item.field}=${item.value}：${item.reason}`).join('；')}` : undefined,
+          `由 ${result.provider} 渲染完成，种子: ${result.seed ?? '未返回'}。${historyLoaded ? '可在历史记录查看实际参数和工作流' : '历史记录读取失败，请重新打开历史记录'}`,
+        ].filter(Boolean).join('；'),
         imageUrl: result.imageUrl,
       });
     } catch (err: any) {
@@ -1264,12 +1284,25 @@ export default function App() {
             if (n.id === existingCkptNode.id) {
               return {
                 ...n,
-                title: checkpointNodeTitle(provider),
+                title: provider === 'replicate'
+                  ? `Load Checkpoint (Replicate · ${modelName.split('/').pop() || modelId})`
+                  : checkpointNodeTitle(provider, modelId),
                 values: {
                   ...replaceSelectedResource(n.values,{...extraData,name:modelId},n.type==='CheckpointLoaderSimple'?'ckpt_name':n.type==='ModelScopeNode'||n.type==='ModelScopeAiNode'?'model_endpoint':'model'),
                   ...(n.type==='CheckpointLoaderSimple'?{ckpt_name:modelId}:n.type==='ModelScopeNode'||n.type==='ModelScopeAiNode'?{model_endpoint:modelId}:{model:modelId}),
                   targetProvider: provider,
                   tensorArtInputs: provider === 'tensorart' ? (extraData?.inputs || []) : undefined,
+                },
+              };
+            }
+            if (n.type === 'SaveImage') {
+              const cleanModel = (modelName.split('/').pop() || modelId).replace(/[^a-zA-Z0-9_-]/g, '_');
+              const cleanProv = provider.charAt(0).toUpperCase() + provider.slice(1);
+              return {
+                ...n,
+                values: {
+                  ...n.values,
+                  filename_prefix: `${cleanProv}_${cleanModel}`,
                 },
               };
             }
@@ -1282,7 +1315,9 @@ export default function App() {
         const newNode: NodeInstance = {
           id: newNodeId,
           type: 'CheckpointLoaderSimple',
-          title: checkpointNodeTitle(provider),
+          title: provider === 'replicate'
+            ? `Load Checkpoint (Replicate · ${modelName.split('/').pop() || modelId})`
+            : checkpointNodeTitle(provider, modelId),
           pos: {
             x: Math.round(-transform.x / transform.scale + 120),
             y: Math.round(-transform.y / transform.scale + 160),
@@ -2162,13 +2197,48 @@ export default function App() {
             };
             setNodes((prev) => [...prev, newNode]);
             setSelectedNodeId(newNodeId);
+          } else if (extraData?.preferEngineNode) {
+            const engineType =
+              detectedProvider === 'replicate' ? 'ReplicateEngineNode' :
+              detectedProvider === 'fal' ? 'FalAIEngineNode' :
+              detectedProvider === 'modelscope' ? 'ModelScopeNode' :
+              detectedProvider === 'modelscope_ai' ? 'ModelScopeAiNode' :
+              detectedProvider === 'nanogpt' ? 'NanoGPTNode' :
+              detectedProvider === 'gemini' ? 'GoogleImagenNode' : null;
+
+            if (engineType && NODE_DEFINITIONS[engineType]) {
+              const def = NODE_DEFINITIONS[engineType];
+              const newNodeId = `node-engine-${Date.now()}`;
+              const newNode: NodeInstance = {
+                id: newNodeId,
+                type: engineType,
+                title: `${def.title} (${mName.split('/').pop() || mId})`,
+                pos: {
+                  x: Math.round(-transform.x / transform.scale + 120),
+                  y: Math.round(-transform.y / transform.scale + 160),
+                },
+                width: 320,
+                inputs: def.inputs,
+                outputs: def.outputs,
+                values: {
+                  ...def.defaultValues,
+                  model: mId,
+                  model_endpoint: mId,
+                },
+                state: 'idle',
+              };
+              setNodes((prev) => [...prev, newNode]);
+              setSelectedNodeId(newNodeId);
+            }
           } else {
             const newNodeId = `node-ckpt-${Date.now()}`;
             const def = NODE_DEFINITIONS['CheckpointLoaderSimple'];
             const newNode: NodeInstance = {
               id: newNodeId,
               type: 'CheckpointLoaderSimple',
-              title: `Load Checkpoint (${mName.split('/').pop()})`,
+              title: detectedProvider === 'replicate'
+                ? `Load Checkpoint (Replicate · ${mName.split('/').pop() || mId})`
+                : `Load Checkpoint (${mName.split('/').pop()})`,
               pos: {
                 x: Math.round(-transform.x / transform.scale + 120),
                 y: Math.round(-transform.y / transform.scale + 160),

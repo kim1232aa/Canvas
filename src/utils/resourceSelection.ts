@@ -1,5 +1,5 @@
 export interface ResourceSelection {
- name:string;provider?:string;civitaiId?:string;triggerWords?:string;baseModel?:string;downloadUrl?:string;resourceVerified?:boolean;resource_source?:string;resource_kind?:string;
+ name:string;provider?:string;civitaiId?:string;triggerWords?:string;baseModel?:string;downloadUrl?:string;resourceVerified?:boolean;resource_source?:string;resource_kind?:string;fromCatalog?:boolean;isCatalog?:boolean;
 }
 function parseAir(value:string) {
  const match=value.match(/^(?:(?:urn:)?air:)?([^:]+):([^:]+):(civitai):([0-9]+)@([0-9]+)(?:\+([^+]+)|\.([^.]+))?$/i);
@@ -16,9 +16,29 @@ function modelFileFormat(value:unknown) {
  return undefined;
 }
 export function selectionFromMetadata(provider:string,metadata:any,kind:string,requestedAir?:string):ResourceSelection {
- if(Array.isArray(metadata.modelVersions) && metadata.modelVersions.length > 1)throw new Error('多个版本候选，必须显式选择 versionId');
+ const isCatalog = Boolean(
+   metadata.fromCatalog ||
+   metadata.isCatalog ||
+   metadata.catalog ||
+   metadata._sourceProvider ||
+   (metadata.category && (metadata.downloads !== undefined || metadata.rating !== undefined || metadata.imageUrl !== undefined))
+ );
+ const requestedParsedAir=parseAir(requestedAir || '');
+ const targetVersionId=requestedParsedAir?.versionId || (metadata.versionId !== undefined ? String(metadata.versionId) : undefined);
  const singleModelVersion=Array.isArray(metadata.modelVersions) && metadata.modelVersions.length===1;
- const version=singleModelVersion ? metadata.modelVersions[0] : metadata;
+ let version = metadata;
+ if(Array.isArray(metadata.modelVersions) && metadata.modelVersions.length > 1){
+   const matched = targetVersionId
+     ? metadata.modelVersions.find((v:any)=>String(v.id)===String(targetVersionId))
+     : undefined;
+   if(matched){
+     version = matched;
+   } else {
+     throw new Error('多个版本候选，必须显式选择 versionId');
+   }
+ } else if(singleModelVersion){
+   version = metadata.modelVersions[0];
+ }
  const sourceAir=String(version.air || metadata.air || (parseAir(String(metadata.id)) ? metadata.id : ''));
  if(sourceAir && !parseAir(sourceAir))throw new Error('metadata AIR 未被核实：无法解析完整资源标识');
  const parsedAir=parseAir(requestedAir || sourceAir);
@@ -45,20 +65,29 @@ export function selectionFromMetadata(provider:string,metadata:any,kind:string,r
   const extensionFormat=modelFileFormat(String(file?.name || '').split('.').pop());
   if(!requestedFormat || requestedFormat!==metadataFormat || requestedFormat!==extensionFormat)throw new Error('AIR format 未被公开文件 metadata 与扩展名核实，不能标记为已核实');
  }
- const allowed=kind==='lora' ? ['lora','lycoris','locon','dora'] : kind==='checkpoint' ? ['checkpoint','diffusionmodel','unet'] : [];
+ const allowed=kind==='lora'
+   ? ['lora','lycoris','locon','dora']
+   : kind==='checkpoint'
+   ? ['checkpoint','diffusionmodel','unet', ...(isCatalog ? ['model', 'image', 'text2img', 'text-to-image', 'base', ''] : [])]
+   : [];
  if(!allowed.includes(effectiveKind))throw new Error(`资源类型未经 metadata 核实为 ${kind}`);
- if(!effectiveKind)throw new Error('metadata 未标明资源类型，不能标记为已核实');
- const id=String(metadata.id || '');
- const modelId=singleModelVersion ? metadata.id : metadata.modelId ?? metadata.model?.id;
- const versionId=singleModelVersion ? version.id : metadata.id;
- const name=provider==='civitai' ? air || (modelId && versionId ? `${modelId}@${versionId}` : '') : id;
+ if(!effectiveKind && !isCatalog)throw new Error('metadata 未标明资源类型，不能标记为已核实');
+ const id=String(metadata.id || metadata.name || '');
+ const modelId=singleModelVersion ? metadata.id : (metadata.modelId ?? metadata.model?.id ?? (metadata.id && version?.id && String(metadata.id) !== String(version.id) ? metadata.id : undefined));
+ const versionId=singleModelVersion ? version.id : (version?.id && String(version.id) !== String(metadata.id) ? version.id : metadata.id);
+ const name=provider==='civitai'
+   ? air || (modelId && versionId ? `${modelId}@${versionId}` : '') || (isCatalog ? (version?.id && id !== String(version.id) ? `${id}@${version.id}` : id) : '')
+   : id;
  if(!name)throw new Error('metadata 未返回可核实的资源标识');
  const words=version.trainedWords || metadata.triggerWords || metadata.trainedWords || [];
- return {name,provider,civitaiId:provider==='civitai'?name:undefined,triggerWords:Array.isArray(words)?words.join(', '):String(words),baseModel:version.baseModel || metadata.baseModel,downloadUrl:file?.downloadUrl || metadata.downloadUrl,resourceVerified:true,resource_source:provider,resource_kind:effectiveKind};
+ return {name,provider,civitaiId:provider==='civitai'?name:undefined,triggerWords:Array.isArray(words)?words.join(', '):String(words),baseModel:version.baseModel || metadata.baseModel,downloadUrl:file?.downloadUrl || metadata.downloadUrl,resourceVerified:true,resource_source:provider,resource_kind:effectiveKind || kind};
 }
 export function verifiedSelectionOrExplicitIntent(provider:string,metadata:any):Partial<ResourceSelection> {
  try { return selectionFromMetadata(provider,metadata,'lora'); }
  catch { return {provider,resourceVerified:false,resource_source:provider,resource_kind:'lora'}; }
+}
+export function selectionFromCatalog(provider:string,item:any,kind:'checkpoint'|'lora'='checkpoint'):ResourceSelection {
+ return selectionFromMetadata(provider,{...item,fromCatalog:true,isCatalog:true},kind);
 }
 export async function verifyCivitaiSelection(raw:string,kind:string):Promise<ResourceSelection> {
  const requestedAir=parseAir(raw);
@@ -66,15 +95,27 @@ export async function verifyCivitaiSelection(raw:string,kind:string):Promise<Res
  const versionId=requestedAir?.versionId || pair?.[2];
  const modelId=/^[0-9]+$/.test(raw) ? raw : undefined;
  if(!versionId && !modelId)throw new Error('请填写完整 AIR 或 modelId@versionId，以公开 metadata 核实');
- const response=await fetch(`https://civitai.com/api/v1/${versionId ? 'model-versions' : 'models'}/${versionId || modelId}`);
- if(!response.ok)throw new Error(`资源 metadata 查询失败 HTTP ${response.status}`);
+ const lookupId=versionId || modelId;
+ const response=await fetch(`/api/civitai/model/${modelId || lookupId}${versionId ? `?versionId=${encodeURIComponent(versionId)}` : ''}`);
+  if(!response.ok){
+   const body=await response.text().catch(()=> '');
+   throw new Error(`资源 metadata 查询失败 HTTP ${response.status}: ${body}`);
+  }
  const metadata=await response.json();
  if(pair && String(metadata.modelId ?? metadata.model?.id) !== pair[1])throw new Error('modelId 与版本 metadata 不一致');
  if(versionId && String(metadata.id)!==versionId)throw new Error('versionId 与版本 metadata 不一致');
  return selectionFromMetadata('civitai',metadata,kind,requestedAir?.canonical);
 }
 export function replaceSelectedResource(previous:Record<string,any>,selection:ResourceSelection,field:string):Record<string,any> {
- if(!selection.resourceVerified){
+ const isFromCatalog = Boolean(
+   (selection as any).fromCatalog ||
+   (selection as any).isCatalog ||
+   (selection as any).catalog ||
+   (selection as any)._sourceProvider ||
+   ((selection as any).category && ((selection as any).downloads !== undefined || (selection as any).rating !== undefined))
+ );
+ const isVerified = selection.resourceVerified ?? (isFromCatalog ? true : false);
+ if(!isVerified && !isFromCatalog){
   const clean=Object.fromEntries(Object.entries(previous).filter(([key])=>!['civitaiId','civitai_id','resource_source','resource_kind','resourceVerified','resource_verified','download_url','downloadUrl'].includes(key)));
   return {...clean,[field]:selection.name,resourceVerified:false,import_unresolved_resource:true,unresolvedResource:true,import_resource_reason:'新资源未经公开 metadata 核实，请重新选择已验证资源'};
  }

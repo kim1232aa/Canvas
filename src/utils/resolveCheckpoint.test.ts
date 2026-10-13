@@ -13,6 +13,8 @@ import {
   isRealLoraEntry,
   omitUnsupportedGenerateFields,
   resolveGenerateLorasPayload,
+  checkLoraArchitectureCompatibility,
+  getArchitectureFamily,
 } from './resolveCheckpoint';
 import { validateLoraCompatibility } from './baseModelMatcher';
 
@@ -572,5 +574,86 @@ describe('schema-agnostic payload preservation', () => {
     // fal-ai/flux-lora supports loras — must not strip a real name "LoRA" for non-openai_compat
     const kept = resolveGenerateLorasPayload('fal', 'fal-ai/flux-lora', namedLoRA);
     expect(kept).toEqual(namedLoRA);
+  });
+});
+
+describe('checkLoraArchitectureCompatibility & ReplicateEngineNode resolution', () => {
+  it('resolves ReplicateEngineNode as active checkpoint and walks LoRA connection', () => {
+    const nodes = [
+      node('lora-1', 'LoRALoader', { lora_name: '[Krea2 Turbo] AsianMix Lora', base_model: 'Krea2 Turbo', strength_model: 1 }),
+      node('rep-1', 'ReplicateEngineNode', { model: 'black-forest-labs/flux-dev' }),
+    ];
+    const conns: Connection[] = [
+      {
+        id: 'c1',
+        fromNodeId: 'lora-1',
+        fromSocketId: 'MODEL',
+        toNodeId: 'rep-1',
+        toSocketId: 'lora',
+        type: 'MODEL',
+      },
+    ];
+
+    const active = resolveActiveCheckpoint(nodes, conns, 'rep-1');
+    expect(active.checkpoint).toBe('black-forest-labs/flux-dev');
+    expect(active.provider).toBe('replicate');
+
+    const forLora = resolveCheckpointForNode('lora-1', nodes, conns);
+    expect(forLora.checkpoint).toBe('black-forest-labs/flux-dev');
+    expect(forLora.provider).toBe('replicate');
+    expect(forLora.engineNodeId).toBe('rep-1');
+  });
+
+  it('correctly classifies model architecture families', () => {
+    expect(getArchitectureFamily('black-forest-labs/flux-dev')).toBe('flux');
+    expect(getArchitectureFamily('FLUX.1')).toBe('flux');
+    expect(getArchitectureFamily('Flux.1 D')).toBe('flux');
+    expect(getArchitectureFamily('Krea2 Turbo')).toBe('sdxl');
+    expect(getArchitectureFamily('krea 2 turbo')).toBe('sdxl');
+    expect(getArchitectureFamily('stabilityai/stable-diffusion-xl-base-1.0')).toBe('sdxl');
+    expect(getArchitectureFamily('SDXL 1.0')).toBe('sdxl');
+    expect(getArchitectureFamily('runwayml/stable-diffusion-v1-5')).toBe('sd15');
+    expect(getArchitectureFamily('stabilityai/stable-diffusion-3.5-large')).toBe('sd35');
+    expect(getArchitectureFamily('Wan-AI/Wan2.1-T2V-14B')).toBe('wan21');
+  });
+
+  it('flags cross-architecture mismatch between FLUX.1 checkpoint and Krea2 Turbo / SDXL LoRA', () => {
+    const res = checkLoraArchitectureCompatibility(
+      'black-forest-labs/flux-dev',
+      undefined,
+      { name: '[Krea2 Turbo] AsianMix Lora', baseModel: 'Krea2 Turbo' }
+    );
+    expect(res.compatible).toBe(false);
+    expect(res.ckptFamily).toBe('flux');
+    expect(res.loraFamily).toBe('sdxl');
+    expect(res.reason).toBe(
+      'LoRA [[Krea2 Turbo] AsianMix Lora] (baseModel: Krea2 Turbo) 与底模 [black-forest-labs/flux-dev] (baseModel: FLUX.1) 架构不兼容，未发送至上游。'
+    );
+  });
+
+  it('allows matching architectures: FLUX + FLUX, SDXL + SDXL', () => {
+    const fluxRes = checkLoraArchitectureCompatibility(
+      'black-forest-labs/flux-dev',
+      'FLUX.1',
+      { name: 'flux-realism-lora', baseModel: 'Flux.1 D' }
+    );
+    expect(fluxRes.compatible).toBe(true);
+
+    const sdxlRes = checkLoraArchitectureCompatibility(
+      'stabilityai/stable-diffusion-xl-base-1.0',
+      'SDXL 1.0',
+      { name: '[Krea2 Turbo] AsianMix Lora', baseModel: 'Krea2 Turbo' }
+    );
+    expect(sdxlRes.compatible).toBe(true);
+  });
+
+  it('resolveGenerateLorasPayload filters out incompatible LoRAs', () => {
+    const loras = [
+      { name: '[Krea2 Turbo] AsianMix Lora', baseModel: 'Krea2 Turbo', strength: 0.8 },
+      { name: 'flux-detailer', baseModel: 'Flux.1 D', strength: 1.0 },
+    ];
+    const filtered = resolveGenerateLorasPayload('replicate', 'black-forest-labs/flux-dev', loras);
+    expect(filtered).toHaveLength(1);
+    expect(filtered![0].name).toBe('flux-detailer');
   });
 });

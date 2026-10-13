@@ -18,6 +18,7 @@ export const PROVIDER_TITLE_LABEL: Record<string, string> = {
   sogni: 'Sogni',
   runware: 'Runware',
   modelslab: 'ModelsLab',
+  replicate: 'Replicate',
 };
 
 /** Closed-source / non-Comfy cloud engines that must not show leftover Comfy sampler badges. */
@@ -72,6 +73,11 @@ export function spatialFrameModelLabel(
 /** CheckpointLoader node title that tracks the current provider (or model short name). */
 export function checkpointNodeTitle(provider: string | undefined | null, checkpoint?: string | undefined | null): string {
   const prov = String(provider || '').trim();
+  if (prov === 'replicate') {
+    const ckpt = String(checkpoint || '').trim();
+    const shortName = ckpt ? ckpt.split('/').pop() || ckpt : '';
+    return shortName ? `Load Checkpoint (Replicate · ${shortName})` : `Load Checkpoint (Replicate)`;
+  }
   if (prov) {
     const label = PROVIDER_TITLE_LABEL[prov] || prov;
     return `加载底模 (${label})`;

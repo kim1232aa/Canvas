@@ -42,6 +42,7 @@ export class HuggingFaceDriver extends BaseEngineDriver {
         inference_provider: params.extraParams?.hf_provider,
         image_url: params.image_url,
         loras: params.loras?.length ? params.loras : undefined,
+        parameterOmissions: params.parameterOmissions || params.extraParams?.parameterOmissions || params.extraParams?.omissions,
         // All seven Space arguments come from explicit canvas state.
         resolution: params.extraParams?.resolution,
         shift: params.extraParams?.shift,

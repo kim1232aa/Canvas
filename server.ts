@@ -18,6 +18,9 @@ import {buildFalVideoRequest} from './src/server/falVideoContract.ts';
 import {buildCivitaiImageRequest, CivitaiAmbiguousError} from './src/server/civitaiImageContract.ts';
 import {civitaiImageHistory} from './src/server/civitaiHistoryContract.ts';
 import {buildAgnesVideoRequest, agnesVideoId} from './src/server/agnesVideoRequest.ts';
+import { handleCivitaiModels, handleHuggingFaceModelInfo, handleTensorArtModelInfo, handleCivitaiModelDetail, handleCivitaiModelVersion } from './src/server/routes/civitaiModelRoutes.ts';
+import { handleExtractCivitaiWorkflow } from './src/server/routes/civitaiWorkflowRoute.ts';
+import { registerReplicateRoutes } from './src/server/routes/replicateRoutes.ts';
 import crypto from 'crypto';
 import dotenv from 'dotenv';
 import { fieldOptions, getFieldSpec, modelStatus, valueStatus, type FieldKey, type Provider as SchemaProvider } from './src/schemas/providerSchema.ts';
@@ -132,7 +135,7 @@ async function upstreamFetch(meta: UpstreamMeta, url: string, init?: RequestInit
     }
     let error: string | undefined;
     if (!res.ok) {
-      error = `HTTP ${res.status}: ${(await res.clone().text().catch(() => '')).slice(0, 500)}`;
+      error = `HTTP ${res.status}: ${await res.clone().text().catch(() => '')}`;
     }
     logUpstream(meta, upstream, res.status, startedAt, error);
     return res;
@@ -182,6 +185,7 @@ const LARGE_BODY_ROUTES = new Set([
   '/api/schema-provider/wavespeed/save-result',
   '/api/schema-provider/sogni/save-result',
   '/api/fal/generate',
+  '/api/engine/fal/generate',
   '/api/generate',
   '/api/video/generate',
   '/api/engine/video/generate',
@@ -190,8 +194,11 @@ const LARGE_BODY_ROUTES = new Set([
   '/api/engine/agnes/generate',
   '/api/agnes/generate',
   '/api/engine/sensenova/generate',
+  '/api/sensenova/generate',
   '/api/engine/runware/generate',
   '/api/engine/modelslab/generate',
+  '/api/engine/replicate/generate',
+  '/api/replicate/generate',
   '/api/media',
   '/api/tensorart/upload',
   '/api/engine/tensorart/upload',
@@ -519,6 +526,8 @@ const defaultKeys: Record<string, string> = {
   runwareBaseUrl: process.env.RUNWARE_BASE_URL || '',
   modelslabKey: process.env.MODELSLAB_API_KEY || process.env.MODELSLAB_KEY || '',
   modelslabBaseUrl: process.env.MODELSLAB_BASE_URL || '',
+  replicateKey: process.env.REPLICATE_API_TOKEN || process.env.REPLICATE_API_KEY || '',
+  replicateBaseUrl: process.env.REPLICATE_BASE_URL || '',
 };
 
 // Pool key sources per provider: settings.json fields (in order), then the defaultKeys (env) field.
@@ -540,6 +549,7 @@ const POOL_KEY_FIELDS: Record<string, { settings: string[]; env: string }> = {
   grok_compat: { settings: ['grokCompatKey'], env: 'grokCompatKey' },
   runware: { settings: ['runwareKey'], env: 'runwareKey' },
   modelslab: { settings: ['modelslabKey'], env: 'modelslabKey' },
+  replicate: { settings: ['replicateKey'], env: 'replicateKey' },
 };
 
 // Multi-Key Pool & High-Availability Round-Robin Load Balancer
@@ -849,7 +859,7 @@ if (!cloudSettings || Object.keys(cloudSettings).length === 0) {
 // Agnes / SenseNova / OpenAI-compat / Grok-compat key + base URL resolution (A1/A2).
 // Key: header (comma-separated rotates) > pool (settings + env, comma-separated). Base URL: header > settings > env > verified official default (only where declared below).
 // A custom base URL requires a custom key — server keys are never sent to a user-supplied host.
-type AuthProvider = 'agnes' | 'sensenova' | 'openai_compat' | 'grok_compat' | 'runware' | 'modelslab';
+type AuthProvider = 'agnes' | 'sensenova' | 'openai_compat' | 'grok_compat' | 'runware' | 'modelslab' | 'replicate';
 const AUTH_META: Record<AuthProvider, { headerPrefix: string; settingsBaseName: string; envName: string; keyEnvName?: string; defaultBaseUrl?: string }> = {
   agnes: { headerPrefix: 'x-agnes', settingsBaseName: 'agnesBaseUrl', envName: 'AGNES', keyEnvName: 'AGNES_API_KEY', defaultBaseUrl: 'https://apihub.agnes-ai.com/v1' },
   sensenova: { headerPrefix: 'x-sensenova', settingsBaseName: 'sensenovaBaseUrl', envName: 'SENSENOVA', defaultBaseUrl: 'https://token.sensenova.cn/v1' },
@@ -857,6 +867,7 @@ const AUTH_META: Record<AuthProvider, { headerPrefix: string; settingsBaseName: 
   grok_compat: { headerPrefix: 'x-grok-compat', settingsBaseName: 'grokCompatBaseUrl', envName: 'GROK_COMPAT' },
   runware: { headerPrefix: 'x-runware', settingsBaseName: 'runwareBaseUrl', envName: 'RUNWARE', keyEnvName: 'RUNWARE_API_KEY', defaultBaseUrl: 'https://api.runware.ai/v1' },
   modelslab: { headerPrefix: 'x-modelslab', settingsBaseName: 'modelslabBaseUrl', envName: 'MODELSLAB', keyEnvName: 'MODELSLAB_API_KEY', defaultBaseUrl: 'https://modelslab.com' },
+  replicate: { headerPrefix: 'x-replicate', settingsBaseName: 'replicateBaseUrl', envName: 'REPLICATE', keyEnvName: 'REPLICATE_API_TOKEN', defaultBaseUrl: 'https://api.replicate.com/v1' },
 };
 
 function normalizeAuthBaseUrl(provider: AuthProvider, raw: string): string {
@@ -939,1129 +950,65 @@ const createGoogleGenAI = (apiKey?: string) => {
   };
 };
 
+// Dedicated Real Live Model Detail Resolution for Tensor.Art / 吐司
+async function fetchTensorArtModelInfo(modelId: string, apiKey?: string) {
+  const cleanId = tensorModelId(modelId);
+  const key = apiKey || keyPoolManager.getNextKey('tensorart') || '';
+  if (!key) throw Object.assign(new Error('缺少 TAMS 模型 API Key'), { status: 400 });
+  if (key.startsWith('ak_')) {
+    throw Object.assign(
+      new Error('当前配置的是 OpenWorks 工具 Key (ak_tensor_...)，不能用于 TAMS 模型 API 查询。画布模型查询需要 TAMS Bearer Key（可在 https://tams.tensor.art/app 获取）。'),
+      { status: 400 }
+    );
+  }
+  const response = await upstreamFetch(
+    { provider: 'tensorart', route: 'model-info', model: cleanId, key },
+    `${TENSOR_MODEL_API}/v1/models/${cleanId}`,
+    { headers: { Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(15000) }
+  );
+  if (!response.ok) {
+    throw Object.assign(
+      new Error(`Tensor.Art 模型 API [${response.status}]: ${await response.text()}。需要 TAMS 模型 API Key，OpenWorks 工具 key 不能作为模型授权`),
+      { status: response.status }
+    );
+  }
+  const raw = (await response.json()).model;
+  if (!raw?.id || !raw.modelType || !raw.baseModel) {
+    throw Object.assign(new Error('Tensor.Art 模型 API 未返回完整模型 ID、类型或架构'), { status: 502 });
+  }
+  const isLora = ['LORA', 'LOCON', 'LYCORIS', 'DORA'].includes(raw.modelType);
+  return {
+    id: raw.id,
+    name: raw.name,
+    provider: 'Tensor.Art',
+    category: isLora ? 'LoRA' : raw.modelType === 'CHECKPOINT' ? 'Checkpoint' : raw.modelType,
+    type: raw.modelType,
+    baseModel: raw.baseModel,
+    imageUrl: raw.showcaseImageUrls?.[0] || '',
+    trainedWords: raw.triggerWords ? [raw.triggerWords] : [],
+    externalUrl: `https://tensor.art/models/${raw.id}`,
+    description: raw.description,
+    generationStatus: 'metadata_verified',
+    tags: ['tensorart', isLora ? 'lora' : 'checkpoint', raw.baseModel.toLowerCase()],
+  };
+}
+
 // ==========================================
 // 1. Civitai API Proxies (developer.civitai.com)
 // ==========================================
 const civitaiCache = new Map<string, { data: any; expiry: number; nextCursor?: string | null }>();
 const tensorArtToolsCache = new Map<string, { data: any; expiry: number }>();
 
-app.get('/api/civitai/models', async (req, res) => {
-  try {
-    const { query = '', types = 'LORA', sort = 'Highest Rated', limit = '16', page = '1', nsfw = 'false', cursor = '' } = req.query;
-    const apiKey = (req.headers['x-civitai-key'] as string) || (req.headers['x-civitai-token'] as string) || cloudSettings['civitaiToken'] || process.env.CIVITAI_API_KEY || '';
-
-    const params = new URLSearchParams({
-      limit: String(limit),
-      types: String(types),
-      sort: String(sort),
-      nsfw: String(nsfw),
-    });
-
-    if (cursor) {
-      params.append('cursor', String(cursor));
-    } else if (query) {
-      params.append('query', String(query));
-    } else if (page) {
-      params.append('page', String(page));
-    }
-
-    const cacheKey = `civitai_models_${params.toString()}_${apiKey ? 'auth' : 'anon'}`;
-    const cached = civitaiCache.get(cacheKey);
-    if (cached && cached.expiry > Date.now()) {
-      return res.json(cached.data);
-    }
-
-    const headers: Record<string, string> = {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
-      'Accept': 'application/json',
-    };
-    if (apiKey) {
-      headers['Authorization'] = `Bearer ${apiKey}`;
-    }
-
-    const response = await upstreamFetch(
-      { provider: 'civitai', route: req.path, key: apiKey },
-      `https://civitai.com/api/v1/models?${params.toString()}`,
-      {
-        headers,
-        signal: AbortSignal.timeout(30000), // Increased to 30s
-      }
-    );
-
-    if (!response.ok) {
-      const errText = await response.text();
-      return res.status(response.status).json({
-        error: `Civitai API error: ${response.status}`,
-        details: errText,
-      });
-    }
-
-    const data = await response.json();
-    civitaiCache.set(cacheKey, { data, expiry: Date.now() + 60000 });
-    return res.json(data);
-  } catch (error: any) {
-    const isTimeout = error.name === 'TimeoutError' || error.message?.includes('timeout') || error.message?.includes('aborted');
-    console.warn(`[Civitai Proxy] 获取${isTimeout ? '超时 (30s)' : '失败'}:`, error.message);
-    return res.status(504).json({ error: isTimeout ? 'Civitai API 请求超时 (上游 Cloudflare 响应过慢，请稍后重试或配置 Civitai API Key)' : error.message || 'Failed to fetch from Civitai' });
-  }
-});
-
-// Dynamic Hugging Face Model Detail & Trigger Word Discovery API
-app.get('/api/huggingface/model-info', async (req, res) => {
-  try {
-    const modelId = String(req.query.modelId || '').trim();
-    if (!modelId) {
-      return res.status(400).json({ error: '缺少 modelId 参数' });
-    }
-    const hfToken =
-      (req.headers['x-hf-token'] as string) ||
-      cloudSettings['hfToken'] ||
-      defaultKeys['hfToken'] ||
-      process.env.HF_TOKEN ||
-      '';
-
-    const headers: Record<string, string> = {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
-    };
-    if (hfToken) headers['Authorization'] = `Bearer ${hfToken}`;
-
-    const safeModelPath = modelId.split('/').map(encodeURIComponent).join('/');
-    const url = `https://huggingface.co/api/models/${safeModelPath}?expand[]=siblings&expand[]=tags&expand[]=likes&expand[]=pipeline_tag&expand[]=author&expand[]=cardData`;
-    const resp = await upstreamFetch(
-      { provider: 'huggingface', route: req.path, model: modelId, key: hfToken },
-      url,
-      { headers, signal: AbortSignal.timeout(15000) }
-    );
-    if (!resp.ok) {
-      const errText = await resp.text();
-      return res.status(resp.status).json({
-        error: `Hugging Face 模型不存在或无权访问 (HTTP ${resp.status})`,
-        details: errText,
-        modelId,
-      });
-    }
-
-    const m = await resp.json();
-
-    // Resolve real trigger words from model card data, instance prompt, widget, or tags
-    const triggers: string[] = [];
-    if (m.cardData?.instance_prompt) triggers.push(String(m.cardData.instance_prompt));
-    if (m.cardData?.trigger_words) {
-      if (Array.isArray(m.cardData.trigger_words)) triggers.push(...m.cardData.trigger_words);
-      else if (typeof m.cardData.trigger_words === 'string') triggers.push(m.cardData.trigger_words);
-    }
-    if (Array.isArray(m.cardData?.widget)) {
-      m.cardData.widget.forEach((w: any) => { if (w.text) triggers.push(String(w.text)); });
-    }
-    if (Array.isArray(m.tags)) {
-      m.tags.forEach((t: string) => {
-        if (t.startsWith('trigger_word:') || t.startsWith('instance_prompt:')) {
-          triggers.push(t.split(':')[1]);
-        }
-      });
-    }
-    const uniqueTriggers = Array.from(new Set(triggers.map((t) => t.trim()).filter(Boolean)));
-
-    // Resolve real base model
-    let baseModel = '';
-    if (m.cardData?.base_model) {
-      baseModel = Array.isArray(m.cardData.base_model) ? m.cardData.base_model[0] : String(m.cardData.base_model);
-    }
-    if (!baseModel && Array.isArray(m.tags)) {
-      const bTag = m.tags.find((t: string) => t.startsWith('base_model:adapter:') || t.startsWith('base_model:'));
-      if (bTag) baseModel = bTag.replace('base_model:adapter:', '').replace('base_model:', '');
-    }
-
-    // Resolve real cover image
-    let imageUrl = '';
-    if (m.cardData?.widget?.[0]?.output?.url) {
-      imageUrl = m.cardData.widget[0].output.url;
-    }
-    if (!imageUrl && Array.isArray(m.siblings)) {
-      const previewFiles = ['thumbnail.png', 'preview.png', 'sample.png', 'example.png', 'cover.png'];
-      let bestSibling = m.siblings.find((s: any) => {
-        const fn = (s.rfilename || '').toLowerCase();
-        return previewFiles.includes(fn) || fn.endsWith('.png') || fn.endsWith('.jpg') || fn.endsWith('.jpeg') || fn.endsWith('.webp');
-      });
-      if (bestSibling) {
-        imageUrl = `https://huggingface.co/${m.id}/resolve/main/${bestSibling.rfilename}`;
-      }
-    }
-
-    return res.json({
-      id: m.id,
-      name: m.id.split('/').pop(),
-      type:isHuggingFaceLora(m)?'LORA':'Checkpoint',
-      category:isHuggingFaceLora(m)?'LoRA':'Checkpoint',
-      inferenceProviderMapping:m.inferenceProviderMapping,
-              author: m.author || m.id.split('/')[0],
-      downloads: m.downloads || 0,
-      likes: m.likes || 0,
-      baseModel,
-      triggerWords: uniqueTriggers,
-      pipelineTag: m.pipeline_tag || '',
-      imageUrl,
-      tags: m.tags || [],
-      description: m.description || m.cardData?.description || '',
-    });
-  } catch (err: any) {
-    return res.status(500).json({ error: `获取 Hugging Face 模型详情失败: ${err.message}` });
-  }
-});
-
-// Helper for parsing count string (e.g. 176K -> 176000, 2W -> 20000)
-function parseCountNumber(str: string): number | undefined {
-  if (!str) return undefined;
-  const s = str.trim().toUpperCase();
-  if (s.endsWith('K')) return Math.round(parseFloat(s) * 1000);
-  if (s.endsWith('W')) return Math.round(parseFloat(s) * 10000);
-  if (s.endsWith('M')) return Math.round(parseFloat(s) * 1000000);
-  const n = parseInt(s.replace(/,/g, ''), 10);
-  return isNaN(n) ? undefined : n;
-}
-
-// Dedicated Real Live Model Detail Resolution for Tensor.Art / 吐司
-async function fetchTensorArtModelInfo(modelId: string, apiKey?: string) {
-  const cleanId = tensorModelId(modelId);
-  const key = apiKey || keyPoolManager.getNextKey('tensorart') || '';
-  if (!key) throw Object.assign(new Error('缺少 TAMS 模型 API Key'), {status:400});
-  const response = await upstreamFetch({provider:'tensorart',route:'model-info',model:cleanId,key}, `${TENSOR_MODEL_API}/v1/models/${cleanId}`, {headers:{Authorization:`Bearer ${key}`},signal:AbortSignal.timeout(15000)});
-  if (!response.ok) {
-    const details=await response.text();
-    throw Object.assign(new Error(`Tensor.Art 模型查询 HTTP ${response.status}`),{status:response.status,details,exactEndpointCalled:`${TENSOR_MODEL_API}/v1/models/${modelId}`});
-  }
-  const raw = (await response.json()).model;
-  if (!raw?.id || !raw.modelType || !raw.baseModel) throw Object.assign(new Error('Tensor.Art 模型 API 未返回完整模型 ID、类型或架构'),{status:502});
-  const isLora = ['LORA','LOCON','LYCORIS','DORA'].includes(raw.modelType);
-  return {id:raw.id,name:raw.name,provider:'Tensor.Art',category:isLora?'LoRA':raw.modelType==='CHECKPOINT'?'Checkpoint':raw.modelType,type:raw.modelType,baseModel:raw.baseModel,imageUrl:raw.showcaseImageUrls?.[0] || '',trainedWords:raw.triggerWords ? [raw.triggerWords] : [],externalUrl:`https://tensor.art/models/${raw.id}`,description:raw.description,generationStatus:'metadata_verified',tags:['tensorart',isLora?'lora':'checkpoint',raw.baseModel.toLowerCase()]};
-}
-
-
-// Endpoint: Dedicated Real Tensor.Art Model Info
-app.get('/api/tensorart/model-info', async (req, res) => {
-  try {
-    const rawId = (req.query.modelId as string) || '';
-    if (!rawId) {
-      return res.status(400).json({ error: '缺少 modelId 参数' });
-    }
-    const cleanId = rawId.match(/\d{10,25}/)?.[0] || rawId.trim();
-    const info = await fetchTensorArtModelInfo(cleanId, resolveTensorArtKey(req));
-    return res.json(info);
-  } catch (err: any) {
-    return res.status(err.status || 500).json({error:err.message,details:err.details,upstreamStatus:err.status ?? null,exactEndpointCalled:err.exactEndpointCalled,stack:err.stack});
-  }
-});
-
-app.get('/api/civitai/model/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const apiKey = (req.headers['x-civitai-key'] as string) || process.env.CIVITAI_API_KEY || '';
-
-    const headers: Record<string, string> = {
-      'User-Agent': 'ComfyCanvas-AI-Studio/1.0',
-    };
-    if (apiKey) {
-      headers['Authorization'] = `Bearer ${apiKey}`;
-    }
-
-    const response = await upstreamFetch(
-      { provider: 'civitai', route: req.path, model: id, key: apiKey },
-      `https://civitai.com/api/v1/models/${id}`,
-      { headers }
-    );
-    if (!response.ok) {
-      return res.status(response.status).json({ error: `Civitai model not found or error: ${response.status}` });
-    }
-
-    const data = await response.json();
-    return res.json(data);
-  } catch (error: any) {
-    return res.status(500).json({ error: error.message || 'Civitai model lookup failed' });
-  }
-});
+app.get('/api/civitai/models', handleCivitaiModels({ getSettings: () => cloudSettings, defaultKeys, upstreamFetch }));
+app.get('/api/huggingface/model-info', handleHuggingFaceModelInfo({ getSettings: () => cloudSettings, defaultKeys, upstreamFetch }));
+app.get('/api/tensorart/model-info', handleTensorArtModelInfo({ getSettings: () => cloudSettings, defaultKeys, upstreamFetch }));
+app.get('/api/civitai/model/:id', handleCivitaiModelDetail({ getSettings: () => cloudSettings, defaultKeys, upstreamFetch }));
+app.get(['/api/civitai/model-version/:id', '/api/civitai/model-version'], handleCivitaiModelVersion({ getSettings: () => cloudSettings, defaultKeys, upstreamFetch }));
 
 // ==========================================
-// 1.2. Civitai URL / Image / Model / Raw Text to Workflow Extractor (Intelligent Base Model Matching Engine)
+// 1.2. Civitai URL / Image / Model / Raw Text to Workflow Extractor (Modular Route)
 // ==========================================
-
-// Intelligent Base Model & LoRA Architecture Resolver Helper (Strict Transparency & Zero Guessing)
-function resolveArchitectureAndBaseModel(baseModelRaw?: string, modelNameHint?: string, rawText?: string, hasLora = false) {
-  const combined = `${baseModelRaw || ''} ${modelNameHint || ''} ${rawText || ''}`.toLowerCase();
-
-  if (combined.includes('flux') || combined.includes('bfl') || combined.includes('schnell') || combined.includes('dev')) {
-    return {
-      family: 'flux',
-      checkpoint: 'flux-dev',
-      steps: 28,
-      cfg: 3.5,
-      sampler: 'euler',
-      scheduler: 'simple',
-      width: 1024,
-      height: 1024,
-      provider: 'Detected FLUX.1 Architecture',
-      targetProvider: 'fal',
-      architectureExplanation: hasLora
-        ? '检测到 FLUX.1 架构并挂载了 LoRA。推荐使用官方 FLUX.1 [dev] 底模进行高质感生成。'
-        : '检测到 FLUX.1 官方旗舰扩散模型架构，推荐 28 步采样，CFG 3.5。',
-    };
-  }
-
-  if (combined.includes('krea') || combined.includes('krea2') || combined.includes('krea-2')) {
-    return {
-      family: 'krea2',
-      checkpoint: 'krea2-turbo',
-      steps: 10,
-      cfg: 2.0,
-      sampler: 'euler_ancestral',
-      scheduler: 'simple',
-      width: 1024,
-      height: 1024,
-      provider: 'Detected Krea 2 Architecture',
-      targetProvider: 'fal',
-      architectureExplanation: '检测到 Krea 2 Turbo 官方模型，推荐 8~12 步采样，CFG 1.0~2.0。',
-    };
-  }
-  if (combined.includes('pony') || combined.includes('pdxl')) {
-    return {
-      family: 'pony',
-      checkpoint: 'pony-diffusion-v6',
-      steps: 30,
-      cfg: 5.5,
-      sampler: 'dpmpp_2m',
-      scheduler: 'karras',
-      width: 1024,
-      height: 1024,
-      provider: 'Detected Pony XL',
-      targetProvider: 'fal',
-      architectureExplanation: '检测到 Pony V6 / PDXL 架构。',
-    };
-  }
-  if (combined.includes('illustrious') || combined.includes('noobai') || combined.includes('noob')) {
-    return {
-      family: 'illustrious',
-      checkpoint: 'illustrious-xl',
-      steps: 28,
-      cfg: 5.0,
-      sampler: 'euler_ancestral',
-      scheduler: 'normal',
-      width: 1024,
-      height: 1024,
-      provider: 'Detected Illustrious XL',
-      targetProvider: 'fal',
-      architectureExplanation: '检测到 Illustrious-XL / NoobAI 二次元旗舰架构。',
-    };
-  }
-  if (combined.includes('nanogpt')) {
-    return {
-      family: 'flux',
-      checkpoint: 'flux-schnell',
-      steps: 4,
-      cfg: 1.0,
-      sampler: 'euler',
-      scheduler: 'simple',
-      width: 1024,
-      height: 1024,
-      provider: 'Detected NanoGPT Architecture',
-      targetProvider: 'nanogpt',
-      architectureExplanation: '检测到 NanoGPT 原生按需推理模型通道。',
-    };
-  }
-  if (combined.includes('wan') || combined.includes('wan2.1') || combined.includes('tongyi')) {
-    return {
-      family: 'wan21',
-      checkpoint: 'wan2.1-t2i',
-      steps: 30,
-      cfg: 6.0,
-      sampler: 'euler',
-      scheduler: 'normal',
-      width: 1024,
-      height: 1024,
-      provider: 'Detected Wan 2.1 Architecture',
-      targetProvider: 'modelscope',
-      architectureExplanation: '检测到通义万相 Wan 2.1 阿里官方自研架构。',
-    };
-  }
-  if (combined.includes('sd 1.5') || combined.includes('sd1.5') || combined.includes('v1-5') || combined.includes('sd 1.4')) {
-    return {
-      family: 'sd15',
-      checkpoint: 'stable-diffusion-v1-5',
-      steps: 25,
-      cfg: 7.0,
-      sampler: 'dpmpp_2m',
-      scheduler: 'karras',
-      width: 512,
-      height: 768,
-      provider: 'Detected SD 1.5',
-      targetProvider: 'huggingface',
-      architectureExplanation: '检测到经典 SD 1.5 架构，采用 512x768 经典画幅与 25 步采样。',
-    };
-  }
-  if (combined.includes('sd 3.5') || combined.includes('sd3.5') || combined.includes('sd 3') || combined.includes('sd3')) {
-    return {
-      family: 'sd35',
-      checkpoint: 'stable-diffusion-v35-large',
-      steps: 28,
-      cfg: 4.5,
-      sampler: 'dpmpp_2m',
-      scheduler: 'karras',
-      width: 1024,
-      height: 1024,
-      provider: 'Detected SD 3.5',
-      targetProvider: 'fal',
-      architectureExplanation: '检测到 Stability AI SD 3.5 Large 架构，多模态扩散解算。',
-    };
-  }
-
-  // Remove silent black-box fallback to SDXL 1.0
-  return {
-    family: 'unknown',
-    checkpoint: '', // No default, force identification or error
-    steps: 28,
-    cfg: 5.0,
-    sampler: 'euler',
-    scheduler: 'normal',
-    width: 1024,
-    height: 1024,
-    provider: 'Original / Detected Model',
-    targetProvider: 'fal',
-    architectureExplanation: '⚠️ 未能识别此作品的精确底模架构。已自动切换为透明模式，请在画布上手动选择匹配的模型以确保生成质量。',
-  };
-}
-
-// Helper to fetch real, authentic Civitai image generation metadata via __NEXT_DATA__
-async function fetchCivitaiRealImageMeta(imageId: string) {
-  try {
-    const resp = await upstreamFetch(
-      { provider: 'civitai', route: 'image-metadata', model: imageId },
-      `https://civitai.com/images/${imageId}`,
-      {
-        headers: {
-          'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        },
-      }
-    );
-    if (!resp.ok) {
-      const errText = await resp.text();
-      return { error: `Civitai 上游响应 HTTP ${resp.status}: ${errText.slice(0, 500)}`, status: resp.status };
-    }
-    const html = await resp.text();
-    const match = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
-    if (!match) {
-      return { error: `Civitai 页面未包含 __NEXT_DATA__ 元数据 (Image #${imageId})`, status: 404 };
-    }
-    const json = JSON.parse(match[1]);
-    const queries = json.props?.pageProps?.trpcState?.json?.queries || [];
-    let genData: any = null;
-    let imgGet: any = null;
-    for (const q of queries) {
-      const qName = q.queryKey?.[0]?.[1];
-      if (qName === 'getGenerationData') genData = q.state?.data;
-      if (qName === 'get') imgGet = q.state?.data;
-    }
-    if (!genData && !imgGet) {
-      return { error: `Civitai 页面未找到该图片的生成元数据 (Image #${imageId})`, status: 404 };
-    }
-    return { genData, imgGet, status: 200 };
-  } catch (e: any) {
-    return { error: `连接 Civitai 发生网络错误: ${e.message}`, status: 500 };
-  }
-}
-
-app.post('/api/civitai/extract-workflow', async (req, res) => {
-  try {
-    const { url = '', imageId = '', modelId = '', rawText = '', engine = 'civitai' } = req.body;
-    const apiKey = (req.headers['x-civitai-key'] as string) || cloudSettings['civitaiKey'] || defaultKeys['civitaiKey'] || '';
-
-    let targetImageId = imageId;
-    let targetModelId = modelId;
-    let targetVersionId = '';
-    const inputContent = (rawText || url || '').trim();
-
-    // Check if input is a Civitai URL or bare image ID or model version ID
-    if (url || (!rawText && !inputContent.includes('Negative prompt:') && !inputContent.includes('Steps:'))) {
-      const imgMatch = inputContent.match(/(?:civitai\.(?:com|red|work|link)\/images\/|images\/|^)(\d{7,10})/i);
-      if (imgMatch) targetImageId = imgMatch[1];
-      const modelMatch = inputContent.match(/(?:civitai\.(?:com|red|work|link)\/models\/|models\/)(\d+)/i);
-      if (modelMatch) targetModelId = modelMatch[1];
-      const verMatch = inputContent.match(/(?:modelVersionId=|model-versions\/)(\d+)/i);
-      if (verMatch) targetVersionId = verMatch[1];
-    }
-
-    let presetTitle = 'Civitai 社区一键逆向工作流';
-    let creatorName = 'Civitai Creator';
-    let previewImage = 'https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/0695b6d7-40ad-4df5-b99a-ba27550b9a58/original=true/preview.jpeg';
-    let prompt = 'asian woman, 1girl, close up portrait, beautiful detailed eyes, natural skin texture, realistic lighting, shallow depth of field, 35mm film photography, masterpiece, sharp focus, 8k';
-    let negativePrompt = 'blurry, bad anatomy, deformed fingers, low resolution, poorly drawn face, plastic skin, oversaturated, text, watermark';
-    
-    let rawModelName = '';
-    let detectedBaseModel = '';
-    let importedCheckpointRef = '';
-    let detectedVae = 'qwen_image_vae.safetensors';
-    let detectedEngine = 'ComfyUI / Civitai';
-    let checkpoint = 'krea2_turbo_fp8_scaled';
-    let baseModelArchitecture = 'Krea 2';
-    let loras: Array<{ name: string; displayName?: string; strength: number; civitaiId?: string; triggers?: string; baseModel?: string }> = [];
-    let steps = 8;
-    let cfg = 1.0;
-    let sampler = 'er_sde_simple';
-    let scheduler = 'sgm_uniform';
-    let denoise = 1.0;
-    let seed: number | null = null;
-    let width = 1024;
-    let height = 1024;
-    let extractSource = 'Civitai 热门图库';
-    let isVideo = false;
-    let videoDuration: number | null = null;
-
-    // mapSampler / mapScheduler: imported from src/utils/civitaiImportMap.ts
-
-    // 1. Raw Generation Parameters Text Parser (WebUI / Civitai Copy Generation Data)
-    const isRawParamsText =
-      rawText ||
-      inputContent.includes('Negative prompt:') ||
-      inputContent.includes('Steps:') ||
-      inputContent.includes('Sampler:') ||
-      inputContent.includes('<lora:');
-
-    if (isRawParamsText) {
-      extractSource = 'Civitai / WebUI 复制参数解析';
-      presetTitle = 'Civitai 参数导入：一键生成 ComfyUI 工作流';
-
-      const fullText = rawText || inputContent;
-
-      // Split positive prompt text (negative/sampler/scheduler resolved below via util)
-      let posText = fullText;
-      const negMatch = fullText.match(/Negative prompt:\s*([\s\S]*?)(?=(?:Steps:|$))/i);
-      if (negMatch) {
-        posText = fullText.substring(0, fullText.indexOf(negMatch[0])).replace(/^Prompt:\s*/i, '').trim();
-      } else {
-        const stepsIdx = fullText.search(/Steps:\s*\d+/i);
-        if (stepsIdx !== -1) {
-          posText = fullText.substring(0, stepsIdx).replace(/^Prompt:\s*/i, '').trim();
-        }
-      }
-
-      // Extract LoRAs from positive prompt <lora:name:strength>
-      const loraRegex = /<lora:([^:>]+)(?::([\d.]+))?(?::([\d.]+))?>/gi;
-      const detectedLoras: typeof loras = [];
-      let match;
-      while ((match = loraRegex.exec(posText)) !== null) {
-        detectedLoras.push({
-          name: match[1].endsWith('.safetensors') ? match[1] : `${match[1]}.safetensors`,
-          strength: match[2] ? parseFloat(match[2]) : 0.85,
-          civitaiId: '',
-          triggers: '',
-        });
-      }
-
-      // Clean positive prompt (strip lora tags for pure text encoding)
-      const cleanedPos = posText.replace(loraRegex, '').replace(/\s+,/g, ',').replace(/,\s*,/g, ',').trim();
-      if (cleanedPos) prompt = cleanedPos;
-      if (detectedLoras.length > 0) loras = detectedLoras;
-
-      // Plain-text import: never keep template blurry-negative / forged sampler/scheduler
-      // (match image-import phenomenon — empty source stays empty; no er_sde_simple/sgm_uniform)
-      const rawResolved = resolveRawImportNegativeSamplerScheduler(fullText);
-      negativePrompt = rawResolved.negativePrompt;
-      sampler = rawResolved.sampler;
-      scheduler = rawResolved.scheduler;
-
-      // Extract Steps
-      const stepsMatch = fullText.match(/Steps:\s*(\d+)/i);
-      if (stepsMatch) steps = parseInt(stepsMatch[1], 10);
-
-      // Extract CFG
-      const cfgMatch = fullText.match(/CFG scale:\s*([\d.]+)/i);
-      if (cfgMatch) cfg = parseFloat(cfgMatch[1]);
-
-      // Extract Seed
-      const seedMatch = fullText.match(/Seed:\s*(\d+)/i);
-      if (seedMatch) seed = parseInt(seedMatch[1], 10);
-
-      // Extract Size
-      const sizeMatch = fullText.match(/Size:\s*(\d+)x(\d+)/i);
-      if (sizeMatch) {
-        width = parseInt(sizeMatch[1], 10);
-        height = parseInt(sizeMatch[2], 10);
-      }
-
-      const modelMatch = fullText.match(/Model:\s*([^,\n]+)/i);
-      rawModelName = modelMatch ? modelMatch[1].trim() : '';
-    } else if (targetImageId) {
-      // 2. Real Civitai Image Extractor via __NEXT_DATA__
-      extractSource = `Civitai Image #${targetImageId}`;
-      const civData = await fetchCivitaiRealImageMeta(targetImageId);
-      if (civData.error) {
-        return res.status(civData.status || 500).json({ error: civData.error });
-      }
-
-      if (civData) {
-        const { genData, imgGet } = civData;
-        const meta = genData?.meta || {};
-
-        if (imgGet?.user?.username) creatorName = imgGet.user.username;
-        if (imgGet?.url) {
-          previewImage = imgGet.url.startsWith('http')
-            ? imgGet.url
-            : `https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/${imgGet.url}/original=true/preview.jpeg`;
-        }
-
-        // Real image import: never keep template blurry-negative / forged sampler/scheduler
-        negativePrompt = '';
-        sampler = '';
-        scheduler = '';
-
-        if (meta.prompt) prompt = meta.prompt;
-        negativePrompt = resolveImportedNegativePrompt(meta.negativePrompt, negativePrompt);
-
-        rawModelName = meta.Model || meta.baseModel || (meta.models && meta.models[0]) || '';
-        
-        // Accurate Base Model detection from Civitai resources or metadata
-        const resWithBase = Array.isArray(genData?.resources)
-          ? genData.resources.find((r: any) => r.baseModel)
-          : null;
-
-        if (resWithBase?.baseModel) {
-          detectedBaseModel = resWithBase.baseModel;
-        } else if (meta.baseModel) {
-          detectedBaseModel = meta.baseModel;
-        } else {
-          detectedBaseModel = rawModelName;
-        }
-
-        if (meta.steps) steps = meta.steps;
-        if (meta.cfgScale) cfg = meta.cfgScale;
-        if (meta.sampler) {
-          const mappedSampler = mapSampler(String(meta.sampler));
-          if (mappedSampler) sampler = mappedSampler;
-        }
-        // Only use an explicit scheduler field — never invent from sampler or forge sgm_uniform
-        if (meta.scheduler) {
-          const mappedScheduler = mapScheduler(String(meta.scheduler));
-          if (mappedScheduler) scheduler = mappedScheduler;
-        }
-        if (meta.seed) seed = meta.seed;
-        if (meta.denoise !== undefined) denoise = meta.denoise;
-
-        if (meta.vaes) {
-          detectedVae = Array.isArray(meta.vaes) ? meta.vaes[0] : meta.vaes;
-        } else if (meta.VAE) {
-          detectedVae = meta.VAE;
-        }
-
-        if (imgGet?.width) width = imgGet.width;
-        else if (meta.width) width = meta.width;
-
-        if (imgGet?.height) height = imgGet.height;
-        else if (meta.height) height = meta.height;
-
-        if (imgGet?.type === 'video' || Boolean(imgGet?.metadata?.duration) || detectedBaseModel === 'MiniMax H3') {
-          isVideo = true;
-          videoDuration = imgGet?.metadata?.duration || 10;
-        }
-
-        detectedEngine = meta.engine || genData?.process || (isVideo ? 'Video AI' : 'ComfyUI');
-
-        // Extract LoRAs from resources and additionalResources, deduplicating and merging
-        loras = [];
-        const rawLorasFromResources: any[] = [];
-        if (Array.isArray(genData?.resources)) {
-          genData.resources.forEach((r: any) => {
-            if (r.modelType === 'LORA' || r.type === 'lora' || r.type === 'LoRA') {
-              rawLorasFromResources.push({
-                displayName: r.modelName || 'Civitai LoRA',
-                civitaiId: String(r.versionId || r.modelVersionId || r.modelId || ''),
-                strength: r.strength || 0.8,
-                baseModel: r.baseModel || detectedBaseModel,
-              });
-            } else if (String(r.modelType || r.type || '').toLowerCase() === 'checkpoint' && !rawModelName) {
-              rawModelName = r.modelName || '';
-            }
-          });
-        }
-
-        // Unique ref (AIR / modelId@versionId / versionId) beats fuzzy architecture name like "Flux.1 D"
-        importedCheckpointRef = resolveImportedCheckpointRef(genData?.resources, meta, rawModelName, detectedBaseModel);
-
-        const rawLorasFromAdditional: any[] = [];
-        if (Array.isArray(meta.additionalResources)) {
-          meta.additionalResources.forEach((ar: any) => {
-            if (ar.type === 'lora' && ar.name) {
-              rawLorasFromAdditional.push({
-                fileName: ar.name.endsWith('.safetensors') ? ar.name : `${ar.name}.safetensors`,
-                strength: ar.strength || 0.8,
-              });
-            }
-          });
-        }
-
-        if (rawLorasFromResources.length > 0 && rawLorasFromAdditional.length > 0) {
-          // Merge matched pairs (exact same LoRA title vs safetensors filename)
-          rawLorasFromResources.forEach((r, idx) => {
-            const add = rawLorasFromAdditional[idx] || rawLorasFromAdditional[0];
-            loras.push({
-              name: add?.fileName || `${r.displayName}.safetensors`,
-              displayName: r.displayName,
-              strength: add?.strength || r.strength || 0.8,
-              civitaiId: r.civitaiId,
-              triggers: '',
-              baseModel: r.baseModel || detectedBaseModel,
-            });
-          });
-        } else if (rawLorasFromResources.length > 0) {
-          rawLorasFromResources.forEach((r) => {
-            loras.push({
-              name: `${r.displayName}.safetensors`,
-              displayName: r.displayName,
-              strength: r.strength || 0.8,
-              civitaiId: r.civitaiId,
-              triggers: '',
-              baseModel: r.baseModel || detectedBaseModel,
-            });
-          });
-        } else if (rawLorasFromAdditional.length > 0) {
-          rawLorasFromAdditional.forEach((a) => {
-            loras.push({
-              name: a.fileName,
-              displayName: a.fileName.replace('.safetensors', ''),
-              strength: a.strength || 0.8,
-              civitaiId: '',
-              triggers: '',
-              baseModel: detectedBaseModel,
-            });
-          });
-        }
-
-        presetTitle = `Civitai 作品 #${targetImageId}：${creatorName} 原作逆向工作流`;
-      }
-    } else if (targetVersionId) {
-      // 2.5. Civitai Model Version ID Extractor (GET /api/v1/model-versions/:id)
-      try {
-        const vResp = await upstreamFetch(
-          { provider: 'civitai', route: 'workflow-extract-version', model: String(targetVersionId), key: apiKey },
-          `https://civitai.com/api/v1/model-versions/${targetVersionId}`,
-          {
-            headers: apiKey ? { Authorization: `Bearer ${apiKey}`, 'User-Agent': 'ComfyCanvas/1.0' } : { 'User-Agent': 'ComfyCanvas/1.0' },
-          }
-        );
-        if (vResp.ok) {
-          const vData = await vResp.json();
-          presetTitle = `Civitai 模型版本：${vData.model?.name || vData.name || 'LoRA 微调'}`;
-          creatorName = vData.model?.creator?.username || creatorName;
-          if (vData.images?.[0]?.url) previewImage = vData.images[0].url;
-          const triggers = vData.trainedWords?.join(', ') || '';
-          if (triggers) {
-            prompt = `${triggers}, 1girl, masterpiece, highly detailed face, natural skin texture, 8k`;
-          }
-          rawModelName = vData.baseModel || '';
-          detectedBaseModel = rawModelName;
-          loras = [
-            {
-              name: vData.files?.[0]?.name || `${vData.name || 'Civitai_LoRA'}.safetensors`,
-              strength: 0.8,
-              civitaiId: String(vData.id),
-              triggers,
-              baseModel: rawModelName,
-            },
-          ];
-        }
-      } catch (e) {
-        console.error('Error fetching Civitai model-version for workflow:', e);
-      }
-    } else if (targetModelId) {
-      // 3. Civitai Model ID Extractor
-      try {
-        const mResp = await upstreamFetch(
-          { provider: 'civitai', route: 'workflow-extract-model', model: String(targetModelId), key: apiKey },
-          `https://civitai.com/api/v1/models/${targetModelId}`,
-          {
-            headers: apiKey ? { Authorization: `Bearer ${apiKey}`, 'User-Agent': 'ComfyCanvas/1.0' } : { 'User-Agent': 'ComfyCanvas/1.0' },
-          }
-        );
-        if (mResp.ok) {
-          const mData = await mResp.json();
-          presetTitle = `Civitai 模型定制：${mData.name}`;
-          creatorName = mData.creator?.username || creatorName;
-          const v0 = (mData.modelVersions || [])[0];
-          if (v0) {
-            if (v0.images?.[0]?.url) previewImage = v0.images[0].url;
-            const triggers = v0.trainedWords?.join(', ') || '';
-            if (triggers) {
-              prompt = `${triggers}, 1girl, masterpiece, highly detailed face, natural skin texture, 8k`;
-            }
-            rawModelName = v0.baseModel || '';
-            detectedBaseModel = rawModelName;
-            const isLoraModel = mData.type === 'LORA' || mData.type === 'LoRA';
-            if (isLoraModel) {
-              loras = [
-                {
-                  name: v0.files?.[0]?.name || `${mData.name}.safetensors`,
-                  strength: 0.8,
-                  civitaiId: String(mData.id),
-                  triggers,
-                  baseModel: rawModelName,
-                },
-              ];
-            }
-          }
-        }
-      } catch (e) {
-        console.error('Error fetching Civitai model for workflow:', e);
-      }
-    }
-
-    const hasLora = loras.length > 0;
-    const primaryLora = hasLora ? loras[0] : null;
-
-    // ==========================================
-    // Multi-Engine Adapter & Resolution (User Choice Supported!)
-    // ==========================================
-    let targetProvider = engine || "civitai";
-    let chosenEngineName = "Civitai 官方原生生成引擎";
-    let engineExplanation = "";
-
-    const sourceModelReference = importedCheckpointRef || rawModelName || detectedBaseModel || "";
-    if (isVideo && (engine === "video" || engine === "civitai")) {
-      targetProvider = "video";
-      chosenEngineName = "AI Video 视频生成引擎";
-      checkpoint = "";
-      baseModelArchitecture = detectedBaseModel || "";
-      engineExplanation = `检测到视频来源；已保留来源模型“${sourceModelReference || "未提供"}”，但不会把 Civitai 模型名猜成其他视频供应商 ID。请在视频节点明确选择实际供应商与模型后再运行。`;
-    } else if (engine === "civitai") {
-      targetProvider = "civitai";
-      chosenEngineName = "Civitai 官方原生生成引擎";
-      checkpoint = sourceModelReference;
-      baseModelArchitecture = detectedBaseModel || "";
-      engineExplanation = "保留 Civitai 解析出的原始模型/版本引用；是否具备在线生成权限以本次上游响应为准。";
-    } else {
-      targetProvider = engine || "";
-      chosenEngineName = `${engine || "未选择"} 目标引擎`;
-      checkpoint = "";
-      baseModelArchitecture = detectedBaseModel || "";
-      engineExplanation = `已保留 Civitai 来源模型“${sourceModelReference || "未提供"}”和 LoRA 意图，但不会跨供应商猜测模型 ID、端点或 LoRA 资源。请先从 ${engine || "目标供应商"} 的模型中心选择真实执行模型；来源 LoRA 也必须在该供应商重新解析后才能运行。`;
-    }
-
-    // Build Nodes & Connections
-    const nodes: any[] = [];
-    const connections: any[] = [];
-
-    if (isVideo) {
-      nodes.push(
-        {
-          id: 'node-imp-video',
-          type: 'AIVideoNode',
-          title: 'AI 视频生成器 (MiniMax H3 / Wan 2.1)',
-          pos: { x: 380, y: 120 },
-          width: 380,
-          inputs: [
-            { id: 'prompt', name: 'prompt', type: 'STRING' },
-            { id: 'init_image', name: 'init_image', type: 'IMAGE' },
-          ],
-          outputs: [
-            { id: 'video', name: 'video', type: 'VIDEO' },
-            { id: 'FIRST_FRAME', name: 'FIRST_FRAME', type: 'IMAGE' },
-          ],
-          values: {
-            model: checkpoint,
-            prompt,
-            negative_prompt: negativePrompt,
-            duration: videoDuration || 10,
-            fps: 24,
-            aspect_ratio: '16:9',
-          },
-        },
-        {
-          id: 'node-imp-save-video',
-          type: 'SaveVideo',
-          title: '保存视频产物 (Save Video)',
-          pos: { x: 820, y: 120 },
-          width: 320,
-          inputs: [{ id: 'video', name: 'video', type: 'VIDEO' }],
-          outputs: [],
-          values: { filename_prefix: `Civitai_Video_${creatorName}` },
-        }
-      );
-      connections.push({
-        id: 'imp-vc1',
-        fromNodeId: 'node-imp-video',
-        fromSocketId: 'video',
-        toNodeId: 'node-imp-save-video',
-        toSocketId: 'video',
-        type: 'VIDEO',
-      });
-    } else {
-      nodes.push({
-        id: 'node-imp-1',
-        type: 'CheckpointLoaderSimple',
-        title: `加载底模 (${chosenEngineName})`,
-        pos: { x: 60, y: 120 },
-        width: 280,
-        inputs: [],
-        outputs: [
-          { id: 'MODEL', name: 'MODEL', type: 'MODEL' },
-          { id: 'CLIP', name: 'CLIP', type: 'CLIP' },
-          { id: 'VAE', name: 'VAE', type: 'VAE' },
-        ],
-        values: { ckpt_name: checkpoint, targetProvider, import_source_provider: 'civitai', import_source_model: sourceModelReference, import_requires_model_selection: targetProvider !== 'civitai' && !checkpoint },
-      });
-
-      if (hasLora && primaryLora) {
-        nodes.push({
-          id: 'node-imp-2',
-          type: 'LoRALoader',
-          title: `加载 LoRA (${primaryLora.name.slice(0, 18)}...)`,
-          pos: { x: 380, y: 120 },
-          width: 320,
-          inputs: [
-            { id: 'model', name: 'model', type: 'MODEL' },
-            { id: 'clip', name: 'clip', type: 'CLIP' },
-          ],
-          outputs: [
-            { id: 'MODEL', name: 'MODEL', type: 'MODEL' },
-            { id: 'CLIP', name: 'CLIP', type: 'CLIP' },
-          ],
-          values: {
-            lora_name: primaryLora.name,
-            strength_model: primaryLora.strength,
-            strength_clip: primaryLora.strength,
-            trigger_words: primaryLora.triggers || '',
-            civitai_id: primaryLora.civitaiId,
-            import_source_provider: 'civitai',
-            import_unresolved_resource: targetProvider !== 'civitai',
-          },
-        });
-
-        connections.push(
-          { id: 'imp-c1', fromNodeId: 'node-imp-1', fromSocketId: 'MODEL', toNodeId: 'node-imp-2', toSocketId: 'model', type: 'MODEL' },
-          { id: 'imp-c2', fromNodeId: 'node-imp-1', fromSocketId: 'CLIP', toNodeId: 'node-imp-2', toSocketId: 'clip', type: 'CLIP' },
-          { id: 'imp-c3', fromNodeId: 'node-imp-2', fromSocketId: 'CLIP', toNodeId: 'node-imp-3', toSocketId: 'clip', type: 'CLIP' },
-          { id: 'imp-c4', fromNodeId: 'node-imp-2', fromSocketId: 'CLIP', toNodeId: 'node-imp-4', toSocketId: 'clip', type: 'CLIP' },
-          { id: 'imp-c5', fromNodeId: 'node-imp-2', fromSocketId: 'MODEL', toNodeId: 'node-imp-6', toSocketId: 'model', type: 'MODEL' }
-        );
-      } else {
-        connections.push(
-          { id: 'imp-c1', fromNodeId: 'node-imp-1', fromSocketId: 'CLIP', toNodeId: 'node-imp-3', toSocketId: 'clip', type: 'CLIP' },
-          { id: 'imp-c2', fromNodeId: 'node-imp-1', fromSocketId: 'CLIP', toNodeId: 'node-imp-4', toSocketId: 'clip', type: 'CLIP' },
-          { id: 'imp-c5', fromNodeId: 'node-imp-1', fromSocketId: 'MODEL', toNodeId: 'node-imp-6', toSocketId: 'model', type: 'MODEL' }
-        );
-      }
-
-      nodes.push(
-        {
-          id: 'node-imp-3',
-          type: 'CLIPTextEncode',
-          title: 'CLIP 正向提示词 (Positive Prompt)',
-          pos: { x: 740, y: 60 },
-          width: 380,
-          inputs: [{ id: 'clip', name: 'clip', type: 'CLIP' }],
-          outputs: [{ id: 'CONDITIONING', name: 'CONDITIONING', type: 'CONDITIONING' }],
-          values: { text: prompt },
-        },
-        {
-          id: 'node-imp-4',
-          type: 'CLIPTextEncodeNegative',
-          title: 'CLIP 负向提示词 (Negative Prompt)',
-          pos: { x: 740, y: 280 },
-          width: 380,
-          inputs: [{ id: 'clip', name: 'clip', type: 'CLIP' }],
-          outputs: [{ id: 'CONDITIONING', name: 'CONDITIONING', type: 'CONDITIONING' }],
-          values: { text: negativePrompt },
-        },
-        {
-          id: 'node-imp-5',
-          type: 'EmptyLatentImage',
-          title: '空潜空间张量 (Empty Latent)',
-          pos: { x: 740, y: 500 },
-          width: 280,
-          inputs: [],
-          outputs: [{ id: 'LATENT', name: 'LATENT', type: 'LATENT' }],
-          values: { width, height, batch_size: 1 },
-        },
-        {
-          id: 'node-imp-6',
-          type: 'KSampler',
-          title: 'KSampler 核心降噪采样',
-          pos: { x: 1180, y: 140 },
-          width: 320,
-          inputs: [
-            { id: 'model', name: 'model', type: 'MODEL' },
-            { id: 'positive', name: 'positive', type: 'CONDITIONING' },
-            { id: 'negative', name: 'negative', type: 'CONDITIONING' },
-            { id: 'latent_image', name: 'latent_image', type: 'LATENT' },
-          ],
-          outputs: [{ id: 'LATENT', name: 'LATENT', type: 'LATENT' }],
-          values: {
-            seed,
-            control_after_generate: 'randomize',
-            steps,
-            cfg,
-            sampler_name: sampler,
-            scheduler,
-            denoise: denoise ?? 1.0,
-          },
-        },
-        {
-          id: 'node-imp-7',
-          type: 'VAEDecode',
-          title: 'VAE 解码器 (VAE Decode)',
-          pos: { x: 1560, y: 140 },
-          width: 220,
-          inputs: [
-            { id: 'samples', name: 'samples', type: 'LATENT' },
-            { id: 'vae', name: 'vae', type: 'VAE' },
-          ],
-          outputs: [{ id: 'IMAGE', name: 'IMAGE', type: 'IMAGE' }],
-          values: {},
-        },
-        {
-          id: 'node-imp-8',
-          type: 'SaveImage',
-          title: '保存图像 (Save Image)',
-          pos: { x: 1840, y: 100 },
-          width: 360,
-          inputs: [{ id: 'images', name: 'images', type: 'IMAGE' }],
-          outputs: [],
-          values: { filename_prefix: `Civitai_${creatorName}` },
-        }
-      );
-
-      connections.push(
-        { id: 'imp-c6', fromNodeId: 'node-imp-3', fromSocketId: 'CONDITIONING', toNodeId: 'node-imp-6', toSocketId: 'positive', type: 'CONDITIONING' },
-        { id: 'imp-c7', fromNodeId: 'node-imp-4', fromSocketId: 'CONDITIONING', toNodeId: 'node-imp-6', toSocketId: 'negative', type: 'CONDITIONING' },
-        { id: 'imp-c8', fromNodeId: 'node-imp-5', fromSocketId: 'LATENT', toNodeId: 'node-imp-6', toSocketId: 'latent_image', type: 'LATENT' },
-        { id: 'imp-c9', fromNodeId: 'node-imp-6', fromSocketId: 'LATENT', toNodeId: 'node-imp-7', toSocketId: 'samples', type: 'LATENT' },
-        { id: 'imp-c10', fromNodeId: 'node-imp-1', fromSocketId: 'VAE', toNodeId: 'node-imp-7', toSocketId: 'vae', type: 'VAE' },
-        { id: 'imp-c11', fromNodeId: 'node-imp-7', fromSocketId: 'IMAGE', toNodeId: 'node-imp-8', toSocketId: 'images', type: 'IMAGE' }
-      );
-    }
-
-    // Rich Other Metadata
-    const otherMetadata = {
-      prompt: prompt || '',
-      negativePrompt: negativePrompt || '',
-      baseModel: detectedBaseModel || (isVideo ? 'MiniMax H3' : 'Original'),
-      modelFile: rawModelName ? (rawModelName.endsWith('.safetensors') ? rawModelName : `${rawModelName}.safetensors`) : (isVideo ? 'minimax_h3.safetensors' : (checkpoint || 'unknown.safetensors')),
-      vae: detectedVae || 'qwen_image_vae.safetensors',
-      sampler: sampler || '',
-      scheduler: scheduler || '',
-      steps: steps || 8,
-      cfgScale: cfg || 1.0,
-      seed: seed,
-      denoise: denoise ?? 1.0,
-      width: width || 1024,
-      height: height || 1024,
-      resolution: `${width} x ${height}`,
-      aspectRatio: `${width}:${height}`,
-      mediaType: isVideo ? 'video' : 'image',
-      duration: videoDuration || null,
-      engine: detectedEngine || (isVideo ? 'Video AI' : 'ComfyUI'),
-      resources: loras.map((l) => ({
-        name: l.displayName || l.name,
-        fileName: l.name,
-        versionId: l.civitaiId,
-        strength: l.strength,
-        baseModel: l.baseModel || detectedBaseModel,
-      })),
-    };
-
-    const preset = {
-      id: `civitai-imported-${Date.now()}`,
-      name: presetTitle,
-      prompt,
-      negativePrompt,
-      category: isVideo ? 'Civitai 视频工作流' : 'Civitai 一键导入',
-      provider: chosenEngineName,
-      previewImage,
-      tags: ['Civitai 导入', creatorName, ...(primaryLora ? [primaryLora.name.replace('.safetensors', '')] : []), targetProvider.toUpperCase(), '真实解析'],
-      loraNames: loras.map((l) => l.name),
-      description: `从 ${extractSource} 逆向解析提取的工作流。作者: ${creatorName}，底模: ${checkpoint}，LoRA 数量: ${loras.length}。${engineExplanation ? ` 说明: ${engineExplanation}` : ''}`,
-      architectureExplanation: engineExplanation,
-      nodes,
-      connections,
-      otherMetadata,
-      spatialFrames: [
-        {
-          id: `frame-imp-${Date.now()}`,
-          title: `${presetTitle} (取景框)`,
-          pos: { x: 260, y: 160 },
-          width: 480,
-          height: 480,
-          prompt,
-          negativePrompt,
-          params: {
-            checkpoint,
-            seed,
-            seedControl: 'randomize',
-            steps,
-            cfg,
-            sampler,
-            scheduler,
-            denoise: denoise ?? 1.0,
-            width,
-            height,
-            batchSize: 1,
-            loras: loras.map((l) => ({
-              name: l.name,
-              modelStrength: l.strength,
-              clipStrength: l.strength,
-              triggerWords: l.triggers || '',
-              civitaiId: l.civitaiId,
-              unresolvedResource: targetProvider !== 'civitai',
-            })),
-            targetProvider,
-            videoDuration: isVideo ? (videoDuration || 10) : undefined,
-          },
-          status: 'idle',
-          imageUrl: previewImage,
-          createdAt: Date.now(),
-        },
-      ],
-    };
-
-    return res.json({
-      success: true,
-      preset,
-      otherMetadata,
-      availableEngines: [
-        { id: "civitai", name: "Civitai 官方原生引擎", badge: "保留原始引用", recommended: !isVideo, description: "保留解析出的 Civitai 模型/版本引用；生成权限和 LoRA 能力以上游响应为准" },
-        { id: "fal", name: "Fal.ai", badge: "需重选模型", description: "只保留来源元数据；请从 Fal 目录选择真实端点和 LoRA URL" },
-        { id: "tensorart", name: "Tensor.Art", badge: "需重选模型", description: "请从 TAMS 目录选择真实模型 ID；不会把 Civitai 名称转换成 Tensor ID" },
-        { id: "nanogpt", name: "NanoGPT", badge: "需重选模型", description: "请从 NanoGPT 当前目录选择执行模型，参数能力按端点元数据与响应核实" },
-        { id: "modelscope", name: "ModelScope CN", badge: "需重选模型", description: "国内站与来源 Civitai 不是同一资源命名空间" },
-        { id: "modelscope_ai", name: "ModelScope AI", badge: "需重选模型", description: "国际站单独选择真实模型与账户，不与国内站互换" },
-        { id: "huggingface", name: "Hugging Face", badge: "需重选模型", description: "请明确选择 Hub 模型及实际在线推理路由" },
-        { id: "muapi", name: "MuAPI", badge: "需重选端点", description: "请从 MuAPI 目录选择真实 endpoint_url；不映射 Civitai 模型名" },
-        { id: "wavespeed", name: "WaveSpeed", badge: "需重选端点", description: "请从 WaveSpeed 目录选择完整 model_id；不映射 Civitai 模型名" },
-        { id: "sogni", name: "Sogni", badge: "需重选 selector", description: "请从当前官方工具 Schema selector 选择模型；worker ID 不自动转换" },
-        { id: "sensenova", name: "SenseNova", badge: "需重选模型", description: "请按当前商汤接口配置选择模型；不使用导入来源名替代" },
-        { id: "agnes", name: "Agnes AI", badge: "需重选模型", description: "请按当前 Agnes 接口配置选择模型；不自动套默认模型" },
-        { id: "gemini", name: "Google Gemini", badge: "需重选模型", description: "请从 Gemini 模型选项明确选择实际生图模型" },
-        ...(isVideo ? [{ id: "video", name: "AI Video 视频生成引擎", badge: "需重选供应商/模型", recommended: true, description: "保留视频来源元数据，但不把 Civitai 模型名猜成其他视频供应商模型" }] : [])
-      ],
-      selectedEngine: targetProvider,
-      parsedMeta: {
-        creator: creatorName,
-        checkpoint,
-        architecture: rawModelName || (isVideo ? 'MiniMax H3' : 'Krea 2'),
-        architectureExplanation: engineExplanation,
-        lorasCount: loras.length,
-        steps,
-        cfg,
-        sampler,
-        scheduler,
-        seed,
-        size: `${width}x${height}`,
-        mediaType: isVideo ? 'video' : 'image',
-        duration: videoDuration,
-      },
-    });
-  } catch (error: any) {
-    console.error('Extract civitai workflow error:', error);
-    return res.status(500).json({ error: error.message || 'Civitai workflow extraction failed' });
-  }
-});
+app.post('/api/civitai/extract-workflow', handleExtractCivitaiWorkflow({ getSettings: () => cloudSettings, defaultKeys, upstreamFetch }));
 
 const modelScopeImageCache = new Map<string, string>();
 
@@ -2389,7 +1336,33 @@ registerSchemaProviderRoutes(app,{fetch:upstreamFetch,key:(p,k)=>keyPoolManager.
 app.get('/api/model-schema', async (req,res)=>{
   try {
     const provider=String(req.query.provider || ''),model=String(req.query.model || '');
-    if(!model)return res.status(400).json({error:'请选择模型'});
+    if (provider === 'replicate') {
+      let owner = '';
+      let name = '';
+      if (model.includes('/')) {
+        const parts = model.split('/');
+        owner = parts[0];
+        name = parts[1].split(':')[0];
+      }
+      if (!owner || !name) {
+        return res.status(400).json({ error: 'Replicate 模型格式必须为 owner/name', provider, model });
+      }
+      const endpoint = `https://api.replicate.com/v1/models/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`;
+      const key = keyPoolManager.getNextKey('replicate', req.headers['x-replicate-key'] as string);
+      const response = await upstreamFetch(
+        { provider: 'replicate', route: req.path, model, key },
+        endpoint,
+        {
+          headers: key ? { Authorization: `Bearer ${key}`, Accept: 'application/json' } : { Accept: 'application/json' },
+          signal: AbortSignal.timeout(30000),
+        }
+      );
+      if (!response.ok) return res.status(response.status).json({ error: `HTTP ${response.status}`, details: await response.text(), endpoint });
+      const data = await response.json();
+      const openapi = data.latest_version?.openapi_schema;
+      const inputSchema = openapi?.components?.schemas?.Input || null;
+      return res.json({ provider, model, source: endpoint, inputSchema, openapi });
+    }
     if(provider!=='fal')return res.json({provider,model,source:provider==='huggingface'?'https://huggingface.co/docs/inference-providers/tasks/text-to-image':'https://www.modelscope.cn/docs/model-service/API-Inference/intro',inputSchema:null,note:'此处尚未取得该模型的机器可读 Schema；自定义 JSON 会原样提交，由上游返回参数结果。'});
     const endpoint=`https://api.fal.ai/v1/models?endpoint_id=${encodeURIComponent(model)}&expand=openapi-3.0`;
     const key=keyPoolManager.getNextKey('fal',req.headers['x-fal-key'] as string);
@@ -2455,151 +1428,154 @@ app.get("/api/models", async (req, res) => {
       return true;
     };
 
+    const tasks: Promise<void>[] = [];
+
     // 1. ModelScope CN (魔搭社区国内站 - modelscope.cn) Real-Time Live OpenAPI Fetching
     if (provider === "all" || provider === "modelscope") {
-      const msCnCatalog: any[] = [];
-      try {
-        let msSearch = rawSearch;
-        if (!msSearch) {
-          msSearch = cat === 'lora' ? 'lora' : cat === 'video' ? 'video' : 'diffusion';
-        } else if (archFilter && !msSearch.includes(archFilter)) {
-          msSearch = `${msSearch} ${archFilter}`;
-        }
-        const msSort = sortParam.toLowerCase().includes('like') ? 'likes' : sortParam.toLowerCase().includes('new') ? 'last_modified' : 'downloads';
-        const msUrl = `https://modelscope.cn/openapi/v1/models?page_size=${Math.min(limitParam,50)}&page_number=${pageParam}&sort=${msSort}&search=${encodeURIComponent(msSearch)}`;
-        const msResp = await upstreamFetch(
-          { provider: 'modelscope_cn', route: req.path, model: msSearch },
-          msUrl,
-          { headers: {Authorization:`Bearer ${keyPoolManager.getNextKey('modelscope',req.headers['x-modelscope-token'] as string) || ''}`}, signal: AbortSignal.timeout(30000) }
-        );
-        if (msResp.ok) {
-          const msData = await msResp.json();
-          const items = msData?.data?.models || [];
+      tasks.push((async () => {
+        const msCnCatalog: any[] = [];
+        try {
+          let msSearch = rawSearch;
+          if (!msSearch) {
+            msSearch = cat === 'lora' ? 'lora' : cat === 'video' ? 'video' : 'diffusion';
+          } else if (archFilter && !msSearch.includes(archFilter)) {
+            msSearch = `${msSearch} ${archFilter}`;
+          }
+          const msSort = sortParam.toLowerCase().includes('like') ? 'likes' : sortParam.toLowerCase().includes('new') ? 'last_modified' : 'downloads';
+          const msUrl = `https://modelscope.cn/openapi/v1/models?page_size=${Math.min(limitParam,50)}&page_number=${pageParam}&sort=${msSort}&search=${encodeURIComponent(msSearch)}`;
+          const msResp = await upstreamFetch(
+            { provider: 'modelscope_cn', route: req.path, model: msSearch },
+            msUrl,
+            { headers: {Authorization:`Bearer ${keyPoolManager.getNextKey('modelscope',req.headers['x-modelscope-token'] as string) || ''}`}, signal: AbortSignal.timeout(30000) }
+          );
+          if (msResp.ok) {
+            const msData = await msResp.json();
+            const items = msData?.data?.models || [];
 
-          pagination.modelscope = {
-            page: pageParam,
-            hasMore: pageParam*Math.min(limitParam,50)<Math.min(msData?.data?.total_count ?? Infinity,3000) && items.length>=Math.min(limitParam,50),
-          };
-          
+            pagination.modelscope = {
+              page: pageParam,
+              hasMore: pageParam*Math.min(limitParam,50)<Math.min(msData?.data?.total_count ?? Infinity,3000) && items.length>=Math.min(limitParam,50),
+            };
 
+            items.forEach((m: any, idx: number) => {
+              const meta = extractModelMetadata(m.id, m.display_name, m.tags || [], m.description || '', (m.tasks || []).join(' '), 'ModelScope CN');
+              const realImg = m.cover || m.image_url || '';
 
-          items.forEach((m: any, idx: number) => {
-            const meta = extractModelMetadata(m.id, m.display_name, m.tags || [], m.description || '', (m.tasks || []).join(' '), 'ModelScope CN');
-            const realImg = m.cover || m.image_url || '';
+              // Extract real trigger words if present in tags, else empty
+              const triggers: string[] = [];
+              if (Array.isArray(m.tags)) {
+                m.tags.forEach((t: string) => {
+                  if (t.startsWith('trigger_word:') || t.startsWith('instance_prompt:')) {
+                    triggers.push(t.split(':')[1]);
+                  }
+                });
+              }
 
-            // Extract real trigger words if present in tags, else empty
-            const triggers: string[] = [];
-            if (Array.isArray(m.tags)) {
-              m.tags.forEach((t: string) => {
-                if (t.startsWith('trigger_word:') || t.startsWith('instance_prompt:')) {
-                  triggers.push(t.split(':')[1]);
-                }
+              msCnCatalog.push({
+                id: m.id,
+                name: meta.cleanDisplayName,
+                provider: "ModelScope CN",
+                category: meta.category,
+                type: meta.type,
+                baseModel: meta.baseModel,
+                downloads: m.downloads || 0,
+                likes: m.likes || 0,
+                rating: m.rating || 0,
+                imageUrl: realImg,
+                externalUrl: `https://www.modelscope.cn/models/${m.id}`,
+                tags: m.tags || [],
+                trainedWords: triggers,
               });
-            }
-
-            msCnCatalog.push({
-              id: m.id,
-              name: meta.cleanDisplayName,
-              provider: "ModelScope CN",
-              category: meta.category,
-              type: meta.type,
-              baseModel: meta.baseModel,
-              downloads: m.downloads || 0,
-              likes: m.likes || 0,
-              rating: m.rating || 0,
-              imageUrl: realImg,
-              externalUrl: `https://www.modelscope.cn/models/${m.id}`,
-              tags: m.tags || [],
-              trainedWords: triggers,
             });
-          });
-        } else {
-          results.modelscope = { error: `HTTP ${msResp.status}`, status:msResp.status, details:await msResp.text(),endpoint:msUrl } as any;
+          } else {
+            results.modelscope = { error: `HTTP ${msResp.status}`, status:msResp.status, details:await msResp.text(),endpoint:msUrl } as any;
+          }
+        } catch (err: any) {
+          console.error("ModelScope CN OpenAPI real-time fetch error:", err);
+          results.modelscope = { error: `ModelScope CN 连接失败: ${err.message}` } as any;
         }
-      } catch (err: any) {
-        console.error("ModelScope CN OpenAPI real-time fetch error:", err);
-        results.modelscope = { error: `ModelScope CN 连接失败: ${err.message}` } as any;
-      }
 
-      if (!results.modelscope) {
-        results.modelscope = msCnCatalog.filter((m) => matchCategory(m) && matchSearch(m));
-      }
+        if (!results.modelscope) {
+          results.modelscope = msCnCatalog.filter((m) => matchCategory(m) && matchSearch(m));
+        }
+      })());
     }
 
     // 1.5 ModelScope AI (魔搭国际站 - modelscope.ai) Real-Time Live OpenAPI Fetching
     if (provider === "all" || provider === "modelscope_ai") {
-      const msAiCatalog: any[] = [];
-      try {
-        let msSearch = rawSearch;
-        if (!msSearch) {
-          msSearch = cat === 'lora' ? 'lora' : cat === 'video' ? 'video' : 'diffusion';
-        } else if (archFilter && !msSearch.includes(archFilter)) {
-          msSearch = `${msSearch} ${archFilter}`;
-        }
-        const msAiSort = sortParam.toLowerCase().includes('like') ? 'likes' : sortParam.toLowerCase().includes('new') ? 'last_modified' : 'downloads';
-        const msUrl = `https://www.modelscope.ai/openapi/v1/models?page_size=${Math.min(limitParam,50)}&page_number=${pageParam}&sort=${msAiSort}&search=${encodeURIComponent(msSearch)}`;
-        const msResp = await upstreamFetch(
-          { provider: 'modelscope_ai', route: req.path, model: msSearch },
-          msUrl,
-          { headers: {Authorization:`Bearer ${keyPoolManager.getNextKey('modelscope_ai',req.headers['x-modelscope-ai-token'] as string) || ''}`}, signal: AbortSignal.timeout(30000) }
-        );
-        if (msResp.ok) {
-          const msData = await msResp.json();
-          const items = msData?.data?.models || [];
+      tasks.push((async () => {
+        const msAiCatalog: any[] = [];
+        try {
+          let msSearch = rawSearch;
+          if (!msSearch) {
+            msSearch = cat === 'lora' ? 'lora' : cat === 'video' ? 'video' : 'diffusion';
+          } else if (archFilter && !msSearch.includes(archFilter)) {
+            msSearch = `${msSearch} ${archFilter}`;
+          }
+          const msAiSort = sortParam.toLowerCase().includes('like') ? 'likes' : sortParam.toLowerCase().includes('new') ? 'last_modified' : 'downloads';
+          const msUrl = `https://www.modelscope.ai/openapi/v1/models?page_size=${Math.min(limitParam,50)}&page_number=${pageParam}&sort=${msAiSort}&search=${encodeURIComponent(msSearch)}`;
+          const msResp = await upstreamFetch(
+            { provider: 'modelscope_ai', route: req.path, model: msSearch },
+            msUrl,
+            { headers: {Authorization:`Bearer ${keyPoolManager.getNextKey('modelscope_ai',req.headers['x-modelscope-ai-token'] as string) || ''}`}, signal: AbortSignal.timeout(30000) }
+          );
+          if (msResp.ok) {
+            const msData = await msResp.json();
+            const items = msData?.data?.models || [];
 
-          pagination.modelscope_ai = {
-            page: pageParam,
-            hasMore: pageParam*Math.min(limitParam,50)<Math.min(msData?.data?.total_count ?? Infinity,3000) && items.length>=Math.min(limitParam,50),
-          };
+            pagination.modelscope_ai = {
+              page: pageParam,
+              hasMore: pageParam*Math.min(limitParam,50)<Math.min(msData?.data?.total_count ?? Infinity,3000) && items.length>=Math.min(limitParam,50),
+            };
 
+            items.forEach((m: any, idx: number) => {
+              const meta = extractModelMetadata(m.id, m.display_name, m.tags || [], m.description || '', (m.tasks || []).join(' '), 'ModelScope AI');
+              const realImg = m.cover || m.image_url || '';
 
+              const triggers: string[] = [];
+              if (Array.isArray(m.tags)) {
+                m.tags.forEach((t: string) => {
+                  if (t.startsWith('trigger_word:') || t.startsWith('instance_prompt:')) {
+                    triggers.push(t.split(':')[1]);
+                  }
+                });
+              }
 
-          items.forEach((m: any, idx: number) => {
-            const meta = extractModelMetadata(m.id, m.display_name, m.tags || [], m.description || '', (m.tasks || []).join(' '), 'ModelScope AI');
-            const realImg = m.cover || m.image_url || '';
-
-            const triggers: string[] = [];
-            if (Array.isArray(m.tags)) {
-              m.tags.forEach((t: string) => {
-                if (t.startsWith('trigger_word:') || t.startsWith('instance_prompt:')) {
-                  triggers.push(t.split(':')[1]);
-                }
+              msAiCatalog.push({
+                id: m.id,
+                name: meta.cleanDisplayName,
+                provider: "ModelScope AI",
+                category: meta.category,
+                type: meta.type,
+                baseModel: meta.baseModel,
+                downloads: m.downloads || 0,
+                likes: m.likes || 0,
+                rating: m.rating || 0,
+                imageUrl: realImg,
+                externalUrl: `https://modelscope.ai/models/${m.id}`,
+                tags: m.tags || [],
+                trainedWords: triggers,
               });
-            }
-
-            msAiCatalog.push({
-              id: m.id,
-              name: meta.cleanDisplayName,
-              provider: "ModelScope AI",
-              category: meta.category,
-              type: meta.type,
-              baseModel: meta.baseModel,
-              downloads: m.downloads || 0,
-              likes: m.likes || 0,
-              rating: m.rating || 0,
-              imageUrl: realImg,
-              externalUrl: `https://modelscope.ai/models/${m.id}`,
-              tags: m.tags || [],
-              trainedWords: triggers,
             });
-          });
-        } else {
-          results.modelscope_ai = { error: `HTTP ${msResp.status}`, status:msResp.status, details:await msResp.text(),endpoint:msUrl } as any;
+          } else {
+            results.modelscope_ai = { error: `HTTP ${msResp.status}`, status:msResp.status, details:await msResp.text(),endpoint:msUrl } as any;
+          }
+        } catch (err: any) {
+          const isTimeout = err.name === 'TimeoutError' || err.message?.includes('timeout') || err.message?.includes('aborted');
+          console.warn(`[Models Discovery] ModelScope AI 获取${isTimeout ? '超时 (15s)' : '异常'}:`, err.message);
+          results.modelscope_ai = { error: isTimeout ? 'ModelScope AI 接口请求超时 (超过 15 秒)' : `ModelScope AI 连接失败: ${err.message}` } as any;
         }
-      } catch (err: any) {
-        const isTimeout = err.name === 'TimeoutError' || err.message?.includes('timeout') || err.message?.includes('aborted');
-        console.warn(`[Models Discovery] ModelScope AI 获取${isTimeout ? '超时 (15s)' : '异常'}:`, err.message);
-        results.modelscope_ai = { error: isTimeout ? 'ModelScope AI 接口请求超时 (超过 15 秒)' : `ModelScope AI 连接失败: ${err.message}` } as any;
-      }
 
-      if (!results.modelscope_ai) {
-        results.modelscope_ai = msAiCatalog.filter((m) => matchCategory(m) && matchSearch(m));
-      }
+        if (!results.modelscope_ai) {
+          results.modelscope_ai = msAiCatalog.filter((m) => matchCategory(m) && matchSearch(m));
+        }
+      })());
     }
 
     // 2. Hugging Face Real-Time Live API Proxy with Dynamic Image Resolution & True Metadata
     if (provider === "all" || provider === "huggingface") {
-      try {
+      tasks.push((async () => {
+        try {
         const hfSort = sortParam.toLowerCase().includes('like')
           ? 'likes'
           : (sortParam.toLowerCase().includes('new') || sortParam.toLowerCase().includes('created'))
@@ -2790,440 +1766,502 @@ app.get("/api/models", async (req, res) => {
         console.warn(`[Models Discovery] Hugging Face 获取${isTimeout ? '超时 (15s)' : '异常'}:`, err.message);
         results.huggingface = { error: isTimeout ? 'Hugging Face API 请求超时 (超过 15 秒)' : `Hugging Face 连接失败: ${err.message}` } as any;
       }
-    }
+    })());
+  }
 
     // 3. Civitai Real-Time Live API Fetching
     if (provider === "all" || provider === "civitai") {
-      try {
-        let civitaiType = "LORA";
-        if (cat === "checkpoint") civitaiType = "Checkpoint";
-        else if (cat === "video") civitaiType = "MotionModule";
-        else if (cat === "edit") civitaiType = "Controlnet";
-        else if (cat === "all") civitaiType = "LORA";
+      tasks.push((async () => {
+        try {
+          const civitaiTypes: string[] = [];
+          if (cat === "checkpoint") civitaiTypes.push("Checkpoint");
+          else if (cat === "lora") civitaiTypes.push("LORA");
+          else if (cat === "video") civitaiTypes.push("MotionModule");
+          else if (cat === "edit") civitaiTypes.push("Controlnet");
+          else if (cat === "all") civitaiTypes.push("Checkpoint", "LORA");
 
-        const civitaiSort = sortParam.toLowerCase().includes('rate') || sortParam.toLowerCase().includes('highest')
-          ? 'Highest Rated'
-          : sortParam.toLowerCase().includes('new')
-          ? 'Newest'
-          : sortParam.toLowerCase().includes('like')
-          ? 'Most Liked'
-          : 'Most Downloaded';
+          const civitaiSort = sortParam.toLowerCase().includes('rate') || sortParam.toLowerCase().includes('highest')
+            ? 'Highest Rated'
+            : sortParam.toLowerCase().includes('new')
+            ? 'Newest'
+            : sortParam.toLowerCase().includes('like')
+            ? 'Most Liked'
+            : 'Most Downloaded';
 
-        const params = new URLSearchParams({
-          types: civitaiType,
-          limit: String(limitParam),
-          sort: civitaiSort,
-          nsfw: "false",
-        });
-        if (searchStr) {
-          params.append("query", searchStr);
-        }
-        if (cursorParam) {
-          params.append("cursor", cursorParam);
-        }
-
-        const civitaiToken =
-          (req.headers['x-civitai-token'] as string) ||
-          (req.headers['x-civitai-key'] as string) ||
-          cloudSettings['civitaiToken'] ||
-          process.env.CIVITAI_API_TOKEN ||
-          '';
-
-        const civitaiHeaders: Record<string, string> = {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
-          "Accept": "application/json",
-        };
-        if (civitaiToken) {
-          civitaiHeaders['Authorization'] = `Bearer ${civitaiToken}`;
-        }
-
-        const civitaiCacheKey = `models_civitai_${params.toString()}_${civitaiToken ? 'auth' : 'anon'}`;
-        const cachedCivitai = civitaiCache.get(civitaiCacheKey);
-
-        if (cachedCivitai && cachedCivitai.expiry > Date.now()) {
-          results.civitai = cachedCivitai.data;
-          if (cachedCivitai.nextCursor) {
-            pagination.civitai = { nextCursor: cachedCivitai.nextCursor, hasMore: true };
+          const params = new URLSearchParams({
+            limit: String(limitParam),
+            sort: civitaiSort,
+            nsfw: "false",
+          });
+          for (const t of civitaiTypes) {
+            params.append("types", t);
           }
-        } else {
-          const civitaiResp = await upstreamFetch(
-            { provider: 'civitai', route: req.path, model: (params.get('query') || params.get('types') || 'list'), key: civitaiToken },
-            `https://civitai.com/api/v1/models?${params.toString()}`,
-            {
-              headers: civitaiHeaders,
-              signal: AbortSignal.timeout(30000), // Increased to 30s
-            }
-          );
-          if (civitaiResp.ok) {
-            const cData = await civitaiResp.json();
-            if (cData.error) {
-              results.civitai = { error: cData.error } as any;
-            } else {
-              const mappedCivitai = (cData.items || []).map((m: any) => ({
-                id: String(m.id),
-                name: m.name,
-                provider: "Civitai",
-                type: m.type,
-                category: m.type === "LORA" ? "LoRA" : m.type === "MotionModule" ? "Video" : "Checkpoint",
-                baseModel: (m.modelVersions || [])[0]?.baseModel || "FLUX.1 / SDXL",
-                downloads: m.stats?.downloadCount || 0,
-                rating: m.stats?.rating || 0,
-                imageUrl: (m.modelVersions || [])[0]?.images?.[0]?.url || "",
-                externalUrl: `https://civitai.com/models/${m.id}`,
-                trainedWords: Array.isArray((m.modelVersions || [])[0]?.trainedWords) ? (m.modelVersions || [])[0].trainedWords : [],
-              }));
-              results.civitai = mappedCivitai;
-              const nextCursor = cData.metadata?.nextCursor || null;
-              pagination.civitai = { nextCursor, hasMore: Boolean(nextCursor) };
-              civitaiCache.set(civitaiCacheKey, { data: mappedCivitai, nextCursor, expiry: Date.now() + 60000 });
+          if (searchStr) {
+            params.append("query", searchStr);
+          }
+          if (cursorParam) {
+            params.append("cursor", cursorParam);
+          }
+
+          const civitaiToken =
+            (req.headers['x-civitai-token'] as string) ||
+            (req.headers['x-civitai-key'] as string) ||
+            cloudSettings['civitaiToken'] ||
+            process.env.CIVITAI_API_TOKEN ||
+            '';
+
+          const civitaiHeaders: Record<string, string> = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+            "Accept": "application/json",
+          };
+          if (civitaiToken) {
+            civitaiHeaders['Authorization'] = `Bearer ${civitaiToken}`;
+          }
+
+          const civitaiCacheKey = `models_civitai_${params.toString()}_${civitaiToken ? 'auth' : 'anon'}`;
+          const cachedCivitai = civitaiCache.get(civitaiCacheKey);
+
+          if (cachedCivitai && cachedCivitai.expiry > Date.now()) {
+            results.civitai = cachedCivitai.data;
+            if (cachedCivitai.nextCursor) {
+              pagination.civitai = { nextCursor: cachedCivitai.nextCursor, hasMore: true };
             }
           } else {
-            results.civitai = { error: `Civitai 接口异常 (HTTP ${civitaiResp.status})` } as any;
+            const civitaiResp = await upstreamFetch(
+              { provider: 'civitai', route: req.path, model: (params.get('query') || params.get('types') || 'list'), key: civitaiToken },
+              `https://civitai.com/api/v1/models?${params.toString()}`,
+              {
+                headers: civitaiHeaders,
+                signal: AbortSignal.timeout(30000), // Increased to 30s
+              }
+            );
+            if (civitaiResp.ok) {
+              const cData = await civitaiResp.json();
+              if (cData.error) {
+                results.civitai = { error: cData.error } as any;
+              } else {
+                const mappedCivitai = (cData.items || []).map((m: any) => ({
+                  id: String(m.id),
+                  name: m.name,
+                  provider: "Civitai",
+                  type: m.type,
+                  category: m.type === "LORA" ? "LoRA" : m.type === "MotionModule" ? "Video" : "Checkpoint",
+                  baseModel: (m.modelVersions || [])[0]?.baseModel || null,
+                  downloads: m.stats?.downloadCount || 0,
+                  rating: m.stats?.rating || 0,
+                  imageUrl: (m.modelVersions || [])[0]?.images?.[0]?.url || "",
+                  externalUrl: `https://civitai.com/models/${m.id}`,
+                  trainedWords: Array.isArray((m.modelVersions || [])[0]?.trainedWords) ? (m.modelVersions || [])[0].trainedWords : [],
+                }));
+                results.civitai = mappedCivitai;
+                const nextCursor = cData.metadata?.nextCursor || null;
+                pagination.civitai = { nextCursor, hasMore: Boolean(nextCursor) };
+                civitaiCache.set(civitaiCacheKey, { data: mappedCivitai, nextCursor, expiry: Date.now() + 60000 });
+              }
+            } else {
+              results.civitai = { error: `Civitai 接口异常 (HTTP ${civitaiResp.status})` } as any;
+            }
           }
+        } catch (err: any) {
+          const isTimeout = err.name === 'TimeoutError' || err.message?.includes('timeout') || err.message?.includes('aborted');
+          console.warn(`[Models Discovery] Civitai 获取${isTimeout ? '超时 (25s)' : '异常'}:`, err.message);
+          results.civitai = { error: isTimeout ? 'Civitai API 请求超时 (上游 Cloudflare 响应过慢，请稍后重试或配置 Civitai API Key)' : `Civitai 连接失败: ${err.message}` } as any;
         }
-      } catch (err: any) {
-        const isTimeout = err.name === 'TimeoutError' || err.message?.includes('timeout') || err.message?.includes('aborted');
-        console.warn(`[Models Discovery] Civitai 获取${isTimeout ? '超时 (25s)' : '异常'}:`, err.message);
-        results.civitai = { error: isTimeout ? 'Civitai API 请求超时 (上游 Cloudflare 响应过慢，请稍后重试或配置 Civitai API Key)' : `Civitai 连接失败: ${err.message}` } as any;
-      }
+      })());
     }
 
     // 4. Fal.ai Real-Time Dynamic Models Discovery Endpoint (https://api.fal.ai/v1/models)
     if (provider === "all" || provider === "fal") {
-      const falItems: any[] = [];
-      try {
-        const falKey = keyPoolManager.getNextKey('fal',req.headers['x-fal-key'] as string) || '';
+      tasks.push((async () => {
+        if (cat === 'lora') {
+          results.fal = [];
+          pagination.fal = { page: pageParam, hasMore: false, sourceUrl: 'https://api.fal.ai/v1/models', sourceNotice: 'lookup-only (no public lora weight directory)' };
+          (results as any).falNotice = 'Fal.ai 模型目录 (https://api.fal.ai/v1/models) 只列出推理端点，没有公开的 LoRA 权重目录；以 "lora" 搜到的是"可加载 LoRA 的生成端点"，其缩略图是端点示例，不是 LoRA 封面，因此不在 LoRA 目录中展示。请在上方输入 LoRA 权重 URL，并在模型中心选择支持 LoRA 的 Fal 端点。';
+        } else {
+          const falItems: any[] = [];
+          try {
+            const falKey = keyPoolManager.getNextKey('fal',req.headers['x-fal-key'] as string) || '';
 
-        const falHeaders: Record<string, string> = {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
-          "Accept": "application/json",
-        };
-        if (falKey) {
-          falHeaders['Authorization'] = `Key ${falKey}`;
-        }
-
-        // Determine live Fal.ai query URLs based on requested category & search string
-        // Official Fal.ai API: search uses `?q=`, category uses `?category=`
-        const falParams=new URLSearchParams({limit:String(limitParam),status:'active'});
-        if(cursorParam) falParams.set('cursor',cursorParam);
-        if(rawSearch) falParams.set('q',rawSearch);
-        if(cat==='checkpoint') falParams.set('category','text-to-image');
-        if(cat==='video') falParams.set('category','text-to-video');
-        if(cat==='edit') falParams.set('category','image-to-image');
-        if(cat==='lora' && !rawSearch) falParams.set('q','lora');
-        const fetchUrls=[`https://api.fal.ai/v1/models?${falParams}`];
-
-        const responses = await Promise.allSettled(
-          fetchUrls.map((u) =>
-            upstreamFetch(
-              { provider: 'fal', route: req.path, model: u.includes('text-to-video') ? 'category:video' : 'category:image', key: falKey },
-              u,
-              { headers: falHeaders, signal: AbortSignal.timeout(15000) }
-            )
-          )
-        );
-
-        const seenEndpoints = new Set<string>();
-        let hadSuccessfulResponse = false;
-        let lastErrorStatus = 0;
-
-        for (const respResult of responses) {
-          if (respResult.status === 'fulfilled' && respResult.value.ok) {
-            hadSuccessfulResponse = true;
-            const falData = await respResult.value.json();
-            pagination.fal={page:pageParam,nextCursor:falData.next_cursor,hasMore:falData.has_more===true};
-            const list = Array.isArray(falData.models) ? falData.models : Array.isArray(falData) ? falData : [];
-            for (const m of list) {
-              const endpointId = m.endpoint_id || m.id || "";
-              if (!endpointId || seenEndpoints.has(endpointId)) continue;
-              seenEndpoints.add(endpointId);
-
-              const meta = m.metadata || {};
-              const parsed = extractModelMetadata(
-                endpointId,
-                meta.display_name,
-                meta.tags || [],
-                meta.description || '',
-                meta.category || '',
-                'Fal.ai'
-              );
-
-              falItems.push({
-                id: endpointId,
-                name: parsed.cleanDisplayName,
-                provider: "Fal.ai",
-                category: parsed.category,
-                type: parsed.type,
-                baseModel: parsed.baseModel,
-                downloads: typeof m.popularity === 'number' ? m.popularity : undefined,
-                likes: typeof m.favorites === 'number' ? m.favorites : undefined,
-                rating: typeof m.rating === 'number' ? m.rating : undefined,
-                speed: meta.inference_time ? `${meta.inference_time}s` : "Fal 极速算力",
-                badge: meta.author_name || parsed.badge,
-                imageUrl: meta.thumbnail_url || meta.cover_image || meta.sample_output_url || "",
-                externalUrl: `https://fal.ai/models/${endpointId}`,
-                description: meta.description || "",
-                tags: ["fal", parsed.category.toLowerCase(), parsed.baseModel.toLowerCase(), ...(meta.tags || [])],
-                trainedWords: Array.isArray(meta.trigger_words) ? meta.trigger_words : [],
-              });
+            const falHeaders: Record<string, string> = {
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+              "Accept": "application/json",
+            };
+            if (falKey) {
+              falHeaders['Authorization'] = `Key ${falKey}`;
             }
-          } else if (respResult.status === 'fulfilled') {
-            lastErrorStatus = respResult.value.status;
-            results.fal={error:`HTTP ${lastErrorStatus}`,status:lastErrorStatus,details:await respResult.value.text(),endpoint:fetchUrls[0]} as any;
+
+            // Determine live Fal.ai query URLs based on requested category & search string
+            // Official Fal.ai API: search uses `?q=`, category uses `?category=`
+            const falParams=new URLSearchParams({limit:String(limitParam),status:'active'});
+            if(cursorParam) falParams.set('cursor',cursorParam);
+            if(rawSearch) falParams.set('q',rawSearch);
+            if(cat==='checkpoint') falParams.set('category','text-to-image');
+            if(cat==='video') falParams.set('category','text-to-video');
+            if(cat==='edit') falParams.set('category','image-to-image');
+            if(cat==='lora' && !rawSearch) falParams.set('q','lora');
+            const fetchUrls=[`https://api.fal.ai/v1/models?${falParams}`];
+
+            const responses = await Promise.allSettled(
+              fetchUrls.map((u) =>
+                upstreamFetch(
+                  { provider: 'fal', route: req.path, model: u.includes('text-to-video') ? 'category:video' : 'category:image', key: falKey },
+                  u,
+                  { headers: falHeaders, signal: AbortSignal.timeout(15000) }
+                )
+              )
+            );
+
+            const seenEndpoints = new Set<string>();
+            let hadSuccessfulResponse = false;
+            let lastErrorStatus = 0;
+
+            for (const respResult of responses) {
+              if (respResult.status === 'fulfilled' && respResult.value.ok) {
+                hadSuccessfulResponse = true;
+                const falData = await respResult.value.json();
+                pagination.fal={page:pageParam,nextCursor:falData.next_cursor,hasMore:falData.has_more===true};
+                const list = Array.isArray(falData.models) ? falData.models : Array.isArray(falData) ? falData : [];
+                for (const m of list) {
+                  const endpointId = m.endpoint_id || m.id || "";
+                  if (!endpointId || seenEndpoints.has(endpointId)) continue;
+                  seenEndpoints.add(endpointId);
+
+                  const meta = m.metadata || {};
+                  const parsed = extractModelMetadata(
+                    endpointId,
+                    meta.display_name,
+                    meta.tags || [],
+                    meta.description || '',
+                    meta.category || '',
+                    'Fal.ai'
+                  );
+
+                  falItems.push({
+                    id: endpointId,
+                    name: parsed.cleanDisplayName,
+                    provider: "Fal.ai",
+                    category: parsed.category,
+                    type: parsed.type,
+                    baseModel: parsed.baseModel,
+                    downloads: typeof m.popularity === 'number' ? m.popularity : undefined,
+                    likes: typeof m.favorites === 'number' ? m.favorites : undefined,
+                    rating: typeof m.rating === 'number' ? m.rating : undefined,
+                    speed: meta.inference_time ? `${meta.inference_time}s` : "Fal 极速算力",
+                    badge: meta.author_name || parsed.badge,
+                    imageUrl: meta.thumbnail_url || meta.cover_image || meta.sample_output_url || "",
+                    externalUrl: `https://fal.ai/models/${endpointId}`,
+                    description: meta.description || "",
+                    tags: ["fal", parsed.category.toLowerCase(), parsed.baseModel.toLowerCase(), ...(meta.tags || [])],
+                    trainedWords: Array.isArray(meta.trigger_words) ? meta.trigger_words : [],
+                  });
+                }
+              } else if (respResult.status === 'fulfilled') {
+                lastErrorStatus = respResult.value.status;
+                results.fal={error:`HTTP ${lastErrorStatus}`,status:lastErrorStatus,details:await respResult.value.text(),endpoint:fetchUrls[0]} as any;
+              }
+            }
+
+            if (!results.fal && !hadSuccessfulResponse && responses.length > 0 && lastErrorStatus > 0) {
+              results.fal = { error: `Fal.ai 接口响应异常 (HTTP ${lastErrorStatus})` } as any;
+            }
+          } catch (err: any) {
+            const isTimeout = err.name === 'TimeoutError' || err.message?.includes('timeout') || err.message?.includes('aborted');
+            console.warn(`[Models Discovery] Fal.ai 获取${isTimeout ? '超时 (15s)' : '异常'}:`, err.message);
+            results.fal = { error: isTimeout ? 'Fal.ai API 请求超时 (超过 15 秒)' : `Fal.ai 连接失败: ${err.message}` } as any;
+          }
+
+          if (!results.fal) {
+            results.fal = falItems.filter((m) => matchCategory(m) && matchSearch(m));
           }
         }
-
-        if (!results.fal && !hadSuccessfulResponse && responses.length > 0 && lastErrorStatus > 0) {
-          results.fal = { error: `Fal.ai 接口响应异常 (HTTP ${lastErrorStatus})` } as any;
-        }
-      } catch (err: any) {
-        const isTimeout = err.name === 'TimeoutError' || err.message?.includes('timeout') || err.message?.includes('aborted');
-        console.warn(`[Models Discovery] Fal.ai 获取${isTimeout ? '超时 (15s)' : '异常'}:`, err.message);
-        results.fal = { error: isTimeout ? 'Fal.ai API 请求超时 (超过 15 秒)' : `Fal.ai 连接失败: ${err.message}` } as any;
-      }
-
-      if (!results.fal) {
-        results.fal = falItems.filter((m) => matchCategory(m) && matchSearch(m));
-      }
+      })());
     }
 
     // 5. NanoGPT Real Live Discovery Endpoint (Live OpenAPI: image-models & video-models)
     if (provider === "all" || provider === "nanogpt") {
-      const nanoItems: any[] = [];
-      // NanoGPT is an inference API provider and does NOT host a community LoRA weights repository.
-      if (cat === "lora") {
-        results.nanogpt = [];
-      } else {
-        try {
-          const shouldFetchImage = cat === "all" || cat === "checkpoint" || cat === "edit";
-          const shouldFetchVideo = cat === "all" || cat === "video";
+      tasks.push((async () => {
+        const nanoItems: any[] = [];
+        // NanoGPT is an inference API provider and does NOT host a community LoRA weights repository.
+        if (cat === "lora") {
+          results.nanogpt = [];
+          pagination.nanogpt = {
+            page: 1,
+            limit: limitParam,
+            total: 0,
+            hasMore: false,
+            sourceUrl: 'https://nano-gpt.com',
+            sourceNotice: 'lookup-only (no public lora directory)',
+          };
+          (results as any).nanogptNotice = 'NanoGPT 为在线推理 API 服务商，不托管社区 LoRA 权重；支持在上方输入框按 ID 选用。';
+        } else {
+          try {
+            const shouldFetchImage = cat === "all" || cat === "checkpoint" || cat === "edit";
+            const shouldFetchVideo = cat === "all" || cat === "video";
 
-          const fetchImageModels = shouldFetchImage
-            ? upstreamFetch(
-                { provider: 'nanogpt', route: req.path, model: 'image-models' },
-                'https://api.nano-gpt.com/api/v1/image-models',
-                {
-                  headers: { 'User-Agent': 'ComfyCanvas/1.0' },
-                  signal: AbortSignal.timeout(10000),
-                }
-              )
-            : Promise.resolve(null);
+            const fetchImageModels = shouldFetchImage
+              ? upstreamFetch(
+                  { provider: 'nanogpt', route: req.path, model: 'image-models' },
+                  'https://api.nano-gpt.com/api/v1/image-models',
+                  {
+                    headers: { 'User-Agent': 'ComfyCanvas/1.0' },
+                    signal: AbortSignal.timeout(10000),
+                  }
+                )
+              : Promise.resolve(null);
 
-          const fetchVideoModels = shouldFetchVideo
-            ? upstreamFetch(
-                { provider: 'nanogpt', route: req.path, model: 'video-models' },
-                'https://api.nano-gpt.com/api/v1/video-models',
-                {
-                  headers: { 'User-Agent': 'ComfyCanvas/1.0' },
-                  signal: AbortSignal.timeout(10000),
-                }
-              )
-            : Promise.resolve(null);
+            const fetchVideoModels = shouldFetchVideo
+              ? upstreamFetch(
+                  { provider: 'nanogpt', route: req.path, model: 'video-models' },
+                  'https://api.nano-gpt.com/api/v1/video-models',
+                  {
+                    headers: { 'User-Agent': 'ComfyCanvas/1.0' },
+                    signal: AbortSignal.timeout(10000),
+                  }
+                )
+              : Promise.resolve(null);
 
-          const [imgResp, vidResp] = await Promise.all([fetchImageModels, fetchVideoModels]);
+            const [imgResp, vidResp] = await Promise.all([fetchImageModels, fetchVideoModels]);
 
-          if (imgResp) {
-            if (!imgResp.ok) {
-              const errText = await imgResp.text().catch(() => '');
-              throw new Error(`NanoGPT image-models 失败 [${imgResp.status}]: ${errText.slice(0, 200)}`);
+            if (imgResp) {
+              if (!imgResp.ok) {
+                const errText = await imgResp.text().catch(() => '');
+                const err: any = new Error(`NanoGPT image-models 失败 [${imgResp.status}]: ${errText.slice(0, 200)}`);
+                err.status = imgResp.status;
+                err.endpoint = 'https://api.nano-gpt.com/api/v1/image-models';
+                err.rawResponse = errText;
+                err.errorSource = 'upstream';
+                throw err;
+              }
+              const nanoData = await imgResp.json();
+              const list = Array.isArray(nanoData.data) ? nanoData.data : Array.isArray(nanoData.models) ? nanoData.models : Array.isArray(nanoData) ? nanoData : [];
+              for (const m of list) {
+                const mId = m.id || m.model_id || "";
+                if (!mId) continue;
+
+                const isEdit = m.architecture?.modality === 'image->image' || m.capabilities?.inpainting || mId.includes('edit') || mId.includes('remover') || mId.includes('upscal') || mId.includes('birefnet');
+                const parsed = extractModelMetadata(
+                  mId,
+                  m.name,
+                  m.tags || [],
+                  m.description || '',
+                  isEdit ? 'image-to-image' : 'text-to-image',
+                  'NanoGPT'
+                );
+
+                const iconUrl = m.icon_url
+                  ? (m.icon_url.startsWith('http') ? m.icon_url : `https://nano-gpt.com${m.icon_url}`)
+                  : (m.owned_by && m.owned_by !== 'unknown' ? `https://nano-gpt.com/icons/${m.owned_by.charAt(0).toUpperCase() + m.owned_by.slice(1)}.svg` : '');
+                const pricingStr = m.pricing?.per_image ? `$${m.pricing.per_image['1k'] || m.pricing.per_image.auto || 0.02}/图` : m.pricing ? `$${m.pricing}/次` : 'NanoGPT 算力';
+
+                nanoItems.push({
+                  id: mId,
+                  name: m.name || parsed.cleanDisplayName,
+                  provider: "NanoGPT",
+                  category: isEdit ? 'Edit' : 'Checkpoint',
+                  type: isEdit ? 'Tools' : 'Checkpoint',
+                  baseModel: parsed.baseModel,
+                  downloads: undefined,
+                  likes: undefined,
+                  rating: undefined,
+                  speed: pricingStr,
+                  badge: m.category === 'Featured' ? 'NanoGPT 官方精选' : parsed.badge,
+                  imageUrl: iconUrl,
+                  externalUrl: `https://nano-gpt.com/models?search=${encodeURIComponent(mId)}`,
+                  description: m.description || "",
+                  tags: m.tags || ["nanogpt", isEdit ? "edit" : "checkpoint", parsed.baseModel.toLowerCase()],
+                });
+              }
             }
-            const nanoData = await imgResp.json();
-            const list = Array.isArray(nanoData.data) ? nanoData.data : Array.isArray(nanoData.models) ? nanoData.models : Array.isArray(nanoData) ? nanoData : [];
-            for (const m of list) {
-              const mId = m.id || m.model_id || "";
-              if (!mId) continue;
 
-              const isEdit = m.architecture?.modality === 'image->image' || m.capabilities?.inpainting || mId.includes('edit') || mId.includes('remover') || mId.includes('upscal') || mId.includes('birefnet');
-              const parsed = extractModelMetadata(
-                mId,
-                m.name,
-                m.tags || [],
-                m.description || '',
-                isEdit ? 'image-to-image' : 'text-to-image',
-                'NanoGPT'
-              );
+            if (vidResp) {
+              if (!vidResp.ok) {
+                const errText = await vidResp.text().catch(() => '');
+                const err: any = new Error(`NanoGPT video-models 失败 [${vidResp.status}]: ${errText.slice(0, 200)}`);
+                err.status = vidResp.status;
+                err.endpoint = 'https://api.nano-gpt.com/api/v1/video-models';
+                err.rawResponse = errText;
+                err.errorSource = 'upstream';
+                throw err;
+              }
+              const vidData = await vidResp.json();
+              const list = Array.isArray(vidData.data) ? vidData.data : Array.isArray(vidData.models) ? vidData.models : Array.isArray(vidData) ? vidData : [];
+              for (const m of list) {
+                const mId = m.id || m.model_id || "";
+                if (!mId) continue;
+                
+                const parsed = extractModelMetadata(
+                  mId,
+                  m.name,
+                  m.tags || [],
+                  m.description || '',
+                  'video',
+                  'NanoGPT'
+                );
 
-              const iconUrl = m.icon_url
-                ? (m.icon_url.startsWith('http') ? m.icon_url : `https://nano-gpt.com${m.icon_url}`)
-                : (m.owned_by && m.owned_by !== 'unknown' ? `https://nano-gpt.com/icons/${m.owned_by.charAt(0).toUpperCase() + m.owned_by.slice(1)}.svg` : 'https://nano-gpt.com/icons/Fal.svg');
-              const pricingStr = m.pricing?.per_image ? `$${m.pricing.per_image['1k'] || m.pricing.per_image.auto || 0.02}/图` : m.pricing ? `$${m.pricing}/次` : 'NanoGPT 算力';
+                const iconUrl = m.icon_url
+                  ? (m.icon_url.startsWith('http') ? m.icon_url : `https://nano-gpt.com${m.icon_url}`)
+                  : (m.owned_by && m.owned_by !== 'unknown' ? `https://nano-gpt.com/icons/${m.owned_by.charAt(0).toUpperCase() + m.owned_by.slice(1)}.svg` : '');
+                
+                const pricingStr = m.pricing?.per_second
+                  ? `$${m.pricing.per_second}/秒`
+                  : (m.pricing?.minimum ? `$${m.pricing.minimum}/次` : 'NanoGPT 视频算力');
 
-              nanoItems.push({
-                id: mId,
-                name: m.name || parsed.cleanDisplayName,
-                provider: "NanoGPT",
-                category: isEdit ? 'Edit' : 'Checkpoint',
-                type: isEdit ? 'Tools' : 'Checkpoint',
-                baseModel: parsed.baseModel,
-                downloads: undefined,
-                likes: undefined,
-                rating: undefined,
-                speed: pricingStr,
-                badge: m.category === 'Featured' ? 'NanoGPT 官方精选' : parsed.badge,
-                imageUrl: iconUrl,
-                externalUrl: `https://nano-gpt.com/models?search=${encodeURIComponent(mId)}`,
-                description: m.description || "",
-                tags: m.tags || ["nanogpt", isEdit ? "edit" : "checkpoint", parsed.baseModel.toLowerCase()],
-              });
+                nanoItems.push({
+                  id: mId,
+                  name: m.name || parsed.cleanDisplayName,
+                  provider: "NanoGPT",
+                  category: "Video",
+                  type: "MotionModule",
+                  baseModel: parsed.baseModel || (m.owned_by ? m.owned_by.toUpperCase() : 'Video'),
+                  downloads: undefined,
+                  likes: undefined,
+                  rating: undefined,
+                  speed: pricingStr,
+                  badge: 'NanoGPT 视频端点',
+                  imageUrl: iconUrl,
+                  externalUrl: `https://nano-gpt.com/models?search=${encodeURIComponent(mId)}`,
+                  description: m.description || "",
+                  tags: [...(m.tags || []), "nanogpt", "video", parsed.baseModel.toLowerCase()],
+                });
+              }
             }
+
+            if ((!imgResp || !imgResp.ok) && (!vidResp || !vidResp.ok) && nanoItems.length === 0) {
+              const status = imgResp ? imgResp.status : 504;
+              const rawResponse = imgResp ? await imgResp.text().catch(() => '') : '';
+              results.nanogpt = {
+                error: `NanoGPT 接口响应异常 (HTTP ${status})`,
+                status,
+                endpoint: 'https://api.nano-gpt.com/api/v1/image-models',
+                rawResponse: rawResponse || null,
+                errorSource: 'upstream',
+              } as any;
+            }
+          } catch (err: any) {
+            console.error("NanoGPT live models discovery error:", err);
+            results.nanogpt = {
+              error: `NanoGPT 连接失败: ${err.message}`,
+              status: err.status || 502,
+              endpoint: err.endpoint || 'https://api.nano-gpt.com/api/v1/image-models',
+              rawResponse: err.rawResponse || err.details || null,
+              errorSource: err.errorSource || 'network',
+              stack: err.stack,
+            } as any;
           }
 
-          if (vidResp) {
-            if (!vidResp.ok) {
-              const errText = await vidResp.text().catch(() => '');
-              throw new Error(`NanoGPT video-models 失败 [${vidResp.status}]: ${errText.slice(0, 200)}`);
-            }
-            const vidData = await vidResp.json();
-            const list = Array.isArray(vidData.data) ? vidData.data : Array.isArray(vidData.models) ? vidData.models : Array.isArray(vidData) ? vidData : [];
-            for (const m of list) {
-              const mId = m.id || m.model_id || "";
-              if (!mId) continue;
-              
-              const parsed = extractModelMetadata(
-                mId,
-                m.name,
-                m.tags || [],
-                m.description || '',
-                'video',
-                'NanoGPT'
-              );
-
-              const iconUrl = m.icon_url
-                ? (m.icon_url.startsWith('http') ? m.icon_url : `https://nano-gpt.com${m.icon_url}`)
-                : (m.owned_by && m.owned_by !== 'unknown' ? `https://nano-gpt.com/icons/${m.owned_by.charAt(0).toUpperCase() + m.owned_by.slice(1)}.svg` : 'https://nano-gpt.com/icons/Fal.svg');
-              
-              const pricingStr = m.pricing?.per_second
-                ? `$${m.pricing.per_second}/秒`
-                : (m.pricing?.minimum ? `$${m.pricing.minimum}/次` : 'NanoGPT 视频算力');
-
-              nanoItems.push({
-                id: mId,
-                name: m.name || parsed.cleanDisplayName,
-                provider: "NanoGPT",
-                category: "Video",
-                type: "MotionModule",
-                baseModel: parsed.baseModel || (m.owned_by ? m.owned_by.toUpperCase() : 'Video'),
-                downloads: undefined,
-                likes: undefined,
-                rating: undefined,
-                speed: pricingStr,
-                badge: 'NanoGPT 视频端点',
-                imageUrl: iconUrl,
-                externalUrl: `https://nano-gpt.com/models?search=${encodeURIComponent(mId)}`,
-                description: m.description || "",
-                tags: [...(m.tags || []), "nanogpt", "video", parsed.baseModel.toLowerCase()],
-              });
-            }
+          if (!results.nanogpt) {
+            const filtered = nanoItems.filter((m) => matchCategory(m) && matchSearch(m));
+            const offset = (pageParam - 1) * limitParam;
+            results.nanogpt = filtered.slice(offset, offset + limitParam);
+            pagination.nanogpt = {
+              page: pageParam,
+              limit: limitParam,
+              total: filtered.length,
+              hasMore: offset + limitParam < filtered.length,
+              sourceUrl: 'https://api.nano-gpt.com/api/v1',
+              sourceNotice: 'live-api (image-models & video-models)',
+            };
           }
-
-          if ((!imgResp || !imgResp.ok) && (!vidResp || !vidResp.ok) && nanoItems.length === 0) {
-            const status = imgResp ? imgResp.status : 504;
-            results.nanogpt = { error: `NanoGPT 接口响应异常 (HTTP ${status})` } as any;
-          }
-        } catch (err: any) {
-          console.error("NanoGPT live models discovery error:", err);
-          results.nanogpt = { error: `NanoGPT 连接失败: ${err.message}` } as any;
         }
-
-        if (!results.nanogpt) {
-          results.nanogpt = nanoItems.filter((m) => matchCategory(m) && matchSearch(m));
-        }
-      }
+      })());
     }
 
     // 8. Google Gemini & Imagen Real Dynamic Models Endpoint
     if (provider === "all" || provider === "gemini") {
-      const geminiItems: any[] = [];
-      try {
-        const geminiKey = process.env.GEMINI_API_KEY || cloudSettings['geminiKey'] || defaultKeys['geminiKey'] || '';
-        if (geminiKey) {
-          const gResp = await upstreamFetch(
-            { provider: 'gemini', route: req.path, model: 'models', key: geminiKey },
-            'https://generativelanguage.googleapis.com/v1beta/models',
-            {
-              headers: {
-                'x-goog-api-key': geminiKey,
-              },
-              signal: AbortSignal.timeout(4500),
-            }
-          );
-          if (gResp.ok) {
-            const gData = await gResp.json();
-            const models = gData.models || [];
-            for (const m of models) {
-              const nameClean = (m.name || '').replace('models/', '');
-              const isImage = nameClean.includes('imagen') || nameClean.includes('image');
-              const isVision = nameClean.includes('flash') || nameClean.includes('pro');
-              if (isImage || isVision) {
-                const parsed = extractModelMetadata(
-                  nameClean,
-                  m.displayName || nameClean,
-                  ["google", isImage ? "imagen" : "gemini"],
-                  m.description || "",
-                  isImage ? "text-to-image" : "multimodal",
-                  "Google"
-                );
-
-                geminiItems.push({
-                  id: nameClean,
-                  name: parsed.cleanDisplayName,
-                  provider: "Google Gemini",
-                  category: isImage ? "Checkpoint" : "Edit",
-                  type: isImage ? "Checkpoint" : "Reasoning",
-                  baseModel: parsed.baseModel,
-                  downloads: 0,
-                  likes: 0,
-                  rating: 0,
-                  speed: "Google 官方接口",
-                  badge: parsed.badge,
-                  imageUrl: "",
-                  tags: ["google", isImage ? "imagen" : "gemini"],
-                });
+      tasks.push((async () => {
+        const geminiItems: any[] = [];
+        try {
+          const geminiKey = process.env.GEMINI_API_KEY || cloudSettings['geminiKey'] || defaultKeys['geminiKey'] || '';
+          if (geminiKey) {
+            const gResp = await upstreamFetch(
+              { provider: 'gemini', route: req.path, model: 'models', key: geminiKey },
+              'https://generativelanguage.googleapis.com/v1beta/models',
+              {
+                headers: {
+                  'x-goog-api-key': geminiKey,
+                },
+                signal: AbortSignal.timeout(4500),
               }
+            );
+            if (gResp.ok) {
+              const gData = await gResp.json();
+              const models = gData.models || [];
+              for (const m of models) {
+                const nameClean = (m.name || '').replace('models/', '');
+                const isImage = nameClean.includes('imagen') || nameClean.includes('image');
+                const isVision = nameClean.includes('flash') || nameClean.includes('pro');
+                if (isImage || isVision) {
+                  const parsed = extractModelMetadata(
+                    nameClean,
+                    m.displayName || nameClean,
+                    ["google", isImage ? "imagen" : "gemini"],
+                    m.description || "",
+                    isImage ? "text-to-image" : "multimodal",
+                    "Google"
+                  );
+
+                  geminiItems.push({
+                    id: nameClean,
+                    name: parsed.cleanDisplayName,
+                    provider: "Google Gemini",
+                    category: isImage ? "Checkpoint" : "Edit",
+                    type: isImage ? "Checkpoint" : "Reasoning",
+                    baseModel: parsed.baseModel,
+                    downloads: 0,
+                    likes: 0,
+                    rating: 0,
+                    speed: "Google 官方接口",
+                    badge: parsed.badge,
+                    imageUrl: "",
+                    tags: ["google", isImage ? "imagen" : "gemini"],
+                  });
+                }
+              }
+            } else if (gResp) {
+              results.gemini = { error: `Google Gemini 接口异常 (HTTP ${gResp.status})` } as any;
             }
-          } else if (gResp) {
-            results.gemini = { error: `Google Gemini 接口异常 (HTTP ${gResp.status})` } as any;
+          } else {
+            results.gemini = { error: "Google Gemini 密钥未配置" } as any;
           }
-        } else {
-          results.gemini = { error: "Google Gemini 密钥未配置" } as any;
+        } catch (err: any) {
+          console.error("Gemini models live discovery error:", err);
+          results.gemini = { error: `Google Gemini 连接失败: ${err.message}` } as any;
         }
-      } catch (err: any) {
-        console.error("Gemini models live discovery error:", err);
-        results.gemini = { error: `Google Gemini 连接失败: ${err.message}` } as any;
-      }
-      if (!results.gemini) {
-        results.gemini = geminiItems.filter((m) => matchCategory(m) && matchSearch(m));
-      }
+        if (!results.gemini) {
+          results.gemini = geminiItems.filter((m) => matchCategory(m) && matchSearch(m));
+        }
+      })());
     }
 
     // 9. TAMS has no list API (official Integration FAQ); only explicit ID lookup.
     if (provider === "all" || provider === "tensorart" || provider === "tensor") {
-      try {
-        const numericSearch = searchStr.match(/(?:^|\/models\/)(\d{10,25})(?:$|[/?#])/);
-        const taCatalog = numericSearch
-          ? {items:[await fetchTensorArtModelInfo(numericSearch[1],resolveTensorArtKey(req))],nextCursor:null,sourceUrl:TENSOR_MODEL_API}
-          : {items:[],nextCursor:null,sourceUrl:'https://tams-docs.tensor.art/docs/api/guide/integration-faq/'};
-        const taItems=taCatalog.items;
-        const filteredTensorItems = taItems.filter((m:any)=> (!searchStr || numericSearch || `${m.name} ${m.baseModel}`.toLowerCase().includes(searchStr.toLowerCase())) && (!archFilter || archFilter==='all' || m.baseModel.toLowerCase().includes(archFilter.toLowerCase())));
-        results.tensorart = filteredTensorItems.filter((m: any) => matchCategory(m));
-        pagination.tensorart = {
-          page: pageParam,
-          hasMore: !!taCatalog.nextCursor,
-          nextCursor:taCatalog.nextCursor,
-          sourceUrl:taCatalog.sourceUrl,
-          paging:numericSearch ? 'model-id-lookup' : 'lookup-only',
-          catalogAvailable:false,
-          message:'TAMS 官方不提供模型列表 API；请在官方模型库选择底模或 LoRA，复制 ID 查询。未发起网页抓取。',
-        } as any;
-      } catch (taErr: any) {
-        console.error("Tensor.Art live models fetch error:", taErr.message);
-        results.tensorart = { error: taErr.message,status:taErr.status,details:taErr.details,exactEndpointCalled:taErr.exactEndpointCalled,stack:taErr.stack } as any;
-        if(provider !== 'all') return res.status(taErr.status >= 400 && taErr.status <= 599 ? taErr.status : 502).json({ok:false,error:taErr.message,details:taErr.details,upstreamStatus:taErr.status ?? null,exactEndpointCalled:taErr.exactEndpointCalled,stack:taErr.stack});
-      }
+      tasks.push((async () => {
+        try {
+          const numericSearch = searchStr.match(/(?:^|\/models\/)(\d{10,25})(?:$|[/?#])/);
+          const taCatalog = numericSearch
+            ? {items:[await fetchTensorArtModelInfo(numericSearch[1],resolveTensorArtKey(req))],nextCursor:null,sourceUrl:TENSOR_MODEL_API}
+            : {items:[],nextCursor:null,sourceUrl:'https://tams-docs.tensor.art/docs/api/guide/integration-faq/'};
+          const taItems=taCatalog.items;
+          const filteredTensorItems = taItems.filter((m:any)=> (!searchStr || numericSearch || `${m.name} ${m.baseModel}`.toLowerCase().includes(searchStr.toLowerCase())) && (!archFilter || archFilter==='all' || m.baseModel.toLowerCase().includes(archFilter.toLowerCase())));
+          results.tensorart = filteredTensorItems.filter((m: any) => matchCategory(m));
+          pagination.tensorart = {
+            page: pageParam,
+            hasMore: !!taCatalog.nextCursor,
+            nextCursor:taCatalog.nextCursor,
+            sourceUrl:taCatalog.sourceUrl,
+            paging:numericSearch ? 'model-id-lookup' : 'lookup-only',
+            catalogAvailable:false,
+            message:'TAMS 官方不提供模型列表 API；请在官方模型库选择底模或 LoRA，复制 ID 查询。未发起网页抓取。',
+          } as any;
+        } catch (taErr: any) {
+          console.error("Tensor.Art live models fetch error:", taErr.message);
+          results.tensorart = { error: taErr.message,status:taErr.status,details:taErr.details,exactEndpointCalled:taErr.exactEndpointCalled,stack:taErr.stack } as any;
+        }
 
-      if (provider === "tensor") {
-        results.tensor = results.tensorart;
-      }
+        if (provider === "tensor") {
+          results.tensor = results.tensorart;
+        }
+      })());
     }
 
     // Sort all provider arrays consistently by requested sortParam
@@ -3250,244 +2288,349 @@ app.get("/api/models", async (req, res) => {
     // Schema-driven providers (MuAPI / WaveSpeed / Sogni) join the "all" aggregation or direct query.
     // Each keeps its own source and error; one provider's failure never drops the others.
     if (provider === "all" || provider === 'muapi' || provider === 'wavespeed' || provider === 'sogni') {
-      const sps = (provider === 'all' ? ['muapi', 'wavespeed', 'sogni'] : [provider]) as ('muapi' | 'wavespeed' | 'sogni')[];
-      await Promise.allSettled(
-        sps.map(async (sp) => {
-          try {
-            const spKey = keyPoolManager.getNextKey(sp, undefined) || '';
-            const spRead = makeSchemaProviderReader(sp, upstreamFetch, spKey, req.path);
-            const wantsLora = cat === 'lora';
-            const { rows, sourceUrl, notice } = await fetchSchemaProviderRows(sp, spRead, { lora: wantsLora });
-            const spItems = normalizeSchemaProviderItems(sp, rows, {
-              lora: wantsLora,
-              sourceUrl,
-              category: cat === 'all' ? 'checkpoint' : cat,
-              query: '',
-            });
-            const filtered = spItems.filter((m: any) => matchCategory(m) && matchSearch(m));
-            results[sp] = filtered.slice((pageParam - 1) * limitParam, pageParam * limitParam);
-            const spNotice = sp === 'sogni' && !wantsLora
-              ? 'versioned-official-schema-selectors (@sogni-ai/sogni-protocol@1.0.0-alpha.46)'
-              : sp === 'sogni' && wantsLora
-              ? 'lookup-only (no public lora directory)'
-              : 'local-slice-of-live-upstream-catalog';
-            pagination[sp] = {
-              page: pageParam,
-              limit: limitParam,
-              total: filtered.length,
-              hasMore: pageParam * limitParam < filtered.length,
-              sourceUrl,
-              sourceNotice: spNotice,
-              paging: spNotice,
-            };
-            if (notice) (results as any)[`${sp}Notice`] = notice;
-          } catch (spErr: any) {
-            results[sp] = {
-              error: spErr.message,
-              status: spErr.status ?? null,
-              details: typeof spErr.rawResponse === 'string' ? spErr.rawResponse.slice(0, 500) : spErr.rawResponse,
-              endpoint: spErr.endpoint,
-            } as any;
-          }
-        })
-      );
+      tasks.push((async () => {
+        const sps = (provider === 'all' ? ['muapi', 'wavespeed', 'sogni'] : [provider]) as ('muapi' | 'wavespeed' | 'sogni')[];
+        await Promise.allSettled(
+          sps.map(async (sp) => {
+            try {
+              const spKey = keyPoolManager.getNextKey(sp, undefined) || '';
+              const spRead = makeSchemaProviderReader(sp, upstreamFetch, spKey, req.path);
+              const wantsLora = cat === 'lora';
+              const { rows, sourceUrl, notice } = await fetchSchemaProviderRows(sp, spRead, { lora: wantsLora });
+              const spItems = normalizeSchemaProviderItems(sp, rows, {
+                lora: wantsLora,
+                sourceUrl,
+                category: cat === 'all' ? 'checkpoint' : cat,
+                query: '',
+              });
+              const filtered = spItems.filter((m: any) => matchCategory(m) && matchSearch(m));
+              results[sp] = filtered.slice((pageParam - 1) * limitParam, pageParam * limitParam);
+              const spNotice = sp === 'sogni' && !wantsLora
+                ? 'versioned-official-schema-selectors (@sogni-ai/sogni-protocol@1.0.0-alpha.46)'
+                : sp === 'sogni' && wantsLora
+                ? 'lookup-only (no public lora directory)'
+                : 'local-slice-of-live-upstream-catalog';
+              pagination[sp] = {
+                page: pageParam,
+                limit: limitParam,
+                total: filtered.length,
+                hasMore: pageParam * limitParam < filtered.length,
+                sourceUrl,
+                sourceNotice: spNotice,
+                paging: spNotice,
+              };
+              if (notice) (results as any)[`${sp}Notice`] = notice;
+            } catch (spErr: any) {
+              results[sp] = {
+                error: spErr.message,
+                status: spErr.status ?? null,
+                details: typeof spErr.rawResponse === 'string' ? spErr.rawResponse.slice(0, 500) : spErr.rawResponse,
+                endpoint: spErr.endpoint,
+              } as any;
+            }
+          })
+        );
+      })());
     }
 
     // Runware live model search or lookup-only notice
     if (provider === 'all' || provider === 'runware') {
-      try {
-        const runwareKey = (req.headers['x-runware-key'] as string) || keyPoolManager.getNextKey('runware', undefined) || defaultKeys.runwareKey;
-        if (!runwareKey) {
-          results.runware = [];
-          pagination.runware = {
-            page: pageParam,
-            limit: limitParam,
-            total: 0,
-            hasMore: false,
-            sourceUrl: 'https://docs.runware.ai',
-            sourceNotice: 'lookup-only (no api key configured)',
-          };
-          (results as any).runwareNotice = 'Runware 实时模型搜索需要配置 API Key (RUNWARE_API_KEY)；支持直接在上方输入框中输入 AIR 标识符 (如 civitai:xxxx@yyyy 或 runware:xx@y) 按 ID 选用。';
-        } else if (!rawSearch) {
-          // Runware upstream modelSearch requires a non-empty search query; empty query times out.
-          const defaultModels = [
-            { id: 'runware:100@1', name: 'FLUX.1 Schnell (Runware 官方托管)', air: 'runware:100@1', category: 'checkpoint', architecture: 'flux' },
-            { id: 'runware:101@1', name: 'FLUX.1 Dev (Runware 官方托管)', air: 'runware:101@1', category: 'checkpoint', architecture: 'flux' },
-            { id: 'civitai:101055@128078', name: 'SDXL 1.0 Base (Civitai AIR)', air: 'civitai:101055@128078', category: 'checkpoint', architecture: 'sdxl' },
-            { id: 'alibaba:qwen-image@3.0', name: 'Qwen Image 3.0 (Runware)', air: 'alibaba:qwen-image@3.0', category: 'checkpoint', architecture: 'qwen' },
-          ];
-          results.runware = defaultModels.map((r: any) => ({
-            id: r.air || r.id,
-            name: r.name,
-            category: 'model',
-            provider: 'runware',
-            type: cat === 'lora' ? 'lora' : 'checkpoint',
-            architecture: r.architecture || null,
-            tags: ['runware', r.architecture].filter(Boolean),
-            description: 'Runware 官方托管模型；输入搜索词（如 flux、sdxl、anime）可实时检索官方与社区全量模型。',
-            previewImage: 'https://assets.runware.ai/logo.png',
-          }));
-          pagination.runware = {
-            page: 1,
-            limit: limitParam,
-            total: defaultModels.length,
-            hasMore: false,
-            sourceUrl: 'https://docs.runware.ai',
-            sourceNotice: 'default-recommendations (search query required for live full catalog)',
-          };
-          (results as any).runwareNotice = 'Runware 实时模型库支持关键词搜索（如 flux、sdxl、anime）；输入关键词即可实时检索。';
-        } else {
-          const searchTask = {
-            taskType: 'modelSearch',
-            taskUUID: crypto.randomUUID(),
-            search: rawSearch,
-            category: cat === 'lora' ? 'lora' : 'checkpoint',
-            limit: limitParam,
-            offset: (pageParam - 1) * limitParam,
-            ...(archFilter && archFilter !== 'all' ? { architecture: archFilter } : {}),
-          };
-          const rwResp = await upstreamFetch(
-            { provider: 'runware', route: req.path, model: 'modelSearch', key: runwareKey },
-            defaultKeys.runwareBaseUrl || 'https://api.runware.ai/v1',
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${runwareKey}`,
-              },
-              body: JSON.stringify([searchTask]),
-              signal: AbortSignal.timeout(8000),
-            }
-          );
-          if (!rwResp.ok) {
-            const errText = await rwResp.text().catch(() => '');
-            results.runware = {
-              error: `Runware 上游请求失败 (${rwResp.status})`,
-              status: rwResp.status,
-              details: errText.slice(0, 300),
-              endpoint: 'https://api.runware.ai/v1',
-            } as any;
-          } else {
-            const rwData = await rwResp.json().catch(() => ({}));
-            const taskResult = Array.isArray(rwData?.data) ? rwData.data[0] : null;
-            const rawList = Array.isArray(taskResult?.results) ? taskResult.results : [];
-            const mapped = rawList.map((r: any) => ({
-              id: r.air || r.id || r.name,
-              name: r.name || r.air,
-              category: 'model',
-              provider: 'runware',
-              type: r.category === 'lora' || cat === 'lora' ? 'lora' : 'checkpoint',
-              architecture: r.architecture || null,
-              tags: Array.isArray(r.tags) ? r.tags : [],
-              imageUrl: r.heroImage || r.image || r.thumbnail || null,
-              description: r.description || (r.air ? `AIR: ${r.air}` : null),
-              sourceUrl: typeof r.air === 'string' && r.air.startsWith('civitai:')
-                ? `https://civitai.com/models/${r.air.split(':')[1]?.split('@')[0]}`
-                : 'https://runware.ai',
-              rawAir: r.air,
-            }));
-            const filtered = mapped.filter((m: any) => matchCategory(m) && matchSearch(m));
-            results.runware = filtered;
-            const total = typeof taskResult?.totalResults === 'number' ? taskResult.totalResults : filtered.length;
+      tasks.push((async () => {
+        try {
+          const runwareKey = (req.headers['x-runware-key'] as string) || keyPoolManager.getNextKey('runware', undefined) || defaultKeys.runwareKey;
+          if (!runwareKey) {
+            results.runware = [];
             pagination.runware = {
-              page: pageParam,
-              limit: limitParam,
-              total,
-              hasMore: pageParam * limitParam < total,
-              sourceUrl: 'https://api.runware.ai/v1',
-              sourceNotice: 'live-api (modelSearch)',
-            };
-          }
-        }
-      } catch (rwErr: any) {
-        results.runware = {
-          error: rwErr.message || 'Runware 请求失败',
-          status: rwErr.status ?? null,
-          endpoint: 'https://api.runware.ai/v1',
-        } as any;
-      }
-    }
-
-    // ModelsLab live models list or lookup-only notice
-    if (provider === 'all' || provider === 'modelslab') {
-      try {
-        if (cat === 'lora') {
-          results.modelslab = [];
-          pagination.modelslab = {
-            page: 1,
-            limit: limitParam,
-            total: 0,
-            hasMore: false,
-            sourceUrl: 'https://modelslab.com',
-            sourceNotice: 'lookup-only (no public lora directory)',
-          };
-          (results as any).modelslabNotice = 'ModelsLab 暂无公开 LoRA 实时检索目录；如需使用 LoRA，请在生成节点中直接填入 lora_model ID（或用户微调模型 ID）。';
-        } else {
-          const modelslabKey = (req.headers['x-modelslab-key'] as string) || keyPoolManager.getNextKey('modelslab', undefined) || defaultKeys.modelslabKey;
-          if (!modelslabKey) {
-            results.modelslab = [];
-            pagination.modelslab = {
               page: pageParam,
               limit: limitParam,
               total: 0,
               hasMore: false,
-              sourceUrl: 'https://modelslab.com/api/v4/dreambooth/model_list',
+              sourceUrl: 'https://docs.runware.ai',
               sourceNotice: 'lookup-only (no api key configured)',
             };
-            (results as any).modelslabNotice = 'ModelsLab 官方模型列表需要 API Key (MODELSLAB_API_KEY)；支持直接在上方输入框中输入模型 ID (如 midjourney、anything-v3 等) 按 ID 选用。';
+            (results as any).runwareNotice = 'Runware 实时模型搜索需要配置 API Key (RUNWARE_API_KEY)；支持直接在上方输入框中输入 AIR 标识符 (如 civitai:xxxx@yyyy 或 runware:xx@y) 按 ID 选用。';
+          } else if (!rawSearch) {
+            results.runware = [];
+            pagination.runware = {
+              page: pageParam,
+              limit: limitParam,
+              total: 0,
+              hasMore: false,
+              sourceUrl: 'https://docs.runware.ai',
+              sourceNotice: 'lookup-only (search query required for live catalog)',
+            };
+            (results as any).runwareNotice = 'Runware 实时模型目录需要搜索关键词；请输入关键词后查询真实上游目录。';
           } else {
-            const mlResp = await upstreamFetch(
-              { provider: 'modelslab', route: req.path, model: 'dreambooth/model_list', key: modelslabKey },
-              'https://modelslab.com/api/v4/dreambooth/model_list',
+            const searchTask = {
+              taskType: 'modelSearch',
+              taskUUID: crypto.randomUUID(),
+              search: rawSearch,
+              category: cat === 'lora' ? 'lora' : 'checkpoint',
+              limit: limitParam,
+              offset: (pageParam - 1) * limitParam,
+              ...(archFilter && archFilter !== 'all' ? { architecture: archFilter } : {}),
+            };
+            const rwResp = await upstreamFetch(
+              { provider: 'runware', route: req.path, model: 'modelSearch', key: runwareKey },
+              defaultKeys.runwareBaseUrl || 'https://api.runware.ai/v1',
               {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ key: modelslabKey }),
-                signal: AbortSignal.timeout(15000),
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${runwareKey}`,
+                },
+                body: JSON.stringify([searchTask]),
+                signal: AbortSignal.timeout(8000),
               }
             );
-            if (!mlResp.ok) {
-              const errText = await mlResp.text().catch(() => '');
-              results.modelslab = {
-                error: `ModelsLab 上游请求失败 (${mlResp.status})`,
-                status: mlResp.status,
+            if (!rwResp.ok) {
+              const errText = await rwResp.text().catch(() => '');
+              results.runware = {
+                error: `Runware 上游请求失败 (${rwResp.status})`,
+                status: rwResp.status,
                 details: errText.slice(0, 300),
-                endpoint: 'https://modelslab.com/api/v4/dreambooth/model_list',
+                endpoint: 'https://api.runware.ai/v1',
               } as any;
             } else {
-              const mlData = await mlResp.json().catch(() => []);
-              const rawList = Array.isArray(mlData) ? mlData : [];
-              const mapped = rawList.map((m: any) => ({
-                id: m.model_id,
-                name: m.model_name || m.model_id,
-                category: 'checkpoint',
-                provider: 'modelslab',
-                type: 'Checkpoint',
-                imageUrl: m.screenshots || null,
-                description: m.description || null,
-                sourceUrl: `https://modelslab.com/models/${m.model_id}`,
+              const rwData = await rwResp.json().catch(() => ({}));
+              const taskResult = Array.isArray(rwData?.data) ? rwData.data[0] : null;
+              const rawList = Array.isArray(taskResult?.results) ? taskResult.results : [];
+              const mapped = rawList.map((r: any) => ({
+                id: r.air || r.id || r.name,
+                name: r.name || r.air,
+                category: 'model',
+                provider: 'runware',
+                type: r.category === 'lora' || cat === 'lora' ? 'lora' : 'checkpoint',
+                architecture: r.architecture || null,
+                tags: Array.isArray(r.tags) ? r.tags : [],
+                imageUrl: r.heroImage || r.image || r.thumbnail || null,
+                description: r.description || (r.air ? `AIR: ${r.air}` : null),
+                sourceUrl: typeof r.air === 'string' && r.air.startsWith('civitai:')
+                  ? `https://civitai.com/models/${r.air.split(':')[1]?.split('@')[0]}`
+                  : 'https://runware.ai',
+                rawAir: r.air,
               }));
               const filtered = mapped.filter((m: any) => matchCategory(m) && matchSearch(m));
-              const offset = (pageParam - 1) * limitParam;
-              results.modelslab = filtered.slice(offset, offset + limitParam);
+              results.runware = filtered;
+              const total = typeof taskResult?.totalResults === 'number' ? taskResult.totalResults : filtered.length;
+              pagination.runware = {
+                page: pageParam,
+                limit: limitParam,
+                total,
+                hasMore: pageParam * limitParam < total,
+                sourceUrl: 'https://api.runware.ai/v1',
+                sourceNotice: 'live-api (modelSearch)',
+              };
+            }
+          }
+        } catch (rwErr: any) {
+          results.runware = {
+            error: rwErr.message || 'Runware 请求失败',
+            status: rwErr.status ?? null,
+            endpoint: 'https://api.runware.ai/v1',
+          } as any;
+        }
+      })());
+    }
+
+    // ModelsLab live models list or lookup-only notice
+    if (provider === 'all' || provider === 'modelslab') {
+      tasks.push((async () => {
+        try {
+          if (cat === 'lora') {
+            results.modelslab = [];
+            pagination.modelslab = {
+              page: 1,
+              limit: limitParam,
+              total: 0,
+              hasMore: false,
+              sourceUrl: 'https://modelslab.com',
+              sourceNotice: 'lookup-only (no public lora directory)',
+            };
+            (results as any).modelslabNotice = 'ModelsLab 暂无公开 LoRA 实时检索目录；如需使用 LoRA，请在生成节点中直接填入 lora_model ID（或用户微调模型 ID）。';
+          } else {
+            const modelslabKey = (req.headers['x-modelslab-key'] as string) || keyPoolManager.getNextKey('modelslab', undefined) || defaultKeys.modelslabKey;
+            if (!modelslabKey) {
+              results.modelslab = [];
               pagination.modelslab = {
+                page: pageParam,
+                limit: limitParam,
+                total: 0,
+                hasMore: false,
+                sourceUrl: 'https://modelslab.com/api/v4/dreambooth/model_list',
+                sourceNotice: 'lookup-only (no api key configured)',
+              };
+              (results as any).modelslabNotice = 'ModelsLab 官方模型列表需要 API Key (MODELSLAB_API_KEY)；支持直接在上方输入框中输入模型 ID (如 midjourney、anything-v3 等) 按 ID 选用。';
+            } else {
+              const mlResp = await upstreamFetch(
+                { provider: 'modelslab', route: req.path, model: 'dreambooth/model_list', key: modelslabKey },
+                'https://modelslab.com/api/v4/dreambooth/model_list',
+                {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ key: modelslabKey }),
+                  signal: AbortSignal.timeout(15000),
+                }
+              );
+              if (!mlResp.ok) {
+                const errText = await mlResp.text().catch(() => '');
+                results.modelslab = {
+                  error: `ModelsLab 上游请求失败 (${mlResp.status})`,
+                  status: mlResp.status,
+                  details: errText.slice(0, 300),
+                  endpoint: 'https://modelslab.com/api/v4/dreambooth/model_list',
+                } as any;
+              } else {
+                const mlData = await mlResp.json().catch(() => []);
+                const rawList = Array.isArray(mlData) ? mlData : [];
+                const mapped = rawList.map((m: any) => ({
+                  id: m.model_id,
+                  name: m.model_name || m.model_id,
+                  category: 'checkpoint',
+                  provider: 'modelslab',
+                  type: 'Checkpoint',
+                  imageUrl: m.screenshots || null,
+                  description: m.description || null,
+                  sourceUrl: `https://modelslab.com/models/${m.model_id}`,
+                }));
+                const filtered = mapped.filter((m: any) => matchCategory(m) && matchSearch(m));
+                const offset = (pageParam - 1) * limitParam;
+                results.modelslab = filtered.slice(offset, offset + limitParam);
+                pagination.modelslab = {
+                  page: pageParam,
+                  limit: limitParam,
+                  total: filtered.length,
+                  hasMore: offset + limitParam < filtered.length,
+                  sourceUrl: 'https://modelslab.com/api/v4/dreambooth/model_list',
+                  sourceNotice: 'live-api (dreambooth/model_list)',
+                };
+              }
+            }
+          }
+        } catch (mlErr: any) {
+          results.modelslab = {
+            error: mlErr.message || 'ModelsLab 请求失败',
+            status: mlErr.status ?? null,
+            endpoint: 'https://modelslab.com/api/v4/dreambooth/model_list',
+          } as any;
+        }
+      })());
+    }
+
+    // Replicate live models discovery (collections/text-to-image with fallback to /v1/models)
+    if (provider === "all" || provider === "replicate") {
+      tasks.push((async () => {
+        const replicateItems: any[] = [];
+        try {
+          const replicateKey = (req.headers['x-replicate-key'] as string) || keyPoolManager.getNextKey('replicate', undefined) || defaultKeys.replicateKey || process.env.REPLICATE_API_TOKEN || '';
+          const replicateBase = (cloudSettings['replicateBaseUrl'] || defaultKeys['replicateBaseUrl'] || 'https://api.replicate.com/v1').replace(/\/+$/, '');
+          const repHeaders: Record<string, string> = {
+            'User-Agent': 'ComfyCanvas/1.0',
+            'Accept': 'application/json',
+          };
+          if (replicateKey) {
+            repHeaders['Authorization'] = `Bearer ${replicateKey}`;
+          }
+
+          let collectionModels: any[] = [];
+          let collectionFetched = false;
+
+          const collectionSlug = cat === 'video' ? 'text-to-video' : cat === 'lora' ? 'flux-fine-tunes' : 'text-to-image';
+            try {
+              const colResp = await upstreamFetch(
+                { provider: 'replicate', route: req.path, model: `collection:${collectionSlug}`, key: replicateKey },
+                `${replicateBase}/collections/${collectionSlug}`,
+                {
+                  headers: repHeaders,
+                  signal: AbortSignal.timeout(10000),
+                }
+              );
+              if (colResp.ok) {
+                const colData = await colResp.json();
+                if (Array.isArray(colData.models)) {
+                  collectionModels = colData.models;
+                  collectionFetched = true;
+                }
+              }
+            } catch (colErr) {
+              // Fallback to /v1/models below
+            }
+
+            if (!collectionFetched) {
+              const modelsResp = await upstreamFetch(
+                { provider: 'replicate', route: req.path, model: 'models', key: replicateKey },
+                `${replicateBase}/models`,
+                {
+                  headers: repHeaders,
+                  signal: AbortSignal.timeout(10000),
+                }
+              );
+              if (modelsResp.ok) {
+                const modelsData = await modelsResp.json();
+                collectionModels = Array.isArray(modelsData.results) ? modelsData.results : Array.isArray(modelsData) ? modelsData : [];
+              } else {
+                results.replicate = {
+                  error: `Replicate 接口响应异常 (HTTP ${modelsResp.status})`,
+                  status: modelsResp.status,
+                  endpoint: `${replicateBase}/models`,
+                } as any;
+              }
+            }
+
+            if (!results.replicate) {
+              for (const m of collectionModels) {
+                const modelId = m.owner && m.name ? `${m.owner}/${m.name}` : m.id || m.name || '';
+                if (!modelId) continue;
+
+                const parsed = extractModelMetadata(
+                  modelId,
+                  m.name || modelId,
+                  [],
+                  m.description || '',
+                  cat === 'video' ? 'video' : 'text-to-image',
+                  'Replicate'
+                );
+
+                replicateItems.push({
+                  id: modelId,
+                  name: m.name ? `${m.owner ? `${m.owner}/` : ''}${m.name}` : parsed.cleanDisplayName,
+                  provider: "Replicate",
+                  category: cat === 'video' ? 'Video' : cat === 'lora' ? 'LoRA' : 'Checkpoint',
+                  type: cat === 'video' ? 'MotionModule' : cat === 'lora' ? 'lora' : 'Checkpoint',
+                  baseModel: parsed.baseModel,
+                  downloads: typeof m.run_count === 'number' ? m.run_count : undefined,
+                  likes: undefined,
+                  rating: undefined,
+                  speed: "Replicate 官方算力",
+                  badge: m.owner || parsed.badge,
+                  imageUrl: m.cover_image_url || m.default_example?.output || "",
+                  externalUrl: `https://replicate.com/${modelId}`,
+                  description: m.description || "",
+                  tags: ["replicate", cat === 'video' ? 'video' : cat === 'lora' ? 'lora' : 'checkpoint', parsed.baseModel.toLowerCase()],
+                });
+              }
+
+              const filtered = replicateItems.filter((m) => matchCategory(m) && matchSearch(m));
+              const offset = (pageParam - 1) * limitParam;
+              results.replicate = filtered.slice(offset, offset + limitParam);
+              pagination.replicate = {
                 page: pageParam,
                 limit: limitParam,
                 total: filtered.length,
                 hasMore: offset + limitParam < filtered.length,
-                sourceUrl: 'https://modelslab.com/api/v4/dreambooth/model_list',
-                sourceNotice: 'live-api (dreambooth/model_list)',
+                sourceUrl: `${replicateBase}/collections/${collectionSlug}`,
+                sourceNotice: collectionFetched ? `live-api (collections/${collectionSlug})` : 'live-api (models fallback)',
               };
             }
+          } catch (repErr: any) {
+            console.error("Replicate live models discovery error:", repErr);
+            results.replicate = {
+              error: `Replicate 连接失败: ${repErr.message}`,
+              status: repErr.status || 502,
+              endpoint: `${cloudSettings['replicateBaseUrl'] || defaultKeys['replicateBaseUrl'] || 'https://api.replicate.com/v1'}/collections/text-to-image`,
+            } as any;
           }
-        }
-      } catch (mlErr: any) {
-        results.modelslab = {
-          error: mlErr.message || 'ModelsLab 请求失败',
-          status: mlErr.status ?? null,
-          endpoint: 'https://modelslab.com/api/v4/dreambooth/model_list',
-        } as any;
-      }
+      })());
     }
 
     if (provider === 'openai_compat') {
@@ -3507,17 +2650,20 @@ app.get("/api/models", async (req, res) => {
     }
 
     if (provider === 'all' || provider === 'sensenova') {
-      const officialImageModels = [{
-        id:'sensenova-u1.5-lite',name:'SenseNova U1.5 Lite · 官方图像生成/编辑',provider:'SenseNova',
-        category:'checkpoint',type:'Checkpoint',baseModel:'SenseNova U1.5 Lite',
-        tags:['text-to-image','image-editing'],
-        source:'https://www.sensetime.com/cn/news/sensenova-u1-5-lite-token-plan-20260911-1741',
-        description:'官方已公开 images/generations 与 images/edits。目录可见不代表当前账户拥有 API Key 或额度。',
-      }];
-      const filtered = officialImageModels.filter(m=>matchCategory(m) && matchSearch(m));
-      results.sensenova = cat === 'lora' || cat === 'video' ? [] : filtered.slice((pageParam-1)*limitParam,pageParam*limitParam);
-      pagination.sensenova = {page:pageParam,hasMore:pageParam*limitParam<filtered.length};
+      results.sensenova = [];
+      pagination.sensenova = {
+        page: pageParam,
+        limit: limitParam,
+        total: 0,
+        hasMore: false,
+        sourceUrl: 'https://www.sensetime.com',
+        sourceNotice: 'lookup-only (catalogAvailable:false; official public model list API unavailable)',
+        catalogAvailable: false,
+      };
+      (results as any).sensenovaNotice = 'SenseNova 官方没有公开模型列表 API；支持按模型 ID 选用，不能把本地白名单当作远端目录。';
     }
+
+    await Promise.allSettled(tasks);
 
     for (const k of Object.keys(results)) {
       if (Array.isArray(results[k])) {
@@ -3582,7 +2728,7 @@ function normalizeFalEndpoint(model: string, _isVideo = false): string {
 // ==========================================
 // 2. Fal.ai Inference (fal.ai / docs.fal.ai)
 // ==========================================
-app.post(['/api/fal/generate', '/api/generate'], async (req, res) => {
+app.post(['/api/fal/generate', '/api/generate', '/api/engine/fal/generate'], async (req, res) => {
   const startTime = Date.now();
   const falKey = keyPoolManager.getNextKey('fal', (req.headers['x-fal-key'] as string) || undefined) || '';
   try {
@@ -4996,7 +4142,7 @@ app.post(['/api/engine/sensenova/chat', '/api/sensenova/chat'], async (req, res)
   }
 });
 
-app.post('/api/engine/sensenova/generate', async (req, res) => {
+app.post(['/api/engine/sensenova/generate', '/api/sensenova/generate'], async (req, res) => {
   const startTime = Date.now();
   let mapped: ReturnType<typeof buildSenseNovaImageRequest>;
   try {
@@ -5293,6 +4439,18 @@ app.post('/api/engine/modelslab/generate', async (req, res) => {
       stack: error.stack,
     });
   }
+});
+
+// ==========================================
+// 2.9c. Replicate 引擎 (Modular Route)
+// ==========================================
+registerReplicateRoutes(app, {
+  resolveProviderAuth,
+  upstreamFetch,
+  keyPoolManager,
+  respondWithGeneratedImages,
+  recordHistoryItem,
+  sanitizeGenerationMetadata,
 });
 
 // ==========================================
@@ -5667,8 +4825,22 @@ app.post(['/api/tensorart/generate', '/api/engine/tensorart/generate'], async (r
       });
     }
 
-    // Model IDs use the model API. Tools have their own explicit namespace and never stand in for a model.
-    if (!req.body.toolName || /^\d{10,25}$/.test(String(req.body.model ?? '')) || String(req.body.model ?? '').startsWith('https://')) {
+    // Model IDs use the TAMS Model API for diffusion workflows (Checkpoint + KSampler + LoRA).
+    // Tools have their own explicit namespace (/openworks/v1/task) and never stand in for a model.
+    const requestedModelOrTool = String(req.body.toolName || req.body.model || '').trim();
+    const isNumericModelId = /^\d{10,25}$/.test(requestedModelOrTool) || /^https:\/\/(?:www\.)?(?:tensor\.art|tusiart\.com)\/models\/\d{10,25}/.test(requestedModelOrTool);
+    const isModelJob = !req.body.toolName && isNumericModelId;
+
+    if (isModelJob) {
+      if (apiKey.startsWith('ak_')) {
+        return res.status(400).json({
+          error: '当前配置的是 Tensor.Art OpenWorks Access Key (ak_tensor_...)，不能用于 TAMS 模型 API。',
+          details: '画布上的 Checkpoint + KSampler + LoRA 节点工作流通过 TAMS 模型 API 运行，需要 TAMS 应用授权（可在 https://tams.tensor.art/app 创建应用获取 Bearer Key）。OpenWorks ak_tensor 仅用于固定工具/工作流接口，两套系统凭证不互通。',
+          credentialHint: '模型 API 使用 TAMS Bearer Key；OpenWorks ak_tensor 工具 key 不代表模型 API 授权',
+          requestedModel: requestedModelOrTool,
+          exactEndpointCalled: `${TENSOR_MODEL_API}/v1/models/${requestedModelOrTool}`,
+        });
+      }
       if (rejectUnsupported(res, 'Tensor.Art 模型 API（当前文生图路由）', req.body, ['image_url', 'denoise', 'ratio', 'size', 'resolution', 'duration', 'inputs'])) return;
       let payload;
       try { payload = buildTensorModelJob(req.body, crypto.randomUUID()); }
@@ -7039,6 +6211,35 @@ async function testSingleProviderKey(
       return {maskedKey,status:'ok',latency:Date.now()-startTime,message:`模型 API 鉴权成功：${model.id}（${model.baseModel}）；仅验证查询，生成能力须实际出图确认`};
     }
 
+    if (prov === 'replicate') {
+      if (!singleKey) {
+        return { maskedKey, status: 'error', latency: 0, message: '未配置 Replicate API 密钥' };
+      }
+      const resp = await upstreamFetch(
+        { provider: 'replicate', route: routePath, model: 'account', key: singleKey },
+        'https://api.replicate.com/v1/account',
+        { headers: { Authorization: `Bearer ${singleKey}` } }
+      );
+      const latency = Date.now() - startTime;
+      if (resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        const username = data.username || data.name || '';
+        return {
+          maskedKey,
+          status: 'ok',
+          latency,
+          message: `Replicate 认证成功${username ? `（用户: ${username}）` : ''}`,
+        };
+      }
+      const errText = await resp.text().catch(() => '');
+      return {
+        maskedKey,
+        status: resp.status === 429 ? 'rate_limited' : 'error',
+        latency,
+        message: `Replicate 鉴权失败 [${resp.status}]: ${errText.slice(0, 200)}`,
+      };
+    }
+
     if (prov === 'runware' || prov === 'modelslab') {
       return {
         maskedKey,
@@ -7147,6 +6348,7 @@ const VALID_STRATEGY_PROVIDERS = new Set([
   'grok_compat',
   'runware',
   'modelslab',
+  'replicate',
 ]);
 const VALID_STRATEGIES = new Set(['round_robin']);
 
@@ -7724,6 +6926,9 @@ const ALLOWED_SETTINGS_SECRET = new Set([
   'geminiKey',
   'openaiCompatKey',
   'grokCompatKey',
+  'runwareKey',
+  'modelslabKey',
+  'replicateKey',
 ]);
 
 const ALLOWED_SETTINGS_PLAIN = new Set([
@@ -7731,6 +6936,9 @@ const ALLOWED_SETTINGS_PLAIN = new Set([
   'sensenovaBaseUrl',
   'openaiCompatBaseUrl',
   'grokCompatBaseUrl',
+  'runwareBaseUrl',
+  'modelslabBaseUrl',
+  'replicateBaseUrl',
 ]);
 
 const ALLOWED_SETTINGS = new Set([...ALLOWED_SETTINGS_SECRET, ...ALLOWED_SETTINGS_PLAIN]);

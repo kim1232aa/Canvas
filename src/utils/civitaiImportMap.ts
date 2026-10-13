@@ -115,3 +115,59 @@ export function resolveRawImportNegativeSamplerScheduler(fullText: string): {
 
   return { negativePrompt, sampler, scheduler };
 }
+
+/**
+ * Detects if a model identifier string is merely a raw architecture family name
+ * (such as "SDXL 1.0", "SD 1.5", "Flux.1 D", "Pony") rather than a concrete
+ * checkpoint filename or Civitai URN / AIR / modelId@versionId reference.
+ */
+export function isRawBaseModelArchitectureText(text: string): boolean {
+  if (!text) return false;
+  const s = text.trim();
+  if (!s) return false;
+  // Concrete filenames with weights extensions
+  if (/\.(?:safetensors|ckpt|pt|bin)$/i.test(s)) return false;
+  // Explicit URNs or ID references
+  if (s.startsWith('urn:air:') || s.startsWith('civitai:') || s.includes('@') || /^\d+$/.test(s)) return false;
+
+  const RAW_ARCHITECTURES = new Set([
+    'sdxl 1.0',
+    'sdxl 0.9',
+    'sdxl turbo',
+    'sdxl lightning',
+    'sdxl',
+    'sd 1.5',
+    'sd 1.4',
+    'sd 2.0',
+    'sd 2.1',
+    'sd 3',
+    'sd 3.5',
+    'sd 3.5 large',
+    'sd 3.5 medium',
+    'flux.1',
+    'flux.1 d',
+    'flux.1 s',
+    'flux.1 dev',
+    'flux.1 schnell',
+    'flux',
+    'pony',
+    'pony v6',
+    'illustrious',
+    'illustrious xl',
+    'noobai',
+    'noobai xl',
+    'wan 2.1',
+    'hunyuan video',
+    'krea 2',
+    'zimageturbo',
+  ]);
+  const lower = s.toLowerCase().replace(/[-_]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (RAW_ARCHITECTURES.has(lower)) return true;
+
+  if (/^(?:sdxl|sd|flux|pony|illustrious|wan)\b/i.test(lower) && !/\b(?:checkpoint|model|v\d{2,}|v\d+\.\d+\.\d+)\b/i.test(lower)) {
+    if (/^(?:sdxl(?:\s*1\.0)?|sd\s*(?:1\.5|1\.4|2\.1|3\.5)|flux(?:\.1)?(?:\s*[ds])?|pony)$/i.test(lower)) {
+      return true;
+    }
+  }
+  return false;
+}

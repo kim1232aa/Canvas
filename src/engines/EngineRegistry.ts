@@ -22,6 +22,7 @@ import { GrokCompatDriver } from './drivers/GrokCompatDriver';
 import { SchemaProviderDriver } from './drivers/SchemaProviderDriver';
 import { RunwareDriver } from './drivers/RunwareDriver';
 import { ModelsLabDriver } from './drivers/ModelsLabDriver';
+import { ReplicateDriver } from './drivers/ReplicateDriver';
 
 /**
  * 引擎注册管理中心 (Central Engine Registry Shell)
@@ -53,6 +54,7 @@ export class EngineRegistryClass {
     this.register(new SchemaProviderDriver('sogni'));
     this.register(new RunwareDriver());
     this.register(new ModelsLabDriver());
+    this.register(new ReplicateDriver());
   }
 
   /**

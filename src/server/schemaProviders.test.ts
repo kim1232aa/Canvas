@@ -1,6 +1,6 @@
 import express from 'express';
 import { describe, expect, it } from 'vitest';
-import { registerSchemaProviderRoutes, resolveSchemaRefs, upstreamReferenceUrlIssue } from './schemaProviders';
+import { normalizeSchemaProviderItems, registerSchemaProviderRoutes, resolveSchemaRefs, sogniLoraCover, upstreamReferenceUrlIssue } from './schemaProviders';
 
 async function withFixture(
   upstream: (url: string, init?: RequestInit) => Promise<Response>,
@@ -81,6 +81,24 @@ async function withFixture(
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 }
+
+describe('Sogni LoRA catalog covers', () => {
+  const example=(caption:string,isMature=false)=>({url:`https://cdn.sogni.ai/ComfyUI/lora-examples/x_${caption}.jpg`,caption,isMature});
+  it('uses an upstream positive-strength example, skipping the shared Off baseline, negatives and mature samples', () => {
+    expect(sogniLoraCover({ui:{examples:[example('-2'),example('Off'),example('+1',true),example('+3')]}})).toEqual({url:'https://cdn.sogni.ai/ComfyUI/lora-examples/x_+3.jpg',caption:'+3'});
+    expect(sogniLoraCover({ui:{examples:[example('Off'),example('-1')]}})?.caption).toBe('-1');
+  });
+  it('leaves the cover empty when upstream has no usable example', () => {
+    expect(sogniLoraCover({ui:{examples:[example('Off'),example('+1',true)]}})).toBeUndefined();
+    const [item]=normalizeSchemaProviderItems('sogni',[{loraId:'h3-better-motion',name:'Better Motion',ui:{}}],{lora:true,sourceUrl:'https://api.sogni.ai/v1/loras/comfy'});
+    expect(item.imageUrl).toBe('');
+  });
+  it('maps compatible models, creator and source page from the Sogni row', () => {
+    const [item]=normalizeSchemaProviderItems('sogni',[{loraId:'krea2-detail-enhancer',name:'Detail Enhancer',compatibleModels:[{modelId:'a',name:'Krea 2 Turbo'},{modelId:'b',name:'Dark Beast Krea 2 v3'}],ui:{creator:'alcaitiff',sourceUrl:'https://civitai.com/models/2729908',examples:[example('+1')]}}],{lora:true,sourceUrl:'https://api.sogni.ai/v1/loras/comfy'});
+    expect(item).toMatchObject({id:'krea2-detail-enhancer',baseModel:'Krea 2 Turbo 等 2 个',creator:'alcaitiff',externalUrl:'https://civitai.com/models/2729908',imageCaption:'+1'});
+    expect(item.imageUrl).toContain('cdn.sogni.ai');
+  });
+});
 
 describe('schema provider server contract', () => {
   it('uses the MuAPI execution identifier rather than the display alias, with weighted model objects', async () => {

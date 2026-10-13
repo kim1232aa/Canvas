@@ -84,8 +84,8 @@ export class AgnesDriver extends BaseEngineDriver {
     keys: Record<string, string>
   ): Promise<NormalizedGenerateResult> {
     if (!params.model) throw new Error('模型为必填项（model is required）');
-    // No key here → server resolves from its pool (AGNES_KEY / settings)
-    const effectiveKey = params.apiKey || keys.agnesKey || '';
+    const rawKey = params.apiKey || keys.agnesKey || '';
+    const effectiveKey = (rawKey || '').split(/[\r\n,]/)[0].trim();
     const effectiveBaseUrl = params.baseUrl || keys.agnesBaseUrl || this.defaultBaseUrl;
 
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -164,8 +164,8 @@ export class AgnesDriver extends BaseEngineDriver {
     keys: Record<string, string>
   ): Promise<NormalizedChatResult> {
     if (!params.model) throw new Error('模型为必填项（model is required）');
-    // No key here → server resolves from its pool (AGNES_KEY / settings)
-    const effectiveKey = params.apiKey || keys.agnesKey || '';
+    const rawKey = params.apiKey || keys.agnesKey || '';
+    const effectiveKey = (rawKey || '').split(/[\r\n,]/)[0].trim();
     const effectiveBaseUrl = params.baseUrl || keys.agnesBaseUrl || this.defaultBaseUrl;
 
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };

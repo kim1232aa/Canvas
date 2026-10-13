@@ -4,6 +4,60 @@
 
 **合并范围说明**：保留 origin/main 已有的验收事实与功能说明，以及本地 incoming `72f5372` 的 2026-10-12 接线修复记录。10-10 Runware 的 `PASS_GENERATION` 仅指当时实测路径；10-12 `lora` 字段修复尚未上游复验，余额不足不是生成成功。ModelsLab 的订阅限制仍只记 `PASS_BILLING`，参考图 `/img2img` 修复未完成真实复验。10-09 资产库旧 base64 不自动迁移是当时状态，10-12 新增打开资产库时上传的接线记录，不代表已逐项真实验收。下文 10-06/10-05 的状态及待验项限各自当时范围，后续 SenseNova、Fal、媒体架构进展按 10-10/10-09 记录并列保留，不提升任何验收等级。
 
+## 2026-10-13 引擎补齐、双轨架构落地与无头浏览器 E2E 实测闭环
+
+- **Replicate 官方推理引擎全面接入**：
+  - **契约构建**：新建 `src/server/replicateImageContract.ts`，原生支持 `owner/name`、`owner/name:version` 及 64 字符 hex version，严谨映射 `num_inference_steps`、`guidance_scale`、`hf_lora`，并全面覆盖单/多图输出与对象型输出提取。
+  - **服务端路由**：新建 `src/server/routes/replicateRoutes.ts`，暴露 `/api/engine/replicate/generate`（异步轮询 `predictions/{id}` 直至终态，失败透明回传 402/401/422）与 `/api/replicate/model-info`。
+  - **前端驱动**：新建 `src/engines/drivers/ReplicateDriver.ts` 并注册进 `EngineRegistry`，内置 FLUX.1 [schnell/dev]、Ideogram v2a、MiniMax Image-01、Seedream 3 模型规格。
+  - **动态 Schema 路由**：`server.ts` `/api/model-schema` 增加 `provider === 'replicate'` 分支，直连 Replicate 官方端点解析提取 OpenAPI `Input` 规范，为前端自定义参数面板提供即时字段提示。
+- **双轨并存补全（方案 B）：彻底终结一体化引擎孤立节点状态**：
+  - **节点坞入口（`ModernToolDock.tsx`）**：正式建立「云端一体化加速引擎」分类，暴露 `FalAIEngineNode`、`ReplicateEngineNode`、`ModelScopeNode`、`ModelScopeAiNode`、`NanoGPTNode`、`GoogleImagenNode`。
+  - **模型中心专属动作（`ModelHubModal.tsx` & `App.tsx`）**：在支持一体化引擎的供应商模型卡片上增加「添加一体化引擎节点」专属按钮（保留标准 ComfyUI「添加底模节点」按钮），点击自动在画布挂载预填充好的专属引擎节点。
+  - **节点内参数与结果渲染（`NodeItem.tsx`）**：将 `ReplicateEngineNode` 纳入 `ApiParameterEditor` 高级参数白名单与节点映射；在节点卡片底部输出区补齐 `ReplicateEngineNode`、`ModelScopeNode`、`ModelScopeAiNode`、`NanoGPTNode`、`GoogleImagenNode` 的图片与媒体渲染。
+  - **总控台与执行器打通（`inspectorParameters.ts` & `graphEngine.ts`）**：补齐 `ReplicateEngineNode` 的 target 匹配、`targetProvider: 'replicate'` 映射、`guidance_scale` 补丁与动态分辨率提取。
+- **架构级 LoRA 兼容性防护（严禁静默丢弃）**：
+  - 在 `graphEngine.ts` 与 `resolveCheckpoint.ts` 建立严格的模型架构族校验（FLUX, SDXL, SD1.5, Krea2 等）。
+  - 当用户在画布连接跨架构 LoRA 时（例如 SDXL/Krea2 LoRA 挂载至 FLUX.1），彻底封堵此前将 LoRA 静默剔除后发起虚假请求的违规行为，强制在执行前阻断并显式抛出架构不兼容错误。
+- **无头浏览器 E2E 走查与端到端实机验证（实测全通）**：
+  - **浏览器 E2E 走查**：使用自动化无头 Chrome（端口 9225）在真实前端页面（`http://127.0.0.1:3000`）实测，工具栏点击成功挂载 `ReplicateEngineNode` 与 `NanoGPTNode`；模型中心点击「添加一体化引擎节点」成功挂载 `FalAIEngineNode (FLUX.1 [schnell])`。
+  - **真实上游错误透明回传（0 Mock / 100% 透明）**：
+    - `FalAIEngineNode`: 上游 HTTP 403 `{"detail":"User is locked. Reason: TOP_UP."}`
+    - `NanoGPTNode`: 上游 HTTP 401 `{"error":{"message":"Invalid session","type":"invalid_request_error","code":"invalid_api_key"}}`
+    - `ReplicateEngineNode`: 上游 HTTP 402 `{"title":"Insufficient credit"}`
+    - `ModelScopeNode` (国内): 上游 HTTP 400 `{"errors":{"message":"Model not exists..."}}`
+    - `ModelScopeAiNode` (国际): 上游 HTTP 401 `{"errors":{"message":"Please bind your Alibaba Cloud account before use."}}`
+  - **实机成功生成与历史沉淀校验（Agnes AI / ApiHub）**：
+    - 前端完整工作流节点链真实执行成功，产出 1.91 MB PNG 原图（`/api/media/e65c225006fa4261df5a4d797caa22bd3b160971ac2f8b13f6a575d10c36c9af`）。
+    - `/api/history` 成功落盘包含节点快照、略过参数透明记录（`seed`, `steps`, `cfg`）与原始 trace 的完整历史记录。
+- **验证矩阵**：
+  - `npm run lint` (`tsc --noEmit`): 0 error
+  - `npm test`: 89 个测试套件 / 773 个测试用例全部 PASS
+
+## 2026-10-13 架构重构与审查闭环：server.ts 模块化瘦身 & 契约缺陷全面清零
+
+- **server.ts 模块化解耦与瘦身（方案 B）**：
+  - 成功抽离并建立独立路由模块 `src/server/routes/civitaiWorkflowRoute.ts`（约 850 行）与 `src/server/routes/civitaiModelRoutes.ts`（约 260 行）。
+  - `server.ts` 减少逾千行代码，保持与 `hosting/build.mjs` 以及 Vitest 契约切片（`generatedImageRoutes.test.ts`, `modelHubCatalog.test.ts` 等）的平滑构建兼容。
+- **安全加固（CRITICAL）**：
+  - `.gitignore` 补充 `temp/` 规则，防止自动化测试运行中的浏览器 Cookie / 凭证目录被纳入版本管理。
+- **审查缺陷闭环（8 HIGH / 2 MEDIUM）**：
+  1. `[HIGH 1]` Civitai 模型路由 `modelId` 与 `versionId` 采用严格纯数字正则 `/^\d+$/` 校验，非法字符串直返 400，拒绝向上游发送无效请求。
+  2. `[HIGH 2]` `extract-workflow` 端点对 `rawText` / `url` / `modelId` / `imageId` 模式实施互斥校验，收到多个或空模式时直接 400 拦截，彻底消除模式混淆与静默优先。
+  3. `[HIGH 3]` Civitai 提取上游错误时保留完整 status、errorSource、endpoint 和原始错误体，严禁截断吞错。
+  4. `[HIGH 4]` `extract-workflow` 引入严格可执行性校验，无正向提示词且无模型信息时 400 拦截，杜绝虚假成功。
+  5. `[HIGH 5]` Civitai `resources` 区分 Checkpoint 与 LoRA 类型，不把 LoRA 误标为底模。
+  6. `[HIGH 6]` `extract-workflow` 彻底移除硬编码默认值（duration 10, fps 24, aspect 16:9, denoise 1.0, 拼接 `.safetensors`）。
+  7. `[HIGH 7]` `LLMReasoningNode` 提示词改写保留前置 LoRA trigger words，在 `workflowSnapshot.requestMetadata.promptTransform` 中完整记录 `prependedTriggerWords`、`originalPrompt`、`llmPrompt` 与 `finalPrompt`。
+  8. `[HIGH 8]` Hugging Face 非 z-image-space 路由遗漏追踪，完整记录 `shift`、`random_seed`、`gallery_images`。
+  9. `[MEDIUM 1]` `CivitaiModal.tsx` 在 Civitai 元数据缺失 `baseModel` 时保留为 `null`，禁止从模型名称强猜架构，仅保留 `badge` 为纯视觉提示。
+  10. `[MEDIUM 2]` `NanoGPT` 目录错误透传上游真实 status 与报错详情，禁止以空列表假装正常。
+- **验证矩阵**：
+  - `npm run lint` (`tsc --noEmit`): 0 error
+  - `npm test`: 84 个测试套件 / 697 个测试用例全部 PASS
+  - `npm run build && node hosting/check-hosting.mjs`: Sites 构建与 Hosting 检查全部 PASS
+  - pm2 进程重启（`pm2 restart canvas --update-env`），使用 curl 针对 400 拦截实测验证通过。
+
 ## 2026-10-12 接线修复状态：契约已修，真实复验未完成
 
 - Runware 请求字段改为官方 `lora`；Schnell 的 `CFGScale=0` 保留。网页真实提交曾发送旧字段 `loras`，上游先返回余额不足，因此新字段尚未得到上游复验。

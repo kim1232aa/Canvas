@@ -16,3 +16,11 @@ data/*
 .wrangler/
 hosting/server.generated.ts
 hosting/assets.generated.ts
+temp/
+*.db
+*.db-journal
+*.wal
+*.sqlite
+*.sqlite3
+*.pma
+

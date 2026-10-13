@@ -3,7 +3,7 @@ import type {Connection,NodeInstance} from '../types/graph';
 // Attach to one execution branch. An independent palette node remains independent.
 export function findLoraTarget(nodes:NodeInstance[],connections:Connection[],selectedId?:string|null) {
   const active=nodes.filter(node=>!node.bypassed);
-  const engines=active.filter(node=>node.type==='KSampler' || node.type==='FalAIEngineNode');
+  const engines=active.filter(node=>node.type==='KSampler' || node.type==='FalAIEngineNode' || node.type==='ReplicateEngineNode');
   const selected=active.find(node=>node.id===selectedId);
   if(selected && engines.some(node=>node.id===selected.id))return selected;
   if(selected){
@@ -31,7 +31,7 @@ export function removeLoraFromBranch(nodes:NodeInstance[],connections:Connection
 
 export function attachLoraToBranch(nodes:NodeInstance[],connections:Connection[],lora:NodeInstance,selectedId?:string|null) {
   const target=findLoraTarget(nodes,connections,selectedId);
-  const input=target.type==='FalAIEngineNode'?'lora':'model';
+  const input=(target.type==='FalAIEngineNode' || target.type==='ReplicateEngineNode')?'lora':'model';
   const existing=connections.find(edge=>edge.toNodeId===target.id && edge.toSocketId===input);
   if(!existing && target.type==='KSampler')throw new Error('所选采样器没有底模连线，请先连接真实底模');
   const edges=connections.filter(edge=>edge.id!==existing?.id);

@@ -386,8 +386,8 @@ export const NodeItem: React.FC<NodeItemProps> = ({
             </div>
           )}
 
-          {node.type==='CheckpointLoaderSimple' && ['civitai','fal','modelscope','modelscope_ai','huggingface','muapi','wavespeed','sogni'].includes(node.values.targetProvider) && <ApiParameterEditor provider={node.values.targetProvider} model={node.values.ckpt_name} value={node.values.custom_parameters} onChange={value=>onUpdateValue(node.id,'custom_parameters',value)} />}
-          {['FalAIEngineNode','ModelScopeNode','ModelScopeAiNode','NanoGPTNode'].includes(node.type) && <ApiParameterEditor provider={({FalAIEngineNode:'fal',ModelScopeNode:'modelscope',ModelScopeAiNode:'modelscope_ai',NanoGPTNode:'nanogpt'} as Record<string,string>)[node.type]} model={node.values.model_endpoint || node.values.model || ''} value={node.values.custom_parameters} onChange={value=>onUpdateValue(node.id,'custom_parameters',value)} />}
+          {node.type==='CheckpointLoaderSimple' && ['civitai','fal','modelscope','modelscope_ai','huggingface','muapi','wavespeed','sogni','replicate'].includes(node.values.targetProvider) && <ApiParameterEditor provider={node.values.targetProvider} model={node.values.ckpt_name} value={node.values.custom_parameters} onChange={value=>onUpdateValue(node.id,'custom_parameters',value)} />}
+          {['FalAIEngineNode','ModelScopeNode','ModelScopeAiNode','NanoGPTNode','ReplicateEngineNode'].includes(node.type) && <ApiParameterEditor provider={({FalAIEngineNode:'fal',ModelScopeNode:'modelscope',ModelScopeAiNode:'modelscope_ai',NanoGPTNode:'nanogpt',ReplicateEngineNode:'replicate'} as Record<string,string>)[node.type]} model={node.values.model_endpoint || node.values.model || ''} value={node.values.custom_parameters} onChange={value=>onUpdateValue(node.id,'custom_parameters',value)} />}
           {node.type === 'CheckpointLoaderSimple' && node.values.targetProvider === 'sensenova' && <div className="space-y-2">
             <label className="block text-slate-300">SenseNova size<input type="text" aria-label="SenseNova size" aria-describedby={`sensenova-size-note-${node.id}`} value={node.values.size ?? ''} onMouseDown={e=>e.stopPropagation()} onPointerDown={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()} onChange={e=>onUpdateValue(node.id,'size',e.target.value === '' ? undefined : e.target.value)} placeholder="auto / 2048x2048；留空时按画布宽高(如1024x1024)发送，无宽高则 auto" className="mt-1 w-full rounded border border-slate-700 bg-[#121316] p-2 focus-visible:outline-2 focus-visible:outline-cyan-400" /></label>
             <p id={`sensenova-size-note-${node.id}`} role="note" className="text-amber-200">官方文档写 2K/4K 常量，但本次上游对这两个值返回 400：invalid size, should be auto or WIDTHxHEIGHT。建议明确填写像素尺寸或 auto；原值保留，不自动转换，也不在此限制提交。</p>
@@ -1023,6 +1023,11 @@ export const NodeItem: React.FC<NodeItemProps> = ({
             node.type === 'SaveVideo' ||
             node.type === 'AIVideoNode' ||
             node.type === 'FalAIEngineNode' ||
+            node.type === 'ReplicateEngineNode' ||
+            node.type === 'ModelScopeNode' ||
+            node.type === 'ModelScopeAiNode' ||
+            node.type === 'NanoGPTNode' ||
+            node.type === 'GoogleImagenNode' ||
             (node.type === 'KSampler' && node.outputData) ||
             (node.type === 'VAEDecode' && node.outputData)) && (
             <div className="mt-2 space-y-2">

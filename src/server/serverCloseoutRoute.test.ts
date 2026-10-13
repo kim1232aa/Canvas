@@ -21,4 +21,10 @@ describe('server closeout wiring contracts', () => {
     expect(serverSource).toContain('parameterOmissions,');
     expect(serverSource).toContain('const actualRequest = { model: actualModel, contents: { parts }, config: sentConfig };');
   });
+
+  it('Replicate model-schema route queries official Replicate model endpoint and extracts openapi inputSchema', () => {
+    expect(serverSource).toContain("if (provider === 'replicate') {");
+    expect(serverSource).toContain('https://api.replicate.com/v1/models/${encodeURIComponent(owner)}/${encodeURIComponent(name)}');
+    expect(serverSource).toContain('const inputSchema = openapi?.components?.schemas?.Input || null;');
+  });
 });

@@ -31,7 +31,7 @@ import {
   ArrowDown,
   Box,
 } from 'lucide-react';
-import { fetchLiveModels, fetchHuggingFaceModelInfo, fetchTensorArtModelInfo } from '../services/api';
+import { fetchLiveModels, fetchHuggingFaceModelInfo, fetchTensorArtModelInfo, fetchReplicateModelInfo } from '../services/api';
 
 interface ModelHubModalProps {
   isOpen: boolean;
@@ -64,7 +64,7 @@ interface ModelHubModalProps {
 }
 
 export type CategoryFilter = 'all' | 'checkpoint' | 'lora' | 'video' | 'edit';
-export type ProviderTab = 'all' | 'civitai' | 'fal' | 'tensorart' | 'modelscope' | 'modelscope_ai' | 'huggingface' | 'nanogpt' | 'gemini' | 'muapi' | 'wavespeed' | 'sogni' | 'runware' | 'modelslab' | 'agnes' | 'sensenova' | 'openai_compat' | 'grok_compat';
+export type ProviderTab = 'all' | 'civitai' | 'fal' | 'tensorart' | 'modelscope' | 'modelscope_ai' | 'huggingface' | 'nanogpt' | 'gemini' | 'muapi' | 'wavespeed' | 'sogni' | 'runware' | 'modelslab' | 'agnes' | 'sensenova' | 'openai_compat' | 'grok_compat' | 'replicate';
 export type ModelSortOption = 'downloads' | 'rating' | 'likes' | 'name_asc' | 'name_desc' | 'bookmarked';
 
 const ARCHITECTURE_TAGS = [
@@ -361,7 +361,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       const targetCat = initialCategory || 'all';
-      const targetProvider = (initialProvider && !['openai_compat', 'grok_compat', 'agnes'].includes(initialProvider) && ['civitai','fal','tensorart','modelscope','modelscope_ai','huggingface','nanogpt','gemini','muapi','wavespeed','sogni','runware','modelslab','sensenova'].includes(initialProvider)) ? initialProvider as ProviderTab : 'civitai';
+      const targetProvider = (initialProvider && !['openai_compat', 'grok_compat', 'agnes'].includes(initialProvider) && ['civitai','fal','tensorart','modelscope','modelscope_ai','huggingface','nanogpt','gemini','muapi','wavespeed','sogni','runware','modelslab','sensenova','replicate'].includes(initialProvider)) ? initialProvider as ProviderTab : 'civitai';
       setActiveProvider(targetProvider);
       setActiveCategory(targetCat);
       loadModels(targetProvider, targetCat, query, sortOption, selectedArch, false);
@@ -574,6 +574,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
             { id: 'sensenova', name: 'SenseNova' },
             { id: 'openai_compat', name: 'OpenAI 兼容中转' },
             { id: 'grok_compat', name: 'Grok 兼容中转' },
+            { id: 'replicate', name: 'Replicate' },
           ].map((tab) => {
             const isActive = activeProvider === tab.id;
             return (
@@ -701,6 +702,8 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                 ? '输入任意 NanoGPT Model ID (如 qwen-image-2.1/text-to-image, flux-pro, birefnet/v2)'
                 : activeProvider === 'gemini'
                 ? '输入 Gemini 模型 ID (如 gemini-2.5-flash-image)'
+                : activeProvider === 'replicate'
+                ? '输入 Replicate 模型 ID (如 black-forest-labs/flux-schnell 或 ideogram-ai/ideogram-v2a)'
                 : activeProvider === 'runware'
                 ? '输入 Runware AIR 标识符 (如 civitai:12345@67890 或 runware:100@1)'
                 : activeProvider === 'modelslab'
@@ -729,6 +732,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                   : activeProvider === 'nanogpt'
                   ? '输入 NanoGPT Model ID (如 qwen-image-2.1/text-to-image)...'
                   : activeProvider === 'gemini' ? '输入 Gemini 模型 ID...'
+                  : activeProvider === 'replicate' ? '输入 Replicate 模型 ID (如 black-forest-labs/flux-schnell 或 ideogram-ai/ideogram-v2a)...'
                   : activeProvider === 'runware' ? '输入 Runware AIR (如 civitai:xxxx@yyyy)...'
                   : activeProvider === 'modelslab' ? '输入 ModelsLab 模型 ID (如 midjourney)...'
                   : activeProvider === 'muapi' ? '输入 MuAPI 模型端点 ID...'
@@ -764,6 +768,33 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                       else if(onAddLora)onAddLora({...resource,modelStrength:0.8,clipStrength:0.8});
                     } else onSelectModel(resource.name,resource.name,activeProvider,resource);
                     onClose();return;
+                  }
+                  if (activeProvider === 'replicate') {
+                    const info = await fetchReplicateModelInfo(rawId);
+                    if (version !== requestVersion.current) return;
+                    const verifiedType = String(info?.category || info?.type || '').toLowerCase();
+                    const isLora = ['lora', 'locon', 'lycoris', 'dora'].includes(verifiedType) || (activeCategory === 'lora' && rawId.toLowerCase().includes('lora'));
+                    if (isLora) {
+                      const words = info?.triggerWords || info?.trainedWords || [];
+                      const lora = {
+                        name: String(rawId),
+                        provider: 'replicate',
+                        civitaiId: undefined,
+                        triggerWords: Array.isArray(words) ? words.join(', ') : String(words),
+                        baseModel: info?.baseModel || undefined,
+                        resourceVerified: true,
+                        resource_source: 'replicate',
+                        resource_kind: verifiedType,
+                        downloadUrl: info?.downloadUrl,
+                      };
+                      if (onSelectLoRAWithBaseModel) onSelectLoRAWithBaseModel(lora);
+                      else if (onAddLora) onAddLora({ ...lora, modelStrength: 0.8, clipStrength: 0.8 });
+                      else onSelectModel(rawId, info?.name || rawId, 'replicate', info);
+                    } else {
+                      onSelectModel(rawId, info?.name || rawId, 'replicate', info);
+                    }
+                    onClose();
+                    return;
                   }
                   let info: any = { id: rawId, name: rawId };
                   if (activeProvider === 'huggingface') info = await fetchHuggingFaceModelInfo(rawId);
@@ -968,6 +999,8 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                               ? 'bg-gradient-to-br from-[#29220c] via-[#1c1812] to-[#12131a]'
                               : providerKey === 'tensorart' || providerKey === 'tensor'
                               ? 'bg-gradient-to-br from-[#291038] via-[#1a1226] to-[#12131a]'
+                              : providerKey === 'replicate'
+                              ? 'bg-gradient-to-br from-[#082032] via-[#0f172a] to-[#1e1b4b]'
                               : 'bg-gradient-to-br from-[#1a122e] via-[#141220] to-[#12131a]'
                           }`}
                         >
@@ -1112,6 +1145,16 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                                 rel="noreferrer"
                                 className="text-slate-400 hover:text-emerald-400 shrink-0 p-1 hover:bg-white/5 rounded-md transition-colors"
                                 title="前往 Fal.ai 查看模型"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </a>
+                            ) : providerKey === 'replicate' ? (
+                              <a
+                                href={`https://replicate.com/${modelId}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-slate-400 hover:text-cyan-400 shrink-0 p-1 hover:bg-white/5 rounded-md transition-colors"
+                                title="前往 Replicate 查看模型"
                               >
                                 <ExternalLink className="w-3.5 h-3.5" />
                               </a>
@@ -1343,6 +1386,20 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                                   )}
                                 </button>
                               </div>
+
+                              {onAddModelNode && ['fal', 'replicate', 'modelscope', 'modelscope_ai', 'nanogpt', 'gemini'].includes(providerKey) && (
+                                <button
+                                  onClick={() => {
+                                    onAddModelNode(resource.name, displayName, providerKey, {...m,...resource, preferEngineNode: true});
+                                    onClose();
+                                  }}
+                                  className="w-full py-1.5 px-2.5 rounded-lg bg-[#1c1d29] hover:bg-[#252737] text-purple-300 hover:text-purple-200 font-medium flex items-center justify-center gap-1.5 border border-purple-500/30 transition-colors text-[10px]"
+                                  title="在画布上创建一体化极速引擎节点（免连 KSampler 独立直出）"
+                                >
+                                  <Layers className="w-3 h-3 text-purple-400" />
+                                  <span>添加一体化引擎节点</span>
+                                </button>
+                              )}
                             </div>
                           )}
                         </div>

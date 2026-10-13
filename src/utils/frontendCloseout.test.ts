@@ -16,7 +16,7 @@ it('edits only the actual checkpoint and never adds parameters to CLIP text node
  const before=readInspectorParameters([a,b,p,k],connections,'k'),after={...before,checkpoint:'changed'};
  expect(patchInspectorNode(p,before,after)).toBe(p);
 });
-it.each(['FalAIEngineNode','ModelScopeNode','ModelScopeAiNode','NanoGPTNode'])('round-trips %s JSON through inspector, extraction and actual driver body',async(type)=>{
+it.each(['FalAIEngineNode','ModelScopeNode','ModelScopeAiNode','NanoGPTNode','ReplicateEngineNode'])('round-trips %s JSON through inspector, extraction and actual driver body',async(type)=>{
  const n=node('n',type,{model:'custom-image',model_endpoint:'custom-image',prompt:'test'});
  const before=readInspectorParameters([n],[],'n');
  const patched=patchInspectorNode(n,before,{...before,customParameters:'{"zero":0,"enabled":false}'});

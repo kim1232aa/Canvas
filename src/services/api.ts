@@ -22,21 +22,33 @@ const EMPTY_KEYS: ApiKeysState = {
   muapiKey: '',
   wavespeedKey: '',
   sogniKey: '',
+  replicateKey: '',
 };
 
 export const getStoredApiKeys = (): ApiKeysState => {
+  const replicateKey = localStorage.getItem('comfycanvas_replicate_key') || '';
   try {
     const raw = localStorage.getItem(API_KEYS_STORAGE_KEY);
-    if (raw) return { ...EMPTY_KEYS, ...JSON.parse(raw) };
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return {
+        ...EMPTY_KEYS,
+        ...parsed,
+        replicateKey: replicateKey || parsed.replicateKey || '',
+      };
+    }
   } catch (e) {
     console.error('Error reading stored keys:', e);
   }
-  return { ...EMPTY_KEYS };
+  return { ...EMPTY_KEYS, replicateKey };
 };
 
 export const saveStoredApiKeys = (keys: ApiKeysState) => {
   try {
     localStorage.setItem(API_KEYS_STORAGE_KEY, JSON.stringify(keys));
+    if (keys.replicateKey !== undefined) {
+      localStorage.setItem('comfycanvas_replicate_key', keys.replicateKey);
+    }
   } catch (e) {
     console.error('Error saving keys:', e);
   }
@@ -415,7 +427,7 @@ export const deleteHistoryBatch = async (ids: string[]) => {await historyRequest
 export const clearHistory = async () => {await historyRequest('/api/history', {method: 'DELETE'}); return true;};
 
 export const fetchLiveModels = async (
-  provider: 'all' | 'civitai' | 'fal' | 'modelscope' | 'agnes' | 'sensenova' | 'huggingface' | 'nanogpt' | 'gemini' | string = 'all',
+  provider: 'all' | 'civitai' | 'fal' | 'modelscope' | 'agnes' | 'sensenova' | 'huggingface' | 'nanogpt' | 'gemini' | 'replicate' | string = 'all',
   query = '',
   type = 'Checkpoint',
   category = 'all',
@@ -442,6 +454,7 @@ export const fetchLiveModels = async (
   if (keys.muapiKey) headers['x-muapi-key'] = keys.muapiKey;
   if (keys.wavespeedKey) headers['x-wavespeed-key'] = keys.wavespeedKey;
   if (keys.sogniKey) headers['x-sogni-key'] = keys.sogniKey;
+  if (keys.replicateKey) headers['x-replicate-key'] = keys.replicateKey;
 
   const params = new URLSearchParams({ provider, query, type, category, sort });
   if (cursor) params.append('cursor', cursor);
@@ -490,6 +503,19 @@ export const fetchTensorArtModelInfo = async (modelId: string) => {
   if (!resp.ok) {
     const errorData = await resp.json().catch(() => ({ error: `HTTP ${resp.status}` }));
     throw new Error(errorData.details || errorData.error || `Tensor.Art 模型详情获取失败 (${resp.status})`);
+  }
+  return await resp.json();
+};
+
+export const fetchReplicateModelInfo = async (model: string) => {
+  const keys = getStoredApiKeys();
+  const headers: Record<string, string> = {};
+  if (keys.replicateKey) headers['x-replicate-key'] = keys.replicateKey;
+
+  const resp = await fetch(`/api/replicate/model-info?model=${encodeURIComponent(model)}`, { headers });
+  if (!resp.ok) {
+    const errorData = await resp.json().catch(() => ({ error: `HTTP ${resp.status}` }));
+    throw new Error(errorData.details || errorData.error || `Replicate model query failed (${resp.status})`);
   }
   return await resp.json();
 };

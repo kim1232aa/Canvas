@@ -8,13 +8,14 @@ import {
   isCloudEngineNode,
   omitUnsupportedGenerateFields,
   resolveGenerateLorasPayload,
+  checkLoraArchitectureCompatibility,
 } from './resolveCheckpoint';
 import { assertAIVideoProviderReady } from './videoProvider';
 import {modelCheckpoint} from './inspectorParameters';
 import { assertResolvedResources, parseCustomParameters, explicitLoraPath } from './frontendParameters';
 
 const MEDIA_OUTPUT_NODE_TYPES = new Set([
-  'KSampler','AIVideoNode','FalAIEngineNode','GoogleImagenNode','ModelScopeNode','ModelScopeAiNode','NanoGPTNode','VAEDecode','SaveImage','SaveVideo','PreviewImage',
+  'KSampler','AIVideoNode','FalAIEngineNode','GoogleImagenNode','ModelScopeNode','ModelScopeAiNode','NanoGPTNode','ReplicateEngineNode','VAEDecode','SaveImage','SaveVideo','PreviewImage',
 ]);
 
 export function shouldClearExecutionOutput(nodeType: string, state: NodeInstance['state'], output: unknown, errorMessage?: string): boolean {
@@ -31,7 +32,10 @@ export function sanitizeExecutionSnapshotNodes(nodes: NodeInstance[]): NodeInsta
 
 export interface WorkflowExtraction {
   checkpointModel: string;
+  checkpointBaseModel?: string;
   positivePrompt: string;
+  originalPositivePrompt: string;
+  prependedTriggerWords: string;
   negativePrompt: string;
   // F5: undefined = 节点上没填，不发上游、历史记 null
   width?: number;
@@ -45,6 +49,8 @@ export interface WorkflowExtraction {
   denoise?: number;
   loras: Array<{
     name: string;
+    baseModel?: string;
+    nodeId?: string;
     modelStrength: number;
     clipStrength: number;
     triggerWords: string;
@@ -225,6 +231,8 @@ function traceModelAndLorasUpstream(
       if (String(n.values.lora_name ?? '').trim()) {
         loras.push({
           name: String(n.values.lora_name).trim(),
+          baseModel: n.values.base_model || n.values.baseModel || '',
+          nodeId: n.id,
           modelStrength: Number(n.values.strength_model ?? 0.8),
           clipStrength: Number(n.values.strength_clip ?? 0.8),
           triggerWords: n.values.trigger_words || '',
@@ -239,6 +247,8 @@ function traceModelAndLorasUpstream(
       if (n.values.selected_model_name) {
         loras.push({
           name: n.values.selected_model_name,
+          baseModel: n.values.baseModel || n.values.base_model || '',
+          nodeId: n.id,
           modelStrength: 0.8,
           clipStrength: 0.8,
           triggerWords: n.values.selected_triggers || '',
@@ -277,6 +287,8 @@ function traceLorasUpstream(
       if (String(n.values.lora_name ?? '').trim()) {
         loras.push({
           name: String(n.values.lora_name).trim(),
+          baseModel: n.values.base_model || n.values.baseModel || '',
+          nodeId: n.id,
           modelStrength: Number(n.values.strength_model ?? 0.8),
           clipStrength: Number(n.values.strength_clip ?? 0.8),
           triggerWords: n.values.trigger_words || '',
@@ -291,6 +303,8 @@ function traceLorasUpstream(
       if (n.values.selected_model_name) {
         loras.push({
           name: n.values.selected_model_name,
+          baseModel: n.values.baseModel || n.values.base_model || '',
+          nodeId: n.id,
           modelStrength: 0.8,
           clipStrength: 0.8,
           triggerWords: n.values.selected_triggers || '',
@@ -538,6 +552,7 @@ export function extractWorkflowParameters(
   }
   // 3. Node-specific parameter extraction
   let checkpointModel = '';
+  let checkpointBaseModel: string | undefined = undefined;
   let targetProvider: WorkflowExtraction['targetProvider'] = 'civitai';
   let videoProvider: string | undefined = undefined;
   let isVideo = false;
@@ -576,6 +591,7 @@ export function extractWorkflowParameters(
     targetProvider = 'video';
     videoProvider = execNode.values.targetProvider || execNode.values.provider || undefined;
     checkpointModel = (execNode.values.model || '').trim();
+    checkpointBaseModel = (execNode.values.base_model || execNode.values.baseModel || '').trim() || undefined;
     if (!checkpointModel) {
       throw new Error('请先选择模型');
     }
@@ -596,6 +612,7 @@ export function extractWorkflowParameters(
     isVideo = false;
     targetProvider = 'fal';
     checkpointModel = (execNode.values.model || '').trim();
+    checkpointBaseModel = (execNode.values.base_model || execNode.values.baseModel || '').trim() || undefined;
     if (!checkpointModel) {
       throw new Error('请先选择模型');
     }
@@ -612,10 +629,32 @@ export function extractWorkflowParameters(
       traceLorasUpstream(loraConn.fromNodeId, connections, nodeMap, loras, subgraphNodeIds);
     }
     customParameters = execNode.values.custom_parameters;
+  } else if (execNode.type === 'ReplicateEngineNode') {
+    isVideo = false;
+    targetProvider = 'replicate';
+    checkpointModel = (execNode.values.model || '').trim();
+    checkpointBaseModel = (execNode.values.base_model || execNode.values.baseModel || '').trim() || undefined;
+    if (!checkpointModel) {
+      throw new Error('请先选择模型');
+    }
+    steps = numOrUndef(execNode.values.steps);
+    cfg = numOrUndef(execNode.values.guidance_scale ?? execNode.values.cfg);
+    const res = strOrUndef(execNode.values.resolution);
+    const resParts = res ? res.split('x') : [];
+    if (resParts.length === 2) {
+      width = numOrUndef(resParts[0]);
+      height = numOrUndef(resParts[1]);
+    }
+    const loraConn = connections.find((c) => c.toNodeId === execNode.id && c.toSocketId === 'lora');
+    if (loraConn) {
+      traceLorasUpstream(loraConn.fromNodeId, connections, nodeMap, loras, subgraphNodeIds);
+    }
+    customParameters = execNode.values.custom_parameters;
   } else if (execNode.type === 'GoogleImagenNode') {
     isVideo = false;
     targetProvider = 'gemini';
     checkpointModel = (execNode.values.model || '').trim();
+    checkpointBaseModel = (execNode.values.base_model || execNode.values.baseModel || '').trim() || undefined;
     if (!checkpointModel) {
       throw new Error('请先选择模型');
     }
@@ -625,6 +664,7 @@ export function extractWorkflowParameters(
     isVideo = false;
     targetProvider = execNode.type === 'ModelScopeAiNode' ? 'modelscope_ai' : 'modelscope';
     checkpointModel = (execNode.values.model_endpoint || execNode.values.model || '').trim();
+    checkpointBaseModel = (execNode.values.base_model || execNode.values.baseModel || '').trim() || undefined;
     if (!checkpointModel) {
       throw new Error('请先选择模型');
     }
@@ -634,12 +674,14 @@ export function extractWorkflowParameters(
     isVideo = false;
     targetProvider = 'nanogpt';
     checkpointModel = (execNode.values.model || '').trim();
+    checkpointBaseModel = (execNode.values.base_model || execNode.values.baseModel || '').trim() || undefined;
     if (!checkpointModel) {
       throw new Error('请先选择模型');
     }
   } else if (execNode.type === 'CheckpointLoaderSimple') {
     isVideo = false;
-    checkpointModel = (execNode.values.ckpt_name || '').trim();
+    checkpointModel = (execNode.values.model || execNode.values.ckpt_name || '').trim();
+    checkpointBaseModel = (execNode.values.base_model || execNode.values.baseModel || '').trim() || undefined;
     if (!checkpointModel) {
       throw new Error('请先选择模型');
     }
@@ -683,7 +725,8 @@ export function extractWorkflowParameters(
     if (!ckpt) {
       throw new Error('请先选择模型');
     }
-    checkpointModel = (ckpt.values.ckpt_name || '').trim();
+    checkpointModel = (ckpt.values.model || ckpt.values.ckpt_name || '').trim();
+    checkpointBaseModel = (ckpt.values.base_model || ckpt.values.baseModel || '').trim() || undefined;
     if (!checkpointModel) {
       throw new Error('请先选择模型');
     }
@@ -718,6 +761,7 @@ export function extractWorkflowParameters(
     }
   } else {
     checkpointModel = (execNode.values.model || execNode.values.ckpt_name || '').trim();
+    checkpointBaseModel = (execNode.values.base_model || execNode.values.baseModel || '').trim() || undefined;
     targetProvider = (execNode.values.targetProvider || '').trim();
 
     // 智能拓扑反向追踪：若执行节点本身无模型配置（例如正向提示词节点直连 SaveImage），沿 clip/model 上游追踪 CheckpointLoaderSimple
@@ -730,6 +774,7 @@ export function extractWorkflowParameters(
         if (src && !src.bypassed && src.type === 'CheckpointLoaderSimple') {
           subgraphNodeIds.add(src.id);
           checkpointModel = (src.values.ckpt_name || src.values.model || '').trim();
+          checkpointBaseModel = (src.values.base_model || src.values.baseModel || '').trim() || undefined;
           targetProvider = (src.values.targetProvider || '').trim();
           size = src.values.size || undefined;
           quality = src.values.quality || undefined;
@@ -761,8 +806,12 @@ export function extractWorkflowParameters(
     throw new Error('请填写提示词');
   }
 
-  // Append LoRA triggers if needed
-  const triggerWordsAll = loras
+  // Append LoRA triggers if needed (only for architecture-compatible LoRAs)
+  const originalPositivePrompt = positivePrompt;
+  const compatibleLorasForTriggers = loras.filter(
+    (l) => checkLoraArchitectureCompatibility(checkpointModel, checkpointBaseModel, l).compatible
+  );
+  const triggerWordsAll = compatibleLorasForTriggers
     .map((l) => l.triggerWords)
     .filter(Boolean)
     .join(', ');
@@ -772,9 +821,10 @@ export function extractWorkflowParameters(
     finalPositive = `${triggerWordsAll}, ${finalPositive}`.trim();
   }
 
-  const recipeNode = modelCheckpoint(nodes,connections,execNode.id) || Array.from(subgraphNodeIds).map(id=>nodeMap.get(id)).find(n=>n?.type==='CheckpointLoaderSimple' && n.values.ckpt_name===checkpointModel) || execNode;
+  const recipeNode = modelCheckpoint(nodes,connections,execNode.id) || Array.from(subgraphNodeIds).map(id=>nodeMap.get(id)).find(n=>n?.type==='CheckpointLoaderSimple' && (n.values.ckpt_name===checkpointModel || n.values.model===checkpointModel)) || execNode;
   const recipeValues = recipeNode.values;
-  if (recipeValues.import_unresolved_resource === true || recipeValues.unresolvedResource === true) throw new Error(`底模 ${checkpointModel || '未指定'} 尚未核实，请重新选择已核实资源`);
+  const isModelUnresolved = (recipeValues.import_unresolved_resource === true || recipeValues.unresolvedResource === true) && recipeValues.resourceVerified !== true;
+  if (isModelUnresolved) throw new Error(`底模 ${checkpointModel || '未指定'} 尚未核实，请重新选择已核实资源`);
   if (recipeValues.execution_blocked_reason) throw new Error(String(recipeValues.execution_blocked_reason));
   if (recipeValues.source_lora_air) throw new Error('来源 LoRA 执行链尚未接入；请保留此历史档案，创建新的显式生成分支');
   if (recipeValues.require_reference_image === true && !initImageUrl) throw new Error('编辑输入需要明确参考图，请选择或上传参考图');
@@ -782,7 +832,7 @@ export function extractWorkflowParameters(
   assertResolvedResources(loras);
   return {
     requireReferenceImage: recipe.require_reference_image === true,
-    unresolvedModel: recipe.import_unresolved_resource === true || recipe.unresolvedResource === true,
+    unresolvedModel: isModelUnresolved,
     executionBlockedReason: strOrUndef(recipe.execution_blocked_reason),
     sourceLoraAir: strOrUndef(recipe.source_lora_air),
     watermark: targetProvider === 'sensenova' && typeof recipe.watermark === 'boolean' ? recipe.watermark : undefined,
@@ -791,7 +841,10 @@ export function extractWorkflowParameters(
     civitaiEcosystem: strOrUndef(recipe.civitai_ecosystem),
     civitaiModel: strOrUndef(recipe.civitai_model),
     checkpointModel,
+    checkpointBaseModel,
     positivePrompt: finalPositive,
+    originalPositivePrompt,
+    prependedTriggerWords: triggerWordsAll && finalPositive !== originalPositivePrompt ? triggerWordsAll : '',
     negativePrompt,
     width,
     height,
@@ -841,7 +894,7 @@ export async function executeWorkflow(
   nodes: NodeInstance[],
   connections: Connection[],
   onNodeStateChange: (nodeId: string, state: NodeInstance['state'], progress?: number, output?: any, errorMessage?: string) => void,
-  onProgress?: (percent: number, statusText: string) => void,
+  onProgress?: (percent: number, statusText: string, details?: { omissions?: Array<{ field: string; value: unknown; reason: string }> }) => void,
   targetNodeOrId?: NodeInstance | string
 ): Promise<{ imageUrl: string; provider: string; model: string; seed: number | null; isVideo?: boolean; executingNodeId?: string; historyWarning?: string }> {
   let stepInterval: any = null;
@@ -868,7 +921,8 @@ export async function executeWorkflow(
         n.type === 'GoogleImagenNode' ||
         n.type === 'ModelScopeNode' ||
         n.type === 'ModelScopeAiNode' ||
-        n.type === 'NanoGPTNode'
+        n.type === 'NanoGPTNode' ||
+        n.type === 'ReplicateEngineNode'
     );
     const vaeNodes = activeNodes.filter((n) => n.type === 'VAEDecode');
     const saveNodes = activeNodes.filter(n => n.id === params.executingNodeId || n.id === params.saveImageNodeId || n.id === params.saveVideoNodeId);
@@ -885,7 +939,33 @@ export async function executeWorkflow(
 
     const storedKeys = getStoredApiKeys() as unknown as Record<string, string>;
 
+    const engProv = params.videoProvider || params.targetProvider;
+    const engModel = params.checkpointModel;
+    const grokish = params.targetProvider === 'grok_compat' || params.videoProvider === 'grok_compat';
+    const grokOrOpenAi = params.targetProvider === 'openai_compat' || params.targetProvider === 'grok_compat' || params.videoProvider === 'grok_compat';
+    const omissions: Array<{ field: string; value: unknown; reason: string }> = [];
+
+    // Check architecture compatibility for each LoRA
+    const compatibleLoras: typeof params.loras = [];
+    for (const l of params.loras) {
+      const compat = checkLoraArchitectureCompatibility(
+        params.checkpointModel,
+        params.checkpointBaseModel,
+        l
+      );
+      if (!compat.compatible) {
+        const reason = `LoRA [${l.name}] 与底模 [${params.checkpointModel}] 架构不兼容，拒绝静默丢弃执行`;
+        if (l.nodeId) {
+          onNodeStateChange(l.nodeId, 'error', 0, undefined, reason);
+        }
+        throw new Error(reason);
+      } else {
+        compatibleLoras.push(l);
+      }
+    }
+
     // 0. 前置大模型深度推理思考阶段 (LLM Reasoning Pre-Execution Pipeline)
+    let llmPrompt: string | undefined = undefined;
     const llmNode = activeNodes.find((n) => n.type === 'LLMReasoningNode');
     if (llmNode && (llmNode.values.prompt || llmNode.values.input_text)) {
       onNodeStateChange(llmNode.id, 'running', 40);
@@ -918,8 +998,44 @@ export async function executeWorkflow(
           storedKeys
         );
 
+        llmPrompt = chatResult.content;
         if (chatResult.content) {
           params.positivePrompt = chatResult.content;
+
+          // Ensure LoRA trigger words from compatible LoRAs are NOT wiped out
+          const missingTriggers: string[] = [];
+          for (const lora of compatibleLoras) {
+            const tw = (lora.triggerWords || '').trim();
+            if (!tw) continue;
+            const parts = tw.split(',').map((s) => s.trim()).filter(Boolean);
+            const missingParts = parts.filter((p) => !params.positivePrompt.includes(p));
+            if (missingParts.length > 0) {
+              const toAdd = missingParts.join(', ');
+              if (!missingTriggers.includes(toAdd)) {
+                missingTriggers.push(toAdd);
+              }
+            }
+          }
+
+          if (missingTriggers.length > 0) {
+            const prependStr = missingTriggers.join(', ');
+            params.positivePrompt = `${prependStr}, ${params.positivePrompt}`.trim();
+            const existingTokens = new Set(
+              (params.prependedTriggerWords || '')
+                .split(',')
+                .map((s) => s.trim())
+                .filter(Boolean)
+            );
+            for (const t of missingTriggers) {
+              for (const part of t.split(',').map((s) => s.trim()).filter(Boolean)) {
+                existingTokens.add(part);
+              }
+            }
+            params.prependedTriggerWords = Array.from(existingTokens).join(', ');
+          } else if (params.prependedTriggerWords && !params.positivePrompt.includes(params.prependedTriggerWords)) {
+            params.positivePrompt = `${params.prependedTriggerWords}, ${params.positivePrompt}`.trim();
+          }
+
           onNodeStateChange(llmNode.id, 'success', 100, {
             refined_output: chatResult.content,
             reasoning_output: chatResult.reasoningContent || '',
@@ -931,10 +1047,6 @@ export async function executeWorkflow(
       }
     }
 
-    const engProv = params.videoProvider || params.targetProvider;
-    const engModel = params.checkpointModel;
-    const grokish = params.targetProvider === 'grok_compat' || params.videoProvider === 'grok_compat';
-    const grokOrOpenAi = params.targetProvider === 'openai_compat' || params.targetProvider === 'grok_compat' || params.videoProvider === 'grok_compat';
     const extraParams: Record<string, unknown> = {
       ...(params.sampler !== undefined ? { sampler_name: params.sampler } : {}),
       ...(params.scheduler !== undefined ? { scheduler: params.scheduler } : {}),
@@ -953,7 +1065,13 @@ export async function executeWorkflow(
     }
     if (params.background) extraParams.background = params.background;
     if (params.moderation) extraParams.moderation = params.moderation;
-    if (params.resolution && !(params.targetProvider === 'huggingface' && params.hfProvider !== 'z-image-space')) extraParams.resolution = params.resolution;
+    if (params.resolution) {
+      if (params.targetProvider === 'huggingface' && params.hfProvider !== 'z-image-space') {
+        omissions.push({field: 'resolution', value: params.resolution, reason: `Hugging Face 该路由（hfProvider=${params.hfProvider || '未指定'}）未采用像素分辨率字段；保留原值不作为请求参数`});
+      } else {
+        extraParams.resolution = params.resolution;
+      }
+    }
     if (params.falModelName) extraParams.model_name=params.falModelName;
     if (params.targetProvider === 'huggingface') {
       if (params.hfProvider) extraParams.hf_provider = params.hfProvider;
@@ -963,6 +1081,10 @@ export async function executeWorkflow(
         if (params.shift !== undefined) extraParams.shift = params.shift;
         if (params.randomSeed !== undefined) extraParams.random_seed = params.randomSeed;
         if (params.galleryImages !== undefined) extraParams.gallery_images = params.galleryImages;
+      } else {
+        if (params.shift !== undefined) omissions.push({ field: 'shift', value: params.shift, reason: '非 z-image-space 的 HF 路由不支持 shift 字段；保留原值不作为请求参数' });
+        if (params.randomSeed !== undefined) omissions.push({ field: 'random_seed', value: params.randomSeed, reason: '非 z-image-space 的 HF 路由不支持 random_seed 字段；保留原值不作为请求参数' });
+        if (params.galleryImages !== undefined) omissions.push({ field: 'gallery_images', value: params.galleryImages, reason: '非 z-image-space 的 HF 路由不支持 gallery_images 字段；保留原值不作为请求参数' });
       }
     }
     if (grokOrOpenAi && params.batchSize != null && Number(params.batchSize) > 0) {
@@ -971,11 +1093,19 @@ export async function executeWorkflow(
     if (engProv === 'tensorart' && params.batchSize !== undefined) extraParams.count = params.batchSize;
     if (engProv === 'nanogpt' && params.batchSize !== undefined) extraParams.n=params.batchSize;
     if (engProv === 'fal' && params.batchSize !== undefined) extraParams.n=params.batchSize;
+    if (grokish && params.videoFps !== undefined) {
+      omissions.push({field: 'videoFps', value: params.videoFps, reason: 'Grok 兼容中转的视频契约没有 videoFps 字段；保留原值不作为请求参数'});
+    }
+    if (omissions.length) {
+      extraParams.omissions = omissions;
+      extraParams.parameterOmissions = omissions;
+      onProgress?.(15, '已整理工作流参数：存在未提交字段', {omissions});
+    }
 
     const lorasPayload = resolveGenerateLorasPayload(
       engProv,
       engModel,
-      params.loras.map((l) => ({
+      compatibleLoras.map((l) => ({
         name: l.name,
         path: explicitLoraPath(l),
         strength: l.modelStrength,
@@ -983,11 +1113,28 @@ export async function executeWorkflow(
         clipStrength: l.clipStrength,
         civitaiId: l.civitaiId,
         triggers: l.triggerWords,
+        baseModel: l.baseModel,
       })),
+      params.checkpointBaseModel
     );
 
     const normParams: NormalizedGenerateParams = omitUnsupportedGenerateFields(engProv, engModel, {
-      workflowSnapshot: { format: 'comfycanvas', version: 1, nodes: sanitizeExecutionSnapshotNodes(activeNodes), connections, executingNodeId: params.executingNodeId },
+      workflowSnapshot: {
+        format: 'comfycanvas',
+        version: 1,
+        nodes: sanitizeExecutionSnapshotNodes(activeNodes),
+        connections,
+        executingNodeId: params.executingNodeId,
+        requestMetadata: {
+          promptTransform: {
+            prependedTriggerWords: params.prependedTriggerWords,
+            originalPrompt: params.originalPositivePrompt,
+            llmPrompt,
+            finalPrompt: params.positivePrompt,
+          },
+          ...(omissions.length ? {omissions, parameterOmissions: omissions} : {}),
+        },
+      },
       prompt: params.positivePrompt,
       negative_prompt: params.negativePrompt,
       model: params.checkpointModel,
@@ -1010,6 +1157,7 @@ export async function executeWorkflow(
       scheduler: params.scheduler,
       extraParams,
       loras: lorasPayload,
+      parameterOmissions: omissions.length ? omissions : undefined,
     }) as NormalizedGenerateParams;
 
     // Stage 4: KSampler / Video Generation

@@ -64,7 +64,7 @@ export class TensorArtDriver extends BaseEngineDriver {
       mediaType: data.mediaType || 'image',
       provider: data.provider || 'Tensor.Art (模型 API)',
       providerId: this.id,
-      model: data.toolName || data.model || params.model,
+      model: data.model || data.toolName || params.model,
       requestedModel: params.model,
       seed: data.historyItem?.seed ?? null,
       rawResponse: data,

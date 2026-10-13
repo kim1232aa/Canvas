@@ -59,7 +59,7 @@ export function buildModelsLabImageRequest(
   payload.height = height;
 
   if (typeof body.steps === 'number' && body.steps > 0) {
-    payload.num_inference_steps = Math.min(Math.round(body.steps), 50);
+    payload.num_inference_steps = Math.round(body.steps);
   }
   const cfg = body.cfg ?? body.guidance_scale ?? body.cfgScale;
   if (typeof cfg === 'number' && cfg > 0) {

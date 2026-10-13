@@ -14,7 +14,7 @@ import {TENSOR_JOB_DOC} from './tensorModelApi';
 export type FieldStatus = 'supported' | 'unverified' | 'unsupported' | 'deprecated';
 export const FIELD_STATUSES: readonly FieldStatus[] = ['supported', 'unverified', 'unsupported', 'deprecated'];
 
-export type Provider = 'gemini' | 'fal' | 'civitai' | 'openai_compat' | 'grok_compat' | 'agnes' | 'huggingface' | 'nanogpt' | 'tensorart' | 'sensenova' | 'modelscope' | 'modelscope_ai' | 'runware' | 'modelslab';
+export type Provider = 'gemini' | 'fal' | 'civitai' | 'openai_compat' | 'grok_compat' | 'agnes' | 'huggingface' | 'nanogpt' | 'tensorart' | 'sensenova' | 'modelscope' | 'modelscope_ai' | 'runware' | 'modelslab' | 'replicate';
 
 /** 画布侧字段名；上游字段名不同时写在 FieldSpec.wire */
 export type FieldKey =
@@ -728,6 +728,59 @@ const MODELSLAB_MODELS: ModelSpec[] = [
   },
 ];
 
+const REPLICATE_DOC = 'https://replicate.com/docs';
+
+const REPLICATE_COMMON_FIELDS: Partial<Record<FieldKey, FieldSpec>> = {
+  width: { status: 'supported' as const, source: REPLICATE_DOC, type: 'integer' as const, min: 256, max: 2048 },
+  height: { status: 'supported' as const, source: REPLICATE_DOC, type: 'integer' as const, min: 256, max: 2048 },
+  aspect_ratio: { status: 'supported' as const, source: REPLICATE_DOC, type: 'string' as const },
+  seed: { status: 'supported' as const, source: REPLICATE_DOC, type: 'integer' as const, min: 0 },
+  steps: { status: 'supported' as const, source: REPLICATE_DOC, type: 'integer' as const, wire: 'num_inference_steps', min: 1, max: 100 },
+  cfg: { status: 'supported' as const, source: REPLICATE_DOC, type: 'number' as const, wire: 'guidance_scale', min: 1, max: 20 },
+  loras: { status: 'supported' as const, source: REPLICATE_DOC, wire: 'hf_lora', note: '支持 HuggingFace 或 Civitai 下载 URL 权重与 lora_scale' },
+  negative_prompt: { status: 'supported' as const, source: REPLICATE_DOC },
+  output_format: { status: 'supported' as const, source: REPLICATE_DOC, type: 'enum' as const, enum: [{ value: 'webp', status: 'supported' }, { value: 'png', status: 'supported' }, { value: 'jpg', status: 'supported' }] },
+  ...unsupported(REPLICATE_DOC, ['image_size', 'resolution', 'shift', 'sampler', 'scheduler', 'denoise', 'num_images', 'size', 'quality', 'background', 'moderation']),
+};
+
+const REPLICATE_MODELS: ModelSpec[] = [
+  {
+    provider: 'replicate',
+    id: 'black-forest-labs/flux-schnell',
+    label: 'FLUX.1 Schnell (Replicate)',
+    source: REPLICATE_DOC,
+    fields: { ...REPLICATE_COMMON_FIELDS, steps: { status: 'supported', source: REPLICATE_DOC, type: 'integer', wire: 'num_inference_steps', min: 1, max: 8, providerDefault: 4 } },
+  },
+  {
+    provider: 'replicate',
+    id: 'black-forest-labs/flux-dev',
+    label: 'FLUX.1 Dev (Replicate)',
+    source: REPLICATE_DOC,
+    fields: { ...REPLICATE_COMMON_FIELDS, steps: { status: 'supported', source: REPLICATE_DOC, type: 'integer', wire: 'num_inference_steps', min: 1, max: 50, providerDefault: 28 } },
+  },
+  {
+    provider: 'replicate',
+    id: 'ideogram-ai/ideogram-v2a',
+    label: 'Ideogram v2a (Replicate)',
+    source: REPLICATE_DOC,
+    fields: { ...REPLICATE_COMMON_FIELDS },
+  },
+  {
+    provider: 'replicate',
+    id: 'bytedance/seedream-3',
+    label: 'Seedream 3 (Replicate)',
+    source: REPLICATE_DOC,
+    fields: { ...REPLICATE_COMMON_FIELDS },
+  },
+  {
+    provider: 'replicate',
+    id: 'replicate-hosted-image',
+    label: 'Replicate 托管生图模型',
+    source: REPLICATE_DOC,
+    fields: { ...REPLICATE_COMMON_FIELDS },
+  },
+];
+
 export const PROVIDER_SCHEMA: readonly ModelSpec[] = [
   ...MODELSCOPE_MODELS,
   ...GEMINI_MODELS,
@@ -742,6 +795,7 @@ export const PROVIDER_SCHEMA: readonly ModelSpec[] = [
   ...SENSENOVA_MODELS,
   ...RUNWARE_MODELS,
   ...MODELSLAB_MODELS,
+  ...REPLICATE_MODELS,
 ];
 
 const INDEX = new Map(PROVIDER_SCHEMA.map((m) => [`${m.provider}/${m.id}`, m]));
@@ -798,5 +852,6 @@ export function resolveSchemaModelId(provider: Provider, model: string | undefin
   if (provider === 'modelscope' || provider === 'modelscope_ai') return 'modelscope-hosted-image';
   if (provider === 'nanogpt' && id) return id;
   if (provider === 'tensorart' && id) return /^\d{10,25}$/.test(id) || /^https:\/\/(?:www\.)?(?:tensor\.art|tusiart\.com)\/models\//.test(id) ? 'tensorart-model-api' : id;
+  if (provider === 'replicate' && id) return id;
   return listModels(provider)[0]?.id ?? id;
 }

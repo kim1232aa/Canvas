@@ -166,11 +166,17 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
   };
 
   const handleCopyComfyJSON = async () => {
-    const comfyPromptApiFormat = normalizeForComfyUI(
-      params,
-      positivePrompt || '',
-      negativePrompt || ''
-    );
+    let comfyPromptApiFormat: Record<string, any>;
+    try {
+      comfyPromptApiFormat = normalizeForComfyUI(
+        params,
+        positivePrompt || '',
+        negativePrompt || ''
+      );
+    } catch (error) {
+      alert(error instanceof Error ? error.message : '无法生成 ComfyUI API JSON');
+      return;
+    }
     try { await navigator.clipboard.writeText(JSON.stringify(comfyPromptApiFormat, null, 2)); } catch { alert("复制失败，请检查剪贴板权限"); return; }
     setCopiedComfyJson(true);
     setTimeout(() => setCopiedComfyJson(false), 2000);
@@ -420,8 +426,16 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
           )}
 
           {(params.targetProvider === 'modelscope' || params.targetProvider === 'modelscope_ai') && <p role="note" className="rounded-lg border border-amber-800/40 p-3 text-sm text-amber-200">魔搭云端已核实提示词、模型与 LoRA 格式；其余参数按请求原样发送，是否接受以本次上游响应为准。Qwen Image Edit 支持参考图。模型目录中的仓库不保证已开通在线推理。</p>}
-          {['muapi','wavespeed','sogni'].includes(params.targetProvider)&&<p role="note" className="rounded-lg border border-cyan-800/40 p-3 text-sm text-cyan-200">按所选模型的官方 Schema 转换画布参数；没有对应字段的参数会在执行记录中标明未提交。可在 API 参数面板关闭此模式，或用 JSON 直接指定字段。LoRA 始终保留请求意图，实际兼容性以官方能力和本次上游响应为准。</p>}
-          {['civitai','fal','modelscope','modelscope_ai','huggingface','muapi','wavespeed','sogni'].includes(params.targetProvider) && <ApiParameterEditor provider={params.targetProvider} model={params.checkpoint} value={params.customParameters} onChange={customParameters=>update({customParameters})} />}
+          {['civitai','fal','modelscope','modelscope_ai','huggingface','muapi','wavespeed','sogni','replicate'].includes(params.targetProvider) && <ApiParameterEditor provider={params.targetProvider} model={params.checkpoint} value={params.customParameters} onChange={customParameters=>update({customParameters})} />}
+          {params.targetProvider === 'replicate' && (
+            <div className="p-2.5 bg-orange-950/20 border border-orange-500/30 rounded-lg text-[10px] text-orange-300/90 leading-relaxed flex items-start gap-2">
+              <Info className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold text-orange-300">Replicate 官方原生架构：</span>
+                <span> 使用 Replicate 官方模型运行平台。支持 FLUX.1 (FLUX.1-dev 支持 hf_lora)、SDXL、Ideogram 等模型。支持自定义参数注入与异步执行轮询。</span>
+              </div>
+            </div>
+          )}
           {/* Engine Parameter Notice Banner */}
           {params.targetProvider === 'agnes' && (
             <div className="p-2.5 bg-rose-950/20 border border-rose-500/30 rounded-lg text-[10px] text-rose-300/90 leading-relaxed flex items-start gap-2">

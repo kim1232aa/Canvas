@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import { CivitaiModelItem } from '../types/providers';
 import { searchCivitaiModels, fetchLiveModels, fetchHuggingFaceModelInfo, fetchTensorArtModelInfo } from '../services/api';
-import { identifyArchitectureFamily, ARCHITECTURE_PROFILES } from '../utils/baseModelMatcher';
+import { identifyArchitectureFamily } from '../utils/baseModelMatcher';
 
 export type LoraProviderFilter = 'all' | 'civitai' | 'huggingface' | 'modelscope' | 'modelscope_ai' | 'fal' | 'tensorart' | 'muapi' | 'wavespeed' | 'sogni' | 'runware' | 'modelslab';
 
@@ -35,13 +35,14 @@ export interface UnifiedLoRAItem {
   name: string;
   provider: 'Civitai' | 'Hugging Face' | 'ModelScope CN' | 'ModelScope AI' | 'Fal.ai' | 'Tensor.Art' | 'MuAPI' | 'WaveSpeed' | 'Sogni' | 'Runware' | 'ModelsLab';
   providerKey: LoraProviderFilter;
-  baseModel: string;
+  baseModel: string | null;
   creator: string;
   rating?: number;
   downloadCount?: number;
   likes?: number;
   speed?: string;
   previewImg: string;
+  previewCaption?: string;
   triggerWords: string;
   civitaiId?: string;
   externalUrl?: string;
@@ -135,9 +136,8 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
             cData.items.forEach((m: CivitaiModelItem) => {
               const latest = m.modelVersions?.[0];
               const trigger = latest?.trainedWords?.join(', ') || '';
-              const rawBase = latest?.baseModel || '未知底模';
-              const fam = identifyArchitectureFamily(rawBase, m.name);
-              const displayBase = ARCHITECTURE_PROFILES[fam]?.displayName.split(' ')[0] || rawBase;
+              const rawBase = latest?.baseModel?.trim() || null;
+              const fam = identifyArchitectureFamily(rawBase || '', m.name);
 
               let selection:ResourceSelection|undefined;
               try {selection=selectionFromMetadata('civitai',m,'lora');}catch{/* Catalog entries with incomplete metadata remain explicitly unverified. */}
@@ -147,7 +147,7 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
                 name: m.name,
                 provider: 'Civitai',
                 providerKey: 'civitai',
-                baseModel: displayBase,
+                baseModel: rawBase,
                 creator: m.creator?.username || 'Community Creator',
                 rating: typeof m.stats?.rating === 'number' && m.stats.rating > 0 ? m.stats.rating : undefined,
                 downloadCount: typeof m.stats?.downloadCount === 'number' && m.stats.downloadCount > 0 ? m.stats.downloadCount : undefined,
@@ -280,13 +280,14 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
                   name: m.name || m.id,
                   provider: pName as any,
                   providerKey: normalizedProvKey,
-                  baseModel: m.baseModel || ARCHITECTURE_PROFILES[fam]?.displayName.split(' ')[0] || 'FLUX.1',
+                  baseModel: m.baseModel || '',
                   creator: m.creator || m.author || pName,
                   rating: typeof m.rating === 'number' && m.rating > 0 ? m.rating : undefined,
                   downloadCount: typeof m.downloads === 'number' && m.downloads > 0 ? m.downloads : undefined,
                   likes: typeof m.likes === 'number' && m.likes > 0 ? m.likes : undefined,
                   speed: m.speed,
                   previewImg: m.imageUrl || '',
+                  previewCaption: m.imageCaption ? `${pName} 官方示例 · 强度 ${m.imageCaption}` : undefined,
                   triggerWords: triggerStr,
                   civitaiId: provKey === 'civitai' ? String(m.id) : undefined,
                   externalUrl: itemExternalUrl,
@@ -695,7 +696,31 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
           </div>
         </div>
 
-        {activeProvider === 'tensorart' && <TensorCatalogNotice />}
+        {activeProvider === 'tensorart' && (
+          <div className="px-6 pt-3">
+            <TensorCatalogNotice />
+          </div>
+        )}
+        {activeProvider === 'sogni' && (
+          <div className="px-6 pt-3">
+            <div className="rounded-lg border border-purple-800/40 bg-purple-950/25 p-3 text-xs leading-relaxed text-purple-200">
+              <p className="font-semibold text-purple-300">Sogni 官方 LoRA 目录说明：</p>
+              <p className="text-slate-300 mt-1">
+                Sogni 官方公开目录（<code>/v1/loras/comfy</code>）收录的 LoRA 为 Krea-2 专用参数调节滑块（如画质增强、景深复杂度、暮光质感等）。上游文档在评测时统一使用标准测试场景（黄色长裙行人基准图）进行控制变量采样，卡片预览图为官方在不同强度下的调节效果对照帧，非独立艺术海报；无示例的模型已真实标注为 [上游目录未提供封面]。
+              </p>
+            </div>
+          </div>
+        )}
+        {activeProvider === 'fal' && (
+          <div className="px-6 pt-3">
+            <div className="rounded-lg border border-amber-800/40 bg-amber-950/25 p-3 text-xs leading-relaxed text-amber-200">
+              <p className="font-semibold text-amber-300">Fal.ai 目录类型说明：</p>
+              <p className="text-slate-300 mt-1">
+                Fal.ai 官方模型目录仅列出云端推理端点（如文生图、图生图生成器），无独立的公开 LoRA 权重库。若需使用特定 LoRA，请在上方输入 LoRA 权重 URL 或 Civitai/HF 直链，并在底模中心选用支持加载 LoRA 的 Fal 基础端点。
+              </p>
+            </div>
+          </div>
+        )}
         {errorMsg && (
           <div className="px-6 py-2 bg-red-950/20 border-b border-red-800/20 text-red-300 text-xs flex items-center justify-between shrink-0 animate-in slide-in-from-top-1 duration-200">
             <div className="flex items-center gap-2">
@@ -739,7 +764,24 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
             <div className="space-y-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 {displayedModels.map((model) => {
-                  const baseArch = model.baseModel || 'FLUX.1 / SDXL';
+                  const baseArch = model.baseModel || '底模未标注';
+                  const externalTitle = (() => {
+                    if (!model.externalUrl) return '';
+                    try {
+                      const url = new URL(model.externalUrl);
+                      if (url.hostname.includes('civitai.com')) {
+                        return model.providerKey === 'sogni'
+                          ? `Sogni 上游来源出处 (Civitai: ${model.creator || '原作者'})`
+                          : `在 Civitai 中查看 (${model.name})`;
+                      }
+                      if (url.hostname.includes('huggingface.co')) return '在 Hugging Face 中查看';
+                      if (url.hostname.includes('modelscope.cn')) return '在 ModelScope 中查看';
+                      if (url.hostname.includes('tensor.art')) return '在 Tensor.Art 中查看';
+                      return `在官方页面中查看 (${url.hostname})`;
+                    } catch {
+                      return '在官方页面中查看';
+                    }
+                  })();
                   return (
                     <div
                       key={model.id}
@@ -752,16 +794,19 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
                             <img
                               src={model.previewImg}
                               alt={model.name}
+                              title={model.previewCaption}
                               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                               loading="lazy"
                             />
                             <div className="absolute inset-0 bg-gradient-to-t from-[#191a24]/90 via-transparent to-black/35 pointer-events-none" />
+                            {model.previewCaption && (
+                              <span className="absolute bottom-2 left-2 text-[9px] px-1.5 py-0.5 rounded bg-black/70 text-slate-300">{model.previewCaption}</span>
+                            )}
                           </>
                         ) : (
                           <div className="w-full h-full flex flex-col items-center justify-center text-slate-600 gap-2 p-4 text-center">
                             <Layers className="w-10 h-10 text-purple-400/40" />
-                            <span className="text-[10px] text-slate-400 font-mono">官方原生 LoRA</span>
-                            <span className="text-[9px] text-slate-500">直连官方仓库</span>
+                            <span className="text-[10px] text-slate-400 font-mono">上游目录未提供封面</span>
                           </div>
                         )}
 
@@ -791,7 +836,7 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
                             target="_blank"
                             rel="noreferrer"
                             className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/60 hover:bg-black/90 text-slate-300 hover:text-white transition-colors"
-                            title="在官方页面中查看"
+                            title={externalTitle || '在官方页面中查看'}
                           >
                             <ExternalLink className="w-3.5 h-3.5" />
                           </a>
@@ -860,7 +905,7 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
                             )}
                           </div>
                           <p className="text-[10px] text-purple-200/90 font-mono line-clamp-2 leading-relaxed break-words">
-                            {model.triggerWords || '无需专用触发词 (提示词直接描述即可)'}
+                            {model.triggerWords || '上游目录未提供触发词'}
                           </p>
                         </div>
 
@@ -879,7 +924,7 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
                                         provider: model.selection?.provider || (model.providerKey as any),
                                         civitaiId: model.civitaiId,
                                         triggerWords: model.triggerWords,
-                                        baseModel: model.baseModel,
+                                        baseModel: model.baseModel || undefined,
                                       });
                                     } else {
                                       onSelectLoRA({
@@ -887,7 +932,7 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
                                         name: cleanName,
                                         provider: model.selection?.provider || (model.providerKey as any),
                                         triggerWords: model.triggerWords,
-                                        baseModel: model.baseModel,
+                                        baseModel: model.baseModel || undefined,
                                       });
                                     }
                                     onClose();
@@ -911,7 +956,7 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
                                         provider: model.selection?.provider || model.providerKey,
                                         civitaiId: model.selection?.civitaiId || model.civitaiId,
                                         triggerWords: model.triggerWords,
-                                        baseModel: baseArch,
+                                        baseModel: model.baseModel || undefined,
                                       });
                                       onClose();
                                     }}
@@ -928,7 +973,7 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
                                         provider: model.selection?.provider || model.providerKey,
                                         civitaiId: model.selection?.civitaiId || model.civitaiId,
                                         triggerWords: model.triggerWords,
-                                        baseModel: baseArch,
+                                        baseModel: model.baseModel || undefined,
                                       });
                                       onClose();
                                     }}

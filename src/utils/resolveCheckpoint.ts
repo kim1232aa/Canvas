@@ -18,6 +18,7 @@ const SCHEMA_PROVIDERS: readonly Provider[] = [
   'modelscope_ai',
   'runware',
   'modelslab',
+  'replicate',
 ];
 
 export function toSchemaProvider(provider: string | undefined | null): Provider | undefined {
@@ -34,6 +35,7 @@ export const ENGINE_NODE_TYPES = [
   'ModelScopeNode',
   'ModelScopeAiNode',
   'NanoGPTNode',
+  'ReplicateEngineNode',
   'CheckpointLoaderSimple',
   'KSampler',
 ] as const;
@@ -48,6 +50,7 @@ export const CLOUD_ENGINE_NODE_TYPES = [
   'ModelScopeNode',
   'ModelScopeAiNode',
   'NanoGPTNode',
+  'ReplicateEngineNode',
 ] as const;
 
 export function isCloudEngineNode(node: NodeInstance | null | undefined): boolean {
@@ -80,6 +83,7 @@ export function getModelFromNode(node: NodeInstance | null | undefined): string 
     case 'GoogleImagenNode':
     case 'AIVideoNode':
     case 'NanoGPTNode':
+    case 'ReplicateEngineNode':
       return String(v.model || '').trim();
     case 'ModelScopeNode':
     case 'ModelScopeAiNode':
@@ -95,6 +99,7 @@ export function getProviderFromNode(node: NodeInstance | null | undefined): stri
   const explicit = String(node.values?.targetProvider || node.values?.provider || '').trim();
   if (explicit) return explicit;
   const model = getModelFromNode(node);
+  if (node.type === 'ReplicateEngineNode') return 'replicate';
   if (model.startsWith('fal-ai/') || node.type === 'FalAIEngineNode') return 'fal';
   if (node.type === 'GoogleImagenNode' || model.includes('gemini')) return 'gemini';
   if (node.type === 'AIVideoNode') return 'video';
@@ -126,6 +131,7 @@ export function resolveCheckpointForNode(
     self.type === 'ModelScopeNode' ||
     self.type === 'ModelScopeAiNode' ||
     self.type === 'NanoGPTNode' ||
+    self.type === 'ReplicateEngineNode' ||
     self.type === 'CheckpointLoaderSimple'
   ) {
     return {
@@ -261,7 +267,8 @@ function walkToCheckpoint(
       n.type === 'AIVideoNode' ||
       n.type === 'ModelScopeNode' ||
       n.type === 'ModelScopeAiNode' ||
-      n.type === 'NanoGPTNode'
+      n.type === 'NanoGPTNode' ||
+      n.type === 'ReplicateEngineNode'
     ) {
       return n;
     }
@@ -305,6 +312,7 @@ export function resolveActiveCheckpoint(
         selected.type === 'ModelScopeNode' ||
         selected.type === 'ModelScopeAiNode' ||
         selected.type === 'NanoGPTNode' ||
+        selected.type === 'ReplicateEngineNode' ||
         selected.type === 'CheckpointLoaderSimple'
       ) {
         return {
@@ -318,16 +326,8 @@ export function resolveActiveCheckpoint(
     }
   }
 
-  // 2. Sole engine node on canvas (Fal / Gemini / Video / …)
-  const engines = active.filter(
-    (n) =>
-      n.type === 'FalAIEngineNode' ||
-      n.type === 'GoogleImagenNode' ||
-      n.type === 'AIVideoNode' ||
-      n.type === 'ModelScopeNode' ||
-      n.type === 'ModelScopeAiNode' ||
-      n.type === 'NanoGPTNode'
-  );
+  // 2. Sole engine node on canvas (Fal / Gemini / Video / Replicate / …)
+  const engines = active.filter((n) => isCloudEngineNode(n));
   if (engines.length === 1) {
     return {
       checkpoint: getModelFromNode(engines[0]),
@@ -548,17 +548,182 @@ export function filterRealLoraEntries<T>(list: T[] | undefined | null): T[] {
 }
 
 /**
+ * Architecture family classification for Checkpoints and LoRAs.
+ * LoRAs are strictly architecture-specific (e.g. FLUX vs SDXL vs SD 1.5).
+ */
+export type ArchitectureFamily = 'flux' | 'sdxl' | 'sd15' | 'sd35' | 'wan21' | 'video' | 'imagen' | 'unknown';
+
+export function getArchitectureFamily(modelOrBaseModel?: string): ArchitectureFamily {
+  const raw = String(modelOrBaseModel || '').toLowerCase().trim();
+  if (!raw) return 'unknown';
+
+  // FLUX family: flux, flux.1, flux.1-dev, flux-schnell, bfl, black-forest-labs
+  if (
+    raw.includes('flux') ||
+    raw.includes('bfl') ||
+    raw.includes('black-forest-labs') ||
+    raw.includes('618692') ||
+    raw.includes('613730')
+  ) {
+    return 'flux';
+  }
+
+  // SDXL family: sdxl, sdxl 1.0, krea2 turbo, krea 2 turbo, pony, illustrious, pdxl, noobai, stable-diffusion-xl
+  if (
+    raw.includes('sdxl') ||
+    raw.includes('stable-diffusion-xl') ||
+    raw.includes('stable diffusion xl') ||
+    raw.includes('krea2 turbo') ||
+    raw.includes('krea 2 turbo') ||
+    raw.includes('krea2') ||
+    raw.includes('krea-2') ||
+    raw.includes('pony') ||
+    raw.includes('pdxl') ||
+    raw.includes('illustrious') ||
+    raw.includes('noobai') ||
+    raw.includes('animagine') ||
+    raw.includes('juggernaut') ||
+    raw.includes('133005') ||
+    raw.includes('101055') ||
+    raw.includes('257749') ||
+    raw.includes('3290120')
+  ) {
+    return 'sdxl';
+  }
+
+  // SD1.5 family: sd 1.5, sd1.5, sd1, sd 1.4, v1-5, runwayml
+  if (
+    raw.includes('sd 1.5') ||
+    raw.includes('sd1.5') ||
+    raw.includes('sd 1.4') ||
+    raw.includes('sd1.4') ||
+    raw.includes('sd1') ||
+    raw.includes('v1-5') ||
+    raw.includes('runwayml') ||
+    raw.includes('4201')
+  ) {
+    return 'sd15';
+  }
+
+  // SD3.5 / SD3 family
+  if (
+    raw.includes('sd 3.5') ||
+    raw.includes('sd3.5') ||
+    raw.includes('sd 3') ||
+    raw.includes('sd3') ||
+    raw.includes('stable-diffusion-3') ||
+    raw.includes('stable diffusion 3') ||
+    raw.includes('stable-diffusion-v35')
+  ) {
+    return 'sd35';
+  }
+
+  // Wan family
+  if (
+    raw.includes('wan') ||
+    raw.includes('wan2.1') ||
+    raw.includes('wan-2.1') ||
+    raw.includes('tongyi')
+  ) {
+    return 'wan21';
+  }
+
+  // Video family
+  if (
+    raw.includes('ltx') ||
+    raw.includes('kling') ||
+    raw.includes('minimax') ||
+    raw.includes('hailuo') ||
+    raw.includes('cogvideox')
+  ) {
+    return 'video';
+  }
+
+  // Imagen / Gemini family
+  if (raw.includes('imagen') || raw.includes('gemini')) {
+    return 'imagen';
+  }
+
+  return 'unknown';
+}
+
+export interface LoraArchitectureCompatibilityResult {
+  compatible: boolean;
+  reason?: string;
+  ckptFamily: ArchitectureFamily;
+  loraFamily: ArchitectureFamily;
+  ckptBaseModel: string;
+  loraBaseModel: string;
+}
+
+export function checkLoraArchitectureCompatibility(
+  checkpoint: string,
+  checkpointBaseModel: string | undefined,
+  lora: { name: string; baseModel?: string }
+): LoraArchitectureCompatibilityResult {
+  const ckptName = (checkpoint || '').trim();
+  const loraName = (lora.name || '').trim();
+  const ckptBase = (checkpointBaseModel || '').trim();
+  const loraBase = (lora.baseModel || '').trim();
+
+  const ckptFamily = getArchitectureFamily(ckptBase) !== 'unknown'
+    ? getArchitectureFamily(ckptBase)
+    : getArchitectureFamily(ckptName);
+
+  const loraFamily = getArchitectureFamily(loraBase) !== 'unknown'
+    ? getArchitectureFamily(loraBase)
+    : getArchitectureFamily(loraName);
+
+  const defaultCkptBase = ckptFamily === 'flux' ? 'FLUX.1' : ckptFamily === 'sdxl' ? 'SDXL 1.0' : ckptFamily === 'sd15' ? 'SD 1.5' : ckptFamily === 'sd35' ? 'SD 3.5' : ckptFamily === 'wan21' ? 'Wan 2.1' : ckptName || '未知';
+  const defaultLoraBase = loraFamily === 'flux' ? 'FLUX.1' : loraFamily === 'sdxl' ? 'SDXL 1.0' : loraFamily === 'sd15' ? 'SD 1.5' : loraFamily === 'sd35' ? 'SD 3.5' : loraFamily === 'wan21' ? 'Wan 2.1' : '未知';
+
+  const effectiveCkptBaseModel = ckptBase || defaultCkptBase;
+  const effectiveLoraBaseModel = loraBase || defaultLoraBase;
+
+  // Strict cross-architecture check: if both families are identified and differ, it's incompatible
+  if (ckptFamily !== 'unknown' && loraFamily !== 'unknown' && ckptFamily !== loraFamily) {
+    const reason = `LoRA [${loraName}] (baseModel: ${effectiveLoraBaseModel}) 与底模 [${ckptName}] (baseModel: ${effectiveCkptBaseModel}) 架构不兼容，未发送至上游。`;
+    return {
+      compatible: false,
+      reason,
+      ckptFamily,
+      loraFamily,
+      ckptBaseModel: effectiveCkptBaseModel,
+      loraBaseModel: effectiveLoraBaseModel,
+    };
+  }
+
+  return {
+    compatible: true,
+    ckptFamily,
+    loraFamily,
+    ckptBaseModel: effectiveCkptBaseModel,
+    loraBaseModel: effectiveLoraBaseModel,
+  };
+}
+
+/**
  * Keep LoRA values in the request. Runtime endpoint validation is authoritative;
  * local catalog hints must not prevent the provider returning its actual response.
+ * Filters out architecture-incompatible entries when both checkpoint and LoRA architectures are identified.
  */
-export function resolveGenerateLorasPayload<T>(
+export function resolveGenerateLorasPayload<T extends { name?: string; baseModel?: string }>(
   provider: string | undefined,
   model: string | undefined,
-  mappedLoras: T[] | undefined | null
+  mappedLoras: T[] | undefined | null,
+  checkpointBaseModel?: string
 ): T[] | undefined {
   void provider;
-  void model;
-  return Array.isArray(mappedLoras) ? mappedLoras : [];
+  if (!Array.isArray(mappedLoras)) return [];
+  if (!model) return mappedLoras;
+  return mappedLoras.filter((lora) => {
+    if (!lora || typeof lora !== 'object') return true;
+    const compat = checkLoraArchitectureCompatibility(model, checkpointBaseModel, {
+      name: String(lora.name || ''),
+      baseModel: lora.baseModel,
+    });
+    return compat.compatible;
+  });
 }
 
 /** Preserve explicit canvas values; endpoint schema validation and its response are authoritative. */

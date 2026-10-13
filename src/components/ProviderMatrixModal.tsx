@@ -182,6 +182,20 @@ export const ProviderMatrixModal: React.FC<ProviderMatrixModalProps> = ({
       keyFormat: '格式: 32位十六进制字符串 (Civitai API Key)',
       features: ['公开资源元数据', 'AIR / version 保真', '历史实际参数可追溯'],
     },
+    {
+      name: 'Replicate',
+      badge: 'PASS_GENERATION',
+      badgeColor: 'bg-orange-500/20 text-orange-300 border-orange-500/40',
+      description: 'Replicate 官方模型运行平台，通过 /v1/models/{owner}/{name}/predictions 或 /v1/predictions 提交异步预测并轮询。FLUX.1-dev 等模型支持通过 hf_lora 挂载权重。',
+      models: [
+        { name: 'black-forest-labs/flux-dev', steps: '28 (num_inference_steps)', resolution: 'aspect_ratio / width, height', speed: 'PASS_GENERATION' },
+        { name: 'black-forest-labs/flux-schnell', steps: '4 (num_inference_steps)', resolution: 'aspect_ratio / width, height', speed: '官方高速端点' },
+      ],
+      loraSupport: 'FLUX.1-dev 端点支持 hf_lora (HuggingFace/URL) 与 lora_scale；Civitai 权重可解析为直链注入。不支持 LoRA 的端点在提交时透明提示或忽略。',
+      promptLanguage: '英文/多语言提示词',
+      keyFormat: '格式: r8_xxxxxxxxxxxxxxxxxxxxxx (Replicate API Token)',
+      features: ['异步轮询与 wait 优化', 'hf_lora 权重挂载', '真实执行日志与错误透明'],
+    },
   ];
 
   const wireRules = [
@@ -730,6 +744,36 @@ export const ProviderMatrixModal: React.FC<ProviderMatrixModalProps> = ({
                         <td className="p-3 text-slate-300">
                           <span className="inline-block px-1.5 py-0.5 rounded bg-blue-950/60 text-blue-300 border border-blue-800/40 font-mono text-[10px]">
                             仅映射官方图像配置；不合成 LoRA/Steps/Sampler
+                          </span>
+                        </td>
+                      </tr>
+
+                      {/* Replicate */}
+                      <tr className="hover:bg-[#181a23] transition-colors">
+                        <td className="p-3 font-bold text-white">
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-orange-400" />
+                            <span>Replicate</span>
+                          </div>
+                          <span className="text-[10px] text-slate-500 font-mono">FLUX.1 / SDXL / Ideogram</span>
+                        </td>
+                        <td className="p-3 font-mono text-purple-300 text-[10px]">
+                          <code>hf_lora: string</code>
+                          <div className="text-slate-500 text-[9px] mt-0.5">HF 仓库名或直链 safetensors URL</div>
+                        </td>
+                        <td className="p-3 font-mono text-cyan-300">
+                          <code>lora_scale: float</code>
+                        </td>
+                        <td className="p-3 font-mono text-amber-300">
+                          <code>guidance_scale</code>
+                        </td>
+                        <td className="p-3 font-mono text-emerald-300 text-[10px]">
+                          <div><code>num_inference_steps</code></div>
+                          <div className="text-slate-500"><code>aspect_ratio</code> / 宽高</div>
+                        </td>
+                        <td className="p-3 text-slate-300">
+                          <span className="inline-block px-1.5 py-0.5 rounded bg-orange-950/60 text-orange-300 border border-orange-800/40 font-mono text-[10px]">
+                            模型 endpoint 驱动 + hf_lora 映射 + 轮询状态透明
                           </span>
                         </td>
                       </tr>

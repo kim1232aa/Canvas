@@ -142,7 +142,7 @@ export const WorkflowPresetsModal: React.FC<WorkflowPresetsModalProps> = ({
 
       const payload = isRaw
         ? { rawText: targetUrl.trim(), engine: engineToUse }
-        : { url: targetUrl.trim(), imageId: targetUrl.trim(), engine: engineToUse };
+        : { url: targetUrl.trim(), engine: engineToUse };
 
       const resp = await fetch('/api/civitai/extract-workflow', {
         method: 'POST',
@@ -1157,7 +1157,7 @@ Steps: 28, Sampler: DPM++ 2M Karras, CFG scale: 4.5, Seed: 136947637, Size: 1024
                                 <div className="bg-[#181924] p-2 rounded-lg border border-[#232535]">
                                   <span className="text-slate-500 block text-[10px]">VAE</span>
                                   <span className="text-indigo-300 font-bold truncate block" title={extractedPreset.otherMetadata.vae}>
-                                    {extractedPreset.otherMetadata.vae || 'qwen_image_vae.safetensors'}
+                                    {extractedPreset.otherMetadata.vae || '未提供'}
                                   </span>
                                 </div>
                                 <div className="bg-[#181924] p-2 rounded-lg border border-[#232535]">

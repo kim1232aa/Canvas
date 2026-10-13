@@ -61,6 +61,7 @@ const ALLOWED_CLOUD_SETTINGS_FIELDS = new Set([
   'runwareBaseUrl',
   'modelslabKey',
   'modelslabBaseUrl',
+  'replicateKey',
 ]);
 
 interface BackendSettingsModalProps {
@@ -368,6 +369,18 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       status: 'unconfigured',
       popularModels: ['flux', 'sdxl', 'dream-shaper-v8'],
     },
+    {
+      id: 'replicate',
+      name: 'Replicate',
+      badge: '官方 API / 云端模型',
+      docsUrl: 'https://replicate.com/docs',
+      description: '配置 Replicate API Token (r8_...)。支持直接调用 Flux、Ideogram、SDXL 等 Replicate 云端模型与部署。',
+      apiUrl: 'https://api.replicate.com/v1',
+      keyName: 'replicateKey',
+      keyPlaceholder: 'r8_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx (REPLICATE_API_TOKEN)',
+      status: 'unconfigured',
+      popularModels: ['black-forest-labs/flux-schnell', 'black-forest-labs/flux-dev', 'ideogram-ai/ideogram-v2a'],
+    },
   ];
 
   const currentProvider = providers.find((p) => p.id === activeProviderTab) || providers[0];
@@ -514,7 +527,12 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       const { cloud } = await saveKeysLocalFirst({
         // 浏览器本地密钥是主存储（逐请求从 localStorage 读取），必须先保存；
         // 云端同步需管理令牌，失败不阻塞本地、不静默，错误原样展示。
-        saveLocal: () => onSaveKeys(keys),
+        saveLocal: () => {
+          if (keys.replicateKey !== undefined) {
+            localStorage.setItem('comfycanvas_replicate_key', keys.replicateKey);
+          }
+          onSaveKeys(keys);
+        },
         syncCloud: async () => {
           const payload: Record<string, string> = {};
           for (const field of ALLOWED_CLOUD_SETTINGS_FIELDS) {
@@ -711,6 +729,20 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
                     {currentProvider.description}
                   </p>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => handleTest(currentProvider.id)}
+                  disabled={Boolean(testingProvider) || testingAll || isSavingAll}
+                  className="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-semibold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-cyan-600/20 disabled:opacity-50 shrink-0 ml-3"
+                  title={`测试 ${currentProvider.name} 连通性`}
+                >
+                  {testingProvider === currentProvider.id ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-3.5 h-3.5" />
+                  )}
+                  <span>测试连通性</span>
+                </button>
               </div>
 
               {/* Endpoint & Models */}

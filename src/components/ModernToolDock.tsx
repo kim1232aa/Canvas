@@ -79,12 +79,21 @@ export const ModernToolDock: React.FC<ModernToolDockProps> = ({
       ],
     },
     {
-      group: 'LoRA 与加速引擎',
+      group: 'LoRA 与风格微调',
       items: [
         { type: 'LoRALoader', label: 'Load LoRA 风格微调', desc: '调节模型与CLIP权重强度', tag: 'LoRA' },
         { type: 'CivitaiLoRABrowserNode', label: 'Civitai LoRA 浏览器', desc: '搜索并一键导入社区模型', tag: '社区' },
-        { type: 'FalAIEngineNode', label: 'Fal.ai GPU 加速引擎', desc: '极速 FLUX / SDXL 云端直出', tag: '加速' },
-        { type: 'GoogleImagenNode', label: 'Gemini 生图', desc: '官方 Gemini 图像模型（不是已下线 Imagen）', tag: 'Gemini' },
+      ],
+    },
+    {
+      group: '云端一体化加速引擎',
+      items: [
+        { type: 'FalAIEngineNode', label: 'Fal.ai GPU 加速引擎', desc: '极速 FLUX / SDXL 云端直出', tag: 'Fal.ai' },
+        { type: 'ReplicateEngineNode', label: 'Replicate 官方推理引擎', desc: 'FLUX.1 / SDXL / Ideogram 云端直出', tag: 'Replicate' },
+        { type: 'ModelScopeNode', label: '魔搭国内加速引擎', desc: '魔搭社区模型一键推理直出', tag: '魔搭CN' },
+        { type: 'ModelScopeAiNode', label: '魔搭国际加速引擎', desc: 'ModelScope.ai 国际站推理直出', tag: '魔搭AI' },
+        { type: 'NanoGPTNode', label: 'NanoGPT 极速引擎', desc: '轻量免部署 FLUX / SDXL 云端出图', tag: 'NanoGPT' },
+        { type: 'GoogleImagenNode', label: 'Gemini 生图', desc: '官方 Gemini 图像模型', tag: 'Gemini' },
       ],
     },
     {

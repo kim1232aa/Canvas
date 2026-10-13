@@ -7,6 +7,29 @@
 6. 本次用户授权真实生成，按前端完整链路验收。直调 API 和单元测试不能替代网页生成验收。余额不足单独记录，不算出图成功也不据此判定集成失败。
 7. Schema 匹配模式必须在 UI 明示并可关闭，未提交的普通画布字段逐项记录值与原因；手写 JSON 保留字段与覆盖值，非空 LoRA 意图不删除。当前模式是请求前的公开协议映射，不是错误后的回退。只有真实上游图片返回才能进入图像成功状态。
 
+### 2026-10-13 架构重构、Replicate 引擎与双轨架构 E2E 落地
+- server.ts 模块化解耦：提取 `civitaiWorkflowRoute.ts` 与 `civitaiModelRoutes.ts` 到 `src/server/routes/`，移除超 1000 行庞大单文件堆砌代码，保持与 `hosting/build.mjs` 以及 Vitest 契约切片严格兼容。
+- Replicate 官方推理引擎全链路接入：新增 `ReplicateDriver`、`replicateImageContract`、`replicateRoutes`，支持 FLUX.1、SDXL、Ideogram 等模型。后端 `/api/model-schema` 对接 Replicate 官方 OpenAPI Schema 提取 Input 规范。
+- 双轨并存补全（方案 B）：彻底打通 `ReplicateEngineNode`、`ModelScopeNode`、`ModelScopeAiNode`、`NanoGPTNode`、`FalAIEngineNode`、`GoogleImagenNode`。`ModernToolDock` 新设「云端一体化加速引擎」分类，`ModelHubModal` 提供「添加一体化引擎节点」专属动作，打通 `NodeItem` 参数白名单与节点级出图渲染。
+- 跨模型架构 LoRA 强校验：在 `graphEngine.ts` 建立架构兼容性断言；严禁跨架构挂载时（如 FLUX.1 挂载 SDXL/Krea2 LoRA）静默剔除 LoRA 伪造成功，强制在执行前阻断并抛出架构不兼容错误。
+- 无头浏览器 E2E 走查与真实上游实机核验：
+  - 无头 Chrome（端口 9225）实测：Dock 成功添加 Replicate 与 NanoGPT 引擎节点；ModelHub 成功添加预填充的 FalAI 引擎节点。
+  - 真实网络执行透明回传：FalAI 403 `TOP_UP` 欠费、NanoGPT 401 会话失效、Replicate 402 余额不足、ModelScope 国内 400 模型下线、ModelScope 国际 401 需绑定账号，全链路 0 Mock / 100% 透明。
+  - Agnes AI 真实出图成功：产出 1.91 MB PNG 原图（`/api/media/e65c...`），`/api/history` 成功持久化完整快照与 executionTrace。
+- 安全底线（CRITICAL）：`.gitignore` 增加 `temp/` 规则，严防浏览器自动化测试中会话凭证及 Cookie 泄露进版本库。
+- 契约与透传修复（HIGH 1-8, MEDIUM 1-2）：
+  1. Civitai modelId/versionId 纯数字校验 (`/^\d+$/`)，非法字符直接报 400，杜绝向 Civitai 发送无效路径。
+  2. extract-workflow 严格互斥校验 `rawText` / `url` / `modelId` / `imageId`，避免模式混淆与静默优先。
+  3. Civitai 上游错误透传保留原始 status、errorSource、endpoint 与完整错误体，严禁截断吞错。
+  4. extract-workflow 严格可执行性校验，缺失正向提示词或模型信息时 400 拦截，杜绝虚假成功。
+  5. Civitai 资源严格区分 Checkpoint 与 LoRA 类型，不把 LoRA 误标为底模。
+  6. extract-workflow 移除写死默认值（duration 10, fps 24, aspect 16:9, denoise 1.0, 自动拼接 .safetensors）。
+  7. LLM prompt 改写保留前置 LoRA trigger words，在 `promptTransform` 中完整公开原始词、LLM 词与 wire 终态词。
+  8. Hugging Face 非 z-image-space 路由遗漏追踪，完整记录 `shift`、`random_seed`、`gallery_images` 及原因。
+  9. CivitaiModal 缺失 baseModel 时保留 null，严禁凭模型名称强猜架构，badge 仅作为视觉提示。
+  10. NanoGPT 模型目录接口错误原样透传真实 HTTP status 与上游详情，不以空列表掩盖。
+- 本地验证状态：`npm run lint` 0 错误；`npm test` 89 files / 773 tests 全绿；`node hosting/check-hosting.mjs` 全过。
+
 ### 2026-10-12 接线修复边界
 - Runware `lora`、ModelsLab 图生图、ModelScope `size`、异步历史保存、Tensor 目录和兼容中转字段限制已有代码与测试修复。真实上游复验仍受余额或订阅状态阻断，不升级为 PASS_GENERATION。
 - 当前本地验证为 75 个测试文件 / 640 个测试通过，类型检查 0 错误。测试通过不代表所有供应商网页生成已验收。

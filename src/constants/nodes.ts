@@ -33,7 +33,7 @@ export const SCHEDULER_OPTIONS = [
 export interface BaseModelOption {
   label: string;
   value: string;
-  provider: 'fal' | 'agnes' | 'civitai' | 'modelscope' | 'modelscope_ai' | 'huggingface' | 'nanogpt' | 'gemini' | 'sensenova' | 'video' | 'tensorart' | 'openai_compat' | 'grok_compat' | 'muapi' | 'wavespeed' | 'sogni';
+  provider: 'fal' | 'agnes' | 'civitai' | 'modelscope' | 'modelscope_ai' | 'huggingface' | 'nanogpt' | 'gemini' | 'sensenova' | 'video' | 'tensorart' | 'openai_compat' | 'grok_compat' | 'muapi' | 'wavespeed' | 'sogni' | 'runware' | 'modelslab' | 'replicate';
   category?: 'checkpoint' | 'video' | 'reasoning' | 'edit' | 'lora';
 }
 
@@ -85,6 +85,13 @@ export const BASE_MODELS: BaseModelOption[] = [
   { label: '🔁 [Grok 兼容中转] Imagine Image Quality (grok-imagine-image-quality)', value: 'grok-imagine-image-quality', provider: 'grok_compat', category: 'checkpoint' },
   { label: '🔁 [Grok 兼容中转] Imagine Video (grok-imagine-video)', value: 'grok-imagine-video', provider: 'grok_compat', category: 'video' },
   { label: '🔁 [Grok 兼容中转] Imagine Video 1.5 (grok-imagine-video-1.5)', value: 'grok-imagine-video-1.5', provider: 'grok_compat', category: 'video' },
+
+  // ===================== REPLICATE =====================
+  { label: '🔥 [Replicate] FLUX.1 Schnell (black-forest-labs/flux-schnell)', value: 'black-forest-labs/flux-schnell', provider: 'replicate', category: 'checkpoint' },
+  { label: '🔥 [Replicate] FLUX.1 [dev] (black-forest-labs/flux-dev)', value: 'black-forest-labs/flux-dev', provider: 'replicate', category: 'checkpoint' },
+  { label: '🔥 [Replicate] Ideogram v2a (ideogram-ai/ideogram-v2a)', value: 'ideogram-ai/ideogram-v2a', provider: 'replicate', category: 'checkpoint' },
+  { label: '🔥 [Replicate] MiniMax Image-01 (minimax/image-01)', value: 'minimax/image-01', provider: 'replicate', category: 'checkpoint' },
+  { label: '🔥 [Replicate] Seedream 3 (bytedance/seedream-3)', value: 'bytedance/seedream-3', provider: 'replicate', category: 'checkpoint' },
 ];
 
 export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
@@ -126,6 +133,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
           { label: 'MuAPI', value: 'muapi' },
           { label: 'WaveSpeed', value: 'wavespeed' },
           { label: 'Sogni', value: 'sogni' },
+          { label: '⚡ Replicate 官方云平台', value: 'replicate' },
         ],
       },
       {
@@ -799,6 +807,66 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
     defaultValues: {
       model: '',
       steps: 28,
+      guidance_scale: 3.5,
+      resolution: '1024x1024',
+    },
+  },
+
+  ReplicateEngineNode: {
+    type: 'ReplicateEngineNode',
+    title: 'Replicate 官方推理引擎',
+    category: 'providers',
+    colorTag: '#ea580c',
+    description: '直连 Replicate 官方模型运行平台，支持 FLUX.1、SDXL、Ideogram、Wan 等社区与官方模型。',
+    inputs: [
+      { id: 'positive', name: 'positive', type: 'CONDITIONING', label: 'prompt' },
+      { id: 'negative', name: 'negative', type: 'CONDITIONING', label: 'negative' },
+      { id: 'lora', name: 'lora', type: 'MODEL', label: 'lora_model' },
+    ],
+    outputs: [{ id: 'IMAGE', name: 'IMAGE', type: 'IMAGE', label: 'IMAGE' }],
+    widgets: [
+      {
+        name: 'model',
+        label: 'model',
+        type: 'text',
+        default: 'black-forest-labs/flux-schnell',
+        placeholder: '输入 Replicate 模型标识 (如 black-forest-labs/flux-schnell)',
+      },
+      {
+        name: 'steps',
+        label: 'steps',
+        type: 'slider',
+        default: 4,
+        min: 1,
+        max: 50,
+        step: 1,
+      },
+      {
+        name: 'guidance_scale',
+        label: 'guidance_scale',
+        type: 'slider',
+        default: 3.5,
+        min: 1.0,
+        max: 20.0,
+        step: 0.1,
+      },
+      {
+        name: 'resolution',
+        label: 'resolution',
+        type: 'select',
+        default: '1024x1024',
+        options: [
+          { label: '1024x1024 (1:1 正方形)', value: '1024x1024' },
+          { label: '1152x768 (16:9 横版风景)', value: '1152x768' },
+          { label: '768x1152 (9:16 竖屏人像)', value: '768x1152' },
+          { label: '1280x720 (720p 电影画幅)', value: '1280x720' },
+          { label: '2048x2048 (2K 超大解析度)', value: '2048x2048' },
+        ],
+      },
+    ],
+    defaultValues: {
+      model: 'black-forest-labs/flux-schnell',
+      steps: 4,
       guidance_scale: 3.5,
       resolution: '1024x1024',
     },
