@@ -1,3 +1,5 @@
+> 2026-10-14 追加：WaveSpeed 目录模型 `wavespeed-ai/krea-v2/turbo`（非 LoRA）已在真实前端单次运行出图，记 PASS_GENERATION。不新开未决项，也不外推其他供应商。证据见 HANDOFF 同日条目与 `/workspace/canvas-e2e-wavespeed/`。
+
 > 当前状态（2026-10-13）：下文含历史实现与历史验收描述。以 CLAUDE.md 固定规则、PROGRESS.md 最新验收、public/verification/ 真实响应为准；禁止未经核实的自动模型/端点替换与静默丢弃。
 
 # 项目已知与已解决问题跟踪表 (UNRESOLVED_ISSUES.md)

@@ -47,6 +47,15 @@ describe('Runware Image Contract', () => {
     expect(req.payload[0].lora).toEqual([{ model: 'civitai:120096@135931', weight: 0.7 }]);
   });
 
+  it('normalizes full Civitai AIR URN and modelStrength into Runware lora array', () => {
+    const req = buildRunwareImageRequest({
+      model: 'runware:101@1',
+      prompt: 'portrait',
+      loras: [{ name: 'urn:air:flux1:lora:civitai:618692@691639', modelStrength: 0.85 }],
+    });
+    expect(req.payload[0].lora).toEqual([{ model: 'civitai:618692@691639', weight: 0.85 }]);
+  });
+
   it('maps image_url and denoise to seedImage and strength for image-to-image', () => {
     const req = buildRunwareImageRequest({
       model: 'runware:100@1',
@@ -62,6 +71,8 @@ describe('Runware Image Contract', () => {
   it('throws error when model or prompt is missing', () => {
     expect(() => buildRunwareImageRequest({ prompt: 'test' })).toThrow(/模型为必填项/);
     expect(() => buildRunwareImageRequest({ model: 'runware:100@1' })).toThrow(/提示词为必填项/);
+    expect(() => buildRunwareImageRequest({ model: 'runware:100@1', prompt: 'p', image_url: 'https://x/a.png', denoise: 1.5 })).toThrow(/严禁静默截断/);
+    expect(() => buildRunwareImageRequest({ model: 'runware:100@1', prompt: 'p', loras: [{ name: 'civitai:1@2' }] })).toThrow(/严禁静默兜底为 1\.0/);
   });
 
   it('parses successful response and extracts imageURL', () => {

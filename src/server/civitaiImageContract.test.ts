@@ -93,11 +93,44 @@ describe('Civitai image request contract', () => {
     expect(input).toMatchObject({ engine: 'sdcpp', ecosystem: 'zImage', model: 'turbo', operation: 'createImage' });
     await expect(buildCivitaiImageInput({ model: 'base', comfyModel: 'base', ecosystem: 'zImage', engine: 'sdcpp', image_url: 'a' }, api({}))).rejects.toThrow(/createImage/);
   });
-  it('Krea Comfy turbo accepts no diffusion override and real AIR LoRA', async () => {
+  it('Krea2 rejects LoRA intent and never emits loras (official recipe)', async () => {
     const lora = 'urn:air:krea2:locon:civitai:1@2';
-    const input = await buildCivitaiImageInput({ model: 'turbo', comfyModel: 'turbo', ecosystem: 'krea2', engine: 'comfy', loras: [{ civitaiId: lora, strength: 0.8 }] }, api({}));
-    expect(input).toMatchObject({ engine: 'comfy', ecosystem: 'krea2', model: 'turbo', loras: { [lora]: 0.8 } });
-    expect(input).not.toHaveProperty('diffusionModel');
+    await expect(buildCivitaiImageInput({ model: 'turbo', comfyModel: 'turbo', ecosystem: 'krea2', engine: 'comfy', loras: [{ civitaiId: lora, strength: 0.8 }] }, api({}))).rejects.toThrow(/Krea v2|不接受 LoRA/);
+    const bare = await buildCivitaiImageInput({ model: 'turbo', comfyModel: 'turbo', ecosystem: 'krea2', engine: 'comfy', prompt: 'scene' }, api({}));
+    expect(bare).toMatchObject({ engine: 'comfy', ecosystem: 'krea2', model: 'turbo' });
+    expect(bare).not.toHaveProperty('loras');
+    expect(bare).not.toHaveProperty('diffusionModel');
+  });
+  it('Krea2 rejects negative_prompt and width/height per official recipe', async () => {
+    await expect(buildCivitaiImageInput({ model: 'turbo', comfyModel: 'turbo', ecosystem: 'krea2', engine: 'comfy', negative_prompt: 'blur' }, api({}))).rejects.toThrow(/负面|Krea/);
+    await expect(buildCivitaiImageInput({ model: 'turbo', comfyModel: 'turbo', ecosystem: 'krea2', engine: 'comfy', width: 1024, height: 1024 }, api({}))).rejects.toThrow(/宽高|Krea/);
+  });
+  it('Flux2 Dev builds loras[] {air,strength} (not Klein map)', async () => {
+    const lora = 'urn:air:flux2:lora:civitai:3@4';
+    const input = await buildCivitaiImageInput({
+      model: 'urn:air:flux2:checkpoint:civitai:1@2',
+      engine: 'flux2',
+      ecosystem: 'dev',
+      prompt: 'x',
+      loras: [{ civitaiId: lora, strength: 0.7 }],
+    }, api({}));
+    expect(input.loras).toEqual([{ air: lora, strength: 0.7 }]);
+  });
+  it('Flux2 Klein still builds AIR→strength loras map', async () => {
+    const lora = 'urn:air:flux2:lora:civitai:5@6';
+    const input = await buildCivitaiImageInput({
+      model: 'urn:air:flux2:checkpoint:civitai:1@2',
+      engine: 'sdcpp',
+      ecosystem: 'flux2Klein',
+      prompt: 'x',
+      loras: [{ civitaiId: lora, strength: 0.5 }],
+    }, api({}));
+    expect(input).toMatchObject({ ecosystem: 'flux2Klein', loras: { [lora]: 0.5 } });
+  });
+  it('Flux1 still builds AIR→strength loras map', async () => {
+    const lora = 'urn:air:flux1:lora:civitai:3@4';
+    const input = await buildCivitaiImageInput({ model: 'urn:air:flux1:checkpoint:civitai:1@2', engine: 'comfy', ecosystem: 'flux1', loras: [{ civitaiId: lora, strength: 0.7 }] }, api({}));
+    expect(input).toMatchObject({ ecosystem: 'flux1', loras: { [lora]: 0.7 } });
   });
   it('rejects checkpoint masquerading as LoRA and preserves unknown ecosystem knobs', async () => {
     await expect(buildCivitaiImageInput({ model: air, loras: [{ civitaiId: air, strength: 1 }] }, api({}))).rejects.toThrow(/LoRA/);

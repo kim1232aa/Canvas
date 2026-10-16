@@ -1,0 +1,190 @@
+{
+ "prompt": "a futuristic starship corridor, warm ambient lighting, wide angle",
+ "negativePrompt": "blurry, low quality",
+ "provider": "ModelScope AI (魔搭国际站)",
+ "model": "Tongyi-MAI/Z-Image-Turbo",
+ "actualModel": "Tongyi-MAI/Z-Image-Turbo",
+ "seed": 42,
+ "steps": 8,
+ "cfg": 3,
+ "loras": [
+  {
+   "name": "LcarsPicturesDatabase/ST-TNG-Rooms-Z-Image-Turbo-v1",
+   "strength": 1
+  }
+ ],
+ "requestMetadata": {
+  "requestedParameters": {
+   "prompt": "a futuristic starship corridor, warm ambient lighting, wide angle",
+   "negative_prompt": "blurry, low quality",
+   "model": "Tongyi-MAI/Z-Image-Turbo",
+   "steps": 8,
+   "guidance": 3,
+   "seed": 42,
+   "width": 512,
+   "height": 512,
+   "site": "ai",
+   "loras": [
+    {
+     "name": "LcarsPicturesDatabase/ST-TNG-Rooms-Z-Image-Turbo-v1",
+     "strength": 1,
+     "modelStrength": 1,
+     "clipStrength": 1,
+     "civitaiId": "",
+     "triggers": ""
+    }
+   ],
+   "sampler_name": "euler_ancestral",
+   "denoise": 1
+  },
+  "actualParameters": {
+   "model": "Tongyi-MAI/Z-Image-Turbo",
+   "prompt": "a futuristic starship corridor, warm ambient lighting, wide angle",
+   "size": "512x512",
+   "negative_prompt": "blurry, low quality",
+   "steps": 8,
+   "guidance": 3,
+   "seed": 42,
+   "loras": {
+    "LcarsPicturesDatabase/ST-TNG-Rooms-Z-Image-Turbo-v1": 1
+   }
+  },
+  "actualModel": "Tongyi-MAI/Z-Image-Turbo",
+  "overrides": [],
+  "parameterMappings": [
+   {
+    "from": "width+height",
+    "to": "size",
+    "value": "512x512"
+   }
+  ],
+  "parameterOmissions": [
+   {
+    "from": "sampler_name",
+    "to": null,
+    "value": "euler_ancestral",
+    "sent": false,
+    "reason": "该端点不支持：魔搭 API-Inference 官方参数表无 sampler_name；未发送（https://www.modelscope.cn/docs/model-service/API-Inference/intro）"
+   },
+   {
+    "from": "denoise",
+    "to": null,
+    "value": 1,
+    "sent": false,
+    "reason": "该端点不支持：魔搭 API-Inference 官方参数表无 denoise；未发送（https://www.modelscope.cn/docs/model-service/API-Inference/intro）"
+   }
+  ],
+  "schemaFields": [
+   "model",
+   "prompt",
+   "negative_prompt",
+   "size",
+   "seed",
+   "steps",
+   "guidance",
+   "image_url",
+   "loras"
+  ],
+  "upstreamEndpoint": "https://api-inference.modelscope.ai/v1/images/generations",
+  "route": "/api/modelscope_ai/generate",
+  "submissions": [
+   {
+    "endpoint": "https://api-inference.modelscope.ai/v1/images/generations",
+    "parameters": {
+     "model": "Tongyi-MAI/Z-Image-Turbo",
+     "prompt": "a futuristic starship corridor, warm ambient lighting, wide angle",
+     "size": "512x512",
+     "negative_prompt": "blurry, low quality",
+     "steps": 8,
+     "guidance": 3,
+     "seed": 42,
+     "loras": {
+      "LcarsPicturesDatabase/ST-TNG-Rooms-Z-Image-Turbo-v1": 1
+     }
+    },
+    "status": 200
+   }
+  ],
+  "executionTrace": [
+   {
+    "provider": "modelscope_ai",
+    "model": "Tongyi-MAI/Z-Image-Turbo",
+    "method": "POST",
+    "endpoint": "https://api-inference.modelscope.ai/v1/images/generations",
+    "requestBody": {
+     "model": "Tongyi-MAI/Z-Image-Turbo",
+     "prompt": "a futuristic starship corridor, warm ambient lighting, wide angle",
+     "size": "512x512",
+     "negative_prompt": "blurry, low quality",
+     "steps": 8,
+     "guidance": 3,
+     "seed": 42,
+     "loras": {
+      "LcarsPicturesDatabase/ST-TNG-Rooms-Z-Image-Turbo-v1": 1
+     }
+    },
+    "status": 200,
+    "statusText": "OK",
+    "responseBody": {
+     "kind": "raw-response",
+     "url": "/api/media/raw/a45d71440dd888cdcb8d945f983697f07cc4cda594e1291bfbaf701729ac6745",
+     "sha256": "a45d71440dd888cdcb8d945f983697f07cc4cda594e1291bfbaf701729ac6745",
+     "size": 126,
+     "encoding": "utf-8",
+     "fidelity": "original"
+    },
+    "maskedKey": "ms-b...830d",
+    "keyUsage": {
+     "provider": "modelscope_ai",
+     "index": 0,
+     "count": 2,
+     "source": "pool"
+    },
+    "durationMs": 2011
+   },
+   {
+    "provider": "modelscope_ai",
+    "model": "Tongyi-MAI/Z-Image-Turbo",
+    "method": "GET",
+    "endpoint": "https://api-inference.modelscope.ai/v1/tasks/bcab04fd-5df9-409a-b010-b7319586739d",
+    "status": 200,
+    "statusText": "OK",
+    "responseBody": {
+     "kind": "raw-response",
+     "url": "/api/media/raw/bc2eb9cf268ff01d164f3e1891d213c8a85174f5a8eed135440a4de3848daf71",
+     "sha256": "bc2eb9cf268ff01d164f3e1891d213c8a85174f5a8eed135440a4de3848daf71",
+     "size": 306,
+     "encoding": "utf-8",
+     "fidelity": "original"
+    },
+    "maskedKey": "ms-b...830d",
+    "keyUsage": {
+     "provider": "modelscope_ai",
+     "index": 0,
+     "count": 2,
+     "source": "pool"
+    },
+    "durationMs": 2935
+   }
+  ],
+  "keyUsages": [
+   {
+    "provider": "modelscope_ai",
+    "index": 0,
+    "count": 2,
+    "source": "pool"
+   }
+  ]
+ },
+ "url": "/api/media/f3180838b4822adeb63ea714a480ef27f6be79d4f2c451d914ddb871bd4456c7",
+ "imageIndex": 0,
+ "imageCount": 1,
+ "requestOrigin": "browser",
+ "id": "hist_1792121319067_i9lp9",
+ "timestamp": 1792121319067,
+ "actualProvider": "ModelScope AI (魔搭国际站)",
+ "sampler": null,
+ "scheduler": null,
+ "width": null,
+ "height": null
+}

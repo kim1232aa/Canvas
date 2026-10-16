@@ -1,0 +1,30 @@
+{
+  "httpStatus": 403,
+  "ok": false,
+  "errorSource": "upstream",
+  "endpoint": "https://api.aimlapi.com/v1/images/generations",
+  "errorHead": "HTTP 403: {\"title\":\"Forbidden\",\"status\":403,\"message\":\"You've run out of funds. Please top up your balance or update your payment method to continue: https://aimlapi.com/app/billing/\",\"instance\":\"/v1/images/generations\",",
+  "actualRequestLoras": [
+    {
+      "path": "ostris/z_image_turbo_childrens_drawings",
+      "scale": 0.85
+    }
+  ],
+  "actualRequestKeys": [
+    "prompt",
+    "num_inference_steps",
+    "seed",
+    "loras",
+    "model",
+    "image_size"
+  ],
+  "historyItemLoras": [
+    {
+      "name": "ostris/z_image_turbo_childrens_drawings",
+      "strength": 0.85
+    }
+  ],
+  "historyItemStatus": "failed",
+  "historyHasActualLoras": true,
+  "hasFakeSuccessWords": false
+}

@@ -82,7 +82,7 @@ export const WorkflowPresetsModal: React.FC<WorkflowPresetsModalProps> = ({
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // Civitai URL Extract State
-  const [civitaiUrlInput, setCivitaiUrlInput] = useState<string>('https://civitai.red/images/136947637');
+  const [civitaiUrlInput, setCivitaiUrlInput] = useState<string>('');
   const [selectedEngine, setSelectedEngine] = useState<ImportTargetProvider>('civitai');
   const [showOtherMetadata, setShowOtherMetadata] = useState<boolean>(true);
   const [isExtractingCivitai, setIsExtractingCivitai] = useState<boolean>(false);

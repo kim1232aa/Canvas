@@ -1,0 +1,258 @@
+{
+  "$schemaNote": "草案 — 仅声明，非可执行驱动。真相源: docs/provider-api-audit/krea.md (2026-10-15)",
+  "id": "krea",
+  "displayName": "Krea",
+  "auth": {
+    "envVar": "KREA_API_KEY",
+    "header": "Authorization",
+    "scheme": "Bearer",
+    "optionalHeaders": [
+      "X-Webhook-URL",
+      "X-Api-Zero-Data-Retention"
+    ],
+    "sources": [
+      "https://api.krea.ai/openapi.json"
+    ]
+  },
+  "base": {
+    "root": "https://api.krea.ai"
+  },
+  "catalog": {
+    "models": {
+      "source": "GET /openapi.json",
+      "rule": "每个 POST /generate/{image|video}/... 即一个模型端点；无全局 model list",
+      "pagination": "n/a"
+    },
+    "loraStyles": {
+      "method": "GET",
+      "path": "/styles",
+      "pagination": "cursor",
+      "limit": "1-1000",
+      "filters": [
+        "filter: all|user|community|krea|...",
+        "model",
+        "ids"
+      ]
+    }
+  },
+  "image": {
+    "mode": "async",
+    "create": {
+      "method": "POST",
+      "path": "/generate/image/{vendor}/{model...}"
+    },
+    "poll": {
+      "method": "GET",
+      "path": "/jobs/{id}",
+      "statuses": [
+        "backlogged",
+        "queued",
+        "scheduled",
+        "processing",
+        "sampling",
+        "intermediate-complete",
+        "completed",
+        "failed",
+        "cancelled"
+      ],
+      "successField": "result.urls"
+    },
+    "parametersByEndpoint": {
+      "bfl/flux-1-dev": {
+        "steps": {
+          "type": "integer",
+          "min": 1,
+          "max": 100,
+          "default": 25,
+          "mustSend": true,
+          "sendStatus": "会发送",
+          "sendEvidence": "canvas-e2e-krea-0936（挑刺过、画布 PASS_BILLING）：flux-1-dev actualRequest/历史实际发送含 steps:25、seed:7、guidance_scale:3、styles:[{id:79tzf61yz,strength:0.8}]；上游 HTTP 402 欠费原文；证据 /workspace/canvas-e2e-krea-0936/；Researchy 对照官方 OpenAPI 一致"
+        },
+        "guidance_scale": {
+          "type": "number",
+          "min": 0,
+          "max": 24,
+          "default": 3,
+          "mustSend": true,
+          "canvasField": "cfg",
+          "sendStatus": "会发送",
+          "sendEvidence": "canvas-e2e-krea-0936（挑刺过、画布 PASS_BILLING）：flux-1-dev actualRequest/历史实际发送含 steps:25、seed:7、guidance_scale:3、styles:[{id:79tzf61yz,strength:0.8}]；上游 HTTP 402 欠费原文；证据 /workspace/canvas-e2e-krea-0936/；Researchy 对照官方 OpenAPI 一致"
+        },
+        "seed": {
+          "type": "number|null",
+          "mustSend": true,
+          "sendStatus": "会发送",
+          "sendEvidence": "canvas-e2e-krea-0936（挑刺过、画布 PASS_BILLING）：flux-1-dev actualRequest/历史实际发送含 steps:25、seed:7、guidance_scale:3、styles:[{id:79tzf61yz,strength:0.8}]；上游 HTTP 402 欠费原文；证据 /workspace/canvas-e2e-krea-0936/；Researchy 对照官方 OpenAPI 一致"
+        },
+        "width": {
+          "min": 512,
+          "max": 2368,
+          "default": 1024
+        },
+        "height": {
+          "min": 512,
+          "max": 2368,
+          "default": 1024
+        },
+        "styles": {
+          "supported": true,
+          "sendStatus": "会发送",
+          "sendEvidence": "canvas-e2e-krea-0936（挑刺过、画布 PASS_BILLING）：flux-1-dev actualRequest/历史实际发送含 steps:25、seed:7、guidance_scale:3、styles:[{id:79tzf61yz,strength:0.8}]；上游 HTTP 402 欠费原文；证据 /workspace/canvas-e2e-krea-0936/；Researchy 对照官方 OpenAPI 一致",
+          "item": "{id,strength −2..2}"
+        }
+      },
+      "krea/krea-2/{medium|large|medium-turbo}": {
+        "seed": {
+          "type": "number|null"
+        },
+        "aspect_ratio": {
+          "required": true
+        },
+        "resolution": {
+          "example": "1K"
+        },
+        "creativity|intensity|complexity|movement": "K2 特有",
+        "styles": {
+          "supported": true
+        }
+      },
+      "bfl/flux-1-kontext-dev": {
+        "styles": {
+          "supported": false
+        }
+      },
+      "ideogram/ideogram-4.5": {
+        "seed": {
+          "type": "integer",
+          "min": 0,
+          "max": 2147483647
+        },
+        "quality": true,
+        "styles": {
+          "supported": false
+        },
+        "steps": {
+          "supported": false
+        },
+        "guidance_scale": {
+          "supported": false
+        }
+      }
+    },
+    "rule": "以所选 path 的 OpenAPI requestBody 为准决定可发字段"
+  },
+  "video": {
+    "supported": true,
+    "mode": "async",
+    "create": {
+      "method": "POST",
+      "path": "/generate/video/{vendor}/{model...}"
+    },
+    "poll": "GET /jobs/{id}",
+    "samples": {
+      "bytedance/seedance-2": {
+        "duration": "4-15 default 5",
+        "resolution": [
+          "480p",
+          "720p",
+          "1080p",
+          "4k"
+        ],
+        "seed": true,
+        "aspect_ratio": true
+      },
+      "kling/kling-2.5": {
+        "duration": [
+          5,
+          10
+        ],
+        "seed": false
+      },
+      "minimax/hailuo-02": {
+        "duration": "6-10",
+        "resolution": [
+          "512p",
+          "768p",
+          "1080p"
+        ],
+        "seed": false
+      },
+      "google/veo-3": {
+        "duration": [
+          4,
+          6,
+          8
+        ],
+        "resolution": [
+          "720p",
+          "1080p"
+        ],
+        "seed": false
+      }
+    },
+    "fps": {
+      "supported": false,
+      "reason": "抽样 schema 未出现 fps"
+    },
+    "lora": {
+      "supported": "per-path; 抽样未见 styles"
+    }
+  },
+  "lora": {
+    "field": "styles",
+    "item": {
+      "id": {
+        "type": "string",
+        "required": true,
+        "source": "GET /styles",
+        "sendStatus": "会发送",
+        "sendEvidence": "canvas-e2e-krea-0936（挑刺过、画布 PASS_BILLING）：flux-1-dev actualRequest/历史实际发送含 steps:25、seed:7、guidance_scale:3、styles:[{id:79tzf61yz,strength:0.8}]；上游 HTTP 402 欠费原文；证据 /workspace/canvas-e2e-krea-0936/；Researchy 对照官方 OpenAPI 一致"
+      },
+      "strength": {
+        "type": "number",
+        "min": -2,
+        "max": 2,
+        "required": true,
+        "default": null,
+        "uiRule": "必填；禁止静默 0.8",
+        "sendStatus": "会发送",
+        "sendEvidence": "canvas-e2e-krea-0936（挑刺过、画布 PASS_BILLING）：flux-1-dev actualRequest/历史实际发送含 steps:25、seed:7、guidance_scale:3、styles:[{id:79tzf61yz,strength:0.8}]；上游 HTTP 402 欠费原文；证据 /workspace/canvas-e2e-krea-0936/；Researchy 对照官方 OpenAPI 一致"
+      }
+    },
+    "exposeOnlyWhen": "所选端点 requestBody 声明 styles",
+    "sendStatus": "会发送",
+    "sendEvidence": "canvas-e2e-krea-0936（挑刺过、画布 PASS_BILLING）：flux-1-dev actualRequest/历史实际发送含 steps:25、seed:7、guidance_scale:3、styles:[{id:79tzf61yz,strength:0.8}]；上游 HTTP 402 欠费原文；证据 /workspace/canvas-e2e-krea-0936/；Researchy 对照官方 OpenAPI 一致"
+  },
+  "billing": {
+    "insufficientHints": [
+      {
+        "http": 402,
+        "text": "You have run out of credits / Insufficient credits / top up your API balance"
+      }
+    ],
+    "balanceEndpoint": null,
+    "concurrency": {
+      "http": 429
+    }
+  },
+  "contractTestHint": "flux-1-dev: 画布填 steps/cfg/seed/LoRA → actualRequest 必含 steps、guidance_scale、seed、styles[{id,strength}]（krea-0936 已证实会发送，至 402）；任一缺失即 FAIL",
+  "sources": [
+    "https://api.krea.ai/openapi.json",
+    "https://www.krea.ai/docs/developers/api-keys-and-billing.md",
+    "https://www.krea.ai/docs/developers/job-lifecycle.md"
+  ],
+  "_auditStatus": "2026-10-16 ~09:53 JST tinkabot：认领 krea-0936（挑刺过）——steps/seed/guidance_scale/styles 升「会发送」。前序 2026-10-15 03:26：旧审计仅对比；以 v2 与 DIFF 为准。",
+  "flux1DevLive": {
+    "width/height": "512–2368（实时 OpenAPI）",
+    "strength": "去噪强度，默认1，非 LoRA",
+    "notSupported": [
+      "negative_prompt",
+      "sampler",
+      "scheduler"
+    ],
+    "evidence": "docs/evidence/krea-openapi-live-0330.json"
+  },
+  "acceptanceNotes": [
+    "2026-10-16 krea-0936：flux-1-dev steps/seed/guidance_scale/styles 升会发送（至 402）；LoRA 走 styles 非 loras；欠费接线非真出图。"
+  ]
+}

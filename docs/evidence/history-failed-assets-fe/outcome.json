@@ -1,0 +1,12 @@
+{
+  "assetsCount": 5,
+  "imageCountLabel": "5 张图片",
+  "failedCardsInAssets": 0,
+  "historyFailedDownloadDisabled": "yes",
+  "historyFailedApplyDisabled": "yes",
+  "screenshotPaths": [
+    "/workspace/canvas/Canvas-main/docs/evidence/history-failed-assets-fe/01-history-title.png",
+    "/workspace/canvas/Canvas-main/docs/evidence/history-failed-assets-fe/02-failed-card.png",
+    "/workspace/canvas/Canvas-main/docs/evidence/history-failed-assets-fe/03-assets.png"
+  ]
+}

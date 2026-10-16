@@ -139,7 +139,6 @@ export class VideoDriver extends BaseEngineDriver {
     };
     if (keys.falKey || effectiveKey) reqHeaders['x-fal-key'] = keys.falKey || effectiveKey;
     if (keys.agnesKey || keys.agnes) reqHeaders['x-agnes-key'] = keys.agnesKey || keys.agnes;
-    if (keys.modelscopeToken || keys.modelscope) reqHeaders['x-modelscope-token'] = keys.modelscopeToken || keys.modelscope;
     if (keys.tensorartKey || keys.tensorart) reqHeaders['x-tensorart-key'] = keys.tensorartKey || keys.tensorart;
     if (keys.nanogptKey || keys.nanogpt) reqHeaders['x-nanogpt-key'] = keys.nanogptKey || keys.nanogpt;
     if (keys.grokCompatKey) reqHeaders['x-grok-compat-key'] = keys.grokCompatKey;
@@ -151,6 +150,28 @@ export class VideoDriver extends BaseEngineDriver {
       throw new Error(
         '视频服务商 (Provider) 未设置，拒绝回退到 Fal。请先选择服务商或从带服务商标注的模型列表中选择模型。'
       );
+    }
+
+    // Match ModelScope image drivers: site-specific token + site header; never swap CN↔AI tokens.
+    const msProvider = String(videoProvider).toLowerCase().trim();
+    if (msProvider === 'modelscope_ai' || msProvider === 'modelscope-ai') {
+      const aiToken = keys.modelscopeAiToken || keys.modelscope_ai || '';
+      if (!aiToken) {
+        throw new Error(
+          '魔搭国际站视频需要 x-modelscope-ai-token（MODELSCOPE_AI_TOKEN / modelscopeAiToken）；当前未配置，不会改用国内站 Token 或切换站点。'
+        );
+      }
+      reqHeaders['x-modelscope-ai-token'] = aiToken;
+      reqHeaders['x-modelscope-site'] = 'ai';
+    } else if (msProvider === 'modelscope' || msProvider === 'modelscope_cn' || msProvider === 'modelscope-cn') {
+      const cnToken = keys.modelscopeToken || keys.modelscope || '';
+      if (!cnToken) {
+        throw new Error(
+          '魔搭国内站视频需要 x-modelscope-token（MODELSCOPE_TOKEN / modelscopeToken）；当前未配置，不会改用国际站 Token 或切换站点。'
+        );
+      }
+      reqHeaders['x-modelscope-token'] = cnToken;
+      reqHeaders['x-modelscope-site'] = 'cn';
     }
     const extra = params.extraParams || {};
     const videoBody: Record<string, unknown> = {

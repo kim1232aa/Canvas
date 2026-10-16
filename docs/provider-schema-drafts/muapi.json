@@ -1,0 +1,201 @@
+{
+  "$schemaNote": "草案 — 仅声明。真相源: docs/provider-api-audit/muapi.md (2026-10-15)",
+  "id": "muapi",
+  "displayName": "MuAPI",
+  "auth": {
+    "envVar": "MUAPI_API_KEY",
+    "primary": {
+      "header": "x-api-key"
+    },
+    "alsoAccepted": {
+      "header": "Authorization",
+      "scheme": "Bearer"
+    },
+    "oauth": "POST /oauth/token client_credentials, 1h",
+    "sandboxWarning": "Sandbox key 返回 mock 不计费 — 验收禁止用 sandbox key 当 PASS_GENERATION"
+  },
+  "base": {
+    "root": "https://api.muapi.ai"
+  },
+  "catalog": {
+    "method": "GET",
+    "path": "/api/v1/models",
+    "rowFields": [
+      "name",
+      "endpoint_url",
+      "description",
+      "category",
+      "cost",
+      "cost_strategy"
+    ],
+    "query": {
+      "category": [
+        "Text to Image",
+        "Text to Video",
+        "Image to Video",
+        "..."
+      ],
+      "family": [
+        "flux",
+        "veo3",
+        "kling",
+        "..."
+      ]
+    },
+    "schemaSource": "https://api.muapi.ai/openapi.json (按 endpoint_url 找 requestBody)",
+    "loraBrowseDashboardOnly": "/app/lora-models-data?page=&q=&lora_type= （Dashboard 接口，非公开 API；接前须确认）",
+    "rule": "显示名 ≠ 执行路径；按 endpoint_url 调用"
+  },
+  "predict": {
+    "mode": "async (全部)",
+    "create": {
+      "method": "POST",
+      "path": "/api/v1/{endpoint}",
+      "returns": "request_id"
+    },
+    "poll": {
+      "method": "GET",
+      "path": "/api/v1/predictions/{id}/result",
+      "statuses": [
+        "queued",
+        "pending",
+        "processing",
+        "completed",
+        "failed",
+        "cancelled"
+      ]
+    },
+    "webhook": "?webhook="
+  },
+  "image": {
+    "examples": [
+      "/api/v1/flux_dev_lora_image",
+      "/api/v1/krea-v2-turbo-lora",
+      "/api/v1/flux-2-klein-4b-text-to-image-lora"
+    ],
+    "seed": {
+      "supported": "≥69 schema 含 seed；常见 default -1 = random"
+    },
+    "stepsCfg": "多数现代端点无 classic steps/cfg；按 schema",
+    "sdxlLora": {
+      "width": "256-1536",
+      "height": "256-1536",
+      "default": 1024
+    }
+  },
+  "video": {
+    "supported": true,
+    "examples": [
+      "/api/v1/flux-3-text-to-video",
+      "/api/v1/kling-o1-image-to-video",
+      "WanLoRAT2VRequest",
+      "WanLoRAI2VRequest"
+    ],
+    "wanLora": {
+      "duration": [
+        5,
+        10
+      ],
+      "resolution": [
+        "480p",
+        "720p"
+      ],
+      "aspect_ratio": true,
+      "lora_list": true,
+      "seed": false
+    },
+    "fps": {
+      "supported": "无统一字段；按 schema"
+    }
+  },
+  "lora": {
+    "itemSchema": "LoraItem { path: string (required), scale: number 0..4 (required) }",
+    "fieldVariants": {
+      "loras": "array LoraItem, max 3 (KreaV2TurboLora, ZImageTurboLora)",
+      "lora_list": "array LoraItem (Flux2 Klein, SDXL, Wan LoRA)",
+      "single": "lora_url + lora_weight 0..4 (Flux1DevStyleLora)"
+    },
+    "rule": "按端点 schema 选字段名；无 LoRA 字段 → 拒绝挂载"
+  },
+  "billing": {
+    "balance": {
+      "method": "GET",
+      "path": "/api/v1/account/balance"
+    },
+    "costSignals": [
+      "header X-MuAPI-Cost-USD",
+      "body cost.amount_usd"
+    ],
+    "insufficientHints": [],
+    "note": "未文档化 402；按实测原样记录"
+  },
+  "contractTestHint": "krea-v2-turbo-lora → loras[]；flux-2-klein → lora_list[]；flux1 style → lora_url+lora_weight；同一画布 LoRA 节点按端点换字段名",
+  "sources": [
+    "https://muapi.ai/docs/authentication",
+    "https://api.muapi.ai/openapi.json"
+  ],
+  "_auditStatus": "2026-10-16 16:31：fix5 UI 收口（非升 PASS）——strength 显示澄清 + aspect_ratio 进尺寸行；证据 /workspace/canvas-e2e-fix5-accept-1618/。2026-10-16 14:42：fix3-1530 升 PASS_BILLING（loras[{path,scale}]/resolution 1k → 402）。2026-10-16 14:50：fix2-1340 FAIL（resolution 本地拦合规；LoRA item 映射待供应商配置 path/scale）。2026-10-16 12:37：rekey-1230 字段已核，不收口、徽章未升。2026-10-15 03:26：引用的 docs/provider-api-audit 旧审计仅留作对比、不再引用；以 docs/provider-api-audit-v2/ 与 DIFF.md 为准；本草案凡依据旧审计的结论一律视为未核实，等 Researchy 新调查",
+  "requestFieldsVerified": {
+    "run": "/workspace/canvas-e2e-muapi-rekey-1230/（失败卡 hist_1792125133065_2ffvp）",
+    "endpoint": "POST https://api.muapi.ai/api/v1/krea-v2-turbo-lora",
+    "status": "字段与官方 openapi.json（12:29 抓取）一致：prompt/seed/resolution/aspect_ratio/loras[{path,scale}]；steps/CFG/采样器/宽高/负向词 标该端点不支持 · 未发送",
+    "upstream": "402 INSUFFICIENT_CREDITS 原文透传，进历史，有 Key #0",
+    "closure": "画布收口 PASS_BILLING（fix3-1530，挑刺无严重）",
+    "loraMaxItems": {
+      "value": null,
+      "status": "官方 Schema 未写上限（openapi.json 12:45:00 抓取，loras 类型 array 或 null，无 maxItems）；只在 description 原文写了 \"List of LoRAs to apply (maximum 3)\"；画布不解析、不拦",
+      "sameFor": [
+        "KreaV2TurboLora",
+        "ZImageTurboLora",
+        "ZImageBaseLora",
+        "QwenImageEdit*Lora"
+      ],
+      "descriptionDisplay": "待实现（下一批）：LoRA 区旁原样显示 description；前端验收过再改成现状"
+    },
+    "acceptanceBadge": "PASS_BILLING",
+    "retest_fix2_1340": {
+      "run": "/workspace/canvas-e2e-muapi-fix2-1340/（卡 hist_1792129505860_hvuig）",
+      "verdict": "FAIL（本地拦截，请求未出站）",
+      "localBlockOk": "Empty Latent 1024x1024 不在 resolution enum [1k,2k]，未自动改值，来源 openapi.json",
+      "loraItemShape": {
+        "official": "KreaV2TurboLoraRequest.loras = anyOf[array of {type:object, additionalProperties:true}, null]，items 无 properties；scale 只在 description 示例；同文件有 LoraItem{path,scale 0-4} 但该端点未 $ref（Researchy 14:49:59 JST）",
+        "cardBug": "拟发送 JSON 显示 path+strength/modelStrength/clipStrength（前端原始体），芯片写未发送；canvas-dev：服务端映射放行时会发 {path,scale}，卡上拟发送不是映射后体",
+        "productRule": "供应商配置声明 LoRA item 字段映射 path/scale（带来源链接+抓取时间）；引擎只读配置。无 Schema properties/$ref 且无配置 → 本地拦「Schema 未定义 LoRA 强度字段」。不准猜 strength/modelStrength/clipStrength，也不准把默认 {path,scale} 当通用兜底。",
+        "configStatus": "待实现（下一批）",
+        "openapi": "https://api.muapi.ai/openapi.json"
+      },
+      "acceptanceBadge": "未升"
+    }
+  },
+  "acceptanceBadge": "PASS_BILLING",
+  "sendEvidence": {
+    "fix3_1530": {
+      "run": "/workspace/canvas-e2e-muapi-fix3-1530/（卡 hist_1792132514936_nav55）",
+      "endpoint": "krea-v2-turbo-lora",
+      "actualRequest": {
+        "loras": [
+          {
+            "path": "darkbrush HF URL",
+            "scale": 0.75
+          }
+        ],
+        "resolution": "1k"
+      },
+      "upstream": "HTTP 402 INSUFFICIENT_CREDITS 原样",
+      "挑刺": "无严重",
+      "note": "Schema 清单仍含 strength 字段名（端点 schema），实发强度键是 scale——属显示澄清，不挡收口",
+      "acceptanceBadge": "PASS_BILLING"
+    },
+    "fix5_ui": {
+      "run": "/workspace/canvas-e2e-fix5-accept-1618/",
+      "verdict": "UI_CLOSED",
+      "notPassUpgrade": true,
+      "items": [
+        "strength 标注「Schema 声明，本次请求未含」（02-muapi-nav55-strength-label.png）",
+        "aspect_ratio 通用进尺寸行；jczni 16:9 实发（03-muapi-aspect-ratio-size-row.png）"
+      ],
+      "acceptanceBadge": "未升（仍 PASS_BILLING）",
+      "at": "2026-10-16 16:31"
+    }
+  }
+}

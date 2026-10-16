@@ -9,7 +9,6 @@ import {
   Layers,
   Download,
   Upload,
-  Maximize2,
   Trash2,
   CheckCircle2,
   AlertTriangle,
@@ -193,14 +192,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
 
         {/* Canvas Navigation Helper */}
         <div className="flex gap-1.5 pt-1">
-          <button
-            onClick={onResetView}
-            className="flex-1 py-1.5 px-2 rounded-lg hover:bg-[#252731] text-slate-400 hover:text-white flex items-center justify-center gap-1 text-[11px] transition-colors"
-            title="自适应缩放以查看所有节点"
-          >
-            <Maximize2 className="w-3.5 h-3.5" />
-            <span>适配视口</span>
-          </button>
+          {/* clean-1351 #5: Fit lives on the bottom dock (wired); the dead ControlPanel Fit button was removed. */}
 
           <button
             onClick={onClearCanvas}

@@ -46,6 +46,7 @@ export const ModernToolDock: React.FC<ModernToolDockProps> = ({
   onOpenCivitai,
   onClearCanvas,
 }) => {
+  const [fitTip, setFitTip] = useState(false);
   const [showAddNodeMenu, setShowAddNodeMenu] = useState(false);
   const [showClearMenu, setShowClearMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -107,9 +108,9 @@ export const ModernToolDock: React.FC<ModernToolDockProps> = ({
   ];
 
   return (
-    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 pointer-events-auto">
+    <div data-canvas-chrome="bottom" data-testid="modern-tool-dock" className="absolute bottom-6 left-1/2 -translate-x-1/2 max-[1180px]:left-auto max-[1180px]:translate-x-0 max-[1180px]:right-[254px] z-40 flex items-center gap-2 pointer-events-auto">
       {/* Floating Main Dock Pill */}
-      <div className="bg-[#14151b]/95 backdrop-blur-2xl border border-[#272935] rounded-2xl px-3 py-1.5 shadow-2xl flex items-center gap-2 text-xs">
+      <div className="bg-[#14151b]/95 backdrop-blur-2xl border border-[#272935] rounded-2xl px-3 py-1.5 shadow-2xl flex flex-nowrap items-center gap-2 text-xs whitespace-nowrap">
         {/* Add Node Dropdown Trigger */}
         <div className="relative" ref={menuRef}>
           <button
@@ -166,6 +167,8 @@ export const ModernToolDock: React.FC<ModernToolDockProps> = ({
           onClick={onAddSpatialFrame}
           className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold flex items-center gap-1.5 shadow-md shadow-cyan-600/20 transition-all active:scale-95"
           title="在无限画布上放置新的生成取景框"
+          aria-label="新建取景框"
+          data-dock-compact=""
         >
           <Plus className="w-3.5 h-3.5" />
           <span>新建取景框</span>
@@ -176,6 +179,8 @@ export const ModernToolDock: React.FC<ModernToolDockProps> = ({
           onClick={onOpenCivitai}
           className="px-2.5 py-1.5 rounded-xl bg-[#1e202a] hover:bg-[#262835] border border-[#2c2f3d] text-purple-300 hover:text-white font-semibold flex items-center gap-1.5 transition-colors"
           title="打开 LoRA 中心；按供应商标签选择 Civitai / Hugging Face / ModelScope / Fal.ai / Tensor.Art / MuAPI / WaveSpeed / Sogni 资源"
+          aria-label="LoRA 模型中心"
+          data-dock-compact=""
         >
           <Sparkles className="w-3.5 h-3.5 text-purple-400" />
           <span>LoRA 模型中心</span>
@@ -188,6 +193,8 @@ export const ModernToolDock: React.FC<ModernToolDockProps> = ({
               onClick={() => setShowClearMenu(!showClearMenu)}
               className="px-2.5 py-1.5 rounded-xl bg-rose-950/40 hover:bg-rose-950/80 border border-rose-800/50 text-rose-300 hover:text-rose-200 font-semibold flex items-center gap-1.5 transition-colors"
               title="一键清空画布 / 重置工作流"
+              aria-label="清空"
+              data-dock-compact=""
             >
               <Trash2 className="w-3.5 h-3.5 text-rose-400" />
               <span>清空</span>
@@ -300,11 +307,19 @@ export const ModernToolDock: React.FC<ModernToolDockProps> = ({
           </button>
 
           <button
-            onClick={onFitView}
-            className="p-1.5 hover:text-white hover:bg-[#20222b] rounded-lg transition-colors ml-0.5"
-            title="适配所有元素 (Fit View)"
+            onClick={() => { setFitTip(false); onFitView(); }}
+            onMouseEnter={() => setFitTip(true)}
+            onMouseLeave={() => setFitTip(false)}
+            onFocus={() => setFitTip(true)}
+            onBlur={() => setFitTip(false)}
+            aria-label="自适应缩放以查看所有节点"
+            data-testid="fit-view"
+            className="relative p-1.5 hover:text-white hover:bg-[#20222b] rounded-lg transition-colors ml-0.5"
           >
             <Maximize2 className="w-3.5 h-3.5" />
+            {/* clean-1351 #7: tooltip opens ABOVE the dock button only. clean-1333 #6: it is hidden on click (the pointer
+                still hovers, so a CSS :hover tooltip used to stay over the fitted nodes) and only re-opens on the next hover. */}
+            {fitTip && <span role="tooltip" data-testid="fit-view-tooltip" className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 whitespace-nowrap rounded bg-black/90 px-2 py-1 text-[11px] text-slate-100">自适应缩放以查看所有节点</span>}
           </button>
 
           <button

@@ -98,8 +98,8 @@ export abstract class BaseEngineDriver implements IEngineDriver {
         content: m.content.trim(),
       })),
       model: params.model,
-      temperature: typeof params.temperature === 'number' ? params.temperature : 0.7,
-      maxTokens: typeof params.maxTokens === 'number' ? params.maxTokens : 2048,
+      temperature: typeof params.temperature === 'number' ? params.temperature : undefined,
+      maxTokens: typeof params.maxTokens === 'number' ? params.maxTokens : undefined,
       apiKey: params.apiKey,
       baseUrl: params.baseUrl,
     };

@@ -1,6 +1,6 @@
 import { isCanvasFieldUnsupported } from './resolveCheckpoint';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { extractWorkflowParameters, executeWorkflow, resolveTargetNode, sanitizeExecutionSnapshotNodes, shouldClearExecutionOutput } from './graphEngine';
+import { extractWorkflowParameters, executeWorkflow, resolveTargetNode, sanitizeExecutionSnapshotNodes, shouldClearExecutionOutput, clearNodeExecutionErrors } from './graphEngine';
 import { Connection, NodeInstance } from '../types/graph';
 import { EngineRegistry } from '../engines/EngineRegistry';
 import { NormalizedGenerateResult } from '../engines/types';
@@ -87,6 +87,49 @@ describe('graphEngine - B2 & L2a & L2b 拓扑反向追踪与参数抽取隔离�
     expect(clean).not.toHaveProperty('outputData');
     expect(clean).not.toHaveProperty('errorMessage');
     expect(clean.values).toEqual({ seed: 7 });
+  });
+
+  it('rewrites CheckpointLoader title in snapshot to match current targetProvider (not WaveSpeed leftover)', () => {
+    const ckpt = createNode('c', 'CheckpointLoaderSimple', { targetProvider: 'modelscope', ckpt_name: 'Tongyi-MAI/Z-Image-Turbo' });
+    ckpt.title = '加载基础模型 (WaveSpeed)';
+    const [clean] = sanitizeExecutionSnapshotNodes([ckpt]);
+    expect(clean.title).toBe('加载底模 (魔搭 CN)');
+    expect(clean.title).not.toMatch(/WaveSpeed/);
+    expect(clean.values.targetProvider).toBe('modelscope');
+  });
+
+  it('clearNodeExecutionErrors also drops leftover media on errored media nodes', () => {
+    const a = createNode('a', 'KSampler', { seed: 1 });
+    a.state = 'error';
+    a.errorMessage = 'HTTP 402 leftover';
+    a.outputData = 'data:image/jpeg;base64,old-cat';
+    const cleared = clearNodeExecutionErrors([a]);
+    expect(cleared[0].state).toBe('idle');
+    expect(cleared[0].errorMessage).toBeUndefined();
+    expect(cleared[0].outputData).toBeUndefined();
+  });
+
+  it('resolveTargetNode miss never embeds raw node- id in the Error message', () => {
+    expect(() => resolveTargetNode([], [], 'node-1791998332520')).toThrow(/未找到指定的执行节点/);
+    try {
+      resolveTargetNode([], [], 'node-1791998332520');
+    } catch (e: any) {
+      expect(String(e.message)).not.toMatch(/node-1791998332520/);
+      expect(String(e.message)).not.toMatch(/node-/);
+    }
+  });
+
+  it('clearNodeExecutionErrors drops stale red-box state on provider change / re-run', () => {
+    const a = createNode('a', 'KSampler', { seed: 1 });
+    a.state = 'error';
+    a.errorMessage = 'Civitai leftover';
+    const b = createNode('b', 'CheckpointLoaderSimple', { targetProvider: 'modelscope' });
+    b.state = 'success';
+    const cleared = clearNodeExecutionErrors([a, b]);
+    expect(cleared[0].state).toBe('idle');
+    expect(cleared[0].errorMessage).toBeUndefined();
+    expect(cleared[1].state).toBe('success');
+    expect(cleared[1].errorMessage).toBeUndefined();
   });
 
   beforeEach(() => {
@@ -1270,5 +1313,78 @@ describe('graphEngine - F4 AIVideoNode provider sync / reject empty & mismatch',
         expect.objectContaining({ field: 'gallery_images', value: ['https://example.test/img1.png'] }),
       ])
     );
+  });
+});
+
+describe('LoRA strength — no silent 0.8 (iron rule)', () => {
+  const createNode = (id: string, type: string, values: Record<string, any>): NodeInstance => ({
+    id,
+    type,
+    title: type,
+    pos: { x: 0, y: 0 },
+    inputs: [],
+    outputs: [],
+    values,
+  });
+
+  it('extractWorkflowParameters does not invent 0.8 when strength_model is omitted', () => {
+    const nodes = [
+      createNode('ckpt', 'CheckpointLoaderSimple', { ckpt_name: 'fal-ai/flux-lora', targetProvider: 'fal' }),
+      createNode('lora', 'LoRALoader', { lora_name: 'https://example.test/a.safetensors' }),
+      createNode('pos', 'CLIPTextEncode', { text: 'a cat' }),
+      createNode('neg', 'CLIPTextEncodeNegative', { text: '' }),
+      createNode('latent', 'EmptyLatentImage', { width: 512, height: 512 }),
+      createNode('ksampler', 'KSampler', { seed: 1, steps: 4, cfg: 1, sampler_name: 'euler', scheduler: 'simple', denoise: 1 }),
+      createNode('vae', 'VAEDecode', {}),
+      createNode('save', 'SaveImage', {}),
+    ];
+    const connections = [
+      { id: '1', fromNodeId: 'ckpt', fromSocketId: 'MODEL', toNodeId: 'lora', toSocketId: 'model', type: 'MODEL' as const },
+      { id: '2', fromNodeId: 'lora', fromSocketId: 'MODEL', toNodeId: 'ksampler', toSocketId: 'model', type: 'MODEL' as const },
+      { id: '3', fromNodeId: 'pos', fromSocketId: 'CONDITIONING', toNodeId: 'ksampler', toSocketId: 'positive', type: 'CONDITIONING' as const },
+      { id: '4', fromNodeId: 'neg', fromSocketId: 'CONDITIONING', toNodeId: 'ksampler', toSocketId: 'negative', type: 'CONDITIONING' as const },
+      { id: '5', fromNodeId: 'latent', fromSocketId: 'LATENT', toNodeId: 'ksampler', toSocketId: 'latent_image', type: 'LATENT' as const },
+      { id: '6', fromNodeId: 'ksampler', fromSocketId: 'LATENT', toNodeId: 'vae', toSocketId: 'samples', type: 'LATENT' as const },
+      { id: '7', fromNodeId: 'vae', fromSocketId: 'IMAGE', toNodeId: 'save', toSocketId: 'images', type: 'IMAGE' as const },
+    ];
+    const params = extractWorkflowParameters(nodes, connections, 'ksampler');
+    expect(params.loras).toHaveLength(1);
+    expect(params.loras[0].name).toContain('a.safetensors');
+    expect(params.loras[0].modelStrength).toBeUndefined();
+    expect(params.loras[0].clipStrength).toBeUndefined();
+    expect(params.loras[0].modelStrength).not.toBe(0.8);
+  });
+
+  it('executeWorkflow rejects LoRA missing explicit strength instead of inventing 0.8', async () => {
+    const nodes = [
+      createNode('fal', 'FalAIEngineNode', { model: 'fal-ai/flux-lora', prompt: 'a cat' }),
+      createNode('lora', 'LoRALoader', { lora_name: 'https://example.test/a.safetensors' }),
+    ];
+    const connections = [
+      { id: 'c', fromNodeId: 'lora', fromSocketId: 'MODEL', toNodeId: 'fal', toSocketId: 'lora', type: 'MODEL' as const },
+    ];
+    await expect(executeWorkflow(nodes, connections, () => {}, undefined)).rejects.toThrow(/缺少显式 LoRA 强度/);
+  });
+
+  it('executeWorkflow accepts LoRA with explicit strength 0', async () => {
+    const generateSpy = vi.spyOn(EngineRegistry, 'generate').mockImplementation(async (provider, p): Promise<NormalizedGenerateResult> => ({
+      mediaUrl: 'https://example.com/result.png',
+      provider,
+      providerId: provider as any,
+      model: p.model,
+      seed: 1,
+      mediaType: 'image',
+    }));
+    const nodes = [
+      createNode('fal', 'FalAIEngineNode', { model: 'fal-ai/flux-lora', prompt: 'a cat' }),
+      createNode('lora', 'LoRALoader', { lora_name: 'https://example.test/a.safetensors', strength_model: 0, strength_clip: 0 }),
+    ];
+    const connections = [
+      { id: 'c', fromNodeId: 'lora', fromSocketId: 'MODEL', toNodeId: 'fal', toSocketId: 'lora', type: 'MODEL' as const },
+    ];
+    await executeWorkflow(nodes, connections, () => {}, undefined);
+    expect(generateSpy).toHaveBeenCalled();
+    expect(generateSpy.mock.calls[0][1].loras?.[0]?.strength).toBe(0);
+    generateSpy.mockRestore();
   });
 });

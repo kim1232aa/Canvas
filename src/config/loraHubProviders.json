@@ -1,0 +1,98 @@
+{
+  "_doc": "LoRA Hub per-provider custom-import declaration; read generically by customImportFor()",
+  "providers": {
+    "civitai": {
+      "supportsCustomImport": true,
+      "idFormat": "输入任意 Civitai 模型 ID / AIR URN (如 138944 或 urn:air:...)",
+      "placeholder": "输入 Civitai ID (如 138944) 或 URN..."
+    },
+    "all": {
+      "supportsCustomImport": true,
+      "idFormat": "输入任意 Civitai 模型 ID / AIR URN (如 138944 或 urn:air:...)",
+      "placeholder": "输入 Civitai ID (如 138944) 或 URN..."
+    },
+    "huggingface": {
+      "supportsCustomImport": true,
+      "idFormat": "输入任意 Hugging Face 模型 ID (如 fofr/flux-80s-cyberpunk 或 lightx2v/Qwen-Image-Lightning)",
+      "placeholder": "输入 HF Repo ID (如 fofr/flux-80s-cyberpunk)..."
+    },
+    "modelscope": {
+      "supportsCustomImport": true,
+      "idFormat": "输入任意 ModelScope 模型 ID (格式 组织名/模型名)",
+      "placeholder": "输入 ModelScope ID (如 damo/model-id)..."
+    },
+    "modelscope_ai": {
+      "supportsCustomImport": true,
+      "idFormat": "输入任意 ModelScope 模型 ID (格式 组织名/模型名)",
+      "placeholder": "输入 ModelScope ID (如 damo/model-id)..."
+    },
+    "fal": {
+      "supportsCustomImport": true,
+      "idFormat": "输入任意 Fal.ai LoRA 路径或 Endpoint",
+      "placeholder": "输入 Fal.ai LoRA path / Endpoint..."
+    },
+    "tensorart": {
+      "supportsCustomImport": true,
+      "idFormat": "输入 Tensor.Art / 吐司 Model ID (如 672390779613802167) 或主页链接",
+      "placeholder": "输入 Tensor.Art / 吐司 Model ID (如 672390779613802167)...",
+      "requiresCredential": {
+        "kind": "tams-bearer",
+        "keyHeader": "x-tensorart-key",
+        "storedKey": "tensorartKey",
+        "notice": "需要 TAMS Bearer key；官方没有模型列表接口",
+        "docUrl": "https://tams-docs.tensor.art/docs/api/guide/integration-faq/#model-issues"
+      }
+    },
+    "runware": {
+      "supportsCustomImport": true,
+      "idFormat": "输入 Runware LoRA AIR 标识符 (如 civitai:xxxx@yyyy)",
+      "placeholder": "输入 Runware AIR (如 civitai:xxxx@yyyy)..."
+    },
+    "modelslab": {
+      "supportsCustomImport": true,
+      "idFormat": "输入 ModelsLab lora_model ID 或公开 LoRA 权重 URL",
+      "placeholder": "输入 ModelsLab lora_model ID..."
+    },
+    "replicate": {
+      "supportsCustomImport": true,
+      "idFormat": "输入 Replicate / Hugging Face LoRA 仓库 (owner/repo) 或权重直链 URL",
+      "placeholder": "输入 HF LoRA (如 owner/lora) 或直链 URL..."
+    },
+    "muapi": {
+      "supportsCustomImport": true,
+      "idFormat": "输入公开可访问的 LoRA 权重 URL (如 Civitai / HF 下载直链)",
+      "placeholder": "输入 LoRA 权重下载直链 URL..."
+    },
+    "wavespeed": {
+      "supportsCustomImport": true,
+      "idFormat": "输入公开可访问的 LoRA 权重 URL (如 Civitai / HF 下载直链)",
+      "placeholder": "输入 LoRA 权重下载直链 URL..."
+    },
+    "sogni": {
+      "supportsCustomImport": true,
+      "idFormat": "输入 Sogni 协议支持的 LoRA 标识符或下载直链",
+      "placeholder": "输入 Sogni LoRA 标识符..."
+    },
+    "krea": {
+      "supportsCustomImport": true,
+      "idFormat": "输入 Krea style ID（官方 GET /styles 返回的 id，对应请求 styles[].id）",
+      "placeholder": "输入 Krea style ID..."
+    },
+    "novita": {
+      "supportsCustomImport": true,
+      "idFormat": "输入 Novita LoRA 的 sd_name_in_api（官方 GET /v3/model?filter.types=lora，对应 loras[].model_name）",
+      "placeholder": "输入 Novita sd_name_in_api..."
+    },
+    "aimlapi": {
+      "supportsCustomImport": true,
+      "idFormat": "输入 Hugging Face owner/repo 或 LoRA 权重 URL（对应官方 loras[].path）",
+      "placeholder": "输入 HF owner/repo 或权重 URL..."
+    },
+    "venice": {
+      "supportsCustomImport": false
+    },
+    "together": {
+      "supportsCustomImport": false
+    }
+  }
+}

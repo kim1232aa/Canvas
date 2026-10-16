@@ -1,0 +1,6 @@
+{
+  "schema_get_url": "https://api.replicate.com/v1/models/someone/does-not-exist-zzz",
+  "status": 404,
+  "body": "{\"detail\":\"Model not found.\"}",
+  "note": "route returns blocked:schema_missing + notSent + actualRequest:null; no POST /predictions"
+}

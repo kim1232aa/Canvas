@@ -42,6 +42,7 @@ describe('ModelsLabDriver', () => {
     expect(init.method).toBe('POST');
     expect(init.headers).toEqual({
       'Content-Type': 'application/json',
+      'x-canvas-origin': 'browser-ui', // Canvas UI origin tag (本机直调 labelling, reverify3)
       'x-modelslab-key': 'fixture-modelslab-key',
       'x-modelslab-base-url': 'https://modelslab.example',
     });

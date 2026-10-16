@@ -49,11 +49,14 @@ describe('ModelHub and Backend Directory Architecture', () => {
   });
 
   describe('Server /api/models Multi-Provider Aggregation', () => {
-    it('provider=all covers muapi, wavespeed, sogni, runware, modelslab, sensenova', () => {
-      expect(serverSource).toContain("['muapi', 'wavespeed', 'sogni']");
+    it('provider=all covers muapi, wavespeed, sogni, runware, modelslab, sensenova, openai_compat, grok_compat, agnes', () => {
+      expect(serverSource).toContain("['muapi', 'wavespeed', 'sogni', 'krea', 'together', 'aimlapi', 'novita', 'venice']");
       expect(serverSource).toContain("provider === 'all' || provider === 'runware'");
       expect(serverSource).toContain("provider === 'all' || provider === 'modelslab'");
       expect(serverSource).toContain("provider === 'all' || provider === 'sensenova'");
+      expect(serverSource).toContain("provider === 'all' || provider === 'openai_compat'");
+      expect(serverSource).toContain("provider === 'all' || provider === 'grok_compat'");
+      expect(serverSource).toContain("provider === 'all' || provider === 'agnes'");
     });
 
     it('uses Promise.allSettled for schema providers to prevent cascading 500 errors', () => {
@@ -63,12 +66,12 @@ describe('ModelHub and Backend Directory Architecture', () => {
     it('Runware live search uses official modelSearch taskType and handles missing key gracefully', () => {
       expect(serverSource).toContain("taskType: 'modelSearch'");
       expect(serverSource).toContain('lookup-only (no api key configured)');
-      expect(serverSource).toContain('runwareNotice');
+      expect(serverSource).toContain('catalogNoticesAccum.runware');
     });
 
     it('ModelsLab live model list uses dreambooth/model_list and handles missing key gracefully', () => {
       expect(serverSource).toContain('dreambooth/model_list');
-      expect(serverSource).toContain('modelslabNotice');
+      expect(serverSource).toContain('catalogNoticesAccum.modelslab');
     });
 
     it('does not present OpenWorks tool names as Tensor checkpoint catalog rows', () => {
@@ -81,11 +84,38 @@ describe('ModelHub and Backend Directory Architecture', () => {
 
     it('OpenAI Compat, Grok Compat, and Agnes report clear lookup-only notices', () => {
       expect(serverSource).toContain("provider === 'openai_compat'");
-      expect(serverSource).toContain('openai_compatNotice');
+      expect(serverSource).toContain('catalogNoticesAccum.openai_compat');
       expect(serverSource).toContain("provider === 'grok_compat'");
-      expect(serverSource).toContain('grok_compatNotice');
+      expect(serverSource).toContain('catalogNoticesAccum.grok_compat');
       expect(serverSource).toContain("provider === 'agnes'");
-      expect(serverSource).toContain('agnesNotice');
+      expect(serverSource).toContain('catalogNoticesAccum.agnes');
+    });
+
+    it('provider=all results keys stay provider ids only (no *Notice siblings)', () => {
+      expect(serverSource).toContain('const catalogNoticesAccum: Record<string, string> = {};');
+      expect(serverSource).toContain('delete (results as any)[k]');
+      expect(serverSource).toMatch(/k\.endsWith\('Notice'\)/);
+      // Notices are written to catalogNoticesAccum, not results.*Notice
+      expect(serverSource).not.toContain('(results as any).openai_compatNotice');
+      expect(serverSource).not.toContain('(results as any).grok_compatNotice');
+      expect(serverSource).not.toContain('(results as any).agnesNotice');
+    });
+  });
+
+  describe('Fal LoRA-named generation endpoints stay Checkpoint', () => {
+    it('server matchCategory no longer drops Checkpoint by id containing lora', () => {
+      expect(serverSource).toContain('isLoraWeightResource');
+      expect(serverSource).toContain("resourceKind: 'model-endpoint'");
+      // Old bug: !itemId.includes("lora") removed fal-ai/krea-2/turbo/lora from Checkpoint
+      expect(serverSource).not.toContain('!itemId.includes("lora")');
+      expect(serverSource).not.toContain("itemId.includes('lora')");
+    });
+
+    it('ModelHubModal / CivitaiModal use isLoraWeightResource instead of id.includes(lora)', () => {
+      expect(modelHubModalSource).toContain('isLoraWeightResource');
+      expect(modelHubModalSource).not.toContain("modelId.toLowerCase().includes('lora')");
+      expect(civitaiModalSource).toContain('isLoraWeightResource');
+      expect(civitaiModalSource).not.toContain('m.id.toLowerCase().includes("lora")');
     });
   });
 
@@ -101,6 +131,10 @@ describe('ModelHub and Backend Directory Architecture', () => {
       expect(modelHubModalSource).toContain('Runware AIR');
       expect(modelHubModalSource).toContain('ModelsLab');
       expect(modelHubModalSource).toContain('catalogNotices[activeProvider]');
+    });
+
+    it('ModelHubModal ignores keys ending in Notice when mapping results', () => {
+      expect(modelHubModalSource).toContain("key.endsWith('Notice')");
     });
   });
 

@@ -47,16 +47,21 @@ export function buildModelsLabImageRequest(
     key: apiKey,
     prompt,
     model_id: modelId,
-    samples: 1,
+    samples: typeof body.samples === 'number' && body.samples > 0 ? Math.round(body.samples) : typeof body.num_images === 'number' && body.num_images > 0 ? Math.round(body.num_images) : 1,
   };
 
   const neg = String(body.negative_prompt || body.negativePrompt || '').trim();
   if (neg) payload.negative_prompt = neg;
 
-  const width = typeof body.width === 'number' && body.width > 0 ? Math.round(body.width) : 512;
-  const height = typeof body.height === 'number' && body.height > 0 ? Math.round(body.height) : 512;
-  payload.width = width;
-  payload.height = height;
+  const hasWidth = typeof body.width === 'number' && Number.isFinite(body.width) && body.width > 0;
+  const hasHeight = typeof body.height === 'number' && Number.isFinite(body.height) && body.height > 0;
+  if (hasWidth !== hasHeight) {
+    throw new Error('ModelsLab 宽高 (width / height) 必须同时显式提供或同时留空，严禁单边静默兜底 512');
+  }
+  if (hasWidth && hasHeight) {
+    payload.width = Math.round(body.width as number);
+    payload.height = Math.round(body.height as number);
+  }
 
   if (typeof body.steps === 'number' && body.steps > 0) {
     payload.num_inference_steps = Math.round(body.steps);
@@ -65,10 +70,8 @@ export function buildModelsLabImageRequest(
   if (typeof cfg === 'number' && cfg > 0) {
     payload.guidance_scale = Number(cfg);
   }
-  if (typeof body.seed === 'number' && body.seed >= 0) {
+  if (typeof body.seed === 'number' && Number.isFinite(body.seed) && body.seed >= 0) {
     payload.seed = Math.round(body.seed);
-  } else {
-    payload.seed = null;
   }
   if (typeof body.scheduler === 'string' && body.scheduler.trim()) {
     payload.scheduler = body.scheduler.trim();
@@ -80,11 +83,20 @@ export function buildModelsLabImageRequest(
     for (const item of body.loras) {
       if (typeof item === 'object' && item !== null) {
         const name = String((item as any).name || (item as any).civitaiId || (item as any).model || '').trim();
-        const str = typeof (item as any).strength === 'number' ? (item as any).strength : 0.8;
-        if (name) {
-          loraModels.push(name);
-          loraStrengths.push(str);
+        if (!name) continue;
+        const rawStr =
+          typeof (item as any).strength === 'number'
+            ? (item as any).strength
+            : typeof (item as any).modelStrength === 'number'
+            ? (item as any).modelStrength
+            : typeof (item as any).scale === 'number'
+            ? (item as any).scale
+            : undefined;
+        if (typeof rawStr !== 'number' || !Number.isFinite(rawStr)) {
+          throw new Error(`ModelsLab LoRA [${name}] 缺少显式权重 (strength)，严禁静默兜底为 0.8`);
         }
+        loraModels.push(name);
+        loraStrengths.push(rawStr);
       }
     }
     if (loraModels.length > 0) {

@@ -21,6 +21,11 @@ const EMPTY_KEYS: ApiKeysState = {
   grokCompatBaseUrl: '',
   muapiKey: '',
   wavespeedKey: '',
+  kreaKey: '',
+  togetherKey: '',
+  aimlapiKey: '',
+  novitaKey: '',
+  veniceKey: '',
   sogniKey: '',
   replicateKey: '',
 };
@@ -426,7 +431,23 @@ export const deleteHistoryItem = async (id: string) => {await historyRequest(`/a
 export const deleteHistoryBatch = async (ids: string[]) => {await historyRequest('/api/history/delete-batch', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ids})}); return true;};
 export const clearHistory = async () => {await historyRequest('/api/history', {method: 'DELETE'}); return true;};
 
-export const fetchLiveModels = async (
+
+/** clean-1149 #2: custom_parameters JSON (often with _canvas) must never become /api/models?query={…}. */
+export function isCustomParametersJsonQuery(query: unknown): boolean {
+  if (typeof query !== 'string') return false;
+  const t = query.trim();
+  if (!t.startsWith('{')) return false;
+  try {
+    const o = JSON.parse(t);
+    return !!o && typeof o === 'object' && !Array.isArray(o);
+  } catch { return t.includes('"_canvas"') || t.includes("'_canvas'"); }
+}
+export function sanitizeCatalogQuery(query: unknown): string {
+  if (typeof query !== 'string') return '';
+  return isCustomParametersJsonQuery(query) ? '' : query;
+}
+
+const fetchLiveModelsOnce = async (
   provider: 'all' | 'civitai' | 'fal' | 'modelscope' | 'agnes' | 'sensenova' | 'huggingface' | 'nanogpt' | 'gemini' | 'replicate' | string = 'all',
   query = '',
   type = 'Checkpoint',
@@ -454,20 +475,28 @@ export const fetchLiveModels = async (
   if (keys.muapiKey) headers['x-muapi-key'] = keys.muapiKey;
   if (keys.wavespeedKey) headers['x-wavespeed-key'] = keys.wavespeedKey;
   if (keys.sogniKey) headers['x-sogni-key'] = keys.sogniKey;
+  if (keys.kreaKey) headers['x-krea-key'] = keys.kreaKey;
+  if (keys.togetherKey) headers['x-together-key'] = keys.togetherKey;
+  if (keys.aimlapiKey) headers['x-aimlapi-key'] = keys.aimlapiKey;
+  if (keys.novitaKey) headers['x-novita-key'] = keys.novitaKey;
+  if (keys.veniceKey) headers['x-venice-key'] = keys.veniceKey;
   if (keys.replicateKey) headers['x-replicate-key'] = keys.replicateKey;
+  if (keys.geminiKey) headers['x-gemini-key'] = keys.geminiKey;
 
-  const params = new URLSearchParams({ provider, query, type, category, sort });
+  const safeQuery = sanitizeCatalogQuery(query);
+  const params = new URLSearchParams({ provider, query: safeQuery, type, category, sort });
   if (cursor) params.append('cursor', cursor);
   if (page) params.append('page', String(page));
   if (limit) params.append('limit', String(limit));
   if (architecture) params.append('architecture', architecture);
   if (catalogTag) params.append('catalogTag',catalogTag);
 
-  const resp = await tracedFetch(`/api/models?${params.toString()}`, { headers });
+  const resp = await tracedFetch(`/api/models?${params.toString()}`, { headers }, 'catalog');
   
   if (!resp.ok) {
     const errorData = await resp.json().catch(() => ({ error: `HTTP ${resp.status}` }));
-    throw new Error(errorData.details || errorData.error || `Failed to fetch models (Status: ${resp.status})`);
+    const upstreamText = typeof errorData.rawResponse === 'string' ? errorData.rawResponse : errorData.rawResponse != null ? JSON.stringify(errorData.rawResponse) : '';
+    throw Object.assign(new Error(`HTTP ${resp.status} ${errorData.details || errorData.error || ''}${upstreamText ? `\n${upstreamText}` : ''}`.trim()), {status: resp.status, endpoint: errorData.endpoint, rawResponse: errorData.rawResponse});
   }
   
   const raw = await resp.json();
@@ -479,6 +508,41 @@ export const fetchLiveModels = async (
     _pagination: pagination,
     catalogNotices: raw.catalogNotices || {},
   };
+};
+
+/**
+ * In-flight dedupe (generic, all callers): identical catalog queries issued while one is still pending
+ * (e.g. React StrictMode double effects, tab click + effect) share ONE network request and its result/error.
+ * The entry is removed when the request settles, so later calls fetch fresh — no caching of results.
+ */
+const liveModelsInFlight = new Map<string, ReturnType<typeof fetchLiveModelsOnce>>();
+export const liveModelsInFlightSize = () => liveModelsInFlight.size;
+/**
+ * Checkpoint dropdowns (node + inspector, remounts): ONE GET per real change of the catalog query. The resolved catalog is
+ * shared for the session; a different provider/query/page/API key is a new key, 「刷新目录」 passes force. Failures are not kept.
+ */
+const liveModelsSettled = new Map<string, ReturnType<typeof fetchLiveModelsOnce>>();
+export const liveModelsSharedSize = () => liveModelsSettled.size;
+export const fetchLiveModelsShared = (force: boolean, ...args: Parameters<typeof fetchLiveModelsOnce>): ReturnType<typeof fetchLiveModelsOnce> => {
+  const keys = (() => { try { return JSON.stringify(getStoredApiKeys()); } catch { return ''; } })();
+  const key = JSON.stringify([args, keys.length, hashText(keys)]);
+  const hit = liveModelsSettled.get(key);
+  if (hit && !force) return hit;
+  const p = fetchLiveModels(...args);
+  liveModelsSettled.set(key, p);
+  p.catch(() => { if (liveModelsSettled.get(key) === p) liveModelsSettled.delete(key); });
+  return p;
+};
+/** Non-cryptographic fingerprint so the memo key changes when an API key changes, without storing the key itself. */
+function hashText(t: string): number { let h = 0; for (let i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) | 0; return h; }
+export const fetchLiveModels = (...args: Parameters<typeof fetchLiveModelsOnce>): ReturnType<typeof fetchLiveModelsOnce> => {
+  const [provider = 'all', query = '', type = 'Checkpoint', category = 'all', sort = 'downloads', cursor = '', page = 1, limit = 50, architecture = '', catalogTag = ''] = args;
+  const key = JSON.stringify([provider, query, type, category, sort, cursor, page, limit, architecture, catalogTag]);
+  const existing = liveModelsInFlight.get(key);
+  if (existing) return existing;
+  const p = fetchLiveModelsOnce(...args).finally(() => { if (liveModelsInFlight.get(key) === p) liveModelsInFlight.delete(key); });
+  liveModelsInFlight.set(key, p);
+  return p;
 };
 
 export const fetchHuggingFaceModelInfo = async (modelId: string) => {

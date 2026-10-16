@@ -1,11 +1,22 @@
 # ComfyCanvas Studio：开发交接、产品缺口与验收手册
 
+## 2026-10-14 前端 E2E：WaveSpeed `wavespeed-ai/krea-v2/turbo`（非 LoRA）PASS_GENERATION
+
+只证明这一次、这一家、这一模型。不外推 Fal 或其他供应商。
+
+- 真实浏览器 `http://127.0.0.1:3000`，画布默认工作流，Provider 选 **WaveSpeed**，目录模型 **wavespeed-ai/krea-v2/turbo**（目录返回 50 条，从下拉选中，不是手填假 ID）。
+- 未出现 LoRA 强度控件；`loras: []`。KSampler 空白的 cfg/denoise 被显式填为 1 / 1。Schema 匹配后实际提交不包含 steps/cfg（界面记「未发送」）；`denoise=1` 映射为官方字段 `strength=1`（该字段说明仅在带 image 时用于图生图；本次无参考图，上游仍接受）。
+- 实际端点：`POST https://api.wavespeed.ai/api/v3/wavespeed-ai/krea-v2/turbo`。上游回显 input：`prompt` + `seed=42` + `strength=1` + 默认 `aspect_ratio=1:1`、`resolution=1k`。提交 `status=created`，task `507d3d31d97d4f05af7852a595b48e38`；轮询终态 `status=completed`，`code=200`，`inference=3767` ms，error 为空。
+- 输出：`https://d2h7xmz5gqybh9.cloudfront.net/output/15fc1dbb-393a-4712-b0f4-672ce5682c08-u1_1b7bf0fe-9640-487b-a257-a36a7f5ef8cb.jpeg`，画布与历史均显示同一张图，本地 `/api/media/7b77ccd3152521a920183250d610b0d4979e3c25d1637ce62134d72ead636da8`。画面与提示词一致（雨夜撑伞蹲姿、黑猫、积水反光）。
+- 证据截图与脱敏历史 JSON：`/workspace/canvas-e2e-wavespeed/`（01 运行前、02 画布出图、03 结果图、04 历史弹窗、history-export.json）。凭证已脱敏，未写入密钥。
+
+
 ## 2026-10-11 当前状态：Runware/ModelsLab 网页实测闭环、双兼容中转出图通过、模型中心 17 家全聚合
 
 **不能宣称全部集成完毕，未验证项仍为 PARTIAL。**
 
 - **真实网页点击运行出图成功（PASS_GENERATION）**：
-  - **Tensor.Art**：纠正此前将 OpenWorks `ak_tensor_...` 错发往 TAMS 裸底模导致的 404 历史误判。现已接入官方 OpenWorks API (`https://openapi.tensor.art/openworks/v1`)，向 `photoreal_studio_z_image` 发起真实生图，轮询终态 `FINISH` 成功输出真实 1.78MB 图片并持久化，记 **`PASS_GENERATION`**（证据保存在 `docs/evidence/t7-tensorart-acceptance.md`）；
+  - **Tensor.Art (TAMS)**：旧 OpenWorks 工具名（如 `photoreal_studio_z_image`）不代表模型和 LoRA，不算 TAMS 验收；真实 TAMS 模型 API (`https://tams-api.tensor.art/v1`) 当前账户返回 `unauthorized / app not found`，记 **`BLOCKED_AUTH`**；
   - **Runware**：预设载入 `runware:100@1` (FLUX.1 [schnell])，从网页点击运行，上游返回 HTTP 200 真实成功出图，持久化至 `/api/media/<hash>`，记 **`PASS_GENERATION`**（证据保存在 `docs/evidence/t7-runware-acceptance.md`）；
   - **OpenAI 兼容中转**：中转 Base URL `https://sub.alibb123.ccwu.cc/v1` + 模型 `gpt-image-2`，从网页点击运行，上游返回 HTTP 200 真实成功出图，持久化至 `/api/media/<hash>`，记 **`PASS_GENERATION`**（证据保存在 `docs/evidence/t7-openai-compat-acceptance.md`）；
   - **Grok 兼容中转**：中转 Base URL `https://sub.alibb123.ccwu.cc/v1` + 模型 `grok-imagine-image`，在网页选定 `1k` 分辨率并点击运行，上游返回 HTTP 200 真实成功出图，持久化并在画布与大图灯箱渲染，记 **`PASS_GENERATION`**（证据保存在 `docs/evidence/t7-grok-compat-acceptance.md`）；

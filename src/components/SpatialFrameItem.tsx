@@ -18,7 +18,7 @@ import {
 import { SpatialFrame, ComfyParameters } from '../types/graph';
 import { refinePromptWithGemini, getRefineModelSelection } from '../services/api';
 import { validateModelCompatibility } from '../utils/baseModelMatcher';
-import { isCanvasFieldUnsupported } from '../utils/resolveCheckpoint';
+import {isCanvasFieldUnsupported, LORA_UNSUPPORTED_TITLE } from '../utils/resolveCheckpoint';
 import { getSpatialFrameLoraBanner } from '../utils/spatialFrameLoraBanner';
 import { friendlyProviderLabel,
   isNonComfyCloudProvider,
@@ -26,6 +26,7 @@ import { friendlyProviderLabel,
   sanitizeFrameMarketingTitle,
 } from '../utils/providerLabels';
 import { FieldStatusBadge } from './FieldStatusBadge';
+import { errorBannerText } from '../utils/apiFailure';
 
 interface SpatialFrameItemProps {
   frame: SpatialFrame;
@@ -412,8 +413,8 @@ export const SpatialFrameItem: React.FC<SpatialFrameItemProps> = ({
             </div>
             <div className="space-y-1 max-w-[90%]">
               <h4 className="text-xs font-bold text-rose-300">生成执行未完成</h4>
-              <p className="text-[11px] text-rose-200/80 leading-relaxed font-mono break-words bg-rose-950/40 p-2.5 rounded-lg border border-rose-900/50">
-                {frame.errorMessage}
+              <p className="text-[11px] text-rose-200/80 leading-relaxed break-words bg-rose-950/40 p-2.5 rounded-lg border border-rose-900/50" title={frame.errorMessage}>
+                {errorBannerText(frame.errorMessage)}
               </p>
             </div>
             <button
@@ -488,10 +489,14 @@ export const SpatialFrameItem: React.FC<SpatialFrameItemProps> = ({
 
         {/* LoRA tag summary — keep values when unsupported; grey + full compat.message (same as node) */}
         {frame.params.loras.length > 0 && (() => {
-          const lorasUnsupported = isCanvasFieldUnsupported(frame.params.targetProvider, frame.params.checkpoint, 'loras');
+          const civitaiSchemaId = frame.params.targetProvider === 'civitai' && frame.params.civitaiEngine && frame.params.civitaiEcosystem
+            ? `${frame.params.civitaiEngine}:${frame.params.civitaiEcosystem}`
+            : undefined;
+          const loraModelId = civitaiSchemaId || frame.params.checkpoint;
+          const lorasUnsupported = isCanvasFieldUnsupported(frame.params.targetProvider, loraModelId, 'loras');
           const banner = getSpatialFrameLoraBanner(
             frame.params.targetProvider,
-            frame.params.checkpoint,
+            loraModelId,
             frame.params.loras as Array<{ name: string; baseModel?: string; modelStrength?: number }>
           );
           return (
@@ -501,9 +506,9 @@ export const SpatialFrameItem: React.FC<SpatialFrameItemProps> = ({
               {lorasUnsupported && (
                 <span
                   className="text-[9px] px-1.5 py-0.5 rounded bg-slate-800/80 text-slate-400 border border-slate-600/50 font-mono"
-                  title={banner?.message || '该服务商不支持'}
+                  title={banner?.message || LORA_UNSUPPORTED_TITLE}
                 >
-                  该服务商不支持
+                  {LORA_UNSUPPORTED_TITLE}
                 </span>
               )}
               {frame.params.loras.map((l, i) => {
@@ -512,7 +517,7 @@ export const SpatialFrameItem: React.FC<SpatialFrameItemProps> = ({
                 return (
                   <span
                     key={i}
-                    title={lorasUnsupported ? (banner?.message || '该服务商不支持') : compat.message}
+                    title={lorasUnsupported ? (banner?.message || LORA_UNSUPPORTED_TITLE) : compat.message}
                     className={`text-[10px] font-mono px-1.5 py-0.5 rounded flex items-center gap-1 ${
                       lorasUnsupported
                         ? 'bg-slate-900/60 text-slate-500 border border-slate-700/50'
@@ -525,7 +530,6 @@ export const SpatialFrameItem: React.FC<SpatialFrameItemProps> = ({
                   >
                     {!lorasUnsupported && verification === 'incompatible' && <AlertTriangle className="w-2.5 h-2.5 text-rose-400 shrink-0" />}
                     <span>{l.name.replace('.safetensors', '')} ({l.modelStrength})</span>
-                    {!lorasUnsupported && verification === 'unverified' && <span>待验证</span>}
                   </span>
                 );
               })}

@@ -7,7 +7,7 @@ export class TensorArtDriver extends BaseEngineDriver {
   readonly name = 'Tensor.Art (模型 API)';
   readonly label = 'Tensor.Art 模型与 LoRA';
   readonly badgeColor = '#8b5cf6';
-  readonly description = '通过 TAMS 模型 API 指定真实底模 ID 和 LoRA ID；工具接口单独标识。';
+  readonly description = '通过 TAMS 模型 API 指定真实底模 ID 和 LoRA ID；OpenWorks 是独立服务商。';
   readonly capabilities = ['text2img', 'img2img', 'text2video', 'img2video'] as const;
   readonly defaultKey = '';
 
@@ -37,7 +37,7 @@ export class TensorArtDriver extends BaseEngineDriver {
     if (params.extraParams?.count !== undefined) body.count = params.extraParams.count;
     if (params.extraParams?.inputs !== undefined) body.inputs = params.extraParams.inputs;
     if (params.extraParams?.custom_parameters !== undefined) body.custom_parameters = params.extraParams.custom_parameters;
-    // Forward explicit model-job parameters; model IDs never select the tool API.
+    // Forward explicit model-job parameters; model IDs never select OpenWorks.
     if (params.steps) body.steps = params.steps;
     if (params.cfg !== undefined) body.cfg = params.cfg;
     if (params.loras?.length) body.loras = params.loras;
@@ -64,7 +64,7 @@ export class TensorArtDriver extends BaseEngineDriver {
       mediaType: data.mediaType || 'image',
       provider: data.provider || 'Tensor.Art (模型 API)',
       providerId: this.id,
-      model: data.model || data.toolName || params.model,
+      model: data.model || params.model,
       requestedModel: params.model,
       seed: data.historyItem?.seed ?? null,
       rawResponse: data,

@@ -10,9 +10,9 @@
 2. **零硬编码与动态 API Schema 驱动 (Zero-Hardcoding)**：
    - 彻底杜绝硬编码 Key。所有模型 ID、端点 URL、API Key 均支持动态配置与自定义扩展，支持任意第三方兼容端点。
    - 前端节点与属性面板支持自定义输入任意合法模型路径或 URN。
-3. **多 Key 轮询与负载均衡架构 (Multi-Key Load Balancing)**：
-   - 后端 `KeyPoolManager` 支持 `round_robin`（顺序轮询）、`failover`（主备故障切换）与 `latency_best`（最优低延迟）三种调度模式。
-   - 遭遇 429/503/Quota 限流时自动进入 60 秒冷却解冻队列，遭遇 401/403 鉴权失败时标记为 `invalid`。
+3. **多 Key 凭据一致性与严禁静默换 Key 重试 (Credential Consistency)**：
+   - 后端 `KeyPoolManager` 仅在新请求开始时按 `round_robin` 选取可用 Key；单次生成任务（Schema -> 提交 -> 轮询）全程绑定同一凭据。
+   - 严禁在请求失败后自动触发 `failover` 或 `latency_best` 静默换 Key 重提，所有上游 401/402/403/429/5xx 错误原样透传给用户。
 4. **ComfyUI 纯正潜空间拓扑生态**：
    - 核心参数面板 (`ParameterInspector`) 与画布节点 (`KSampler`, `CheckpointLoaderSimple`, `LoRALoader`, `EmptyLatentImage`, `CLIPTextEncode`) 严格双向数据同步。
    - 全链路支持图生图 (Img2Img: `LoadImage -> VAEEncode -> KSampler`) 与 图生视频 (I2V: `LoadImage -> AIVideoNode`) 拓扑逆向溯源。

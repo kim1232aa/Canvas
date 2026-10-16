@@ -1,0 +1,110 @@
+{
+  "$schemaNote": "草案 — 仅声明。真相源: docs/provider-api-audit/huggingface.md (2026-10-15)。范围: Inference Providers router（非自建 Endpoints）",
+  "id": "huggingface",
+  "displayName": "Hugging Face Inference Providers",
+  "auth": {
+    "envVar": "HF_TOKEN",
+    "header": "Authorization",
+    "scheme": "Bearer",
+    "permission": "Make calls to Inference Providers",
+    "billTo": "X-HF-Bill-To (optional)"
+  },
+  "catalog": {
+    "how": "Hub pipeline_tag (text-to-image / text-to-video) + inferenceProviderMapping",
+    "notImage": "GET router.huggingface.co/v1/models 是 chat 列表，禁止当图像目录",
+    "providerChoice": "provider=auto | hf-inference | fal-ai | … 须在配置里显式且可见"
+  },
+  "image": {
+    "mode": "sync (task API 返回 bytes)",
+    "client": "InferenceClient.text_to_image",
+    "openaiRouter": {
+      "supported": false,
+      "reason": "router /v1 明确不支持 image generation"
+    },
+    "request": {
+      "inputs": {
+        "required": true,
+        "meaning": "prompt"
+      },
+      "parameters.seed": {
+        "type": "integer"
+      },
+      "parameters.num_inference_steps": {
+        "type": "integer",
+        "canvasField": "steps"
+      },
+      "parameters.guidance_scale": {
+        "type": "number",
+        "canvasField": "cfg"
+      },
+      "parameters.width": {
+        "type": "integer"
+      },
+      "parameters.height": {
+        "type": "integer"
+      },
+      "parameters.negative_prompt": {
+        "type": "string"
+      },
+      "parameters.scheduler": {
+        "type": "string"
+      }
+    },
+    "response": "image bytes",
+    "poll": null
+  },
+  "video": {
+    "supported": true,
+    "client": "InferenceClient.text_to_video",
+    "providers": [
+      "fal-ai",
+      "novita",
+      "replicate",
+      "together",
+      "wavespeed"
+    ],
+    "request": {
+      "inputs": {
+        "required": true
+      },
+      "parameters.num_frames": {
+        "type": "number",
+        "note": "帧数，非秒"
+      },
+      "parameters.guidance_scale": true,
+      "parameters.negative_prompt": {
+        "type": "string[]"
+      },
+      "parameters.num_inference_steps": true,
+      "parameters.seed": true
+    },
+    "notInStandard": [
+      "duration",
+      "resolution",
+      "fps"
+    ],
+    "rule": "需要时走 provider 原生参数/extra_body 且须有该 provider 文档证据",
+    "response": "video bytes"
+  },
+  "lora": {
+    "standardSchema": {
+      "supported": false,
+      "reason": "task 参数表无 loras/adapters"
+    },
+    "viaProviderNative": "如 fal-ai/flux-lora 经 HF 路由或 Custom Provider Key；字段跟该 provider（参见 fal.json）",
+    "uiRule": "仅 HF 标准 parameters 时隐藏 LoRA 挂载"
+  },
+  "billing": {
+    "model": "PAYG 透传 provider 费率；PRO/Team/Enterprise 每月 $2 credits；Custom Provider Key 则 provider 直账单",
+    "insufficientHints": [],
+    "note": "402 未文档化；原样展示"
+  },
+  "contractTestHint": "text-to-image: seed/steps/cfg/宽高 进 parameters.*；挂 LoRA 且 provider 非原生 LoRA 端点 → 本地拒绝",
+  "sources": [
+    "https://huggingface.co/docs/inference-providers/index",
+    "https://huggingface.co/docs/inference-providers/main/tasks/text-to-image",
+    "https://huggingface.co/docs/inference-providers/main/tasks/text-to-video",
+    "https://huggingface.co/docs/inference-providers/pricing"
+  ],
+  "_auditStatus": "2026-10-15 03:26：引用的 docs/provider-api-audit 旧审计仅留作对比、不再引用；以 docs/provider-api-audit-v2/ 与 DIFF.md 为准；本草案凡依据旧审计的结论一律视为未核实，等 Researchy 新调查"
+}

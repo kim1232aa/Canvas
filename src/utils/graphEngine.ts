@@ -1,3 +1,4 @@
+import { isSchemaDrivenProvider } from './schemaSendHint';
 import { Connection, DataType, NodeInstance, Socket } from '../types/graph';
 import { ApiKeysState } from '../types/providers';
 import { getStoredApiKeys, saveToHistory } from '../services/api';
@@ -13,6 +14,9 @@ import {
 import { assertAIVideoProviderReady } from './videoProvider';
 import {modelCheckpoint} from './inspectorParameters';
 import { assertResolvedResources, parseCustomParameters, explicitLoraPath } from './frontendParameters';
+import { normalizeLoraPayloadItem } from './resourceSelection';
+import { assertExplicitLoraStrengths, parseExplicitLoraStrength } from './loraStrength';
+import { checkpointNodeTitle } from './providerLabels';
 
 const MEDIA_OUTPUT_NODE_TYPES = new Set([
   'KSampler','AIVideoNode','FalAIEngineNode','GoogleImagenNode','ModelScopeNode','ModelScopeAiNode','NanoGPTNode','ReplicateEngineNode','VAEDecode','SaveImage','SaveVideo','PreviewImage',
@@ -22,12 +26,69 @@ export function shouldClearExecutionOutput(nodeType: string, state: NodeInstance
   return output === undefined && MEDIA_OUTPUT_NODE_TYPES.has(nodeType) && (state === 'running' || state === 'error' || (state === 'idle' && errorMessage === ''));
 }
 
+/** Drop prior run media/error from the client request snapshot; sync CheckpointLoader title to current provider. */
 export function sanitizeExecutionSnapshotNodes(nodes: NodeInstance[]): NodeInstance[] {
-  return nodes.map(({ outputData: _outputData, errorMessage: _errorMessage, executionProgress: _executionProgress, ...node }) => ({
-    ...node,
-    state: 'idle',
-    executionProgress: 0,
-  }));
+  return nodes.map(({ outputData: _outputData, errorMessage: _errorMessage, errorAt: _errorAt, executionProgress: _executionProgress, ...node }) => {
+    const title =
+      node.type === 'CheckpointLoaderSimple'
+        ? checkpointNodeTitle(node.values?.targetProvider, node.values?.ckpt_name)
+        : node.title;
+    return {
+      ...node,
+      title,
+      state: 'idle' as const,
+      executionProgress: 0,
+    };
+  });
+}
+
+/** Clear stale red-box / error banners so a prior Civitai (etc.) failure never sticks after provider switch or re-run.
+ *  Also drop leftover media on errored nodes so a failed run never keeps showing the previous image.
+ *  clean-1651: `keepUpstreamFailures` (run start) clears only local-block chrome; upstream 401 badges stay
+ *  until the next successful run (or a full clear on provider switch). */
+export function clearNodeExecutionErrors(
+  nodes: NodeInstance[],
+  opts?: { keepUpstreamFailures?: boolean },
+): NodeInstance[] {
+  const keep = !!opts?.keepUpstreamFailures;
+  return nodes.map((n) => {
+    const hasLocal = !!(n.localBlockReason || n.localBlockTitle || n.upstreamLocalBlocked);
+    const hasUpstream = !!(n.state === 'error' || n.errorMessage);
+    if (!hasLocal && !hasUpstream) return n;
+    if (keep) {
+      // Drop local-block marks only; leave errorMessage / errorAt for 「上一次」badge (clean-0006).
+      // If this node still carries an upstream failure, restore state=error and drop local-only
+      // 「这次没有出图」 marks so clearing 宽高拦截 never hides the prior 401 badge.
+      if (!hasLocal) return n;
+      const wasLocalDownstream = !!n.upstreamLocalBlocked;
+      return {
+        ...n,
+        localBlockReason: undefined,
+        localBlockTitle: undefined,
+        localBlockField: undefined,
+        localBlockLoraCount: undefined,
+        upstreamLocalBlocked: undefined,
+        ...(n.errorMessage
+          ? { state: 'error' as NodeInstance['state'], upstreamFailed: false }
+          : wasLocalDownstream
+            ? { upstreamFailed: false }
+            : {}),
+      };
+    }
+    return {
+      ...n,
+      localBlockReason: undefined,
+      localBlockTitle: undefined,
+      localBlockField: undefined,
+      localBlockLoraCount: undefined,
+      upstreamLocalBlocked: undefined,
+      state: (n.state === 'error' ? 'idle' : n.state) as NodeInstance['state'],
+      errorMessage: undefined,
+      errorAt: undefined,
+      executionProgress: n.state === 'error' ? 0 : n.executionProgress,
+      ...(n.state === 'error' && MEDIA_OUTPUT_NODE_TYPES.has(n.type) ? { outputData: undefined } : {}),
+    };
+  });
 }
 
 export interface WorkflowExtraction {
@@ -51,8 +112,9 @@ export interface WorkflowExtraction {
     name: string;
     baseModel?: string;
     nodeId?: string;
-    modelStrength: number;
-    clipStrength: number;
+    /** Explicit only — never invent 0.8 when the node left strength empty. */
+    modelStrength?: number;
+    clipStrength?: number;
     triggerWords: string;
     civitaiId?: string;
     unresolvedResource?: boolean;
@@ -172,7 +234,7 @@ export function resolveTargetNode(
     const id = typeof targetNodeOrId === 'string' ? targetNodeOrId : targetNodeOrId.id;
     const target = nodeMap.get(id);
     if (!target) {
-      throw new Error(`未找到指定的执行节点: ${id}`);
+      throw new Error('未找到指定的执行节点');  // never expose raw node-… id in UI
     }
     return target;
   }
@@ -233,8 +295,8 @@ function traceModelAndLorasUpstream(
           name: String(n.values.lora_name).trim(),
           baseModel: n.values.base_model || n.values.baseModel || '',
           nodeId: n.id,
-          modelStrength: Number(n.values.strength_model ?? 0.8),
-          clipStrength: Number(n.values.strength_clip ?? 0.8),
+          modelStrength: parseExplicitLoraStrength(n.values.strength_model),
+          clipStrength: parseExplicitLoraStrength(n.values.strength_clip),
           triggerWords: n.values.trigger_words || '',
           civitaiId: n.values.civitai_id || n.values.civitaiId || '',
           unresolvedResource: n.values.import_unresolved_resource === true || n.values.unresolvedResource === true,
@@ -249,8 +311,8 @@ function traceModelAndLorasUpstream(
           name: n.values.selected_model_name,
           baseModel: n.values.baseModel || n.values.base_model || '',
           nodeId: n.id,
-          modelStrength: 0.8,
-          clipStrength: 0.8,
+          modelStrength: parseExplicitLoraStrength(n.values.strength_model ?? n.values.strength ?? n.values.modelStrength),
+          clipStrength: parseExplicitLoraStrength(n.values.strength_clip ?? n.values.clipStrength ?? n.values.strength ?? n.values.modelStrength),
           triggerWords: n.values.selected_triggers || '',
         });
       }
@@ -261,6 +323,38 @@ function traceModelAndLorasUpstream(
     }
   }
   return undefined;
+}
+
+/**
+ * clean-0942: why no Checkpoint loader reaches this exec node's `model` input — named, not a generic 「请先选择模型」.
+ * Returns undefined when a loader IS reached (then an empty ckpt_name is the real 「请先选择模型」).
+ */
+/** Where the MODEL chain breaks, with the exact user-facing sentence (one source for banner / panel / LoRA node). */
+export type ModelChainBreak = { message: string; atNodeId: string };
+export function modelChainBreakDetail(nodes: Array<{id:string;type:string;title?:string;bypassed?:boolean}>, connections: Connection[], execNodeId: string): ModelChainBreak | undefined {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const exec = byId.get(execNodeId);
+  const name = (n: any) => `「${n?.title || n?.type || n?.id}」`;
+  let conn = connections.find((c) => c.toNodeId === execNodeId && c.toSocketId === 'model');
+  if (!conn) return { message: `${name(exec)}的 model 输入没有连接底模加载器（MODEL 连线缺失）；把「加载底模」的 MODEL 连到它`, atNodeId: execNodeId };
+  const seen = new Set<string>();
+  while (conn && !seen.has(conn.fromNodeId)) {
+    seen.add(conn.fromNodeId);
+    const n: any = byId.get(conn.fromNodeId);
+    if (!n) return { message: `${name(exec)}的 model 连线指向已删除的节点`, atNodeId: execNodeId };
+    if (n.bypassed) return { message: `底模链上的${name(n)}已被旁路，MODEL 无法传到${name(exec)}`, atNodeId: n.id };
+    if (n.type === 'CheckpointLoaderSimple') return undefined;
+    if (n.type === 'LoRALoader' || n.type === 'CivitaiLoRABrowserNode') {
+      const up = connections.find((c) => c.toNodeId === n.id && c.toSocketId === 'model');
+      if (!up) return { message: `底模连线断开：${name(n)}的 model 输入没有连接「加载底模」的 MODEL，底模无法传到${name(exec)}`, atNodeId: n.id };
+      conn = up; continue;
+    }
+    return { message: `${name(exec)}的 model 输入连接的是${name(n)}，不是底模加载器`, atNodeId: n.id };
+  }
+  return undefined;
+}
+export function modelChainBreak(nodes: Array<{id:string;type:string;title?:string;bypassed?:boolean}>, connections: Connection[], execNodeId: string): string | undefined {
+  return modelChainBreakDetail(nodes, connections, execNodeId)?.message;
 }
 
 /**
@@ -289,8 +383,8 @@ function traceLorasUpstream(
           name: String(n.values.lora_name).trim(),
           baseModel: n.values.base_model || n.values.baseModel || '',
           nodeId: n.id,
-          modelStrength: Number(n.values.strength_model ?? 0.8),
-          clipStrength: Number(n.values.strength_clip ?? 0.8),
+          modelStrength: parseExplicitLoraStrength(n.values.strength_model),
+          clipStrength: parseExplicitLoraStrength(n.values.strength_clip),
           triggerWords: n.values.trigger_words || '',
           civitaiId: n.values.civitai_id || n.values.civitaiId || '',
           unresolvedResource: n.values.import_unresolved_resource === true || n.values.unresolvedResource === true,
@@ -305,8 +399,8 @@ function traceLorasUpstream(
           name: n.values.selected_model_name,
           baseModel: n.values.baseModel || n.values.base_model || '',
           nodeId: n.id,
-          modelStrength: 0.8,
-          clipStrength: 0.8,
+          modelStrength: parseExplicitLoraStrength(n.values.strength_model ?? n.values.strength ?? n.values.modelStrength),
+          clipStrength: parseExplicitLoraStrength(n.values.strength_clip ?? n.values.clipStrength ?? n.values.strength ?? n.values.modelStrength),
           triggerWords: n.values.selected_triggers || '',
         });
       }
@@ -512,6 +606,11 @@ export function extractWorkflowParameters(
   if (!negativePrompt) {
     negativePrompt = (execNode.values.negative_prompt || '').trim();
   }
+  // CheckpointLoader fallback when no negative CLIP node (panel edits persist there).
+  if (!negativePrompt) {
+    const ckptForNeg = modelCheckpoint(nodes, connections, execNode.id);
+    if (ckptForNeg) negativePrompt = (ckptForNeg.values.negative_prompt || '').trim();
+  }
 
   // 2. Reference image (initImageUrl) strictly along incoming edges (NO canvas fallback!)
   let initImageUrl: string | undefined = undefined;
@@ -617,12 +716,17 @@ export function extractWorkflowParameters(
       throw new Error('请先选择模型');
     }
     steps = numOrUndef(execNode.values.steps);
-    cfg = numOrUndef(execNode.values.guidance_scale);
+    cfg = numOrUndef(execNode.values.guidance_scale ?? execNode.values.cfg);
+    seed = numOrUndef(execNode.values.seed);
+    denoise = numOrUndef(execNode.values.denoise);
     const res = strOrUndef(execNode.values.resolution);
     const resParts = res ? res.split('x') : [];
     if (resParts.length === 2) {
       width = numOrUndef(resParts[0]);
       height = numOrUndef(resParts[1]);
+    } else {
+      width = numOrUndef(execNode.values.width);
+      height = numOrUndef(execNode.values.height);
     }
     const loraConn = connections.find((c) => c.toNodeId === execNode.id && c.toSocketId === 'lora');
     if (loraConn) {
@@ -639,11 +743,17 @@ export function extractWorkflowParameters(
     }
     steps = numOrUndef(execNode.values.steps);
     cfg = numOrUndef(execNode.values.guidance_scale ?? execNode.values.cfg);
+    seed = numOrUndef(execNode.values.seed);
+    denoise = numOrUndef(execNode.values.denoise);
+    aspectRatio = strOrUndef(execNode.values.aspect_ratio ?? execNode.values.aspectRatio);
     const res = strOrUndef(execNode.values.resolution);
     const resParts = res ? res.split('x') : [];
     if (resParts.length === 2) {
       width = numOrUndef(resParts[0]);
       height = numOrUndef(resParts[1]);
+    } else {
+      width = numOrUndef(execNode.values.width);
+      height = numOrUndef(execNode.values.height);
     }
     const loraConn = connections.find((c) => c.toNodeId === execNode.id && c.toSocketId === 'lora');
     if (loraConn) {
@@ -660,6 +770,7 @@ export function extractWorkflowParameters(
     }
     aspectRatio = execNode.values.aspect_ratio || undefined;
     imageSize = execNode.values.image_size || undefined;
+    customParameters = execNode.values.custom_parameters;
   } else if (execNode.type === 'ModelScopeNode' || execNode.type === 'ModelScopeAiNode') {
     isVideo = false;
     targetProvider = execNode.type === 'ModelScopeAiNode' ? 'modelscope_ai' : 'modelscope';
@@ -667,6 +778,22 @@ export function extractWorkflowParameters(
     checkpointBaseModel = (execNode.values.base_model || execNode.values.baseModel || '').trim() || undefined;
     if (!checkpointModel) {
       throw new Error('请先选择模型');
+    }
+    steps = numOrUndef(execNode.values.steps);
+    cfg = numOrUndef(execNode.values.guidance_scale ?? execNode.values.cfg);
+    seed = numOrUndef(execNode.values.seed);
+    const res = strOrUndef(execNode.values.resolution);
+    const resParts = res ? res.split('x') : [];
+    if (resParts.length === 2) {
+      width = numOrUndef(resParts[0]);
+      height = numOrUndef(resParts[1]);
+    } else {
+      width = numOrUndef(execNode.values.width);
+      height = numOrUndef(execNode.values.height);
+    }
+    const loraConn = connections.find((c) => c.toNodeId === execNode.id && c.toSocketId === 'lora');
+    if (loraConn) {
+      traceLorasUpstream(loraConn.fromNodeId, connections, nodeMap, loras, subgraphNodeIds);
     }
     customParameters = execNode.values.custom_parameters;
   } else if (execNode.type === 'NanoGPTNode') {
@@ -678,6 +805,17 @@ export function extractWorkflowParameters(
     if (!checkpointModel) {
       throw new Error('请先选择模型');
     }
+    resolution = strOrUndef(execNode.values.resolution);
+    steps = numOrUndef(execNode.values.steps);
+    cfg = numOrUndef(execNode.values.cfg ?? execNode.values.guidance_scale);
+    seed = numOrUndef(execNode.values.seed);
+    aspectRatio = strOrUndef(execNode.values.aspect_ratio ?? execNode.values.aspectRatio);
+    width = numOrUndef(execNode.values.width);
+    height = numOrUndef(execNode.values.height);
+    const loraConn = connections.find((c) => c.toNodeId === execNode.id && c.toSocketId === 'lora');
+    if (loraConn) {
+      traceLorasUpstream(loraConn.fromNodeId, connections, nodeMap, loras, subgraphNodeIds);
+    }
   } else if (execNode.type === 'CheckpointLoaderSimple') {
     isVideo = false;
     checkpointModel = (execNode.values.model || execNode.values.ckpt_name || '').trim();
@@ -687,6 +825,8 @@ export function extractWorkflowParameters(
     }
     targetProvider = (execNode.values.targetProvider || '').trim();
     if (!targetProvider) throw new Error('请选择执行服务商；不会从模型名称猜测引擎');
+    width = numOrUndef(execNode.values.width);
+    height = numOrUndef(execNode.values.height);
     size = execNode.values.size || undefined;
     quality = execNode.values.quality || undefined;
     outputFormat = execNode.values.output_format || execNode.values.outputFormat || undefined;
@@ -719,11 +859,12 @@ export function extractWorkflowParameters(
 
     const modelConn = connections.find((c) => c.toNodeId === execNode.id && c.toSocketId === 'model');
     if (!modelConn) {
-      throw new Error('请先选择模型');
+      throw new Error(modelChainBreak([...nodeMap.values()], connections, execNode.id) || '请先选择模型');
     }
     const ckpt = traceModelAndLorasUpstream(modelConn.fromNodeId, connections, nodeMap, loras, subgraphNodeIds);
     if (!ckpt) {
-      throw new Error('请先选择模型');
+      // The selected model may be set on the loader; the chain to this sampler is what's missing — say so.
+      throw new Error(modelChainBreak([...nodeMap.values()], connections, execNode.id) || '请先选择模型');
     }
     checkpointModel = (ckpt.values.model || ckpt.values.ckpt_name || '').trim();
     checkpointBaseModel = (ckpt.values.base_model || ckpt.values.baseModel || '').trim() || undefined;
@@ -749,15 +890,24 @@ export function extractWorkflowParameters(
       batchSize = numOrUndef(ckpt.values.n ?? ckpt.values.batch_size ?? ckpt.values.batchSize) ?? batchSize;
     }
 
+    let latentSizeSource = false;
     const latentConn = connections.find((c) => c.toNodeId === execNode.id && c.toSocketId === 'latent_image');
     if (latentConn) {
       const src = nodeMap.get(latentConn.fromNodeId);
       if (src && !src.bypassed && src.type === 'EmptyLatentImage') {
         subgraphNodeIds.add(src.id);
+        latentSizeSource = true;
         width = numOrUndef(src.values.width);
         height = numOrUndef(src.values.height);
         batchSize = numOrUndef(src.values.batch_size) ?? batchSize;
       }
+    }
+    // CheckpointLoader size fallback ONLY when no EmptyLatent is connected (panel edits persist there).
+    // clean-1351 #3: a connected EmptyLatent with an empty field must NOT pick up a stale ckpt width/height
+    // (that produced a size string whose height came from a stale ckpt value while the canvas height was empty). Unfilled → not sent / local block.
+    if (!latentSizeSource) {
+      if (width === undefined) width = numOrUndef(ckpt.values.width);
+      if (height === undefined) height = numOrUndef(ckpt.values.height);
     }
   } else {
     checkpointModel = (execNode.values.model || execNode.values.ckpt_name || '').trim();
@@ -945,6 +1095,9 @@ export async function executeWorkflow(
     const grokOrOpenAi = params.targetProvider === 'openai_compat' || params.targetProvider === 'grok_compat' || params.videoProvider === 'grok_compat';
     const omissions: Array<{ field: string; value: unknown; reason: string }> = [];
 
+    // Explicit LoRA strength required — never invent 0.8 before upstream submit
+    assertExplicitLoraStrengths(params.loras);
+
     // Check architecture compatibility for each LoRA
     const compatibleLoras: typeof params.loras = [];
     for (const l of params.loras) {
@@ -953,7 +1106,10 @@ export async function executeWorkflow(
         params.checkpointBaseModel,
         l
       );
-      if (!compat.compatible) {
+      // Schema-driven providers: LoRA support is decided only by the server provider
+      // table (unified 「本地拦截 · 未发请求」 + history) or by upstream verbatim — no
+      // name-heuristic frontend gate.
+      if (!compat.compatible && !isSchemaDrivenProvider(params.targetProvider)) {
         const reason = `LoRA [${l.name}] 与底模 [${params.checkpointModel}] 架构不兼容，拒绝静默丢弃执行`;
         if (l.nodeId) {
           onNodeStateChange(l.nodeId, 'error', 0, undefined, reason);
@@ -1105,9 +1261,10 @@ export async function executeWorkflow(
     const lorasPayload = resolveGenerateLorasPayload(
       engProv,
       engModel,
-      compatibleLoras.map((l) => ({
+      compatibleLoras.map((l) => normalizeLoraPayloadItem({
         name: l.name,
         path: explicitLoraPath(l),
+        downloadUrl: l.downloadUrl,
         strength: l.modelStrength,
         modelStrength: l.modelStrength,
         clipStrength: l.clipStrength,
@@ -1212,4 +1369,104 @@ export async function executeWorkflow(
     for(const id of outputIds)onNodeStateChange(id,id===targetErrorNodeId?'error':'idle',0,undefined,id===targetErrorNodeId?'请求失败，查看执行记录':'');
     throw error;
   }
+}
+export const RUN_NODE_DELETED = '节点已删除，请重新选择';
+export const RUN_NO_OUTPUT_NODE = '没有可运行的输出节点：请添加保存/预览节点或生成节点，或先选中要运行的节点；未发送请求';
+const OUTPUT_SINK_TYPES = new Set(['SaveVideo', 'SaveImage', 'PreviewImage']);
+
+export interface RunTarget { id: string; title: string; type: string; auto: boolean }
+const nodeTitle = (n: { title?: string; type: string }) => (typeof n.title === 'string' && n.title.trim() ? n.title.trim() : n.type);
+
+/**
+ * The node a run will execute — the same id is passed to executeWorkflow and shown on the run button / execution log.
+ * - explicit target or selection: must exist, else 「节点已删除，请重新选择」 (never auto-picked).
+ * - no selection: the graph's output node (sink or generator) via resolveTargetNode; a loader / arbitrary node is
+ *   not an output → RUN_NO_OUTPUT_NODE (blocked locally, nothing sent).
+ */
+function downstreamOutputNodes(nodes: NodeInstance[], connections: Connection[], fromId: string): NodeInstance[] {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const seen = new Set<string>(); const queue = [fromId]; const out: NodeInstance[] = [];
+  while (queue.length) {
+    const id = queue.shift()!; if (seen.has(id)) continue; seen.add(id);
+    for (const c of connections) if (c.fromNodeId === id) {
+      const n = byId.get(c.toNodeId); if (!n || n.bypassed || seen.has(n.id)) continue;
+      if (OUTPUT_SINK_TYPES.has(n.type)) { if (!out.includes(n)) out.push(n); } else queue.push(n.id);
+    }
+  }
+  return out;
+}
+export function isRunnableNode(node: NodeInstance): boolean {
+  return OUTPUT_SINK_TYPES.has(node.type) || node.type === 'KSampler' || isCloudEngineNode(node);
+}
+export const runNotRunnableMessage = (title: string) => `所选节点「${title}」不是可运行的输出节点（LoRA/加载器节点不能单独运行）：请选中保存/预览或生成节点，或取消选择；未发送请求`;
+
+export function resolveRunTarget(nodes: NodeInstance[], connections: Connection[], targetNodeId?: string | null, selectedNodeId?: string | null): RunTarget {
+  const id = targetNodeId || selectedNodeId || undefined;
+  if (id) {
+    const node = nodes.find((n) => n.id === id);
+    if (!node) throw new Error(RUN_NODE_DELETED);
+    // ComfyUI only executes output nodes (OUTPUT_NODE); a selected loader/LoRA is not runnable on its own.
+    if (!targetNodeId && !isRunnableNode(node)) {
+      // clean-0942: a selected loader/LoRA (e.g. while choosing its model) runs the ONE output node downstream of it.
+      // Explicit and shown on the button (「运行：<节点>」); several or zero downstream outputs → the existing message.
+      const sinks = downstreamOutputNodes(nodes, connections, node.id);
+      if (sinks.length === 1) return { id: sinks[0].id, title: nodeTitle(sinks[0]), type: sinks[0].type, auto: true };
+      throw new Error(runNotRunnableMessage(nodeTitle(node)));
+    }
+    return { id: node.id, title: nodeTitle(node), type: node.type, auto: false };
+  }
+  let node: NodeInstance;
+  try { node = resolveTargetNode(nodes, connections); } catch { throw new Error(RUN_NO_OUTPUT_NODE); }
+  if (!(OUTPUT_SINK_TYPES.has(node.type) || node.type === 'KSampler' || isCloudEngineNode(node))) throw new Error(RUN_NO_OUTPUT_NODE);
+  return { id: node.id, title: nodeTitle(node), type: node.type, auto: true };
+}
+
+/** Back-compat wrapper (ids only). */
+export function liveRunTargetId(nodes: Array<{ id: string }>, targetNodeId?: string | null, selectedNodeId?: string | null): string | undefined {
+  const id = targetNodeId || selectedNodeId || undefined;
+  if (id && !nodes.some((n) => n.id === id)) throw new Error(RUN_NODE_DELETED);
+  return id;
+}
+
+
+/**
+ * Read-only: does the execution node have a real reference-image input along incoming edges (same sockets/rules as
+ * extraction's initImageUrl)? Used so denoise/strength badges match the request: strength is only sent with an image input.
+ */
+export function hasReferenceImageInput(nodes: Array<{id:string;type:string;bypassed?:boolean;values?:any;outputData?:any}>, connections: Array<{fromNodeId:string;toNodeId:string;toSocketId:string}>, execNodeId: string): boolean {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const conn = connections.find((c) => c.toNodeId === execNodeId && ['init_image', 'image', 'latent_image', 'pixels'].includes(c.toSocketId));
+  const src = conn ? byId.get(conn.fromNodeId) : undefined;
+  if (!src || src.bypassed) return false;
+  if (src.type === 'LoadImage') return !!src.values?.image_url;
+  if (src.type === 'SaveImage') return !!(typeof src.outputData === 'string' ? src.outputData : src.outputData?.imageUrl);
+  if (src.type === 'VAEEncode') {
+    const px = connections.find((c) => c.toNodeId === src.id && (c.toSocketId === 'pixels' || c.toSocketId === 'image'));
+    const img = px ? byId.get(px.fromNodeId) : undefined;
+    return !!(img && !img.bypassed && img.type === 'LoadImage' && img.values?.image_url);
+  }
+  return false;
+}
+
+
+/**
+ * trace-fix2 #10: a LoRA-caused local block (「最多 N 个，当前 M 个」…) only describes the LoRA set it was decided on.
+ * Once the active LoRA node count differs from the count recorded at block time — or a LoRA node shows a block with no
+ * recorded count (cannot be checked against the current graph) — the block chrome is stale and is cleared graph-wide
+ * (upstream failure badges kept, same as the size-mismatch clear). Returns the same array when nothing is stale.
+ */
+export function activeLoraNodeCount(nodes: NodeInstance[]): number {
+  return nodes.filter((n) => LORA_TYPES_FOR_BLOCK.has(n.type) && !n.bypassed).length;
+}
+const LORA_TYPES_FOR_BLOCK = new Set(['LoRALoader', 'LoraLoader', 'LoraLoaderModelOnly']);
+export function hasStaleLoraBlock(nodes: NodeInstance[]): boolean {
+  const count = activeLoraNodeCount(nodes);
+  return nodes.some((n) => {
+    if (!(n.localBlockReason || n.localBlockTitle)) return false;
+    if (typeof n.localBlockLoraCount === 'number') return n.localBlockLoraCount !== count;
+    return LORA_TYPES_FOR_BLOCK.has(n.type); // legacy chrome on a LoRA node without a recorded count
+  });
+}
+export function clearStaleLoraBlocks(nodes: NodeInstance[]): NodeInstance[] {
+  return hasStaleLoraBlock(nodes) ? clearNodeExecutionErrors(nodes) : nodes; // fix3 N: 拦截解除后按当前状态清掉「上一次失败」
 }

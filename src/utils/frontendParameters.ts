@@ -1,3 +1,4 @@
+import { normalizeLoraPayloadItem } from './resourceSelection';
 import type { SpatialFrame } from '../types/graph';
 import type { NormalizedGenerateParams } from '../engines/types';
 
@@ -67,6 +68,6 @@ export function spatialRequestParameters(frame: SpatialFrame): NormalizedGenerat
     videoDuration:isVideo ? (Object.hasOwn(p,'videoDuration') ? p.videoDuration : frame.videoDuration) : undefined,
     videoFps:isVideo ? (Object.hasOwn(p,'videoFps') ? p.videoFps : frame.videoFps) : undefined,videoFrames:isVideo ? p.videoFrames : undefined,
     aspectRatio:Object.hasOwn(p,'aspectRatio') ? p.aspectRatio : frame.videoAspectRatio,imageSize:p.imageSize,extraParams,
-    loras:p.loras.map(l => ({name:l.name,path:explicitLoraPath(l),strength:l.modelStrength,modelStrength:l.modelStrength,clipStrength:l.clipStrength,civitaiId:l.civitaiId,triggers:l.triggerWords})),
+    loras:p.loras.map(l => normalizeLoraPayloadItem({name:l.name,path:explicitLoraPath(l),...(l.downloadUrl?{downloadUrl:l.downloadUrl}:{}),strength:l.modelStrength,modelStrength:l.modelStrength,clipStrength:l.clipStrength,civitaiId:l.civitaiId,triggers:l.triggerWords})),
   };
 }

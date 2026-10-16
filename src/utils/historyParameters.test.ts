@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { GenerationHistoryItem } from '../types/providers';
-import { extractEmbeddedGenerationParameters, resolveHistoryParameters } from './historyParameters';
+import { extractEmbeddedGenerationParameters, resolveHistoryParameters, sentHistoryLoras, historyParameterSourceLabel } from './historyParameters';
 
 const baseItem = (): GenerationHistoryItem => ({
   id: 'hist-1',
@@ -53,7 +53,7 @@ describe('history generation parameter provenance', () => {
     expect(params.scheduler).toMatchObject({ value: 'discrete', source: 'upstream' });
     expect(params.width).toMatchObject({ value: 512, source: 'upstream' });
     expect(params.height).toMatchObject({ value: 512, source: 'upstream' });
-    expect(params.negativePrompt.source).toBe('not-sent');
+    expect(params.negativePrompt.source).toBe('schema-unrecorded');
   });
 
   it('recovers seed and WebUI-style fields from embedded image generation metadata', () => {
@@ -77,13 +77,101 @@ describe('history generation parameter provenance', () => {
     } as any;
 
     const params = resolveHistoryParameters(item);
-    expect(params.steps).toMatchObject({ source: 'not-sent', requested: 30 });
-    expect(params.negativePrompt).toMatchObject({ source: 'not-sent', requested: 'bad hands' });
+    expect(params.steps).toMatchObject({ source: 'schema-unrecorded', requested: 30 });
+    expect(params.negativePrompt).toMatchObject({ source: 'schema-unrecorded', requested: 'bad hands' });
   });
 
   it('labels metadata-less old records separately instead of pretending they were not sent', () => {
     const params = resolveHistoryParameters(baseItem());
     expect(params.seed.source).toBe('unknown');
     expect(params.steps.source).toBe('unknown');
+  });
+});
+
+describe('failed AIMLAPI history row (image_size alias + LoRA from actualRequest)', () => {
+  const item: any = { id: 'h', url: '', timestamp: 1, prompt: 'p', seed: null, steps: null, cfg: null, loras: [], status: 'failed',
+    requestMetadata: { actualRequest: { endpoint: 'https://api.aimlapi.com/v1/images/generations', parameters: { prompt: 'p', num_inference_steps: 8, seed: 424242, image_size: { width: 1024, height: 768 }, loras: [{ path: 'ostris/z_image_turbo_childrens_drawings', scale: 0.85 }] } } } };
+  it('size comes from image_size and is 实际发送, not 未发送', () => {
+    const r = resolveHistoryParameters(item);
+    expect(r.width).toMatchObject({ value: 1024, source: 'sent' });
+    expect(r.height).toMatchObject({ value: 768, source: 'sent' });
+    expect(r.cfg.source).toBe('schema-unrecorded');
+    expect(item.requestMetadata.actualRequest.parameters).not.toHaveProperty('width');
+  });
+  it('LoRA row from actualRequest loras[{path,scale}]', () => {
+    expect(sentHistoryLoras(item)).toEqual([{ name: 'ostris/z_image_turbo_childrens_drawings', strength: 0.85 }]);
+  });
+});
+
+
+describe('Novita nested request envelope (chips must follow actualRequest path)', () => {
+  const novitaItem: any = {
+    id: 'novita-0958', status: 'failed', url: '', provider: 'novita',
+    model: 'dreamshaper_8_93211.safetensors', prompt: 'a lighthouse',
+    negativePrompt: null, seed: null, steps: null, cfg: null, loras: [],
+    requestMetadata: {
+      actualRequest: {
+        endpoint: 'https://api.novita.ai/v3/async/txt2img',
+        parameters: {
+          extra: { response_image_type: 'jpeg' },
+          request: {
+            prompt: 'a lighthouse on a cliff at sunset, detailed',
+            negative_prompt: 'blurry, low quality',
+            width: 512, height: 512, steps: 20, guidance_scale: 7, seed: 42,
+            sampler_name: 'Euler a',
+            loras: [{ model_name: 'more_details_59655', strength: 0.75 }],
+            model_name: 'dreamshaper_8_93211.safetensors',
+          },
+        },
+        schemaFields: [
+          'prompt', 'negative_prompt', 'width', 'height', 'steps', 'guidance_scale',
+          'seed', 'sampler_name', 'loras', 'model_name',
+        ],
+      },
+    },
+  };
+
+  it('nested request.steps/seed/guidance_scale/sampler/size/negative → 实际发送, never 未发送', () => {
+    const r = resolveHistoryParameters(novitaItem);
+    expect(r.steps).toMatchObject({ value: 20, source: 'sent' });
+    expect(r.seed).toMatchObject({ value: 42, source: 'sent' });
+    expect(r.cfg).toMatchObject({ value: 7, source: 'sent' });
+    expect(r.sampler).toMatchObject({ value: 'Euler a', source: 'sent' });
+    expect(r.width).toMatchObject({ value: 512, source: 'sent' });
+    expect(r.height).toMatchObject({ value: 512, source: 'sent' });
+    expect(r.negativePrompt).toMatchObject({ value: 'blurry, low quality', source: 'sent' });
+    for (const k of ['steps', 'seed', 'cfg', 'sampler', 'width', 'height', 'negativePrompt'] as const) {
+      expect(historyParameterSourceLabel(r[k].source)).toBe('实际发送');
+      expect(historyParameterSourceLabel(r[k].source)).not.toBe('未发送');
+    }
+  });
+
+  it('nested request.loras[{model_name,strength}] → sentHistoryLoras (no mismatch from missing top-level)', () => {
+    expect(sentHistoryLoras(novitaItem)).toEqual([
+      { name: 'more_details_59655', strength: 0.75 },
+    ]);
+  });
+});
+
+describe('Replicate flat input envelope (same generic nest rule)', () => {
+  it('parameters.input.num_inference_steps/guidance/seed → sent', () => {
+    const item: any = {
+      id: 'rep', status: 'failed', url: '', loras: [],
+      requestMetadata: {
+        actualRequest: {
+          endpoint: 'https://api.replicate.com/v1/predictions',
+          parameters: {
+            input: {
+              prompt: 'p', num_inference_steps: 28, guidance: 3, seed: 9,
+              lora_weights: 'https://example/lora.safetensors', lora_scale: 0.8,
+            },
+          },
+        },
+      },
+    };
+    const r = resolveHistoryParameters(item);
+    expect(r.steps).toMatchObject({ value: 28, source: 'sent' });
+    expect(r.cfg).toMatchObject({ value: 3, source: 'sent' });
+    expect(r.seed).toMatchObject({ value: 9, source: 'sent' });
   });
 });

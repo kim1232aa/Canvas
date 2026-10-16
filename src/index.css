@@ -36,10 +36,19 @@ canvas, svg {
 .studio-action span { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .studio-action:hover { background: #ffffff0d; color: white; }
 .studio-action-active { background: #22d3ee18; border-color: #22d3ee40; color: #67e8f9; }
-.studio-run { display: inline-flex; align-items: center; gap: .5rem; background: #0891b2; padding: .65rem .9rem; border-radius: 9px; color: white; font-size: .875rem; font-weight: 600; min-height: 40px; }
-.studio-run:hover { background: #06a1c4; }
-.studio-action:disabled, .studio-run:disabled { opacity: .5; cursor: not-allowed; }
-.studio-action:focus-visible, .studio-run:focus-visible { outline: 2px solid #67e8f9; outline-offset: 2px; }
+.studio-run { display: inline-flex; align-items: center; gap: .5rem; background: #0891b2; padding: .65rem .9rem; border-radius: 9px; color: white; font-size: .875rem; font-weight: 600; min-height: 40px; transition: background .15s; }
+/* clean-1149 #11: hover only while the pointer is actually over an enabled button — no stuck highlight after click/disable. */
+.studio-run span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.studio-run, .studio-action { white-space: nowrap; flex-shrink: 0; }
+.studio-run { flex-shrink: 1; }
+/* fix11 #1: below 1180px the tool dock parks left of the minimap (ModernToolDock max-[1180px]:right-[254px]);  icon-only for compactable actions (label kept in title/aria-label); rows never wrap. */
+@media (max-width: 1180px) { .studio-action[data-compact] > span { display: none; } .studio-brand { display: none; } [data-dock-compact] > span { display: none; } }
+.studio-run:hover:not(:disabled):not(:focus) { background: #06a1c4; }
+.studio-run:focus { background: #0891b2; outline: none; }
+.studio-run:focus-visible { outline: 2px solid #67e8f9; outline-offset: 2px; }
+.studio-run:disabled { opacity: .5; cursor: not-allowed; background: #0891b2; }
+.studio-action:disabled { opacity: .5; cursor: not-allowed; }
+.studio-action:focus-visible { outline: 2px solid #67e8f9; outline-offset: 2px; }
 @media (max-width: 640px) { .studio-toolbar {padding: 10px;} .studio-action {padding: .4rem .5rem;} }
 
 .canvas-node { box-shadow: 0 10px 24px #0004; background: #181c25f5; }

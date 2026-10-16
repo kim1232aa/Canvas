@@ -29,14 +29,13 @@ describe('replicateImageContract', () => {
       expect(result.payload.version).toBeUndefined();
       expect(result.payload.input).toEqual({
         prompt: 'a futuristic cityscape at sunset',
-        negative_prompt: 'blurry, low quality',
-        width: 1024,
-        height: 768,
         aspect_ratio: '16:9',
         seed: 42,
         num_inference_steps: 4,
-        guidance_scale: 3.5,
       });
+      // Official flux-schnell Input Schema: no width/height, negative_prompt, guidance/guidance_scale → not sent, recorded.
+      expect(result.omitted?.map((o) => o.from)).toEqual(['negative_prompt', 'width', 'height', 'cfg']);
+      expect(result.omitted?.every((o) => o.reason.startsWith('该端点不支持'))).toBe(true);
     });
 
     it('builds request for named model with version in owner/name:version format', () => {
@@ -60,6 +59,7 @@ describe('replicateImageContract', () => {
       const result = buildReplicatePredictionRequest({
         model: hex64,
         prompt: 'abstract oil painting',
+        inputSchemaProperties: { prompt: {} },
       });
 
       expect(result.endpoint).toBe('https://api.replicate.com/v1/predictions');
@@ -71,54 +71,121 @@ describe('replicateImageContract', () => {
       });
     });
 
-    it('maps image_url and loras correctly', () => {
+    it('maps official black-forest-labs/flux-dev-lora schema fields (lora_weights, guidance, prompt_strength)', () => {
       const result = buildReplicatePredictionRequest({
-        model: 'black-forest-labs/flux-dev',
+        model: 'black-forest-labs/flux-dev-lora',
         prompt: 'portrait of a warrior',
         image_url: 'https://example.com/source.png',
+        denoise: 0.75,
+        cfg: 3.5,
         loras: [
-          { path: 'https://huggingface.co/owner/lora', strength: 0.8 },
-          { path: 'https://huggingface.co/owner/lora-second', strength: 0.5 },
+          { path: 'https://huggingface.co/owner/lora/resolve/main/weights.safetensors', strength: 0.8 },
+          { path: 'https://huggingface.co/owner/lora-second/resolve/main/weights.safetensors', strength: 0.5 },
         ],
       });
 
       const input = result.payload.input as Record<string, unknown>;
       expect(input.image).toBe('https://example.com/source.png');
-      expect(input.hf_lora).toBe('https://huggingface.co/owner/lora');
+      expect(input.prompt_strength).toBe(0.75);
+      expect(input.guidance).toBe(3.5);
+      expect(input.lora_weights).toBe('https://huggingface.co/owner/lora/resolve/main/weights.safetensors');
       expect(input.lora_scale).toBe(0.8);
+      expect(input.extra_lora).toBe('https://huggingface.co/owner/lora-second/resolve/main/weights.safetensors');
+      expect(input.extra_lora_scale).toBe(0.5);
     });
 
-    it('resolves civitaiId or versionId to official civitai download URL for hf_lora', () => {
-      const result = buildReplicatePredictionRequest({
-        model: 'black-forest-labs/flux-dev',
-        prompt: 'portrait of a warrior',
-        loras: [
-          { civitaiId: '2746042', strength: 0.75 },
-        ],
-      });
-
+    it('maps dynamic OpenAPI inputSchemaProperties for community hf_lora models', () => {
+      const result = buildReplicatePredictionRequest(
+        {
+          model: 'lucataco/flux-dev-lora',
+          prompt: 'cyberpunk portrait',
+          cfg: 4.0,
+          loras: [
+            { downloadUrl: 'https://huggingface.co/org/lora/resolve/main/weights.safetensors', modelStrength: 0.65 },
+          ],
+        },
+        'https://api.replicate.com/v1',
+        { prompt: {}, hf_lora: {}, lora_scale: {}, guidance_scale: {} }
+      );
       const input = result.payload.input as Record<string, unknown>;
-      expect(input.hf_lora).toBe('https://civitai.com/api/download/models/2746042');
-      expect(input.lora_scale).toBe(0.75);
+      expect(input.hf_lora).toBe('https://huggingface.co/org/lora/resolve/main/weights.safetensors');
+      expect(input.lora_scale).toBe(0.65);
+      expect(input.guidance_scale).toBe(4.0);
     });
 
-    it('maps input_image when explicitly provided and handles string loras', () => {
-      const result = buildReplicatePredictionRequest({
-        model: 'black-forest-labs/flux-redux',
-        prompt: 'styled portrait',
-        input_image: 'https://example.com/init.png',
-        loras: ['alexp/flux-ghibli'],
-      });
+    it('rejects bare Civitai numeric IDs or AIR URNs without explicit downloadUrl instead of fabricating URLs', () => {
+      expect(() =>
+        buildReplicatePredictionRequest({
+          model: 'black-forest-labs/flux-dev-lora',
+          prompt: 'portrait of a warrior',
+          loras: [{ civitaiId: '2746042', strength: 0.75 }],
+        })
+      ).toThrow(/严禁从 Civitai ID 或 AIR 猜测拼接下载链接/);
 
-      const input = result.payload.input as Record<string, unknown>;
-      expect(input.input_image).toBe('https://example.com/init.png');
-      expect(input.hf_lora).toBe('alexp/flux-ghibli');
-      expect(input.lora_scale).toBe(1.0);
+      expect(() =>
+        buildReplicatePredictionRequest({
+          model: 'black-forest-labs/flux-dev-lora',
+          prompt: 'portrait of a warrior',
+          loras: [{ name: 'urn:air:flux1:lora:civitai:12345@67890', modelStrength: 0.65 }],
+        })
+      ).toThrow(/严禁从 Civitai ID 或 AIR 猜测拼接下载链接/);
+    });
+
+    it('rejects LoRA entries without explicit numeric strength instead of defaulting to 1.0', () => {
+      expect(() =>
+        buildReplicatePredictionRequest({
+          model: 'black-forest-labs/flux-dev-lora',
+          prompt: 'styled portrait',
+          loras: ['alexp/flux-ghibli'],
+        })
+      ).toThrow(/严禁仅传字符串并静默兜底为 1\.0/);
+
+      expect(() =>
+        buildReplicatePredictionRequest({
+          model: 'black-forest-labs/flux-dev-lora',
+          prompt: 'styled portrait',
+          loras: [{ path: 'alexp/flux-ghibli' }],
+        })
+      ).toThrow(/缺少显式权重.*严禁静默兜底为 1\.0/);
+    });
+
+    it('rejects loras when model inputSchemaProperties does not support LoRA fields', () => {
+      expect(() =>
+        buildReplicatePredictionRequest(
+          {
+            model: 'black-forest-labs/flux-schnell',
+            prompt: 'fast render',
+            loras: [{ path: 'alexp/flux-ghibli', strength: 0.8 }],
+          },
+          'https://api.replicate.com/v1',
+          { prompt: {}, aspect_ratio: {}, num_inference_steps: {} }
+        )
+      ).toThrow(/官方 OpenAPI Input Schema 不支持挂载 LoRA 参数/);
+    });
+
+    it('rejects loras for flux-schnell via PROVIDER_SCHEMA alone (no live props, never invent hf_lora)', () => {
+      expect(() =>
+        buildReplicatePredictionRequest({
+          model: 'black-forest-labs/flux-schnell',
+          prompt: 'fast render',
+          loras: [{ path: 'alexp/flux-ghibli', strength: 0.8 }],
+        })
+      ).toThrow(/官方 OpenAPI Input Schema 不支持挂载 LoRA 参数/);
+    });
+
+    it('rejects loras for flux-dev via PROVIDER_SCHEMA (LoRA belongs on flux-dev-lora)', () => {
+      expect(() =>
+        buildReplicatePredictionRequest({
+          model: 'black-forest-labs/flux-dev',
+          prompt: 'portrait',
+          loras: [{ path: 'fofr/flux-pixar-cars', strength: 0.9 }],
+        })
+      ).toThrow(/官方 OpenAPI Input Schema 不支持挂载 LoRA 参数/);
     });
 
     it('applies custom_parameters and records overrides', () => {
       const result = buildReplicatePredictionRequest({
-        model: 'black-forest-labs/flux-schnell',
+        model: 'bytedance/seedream-3',
         prompt: 'space station',
         cfg: 3.0,
         custom_parameters: {

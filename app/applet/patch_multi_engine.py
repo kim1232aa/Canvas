@@ -102,7 +102,7 @@ replacement_block = """    // ==========================================
       chosenEngineName = 'ModelScope 魔搭社区引擎';
       const l = (rawModelName || '').toLowerCase() + ' ' + (detectedBaseModel || '').toLowerCase();
       if (l.includes('wan') || isVideo) {
-        checkpoint = 'damo/wan2.1-t2i';
+        checkpoint = '';
         baseModelArchitecture = 'Wan 2.1';
       } else {
         checkpoint = 'damo/cv_sd_text-to-image_synthesis-v1.0';

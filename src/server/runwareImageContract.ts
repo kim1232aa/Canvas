@@ -58,14 +58,18 @@ export function buildRunwareImageRequest(body: Record<string, unknown>, baseUrl 
 
   const taskUUID = typeof body.taskUUID === 'string' && body.taskUUID.trim() ? body.taskUUID.trim() : randomUUID();
 
+  const rawNumResults = body.numberResults ?? body.num_images;
+  const rawFormat = String(body.outputFormat || body.output_format || 'PNG').trim().toUpperCase();
+  const rawType = String(body.outputType || body.output_type || 'URL').trim();
+
   const task: RunwareTask = {
     taskType: 'imageInference',
     taskUUID,
     model,
     positivePrompt: prompt,
-    numberResults: 1,
-    outputFormat: 'PNG',
-    outputType: 'URL',
+    numberResults: typeof rawNumResults === 'number' && Number.isFinite(rawNumResults) && rawNumResults > 0 ? Math.round(rawNumResults) : 1,
+    outputFormat: (['PNG', 'WEBP', 'JPG'].includes(rawFormat) ? rawFormat : 'PNG') as 'PNG' | 'WEBP' | 'JPG',
+    outputType: (['URL', 'base64Data', 'dataURI'].includes(rawType) ? rawType : 'URL') as 'URL' | 'base64Data' | 'dataURI',
   };
 
   if (typeof body.negative_prompt === 'string' && body.negative_prompt.trim()) {
@@ -79,7 +83,10 @@ export function buildRunwareImageRequest(body: Record<string, unknown>, baseUrl 
     task.seedImage = seedImage;
     const strength = body.strength ?? body.denoise;
     if (typeof strength === 'number' && Number.isFinite(strength)) {
-      task.strength = Math.max(0, Math.min(1, Number(strength)));
+      if (strength <= 0 || strength > 1) {
+        throw new Error(`Runware 重绘强度 (strength/denoise=${strength}) 超出官方有效范围 (0, 1]，严禁静默截断`);
+      }
+      task.strength = Number(strength);
     }
   }
 
@@ -105,15 +112,22 @@ export function buildRunwareImageRequest(body: Record<string, unknown>, baseUrl 
     const loras: RunwareLora[] = [];
     for (const item of body.loras) {
       if (typeof item === 'object' && item !== null) {
-        const loraModel = String((item as any).civitaiId || (item as any).path || (item as any).name || (item as any).model || '').trim();
-        const weight = typeof (item as any).strength === 'number'
-          ? (item as any).strength
-          : typeof (item as any).weight === 'number'
-          ? (item as any).weight
-          : 1.0;
-        if (loraModel) {
-          loras.push({ model: loraModel, weight });
+        const rawLoraModel = String((item as any).civitaiId || (item as any).path || (item as any).name || (item as any).model || '').trim();
+        if (!rawLoraModel) continue;
+        const airMatch = rawLoraModel.match(/^(?:urn:)?air:[^:]+:[^:]+:(civitai:\d+@\d+)/i);
+        const loraModel = airMatch ? airMatch[1].toLowerCase() : rawLoraModel;
+        const rawWeight =
+          typeof (item as any).strength === 'number'
+            ? (item as any).strength
+            : typeof (item as any).modelStrength === 'number'
+            ? (item as any).modelStrength
+            : typeof (item as any).weight === 'number'
+            ? (item as any).weight
+            : undefined;
+        if (typeof rawWeight !== 'number' || !Number.isFinite(rawWeight)) {
+          throw new Error(`Runware LoRA [${loraModel}] 缺少显式权重 (weight/strength)，严禁静默兜底为 1.0`);
         }
+        loras.push({ model: loraModel, weight: rawWeight });
       }
     }
     if (loras.length > 0) {

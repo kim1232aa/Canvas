@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { getSpatialFrameLoraBanner } from '../utils/spatialFrameLoraBanner';
 import { validateModelCompatibility } from '../utils/baseModelMatcher';
-import { isLoraUnsupportedOnEndpoint } from '../utils/resolveCheckpoint';
+import { isLoraUnsupportedOnEndpoint, LORA_UNSUPPORTED_TITLE, LORA_UNSUPPORTED_EMPTY_CHECKPOINT, LORA_UNSUPPORTED_MESSAGE } from '../utils/resolveCheckpoint';
 import React from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {SpatialFrameItem} from './SpatialFrameItem';
@@ -19,7 +19,7 @@ it.each([['custom-checkpoint',undefined],['flux-dev','Flux.1 D'],['custom-model'
   const html=renderLoraFrame(checkpoint,baseModel);
   const compat=validateModelCompatibility(checkpoint,baseModel,'adapter.safetensors','civitai');
   expect(html).toContain(`title="${compat.message}"`);
-  expect(html).toContain('待验证');
+  expect(html).not.toContain('待验证');
   expect(html).not.toContain('与当前底模架构兼容');
   expect(html).not.toContain('已兼容');
   expect(html).not.toContain('bg-purple-950/50 text-purple-300 border border-purple-800/40');
@@ -27,11 +27,12 @@ it.each([['custom-checkpoint',undefined],['flux-dev','Flux.1 D'],['custom-model'
   expect(html).not.toContain('disabled=""');
 });
 
-it('renders explicit architecture mismatch in red with its original explanation',()=>{
+// 2026-10-15: family-name guess is not real metadata → no red 「底模架构不匹配」 (warning removed, not blocked).
+it('does not render a guessed architecture mismatch (name-substring families are unreliable)',()=>{
   const html=renderLoraFrame('Tongyi-MAI/Z-Image-Turbo','Flux.1 D');
-  expect(html).toContain('bg-rose-950/60 text-rose-300 border border-rose-700/50');
-  expect(html).toContain('底模架构不匹配');
-  expect(html).not.toContain('与当前底模架构兼容');
+  expect(html).not.toContain('底模架构不匹配');
+  expect(html).not.toContain('bg-rose-950/60 text-rose-300 border border-rose-700/50');
+  expect(html).not.toContain('待验证');
 });
 
 const fluxLora = {
@@ -41,49 +42,25 @@ const fluxLora = {
 };
 
 describe('SpatialFrameItem LoRA visible copy (same sentences as node/inspector)', () => {
-  it('ModelScope Z-Image + Flux LoRA mismatch: frame banner includes full compat.message', () => {
-    const banner = getSpatialFrameLoraBanner(
-      'modelscope_ai',
-      'Tongyi-MAI/Z-Image-Turbo',
-      [fluxLora]
-    );
-    expect(banner).not.toBeNull();
-    expect(banner!.kind).toBe('mismatch');
-    expect(banner!.title).toBe('LoRA 架构与底模不匹配');
-
-    const compat = validateModelCompatibility(
-      'Tongyi-MAI/Z-Image-Turbo',
-      fluxLora.baseModel,
-      fluxLora.name,
-      'modelscope_ai'
-    );
-    expect(banner!.message).toBe(compat.message);
-    expect(banner!.message).toMatch(/底模架构不匹配/);
-    expect(banner!.message).toMatch(/Z-Image-Turbo/);
-    expect(banner!.message).toMatch(/Flux\.1 D|FLUX/);
-    expect(banner!.message).toMatch(/请自行选择/);
-    expect(banner!.message).toMatch(/保留现有 LoRA \/ seed/);
-    expect(banner!.message).toMatch(/负向与采样器按导入原样/);
-    expect(banner!.message).toMatch(/空或「未指定」都算原样/);
-    expect(banner!.message).not.toMatch(/已保留当前 LoRA \/ 负向 \/ seed/);
-    expect(banner!.message).not.toMatch(/已保留负向/);
-    // Must be body text candidate — not the short chip alone
-    expect(banner!.message.length).toBeGreaterThan(20);
+  it('ModelScope Z-Image + Flux LoRA: no guessed mismatch banner', () => {
+    const banner = getSpatialFrameLoraBanner('modelscope_ai', 'Tongyi-MAI/Z-Image-Turbo', [fluxLora]);
+    expect(banner).toBeNull();
+    const compat = validateModelCompatibility('Tongyi-MAI/Z-Image-Turbo', fluxLora.baseModel, fluxLora.name, 'modelscope_ai');
+    expect(compat.verification).toBe('unverified');
+    expect(compat.message).not.toMatch(/底模架构不匹配/);
   });
 
   it('Fal empty checkpoint: frame banner includes fuller unsupported sentence, not only 4-char chip', () => {
     const banner = getSpatialFrameLoraBanner('fal', '', [fluxLora]);
     expect(banner).not.toBeNull();
     expect(banner!.kind).toBe('unsupported');
-    expect(banner!.title).toBe('该服务商不支持');
+    expect(banner!.title).toBe(LORA_UNSUPPORTED_TITLE);
 
     const endpoint = isLoraUnsupportedOnEndpoint('fal', '');
     expect(endpoint.unsupported).toBe(true);
     expect(banner!.message).toBe(endpoint.message);
-    expect(banner!.message).toBe(
-      '该服务商不支持（未选择具体模型 / checkpoint，无法确认 LoRA 支持）'
-    );
-    expect(banner!.message.length).toBeGreaterThan('该服务商不支持'.length);
+    expect(banner!.message).toBe(LORA_UNSUPPORTED_EMPTY_CHECKPOINT);
+    expect(banner!.message.length).toBeGreaterThan(LORA_UNSUPPORTED_TITLE.length);
   });
 
   it('fal-ai/flux-lora stays usable (no unsupported banner); flux/dev stays grey unsupported', () => {
@@ -92,11 +69,11 @@ describe('SpatialFrameItem LoRA visible copy (same sentences as node/inspector)'
 
     const greyDev = getSpatialFrameLoraBanner('fal', 'fal-ai/flux/dev', [fluxLora]);
     expect(greyDev?.kind).toBe('unsupported');
-    expect(greyDev?.message).toMatch(/该服务商不支持/);
+    expect(greyDev?.message).toBe(LORA_UNSUPPORTED_MESSAGE);
 
     const greySchnell = getSpatialFrameLoraBanner('fal', 'fal-ai/flux/schnell', [fluxLora]);
     expect(greySchnell?.kind).toBe('unsupported');
-    expect(greySchnell?.message).toMatch(/该服务商不支持/);
+    expect(greySchnell?.message).toBe(LORA_UNSUPPORTED_MESSAGE);
   });
 
   it('returns null when no loras', () => {

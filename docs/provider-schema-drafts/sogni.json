@@ -1,0 +1,333 @@
+{
+  "$schemaNote": "草案 — 仅声明。真相源: docs/provider-api-audit-v2/sogni.md（04:43–04:45 修正版）+ DIFF.md",
+  "id": "sogni",
+  "displayName": "Sogni",
+  "auth": {
+    "envVar": "SOGNI_API_KEY",
+    "header": "Authorization",
+    "scheme": "Bearer",
+    "alt": "api-key header",
+    "idempotency": [
+      "Idempotency-Key",
+      "X-Idempotency-Key"
+    ]
+  },
+  "base": {
+    "root": "https://api.sogni.ai/v1"
+  },
+  "catalog": {
+    "image": "GET /model-catalog?mediaType=image",
+    "notImage": "GET /models 只列 LLM，禁止当图像目录",
+    "loraPublic": {
+      "path": "GET /loras/comfy?modelId=<workerModelId>",
+      "auth": false,
+      "rowFields": [
+        "loraId",
+        "modelIds",
+        "restrictedModelIds",
+        "ui.min",
+        "ui.max",
+        "ui.default",
+        "ui.step",
+        "ui.recommendedMin",
+        "ui.recommendedMax"
+      ],
+      "note": "无 key 200；强度范围逐条在 ui.*；服务端会 clamp 越界值 → 画布应按 ui 本地校验"
+    },
+    "loraPersonal": {
+      "path": "GET /loras/personal | /loras/personal/catalog",
+      "auth": true,
+      "requires": "Unlimited plan"
+    },
+    "namespaceWarning": "worker modelId（如 krea2_turbo_fp8_scaled）≠ workflow model selector（如 krea-2-turbo）；无官方映射时不得改写",
+    "pagination": "none_documented",
+    "imageNote": "OpenAI 兼容 /v1/images/generations 实测 404；图像走 creative-agent/workflows"
+  },
+  "predict": {
+    "mode": "async workflow",
+    "create": {
+      "method": "POST",
+      "path": "/creative-agent/workflows",
+      "body": "input: { title, steps: [{ id, toolName, arguments, dependsOn? }] } + token_type/billing_mode/confirm_cost/max_estimated_capacity_units/safe_content_filter/media_references",
+      "responses": {
+        "201": "inline steps created",
+        "202": "template awaiting cost confirm"
+      },
+      "note": "201/202 不是完成态"
+    },
+    "poll": [
+      "GET /creative-agent/workflows/:id",
+      "GET /creative-agent/workflows/:id/events",
+      "SSE /creative-agent/workflows/:id/events/stream"
+    ],
+    "control": [
+      "POST :id/resume",
+      "POST :id/confirm-cost",
+      "POST :id/cancel",
+      "POST :id/reseed"
+    ],
+    "statuses": [
+      "queued",
+      "running",
+      "completed",
+      "partial_failure",
+      "waiting_for_user",
+      "failed",
+      "cancelled"
+    ],
+    "nonSuccessRule": "partial_failure / waiting_for_user 不得当完成",
+    "outputs": "workflow.steps[i].artifacts[j].url"
+  },
+  "image": {
+    "toolName": "generate_image",
+    "arguments": {
+      "prompt": true,
+      "model": "workflow selector",
+      "width": true,
+      "height": true,
+      "loras": true,
+      "loraStrengths": true
+    },
+    "seed": {
+      "supported": true,
+      "type": "Uint32",
+      "via": [
+        "SDK seed",
+        "POST :id/reseed seed_overrides"
+      ],
+      "caveat": "多图只固定其中一张"
+    },
+    "stepsGuidance": {
+      "source": "SDK ImageProjectParams",
+      "note": "workflow 示例常只传 prompt+model；采样字段勿硬编码"
+    }
+  },
+  "video": {
+    "supported": true,
+    "toolNames": {
+      "generate_video": "t2v / reference",
+      "animate_photo": "i2v",
+      "others": [
+        "sound_to_video",
+        "video_to_video",
+        "stitch_video",
+        "orbit_video",
+        "extend_video"
+      ]
+    },
+    "arguments": {
+      "videoModel": [
+        "ltx25(default)",
+        "ltx23",
+        "wan22",
+        "minimax-h3-*",
+        "seedance2",
+        "seedance2-mini",
+        "seedance2-5",
+        "happyhorse-1.1-*",
+        "wan3.0-video",
+        "wan3.0-spicy-video"
+      ],
+      "durationByModel": {
+        "ltx": "2-20s",
+        "seedance2/mini": "4-15s",
+        "seedance2-5": "4-30s",
+        "happyhorse": "3-15s",
+        "wan3": "2-30s",
+        "h3": "~5.2-15.1s @24fps"
+      },
+      "size": [
+        "ratio",
+        "aspectRatio",
+        "width+height",
+        "targetResolution 480/720/1080 (Seedance 2.0 可 4K)"
+      ],
+      "flags": [
+        "generateAudio",
+        "expandPrompt",
+        "watermark",
+        "keyframes",
+        "sourceAudioPolicy"
+      ],
+      "loras": "仅部分 minimax-h3 模式"
+    },
+    "fps": {
+      "supported": false,
+      "reason": "无通用 fps 参数；H3 源片要求 24fps"
+    },
+    "seed": "reseed seed_overrides；省略则随机"
+  },
+  "lora": {
+    "fields": {
+      "loras": "string[] (catalog slug | personal-…)",
+      "loraStrengths": "number[] 等长按位；亦接受 lora_strengths"
+    },
+    "defaultStrength": {
+      "value": 1.0,
+      "documented": true,
+      "note": "省略 loraStrengths 时全部 1.0（非 catalog default）"
+    },
+    "maxItems": {
+      "value": 8,
+      "status": "已核（Researchy 15:12：官方 Generation Recipes / Creative Agent，最多 8、等长）"
+    },
+    "hard400": [
+      "loras: []",
+      "长度不一致",
+      "无 loras 却有 strengths"
+    ],
+    "loadableModels": {
+      "generate_image": [
+        "krea-2-turbo",
+        "dark-beast-krea2"
+      ],
+      "edit_image": [
+        "krea-identity-edit",
+        "qwen(personal)"
+      ],
+      "generate_video": "minimax-h3-t2v* / r2v*",
+      "animate_photo": "minimax-h3-i2v* / flf2v*"
+    },
+    "silentFilterWarning": "公开 LoRA 发到不兼容模型会被上游静默过滤 → 画布必须在不兼容模型上隐藏挂载，避免假生效",
+    "personalIncompatible": "400（不静默）",
+    "strengthRange": {
+      "krea2": "可为负（双极）",
+      "personal": "(0, 1]"
+    },
+    "serverClamp": "TypeDoc：values outside the valid range are clamped server-side",
+    "fieldsVerified": {
+      "status": "已核（SDK 文档，2026-10-16 12:30:53 抓取）",
+      "source": "https://sdk-docs.sogni.ai/interfaces/_internal_.BaseProjectParams.html",
+      "loras": "string[]，按串联顺序",
+      "loraStrengths": "number[]，与 loras 按位置对应，省略默认 1.0，可为负",
+      "gaps": [
+        "REST 接口参考页没列这些字段（只有 SDK 类型定义）",
+        "最多 8 个没有原文出处"
+      ]
+    },
+    "sendStatus": "会发送",
+    "sendEvidence": "fix3-1440 PASS_BILLING：loras+loraStrengths 实发至 waiting_for_user/insufficient_credit"
+  },
+  "billing": {
+    "params": {
+      "token_type": [
+        "spark",
+        "sogni",
+        "auto"
+      ],
+      "billing_mode": [
+        "auto",
+        "subscription",
+        "tokens"
+      ]
+    },
+    "insufficientHints": [
+      {
+        "status": "waiting_for_user",
+        "waitingReason": "insufficient_credit"
+      },
+      {
+        "http": 402,
+        "when": "vendor 模型且无 Premium Spark"
+      },
+      {
+        "flag": "cost_approval_required"
+      }
+    ],
+    "otherErrors": {
+      "403/179": "Personal LoRA 无 Unlimited",
+      "429": "Retry-After",
+      "409": "活跃 workflow 上限"
+    },
+    "http402": {
+      "when": "无 Premium Spark 却用 vendor 模型 → 任何 step 运行前 402",
+      "source": "docs.sogni.ai workflows/index.md（v2 官方原文）"
+    }
+  },
+  "contractTestHint": "krea-2-turbo + 2 LoRA → loras 与 loraStrengths 等长；非 krea-2-turbo/dark-beast-krea2 模型挂公开 LoRA 应本地拒绝（防上游静默过滤）；loras/comfy 的 ui.min/max 作本地校验（服务端会 clamp）",
+  "sources": [
+    "https://docs.sogni.ai/sogni-intelligence/creative-agent-workflows/",
+    "https://docs.sogni.ai/api-reference/direct-generation/",
+    "https://docs.sogni.ai/api-reference/personal-loras/",
+    "https://sdk-docs.sogni.ai/interfaces/ImageProjectParams.html",
+    "https://docs.sogni.ai/api-reference/",
+    "docs/provider-api-audit-v2/sogni.md",
+    "docs/provider-api-audit-v2/DIFF.md",
+    "https://sdk-docs.sogni.ai/interfaces/_internal_.BaseProjectParams.html"
+  ],
+  "_auditStatus": "2026-10-16 15:13：fix3-1440 升 PASS_BILLING。2026-10-16 15:13：fix3-1440 挑刺无严重+Researchy 已核，等画布收口。2026-10-15 04:45 v2 已核（sogni.md 04:43 修正）：REST creative-agent/workflows + model-catalog + loras/comfy ui 范围；首版「无 REST」已废。字段徽章仍以前端实测为准；2026-10-16 12:31 sogni-rekey-1220 判 FAIL（不升徽章）；LoRA 字段名/格式已核（SDK 文档 12:30:53），缺口：REST 参考页未列、最多 8 个无原文",
+  "acceptanceBadge": "PASS_BILLING",
+  "sendEvidence": {
+    "run": "/workspace/canvas-e2e-sogni-rekey-1220/",
+    "actualRequest": {
+      "loras": [
+        "krea2-detail-enhancer"
+      ],
+      "loraStrengths": [
+        0.8
+      ]
+    },
+    "upstream": "提交 201，查询 200，Key #0；waiting_for_user / insufficient_credit（Debit Error: Insufficient funds）",
+    "verdict": "FAIL，不算 PASS_BILLING：报错提示写「本次请求未含 LoRA」与实际请求不符；失败记录没进历史",
+    "sendStatus": "待确认（整单 FAIL，字段不升会发送）",
+    "retest": {
+      "run": "/workspace/canvas-e2e-sogni-trace-1255/（卡 hist_1792127116221_7nqv6）",
+      "verdict": "仍 FAIL",
+      "fixed": [
+        "不再误报未含 LoRA",
+        "失败进历史",
+        "有 Key 行"
+      ],
+      "open": [
+        "实发 loraStrengths 0.8 卡上却写未发送强度",
+        "toast 标「本地拦截」实际已发上游",
+        "卡上缺上游交互区/POST 段"
+      ],
+      "note": "canvas-dev PID 2909416 已改（CODE_ONLY），待重拍"
+    },
+    "retest_fix2_1450": {
+      "run": "/workspace/canvas-e2e-sogni-fix2-1450/（卡 hist_1792129805269_f8m5v）",
+      "verdict": "FAIL_UI，不收口",
+      "fixed": [
+        "loras/loraStrengths 芯片标实际发送",
+        "有 Key 行",
+        "上游两段 POST 201 + GET 200（waiting_for_user / insufficient_credit / COST_LIMIT_EXCEEDED）",
+        "标上游失败非本地拦截"
+      ],
+      "open": [
+        "toast 写上游响应体为空，与两段原文矛盾",
+        "toast/KSampler 标题只写 HTTP 200，缺任务状态原文",
+        "上游交互响应原文横向截断",
+        "底模节点说明溢出被工具栏盖"
+      ]
+    },
+    "retest_fix3_1440": {
+      "run": "/workspace/canvas-e2e-sogni-fix3-1440/（卡 hist_1792133816603_r4oww）",
+      "verdict": "PASS_BILLING",
+      "fixed": [
+        "toast 标题 HTTP 200 · task status=waiting_for_user · insufficient_credit（无「响应体为空」）",
+        "实发 loras+loraStrengths 0.8",
+        "上游 POST 201 → GET 200 waiting_for_user / insufficient_credit",
+        "非本地拦截"
+      ],
+      "acceptanceBadge": "PASS_BILLING",
+      "挑刺": "严重项这轮没挑到（toast/卡头/KSampler 均带 insufficient_credit；芯片实际发送；上游第2段非空）",
+      "researchy": {
+        "fetched": "2026-10-16 15:12 北京",
+        "loras": "有序栈；loraStrengths[i]↔loras[i]；最多8；krea-2-turbo 可挂",
+        "billing": "status=waiting_for_user + waitingReason=insufficient_credit 官方有，可作 PASS_BILLING；Debit Error/COST_LIMIT_EXCEEDED 非官方字段，透传即可",
+        "path": "POST /v1/creative-agent/workflows → GET by id"
+      },
+      "status": "画布收口 PASS_BILLING（挑刺无严重 + Researchy 15:12）",
+      "actualRequest": {
+        "loras": [
+          "krea2-detail-enhancer"
+        ],
+        "loraStrengths": [
+          0.8
+        ]
+      },
+      "upstream": "POST 201 → GET 200 waiting_for_user / insufficient_credit"
+    }
+  }
+}

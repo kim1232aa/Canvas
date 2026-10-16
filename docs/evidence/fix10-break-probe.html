@@ -1,0 +1,10 @@
+<!doctype html><meta charset=utf-8><body style="background:#181c25;color:#bef264;margin:20px">
+<script>
+const id='fal-ai/kling-video/v3/standard/image-to-video';
+const zw=id.replace(/([/-])/g,'$1\u200B');
+const st='width:290px;box-sizing:border-box;font:14px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;padding:12px;border:1px solid #333;white-space:pre-wrap;word-break:normal;overflow-wrap:anywhere;hyphens:none;';
+let st2;function lines2(txt,S){const d=document.createElement('div');d.style.cssText=S;d.textContent=txt;document.body.appendChild(d);const n=d.firstChild;const out=[];let cur='',top=null;for(let i=0;i<txt.length;i++){const r=document.createRange();r.setStart(n,i);r.setEnd(n,i+1);const rs=r.getClientRects();const rc=rs[rs.length-1]||rs[0];if(!rc){cur+=txt[i];continue;}if(top!==null&&rc.top>top+2){out.push(cur);cur='';}top=rc.top;cur+=txt[i];}out.push(cur);return out.map(s=>s.replace(/\u200B/g,''));}
+const res={};for(const w of [160,200,240,290]){document.body.dataset.w=w;}const W=[160,200,240,290];for(const w of W){const s0=st;st2=s0.replace('width:290px','width:'+w+'px');res[w]={before:lines2(id,st2),after:lines2(zw,st2)};}
+for(const v of [id,zw]){const t=document.createElement('textarea');t.style.cssText=st+'display:block;margin-top:8px;field-sizing:content;resize:none;background:#0d0e12;color:#bef264';t.value=v;document.body.appendChild(t);}
+const pre=document.createElement('pre');pre.id='res';pre.textContent=JSON.stringify(res);document.body.appendChild(pre);
+</script>

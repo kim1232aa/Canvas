@@ -44,7 +44,7 @@ export class NanoGPTDriver extends BaseEngineDriver {
         denoise: params.denoise,
         sampler_name: params.sampler_name,
         scheduler: params.scheduler,
-        loras: params.loras?.length ? params.loras : undefined,
+        loras: params.loras?.length ? params.loras.map((l: any) => (typeof l === 'object' && l !== null ? { ...l, path: l.path || l.downloadUrl || l.url, strength: l.strength ?? l.modelStrength ?? l.scale } : l)) : undefined,
         quality: params.extraParams?.quality,
         output_format: params.extraParams?.output_format,
         n: params.extraParams?.n,

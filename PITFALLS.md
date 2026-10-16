@@ -12,9 +12,9 @@
    - 严禁在 `server.ts`、`src/services/api.ts` 或任何前端代码中硬编码真实/测试 API Key（如 `ak_tensor_...`、`fal_...`）。
    - 所有密钥必须严格通过环境变量 (`process.env.*`) 或客户端 Header (`x-*-key`) 动态传入，并交由 `KeyPoolManager` 统一调度。
 
-3. **Tensor.Art OpenWorks 工具链与社区模型映射**：
-   - 用户选用 18 位数字雪花 ID（如 `958694016000505570`）的社区 Checkpoint 时，若通过 OpenWorks 算力驱动，必须执行**语义对齐透明映射**（写实->`photoreal_studio`，二次元->`anime_lab`，视频->`wan27`，通用->`strong_text2image`）。
-   - **绝对禁止 `tools.find() || tools[0]` 盲目回退**，且必须返回 `wasAdapted: true` 与 `adaptationNotice` 告知用户。
+3. **Tensor.Art TAMS 真实模型 API 与旧 OpenWorks 工具链物理隔离（严禁映射冒充）**：
+   - 用户选用 18 位数字雪花 ID（如 `958694016000505570`）的社区 Checkpoint 或 LoRA 时，必须直连官方 TAMS 模型 API（`https://tams-api.tensor.art/v1/jobs`），按真实 `modelId` 与 `diffusion.lora.items` 原样提交。
+   - **严禁将社区模型 ID 语义映射到 `photoreal_studio`、`anime_lab`、`strong_text2image` 等旧 OpenWorks 工具名**，严禁任何形式的静默替换或回退兜底。
 
 4. **NanoGPT 视频模型与生图模型端点物理隔离**：
    - `cat === 'video'` 必须严格调用官方 `https://nano-gpt.com/api/v1/video-models` (175 款视频大模型)，严禁与 `image-models` 混流。

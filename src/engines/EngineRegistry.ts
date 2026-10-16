@@ -52,6 +52,12 @@ export class EngineRegistryClass {
     this.register(new SchemaProviderDriver('muapi'));
     this.register(new SchemaProviderDriver('wavespeed'));
     this.register(new SchemaProviderDriver('sogni'));
+    this.register(new SchemaProviderDriver('krea'));
+    this.register(new SchemaProviderDriver('together'));
+    this.register(new SchemaProviderDriver('aimlapi'));
+    this.register(new SchemaProviderDriver('novita'));
+    this.register(new SchemaProviderDriver('venice'));
+    this.register(new SchemaProviderDriver('openworks'));
     this.register(new RunwareDriver());
     this.register(new ModelsLabDriver());
     this.register(new ReplicateDriver());

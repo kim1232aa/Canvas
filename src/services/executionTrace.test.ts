@@ -34,3 +34,34 @@ it('isApiTraceError rejects plain errors so only real connection failures are la
 });
 
 afterEach(()=>vi.unstubAllGlobals());
+
+it('clipForSessionStorage keeps actualRequest.loras when response is huge (reload survival)', async () => {
+  const { clipForSessionStorage } = await import('./executionTrace');
+  const fat = 'x'.repeat(25000);
+  const response = {
+    ok: false,
+    error: `HTTP 403: ${fat}`,
+    errorSource: 'upstream',
+    endpoint: 'https://api.aimlapi.com/v1/images/generations',
+    stack: fat,
+    actualRequest: {
+      endpoint: 'https://api.aimlapi.com/v1/images/generations',
+      parameters: {
+        model: 'alibaba/z-image-turbo-lora',
+        loras: [{ path: 'ostris/z_image_turbo_childrens_drawings', scale: 0.85 }],
+      },
+    },
+    historyItem: {
+      id: 'h1', status: 'failed', loras: [],
+      requestMetadata: { actualRequest: { parameters: { loras: [{ path: 'ostris/z_image_turbo_childrens_drawings', scale: 0.85 }] } } },
+    },
+    executionTrace: [{ huge: fat }],
+  };
+  const clipped: any = clipForSessionStorage(response);
+  expect(clipped.storedTruncated).toBe(true);
+  expect(clipped.actualRequest.parameters.loras).toEqual([{ path: 'ostris/z_image_turbo_childrens_drawings', scale: 0.85 }]);
+  expect(clipped.endpoint).toBe('https://api.aimlapi.com/v1/images/generations');
+  // Must not be a blind head-only slice that dropped actualRequest.
+  expect(clipped.actualRequest).toBeTruthy();
+  expect(clipped.head).toBeUndefined();
+});

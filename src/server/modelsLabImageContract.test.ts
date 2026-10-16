@@ -68,6 +68,12 @@ describe('ModelsLab Image Contract', () => {
     expect(() => buildModelsLabImageRequest({ prompt: 'test', model: 'flux' }, '')).toThrow(/API Key 必填/);
     expect(() => buildModelsLabImageRequest({ model: 'flux' }, 'test-key')).toThrow(/提示词为必填项/);
     expect(() => buildModelsLabImageRequest({ prompt: 'test' }, 'test-key')).toThrow(/模型为必填项/);
+    const noDimReq = buildModelsLabImageRequest({ model: 'flux', prompt: 'test' }, 'test-key');
+    expect(noDimReq.payload.width).toBeUndefined();
+    expect(noDimReq.payload.height).toBeUndefined();
+    expect(noDimReq.payload.seed).toBeUndefined();
+    expect(() => buildModelsLabImageRequest({ model: 'flux', prompt: 'test', width: 1024 }, 'test-key')).toThrow(/严禁单边静默兜底 512/);
+    expect(() => buildModelsLabImageRequest({ model: 'flux', prompt: 'test', loras: [{ name: 'style-lora' }] }, 'test-key')).toThrow(/严禁静默兜底为 0\.8/);
   });
 
   it('builds official fetch request for async polling', () => {

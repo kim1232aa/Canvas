@@ -1,5 +1,8 @@
+import { beginTraceOperation } from '../services/executionTrace';
+import { getStoredApiKeys } from '../services/api';
 import {TensorCatalogNotice} from './TensorCatalogNotice';
-import {isCivitaiAir,selectionFromMetadata,verifiedSelectionOrExplicitIntent,verifyCivitaiSelection,type ResourceSelection} from '../utils/resourceSelection';
+import {isCivitaiAir,selectionFromExplicitLoraUrl,selectionFromMetadata,verifiedSelectionOrExplicitIntent,verifyCivitaiSelection,type ResourceSelection} from '../utils/resourceSelection';
+import {isLoraWeightResource} from '../utils/isLoraWeightResource';
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Search,
@@ -23,9 +26,35 @@ import {
 } from 'lucide-react';
 import { CivitaiModelItem } from '../types/providers';
 import { searchCivitaiModels, fetchLiveModels, fetchHuggingFaceModelInfo, fetchTensorArtModelInfo } from '../services/api';
+import loraHubProviders from '../config/loraHubProviders.json';
 import { identifyArchitectureFamily } from '../utils/baseModelMatcher';
 
-export type LoraProviderFilter = 'all' | 'civitai' | 'huggingface' | 'modelscope' | 'modelscope_ai' | 'fal' | 'tensorart' | 'muapi' | 'wavespeed' | 'sogni' | 'runware' | 'modelslab';
+/** What the catalog upstream actually answered (endpoint, HTTP status, body) — shown verbatim in empty / error states. */
+export interface CatalogEvidence { /** Provider tab this evidence belongs to; rendered only under that tab. */ provider?: string; endpoint?: string; method?: string; status?: number | null; body?: string; noUpstreamCall?: boolean; message?: string }
+export function catalogEvidenceFrom(liveData: any, prov: string): CatalogEvidence | null {
+  const traces: any[] = Array.isArray(liveData?.executionTrace) ? liveData.executionTrace : [];
+  const t = [...traces].reverse().find((x) => x && x.endpoint);
+  const pag = liveData?._pagination?.[prov] || liveData?.pagination?.[prov];
+  // Declared-absence of a LoRA catalog: show the notice, never a model-catalog URL as「来源」.
+  if (!t && pag?.noLoraCatalog) {
+    return { noUpstreamCall: true, message: typeof pag?.message === 'string' ? pag.message : '无 LoRA 目录接口' };
+  }
+  if (!t && !pag?.sourceUrl) return null;
+  const body = t?.responseBody;
+  if (!t) return { endpoint: pag?.sourceUrl, noUpstreamCall: true, message: typeof pag?.message === 'string' ? pag.message : undefined };
+  // If backend marked no LoRA catalog, do not surface a model-catalog endpoint as LoRA source.
+  if (pag?.noLoraCatalog) {
+    return { noUpstreamCall: true, message: typeof pag?.message === 'string' ? pag.message : '无 LoRA 目录接口' };
+  }
+  return { endpoint: t?.endpoint || pag?.sourceUrl, method: t?.method || 'GET', status: typeof t?.status === 'number' ? t.status : null, body: body == null ? undefined : typeof body === 'string' ? body : JSON.stringify(body) };
+}
+
+/** Evidence is keyed by provider tab: another provider's endpoint never renders in this tab's empty state. */
+export function evidenceForTab(ev: CatalogEvidence | null, activeProvider: string): CatalogEvidence | null {
+  return ev && ev.provider === activeProvider ? ev : null;
+}
+
+export type LoraProviderFilter = 'all' | 'civitai' | 'huggingface' | 'modelscope' | 'modelscope_ai' | 'fal' | 'tensorart' | 'muapi' | 'wavespeed' | 'sogni' | 'krea' | 'together' | 'aimlapi' | 'novita' | 'venice' | 'runware' | 'modelslab' | 'replicate';
 
 export interface UnifiedLoRAItem {
   id: string;
@@ -33,9 +62,10 @@ export interface UnifiedLoRAItem {
   resourceId?: string;
   selection?: ResourceSelection;
   name: string;
-  provider: 'Civitai' | 'Hugging Face' | 'ModelScope CN' | 'ModelScope AI' | 'Fal.ai' | 'Tensor.Art' | 'MuAPI' | 'WaveSpeed' | 'Sogni' | 'Runware' | 'ModelsLab';
+  provider: 'Civitai' | 'Hugging Face' | 'ModelScope CN' | 'ModelScope AI' | 'Fal.ai' | 'Tensor.Art' | 'MuAPI' | 'WaveSpeed' | 'Sogni' | 'Runware' | 'ModelsLab' | 'Replicate';
   providerKey: LoraProviderFilter;
   baseModel: string | null;
+  baseModelSource?: string;
   creator: string;
   rating?: number;
   downloadCount?: number;
@@ -54,34 +84,59 @@ export interface CivitaiModalProps {
   onClose: () => void;
   onSelectLoRA: (lora: ResourceSelection & {triggerWords:string}) => void;
   onAddLoRANodeToCanvas: (lora: ResourceSelection & {triggerWords:string}) => void;
+  /** 「仅填入当前节点」: fill the current LoRA node only — never creates a node. */
+  onFillCurrentLoRANode?: (lora: ResourceSelection & {triggerWords:string}) => void;
   onSelectLoRAWithBaseModel?: (lora: ResourceSelection & {triggerWords:string}) => void;
   initialProvider?: LoraProviderFilter;
 }
 
-const ARCHITECTURE_TAGS = [
-  { id: 'all', label: '全部架构' },
-  { id: 'flux', label: 'FLUX.1' },
-  { id: 'sdxl', label: 'SDXL 1.0' },
-  { id: 'wan', label: 'Wan 2.1 (视频)' },
-  { id: 'sd15', label: 'SD 1.5' },
-  { id: 'pony', label: 'Pony XL' },
-  { id: 'illustrious', label: 'Illustrious' },
-  { id: 'qwen', label: 'Qwen-Image' },
-  { id: 'z-image', label: 'Z-Image' },
-];
+/** Chips are built from the baseModel tags actually present on the loaded items of the active tab. */
+export function architectureChipsFrom(items: Array<{ baseModel: string | null | undefined }>): Array<{ id: string; label: string }> {
+  const tags = Array.from(new Set(items.map((m) => (m.baseModel || '').trim()).filter(Boolean))).sort();
+  return [{ id: 'all', label: '全部' }, ...tags.map((t) => ({ id: t, label: t }))];
+}
+
+type CredentialReq = { kind: string; keyHeader?: string; storedKey?: string; notice: string; docUrl?: string };
+/** Credential requirement declared per provider in src/config/loraHubProviders.json (generic). */
+export const credentialRequirementFor = (provider: string): CredentialReq | undefined => (loraHubProviders as any).providers?.[provider]?.requiresCredential;
+/** Custom-import capability comes from provider config data (src/config/loraHubProviders.json), never from provider-name branches. */
+export function customImportFor(provider: string, config: { providers: Record<string, { supportsCustomImport?: boolean; idFormat?: string; placeholder?: string }> } = loraHubProviders): { hint: string; placeholder: string } | undefined {
+  const d = config.providers[provider];
+  return d?.supportsCustomImport && d.idFormat ? { hint: d.idFormat, placeholder: d.placeholder || '' } : undefined;
+}
+
+export const LORA_SEARCH_WATCHDOG_MS = 45_000;
+/** Shown when a hub search has not settled in time — says plainly no upstream response arrived (no guessed cause). */
+export function loraSearchWatchdogMessage(provider: string, ms: number): string {
+  return `检索 ${Math.round(ms / 1000)} 秒仍未返回（服务商：${provider}）：未收到上游响应，已停止等待；未重试、未显示替代结果。可点「检索」重新发起，完整请求见执行记录。`;
+}
 
 export const CivitaiModal: React.FC<CivitaiModalProps> = ({
   isOpen,
   onClose,
   onSelectLoRA,
   onAddLoRANodeToCanvas,
+  onFillCurrentLoRANode,
   onSelectLoRAWithBaseModel,
   initialProvider = 'all',
 }) => {
   const [activeProvider, setActiveProvider] = useState<LoraProviderFilter>(initialProvider);
   const [query, setQuery] = useState('');
+  const loraHubWasOpen = useRef(false);
+  if (isOpen && !loraHubWasOpen.current) beginTraceOperation('打开 LoRA Hub');
+  loraHubWasOpen.current = isOpen;
   const [sort, setSort] = useState('Highest Rated');
   const [selectedArch, setSelectedArch] = useState<string>('all');
+  const [credentialPresent, setCredentialPresent] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    const req = credentialRequirementFor(activeProvider);
+    if (!isOpen || !req) return;
+    let stored = '';
+    try { stored = req.storedKey ? String((getStoredApiKeys() as any)[req.storedKey] || '') : ''; } catch { /* no stored keys */ }
+    fetch(`/api/credential-presence?kind=${encodeURIComponent(req.kind)}`, { headers: stored && req.keyHeader ? { [req.keyHeader]: stored } : {} })
+      .then((r) => r.json()).then((d) => setCredentialPresent((p) => ({ ...p, [req.kind]: d?.present === true })))
+      .catch(() => setCredentialPresent((p) => ({ ...p, [req.kind]: false })));
+  }, [isOpen, activeProvider]);
   const [models, setModels] = useState<UnifiedLoRAItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -92,7 +147,23 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
   const [copiedTrigger, setCopiedTrigger] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [catalogNotice, setCatalogNotice] = useState<string | null>(null);
+  const [catalogEvidence, setCatalogEvidence] = useState<CatalogEvidence | null>(null);
   const activeReqIdRef = useRef(0);
+
+  // clean-0942: one LoRA catalog GET per URL per open (StrictMode / repeated effects share it; failures retry).
+  const catalogMemo = useRef(new Map<string, ReturnType<typeof fetchLiveModels>>());
+  const wasOpen = useRef(false);
+  if (isOpen && !wasOpen.current) catalogMemo.current = new Map();
+  wasOpen.current = isOpen;
+  const catalogOncePerOpen = (...args: Parameters<typeof fetchLiveModels>): ReturnType<typeof fetchLiveModels> => {
+    const k = JSON.stringify(args);
+    const hit = catalogMemo.current.get(k);
+    if (hit) return hit;
+    const p = fetchLiveModels(...args);
+    catalogMemo.current.set(k, p);
+    p.catch(() => { if (catalogMemo.current.get(k) === p) catalogMemo.current.delete(k); });
+    return p;
+  };
 
   const fetchModels = async (
     prov = activeProvider,
@@ -110,11 +181,14 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
       setHfCursor(null);
       setMsPage(1);
       setHasMore(true);
+      // New query (incl. provider switch): previous provider's empty-state evidence must not linger.
+      setCatalogNotice(null);
+      setCatalogEvidence(null);
     }
     setErrorMsg(null);
     try {
       const items: UnifiedLoRAItem[] = [];
-      const archQuery = arch === 'all' ? '' : arch;
+      const archQuery = ''; // architecture chips filter loaded items locally (built from their real tags)
 
       // 1. Fetch from Civitai if activeProvider is 'all' or 'civitai'
       if (prov === 'all' || prov === 'civitai') {
@@ -169,7 +243,7 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
       if (prov !== 'civitai') {
         const liveCursor = isLoadMore ? (hfCursor || '') : '';
         const livePage = isLoadMore ? (msPage + 1) : 1;
-        const liveData = await fetchLiveModels(
+        const liveData = await catalogOncePerOpen(
           prov === 'all' ? 'all' : prov,
           searchTerm,
           'LORA',
@@ -180,14 +254,23 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
           36,
           archQuery
         );
+        // Out-of-order guard: a slower response for an earlier provider/query must not overwrite current state.
+        if (currentReqId !== activeReqIdRef.current) return;
 
         const pag = liveData._pagination || {};
         const noticeEntry = Object.entries(liveData as Record<string, unknown>).find(([k, v]) => (k === 'catalogNotice' || k.endsWith('Notice')) && typeof v === 'string');
         setCatalogNotice(noticeEntry ? (noticeEntry[1] as string) : null);
+        const ev = catalogEvidenceFrom(liveData, prov);
+        setCatalogEvidence(ev ? { ...ev, provider: prov } : null);
         if (pag.huggingface?.nextCursor) {
           setHfCursor(pag.huggingface.nextCursor);
         } else if (prov === 'huggingface') {
           setHasMore(false);
+        }
+        // Generic upstream-cursor paging (e.g. Krea GET /styles next_cursor): use exactly what upstream returned.
+        if (prov !== 'huggingface' && prov !== 'all' && (pag as any)[prov]?.paging === 'upstream-cursor') {
+          setHfCursor((pag as any)[prov].nextCursor || '');
+          setHasMore(Boolean((pag as any)[prov].nextCursor));
         }
 
         if (pag.modelscope?.page) {
@@ -212,7 +295,8 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
           if (provKey === '_pagination' || provKey === 'pagination' || provKey === 'catalogNotices' || provKey === 'errors' || provKey === 'results') return;
           if (Array.isArray(list)) {
             list.forEach((m: any) => {
-              const isLoraItem = m.category === "LoRA" || m.type === "LORA" || (m.tags && m.tags.includes("lora")) || (m.id && m.id.toLowerCase().includes("lora")) || (m.name && m.name.toLowerCase().includes("lora"));
+              // Prefer metadata; Fal/schema endpoint catalogs with "lora" in id are gen models, not weights.
+              const isLoraItem = isLoraWeightResource(m, provKey);
 
               if (isLoraItem) {
                 const fam = identifyArchitectureFamily(m.baseModel || m.name || m.id);
@@ -224,15 +308,21 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
                   provKey === 'muapi' ? 'MuAPI' :
                   provKey === 'wavespeed' ? 'WaveSpeed' :
                   provKey === 'sogni' ? 'Sogni' :
+                  provKey === 'krea' ? 'Krea' :
+                  provKey === 'together' ? 'Together' :
+                  provKey === 'aimlapi' ? 'AIMLAPI' :
+                  provKey === 'novita' ? 'Novita' :
+                  provKey === 'venice' ? 'Venice' :
                   provKey === 'runware' ? 'Runware' :
                   provKey === 'modelslab' ? 'ModelsLab' :
+                  provKey === 'replicate' ? 'Replicate' :
                   (provKey === 'tensorart' || provKey === 'tensor') ? 'Tensor.Art' : 'Civitai';
                 
                 // Avoid duplicating civitai items already fetched
                 if (provKey === 'civitai' && items.some((it) => it.id === `civitai-${m.id}`)) return;
 
                 const normalizedProvKey: LoraProviderFilter =
-                  ['huggingface','modelscope','modelscope_ai','fal','muapi','wavespeed','sogni','runware','modelslab','tensorart','tensor'].includes(provKey)
+                  ['huggingface','modelscope','modelscope_ai','fal','muapi','wavespeed','sogni','krea','together','aimlapi','novita','venice','runware','modelslab','replicate','tensorart','tensor'].includes(provKey)
                     ? (provKey === 'tensor' ? 'tensorart' : (provKey as LoraProviderFilter))
                     : 'civitai';
 
@@ -281,6 +371,7 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
                   provider: pName as any,
                   providerKey: normalizedProvKey,
                   baseModel: m.baseModel || '',
+                  baseModelSource: m.baseModelSource,
                   creator: m.creator || m.author || pName,
                   rating: typeof m.rating === 'number' && m.rating > 0 ? m.rating : undefined,
                   downloadCount: typeof m.downloads === 'number' && m.downloads > 0 ? m.downloads : undefined,
@@ -331,6 +422,7 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
       console.warn('LoRA search error:', err);
       if (currentReqId === activeReqIdRef.current) {
         setErrorMsg(`模型检索异常: ${err.message || '网络连接或上游服务异常'}`);
+        setCatalogEvidence(err?.status != null || err?.endpoint ? { provider: prov, endpoint: err.endpoint, status: err.status ?? null, body: typeof err.rawResponse === 'string' ? err.rawResponse : err.rawResponse != null ? JSON.stringify(err.rawResponse) : undefined } : null);
       }
     } finally {
       if (currentReqId === activeReqIdRef.current) {
@@ -340,11 +432,40 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
     }
   };
 
+  // Esc closes the hub (capture phase so inner inputs that stop propagation cannot swallow it).
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); onClose(); } };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [isOpen, onClose]);
+
+  // The spinner must always resolve: a search that has not settled after LORA_SEARCH_WATCHDOG_MS ends with an explicit,
+  // honest client-side message (no upstream response received) instead of spinning forever. No retry, no substitute data.
+  useEffect(() => {
+    if (!loading) return;
+    const reqId = activeReqIdRef.current;
+    const t = setTimeout(() => {
+      if (reqId !== activeReqIdRef.current) return;
+      activeReqIdRef.current += 1; // a late reply for this search is ignored, never shown as this search's result
+      setLoading(false);
+      setLoadingMore(false);
+      setErrorMsg(loraSearchWatchdogMessage(activeProvider, LORA_SEARCH_WATCHDOG_MS));
+    }, LORA_SEARCH_WATCHDOG_MS);
+    return () => clearTimeout(t);
+  }, [loading, activeProvider]);
+
   useEffect(() => {
     if (isOpen) {
       fetchModels(activeProvider, query, sort, selectedArch, false);
     }
-  }, [isOpen, activeProvider, selectedArch]);
+  }, [isOpen, activeProvider]);
+
+  // Evidence is keyed by provider tab: never show another provider's endpoint in this tab's empty state.
+  const shownEvidence = evidenceForTab(catalogEvidence, activeProvider);
+  // Declared no LoRA catalog for this tab: searching cannot return anything, so search controls are disabled with the reason.
+  const noCatalog = shownEvidence?.noUpstreamCall === true && !shownEvidence.endpoint;
+  const noCatalogReason = noCatalog ? `该服务商无 LoRA 目录接口，检索不可用：${shownEvidence?.message || '无 LoRA 目录接口'}` : undefined;
 
   if (!isOpen) return null;
 
@@ -380,7 +501,14 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
         setErrorMsg('URL 不携带执行供应商信息；请先切换到实际执行供应商标签，再导入该 LoRA URL。');
         return;
       }
-      onSelectLoRA({provider:activeProvider,name:rawVal,civitaiId:undefined,triggerWords:'',baseModel:undefined});
+      // Explicit weight URL ≡ typing the same URL into LoRALoader — do not force unresolved.
+      // Strength is intentionally omitted (never invent 0.8); run still requires explicit strength.
+      try {
+        onSelectLoRA({...selectionFromExplicitLoraUrl(activeProvider, rawVal), triggerWords: ''});
+      } catch (error: any) {
+        setErrorMsg(error.message);
+        return;
+      }
       onClose();
       return;
     }
@@ -443,6 +571,31 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
       setErrorMsg(`${activeProvider === 'muapi' ? 'MuAPI' : 'WaveSpeed'} 当前没有已核实的 LoRA 权重目录；请粘贴目标端点实际可读取的 HTTP(S) LoRA URL。`);
       return;
     }
+    if (activeProvider === 'venice' || activeProvider === 'together') {
+      // No FE hard-block: support status comes only from the server provider table
+      // (local block → 「本地拦截 · 未发请求」 + history card; 待确认 → sent verbatim).
+      onSelectLoRA({provider:activeProvider,name:rawVal,civitaiId:undefined,triggerWords:'',baseModel:undefined});
+      onClose();
+      return;
+    }
+    if (activeProvider === 'novita') {
+      // Official request.loras[].model_name = sd_name_in_api from GET /v3/model?filter.types=lora
+      onSelectLoRA({provider:'novita',name:rawVal,civitaiId:undefined,triggerWords:'',baseModel:undefined});
+      onClose();
+      return;
+    }
+    if (activeProvider === 'aimlapi') {
+      // Official loras[].path accepts HuggingFace owner/repo or weight URL.
+      onSelectLoRA({provider:'aimlapi',name:rawVal,civitaiId:undefined,triggerWords:'',baseModel:undefined});
+      onClose();
+      return;
+    }
+    if (activeProvider === 'krea') {
+      // Manual entry = Krea style ID from GET /styles (official LoRA field styles[].id).
+      onSelectLoRA({provider:'krea',name:rawVal,civitaiId:undefined,triggerWords:'',baseModel:undefined});
+      onClose();
+      return;
+    }
     if (activeProvider === 'sogni') {
       onSelectLoRA({provider:'sogni',name:rawVal,civitaiId:undefined,triggerWords:'',baseModel:undefined});
       onClose();
@@ -477,6 +630,20 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
       onClose();
       return;
     }
+    if (activeProvider === 'replicate') {
+      onSelectLoRA({
+        provider: 'replicate',
+        name: rawVal,
+        civitaiId: /^\d+$/.test(rawVal) ? rawVal : undefined,
+        triggerWords: '',
+        baseModel: undefined,
+        resourceVerified: false,
+        resource_source: 'replicate',
+        resource_kind: 'lora',
+      });
+      onClose();
+      return;
+    }
     if (activeProvider === 'all') {
       setErrorMsg('无法从任意字符串可靠判断 LoRA 所属供应商；请先选择具体供应商标签。');
       return;
@@ -495,9 +662,14 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
   };
 
   const displayedModels = models.filter((model) => {
-    if (activeProvider === 'all') return true;
-    return model.providerKey === activeProvider;
+    if (activeProvider !== 'all' && model.providerKey !== activeProvider) return false;
+    return selectedArch === 'all' || (model.baseModel || '').trim() === selectedArch;
   });
+  const architectureChips = architectureChipsFrom(models.filter((m) => activeProvider === 'all' || m.providerKey === activeProvider));
+  const credentialReq = credentialRequirementFor(activeProvider);
+  // Missing declared credential → no cards, no import/mount controls; only the notice.
+  const credentialMissing = !!credentialReq && credentialPresent[credentialReq.kind] !== true;
+  const customImport = credentialMissing ? undefined : customImportFor(activeProvider);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-in fade-in duration-200">
@@ -516,7 +688,7 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
                 </span>
               </h2>
               <p className="text-[11px] text-slate-400">
-                涵盖 Civitai、Hugging Face、魔搭社区 (ModelScope)、Fal.ai、Tensor.Art 全网海量开源与微调 LoRA，支持架构筛选与海量翻页
+                聚合 Civitai / Hugging Face / ModelScope / Tensor.Art 等可检索目录；Fal.ai 无独立公开 LoRA 权重库，需手输权重 URL 或直链。支持架构筛选与翻页
               </p>
             </div>
           </div>
@@ -530,7 +702,7 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
         </div>
 
         {/* Engine Provider Tabs */}
-        <div className="px-6 pt-3 pb-2 bg-[#15161d] border-b border-[#242630] flex items-center gap-2 overflow-x-auto shrink-0 min-h-[46px] scrollbar-thin scrollbar-thumb-white/10 hover:scrollbar-thumb-white/20">
+        <div className="px-6 pt-3 pb-2 bg-[#15161d] border-b border-[#242630] flex flex-wrap items-center gap-x-2 gap-y-1 shrink-0 min-h-[46px]" data-testid="lora-hub-tabs">
           {[
             { id: 'all', name: '全生态聚合' },
             { id: 'civitai', name: 'Civitai (C站社区)' },
@@ -542,17 +714,25 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
             { id: 'muapi', name: 'MuAPI' },
             { id: 'wavespeed', name: 'WaveSpeed' },
             { id: 'sogni', name: 'Sogni' },
+            { id: 'krea', name: 'Krea' },
+            { id: 'together', name: 'Together' },
+            { id: 'aimlapi', name: 'AIMLAPI' },
+            { id: 'novita', name: 'Novita' },
+            { id: 'venice', name: 'Venice' },
             { id: 'runware', name: 'Runware' },
             { id: 'modelslab', name: 'ModelsLab' },
+            { id: 'replicate', name: 'Replicate' },
           ].map((tab) => {
             const isActive = activeProvider === tab.id;
             return (
               <button
                 key={tab.id}
                 onClick={() => {
-                  setActiveProvider(tab.id as any);
                   setModels([]);
-                  fetchModels(tab.id as any, query, sort, selectedArch, false);
+                  setSelectedArch('all');
+                  // Switching tabs: the [isOpen, activeProvider] effect fetches once. Re-click on the active tab: refetch explicitly.
+                  if (tab.id === activeProvider) fetchModels(tab.id as any, query, sort, 'all', false);
+                  else setActiveProvider(tab.id as any);
                 }}
                 className={`pb-2.5 px-3.5 font-semibold transition-all relative whitespace-nowrap text-xs flex items-center gap-1.5 shrink-0 ${
                   isActive ? 'text-cyan-400 font-bold' : 'text-slate-400 hover:text-slate-200'
@@ -573,15 +753,13 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
             <Filter className="w-3.5 h-3.5 text-purple-400" />
             底模架构筛选:
           </span>
-          {ARCHITECTURE_TAGS.map((tag) => {
+          {architectureChips.map((tag) => {
             const isSelected = selectedArch === tag.id;
             return (
               <button
                 key={tag.id}
                 onClick={() => {
                   setSelectedArch(tag.id);
-                  setModels([]);
-                  fetchModels(activeProvider, query, sort, tag.id, false);
                 }}
                 className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold transition-all shrink-0 ${
                   isSelected
@@ -594,7 +772,9 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
             );
           })}
           <div className="ml-auto text-[11px] text-slate-400 font-mono shrink-0">
-            已检索到 <span className="text-purple-400 font-bold">{displayedModels.length}</span> 个模型
+            {noCatalog
+              ? <span data-testid="lora-hub-count">未请求上游目录 · 0 个 LoRA</span>
+              : <span data-testid="lora-hub-count">已检索到 <span className="text-purple-400 font-bold">{displayedModels.length}</span> 个 LoRA</span>}
           </div>
         </div>
 
@@ -606,9 +786,12 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && fetchModels(activeProvider, query, sort, selectedArch, false)}
+              onKeyDown={(e) => e.key === 'Enter' && !noCatalog && fetchModels(activeProvider, query, sort, selectedArch, false)}
+              disabled={noCatalog}
+              title={noCatalogReason}
+              data-testid="lora-hub-search-input"
               placeholder="跨引擎检索 LoRA (如: Cyberpunk, Ghibli, Detail, Face, Armor, Realistic, Anime, Wan)..."
-              className="w-full bg-[#111216] border border-[#2b2d38] focus:border-cyan-500 rounded-xl pl-10 pr-4 py-2 text-xs text-white placeholder-slate-500 outline-none font-mono"
+              className="w-full bg-[#111216] border border-[#2b2d38] focus:border-cyan-500 rounded-xl pl-10 pr-4 py-2 text-xs text-white placeholder-slate-500 outline-none font-mono disabled:bg-[#1a1b20] disabled:text-slate-500 disabled:placeholder-slate-600 disabled:border-slate-700 disabled:cursor-not-allowed"
             />
           </div>
 
@@ -629,61 +812,31 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
 
           <button
             onClick={() => fetchModels(activeProvider, query, sort, selectedArch, false)}
-            disabled={loading}
-            className="px-5 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-xs font-bold text-white flex items-center gap-1.5 shadow-md shadow-purple-600/20 transition-all disabled:opacity-50 shrink-0"
+            disabled={loading || noCatalog}
+            title={noCatalogReason}
+            data-testid="lora-hub-search-button"
+            aria-disabled={loading || noCatalog}
+            className="px-5 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-xs font-bold text-white flex items-center gap-1.5 shadow-md shadow-purple-600/20 transition-all disabled:opacity-50 shrink-0 disabled:from-slate-700 disabled:to-slate-700 disabled:text-slate-400 disabled:shadow-none disabled:cursor-not-allowed"
           >
             {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
             <span>实时检索</span>
           </button>
         </div>
 
-        {/* Universal Dynamic Custom Model / LoRA Import Bar */}
+        {/* Custom import bar: shown only when the provider declares a custom-import capability */}
+        {customImport && (
         <div className="px-6 py-2.5 bg-[#171424] border-b border-purple-900/40 flex flex-wrap items-center justify-between gap-3 text-xs">
           <div className="flex items-center gap-2 text-purple-300">
             <Zap className="w-4 h-4 text-purple-400 shrink-0" />
             <span>
               <strong>自定义/任意 LoRA 动态导入：</strong>
-              {activeProvider === 'huggingface'
-                ? '输入任意 Hugging Face 模型 ID (如 fofr/flux-80s-cyberpunk 或 lightx2v/Qwen-Image-Lightning)'
-                : activeProvider === 'modelscope' || activeProvider === 'modelscope_ai'
-                ? '输入任意 ModelScope 模型 ID (如 damo/wan2.1-t2i)'
-                : activeProvider === 'fal'
-                ? '输入任意 Fal.ai LoRA 路径或 Endpoint'
-                : activeProvider === 'tensorart'
-                ? '输入 Tensor.Art / 吐司 Model ID (如 672390779613802167) 或主页链接'
-                : activeProvider === 'runware'
-                ? '输入 Runware LoRA AIR 标识符 (如 civitai:xxxx@yyyy)'
-                : activeProvider === 'modelslab'
-                ? '输入 ModelsLab lora_model ID 或公开 LoRA 权重 URL'
-                : activeProvider === 'muapi' || activeProvider === 'wavespeed'
-                ? '输入公开可访问的 LoRA 权重 URL (如 Civitai / HF 下载直链)'
-                : activeProvider === 'sogni'
-                ? '输入 Sogni 协议支持的 LoRA 标识符或下载直链'
-                : '输入任意 Civitai 模型 ID / AIR URN (如 138944 或 urn:air:...)'}
+              {customImport.hint}
             </span>
           </div>
           <div className="flex items-center gap-2 flex-1 max-w-md">
             <input
               type="text"
-              placeholder={
-                activeProvider === 'huggingface'
-                  ? '输入 HF Repo ID (如 fofr/flux-80s-cyberpunk)...'
-                  : activeProvider === 'modelscope' || activeProvider === 'modelscope_ai'
-                  ? '输入 ModelScope ID (如 damo/model-id)...'
-                  : activeProvider === 'fal'
-                  ? '输入 Fal.ai LoRA path / Endpoint...'
-                  : activeProvider === 'tensorart'
-                  ? '输入 Tensor.Art / 吐司 Model ID (如 672390779613802167)...'
-                  : activeProvider === 'runware'
-                  ? '输入 Runware AIR (如 civitai:xxxx@yyyy)...'
-                  : activeProvider === 'modelslab'
-                  ? '输入 ModelsLab lora_model ID...'
-                  : activeProvider === 'muapi' || activeProvider === 'wavespeed'
-                  ? '输入 LoRA 权重下载直链 URL...'
-                  : activeProvider === 'sogni'
-                  ? '输入 Sogni LoRA 标识符...'
-                  : '输入 Civitai ID (如 138944) 或 URN...'
-              }
+              placeholder={customImport.placeholder}
               id="custom-universal-lora-input"
               className="flex-1 bg-[#100d1c] border border-purple-800/50 rounded-lg px-3 py-1.5 text-xs text-purple-100 placeholder-purple-400/50 outline-none focus:border-purple-400 font-mono"
             />
@@ -695,6 +848,7 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
             </button>
           </div>
         </div>
+        )}
 
         {activeProvider === 'tensorart' && (
           <div className="px-6 pt-3">
@@ -738,7 +892,12 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
 
         {/* Models Grid */}
         <div className="flex-1 p-6 pb-24 overflow-y-auto bg-[#141518] scrollbar-thin scrollbar-thumb-white/10 hover:scrollbar-thumb-white/20">
-          {loading ? (
+          {credentialMissing ? (
+            <div className="h-64 flex flex-col items-center justify-center gap-2 text-slate-300 text-sm" data-testid="hub-credential-missing">
+              <p>{credentialReq!.notice}</p>
+              {credentialReq!.docUrl && <a href={credentialReq!.docUrl} target="_blank" rel="noopener noreferrer" className="text-cyan-300 underline text-xs">官方说明 ↗</a>}
+            </div>
+          ) : loading ? (
             <div className="h-64 flex flex-col items-center justify-center gap-3 text-slate-400">
               <Loader2 className="w-8 h-8 animate-spin text-purple-400" />
               <p className="text-sm font-medium">正在从官方 API 实时检索云端 LoRA 模型库...</p>
@@ -747,14 +906,28 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
             <div className="h-64 flex flex-col items-center justify-center text-slate-400 space-y-3">
               <Sparkles className="w-10 h-10 text-purple-400/40" />
               <div className="text-center">
-                <p className="text-sm font-bold text-white">
-                  暂未找到匹配的 LoRA 模型
+                <p className="text-sm font-bold text-white" data-testid="lora-hub-empty-conclusion">
+                  {shownEvidence?.noUpstreamCall
+                    ? `未请求上游目录（0 个 LoRA）：${shownEvidence.message || '无 LoRA 目录接口'}${shownEvidence.endpoint ? `（来源：${shownEvidence.endpoint}）` : ''}`
+                    : shownEvidence
+                    ? `${shownEvidence.method || 'GET'} ${shownEvidence.endpoint || '（未记录端点）'} → ${shownEvidence.status != null ? `HTTP ${shownEvidence.status}` : '无上游状态码'}，返回 0 个 LoRA`
+                    : '暂未找到匹配的 LoRA 模型（本次未记录上游请求）'}
                 </p>
-                <p className="text-xs text-slate-500 mt-1">
-                  请尝试清空筛选关键词、切换底模架构或直接在上方输入任意模型 ID 动态载入
-                </p>
-                {catalogNotice && (
-                  <p className="text-[11px] text-amber-300/90 mt-2 max-w-md mx-auto leading-relaxed">
+                {shownEvidence?.body && (
+                  <details className="mt-2 max-w-xl mx-auto text-left">
+                    <summary className="cursor-pointer text-[11px] text-slate-300">上游原文（原样）</summary>
+                    <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-all text-[10px] text-slate-400" data-testid="lora-hub-empty-body">{shownEvidence.body}</pre>
+                  </details>
+                )}
+                {noCatalog ? (
+                  <p className="text-[11px] text-slate-400 mt-2" data-testid="lora-hub-empty-subtext">检索与筛选对该服务商无效（无目录可查）；如需 LoRA，请换有 LoRA 目录的服务商。</p>
+                ) : (
+                  <p className="text-[11px] text-slate-500 mt-2" data-testid="lora-hub-empty-subtext">
+                    请尝试清空筛选关键词、切换底模架构或直接在上方输入任意模型 ID 动态载入
+                  </p>
+                )}
+                {catalogNotice && !(shownEvidence?.noUpstreamCall && shownEvidence?.message && catalogNotice.includes(shownEvidence.message.split('。')[0])) && (
+                  <p className="text-[11px] text-amber-300/90 mt-2 max-w-md mx-auto leading-relaxed" data-testid="lora-hub-catalog-notice">
                     {catalogNotice}
                   </p>
                 )}
@@ -825,8 +998,8 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
                           >
                             {model.provider}
                           </span>
-                          <span className="text-[9px] px-2 py-0.5 rounded-full bg-black/75 backdrop-blur-md text-cyan-300 font-mono border border-cyan-500/30">
-                            {baseArch}
+                          <span title={model.baseModelSource ? `兼容模型：${baseArch}（来源：${model.baseModelSource}）` : undefined} className="text-[9px] px-2 py-0.5 rounded-full bg-black/75 backdrop-blur-md text-cyan-300 font-mono border border-cyan-500/30">
+                            {model.baseModelSource ? `兼容模型：${baseArch}` : baseArch}
                           </span>
                         </div>
 
@@ -866,7 +1039,7 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
                               </span>
                             )}
                           </div>
-                          <span className="text-slate-400 truncate max-w-[90px]">{model.creator}</span>
+                          <span className="text-slate-400 truncate max-w-[90px]" title={model.creator}>{model.creator}</span>
                         </div>
                       </div>
 
@@ -876,8 +1049,9 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
                           <h3 className="font-bold text-white text-xs line-clamp-1 group-hover:text-purple-300 transition-colors" title={model.name}>
                             {model.name}
                           </h3>
-                          <p className="text-[10px] text-slate-400 font-mono truncate" title={model.id}>
-                            ID: {model.id.replace('huggingface-', '').replace('civitai-', '').replace('modelscope-', '')}
+                          <p className="text-[10px] text-slate-400 font-mono truncate" title={model.selection?.name || model.resourceId || model.id}>
+                            {/* Show the identifier that is actually sent (upstream raw id), never the internal namespaced key */}
+                            ID: {model.selection?.name || model.resourceId || model.id}
                           </p>
                         </div>
 
@@ -904,7 +1078,7 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
                               </button>
                             )}
                           </div>
-                          <p className="text-[10px] text-purple-200/90 font-mono line-clamp-2 leading-relaxed break-words">
+                          <p className="text-[10px] text-purple-200/90 font-mono line-clamp-2 leading-relaxed break-words" title={model.triggerWords || undefined}>
                             {model.triggerWords || '上游目录未提供触发词'}
                           </p>
                         </div>
@@ -950,7 +1124,7 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
                                 <div className="flex gap-2">
                                   <button
                                     onClick={() => {
-                                      onSelectLoRA({
+                                      (onFillCurrentLoRANode || onSelectLoRA)({
                                         ...(model.selection || {}),
                                         name: cleanName,
                                         provider: model.selection?.provider || model.providerKey,

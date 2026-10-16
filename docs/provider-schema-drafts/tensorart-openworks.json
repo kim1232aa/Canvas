@@ -1,0 +1,103 @@
+{
+  "$schemaNote": "草案 — 仅声明。2026-10-15 方案 C：OpenWorks 作为普通 Schema 驱动服务商（provider id openworks）。实现 src/server/openWorksProvider.ts",
+  "id": "tensorart-openworks",
+  "displayName": "Tensor.Art OpenWorks",
+  "auth": {
+    "envVar": "TENSORART_OPENWORKS_KEY",
+    "header": "Echo-Access-Key",
+    "format": "ak_tensor_…",
+    "notTams": true
+  },
+  "base": {
+    "root": "https://openapi.tensor.art/openworks/v1"
+  },
+  "catalog": {
+    "method": "POST",
+    "path": "/tool/list",
+    "body": "{}",
+    "canvas": "目录中 outputs[].format 为 image/video 的条目作为普通模型；id = 上游 name",
+    "errors": "非 2xx / code≠0 原文透传"
+  },
+  "predict": {
+    "create": {
+      "method": "POST",
+      "path": "/task",
+      "body": "{toolName: <模型 id>, inputs: [{type,value}] 按 Schema 位置序列化}"
+    },
+    "poll": {
+      "method": "POST",
+      "path": "/task/query",
+      "body": "{taskIds:[id]}",
+      "terminal": {
+        "completed": [
+          "FINISH",
+          "SUCCESS"
+        ],
+        "failed": [
+          "FAILED",
+          "EXCEPTION",
+          "CANCELED"
+        ]
+      }
+    }
+  },
+  "image": {
+    "parameters": "仅上游 Schema 声明字段"
+  },
+  "video": {
+    "supported": "per-model，按 outputs[].format==='video'",
+    "route": "同一通用 Schema 路由 /api/schema-provider/openworks/submit；/api/video/generate 不代理 OpenWorks（本地 400）"
+  },
+  "lora": {
+    "supported": false,
+    "reason": "实测探针无证据",
+    "rule": "需要 LoRA 走 tensorart（TAMS）"
+  },
+  "billing": {
+    "insufficientHints": [],
+    "note": "无 credits/402 专页；原样保留上游 code/message；禁止 fallback 到 TAMS"
+  },
+  "sources": [
+    "https://raw.githubusercontent.com/Tensor-Art/tensorart-skills/master/skills/tensorart-generate/SKILL.md",
+    "https://raw.githubusercontent.com/Tensor-Art/tensorart-skills/master/skills/tensorart-generate/scripts/_api.py",
+    "https://raw.githubusercontent.com/Tensor-Art/tensorart-skills/master/skills/tensorart-generate/scripts/create_task.py",
+    "docs/evidence/openworks-tool-list-2026-10-15.json"
+  ],
+  "paramStatus": {
+    "send": "只发模型自己声明的输入（通常是提示词、宽、高、张数）",
+    "localBlocked": [
+      "seed",
+      "lora",
+      "steps",
+      "cfg",
+      "sampler"
+    ],
+    "reason": "2026-10-15 实测 7 单：上游回 200，但值被静默丢弃（同 seed 两次哈希不同、task/query 无回显、tool/list 未声明）",
+    "evidence": "/workspace/canvas-e2e-tensorart-probe/README.md"
+  },
+  "canvasProviderId": "openworks",
+  "schema": {
+    "source": "上游条目 inputs[]",
+    "propertyName": "上游 description 原文（重复时加 #位置）",
+    "position": "x-openworks-position",
+    "type": "x-openworks-type（STRING/INTEGER/NUMBER/BOOLEAN/ARRAY/FILE）",
+    "required": "全部（上游无可选标记；不得占位）",
+    "arrayItems": "inputs[].schema.items 原样作为 items，必填属性按通用校验"
+  },
+  "mapping": {
+    "canvasFields": "仅当 Schema 属性名等于画布字段或 CANVAS_TO_SCHEMA_ALIASES 别名时发送（与徽标同表）；否则 sent:false 不会发送",
+    "customJson": "键必须为 Schema 属性名，否则本地 400"
+  },
+  "probeGated": {
+    "fields": [
+      "loras",
+      "seed",
+      "steps",
+      "cfg"
+    ],
+    "rule": "仅当画布实测探针证明上游接受且出图变化才会发送；否则本地拦截，被拒时引用上游原文",
+    "evidence": "/workspace/canvas-e2e-tensorart-probe/README.md（2026-10-15 02:39–02:50）：photoreal_studio_z_image 上 seed/steps/cfg/sampler/LoRA 无论 positional、named 还是顶层，上游都 200 不报错但不生效（同 seed 两次 sha256 不同）；23 个条目均未声明这些字段",
+    "current": "全部本地拦截；photoreal_studio_z_image 引用上游 200 原文，其余模型标为未实测"
+  },
+  "contractTestHint": "只发 Schema 声明输入；seed/steps/cfg/loras 本地拦截；视频按 outputs[].format==video；未声明工具本地拒绝"
+}

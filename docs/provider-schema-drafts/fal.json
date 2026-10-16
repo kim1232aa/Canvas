@@ -1,0 +1,294 @@
+{
+  "$schemaNote": "草案 — 仅声明。真相源: docs/provider-api-audit-v2/fal.md + DIFF.md (2026-10-15)",
+  "id": "fal",
+  "displayName": "fal.ai",
+  "auth": {
+    "envVar": "FAL_KEY",
+    "header": "Authorization",
+    "scheme": "Key",
+    "note": "是 Key 不是 Bearer；禁止浏览器端暴露"
+  },
+  "base": {
+    "queue": "https://queue.fal.run",
+    "platform": "https://api.fal.ai/v1"
+  },
+  "catalog": {
+    "global": {
+      "path": "GET https://api.fal.ai/v1/models",
+      "auth": false,
+      "query": [
+        "q",
+        "category",
+        "status",
+        "limit",
+        "cursor",
+        "expand"
+      ],
+      "note": "无 key 200（v2 实测 fal_models.json）；旧审计称无公开目录已否"
+    },
+    "perEndpointOpenAPI": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=<id>（无 key）；部分 expand=openapi-3.0 会 expansion_failed → 改用本 URL",
+    "pricing": "GET https://api.fal.ai/v1/models/pricing?endpoint_id=…（需 Key）"
+  },
+  "predict": {
+    "mode": "async queue",
+    "create": {
+      "method": "POST",
+      "path": "/{model_id}"
+    },
+    "status": {
+      "method": "GET",
+      "path": "/{model_id}/requests/{request_id}/status?logs=1"
+    },
+    "result": {
+      "method": "GET",
+      "path": "/{model_id}/requests/{request_id}"
+    },
+    "cancel": {
+      "method": "PUT",
+      "path": "/{model_id}/requests/{request_id}/cancel"
+    },
+    "statuses": [
+      "IN_QUEUE",
+      "IN_PROGRESS",
+      "COMPLETED"
+    ],
+    "webhook": "fal_webhook="
+  },
+  "image": {
+    "fal-ai/flux-lora": {
+      "seed": {
+        "type": "integer",
+        "echoed": true
+      },
+      "num_inference_steps": {
+        "type": "integer",
+        "default": 28,
+        "canvasField": "steps"
+      },
+      "guidance_scale": {
+        "type": "number",
+        "default": 3.5,
+        "canvasField": "cfg"
+      },
+      "image_size": {
+        "anyOf": [
+          "enum preset",
+          "{width,height}"
+        ],
+        "canvasMapping": "width+height → image_size"
+      },
+      "loras": {
+        "maxItems": "any (merged)"
+      }
+    },
+    "fal-ai/krea-2/turbo/lora": {
+      "seed": {
+        "type": "integer",
+        "note": "image i uses seed+i"
+      },
+      "image_size": {
+        "default": "square_hd",
+        "enum": [
+          "square_hd",
+          "square",
+          "portrait_4_3",
+          "portrait_16_9",
+          "landscape_4_3",
+          "landscape_16_9"
+        ],
+        "orObject": "{width,height} ≤14142"
+      },
+      "num_images": true,
+      "acceleration": true,
+      "enable_prompt_expansion": true,
+      "output_format": true,
+      "num_inference_steps": {
+        "supported": false
+      },
+      "guidance_scale": {
+        "supported": false
+      },
+      "loras": {
+        "maxItems": 3
+      },
+      "openapiVerified": "2026-10-15 queue openapi.json Krea2TurboLoraInput：无 num_inference_steps/guidance_scale；loras maxItems 3；scale 0-4"
+    }
+  },
+  "video": {
+    "supported": true,
+    "outputShape": "video {url,…}（非 images[]）",
+    "fal-ai/wan-t2v-lora": {
+      "prompt": {
+        "required": true
+      },
+      "negative_prompt": true,
+      "num_frames": {
+        "min": 81,
+        "max": 100,
+        "default": 81
+      },
+      "frames_per_second": {
+        "min": 5,
+        "max": 24,
+        "default": 16,
+        "note": "字段名不是 fps"
+      },
+      "seed": {
+        "type": "integer"
+      },
+      "resolution": {
+        "enum": [
+          "480p",
+          "580p",
+          "720p"
+        ],
+        "default": "480p"
+      },
+      "aspect_ratio": {
+        "enum": [
+          "16:9",
+          "9:16"
+        ],
+        "default": "16:9"
+      },
+      "num_inference_steps": {
+        "default": 30
+      },
+      "loras": true,
+      "turbo_mode": {
+        "default": true
+      },
+      "flags": [
+        "enable_safety_checker",
+        "enable_prompt_expansion",
+        "reverse_video"
+      ],
+      "duration": {
+        "supported": false,
+        "reason": "用 num_frames/frames_per_second，无秒数字段"
+      }
+    },
+    "rule": "其他视频模型各有 endpoint 与 schema，勿共用 Wan 字段",
+    "fal-ai/kling-video/v3/standard/image-to-video": {
+      "mode": "image-to-video",
+      "endpoint": "POST https://fal.run/fal-ai/kling-video/v3/standard/image-to-video",
+      "fields": {
+        "prompt": {
+          "sendStatus": "会发送",
+          "sendEvidence": "hist_1792140360652_bq6y0"
+        },
+        "duration": {
+          "sendStatus": "会发送",
+          "wireType": "string",
+          "example": "5",
+          "note": "实发字符串 duration=\"5\"，非数字",
+          "sendEvidence": "hist_1792140360652_bq6y0"
+        },
+        "start_image_url": {
+          "sendStatus": "会发送",
+          "canvasMapping": "本站 image_url / init_image → 官方 start_image_url（实发无 image_url 键）",
+          "sendEvidence": "hist_1792140360652_bq6y0"
+        },
+        "aspect_ratio": {
+          "sendStatus": "未填写，不发送",
+          "note": "本轮画面比例空；actualRequest 无 aspect_ratio"
+        }
+      },
+      "acceptanceBadge": "PASS_BILLING",
+      "notPassGeneration": true,
+      "upstream": {
+        "http": 403,
+        "body": "{\"detail\":\"User is locked. Reason: TOP_UP.\"}",
+        "note": "欠费/锁定原文透传，非出片"
+      },
+      "historyId": "hist_1792140360652_bq6y0",
+      "evidence": "/workspace/canvas-e2e-fal-kling-i2v-1637/",
+      "processNote": "S1 切分后进程 PID 3221919",
+      "挑刺": "无严重（节点标题/模型 ID 裁切属细节，已放行 fix7）",
+      "researchy": {
+        "at": "2026-10-16 16:52 Asia/Shanghai",
+        "note": "403 TOP_UP 与 lock threshold FAQ 一致；支持 PASS_BILLING（非出片）",
+        "sources": [
+          "https://fal.ai/docs/documentation/model-apis/faq",
+          "https://github.com/fal-ai/fal/issues/1189"
+        ]
+      },
+      "formalClose": "2026-10-16 16:54 画布正式收口 PASS_BILLING（挑刺过 + Researchy 已核）"
+    }
+  },
+  "lora": {
+    "item": {
+      "path": {
+        "required": true,
+        "accepts": [
+          "URL",
+          "HF owner/repo",
+          "path"
+        ]
+      },
+      "scale": {
+        "type": "number",
+        "default": 1,
+        "rangeKrea": "0-4"
+      },
+      "weight_name": {
+        "optional": true,
+        "where": "wan-t2v-lora, HF 多文件"
+      }
+    },
+    "unsupported": "schema 无 loras → 拒绝（上游 422），禁止静默剥离",
+    "maxItemsByEndpoint": {
+      "fal-ai/flux-lora": "OpenAPI 原文 any number of LoRAs（无 maxItems）",
+      "fal-ai/krea-2/turbo/lora": "maxItems=3（OpenAPI）"
+    }
+  },
+  "billing": {
+    "model": "prepaid credits；成功产出计费；排队与 500+ 不计费；422 已耗 GPU 可能计费",
+    "insufficientHints": [
+      {
+        "behavior": "低于 lock threshold → 账户锁定，请求被拒"
+      },
+      {
+        "http": 403,
+        "detail": "User is locked. Reason: TOP_UP.",
+        "evidence": "kling i2v bq6y0 2026-10-16"
+      }
+    ],
+    "http402": "未文档化；原样展示上游响应"
+  },
+  "contractTestHint": "flux-lora: steps/cfg/seed/宽高→image_size/loras 必发；krea-2 turbo lora: steps/cfg 必标不会发送、第 4 个 LoRA 本地拒绝；Authorization 头必须以 'Key ' 开头；视频 Kling V3 standard i2v：actualRequest 须含 start_image_url+duration(字符串)；PASS_BILLING（bq6y0，403 TOP_UP，非出片）",
+  "sources": [
+    "https://fal.ai/models/fal-ai/flux-lora/api",
+    "https://fal.ai/models/fal-ai/krea-2/turbo/lora/api",
+    "https://fal.ai/models/fal-ai/wan-t2v-lora/api",
+    "https://fal.ai/docs/documentation/model-apis/inference/queue",
+    "https://fal.ai/docs/documentation/model-apis/faq",
+    "https://api.fal.ai/v1/models",
+    "https://fal.ai/docs/documentation/model-apis/faq.md",
+    "docs/provider-api-audit-v2/fal.md",
+    "docs/provider-api-audit-v2/DIFF.md"
+  ],
+  "_auditStatus": "2026-10-16 16:54：画布正式收口 Kling V3 i2v PASS_BILLING（挑刺无严重 + Researchy TOP_UP 核）；2026-10-16 16:53：Kling V3 standard i2v 升 PASS_BILLING（非 PASS_GENERATION）——hist_1792140360652_bq6y0；403 TOP_UP；actualRequest start_image_url+duration\"5\"；证据 /workspace/canvas-e2e-fal-kling-i2v-1637/；S1 切分后进程。勿写成出片。2026-10-15 04:45 v2 已核（fal.md + DIFF 04:44）：目录 GET /v1/models 无 key 200；lock threshold FAQ 已有；krea-2/turbo/lora 无 steps/guidance、loras≤3。字段徽章仍以前端实测为准",
+  "acceptanceBadgeVideoKlingV3I2v": "PASS_BILLING",
+  "sendEvidence": {
+    "kling_v3_standard_i2v_1637": {
+      "run": "/workspace/canvas-e2e-fal-kling-i2v-1637/",
+      "historyId": "hist_1792140360652_bq6y0",
+      "model": "fal-ai/kling-video/v3/standard/image-to-video",
+      "actualRequest": {
+        "prompt": true,
+        "duration": "5",
+        "start_image_url": true,
+        "aspect_ratio": false,
+        "no_image_url_key": true
+      },
+      "upstream": "HTTP 403 User is locked. Reason: TOP_UP.",
+      "acceptanceBadge": "PASS_BILLING",
+      "notPassGeneration": true,
+      "at": "2026-10-16 16:46 Asia/Shanghai",
+      "挑刺": "无严重",
+      "researchy": "TOP_UP=lock threshold；PASS_BILLING 依据成立",
+      "formalClose": "2026-10-16 16:54"
+    }
+  }
+}

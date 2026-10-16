@@ -1,0 +1,260 @@
+{
+  "provider": "novita",
+  "model": "dreamshaper_8_93211.safetensors",
+  "sourceUrl": "https://api.novita.ai/v3/model?filter.types=checkpoint&filter.visibility=public&pagination.limit=100",
+  "endpoint": "https://api.novita.ai/v3/async/txt2img",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "model_name": {
+        "type": "string",
+        "description": "request.model_name = GET /v3/model?filter.types=checkpoint 的 sd_name_in_api（来源 https://docs.novita.ai/guides/model-apis-v2-to-v3-migration · 抓取 2026-10-16）",
+        "x-source": "https://docs.novita.ai/guides/model-apis-v2-to-v3-migration",
+        "x-fetchedAt": "2026-10-16",
+        "x-liveConfirmed": false,
+        "x-liveConfirmedBy": null,
+        "x-liveConfirmedAt": null
+      },
+      "prompt": {
+        "type": "string",
+        "description": "request.prompt（来源 https://docs.novita.ai/guides/model-apis-v2-to-v3-migration · 抓取 2026-10-15）",
+        "x-source": "https://docs.novita.ai/guides/model-apis-v2-to-v3-migration",
+        "x-fetchedAt": "2026-10-16",
+        "x-liveConfirmed": false,
+        "x-liveConfirmedBy": null,
+        "x-liveConfirmedAt": null
+      },
+      "negative_prompt": {
+        "type": "string",
+        "description": "request.negative_prompt（来源 https://docs.novita.ai/guides/model-apis-v2-to-v3-migration · 抓取 2026-10-15）",
+        "x-source": "https://docs.novita.ai/guides/model-apis-v2-to-v3-migration",
+        "x-fetchedAt": "2026-10-16",
+        "x-liveConfirmed": false,
+        "x-liveConfirmedBy": null,
+        "x-liveConfirmedAt": null
+      },
+      "width": {
+        "type": "integer",
+        "description": "request.width（来源 https://docs.novita.ai/guides/model-apis-v2-to-v3-migration · 抓取 2026-10-15）",
+        "x-source": "https://docs.novita.ai/guides/model-apis-v2-to-v3-migration",
+        "x-fetchedAt": "2026-10-16",
+        "x-liveConfirmed": false,
+        "x-liveConfirmedBy": null,
+        "x-liveConfirmedAt": null
+      },
+      "height": {
+        "type": "integer",
+        "description": "request.height（来源 https://docs.novita.ai/guides/model-apis-v2-to-v3-migration · 抓取 2026-10-15）",
+        "x-source": "https://docs.novita.ai/guides/model-apis-v2-to-v3-migration",
+        "x-fetchedAt": "2026-10-16",
+        "x-liveConfirmed": false,
+        "x-liveConfirmedBy": null,
+        "x-liveConfirmedAt": null
+      },
+      "image_num": {
+        "type": "integer",
+        "description": "request.image_num（来源 https://docs.novita.ai/guides/model-apis-v2-to-v3-migration · 抓取 2026-10-15）",
+        "x-source": "https://docs.novita.ai/guides/model-apis-v2-to-v3-migration",
+        "x-fetchedAt": "2026-10-16",
+        "x-liveConfirmed": false,
+        "x-liveConfirmedBy": null,
+        "x-liveConfirmedAt": null
+      },
+      "steps": {
+        "type": "integer",
+        "description": "request.steps（来源 https://docs.novita.ai/guides/model-apis-v2-to-v3-migration · 抓取 2026-10-15）",
+        "x-source": "https://docs.novita.ai/guides/model-apis-v2-to-v3-migration",
+        "x-fetchedAt": "2026-10-16",
+        "x-liveConfirmed": false,
+        "x-liveConfirmedBy": null,
+        "x-liveConfirmedAt": null
+      },
+      "seed": {
+        "type": "integer",
+        "description": "request.seed（来源 https://docs.novita.ai/guides/model-apis-v2-to-v3-migration · 抓取 2026-10-15）",
+        "x-source": "https://docs.novita.ai/guides/model-apis-v2-to-v3-migration",
+        "x-fetchedAt": "2026-10-16",
+        "x-liveConfirmed": false,
+        "x-liveConfirmedBy": null,
+        "x-liveConfirmedAt": null
+      },
+      "clip_skip": {
+        "type": "integer",
+        "description": "request.clip_skip（来源 https://docs.novita.ai/guides/model-apis-v2-to-v3-migration · 抓取 2026-10-15）",
+        "x-source": "https://docs.novita.ai/guides/model-apis-v2-to-v3-migration",
+        "x-fetchedAt": "2026-10-16",
+        "x-liveConfirmed": false,
+        "x-liveConfirmedBy": null,
+        "x-liveConfirmedAt": null
+      },
+      "sampler_name": {
+        "type": "string",
+        "description": "request.sampler_name（来源 https://docs.novita.ai/guides/model-apis-v2-to-v3-migration · 抓取 2026-10-15）",
+        "x-source": "https://docs.novita.ai/guides/model-apis-v2-to-v3-migration",
+        "x-fetchedAt": "2026-10-16",
+        "x-liveConfirmed": false,
+        "x-liveConfirmedBy": null,
+        "x-liveConfirmedAt": null
+      },
+      "guidance_scale": {
+        "type": "number",
+        "description": "request.guidance_scale（来源 https://docs.novita.ai/guides/model-apis-v2-to-v3-migration · 抓取 2026-10-15）",
+        "x-source": "https://docs.novita.ai/guides/model-apis-v2-to-v3-migration",
+        "x-fetchedAt": "2026-10-16",
+        "x-liveConfirmed": false,
+        "x-liveConfirmedBy": null,
+        "x-liveConfirmedAt": null
+      },
+      "loras": {
+        "type": "array",
+        "description": "request.loras[{model_name, strength}]；model_name = GET /v3/model?filter.types=lora 的 sd_name_in_api；strength ∈ [0,1]；最多 5 个仅见搜索快照，原页 404，未核实（来源 https://docs.novita.ai/guides/model-apis-v2-to-v3-migration ; https://github.com/novitalabs/python-sdk/blob/main/examples/txt2img-with-lora.py · 抓取 2026-10-15）",
+        "x-source": "https://docs.novita.ai/guides/model-apis-v2-to-v3-migration ; https://github.com/novitalabs/python-sdk/blob/main/examples/txt2img-with-lora.py",
+        "x-fetchedAt": "2026-10-16",
+        "items": {
+          "type": "object",
+          "properties": {
+            "model_name": {
+              "type": "string"
+            },
+            "strength": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          },
+          "required": [
+            "model_name",
+            "strength"
+          ]
+        },
+        "x-unverifiedNotes": [
+          "最多 5 个 LoRA：搜索快照，原页 404（未核实，不作本地上限；超限以上游错误原样显示为准）"
+        ],
+        "x-liveConfirmed": false,
+        "x-liveConfirmedBy": null,
+        "x-liveConfirmedAt": null
+      }
+    }
+  },
+  "modelMetadata": {
+    "id": "dreamshaper_8_93211.safetensors",
+    "name": "8",
+    "category": "text-to-image",
+    "family": "SD 1.5",
+    "description": "",
+    "type": "image",
+    "endpoint": "/v3/async/txt2img",
+    "supportsLora": true,
+    "cover_url": "https://next-app-static.s3.amazonaws.com/images-prod/xG1nkqKTMzGDvpLrqFT7WA/dd9b038c-bd15-43ab-86ab-66e145ad7ff2/width=450/1777041.jpeg",
+    "base_model": "SD 1.5",
+    "tags": [
+      "photorealistic",
+      "2d",
+      "woman",
+      "base model",
+      "portraits",
+      "digital art",
+      "illustration",
+      "art style",
+      "paintings",
+      "girls",
+      "fantasy art",
+      "realistic",
+      "anime",
+      "fantasy",
+      "landscapes",
+      "inpainting",
+      "scifi",
+      "3d",
+      "video game",
+      "digital illustration"
+    ],
+    "metadata": {
+      "id": 128713,
+      "name": "8",
+      "hash_sha256": "879DB523C3",
+      "sd_name": "dreamshaper_8_93211.safetensors",
+      "type": {
+        "name": "checkpoint",
+        "display_name": "Checkpoint"
+      },
+      "categories": [],
+      "status": 1,
+      "download_url": "https://civitai.com/api/download/models/128713",
+      "tags": [
+        "photorealistic",
+        "2d",
+        "woman",
+        "base model",
+        "portraits",
+        "digital art",
+        "illustration",
+        "art style",
+        "paintings",
+        "girls",
+        "fantasy art",
+        "realistic",
+        "anime",
+        "fantasy",
+        "landscapes",
+        "inpainting",
+        "scifi",
+        "3d",
+        "video game",
+        "digital illustration"
+      ],
+      "cover_url": "https://next-app-static.s3.amazonaws.com/images-prod/xG1nkqKTMzGDvpLrqFT7WA/dd9b038c-bd15-43ab-86ab-66e145ad7ff2/width=450/1777041.jpeg",
+      "source": "civitai",
+      "base_model": "SD 1.5",
+      "base_model_type": "",
+      "download_url_ttl": 2592000,
+      "sd_name_in_api": "dreamshaper_8_93211.safetensors",
+      "is_nsfw": true,
+      "is_sdxl": false,
+      "is_sd3": false,
+      "model_details": [],
+      "model_name": "dreamshaper_8_93211.safetensors",
+      "in_whitelist": false
+    }
+  },
+  "schemaStatus": "official-html-declaration",
+  "schemaSource": "https://docs.novita.ai/guides/model-apis-v2-to-v3-migration ; https://docs.novita.ai/guides/model-apis-v2-to-v3-migration.md ; https://github.com/novitalabs/python-sdk/blob/main/examples/txt2img-with-lora.py",
+  "declaration": {
+    "file": "src/config/providerDeclarations/novita.txt2img.json",
+    "sources": [
+      "https://docs.novita.ai/guides/model-apis-v2-to-v3-migration",
+      "https://docs.novita.ai/guides/model-apis-v2-to-v3-migration.md",
+      "https://github.com/novitalabs/python-sdk/blob/main/examples/txt2img-with-lora.py"
+    ],
+    "fetchedAt": "2026-10-16"
+  },
+  "schemaUnprobed": true,
+  "schemaConfirmedFields": [],
+  "mediaKind": "image",
+  "credentialRef": "[redacted-uuid]",
+  "schemaRead": {
+    "fetched": true,
+    "readAt": "2026-10-16T00:58:27.221Z",
+    "route": "/api/model-schema"
+  },
+  "executionTrace": [
+    {
+      "provider": "novita",
+      "model": "dreamshaper_8_93211.safetensors",
+      "method": "GET",
+      "endpoint": "https://api.novita.ai/v3/model?filter.types=checkpoint&filter.visibility=public&pagination.limit=100",
+      "status": 200,
+      "statusText": "OK",
+      "responseBody": {
+        "kind": "raw-response",
+        "url": "/api/media/raw/23cee3a7711d46df4affe38e8b3531943af6e0bb62322cd56b86623a6cecca68",
+        "sha256": "23cee3a7711d46df4affe38e8b3531943af6e0bb62322cd56b86623a6cecca68",
+        "size": 87010,
+        "encoding": "utf-8",
+        "fidelity": "original"
+      },
+      "maskedKey": "sk_t...rVwQ",
+      "durationMs": 702
+    }
+  ]
+}

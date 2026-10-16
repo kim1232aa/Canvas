@@ -1,3 +1,5 @@
+import { loraDisplayName } from './loraDisplayName';
+import { explicitProvider } from './graphEditing';
 /** Human-readable provider labels for node titles (never raw ids like GROK_COMPAT). */
 export const PROVIDER_TITLE_LABEL: Record<string, string> = {
   grok_compat: 'Grok 兼容中转',
@@ -16,6 +18,12 @@ export const PROVIDER_TITLE_LABEL: Record<string, string> = {
   muapi: 'MuAPI',
   wavespeed: 'WaveSpeed',
   sogni: 'Sogni',
+  krea: 'Krea',
+  together: 'Together',
+  aimlapi: 'AIMLAPI',
+  novita: 'Novita',
+  venice: 'Venice',
+  openworks: 'Tensor.Art OpenWorks',
   runware: 'Runware',
   modelslab: 'ModelsLab',
   replicate: 'Replicate',
@@ -133,9 +141,10 @@ export function loraLoaderNodeTitle(
 ): string {
   const name = String(loraName ?? '').trim();
   if (!name) return LORA_LOADER_EMPTY_TITLE;
-  const short = name.replace('.safetensors', '');
+  // trace-fix2 #12: a URL LoRA id shows its file name (last path segment), never a URL fragment.
+  const short = loraDisplayName(name).replace('.safetensors', '');
   const raw = String(existingTitle || '').trim();
-  if (raw && raw !== LORA_LOADER_EMPTY_TITLE && raw.includes(short)) return raw;
+  if (raw && raw !== LORA_LOADER_EMPTY_TITLE && raw.includes(short) && !/:\/\//.test(raw)) return raw;
   return `LoRA: ${short}`;
 }
 
@@ -192,4 +201,12 @@ export function sanitizeFrameMarketingTitle(
     return '取景生成框';
   }
   return raw;
+}
+
+/** Canonical display name for any recorded provider value (id or legacy label like 「Tensor.Art (openworks)」). Single source: PROVIDER_TITLE_LABEL. Unknown values pass through verbatim. */
+export function canonicalProviderLabel(provider: string | undefined | null): string {
+  const raw = String(provider || '').trim();
+  if (!raw) return '';
+  const id = explicitProvider(raw);
+  return id && PROVIDER_TITLE_LABEL[id] ? PROVIDER_TITLE_LABEL[id] : raw;
 }

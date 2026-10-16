@@ -1,0 +1,148 @@
+{
+  "_doc": "Provider parameter declaration transcribed from official V3 migration guide (WebFetch 2026-10-16). Body shape: { extra, request }; generation fields live under request. UI badges: filled declared fields → 会发送 / empty → 未填写，不发送 (clean-1029); x-liveConfirmed stays false until FE live confirm upgrades 对照表 — not a UI gate.",
+  "provider": "novita",
+  "operation": "POST /v3/async/txt2img",
+  "endpointPath": "/v3/async/txt2img",
+  "requestWrapper": "request",
+  "resultEndpoint": "GET /v3/async/task-result?task_id=",
+  "sources": [
+    "https://docs.novita.ai/guides/model-apis-v2-to-v3-migration",
+    "https://docs.novita.ai/guides/model-apis-v2-to-v3-migration.md",
+    "https://github.com/novitalabs/python-sdk/blob/main/examples/txt2img-with-lora.py"
+  ],
+  "fetchedAt": "2026-10-16",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "model_name": {
+        "type": "string",
+        "description": "request.model_name = GET /v3/model?filter.types=checkpoint 的 sd_name_in_api（来源 https://docs.novita.ai/guides/model-apis-v2-to-v3-migration · 抓取 2026-10-16）",
+        "x-source": "https://docs.novita.ai/guides/model-apis-v2-to-v3-migration",
+        "x-fetchedAt": "2026-10-16",
+        "x-liveConfirmed": false,
+        "x-liveConfirmedBy": null,
+        "x-liveConfirmedAt": null
+      },
+      "prompt": {
+        "type": "string",
+        "description": "request.prompt（来源 https://docs.novita.ai/guides/model-apis-v2-to-v3-migration · 抓取 2026-10-15）",
+        "x-source": "https://docs.novita.ai/guides/model-apis-v2-to-v3-migration",
+        "x-fetchedAt": "2026-10-16",
+        "x-liveConfirmed": false,
+        "x-liveConfirmedBy": null,
+        "x-liveConfirmedAt": null
+      },
+      "negative_prompt": {
+        "type": "string",
+        "description": "request.negative_prompt（来源 https://docs.novita.ai/guides/model-apis-v2-to-v3-migration · 抓取 2026-10-15）",
+        "x-source": "https://docs.novita.ai/guides/model-apis-v2-to-v3-migration",
+        "x-fetchedAt": "2026-10-16",
+        "x-liveConfirmed": false,
+        "x-liveConfirmedBy": null,
+        "x-liveConfirmedAt": null
+      },
+      "width": {
+        "type": "integer",
+        "description": "request.width（来源 https://docs.novita.ai/guides/model-apis-v2-to-v3-migration · 抓取 2026-10-15）",
+        "x-source": "https://docs.novita.ai/guides/model-apis-v2-to-v3-migration",
+        "x-fetchedAt": "2026-10-16",
+        "x-liveConfirmed": false,
+        "x-liveConfirmedBy": null,
+        "x-liveConfirmedAt": null
+      },
+      "height": {
+        "type": "integer",
+        "description": "request.height（来源 https://docs.novita.ai/guides/model-apis-v2-to-v3-migration · 抓取 2026-10-15）",
+        "x-source": "https://docs.novita.ai/guides/model-apis-v2-to-v3-migration",
+        "x-fetchedAt": "2026-10-16",
+        "x-liveConfirmed": false,
+        "x-liveConfirmedBy": null,
+        "x-liveConfirmedAt": null
+      },
+      "image_num": {
+        "type": "integer",
+        "description": "request.image_num（来源 https://docs.novita.ai/guides/model-apis-v2-to-v3-migration · 抓取 2026-10-15）",
+        "x-source": "https://docs.novita.ai/guides/model-apis-v2-to-v3-migration",
+        "x-fetchedAt": "2026-10-16",
+        "x-liveConfirmed": false,
+        "x-liveConfirmedBy": null,
+        "x-liveConfirmedAt": null
+      },
+      "steps": {
+        "type": "integer",
+        "description": "request.steps（来源 https://docs.novita.ai/guides/model-apis-v2-to-v3-migration · 抓取 2026-10-15）",
+        "x-source": "https://docs.novita.ai/guides/model-apis-v2-to-v3-migration",
+        "x-fetchedAt": "2026-10-16",
+        "x-liveConfirmed": false,
+        "x-liveConfirmedBy": null,
+        "x-liveConfirmedAt": null
+      },
+      "seed": {
+        "type": "integer",
+        "description": "request.seed（来源 https://docs.novita.ai/guides/model-apis-v2-to-v3-migration · 抓取 2026-10-15）",
+        "x-source": "https://docs.novita.ai/guides/model-apis-v2-to-v3-migration",
+        "x-fetchedAt": "2026-10-16",
+        "x-liveConfirmed": false,
+        "x-liveConfirmedBy": null,
+        "x-liveConfirmedAt": null
+      },
+      "clip_skip": {
+        "type": "integer",
+        "description": "request.clip_skip（来源 https://docs.novita.ai/guides/model-apis-v2-to-v3-migration · 抓取 2026-10-15）",
+        "x-source": "https://docs.novita.ai/guides/model-apis-v2-to-v3-migration",
+        "x-fetchedAt": "2026-10-16",
+        "x-liveConfirmed": false,
+        "x-liveConfirmedBy": null,
+        "x-liveConfirmedAt": null
+      },
+      "sampler_name": {
+        "type": "string",
+        "description": "request.sampler_name（来源 https://docs.novita.ai/guides/model-apis-v2-to-v3-migration · 抓取 2026-10-15）",
+        "x-source": "https://docs.novita.ai/guides/model-apis-v2-to-v3-migration",
+        "x-fetchedAt": "2026-10-16",
+        "x-liveConfirmed": false,
+        "x-liveConfirmedBy": null,
+        "x-liveConfirmedAt": null
+      },
+      "guidance_scale": {
+        "type": "number",
+        "description": "request.guidance_scale（来源 https://docs.novita.ai/guides/model-apis-v2-to-v3-migration · 抓取 2026-10-15）",
+        "x-source": "https://docs.novita.ai/guides/model-apis-v2-to-v3-migration",
+        "x-fetchedAt": "2026-10-16",
+        "x-liveConfirmed": false,
+        "x-liveConfirmedBy": null,
+        "x-liveConfirmedAt": null
+      },
+      "loras": {
+        "type": "array",
+        "description": "request.loras[{model_name, strength}]；model_name = GET /v3/model?filter.types=lora 的 sd_name_in_api；strength ∈ [0,1]；最多 5 个仅见搜索快照，原页 404，未核实（来源 https://docs.novita.ai/guides/model-apis-v2-to-v3-migration ; https://github.com/novitalabs/python-sdk/blob/main/examples/txt2img-with-lora.py · 抓取 2026-10-15）",
+        "x-source": "https://docs.novita.ai/guides/model-apis-v2-to-v3-migration ; https://github.com/novitalabs/python-sdk/blob/main/examples/txt2img-with-lora.py",
+        "x-fetchedAt": "2026-10-16",
+        "items": {
+          "type": "object",
+          "properties": {
+            "model_name": {
+              "type": "string"
+            },
+            "strength": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          },
+          "required": [
+            "model_name",
+            "strength"
+          ]
+        },
+        "x-unverifiedNotes": [
+          "最多 5 个 LoRA：搜索快照，原页 404（未核实，不作本地上限；超限以上游错误原样显示为准）"
+        ],
+        "x-liveConfirmed": false,
+        "x-liveConfirmedBy": null,
+        "x-liveConfirmedAt": null
+      }
+    }
+  },
+  "alignedWith": "docs/provider-schema-drafts/novita.json#runtimeSchema (tinkabot, Researchy 2026-10-15 03:25)"
+}

@@ -67,6 +67,7 @@ export function isFalLoraEndpointError(msg: string | null | undefined): boolean 
   if (!msg) return false;
   if (/该服务商不支持/i.test(msg) && /Hugging\s*Face/i.test(msg)) return false;
   if (/该端点不支持 LoRA/.test(msg)) return true;
+  if (/当前模型不支持 LoRA|这模型不能挂 LoRA|请换支持 LoRA 的模型/.test(msg)) return true;
   if (/该服务商不支持/.test(msg) && /loras|LoRA/i.test(msg) && !/Hugging\s*Face/i.test(msg)) return true;
   if (/HTTP\s+\d+/.test(msg) && /Fal/i.test(msg)) return true;
   return false;
@@ -366,9 +367,19 @@ export function resolveActiveCheckpoint(
   return { checkpoint: '', provider: frameProvider || '' };
 }
 
+/** User-facing LoRA-unsupported card / banner / badge (plain Chinese; no schema jargon). */
+export const LORA_UNSUPPORTED_TITLE = '当前模型不支持 LoRA';
+/** Card/banner body: next step only (title already says unsupported). */
+export const LORA_UNSUPPORTED_MESSAGE = '请换支持 LoRA 的模型或先不用这条';
+export const LORA_UNSUPPORTED_EMPTY_CHECKPOINT = '请先选好模型，才能判断能不能挂 LoRA';
+export const LORA_UNSUPPORTED_UNKNOWN_MODEL = '无法确认这模型能不能挂 LoRA，请先选好模型';
+/** Bypass / skip action on LoRA node card. */
+export const LORA_BYPASS_LABEL = '暂时不用这个 LoRA';
+
 /**
  * True when the current endpoint's official schema marks loras as unsupported.
  * Uses providerSchema only — never an unrelated canvas checkpoint.
+ * message is plain Chinese for UI; official refuse detail stays in server fail()/exec log.
  */
 export function isLoraUnsupportedOnEndpoint(
   provider: string | undefined,
@@ -388,7 +399,7 @@ export function isLoraUnsupportedOnEndpoint(
     if (schemaProv) {
       return {
         unsupported: true,
-        message: `该服务商不支持（未选择具体模型 / checkpoint，无法确认 LoRA 支持）`,
+        message: LORA_UNSUPPORTED_EMPTY_CHECKPOINT,
       };
     }
     return { unsupported: false };
@@ -397,11 +408,17 @@ export function isLoraUnsupportedOnEndpoint(
   if (!schemaProv) return { unsupported: false };
 
   const schemaModel = resolveSchemaModelId(schemaProv, modelId);
+  if (!schemaModel) {
+    return {
+      unsupported: true,
+      message: LORA_UNSUPPORTED_UNKNOWN_MODEL,
+    };
+  }
   const spec = getFieldSpec(schemaProv, schemaModel, 'loras');
   if (spec?.status === 'unsupported') {
     return {
       unsupported: true,
-      message: `该服务商不支持（${schemaProv} / ${schemaModel} 的官方 schema 无 loras 字段）`,
+      message: LORA_UNSUPPORTED_MESSAGE,
     };
   }
   return { unsupported: false };
@@ -510,8 +527,7 @@ export function isCanvasFieldUnsupported(
   // Empty checkpoint + loras: never pretend the first schema model was selected.
   // Fal's first model is fal-ai/flux-lora (loras supported) — empty must stay grey / not sent.
   if (!modelId && field === 'loras') return true;
-  // resolveSchemaModelId: empty / foreign checkpoint (e.g. after engine switch) → first schema model
-  // so Fal/Agnes/HF/Grok/OpenAI grey unsupported fields immediately, matching Grok-compat.
+  // resolveSchemaModelId: empty / foreign → undefined (no silent first-model swap).
   const schemaModel = resolveSchemaModelId(schemaProv, model);
   if (!schemaModel) return false;
   return getFieldSpec(schemaProv, schemaModel, field)?.status === 'unsupported';
@@ -714,16 +730,10 @@ export function resolveGenerateLorasPayload<T extends { name?: string; baseModel
   checkpointBaseModel?: string
 ): T[] | undefined {
   void provider;
+  void model;
+  void checkpointBaseModel;
   if (!Array.isArray(mappedLoras)) return [];
-  if (!model) return mappedLoras;
-  return mappedLoras.filter((lora) => {
-    if (!lora || typeof lora !== 'object') return true;
-    const compat = checkLoraArchitectureCompatibility(model, checkpointBaseModel, {
-      name: String(lora.name || ''),
-      baseModel: lora.baseModel,
-    });
-    return compat.compatible;
-  });
+  return [...mappedLoras];
 }
 
 /** Preserve explicit canvas values; endpoint schema validation and its response are authoritative. */

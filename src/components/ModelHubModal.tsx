@@ -1,5 +1,7 @@
+import { beginTraceOperation } from '../services/executionTrace';
 import {TensorCatalogNotice} from './TensorCatalogNotice';
-import {selectionFromMetadata,verifyCivitaiSelection,type ResourceSelection} from '../utils/resourceSelection';
+import {isExplicitLoraWeightUrl,selectionFromExplicitLoraUrl,selectionFromMetadata,verifyCivitaiSelection,type ResourceSelection} from '../utils/resourceSelection';
+import {isLoraWeightResource} from '../utils/isLoraWeightResource';
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Search,
@@ -42,8 +44,9 @@ interface ModelHubModalProps {
     name: string;
     provider?: string;
     civitaiId?: string;
-    modelStrength: number;
-    clipStrength: number;
+    /** Omit until user sets — never invent 0.8 */
+    modelStrength?: number;
+    clipStrength?: number;
     triggerWords?: string;
     baseModel?: string;
   }) => void;
@@ -64,7 +67,7 @@ interface ModelHubModalProps {
 }
 
 export type CategoryFilter = 'all' | 'checkpoint' | 'lora' | 'video' | 'edit';
-export type ProviderTab = 'all' | 'civitai' | 'fal' | 'tensorart' | 'modelscope' | 'modelscope_ai' | 'huggingface' | 'nanogpt' | 'gemini' | 'muapi' | 'wavespeed' | 'sogni' | 'runware' | 'modelslab' | 'agnes' | 'sensenova' | 'openai_compat' | 'grok_compat' | 'replicate';
+export type ProviderTab = 'all' | 'civitai' | 'fal' | 'tensorart' | 'modelscope' | 'modelscope_ai' | 'huggingface' | 'nanogpt' | 'gemini' | 'muapi' | 'wavespeed' | 'sogni' | 'krea' | 'together' | 'aimlapi' | 'novita' | 'venice' | 'openworks' | 'runware' | 'modelslab' | 'agnes' | 'sensenova' | 'openai_compat' | 'grok_compat' | 'replicate';
 export type ModelSortOption = 'downloads' | 'rating' | 'likes' | 'name_asc' | 'name_desc' | 'bookmarked';
 
 const ARCHITECTURE_TAGS = [
@@ -77,7 +80,7 @@ const ARCHITECTURE_TAGS = [
   { id: 'illustrious', label: 'Illustrious' },
   { id: 'qwen', label: 'Qwen-Image' },
   { id: 'z-image', label: 'Z-Image' },
-  {id:'krea',label:'Krea'}, {id:'chroma',label:'Chroma'}, {id:'hunyuan',label:'Hunyuan'}, {id:'kolors',label:'Kolors'}, {id:'pixart',label:'PixArt'}, {id:'auraflow',label:'AuraFlow'}, {id:'anima',label:'Anima'}, {id:'ernie',label:'ERNIE'}, {id:'hidream',label:'HiDream'},
+  {id:'krea',label:'Krea'}, {id:'together',label:'Together'}, {id:'aimlapi',label:'AIMLAPI'}, {id:'novita',label:'Novita'}, {id:'venice',label:'Venice'}, {id:'chroma',label:'Chroma'}, {id:'hunyuan',label:'Hunyuan'}, {id:'kolors',label:'Kolors'}, {id:'pixart',label:'PixArt'}, {id:'auraflow',label:'AuraFlow'}, {id:'anima',label:'Anima'}, {id:'ernie',label:'ERNIE'}, {id:'hidream',label:'HiDream'},
 ];
 
 interface ArchitectureFields { baseModel?: unknown; id?: unknown; name?: unknown; description?: unknown; tags?: unknown }
@@ -207,6 +210,22 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
     });
   };
 
+  // clean-0942: one catalog GET per URL per open. StrictMode double effects, initialProvider/initialCategory settling
+  // after open, and repeated handlers share the in-flight/settled result. Failures are dropped so 重试 refetches.
+  const catalogMemo = useRef(new Map<string, ReturnType<typeof fetchLiveModels>>());
+  const wasOpen = useRef(false);
+  if (isOpen && !wasOpen.current) { catalogMemo.current = new Map(); beginTraceOperation('打开底模中心'); }
+  wasOpen.current = isOpen;
+  const catalogOncePerOpen = (...args: Parameters<typeof fetchLiveModels>): ReturnType<typeof fetchLiveModels> => {
+    const k = JSON.stringify(args);
+    const hit = catalogMemo.current.get(k);
+    if (hit) return hit;
+    const p = fetchLiveModels(...args);
+    catalogMemo.current.set(k, p);
+    p.catch(() => { if (catalogMemo.current.get(k) === p) catalogMemo.current.delete(k); });
+    return p;
+  };
+
   const loadModels = async (
     prov = activeProvider,
     cat = activeCategory,
@@ -241,7 +260,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
       const archQuery = arch === 'all' ? '' : arch;
 
       const backendSort = sort === 'bookmarked' ? 'downloads' : sort;
-      const data = await fetchLiveModels(
+      const data = await catalogOncePerOpen(
         prov,
         searchTerm,
         typeParam,
@@ -284,6 +303,8 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
 
       Object.entries(sourceMap).forEach(([key, val]) => {
         if (key === '_pagination' || key === 'pagination' || key === 'catalogNotices' || key === 'errors' || key === 'results') return;
+        // Ignore legacy results.*Notice / top-level *Notice siblings (human text only belongs in catalogNotices).
+        if (key === 'catalogNotices' || key.endsWith('Notice')) return;
         if (val && typeof val === 'object' && !Array.isArray(val) && (val as any).error) {
           errors[key] = (val as any).error + ((val as any).details ? `: ${(val as any).details}` : '');
         } else if (Array.isArray(val)) {
@@ -361,7 +382,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       const targetCat = initialCategory || 'all';
-      const targetProvider = (initialProvider && !['openai_compat', 'grok_compat', 'agnes'].includes(initialProvider) && ['civitai','fal','tensorart','modelscope','modelscope_ai','huggingface','nanogpt','gemini','muapi','wavespeed','sogni','runware','modelslab','sensenova','replicate'].includes(initialProvider)) ? initialProvider as ProviderTab : 'civitai';
+      const targetProvider = (initialProvider && !['openai_compat', 'grok_compat', 'agnes'].includes(initialProvider) && ['civitai','fal','tensorart','modelscope','modelscope_ai','huggingface','nanogpt','gemini','muapi','wavespeed','sogni','krea','together','aimlapi','novita','venice','openworks','runware','modelslab','sensenova','replicate'].includes(initialProvider)) ? initialProvider as ProviderTab : 'civitai';
       setActiveProvider(targetProvider);
       setActiveCategory(targetCat);
       loadModels(targetProvider, targetCat, query, sortOption, selectedArch, false);
@@ -386,41 +407,22 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
     }));
   }
 
-  // Filter by category
+  // Filter by category — prefer type/category/resourceKind over id substring
+  // (Fal fal-ai/krea-2/turbo/lora is a Checkpoint endpoint, not a LoRA weight).
   if (activeCategory !== 'all') {
     displayList = displayList.filter((m) => {
       const cat = (m.category || m.type || '').toLowerCase();
-      const idLower = (m.id || '').toLowerCase();
-      const nameLower = (m.name || '').toLowerCase();
+      const providerHint = m._sourceProvider || m.provider;
 
       if (activeCategory === 'lora') {
-        return cat.includes('lora') || (m.tags && m.tags.includes('lora')) || idLower.includes('lora') || nameLower.includes('lora') || m.type === 'LORA';
+        return isLoraWeightResource(m, providerHint);
       }
       if (activeCategory === 'video') {
-        return (
-          cat.includes('video') ||
-          (m.tags && m.tags.includes('video')) ||
-          idLower.includes('video') ||
-          idLower.includes('wan') ||
-          idLower.includes('kling') ||
-          idLower.includes('ltx') ||
-          idLower.includes('minimax') ||
-          idLower.includes('hailuo') ||
-          idLower.includes('cogvideo') ||
-          idLower.includes('hunyuan') ||
-          nameLower.includes('视频') ||
-          nameLower.includes('video')
-        );
+        return cat.includes('video') || m.type === 'MotionModule';
       }
       if (activeCategory === 'checkpoint') {
-        return (
-          (cat.includes('checkpoint') || cat.includes('base') || m.type === 'Checkpoint') &&
-          !cat.includes('video') &&
-          !idLower.includes('video') &&
-          !idLower.includes('wan2.1-t2v') &&
-          !cat.includes('lora') &&
-          !idLower.includes('lora')
-        );
+        if (isLoraWeightResource(m, providerHint)) return false;
+        return (cat.includes('checkpoint') || cat.includes('base') || m.type === 'Checkpoint') && !cat.includes('video');
       }
       if (activeCategory === 'edit') {
         return cat.includes('edit') || cat.includes('controlnet') || cat.includes('inpaint') || cat.includes('tools');
@@ -568,6 +570,12 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
             { id: 'muapi', name: 'MuAPI' },
             { id: 'wavespeed', name: 'WaveSpeed' },
             { id: 'sogni', name: 'Sogni' },
+            { id: 'krea', name: 'Krea' },
+            { id: 'together', name: 'Together' },
+            { id: 'aimlapi', name: 'AIMLAPI' },
+            { id: 'novita', name: 'Novita' },
+            { id: 'venice', name: 'Venice' },
+            { id: 'openworks', name: 'Tensor.Art OpenWorks' },
             { id: 'runware', name: 'Runware' },
             { id: 'modelslab', name: 'ModelsLab' },
             { id: 'agnes', name: 'Agnes AI' },
@@ -695,7 +703,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                 : activeProvider === 'huggingface'
                 ? '输入任意 Hugging Face 模型 ID (如 stabilityai/stable-diffusion-xl-base-1.0)'
                 : activeProvider === 'modelscope' || activeProvider === 'modelscope_ai'
-                ? '输入任意 ModelScope 模型 ID (如 damo/wan2.1-t2i)'
+                ? '输入任意 ModelScope 模型 ID (格式 组织名/模型名)'
                 : activeProvider === 'fal'
                 ? '输入任意 Fal.ai 官方端点 (如 fal-ai/flux/dev 或 fal-ai/lora)'
                 : activeProvider === 'nanogpt'
@@ -747,9 +755,10 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
               id="custom-tensor-template-input-modelhub"
               aria-label="自定义模型或 LoRA ID"
               value={customId}
+              data-testid="hub-custom-id"
               disabled={activeProvider === 'all' || importing}
               onChange={(event) => { setCustomId(event.target.value); setImportError(null); }}
-              className="flex-1 bg-[#100d1c] border border-purple-800/50 rounded-lg px-3 py-1.5 text-xs text-purple-100 placeholder-purple-400/50 outline-none focus:border-purple-400"
+              className="flex-1 bg-[#100d1c] border border-purple-800/50 rounded-lg px-3 py-1.5 text-xs text-purple-100 placeholder:text-[#b9a6e0] outline-none focus:border-purple-400"
             />
             <button
               disabled={importing || activeProvider === 'all' || !customId.trim()}
@@ -765,9 +774,19 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                     if(version !== requestVersion.current)return;
                     if(activeCategory==='lora') {
                       if(onSelectLoRAWithBaseModel)onSelectLoRAWithBaseModel(resource);
-                      else if(onAddLora)onAddLora({...resource,modelStrength:0.8,clipStrength:0.8});
+                      else if(onAddLora)onAddLora({...resource}); // never invent 0.8
                     } else onSelectModel(resource.name,resource.name,activeProvider,resource);
                     onClose();return;
+                  }
+                  // LoRA Hub paste of an HTTP(S) weight URL: same executable attachment as LoRALoader typing.
+                  if (activeCategory === 'lora' && isExplicitLoraWeightUrl(rawId)) {
+                    const lora = selectionFromExplicitLoraUrl(activeProvider, rawId);
+                    if (version !== requestVersion.current) return;
+                    if (onSelectLoRAWithBaseModel) onSelectLoRAWithBaseModel(lora);
+                    else if (onAddLora) onAddLora({ ...lora }); // strength must be explicit — never invent 0.8
+                    else throw new Error('当前画布没有可挂载 LoRA 的入口，请先选择底模。');
+                    onClose();
+                    return;
                   }
                   if (activeProvider === 'replicate') {
                     const info = await fetchReplicateModelInfo(rawId);
@@ -788,7 +807,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                         downloadUrl: info?.downloadUrl,
                       };
                       if (onSelectLoRAWithBaseModel) onSelectLoRAWithBaseModel(lora);
-                      else if (onAddLora) onAddLora({ ...lora, modelStrength: 0.8, clipStrength: 0.8 });
+                      else if (onAddLora) onAddLora({ ...lora }); // strength must be explicit — never invent 0.8
                       else onSelectModel(rawId, info?.name || rawId, 'replicate', info);
                     } else {
                       onSelectModel(rawId, info?.name || rawId, 'replicate', info);
@@ -811,7 +830,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                       triggerWords: Array.isArray(words) ? words.join(', ') : String(words),
                       baseModel: info.baseModel || undefined,resourceVerified:['huggingface','tensorart'].includes(activeProvider),resource_source:activeProvider,resource_kind:verifiedType,downloadUrl:info.downloadUrl };
                     if (onSelectLoRAWithBaseModel) onSelectLoRAWithBaseModel(lora);
-                    else if (onAddLora) onAddLora({ ...lora, modelStrength: 0.8, clipStrength: 0.8 });
+                    else if (onAddLora) onAddLora({ ...lora }); // strength must be explicit — never invent 0.8
                     else throw new Error('当前画布没有可挂载 LoRA 的入口，请先选择底模。');
                   } else {
                     onSelectModel(String(info.id), info.name || String(info.id), activeProvider, {...info,resourceVerified:['huggingface','tensorart'].includes(activeProvider),resource_source:activeProvider,resource_kind:verifiedType});
@@ -823,7 +842,9 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                   setImporting(false);
                 }
               }}
-              className="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs whitespace-nowrap shadow-sm active:scale-95 transition-all cursor-pointer"
+              data-testid="hub-custom-id-apply"
+              style={{ opacity: 1 }}
+              className="px-3 py-1.5 rounded-lg bg-[#7e22ce] hover:bg-[#6b21a8] text-white disabled:bg-[#3b2d5e] disabled:text-[#e4dcf5] disabled:cursor-not-allowed font-bold text-xs whitespace-nowrap shadow-sm active:scale-95 transition-all cursor-pointer"
             >
               {importing ? '正在查询…' : activeProvider === 'all' ? '先选择服务商' : '选用此 ID'}
             </button>
@@ -947,10 +968,11 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
               {displayList.map((m: any, i: number) => {
                 const modelId = m.id || m.name;
                 const displayName = m.name || m.id;
-                const isLora = m.type === 'LORA' || m.category === 'LoRA' || modelId.toLowerCase().includes('lora');
-                const isVideo = m.category === 'Video' || modelId.toLowerCase().includes('video') || modelId.toLowerCase().includes('wan2.1-t2v');
                 const providerName = m.provider || m._sourceProvider || 'Cloud API';
                 const providerKey = (m._sourceProvider || m.provider || '').toLowerCase();
+                // Prefer type/category/resourceKind — do not treat Fal gen endpoints with "lora" in id as weights.
+                const isLora = isLoraWeightResource(m, providerKey || m.provider || m._sourceProvider);
+                const isVideo = m.category === 'Video' || modelId.toLowerCase().includes('video') || modelId.toLowerCase().includes('wan2.1-t2v');
                 let resource:ResourceSelection={name:String(modelId),provider:providerKey,resourceVerified:false};
                 try {resource=selectionFromMetadata(providerKey,m,isLora?'lora':'checkpoint');}catch{/* Incomplete catalog metadata does not clear unresolved imports. */}
                 const trainedWords = m.trainedWords || [];
@@ -1240,8 +1262,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                                       onAddLora({
                                         provider: providerKey,
                                         civitaiId: providerKey === 'civitai' && m.id ? String(m.id) : undefined,
-                                        modelStrength: 0.8,
-                                        clipStrength: 0.8,
+                                        // Never invent 0.8 — user must set strength before generate
                                         triggerWords: trainedWords.join(', '),
                                         baseModel: baseArch,
                                         ...resource,
@@ -1272,8 +1293,8 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                               </div>
 
                               <button
-                                title="本地提示词语法，云端接口仍需独立传入 LoRA ID 与权重"
-                                onClick={() => handleCopyText(`lora-syntax-${modelId}`, `<lora:${displayName}:0.8>`)}
+                                title="本地提示词语法占位（无强度）；请自行填写强度，禁止默认 0.8。云端接口仍需独立传入 LoRA ID 与权重"
+                                onClick={() => handleCopyText(`lora-syntax-${modelId}`, `<lora:${displayName}>`)}
                                 className="w-full py-1 rounded bg-[#13141a] hover:bg-[#1c1d25] text-slate-400 hover:text-slate-200 font-mono text-[10px] flex items-center justify-center gap-1 border border-[#242633]"
                               >
                                 {copiedKey === `lora-syntax-${modelId}` ? (

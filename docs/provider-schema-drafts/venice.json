@@ -1,0 +1,338 @@
+{
+  "$schemaNote": "草案 — 仅声明，非可执行驱动。真相源: docs/provider-api-audit-v2/venice.md（Researchy 全量重查完成）+ 前端实测",
+  "id": "venice",
+  "displayName": "Venice",
+  "domainTypes": {
+    "ImageJob": "{ model, prompt, seed?, steps?, cfg_scale?, width?, height?, aspect_ratio?, resolution?, quality?, variants?, format?, negative_prompt?, lora_strength?, style_references? }",
+    "VideoQueueJob": "{ model, duration, prompt?, negative_prompt?, aspect_ratio?, resolution?, image_url?, end_image_url?, audio? }",
+    "CatalogRow": "{ id, type, model_spec: { capabilities, constraints, pricing } }"
+  },
+  "auth": {
+    "envVar": "VENICE_API_KEY",
+    "primary": {
+      "header": "Authorization",
+      "scheme": "Bearer"
+    },
+    "alt": {
+      "name": "x402 wallet",
+      "headers": [
+        "SIGN-IN-WITH-X",
+        "legacy X-Sign-In-With-X"
+      ]
+    },
+    "sources": [
+      "https://docs.venice.ai/llms.txt"
+    ]
+  },
+  "base": {
+    "root": "https://api.venice.ai/api/v1",
+    "openapiVersionStamp": "20261012.214344"
+  },
+  "catalog": {
+    "method": "GET",
+    "path": "/models",
+    "queryType": [
+      "text",
+      "image",
+      "video",
+      "tts",
+      "asr",
+      "embedding",
+      "music",
+      "upscale",
+      "inpaint",
+      "decision",
+      "all"
+    ],
+    "pagination": "none_cursor_full_list",
+    "anonymousAllowed": true,
+    "constraintsFromModelSpec": {
+      "image": [
+        "steps.default/max",
+        "widthHeightDivisor",
+        "aspectRatios",
+        "resolutions"
+      ],
+      "video": [
+        "durations[]",
+        "resolutions[]",
+        "aspect_ratios[]",
+        "model_type",
+        "audio",
+        "audio_configurable"
+      ]
+    },
+    "related": [
+      "/models/traits",
+      "/models/compatibility_mapping"
+    ],
+    "sources": [
+      "https://docs.venice.ai/api-reference/endpoint/models/list",
+      "https://docs.venice.ai/models/overview"
+    ]
+  },
+  "image": {
+    "mode": "sync",
+    "method": "POST",
+    "path": "/image/generate",
+    "outputs": "images[] base64 | binary when return_binary",
+    "poll": null,
+    "parameters": {
+      "seed": {
+        "type": "integer",
+        "min": -999999999,
+        "max": 999999999,
+        "default": 0,
+        "supported": true,
+        "note": "未提供则随机（描述）",
+        "sendStatus": "会发送",
+        "sendEvidence": "FE actualRequest 2026-10-15 venice-sd35"
+      },
+      "steps": {
+        "type": "integer",
+        "default": 8,
+        "note": "部分模型忽略 steps",
+        "sendStatus": "会发送",
+        "sendEvidence": "FE actualRequest 含 steps 20"
+      },
+      "cfg_scale": {
+        "type": "number",
+        "exclusiveMin": 0,
+        "max": 20,
+        "sendStatus": "会发送",
+        "sendEvidence": "FE actualRequest 含 cfg_scale 7.5；历史标签曾误标未发送=显示 bug"
+      },
+      "width": {
+        "type": "integer",
+        "exclusiveMin": 0,
+        "max": 1280,
+        "default": 1024,
+        "when": "pixel models (constraints has widthHeightDivisor, no aspectRatios) e.g. venice-sd35",
+        "sendStatus": "待确认",
+        "sendEvidence": "clean-0544 FE actualRequest 2026-10-15 venice-sd35：width:768 height:1024 实发，无 aspect_ratio/resolution/format；上游 HTTP 402 余额不足（过校验）。同会话 height=1344 → 本地拦截「超出官方 Schema 范围 [0, 1280]」未出站。证据：/workspace/canvas-e2e-clean-0544/outcome.json step5；docs/evidence/clean-0544-fixes-2026-10-15.md。仅像素模型；Qwen 族发宽高会 400，勿一律发。 ⚠ clean-0544 已被挑刺/画布整套退回，仅作线索，不升会发送。"
+      },
+      "height": {
+        "type": "integer",
+        "exclusiveMin": 0,
+        "max": 1280,
+        "default": 1024,
+        "when": "pixel models (constraints has widthHeightDivisor, no aspectRatios) e.g. venice-sd35",
+        "sendStatus": "待确认",
+        "sendEvidence": "同上（max 1280；1344 本地拦截未出站）。 ⚠ clean-0544 整套退回，仅线索。"
+      },
+      "aspect_ratio": {
+        "type": "string",
+        "when": "constraints.aspectRatios present; Qwen family rejects width/height with HTTP 400",
+        "sendStatus": "待确认",
+        "sendEvidence": "Researchy 2026-10-15 live：docs.venice.ai Generate Images · Sizing Options + GET /models?type=image model_spec.constraints。前端未按模型约束实测 actualRequest 前不升会发送。",
+        "sources": [
+          "https://docs.venice.ai/api-reference/endpoint/image/generate",
+          "https://api.venice.ai/api/v1/models?type=image"
+        ]
+      },
+      "resolution": {
+        "type": "string",
+        "examples": [
+          "1K",
+          "2K",
+          "4K"
+        ],
+        "when": "constraints.resolutions present (with aspect_ratio)",
+        "sendStatus": "待确认",
+        "sendEvidence": "同上 Researchy 2026-10-15；未前端实测不升会发送"
+      },
+      "quality": {
+        "enum": [
+          "low",
+          "medium",
+          "high"
+        ]
+      },
+      "variants": {
+        "min": 1,
+        "max": 4,
+        "when": "return_binary=false"
+      },
+      "negative_prompt": {
+        "type": "string",
+        "maxLength": 7500,
+        "sendStatus": "待确认",
+        "sendEvidence": "clean-0544 FE actualRequest 2026-10-15 venice-sd35 含 negative_prompt，同包至上游 402。证据：/workspace/canvas-e2e-clean-0544/outcome.json step5。 ⚠ clean-0544 已被挑刺/画布整套退回，仅作线索，不升会发送。"
+      },
+      "lora_strength": {
+        "type": "integer",
+        "min": 0,
+        "max": 100,
+        "supported": true,
+        "note": "Only applies if the model uses additional Loras — 捆绑附加 LoRA 强度，不是自定义 loras[]。Live swagger 2026-10-15 确认。x-liveConfirmed 待 FE 实测。",
+        "x-liveConfirmed": false,
+        "sendStatus": "待确认",
+        "sendEvidence": "官方有 lora_strength 0–100（捆绑附加 LoRA，非自定义 loras[]）。Live probe 2026-10-15：lora_strength:50 → HTTP 402 余额不足（过校验到计费层）→ 字段被上游接受；升会发送仍须被认过的 FE actualRequest 含该键。（docs/evidence/together-venice-lora-live-probe-2026-10-15.md） UI（2026-10-16 画布拍板）：空值写「未填写，不发送」，不加回「待确认」徽章；填了值须照实发出；发没发出以历史 actualRequest 为准。草案 sendStatus「待确认」仅表示尚无被认过的 FE 实发证据，不是 UI 文案。"
+      },
+      "format": {
+        "type": "string",
+        "enum": [
+          "jpeg",
+          "png",
+          "webp"
+        ],
+        "default": "webp",
+        "supported": true,
+        "note": "Live swagger GenerateImageRequest 2026-10-15; fillable via SchemaChoiceControls / canvas outputFormat→format alias. Never hardcode.",
+        "sources": [
+          "https://api.venice.ai/doc/api/swagger.yaml",
+          "https://docs.venice.ai/api-reference/endpoint/image/generate"
+        ],
+        "x-liveConfirmed": false
+      }
+    },
+    "alsoOpenaiCompatPath": "/image/generations",
+    "sources": [
+      "https://docs.venice.ai/api-reference/endpoint/image/generate",
+      "https://docs.venice.ai/api-reference/endpoint/image/generations"
+    ]
+  },
+  "video": {
+    "supported": true,
+    "mode": "async",
+    "optionalQuote": {
+      "method": "POST",
+      "path": "/video/quote"
+    },
+    "create": {
+      "method": "POST",
+      "path": "/video/queue",
+      "returns": "queue_id"
+    },
+    "poll": {
+      "method": "POST",
+      "path": "/video/retrieve",
+      "body": {
+        "queue_id": "required"
+      }
+    },
+    "completeOnce": {
+      "method": "POST",
+      "path": "/video/complete",
+      "note": "一次等完"
+    },
+    "required": [
+      "model",
+      "duration"
+    ],
+    "durationEnumExamples": [
+      "5s",
+      "10s",
+      "auto",
+      "-1"
+    ],
+    "parameters": {
+      "seed": {
+        "supported": false,
+        "reason": "QueueVideoRequest OpenAPI 属性列表未出现；勿臆造"
+      },
+      "fps": {
+        "supported": false,
+        "reason": "无通用 fps；增强模型有 target_fps 16–120"
+      },
+      "prompt": {
+        "optional": true
+      },
+      "negative_prompt": {
+        "optional": true
+      },
+      "aspect_ratio": {
+        "optional": true
+      },
+      "resolution": {
+        "examples": [
+          "480p",
+          "720p",
+          "1080p"
+        ]
+      },
+      "image_url": {
+        "optional": true
+      },
+      "end_image_url": {
+        "optional": true
+      },
+      "audio": {
+        "optional": true
+      }
+    },
+    "lora": {
+      "supported": false,
+      "reason": "视频路径无自定义 LoRA 文档"
+    },
+    "sources": [
+      "https://docs.venice.ai/api-reference/endpoint/video/queue",
+      "https://docs.venice.ai/api-reference/endpoint/video/retrieve"
+    ]
+  },
+  "lora": {
+    "customUrlOrPathArray": false,
+    "image": {
+      "lora_strength": {
+        "type": "integer",
+        "min": 0,
+        "max": 100,
+        "meaning": "Only applies if the model uses additional Loras — 已捆绑附加 LoRA 的模型调强度，不是挂任意 Civitai/HF 权重",
+        "sendStatus": "待确认",
+        "sendEvidence": "官方有 lora_strength 0–100（捆绑附加 LoRA，非自定义 loras[]）。Live probe 2026-10-15：lora_strength:50 → HTTP 402 余额不足（过校验到计费层）→ 字段被上游接受；升会发送仍须被认过的 FE actualRequest 含该键。（docs/evidence/together-venice-lora-live-probe-2026-10-15.md） UI（2026-10-16 画布拍板）：空值写「未填写，不发送」，不加回「待确认」徽章；填了值须照实发出；发没发出以历史 actualRequest 为准。草案 sendStatus「待确认」仅表示尚无被认过的 FE 实发证据，不是 UI 文案。"
+      },
+      "style_references": {
+        "notLora": true,
+        "shape": "{ image, strength?: 0.1-1 }",
+        "requires": "model supportsStyleReferences"
+      },
+      "uiRule": "用户挂自定义 LoRA → 应拒绝；勿静默丢弃或伪造 loras[]",
+      "customLoras": {
+        "sendStatus": "不会发送",
+        "sendEvidence": "FE 2026-10-15：挂 0.85 本地拦截；canvas-dev 实测 2026-10-15 上游 400「Unrecognized key(s) in object: 'loras'」→ 本地拦截有实测依据（docs/evidence/together-venice-lora-live-probe-2026-10-15.md）"
+      }
+    },
+    "sources": [
+      "https://docs.venice.ai/api-reference/endpoint/image/generate"
+    ]
+  },
+  "billing": {
+    "balance": {
+      "method": "GET",
+      "path": "/billing/balance",
+      "auth": "Bearer"
+    },
+    "x402": {
+      "balancePath": "/x402/balance/{wallet}",
+      "responseHeader": "X-Balance-Remaining"
+    },
+    "insufficientHints": [
+      {
+        "http": 402,
+        "apiKey": "INSUFFICIENT_BALANCE",
+        "x402": "PAYMENT_REQUIRED + topUpInstructions"
+      }
+    ],
+    "sources": [
+      "https://docs.venice.ai/api-reference/endpoint/billing/balance",
+      "https://docs.venice.ai/api-reference/endpoint/image/generate",
+      "https://docs.venice.ai/api-reference/endpoint/video/queue"
+    ]
+  },
+  "acceptanceNotes": [
+    "图像同步、视频异步 — 勿混用轮询模型",
+    "无通用自定义 LoRA；只有 lora_strength（0–100）；挂自定义 → 本地拒绝",
+    "视频不要发 seed（除非将来 OpenAPI 新增）",
+    "按 /models constraints 切换 width/height vs aspect_ratio/resolution",
+    "欠费展示真实 402 正文，勿改写成成功",
+    "2026-10-15 clean-0544：venice-sd35 actualRequest 证实 width/height/negative_prompt/seed/steps/cfg_scale 会发送（至 402）；height>1280 本地拦。aspect_ratio/resolution/lora_strength/format 仍待确认。",
+    "2026-10-16：UI 废「待确认」徽章；空字段「未填写，不发送」；填值以 actualRequest 验收。"
+  ],
+  "runtimeSchema": {
+    "source": "https://api.venice.ai/doc/api/swagger.yaml + /api/v1/models?type=image constraints",
+    "use": "接口级 OpenAPI 叠加按模型 constraints；字段经实测才标会发送",
+    "checked": "Researchy v2 + 画布 FE 2026-10-15"
+  },
+  "contractTestHint": "按 model_spec.constraints 分三类发尺寸，禁止一律宽高：①像素（如 venice-sd35）actualRequest 须含 width/height（clean-0544 线索：会发、height>1280 本地拦；该轮整套退回，待干净轮证实）；②比例（Qwen 族）只发 aspect_ratio，发宽高会 400；③档位（nano-banana/gpt-image-2）发 aspect_ratio+resolution。另：seed/steps/cfg_scale 像素模型会发送已证实；negative_prompt 待确认（clean-0544 仅线索）；lora_strength：空值 UI 写「未填写，不发送」（2026-10-16 画布废「待确认」徽章）；填了须发出；草案 sendStatus 仍待确认至被认过的 FE actualRequest（live 过校验至 402）；自定义 LoRA 本地拒（live 上游 400 Unrecognized key loras）；视频勿发 seed；历史徽标不得把已实发 cfg_scale 标未发送。",
+  "_auditStatus": "2026-10-16 ~09:30 JST tinkabot：对齐画布拍板——UI 不加回「待确认」；空值「未填写，不发送」；草案 lora_strength 等仍待确认至被认 FE 实发。前序 2026-10-15 07:13：clean-0544 整套退回，宽高/negative 仅线索。 2026-10-15 07:13 tinkabot 撤回：clean-0544 已整套退回，width/height/negative_prompt 回退待确认，仅保留为线索。2026-10-15 07:09 tinkabot：认领 clean-0544——venice-sd35 干净会话 actualRequest 含 width/height/negative_prompt→ 升会发送；height=1344 本地拦坐实 max 1280。前序 06:38：live probe lora_strength/自定义 LoRA。aspect_ratio/resolution/lora_strength/format 仍待确认（本轮未测比例/档位模型；lora_strength 无 FE actualRequest 键）。"
+}

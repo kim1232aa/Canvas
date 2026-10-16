@@ -132,7 +132,7 @@ export const ARCHITECTURE_PROFILES: Record<ModelArchitectureFamily, BaseArchitec
     family: 'wan21',
     displayName: 'Wan 2.1 (通义万相 2.1 中文生图/生视频)',
     recommendedCheckpoint: 'wan2.1-t2i',
-    alternativeCheckpoints: ['damo/wan2.1-t2i', 'wan2.1-t2v'],
+    alternativeCheckpoints: ['wan2.1-t2v'],
     recommendedSteps: 30,
     recommendedCfg: 6.0,
     recommendedSampler: 'euler',
@@ -283,31 +283,13 @@ export function validateModelCompatibility(
     };
   }
 
-  // 3. SDXL cross-compatibility with Pony & Illustrious
-  const isSdxlCross =
-    (ckptFamily === 'sdxl' && (loraFamily === 'pony' || loraFamily === 'illustrious')) ||
-    (ckptFamily === 'pony' && loraFamily === 'sdxl') ||
-    (ckptFamily === 'illustrious' && loraFamily === 'sdxl');
-
-  if (isSdxlCross) {
-    return {
-      isCompatible: true,
-      verification: 'unverified',
-      message: `SDXL 衍生家族兼容性待上游或 metadata 验证 (${ARCHITECTURE_PROFILES[ckptFamily].displayName})`,
-    };
-  }
-
-  const rec = ARCHITECTURE_PROFILES[loraFamily];
-  
-  const ckptArch = ARCHITECTURE_PROFILES[ckptFamily].displayName;
-  const loraArch = rec.displayName;
-  const loraBase = loraBaseModelRaw || loraArch;
+  // 2026-10-15 audit: families come from substring guesses over names (e.g. 'z-image' was mapped to Krea 2,
+  // 'xl' / 'wan' / 'google' match unrelated ids) — not from upstream metadata on both sides. A guess can neither
+  // block nor warn (iron rules 1/5), so a family difference is reported as unverified, never 「底模架构不匹配」.
   return {
-    isCompatible: false,
-      verification:'incompatible',
-    message:
-      `底模架构不匹配：当前底模为【${checkpointName}】（${ckptArch}），但此 LoRA 基于【${loraBase}】（${loraArch}）。` +
-      `请自行选择与该 LoRA 匹配的底模；保留现有 LoRA / seed；负向与采样器按导入原样（空或「未指定」都算原样）。`,
+    isCompatible: true,
+    verification: 'unverified',
+    message: `底模与 LoRA 兼容性待上游或 metadata 验证 (${loraBaseModelRaw || loraName || checkpointName})`,
   };
 }
 

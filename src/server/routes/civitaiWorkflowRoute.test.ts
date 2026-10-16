@@ -288,35 +288,37 @@ describe('Civitai Routes and Workflow Contract Tests', () => {
       expect(res.data.success).toBe(true);
 
       const preset = res.data.preset;
-      // Multi-version note in title and description
-      expect(preset.name).toContain('默认版本: v2.0 Latest');
+      // Multi-version never picks versions[0] ("多版本不取 first")
+      expect(preset.name).toContain('含 2 个版本，待显式选择 versionId');
       expect(preset.description).toContain('该模型包含 2 个版本');
-      expect(preset.description).toContain('已明确选用默认最新版本“v2.0 Latest”(#1001)');
+      expect(preset.description).toContain('严禁默认取第一个版本 (versions[0])');
 
       // Verify selectedMultiVersion metadata
       expect(preset.selectedMultiVersion).toMatchObject({
-        id: 1001,
-        name: 'v2.0 Latest',
-        isDefaultLatest: true,
+        id: null,
+        name: '',
+        isDefaultLatest: false,
+        requiresExplicitSelection: true,
         totalVersionsCount: 2,
       });
       expect(res.data.otherMetadata.selectedMultiVersion).toMatchObject({
-        id: 1001,
-        name: 'v2.0 Latest',
+        id: null,
+        requiresExplicitSelection: true,
       });
       expect(res.data.parsedMeta.selectedMultiVersion).toMatchObject({
-        id: 1001,
-        name: 'v2.0 Latest',
+        id: null,
+        requiresExplicitSelection: true,
       });
 
       // Never construct LoRALoader for Checkpoint model
       const loraNodes = preset.nodes.filter((n: any) => n.type === 'LoRALoader');
       expect(loraNodes).toHaveLength(0);
 
-      // Checkpoint loader node exists with proper civitai reference
+      // Checkpoint loader node exists with empty ckpt_name requiring explicit version selection
       const ckptNode = preset.nodes.find((n: any) => n.type === 'CheckpointLoaderSimple');
       expect(ckptNode).toBeDefined();
-      expect(ckptNode.values.ckpt_name).toBe('civitai:888@1001');
+      expect(ckptNode.values.ckpt_name).toBe('');
+      expect(ckptNode.values.import_requires_model_selection).toBe(true);
     });
 
     it('creates LoRALoader for LoRA model and clears checkpoint if only raw baseModel text is present', async () => {

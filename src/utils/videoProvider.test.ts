@@ -10,7 +10,7 @@ describe('F4 / soft-visual-4 videoProvider — model select syncs provider; empt
     expect(resolveAIVideoModelProvider('fal-ai/wan-t2v')).toBe('fal');
     expect(resolveAIVideoModelProvider('fal-ai/wan/v2.7/text-to-video')).toBe('fal');
     expect(resolveAIVideoModelProvider('text2video_wan27')).toBeUndefined();
-    expect(()=>assertAIVideoProviderReady('text2video_wan27','tensorart')).toThrow(/工具不是视频模型/);
+    expect(()=>assertAIVideoProviderReady('text2video_wan27','tensorart')).toThrow(/OpenWorks 视频模型请在模型中心选择「Tensor.Art OpenWorks」服务商[\s\S]*不会回退到 Fal/);
     expect(resolveAIVideoModelProvider('agnes-video-2.5-flash')).toBe('agnes');
     expect(resolveAIVideoModelProvider('grok-imagine-video')).toBe('grok_compat');
     expect(resolveAIVideoModelProvider('custom-unknown-endpoint')).toBeUndefined();

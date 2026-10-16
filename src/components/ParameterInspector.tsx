@@ -1,3 +1,6 @@
+import { noteUserModelSelection } from '../services/userModelSelection';
+import { civitaiEngines, civitaiEcosystemsFor } from '../schemas/providerSchema';
+import { ensureModelSchema, withCachedSchemaProperties } from '../services/modelSchemaCache';
 import {ApiParameterEditor} from './ApiParameterEditor';
 import {videoDurationBounds} from '../utils/frontendParameters';
 import {ProviderModelSelect} from './ProviderModelSelect';
@@ -25,11 +28,15 @@ import { ComfyParameters } from '../types/graph';
 import { SAMPLER_OPTIONS, SCHEDULER_OPTIONS } from '../constants/nodes';
 import { refinePromptWithGemini, getRefineModelSelection } from '../services/api';
 import { validateLoraCompatibility } from '../utils/baseModelMatcher';
-import { isLoraUnsupportedOnEndpoint } from '../utils/resolveCheckpoint';
+import { isLoraUnsupportedOnEndpoint, toSchemaProvider, LORA_UNSUPPORTED_TITLE } from '../utils/resolveCheckpoint';
 import { normalizeForComfyUI } from '../utils/engineParameterNormalizer';
 import { GeminiFieldSelect } from './GeminiFieldSelect';
-import { FieldStatusBadge } from './FieldStatusBadge';
+import { FieldStatusBadge, SchemaSendBadge } from './FieldStatusBadge';
+import { SCHEMA_OMIT_REASON, readDeclaredSchemaProperties } from '../utils/schemaSendHint';
+import { schemaSendStatus } from '../utils/schemaSendStatus';
+import { parseExplicitLoraStrength } from '../utils/loraStrength';
 import { fieldOptions, getFieldSpec, resolveSchemaModelId, type FieldKey, type Provider as SchemaProvider } from '../schemas/providerSchema';
+import { middleEllipsis } from '../utils/middleEllipsis';
 
 interface ParameterInspectorProps {
   params: ComfyParameters;
@@ -45,6 +52,10 @@ interface ParameterInspectorProps {
   onClose?: () => void;
   title?: string;
   isFloatingDrawer?: boolean;
+  /** Execution node has a real reference-image input (img2img). Without it denoise/strength is not sent. */
+  hasImageInput?: boolean;
+  /** clean-0942: why the selected model does not reach the sampler (same reason the Run gate shows). */
+  modelChainIssue?: string;
 }
 
 export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
@@ -61,6 +72,8 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
   onClose,
   title = 'ComfyUI 核心参数总控台',
   isFloatingDrawer = true,
+  hasImageInput,
+  modelChainIssue,
 }) => {
   const [copiedComfyJson, setCopiedComfyJson] = React.useState(false);
   const [copiedTrigger, setCopiedTrigger] = React.useState<string | null>(null);
@@ -98,24 +111,14 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
   const isGemini = params.targetProvider === 'gemini';
   const isOpenAiCompat = params.targetProvider === 'openai_compat';
   const isGrokCompat = params.targetProvider === 'grok_compat';
-  const schemaProvider: SchemaProvider | undefined =
-    params.targetProvider === 'gemini' ||
-    params.targetProvider === 'fal' ||
-    params.targetProvider === 'civitai' ||
-    params.targetProvider === 'openai_compat' ||
-    params.targetProvider === 'grok_compat' ||
-    params.targetProvider === 'agnes' ||
-    params.targetProvider === 'huggingface' ||
-    params.targetProvider === 'nanogpt' ||
-    params.targetProvider === 'tensorart' ||
-    params.targetProvider === 'sensenova'
-      ? (params.targetProvider as SchemaProvider)
+  const schemaProvider: SchemaProvider | undefined = toSchemaProvider(params.targetProvider);
+  // Prefer checkpoint when it exists in schema; empty/unknown → undefined (no silent listModels[0]).
+  const civitaiSchemaId =
+    schemaProvider === 'civitai' && params.civitaiEngine && params.civitaiEcosystem
+      ? `${params.civitaiEngine}:${params.civitaiEcosystem}`
       : undefined;
-  // Prefer checkpoint when it exists in schema; else first model for provider so
-  // grok/openai enum selects (aspect_ratio/resolution/size/…) still render when
-  // checkpoint is empty or leftover from another provider.
   const schemaModel = schemaProvider
-    ? resolveSchemaModelId(schemaProvider, params.checkpoint)
+    ? resolveSchemaModelId(schemaProvider, civitaiSchemaId || params.checkpoint)
     : (params.checkpoint || '');
   const fieldUnsupported = (field: FieldKey) =>
     Boolean(schemaProvider && schemaModel && getFieldSpec(schemaProvider, schemaModel, field)?.status === 'unsupported');
@@ -128,12 +131,31 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
   const greyDenoise = isOpenAiCompat || isGrokCompat || fieldUnsupported('denoise');
   const endpointLoraUnsupported = isLoraUnsupportedOnEndpoint(
     params.targetProvider,
-    params.checkpoint,
+    civitaiSchemaId || params.checkpoint,
   ).unsupported;
   const greyLoras = isOpenAiCompat || isGrokCompat || fieldUnsupported('loras') || endpointLoraUnsupported;
   const greyWidthHeight = isGemini || isOpenAiCompat || isGrokCompat || fieldUnsupported('width') || fieldUnsupported('height');
   const greyNegative = isOpenAiCompat || isGrokCompat || fieldUnsupported('negative_prompt');
   const greyNumImages = fieldUnsupported('num_images');
+  ensureModelSchema(params.targetProvider, params.checkpoint);
+  const customParamsJson = withCachedSchemaProperties(params.targetProvider, params.checkpoint, params.customParameters);
+  const sendSteps = schemaSendStatus(params.targetProvider, 'steps', (params as any).steps, customParamsJson);
+  const omitSteps = sendSteps === 'not_sent';
+  const sendCfg = schemaSendStatus(params.targetProvider, 'cfg', (params as any).cfg, customParamsJson);
+  const omitCfg = sendCfg === 'not_sent';
+  const sendSampler = schemaSendStatus(params.targetProvider, 'sampler', (params as any).sampler, customParamsJson);
+  const omitSampler = sendSampler === 'not_sent';
+  const sendScheduler = schemaSendStatus(params.targetProvider, 'scheduler', (params as any).scheduler, customParamsJson);
+  const omitScheduler = sendScheduler === 'not_sent';
+  const sendDenoiseUnscoped = schemaSendStatus(params.targetProvider, 'denoise', (params as any).denoise, customParamsJson, undefined, undefined, { hasReferenceImage: true });
+  const sendDenoiseSchema = schemaSendStatus(params.targetProvider, 'denoise', (params as any).denoise, customParamsJson, undefined, undefined, { hasReferenceImage: hasImageInput !== false });
+  // Same plan as the payload: no reference image ⇒ omitted; keep the specific 「无参考图」 wording when the Schema would otherwise accept it.
+  const sendDenoise = sendDenoiseSchema === 'not_sent' && sendDenoiseUnscoped !== 'not_sent' && hasImageInput === false ? 'no_image' as const : sendDenoiseSchema;
+  const omitDenoise = sendDenoise === 'not_sent';
+  const sendWidthHeight = schemaSendStatus(params.targetProvider, 'width', (params as any).width, customParamsJson);
+  const sendLoras = schemaSendStatus(params.targetProvider, 'loras', params.loras?.length ? params.loras : undefined, customParamsJson);
+  const omitWidthHeight = sendWidthHeight === 'not_sent';
+  const schemaDeclaresAspectRatio = !!readDeclaredSchemaProperties(customParamsJson)?.has('aspect_ratio');
   const schemaSelect = (field: FieldKey, value: string, onChange: (v: string) => void, label: string) => {
     if (!schemaProvider || !schemaModel) return null;
     const spec = getFieldSpec(schemaProvider, schemaModel, field);
@@ -278,11 +300,12 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
 
             {/* Negative Prompt */}
             {onChangeNegativePrompt && (
-              <div className="space-y-1">
-                <div className="flex items-center justify-between text-[10px]">
-                  <label className="text-rose-400 font-mono font-semibold flex items-center gap-1.5">
-                    负向提示词 (Negative Prompt)
+              <div className="space-y-1" data-testid="inspector-negative-prompt">
+                <div className="flex flex-wrap items-start justify-between gap-2 text-[10px]">
+                  <label className="text-rose-400 font-mono font-semibold flex flex-wrap items-center gap-1.5 min-w-0">
+                    <span className="shrink-0">负向提示词 (Negative Prompt)</span>
                     {greyNegative && <FieldStatusBadge status="unsupported" />}
+                    {!greyNegative && <span className="min-w-0 max-w-full [overflow-wrap:anywhere]" data-testid="inspector-negative-badge"><SchemaSendBadge status={schemaSendStatus(params.targetProvider, 'negative_prompt', negativePrompt, customParamsJson)} omitTitle={SCHEMA_OMIT_REASON} /></span>}
                   </label>
                   <button
                     onClick={() =>
@@ -291,7 +314,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                       )
                     }
                     disabled={greyNegative}
-                    className="text-[9px] text-slate-400 hover:text-white font-mono bg-[#121316] px-1.5 py-0.5 rounded border border-[#282a35] disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="shrink-0 text-[9px] text-slate-400 hover:text-white font-mono bg-[#121316] px-1.5 py-0.5 rounded border border-[#282a35] disabled:opacity-40 disabled:cursor-not-allowed"
                     title={greyNegative ? '该服务商不支持负向提示词' : '填入通用排畸预设'}
                   >
                     填入通用排畸
@@ -342,6 +365,12 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                 { id: 'muapi', label: 'MuAPI' },
                 { id: 'wavespeed', label: 'WaveSpeed' },
                 { id: 'sogni', label: 'Sogni' },
+                { id: 'krea', label: 'Krea' },
+                { id: 'together', label: 'Together' },
+                { id: 'aimlapi', label: 'AIMLAPI' },
+                { id: 'novita', label: 'Novita' },
+                { id: 'venice', label: 'Venice' },
+                { id: 'openworks', label: 'Tensor.Art OpenWorks' },
               ].map((p) => {
                 const isSelected = params.targetProvider === p.id;
                 return (
@@ -349,7 +378,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                     key={p.id}
                     onClick={() => {
                       // G4: 切换 provider 时不自动填默认模型 → 清空 checkpoint
-                      if (!isSelected) update({ targetProvider: p.id as any, checkpoint: '' });
+                      if (!isSelected) update({ targetProvider: p.id as any, checkpoint: '' }); // same provider: keep checkpoint (reload must not blank)
                     }}
                     className={`py-1.5 px-1 rounded-lg text-center font-mono text-[10px] transition-all truncate ${
                       isSelected
@@ -378,15 +407,20 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                 </button>
               )}
             </div>
-            {params.retiredToolSelection && !params.checkpoint && <details className="text-xs text-amber-200"><summary>旧工具选择已清除，请选择模型</summary><pre className="whitespace-pre-wrap break-all">{JSON.stringify(params.retiredToolSelection,null,2)}</pre></details>}
+            {params.retiredToolSelection && !params.checkpoint && <details className="text-xs text-amber-200"><summary>旧选择已清除，请选择模型</summary><pre className="whitespace-pre-wrap break-all">{JSON.stringify(params.retiredToolSelection,null,2)}</pre></details>}
             <ProviderModelSelect provider={params.targetProvider || ''} value={params.checkpoint || ''} onChange={checkpoint=>update({checkpoint})} />
             <p className="text-sm text-slate-400 break-all">提交服务商：{params.targetProvider || '未选择'} · 模型：{params.checkpoint || '未选择'}</p>
+            {modelChainIssue && <p role="alert" data-testid="model-chain-issue" className="text-sm text-amber-200">{modelChainIssue}</p>}
             {/* Custom Model ID input */}
             <div className="pt-1">
               <input
                 type="text"
                 value={params.checkpoint}
                 onChange={(e) => update({ checkpoint: e.target.value })}
+                onFocus={(e) => { e.currentTarget.dataset.committed = e.currentTarget.value; }}
+                onKeyDown={(e) => { if (e.key === 'Enter') { const el = e.currentTarget; if (el.value !== (el.dataset.committed ?? '')) { el.dataset.committed = el.value; noteUserModelSelection(params.targetProvider, el.value); } } }}
+                onBlur={(e) => { if (e.currentTarget.value !== (e.currentTarget.dataset.committed ?? '')) noteUserModelSelection(params.targetProvider, e.currentTarget.value); }}
+                data-testid="inspector-custom-model-id"
                 placeholder="或直接输入自定义模型 ID / 端点路径..."
                 className="w-full bg-[#0d0e12] border border-[#232530] focus:border-cyan-500 rounded px-2 py-1 text-slate-400 focus:text-slate-200 text-[10px] font-mono outline-none"
                 title="支持直接填入任意 Hugging Face / Fal / Civitai 模型路径或 URN"
@@ -399,13 +433,13 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
           {params.requireReferenceImage && <p role="note" className="text-sm text-amber-200">编辑输入需要明确参考图；展示样图不作为输入。</p>}
           {params.targetProvider === 'video' && <label className="block text-sm text-slate-300">实际视频服务商<select aria-label="实际视频服务商" value={params.videoProvider || ''} onChange={e=>update({videoProvider:e.target.value || undefined})} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2"><option value="">请选择实际 provider</option><option value="fal">Fal</option><option value="agnes">Agnes</option><option value="grok_compat">Grok 兼容中转</option>{params.videoProvider && !['fal','agnes','grok_compat'].includes(params.videoProvider) && <option value={params.videoProvider}>{params.videoProvider}</option>}</select></label>}
           {(params.targetProvider === 'civitai' || (params.targetProvider === 'video' && params.videoProvider === 'civitai')) && <div className="space-y-2 rounded-lg border border-slate-700 p-3">
-            <label className="block text-sm text-slate-300">Civitai engine<select aria-label="Civitai engine" value={params.civitaiEngine || ''} onChange={e=>update({civitaiEngine:e.target.value || undefined})} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2"><option value="">请选择引擎</option><option value="sdcpp">sdcpp</option><option value="comfy">comfy</option>{params.civitaiEngine && !['sdcpp','comfy'].includes(params.civitaiEngine) && <option value={params.civitaiEngine}>{params.civitaiEngine}</option>}</select></label>
-            <label className="block text-sm text-slate-300">Civitai ecosystem<input aria-label="Civitai ecosystem" value={params.civitaiEcosystem || ''} onChange={e=>update({civitaiEcosystem:e.target.value || undefined})} placeholder="显式填写生态；未知生态保留" className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2" /></label>
+            <label className="block text-sm text-slate-300">Civitai engine<select aria-label="Civitai engine" value={params.civitaiEngine || ''} onChange={e=>update({civitaiEngine:e.target.value || undefined})} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2"><option value="">请选择引擎</option>{civitaiEngines().map(e=><option key={e} value={e}>{e}</option>)}{params.civitaiEngine && !civitaiEngines().includes(params.civitaiEngine) && <option value={params.civitaiEngine}>{params.civitaiEngine}</option>}</select></label>
+            <label className="block text-sm text-slate-300">Civitai ecosystem<input aria-label="Civitai ecosystem" value={params.civitaiEcosystem || ''} onChange={e=>update({civitaiEcosystem:e.target.value || undefined})} list="civitai-ecosystems" placeholder="显式填写生态；未知生态保留" className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2" /><datalist id="civitai-ecosystems">{civitaiEcosystemsFor(params.civitaiEngine || '').map(x=><option key={x} value={x} />)}</datalist></label>
             <label className="block text-sm text-slate-300">Civitai model<input aria-label="Civitai model" value={params.civitaiModel || ''} onChange={e=>update({civitaiModel:e.target.value || undefined})} placeholder="按官方 recipe 填写 model selector" className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2" /></label>
             <p className="text-sm text-slate-400">不自动填写引擎或更换模型。AIR 和引擎兼容性以 metadata / 上游响应为准。</p>
           </div>}
           {(params.targetProvider === 'video' || params.videoProvider || params.checkpoint?.includes('video')) && <div className="space-y-2">
-            <label className="block text-sm text-slate-300">视频时长 (秒)<input aria-label="视频时长 (秒)" type="number" {...videoDurationBounds(params.videoProvider || params.targetProvider,params.checkpoint)} step={1} value={params.videoDuration ?? ''} onChange={e=>update({videoDuration:e.target.value === '' ? undefined : Number(e.target.value)})} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2" /><span className="text-sm text-slate-400">仅核实的端点显示范围；未填写不提交默认时长。</span></label>
+            <label className="block text-sm text-slate-300">视频时长 (duration)<span className="relative block"><input aria-label="视频时长 (duration)" type="number" {...videoDurationBounds(params.videoProvider || params.targetProvider,params.checkpoint)} step={1} value={params.videoDuration ?? ''} onChange={e=>update({videoDuration:e.target.value === '' ? undefined : Number(e.target.value)})} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2 pr-8" /><span aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-[calc(50%-2px)] text-slate-400">秒</span></span><span className="text-sm text-slate-400">仅核实的端点显示范围；未填写不提交默认时长。</span></label>
             <label className="block text-sm text-slate-300">视频 resolution<input aria-label="视频 resolution" value={params.resolution || ''} onChange={e=>update({resolution:e.target.value || undefined})} placeholder="按所选端点填写；未设置保留空" className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2" /></label>
           </div>}
           {(params.targetProvider === 'video' || params.videoProvider || params.checkpoint?.includes('video')) && <label className="block text-sm text-slate-300">视频自定义参数 JSON<textarea aria-label="视频自定义参数 JSON" value={params.customParameters || ''} onChange={e=>update({customParameters:e.target.value || undefined})} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2" /><span className="text-sm text-slate-400">JSON 对象字段在服务端展开，false/0 保留。</span></label>}
@@ -426,7 +460,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
           )}
 
           {(params.targetProvider === 'modelscope' || params.targetProvider === 'modelscope_ai') && <p role="note" className="rounded-lg border border-amber-800/40 p-3 text-sm text-amber-200">魔搭云端已核实提示词、模型与 LoRA 格式；其余参数按请求原样发送，是否接受以本次上游响应为准。Qwen Image Edit 支持参考图。模型目录中的仓库不保证已开通在线推理。</p>}
-          {['civitai','fal','modelscope','modelscope_ai','huggingface','muapi','wavespeed','sogni','replicate'].includes(params.targetProvider) && <ApiParameterEditor provider={params.targetProvider} model={params.checkpoint} value={params.customParameters} onChange={customParameters=>update({customParameters})} />}
+          {['civitai','fal','modelscope','modelscope_ai','huggingface','muapi','wavespeed','sogni','krea','together','aimlapi','novita','venice','openworks','replicate'].includes(params.targetProvider) && <ApiParameterEditor provider={params.targetProvider} model={params.checkpoint} value={params.customParameters} onChange={customParameters=>update({customParameters})} canvasLoras={params.loras ?? []} />}
           {params.targetProvider === 'replicate' && (
             <div className="p-2.5 bg-orange-950/20 border border-orange-500/30 rounded-lg text-[10px] text-orange-300/90 leading-relaxed flex items-start gap-2">
               <Info className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
@@ -491,7 +525,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
               <Sparkles className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
               <div>
                 <span className="font-bold text-purple-300">Tensor.Art / 吐司模型 API：</span>
-                <span> 使用 TAMS 模型 ID 与模型 API Key。OpenWorks 工具名和密钥不能代用；LoRA 需与所选底模架构兼容。</span>
+                <span> 使用 TAMS 模型 ID 与模型 API Key。OpenWorks 模型与 Access Key 属于另一服务商「Tensor.Art OpenWorks」，不能代用；LoRA 需与所选底模架构兼容。</span>
               </div>
             </div>
           )}
@@ -509,12 +543,13 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
 
           {/* Seed & Seed Control */}
           <div className="space-y-1.5">
-            <div className="flex items-center justify-between text-slate-400 text-[10px] font-mono">
+            <div className="flex flex-wrap items-center justify-between gap-1 text-slate-400 text-[10px] font-mono">
               <span className="flex items-center gap-1.5">
                 SEED (随机种子与控制模式)
                 {greySeed && <FieldStatusBadge status="unsupported" />}
+                {!greySeed && <SchemaSendBadge status={schemaSendStatus(params.targetProvider, 'seed', params.seed, customParamsJson)} omitTitle={SCHEMA_OMIT_REASON} />}
               </span>
-              <div className="flex items-center gap-1">
+              <div className="flex flex-wrap items-center justify-end gap-1">
                 {(['randomize', 'fixed', 'increment', 'decrement'] as const).map((mode) => (
                   <button
                     key={mode}
@@ -522,7 +557,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                     disabled={greySeed}
                     onClick={() => { if (!greySeed) update({ seedControl: mode }); }}
                     title={greySeed ? '该服务商不支持' : undefined}
-                    className={`px-1.5 py-0.5 rounded text-[9px] font-mono transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-slate-400 ${
+                    className={`px-1.5 py-0.5 rounded text-[9px] font-mono whitespace-nowrap shrink-0 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-slate-400 ${
                       !greySeed && (params.seedControl || 'randomize') === mode
                         ? 'bg-cyan-500/25 text-cyan-300 font-bold border border-cyan-500/50'
                         : 'bg-[#121316] text-slate-400 border border-[#262833] hover:text-slate-200'
@@ -561,12 +596,13 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
 
           {/* Steps & CFG Sliders */}
           <div className="space-y-1">
-            <div className="flex justify-between text-slate-400 text-[10px] font-mono">
+            <div className="flex flex-wrap justify-between gap-x-2 gap-y-1 text-slate-400 text-[10px] font-mono">
               <span className="flex items-center gap-1.5" title="采样步数：FLUX 推荐 4~28 步，SDXL 推荐 25~30 步">
                 STEPS (采样步数)
                 {greySteps && <FieldStatusBadge status="unsupported" />}
+                {!greySteps && <SchemaSendBadge status={sendSteps} omitTitle={SCHEMA_OMIT_REASON} />}
               </span>
-              <span className="text-cyan-400 font-bold">{greySteps ? '—' : `${params.steps} 步`}</span>
+              <span className={`font-bold whitespace-nowrap shrink-0 ${omitSteps ? 'text-slate-500 line-through' : 'text-cyan-400'}`} title={omitSteps ? '该端点不支持，不发送' : undefined}>{greySteps ? '—' : `${params.steps} 步`}</span>
             </div>
             <input
               type="range"
@@ -581,12 +617,13 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
           </div>
 
           <div className="space-y-1">
-            <div className="flex justify-between text-slate-400 text-[10px] font-mono">
+            <div className="flex flex-wrap justify-between gap-x-2 gap-y-1 text-slate-400 text-[10px] font-mono">
               <span className="flex items-center gap-1.5" title="提示词引导系数：FLUX 推荐 3.5，SDXL 推荐 7.0~8.0">
                 CFG SCALE (提示词引导系数)
                 {greyCfg && <FieldStatusBadge status="unsupported" />}
+                {!greyCfg && <SchemaSendBadge status={sendCfg} omitTitle={SCHEMA_OMIT_REASON} />}
               </span>
-              <span className="text-cyan-400 font-bold">{greyCfg ? '—' : (params.cfg?.toFixed(1) ?? '未设置')}</span>
+              <span className={`font-bold whitespace-nowrap shrink-0 ${omitCfg ? 'text-slate-500 line-through' : 'text-cyan-400'}`} title={omitCfg ? '该端点不支持，不发送' : undefined}>{greyCfg ? '—' : (params.cfg?.toFixed(1) ?? '未设置')}</span>
             </div>
             <input
               type="range"
@@ -606,6 +643,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
               <label className="text-slate-400 text-[10px] font-mono flex items-center gap-1.5">
                 SAMPLER (采样算法)
                 {greySampler && <FieldStatusBadge status="unsupported" />}
+                {!greySampler && <SchemaSendBadge status={sendSampler} omitTitle={SCHEMA_OMIT_REASON} />}
               </label>
               <select
                 value={params.sampler}
@@ -625,6 +663,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
               <label className="text-slate-400 text-[10px] font-mono flex items-center gap-1.5">
                 SCHEDULER (调度器)
                 {greyScheduler && <FieldStatusBadge status="unsupported" />}
+                {!greyScheduler && <SchemaSendBadge status={sendScheduler} omitTitle={SCHEMA_OMIT_REASON} />}
               </label>
               <select
                 value={params.scheduler}
@@ -643,12 +682,13 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
 
           {/* Denoise (img2img) */}
           <div className="space-y-1">
-            <div className="flex justify-between text-slate-400 text-[10px] font-mono">
+            <div className="flex flex-wrap justify-between gap-x-2 gap-y-1 text-slate-400 text-[10px] font-mono">
               <span className="flex items-center gap-1.5" title="文生图固定为 1.0；图生图与重绘建议 0.35 ~ 0.65">
                 DENOISE (重绘降噪幅度)
                 {greyDenoise && <FieldStatusBadge status="unsupported" />}
+                {!greyDenoise && <SchemaSendBadge status={sendDenoise} omitTitle={SCHEMA_OMIT_REASON} />}
               </span>
-              <span className="text-cyan-400 font-bold">{greyDenoise ? '—' : (params.denoise?.toFixed(2) ?? '未设置')}</span>
+              <span className={`font-bold whitespace-nowrap shrink-0 ${sendDenoise === 'not_sent' || sendDenoise === 'no_image' ? 'text-slate-500 line-through' : 'text-cyan-400'}`}>{greyDenoise ? '—' : (params.denoise?.toFixed(2) ?? '未设置')}</span>
             </div>
             <input
               type="range"
@@ -658,8 +698,10 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
               value={greyDenoise ? 0 : (params.denoise ?? 0)}
               disabled={greyDenoise}
               onChange={(e) => { if (greyDenoise) return; update({ denoise: parseFloat(e.target.value) }); }}
-              title={greyDenoise ? '该服务商不支持' : undefined}
-              className="w-full h-1.5 bg-[#252833] rounded appearance-none cursor-pointer accent-cyan-400 disabled:opacity-40 disabled:cursor-not-allowed"
+              title={greyDenoise ? '该服务商不支持' : sendDenoise === 'not_sent' ? '该端点不支持，不发送' : undefined}
+              aria-disabled={greyDenoise || sendDenoise === 'not_sent' || undefined}
+              data-unsupported={sendDenoise === 'not_sent' || undefined}
+              className={`w-full h-1.5 bg-[#252833] rounded appearance-none cursor-pointer accent-cyan-400 disabled:opacity-40 disabled:cursor-not-allowed ${sendDenoise === 'not_sent' ? 'opacity-40 grayscale accent-slate-500' : ''}`}
             />
           </div>
         </div>
@@ -670,14 +712,14 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
             <span className="flex items-center gap-1.5">
               <Layers className="w-3.5 h-3.5 text-purple-400" />
               LoRA 微调模型堆叠 ({params.loras.length})
-              {greyLoras && <FieldStatusBadge status="unsupported" />}
+              {greyLoras ? <FieldStatusBadge status="unsupported" /> : <SchemaSendBadge status={sendLoras} omitTitle={SCHEMA_OMIT_REASON} />}
             </span>
             <div className="flex items-center gap-1.5">
               <button
                 onClick={onOpenCivitai || onOpenModelHub}
                 disabled={greyLoras}
                 className="text-[10px] text-purple-400 hover:text-purple-300 flex items-center gap-1 bg-purple-950/40 px-2 py-0.5 rounded border border-purple-800/40 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                title={greyLoras ? '该服务商不支持 LoRA' : '打开全生态 LoRA 模型中心 (Civitai / Hugging Face / 魔搭 / Fal / Tensor)'}
+                title={greyLoras ? LORA_UNSUPPORTED_TITLE : '打开全生态 LoRA 模型中心 (Civitai / Hugging Face / 魔搭 / Fal / Tensor)'}
               >
                 <Plus className="w-3 h-3" />
                 添加 LoRA
@@ -699,23 +741,23 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                   <div key={idx} className={`bg-[#121318] p-2.5 rounded-lg border space-y-2 ${loraUnsupported ? 'border-slate-700/60 opacity-70' : 'border-[#282a35]'}`}>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1.5 min-w-0">
-                        <span className={`font-semibold truncate max-w-[170px] ${loraUnsupported ? 'text-slate-500' : 'text-white'}`} title={lora.name}>
-                          {lora.name.replace('.safetensors', '')}
+                        <span className={`font-semibold max-w-[170px] break-normal ${loraUnsupported ? 'text-slate-500' : 'text-white'}`} title={lora.name}>
+                          {middleEllipsis(lora.name)}
                         </span>
                         {loraUnsupported ? (
-                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-800/80 text-slate-400 border border-slate-600/50 shrink-0" title="该服务商不支持">
-                            该服务商不支持
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-800/80 text-slate-400 border border-slate-600/50 shrink-0" title={LORA_UNSUPPORTED_TITLE}>
+                            {LORA_UNSUPPORTED_TITLE}
                           </span>
-                        ) : compat.verification === 'unverified' ? (<span className="text-[9px] px-1.5 py-0.5 rounded border border-slate-600 text-slate-400" title={compat.message}>待验证</span>) : compat.verification === 'verified' ? (
+                        ) : compat.verification === 'verified' ? (
                           <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-950/60 text-emerald-400 border border-emerald-800/40 shrink-0">
                             兼容
                           </span>
-                        ) : (
+                        ) : compat.verification === 'incompatible' ? (
                           <span className="text-[9px] px-1.5 py-0.5 rounded bg-rose-950/60 text-rose-400 border border-rose-800/40 shrink-0 flex items-center gap-0.5">
                             <AlertTriangle className="w-2.5 h-2.5" />
                             不匹配
                           </span>
-                        )}
+                        ) : null}
                       </div>
                       <button
                         onClick={() => {
@@ -747,29 +789,58 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                       </div>
                     )}
 
-                  {/* Weight slider */}
+                  {/* Weight: never show mid-slider when strength unset (no silent 0.8) */}
                   <div className="space-y-1">
                     <div className="flex justify-between text-[10px] font-mono text-slate-400">
-                      <span>推荐权重 (STRENGTH)</span>
-                      <span className="text-purple-300 font-bold">{lora.modelStrength.toFixed(2)}</span>
+                      <span>强度 (STRENGTH，必填)</span>
+                      <span className={`font-bold ${parseExplicitLoraStrength(lora.modelStrength) == null ? 'text-amber-300' : 'text-purple-300'}`}>
+                        {parseExplicitLoraStrength(lora.modelStrength) != null ? Number(lora.modelStrength).toFixed(2) : '未设置'}
+                      </span>
                     </div>
-                    <input
-                      type="range"
-                      min={-1.5}
-                      max={2.0}
-                      step={0.05}
-                      value={lora.modelStrength}
-                      disabled={loraUnsupported}
-                      title={loraUnsupported ? '该服务商不支持' : undefined}
-                      onChange={(e) => {
-                        if (loraUnsupported) return;
-                        const next = [...params.loras];
-                        next[idx].modelStrength = parseFloat(e.target.value);
-                        next[idx].clipStrength = parseFloat(e.target.value);
-                        update({ loras: next });
-                      }}
-                      className="w-full h-1 bg-[#252833] rounded appearance-none cursor-pointer accent-purple-400 disabled:opacity-40 disabled:cursor-not-allowed"
-                    />
+                    {parseExplicitLoraStrength(lora.modelStrength) == null ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          min={-1.5}
+                          max={2.0}
+                          step={0.05}
+                          value=""
+                          placeholder="未设置"
+                          disabled={loraUnsupported}
+                          aria-label={`LoRA ${lora.name} 强度（未设置）`}
+                          title={loraUnsupported ? LORA_UNSUPPORTED_TITLE : '生成前必须显式填写强度，禁止静默兜底 0.8'}
+                          onChange={(e) => {
+                            if (loraUnsupported) return;
+                            const next = [...params.loras];
+                            const parsed = parseExplicitLoraStrength(e.target.value);
+                            next[idx].modelStrength = parsed;
+                            next[idx].clipStrength = parsed;
+                            update({ loras: next });
+                          }}
+                          className="w-full rounded border border-amber-700/60 bg-[#121318] px-2 py-1 text-amber-100 text-[11px] font-mono placeholder:text-amber-500/80 disabled:opacity-40"
+                        />
+                        <span className="text-[9px] text-amber-400 shrink-0">生成前必填</span>
+                      </div>
+                    ) : (
+                      <input
+                        type="range"
+                        min={-1.5}
+                        max={2.0}
+                        step={0.05}
+                        value={Number(lora.modelStrength)}
+                        disabled={loraUnsupported}
+                        title={loraUnsupported ? LORA_UNSUPPORTED_TITLE : undefined}
+                        aria-label={`LoRA ${lora.name} 强度`}
+                        onChange={(e) => {
+                          if (loraUnsupported) return;
+                          const next = [...params.loras];
+                          next[idx].modelStrength = parseFloat(e.target.value);
+                          next[idx].clipStrength = parseFloat(e.target.value);
+                          update({ loras: next });
+                        }}
+                        className="w-full h-1 bg-[#252833] rounded appearance-none cursor-pointer accent-purple-400 disabled:opacity-40 disabled:cursor-not-allowed"
+                      />
+                    )}
                   </div>
 
                   {lora.triggerWords && (
@@ -827,16 +898,23 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
           <span className="font-semibold text-slate-200 text-[11px] block">
             📐 潜空间画幅比例 (Latent Canvas Dimensions)
           </span>
+          {omitWidthHeight && schemaDeclaresAspectRatio && (
+            <p className="text-[11px] text-amber-200 flex flex-wrap items-center gap-1.5" data-testid="latent-ratio-schema-owned">
+              <FieldStatusBadge status="not_sent" />
+              本模型官方 Schema 只有 aspect_ratio、没有像素宽高：下方画幅预设与宽高不会发送；实际发送的是「官方 Schema 字段」里的 aspect_ratio。
+            </p>
+          )}
 
           <div className="grid grid-cols-5 gap-1.5">
             {aspectRatios.map((ar) => {
-              const isActive = !greyWidthHeight && params.width === ar.w && params.height === ar.h;
+              const isActive = !greyWidthHeight && !omitWidthHeight && params.width === ar.w && params.height === ar.h;
               return (
                 <button
                   key={ar.label}
                   disabled={greyWidthHeight}
                   onClick={() => handleAspectRatioPreset(ar.w, ar.h)}
-                  className={`py-1.5 rounded-lg text-center transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+                  title={omitWidthHeight ? '该端点不支持：本模型不接收像素宽高' : undefined}
+                  className={`py-1.5 rounded-lg text-center transition-all disabled:opacity-40 disabled:cursor-not-allowed ${omitWidthHeight ? 'opacity-40 ' : ''}${
                     isActive
                       ? 'bg-cyan-500/20 border border-cyan-500/50 text-cyan-300 font-bold'
                       : 'bg-[#121316] border border-[#272933] text-slate-400 hover:text-white'
@@ -850,32 +928,35 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
           </div>
 
           <div className="grid grid-cols-2 gap-2 pt-1 font-mono text-[11px]">
-            <div className="space-y-1">
-              <div className="flex items-center justify-between gap-1">
+            <div className="space-y-1 min-w-0">
+              <div className="flex flex-wrap items-center justify-between gap-1">
                 <span className="text-slate-400 text-[10px]">宽度 WIDTH (像素)</span>
                 {greyWidthHeight && <FieldStatusBadge status="unsupported" />}
+                {!greyWidthHeight && <SchemaSendBadge status={sendWidthHeight} omitTitle={SCHEMA_OMIT_REASON} />}
               </div>
               <input
                 type="number"
                 step={64}
                 disabled={greyWidthHeight}
-                value={greyWidthHeight ? '' : params.width}
-                onChange={(e) => update({ width: parseInt(e.target.value) || 1024 })}
-                className="w-full bg-[#111216] border border-[#2b2d38] rounded-lg px-2.5 py-1 text-slate-200 outline-none font-mono disabled:opacity-40 disabled:cursor-not-allowed"
+                value={greyWidthHeight ? '' : (params.width ?? '')}
+                // clean-1333 #1: cleared field stays empty (undefined) — never silently becomes 1024.
+                onChange={(e) => update({ width: e.target.value === '' || !Number.isFinite(parseInt(e.target.value)) ? undefined : parseInt(e.target.value) })}
+                className="w-full min-w-0 box-border bg-[#111216] border border-[#2b2d38] rounded-lg px-2.5 py-1 text-slate-200 outline-none font-mono disabled:opacity-40 disabled:cursor-not-allowed"
               />
             </div>
-            <div className="space-y-1">
-              <div className="flex items-center justify-between gap-1">
+            <div className="space-y-1 min-w-0">
+              <div className="flex flex-wrap items-center justify-between gap-1">
                 <span className="text-slate-400 text-[10px]">高度 HEIGHT (像素)</span>
                 {greyWidthHeight && <FieldStatusBadge status="unsupported" />}
+                {!greyWidthHeight && <SchemaSendBadge status={sendWidthHeight} omitTitle={SCHEMA_OMIT_REASON} />}
               </div>
               <input
                 type="number"
                 step={64}
                 disabled={greyWidthHeight}
-                value={greyWidthHeight ? '' : params.height}
-                onChange={(e) => update({ height: parseInt(e.target.value) || 1024 })}
-                className="w-full bg-[#111216] border border-[#2b2d38] rounded-lg px-2.5 py-1 text-slate-200 outline-none font-mono disabled:opacity-40 disabled:cursor-not-allowed"
+                value={greyWidthHeight ? '' : (params.height ?? '')}
+                onChange={(e) => update({ height: e.target.value === '' || !Number.isFinite(parseInt(e.target.value)) ? undefined : parseInt(e.target.value) })}
+                className="w-full min-w-0 box-border bg-[#111216] border border-[#2b2d38] rounded-lg px-2.5 py-1 text-slate-200 outline-none font-mono disabled:opacity-40 disabled:cursor-not-allowed"
               />
             </div>
           </div>
@@ -935,7 +1016,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
             </div>
           )}
 
-          {schemaProvider === 'huggingface' && getFieldSpec('huggingface', schemaModel, 'shift') && (
+          {schemaProvider === 'huggingface' && schemaModel && getFieldSpec('huggingface', schemaModel, 'shift') && (
             <div className="grid grid-cols-2 gap-2">
               {schemaSelect('resolution', params.resolution || '', (v) => update({ resolution: v || undefined }), 'RESOLUTION')}
               <div className="space-y-1">
@@ -948,7 +1029,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
             </div>
           )}
 
-          {schemaProvider === 'huggingface' && getFieldSpec('huggingface', schemaModel, 'shift') && (
+          {schemaProvider === 'huggingface' && schemaModel && getFieldSpec('huggingface', schemaModel, 'shift') && (
             <div className="grid grid-cols-2 gap-2">
               <label className="text-sm text-slate-400">种子策略
                 <select value={typeof params.randomSeed === 'boolean' ? String(params.randomSeed) : ''} onChange={e => update({randomSeed: e.target.value === '' ? undefined : e.target.value === 'true'})} className="w-full mt-1 bg-[#111216] border border-slate-700 rounded-lg p-2 text-slate-200">

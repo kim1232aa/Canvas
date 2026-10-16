@@ -39,6 +39,7 @@ describe('ReplicateDriver', () => {
     const modelIds = driver.supportedModels.map((m) => m.id);
     expect(modelIds).toContain('black-forest-labs/flux-schnell');
     expect(modelIds).toContain('black-forest-labs/flux-dev');
+    expect(modelIds).toContain('black-forest-labs/flux-dev-lora');
     expect(modelIds).toContain('ideogram-ai/ideogram-v2a');
     expect(modelIds).toContain('minimax/image-01');
     expect(modelIds).toContain('bytedance/seedream-3');
@@ -51,7 +52,12 @@ describe('ReplicateDriver', () => {
     const dev = driver.supportedModels.find((m) => m.id === 'black-forest-labs/flux-dev');
     expect(dev?.defaultSteps).toBe(28);
     expect(dev?.defaultCfg).toBe(3.5);
-    expect(dev?.supportsLora).toBe(true);
+    expect(dev?.supportsLora).toBe(false);
+
+    const lora = driver.supportedModels.find((m) => m.id === 'black-forest-labs/flux-dev-lora');
+    expect(lora?.defaultSteps).toBe(28);
+    expect(lora?.defaultCfg).toBe(3);
+    expect(lora?.supportsLora).toBe(true);
   });
 
   it('posts a complete generate request and maps normalized image result', async () => {
@@ -184,5 +190,11 @@ describe('ReplicateDriver', () => {
         { replicateKey: FIXTURE_KEY }
       )
     ).rejects.toThrow('Replicate 返回缺少图像输出 URL');
+  });
+
+  it('surfaces schema-missing block error verbatim (upstream first line)', async () => {
+    const err = 'HTTP 404: {"detail":"Model not found"} (https://api.replicate.com/v1/models/a/b)\n本地拦截：拿不到该模型 Schema，未发送 /predictions（model=a/b）';
+    mockFetch.mockResolvedValueOnce(jsonResponse({ error: err, blocked: 'schema_missing', notSent: true }, 404));
+    await expect(driver.generate({ prompt: 'x', model: 'a/b' } as any, { replicateKey: FIXTURE_KEY })).rejects.toThrow(err);
   });
 });

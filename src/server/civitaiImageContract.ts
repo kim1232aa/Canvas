@@ -1,4 +1,4 @@
-import { getFieldSpec, valueStatus } from '../schemas/providerSchema';
+import { getFieldSpec, getModelSpec, valueStatus } from '../schemas/providerSchema';
 import { parseCustomObject } from './customParameters';
 
 type Body = Record<string, any>;
@@ -15,7 +15,10 @@ const fail = (message: string): never => { throw new CivitaiContractError(messag
 const airParts = (air: string) => air.replace(/^(?:urn:)?air:/, '').split(':');
 const canonicalAir = (input: string) => /^(?:urn:)?air:/.test(input) ? (input.startsWith('urn:') ? input : `urn:${input}`) : undefined;
 const baseEcosystems: Record<string, string> = {
-  'sd 1.5': 'sd15', 'sd 1.4': 'sd15', 'sdxl 1.0': 'sdxl', 'flux.1 d': 'flux1', 'flux.1 s': 'flux1', 'flux.1 dev': 'flux1', 'flux.1 schnell': 'flux1',
+  'sd 1.5': 'sd15', 'sd 1.4': 'sd15', 'sdxl 1.0': 'sdxl', 'sdxl turbo': 'sdxl', 'sdxl lightning': 'sdxl', 'sdxl hyper': 'sdxl',
+  'pony': 'pony', 'pony v7': 'ponyV7', 'illustrious': 'illustrious', 'noobai': 'noobai',
+  'flux.1 d': 'flux1', 'flux.1 s': 'flux1', 'flux.1 dev': 'flux1', 'flux.1 schnell': 'flux1', 'flux.1 kontext': 'flux1',
+  'flux.2 d': 'flux2Dev', 'flux.2 klein': 'flux2Klein', 'qwen': 'qwen', 'anima': 'anima', 'ernie': 'ernie',
   'zimageturbo': 'zimageturbo', 'zimagebase': 'zimagebase', 'krea 2': 'krea2',
 };
 function versionAir(data: Body, parent?: Body): string {
@@ -76,23 +79,39 @@ async function buildCivitaiBaseInput(body: Body, get: CivitaiPublicGet): Promise
   if (sourceType && ['lora', 'locon', 'lycoris', 'embedding', 'vae', 'controlnet', 'upscaler'].includes(sourceType)) fail(`传统底模资源类型 ${sourceType} 不可用作 checkpoint/diffusion model`);
   // AIR guide uses sd15; imageGen OpenAPI uses sd1 as the request discriminator.
   const requestEcosystem = actualEcosystem === 'sd15' ? 'sd1' : actualEcosystem === 'zimageturbo' && body.comfyModel === 'turbo' || actualEcosystem === 'zimagebase' && body.comfyModel === 'base' ? 'zImage' : actualEcosystem;
-  if (provided(body.ecosystem) && requestEcosystem && body.ecosystem !== requestEcosystem) fail(`显式生态 ${body.ecosystem} 与实际资源生态 ${actualEcosystem} 冲突`);
+  // AIR namespace is "flux2"; request discriminators are flux2Dev / flux2Klein (recipe pages).
+  const declaredSpec = provided(body.engine) && provided(body.ecosystem) ? getModelSpec('civitai', `${body.engine}:${body.ecosystem}`) : undefined;
+  const flux2RecipeOk = actualEcosystem === 'flux2' && (body.ecosystem === 'flux2Dev' || body.ecosystem === 'flux2Klein') || (!!actualEcosystem && !!declaredSpec?.request?.airEcosystems?.includes(actualEcosystem));
+  if (provided(body.ecosystem) && requestEcosystem && body.ecosystem !== requestEcosystem && !flux2RecipeOk) fail(`显式生态 ${body.ecosystem} 与实际资源生态 ${actualEcosystem} 冲突`);
   const ecosystem = body.ecosystem ?? requestEcosystem;
   if (!ecosystem) fail('Civitai ecosystem 为必填项，或提供带生态的完整 AIR');
   const engine = body.engine ?? (['sd1', 'sd15', 'sdxl', 'flux1', 'flux2Dev', 'flux2Klein', 'qwen', 'zImage', 'anima'].includes(ecosystem) ? 'sdcpp' : 'comfy');
-  if (!['comfy', 'sdcpp'].includes(engine)) fail('Civitai engine 只接受显式 comfy 或 sdcpp');
+  if (!['comfy', 'sdcpp'].includes(engine) && getModelSpec('civitai', `${engine}:${ecosystem}`)?.request?.engine !== engine) fail('Civitai engine 只接受显式 comfy / sdcpp，或模型配置声明的引擎');
   const operation = body.operation ?? (provided(body.image_url) ? 'createVariant' : 'createImage');
   if (ecosystem === 'zImage' && (operation !== 'createImage' || provided(body.image_url))) fail('ZImage 仅支持 operation=createImage');
   if (ecosystem === 'krea2' && builtin && (engine !== 'comfy' || body.comfyModel !== 'turbo' || operation !== 'createImage')) fail('Krea Comfy turbo 需要 engine=comfy、model=turbo、operation=createImage');
   if (ecosystem === 'zImage' && !['turbo', 'base'].includes(body.comfyModel)) fail('ZImage comfyModel 必须为 turbo 或 base');
-  const input: Body = { engine, ecosystem, operation };
+  // Spec-declared request wiring (providerSchema.ts CIVITAI_MODELS[].request). Disallowed operation → local block, never an endpoint switch.
+  const spec = getModelSpec('civitai', `${engine}:${ecosystem}`);
+  if (spec?.request?.operations && !spec.request.operations.includes(operation)) fail(spec.request.operationBlockedMessage ?? `Civitai ${spec.id} 官方只支持 operation=${spec.request.operations.join(' / ')}`);
+  const wire = spec?.request ?? {};
+  const input: Body = { engine: wire.engine ?? engine, ...(wire.omitEcosystem ? {} : { ecosystem }), operation };
   if (builtin) {
     input.model = body.comfyModel;
     if (source && engine === 'comfy') input[ecosystem === 'zImage' ? 'diffuserModel' : 'diffusionModel'] = source;
     else if (source) fail('ZImage 内建 selector 不接受 source checkpoint；请明确选择 turbo/base');
-  } else if (ecosystem === 'anima' || engine === 'sdcpp' && ecosystem === 'flux1') input.diffuserModel = source;
+  } else if (wire.model !== undefined) input.model = wire.model;
+  else if (ecosystem === 'anima' || engine === 'sdcpp' && ecosystem === 'flux1') input.diffuserModel = source;
   else input.model = source;
-  const schemaId = `${engine}:${ecosystem}`;
+  const schemaId = spec?.id ?? `${engine}:${ecosystem}`;
+  // Official Krea v2 recipe: no negative prompts or explicit width/height.
+  // https://developer.civitai.com/orchestration/recipes/krea
+  if (ecosystem === 'krea2') {
+    const kreaFieldLimit =
+      'Civitai Krea v2 官方不接受 LoRA、负面提示词或宽高像素（见 https://developer.civitai.com/orchestration/recipes/krea）。请改用 Flux 2 / Qwen 配方，或换到官方支持 LoRA 的供应商端点。';
+    if (provided(body.negative_prompt)) fail(kreaFieldLimit);
+    if (provided(body.width) || provided(body.height)) fail(kreaFieldLimit);
+  }
   for (const [field, key, wire] of [
     ['prompt', undefined, 'prompt'], ['negative_prompt', 'negative_prompt', 'negativePrompt'], ['width', 'width', 'width'], ['height', 'height', 'height'],
     ['steps', 'steps', 'steps'], ['cfg', 'cfg', 'cfgScale'], ['seed', 'seed', 'seed'], ['quantity', 'num_images', 'quantity'],
@@ -101,16 +120,36 @@ async function buildCivitaiBaseInput(body: Body, get: CivitaiPublicGet): Promise
     if (!provided(body[field])) continue;
     if (key && getFieldSpec('civitai', schemaId, key)?.status === 'unsupported') fail(`Civitai ${schemaId} 不支持 ${field}`);
     if (key && valueStatus('civitai', schemaId, key, body[field]) === 'unsupported') fail(`${wire}=${body[field]} 不符合 Civitai ${schemaId} 官方范围/枚举`);
-    input[wire] = ['width', 'height', 'steps', 'cfg', 'seed', 'quantity'].includes(field) ? Number(body[field]) : body[field];
+    // Wire name comes from the model's field spec (providerSchema.ts) when declared; the tuple wire is only the default.
+    const specWire = key ? getFieldSpec('civitai', schemaId, key)?.wire : undefined;
+    input[specWire || wire] = ['width', 'height', 'steps', 'cfg', 'seed', 'quantity'].includes(field) ? Number(body[field]) : body[field];
   }
   if (provided(body.image_url)) {
     input.image = body.image_url;
     if (provided(body.denoise)) input[engine === 'comfy' && ['sd1', 'sdxl', 'flux1'].includes(ecosystem) ? 'denoiseStrength' : 'strength'] = Number(body.denoise);
   } else if (provided(body.denoise)) fail('denoise 需要同时提供 image_url');
+  // Official Krea v2: no LoRAs — never emit input.loras (https://developer.civitai.com/orchestration/recipes/krea).
+  const kreaOfficialLimit =
+    'Civitai Krea v2 官方不接受 LoRA、负面提示词或宽高像素（见 https://developer.civitai.com/orchestration/recipes/krea）。请改用 Flux 2 / Qwen 配方，或换到官方支持 LoRA 的供应商端点。';
   if (body.loras !== undefined && !Array.isArray(body.loras)) fail('loras 必须为数组');
-  const loras: Body = {};
+  const hasLoraIntent = Array.isArray(body.loras) && body.loras.length > 0;
+  if (ecosystem === 'krea2') {
+    if (hasLoraIntent) fail(kreaOfficialLimit);
+    // Never emit input.loras for krea2 (including empty map).
+    return input;
+  }
+  // Official flux1-kontext: no LoRA (recipe troubleshooting: sending loras → 400). Local refuse.
+  if (hasLoraIntent && (engine === 'flux1-kontext' || spec?.request?.refuseLora === true)) {
+    fail('Civitai flux1-kontext 官方不接受 LoRA（发 loras 会 400）。请移除 LoRA 节点，或换支持 LoRA 的配方。');
+  }
+  // Flux2 Dev official recipe uses loras[] { air, strength }; Klein / Flux1 / sdcpp use AIR→strength map.
+  // https://developer.civitai.com/orchestration/recipes/flux2 — Researchy audit 2026-10-15.
+  const useFlux2DevArray = spec?.request?.loraShape === 'array';
+  const lorasMap: Body = {};
+  const lorasArr: Array<{ air: string; strength: number }> = [];
   for (const lora of body.loras ?? []) {
-    const raw = lora.civitaiId ?? lora.versionId ?? lora.id ?? lora.name;
+    // Empty-string civitaiId must not block fallback to name (AIR pasted into lora_name).
+    const raw = [lora.civitaiId, lora.versionId, lora.id, lora.air, lora.name, lora.path].find(provided);
     if (!provided(raw)) fail('LoRA 资源 AIR/ID 为必填项');
     const resource = await resolveCivitaiResource(String(raw), get);
     const [resourceEcosystem, type] = airParts(resource);
@@ -119,12 +158,19 @@ async function buildCivitaiBaseInput(body: Body, get: CivitaiPublicGet): Promise
     // Civitai's app-panorama-360 documents zimageturbo as the worker's canonical Turbo AIR namespace.
     const zImageTurboResource = resourceEcosystem === 'zimageturbo' && ecosystem === 'zImage' && input.model === 'turbo';
     const zImageBaseResource = resourceEcosystem === 'zimagebase' && ecosystem === 'zImage' && input.model === 'base';
-    if (resourceEcosystem !== ecosystem && !sd1Resource && !zImageTurboResource && !zImageBaseResource) fail(`LoRA 实际生态 ${resourceEcosystem} 与所选生态 ${ecosystem} 冲突`);
+    // Flux2 recipe ecosystems (flux2Dev / flux2Klein) share AIR namespace "flux2".
+    const flux2Resource = resourceEcosystem === 'flux2' && (ecosystem === 'flux2Dev' || ecosystem === 'flux2Klein') || !!spec?.request?.airEcosystems?.includes(resourceEcosystem);
+    if (resourceEcosystem !== ecosystem && !sd1Resource && !zImageTurboResource && !zImageBaseResource && !flux2Resource) fail(`LoRA 实际生态 ${resourceEcosystem} 与所选生态 ${ecosystem} 冲突`);
     const strength = lora.strength ?? lora.modelStrength;
     if (!provided(strength) || !Number.isFinite(Number(strength))) fail(`LoRA strength 为必填数值: ${raw}`);
-    loras[resource] = Number(strength);
+    if (useFlux2DevArray) lorasArr.push({ air: resource, strength: Number(strength) });
+    else lorasMap[resource] = Number(strength);
   }
-  if (Object.keys(loras).length) input.loras = loras;
+  if (useFlux2DevArray) {
+    if (lorasArr.length) input.loras = lorasArr;
+  } else if (Object.keys(lorasMap).length) {
+    input.loras = lorasMap;
+  }
   return input;
 }
 
@@ -154,7 +200,7 @@ export async function buildCivitaiImageRequest(body: Body, get: CivitaiPublicGet
   const advanced = (source: Body) => Object.fromEntries(Object.entries(source).filter(([key]) => !translated.has(key) && !boundary.test(key) && !controls.test(key)));
   const beforeCustom = { ...await buildCivitaiBaseInput(topLevel, get), ...advanced(topLevel) };
   const mapped = await buildCivitaiBaseInput(effective, get);
-  if (Object.hasOwn(normalizedCustom, 'loras')) mapped.loras = mapped.loras ?? {};
+  if (Object.hasOwn(normalizedCustom, 'loras') && mapped.ecosystem !== 'krea2') mapped.loras = mapped.loras ?? {};
   const payload = { ...mapped, ...advanced(effective) };
   const overrides = Object.fromEntries(Object.entries(payload).filter(([key, value]) => Object.hasOwn(beforeCustom, key) && JSON.stringify(beforeCustom[key]) !== JSON.stringify(value)).map(([key, value]) => [key, { before: beforeCustom[key], after: value }]));
   return { payload, beforeCustom, customParameters: { ...custom }, overrides };

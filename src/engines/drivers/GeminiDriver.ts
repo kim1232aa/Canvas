@@ -32,8 +32,8 @@ export class GeminiDriver extends BaseEngineDriver {
       supportsLora: false,
     },
     {
-      id: 'gemini-3.8-flash',
-      name: 'Gemini 3.8 Flash (旗舰多模态思考)',
+      id: 'gemini-2.5-flash',
+      name: 'Gemini 2.5 Flash (旗舰多模态思考)',
       type: 'reasoning',
       description: 'Google 旗舰级多模态视觉推理与超快文本生成',
     },

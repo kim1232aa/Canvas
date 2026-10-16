@@ -1,3 +1,4 @@
+import { formatRecordTime } from '../services/executionTrace';
 import React, { useState, useEffect } from 'react';
 import {
   Cloud,
@@ -203,12 +204,7 @@ export const CloudProjectModal: React.FC<CloudProjectModalProps> = ({
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {projects.map((p) => {
                 const isCurrent = currentProjectId === p.id;
-                const formattedTime = new Date(p.updatedAt).toLocaleString('zh-CN', {
-                  month: 'short',
-                  day: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                });
+                const formattedTime = formatRecordTime(new Date(p.updatedAt).toISOString());
 
                 return (
                   <div

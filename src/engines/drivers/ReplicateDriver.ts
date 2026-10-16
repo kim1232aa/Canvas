@@ -30,9 +30,18 @@ export class ReplicateDriver extends BaseEngineDriver {
       id: 'black-forest-labs/flux-dev',
       name: 'FLUX.1 [dev] (Replicate)',
       type: 'image',
-      description: 'Black Forest Labs 旗舰 28 步生图模型，支持 LoRA',
+      description: 'Black Forest Labs 旗舰 28 步生图模型（无 LoRA 字段；LoRA 请用 flux-dev-lora）',
       defaultSteps: 28,
       defaultCfg: 3.5,
+      supportsLora: false,
+    },
+    {
+      id: 'black-forest-labs/flux-dev-lora',
+      name: 'FLUX.1 [dev] LoRA (Replicate)',
+      type: 'image',
+      description: '官方 Input：lora_weights + lora_scale（及 extra_lora）；guidance / num_inference_steps',
+      defaultSteps: 28,
+      defaultCfg: 3,
       supportsLora: true,
     },
     {
@@ -88,7 +97,13 @@ export class ReplicateDriver extends BaseEngineDriver {
       steps: params.steps,
       cfg: params.cfg,
       seed: params.seed,
-      loras: params.loras,
+      loras: Array.isArray(params.loras)
+        ? params.loras.map((l: any) => (typeof l === 'object' && l !== null ? {
+            ...l,
+            ...(l.path || l.downloadUrl || l.url ? { path: l.path || l.downloadUrl || l.url } : {}),
+            ...(typeof (l.strength ?? l.modelStrength ?? l.scale) === 'number' ? { strength: l.strength ?? l.modelStrength ?? l.scale } : {}),
+          } : l))
+        : params.loras,
       custom_parameters: params.extraParams?.custom_parameters,
       workflowSnapshot: params.workflowSnapshot,
       ...params.extraParams,

@@ -38,8 +38,9 @@ export class ModelScopeAiDriver extends BaseEngineDriver {
         width: params.width,
         height: params.height,
         site: 'ai',
-        loras: params.loras?.length ? params.loras : undefined,
+        loras: params.loras?.length ? params.loras.map((l: any) => (typeof l === 'object' && l !== null ? { ...l, strength: l.strength ?? l.modelStrength ?? l.scale } : l)) : undefined,
         image_url: params.image_url,
+        // sampler / scheduler / denoise are forwarded only so the route can record them as 「该端点不支持」 (never sent upstream).
         sampler_name: params.sampler_name,
         scheduler: params.scheduler,
         denoise: params.denoise,

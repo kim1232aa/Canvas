@@ -1,0 +1,213 @@
+{
+  "$schemaNote": "草案 — 仅声明。真相源: docs/provider-api-audit-v2/replicate.md + DIFF.md (2026-10-15)",
+  "id": "replicate",
+  "displayName": "Replicate",
+  "auth": {
+    "envVar": "REPLICATE_API_TOKEN",
+    "header": "Authorization",
+    "scheme": "Bearer"
+  },
+  "base": {
+    "root": "https://api.replicate.com/v1"
+  },
+  "catalog": {
+    "list": "GET /models",
+    "search": "GET /models (search)",
+    "get": "GET /models/{owner}/{name}",
+    "versions": "GET /models/{owner}/{name}/versions",
+    "schema": "GET /models/{owner}/{name}/versions/{id} → openapi_schema",
+    "rule": "输入字段按模型版本 openapi_schema 动态读取；非全局统一 body",
+    "noSchemaRule": "无 live OpenAPI Input.properties 且无静态表行 → 本地拦截，不发 POST /predictions（blocked:schema_missing）；证据 docs/evidence/replicate-noschema-block-2026-10-15.md"
+  },
+  "predict": {
+    "mode": "async (default) | sync via Prefer: wait[=N]",
+    "create": [
+      "POST /predictions (community, needs version)",
+      "POST /models/{owner}/{name}/predictions (official)",
+      "POST /deployments/{owner}/{name}/predictions"
+    ],
+    "poll": {
+      "method": "GET",
+      "path": "/predictions/{id}",
+      "statuses": [
+        "starting",
+        "processing",
+        "succeeded",
+        "failed",
+        "canceled"
+      ]
+    },
+    "cancel": "POST /predictions/{id}/cancel",
+    "webhook": [
+      "webhook",
+      "webhook_events_filter"
+    ],
+    "outputNote": "file URL 下载可能需带 Authorization"
+  },
+  "image": {
+    "exampleModel": "black-forest-labs/flux-dev-lora",
+    "parameters": {
+      "seed": {
+        "type": "integer",
+        "supported": true,
+        "caveat": "go_fast=true 时不保证确定性"
+      },
+      "go_fast": {
+        "type": "boolean",
+        "default": true
+      },
+      "guidance": {
+        "type": "number",
+        "default": 3,
+        "min": 0,
+        "max": 10,
+        "canvasField": "cfg"
+      },
+      "num_inference_steps": {
+        "type": "integer",
+        "default": 28,
+        "min": 1,
+        "max": 50,
+        "canvasField": "steps"
+      },
+      "aspect_ratio": {
+        "type": "enum",
+        "default": "1:1",
+        "note": "无独立 width/height"
+      },
+      "megapixels": {
+        "enum": [
+          "1",
+          "0.25"
+        ],
+        "default": "1"
+      },
+      "prompt_strength": {
+        "type": "number",
+        "default": 0.8,
+        "range": "0-1",
+        "when": "img2img"
+      },
+      "output_format": {
+        "enum": [
+          "webp",
+          "jpg",
+          "png"
+        ],
+        "default": "webp"
+      },
+      "output_quality": {
+        "type": "integer",
+        "default": 80,
+        "range": "0-100"
+      },
+      "num_outputs": true,
+      "disable_safety_checker": {
+        "type": "boolean",
+        "default": false
+      }
+    },
+    "widthHeight": {
+      "supported": false,
+      "reason": "flux-dev-lora schema 只有 aspect_ratio/megapixels；画布宽高须映射或标不会发送并说明"
+    }
+  },
+  "video": {
+    "supported": true,
+    "mechanism": "同一 predictions API + 视频模型",
+    "example": "POST /models/minimax/video-01/predictions",
+    "parameters": "duration/fps/seed 按目标视频模型 version openapi_schema；不可假定",
+    "lora": "per-model schema"
+  },
+  "lora": {
+    "model": "black-forest-labs/flux-dev-lora",
+    "fields": {
+      "lora_weights": {
+        "type": "string",
+        "accepts": [
+          "Replicate owner/name[/version]",
+          "HF URL",
+          "CivitAI URL",
+          ".safetensors URL"
+        ]
+      },
+      "lora_scale": {
+        "type": "number",
+        "default": 1,
+        "min": -1,
+        "max": 3,
+        "defaultDocumented": true
+      },
+      "extra_lora": {
+        "type": "string",
+        "note": "第二路 LoRA"
+      },
+      "extra_lora_scale": {
+        "type": "number",
+        "default": 1,
+        "min": -1,
+        "max": 3
+      }
+    },
+    "maxLoras": 2,
+    "not": "Comfy strength_model / loras[] 数组",
+    "unsupportedModels": "schema 无这些字段 → 不挂载"
+  },
+  "billing": {
+    "insufficientHints": [],
+    "note": "官方 http.md 未摘到明确 402；以实测码记 evidence，4xx 原样上报"
+  },
+  "contractTestHint": "flux-dev-lora: 画布 steps→num_inference_steps, cfg→guidance, seed→seed, LoRA[0]→lora_weights+lora_scale, LoRA[1]→extra_lora+extra_lora_scale；第 3 个 LoRA 应本地拒绝；flux-schnell: 官方 Input 无 negative_prompt/guidance/guidance_scale/width/height → 未传 schemaProps 时也不得发送（须 omit 或本地拒），只发 prompt/seed/num_inference_steps/aspect_ratio/num_outputs/output_* 等声明字段；无 Schema（无 live Input.properties 且无表行）→ 本地拦截不发 /predictions（schema_missing）",
+  "sources": [
+    "https://replicate.com/docs/reference/http",
+    "https://replicate.com/docs/topics/predictions/create-a-prediction",
+    "https://replicate.com/black-forest-labs/flux-dev-lora/api",
+    "https://replicate.com/black-forest-labs/flux-schnell/api",
+    "https://replicate.com/api/models/black-forest-labs/flux-schnell/versions"
+  ],
+  "_auditStatus": "2026-10-16 ~10:55：1049 收口 PASS_BILLING（欠费 402，非真出图）。flux-dev-lora seed/steps/guidance/lora_weights/lora_scale 升「会发送」；extra_lora 未实发仍待确认",
+  "acceptanceBadge": "PASS_BILLING",
+  "sendEvidence": {
+    "run": "/workspace/canvas-e2e-replicate-1049/",
+    "pid": "2620869 @10:48:41",
+    "upstream": "HTTP 402 Insufficient credit 原文透传",
+    "actualRequestInput": {
+      "prompt": "…",
+      "seed": 7,
+      "num_inference_steps": 28,
+      "guidance": 3,
+      "lora_weights": "fofr/flux-pixar-cars",
+      "lora_scale": 0.85
+    },
+    "localOnly": "schemaFields 只在「本地记录」，未发上游",
+    "acceptedBy": "画布挑刺 1049 无严重 + Researchy 对官方 Schema 核实"
+  },
+  "sendStatus": {
+    "flux-dev-lora": {
+      "会发送": [
+        "prompt",
+        "seed",
+        "num_inference_steps",
+        "guidance",
+        "lora_weights",
+        "lora_scale"
+      ],
+      "该端点不支持": [
+        "sampler",
+        "scheduler",
+        "width/height",
+        "negative_prompt"
+      ],
+      "未填写，不发送": [
+        "aspect_ratio (Schema 默认 1:1；allOf/$ref 已解析为下拉)"
+      ],
+      "待确认": [
+        "extra_lora",
+        "extra_lora_scale",
+        "megapixels",
+        "go_fast",
+        "output_*"
+      ]
+    }
+  }
+}

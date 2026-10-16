@@ -1,0 +1,816 @@
+{
+ "prompt": "a futuristic starship corridor, warm ambient lighting, wide angle",
+ "negativePrompt": "blurry, low quality",
+ "provider": "ModelScope AI (魔搭国际站)",
+ "model": "Tongyi-MAI/Z-Image-Turbo",
+ "actualModel": "Tongyi-MAI/Z-Image-Turbo",
+ "seed": 42,
+ "steps": 8,
+ "cfg": 3,
+ "loras": [
+  {
+   "name": "LcarsPicturesDatabase/ST-TNG-Rooms-Z-Image-Turbo-v1",
+   "strength": 1
+  }
+ ],
+ "requestMetadata": {
+  "requestedParameters": {
+   "prompt": "a futuristic starship corridor, warm ambient lighting, wide angle",
+   "negative_prompt": "blurry, low quality",
+   "model": "Tongyi-MAI/Z-Image-Turbo",
+   "steps": 8,
+   "guidance": 3,
+   "seed": 42,
+   "width": 512,
+   "height": 512,
+   "site": "ai",
+   "loras": [
+    {
+     "name": "LcarsPicturesDatabase/ST-TNG-Rooms-Z-Image-Turbo-v1",
+     "strength": 1,
+     "modelStrength": 1,
+     "clipStrength": 1,
+     "civitaiId": "",
+     "triggers": ""
+    }
+   ],
+   "sampler_name": "euler_ancestral",
+   "denoise": 1
+  },
+  "actualParameters": {
+   "model": "Tongyi-MAI/Z-Image-Turbo",
+   "prompt": "a futuristic starship corridor, warm ambient lighting, wide angle",
+   "size": "512x512",
+   "negative_prompt": "blurry, low quality",
+   "steps": 8,
+   "guidance": 3,
+   "seed": 42,
+   "loras": {
+    "LcarsPicturesDatabase/ST-TNG-Rooms-Z-Image-Turbo-v1": 1
+   }
+  },
+  "actualModel": "Tongyi-MAI/Z-Image-Turbo",
+  "overrides": [],
+  "parameterMappings": [
+   {
+    "from": "width+height",
+    "to": "size",
+    "value": "512x512"
+   }
+  ],
+  "parameterOmissions": [
+   {
+    "from": "sampler_name",
+    "to": null,
+    "value": "euler_ancestral",
+    "sent": false,
+    "reason": "该端点不支持：魔搭 API-Inference 官方参数表无 sampler_name；未发送（https://www.modelscope.cn/docs/model-service/API-Inference/intro）"
+   },
+   {
+    "from": "denoise",
+    "to": null,
+    "value": 1,
+    "sent": false,
+    "reason": "该端点不支持：魔搭 API-Inference 官方参数表无 denoise；未发送（https://www.modelscope.cn/docs/model-service/API-Inference/intro）"
+   }
+  ],
+  "schemaFields": [
+   "model",
+   "prompt",
+   "negative_prompt",
+   "size",
+   "seed",
+   "steps",
+   "guidance",
+   "image_url",
+   "loras"
+  ],
+  "upstreamEndpoint": "https://api-inference.modelscope.ai/v1/images/generations",
+  "route": "/api/modelscope_ai/generate",
+  "submissions": [
+   {
+    "endpoint": "https://api-inference.modelscope.ai/v1/images/generations",
+    "parameters": {
+     "model": "Tongyi-MAI/Z-Image-Turbo",
+     "prompt": "a futuristic starship corridor, warm ambient lighting, wide angle",
+     "size": "512x512",
+     "negative_prompt": "blurry, low quality",
+     "steps": 8,
+     "guidance": 3,
+     "seed": 42,
+     "loras": {
+      "LcarsPicturesDatabase/ST-TNG-Rooms-Z-Image-Turbo-v1": 1
+     }
+    },
+    "status": 200
+   }
+  ],
+  "executionTrace": [
+   {
+    "provider": "modelscope_ai",
+    "model": "Tongyi-MAI/Z-Image-Turbo",
+    "method": "POST",
+    "endpoint": "https://api-inference.modelscope.ai/v1/images/generations",
+    "requestBody": {
+     "model": "Tongyi-MAI/Z-Image-Turbo",
+     "prompt": "a futuristic starship corridor, warm ambient lighting, wide angle",
+     "size": "512x512",
+     "negative_prompt": "blurry, low quality",
+     "steps": 8,
+     "guidance": 3,
+     "seed": 42,
+     "loras": {
+      "LcarsPicturesDatabase/ST-TNG-Rooms-Z-Image-Turbo-v1": 1
+     }
+    },
+    "status": 200,
+    "statusText": "OK",
+    "responseBody": {
+     "kind": "raw-response",
+     "url": "/api/media/raw/0fef32c0caec6dcdbefdc7226ea413e164157d2fcea7c0f5de817d492f1fe42c",
+     "sha256": "0fef32c0caec6dcdbefdc7226ea413e164157d2fcea7c0f5de817d492f1fe42c",
+     "size": 126,
+     "encoding": "utf-8",
+     "fidelity": "original"
+    },
+    "maskedKey": "ms-b...830d",
+    "keyUsage": {
+     "provider": "modelscope_ai",
+     "index": 0,
+     "count": 2,
+     "source": "pool"
+    },
+    "durationMs": 2045
+   },
+   {
+    "provider": "modelscope_ai",
+    "model": "Tongyi-MAI/Z-Image-Turbo",
+    "method": "GET",
+    "endpoint": "https://api-inference.modelscope.ai/v1/tasks/356f010c-66b5-4bd7-a2c3-744e7b1578c4",
+    "status": 200,
+    "statusText": "OK",
+    "responseBody": {
+     "kind": "raw-response",
+     "url": "/api/media/raw/40d3413aaccacac70468360fa731e7d242ba71f9b1b1051e8c5159cfaf098243",
+     "sha256": "40d3413aaccacac70468360fa731e7d242ba71f9b1b1051e8c5159cfaf098243",
+     "size": 103,
+     "encoding": "utf-8",
+     "fidelity": "original"
+    },
+    "maskedKey": "ms-b...830d",
+    "keyUsage": {
+     "provider": "modelscope_ai",
+     "index": 0,
+     "count": 2,
+     "source": "pool"
+    },
+    "durationMs": 395
+   },
+   {
+    "provider": "modelscope_ai",
+    "model": "Tongyi-MAI/Z-Image-Turbo",
+    "method": "GET",
+    "endpoint": "https://api-inference.modelscope.ai/v1/tasks/356f010c-66b5-4bd7-a2c3-744e7b1578c4",
+    "status": 200,
+    "statusText": "OK",
+    "responseBody": {
+     "kind": "raw-response",
+     "url": "/api/media/raw/40d3413aaccacac70468360fa731e7d242ba71f9b1b1051e8c5159cfaf098243",
+     "sha256": "40d3413aaccacac70468360fa731e7d242ba71f9b1b1051e8c5159cfaf098243",
+     "size": 103,
+     "encoding": "utf-8",
+     "fidelity": "original"
+    },
+    "maskedKey": "ms-b...830d",
+    "keyUsage": {
+     "provider": "modelscope_ai",
+     "index": 0,
+     "count": 2,
+     "source": "pool"
+    },
+    "durationMs": 399
+   },
+   {
+    "provider": "modelscope_ai",
+    "model": "Tongyi-MAI/Z-Image-Turbo",
+    "method": "GET",
+    "endpoint": "https://api-inference.modelscope.ai/v1/tasks/356f010c-66b5-4bd7-a2c3-744e7b1578c4",
+    "status": 200,
+    "statusText": "OK",
+    "responseBody": {
+     "kind": "raw-response",
+     "url": "/api/media/raw/40d3413aaccacac70468360fa731e7d242ba71f9b1b1051e8c5159cfaf098243",
+     "sha256": "40d3413aaccacac70468360fa731e7d242ba71f9b1b1051e8c5159cfaf098243",
+     "size": 103,
+     "encoding": "utf-8",
+     "fidelity": "original"
+    },
+    "maskedKey": "ms-b...830d",
+    "keyUsage": {
+     "provider": "modelscope_ai",
+     "index": 0,
+     "count": 2,
+     "source": "pool"
+    },
+    "durationMs": 390
+   },
+   {
+    "provider": "modelscope_ai",
+    "model": "Tongyi-MAI/Z-Image-Turbo",
+    "method": "GET",
+    "endpoint": "https://api-inference.modelscope.ai/v1/tasks/356f010c-66b5-4bd7-a2c3-744e7b1578c4",
+    "status": 200,
+    "statusText": "OK",
+    "responseBody": {
+     "kind": "raw-response",
+     "url": "/api/media/raw/40d3413aaccacac70468360fa731e7d242ba71f9b1b1051e8c5159cfaf098243",
+     "sha256": "40d3413aaccacac70468360fa731e7d242ba71f9b1b1051e8c5159cfaf098243",
+     "size": 103,
+     "encoding": "utf-8",
+     "fidelity": "original"
+    },
+    "maskedKey": "ms-b...830d",
+    "keyUsage": {
+     "provider": "modelscope_ai",
+     "index": 0,
+     "count": 2,
+     "source": "pool"
+    },
+    "durationMs": 395
+   },
+   {
+    "provider": "modelscope_ai",
+    "model": "Tongyi-MAI/Z-Image-Turbo",
+    "method": "GET",
+    "endpoint": "https://api-inference.modelscope.ai/v1/tasks/356f010c-66b5-4bd7-a2c3-744e7b1578c4",
+    "status": 200,
+    "statusText": "OK",
+    "responseBody": {
+     "kind": "raw-response",
+     "url": "/api/media/raw/40d3413aaccacac70468360fa731e7d242ba71f9b1b1051e8c5159cfaf098243",
+     "sha256": "40d3413aaccacac70468360fa731e7d242ba71f9b1b1051e8c5159cfaf098243",
+     "size": 103,
+     "encoding": "utf-8",
+     "fidelity": "original"
+    },
+    "maskedKey": "ms-b...830d",
+    "keyUsage": {
+     "provider": "modelscope_ai",
+     "index": 0,
+     "count": 2,
+     "source": "pool"
+    },
+    "durationMs": 395
+   },
+   {
+    "provider": "modelscope_ai",
+    "model": "Tongyi-MAI/Z-Image-Turbo",
+    "method": "GET",
+    "endpoint": "https://api-inference.modelscope.ai/v1/tasks/356f010c-66b5-4bd7-a2c3-744e7b1578c4",
+    "status": 200,
+    "statusText": "OK",
+    "responseBody": {
+     "kind": "raw-response",
+     "url": "/api/media/raw/40d3413aaccacac70468360fa731e7d242ba71f9b1b1051e8c5159cfaf098243",
+     "sha256": "40d3413aaccacac70468360fa731e7d242ba71f9b1b1051e8c5159cfaf098243",
+     "size": 103,
+     "encoding": "utf-8",
+     "fidelity": "original"
+    },
+    "maskedKey": "ms-b...830d",
+    "keyUsage": {
+     "provider": "modelscope_ai",
+     "index": 0,
+     "count": 2,
+     "source": "pool"
+    },
+    "durationMs": 398
+   },
+   {
+    "provider": "modelscope_ai",
+    "model": "Tongyi-MAI/Z-Image-Turbo",
+    "method": "GET",
+    "endpoint": "https://api-inference.modelscope.ai/v1/tasks/356f010c-66b5-4bd7-a2c3-744e7b1578c4",
+    "status": 200,
+    "statusText": "OK",
+    "responseBody": {
+     "kind": "raw-response",
+     "url": "/api/media/raw/40d3413aaccacac70468360fa731e7d242ba71f9b1b1051e8c5159cfaf098243",
+     "sha256": "40d3413aaccacac70468360fa731e7d242ba71f9b1b1051e8c5159cfaf098243",
+     "size": 103,
+     "encoding": "utf-8",
+     "fidelity": "original"
+    },
+    "maskedKey": "ms-b...830d",
+    "keyUsage": {
+     "provider": "modelscope_ai",
+     "index": 0,
+     "count": 2,
+     "source": "pool"
+    },
+    "durationMs": 396
+   },
+   {
+    "provider": "modelscope_ai",
+    "model": "Tongyi-MAI/Z-Image-Turbo",
+    "method": "GET",
+    "endpoint": "https://api-inference.modelscope.ai/v1/tasks/356f010c-66b5-4bd7-a2c3-744e7b1578c4",
+    "status": 200,
+    "statusText": "OK",
+    "responseBody": {
+     "kind": "raw-response",
+     "url": "/api/media/raw/40d3413aaccacac70468360fa731e7d242ba71f9b1b1051e8c5159cfaf098243",
+     "sha256": "40d3413aaccacac70468360fa731e7d242ba71f9b1b1051e8c5159cfaf098243",
+     "size": 103,
+     "encoding": "utf-8",
+     "fidelity": "original"
+    },
+    "maskedKey": "ms-b...830d",
+    "keyUsage": {
+     "provider": "modelscope_ai",
+     "index": 0,
+     "count": 2,
+     "source": "pool"
+    },
+    "durationMs": 414
+   },
+   {
+    "provider": "modelscope_ai",
+    "model": "Tongyi-MAI/Z-Image-Turbo",
+    "method": "GET",
+    "endpoint": "https://api-inference.modelscope.ai/v1/tasks/356f010c-66b5-4bd7-a2c3-744e7b1578c4",
+    "status": 200,
+    "statusText": "OK",
+    "responseBody": {
+     "kind": "raw-response",
+     "url": "/api/media/raw/40d3413aaccacac70468360fa731e7d242ba71f9b1b1051e8c5159cfaf098243",
+     "sha256": "40d3413aaccacac70468360fa731e7d242ba71f9b1b1051e8c5159cfaf098243",
+     "size": 103,
+     "encoding": "utf-8",
+     "fidelity": "original"
+    },
+    "maskedKey": "ms-b...830d",
+    "keyUsage": {
+     "provider": "modelscope_ai",
+     "index": 0,
+     "count": 2,
+     "source": "pool"
+    },
+    "durationMs": 401
+   },
+   {
+    "provider": "modelscope_ai",
+    "model": "Tongyi-MAI/Z-Image-Turbo",
+    "method": "GET",
+    "endpoint": "https://api-inference.modelscope.ai/v1/tasks/356f010c-66b5-4bd7-a2c3-744e7b1578c4",
+    "status": 200,
+    "statusText": "OK",
+    "responseBody": {
+     "kind": "raw-response",
+     "url": "/api/media/raw/471463b7ce476d3a529cffca19a7d8b208ce97a5b2e04c384169f59ca2369f08",
+     "sha256": "471463b7ce476d3a529cffca19a7d8b208ce97a5b2e04c384169f59ca2369f08",
+     "size": 306,
+     "encoding": "utf-8",
+     "fidelity": "original"
+    },
+    "maskedKey": "ms-b...830d",
+    "keyUsage": {
+     "provider": "modelscope_ai",
+     "index": 0,
+     "count": 2,
+     "source": "pool"
+    },
+    "durationMs": 2940
+   }
+  ],
+  "keyUsages": [
+   {
+    "provider": "modelscope_ai",
+    "index": 0,
+    "count": 2,
+    "source": "pool"
+   }
+  ]
+ },
+ "url": "/api/media/f3180838b4822adeb63ea714a480ef27f6be79d4f2c451d914ddb871bd4456c7",
+ "imageIndex": 0,
+ "imageCount": 1,
+ "requestOrigin": "browser",
+ "workflowSnapshot": {
+  "format": "comfycanvas",
+  "version": 1,
+  "nodes": [
+   {
+    "id": "node-public-zimg-1",
+    "type": "CheckpointLoaderSimple",
+    "title": "加载底模 (魔搭 AI)",
+    "pos": {
+     "x": 50,
+     "y": 486
+    },
+    "width": 280,
+    "inputs": [],
+    "outputs": [
+     {
+      "id": "MODEL",
+      "name": "MODEL",
+      "type": "MODEL",
+      "label": "MODEL"
+     },
+     {
+      "id": "CLIP",
+      "name": "CLIP",
+      "type": "CLIP",
+      "label": "CLIP"
+     },
+     {
+      "id": "VAE",
+      "name": "VAE",
+      "type": "VAE",
+      "label": "VAE"
+     }
+    ],
+    "values": {
+     "ckpt_name": "Tongyi-MAI/Z-Image-Turbo",
+     "targetProvider": "modelscope_ai",
+     "hf_provider": "",
+     "resolution": "1k",
+     "shift": 3,
+     "random_seed": false,
+     "gallery_images": [],
+     "provider": "modelscope_ai",
+     "model": "",
+     "model_endpoint": "",
+     "civitai_engine": "comfy",
+     "civitai_ecosystem": "krea2",
+     "trigger_words": "",
+     "base_model": "",
+     "civitai_model": "turbo",
+     "negative_prompt": "blurry",
+     "width": 768,
+     "height": 1344,
+     "resourceVerified": true,
+     "import_unresolved_resource": false,
+     "unresolvedResource": false
+    },
+    "state": "idle",
+    "executionProgress": 0
+   },
+   {
+    "id": "node-public-zimg-2",
+    "type": "CLIPTextEncode",
+    "title": "正向提示词 (Prompt)",
+    "pos": {
+     "x": 390,
+     "y": 576
+    },
+    "width": 440,
+    "inputs": [
+     {
+      "id": "clip",
+      "name": "clip",
+      "type": "CLIP",
+      "label": "CLIP"
+     },
+     {
+      "id": "image",
+      "name": "image",
+      "type": "IMAGE",
+      "label": "image"
+     }
+    ],
+    "outputs": [
+     {
+      "id": "CONDITIONING",
+      "name": "CONDITIONING",
+      "type": "CONDITIONING",
+      "label": "CONDITIONING"
+     }
+    ],
+    "values": {
+     "text": "a futuristic starship corridor, warm ambient lighting, wide angle"
+    },
+    "state": "idle",
+    "executionProgress": 0
+   },
+   {
+    "id": "node-public-zimg-4",
+    "type": "KSampler",
+    "title": "KSampler (8 步极速)",
+    "pos": {
+     "x": 870,
+     "y": 150
+    },
+    "width": 300,
+    "inputs": [
+     {
+      "id": "model",
+      "name": "model",
+      "type": "MODEL",
+      "label": "MODEL"
+     },
+     {
+      "id": "positive",
+      "name": "positive",
+      "type": "CONDITIONING",
+      "label": "positive"
+     },
+     {
+      "id": "negative",
+      "name": "negative",
+      "type": "CONDITIONING",
+      "label": "negative"
+     },
+     {
+      "id": "latent_image",
+      "name": "latent_image",
+      "type": "LATENT",
+      "label": "latent_image"
+     }
+    ],
+    "outputs": [
+     {
+      "id": "LATENT",
+      "name": "LATENT",
+      "type": "LATENT",
+      "label": "LATENT"
+     }
+    ],
+    "values": {
+     "control_after_generate": "fixed",
+     "seed": 42,
+     "sampler_name": "euler_ancestral",
+     "scheduler": "",
+     "denoise": 1,
+     "steps": 8,
+     "cfg": 3
+    },
+    "state": "idle",
+    "outputAt": "2026-10-16T03:28:39.107Z",
+    "restoredFromPreviousSession": {
+     "at": "2026-10-16T03:28:39.107Z"
+    },
+    "executionProgress": 0
+   },
+   {
+    "id": "node-public-zimg-vae",
+    "type": "VAEDecode",
+    "title": "VAE 解码",
+    "pos": {
+     "x": 1210,
+     "y": 150
+    },
+    "width": 260,
+    "inputs": [
+     {
+      "id": "samples",
+      "name": "samples",
+      "type": "LATENT",
+      "label": "samples"
+     },
+     {
+      "id": "vae",
+      "name": "vae",
+      "type": "VAE",
+      "label": "vae"
+     }
+    ],
+    "outputs": [
+     {
+      "id": "IMAGE",
+      "name": "IMAGE",
+      "type": "IMAGE",
+      "label": "IMAGE"
+     }
+    ],
+    "values": {},
+    "state": "idle",
+    "executionProgress": 0
+   },
+   {
+    "id": "node-public-zimg-5",
+    "type": "SaveImage",
+    "title": "保存图像",
+    "pos": {
+     "x": 1510,
+     "y": 150
+    },
+    "width": 300,
+    "inputs": [
+     {
+      "id": "images",
+      "name": "images",
+      "type": "IMAGE",
+      "label": "images"
+     }
+    ],
+    "outputs": [],
+    "values": {
+     "filename_prefix": "Modelscope_ai_Z-Image-Turbo"
+    },
+    "state": "idle",
+    "outputAt": "2026-10-16T03:28:39.107Z",
+    "restoredFromPreviousSession": {
+     "at": "2026-10-16T03:28:39.107Z"
+    },
+    "executionProgress": 0
+   },
+   {
+    "id": "node-1792010341260",
+    "type": "CLIPTextEncodeNegative",
+    "title": "CLIP Text Encode (Negative Prompt)",
+    "pos": {
+     "x": 120,
+     "y": 42
+    },
+    "width": 380,
+    "inputs": [
+     {
+      "id": "clip",
+      "name": "clip",
+      "type": "CLIP",
+      "label": "CLIP"
+     }
+    ],
+    "outputs": [
+     {
+      "id": "CONDITIONING",
+      "name": "CONDITIONING",
+      "type": "CONDITIONING",
+      "label": "CONDITIONING"
+     }
+    ],
+    "values": {
+     "text": "blurry, low quality"
+    },
+    "state": "idle",
+    "executionProgress": 0
+   },
+   {
+    "id": "node-1792010341490",
+    "type": "EmptyLatentImage",
+    "title": "Empty Latent Image",
+    "pos": {
+     "x": 120,
+     "y": 42
+    },
+    "width": 300,
+    "inputs": [],
+    "outputs": [
+     {
+      "id": "LATENT",
+      "name": "LATENT",
+      "type": "LATENT",
+      "label": "LATENT"
+     }
+    ],
+    "values": {
+     "width": 512,
+     "batch_size": 1,
+     "height": 512
+    },
+    "state": "idle",
+    "executionProgress": 0
+   },
+   {
+    "id": "node-lora-1792121019031",
+    "type": "LoRALoader",
+    "title": "LoRA: LcarsPicturesDatabase/ST-TNG-Rooms-Z-Image-Turbo-v1",
+    "pos": {
+     "x": -1221,
+     "y": -1280
+    },
+    "width": 320,
+    "inputs": [
+     {
+      "id": "model",
+      "name": "model",
+      "type": "MODEL",
+      "label": "MODEL"
+     },
+     {
+      "id": "clip",
+      "name": "clip",
+      "type": "CLIP",
+      "label": "CLIP"
+     }
+    ],
+    "outputs": [
+     {
+      "id": "MODEL",
+      "name": "MODEL",
+      "type": "MODEL",
+      "label": "MODEL"
+     },
+     {
+      "id": "CLIP",
+      "name": "CLIP",
+      "type": "CLIP",
+      "label": "CLIP"
+     }
+    ],
+    "values": {
+     "lora_name": "LcarsPicturesDatabase/ST-TNG-Rooms-Z-Image-Turbo-v1",
+     "trigger_words": "",
+     "base_model": "Tongyi-MAI/Z-Image-Turbo",
+     "source_provider": "modelscope_ai",
+     "strength_model": 1,
+     "resource_source": "modelscope_ai",
+     "resource_kind": "lora",
+     "resourceVerified": true
+    },
+    "state": "idle",
+    "executionProgress": 0
+   }
+  ],
+  "connections": [
+   {
+    "id": "pub-zc-6",
+    "fromNodeId": "node-public-zimg-2",
+    "fromSocketId": "CONDITIONING",
+    "toNodeId": "node-public-zimg-4",
+    "toSocketId": "positive",
+    "type": "CONDITIONING"
+   },
+   {
+    "id": "pub-zc-9",
+    "fromNodeId": "node-public-zimg-4",
+    "fromSocketId": "LATENT",
+    "toNodeId": "node-public-zimg-vae",
+    "toSocketId": "samples",
+    "type": "LATENT"
+   },
+   {
+    "id": "pub-zc-10",
+    "fromNodeId": "node-public-zimg-1",
+    "fromSocketId": "VAE",
+    "toNodeId": "node-public-zimg-vae",
+    "toSocketId": "vae",
+    "type": "VAE"
+   },
+   {
+    "id": "pub-zc-11",
+    "fromNodeId": "node-public-zimg-vae",
+    "fromSocketId": "IMAGE",
+    "toNodeId": "node-public-zimg-5",
+    "toSocketId": "images",
+    "type": "IMAGE"
+   },
+   {
+    "id": "node-public-zimg-1-node-public-zimg-2-clip",
+    "fromNodeId": "node-lora-1792121019031",
+    "fromSocketId": "CLIP",
+    "toNodeId": "node-public-zimg-2",
+    "toSocketId": "clip",
+    "type": "CLIP"
+   },
+   {
+    "id": "conn-1792010372645-3ba5",
+    "fromNodeId": "node-1792010341260",
+    "fromSocketId": "CONDITIONING",
+    "toNodeId": "node-public-zimg-4",
+    "toSocketId": "negative",
+    "type": "CONDITIONING"
+   },
+   {
+    "id": "conn-1792010373195-3ma5",
+    "fromNodeId": "node-1792010341490",
+    "fromSocketId": "LATENT",
+    "toNodeId": "node-public-zimg-4",
+    "toSocketId": "latent_image",
+    "type": "LATENT"
+   },
+   {
+    "id": "node-lora-1792121019031-model-out",
+    "fromNodeId": "node-lora-1792121019031",
+    "fromSocketId": "MODEL",
+    "toNodeId": "node-public-zimg-4",
+    "toSocketId": "model",
+    "type": "MODEL"
+   },
+   {
+    "id": "node-public-zimg-1-node-lora-1792121019031-model",
+    "fromNodeId": "node-public-zimg-1",
+    "fromSocketId": "MODEL",
+    "toNodeId": "node-lora-1792121019031",
+    "toSocketId": "model",
+    "type": "MODEL"
+   }
+  ],
+  "executingNodeId": "node-public-zimg-4",
+  "requestMetadata": {
+   "promptTransform": {
+    "prependedTriggerWords": "",
+    "originalPrompt": "a futuristic starship corridor, warm ambient lighting, wide angle",
+    "finalPrompt": "a futuristic starship corridor, warm ambient lighting, wide angle"
+   }
+  }
+ },
+ "id": "hist_1792121951701_hr9oq",
+ "timestamp": 1792121951701,
+ "actualProvider": "ModelScope AI (魔搭国际站)",
+ "sampler": null,
+ "scheduler": null,
+ "width": null,
+ "height": null
+}

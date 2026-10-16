@@ -1,0 +1,304 @@
+{
+  "$schemaNote": "草案 — 仅声明，非可执行驱动。真相源: docs/provider-api-audit/aimlapi.md (2026-10-15)",
+  "id": "aimlapi",
+  "displayName": "AIMLAPI",
+  "domainTypes": {
+    "ImageJob": "{ prompt, model, seed?, loras?, num_inference_steps?, image_size?, num_images?, output_format?, guidance_scale? }",
+    "LoraRef": "{ path: string(URL|HF owner/repo), scale: number(0..4) }",
+    "VideoJob": "{ model, prompt, image_url?, seed?, duration?, resolution?, negative_prompt? }",
+    "CatalogRow": "{ id, capabilities?, output_modalities? }"
+  },
+  "auth": {
+    "envVar": "AIMLAPI_KEY",
+    "header": "Authorization",
+    "scheme": "Bearer",
+    "contentType": "application/json",
+    "sources": [
+      "https://docs.aimlapi.com/"
+    ]
+  },
+  "base": {
+    "root": "https://api.aimlapi.com",
+    "openaiCompatNote": "示例 base_url=https://api.aimlapi.com/v1"
+  },
+  "catalog": {
+    "method": "GET",
+    "path": "/v1/models",
+    "queryFiltersDocumented": [
+      "capabilities=image_to_video",
+      "output_modalities=video"
+    ],
+    "pagination": "list_plus_filter_primary",
+    "authNote": "docs ask 称可不带 key",
+    "sources": [
+      "https://docs.aimlapi.com/api-references/service-endpoints/complete-model-list.md"
+    ]
+  },
+  "image": {
+    "mode": "sync",
+    "method": "POST",
+    "path": "/v1/images/generations",
+    "exampleModels": [
+      "alibaba/z-image-turbo-lora",
+      "blackforestlabs/flux-2-lora"
+    ],
+    "parametersCommon": {
+      "seed": {
+        "type": "integer",
+        "min": 1,
+        "supported": true,
+        "sendStatus": "会发送",
+        "sendEvidence": "canvas-e2e-aimlapi-0006（挑刺过、画布收口，欠费接线 PASS_BILLING）：alibaba/z-image-turbo-lora + ostris/z_image_turbo_childrens_drawings @0.85；actualRequest.loras=[{path,scale:0.85}]；上游 HTTP 403 欠费原文；证据 /workspace/canvas-e2e-aimlapi-0006/ + docs/evidence/aimlapi-fake-lora-live-403-summary.json；Researchy 对照官网 OpenAPI 一致；本轮 seed 入 actualRequest（z-image-turbo-lora）"
+      },
+      "num_images": {
+        "type": "integer",
+        "min": 1,
+        "max": 4,
+        "default": 1
+      },
+      "output_format": {
+        "enum": [
+          "jpeg",
+          "png",
+          "webp"
+        ]
+      }
+    },
+    "parametersByModel": {
+      "alibaba/z-image-turbo-lora": {
+        "num_inference_steps": {
+          "type": "integer",
+          "min": 1,
+          "max": 8,
+          "outOfRange": "超 8 本地拒绝，禁止截断",
+          "sendStatus": "会发送",
+          "sendEvidence": "canvas-e2e-aimlapi-0006（挑刺过、画布收口，欠费接线 PASS_BILLING）：alibaba/z-image-turbo-lora + ostris/z_image_turbo_childrens_drawings @0.85；actualRequest.loras=[{path,scale:0.85}]；上游 HTTP 403 欠费原文；证据 /workspace/canvas-e2e-aimlapi-0006/ + docs/evidence/aimlapi-fake-lora-live-403-summary.json；Researchy 对照官网 OpenAPI 一致；本轮 steps=8（schema 上限）入 actualRequest"
+        },
+        "image_size": {
+          "oneOf": [
+            "{width,height 512-2048 step 32}",
+            "preset string"
+          ],
+          "canvasMapping": "画布 width+height → image_size{width,height}",
+          "sendStatus": "会发送",
+          "sendEvidence": "canvas-e2e-aimlapi-0006（挑刺过、画布收口，欠费接线 PASS_BILLING）：alibaba/z-image-turbo-lora + ostris/z_image_turbo_childrens_drawings @0.85；actualRequest.loras=[{path,scale:0.85}]；上游 HTTP 403 欠费原文；证据 /workspace/canvas-e2e-aimlapi-0006/ + docs/evidence/aimlapi-fake-lora-live-403-summary.json；Researchy 对照官网 OpenAPI 一致；本轮 image_size=square 入 actualRequest"
+        },
+        "enable_prompt_expansion": {
+          "type": "boolean",
+          "default": true
+        },
+        "acceleration": {
+          "enum": [
+            "none",
+            "regular",
+            "high"
+          ]
+        },
+        "loras": {
+          "maxItems": 3,
+          "item": "{path,scale 0-4}",
+          "sendStatus": "会发送",
+          "sendEvidence": "canvas-e2e-aimlapi-0006（挑刺过、画布收口，欠费接线 PASS_BILLING）：alibaba/z-image-turbo-lora + ostris/z_image_turbo_childrens_drawings @0.85；actualRequest.loras=[{path,scale:0.85}]；上游 HTTP 403 欠费原文；证据 /workspace/canvas-e2e-aimlapi-0006/ + docs/evidence/aimlapi-fake-lora-live-403-summary.json；Researchy 对照官网 OpenAPI 一致",
+          "maxItemsSource": "官方 OpenAPI loras.maxItems:3（https://docs.aimlapi.com/api-references/image-models/alibaba-cloud/z-image-turbo-lora，Researchy 2026-10-16 13:17:24 抓取），不以审计文档为来源"
+        },
+        "_notDeclared": "官方 schema 无 guidance_scale / negative_prompt → 画布标不会发送，不发出"
+      },
+      "blackforestlabs/flux-2-lora": {
+        "guidance_scale": {
+          "type": "number",
+          "min": 0,
+          "max": 20
+        },
+        "num_inference_steps": {
+          "type": "integer",
+          "min": 4,
+          "max": 50
+        },
+        "image_size": {
+          "anyOf": [
+            {
+              "object": {
+                "width": "512-2048 step 32",
+                "height": "512-2048 step 32"
+              },
+              "default": "1024x768"
+            },
+            {
+              "preset": [
+                "square_hd",
+                "square",
+                "portrait_4_3",
+                "portrait_16_9",
+                "landscape_4_3",
+                "landscape_16_9"
+              ],
+              "default": "landscape_4_3"
+            }
+          ],
+          "canvasMapping": "画布 width+height → image_size{width,height}；属会发送",
+          "source": "https://docs.aimlapi.com/api-references/image-models/flux/flux-2-lora.md (Researchy curl 2026-10-15)"
+        }
+      }
+    },
+    "outputs": "data[].url | data[].b64_json",
+    "poll": null,
+    "sources": [
+      "https://docs.aimlapi.com/api-references/image-models/alibaba-cloud/z-image-turbo-lora.md",
+      "https://docs.aimlapi.com/api-references/image-models/flux/flux-2-lora.md"
+    ]
+  },
+  "video": {
+    "supported": true,
+    "mode": "async",
+    "create": {
+      "method": "POST",
+      "path": "/v2/video/generations"
+    },
+    "poll": {
+      "method": "GET",
+      "path": "/v2/video/generations",
+      "query": {
+        "generation_id": "required"
+      },
+      "suggestedIntervalSec": 15,
+      "statusesOpenApi": [
+        "queued",
+        "generating",
+        "completed",
+        "error"
+      ],
+      "statusesAlsoSeenInExamples": [
+        "waiting",
+        "succeeded"
+      ],
+      "statusRule": "以 OpenAPI enum 为主，实测兼容多值"
+    },
+    "exampleModels": [
+      "pixverse/v5.5/image-to-video"
+    ],
+    "parametersPixverseV55I2v": {
+      "seed": {
+        "type": "integer",
+        "supported": true
+      },
+      "duration": {
+        "type": "integer",
+        "enum": [
+          5,
+          8,
+          10
+        ],
+        "note": "1080p 不支持 8s"
+      },
+      "resolution": {
+        "enum": [
+          "360p",
+          "540p",
+          "720p",
+          "1080p"
+        ],
+        "default": "720p"
+      },
+      "fps": {
+        "supported": false,
+        "reason": "该 schema 未文档化 fps"
+      },
+      "prompt": {
+        "required": true
+      },
+      "image_url": {
+        "required": true
+      },
+      "negative_prompt": {
+        "optional": true
+      },
+      "style": {
+        "optional": true
+      }
+    },
+    "lora": {
+      "supported": false,
+      "reason": "Pixverse V5.5 i2v OpenAPI 无 loras 字段"
+    },
+    "note": "llms.txt 另有大量 Video Models，各自独立 schema 页；按模型 schema 接线，禁止张冠李戴",
+    "sources": [
+      "https://docs.aimlapi.com/api-references/video-models/pixverse/v5-5-image-to-video.md"
+    ]
+  },
+  "lora": {
+    "image": {
+      "supportedWhenModelDeclares": true,
+      "field": "loras",
+      "maxItems": 3,
+      "item": {
+        "path": {
+          "type": "string",
+          "required": true,
+          "accepts": [
+            "URL",
+            "HuggingFace owner/repo"
+          ],
+          "sendStatus": "会发送",
+          "sendEvidence": "canvas-e2e-aimlapi-0006（挑刺过、画布收口，欠费接线 PASS_BILLING）：alibaba/z-image-turbo-lora + ostris/z_image_turbo_childrens_drawings @0.85；actualRequest.loras=[{path,scale:0.85}]；上游 HTTP 403 欠费原文；证据 /workspace/canvas-e2e-aimlapi-0006/ + docs/evidence/aimlapi-fake-lora-live-403-summary.json；Researchy 对照官网 OpenAPI 一致"
+        },
+        "scale": {
+          "type": "number",
+          "min": 0,
+          "max": 4,
+          "default": null,
+          "uiRule": "须显式传；勿静默 0.8；字段名是 scale 不是 strength",
+          "sendStatus": "会发送",
+          "sendEvidence": "canvas-e2e-aimlapi-0006（挑刺过、画布收口，欠费接线 PASS_BILLING）：alibaba/z-image-turbo-lora + ostris/z_image_turbo_childrens_drawings @0.85；actualRequest.loras=[{path,scale:0.85}]；上游 HTTP 403 欠费原文；证据 /workspace/canvas-e2e-aimlapi-0006/ + docs/evidence/aimlapi-fake-lora-live-403-summary.json；Researchy 对照官网 OpenAPI 一致"
+        }
+      },
+      "unsupportedModels": "schema 无 loras → 拒绝挂载 / 不塞假参数",
+      "maxItemsSource": "官方 OpenAPI loras.maxItems:3（https://docs.aimlapi.com/api-references/image-models/alibaba-cloud/z-image-turbo-lora，Researchy 2026-10-16 13:17:24 抓取），不以审计文档为来源"
+    },
+    "video": {
+      "pixverse_v5_5_i2v": false
+    },
+    "sources": [
+      "https://docs.aimlapi.com/api-references/image-models/alibaba-cloud/z-image-turbo-lora.md",
+      "https://docs.aimlapi.com/api-references/image-models/flux/flux-2-lora.md"
+    ]
+  },
+  "billing": {
+    "balance": {
+      "method": "GET",
+      "path": "/v2/billing",
+      "fields": [
+        "current_balance",
+        "currency"
+      ],
+      "legacy": "/v1/billing/balance"
+    },
+    "insufficientHints": [
+      {
+        "http": 403,
+        "meaning": "run out of credits（官方 4xx 文档；不返回 402）"
+      }
+    ],
+    "sources": [
+      "https://docs.aimlapi.com/api-references/service-endpoints/account-balance.md",
+      "https://docs.aimlapi.com/errors-and-messages/errors-with-status-code-4xx.md"
+    ]
+  },
+  "acceptanceNotes": [
+    "LoRA: loras[].path + loras[].scale (0–4)，最多 3；无默认 scale",
+    "图 /v1/images/generations vs 视频 /v2/video/generations + generation_id 轮询",
+    "欠费验 403，勿只认 402",
+    "按模型 schema 决定是否露出 LoRA / seed / duration",
+    "2026-10-16 aimlapi-0006：z-image-turbo-lora actualRequest 证实 loras[{path,scale}]/image_size/num_inference_steps/seed 会发送（至上游 403 欠费）；挑刺过、画布收口。cfg/negative 仍不会发送。",
+    "2026-10-16 fix5 UI：历史尺寸行不再与「响应体 505 B」混淆（挑刺过）；证据 /workspace/canvas-e2e-fix5-accept-1618/；勿升 PASS。"
+  ],
+  "contractTestHint": "z-image-turbo-lora: width+height→image_size, steps 1-8 (20 本地拒绝), seed≥1, loras[{path,scale:0.85}] 必发（aimlapi-0006 已证实会发送，至 403）；cfg/negative 标不会发送",
+  "_auditStatus": "2026-10-16 16:31：fix5 UI 收口（非升 PASS）——尺寸行不再与「响应体 505 B」混淆；证据 /workspace/canvas-e2e-fix5-accept-1618/；徽章仍 PASS_BILLING（aimlapi-0006）。2026-10-16 ~01:00 JST tinkabot：认领 aimlapi-0006（挑刺过）——loras[{path,scale}]/image_size/num_inference_steps/seed 升「会发送」；欠费 403 接线非真出图。前序 2026-10-15 03:26：旧审计仅对比；以 v2 与 DIFF 为准。",
+  "fix5Ui": {
+    "verdict": "UI_CLOSED",
+    "notPassUpgrade": true,
+    "item": "尺寸行 ≠ 响应体 505 B",
+    "evidence": "/workspace/canvas-e2e-fix5-accept-1618/",
+    "shot": "01-aimlapi-size-and-unsupported.png",
+    "at": "2026-10-16 16:31"
+  }
+}

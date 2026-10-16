@@ -1,0 +1,157 @@
+{
+  "$schemaNote": "草案 — 仅声明。真相源: docs/provider-api-audit-v2/modelscope.md + DIFF.md（Researchy 2026-10-15）",
+  "id": "modelscope",
+  "displayName": "ModelScope（魔搭 CN / 国际站）",
+  "auth": {
+    "envVar": "MODELSCOPE_API_TOKEN",
+    "header": "Authorization",
+    "scheme": "Bearer"
+  },
+  "base": {
+    "root": "https://api-inference.modelscope.cn/v1",
+    "intl": {
+      "supported": true,
+      "root": "https://api-inference.modelscope.ai/v1",
+      "acceptanceBadge": "PASS_GENERATION（附缺口）",
+      "sendEvidence": [
+        "/workspace/canvas-e2e-modelscope-ai-lora-1137/",
+        "/workspace/canvas-e2e-modelscope-ai-lora-1152/"
+      ],
+      "evidenceNote": "国际站前端实测出图两次（Key #0/共2）；上游交互 11 段与 2 段已由挑刺按画面数过",
+      "paramRuleSource": "参数规则依据中国站官方文档（2026-10-16 11:52 实时抓取）",
+      "gap": "国际站官方文档正文当前取不到，待补",
+      "loraCatalog": "PUT www.modelscope.ai/api/v1/dolphin/models（只取国际站，不混中国站）",
+      "actualRequest": {
+        "model": "Tongyi-MAI/Z-Image-Turbo",
+        "size": "512x512",
+        "negative_prompt": "会发送",
+        "steps": 8,
+        "guidance": 3,
+        "seed": 42,
+        "loras": {
+          "LcarsPicturesDatabase/ST-TNG-Rooms-Z-Image-Turbo-v1": 1
+        }
+      },
+      "sendStatus": {
+        "model": "会发送",
+        "size": "会发送",
+        "negative_prompt": "会发送",
+        "steps": "会发送",
+        "guidance": "会发送",
+        "seed": "会发送",
+        "loras": "会发送",
+        "sampler": "该端点不支持 · 未发送",
+        "scheduler": "该端点不支持 · 未发送",
+        "loraMultiFileChoice": "待确认（只传仓库 ID，文档未写多 safetensors 时用哪个）"
+      }
+    }
+  },
+  "catalog": {
+    "method": "GET",
+    "path": "/models",
+    "shape": "{ object: list, data: [{ id }] }",
+    "warning": "列表混 LLM/多模态；不能假设 list = 全部可生图，须实测过滤",
+    "modelId": "ModelScope repo id org/name"
+  },
+  "image": {
+    "mode": "async (推荐)",
+    "create": {
+      "method": "POST",
+      "path": "/images/generations",
+      "headers": {
+        "X-ModelScope-Async-Mode": "true"
+      },
+      "returns": "task_id"
+    },
+    "poll": {
+      "method": "GET",
+      "path": "/tasks/{task_id}",
+      "headers": {
+        "X-ModelScope-Task-Type": "image_generation"
+      },
+      "statuses": [
+        "SUCCEED",
+        "FAILED",
+        "…"
+      ],
+      "success": "output_images[0]"
+    },
+    "parametersQwenImage": {
+      "model": {
+        "required": true
+      },
+      "prompt": {
+        "required": true,
+        "maxChars": 2000
+      },
+      "negative_prompt": {
+        "maxChars": 2000
+      },
+      "size": {
+        "type": "string",
+        "example": "1024x1024",
+        "canvasMapping": "width+height → size 'WxH'"
+      },
+      "seed": {
+        "type": "integer",
+        "min": 0,
+        "max": 2147483647
+      },
+      "steps": {
+        "type": "integer",
+        "min": 1,
+        "max": 100
+      },
+      "guidance": {
+        "type": "number",
+        "min": 1.5,
+        "max": 20,
+        "canvasField": "cfg",
+        "note": "字段名 guidance，不是 guidance_scale"
+      }
+    },
+    "edit": {
+      "image_url": "array (模型卡示例)"
+    },
+    "paramSourceCaveat": "范围以 modelscope.cn API-Inference 原页参数表为准（v2 已核）；阿里云转载仅作对照；以实测报错为准",
+    "unsupportedWireFields": {
+      "sampler_name": "官方 API-Inference 参数表无采样器 → 不发送 / 记 omissions",
+      "sampler": "同上",
+      "scheduler": "官方参数表无 → 不发送",
+      "denoise": "官方参数表无 → 不发送",
+      "note": "cfg 画布字段映射为官方 guidance（有）；勿透传未声明采样器字段（Researchy 05:29 + canvas-dev gating 证据）"
+    }
+  },
+  "video": {
+    "supported": false,
+    "reason": "API-Inference 文档范围只列 LLM/多模态/文生图；/v1/videos/generations 探针返回应用错误未出片 → 禁止接线装成功"
+  },
+  "lora": {
+    "modeA_loraAsModel": {
+      "how": "model = LoRA repo id，平台自动挂底模",
+      "strength": "无字段；勿塞 0.8"
+    },
+    "modeB_baseWithLoras": {
+      "field": "loras",
+      "single": "string <lora-repo-id>",
+      "multi": "object { <lora-repo-id>: weight }",
+      "maxItems": 6,
+      "constraint": "多 LoRA 权重总和必须 = 1.0",
+      "source": "Qwen/Qwen-Image-2512 模型卡注释"
+    },
+    "not": "scale/strength 数组",
+    "canvasRule": "多 LoRA 强度和 ≠ 1 时本地拒绝并说明，禁止自动归一化（黑盒改值）"
+  },
+  "billing": {
+    "insufficientHints": [],
+    "note": "魔粒/免费额度；402 原文未抓到；原样展示"
+  },
+  "contractTestHint": "Qwen-Image: 画布 steps→steps, cfg→guidance, seed→seed, 宽高→size 'WxH'；2 LoRA 0.6/0.4 → loras map；0.6/0.6 本地拒绝；填 sampler_name/scheduler/denoise → 不得进入上游 payload（omit +「该端点不支持」）",
+  "sources": [
+    "https://modelscope.cn/docs/model-service/API-Inference/intro",
+    "https://modelscope.cn/models/Qwen/Qwen-Image-2512",
+    "https://developer.aliyun.com/article/1689282",
+    "https://modelscope.cn/headlines/article/960"
+  ],
+  "_auditStatus": "2026-10-15 05:40：已对齐 v2 modelscope.md / Researchy 05:29；官方参数表无 sampler/scheduler/denoise；cfg→guidance。字段徽章仍以前端实测为准；2026-10-16 12:00 国际站 + LoRA 收口 PASS_GENERATION（附缺口）：参数规则依据中国站官方文档（11:52 实时抓取）；国际站官方文档正文当前取不到，待补"
+}

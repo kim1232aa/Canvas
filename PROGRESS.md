@@ -4,7 +4,7 @@
 
 **合并范围说明**：保留 origin/main 已有的验收事实与功能说明，以及本地 incoming `72f5372` 的 2026-10-12 接线修复记录。10-10 Runware 的 `PASS_GENERATION` 仅指当时实测路径；10-12 `lora` 字段修复尚未上游复验，余额不足不是生成成功。ModelsLab 的订阅限制仍只记 `PASS_BILLING`，参考图 `/img2img` 修复未完成真实复验。10-09 资产库旧 base64 不自动迁移是当时状态，10-12 新增打开资产库时上传的接线记录，不代表已逐项真实验收。下文 10-06/10-05 的状态及待验项限各自当时范围，后续 SenseNova、Fal、媒体架构进展按 10-10/10-09 记录并列保留，不提升任何验收等级。
 
-## 2026-10-13 引擎补齐、双轨架构落地与无头浏览器 E2E 实测闭环
+## 2026-10-13 引擎接线、双轨架构落地与前端路由错误透传记录（单测通过不代表全供应商实机验收完成）
 
 - **Replicate 官方推理引擎全面接入**：
   - **契约构建**：新建 `src/server/replicateImageContract.ts`，原生支持 `owner/name`、`owner/name:version` 及 64 字符 hex version，严谨映射 `num_inference_steps`、`guidance_scale`、`hf_lora`，并全面覆盖单/多图输出与对象型输出提取。
@@ -19,7 +19,7 @@
 - **架构级 LoRA 兼容性防护（严禁静默丢弃）**：
   - 在 `graphEngine.ts` 与 `resolveCheckpoint.ts` 建立严格的模型架构族校验（FLUX, SDXL, SD1.5, Krea2 等）。
   - 当用户在画布连接跨架构 LoRA 时（例如 SDXL/Krea2 LoRA 挂载至 FLUX.1），彻底封堵此前将 LoRA 静默剔除后发起虚假请求的违规行为，强制在执行前阻断并显式抛出架构不兼容错误。
-- **无头浏览器 E2E 走查与端到端实机验证（实测全通）**：
+- **无头浏览器 E2E 走查与上游响应透传记录（仅已出图项记 PASS_GENERATION，欠费/鉴权失败按实情记录）**：
   - **浏览器 E2E 走查**：使用自动化无头 Chrome（端口 9225）在真实前端页面（`http://127.0.0.1:3000`）实测，工具栏点击成功挂载 `ReplicateEngineNode` 与 `NanoGPTNode`；模型中心点击「添加一体化引擎节点」成功挂载 `FalAIEngineNode (FLUX.1 [schnell])`。
   - **真实上游错误透明回传（0 Mock / 100% 透明）**：
     - `FalAIEngineNode`: 上游 HTTP 403 `{"detail":"User is locked. Reason: TOP_UP."}`
@@ -34,7 +34,7 @@
   - `npm run lint` (`tsc --noEmit`): 0 error
   - `npm test`: 89 个测试套件 / 773 个测试用例全部 PASS
 
-## 2026-10-13 架构重构与审查闭环：server.ts 模块化瘦身 & 契约缺陷全面清零
+## 2026-10-13 架构重构记录：server.ts 路由拆解与契约审查修复
 
 - **server.ts 模块化解耦与瘦身（方案 B）**：
   - 成功抽离并建立独立路由模块 `src/server/routes/civitaiWorkflowRoute.ts`（约 850 行）与 `src/server/routes/civitaiModelRoutes.ts`（约 260 行）。
@@ -657,3 +657,21 @@ P 事实表（2026-09-29 抓取）：
 - 资产转画板按真实供应商/已知展示标签映射，保留 seed=0、固定种子、实际 steps/CFG/LoRA 等；未知来源明确拒绝。工作流格式先区分原生/ComfyUI，不再把标准 nodes 原样当本项目节点。取景框沿真实连线提取参数，不猜 provider、不补假提示词或采样器；不完整、多分支、固定云专用节点及 Advanced 采样器保留原图并提示未转换。Advanced 原始 widgets 保留，禁止误套普通 KSampler 顺序。
 - 本轮没有新增真实生成调用。验证覆盖分支定位、资源分类、导入零值/参数、共享提示词保护和失败状态；浏览器逐按钮视觉验收仍未完成，不声称全量模型已出图。
 - 最终验证：32 个测试文件、255 个测试通过，生产 Worker 构建及所有者访问、CSRF、加密设置、项目/媒体/历史持久化与重启恢复检查通过；类型检查 0 错误。
+
+---
+
+## 三、全量清查：写死模型 / 写死封面 / 写死 URL 专项清理记录
+
+1. **清除写死封面与写死参考图**：
+   - `src/constants/nodes.ts` (`LoadImage` 节点)：将 `default` 与 `defaultValues.image_url` 从写死的 Civitai 预览图 URL (`https://image.civitai.com/.../0695b6d7.../preview.jpeg`) 清空为 `''`。
+   - `src/constants/presets.ts`：清空全部 27 个预设模板中写死的 `previewImage`、未运行 `idle` 画框上预置的 `spatialFrames[].imageUrl` 以及 `LoadImage` 节点的 `image_url`，杜绝未生成前显示假封面或将模板缩略图混入图生图/图生视频请求。
+   - `src/server/routes/civitaiWorkflowRoute.ts`：移除 `xG1nkqKTMzGDvpLrqFT7WA` 写死 Cloudflare 账号 Hash 拼接逻辑，仅当上游返回真实 `http(s)` 图片地址时采用。
+2. **清除写死模型与默认服务商锁定**：
+   - `src/constants/nodes.ts`：`LLMReasoningNode` 默认 `provider` 从 `'sensenova'` 清空为 `''`；`ImageUpscaleWithModel` 默认 `model_name` 从 `'fal-ai/clarity-upscaler'` 清空为 `''`；`CivitaiLoRABrowserNode` 默认搜索词清空为 `''`。
+   - `src/constants/nodes.ts` / `src/engines/drivers/GeminiDriver.ts` / `src/engines/drivers/GrokCompatDriver.ts` / `src/components/BackendSettingsModal.tsx`：移除虚构模型 ID（`gemini-3.8-flash`、`grok-4.3`、`grok-4.5`），替换为真实模型标识并保留全开放自定义模型 ID 输入。
+   - `server.ts` (`/api/test-provider` & `/api/cloud-keys/balances`)：移除 Tensor.Art TAMS 鉴权探针中写死的模型 ID `'613045163490732233'`。
+3. **清除写死 URL 与补齐自定义 Base URL 路由**：
+   - `server.ts`：移除 `EXTRA_HOSTS` / `EXTRA_ORIGINS` 中写死的私人域名 `canvas.alibb123.ccwu.cc`。
+   - `server.ts`：将 `nanogpt` 正式纳入 `AuthProvider` / `AUTH_META` / `defaultKeys.nanogptBaseUrl` / `ALLOWED_SETTINGS_PLAIN`，修复 `resolveProviderAuth(req, 'nanogpt')` 并将 NanoGPT 生图与视频轮询统一路由至动态解析的 `nanoOrigin` / `nanoApiV1`。
+   - `server.ts` & `src/server/replicateImageContract.ts` & `src/server/routes/replicateRoutes.ts`：Replicate `/api/model-schema`、`/api/test-provider` 与异步预测 `pollUrl`、Runware `/api/models`、ModelsLab `/api/models` 全部支持从请求头、`cloudSettings` 或环境变量读取自定义 `baseUrl`。
+   - `src/components/WorkflowPresetsModal.tsx`：将 `civitaiUrlInput` 初始状态从写死的 `'https://civitai.red/images/136947637'` 清空为 `''`。

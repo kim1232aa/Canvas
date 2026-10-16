@@ -8,7 +8,7 @@ describe('real model APIs cannot use tool / foreign resource IDs',()=>{
     const job=buildTensorModelJob({model:'672797109289765558',prompt:'robot',width:512,height:768,seed:0,steps:12,cfg:7,sampler_name:'Euler',scheduler:'Discrete',loras:[{name:'672390779613802167',strength:0.8,civitaiId:'123'}]},'request-1');
     expect(job.stages[0].inputInitialize).toEqual({seed:'0'});
     expect(job.stages[1].diffusion).toMatchObject({sdModel:'672797109289765558',cfgScale:7,sampler:'Euler',scheduleName:'Discrete',lora:{items:[{loraModel:'672390779613802167',weight:0.8}]}});
-    expect(()=>tensorModelId('photoreal_studio_z_image')).toThrow(/工具名/);
+    expect(()=>tensorModelId('photoreal_studio_z_image')).toThrow(/接口名/);
     expect(()=>buildTensorModelJob({model:'672797109289765558',prompt:'x',width:512,height:512,loras:[{name:'foreign.safetensors',civitaiId:'672390779613802167',strength:.8}]},'x')).toThrow();
   });
   it('Tensor preserves explicit custom job fields, including an actual model override',()=>{
@@ -29,19 +29,20 @@ describe('Nano normalized API uses live per-model capabilities',()=>{
     expect(()=>buildNanoImagePayload({model:'flux-schnell',width:512,height:512},endpoint)).toThrow(/不支持/);
     expect(()=>buildNanoImagePayload({model:'flux-schnell',resolution:'1k'},endpoint)).toThrow(/官方支持值/);
   });
-  it('undeclared parameters are unknown, not unsupported: pass through with notes, never blocked locally',()=>{
+  it('undeclared seed/steps/cfg are 不会发送: omitted from payload (catalog-driven)',()=>{
     const seed=buildNanoImagePayload({model:'flux-schnell',prompt:'x',seed:42},endpoint);
-    expect(seed.payload.seed).toBe(42);
-    expect(seed.capabilityNotes).toEqual([expect.objectContaining({field:'seed',capability:'unknown'})]);
-    const np=buildNanoImagePayload({model:'flux-schnell',prompt:'x',negative_prompt:'blur',steps:8},endpoint);
-    expect(np.payload.negative_prompt).toBe('blur');
-    expect(np.payload.steps).toBe(8);
-    expect(np.capabilityNotes.map((n:any)=>n.field)).toEqual(['negative_prompt','steps']);
+    expect(seed.payload.seed).toBeUndefined();
+    expect(seed.capabilityNotes).toEqual([expect.objectContaining({field:'seed',capability:'not_sent'})]);
+    const np=buildNanoImagePayload({model:'flux-schnell',prompt:'x',negative_prompt:'blur',steps:8,cfg:3.5},endpoint);
+    expect(np.payload.negative_prompt).toBeUndefined();
+    expect(np.payload.steps).toBeUndefined();
+    expect(np.payload.cfg).toBeUndefined();
+    expect(np.capabilityNotes.map((n:any)=>n.field).sort()).toEqual(['cfg','negative_prompt','steps']);
+    const declared=buildNanoImagePayload({model:'nano-banana-2.1',prompt:'x',seed:7},{supported_parameters:{seed:{min:0},resolutions:['1024x1024']},capabilities:{}});
+    expect(declared.payload.seed).toBe(7);
   });
-  it('LoRA follows declared metadata: passthrough when undeclared, {path,scale} when declared',()=>{
-    const undeclared=buildNanoImagePayload({model:'flux-schnell',prompt:'x',loras:[{name:'https://cdn.example.com/a.safetensors',strength:0.8}]},endpoint);
-    expect(undeclared.payload.loras).toEqual([{path:'https://cdn.example.com/a.safetensors',scale:0.8}]);
-    expect(undeclared.capabilityNotes).toEqual([expect.objectContaining({field:'loras',capability:'unknown'})]);
+  it('LoRA: refuse when undeclared (audit 2026-10-15); {path,scale} only when supported_parameters.loras declared',()=>{
+    expect(()=>buildNanoImagePayload({model:'flux-schnell',prompt:'x',loras:[{name:'https://cdn.example.com/a.safetensors',strength:0.8}]},endpoint)).toThrow(/未声明 loras|无通用 LoRA/);
     const loraEndpoint={supported_parameters:{loras:{max_items:3,item:{path:'HTTPS URL',scale:'number'}}},capabilities:{}};
     const declared=buildNanoImagePayload({model:'minimax-h3/text-to-image',prompt:'x',loras:[{path:'https://cdn.example.com/b.safetensors',strength:0.6}]},loraEndpoint);
     expect(declared.payload.loras).toEqual([{path:'https://cdn.example.com/b.safetensors',scale:0.6}]);

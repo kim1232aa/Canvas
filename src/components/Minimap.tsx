@@ -9,6 +9,8 @@ interface MinimapProps {
   onUpdateTransform: (t: CanvasTransform | ((prev: CanvasTransform) => CanvasTransform)) => void;
   isOpen: boolean;
   onToggle: () => void;
+  /** clean-1613: graph mode ignores leftover spatial frames (same as Fit View). */
+  canvasMode?: 'graph' | 'spatial';
 }
 
 export const Minimap: React.FC<MinimapProps> = ({
@@ -18,6 +20,7 @@ export const Minimap: React.FC<MinimapProps> = ({
   onUpdateTransform,
   isOpen,
   onToggle,
+  canvasMode = 'graph',
 }) => {
   if (!isOpen) {
     return (
@@ -31,11 +34,13 @@ export const Minimap: React.FC<MinimapProps> = ({
     );
   }
 
-  // Calculate world bounding box
-  const allElements = [
-    ...nodes.map((n) => ({ x: n.pos.x, y: n.pos.y, w: n.width || 300, h: 320, type: 'node' })),
-    ...frames.map((f) => ({ x: f.pos.x, y: f.pos.y, w: f.width, h: f.height + 120, type: 'frame' })),
-  ];
+  // Calculate world bounding box — clean-1613: match Fit View mode (graph → nodes only).
+  const allElements = canvasMode === 'spatial' && frames.length
+    ? frames.map((f) => ({ x: f.pos.x, y: f.pos.y, w: f.width, h: f.height + 120, type: 'frame' as const }))
+    : [
+        ...nodes.map((n) => ({ x: n.pos.x, y: n.pos.y, w: n.width || 300, h: 320, type: 'node' as const })),
+        ...(canvasMode === 'spatial' ? frames.map((f) => ({ x: f.pos.x, y: f.pos.y, w: f.width, h: f.height + 120, type: 'frame' as const })) : []),
+      ];
 
   let minX = 0,
     minY = 0,
@@ -59,9 +64,13 @@ export const Minimap: React.FC<MinimapProps> = ({
   const scaleY = mapHeight / worldHeight;
   const scale = Math.min(scaleX, scaleY);
 
-  // Viewport rect calculation
-  const vpWidth = window.innerWidth / transform.scale;
-  const vpHeight = window.innerHeight / transform.scale;
+  // clean-1358 #1: viewport rect must use the canvas container (same box Fit View uses), not window —
+  // otherwise the yellow box drifts from the nodes after Fit View.
+  const canvasEl = typeof document !== 'undefined' ? (document.querySelector('[data-testid="canvas-container"]') as HTMLElement | null) : null;
+  const viewW = canvasEl?.clientWidth || window.innerWidth;
+  const viewH = canvasEl?.clientHeight || window.innerHeight;
+  const vpWidth = viewW / transform.scale;
+  const vpHeight = viewH / transform.scale;
   const vpX = -transform.x / transform.scale;
   const vpY = -transform.y / transform.scale;
 
@@ -78,15 +87,18 @@ export const Minimap: React.FC<MinimapProps> = ({
     const targetWorldX = clickX / scale + minX;
     const targetWorldY = clickY / scale + minY;
 
+    const el = document.querySelector('[data-testid="canvas-container"]') as HTMLElement | null;
+    const cw = el?.clientWidth || window.innerWidth;
+    const ch = el?.clientHeight || window.innerHeight;
     onUpdateTransform((prev) => ({
       ...prev,
-      x: window.innerWidth / 2 - targetWorldX * prev.scale,
-      y: window.innerHeight / 2 - targetWorldY * prev.scale,
+      x: cw / 2 - targetWorldX * prev.scale,
+      y: ch / 2 - targetWorldY * prev.scale,
     }));
   };
 
   return (
-    <div className="absolute bottom-6 right-6 z-30 flex flex-col items-end gap-1.5 pointer-events-auto">
+    <div data-canvas-chrome="right" className="absolute bottom-6 right-6 z-30 flex flex-col items-end gap-1.5 pointer-events-auto">
       <div className="bg-[#14151a]/95 backdrop-blur-xl border border-[#272932] rounded-xl p-2 shadow-2xl shadow-black/80">
         <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono pb-1.5 px-1 border-b border-[#22242c]">
           <span>RADAR MINIMAP</span>
@@ -138,13 +150,14 @@ export const Minimap: React.FC<MinimapProps> = ({
             );
           })}
 
-          {/* Viewport Indicator */}
+          {/* Viewport Indicator — clean-1613: do NOT clamp into the map; overflow:hidden clips.
+              Clamping made the yellow box cover all nodes while the real viewport was empty. */}
           <div
             style={{
-              left: Math.max(vpMapX, 0),
-              top: Math.max(vpMapY, 0),
-              width: Math.min(vpMapW, mapWidth),
-              height: Math.min(vpMapH, mapHeight),
+              left: vpMapX,
+              top: vpMapY,
+              width: vpMapW,
+              height: vpMapH,
             }}
             className="absolute border-2 border-amber-400/80 bg-amber-400/10 pointer-events-none rounded-xs transition-all duration-75"
           />

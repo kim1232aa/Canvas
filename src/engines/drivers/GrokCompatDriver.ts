@@ -29,8 +29,8 @@ export class GrokCompatDriver extends BaseEngineDriver {
     { id: 'grok-imagine-image-quality', name: 'Grok Imagine Image Quality', type: 'image', supportsLora: false },
     { id: 'grok-imagine-video', name: 'Grok Imagine Video', type: 'video', supportsLora: false },
     { id: 'grok-imagine-video-1.5', name: 'Grok Imagine Video 1.5', type: 'video', supportsLora: false },
-    { id: 'grok-4.3', name: 'Grok 4.3', type: 'reasoning' },
-    { id: 'grok-4.5', name: 'Grok 4.5', type: 'reasoning' },
+    { id: 'grok-3', name: 'Grok 3', type: 'reasoning' },
+    { id: 'grok-3-mini', name: 'Grok 3 Mini', type: 'reasoning' },
   ];
 
   protected async executeGenerate(

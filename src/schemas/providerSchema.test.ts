@@ -140,7 +140,11 @@ describe('providerSchema 自检', () => {
     expect(dim('sdcpp:flux2Dev')).toEqual([512, 2048, undefined]);
     expect(dim('sdcpp:flux2Klein')).toEqual([512, 2048, 16]);
     expect(dim('comfy:flux1')).toEqual([64, 2048, undefined]);
-    expect(dim('comfy:krea2')).toEqual([64, 2048, undefined]);
+    // Official Krea v2: no width/height / LoRA / negative — schema marks unsupported
+    expect(getFieldSpec('civitai', 'comfy:krea2', 'width')?.status).toBe('unsupported');
+    expect(getFieldSpec('civitai', 'comfy:krea2', 'height')?.status).toBe('unsupported');
+    expect(getFieldSpec('civitai', 'comfy:krea2', 'loras')?.status).toBe('unsupported');
+    expect(getFieldSpec('civitai', 'comfy:krea2', 'negative_prompt')?.status).toBe('unsupported');
     expect(dim('sdcpp:ponyV7')).toBeUndefined(); // 不在 schema → 原样发
   });
   it('Civitai engine enums remain distinct for SDXL and Flux', () => {
@@ -161,20 +165,19 @@ describe('resolveSchemaModelId', () => {
     expect(resolveSchemaModelId('grok_compat', 'grok-imagine-video')).toBe('grok-imagine-video');
   });
 
-  it('falls back to first grok model when checkpoint empty or foreign', () => {
-    const fallback = resolveSchemaModelId('grok_compat', '');
-    expect(fallback).toBe('grok-imagine-image');
-    expect(getFieldSpec('grok_compat', fallback, 'aspect_ratio')?.status).toBe('supported');
-    expect(getFieldSpec('grok_compat', fallback, 'resolution')?.enum?.map((v) => v.value)).toEqual(['1k', '1.5k', '2k']);
-
-    const foreign = resolveSchemaModelId('grok_compat', 'Tongyi-MAI/Z-Image-Turbo');
-    expect(foreign).toBe('grok-imagine-image');
-    expect(fieldOptions('grok_compat', foreign, 'aspect_ratio').length).toBeGreaterThan(0);
+  it('returns undefined for empty or foreign checkpoint (never listModels[0])', () => {
+    expect(resolveSchemaModelId('grok_compat', '')).toBeUndefined();
+    expect(resolveSchemaModelId('grok_compat', 'Tongyi-MAI/Z-Image-Turbo')).toBeUndefined();
+    expect(resolveSchemaModelId('openai_compat', '')).toBeUndefined();
+    expect(resolveSchemaModelId('openai_compat', 'fal-ai/flux/dev')).toBeUndefined();
+    expect(resolveSchemaModelId('agnes', '')).toBeUndefined();
+    expect(resolveSchemaModelId('nanogpt', '')).toBeUndefined();
+    expect(resolveSchemaModelId('huggingface', '')).toBeUndefined();
+    expect(resolveSchemaModelId('huggingface', 'foreign-civitai.safetensors')).toBeUndefined();
   });
 
-  it('falls back for openai_compat so size/quality enums stay available', () => {
-    expect(resolveSchemaModelId('openai_compat', '')).toBe('gpt-image-2');
-    expect(resolveSchemaModelId('openai_compat', 'fal-ai/flux/dev')).toBe('gpt-image-2');
+  it('keeps known openai_compat id without inventing a default', () => {
+    expect(resolveSchemaModelId('openai_compat', 'gpt-image-2')).toBe('gpt-image-2');
   });
 });
 
@@ -190,7 +193,8 @@ describe('agnes / huggingface / nanogpt schema unsupported fields', () => {
       expect(getFieldSpec('agnes', id, 'width')?.status, `${id}.width`).toBe('unverified');
       expect(getFieldSpec('agnes', id, 'loras')?.status, `${id}.loras`).toBe('unverified');
     }
-    expect(resolveSchemaModelId('agnes', '')).toBe('agnes-image-2.5-flash');
+    expect(resolveSchemaModelId('agnes', 'agnes-image-2.5-flash')).toBe('agnes-image-2.5-flash');
+    expect(resolveSchemaModelId('agnes', '')).toBeUndefined();
   });
 
   it('huggingface text-to-image: greys loras/denoise/sampler; keeps negative/seed/steps/cfg/WH', () => {
@@ -201,7 +205,8 @@ describe('agnes / huggingface / nanogpt schema unsupported fields', () => {
     expect(getFieldSpec('huggingface', id, 'negative_prompt')?.status).toBe('supported');
     expect(getFieldSpec('huggingface', id, 'seed')?.status).toBe('supported');
     expect(getFieldSpec('huggingface', id, 'steps')?.status).toBe('supported');
-    expect(resolveSchemaModelId('huggingface', 'foreign-civitai.safetensors')).toBe('huggingface-text-to-image');
+    expect(resolveSchemaModelId('huggingface', 'huggingface-text-to-image')).toBe('huggingface-text-to-image');
+    expect(resolveSchemaModelId('huggingface', 'foreign-civitai.safetensors')).toBeUndefined();
   });
 
   it('nanogpt flux-schnell: greys negative/loras/steps/cfg/WH; keeps seed', () => {
@@ -210,7 +215,8 @@ describe('agnes / huggingface / nanogpt schema unsupported fields', () => {
     expect(getFieldSpec('nanogpt', 'flux-schnell', 'steps')?.status).toBe('unsupported');
     expect(getFieldSpec('nanogpt', 'flux-schnell', 'width')?.status).toBe('unverified');
     expect(getFieldSpec('nanogpt', 'flux-schnell', 'seed')?.status).toBe('unsupported');
-    expect(resolveSchemaModelId('nanogpt', '')).toBe('flux-schnell');
+    expect(resolveSchemaModelId('nanogpt', 'flux-schnell')).toBe('flux-schnell');
+    expect(resolveSchemaModelId('nanogpt', '')).toBeUndefined();
   });
 });
 

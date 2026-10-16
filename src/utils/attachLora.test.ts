@@ -61,4 +61,17 @@ describe('LoRA mounting modifies the executing branch, not just the node palette
  it('rejects an unconnected sampler instead of claiming the LoRA is mounted',()=>{
   const graph=fixture();expect(()=>attachLoraToBranch(graph.nodes,[],node('a','LoRALoader',{lora_name:'id'}),'sampler')).toThrow(/底模连线/);
  });
+ it('mounts LoRAs and extracts steps/resolution on ModelScopeNode and NanoGPTNode',()=>{
+  const msNodes=[node('ms','ModelScopeNode',{model_endpoint:'AI-ModelScope/flux.1-dev',prompt:'cat',steps:20})];
+  const msMounted=attachLoraToBranch(msNodes,[],node('lora1','LoRALoader',{lora_name:'owner/flux-lora',strength_model:1.0}),'ms');
+  const msExtracted=extractWorkflowParameters(msMounted.nodes,msMounted.connections,'ms');
+  expect(msExtracted.steps).toBe(20);
+  expect(msExtracted.loras.map(r=>[r.name,r.modelStrength])).toEqual([['owner/flux-lora',1.0]]);
+
+  const nanoNodes=[node('nano','NanoGPTNode',{model:'flux-schnell',prompt:'dog',resolution:'1280x720'})];
+  const nanoMounted=attachLoraToBranch(nanoNodes,[],node('lora2','LoRALoader',{lora_name:'https://example.test/nano.safetensors',strength_model:0.75}),'nano');
+  const nanoExtracted=extractWorkflowParameters(nanoMounted.nodes,nanoMounted.connections,'nano');
+  expect(nanoExtracted.resolution).toBe('1280x720');
+  expect(nanoExtracted.loras.map(r=>[r.name,r.modelStrength])).toEqual([['https://example.test/nano.safetensors',0.75]]);
+ });
 });

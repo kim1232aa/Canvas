@@ -103,3 +103,28 @@ it('does not guess baseModel from model name when Civitai metadata has missing b
  expect(compatSdxlModel.isCompatible).toBe(true);
 });
 
+it('WaveSpeed Hub paste of HTTPS LoRA URL selects executable weight path without inventing strength', async () => {
+  const url = 'https://huggingface.co/Comfy-Org/Krea-2/resolve/main/loras/krea2_darkbrush.safetensors';
+  const input = submit('wavespeed', url);
+  await input.run();
+  expect(input.onSelectLoRA).toHaveBeenCalledWith(expect.objectContaining({
+    name: url,
+    downloadUrl: url,
+    provider: 'wavespeed',
+    resourceVerified: true,
+    resource_kind: 'lora',
+  }));
+  const arg = input.onSelectLoRA.mock.calls[0][0];
+  expect(arg.modelStrength).toBeUndefined();
+  expect(arg.clipStrength).toBeUndefined();
+  expect(input.onClose).toHaveBeenCalledOnce();
+});
+
+it('provider=all refuses HTTPS LoRA URL paste until a concrete provider tab is chosen', async () => {
+  const url = 'https://huggingface.co/Comfy-Org/Krea-2/resolve/main/loras/krea2_darkbrush.safetensors';
+  const input = submit('all', url);
+  await input.run();
+  expect(input.onSelectLoRA).not.toHaveBeenCalled();
+  expect(input.onClose).not.toHaveBeenCalled();
+});
+

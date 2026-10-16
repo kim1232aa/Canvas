@@ -101,11 +101,14 @@ export class FalDriver extends BaseEngineDriver {
         model_name: params.extraParams?.model_name,
         num_images: params.extraParams?.n,
         // V2: no strength fallback — server 400s if scale/path missing.
-        loras: (params.loras || []).map((l) => ({
-          path: l.path || l.url,
-          ...(!l.path && !l.url ? {name:l.name,civitaiId:l.civitaiId} : {}),
-          scale: l.strength ?? l.modelStrength,
-        })),
+        loras: (params.loras || []).map((l: any) => {
+          const resolvedPath = l.path || l.downloadUrl || l.url || (/^https?:\/\//i.test(String(l.name || '')) ? l.name : undefined);
+          return {
+            path: resolvedPath,
+            ...(!resolvedPath ? { name: l.name, civitaiId: l.civitaiId } : {}),
+            scale: l.strength ?? l.modelStrength ?? l.scale,
+          };
+        }),
       }),
     });
 

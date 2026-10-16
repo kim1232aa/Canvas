@@ -88,7 +88,7 @@ describe('replicateRoutes', () => {
       });
 
       const handler = handleReplicateGenerate(deps);
-      const req: any = { body: { model: 'owner/name', prompt: 'test' }, path: '/api/engine/replicate/generate' };
+      const req: any = { body: { model: 'owner/name', prompt: 'test', inputSchemaProperties: { prompt: {} } }, path: '/api/engine/replicate/generate' };
       const res = createMockRes();
 
       await handler(req, res);
@@ -182,7 +182,7 @@ describe('replicateRoutes', () => {
 
       const handler = handleReplicateGenerate(deps);
       const req: any = {
-        body: { model: 'owner/name', prompt: 'test' },
+        body: { model: 'owner/name', prompt: 'test', inputSchemaProperties: { prompt: {} } },
         path: '/api/engine/replicate/generate',
       };
       const res = createMockRes();
@@ -206,7 +206,7 @@ describe('replicateRoutes', () => {
 
       const handler = handleReplicateGenerate(deps);
       const req: any = {
-        body: { model: 'owner/name', prompt: 'test' },
+        body: { model: 'owner/name', prompt: 'test', inputSchemaProperties: { prompt: {} } },
         path: '/api/engine/replicate/generate',
       };
       const res = createMockRes();
@@ -251,7 +251,7 @@ describe('replicateRoutes', () => {
 
       const handler = handleReplicateGenerate(deps);
       const req: any = {
-        body: { model: 'owner/name', prompt: 'test' },
+        body: { model: 'owner/name', prompt: 'test', inputSchemaProperties: { prompt: {} } },
         path: '/api/engine/replicate/generate',
       };
       const res = createMockRes();
@@ -260,6 +260,44 @@ describe('replicateRoutes', () => {
 
       expect(res.statusCode).toBe(502);
       expect(res.data.error).toContain('OOM killed during inference');
+      expect(res.data.errorSource).toBe('upstream');
+      expect(recordedResults[0][2]).toBe(false);
+    });
+
+    it('exposes polling 5xx error immediately without silent loop swallowing', async () => {
+      const { deps, recordedResults } = createMockDeps({
+        upstreamFetch: vi.fn(async (_meta: any, url: string) => {
+          if (url.includes('/models/')) {
+            return {
+              ok: true,
+              status: 201,
+              json: async () => ({
+                id: 'pred_async_503',
+                status: 'starting',
+                urls: { get: 'https://api.replicate.com/v1/predictions/pred_async_503' },
+              }),
+            };
+          }
+          return {
+            ok: false,
+            status: 503,
+            text: async () => 'Service Unavailable: upstream worker crashed',
+          };
+        }),
+      });
+
+      const handler = handleReplicateGenerate(deps);
+      const req: any = {
+        body: { model: 'owner/name', prompt: 'test', inputSchemaProperties: { prompt: {} } },
+        path: '/api/engine/replicate/generate',
+      };
+      const res = createMockRes();
+
+      await handler(req, res);
+
+      expect(res.statusCode).toBe(503);
+      expect(res.data.error).toContain('HTTP 503');
+      expect(res.data.rawResponse).toContain('upstream worker crashed');
       expect(res.data.errorSource).toBe('upstream');
       expect(recordedResults[0][2]).toBe(false);
     });
@@ -273,7 +311,7 @@ describe('replicateRoutes', () => {
 
       const handler = handleReplicateGenerate(deps);
       const req: any = {
-        body: { model: 'owner/name', prompt: 'test' },
+        body: { model: 'owner/name', prompt: 'test', inputSchemaProperties: { prompt: {} } },
         path: '/api/engine/replicate/generate',
       };
       const res = createMockRes();

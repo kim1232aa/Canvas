@@ -1,0 +1,364 @@
+{
+ "code": 200,
+ "data": [
+  {
+   "model_id": "wavespeed-ai/krea-v2/turbo-lora",
+   "api_schema": {
+    "api_schemas": [
+     {
+      "type": "model_run",
+      "method": "POST",
+      "server": "https://api.wavespeed.ai",
+      "api_path": "/api/v3/wavespeed-ai/krea-v2/turbo-lora",
+      "request_schema": {
+       "additionalProperties": false,
+       "properties": {
+        "aspect_ratio": {
+         "default": "1:1",
+         "description": "The aspect ratio of the generated image.",
+         "enum": [
+          "1:1",
+          "1:2",
+          "2:1",
+          "1:3",
+          "3:1",
+          "2:3",
+          "3:2",
+          "3:4",
+          "4:3",
+          "4:5",
+          "5:4",
+          "9:16",
+          "16:9",
+          "9:21",
+          "21:9"
+         ],
+         "type": "string"
+        },
+        "enable_base64_output": {
+         "default": false,
+         "description": "If set to `true`, the prediction's `output` strings are returned as **naked base64** (no `data:<mime>;base64,` prefix). When `false` (default), outputs are returned as URLs pointing to our CDN.",
+         "disabled": true,
+         "type": "boolean"
+        },
+        "enable_sync_mode": {
+         "default": false,
+         "description": "If set to `true`, the request attempts to wait for the generated result and return outputs in the same response. If the result is not ready within the sync wait window, the API can return a timeout body while the task continues processing. This option is only available via the API and is supported only by some models.",
+         "disabled": true,
+         "type": "boolean"
+        },
+        "image": {
+         "description": "Optional source image URL. When provided, the model runs image-to-image from it; the output keeps the source aspect ratio.",
+         "type": "string"
+        },
+        "loras": {
+         "description": "List of LoRAs to apply (max 3).",
+         "items": {
+          "properties": {
+           "path": {
+            "description": "URL or the path to the LoRA weights.",
+            "type": "string"
+           },
+           "scale": {
+            "default": 1,
+            "description": "The scale of the LoRA weights. This is used to scale the LoRA weight before merging it with the base model.",
+            "maximum": 4,
+            "minimum": 0,
+            "type": "number"
+           }
+          },
+          "required": [
+           "path"
+          ],
+          "type": "object",
+          "x-order-properties": [
+           "path",
+           "scale"
+          ]
+         },
+         "maxItems": 3,
+         "type": "array",
+         "x-ui-component": "loras"
+        },
+        "prompt": {
+         "description": "The positive prompt for the generation.",
+         "type": "string"
+        },
+        "resolution": {
+         "default": "1k",
+         "description": "Total output resolution tier: 1k (~1 megapixel) or 2k (~4 megapixels, generated natively).",
+         "enum": [
+          "1k",
+          "2k"
+         ],
+         "type": "string"
+        },
+        "seed": {
+         "description": "The random seed to use for the generation. -1 means a random seed will be used.",
+         "type": "integer"
+        },
+        "strength": {
+         "default": 0.8,
+         "description": "Image-to-image strength (0-1). Higher values repaint the source image more freely. Only used when `image` is set.",
+         "maximum": 1,
+         "minimum": 0,
+         "type": "number"
+        }
+       },
+       "required": [
+        "prompt"
+       ],
+       "type": "object",
+       "x-order-properties": [
+        "prompt",
+        "image",
+        "loras",
+        "aspect_ratio",
+        "resolution",
+        "strength",
+        "seed",
+        "enable_sync_mode",
+        "enable_base64_output"
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "model_id": "wavespeed-ai/z-image/turbo-lora",
+   "api_schema": {
+    "api_schemas": [
+     {
+      "type": "model_run",
+      "method": "POST",
+      "server": "https://api.wavespeed.ai",
+      "api_path": "/api/v3/wavespeed-ai/z-image/turbo-lora",
+      "request_schema": {
+       "additionalProperties": false,
+       "properties": {
+        "enable_base64_output": {
+         "default": false,
+         "description": "If set to `true`, the prediction's `output` strings are returned as **naked base64** (no `data:<mime>;base64,` prefix). When `false` (default), outputs are returned as URLs pointing to our CDN.",
+         "disabled": true,
+         "type": "boolean"
+        },
+        "enable_sync_mode": {
+         "default": false,
+         "description": "If set to `true`, the request attempts to wait for the generated result and return outputs in the same response. If the result is not ready within the sync wait window, the API can return a timeout body while the task continues processing. This option is only available via the API and is supported only by some models.",
+         "disabled": true,
+         "type": "boolean"
+        },
+        "loras": {
+         "description": "List of LoRAs to apply (max 3).",
+         "items": {
+          "properties": {
+           "path": {
+            "description": "URL or the path to the LoRA weights.",
+            "type": "string"
+           },
+           "scale": {
+            "default": 1,
+            "description": "The scale of the LoRA weights. This is used to scale the LoRA weight before merging it with the base model.",
+            "maximum": 4,
+            "minimum": 0,
+            "type": "number"
+           }
+          },
+          "required": [
+           "path"
+          ],
+          "type": "object",
+          "x-order-properties": [
+           "path",
+           "scale"
+          ]
+         },
+         "maxItems": 3,
+         "type": "array",
+         "x-ui-component": "loras"
+        },
+        "output_format": {
+         "default": "jpeg",
+         "description": "The format of the output image.",
+         "enum": [
+          "jpeg",
+          "png",
+          "webp"
+         ],
+         "type": "string"
+        },
+        "prompt": {
+         "description": "The positive prompt for the generation.",
+         "type": "string"
+        },
+        "seed": {
+         "description": "The random seed to use for the generation. -1 means a random seed will be used.",
+         "type": "integer"
+        },
+        "size": {
+         "default": "1024*1024",
+         "description": "The size of the generated media in pixels (width*height).",
+         "maximum": 1536,
+         "minimum": 256,
+         "type": "string"
+        }
+       },
+       "required": [
+        "prompt"
+       ],
+       "type": "object",
+       "x-order-properties": [
+        "prompt",
+        "loras",
+        "size",
+        "seed",
+        "output_format",
+        "enable_sync_mode",
+        "enable_base64_output"
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "model_id": "wavespeed-ai/flux-dev-lora",
+   "api_schema": {
+    "api_schemas": [
+     {
+      "type": "model_run",
+      "method": "POST",
+      "server": "https://api.wavespeed.ai",
+      "api_path": "/api/v3/wavespeed-ai/flux-dev-lora",
+      "request_schema": {
+       "additionalProperties": false,
+       "properties": {
+        "enable_base64_output": {
+         "default": false,
+         "description": "If set to `true`, the prediction's `output` strings are returned as **naked base64** (no `data:<mime>;base64,` prefix). When `false` (default), outputs are returned as URLs pointing to our CDN.",
+         "disabled": true,
+         "type": "boolean"
+        },
+        "enable_sync_mode": {
+         "default": false,
+         "description": "If set to `true`, the request attempts to wait for the generated result and return outputs in the same response. If the result is not ready within the sync wait window, the API can return a timeout body while the task continues processing. This option is only available via the API and is supported only by some models.",
+         "disabled": true,
+         "type": "boolean"
+        },
+        "guidance_scale": {
+         "default": 3.5,
+         "description": "The guidance scale to use for the generation.",
+         "maximum": 20,
+         "minimum": 0,
+         "type": "number"
+        },
+        "image": {
+         "type": "string"
+        },
+        "loras": {
+         "description": "List of LoRAs to apply (max 3).",
+         "items": {
+          "properties": {
+           "path": {
+            "description": "URL or the path to the LoRA weights.",
+            "type": "string"
+           },
+           "scale": {
+            "default": 1,
+            "description": "The scale of the LoRA weights. This is used to scale the LoRA weight before merging it with the base model.",
+            "maximum": 4,
+            "minimum": 0,
+            "type": "number"
+           }
+          },
+          "required": [
+           "path"
+          ],
+          "type": "object",
+          "x-order-properties": [
+           "path",
+           "scale"
+          ]
+         },
+         "maxItems": 3,
+         "type": "array",
+         "x-ui-component": "loras"
+        },
+        "mask_image": {
+         "description": "The mask image tells the model where to generate new pixels (white) and where to preserve the original image (black). It acts as a stencil or guide for targeted image editing.",
+         "type": "string"
+        },
+        "num_images": {
+         "default": 1,
+         "description": "The number of images to generate.",
+         "maximum": 4,
+         "minimum": 1,
+         "type": "integer"
+        },
+        "num_inference_steps": {
+         "default": 28,
+         "description": "The number of inference steps to perform.",
+         "maximum": 50,
+         "minimum": 1,
+         "type": "integer"
+        },
+        "output_format": {
+         "default": "jpeg",
+         "description": "The format of the output image.",
+         "enum": [
+          "jpeg",
+          "png",
+          "webp"
+         ],
+         "type": "string"
+        },
+        "prompt": {
+         "description": "The positive prompt for the generation.",
+         "type": "string"
+        },
+        "seed": {
+         "description": "The random seed to use for the generation. -1 means a random seed will be used.",
+         "type": "integer"
+        },
+        "size": {
+         "default": "1024*1024",
+         "description": "The size of the generated media in pixels (width*height).",
+         "maximum": 1536,
+         "minimum": 256,
+         "type": "string"
+        },
+        "strength": {
+         "default": 0.8,
+         "description": "Strength indicates extent to transform the reference image.",
+         "maximum": 1,
+         "minimum": 0,
+         "type": "number"
+        }
+       },
+       "required": [
+        "prompt"
+       ],
+       "type": "object",
+       "x-order-properties": [
+        "prompt",
+        "image",
+        "mask_image",
+        "strength",
+        "loras",
+        "size",
+        "num_inference_steps",
+        "guidance_scale",
+        "num_images",
+        "seed",
+        "output_format",
+        "enable_base64_output",
+        "enable_sync_mode"
+       ]
+      }
+     }
+    ]
+   }
+  }
+ ]
+}

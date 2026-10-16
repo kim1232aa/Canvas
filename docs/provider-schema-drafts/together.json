@@ -1,0 +1,259 @@
+{
+  "$schemaNote": "草案 — 仅声明。真相源: docs/provider-api-audit-v2/together.md + DIFF.md (2026-10-15)",
+  "id": "together",
+  "displayName": "Together",
+  "domainTypes": {
+    "ImageJob": "{ prompt, model, seed?, steps?, guidance_scale?, width?, height?, n?, negative_prompt?, response_format?, output_format? }",
+    "VideoJob": "{ model, prompt?, seed?, seconds?, fps?, width?, height?, resolution?, ratio?, negative_prompt? }",
+    "CatalogRow": "{ id, type: image|video, display_name?, pricing? }"
+  },
+  "auth": {
+    "envVar": "TOGETHER_API_KEY",
+    "header": "Authorization",
+    "scheme": "Bearer",
+    "sources": [
+      "https://docs.together.ai/docs/api-keys-authentication.md"
+    ]
+  },
+  "base": {
+    "v1": "https://api.together.ai/v1",
+    "v2": "https://api.together.ai/v2",
+    "note": "视频走 v2 /videos；图生走 v1 /images/generations"
+  },
+  "catalog": {
+    "method": "GET",
+    "path": "/models",
+    "root": "v1",
+    "query": {
+      "dedicated": {
+        "type": "boolean",
+        "optional": true
+      }
+    },
+    "pagination": "none_documented",
+    "search": "none_documented",
+    "rowFilter": "type === 'image' || type === 'video'",
+    "sources": [
+      "https://docs.together.ai/reference/models.md"
+    ]
+  },
+  "image": {
+    "mode": "sync",
+    "method": "POST",
+    "path": "/images/generations",
+    "root": "v1",
+    "required": [
+      "prompt",
+      "model"
+    ],
+    "parameters": {
+      "seed": {
+        "type": "integer",
+        "supported": true
+      },
+      "steps": {
+        "type": "integer",
+        "default": 20
+      },
+      "guidance_scale": {
+        "type": "number",
+        "default": 3.5
+      },
+      "width": {
+        "type": "integer",
+        "default": 1024
+      },
+      "height": {
+        "type": "integer",
+        "default": 1024
+      },
+      "n": {
+        "type": "integer",
+        "default": 1,
+        "min": 1,
+        "max": 4
+      },
+      "negative_prompt": {
+        "type": "string"
+      },
+      "response_format": {
+        "enum": [
+          "url",
+          "base64"
+        ]
+      },
+      "output_format": {
+        "enum": [
+          "jpeg",
+          "png"
+        ]
+      },
+      "disable_safety_checker": {
+        "type": "boolean"
+      }
+    },
+    "outputs": "data[].url | data[].b64_json",
+    "poll": null,
+    "sources": [
+      "https://docs.together.ai/reference/post-images-generations.md",
+      "https://docs.together.ai/docs/inference/images/parameters.md"
+    ]
+  },
+  "video": {
+    "supported": true,
+    "mode": "async",
+    "create": {
+      "method": "POST",
+      "path": "/videos",
+      "root": "v2"
+    },
+    "poll": {
+      "method": "GET",
+      "path": "/videos/{id}",
+      "root": "v2",
+      "suggestedIntervalSec": 60,
+      "statuses": [
+        "queued",
+        "in_progress",
+        "completed",
+        "failed",
+        "cancelled"
+      ],
+      "successField": "outputs.video_url",
+      "errorField": "error.message / error.code"
+    },
+    "parameters": {
+      "seed": {
+        "type": "integer",
+        "supported": true
+      },
+      "seconds": {
+        "type": "string",
+        "range": "1-10"
+      },
+      "fps": {
+        "type": "integer",
+        "rangeDoc": "15-60"
+      },
+      "width": {
+        "type": "integer"
+      },
+      "height": {
+        "type": "integer"
+      },
+      "resolution": {
+        "type": "string",
+        "note": "Wan 2.7 等用 720P/1080P"
+      },
+      "ratio": {
+        "type": "string"
+      },
+      "prompt": {
+        "type": "string"
+      }
+    },
+    "lora": {
+      "supported": false,
+      "reason": "视频参数页/OpenAPI 未文档化 LoRA；勿挂假强度"
+    },
+    "sources": [
+      "https://docs.together.ai/docs/inference/videos/overview.md",
+      "https://docs.together.ai/docs/inference/videos/parameters.md",
+      "https://docs.together.ai/reference/create-videos.md",
+      "https://docs.together.ai/reference/get-videos-id.md"
+    ]
+  },
+  "lora": {
+    "image": {
+      "serverless": {
+        "supported": "待确认",
+        "openapiFieldStillListed": "image_loras",
+        "shapeIfUsedHistorically": {
+          "path": "string(URL)",
+          "scale": "number"
+        },
+        "officialStance": "parameters.md: No longer available; current FLUX.2 models reject this parameter（散文，非 OpenAPI deprecated）",
+        "uiRule": "官方明文不可用 → 本地拦（官方参数指南：image_loras no longer available）",
+        "dedicatedNote": "LoRA 仅能通过 Dedicated Endpoint 上传 adapter 后调用，非本 serverless 路径",
+        "localReject": true,
+        "ruling": "待确认：OpenAPI 声明 image_loras 且无 deprecated；parameters.md 文字说明与之冲突，按通用规则不据文字拦截；live probe 仅得 401 invalid_api_key（有无 LoRA 对照同码），等有效 key 实测",
+        "sources": [
+          "https://docs.together.ai/docs/inference/images/parameters.md",
+          "https://docs.together.ai/openapi.yaml",
+          "docs/provider-api-audit-v2/together.md",
+          "/workspace/audit-v2-raw/researchy-30m-0602/tg_image_loras_excerpt.md",
+          "docs/evidence/together-venice-lora-live-probe-2026-10-15.md"
+        ]
+      }
+    },
+    "sources": [
+      "https://docs.together.ai/docs/inference/images/parameters.md",
+      "https://docs.together.ai/openapi.yaml",
+      "docs/provider-api-audit-v2/together.md"
+    ],
+    "note": "官方参数页 2026-10-15 仍写 image_loras No longer available / FLUX.2 reject；OpenAPI 仍列未 deprecated（滞后）。按 Canvas 房间规则：OpenAPI 未 deprecated 字段保持待确认，不以参数页 prose 作本地拦截/隐藏依据。Live probe 2026-10-15（docs/evidence/together-venice-lora-live-probe-2026-10-15.md）：带/不带 image_loras 均 HTTP 401 invalid_api_key → 上游对 image_loras 实际行为仍未测，保持待确认。"
+  },
+  "billing": {
+    "insufficientHints": [
+      {
+        "http": 402,
+        "meaning": "Payment Required / monthly spending limit"
+      }
+    ],
+    "prepaidCredits": true,
+    "sources": [
+      "https://docs.together.ai/docs/billing-credits.md",
+      "https://docs.together.ai/docs/error-codes.md"
+    ]
+  },
+  "acceptanceNotes": [
+    "Serverless image_loras：OpenAPI 仍列未 deprecated → 草案标待确认；参数页 prose 不作本地拦截依据；HTTP 实测码待有效 key",
+    "seed 图/视频均有官方字段",
+    "视频必须 POST /videos + GET /videos/{id}，勿当同步",
+    "无 serverless 默认可依赖的 LoRA 强度（待实测）"
+  ],
+  "runtimeSchema": {
+    "source": "https://docs.together.ai/openapi.yaml（/images/generations、/videos）",
+    "use": "运行时拉 OpenAPI 按接口出 Schema，标来源；字段经画布实测才标会发送，未测待确认",
+    "checked": "Researchy 2026-10-15 06:02 curl parameters.md+openapi.yaml；参数页 reject 仍在，OpenAPI 仍列未 deprecated；tinkabot 06:13 按房间规则纠正草案为待确认"
+  },
+  "contractTestHint": "image_loras：OpenAPI 仍列且未 deprecated → 待确认（不以参数页 reject 散文作本地拒/隐藏依据）；有效 key 实测前徽章勿标不发或会发送。seed/steps/guidance_scale/宽高 徽章升会发送仍待前端实测；live probe 仅得 401 invalid_api_key，不得据此升会发送或本地拒",
+  "_auditStatus": "2026-10-16 15:58：Together 缓存重试 BLOCKED（刷新后仍 Schema 未读取，未点生成；证据 tg-retry-01-before.png + 99-together-retry.txt）；需有效 Key 才能验 image_loras 拦截；画布确认维持 CODE_ONLY。2026-10-16 15:24：fix4 CODE_ONLY Together 官方不可用拦截已接线，等前端验收。2026-10-16 15:14 fix4：canvas-dev 已实现 officialUnavailableParams 本地拦（CODE_ONLY）。2026-10-16 15:10：通用规则「官方明文不可用可拦」+ Together 单独拦截（非 D）。2026-10-16 15:09：image_loras 定案本地拦（官方明文不可用）。2026-10-15 06:38：补 live",
+  "loraDecision": {
+    "date": "2026-10-16 15:10 JST（画布定案）",
+    "decision": "不补 loraItemFields；单独加「官方明文不可用」本地拦",
+    "blockText": "官方参数指南：image_loras no longer available",
+    "notRuleD": "OpenAPI items 有 path/scale properties（Researchy 15:08:58），单靠 D 第一档会映射发出；本次拦截靠新规则，不拿「Schema 没字段」当理由",
+    "generalRule": "通用规则（非一次性例外）：仅当官方文档明文写「不可用 / 会拒绝该参数」一类才可本地拦，须附原文、链接、抓取时间；措辞模糊或仅推断 → 仍按 10-15 保持待确认不拦",
+    "evidence": {
+      "paramsGuide": "https://docs.together.ai/docs/inference/images/parameters（No longer available… current FLUX.2 models reject this parameter）",
+      "residualSchema": "https://docs.together.ai/reference/post-images-generations（残留 image_loras[].path/scale，有 properties）",
+      "dedicated": "https://docs.together.ai/docs/post-training/multi-lora-deployment（以后另开）",
+      "fetched": "Researchy 2026-10-16 15:08:58 JST，副本 /workspace/together-lora-check/"
+    },
+    "supersedes": "10-15 待确认（OpenAPI 未 deprecated）——本次按官方明文不可用定案；旧待确认文字留作历史",
+    "implStatus": "CODE_ONLY（fix4 验收 PARTIAL + 15:58 缓存重试 BLOCKED：仍 Schema 未读取；需有效 Together Key；画布 15:58 确认勿升）",
+    "fix4": {
+      "pid": 3138956,
+      "ticks": 13436675,
+      "evidence": "docs/evidence/fix4-2026-10-16.md",
+      "restored": "/workspace/canvas-restore/pre-fix4-20261016-151410.tgz"
+    },
+    "fix4Accept": {
+      "evidence": "/workspace/canvas-e2e-fix4-accept-1524/",
+      "verdict": "PARTIAL",
+      "together": "拦截未走到",
+      "pid": 3138956,
+      "cacheRetry": {
+        "verdict": "BLOCKED",
+        "reason": "刷新后仍 Schema 未读取，未点生成、未再打 /v1/models",
+        "evidence": [
+          "tg-retry-01-before.png",
+          "99-together-retry.txt"
+        ],
+        "blocker": "需有效 Together Key",
+        "at": "2026-10-16 15:58"
+      }
+    }
+  }
+}

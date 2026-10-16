@@ -1,0 +1,24 @@
+{
+  "status": 402,
+  "endpoint": "https://api.replicate.com/v1/models/black-forest-labs/flux-dev-lora/predictions",
+  "actualRequest": {
+    "input": {
+      "prompt": "a red apple on a wooden table, studio light",
+      "seed": 7,
+      "num_inference_steps": 28,
+      "guidance": 3,
+      "lora_weights": "fofr/flux-pixar-cars",
+      "lora_scale": 0.85
+    }
+  },
+  "response_keys": [
+    "title",
+    "detail",
+    "status"
+  ],
+  "response_redacted": {
+    "status": 402,
+    "detail": "You have insufficient credit to run this model. Go to https://replicate.com/account/billing#billing to purchase credit. Once you purchase credit, please wait a few minutes before trying again.",
+    "title": "Insufficient credit"
+  }
+}

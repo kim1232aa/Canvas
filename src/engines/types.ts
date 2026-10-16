@@ -17,6 +17,12 @@ export type ProviderId =
   | 'muapi'
   | 'wavespeed'
   | 'sogni'
+  | 'krea'
+  | 'together'
+  | 'aimlapi'
+  | 'novita'
+  | 'venice'
+  | 'openworks'
   | 'runware'
   | 'modelslab'
   | 'replicate';

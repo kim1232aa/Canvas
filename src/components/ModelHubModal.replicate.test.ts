@@ -116,7 +116,7 @@ describe('Replicate Engine Integration & Wiring', () => {
 
     it('providers list includes Replicate with REPLICATE_API_TOKEN placeholder', () => {
       expect(backendSettingsModalSource).toContain("id: 'replicate'");
-      expect(backendSettingsModalSource).toContain("name: 'Replicate'");
+      expect(backendSettingsModalSource).toContain("name: friendlyProviderLabel('replicate')");
       expect(backendSettingsModalSource).toContain("keyName: 'replicateKey'");
       expect(backendSettingsModalSource).toContain('REPLICATE_API_TOKEN');
     });

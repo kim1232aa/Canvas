@@ -44,7 +44,7 @@ export function applyAIVideoModelSelection(
  * Never fall back to Fal. User-facing Chinese only (no targetProvider jargon).
  */
 export function assertAIVideoProviderReady(modelId: string, rawProvider: unknown): string {
-  if (/^(?:text2video_|image2video_|live_wallpaper$)/.test(modelId)) throw new Error('OpenWorks 工具不是视频模型；请重选真实模型，不会回退到 Fal。');
+  if (/^(?:text2video_|image2video_|live_wallpaper$)/.test(modelId)) throw new Error('OpenWorks 视频模型请在模型中心选择「Tensor.Art OpenWorks」服务商（通用 Schema 路由）；视频节点不代理，不会回退到 Fal。');
   const videoProvider = typeof rawProvider === 'string' ? rawProvider.trim() : '';
   if (!videoProvider) {
     throw new Error(

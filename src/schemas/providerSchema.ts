@@ -53,6 +53,9 @@ export interface ModelSpec {
   shutdownDate?: string;
   shutdownSource?: string;
   fields: Partial<Record<FieldKey, FieldSpec>>;
+  /** Request wiring declared as data (Civitai): engine/model to emit, whether to omit ecosystem, allowed operations
+   *  (+ exact local block text), LoRA shape, AIR namespaces accepted. Read generically by the builder. Never re-routes. */
+  request?: { engine?: string; model?: string; omitEcosystem?: boolean; operations?: string[]; loraShape?: 'array' | 'map'; operationBlockedMessage?: string; airEcosystems?: string[]; refuseLora?: boolean };
 }
 
 export type GeminiSelectField = 'aspect_ratio' | 'image_size';
@@ -213,6 +216,13 @@ const FAL_MODELS: ModelSpec[] = [
     seed: falSeed(s), image_size: falImageSize(s, 'square_hd'), num_images: falNum(s, 4),
     ...unsupported(s, ['negative_prompt', 'steps', 'cfg', 'sampler', 'scheduler', 'loras']),
   })),
+  // docs/provider-schema-drafts/fal.json (Researchy audit 2026-10-15): krea-2 turbo LoRA has no num_inference_steps /
+  // guidance_scale; loras[{path,scale 0–4}] maxItems 3.
+  fal('fal-ai/krea-2/turbo/lora', 'Krea 2 Turbo + LoRA', (s) => ({
+    seed: falSeed(s), image_size: falImageSize(s, 'square_hd'), num_images: falNum(s, 4),
+    loras: { ...falLoras(s, 'LoraWeight {path, scale 0–4}，最多 3 个'), max: 3 },
+    ...unsupported(s, ['negative_prompt', 'steps', 'cfg', 'sampler', 'scheduler']),
+  })),
   fal('fal-ai/wan-t2v', 'Wan 2.1 文生视频', (s) => ({
     seed: falSeed(s), negative_prompt: falNeg(s, undefined, WAN_NEG_NOTE), steps: falSteps(s, 2, 40, 30),
     aspect_ratio: enumField(s, vals(['9:16', '16:9'], 'supported'), { providerDefault: '16:9' }),
@@ -349,14 +359,36 @@ const CIVITAI_MODELS: ModelSpec[] = [
     loras: cvLoras(cvRecipe('flux2'), 'unverified'),
     num_images: cvInt(cvRecipe('flux2'), 'quantity', 1, 4, 1),
   }),
-  civitai('sdcpp', 'flux2Dev', 'FLUX.2 Dev（sdcpp）', cvRecipe('flux2'), {
-    // 「Klein requires divisible by 16; other models have no divisibility constraint」（排障段另写 divisible by 8，矛盾 → 不写 multipleOf）
+  // FLUX.2 Dev native path (recipe: engine "flux2", model "dev"; createImage / editImage). Source: https://developer.civitai.com/orchestration/recipes/flux2.md
+  { ...civitai('comfy', 'x', 'FLUX.2 Dev（flux2 原生）', cvRecipe('flux2'), {
+    ...cvDim(cvRecipe('flux2'), 512, 2048, undefined, 1024),
+    steps: cvInt(cvRecipe('flux2'), 'numInferenceSteps', 4, 50, 28),
+    cfg: { status: 'supported', source: cvRecipe('flux2'), wire: 'guidanceScale', type: 'number', min: 0, max: 20, providerDefault: 2.5 },
+    seed: cvSeed(cvRecipe('flux2')),
+    num_images: cvInt(cvRecipe('flux2'), 'quantity', 1, 4, 1),
+    loras: { status: 'supported', source: cvRecipe('flux2'), type: 'object', note: 'Dev 为 [{ air, strength }] 数组（与 Klein 的字典不同）' },
+    ...unsupported(cvRecipe('flux2'), ['negative_prompt', 'sampler', 'scheduler'], '官方 Dev 原生配方无 negativePrompt / sampleMethod / schedule（仅 sdcpp 路径有）'),
+  }), id: 'flux2:dev', request: { engine: 'flux2', model: 'dev', omitEcosystem: true, operations: ['createImage', 'editImage'], loraShape: 'array', airEcosystems: ['flux2'] } },
+  // sdcpp + flux2Dev kept only for img2img (createVariant); OpenAPI Flux2DevSdCpp*: steps/cfgScale + loras object map.
+  { ...civitai('sdcpp', 'flux2Dev', 'FLUX.2 Dev（sdcpp，仅图生图 createVariant）', cvRecipe('flux2'), {
     ...cvDim(cvRecipe('flux2'), 512, 2048, undefined, 1024),
     seed: cvSeed(cvRecipe('flux2')),
     num_images: cvInt(cvRecipe('flux2'), 'quantity', 1, 4, 1),
-    ...unv(cvRecipe('flux2'), ['steps', 'cfg', 'sampler', 'scheduler', 'negative_prompt', 'loras'],
-      `${FLUX2_NOTE}；recipe 的 Dev 用 numInferenceSteps / guidanceScale，无 negativePrompt`),
-  }),
+    steps: cvInt(cvRecipe('flux2'), 'steps', 4, 50, 20),
+    cfg: cvNum(cvRecipe('flux2'), 1, 20, 1),
+    sampler: cvEnum(cvRecipe('flux2'), 'sampleMethod', 'euler'),
+    scheduler: cvEnum(cvRecipe('flux2'), 'schedule', 'simple'),
+    negative_prompt: cvNeg(cvRecipe('flux2')),
+    loras: { status: 'supported', source: cvRecipe('flux2'), type: 'object', note: 'sdcpp 路径为 AIR→strength object map（与原生 Dev 的 [{air,strength}] 不同）' },
+  }), request: { loraShape: 'map', operations: ['createVariant'], operationBlockedMessage: '该路径仅用于图生图，文生图请选 Flux2 Dev（原生）' } },
+  // Official flux1-kontext (engine flux1-kontext + model dev/pro/max): no LoRA; guidanceScale only. Researchy 2026-10-15.
+  { ...civitai('comfy', 'x', 'FLUX.1 Kontext（原生）', cvRecipe('flux1'), {
+    ...cvDim(cvRecipe('flux1'), 512, 2048, undefined, 1024, 'unverified'),
+    cfg: { status: 'supported', source: cvRecipe('flux1'), wire: 'guidanceScale', type: 'number', min: 1, max: 20, providerDefault: 3.5 },
+    seed: cvSeed(cvRecipe('flux1')),
+    num_images: cvInt(cvRecipe('flux1'), 'quantity', 1, 4, 1),
+    ...unsupported(cvRecipe('flux1'), ['steps', 'sampler', 'scheduler', 'negative_prompt', 'loras'], '官方 flux1-kontext 无 steps/sampler/negativePrompt/LoRA（发 loras → 上游 400）'),
+  }), id: 'flux1-kontext:dev', request: { engine: 'flux1-kontext', model: 'dev', omitEcosystem: true, operations: ['createImage', 'editImage'], refuseLora: true, airEcosystems: ['flux1'] } },
   civitai('comfy', 'flux1', 'FLUX.1（comfy）', CV_YAML, {
     // comfy 生态倍数要求官方未写 → 不写 multipleOf，status unverified
     ...cvDim(CV_YAML, 64, 2048, undefined, 1024, 'unverified'),
@@ -375,11 +407,14 @@ const CIVITAI_MODELS: ModelSpec[] = [
     sampler: cvEnum(CV_YAML, 'sampler'), scheduler: cvEnum(CV_YAML, 'scheduler'),
     seed: cvSeed(CV_YAML), negative_prompt: cvNeg(CV_YAML), loras: cvLoras(CV_YAML), num_images: cvInt(CV_YAML, 'quantity', 1, 12, 1),
   }),
-  civitai('comfy', 'krea2', 'Krea 2 Turbo（comfy）', CV_YAML, {
-    ...cvDim(CV_YAML, 64, 2048, undefined, 1024),
-    steps: cvInt(CV_YAML, 'steps', 1, 150, 8), cfg: cvNum(CV_YAML, 0, 30, 1),
+  civitai('comfy', 'krea2', 'Krea 2 Turbo（comfy）', cvRecipe('krea'), {
+    // Official recipe https://developer.civitai.com/orchestration/recipes/krea.md lists no steps/cfg → 未核实 (never 会发送).
+    steps: { status: 'unverified', source: cvRecipe('krea'), wire: 'steps', type: 'integer', note: '未核实：官方 Krea 配方参数表未列 steps' },
+    cfg: { status: 'unverified', source: cvRecipe('krea'), wire: 'cfgScale', type: 'number', note: '未核实：官方 Krea 配方参数表未列 cfg' },
     sampler: cvEnum(CV_YAML, 'sampler'), scheduler: cvEnum(CV_YAML, 'scheduler'),
-    seed: cvSeed(CV_YAML), negative_prompt: cvNeg(CV_YAML), loras: cvLoras(CV_YAML), num_images: cvInt(CV_YAML, 'quantity', 1, 12, 1),
+    seed: cvSeed(CV_YAML), num_images: cvInt(CV_YAML, 'quantity', 1, 12, 1),
+    // Official: https://developer.civitai.com/orchestration/recipes/krea — no LoRAs / negative / width/height
+    ...unsupported(cvRecipe('krea'), ['loras', 'negative_prompt', 'width', 'height'], 'Krea v2 官方不接受 LoRA、负面提示词或宽高像素；请改用 Flux 2 / Qwen 配方'),
   }),
 ];
 
@@ -387,7 +422,7 @@ const CIVITAI_MODELS: ModelSpec[] = [
 // Current official AgnesAI-Labs reference (2026-09-24):
 // https://github.com/AgnesAI-Labs/skills/blob/main/agnes-ai-models/references/model_catalog.md
 // Image 2.5 Flash requires model + prompt + size tier; ratio/image refs are carried in extra_body.
-const AGNES_DOC = 'https://agnes-ai.com/en/docs/agnes-image-25-flash';
+const AGNES_DOC = 'https://wiki.agnes-ai.com/en/docs/agnes-image-25-flash';
 const AGNES_CATALOG = 'https://github.com/AgnesAI-Labs/skills/blob/main/agnes-ai-models/references/model_catalog.md';
 const AGNES_RATIO = vals(['1:1', '3:4', '4:3', '16:9', '9:16', '2:3', '3:2', '21:9'], 'supported');
 const AGNES_SIZE = vals(['1K', '2K', '3K', '4K'], 'supported');
@@ -729,18 +764,15 @@ const MODELSLAB_MODELS: ModelSpec[] = [
 ];
 
 const REPLICATE_DOC = 'https://replicate.com/docs';
+const REPLICATE_FLUX_LORA_DOC = 'https://replicate.com/black-forest-labs/flux-dev-lora/api/schema';
+const REPLICATE_FLUX_DEV_DOC = 'https://replicate.com/black-forest-labs/flux-dev/api/schema';
+const REPLICATE_FLUX_SCHNELL_DOC = 'https://replicate.com/black-forest-labs/flux-schnell/api/schema';
 
-const REPLICATE_COMMON_FIELDS: Partial<Record<FieldKey, FieldSpec>> = {
-  width: { status: 'supported' as const, source: REPLICATE_DOC, type: 'integer' as const, min: 256, max: 2048 },
-  height: { status: 'supported' as const, source: REPLICATE_DOC, type: 'integer' as const, min: 256, max: 2048 },
-  aspect_ratio: { status: 'supported' as const, source: REPLICATE_DOC, type: 'string' as const },
-  seed: { status: 'supported' as const, source: REPLICATE_DOC, type: 'integer' as const, min: 0 },
-  steps: { status: 'supported' as const, source: REPLICATE_DOC, type: 'integer' as const, wire: 'num_inference_steps', min: 1, max: 100 },
-  cfg: { status: 'supported' as const, source: REPLICATE_DOC, type: 'number' as const, wire: 'guidance_scale', min: 1, max: 20 },
-  loras: { status: 'supported' as const, source: REPLICATE_DOC, wire: 'hf_lora', note: '支持 HuggingFace 或 Civitai 下载 URL 权重与 lora_scale' },
-  negative_prompt: { status: 'supported' as const, source: REPLICATE_DOC },
-  output_format: { status: 'supported' as const, source: REPLICATE_DOC, type: 'enum' as const, enum: [{ value: 'webp', status: 'supported' }, { value: 'png', status: 'supported' }, { value: 'jpg', status: 'supported' }] },
-  ...unsupported(REPLICATE_DOC, ['image_size', 'resolution', 'shift', 'sampler', 'scheduler', 'denoise', 'num_images', 'size', 'quality', 'background', 'moderation']),
+const REPLICATE_OUTPUT_FORMAT: FieldSpec = {
+  status: 'supported',
+  source: REPLICATE_DOC,
+  type: 'enum',
+  enum: [{ value: 'webp', status: 'supported' }, { value: 'png', status: 'supported' }, { value: 'jpg', status: 'supported' }],
 };
 
 const REPLICATE_MODELS: ModelSpec[] = [
@@ -748,36 +780,76 @@ const REPLICATE_MODELS: ModelSpec[] = [
     provider: 'replicate',
     id: 'black-forest-labs/flux-schnell',
     label: 'FLUX.1 Schnell (Replicate)',
-    source: REPLICATE_DOC,
-    fields: { ...REPLICATE_COMMON_FIELDS, steps: { status: 'supported', source: REPLICATE_DOC, type: 'integer', wire: 'num_inference_steps', min: 1, max: 8, providerDefault: 4 } },
+    source: REPLICATE_FLUX_SCHNELL_DOC,
+    fields: {
+      aspect_ratio: { status: 'supported', source: REPLICATE_FLUX_SCHNELL_DOC, type: 'string' },
+      seed: { status: 'supported', source: REPLICATE_FLUX_SCHNELL_DOC, type: 'integer', min: 0 },
+      steps: { status: 'supported', source: REPLICATE_FLUX_SCHNELL_DOC, type: 'integer', wire: 'num_inference_steps', min: 1, max: 4, providerDefault: 4 },
+      num_images: { status: 'supported', source: REPLICATE_FLUX_SCHNELL_DOC, type: 'integer', wire: 'num_outputs', min: 1, max: 4, providerDefault: 1 },
+      output_format: REPLICATE_OUTPUT_FORMAT,
+      ...unsupported(REPLICATE_FLUX_SCHNELL_DOC, ['width', 'height', 'cfg', 'negative_prompt', 'loras', 'image_size', 'resolution', 'shift', 'sampler', 'scheduler', 'denoise', 'size', 'quality', 'background', 'moderation']),
+    },
   },
   {
     provider: 'replicate',
     id: 'black-forest-labs/flux-dev',
     label: 'FLUX.1 Dev (Replicate)',
-    source: REPLICATE_DOC,
-    fields: { ...REPLICATE_COMMON_FIELDS, steps: { status: 'supported', source: REPLICATE_DOC, type: 'integer', wire: 'num_inference_steps', min: 1, max: 50, providerDefault: 28 } },
+    source: REPLICATE_FLUX_DEV_DOC,
+    fields: {
+      aspect_ratio: { status: 'supported', source: REPLICATE_FLUX_DEV_DOC, type: 'string' },
+      seed: { status: 'supported', source: REPLICATE_FLUX_DEV_DOC, type: 'integer', min: 0 },
+      steps: { status: 'supported', source: REPLICATE_FLUX_DEV_DOC, type: 'integer', wire: 'num_inference_steps', min: 1, max: 50, providerDefault: 28 },
+      cfg: { status: 'supported', source: REPLICATE_FLUX_DEV_DOC, type: 'number', wire: 'guidance', min: 0, max: 10, providerDefault: 3 },
+      image: { status: 'supported', source: REPLICATE_FLUX_DEV_DOC, type: 'string', wire: 'image', note: 'live OpenAPI Input.image（img2img）' },
+      denoise: { status: 'supported', source: REPLICATE_FLUX_DEV_DOC, type: 'number', wire: 'prompt_strength', min: 0, max: 1, providerDefault: 0.8 },
+      num_images: { status: 'supported', source: REPLICATE_FLUX_DEV_DOC, type: 'integer', wire: 'num_outputs', min: 1, max: 4, providerDefault: 1 },
+      output_format: REPLICATE_OUTPUT_FORMAT,
+      ...unsupported(REPLICATE_FLUX_DEV_DOC, ['width', 'height', 'negative_prompt', 'loras', 'image_size', 'resolution', 'shift', 'sampler', 'scheduler', 'size', 'quality', 'background', 'moderation']),
+    },
+  },
+  {
+    provider: 'replicate',
+    id: 'black-forest-labs/flux-dev-lora',
+    label: 'FLUX.1 Dev LoRA (Replicate 官方)',
+    source: REPLICATE_FLUX_LORA_DOC,
+    fields: {
+      aspect_ratio: { status: 'supported', source: REPLICATE_FLUX_LORA_DOC, type: 'string' },
+      seed: { status: 'supported', source: REPLICATE_FLUX_LORA_DOC, type: 'integer', min: 0 },
+      steps: { status: 'supported', source: REPLICATE_FLUX_LORA_DOC, type: 'integer', wire: 'num_inference_steps', min: 1, max: 50, providerDefault: 28 },
+      cfg: { status: 'supported', source: REPLICATE_FLUX_LORA_DOC, type: 'number', wire: 'guidance', min: 0, max: 10, providerDefault: 3 },
+      image: { status: 'supported', source: REPLICATE_FLUX_LORA_DOC, type: 'string', wire: 'image', note: 'live OpenAPI Input.image（img2img）' },
+      denoise: { status: 'supported', source: REPLICATE_FLUX_LORA_DOC, type: 'number', wire: 'prompt_strength', min: 0, max: 1, providerDefault: 0.8 },
+      loras: { status: 'supported', source: REPLICATE_FLUX_LORA_DOC, wire: 'lora_weights', note: '官方字段为 lora_weights + lora_scale（副 LoRA 为 extra_lora + extra_lora_scale）' },
+      num_images: { status: 'supported', source: REPLICATE_FLUX_LORA_DOC, type: 'integer', wire: 'num_outputs', min: 1, max: 4, providerDefault: 1 },
+      output_format: REPLICATE_OUTPUT_FORMAT,
+      ...unsupported(REPLICATE_FLUX_LORA_DOC, ['width', 'height', 'negative_prompt', 'image_size', 'resolution', 'shift', 'sampler', 'scheduler', 'size', 'quality', 'background', 'moderation']),
+    },
   },
   {
     provider: 'replicate',
     id: 'ideogram-ai/ideogram-v2a',
     label: 'Ideogram v2a (Replicate)',
     source: REPLICATE_DOC,
-    fields: { ...REPLICATE_COMMON_FIELDS },
+    fields: {
+      aspect_ratio: { status: 'supported', source: REPLICATE_DOC, type: 'string' },
+      seed: { status: 'supported', source: REPLICATE_DOC, type: 'integer', min: 0 },
+      negative_prompt: { status: 'supported', source: REPLICATE_DOC, type: 'string' },
+      ...unsupported(REPLICATE_DOC, ['width', 'height', 'steps', 'cfg', 'loras', 'image_size', 'resolution', 'shift', 'sampler', 'scheduler', 'denoise', 'num_images', 'size', 'quality', 'output_format', 'background', 'moderation']),
+    },
   },
   {
     provider: 'replicate',
     id: 'bytedance/seedream-3',
     label: 'Seedream 3 (Replicate)',
     source: REPLICATE_DOC,
-    fields: { ...REPLICATE_COMMON_FIELDS },
-  },
-  {
-    provider: 'replicate',
-    id: 'replicate-hosted-image',
-    label: 'Replicate 托管生图模型',
-    source: REPLICATE_DOC,
-    fields: { ...REPLICATE_COMMON_FIELDS },
+    fields: {
+      aspect_ratio: { status: 'supported', source: REPLICATE_DOC, type: 'string' },
+      width: { status: 'supported', source: REPLICATE_DOC, type: 'integer', min: 512, max: 2048 },
+      height: { status: 'supported', source: REPLICATE_DOC, type: 'integer', min: 512, max: 2048 },
+      seed: { status: 'supported', source: REPLICATE_DOC, type: 'integer', min: 0 },
+      cfg: { status: 'supported', source: REPLICATE_DOC, type: 'number', wire: 'guidance_scale', min: 1, max: 20 },
+      ...unsupported(REPLICATE_DOC, ['steps', 'negative_prompt', 'loras', 'image_size', 'resolution', 'shift', 'sampler', 'scheduler', 'denoise', 'num_images', 'size', 'quality', 'output_format', 'background', 'moderation']),
+    },
   },
 ];
 
@@ -806,6 +878,20 @@ export const listModels = (provider: Provider): ModelSpec[] => PROVIDER_SCHEMA.f
 
 export const getFieldSpec = (provider: Provider, model: string, field: FieldKey): FieldSpec | undefined =>
   getModelSpec(provider, model)?.fields[field];
+
+/** Upstream wire names declared by the model Schema (excludes unsupported). Used for history 该端点不支持. */
+export function schemaFieldWires(provider: Provider, modelId: string | undefined): string[] | undefined {
+  if (!modelId) return undefined;
+  const spec = getModelSpec(provider, modelId);
+  if (!spec) return undefined;
+  const wires: string[] = ['prompt', 'model'];
+  for (const [key, field] of Object.entries(spec.fields || {})) {
+    if (!field || field.status === 'unsupported') continue;
+    wires.push(field.wire || key);
+  }
+  return wires;
+}
+
 
 /** enum 字段的取值列表（下拉选项 / 报错里列出官方取值）；非 enum 或不在表内 → [] */
 export const fieldOptions = (provider: Provider, model: string, field: FieldKey): FieldValue[] =>
@@ -840,18 +926,30 @@ export function modelStatus(provider: Provider, model: string, today: string): F
 }
 
 /**
- * Resolve a model id that exists in PROVIDER_SCHEMA for field lookups.
- * If `model` is missing or not in the table for this provider, fall back to the
- * first listed model so supported enum selects (e.g. grok aspect_ratio / resolution)
- * still render instead of disappearing when the checkpoint is empty or leftover
- * from another provider.
+ * Resolve a model id for PROVIDER_SCHEMA field lookups.
+ * Known schema ids and verified provider-specific aliases are returned transparently.
+ * Empty or unknown ids return undefined — never silently swap to listModels[0].
  */
-export function resolveSchemaModelId(provider: Provider, model: string | undefined | null): string {
+export function resolveSchemaModelId(provider: Provider, model: string | undefined | null): string | undefined {
   const id = String(model || '').trim();
-  if (id && getModelSpec(provider, id)) return id;
+  if (!id) return undefined;
+  if (getModelSpec(provider, id)) return id;
+  // Shared schema aliases / passthroughs — only when the caller supplied an explicit id.
   if (provider === 'modelscope' || provider === 'modelscope_ai') return 'modelscope-hosted-image';
-  if (provider === 'nanogpt' && id) return id;
-  if (provider === 'tensorart' && id) return /^\d{10,25}$/.test(id) || /^https:\/\/(?:www\.)?(?:tensor\.art|tusiart\.com)\/models\//.test(id) ? 'tensorart-model-api' : id;
-  if (provider === 'replicate' && id) return id;
-  return listModels(provider)[0]?.id ?? id;
+  if (provider === 'nanogpt') return id;
+  if (provider === 'tensorart') return /^\d{10,25}$/.test(id) || /^https:\/\/(?:www\.)?(?:tensor\.art|tusiart\.com)\/models\//.test(id) ? 'tensorart-model-api' : id;
+  if (provider === 'replicate') return id;
+  if (provider === 'fal' && id.startsWith('fal-ai/')) return id;
+  if (provider === 'civitai') {
+    if (getModelSpec('civitai', id)) return id;
+    if (id.startsWith('sdcpp:') || id.startsWith('comfy:')) return id;
+    // Official Krea v2 / local comfy:krea2 — AIR or bare ecosystem → schema row for LoRA banners
+    if (id.includes(':krea2:') || /(^|:)krea2($|:)/i.test(id)) return 'comfy:krea2';
+    if (id.includes('civitai:')) return id;
+  }
+  if (provider === 'runware' && /^[a-z0-9_]+:\d+@\d+$/i.test(id)) return id;
+  return undefined;
 }
+/** Civitai engines offered in the picker = engines declared by CIVITAI_MODELS (id prefix / request.engine). */
+export const civitaiEngines = (): string[] => Array.from(new Set(CIVITAI_MODELS.map((m) => m.request?.engine ?? m.id.split(':')[0])));
+export const civitaiEcosystemsFor = (engine: string): string[] => CIVITAI_MODELS.filter((m) => (m.request?.engine ?? m.id.split(':')[0]) === engine).map((m) => m.id.split(':').slice(1).join(':'));

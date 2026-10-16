@@ -1,5 +1,7 @@
 import {it,expect,vi} from 'vitest';
-import {replaceSelectedResource, selectionFromMetadata,verifyCivitaiSelection} from './resourceSelection';
+import {replaceSelectedResource, selectionFromExplicitLoraUrl, selectionFromMetadata,verifyCivitaiSelection} from './resourceSelection';
+import { assertExplicitLoraStrengths, MISSING_LORA_STRENGTH_MSG } from './loraStrength';
+import { generationReadiness } from './generationReadiness';
 it('manual AIR metadata verification invokes a real selection helper before clearing markers',async()=>{
  const original=globalThis.fetch;
  globalThis.fetch=vi.fn(async()=>new Response(JSON.stringify({id:456,modelId:123,model:{name:'real version shape',type:'LORA'},air:'urn:air:sdxl:lora:civitai:123@456',files:[]})));
@@ -155,3 +157,69 @@ it('verifies catalog Replicate model and sets resourceVerified true cleanly',()=
  expect(updated.unresolvedResource).toBeUndefined();
 });
 
+const HF_LORA_URL = 'https://huggingface.co/Comfy-Org/Krea-2/resolve/main/loras/krea2_darkbrush.safetensors';
+
+it('Hub paste of HTTPS LoRA weight URL is executable — not forced unresolved', () => {
+  const selection = selectionFromExplicitLoraUrl('wavespeed', HF_LORA_URL);
+  expect(selection).toMatchObject({
+    name: HF_LORA_URL,
+    downloadUrl: HF_LORA_URL,
+    provider: 'wavespeed',
+    resourceVerified: true,
+    resource_kind: 'lora',
+  });
+  // Never invent strength on Hub attach
+  expect(selection.modelStrength).toBeUndefined();
+  expect(selection.clipStrength).toBeUndefined();
+
+  const next = replaceSelectedResource(
+    { import_unresolved_resource: true, unresolvedResource: true, lora_name: 'old' },
+    selection,
+    'lora_name',
+  );
+  expect(next.import_unresolved_resource).toBeUndefined();
+  expect(next.unresolvedResource).toBeUndefined();
+  expect(next).toMatchObject({
+    lora_name: HF_LORA_URL,
+    download_url: HF_LORA_URL,
+    resourceVerified: true,
+    resource_source: 'wavespeed',
+    resource_kind: 'lora',
+  });
+  expect(generationReadiness({
+    provider: 'wavespeed',
+    model: 'wavespeed-ai/krea-v2/turbo-lora',
+    prompt: 'test',
+    loras: [{ name: next.lora_name, downloadUrl: next.download_url, unresolvedResource: next.unresolvedResource }],
+  })).toBeUndefined();
+});
+
+it('HTTPS name alone (legacy Hub paste without resourceVerified) is not forced unresolved', () => {
+  const next = replaceSelectedResource({}, { name: HF_LORA_URL, provider: 'fal' }, 'lora_name');
+  expect(next.import_unresolved_resource).toBeUndefined();
+  expect(next.unresolvedResource).toBeUndefined();
+  expect(next.download_url).toBe(HF_LORA_URL);
+  expect(next.resourceVerified).toBe(true);
+});
+
+it('non-URL placeholder names remain unresolved; empty strength still refused without inventing 0.8', () => {
+  const next = replaceSelectedResource({}, { name: 'some-unverified-lora', resourceVerified: false }, 'lora_name');
+  expect(next.import_unresolved_resource).toBe(true);
+  expect(next.unresolvedResource).toBe(true);
+  expect(generationReadiness({
+    provider: 'wavespeed',
+    model: 'wavespeed-ai/krea-v2/turbo-lora',
+    prompt: 'test',
+    loras: [{ name: next.lora_name, unresolvedResource: true }],
+  })).toContain('尚未转换');
+
+  const hubAttach = selectionFromExplicitLoraUrl('wavespeed', HF_LORA_URL);
+  expect(() => assertExplicitLoraStrengths([{ name: hubAttach.name }])).toThrow(MISSING_LORA_STRENGTH_MSG);
+  expect(() => assertExplicitLoraStrengths([{ name: hubAttach.name, modelStrength: 0.75 }])).not.toThrow();
+  expect(hubAttach).not.toHaveProperty('modelStrength', 0.8);
+});
+
+it('selectionFromExplicitLoraUrl refuses provider=all and non-URL input', () => {
+  expect(() => selectionFromExplicitLoraUrl('all', HF_LORA_URL)).toThrow(/供应商/);
+  expect(() => selectionFromExplicitLoraUrl('wavespeed', 'owner/repo')).toThrow(/HTTP/);
+});

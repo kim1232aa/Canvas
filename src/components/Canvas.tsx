@@ -1,3 +1,7 @@
+import { ensureModelSchema, modelSchemaVersion, subscribeModelSchema, withCachedSchemaProperties } from '../services/modelSchemaCache';
+import { canvasLorasForCheckpoint } from '../utils/canvasLoras';
+import { hasReferenceImageInput } from '../utils/graphEngine';
+import { overlapPushes } from '../utils/nodeOverlap';
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import {
   CanvasMode,
@@ -34,6 +38,8 @@ interface CanvasProps {
   onToggleBypass: (id: string) => void;
   onAddConnection: (conn: Omit<Connection, 'id'>) => void;
   onDeleteConnection: (connId: string) => void;
+  /** clean-1005: same 底模连线断开 sentence as the Run banner; shown on the LoRA node where the chain breaks. */
+  modelChainBreakInfo?: { message: string; atNodeId: string };
   onAddNode: (type: string, pos: { x: number; y: number }) => void;
   onUpdateFramePos: (id: string, pos: { x: number; y: number }) => void;
   onUpdateFrame: (frameId: string, partial: Partial<SpatialFrame>) => void;
@@ -67,6 +73,7 @@ export const Canvas: React.FC<CanvasProps> = ({
   onToggleBypass,
   onAddConnection,
   onDeleteConnection,
+  modelChainBreakInfo,
   onAddNode,
   onUpdateFramePos,
   onUpdateFrame,
@@ -92,6 +99,7 @@ export const Canvas: React.FC<CanvasProps> = ({
 
   // Wire Connection Dragging
   const [draggingWire, setDraggingWire] = useState<DraggingWire | null>(null);
+  const wirePressRef = useRef<{ id: string; x: number; y: number } | null>(null);
   const [hoveredWireId, setHoveredWireId] = useState<string | null>(null);
 
   // Context Menu for Adding Nodes or Frames
@@ -219,6 +227,15 @@ export const Canvas: React.FC<CanvasProps> = ({
   };
 
   // Dragging Handlers
+  // Re-render when a model Schema arrives so send badges update.
+  React.useSyncExternalStore(subscribeModelSchema, modelSchemaVersion);
+  // Grown nodes (e.g. LoRA warning box) push nodes below them down instead of covering them.
+  const nodesRef = React.useRef(nodes);
+  nodesRef.current = nodes;
+  const handleMeasuredHeight = React.useCallback((nodeId: string, height: number) => {
+    for (const push of overlapPushes(nodesRef.current, nodeId, height)) onUpdateNodePos(push.id, push.pos);
+  }, [onUpdateNodePos]);
+
   const handleStartNodeDrag = (e: React.MouseEvent, nodeId: string) => {
     e.stopPropagation();
     onSelectNode(nodeId);
@@ -374,7 +391,7 @@ export const Canvas: React.FC<CanvasProps> = ({
 
   return (
     <div
-      ref={containerRef}
+      ref={containerRef} data-testid="canvas-container"
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
@@ -417,15 +434,25 @@ export const Canvas: React.FC<CanvasProps> = ({
             const fromNode = nodes.find((n) => n.id === conn.fromNodeId);
             const isRunning = fromNode?.state === 'running';
 
+            // clean-1005: single click near a freshly linked socket was deleting the edge while the user tried to drag
+            // the node to align it (wire hit-area extends outside the node). Delete only on double-click; ignore drag-like presses.
             return (
               <g
                 key={conn.id}
                 className="pointer-events-auto cursor-pointer group"
                 onMouseEnter={() => setHoveredWireId(conn.id)}
                 onMouseLeave={() => setHoveredWireId(null)}
-                onClick={() => onDeleteConnection(conn.id)}
+                onMouseDown={(e) => { wirePressRef.current = { id: conn.id, x: e.clientX, y: e.clientY }; }}
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  const p = wirePressRef.current;
+                  if (p && p.id === conn.id && Math.hypot(e.clientX - p.x, e.clientY - p.y) > 6) return;
+                  onDeleteConnection(conn.id);
+                }}
+                onClick={(e) => { e.stopPropagation(); /* single click no longer deletes */ }}
               >
                 <path d={pathData} fill="none" stroke="transparent" strokeWidth="18" />
+                <title>{isHovered ? '双击删除连线' : ''}</title>
                 <path
                   d={pathData}
                   fill="none"
@@ -540,6 +567,24 @@ export const Canvas: React.FC<CanvasProps> = ({
                     ? (resolveCheckpointForNode(node.id, nodes, connections).provider || undefined)
                     : undefined
                 }
+                modelChainBreakMessage={modelChainBreakInfo?.atNodeId === node.id ? modelChainBreakInfo.message : undefined}
+                onMeasuredHeight={handleMeasuredHeight}
+                schemaCustomParameters={(() => {
+                  // Model Schema field list lives on the engine/Checkpoint node; KSampler etc. read it for send badges.
+                  const engineId = resolveCheckpointForNode(node.id, nodes, connections).engineNodeId;
+                  const engine = engineId ? nodes.find((n) => n.id === engineId) : undefined;
+                  if (!engine) return undefined;
+                  const r = resolveCheckpointForNode(node.id, nodes, connections);
+                  ensureModelSchema(r.provider, r.checkpoint);
+                  const cp = withCachedSchemaProperties(r.provider, r.checkpoint, engine.values?.custom_parameters);
+                  // Same reference-image rule the run extraction uses; drives the denoise badge via planCanvasField.
+                  try {
+                    const o = JSON.parse(cp || '{}') || {};
+                    o._canvas = { ...(o._canvas || {}), hasReferenceImage: hasReferenceImageInput(nodes as any, connections as any, node.id) };
+                    return JSON.stringify(o);
+                  } catch { return cp; }
+                })()}
+                canvasLoras={node.type === 'CheckpointLoaderSimple' ? canvasLorasForCheckpoint(node.id, nodes as any, connections as any) : undefined}
                 onAutoFixCheckpoint={onAutoFixCheckpoint}
                 onOpenModelHub={onOpenModelHub}
               />

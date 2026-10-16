@@ -1,0 +1,241 @@
+{
+  "$schemaNote": "草案 — 仅声明。真相源: docs/provider-api-audit-v2/civitai.md + DIFF.md (2026-10-15)",
+  "id": "civitai",
+  "displayName": "Civitai Orchestration",
+  "auth": {
+    "envVar": "CIVITAI_API_TOKEN",
+    "header": "Authorization",
+    "scheme": "Bearer"
+  },
+  "base": {
+    "orchestration": "https://orchestration.civitai.com/v2/consumer",
+    "site": "https://civitai.com/api/v1"
+  },
+  "catalog": {
+    "market": {
+      "path": "GET site /models",
+      "pagination": {
+        "limit": "1-100 default 100",
+        "page": true,
+        "cursor": "metadata.nextCursor (query 搜索必须用 cursor)"
+      },
+      "filters": [
+        "query",
+        "types (LORA…)",
+        "baseModels",
+        "supportsGeneration",
+        "tag",
+        "username",
+        "nsfw"
+      ],
+      "note": "得到 model@version → 构造 AIR；不是可运行目录"
+    },
+    "runnable": [
+      "GET /v2/resources",
+      "GET /v2/resources/{air}",
+      "GET /v2/services",
+      "GET /v2/services/{serviceId}"
+    ],
+    "modelRef": "AIR URN, e.g. urn:air:flux1:diffuser:civitai:618692@691639"
+  },
+  "predict": {
+    "mode": "async workflow (wait=N 可内联阻塞)",
+    "create": {
+      "method": "POST",
+      "path": "/workflows",
+      "query": {
+        "wait": "秒；0=立即返回",
+        "whatif": "仅估价",
+        "tier": [
+          "paid",
+          "free"
+        ]
+      },
+      "body": "{ steps: [{ $type: imageGen|videoGen, input: {…} }] }"
+    },
+    "poll": {
+      "method": "GET",
+      "path": "/workflows/{workflowId}",
+      "progress": [
+        "unassigned",
+        "preparing",
+        "scheduled",
+        "processing"
+      ],
+      "terminal": [
+        "succeeded",
+        "failed",
+        "expired",
+        "canceled"
+      ]
+    },
+    "recipeShortcut": {
+      "imageGen": "POST /recipes/imageGen",
+      "textToImage": "POST /recipes/textToImage（OpenAPI TextToImageInput）",
+      "videoGen": "POST /recipes/videoGen",
+      "note": "engine 专属 recipe（flux1/flux2/krea/wan…）字段名可能与 textToImage 不同；按 recipe 区分，禁止混用"
+    }
+  },
+  "image": {
+    "$type": "imageGen",
+    "byEngine": {
+      "flux1 sdcpp": {
+        "seed": "int64 default random",
+        "steps": "default 28, 4-50",
+        "cfgScale": "default 3.5, 1-20",
+        "width/height": "832-1216, %16, default 1024",
+        "loras": "map"
+      },
+      "flux1 comfy": {
+        "seed": true,
+        "steps": true,
+        "cfgScale": true,
+        "maxSize": 2048,
+        "loras": "map"
+      },
+      "flux2 klein": {
+        "seed": "int64",
+        "steps": "default 20, 4-50",
+        "cfgScale": "default 5, 1-20",
+        "size": "512-2048 %16",
+        "loras": "map"
+      },
+      "flux2 dev/flex": {
+        "seed": true,
+        "numInferenceSteps": "4-50 default 28",
+        "guidanceScale": "0-20",
+        "cfgScale/steps": "禁止（上游 400）",
+        "loras": "array {air,strength}"
+      },
+      "flux2 pro/max": {
+        "loras": "unsupported"
+      },
+      "flux1-kontext": {
+        "engine": "独立 flux1-kontext (dev/pro/max)",
+        "checkpoint": "不可选",
+        "loras": "unsupported (传了 → 400)"
+      },
+      "krea v2": {
+        "seed": "uint32 批内共用",
+        "steps": "unsupported",
+        "cfg": "unsupported",
+        "width/height": "unsupported",
+        "aspectRatio": true,
+        "size": [
+          "medium",
+          "large"
+        ],
+        "loras": "unsupported",
+        "negative_prompt": "unsupported",
+        "call": "engine:\"fal\", model:\"krea2\"",
+        "creativity": true
+      }
+    },
+    "fieldNameWarning": "cfgScale vs guidanceScale、steps vs numInferenceSteps 按引擎切换；flux2.dev 发 cfgScale/steps → 400（Researchy 2026-10-15 recipes/flux2.md 复核）",
+    "textToImage": {
+      "path": "POST /recipes/textToImage",
+      "source": "orchestration OpenAPI TextToImageInput + ImageJobNetworkParams（/workspace/audit-v2-raw/cv_oa.json）",
+      "fields": {
+        "model": "AIR URN",
+        "prompt": "required",
+        "negativePrompt": true,
+        "scheduler": "枚举 eulerA/euler/…/lcm/ddpm/deis…",
+        "steps": "1–150 default 30",
+        "cfgScale": "1–30 default 7.5 required",
+        "width/height": "64–4084 default 512",
+        "seed": "0–4294967295",
+        "clipSkip": "default 2",
+        "additionalNetworks": "map keyed by AIR → ImageJobNetworkParams{strength:number|null, triggerWord, type}；strength 无官方 min/max"
+      },
+      "loraShape": "additionalNetworks（不是简单 {AIR:strength} 也不是 [{air,strength}]）",
+      "vsEngineRecipes": "flux1/flux2/krea 等 engine recipe 仍按 byEngine；与 textToImage 并存，不矛盾（DIFF.md）"
+    }
+  },
+  "video": {
+    "supported": true,
+    "$type": "videoGen",
+    "engines": [
+      "wan",
+      "ltx2",
+      "kling",
+      "vidu",
+      "veo3",
+      "seedance",
+      "hunyuan",
+      "flux-3"
+    ],
+    "wan": {
+      "input": [
+        "engine",
+        "version",
+        "provider",
+        "operation",
+        "prompt",
+        "resolution 480p(v3)/720p/1080p",
+        "aspectRatio",
+        "duration 5|10 (秒)",
+        "enablePromptExpansion"
+      ],
+      "operations": [
+        "text-to-video",
+        "image-to-video",
+        "reference-to-video",
+        "edit-video"
+      ],
+      "seed": "未列为 fal 路径通用字段",
+      "fps": "未列（fal 路径）",
+      "loras": "仅 provider=comfy + version=v2.2：[{air,strength}]"
+    },
+    "rule": "每个 engine 按自己的 recipe；不跨引擎套参数"
+  },
+  "lora": {
+    "shapes": {
+      "textToImage.additionalNetworks": "{\"<AIR>\": {\"strength\": number|null, \"triggerWord\"?, \"type\"?}} — OpenAPI ImageJobNetworkParams",
+      "flux1/flux2-klein recipe map": "{ \"<AIR>\": strength }（旧 recipe 文档）",
+      "flux2-dev recipe array": "[{ air, strength }]"
+    },
+    "strengthRange": {
+      "textToImage": "OpenAPI 无 min/max → 待确认至实测；Site 模型描述里的权重范围仅自由文本",
+      "typicalRecipeDocs": "0.0-2.0（非 OpenAPI 约束）"
+    },
+    "invalid": "可能静默无效（URN 错）或 400 LoRA not found",
+    "unsupportedEngines": [
+      "flux2 pro",
+      "flux2 max",
+      "flux1-kontext",
+      "krea v2",
+      "wan fal"
+    ]
+  },
+  "billing": {
+    "currency": "Buzz",
+    "preview": "whatif=true",
+    "freeTier": "GET /v2/consumer/free-tier",
+    "insufficientHints": [
+      {
+        "behavior": "Buzz 用尽 → orchestrator 将 step 标 canceled（提交可能仍 200/202）",
+        "source": "developer.civitai.com/orchestration/guide/errors-and-retries.md（cv_err.md L99）"
+      }
+    ],
+    "httpErrors": "ProblemDetails status/title/errors；400/401/403/404/409",
+    "http402": "未文档化为欠费码；欠费看 step canceled",
+    "uiRule": "必须展示 step 状态与原因；submit 2xx ≠ 成功"
+  },
+  "contractTestHint": "textToImage → additionalNetworks map（AIR→{strength}），非 [{air,strength}]；flux1 recipe → loras map；flux2 dev → numInferenceSteps/guidanceScale + loras array（发 steps/cfgScale → 上游 400）；krea v2 挂 LoRA/宽高/steps/cfg 本地拒绝或标不会发送；flux1-kontext 挂 LoRA → 上游 400；Buzz 用尽 → step canceled（非专用 HTTP 402）；sdcpp+flux2Dev → steps/cfgScale + loras map（勿发 numInferenceSteps/guidanceScale）；flux2 pro/max 无 LoRA/steps/cfg",
+  "sources": [
+    "https://developer.civitai.com/llms.txt",
+    "https://orchestration.civitai.com/openapi/v2-consumers.json",
+    "https://developer.civitai.com/orchestration/guide/errors-and-retries.md",
+    "https://developer.civitai.com/orchestration/recipes/flux2.md",
+    "https://developer.civitai.com/orchestration/recipes/krea.md",
+    "docs/provider-api-audit-v2/civitai.md",
+    "docs/provider-api-audit-v2/DIFF.md"
+  ],
+  "_auditStatus": "2026-10-15 04:58：补 OpenAPI 核实 sdcpp Dev 字段为 steps/cfgScale；flux1-kontext 无 LoRA。字段徽章仍以前端实测为准",
+  "flux2DevPaths": {
+    "native": "engine flux2 + model dev；numInferenceSteps 4–50 默认28、guidanceScale 0–20 默认2.5、loras[{air,strength}]（官方推荐）",
+    "sdcpp": "engine sdcpp + ecosystem flux2Dev；steps 4–50 默认20、cfgScale 1–20 默认1、sampleMethod/schedule/negativePrompt；loras 为 object map；createVariant 用 strength 0–1",
+    "rule": "引擎与字段名、LoRA 形状必须配套，不得混发（原生 array ≠ sdcpp map）",
+    "source": "OpenAPI Flux2DevSdCpp*ImageGenInput 2026-10-15 curl https://developer.civitai.com/openapi/v2-consumers.json；配方 https://developer.civitai.com/orchestration/recipes/flux2.md；evidence researchy-claim-sdcpp-nanogpt-kontext-2026-10-15.md"
+  }
+}

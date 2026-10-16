@@ -63,7 +63,12 @@ export class ModelsLabDriver extends BaseEngineDriver {
       image_url: params.image_url,
       denoise: params.denoise,
       scheduler: params.scheduler,
-      loras: params.loras,
+      loras: Array.isArray(params.loras)
+        ? params.loras.map((l: any) => (typeof l === 'object' && l !== null ? {
+            ...l,
+            ...(typeof (l.strength ?? l.modelStrength ?? l.scale) === 'number' ? { strength: l.strength ?? l.modelStrength ?? l.scale } : {}),
+          } : l))
+        : params.loras,
       custom_parameters: params.extraParams?.custom_parameters,
       workflowSnapshot: params.workflowSnapshot,
     };

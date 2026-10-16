@@ -77,7 +77,12 @@ export class RunwareDriver extends BaseEngineDriver {
       steps: params.steps,
       cfg: params.cfg,
       seed: params.seed,
-      loras: params.loras,
+      loras: Array.isArray(params.loras)
+        ? params.loras.map((l: any) => (typeof l === 'object' && l !== null ? {
+            ...l,
+            ...(typeof (l.strength ?? l.modelStrength ?? l.weight) === 'number' ? { strength: l.strength ?? l.modelStrength ?? l.weight } : {}),
+          } : l))
+        : params.loras,
       custom_parameters: params.extraParams?.custom_parameters,
       workflowSnapshot: params.workflowSnapshot,
     };

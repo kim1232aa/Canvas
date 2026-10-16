@@ -57,7 +57,7 @@ export function buildSenseNovaImageRequest(body: Json): SenseNovaImageRequest {
   const size = imageSize(body.size ?? dimensionSize ?? 'auto');
 
   const n = body.n === undefined ? 1 : Number(body.n);
-  if (n !== 1) throw new Error('SenseNova U1.5 Lite 当前仅支持 n=1');
+  if (model === 'sensenova-u1.5-lite' && n !== 1) throw new Error('SenseNova U1.5 Lite 当前仅支持 n=1');
   const outputFormat = body.output_format ?? 'png';
   if (!['png','jpeg','webp'].includes(String(outputFormat))) throw new Error('SenseNova output_format 仅支持 png/jpeg/webp');
   const responseFormat = body.response_format ?? 'b64_json';

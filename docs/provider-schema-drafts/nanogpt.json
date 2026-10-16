@@ -1,0 +1,125 @@
+{
+  "$schemaNote": "草案 — 仅声明。真相源: docs/provider-api-audit-v2/nanogpt.md + DIFF.md (2026-10-15)",
+  "id": "nanogpt",
+  "displayName": "NanoGPT",
+  "auth": {
+    "envVar": "NANOGPT_API_KEY",
+    "header": "Authorization",
+    "scheme": "Bearer",
+    "alt": "x-api-key",
+    "discoveryNoAuth": true
+  },
+  "base": {
+    "root": "https://api.nano-gpt.com/api"
+  },
+  "catalog": {
+    "image": {
+      "path": "GET /v1/images/models",
+      "rowFields": [
+        "id",
+        "supported_parameters",
+        "capabilities",
+        "endpoints"
+      ],
+      "detail": "GET /v1/images/models/{modelId}/endpoints → pricing, supported_parameters, input_reference_constraints",
+      "legacy": "GET /v1/image-models",
+      "idNote": "id 可含斜杠，需 URL 编码"
+    },
+    "video": {
+      "path": "GET /v1/video-models?detailed=true"
+    },
+    "rule": "参数只按 supported_parameters 发送；不硬编码"
+  },
+  "image": {
+    "mode": "sync",
+    "create": {
+      "method": "POST",
+      "path": "/v1/images",
+      "legacy": [
+        "/v1/images/generations",
+        "/v1/images/edits"
+      ]
+    },
+    "commonFields": {
+      "model": true,
+      "prompt": true,
+      "n|nImages": "nImages 优先",
+      "resolution": "1k/2k/4k per model",
+      "aspect_ratio": "per model",
+      "quality": "low…max",
+      "output_format": true,
+      "background": true,
+      "seed": {
+        "supported": "per model",
+        "guarantee": false
+      },
+      "input_references": "img2img"
+    },
+    "stepsCfg": "2026-10-15 实测无模型声明 steps/guidance/cfg → 默认不发并标不会发送",
+    "rejects": {
+      "stream:true": "unsupported_stream",
+      "provider 对象": "unsupported_provider_options",
+      "混用 input_references 与旧 alias": "conflicting_image_inputs"
+    },
+    "seed": {
+      "supported": "per model; 2026-10-15 实测 243 个模型仅 nano-banana-2.1 声明"
+    }
+  },
+  "video": {
+    "supported": true,
+    "mode": "async",
+    "create": {
+      "method": "POST",
+      "path": "/generate-video",
+      "returns": "runId, status, remainingBalance?"
+    },
+    "poll": {
+      "method": "GET",
+      "path": "/video/status?requestId=<runId>",
+      "success": "data.status=COMPLETED → data.output.video.url",
+      "intervalSecExample": 5
+    },
+    "fields": {
+      "duration|seconds": "字符串秒（Sora 用 seconds）",
+      "resolution": true,
+      "aspect_ratio|aspect": true,
+      "frames_per_second": "部分 Wan 5-24",
+      "num_frames": "部分 81-100",
+      "imageUrl|imageDataUrl": "I2V ≤4MB",
+      "seed": "可选，不保证复现",
+      "negative_prompt|cfg_scale|num_inference_steps": "per model"
+    },
+    "rule": "全部字段仅当该模型 supported_parameters 允许"
+  },
+  "lora": {
+    "supported": "per-model (supported_parameters)",
+    "declaredModels": [
+      "minimax-h3/text-to-image",
+      "minimax-h3/image-edit"
+    ],
+    "item": {
+      "path": "HTTPS URL",
+      "scale": "number"
+    },
+    "maxItems": 3,
+    "rule": "模型 supported_parameters 声明 loras 才开放；未声明本地拒绝",
+    "source": "Researchy 2026-10-15 实测 /api/v1/image-models?detailed=true + https://docs.nano-gpt.com/api-reference/endpoint/image-api-generate.md"
+  },
+  "billing": {
+    "insufficientHints": [
+      {
+        "status": 402
+      },
+      {
+        "errorType": "INSUFFICIENT_BALANCE"
+      }
+    ],
+    "balanceSignal": "remainingBalance (video submit)"
+  },
+  "contractTestHint": "minimax-h3/text-to-image 挂 ≤3 LoRA → loras[{path,scale}] 发出；其他模型挂 LoRA 本地拒绝；seed 仅 nano-banana-2.1 发送；steps/cfg 一律标不会发送",
+  "sources": [
+    "https://docs.nano-gpt.com (Image API, Video Generation, Video Status, authentication.md)",
+    "docs/provider-api-audit-v2/nanogpt.md"
+  ],
+  "_auditStatus": "2026-10-15 04:58：已对齐 v2 nanogpt.md：按每模型 supported_parameters 决定发送；未声明字段标不会发送、默认不发；实测 243 模型仅 nano-banana-2.1 声明 seed，无模型声明 steps/guidance。徽章仍以前端实测为准"
+}

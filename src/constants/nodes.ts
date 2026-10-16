@@ -33,7 +33,7 @@ export const SCHEDULER_OPTIONS = [
 export interface BaseModelOption {
   label: string;
   value: string;
-  provider: 'fal' | 'agnes' | 'civitai' | 'modelscope' | 'modelscope_ai' | 'huggingface' | 'nanogpt' | 'gemini' | 'sensenova' | 'video' | 'tensorart' | 'openai_compat' | 'grok_compat' | 'muapi' | 'wavespeed' | 'sogni' | 'runware' | 'modelslab' | 'replicate';
+  provider: 'fal' | 'agnes' | 'civitai' | 'modelscope' | 'modelscope_ai' | 'huggingface' | 'nanogpt' | 'gemini' | 'sensenova' | 'video' | 'tensorart' | 'openai_compat' | 'grok_compat' | 'muapi' | 'wavespeed' | 'sogni' | 'krea' | 'together' | 'aimlapi' | 'novita' | 'venice' | 'openworks' | 'runware' | 'modelslab' | 'replicate';
   category?: 'checkpoint' | 'video' | 'reasoning' | 'edit' | 'lora';
 }
 
@@ -47,9 +47,6 @@ export const BASE_MODELS: BaseModelOption[] = [
   { label: '🇨🇳 [魔搭] Tongyi-MAI Z-Image-Turbo (API Token)', value: 'Tongyi-MAI/Z-Image-Turbo', provider: 'modelscope', category: 'checkpoint' },
   { label: '🇨🇳 [魔搭] SDXL 1.0 官方基模 (AI-ModelScope/stable-diffusion-xl-base-1.0)', value: 'AI-ModelScope/stable-diffusion-xl-base-1.0', provider: 'modelscope', category: 'checkpoint' },
   { label: '🇨🇳 [魔搭] FLUX.1 [dev] (AI-ModelScope/flux.1-dev)', value: 'AI-ModelScope/flux.1-dev', provider: 'modelscope', category: 'checkpoint' },
-  { label: '🇨🇳 [魔搭] Wan 2.1 文生图 (damo/wan2.1-t2i-1.3b)', value: 'damo/wan2.1-t2i-1.3b', provider: 'modelscope', category: 'checkpoint' },
-  { label: '🇨🇳 [魔搭] Wan 2.1 视频生图 (damo/wan2.1-i2v-480p-14b)', value: 'damo/wan2.1-i2v-480p-14b', provider: 'modelscope', category: 'video' },
-  { label: '🇨🇳 [魔搭] CogVideoX-5B 视频模型 (THUDM/CogVideoX-5b)', value: 'THUDM/CogVideoX-5b', provider: 'modelscope', category: 'video' },
   { label: '🇨🇳 [魔搭] Qwen-VL-Plus 视觉解析 (qwen/qwen-vl-plus)', value: 'qwen/qwen-vl-plus', provider: 'modelscope', category: 'edit' },
   { label: '🇨🇳 [魔搭] Kolors 旗舰基模 (Kwai-Kolors/Kolors)', value: 'Kwai-Kolors/Kolors', provider: 'modelscope', category: 'checkpoint' },
 
@@ -133,21 +130,27 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
           { label: 'MuAPI', value: 'muapi' },
           { label: 'WaveSpeed', value: 'wavespeed' },
           { label: 'Sogni', value: 'sogni' },
+          { label: 'Krea', value: 'krea' },
+          { label: 'Together', value: 'together' },
+          { label: 'AIMLAPI', value: 'aimlapi' },
+          { label: 'Novita', value: 'novita' },
+          { label: 'Venice', value: 'venice' },
+          { label: 'Tensor.Art OpenWorks', value: 'openworks' },
           { label: '⚡ Replicate 官方云平台', value: 'replicate' },
         ],
       },
       {
         name: 'ckpt_name',
-        label: 'ckpt_name (模型名称/路径/ID)',
+        label: '底模',
         type: 'select',
         default: '',
         options: BASE_MODELS,
         placeholder: '输入模型 ID/路径，或点击右上角「模型中心」实时拉取选用',
       },
       // grok_compat: options filled from providerSchema at render time (NodeItem)
-      { name: 'aspect_ratio', label: 'aspect_ratio', type: 'select', default: '', options: [] },
-      { name: 'resolution', label: 'resolution', type: 'select', default: '', options: [] },
-      { name: 'shift', label: 'shift（时间偏移）', type: 'number', default: '', min: 1, max: 10, step: 0.1 },
+      { name: 'aspect_ratio', label: '画面比例 (aspect_ratio)', type: 'select', default: '', options: [] },
+      { name: 'resolution', label: '分辨率 (resolution)', type: 'select', default: '', options: [] },
+      { name: 'shift', label: '时间偏移 (shift)', type: 'number', default: '', min: 1, max: 10, step: 0.1 },
       { name: 'random_seed', label: '种子策略', type: 'select', default: '', options: [] },
       { name: 'gallery_images', label: '结果集', type: 'select', default: '', options: [] },
       { name: 'fal_model_name', label: 'SD LoRA 底模仓库 / URL', type: 'text', default: '' },
@@ -178,50 +181,49 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
     widgets: [
       {
         name: 'lora_name',
-        label: 'lora_name',
+        label: 'LoRA 名称',
         type: 'text',
-        default: 'DetailTweaker_SDXL_v1.0.safetensors',
-        placeholder: 'e.g. Makoto_Shinkai_Style or Civitai LoRA Name',
+        default: '',
+        placeholder: 'LoRA 名称或仓库路径',
       },
       {
         name: 'strength_model',
-        label: 'strength_model',
+        label: 'LoRA 强度',
+        title: '必填，禁止默认 0.8',
         type: 'slider',
-        default: 0.8,
+        // No invented default — user must set explicitly before generate
         min: -2.0,
         max: 2.0,
         step: 0.05,
       },
       {
         name: 'strength_clip',
-        label: 'strength_clip',
+        label: 'CLIP 强度',
         type: 'slider',
-        default: 0.8,
         min: -2.0,
         max: 2.0,
         step: 0.05,
       },
       {
         name: 'trigger_words',
-        label: 'trigger_words',
+        label: '触发词',
         type: 'text',
-        default: 'masterpiece, high detail, vibrant lighting',
-        placeholder: 'Civitai trigger words',
+        default: '',
+        placeholder: '触发词',
       },
       {
         name: 'civitai_id',
-        label: 'civitai_id',
+        label: 'Civitai 编号',
         type: 'text',
-        default: '122359',
-        placeholder: 'Civitai Model ID (optional)',
+        default: '',
+        placeholder: '模型编号（可选）',
       },
     ],
     defaultValues: {
-      lora_name: 'DetailTweaker_SDXL_v1.0.safetensors',
-      strength_model: 0.8,
-      strength_clip: 0.8,
-      trigger_words: 'masterpiece, high detail, vibrant lighting',
-      civitai_id: '122359',
+      lora_name: '',
+      // strength_model / strength_clip intentionally omitted — never invent 0.8
+      trigger_words: '',
+      civitai_id: '',
     },
   },
 
@@ -240,7 +242,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
     widgets: [
       {
         name: 'text',
-        label: 'text',
+        label: '提示词',
         type: 'textarea',
         default: 'A futuristic cybernetic city at twilight, neon reflections on wet asphalt, volumetric mist, intricate architectural details, photorealistic, 8k resolution',
         placeholder: 'Enter positive prompt...',
@@ -286,7 +288,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
     widgets: [
       {
         name: 'text',
-        label: 'text',
+        label: '负向提示词',
         type: 'textarea',
         default: 'blurry, distorted, low quality, bad anatomy, deformed limbs, watermark, text, out of focus',
         placeholder: 'Enter negative prompt...',
@@ -376,11 +378,12 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
         name: 'provider',
         label: '推理服务商',
         type: 'select',
-        default: 'sensenova',
+        default: '',
         options: [
-          { label: '商汤日日新 (SenseNova DeepSeek V4)', value: 'sensenova' },
-          { label: 'Agnes AI (ApiHub Agnes 3.0 Flash)', value: 'agnes' },
-          { label: 'Google Gemini (Gemini 3.8 Flash)', value: 'gemini' },
+          { label: '请选择服务商...', value: '' },
+          { label: '商汤日日新 (SenseNova)', value: 'sensenova' },
+          { label: 'Agnes AI (ApiHub)', value: 'agnes' },
+          { label: 'Google Gemini', value: 'gemini' },
           { label: 'Grok 兼容中转', value: 'grok_compat' },
         ],
       },
@@ -388,15 +391,16 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
         name: 'model',
         label: '推理模型',
         type: 'select',
-        default: 'sensenova-6.8-flash-lite',
+        default: '',
         options: [
+          { label: '请选择或输入推理模型...', value: '' },
           { label: 'sensenova-6.8-flash-lite (商汤轻量多模态)', value: 'sensenova-6.8-flash-lite' },
           { label: 'agnes-3.0-flash (Agnes 深度推理)', value: 'agnes-3.0-flash' },
           { label: 'agnes-2.5-pro-alpha (Agnes 逻辑分析)', value: 'agnes-2.5-pro-alpha' },
-          { label: 'gemini-3.8-flash (Google 旗舰多模态)', value: 'gemini-3.8-flash' },
-          { label: 'gemini-3.1-pro-preview (Google 复杂深度推理)', value: 'gemini-3.1-pro-preview' },
-          { label: 'grok-4.3 (Grok 兼容中转)', value: 'grok-4.3' },
-          { label: 'grok-4.5 (Grok 兼容中转)', value: 'grok-4.5' },
+          { label: 'gemini-2.5-flash (Google 多模态推理)', value: 'gemini-2.5-flash' },
+          { label: 'gemini-2.5-pro (Google 深度推理)', value: 'gemini-2.5-pro' },
+          { label: 'grok-3 (Grok 兼容中转)', value: 'grok-3' },
+          { label: 'grok-3-mini (Grok 兼容中转)', value: 'grok-3-mini' },
         ],
       },
       {
@@ -421,8 +425,8 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
       },
     ],
     defaultValues: {
-      provider: 'sensenova',
-      model: 'sensenova-6.8-flash-lite',
+      provider: '',
+      model: '',
       task_type: 'cinematic_photoreal',
       prompt: 'a cyberpunk girl holding an umbrella under neon lights in rain',
       reasoning_output: '',
@@ -486,25 +490,25 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
     widgets: [
       {
         name: 'seed',
-        label: 'seed',
+        label: '种子',
         type: 'seed',
         default: 428912389,
       },
       {
         name: 'control_after_generate',
-        label: 'control_after_generate',
+        label: '生成后种子',
         type: 'select',
         default: 'randomize',
         options: [
-          { label: 'randomize', value: 'randomize' },
-          { label: 'fixed', value: 'fixed' },
-          { label: 'increment', value: 'increment' },
-          { label: 'decrement', value: 'decrement' },
+          { label: '随机', value: 'randomize' },
+          { label: '固定', value: 'fixed' },
+          { label: '递增', value: 'increment' },
+          { label: '递减', value: 'decrement' },
         ],
       },
       {
         name: 'steps',
-        label: 'steps',
+        label: '步数',
         type: 'slider',
         default: 25,
         min: 1,
@@ -513,7 +517,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
       },
       {
         name: 'cfg',
-        label: 'cfg',
+        label: 'CFG',
         type: 'slider',
         default: 4.5,
         min: 1.0,
@@ -522,21 +526,21 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
       },
       {
         name: 'sampler_name',
-        label: 'sampler_name',
+        label: '采样器',
         type: 'select',
         default: 'euler',
         options: SAMPLER_OPTIONS,
       },
       {
         name: 'scheduler',
-        label: 'scheduler',
+        label: '调度器',
         type: 'select',
         default: 'normal',
         options: SCHEDULER_OPTIONS,
       },
       {
         name: 'denoise',
-        label: 'denoise',
+        label: '去噪强度',
         type: 'slider',
         default: 1.0,
         min: 0.0,
@@ -597,7 +601,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
     widgets: [
       {
         name: 'filename_prefix',
-        label: 'filename_prefix',
+        label: '文件名前缀',
         type: 'text',
         default: 'ComfyCanvas',
       },
@@ -623,26 +627,26 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
         name: 'search_keyword',
         label: 'search_keyword',
         type: 'text',
-        default: 'Anime style',
+        default: '',
         placeholder: 'Search Civitai LoRAs...',
       },
       {
         name: 'selected_model_name',
         label: 'selected_model_name',
         type: 'text',
-        default: 'Ghibli Style XL',
+        default: '',
       },
       {
         name: 'selected_triggers',
         label: 'selected_triggers',
         type: 'text',
-        default: 'ghibli style, studio ghibli anime, painterly sky',
+        default: '',
       },
     ],
     defaultValues: {
-      search_keyword: 'Anime style',
-      selected_model_name: 'Ghibli Style XL',
-      selected_triggers: 'ghibli style, studio ghibli anime, painterly sky',
+      search_keyword: '',
+      selected_model_name: '',
+      selected_triggers: '',
     },
   },
 
@@ -655,6 +659,8 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
     inputs: [
       { id: 'positive', name: 'positive', type: 'CONDITIONING', label: 'prompt' },
       { id: 'negative', name: 'negative', type: 'CONDITIONING', label: 'negative' },
+      { id: 'lora', name: 'lora', type: 'MODEL', label: 'lora_model' },
+      { id: 'init_image', name: 'init_image', type: 'IMAGE', label: 'init_image' },
     ],
     outputs: [{ id: 'IMAGE', name: 'IMAGE', type: 'IMAGE', label: 'IMAGE' }],
     widgets: [
@@ -663,7 +669,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
         label: 'model_endpoint',
         type: 'text',
         default: '',
-        placeholder: '输入 ModelScope 模型 ID (如 damo/wan2.1-t2i)',
+        placeholder: '输入 ModelScope 模型 ID (格式 组织名/模型名)',
       },
       {
         name: 'steps',
@@ -690,6 +696,8 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
     inputs: [
       { id: 'positive', name: 'positive', type: 'CONDITIONING', label: 'prompt' },
       { id: 'negative', name: 'negative', type: 'CONDITIONING', label: 'negative' },
+      { id: 'lora', name: 'lora', type: 'MODEL', label: 'lora_model' },
+      { id: 'init_image', name: 'init_image', type: 'IMAGE', label: 'init_image' },
     ],
     outputs: [{ id: 'IMAGE', name: 'IMAGE', type: 'IMAGE', label: 'IMAGE' }],
     widgets: [
@@ -724,6 +732,9 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
     description: 'Ultra-fast pay-per-image inference via nano-gpt.com API (Flux, SDXL).',
     inputs: [
       { id: 'positive', name: 'positive', type: 'CONDITIONING', label: 'prompt' },
+      { id: 'negative', name: 'negative', type: 'CONDITIONING', label: 'negative' },
+      { id: 'lora', name: 'lora', type: 'MODEL', label: 'lora_model' },
+      { id: 'init_image', name: 'init_image', type: 'IMAGE', label: 'init_image' },
     ],
     outputs: [{ id: 'IMAGE', name: 'IMAGE', type: 'IMAGE', label: 'IMAGE' }],
     widgets: [
@@ -736,7 +747,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
       },
       {
         name: 'resolution',
-        label: 'resolution',
+        label: '分辨率 (resolution)',
         type: 'select',
         default: '1024x1024',
         options: [
@@ -762,6 +773,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
       { id: 'positive', name: 'positive', type: 'CONDITIONING', label: 'prompt' },
       { id: 'negative', name: 'negative', type: 'CONDITIONING', label: 'negative' },
       { id: 'lora', name: 'lora', type: 'MODEL', label: 'lora_model' },
+      { id: 'init_image', name: 'init_image', type: 'IMAGE', label: 'init_image' },
     ],
     outputs: [{ id: 'IMAGE', name: 'IMAGE', type: 'IMAGE', label: 'IMAGE' }],
     widgets: [
@@ -792,7 +804,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
       },
       {
         name: 'resolution',
-        label: 'resolution',
+        label: '分辨率 (resolution)',
         type: 'select',
         default: '1024x1024',
         options: [
@@ -822,6 +834,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
       { id: 'positive', name: 'positive', type: 'CONDITIONING', label: 'prompt' },
       { id: 'negative', name: 'negative', type: 'CONDITIONING', label: 'negative' },
       { id: 'lora', name: 'lora', type: 'MODEL', label: 'lora_model' },
+      { id: 'init_image', name: 'init_image', type: 'IMAGE', label: 'init_image' },
     ],
     outputs: [{ id: 'IMAGE', name: 'IMAGE', type: 'IMAGE', label: 'IMAGE' }],
     widgets: [
@@ -829,7 +842,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
         name: 'model',
         label: 'model',
         type: 'text',
-        default: 'black-forest-labs/flux-schnell',
+        default: '',
         placeholder: '输入 Replicate 模型标识 (如 black-forest-labs/flux-schnell)',
       },
       {
@@ -852,7 +865,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
       },
       {
         name: 'resolution',
-        label: 'resolution',
+        label: '分辨率 (resolution)',
         type: 'select',
         default: '1024x1024',
         options: [
@@ -865,7 +878,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
       },
     ],
     defaultValues: {
-      model: 'black-forest-labs/flux-schnell',
+      model: '',
       steps: 4,
       guidance_scale: 3.5,
       resolution: '1024x1024',
@@ -900,7 +913,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
         ],
       },
       // aspect_ratio / image_size 的选项按所选模型从 providerSchema 取，由 GeminiFieldSelect 渲染
-      { name: 'aspect_ratio', label: 'aspect_ratio', type: 'select', default: '', options: [] },
+      { name: 'aspect_ratio', label: '画面比例 (aspect_ratio)', type: 'select', default: '', options: [] },
       { name: 'image_size', label: 'image_size', type: 'select', default: '', options: [] },
     ],
     defaultValues: {
@@ -912,7 +925,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
 
   AIVideoNode: {
     type: 'AIVideoNode',
-    title: 'AI 视频生成（显式 Provider / Model）',
+    title: 'AI 视频（显式 Provider/Model）',
     category: 'providers',
     colorTag: '#a3e635',
     description: '视频节点只执行用户显式选择的 provider 与 model；预置项仅包含当前重新核实的 Fal / Agnes 端点和显式 Grok 兼容中转。',
@@ -977,10 +990,11 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
       { name: 'num_frames', label: 'Wan 帧数 (81–100)', type: 'number', default: '', min: 81, max: 100, step: 1 },
       {
         name: 'duration',
-        label: '视频时长 (秒)',
+        label: '视频时长 (duration)',
         type: 'number',
         default: '',
         step: 1,
+        unit: '秒',
       },
       {
         name: 'fps',
@@ -1031,7 +1045,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
     widgets: [
       {
         name: 'filename_prefix',
-        label: 'filename_prefix',
+        label: '文件名前缀',
         type: 'text',
         default: 'ComfyCanvas_Video',
       },
@@ -1054,12 +1068,12 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
         name: 'image_url',
         label: 'image_url',
         type: 'text',
-        default: 'https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/0695b6d7-40ad-4df5-b99a-ba27550b9a58/original=true/preview.jpeg',
+        default: '',
         placeholder: '输入图像 URL 或从资产库选择...',
       },
     ],
     defaultValues: {
-      image_url: 'https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/0695b6d7-40ad-4df5-b99a-ba27550b9a58/original=true/preview.jpeg',
+      image_url: '',
     },
   },
 
@@ -1076,8 +1090,9 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
         name: 'model_name',
         label: 'model_name',
         type: 'select',
-        default: 'fal-ai/clarity-upscaler',
+        default: '',
         options: [
+          { label: '未选择 (请选择或输入放大模型)', value: '' },
           { label: 'Clarity AI (人像皮肤纹理高清增强放大)', value: 'fal-ai/clarity-upscaler' },
           { label: 'CCSR 4K/8K (超分辨率细节重塑放大器)', value: 'fal-ai/ccsr' },
           { label: 'RealESRGAN_x4plus (通用动漫与二次元)', value: 'RealESRGAN_x4plus' },
@@ -1094,7 +1109,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
       },
     ],
     defaultValues: {
-      model_name: 'fal-ai/clarity-upscaler',
+      model_name: '',
       scale_by: 2.0,
     },
   },

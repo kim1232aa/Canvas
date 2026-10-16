@@ -1,4 +1,4 @@
-export type ProviderId = 'civitai' | 'fal' | 'agnes' | 'sensenova' | 'huggingface' | 'modelscope' | 'modelscope_ai' | 'nanogpt' | 'gemini' | 'tensorart' | 'video' | 'openai_compat' | 'grok_compat' | 'muapi' | 'wavespeed' | 'sogni' | 'runware' | 'modelslab' | 'replicate';
+export type ProviderId = 'civitai' | 'fal' | 'agnes' | 'sensenova' | 'huggingface' | 'modelscope' | 'modelscope_ai' | 'nanogpt' | 'gemini' | 'tensorart' | 'video' | 'openai_compat' | 'grok_compat' | 'muapi' | 'wavespeed' | 'sogni' | 'krea' | 'together' | 'aimlapi' | 'novita' | 'venice' | 'runware' | 'modelslab' | 'replicate';
 
 export interface ProviderConfig {
   id: ProviderId;
@@ -65,6 +65,11 @@ export interface ApiKeysState {
   tensorartKey?: string;
   muapiKey?: string;
   wavespeedKey?: string;
+  kreaKey?: string;
+  togetherKey?: string;
+  aimlapiKey?: string;
+  novitaKey?: string;
+  veniceKey?: string;
   sogniKey?: string;
   runwareKey?: string;
   runwareBaseUrl?: string;
@@ -122,6 +127,21 @@ export interface GenerationHistoryRequestMetadata {
 
 export interface GenerationHistoryItem {
   id: string;
+  /** 'failed' = upstream attempt failed; url is empty, upstream fields are verbatim. */
+  status?: 'failed' | 'local_blocked';
+  /** 'direct' = request did not come from the Canvas UI (no x-canvas-origin) → 「本机直调」. */
+  requestOrigin?: 'browser' | 'direct';
+  /** 'local_blocked' → 「未出站，本地拦截」 */
+  statusLabel?: string;
+  upstreamStatus?: number | null;
+  upstreamStatusText?: string | null;
+  upstreamEndpoint?: string | null;
+  upstreamResponseBody?: string | null;
+  networkError?: { message: string | null; cause: unknown } | null;
+  httpStatus?: number;
+  error?: string | null;
+  errorSource?: string | null;
+  stack?: string | null;
   url: string;
   imageUrl?: string;
   videoUrl?: string;

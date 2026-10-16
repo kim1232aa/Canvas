@@ -2,10 +2,8 @@ import { applyCustomParameters } from '../server/customParameters';
 
 export const NANO_IMAGE_DOC='https://docs.nano-gpt.com/api-reference/image-generation';
 // Normalized /api/v1/images contract. Capability metadata is per-model:
-// supported_parameters declares what is officially documented. A missing key
-// means "unknown" — never reported as "unsupported" and never silently dropped:
-// user-supplied values pass through with an explicit unknown-capability note,
-// so the upstream response is the source of truth (2026-10-05 live metadata audit).
+// supported_parameters declares what is officially documented (Researchy 2026-10-15).
+// Undeclared seed/steps/cfg/negative_prompt/… are NOT sent (UI: 「不会发送」); only declared fields go upstream.
 export function buildNanoImagePayload(body:Record<string,any>,endpoint:Record<string,any>):{payload:Record<string,any>;capabilityNotes:Record<string,any>[]} {
   if (!body.model) throw new Error('模型为必填项');
   const supported=endpoint.supported_parameters || {};
@@ -31,9 +29,8 @@ export function buildNanoImagePayload(body:Record<string,any>,endpoint:Record<st
     if (!supplied(body[key])) continue;
     const spec=supported[key];
     if (!spec) {
-      // Undeclared = unknown capability. Pass through and annotate; do not block.
-      payload[key]=body[key];
-      capabilityNotes.push({field:key,value:body[key],capability:'unknown',note:'该模型 supported_parameters 未声明此参数；按用户显式值提交，上游响应为准。'});
+      // Undeclared → 不会发送 (Researchy 2026-10-15: only nano-banana-2.1 declares seed among 243 models).
+      capabilityNotes.push({field:key,value:body[key],capability:'not_sent',note:'该模型 supported_parameters 未声明此参数；不会发送。'});
       continue;
     }
     const values=Array.isArray(spec)?spec:spec.values;
@@ -41,22 +38,20 @@ export function buildNanoImagePayload(body:Record<string,any>,endpoint:Record<st
     if (spec.min!==undefined && body[key]<spec.min || spec.max!==undefined && body[key]>spec.max) throw new Error(`${key} 超出模型支持范围`);
     payload[key]=body[key];
   }
-  // Never documented on any image model as of 2026-10-05 live audit: negative_prompt,
-  // steps, cfg/guidance_scale, denoise, sampler_name, scheduler, size. Unknown ≠
-  // unsupported — pass user values through with an explicit note instead of a local gate.
+  // steps/cfg/negative_prompt/…: send only when supported_parameters declares them.
   for (const key of ['negative_prompt','steps','cfg','guidance_scale','denoise','sampler_name','scheduler','size']) {
     if (!supplied(body[key])) continue;
     if (supported[key]) { payload[key]=body[key]; continue; }
-    payload[key]=body[key];
-    capabilityNotes.push({field:key,value:body[key],capability:'unknown',note:'supported_parameters 未声明此参数；按用户显式值提交，不本地拦截，上游响应为准。'});
+    capabilityNotes.push({field:key,value:body[key],capability:'not_sent',note:'该模型 supported_parameters 未声明此参数；不会发送。'});
   }
   // LoRA: only models whose metadata declares supported_parameters.loras accept them
   // (2026-10-05: minimax-h3/* 等声明 {max_items:3, item:{path,scale}})。
   if (supplied(body.loras)) {
     const spec=supported.loras;
     if (!spec) {
-      capabilityNotes.push({field:'loras',value:body.loras,capability:'unknown',note:'该模型 supported_parameters 未声明 loras；按用户显式值提交，上游响应为准。'});
-      payload.loras=body.loras.map((l:any)=>({path:l.path || l.url || l.name,scale:l.strength ?? l.modelStrength}));
+      // Researchy audit 2026-10-15: NanoGPT Image/Video docs have no generic LoRA.
+      // Only send when live supported_parameters.loras declares the field — never invent path+scale.
+      throw new Error('该 NanoGPT 模型 supported_parameters 未声明 loras；官方 Image API 无通用 LoRA 字段。未发送请求。请移除 LoRA 节点，或换 metadata 声明了 loras 的模型。');
     } else {
       const items=body.loras.map((l:any)=>{
         const path=l.path || l.url || l.name;

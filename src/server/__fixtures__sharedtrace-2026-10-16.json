@@ -1,0 +1,469 @@
+{
+ "_note": "Live GET /api/model-schema 2026-10-16 12:4x CST (loras property only) + data/history.json samples (requestMetadata only, URLs as stored).",
+ "muapi": {
+  "sourceUrl": "https://api.muapi.ai/openapi.json",
+  "loras": {
+   "anyOf": [
+    {
+     "items": {
+      "additionalProperties": true,
+      "type": "object"
+     },
+     "type": "array"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "title": "Loras",
+   "description": "List of LoRAs to apply (maximum 3). Example: [{'path': '...', 'scale': 1.0}]"
+  }
+ },
+ "wavespeed": {
+  "sourceUrl": "https://api.wavespeed.ai/api/v3/models",
+  "loras": {
+   "description": "List of LoRAs to apply (max 3).",
+   "items": {
+    "properties": {
+     "path": {
+      "description": "URL or the path to the LoRA weights.",
+      "type": "string"
+     },
+     "scale": {
+      "default": 1,
+      "description": "The scale of the LoRA weights. This is used to scale the LoRA weight before merging it with the base model.",
+      "maximum": 4,
+      "minimum": 0,
+      "type": "number"
+     }
+    },
+    "required": [
+     "path"
+    ],
+    "type": "object",
+    "x-order-properties": [
+     "path",
+     "scale"
+    ]
+   },
+   "maxItems": 3,
+   "type": "array",
+   "x-ui-component": "loras"
+  }
+ },
+ "history": {
+  "hist_1792123905033_9bnb0": {
+   "id": "hist_1792123905033_9bnb0",
+   "provider": "WaveSpeed",
+   "status": null,
+   "requestMetadata": {
+    "actualRequest": {
+     "endpoint": "https://api.wavespeed.ai/api/v3/wavespeed-ai/krea-v2/turbo-lora",
+     "parameters": {
+      "prompt": "a lighthouse on a cliff at dusk, dramatic sky",
+      "seed": 42,
+      "resolution": "1k",
+      "loras": [
+       {
+        "path": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/loras/krea2_darkbrush.safetensors",
+        "scale": 0.75
+       }
+      ],
+      "aspect_ratio": "16:9"
+     },
+     "mapping": [
+      {
+       "from": "negative_prompt",
+       "to": null,
+       "value": "blurry, low quality",
+       "sent": false,
+       "reason": "画布参数没有对应的官方 Schema 字段；界面的 Schema 匹配模式已启用。可取消此模式，或在 JSON 中显式提交。"
+      },
+      {
+       "from": "width",
+       "to": null,
+       "value": 512,
+       "sent": false,
+       "reason": "画布参数没有对应的官方 Schema 字段；界面的 Schema 匹配模式已启用。可取消此模式，或在 JSON 中显式提交。"
+      },
+      {
+       "from": "height",
+       "to": null,
+       "value": 512,
+       "sent": false,
+       "reason": "画布参数没有对应的官方 Schema 字段；界面的 Schema 匹配模式已启用。可取消此模式，或在 JSON 中显式提交。"
+      },
+      {
+       "from": "steps",
+       "to": null,
+       "value": 8,
+       "sent": false,
+       "reason": "画布参数没有对应的官方 Schema 字段；界面的 Schema 匹配模式已启用。可取消此模式，或在 JSON 中显式提交。"
+      },
+      {
+       "from": "cfg",
+       "to": null,
+       "value": 3,
+       "sent": false,
+       "reason": "画布参数没有对应的官方 Schema 字段；界面的 Schema 匹配模式已启用。可取消此模式，或在 JSON 中显式提交。"
+      },
+      {
+       "from": "seed",
+       "to": "seed",
+       "value": 42,
+       "schemaDeclared": true,
+       "finalValue": 42
+      },
+      {
+       "from": "denoise",
+       "to": null,
+       "value": 1,
+       "sent": false,
+       "reason": "无参考图输入：去噪/strength 仅在图生图时发送；未发送。"
+      },
+      {
+       "from": "sampler_name",
+       "to": null,
+       "value": "euler_ancestral",
+       "sent": false,
+       "reason": "画布参数没有对应的官方 Schema 字段；界面的 Schema 匹配模式已启用。可取消此模式，或在 JSON 中显式提交。"
+      },
+      {
+       "from": "resolution",
+       "to": "resolution",
+       "value": "1k",
+       "schemaDeclared": true,
+       "finalValue": "1k"
+      },
+      {
+       "from": "loras",
+       "to": "loras",
+       "requested": [
+        {
+         "name": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/loras/krea2_darkbrush.safetensors",
+         "path": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/loras/krea2_darkbrush.safetensors",
+         "strength": 0.75,
+         "modelStrength": 0.75,
+         "clipStrength": 0.75,
+         "civitaiId": "",
+         "triggers": ""
+        }
+       ],
+       "value": [
+        {
+         "path": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/loras/krea2_darkbrush.safetensors",
+         "scale": 0.75
+        }
+       ],
+       "note": "仅记录已提交的 LoRA 参数；生成成功不证明上游实际应用了 LoRA。独立 CLIP 强度没有对应字段时不会假称生效。",
+       "finalValue": [
+        {
+         "path": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/loras/krea2_darkbrush.safetensors",
+         "scale": 0.75
+        }
+       ]
+      },
+      {
+       "from": "custom_parameters.aspect_ratio",
+       "to": "aspect_ratio",
+       "value": "16:9",
+       "schemaDeclared": true,
+       "finalValue": "16:9"
+      },
+      {
+       "from": "custom_parameters.resolution",
+       "to": "resolution",
+       "value": "1k",
+       "overrides": "1k",
+       "schemaDeclared": true,
+       "finalValue": "1k"
+      }
+     ],
+     "parametersOnly": false,
+     "schemaFieldsOnly": true,
+     "schemaFields": [
+      "aspect_ratio",
+      "enable_base64_output",
+      "enable_sync_mode",
+      "image",
+      "loras",
+      "prompt",
+      "resolution",
+      "seed",
+      "strength"
+     ]
+    },
+    "executionTrace": [],
+    "keyUsages": []
+   }
+  },
+  "hist_1792125133065_2ffvp": {
+   "id": "hist_1792125133065_2ffvp",
+   "provider": "muapi",
+   "status": "failed",
+   "requestMetadata": {
+    "actualRequest": {
+     "endpoint": "https://api.muapi.ai/api/v1/krea-v2-turbo-lora",
+     "parameters": {
+      "prompt": "a lighthouse on a cliff at dusk, dramatic sky",
+      "seed": 42,
+      "resolution": "1k",
+      "loras": [
+       {
+        "path": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/loras/krea2_darkbrush.safetensors",
+        "scale": 0.75
+       }
+      ],
+      "aspect_ratio": "16:9"
+     },
+     "mapping": [
+      {
+       "from": "negative_prompt",
+       "to": null,
+       "value": "blurry, low quality",
+       "sent": false,
+       "reason": "画布参数没有对应的官方 Schema 字段；界面的 Schema 匹配模式已启用。可取消此模式，或在 JSON 中显式提交。"
+      },
+      {
+       "from": "width",
+       "to": null,
+       "value": 1024,
+       "sent": false,
+       "reason": "画布参数没有对应的官方 Schema 字段；界面的 Schema 匹配模式已启用。可取消此模式，或在 JSON 中显式提交。"
+      },
+      {
+       "from": "height",
+       "to": null,
+       "value": 1024,
+       "sent": false,
+       "reason": "画布参数没有对应的官方 Schema 字段；界面的 Schema 匹配模式已启用。可取消此模式，或在 JSON 中显式提交。"
+      },
+      {
+       "from": "steps",
+       "to": null,
+       "value": 8,
+       "sent": false,
+       "reason": "画布参数没有对应的官方 Schema 字段；界面的 Schema 匹配模式已启用。可取消此模式，或在 JSON 中显式提交。"
+      },
+      {
+       "from": "cfg",
+       "to": null,
+       "value": 3,
+       "sent": false,
+       "reason": "画布参数没有对应的官方 Schema 字段；界面的 Schema 匹配模式已启用。可取消此模式，或在 JSON 中显式提交。"
+      },
+      {
+       "from": "seed",
+       "to": "seed",
+       "value": 42,
+       "schemaDeclared": true,
+       "finalValue": 42
+      },
+      {
+       "from": "denoise",
+       "to": null,
+       "value": 1,
+       "sent": false,
+       "reason": "无参考图输入：去噪/strength 仅在图生图时发送；未发送。"
+      },
+      {
+       "from": "sampler_name",
+       "to": null,
+       "value": "euler_ancestral",
+       "sent": false,
+       "reason": "画布参数没有对应的官方 Schema 字段；界面的 Schema 匹配模式已启用。可取消此模式，或在 JSON 中显式提交。"
+      },
+      {
+       "from": "resolution",
+       "to": "resolution",
+       "value": "1k",
+       "schemaDeclared": true,
+       "finalValue": "1k"
+      },
+      {
+       "from": "loras",
+       "to": "loras",
+       "requested": [
+        {
+         "name": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/loras/krea2_darkbrush.safetensors",
+         "path": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/loras/krea2_darkbrush.safetensors",
+         "strength": 0.75,
+         "modelStrength": 0.75,
+         "clipStrength": 0.75,
+         "civitaiId": "",
+         "triggers": ""
+        }
+       ],
+       "value": [
+        {
+         "path": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/loras/krea2_darkbrush.safetensors",
+         "scale": 0.75
+        }
+       ],
+       "note": "仅记录已提交的 LoRA 参数；生成成功不证明上游实际应用了 LoRA。独立 CLIP 强度没有对应字段时不会假称生效。",
+       "finalValue": [
+        {
+         "path": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/loras/krea2_darkbrush.safetensors",
+         "scale": 0.75
+        }
+       ]
+      },
+      {
+       "from": "custom_parameters.aspect_ratio",
+       "to": "aspect_ratio",
+       "value": "16:9",
+       "schemaDeclared": true,
+       "finalValue": "16:9"
+      },
+      {
+       "from": "custom_parameters.resolution",
+       "to": "resolution",
+       "value": "1k",
+       "overrides": "1k",
+       "schemaDeclared": true,
+       "finalValue": "1k"
+      }
+     ],
+     "parametersOnly": false,
+     "schemaFieldsOnly": true,
+     "schemaFields": [
+      "prompt",
+      "image_url",
+      "loras",
+      "aspect_ratio",
+      "resolution",
+      "strength",
+      "seed",
+      "webhook_url"
+     ]
+    },
+    "keyUsages": [
+     {
+      "provider": "muapi",
+      "index": 0,
+      "count": 1,
+      "source": "pool"
+     }
+    ],
+    "executionTrace": [
+     {
+      "provider": "muapi",
+      "model": "krea-v2-turbo-lora",
+      "method": "POST",
+      "endpoint": "https://api.muapi.ai/api/v1/krea-v2-turbo-lora",
+      "requestBody": {
+       "prompt": "a lighthouse on a cliff at dusk, dramatic sky",
+       "seed": 42,
+       "resolution": "1k",
+       "loras": [
+        {
+         "path": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/loras/krea2_darkbrush.safetensors",
+         "scale": 0.75
+        }
+       ],
+       "aspect_ratio": "16:9"
+      },
+      "status": 402,
+      "statusText": "Payment Required",
+      "responseBody": {
+       "kind": "raw-response",
+       "url": "/api/media/raw/f2aa1acf7cc0f129c681bff513f5b8ed9ce57c9760e7aed21c484e35300befc1",
+       "sha256": "f2aa1acf7cc0f129c681bff513f5b8ed9ce57c9760e7aed21c484e35300befc1",
+       "size": 254,
+       "encoding": "utf-8",
+       "fidelity": "original"
+      },
+      "maskedKey": "5597...2886",
+      "keyUsage": {
+       "provider": "muapi",
+       "index": 0,
+       "count": 1,
+       "source": "pool"
+      },
+      "durationMs": 312,
+      "startedAt": "2026-10-16T04:32:12.740Z"
+     }
+    ]
+   }
+  },
+  "hist_1792122808194_7602v": {
+   "id": "hist_1792122808194_7602v",
+   "provider": "ModelScope AI (魔搭国际站)",
+   "status": null,
+   "requestMetadata": {
+    "executionTrace": [
+     {
+      "provider": "modelscope_ai",
+      "model": "Tongyi-MAI/Z-Image-Turbo",
+      "method": "POST",
+      "endpoint": "https://api-inference.modelscope.ai/v1/images/generations",
+      "requestBody": {
+       "model": "Tongyi-MAI/Z-Image-Turbo",
+       "prompt": "a futuristic starship corridor, warm ambient lighting, wide angle",
+       "size": "512x512",
+       "negative_prompt": "blurry, low quality",
+       "steps": 8,
+       "guidance": 3,
+       "seed": 42,
+       "loras": {
+        "LcarsPicturesDatabase/ST-TNG-Rooms-Z-Image-Turbo-v1": 1
+       }
+      },
+      "status": 200,
+      "statusText": "OK",
+      "responseBody": {
+       "kind": "raw-response",
+       "url": "/api/media/raw/5da4d209cee2b2fb6cf0e989528f8284e0e21bce0f2efe3c5986f25a23bdc0ac",
+       "sha256": "5da4d209cee2b2fb6cf0e989528f8284e0e21bce0f2efe3c5986f25a23bdc0ac",
+       "size": 126,
+       "encoding": "utf-8",
+       "fidelity": "original"
+      },
+      "maskedKey": "ms-b...830d",
+      "keyUsage": {
+       "provider": "modelscope_ai",
+       "index": 0,
+       "count": 2,
+       "source": "pool"
+      },
+      "durationMs": 1874,
+      "startedAt": "2026-10-16T03:53:19.134Z"
+     },
+     {
+      "provider": "modelscope_ai",
+      "model": "Tongyi-MAI/Z-Image-Turbo",
+      "method": "GET",
+      "endpoint": "https://api-inference.modelscope.ai/v1/tasks/1024ebe2-ce38-4024-abc6-615dd6631d70",
+      "status": 200,
+      "statusText": "OK",
+      "responseBody": {
+       "kind": "raw-response",
+       "url": "/api/media/raw/d6b47c7abf5491d2d2a384246b60fcc4f635a6a3383af106b846c2a35881df6f",
+       "sha256": "d6b47c7abf5491d2d2a384246b60fcc4f635a6a3383af106b846c2a35881df6f",
+       "size": 306,
+       "encoding": "utf-8",
+       "fidelity": "original"
+      },
+      "maskedKey": "ms-b...830d",
+      "keyUsage": {
+       "provider": "modelscope_ai",
+       "index": 0,
+       "count": 2,
+       "source": "pool"
+      },
+      "durationMs": 2930,
+      "startedAt": "2026-10-16T03:53:23.510Z"
+     }
+    ],
+    "keyUsages": [
+     {
+      "provider": "modelscope_ai",
+      "index": 0,
+      "count": 2,
+      "source": "pool"
+     }
+    ]
+   }
+  }
+ }
+}

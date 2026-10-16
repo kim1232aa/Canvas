@@ -7,7 +7,7 @@ import {NODE_DEFINITIONS} from '../constants/nodes';
 import {nextSeedAfterGeneration} from '../utils/seedControl';
 import {ParameterInspector} from './ParameterInspector';
 it('new generation nodes do not preselect a model or Civitai engine',()=>{
-  for(const type of ['CheckpointLoaderSimple','FalAIEngineNode','ModelScopeNode','ModelScopeAiNode','NanoGPTNode','AIVideoNode']) {
+  for(const type of ['CheckpointLoaderSimple','FalAIEngineNode','ModelScopeNode','ModelScopeAiNode','NanoGPTNode','AIVideoNode','ReplicateEngineNode','LLMReasoningNode']) {
     const def=NODE_DEFINITIONS[type];
     expect(def.defaultValues.ckpt_name || def.defaultValues.model || def.defaultValues.model_endpoint || '').toBe('');
   }
@@ -25,7 +25,7 @@ it('inspector retains custom ecosystem and explicit video provider controls',()=
 it('shows essential studio actions and explains a disabled run', () => {
   const noop = () => {};
   const html = renderToStaticMarkup(<TopBar nodeCount={4} connectionCount={3} canvasMode="graph" onChangeCanvasMode={noop} onOpenSettings={noop} onOpenCivitai={noop} onQueuePrompt={noop} onSaveProject={noop} onOpenCloudProjects={noop} runDisabledReason="请选择模型" />);
-  for (const label of ['API 设置', '保存到云端', '云端项目', '运行工作流', '请选择模型', '历史 API 调用样本']) expect(html).toContain(label);
+  for (const label of ['API 设置', '保存到云端', '云端项目', '运行：未确定节点' /* clean-0942 item 4: one label rule */, '请选择模型', '历史 API 调用样本']) expect(html).toContain(label);
   expect(html).toContain('在新标签页查看历史 API 调用样本');
   expect(html).toMatch(/disabled=""[^>]*aria-describedby="studio-run-status"/);
 });

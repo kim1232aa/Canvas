@@ -1,0 +1,378 @@
+{
+ "hist_1792126858043_jczni": {
+  "status": "failed",
+  "url": "",
+  "prompt": "a lighthouse on a cliff at dusk, dramatic sky",
+  "negativePrompt": null,
+  "provider": "muapi",
+  "actualProvider": "muapi",
+  "model": "krea-v2-turbo-lora",
+  "actualModel": "krea-v2-turbo-lora",
+  "loras": [],
+  "upstreamStatus": 402,
+  "upstreamStatusText": "Payment Required",
+  "upstreamEndpoint": "https://api.muapi.ai/api/v1/krea-v2-turbo-lora",
+  "upstreamResponseBody": "{\"detail\":{\"error\":{\"code\":\"INSUFFICIENT_CREDITS\",\"message\":\"Insufficient credit balance\"}},\"error\":{\"code\":\"INSUFFICIENT_CREDITS\",\"message\":\"Insufficient credit balance\",\"topup_url\":\"https://muapi.ai/topup\",\"balance_endpoint\":\"/api/v1/account/balance\"}}",
+  "networkError": null,
+  "httpStatus": 402,
+  "error": "HTTP 402: {\"detail\":{\"error\":{\"code\":\"INSUFFICIENT_CREDITS\",\"message\":\"Insufficient credit balance\"}},\"error\":{\"code\":\"INSUFFICIENT_CREDITS\",\"message\":\"Insufficient credit balance\",\"topup_url\":\"https://muapi.ai/topup\",\"balance_endpoint\":\"/api/v1/account/balance\"}}",
+  "errorSource": "upstream",
+  "stack": "Error: HTTP 402: {\"detail\":{\"error\":{\"code\":\"INSUFFICIENT_CREDITS\",\"message\":\"Insufficient credit balance\"}},\"error\":{\"code\":\"INSUFFICIENT_CREDITS\",\"message\":\"Insufficient credit balance\",\"topup_url\":\"https://muapi.ai/topup\",\"balance_endpoint\":\"/api/v1/account/balance\"}}\n    at read (/workspace/canvas/Canvas-main/src/server/schemaProviders.ts:710:27)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async <anonymous> (/workspace/canvas/Canvas-main/src/server/schemaProviders.ts:1056:27)",
+  "requestMetadata": {
+   "route": "/api/schema-provider/muapi/submit",
+   "actualRequest": {
+    "endpoint": "https://api.muapi.ai/api/v1/krea-v2-turbo-lora",
+    "parameters": {
+     "prompt": "a lighthouse on a cliff at dusk, dramatic sky",
+     "seed": 42,
+     "resolution": "1k",
+     "aspect_ratio": "16:9"
+    },
+    "mapping": [
+     {
+      "from": "steps",
+      "to": null,
+      "value": 8,
+      "sent": false,
+      "reason": "画布参数没有对应的官方 Schema 字段；界面的 Schema 匹配模式已启用。可取消此模式，或在 JSON 中显式提交。"
+     },
+     {
+      "from": "seed",
+      "to": "seed",
+      "value": 42,
+      "schemaDeclared": true,
+      "finalValue": 42
+     },
+     {
+      "from": "resolution",
+      "to": "resolution",
+      "value": "1024x1024 ( 1:1 )",
+      "schemaDeclared": true,
+      "finalValue": "1k"
+     },
+     {
+      "from": "custom_parameters.aspect_ratio",
+      "to": "aspect_ratio",
+      "value": "16:9",
+      "schemaDeclared": true,
+      "finalValue": "16:9"
+     },
+     {
+      "from": "custom_parameters.resolution",
+      "to": "resolution",
+      "value": "1k",
+      "overrides": "1024x1024 ( 1:1 )",
+      "schemaDeclared": true,
+      "finalValue": "1k"
+     }
+    ],
+    "parametersOnly": false,
+    "schemaFieldsOnly": true,
+    "schemaFields": [
+     "prompt",
+     "image_url",
+     "loras",
+     "aspect_ratio",
+     "resolution",
+     "strength",
+     "seed",
+     "webhook_url"
+    ]
+   },
+   "schemaFields": [
+    "prompt",
+    "image_url",
+    "loras",
+    "aspect_ratio",
+    "resolution",
+    "strength",
+    "seed",
+    "webhook_url"
+   ],
+   "keyUsages": [
+    {
+     "provider": "muapi",
+     "index": 0,
+     "count": 1,
+     "source": "pool"
+    }
+   ],
+   "submissions": [
+    {
+     "endpoint": "https://api.muapi.ai/api/v1/krea-v2-turbo-lora",
+     "parameters": {
+      "prompt": "a lighthouse on a cliff at dusk, dramatic sky",
+      "seed": 42,
+      "resolution": "1k",
+      "aspect_ratio": "16:9"
+     },
+     "status": 402
+    }
+   ],
+   "executionTrace": [
+    {
+     "provider": "muapi",
+     "model": "krea-v2-turbo-lora",
+     "method": "POST",
+     "endpoint": "https://api.muapi.ai/api/v1/krea-v2-turbo-lora",
+     "requestBody": {
+      "prompt": "a lighthouse on a cliff at dusk, dramatic sky",
+      "seed": 42,
+      "resolution": "1k",
+      "aspect_ratio": "16:9"
+     },
+     "status": 402,
+     "statusText": "Payment Required",
+     "responseBody": {
+      "kind": "raw-response",
+      "url": "/api/media/raw/f2aa1acf7cc0f129c681bff513f5b8ed9ce57c9760e7aed21c484e35300befc1",
+      "sha256": "f2aa1acf7cc0f129c681bff513f5b8ed9ce57c9760e7aed21c484e35300befc1",
+      "size": 254,
+      "encoding": "utf-8",
+      "fidelity": "original"
+     },
+     "maskedKey": "5597...2886",
+     "keyUsage": {
+      "provider": "muapi",
+      "index": 0,
+      "count": 1,
+      "source": "pool"
+     },
+     "durationMs": 308,
+     "startedAt": "2026-10-16T05:00:57.733Z"
+    }
+   ]
+  },
+  "requestOrigin": "browser",
+  "id": "hist_1792126858043_jczni",
+  "timestamp": 1792126858043,
+  "seed": null,
+  "steps": null,
+  "cfg": null,
+  "sampler": null,
+  "scheduler": null,
+  "width": null,
+  "height": null
+ },
+ "hist_1792127116221_7nqv6": {
+  "status": "failed",
+  "url": "",
+  "prompt": "a lighthouse on a cliff at dusk, dramatic sky",
+  "negativePrompt": null,
+  "provider": "Sogni",
+  "actualProvider": "Sogni",
+  "model": "krea-2-turbo",
+  "actualModel": "krea-2-turbo",
+  "loras": [],
+  "upstreamStatus": 200,
+  "upstreamStatusText": "task status=waiting_for_user · insufficient_credit",
+  "upstreamEndpoint": "https://api.sogni.ai/v1/creative-agent/workflows/wf_durable_workflow_2f99ad38-4386-4d7d-a076-74fae8d4ea82",
+  "upstreamResponseBody": "{\"status\":\"success\",\"data\":{\"workflow\":{\"workflowId\":\"wf_durable_workflow_2f99ad38-4386-4d7d-a076-74fae8d4ea82\",\"title\":\"Canvas · krea-2-turbo\",\"ownerAddressSID\":380407,\"ownerWalletAddress\":\"0x185aB7Edb0efceA72f0d4AdbF91476f0a6045b60\",\"appSource\":\"sogni-api\",\"safeContentFilter\":true,\"agentTelemetry\":{\"appSource\":\"sogni-api\",\"interactionKind\":\"service\",\"workloadKind\":\"service\",\"agentFramework\":\"unknown\",\"agentSurface\":\"direct_api\",\"executionMode\":\"server\",\"operationScope\":\"top_level\",\"operationId\":\"wf_durable_workflow_2f99ad38-4386-4d7d-a076-74fae8d4ea82\",\"rootOperationId\":\"wf_durable_workflow_2f99ad38-4386-4d7d-a076-74fae8d4ea82\",\"costOwnership\":\"derived\"},\"llmAttribution\":{\"authMethod\":\"api_key\",\"apiKeyFingerprint\":\"0206a8a7f7691a29\"},\"status\":\"waiting_for_user\",\"input\":{\"title\":\"Canvas · krea-2-turbo\",\"steps\":[{\"id\":\"image1\",\"toolName\":\"generate_image\",\"arguments\":{\"prompt\":\"a lighthouse on a cliff at dusk, dramatic sky\",\"width\":1024,\"height\":1024,\"seed\":42,\"loras\":[\"krea2-detail-enhancer\"],\"loraStrengths\":[0.8],\"model\":\"krea-2-turbo\"}}],\"assetManifest\":{\"assets\":[],\"next_index\":1,\"updated_at\":\"2026-10-16T05:05:14.021Z\"}},\"plan\":{\"workflowId\":\"wf_durable_workflow_2f99ad38-4386-4d7d-a076-74fae8d4ea82\",\"status\":\"waiting_for_user\",\"backbone\":{\"schemaVersion\":\"2026-07-18.1\",\"modelKnowledgeVersion\":\"2026-07-18.1\",\"routingPolicyVersion\":\"2026-04-27.1\"},\"title\":\"Canvas · krea-2-turbo\",\"input\":{\"title\":\"Canvas · krea-2-turbo\",\"steps\":[{\"id\":\"image1\",\"toolName\":\"generate_image\",\"arguments\":{\"prompt\":\"a lighthouse on a cliff at dusk, dramatic sky\",\"width\":1024,\"height\":1024,\"seed\":42,\"loras\":[\"krea2-detail-enhancer\"],\"loraStrengths\":[0.8],\"model\":\"krea-2-turbo\"}}],\"assetManifest\":{\"assets\":[],\"next_index\":1,\"updated_at\":\"2026-10-16T05:05:14.021Z\"}},\"steps\":[{\"id\":\"image1\",\"sequence\":0,\"toolName\":\"generate_image\",\"arguments\":{\"prompt\":\"a lighthouse on a cliff at dusk, dramatic sky\",\"width\":1024,\"height\":1024,\"seed\":42,\"loras\":[\"krea2-detail-enhancer\"],\"loraStrengths\":[0.8],\"model\":\"krea-2-turbo\"}}],\"events\":[{\"id\":\"evt_wf_durable_workflow_2f99ad38-4386-4d7d-a076-74fae8d4ea82_image1_failed\",\"workflowId\":\"wf_durable_workflow_2f99ad38-4386-4d7d-a076-74fae8d4ea82\",\"sequence\":0,\"timestamp\":\"2026-10-16T05:05:14.088Z\",\"type\":\"step_failed\",\"status\":\"failed\",\"message\":\"Debit Error: Insufficient funds\",\"data\":{\"stepId\":\"image1\",\"toolName\":\"generate_image\",\"errorType\":\"COST_LIMIT_EXCEEDED\",\"retryable\":false,\"suggestedNextAction\":\"wait_for_user\"}},{\"id\":\"evt_wf_durable_workflow_2f99ad38-4386-4d7d-a076-74fae8d4ea82_waiting_for_user\",\"workflowId\":\"wf_durable_workflow_2f99ad38-4386-4d7d-a076-74fae8d4ea82\",\"sequence\":1,\"timestamp\":\"2026-10-16T05:05:14.095Z\",\"type\":\"workflow_waiting_for_user\",\"status\":\"waiting_for_user\",\"message\":\"Debit Error: Insufficient funds\",\"data\":{\"errorType\":\"COST_LIMIT_EXCEEDED\",\"retryable\":false,\"suggestedNextAction\":\"wait_for_user\"}}],\"artifacts\":[],\"timestamps\":{\"createdAt\":\"2026-10-16T05:05:14.015Z\",\"updatedAt\":\"2026-10-16T05:05:14.105Z\"}},\"steps\":[],\"events\":[{\"id\":\"evt_wf_durable_workflow_2f99ad38-4386-4d7d-a076-74fae8d4ea82_lease_lease_wf_durable_workflow_2f99ad38-4386-4d7d-a076-74fae8d4ea82_ab3a2785-2c76-4b1f-badd-aef383c31092\",\"workflowId\":\"wf_durable_workflow_2f99ad38-4386-4d7d-a076-74fae8d4ea82\",\"sequence\":0,\"timestamp\":\"2026-10-16T05:05:14.024Z\",\"type\":\"workflow_progress\",\"status\":\"running\",\"message\":\"Workflow lease acquired by executor\",\"data\":{\"leaseId\":\"lease_wf_durable_workflow_2f99ad38-4386-4d7d-a076-74fae8d4ea82_ab3a2785-2c76-4b1f-badd-aef383c31092\",\"ownerId\":\"sogni-api:local:3788960\",\"expiresAt\":\"2026-10-16T05:07:14.024Z\",\"recovering\":false}},{\"id\":\"evt_wf_durable_workflow_2f99ad38-4386-4d7d-a076-74fae8d4ea82_image1_failed\",\"workflowId\":\"wf_durable_workflow_2f99ad38-4386-4d7d-a076-74fae8d4ea82\",\"sequence\":0,\"timestamp\":\"2026-10-16T05:05:14.088Z\",\"type\":\"step_failed\",\"status\":\"failed\",\"message\":\"Debit Error: Insufficient funds\",\"data\":{\"stepId\":\"image1\",\"toolName\":\"generate_image\",\"errorType\":\"COST_LIMIT_EXCEEDED\",\"retryable\":false,\"suggestedNextAction\":\"wait_for_user\"}},{\"id\":\"evt_wf_durable_workflow_2f99ad38-4386-4d7d-a076-74fae8d4ea82_waiting_for_user\",\"workflowId\":\"wf_durable_workflow_2f99ad38-4386-4d7d-a076-74fae8d4ea82\",\"sequence\":1,\"timestamp\":\"2026-10-16T05:05:14.095Z\",\"type\":\"workflow_waiting_for_user\",\"status\":\"waiting_for_user\",\"message\":\"Debit Error: Insufficient funds\",\"data\":{\"errorType\":\"COST_LIMIT_EXCEEDED\",\"retryable\":false,\"suggestedNextAction\":\"wait_for_user\"}}],\"artifacts\":[],\"billingPreviews\":[],\"dispatchLedgerVersion\":1,\"createTime\":1792127114015,\"updateTime\":1792127114104,\"dispatchLedger\":[{\"entryId\":\"image1:1:d575efd6-d3b0-456f-bb03-070f57eb28f2\",\"toolCallId\":\"wf_durable_workflow_2f99ad38-4386-4d7d-a076-74fae8d4ea82_image1\",\"toolName\":\"generate_image\",\"stepId\":\"image1\",\"attempt\":1,\"state\":\"resolved\",\"projectIds\":[\"3EB2B7BC-4E1B-431D-80D3-2103E479043E\"],\"appSource\":\"sogni-api\",\"createdAt\":1792127114049,\"updatedAt\":1792127114087,\"createStartedAt\":1792127114066,\"result\":{\"content\":\"{\\\"ok\\\":false,\\\"success\\\":false,\\\"tool\\\":\\\"generate_image\\\",\\\"error_type\\\":\\\"COST_LIMIT_EXCEEDED\\\",\\\"error\\\":\\\"Debit Error: Insufficient funds\\\",\\\"message\\\":\\\"Debit Error: Insufficient funds\\\",\\\"retryable\\\":false,\\\"suggested_next_action\\\":\\\"wait_for_user\\\"}\",\"mediaUrls\":[]},\"checkpointed\":true}],\"waitingReason\":\"insufficient_credit\",\"awaitingCostApproval\":false}}}",
+  "httpStatus": 200,
+  "error": "Debit Error: Insufficient funds",
+  "errorSource": "upstream",
+  "requestMetadata": {
+   "route": "/api/schema-provider/sogni/tasks/wf_durable_workflow_2f99ad38-4386-4d7d-a076-74fae8d4ea82",
+   "actualRequest": {
+    "endpoint": "https://api.sogni.ai/v1/creative-agent/workflows",
+    "parameters": {
+     "input": {
+      "title": "Canvas · krea-2-turbo",
+      "steps": [
+       {
+        "id": "image1",
+        "toolName": "generate_image",
+        "arguments": {
+         "prompt": "a lighthouse on a cliff at dusk, dramatic sky",
+         "width": 1024,
+         "height": 1024,
+         "seed": 42,
+         "loras": [
+          "krea2-detail-enhancer"
+         ],
+         "loraStrengths": [
+          0.8
+         ],
+         "model": "krea-2-turbo"
+        }
+       }
+      ]
+     }
+    },
+    "mapping": [
+     {
+      "from": "width",
+      "to": "width",
+      "value": 1024,
+      "schemaDeclared": true,
+      "finalValue": 1024
+     },
+     {
+      "from": "height",
+      "to": "height",
+      "value": 1024,
+      "schemaDeclared": true,
+      "finalValue": 1024
+     },
+     {
+      "from": "steps",
+      "to": null,
+      "value": 8,
+      "sent": false,
+      "reason": "画布参数没有对应的官方 Schema 字段；界面的 Schema 匹配模式已启用。可取消此模式，或在 JSON 中显式提交。"
+     },
+     {
+      "from": "seed",
+      "to": "seed",
+      "value": 42,
+      "schemaDeclared": true,
+      "finalValue": 42
+     },
+     {
+      "from": "resolution",
+      "to": null,
+      "value": "1024x1024 ( 1:1 )",
+      "sent": false,
+      "reason": "画布参数没有对应的官方 Schema 字段；界面的 Schema 匹配模式已启用。可取消此模式，或在 JSON 中显式提交。"
+     },
+     {
+      "from": "loras",
+      "to": "loras + loraStrengths",
+      "requested": [
+       {
+        "name": "krea2-detail-enhancer",
+        "strength": 0.8,
+        "modelStrength": 0.8,
+        "clipStrength": 0.8,
+        "civitaiId": "",
+        "triggers": ""
+       }
+      ],
+      "value": [
+       "krea2-detail-enhancer"
+      ],
+      "strengths": [
+       0.8
+      ],
+      "note": "仅记录已提交的 LoRA 参数；生成成功不证明上游实际应用了 LoRA。独立 CLIP 强度没有对应字段时不会假称生效。"
+     }
+    ],
+    "parametersOnly": false,
+    "schemaFieldsOnly": true,
+    "schemaFields": [
+     "prompt",
+     "model",
+     "width",
+     "height",
+     "numberOfVariations",
+     "negativePrompt",
+     "starting_image_strength",
+     "sourceImageIndex",
+     "seed",
+     "guidance",
+     "gptImageQuality",
+     "outputFormat",
+     "aspectRatio",
+     "gptImageBackground",
+     "gptImageOutputCompression",
+     "loras",
+     "loraStrengths"
+    ]
+   },
+   "executionTrace": [
+    {
+     "provider": "sogni",
+     "model": "krea-2-turbo",
+     "method": "POST",
+     "endpoint": "https://api.sogni.ai/v1/creative-agent/workflows",
+     "requestBody": {
+      "input": {
+       "title": "Canvas · krea-2-turbo",
+       "steps": [
+        {
+         "id": "image1",
+         "toolName": "generate_image",
+         "arguments": {
+          "prompt": "a lighthouse on a cliff at dusk, dramatic sky",
+          "width": 1024,
+          "height": 1024,
+          "seed": 42,
+          "loras": [
+           "krea2-detail-enhancer"
+          ],
+          "loraStrengths": [
+           0.8
+          ],
+          "model": "krea-2-turbo"
+         }
+        }
+       ]
+      }
+     },
+     "status": 201,
+     "statusText": "Created",
+     "responseBody": {
+      "kind": "raw-response",
+      "url": "/api/media/raw/17e91373530002ea7ba15cb709586bc72a7006dbcf5e653b4c9f1f759f994eb5",
+      "sha256": "17e91373530002ea7ba15cb709586bc72a7006dbcf5e653b4c9f1f759f994eb5",
+      "size": 2136,
+      "encoding": "utf-8",
+      "fidelity": "original"
+     },
+     "maskedKey": "225e...fae1",
+     "keyUsage": {
+      "provider": "sogni",
+      "index": 0,
+      "count": 1,
+      "source": "pool"
+     },
+     "durationMs": 163,
+     "startedAt": "2026-10-16T05:05:13.919Z"
+    },
+    {
+     "provider": "sogni",
+     "method": "GET",
+     "endpoint": "https://api.sogni.ai/v1/creative-agent/workflows/wf_durable_workflow_2f99ad38-4386-4d7d-a076-74fae8d4ea82",
+     "status": 200,
+     "statusText": "OK",
+     "responseBody": {
+      "kind": "raw-response",
+      "url": "/api/media/raw/58692ef76ad2c20334d2d6ed8d0fe4e73f3c1fe817bd140312008da31f418d49",
+      "sha256": "58692ef76ad2c20334d2d6ed8d0fe4e73f3c1fe817bd140312008da31f418d49",
+      "size": 5384,
+      "encoding": "utf-8",
+      "fidelity": "original"
+     },
+     "maskedKey": "225e...fae1",
+     "keyUsage": {
+      "provider": "sogni",
+      "index": 0,
+      "count": 1,
+      "source": "pool"
+     },
+     "durationMs": 100,
+     "startedAt": "2026-10-16T05:05:16.119Z"
+    }
+   ],
+   "submissions": [],
+   "keyUsages": [
+    {
+     "provider": "sogni",
+     "index": 0,
+     "count": 1,
+     "source": "pool"
+    }
+   ]
+  },
+  "requestOrigin": "browser",
+  "id": "hist_1792127116221_7nqv6",
+  "timestamp": 1792127116221,
+  "seed": null,
+  "steps": null,
+  "cfg": null,
+  "sampler": null,
+  "scheduler": null,
+  "width": null,
+  "height": null
+ }
+}

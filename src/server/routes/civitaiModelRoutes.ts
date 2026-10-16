@@ -1,4 +1,5 @@
 import type { Request, Response } from 'express';
+import { isOpenWorksAccessKey, pickTamsBearerKey, TAMS_BEARER_REQUIRED_HINT } from '../../schemas/tensorArtCredentials.ts';
 
 export interface CivitaiModelRouteDeps {
   getSettings: () => Record<string, any>;
@@ -168,22 +169,45 @@ export function handleTensorArtModelInfo(deps: CivitaiModelRouteDeps) {
         return res.status(400).json({ error: '缺少 modelId 参数', errorSource: 'local' });
       }
       const cloudSettings = deps.getSettings();
-      const apiKey =
-        (req.headers['x-tensorart-key'] as string) ||
-        cloudSettings['tensorartKey'] ||
-        deps.defaultKeys['tensorartKey'] ||
-        process.env.TENSORART_API_KEY ||
-        '';
+      const apiKey = pickTamsBearerKey(
+        req.headers['x-tensorart-key'],
+        cloudSettings['tensorartKey'],
+        deps.defaultKeys['tensorartKey'],
+        process.env.TENSORART_API_KEY,
+        process.env.TENSORART_KEY,
+        process.env.TENSORART
+      );
+      const baseUrl = String(cloudSettings['tensorartBaseUrl'] || deps.defaultKeys['tensorartBaseUrl'] || 'https://tams-api.tensor.art/v1').replace(/\/+$/, '');
+      const targetEndpoint = `${baseUrl}/models/${encodeURIComponent(modelId)}`;
+      if (!apiKey) {
+        const hadAny =
+          !!(req.headers['x-tensorart-key'] || cloudSettings['tensorartKey'] || deps.defaultKeys['tensorartKey'] || process.env.TENSORART_API_KEY || process.env.TENSORART_KEY || process.env.TENSORART);
+        return res.status(400).json({
+          error: hadAny
+            ? '当前配置的是 OpenWorks Access Key (ak_tensor_...)，不能用于 TAMS 模型 API 查询'
+            : '缺少 TAMS 模型 API Key',
+          details: TAMS_BEARER_REQUIRED_HINT,
+          endpoint: targetEndpoint,
+          status: 400,
+          errorSource: 'local',
+        });
+      }
+      if (isOpenWorksAccessKey(apiKey)) {
+        return res.status(400).json({
+          error: '当前配置的是 OpenWorks Access Key (ak_tensor_...)，不能用于 TAMS 模型 API 查询',
+          details: TAMS_BEARER_REQUIRED_HINT,
+          endpoint: targetEndpoint,
+          status: 400,
+          errorSource: 'local',
+        });
+      }
 
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
         Accept: 'application/json',
+        Authorization: `Bearer ${apiKey}`,
       };
-      if (apiKey) {
-        headers['Authorization'] = `Bearer ${apiKey}`;
-      }
 
-      const targetEndpoint = `https://ap-east-1.tensorart.cloud/v1/models/${modelId}`;
       const response = await deps.upstreamFetch(
         { provider: 'tensorart', route: req.path, model: modelId, key: apiKey },
         targetEndpoint,
@@ -353,5 +377,18 @@ export function handleCivitaiModelVersion(deps: CivitaiModelRouteDeps) {
         errorSource: 'network',
       });
     }
+  };
+}
+
+/** Credential presence by kind (declared in src/config/loraHubProviders.json requiresCredential.kind). Returns only a boolean, never the key. */
+const CREDENTIAL_RESOLVERS: Record<string, (req: Request, deps: CivitaiModelRouteDeps) => string | null> = {
+  'tams-bearer': (req, deps) => pickTamsBearerKey(req.headers['x-tensorart-key'], deps.getSettings()['tensorartKey'], deps.defaultKeys['tensorartKey'], process.env.TENSORART_API_KEY, process.env.TENSORART_KEY, process.env.TENSORART),
+};
+export function handleCredentialPresence(deps: CivitaiModelRouteDeps) {
+  return (req: Request, res: Response) => {
+    const kind = String(req.query.kind || '');
+    const resolve = CREDENTIAL_RESOLVERS[kind];
+    if (!resolve) return res.status(400).json({ ok: false, error: `未知凭证类型 ${kind}`, errorSource: 'local' });
+    res.json({ ok: true, kind, present: Boolean(resolve(req, deps)) });
   };
 }

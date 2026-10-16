@@ -46,12 +46,17 @@ export interface WidgetDef {
   name: string;
   label: string;
   type: 'text' | 'textarea' | 'number' | 'slider' | 'select' | 'toggle' | 'seed';
-  default: any;
+  /** Optional: omit when the field must be set explicitly (e.g. LoRA strength — no silent 0.8). */
+  default?: any;
   options?: WidgetOption[];
   min?: number;
   max?: number;
   step?: number;
   placeholder?: string;
+  /** Hover hint (e.g. strength rules). */
+  title?: string;
+  /** fix10: display-only unit suffix next to number inputs (e.g. 秒); never sent. */
+  unit?: string;
 }
 
 export interface NodeDefinition {
@@ -79,8 +84,25 @@ export interface NodeInstance {
   bypassed?: boolean;
   state?: 'idle' | 'running' | 'success' | 'error';
   errorMessage?: string;
+  /** ISO time the upstream failure was recorded (clean-1651: badge shows 「上一次」+ 北京时间). */
+  errorAt?: string;
+  /** Set on downstream branch nodes when this run failed upstream (no media produced). */
+  upstreamFailed?: boolean;
+  /** The failure was a local block (no request left the machine), not an upstream failure. */
+  upstreamLocalBlocked?: boolean;
+  /** clean-1333 #6: set ONLY on the node that caused a local block — the specific reason (same text as the toast). */
+  localBlockReason?: string;
+  /** 「本地拦截 · 未发请求」 (zero requests) or 「本地拦截 · 已读 Schema、未发生成」 — matches the request log. */
+  localBlockTitle?: string;
+  /** trace-fix2 #10: Schema field that caused the local block (e.g. 'loras') and the active LoRA node count at block time. */
+  localBlockField?: string;
+  localBlockLoraCount?: number;
   executionProgress?: number; // 0 - 100
   outputData?: any; // e.g. generated image URL
+  /** ISO time this output arrived (set when a run delivers it). */
+  outputAt?: string;
+  /** Output restored from the workspace cache after a page refresh (not produced by this session). */
+  restoredFromPreviousSession?: { at: string | null };
 }
 
 export interface Connection {
@@ -172,8 +194,8 @@ export interface ComfyParameters {
   batchSize?: number;
   loras: Array<{
     name: string;
-    modelStrength: number;
-    clipStrength: number;
+    modelStrength?: number;
+    clipStrength?: number;
     triggerWords: string;
     civitaiId?: string;
     downloadUrl?: string;
@@ -186,7 +208,7 @@ export interface ComfyParameters {
   civitaiEngine?: string;
   civitaiEcosystem?: string;
   civitaiModel?: string;
-  targetProvider: 'civitai' | 'fal' | 'agnes' | 'sensenova' | 'huggingface' | 'modelscope' | 'modelscope_ai' | 'nanogpt' | 'gemini' | 'video' | 'tensorart' | 'openai_compat' | 'grok_compat' | 'muapi' | 'wavespeed' | 'sogni' | 'runware' | 'modelslab' | 'replicate';
+  targetProvider: 'civitai' | 'fal' | 'agnes' | 'sensenova' | 'huggingface' | 'modelscope' | 'modelscope_ai' | 'nanogpt' | 'gemini' | 'video' | 'tensorart' | 'openai_compat' | 'grok_compat' | 'muapi' | 'wavespeed' | 'sogni' | 'krea' | 'together' | 'aimlapi' | 'novita' | 'venice' | 'runware' | 'modelslab' | 'replicate';
   tensorArtInputs?: any[];
   videoDuration?: number;
   aspectRatio?: string;

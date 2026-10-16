@@ -1,0 +1,325 @@
+{
+  "$schemaNote": "草案 — 仅声明，非可执行驱动。真相源: docs/provider-api-audit/novita.md (2026-10-15)",
+  "id": "novita",
+  "displayName": "Novita",
+  "domainTypes": {
+    "SdImageRequest": "{ extra?, request: { model_name, prompt, seed?, steps?, guidance_scale?, width?, height?, image_num?, sampler_name?, loras?, negative_prompt? } }",
+    "LoraRef": "{ model_name: sd_name_in_api, strength: number(0..1) }",
+    "AsyncTask": "{ task_id }",
+    "TaskResult": "{ task.status, images[]?, videos[]?, extra.seed? }",
+    "CatalogRow": "{ sd_name, sd_name_in_api, type, status, base_model }"
+  },
+  "auth": {
+    "envVar": "NOVITA_API_KEY",
+    "header": "Authorization",
+    "scheme": "Bearer",
+    "sources": [
+      "https://docs.novita.ai/api-reference/basic-authentication"
+    ]
+  },
+  "base": {
+    "root": "https://api.novita.ai",
+    "openaiCompat": "https://api.novita.ai/openai"
+  },
+  "catalog": {
+    "method": "GET",
+    "path": "/v3/model",
+    "query": {
+      "filter.visibility": [
+        "public",
+        "private"
+      ],
+      "filter.source": [
+        "civitai",
+        "training",
+        "uploading"
+      ],
+      "filter.types": [
+        "checkpoint",
+        "lora",
+        "vae",
+        "controlnet",
+        "upscaler",
+        "textualinversion"
+      ],
+      "search": [
+        "sd_name",
+        "name",
+        "tags"
+      ],
+      "pagination.limit": {
+        "openInterval": "(0,100]"
+      },
+      "pagination.cursor": "use response pagination.next_cursor"
+    },
+    "callIdField": "sd_name_in_api",
+    "loraCatalogHint": "GET /v3/model?filter.types=lora",
+    "note": "LLM OpenAI List Models 与 SD/媒体目录分离",
+    "sources": [
+      "https://docs.novita.ai/api-reference/model-apis-get-model"
+    ]
+  },
+  "image": {
+    "sdAsync": {
+      "mode": "async",
+      "create": [
+        {
+          "method": "POST",
+          "path": "/v3/async/txt2img"
+        },
+        {
+          "method": "POST",
+          "path": "/v3/async/img2img"
+        }
+      ],
+      "bodyShape": "prefer { extra, request } (V3 migration guide)",
+      "returns": "task_id",
+      "parameters": {
+        "seed": {
+          "type": "integer",
+          "min": -1,
+          "supported": true,
+          "note": "-1 = random",
+          "sendStatus": "会发送",
+          "sendEvidence": "canvas-e2e-novita-1019（挑刺这屏没挑到、画布 PASS_BILLING）：POST /v3/async/txt2img；actualRequest.request 含 model_name、prompt、loras:[{model_name:more_details_59655,strength:0.75}]、steps:20、seed:42、guidance_scale:7、sampler_name、width/height、negative_prompt；上游 HTTP 403 NOT_ENOUGH_BALANCE 原文；历史芯片蓝「实际发送」；证据 /workspace/canvas-e2e-novita-1019/；Researchy 对照官网一致"
+        },
+        "steps": {
+          "type": "integer",
+          "sendStatus": "会发送",
+          "sendEvidence": "canvas-e2e-novita-1019（挑刺这屏没挑到、画布 PASS_BILLING）：POST /v3/async/txt2img；actualRequest.request 含 model_name、prompt、loras:[{model_name:more_details_59655,strength:0.75}]、steps:20、seed:42、guidance_scale:7、sampler_name、width/height、negative_prompt；上游 HTTP 403 NOT_ENOUGH_BALANCE 原文；历史芯片蓝「实际发送」；证据 /workspace/canvas-e2e-novita-1019/；Researchy 对照官网一致"
+        },
+        "guidance_scale": {
+          "type": "number",
+          "note": "V2 cfg_scale 已改名",
+          "sendStatus": "会发送",
+          "sendEvidence": "canvas-e2e-novita-1019（挑刺这屏没挑到、画布 PASS_BILLING）：POST /v3/async/txt2img；actualRequest.request 含 model_name、prompt、loras:[{model_name:more_details_59655,strength:0.75}]、steps:20、seed:42、guidance_scale:7、sampler_name、width/height、negative_prompt；上游 HTTP 403 NOT_ENOUGH_BALANCE 原文；历史芯片蓝「实际发送」；证据 /workspace/canvas-e2e-novita-1019/；Researchy 对照官网一致"
+        },
+        "width": {
+          "type": "integer",
+          "min": 128,
+          "max": 2048,
+          "sendStatus": "会发送",
+          "sendEvidence": "canvas-e2e-novita-1019（挑刺这屏没挑到、画布 PASS_BILLING）：POST /v3/async/txt2img；actualRequest.request 含 model_name、prompt、loras:[{model_name:more_details_59655,strength:0.75}]、steps:20、seed:42、guidance_scale:7、sampler_name、width/height、negative_prompt；上游 HTTP 403 NOT_ENOUGH_BALANCE 原文；历史芯片蓝「实际发送」；证据 /workspace/canvas-e2e-novita-1019/；Researchy 对照官网一致"
+        },
+        "height": {
+          "type": "integer",
+          "min": 128,
+          "max": 2048,
+          "sendStatus": "会发送",
+          "sendEvidence": "canvas-e2e-novita-1019（挑刺这屏没挑到、画布 PASS_BILLING）：POST /v3/async/txt2img；actualRequest.request 含 model_name、prompt、loras:[{model_name:more_details_59655,strength:0.75}]、steps:20、seed:42、guidance_scale:7、sampler_name、width/height、negative_prompt；上游 HTTP 403 NOT_ENOUGH_BALANCE 原文；历史芯片蓝「实际发送」；证据 /workspace/canvas-e2e-novita-1019/；Researchy 对照官网一致"
+        },
+        "image_num": {
+          "type": "integer"
+        },
+        "sampler_name": {
+          "type": "string",
+          "sendStatus": "会发送",
+          "sendEvidence": "canvas-e2e-novita-1019（挑刺这屏没挑到、画布 PASS_BILLING）：POST /v3/async/txt2img；actualRequest.request 含 model_name、prompt、loras:[{model_name:more_details_59655,strength:0.75}]、steps:20、seed:42、guidance_scale:7、sampler_name、width/height、negative_prompt；上游 HTTP 403 NOT_ENOUGH_BALANCE 原文；历史芯片蓝「实际发送」；证据 /workspace/canvas-e2e-novita-1019/；Researchy 对照官网一致"
+        },
+        "negative_prompt": {
+          "type": "string",
+          "sendStatus": "会发送",
+          "sendEvidence": "canvas-e2e-novita-1019（挑刺这屏没挑到、画布 PASS_BILLING）：POST /v3/async/txt2img；actualRequest.request 含 model_name、prompt、loras:[{model_name:more_details_59655,strength:0.75}]、steps:20、seed:42、guidance_scale:7、sampler_name、width/height、negative_prompt；上游 HTTP 403 NOT_ENOUGH_BALANCE 原文；历史芯片蓝「实际发送」；证据 /workspace/canvas-e2e-novita-1019/；Researchy 对照官网一致"
+        },
+        "model_name": {
+          "type": "string",
+          "required": true,
+          "sendStatus": "会发送",
+          "sendEvidence": "canvas-e2e-novita-1019（挑刺这屏没挑到、画布 PASS_BILLING）：POST /v3/async/txt2img；actualRequest.request 含 model_name、prompt、loras:[{model_name:more_details_59655,strength:0.75}]、steps:20、seed:42、guidance_scale:7、sampler_name、width/height、negative_prompt；上游 HTTP 403 NOT_ENOUGH_BALANCE 原文；历史芯片蓝「实际发送」；证据 /workspace/canvas-e2e-novita-1019/；Researchy 对照官网一致"
+        }
+      }
+    },
+    "mingOpenaiImages": {
+      "mode": "sync",
+      "method": "POST",
+      "path": "/openai/v1/images/generations",
+      "exampleModel": "ming-image-0.1-design",
+      "lora": {
+        "supported": false,
+        "reason": "文档未列 LoRA/seed"
+      },
+      "seed": {
+        "supported": false,
+        "reason": "文档未列"
+      },
+      "size": "{w}x{h} string ≥1k"
+    },
+    "poll": {
+      "method": "GET",
+      "path": "/v3/async/task-result",
+      "query": {
+        "task_id": "required"
+      },
+      "statuses": [
+        "TASK_STATUS_QUEUED",
+        "TASK_STATUS_PROCESSING",
+        "TASK_STATUS_SUCCEED",
+        "TASK_STATUS_FAILED"
+      ],
+      "successImages": "images[]",
+      "successVideos": "videos[] (video_url, video_type mp4|gif)",
+      "progress": "task.progress_percent",
+      "seedEcho": "extra.seed (string)"
+    },
+    "sources": [
+      "https://docs.novita.ai/guides/model-apis-v2-to-v3-migration",
+      "https://docs.novita.ai/api-reference/model-apis-task-result",
+      "https://docs.novita.ai/api-reference/model-apis-ming-image-txt2img"
+    ]
+  },
+  "video": {
+    "supported": true,
+    "mode": "async",
+    "evidence": "official Python SDK + Task Result（部分 Mintlify 专页 2026-10-15 404）",
+    "create": [
+      {
+        "method": "POST",
+        "path": "/v3/async/txt2video",
+        "sdk": "async_txt2video / txt2video"
+      },
+      {
+        "method": "POST",
+        "path": "/v3/async/img2video",
+        "sdk": "async_img2video / img2video",
+        "exampleModel": "SVD-XT"
+      }
+    ],
+    "poll": "same as image — GET /v3/async/task-result?task_id=",
+    "txt2videoParamsFromSdk": {
+      "model_name": true,
+      "height": true,
+      "width": true,
+      "steps": true,
+      "prompts": "[{prompt, frames}]",
+      "guidance_scale": true,
+      "seed": {
+        "supported": true
+      },
+      "negative_prompt": true,
+      "loras": {
+        "supported": true,
+        "note": "SDK accepts loras"
+      },
+      "embeddings": true,
+      "clip_skip": true,
+      "response_video_type": "mp4"
+    },
+    "img2videoParamsFromSdk": {
+      "image": true,
+      "model_name": true,
+      "steps": true,
+      "frames_num": true,
+      "frames_per_second": {
+        "default": 6,
+        "note": "字段名 frames_per_second，不是 fps"
+      },
+      "seed": {
+        "supported": true
+      },
+      "motion_bucket_id": true,
+      "cond_aug": true,
+      "enable_frame_interpolation": true
+    },
+    "warning": "Wan/Seedance/Kling 等专页 URL 多 404；勿写死未证实路径；以 Task Result + 冒烟为准",
+    "sources": [
+      "https://docs.novita.ai/api-reference/model-apis-task-result",
+      "https://github.com/novitalabs/python-sdk"
+    ]
+  },
+  "lora": {
+    "imageSdAsync": {
+      "supported": true,
+      "field": "request.loras",
+      "item": {
+        "model_name": {
+          "type": "string",
+          "required": true,
+          "source": "sd_name_in_api from catalog",
+          "sendStatus": "会发送",
+          "sendEvidence": "canvas-e2e-novita-1019（挑刺这屏没挑到、画布 PASS_BILLING）：POST /v3/async/txt2img；actualRequest.request 含 model_name、prompt、loras:[{model_name:more_details_59655,strength:0.75}]、steps:20、seed:42、guidance_scale:7、sampler_name、width/height、negative_prompt；上游 HTTP 403 NOT_ENOUGH_BALANCE 原文；历史芯片蓝「实际发送」；证据 /workspace/canvas-e2e-novita-1019/；Researchy 对照官网一致"
+        },
+        "strength": {
+          "type": "number",
+          "min": 0,
+          "max": 1,
+          "default": null,
+          "uiRule": "勿静默 0.8",
+          "sendStatus": "会发送",
+          "sendEvidence": "canvas-e2e-novita-1019（挑刺这屏没挑到、画布 PASS_BILLING）：POST /v3/async/txt2img；actualRequest.request 含 model_name、prompt、loras:[{model_name:more_details_59655,strength:0.75}]、steps:20、seed:42、guidance_scale:7、sampler_name、width/height、negative_prompt；上游 HTTP 403 NOT_ENOUGH_BALANCE 原文；历史芯片蓝「实际发送」；证据 /workspace/canvas-e2e-novita-1019/；Researchy 对照官网一致"
+        }
+      },
+      "maxHistorical": "up to 5 LoRAs (legacy docs)",
+      "not": "URL/path + scale（那是 Together/AIML 形状）",
+      "sendStatus": "会发送",
+      "sendEvidence": "canvas-e2e-novita-1019（挑刺这屏没挑到、画布 PASS_BILLING）：POST /v3/async/txt2img；actualRequest.request 含 model_name、prompt、loras:[{model_name:more_details_59655,strength:0.75}]、steps:20、seed:42、guidance_scale:7、sampler_name、width/height、negative_prompt；上游 HTTP 403 NOT_ENOUGH_BALANCE 原文；历史芯片蓝「实际发送」；证据 /workspace/canvas-e2e-novita-1019/；Researchy 对照官网一致"
+    },
+    "videoTxt2video": {
+      "supported": true,
+      "evidence": "SDK Txt2VideoLoRA"
+    },
+    "mingOpenai": {
+      "supported": false
+    },
+    "sources": [
+      "https://docs.novita.ai/guides/model-apis-v2-to-v3-migration",
+      "https://docs.novita.ai/guides/model-apis-custom-model"
+    ]
+  },
+  "billing": {
+    "balance": {
+      "method": "GET",
+      "path": "/openapi/v1/billing/balance/detail",
+      "unit": "1/10000 USD (10000 = $1.00)",
+      "fields": [
+        "availableBalance",
+        "cashBalance",
+        "creditLimit",
+        "pendingCharges",
+        "outstandingInvoices"
+      ]
+    },
+    "insufficientHints": [
+      {
+        "code": "BILLING_BALANCE_NOT_ENOUGH",
+        "http": 400,
+        "message": "Insufficient balance"
+      },
+      {
+        "code": "BILLING_AUTH_FAILED",
+        "http": 403
+      },
+      {
+        "code": "NOT_ENOUGH_BALANCE",
+        "http": 403,
+        "scope": "LLM table"
+      }
+    ],
+    "http402": false,
+    "sources": [
+      "https://docs.novita.ai/api-reference/basic-get-user-balance",
+      "https://docs.novita.ai/api-reference/basic-error-code"
+    ]
+  },
+  "acceptanceNotes": [
+    "SD 出图必须 async + task-result，禁止把单次 POST 当同步出图",
+    "LoRA 用 model_name+strength，不是 URL/path+scale",
+    "seed=-1 合法",
+    "视频至少核对 /v3/async/txt2video 与 /v3/async/img2video",
+    "余额单位是万分之一美元",
+    "2026-10-16 novita-1019：txt2img request 内 seed/steps/guidance_scale/sampler_name/width/height/negative_prompt/loras[{model_name,strength}] 升会发送（至 403）；PASS_BILLING 非真出图。"
+  ],
+  "runtimeSchema": {
+    "source": "https://docs.novita.ai/guides/model-apis-v2-to-v3-migration",
+    "kind": "HTML 文档（非机器可读 Schema），由可配置参数声明承载，每字段带来源 URL+抓取日期",
+    "use": "徽章：空值「未填写，不发送」；填值照实发；发没发出以历史 actualRequest 为准（2026-10-16 废 UI「待确认」）。strength 超 [0,1] 本地拦截；上游错误原样显示；实测后才改会发送。",
+    "notes": [
+      "LoRA model_name 填 /v3/model?filter.types=lora 的 sd_name_in_api",
+      "最多 5 个 LoRA 仅见于搜索快照、原页 404，不作已核实上限"
+    ],
+    "checked": "Researchy 2026-10-15 03:25"
+  },
+  "contractTestHint": "txt2img: request.loras[{model_name,strength 0-1}]、seed(含-1)、steps、guidance_scale 必发（novita-1019 已证实会发送，至 403）；Ming images 挂 LoRA/seed 本地拒绝；img2video 用 frames_per_second 非 fps；历史芯片须下钻 request 嵌套，发了不得标未发送",
+  "_auditStatus": "2026-10-16 ~10:32 JST tinkabot：认领 novita-1019（挑刺过）——txt2img request 字段与 loras 升「会发送」，acceptanceBadge=PASS_BILLING。前序 2026-10-15 03:26：旧审计仅对比；以 v2 与 DIFF 为准。",
+  "acceptanceBadge": "PASS_BILLING",
+  "acceptanceBadgeEvidence": "2026-10-16 novita-1019：欠费接线通过（403 NOT_ENOUGH_BALANCE），非 PASS_GENERATION"
+}

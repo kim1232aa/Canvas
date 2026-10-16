@@ -192,7 +192,7 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
       let previewImage = '';
       let prompt = '';
       let negativePrompt = '';
-      let selectedMultiVersionInfo: { id: number | string; name: string; isDefaultLatest: boolean; totalVersionsCount: number } | null = null;
+      let selectedMultiVersionInfo: { id: number | string | null; name: string; isDefaultLatest: boolean; requiresExplicitSelection?: boolean; totalVersionsCount: number; candidates?: Array<{ id: number | string; name: string; baseModel: string }> } | null = null;
 
       let rawModelName = '';
       let detectedBaseModel = '';
@@ -326,10 +326,8 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
         const meta = genData?.meta || {};
 
         if (imgGet?.user?.username) creatorName = imgGet.user.username;
-        if (imgGet?.url) {
-          previewImage = imgGet.url.startsWith('http')
-            ? imgGet.url
-            : `https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/${imgGet.url}/original=true/preview.jpeg`;
+        if (imgGet?.url && typeof imgGet.url === 'string' && imgGet.url.startsWith('http')) {
+          previewImage = imgGet.url;
         }
 
         negativePrompt = '';
@@ -552,42 +550,69 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
               });
             }
 
-            // Note: If multi-version, pick latest but clearly report in title/description
+            // Strict Rule: Multiple versions must NEVER silently default to versions[0] ("多版本不取 first")
             const v0 = versions[0];
             const hasMultipleVersions = versions.length > 1;
-            selectedMultiVersionInfo = hasMultipleVersions
-              ? {
-                  id: v0.id,
-                  name: v0.name || String(v0.id),
-                  isDefaultLatest: true,
-                  totalVersionsCount: versions.length,
-                }
-              : null;
-            presetTitle = `Civitai 模型：${mData.name || ''}${hasMultipleVersions ? ` (默认版本: ${v0.name || v0.id})` : ''}`;
-            creatorName = mData.creator?.username || '';
-            if (v0.images?.[0]?.url) previewImage = v0.images[0].url;
-            const triggers = Array.isArray(v0.trainedWords) ? v0.trainedWords.join(', ') : '';
-            if (triggers) prompt = triggers;
-            rawModelName = v0.baseModel || '';
-            detectedBaseModel = rawModelName;
             const mType = (mData.type || '').toUpperCase();
             const isLoraModel = mType === 'LORA' || mType === 'LOCON' || mType === 'DORA';
+            creatorName = mData.creator?.username || '';
 
-            if (isLoraModel) {
-              loras = [
-                {
-                  name: v0.files?.[0]?.name || v0.name || '',
-                  strength: null,
-                  civitaiId: String(mData.id),
-                  triggers,
-                  baseModel: rawModelName,
-                },
-              ];
-              checkpoint = '';
+            if (hasMultipleVersions) {
+              selectedMultiVersionInfo = {
+                id: null,
+                name: '',
+                isDefaultLatest: false,
+                requiresExplicitSelection: true,
+                totalVersionsCount: versions.length,
+                candidates: versions.map((v: any) => ({
+                  id: v.id,
+                  name: v.name || String(v.id),
+                  baseModel: v.baseModel || '',
+                })),
+              };
+              presetTitle = `Civitai 模型：${mData.name || ''} (含 ${versions.length} 个版本，待显式选择 versionId)`;
+              rawModelName = '';
+              detectedBaseModel = '';
+              if (isLoraModel) {
+                loras = [
+                  {
+                    name: mData.name || String(mData.id),
+                    strength: null,
+                    civitaiId: '',
+                    triggers: '',
+                    baseModel: '',
+                  },
+                ];
+                checkpoint = '';
+              } else {
+                loras = [];
+                importedCheckpointRef = '';
+                checkpoint = '';
+              }
             } else {
-              loras = [];
-              importedCheckpointRef = `civitai:${mData.id}@${v0.id}`;
-              checkpoint = importedCheckpointRef;
+              selectedMultiVersionInfo = null;
+              presetTitle = `Civitai 模型：${mData.name || ''}`;
+              if (v0.images?.[0]?.url) previewImage = v0.images[0].url;
+              const triggers = Array.isArray(v0.trainedWords) ? v0.trainedWords.join(', ') : '';
+              if (triggers) prompt = triggers;
+              rawModelName = v0.baseModel || '';
+              detectedBaseModel = rawModelName;
+              if (isLoraModel) {
+                loras = [
+                  {
+                    name: v0.files?.[0]?.name || v0.name || '',
+                    strength: null,
+                    civitaiId: String(v0.id),
+                    triggers,
+                    baseModel: rawModelName,
+                  },
+                ];
+                checkpoint = '';
+              } else {
+                loras = [];
+                importedCheckpointRef = `civitai:${mData.id}@${v0.id}`;
+                checkpoint = importedCheckpointRef;
+              }
             }
             parsedUpstreamData = true;
           } else {
@@ -878,7 +903,7 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
       };
 
       const multiVersionNote = selectedMultiVersionInfo
-        ? ` 该模型包含 ${selectedMultiVersionInfo.totalVersionsCount} 个版本，已明确选用默认最新版本“${selectedMultiVersionInfo.name}”(#${selectedMultiVersionInfo.id})。`
+        ? ` 该模型包含 ${selectedMultiVersionInfo.totalVersionsCount} 个版本，严禁默认取第一个版本 (versions[0])，请显式选择具体 versionId。`
         : '';
 
       const preset = {

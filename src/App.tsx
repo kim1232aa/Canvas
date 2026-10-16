@@ -1,12 +1,17 @@
+import { computeFitTransform, measureChromeInsets, fitItemsForMode } from './utils/fitView';
+import { findActualRequest, countActualRequestLoras } from './utils/actualRequestLoras';
+import { modelSchemaVersion, subscribeModelSchema, getModelSizePairing } from './services/modelSchemaCache';
 import {migrateTensorWorkflow} from './utils/legacyTensorWorkflow';
 import {ExecutionLog} from './components/ExecutionLog';
 import {spatialRequestParameters} from './utils/frontendParameters';
-import {replaceSelectedResource,type ResourceSelection} from './utils/resourceSelection';
+import {replaceSelectedResource,applyLoraNameToNodeValues,type ResourceSelection} from './utils/resourceSelection';
 import {readInspectorParameters,patchInspectorBranchNode,patchSpatialParameters,variationReference,modelCheckpoint} from './utils/inspectorParameters';
 import {explicitProvider,graphBranch,catalogModelTarget} from './utils/graphEditing';
 import {attachLoraToBranch,findLoraTarget,removeLoraFromBranch} from './utils/attachLora';
+import { parseExplicitLoraStrength } from './utils/loraStrength';
 import {isInvalidTensorModel} from './utils/modelCatalog';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { scrubZeroWidthNodes, describeZeroWidthHits, preRunZeroWidthBlock } from './utils/zeroWidth';
 import {loadWorkspaceCache, saveWorkspaceCache, BOARDS_KEY, ACTIVE_BOARD_KEY, MODE_KEY, isCanvasProject} from './utils/workspaceCache';
 import {generationReadiness} from './utils/generationReadiness';
 import {nextSeedAfterGeneration} from './utils/seedControl';
@@ -50,7 +55,16 @@ import {
 } from './services/api';
 import { EngineRegistry } from './engines/EngineRegistry';
 import { NormalizedGenerateParams } from './engines/types';
-import { executeWorkflow, extractWorkflowParameters, resolveTargetNode, shouldClearExecutionOutput } from './utils/graphEngine';
+import { noteUserModelSelection, subscribeSchemaSelectResult } from './services/userModelSelection';
+import { sizeOrUndef, widthHeightMismatch, localBlockTitle, schemaReadLine, localBlockCauseNodeIds, revealNodeTransform, sizeMismatchCleared } from './utils/localBlock';
+import { findNonOverlappingPos } from './utils/nodeOverlap';
+import { setCurrentRunTarget, beginRun, endRun, clearExecutionErrors, getExecutions, formatRecordTime, recordLocalEvent, currentRunAttach, ApiTraceError} from './services/executionTrace';
+import { historySeedStatement, historyActualRequest } from './utils/historyParameters';
+import { resolveFillLoraNodeId } from './utils/fillLoraNode';
+import { findRunHistoryItem } from './utils/runHistoryItem';
+import { isLocalBlockError } from './utils/apiFailure';
+import { executeWorkflow, extractWorkflowParameters, resolveTargetNode, shouldClearExecutionOutput, clearNodeExecutionErrors, clearStaleLoraBlocks, hasStaleLoraBlock, activeLoraNodeCount, resolveRunTarget, hasReferenceImageInput, modelChainBreak, modelChainBreakDetail } from './utils/graphEngine';
+import { toastFromRunError, plainFailureConclusion, plainErrorMessage, unicodeSafeSlice, EXEC_NODE_MISSING, localBlockToastReason, upstreamFailureToast } from './utils/apiFailure';
 import { applyAIVideoModelSelection } from './utils/videoProvider';
 import {
   PREVIEW_HANG_MS,
@@ -67,6 +81,7 @@ import { identifyArchitectureFamily } from './utils/baseModelMatcher';
 import {
   findFirstNodeOfType,
   getProviderFromNode,
+  getModelFromNode,
   isLoraUnsupportedOnEndpoint,
   resolveActiveCheckpoint,
   resolveCheckpointForNode,
@@ -82,6 +97,8 @@ import {
 } from './utils/providerLabels';
 
 export default function App() {
+  // Model Schema arrivals re-render inspector/canvas send badges.
+  React.useSyncExternalStore(subscribeModelSchema, modelSchemaVersion);
   const [initialWorkspace] = useState(() => loadWorkspaceCache([
     {id: 'canvas-zimage', name: 'Z-Image 创作画布', description: 'Hugging Face 官方 Space 文生图', updatedAt: Date.now(), nodes: WORKFLOW_PRESETS[0].nodes, connections: WORKFLOW_PRESETS[0].connections, spatialFrames: WORKFLOW_PRESETS[0].spatialFrames || []},
   ]));
@@ -113,7 +130,8 @@ export default function App() {
     toastThumbSettleRef.current = 'loading';
     setToastThumbSettle('loading');
     if (!toast) return;
-    const closeTimer = setTimeout(() => setToast(null), 6000);
+    // Failures / local blocks / warnings stay until closed (or the next run): an error must not vanish before it is read.
+    const closeTimer = toast.type === 'success' || toast.type === 'info' ? setTimeout(() => setToast(null), 6000) : undefined;
     const thumbUrl = toast.imageUrl;
     const remote = isRemotePreviewUrl(thumbUrl);
     let hangTimer: number | undefined;
@@ -154,6 +172,7 @@ export default function App() {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isModelHubOpen, setIsModelHubOpen] = useState(false);
   const [modelHubCategory, setModelHubCategory] = useState<CategoryFilter>('all');
+  const [modelHubInitialProvider, setModelHubInitialProvider] = useState<string | undefined>(undefined);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
   const [isParamsDrawerOpen, setIsParamsDrawerOpen] = useState(false);
   const [isMinimapOpen, setIsMinimapOpen] = useState(true);
@@ -174,15 +193,18 @@ export default function App() {
   };
 
   const handleOpenBaseModelHub = () => {
+    setToast(null); // suppress unrelated leftover notices on the canvas
     setModelHubCategory('checkpoint');
     setIsModelHubOpen(true);
   };
 
   const handleOpenLoRAHub = () => {
+    setToast(null);
     setIsCivitaiOpen(true);
   };
 
   const handleOpenVideoHub = () => {
+    setToast(null);
     setModelHubCategory('video');
     setIsModelHubOpen(true);
   };
@@ -230,8 +252,51 @@ export default function App() {
     }).catch((err) => setToast({type: 'error', title: '历史记录读取失败', message: err.message}));
   }, []);
 
+  // clean-1358 #3: Schema GET failure on model select → toast immediately (HTTP status + first-line upstream body).
+  // Reuse of a prior failure is labelled on the node; do not re-toast.
+  useEffect(() => subscribeSchemaSelectResult(({ provider, model, result, reused }) => {
+    // Persist Schema property names on matching Checkpoint (dropdown + hub) so badges match the run Schema.
+    if (result.ok) {
+      const props = result.data?.inputSchema?.properties;
+      if (props && typeof props === 'object') {
+        const keys = Object.keys(props);
+        setNodes((prev) => prev.map((n) => {
+          if (n.type !== 'CheckpointLoaderSimple') return n;
+          const ckpt = String(n.values?.ckpt_name || n.values?.model || '');
+          const prov = String(n.values?.targetProvider || '').toLowerCase();
+          if (ckpt !== model || prov !== String(provider).toLowerCase()) return n;
+          try {
+            const prevCp = typeof n.values?.custom_parameters === 'string' ? JSON.parse(n.values.custom_parameters || '{}') : {};
+            const next = JSON.stringify({ ...prevCp, _canvas: { ...prevCp._canvas, scope: { provider, model }, schemaProperties: keys } }, null, 2);
+            if (next === n.values?.custom_parameters) return n;
+            return { ...n, values: { ...n.values, custom_parameters: next } };
+          } catch { return n; }
+        }));
+      }
+      return;
+    }
+    if (reused) return;
+    const data = result.data && typeof result.data === 'object' ? result.data : { upstreamStatus: result.status, upstreamResponseBody: typeof result.data === 'string' ? result.data : JSON.stringify(result.data ?? '') };
+    const shaped = {
+      ...data,
+      upstreamStatus: typeof data.upstreamStatus === 'number' ? data.upstreamStatus : result.status,
+      upstreamResponseBody: data.upstreamResponseBody ?? data.rawResponse ?? (typeof data.error === 'string' ? data.error : undefined),
+      rawResponse: data.rawResponse,
+    };
+    const toast = upstreamFailureToast(shaped, `选用模型：${provider} · ${model}`)
+      || { title: `HTTP ${result.status || '—'}`, message: `${typeof result.data === 'object' ? JSON.stringify(result.data) : String(result.data ?? 'Schema 读取失败')}\n选用模型：${provider} · ${model}` };
+    setToast({ type: 'error', title: toast.title, message: toast.message });
+  }), []);
+
   // U-E2: Determine if generation/run is disabled due to missing model
+  // The exact node the next graph run will execute (live with selection / graph edits); shown on the run button.
+  const runTargetState = useMemo(() => {
+    try { return { target: resolveRunTarget(nodes, connections, undefined, selectedNodeId), error: '' }; }
+    catch (error: any) { return { target: null, error: String(error?.message || error) }; }
+  }, [nodes, connections, selectedNodeId]);
+
   const runDisabledReason = useMemo(() => {
+    if (canvasMode === 'graph' && runTargetState.error && nodes.length) return runTargetState.error;
     if (canvasMode === 'spatial') {
       const frame = spatialFrames.find(f => f.id === selectedFrameId);
       if (!frame) return '请选择要生成的画板';
@@ -257,9 +322,8 @@ export default function App() {
       });
     }
     if (!nodes.length) return undefined;
-    try {
-      const p = extractWorkflowParameters(nodes, connections, selectedNodeId || undefined);
-      return generationReadiness({
+    const readinessFrom = (p: ReturnType<typeof extractWorkflowParameters>) =>
+      generationReadiness({
         hfProvider: p.hfProvider,
         provider: p.videoProvider || p.targetProvider,
         model: p.checkpointModel,
@@ -277,8 +341,21 @@ export default function App() {
         height: p.height,
         ksamplerNodeId: p.ksamplerNodeId,
       });
-    } catch (error: any) { return error.message || '工作流连接不完整'; }
-  }, [canvasMode, selectedFrameId, spatialFrames, nodes, connections, selectedNodeId]);
+    try {
+      // Same target the Run button names and the run executes (runTargetState) — one source for gate, label and submit.
+      return readinessFrom(extractWorkflowParameters(nodes, connections, runTargetState.target?.id || selectedNodeId || undefined));
+    } catch (error: any) {
+      // Stale selectedNodeId must not permanently amber-lock the bar with an internal node-… id.
+      if (selectedNodeId && /未找到指定的执行节点/.test(String(error?.message || ''))) {
+        try {
+          return readinessFrom(extractWorkflowParameters(nodes, connections, undefined));
+        } catch (error2: any) {
+          return plainFailureConclusion(error2?.message) || EXEC_NODE_MISSING;
+        }
+      }
+      return plainFailureConclusion(error?.message) || error?.message || '工作流连接不完整';
+    }
+  }, [canvasMode, selectedFrameId, spatialFrames, nodes, connections, selectedNodeId, runTargetState]);
 
   // Keyboard Shortcuts
   useEffect(() => {
@@ -468,6 +545,9 @@ export default function App() {
       errorMessage: undefined,
     });
     setIsExecuting(true);
+    beginRun();
+    // clean-1005: select-model + run share one action — do NOT bump the sharedGet epoch here (reuse the Schema GET).
+    setCurrentRunTarget(frame.title || '取景框');
     setExecutionStatusText(`正在通过 ${frame.params.targetProvider.toUpperCase()} 渲染: ${frame.title}...`);
 
     try {
@@ -571,18 +651,20 @@ export default function App() {
       }
     } catch (err: any) {
       console.error('Frame gen error:', err);
+      const plainFrame = plainErrorMessage(err);
       handleUpdateFrame(frameId, {
         status: 'error',
         executionProgress: 0,
-        errorMessage: err.message || '生成失败',
+        errorMessage: plainFrame,
       });
-      setExecutionStatusText(err.message || '生成失败');
+      setExecutionStatusText(plainFrame);
       setToast({
         type: 'error',
         title: '⚠️ 取景框生成失败',
-        message: err.message || '服务商返回错误，请检查 API Key 配置与模型参数',
+        message: plainFrame,
       });
     } finally {
+      endRun();
       setIsExecuting(false);
       setTimeout(() => setExecutionStatusText(''), 2000);
     }
@@ -615,6 +697,28 @@ export default function App() {
     setSelectedNodeId(newNodeId);
   };
 
+  // A deleted node can be re-selected by the click that bubbles from its own trash button (or stay selected via
+  // another path); a stale id then made the next run fail with 「请重新选择要运行的节点」 and send nothing.
+  useEffect(() => {
+    if (selectedNodeId && !nodes.some((n) => n.id === selectedNodeId)) setSelectedNodeId(null);
+  }, [nodes, selectedNodeId]);
+
+  // fix10.1: node values loaded/stored with zero-width chars (U+200B/200C/200D/FEFF/2060) are scrubbed VISIBLY:
+  // toast + exec-log local event naming node/field/count. Covers every load path (cache, board switch, preset, import).
+  const zwScrubbed = useRef(new WeakSet<object>());
+  useEffect(() => {
+    // StrictMode re-runs effects with the same nodes array: report each dirty snapshot once.
+    if (zwScrubbed.current.has(nodes)) return;
+    zwScrubbed.current.add(nodes);
+    const { nodes: clean, hits } = scrubZeroWidthNodes(nodes);
+    if (!hits.length) return;
+    const total = hits.reduce((a, h) => a + h.count, 0);
+    const detail = describeZeroWidthHits(hits);
+    recordLocalEvent('零宽字符清洗（节点数据）', { ok: true, note: `已清除 ${total} 个零宽字符`, zeroWidthHits: hits, requestCount: 0 }, 'complete');
+    setToast({ type: 'warning', title: `已清除 ${total} 个零宽字符`, message: detail });
+    setNodes(clean);
+  }, [nodes]);
+
   const handleDeleteNode = (nodeId: string) => {
     const next=removeLoraFromBranch(nodes,connections,nodeId);
     setNodes(next.nodes);
@@ -640,8 +744,18 @@ export default function App() {
 
   const handleUpdateNodeValue = (nodeId: string, widgetName: string, value: any) => {
     const targetNode = nodes.find((n) => n.id === nodeId);
-    setNodes((prev) =>
-      prev.map((n) => {
+    // clean-0006: filling Empty Latent width/height must clear local-block chrome graph-wide
+    // without wiping upstream failure badges (errorMessage / errorAt / 「上一次」).
+    const willClearSizeMismatch =
+      targetNode?.type === 'EmptyLatentImage' &&
+      (widgetName === 'width' || widgetName === 'height') &&
+      !!(targetNode.localBlockReason || targetNode.localBlockTitle) &&
+      sizeMismatchCleared(
+        widgetName === 'width' ? value : targetNode.values?.width,
+        widgetName === 'height' ? value : targetNode.values?.height,
+      );
+    setNodes((prev) => {
+      const mapped = prev.map((n) => {
         if (targetNode?.type === 'CheckpointLoaderSimple' && (widgetName === 'ckpt_name' || widgetName === 'targetProvider') && n.type === 'SaveImage') {
           const prov = widgetName === 'targetProvider' ? value : (targetNode.values?.targetProvider || '');
           const model = widgetName === 'ckpt_name' ? value : (targetNode.values?.ckpt_name || '');
@@ -654,7 +768,20 @@ export default function App() {
           };
         }
         if (n.id !== nodeId) return n;
-        if(widgetName==='targetProvider' && value!==n.values?.targetProvider) return {...n,values:{...n.values,targetProvider:value,provider:value,ckpt_name:'',model:'',model_endpoint:'',hf_provider:'',custom_parameters:undefined},state:'idle',errorMessage:undefined};
+        // Provider switch: sync CheckpointLoader title to current provider; clear THIS node error.
+        // Sibling stale errors (e.g. leftover Civitai on KSampler) cleared in post-pass below.
+        if(widgetName==='targetProvider' && value!==n.values?.targetProvider) {
+          const cleared = {
+            ...n,
+            values:{...n.values,targetProvider:value,provider:value,ckpt_name:'',model:'',model_endpoint:'',hf_provider:'',custom_parameters:undefined,resource_source:undefined,resource_kind:undefined,download_url:undefined,civitai_id:undefined},
+            state:'idle' as const,
+            errorMessage:undefined,
+          };
+          if (n.type === 'CheckpointLoaderSimple') {
+            return { ...cleared, title: checkpointNodeTitle(value, '') };
+          }
+          return cleared;
+        }
         // F4: AIVideoNode model select atomically syncs targetProvider + provider from schema option
         if (n.type === 'AIVideoNode' && widgetName === 'model') {
           return { ...n, values: applyAIVideoModelSelection(n.values || {}, value) };
@@ -669,12 +796,42 @@ export default function App() {
           return {
             ...n,
             title: loraLoaderNodeTitle(n.title, value),
-            values: { ...(n.values || {}), lora_name: value },
+            values: applyLoraNameToNodeValues(n.values || {}, value),
           };
         }
-        return { ...n, values: { ...(n.values || {}), [widgetName]: value } };
-      })
-    );
+        const nextVals = { ...(n.values || {}), [widgetName]: value };
+        // clean-1358 #7: value update only — local chrome cascade is clearNodeExecutionErrors(keepUpstreamFailures) below.
+        return { ...n, values: nextVals };
+      });
+      return willClearSizeMismatch
+        ? clearNodeExecutionErrors(mapped) // fix3 N: 宽高拦截解除后清掉红字
+        : mapped;
+    });
+
+    // clean-1358 #7: clear the top toast when the size-mismatch condition no longer holds after this edit.
+    if (targetNode?.type === 'EmptyLatentImage' && (widgetName === 'width' || widgetName === 'height')) {
+      const w = widgetName === 'width' ? value : targetNode.values?.width;
+      const h = widgetName === 'height' ? value : targetNode.values?.height;
+      // After setState the node holds the new value; mirror it for the toast check.
+      const ww = widgetName === 'width' ? value : w;
+      const hh = widgetName === 'height' ? value : h;
+      if (sizeMismatchCleared(ww, hh)) {
+        setToast((prev) => (prev && prev.type === 'error' && /宽高不齐|只填了宽|只填了高/.test(`${prev.title}\n${prev.message}`) ? null : prev));
+      }
+    }
+
+    // P0: switching engine/provider must drop leftover red-box errors on other nodes (Civitai etc.).
+    if (widgetName === 'targetProvider' && targetNode && value !== targetNode.values?.targetProvider) {
+      clearExecutionErrors();
+      setNodes((prev) => clearNodeExecutionErrors(prev));
+      setSpatialFrames((prev) =>
+        prev.map((f) =>
+          f.status === 'error' || f.errorMessage
+            ? { ...f, status: f.status === 'error' ? 'idle' : f.status, errorMessage: undefined }
+            : f
+        )
+      );
+    }
 
     if (canvasMode !== 'spatial') return;
 
@@ -856,8 +1013,8 @@ export default function App() {
           ...f,
           params: {
             ...f.params,
-            ...(widgetName === 'width' ? { width: Number(value) } : {}),
-            ...(widgetName === 'height' ? { height: Number(value) } : {}),
+            ...(widgetName === 'width' ? { width: sizeOrUndef(value) } : {}),
+            ...(widgetName === 'height' ? { height: sizeOrUndef(value) } : {}),
           },
         } : f))
       );
@@ -866,17 +1023,22 @@ export default function App() {
         prev.map((f) => {
           if (f.id !== activeFrameTargetId) return f;
           const currentLoras = [...f.params.loras];
-          if (currentLoras.length > 0) {
-            if (widgetName === 'lora_name') currentLoras[0].name = value;
-            if (widgetName === 'strength_model') currentLoras[0].modelStrength = Number(value);
-            if (widgetName === 'strength_clip') currentLoras[0].clipStrength = Number(value);
-            if (widgetName === 'trigger_words') currentLoras[0].triggerWords = value;
-            if (widgetName === 'civitai_id') currentLoras[0].civitaiId = value;
+          // Bind the edit to the LoRA entry of THIS node (by its lora_name), never index 0.
+          const idx = currentLoras.findIndex((l) => l.name === targetNode.values?.lora_name);
+          if (idx >= 0) {
+            const e = { ...currentLoras[idx] };
+            if (widgetName === 'lora_name') e.name = value;
+            if (widgetName === 'strength_model') e.modelStrength = parseExplicitLoraStrength(value);
+            if (widgetName === 'strength_clip') e.clipStrength = parseExplicitLoraStrength(value);
+            if (widgetName === 'trigger_words') e.triggerWords = value;
+            if (widgetName === 'civitai_id') e.civitaiId = value;
+            currentLoras[idx] = e;
+          } else if (currentLoras.length > 0) {
+            // no entry belongs to this node: do not touch other LoRAs
           } else if (widgetName === 'lora_name' && value) {
              currentLoras.push({
                name: value,
-               modelStrength: 0.8,
-               clipStrength: 0.8,
+               // strength must be set via strength_model / strength_clip widgets — never invent 0.8
                triggerWords: '',
                civitaiId: '',
              });
@@ -916,6 +1078,12 @@ export default function App() {
     }
     const activeNodes = overrideNodes || nodes;
     const activeConns = overrideConns || connections;
+    let runTarget: ReturnType<typeof resolveRunTarget> | undefined;
+    if (activeNodes.length) {
+      try { runTarget = resolveRunTarget(activeNodes, activeConns, targetNodeId, selectedNodeId); }
+      catch (error: any) { setToast({type:'warning', title:'未发送请求', message:error.message}); return; }
+    }
+    const runTargetId = runTarget?.id;
 
     if (activeNodes.length === 0) {
       setToast({
@@ -928,8 +1096,23 @@ export default function App() {
     }
 
     setIsExecuting(true);
+    const thisRunSeq = beginRun();
+    // clean-1005: select-model + run share one action — do NOT bump the sharedGet epoch here (reuse the Schema GET).
+    // Toast line: target node + LoRA count actually in this run's generation request (read from the traced request body).
+    const runToastLine = (runItem?: GenerationHistoryItem) => {
+      // Derived from the server's actualRequest echo (what was really sent), any LoRA-carrying field.
+      const posts = getExecutions().filter((r) => r.runSeq === thisRunSeq && r.method.toUpperCase() !== 'GET');
+      // Same source as the history card: the recorded entry's outbound request (actualRequest or submission), else the response echo.
+      const actual = (runItem ? historyActualRequest(runItem) : undefined) ?? posts.map((r) => findActualRequest(r.response)).find(Boolean);
+      const n = countActualRequestLoras(actual);
+      return `运行：${runTarget?.title ?? '未知节点'} · 本次请求${posts.length ? (actual ? (n ? `含 LoRA ${n} 个` : '未含 LoRA') : '未返回 actualRequest') : '未发出生成请求'}`;
+    };
+    setCurrentRunTarget(runTarget ? `${runTarget.title}${runTarget.auto ? '（未选中节点，按输出节点）' : ''}` : null);
     setExecutionProgress(5);
     setExecutionStatusText('正在调度模型与 LoRA 权重...');
+    setToast(null); // drop stale global notices from prior hub/search/run
+    // New run: clear local-block chrome; keep upstream failure badges until success (clean-1651 A).
+    setNodes((prev) => clearNodeExecutionErrors(prev, { keepUpstreamFailures: true }));
 
     const handleNodeStateChange = (
       nodeId: string,
@@ -952,7 +1135,18 @@ export default function App() {
                   : shouldClearExecutionOutput(n.type, state, output, errorMessage)
                     ? undefined
                     : n.outputData,
-              errorMessage: errorMessage !== undefined ? errorMessage : n.errorMessage,
+              errorMessage: state === 'running' || state === 'success'
+                ? undefined
+                : (errorMessage !== undefined ? errorMessage : n.errorMessage),
+              errorAt: state === 'running' || state === 'success'
+                ? undefined
+                : (errorMessage !== undefined
+                  ? (errorMessage ? new Date().toISOString() : undefined)
+                  : n.errorAt),
+              upstreamFailed: state === 'running' || state === 'success' ? false : n.upstreamFailed,
+              // This session produced (or is replacing) the output: no longer a 刷新前的结果; remember when it arrived.
+              outputAt: output !== undefined ? new Date().toISOString() : n.outputAt,
+              restoredFromPreviousSession: output !== undefined || state === 'running' ? undefined : n.restoredFromPreviousSession,
             };
           }
           return n;
@@ -962,6 +1156,26 @@ export default function App() {
 
     let workflowOmissions: Array<{field: string; value: unknown; reason: string}> = [];
     try {
+      // clean-1333 #2: canvas-decidable block BEFORE any request (no Schema GET, no submit). Exactly one of width/height
+      // filled on the connected Empty Latent → 「宽高不齐，未发 size」; nothing is filled in, nothing is sent.
+      // fix10.1: zero-width chars in node values → local block (never stripped silently at request build).
+      const zwBlock = preRunZeroWidthBlock(activeNodes);
+      if (zwBlock) {
+        recordLocalEvent('零宽字符检查（运行前）', zwBlock);
+        throw new ApiTraceError(400, zwBlock, 'local:zero-width', JSON.stringify(zwBlock));
+      }
+      if (canvasMode === 'graph') {
+        let ext: ReturnType<typeof extractWorkflowParameters> | undefined;
+        try { ext = extractWorkflowParameters(activeNodes, activeConns, runTargetId); } catch { /* graph validation is reported by executeWorkflow */ }
+        const ck = activeNodes.find((n) => n.type === 'CheckpointLoaderSimple' && !n.bypassed);
+        const pairing = getModelSizePairing(ck?.values?.targetProvider, ck?.values?.ckpt_name);
+        const mismatch = ext ? widthHeightMismatch(ext.width, ext.height, pairing) : null;
+        if (mismatch) {
+          const data = { ok: false, errorSource: 'local', localOnly: true, requestCount: 0, error: mismatch, blockedField: { field: 'size', value: { width: ext?.width ?? null, height: ext?.height ?? null }, reason: mismatch } };
+          recordLocalEvent('画布尺寸检查（Empty Latent 宽高）', data);
+          throw new ApiTraceError(400, data, 'local:size-check', JSON.stringify(data));
+        }
+      }
       const result = await executeWorkflow(
         activeNodes,
         activeConns,
@@ -974,11 +1188,12 @@ export default function App() {
             setToast({type:'warning', title:'请求参数未提交项', message:workflowOmissions.map(item => `${item.field}=${item.value}：${item.reason}`).join('；')});
           }
         },
-        targetNodeId || selectedNodeId || undefined
+        runTargetId
       );
       setExecutionStatusText(`成功完成 (${result.provider})`);
       setExecutionProgress(100);
-      setNodes(prev => prev.map(node => node.id === result.executingNodeId ? {...node, values: {...node.values, seed: nextSeedAfterGeneration(result.seed, node.values.control_after_generate) ?? node.values.seed}} : node));
+      // clean-1651 A: successful run clears all prior upstream failure badges.
+      setNodes(prev => clearNodeExecutionErrors(prev).map(node => node.id === result.executingNodeId ? {...node, values: {...node.values, seed: nextSeedAfterGeneration(result.seed, node.values.control_after_generate) ?? node.values.seed}} : node));
 
       // Sync output to active Spatial Frame so infinite canvas updates simultaneously
       const isVid = Boolean(result.isVideo || result.imageUrl?.includes('.mp4') || result.model?.includes('video'));
@@ -999,38 +1214,119 @@ export default function App() {
 
       // Refresh generation history from server
       let historyLoaded = true;
-      await fetchHistory().then(setHistory).catch(() => { historyLoaded = false; });
+      let freshHistory: GenerationHistoryItem[] | undefined;
+      await fetchHistory().then((h) => { freshHistory = h; setHistory(h); }).catch(() => { historyLoaded = false; });
+      const runItem = findRunHistoryItem(getExecutions().filter((r) => r.runSeq === thisRunSeq && r.method.toUpperCase() !== 'GET').map((r) => r.response), freshHistory);
 
       // Trigger high visibility toast
       setToast({
         type: result.historyWarning || workflowOmissions.length ? 'warning' : 'success',
         title: '工作流运行成功！',
         message: [
+          runToastLine(runItem),
           result.historyWarning,
           workflowOmissions.length ? `请求参数未提交项：${workflowOmissions.map(item => `${item.field}=${item.value}：${item.reason}`).join('；')}` : undefined,
-          `由 ${result.provider} 渲染完成，种子: ${result.seed ?? '未返回'}。${historyLoaded ? '可在历史记录查看实际参数和工作流' : '历史记录读取失败，请重新打开历史记录'}`,
+          `由 ${result.provider} 渲染完成，${runItem ? historySeedStatement(runItem) : '种子：未找到本次历史记录，无法核对实际发送 / 上游返回'}。${historyLoaded ? '可在历史记录查看实际参数和工作流' : '历史记录读取失败，请重新打开历史记录'}`,
         ].filter(Boolean).join('；'),
         imageUrl: result.imageUrl,
       });
     } catch (err: any) {
       console.error('Queue error:', err);
       setExecutionProgress(0);
-      setExecutionStatusText('请求失败，查看执行记录');
+      // P0: plain primary on node + status bar; JSON / [500] / request_id stay in exec-log 技术细节.
+      const errMsg = plainErrorMessage(err);
+      const localBlockedRun = isLocalBlockError(err);
+      // clean-1333 #3/#5/#6: one title for toast / node / exec log, chosen from what was actually requested.
+      const blockData = localBlockedRun ? (err as any).data : undefined;
+      const blockTitle = localBlockedRun ? localBlockTitle(blockData) : undefined;
+      const blockReason = localBlockedRun ? localBlockToastReason(err.rawBody) : undefined;
+      const blockField = localBlockedRun && typeof blockData?.blockedField?.field === 'string' ? String(blockData.blockedField.field) : undefined;
+      const loraBlock = !!blockField && /^lora/i.test(blockField);
+      const blockLoraCount = activeLoraNodeCount(activeNodes);
 
-      // Prefer the Fal/engine node the user ran; never leave it idle with empty preview.
+      // Prefer the Fal/engine node the user ran; never leave prior media as if this run succeeded.
       const currentTargetId = targetNodeId || selectedNodeId;
-      const errMsg = err.message || '执行遇到错误';
+      setExecutionStatusText(errMsg);
       const branch=graphBranch(activeNodes,activeConns,currentTargetId);
-      setNodes(prev=>prev.map(n=>branch.ids.has(n.id) ? {...n,state:n.id===branch.target?.id?'error' as const:'idle' as const,executionProgress:0,errorMessage:n.id===branch.target?.id?'请求失败，查看执行记录':undefined} : n));
+      // Only the node that caused a local block shows the reason; with no identifiable cause node the run target shows it.
+      const causeIds = new Set(localBlockedRun ? localBlockCauseNodeIds(activeNodes, branch.ids, blockData?.blockedField?.field) : []);
+      if (localBlockedRun && !causeIds.size && branch.target) causeIds.add(branch.target.id);
+      // Downstream of the failed node (e.g. VAE → SaveImage) also shows 「这次没有出图」, never 「等待生成图像…」.
+      const downstream=new Set<string>();
+      {const queue=branch.target?[branch.target.id]:[];while(queue.length){const id=queue.shift()!;for(const c of activeConns)if(c.fromNodeId===id&&!downstream.has(c.toNodeId)&&!branch.ids.has(c.toNodeId)){downstream.add(c.toNodeId);queue.push(c.toNodeId);}}}
+      setNodes(prev=>prev.map(n=>{
+        // clean-0006: local block must NOT wipe upstream failure badges (errorMessage/errorAt).
+        // Those stay until the next successful run; only local chrome is layered on top.
+        if (downstream.has(n.id)) {
+          const keepErr = !!n.errorMessage;
+          return {...n,state:(keepErr?'error':'idle') as NodeInstance['state'],executionProgress:0,upstreamFailed:true,upstreamLocalBlocked:localBlockedRun,localBlockTitle:blockTitle,localBlockReason:undefined,outputData:undefined};
+        }
+        if (localBlockedRun) {
+          if (!branch.ids.has(n.id) && !causeIds.has(n.id)) return n;
+          const cause = causeIds.has(n.id);
+          const keepErr = !!n.errorMessage;
+          // No generic red box on the other branch nodes (clean-1333 #6): they go back to idle unless they still carry a prior upstream badge.
+          return {...n,state:(cause?'idle':keepErr?'error':'idle') as NodeInstance['state'],executionProgress:0,upstreamFailed:false,upstreamLocalBlocked:false,
+            localBlockTitle:cause?blockTitle:undefined,localBlockReason:cause?blockReason:undefined,
+            // trace-fix2 #10: remember which field caused it and, for LoRA blocks, the LoRA count it was decided on.
+            localBlockField:cause?blockField:undefined,localBlockLoraCount:cause && loraBlock?blockLoraCount:undefined};
+        }
+        if (!branch.ids.has(n.id)) return n;
+        const isTarget = n.id === branch.target?.id;
+        const nextState = (isTarget ? 'error' : 'idle') as NodeInstance['state'];
+        const clearOut = shouldClearExecutionOutput(n.type, nextState, undefined, isTarget ? errMsg : '');
+        return {
+          ...n,
+          state: nextState,
+          executionProgress: 0,
+          errorMessage: isTarget ? errMsg : undefined,
+          errorAt: isTarget ? new Date().toISOString() : undefined,
+          upstreamFailed: !isTarget,
+          upstreamLocalBlocked: false,
+          outputData: clearOut ? undefined : n.outputData,
+        };
+      }));
 
-      setToast({
-        type: 'error',
-        title: '请求未完成',
-        message: `${String(err.message).split('\n')[0]}；完整响应见执行记录。`,
-      });
+      setToast(localBlockedRun
+        ? { type: 'error', title: blockTitle!, message: `${blockReason}\n${schemaReadLine(blockData)}\n运行：${runTarget?.title ?? '未知节点'} · 生成请求未发出` }
+        : (toastFromRunError(err, `运行：${runTarget?.title ?? '未知节点'}`)
+          ? { type: 'error', ...toastFromRunError(err, `运行：${runTarget?.title ?? '未知节点'}`)! }
+          : { type: 'error', title: '请求未完成', message: `${runToastLine()}；${errMsg}` }));
+      // clean-1358 #4 + clean-1613 #2: pan only after writing ONE exec-log row 「视口平移至原因节点」.
+      // Capture run attach BEFORE finally/endRun clears currentRunLabel; record OUTSIDE setState (StrictMode would double-fire).
+      // state 'complete' — pan is not a request failure (no 请求失败 / 较早失败).
+      if (localBlockedRun && causeIds.size) {
+        const causeNode = activeNodes.find((n) => causeIds.has(n.id) && n.id !== branch.target?.id) || activeNodes.find((n) => causeIds.has(n.id));
+        const panAttach = currentRunAttach();
+        if (causeNode) setTimeout(() => {
+          const el = document.querySelector('[data-testid="canvas-container"]') as HTMLElement | null;
+          const nodeEl = document.getElementById(`node-${causeNode.id}`) as HTMLElement | null;
+          const ins = measureChromeInsets(el);
+          // fix4: toast sits at bottom; keep chrome top inset (do not push reveal below a top toast).
+          const width = el?.clientWidth || window.innerWidth;
+          const height = el?.clientHeight || window.innerHeight;
+          const top = ins.top;
+          let recordedPan = false;
+          setTransform((t) => {
+            const next = revealNodeTransform(
+              { x: causeNode.pos.x, y: causeNode.pos.y, w: (nodeEl && nodeEl.offsetWidth > 0 ? nodeEl.offsetWidth : causeNode.width) || 300, h: nodeEl && nodeEl.offsetHeight > 0 ? nodeEl.offsetHeight : 200 },
+              t, { width, height }, { top, bottom: ins.bottom, left: ins.left, right: ins.right },
+            );
+            if (!next) return t;
+            // StrictMode may replay this updater with the same t — write the row only once, and only then jump.
+            if (!recordedPan) {
+              recordedPan = true;
+              recordLocalEvent('视口平移至原因节点', { ok: true, note: '视口平移至原因节点', causeNodeId: causeNode.id, causeTitle: causeNode.title || causeNode.type, from: { x: t.x, y: t.y, scale: t.scale }, to: next }, 'complete', new Date(), panAttach);
+            }
+            return next;
+          });
+        }, 60);
+      }
       fetchHistory().then(setHistory).catch((err) => console.error('History refresh failed:', err.message));
     } finally {
       setIsExecuting(false);
+      setCurrentRunTarget(null);
+      endRun();
       setExecutionProgress(0);
       setExecutionStatusText('');
     }
@@ -1093,8 +1389,9 @@ export default function App() {
           {
             ...lora,
             name: lora.name,
-            modelStrength: 0.8,
-            clipStrength: 0.8,
+            downloadUrl: lora.downloadUrl,
+            modelStrength: parseExplicitLoraStrength(lora.modelStrength),
+            clipStrength: parseExplicitLoraStrength(lora.clipStrength ?? lora.modelStrength),
             triggerWords: lora.triggerWords,
             civitaiId: lora.civitaiId,
             baseModel: lora.baseModel,
@@ -1106,7 +1403,7 @@ export default function App() {
       }
     }
 
-    if (canvasMode === 'graph' && !targetLoRANodeId) {handleSelectLoRAWithBaseModel({...lora,provider:'civitai'});return;}
+    if (canvasMode === 'graph' && !targetLoRANodeId) {handleSelectLoRAWithBaseModel({...lora,provider:lora.provider || 'civitai'});return;}
 
     // Also update any targeted LoRALoader node if present
     if (canvasMode === 'graph' && targetLoRANodeId) {
@@ -1124,6 +1421,18 @@ export default function App() {
     }
   };
 
+  // 「仅填入当前节点」: update the existing current LoRA node only (any provider); never creates a node.
+  const handleFillCurrentLoRANode = (lora: ResourceSelection & {triggerWords:string}) => {
+    if (canvasMode === 'spatial') { handleSelectLoRAFromCivitai(lora); return; }
+    let nodeId: string;
+    try { nodeId = resolveFillLoraNodeId(nodes, targetLoRANodeId, selectedNodeId); }
+    catch (error: any) { setToast({type:'warning', title:'LoRA 未填入', message:error.message}); return; }
+    setNodes((prev) => prev.map((n) => n.id === nodeId
+      ? { ...n, title: loraLoaderNodeTitle(n.title, lora.name), values: {...replaceSelectedResource(n.values,lora,'lora_name'),civitai_id:lora.civitaiId,trigger_words:lora.triggerWords,base_model:lora.baseModel || ''} }
+      : n));
+    setToast({type:'success', title:'LoRA 已填入当前节点', message:`${lora.name} 已填入当前 LoRA 节点；未新建节点。`});
+  };
+
   const handleAddLoRANodeToCanvas = (lora: ResourceSelection & {modelStrength?:number;clipStrength?:number}, attach = false) => {
     const newNodeId = `node-lora-${Date.now()}`;
     const def = NODE_DEFINITIONS['LoRALoader'];
@@ -1132,10 +1441,11 @@ export default function App() {
       id: newNodeId,
       type: 'LoRALoader',
       title: loraLoaderNodeTitle(undefined, lora.name),
-      pos: {
-        x: Math.round(-transform.x / transform.scale + 420),
-        y: Math.round(-transform.y / transform.scale + 220),
-      },
+      pos: findNonOverlappingPos(
+        nodes.map((n) => ({ id: n.id, pos: n.pos, width: n.width })),
+        { x: Math.round(-transform.x / transform.scale + 420), y: Math.round(-transform.y / transform.scale + 220) },
+        { w: 320, h: 180 },
+      ),
       width: 320,
       inputs: def.inputs,
       outputs: def.outputs,
@@ -1146,8 +1456,12 @@ export default function App() {
         trigger_words: lora.triggerWords || '',
         base_model: lora.baseModel || '',
         source_provider: lora.provider || '',
-        strength_model: lora.modelStrength ?? 0.8,
-        strength_clip: lora.clipStrength ?? 0.8,
+        ...(parseExplicitLoraStrength(lora.modelStrength) !== undefined
+          ? { strength_model: parseExplicitLoraStrength(lora.modelStrength) }
+          : {}),
+        ...(parseExplicitLoraStrength(lora.clipStrength ?? lora.modelStrength) !== undefined
+          ? { strength_clip: parseExplicitLoraStrength(lora.clipStrength ?? lora.modelStrength) }
+          : {}),
       },
       state: 'idle',
     };
@@ -1166,6 +1480,7 @@ export default function App() {
   const handleSelectLoRAWithBaseModel = (lora: ResourceSelection & {modelStrength?:number;clipStrength?:number}) => {
     const frame=canvasMode==='spatial' ? spatialFrames.find(f=>f.id===selectedFrameId) : undefined;
     let chosen: {checkpoint:string;provider:string};
+    let adaptedLora = { ...lora };
     try {
       if (canvasMode==='spatial') {
         if(!frame)throw new Error('请先选择目标空间画板');
@@ -1176,22 +1491,38 @@ export default function App() {
       }
       const source=lora.provider==='tensor'?'tensorart':lora.provider;
       if(!chosen.provider || !chosen.checkpoint || (source && source!==chosen.provider))throw new Error('请先选择同平台底模，LoRA 不会自动修改供应商或底模');
-      if(isInvalidTensorModel(chosen.provider,chosen.checkpoint))throw new Error('旧 OpenWorks 工具不能挂载模型 LoRA，请先选择真实 Tensor 模型 ID');
-      const unsupported=isLoraUnsupportedOnEndpoint(chosen.provider,chosen.checkpoint);
+      if(isInvalidTensorModel(chosen.provider,chosen.checkpoint))throw new Error('Tensor.Art 模型 API 只接受 TAMS 数字模型 ID 挂载 LoRA，请先选择真实 Tensor 模型 ID');
+      const civitaiSchemaId = chosen.provider === 'civitai' && canvasMode==='spatial' && frame?.params.civitaiEngine && frame?.params.civitaiEcosystem
+        ? `${frame.params.civitaiEngine}:${frame.params.civitaiEcosystem}`
+        : undefined;
+      const unsupported=isLoraUnsupportedOnEndpoint(chosen.provider, civitaiSchemaId || chosen.checkpoint);
       if(unsupported.unsupported)throw new Error(unsupported.message || '所选端点不支持 LoRA');
     } catch(error:any) {setToast({type:'error',title:'LoRA 未挂载',message:error.message});return;}
     const selected={...lora,triggerWords:lora.triggerWords || '',civitaiId:chosen.provider==='civitai'?lora.civitaiId:undefined};
     if (canvasMode==='spatial') {
-      const strength=lora.modelStrength ?? 0.8;
-      handleUpdateFrame(frame!.id,{params:{...frame!.params,loras:[...frame!.params.loras.filter(row=>row.name!==lora.name),{...selected,modelStrength:strength,clipStrength:lora.clipStrength ?? strength}]}});
+      const strength=parseExplicitLoraStrength(lora.modelStrength);
+      const clip=parseExplicitLoraStrength(lora.clipStrength ?? lora.modelStrength);
+      handleUpdateFrame(frame!.id,{params:{...frame!.params,loras:[...frame!.params.loras.filter(row=>row.name!==lora.name),{...selected,downloadUrl:lora.downloadUrl,modelStrength:strength,clipStrength:clip}]}});
     } else if(!handleAddLoRANodeToCanvas(selected,true))return;
-    setToast({type:'success',title:'LoRA 已挂载',message:`${lora.name} × ${lora.modelStrength ?? 0.8}；已接入当前${canvasMode==='graph'?'生成分支':'空间画板'}，生成前继续核实模型架构与权限。`});
+    const shown=parseExplicitLoraStrength(lora.modelStrength);
+    setToast({type:'success',title:'LoRA 已挂载',message:shown !== undefined
+      ? `${lora.name} × ${shown}；已接入当前${canvasMode==='graph'?'生成分支':'空间画板'}，生成前继续核实模型架构与权限。`
+      : `${lora.name} 已挂载但未设置强度；生成前必须显式填写 strength_model，禁止静默兜底 0.8。`});
   };
 
   // Live Model Hub selection
   const handleSelectModelFromHub = (modelId: string, modelName: string, providerHint?: string, extraData?: any) => {
     const provider = explicitProvider(providerHint);
     if (!provider) {setToast({type:'error',title:'未应用模型',message:'模型目录缺少明确供应商，请先选择供应商'});return;}
+    // 选用此 ID / 应用为底模 are explicit user selections → exactly one Schema GET for this model.
+    // Schema-driven verification: a 200 Schema for exactly this provider+model verifies the typed/catalog ID (the same GET
+    // the run makes). A failed GET leaves the 「尚未核实」 state and its verbatim error in the exec log.
+    noteUserModelSelection(provider, modelId)?.then((r) => {
+      if (!(r.ok && r.data?.inputSchema?.properties)) return;
+      setNodes((prev) => prev.map((n) => n.type === 'CheckpointLoaderSimple' && n.values?.ckpt_name === modelId && n.values?.targetProvider === provider && (n.values?.import_unresolved_resource || n.values?.unresolvedResource)
+        ? { ...n, values: { ...n.values, resourceVerified: true, import_unresolved_resource: false, unresolvedResource: false, import_resource_reason: undefined, resource_source: `${provider} 官方 Schema（GET /api/model-schema · HTTP ${r.status}）` } }
+        : n));
+    }, () => {});
     const lowerId = modelId.toLowerCase();
 
     const isVideoModel =
@@ -1292,6 +1623,15 @@ export default function App() {
                   ...(n.type==='CheckpointLoaderSimple'?{ckpt_name:modelId}:n.type==='ModelScopeNode'||n.type==='ModelScopeAiNode'?{model_endpoint:modelId}:{model:modelId}),
                   targetProvider: provider,
                   tensorArtInputs: provider === 'tensorart' ? (extraData?.inputs || []) : undefined,
+                  // Persist official Schema property names so UI never fakes「不会发送」for declared fields (Krea steps/seed/guidance_scale…)
+                  ...(() => {
+                    const props = extraData?.parameters?.properties || extraData?.metadata?.parameters?.properties || extraData?.inputSchema?.properties;
+                    if (!props || typeof props !== 'object') return {};
+                    try {
+                      const prev = typeof n.values?.custom_parameters === 'string' ? JSON.parse(n.values.custom_parameters || '{}') : {};
+                      return { custom_parameters: JSON.stringify({ ...prev, _canvas: { ...prev._canvas, schemaProperties: Object.keys(props) } }, null, 2) };
+                    } catch { return {}; }
+                  })(),
                 },
               };
             }
@@ -1431,7 +1771,7 @@ export default function App() {
     const newBoard: CanvasProject = {
       id: `canvas-${Date.now()}`,
       name,
-      description: `创建于 ${new Date().toLocaleString()}`,
+      description: `创建于 ${formatRecordTime(new Date().toISOString())}`,
       updatedAt: Date.now(),
       nodes: JSON.parse(JSON.stringify(nodes)),
       connections: JSON.parse(JSON.stringify(connections)),
@@ -1532,10 +1872,10 @@ export default function App() {
         sampler: asset.sampler,
         scheduler: asset.scheduler,
         denoise: 1.0,
-        width: asset.width ?? 1024,
-        height: asset.height ?? 1024,
+        width: asset.width ?? undefined, // clean-1333 #1: no silent 1024
+        height: asset.height ?? undefined,
         batchSize: 1,
-        loras: (asset.loras || []).map(l=>({name:l.name,modelStrength:l.strength ?? 0.8,clipStrength:l.strength ?? 0.8,triggerWords:''})),
+        loras: (asset.loras || []).map(l=>({name:l.name,modelStrength:parseExplicitLoraStrength(l.strength),clipStrength:parseExplicitLoraStrength(l.strength),triggerWords:''})),
         targetProvider: provider as any,
       },
       imageUrl: asset.type === 'image' ? asset.url : undefined,
@@ -1625,39 +1965,75 @@ export default function App() {
     }
   };
 
+  // trace-fix2 #10: a LoRA-caused block whose LoRA count no longer matches the graph is stale → clear it (and its toast).
+  useEffect(() => {
+    if (!hasStaleLoraBlock(nodes)) return;
+    setNodes((prev) => clearStaleLoraBlocks(prev));
+    setToast((prev) => (prev && prev.type === 'error' && /LoRA/.test(`${prev.title}\n${prev.message}`) && /本地拦截/.test(`${prev.title}\n${prev.message}`) ? null : prev));
+  }, [nodes]);
+
+  // trace-fix2 #15: when the node set is (re)loaded — first paint, workflow load, 「一键清空全部」 reset — no node may sit
+  // under the top chrome. Pan down only (zoom unchanged, nodes never moved); later user pans are not touched.
+  const nodeSetKey = nodes.map((n) => n.id).sort().join('|');
+  const lastNodeSetKey = useRef<string | null>(null);
+  useEffect(() => {
+    const prevKey = lastNodeSetKey.current;
+    lastNodeSetKey.current = nodeSetKey;
+    const prevIds = new Set((prevKey || '').split('|').filter(Boolean));
+    const changed = nodeSetKey.split('|').filter((id) => id && !prevIds.has(id)).length;
+    if (prevKey !== null && changed <= 1) return; // single add/remove is a user edit, not a reload
+    const raf = requestAnimationFrame(() => {
+      const el = document.querySelector('[data-testid="canvas-container"]') as HTMLElement | null;
+      if (!el) return;
+      const insets = measureChromeInsets(el);
+      const cTop = el.getBoundingClientRect().top + insets.top;
+      const tops = nodes.map((n) => document.getElementById(`node-${n.id}`)?.getBoundingClientRect().top).filter((v): v is number => typeof v === 'number');
+      if (!tops.length) return;
+      const minTop = Math.min(...tops);
+      if (minTop < cTop) setTransform((t) => ({ ...t, y: t.y + (cTop - minTop) }));
+    });
+    return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodeSetKey]);
+
   // Reset view to fit all elements
   const handleResetView = () => {
-    const all = [
-      ...nodes.map((n) => ({ x: n.pos.x, y: n.pos.y, w: n.width || 300, h: 350 })),
-      ...spatialFrames.map((f) => ({ x: f.pos.x, y: f.pos.y, w: f.width, h: f.height + 150 })),
-    ];
-    if (all.length === 0) {
-      setTransform({ x: 80, y: 80, scale: 0.8 });
-      return;
-    }
-
-    let minX = Infinity,
-      minY = Infinity,
-      maxX = -Infinity,
-      maxY = -Infinity;
-    all.forEach((item) => {
-      minX = Math.min(minX, item.x);
-      minY = Math.min(minY, item.y);
-      maxX = Math.max(maxX, item.x + item.w);
-      maxY = Math.max(maxY, item.y + item.h);
+    // clean-1358 #1 + clean-1613 #1: Fit View uses the canvas container; graph mode ignores leftover spatial frames;
+    // measured DOM width/height; usable-box insets include top/bottom/left/right chrome. Nodes are not moved.
+    // After model switch nodes grow (schema widgets / previews) — computeFitTransform loops minScale until every
+    // item sits inside the usable box. A rAF second pass re-measures DOM in case layout was stale on click.
+    const el = document.querySelector('[data-testid="canvas-container"]') as HTMLElement | null;
+    const width = el?.clientWidth || window.innerWidth;
+    const height = el?.clientHeight || window.innerHeight;
+    const measureH = (id: string) => {
+      const nodeEl = document.getElementById(`node-${id}`);
+      return nodeEl && nodeEl.offsetHeight > 0 ? nodeEl.offsetHeight : undefined;
+    };
+    const measureW = (id: string) => {
+      const nodeEl = document.getElementById(`node-${id}`);
+      return nodeEl && nodeEl.offsetWidth > 0 ? nodeEl.offsetWidth : undefined;
+    };
+    const fitNow = () => {
+      const insets = measureChromeInsets(el);
+      const all = fitItemsForMode(canvasMode, nodes, spatialFrames, measureH, measureW);
+      return computeFitTransform(all, { width, height }, { insets, minScale: 0.05 });
+    };
+    setTransform(fitNow());
+    requestAnimationFrame(() => {
+      if (!el) return;
+      const insets = measureChromeInsets(el);
+      const cRect = el.getBoundingClientRect();
+      const nodeEls = nodes.map((n) => document.getElementById(`node-${n.id}`)).filter(Boolean) as HTMLElement[];
+      if (!nodeEls.length) return;
+      const outside = nodeEls.some((ne) => {
+        const r = ne.getBoundingClientRect();
+        return r.bottom < cRect.top + insets.top - 2
+          || r.top > cRect.bottom - insets.bottom + 2
+          || r.right < cRect.left + insets.left - 2
+          || r.left > cRect.right - insets.right + 2;
+      });
+      if (outside) setTransform(fitNow());
     });
-
-    const padding = 140;
-    const canvasWidth = window.innerWidth;
-    const canvasHeight = window.innerHeight;
-    const graphWidth = maxX - minX + padding * 2;
-    const graphHeight = maxY - minY + padding * 2;
-    const scale = Math.min(Math.max(Math.min(canvasWidth / graphWidth, canvasHeight / graphHeight), 0.35), 1.0);
-
-    const x = canvasWidth / 2 - ((minX + maxX) / 2) * scale;
-    const y = canvasHeight / 2 - ((minY + maxY) / 2) * scale;
-
-    setTransform({ x, y, scale });
   };
 
   // Active parameters and prompts dynamically derived from nodes and active frame
@@ -1675,14 +2051,26 @@ export default function App() {
   const selectedNode = selectedNodeId ? nodes.find((n) => n.id === selectedNodeId) : null;
 
   // LoRA/panel checkpoint: ONLY the selected (or sole) engine node's model — never invent Z-Image-Turbo
-  const resolvedActive = canvasMode==='spatial'
+  const tracedActive = canvasMode==='spatial'
     ? {checkpoint:inspectorFrame?.params.checkpoint || '',provider:inspectorFrame?.params.targetProvider || ''}
     : resolveActiveCheckpoint(inspectorNodes,connections,inspectorBranch.target?.id);
+  // clean-0942 single source of truth for the selected provider + model: the branch's loader node values (what the node
+  // label shows). Traced through the MODEL chain when connected; when the chain is broken the selection is still shown
+  // and the break is reported (modelChainIssue) — the Run gate blocks with the same reason. No guessing, no fallback model.
+  const branchLoader = canvasMode==='graph' ? checkpointLoaderNode : undefined;
+  const resolvedActive = (tracedActive.checkpoint || tracedActive.provider || !branchLoader)
+    ? tracedActive
+    : { checkpoint: getModelFromNode(branchLoader), provider: getProviderFromNode(branchLoader), engineNodeId: branchLoader.id };
+  // Same sentence for Run banner, panel, and the LoRA node where the MODEL chain breaks (one source).
+  const chainExecId = (canvasMode==='graph' && (inspectorBranch.target?.type==='KSampler' ? inspectorBranch.target.id
+    : nodes.find(n=>n.type==='KSampler' && !n.bypassed && inspectorBranch.ids.has(n.id))?.id)) || undefined;
+  const modelChainBreakInfo = chainExecId ? modelChainBreakDetail(nodes, connections, chainExecId) : undefined;
+  const modelChainIssue = modelChainBreakInfo?.message;
   let graphExtraction:ReturnType<typeof extractWorkflowParameters>|undefined;
   try {if(inspectorBranch.target)graphExtraction=extractWorkflowParameters(inspectorNodes,connections,inspectorBranch.target.id);}catch{/* Incomplete graphs stay editable; generation exposes validation. */}
   const promptNode=(socket:string)=>inspectorNodes.find(n=>connections.some(c=>c.fromNodeId===n.id && c.toNodeId===inspectorBranch.target?.id && c.toSocketId===socket));
   const nodePositiveText=promptNode('positive')?.values.text ?? promptNode('prompt')?.values.text ?? inspectorBranch.target?.values.prompt;
-  const nodeNegativeText=promptNode('negative')?.values.text ?? inspectorBranch.target?.values.negative_prompt;
+  const nodeNegativeText=promptNode('negative')?.values.text ?? inspectorBranch.target?.values.negative_prompt ?? checkpointLoaderNode?.values?.negative_prompt;
 
   // Single source of truth with SpatialFrame: when any frame is active (selected
   // or fallback first), inspector prompt mirrors frame.prompt / negativePrompt.
@@ -1705,8 +2093,8 @@ export default function App() {
     .filter((n) => (n.type === 'LoRALoader' || n.type === 'LoraLoader' || n.type === 'LoraLoaderModelOnly') && !n.bypassed)
     .map((n) => ({
       name: String(n.values?.lora_name ?? '').trim(),
-      modelStrength: Number(n.values?.strength_model ?? 0.8),
-      clipStrength: Number(n.values?.strength_clip ?? 0.8),
+      modelStrength: parseExplicitLoraStrength(n.values?.strength_model),
+      clipStrength: parseExplicitLoraStrength(n.values?.strength_clip),
       triggerWords: n.values?.trigger_words || '',
       civitaiId: n.values?.civitai_id || '',
       downloadUrl: n.values?.download_url || n.values?.downloadUrl,
@@ -1736,8 +2124,11 @@ export default function App() {
     sampler: graphExtraction?.sampler,
     scheduler: graphExtraction?.scheduler,
     denoise: ksamplerNode?.values?.denoise !== undefined ? Number(ksamplerNode.values.denoise) : (inspectorFrame?.params?.denoise ?? 1.0),
-    width: graphExtraction?.width ?? (Number(latentNode?.values.width) || 0),
-    height: graphExtraction?.height ?? (Number(latentNode?.values.height) || 0),
+    // clean-1333 #1: the inspector mirrors the request exactly. A connected Empty Latent is the ONLY size source; an empty
+    // field stays undefined (never 0, never the stale CheckpointLoader width/height, which the write-back below would
+    // otherwise copy INTO the Empty Latent on any panel edit — that was the silent 1024 fill).
+    width: graphExtraction ? graphExtraction.width : latentNode ? sizeOrUndef(latentNode.values.width) : sizeOrUndef(checkpointLoaderNode?.values?.width),
+    height: graphExtraction ? graphExtraction.height : latentNode ? sizeOrUndef(latentNode.values.height) : sizeOrUndef(checkpointLoaderNode?.values?.height),
     batchSize: (selectedFrameId && inspectorFrame?.params?.batchSize != null)
       ? Number(inspectorFrame.params.batchSize)
       : (latentNode?.values?.batch_size !== undefined
@@ -1782,7 +2173,17 @@ export default function App() {
   };
 
   const rawInspectorParams = readInspectorParameters(inspectorNodes,connections,inspectorBranch.target?.id);
-  const activeParams = inspectorFrame ? inspectorFrame.params : {...graphParams,...rawInspectorParams,loras:graphLoras};
+  // Defined values win: rawInspectorParams may carry undefined width/height when EmptyLatent is unconnected — never wipe graphParams.
+  const mergeDefined = (base: ComfyParameters, overlay: ComfyParameters): ComfyParameters => {
+    const out: any = { ...base };
+    for (const [k, v] of Object.entries(overlay as any)) if (v !== undefined) out[k] = v;
+    return out as ComfyParameters;
+  };
+  // Provider + model come from ONE source (resolvedActive = the branch loader values) — readInspectorParameters re-traces
+  // the MODEL chain and would blank them when that chain is broken, contradicting the node label.
+  const activeParams = inspectorFrame ? inspectorFrame.params : {...mergeDefined(graphParams, rawInspectorParams),loras:graphLoras,
+    ...(resolvedActive.checkpoint ? { checkpoint: resolvedActive.checkpoint } : {}),
+    ...(resolvedActive.provider ? { targetProvider: graphParams.targetProvider } : {})};
 
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-[#0c0d11] select-none font-sans">
@@ -1831,6 +2232,7 @@ export default function App() {
         isExecuting={isExecuting}
         executionStatusText={executionStatusText}
         runDisabledReason={runDisabledReason}
+        runTargetLabel={runTargetState.target ? runTargetState.target.title : undefined}
         onClearCanvas={handleClearCanvas}
       />
 
@@ -1863,6 +2265,7 @@ export default function App() {
             onToggleBypass={handleToggleBypass}
             onAddConnection={handleAddConnection}
             onDeleteConnection={handleDeleteConnection}
+            modelChainBreakInfo={modelChainBreakInfo}
             onAddNode={handleAddNode}
             onUpdateFramePos={handleUpdateFramePos}
             onUpdateFrame={handleUpdateFrame}
@@ -1917,18 +2320,30 @@ export default function App() {
         canvasMode={canvasMode}
         zoom={transform.scale}
         onZoomIn={() =>
-          setTransform((prev) => ({
-            ...prev,
-            scale: Math.min(prev.scale * 1.15, 2.5),
-          }))
+          setTransform((prev) => {
+            const el = document.querySelector('[data-testid="canvas-container"]') as HTMLElement | null;
+            const cx = (el?.clientWidth || window.innerWidth) / 2;
+            const cy = (el?.clientHeight || window.innerHeight) / 2;
+            const scale = Math.min(prev.scale * 1.15, 2.5);
+            return { scale, x: cx - ((cx - prev.x) * scale) / prev.scale, y: cy - ((cy - prev.y) * scale) / prev.scale };
+          })
         }
         onZoomOut={() =>
-          setTransform((prev) => ({
-            ...prev,
-            scale: Math.max(prev.scale / 1.15, 0.15),
-          }))
+          setTransform((prev) => {
+            const el = document.querySelector('[data-testid="canvas-container"]') as HTMLElement | null;
+            const cx = (el?.clientWidth || window.innerWidth) / 2;
+            const cy = (el?.clientHeight || window.innerHeight) / 2;
+            const scale = Math.max(prev.scale / 1.15, 0.15);
+            return { scale, x: cx - ((cx - prev.x) * scale) / prev.scale, y: cy - ((cy - prev.y) * scale) / prev.scale };
+          })
         }
-        onZoomReset={() => setTransform((prev) => ({ ...prev, scale: 1.0 }))}
+        onZoomReset={() => setTransform((prev) => {
+          const el = document.querySelector('[data-testid="canvas-container"]') as HTMLElement | null;
+          const cx = (el?.clientWidth || window.innerWidth) / 2;
+          const cy = (el?.clientHeight || window.innerHeight) / 2;
+          const scale = 1.0;
+          return { scale, x: cx - ((cx - prev.x) * scale) / prev.scale, y: cy - ((cy - prev.y) * scale) / prev.scale };
+        })}
         onFitView={handleResetView}
         isMinimapOpen={isMinimapOpen}
         onToggleMinimap={() => setIsMinimapOpen(!isMinimapOpen)}
@@ -1940,9 +2355,11 @@ export default function App() {
 
       {/* Floating ComfyUI Parameter Inspector Drawer */}
       {isParamsDrawerOpen && (
-        <aside className="fixed top-[168px] right-4 bottom-4 w-96 max-w-[calc(100vw-2rem)] z-40 animate-in slide-in-from-right-4 duration-200">
+        <aside data-testid="params-drawer" className="fixed top-[168px] right-4 bottom-24 w-96 max-w-[calc(100vw-2rem)] z-40 animate-in slide-in-from-right-4 duration-200">
           <ParameterInspector
             params={activeParams}
+            modelChainIssue={modelChainIssue}
+            hasImageInput={inspectorBranch.target ? hasReferenceImageInput(nodes as any, connections as any, inspectorBranch.target.id) : undefined}
             positivePrompt={activePositivePrompt}
             onChangePositivePrompt={(newPrompt) => {
               if(canvasMode==='graph' && inspectorBranch.error){setToast({type:'error',title:'未修改提示词',message:inspectorBranch.error});return;}
@@ -1983,6 +2400,10 @@ export default function App() {
                   if (n.type === 'GoogleImagenNode') {
                     return { ...n, values: { ...(n.values || {}), negative_prompt: newPrompt } };
                   }
+                  // Fallback when no negative CLIP node: keep text on CheckpointLoader for execute + panel reopen.
+                  if (n.type === 'CheckpointLoaderSimple') {
+                    return { ...n, values: { ...(n.values || {}), negative_prompt: newPrompt } };
+                  }
                   return n;
                 })
               );
@@ -1996,16 +2417,27 @@ export default function App() {
             }}
             onChange={(newParams) => {
               if(canvasMode==='graph' && inspectorBranch.error){setToast({type:'error',title:'未修改参数',message:inspectorBranch.error});return;}
+              const providerChanged = newParams.targetProvider !== activeParams.targetProvider;
               // Update active spatial frame ONLY
               const targetFrameId = selectedFrameId || (spatialFrames.length > 0 ? spatialFrames[0].id : null);
               if (canvasMode==='spatial' && targetFrameId) {
                 setSpatialFrames((prev) =>
-                  prev.map((f) => (f.id === targetFrameId ? patchSpatialParameters(f,newParams) : f))
+                  prev.map((f) => {
+                    if (f.id !== targetFrameId) return f;
+                    const patched = patchSpatialParameters(f, newParams);
+                    if (!providerChanged) return patched;
+                    // Provider switch: drop stale frame error (prior Civitai/WaveSpeed/etc.).
+                    return {
+                      ...patched,
+                      status: patched.status === 'error' ? 'idle' : patched.status,
+                      errorMessage: undefined,
+                    };
+                  })
                 );
               }
               // Update matching graph nodes
-              setNodes((prev) =>
-                prev.map((n) => {
+              setNodes((prev) => {
+                const mapped = prev.map((n) => {
                   if(canvasMode!=='graph' || !inspectorBranch.ids.has(n.id))return n;
                   if (!LORA_LOADER_TYPES.has(n.type)) return patchInspectorBranchNode(n,prev,connections,inspectorBranch.target?.id,activeParams,newParams);
                   if (LORA_LOADER_TYPES.has(n.type)) {
@@ -2052,6 +2484,9 @@ export default function App() {
                       civitai_model: newParams.civitaiModel,
                       aspect_ratio: newParams.aspectRatio,
                       n: newParams.batchSize,
+                      // Size fallback when EmptyLatent is missing/unconnected — panel reopen must keep these.
+                      width: newParams.width,
+                      height: newParams.height,
                       // Always track provider so title and schema selects stay in sync
                       // (empty-string default previously blocked write-back → stuck GROK_COMPAT title)
                       targetProvider: newParams.targetProvider || n.values?.targetProvider || '',
@@ -2092,8 +2527,9 @@ export default function App() {
                     };
                   }
                   return n;
-                })
-              );
+                });
+                return providerChanged ? clearNodeExecutionErrors(mapped) : mapped;
+              });
             }}
             onOpenCivitai={() => setIsCivitaiOpen(true)}
             onOpenModelHub={() => setIsModelHubOpen(true)}
@@ -2134,14 +2570,15 @@ export default function App() {
         onUpdateTransform={setTransform}
         isOpen={isMinimapOpen}
         onToggle={() => setIsMinimapOpen(!isMinimapOpen)}
+        canvasMode={canvasMode}
       />
 
       {/* Real Live API Model Hub Modal */}
       <ModelHubModal
         isOpen={isModelHubOpen}
-        onClose={() => setIsModelHubOpen(false)}
+        onClose={() => { setIsModelHubOpen(false); setModelHubInitialProvider(undefined); }}
         initialCategory={modelHubCategory}
-        initialProvider={canvasMode === 'spatial' ? activeFrame?.params.targetProvider : resolvedActive.provider}
+        initialProvider={modelHubInitialProvider || (canvasMode === 'spatial' ? activeFrame?.params.targetProvider : resolvedActive.provider)}
         isSpatialMode={canvasMode === 'spatial'}
         currentCheckpoint={
           resolvedActive.checkpoint ||
@@ -2288,6 +2725,11 @@ export default function App() {
           setApiKeys(newKeys);
           saveStoredApiKeys(newKeys);
         }}
+        onOpenModelHub={(providerId) => {
+          setModelHubCategory('checkpoint');
+          setModelHubInitialProvider(providerId);
+          setIsModelHubOpen(true);
+        }}
       />
 
       {/* Unified LoRA & Model Hub Modal */}
@@ -2295,6 +2737,7 @@ export default function App() {
         isOpen={isCivitaiOpen}
         onClose={() => setIsCivitaiOpen(false)}
         onSelectLoRA={handleSelectLoRAFromCivitai}
+        onFillCurrentLoRANode={handleFillCurrentLoRANode}
         onAddLoRANodeToCanvas={handleAddLoRANodeToCanvas}
         onSelectLoRAWithBaseModel={handleSelectLoRAWithBaseModel}
       />
@@ -2394,9 +2837,10 @@ export default function App() {
 
       {/* Real-time Floating Notification Toast */}
       {toast && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 pointer-events-auto animate-in slide-in-from-top-4 duration-300">
+        /* fix4.1: bottom-center above bottom tool dock (bottom-6 + ~3.5rem pill); clear 「LoRA 模型中心」/「100%」. */
+        <div data-testid="toast-container" className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 pointer-events-auto animate-in slide-in-from-bottom-4 duration-300 max-w-[min(48rem,94vw)] max-h-[min(40vh,24rem)] overflow-auto">
           <div
-            className={`flex items-center gap-3 px-4 py-3 rounded-2xl shadow-2xl backdrop-blur-xl border ${
+            className={`flex items-start gap-3 px-4 py-3 rounded-2xl shadow-2xl backdrop-blur-xl border ${
               toast.type === 'success'
                 ? 'bg-[#121c17]/95 border-emerald-500/50 text-white shadow-emerald-950/60 ring-1 ring-emerald-500/30'
                 : toast.type === 'error'
@@ -2464,18 +2908,31 @@ export default function App() {
                 </div>
               );
             })()}
-            <div className="max-w-md text-xs">
+            <div className="max-w-xl min-w-0 text-xs">
               <div className="font-bold text-sm tracking-wide flex items-center gap-2">
                 <span>{toast.title}</span>
                 {toast.type === 'success' && (
                   <span className="text-[10px] font-mono px-1.5 py-0.2 bg-emerald-500/20 text-emerald-300 rounded border border-emerald-500/30">
-                    Done
+                    完成
                   </span>
                 )}
               </div>
-              <div className="text-slate-300 mt-0.5 line-clamp-2 leading-relaxed">
-                {toast.message}
-              </div>
+              {(() => {
+                // First line in full (upstream verbatim); a long remainder is expandable, never ellipsized away.
+                const [first, ...rest] = String(toast.message ?? '').split('\n');
+                const more = rest.join('\n').trim();
+                return (
+                  <>
+                    <div data-testid="toast-first-line" className="text-slate-300 mt-0.5 leading-relaxed whitespace-pre-wrap [overflow-wrap:break-word] [word-break:normal]">{first}</div>
+                    {more && (
+                      <details data-testid="toast-more" className="mt-1">
+                        <summary className="cursor-pointer text-cyan-300">展开全文</summary>
+                        <pre className="mt-1 max-h-[40vh] overflow-auto whitespace-pre-wrap [overflow-wrap:break-word] text-[11px] text-slate-300 font-mono">{more}</pre>
+                      </details>
+                    )}
+                  </>
+                );
+              })()}
             </div>
 
             <div className="flex items-center gap-2 shrink-0 ml-2">

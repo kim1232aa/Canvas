@@ -1,3 +1,4 @@
+import { friendlyProviderLabel } from '../utils/providerLabels';
 import React from 'react';
 import {
   ExternalLink,
@@ -55,6 +56,11 @@ const ALLOWED_CLOUD_SETTINGS_FIELDS = new Set([
   'grokCompatKey',
   'grokCompatBaseUrl',
   'muapiKey',
+  'kreaKey',
+  'togetherKey',
+  'aimlapiKey',
+  'novitaKey',
+  'veniceKey',
   'wavespeedKey',
   'sogniKey',
   'runwareKey',
@@ -69,6 +75,8 @@ interface BackendSettingsModalProps {
   onClose: () => void;
   apiKeys: ApiKeysState;
   onSaveKeys: (newKeys: ApiKeysState) => void;
+  /** Open Model Hub for the active provider (empty popularModels CTA). */
+  onOpenModelHub?: (providerId?: ProviderId) => void;
 }
 
 export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
@@ -76,6 +84,7 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
   onClose,
   apiKeys,
   onSaveKeys,
+  onOpenModelHub,
 }) => {
   const [keys, setKeys] = React.useState<ApiKeysState>(apiKeys);
   const initialKeysRef = React.useRef<ApiKeysState>(apiKeys);
@@ -167,7 +176,7 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
   const providers: ProviderConfig[] = [
     {
       id: 'fal',
-      name: 'Fal.ai',
+      name: friendlyProviderLabel('fal'),
       badge: '模型端点 / 多密钥',
       docsUrl: 'https://docs.fal.ai',
       description: '每个 Fal 模型使用独立端点。LoRA 等参数须由该端点支持；选择端点后再配置参数。',
@@ -175,11 +184,11 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       keyName: 'falKey',
       keyPlaceholder: 'fal_key_xxxxxxxxxxxxxxxxxxxxxxxx (支持换行/逗号输入多个 Key)',
       status: 'unconfigured',
-      popularModels: ['fal-ai/flux/dev', 'fal-ai/flux/schnell', 'fal-ai/fast-sdxl', 'fal-ai/flux-lora'],
+      popularModels: [],
     },
     {
       id: 'gemini',
-      name: 'Google Gemini',
+      name: friendlyProviderLabel('gemini'),
       badge: 'Google GenAI SDK',
       docsUrl: 'https://ai.google.dev',
       description: '图像生成与提示词推理分别使用用户选定的模型。请核对模型 ID 与账户权限。',
@@ -187,11 +196,11 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       keyName: 'geminiKey',
       keyPlaceholder: '系统自动注入环境变量 GEMINI_API_KEY (或填入自定义多 Key)',
       status: 'unconfigured',
-      popularModels: ['gemini-2.5-flash-image', 'gemini-3.1-flash-image', 'gemini-3-pro-image'],
+      popularModels: [],
     },
     {
       id: 'openai_compat',
-      name: 'OpenAI 兼容中转',
+      name: friendlyProviderLabel('openai_compat'),
       badge: '兼容中转（自填 Base URL，不是官方 OpenAI）',
       docsUrl: 'https://platform.openai.com/docs/api-reference/images/create',
       description: 'OpenAI Images 兼容中转：gpt-image-2 文生图 / 图生图。须自填 Base URL（通常以 /v1 结尾）与 API Key。不是官方 OpenAI，不硬编码任何中转域名。',
@@ -199,11 +208,11 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       keyName: 'openaiCompatKey',
       keyPlaceholder: 'sk-xxxx（兼容中转 Key）',
       status: 'unconfigured',
-      popularModels: ['gpt-image-2'],
+      popularModels: [],
     },
     {
       id: 'grok_compat',
-      name: 'Grok 兼容中转',
+      name: friendlyProviderLabel('grok_compat'),
       badge: '兼容中转（自填 Base URL，不是官方 xAI）',
       docsUrl: 'https://docs.x.ai/docs/guides/image-generations',
       description: 'Grok / xAI Imagine 兼容中转：生图、图生图、文生视频、图生视频、对话。须自填 Base URL 与 API Key。不是官方 xAI。HTTP 503 grok_media_no_eligible_account 原样暴露，不换商。',
@@ -211,11 +220,11 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       keyName: 'grokCompatKey',
       keyPlaceholder: 'sk-xxxx（兼容中转 Key）',
       status: 'unconfigured',
-      popularModels: ['grok-imagine-image', 'grok-imagine-image-2.0', 'grok-imagine-video', 'grok-4.3', 'grok-4.5'],
+      popularModels: [],
     },
     {
       id: 'agnes',
-      name: 'Agnes AI (ApiHub)',
+      name: friendlyProviderLabel('agnes'),
       badge: '聚合引擎 / 2.5 Flash / 3.0 推理',
       docsUrl: 'https://apihub.agnes-ai.com',
       description: '配置 Agnes API 地址与密钥。图像、视频与推理任务分别按选定模型提交。',
@@ -223,11 +232,11 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       keyName: 'agnesKey',
       keyPlaceholder: 'sk-xxxx',
       status: 'unconfigured',
-      popularModels: ['agnes-image-2.5-flash', 'agnes-image-2.1-flash', 'agnes-video-2.5-flash', 'agnes-3.0-flash'],
+      popularModels: [],
     },
     {
       id: 'sensenova',
-      name: 'SenseNova (商汤日日新)',
+      name: friendlyProviderLabel('sensenova'),
       badge: '提示词推理',
       docsUrl: 'https://token.sensenova.cn',
       description: '用于提示词推理与扩写。需显式选择模型，推理结果可连接至图像生成工作流。',
@@ -235,11 +244,11 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       keyName: 'sensenovaKey',
       keyPlaceholder: 'sk-xxxx',
       status: 'unconfigured',
-      popularModels: ['sensenova-u1.5-lite', 'sensenova-6.8-flash-lite'],
+      popularModels: [],
     },
     {
       id: 'civitai',
-      name: 'Civitai API',
+      name: friendlyProviderLabel('civitai'),
       badge: 'C站 LoRA 与底模库',
       docsUrl: 'https://developer.civitai.com',
       description: '直连 Civitai.com 官方开放接口，检索与下载社区数以万计的真实 LoRA、触发词与 Checkpoints。',
@@ -247,11 +256,11 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       keyName: 'civitaiKey',
       keyPlaceholder: 'Civitai 个人 API Key (检索公开模型可免填)',
       status: 'unconfigured',
-      popularModels: ['10,000+ SDXL LoRAs', 'FLUX LoRAs', '二次元与写实人物 LoRA'],
+      popularModels: [],
     },
     {
       id: 'huggingface',
-      name: 'Hugging Face',
+      name: friendlyProviderLabel('huggingface'),
       badge: '抱脸开源大模型社区',
       docsUrl: 'https://huggingface.co/docs',
       description: '模型仓库与在线推理不同。请在模型节点中明确选择 HF Inference 或 fal-ai 路由；fal-ai 会产生对应推理费用。Space 的能力单独核实。',
@@ -259,11 +268,11 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       keyName: 'hfToken',
       keyPlaceholder: 'YOUR_API_KEY',
       status: 'unconfigured',
-      popularModels: ['black-forest-labs/FLUX.1-schnell', 'stabilityai/stable-diffusion-xl-base-1.0'],
+      popularModels: [],
     },
     {
       id: 'modelscope',
-      name: 'ModelScope CN (魔搭国内站)',
+      name: friendlyProviderLabel('modelscope'),
       badge: '国内站 / 消耗国内魔粒',
       docsUrl: 'https://modelscope.cn/docs',
       description: '国内站密钥与额度独立于国际站。目录中的资源是否可在线推理，以及 LoRA 能力，需按所选模型核实。',
@@ -271,11 +280,11 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       keyName: 'modelscopeToken',
       keyPlaceholder: '国内站 Access Token (ms-xxxxxxxx，从 modelscope.cn 获取)',
       status: 'unconfigured',
-      popularModels: ['Tongyi-MAI/Z-Image-Turbo', 'damo/wan2.1-t2i', 'laonansheng Z-Image LoRA'],
+      popularModels: [],
     },
     {
       id: 'modelscope_ai',
-      name: 'ModelScope AI (魔搭国际站)',
+      name: friendlyProviderLabel('modelscope_ai'),
       badge: '国际站 / 消耗国际魔粒',
       docsUrl: 'https://modelscope.ai/docs',
       description: '魔搭社区国际站 (modelscope.ai) 官方推理接口，需绑定阿里云账号激活，消耗国际站魔粒。',
@@ -283,11 +292,11 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       keyName: 'modelscopeAiToken',
       keyPlaceholder: '国际站 Access Token (ms-xxxxxxxx，从 modelscope.ai 获取)',
       status: 'unconfigured',
-      popularModels: ['Tongyi-MAI/Z-Image-Turbo', 'damo/wan2.1-t2i', 'AI-ModelScope/flux.1-dev'],
+      popularModels: [],
     },
     {
       id: 'nanogpt',
-      name: 'NanoGPT',
+      name: friendlyProviderLabel('nanogpt'),
       badge: '模型能力动态校验',
       docsUrl: 'https://docs.nano-gpt.com',
       description: '生成前读取选定模型的能力。resolution 与像素宽高须按该模型要求填写，不支持的字段会明确报错。',
@@ -299,19 +308,19 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
     },
     {
       id: 'tensorart',
-      name: 'Tensor.Art / TusiArt',
+      name: friendlyProviderLabel('tensorart'),
       badge: '吐司 AI 模型中心',
-      docsUrl: 'https://tensor.art',
-      description: '模型目录用于资源发现。在线生成使用 TAMS 模型 API；OpenWorks 工具与模型 API 是两套接口，密钥不能混用。',
+      docsUrl: 'https://tams-docs.tensor.art',
+      description: '底模/LoRA 走官方 TAMS（tams-api.tensor.art）：按模型 ID 查询、POST /v1/jobs（含 lora.items）。无全量目录 API。OpenWorks（ak_tensor_… Access Key）是独立服务商「Tensor.Art OpenWorks」：目录中的图像/视频模型按其上游 Schema 出图。',
       apiUrl: 'https://tams-api.tensor.art/v1（模型 API）',
       keyName: 'tensorartKey',
-      keyPlaceholder: 'TAMS 模型 API 的 Bearer Key；OpenWorks ak_tensor 仅用于工具',
+      keyPlaceholder: 'TAMS Bearer Key，或 OpenWorks ak_tensor_… Access Key（OpenWorks 服务商）',
       status: 'unconfigured',
-      popularModels: ['936101665537308499', '990778216270553015', '1015578945501842388'],
+      popularModels: [],
     },
     {
       id: 'muapi',
-      name: 'MuAPI',
+      name: friendlyProviderLabel('muapi'),
       badge: '动态模型目录',
       docsUrl: 'https://muapi.ai',
       description: '使用 MuAPI API Key。模型选择来自供应商目录，不预设模型；目录或连通性失败时显示真实错误。',
@@ -323,7 +332,7 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
     },
     {
       id: 'wavespeed',
-      name: 'WaveSpeed',
+      name: friendlyProviderLabel('wavespeed'),
       badge: '动态模型目录',
       docsUrl: 'https://wavespeed.ai/docs',
       description: '使用 WaveSpeed API Key。模型选择来自供应商目录，不预设模型；目录或连通性失败时显示真实错误。',
@@ -334,8 +343,68 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       popularModels: [],
     },
     {
+      id: 'krea',
+      name: friendlyProviderLabel('krea'),
+      badge: '官方 OpenAPI 目录',
+      docsUrl: 'https://docs.krea.ai/developers/introduction',
+      description: '使用 Krea API Token（Bearer）。模型目录来自官方 https://api.krea.ai/openapi.json 的 /generate/* 端点；LoRA 来自官方 GET /styles，按 styles[{id,strength}] 提交。失败原样显示状态码与响应体。',
+      apiUrl: 'https://api.krea.ai',
+      keyName: 'kreaKey',
+      keyPlaceholder: 'Krea API Token',
+      status: 'unconfigured',
+      popularModels: [],
+    },
+    {
+      id: 'together',
+      name: friendlyProviderLabel('together'),
+      badge: '官方 /v1/models',
+      docsUrl: 'https://docs.together.ai/docs/inference/images/overview',
+      description: '使用 Together API Key（Bearer，环境变量 TOGETHER_API_KEY）。目录来自 GET https://api.together.ai/v1/models（image/video）；图像 POST /v1/images/generations（同步）；视频 POST/GET https://api.together.ai/v2/videos（异步）。serverless image_loras：官方参数指南明文 no longer available，挂 LoRA 本地拦截。失败原样显示状态码与响应体。',
+      apiUrl: 'https://api.together.ai/v1',
+      keyName: 'togetherKey',
+      keyPlaceholder: 'Together API Key',
+      status: 'unconfigured',
+      popularModels: [],
+    },
+    {
+      id: 'aimlapi',
+      name: friendlyProviderLabel('aimlapi'),
+      badge: '官方 /v1/models',
+      docsUrl: 'https://docs.aimlapi.com/',
+      description: '使用 AIMLAPI Key（Bearer，环境变量 AIMLAPI_KEY，支持逗号多 Key）。目录来自 GET https://api.aimlapi.com/v1/models；图像 POST /v1/images/generations（同步）；视频 POST/GET /v2/video/generations（异步 generation_id）。LoRA 字段为 loras[{path,scale}]（0–4，最多 3，无默认 scale），仅官方声明的模型（如 alibaba/z-image-turbo-lora）。欠费按官方文档可能返回 403。失败原样显示状态码与响应体。',
+      apiUrl: 'https://api.aimlapi.com/v1',
+      keyName: 'aimlapiKey',
+      keyPlaceholder: 'AIMLAPI API Key',
+      status: 'unconfigured',
+      popularModels: [],
+    },
+    {
+      id: 'novita',
+      name: friendlyProviderLabel('novita'),
+      badge: '官方 /v3/model',
+      docsUrl: 'https://docs.novita.ai/',
+      description: '使用 Novita API Key（Bearer，环境变量 NOVITA_API_KEY）。目录 GET https://api.novita.ai/v3/model；SD 出图 POST /v3/async/txt2img（或 img2img）后轮询 GET /v3/async/task-result。LoRA 字段为 request.loras[{model_name,strength}]（strength [0,1]，须显式传，最多 5）。欠费官方多为 HTTP 400 BILLING_BALANCE_NOT_ENOUGH。失败原样显示状态码与响应体。',
+      apiUrl: 'https://api.novita.ai',
+      keyName: 'novitaKey',
+      keyPlaceholder: 'Novita API Key',
+      status: 'unconfigured',
+      popularModels: [],
+    },
+    {
+      id: 'venice',
+      name: friendlyProviderLabel('venice'),
+      badge: '官方 /models',
+      docsUrl: 'https://docs.venice.ai/',
+      description: '使用 Venice API Key（Bearer，环境变量 VENICE_API_KEY）。目录 GET https://api.venice.ai/api/v1/models?type=all；图像 POST /image/generate（同步 base64）；视频 POST /video/queue → POST /video/retrieve（异步）。官方无自定义 LoRA（仅捆绑模型 lora_strength）；挂自定义 LoRA 会本地拦截（未发请求）。视频不发 seed。欠费 HTTP 402 INSUFFICIENT_BALANCE。失败原样显示状态码与响应体。',
+      apiUrl: 'https://api.venice.ai/api/v1',
+      keyName: 'veniceKey',
+      keyPlaceholder: 'Venice API Key',
+      status: 'unconfigured',
+      popularModels: [],
+    },
+    {
       id: 'sogni',
-      name: 'Sogni',
+      name: friendlyProviderLabel('sogni'),
       badge: 'REST Creative Workflows',
       docsUrl: 'https://docs.sogni.ai',
       description: '使用 Sogni API Key 与 Creative Workflows。模型从 Sogni 目录动态读取，不预设快捷模型。',
@@ -347,7 +416,7 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
     },
     {
       id: 'runware',
-      name: 'Runware',
+      name: friendlyProviderLabel('runware'),
       badge: '极速统一 API',
       docsUrl: 'https://runware.ai/docs/',
       description: '使用 Runware API Key。统一高性能推理端点，支持 FLUX、SDXL、Qwen 等模型与 LoRA。',
@@ -355,11 +424,11 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       keyName: 'runwareKey',
       keyPlaceholder: 'Runware API Key',
       status: 'unconfigured',
-      popularModels: ['runware:100@1', 'bfl:flux@1-schnell', 'bfl:flux@1-dev', 'alibaba:qwen-image@3.0'],
+      popularModels: [],
     },
     {
       id: 'modelslab',
-      name: 'ModelsLab',
+      name: friendlyProviderLabel('modelslab'),
       badge: '开放模型库',
       docsUrl: 'https://docs.modelslab.com',
       description: '使用 ModelsLab API Key。支持 Flux、SDXL 等 10,000+ 社区模型生图与 LoRA 融合。',
@@ -367,11 +436,11 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       keyName: 'modelslabKey',
       keyPlaceholder: 'ModelsLab API Key',
       status: 'unconfigured',
-      popularModels: ['flux', 'sdxl', 'dream-shaper-v8'],
+      popularModels: [],
     },
     {
       id: 'replicate',
-      name: 'Replicate',
+      name: friendlyProviderLabel('replicate'),
       badge: '官方 API / 云端模型',
       docsUrl: 'https://replicate.com/docs',
       description: '配置 Replicate API Token (r8_...)。支持直接调用 Flux、Ideogram、SDXL 等 Replicate 云端模型与部署。',
@@ -379,7 +448,7 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       keyName: 'replicateKey',
       keyPlaceholder: 'r8_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx (REPLICATE_API_TOKEN)',
       status: 'unconfigured',
-      popularModels: ['black-forest-labs/flux-schnell', 'black-forest-labs/flux-dev', 'ideogram-ai/ideogram-v2a'],
+      popularModels: [],
     },
   ];
 
@@ -752,17 +821,42 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
                   <span className="text-cyan-400 font-semibold truncate mt-0.5">{currentProvider.apiUrl}</span>
                 </div>
                 <div className="bg-[#111216] border border-[#252733] rounded-xl p-2.5 text-xs">
-                  <span className="text-slate-400 text-[10px] block mb-1">模型 ID 参考（可用性以目录与账户权限为准）:</span>
-                  <div className="flex flex-wrap gap-1">
-                    {currentProvider.popularModels.map((m, mIdx) => (
-                      <span
-                        key={`pop-${currentProvider.id}-${m}-${mIdx}`}
-                        className="text-[10px] font-mono bg-[#20222a] border border-[#2e313d] text-slate-300 px-1.5 py-0.5 rounded"
-                      >
-                        {m}
-                      </span>
-                    ))}
-                  </div>
+                  <span className="text-slate-400 text-[10px] block mb-1">模型目录:</span>
+                  {currentProvider.popularModels.length === 0 ? (
+                    <div className="mt-0.5 space-y-1.5">
+                      <p className="text-[10px] text-slate-500 leading-relaxed">
+                        目录请用模型中心，此处不维护假热门列表。compat 中转以你配置的 Base URL 与模型名为准。
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onOpenModelHub?.(currentProvider.id);
+                            onClose();
+                          }}
+                          className="inline-flex items-center gap-1 rounded-lg border border-cyan-700/50 bg-cyan-950/40 px-2 py-1 text-[10px] font-semibold text-cyan-300 hover:bg-cyan-900/50"
+                        >
+                          <Sparkles className="w-3 h-3" />
+                          打开模型中心 · {currentProvider.name}
+                        </button>
+                        <span className="inline-flex items-center rounded-lg border border-slate-700 bg-[#0d0e12] px-2 py-1 text-[10px] text-slate-400">
+                          或按 ID 粘贴到画布节点
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-1">
+                      <span className="text-[9px] text-amber-400/80 w-full mb-0.5">以下仅为示例，非实时目录：</span>
+                      {currentProvider.popularModels.map((m, mIdx) => (
+                        <span
+                          key={`pop-${currentProvider.id}-${m}-${mIdx}`}
+                          className="text-[10px] font-mono bg-[#20222a] border border-[#2e313d] text-slate-300 px-1.5 py-0.5 rounded"
+                        >
+                          {m}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 

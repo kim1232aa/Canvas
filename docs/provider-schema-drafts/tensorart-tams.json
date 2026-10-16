@@ -1,0 +1,139 @@
+{
+  "$schemaNote": "草案 — 仅声明。真相源: docs/provider-api-audit/tensorart-tams.md (2026-10-15)",
+  "id": "tensorart-tams",
+  "displayName": "Tensor.Art TAMS",
+  "auth": {
+    "envVar": "TAMS_API_TOKEN",
+    "simple": {
+      "header": "Authorization",
+      "scheme": "Bearer"
+    },
+    "standard": {
+      "header": "Authorization",
+      "scheme": "TAMS-SHA256-RSA appid,nonce_str,timestamp,signature",
+      "stringToSign": "METHOD\\nPATH\\ntimestamp\\nnonce\\nbody"
+    },
+    "notOpenWorks": "Echo-Access-Key ak_tensor_… 不能当 TAMS Bearer"
+  },
+  "base": {
+    "hosts": [
+      "tams-api.tensor.art",
+      "ap-east-1.tensorart.cloud"
+    ]
+  },
+  "catalog": {
+    "list": {
+      "supported": false,
+      "reason": "FAQ: listing models currently not available"
+    },
+    "get": "GET /v1/models/{modelId}",
+    "modelTypes": [
+      "CHECKPOINT",
+      "LORA",
+      "LOCON",
+      "LYCORIS",
+      "VAE",
+      "MOTION_LORA"
+    ],
+    "rule": "用户填数字 modelId；禁止伪造全站 catalog"
+  },
+  "image": {
+    "mode": "async job",
+    "create": {
+      "method": "POST",
+      "path": "/v1/jobs",
+      "body": "{ requestId, stages: [INPUT_INITIALIZE, DIFFUSION], notifyUrl? }"
+    },
+    "poll": {
+      "method": "GET",
+      "path": "/v1/jobs/{jobId}",
+      "statuses": [
+        "CREATED",
+        "PENDING",
+        "RUNNING",
+        "WAITING",
+        "SUCCESS",
+        "FAILED",
+        "CANCELED"
+      ],
+      "success": "successInfo.images[]"
+    },
+    "cancel": "DELETE /v1/jobs/{jobId}",
+    "estimate": "POST /v1/jobs/credits",
+    "rateLimit": "5 QPS",
+    "parameters": {
+      "inputInitialize.seed": {
+        "type": "int64|string",
+        "random": "-1 (文档) / omit|0 (OpenAPI)",
+        "max": 4294967295
+      },
+      "inputInitialize.count": {
+        "min": 1,
+        "max": 4
+      },
+      "diffusion.width": {
+        "min": 512,
+        "max": 1536,
+        "step": 64,
+        "default": 512
+      },
+      "diffusion.height": {
+        "min": 512,
+        "max": 1536,
+        "step": 64,
+        "default": 512
+      },
+      "diffusion.steps": {
+        "min": 1,
+        "max": 60
+      },
+      "diffusion.cfgScale": {
+        "default": 7,
+        "max": 30,
+        "canvasField": "cfg"
+      },
+      "diffusion.sampler": {
+        "required": true
+      },
+      "diffusion.sdVae": {
+        "required": true
+      },
+      "diffusion.sdModel": {
+        "required": true
+      },
+      "diffusion.clipSkip": true,
+      "diffusion.denoisingStrength": {
+        "when": "img2img"
+      }
+    },
+    "caseWarning": "文档混用 camelCase/snake_case；以 OpenAPI + 实测为准，禁止静默改名"
+  },
+  "video": {
+    "supported": false,
+    "reason": "无通用视频 API 文档；只有 AnimateDiff stage (IMAGE_TO_ANIMATE_DIFF) / workflow 模板，须单独接线单独验收"
+  },
+  "lora": {
+    "path": "diffusion.lora.items[]",
+    "item": {
+      "loraModel": "uint64 id string",
+      "weight": "number（不是 strength）",
+      "blockWeight": "optional",
+      "loraAccessKey": "私有 LoRA 必填"
+    },
+    "workflowNode": "LoraLoader: lora_name + strength_model/strength_clip + access_key"
+  },
+  "billing": {
+    "unit": "credit = 0.003 USD",
+    "failedNotCharged": true,
+    "insufficientHints": [],
+    "http402": "未文档化；原样上报"
+  },
+  "contractTestHint": "seed→inputInitialize.seed；steps/cfg/宽高→diffusion.*；LoRA→diffusion.lora.items[{loraModel,weight}]；宽高非 64 倍数本地拒绝",
+  "sources": [
+    "https://echoing-swagger.oss-cn-shanghai.aliyuncs.com/tams/tams_api.swagger.online.json",
+    "https://tams-docs.tensor.art/docs/api/signature/signature_build/",
+    "https://tams-docs.tensor.art/docs/api/guide/integration-faq/",
+    "https://tams-docs.tensor.art/docs/use-cases/basic/component/lora/"
+  ],
+  "_auditStatus": "2026-10-15 03:26：引用的 docs/provider-api-audit 旧审计仅留作对比、不再引用；以 docs/provider-api-audit-v2/ 与 DIFF.md 为准；本草案凡依据旧审计的结论一律视为未核实，等 Researchy 新调查"
+}

@@ -1,0 +1,273 @@
+{
+  "ok": false,
+  "error": "HTTP 403: {\"title\":\"Forbidden\",\"status\":403,\"message\":\"You've run out of funds. Please top up your balance or update your payment method to continue: https://aimlapi.com/app/billing/\",\"instance\":\"/v1/images/generations\",\"requestId\":\"UmGD9IYPlzdAIz4gzo4LV\",\"timestamp\":\"2026-10-15T16:40:28.191Z\",\"error\":{\"name\":\"ForbiddenException\",\"message\":\"You've run out of funds. Please top up your balance or update your payment method to continue: https://aimlapi.com/app/billing/\",\"data\":{\"kind\":\"err_insuffic…",
+  "errorSource": "upstream",
+  "endpoint": "https://api.aimlapi.com/v1/images/generations",
+  "actualRequest": {
+    "endpoint": "https://api.aimlapi.com/v1/images/generations",
+    "parameters": {
+      "prompt": "a childrens drawing of a red boat",
+      "num_inference_steps": 8,
+      "seed": 424242,
+      "loras": [
+        {
+          "path": "ostris/z_image_turbo_childrens_drawings",
+          "scale": 0.85
+        }
+      ],
+      "model": "alibaba/z-image-turbo-lora",
+      "image_size": {
+        "width": 1024,
+        "height": 768
+      }
+    },
+    "mapping": [
+      {
+        "from": "steps",
+        "to": "num_inference_steps",
+        "value": 8,
+        "schemaDeclared": true,
+        "finalValue": 8
+      },
+      {
+        "from": "cfg",
+        "to": null,
+        "value": 3.5,
+        "sent": false,
+        "reason": "画布参数没有对应的官方 Schema 字段；界面的 Schema 匹配模式已启用。可取消此模式，或在 JSON 中显式提交。"
+      },
+      {
+        "from": "seed",
+        "to": "seed",
+        "value": 424242,
+        "schemaDeclared": true,
+        "finalValue": 424242
+      },
+      {
+        "from": "loras",
+        "to": "loras",
+        "requested": [
+          {
+            "path": "ostris/z_image_turbo_childrens_drawings",
+            "strength": 0.85
+          }
+        ],
+        "value": [
+          {
+            "path": "ostris/z_image_turbo_childrens_drawings",
+            "scale": 0.85
+          }
+        ],
+        "note": "仅记录已提交的 LoRA 参数；生成成功不证明上游实际应用了 LoRA。独立 CLIP 强度没有对应字段时不会假称生效。",
+        "finalValue": [
+          {
+            "path": "ostris/z_image_turbo_childrens_drawings",
+            "scale": 0.85
+          }
+        ]
+      },
+      {
+        "from": "width+height",
+        "to": "image_size",
+        "value": {
+          "width": 1024,
+          "height": 768
+        },
+        "schemaDeclared": true,
+        "finalValue": {
+          "width": 1024,
+          "height": 768
+        }
+      }
+    ],
+    "parametersOnly": false,
+    "schemaFieldsOnly": true,
+    "schemaFields": [
+      "model",
+      "provider",
+      "prompt",
+      "image_size",
+      "output_format",
+      "enable_prompt_expansion",
+      "num_inference_steps",
+      "seed",
+      "num_images",
+      "enable_safety_checker",
+      "acceleration",
+      "loras"
+    ]
+  },
+  "historyItem": {
+    "status": "failed",
+    "url": "",
+    "prompt": "a childrens drawing of a red boat",
+    "negativePrompt": null,
+    "provider": "aimlapi",
+    "actualProvider": "aimlapi",
+    "model": "alibaba/z-image-turbo-lora",
+    "actualModel": "alibaba/z-image-turbo-lora",
+    "loras": [
+      {
+        "name": "ostris/z_image_turbo_childrens_drawings",
+        "strength": 0.85
+      }
+    ],
+    "upstreamStatus": 403,
+    "upstreamStatusText": "Forbidden",
+    "upstreamEndpoint": "https://api.aimlapi.com/v1/images/generations",
+    "upstreamResponseBody": "{\"title\":\"Forbidden\",\"status\":403,\"message\":\"You've run out of funds. Please top up your balance or update your payment method to continue: https://aimlapi.com/app/billing/\",\"instance\":\"/v1/images/generations\",\"requestId\":\"UmGD9IYPlzdAIz4gzo4LV\",\"timestamp\":\"2026-10-15T16:40:28.191Z\",\"error\":{\"name\":\"ForbiddenException\",\"message\":\"You've run out of funds. Please top up your balance or update your payment method to continue: https://aimlapi.com/app/billing/\",\"data\":{\"kind\":\"err_insufficent_credits\"}}}",
+    "networkError": null,
+    "httpStatus": 403,
+    "error": "HTTP 403: {\"title\":\"Forbidden\",\"status\":403,\"message\":\"You've run out of funds. Please top up your balance or update your payment method to continue: https://aimlapi.com/app/billing/\",\"instance\":\"/v1/images/generations\",\"requestId\":\"UmGD9IYPlzdAIz4gzo4LV\",\"timestamp\":\"2026-10-15T16:40:28.191Z\",\"error\":{\"name\":\"ForbiddenException\",\"message\":\"You've run out of funds. Please top up your balance or update your payment method to continue: https://aimlapi.com/app/billing/\",\"data\":{\"kind\":\"err_insufficent_credits\"}}}",
+    "errorSource": "upstream",
+    "requestMetadata": {
+      "route": "/api/schema-provider/aimlapi/submit",
+      "actualRequest": {
+        "endpoint": "https://api.aimlapi.com/v1/images/generations",
+        "parameters": {
+          "prompt": "a childrens drawing of a red boat",
+          "num_inference_steps": 8,
+          "seed": 424242,
+          "loras": [
+            {
+              "path": "ostris/z_image_turbo_childrens_drawings",
+              "scale": 0.85
+            }
+          ],
+          "model": "alibaba/z-image-turbo-lora",
+          "image_size": {
+            "width": 1024,
+            "height": 768
+          }
+        },
+        "mapping": [
+          {
+            "from": "steps",
+            "to": "num_inference_steps",
+            "value": 8,
+            "schemaDeclared": true,
+            "finalValue": 8
+          },
+          {
+            "from": "cfg",
+            "to": null,
+            "value": 3.5,
+            "sent": false,
+            "reason": "画布参数没有对应的官方 Schema 字段；界面的 Schema 匹配模式已启用。可取消此模式，或在 JSON 中显式提交。"
+          },
+          {
+            "from": "seed",
+            "to": "seed",
+            "value": 424242,
+            "schemaDeclared": true,
+            "finalValue": 424242
+          },
+          {
+            "from": "loras",
+            "to": "loras",
+            "requested": [
+              {
+                "path": "ostris/z_image_turbo_childrens_drawings",
+                "strength": 0.85
+              }
+            ],
+            "value": [
+              {
+                "path": "ostris/z_image_turbo_childrens_drawings",
+                "scale": 0.85
+              }
+            ],
+            "note": "仅记录已提交的 LoRA 参数；生成成功不证明上游实际应用了 LoRA。独立 CLIP 强度没有对应字段时不会假称生效。",
+            "finalValue": [
+              {
+                "path": "ostris/z_image_turbo_childrens_drawings",
+                "scale": 0.85
+              }
+            ]
+          },
+          {
+            "from": "width+height",
+            "to": "image_size",
+            "value": {
+              "width": 1024,
+              "height": 768
+            },
+            "schemaDeclared": true,
+            "finalValue": {
+              "width": 1024,
+              "height": 768
+            }
+          }
+        ],
+        "parametersOnly": false,
+        "schemaFieldsOnly": true,
+        "schemaFields": [
+          "model",
+          "provider",
+          "prompt",
+          "image_size",
+          "output_format",
+          "enable_prompt_expansion",
+          "num_inference_steps",
+          "seed",
+          "num_images",
+          "enable_safety_checker",
+          "acceleration",
+          "loras"
+        ]
+      },
+      "submissions": [
+        {
+          "endpoint": "https://api.aimlapi.com/v1/images/generations",
+          "parameters": {
+            "prompt": "a childrens drawing of a red boat",
+            "num_inference_steps": 8,
+            "seed": 424242,
+            "loras": [
+              {
+                "path": "ostris/z_image_turbo_childrens_drawings",
+                "scale": 0.85
+              }
+            ],
+            "model": "alibaba/z-image-turbo-lora",
+            "image_size": {
+              "width": 1024,
+              "height": 768
+            }
+          },
+          "status": 403
+        }
+      ],
+      "executionTrace": [
+        {
+          "provider": "aimlapi",
+          "method": "GET",
+          "endpoint": "https://api.aimlapi.com/v1/models?include=modalities,capabilities",
+          "status": 200
+        },
+        {
+          "provider": "aimlapi",
+          "method": "GET",
+          "endpoint": "https://api.aimlapi.com/docs-json?model=alibaba%2Fz-image-turbo-lora&endpoint=openai%2Fimage-generations",
+          "status": 200
+        },
+        {
+          "provider": "aimlapi",
+          "method": "POST",
+          "endpoint": "https://api.aimlapi.com/v1/images/generations",
+          "status": 403
+        }
+      ]
+    },
+    "requestOrigin": "browser",
+    "id": "hist_1792082428281_aluac",
+    "timestamp": 1792082428281,
+    "seed": null,
+    "steps": null,
+    "cfg": null,
+    "sampler": null,
+    "scheduler": null,
+    "width": null,
+    "height": null
+  }
+}

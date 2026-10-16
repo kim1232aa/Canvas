@@ -1,5 +1,5 @@
 import { validateModelCompatibility } from './baseModelMatcher';
-import { isCanvasFieldUnsupported, isLoraUnsupportedOnEndpoint } from './resolveCheckpoint';
+import { isCanvasFieldUnsupported, isLoraUnsupportedOnEndpoint, LORA_UNSUPPORTED_TITLE } from './resolveCheckpoint';
 
 /** Visible LoRA status copy for the spatial frame (mirrors node/inspector banners). */
 export function getSpatialFrameLoraBanner(
@@ -17,8 +17,8 @@ export function getSpatialFrameLoraBanner(
     const endpoint = isLoraUnsupportedOnEndpoint(provider, checkpoint);
     return {
       kind: 'unsupported',
-      title: '该服务商不支持',
-      message: endpoint.message || '该服务商不支持',
+      title: LORA_UNSUPPORTED_TITLE,
+      message: endpoint.message || LORA_UNSUPPORTED_TITLE,
     };
   }
   const incompatibleLora = loras.find((l) => {

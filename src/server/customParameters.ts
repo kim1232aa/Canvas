@@ -13,6 +13,8 @@ const BOUNDARY = /^(?:provider|endpoint|route|url|base_?url|baseurl|inference_pr
 
 const isObject = (value: unknown): value is Json => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 
+const CANVAS_META_KEY = '_canvas';
+
 function assertNoBoundary(value: unknown, path: string): void {
   if (Array.isArray(value)) {
     value.forEach((item, index) => assertNoBoundary(item, `${path}[${index}]`));
@@ -20,6 +22,9 @@ function assertNoBoundary(value: unknown, path: string): void {
   }
   if (!isObject(value)) return;
   for (const key of Object.keys(value)) {
+    // Root `_canvas` is canvas UI metadata (scope/schemaProperties/schemaFieldsOnly);
+    // it is never merged into the upstream payload, so its keys are not routing fields.
+    if (!path && key === CANVAS_META_KEY) continue;
     const field = path ? `${path}.${key}` : key;
     if (BOUNDARY.test(key)) throw new Error(`自定义 JSON 不可修改路由/凭据字段：${field}；请在供应商设置中修改`);
     assertNoBoundary(value[key], field);
@@ -54,7 +59,8 @@ export function applyCustomParameters<T extends Json>(payload: T, custom: unknow
   const parsed = parseCustomObject(custom);
   if (!parsed) return { payload: { ...payload }, overrides: [], ...(typeof payload.model === 'string' ? { actualModel: payload.model } : {}) };
   const overrides: CustomOverride[] = [];
-  const merged = merge(payload, parsed, '', overrides) as T;
+  const { [CANVAS_META_KEY]: _meta, ...sendable } = parsed;
+  const merged = merge(payload, sendable, '', overrides) as T;
   return {
     payload: merged,
     overrides,

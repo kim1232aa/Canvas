@@ -1,0 +1,123 @@
+{
+  "errorSource": "upstream",
+  "error": "HTTP 403: {\"code\":403, \"reason\":\"NOT_ENOUGH_BALANCE\", \"message\":\"insufficient balance\", \"metadata\":{}}",
+  "rawResponse": "{\"code\":403, \"reason\":\"NOT_ENOUGH_BALANCE\", \"message\":\"insufficient balance\", \"metadata\":{}}",
+  "endpoint": "https://api.novita.ai/v3/async/txt2img",
+  "actualRequest": {
+    "endpoint": "https://api.novita.ai/v3/async/txt2img",
+    "parameters": {
+      "extra": {
+        "response_image_type": "jpeg"
+      },
+      "request": {
+        "prompt": "a lighthouse on a cliff at sunset, detailed",
+        "negative_prompt": "blurry, low quality",
+        "width": 512,
+        "height": 512,
+        "steps": 20,
+        "guidance_scale": 7,
+        "seed": 42,
+        "sampler_name": "Euler a",
+        "loras": [
+          {
+            "model_name": "more_details_59655",
+            "strength": 0.75
+          }
+        ],
+        "model_name": "dreamshaper_8_93211.safetensors"
+      }
+    },
+    "mapping": [
+      {
+        "from": "negative_prompt",
+        "to": "negative_prompt",
+        "value": "blurry, low quality",
+        "schemaDeclared": true,
+        "finalValue": "blurry, low quality"
+      },
+      {
+        "from": "width",
+        "to": "width",
+        "value": 512,
+        "schemaDeclared": true,
+        "finalValue": 512
+      },
+      {
+        "from": "height",
+        "to": "height",
+        "value": 512,
+        "schemaDeclared": true,
+        "finalValue": 512
+      },
+      {
+        "from": "steps",
+        "to": "steps",
+        "value": 20,
+        "schemaDeclared": true,
+        "finalValue": 20
+      },
+      {
+        "from": "cfg",
+        "to": "guidance_scale",
+        "value": 7,
+        "schemaDeclared": true,
+        "finalValue": 7
+      },
+      {
+        "from": "seed",
+        "to": "seed",
+        "value": 42,
+        "schemaDeclared": true,
+        "finalValue": 42
+      },
+      {
+        "from": "sampler_name",
+        "to": "sampler_name",
+        "value": "Euler a",
+        "schemaDeclared": true,
+        "finalValue": "Euler a"
+      },
+      {
+        "from": "loras",
+        "to": "loras",
+        "requested": [
+          {
+            "path": "more_details_59655",
+            "strength": 0.75
+          }
+        ],
+        "value": [
+          {
+            "model_name": "more_details_59655",
+            "strength": 0.75
+          }
+        ],
+        "note": "仅记录已提交的 LoRA 参数；生成成功不证明上游实际应用了 LoRA。独立 CLIP 强度没有对应字段时不会假称生效。",
+        "finalValue": [
+          {
+            "model_name": "more_details_59655",
+            "strength": 0.75
+          }
+        ]
+      }
+    ],
+    "parametersOnly": false,
+    "schemaFieldsOnly": true,
+    "schemaFields": [
+      "model_name",
+      "prompt",
+      "negative_prompt",
+      "width",
+      "height",
+      "image_num",
+      "steps",
+      "seed",
+      "clip_skip",
+      "sampler_name",
+      "guidance_scale",
+      "loras"
+    ]
+  },
+  "taskId": null,
+  "schemaStatus_from_schema": "official-html-declaration"
+}

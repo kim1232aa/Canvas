@@ -174,4 +174,57 @@ it('F3: 完整转发 fps, negative_prompt, steps, cfg, loras 到 /api/video/gene
       /该服务商不支持: loras[\s\S]*HTTP 400/
     );
   });
+
+  it('modelscope_ai sends x-modelscope-ai-token + site=ai and refuses CN token substitute', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      error: 'ModelScope API-Inference 当前没有已接入的视频生成接口',
+    }), { status: 400 }));
+    globalThis.fetch = fetchMock;
+
+    await expect(driver.generate({
+      prompt: 'orbit',
+      model: 'Wan-AI/Wan2.1-T2V-1.3B',
+      targetProvider: 'modelscope_ai',
+      isVideo: true,
+    }, { modelscopeToken: 'cn-only-token' })).rejects.toThrow(/x-modelscope-ai-token/);
+
+    await expect(driver.generate({
+      prompt: 'orbit',
+      model: 'Wan-AI/Wan2.1-T2V-1.3B',
+      targetProvider: 'modelscope_ai',
+      isVideo: true,
+    }, { modelscopeAiToken: 'ai-token-xyz' })).rejects.toThrow(/HTTP 400/);
+
+    const headers = fetchMock.mock.calls[0][1].headers as Record<string, string>;
+    expect(headers['x-modelscope-ai-token']).toBe('ai-token-xyz');
+    expect(headers['x-modelscope-site']).toBe('ai');
+    expect(headers['x-modelscope-token']).toBeUndefined();
+  });
+
+  it('modelscope CN sends x-modelscope-token + site=cn and refuses AI token substitute', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      error: 'ModelScope API-Inference 当前没有已接入的视频生成接口',
+    }), { status: 400 }));
+    globalThis.fetch = fetchMock;
+
+    await expect(driver.generate({
+      prompt: 'orbit',
+      model: 'Wan-AI/Wan2.1-T2V-1.3B',
+      targetProvider: 'modelscope',
+      isVideo: true,
+    }, { modelscopeAiToken: 'ai-only' })).rejects.toThrow(/x-modelscope-token/);
+
+    await expect(driver.generate({
+      prompt: 'orbit',
+      model: 'Wan-AI/Wan2.1-T2V-1.3B',
+      targetProvider: 'modelscope',
+      isVideo: true,
+    }, { modelscopeToken: 'cn-token-xyz' })).rejects.toThrow(/HTTP 400/);
+
+    const headers = fetchMock.mock.calls[0][1].headers as Record<string, string>;
+    expect(headers['x-modelscope-token']).toBe('cn-token-xyz');
+    expect(headers['x-modelscope-site']).toBe('cn');
+    expect(headers['x-modelscope-ai-token']).toBeUndefined();
+  });
+
 });

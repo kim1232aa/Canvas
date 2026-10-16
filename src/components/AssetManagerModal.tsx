@@ -1,3 +1,5 @@
+import { canonicalProviderLabel } from '../utils/providerLabels';
+import { hasOutputMedia } from '../utils/historyParameters';
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   FolderOpen,
@@ -182,7 +184,8 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
   // Convert history items + user uploads into unified MediaAsset list
   const allAssets: MediaAsset[] = useMemo(() => {
     const historyAssets: MediaAsset[] = history
-      .filter((item) => Boolean(item.url || item.imageUrl))
+      // Only records that actually produced media; failed / local_blocked / image-less records never become assets.
+      .filter((item) => hasOutputMedia(item) || (!item.status && Boolean(item.imageUrl)))
       .map((item, idx) => {
         const url = item.url || item.imageUrl || '';
         const isVid =
@@ -201,8 +204,8 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
           provider: item.provider || '',
           model: item.model || '',
           timestamp: item.timestamp || Date.now() - idx * 60000,
-          width: item.width || 1024,
-          height: item.height || 1024,
+          width: item.width || undefined, // clean-1333 #1: no silent 1024
+          height: item.height || undefined,
           seed: item.seed,
           steps: item.steps,
           cfg: item.cfg,
@@ -689,7 +692,7 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
               >
                 <option value="all" className="bg-[#1a1b24]">全服务商 (All)</option>
                 {providerOptions.map((provider) => (
-                  <option key={provider} value={provider} className="bg-[#1a1b24]">{provider}</option>
+                  <option key={provider} value={provider} className="bg-[#1a1b24]">{canonicalProviderLabel(provider)}</option>
                 ))}
               </select>
             </div>
@@ -887,8 +890,8 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
                             <Star className={`w-3 h-3 ${isStarred ? 'fill-amber-400 text-amber-400' : ''}`} />
                           </button>
 
-                          <span className="px-2 py-0.5 rounded-full text-[9px] font-mono bg-black/80 text-slate-200 border border-slate-700/80 backdrop-blur-md pointer-events-none truncate max-w-[140px]">
-                            {asset.provider}
+                          <span className="px-2 py-0.5 rounded-lg text-[9px] font-mono bg-black/80 text-slate-200 border border-slate-700/80 backdrop-blur-md whitespace-normal break-words max-w-[160px]" title={canonicalProviderLabel(asset.provider)} data-testid="asset-provider-label">
+                            {canonicalProviderLabel(asset.provider)}
                           </span>
                         </div>
 
@@ -1131,7 +1134,7 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
                   <div className="grid grid-cols-2 gap-2 font-mono text-[10px]">
                     <div className="p-2 rounded-lg bg-[#161720] border border-[#222430]">
                       <span className="text-slate-500 block">生成服务商:</span>
-                      <span className="text-purple-300 font-bold">{displayValue(selectedAsset.provider)}</span>
+                      <span className="text-purple-300 font-bold">{displayValue(canonicalProviderLabel(selectedAsset.provider))}</span>
                     </div>
                     <div className="p-2 rounded-lg bg-[#161720] border border-[#222430]">
                       <span className="text-slate-500 block">生成模型:</span>

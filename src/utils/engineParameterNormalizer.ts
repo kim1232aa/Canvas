@@ -9,8 +9,9 @@ import { ComfyParameters } from '../types/graph';
 
 export interface UnifiedLoraInput {
   name: string;
-  modelStrength: number;
-  clipStrength: number;
+  /** Explicit only — never invent 0.8 */
+  modelStrength?: number;
+  clipStrength?: number;
   triggerWords?: string;
   civitaiId?: string;
   downloadUrl?: string;

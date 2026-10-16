@@ -112,10 +112,50 @@ describe('schema provider server contract', () => {
       expect(catalog.muapi[0]).toMatchObject({id:'flux_dev_lora_image',name:'flux-dev-lora'});
       const response=await fetch(`${baseUrl}/api/schema-provider/muapi/submit`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'flux_dev_lora_image',prompt:'weighted portrait',width:640,steps:20,loras:[{name:'style',url:'https://fixture.invalid/style.safetensors',strength:0.8}],custom_parameters:{width:768,custom_field:'explicit'}})});
       const body=await response.json() as any;
-      expect(body.actualRequest.parameters).toEqual({prompt:'weighted portrait',width:768,model_id:[{model:'https://fixture.invalid/style.safetensors',weight:0.8}],custom_field:'explicit'});
+      // custom_parameters are scoped to the current model Schema (2026-10-15 leak fix): undeclared custom_field is not sent while Schema matching is on.
+      expect(body.actualRequest.parameters).toEqual({prompt:'weighted portrait',width:768,model_id:[{model:'https://fixture.invalid/style.safetensors',weight:0.8}]});
+      expect(body.actualRequest.mapping.find((x:any)=>x.from==='custom_parameters.custom_field')).toMatchObject({sent:false});
       expect(body.actualRequest.mapping.find((x:any)=>x.from==='steps')).toMatchObject({sent:false,value:20});
       expect(body.actualRequest.mapping.find((x:any)=>x.from==='width')).toMatchObject({value:640,finalValue:768});
       expect(calls.filter(x=>x.init?.method==='POST')).toHaveLength(1);
+    });
+  });
+
+  it('refuses LoRA when OpenAPI input schema has no loras field (never invent path+scale)', async () => {
+    const plainOpenApi = {
+      paths: {
+        '/api/v1/plain_image': {
+          post: {
+            requestBody: {
+              content: {
+                'application/json': {
+                  schema: { type: 'object', properties: { prompt: { type: 'string' }, seed: { type: 'integer' } } },
+                },
+              },
+            },
+          },
+        },
+      },
+    };
+    await withFixture(async (url, init) => {
+      if (url.endsWith('/api/v1/models')) return json({ models: [{ name: 'plain-image', endpoint: '/api/v1/plain-image', endpoint_url: 'plain_image', group_of: 'image', category: 'Training' }] });
+      if (url.endsWith('/openapi.json')) return json(plainOpenApi);
+      throw new Error(`Unexpected fixture route: ${url}`);
+    }, async (baseUrl, calls) => {
+      const response = await fetch(`${baseUrl}/api/schema-provider/muapi/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'plain_image',
+          prompt: 'no invent',
+          loras: [{ name: 'style', url: 'https://fixture.invalid/style.safetensors', strength: 0.8 }],
+        }),
+      });
+      const body = await response.json() as any;
+      expect(response.status).toBe(400);
+      expect(body.errorSource).toBe('local');
+      expect(body.error).toMatch(/没有 loras|不会发明/);
+      expect(calls.filter((x) => x.init?.method === 'POST')).toHaveLength(0);
     });
   });
 
@@ -153,7 +193,9 @@ describe('schema provider server contract', () => {
       const polled=await pollResponse.json() as any;
       expect(polled).toMatchObject({status:'completed',credentialRef:schema.credentialRef});
       expect(keyCalls).toBe(1);
-      expect(calls.length).toBeGreaterThanOrEqual(6);
+      // clean-1333 #4: submit reuses the Schema read by /api/model-schema (schemaRead.reused) → 2 schema GETs + POST + poll.
+      expect(submitted.schemaRead).toMatchObject({fetched:false,reused:true});
+      expect(calls.length).toBe(4);
       for (const call of calls) expect((call.init?.headers as Record<string,string> | undefined)?.['x-api-key']).toBe('account-a');
     }, (_provider,override) => override || selectedKeys[keyCalls++ % selectedKeys.length]);
   });
@@ -261,7 +303,7 @@ describe('schema provider server contract', () => {
     const submittedBodies: unknown[] = [];
     await withFixture(async (url, init) => {
       if (url.endsWith('/v1/model-catalog?mediaType=image&include=parameters')) {
-        return json({ data: { models: [{ id: 'worker-model', name: 'Worker model' }] } });
+        return json({ data: { models: [{ id: 'krea-2-turbo', name: 'Worker model' }] } });
       }
       if (init?.method === 'POST' && url.endsWith('/v1/creative-agent/workflows')) {
         const body = JSON.parse(String(init.body));
@@ -276,7 +318,7 @@ describe('schema provider server contract', () => {
       const standardResponse = await fetch(`${baseUrl}/api/schema-provider/sogni/submit`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'worker-model', prompt: 'portrait', width: 640,
+          model: 'krea-2-turbo', prompt: 'portrait', width: 640,
           loras: [
             { name: 'first', path: 'https://fixture.invalid/first.safetensors', strength: 0.4 },
             { name: 'second', path: 'https://fixture.invalid/second.safetensors', strength: 0.9 },
@@ -287,7 +329,7 @@ describe('schema provider server contract', () => {
       const standard = await standardResponse.json() as any;
       expect(standard.rawResponse.data.workflow.workflowId).toBe('task-1');
       expect(standard.actualRequest.parameters.input.steps[0].arguments).toMatchObject({
-        model: 'worker-model', prompt: 'portrait', width: 640,
+        model: 'krea-2-turbo', prompt: 'portrait', width: 640,
         loras: ['https://fixture.invalid/first.safetensors', 'https://fixture.invalid/second.safetensors'],
         loraStrengths: [0.4, 0.9],
       });
@@ -295,14 +337,14 @@ describe('schema provider server contract', () => {
       const exactResponse = await fetch(`${baseUrl}/api/schema-provider/sogni/submit`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'worker-model', prompt: 'only these plus custom', width: 1024,
+          model: 'krea-2-turbo', prompt: 'only these plus custom', width: 1024,
           loras: [{ name: 'ignored in exact mode', path: 'https://fixture.invalid/ignored', strength: 1 }],
           custom_parameters: { _canvas: { parametersOnly: true }, seed: 13, custom_text: 'literal' },
         }),
       });
       const exact = await exactResponse.json() as any;
       const args = exact.actualRequest.parameters.input.steps[0].arguments;
-      expect(args).toEqual({ prompt: 'only these plus custom', seed: 13, custom_text: 'literal', model: 'worker-model' });
+      expect(args).toEqual({ prompt: 'only these plus custom', seed: 13, custom_text: 'literal', model: 'krea-2-turbo' });
       expect(exact.actualRequest.parametersOnly).toBe(true);
       expect(JSON.stringify(submittedBodies[1])).not.toContain('parametersOnly');
 
@@ -314,4 +356,92 @@ describe('schema provider server contract', () => {
       expect(submittedBodies).toHaveLength(2);
     });
   });
+
+
+  it('Krea flux-1-dev sends steps/seed/cfg→guidance_scale/width/height; sampler omitted', async () => {
+    const openapi = {
+      paths: {
+        '/generate/image/bfl/flux-1-dev': {
+          post: {
+            summary: 'Flux.1 Dev',
+            requestBody: {
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      prompt: { type: 'string' },
+                      seed: { type: 'number' },
+                      steps: { type: 'integer' },
+                      width: { type: 'number' },
+                      height: { type: 'number' },
+                      guidance_scale: { type: 'number' },
+                      strength: { type: 'number' },
+                      styles: {
+                        type: 'array',
+                        items: {
+                          type: 'object',
+                          properties: { id: { type: 'string' }, strength: { type: 'number' } },
+                          required: ['id', 'strength'],
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    };
+    let upstreamBody: any;
+    await withFixture(async (url, init) => {
+      if (url.endsWith('/openapi.json')) return json(openapi);
+      if (init?.method === 'POST' && url.endsWith('/generate/image/bfl/flux-1-dev')) {
+        upstreamBody = JSON.parse(String(init.body || '{}'));
+        return json({ job_id: 'krea-job-1' }, 402);
+      }
+      throw new Error(`Unexpected fixture route: ${url}`);
+    }, async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/api/schema-provider/krea/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'image/bfl/flux-1-dev',
+          prompt: 'lighthouse',
+          width: 1024,
+          height: 1024,
+          steps: 25,
+          cfg: 3.5,
+          seed: 42,
+          sampler_name: 'euler',
+          scheduler: 'normal',
+          denoise: 0.85,
+          loras: [{ name: '79tzf61yz', strength: 0.8 }],
+        }),
+      });
+      const body = await response.json() as any;
+      expect(body.actualRequest.parameters).toMatchObject({
+        prompt: 'lighthouse',
+        width: 1024,
+        height: 1024,
+        steps: 25,
+        guidance_scale: 3.5,
+        seed: 42,
+        // strength not sent: no reference image input (denoise is img2img only),
+        styles: [{ id: '79tzf61yz', strength: 0.8 }],
+      });
+      expect(body.actualRequest.parameters.sampler_name).toBeUndefined();
+      expect(body.actualRequest.parameters.strength).toBeUndefined();
+      expect(body.actualRequest.parameters.scheduler).toBeUndefined();
+      expect(body.actualRequest.parameters.cfg).toBeUndefined();
+      expect(body.actualRequest.mapping.find((x: any) => x.from === 'cfg')).toMatchObject({ to: 'guidance_scale', value: 3.5 });
+      expect(body.actualRequest.mapping.find((x: any) => x.from === 'steps')).toMatchObject({ to: 'steps', value: 25 });
+      expect(body.actualRequest.mapping.find((x: any) => x.from === 'seed')).toMatchObject({ to: 'seed', value: 42 });
+      expect(body.actualRequest.mapping.find((x: any) => x.from === 'sampler_name')).toMatchObject({ sent: false });
+      expect(body.actualRequest.mapping.find((x: any) => x.from === 'scheduler')).toMatchObject({ sent: false });
+      expect(upstreamBody).toMatchObject({ steps: 25, seed: 42, guidance_scale: 3.5, styles: [{ id: '79tzf61yz', strength: 0.8 }] });
+    }, () => 'krea-test-key');
+  });
+
 });

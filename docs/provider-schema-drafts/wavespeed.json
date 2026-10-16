@@ -1,0 +1,260 @@
+{
+  "$schemaNote": "草案 — 仅声明。真相源: docs/provider-api-audit-v2/wavespeed.md + DIFF.md (2026-10-15)",
+  "id": "wavespeed",
+  "displayName": "WaveSpeed",
+  "auth": {
+    "envVar": "WAVESPEED_API_KEY",
+    "header": "Authorization",
+    "scheme": "Bearer",
+    "errors": {
+      "401": "Missing API key",
+      "403": "API_KEY_PERMISSION_FORBIDDEN"
+    }
+  },
+  "base": {
+    "root": "https://api.wavespeed.ai/api/v3"
+  },
+  "catalog": {
+    "method": "GET",
+    "path": "/models",
+    "authRequired": true,
+    "rowFields": [
+      "model_id",
+      "name",
+      "base_price",
+      "description",
+      "type",
+      "api_schema.api_path",
+      "api_schema.request_schema.properties"
+    ],
+    "types": [
+      "text-to-image",
+      "image-to-image",
+      "text-to-video",
+      "image-to-video",
+      "video-to-video",
+      "text-to-audio"
+    ],
+    "pagination": "none_documented; 整表 + 客户端过滤（当前实现标 local-slice-of-live-catalog）",
+    "rule": "提交路径与字段取自每行 api_schema；禁止硬编码"
+  },
+  "predict": {
+    "mode": "async (部分模型 enable_sync_mode)",
+    "create": {
+      "method": "POST",
+      "path": "/{model_id}",
+      "returns": "data.id, status=created, urls.get"
+    },
+    "poll": {
+      "method": "GET",
+      "path": "/predictions/{task-id}/result",
+      "intervalSecMin": 2,
+      "success": "status=completed → outputs[]",
+      "terminalFail": [
+        "failed",
+        "cancelled",
+        "timeout",
+        "deleted"
+      ]
+    },
+    "webhook": "optional query"
+  },
+  "image": {
+    "parameters": "按每模型 api_schema；禁止全站一律 size。Krea V2 Turbo(±LoRA)=aspect_ratio+resolution(1k|2k)；z-image/turbo(±LoRA)、flux-dev-lora=size 'W*H'(+output_format)",
+    "examples": {
+      "wavespeed-ai/krea-v2/turbo-lora": {
+        "seed": {
+          "type": "integer",
+          "random": -1
+        },
+        "aspect_ratio": true,
+        "resolution": {
+          "enum": [
+            "1k",
+            "2k"
+          ]
+        },
+        "strength": {
+          "range": "0-1",
+          "when": "i2i"
+        },
+        "steps": {
+          "supported": false
+        },
+        "cfg": {
+          "supported": false
+        },
+        "loras": {
+          "maxItems": 3
+        },
+        "size": {
+          "supported": false
+        }
+      },
+      "wavespeed-ai/z-image/turbo": {
+        "size": {
+          "type": "string",
+          "example": "1024*1024",
+          "range": "256-1536"
+        },
+        "output_format": {
+          "enum": [
+            "jpeg",
+            "png",
+            "webp"
+          ],
+          "default": "jpeg"
+        },
+        "seed": {
+          "type": "integer",
+          "random": -1
+        },
+        "aspect_ratio": {
+          "supported": false
+        },
+        "resolution": {
+          "supported": false
+        },
+        "steps": {
+          "supported": false
+        },
+        "cfg": {
+          "supported": false
+        }
+      }
+    }
+  },
+  "video": {
+    "supported": true,
+    "mechanism": "同 submit + poll",
+    "commonBodyI2V": [
+      "prompt",
+      "image(URL)",
+      "duration(sec)",
+      "resolution(e.g. 768p)"
+    ],
+    "examples": {
+      "hunyuan t2v": {
+        "size": [
+          "1280*720",
+          "720*1280"
+        ],
+        "seed": true,
+        "num_inference_steps": "2-30"
+      },
+      "wan 2.2 i2v-lora": {
+        "duration": true,
+        "loras": true,
+        "high_noise_loras": true,
+        "low_noise_loras": true
+      }
+    },
+    "fps": {
+      "supported": "per api_schema; 通用指南未列"
+    }
+  },
+  "lora": {
+    "field": "loras (部分模型另有 high_noise_loras / low_noise_loras)",
+    "item": {
+      "path": {
+        "type": "string",
+        "accepts": [
+          "HF owner/name（通用指南、z-image-turbo-lora 页）",
+          ".safetensors 直链（所有页；krea-v2-turbo-lora 页只写这一种）",
+          "Civitai Files 直链"
+        ],
+        "perModelDoc": {
+          "wavespeed-ai/krea-v2/turbo-lora": "direct .safetensors URL",
+          "wavespeed-ai/z-image/turbo-lora": "<owner>/<model-name> or direct .safetensors URL"
+        },
+        "errorOnUnreachable": "上游 status=failed code=1402 Media Access Failed；画布原样显示失败，不改写 path"
+      },
+      "scale": {
+        "type": "number",
+        "min": 0,
+        "max": 4,
+        "defaultKrea": 1
+      }
+    },
+    "maxItemsKrea": 3,
+    "notes": [
+      "LoRA 必须匹配底模",
+      "trigger word 需写进 prompt"
+    ],
+    "unsupported": "schema 无 loras → 不露控件、不塞字段"
+  },
+  "billing": {
+    "balance": {
+      "method": "GET",
+      "path": "/balance",
+      "field": "data.balance (USD)"
+    },
+    "insufficientHints": [
+      {
+        "code": 1407,
+        "name": "insufficient_credits",
+        "where": "任务失败体"
+      }
+    ],
+    "http402": false,
+    "submitHttpErrors": [
+      400,
+      401,
+      403,
+      429,
+      500
+    ]
+  },
+  "contractTestHint": "krea-v2/turbo-lora: actualRequest 须含 aspect_ratio+resolution(1k|2k)、seed、loras[{path,scale}]；path 须为 direct .safetensors URL（该模型页只写这一种）；不得发 size/steps/cfg；steps/cfg 标不会发送。z-image/turbo(-lora): 须含 size 'W*H'（及 schema 声明的 output_format）；path 可为 owner/name 或 .safetensors 直链；不得发 aspect_ratio/resolution(1k|2k)。不可达/非公开 path → 上游 status=failed code=1402 原样失败（画布不改写 path）。线索（clean-0544 整套退回，不算 PASS）：Krea hist_1792014675785_924um 出图成功；z-image hist_1792014824657_5o7wt。",
+  "sources": [
+    "https://wavespeed.ai/docs/get-started-api",
+    "https://wavespeed.ai/docs/lora-training-usage",
+    "https://wavespeed.ai/docs/docs-api/wavespeed-ai/krea-v2-turbo-lora",
+    "https://wavespeed.ai/docs/error-codes",
+    "https://wavespeed.ai/docs/docs-api/wavespeed-ai/krea-v2-turbo",
+    "https://wavespeed.ai/docs/docs-api/wavespeed-ai/z-image-turbo",
+    "https://wavespeed.ai/docs/docs-api/wavespeed-ai/z-image-turbo-lora",
+    "https://wavespeed.ai/docs/docs-api/wavespeed-ai/flux-dev-lora"
+  ],
+  "_auditStatus": "2026-10-16 15:12：fix3-1510 升 PASS_GENERATION。2026-10-16 15:35：fix3-1510 真出图暂不收口（等挑刺确认 aspect_ratio 补拍）。2026-10-16 14:46：fix2-1320 真出图但不收口 FAIL_UI；strength 官方字段默认 0.8 仅 image 时用，本轮为上游回显非我方发送。2026-10-16 12:37：新 Key 复验请求字段已核（不收口，徽章未升）。2026-10-15 07:13 tinkabot 撤回：clean-0544 整套退回，Krea/z-image 出图仅作线索，不算证实。2026-10-15 07:09：clean-0544（已退回）线索显示 krea-v2/turbo-lora actualRequest=aspect_ratio+resolution+seed+loras[{path:.safetensors直链,scale}]（无 size/steps/cfg）；z-image/turbo-lora size 'W*H' 无 aspect_ratio/resolution。前序 2026-10-15 06:38：认领 Researchy 06:30——补 contractTestHint（Krea path=.safetensors 直链；z-image 允许 owner/name；1402 原样失败不改写）。前序 06:30 Researchy 已写 lora.path.perModelDoc；06:02：尺寸分两族。",
+  "requestFieldsVerified": {
+    "actualRequest": {
+      "prompt": true,
+      "seed": true,
+      "resolution": "1k",
+      "aspect_ratio": "1:1",
+      "loras": [
+        {
+          "path": true,
+          "scale": 0.85
+        }
+      ],
+      "no_strength": true
+    },
+    "upstreamEcho": {
+      "labeled": "非我方请求体",
+      "defaultsShown": [
+        "strength=0.8",
+        "enable_base64_output",
+        "enable_sync_mode"
+      ],
+      "note": "aspect_ratio 在实发里故不在默认补全列表——正确"
+    },
+    "officialStrength": {
+      "field": "strength",
+      "type": "number",
+      "optional": true,
+      "default": 0.8,
+      "range": "0-1",
+      "description": "Image-to-image strength (0-1). Higher values repaint the source image more freely. Only used when image is set.",
+      "docs": "https://wavespeed.ai/docs/docs-api/wavespeed-ai/krea-v2-turbo-lora",
+      "fetched": "2026-10-16 14:44:49 JST"
+    },
+    "evidence": "/workspace/canvas-e2e-wavespeed-fix3-1510/",
+    "run": "hist_1792131937012_blhs1（fix3-1510，真出图）",
+    "status": "画布收口 PASS_GENERATION；挑刺已撤 aspect_ratio 严重项（补拍 10-actual-request-scrolled-aspect_ratio.png）",
+    "acceptanceBadge": "PASS_GENERATION",
+    "补拍": "10-actual-request-scrolled-aspect_ratio.png 框底 aspect_ratio:1:1；挑刺已撤项"
+  },
+  "acceptanceBadge": "PASS_GENERATION"
+}

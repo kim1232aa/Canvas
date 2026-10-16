@@ -25,6 +25,6 @@ describe('server closeout wiring contracts', () => {
   it('Replicate model-schema route queries official Replicate model endpoint and extracts openapi inputSchema', () => {
     expect(serverSource).toContain("if (provider === 'replicate') {");
     expect(serverSource).toContain('https://api.replicate.com/v1/models/${encodeURIComponent(owner)}/${encodeURIComponent(name)}');
-    expect(serverSource).toContain('const inputSchema = openapi?.components?.schemas?.Input || null;');
+    expect(serverSource).toContain('const inputSchema = openapi?.components?.schemas?.Input ? resolveSchemaRefs(openapi.components.schemas.Input, openapi) : null;');
   });
 });
