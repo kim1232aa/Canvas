@@ -1,4 +1,5 @@
 {
+  "canvasAcceptance": "未验证（2026-10-17 14:40 北京：测试截图已全删，按雁标准「画布里出图、落保存节点、历史有缩略图」当前 0 家；以前的出图/欠费标记一律作废，官方字段结论保留；在画布重跑出图并有节点图+历史缩略图后再单独改）",
   "$schemaNote": "草案 — 仅声明。真相源: docs/provider-api-audit-v2/modelscope.md + DIFF.md（Researchy 2026-10-15）",
   "id": "modelscope",
   "displayName": "ModelScope（魔搭 CN / 国际站）",
@@ -12,25 +13,21 @@
     "intl": {
       "supported": true,
       "root": "https://api-inference.modelscope.ai/v1",
-      "acceptanceBadge": "PASS_GENERATION（附缺口）",
+      "acceptanceBadge": "未验证",
       "sendEvidence": [
-        "/workspace/canvas-e2e-modelscope-ai-lora-1137/",
-        "/workspace/canvas-e2e-modelscope-ai-lora-1152/"
+        "已清理",
+        "已清理"
       ],
-      "evidenceNote": "国际站前端实测出图两次（Key #0/共2）；上游交互 11 段与 2 段已由挑刺按画面数过",
+      "evidenceNote": "历史目录 已清理 仅作线索，不算国际站收口；国际站前端实测出图两次（Key #0/共2）；上游交互 11 段与 2 段已由挑刺按画面数过",
       "paramRuleSource": "参数规则依据中国站官方文档（2026-10-16 11:52 实时抓取）",
-      "gap": "国际站官方文档正文当前取不到，待补",
+      "gap": "国际站官方 docs 无 LoRA 专节；国际站是否真收 loras 要有 Key 实测。历史 1137/1152 仅线索不算收口。",
       "loraCatalog": "PUT www.modelscope.ai/api/v1/dolphin/models（只取国际站，不混中国站）",
       "actualRequest": {
-        "model": "Tongyi-MAI/Z-Image-Turbo",
-        "size": "512x512",
-        "negative_prompt": "会发送",
-        "steps": 8,
-        "guidance": 3,
-        "seed": 42,
+        "note": "fix15 画布前端实测（2026-10-16 ~22:50 北京）",
         "loras": {
           "LcarsPicturesDatabase/ST-TNG-Rooms-Z-Image-Turbo-v1": 1
-        }
+        },
+        "modelHint": "Z-Image-Turbo + Lcars…@1"
       },
       "sendStatus": {
         "model": "会发送",
@@ -39,11 +36,96 @@
         "steps": "会发送",
         "guidance": "会发送",
         "seed": "会发送",
-        "loras": "会发送",
+        "loras": "会发送（fix15 证实 map {repoId:1}，无 path/scale）",
         "sampler": "该端点不支持 · 未发送",
         "scheduler": "该端点不支持 · 未发送",
         "loraMultiFileChoice": "待确认（只传仓库 ID，文档未写多 safetensors 时用哪个）"
+      },
+      "pendingNote": "2026-10-16 ~23:00 北京：画布收口——intl 仅接线形状过；401≠欠费；双徽章都不升。fix16 UI 细节批进行中。",
+      "confidence": {
+        "lorasShape": "高（fix15 actualRequest）",
+        "intlLoraLive": "未出图——401 绑账号；不升徽章"
+      },
+      "researchyConfirm": {
+        "at": "2026-10-16 ~23:18 JST",
+        "root": "https://api-inference.modelscope.ai/v1",
+        "auth": "国际站 Bearer（与 .cn 令牌隔离）",
+        "loraField": "loras",
+        "loraShape": "repo id 字符串，或多条 {id:权重}；≤6 且权重和=1.0",
+        "notFields": [
+          "path",
+          "url",
+          "strength",
+          "scale"
+        ],
+        "async": "POST /images/generations + X-ModelScope-Async-Mode: true；GET /tasks/{id} + X-ModelScope-Task-Type: image_generation",
+        "sourcesNote": "WebSearch 与 CN 模型页一致；agy 只确认双站；Build grok_search 超时缺一路",
+        "canvasLock": "画布已锁：.ai 根 + Bearer + 异步头；LoRA 只用 loras（权重和 1.0），弃 path/scale"
+      },
+      "fix15": {
+        "status": "CLOSED_shape_only",
+        "pid": "3656255",
+        "hist": "hist_1792161944810_gfkr9",
+        "endpoint": "POST modelscope.ai/v1/images/generations",
+        "http": 401,
+        "upstream": "Please bind your Alibaba Cloud account… Key #1/2",
+        "actualRequestLoras": {
+          "LcarsPicturesDatabase/ST-TNG-Rooms-Z-Image-Turbo-v1": 1
+        },
+        "shapeOk": true,
+        "noPathScale": true,
+        "evidence": "已清理",
+        "badge": "接线形状过；不升 PASS_GENERATION / PASS_BILLING",
+        "挑刺": {
+          "severe": 0,
+          "note": "fix15.1 收口后无严重；此前严重已修"
+        }
+      },
+      "wiringShape": {
+        "status": "过",
+        "at": "2026-10-16 ~23:00 北京",
+        "loras": {
+          "LcarsPicturesDatabase/ST-TNG-Rooms-Z-Image-Turbo-v1": 1
+        },
+        "noPathScale": true,
+        "http": 401,
+        "reason": "账号未绑阿里云（非欠费）→ 不升 PASS_GENERATION / PASS_BILLING",
+        "fix15": "已清理",
+        "fix15_1": "已清理",
+        "pids": [
+          "3656255",
+          "3681517"
+        ]
+      },
+      "fix15_1": {
+        "status": "CLOSED",
+        "evidence": "已清理",
+        "pid": "3681517",
+        "docs": "docs/evidence/fix15.1-2026-10-16.md"
+      },
+      "fix16": {
+        "status": "PARTIAL_不收口",
+        "pid": "3695091",
+        "evidence": "已清理",
+        "docs": "docs/evidence/fix16-2026-10-16.md",
+        "hist": "hist_1792163186452_eigrc",
+        "http": 429,
+        "upstream": "insufficient balance",
+        "ui": "①④过；②③未改到；⑤证据不硬",
+        "badgeNote": "429+insufficient balance 已原样透传，但画布未收口升 PASS_BILLING；等 fix16.1+画布明示再动徽章"
+      },
+      "billingEvidence": {
+        "at": "2026-10-16 ~23:10 北京",
+        "status": "待画布明示是否算 PASS_BILLING",
+        "http": 429,
+        "bodyHint": "insufficient balance",
+        "notYet": "禁止自升 PASS_BILLING；此前 401 绑账号仍不算欠费"
       }
+    },
+    "cnAcceptance": {
+      "acceptanceBadge": "未验证",
+      "note": "2026-10-16 晚画布对齐：中国站带 LoRA 真正出过图；以画布收口为准",
+      "root": "https://api-inference.modelscope.cn/v1"
     }
   },
   "catalog": {
@@ -137,9 +219,10 @@
       "multi": "object { <lora-repo-id>: weight }",
       "maxItems": 6,
       "constraint": "多 LoRA 权重总和必须 = 1.0",
-      "source": "Qwen/Qwen-Image-2512 模型卡注释"
+      "source": "Qwen/Qwen-Image-2512 模型卡注释",
+      "canvasIntl": "国际站接线同字段名 loras；形状跟 CN 模型页；置信度中低待 Key 实测"
     },
-    "not": "scale/strength 数组",
+    "not": "path / url / strength / scale 数组（国际站与中国站均勿发）",
     "canvasRule": "多 LoRA 强度和 ≠ 1 时本地拒绝并说明，禁止自动归一化（黑盒改值）"
   },
   "billing": {
@@ -153,5 +236,23 @@
     "https://developer.aliyun.com/article/1689282",
     "https://modelscope.cn/headlines/article/960"
   ],
-  "_auditStatus": "2026-10-15 05:40：已对齐 v2 modelscope.md / Researchy 05:29；官方参数表无 sampler/scheduler/denoise；cfg→guidance。字段徽章仍以前端实测为准；2026-10-16 12:00 国际站 + LoRA 收口 PASS_GENERATION（附缺口）：参数规则依据中国站官方文档（11:52 实时抓取）；国际站官方文档正文当前取不到，待补"
+  "_auditStatus": "2026-10-16 ~23:33 北京：@tinkabot 等明示再升徽章；intl 仍未收口。 2026-10-16 ~23:10 北京：fix16 PARTIAL；新卡 429 insufficient balance 已记、不自升 PASS_BILLING；fix16.1 进行中。 2026-10-16 ~23:00 北京：fix15/15.1 收口=接线形状过；不升 PASS_GENERATION/PASS_BILLING（401 非欠费）。 2026-10-16 ~22:51 北京：fix15 挑刺严重1（历史未发送灰字）——不收口。 2026-10-16 ~22:50 北京：fix15 hist_gfkr9 loras map 对、401 绑账号；证据 已清理 仍未收口、不升出图。 2026-10-16 ~23:24：fix14 收口；canvas-dev 开 intl+loras。徽章仍未收口。 2026-10-16 ~23:18：intl 跟画布私信+Researchy——根 api-inference.modelscope.ai/v1；loras（禁 path/scale）；置信度中低等 Key 实测。不升徽章。 2026-10-16 ~23:11：画布下一批=魔搭国际站+LoRA（等 Researchy）；intl 不升徽章。 2026-10-16 22:06 JST tinkabot：按画布对齐——中国站+LoRA=能出图；国际站 LoRA=未收口（撤回 intl PASS_GENERATION）。2026-10-15 05:40：已对齐 v2 modelscope.md / Researchy 05:29；官方参数表无 sampler/scheduler/denoise；cfg→guidance。字段徽章仍以前端实测为准；2026-10-16 12:00 国际站 + LoRA 收口 PASS_GENERATION（附缺口）：参数规则依据中国站官方文档（11:52 实时抓取）；国际站官方文档正文当前取不到，待补",
+  "nextBatch": {
+    "at": "2026-10-16 ~23:00 北京",
+    "focus": "fix16 UI 五项",
+    "badge": "intl 仍未收口"
+  },
+  "fix14": {
+    "status": "CLOSED",
+    "evidence": "已清理",
+    "pid": "3634115",
+    "note": "UI only；与 intl LoRA 接线无关"
+  },
+  "canvasRuleBadge": "2026-10-16 ~23:33 北京：画布@tinkabot 等明示再升徽章；下一轮主验收=有额度家真出图 PASS_GENERATION（先 WaveSpeed）",
+  "fix16_1": {
+    "status": "重拍中",
+    "pid": "3714746",
+    "evidence": "已清理",
+    "docs": "docs/evidence/fix16.1-2026-10-16.md"
+  }
 }

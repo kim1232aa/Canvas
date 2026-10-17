@@ -1,12 +1,12 @@
 # fix11.2 — 2026-10-16（CODE_ONLY，等画布前端验收）
 
-- Restore: `/workspace/canvas-restore/pre-fix11.2-20261016-201736.tgz`
+- Restore: `/workspace/canvas/temp/backups/canvas-restore/pre-fix11.2-20261016-201736.tgz`
 - 重启一次：旧 PID 3416167 → 新 PID **3447072**，ticks **14848805**
   - lstart 本机(Asia/Tokyo)：2026-10-16 **20:21:05** JST
   - lstart 北京(Asia/Shanghai)：2026-10-16 **19:21:05** CST
   - cmdline/cwd/environ 与旧进程逐项一致（environ 排序比对 identical）；`:3000` → 200
 - 未改供应商调用逻辑 / 发送内容；未碰 Together、TAMS；**未改** 900 执行记录停靠（仍按 fix11.1）。
-- E2E：`/workspace/canvas-e2e-fix11.2/`（e2e.mjs、transcript.txt、截图见下）
+- E2E：`/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-fix11.2/`（e2e.mjs、transcript.txt、截图见下）
 
 | # | 改动 | 实测 |
 |---|---|---|

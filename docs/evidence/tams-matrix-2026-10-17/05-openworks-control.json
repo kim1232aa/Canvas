@@ -1,0 +1,203 @@
+{
+  "case": "05-openworks-control",
+  "note": "OpenWorks control: photoreal_studio_z_image official 4 fields (prompt, image width, image height, result image count); no LoRA. FE uses width/height aliases + custom_parameters for count.",
+  "httpStatus": 200,
+  "timestampAsiaTokyo": "2026-10-17 12:14:10 JST",
+  "response": {
+    "taskId": "1056282141186342651",
+    "pollUrl": "/api/schema-provider/openworks/tasks/1056282141186342651",
+    "actualRequest": {
+      "endpoint": "https://openapi.tensor.art/openworks/v1/task",
+      "parameters": {
+        "toolName": "photoreal_studio_z_image",
+        "inputs": [
+          {
+            "type": "STRING",
+            "value": "a red apple, studio photo"
+          },
+          {
+            "type": "INTEGER",
+            "value": 512
+          },
+          {
+            "type": "INTEGER",
+            "value": 512
+          },
+          {
+            "type": "INTEGER",
+            "value": 1
+          }
+        ]
+      },
+      "mapping": [
+        {
+          "from": "custom_parameters.result image count",
+          "to": "result image count",
+          "value": 1,
+          "sent": true
+        },
+        {
+          "from": "prompt",
+          "to": "prompt",
+          "value": "a red apple, studio photo",
+          "sent": true
+        },
+        {
+          "from": "width",
+          "to": "image width",
+          "value": 512,
+          "sent": true
+        },
+        {
+          "from": "height",
+          "to": "image height",
+          "value": 512,
+          "sent": true
+        }
+      ],
+      "credential": "tensorartKey · Key 池 tensorart（env TENSORART_API_KEY 第 1/3 个） · ak_tensor_…1o64"
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "prompt": {
+          "type": "string",
+          "description": "prompt",
+          "x-openworks-position": 0,
+          "x-openworks-type": "STRING"
+        },
+        "image width": {
+          "type": "integer",
+          "description": "image width",
+          "x-openworks-position": 1,
+          "x-openworks-type": "INTEGER"
+        },
+        "image height": {
+          "type": "integer",
+          "description": "image height",
+          "x-openworks-position": 2,
+          "x-openworks-type": "INTEGER"
+        },
+        "result image count": {
+          "type": "integer",
+          "description": "result image count",
+          "x-openworks-position": 3,
+          "x-openworks-type": "INTEGER"
+        }
+      },
+      "required": [
+        "prompt",
+        "image width",
+        "image height",
+        "result image count"
+      ]
+    },
+    "rawResponse": {
+      "code": "0",
+      "message": "",
+      "data": {
+        "task": {
+          "id": "1056282141186342651",
+          "userId": "1048723019146487792",
+          "status": "WAITING",
+          "toolName": "photoreal_studio_z_image",
+          "outputs": []
+        }
+      }
+    },
+    "executionTrace": [
+      {
+        "provider": "openworks",
+        "model": "photoreal_studio_z_image",
+        "method": "POST",
+        "endpoint": "https://openapi.tensor.art/openworks/v1/task",
+        "requestBody": {
+          "toolName": "photoreal_studio_z_image",
+          "inputs": [
+            {
+              "type": "STRING",
+              "value": "a red apple, studio photo"
+            },
+            {
+              "type": "INTEGER",
+              "value": 512
+            },
+            {
+              "type": "INTEGER",
+              "value": 512
+            },
+            {
+              "type": "INTEGER",
+              "value": 1
+            }
+          ]
+        },
+        "status": 200,
+        "statusText": "OK",
+        "responseBody": {
+          "kind": "raw-response",
+          "url": "/api/media/raw/c28110a6a71e6e9331219b1f1a4114bbaeecdf4fece6675c2c3f78fe123b7d07",
+          "sha256": "c28110a6a71e6e9331219b1f1a4114bbaeecdf4fece6675c2c3f78fe123b7d07",
+          "size": 177,
+          "encoding": "utf-8",
+          "fidelity": "original"
+        },
+        "maskedKey": "ak_t...1o64",
+        "keyUsage": null,
+        "durationMs": 513,
+        "startedAt": "2026-10-17T03:14:10.323Z"
+      }
+    ]
+  },
+  "actualRequest": {
+    "endpoint": "https://openapi.tensor.art/openworks/v1/task",
+    "parameters": {
+      "toolName": "photoreal_studio_z_image",
+      "inputs": [
+        {
+          "type": "STRING",
+          "value": "a red apple, studio photo"
+        },
+        {
+          "type": "INTEGER",
+          "value": 512
+        },
+        {
+          "type": "INTEGER",
+          "value": 512
+        },
+        {
+          "type": "INTEGER",
+          "value": 1
+        }
+      ]
+    },
+    "mapping": [
+      {
+        "from": "custom_parameters.result image count",
+        "to": "result image count",
+        "value": 1,
+        "sent": true
+      },
+      {
+        "from": "prompt",
+        "to": "prompt",
+        "value": "a red apple, studio photo",
+        "sent": true
+      },
+      {
+        "from": "width",
+        "to": "image width",
+        "value": 512,
+        "sent": true
+      },
+      {
+        "from": "height",
+        "to": "image height",
+        "value": 512,
+        "sent": true
+      }
+    ],
+    "credential": "tensorartKey · Key 池 tensorart（env TENSORART_API_KEY 第 1/3 个） · ak_tensor_…1o64"
+  }
+}

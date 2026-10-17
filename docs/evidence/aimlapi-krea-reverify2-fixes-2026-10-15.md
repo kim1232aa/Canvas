@@ -1,7 +1,7 @@
 # AIMLAPI / Krea reverify2 修复（2026-10-15 02:58 北京时间）— 状态：CODE_ONLY
 
-来源：画布前端复验 `/workspace/canvas-e2e-aimlapi-krea-reverify2/`（run2/run3-history-modal.webp 已看）。
-未做浏览器 E2E，未提交/推送。还原包：`/workspace/canvas-restore/pre-aimlapi-krea-fixes-0251.tgz`。
+来源：画布前端复验 `/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-aimlapi-krea-reverify2/`（run2/run3-history-modal.webp 已看）。
+未做浏览器 E2E，未提交/推送。还原包：`/workspace/canvas/temp/backups/canvas-restore/pre-aimlapi-krea-fixes-0251.tgz`。
 
 ## 逐项
 | # | 结论 | 根因 / 改动 |

@@ -1,0 +1,14 @@
+{
+  "case": "02a-named-lora-string",
+  "title": "Official 4 + name=lora STRING id",
+  "note": "extra name=lora + lora_weight; LoRA 661652545330040294",
+  "httpStatus": 200,
+  "submitCode": "0",
+  "submitMessage": "",
+  "taskId": "1056289973059242576",
+  "finalStatus": "FINISH",
+  "imageSha256": "9482f9808a2b821c772a63deaa257ac123c4c94c7c97c9a64e98b973b49912a9",
+  "imageBytes": 467579,
+  "conclusion": "ignored_or_unproven (HTTP200 FINISH; schema has no LoRA; no proof applied)",
+  "timestampAsiaTokyo": "2026-10-17 12:45:39 JST"
+}

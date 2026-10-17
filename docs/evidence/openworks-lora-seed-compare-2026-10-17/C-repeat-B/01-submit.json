@@ -1,0 +1,71 @@
+{
+  "case": "C-repeat-B",
+  "title": "Repeat B same body (noise check)",
+  "hasLoraStuff": true,
+  "timestampAsiaTokyo": "2026-10-17 13:01:04 JST",
+  "actualRequest": {
+    "endpoint": "https://openapi.tensor.art/openworks/v1/task",
+    "method": "POST",
+    "headers": {
+      "Content-Type": "application/json",
+      "User-Agent": "ow-lora-seed-compare/1.0",
+      "Echo-Access-Key": "ak_tensor_W6…1o64"
+    },
+    "body": {
+      "toolName": "photoreal_studio_z_image",
+      "inputs": [
+        {
+          "type": "STRING",
+          "value": "ta86_inkriot, thin black outlines, art by Jean Giraud (Moebius), watercolor and ink illustration, a female pilot holding a white helmet, wearing a complex mechanical flight suit with black hoses and cables, standing amidst the wreckage of a crashed mecha or spaceship, looking back over her shoulder, cloudy sky background, another ship flying away in distance, vintage sci-fi comic art style, detailed linework, muted colors."
+        },
+        {
+          "type": "INTEGER",
+          "value": 512
+        },
+        {
+          "type": "INTEGER",
+          "value": 512
+        },
+        {
+          "type": "INTEGER",
+          "value": 1
+        },
+        {
+          "type": "INTEGER",
+          "name": "seed",
+          "value": 424242
+        },
+        {
+          "type": "STRING",
+          "name": "loras",
+          "value": "661652545330040294"
+        },
+        {
+          "type": "NUMBER",
+          "name": "weight",
+          "value": 1.0
+        },
+        {
+          "type": "STRING",
+          "name": "image_loras",
+          "value": "661652545330040294"
+        }
+      ]
+    }
+  },
+  "httpStatus": 200,
+  "responseRaw": "{\"code\":\"0\", \"message\":\"\", \"data\":{\"task\":{\"id\":\"1056294227224299576\", \"userId\":\"1048723019146487792\", \"status\":\"WAITING\", \"toolName\":\"photoreal_studio_z_image\", \"outputs\":[]}}}",
+  "response": {
+    "code": "0",
+    "message": "",
+    "data": {
+      "task": {
+        "id": "1056294227224299576",
+        "userId": "1048723019146487792",
+        "status": "WAITING",
+        "toolName": "photoreal_studio_z_image",
+        "outputs": []
+      }
+    }
+  }
+}

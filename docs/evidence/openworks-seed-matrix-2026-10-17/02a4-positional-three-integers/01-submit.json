@@ -1,0 +1,50 @@
+{
+  "case": "02a4-positional-three-integers",
+  "timestampAsiaTokyo": "2026-10-17 12:24:28 JST",
+  "actualRequest": {
+    "endpoint": "https://openapi.tensor.art/openworks/v1/task",
+    "headers": {
+      "Echo-Access-Key": "ak_tensor_…1o64",
+      "User-Agent": "node"
+    },
+    "body": {
+      "toolName": "photoreal_studio_z_image",
+      "inputs": [
+        {
+          "type": "STRING",
+          "value": "a red apple on a white table, studio photo"
+        },
+        {
+          "type": "INTEGER",
+          "value": 512
+        },
+        {
+          "type": "INTEGER",
+          "value": 512
+        },
+        {
+          "type": "INTEGER",
+          "value": 1
+        },
+        {
+          "type": "INTEGER",
+          "value": 424242
+        },
+        {
+          "type": "INTEGER",
+          "value": 20
+        },
+        {
+          "type": "INTEGER",
+          "value": 8
+        }
+      ]
+    }
+  },
+  "httpStatus": 500,
+  "response": {
+    "code": 13,
+    "message": "failed to handle task: works service error: code=1300013, message=WORKS_QUEUE_FULL"
+  },
+  "note": "narrow positional retry to characterize 02a 404; submit-only (no poll) unless 200"
+}

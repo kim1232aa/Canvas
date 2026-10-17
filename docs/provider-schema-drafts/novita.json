@@ -1,4 +1,5 @@
 {
+  "canvasAcceptance": "未验证（2026-10-17 14:40 北京：测试截图已全删，按雁标准「画布里出图、落保存节点、历史有缩略图」当前 0 家；以前的出图/欠费标记一律作废，官方字段结论保留；在画布重跑出图并有节点图+历史缩略图后再单独改）",
   "$schemaNote": "草案 — 仅声明，非可执行驱动。真相源: docs/provider-api-audit/novita.md (2026-10-15)",
   "id": "novita",
   "displayName": "Novita",
@@ -81,32 +82,32 @@
           "supported": true,
           "note": "-1 = random",
           "sendStatus": "会发送",
-          "sendEvidence": "canvas-e2e-novita-1019（挑刺这屏没挑到、画布 PASS_BILLING）：POST /v3/async/txt2img；actualRequest.request 含 model_name、prompt、loras:[{model_name:more_details_59655,strength:0.75}]、steps:20、seed:42、guidance_scale:7、sampler_name、width/height、negative_prompt；上游 HTTP 403 NOT_ENOUGH_BALANCE 原文；历史芯片蓝「实际发送」；证据 /workspace/canvas-e2e-novita-1019/；Researchy 对照官网一致"
+          "sendEvidence": "canvas-e2e-novita-1019（挑刺这屏没挑到、画布 PASS_BILLING）：POST /v3/async/txt2img；actualRequest.request 含 model_name、prompt、loras:[{model_name:more_details_59655,strength:0.75}]、steps:20、seed:42、guidance_scale:7、sampler_name、width/height、negative_prompt；上游 HTTP 403 NOT_ENOUGH_BALANCE 原文；历史芯片蓝「实际发送」；证据 已清理；Researchy 对照官网一致"
         },
         "steps": {
           "type": "integer",
           "sendStatus": "会发送",
-          "sendEvidence": "canvas-e2e-novita-1019（挑刺这屏没挑到、画布 PASS_BILLING）：POST /v3/async/txt2img；actualRequest.request 含 model_name、prompt、loras:[{model_name:more_details_59655,strength:0.75}]、steps:20、seed:42、guidance_scale:7、sampler_name、width/height、negative_prompt；上游 HTTP 403 NOT_ENOUGH_BALANCE 原文；历史芯片蓝「实际发送」；证据 /workspace/canvas-e2e-novita-1019/；Researchy 对照官网一致"
+          "sendEvidence": "canvas-e2e-novita-1019（挑刺这屏没挑到、画布 PASS_BILLING）：POST /v3/async/txt2img；actualRequest.request 含 model_name、prompt、loras:[{model_name:more_details_59655,strength:0.75}]、steps:20、seed:42、guidance_scale:7、sampler_name、width/height、negative_prompt；上游 HTTP 403 NOT_ENOUGH_BALANCE 原文；历史芯片蓝「实际发送」；证据 已清理；Researchy 对照官网一致"
         },
         "guidance_scale": {
           "type": "number",
           "note": "V2 cfg_scale 已改名",
           "sendStatus": "会发送",
-          "sendEvidence": "canvas-e2e-novita-1019（挑刺这屏没挑到、画布 PASS_BILLING）：POST /v3/async/txt2img；actualRequest.request 含 model_name、prompt、loras:[{model_name:more_details_59655,strength:0.75}]、steps:20、seed:42、guidance_scale:7、sampler_name、width/height、negative_prompt；上游 HTTP 403 NOT_ENOUGH_BALANCE 原文；历史芯片蓝「实际发送」；证据 /workspace/canvas-e2e-novita-1019/；Researchy 对照官网一致"
+          "sendEvidence": "canvas-e2e-novita-1019（挑刺这屏没挑到、画布 PASS_BILLING）：POST /v3/async/txt2img；actualRequest.request 含 model_name、prompt、loras:[{model_name:more_details_59655,strength:0.75}]、steps:20、seed:42、guidance_scale:7、sampler_name、width/height、negative_prompt；上游 HTTP 403 NOT_ENOUGH_BALANCE 原文；历史芯片蓝「实际发送」；证据 已清理；Researchy 对照官网一致"
         },
         "width": {
           "type": "integer",
           "min": 128,
           "max": 2048,
           "sendStatus": "会发送",
-          "sendEvidence": "canvas-e2e-novita-1019（挑刺这屏没挑到、画布 PASS_BILLING）：POST /v3/async/txt2img；actualRequest.request 含 model_name、prompt、loras:[{model_name:more_details_59655,strength:0.75}]、steps:20、seed:42、guidance_scale:7、sampler_name、width/height、negative_prompt；上游 HTTP 403 NOT_ENOUGH_BALANCE 原文；历史芯片蓝「实际发送」；证据 /workspace/canvas-e2e-novita-1019/；Researchy 对照官网一致"
+          "sendEvidence": "canvas-e2e-novita-1019（挑刺这屏没挑到、画布 PASS_BILLING）：POST /v3/async/txt2img；actualRequest.request 含 model_name、prompt、loras:[{model_name:more_details_59655,strength:0.75}]、steps:20、seed:42、guidance_scale:7、sampler_name、width/height、negative_prompt；上游 HTTP 403 NOT_ENOUGH_BALANCE 原文；历史芯片蓝「实际发送」；证据 已清理；Researchy 对照官网一致"
         },
         "height": {
           "type": "integer",
           "min": 128,
           "max": 2048,
           "sendStatus": "会发送",
-          "sendEvidence": "canvas-e2e-novita-1019（挑刺这屏没挑到、画布 PASS_BILLING）：POST /v3/async/txt2img；actualRequest.request 含 model_name、prompt、loras:[{model_name:more_details_59655,strength:0.75}]、steps:20、seed:42、guidance_scale:7、sampler_name、width/height、negative_prompt；上游 HTTP 403 NOT_ENOUGH_BALANCE 原文；历史芯片蓝「实际发送」；证据 /workspace/canvas-e2e-novita-1019/；Researchy 对照官网一致"
+          "sendEvidence": "canvas-e2e-novita-1019（挑刺这屏没挑到、画布 PASS_BILLING）：POST /v3/async/txt2img；actualRequest.request 含 model_name、prompt、loras:[{model_name:more_details_59655,strength:0.75}]、steps:20、seed:42、guidance_scale:7、sampler_name、width/height、negative_prompt；上游 HTTP 403 NOT_ENOUGH_BALANCE 原文；历史芯片蓝「实际发送」；证据 已清理；Researchy 对照官网一致"
         },
         "image_num": {
           "type": "integer"
@@ -114,18 +115,18 @@
         "sampler_name": {
           "type": "string",
           "sendStatus": "会发送",
-          "sendEvidence": "canvas-e2e-novita-1019（挑刺这屏没挑到、画布 PASS_BILLING）：POST /v3/async/txt2img；actualRequest.request 含 model_name、prompt、loras:[{model_name:more_details_59655,strength:0.75}]、steps:20、seed:42、guidance_scale:7、sampler_name、width/height、negative_prompt；上游 HTTP 403 NOT_ENOUGH_BALANCE 原文；历史芯片蓝「实际发送」；证据 /workspace/canvas-e2e-novita-1019/；Researchy 对照官网一致"
+          "sendEvidence": "canvas-e2e-novita-1019（挑刺这屏没挑到、画布 PASS_BILLING）：POST /v3/async/txt2img；actualRequest.request 含 model_name、prompt、loras:[{model_name:more_details_59655,strength:0.75}]、steps:20、seed:42、guidance_scale:7、sampler_name、width/height、negative_prompt；上游 HTTP 403 NOT_ENOUGH_BALANCE 原文；历史芯片蓝「实际发送」；证据 已清理；Researchy 对照官网一致"
         },
         "negative_prompt": {
           "type": "string",
           "sendStatus": "会发送",
-          "sendEvidence": "canvas-e2e-novita-1019（挑刺这屏没挑到、画布 PASS_BILLING）：POST /v3/async/txt2img；actualRequest.request 含 model_name、prompt、loras:[{model_name:more_details_59655,strength:0.75}]、steps:20、seed:42、guidance_scale:7、sampler_name、width/height、negative_prompt；上游 HTTP 403 NOT_ENOUGH_BALANCE 原文；历史芯片蓝「实际发送」；证据 /workspace/canvas-e2e-novita-1019/；Researchy 对照官网一致"
+          "sendEvidence": "canvas-e2e-novita-1019（挑刺这屏没挑到、画布 PASS_BILLING）：POST /v3/async/txt2img；actualRequest.request 含 model_name、prompt、loras:[{model_name:more_details_59655,strength:0.75}]、steps:20、seed:42、guidance_scale:7、sampler_name、width/height、negative_prompt；上游 HTTP 403 NOT_ENOUGH_BALANCE 原文；历史芯片蓝「实际发送」；证据 已清理；Researchy 对照官网一致"
         },
         "model_name": {
           "type": "string",
           "required": true,
           "sendStatus": "会发送",
-          "sendEvidence": "canvas-e2e-novita-1019（挑刺这屏没挑到、画布 PASS_BILLING）：POST /v3/async/txt2img；actualRequest.request 含 model_name、prompt、loras:[{model_name:more_details_59655,strength:0.75}]、steps:20、seed:42、guidance_scale:7、sampler_name、width/height、negative_prompt；上游 HTTP 403 NOT_ENOUGH_BALANCE 原文；历史芯片蓝「实际发送」；证据 /workspace/canvas-e2e-novita-1019/；Researchy 对照官网一致"
+          "sendEvidence": "canvas-e2e-novita-1019（挑刺这屏没挑到、画布 PASS_BILLING）：POST /v3/async/txt2img；actualRequest.request 含 model_name、prompt、loras:[{model_name:more_details_59655,strength:0.75}]、steps:20、seed:42、guidance_scale:7、sampler_name、width/height、negative_prompt；上游 HTTP 403 NOT_ENOUGH_BALANCE 原文；历史芯片蓝「实际发送」；证据 已清理；Researchy 对照官网一致"
         }
       }
     },
@@ -236,7 +237,7 @@
           "required": true,
           "source": "sd_name_in_api from catalog",
           "sendStatus": "会发送",
-          "sendEvidence": "canvas-e2e-novita-1019（挑刺这屏没挑到、画布 PASS_BILLING）：POST /v3/async/txt2img；actualRequest.request 含 model_name、prompt、loras:[{model_name:more_details_59655,strength:0.75}]、steps:20、seed:42、guidance_scale:7、sampler_name、width/height、negative_prompt；上游 HTTP 403 NOT_ENOUGH_BALANCE 原文；历史芯片蓝「实际发送」；证据 /workspace/canvas-e2e-novita-1019/；Researchy 对照官网一致"
+          "sendEvidence": "canvas-e2e-novita-1019（挑刺这屏没挑到、画布 PASS_BILLING）：POST /v3/async/txt2img；actualRequest.request 含 model_name、prompt、loras:[{model_name:more_details_59655,strength:0.75}]、steps:20、seed:42、guidance_scale:7、sampler_name、width/height、negative_prompt；上游 HTTP 403 NOT_ENOUGH_BALANCE 原文；历史芯片蓝「实际发送」；证据 已清理；Researchy 对照官网一致"
         },
         "strength": {
           "type": "number",
@@ -245,13 +246,13 @@
           "default": null,
           "uiRule": "勿静默 0.8",
           "sendStatus": "会发送",
-          "sendEvidence": "canvas-e2e-novita-1019（挑刺这屏没挑到、画布 PASS_BILLING）：POST /v3/async/txt2img；actualRequest.request 含 model_name、prompt、loras:[{model_name:more_details_59655,strength:0.75}]、steps:20、seed:42、guidance_scale:7、sampler_name、width/height、negative_prompt；上游 HTTP 403 NOT_ENOUGH_BALANCE 原文；历史芯片蓝「实际发送」；证据 /workspace/canvas-e2e-novita-1019/；Researchy 对照官网一致"
+          "sendEvidence": "canvas-e2e-novita-1019（挑刺这屏没挑到、画布 PASS_BILLING）：POST /v3/async/txt2img；actualRequest.request 含 model_name、prompt、loras:[{model_name:more_details_59655,strength:0.75}]、steps:20、seed:42、guidance_scale:7、sampler_name、width/height、negative_prompt；上游 HTTP 403 NOT_ENOUGH_BALANCE 原文；历史芯片蓝「实际发送」；证据 已清理；Researchy 对照官网一致"
         }
       },
       "maxHistorical": "up to 5 LoRAs (legacy docs)",
       "not": "URL/path + scale（那是 Together/AIML 形状）",
       "sendStatus": "会发送",
-      "sendEvidence": "canvas-e2e-novita-1019（挑刺这屏没挑到、画布 PASS_BILLING）：POST /v3/async/txt2img；actualRequest.request 含 model_name、prompt、loras:[{model_name:more_details_59655,strength:0.75}]、steps:20、seed:42、guidance_scale:7、sampler_name、width/height、negative_prompt；上游 HTTP 403 NOT_ENOUGH_BALANCE 原文；历史芯片蓝「实际发送」；证据 /workspace/canvas-e2e-novita-1019/；Researchy 对照官网一致"
+      "sendEvidence": "canvas-e2e-novita-1019（挑刺这屏没挑到、画布 PASS_BILLING）：POST /v3/async/txt2img；actualRequest.request 含 model_name、prompt、loras:[{model_name:more_details_59655,strength:0.75}]、steps:20、seed:42、guidance_scale:7、sampler_name、width/height、negative_prompt；上游 HTTP 403 NOT_ENOUGH_BALANCE 原文；历史芯片蓝「实际发送」；证据 已清理；Researchy 对照官网一致"
     },
     "videoTxt2video": {
       "supported": true,
@@ -320,6 +321,6 @@
   },
   "contractTestHint": "txt2img: request.loras[{model_name,strength 0-1}]、seed(含-1)、steps、guidance_scale 必发（novita-1019 已证实会发送，至 403）；Ming images 挂 LoRA/seed 本地拒绝；img2video 用 frames_per_second 非 fps；历史芯片须下钻 request 嵌套，发了不得标未发送",
   "_auditStatus": "2026-10-16 ~10:32 JST tinkabot：认领 novita-1019（挑刺过）——txt2img request 字段与 loras 升「会发送」，acceptanceBadge=PASS_BILLING。前序 2026-10-15 03:26：旧审计仅对比；以 v2 与 DIFF 为准。",
-  "acceptanceBadge": "PASS_BILLING",
+  "acceptanceBadge": "未验证",
   "acceptanceBadgeEvidence": "2026-10-16 novita-1019：欠费接线通过（403 NOT_ENOUGH_BALANCE），非 PASS_GENERATION"
 }

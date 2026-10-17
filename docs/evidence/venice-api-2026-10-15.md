@@ -45,7 +45,7 @@
 - 相关：`modelHubCatalog` / `togetherProvider` 通过
 
 ## Live smoke（服务端，临时 express + 真实上游）
-结果：`/workspace/canvas-e2e-venice/smoke-result.json`
+结果：`/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-venice/smoke-result.json`
 | 步骤 | 结果 |
 |---|---|
 | 目录 `GET /models?type=all` | **200**，checkpoint≈45；例：`venice-sd35` supportsLora=false |
@@ -56,7 +56,7 @@
 Key 元数据（不回显密钥）：`keyPresent=true`，`keyLen=63`，前缀脱敏。`/billing/balance` 对本 Key 返回 401 Admin API key required（与审计一致：普通推理 Key 用 402 生图体验证欠费）。
 
 ## 恢复包
-- 改前：`/workspace/canvas-restore/pre-venice-0203.tgz`
+- 改前：`/workspace/canvas/temp/backups/canvas-restore/pre-venice-0203.tgz`
 
 ## 未完成 / 待办（给画布 FE）
 - **充值 `VENICE_API_KEY` 对应账户** 后重跑 `npx tsx scripts/venice-live-smoke.ts`，争取 PASS_GENERATION（仍勿带自定义 LoRA；填齐 seed/steps/cfg/size）。

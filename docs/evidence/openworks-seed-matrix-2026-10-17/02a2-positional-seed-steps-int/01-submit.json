@@ -1,0 +1,55 @@
+{
+  "case": "02a2-positional-seed-steps-int",
+  "timestampAsiaTokyo": "2026-10-17 12:24:26 JST",
+  "actualRequest": {
+    "endpoint": "https://openapi.tensor.art/openworks/v1/task",
+    "headers": {
+      "Echo-Access-Key": "ak_tensor_…1o64",
+      "User-Agent": "node"
+    },
+    "body": {
+      "toolName": "photoreal_studio_z_image",
+      "inputs": [
+        {
+          "type": "STRING",
+          "value": "a red apple on a white table, studio photo"
+        },
+        {
+          "type": "INTEGER",
+          "value": 512
+        },
+        {
+          "type": "INTEGER",
+          "value": 512
+        },
+        {
+          "type": "INTEGER",
+          "value": 1
+        },
+        {
+          "type": "INTEGER",
+          "value": 424242
+        },
+        {
+          "type": "INTEGER",
+          "value": 20
+        }
+      ]
+    }
+  },
+  "httpStatus": 200,
+  "response": {
+    "code": "0",
+    "message": "",
+    "data": {
+      "task": {
+        "id": "1056284785812482359",
+        "userId": "1048723019146487792",
+        "status": "WAITING",
+        "toolName": "photoreal_studio_z_image",
+        "outputs": []
+      }
+    }
+  },
+  "note": "narrow positional retry to characterize 02a 404; submit-only (no poll) unless 200"
+}

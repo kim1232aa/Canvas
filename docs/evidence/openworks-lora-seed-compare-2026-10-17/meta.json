@@ -1,0 +1,17 @@
+{
+  "timeStartedAsiaTokyo": "2026-10-17 13:00:07 JST",
+  "tool": "photoreal_studio_z_image",
+  "endpoint": "https://openapi.tensor.art/openworks/v1/task",
+  "auth": "Echo-Access-Key = ak_tensor_W6…1o64 (first ak_tensor_ from env TENSORART_API_KEY)",
+  "seed": 424242,
+  "loraId": "661652545330040294",
+  "loraWeight": 1.0,
+  "recipeImageId": 141319690,
+  "recipeNote": "Moebius ink female pilot 141319690 — NOT tiger (141294062), NOT apple; newlines flattened for OW template",
+  "promptLenRaw": 426,
+  "promptLenFlat": 426,
+  "promptPreview": "ta86_inkriot, thin black outlines, art by Jean Giraud (Moebius), watercolor and ink illustration, a female pilot holding a white helmet, wearing a complex mecha",
+  "size": "512x512",
+  "productCodeModified": false,
+  "rerunNote": "First attempt 400 due to \\n in recipe prompt; flattened and re-ran all A/B/C"
+}

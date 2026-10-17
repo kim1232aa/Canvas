@@ -119,8 +119,8 @@ Vitest (2026-10-15): `modelApiWiring` / `civitaiImageContract` / `schemaProvider
 
 ### P0 · Krea `image/bfl/flux-1-dev`（画布 FE：`PASS_BILLING_AND_FAIL_PARAMS`）
 
-- **OpenAPI**（`/workspace/krea-docs/openapi.json`）：`steps`, `seed`, `width`, `height`, `guidance_scale`, `strength`, `styles`, … — **无** `sampler` / `scheduler`
-- **FE 截图**：`/workspace/canvas-e2e-krea-fe/05-error.png` — KSampler 对 steps/cfg/sampler/scheduler/denoise 标「不会发送」；402 欠费展示 OK；LoRA `styles[{id:79tzf61yz,strength:0.8}]` OK
+- **OpenAPI**（`/workspace/canvas/temp/krea-docs/openapi.json`）：`steps`, `seed`, `width`, `height`, `guidance_scale`, `strength`, `styles`, … — **无** `sampler` / `scheduler`
+- **FE 截图**：`/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-krea-fe/05-error.png` — KSampler 对 steps/cfg/sampler/scheduler/denoise 标「不会发送」；402 欠费展示 OK；LoRA `styles[{id:79tzf61yz,strength:0.8}]` OK
 - **FAIL**：steps / seed（及 cfg→guidance_scale、width/height、denoise→strength）官方支持却标不发
 - **OK 不发**：sampler / scheduler（Schema 无字段）
 

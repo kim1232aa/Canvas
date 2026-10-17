@@ -32,7 +32,7 @@
 - 未改 server.ts / CivitaiModal / ExecutionLog / history 组件。
 
 ## 备份
-`/workspace/canvas-restore/pre-wavespeed-together-20261015-050808.tgz`（不含 node_modules/.git/.env）
+`/workspace/canvas/temp/backups/canvas-restore/pre-wavespeed-together-20261015-050808.tgz`（不含 node_modules/.git/.env）
 
 ## 待画布前端 E2E（新会话，后端需重启）
 1. WaveSpeed → `wavespeed-ai/krea-v2/turbo-lora`；参数面板「官方 Schema 字段」应出现 aspect_ratio、resolution 下拉；选 16:9 + 2k，徽章「会发送 16:9」「会发送 2k」。

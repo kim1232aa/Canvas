@@ -1,0 +1,66 @@
+{
+  "case": "03b-same-seed-run2",
+  "title": "Same seed=424242 run #2 (named extras, identical body)",
+  "note": "second of two identical named-seed requests for hash compare",
+  "timestampAsiaTokyo": "2026-10-17 12:23:56 JST",
+  "actualRequest": {
+    "endpoint": "https://openapi.tensor.art/openworks/v1/task",
+    "method": "POST",
+    "headers": {
+      "Content-Type": "application/json",
+      "User-Agent": "node",
+      "Echo-Access-Key": "ak_tensor_…1o64"
+    },
+    "body": {
+      "toolName": "photoreal_studio_z_image",
+      "inputs": [
+        {
+          "type": "STRING",
+          "value": "a red apple on a white table, studio photo"
+        },
+        {
+          "type": "INTEGER",
+          "value": 512
+        },
+        {
+          "type": "INTEGER",
+          "value": 512
+        },
+        {
+          "type": "INTEGER",
+          "value": 1
+        },
+        {
+          "type": "INTEGER",
+          "name": "seed",
+          "value": 424242
+        },
+        {
+          "type": "INTEGER",
+          "name": "steps",
+          "value": 20
+        },
+        {
+          "type": "NUMBER",
+          "name": "cfg",
+          "value": 7.5
+        }
+      ]
+    }
+  },
+  "httpStatus": 200,
+  "responseRaw": null,
+  "response": {
+    "code": "0",
+    "message": "",
+    "data": {
+      "task": {
+        "id": "1056284658037188309",
+        "userId": "1048723019146487792",
+        "status": "WAITING",
+        "toolName": "photoreal_studio_z_image",
+        "outputs": []
+      }
+    }
+  }
+}

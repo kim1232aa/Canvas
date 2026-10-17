@@ -1,7 +1,7 @@
 # Replicate 无 Schema 本地拦截（铁律 4）— 2026-10-15
 
 状态：**CODE_ONLY**（未经前端 E2E，不是 PASS）
-备份：`/workspace/canvas-restore/pre-replicate-noschema-044011.tgz`
+备份：`/workspace/canvas/temp/backups/canvas-restore/pre-replicate-noschema-044011.tgz`
 
 ## 改动
 - `src/server/replicateImageContract.ts`
@@ -29,7 +29,7 @@
 3. 回归：flux-schnell、flux-dev-lora 走表里的行，行为不变。
 
 ## 追加：状态码透传（画布追问，05:43 JST）
-备份：`/workspace/canvas-restore/pre-replicate-noschema-status-044348.tgz`
+备份：`/workspace/canvas/temp/backups/canvas-restore/pre-replicate-noschema-status-044348.tgz`
 
 错误文本固定两行：第一行是上游信息（照原文，或明确写没有上游信息），第二行是 `本地拦截：拿不到该模型 Schema，未发送 /predictions（model=…）`。
 
@@ -49,7 +49,7 @@
 画布前端 E2E 加验：选一个不存在的模型，Network 里 /generate 的状态码应为 404；错误第一行是 `HTTP 404: <上游原文>`，第二行是本地拦截说明；历史卡显示 404 和同样的第一行。
 
 ## 追加：历史 errorSource 与路由响应一致（05:45 JST）
-备份：`/workspace/canvas-restore/pre-history-errorsource-044528.tgz`
+备份：`/workspace/canvas/temp/backups/canvas-restore/pre-history-errorsource-044528.tgz`
 - server.ts 失败中间件在填默认值之前，先记下路由自己写在响应体里的 `errorSource` 和 `upstreamStatus`，再传给 `buildLocalRejectionHistoryItem` 的新可选参数 `routeProvenance`。
 - 历史记录优先用路由给的值：upstream、network 或 local；有 `upstreamStatus` 时一并写入。路由没给时仍为 `'local'`，不写 upstreamStatus，其他本地拦截行为不变。
 - 测试：新增用例覆盖 upstream+404、network、没传 provenance 时默认 local 三种情况。全量 1083/1085 通过，失败的 2 条是 mediaHostedReview，改动前就失败，和这次改动无关。

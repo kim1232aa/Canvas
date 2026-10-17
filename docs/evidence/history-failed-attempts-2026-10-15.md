@@ -1,7 +1,7 @@
 # 失败尝试写入历史（全供应商统一） — 2026-10-15
 
 状态：**CODE_ONLY**（单测通过；未做前端 E2E，待画布复验）。
-回滚包：`/workspace/canvas-restore/pre-history-failed-021523.tgz`（改动前，已校验不含新代码）。
+回滚包：`/workspace/canvas/temp/backups/canvas-restore/pre-history-failed-021523.tgz`（改动前，已校验不含新代码）。
 
 ## 唯一写入路径
 `server.ts` `recordHistoryItem()` → `history.json`。成功走它；失败现在也走它。
@@ -33,7 +33,7 @@
 
 ---
 # 追加（02:30）：会发送徽标 / 本地拦截文案 / LoRA 警告遮挡 — 全部 CODE_ONLY
-回滚包：`/workspace/canvas-restore/pre-sendbadge-*.tgz`
+回滚包：`/workspace/canvas/temp/backups/canvas-restore/pre-sendbadge-*.tgz`
 
 ## 1) 对称「会发送」徽标（单一真相源）
 `src/utils/schemaSendStatus.ts` 只调用 `schemaSendHint.ts` 已有导出（`isSchemaOmitCandidate` / `canvasFieldMatchesSchema` / `readDeclaredSchemaProperties`…）；`schemaSendHint.ts` **零改动**。
@@ -58,7 +58,7 @@
 
 ---
 # 追加（02:35）：本地拦截写入历史 + seed/负向徽标 — CODE_ONLY
-回滚包：`/workspace/canvas-restore/pre-localhistory-0227.tgz`。改前 vitest：954 过 / 2 既有失败；改后 957 过 / 同 2 既有失败（mediaHostedReview）。
+回滚包：`/workspace/canvas/temp/backups/canvas-restore/pre-localhistory-0227.tgz`。改前 vitest：954 过 / 2 既有失败；改后 957 过 / 同 2 既有失败（mediaHostedReview）。
 
 ## 本地拦截写历史（全供应商统一）
 - `src/server/failedAttemptHistory.ts`：`buildLocalRejectionHistoryItem()`、`isGenerationRoute()`（路径以 `/generate` 或 `/submit` 结尾，覆盖 `/api/schema-provider/:p/submit`）。

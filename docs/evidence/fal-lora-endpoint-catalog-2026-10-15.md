@@ -6,7 +6,7 @@
 ## 原缺口（画布反馈）
 Fal 目录把 `endpoint_id` 含「lora」的一律标成 LoRA 资源，并从 Checkpoint 过滤掉。  
 结果：模型中心搜不到 `fal-ai/krea-2/turbo/lora`，只能手填自定义 ID。  
-Fal+LoRA 前端验收已用手工 ID 跑通（`PASS_BILLING`，证据 `/workspace/canvas-e2e-fal-lora/outcome.json`）。
+Fal+LoRA 前端验收已用手工 ID 跑通（`PASS_BILLING`，证据 `/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-fal-lora/outcome.json`）。
 
 ## 官方区分
 - Fal `https://api.fal.ai/v1/models` 列出的是 **推理/生图端点**，不是 LoRA 权重仓库。
@@ -53,4 +53,4 @@ npx vitest run \
 - 未改 Civitai Krea 拒发
 
 ## 备份
-`/workspace/canvas-restore/Canvas-main-fal-lora-endpoint-catalog-20261015.tar.gz`（排除 node_modules、data/media、.env）
+`/workspace/canvas/temp/backups/canvas-restore/Canvas-main-fal-lora-endpoint-catalog-20261015.tar.gz`（排除 node_modules、data/media、.env）

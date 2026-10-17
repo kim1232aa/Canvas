@@ -115,7 +115,7 @@
 | **风险** | 低。`hosting/build.mjs` 对 `logUpstream` 有字符串 `removeRange` —— **必须同步改 adapter 锚点或保持函数名/邻近注释不变** |
 | **测试** | 新建小 vitest（纯函数）；跑既有 `src/server/*.test.ts` 全绿 |
 | **冒烟** | `node`/`tsx` 起服 + `GET /api/cloud/health` |
-| **回滚** | 恢复 tar：`/workspace/canvas-restore/Canvas-main-pre-<slice0>-*.tar.gz`（实施前现打） |
+| **回滚** | 恢复 tar：`/workspace/canvas/temp/backups/canvas-restore/Canvas-main-pre-<slice0>-*.tar.gz`（实施前现打） |
 | **与 Together** | 若 Together 只动 schema/settings，本片仍可能碰 `server.ts` 顶部 → **建议等 Together merge 后再做**，或确认无并行写 `server.ts` |
 
 ### Slice 1 — 单供应商路由（推荐第一刀）
@@ -185,12 +185,12 @@
 实施任一 Slice 前：
 
 ```bash
-tar czf /workspace/canvas-restore/Canvas-main-pre-<slice-name>-$(date +%Y%m%d-%H%M%S).tar.gz \
+tar czf /workspace/canvas/temp/backups/canvas-restore/Canvas-main-pre-<slice-name>-$(date +%Y%m%d-%H%M%S).tar.gz \
   -C /workspace/canvas Canvas-main \
   --exclude=Canvas-main/node_modules --exclude=Canvas-main/dist
 ```
 
-回滚：解压覆盖对应文件（或整树）。参考已有包：`/workspace/canvas-restore/Canvas-main-pre-exec-success-plain-20261015-014200.tar.gz` 等。
+回滚：解压覆盖对应文件（或整树）。参考已有包：`/workspace/canvas/temp/backups/canvas-restore/Canvas-main-pre-exec-success-plain-20261015-014200.tar.gz` 等。
 
 **禁止** commit/push（用户铁律）。
 

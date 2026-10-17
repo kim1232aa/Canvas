@@ -1,0 +1,26 @@
+{
+  "httpStatus": 200,
+  "finalStatus": "FINISH",
+  "timestampAsiaTokyo": "2026-10-17 12:47:24 JST",
+  "responseRaw": "{\"code\":\"0\", \"message\":\"\", \"data\":{\"tasks\":[{\"id\":\"1056290546437376000\", \"userId\":\"1048723019146487792\", \"status\":\"FINISH\", \"toolName\":\"photoreal_studio_z_image\", \"outputs\":[{\"type\":\"STRING\", \"value\":\"https://tensor-sf-sig.7022ae40757f8d53295a57619de9b364.r2.cloudflarestorage.com/workspace/generation/1048723019146487792/2026-10-17/c0d8a0e3-b904-4852-9893-df14e0593a70.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=0bef8a003dc93fc4d7030c9da79271ff%2F20261017%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20261017T034724Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&x-id=GetObject&X-Amz-Signature=fb355e390bab2df83e295a1eb8a07a948ad7bfcb610fdb2b7da198c6f4f077ec\"}]}]}}",
+  "response": {
+    "code": "0",
+    "message": "",
+    "data": {
+      "tasks": [
+        {
+          "id": "1056290546437376000",
+          "userId": "1048723019146487792",
+          "status": "FINISH",
+          "toolName": "photoreal_studio_z_image",
+          "outputs": [
+            {
+              "type": "STRING",
+              "value": "https://tensor-sf-sig.7022ae40757f8d53295a57619de9b364.r2.cloudflarestorage.com/workspace/generation/1048723019146487792/2026-10-17/c0d8a0e3-b904-4852-9893-df14e0593a70.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=0bef8a003dc93fc4d7030c9da79271ff%2F20261017%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20261017T034724Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&x-id=GetObject&X-Amz-Signature=fb355e390bab2df83e295a1eb8a07a948ad7bfcb610fdb2b7da198c6f4f077ec"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

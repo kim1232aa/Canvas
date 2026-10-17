@@ -1,4 +1,5 @@
 {
+  "canvasAcceptance": "未验证（2026-10-17 14:40 北京：测试截图已全删，按雁标准「画布里出图、落保存节点、历史有缩略图」当前 0 家；以前的出图/欠费标记一律作废，官方字段结论保留；在画布重跑出图并有节点图+历史缩略图后再单独改）",
   "$schemaNote": "草案 — 仅声明。真相源: docs/provider-api-audit-v2/replicate.md + DIFF.md (2026-10-15)",
   "id": "replicate",
   "displayName": "Replicate",
@@ -166,9 +167,9 @@
     "https://replicate.com/api/models/black-forest-labs/flux-schnell/versions"
   ],
   "_auditStatus": "2026-10-16 ~10:55：1049 收口 PASS_BILLING（欠费 402，非真出图）。flux-dev-lora seed/steps/guidance/lora_weights/lora_scale 升「会发送」；extra_lora 未实发仍待确认",
-  "acceptanceBadge": "PASS_BILLING",
+  "acceptanceBadge": "未验证",
   "sendEvidence": {
-    "run": "/workspace/canvas-e2e-replicate-1049/",
+    "run": "已清理",
     "pid": "2620869 @10:48:41",
     "upstream": "HTTP 402 Insufficient credit 原文透传",
     "actualRequestInput": {

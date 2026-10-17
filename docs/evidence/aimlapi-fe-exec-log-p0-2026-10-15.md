@@ -2,7 +2,7 @@
 
 ## 结论
 状态：CODE_ONLY，待画布前端复验。不是 PASS。
-对应失败：`/workspace/canvas-e2e-aimlapi-fe/outcome.json` = `FAIL_EXEC_LOG_NO_LORA_REQUEST`（05-error.png / 06-exec-or-history.png）。
+对应失败：`/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-aimlapi-fe/outcome.json` = `FAIL_EXEC_LOG_NO_LORA_REQUEST`（05-error.png / 06-exec-or-history.png）。
 上游证据：`logs/upstream.log`，2026-10-14T18:07:05Z（北京时间 02:07），POST `api.aimlapi.com/v1/images/generations` → 403，`You've run out of funds…`，`err_insufficent_credits`。
 
 ## 根因
@@ -40,5 +40,5 @@
 - SaveImage 显示「这次没有出图」，LoRA 卡上没有「Civitai 编号」
 
 ## 还原包
-`/workspace/canvas-restore/Canvas-main-pre-aimlapi-fe-exec-log-p0-20261015.tar.gz`
+`/workspace/canvas/temp/backups/canvas-restore/Canvas-main-pre-aimlapi-fe-exec-log-p0-20261015.tar.gz`
 未 commit / push，未使用浏览器。

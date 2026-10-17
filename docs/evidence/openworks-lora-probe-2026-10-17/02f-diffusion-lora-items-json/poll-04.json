@@ -1,0 +1,31 @@
+{
+  "poll": 4,
+  "httpStatus": 200,
+  "timestampAsiaTokyo": "2026-10-17 12:48:43 JST",
+  "requestBody": {
+    "taskIds": [
+      "1056290978081594166"
+    ]
+  },
+  "responseRaw": "{\"code\":\"0\", \"message\":\"\", \"data\":{\"tasks\":[{\"id\":\"1056290978081594166\", \"userId\":\"1048723019146487792\", \"status\":\"FINISH\", \"toolName\":\"photoreal_studio_z_image\", \"outputs\":[{\"type\":\"STRING\", \"value\":\"https://tensor-sf-sig.7022ae40757f8d53295a57619de9b364.r2.cloudflarestorage.com/workspace/generation/1048723019146487792/2026-10-17/65b1e03b-0f9f-452c-b032-b96a28955445.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=0bef8a003dc93fc4d7030c9da79271ff%2F20261017%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20261017T034843Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&x-id=GetObject&X-Amz-Signature=a8aa26fd083616382d019bea2c941b5fa5cd3349d3fdd35d54e597872b8bf574\"}]}]}}",
+  "response": {
+    "code": "0",
+    "message": "",
+    "data": {
+      "tasks": [
+        {
+          "id": "1056290978081594166",
+          "userId": "1048723019146487792",
+          "status": "FINISH",
+          "toolName": "photoreal_studio_z_image",
+          "outputs": [
+            {
+              "type": "STRING",
+              "value": "https://tensor-sf-sig.7022ae40757f8d53295a57619de9b364.r2.cloudflarestorage.com/workspace/generation/1048723019146487792/2026-10-17/65b1e03b-0f9f-452c-b032-b96a28955445.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=0bef8a003dc93fc4d7030c9da79271ff%2F20261017%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20261017T034843Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&x-id=GetObject&X-Amz-Signature=a8aa26fd083616382d019bea2c941b5fa5cd3349d3fdd35d54e597872b8bf574"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

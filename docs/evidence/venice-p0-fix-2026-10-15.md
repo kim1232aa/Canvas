@@ -1,6 +1,6 @@
 # Venice P0 修复 · 2026-10-15
 
-结论：**CODE_ONLY**（无浏览器；不宣称 PASS_BILLING）。服务端 smoke 此前已能发送 width/height/negative_prompt/cfg_scale（`/workspace/canvas-e2e-venice/smoke-result.json`）；前端 E2E FAIL_PARAM_DROP（`/workspace/canvas-e2e-venice-fe/outcome.json`）根因已修，待画布前端复验。
+结论：**CODE_ONLY**（无浏览器；不宣称 PASS_BILLING）。服务端 smoke 此前已能发送 width/height/negative_prompt/cfg_scale（`/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-venice/smoke-result.json`）；前端 E2E FAIL_PARAM_DROP（`/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-venice-fe/outcome.json`）根因已修，待画布前端复验。
 
 ## 官方依据（实时）
 - Image Generate OpenAPI：https://docs.venice.ai/api-reference/endpoint/image/generate （stamp `20261012.214344`）

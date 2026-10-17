@@ -3,7 +3,7 @@
 结论：**CODE_ONLY**（无浏览器；不宣称 PASS）。Krea 服务端 live submit 已含 steps/seed/guidance_scale/styles，上游 **HTTP 402**（欠费原文透传）。前端徽章与 Venice 两处瑕疵已改，待画布重拍。
 
 ## Restore
-`/workspace/canvas-restore/pre-venice-krea-20261016-093004.tgz`
+`/workspace/canvas/temp/backups/canvas-restore/pre-venice-krea-20261016-093004.tgz`
 
 ## 后端
 - 旧 PID 2084318 已停；本批只重启一次。

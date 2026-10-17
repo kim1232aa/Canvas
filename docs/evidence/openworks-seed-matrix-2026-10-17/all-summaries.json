@@ -1,0 +1,165 @@
+{
+  "results": [
+    {
+      "case": "01-official-4",
+      "title": "Official 4 fields only",
+      "note": "prompt + image width + image height + result image count; no seed/steps/cfg",
+      "timestampAsiaTokyo": "2026-10-17 12:21:48 JST",
+      "submitHttpStatus": 200,
+      "taskId": "1056284107207646691",
+      "seedInRequest": false,
+      "imageSha256": "c0b6edb6e5ccde09c1bb5ae960dbb9944c81016239b2bd6dd94ba9c560078975",
+      "imageUrl": "https://tensor-sf-sig.7022ae40757f8d53295a57619de9b364.r2.cloudflarestorage.com/workspace/generation/1048723019146487792/2026-10-17/38b62ced-6204-4e45-ad27-cd9cfe8b73df.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=0bef8a003dc93fc4d7030c9da79271ff%2F20261017%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20261017T032221Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&x-id=GetObject&X-Amz-Signature=0300f42b68c896f98fa6330eff09fe4e5edad289230c90f040bd785bef7abf09",
+      "finalTaskStatus": "FINISH",
+      "conclusion": "上游 200 FINISH 已出图",
+      "finalTask": {
+        "id": "1056284107207646691",
+        "userId": "1048723019146487792",
+        "status": "FINISH",
+        "toolName": "photoreal_studio_z_image",
+        "outputs": [
+          {
+            "type": "STRING",
+            "value": "https://tensor-sf-sig.7022ae40757f8d53295a57619de9b364.r2.cloudflarestorage.com/workspace/generation/1048723019146487792/2026-10-17/38b62ced-6204-4e45-ad27-cd9cfe8b73df.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=0bef8a003dc93fc4d7030c9da79271ff%2F20261017%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20261017T032221Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&x-id=GetObject&X-Amz-Signature=0300f42b68c896f98fa6330eff09fe4e5edad289230c90f040bd785bef7abf09"
+          }
+        ]
+      },
+      "imageBytes": 287380
+    },
+    {
+      "case": "02a-extra-positional",
+      "title": "Stuff seed/steps/cfg as extra positional inputs",
+      "note": "5th INTEGER=424242 (seed), 6th INTEGER=20 (steps), 7th NUMBER=7.5 (cfg). Schema has no these fields.",
+      "timestampAsiaTokyo": "2026-10-17 12:22:31 JST",
+      "submitHttpStatus": 404,
+      "taskId": null,
+      "seedInRequest": true,
+      "imageSha256": null,
+      "imageUrl": null,
+      "finalTaskStatus": null,
+      "conclusion": "提交 HTTP 404，上游原文 code=5 tool not found：mapping.json context deadline exceeded（CDN 超时，非参数形状拒绝）。窄化重试：仅 seed / seed+steps → 200 WAITING；再塞 FLOAT/三整数时遇 WORKS_QUEUE_FULL 500。",
+      "upstream404Body": {
+        "code": 5,
+        "message": "tool not found: failed to fetch mapping: Get \"https://config-cdn.qiandaoapp.com/tusi_tensor_tools/mapping.json\": context deadline exceeded (Client.Timeout exceeded while awaiting headers)"
+      },
+      "positionalRetries": [
+        {
+          "case": "02a1-positional-seed-only",
+          "httpStatus": 200,
+          "responseSnippet": "{\"code\":\"0\", \"message\":\"\", \"data\":{\"task\":{\"id\":\"1056284777222547745\", \"userId\":\"1048723019146487792\", \"status\":\"WAITING\", \"toolName\":\"photoreal_studio_z_image\", \"outputs\":[]}}}"
+        },
+        {
+          "case": "02a2-positional-seed-steps-int",
+          "httpStatus": 200,
+          "responseSnippet": "{\"code\":\"0\", \"message\":\"\", \"data\":{\"task\":{\"id\":\"1056284785812482359\", \"userId\":\"1048723019146487792\", \"status\":\"WAITING\", \"toolName\":\"photoreal_studio_z_image\", \"outputs\":[]}}}"
+        },
+        {
+          "case": "02a3-positional-seed-steps-cfg-float",
+          "httpStatus": 500,
+          "responseSnippet": "{\"code\":13,\"message\":\"failed to handle task: works service error: code=1300013, message=WORKS_QUEUE_FULL\"}\n"
+        },
+        {
+          "case": "02a4-positional-three-integers",
+          "httpStatus": 500,
+          "responseSnippet": "{\"code\":13,\"message\":\"failed to handle task: works service error: code=1300013, message=WORKS_QUEUE_FULL\"}\n"
+        }
+      ]
+    },
+    {
+      "case": "02b-named-extras",
+      "title": "Stuff seed/steps/cfg as named extra inputs",
+      "note": "named seed/steps/cfg/cfg_scale/guidance alongside official 4; tool/list declares none of these",
+      "timestampAsiaTokyo": "2026-10-17 12:22:32 JST",
+      "submitHttpStatus": 200,
+      "taskId": "1056284297259933947",
+      "seedInRequest": true,
+      "imageSha256": "6abd9e3777d0092118e10d7c8629a17534dcd4d462a962f4d532fed5f557284d",
+      "imageUrl": "https://tensor-sf-sig.7022ae40757f8d53295a57619de9b364.r2.cloudflarestorage.com/workspace/generation/1048723019146487792/2026-10-17/da3c81af-fd97-497f-8ee7-0de6c87959ca.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=0bef8a003dc93fc4d7030c9da79271ff%2F20261017%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20261017T032308Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&x-id=GetObject&X-Amz-Signature=f4a7c57d6872719f9c29d47723e26d125cab75d590c3318e25c638ba429681fc",
+      "finalTaskStatus": "FINISH",
+      "conclusion": "上游 200 FINISH 已出图",
+      "finalTask": {
+        "id": "1056284297259933947",
+        "userId": "1048723019146487792",
+        "status": "FINISH",
+        "toolName": "photoreal_studio_z_image",
+        "outputs": [
+          {
+            "type": "STRING",
+            "value": "https://tensor-sf-sig.7022ae40757f8d53295a57619de9b364.r2.cloudflarestorage.com/workspace/generation/1048723019146487792/2026-10-17/da3c81af-fd97-497f-8ee7-0de6c87959ca.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=0bef8a003dc93fc4d7030c9da79271ff%2F20261017%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20261017T032308Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&x-id=GetObject&X-Amz-Signature=f4a7c57d6872719f9c29d47723e26d125cab75d590c3318e25c638ba429681fc"
+          }
+        ]
+      },
+      "imageBytes": 298380
+    },
+    {
+      "case": "03a-same-seed-run1",
+      "title": "Same seed=424242 run #1 (named extras)",
+      "note": "first of two identical named-seed requests for hash compare",
+      "timestampAsiaTokyo": "2026-10-17 12:23:09 JST",
+      "submitHttpStatus": 200,
+      "taskId": "1056284452952489242",
+      "seedInRequest": true,
+      "imageSha256": "9a3681852417bf7fe701ebfcd171781ccc856da0804794a89e48a733b6259a4b",
+      "imageUrl": "https://tensor-sf-sig.7022ae40757f8d53295a57619de9b364.r2.cloudflarestorage.com/workspace/generation/1048723019146487792/2026-10-17/75c62524-b338-4ae9-8cbd-45a5dcd8654b.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=0bef8a003dc93fc4d7030c9da79271ff%2F20261017%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20261017T032355Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&x-id=GetObject&X-Amz-Signature=0e64a69911140627005b39ebd0936d6b94f55dfb1889271bf035b23808d0c511",
+      "finalTaskStatus": "FINISH",
+      "conclusion": "上游 200 FINISH 已出图",
+      "finalTask": {
+        "id": "1056284452952489242",
+        "userId": "1048723019146487792",
+        "status": "FINISH",
+        "toolName": "photoreal_studio_z_image",
+        "outputs": [
+          {
+            "type": "STRING",
+            "value": "https://tensor-sf-sig.7022ae40757f8d53295a57619de9b364.r2.cloudflarestorage.com/workspace/generation/1048723019146487792/2026-10-17/75c62524-b338-4ae9-8cbd-45a5dcd8654b.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=0bef8a003dc93fc4d7030c9da79271ff%2F20261017%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20261017T032355Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&x-id=GetObject&X-Amz-Signature=0e64a69911140627005b39ebd0936d6b94f55dfb1889271bf035b23808d0c511"
+          }
+        ]
+      },
+      "imageBytes": 224737
+    },
+    {
+      "case": "03b-same-seed-run2",
+      "title": "Same seed=424242 run #2 (named extras, identical body)",
+      "note": "second of two identical named-seed requests for hash compare",
+      "timestampAsiaTokyo": "2026-10-17 12:23:56 JST",
+      "submitHttpStatus": 200,
+      "taskId": "1056284658037188309",
+      "seedInRequest": true,
+      "imageSha256": "c7268c98cc55b09def930ce802d25086410e828e2fa6acf24bd7baf9e259665e",
+      "imageUrl": "https://tensor-sf-sig.7022ae40757f8d53295a57619de9b364.r2.cloudflarestorage.com/workspace/generation/1048723019146487792/2026-10-17/2264b4e0-c59b-49ad-8dbd-17b31c436919.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=0bef8a003dc93fc4d7030c9da79271ff%2F20261017%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20261017T032413Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&x-id=GetObject&X-Amz-Signature=a4eba472f7e1e55574fa2e4b1e9e4bb4b8c538f3c93f50e226306acd107e8add",
+      "finalTaskStatus": "FINISH",
+      "conclusion": "上游 200 FINISH 已出图",
+      "finalTask": {
+        "id": "1056284658037188309",
+        "userId": "1048723019146487792",
+        "status": "FINISH",
+        "toolName": "photoreal_studio_z_image",
+        "outputs": [
+          {
+            "type": "STRING",
+            "value": "https://tensor-sf-sig.7022ae40757f8d53295a57619de9b364.r2.cloudflarestorage.com/workspace/generation/1048723019146487792/2026-10-17/2264b4e0-c59b-49ad-8dbd-17b31c436919.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=0bef8a003dc93fc4d7030c9da79271ff%2F20261017%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20261017T032413Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&x-id=GetObject&X-Amz-Signature=a4eba472f7e1e55574fa2e4b1e9e4bb4b8c538f3c93f50e226306acd107e8add"
+          }
+        ]
+      },
+      "imageBytes": 261603
+    }
+  ],
+  "compare": {
+    "seed": 424242,
+    "variant": "named extras (seed/steps/cfg)",
+    "run1": {
+      "case": "03a-same-seed-run1",
+      "sha256": "9a3681852417bf7fe701ebfcd171781ccc856da0804794a89e48a733b6259a4b",
+      "taskId": "1056284452952489242",
+      "status": "FINISH"
+    },
+    "run2": {
+      "case": "03b-same-seed-run2",
+      "sha256": "c7268c98cc55b09def930ce802d25086410e828e2fa6acf24bd7baf9e259665e",
+      "taskId": "1056284658037188309",
+      "status": "FINISH"
+    },
+    "hashesEqual": false,
+    "conclusion": "同 seed 两次 sha256 不同 → 上游忽略 seed（参数无效/未生效）"
+  }
+}

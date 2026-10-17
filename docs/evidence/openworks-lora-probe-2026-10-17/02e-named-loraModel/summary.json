@@ -1,0 +1,14 @@
+{
+  "case": "02e-named-loraModel",
+  "title": "Official 4 + name=loraModel",
+  "note": "name=loraModel + weight 1.1",
+  "httpStatus": 200,
+  "submitCode": "0",
+  "submitMessage": "",
+  "taskId": "1056290887887280609",
+  "finalStatus": "FINISH",
+  "imageSha256": "2f19ab18b2541c4d6d204ae496fe8e1724d5c3f4cf1019ddc7bf69196cef10e6",
+  "imageBytes": 454021,
+  "conclusion": "ignored_or_unproven (HTTP200 FINISH; schema has no LoRA; no proof applied)",
+  "timestampAsiaTokyo": "2026-10-17 12:48:09 JST"
+}

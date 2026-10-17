@@ -1,6 +1,6 @@
 # Krea 挑刺 UI P0 — 2026-10-15
 
-对照 `/workspace/canvas-e2e-krea-fe/{04-before-run,05-error}.png` 与画布挑刺严重项。  
+对照 `/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-krea-fe/{04-before-run,05-error}.png` 与画布挑刺严重项。  
 **「不会发送」/ schemaSendHint 未动。** 未改 `schemaProviders.ts` / `server.ts`。
 
 ## 结论
@@ -43,7 +43,7 @@ npx vitest run \
 
 ## 还原包
 
-`/workspace/canvas-restore/Canvas-main-pre-krea-tiaoci-ui-p0-20261015-020223.tar.gz`
+`/workspace/canvas/temp/backups/canvas-restore/Canvas-main-pre-krea-tiaoci-ui-p0-20261015-020223.tar.gz`
 
 ## 修订 · 402 首行改回透传（产品硬规 · 雁）
 

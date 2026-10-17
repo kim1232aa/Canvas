@@ -4,6 +4,14 @@
 
 **合并范围说明**：保留 origin/main 已有的验收事实与功能说明，以及本地 incoming `72f5372` 的 2026-10-12 接线修复记录。10-10 Runware 的 `PASS_GENERATION` 仅指当时实测路径；10-12 `lora` 字段修复尚未上游复验，余额不足不是生成成功。ModelsLab 的订阅限制仍只记 `PASS_BILLING`，参考图 `/img2img` 修复未完成真实复验。10-09 资产库旧 base64 不自动迁移是当时状态，10-12 新增打开资产库时上传的接线记录，不代表已逐项真实验收。下文 10-06/10-05 的状态及待验项限各自当时范围，后续 SenseNova、Fal、媒体架构进展按 10-10/10-09 记录并列保留，不提升任何验收等级。
 
+## 2026-10-16 晚间（Asia/Tokyo）
+
+- **Git**：本地 `/workspace/canvas/Canvas-main` 已对上远程；`2d76382` 推送至 https://github.com/kim1232aa/Canvas `main`；**.env 未提交**。
+- **CLOSED**：fix10.1（ZWSP 出 value/存储；Fal Kling V3 i2v `q1cbe` 403 TOP_UP = PASS_BILLING）；fix11.2（900/1100/1600 预览浮层可读、不盖画面比例、历史弹层藏浮层；挑刺无严重后正式收口）。证据见 `docs/evidence/fix10.1-2026-10-16.md`、`fix11.2-2026-10-16.md` 与 `/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-fix11.2-accept-2022/`。
+- **进行中**：fix12 CODE_ONLY 冻结（PID 3473149 / ticks 14993784，约 20:45 JST）— 历史「共 N 项」+ 900 执行记录 under-top；前端重拍 `/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-fix12-accept-2157/`，**未收口**。
+- **挂起**：Together `image_loras`（等 Key）；TAMS Bearer；ModelScope intl LoRA E2E；civitai.red 付费 LoRA 复跑；Fal 之后更多视频供应商；预设/App 拆分未批准。
+- **不降级**：WaveSpeed PASS_GENERATION；MuAPI/Sogni 等 PASS_BILLING；Krea/AIMLAPI/Novita/Replicate 等维持既有 evidence 判定。本条只记进度，不发明 PASS。
+
 ## 2026-10-13 引擎接线、双轨架构落地与前端路由错误透传记录（单测通过不代表全供应商实机验收完成）
 
 - **Replicate 官方推理引擎全面接入**：

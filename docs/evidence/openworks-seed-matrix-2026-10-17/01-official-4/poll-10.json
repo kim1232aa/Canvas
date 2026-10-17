@@ -1,0 +1,18 @@
+{
+  "httpStatus": 200,
+  "body": {
+    "code": "0",
+    "message": "",
+    "data": {
+      "tasks": [
+        {
+          "id": "1056284107207646691",
+          "userId": "1048723019146487792",
+          "status": "PROCESSING",
+          "toolName": "photoreal_studio_z_image",
+          "outputs": []
+        }
+      ]
+    }
+  }
+}

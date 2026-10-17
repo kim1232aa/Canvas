@@ -2,7 +2,7 @@
 
 状态：**CODE_ONLY**（服务端 live 证据到 HTTP 402 欠费；未经画布前端 E2E，不是 PASS）
 
-备份：`/workspace/canvas-restore/pre-replicate-20261016-103237.tgz`
+备份：`/workspace/canvas/temp/backups/canvas-restore/pre-replicate-20261016-103237.tgz`
 
 ## 官网核对（改前）
 - HTTP：https://replicate.com/docs/reference/http — `POST /v1/predictions`，参数在 **input**；亦可 `POST /v1/models/{owner}/{name}/predictions`

@@ -3,8 +3,8 @@
 状态：CODE_ONLY（只有单元/契约测试，没有做浏览器端到端，也没有调用真实 /task）。未提交 commit。
 
 还原包：
-- `/workspace/canvas-restore/pre-openworks-detool-0238.tgz`：02:38 打的，早于第一轮。
-- `/workspace/canvas-restore/pre-openworks-optionC-0240.tgz`：02:40 重新打的，开始方案 C 改动之前。
+- `/workspace/canvas/temp/backups/canvas-restore/pre-openworks-detool-0238.tgz`：02:38 打的，早于第一轮。
+- `/workspace/canvas/temp/backups/canvas-restore/pre-openworks-optionC-0240.tgz`：02:40 重新打的，开始方案 C 改动之前。
 
 ## 方案 C 是什么
 OpenWorks 是一个普通的 Schema 驱动服务商，provider id 为 `openworks`，在 UI 上显示为「Tensor.Art OpenWorks」。
@@ -22,7 +22,7 @@ OpenWorks 是一个普通的 Schema 驱动服务商，provider id 为 `openworks
 - https://raw.githubusercontent.com/Tensor-Art/tensorart-skills/master/skills/tensorart-generate/scripts/create_task.py （200）：`POST task {toolName, inputs}`
 - https://openapi.tensor.art/openworks/docs 返回 404；https://openapi.tensor.art/openworks/v1 返回 301
 
-## 实测探针（第 4 项）：/workspace/canvas-e2e-tensorart-probe/README.md，02:39–02:50
+## 实测探针（第 4 项）：/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-tensorart-probe/README.md，02:39–02:50
 测试对象是 photoreal_studio_z_image，512×512。
 - seed：传 seed=42 两次，分别以 positional、named、顶层字段三种方式发送。上游都返回 200、不报错，但两次输出的 sha256 都不同，说明上游忽略了 seed。
 - steps/cfg/sampler/loras：上游 200，task/query 不回显这些值，输出没有可验证的变化。

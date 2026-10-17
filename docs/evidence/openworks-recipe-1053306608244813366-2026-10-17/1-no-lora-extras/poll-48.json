@@ -1,0 +1,8 @@
+{
+  "httpStatus": 400,
+  "response": {
+    "code": 3,
+    "message": "task_ids is required"
+  },
+  "responseRaw": "{\"code\":3,\"message\":\"task_ids is required\"}\n"
+}

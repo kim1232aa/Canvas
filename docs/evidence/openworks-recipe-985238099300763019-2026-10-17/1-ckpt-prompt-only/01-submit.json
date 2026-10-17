@@ -1,0 +1,66 @@
+{
+  "case": "1-ckpt-prompt-only",
+  "title": "Checkpoint + positive prompt only (official 4 + ckpt named; NO seed/steps/cfg/lora/negative)",
+  "note": "prompt+768x1344+count=1 + checkpoint/model/sdModel=984644890228968118; page LoRA none so not stuffed",
+  "timestampAsiaTokyo": "2026-10-17 13:25:38 JST",
+  "actualRequest": {
+    "endpoint": "https://openapi.tensor.art/openworks/v1/task",
+    "method": "POST",
+    "headers": {
+      "Content-Type": "application/json",
+      "User-Agent": "ow-recipe-probe/1.2",
+      "Echo-Access-Key": "ak_tensor_W6…1o64"
+    },
+    "body": {
+      "toolName": "photoreal_studio_z_image",
+      "inputs": [
+        {
+          "type": "STRING",
+          "value": "asian woman, young with dark brown hair in high ponytail, sporty healthy physique in form-fitting lightweight yoga outfit, toned waist peeking. Swaying and bouncing lightly on large gray balance ball in modern living room corner, chin on hand, bored downward gaze but fidgeting restlessly motivated to resume workout despite weariness. Medium close-up highlighting female form's beauty and loneliness. Sharp afternoon sunlight streaming in casting long shadows, urban high contrast. Photorealistic, skin texture, fabric details, imperfections, film grain."
+        },
+        {
+          "type": "INTEGER",
+          "value": 768
+        },
+        {
+          "type": "INTEGER",
+          "value": 1344
+        },
+        {
+          "type": "INTEGER",
+          "value": 1
+        },
+        {
+          "type": "STRING",
+          "name": "checkpoint",
+          "value": "984644890228968118"
+        },
+        {
+          "type": "STRING",
+          "name": "model",
+          "value": "984644890228968118"
+        },
+        {
+          "type": "STRING",
+          "name": "sdModel",
+          "value": "984644890228968118"
+        }
+      ]
+    }
+  },
+  "httpStatus": 200,
+  "responseRaw": "{\"code\":\"0\", \"message\":\"\", \"data\":{\"task\":{\"id\":\"1056300555858640631\", \"userId\":\"1048723019146487792\", \"status\":\"WAITING\", \"toolName\":\"photoreal_studio_z_image\", \"outputs\":[]}}}",
+  "response": {
+    "code": "0",
+    "message": "",
+    "data": {
+      "task": {
+        "id": "1056300555858640631",
+        "userId": "1048723019146487792",
+        "status": "WAITING",
+        "toolName": "photoreal_studio_z_image",
+        "outputs": []
+      }
+    }
+  }
+}

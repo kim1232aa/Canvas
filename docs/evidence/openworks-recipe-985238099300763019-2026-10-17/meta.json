@@ -1,0 +1,24 @@
+{
+  "timeStartedAsiaTokyo": "2026-10-17 13:25:38 JST",
+  "sourceUrl": "https://tensor.art/images/985238099300763019?post_id=985238067088523182",
+  "scrape": "WebFetch+Context web-scrape; Models link https://tensor.art/models/984644890228968118; loras=[]",
+  "tool": "photoreal_studio_z_image",
+  "endpoint": "https://openapi.tensor.art/openworks/v1/task",
+  "auth": "Echo-Access-Key = ak_tensor_W6…1o64",
+  "seed": 904953581,
+  "steps": 9,
+  "cfg": 1,
+  "size": "768x1344",
+  "checkpointPage": "984644890228968118",
+  "checkpointName": "2127 - Z Image Asian Utopian - Turbo/Base - v3.6 - Turbo - FFV",
+  "loraIds": [],
+  "promptLenFlat": 555,
+  "negativeLenFlat": 296,
+  "cases": [
+    "1-ckpt-prompt-only",
+    "2-full-params"
+  ],
+  "productCodeModified": false,
+  "queryBodyField": "taskIds",
+  "note": "Case1=official4+checkpoint named (NO seed/steps/cfg/lora/negative). Case2=full page params; page has no LoRA."
+}

@@ -1,5 +1,5 @@
 # Replicate 1035 修复（CODE_ONLY，待前端 E2E）— 2026-10-16 Asia/Shanghai
-改前快照：/workspace/canvas-restore/pre-replicate-1035fix-20261016-104740.tgz
+改前快照：/workspace/canvas/temp/backups/canvas-restore/pre-replicate-1035fix-20261016-104740.tgz
 Server 重启 1 次：2587844 → **2620869，lstart Fri Oct 16 10:48:41 2026（Asia/Shanghai）**，GET / 200。未 commit、未开浏览器。
 
 ## 1) 「实际发送」里的 schemaFields —— 核实：**没有发给 Replicate**

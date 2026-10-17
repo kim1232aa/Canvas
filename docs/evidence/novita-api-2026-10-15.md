@@ -45,7 +45,7 @@
 - 相关：`modelHubCatalog` / `aimlapiProvider` / `togetherProvider` 均通过
 
 ## Live smoke（服务端，临时 express + 真实上游）
-结果：`/workspace/canvas-e2e-novita/smoke-result.json`
+结果：`/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-novita/smoke-result.json`
 | 步骤 | 结果 |
 |---|---|
 | 目录 `GET /v3/model` checkpoint | **200**，count≈100；例：`dreamshaper_8_93211.safetensors` supportsLora=true |
@@ -56,7 +56,7 @@
 Key 元数据（不回显密钥）：`keyPresent=true`，`keyLen=46`，前缀脱敏。余额实测 `availableBalance=0`。
 
 ## 恢复包
-- 改前：`/workspace/canvas-restore/pre-novita-0156.tgz`
+- 改前：`/workspace/canvas/temp/backups/canvas-restore/pre-novita-0156.tgz`
 
 ## 未完成 / 待办（给画布 FE）
 - **充值 `NOVITA_API_KEY` 对应账户** 后重跑 `npx tsx scripts/novita-live-smoke.ts`，争取 PASS_GENERATION（须继续带真实 LoRA + 填齐 seed/steps/cfg/size）。

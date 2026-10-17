@@ -42,4 +42,4 @@ npx tsc --noEmit → exit 0
 - 历史 Krea+LoRA 预设仍可能挂在画布上；运行时会被合同拒绝并展示原因（不假成功）
 
 ## 备份
-`/workspace/canvas-restore/Canvas-main-post-krea-nolora-20261015-010959.tar.gz`（排除 node_modules、data/media、.env）
+`/workspace/canvas/temp/backups/canvas-restore/Canvas-main-post-krea-nolora-20261015-010959.tar.gz`（排除 node_modules、data/media、.env）

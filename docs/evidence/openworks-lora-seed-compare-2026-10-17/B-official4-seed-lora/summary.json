@@ -1,0 +1,14 @@
+{
+  "case": "B-official4-seed-lora",
+  "title": "Official 4 + same seed + LoRA hard-stuff (loras+image_loras id+weight 1.0)",
+  "hasLoraStuff": true,
+  "seed": 424242,
+  "submitHttp": 200,
+  "taskId": "1056294008180966439",
+  "finalStatus": "FINISH",
+  "imageUrl": "https://tensor-sf-sig.7022ae40757f8d53295a57619de9b364.r2.cloudflarestorage.com/workspace/generation/1048723019146487792/2026-10-17/cf5a96af-3c24-4b1d-b363-fd87d7aea38b.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=0bef8a003dc93fc4d7030c9da79271ff%2F20261017%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20261017T040104Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&x-id=GetObject&X-Amz-Signature=05fd45df27457caf9b8c94c787f027162285a01d6959714a399b611260eb438e",
+  "sha256": "ca9b24ea893b4f3565f29d543c40cd17527128e4f8fdf6f9ba9d8ceec5b7bc85",
+  "bytes": 481279,
+  "downloadError": null,
+  "timestampAsiaTokyo": "2026-10-17 13:01:04 JST"
+}

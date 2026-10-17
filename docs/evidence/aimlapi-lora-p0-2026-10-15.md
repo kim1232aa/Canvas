@@ -1,5 +1,5 @@
 # AIMLAPI z-image-turbo-lora P0（+ Krea 共用修复）— 2026-10-15 — CODE_ONLY + 本地 curl 实证
-回滚包：`/workspace/canvas-restore/pre-aiml-lora-0229.tgz`。未提交。前端复验待画布。
+回滚包：`/workspace/canvas/temp/backups/canvas-restore/pre-aiml-lora-0229.tgz`。未提交。前端复验待画布。
 
 ## 根因
 1. **LoRA 其实已出站，只是看不到。** `data/history.json` 中 02:23:22（画布 FE 那次）的 submissions：上游 body 含 `loras:[{path:"ostris/z_image_turbo_childrens_drawings",scale:0.85}]`（同时含 `num_inference_steps:17`、`guidance_scale:3.5`）。
@@ -32,7 +32,7 @@
 
 ---
 ## 追加（02:45）：AIMLAPI 去掉静态 Schema 兜底（铁律 3）— CODE_ONLY
-回滚包：`/workspace/canvas-restore/pre-aiml-nofallback-*.tgz`
+回滚包：`/workspace/canvas/temp/backups/canvas-restore/pre-aiml-nofallback-*.tgz`
 - `schemaProviders.ts` AIMLAPI model-schema：只用目录 `info.docsJson` 官方 OpenAPI。目录项无 docsJson / 主机不属 AIMLAPI / GET 失败 / 无 POST requestBody schema → 本地 400：
   `未出站，本地拦截：AIMLAPI 模型 <id> 官方 Schema 不可用（GET <docsJson URL> → HTTP <code> <上游 body 原文>）；未发送生成请求，不使用内置 Schema 兜底。`，附 `schemaUrl`、`upstreamStatus`、`upstreamResponseBody`。submit 前即拦截 → 中间件写 `local_blocked` 历史；`/api/model-schema` 同样 400 → 徽标缓存 error → 「待确认」。
   静态 `aimlapi*InputSchema` 常量仍导出（旧单测引用），**不再被任何 AIMLAPI 路径使用**。

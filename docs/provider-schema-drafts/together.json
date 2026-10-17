@@ -1,4 +1,5 @@
 {
+  "canvasAcceptance": "未验证（2026-10-17 14:40 北京：测试截图已全删，按雁标准「画布里出图、落保存节点、历史有缩略图」当前 0 家；以前的出图/欠费标记一律作废，官方字段结论保留；在画布重跑出图并有节点图+历史缩略图后再单独改）",
   "$schemaNote": "草案 — 仅声明。真相源: docs/provider-api-audit-v2/together.md + DIFF.md (2026-10-15)",
   "id": "together",
   "displayName": "Together",
@@ -166,24 +167,35 @@
   "lora": {
     "image": {
       "serverless": {
-        "supported": "待确认",
+        "supported": false,
         "openapiFieldStillListed": "image_loras",
         "shapeIfUsedHistorically": {
           "path": "string(URL)",
           "scale": "number"
         },
         "officialStance": "parameters.md: No longer available; current FLUX.2 models reject this parameter（散文，非 OpenAPI deprecated）",
-        "uiRule": "官方明文不可用 → 本地拦（官方参数指南：image_loras no longer available）",
+        "uiRule": "公共生图路径：不挂假 LoRA 控件（参数页：image_loras 已不可用，FLUX.2 会拒）。误发被拒 → 错误原样显示。Dedicated Endpoint 挂 LoRA 另开，不混本路径。",
         "dedicatedNote": "LoRA 仅能通过 Dedicated Endpoint 上传 adapter 后调用，非本 serverless 路径",
-        "localReject": true,
-        "ruling": "待确认：OpenAPI 声明 image_loras 且无 deprecated；parameters.md 文字说明与之冲突，按通用规则不据文字拦截；live probe 仅得 401 invalid_api_key（有无 LoRA 对照同码），等有效 key 实测",
+        "localReject": false,
+        "ruling": "2026-10-16 晚画布拍板（Researchy 已核）：跟参数页——公共 /images/generations 不挂 image_loras；不是再做一道拦截验收。OpenAPI/overview 冲突仅作备注。",
         "sources": [
           "https://docs.together.ai/docs/inference/images/parameters.md",
           "https://docs.together.ai/openapi.yaml",
           "docs/provider-api-audit-v2/together.md",
           "/workspace/audit-v2-raw/researchy-30m-0602/tg_image_loras_excerpt.md",
           "docs/evidence/together-venice-lora-live-probe-2026-10-15.md"
-        ]
+        ],
+        "researchy": {
+          "fetchedAt": "2026-10-16 ~22:06 CST",
+          "parametersPage": "image_loras No longer available；FLUX.2 reject；LoRA → dedicated endpoint",
+          "openapiStillLists": true,
+          "overviewSupportsLorasNote": true,
+          "links": [
+            "https://docs.together.ai/docs/inference/images/parameters",
+            "https://docs.together.ai/reference/post-images-generations",
+            "https://docs.together.ai/docs/inference/images/overview"
+          ]
+        }
       }
     },
     "sources": [
@@ -191,7 +203,7 @@
       "https://docs.together.ai/openapi.yaml",
       "docs/provider-api-audit-v2/together.md"
     ],
-    "note": "官方参数页 2026-10-15 仍写 image_loras No longer available / FLUX.2 reject；OpenAPI 仍列未 deprecated（滞后）。按 Canvas 房间规则：OpenAPI 未 deprecated 字段保持待确认，不以参数页 prose 作本地拦截/隐藏依据。Live probe 2026-10-15（docs/evidence/together-venice-lora-live-probe-2026-10-15.md）：带/不带 image_loras 均 HTTP 401 invalid_api_key → 上游对 image_loras 实际行为仍未测，保持待确认。"
+    "note": "公共 serverless 生图：不挂假 LoRA。Dedicated Endpoint 以后单独接。误发上游拒绝则原样展示。"
   },
   "billing": {
     "insufficientHints": [
@@ -207,53 +219,58 @@
     ]
   },
   "acceptanceNotes": [
-    "Serverless image_loras：OpenAPI 仍列未 deprecated → 草案标待确认；参数页 prose 不作本地拦截依据；HTTP 实测码待有效 key",
+    "公共生图不挂假 LoRA（参数页）；Dedicated 另开",
+    "误发被拒 → 错误原样显示",
     "seed 图/视频均有官方字段",
-    "视频必须 POST /videos + GET /videos/{id}，勿当同步",
-    "无 serverless 默认可依赖的 LoRA 强度（待实测）"
+    "视频必须 POST /videos + GET /videos/{id}"
   ],
   "runtimeSchema": {
     "source": "https://docs.together.ai/openapi.yaml（/images/generations、/videos）",
     "use": "运行时拉 OpenAPI 按接口出 Schema，标来源；字段经画布实测才标会发送，未测待确认",
     "checked": "Researchy 2026-10-15 06:02 curl parameters.md+openapi.yaml；参数页 reject 仍在，OpenAPI 仍列未 deprecated；tinkabot 06:13 按房间规则纠正草案为待确认"
   },
-  "contractTestHint": "image_loras：OpenAPI 仍列且未 deprecated → 待确认（不以参数页 reject 散文作本地拒/隐藏依据）；有效 key 实测前徽章勿标不发或会发送。seed/steps/guidance_scale/宽高 徽章升会发送仍待前端实测；live probe 仅得 401 invalid_api_key，不得据此升会发送或本地拒",
-  "_auditStatus": "2026-10-16 15:58：Together 缓存重试 BLOCKED（刷新后仍 Schema 未读取，未点生成；证据 tg-retry-01-before.png + 99-together-retry.txt）；需有效 Key 才能验 image_loras 拦截；画布确认维持 CODE_ONLY。2026-10-16 15:24：fix4 CODE_ONLY Together 官方不可用拦截已接线，等前端验收。2026-10-16 15:14 fix4：canvas-dev 已实现 officialUnavailableParams 本地拦（CODE_ONLY）。2026-10-16 15:10：通用规则「官方明文不可用可拦」+ Together 单独拦截（非 D）。2026-10-16 15:09：image_loras 定案本地拦（官方明文不可用）。2026-10-15 06:38：补 live",
+  "contractTestHint": "Together 公共生图：节点不得挂 serverless image_loras 假控件；若 payload 仍含 image_loras，上游拒绝须原样展示。Dedicated LoRA 不在本路径验收。seed/steps/guidance_scale/宽高 升会发送仍待有效 Key 实测。",
+  "_auditStatus": "2026-10-16 ~23:11 JST：画布正式收口 fix13.1；证据 已清理，PID 3611920。@tinkabot 不升出图徽章。 2026-10-16 ~22:57 JST：fix13.1 CODE_ONLY（UI 五条）；PID 3611920；证据 docs/evidence/fix13.1-2026-10-16.md。对照表仍 CODE_ONLY、不升出图。 2026-10-16 ~22:53 JST：画布正式收口 fix13（清理+主机+口径）；证据 已清理，PID 3576628。建任务 BLOCKED——**对照表保持 CODE_ONLY、不升出图徽章**（画布@tinkabot）。下一批 fix13.1 仅 UI 细节。 2026-10-16 ~22:52 JST：画布 fix13 前端四项复验过（清理+主机+Together），证据 已清理，PID 3576628；已交挑刺。建任务仍 BLOCKED，**不升出图徽章**。 2026-10-16 ~22:35 JST fix13 CODE_ONLY（canvas-dev PID 3576628；证据 docs/evidence/fix13-2026-10-16.md）。未升徽章；等画布验收。无 TAMS 令牌未测建任务。 2026-10-16 22:27：画布再确认——公共路径不挂假 LoRA；Dedicated 另开；误发原样报错；非「拆本地拦/真发 image_loras」产品项。勿升 PASS。;2026-10-16 22:07：画布拍板——公共路径不挂假 LoRA（Researchy 参数页）；Dedicated 另开；非拦截产品。2026-10-16 22:07 JST：记入 Researchy 群内核（参数页不可用 / OpenAPI 仍列 / overview 写 Supports LoRAs 三处冲突）；产品口径仍为有 Key 真发。2026-10-16 22:06 JST tinkabot：画布撤回 Together image_loras 本地拦——有 Key 真发、错了原样显示；等 Researchy 核文档后 canvas-dev 拆代码。2026-10-16 15:58：Together 缓存重试 BLOCKED（刷新后仍 Schema 未读取，未点生成；证据 tg-retry-01-before.png + 99-together-retry.txt）；需有效 Key 才能验 image_loras 拦截；画布确认维持 CODE_ONLY。2026-10-16 15:24：fix4 CODE_ONLY Together 官方不可用拦截已接线，等前端验收。2026-10-16 15:14 fix4：canvas-dev 已实现 officialUnavailableParams 本地拦（CODE_ONLY）。2026-10-16 15:10：通用规则「官方明文不可用可拦」+ Together 单独拦截（非 D）。2026-10-16 15:09：image_loras 定案本地拦（官方明文不可用）。2026-10-15 06:38：补 live",
   "loraDecision": {
-    "date": "2026-10-16 15:10 JST（画布定案）",
-    "decision": "不补 loraItemFields；单独加「官方明文不可用」本地拦",
-    "blockText": "官方参数指南：image_loras no longer available",
-    "notRuleD": "OpenAPI items 有 path/scale properties（Researchy 15:08:58），单靠 D 第一档会映射发出；本次拦截靠新规则，不拿「Schema 没字段」当理由",
-    "generalRule": "通用规则（非一次性例外）：仅当官方文档明文写「不可用 / 会拒绝该参数」一类才可本地拦，须附原文、链接、抓取时间；措辞模糊或仅推断 → 仍按 10-15 保持待确认不拦",
-    "evidence": {
-      "paramsGuide": "https://docs.together.ai/docs/inference/images/parameters（No longer available… current FLUX.2 models reject this parameter）",
-      "residualSchema": "https://docs.together.ai/reference/post-images-generations（残留 image_loras[].path/scale，有 properties）",
-      "dedicated": "https://docs.together.ai/docs/post-training/multi-lora-deployment（以后另开）",
-      "fetched": "Researchy 2026-10-16 15:08:58 JST，副本 /workspace/together-lora-check/"
-    },
-    "supersedes": "10-15 待确认（OpenAPI 未 deprecated）——本次按官方明文不可用定案；旧待确认文字留作历史",
-    "implStatus": "CODE_ONLY（fix4 验收 PARTIAL + 15:58 缓存重试 BLOCKED：仍 Schema 未读取；需有效 Together Key；画布 15:58 确认勿升）",
-    "fix4": {
-      "pid": 3138956,
-      "ticks": 13436675,
-      "evidence": "docs/evidence/fix4-2026-10-16.md",
-      "restored": "/workspace/canvas-restore/pre-fix4-20261016-151410.tgz"
-    },
-    "fix4Accept": {
-      "evidence": "/workspace/canvas-e2e-fix4-accept-1524/",
-      "verdict": "PARTIAL",
-      "together": "拦截未走到",
-      "pid": 3138956,
-      "cacheRetry": {
-        "verdict": "BLOCKED",
-        "reason": "刷新后仍 Schema 未读取，未点生成、未再打 /v1/models",
-        "evidence": [
-          "tg-retry-01-before.png",
-          "99-together-retry.txt"
-        ],
-        "blocker": "需有效 Together Key",
-        "at": "2026-10-16 15:58"
-      }
+    "date": "2026-10-16 22:07 JST（画布拍板）",
+    "decision": "公共生图不挂假 LoRA（跟参数页）；Dedicated 另开；误发错误原样显示；不作「拦截产品」验收",
+    "supersedes": [
+      "15:09 本地拦定案",
+      "22:06 撤回拦改真发"
+    ],
+    "implNote": "fix12 收口后一批：拆「拦截验收」排期/文案；UI 不在公共路径挂 LoRA；代码改动归 canvas-dev",
+    "implStatus": "CODE_ONLY（待 fix12 后改）"
+  },
+  "productRule": {
+    "public": "不挂假 LoRA（参数页 image_loras 不可用）",
+    "dedicated": "Dedicated Endpoint 挂 LoRA 另开",
+    "misSend": "误发则上游错误原样显示",
+    "notProduct": "禁止做成拦截产品验收项；亦勿按旧「有 Key 真发 image_loras」拆"
+  },
+  "fix13": {
+    "status": "CODE_ONLY",
+    "stance": "公共 serverless 不挂假 LoRA；保留 officialUnavailableParams（image_loras）；未按旧真发拆；Dedicated 本批不做",
+    "evidence": "docs/evidence/fix13-2026-10-16.md",
+    "badge": "CODE_ONLY（画布明示不升出图）",
+    "frontendAccept": {
+      "status": "CLOSED",
+      "canvasSaid": "正式收口清理+主机+口径；建任务 BLOCKED 不升出图",
+      "evidence": "已清理",
+      "pid": "3576628"
+    }
+  },
+  "acceptanceBadge": "未验证",
+  "fix13_1": {
+    "status": "CLOSED",
+    "pid": "3611920",
+    "evidence": "docs/evidence/fix13.1-2026-10-16.md",
+    "scope": "UI only（说明分行/URL wrap/空态不叠/Together 折叠/标点统一）",
+    "badge": "CODE_ONLY（画布明示不升出图）",
+    "frontendAccept": {
+      "status": "CLOSED",
+      "evidence": "已清理",
+      "pid": "3611920",
+      "note": "01/03/04 过；02 OpenWorks 空态双层 SKIP"
     }
   }
 }

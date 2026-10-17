@@ -1,4 +1,5 @@
 {
+  "canvasAcceptance": "已出图（2026-10-17 ~16:14 北京，画布认可，第 2 家）：flux-dev-lora，civitai 配方 33530948 原文；Realism LoRA 强度 1.1（HF 同文件，SHA256 与原件一致）、种子 3742927916、36 步、CFG 3.5、832×1216。同一会话点运行出图落保存图像节点；历史成功卡 hist_1792224305224_meynb，「实际发送」含 LoRA 链接+1.1 与上述参数。尺寸已接空潜空间节点（连采样器 latent_image），发出的 size 只认该节点、加载器不再另藏宽高；下次有余额再跑时核「实际发送」尺寸与空潜空间一致。证据 /workspace/canvas/temp/e2e/wavespeed/recipe-33530948/",
   "$schemaNote": "草案 — 仅声明。真相源: docs/provider-api-audit-v2/wavespeed.md + DIFF.md (2026-10-15)",
   "id": "wavespeed",
   "displayName": "WaveSpeed",
@@ -216,7 +217,7 @@
     "https://wavespeed.ai/docs/docs-api/wavespeed-ai/z-image-turbo-lora",
     "https://wavespeed.ai/docs/docs-api/wavespeed-ai/flux-dev-lora"
   ],
-  "_auditStatus": "2026-10-16 15:12：fix3-1510 升 PASS_GENERATION。2026-10-16 15:35：fix3-1510 真出图暂不收口（等挑刺确认 aspect_ratio 补拍）。2026-10-16 14:46：fix2-1320 真出图但不收口 FAIL_UI；strength 官方字段默认 0.8 仅 image 时用，本轮为上游回显非我方发送。2026-10-16 12:37：新 Key 复验请求字段已核（不收口，徽章未升）。2026-10-15 07:13 tinkabot 撤回：clean-0544 整套退回，Krea/z-image 出图仅作线索，不算证实。2026-10-15 07:09：clean-0544（已退回）线索显示 krea-v2/turbo-lora actualRequest=aspect_ratio+resolution+seed+loras[{path:.safetensors直链,scale}]（无 size/steps/cfg）；z-image/turbo-lora size 'W*H' 无 aspect_ratio/resolution。前序 2026-10-15 06:38：认领 Researchy 06:30——补 contractTestHint（Krea path=.safetensors 直链；z-image 允许 owner/name；1402 原样失败不改写）。前序 06:30 Researchy 已写 lora.path.perModelDoc；06:02：尺寸分两族。",
+  "_auditStatus": "2026-10-16 ~23:33 北京：下一批主验 WaveSpeed 真出图；tinkabot 等明示再升。 2026-10-16 15:12：fix3-1510 升 PASS_GENERATION。2026-10-16 15:35：fix3-1510 真出图暂不收口（等挑刺确认 aspect_ratio 补拍）。2026-10-16 14:46：fix2-1320 真出图但不收口 FAIL_UI；strength 官方字段默认 0.8 仅 image 时用，本轮为上游回显非我方发送。2026-10-16 12:37：新 Key 复验请求字段已核（不收口，徽章未升）。2026-10-15 07:13 tinkabot 撤回：clean-0544 整套退回，Krea/z-image 出图仅作线索，不算证实。2026-10-15 07:09：clean-0544（已退回）线索显示 krea-v2/turbo-lora actualRequest=aspect_ratio+resolution+seed+loras[{path:.safetensors直链,scale}]（无 size/steps/cfg）；z-image/turbo-lora size 'W*H' 无 aspect_ratio/resolution。前序 2026-10-15 06:38：认领 Researchy 06:30——补 contractTestHint（Krea path=.safetensors 直链；z-image 允许 owner/name；1402 原样失败不改写）。前序 06:30 Researchy 已写 lora.path.perModelDoc；06:02：尺寸分两族。",
   "requestFieldsVerified": {
     "actualRequest": {
       "prompt": true,
@@ -250,11 +251,16 @@
       "docs": "https://wavespeed.ai/docs/docs-api/wavespeed-ai/krea-v2-turbo-lora",
       "fetched": "2026-10-16 14:44:49 JST"
     },
-    "evidence": "/workspace/canvas-e2e-wavespeed-fix3-1510/",
+    "evidence": "已清理",
     "run": "hist_1792131937012_blhs1（fix3-1510，真出图）",
     "status": "画布收口 PASS_GENERATION；挑刺已撤 aspect_ratio 严重项（补拍 10-actual-request-scrolled-aspect_ratio.png）",
-    "acceptanceBadge": "PASS_GENERATION",
+    "acceptanceBadge": "未验证",
     "补拍": "10-actual-request-scrolled-aspect_ratio.png 框底 aspect_ratio:1:1；挑刺已撤项"
   },
-  "acceptanceBadge": "PASS_GENERATION"
+  "acceptanceBadge": "已出图（同会话 + LoRA 已发送 + 尺寸在板上；LoRA 是否生效未证实）",
+  "nextAccept": {
+    "at": "2026-10-16 ~23:33 北京",
+    "plan": "画布：fix16.1 快收后立刻 WaveSpeed 真出图 PASS_GENERATION（已知有额度）",
+    "tinkabot": "等明示再升徽章"
+  }
 }

@@ -1,4 +1,5 @@
 {
+  "canvasAcceptance": "未验证（2026-10-17 14:40 北京：测试截图已全删，按雁标准「画布里出图、落保存节点、历史有缩略图」当前 0 家；以前的出图/欠费标记一律作废，官方字段结论保留；在画布重跑出图并有节点图+历史缩略图后再单独改）",
   "$schemaNote": "草案 — 仅声明。真相源: docs/provider-api-audit-v2/fal.md + DIFF.md (2026-10-15)",
   "id": "fal",
   "displayName": "fal.ai",
@@ -194,7 +195,7 @@
           "note": "本轮画面比例空；actualRequest 无 aspect_ratio"
         }
       },
-      "acceptanceBadge": "PASS_BILLING",
+      "acceptanceBadge": "未验证",
       "notPassGeneration": true,
       "upstream": {
         "http": 403,
@@ -202,7 +203,7 @@
         "note": "欠费/锁定原文透传，非出片"
       },
       "historyId": "hist_1792140360652_bq6y0",
-      "evidence": "/workspace/canvas-e2e-fal-kling-i2v-1637/",
+      "evidence": "已清理",
       "processNote": "S1 切分后进程 PID 3221919",
       "挑刺": "无严重（节点标题/模型 ID 裁切属细节，已放行 fix7）",
       "researchy": {
@@ -268,11 +269,11 @@
     "docs/provider-api-audit-v2/fal.md",
     "docs/provider-api-audit-v2/DIFF.md"
   ],
-  "_auditStatus": "2026-10-16 16:54：画布正式收口 Kling V3 i2v PASS_BILLING（挑刺无严重 + Researchy TOP_UP 核）；2026-10-16 16:53：Kling V3 standard i2v 升 PASS_BILLING（非 PASS_GENERATION）——hist_1792140360652_bq6y0；403 TOP_UP；actualRequest start_image_url+duration\"5\"；证据 /workspace/canvas-e2e-fal-kling-i2v-1637/；S1 切分后进程。勿写成出片。2026-10-15 04:45 v2 已核（fal.md + DIFF 04:44）：目录 GET /v1/models 无 key 200；lock threshold FAQ 已有；krea-2/turbo/lora 无 steps/guidance、loras≤3。字段徽章仍以前端实测为准",
+  "_auditStatus": "2026-10-16 16:54：画布正式收口 Kling V3 i2v PASS_BILLING（挑刺无严重 + Researchy TOP_UP 核）；2026-10-16 16:53：Kling V3 standard i2v 升 PASS_BILLING（非 PASS_GENERATION）——hist_1792140360652_bq6y0；403 TOP_UP；actualRequest start_image_url+duration\"5\"；证据 已清理 切分后进程。勿写成出片。2026-10-15 04:45 v2 已核（fal.md + DIFF 04:44）：目录 GET /v1/models 无 key 200；lock threshold FAQ 已有；krea-2/turbo/lora 无 steps/guidance、loras≤3。字段徽章仍以前端实测为准",
   "acceptanceBadgeVideoKlingV3I2v": "PASS_BILLING",
   "sendEvidence": {
     "kling_v3_standard_i2v_1637": {
-      "run": "/workspace/canvas-e2e-fal-kling-i2v-1637/",
+      "run": "已清理",
       "historyId": "hist_1792140360652_bq6y0",
       "model": "fal-ai/kling-video/v3/standard/image-to-video",
       "actualRequest": {
@@ -283,7 +284,7 @@
         "no_image_url_key": true
       },
       "upstream": "HTTP 403 User is locked. Reason: TOP_UP.",
-      "acceptanceBadge": "PASS_BILLING",
+      "acceptanceBadge": "未验证",
       "notPassGeneration": true,
       "at": "2026-10-16 16:46 Asia/Shanghai",
       "挑刺": "无严重",

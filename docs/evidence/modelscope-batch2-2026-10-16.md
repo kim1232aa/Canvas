@@ -1,6 +1,6 @@
 # ModelScope batch 2 — 2026-10-16 (Asia/Shanghai) — Status: CODE_ONLY
 
-Restore tar: /workspace/canvas-restore/pre-modelscope-batch2-20261016-111707.tgz (node_modules excluded). No commit/push. No paid generation calls.
+Restore tar: /workspace/canvas/temp/backups/canvas-restore/pre-modelscope-batch2-20261016-111707.tgz (node_modules excluded). No commit/push. No paid generation calls.
 
 ## 1. Key rotation visibility (generic)
 - New src/server/keyUsage.ts: describeKeySelection / formatKeyUsage / keyUsagesFromTrace. Records {provider,index,count,source:pool|header} only — never key text.
@@ -20,7 +20,7 @@ Restore tar: /workspace/canvas-restore/pre-modelscope-batch2-20261016-111707.tgz
 - Change: region config src/server/modelScopeLoraList.ts; when category=lora on modelscope_ai, list via PUT https://www.modelscope.ai/api/v1/dolphin/models (shape verified live 11:18:32, Code 200, TotalCount 203 for Name=Z-Image-Turbo + tags contains lora). Errors returned verbatim, no fallback to openapi or .cn.
 
 ## 4. LoRA pick (decided: LcarsPicturesDatabase/ST-TNG-Rooms-Z-Image-Turbo-v1, strength 1, repo ID only)
-Raw responses: /workspace/canvas-e2e-modelscope-ai-lora-pick-1118/
+Raw responses: /workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-modelscope-ai-lora-pick-1118/
 - info-www.modelscope.ai.txt (11:18:30): Code 200, AigcType LoRA, BaseModel ["Tongyi-MAI/Z-Image-Turbo"], SubVisionFoundation Z_IMAGE_TURBO.
 - info-www.modelscope.cn.txt (11:18:31): HTTP 404, 10010205001 record not found (intl-only).
 - dolphin.txt (11:18:32): list incl. this LoRA. old-openapi-search.txt (11:18:51).

@@ -1,4 +1,33 @@
-> 2026-10-14 追加：WaveSpeed 目录模型 `wavespeed-ai/krea-v2/turbo`（非 LoRA）已在真实前端单次运行出图，记 PASS_GENERATION。不新开未决项，也不外推其他供应商。证据见 HANDOFF 同日条目与 `/workspace/canvas-e2e-wavespeed/`。
+
+## fix16（2026-10-16）CODE_ONLY 冻等重拍
+- 五项历史卡 UI：见 `docs/evidence/fix16-2026-10-16.md`；PID 3695091。未改供应商接线。
+> 2026-10-16 晚间追加（Asia/Tokyo；北京=JST−1）：UI fix10.1 / fix11.2 已 CLOSED；fix12 当时为 CODE_ONLY 待前端重拍，现已 CLOSED（见文末）。Git `2d76382` 已推 `kim1232aa/Canvas` main；`.env` 未进仓。Together image_loras / TAMS Bearer / ModelScope intl LoRA / civitai.red 付费 LoRA 仍挂起。不发明 PASS。详见下方「开/闭」与 HANDOFF 同日条。
+
+## 2026-10-16 开项 vs 已闭（产品真相快照）
+
+### 已闭 CLOSED
+| ID | 说明 | 证据 |
+| --- | --- | --- |
+| fix10.1 | ZWSP 不进 value/存储；出站 model 干净；Fal Kling V3 i2v 403 TOP_UP（PASS_BILLING） | `docs/evidence/fix10.1-2026-10-16.md` |
+| fix11.2 | 三宽预览浮层可读、不盖画面比例；历史弹层隐藏浮层；挑刺无严重 | `docs/evidence/fix11.2-2026-10-16.md`、`/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-fix11.2-accept-2022/` |
+
+### 开项 OPEN / 进行中
+| ID | 状态 | 说明 |
+| --- | --- | --- |
+| fix12 | CLOSED（挑刺过） | 「共 N 项」摘要 + 900 执行记录 under-top；PID 3473149 / ticks 14993784；`/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-fix12-accept-2157/` **已收口** |
+| Together `image_loras` | BLOCKED | 等有效 Key |
+| TAMS Bearer | BLOCKED | 既有鉴权阻塞不变 |
+| ModelScope 国际站 LoRA E2E | pending | — |
+| civitai.red 付费 LoRA 复跑 | pending | — |
+| 视频更多供应商（Fal 之后） | pending | 预设/App 拆分未批准 |
+| Parked UI | — | 无 parked |
+
+### 既有供应商等级（不降级）
+WaveSpeed `PASS_GENERATION`；MuAPI / Sogni / HF→fal-ai / Fal（含 Kling V3 i2v）/ ModelScope CN 等按 HANDOFF §3.2 与各 evidence 保持原判定。Krea / AIMLAPI / Novita / Replicate 等以已有 evidence 为准，本文件不另升格。
+
+---
+
+> 2026-10-14 追加：WaveSpeed 目录模型 `wavespeed-ai/krea-v2/turbo`（非 LoRA）已在真实前端单次运行出图，记 PASS_GENERATION。不新开未决项，也不外推其他供应商。证据见 HANDOFF 同日条目与 `/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-wavespeed/`。
 
 > 当前状态（2026-10-13）：下文含历史实现与历史验收描述。以 CLAUDE.md 固定规则、PROGRESS.md 最新验收、public/verification/ 真实响应为准；禁止未经核实的自动模型/端点替换与静默丢弃。
 
@@ -49,3 +78,17 @@
 ---
 
 *当前范围：所有上述项均已通过无头浏览器 E2E 走查与自动化单元测试验证。*
+
+### 2026-10-16 已关
+- fix12 历史徽章/执行记录停靠：CLOSED（挑刺过）
+### 仍开
+- TAMS：无 Bearer；清 OpenWorks 冒充后接 ap-east-1 `/v1/jobs`
+- Together：公共不挂假 LoRA；Dedicated 另接；等有效 Key
+- OpenWorks：工具层不要；真生图测通才留
+
+### 2026-10-16 已关
+- fix13 OpenWorks↔TAMS 混用清理 + 主机 ap-east-1 + Together 口径：CLOSED（UI 复验+挑刺无严重；出图 BLOCKED）
+### 仍开 / 下一批
+- fix13.1 挑刺细节（说明过密、URL 截断、空态双层、Together 说明块、标点不一致）
+- TAMS Bearer 补齐后建任务 E2E
+- Together 有效 Key / Dedicated 另接

@@ -1,5 +1,5 @@
 # Novita HTML parameter declaration · 2026-10-15 03:25 (Asia/Shanghai) · CODE_ONLY
-Backup: /workspace/canvas-restore/pre-novita-decl-0325.tgz. No live curl / 本机直调 smoke was run.
+Backup: /workspace/canvas/temp/backups/canvas-restore/pre-novita-decl-0325.tgz. No live curl / 本机直调 smoke was run.
 
 Source (Researchy / tinkabot docs/provider-schema-drafts/novita.json#runtimeSchema):
 - https://docs.novita.ai/guides/model-apis-v2-to-v3-migration — POST /v3/async/txt2img, `request{model_name,prompt,negative_prompt,width,height,image_num,steps,seed,clip_skip,sampler_name,guidance_scale,loras[{model_name,strength∈[0,1]}]}`; result GET /v3/async/task-result?task_id=

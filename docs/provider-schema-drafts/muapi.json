@@ -1,4 +1,5 @@
 {
+  "canvasAcceptance": "未验证（2026-10-17 14:40 北京：测试截图已全删，按雁标准「画布里出图、落保存节点、历史有缩略图」当前 0 家；以前的出图/欠费标记一律作废，官方字段结论保留；在画布重跑出图并有节点图+历史缩略图后再单独改）",
   "$schemaNote": "草案 — 仅声明。真相源: docs/provider-api-audit/muapi.md (2026-10-15)",
   "id": "muapi",
   "displayName": "MuAPI",
@@ -134,9 +135,9 @@
     "https://muapi.ai/docs/authentication",
     "https://api.muapi.ai/openapi.json"
   ],
-  "_auditStatus": "2026-10-16 16:31：fix5 UI 收口（非升 PASS）——strength 显示澄清 + aspect_ratio 进尺寸行；证据 /workspace/canvas-e2e-fix5-accept-1618/。2026-10-16 14:42：fix3-1530 升 PASS_BILLING（loras[{path,scale}]/resolution 1k → 402）。2026-10-16 14:50：fix2-1340 FAIL（resolution 本地拦合规；LoRA item 映射待供应商配置 path/scale）。2026-10-16 12:37：rekey-1230 字段已核，不收口、徽章未升。2026-10-15 03:26：引用的 docs/provider-api-audit 旧审计仅留作对比、不再引用；以 docs/provider-api-audit-v2/ 与 DIFF.md 为准；本草案凡依据旧审计的结论一律视为未核实，等 Researchy 新调查",
+  "_auditStatus": "2026-10-16 16:31：fix5 UI 收口（非升 PASS）——strength 显示澄清 + aspect_ratio 进尺寸行；证据 已清理。2026-10-16 14:42：fix3-1530 升 PASS_BILLING（loras[{path,scale}]/resolution 1k → 402）。2026-10-16 14:50：fix2-1340 FAIL（resolution 本地拦合规；LoRA item 映射待供应商配置 path/scale）。2026-10-16 12:37：rekey-1230 字段已核，不收口、徽章未升。2026-10-15 03:26：引用的 docs/provider-api-audit 旧审计仅留作对比、不再引用；以 docs/provider-api-audit-v2/ 与 DIFF.md 为准；本草案凡依据旧审计的结论一律视为未核实，等 Researchy 新调查",
   "requestFieldsVerified": {
-    "run": "/workspace/canvas-e2e-muapi-rekey-1230/（失败卡 hist_1792125133065_2ffvp）",
+    "run": "已清理 hist_1792125133065_2ffvp）",
     "endpoint": "POST https://api.muapi.ai/api/v1/krea-v2-turbo-lora",
     "status": "字段与官方 openapi.json（12:29 抓取）一致：prompt/seed/resolution/aspect_ratio/loras[{path,scale}]；steps/CFG/采样器/宽高/负向词 标该端点不支持 · 未发送",
     "upstream": "402 INSUFFICIENT_CREDITS 原文透传，进历史，有 Key #0",
@@ -152,9 +153,9 @@
       ],
       "descriptionDisplay": "待实现（下一批）：LoRA 区旁原样显示 description；前端验收过再改成现状"
     },
-    "acceptanceBadge": "PASS_BILLING",
+    "acceptanceBadge": "未验证",
     "retest_fix2_1340": {
-      "run": "/workspace/canvas-e2e-muapi-fix2-1340/（卡 hist_1792129505860_hvuig）",
+      "run": "已清理 hist_1792129505860_hvuig）",
       "verdict": "FAIL（本地拦截，请求未出站）",
       "localBlockOk": "Empty Latent 1024x1024 不在 resolution enum [1k,2k]，未自动改值，来源 openapi.json",
       "loraItemShape": {
@@ -164,13 +165,13 @@
         "configStatus": "待实现（下一批）",
         "openapi": "https://api.muapi.ai/openapi.json"
       },
-      "acceptanceBadge": "未升"
+      "acceptanceBadge": "未验证"
     }
   },
-  "acceptanceBadge": "PASS_BILLING",
+  "acceptanceBadge": "未验证",
   "sendEvidence": {
     "fix3_1530": {
-      "run": "/workspace/canvas-e2e-muapi-fix3-1530/（卡 hist_1792132514936_nav55）",
+      "run": "已清理 hist_1792132514936_nav55）",
       "endpoint": "krea-v2-turbo-lora",
       "actualRequest": {
         "loras": [
@@ -184,17 +185,17 @@
       "upstream": "HTTP 402 INSUFFICIENT_CREDITS 原样",
       "挑刺": "无严重",
       "note": "Schema 清单仍含 strength 字段名（端点 schema），实发强度键是 scale——属显示澄清，不挡收口",
-      "acceptanceBadge": "PASS_BILLING"
+      "acceptanceBadge": "未验证"
     },
     "fix5_ui": {
-      "run": "/workspace/canvas-e2e-fix5-accept-1618/",
+      "run": "已清理",
       "verdict": "UI_CLOSED",
       "notPassUpgrade": true,
       "items": [
         "strength 标注「Schema 声明，本次请求未含」（02-muapi-nav55-strength-label.png）",
         "aspect_ratio 通用进尺寸行；jczni 16:9 实发（03-muapi-aspect-ratio-size-row.png）"
       ],
-      "acceptanceBadge": "未升（仍 PASS_BILLING）",
+      "acceptanceBadge": "未验证",
       "at": "2026-10-16 16:31"
     }
   }

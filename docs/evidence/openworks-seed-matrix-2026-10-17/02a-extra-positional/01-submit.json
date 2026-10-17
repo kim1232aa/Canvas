@@ -1,0 +1,54 @@
+{
+  "case": "02a-extra-positional",
+  "title": "Stuff seed/steps/cfg as extra positional inputs",
+  "note": "5th INTEGER=424242 (seed), 6th INTEGER=20 (steps), 7th NUMBER=7.5 (cfg). Schema has no these fields.",
+  "timestampAsiaTokyo": "2026-10-17 12:22:31 JST",
+  "actualRequest": {
+    "endpoint": "https://openapi.tensor.art/openworks/v1/task",
+    "method": "POST",
+    "headers": {
+      "Content-Type": "application/json",
+      "User-Agent": "node",
+      "Echo-Access-Key": "ak_tensor_…1o64"
+    },
+    "body": {
+      "toolName": "photoreal_studio_z_image",
+      "inputs": [
+        {
+          "type": "STRING",
+          "value": "a red apple on a white table, studio photo"
+        },
+        {
+          "type": "INTEGER",
+          "value": 512
+        },
+        {
+          "type": "INTEGER",
+          "value": 512
+        },
+        {
+          "type": "INTEGER",
+          "value": 1
+        },
+        {
+          "type": "INTEGER",
+          "value": 424242
+        },
+        {
+          "type": "INTEGER",
+          "value": 20
+        },
+        {
+          "type": "NUMBER",
+          "value": 7.5
+        }
+      ]
+    }
+  },
+  "httpStatus": 404,
+  "responseRaw": null,
+  "response": {
+    "code": 5,
+    "message": "tool not found: failed to fetch mapping: Get \"https://config-cdn.qiandaoapp.com/tusi_tensor_tools/mapping.json\": context deadline exceeded (Client.Timeout exceeded while awaiting headers)"
+  }
+}

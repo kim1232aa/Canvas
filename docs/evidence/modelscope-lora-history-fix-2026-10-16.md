@@ -1,7 +1,7 @@
 # 魔搭国际站 LoRA 历史卡修复 — 2026-10-16 — CODE_ONLY
 
-Source E2E: /workspace/canvas-e2e-modelscope-ai-lora-1056/ (POST api-inference.modelscope.ai/v1/images/generations, upstream 401 BLOCKED_AUTH).
-Restore tar: /workspace/canvas-restore/pre-modelscope-lora-20261016-110407.tgz
+Source E2E: /workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-modelscope-ai-lora-1056/ (POST api-inference.modelscope.ai/v1/images/generations, upstream 401 BLOCKED_AUTH).
+Restore tar: /workspace/canvas/temp/backups/canvas-restore/pre-modelscope-lora-20261016-110407.tgz
 
 ## Root cause
 1. sentHistoryLoras() / countActualRequestLoras() only accepted LoRA fields that were arrays. ModelScope's Schema sends

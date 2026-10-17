@@ -7,8 +7,8 @@
 
 | 来源 | 路径 | 说明 |
 |------|------|------|
-| WaveSpeed PASS_GENERATION | `/workspace/canvas-e2e-wavespeed/` | `01-before-run.png` `02-after-run-canvas.png` `04-history-modal.png` `history-export.json` |
-| Fal PASS_BILLING | `/workspace/canvas-e2e-fal/` | `01–04-*.png` `outcome.json`（403 TOP_UP） |
+| WaveSpeed PASS_GENERATION | `/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-wavespeed/` | `01-before-run.png` `02-after-run-canvas.png` `04-history-modal.png` `history-export.json` |
+| Fal PASS_BILLING | `/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-fal/` | `01–04-*.png` `outcome.json`（403 TOP_UP） |
 | 硬编码收口 | `docs/evidence/hardcode-miswire-scan-2026-10-14.md` | popularModels 已清空；LoRA 0.8 主路径已清 |
 | 关键组件 | `src/components/{ModelHubModal,CivitaiModal,BackendSettingsModal,ParameterInspector,NodeItem,HistoryModal,ExecutionLog}.tsx` | 见下表行内路径 |
 

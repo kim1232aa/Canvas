@@ -1,0 +1,15 @@
+{
+  "case": "2-full-params",
+  "title": "Full page params: prompt+neg+seed+steps+cfg+size+checkpoint (no LoRA on page)",
+  "note": "seed=904953581 steps=9 cfg=1 size=768x1344 ckpt=984644890228968118; loras=[] from page",
+  "httpStatus": 200,
+  "submitCode": "0",
+  "submitMessage": "",
+  "taskId": "1056300802819258469",
+  "finalStatus": "FINISH",
+  "imageUrl": "https://tensor-sf-sig.7022ae40757f8d53295a57619de9b364.r2.cloudflarestorage.com/workspace/generation/1048723019146487792/2026-10-17/3e2c7d98-118b-4be2-b803-73728be49739.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=0bef8a003dc93fc4d7030c9da79271ff%2F20261017%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20261017T042705Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&x-id=GetObject&X-Amz-Signature=7c8b7d62d77ae20baeae0d9939e19f9af7804736c09272637e3c596ebf4e6872",
+  "imageSha256": "d172692d293f7410d9feeaccf677d216bbcfe6da361e474521c806933a9a19ff",
+  "imageBytes": 1309248,
+  "timestampAsiaTokyo": "2026-10-17 13:27:05 JST",
+  "inputsCount": 14
+}

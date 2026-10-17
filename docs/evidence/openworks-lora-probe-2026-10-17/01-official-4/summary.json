@@ -1,0 +1,14 @@
+{
+  "case": "01-official-4",
+  "title": "Official 4 fields baseline (control)",
+  "note": "prompt + width + height + count only",
+  "httpStatus": 200,
+  "submitCode": "0",
+  "submitMessage": "",
+  "taskId": "1056289942994471380",
+  "finalStatus": "FINISH",
+  "imageSha256": "f227afb54ae728077a0d6e1f21e6e24d71b6439131af3ebdb35b9124485e7372",
+  "imageBytes": 472075,
+  "conclusion": "baseline OK (official 4)",
+  "timestampAsiaTokyo": "2026-10-17 12:45:38 JST"
+}

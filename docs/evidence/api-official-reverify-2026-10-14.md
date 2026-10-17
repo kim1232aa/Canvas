@@ -23,4 +23,4 @@
 Sogni / Civitai / ModelScope / MuAPI / HF / NanoGPT — 完整表见本文件后续更新。
 
 ## 用户标准（2026-10-14）
-官方支持 LoRA 的供应商：付费请求必须带真实 LoRA 参数；素材优先 https://civitai.red/images（配方：`/workspace/canvas-e2e-krea2-recipes/recipes.json`）。
+官方支持 LoRA 的供应商：付费请求必须带真实 LoRA 参数；素材优先 https://civitai.red/images（配方：`/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-krea2-recipes/recipes.json`）。

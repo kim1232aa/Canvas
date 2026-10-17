@@ -1,5 +1,5 @@
 # Krea runD follow-ups · 2026-10-15 03:30 (Asia/Shanghai) · all CODE_ONLY
-Backup: /workspace/canvas-restore/pre-runD-*.tgz. Evidence: /workspace/canvas-e2e-krea-lora-runD/. Live Krea OpenAPI saved: docs/evidence/krea-openapi-live-0330.json (GET https://api.krea.ai/openapi.json, HTTP 200, no key).
+Backup: /workspace/canvas/temp/backups/canvas-restore/pre-runD-*.tgz. Evidence: /workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-krea-lora-runD/. Live Krea OpenAPI saved: docs/evidence/krea-openapi-live-0330.json (GET https://api.krea.ai/openapi.json, HTTP 200, no key).
 
 A. Novita declaration: the file-level liveConfirmed is removed. Every field has x-liveConfirmed:false (+By/At). The server returns schemaConfirmedFields (fields with x-liveConfirmed true). schemaSendStatus is generic: when unprobed, only fields in schemaConfirmedFields → 会发送.
 B. Hub card ID shows selection.name/resourceId (the sent raw /styles id, e.g. 79tzf61yz), not the internal `krea-<id>` key.

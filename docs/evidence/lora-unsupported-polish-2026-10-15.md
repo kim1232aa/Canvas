@@ -4,8 +4,8 @@
 挑刺严重项已过；本轮只改文案/呈现，**拒发路由未改**。
 
 ## 截图基线
-`/workspace/canvas-e2e-civitai-krea-nolora-recheck/01-lora-card-plain.png`
-`/workspace/canvas-e2e-civitai-krea-nolora-recheck/02-exec-log-plain.png`
+`/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-civitai-krea-nolora-recheck/01-lora-card-plain.png`
+`/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-civitai-krea-nolora-recheck/02-exec-log-plain.png`
 
 ## 四条小修
 

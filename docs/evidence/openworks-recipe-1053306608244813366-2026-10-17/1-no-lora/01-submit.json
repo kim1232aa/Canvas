@@ -1,0 +1,81 @@
+{
+  "case": "1-no-lora",
+  "title": "Recipe prompt + 768x1024 + seed/steps/cfg/neg (no LoRA)",
+  "note": "official4 + named seed/steps/cfg/cfg_scale/negative_prompt/checkpoint; LoRA none",
+  "timestampAsiaTokyo": "2026-10-17 13:11:43 JST",
+  "actualRequest": {
+    "endpoint": "https://openapi.tensor.art/openworks/v1/task",
+    "method": "POST",
+    "headers": {
+      "Content-Type": "application/json",
+      "User-Agent": "ow-recipe-probe/1.1",
+      "Echo-Access-Key": "ak_tensor_W6…1o64"
+    },
+    "body": {
+      "toolName": "photoreal_studio_z_image",
+      "inputs": [
+        {
+          "type": "STRING",
+          "value": "Outfit: ((long flowing ivory-white dress:1.5)), lightweight semi-sheer fabric, soft translucent layers, off-shoulder neckline, long flowing sleeves, elegant draped silhouette, delicate gauzy texture, romantic ethereal design, fabric flowing naturally around the body Hair: ((long dark brown hair:1.45)), soft naturally wavy dark brown hair, long hair falling over the shoulders and down the back, loose face-framing strands, slightly tousled texture, natural movement, subtle warm highlights from the sunlight Face: ((soft ethereal feminine features:1.4)), delicate youthful face, large fuchsia red eyes, natural eyelashes, gentle rosy cheeks, small refined nose, glossy natural pink lips, peaceful dreamy expression, eyes softly closed or looking upward, serene romantic mood Accessories: ((small white flower hair accessory:1.4)), single delicate white flower tucked behind the ear, minimal jewelry, simple natural styling Pose: standing gracefully beside a shallow stream, body turned slightly sideways, head tilted upward toward the light, one hand raised near the face, the other arm relaxed naturally, flowing dress trailing around the body, peaceful elegant posture Props: ((small glowing water feature:1.35)), narrow stream of sparkling water flowing beside her, bright water droplets catching the sunlight, smooth pale stones surrounding the water Background: ((quiet natural rocky stream:1.45)), dark mossy rocks, shallow clear water, scattered pale stones, subtle greenery, secluded forest-like environment, peaceful hidden garden atmosphere Lighting: ((strong backlighting:1.55)), intense sunlight shining from behind the subject, dramatic glowing rim light around the hair and dress, dreamy overexposed highlights, sparkling reflections on the water, soft atmospheric haze, luminous white glow Photography: ((dreamy candid outdoor photograph:1.45)), strong natural lens flare, slightly overexposed exposure, soft focus, glowing highlights, subtle film grain, realistic digital camera texture, nostalgic Japanese photography aesthetic, ethereal summer atmosphere, natural imperfect composition"
+        },
+        {
+          "type": "INTEGER",
+          "value": 768
+        },
+        {
+          "type": "INTEGER",
+          "value": 1024
+        },
+        {
+          "type": "INTEGER",
+          "value": 1
+        },
+        {
+          "type": "INTEGER",
+          "name": "seed",
+          "value": 1388322349
+        },
+        {
+          "type": "INTEGER",
+          "name": "steps",
+          "value": 10
+        },
+        {
+          "type": "NUMBER",
+          "name": "cfg",
+          "value": 1
+        },
+        {
+          "type": "NUMBER",
+          "name": "cfg_scale",
+          "value": 1
+        },
+        {
+          "type": "STRING",
+          "name": "negative_prompt",
+          "value": "(worst quality:2), (low quality:2), (normal quality:1.8), lowres, blurry, jpeg artifacts, pixelated, noisy, grainy, watermark, logo, text, signature, username, copyright, censored, cropped, out of frame, bad anatomy, bad proportions, malformed anatomy, deformed, disfigured, mutated, mutation, ugly, poorly drawn, poorly rendered, bad face, asymmetrical face, bad hands, bad fingers, malformed hands, fused fingers, missing fingers, extra fingers, six fingers, four fingers, extra arms, missing arms, extra legs, missing legs, twisted fingers, broken fingers, disconnected limbs, floating limbs, duplicated limbs, long fingers, short fingers, mutated hands, malformed nails, missing nails, cross-eyed, lazy eye, wonky eyes, mismatched eyes, asymmetrical eyes, extra eyes, missing eyes, bad pupils, blurry eyes, dead eyes, bad mouth, bad teeth, malformed lips, extra mouth, missing mouth, distorted nose, extra nose, duplicate, cloned face, twin, multiple people, multiple girls, extra person, oversaturated, overexposed, underexposed, harsh shadows, unnatural lighting, flat lighting, low contrast, bad perspective, distorted body, stretched body, compressed body, messy hair, floating hair, extra hair, hair covering eyes, tangled hair, bad clothes, fused clothes, clipping, floating accessories, broken accessories, extra accessories"
+        },
+        {
+          "type": "STRING",
+          "name": "checkpoint",
+          "value": "1001238167812080872"
+        }
+      ]
+    }
+  },
+  "httpStatus": 200,
+  "responseRaw": "{\"code\":\"0\", \"message\":\"\", \"data\":{\"task\":{\"id\":\"1056296968487178490\", \"userId\":\"1048723019146487792\", \"status\":\"WAITING\", \"toolName\":\"photoreal_studio_z_image\", \"outputs\":[]}}}",
+  "response": {
+    "code": "0",
+    "message": "",
+    "data": {
+      "task": {
+        "id": "1056296968487178490",
+        "userId": "1048723019146487792",
+        "status": "WAITING",
+        "toolName": "photoreal_studio_z_image",
+        "outputs": []
+      }
+    }
+  }
+}

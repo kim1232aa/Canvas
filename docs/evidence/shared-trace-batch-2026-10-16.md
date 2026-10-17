@@ -1,6 +1,6 @@
 # Shared-trace batch — 2026-10-16 · 状态：CODE_ONLY
 
-未做前端 E2E。没有 commit，也没有 push。恢复包：`/workspace/canvas-restore/pre-sharedtrace-20261016-123558.tgz`。
+未做前端 E2E。没有 commit，也没有 push。恢复包：`/workspace/canvas/temp/backups/canvas-restore/pre-sharedtrace-20261016-123558.tgz`。
 重启一次：旧 PID 2765449 → 新 PID **2840993**，/proc stat 第 22 字段 ticks 为 **12478036**，lstart 为 Fri Oct 16 12:42:27 2026。启动命令和 cwd 跟旧进程完全一样（tsx loader server.ts，cwd 是 /workspace/canvas/Canvas-main），环境变量从旧进程原样继承，没有打印出来。日志在 /tmp/canvas-dev-sharedtrace.log。端口 3000 返回 HTTP 200。
 
 ## 1 共用 schema-provider 路径：上游调用记录与 Key 记录

@@ -1,0 +1,83 @@
+{
+  "case": "04-wrong-bearer",
+  "note": "TAMS: wrong Bearer in x-tensorart-key (non-ak_); must not fall through to env token silently for auth — uses header Bearer",
+  "httpStatus": 404,
+  "timestampAsiaTokyo": "2026-10-17 12:13:53 JST",
+  "response": {
+    "error": "Tensor.Art 模型 API 鉴权 / 模型查询失败 [404]",
+    "details": "{\"code\":100001,\"message\":\"unauthorized\",\"tips\":\"app not found\"}",
+    "exactEndpointCalled": "https://ap-east-1.tensorart.cloud/v1/models/613045163490732233",
+    "requestedModel": "613045163490732233",
+    "credentialHint": "模型 API 使用 TAMS Bearer；OpenWorks ak_tensor_ 不能作为 Bearer",
+    "actualRequest": {
+      "requestId": "722c66f2-aa59-4e08-8f81-1113e1765959",
+      "stages": [
+        {
+          "type": "INPUT_INITIALIZE",
+          "inputInitialize": {}
+        },
+        {
+          "type": "DIFFUSION",
+          "diffusion": {
+            "sdModel": "613045163490732233",
+            "width": 512,
+            "height": 512,
+            "prompts": [
+              {
+                "text": "control probe"
+              }
+            ],
+            "negativePrompts": []
+          }
+        }
+      ]
+    },
+    "executionTrace": [
+      {
+        "provider": "tensorart",
+        "model": "613045163490732233",
+        "method": "GET",
+        "endpoint": "https://ap-east-1.tensorart.cloud/v1/models/613045163490732233",
+        "status": 404,
+        "statusText": "Not Found",
+        "responseBody": {
+          "kind": "raw-response",
+          "url": "/api/media/raw/2ce745e66739a7011726318bd47870f727660b6ad6ae346d70fef28a8ecc712f",
+          "sha256": "2ce745e66739a7011726318bd47870f727660b6ad6ae346d70fef28a8ecc712f",
+          "size": 63,
+          "encoding": "utf-8",
+          "fidelity": "original"
+        },
+        "maskedKey": "0000...ffff",
+        "keyUsage": null,
+        "durationMs": 221,
+        "startedAt": "2026-10-17T03:13:53.745Z"
+      }
+    ],
+    "errorSource": "upstream",
+    "stack": "Error: Tensor.Art 模型 API 鉴权 / 模型查询失败 [404]\n    at ServerResponse.res.json (/workspace/canvas/Canvas-main/server.ts:328:24)\n    at <anonymous> (/workspace/canvas/Canvas-main/server.ts:4204:60)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)"
+  },
+  "actualRequest": {
+    "requestId": "722c66f2-aa59-4e08-8f81-1113e1765959",
+    "stages": [
+      {
+        "type": "INPUT_INITIALIZE",
+        "inputInitialize": {}
+      },
+      {
+        "type": "DIFFUSION",
+        "diffusion": {
+          "sdModel": "613045163490732233",
+          "width": 512,
+          "height": 512,
+          "prompts": [
+            {
+              "text": "control probe"
+            }
+          ],
+          "negativePrompts": []
+        }
+      }
+    ]
+  }
+}

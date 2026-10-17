@@ -1,7 +1,7 @@
 # 魔搭执行记录人话 + 残留错误清理（2026-10-15）
 
 ## 结论
-对照 `/workspace/canvas-e2e-modelscope-cn-lora/`（上游 500「模型不存在」，请求已正确带 `loras`）：
+对照 `/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-modelscope-cn-lora/`（上游 500「模型不存在」，请求已正确带 `loras`）：
 1. **执行记录 / 节点主视线**改为人话结论，不再把 `[500]`、完整 JSON、`request_id` 堆在首行。
 2. **换引擎 / 重跑**清掉节点与取景框残留红框错误（如旧 Civitai）。
 3. **客户端请求快照**里 CheckpointLoader 标题按当前 `targetProvider` / 路由重写，禁止 WaveSpeed 标题对着魔搭请求。
@@ -50,4 +50,4 @@ npx vitest run \
 - 未改 ModelScope 上游接线 / 未静默剥 LoRA / 未假装出图
 
 ## 还原包
-`/workspace/canvas-restore/Canvas-main-pre-ms-exec-copy-20261015-013115.tar.gz`
+`/workspace/canvas/temp/backups/canvas-restore/Canvas-main-pre-ms-exec-copy-20261015-013115.tar.gz`

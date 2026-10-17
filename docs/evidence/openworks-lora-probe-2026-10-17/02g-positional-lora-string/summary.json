@@ -1,0 +1,14 @@
+{
+  "case": "02g-positional-lora-string",
+  "title": "Official 4 + 5th positional STRING = LoRA id",
+  "note": "positional extra STRING LoRA id + NUMBER weight",
+  "httpStatus": 200,
+  "submitCode": "0",
+  "submitMessage": "",
+  "taskId": "1056291067202153209",
+  "finalStatus": "FINISH",
+  "imageSha256": "f9143664a207bc586c8df3f676b0a3154e4175410ec6206da066747f6c30e93e",
+  "imageBytes": 461762,
+  "conclusion": "ignored_or_unproven (HTTP200 FINISH; schema has no LoRA; no proof applied)",
+  "timestampAsiaTokyo": "2026-10-17 12:48:51 JST"
+}

@@ -1,7 +1,7 @@
 # 执行记录成功人话 + 空请求快照隐藏（2026-10-15）
 
 ## 结论
-对照 Realism LoRA 成功态截图 `/workspace/canvas-e2e-modelscope-cn-lora-realism/03-execution-log-desktop.png`（首行仅「完成」、客户端请求 JSON 下空白黑框）：
+对照 Realism LoRA 成功态截图 `/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-modelscope-cn-lora-realism/03-execution-log-desktop.png`（首行仅「完成」、客户端请求 JSON 下空白黑框）：
 
 1. **成功首行**改为人话结论，不再只写「完成」。
 2. **客户端请求 JSON** 在对齐/脱敏后为空、`{}`、`null` 时**整块不渲染**（不留空黑 `<pre>`）。
@@ -56,10 +56,10 @@ npx vitest run \
 - 未改上游接线 / 未静默剥 LoRA
 
 ## 还原包
-`/workspace/canvas-restore/Canvas-main-pre-exec-success-plain-20261015-014200.tar.gz`
+`/workspace/canvas/temp/backups/canvas-restore/Canvas-main-pre-exec-success-plain-20261015-014200.tar.gz`
 
 ## 对照证据（合前）
-- `/workspace/canvas-e2e-modelscope-cn-lora-realism/03-execution-log-desktop.png`
-- `/workspace/canvas-e2e-modelscope-cn-lora-realism/02-after-run.png`
-- `/workspace/canvas-e2e-modelscope-cn-lora-realism/05-history.png`
+- `/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-modelscope-cn-lora-realism/03-execution-log-desktop.png`
+- `/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-modelscope-cn-lora-realism/02-after-run.png`
+- `/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-modelscope-cn-lora-realism/05-history.png`
 - outcome：`PASS_GENERATION`

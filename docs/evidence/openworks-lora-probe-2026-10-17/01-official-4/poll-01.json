@@ -1,0 +1,10 @@
+{
+  "poll": 1,
+  "httpStatus": 400,
+  "timestampAsiaTokyo": "2026-10-17 12:44:29 JST",
+  "responseRaw": "{\"code\":3,\"message\":\"task_ids is required\"}\n",
+  "response": {
+    "code": 3,
+    "message": "task_ids is required"
+  }
+}

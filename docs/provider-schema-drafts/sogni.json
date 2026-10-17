@@ -1,4 +1,5 @@
 {
+  "canvasAcceptance": "未验证（2026-10-17 14:40 北京：测试截图已全删，按雁标准「画布里出图、落保存节点、历史有缩略图」当前 0 家；以前的出图/欠费标记一律作废，官方字段结论保留；在画布重跑出图并有节点图+历史缩略图后再单独改）",
   "$schemaNote": "草案 — 仅声明。真相源: docs/provider-api-audit-v2/sogni.md（04:43–04:45 修正版）+ DIFF.md",
   "id": "sogni",
   "displayName": "Sogni",
@@ -256,9 +257,9 @@
     "https://sdk-docs.sogni.ai/interfaces/_internal_.BaseProjectParams.html"
   ],
   "_auditStatus": "2026-10-16 15:13：fix3-1440 升 PASS_BILLING。2026-10-16 15:13：fix3-1440 挑刺无严重+Researchy 已核，等画布收口。2026-10-15 04:45 v2 已核（sogni.md 04:43 修正）：REST creative-agent/workflows + model-catalog + loras/comfy ui 范围；首版「无 REST」已废。字段徽章仍以前端实测为准；2026-10-16 12:31 sogni-rekey-1220 判 FAIL（不升徽章）；LoRA 字段名/格式已核（SDK 文档 12:30:53），缺口：REST 参考页未列、最多 8 个无原文",
-  "acceptanceBadge": "PASS_BILLING",
+  "acceptanceBadge": "未验证",
   "sendEvidence": {
-    "run": "/workspace/canvas-e2e-sogni-rekey-1220/",
+    "run": "已清理",
     "actualRequest": {
       "loras": [
         "krea2-detail-enhancer"
@@ -271,7 +272,7 @@
     "verdict": "FAIL，不算 PASS_BILLING：报错提示写「本次请求未含 LoRA」与实际请求不符；失败记录没进历史",
     "sendStatus": "待确认（整单 FAIL，字段不升会发送）",
     "retest": {
-      "run": "/workspace/canvas-e2e-sogni-trace-1255/（卡 hist_1792127116221_7nqv6）",
+      "run": "已清理 hist_1792127116221_7nqv6）",
       "verdict": "仍 FAIL",
       "fixed": [
         "不再误报未含 LoRA",
@@ -286,7 +287,7 @@
       "note": "canvas-dev PID 2909416 已改（CODE_ONLY），待重拍"
     },
     "retest_fix2_1450": {
-      "run": "/workspace/canvas-e2e-sogni-fix2-1450/（卡 hist_1792129805269_f8m5v）",
+      "run": "已清理 hist_1792129805269_f8m5v）",
       "verdict": "FAIL_UI，不收口",
       "fixed": [
         "loras/loraStrengths 芯片标实际发送",
@@ -302,7 +303,7 @@
       ]
     },
     "retest_fix3_1440": {
-      "run": "/workspace/canvas-e2e-sogni-fix3-1440/（卡 hist_1792133816603_r4oww）",
+      "run": "已清理 hist_1792133816603_r4oww）",
       "verdict": "PASS_BILLING",
       "fixed": [
         "toast 标题 HTTP 200 · task status=waiting_for_user · insufficient_credit（无「响应体为空」）",
@@ -310,7 +311,7 @@
         "上游 POST 201 → GET 200 waiting_for_user / insufficient_credit",
         "非本地拦截"
       ],
-      "acceptanceBadge": "PASS_BILLING",
+      "acceptanceBadge": "未验证",
       "挑刺": "严重项这轮没挑到（toast/卡头/KSampler 均带 insufficient_credit；芯片实际发送；上游第2段非空）",
       "researchy": {
         "fetched": "2026-10-16 15:12 北京",

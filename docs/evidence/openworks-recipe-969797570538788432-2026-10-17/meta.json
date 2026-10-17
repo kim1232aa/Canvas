@@ -1,0 +1,27 @@
+{
+  "timeStartedAsiaTokyo": "2026-10-17 13:31:48 JST",
+  "sourceUrl": "https://tensor.art/images/969797570538788432?post_id=969797555506437456",
+  "idSource": "Context web-scrape markdown model hrefs on recipe page",
+  "tool": "photoreal_studio_z_image",
+  "endpoint": "https://openapi.tensor.art/openworks/v1/task",
+  "auth": "Echo-Access-Key = ak_tensor_W6…1o64",
+  "seed": 3260052276,
+  "steps": 9,
+  "cfg": 1,
+  "size": "768x1344",
+  "clipSkip": 1,
+  "checkpointPage": "940566212906107758",
+  "checkpointName": "Z-Image-Turbo-FP32",
+  "loraId": "969483275569466663",
+  "loraName": "[Z Image Turbo] Asian Mix Lokr - v5.2 - C",
+  "loraWeight": 1.0,
+  "loraWeightNote": "page showed no weight; used 1.0 (id is from page)",
+  "negativeOnPage": false,
+  "promptLenFlat": 1725,
+  "cases": [
+    "1-ckpt-prompt-only",
+    "2-full-with-page-lora"
+  ],
+  "productCodeModified": false,
+  "queryBodyField": "taskIds"
+}

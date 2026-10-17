@@ -1,6 +1,6 @@
 # 去掉 Schema / 端点兜底（铁律 3）— 2026-10-15 — CODE_ONLY
 
-恢复包：`/workspace/canvas-restore/pre-nofallback-*.tgz`
+恢复包：`/workspace/canvas/temp/backups/canvas-restore/pre-nofallback-*.tgz`
 
 ## 改动（`src/server/schemaProviders.ts`）
 - 新增 `schemaUnavailableBlock()`：本地 400，`errorSource:'local'`，首句「未出站，本地拦截：…」，带来源 URL；不 POST。server.ts 现有中间件把生成路由的本地 4xx 写成 `local_blocked` 历史（无 upstreamStatus）。
@@ -47,4 +47,4 @@
 - Venice `/models?type=image` 返回的 45 个模型，`model_spec.constraints.steps` 全部都有 `{default,max}`。没有哪个模型缺 steps，也没有按模型的「忽略」标记。
 - 结论：没有结构化的按模型信号。按铁律不做关键词匹配、不做特判，steps 照常走通用逻辑（不经实测就一直显示「待确认」）。真正生效与否交给画布的前端实测。
 - 新增通用规则：Schema 字段 `deprecated: true`（OpenAPI 结构化标记）→ 填了就本地拦截，原文引用官方 description。Venice 目前唯一命中的是 `inpaint`。测试：`src/server/schemaDeprecated.test.ts`，里面也断言了描述里的 “is ignored” 文本不会触发拦截。
-- 还原包：`/workspace/canvas-restore/pre-ignored-field-0252.tgz`
+- 还原包：`/workspace/canvas/temp/backups/canvas-restore/pre-ignored-field-0252.tgz`

@@ -1,8 +1,8 @@
 # 魔搭国际站成功卡四处修复（2026-10-16，CODE_ONLY）
 
 状态：CODE_ONLY（单测通过，未做前端 E2E；无付费调用；未 commit/push）。
-还原包：/workspace/canvas-restore/pre-modelscope-success-20261016-113200.tgz（排除 node_modules）
-依据：/workspace/canvas-e2e-modelscope-ai-lora-1121/（run-notes.txt）与 data/history.json 中 hist_1792121319067_i9lp9。
+还原包：/workspace/canvas/temp/backups/canvas-restore/pre-modelscope-success-20261016-113200.tgz（排除 node_modules）
+依据：/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-modelscope-ai-lora-1121/（run-notes.txt）与 data/history.json 中 hist_1792121319067_i9lp9。
 
 ## 根因与修复（通用，不含供应商特化）
 1. 成功卡无原样请求 / 提示条「未返回 actualRequest」

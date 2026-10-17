@@ -1,0 +1,14 @@
+{
+  "case": "02f-diffusion-lora-items-json",
+  "title": "Official 4 + diffusion.lora.items style JSON strings",
+  "note": "named STRING JSON for diffusion.lora.items / lora_items / lora",
+  "httpStatus": 200,
+  "submitCode": "0",
+  "submitMessage": "",
+  "taskId": "1056290978081594166",
+  "finalStatus": "FINISH",
+  "imageSha256": "d2b257eaf1cf450a36b6c61a75592b26264601590f9029437bf112225e300299",
+  "imageBytes": 461546,
+  "conclusion": "ignored_or_unproven (HTTP200 FINISH; schema has no LoRA; no proof applied)",
+  "timestampAsiaTokyo": "2026-10-17 12:48:30 JST"
+}

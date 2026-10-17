@@ -48,7 +48,7 @@
 - 相关：`modelHubCatalog` / `kreaProvider` / `schemaProviders` / `schemaProviderWireReview` / `providerSchema` / `schemaSendHint` / `providerLabels` / `isLoraWeightResource` 均通过
 
 ## Live smoke（服务端，临时 express + 真实上游）
-结果：`/workspace/canvas-e2e-together/smoke-result.json`
+结果：`/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-together/smoke-result.json`
 | 步骤 | 结果 |
 |---|---|
 | 目录 `GET /v1/models` | **401** `{"error":{"message":"Unauthorized"}}` |
@@ -59,7 +59,7 @@
 Key 元数据（不回显密钥）：`keyPresent=true`，`keyLen=25`，前缀 `key_…`。Together 控制台签发的有效 Key 通常更长；当前值被上游直接判 Unauthorized。
 
 ## 恢复包
-- 改前：`/workspace/canvas-restore/pre-together-0143.tgz`
+- 改前：`/workspace/canvas/temp/backups/canvas-restore/pre-together-0143.tgz`
 
 ## 未完成 / 待办
 - **换有效 `TOGETHER_API_KEY`** 后重跑 `npx tsx scripts/together-live-smoke.ts`，争取 PASS_GENERATION（无 LoRA；图像同步）。

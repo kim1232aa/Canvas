@@ -1,4 +1,5 @@
 {
+  "canvasAcceptance": "未验证（2026-10-17 14:40 北京：测试截图已全删，按雁标准「画布里出图、落保存节点、历史有缩略图」当前 0 家；以前的出图/欠费标记一律作废，官方字段结论保留；在画布重跑出图并有节点图+历史缩略图后再单独改）",
   "$schemaNote": "草案 — 仅声明。真相源: docs/provider-api-audit/tensorart-tams.md (2026-10-15)",
   "id": "tensorart-tams",
   "displayName": "Tensor.Art TAMS",
@@ -135,5 +136,58 @@
     "https://tams-docs.tensor.art/docs/api/guide/integration-faq/",
     "https://tams-docs.tensor.art/docs/use-cases/basic/component/lora/"
   ],
-  "_auditStatus": "2026-10-15 03:26：引用的 docs/provider-api-audit 旧审计仅留作对比、不再引用；以 docs/provider-api-audit-v2/ 与 DIFF.md 为准；本草案凡依据旧审计的结论一律视为未核实，等 Researchy 新调查"
+  "_auditStatus": "2026-10-16 ~23:11 JST：画布正式收口 fix13.1；证据 已清理，PID 3611920。@tinkabot 不升出图徽章。 2026-10-16 ~22:57 JST：fix13.1 CODE_ONLY（UI 五条）；PID 3611920；证据 docs/evidence/fix13.1-2026-10-16.md。对照表仍 CODE_ONLY、不升出图。 2026-10-16 ~22:53 JST：画布正式收口 fix13（清理+主机+口径）；证据 已清理，PID 3576628。建任务 BLOCKED——**对照表保持 CODE_ONLY、不升出图徽章**（画布@tinkabot）。下一批 fix13.1 仅 UI 细节。 2026-10-16 ~22:52 JST：画布 fix13 前端四项复验过（清理+主机+Together），证据 已清理，PID 3576628；已交挑刺。建任务仍 BLOCKED，**不升出图徽章**。 2026-10-16 ~22:35 JST fix13 CODE_ONLY（canvas-dev PID 3576628；证据 docs/evidence/fix13-2026-10-16.md）。未升徽章；等画布验收。无 TAMS 令牌未测建任务。 2026-10-16 22:16 Researchy 再核 preferredHost=ap-east-1.tensorart.cloud。2026-10-16 22:12：雁口径——报错先查是否用错接口。2026-10-16 22:10：Researchy 确认出图 POST ap-east-1.tensorart.cloud/v1/jobs + Bearer/TAMS-SHA256-RSA，非 OpenWorks。2026-10-15 03:26：引用的 docs/provider-api-audit 旧审计仅留作对比、不再引用；以 docs/provider-api-audit-v2/ 与 DIFF.md 为准；本草案凡依据旧审计的结论一律视为未核实，等 Researchy 新调查",
+  "researchyConfirm": {
+    "fetchedAt": "2026-10-16 ~22:10 CST（Researchy 群内）",
+    "createJob": "POST https://ap-east-1.tensorart.cloud/v1/jobs（stages）",
+    "auth": "Bearer {token} 或 TAMS-SHA256-RSA",
+    "not": "OpenWorks / ak_tensor",
+    "source": "https://tams-docs.tensor.art/docs/api/signature/signature_build/",
+    "at": "2026-10-16 ~22:16 JST",
+    "preferredHost": "https://ap-east-1.tensorart.cloud",
+    "sources": [
+      "https://tams-docs.tensor.art/docs/api/signature/signature_build/",
+      "https://github.com/Tensor-Art/tams-signature-demo"
+    ]
+  },
+  "preferredHost": "https://ap-east-1.tensorart.cloud",
+  "wrongApiHint": {
+    "userRule": "2026-10-16 雁：TAMS 若提示错误，优先怀疑用错接口（OpenWorks/ak_tensor 或错误主机），不是「TAMS 不能出图」",
+    "correct": "官方建任务 POST /v1/jobs + Bearer 或 TAMS-SHA256-RSA；主机等 Researchy 核 tams-api.tensor.art vs ap-east-1.tensorart.cloud",
+    "forbidden": "OpenWorks / ak_tensor 冒充"
+  },
+  "alternateHosts": [
+    "https://tams-api.tensor.art"
+  ],
+  "hostNote": "2026-10-16 Researchy ~22:16：官方签名页示例主机 ap-east-1.tensorart.cloud；demo 写 endpoint from your app（以控制台为准）。本机探针两 host 对 POST /v1/jobs 无鉴权均回 code 100002 invalid authorization header。优先控制台 Endpoint，文档默认跟 ap-east-1。",
+  "fix13": {
+    "status": "CODE_ONLY",
+    "pid": "3576628",
+    "evidence": "docs/evidence/fix13-2026-10-16.md",
+    "defaultHost": "https://ap-east-1.tensorart.cloud",
+    "override": "cloudSettings.tensorartBaseUrl / TENSORART_BASE_URL",
+    "jobsPath": "POST {origin}/v1/jobs",
+    "note": "钥匙测试/余额不再把 OpenWorks 目录成功记为 tensorart ok；等 TAMS Bearer 再测出图",
+    "frontendAccept": {
+      "status": "CLOSED",
+      "canvasSaid": "正式收口清理+主机+口径；建任务 BLOCKED 不升出图",
+      "evidence": "已清理",
+      "pid": "3576628"
+    },
+    "badge": "CODE_ONLY（画布明示不升出图）"
+  },
+  "acceptanceBadge": "未验证",
+  "fix13_1": {
+    "status": "CLOSED",
+    "pid": "3611920",
+    "evidence": "docs/evidence/fix13.1-2026-10-16.md",
+    "scope": "UI only（说明分行/URL wrap/空态不叠/Together 折叠/标点统一）",
+    "badge": "CODE_ONLY（画布明示不升出图）",
+    "frontendAccept": {
+      "status": "CLOSED",
+      "evidence": "已清理",
+      "pid": "3611920",
+      "note": "01/03/04 过；02 OpenWorks 空态双层 SKIP"
+    }
+  }
 }

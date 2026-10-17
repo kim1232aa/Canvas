@@ -2,7 +2,7 @@
 
 ## Bug
 LoRA Hub pasting an HTTP(S) weight URL (e.g. HuggingFace resolve URL) marked the resource `unresolved` / `import_unresolved_resource` and blocked run via `generationReadiness`.
-Manually creating a LoRALoader node and typing the **same** URL + explicit strength ran successfully (WaveSpeed+LoRA `PASS_GENERATION`, evidence `/workspace/canvas-e2e-wavespeed-lora/`).
+Manually creating a LoRALoader node and typing the **same** URL + explicit strength ran successfully (WaveSpeed+LoRA `PASS_GENERATION`, evidence `/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-wavespeed-lora/`).
 
 ## Root cause
 1. `CivitaiModal.tsx` `handleCustomUniversalLoraSubmit` HTTP branch called `onSelectLoRA({ provider, name: rawVal, ... })` **without** `downloadUrl` or `resourceVerified`.

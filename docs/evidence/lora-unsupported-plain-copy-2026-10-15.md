@@ -3,7 +3,7 @@
 ## 结论
 用户可见的 LoRA 卡 / 横幅 / 徽章与执行记录**首行**改为人话；`comfy:krea2` /「官方 schema」/「loras 字段」/ HTTP·local·API 路径堆叠只进可展开技术细节。拒发逻辑未削弱。
 
-## Before（截图 `/workspace/canvas-e2e-civitai-krea-nolora/`）
+## Before（截图 `/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-civitai-krea-nolora/`）
 - 卡标题：`该服务商不支持`
 - 卡正文：`该服务商不支持（civitai / comfy:krea2 的官方 schema 无 loras 字段）`
 - 按钮：`旁路此 LoRA 节点`

@@ -1,0 +1,16 @@
+{
+  "case": "2-full-with-page-lora",
+  "title": "Full page params + hard-stuff page LoRA Asian Mix Lokr v5.2",
+  "note": "seed/steps/cfg/clip_skip/ckpt + prefer named loras/image_loras id=969483275569466663 weight=1.0; neg absent on page so omitted",
+  "httpStatus": 200,
+  "submitCode": "0",
+  "submitMessage": "",
+  "taskId": "1056302253444485758",
+  "finalStatus": "FINISH",
+  "imageUrl": "https://tensor-sf-sig.7022ae40757f8d53295a57619de9b364.r2.cloudflarestorage.com/workspace/generation/1048723019146487792/2026-10-17/5b50d6ce-63b5-4162-a4d7-70790f40896c.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=0bef8a003dc93fc4d7030c9da79271ff%2F20261017%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20261017T043249Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&x-id=GetObject&X-Amz-Signature=35fbdca78ad7e7c5825942af9611ee526fce480d3758f4829c66c7544610360c",
+  "imageSha256": "7c11b04a67a26ecca4ffc875e8f0e140dee5d10e7dc6fd168d21da769f126078",
+  "imageBytes": 1253800,
+  "timestampAsiaTokyo": "2026-10-17 13:32:50 JST",
+  "inputsCount": 20,
+  "loraIdUsed": "969483275569466663"
+}

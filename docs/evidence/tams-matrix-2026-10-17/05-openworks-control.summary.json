@@ -1,0 +1,30 @@
+{
+  "case": "05-openworks-control",
+  "httpStatus": 200,
+  "error": null,
+  "errorSource": null,
+  "taskId": "1056282141186342651",
+  "ow_endpoint": "https://openapi.tensor.art/openworks/v1/task",
+  "ow_parameters": {
+    "toolName": "photoreal_studio_z_image",
+    "inputs": [
+      {
+        "type": "STRING",
+        "value": "a red apple, studio photo"
+      },
+      {
+        "type": "INTEGER",
+        "value": 512
+      },
+      {
+        "type": "INTEGER",
+        "value": 512
+      },
+      {
+        "type": "INTEGER",
+        "value": 1
+      }
+    ]
+  },
+  "details_preview": "{'code': '0', 'message': '', 'data': {'task': {'id': '1056282141186342651', 'userId': '1048723019146487792', 'status': 'WAITING', 'toolName': 'photoreal_studio_z_image', 'outputs': []}}}"
+}

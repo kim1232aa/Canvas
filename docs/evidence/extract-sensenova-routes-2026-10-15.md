@@ -4,7 +4,7 @@
 
 ## Restore tar
 
-`/workspace/canvas-restore/pre-sensenova-extract-0157.tgz`  
+`/workspace/canvas/temp/backups/canvas-restore/pre-sensenova-extract-0157.tgz`  
 (excludes node_modules / dist / .git)
 
 ## server.ts line counts

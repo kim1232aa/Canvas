@@ -1,0 +1,15 @@
+{
+  "task": {
+    "id": "1056284107207646691",
+    "userId": "1048723019146487792",
+    "status": "FINISH",
+    "toolName": "photoreal_studio_z_image",
+    "outputs": [
+      {
+        "type": "STRING",
+        "value": "https://tensor-sf-sig.7022ae40757f8d53295a57619de9b364.r2.cloudflarestorage.com/workspace/generation/1048723019146487792/2026-10-17/38b62ced-6204-4e45-ad27-cd9cfe8b73df.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=0bef8a003dc93fc4d7030c9da79271ff%2F20261017%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20261017T032221Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&x-id=GetObject&X-Amz-Signature=0300f42b68c896f98fa6330eff09fe4e5edad289230c90f040bd785bef7abf09"
+      }
+    ]
+  },
+  "pollCount": 11
+}

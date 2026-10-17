@@ -1,7 +1,7 @@
 # Replicate PARTIAL 修复 · 2026-10-16（CODE_ONLY，待画布前端 E2E）
 
 - 官方依据：live `GET https://api.replicate.com/v1/models/black-forest-labs/flux-dev-lora` → `latest_version.openapi_schema.components.schemas.Input`，快照 `docs/evidence/replicate-flux-dev-lora-openapi-2026-10-16.json`（HTTP 200，10:17 Asia/Shanghai）。lora_weights=`type:string`；aspect_ratio=`allOf:[{$ref:'#/components/schemas/aspect_ratio'}]` 默认 1:1；hf_api_token/civitai_api_token=`writeOnly + x-cog-secret`。
-- Restore：`/workspace/canvas-restore/pre-replicate-fix-20261016-101643.tgz`
+- Restore：`/workspace/canvas/temp/backups/canvas-restore/pre-replicate-fix-20261016-101643.tgz`
 - Server：旧 2491484 @ 09:38:15 → 新 **2563005 @ 2026-10-16 10:22:43 Asia/Shanghai**，日志 `/tmp/canvas-server-replicate-fix-1023.log`；`GET /` 200；`/api/model-schema?provider=replicate&model=black-forest-labs/flux-dev-lora` 200，aspect_ratio 已内联 enum。
 - 测试：`src/utils/replicatePartialFix.test.tsx` 10/10；`vitest run src/utils src/components src/server src/services src/integration` 1109 passed / 2 failed（`mediaHostedReview` 2 条，改前基线同样失败，缺 `hosting/server.generated`）。
 
@@ -37,5 +37,5 @@
 - 测试：#5 两条；`serverCloseoutRoute.test.ts` 源码断言更新。
 
 ## 6) 导入工作流把 LoRA base_model 清成 SD 1.5 — NOT FIXED（未复现）
-- 已查：`/workspace/canvas-e2e-replicate-0951/workflow-import.json` 中 LoRALoader `base_model:""`、`lora_name:fofr/flux-pixar-cars`；`checkLoraArchitectureCompatibility` 按名推断两者都为 flux → 兼容；history.json 无含「SD 1.5 / 架构」的条目；代码中写入 'SD 1.5' 的只有展示默认值。
+- 已查：`/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-replicate-0951/workflow-import.json` 中 LoRALoader `base_model:""`、`lora_name:fofr/flux-pixar-cars`；`checkLoraArchitectureCompatibility` 按名推断两者都为 flux → 兼容；history.json 无含「SD 1.5 / 架构」的条目；代码中写入 'SD 1.5' 的只有展示默认值。
 - 需画布提供：被拦截时的原文报错 + 导入前后节点 JSON（或截图）。未加任何兜底。

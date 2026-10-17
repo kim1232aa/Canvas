@@ -1,6 +1,6 @@
 # Replicate flux-schnell / ModelScope 声明字段门控 — 2026-10-15
 
-状态：**CODE_ONLY**（未跑浏览器、未真实出图；前端 E2E 归画布）。备份：`/workspace/canvas-restore/pre-replicate-modelscope-0540.tgz`。
+状态：**CODE_ONLY**（未跑浏览器、未真实出图；前端 E2E 归画布）。备份：`/workspace/canvas/temp/backups/canvas-restore/pre-replicate-modelscope-0540.tgz`。
 
 ## 官方 live 核对（改代码前）
 1. Replicate `black-forest-labs/flux-schnell` — `GET https://replicate.com/api/models/black-forest-labs/flux-schnell/versions`（最新版本 `c846a699…`，created 2025-06-25T20:02Z）Input properties：

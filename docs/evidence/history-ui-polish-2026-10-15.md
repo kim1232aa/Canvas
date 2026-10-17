@@ -1,7 +1,7 @@
 
 ## History UI polish follow-ups (2026-10-15 04:45 JST) — CODE_ONLY, FE screenshots pending
 
-Restore tar: `/workspace/canvas-restore/pre-histpolish-0441.tgz`
+Restore tar: `/workspace/canvas/temp/backups/canvas-restore/pre-histpolish-0441.tgz`
 
 ### 1) Provider label — single source
 - Source: `PROVIDER_TITLE_LABEL` in `src/utils/providerLabels.ts` (`openworks: 'Tensor.Art OpenWorks'`, already correct).

@@ -1,0 +1,327 @@
+{
+  "case": "02-seed-steps-cfg",
+  "note": "TAMS: +seed+steps+CFG",
+  "httpStatus": 400,
+  "timestampAsiaTokyo": "2026-10-17 12:13:52 JST",
+  "response": {
+    "error": "Tensor.Art 模型任务提交失败 [400]",
+    "details": "{\"code\":3, \"message\":\"Params Valid\", \"details\":[{\"@type\":\"type.googleapis.com/tams_api.ArgumentError\", \"field\":\"base\", \"message\":\"credits not enough\"}]}",
+    "exactEndpointCalled": "https://ap-east-1.tensorart.cloud/v1/jobs",
+    "requestedModel": "613045163490732233",
+    "actualRequest": {
+      "requestId": "34249fcc-a612-4358-abbc-d379e7deb368",
+      "stages": [
+        {
+          "type": "INPUT_INITIALIZE",
+          "inputInitialize": {
+            "seed": "42"
+          }
+        },
+        {
+          "type": "DIFFUSION",
+          "diffusion": {
+            "sdModel": "613045163490732233",
+            "width": 512,
+            "height": 768,
+            "prompts": [
+              {
+                "text": "a red apple on a wooden table"
+              }
+            ],
+            "negativePrompts": [],
+            "steps": 20,
+            "cfgScale": 7
+          }
+        }
+      ]
+    },
+    "errorSource": "upstream",
+    "executionTrace": [
+      {
+        "provider": "tensorart",
+        "model": "613045163490732233",
+        "method": "GET",
+        "endpoint": "https://ap-east-1.tensorart.cloud/v1/models/613045163490732233",
+        "status": 200,
+        "statusText": "OK",
+        "responseBody": {
+          "kind": "raw-response",
+          "url": "/api/media/raw/7385c93fc53c8e08fea194e81c4f8435a14066aaeb01b3a2bf7bfd3adc2bba51",
+          "sha256": "7385c93fc53c8e08fea194e81c4f8435a14066aaeb01b3a2bf7bfd3adc2bba51",
+          "size": 911,
+          "encoding": "utf-8",
+          "fidelity": "original"
+        },
+        "maskedKey": "38b4...6ca5",
+        "keyUsage": {
+          "provider": "tensorart",
+          "index": 2,
+          "count": 3,
+          "source": "pool"
+        },
+        "durationMs": 236,
+        "startedAt": "2026-10-17T03:13:52.469Z"
+      },
+      {
+        "provider": "tensorart",
+        "model": "613045163490732233",
+        "method": "POST",
+        "endpoint": "https://ap-east-1.tensorart.cloud/v1/jobs",
+        "requestBody": {
+          "requestId": "34249fcc-a612-4358-abbc-d379e7deb368",
+          "stages": [
+            {
+              "type": "INPUT_INITIALIZE",
+              "inputInitialize": {
+                "seed": "42"
+              }
+            },
+            {
+              "type": "DIFFUSION",
+              "diffusion": {
+                "sdModel": "613045163490732233",
+                "width": 512,
+                "height": 768,
+                "prompts": [
+                  {
+                    "text": "a red apple on a wooden table"
+                  }
+                ],
+                "negativePrompts": [],
+                "steps": 20,
+                "cfgScale": 7
+              }
+            }
+          ]
+        },
+        "status": 400,
+        "statusText": "Bad Request",
+        "responseBody": {
+          "kind": "raw-response",
+          "url": "/api/media/raw/2e1c19bd22b724caeb556ab1eccee01bbb3021fe3cf6c70647380a10ff718eab",
+          "sha256": "2e1c19bd22b724caeb556ab1eccee01bbb3021fe3cf6c70647380a10ff718eab",
+          "size": 152,
+          "encoding": "utf-8",
+          "fidelity": "original"
+        },
+        "maskedKey": "38b4...6ca5",
+        "keyUsage": {
+          "provider": "tensorart",
+          "index": 2,
+          "count": 3,
+          "source": "pool"
+        },
+        "durationMs": 248,
+        "startedAt": "2026-10-17T03:13:52.705Z"
+      }
+    ],
+    "stack": "Error: Tensor.Art 模型任务提交失败 [400]\n    at ServerResponse.res.json (/workspace/canvas/Canvas-main/server.ts:328:24)\n    at <anonymous> (/workspace/canvas/Canvas-main/server.ts:4220:45)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)",
+    "historyItem": {
+      "status": "failed",
+      "url": "",
+      "prompt": "a red apple on a wooden table",
+      "negativePrompt": null,
+      "provider": "tensorart",
+      "actualProvider": "tensorart",
+      "model": "613045163490732233",
+      "actualModel": "613045163490732233",
+      "loras": [],
+      "upstreamStatus": 400,
+      "upstreamStatusText": "Bad Request",
+      "upstreamEndpoint": "https://ap-east-1.tensorart.cloud/v1/jobs",
+      "upstreamResponseBody": "{\"code\":3, \"message\":\"Params Valid\", \"details\":[{\"@type\":\"type.googleapis.com/tams_api.ArgumentError\", \"field\":\"base\", \"message\":\"credits not enough\"}]}",
+      "networkError": null,
+      "httpStatus": 400,
+      "error": "Tensor.Art 模型任务提交失败 [400]",
+      "errorSource": "upstream",
+      "stack": "Error: Tensor.Art 模型任务提交失败 [400]\n    at ServerResponse.res.json (/workspace/canvas/Canvas-main/server.ts:328:24)\n    at <anonymous> (/workspace/canvas/Canvas-main/server.ts:4220:45)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)",
+      "requestMetadata": {
+        "route": "/api/tensorart/generate",
+        "actualRequest": {
+          "requestId": "34249fcc-a612-4358-abbc-d379e7deb368",
+          "stages": [
+            {
+              "type": "INPUT_INITIALIZE",
+              "inputInitialize": {
+                "seed": "42"
+              }
+            },
+            {
+              "type": "DIFFUSION",
+              "diffusion": {
+                "sdModel": "613045163490732233",
+                "width": 512,
+                "height": 768,
+                "prompts": [
+                  {
+                    "text": "a red apple on a wooden table"
+                  }
+                ],
+                "negativePrompts": [],
+                "steps": 20,
+                "cfgScale": 7
+              }
+            }
+          ]
+        },
+        "keyUsages": [
+          {
+            "provider": "tensorart",
+            "index": 2,
+            "count": 3,
+            "source": "pool"
+          }
+        ],
+        "executionTrace": [
+          {
+            "provider": "tensorart",
+            "model": "613045163490732233",
+            "method": "GET",
+            "endpoint": "https://ap-east-1.tensorart.cloud/v1/models/613045163490732233",
+            "status": 200,
+            "statusText": "OK",
+            "responseBody": {
+              "kind": "raw-response",
+              "url": "/api/media/raw/7385c93fc53c8e08fea194e81c4f8435a14066aaeb01b3a2bf7bfd3adc2bba51",
+              "sha256": "7385c93fc53c8e08fea194e81c4f8435a14066aaeb01b3a2bf7bfd3adc2bba51",
+              "size": 911,
+              "encoding": "utf-8",
+              "fidelity": "original"
+            },
+            "maskedKey": "38b4...6ca5",
+            "keyUsage": {
+              "provider": "tensorart",
+              "index": 2,
+              "count": 3,
+              "source": "pool"
+            },
+            "durationMs": 236,
+            "startedAt": "2026-10-17T03:13:52.469Z"
+          },
+          {
+            "provider": "tensorart",
+            "model": "613045163490732233",
+            "method": "POST",
+            "endpoint": "https://ap-east-1.tensorart.cloud/v1/jobs",
+            "requestBody": {
+              "requestId": "34249fcc-a612-4358-abbc-d379e7deb368",
+              "stages": [
+                {
+                  "type": "INPUT_INITIALIZE",
+                  "inputInitialize": {
+                    "seed": "42"
+                  }
+                },
+                {
+                  "type": "DIFFUSION",
+                  "diffusion": {
+                    "sdModel": "613045163490732233",
+                    "width": 512,
+                    "height": 768,
+                    "prompts": [
+                      {
+                        "text": "a red apple on a wooden table"
+                      }
+                    ],
+                    "negativePrompts": [],
+                    "steps": 20,
+                    "cfgScale": 7
+                  }
+                }
+              ]
+            },
+            "status": 400,
+            "statusText": "Bad Request",
+            "responseBody": {
+              "kind": "raw-response",
+              "url": "/api/media/raw/2e1c19bd22b724caeb556ab1eccee01bbb3021fe3cf6c70647380a10ff718eab",
+              "sha256": "2e1c19bd22b724caeb556ab1eccee01bbb3021fe3cf6c70647380a10ff718eab",
+              "size": 152,
+              "encoding": "utf-8",
+              "fidelity": "original"
+            },
+            "maskedKey": "38b4...6ca5",
+            "keyUsage": {
+              "provider": "tensorart",
+              "index": 2,
+              "count": 3,
+              "source": "pool"
+            },
+            "durationMs": 248,
+            "startedAt": "2026-10-17T03:13:52.705Z"
+          }
+        ],
+        "submissions": [
+          {
+            "endpoint": "https://ap-east-1.tensorart.cloud/v1/jobs",
+            "parameters": {
+              "requestId": "34249fcc-a612-4358-abbc-d379e7deb368",
+              "stages": [
+                {
+                  "type": "INPUT_INITIALIZE",
+                  "inputInitialize": {
+                    "seed": "42"
+                  }
+                },
+                {
+                  "type": "DIFFUSION",
+                  "diffusion": {
+                    "sdModel": "613045163490732233",
+                    "width": 512,
+                    "height": 768,
+                    "prompts": [
+                      {
+                        "text": "a red apple on a wooden table"
+                      }
+                    ],
+                    "negativePrompts": [],
+                    "steps": 20,
+                    "cfgScale": 7
+                  }
+                }
+              ]
+            },
+            "status": 400
+          }
+        ]
+      },
+      "requestOrigin": "direct",
+      "id": "hist_1792206832953_e20t2",
+      "timestamp": 1792206832954,
+      "seed": null,
+      "steps": null,
+      "cfg": null,
+      "sampler": null,
+      "scheduler": null,
+      "width": null,
+      "height": null
+    }
+  },
+  "actualRequest": {
+    "requestId": "34249fcc-a612-4358-abbc-d379e7deb368",
+    "stages": [
+      {
+        "type": "INPUT_INITIALIZE",
+        "inputInitialize": {
+          "seed": "42"
+        }
+      },
+      {
+        "type": "DIFFUSION",
+        "diffusion": {
+          "sdModel": "613045163490732233",
+          "width": 512,
+          "height": 768,
+          "prompts": [
+            {
+              "text": "a red apple on a wooden table"
+            }
+          ],
+          "negativePrompts": [],
+          "steps": 20,
+          "cfgScale": 7
+        }
+      }
+    ]
+  }
+}

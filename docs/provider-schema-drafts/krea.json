@@ -1,4 +1,5 @@
 {
+  "canvasAcceptance": "未验证（2026-10-17 14:40 北京：测试截图已全删，按雁标准「画布里出图、落保存节点、历史有缩略图」当前 0 家；以前的出图/欠费标记一律作废，官方字段结论保留；在画布重跑出图并有节点图+历史缩略图后再单独改）",
   "$schemaNote": "草案 — 仅声明，非可执行驱动。真相源: docs/provider-api-audit/krea.md (2026-10-15)",
   "id": "krea",
   "displayName": "Krea",
@@ -66,7 +67,7 @@
           "default": 25,
           "mustSend": true,
           "sendStatus": "会发送",
-          "sendEvidence": "canvas-e2e-krea-0936（挑刺过、画布 PASS_BILLING）：flux-1-dev actualRequest/历史实际发送含 steps:25、seed:7、guidance_scale:3、styles:[{id:79tzf61yz,strength:0.8}]；上游 HTTP 402 欠费原文；证据 /workspace/canvas-e2e-krea-0936/；Researchy 对照官方 OpenAPI 一致"
+          "sendEvidence": "canvas-e2e-krea-0936（挑刺过、画布 PASS_BILLING）：flux-1-dev actualRequest/历史实际发送含 steps:25、seed:7、guidance_scale:3、styles:[{id:79tzf61yz,strength:0.8}]；上游 HTTP 402 欠费原文；证据 已清理；Researchy 对照官方 OpenAPI 一致"
         },
         "guidance_scale": {
           "type": "number",
@@ -76,13 +77,13 @@
           "mustSend": true,
           "canvasField": "cfg",
           "sendStatus": "会发送",
-          "sendEvidence": "canvas-e2e-krea-0936（挑刺过、画布 PASS_BILLING）：flux-1-dev actualRequest/历史实际发送含 steps:25、seed:7、guidance_scale:3、styles:[{id:79tzf61yz,strength:0.8}]；上游 HTTP 402 欠费原文；证据 /workspace/canvas-e2e-krea-0936/；Researchy 对照官方 OpenAPI 一致"
+          "sendEvidence": "canvas-e2e-krea-0936（挑刺过、画布 PASS_BILLING）：flux-1-dev actualRequest/历史实际发送含 steps:25、seed:7、guidance_scale:3、styles:[{id:79tzf61yz,strength:0.8}]；上游 HTTP 402 欠费原文；证据 已清理；Researchy 对照官方 OpenAPI 一致"
         },
         "seed": {
           "type": "number|null",
           "mustSend": true,
           "sendStatus": "会发送",
-          "sendEvidence": "canvas-e2e-krea-0936（挑刺过、画布 PASS_BILLING）：flux-1-dev actualRequest/历史实际发送含 steps:25、seed:7、guidance_scale:3、styles:[{id:79tzf61yz,strength:0.8}]；上游 HTTP 402 欠费原文；证据 /workspace/canvas-e2e-krea-0936/；Researchy 对照官方 OpenAPI 一致"
+          "sendEvidence": "canvas-e2e-krea-0936（挑刺过、画布 PASS_BILLING）：flux-1-dev actualRequest/历史实际发送含 steps:25、seed:7、guidance_scale:3、styles:[{id:79tzf61yz,strength:0.8}]；上游 HTTP 402 欠费原文；证据 已清理；Researchy 对照官方 OpenAPI 一致"
         },
         "width": {
           "min": 512,
@@ -97,7 +98,7 @@
         "styles": {
           "supported": true,
           "sendStatus": "会发送",
-          "sendEvidence": "canvas-e2e-krea-0936（挑刺过、画布 PASS_BILLING）：flux-1-dev actualRequest/历史实际发送含 steps:25、seed:7、guidance_scale:3、styles:[{id:79tzf61yz,strength:0.8}]；上游 HTTP 402 欠费原文；证据 /workspace/canvas-e2e-krea-0936/；Researchy 对照官方 OpenAPI 一致",
+          "sendEvidence": "canvas-e2e-krea-0936（挑刺过、画布 PASS_BILLING）：flux-1-dev actualRequest/历史实际发送含 steps:25、seed:7、guidance_scale:3、styles:[{id:79tzf61yz,strength:0.8}]；上游 HTTP 402 欠费原文；证据 已清理；Researchy 对照官方 OpenAPI 一致",
           "item": "{id,strength −2..2}"
         }
       },
@@ -206,7 +207,7 @@
         "required": true,
         "source": "GET /styles",
         "sendStatus": "会发送",
-        "sendEvidence": "canvas-e2e-krea-0936（挑刺过、画布 PASS_BILLING）：flux-1-dev actualRequest/历史实际发送含 steps:25、seed:7、guidance_scale:3、styles:[{id:79tzf61yz,strength:0.8}]；上游 HTTP 402 欠费原文；证据 /workspace/canvas-e2e-krea-0936/；Researchy 对照官方 OpenAPI 一致"
+        "sendEvidence": "canvas-e2e-krea-0936（挑刺过、画布 PASS_BILLING）：flux-1-dev actualRequest/历史实际发送含 steps:25、seed:7、guidance_scale:3、styles:[{id:79tzf61yz,strength:0.8}]；上游 HTTP 402 欠费原文；证据 已清理；Researchy 对照官方 OpenAPI 一致"
       },
       "strength": {
         "type": "number",
@@ -216,12 +217,12 @@
         "default": null,
         "uiRule": "必填；禁止静默 0.8",
         "sendStatus": "会发送",
-        "sendEvidence": "canvas-e2e-krea-0936（挑刺过、画布 PASS_BILLING）：flux-1-dev actualRequest/历史实际发送含 steps:25、seed:7、guidance_scale:3、styles:[{id:79tzf61yz,strength:0.8}]；上游 HTTP 402 欠费原文；证据 /workspace/canvas-e2e-krea-0936/；Researchy 对照官方 OpenAPI 一致"
+        "sendEvidence": "canvas-e2e-krea-0936（挑刺过、画布 PASS_BILLING）：flux-1-dev actualRequest/历史实际发送含 steps:25、seed:7、guidance_scale:3、styles:[{id:79tzf61yz,strength:0.8}]；上游 HTTP 402 欠费原文；证据 已清理；Researchy 对照官方 OpenAPI 一致"
       }
     },
     "exposeOnlyWhen": "所选端点 requestBody 声明 styles",
     "sendStatus": "会发送",
-    "sendEvidence": "canvas-e2e-krea-0936（挑刺过、画布 PASS_BILLING）：flux-1-dev actualRequest/历史实际发送含 steps:25、seed:7、guidance_scale:3、styles:[{id:79tzf61yz,strength:0.8}]；上游 HTTP 402 欠费原文；证据 /workspace/canvas-e2e-krea-0936/；Researchy 对照官方 OpenAPI 一致"
+    "sendEvidence": "canvas-e2e-krea-0936（挑刺过、画布 PASS_BILLING）：flux-1-dev actualRequest/历史实际发送含 steps:25、seed:7、guidance_scale:3、styles:[{id:79tzf61yz,strength:0.8}]；上游 HTTP 402 欠费原文；证据 已清理；Researchy 对照官方 OpenAPI 一致"
   },
   "billing": {
     "insufficientHints": [

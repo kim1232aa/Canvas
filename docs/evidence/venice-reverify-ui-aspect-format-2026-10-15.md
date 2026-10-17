@@ -8,8 +8,8 @@
   - **按模型 sizing**：像素模型用 `width`/`height`（如 venice-sd35）；比例模型用 `aspect_ratio`（如 qwen-image-2）；Qwen Image 族对 `width`/`height` 回 **HTTP 400**；分辨率阶梯模型用 `aspect_ratio`+`resolution`（1K/2K/4K）
 - OpenAPI：https://api.venice.ai/doc/api/swagger.yaml → `GenerateImageRequest.format`
 - 目录 constraints：`GET https://api.venice.ai/api/v1/models?type=image`（无 key 200）— `aspectRatios` / `resolutions` / `widthHeightDivisor` 区分三种 sizing
-- WaveSpeed 证据：`/workspace/canvas-e2e-wavespeed/history-export.json` Schema 有 `aspect_ratio`，actualRequest 仅 prompt/seed/strength（CLAIM `/workspace/canvas-e2e-schema-aspect-p0/CLAIM.md`）
-- 挑刺覆写：`/workspace/canvas-e2e-venice-p0-reverify/VERDICT_OVERRIDE.md`
+- WaveSpeed 证据：`/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-wavespeed/history-export.json` Schema 有 `aspect_ratio`，actualRequest 仅 prompt/seed/strength（CLAIM `/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-schema-aspect-p0/CLAIM.md`）
+- 挑刺覆写：`/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-venice-p0-reverify/VERDICT_OVERRIDE.md`
 
 ## 四条 UI（挑刺驳回）
 | # | 问题 | 修复 |

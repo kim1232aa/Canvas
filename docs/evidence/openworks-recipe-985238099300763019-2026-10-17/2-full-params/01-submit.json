@@ -1,0 +1,101 @@
+{
+  "case": "2-full-params",
+  "title": "Full page params: prompt+neg+seed+steps+cfg+size+checkpoint (no LoRA on page)",
+  "note": "seed=904953581 steps=9 cfg=1 size=768x1344 ckpt=984644890228968118; loras=[] from page",
+  "timestampAsiaTokyo": "2026-10-17 13:26:35 JST",
+  "actualRequest": {
+    "endpoint": "https://openapi.tensor.art/openworks/v1/task",
+    "method": "POST",
+    "headers": {
+      "Content-Type": "application/json",
+      "User-Agent": "ow-recipe-probe/1.2",
+      "Echo-Access-Key": "ak_tensor_W6…1o64"
+    },
+    "body": {
+      "toolName": "photoreal_studio_z_image",
+      "inputs": [
+        {
+          "type": "STRING",
+          "value": "asian woman, young with dark brown hair in high ponytail, sporty healthy physique in form-fitting lightweight yoga outfit, toned waist peeking. Swaying and bouncing lightly on large gray balance ball in modern living room corner, chin on hand, bored downward gaze but fidgeting restlessly motivated to resume workout despite weariness. Medium close-up highlighting female form's beauty and loneliness. Sharp afternoon sunlight streaming in casting long shadows, urban high contrast. Photorealistic, skin texture, fabric details, imperfections, film grain."
+        },
+        {
+          "type": "INTEGER",
+          "value": 768
+        },
+        {
+          "type": "INTEGER",
+          "value": 1344
+        },
+        {
+          "type": "INTEGER",
+          "value": 1
+        },
+        {
+          "type": "INTEGER",
+          "name": "seed",
+          "value": 904953581
+        },
+        {
+          "type": "INTEGER",
+          "name": "steps",
+          "value": 9
+        },
+        {
+          "type": "NUMBER",
+          "name": "cfg",
+          "value": 1
+        },
+        {
+          "type": "NUMBER",
+          "name": "cfg_scale",
+          "value": 1
+        },
+        {
+          "type": "STRING",
+          "name": "negative_prompt",
+          "value": "low query, blur, bad anatomy, bad hands, missing fingers, extra fingers, bad arms, missing legs, missing arms, poorly drawn face, bad face, fused face, cloned face, three crus, fused feet, fused thigh, extra crus, ugly fingers, horn, cartoon, cg, 3d, unreal, anime, amputation, disconnected limbs"
+        },
+        {
+          "type": "STRING",
+          "name": "negative",
+          "value": "low query, blur, bad anatomy, bad hands, missing fingers, extra fingers, bad arms, missing legs, missing arms, poorly drawn face, bad face, fused face, cloned face, three crus, fused feet, fused thigh, extra crus, ugly fingers, horn, cartoon, cg, 3d, unreal, anime, amputation, disconnected limbs"
+        },
+        {
+          "type": "STRING",
+          "name": "checkpoint",
+          "value": "984644890228968118"
+        },
+        {
+          "type": "STRING",
+          "name": "model",
+          "value": "984644890228968118"
+        },
+        {
+          "type": "STRING",
+          "name": "sdModel",
+          "value": "984644890228968118"
+        },
+        {
+          "type": "INTEGER",
+          "name": "clip_skip",
+          "value": 0
+        }
+      ]
+    }
+  },
+  "httpStatus": 200,
+  "responseRaw": "{\"code\":\"0\", \"message\":\"\", \"data\":{\"task\":{\"id\":\"1056300802819258469\", \"userId\":\"1048723019146487792\", \"status\":\"WAITING\", \"toolName\":\"photoreal_studio_z_image\", \"outputs\":[]}}}",
+  "response": {
+    "code": "0",
+    "message": "",
+    "data": {
+      "task": {
+        "id": "1056300802819258469",
+        "userId": "1048723019146487792",
+        "status": "WAITING",
+        "toolName": "photoreal_studio_z_image",
+        "outputs": []
+      }
+    }
+  }
+}

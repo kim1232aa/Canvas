@@ -7,7 +7,7 @@
 - **未 commit / 未 push**；未开浏览器；不喊画布重拍。
 
 ## 证据来源
-- 挑刺退回：`/workspace/canvas-e2e-novita-0958/` 01–04
+- 挑刺退回：`/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-novita-0958/` 01–04
 - 真体形状：`docs/evidence/novita-polish-batch-2026-10-16/submit-redacted.json` → `parameters.request.*`
 
 ## 改动文件
@@ -19,7 +19,7 @@
 | `src/components/nodeUI.test.tsx` | unverified 不得含「不匹配」 |
 
 ## Restore
-`/workspace/canvas-restore/pre-novita-chips-20261016-101629.tgz`
+`/workspace/canvas/temp/backups/canvas-restore/pre-novita-chips-20261016-101629.tgz`
 
 ## 单测
 `vitest run`：historyParameters / veniceP0Fix / nodeUI / historyUiPolish / SpatialFrameItem.loraCopy / runDFollowups / clean0611 → **58 passed**。
@@ -37,4 +37,4 @@
 
 
 ## 收口
-- 2026-10-16 挑刺过 → Novita **PASS_BILLING**。证据 `/workspace/canvas-e2e-novita-1019/`。下一步 Replicate FE E2E。
+- 2026-10-16 挑刺过 → Novita **PASS_BILLING**。证据 `/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-novita-1019/`。下一步 Replicate FE E2E。

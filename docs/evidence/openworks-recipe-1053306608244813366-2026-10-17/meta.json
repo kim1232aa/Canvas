@@ -1,0 +1,28 @@
+{
+  "timeStartedAsiaTokyo": "2026-10-17 13:11:42 JST",
+  "sourceUrl": "https://tensor.art/images/1053306608244813366?post_id=1053306593212409750",
+  "promptFile": "/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-tams-reopen-20261017/browser-recipe-prompt.txt",
+  "tool": "photoreal_studio_z_image",
+  "endpoint": "https://openapi.tensor.art/openworks/v1/task",
+  "auth": "Echo-Access-Key = ak_tensor_W6…1o64",
+  "seed": 1388322349,
+  "steps": 10,
+  "cfg": 1,
+  "size": "768x1024",
+  "checkpointPage": "1001238167812080872",
+  "loraIds": [
+    "1015863436619315552",
+    "1029661490430387503",
+    "1015214543296590260"
+  ],
+  "loraWeight": 1.0,
+  "promptLenFlat": 2105,
+  "negativeLenFlat": 1335,
+  "cases": [
+    "1-no-lora",
+    "2-with-3-loras"
+  ],
+  "productCodeModified": false,
+  "queryBodyField": "taskIds",
+  "note": "Only 2 cases. Browser LoRA ids. Prompt flattened (no newlines)."
+}

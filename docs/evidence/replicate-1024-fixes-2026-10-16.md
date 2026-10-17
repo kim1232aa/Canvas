@@ -1,5 +1,5 @@
 # Replicate 1024 修复（CODE_ONLY，待前端 E2E）— 2026-10-16 Asia/Shanghai
-改前快照：/workspace/canvas-restore/pre-replicate-1024fix-20261016-103242.tgz
+改前快照：/workspace/canvas/temp/backups/canvas-restore/pre-replicate-1024fix-20261016-103242.tgz
 Server 重启 1 次：2563005 → **2587844，lstart Fri Oct 16 10:34:32 2026（Asia/Shanghai）**，GET / 200。未 commit、未开浏览器。
 根因见 replicate-1024-rootcause-2026-10-16.md。
 

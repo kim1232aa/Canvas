@@ -1,0 +1,13 @@
+{
+  "case": "02a-extra-positional",
+  "title": "Stuff seed/steps/cfg as extra positional inputs",
+  "note": "5th INTEGER=424242 (seed), 6th INTEGER=20 (steps), 7th NUMBER=7.5 (cfg). Schema has no these fields.",
+  "timestampAsiaTokyo": "2026-10-17 12:22:31 JST",
+  "submitHttpStatus": 404,
+  "taskId": null,
+  "seedInRequest": true,
+  "imageSha256": null,
+  "imageUrl": null,
+  "finalTaskStatus": null,
+  "conclusion": "提交失败或不返回 taskId；HTTP 404"
+}

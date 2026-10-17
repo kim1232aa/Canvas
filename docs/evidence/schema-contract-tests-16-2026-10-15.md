@@ -3,7 +3,7 @@
 - 测试：`src/server/schemaContract.test.ts`（7 → 21 条，全部通过）。`npx vitest run src/server/schemaContract.test.ts`
 - 夹具：`docs/provider-schema-drafts/*.json`（tinkabot 草案）。没走网络，没用真 key，没读 .env。
 - 状态：**CODE_ONLY**。只是单测，**没做前端 E2E**，也没真实出图。
-- 修改前快照：`/workspace/canvas-restore/pre-contract16-*.tgz`。「修复前」一列是在这个快照上跑同一套新测试得到的。
+- 修改前快照：`/workspace/canvas/temp/backups/canvas-restore/pre-contract16-*.tgz`。「修复前」一列是在这个快照上跑同一套新测试得到的。
 - 测试方式：
   - MuAPI / WaveSpeed / Sogni：走真实的 `/api/schema-provider/:p/submit` 路由，上游用本地夹具。
   - Replicate：走真实的 `handleReplicateGenerate`，上游用夹具。

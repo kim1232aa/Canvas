@@ -1,4 +1,5 @@
 {
+  "canvasAcceptance": "已出图（2026-10-17 ~15:51 北京，画布认可）：配方 tensor.art/images/1053306608244813366 原文，全参数+3 个真 LoRA（强度 1）在画布点运行出图，落保存图像节点；历史成功卡 hist_1792223105137_bhlop，「实际发送」含 LoRA/种子/步数/CFG/尺寸/负向，采样器·调度器写「这次没用上」，只写已发送不写已生效。证据 /workspace/canvas/temp/e2e/openworks/recipe-1053306608244813366/。另：「获取模型参数表」HTTP 500 红卡与出图无关，单独查。",
   "$schemaNote": "草案 — 仅声明。2026-10-15 方案 C：OpenWorks 作为普通 Schema 驱动服务商（provider id openworks）。实现 src/server/openWorksProvider.ts",
   "id": "tensorart-openworks",
   "displayName": "Tensor.Art OpenWorks",
@@ -49,9 +50,10 @@
     "route": "同一通用 Schema 路由 /api/schema-provider/openworks/submit；/api/video/generate 不代理 OpenWorks（本地 400）"
   },
   "lora": {
-    "supported": false,
-    "reason": "实测探针无证据",
-    "rule": "需要 LoRA 走 tensorart（TAMS）"
+    "supported": "发送（雁定）；上游是否生效未证实",
+    "reason": "官方 tool/list 无 LoRA 输入",
+    "rule": "板上挂配方真 LoRA，请求带上；历史标「已发送」不标「已生效」；不混成 TAMS",
+    "canvasRuling": "2026-10-17 ~15:28 北京 雁拍死，取代 15:27 的不挂"
   },
   "billing": {
     "insufficientHints": [],
@@ -64,16 +66,22 @@
     "docs/evidence/openworks-tool-list-2026-10-15.json"
   ],
   "paramStatus": {
-    "send": "只发模型自己声明的输入（通常是提示词、宽、高、张数）",
-    "localBlocked": [
+    "send": [
+      "prompt",
+      "width",
+      "height",
+      "count",
       "seed",
-      "lora",
       "steps",
       "cfg",
-      "sampler"
+      "negative_prompt",
+      "sampler",
+      "loras"
     ],
-    "reason": "2026-10-15 实测 7 单：上游回 200，但值被静默丢弃（同 seed 两次哈希不同、task/query 无回显、tool/list 未声明）",
-    "evidence": "/workspace/canvas-e2e-tensorart-probe/README.md"
+    "history": "历史只写「已发送」，不准写「已生效」",
+    "canvasRuling": "2026-10-17 ~15:28 北京：雁拍死——OpenWorks 全参数发送+板上挂真 LoRA；下午「只发四项/不挂 LoRA」作废；TAMS 参数仅作参考，走的仍是 OpenWorks",
+    "officialNote": "官方 tool/list 中 photoreal_studio_z_image 仅登记 prompt/width/height/count（docs/evidence/openworks-tool-list-2026-10-17.json）；故其余字段与 LoRA 属「发了」，是否生效未证实",
+    "evidencePending": "已交：见 canvasAcceptance"
   },
   "canvasProviderId": "openworks",
   "schema": {
@@ -96,8 +104,48 @@
       "cfg"
     ],
     "rule": "仅当画布实测探针证明上游接受且出图变化才会发送；否则本地拦截，被拒时引用上游原文",
-    "evidence": "/workspace/canvas-e2e-tensorart-probe/README.md（2026-10-15 02:39–02:50）：photoreal_studio_z_image 上 seed/steps/cfg/sampler/LoRA 无论 positional、named 还是顶层，上游都 200 不报错但不生效（同 seed 两次 sha256 不同）；23 个条目均未声明这些字段",
-    "current": "全部本地拦截；photoreal_studio_z_image 引用上游 200 原文，其余模型标为未实测"
+    "evidence": "已清理（OpenWorks LoRA/参数探针 02:39–02:50）：photoreal_studio_z_image 上 seed/steps/cfg/sampler/LoRA 无论 positional、named 还是顶层，上游都 200 不报错但不生效（同 seed 两次 sha256 不同）；23 个条目均未声明这些字段",
+    "current": "全部本地不发送（对齐 2026-10-17 画布拍板「只发四项」）；历史写「这次没用上」"
   },
-  "contractTestHint": "只发 Schema 声明输入；seed/steps/cfg/loras 本地拦截；视频按 outputs[].format==video；未声明工具本地拒绝"
+  "contractTestHint": "只发 prompt/width/height/count；seed/steps/cfg/负向/LoRA 不进请求且历史不标实际发送；视频按 outputs[].format==video",
+  "canvasWiring": {
+    "keep": "OpenWorks 真生图路径：测通才留（非整包删）",
+    "cut": [
+      "钥匙池混用：tensorart 槽位同时认 ak_tensor 与 TAMS Bearer",
+      "ak_tensor / Echo-Access-Key 冒充 TAMS",
+      "文案入口「选 Tensor.Art OpenWorks」当 TAMS（ModelHub/BackendSettings/generationReadiness 等）",
+      "工具层（ak_tensor 一类），不要工具"
+    ],
+    "notTams": "OpenWorks ≠ TAMS",
+    "userRule": "2026-10-16 雁：有能出图的接口可留，不要那些工具",
+    "canvasRule": "2026-10-16 画布：别整包删；只拆混用/冒充/误导入口；真生图测通再留"
+  },
+  "_auditStatus": "2026-10-17 ~15:00 北京：画布拍板只发四项；全参数发送作废；hist_wgtkk 出图但多发参数→仍未验证。等四项干净重跑。 | 2026-10-16 ~23:11 JST：画布正式收口 fix13.1；证据 已清理，PID 3611920。@tinkabot 不升出图徽章。 2026-10-16 ~22:57 JST：fix13.1 CODE_ONLY（UI 五条）；PID 3611920；证据 docs/evidence/fix13.1-2026-10-16.md。对照表仍 CODE_ONLY、不升出图。 2026-10-16 ~22:53 JST：画布正式收口 fix13（清理+主机+口径）；证据 已清理，PID 3576628。建任务 BLOCKED——**对照表保持 CODE_ONLY、不升出图徽章**（画布@tinkabot）。下一批 fix13.1 仅 UI 细节。 2026-10-16 ~22:52 JST：画布 fix13 前端四项复验过（清理+主机+Together），证据 已清理，PID 3576628；已交挑刺。建任务仍 BLOCKED，**不升出图徽章**。 2026-10-16 ~22:35 JST fix13 CODE_ONLY（canvas-dev PID 3576628；证据 d",
+  "fix13": {
+    "status": "CODE_ONLY",
+    "kept": "openWorksProvider.ts + schema-provider/openworks/* 真生图路径",
+    "cut": "钥匙池混用冒充、误导文案；ak_ 不再写成 tensorart ok",
+    "evidence": "docs/evidence/fix13-2026-10-16.md",
+    "frontendAccept": {
+      "status": "CLOSED",
+      "canvasSaid": "正式收口清理+主机+口径；建任务 BLOCKED 不升出图",
+      "evidence": "已清理",
+      "pid": "3576628"
+    },
+    "badge": "CODE_ONLY（画布明示不升出图）"
+  },
+  "acceptanceBadge": "已出图（全参数+LoRA 已发送；LoRA 是否生效未证实）",
+  "fix13_1": {
+    "status": "CLOSED",
+    "pid": "3611920",
+    "evidence": "docs/evidence/fix13.1-2026-10-16.md",
+    "scope": "UI only（说明分行/URL wrap/空态不叠/Together 折叠/标点统一）",
+    "badge": "CODE_ONLY（画布明示不升出图）",
+    "frontendAccept": {
+      "status": "CLOSED",
+      "evidence": "已清理",
+      "pid": "3611920",
+      "note": "01/03/04 过；02 OpenWorks 空态双层 SKIP"
+    }
+  }
 }

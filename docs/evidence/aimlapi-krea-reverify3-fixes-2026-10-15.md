@@ -1,6 +1,6 @@
 # AIMLAPI / Krea reverify3 修复（2026-10-15 03:20 北京时间）— CODE_ONLY
 
-来源：`/workspace/canvas-e2e-aimlapi-krea-reverify3/`（runB-history、runC-node-first-attempt-reselect、runD-lorahub-wavespeed-empty 已看）。还原包 `/workspace/canvas-restore/pre-reverify3-0307.tgz`。未提交。
+来源：`/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-aimlapi-krea-reverify3/`（runB-history、runC-node-first-attempt-reselect、runD-lorahub-wavespeed-empty 已看）。还原包 `/workspace/canvas/temp/backups/canvas-restore/pre-reverify3-0307.tgz`。未提交。
 
 | # | 状态 | 根因 / 改动 |
 |---|---|---|

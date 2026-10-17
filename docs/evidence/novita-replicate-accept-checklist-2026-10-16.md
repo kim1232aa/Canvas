@@ -13,7 +13,7 @@
 - 审计全文：`docs/provider-api-audit/novita.md`
 
 ### 当前前端缺口（证据）
-- `/workspace/canvas-e2e-novita-fe/outcome.json` → **BLOCKED_SCHEMA_LOOKUP**
+- `/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-novita-fe/outcome.json` → **BLOCKED_SCHEMA_LOOKUP**
 - 本地拦截原文大意：目录项没有 parameters → 未出站、不用内置 Schema 兜底
 - 后续重跑被改代码打断：`canvas-e2e-novita-fe-r3` → BLOCKED_TAB_INTERFERENCE
 

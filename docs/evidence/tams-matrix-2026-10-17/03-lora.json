@@ -1,0 +1,455 @@
+{
+  "case": "03-lora",
+  "note": "TAMS: checkpoint 613045163490732233 + LoRA 661652545330040294 @1.1",
+  "httpStatus": 400,
+  "timestampAsiaTokyo": "2026-10-17 12:13:53 JST",
+  "response": {
+    "error": "Tensor.Art 模型任务提交失败 [400]",
+    "details": "{\"code\":3, \"message\":\"Params Valid\", \"details\":[{\"@type\":\"type.googleapis.com/tams_api.ArgumentError\", \"field\":\"base\", \"message\":\"credits not enough\"}]}",
+    "exactEndpointCalled": "https://ap-east-1.tensorart.cloud/v1/jobs",
+    "requestedModel": "613045163490732233",
+    "actualRequest": {
+      "requestId": "677783fe-8e40-401e-a00c-d027c71921f1",
+      "stages": [
+        {
+          "type": "INPUT_INITIALIZE",
+          "inputInitialize": {
+            "seed": "42"
+          }
+        },
+        {
+          "type": "DIFFUSION",
+          "diffusion": {
+            "sdModel": "613045163490732233",
+            "width": 512,
+            "height": 768,
+            "prompts": [
+              {
+                "text": "1girl, red apple"
+              }
+            ],
+            "negativePrompts": [
+              {
+                "text": "blurry"
+              }
+            ],
+            "steps": 20,
+            "cfgScale": 7,
+            "sampler": "Euler a",
+            "lora": {
+              "items": [
+                {
+                  "loraModel": "661652545330040294",
+                  "weight": 1.1
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "errorSource": "upstream",
+    "executionTrace": [
+      {
+        "provider": "tensorart",
+        "model": "613045163490732233",
+        "method": "GET",
+        "endpoint": "https://ap-east-1.tensorart.cloud/v1/models/613045163490732233",
+        "status": 200,
+        "statusText": "OK",
+        "responseBody": {
+          "kind": "raw-response",
+          "url": "/api/media/raw/497107a6fe9adb15a5e1b7c38de6dd707b7a00638a7fe1fc2ae33afd69b787da",
+          "sha256": "497107a6fe9adb15a5e1b7c38de6dd707b7a00638a7fe1fc2ae33afd69b787da",
+          "size": 911,
+          "encoding": "utf-8",
+          "fidelity": "original"
+        },
+        "maskedKey": "38b4...6ca5",
+        "keyUsage": {
+          "provider": "tensorart",
+          "index": 2,
+          "count": 3,
+          "source": "pool"
+        },
+        "durationMs": 230,
+        "startedAt": "2026-10-17T03:13:52.987Z"
+      },
+      {
+        "provider": "tensorart",
+        "model": "661652545330040294",
+        "method": "GET",
+        "endpoint": "https://ap-east-1.tensorart.cloud/v1/models/661652545330040294",
+        "status": 200,
+        "statusText": "OK",
+        "responseBody": {
+          "kind": "raw-response",
+          "url": "/api/media/raw/6a125b29f740f8e683a2086dc198df5210994cb43f9656af50279013133b4593",
+          "sha256": "6a125b29f740f8e683a2086dc198df5210994cb43f9656af50279013133b4593",
+          "size": 749,
+          "encoding": "utf-8",
+          "fidelity": "original"
+        },
+        "maskedKey": "38b4...6ca5",
+        "keyUsage": {
+          "provider": "tensorart",
+          "index": 2,
+          "count": 3,
+          "source": "pool"
+        },
+        "durationMs": 252,
+        "startedAt": "2026-10-17T03:13:53.217Z"
+      },
+      {
+        "provider": "tensorart",
+        "model": "613045163490732233",
+        "method": "POST",
+        "endpoint": "https://ap-east-1.tensorart.cloud/v1/jobs",
+        "requestBody": {
+          "requestId": "677783fe-8e40-401e-a00c-d027c71921f1",
+          "stages": [
+            {
+              "type": "INPUT_INITIALIZE",
+              "inputInitialize": {
+                "seed": "42"
+              }
+            },
+            {
+              "type": "DIFFUSION",
+              "diffusion": {
+                "sdModel": "613045163490732233",
+                "width": 512,
+                "height": 768,
+                "prompts": [
+                  {
+                    "text": "1girl, red apple"
+                  }
+                ],
+                "negativePrompts": [
+                  {
+                    "text": "blurry"
+                  }
+                ],
+                "steps": 20,
+                "cfgScale": 7,
+                "sampler": "Euler a",
+                "lora": {
+                  "items": [
+                    {
+                      "loraModel": "661652545330040294",
+                      "weight": 1.1
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "status": 400,
+        "statusText": "Bad Request",
+        "responseBody": {
+          "kind": "raw-response",
+          "url": "/api/media/raw/2e1c19bd22b724caeb556ab1eccee01bbb3021fe3cf6c70647380a10ff718eab",
+          "sha256": "2e1c19bd22b724caeb556ab1eccee01bbb3021fe3cf6c70647380a10ff718eab",
+          "size": 152,
+          "encoding": "utf-8",
+          "fidelity": "original"
+        },
+        "maskedKey": "38b4...6ca5",
+        "keyUsage": {
+          "provider": "tensorart",
+          "index": 2,
+          "count": 3,
+          "source": "pool"
+        },
+        "durationMs": 252,
+        "startedAt": "2026-10-17T03:13:53.469Z"
+      }
+    ],
+    "stack": "Error: Tensor.Art 模型任务提交失败 [400]\n    at ServerResponse.res.json (/workspace/canvas/Canvas-main/server.ts:328:24)\n    at <anonymous> (/workspace/canvas/Canvas-main/server.ts:4220:45)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)",
+    "historyItem": {
+      "status": "failed",
+      "url": "",
+      "prompt": "1girl, red apple",
+      "negativePrompt": "blurry",
+      "provider": "tensorart",
+      "actualProvider": "tensorart",
+      "model": "613045163490732233",
+      "actualModel": "613045163490732233",
+      "loras": [],
+      "upstreamStatus": 400,
+      "upstreamStatusText": "Bad Request",
+      "upstreamEndpoint": "https://ap-east-1.tensorart.cloud/v1/jobs",
+      "upstreamResponseBody": "{\"code\":3, \"message\":\"Params Valid\", \"details\":[{\"@type\":\"type.googleapis.com/tams_api.ArgumentError\", \"field\":\"base\", \"message\":\"credits not enough\"}]}",
+      "networkError": null,
+      "httpStatus": 400,
+      "error": "Tensor.Art 模型任务提交失败 [400]",
+      "errorSource": "upstream",
+      "stack": "Error: Tensor.Art 模型任务提交失败 [400]\n    at ServerResponse.res.json (/workspace/canvas/Canvas-main/server.ts:328:24)\n    at <anonymous> (/workspace/canvas/Canvas-main/server.ts:4220:45)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)",
+      "requestMetadata": {
+        "route": "/api/tensorart/generate",
+        "actualRequest": {
+          "requestId": "677783fe-8e40-401e-a00c-d027c71921f1",
+          "stages": [
+            {
+              "type": "INPUT_INITIALIZE",
+              "inputInitialize": {
+                "seed": "42"
+              }
+            },
+            {
+              "type": "DIFFUSION",
+              "diffusion": {
+                "sdModel": "613045163490732233",
+                "width": 512,
+                "height": 768,
+                "prompts": [
+                  {
+                    "text": "1girl, red apple"
+                  }
+                ],
+                "negativePrompts": [
+                  {
+                    "text": "blurry"
+                  }
+                ],
+                "steps": 20,
+                "cfgScale": 7,
+                "sampler": "Euler a",
+                "lora": {
+                  "items": [
+                    {
+                      "loraModel": "661652545330040294",
+                      "weight": 1.1
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "keyUsages": [
+          {
+            "provider": "tensorart",
+            "index": 2,
+            "count": 3,
+            "source": "pool"
+          }
+        ],
+        "executionTrace": [
+          {
+            "provider": "tensorart",
+            "model": "613045163490732233",
+            "method": "GET",
+            "endpoint": "https://ap-east-1.tensorart.cloud/v1/models/613045163490732233",
+            "status": 200,
+            "statusText": "OK",
+            "responseBody": {
+              "kind": "raw-response",
+              "url": "/api/media/raw/497107a6fe9adb15a5e1b7c38de6dd707b7a00638a7fe1fc2ae33afd69b787da",
+              "sha256": "497107a6fe9adb15a5e1b7c38de6dd707b7a00638a7fe1fc2ae33afd69b787da",
+              "size": 911,
+              "encoding": "utf-8",
+              "fidelity": "original"
+            },
+            "maskedKey": "38b4...6ca5",
+            "keyUsage": {
+              "provider": "tensorart",
+              "index": 2,
+              "count": 3,
+              "source": "pool"
+            },
+            "durationMs": 230,
+            "startedAt": "2026-10-17T03:13:52.987Z"
+          },
+          {
+            "provider": "tensorart",
+            "model": "661652545330040294",
+            "method": "GET",
+            "endpoint": "https://ap-east-1.tensorart.cloud/v1/models/661652545330040294",
+            "status": 200,
+            "statusText": "OK",
+            "responseBody": {
+              "kind": "raw-response",
+              "url": "/api/media/raw/6a125b29f740f8e683a2086dc198df5210994cb43f9656af50279013133b4593",
+              "sha256": "6a125b29f740f8e683a2086dc198df5210994cb43f9656af50279013133b4593",
+              "size": 749,
+              "encoding": "utf-8",
+              "fidelity": "original"
+            },
+            "maskedKey": "38b4...6ca5",
+            "keyUsage": {
+              "provider": "tensorart",
+              "index": 2,
+              "count": 3,
+              "source": "pool"
+            },
+            "durationMs": 252,
+            "startedAt": "2026-10-17T03:13:53.217Z"
+          },
+          {
+            "provider": "tensorart",
+            "model": "613045163490732233",
+            "method": "POST",
+            "endpoint": "https://ap-east-1.tensorart.cloud/v1/jobs",
+            "requestBody": {
+              "requestId": "677783fe-8e40-401e-a00c-d027c71921f1",
+              "stages": [
+                {
+                  "type": "INPUT_INITIALIZE",
+                  "inputInitialize": {
+                    "seed": "42"
+                  }
+                },
+                {
+                  "type": "DIFFUSION",
+                  "diffusion": {
+                    "sdModel": "613045163490732233",
+                    "width": 512,
+                    "height": 768,
+                    "prompts": [
+                      {
+                        "text": "1girl, red apple"
+                      }
+                    ],
+                    "negativePrompts": [
+                      {
+                        "text": "blurry"
+                      }
+                    ],
+                    "steps": 20,
+                    "cfgScale": 7,
+                    "sampler": "Euler a",
+                    "lora": {
+                      "items": [
+                        {
+                          "loraModel": "661652545330040294",
+                          "weight": 1.1
+                        }
+                      ]
+                    }
+                  }
+                }
+              ]
+            },
+            "status": 400,
+            "statusText": "Bad Request",
+            "responseBody": {
+              "kind": "raw-response",
+              "url": "/api/media/raw/2e1c19bd22b724caeb556ab1eccee01bbb3021fe3cf6c70647380a10ff718eab",
+              "sha256": "2e1c19bd22b724caeb556ab1eccee01bbb3021fe3cf6c70647380a10ff718eab",
+              "size": 152,
+              "encoding": "utf-8",
+              "fidelity": "original"
+            },
+            "maskedKey": "38b4...6ca5",
+            "keyUsage": {
+              "provider": "tensorart",
+              "index": 2,
+              "count": 3,
+              "source": "pool"
+            },
+            "durationMs": 252,
+            "startedAt": "2026-10-17T03:13:53.469Z"
+          }
+        ],
+        "submissions": [
+          {
+            "endpoint": "https://ap-east-1.tensorart.cloud/v1/jobs",
+            "parameters": {
+              "requestId": "677783fe-8e40-401e-a00c-d027c71921f1",
+              "stages": [
+                {
+                  "type": "INPUT_INITIALIZE",
+                  "inputInitialize": {
+                    "seed": "42"
+                  }
+                },
+                {
+                  "type": "DIFFUSION",
+                  "diffusion": {
+                    "sdModel": "613045163490732233",
+                    "width": 512,
+                    "height": 768,
+                    "prompts": [
+                      {
+                        "text": "1girl, red apple"
+                      }
+                    ],
+                    "negativePrompts": [
+                      {
+                        "text": "blurry"
+                      }
+                    ],
+                    "steps": 20,
+                    "cfgScale": 7,
+                    "sampler": "Euler a",
+                    "lora": {
+                      "items": [
+                        {
+                          "loraModel": "661652545330040294",
+                          "weight": 1.1
+                        }
+                      ]
+                    }
+                  }
+                }
+              ]
+            },
+            "status": 400
+          }
+        ]
+      },
+      "requestOrigin": "direct",
+      "id": "hist_1792206833722_jsu9p",
+      "timestamp": 1792206833722,
+      "seed": null,
+      "steps": null,
+      "cfg": null,
+      "sampler": null,
+      "scheduler": null,
+      "width": null,
+      "height": null
+    }
+  },
+  "actualRequest": {
+    "requestId": "677783fe-8e40-401e-a00c-d027c71921f1",
+    "stages": [
+      {
+        "type": "INPUT_INITIALIZE",
+        "inputInitialize": {
+          "seed": "42"
+        }
+      },
+      {
+        "type": "DIFFUSION",
+        "diffusion": {
+          "sdModel": "613045163490732233",
+          "width": 512,
+          "height": 768,
+          "prompts": [
+            {
+              "text": "1girl, red apple"
+            }
+          ],
+          "negativePrompts": [
+            {
+              "text": "blurry"
+            }
+          ],
+          "steps": 20,
+          "cfgScale": 7,
+          "sampler": "Euler a",
+          "lora": {
+            "items": [
+              {
+                "loraModel": "661652545330040294",
+                "weight": 1.1
+              }
+            ]
+          }
+        }
+      }
+    ]
+  }
+}

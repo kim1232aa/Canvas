@@ -12,7 +12,7 @@
 - 契约：`{ extra, request }`；LoRA = `request.loras[{ model_name, strength∈[0,1] }]`；`model_name` = 目录 `sd_name_in_api`。
 
 ## 根因
-- 旧 E2E（`/workspace/canvas-e2e-novita-fe/outcome.json`，03:20）**早于** HTML 声明落地（03:25），当时 `loadProviderDeclaration` 为空 → `BLOCKED_SCHEMA_LOOKUP`。
+- 旧 E2E（`/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-novita-fe/outcome.json`，03:20）**早于** HTML 声明落地（03:25），当时 `loadProviderDeclaration` 为空 → `BLOCKED_SCHEMA_LOOKUP`。
 - 声明已存在后仍缺：`model_name` 未进 declaration properties；字段描述残留「待确认」；UI unprobed →「发送情况未知」与挑刺四档不符。
 
 ## 改动文件
@@ -27,7 +27,7 @@
 | 相关 `*.test.ts(x)` | 对齐新文案/徽章/声明 |
 
 ## Restore
-`/workspace/canvas-restore/pre-novita-polish-20261016-085318.tgz`（Asia/Tokyo 墙钟命名；打包时刻 box CST≈08:53）
+`/workspace/canvas/temp/backups/canvas-restore/pre-novita-polish-20261016-085318.tgz`（Asia/Tokyo 墙钟命名；打包时刻 box CST≈08:53）
 
 ## 后端重启（仅一次）
 - 旧 PID：2396826

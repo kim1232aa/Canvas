@@ -1,6 +1,6 @@
 # 上游交互区打磨（2026-10-16）— CODE_ONLY
 
-状态：CODE_ONLY，待画布前端重拍 + 挑刺看图。还原包：/workspace/canvas-restore/pre-upstream-trace-20261016-114934.tgz（不含 node_modules/.git）。
+状态：CODE_ONLY，待画布前端重拍 + 挑刺看图。还原包：/workspace/canvas/temp/backups/canvas-restore/pre-upstream-trace-20261016-114934.tgz（不含 node_modules/.git）。
 
 ## 改动
 - `src/components/HistoryModal.tsx` `UpstreamExchanges`/`UpstreamBody`

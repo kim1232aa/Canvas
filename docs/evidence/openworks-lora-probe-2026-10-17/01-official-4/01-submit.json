@@ -1,0 +1,51 @@
+{
+  "case": "01-official-4",
+  "title": "Official 4 fields baseline (control)",
+  "note": "prompt + width + height + count only; no LoRA fields",
+  "timestampAsiaTokyo": "2026-10-17 12:44:27 JST",
+  "actualRequest": {
+    "endpoint": "https://openapi.tensor.art/openworks/v1/task",
+    "method": "POST",
+    "headers": {
+      "Content-Type": "application/json",
+      "User-Agent": "ow-lora-probe/1.0",
+      "Echo-Access-Key": "ak_tensor_W6…1o64"
+    },
+    "body": {
+      "toolName": "photoreal_studio_z_image",
+      "inputs": [
+        {
+          "type": "STRING",
+          "value": "This is a digitally-created, hyper-realistic photograph of a tiger in a forest. The tiger, with its orange and black striped fur, is lying on a large, rough-textured log in the foreground. Its right front paw is resting on the log, while its head is lowered, and it gazes intently at a glowing, orange butterfly that is perched on the log's surface. The tiger's eyes are half-closed, giving it a contemplative or curious expression. The butterfly's wings are illuminated with a bright, fiery orange glow, contrasting sharply with the dark forest background. Snowflakes are gently falling, adding a sense of cold and tranquility to the scene. The forest in the background is dimly lit, with tall, dark trees and a blue, misty light filtering through from the right side, creating a mystical atmosphere. The tiger's fur is detailed with realistic textures, and the log has a natural, weathered appearance. The overall composition combines elements of realism and fantasy, highlighting the tiger's majestic presence and the magical, glowing butterfly."
+        },
+        {
+          "type": "INTEGER",
+          "value": 512
+        },
+        {
+          "type": "INTEGER",
+          "value": 512
+        },
+        {
+          "type": "INTEGER",
+          "value": 1
+        }
+      ]
+    }
+  },
+  "httpStatus": 200,
+  "responseRaw": "{\"code\":\"0\", \"message\":\"\", \"data\":{\"task\":{\"id\":\"1056289942994471380\", \"userId\":\"1048723019146487792\", \"status\":\"WAITING\", \"toolName\":\"photoreal_studio_z_image\", \"outputs\":[]}}}",
+  "response": {
+    "code": "0",
+    "message": "",
+    "data": {
+      "task": {
+        "id": "1056289942994471380",
+        "userId": "1048723019146487792",
+        "status": "WAITING",
+        "toolName": "photoreal_studio_z_image",
+        "outputs": []
+      }
+    }
+  }
+}

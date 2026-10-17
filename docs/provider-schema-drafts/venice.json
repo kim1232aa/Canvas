@@ -1,4 +1,5 @@
 {
+  "canvasAcceptance": "未验证（2026-10-17 14:40 北京：测试截图已全删，按雁标准「画布里出图、落保存节点、历史有缩略图」当前 0 家；以前的出图/欠费标记一律作废，官方字段结论保留；在画布重跑出图并有节点图+历史缩略图后再单独改）",
   "$schemaNote": "草案 — 仅声明，非可执行驱动。真相源: docs/provider-api-audit-v2/venice.md（Researchy 全量重查完成）+ 前端实测",
   "id": "venice",
   "displayName": "Venice",
@@ -109,7 +110,7 @@
         "default": 1024,
         "when": "pixel models (constraints has widthHeightDivisor, no aspectRatios) e.g. venice-sd35",
         "sendStatus": "待确认",
-        "sendEvidence": "clean-0544 FE actualRequest 2026-10-15 venice-sd35：width:768 height:1024 实发，无 aspect_ratio/resolution/format；上游 HTTP 402 余额不足（过校验）。同会话 height=1344 → 本地拦截「超出官方 Schema 范围 [0, 1280]」未出站。证据：/workspace/canvas-e2e-clean-0544/outcome.json step5；docs/evidence/clean-0544-fixes-2026-10-15.md。仅像素模型；Qwen 族发宽高会 400，勿一律发。 ⚠ clean-0544 已被挑刺/画布整套退回，仅作线索，不升会发送。"
+        "sendEvidence": "clean-0544 FE actualRequest 2026-10-15 venice-sd35：width:768 height:1024 实发，无 aspect_ratio/resolution/format；上游 HTTP 402 余额不足（过校验）。同会话 height=1344 → 本地拦截「超出官方 Schema 范围 [0, 1280]」未出站。证据：已清理 step5；docs/evidence/clean-0544-fixes-2026-10-15.md。仅像素模型；Qwen 族发宽高会 400，勿一律发。 ⚠ clean-0544 已被挑刺/画布整套退回，仅作线索，不升会发送。"
       },
       "height": {
         "type": "integer",
@@ -157,7 +158,7 @@
         "type": "string",
         "maxLength": 7500,
         "sendStatus": "待确认",
-        "sendEvidence": "clean-0544 FE actualRequest 2026-10-15 venice-sd35 含 negative_prompt，同包至上游 402。证据：/workspace/canvas-e2e-clean-0544/outcome.json step5。 ⚠ clean-0544 已被挑刺/画布整套退回，仅作线索，不升会发送。"
+        "sendEvidence": "clean-0544 FE actualRequest 2026-10-15 venice-sd35 含 negative_prompt，同包至上游 402。证据：已清理 step5。 ⚠ clean-0544 已被挑刺/画布整套退回，仅作线索，不升会发送。"
       },
       "lora_strength": {
         "type": "integer",

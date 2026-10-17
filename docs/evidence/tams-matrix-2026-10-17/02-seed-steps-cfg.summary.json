@@ -1,0 +1,19 @@
+{
+  "case": "02-seed-steps-cfg",
+  "httpStatus": 400,
+  "error": "Tensor.Art 模型任务提交失败 [400]",
+  "details_preview": "{\"code\":3, \"message\":\"Params Valid\", \"details\":[{\"@type\":\"type.googleapis.com/tams_api.ArgumentError\", \"field\":\"base\", \"message\":\"credits not enough\"}]}",
+  "errorSource": "upstream",
+  "exactEndpointCalled": "https://ap-east-1.tensorart.cloud/v1/jobs",
+  "mapped": {
+    "seed": "42",
+    "count": null,
+    "width": 512,
+    "height": 768,
+    "steps": 20,
+    "cfgScale": 7,
+    "sdModel": "613045163490732233",
+    "lora.items": null,
+    "prompt": "a red apple on a wooden table"
+  }
+}

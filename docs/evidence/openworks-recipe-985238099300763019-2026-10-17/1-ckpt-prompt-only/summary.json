@@ -1,0 +1,15 @@
+{
+  "case": "1-ckpt-prompt-only",
+  "title": "Checkpoint + positive prompt only (official 4 + ckpt named; NO seed/steps/cfg/lora/negative)",
+  "note": "prompt+768x1344+count=1 + checkpoint/model/sdModel=984644890228968118; page LoRA none so not stuffed",
+  "httpStatus": 200,
+  "submitCode": "0",
+  "submitMessage": "",
+  "taskId": "1056300555858640631",
+  "finalStatus": "FINISH",
+  "imageUrl": "https://tensor-sf-sig.7022ae40757f8d53295a57619de9b364.r2.cloudflarestorage.com/workspace/generation/1048723019146487792/2026-10-17/62d43511-4d4c-4972-b8c9-9c2306b57281.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=0bef8a003dc93fc4d7030c9da79271ff%2F20261017%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20261017T042635Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&x-id=GetObject&X-Amz-Signature=c153b0b4dfcf695651c7eb4cac2fe528ed3eb1b84762006b121f6e61a910f25a",
+  "imageSha256": "a4e3512a42f05f6583dbad128c26b7255d39bf4eb03b4e3417e3a28248882461",
+  "imageBytes": 1294824,
+  "timestampAsiaTokyo": "2026-10-17 13:26:35 JST",
+  "inputsCount": 7
+}

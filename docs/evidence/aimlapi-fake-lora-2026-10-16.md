@@ -1,7 +1,7 @@
 # AIMLAPI 假「出图完成」+ LoRA 可见 — 2026-10-16 — CODE_ONLY
 
-对应失败：`/workspace/canvas-e2e-aimlapi-reverify/outcome.json` = `FAIL_LORA_NOT_IN_ACTUAL_REQUEST`。
-还原包：`/workspace/canvas-restore/pre-aimlapi-fake-lora-20261016-003855.tgz`。
+对应失败：`/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-aimlapi-reverify/outcome.json` = `FAIL_LORA_NOT_IN_ACTUAL_REQUEST`。
+还原包：`/workspace/canvas/temp/backups/canvas-restore/pre-aimlapi-fake-lora-20261016-003855.tgz`。
 未 commit / push；未开浏览器；未发群。
 
 ## 根因（人话）

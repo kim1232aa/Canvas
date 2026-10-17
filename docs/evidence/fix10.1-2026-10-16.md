@@ -25,7 +25,7 @@ fix10 的 softBreaks 把 U+200B 直接写进了 textarea 的 `value`（`withSoft
 fix7/8/9/10 中依赖 textarea 的断言改为读 display。
 `src/{utils,components,services,integration,constants}`：91 files / 843 tests，842 passed，1 failed = 既有的 replicatePartialFix #2（fix10 已证明改前就失败）。
 
-## 端到端（google-chrome 154 headless + CDP，脚本 /workspace/canvas-e2e-fix10.1/e2e.mjs，截图同目录）
+## 端到端（google-chrome 154 headless + CDP，脚本 /workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-fix10.1/e2e.mjs，截图同目录）
 A 载入：在 localStorage 写入 model 含 4 个 U+200B 的画板后刷新 → toast「已清除 4 个零宽字符「AI 视频（显式 Provider/Model）」字段 model：4 个」；执行记录按钮「生成 0 · 目录/Schema 0 · 本地 1」，本地行 1 条；localStorage 中 model 长度 45，零宽 0，全部 localStorage 零宽 0。
 B 显示态：textContent 长度 45，wbr 8，零宽 0；整段选中复制，剪贴板 = ID，长度 45，非 ASCII 码点 []。
 C 编辑态：textarea 获得焦点，value 长度 45，非 ASCII []；复制剪贴板长度 45，[]；Input.insertText 真输入 + Enter 后 value 长度 45；blur 后 localStorage model 长度 45，零宽 0。
@@ -37,9 +37,9 @@ E 运行一次（Fal，自定义框长 ID，参考图 Load Image + custom_parame
 - actualRequest：endpoint 同上，parameters {prompt, duration:"5", start_image_url}
 - 码点扫描：card.model / executionTrace[0].model / workflowSnapshot model 均长度 45，零宽 {}；整张卡零宽 {}
 - logs/upstream.log 新增 1 行：2026-10-16 18:01:47.818，fal /api/video/generate → fal.run/…/image-to-video，status 403，error 为上游原文；零宽 {}；key 已脱敏（不打印）
-- 原文：/workspace/canvas-e2e-fix10.1/history-card.json、upstream-new.log、transcript.txt
+- 原文：/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-fix10.1/history-card.json、upstream-new.log、transcript.txt
 - 不扣费：账户已锁（TOP_UP），上游拒绝
 
 ## 进程
 复用 PID 3299769 的 cmdline/cwd/environ 重启一次（未用 start-canvas.sh）→ PID 3340604，ticks 14366341，lstart 2026-10-16 17:58:52，:3000=200，log /tmp/canvas-dev-fix10.1.log。之后只改了前端文件（CustomModelIdField 字号、App WeakSet、ExecutionLog maxWidth），由 Vite 热更新生效，没有再次重启；E2E 每轮都是新开的 Chrome profile 整页载入。
-restore：/workspace/canvas-restore/pre-fix10.1-20261016-175641.tgz
+restore：/workspace/canvas/temp/backups/canvas-restore/pre-fix10.1-20261016-175641.tgz

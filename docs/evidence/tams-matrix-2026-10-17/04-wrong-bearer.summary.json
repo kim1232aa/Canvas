@@ -1,0 +1,19 @@
+{
+  "case": "04-wrong-bearer",
+  "httpStatus": 404,
+  "error": "Tensor.Art 模型 API 鉴权 / 模型查询失败 [404]",
+  "details_preview": "{\"code\":100001,\"message\":\"unauthorized\",\"tips\":\"app not found\"}",
+  "errorSource": "upstream",
+  "exactEndpointCalled": "https://ap-east-1.tensorart.cloud/v1/models/613045163490732233",
+  "mapped": {
+    "seed": null,
+    "count": null,
+    "width": 512,
+    "height": 512,
+    "steps": null,
+    "cfgScale": null,
+    "sdModel": "613045163490732233",
+    "lora.items": null,
+    "prompt": "control probe"
+  }
+}

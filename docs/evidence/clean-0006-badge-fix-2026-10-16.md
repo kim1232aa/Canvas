@@ -2,7 +2,7 @@
 
 Status: **CODE_ONLY**. No commit or push. Browser not opened. Nothing posted to the group. `.env` not printed.
 
-Restore tar: `/workspace/canvas-restore/pre-clean0006badge-20261016-002117.tgz`
+Restore tar: `/workspace/canvas/temp/backups/canvas-restore/pre-clean0006badge-20261016-002117.tgz`
 
 ## Scope
 

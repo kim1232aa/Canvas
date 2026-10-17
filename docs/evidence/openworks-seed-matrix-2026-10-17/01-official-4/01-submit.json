@@ -1,0 +1,51 @@
+{
+  "case": "01-official-4",
+  "title": "Official 4 fields only",
+  "note": "prompt + image width + image height + result image count; no seed/steps/cfg",
+  "timestampAsiaTokyo": "2026-10-17 12:21:48 JST",
+  "actualRequest": {
+    "endpoint": "https://openapi.tensor.art/openworks/v1/task",
+    "method": "POST",
+    "headers": {
+      "Content-Type": "application/json",
+      "User-Agent": "node",
+      "Echo-Access-Key": "ak_tensor_…1o64"
+    },
+    "body": {
+      "toolName": "photoreal_studio_z_image",
+      "inputs": [
+        {
+          "type": "STRING",
+          "value": "a red apple on a white table, studio photo"
+        },
+        {
+          "type": "INTEGER",
+          "value": 512
+        },
+        {
+          "type": "INTEGER",
+          "value": 512
+        },
+        {
+          "type": "INTEGER",
+          "value": 1
+        }
+      ]
+    }
+  },
+  "httpStatus": 200,
+  "responseRaw": null,
+  "response": {
+    "code": "0",
+    "message": "",
+    "data": {
+      "task": {
+        "id": "1056284107207646691",
+        "userId": "1048723019146487792",
+        "status": "WAITING",
+        "toolName": "photoreal_studio_z_image",
+        "outputs": []
+      }
+    }
+  }
+}

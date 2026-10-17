@@ -1,0 +1,26 @@
+{
+  "poll": 1,
+  "httpStatus": 200,
+  "timestampAsiaTokyo": "2026-10-17 13:32:16 JST",
+  "requestBody": {
+    "taskIds": [
+      "1056302253444485758"
+    ]
+  },
+  "responseRaw": "{\"code\":\"0\", \"message\":\"\", \"data\":{\"tasks\":[{\"id\":\"1056302253444485758\", \"userId\":\"1048723019146487792\", \"status\":\"WAITING\", \"toolName\":\"photoreal_studio_z_image\", \"outputs\":[]}]}}",
+  "response": {
+    "code": "0",
+    "message": "",
+    "data": {
+      "tasks": [
+        {
+          "id": "1056302253444485758",
+          "userId": "1048723019146487792",
+          "status": "WAITING",
+          "toolName": "photoreal_studio_z_image",
+          "outputs": []
+        }
+      ]
+    }
+  }
+}
