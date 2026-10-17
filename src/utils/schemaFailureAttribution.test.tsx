@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { executeWorkflow, clearNodeExecutionErrors } from './graphEngine';
-import { schemaFailureHeadline, schemaFailureNodeMessage, schemaFailureTargetId, isSchemaPrefetchError, schemaFailureToast, schemaFailureToastBody, failedNodeDisplayTitle, upstreamFailedLine, shouldClearSchemaFailureOnModelChange, clearSchemaFailureFromModelChange, isSchemaFailureToastForModel, schemaFailureModel } from './schemaFailure';
+import { schemaFailureHeadline, schemaFailureNodeMessage, schemaFailureTargetId, isSchemaPrefetchError, schemaFailureToast, schemaFailureToastBody, failedNodeDisplayTitle, upstreamFailedLine, shouldClearSchemaFailureOnModelChange, clearSchemaFailureFromModelChange, isSchemaFailureToastForModel, schemaFailureModel, applySchemaMissNodeMarks } from './schemaFailure';
 import { toastFromRunError } from './apiFailure';
 import { schemaPrefetchFailureData } from '../engines/drivers/SchemaProviderDriver';
 import { EngineRegistry } from '../engines/EngineRegistry';
@@ -266,3 +266,49 @@ describe('changing the model clears the schema-miss that described the old value
     expect(upstreamFailedLine(title)).toBe(`没出图，原因见${title}`);
   });
 });
+
+describe('real flow: schema-400 with SaveImage downstream of sampler (outside branch.ids)', () => {
+  it('failure handler writes upstreamFailedFromId; changing the model clears the SaveImage line', () => {
+    // Real OpenWorks 标准文生图 shape: run target is KSampler → branch = ck+…+sampler; SaveImage is downstream-of-target, NOT in branch.ids.
+    // That path used to set upstreamFailedTitle without FromId, so model-change left 「没出图，原因见…」 stuck.
+    const failed = 'nonexistent-model-e2e-isolation';
+    const err = schemaErr(400);
+    const ck = {
+      ...node('c', 'CheckpointLoaderSimple', { targetProvider: 'openworks', ckpt_name: failed }),
+      title: '加载底模',
+    } as NodeInstance;
+    const sampler = { ...node('k', 'KSampler'), title: '采样器' } as NodeInstance;
+    const save = { ...node('s', 'SaveImage'), title: '保存图像' } as NodeInstance;
+    const failedTitle = failedNodeDisplayTitle(ck);
+    const afterFail = applySchemaMissNodeMarks([ck, sampler, save], {
+      schemaNodeId: 'c',
+      schemaNodeMsg: schemaFailureNodeMessage(err),
+      errorModel: schemaFailureModel(err, failed),
+      failedTitle,
+      branchIds: new Set(['c', 'k']),
+      downstreamIds: new Set(['s']), // SaveImage reachable from sampler, not in branch
+    });
+    const ckAfter = afterFail.find((n) => n.id === 'c')!;
+    const saveAfter = afterFail.find((n) => n.id === 's')!;
+    expect(ckAfter.errorKind).toBe('schema');
+    expect(ckAfter.errorModel).toBe(MODEL); // from failed GET
+    expect(saveAfter.upstreamFailed).toBe(true);
+    expect(saveAfter.upstreamFailedTitle).toBe(failedTitle);
+    expect(saveAfter.upstreamFailedFromId).toBe('c'); // must be set — this was the bug
+    expect(upstreamFailedLine(saveAfter.upstreamFailedTitle)).toBe(`没出图，原因见${failedTitle}`);
+
+    // User switches model away from the failed value (same as App handleUpdateNodeValue for ckpt_name)
+    expect(shouldClearSchemaFailureOnModelChange(ckAfter, 'photoreal_studio_z_image')).toBe(true);
+    const afterClear = clearSchemaFailureFromModelChange(afterFail, 'c');
+    expect(afterClear.find((n) => n.id === 'c')!.errorMessage).toBeUndefined();
+    expect(afterClear.find((n) => n.id === 's')!.upstreamFailed).toBe(false);
+    expect(afterClear.find((n) => n.id === 's')!.upstreamFailedTitle).toBeUndefined();
+    expect(afterClear.find((n) => n.id === 's')!.upstreamFailedFromId).toBeUndefined();
+  });
+
+  it('App downstream.has path records upstreamFailedFromId (not only the schema branch path)', () => {
+    const app = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
+    expect(app).toMatch(/downstream\.has\([\s\S]*?upstreamFailedFromId:\s*localBlockedRun\s*\?\s*undefined\s*:\s*failedNodeId/);
+  });
+});
+

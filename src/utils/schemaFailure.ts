@@ -151,3 +151,67 @@ export function isSchemaFailureToastForModel(toast: { type?: string; title?: str
   const blob = `${toast.title || ''}\n${toast.message || ''}`;
   return blob.includes(model) && /没出图/.test(blob);
 }
+
+/**
+ * Apply a schema-miss (or any upstream fail) to the graph the same way App.tsx catch does:
+ * error on the model node; branch + downstream-of-run-target nodes get 「没出图，原因见…」
+ * with upstreamFailedFromId pointing at the failing node (required so model-change can clear them).
+ * downstreamIds are nodes reachable FROM the run target that are NOT in branchIds (e.g. VAE/SaveImage when target is KSampler).
+ */
+export function applySchemaMissNodeMarks(
+  nodes: NodeInstance[],
+  opts: {
+    schemaNodeId: string;
+    schemaNodeMsg: string;
+    errorModel: string;
+    failedTitle?: string;
+    branchIds: Set<string>;
+    downstreamIds: Set<string>;
+  },
+): NodeInstance[] {
+  const { schemaNodeId, schemaNodeMsg, errorModel, failedTitle, branchIds, downstreamIds } = opts;
+  return nodes.map((n) => {
+    // Same order as App.tsx catch: downstream-of-target first (SaveImage often lives here when run target is the sampler).
+    if (downstreamIds.has(n.id)) {
+      const keepErr = !!n.errorMessage;
+      return {
+        ...n,
+        state: (keepErr ? 'error' : 'idle') as NodeInstance['state'],
+        executionProgress: 0,
+        upstreamFailed: true,
+        upstreamFailedTitle: failedTitle,
+        upstreamFailedFromId: schemaNodeId,
+        upstreamLocalBlocked: false,
+        localBlockTitle: undefined,
+        localBlockReason: undefined,
+        outputData: undefined,
+      };
+    }
+    if (n.id === schemaNodeId) {
+      return {
+        ...n,
+        state: 'error' as NodeInstance['state'],
+        executionProgress: 0,
+        errorMessage: schemaNodeMsg,
+        errorAt: new Date().toISOString(),
+        errorKind: 'schema' as const,
+        errorModel,
+        upstreamFailed: false,
+        upstreamLocalBlocked: false,
+      };
+    }
+    if (!branchIds.has(n.id)) return n;
+    return {
+      ...n,
+      state: 'idle' as NodeInstance['state'],
+      executionProgress: 0,
+      errorMessage: undefined,
+      errorAt: undefined,
+      errorKind: undefined,
+      upstreamFailed: true,
+      upstreamFailedTitle: failedTitle,
+      upstreamFailedFromId: schemaNodeId,
+      upstreamLocalBlocked: false,
+    };
+  });
+}

@@ -62,7 +62,7 @@ import { EngineRegistry } from './engines/EngineRegistry';
 import { NormalizedGenerateParams } from './engines/types';
 import { noteUserModelSelection, subscribeSchemaSelectResult } from './services/userModelSelection';
 import { hasModelSchemaFetch } from './utils/schemaSendHint';
-import { isSchemaPrefetchError, schemaFailureNodeMessage, schemaFailureTargetId, failedNodeDisplayTitle, schemaFailureModel, shouldClearSchemaFailureOnModelChange, clearSchemaFailureFromModelChange, isSchemaFailureToastForModel } from './utils/schemaFailure';
+import { isSchemaPrefetchError, schemaFailureNodeMessage, schemaFailureTargetId, failedNodeDisplayTitle, schemaFailureModel, shouldClearSchemaFailureOnModelChange, clearSchemaFailureFromModelChange, isSchemaFailureToastForModel, applySchemaMissNodeMarks } from './utils/schemaFailure';
 import { sizeOrUndef, widthHeightMismatch, localBlockTitle, schemaReadLine, localBlockCauseNodeIds, revealNodeTransform, sizeMismatchCleared } from './utils/localBlock';
 import { findNonOverlappingPos } from './utils/nodeOverlap';
 import { setCurrentRunTarget, beginRun, endRun, clearExecutionErrors, getExecutions, formatRecordTime, recordLocalEvent, currentRunAttach, ApiTraceError} from './services/executionTrace';
@@ -1389,7 +1389,7 @@ export default function App() {
         // Those stay until the next successful run; only local chrome is layered on top.
         if (downstream.has(n.id)) {
           const keepErr = !!n.errorMessage;
-          return {...n,state:(keepErr?'error':'idle') as NodeInstance['state'],executionProgress:0,upstreamFailed:true,upstreamFailedTitle:localBlockedRun?undefined:failedTitle,upstreamLocalBlocked:localBlockedRun,localBlockTitle:blockTitle,localBlockReason:undefined,outputData:undefined};
+          return {...n,state:(keepErr?'error':'idle') as NodeInstance['state'],executionProgress:0,upstreamFailed:true,upstreamFailedTitle:localBlockedRun?undefined:failedTitle,upstreamFailedFromId:localBlockedRun?undefined:failedNodeId,upstreamLocalBlocked:localBlockedRun,localBlockTitle:blockTitle,localBlockReason:undefined,outputData:undefined};
         }
         if (localBlockedRun) {
           if (!branch.ids.has(n.id) && !causeIds.has(n.id)) return n;
