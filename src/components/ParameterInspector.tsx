@@ -2,7 +2,7 @@ import { noteUserModelSelection } from '../services/userModelSelection';
 import { civitaiEngines, civitaiEcosystemsFor } from '../schemas/providerSchema';
 import { ensureModelSchema, withCachedSchemaProperties } from '../services/modelSchemaCache';
 import {ApiParameterEditor} from './ApiParameterEditor';
-import {videoDurationBounds} from '../utils/frontendParameters';
+import {videoDurationBounds, videoSchemaValueIssue} from '../utils/frontendParameters';
 import {ProviderModelSelect} from './ProviderModelSelect';
 import React from 'react';
 import {
@@ -37,6 +37,7 @@ import { schemaSendStatus } from '../utils/schemaSendStatus';
 import { parseExplicitLoraStrength } from '../utils/loraStrength';
 import { fieldOptions, getFieldSpec, resolveSchemaModelId, type FieldKey, type Provider as SchemaProvider } from '../schemas/providerSchema';
 import { middleEllipsis } from '../utils/middleEllipsis';
+import { randomSeedFor } from '../utils/seedRange';
 
 interface ParameterInspectorProps {
   params: ComfyParameters;
@@ -180,7 +181,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
   };
 
   const handleRandomizeSeed = () => {
-    update({ seed: Math.floor(Math.random() * 1000000000) });
+    update({ seed: randomSeedFor(params.targetProvider, params.checkpoint) });
   };
 
   const handleAspectRatioPreset = (w: number, h: number) => {
@@ -359,7 +360,6 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                 { id: 'civitai', label: 'Civitai 原生' },
                 { id: 'nanogpt', label: 'NanoGPT' },
                 { id: 'sensenova', label: '商汤日日新 (SenseNova)' },
-                { id: 'tensorart', label: 'Tensor.Art 模型 API' },
                 { id: 'openai_compat', label: 'OpenAI 兼容中转' },
                 { id: 'grok_compat', label: 'Grok 兼容中转' },
                 { id: 'muapi', label: 'MuAPI' },
@@ -380,7 +380,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                       // G4: 切换 provider 时不自动填默认模型 → 清空 checkpoint
                       if (!isSelected) update({ targetProvider: p.id as any, checkpoint: '' }); // same provider: keep checkpoint (reload must not blank)
                     }}
-                    className={`py-1.5 px-1 rounded-lg text-center font-mono text-[10px] transition-all truncate ${
+                    className={`py-1.5 px-1 rounded-lg text-center font-mono text-[10px] transition-all whitespace-normal break-words leading-tight ${
                       isSelected
                         ? 'bg-cyan-500/25 text-cyan-300 font-bold border border-cyan-500/50 shadow-sm'
                         : 'bg-[#121316] text-slate-400 border border-[#282a35] hover:text-slate-200'
@@ -439,10 +439,9 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
             <p className="text-sm text-slate-400">不自动填写引擎或更换模型。AIR 和引擎兼容性以 metadata / 上游响应为准。</p>
           </div>}
           {(params.targetProvider === 'video' || params.videoProvider || params.checkpoint?.includes('video')) && <div className="space-y-2">
-            <label className="block text-sm text-slate-300">视频时长 (duration)<span className="relative block"><input aria-label="视频时长 (duration)" type="number" {...videoDurationBounds(params.videoProvider || params.targetProvider,params.checkpoint)} step={1} value={params.videoDuration ?? ''} onChange={e=>update({videoDuration:e.target.value === '' ? undefined : Number(e.target.value)})} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2 pr-8" /><span aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-[calc(50%-2px)] text-slate-400">秒</span></span><span className="text-sm text-slate-400">仅核实的端点显示范围；未填写不提交默认时长。</span></label>
+            <label className="block text-sm text-slate-300">视频时长（秒）<span className="relative block">{(()=>{const db=videoDurationBounds(params.videoProvider || params.targetProvider,params.checkpoint);return db.options ? <select aria-label="视频时长（秒）" value={params.videoDuration === undefined ? '' : String(params.videoDuration)} onChange={e=>{const hit=db.options!.find(o=>String(o)===e.target.value);update({videoDuration:hit as any});}} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2 pr-8"><option value="">未选择（不提交）</option>{params.videoDuration !== undefined && !db.options.some(o=>String(o)===String(params.videoDuration)) && <option value={String(params.videoDuration)}>{String(params.videoDuration)} 秒（不可用）</option>}{db.options.map(o=><option key={String(o)} value={String(o)}>{String(o)} 秒</option>)}</select> : <input aria-label="视频时长（秒）" type="number" min={db.min} max={db.max} step={1} value={params.videoDuration ?? ''} onChange={e=>update({videoDuration:e.target.value === '' ? undefined : Number(e.target.value)})} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2 pr-8" />;})()}<span aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-[calc(50%-2px)] text-slate-400">秒</span></span><span className="text-sm text-slate-400">可选值来自端点官方 Schema（duration）；Schema 未读取时不限制，未填写不提交。</span>{(()=>{const iss=videoSchemaValueIssue(params.videoProvider || params.targetProvider,params.checkpoint,'duration',params.videoDuration);return iss ? <span role="alert" className="block text-sm text-rose-300">{iss}</span> : null;})()}</label>
             <label className="block text-sm text-slate-300">视频 resolution<input aria-label="视频 resolution" value={params.resolution || ''} onChange={e=>update({resolution:e.target.value || undefined})} placeholder="按所选端点填写；未设置保留空" className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2" /></label>
           </div>}
-          {(params.targetProvider === 'video' || params.videoProvider || params.checkpoint?.includes('video')) && <label className="block text-sm text-slate-300">视频自定义参数 JSON<textarea aria-label="视频自定义参数 JSON" value={params.customParameters || ''} onChange={e=>update({customParameters:e.target.value || undefined})} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2" /><span className="text-sm text-slate-400">JSON 对象字段在服务端展开，false/0 保留。</span></label>}
           {params.targetProvider === 'fal' && params.checkpoint === 'fal-ai/lora' && <label className="block text-sm text-slate-300">SD LoRA 底模 model_name<input className="mt-1 w-full bg-[#111216] border border-slate-700 rounded-lg p-2" value={params.falModelName || ''} onChange={e => update({falModelName:e.target.value})} placeholder="必填：底模仓库 ID 或 URL" /></label>}
 
           {params.targetProvider === 'huggingface' && (
@@ -520,15 +519,6 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
             </div>
           )}
 
-          {params.targetProvider === 'tensorart' && (
-            <div className="p-2.5 bg-purple-950/20 border border-purple-500/30 rounded-lg text-[10px] text-purple-300/90 leading-relaxed flex items-start gap-2">
-              <Sparkles className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
-              <div>
-                <span className="font-bold text-purple-300">Tensor.Art / 吐司模型 API：</span>
-                <span> 使用 TAMS 模型 ID 与模型 API Key。OpenWorks 模型与 Access Key 属于另一服务商「Tensor.Art OpenWorks」，不能代用；LoRA 需与所选底模架构兼容。</span>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Section 2: KSampler Studio */}
@@ -695,11 +685,11 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
               min={0.0}
               max={1.0}
               step={0.01}
-              value={greyDenoise ? 0 : (params.denoise ?? 0)}
-              disabled={greyDenoise}
-              onChange={(e) => { if (greyDenoise) return; update({ denoise: parseFloat(e.target.value) }); }}
-              title={greyDenoise ? '该服务商不支持' : sendDenoise === 'not_sent' ? '该端点不支持，不发送' : undefined}
-              aria-disabled={greyDenoise || sendDenoise === 'not_sent' || undefined}
+              value={greyDenoise || sendDenoise === 'no_image' ? 0 : (params.denoise ?? 0)}
+              disabled={greyDenoise || sendDenoise === 'no_image'}
+              onChange={(e) => { if (greyDenoise || sendDenoise === 'no_image') return; update({ denoise: parseFloat(e.target.value) }); }}
+              title={greyDenoise ? '该服务商不支持' : sendDenoise === 'no_image' ? '有参考图时才发送 strength（官方 Schema；WaveSpeed krea-v2 turbo-lora 等同）' : sendDenoise === 'not_sent' ? '该端点不支持，不发送' : undefined}
+              aria-disabled={greyDenoise || sendDenoise === 'not_sent' || sendDenoise === 'no_image' || undefined}
               data-unsupported={sendDenoise === 'not_sent' || undefined}
               className={`w-full h-1.5 bg-[#252833] rounded appearance-none cursor-pointer accent-cyan-400 disabled:opacity-40 disabled:cursor-not-allowed ${sendDenoise === 'not_sent' ? 'opacity-40 grayscale accent-slate-500' : ''}`}
             />

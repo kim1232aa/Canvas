@@ -7,7 +7,7 @@
 import { getStoredApiKeys } from './api';
 import { beginTraceOperation, formatRecordTime, recordLocalEvent } from './executionTrace';
 import { beginSharedGetAction, peekSharedGetMeta, sharedGetJson, type SharedGetResult } from './sharedGet';
-import { hasSchemaSendBadges } from '../utils/schemaSendHint';
+import { hasModelSchemaFetch } from '../utils/schemaSendHint';
 
 /** clean-1358 #3: App (and tests) subscribe so a Schema GET failure toasts immediately on select. */
 export type SchemaSelectResult = { provider: string; model: string; result: SharedGetResult; reused: boolean };
@@ -27,7 +27,7 @@ export function schemaRequestFor(provider: string, model: string): { url: string
 let last = '';
 export function noteUserModelSelection(provider?: string | null, model?: string | null): Promise<SharedGetResult> | undefined {
   const p = String(provider || '').toLowerCase().trim(); const m = String(model || '').trim();
-  if (!p || !m || !hasSchemaSendBadges(p)) return undefined;
+  if (!p || !m || !hasModelSchemaFetch(p)) return undefined;
   const { url, headers } = schemaRequestFor(p, m);
   // clean-1351 #4: re-selecting the SAME model (dropdown onChange + blur, node sync, hub re-apply) never opens a new
   // action: it reuses the shared result (success or failure). Only a different model — or an explicit force button — refetches.

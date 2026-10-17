@@ -47,8 +47,8 @@ describe('success card shows the verbatim request (fix 1)', () => {
 
 describe('seed: one source of truth (fix 2)', () => {
   it('upstream responses carry no seed, so both surfaces say sent / not returned', () => {
-    expect(historySeedStatement(item)).toBe('种子 42（实际发送；上游未返回种子）');
-    expect(historySeedRowText(item)).toBe('种子 42（上游未返回种子）');
+    expect(historySeedStatement(item)).toBe('种子 42（实际发送）。上游未返回种子');
+    expect(historySeedRowText(item)).toBe('种子 42');
   });
   it('toast resolves the same stored entry by the response historyItem id', () => {
     const responses = [{ historyItem: { id: item.id, status: undefined } }];

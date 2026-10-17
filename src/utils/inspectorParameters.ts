@@ -16,7 +16,9 @@ export function readInspectorParameters(nodes:NodeInstance[],connections:Connect
  const resolution=['FalAIEngineNode','ReplicateEngineNode'].includes(target?.type || '') ? /^(\d+)x(\d+)$/.exec(String(s.resolution || '')) : null;
  const latent=resolution ? {width:resolution[1],height:resolution[2]} : nodes.find(n=>n.id===edge?.fromNodeId && n.type==='EmptyLatentImage')?.values || {};
  // Prefer connected EmptyLatent; else CheckpointLoader width/height so panel edits survive without a latent node.
- const width=num(latent.width) ?? num(v.width); const height=num(latent.height) ?? num(v.height);
+ // ws-sizenode: a connected Empty Latent is the only size source (an empty field stays empty — no loader fallback).
+ const latentWired=!resolution && nodes.some(n=>n.id===edge?.fromNodeId && n.type==='EmptyLatentImage');
+ const width=latentWired?num(latent.width):(num(latent.width) ?? num(v.width)); const height=latentWired?num(latent.height):(num(latent.height) ?? num(v.height));
  return {checkpoint:v.ckpt_name ?? v.model_endpoint ?? v.model ?? '',targetProvider:(v.targetProvider || v.provider || ({FalAIEngineNode:'fal',ModelScopeNode:'modelscope',ModelScopeAiNode:'modelscope_ai',NanoGPTNode:'nanogpt',GoogleImagenNode:'gemini',ReplicateEngineNode:'replicate'} as any)[target?.type || ''] || '') as ComfyParameters['targetProvider'],
  seed:num(s.seed),seedControl:s.control_after_generate || 'fixed',steps:num(s.steps),cfg:num(s.cfg ?? s.guidance_scale),sampler:s.sampler_name,scheduler:s.scheduler,denoise:num(s.denoise) as number,width:width as number,height:height as number,batchSize:num(v.n ?? v.batch_size ?? v.batchSize ?? latent.batch_size) as number,loras:[],
  aspectRatio:v.aspect_ratio ?? v.aspectRatio,imageSize:v.image_size,size:v.size,outputFormat:v.output_format ?? v.outputFormat,watermark:typeof v.watermark==='boolean'?v.watermark:undefined,promptExtend:typeof v.prompt_extend==='boolean'?v.prompt_extend:undefined,resolution:v.resolution,customParameters:v.custom_parameters,hfProvider:v.hf_provider,shift:v.shift,randomSeed:v.random_seed,galleryImages:v.gallery_images,civitaiEngine:v.civitai_engine,civitaiEcosystem:v.civitai_ecosystem,civitaiModel:v.civitai_model,
@@ -45,7 +47,32 @@ export function patchInspectorBranchNode(n:NodeInstance,nodes:NodeInstance[],con
  if(n.type==='CheckpointLoaderSimple' && n.id!==checkpoint?.id)return n;
  if(n.type==='KSampler' && n.id!==targetId)return n;
  if(n.type==='EmptyLatentImage' && !connections.some(c=>c.fromNodeId===n.id && c.toNodeId===targetId && c.toSocketId==='latent_image'))return n;
- return patchInspectorNode(n,before,after);
+ const patched=patchInspectorNode(n,before,after);
+ // ws-sizenode: with a connected Empty Latent the board node is the only size source — never keep a second hidden copy on the loader.
+ if(patched.type==='CheckpointLoaderSimple' && connectedLatent(nodes,connections,targetId))return clearLoaderSize(patched);
+ return patched;
+}
+/** ws-sizenode: the non-bypassed EmptyLatentImage wired into targetId's latent_image socket, if any. */
+export function connectedLatent(nodes:NodeInstance[],connections:Connection[],targetId?:string):NodeInstance|undefined {
+ if(!targetId)return undefined;
+ const edge=connections.find(c=>c.toNodeId===targetId && c.toSocketId==='latent_image');
+ return nodes.find(n=>n.id===edge?.fromNodeId && n.type==='EmptyLatentImage' && !n.bypassed);
+}
+/** ws-sizenode: drop loader width/height (fallback-only fields) so the Empty Latent node is the single size source. */
+export function clearLoaderSize(n:NodeInstance):NodeInstance {
+ if(n.type!=='CheckpointLoaderSimple' || (n.values?.width===undefined && n.values?.height===undefined))return n;
+ const {width:_w,height:_h,...rest}=n.values||{};
+ return {...n,values:rest};
+}
+/** ws-sizenode: loaders feeding any sampler that this Empty Latent drives (used when the latent node itself is edited). */
+export function loadersFedByLatent(nodes:NodeInstance[],connections:Connection[],latentId:string):Set<string> {
+ const ids=new Set<string>();
+ for(const c of connections){
+  if(c.fromNodeId!==latentId || c.toSocketId!=='latent_image')continue;
+  const ck=modelCheckpoint(nodes,connections,c.toNodeId);
+  if(ck)ids.add(ck.id);
+ }
+ return ids;
 }
 export function patchSpatialParameters(f:SpatialFrame,p:ComfyParameters):SpatialFrame {
  return {...f,params:{...f.params,...p},...(!Object.is(f.params.videoDuration,p.videoDuration)?{videoDuration:undefined}:{}),...(!Object.is(f.params.videoFps,p.videoFps)?{videoFps:undefined}:{}),...(!Object.is(f.params.aspectRatio,p.aspectRatio)?{videoAspectRatio:undefined}:{})};

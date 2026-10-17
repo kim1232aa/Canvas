@@ -15,7 +15,7 @@ describe('fix11.1', () => {
     expect(s.right).toBeUndefined();
   });
 
-  it('#3 unrecorded size with no canvas value still shows 未发送 label text', () => {
+  it('#3 unrecorded size with no canvas value still has a non-blank cell (fix16: em dash, fold title carries 未发送)', () => {
     const size = formatHistorySize({
       width: { key: 'width', value: undefined, source: 'schema-unrecorded' },
       height: { key: 'height', value: undefined, source: 'schema-unrecorded' },
@@ -24,7 +24,9 @@ describe('fix11.1', () => {
     expect(size.text).toBe('');
     expect(historyParameterSourceLabel(size.source)).toBe('未发送（Schema 未记录）');
     const modal = read('../components/HistoryModal.tsx');
-    expect(modal).toContain("size.text || historyParameterSourceLabel(size.source)");
+    // fix16 #4: UnrecordedFold shows 「—」 instead of repeating the fold title as the cell.
+    expect(modal).toContain("return '—'");
+    expect(modal).toContain('history-unrecorded-group');
   });
 
   it('#1 preview placeholder portals above bottom chrome when occluded', () => {

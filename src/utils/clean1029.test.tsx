@@ -93,10 +93,11 @@ describe('clean-1029 #5 history 尺寸 unsupported chip readable', () => {
 });
 
 describe('clean-1029 #6 no 「将运行节点」 hover tip', () => {
-  it('TopBar run button title only carries a disabled reason', () => {
+  it('TopBar run button has no hover title covering the label; reason stays in status line', () => {
     const t = read('../components/TopBar.tsx');
     expect(t).not.toContain('将运行节点');
-    expect(t).toContain('title={runDisabledReason ? `当前不能运行：${runDisabledReason}` : undefined}');
+    expect(t).toContain('aria-describedby="studio-run-status"');
+    expect(t).not.toMatch(/data-testid="run-button"[^>]*title=/);
   });
 });
 

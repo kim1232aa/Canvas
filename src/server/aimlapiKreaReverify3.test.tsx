@@ -1,4 +1,4 @@
-// 2026-10-15 画布 round 3 (/workspace/canvas-e2e-aimlapi-krea-reverify3) fixes.
+// 2026-10-15 画布 round 3 (/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-aimlapi-krea-reverify3) fixes.
 import express from 'express';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';

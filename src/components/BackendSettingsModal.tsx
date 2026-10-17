@@ -75,6 +75,8 @@ interface BackendSettingsModalProps {
   onClose: () => void;
   apiKeys: ApiKeysState;
   onSaveKeys: (newKeys: ApiKeysState) => void;
+  /** When opening from missing-key toast: select this provider in the left list. */
+  initialProvider?: string;
   /** Open Model Hub for the active provider (empty popularModels CTA). */
   onOpenModelHub?: (providerId?: ProviderId) => void;
 }
@@ -84,6 +86,7 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
   onClose,
   apiKeys,
   onSaveKeys,
+  initialProvider,
   onOpenModelHub,
 }) => {
   const [keys, setKeys] = React.useState<ApiKeysState>(apiKeys);
@@ -170,6 +173,27 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
     setKeys(apiKeys);
     initialKeysRef.current = apiKeys;
   }, [apiKeys, isOpen]);
+
+  // Focus the provider that triggered "去 API 设置" (missing-key toast), else leave last tab.
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const id = String(initialProvider || '').trim().toLowerCase();
+    if (!id) return;
+    const known: ProviderId[] = [
+      'fal', 'gemini', 'openai_compat', 'grok_compat', 'agnes', 'sensenova', 'civitai',
+      'huggingface', 'modelscope', 'modelscope_ai', 'nanogpt', 'tensorart', 'muapi',
+      'wavespeed', 'krea', 'together', 'aimlapi', 'novita', 'venice', 'sogni',
+      'runware', 'modelslab', 'replicate',
+    ];
+    if (!known.includes(id as ProviderId)) return;
+    setActiveMainTab('providers');
+    setActiveProviderTab(id as ProviderId);
+    const t = window.setTimeout(() => {
+      const el = document.querySelector(`[data-provider-tab="${id}"]`) as HTMLElement | null;
+      el?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }, 0);
+    return () => window.clearTimeout(t);
+  }, [isOpen, initialProvider]);
 
   if (!isOpen) return null;
 
@@ -308,13 +332,13 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
     },
     {
       id: 'tensorart',
-      name: friendlyProviderLabel('tensorart'),
-      badge: '吐司 AI 模型中心',
-      docsUrl: 'https://tams-docs.tensor.art',
-      description: '底模/LoRA 走官方 TAMS（tams-api.tensor.art）：按模型 ID 查询、POST /v1/jobs（含 lora.items）。无全量目录 API。OpenWorks（ak_tensor_… Access Key）是独立服务商「Tensor.Art OpenWorks」：目录中的图像/视频模型按其上游 Schema 出图。',
-      apiUrl: 'https://tams-api.tensor.art/v1（模型 API）',
+      name: 'Tensor.Art OpenWorks',
+      badge: 'OpenWorks 真出图',
+      docsUrl: 'https://github.com/Tensor-Art/tensorart-skills/tree/master/skills/tensorart-generate',
+      description: '仅 OpenWorks 真出图：基址 openapi.tensor.art/openworks/v1（ak_tusi → openapi.tusiart.cn）。\n鉴权头 Echo-Access-Key；目录 POST /tool/list；创建 POST /task；轮询 POST /task/query。\n密钥填 ak_tensor_…（或 ak_tusi…）。画布选服务商「Tensor.Art OpenWorks」。\n已下线 TAMS 双轨入口，不再要求另配 Bearer。',
+      apiUrl: 'https://openapi.tensor.art/openworks/v1',
       keyName: 'tensorartKey',
-      keyPlaceholder: 'TAMS Bearer Key，或 OpenWorks ak_tensor_… Access Key（OpenWorks 服务商）',
+      keyPlaceholder: 'OpenWorks Access Key（ak_tensor_…；https://tensor.art/settings/access-key）',
       status: 'unconfigured',
       popularModels: [],
     },
@@ -738,6 +762,9 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
                 return (
                   <button
                     key={p.id}
+                    type="button"
+                    data-provider-tab={p.id}
+                    data-testid={p.id === activeProviderTab ? 'api-settings-active-provider' : undefined}
                     onClick={() => setActiveProviderTab(p.id)}
                     className={`w-full flex items-center justify-between p-2.5 rounded-xl text-left transition-all ${
                       isActive
@@ -794,7 +821,7 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
                       <ExternalLink className="w-3 h-3" />
                     </a>
                   </h3>
-                  <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                  <p className="text-xs text-slate-300 mt-1 leading-relaxed whitespace-pre-line space-y-0">
                     {currentProvider.description}
                   </p>
                 </div>
@@ -818,7 +845,10 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-[#111216] border border-[#252733] rounded-xl p-2.5 text-xs font-mono text-slate-300 flex flex-col justify-center">
                   <span className="text-slate-400 text-[10px]">接口基址 (API Endpoint):</span>
-                  <span className="text-cyan-400 font-semibold truncate mt-0.5">{currentProvider.apiUrl}</span>
+                  <span className="text-cyan-400 font-semibold break-all whitespace-normal mt-0.5" title={currentProvider.apiUrl}>{currentProvider.apiUrl}</span>
+                  {currentProvider.id === 'tensorart' && (
+                    <span className="text-[9px] text-slate-500 mt-1 leading-snug break-words [overflow-wrap:anywhere]">OpenWorks；密钥槽 tensorartKey 共用，画布选 openworks</span>
+                  )}
                 </div>
                 <div className="bg-[#111216] border border-[#252733] rounded-xl p-2.5 text-xs">
                   <span className="text-slate-400 text-[10px] block mb-1">模型目录:</span>
@@ -834,10 +864,11 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
                             onOpenModelHub?.(currentProvider.id);
                             onClose();
                           }}
-                          className="inline-flex items-center gap-1 rounded-lg border border-cyan-700/50 bg-cyan-950/40 px-2 py-1 text-[10px] font-semibold text-cyan-300 hover:bg-cyan-900/50"
+                          title={`打开模型中心 · ${currentProvider.name}`}
+                          className="inline-flex items-center gap-1 rounded-lg border border-cyan-700/50 bg-cyan-950/40 px-2 py-1 text-[10px] font-semibold text-cyan-300 hover:bg-cyan-900/50 whitespace-normal break-words text-left min-w-0 max-w-full [overflow-wrap:anywhere]"
                         >
-                          <Sparkles className="w-3 h-3" />
-                          打开模型中心 · {currentProvider.name}
+                          <Sparkles className="w-3 h-3 shrink-0" />
+                          <span className="min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]">打开模型中心 · {currentProvider.name}</span>
                         </button>
                         <span className="inline-flex items-center rounded-lg border border-slate-700 bg-[#0d0e12] px-2 py-1 text-[10px] text-slate-400">
                           或按 ID 粘贴到画布节点

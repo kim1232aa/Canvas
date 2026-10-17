@@ -4,7 +4,7 @@ import {
   parseTensorArtKeys,
   pickTamsBearerKey,
 } from './tensorArtCredentials';
-import { buildTensorModelJob } from './tensorModelApi';
+import { buildTensorModelJob, TENSOR_MODEL_API } from './tensorModelApi';
 
 describe('tensorArtCredentials', () => {
   it('parses comma / newline pools without inventing keys', () => {
@@ -62,5 +62,12 @@ describe('TAMS LoRA job mapping (official diffusion.lora.items)', () => {
         'bad'
       )
     ).toThrow(/接口名|模型 ID/);
+  });
+});
+
+describe('TAMS model API host (fix13)', () => {
+  it('defaults to ap-east-1.tensorart.cloud (not tams-api alone)', () => {
+    expect(TENSOR_MODEL_API).toBe('https://ap-east-1.tensorart.cloud');
+    expect(TENSOR_MODEL_API).not.toContain('tams-api.tensor.art');
   });
 });

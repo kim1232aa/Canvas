@@ -4,12 +4,32 @@ import { TensorArtDriver } from './TensorArtDriver';
 vi.mock('../../services/executionTrace', () => ({ tracedFetch: vi.fn() }));
 import { tracedFetch } from '../../services/executionTrace';
 
-describe('TensorArt model driver forwarding', () => {
-  it('forwards custom JSON without selecting a tool endpoint', async () => {
-    vi.mocked(tracedFetch).mockResolvedValue({ ok: true, json: async () => ({ imageUrl: '/api/media/a', historyItem: { id: 'a' } }) } as Response);
-    await new TensorArtDriver().generate({ model: '123', prompt: 'a', width: 512, height: 512, extraParams: { custom_parameters: { diffusion: { cfgScale: 0 } } } } as any, {});
-    const [url, options] = vi.mocked(tracedFetch).mock.calls.at(-1)!;
-    expect(url).toBe('/api/tensorart/generate');
-    expect(JSON.parse(options!.body as string).custom_parameters).toEqual({ diffusion: { cfgScale: 0 } });
+describe('TensorArt model driver', () => {
+  it('rejects with TAMS offline error without calling network, preserving provider failure', async () => {
+    const driver = new TensorArtDriver();
+    expect(driver.id).toBe('tensorart');
+
+    await expect(
+      driver.generate(
+        {
+          model: '123',
+          prompt: 'a',
+          width: 512,
+          height: 512,
+          extraParams: { custom_parameters: { diffusion: { cfgScale: 0 } } },
+        } as any,
+        {}
+      )
+    ).rejects.toThrow('Tensor.Art TAMS 出图入口已下线');
+
+    expect(tracedFetch).not.toHaveBeenCalled();
+  });
+
+  it('validates model is required before throwing offline error', async () => {
+    const driver = new TensorArtDriver();
+    await expect(
+      driver.generate({ prompt: 'test' } as any, {})
+    ).rejects.toThrow('模型为必填项');
   });
 });
+

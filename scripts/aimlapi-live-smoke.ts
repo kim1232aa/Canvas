@@ -9,7 +9,7 @@ const env = Object.fromEntries(
 );
 const KEYS = (env.AIMLAPI_KEY || '').split(',').map((s: string) => s.trim()).filter(Boolean);
 const KEY = KEYS[Number(process.env.AIMLAPI_KEY_INDEX || 0)] || '';
-const OUT = '/workspace/canvas-e2e-aimlapi';
+const OUT = '/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-aimlapi';
 fs.mkdirSync(OUT, { recursive: true });
 
 const app = express();

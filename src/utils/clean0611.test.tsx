@@ -1,4 +1,4 @@
-// 2026-10-15 画布 FE round clean-0611 (/workspace/canvas-e2e-clean-0611) → items 1, 2, 3, 5, 7 (+4, 6, 9, 10 helpers).
+// 2026-10-15 画布 FE round clean-0611 (/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-clean-0611) → items 1, 2, 3, 5, 7 (+4, 6, 9, 10 helpers).
 import express from 'express';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -111,7 +111,7 @@ describe('5 seed: toast and history card say the same thing from the same source
   it('sent 42, upstream returned none → identical sentence on both surfaces', () => {
     const toast = seedStatement(sentSeedFromActualRequest(actualRequest), null);
     const item: any = { id: 'h', url: '/media/x.png', requestMetadata: { actualRequest } };
-    expect(toast).toBe('种子 42（实际发送；上游未返回种子）');
+    expect(toast).toBe('种子 42（实际发送）。上游未返回种子');
     expect(historySeedStatement(item)).toBe(toast);
   });
   it('returned value is labelled 上游返回 and never confused with the sent value', () => {

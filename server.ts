@@ -61,6 +61,10 @@ setGlobalDispatcher(
   })
 );
 
+process.on('unhandledRejection', (reason) => {
+  console.error('[ComfyCanvas Studio] Unhandled Promise Rejection:', reason);
+});
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -88,6 +92,8 @@ const maskSecret = (key: string): string => {
 
 interface UpstreamMeta {
   provider: string;
+  /** Catalog / Schema reads sent as POST (e.g. OpenWorks /tool/list) — not a generation request. */
+  readOnly?: boolean;
   route: string; // this server's route (req.path)
   model?: string; // model actually sent upstream
   key?: string; // only its masked form is logged
@@ -138,8 +144,8 @@ async function upstreamFetch(meta: UpstreamMeta, url: string, init?: RequestInit
     if (trace) {
       const contentType = res.headers.get('content-type') || '';
       const responseBody = !res.ok || /json|text|event-stream/.test(contentType)
-        ? await res.clone().text() : `[${contentType || 'binary'}]`;
-      trace.traces.push({provider:meta.provider, model:meta.model, method:init?.method || 'GET', endpoint:sanitizeGenerationMetadata(url), requestBody:typeof init?.body==='string' ? sanitizeGenerationMetadata((()=>{try{return JSON.parse(init.body as string)}catch{return init.body}})()) : undefined, status:res.status, statusText:res.statusText, responseBody:meta.key?responseBody.split(meta.key).join('[credential redacted]'):responseBody,maskedKey:meta.key?maskSecret(meta.key):undefined, keyUsage:meta.key?keyPoolManager.describeKey(meta.provider, meta.key):undefined, durationMs:Date.now()-startedAt, startedAt:new Date(startedAt).toISOString()});
+        ? await res.clone().text().catch(() => '') : `[${contentType || 'binary'}]`;
+      trace.traces.push({provider:meta.provider, model:meta.model, ...(meta.readOnly?{readOnly:true}:{}), method:init?.method || 'GET', endpoint:sanitizeGenerationMetadata(url), requestBody:typeof init?.body==='string' ? sanitizeGenerationMetadata((()=>{try{return JSON.parse(init.body as string)}catch{return init.body}})()) : undefined, status:res.status, statusText:res.statusText, responseBody:meta.key?responseBody.split(meta.key).join('[credential redacted]'):responseBody,maskedKey:meta.key?maskSecret(meta.key):undefined, keyUsage:meta.key?keyPoolManager.describeKey(meta.provider, meta.key):undefined, durationMs:Date.now()-startedAt, startedAt:new Date(startedAt).toISOString()});
     }
     const provenance = generationContext.getStore();
     if (provenance && init?.method === 'POST' && typeof init.body === 'string' && !/\/tool\/list|\/task\/query|\/file\//.test(url)) {
@@ -153,7 +159,7 @@ async function upstreamFetch(meta: UpstreamMeta, url: string, init?: RequestInit
     return res;
   } catch (e: any) {
     if(receivedStatus!==undefined){e.status=receivedStatus;e.errorSource='upstream-protocol';}
-    generationContext.getStore()?.traces.push({provider:meta.provider,model:meta.model,endpoint:sanitizeGenerationMetadata(url),method:init?.method || 'GET',status:receivedStatus ?? null,keyUsage:meta.key?keyPoolManager.describeKey(meta.provider, meta.key):undefined,error:e?.message,stack:e?.stack,cause:e?.cause?{message:e.cause.message,code:e.cause.code}:undefined,durationMs:Date.now()-startedAt, startedAt:new Date(startedAt).toISOString()});
+    generationContext.getStore()?.traces.push({provider:meta.provider,model:meta.model,...(meta.readOnly?{readOnly:true}:{}),endpoint:sanitizeGenerationMetadata(url),method:init?.method || 'GET',status:receivedStatus ?? null,keyUsage:meta.key?keyPoolManager.describeKey(meta.provider, meta.key):undefined,error:e?.message,stack:e?.stack,cause:e?.cause?{message:e.cause.message,code:e.cause.code}:undefined,durationMs:Date.now()-startedAt, startedAt:new Date(startedAt).toISOString()});
     logUpstream(meta, upstream, receivedStatus ?? 0, startedAt, e?.message || String(e));
     throw e;
   }
@@ -548,6 +554,7 @@ const migrateStoredMedia = <T,>(label: string, file: string, items: T[]): T[] =>
 generationHistory = migrateStoredMedia('history', HISTORY_FILE, generationHistory);
 cloudProjects = migrateStoredMedia('projects', PROJECTS_FILE, cloudProjects);
 
+const TENSORART_KEY_ENV_SOURCE = (['TENSORART_API_KEY', 'TENSORART_KEY', 'TENSORART'] as const).find((n) => String(process.env[n] || '').trim()) || '';
 const defaultKeys: Record<string, string> = {
   muapiKey: process.env.MUAPI_KEY || '',
   wavespeedKey: process.env.WAVESPEED_KEY || '',
@@ -557,7 +564,9 @@ const defaultKeys: Record<string, string> = {
   aimlapiKey: process.env.AIMLAPI_KEY || '',
   novitaKey: process.env.NOVITA_API_KEY || '',
   veniceKey: process.env.VENICE_API_KEY || '',
+  // Traceable: TENSORART_KEY_ENV_SOURCE records which env name supplied the key (first non-empty of the chain).
   tensorartKey: process.env.TENSORART_API_KEY || process.env.TENSORART_KEY || process.env.TENSORART || '',
+  tensorartBaseUrl: process.env.TENSORART_BASE_URL || '',
   agnesKey: process.env.AGNES_API_KEY || process.env.AGNES_KEY || '',
   sensenovaKey: process.env.SENSENOVA_KEY || '',
   falKey: process.env.FAL_KEY || '',
@@ -1061,6 +1070,15 @@ const createGoogleGenAI = (apiKey?: string) => {
   };
 };
 
+/** Default ap-east-1; console / settings tensorartBaseUrl overrides (origin or …/v1). */
+function resolveTamsModelApiOrigin(): string {
+  const override = String(cloudSettings['tensorartBaseUrl'] || defaultKeys['tensorartBaseUrl'] || '')
+    .trim()
+    .replace(/\/+$/, '');
+  if (!override) return TENSOR_MODEL_API;
+  return override.replace(/\/v1$/i, '') || TENSOR_MODEL_API;
+}
+
 // Dedicated Real Live Model Detail Resolution for Tensor.Art / 吐司
 async function fetchTensorArtModelInfo(modelId: string, apiKey?: string) {
   const cleanId = tensorModelId(modelId);
@@ -1073,7 +1091,7 @@ async function fetchTensorArtModelInfo(modelId: string, apiKey?: string) {
       new Error(anyKey
         ? '当前配置的是 OpenWorks Access Key (ak_tensor_...)，不能用于 TAMS 模型 API 查询。画布模型查询需要 TAMS Bearer Key（可在 https://tams.tensor.art/app 获取）。'
         : '缺少 TAMS 模型 API Key'),
-      { status: 400, details: TAMS_BEARER_REQUIRED_HINT, exactEndpointCalled: `${TENSOR_MODEL_API}/v1/models/${cleanId}` }
+      { status: 400, details: TAMS_BEARER_REQUIRED_HINT, exactEndpointCalled: `${resolveTamsModelApiOrigin()}/v1/models/${cleanId}` }
     );
   }
   if (isOpenWorksAccessKey(key)) {
@@ -1084,7 +1102,7 @@ async function fetchTensorArtModelInfo(modelId: string, apiKey?: string) {
   }
   const response = await upstreamFetch(
     { provider: 'tensorart', route: 'model-info', model: cleanId, key },
-    `${TENSOR_MODEL_API}/v1/models/${cleanId}`,
+    `${resolveTamsModelApiOrigin()}/v1/models/${cleanId}`,
     { headers: { Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(15000) }
   );
   if (!response.ok) {
@@ -1123,6 +1141,24 @@ app.get('/api/civitai/models', handleCivitaiModels({ getSettings: () => cloudSet
 app.get('/api/huggingface/model-info', handleHuggingFaceModelInfo({ getSettings: () => cloudSettings, defaultKeys, upstreamFetch }));
 app.get('/api/tensorart/model-info', handleTensorArtModelInfo({ getSettings: () => cloudSettings, defaultKeys, upstreamFetch }));
 app.get('/api/credential-presence', handleCredentialPresence({ getSettings: () => cloudSettings, defaultKeys, upstreamFetch }));
+
+/** cleanup-2026-10-17: per-provider configured:true/false only — NEVER returns key material.
+ * Driven by POOL_KEY_FIELDS (same pool the generate routes use). Client-supplied keys arrive as the usual x-*-key / x-*-token headers.
+ * Display names are resolved on the client via friendlyProviderLabel — this endpoint only reports ids + configured. */
+app.get('/api/provider-key-status', (req, res) => {
+  const headerFor = (prov: string): string => {
+    if (prov === 'huggingface') return 'x-hf-token';
+    if (prov === 'modelscope') return 'x-modelscope-token';
+    if (prov === 'modelscope_ai') return 'x-modelscope-ai-token';
+    return `x-${prov.replace(/_/g, '-')}-key`;
+  };
+  const providers: Record<string, { configured: boolean }> = {};
+  for (const prov of Object.keys(POOL_KEY_FIELDS)) {
+    const custom = String(req.headers[headerFor(prov)] || '').trim();
+    providers[prov] = { configured: Boolean(keyPoolManager.getNextKey(prov, custom || undefined)) };
+  }
+  res.json({ providers });
+});
 app.get('/api/civitai/model/:id', handleCivitaiModelDetail({ getSettings: () => cloudSettings, defaultKeys, upstreamFetch }));
 app.get(['/api/civitai/model-version/:id', '/api/civitai/model-version'], handleCivitaiModelVersion({ getSettings: () => cloudSettings, defaultKeys, upstreamFetch }));
 
@@ -1455,7 +1491,7 @@ function extractModelMetadata(
 // ==========================================
 // 1.5. Dynamic Model List Pulling (Direct from Original APIs)
 // ==========================================
-const openWorks = registerOpenWorksRoutes(app as any,{fetch:upstreamFetch as any,resolveKey:(req)=>{const h=String(req.headers['x-openworks-key']||req.headers['x-tensorart-key']||'').trim();if(h)return h;return [...keyPoolManager.getKeys('tensorart'),...parseTensorArtKeys(String(defaultKeys.tensorartKey||'')),...parseTensorArtKeys(String(cloudSettings['tensorartKey']||''))].map((k:any)=>String(typeof k==='string'?k:k?.key||'').trim()).find((k:string)=>isOpenWorksAccessKey(k)||k.startsWith('ak_tusi'))||'';},record:recordHistoryItem,durable:requireDurableHistoryMediaUrl});
+const openWorks = registerOpenWorksRoutes(app as any,{fetch:upstreamFetch as any,resolveKey:(req)=>{const h=String(req.headers['x-openworks-key']||req.headers['x-tensorart-key']||'').trim();if(h)return h;return [...keyPoolManager.getKeys('tensorart'),...parseTensorArtKeys(String(defaultKeys.tensorartKey||'')),...parseTensorArtKeys(String(cloudSettings['tensorartKey']||''))].map((k:any)=>String(typeof k==='string'?k:k?.key||'').trim()).find((k:string)=>isOpenWorksAccessKey(k)||k.startsWith('ak_tusi'))||'';},keySource:(req)=>{const h=String(req.headers['x-openworks-key']||req.headers['x-tensorart-key']||'').trim();if(h)return req.headers['x-openworks-key']?'请求头 x-openworks-key':'请求头 x-tensorart-key（设置页 tensorartKey 槽）';const pick=(k:any)=>{const s=String(typeof k==='string'?k:k?.key||'').trim();return isOpenWorksAccessKey(s)||s.startsWith('ak_tusi');};if(keyPoolManager.getKeys('tensorart').some(pick)){const pooled=keyPoolManager.getKeys('tensorart').map((k:any)=>String(typeof k==='string'?k:k?.key||'').trim()).find((s:string)=>pick(s));const envKeys=parseTensorArtKeys(String(defaultKeys.tensorartKey||''));const ei=pooled?envKeys.indexOf(pooled):-1;return ei>=0?`Key 池 tensorart（env ${TENSORART_KEY_ENV_SOURCE||'TENSORART_*'} 第 ${ei+1}/${envKeys.length} 个）`:'Key 池 tensorart（设置页）';}if(parseTensorArtKeys(String(defaultKeys.tensorartKey||'')).some(pick))return `env ${TENSORART_KEY_ENV_SOURCE||'TENSORART_*'}`;return '设置文件 tensorartKey';},record:recordHistoryItem,durable:requireDurableHistoryMediaUrl});
 registerSchemaProviderRoutes(app,{fetch:upstreamFetch,key:(p,k)=>keyPoolManager.getNextKey(p,k),record:recordHistoryItem,durable:requireDurableHistoryMediaUrl,traces:()=>generationContext.getStore()?.traces || []});
 
 app.get('/api/model-schema', async (req,res)=>{
@@ -2420,7 +2456,7 @@ app.get("/api/models", async (req, res) => {
         try {
           const numericSearch = searchStr.match(/(?:^|\/models\/)(\d{10,25})(?:$|[/?#])/);
           const taCatalog = numericSearch
-            ? {items:[await fetchTensorArtModelInfo(numericSearch[1],resolveTensorArtKey(req))],nextCursor:null,sourceUrl:TENSOR_MODEL_API}
+            ? {items:[await fetchTensorArtModelInfo(numericSearch[1],resolveTensorArtKey(req))],nextCursor:null,sourceUrl:resolveTamsModelApiOrigin()}
             : {items:[],nextCursor:null,sourceUrl:'https://tams-docs.tensor.art/docs/api/guide/integration-faq/'};
           const taItems=taCatalog.items;
           const filteredTensorItems = taItems.filter((m:any)=> (!searchStr || numericSearch || `${m.name} ${m.baseModel}`.toLowerCase().includes(searchStr.toLowerCase())) && (!archFilter || archFilter==='all' || m.baseModel.toLowerCase().includes(archFilter.toLowerCase())));
@@ -4099,6 +4135,7 @@ function resolveTamsBearerKey(req: express.Request): string {
   );
 }
 
+
 app.post(['/api/tensorart/generate', '/api/engine/tensorart/generate'], async (req, res) => {
   req.setTimeout(180000);
   res.setTimeout(180000);
@@ -4113,76 +4150,14 @@ app.post(['/api/tensorart/generate', '/api/engine/tensorart/generate'], async (r
       });
     }
 
-    // Model IDs use the TAMS Model API for diffusion workflows (Checkpoint + KSampler + LoRA).
-    // Tools have their own explicit namespace (/openworks/v1/task) and never stand in for a model.
+    // 2026-10-17 产品改口：Tensor.Art 只保留 OpenWorks 真出图；本路由不再执行 TAMS /v1/jobs。
     const requestedModelOrTool = String(req.body.toolName || req.body.model || '').trim();
-    const isNumericModelId = /^\d{10,25}$/.test(requestedModelOrTool) || /^https:\/\/(?:www\.)?(?:tensor\.art|tusiart\.com)\/models\/\d{10,25}/.test(requestedModelOrTool);
-    const isModelJob = !req.body.toolName && isNumericModelId;
-
-    if (isModelJob) {
-      const tamsKey = resolveTamsBearerKey(req);
-      if (!tamsKey || isOpenWorksAccessKey(tamsKey)) {
-        return res.status(400).json({
-          error: '当前配置的是 Tensor.Art OpenWorks Access Key (ak_tensor_...)，不能用于 TAMS 模型 API。',
-          details: TAMS_BEARER_REQUIRED_HINT,
-          credentialHint: '模型 API 使用 TAMS Bearer Key；OpenWorks ak_tensor Access Key 不代表模型 API 授权',
-          requestedModel: requestedModelOrTool,
-          exactEndpointCalled: `${TENSOR_MODEL_API}/v1/models/${requestedModelOrTool}`,
-        });
-      }
-      if (rejectUnsupported(res, 'Tensor.Art 模型 API（当前文生图路由）', req.body, ['image_url', 'ratio', 'size', 'resolution', 'duration', 'inputs'])) return;
-      let payload;
-      try { payload = buildTensorModelJob(req.body, crypto.randomUUID()); }
-      catch (error: any) { return res.status(400).json({error:error.message}); }
-      const modelId = payload.stages[1].diffusion!.sdModel;
-      const apiKey = tamsKey;
-      const headers = {Authorization:`Bearer ${apiKey}`, 'Content-Type':'application/json'};
-      const metadata = await upstreamFetch({provider:'tensorart', route:req.path, model:modelId, key:apiKey}, `${TENSOR_MODEL_API}/v1/models/${modelId}`, {headers});
-      if (!metadata.ok) return res.status(metadata.status).json({error:`Tensor.Art 模型 API 鉴权 / 模型查询失败 [${metadata.status}]`, details:await metadata.text(), exactEndpointCalled:`${TENSOR_MODEL_API}/v1/models/${modelId}`, requestedModel:modelId, credentialHint:'模型 API 使用 TAMS Bearer Key；OpenWorks ak_tensor Access Key 不代表模型 API 授权'});
-      const checkpoint = (await metadata.json()).model;
-      if (checkpoint?.modelType !== 'CHECKPOINT') return res.status(400).json({error:'所选模型不是 CHECKPOINT，不能作为底模', model:checkpoint});
-      try {validateTensorModelDimensions(payload.stages[1].diffusion!,checkpoint.baseModel);} catch(error:any) {return res.status(400).json({error:error.message});}
-      for (const lora of payload.stages[1].diffusion!.lora?.items ?? []) {
-        const lookup = await upstreamFetch({provider:'tensorart',route:req.path,model:lora.loraModel,key:apiKey},`${TENSOR_MODEL_API}/v1/models/${lora.loraModel}`,{headers});
-        if (!lookup.ok) return res.status(lookup.status).json({error:`Tensor.Art LoRA 查询失败 [${lookup.status}]`, details:await lookup.text()});
-        const adapter = (await lookup.json()).model;
-        if (!['LORA','LOCON','LYCORIS','DORA'].includes(adapter?.modelType)) return res.status(400).json({error:`${lora.loraModel} 不是 LoRA 模型`, model:adapter});
-        if (!checkpoint.baseModel || !adapter.baseModel) return res.status(400).json({error:'未能核实底模与 LoRA 架构，缺少 baseModel'});
-        if (checkpoint.baseModel !== adapter.baseModel) return res.status(400).json({error:`LoRA 架构不匹配：底模 ${checkpoint.baseModel} / LoRA ${adapter.baseModel}`});
-      }
-      const submitted = await upstreamFetch({provider:'tensorart',route:req.path,model:modelId,key:apiKey},`${TENSOR_MODEL_API}/v1/jobs`,{method:'POST',headers,body:JSON.stringify(payload)});
-      if (!submitted.ok) return res.status(submitted.status).json({error:`Tensor.Art 模型任务提交失败 [${submitted.status}]`, details:await submitted.text()});
-      const accepted = await submitted.json();
-      const taskId = accepted.job?.id;
-      if (!taskId) return res.status(502).json({error:'Tensor.Art 未返回 job.id',details:accepted});
-      let job = accepted.job;
-      for (let attempt=0; attempt<75 && !['SUCCESS','FAILED','CANCELED'].includes(job.status); attempt++) {
-        await new Promise(r=>setTimeout(r,2000));
-        const polled = await upstreamFetch({provider:'tensorart',route:req.path,model:modelId,key:apiKey},`${TENSOR_MODEL_API}/v1/jobs/${taskId}`,{headers});
-        if (!polled.ok) return res.status(polled.status).json({error:`Tensor.Art 模型任务查询失败 [${polled.status}]`,details:await polled.text(),taskId});
-        job = (await polled.json()).job;
-        if (!job) return res.status(502).json({error:'Tensor.Art 查询缺少 job',taskId});
-      }
-      if (job.status !== 'SUCCESS') return res.status(job.status==='FAILED'||job.status==='CANCELED'?502:504).json({error:`Tensor.Art 任务 ${job.status}`,details:job,taskId});
-      const actualDiffusion = payload.stages[1].diffusion!;
-      const actualInitialize = payload.stages[0].inputInitialize!;
-      keyPoolManager.recordResult('tensorart',apiKey,true,Date.now()-startTime);
-      return await respondWithGeneratedImages(res, job.successInfo?.images || [], {
-        prompt: actualDiffusion.prompts?.[0]?.text ?? req.body.prompt,
-        negativePrompt: actualDiffusion.negativePrompts?.[0]?.text,
-        provider: 'Tensor.Art (模型 API)', model: modelId, actualModel: modelId,
-        seed: actualInitialize.seed !== undefined ? Number(actualInitialize.seed) : null,
-        steps: actualDiffusion.steps ?? null, cfg: actualDiffusion.cfgScale ?? null,
-        loras: (actualDiffusion.lora?.items ?? []).map((l:any)=>({name:l.loraModel,strength:l.weight})),
-        requestMetadata: { requestedParameters: sanitizeGenerationMetadata(req.body), customParameters: req.body.custom_parameters, actualParameters: payload },
-      }, { label: 'Tensor.Art 模型 API', response: { provider:'Tensor.Art (模型 API)',actualProvider:'Tensor.Art (模型 API)',model:modelId,actualModel:modelId,requestedModel:req.body.model,taskId,exactEndpointCalled:`${TENSOR_MODEL_API}/v1/jobs` } });
-    }
-
-    // OpenWorks generation is the generic schema provider `openworks` (src/server/openWorksProvider.ts, POST /api/schema-provider/openworks/submit).
-    // This route only serves TAMS model jobs; a non-TAMS id is never re-routed here.
-    return res.status(400).json({
-      error: `Tensor.Art 模型 API 只接受 TAMS 数字模型 ID（收到 ${requestedModelOrTool || '(空)'}）。OpenWorks 模型请在模型中心选择「Tensor.Art OpenWorks」服务商。未出站，本地拦截。`,
-      errorSource: 'local', requestedModel: requestedModelOrTool,
+    return res.status(410).json({
+      error: 'Tensor.Art TAMS 出图入口已下线。请在底模选服务商「Tensor.Art OpenWorks」，走 /api/schema-provider/openworks/submit → 官方 POST https://openapi.tensor.art/openworks/v1/task（Echo-Access-Key / ak_tensor_…）。未出站，本地拦截。',
+      errorSource: 'local',
+      requestedModel: requestedModelOrTool,
+      openWorksSubmit: '/api/schema-provider/openworks/submit',
+      docsUrl: 'https://github.com/Tensor-Art/tensorart-skills/tree/master/skills/tensorart-generate',
     });
   } catch (error: any) {
     return res.status(500).json({ error: `Tensor.Art 请求异常: ${error.message}` });
@@ -4683,24 +4658,27 @@ app.post(
       // cfg / denoise / image_url: 仍 400（不在本项范围）。
 
 
-      const requestedSite = (
-        req.body.site ||
-        req.headers['x-modelscope-site'] ||
-        (req.originalUrl.includes('modelscope_ai') ? 'ai' : 'cn')
-      )
-        .toString()
-        .toLowerCase();
-      const isAiSite = requestedSite === 'ai';
-
+      // Site is bound to the route (CN vs AI). Never mix CN Token into AI (or the reverse).
+      const routeIsAi = /modelscope_ai/.test(String(req.originalUrl || req.path || ''));
+      const headerSite = String(req.headers['x-modelscope-site'] || req.body?.site || '').toLowerCase();
+      if (headerSite && ((routeIsAi && headerSite === 'cn') || (!routeIsAi && headerSite === 'ai'))) {
+        return res.status(400).json({
+          error: `魔搭站点冲突：路由为 ${routeIsAi ? '国际站 modelscope_ai' : '国内站 modelscope'}，但请求标注 site=${headerSite}；CN 与 AI 令牌/域名隔离，未出站。`,
+          errorSource: 'local',
+        });
+      }
+      const isAiSite = routeIsAi;
       const poolName = isAiSite ? 'modelscope_ai' : 'modelscope';
+      // AI: only x-modelscope-ai-token / modelscope_ai pool. CN: only x-modelscope-token. No cross-fallback.
       const headerToken = isAiSite
-        ? (req.headers['x-modelscope-ai-token'] as string) || (req.headers['x-modelscope-token'] as string)
+        ? (req.headers['x-modelscope-ai-token'] as string)
         : (req.headers['x-modelscope-token'] as string);
       const token = keyPoolManager.getNextKey(poolName, headerToken || undefined) || '';
 
       if (!token) {
         return res.status(400).json({
           error: `未配置魔搭${isAiSite ? '国际站 (modelscope.ai)' : '国内站 (modelscope.cn)'} Token，请在右上角设置中填写您的 API Token。`,
+          errorSource: 'local',
         });
       }
 
@@ -4754,6 +4732,17 @@ app.post(
             details: errorText,
             model,
             provider: isAiSite ? 'ModelScope AI' : 'ModelScope CN',
+            actualRequest: {
+              endpoint: `${primaryDomain}/images/generations`,
+              parameters: msPayload,
+            },
+            requestMetadata: {
+              actualParameters: msPayload,
+              schemaFields: msSchemaFields,
+              parameterMappings,
+              parameterOmissions: msOmissions,
+              upstreamEndpoint: `${primaryDomain}/images/generations`,
+            },
           });
         }
       } catch (e: any) {
@@ -5477,13 +5466,25 @@ async function testSingleProviderKey(
       };
     }
 
-    if (prov === 'tensorart') {
-      if (!singleKey) return {maskedKey,status:'error',latency:0,message:'未配置 Tensor.Art API Key'};
-      if (singleKey.startsWith('ak_')) {
-        const entries = await openWorks.catalog({ path: '/api/cloud-keys/test' } as any, singleKey);
-        return {maskedKey,status:'ok',latency:Date.now()-startTime,message:`Tensor.Art OpenWorks API 鉴权成功：目录返回 ${entries.length} 个条目；该 Key 不代表 TAMS 模型 API 已鉴权`};
+    if (prov === 'tensorart' || prov === 'openworks') {
+      if (!singleKey) return {maskedKey,status:'error',latency:0,message:'未配置 Tensor.Art OpenWorks Access Key（ak_tensor_…）'};
+      if (!(isOpenWorksAccessKey(singleKey) || singleKey.startsWith('ak_'))) {
+        return {maskedKey,status:'error',latency:0,message:'本产品 Tensor.Art 仅 OpenWorks：请填 ak_tensor_… / ak_tusi…（Echo-Access-Key）。非 OpenWorks Key 不会当作 TAMS Bearer 使用。'};
       }
-      return {maskedKey,status:'unsupported',latency:0,message:`${NO_READONLY_TEST}（TAMS 官方无不带模型 ID 的只读账户探针接口；请在模型中心输入任意 TAMS 模型数字 ID 查询以验证密钥）`};
+      const base = singleKey.startsWith('ak_tusi') ? 'https://openapi.tusiart.cn/openworks/v1' : 'https://openapi.tensor.art/openworks/v1';
+      const resp = await upstreamFetch(
+        { provider: 'openworks', route: routePath, model: 'catalog', key: singleKey },
+        `${base}/tool/list`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json', 'Echo-Access-Key': singleKey }, body: '{}' }
+      );
+      const latency = Date.now() - startTime;
+      const raw = await resp.text().catch(() => '');
+      let count = 0;
+      try { const j = JSON.parse(raw); count = Array.isArray(j?.data?.tools) ? j.data.tools.length : 0; } catch { /* raw */ }
+      if (resp.ok && (raw.includes('"code":"0"') || raw.includes('"code":0'))) {
+        return {maskedKey,status:'ok',latency,message:`OpenWorks 目录连通（POST ${base}/tool/list；${count} 个工具）`};
+      }
+      return {maskedKey,status:resp.status===429?'rate_limited':'error',latency,message:`OpenWorks 鉴权/目录失败 [${resp.status}]: ${raw.slice(0,300)}`};
     }
 
     if (prov === 'replicate') {
@@ -5828,20 +5829,15 @@ app.post('/api/cloud-keys/balances', requireAdminAuth, checkSecFetchSite, async 
       }
     })(),
 
-    // Tensor.Art
+    // Tensor.Art = OpenWorks only（密钥槽 tensorartKey / ak_tensor_…）
     (async () => {
-      const taKey = keyPoolManager.getNextKey('tensorart');
-      if (taKey) {
-        try {
-          if (taKey.startsWith('ak_')) {
-            const entries = await openWorks.catalog({ path: '/api/cloud-keys/balances' } as any, taKey);
-            balances.tensorart = { status: 'ok', detail: `Tensor.Art OpenWorks API 已鉴权（目录 ${entries.length} 个条目）；不代表 TAMS 模型 API 可用` };
-          } else {
-            balances.tensorart = { status: 'unknown', detail: 'TAMS Bearer Key 已配置（官方无不带模型 ID 的余额或账户探针接口，请在模型中心按模型 ID 查询或出图确认）' };
-          }
-        } catch (e: any) {
-          balances.tensorart = { status: 'error', detail: e.message };
-        }
+      const taKeys = keyPoolManager.getKeys('tensorart');
+      const hasOw = taKeys.some((k) => isOpenWorksAccessKey(k) || String(k).startsWith('ak_'))
+        || isOpenWorksAccessKey(String(defaultKeys.tensorartKey || ''))
+        || isOpenWorksAccessKey(String(cloudSettings['tensorartKey'] || ''));
+      if (hasOw) {
+        balances.tensorart = { status: 'unknown', detail: 'OpenWorks Access Key 已配置（官方无独立余额接口；以 /tool/list 连通与出图为准）' };
+        balances.openworks = { status: 'unknown', detail: '与 tensorartKey 共用；画布选「Tensor.Art OpenWorks」' };
       }
     })(),
 
@@ -5905,8 +5901,68 @@ app.post('/api/cloud-keys/balances', requireAdminAuth, checkSecFetchSite, async 
 // ==========================================
 // 8. Execution History (Server-Persisted)
 // ==========================================
-app.get('/api/history', (_req, res) => {
-  return res.json(generationHistory);
+/** List payload: drop workflowSnapshot + bulky traces/raw bodies so opening History does not ship multi‑MB JSON. */
+function slimHistoryForList(item: any) {
+  if (!item || typeof item !== 'object') return item;
+  const {
+    workflowSnapshot,
+    stack,
+    upstreamResponseBody,
+    ...rest
+  } = item;
+  const md = rest.requestMetadata && typeof rest.requestMetadata === 'object' ? rest.requestMetadata : undefined;
+  if (!md) {
+    return {
+      ...rest,
+      hasWorkflowSnapshot: !!workflowSnapshot,
+      hasStack: typeof stack === 'string' && stack.length > 0,
+      hasUpstreamResponseBody: upstreamResponseBody != null && upstreamResponseBody !== '',
+    };
+  }
+  const {
+    executionTrace,
+    submissions,
+    submit,
+    poll,
+    persistence,
+    ...mdRest
+  } = md as any;
+  return {
+    ...rest,
+    hasWorkflowSnapshot: !!workflowSnapshot,
+    hasStack: typeof stack === 'string' && stack.length > 0,
+    hasUpstreamResponseBody: upstreamResponseBody != null && upstreamResponseBody !== '',
+    requestMetadata: {
+      ...mdRest,
+      // Keep actualRequest for seed/prompt chips; omit poll/submit/trace blobs from the list.
+      actualRequest: md.actualRequest,
+      route: md.route,
+      hasExecutionTrace: Array.isArray(executionTrace) && executionTrace.length > 0,
+    },
+  };
+}
+
+app.get('/api/history', (req, res) => {
+  const rawLimit = req.query.limit;
+  const rawOffset = req.query.offset;
+  const wantsPage = rawLimit != null || rawOffset != null || String(req.query.format || '') === 'page';
+  const full = String(req.query.full || '') === '1';
+  const total = generationHistory.length;
+  if (!wantsPage) {
+    // Default: full chronology, slim records (no workflowSnapshot dump).
+    return res.json(full ? generationHistory : generationHistory.map(slimHistoryForList));
+  }
+  const limit = Math.min(100, Math.max(1, parseInt(String(rawLimit ?? '40'), 10) || 40));
+  const offset = Math.max(0, parseInt(String(rawOffset ?? '0'), 10) || 0);
+  const slice = generationHistory.slice(offset, offset + limit);
+  const items = full ? slice : slice.map(slimHistoryForList);
+  return res.json({ items, total, limit, offset, hasMore: offset + items.length < total });
+});
+
+app.get('/api/history/:id', (req, res) => {
+  const item = generationHistory.find((h: any) => h && h.id === req.params.id);
+  if (!item) return res.status(404).json({ error: '未找到该历史记录', errorSource: 'local' });
+  return res.json(item);
 });
 
 const MAX_HISTORY_ITEM_BYTES = 500 * 1024; // 500KB
@@ -6348,6 +6404,28 @@ async function startServer() {
       res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
     });
   }
+
+  // Global Express JSON error middleware - replaces default HTML error page, returns structured error without swallowing
+  app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    if (res.headersSent) {
+      console.error('[ComfyCanvas Studio] Error after headers sent:', err);
+      return res.end();
+    }
+    const status = Number.isInteger(err?.status) && err.status >= 400 && err.status <= 599
+      ? err.status
+      : Number.isInteger(err?.statusCode) && err.statusCode >= 400 && err.statusCode <= 599
+      ? err.statusCode
+      : 500;
+    const errorSource = err?.errorSource || (err?.rawResponse ? 'upstream' : 'local');
+    const payload: Record<string, any> = {
+      error: err?.message || '服务器内部异常',
+      errorSource,
+    };
+    if (err?.stack) payload.stack = err.stack;
+    if (err?.details !== undefined) payload.details = err.details;
+    if (err?.rawResponse !== undefined) payload.rawResponse = err.rawResponse;
+    res.status(status).json(payload);
+  });
 
   const HOST = '127.0.0.1';
   app.listen(PORT, process.argv.includes('--host') ? process.argv[process.argv.indexOf('--host')+1] : '127.0.0.1', () => {

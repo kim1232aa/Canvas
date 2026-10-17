@@ -41,8 +41,8 @@ export const CANVAS_TO_SCHEMA_ALIASES: Record<string, string[]> = {
   seed: ['seed'],
   // image_size {width,height} object (e.g. AIMLAPI) receives canvas width/height.
   // size "W*H" string (e.g. WaveSpeed z-image / flux-dev-lora) also receives canvas width/height (server packs them).
-  width: ['width', 'image_size', 'size'],
-  height: ['height', 'image_size', 'size'],
+  width: ['width', 'image_size', 'size', 'image width'],
+  height: ['height', 'image_size', 'size', 'image height'],
   size: ['size'],
   negative_prompt: ['negative_prompt', 'negativePrompt'],
   image_url: ['image', 'image_url'],
@@ -81,6 +81,16 @@ export function isSchemaDrivenProvider(provider: string | undefined | null): boo
  * frontend LoRA architecture gate, so it is not in SCHEMA_DRIVEN.
  */
 const SCHEMA_SCOPED_BADGES = new Set([...SCHEMA_DRIVEN, 'replicate']);
+/**
+ * videoschema-2026-10-17: providers whose GET /api/model-schema returns the endpoint's official machine-readable
+ * input Schema (fal: OpenAPI per endpoint_id). Loaded into the Schema cache on model selection so video duration /
+ * aspect_ratio controls follow the selected endpoint. Does NOT turn on send badges for these providers.
+ */
+const SCHEMA_FETCH_ONLY = new Set(['fal']);
+export function hasModelSchemaFetch(provider: string | undefined | null): boolean {
+  const p = String(provider || '').toLowerCase().trim();
+  return SCHEMA_SCOPED_BADGES.has(p) || SCHEMA_FETCH_ONLY.has(p);
+}
 export function hasSchemaSendBadges(provider: string | undefined | null): boolean {
   return SCHEMA_SCOPED_BADGES.has(String(provider || '').toLowerCase().trim());
 }
@@ -145,5 +155,9 @@ export function isSchemaOmitCandidate(
 
   // Hard rule: without Schema evidence, do not claim omission.
   if (!declared || declared.size === 0) return false;
+  // OpenWorks live extras (雁 2026-10-17): seed/steps/cfg/neg/loras are appended as named inputs even when catalog omits them.
+  if (String(provider || '').toLowerCase().trim() === 'openworks' && ['seed', 'steps', 'cfg', 'cfg_scale', 'negative_prompt', 'loras', 'styles'].includes(field)) {
+    return false;
+  }
   return !canvasFieldMatchesSchema(field, declared);
 }

@@ -175,3 +175,52 @@ describe('Replicate flat input envelope (same generic nest rule)', () => {
     expect(r.seed).toMatchObject({ value: 9, source: 'sent' });
   });
 });
+
+
+describe('aspect_ratio-only endpoint: canvas width/height → 该端点不支持 · 未发送', () => {
+  const schemaProps = ['prompt', 'seed', 'num_inference_steps', 'guidance', 'aspect_ratio', 'lora_weights'];
+
+  it('local_blocked: user-set width/height are unsupported (not plain 未发送); size row stays 未发送 via aspect_ratio alias', () => {
+    const blocked: any = {
+      id: 'ar-only-blocked', status: 'local_blocked', provider: 'replicate',
+      model: 'black-forest-labs/flux-dev-lora', url: '', timestamp: 1,
+      requestMetadata: {
+        intendedRequest: {
+          model: 'black-forest-labs/flux-dev-lora',
+          width: 1024, height: 768, steps: 28, cfg: 3, seed: 7,
+          negative_prompt: 'blurry',
+          custom_parameters: { _canvas: { schemaProperties: schemaProps } },
+        },
+      },
+    };
+    const r = resolveHistoryParameters(blocked);
+    expect(r.width.source).toBe('unsupported');
+    expect(r.height.source).toBe('unsupported');
+    expect(historyParameterSourceLabel(r.width.source)).toBe('该端点不支持 · 未发送');
+    expect(historyParameterSourceLabel(r.height.source)).toBe('该端点不支持 · 未发送');
+    expect(historyParameterSourceLabel(r.width.source)).not.toBe('未发送');
+    // size row: Schema lists aspect_ratio ⇒ unfilled ratio is plain 未发送 (fix5), not folded into unsupported
+    expect(r.size.source).toBe('not-sent');
+    expect(historyParameterSourceLabel(r.size.source)).toBe('未发送');
+  });
+
+  it('failed outbound: sent aspect_ratio → size 实际发送; requested width/height still unsupported', () => {
+    const sent: any = {
+      id: 'ar-only-sent', status: 'failed', provider: 'replicate',
+      model: 'black-forest-labs/flux-dev-lora', url: '', timestamp: 1,
+      requestMetadata: {
+        schemaFields: schemaProps,
+        actualRequest: {
+          input: { prompt: 'p', seed: 7, num_inference_steps: 28, guidance: 3, aspect_ratio: '16:9' },
+        },
+        requestedParameters: { width: 1024, height: 576 },
+      },
+    };
+    const r = resolveHistoryParameters(sent);
+    expect(r.size).toMatchObject({ value: '16:9', source: 'sent' });
+    expect(historyParameterSourceLabel(r.size.source)).toBe('实际发送');
+    expect(r.width.source).toBe('unsupported');
+    expect(r.height.source).toBe('unsupported');
+    expect(historyParameterSourceLabel(r.width.source)).toBe('该端点不支持 · 未发送');
+  });
+});

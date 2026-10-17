@@ -140,7 +140,8 @@ describe('clean-0942 real App: explicit model selections', () => {
     expect($('[data-testid="model-chain-issue"]')?.textContent).toContain('底模连线断开');
     expect($('[data-testid="node-model-chain-break"]')?.textContent).toBe($('[data-testid="model-chain-issue"]')?.textContent);
     expect(runButton().disabled).toBe(true);
-    expect(runButton().title).toContain('底模连线断开');
+    expect(runButton().getAttribute('aria-describedby')).toBe('studio-run-status');
+    expect(document.getElementById('studio-run-status')?.textContent).toContain('底模连线断开');
     expect(calls.filter((u) => /\/api\/(model-schema|models)\b/.test(u))).toEqual([]);
   });
 });

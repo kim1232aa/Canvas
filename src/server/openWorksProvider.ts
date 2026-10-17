@@ -19,23 +19,17 @@ export const openWorksBaseUrl = (key: string) =>
   String(key || '').trim().startsWith('ak_tusi') ? 'https://openapi.tusiart.cn/openworks/v1' : 'https://openapi.tensor.art/openworks/v1';
 
 /**
- * Canvas generic params that need live-probe proof (upstream accepted AND output changed) before they may be sent.
- * Source: 画布 live probe /workspace/canvas-e2e-tensorart-probe/README.md (2026-10-15 02:39–02:50 UTC+8).
- * verdict 'ignored' = upstream returned 200 without error but the output did not follow the value (same seed twice → different sha256).
- * Models without an entry have no probe → blocked as unproven.
+ * Live-tested extras (雁 2026-10-17): OpenWorks photoreal_studio_z_image accepts named
+ * checkpoint/seed/steps/cfg/negative/LoRA (id+weight) appended after catalog inputs.
+ * Evidence: docs/evidence/openworks-recipe-969797570538788432-2026-10-17 (case2),
+ * openworks-recipe-1053306608244813366 / 985238099300763019, openworks-lora-probe,
+ * openworks-lora-seed-compare. TAMS field shapes used as reference for names.
+ * History records these as 实际发送 (mapping sent:true); do not claim upstream applied them beyond live image diffs.
  */
-type ProbeVerdict = { verdict: 'accepted'; evidence: string } | { verdict: 'rejected' | 'ignored'; upstreamText: string; evidence: string };
-const IGNORED_200 = '{"code":"0", "message":"", "data":{"task":{"id":"1055407922068083655", "userId":"1048822696747526210", "status":"WAITING", "toolName":"photoreal_studio_z_image", "outputs":[]}}}';
-const ignored = (evidence: string): ProbeVerdict => ({ verdict: 'ignored', upstreamText: IGNORED_200, evidence });
-export const OPENWORKS_PROBE_RESULTS: Record<string, Record<string, ProbeVerdict>> = {
-  photoreal_studio_z_image: {
-    seed: ignored('seed=42 两次（positional 21-B/101-B2，named 30-C/106-C2）输出 sha256 各不相同 → 上游忽略'),
-    steps: ignored('steps=8 named（30-C）：上游 200，task/query 未回显，输出无可验证变化'),
-    cfg: ignored('cfg=1.5 named（30-C）：上游 200，task/query 未回显，输出无可验证变化'),
-    loras: ignored('loras named（30-C）与顶层（45-D）：上游 200，未回显，静默忽略'),
-  },
-};
-export const PROBE_GATED_FIELDS = ['loras', 'seed', 'steps', 'cfg'] as const;
+export const OPENWORKS_LIVE_EXTRAS = ['seed', 'steps', 'cfg', 'negative_prompt', 'loras', 'checkpoint', 'clip_skip'] as const;
+/** @deprecated retained for tests that still import the symbol; no longer gates sends. */
+export const OPENWORKS_PROBE_RESULTS: Record<string, Record<string, { verdict: string; evidence?: string; upstreamText?: string }>> = {};
+export const PROBE_GATED_FIELDS = [] as const;
 
 const isFilled = (v: unknown) => v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && v.length === 0) && !(typeof v === 'number' && Number.isNaN(v));
 
@@ -106,30 +100,42 @@ function typeError(key: string, spec: any, v: unknown): string | null {
 export type OpenWorksMapping = { from: string; to: string | null; value: unknown; sent: boolean; reason?: string };
 
 /**
- * Generic Schema request: canvas fields + custom_parameters JSON → positional {type,value}[] for POST /task.
- * - custom JSON keys must be Schema property names (else local 400; positional wire cannot carry unknown keys).
- * - canvas fields go to a property only when its name equals the field or a CANVAS_TO_SCHEMA_ALIASES alias (same table as badges).
- * - loras/seed/steps/cfg are sent only with live-probe proof (OPENWORKS_PROBE_RESULTS); else local 400.
+ * Catalog Schema fields (positional) + live-tested named extras (雁 2026-10-17).
+ * Wire body for POST /task is { toolName, inputs } where inputs = catalog order first, then named extras
+ * matching probe case2 (seed/steps/cfg/cfg_scale/clip_skip/checkpoint/model/sdModel/loras…/negative_prompt).
+ * custom JSON keys still must be Schema property names (else local 400).
+ * History: mapping sent:true + flat fields on parameters (seed/steps/cfg/loras/…) for 实际发送 chips;
+ * upstream fetch uses only { toolName, inputs } (see registerOpenWorksRoutes).
  */
+export type OpenWorksBuildOk = {
+  ok: true;
+  parameters: {
+    toolName: string;
+    inputs: Array<{ type: string; name?: string; value: unknown }>;
+    prompt?: string;
+    width?: number;
+    height?: number;
+    seed?: number;
+    steps?: number;
+    cfg?: number;
+    negative_prompt?: string;
+    checkpoint?: string;
+    clip_skip?: number;
+    loras?: Array<{ name: string; strength: number }>;
+  };
+  wire: { toolName: string; inputs: Array<{ type: string; name?: string; value: unknown }> };
+  mapping: OpenWorksMapping[];
+  /** Tool Schema property names + canvas names actually sent (incl. live extras) — history uses this to tell 实际发送 from 该端点不支持. */
+  schemaFields: string[];
+};
 export function buildOpenWorksRequest(model: string, inputSchema: ReturnType<typeof openWorksInputSchema>, body: any):
-  { ok: true; parameters: { toolName: string; inputs: Array<{ type: string; value: unknown }> }; mapping: OpenWorksMapping[] } | { ok: false; error: string; mapping: OpenWorksMapping[] } {
+  OpenWorksBuildOk | { ok: false; error: string; mapping: OpenWorksMapping[] } {
   const props = inputSchema.properties;
   const mapping: OpenWorksMapping[] = [];
   const values: Record<string, unknown> = {};
   const custom = { ...(body?.custom_parameters && typeof body.custom_parameters === 'object' ? body.custom_parameters : {}) };
   delete custom._canvas;
   const errors: string[] = [];
-
-  for (const field of PROBE_GATED_FIELDS) {
-    const v = body?.[field];
-    if (!isFilled(v)) continue;
-    const probe = OPENWORKS_PROBE_RESULTS[model]?.[field];
-    if (probe?.verdict === 'rejected') errors.push(`${field}：上游拒绝，原文「${probe.upstreamText}」`);
-    else if (probe?.verdict === 'ignored') errors.push(`${field}：实测上游不报错但不生效（${probe.evidence}；上游原文「${probe.upstreamText}」）`);
-    else if (probe?.verdict !== 'accepted') errors.push(`${field}：该模型没有「上游接受且出图变化」的实测结果（/workspace/canvas-e2e-tensorart-probe/ 未覆盖），不会发送`);
-    mapping.push({ from: field, to: null, value: v, sent: false, reason: '未经实测证实，本地拦截' });
-  }
-  if (errors.length) return { ok: false, error: `OpenWorks 模型 ${model}：${errors.join('；')}。未出站，本地拦截。请清空这些字段后重试。`, mapping };
 
   for (const [k, v] of Object.entries(custom)) {
     if (!Object.hasOwn(props, k)) { errors.push(`JSON 字段「${k}」不在该模型 Schema 中`); continue; }
@@ -140,7 +146,11 @@ export function buildOpenWorksRequest(model: string, inputSchema: ReturnType<typ
     const v = body?.[field];
     if (!isFilled(v)) continue;
     const target = [field, ...(CANVAS_TO_SCHEMA_ALIASES[field] || [])].find((n) => Object.hasOwn(props, n));
-    if (!target) { mapping.push({ from: field, to: null, value: v, sent: false, reason: '该模型 Schema 未声明对应字段，不会发送' }); continue; }
+    if (!target) {
+      // negative_prompt may still go as a named live extra below when Schema omits it
+      if (field !== 'negative_prompt') mapping.push({ from: field, to: null, value: v, sent: false, reason: '该模型 Schema 未声明对应字段，不会发送' });
+      continue;
+    }
     if (Object.hasOwn(values, target)) { mapping.push({ from: field, to: target, value: v, sent: false, reason: 'JSON 已显式填写同名字段' }); continue; }
     values[target] = v; mapping.push({ from: field, to: target, value: v, sent: true });
   }
@@ -151,12 +161,100 @@ export function buildOpenWorksRequest(model: string, inputSchema: ReturnType<typ
   if (missing.length) return { ok: false, error: `OpenWorks 模型 ${model} 的 Schema 必填项没有取值：${missing.map((k) => `「${k}」`).join('、')}（不会用空串/null 占位）。请在 API 参数 JSON 中按 Schema 字段名填写。未出站，本地拦截。`, mapping };
   for (const [k, spec] of ordered) { const e = typeError(k, spec, values[k]); if (e) errors.push(e); }
   if (errors.length) return { ok: false, error: `OpenWorks 模型 ${model}：${errors.join('；')}。未出站，本地拦截。`, mapping };
-  return { ok: true, parameters: { toolName: model, inputs: ordered.map(([k, spec]: any) => ({ type: spec['x-openworks-type'], value: values[k] })) }, mapping };
+
+  const inputs: Array<{ type: string; name?: string; value: unknown }> = ordered.map(([k, spec]: any) => ({ type: spec['x-openworks-type'], value: values[k] }));
+  const flat: Record<string, unknown> = {};
+
+  const pushNamed = (from: string, name: string, type: string, value: unknown) => {
+    if (!isFilled(value)) return;
+    inputs.push({ type, name, value });
+    mapping.push({ from, to: name, value, sent: true, reason: 'live-tested named extra (雁 2026-10-17)' });
+  };
+
+  const seed = body?.seed;
+  if (isFilled(seed)) {
+    const n = Number(seed);
+    if (Number.isFinite(n)) { pushNamed('seed', 'seed', 'INTEGER', Math.trunc(n)); flat.seed = Math.trunc(n); }
+  }
+  const steps = body?.steps;
+  if (isFilled(steps)) {
+    const n = Number(steps);
+    if (Number.isFinite(n)) { pushNamed('steps', 'steps', 'INTEGER', Math.trunc(n)); flat.steps = Math.trunc(n); }
+  }
+  const cfg = body?.cfg ?? body?.cfg_scale;
+  if (isFilled(cfg)) {
+    const n = Number(cfg);
+    if (Number.isFinite(n)) {
+      pushNamed('cfg', 'cfg', 'NUMBER', n);
+      pushNamed('cfg', 'cfg_scale', 'NUMBER', n);
+      flat.cfg = n;
+    }
+  }
+  const clipSkip = body?.clip_skip ?? body?.clipSkip ?? custom.clip_skip;
+  if (isFilled(clipSkip)) {
+    const n = Number(clipSkip);
+    if (Number.isFinite(n)) { pushNamed('clip_skip', 'clip_skip', 'INTEGER', Math.trunc(n)); flat.clip_skip = Math.trunc(n); }
+  }
+  // Checkpoint id is NOT body.model (that is the OpenWorks toolName). Accept TAMS-shaped aliases.
+  const ckpt = body?.checkpoint ?? body?.sdModel ?? body?.sd_model ?? custom.checkpoint ?? custom.sdModel;
+  if (isFilled(ckpt)) {
+    const id = String(ckpt).trim();
+    pushNamed('checkpoint', 'checkpoint', 'STRING', id);
+    pushNamed('checkpoint', 'model', 'STRING', id);
+    pushNamed('checkpoint', 'sdModel', 'STRING', id);
+    flat.checkpoint = id;
+  }
+  const neg = body?.negative_prompt ?? body?.negativePrompt;
+  const negDeclared = [...(CANVAS_TO_SCHEMA_ALIASES.negative_prompt || []), 'negative_prompt'].some((n) => Object.hasOwn(props, n));
+  if (isFilled(neg) && !negDeclared) {
+    pushNamed('negative_prompt', 'negative_prompt', 'STRING', String(neg));
+    flat.negative_prompt = String(neg);
+  }
+
+  const rawLoras = Array.isArray(body?.loras) ? body.loras : [];
+  const loraItems: Array<{ name: string; strength: number }> = [];
+  for (const l of rawLoras) {
+    if (!l || typeof l !== 'object') continue;
+    const id = String((l as any).name || (l as any).id || (l as any).loraModel || (l as any).path || (l as any).model || '').trim();
+    if (!id) continue;
+    const wRaw = (l as any).strength ?? (l as any).weight ?? (l as any).scale ?? 1;
+    const w = Number(wRaw);
+    const weight = Number.isFinite(w) ? w : 1;
+    loraItems.push({ name: id, strength: weight });
+  }
+  if (loraItems.length) {
+    const primary = loraItems[0];
+    const ids = loraItems.map((x) => x.name).join(',');
+    pushNamed('loras', 'loras', 'STRING', ids);
+    pushNamed('loras', 'image_loras', 'STRING', ids);
+    pushNamed('loras', 'lora', 'STRING', primary.name);
+    pushNamed('loras', 'lora_id', 'STRING', primary.name);
+    pushNamed('loras', 'lora_weight', 'NUMBER', primary.strength);
+    pushNamed('loras', 'weight', 'NUMBER', primary.strength);
+    const itemsJson = JSON.stringify(loraItems.map((x) => ({ loraModel: x.name, weight: x.strength })));
+    pushNamed('loras', 'diffusion.lora.items', 'STRING', itemsJson);
+    pushNamed('loras', 'lora_items', 'STRING', itemsJson);
+    flat.loras = loraItems;
+  }
+
+  // Flat prompt/size for history cards + apply-to-canvas (positional inputs alone leave item.prompt empty).
+  const promptSent = mapping.find((m) => m.from === 'prompt' && m.sent && typeof m.value === 'string');
+  if (promptSent) flat.prompt = promptSent.value;
+  const wSent = mapping.find((m) => m.from === 'width' && m.sent);
+  const hSent = mapping.find((m) => m.from === 'height' && m.sent);
+  if (wSent && Number.isFinite(Number(wSent.value))) flat.width = Number(wSent.value);
+  if (hSent && Number.isFinite(Number(hSent.value))) flat.height = Number(hSent.value);
+
+  const schemaFields = [...new Set([...Object.keys(props), ...mapping.filter((m) => m.sent && !m.from.startsWith('custom_parameters.')).map((m) => m.from)])];
+  const parameters = { toolName: model, inputs, ...flat } as OpenWorksBuildOk['parameters'];
+  return { ok: true, parameters, wire: { toolName: model, inputs }, mapping, schemaFields };
 }
 
 type Deps = {
   fetch: (meta: any, url: string, init?: any) => Promise<Response>;
   resolveKey: (req: express.Request) => string;
+  /** Where the key came from (e.g. 「env TENSORART_API_KEY」, 「请求头 x-tensorart-key（设置页 tensorartKey）」). Recorded, never the secret. */
+  keySource?: (req: express.Request) => string;
   durable: (url: string) => Promise<any>;
   record: (item: any) => Promise<any>;
 };
@@ -167,13 +265,14 @@ export function registerOpenWorksRoutes(app: express.Express, dep: Deps) {
   const keyOf = (req: express.Request) => {
     const key = dep.resolveKey(req);
     if (!key) throw Object.assign(new Error('未配置 Tensor.Art OpenWorks Access Key（ak_tensor_… / ak_tusi…）'), { status: 400, errorSource: 'local' });
+    if (/[\s,;]/.test(key)) throw Object.assign(new Error(`Tensor.Art OpenWorks Key 含多个值（逗号/分号/空白分隔，共 ${key.split(/[\s,;]+/).filter(Boolean).length} 个）；Echo-Access-Key 只能放一个，不会替你挑。请在设置页只填一个 ak_tensor_…。未出站，本地拦截。`), { status: 400, errorSource: 'local' });
     if (!isOpenWorksAccessKey(key) && !key.startsWith('ak_tusi')) throw Object.assign(new Error('当前 Tensor.Art Key 不是 OpenWorks Access Key（ak_tensor_… / ak_tusi…）；TAMS Bearer Key 不能用于 OpenWorks。未出站，本地拦截。'), { status: 400, errorSource: 'local' });
     return key;
   };
   const catalog = async (req: express.Request, key: string) => {
     const hit = cache.get(key);
     if (hit && hit.expiry > Date.now()) return hit.data;
-    const r = await dep.fetch({ provider: OPENWORKS_PROVIDER, route: req.path, model: 'catalog', key }, `${openWorksBaseUrl(key)}/tool/list`,
+    const r = await dep.fetch({ provider: OPENWORKS_PROVIDER, route: req.path, model: 'catalog', key, readOnly: true }, `${openWorksBaseUrl(key)}/tool/list`,
       { method: 'POST', headers: { 'Content-Type': 'application/json', 'Echo-Access-Key': key }, body: '{}', signal: AbortSignal.timeout(15000) });
     const data = parseOpenWorksCatalog(r.status, await r.text());
     cache.set(key, { data, expiry: Date.now() + 120000 });
@@ -202,15 +301,18 @@ export function registerOpenWorksRoutes(app: express.Express, dep: Deps) {
       const def = await definition(req, key, model);
       const built = buildOpenWorksRequest(model, def.inputSchema, req.body || {});
       if (!built.ok) return res.status(400).json({ error: built.error, errorSource: 'local', mapping: built.mapping, inputSchema: def.inputSchema });
-      actualRequest = { endpoint: def.endpoint, parameters: built.parameters, mapping: built.mapping };
+      const masked = `${key.slice(0, 10)}…${key.slice(-4)}`;
+      actualRequest = { endpoint: def.endpoint, parameters: built.parameters, mapping: built.mapping, schemaFields: built.schemaFields, credential: `tensorartKey · ${dep.keySource ? dep.keySource(req) : '未知来源'} · ${masked}` };
       const r = await dep.fetch({ provider: OPENWORKS_PROVIDER, route: req.path, model, key }, def.endpoint,
-        { method: 'POST', headers: { 'Content-Type': 'application/json', 'Echo-Access-Key': key }, body: JSON.stringify(built.parameters) });
+        { method: 'POST', headers: { 'Content-Type': 'application/json', 'Echo-Access-Key': key }, body: JSON.stringify(built.wire) });
       const raw = await r.text();
       let data: any; try { data = JSON.parse(raw); } catch { /* raw */ }
       if (!r.ok || !data || (data.code !== '0' && data.code !== 0)) return res.status(r.ok ? 502 : r.status).json({ error: `Tensor.Art OpenWorks /task HTTP ${r.status}: ${raw}`, errorSource: 'upstream', upstreamStatus: r.status, rawResponse: raw, actualRequest });
       const taskId = String(data.data?.task?.id || data.data?.taskId || '');
       if (!taskId) return res.status(502).json({ error: `Tensor.Art OpenWorks /task 未返回任务 ID: ${raw}`, errorSource: 'upstream', rawResponse: raw, actualRequest });
       tasks.set(taskId, { key, model, mediaKind: def.mediaKind as 'image' | 'video' });
+      // Upstream task id (data.data.task.id verbatim) for the history card's 参数与排错 fold.
+      actualRequest.upstreamTaskId = taskId;
       res.json({ taskId, pollUrl: `/api/schema-provider/openworks/tasks/${encodeURIComponent(taskId)}`, actualRequest, inputSchema: def.inputSchema, rawResponse: data });
     } catch (e: any) { if (actualRequest) e.actualRequest = actualRequest; fail(res, e); }
   });

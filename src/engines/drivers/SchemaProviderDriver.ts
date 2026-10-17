@@ -158,6 +158,8 @@ export class SchemaProviderDriver extends BaseEngineDriver {
       resolution: extra.resolution,
       output_format: extra.output_format,
       loras: params.loras,
+      checkpoint: extra.checkpoint ?? extra.sdModel ?? custom.checkpoint ?? custom.sdModel,
+      clip_skip: extra.clip_skip ?? extra.clipSkip ?? custom.clip_skip,
       custom_parameters: custom,
       workflowSnapshot,
     };
@@ -193,8 +195,11 @@ export class SchemaProviderDriver extends BaseEngineDriver {
         if (!mediaUrl) throw new Error(`${this.name} task ${taskId} reported ${status} without a media URL; response body: ${JSON.stringify(pollBody)}`);
         const actualRequest:any=submitted.actualRequest;
         const sent:any=this.id==='sogni'?actualRequest?.parameters?.input?.steps?.[0]?.arguments:this.id==='novita'?actualRequest?.parameters?.request:actualRequest?.parameters;
-        const sentLoras=this.id==='sogni'?(sent?.loras || []).map((name:string,index:number)=>({name,strength:sent?.loraStrengths?.[index]})):(sent?.styles || sent?.loras || sent?.lora_list || sent?.model_id || (sent?.lora_url?[{path:sent.lora_url,scale:sent.lora_weight}]:[])).map((l:any)=>typeof l==='string'?{name:l}:{...l,name:l.path || l.model || l.model_name || l.id,strength:l.scale ?? l.weight ?? l.strength});
-        const metadata={model:params.model,actualModel:params.model,prompt:sent?.prompt,negativePrompt:sent?.negative_prompt ?? sent?.negativePrompt,seed:typeof sent?.seed==='number' && sent.seed>=0?sent.seed:null,steps:sent?.num_inference_steps ?? sent?.steps ?? null,cfg:sent?.guidance_scale ?? sent?.guidance ?? sent?.cfg_scale ?? sent?.cfg ?? null,loras:sentLoras,workflowSnapshot,requestMetadata:{actualRequest,submit:submitBody,poll:pollBody}};
+        const sentLoras=this.id==='sogni'?(sent?.loras || []).map((name:string,index:number)=>({name,strength:sent?.loraStrengths?.[index]})):(sent?.styles || sent?.loras || sent?.lora_list || sent?.model_id || (sent?.lora_url?[{path:sent.lora_url,scale:sent.lora_weight}]:[])).map((l:any)=>typeof l==='string'?{name:l}:{...l,name:l.name || l.path || l.model || l.model_name || l.id,strength:l.scale ?? l.weight ?? l.strength});
+        const owPrompt=(()=>{if(typeof sent?.prompt==='string'&&sent.prompt.trim())return sent.prompt;const map=Array.isArray(actualRequest?.mapping)?actualRequest.mapping:[];const mp=map.find((m:any)=>m?.from==='prompt'&&m?.sent&&typeof m.value==='string');if(mp)return mp.value;const inputs=Array.isArray(sent?.inputs)?sent.inputs:[];const first=inputs.find((x:any)=>x&&(x.type==='STRING'||typeof x.value==='string')&&(x.name==null||x.name==='prompt'));return typeof first?.value==='string'?first.value:undefined;})();
+        const owWidth=typeof sent?.width==='number'?sent.width:(Array.isArray(sent?.inputs)?Number(sent.inputs.filter((x:any)=>x&&!x.name&&(x.type==='INTEGER'||typeof x.value==='number'))[0]?.value):undefined);
+        const owHeight=typeof sent?.height==='number'?sent.height:(Array.isArray(sent?.inputs)?Number(sent.inputs.filter((x:any)=>x&&!x.name&&(x.type==='INTEGER'||typeof x.value==='number'))[1]?.value):undefined);
+        const metadata={model:params.model,actualModel:params.model,prompt:owPrompt,negativePrompt:sent?.negative_prompt ?? sent?.negativePrompt,seed:typeof sent?.seed==='number' && sent.seed>=0?sent.seed:null,steps:sent?.num_inference_steps ?? sent?.steps ?? null,cfg:sent?.guidance_scale ?? sent?.guidance ?? sent?.cfg_scale ?? sent?.cfg ?? null,width:Number.isFinite(owWidth)?owWidth:null,height:Number.isFinite(owHeight)?owHeight:null,loras:sentLoras,workflowSnapshot,requestMetadata:{actualRequest,submit:submitBody,poll:pollBody}};
         let saved:any;let historyWarning:string|undefined;
         try {
           const saveResponse=await request(`/api/schema-provider/${this.id}/save-result`,{method:'POST',headers,body:JSON.stringify({taskId,outputs,metadata,workflowSnapshot})},`${this.name} output persistence`);

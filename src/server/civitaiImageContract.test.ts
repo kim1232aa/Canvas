@@ -40,14 +40,18 @@ describe('Civitai resource identity', () => {
 });
 
 describe('Civitai image request contract', () => {
-  it('accepts the exported ZImage preset without rewriting the API resource AIR', async () => {
+  it('accepts the standard civitai t2i preset engine selectors without requiring a historical AIR', async () => {
     const { WORKFLOW_PRESETS } = await import('../constants/presets');
     const { extractWorkflowParameters } = await import('../utils/graphEngine');
-    const preset = WORKFLOW_PRESETS.find(p => p.id === 'civitai-129705858-zimage-asianmix')!;
+    const preset = WORKFLOW_PRESETS.find(p => p.id === 'std-civitai-t2i')!;
+    expect(preset).toBeTruthy();
     const params = extractWorkflowParameters(preset.nodes, preset.connections);
-    const resource = 'urn:air:zimageturbo:lycoris:civitai:2328130@2920318';
-    const input = await buildCivitaiImageInput({ model: params.checkpointModel, prompt: params.positivePrompt, engine: params.civitaiEngine, ecosystem: params.civitaiEcosystem, comfyModel: params.civitaiModel, loras: params.loras }, async () => new Response(JSON.stringify({ id: 2920318, modelId: 2328130, baseModel: 'ZImageTurbo', model: { type: 'LoCon' }, air: resource })));
-    expect(input).toMatchObject({ engine: 'sdcpp', ecosystem: 'zImage', model: 'turbo', loras: { [resource]: 0.8 } });
+    expect(params.targetProvider).toBe('civitai');
+    expect(params.civitaiEngine).toBe('comfy');
+    expect(params.civitaiEcosystem).toBe('krea2');
+    expect(params.checkpointModel).toBe('turbo');
+    const input = await buildCivitaiImageInput({ model: params.checkpointModel, prompt: params.positivePrompt || '填入配方/用户指定', engine: params.civitaiEngine, ecosystem: params.civitaiEcosystem, comfyModel: params.civitaiModel || 'turbo', loras: [] }, api({}));
+    expect(input).toMatchObject({ engine: 'comfy', ecosystem: 'krea2', model: 'turbo' });
   });
   it('rejects clearly typed adapters or embeddings as a traditional base model', async () => {
     for (const type of ['lora', 'lycoris', 'locon', 'embedding', 'vae', 'controlnet', 'upscaler']) {

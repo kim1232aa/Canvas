@@ -49,7 +49,7 @@ replace("const adminToken = process.env.CANVAS_ADMIN_TOKEN?.trim();", "if (curre
 removeRange('// Persistent Storage Directories', '// Cloud Canvas Project Schema');
 replace("import { createMediaStore } from './src/server/mediaStore.ts';\n", '');
 removeRange('// MEDIA-STORE-BEGIN', '// MEDIA-STORE-END', `const externalizeMedia = async <T,>(value: T): Promise<T> => currentRequest().store.persistMedia(value);\n`);
-removeRange('// Helper methods to read/write JSON files safely', 'const defaultKeys:');
+removeRange('// Helper methods to read/write JSON files safely', 'const TENSORART_KEY_ENV_SOURCE');
 source = source.replaceAll('cloudSettings', 'currentSettings()');
 // Preserve the full HTTP body and classify a failed durable media copy as a
 // storage-stage failure, while retaining the actual media-fetch source/status.

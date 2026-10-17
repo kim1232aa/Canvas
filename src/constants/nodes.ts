@@ -39,9 +39,6 @@ export interface BaseModelOption {
 
 export const BASE_MODELS: BaseModelOption[] = [
   // Tensor model IDs verified from the official model pages this run. Catalog and manual input are open-ended.
-  {label:'🎨 [Tensor 模型] WAI-illustrious v17 · 990778216270553015',value:'990778216270553015',provider:'tensorart',category:'checkpoint'},
-  {label:'🎨 [Tensor 模型] Z-Image-Turbo FP8 · 936101665537308499',value:'936101665537308499',provider:'tensorart',category:'checkpoint'},
-  {label:'🎨 [Tensor 模型] Krea-2 Turbo · 1015578945501842388',value:'1015578945501842388',provider:'tensorart',category:'checkpoint'},
 
   // ===================== MODELSCOPE (CN/AI) =====================
   { label: '🇨🇳 [魔搭] Tongyi-MAI Z-Image-Turbo (API Token)', value: 'Tongyi-MAI/Z-Image-Turbo', provider: 'modelscope', category: 'checkpoint' },
@@ -114,7 +111,6 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
         options: [
           { label: '🤗 Hugging Face Inference / Space', value: 'huggingface' },
           { label: '🌟 Civitai 官方原生引擎', value: 'civitai' },
-          { label: '🎨 Tensor.Art 模型 API（TAMS）', value: 'tensorart' },
           { label: '⚡ Fal.ai 极速云引擎', value: 'fal' },
           { label: '🇨🇳 魔搭 CN (modelscope.cn 国内站)', value: 'modelscope' },
           { label: '🌐 魔搭 AI (modelscope.ai 国际站)', value: 'modelscope_ai' },
@@ -166,7 +162,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
 
   LoRALoader: {
     type: 'LoRALoader',
-    title: 'Load LoRA (Civitai / Local)',
+    title: '加载 LoRA',
     category: 'loaders',
     colorTag: '#a855f7',
     description: 'Applies fine-tuned LoRA weights onto MODEL and CLIP with customizable strengths.',
@@ -437,7 +433,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
   // ===================== LATENT =====================
   EmptyLatentImage: {
     type: 'EmptyLatentImage',
-    title: 'Empty Latent Image',
+    title: '尺寸（空潜空间）',
     category: 'latent',
     colorTag: '#b347ff',
     description: 'Creates a blank latent tensor space with specified dimensions and batch size.',
@@ -990,7 +986,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
       { name: 'num_frames', label: 'Wan 帧数 (81–100)', type: 'number', default: '', min: 81, max: 100, step: 1 },
       {
         name: 'duration',
-        label: '视频时长 (duration)',
+        label: '视频时长（秒）',
         type: 'number',
         default: '',
         step: 1,

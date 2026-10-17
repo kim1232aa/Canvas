@@ -216,13 +216,16 @@ import { falImageFieldGate } from './falImageContract';
 import { buildModelScopeLoras } from '../schemas/modelScopeLoras';
 import { buildModelScopeImagePayload } from './modelScopeImageContract';
 import { buildTensorModelJob, tamsVideoUnsupported } from '../schemas/tensorModelApi';
-import { buildOpenWorksRequest, openWorksInputSchema, openWorksCatalogItems, parseOpenWorksCatalog, OPENWORKS_PROBE_RESULTS } from './openWorksProvider';
+import { buildOpenWorksRequest, openWorksInputSchema, openWorksMediaKind, openWorksCatalogItems, parseOpenWorksCatalog, OPENWORKS_PROBE_RESULTS } from './openWorksProvider';
 import { schemaSendStatus } from '../utils/schemaSendStatus';
+import { schemaChoiceFields } from '../components/SchemaChoiceControls';
 import { buildNanoImagePayload } from '../schemas/nanoImageApi';
 import { buildCivitaiImageRequest } from './civitaiImageContract';
 import { ModelScopeDriver } from '../engines/drivers/ModelScopeDriver';
 
 const serverSrc = readFileSync(path.resolve(__dirname, '../../server.ts'), 'utf8');
+const videoRouteSrc = readFileSync(path.resolve(__dirname, './routes/videoGenerateRoute.ts'), 'utf8');
+const routeWiringSrc = serverSrc + '\n' + videoRouteSrc;
 const unsupportedLabel = (p: any, model: string, f: any) => getFieldSpec(p, model, f)?.status === 'unsupported';
 
 describe('provider contract (16): schema-route providers', () => {
@@ -421,9 +424,9 @@ describe('provider contract (16): builder / route-handler providers', () => {
     expect(() => falImageFieldGate('fal-ai/flux/schnell', {}, [{ path: 'a', scale: 1 }])).toThrow(/没有 loras/);
     // route wiring: gate is used, auth header is Key, upstream errors pass text verbatim
     expect(serverSrc).toContain('falGate = falImageFieldGate(endpoint,');
-    expect(serverSrc.match(/'Authorization': `Key \$\{falKey\}`/g)?.length).toBeGreaterThanOrEqual(2);
-    expect(serverSrc).not.toMatch(/Authorization['"]?: `Bearer \$\{falKey\}`/);
-    expect(serverSrc).toContain('`Fal.ai 接口执行失败 [${response.status}]: ${errorText}`');
+    expect(routeWiringSrc.match(/'Authorization': `Key \$\{falKey\}`/g)?.length).toBeGreaterThanOrEqual(2);
+    expect(routeWiringSrc).not.toMatch(/Authorization['"]?: `Bearer \$\{falKey\}`/);
+    expect(routeWiringSrc).toContain('`Fal.ai 接口执行失败 [${response.status}]: ${errorText}`');
   });
 
   it('ModelScope: steps/guidance(cfg)/seed/size WxH sent; LoRA map 0.6/0.4 ok, 0.6/0.6 rejected (no normalize); video rejected locally', async () => {
@@ -438,7 +441,7 @@ describe('provider contract (16): builder / route-handler providers', () => {
     expect(buildModelScopeImagePayload(bodies[0]).payload).toMatchObject({ size: '1024x768', guidance: 3.5, steps: 6, seed: 42 });
     expect(buildModelScopeLoras(bodies[0].loras)).toEqual({ 'o/a': 0.6, 'o/b': 0.4 });
     expect(() => buildModelScopeLoras([{ path: 'o/a', strength: 0.6 }, { path: 'o/b', strength: 0.6 }])).toThrow(/恰好为 1.0/);
-    expect(serverSrc).toContain('ModelScope API-Inference 当前没有已接入的视频生成接口');
+    expect(videoRouteSrc).toContain('ModelScope API-Inference 当前没有已接入的视频生成接口');
   });
 
   it('HuggingFace standard: seed/steps/cfg/size declared; LoRA refused unless explicit fal-ai route', () => {
@@ -465,7 +468,7 @@ describe('provider contract (16): builder / route-handler providers', () => {
     expect(() => buildTensorModelJob({ model: '600000000000000001', prompt: 'x', width: 1000, height: 768 }, 'r2')).toThrow(/64/);
     expect(tamsVideoUnsupported('600000000000000001')).toMatch(/没有通用视频生成接口/);
     expect(tamsVideoUnsupported('text2video_tool')).toBeUndefined();
-    expect(serverSrc).toContain('if (tamsVideoRefusal) return res.status(400)');
+    expect(readFileSync(path.resolve(__dirname, './routes/videoGenerateRoute.ts'), 'utf8')).toContain('if (tamsVideoRefusal) return res.status(400)');
   });
 
   it('NanoGPT: LoRA refused without supported_parameters.loras; declared seed sent; billing text verbatim', () => {
@@ -476,7 +479,7 @@ describe('provider contract (16): builder / route-handler providers', () => {
     expect(serverSrc).toContain('error: `NanoGPT 生图失败 [${response.status}]: ${errorText}`');
   });
 
-  it('OpenWorks (generic Schema): live catalog → image/video models; Schema from upstream inputs; positional POST /task; probe-gated seed/steps/cfg/LoRA blocked locally', () => {
+  it('OpenWorks (generic Schema): live catalog → image/video models; Schema from upstream inputs; positional POST /task; live extras seed/steps/cfg/LoRA appended', () => {
     const live = JSON.parse(readFileSync(path.resolve(__dirname, '../../docs/evidence/openworks-tool-list-2026-10-15.json'), 'utf8'));
     const entries = parseOpenWorksCatalog(200, JSON.stringify(live));
     const items = openWorksCatalogItems(entries, 'src');
@@ -491,23 +494,41 @@ describe('provider contract (16): builder / route-handler providers', () => {
     const photo = entries.find((e: any) => e.name === 'photoreal_studio_z_image');
     const schema = openWorksInputSchema(photo);
     expect(Object.keys(schema.properties)).toEqual(['prompt', 'image width', 'image height', 'result image count']);
+    // canvas width/height alias → image width / image height; result image count comes from its own Schema number control (custom_parameters)
+    const fromCanvas = buildOpenWorksRequest('photoreal_studio_z_image', schema, { prompt: 'cat', width: 512, height: 768, custom_parameters: { 'result image count': 1 } });
+    expect(fromCanvas.ok && fromCanvas.wire).toEqual({ toolName: 'photoreal_studio_z_image', inputs: [{ type: 'STRING', value: 'cat' }, { type: 'INTEGER', value: 512 }, { type: 'INTEGER', value: 768 }, { type: 'INTEGER', value: 1 }] });
+    expect(fromCanvas.mapping.find((m) => m.from === 'width')).toMatchObject({ to: 'image width', sent: true });
     const ok = buildOpenWorksRequest('photoreal_studio_z_image', schema, { prompt: 'cat', width: 1024, custom_parameters: { 'image width': 768, 'image height': 1024, 'result image count': 1, _canvas: { schemaFieldsOnly: true } } });
-    expect(ok.ok && ok.parameters).toEqual({ toolName: 'photoreal_studio_z_image', inputs: [{ type: 'STRING', value: 'cat' }, { type: 'INTEGER', value: 768 }, { type: 'INTEGER', value: 1024 }, { type: 'INTEGER', value: 1 }] });
-    expect(ok.mapping.find((m) => m.from === 'width')).toMatchObject({ to: null, sent: false });
-    // badges: same Schema → width/seed/steps/cfg 不会发送, prompt 会发送
+    expect(ok.ok && ok.wire).toEqual({ toolName: 'photoreal_studio_z_image', inputs: [{ type: 'STRING', value: 'cat' }, { type: 'INTEGER', value: 768 }, { type: 'INTEGER', value: 1024 }, { type: 'INTEGER', value: 1 }] });
+    expect(ok.mapping.find((m) => m.from === 'width')).toMatchObject({ to: 'image width', sent: false });
+    // badges: live extras seed/steps/cfg 会发送；prompt/width 会发送（别名 image width）
     const props = Object.keys(schema.properties);
-    expect(schemaSendStatus('openworks', 'seed', 42, undefined, props)).toBe('not_sent');
-    expect(schemaSendStatus('openworks', 'steps', 6, undefined, props)).toBe('not_sent');
-    expect(schemaSendStatus('openworks', 'cfg', 3.5, undefined, props)).toBe('not_sent');
-    expect(schemaSendStatus('openworks', 'width', 1024, undefined, props)).toBe('not_sent');
+    expect(schemaSendStatus('openworks', 'seed', 42, undefined, props)).toBe('will_send');
+    expect(schemaSendStatus('openworks', 'steps', 6, undefined, props)).toBe('will_send');
+    expect(schemaSendStatus('openworks', 'cfg', 3.5, undefined, props)).toBe('will_send');
+    expect(schemaSendStatus('openworks', 'width', 1024, undefined, props)).toBe('will_send');
     expect(schemaSendStatus('openworks', 'prompt', 'cat', undefined, props)).toBe('will_send');
-    // live probe (canvas-e2e-tensorart-probe): upstream 200 but ignored → blocked locally, upstream text quoted; unprobed models blocked as unproven
-    expect(Object.values(OPENWORKS_PROBE_RESULTS.photoreal_studio_z_image).every((p: any) => p.verdict === 'ignored')).toBe(true);
-    expect((buildOpenWorksRequest('photoreal_studio_z_image', schema, { prompt: 'x', seed: 42 }) as any).error).toMatch(/不生效[\s\S]*上游原文「\{"code":"0"/);
-    expect((buildOpenWorksRequest('text2video_wan22', openWorksInputSchema(entries.find((e: any) => e.name === 'text2video_wan22')), { prompt: 'x', seed: 1 }) as any).error).toMatch(/没有「上游接受且出图变化」的实测结果/);
-    const gated = buildOpenWorksRequest('photoreal_studio_z_image', schema, { prompt: 'x', seed: 42, steps: 6, cfg: 3.5, loras: [{ name: 'l', strength: 1 }] });
-    expect(gated.ok).toBe(false);
-    expect((gated as any).error).toMatch(/loras[\s\S]*seed[\s\S]*steps[\s\S]*cfg[\s\S]*未出站，本地拦截/);
+    // Live extras (雁 2026-10-17): seed/steps/cfg/LoRA appended as named inputs; mapping sent:true
+    const withExtras = buildOpenWorksRequest('photoreal_studio_z_image', schema, { prompt: 'x', width: 512, height: 512, custom_parameters: { 'result image count': 1 }, seed: 42, steps: 6, cfg: 3.5, checkpoint: '940566212906107758', loras: [{ name: '969483275569466663', strength: 0.8 }] });
+    expect(withExtras.ok).toBe(true);
+    for (const f of ['seed', 'steps', 'cfg', 'loras', 'checkpoint']) expect((withExtras as any).mapping.find((m: any) => m.from === f && m.sent === true)).toBeTruthy();
+    expect((withExtras as any).parameters.seed).toBe(42);
+    expect((withExtras as any).parameters.steps).toBe(6);
+    expect((withExtras as any).parameters.cfg).toBe(3.5);
+    expect((withExtras as any).parameters.loras).toEqual([{ name: '969483275569466663', strength: 0.8 }]);
+    expect((withExtras as any).wire.inputs.length).toBeGreaterThan(4);
+    expect((withExtras as any).wire.inputs.some((i: any) => i.name === 'seed' && i.value === 42)).toBe(true);
+    expect((withExtras as any).wire.inputs.some((i: any) => i.name === 'loras' && String(i.value).includes('969483275569466663'))).toBe(true);
+    expect((withExtras as any).wire.inputs.some((i: any) => i.name === 'lora_weight' && i.value === 0.8)).toBe(true);
+    // every Schema-required field of every OpenWorks IMAGE model has an editable control: a canvas widget (prompt/width/height) or a Schema panel control
+    const canvasOwned = new Set(['prompt', 'image width', 'image height']);
+    for (const e of entries.filter((x: any) => openWorksMediaKind(x) === 'image')) {
+      const s = openWorksInputSchema(e);
+      const panel = new Set(schemaChoiceFields(s).map((f: any) => f.key));
+      const arr = new Set(Object.entries<any>(s.properties).filter(([, v]) => v.type === 'array').map(([k]) => k));
+      for (const k of s.required) if (!canvasOwned.has(k) && !arr.has(k)) expect(panel.has(k), `${e.name}: ${k}`).toBe(true);
+    }
+    expect(schemaChoiceFields(schema).find((f: any) => f.key === 'result image count')).toMatchObject({ numberSpec: { type: 'integer', minimum: undefined, default: undefined } });
     // missing required → local block, no placeholders
     expect((buildOpenWorksRequest('photoreal_studio_z_image', schema, { prompt: 'x' }) as any).error).toMatch(/image width[\s\S]*不会用空串\/null 占位[\s\S]*未出站，本地拦截/);
     // unknown JSON key / wrong type → local block
@@ -522,10 +543,11 @@ describe('provider contract (16): builder / route-handler providers', () => {
     expect((buildOpenWorksRequest('image2video_wan27', wan, { prompt: 'x', custom_parameters: { [keys[1]]: '720P', [keys[2]]: '5', [keys[3]]: [{ url: img.url }] } }) as any).error).toMatch(/mimeType/);
   });
 
-  it('OpenWorks de-tool: no tool layer left in server / canvas UI; TAMS routes keep local refusals', () => {
+  it('OpenWorks de-tool: no tool layer left in server / canvas UI; TAMS generate gated off', () => {
     expect(serverSrc).not.toMatch(/planOpenWorksVideoTask|buildTensorArtInputs|parseOpenWorksToolList|fetchTensorArtToolsList|\/api\/tensorart\/tools|\/api\/tensorart\/upload|tensorOpenWorksInputs/);
     expect(serverSrc).not.toMatch(/OpenWorks 工具|OpenWorks Tool|工具 Key|工具 key/);
-    expect(serverSrc).toContain('if (tamsVideoRefusal) return res.status(400)');
+    expect(readFileSync(path.resolve(__dirname, './routes/videoGenerateRoute.ts'), 'utf8')).toContain('if (tamsVideoRefusal) return res.status(400)');
+    expect(serverSrc).toContain('TAMS 出图入口已下线');
     expect(serverSrc).toContain("registerOpenWorksRoutes(app as any");
     for (const f of ['../components/BackendSettingsModal.tsx', '../components/ParameterInspector.tsx', '../components/ProviderMatrixModal.tsx', '../engines/drivers/TensorArtDriver.ts', '../utils/videoProvider.ts', '../App.tsx']) {
       expect(readFileSync(path.resolve(__dirname, f), 'utf8')).not.toMatch(/OpenWorks[^'`\n]{0,12}工具|仅用于工具|工具接口|旧工具/);

@@ -1,4 +1,6 @@
+import { getModelSchemaEntry } from '../services/modelSchemaCache';
 import { normalizeLoraPayloadItem } from './resourceSelection';
+import { randomSeedFor } from './seedRange';
 import type { SpatialFrame } from '../types/graph';
 import type { NormalizedGenerateParams } from '../engines/types';
 
@@ -6,11 +8,19 @@ export function explicitLoraPath(lora: {name:string;downloadUrl?:string}): strin
   return lora.downloadUrl || (/^(https?:\/\/|\/|\.\/)/.test(lora.name) || /\.(safetensors|ckpt|pt)$/i.test(lora.name) ? lora.name : undefined);
 }
 
-export function videoDurationBounds(provider: string | undefined, model: string): {min?: number; max?: number} {
-  if (provider !== 'fal') return {};
-  if (/^fal-ai\/kling-video\/v3\/standard\/(image|text)-to-video$/.test(model)) return {min:3,max:15};
-  if (/^fal-ai\/wan\/v2\.7\/(image|text)-to-video$/.test(model)) return {min:2,max:15};
-  return {};
+/**
+ * cleanup-2026-10-17 #3: video duration bounds/choices come ONLY from the endpoint's official Schema
+ * (GET /api/model-schema cache: properties.duration enum / minimum / maximum). No per-model hardcoded ranges.
+ * Schema not read yet → {} (free input, nothing invented).
+ */
+export function videoDurationBounds(provider: string | undefined, model: string): {min?: number; max?: number; options?: Array<string | number>} {
+  const d = getModelSchemaEntry(provider, model)?.propertiesObj?.duration as any;
+  if (!d || typeof d !== 'object') return {};
+  const out: {min?: number; max?: number; options?: Array<string | number>} = {};
+  if (Array.isArray(d.enum) && d.enum.length) out.options = d.enum.filter((v: unknown) => typeof v === 'string' || typeof v === 'number');
+  if (typeof d.minimum === 'number') out.min = d.minimum;
+  if (typeof d.maximum === 'number') out.max = d.maximum;
+  return out;
 }
 
 export function assertResolvedResources(loras: Array<{name: string; civitaiId?: string; unresolvedResource?: boolean; resourceVerified?: boolean}>) {
@@ -62,7 +72,7 @@ export function spatialRequestParameters(frame: SpatialFrame): NormalizedGenerat
   const isVideo = frame.mediaType === 'video' || p.targetProvider === 'video';
   return {prompt:frame.prompt,negative_prompt:frame.negativePrompt,model:p.checkpoint,provider,targetProvider:provider,
     width:omitDimensions ? undefined : p.width,height:omitDimensions ? undefined : p.height,steps:p.steps,cfg:p.cfg,
-    seed:isGemini ? undefined : p.seedControl === 'randomize' ? Math.floor(Math.random()*1000000000) : p.seed,
+    seed:isGemini ? undefined : p.seedControl === 'randomize' ? randomSeedFor(provider, p.checkpoint) : p.seed,
     image_url:frame.referenceImageUrl,denoise:!isGemini && frame.referenceImageUrl ? p.denoise : undefined,
     sampler_name:p.sampler,scheduler:p.scheduler,isVideo,
     videoDuration:isVideo ? (Object.hasOwn(p,'videoDuration') ? p.videoDuration : frame.videoDuration) : undefined,
@@ -70,4 +80,52 @@ export function spatialRequestParameters(frame: SpatialFrame): NormalizedGenerat
     aspectRatio:Object.hasOwn(p,'aspectRatio') ? p.aspectRatio : frame.videoAspectRatio,imageSize:p.imageSize,extraParams,
     loras:p.loras.map(l => normalizeLoraPayloadItem({name:l.name,path:explicitLoraPath(l),...(l.downloadUrl?{downloadUrl:l.downloadUrl}:{}),strength:l.modelStrength,modelStrength:l.modelStrength,clipStrength:l.clipStrength,civitaiId:l.civitaiId,triggers:l.triggerWords})),
   };
+}
+
+/**
+ * videoschema-2026-10-17: per-field view of the selected endpoint's official Schema (/api/model-schema cache).
+ * state: 'unknown' (Schema not read → caller keeps its generic control, nothing invented),
+ *        'absent'  (Schema read, field not declared → hide the control; never a fake 「不发送」 row),
+ *        'declared' (options from enum, or min/max).
+ */
+export type VideoSchemaField = {state:'unknown'} | {state:'absent'} | {state:'declared'; options?: Array<string|number>; min?: number; max?: number};
+export function videoSchemaField(provider: string | undefined, model: string | undefined, field: string): VideoSchemaField {
+  const e = getModelSchemaEntry(provider, model);
+  if (!e || e.status !== 'ready' || !e.propertiesObj) return {state:'unknown'};
+  const d = e.propertiesObj[field] as any;
+  if (!d || typeof d !== 'object') return {state:'absent'};
+  const out: VideoSchemaField = {state:'declared'};
+  const en = Array.isArray(d.enum) ? d.enum : Array.isArray(d.anyOf) ? d.anyOf.flatMap((x: any) => Array.isArray(x?.enum) ? x.enum : []) : [];
+  const opts = en.filter((v: unknown) => typeof v === 'string' || typeof v === 'number');
+  if (opts.length) out.options = opts;
+  if (typeof d.minimum === 'number') out.min = d.minimum;
+  if (typeof d.maximum === 'number') out.max = d.maximum;
+  return out;
+}
+
+const VIDEO_FIELD_LABEL: Record<string,string> = {duration:'视频时长（秒）', aspect_ratio:'画面比例'};
+/** Stored value vs Schema. Never clamps: returns a human reason when the stored value is not allowed (run must be blocked). */
+export function videoSchemaValueIssue(provider: string | undefined, model: string | undefined, field: string, value: unknown): string | null {
+  if (value === undefined || value === null || value === '') return null;
+  const f = videoSchemaField(provider, model, field);
+  const label = VIDEO_FIELD_LABEL[field] || field;
+  if (f.state === 'absent') return `${label}：这个模型不接收此参数，画布上还存着「${String(value)}」，请清除后再运行`;
+  if (f.state !== 'declared') return null;
+  if (f.options && !f.options.some((o) => String(o) === String(value))) return `${label}：「${String(value)}」不在这个模型的可选值里（${f.options.join(' / ')}），请重新选择`;
+  const n = Number(value);
+  if (!f.options && Number.isFinite(n) && ((f.min !== undefined && n < f.min) || (f.max !== undefined && n > f.max))) return `${label}：「${String(value)}」超出这个模型的范围（${f.min ?? ''}–${f.max ?? ''}），请重新填写`;
+  return null;
+}
+
+/** All video Schema issues on AIVideoNodes among `nodes` (for pre-run blocking). */
+export function videoSchemaIssues(nodes: Array<{type:string; title?:string; bypassed?:boolean; values?:Record<string,any>}>): string | null {
+  for (const n of nodes) {
+    if (n.type !== 'AIVideoNode' || n.bypassed) continue;
+    const p = String(n.values?.targetProvider || ''); const m = String(n.values?.model || '');
+    for (const f of ['duration', 'aspect_ratio']) {
+      const r = videoSchemaValueIssue(p, m, f, n.values?.[f]);
+      if (r) return r;
+    }
+  }
+  return null;
 }

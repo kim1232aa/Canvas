@@ -1,6 +1,6 @@
-import {ApiParameterEditor} from './ApiParameterEditor';
+import { ensureModelSchema } from '../services/modelSchemaCache';
 import {PreviewPlaceholder} from './PreviewPlaceholder';
-import {videoDurationBounds} from '../utils/frontendParameters';
+import {videoDurationBounds, videoSchemaField, videoSchemaValueIssue} from '../utils/frontendParameters';
 import {ProviderModelSelect} from './ProviderModelSelect';
 import {noteUserModelSelection} from '../services/userModelSelection';
 import React from 'react';
@@ -33,8 +33,10 @@ import { GeminiFieldSelect, GeminiModelBadge } from './GeminiFieldSelect';
 import { fieldOptions, getFieldSpec, resolveSchemaModelId } from '../schemas/providerSchema';
 import { FieldStatusBadge, SchemaSendBadge } from './FieldStatusBadge';
 import { isCanvasFieldUnsupported, isCanvasWidgetUnsupported, LORA_UNSUPPORTED_TITLE, LORA_BYPASS_LABEL } from '../utils/resolveCheckpoint';
-import { readDeclaredSchemaProperties, SCHEMA_OMIT_REASON } from '../utils/schemaSendHint';
+import { readDeclaredSchemaProperties, SCHEMA_OMIT_REASON, canvasFieldMatchesSchema } from '../utils/schemaSendHint';
 import { schemaSendStatus } from '../utils/schemaSendStatus';
+/** KSampler params that must be disabled when the endpoint Schema omits them (cleanup-2026-10-17). */
+const SAMPLER_SCHEMA_WIDGETS = new Set(['steps', 'cfg', 'sampler_name', 'scheduler', 'sampler']);
 import { checkpointNodeTitle, ksamplerNodeTitle, loraLoaderNodeTitle, LORA_LOADER_TYPES } from '../utils/providerLabels';
 import { errorBannerText, priorRunErrorLabel, LOCAL_BLOCK_NODE_LINE } from '../utils/apiFailure';
 import { formatRecordTime } from '../services/executionTrace';
@@ -42,6 +44,13 @@ import { loraSourceMismatch } from '../utils/loraSourceMismatch';
 import { EmphasizeLimit } from './TextEmphasis';
 import { CustomModelIdField } from './CustomModelIdField';
 import { providerSendsSeparateClipStrength, CLIP_STRENGTH_NOT_SENT_NOTE } from '../utils/loraClipStrength';
+
+/** fix16.1 #3: render text with <wbr> after '/' and '-' — break points without inserting invisible characters. */
+export const BreakAfterSlashDash: React.FC<{ text: string }> = ({ text }) => {
+  const parts = text.split(/(?<=[/\-])/);
+  return <>{parts.map((p, i) => <React.Fragment key={i}>{p}{i < parts.length - 1 ? <wbr /> : null}</React.Fragment>)}</>;
+};
+
 
 interface NodeItemProps {
   node: NodeInstance;
@@ -119,6 +128,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
   const [isReasoning, setIsReasoning] = React.useState(false);
   const [reasoningError, setReasoningError] = React.useState<string | null>(null);
   const [copiedRefined, setCopiedRefined] = React.useState(false);
+
   const [showThinkingChain, setShowThinkingChain] = React.useState(true);
 
   const handleRunReasoning = async () => {
@@ -190,17 +200,22 @@ export const NodeItem: React.FC<NodeItemProps> = ({
   const zoomScale = typeof zoom === 'number' && zoom > 1.5 ? zoom / 100 : zoom;
   const zoomedOut = typeof zoomScale === 'number' && zoomScale > 0 && zoomScale < 0.75;
   const zoomAlerts: Array<{ tone: 'rose' | 'amber'; text: string }> = [];
+  // Schema failure: line 1 = plain headline (full model name), rest = upstream body verbatim. Others keep 上一次 label.
+  const schemaErr = node.errorKind === 'schema' && !!node.errorMessage;
+  const nodeErrorHeadline = schemaErr ? String(node.errorMessage).split('\n')[0] : priorRunErrorLabel(node.errorMessage, node.errorAt);
+  const nodeErrorRaw = schemaErr ? String(node.errorMessage).split('\n').slice(1).join('\n') : '';
   if (zoomedOut) {
     if (node.localBlockReason && node.state !== 'running') zoomAlerts.push({ tone: 'rose', text: `⛔ ${node.localBlockTitle || '本地拦截'}：${node.localBlockReason}` });
     if (loraMismatchNote) zoomAlerts.push({ tone: 'amber', text: `⚠ LoRA 来源 ${String(node.values.resource_source)} ≠ 当前 ${String(currentProvider || node.values?.targetProvider)}` });
-    if (node.errorMessage && node.state !== 'running') zoomAlerts.push({ tone: 'rose', text: `✕ ${priorRunErrorLabel(node.errorMessage, node.errorAt)}` });
+    if (node.errorMessage && node.state !== 'running') zoomAlerts.push({ tone: 'rose', text: `✕ ${nodeErrorHeadline}` });
     const notSent = (def.widgets || []).filter((w: any) => w.type === 'number' || w.type === 'select' || w.type === 'text' || w.type === 'textarea').filter((w: any) => {
       const isWH = w.name === 'width' || w.name === 'height';
       if ((isWH && greyWidthHeight) || isCanvasWidgetUnsupported(currentProvider, currentCheckpoint, w.name)) return true;
       if (!['KSampler', 'EmptyLatentImage'].includes(node.type)) return false;
       return schemaSendStatus(currentProvider, w.name, node.values?.[w.name], node.values?.custom_parameters, readDeclaredSchemaProperties(schemaCustomParameters), schemaCustomParameters) === 'not_sent';
     }).map((w: any) => w.label || w.name);
-    if (notSent.length) zoomAlerts.push({ tone: 'amber', text: `未发送：${notSent.join('、')}` });
+    // cleanup-2026-10-17 #1: no 「未发送」 sticky on nodes; send/omit truth lives in inspector + history details.
+    void notSent;
   }
 
   const handleRefinePrompt = async () => {
@@ -317,11 +332,14 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                 className={
                   node.type === 'AIVideoNode'
                     ? 'font-bold text-[13px] text-white tracking-wide min-w-0 flex-1 whitespace-normal break-words leading-snug'
-                    : 'font-bold text-[13px] text-white truncate tracking-wide'
+                    : LORA_LOADER_TYPES.has(node.type)
+                      ? 'font-bold text-[13px] text-white tracking-wide min-w-0 flex-1 whitespace-normal [overflow-wrap:anywhere] leading-snug'
+                      : 'font-bold text-[13px] text-white truncate tracking-wide'
                 }
                 title={hoverTitle}
               >
-                {displayTitle}
+                {/* fix16.1 #3: LoRA title wraps after / and - via <wbr> (no ZWSP in text). */}
+                {LORA_LOADER_TYPES.has(node.type) ? <BreakAfterSlashDash text={String(displayTitle)} /> : displayTitle}
               </span>
             );
           })()}
@@ -338,7 +356,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
             </div>
           )}
           {node.state === 'error' && (
-            <div className="flex items-center gap-1 text-[10px] font-mono text-rose-400 bg-rose-950/60 px-1.5 py-0.5 rounded border border-rose-800/40" title={node.errorMessage}>
+            <div className="flex items-center gap-1 text-[10px] font-mono text-rose-400 bg-rose-950/60 px-1.5 py-0.5 rounded border border-rose-800/40" title={node.errorMessage ? nodeErrorHeadline : undefined}>
               <AlertTriangle className="w-3 h-3" />
               <span>异常</span>
             </div>
@@ -382,11 +400,13 @@ export const NodeItem: React.FC<NodeItemProps> = ({
       )}
 
       {/* Node error message banner — clean-1651/0006: labelled 上一次 + 北京时间; show whenever errorMessage remains (not only state===error), so clearing local 宽高拦截 never hides a prior upstream failure. */}
-      {node.errorMessage && node.state !== 'running' && (
-        <div className="mx-3 mt-2 p-2 bg-rose-950/40 border border-rose-800/60 rounded-lg text-[10px] text-rose-300 leading-relaxed flex items-start gap-1.5">
-          <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0 mt-0.5" />
-          <div className="min-w-0 flex-1 break-all whitespace-pre-wrap max-h-24 overflow-y-auto" title={priorRunErrorLabel(node.errorMessage, node.errorAt)} data-testid="node-error-banner">
-            {priorRunErrorLabel(node.errorMessage, node.errorAt)}
+      {/* One error display per node: when zoomed out the screen-size strip above carries it, so the inner banner is hidden. */}
+      {node.errorMessage && node.state !== 'running' && !zoomedOut && (
+        <div className="mx-3 mt-2 p-2 bg-rose-950/40 border border-rose-800/60 rounded-lg text-[11px] text-rose-100 leading-relaxed flex items-start gap-1.5">
+          <AlertTriangle className="w-3.5 h-3.5 text-rose-300 shrink-0 mt-0.5" />
+          <div className="min-w-0 flex-1 max-h-32 overflow-y-auto" data-testid="node-error-banner">
+            <div className={`[overflow-wrap:anywhere] whitespace-pre-wrap ${schemaErr ? 'font-semibold' : ''}`} data-testid="node-error-headline">{nodeErrorHeadline}</div>
+            {nodeErrorRaw && <pre className="mt-1 whitespace-pre-wrap [overflow-wrap:anywhere] font-mono text-[10px] text-rose-200/90" data-testid="node-error-raw">{nodeErrorRaw}</pre>}
           </div>
         </div>
       )}
@@ -472,8 +492,6 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               Agnes AI 图像模型为云端简易接口，不使用 {node.type === 'KSampler' ? 'KSampler 采样器' : node.type === 'EmptyLatentImage' ? '空潜空间' : '负向提示词'}；请直接连接「加载底模 -&gt; CLIP 正向提示词 -&gt; 保存图像」。
             </p>
           )}
-          {node.type==='CheckpointLoaderSimple' && ['civitai','fal','modelscope','modelscope_ai','huggingface','muapi','wavespeed','sogni','krea','together','aimlapi','novita','venice','replicate'].includes(node.values.targetProvider) && <ApiParameterEditor provider={node.values.targetProvider} model={node.values.ckpt_name} value={node.values.custom_parameters} onChange={value=>onUpdateValue(node.id,'custom_parameters',value)} canvasLoras={canvasLoras} />}
-          {['FalAIEngineNode','ModelScopeNode','ModelScopeAiNode','NanoGPTNode','ReplicateEngineNode'].includes(node.type) && <ApiParameterEditor provider={({FalAIEngineNode:'fal',ModelScopeNode:'modelscope',ModelScopeAiNode:'modelscope_ai',NanoGPTNode:'nanogpt',ReplicateEngineNode:'replicate'} as Record<string,string>)[node.type]} model={node.values.model_endpoint || node.values.model || ''} value={node.values.custom_parameters} onChange={value=>onUpdateValue(node.id,'custom_parameters',value)} />}
           {node.type === 'CheckpointLoaderSimple' && node.values.targetProvider === 'sensenova' && <div className="space-y-2">
             <label className="block text-slate-300">SenseNova size<input type="text" aria-label="SenseNova size" aria-describedby={`sensenova-size-note-${node.id}`} value={node.values.size ?? ''} onMouseDown={e=>e.stopPropagation()} onPointerDown={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()} onChange={e=>onUpdateValue(node.id,'size',e.target.value === '' ? undefined : e.target.value)} placeholder="auto / 2048x2048；留空时按画布宽高(如1024x1024)发送，无宽高则 auto" className="mt-1 w-full rounded border border-slate-700 bg-[#121316] p-2 focus-visible:outline-2 focus-visible:outline-cyan-400" /></label>
             <p id={`sensenova-size-note-${node.id}`} role="note" className="text-amber-200">官方文档写 2K/4K 常量，但本次上游对这两个值返回 400：invalid size, should be auto or WIDTHxHEIGHT。建议明确填写像素尺寸或 auto；原值保留，不自动转换，也不在此限制提交。</p>
@@ -487,7 +505,15 @@ export const NodeItem: React.FC<NodeItemProps> = ({
             <p className="text-slate-400">引擎和生态必须显式选择；AIR、sampler/scheduler 与引擎是否兼容由上游验证。</p>
           </div>}
           {node.type === 'AIVideoNode' && <label className="block text-slate-300">视频分辨率 (resolution)<input aria-label="视频分辨率 (resolution)" value={node.values.resolution || ''} onMouseDown={e=>e.stopPropagation()} onChange={e=>onUpdateValue(node.id,'resolution',e.target.value)} placeholder="未填写；按端点 Schema 指定" className="w-full rounded border border-slate-700 bg-[#121316] p-2" /></label>}
-          {node.type === 'AIVideoNode' && <label className="block text-slate-300">视频自定义参数 JSON<textarea aria-label="视频自定义参数 JSON" value={node.values.custom_parameters || ''} onMouseDown={e=>e.stopPropagation()} onChange={e=>onUpdateValue(node.id,'custom_parameters',e.target.value)} placeholder='{"generate_audio":false}' className="w-full rounded border border-slate-700 bg-[#121316] p-2" /><span className="text-slate-400">对象字段在服务端展开，显式 false/0 保留。</span></label>}
+          {/* cleanup-2026-10-17: when Schema omits steps/CFG/sampler/scheduler — one line, controls disabled below. */}
+          {node.type === 'KSampler' && (() => {
+            const declared = readDeclaredSchemaProperties(schemaCustomParameters);
+            if (!declared || declared.size === 0) return null; // Schema not loaded — don't invent
+            const names = ['steps', 'cfg', 'sampler_name', 'scheduler'] as const;
+            const unused = names.filter((name) => schemaSendStatus(currentProvider, name, node.values?.[name], node.values?.custom_parameters, declared, schemaCustomParameters) === 'not_sent');
+            if (!unused.length) return null;
+            return <p role="note" data-testid="node-sampler-unused" className="text-[11px] text-slate-400 leading-relaxed">这家接口不用这几个参数</p>;
+          })()}
           {/* Widgets according to definition */}
           {def.widgets?.filter(widget => showUnsupported || !(isCanvasWidgetUnsupported(currentProvider, currentCheckpoint, widget.name) || (node.type === 'CLIPTextEncodeNegative' && widget.name === 'text' && greyNegative))).map((widget) => {
             const value = node.values[widget.name];
@@ -496,6 +522,26 @@ export const NodeItem: React.FC<NodeItemProps> = ({
             if (node.type === 'AIVideoNode') {
               const wan = node.values.targetProvider === 'fal' && /wan-t2v|wan-i2v|wan\/v2\.1/.test(node.values.model || '');
               if ((widget.name === 'duration' && wan) || (widget.name === 'num_frames' && !wan)) return null;
+              if (widget.name === 'duration' || widget.name === 'aspect_ratio') {
+                // videoschema: options come from the selected endpoint's official Schema; absent field → no control.
+                ensureModelSchema(node.values.targetProvider, node.values.model);
+                const vf = videoSchemaField(node.values.targetProvider, node.values.model, widget.name);
+                const issue = videoSchemaValueIssue(node.values.targetProvider, node.values.model, widget.name, value);
+                if (vf.state === 'absent' && !issue) return null;
+                if (vf.state !== 'unknown' && (vf.state === 'absent' || vf.options)) {
+                  const opts = vf.state === 'declared' ? vf.options! : [];
+                  const cur = value === undefined || value === null ? '' : String(value);
+                  return <div key={widget.name} className="space-y-1" data-testid={`video-schema-${widget.name}`}>
+                    <label className="text-slate-400 font-mono text-[11px] block whitespace-nowrap">{widget.label}</label>
+                    {opts.length > 0 && <select aria-label={widget.label} value={cur} onMouseDown={e=>e.stopPropagation()} onPointerDown={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()} onChange={e=>onUpdateValue(node.id, widget.name, e.target.value === '' ? undefined : (opts.find(o=>String(o)===e.target.value) as any))} className={`w-full bg-[#121316] border ${issue ? 'border-rose-500' : 'border-[#2d303a]'} rounded-lg px-2.5 py-1.5 text-slate-200 text-xs font-mono outline-none`}>
+                      <option value="">未选择（不提交）</option>
+                      {issue && cur && <option value={cur}>{cur}（不可用）</option>}
+                      {opts.map(o=><option key={String(o)} value={String(o)}>{widget.name === 'duration' ? `${o} 秒` : String(o)}</option>)}
+                    </select>}
+                    {issue && <p role="alert" className="text-[11px] text-rose-300">{issue}<button type="button" className="ml-2 underline" onMouseDown={e=>e.stopPropagation()} onClick={()=>onUpdateValue(node.id, widget.name, undefined)}>清除</button></p>}
+                  </div>;
+                }
+              }
             }
             if (widget.name === 'hf_provider') {
               if ((node.values.targetProvider || currentProvider) !== 'huggingface') return null;
@@ -524,15 +570,26 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               const unsupported = isCanvasWidgetUnsupported(currentProvider, currentCheckpoint, widget.name);
               const sendStatus = schemaSendStatus(currentProvider, widget.name, node.values?.[widget.name], node.values?.custom_parameters, readDeclaredSchemaProperties(schemaCustomParameters), schemaCustomParameters);
               const omitHint = sendStatus === 'not_sent';
-              const greyThis = unsupported;
+              // cleanup-2026-10-17: sampler params omitted by Schema are DISABLED (not 「能调但不发送」).
+              const schemaUnused = SAMPLER_SCHEMA_WIDGETS.has(widget.name) && omitHint;
+              // cleanup-serious: strength/denoise only when a reference image is connected (WaveSpeed strength etc.).
+              const isStrengthField = widget.name === 'denoise' || widget.name === 'strength';
+              let strengthNeedsImage = false;
+              if (isStrengthField && !unsupported) {
+                const declared = readDeclaredSchemaProperties(schemaCustomParameters);
+                let hasRef = false;
+                try { hasRef = JSON.parse(schemaCustomParameters || '{}')?._canvas?.hasReferenceImage === true; } catch { /* */ }
+                if (declared && declared.size > 0 && canvasFieldMatchesSchema('denoise', declared) && !hasRef) strengthNeedsImage = true;
+              }
+              const greyThis = unsupported || schemaUnused || strengthNeedsImage;
               return (
-                <div key={widget.name} className={`space-y-1 ${omitHint && !unsupported ? 'opacity-80' : ''}`}>
+                <div key={widget.name} className={`space-y-1 `}>
                   <div className="flex flex-wrap items-center justify-between text-slate-400 font-mono text-[11px] gap-1.5">
                     {/* clean-1333 #6: label never wraps (「去噪强 / 度」); a long badge drops to its own line instead. */}
                     <span className="flex flex-wrap items-center gap-1.5 min-w-0" title={widget.title || undefined}>
                       <span className="whitespace-nowrap shrink-0" data-testid={`widget-label-${widget.name}`}>{widget.label}</span>
-                      {unsupported && <FieldStatusBadge status="unsupported" />}
-                      {!unsupported && <SchemaSendBadge status={sendStatus} omitTitle={SCHEMA_OMIT_REASON} />}
+                      {unsupported && null}
+                      {!unsupported && null}
                     </span>
                     <input
                       type="number"
@@ -541,9 +598,9 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                       max={widget.max}
                       value={greyThis ? '' : (value ?? '')}
                       disabled={greyThis}
-                      placeholder={greyThis ? '该服务商不支持' : undefined}
-                      title={greyThis ? '该服务商不支持' : undefined}
-                      aria-label={greyThis ? `${widget.name}（该服务商不支持）` : widget.label}
+                      placeholder={schemaUnused ? '' : strengthNeedsImage ? '需接参考图' : (greyThis ? '该服务商不支持' : undefined)}
+                      title={schemaUnused ? '这家接口不用这几个参数' : strengthNeedsImage ? '有参考图时才发送 strength（官方 Schema）' : (greyThis ? '该服务商不支持' : undefined)}
+                      aria-label={schemaUnused ? widget.label : (greyThis ? `${widget.name}（该服务商不支持）` : widget.label)}
                       onMouseDown={(e) => e.stopPropagation()}
                       onPointerDown={(e) => e.stopPropagation()}
                       onKeyDown={(e) => e.stopPropagation()}
@@ -563,8 +620,8 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                     step={widget.step || 0.1}
                     value={greyThis ? (widget.min ?? 0) : (value ?? widget.min ?? 0)}
                     disabled={greyThis}
-                    title={greyThis ? '该服务商不支持' : undefined}
-                    aria-label={greyThis ? `${widget.name}（该服务商不支持）` : widget.label}
+                    title={schemaUnused ? '这家接口不用这几个参数' : strengthNeedsImage ? '有参考图时才发送 strength（官方 Schema）' : (greyThis ? '该服务商不支持' : undefined)}
+                    aria-label={schemaUnused ? widget.label : (greyThis ? `${widget.name}（该服务商不支持）` : widget.label)}
                     onMouseDown={(e) => e.stopPropagation()}
                     onPointerDown={(e) => e.stopPropagation()}
                     onChange={(e) => {
@@ -681,7 +738,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                       onMouseDown={(e) => e.stopPropagation()}
                       onPointerDown={(e) => e.stopPropagation()}
                       onKeyDown={(e) => e.stopPropagation()}
-                      onChange={(e) => onUpdateValue(node.id, widget.name, e.target.value)}
+                      onChange={(e) => { const v = e.target.value; onUpdateValue(node.id, widget.name, v); noteUserModelSelection(currentProv, v); }}
                       className="w-full appearance-none bg-[#121316] border border-[#2d303a] hover:border-lime-500/50 focus:border-lime-500 rounded-lg pl-2.5 pr-8 py-1.5 text-slate-200 text-xs font-mono outline-none cursor-pointer overflow-hidden whitespace-nowrap text-ellipsis [text-overflow:ellipsis]"
                     >
                       <option value="">未选择 (请先选择模型)</option>
@@ -815,7 +872,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                         <div className="space-y-1">
                           <div className="flex items-center justify-between gap-1.5">
                             <label className="text-slate-500 font-mono text-[11px]">width / height</label>
-                            <FieldStatusBadge status="unsupported" />
+                            null
                           </div>
                           <div className="grid grid-cols-2 gap-2">
                             <input type="number" disabled placeholder="width" aria-label="width（该服务商不支持）" className="w-full bg-[#0d0e12] border border-[#22242c] rounded-lg px-2.5 py-1.5 text-slate-600 font-mono text-xs cursor-not-allowed" />
@@ -837,19 +894,30 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               const unsupported = isCanvasWidgetUnsupported(currentProvider, currentCheckpoint, widget.name);
               const sendStatus = schemaSendStatus(currentProvider, widget.name, node.values?.[widget.name], node.values?.custom_parameters, readDeclaredSchemaProperties(schemaCustomParameters), schemaCustomParameters);
               const omitHint = sendStatus === 'not_sent';
-              const greyThis = unsupported;
+              // cleanup-2026-10-17: sampler params omitted by Schema are DISABLED (not 「能调但不发送」).
+              const schemaUnused = SAMPLER_SCHEMA_WIDGETS.has(widget.name) && omitHint;
+              // cleanup-serious: strength/denoise only when a reference image is connected (WaveSpeed strength etc.).
+              const isStrengthField = widget.name === 'denoise' || widget.name === 'strength';
+              let strengthNeedsImage = false;
+              if (isStrengthField && !unsupported) {
+                const declared = readDeclaredSchemaProperties(schemaCustomParameters);
+                let hasRef = false;
+                try { hasRef = JSON.parse(schemaCustomParameters || '{}')?._canvas?.hasReferenceImage === true; } catch { /* */ }
+                if (declared && declared.size > 0 && canvasFieldMatchesSchema('denoise', declared) && !hasRef) strengthNeedsImage = true;
+              }
+              const greyThis = unsupported || schemaUnused || strengthNeedsImage;
               return (
-                <div key={widget.name} className={`space-y-1 ${omitHint && !unsupported ? 'opacity-80' : ''}`}>
+                <div key={widget.name} className={`space-y-1 `}>
                   <div className="flex flex-wrap items-center justify-between gap-1.5">
                     <label className="text-slate-400 font-mono text-[11px] block whitespace-nowrap shrink-0" data-testid={`widget-label-${widget.name}`} title={widget.title || undefined}>{widget.label}</label>
-                    {unsupported && <FieldStatusBadge status="unsupported" />}
-                    {!unsupported && <SchemaSendBadge status={sendStatus} omitTitle={SCHEMA_OMIT_REASON} />}
+                    {unsupported && null}
+                    {!unsupported && null}
                   </div>
                   <select
                     value={greyThis ? '' : (value ?? '')}
                     disabled={greyThis}
                     title={greyThis ? '该服务商不支持' : omitHint ? SCHEMA_OMIT_REASON : ((opts.find((o) => o.value === value)?.label as string) || (value != null && value !== '' ? String(value) : widget.label))}
-                    aria-label={greyThis ? `${widget.name}（该服务商不支持）` : widget.label}
+                    aria-label={schemaUnused ? widget.label : (greyThis ? `${widget.name}（该服务商不支持）` : widget.label)}
                     onMouseDown={(e) => e.stopPropagation()}
                     onPointerDown={(e) => e.stopPropagation()}
                     onKeyDown={(e) => e.stopPropagation()}
@@ -890,8 +958,8 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                   <div className="flex items-center justify-between gap-1.5">
                     <label className="text-slate-400 font-mono text-[11px]" title={widget.title || undefined}>{widget.label}</label>
                     <div className="flex items-center gap-1.5">
-                      {greyThisNegative && <FieldStatusBadge status="unsupported" />}
-                      {isNegativeCLIP && !greyThisNegative && <SchemaSendBadge status={schemaSendStatus(currentProvider, 'negative_prompt', value, node.values?.custom_parameters, readDeclaredSchemaProperties(schemaCustomParameters), schemaCustomParameters)} omitTitle={SCHEMA_OMIT_REASON} />}
+                      {greyThisNegative && null}
+                      {isNegativeCLIP && !greyThisNegative && null}
                       {isPositiveCLIP && (
                         <button
                           onClick={handleRefinePrompt}
@@ -935,8 +1003,8 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                 <div key={widget.name} className="space-y-1">
                   <div className="flex flex-wrap items-center justify-between gap-1.5">
                     <label className="text-slate-400 font-mono text-[11px] block whitespace-nowrap shrink-0" data-testid={`widget-label-${widget.name}`} title={widget.title || undefined}>{widget.label}</label>
-                    {greySeed && <FieldStatusBadge status="unsupported" />}
-                    {!greySeed && <SchemaSendBadge status={schemaSendStatus(currentProvider, 'seed', value, node.values?.custom_parameters, readDeclaredSchemaProperties(schemaCustomParameters), schemaCustomParameters)} omitTitle={SCHEMA_OMIT_REASON} />}
+                    {greySeed && null}
+                    {!greySeed && null}
                   </div>
                   <div className="flex items-center gap-1.5">
                     <input
@@ -979,13 +1047,24 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               const unsupported = (isWH && greyWidthHeight) || isCanvasWidgetUnsupported(currentProvider, currentCheckpoint, widget.name);
               const sendStatus = schemaSendStatus(currentProvider, widget.name, node.values?.[widget.name], node.values?.custom_parameters, readDeclaredSchemaProperties(schemaCustomParameters), schemaCustomParameters);
               const omitHint = sendStatus === 'not_sent';
-              const greyThis = unsupported;
+              // cleanup-2026-10-17: sampler params omitted by Schema are DISABLED (not 「能调但不发送」).
+              const schemaUnused = SAMPLER_SCHEMA_WIDGETS.has(widget.name) && omitHint;
+              // cleanup-serious: strength/denoise only when a reference image is connected (WaveSpeed strength etc.).
+              const isStrengthField = widget.name === 'denoise' || widget.name === 'strength';
+              let strengthNeedsImage = false;
+              if (isStrengthField && !unsupported) {
+                const declared = readDeclaredSchemaProperties(schemaCustomParameters);
+                let hasRef = false;
+                try { hasRef = JSON.parse(schemaCustomParameters || '{}')?._canvas?.hasReferenceImage === true; } catch { /* */ }
+                if (declared && declared.size > 0 && canvasFieldMatchesSchema('denoise', declared) && !hasRef) strengthNeedsImage = true;
+              }
+              const greyThis = unsupported || schemaUnused || strengthNeedsImage;
               return (
-                <div key={widget.name} className={`space-y-1 ${omitHint && !unsupported ? 'opacity-80' : ''}`}>
+                <div key={widget.name} className={`space-y-1 `}>
                   <div className="flex flex-wrap items-center justify-between gap-1.5">
                     <label className="text-slate-400 font-mono text-[11px] block whitespace-nowrap shrink-0" data-testid={`widget-label-${widget.name}`} title={widget.title || undefined}>{widget.label}</label>
-                    {unsupported && <FieldStatusBadge status="unsupported" />}
-                    {!unsupported && <SchemaSendBadge status={sendStatus} omitTitle={SCHEMA_OMIT_REASON} />}
+                    {unsupported && null}
+                    {!unsupported && null}
                   </div>
                   <div className="relative">
                   <input
@@ -995,9 +1074,9 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                     step={widget.step}
                     value={greyThis ? '' : (value ?? '')}
                     disabled={greyThis}
-                    placeholder={greyThis ? '该服务商不支持' : undefined}
-                    title={greyThis ? '该服务商不支持' : omitHint ? SCHEMA_OMIT_REASON : undefined}
-                    aria-label={greyThis ? `${widget.name}（该服务商不支持）` : omitHint ? `${widget.label}（该端点不支持）` : widget.label}
+                    placeholder={schemaUnused ? '' : strengthNeedsImage ? '需接参考图' : (greyThis ? '该服务商不支持' : undefined)}
+                    title={schemaUnused ? '这家接口不用这几个参数' : strengthNeedsImage ? '有参考图时才发送 strength（官方 Schema）' : (greyThis ? '该服务商不支持' : omitHint ? SCHEMA_OMIT_REASON : undefined)}
+                    aria-label={schemaUnused ? widget.label : (greyThis ? `${widget.name}（该服务商不支持）` : omitHint ? `${widget.label}（该端点不支持）` : widget.label)}
                     onMouseDown={(e) => e.stopPropagation()}
                     onPointerDown={(e) => e.stopPropagation()}
                     onKeyDown={(e) => e.stopPropagation()}
@@ -1049,6 +1128,20 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                       </button>
                     )}
                   </div>
+                  {isLoraName ? (
+                    /* fix16.1 #3: LoRA id wraps (break opportunities at / and -; overflow-wrap fallback); value stays verbatim, Enter does not insert newline. */
+                    <textarea
+                      data-testid="lora-name-input"
+                      rows={Math.max(1, Math.ceil(String(value || '').length / 34))}
+                      value={value || ''}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter') e.preventDefault(); }}
+                      onChange={(e) => onUpdateValue(node.id, widget.name, e.target.value)}
+                      placeholder={widget.placeholder}
+                      className="w-full resize-none bg-[#121316] border border-[#2d303a] focus:border-cyan-500 rounded-lg px-2.5 py-1.5 text-slate-200 font-mono text-xs outline-none select-text cursor-text whitespace-pre-wrap [overflow-wrap:anywhere]"
+                    />
+                  ) : (
                   <input
                     type="text"
                     value={value || ''}
@@ -1059,6 +1152,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                     placeholder={widget.placeholder}
                     className="w-full bg-[#121316] border border-[#2d303a] focus:border-cyan-500 rounded-lg px-2.5 py-1.5 text-slate-200 font-mono text-xs outline-none select-text cursor-text"
                   />
+                  )}
                 </div>
               );
             }
@@ -1123,16 +1217,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                   <p className="text-amber-200/90 leading-tight">
                     {compat.message}
                   </p>
-                  {onAutoFixCheckpoint && compat.recommendedCheckpoint && (
-                    <button
-                      onClick={() => onAutoFixCheckpoint(compat.recommendedCheckpoint!)}
-                      className="w-full py-1.5 px-2 rounded-lg bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold flex items-center justify-center gap-1 transition-all shadow-md text-[10px] active:scale-95"
-                      title="一键将前置 CheckpointLoader 节点的模型切换为匹配底模（可选；不会自动触发）"
-                    >
-                      <Sparkles className="w-3 h-3 text-amber-200" />
-                      <span>⚡ 一键自动配对前置底模</span>
-                    </button>
-                  )}
+                  {/* cleanup-2026-10-17 #3: warning only — no one-click base-model swap; the user changes the checkpoint. */}
                 </div>
               );
             })()
@@ -1152,7 +1237,9 @@ export const NodeItem: React.FC<NodeItemProps> = ({
             (node.type === 'KSampler' && node.outputData) ||
             (node.type === 'VAEDecode' && node.outputData)) && (
             <div className="mt-2 space-y-2">
-              {node.outputData && node.restoredFromPreviousSession && <p data-testid="restored-output-label" className="rounded border border-slate-500/60 bg-slate-800/70 px-2 py-1 text-[11px] text-slate-200">{restoredOutputLabel(node.restoredFromPreviousSession)}</p>}
+              {node.outputData && node.stalePriorOutput && <p data-testid="stale-prior-output-label" role="status" className="rounded border border-amber-500/50 bg-amber-950/50 px-2 py-1 text-[11px] text-amber-100">上次结果，不是本次</p>}
+              {node.outputData && node.restoredFromPreviousSession && !node.stalePriorOutput && <p data-testid="restored-output-label" className="rounded border border-slate-500/60 bg-slate-800/70 px-2 py-1 text-[11px] text-slate-200">{restoredOutputLabel(node.restoredFromPreviousSession)}</p>}
+              {node.outputData && node.state === 'error' && !node.stalePriorOutput && <p data-testid="stale-error-output-label" role="status" className="rounded border border-amber-500/50 bg-amber-950/50 px-2 py-1 text-[11px] text-amber-100">上次结果，不是本次</p>}
               <div className="relative aspect-video w-full rounded-lg bg-[#121316] border border-[#2d303a] overflow-hidden flex items-center justify-center group">
                 {node.outputData ? (
                   typeof node.outputData === 'string' &&
@@ -1160,7 +1247,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                     <div className="relative w-full h-full">
                       {node.state === 'error' && (
                         <div className="absolute inset-x-0 top-0 z-[2] px-2 py-1 bg-rose-950/85 text-rose-200 text-[10px] font-mono text-center border-b border-rose-800/50">
-                          上次预览 · 本次未出图
+                          上次结果，不是本次
                         </div>
                       )}
                       <video
@@ -1190,7 +1277,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                     <>
                       {node.state === 'error' && (
                         <div className="absolute inset-x-0 top-0 z-[2] px-2 py-1 bg-rose-950/85 text-rose-200 text-[10px] font-mono text-center border-b border-rose-800/50">
-                          上次预览 · 本次未出图
+                          上次结果，不是本次
                         </div>
                       )}
                       <img

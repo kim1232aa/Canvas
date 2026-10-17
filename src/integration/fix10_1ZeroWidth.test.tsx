@@ -48,7 +48,7 @@ describe('fix10.1 zero-width scrub / block', () => {
     const dirty = [vnode({ model: 'fal-ai/\u200Bkling\u2060-video', prompt: 'ok' })] as any;
     const { nodes, hits } = scrubZeroWidthNodes(dirty);
     expect(hits).toEqual([{ nodeId: 'v1', nodeTitle: D.AIVideoNode.title, field: 'model', count: 2 }]);
-    expect(nodes[0].values.model).toBe('fal-ai/kling-video');
+    expect(nodes[0]?.values?.model).toBe('fal-ai/kling-video');
     expect(dirty[0].values.model).toContain('\u200B'); // input not mutated
     const b = preRunZeroWidthBlock(dirty)!; expect(b.requestCount).toBe(0); expect(String(b.error)).toContain('model');
     expect(preRunZeroWidthBlock(nodes)).toBeNull();

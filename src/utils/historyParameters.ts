@@ -307,14 +307,28 @@ export function resolveHistoryParameters(item: GenerationHistoryItem): Record<Hi
   const intendedSchemaProps = intendedBody && isRecord(intendedBody.custom_parameters) && isRecord(intendedBody.custom_parameters._canvas)
     && Array.isArray(intendedBody.custom_parameters._canvas.schemaProperties) ? intendedBody.custom_parameters._canvas.schemaProperties : undefined;
   const schemaFields = schemaFieldsRaw ? schemaFieldsRaw.map(String) : undefined;
-  const intendedLacks = (key: HistoryParameterKey) => !!intendedSchemaProps && ![...FIELD_KEYS[key], ...(key === 'size' ? ['width', 'height'] : [])].some((k) => intendedSchemaProps.map(String).includes(k));
-  const endpointLacks = (key: HistoryParameterKey) => !!schemaFields && ![...FIELD_KEYS[key], ...(key === 'size' ? ['width', 'height'] : [])].some((k) => schemaFields!.includes(k));
+  // size row: aspect_ratio counts (fix5) so an unfilled ratio is 「未发送」, not 「该端点不支持」.
+  // width/height keys: only discrete fields count — aspect_ratio-only Schema ⇒ user-set WxH is unsupported (task C).
+  const sizeLacksAliases = (key: HistoryParameterKey): string[] =>
+    key === 'size' ? [...FIELD_KEYS.size, 'width', 'height'] : FIELD_KEYS[key];
+  const intendedLacks = (key: HistoryParameterKey) => !!intendedSchemaProps && !sizeLacksAliases(key).some((k) => intendedSchemaProps!.map(String).includes(k));
+  const endpointLacks = (key: HistoryParameterKey) => !!schemaFields && !sizeLacksAliases(key).some((k) => schemaFields!.includes(k));
   // Same verdict for local-blocked and real outbound cards: Schema recorded → 该端点不支持 / 未发送; not recorded → say so, never guess.
   const schemaKnown = !!schemaFields || !!intendedSchemaProps;
   const absentSource = (key: HistoryParameterKey): HistoryParameterSource => endpointLacks(key) || intendedLacks(key) ? 'unsupported' : schemaKnown ? 'not-sent' : 'schema-unrecorded';
+  // Schema-driven envelopes record each canvas value the Schema did not take as mapping {from, value, sent:false}.
+  // Those board values are the 「这次没用上」 values when no requestedParameters were recorded (generic, by canvas name).
+  const unsentMapping: AnyRecord = {};
+  if (isRecord(metadata.actualRequest) && Array.isArray(metadata.actualRequest.mapping)) {
+    for (const m of metadata.actualRequest.mapping) {
+      if (!isRecord(m) || m.sent !== false || m.to != null || typeof m.from !== 'string') continue;
+      const canvasKey = m.from === 'sampler_name' ? 'sampler' : m.from;
+      if (!Object.prototype.hasOwnProperty.call(unsentMapping, canvasKey)) unsentMapping[canvasKey] = m.value;
+    }
+  }
   const result = {} as Record<HistoryParameterKey, ResolvedHistoryParameter>;
   (Object.keys(FIELD_KEYS) as HistoryParameterKey[]).forEach((key) => {
-    const requestedValue = readKeys(requested, FIELD_KEYS[key]);
+    const requestedValue = readKeys(requested, FIELD_KEYS[key]) ?? readKeys(unsentMapping, FIELD_KEYS[key]);
     const sentValue = key === 'size' ? normalizeSize(readKeys(sent, FIELD_KEYS[key])) : readKeys(sent, FIELD_KEYS[key]);
     const upstreamValue = key === 'size' ? normalizeSize(readKeys(upstream, FIELD_KEYS[key])) : readKeys(upstream, FIELD_KEYS[key]);
 
@@ -397,13 +411,19 @@ export function formatResolvedHistoryParameter(param: ResolvedHistoryParameter, 
 
 /** LoRAs actually sent (generic): history loras, else actualRequest (unwrap nested request/input) loras/styles/lora_list. */
 export function sentHistoryLoras(item: GenerationHistoryItem): Array<{ name: string; strength: unknown }> {
-  if (Array.isArray(item.loras) && item.loras.length) return item.loras.map((l) => ({ name: l.name, strength: l.strength }));
+  const fromItem = Array.isArray(item.loras) && item.loras.length
+    ? item.loras.map((l) => ({ name: String(l.name ?? ''), strength: l.strength }))
+    : [];
+  // Prefer item.loras only when every entry has a name — OpenWorks save-result once dropped name via l.path||… overwrite.
+  if (fromItem.length && fromItem.every((l) => l.name.trim())) return fromItem;
   const metadata = isRecord(item.requestMetadata) ? item.requestMetadata : {};
   const submission = last(Array.isArray(metadata.submissions) ? metadata.submissions : undefined);
   const raw = isRecord(metadata.actualRequest) ? metadata.actualRequest : isRecord(submission) ? submission
     : item.status === 'local_blocked' && isRecord(metadata.intendedRequest) ? metadata.intendedRequest : undefined;
   const params = unwrapGenerationParameters(raw);
-  return lorasFromSentParameters(params);
+  const fromParams = lorasFromSentParameters(params);
+  if (fromParams.length) return fromParams;
+  return fromItem.filter((l) => l.name.trim() || l.strength !== undefined);
 }
 
 /**
@@ -500,6 +520,13 @@ export function formatHistorySize(resolved: Record<HistoryParameterKey, Resolved
 export function hasOutputMedia(item: GenerationHistoryItem): boolean {
   if (item.status === 'failed' || item.status === 'local_blocked') return false;
   return typeof item.url === 'string' && item.url.trim() !== '';
+}
+
+/** Upstream task id recorded at submit (actualRequest.upstreamTaskId, else the submit response taskId). Never guessed. */
+export function historyUpstreamTaskId(item: GenerationHistoryItem): string | undefined {
+  const meta: any = (item as any)?.requestMetadata || {};
+  const id = meta?.actualRequest?.upstreamTaskId ?? meta?.submit?.taskId;
+  return id !== undefined && id !== null && String(id).trim() !== '' ? String(id) : undefined;
 }
 
 /** Canvas source of each sent top-level field, from actualRequest.mapping (generic). */
@@ -671,6 +698,17 @@ export function extractUpstreamEcho(item: GenerationHistoryItem, echoPath: strin
   return null;
 }
 
+/**
+ * hist-count-2026-10-17: a history record written for a failed model parameter-table / catalog GET
+ * (/api/history/prefetch-failure → errorSource 'prefetch' + requestMetadata.prefetch). It is NOT a generation request:
+ * history keeps the card visible, but never counts it as 出图失败 / 未出图. Structural fields only, no URL matching.
+ */
+export function isSchemaFetchFailure(item: GenerationHistoryItem): boolean {
+  if (item.status !== 'failed') return false;
+  const md = item.requestMetadata;
+  return item.errorSource === 'prefetch' || (isRecord(md) && isRecord((md as any).prefetch));
+}
+
 /** True when the generation POST never left (local block, or a Schema/catalog GET failed first). */
 export function generationPostNotSent(item: GenerationHistoryItem): boolean {
   if (item.status === 'local_blocked') return true;
@@ -685,7 +723,8 @@ export function seedStatement(sent: unknown, returned: unknown): string {
   const has = (v: unknown) => v !== undefined && v !== null && v !== '';
   if (has(returned) && has(sent) && String(returned) !== String(sent)) return `种子 ${String(returned)}（上游返回；实际发送 ${String(sent)}）`;
   if (has(returned)) return `种子 ${String(returned)}（上游返回${has(sent) ? '，与实际发送一致' : ''}）`;
-  if (has(sent)) return `种子 ${String(sent)}（实际发送；上游未返回种子）`;
+  // fix16: say 「实际发送」 and 「上游未返回种子」 in two sentences — never one vague paren.
+  if (has(sent)) return `种子 ${String(sent)}（实际发送）。上游未返回种子`;
   return '种子：未发送，上游也未返回';
 }
 
@@ -695,9 +734,15 @@ export function seedStatement(sent: unknown, returned: unknown): string {
  */
 export function historySeedRowText(item: GenerationHistoryItem): string {
   const r = resolveHistoryParameters(item).seed;
-  if (r.source === 'sent') return `种子 ${String(r.sent)}（上游未返回种子）`;
+  // fix16: value only; chip carries 「实际发送」, separate note carries 「上游未返回种子」.
+  if (r.source === 'sent') return `种子 ${String(r.sent)}`;
   if (r.source === 'intended') return `种子 ${String(r.value)}`;
   return historySeedStatement(item);
+}
+
+/** True when the seed row should show a separate 「上游未返回种子」 note (chip already says 实际发送). */
+export function historySeedUpstreamMissingNote(item: GenerationHistoryItem): boolean {
+  return resolveHistoryParameters(item).seed.source === 'sent';
 }
 
 /** Seed sentence for a history card, from the same resolver the card's parameter rows use. */
@@ -706,6 +751,10 @@ export function historySeedStatement(item: GenerationHistoryItem): string {
   if (r.source === 'upstream') return seedStatement(r.sent, r.upstream);
   if (r.source === 'sent') return seedStatement(r.sent, undefined);
   if (r.source === 'intended') return `种子 ${String(r.value)}（拟发送，未出站）`;
+  // Schema-driven providers record per-field mapping; a seed the Schema did not declare is 「未发送」 with that reason (not a vague fallback).
+  const mapping = (item as any)?.requestMetadata?.actualRequest?.mapping;
+  const m = Array.isArray(mapping) ? mapping.find((x: any) => x?.from === 'seed' && x?.sent === false) : undefined;
+  if (m) return `种子：未发送（${/Schema 未声明/.test(String(m.reason || '')) ? 'Schema 未声明' : String(m.reason || '未记录原因')}）`;
   return seedStatement(undefined, undefined);
 }
 

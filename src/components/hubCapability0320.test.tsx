@@ -20,10 +20,9 @@ describe('0324 custom import is config-driven', () => {
 });
 import { credentialRequirementFor } from './CivitaiModal';
 describe('0334 credential requirement from config', () => {
-  it('tensorart declares TAMS bearer requirement with notice + doc', () => {
-    const r = credentialRequirementFor('tensorart');
-    expect(r?.kind).toBe('tams-bearer');
-    expect(r?.notice).toBe('需要 TAMS Bearer key；官方没有模型列表接口');
+  it('TAMS Bearer requirement removed (2026-10-17: Tensor.Art = OpenWorks only)', () => {
+    expect(credentialRequirementFor('tensorart')).toBeUndefined();
+    expect(credentialRequirementFor('openworks')).toBeUndefined();
     expect(credentialRequirementFor('civitai')).toBeUndefined();
   });
 });

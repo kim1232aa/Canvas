@@ -61,10 +61,37 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
       generationContext,
     } = deps;
 
-  req.setTimeout(300000);
-  res.setTimeout(300000);
-
   try {
+    // Some test/mocks omit setTimeout; only call when present. Value stays 300s.
+    if (typeof (req as any).setTimeout === 'function') (req as any).setTimeout(300000);
+    if (typeof (res as any).setTimeout === 'function') (res as any).setTimeout(300000);
+
+    // Stop upstream polling when the browser disconnects (fail closed — no further upstream burns).
+    let clientClosed = false;
+    const markClientClosed = () => { clientClosed = true; };
+    req.on('close', markClientClosed);
+    const sleepOrAbort = (ms: number) => new Promise<void>((resolve, reject) => {
+      if (clientClosed) {
+        reject(Object.assign(new Error('client disconnected'), { clientDisconnected: true }));
+        return;
+      }
+      let settled = false;
+      let t: ReturnType<typeof setTimeout> | undefined;
+      const onClose = () => finish(() => reject(Object.assign(new Error('client disconnected'), { clientDisconnected: true })));
+      const finish = (fn: () => void) => {
+        if (settled) return;
+        settled = true;
+        if (t !== undefined) clearTimeout(t);
+        req.off('close', onClose);
+        fn();
+      };
+      t = setTimeout(() => {
+        if (clientClosed) finish(() => reject(Object.assign(new Error('client disconnected'), { clientDisconnected: true })));
+        else finish(() => resolve());
+      }, ms);
+      req.once('close', onClose);
+    });
+
     const {
       prompt,
       model,
@@ -168,7 +195,17 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
         if (runId) {
           // Poll: GET /api/video/status?requestId= → data.status → COMPLETED/FAILED, data.output.video.url
           for (let i = 0; i < 70; i++) {
-            await new Promise((r) => setTimeout(r, 2500));
+            if (clientClosed) {
+              keyPoolManager.recordResult('nanogpt', nanoKey, false, Date.now() - startTime, 'client disconnected');
+              return; // client gone — stop polling, do not keep burning upstream
+            }
+            try { await sleepOrAbort(2500); } catch (e: any) {
+              if (e?.clientDisconnected) {
+                keyPoolManager.recordResult('nanogpt', nanoKey, false, Date.now() - startTime, 'client disconnected');
+                return;
+              }
+              throw e;
+            }
             let statusRes: Response;
             try {
               statusRes = await upstreamFetch(
@@ -295,7 +332,17 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
         const pollDeadline = Date.now() + 5 * 60 * 1000;
         let videoUrl = '';
         while (Date.now() < pollDeadline) {
-          await new Promise((r) => setTimeout(r, 5000));
+          if (clientClosed) {
+            keyPoolManager.recordResult('agnes', agnesKey, false, Date.now() - startTime, 'client disconnected');
+            return;
+          }
+          try { await sleepOrAbort(5000); } catch (e: any) {
+            if (e?.clientDisconnected) {
+              keyPoolManager.recordResult('agnes', agnesKey, false, Date.now() - startTime, 'client disconnected');
+              return;
+            }
+            throw e;
+          }
           let pollResp: Response;
           try {
             pollResp = await upstreamFetch(
@@ -413,7 +460,17 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
         const pollDeadline = Date.now() + 5 * 60 * 1000;
         let videoUrl = '';
         while (Date.now() < pollDeadline) {
-          await new Promise((r) => setTimeout(r, 3000));
+          if (clientClosed) {
+            keyPoolManager.recordResult('grok_compat', grokKey, false, Date.now() - startTime, 'client disconnected');
+            return;
+          }
+          try { await sleepOrAbort(3000); } catch (e: any) {
+            if (e?.clientDisconnected) {
+              keyPoolManager.recordResult('grok_compat', grokKey, false, Date.now() - startTime, 'client disconnected');
+              return;
+            }
+            throw e;
+          }
           let pollResp: Response;
           try {
             pollResp = await upstreamFetch(
@@ -624,7 +681,8 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
       historyItem: item,
     });
   } catch (error: any) {
-    return res.status(500).json({ error: `AI 视频生成失败: ${error.message}` });
+    if (error?.clientDisconnected || (typeof req.aborted === 'boolean' && req.aborted)) return;
+    if (!res.headersSent) return res.status(500).json({ error: `AI 视频生成失败: ${error.message}` });
   }
 
   };

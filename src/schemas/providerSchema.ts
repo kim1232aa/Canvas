@@ -20,7 +20,8 @@ export type Provider = 'gemini' | 'fal' | 'civitai' | 'openai_compat' | 'grok_co
 export type FieldKey =
   | 'width' | 'height' | 'aspect_ratio' | 'image_size' | 'resolution' | 'shift'
   | 'seed' | 'negative_prompt' | 'steps' | 'cfg' | 'sampler' | 'scheduler' | 'denoise' | 'loras' | 'num_images'
-  | 'size' | 'quality' | 'output_format' | 'background' | 'moderation';
+  | 'size' | 'quality' | 'output_format' | 'background' | 'moderation'
+  | 'image';
 
 export interface FieldValue {
   value: string;
@@ -675,6 +676,8 @@ const MODELSCOPE_MODELS: ModelSpec[] = (['modelscope','modelscope_ai'] as const)
   provider,id:'modelscope-hosted-image',label:'ModelScope 云端图像 API（模型能力需核实）',source:MODELSCOPE_DOC,
   fields:{
     ...Object.fromEntries(['negative_prompt','seed','steps','cfg','width','height'].map(key=>[key,{status:'unverified' as const,source:MODELSCOPE_DOC,note:'本地 Diffusers 参数不能证明云端 REST 支持；显式提交将提示未核实'}])),
+    // seed range: official API-Inference Qwen-Image parameter table (docs/provider-schema-drafts/modelscope.json parametersQwenImage.seed). Status stays as-is; range only drives seed generation + precheck.
+    seed:{status:'unverified' as const,source:'https://modelscope.cn/docs/model-service/API-Inference/intro',type:'integer' as const,min:-1,max:2147483647,note:'上游实测 400 原文：seed must be in [-1, 2147483647]（官方参数表写 0 起）；越界运行前拦截'},
     loras:{status:'supported',source:MODELSCOPE_DOC,note:'单一仓库 ID 或最多六项权重映射，总和 1；底模兼容性仍由所选模型决定'},
     ...Object.fromEntries(['sampler','scheduler','denoise'].map(key=>[key,{status:'unverified' as const,source:MODELSCOPE_DOC,note:'当前官方云端 REST 资料未核实对应字段；未知能力不按 unsupported 本地拦截'}])),
   },

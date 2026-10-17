@@ -23,6 +23,6 @@ describe('fix11', () => {
     expect(read('../index.css')).toMatch(/max-width: 1180px[^}]*data-compact/);
     expect(read('../constants/nodes.ts')).toContain("'时间偏移 (shift)'");
     expect(read('../constants/nodes.ts')).not.toContain("label: 'resolution'");
-    expect(read('../components/ParameterInspector.tsx')).toContain('视频时长 (duration)');
+    expect(read('../components/ParameterInspector.tsx')).toContain('视频时长（秒）');
   });
 });

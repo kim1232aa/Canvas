@@ -3,6 +3,7 @@ import { getStoredApiKeys } from '../services/api';
 import {TensorCatalogNotice} from './TensorCatalogNotice';
 import {isCivitaiAir,selectionFromExplicitLoraUrl,selectionFromMetadata,verifiedSelectionOrExplicitIntent,verifyCivitaiSelection,type ResourceSelection} from '../utils/resourceSelection';
 import {isLoraWeightResource} from '../utils/isLoraWeightResource';
+import {isTensorArtLoraType} from '../utils/tensorArtModelInfo';
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Search,
@@ -552,8 +553,8 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
         const triggerStr = Array.isArray(info.trainedWords) && info.trainedWords.length > 0
           ? info.trainedWords.join(', ')
           : '';
-        if (!/lora|locon|lycoris|dora/i.test(info.type || info.category || '')) throw new Error('查询返回的资源不是 LoRA');
-        const baseArch = info.baseModel;
+        if (!isTensorArtLoraType(info)) throw new Error('查询返回的资源不是 LoRA');
+        const baseArch = typeof info.baseModel === 'string' ? info.baseModel : undefined;
         const resource={...selectionFromMetadata('tensorart',info,'lora'),triggerWords:triggerStr,baseModel:baseArch};
         if (onSelectLoRAWithBaseModel) onSelectLoRAWithBaseModel(resource);
         else onSelectLoRA(resource);
@@ -710,7 +711,6 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
             { id: 'modelscope', name: '魔搭 CN (国内站)' },
             { id: 'modelscope_ai', name: '魔搭 AI (国际站)' },
             { id: 'fal', name: 'Fal.ai (云端端点)' },
-            { id: 'tensorart', name: 'Tensor.Art (吐司)' },
             { id: 'muapi', name: 'MuAPI' },
             { id: 'wavespeed', name: 'WaveSpeed' },
             { id: 'sogni', name: 'Sogni' },

@@ -1,4 +1,4 @@
-// 2026-10-15 画布 FE round clean-0903 (/workspace/canvas-e2e-clean-0903): items 1, 2, 4, 5.
+// 2026-10-15 画布 FE round clean-0903 (/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-clean-0903): items 1, 2, 4, 5.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { sharedGetJson, clearSharedGet, beginSharedGetAction, peekSharedGet } from '../services/sharedGet';
 import { ensureModelSchema, getModelSchemaEntry } from '../services/modelSchemaCache';

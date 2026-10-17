@@ -8,7 +8,6 @@ export interface CivitaiModelRouteDeps {
 }
 
 const civitaiCache = new Map<string, { data: any; expiry: number; nextCursor?: string | null }>();
-const tensorArtToolsCache = new Map<string, { data: any; expiry: number }>();
 
 export function handleCivitaiModels(deps: CivitaiModelRouteDeps) {
   return async (req: Request, res: Response) => {
@@ -177,7 +176,7 @@ export function handleTensorArtModelInfo(deps: CivitaiModelRouteDeps) {
         process.env.TENSORART_KEY,
         process.env.TENSORART
       );
-      const baseUrl = String(cloudSettings['tensorartBaseUrl'] || deps.defaultKeys['tensorartBaseUrl'] || 'https://tams-api.tensor.art/v1').replace(/\/+$/, '');
+      const baseUrl = String(cloudSettings['tensorartBaseUrl'] || deps.defaultKeys['tensorartBaseUrl'] || 'https://ap-east-1.tensorart.cloud/v1').replace(/\/+$/, '');
       const targetEndpoint = `${baseUrl}/models/${encodeURIComponent(modelId)}`;
       if (!apiKey) {
         const hadAny =

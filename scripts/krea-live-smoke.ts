@@ -23,8 +23,8 @@ const srv=app.listen(0,async()=>{
     if(log.poll?.taskStatus==='completed'){
       const s=await j(await fetch(base+'/api/schema-provider/krea/save-result',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({outputs:log.poll.outputs,metadata:{model:'image/bfl/flux-1-dev',loras:sub.body.actualRequest?.parameters?.styles,requestMetadata:{actualRequest:sub.body.actualRequest}}})}));
       log.save={status:s.status,history:history.map(h=>({provider:h.provider,model:h.model,loras:h.loras,url:h.url}))};
-      for(const [i,u] of (log.poll.outputs||[]).entries()){const b=Buffer.from(await (await fetch(u)).arrayBuffer());fs.writeFileSync(`/workspace/canvas-e2e-krea/output-${i}.png`,b);}
+      for(const [i,u] of (log.poll.outputs||[]).entries()){const b=Buffer.from(await (await fetch(u)).arrayBuffer());fs.writeFileSync(`/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-krea/output-${i}.png`,b);}
     }
   }
-  fs.writeFileSync('/workspace/canvas-e2e-krea/smoke-result.json',JSON.stringify(log,null,2));console.log(JSON.stringify(log,null,2).slice(0,6000));srv.close();
+  fs.writeFileSync('/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-krea/smoke-result.json',JSON.stringify(log,null,2));console.log(JSON.stringify(log,null,2).slice(0,6000));srv.close();
 });

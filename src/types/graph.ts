@@ -86,6 +86,8 @@ export interface NodeInstance {
   errorMessage?: string;
   /** ISO time the upstream failure was recorded (clean-1651: badge shows 「上一次」+ 北京时间). */
   errorAt?: string;
+  /** 'schema' = model-schema lookup failed before any generation request; shown on the model node as a plain headline + raw body. */
+  errorKind?: 'schema';
   /** Set on downstream branch nodes when this run failed upstream (no media produced). */
   upstreamFailed?: boolean;
   /** The failure was a local block (no request left the machine), not an upstream failure. */
@@ -103,6 +105,8 @@ export interface NodeInstance {
   outputAt?: string;
   /** Output restored from the workspace cache after a page refresh (not produced by this session). */
   restoredFromPreviousSession?: { at: string | null };
+  /** Legacy flag: prior image kept with「上次结果，不是本次」. Prefer clearing outputData (saveempty) instead. */
+  stalePriorOutput?: boolean;
 }
 
 export interface Connection {
@@ -129,6 +133,8 @@ export interface WorkflowPreset {
   previewImage?: string;
   tags?: string[];
   loraNames?: string[];
+  /** 待配方: the endpoint needs a real resource (e.g. a required lora_url) the recipes do not provide yet. Card shows 待配方 and 立即运行 stays disabled. */
+  pendingRecipe?: string;
   architectureExplanation?: string;
   otherMetadata?: {
     baseModel?: string;

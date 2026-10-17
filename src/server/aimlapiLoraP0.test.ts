@@ -31,7 +31,7 @@ async function submit(body: any) {
   return { status, payload, calls, upstreamBody: post ? JSON.parse(String(post.init!.body)) : undefined };
 }
 
-// Same graph shape as /workspace/canvas-e2e-aimlapi-fe 04-before-run.png
+// Same graph shape as /workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-aimlapi-fe 04-before-run.png
 function graph(steps: number) {
   const nodes: any[] = [
     { id: 'ck', type: 'CheckpointLoaderSimple', pos: { x: 0, y: 0 }, values: { targetProvider: 'aimlapi', ckpt_name: MODEL } },

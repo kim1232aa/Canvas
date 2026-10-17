@@ -1,6 +1,6 @@
 /**
  * Tensor.Art credential helpers.
- * TAMS Model API (https://tams-api.tensor.art) uses Bearer tokens from https://tams.tensor.art/app.
+ * TAMS Model API (default https://ap-east-1.tensorart.cloud; override via tensorartBaseUrl / console Endpoint) uses Bearer tokens from https://tams.tensor.art/app.
  * OpenWorks tools (https://openapi.tensor.art/openworks/v1) use Echo-Access-Key ak_tensor_… keys.
  * The two credential families are not interchangeable.
  */
@@ -31,4 +31,4 @@ export function pickTamsBearerKey(...sources: unknown[]): string | null {
 }
 
 export const TAMS_BEARER_REQUIRED_HINT =
-  '画布 Checkpoint / LoRA / 模型查询走 TAMS 模型 API（https://tams-api.tensor.art），需要在 https://tams.tensor.art/app 创建应用获取 Bearer Key。OpenWorks ak_tensor_… 仅用于 OpenWorks 接口，两套凭证不互通。';
+  '本产品 Tensor.Art 已只保留 OpenWorks 真出图（ak_tensor_… → openapi.tensor.art/openworks/v1）。TAMS Bearer / ap-east-1.tensorart.cloud 双轨入口已下线；请在底模选「Tensor.Art OpenWorks」。';

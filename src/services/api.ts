@@ -1,4 +1,5 @@
 import {tracedFetch} from './executionTrace';
+import {normalizeTensorArtModelInfo} from '../utils/tensorArtModelInfo';
 import { ApiKeysState, CivitaiSearchResult, GenerationHistoryItem, ProviderId } from '../types/providers';
 
 const API_KEYS_STORAGE_KEY = 'comfycanvas_api_keys';
@@ -268,36 +269,6 @@ export const generateVideo = async (params: {
   return resp.json();
 };
 
-export const generateWithTensorArt = async (params: {
-  prompt: string;
-  negative_prompt?: string;
-  model?: string;
-  width?: number;
-  height?: number;
-  steps?: number;
-  cfg?: number;
-  seed?: number;
-  loras?: Array<{ name: string; strength: number; civitaiId?: string }>;
-  image_url?: string;
-}) => {
-  const keys = getStoredApiKeys();
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (keys.tensorartKey) headers['x-tensorart-key'] = keys.tensorartKey;
-
-  const resp = await fetch('/api/tensorart/generate', {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(params),
-  });
-
-  if (!resp.ok) {
-    const err = await resp.json().catch(() => ({ error: 'Tensor.Art generation error' }));
-    throw new Error(err.details || err.error || `Tensor.Art failed (${resp.status})`);
-  }
-
-  return resp.json();
-};
-
 export const generateWithGemini = async (params: {
   prompt: string;
   negative_prompt?: string;
@@ -425,7 +396,47 @@ export const uploadMedia = async (dataUrl: string): Promise<string> => {
   if (!body || typeof body.url !== 'string') throw new Error('媒体上传响应缺少 url');
   return body.url;
 };
-export const fetchHistory = async (): Promise<GenerationHistoryItem[]> => historyRequest('/api/history');
+/** Slim list by default (server omits workflowSnapshot). Pass page for {items,total,hasMore}. */
+export type HistoryPage = {
+  items: GenerationHistoryItem[];
+  total: number;
+  limit: number;
+  offset: number;
+  hasMore: boolean;
+};
+
+export const fetchHistory = async (): Promise<GenerationHistoryItem[]> => {
+  const body = await historyRequest('/api/history');
+  if (Array.isArray(body)) return body as GenerationHistoryItem[];
+  if (body && Array.isArray((body as HistoryPage).items)) return (body as HistoryPage).items;
+  return [];
+};
+
+export const fetchHistoryPage = async (opts?: { limit?: number; offset?: number }): Promise<HistoryPage> => {
+  const limit = opts?.limit ?? 24;
+  const offset = opts?.offset ?? 0;
+  const q = new URLSearchParams({ limit: String(limit), offset: String(offset), format: 'page' });
+  const body = await historyRequest(`/api/history?${q}`);
+  if (Array.isArray(body)) {
+    return { items: body as GenerationHistoryItem[], total: body.length, limit, offset: 0, hasMore: false };
+  }
+  const page = body as HistoryPage;
+  return {
+    items: Array.isArray(page?.items) ? page.items : [],
+    total: typeof page?.total === 'number' ? page.total : 0,
+    limit: typeof page?.limit === 'number' ? page.limit : limit,
+    offset: typeof page?.offset === 'number' ? page.offset : offset,
+    hasMore: !!page?.hasMore,
+  };
+};
+
+/** Full record including workflowSnapshot (list responses omit it). */
+export const fetchHistoryItem = async (id: string): Promise<GenerationHistoryItem> => {
+  const body = await historyRequest(`/api/history/${encodeURIComponent(id)}`);
+  if (!body || typeof body !== 'object') throw new Error('历史详情响应无效');
+  return body as GenerationHistoryItem;
+};
+
 export const saveToHistory = async (item: Partial<GenerationHistoryItem>) => historyRequest('/api/history', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(item)});
 export const deleteHistoryItem = async (id: string) => {await historyRequest(`/api/history/${encodeURIComponent(id)}`, {method: 'DELETE'}); return true;};
 export const deleteHistoryBatch = async (ids: string[]) => {await historyRequest('/api/history/delete-batch', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ids})}); return true;};
@@ -568,7 +579,7 @@ export const fetchTensorArtModelInfo = async (modelId: string) => {
     const errorData = await resp.json().catch(() => ({ error: `HTTP ${resp.status}` }));
     throw new Error(errorData.details || errorData.error || `Tensor.Art 模型详情获取失败 (${resp.status})`);
   }
-  return await resp.json();
+  return normalizeTensorArtModelInfo(await resp.json());
 };
 
 export const fetchReplicateModelInfo = async (model: string) => {

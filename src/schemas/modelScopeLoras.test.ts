@@ -27,3 +27,20 @@ it('rejects weights that do not sum to 1.0 without rescaling', () => {
     {name: 'owner/b', strength: 0.5},
   ])).toThrow(/不会自动改权重/);
 });
+
+it('prefers repo id in name over HTTPS path (canvas downloadUrl residue)', () => {
+  expect(buildModelScopeLoras([{
+    name: 'LcarsPicturesDatabase/ST-TNG-Rooms-Z-Image-Turbo-v1',
+    path: 'https://huggingface.co/foo/bar/resolve/main/lora.safetensors',
+    strength: 1,
+  }])).toEqual({'LcarsPicturesDatabase/ST-TNG-Rooms-Z-Image-Turbo-v1': 1});
+});
+it('rejects path_or_id/weight and bare path/scale object (agy / fal shapes)', () => {
+  expect(() => buildModelScopeLoras({ path_or_id: 'owner/a', weight: 1 })).toThrow(/path_or_id|loras/);
+  expect(() => buildModelScopeLoras({ path: 'owner/a', scale: 1 })).toThrow(/path\/scale|loras/);
+});
+it('payload contract: array maps to official loras object, never path/scale keys', () => {
+  const out = buildModelScopeLoras([{ name: 'owner/a', strength: 0.6 }, { id: 'owner/b', modelStrength: 0.4 }]);
+  expect(out).toEqual({ 'owner/a': 0.6, 'owner/b': 0.4 });
+  expect(JSON.stringify(out)).not.toMatch(/"path"|"scale"|"path_or_id"/);
+});

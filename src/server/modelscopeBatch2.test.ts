@@ -47,7 +47,7 @@ describe('modelscope.ai LoRA list (region config, intl only)', () => {
   it('maps rows; bad shape throws (no fallback)', () => {
     const out = parseLoraListResponse(cfg, { Code: 200, Data: { Model: { TotalCount: 203, Models: [{ Path: 'LcarsPicturesDatabase', Name: 'ST-TNG-Rooms-Z-Image-Turbo-v1', BaseModel: ['Tongyi-MAI/Z-Image-Turbo'], Tags: ['LoRA'] }, { Path: 'a', Name: 'b', BaseModel: ['undefined'] }] } } });
     expect(out.total).toBe(203);
-    expect(out.items[0]).toMatchObject({ id: 'LcarsPicturesDatabase/ST-TNG-Rooms-Z-Image-Turbo-v1', baseModel: 'Tongyi-MAI/Z-Image-Turbo', externalUrl: 'https://www.modelscope.ai/models/LcarsPicturesDatabase/ST-TNG-Rooms-Z-Image-Turbo-v1' });
+    expect(out.items[0]).toMatchObject({ id: 'LcarsPicturesDatabase/ST-TNG-Rooms-Z-Image-Turbo-v1', provider: 'modelscope_ai', baseModel: 'Tongyi-MAI/Z-Image-Turbo', externalUrl: 'https://www.modelscope.ai/models/LcarsPicturesDatabase/ST-TNG-Rooms-Z-Image-Turbo-v1' });
     expect(out.items[1].baseModel).toBeNull();
     expect(() => parseLoraListResponse(cfg, { Code: 10010205001 })).toThrow(/响应格式不符/);
   });

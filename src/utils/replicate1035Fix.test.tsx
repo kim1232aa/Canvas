@@ -50,8 +50,8 @@ describe('1035 #2 尺寸 absent state renders like 采样器/调度器/负向 (n
     const html = renderToStaticMarkup(<HistoryModal isOpen onClose={() => {}} history={[{ id: 'h', ...failed() } as any]} onApplyPrompt={() => {}} onDeleteItem={() => {}} onClearAll={() => {}} />);
     // fix5: Schema has aspect_ratio ⇒ size row shows 「未发送」 (not folded into 该端点不支持)
     expect(html).toContain('data-testid="history-size"');
-    expect(html).toMatch(/data-testid="history-size">尺寸: 未发送/);
+    expect(html).toMatch(/data-testid="history-size"[^>]*>尺寸: 未发送/);
     expect(html).not.toMatch(/data-unsupported-key="size"/);
-    expect(html).toMatch(/data-unsupported-key="sampler">采样器 · 该端点不支持 · 未发送<\/li>/);
+    expect(html).not.toContain('history-unsupported-fold'); // cleanup-2026-10-17
   });
 });

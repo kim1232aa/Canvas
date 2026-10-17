@@ -15,7 +15,7 @@ import {
 } from './schemaSendHint';
 import { planCanvasField, GENERIC_PAYLOAD_ALIASES } from './schemaPayloadPlan';
 // Server packs width/height into a declared image_size object or size string (Schema-driven), so those are valid targets too.
-const BADGE_ALIASES = { ...GENERIC_PAYLOAD_ALIASES, width: ['width', 'image_size', 'size'], height: ['height', 'image_size', 'size'], loras: [...GENERIC_PAYLOAD_ALIASES.loras, 'lora_weights', 'hf_lora'] };
+const BADGE_ALIASES = { ...GENERIC_PAYLOAD_ALIASES, width: ['width', 'image_size', 'size', 'image width'], height: ['height', 'image_size', 'size', 'image height'], loras: [...GENERIC_PAYLOAD_ALIASES.loras, 'lora_weights', 'hf_lora'] };
 
 export type SchemaSendStatus = 'will_send' | 'not_sent' | 'pending' | 'loading' | 'schema_unavailable' | null;
 
@@ -43,6 +43,10 @@ export function schemaSendStatus(
   if ((!declared || declared.size === 0) && (canvasFlag(customParameters, 'schemaUnavailable') || canvasFlag(schemaMeta, 'schemaUnavailable'))) return 'schema_unavailable';
   if ((!declared || declared.size === 0) && (canvasFlag(customParameters, 'schemaLoading') || canvasFlag(schemaMeta, 'schemaLoading'))) return 'loading';
   if (!declared || declared.size === 0) return 'pending';
+  // OpenWorks: live-tested extras are sent even when catalog inputs omit them.
+  if (String(provider || '').toLowerCase().trim() === 'openworks' && ['seed', 'steps', 'cfg', 'cfg_scale', 'negative_prompt', 'loras', 'styles'].includes(String(field || '').toLowerCase().trim())) {
+    return 'will_send';
+  }
   if (!canvasFieldMatchesSchema(field, declared)) return null;
   // Same function the server uses to build the scoped payload: omitted there ⇒ never 会发送 here.
   const hasRef = ctx?.hasReferenceImage ?? (canvasFlag(customParameters, 'hasReferenceImage') || canvasFlag(schemaMeta, 'hasReferenceImage'));

@@ -16,7 +16,6 @@ import { GeminiDriver } from './drivers/GeminiDriver';
 import { HuggingFaceDriver } from './drivers/HuggingFaceDriver';
 import { VideoDriver } from './drivers/VideoDriver';
 import { CivitaiDriver } from './drivers/CivitaiDriver';
-import { TensorArtDriver } from './drivers/TensorArtDriver';
 import { OpenAICompatDriver } from './drivers/OpenAICompatDriver';
 import { GrokCompatDriver } from './drivers/GrokCompatDriver';
 import { SchemaProviderDriver } from './drivers/SchemaProviderDriver';
@@ -46,7 +45,6 @@ export class EngineRegistryClass {
     this.register(new NanoGPTDriver());
     this.register(new GeminiDriver());
     this.register(new HuggingFaceDriver());
-    this.register(new TensorArtDriver());
     this.register(new OpenAICompatDriver());
     this.register(new GrokCompatDriver());
     this.register(new SchemaProviderDriver('muapi'));

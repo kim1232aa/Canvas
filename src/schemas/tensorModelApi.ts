@@ -1,5 +1,5 @@
 import { applyCustomParameters, parseCustomObject } from '../server/customParameters';
-export const TENSOR_MODEL_API = 'https://tams-api.tensor.art';
+export const TENSOR_MODEL_API = 'https://ap-east-1.tensorart.cloud';
 export const TENSOR_JOB_DOC = 'https://tams-docs.tensor.art/zh/docs/api/apis/tams-api-v-1-service-create-job/';
 export function tensorModelId(value: unknown): string {
   const raw = String(value ?? '').trim();
@@ -64,7 +64,7 @@ export function buildTensorModelJob(body: Record<string, any>, requestId: string
   const custom = parseCustomObject(body.custom_parameters);
   const { model: customModel, ...jobCustom } = custom || {};
   if (customModel !== undefined) diffusion.sdModel = tensorModelId(customModel);
-  return applyCustomParameters({requestId, request_id: requestId, stages: [{type:'INPUT_INITIALIZE', inputInitialize}, {type:'DIFFUSION', diffusion}]}, jobCustom).payload;
+  return applyCustomParameters({requestId, stages: [{type:'INPUT_INITIALIZE', inputInitialize}, {type:'DIFFUSION', diffusion}]}, jobCustom).payload;
 }
 
 /** TAMS model IDs (numeric / tensor.art model URL) have no generic video job API (docs/provider-schema-drafts/tensorart-tams.json:

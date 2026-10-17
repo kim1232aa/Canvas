@@ -3,14 +3,15 @@ import { describe, expect, it } from 'vitest';
 import { buildAgnesVideoRequest, agnesVideoId } from './agnesVideoRequest';
 
 const serverSource = readFileSync(new URL('../../server.ts', import.meta.url), 'utf8');
+const videoRouteSource = readFileSync(new URL('./routes/videoGenerateRoute.ts', import.meta.url), 'utf8');
 
 describe('server closeout wiring contracts', () => {
   it('production Agnes route uses the builder, actual request metadata, and strict video_id polling contract', () => {
-    expect(serverSource).toContain("import {buildAgnesVideoRequest, agnesVideoId} from './src/server/agnesVideoRequest.ts';");
-    expect(serverSource).toContain('builtAgnes = buildAgnesVideoRequest(model, req.body)');
-    expect(serverSource).toContain('videoId = agnesVideoId(submitData)');
-    expect(serverSource).toContain('actualRequest: agnesPayload');
-    expect(serverSource).toContain('requestMetadata');
+    expect(videoRouteSource).toContain("import { buildAgnesVideoRequest, agnesVideoId } from '../agnesVideoRequest.ts';");
+    expect(videoRouteSource).toContain('builtAgnes = buildAgnesVideoRequest(model, req.body)');
+    expect(videoRouteSource).toContain('videoId = agnesVideoId(submitData)');
+    expect(videoRouteSource).toContain('actualRequest: agnesPayload');
+    expect(videoRouteSource).toContain('requestMetadata');
     expect(() => agnesVideoId({ id: 'task_fixture' })).toThrow(/video_id/);
     expect(buildAgnesVideoRequest('agnes-video-2.5', { custom_parameters: { mode: 'reference', images: ['https://example.com/ref.png'], resolution: 'unknown-explicit' } }).payload).toMatchObject({ mode: 'reference', resolution: 'unknown-explicit' });
   });

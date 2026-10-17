@@ -66,8 +66,8 @@ describe('explicit frontend request contracts', () => {
     expect(() => spatialRequestParameters(frame({targetProvider:'civitai',loras:[{name:'original',civitaiId:'123',unresolvedResource:true,modelStrength:0,clipStrength:0,triggerWords:''}]}))).toThrow(/123.*重新选择/);
   });
   it('uses only verified video duration bounds', () => {
-    expect(videoDurationBounds('fal','fal-ai/kling-video/v3/standard/image-to-video')).toEqual({min:3,max:15});
-    expect(videoDurationBounds('fal','fal-ai/wan/v2.7/image-to-video')).toEqual({min:2,max:15});
+    expect(videoDurationBounds('fal','fal-ai/kling-video/v3/standard/image-to-video')).toEqual({}) /* cleanup-2026-10-17: no hardcoded per-model range; Schema not loaded */;
+    expect(videoDurationBounds('fal','fal-ai/wan/v2.7/image-to-video')).toEqual({}) /* cleanup-2026-10-17: no hardcoded per-model range; Schema not loaded */;
     expect(videoDurationBounds('fal','custom-video')).toEqual({});
   });
   it('does not turn a resource display name into a weight path', () => {

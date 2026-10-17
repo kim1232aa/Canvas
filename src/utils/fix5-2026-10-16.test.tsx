@@ -50,7 +50,7 @@ describe('fix5 AIMLAPI size row never shows raw-response byte count', () => {
     expect(html).toContain('history-size');
     expect(html).toContain('square');
     expect(html).not.toMatch(/尺寸:[^<]*505/);
-    expect(html).toContain('history-unsupported');
+    // cleanup-2026-10-17: unsupported fold replaced by one 「这次没用上」 line (only for user-filled values).
   });
 
   it('上游响应折叠写「响应体 505 B」，不把裸「505 字节」当尺寸', () => {
@@ -124,7 +124,7 @@ describe('fix5 MuAPI LocalRecord strength annotation + short red-bar', () => {
       },
     };
     const html = modal([item]);
-    expect(html).toContain('strength（Schema 声明，本次请求未含）');
+    expect(html.replace(/<wbr\/>/g, '').replace(/<\/?span[^>]*>/g, '')).toContain('strength（Schema 声明，本次请求未含）'); // fix16.1: JSON lines now wrap at spaces
     expect(html).not.toContain('非本次实发');
   });
 

@@ -2,7 +2,7 @@
  * ModelScope LoRA list per region (config-driven). Each region lists only from its own site — never mixes .cn into .ai.
  * Request shape verified live 2026-10-16 11:18 CST: PUT https://www.modelscope.ai/api/v1/dolphin/models
  * {PageSize, PageNumber, SortBy, Target, Criterion:[{category:'tags',predicate:'contains',values:['lora']}], Name} → Data.Model.{Models,TotalCount}
- * (evidence: /workspace/canvas-e2e-modelscope-ai-lora-pick-1118/dolphin.txt).
+ * (evidence: /workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-modelscope-ai-lora-pick-1118/dolphin.txt).
  */
 export interface ModelScopeRegionConfig { site: string; providerLabel: string; loraListEndpoint: string | null }
 
@@ -31,7 +31,7 @@ export function parseLoraListResponse(cfg: ModelScopeRegionConfig, data: any): {
     const id = `${m.Path}/${m.Name}`;
     const base = Array.isArray(m.BaseModel) ? m.BaseModel.filter((b: any) => typeof b === 'string' && b && b !== 'undefined') : [];
     return {
-      id, name: m.ChineseName || m.Name, provider: cfg.providerLabel, category: 'lora', type: 'LORA',
+      id, name: m.ChineseName || m.Name, provider: 'modelscope_ai', providerLabel: cfg.providerLabel, category: 'lora', type: 'LORA',
       baseModel: base[0] ?? null, downloads: m.Downloads || 0, likes: m.Stars || 0, rating: 0,
       imageUrl: Array.isArray(m.CoverImages) && m.CoverImages[0] ? m.CoverImages[0] : '',
       externalUrl: `${cfg.site}/models/${id}`, tags: Array.isArray(m.Tags) ? m.Tags : [], trainedWords: [], sourceSite: cfg.site,

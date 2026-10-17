@@ -610,7 +610,8 @@ export const Canvas: React.FC<CanvasProps> = ({
             </button>
           </div>
           <div className="max-h-80 overflow-y-auto space-y-1 pt-1">
-            {Object.values(NODE_DEFINITIONS).map((def) => (
+            {/* cleanup-2026-10-17 #2: generic AI video box retired from the add menu; video provider/model is chosen in the right panel. */}
+            {Object.values(NODE_DEFINITIONS).filter((def) => def.type !== 'AIVideoNode').map((def) => (
               <button
                 key={def.type}
                 onClick={() => {

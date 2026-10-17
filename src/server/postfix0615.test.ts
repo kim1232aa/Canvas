@@ -1,4 +1,4 @@
-// Fixes for /workspace/canvas-e2e-postfix-0615 FAIL (generic, Schema-driven).
+// Fixes for /workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-postfix-0615 FAIL (generic, Schema-driven).
 import express from 'express';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import catalog from './__fixtures__wavespeed-live-2026-10-15.json';

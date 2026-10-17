@@ -13,6 +13,7 @@ import {
 } from './resolveCheckpoint';
 import { assertAIVideoProviderReady } from './videoProvider';
 import {modelCheckpoint} from './inspectorParameters';
+import { isSchemaPrefetchError, schemaFailureNodeMessage, schemaFailureTargetId } from './schemaFailure';
 import { assertResolvedResources, parseCustomParameters, explicitLoraPath } from './frontendParameters';
 import { normalizeLoraPayloadItem } from './resourceSelection';
 import { assertExplicitLoraStrengths, parseExplicitLoraStrength } from './loraStrength';
@@ -26,9 +27,30 @@ export function shouldClearExecutionOutput(nodeType: string, state: NodeInstance
   return output === undefined && MEDIA_OUTPUT_NODE_TYPES.has(nodeType) && (state === 'running' || state === 'error' || (state === 'idle' && errorMessage === ''));
 }
 
+/** Preview nodes whose on-canvas image must empty when the base model changes or a run is blocked/fails without a new image. */
+export const PRIOR_PREVIEW_CLEAR_TYPES = new Set(['SaveImage', 'PreviewImage', 'KSampler', 'SaveVideo']);
+
+/** Clear prior on-canvas media; keep values (incl. filename_prefix) untouched. History is never touched. */
+export function clearPriorMediaPreview(n: NodeInstance): NodeInstance {
+  if (!PRIOR_PREVIEW_CLEAR_TYPES.has(n.type)) return n;
+  if (!n.outputData && !n.stalePriorOutput && !n.outputAt && !n.restoredFromPreviousSession) return n;
+  return {
+    ...n,
+    outputData: undefined,
+    outputAt: undefined,
+    stalePriorOutput: undefined,
+    restoredFromPreviousSession: undefined,
+  };
+}
+
+/** Apply clearPriorMediaPreview across the graph (model switch / blocked run). */
+export function clearPriorMediaPreviews(nodes: NodeInstance[]): NodeInstance[] {
+  return nodes.map(clearPriorMediaPreview);
+}
+
 /** Drop prior run media/error from the client request snapshot; sync CheckpointLoader title to current provider. */
 export function sanitizeExecutionSnapshotNodes(nodes: NodeInstance[]): NodeInstance[] {
-  return nodes.map(({ outputData: _outputData, errorMessage: _errorMessage, errorAt: _errorAt, executionProgress: _executionProgress, ...node }) => {
+  return nodes.map(({ outputData: _outputData, errorMessage: _errorMessage, errorAt: _errorAt, errorKind: _errorKind, executionProgress: _executionProgress, ...node }) => {
     const title =
       node.type === 'CheckpointLoaderSimple'
         ? checkpointNodeTitle(node.values?.targetProvider, node.values?.ckpt_name)
@@ -85,6 +107,7 @@ export function clearNodeExecutionErrors(
       state: (n.state === 'error' ? 'idle' : n.state) as NodeInstance['state'],
       errorMessage: undefined,
       errorAt: undefined,
+      errorKind: undefined,
       executionProgress: n.state === 'error' ? 0 : n.executionProgress,
       ...(n.state === 'error' && MEDIA_OUTPUT_NODE_TYPES.has(n.type) ? { outputData: undefined } : {}),
     };
@@ -908,6 +931,11 @@ export function extractWorkflowParameters(
     if (!latentSizeSource) {
       if (width === undefined) width = numOrUndef(ckpt.values.width);
       if (height === undefined) height = numOrUndef(ckpt.values.height);
+    } else {
+      // ws-sizenode: the board's Empty Latent is the only size source. A loader that still carries its own
+      // width/height that disagrees is a hidden second copy — block instead of silently picking one.
+      const conflict = latentLoaderSizeConflict(ckpt.values, { width, height });
+      if (conflict) throw new Error(conflict);
     }
   } else {
     checkpointModel = (execNode.values.model || execNode.values.ckpt_name || '').trim();
@@ -1050,6 +1078,8 @@ export async function executeWorkflow(
   let stepInterval: any = null;
   let executingIds = new Set<string>();
   let outputIds = new Set<string>();
+  // Nodes this run put into 'running'; the catch path must not leave any of them stuck mid-progress.
+  const runningIds = new Set<string>();
   let targetErrorNodeId: string | undefined = typeof targetNodeOrId === 'string' ? targetNodeOrId : targetNodeOrId?.id;
 
   try {
@@ -1125,6 +1155,7 @@ export async function executeWorkflow(
     const llmNode = activeNodes.find((n) => n.type === 'LLMReasoningNode');
     if (llmNode && (llmNode.values.prompt || llmNode.values.input_text)) {
       onNodeStateChange(llmNode.id, 'running', 40);
+      runningIds.add(llmNode.id);
       try {
         const reasoningProvider = llmNode.values.provider;
         if (!reasoningProvider) throw new Error('请先选择推理服务商');
@@ -1196,9 +1227,11 @@ export async function executeWorkflow(
             refined_output: chatResult.content,
             reasoning_output: chatResult.reasoningContent || '',
           });
+          runningIds.delete(llmNode.id);
         }
       } catch (reasoningErr: any) {
         onNodeStateChange(llmNode.id, 'error', 0, undefined, reasoningErr.message);
+        runningIds.delete(llmNode.id);
         throw reasoningErr;
       }
     }
@@ -1318,7 +1351,7 @@ export async function executeWorkflow(
     }) as NormalizedGenerateParams;
 
     // Stage 4: KSampler / Video Generation
-    ksamplerNodes.forEach((n) => onNodeStateChange(n.id, 'running', 50));
+    ksamplerNodes.forEach((n) => { onNodeStateChange(n.id, 'running', 50); runningIds.add(n.id); });
     onProgress?.(50, `[4/5] 正在向 ${params.targetProvider.toUpperCase()} 官方算力提交任务并等待渲染回传...`);
 
     const startTime = Date.now();
@@ -1343,7 +1376,7 @@ export async function executeWorkflow(
     usedModel = execResult.model;
 
     // Stage 5: VAE Decode and Final Save
-    ksamplerNodes.forEach((n) => onNodeStateChange(n.id, 'success', 100));
+    ksamplerNodes.forEach((n) => { onNodeStateChange(n.id, 'success', 100); runningIds.delete(n.id); });
     if (vaeNodes.length > 0) {
       onProgress?.(92, `[5/5] 已收到上游图片；整理输出...`);
       vaeNodes.forEach((n) => onNodeStateChange(n.id, 'idle', 0));
@@ -1365,7 +1398,20 @@ export async function executeWorkflow(
     if (stepInterval) clearInterval(stepInterval);
     onProgress?.(0, `执行失败: ${error.message}`);
     const msg = error?.message || '执行遇到错误';
+    // Model-schema lookup failed → nothing was generated; the error belongs on the model (loader) node, not the sampler.
+    const schemaNodeId = isSchemaPrefetchError(error) ? schemaFailureTargetId(nodes, connections, targetErrorNodeId) : undefined;
+    if (schemaNodeId) {
+      if (targetErrorNodeId) outputIds.add(targetErrorNodeId);
+      for (const id of runningIds) onNodeStateChange(id, 'idle', 0, undefined, '');
+      runningIds.clear();
+      for (const id of outputIds) if (id !== schemaNodeId) onNodeStateChange(id, 'idle', 0, undefined, '');
+      onNodeStateChange(schemaNodeId, 'error', 0, undefined, schemaFailureNodeMessage(error));
+      throw error;
+    }
     if (targetErrorNodeId) outputIds.add(targetErrorNodeId);
+    // Samplers / reasoning nodes left at 'running' by this run go back to idle; the failed target itself is marked error below.
+    for (const id of runningIds) if (!outputIds.has(id)) onNodeStateChange(id, 'idle', 0, undefined, '');
+    runningIds.clear();
     for(const id of outputIds)onNodeStateChange(id,id===targetErrorNodeId?'error':'idle',0,undefined,id===targetErrorNodeId?'请求失败，查看执行记录':'');
     throw error;
   }
@@ -1469,4 +1515,77 @@ export function hasStaleLoraBlock(nodes: NodeInstance[]): boolean {
 }
 export function clearStaleLoraBlocks(nodes: NodeInstance[]): NodeInstance[] {
   return hasStaleLoraBlock(nodes) ? clearNodeExecutionErrors(nodes) : nodes; // fix3 N: 拦截解除后按当前状态清掉「上一次失败」
+}
+
+
+/**
+ * cleanup-2026-10-17 #3: generic pre-run precheck (nothing is sent when it returns a message).
+ * - broken edge: a connection into the run chain whose source node no longer exists;
+ * - image-required endpoint: the endpoint's official Schema lists an image field in `required`
+ *   (read from the /api/model-schema cache — no model-name patterns) but no reference-image input is wired.
+ * Schema not read yet → the image rule does not fire (the server-side Schema check still applies; nothing guessed).
+ */
+import { modelRequiresInputImageFromMetadata } from './i2vMetadata';
+export const PRERUN_IMAGE_FIELD = /(^|_)image(_url|_urls)?$|^(init|start|first_frame|input)_image/i;
+/**
+ * schemaRequired:
+ *  - undefined → Schema not loaded yet for (provider, model)
+ *  - string[]  → Schema loaded; list is inputSchema.required (may be empty)
+ * When Schema is loaded: image fields in required ⇒ must have a reference image.
+ * When Schema is NOT loaded: fall back ONLY to existing catalog metadata (AIVideoNode options / VideoDriver names).
+ * If metadata is silent → do not invent; leave to the server.
+ */
+export function preRunPrecheck(
+  nodes: NodeInstance[], connections: Connection[], targetId: string,
+  schemaRequired: (provider: string, model: string) => string[] | undefined,
+): string | null {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const chain = new Set<string>(); const q = [targetId];
+  while (q.length) { const id = q.shift()!; if (chain.has(id)) continue; chain.add(id); for (const c of connections) if (c.toNodeId === id) q.push(c.fromNodeId); }
+  const broken = connections.filter((c) => chain.has(c.toNodeId) && !byId.has(c.fromNodeId));
+  if (broken.length) return `连线断开：${broken.map((c) => `${byId.get(c.toNodeId)?.title || c.toNodeId}.${c.toSocketId}`).join('、')} 的上游节点已不存在；未发送请求`;
+  const hasRefOnChain = () => {
+    const consumers = [...chain].filter((cid) => connections.some((c) => c.toNodeId === cid && ['init_image', 'image', 'latent_image', 'pixels'].includes(c.toSocketId)) || cid === targetId);
+    return consumers.some((cid) => hasReferenceImageInput(nodes as any, connections, cid));
+  };
+  for (const id of chain) {
+    const n = byId.get(id); if (!n || n.bypassed) continue;
+    const provider = String(n.values?.targetProvider || n.values?.provider || '');
+    const model = String(n.values?.model_endpoint || n.values?.model || n.values?.ckpt_name || '');
+    if (!provider || !model) continue;
+    const required = schemaRequired(provider, model);
+    if (required !== undefined) {
+      const req = required.filter((f) => PRERUN_IMAGE_FIELD.test(f));
+      if (req.length && !hasRefOnChain())
+        return '图生视频要先连一张参考图';
+      continue;
+    }
+    // Schema not loaded — only fire when catalog metadata already marks this model as I2V.
+    const meta = modelRequiresInputImageFromMetadata(model);
+    if (meta === true && !hasRefOnChain())
+      return '图生视频要先连一张参考图';
+  }
+  return null;
+}
+
+/**
+ * ws-sizenode: loader (CheckpointLoaderSimple) width/height is only a fallback for boards WITHOUT a connected
+ * Empty Latent. When an Empty Latent is connected and the loader still holds a different width/height,
+ * return a user-facing block message (no silent choice). Undefined/empty loader values → no conflict.
+ */
+export function latentLoaderSizeConflict(
+  loaderValues: Record<string, any> | undefined,
+  latent: { width?: number; height?: number },
+): string | null {
+  const lv = loaderValues || {};
+  const blank = (v: unknown) => v === undefined || v === null || v === '';
+  const lw = blank(lv.width) ? undefined : Number(lv.width);
+  const lh = blank(lv.height) ? undefined : Number(lv.height);
+  if (lw === undefined && lh === undefined) return null;
+  // Only a value present on BOTH sides can disagree. An empty Empty Latent field is handled by the existing
+  // 「宽高不齐 / 未发 size」 path (the loader copy is never used to back-fill it), so nothing is silently chosen there.
+  const same = (a: number | undefined, b: number | undefined) => a === undefined || b === undefined || a === b;
+  if (same(lw, latent.width) && same(lh, latent.height)) return null;
+  const fmt = (w?: number, h?: number) => `${w ?? '空'}×${h ?? '空'}`;
+  return `尺寸两处不一致，未发送：空潜空间节点是 ${fmt(latent.width, latent.height)}，加载底模节点里还存着旧尺寸 ${fmt(lw, lh)}。尺寸以空潜空间为准，不会替你挑一个；在空潜空间节点或右侧面板改一次宽高即可清掉加载器里的旧值。`;
 }

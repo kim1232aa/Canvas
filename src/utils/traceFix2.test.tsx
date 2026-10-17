@@ -86,7 +86,7 @@ describe('trace-fix2 #7 — unsupported rows fold into one', () => {
     const rows = historyUnsupportedRows(resolveHistoryParameters(muapi) as any);
     expect(rows.length).toBeGreaterThan(1);
     const html = render([muapi]);
-    expect(html).toContain(`该端点不支持 ${rows.length} 项 · 未发送`);
+    expect(html).not.toContain(`该端点不支持 ${rows.length} 项 · 未发送`); // cleanup-2026-10-17: one 「这次没用上」 line instead
     expect(html).not.toContain('data-testid="history-cfg"');
   });
 });

@@ -54,7 +54,10 @@ describe('#1/#2/#6 local block: 拟发送 = same builder body, LoRA one Schema-b
     expect(item.requestMetadata.intendedRequest.parameters).toEqual(p.parameters);
     const r = resolveHistoryParameters(item);
     expect(r.seed.source).toBe('intended'); expect(r.steps.source).toBe('intended'); expect(r.cfg.source).toBe('intended');
-    for (const k of ['sampler', 'scheduler', 'size', 'negativePrompt'] as const) expect(historyParameterSourceLabel(r[k].source)).toBe('该端点不支持 · 未发送');
+    for (const k of ['sampler', 'scheduler', 'negativePrompt'] as const) expect(historyParameterSourceLabel(r[k].source)).toBe('该端点不支持 · 未发送');
+    expect(historyParameterSourceLabel(r.size.source)).toBe('未发送'); // aspect_ratio in Schema
+    expect(historyParameterSourceLabel(r.width.source)).toBe('该端点不支持 · 未发送');
+    expect(historyParameterSourceLabel(r.height.source)).toBe('该端点不支持 · 未发送');
     const loras = requestedNotSentLoras(item);
     expect(loras.map((l) => l.name)).toEqual(['fofr/flux-pixar-cars']);
     expect(notSentLoraLabel(item, 'fofr/flux-pixar-cars')).toBe('拟发送（未出站）');
@@ -70,7 +73,8 @@ describe('#4 outbound and local cards share one verdict', () => {
     expect(item.requestMetadata.schemaFields).toEqual(sent.schemaFields);
     expect(item.requestMetadata.actualRequest).toEqual(sent.payload); // 1035: bare body not augmented
     const r = resolveHistoryParameters(item);
-    for (const k of ['sampler', 'scheduler', 'size', 'negativePrompt'] as const) expect(historyParameterSourceLabel(r[k].source)).toBe('该端点不支持 · 未发送');
+    for (const k of ['sampler', 'scheduler', 'negativePrompt'] as const) expect(historyParameterSourceLabel(r[k].source)).toBe('该端点不支持 · 未发送');
+    expect(historyParameterSourceLabel(r.size.source)).toBe('未发送'); // aspect_ratio in Schema
   });
   it('old record without Schema → 未发送（Schema 未记录）, no guess', () => {
     const r = resolveHistoryParameters({ status: 'failed', requestMetadata: { actualRequest: { input: { prompt: 'p', seed: 7 } } } } as any);

@@ -126,7 +126,7 @@ export function ksamplerNodeTitle(
 }
 
 /** Must equal NODE_DEFINITIONS.LoRALoader.title (asserted in providerLabels.test.ts). */
-export const LORA_LOADER_EMPTY_TITLE = 'Load LoRA (Civitai / Local)';
+export const LORA_LOADER_EMPTY_TITLE = '加载 LoRA';
 
 export const LORA_LOADER_TYPES = new Set(['LoRALoader', 'LoraLoader', 'LoraLoaderModelOnly']);
 
@@ -209,4 +209,13 @@ export function canonicalProviderLabel(provider: string | undefined | null): str
   if (!raw) return '';
   const id = explicitProvider(raw);
   return id && PROVIDER_TITLE_LABEL[id] ? PROVIDER_TITLE_LABEL[id] : raw;
+}
+
+/** History stores the display label ("Tensor.Art OpenWorks"); nodes need the id ("openworks"). Unknown → undefined, never guessed. */
+export function providerIdFromHistory(provider: string | undefined | null): string | undefined {
+  const p = String(provider || '').trim();
+  if (!p) return undefined;
+  if (PROVIDER_TITLE_LABEL[p]) return p;
+  const hit = Object.entries(PROVIDER_TITLE_LABEL).find(([, label]) => label === p);
+  return hit ? hit[0] : undefined;
 }

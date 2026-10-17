@@ -23,7 +23,7 @@ import {
   Info,
   Database,
 } from 'lucide-react';
-import { WORKFLOW_PRESETS } from '../constants/presets';
+import { WORKFLOW_PRESETS, presetSummary } from '../constants/presets';
 import { NODE_DEFINITIONS } from '../constants/nodes';
 import { WorkflowPreset, NodeInstance, Connection, SpatialFrame, ComfyParameters } from '../types/graph';
 
@@ -48,7 +48,6 @@ type ImportTargetProvider = ComfyParameters['targetProvider'];
 const CIVITAI_IMPORT_TARGETS: Array<{id:ImportTargetProvider;name:string;badge:string;desc:string;badgeColor:string;activeBorder:string}> = [
   {id:'civitai',name:'Civitai',badge:'保留原始引用',desc:'保留 Civitai 原始模型/版本引用；权限与能力以上游响应为准',badgeColor:'bg-blue-500/20 text-blue-300 border-blue-500/30',activeBorder:'border-blue-500 bg-blue-950/30 text-white'},
   {id:'fal',name:'Fal.ai',badge:'需重选模型',desc:'从 Fal 模型目录重新选择真实端点和 LoRA URL',badgeColor:'bg-purple-500/20 text-purple-300 border-purple-500/30',activeBorder:'border-purple-500 bg-purple-950/30 text-white'},
-  {id:'tensorart',name:'Tensor.Art',badge:'需重选模型',desc:'从 TAMS 目录选择真实模型 ID；不把来源名称转换成 Tensor ID',badgeColor:'bg-purple-600/20 text-purple-300 border-purple-500/30',activeBorder:'border-purple-500 bg-purple-950/30 text-white'},
   {id:'nanogpt',name:'NanoGPT',badge:'需重选模型',desc:'从当前 NanoGPT 模型元数据中选择执行模型',badgeColor:'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',activeBorder:'border-emerald-500 bg-emerald-950/30 text-white'},
   {id:'modelscope',name:'ModelScope CN',badge:'需重选模型',desc:'国内站单独选择真实模型，不与 Civitai 资源名互换',badgeColor:'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',activeBorder:'border-cyan-500 bg-cyan-950/30 text-white'},
   {id:'modelscope_ai',name:'ModelScope AI',badge:'需重选模型',desc:'国际站单独选择真实模型与账户，不与国内站互换',badgeColor:'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',activeBorder:'border-cyan-500 bg-cyan-950/30 text-white'},
@@ -628,15 +627,16 @@ export const WorkflowPresetsModal: React.FC<WorkflowPresetsModalProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                 {filteredPresets.map((preset) => {
                   const frame = preset.spatialFrames?.[0];
-                  const checkpoint =
-                    frame?.params.checkpoint ||
-                    (preset.nodes.find((n) => n.type === 'CheckpointLoaderSimple')?.values.ckpt_name as string) ||
-                    '模型未选择/待重选';
-                  const blockedReason = preset.nodes.find(n => n.values.execution_blocked_reason)?.values.execution_blocked_reason
+                  // Card + board share one source: nodes (presetSummary). Never read a parallel params copy.
+                  const summary = presetSummary(preset);
+                  const checkpoint = summary.model || '模型未选择/待重选';
+                  const baseBlockedReason = preset.nodes.find(n => n.values.execution_blocked_reason)?.values.execution_blocked_reason
                     || preset.spatialFrames?.find(f => f.params.executionBlockedReason)?.params.executionBlockedReason
                     || (preset.nodes.some(n => n.values.import_unresolved_resource) || preset.spatialFrames?.some(f => f.params.unresolvedModel || f.params.loras.some(l => l.unresolvedResource)) ? '存在未核实资源或底模，请先载入并显式重选。' : '')
                     || (checkpoint === '模型未选择/待重选' ? '请先载入并选择模型。' : '')
                     || (preset.nodes.some(n => n.values.require_reference_image) || preset.spatialFrames?.some(f => f.params.requireReferenceImage && !f.referenceImageUrl) ? '请先载入并选择参考图。' : '');
+                  // 待配方: official Schema needs a resource the recipes lack (e.g. MuAPI lora_url) — separate from 待配置 (user must pick a model/resource).
+                  const blockedReason = baseBlockedReason || preset.pendingRecipe || '';
 
                   return (
                     <div
@@ -690,40 +690,43 @@ export const WorkflowPresetsModal: React.FC<WorkflowPresetsModalProps> = ({
                               <Cpu className="w-3 h-3 text-cyan-400" />
                               <span>底模:</span>
                             </span>
-                            <span className="text-white font-mono font-semibold truncate max-w-[170px]" title={checkpoint}>
-                              {checkpoint.split('/').pop()}
+                            <span className="text-white font-mono font-semibold text-right break-all max-w-[220px] leading-snug" title={checkpoint}>
+                              {/* Full model id readable on card (挑刺: no … truncation). Only strip local weight filenames. */}
+                              {/\.(safetensors|ckpt|pt)$/i.test(checkpoint) ? checkpoint.split('/').pop() : checkpoint}
                             </span>
                           </div>
 
-                          {preset.loraNames && preset.loraNames.length > 0 && (
+                          {summary.loras.some(l => l.name) && (
                             <div className="flex items-center justify-between text-[11px]">
                               <span className="text-slate-400 flex items-center gap-1 font-mono">
                                 <Sparkles className="w-3 h-3 text-purple-400" />
                                 <span>LoRA:</span>
                               </span>
                               <div className="flex flex-wrap justify-end gap-1">
-                                {preset.loraNames.map((l, i) => (
+                                {summary.loras.filter(l => l.name).map((l, i) => (
                                   <span
                                     key={i}
                                     className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-purple-900/40 text-purple-300 border border-purple-700/40 truncate max-w-[160px]"
-                                    title={l}
+                                    title={`${l.name} · ${l.strength}`}
                                   >
-                                    {l.replace('.safetensors', '')}
+                                    {(l.name.split('/').pop() || l.name).replace('.safetensors', '')}
                                   </span>
                                 ))}
                               </div>
                             </div>
                           )}
 
-                          {frame?.params && (
+                          {(summary.width != null || summary.steps != null || summary.cfg != null || summary.sampler) && (
                             <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono pt-1 border-t border-[#1d1f2b]">
-                              <span>
-                                {frame.params.width}×{frame.params.height}
-                              </span>
-                              <span>
-                                {frame.params.steps}步 · CFG {frame.params.cfg}
-                              </span>
-                              <span>{frame.params.sampler}</span>
+                              {summary.width != null && summary.height != null && (
+                                <span>{summary.width}×{summary.height}</span>
+                              )}
+                              {(summary.steps != null || summary.cfg != null) && (
+                                <span>
+                                  {[summary.steps != null ? `${summary.steps}步` : '', summary.cfg != null ? `CFG ${summary.cfg}` : ''].filter(Boolean).join(' · ')}
+                                </span>
+                              )}
+                              {summary.sampler && <span>{summary.sampler}</span>}
                             </div>
                           )}
 
@@ -753,7 +756,7 @@ export const WorkflowPresetsModal: React.FC<WorkflowPresetsModalProps> = ({
                           </div>
                         )}
 
-                        {blockedReason && <p id={`preset-blocked-${preset.id}`} className="text-[11px] text-amber-300">待配置：{blockedReason}</p>}
+                        {blockedReason && <p id={`preset-blocked-${preset.id}`} className="text-[11px] text-amber-300">{baseBlockedReason ? '待配置' : '待配方'}：{blockedReason}</p>}
                         {/* Action Buttons */}
                         <div className="pt-2 border-t border-[#232532] flex items-center gap-2">
                           {onLoadAndRunPreset && (
@@ -769,7 +772,7 @@ export const WorkflowPresetsModal: React.FC<WorkflowPresetsModalProps> = ({
                               title={blockedReason || '载入画布并运行工作流'}
                             >
                               <Play className="w-3.5 h-3.5 fill-white" />
-                              <span>{blockedReason ? '待配置，不能立即运行' : '载入并立即运行'}</span>
+                              <span>{blockedReason ? (baseBlockedReason ? '待配置，不能立即运行' : '待配方，不能立即运行') : '载入并立即运行'}</span>
                             </button>
                           )}
 
@@ -1067,7 +1070,6 @@ Steps: 28, Sampler: DPM++ 2M Karras, CFG scale: 4.5, Seed: 136947637, Size: 1024
                           </span>
                           {[
                             { id: 'civitai', label: '🌟 Civitai 原生' },
-                            { id: 'tensorart', label: '🎨 Tensor.Art' },
                             { id: 'fal', label: '⚡ Fal.ai' },
                             { id: 'video', label: '🎬 AI Video' },
                             { id: 'agnes', label: '🚀 Agnes' },

@@ -388,7 +388,17 @@ export function buttonSummary(records:ExecutionRecord[], open=false):string {
   const live = records.filter(r => !r.acknowledged);
   if (open && live.some(r => r.state === 'error')) return '错误详情见上方面板（点此收起）';
   const latestError = live.find(r => r.state === 'error');
-  if (!latestError) return live.some(r => r.state === 'pending') ? `${live.filter(r=>r.state==='pending').length} 个请求中` : countsLabel(records);
+  if (!latestError) {
+    const pending = live.filter(r => r.state === 'pending');
+    if (!pending.length) return countsLabel(records);
+    // Schema/catalog GETs are not generation — do not say 「N 个请求中」 (looks like a run).
+    if (pending.every(isNonGenerationRecord)) {
+      return pending.length === 1
+        ? '读取 Schema 中（非生成请求）'
+        : `读取 Schema 中（非生成请求）· ${pending.length}`;
+    }
+    return `${pending.length} 个请求中`;
+  }
   const plain = humanSummaryText(latestError);
   // Local block: the bar's first words are 「本地拦截 · 未发请求」, then which run, then the local reason verbatim.
   if (isLocalNotOutbound(latestError.response)) {

@@ -147,6 +147,7 @@ export const PreviewMediaPanel: React.FC<PreviewMediaPanelProps> = ({
       )}
       {kind === 'video' ? (
         <video
+          preload="none"
           src={url}
           playsInline
           {...videoProps}
@@ -162,6 +163,8 @@ export const PreviewMediaPanel: React.FC<PreviewMediaPanelProps> = ({
         <img
           src={url}
           alt={alt}
+          loading="lazy"
+          decoding="async"
           referrerPolicy="no-referrer"
           {...imgProps}
           onError={markFail}

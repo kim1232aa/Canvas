@@ -113,7 +113,7 @@ export function selectionFromMetadata(provider:string,metadata:any,kind:string,r
   if(!parsedAir || !verifiedAir || parsedAir.identity!==verifiedAir.identity)throw new Error('手写 AIR 与版本 metadata 不一致或未被核实');
  }
  const air=parsedAir?.canonical || sourceAir;
- const rawKind=String(metadata.type || metadata.model?.type || metadata.category || '').toLowerCase();
+ const rawKind=String(metadata.type || metadata.modelType || metadata.model?.type || metadata.model?.modelType || metadata.category || '').toLowerCase();
  const effectiveKind=parsedAir?.type || rawKind;
  const files=version.files || [];
  const exactFile=(selector:string)=>files.find((file:any)=>String(file.id)===selector || String(file.name || '')===selector);

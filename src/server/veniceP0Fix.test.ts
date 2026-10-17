@@ -86,7 +86,7 @@ describe('Venice P0 · panel size persistence (CheckpointLoader fallback)', () =
     expect(extracted.cfg).toBe(7.5);
   });
 
-  it('connected EmptyLatent wins over CheckpointLoader size', () => {
+  it('connected EmptyLatent conflicting with CheckpointLoader size is blocked (no silent pick)', () => {
     const c = node('c', 'CheckpointLoaderSimple', { ckpt_name: 'venice-sd35', targetProvider: 'venice', width: 512, height: 512 });
     const lat = node('l', 'EmptyLatentImage', { width: 1024, height: 768, batch_size: 1 });
     const k = node('k', 'KSampler', { seed: 1, cfg: 7, steps: 20 });
@@ -96,7 +96,8 @@ describe('Venice P0 · panel size persistence (CheckpointLoader fallback)', () =
       { id: 'lat', fromNodeId: 'l', fromSocketId: 'LATENT', toNodeId: 'k', toSocketId: 'latent_image', type: 'LATENT' } as any,
       { id: 'pos', fromNodeId: 'p', fromSocketId: 'CONDITIONING', toNodeId: 'k', toSocketId: 'positive', type: 'CONDITIONING' } as any,
     ];
-    expect(extractWorkflowParameters([c, k, lat, pos], conns, 'k')).toMatchObject({ width: 1024, height: 768 });
+    // Product rule (size node): disagreeing EmptyLatent vs loader copies must not silently prefer one.
+    expect(() => extractWorkflowParameters([c, k, lat, pos], conns, 'k')).toThrow(/尺寸两处不一致/);
     expect(readInspectorParameters([c, k, lat], conns, 'k')).toMatchObject({ width: 1024, height: 768 });
   });
 });

@@ -2,6 +2,7 @@ import { beginTraceOperation } from '../services/executionTrace';
 import {TensorCatalogNotice} from './TensorCatalogNotice';
 import {isExplicitLoraWeightUrl,selectionFromExplicitLoraUrl,selectionFromMetadata,verifyCivitaiSelection,type ResourceSelection} from '../utils/resourceSelection';
 import {isLoraWeightResource} from '../utils/isLoraWeightResource';
+import { friendlyProviderLabel } from '../utils/providerLabels';
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Search,
@@ -565,7 +566,6 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
             { id: 'modelscope_ai', name: '魔搭 AI' },
             { id: 'fal', name: 'Fal.ai' },
             { id: 'nanogpt', name: 'NanoGPT' },
-            { id: 'tensorart', name: 'Tensor.Art / 吐司' },
             { id: 'gemini', name: 'Google Gemini' },
             { id: 'muapi', name: 'MuAPI' },
             { id: 'wavespeed', name: 'WaveSpeed' },
@@ -820,7 +820,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                   if (activeProvider === 'tensorart') info = await fetchTensorArtModelInfo(rawId);
                   if (version !== requestVersion.current) return;
                   if (!info?.id) throw new Error('查询未返回模型 ID，请核对资源 ID 后重试。');
-                  const verifiedType=String(info.category || info.type || '').toLowerCase();
+                  const verifiedType=String(info.category || info.type || info.modelType || '').toLowerCase();
                   if(activeCategory==='lora' && ['huggingface','tensorart'].includes(activeProvider) && !['lora','locon','lycoris','dora'].includes(verifiedType))throw new Error('资源元数据未标明为 LoRA，不能按当前分类把底模当作 LoRA 挂载');
                   const isLora = ['lora','locon','lycoris','dora'].includes(verifiedType) || (activeCategory==='lora' && !['huggingface','tensorart'].includes(activeProvider));
                   if (isLora) {
@@ -935,7 +935,11 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                   {activeProvider === 'tensorart' ? '按模型 / LoRA ID 查询' : `当前目录页暂无所选分类资源`}
                 </p>
                 <p className="text-xs text-slate-400 mt-1">
-                  {error ? `错误原因: ${error}` : activeProvider === 'tensorart' ? 'TAMS 没有列表 API；在上方输入真实资源 ID 查询详情。' : '请尝试切换分类、服务商或输入更精准的关键词进行查询所选目录'}
+                  {error
+                    ? '目录请求失败，详见上方异常提示；可点重试。'
+                    : activeProvider === 'tensorart'
+                      ? 'TAMS 没有列表 API；在上方输入真实资源 ID 查询详情。'
+                      : '请尝试切换分类、服务商或输入更精准的关键词进行查询所选目录'}
                 </p>
               </div>
               <div className="flex items-center gap-2 mt-2">
@@ -970,6 +974,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                 const displayName = m.name || m.id;
                 const providerName = m.provider || m._sourceProvider || 'Cloud API';
                 const providerKey = (m._sourceProvider || m.provider || '').toLowerCase();
+                const providerLabel = friendlyProviderLabel(providerKey) || String(providerName);
                 // Prefer type/category/resourceKind — do not treat Fal gen endpoints with "lora" in id as weights.
                 const isLora = isLoraWeightResource(m, providerKey || m.provider || m._sourceProvider);
                 const isVideo = m.category === 'Video' || modelId.toLowerCase().includes('video') || modelId.toLowerCase().includes('wan2.1-t2v');
@@ -978,6 +983,13 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                 const trainedWords = m.trainedWords || [];
                 const isBookmarked = isModelBookmarked(m);
                 const baseArch = m.baseModel || '未知底模';
+                // fix14: skip baseArch when it duplicates the provider badge (e.g. OpenWorks + openworks).
+                const showBaseArchBadge =
+                  Boolean(baseArch) &&
+                  baseArch !== '未知底模' &&
+                  baseArch.toLowerCase() !== providerKey &&
+                  baseArch.toLowerCase() !== String(providerName).toLowerCase() &&
+                  !(providerKey === 'openworks' && /^openworks$/i.test(String(baseArch)));
                 const coverImage = m.imageUrl || '';
 
                 return (
@@ -1040,11 +1052,13 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                         </div>
 
                         <div className="absolute top-2 left-2 flex items-center gap-1.5 flex-wrap max-w-[80%] z-10">
-                          <span className="bg-black/75 backdrop-blur-md px-2 py-0.5 rounded text-[10px] text-cyan-300 font-mono border border-cyan-500/30">
-                            {baseArch}
-                          </span>
+                          {showBaseArchBadge && (
+                            <span className="bg-black/75 backdrop-blur-md px-2 py-0.5 rounded text-[10px] text-cyan-300 font-mono border border-cyan-500/30">
+                              {baseArch}
+                            </span>
+                          )}
                           <span className="bg-black/75 backdrop-blur-md px-2 py-0.5 rounded text-[10px] text-purple-300 font-mono border border-purple-500/30">
-                            {providerName}
+                            {providerLabel}
                           </span>
                         </div>
 

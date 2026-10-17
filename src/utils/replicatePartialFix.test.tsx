@@ -73,11 +73,14 @@ const failed: any = {
 };
 
 describe('#2 local_blocked 拟发送 chips follow Schema capability', () => {
-  it('sampler / size / negative → unsupported; seed/steps/cfg stay 拟发送', () => {
+  it('sampler / negative / width / height → unsupported; size 未发送 via aspect_ratio; seed/steps/cfg stay 拟发送', () => {
     const r = resolveHistoryParameters(blocked);
     expect(r.sampler.source).toBe('unsupported');
-    expect(r.size.source).toBe('unsupported');
     expect(r.negativePrompt.source).toBe('unsupported');
+    expect(r.width.source).toBe('unsupported');
+    expect(r.height.source).toBe('unsupported');
+    // Schema lists aspect_ratio ⇒ size row is plain 未发送 (fix5), not 「该端点不支持」
+    expect(r.size.source).toBe('not-sent');
     expect(r.seed.source).toBe('intended');
     expect(r.steps.source).toBe('intended');
     expect(r.cfg.source).toBe('intended');
@@ -86,8 +89,8 @@ describe('#2 local_blocked 拟发送 chips follow Schema capability', () => {
 
 describe('#4 seed row does not repeat 实际发送 next to the chip', () => {
   it('row text omits 实际发送; standalone statement unchanged', () => {
-    expect(historySeedRowText(failed)).toBe('种子 7（上游未返回种子）');
-    expect(historySeedStatement(failed)).toBe('种子 7（实际发送；上游未返回种子）');
+    expect(historySeedRowText(failed)).toBe('种子 7');
+    expect(historySeedStatement(failed)).toBe('种子 7（实际发送）。上游未返回种子');
   });
 });
 

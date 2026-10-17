@@ -31,17 +31,10 @@
       "idFormat": "输入任意 Fal.ai LoRA 路径或 Endpoint",
       "placeholder": "输入 Fal.ai LoRA path / Endpoint..."
     },
-    "tensorart": {
-      "supportsCustomImport": true,
-      "idFormat": "输入 Tensor.Art / 吐司 Model ID (如 672390779613802167) 或主页链接",
-      "placeholder": "输入 Tensor.Art / 吐司 Model ID (如 672390779613802167)...",
-      "requiresCredential": {
-        "kind": "tams-bearer",
-        "keyHeader": "x-tensorart-key",
-        "storedKey": "tensorartKey",
-        "notice": "需要 TAMS Bearer key；官方没有模型列表接口",
-        "docUrl": "https://tams-docs.tensor.art/docs/api/guide/integration-faq/#model-issues"
-      }
+    "openworks": {
+      "supportsCustomImport": false,
+      "idFormat": "OpenWorks 目录模型不走 TAMS LoRA ID；请在模型中心选 Tensor.Art OpenWorks",
+      "placeholder": "OpenWorks 不支持 TAMS 数字 LoRA ID 导入"
     },
     "runware": {
       "supportsCustomImport": true,

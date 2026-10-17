@@ -1,3 +1,4 @@
+import { CANVAS_TO_SCHEMA_ALIASES } from './schemaSendHint';
 import { Connection, NodeInstance } from '../types/graph';
 import { getFieldSpec, resolveSchemaModelId, Provider } from '../schemas/providerSchema';
 
@@ -371,6 +372,12 @@ export function resolveActiveCheckpoint(
 export const LORA_UNSUPPORTED_TITLE = '当前模型不支持 LoRA';
 /** Card/banner body: next step only (title already says unsupported). */
 export const LORA_UNSUPPORTED_MESSAGE = '请换支持 LoRA 的模型或先不用这条';
+/** Live Schema lookup is registered by services/modelSchemaCache (inverted so this util never imports the fetch layer). */
+type LiveSchemaEntry = { status: string; properties?: string[] } | undefined;
+let liveSchemaLookup: ((provider: string, model: string) => LiveSchemaEntry) | undefined;
+export function setLiveSchemaLookup(fn: (provider: string, model: string) => LiveSchemaEntry): void { liveSchemaLookup = fn; }
+/** Live Schema has no LoRA field: say why, then the next step. */
+export const LORA_SCHEMA_ABSENT_MESSAGE = '官方参数表里没有 LoRA 字段，不会发送；请换支持 LoRA 的模型或先不用这条';
 export const LORA_UNSUPPORTED_EMPTY_CHECKPOINT = '请先选好模型，才能判断能不能挂 LoRA';
 export const LORA_UNSUPPORTED_UNKNOWN_MODEL = '无法确认这模型能不能挂 LoRA，请先选好模型';
 /** Bypass / skip action on LoRA node card. */
@@ -405,7 +412,17 @@ export function isLoraUnsupportedOnEndpoint(
     return { unsupported: false };
   }
 
-  if (!schemaProv) return { unsupported: false };
+  if (!schemaProv) {
+    // OpenWorks: live tests 2026-10-17 — LoRA (id+weight) is sent as named extras; do not refuse mount from catalog inputs alone.
+    if (prov === 'openworks') return { unsupported: false };
+    // Other live-Schema providers: once Schema loaded, no LoRA field (or alias) ⇒ unsupported. Not loaded ⇒ no claim.
+    const live = liveSchemaLookup?.(prov, modelId);
+    if (live?.status === 'ready' && Array.isArray(live.properties) && live.properties.length) {
+      const loraNames = new Set([...(CANVAS_TO_SCHEMA_ALIASES.loras || []), 'loras', 'extra_lora']);
+      if (!live.properties.some((k) => loraNames.has(k))) return { unsupported: true, message: LORA_SCHEMA_ABSENT_MESSAGE };
+    }
+    return { unsupported: false };
+  }
 
   const schemaModel = resolveSchemaModelId(schemaProv, modelId);
   if (!schemaModel) {

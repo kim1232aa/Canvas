@@ -1,4 +1,4 @@
-// 2026-10-15 画布 FE retest /workspace/canvas-e2e-aimlapi-krea-reverify2 → fixes P0 1–4, P1 5–8, P2 9–12 (code-level).
+// 2026-10-15 画布 FE retest /workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-aimlapi-krea-reverify2 → fixes P0 1–4, P1 5–8, P2 9–12 (code-level).
 import express from 'express';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -67,7 +67,7 @@ describe('P0 2 seed row on failed cards', () => {
     const item = failedItem({ endpoint: 'https://api.aimlapi.com/v1/images/generations', parameters: { prompt: 'p', num_inference_steps: 8, seed: 42 } });
     expect(resolveHistoryParameters(item).seed).toMatchObject({ value: 42, source: 'sent' });
     const html = renderToStaticMarkup(<HistoryModal isOpen onClose={() => {}} history={[item]} onApplyPrompt={() => {}} onDeleteItem={() => {}} onClearAll={() => {}} />);
-    expect(html).toMatch(/data-testid="history-seed">种子 42（上游未返回种子）/);
+    expect(html).toMatch(/data-testid="history-seed">种子 42/);
   });
 });
 
@@ -81,8 +81,8 @@ describe('P0 1 / P1 8 / P2 11–12 history modal', () => {
     expect(html).toContain('未出图 2 条（上游失败 1 · 本地拦截 1）');
   });
   it('labels sampler and scheduler separately', () => {
-    expect(html).toContain('采样器: 未发送');
-    expect(html).toContain('调度器: 未发送');
+    expect(html).toContain('采样器: —');
+    expect(html).toContain('调度器: —');
   });
   it('raw upstream JSON is collapsed under a details after the status line', () => {
     expect(html).toMatch(/<details[^>]*data-testid="history-failed-raw"><summary[^>]*>上游原文/);

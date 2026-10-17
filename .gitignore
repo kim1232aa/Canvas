@@ -24,3 +24,7 @@ temp/
 *.sqlite3
 *.pma
 
+# Local screenshots / backups — never push to GitHub
+*.tgz
+*.tgz.TRUNCATED
+temp/

@@ -1,14 +1,17 @@
 import { computeFitTransform, measureChromeInsets, fitItemsForMode } from './utils/fitView';
+import { saveImagePrefixFor } from './utils/saveImagePrefix';
 import { findActualRequest, countActualRequestLoras } from './utils/actualRequestLoras';
 import { modelSchemaVersion, subscribeModelSchema, getModelSizePairing } from './services/modelSchemaCache';
 import {migrateTensorWorkflow} from './utils/legacyTensorWorkflow';
 import {ExecutionLog} from './components/ExecutionLog';
-import {spatialRequestParameters} from './utils/frontendParameters';
+import {spatialRequestParameters, videoSchemaIssues} from './utils/frontendParameters';
+import {seedSchemaIssues} from './utils/seedRange';
 import {replaceSelectedResource,applyLoraNameToNodeValues,type ResourceSelection} from './utils/resourceSelection';
-import {readInspectorParameters,patchInspectorBranchNode,patchSpatialParameters,variationReference,modelCheckpoint} from './utils/inspectorParameters';
+import {readInspectorParameters,patchInspectorBranchNode,patchSpatialParameters,variationReference,modelCheckpoint,clearLoaderSize,loadersFedByLatent} from './utils/inspectorParameters';
 import {explicitProvider,graphBranch,catalogModelTarget} from './utils/graphEditing';
 import {attachLoraToBranch,findLoraTarget,removeLoraFromBranch} from './utils/attachLora';
 import { parseExplicitLoraStrength } from './utils/loraStrength';
+import { applyHistoryToCanvas } from './utils/applyHistoryToCanvas';
 import {isInvalidTensorModel} from './utils/modelCatalog';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { scrubZeroWidthNodes, describeZeroWidthHits, preRunZeroWidthBlock } from './utils/zeroWidth';
@@ -48,14 +51,18 @@ import { WORKFLOW_PRESETS } from './constants/presets';
 import { NODE_DEFINITIONS } from './constants/nodes';
 import { CategoryFilter } from './components/ModelHubModal';
 import {
-  fetchHistory,
+  fetchHistoryItem,
+  fetchHistoryPage,
   getStoredApiKeys,
   saveStoredApiKeys,
   saveToHistory,
+  type HistoryPage,
 } from './services/api';
 import { EngineRegistry } from './engines/EngineRegistry';
 import { NormalizedGenerateParams } from './engines/types';
 import { noteUserModelSelection, subscribeSchemaSelectResult } from './services/userModelSelection';
+import { hasModelSchemaFetch } from './utils/schemaSendHint';
+import { isSchemaPrefetchError, schemaFailureNodeMessage, schemaFailureTargetId } from './utils/schemaFailure';
 import { sizeOrUndef, widthHeightMismatch, localBlockTitle, schemaReadLine, localBlockCauseNodeIds, revealNodeTransform, sizeMismatchCleared } from './utils/localBlock';
 import { findNonOverlappingPos } from './utils/nodeOverlap';
 import { setCurrentRunTarget, beginRun, endRun, clearExecutionErrors, getExecutions, formatRecordTime, recordLocalEvent, currentRunAttach, ApiTraceError} from './services/executionTrace';
@@ -63,7 +70,10 @@ import { historySeedStatement, historyActualRequest } from './utils/historyParam
 import { resolveFillLoraNodeId } from './utils/fillLoraNode';
 import { findRunHistoryItem } from './utils/runHistoryItem';
 import { isLocalBlockError } from './utils/apiFailure';
-import { executeWorkflow, extractWorkflowParameters, resolveTargetNode, shouldClearExecutionOutput, clearNodeExecutionErrors, clearStaleLoraBlocks, hasStaleLoraBlock, activeLoraNodeCount, resolveRunTarget, hasReferenceImageInput, modelChainBreak, modelChainBreakDetail } from './utils/graphEngine';
+import { executeWorkflow, extractWorkflowParameters, resolveTargetNode, shouldClearExecutionOutput, clearNodeExecutionErrors, clearStaleLoraBlocks, hasStaleLoraBlock, activeLoraNodeCount, resolveRunTarget, hasReferenceImageInput, modelChainBreak, modelChainBreakDetail, preRunPrecheck, clearPriorMediaPreview, clearPriorMediaPreviews } from './utils/graphEngine';
+import { getModelSchemaEntry } from './services/modelSchemaCache';
+import { fetchProviderKeyStatus, providerKeyConfigured } from './services/providerKeyStatus';
+import { friendlyProviderLabel } from './utils/providerLabels';
 import { toastFromRunError, plainFailureConclusion, plainErrorMessage, unicodeSafeSlice, EXEC_NODE_MISSING, localBlockToastReason, upstreamFailureToast } from './utils/apiFailure';
 import { applyAIVideoModelSelection } from './utils/videoProvider';
 import {
@@ -122,6 +132,10 @@ export default function App() {
     title: string;
     message: string;
     imageUrl?: string;
+    /** Primary action: default history; key-missing → api-settings; I2V missing image → connect-ref (never 查看历史). */
+    action?: 'history' | 'api-settings' | 'connect-ref' | 'none';
+    /** When action is api-settings: provider id to select in BackendSettingsModal (e.g. gemini). */
+    actionProviderId?: string;
   } | null>(null);
   const [toastThumbSettle, setToastThumbSettle] = useState<PreviewSettleState>('loading');
   const toastThumbSettleRef = useRef<PreviewSettleState>('loading');
@@ -168,6 +182,8 @@ export default function App() {
 
   // Modals & Panels
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  /** Open API settings focused on this provider (from missing-key toast). Cleared on close. */
+  const [settingsInitialProvider, setSettingsInitialProvider] = useState<string | undefined>(undefined);
   const [isCivitaiOpen, setIsCivitaiOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isModelHubOpen, setIsModelHubOpen] = useState(false);
@@ -241,16 +257,47 @@ export default function App() {
     }
   }, [canvases, currentCanvasId, canvasMode]);
 
-  // API Keys & History
+  // API Keys & History — open path uses real pagination (slim page, not full dump)
+  const HISTORY_PAGE_SIZE = 24;
   const [apiKeys, setApiKeys] = useState<ApiKeysState>(getStoredApiKeys());
   const [history, setHistory] = useState<GenerationHistoryItem[]>([]);
+  const [historyTotal, setHistoryTotal] = useState(0);
+  const [historyHasMore, setHistoryHasMore] = useState(false);
+  const [historyLoadingMore, setHistoryLoadingMore] = useState(false);
 
-  // Initialize with Default Preset for node view
-  useEffect(() => {
-    fetchHistory().then((items) => {
-      if (items) setHistory(items);
-    }).catch((err) => setToast({type: 'error', title: '历史记录读取失败', message: err.message}));
+  const applyHistoryPage = useCallback((page: HistoryPage, mode: 'replace' | 'append') => {
+    setHistory((prev) => {
+      if (mode === 'replace') return page.items;
+      const seen = new Set(prev.map((i) => i.id));
+      return [...prev, ...page.items.filter((i) => !seen.has(i.id))];
+    });
+    setHistoryTotal(page.total);
+    setHistoryHasMore(!!page.hasMore);
   }, []);
+
+  const loadHistoryFirstPage = useCallback(async (): Promise<GenerationHistoryItem[]> => {
+    const page = await fetchHistoryPage({ limit: HISTORY_PAGE_SIZE, offset: 0 });
+    applyHistoryPage(page, 'replace');
+    return page.items;
+  }, [applyHistoryPage]);
+
+  const loadHistoryMore = useCallback(async () => {
+    if (historyLoadingMore || !historyHasMore) return;
+    setHistoryLoadingMore(true);
+    try {
+      const page = await fetchHistoryPage({ limit: HISTORY_PAGE_SIZE, offset: history.length });
+      applyHistoryPage(page, 'append');
+    } catch (err: any) {
+      setToast({ type: 'warning', title: '历史加载更多失败', message: err?.message || String(err) });
+    } finally {
+      setHistoryLoadingMore(false);
+    }
+  }, [history.length, historyHasMore, historyLoadingMore, applyHistoryPage]);
+
+  // Initialize: first slim page only (limit=24), not all 190+
+  useEffect(() => {
+    loadHistoryFirstPage().catch((err) => setToast({type: 'error', title: '历史记录读取失败', message: err.message}));
+  }, [loadHistoryFirstPage]);
 
   // clean-1358 #3: Schema GET failure on model select → toast immediately (HTTP status + first-line upstream body).
   // Reuse of a prior failure is labelled on the node; do not re-toast.
@@ -287,6 +334,29 @@ export default function App() {
       || { title: `HTTP ${result.status || '—'}`, message: `${typeof result.data === 'object' ? JSON.stringify(result.data) : String(result.data ?? 'Schema 读取失败')}\n选用模型：${provider} · ${model}` };
     setToast({ type: 'error', title: toast.title, message: toast.message });
   }), []);
+
+  // videoschema: saved board / model list change → debounced Schema GET for AIVideoNode (select path notes immediately in NodeItem).
+  const videoSchemaHydrateKey = nodes
+    .filter((n) => n.type === 'AIVideoNode' && !n.bypassed)
+    .map((n) => `${String(n.values?.targetProvider || '').trim()}\0${String(n.values?.model || '').trim()}`)
+    .filter((k) => {
+      const [p, m] = k.split('\0');
+      return Boolean(p && m);
+    })
+    .sort()
+    .join('|');
+  useEffect(() => {
+    if (!videoSchemaHydrateKey) return;
+    const t = window.setTimeout(() => {
+      for (const n of nodes) {
+        if (n.type !== 'AIVideoNode' || n.bypassed) continue;
+        const p = String(n.values?.targetProvider || '').trim();
+        const m = String(n.values?.model || '').trim();
+        if (p && m && hasModelSchemaFetch(p)) noteUserModelSelection(p, m);
+      }
+    }, 300);
+    return () => window.clearTimeout(t);
+  }, [videoSchemaHydrateKey]);
 
   // U-E2: Determine if generation/run is disabled due to missing model
   // The exact node the next graph run will execute (live with selection / graph edits); shown on the run button.
@@ -642,7 +712,7 @@ export default function App() {
           mediaType: generatedVideoUrl ? 'video' : 'image',
         });
 
-        await fetchHistory().then(setHistory).catch((err) => setToast({type: 'warning', title: '图像已生成，历史记录读取失败', message: err.message}));
+        await loadHistoryFirstPage().catch((err) => setToast({type: 'warning', title: '图像已生成，历史记录读取失败', message: err.message}));
         if (execResult.historyWarning) setToast({type:'warning', title:'图像已生成', message:execResult.historyWarning, imageUrl:generatedImageUrl});
         setExecutionStatusText(`生成完成 (${usedProvider})`);
       } catch (err: any) {
@@ -754,19 +824,18 @@ export default function App() {
         widgetName === 'width' ? value : targetNode.values?.width,
         widgetName === 'height' ? value : targetNode.values?.height,
       );
+    const latentFedLoaders =
+      targetNode?.type === 'EmptyLatentImage' && (widgetName === 'width' || widgetName === 'height')
+        ? loadersFedByLatent(nodes, connections, nodeId)
+        : new Set<string>();
     setNodes((prev) => {
       const mapped = prev.map((n) => {
-        if (targetNode?.type === 'CheckpointLoaderSimple' && (widgetName === 'ckpt_name' || widgetName === 'targetProvider') && n.type === 'SaveImage') {
-          const prov = widgetName === 'targetProvider' ? value : (targetNode.values?.targetProvider || '');
-          const model = widgetName === 'ckpt_name' ? value : (targetNode.values?.ckpt_name || '');
-          const cleanModel = String(model).split('/').pop()?.replace(/[^a-zA-Z0-9_-]/g, '_') || '';
-          const cleanProv = prov ? prov.charAt(0).toUpperCase() + prov.slice(1) : '';
-          const prefix = cleanModel ? `${cleanProv ? cleanProv + '_' : ''}${cleanModel}` : cleanProv || 'ComfyCanvas';
-          return {
-            ...n,
-            values: { ...n.values, filename_prefix: prefix },
-          };
+        if (targetNode?.type === 'CheckpointLoaderSimple' && (widgetName === 'ckpt_name' || widgetName === 'targetProvider') && n.id !== nodeId) {
+          // saveempty: model/provider switch clears prior preview on sibling media nodes; do NOT retitle filename_prefix until a new image lands.
+          return clearPriorMediaPreview(n);
         }
+        // ws-sizenode: editing the board's Empty Latent size clears the hidden width/height copy on the loader it feeds.
+        if (n.id !== nodeId && latentFedLoaders.has(n.id)) return clearLoaderSize(n);
         if (n.id !== nodeId) return n;
         // Provider switch: sync CheckpointLoader title to current provider; clear THIS node error.
         // Sibling stale errors (e.g. leftover Civitai on KSampler) cleared in post-pass below.
@@ -1083,6 +1152,37 @@ export default function App() {
       try { runTarget = resolveRunTarget(activeNodes, activeConns, targetNodeId, selectedNodeId); }
       catch (error: any) { setToast({type:'warning', title:'未发送请求', message:error.message}); return; }
     }
+    if (runTarget) {
+      const pre = preRunPrecheck(activeNodes, activeConns, runTarget.id, (p, m) => {
+        const e = getModelSchemaEntry(p, m);
+        if (!e || e.status !== 'ready') return undefined; // Schema not loaded yet
+        return e.required || [];
+      }) || videoSchemaIssues(activeNodes as any) || seedSchemaIssues(activeNodes as any, activeConns as any);
+      if (pre) {
+        setNodes((prev) => clearPriorMediaPreviews(prev));
+        setToast({type:'warning', title:'运行前检查未通过', message:pre, action: pre === '图生视频要先连一张参考图' ? 'connect-ref' : 'none'});
+        return;
+      }
+      // Key precheck: block locally before any generate request when the target provider has no key.
+      try {
+        const extracted = extractWorkflowParameters(activeNodes, activeConns, runTarget.id);
+        const prov = String((extracted.targetProvider === 'video' ? extracted.videoProvider : extracted.targetProvider) || extracted.videoProvider || '').trim();
+        if (prov && prov !== 'video') {
+          const status = await fetchProviderKeyStatus();
+          const ok = providerKeyConfigured(status, prov);
+          if (ok === false) {
+            const label = friendlyProviderLabel(prov) || prov;
+            setNodes((prev) => clearPriorMediaPreviews(prev));
+            setToast({ type: 'warning', title: '未配置密钥', message: `未配置 ${label} 的密钥`, action: 'api-settings', actionProviderId: prov });
+            return;
+          }
+        }
+      } catch (error: any) {
+        // extractWorkflowParameters may throw on incomplete graphs — surface that, don't hide with a key check.
+        setToast({ type: 'warning', title: '运行前检查未通过', message: error?.message || String(error) });
+        return;
+      }
+    }
     const runTargetId = runTarget?.id;
 
     if (activeNodes.length === 0) {
@@ -1111,8 +1211,9 @@ export default function App() {
     setExecutionProgress(5);
     setExecutionStatusText('正在调度模型与 LoRA 权重...');
     setToast(null); // drop stale global notices from prior hub/search/run
-    // New run: clear local-block chrome; keep upstream failure badges until success (clean-1651 A).
-    setNodes((prev) => clearNodeExecutionErrors(prev, { keepUpstreamFailures: true }));
+    // New run: clear every prior red banner / error state (local blocks AND prior upstream failures) before starting,
+    // so an old 「上一次 …」 never lingers once the user re-runs. This run's own failure is written in the catch below.
+    setNodes((prev) => clearNodeExecutionErrors(prev));
 
     const handleNodeStateChange = (
       nodeId: string,
@@ -1143,10 +1244,18 @@ export default function App() {
                 : (errorMessage !== undefined
                   ? (errorMessage ? new Date().toISOString() : undefined)
                   : n.errorAt),
+              errorKind: state === 'running' || state === 'success' || errorMessage !== undefined ? undefined : n.errorKind,
               upstreamFailed: state === 'running' || state === 'success' ? false : n.upstreamFailed,
               // This session produced (or is replacing) the output: no longer a 刷新前的结果; remember when it arrived.
               outputAt: output !== undefined ? new Date().toISOString() : n.outputAt,
               restoredFromPreviousSession: output !== undefined || state === 'running' ? undefined : n.restoredFromPreviousSession,
+              stalePriorOutput: output !== undefined || state === 'running' ? undefined : n.stalePriorOutput,
+              // cleanup-serious: only retitle SaveImage prefix when a NEW image from this run lands.
+              values: (output !== undefined && n.type === 'SaveImage') ? (() => {
+                const ck = prev.find((x) => x.type === 'CheckpointLoaderSimple' && !x.bypassed);
+                const prefix = saveImagePrefixFor(ck?.values?.targetProvider, ck?.values?.ckpt_name, n.values?.filename_prefix);
+                return { ...n.values, filename_prefix: prefix };
+              })() : n.values,
             };
           }
           return n;
@@ -1212,10 +1321,10 @@ export default function App() {
         handleUpdateFrame(spatialFrames[0].id, frameSyncData);
       }
 
-      // Refresh generation history from server
+      // Refresh generation history from server (first slim page — newest prepended)
       let historyLoaded = true;
       let freshHistory: GenerationHistoryItem[] | undefined;
-      await fetchHistory().then((h) => { freshHistory = h; setHistory(h); }).catch(() => { historyLoaded = false; });
+      await loadHistoryFirstPage().then((h) => { freshHistory = h; }).catch(() => { historyLoaded = false; });
       const runItem = findRunHistoryItem(getExecutions().filter((r) => r.runSeq === thisRunSeq && r.method.toUpperCase() !== 'GET').map((r) => r.response), freshHistory);
 
       // Trigger high visibility toast
@@ -1234,8 +1343,12 @@ export default function App() {
       console.error('Queue error:', err);
       setExecutionProgress(0);
       // P0: plain primary on node + status bar; JSON / [500] / request_id stay in exec-log 技术细节.
-      const errMsg = plainErrorMessage(err);
       const localBlockedRun = isLocalBlockError(err);
+      // Model-schema lookup failed (GET /api/model-schema non-2xx, generation never sent): plain headline on the model node;
+      // the raw GET URL + status stay in 执行记录 (traced request) and the history failure card.
+      const schemaFail = !localBlockedRun && isSchemaPrefetchError(err);
+      const schemaNodeMsg = schemaFail ? schemaFailureNodeMessage(err) : undefined;
+      const errMsg = schemaNodeMsg ? schemaNodeMsg.split('\n')[0] : plainErrorMessage(err);
       // clean-1333 #3/#5/#6: one title for toast / node / exec log, chosen from what was actually requested.
       const blockData = localBlockedRun ? (err as any).data : undefined;
       const blockTitle = localBlockedRun ? localBlockTitle(blockData) : undefined;
@@ -1248,6 +1361,7 @@ export default function App() {
       const currentTargetId = targetNodeId || selectedNodeId;
       setExecutionStatusText(errMsg);
       const branch=graphBranch(activeNodes,activeConns,currentTargetId);
+      const schemaNodeId = schemaFail ? schemaFailureTargetId(activeNodes, activeConns, branch.target?.id ?? runTargetId) : undefined;
       // Only the node that caused a local block shows the reason; with no identifiable cause node the run target shows it.
       const causeIds = new Set(localBlockedRun ? localBlockCauseNodeIds(activeNodes, branch.ids, blockData?.blockedField?.field) : []);
       if (localBlockedRun && !causeIds.size && branch.target) causeIds.add(branch.target.id);
@@ -1269,7 +1383,17 @@ export default function App() {
           return {...n,state:(cause?'idle':keepErr?'error':'idle') as NodeInstance['state'],executionProgress:0,upstreamFailed:false,upstreamLocalBlocked:false,
             localBlockTitle:cause?blockTitle:undefined,localBlockReason:cause?blockReason:undefined,
             // trace-fix2 #10: remember which field caused it and, for LoRA blocks, the LoRA count it was decided on.
-            localBlockField:cause?blockField:undefined,localBlockLoraCount:cause && loraBlock?blockLoraCount:undefined};
+            localBlockField:cause?blockField:undefined,localBlockLoraCount:cause && loraBlock?blockLoraCount:undefined,
+            // cleanup-serious: failed/blocked run must not keep showing the prior SaveImage as this run's result.
+            outputData: (n.type === 'SaveImage' || n.type === 'PreviewImage' || n.type === 'SaveVideo') ? undefined : n.outputData,
+            stalePriorOutput: undefined};
+        }
+        if (schemaNodeId) {
+          // Error lives on the model node; sampler / other branch nodes are NOT marked 异常 (nothing was generated).
+          if (n.id === schemaNodeId) return { ...n, state: 'error' as NodeInstance['state'], executionProgress: 0, errorMessage: schemaNodeMsg, errorAt: new Date().toISOString(), errorKind: 'schema' as const, upstreamFailed: false, upstreamLocalBlocked: false };
+          if (!branch.ids.has(n.id)) return n;
+          return { ...n, state: 'idle' as NodeInstance['state'], executionProgress: 0, errorMessage: undefined, errorAt: undefined, errorKind: undefined, upstreamFailed: true, upstreamLocalBlocked: false,
+            outputData: shouldClearExecutionOutput(n.type, 'idle', undefined, '') ? undefined : n.outputData };
         }
         if (!branch.ids.has(n.id)) return n;
         const isTarget = n.id === branch.target?.id;
@@ -1322,7 +1446,7 @@ export default function App() {
           });
         }, 60);
       }
-      fetchHistory().then(setHistory).catch((err) => console.error('History refresh failed:', err.message));
+      loadHistoryFirstPage().catch((err) => console.error('History refresh failed:', err.message));
     } finally {
       setIsExecuting(false);
       setCurrentRunTarget(null);
@@ -1635,18 +1759,8 @@ export default function App() {
                 },
               };
             }
-            if (n.type === 'SaveImage') {
-              const cleanModel = (modelName.split('/').pop() || modelId).replace(/[^a-zA-Z0-9_-]/g, '_');
-              const cleanProv = provider.charAt(0).toUpperCase() + provider.slice(1);
-              return {
-                ...n,
-                values: {
-                  ...n.values,
-                  filename_prefix: `${cleanProv}_${cleanModel}`,
-                },
-              };
-            }
-            return n;
+            // saveempty: hub model pick clears prior preview; do NOT retitle filename_prefix until a new image lands.
+            return clearPriorMediaPreview(n);
           })
         );
       } else {
@@ -1715,7 +1829,7 @@ export default function App() {
     let baseConns: Connection[] = [];
     let baseFrames: SpatialFrame[] = [];
 
-    const templateId = ({flux:'fal-flux-schnell-native',ghibli:'sdxl-anime-dual-lora',wan:'modelscope-wan-workflow'} as Record<string,string>)[templateType];
+    const templateId = ({flux:'std-fal-t2i',ghibli:'std-civitai-t2i',wan:'std-modelscope-t2i'} as Record<string,string>)[templateType];
     const template = WORKFLOW_PRESETS.find(p=>p.id===templateId);
     if(template) {
       baseNodes=structuredClone(template.nodes);
@@ -1926,15 +2040,21 @@ export default function App() {
   };
 
   const handleDeleteHistoryItem = async (id: string, url?: string) => {
-    setHistory((prev) => prev.filter((item) => item.id !== id && (!url || (item.url !== url && item.imageUrl !== url))));
+    setHistory((prev) => {
+      const next = prev.filter((item) => item.id !== id && (!url || (item.url !== url && item.imageUrl !== url)));
+      setHistoryTotal((t) => {
+        const nt = Math.max(0, t - (prev.length - next.length || 1));
+        setHistoryHasMore(next.length < nt);
+        return nt;
+      });
+      return next;
+    });
     try {
-      const { deleteHistoryItem, fetchHistory } = await import('./services/api');
+      const { deleteHistoryItem } = await import('./services/api');
       const ok = await deleteHistoryItem(id);
       if (!ok && url) {
         await deleteHistoryItem(url);
       }
-      const updated = await fetchHistory();
-      if (updated) setHistory(updated);
       setToast({ type: 'success', title: '资产已删除', message: '已从服务器和资产库永久移除' });
     } catch (e) {
       console.error('Delete history item error:', e);
@@ -1943,12 +2063,19 @@ export default function App() {
 
   const handleDeleteBatchHistoryItems = async (ids: string[]) => {
     const idSet = new Set(ids);
-    setHistory((prev) => prev.filter((item) => !idSet.has(item.id)));
+    setHistory((prev) => {
+      const next = prev.filter((item) => !idSet.has(item.id));
+      const removed = prev.length - next.length;
+      setHistoryTotal((t) => {
+        const nt = Math.max(0, t - removed);
+        setHistoryHasMore(next.length < nt);
+        return nt;
+      });
+      return next;
+    });
     try {
-      const { deleteHistoryBatch, fetchHistory } = await import('./services/api');
+      const { deleteHistoryBatch } = await import('./services/api');
       await deleteHistoryBatch(ids);
-      const updated = await fetchHistory();
-      if (updated) setHistory(updated);
       setToast({ type: 'success', title: '批量资产已删除', message: `已成功移除 ${ids.length} 项生成资产` });
     } catch (e) {
       console.error('Batch delete history items error:', e);
@@ -1956,14 +2083,16 @@ export default function App() {
   };
 
   const handleClearHistory = async () => {
-    const { clearHistory, fetchHistory } = await import('./services/api');
+    const { clearHistory } = await import('./services/api');
     const ok = await clearHistory();
     if (ok) {
-      const updated = await fetchHistory();
-      setHistory(updated);
+      setHistory([]);
+      setHistoryTotal(0);
+      setHistoryHasMore(false);
       setToast({ type: 'success', title: '历史记录已清空', message: '所有生成记录已从服务器永久移除' });
     }
   };
+
 
   // trace-fix2 #10: a LoRA-caused block whose LoRA count no longer matches the graph is stale → clear it (and its toast).
   useEffect(() => {
@@ -2035,6 +2164,39 @@ export default function App() {
       if (outside) setTransform(fitNow());
     });
   };
+
+  /** History / 详情「应用到画布」：图→SaveImage、参数写回节点；有快照还原连线，无则 toast「这条没存工作流」。 */
+  const handleApplyHistoryToCanvas = async (item: GenerationHistoryItem & { hasWorkflowSnapshot?: boolean }) => {
+    let full: GenerationHistoryItem & { hasWorkflowSnapshot?: boolean } = item;
+    if (item?.hasWorkflowSnapshot && !item.workflowSnapshot && item.id) {
+      try {
+        full = await fetchHistoryItem(item.id);
+      } catch {
+        full = item;
+      }
+    }
+    const result = applyHistoryToCanvas({
+      item: full,
+      nodes,
+      connections,
+      spatialFrames,
+    });
+    setNodes(result.nodes);
+    setConnections(result.connections);
+    if (result.spatialFrames) {
+      setSpatialFrames(result.spatialFrames);
+      if (result.spatialFrames[0]?.id) setSelectedFrameId(result.spatialFrames[0].id);
+    }
+    if (result.notice) {
+      setToast({ type: 'info', title: result.notice, message: '已把图和参数写回节点；这条记录没有工作流快照，连线未还原。' });
+    } else if (result.restoredFromSnapshot) {
+      setToast({ type: 'success', title: '已应用到画布', message: result.imageApplied ? '图已落到保存图像节点，参数与工作流已还原。' : '参数与工作流已还原。' });
+    } else {
+      setToast({ type: 'success', title: '已应用到画布', message: result.imageApplied ? '图已落到保存图像节点，参数已写回。' : '参数已写回。' });
+    }
+    setTimeout(handleResetView, 60);
+  };
+
 
   // Active parameters and prompts dynamically derived from nodes and active frame
   const activeFrame = spatialFrames.find((f) => f.id === selectedFrameId) || spatialFrames[0];
@@ -2219,7 +2381,7 @@ export default function App() {
         onSaveProject={() => {handleSaveProject().catch(() => {});}}
         isSavingProject={isSavingProject}
         onOpenAssetManager={() => setIsAssetManagerOpen(true)}
-        onOpenHistory={() => setIsHistoryOpen(true)}
+        onOpenHistory={() => { setIsHistoryOpen(true); setToast((prev) => (prev && prev.type === 'error' ? null : prev)); }}
         onOpenParamsDrawer={() => setIsParamsDrawerOpen(!isParamsDrawerOpen)}
         isParamsDrawerOpen={isParamsDrawerOpen}
         onQueuePrompt={() => {
@@ -2719,7 +2881,8 @@ export default function App() {
       {/* Backend Settings Modal */}
       <BackendSettingsModal
         isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
+        onClose={() => { setIsSettingsOpen(false); setSettingsInitialProvider(undefined); }}
+        initialProvider={settingsInitialProvider}
         apiKeys={apiKeys}
         onSaveKeys={(newKeys) => {
           setApiKeys(newKeys);
@@ -2747,6 +2910,10 @@ export default function App() {
         isOpen={isHistoryOpen}
         onClose={() => setIsHistoryOpen(false)}
         history={history}
+        hasMore={historyHasMore}
+        historyTotal={historyTotal}
+        loadingMore={historyLoadingMore}
+        onLoadMore={loadHistoryMore}
         onApplyPrompt={(prompt, negPrompt) => {
           if (selectedFrameId) {
             handleUpdateFrame(selectedFrameId, { prompt, negativePrompt: negPrompt || '' });
@@ -2761,6 +2928,7 @@ export default function App() {
             );
           }
         }}
+        onApplyToCanvas={(item) => { void handleApplyHistoryToCanvas(item); }}
         onDeleteItem={handleDeleteHistoryItem}
         onClearAll={handleClearHistory}
       />
@@ -2829,14 +2997,13 @@ export default function App() {
         onDeleteBatchAssets={handleDeleteBatchHistoryItems}
         onClearAllHistory={handleClearHistory}
         onRefreshHistory={async () => {
-          const { fetchHistory } = await import('./services/api');
-          const h = await fetchHistory();
-          if (h) setHistory(h);
+          await loadHistoryFirstPage();
         }}
       />
 
       {/* Real-time Floating Notification Toast */}
-      {toast && (
+      {/* fix16 #5: while HistoryModal is open, skip error toast — failure is already on the history card. */}
+      {toast && !(isHistoryOpen && toast.type === 'error') && (
         /* fix4.1: bottom-center above bottom tool dock (bottom-6 + ~3.5rem pill); clear 「LoRA 模型中心」/「100%」. */
         <div data-testid="toast-container" className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 pointer-events-auto animate-in slide-in-from-bottom-4 duration-300 max-w-[min(48rem,94vw)] max-h-[min(40vh,24rem)] overflow-auto">
           <div
@@ -2936,12 +3103,28 @@ export default function App() {
             </div>
 
             <div className="flex items-center gap-2 shrink-0 ml-2">
-              <button
-                onClick={() => setIsHistoryOpen(true)}
-                className="px-2.5 py-1.5 rounded-lg bg-[#272a38] hover:bg-[#34384b] text-cyan-300 font-semibold text-xs border border-cyan-500/30 transition-colors shadow-sm"
-              >
-                查看历史
-              </button>
+              {(() => {
+                const act = toast.action ?? (toast.type === 'success' || toast.type === 'error' ? 'history' : 'none');
+                if (act === 'api-settings') return (
+                  <button type="button" data-testid="toast-action-api-settings" onClick={() => {
+                    if (toast?.actionProviderId) setSettingsInitialProvider(toast.actionProviderId);
+                    setIsSettingsOpen(true); setToast(null);
+                  }}
+                    className="px-2.5 py-1.5 rounded-lg bg-[#272a38] hover:bg-[#34384b] text-cyan-300 font-semibold text-xs border border-cyan-500/30 transition-colors shadow-sm">去 API 设置</button>
+                );
+                if (act === 'connect-ref') return (
+                  <button type="button" data-testid="toast-action-connect-ref" onClick={() => {
+                    const load = nodes.find((n) => n.type === 'LoadImage' && !n.bypassed);
+                    if (load) setSelectedNodeId(load.id);
+                    setToast(null);
+                  }} className="px-2.5 py-1.5 rounded-lg bg-[#272a38] hover:bg-[#34384b] text-cyan-300 font-semibold text-xs border border-cyan-500/30 transition-colors shadow-sm">去连参考图</button>
+                );
+                if (act === 'history') return (
+                  <button type="button" data-testid="toast-action-history" onClick={() => { setIsHistoryOpen(true); setToast(null); }}
+                    className="px-2.5 py-1.5 rounded-lg bg-[#272a38] hover:bg-[#34384b] text-cyan-300 font-semibold text-xs border border-cyan-500/30 transition-colors shadow-sm">查看历史</button>
+                );
+                return null;
+              })()}
               {toast.imageUrl && previewShowsMedia(toastThumbSettle) && (
                 <button
                   onClick={() => setPreviewImageUrl(toast.imageUrl!)}
@@ -2953,6 +3136,7 @@ export default function App() {
               <button
                 onClick={() => setToast(null)}
                 className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10"
+                aria-label="关闭"
               >
                 ✕
               </button>
@@ -2968,29 +3152,55 @@ export default function App() {
           onClose={() => setInspectingMediaItem(null)}
           item={inspectingMediaItem}
           onApplyToCanvas={(params) => {
-            if (params.prompt && selectedFrameId) {
-              handleUpdateFrame(selectedFrameId, {
-                prompt: params.prompt,
-                negativePrompt: params.negativePrompt || '',
-                params: {
-                  ...activeFrame?.params,
-                  checkpoint: params.checkpoint || activeFrame?.params?.checkpoint,
-                  targetProvider: (params.provider as any) || activeFrame?.params?.targetProvider,
-                  seed: params.seed ?? activeFrame?.params?.seed,
-                  steps: params.steps ?? activeFrame?.params?.steps,
-                  cfg: params.cfg ?? activeFrame?.params?.cfg,
-                },
-              });
-            } else if (params.prompt) {
-              setNodes((prev) =>
-                prev.map((n) => {
-                  if (n.type === 'CLIPTextEncode') {
-                    return { ...n, values: { ...n.values, text: params.prompt } };
-                  }
-                  return n;
-                })
-              );
-            }
+            const item = {
+              ...(inspectingMediaItem || {}),
+              id: inspectingMediaItem?.id || `apply-${Date.now()}`,
+              url: inspectingMediaItem?.url || inspectingMediaItem?.imageUrl || '',
+              prompt: params.prompt ?? inspectingMediaItem?.prompt ?? null,
+              negativePrompt: params.negativePrompt ?? inspectingMediaItem?.negativePrompt,
+              model: params.checkpoint ?? inspectingMediaItem?.model,
+              actualModel: params.checkpoint ?? inspectingMediaItem?.actualModel,
+              provider: params.provider ?? inspectingMediaItem?.provider,
+              actualProvider: params.provider ?? inspectingMediaItem?.actualProvider,
+              seed: params.seed ?? inspectingMediaItem?.seed ?? null,
+              steps: params.steps ?? inspectingMediaItem?.steps ?? null,
+              cfg: params.cfg ?? inspectingMediaItem?.cfg ?? null,
+              sampler: params.sampler ?? inspectingMediaItem?.sampler,
+              scheduler: params.scheduler ?? inspectingMediaItem?.scheduler,
+              width: params.width ?? inspectingMediaItem?.width,
+              height: params.height ?? inspectingMediaItem?.height,
+              loras: params.loras ?? inspectingMediaItem?.loras,
+              timestamp: inspectingMediaItem?.timestamp || Date.now(),
+              workflowSnapshot: inspectingMediaItem?.workflowSnapshot,
+              hasWorkflowSnapshot: inspectingMediaItem?.hasWorkflowSnapshot,
+            } as GenerationHistoryItem & { hasWorkflowSnapshot?: boolean };
+            void handleApplyHistoryToCanvas(item).then(() => {
+              if (selectedFrameId && params.prompt) {
+                handleUpdateFrame(selectedFrameId, {
+                  prompt: params.prompt,
+                  negativePrompt: params.negativePrompt || '',
+                  imageUrl: item.url || undefined,
+                  params: {
+                    ...activeFrame?.params,
+                    checkpoint: params.checkpoint || activeFrame?.params?.checkpoint,
+                    targetProvider: (params.provider as any) || activeFrame?.params?.targetProvider,
+                    seed: params.seed ?? activeFrame?.params?.seed,
+                    steps: params.steps ?? activeFrame?.params?.steps,
+                    cfg: params.cfg ?? activeFrame?.params?.cfg,
+                    width: params.width ?? activeFrame?.params?.width,
+                    height: params.height ?? activeFrame?.params?.height,
+                    loras: params.loras?.length
+                      ? params.loras.map((l: any) => ({
+                          name: l.name,
+                          modelStrength: l.strength ?? l.modelStrength,
+                          clipStrength: l.strength ?? l.clipStrength ?? l.modelStrength,
+                          triggerWords: l.triggerWords || '',
+                        }))
+                      : activeFrame?.params?.loras,
+                  },
+                });
+              }
+            });
           }}
           onSendToImg2Img={(imageUrl, prompt) => {
             handleBranchVariation({

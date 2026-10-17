@@ -16,10 +16,10 @@ it('inspector retains custom ecosystem and explicit video provider controls',()=
   const noop=()=>{};
   const params={checkpoint:'custom-video',targetProvider:'video' as const,videoProvider:'fal',denoise:0,width:1024,height:1024,batchSize:1,seedControl:'fixed' as const,loras:[]};
   const html=renderToStaticMarkup(<ParameterInspector params={params} onChange={noop} onOpenCivitai={noop} />);
-  expect(html).toContain('实际视频服务商');expect(html).toContain('视频 resolution');expect(html).toContain('视频自定义参数 JSON');
+  expect(html).toContain('实际视频服务商');expect(html).toContain('视频 resolution');expect(html).not.toContain('视频自定义参数 JSON'); // cleanup-2026-10-17 #2
   const civ=renderToStaticMarkup(<ParameterInspector params={{...params,targetProvider:'civitai',civitaiEngine:'comfy',civitaiEcosystem:'custom-ecosystem',civitaiModel:'custom-model'}} onChange={noop} onOpenCivitai={noop} />);
   expect(civ).toContain('custom-ecosystem');expect(civ).toContain('custom-model');expect(civ).toContain('Civitai engine');
-  expect(civ).toContain('aria-label="自定义 API 参数 JSON"');
+  expect(civ).toContain('aria-label="请求参数 JSON 预览（只读）"'); // cleanup-2026-10-17 #2
   expect(civ).not.toContain('读取所选模型的官方 Schema');
 });
 it('shows essential studio actions and explains a disabled run', () => {
@@ -57,7 +57,7 @@ it('uses model-specific duration bounds and keeps custom Civitai recipe selector
     return renderToStaticMarkup(<NodeItem node={{id:'n',type,title:type,pos:{x:0,y:0},inputs:def.inputs,outputs:def.outputs,values}} isSelected={false} zoom={1} onSelect={noop} onStartDrag={noop} onUpdateValue={noop} onDeleteNode={noop} onToggleCollapse={noop} onToggleBypass={noop} onStartConnecting={noop} onEndConnecting={noop} currentProvider={String(values.targetProvider)} currentCheckpoint={String(values.model || values.ckpt_name)} />);
   };
   const video=render('AIVideoNode',{targetProvider:'fal',model:'fal-ai/kling-video/v3/standard/image-to-video',duration:12});
-  expect(video).toMatch(/type="number" min="3" max="15"/);
+  expect(video).not.toMatch(/type="number" min="3" max="15"/); // cleanup-2026-10-17: bounds only from Schema cache
   const unknown=render('AIVideoNode',{targetProvider:'fal',model:'custom-video',duration:20,fps:30});
   expect(unknown).not.toMatch(/type="number" min="5" max="24"/);
   const civitai=render('CheckpointLoaderSimple',{targetProvider:'civitai',ckpt_name:'custom',civitai_ecosystem:'custom-ecosystem'});
@@ -65,7 +65,7 @@ it('uses model-specific duration bounds and keeps custom Civitai recipe selector
   expect(civitai).toContain('Civitai ecosystem');
   expect(civitai).toContain('Civitai model');
   expect(civitai).toContain('custom-ecosystem');
-  expect(civitai).toContain('aria-label="自定义 API 参数 JSON"');
+  expect(civitai).not.toContain('aria-label="自定义 API 参数 JSON"'); // cleanup-2026-10-17: JSON editor no longer on nodes
   expect(civitai).not.toContain('读取所选模型的官方 Schema');
   expect(render('CheckpointLoaderSimple',{targetProvider:'fal',ckpt_name:'custom'})).not.toContain('Civitai engine');
   const blocked=render('AIVideoNode',{targetProvider:'civitai',model:'',execution_blocked_reason:'来源执行链尚未接入',require_reference_image:true});

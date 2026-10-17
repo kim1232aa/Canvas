@@ -38,6 +38,7 @@ export const JsonNoMidBreak: React.FC<{ value: unknown; className?: string; test
 
 const JsonLine: React.FC<{ text: string }> = ({ text }) => {
   // Break only after / ? & inside the line; keep other characters nowrap as whole segments.
-  const pieces = text.split(/(?<=[?&/])/);
+  // fix16.1 #2: also allow wrap after spaces so long string values (prompt) wrap instead of overflowing.
+  const pieces = text.split(/(?<=[?&/ ])/);
   return <>{pieces.map((p, i) => <React.Fragment key={i}><span className="whitespace-nowrap">{p}</span>{i < pieces.length - 1 ? <wbr /> : null}</React.Fragment>)}</>;
 };

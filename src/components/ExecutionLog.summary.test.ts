@@ -3,7 +3,7 @@
  * Full DOM render is not required.
  */
 import {describe,expect,it} from 'vitest';
-import {errorScopeTag, humanSummaryText, providerLabelFromRoute, alignRequestSnapshotProvider, plainSuccessConclusion, shortLoraDisplayName, isEmptyClientRequestSnapshot, clientRequestSnapshotText, extractLorasFromRequest, extractLorasFromRecord, actualRequestFromResponse} from './ExecutionLog';
+import {errorScopeTag, humanSummaryText, providerLabelFromRoute, alignRequestSnapshotProvider, plainSuccessConclusion, shortLoraDisplayName, isEmptyClientRequestSnapshot, clientRequestSnapshotText, extractLorasFromRequest, extractLorasFromRecord, actualRequestFromResponse, buttonSummary} from './ExecutionLog';
 import {MODELSCOPE_MODEL_MISSING_CN} from '../utils/apiFailure';
 import type {ExecutionRecord} from '../services/executionTrace';
 import {LORA_UNSUPPORTED_MESSAGE} from '../utils/resolveCheckpoint';
@@ -341,5 +341,42 @@ describe('ExecutionLog AIMLAPI FE P0 — no fake 出图 + actualRequest loras', 
       parameters: { loras: [{ path: 'ostris/z_image_turbo_childrens_drawings', scale: 0.85 }] },
     });
     expect(providerLabelFromRoute(r.route)).toBe('AIMLAPI');
+  });
+});
+
+describe('buttonSummary Schema pending vs generation pending', () => {
+  it('pending Schema/catalog GET shows 读取 Schema 中（非生成请求）, not N 个请求中', () => {
+    const schemaPending: ExecutionRecord = {
+      id: 1,
+      time: '2026-10-17T00:00:00.000Z',
+      method: 'GET',
+      route: '/api/model-schema?provider=wavespeed&model=x',
+      state: 'pending',
+      status: null,
+      category: 'schema',
+      request: {},
+      response: {},
+    };
+    expect(buttonSummary([schemaPending])).toBe('读取 Schema 中（非生成请求）');
+    const two = [
+      schemaPending,
+      { ...schemaPending, id: 2, category: 'catalog' as const, route: '/api/models?provider=wavespeed' },
+    ];
+    expect(buttonSummary(two)).toBe('读取 Schema 中（非生成请求）· 2');
+  });
+
+  it('pending generation still shows N 个请求中', () => {
+    const gen: ExecutionRecord = {
+      id: 3,
+      time: '2026-10-17T00:00:00.000Z',
+      method: 'POST',
+      route: '/api/engine/wavespeed/generate',
+      state: 'pending',
+      status: null,
+      category: 'generation',
+      request: {},
+      response: {},
+    };
+    expect(buttonSummary([gen])).toBe('1 个请求中');
   });
 });

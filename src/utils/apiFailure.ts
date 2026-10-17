@@ -176,7 +176,7 @@ export function isLocalNotOutbound(data: any): boolean {
     ...(Array.isArray(data.historyItem?.requestMetadata?.executionTrace) ? data.historyItem.requestMetadata.executionTrace : []),
   ];
   if (data.historyItem && typeof data.historyItem === 'object' && data.historyItem.status && data.historyItem.status !== 'local_blocked' && data.historyItem.requestMetadata?.postSent !== false) return false;
-  return !traces.some((t: any) => t && t.endpoint && t.method && t.method !== 'GET');
+  return !traces.some((t: any) => t && t.endpoint && t.method && t.method !== 'GET' && !t.readOnly);
 }
 
 /** 「未出站，本地拦截：<本地错误原文>」 — reason verbatim, never sliced. */
@@ -185,7 +185,7 @@ export function localNotOutboundText(data: any): string {
   const text = String(detail);
   if (text.startsWith('本地拦截 · ')) return text;
   // clean-1333 #3: the submit route read (or reused) the Schema before refusing — never claim nothing went out.
-  const gets = data && typeof data === 'object' && Array.isArray(data.executionTrace) ? data.executionTrace.filter((t: any) => String(t?.method || '').toUpperCase() === 'GET') : [];
+  const gets = data && typeof data === 'object' && Array.isArray(data.executionTrace) ? data.executionTrace.filter((t: any) => String(t?.method || '').toUpperCase() === 'GET' || t?.readOnly) : [];
   const schemaFailed = !!(data?.schemaRead?.failed || (!data?.schemaRead && gets.length && gets.some((t: any) => t.status === null || t.status >= 400)));
   if (schemaFailed) return `本地拦截 · Schema 读取失败、未发生成：${text.replace(/^未出站，本地拦截[：:]?\s*/, '')}`;
   const schemaRead = !!(data && typeof data === 'object' && (data.schemaRead || gets.length));
@@ -224,6 +224,8 @@ function coerceResponseBodyText(value: unknown): string {
 
 export function upstreamFailureParts(data: any): { status: number; statusText: string; body: string } | null {
   if (!data || typeof data !== 'object') return null;
+  // A local block before the generation request has no upstream failure: never headline a successful catalog/Schema read (e.g. HTTP 200 /tool/list).
+  if (isLocalNotOutbound(data)) return null;
   const traces = Array.isArray(data.executionTrace) ? data.executionTrace : Array.isArray(data.taskExecutionTrace) ? data.taskExecutionTrace : [];
   const failed = [...traces].reverse().find((t: any) => typeof t?.status === 'number' && t.status >= 400);
   const hist = data.historyItem && typeof data.historyItem === 'object' ? data.historyItem : null;

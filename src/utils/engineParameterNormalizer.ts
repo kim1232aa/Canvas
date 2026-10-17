@@ -254,7 +254,7 @@ export function normalizeForModelScope(
     payload,
     transformedPrompt: positivePrompt,
     transformedNegativePrompt: negativePrompt,
-    loraShapeDescription: '不支持 (LoRA 格式未经官方文档核实，服务端返回 400)',
+    loraShapeDescription: 'loras: 仓库 ID 字符串或 {"owner/model": weight}，≤6，权重和=1.0（禁止 path/scale）',
     parameterMappings: {
       steps: 'num_inference_steps',
       cfg: 'guidance_scale',
