@@ -45,4 +45,12 @@ describe('seed / negative_prompt badges', () => {
     expect(schemaSendStatus('krea', 'seed', 42, JSON.stringify({ _canvas: { schemaProperties: ['prompt'] } }))).toBe('not_sent');
     expect(schemaSendStatus('krea', 'seed', 42, '{}')).toBe('pending');
   });
+  it('muapi flux schema without steps/cfg → not_sent (hide shells)', () => {
+    const cp = JSON.stringify({ _canvas: { schemaProperties: ['prompt', 'lora_url', 'lora_weight', 'aspect_ratio', 'webhook_url'] } });
+    expect(schemaSendStatus('muapi', 'steps', undefined, cp)).toBe('not_sent');
+    expect(schemaSendStatus('muapi', 'cfg', 7, cp)).toBe('not_sent');
+    expect(schemaSendStatus('muapi', 'seed', 42, cp)).toBe('not_sent');
+    expect(schemaSendStatus('muapi', 'aspect_ratio', '1:1', cp)).toBe('will_send');
+  });
+
 });

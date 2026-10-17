@@ -549,6 +549,15 @@ const STD_SPECS: StdSpec[] = [
     hasLora: false,
     hasNegative: false,
     omit: ['seed', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise'],
+    // Official OpenAPI (2026-10-17): seed schemaProperties so KSampler hides steps/CFG before live Schema GET returns.
+    checkpointExtra: {
+      custom_parameters: JSON.stringify({
+        _canvas: {
+          scope: { provider: 'muapi', model: 'flux-1-dev-style-lora-inference' },
+          schemaProperties: ['prompt', 'lora_url', 'lora_weight', 'aspect_ratio', 'webhook_url'],
+        },
+      }),
+    },
     // Official OpenAPI: lora_url REQUIRED (trainer task URL). No accepted-run recipe → pendingRecipe (plain UI copy, no API field names).
     pendingRecipe: '官方要真 LoRA 地址（训练任务返回的那种），配方里还没有；载入后挂上再运行。',
   },

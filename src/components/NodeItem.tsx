@@ -35,7 +35,7 @@ import { FieldStatusBadge, SchemaSendBadge } from './FieldStatusBadge';
 import { isCanvasFieldUnsupported, isCanvasWidgetUnsupported, LORA_UNSUPPORTED_TITLE, LORA_BYPASS_LABEL } from '../utils/resolveCheckpoint';
 import { readDeclaredSchemaProperties, SCHEMA_OMIT_REASON, canvasFieldMatchesSchema } from '../utils/schemaSendHint';
 import { schemaSendStatus } from '../utils/schemaSendStatus';
-/** KSampler params that must be disabled when the endpoint Schema omits them (cleanup-2026-10-17). */
+/** KSampler params hidden when the endpoint Schema omits them (no empty adjustable shells). */
 const SAMPLER_SCHEMA_WIDGETS = new Set(['steps', 'cfg', 'sampler_name', 'scheduler', 'sampler', 'seed']);
 import { checkpointNodeTitle, ksamplerNodeTitle, loraLoaderNodeTitle, LORA_LOADER_TYPES } from '../utils/providerLabels';
 import { errorBannerText, priorRunErrorLabel, LOCAL_BLOCK_NODE_LINE } from '../utils/apiFailure';
@@ -517,14 +517,15 @@ export const NodeItem: React.FC<NodeItemProps> = ({
             <p className="text-slate-400">引擎和生态必须显式选择；AIR、sampler/scheduler 与引擎是否兼容由上游验证。</p>
           </div>}
           {node.type === 'AIVideoNode' && <label className="block text-slate-300">视频分辨率 (resolution)<input aria-label="视频分辨率 (resolution)" value={node.values.resolution || ''} onMouseDown={e=>e.stopPropagation()} onChange={e=>onUpdateValue(node.id,'resolution',e.target.value)} placeholder="未填写；按端点 Schema 指定" className="w-full rounded border border-slate-700 bg-[#121316] p-2" /></label>}
-          {/* cleanup-2026-10-17: when Schema omits steps/CFG/sampler/scheduler — one line, controls disabled below. */}
+          {/* Schema omits steps/CFG/sampler/scheduler → hide widgets (no empty adjustable shells); one plain line. */}
           {node.type === 'KSampler' && (() => {
             const declared = readDeclaredSchemaProperties(schemaCustomParameters);
             if (!declared || declared.size === 0) return null; // Schema not loaded — don't invent
             const names = ['steps', 'cfg', 'sampler_name', 'scheduler'] as const;
+            const labels: Record<(typeof names)[number], string> = { steps: '步数', cfg: 'CFG', sampler_name: '采样器', scheduler: '调度器' };
             const unused = names.filter((name) => schemaSendStatus(currentProvider, name, node.values?.[name], node.values?.custom_parameters, declared, schemaCustomParameters) === 'not_sent');
             if (!unused.length) return null;
-            return <p role="note" data-testid="node-sampler-unused" className="text-[11px] text-slate-400 leading-relaxed">这家接口不用这几个参数</p>;
+            return <p role="note" data-testid="node-sampler-unused" className="text-[11px] text-slate-400 leading-relaxed">此模型不支持：{unused.map((n) => labels[n]).join('、')}</p>;
           })()}
           {/* Widgets according to definition */}
           {def.widgets?.filter(widget => showUnsupported || !(isCanvasWidgetUnsupported(currentProvider, currentCheckpoint, widget.name) || (node.type === 'CLIPTextEncodeNegative' && widget.name === 'text' && greyNegative))).map((widget) => {
@@ -584,6 +585,8 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               const omitHint = sendStatus === 'not_sent';
               // cleanup-2026-10-17: sampler params omitted by Schema are DISABLED (not 「能调但不发送」).
               const schemaUnused = SAMPLER_SCHEMA_WIDGETS.has(widget.name) && omitHint;
+              // Hide Schema-omitted sampler shells (steps/CFG/sampler/scheduler) — empty disabled sliders look adjustable.
+              if (schemaUnused && ['steps', 'cfg', 'sampler_name', 'scheduler', 'sampler'].includes(widget.name)) return null;
               // cleanup-serious: strength/denoise only when a reference image is connected (WaveSpeed strength etc.).
               const isStrengthField = widget.name === 'denoise' || widget.name === 'strength';
               let strengthNeedsImage = false;
@@ -908,6 +911,8 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               const omitHint = sendStatus === 'not_sent';
               // cleanup-2026-10-17: sampler params omitted by Schema are DISABLED (not 「能调但不发送」).
               const schemaUnused = SAMPLER_SCHEMA_WIDGETS.has(widget.name) && omitHint;
+              // Hide Schema-omitted sampler shells (steps/CFG/sampler/scheduler) — empty disabled sliders look adjustable.
+              if (schemaUnused && ['steps', 'cfg', 'sampler_name', 'scheduler', 'sampler'].includes(widget.name)) return null;
               // cleanup-serious: strength/denoise only when a reference image is connected (WaveSpeed strength etc.).
               const isStrengthField = widget.name === 'denoise' || widget.name === 'strength';
               let strengthNeedsImage = false;
@@ -947,7 +952,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                       <option value="">该服务商不支持</option>
                     ) : (
                       <>
-                        {emptyCtrl && <option value="">未设置</option>}
+                        {emptyCtrl && <option value="">运行后才有</option>}
                         {!isValueInOpts && value && <option value={value}>{value}</option>}
                         {opts.map((opt, idx) => (
                           <option key={`${widget.name}-${opt.value}-${idx}`} value={opt.value}>
@@ -1076,6 +1081,8 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               const omitHint = sendStatus === 'not_sent';
               // cleanup-2026-10-17: sampler params omitted by Schema are DISABLED (not 「能调但不发送」).
               const schemaUnused = SAMPLER_SCHEMA_WIDGETS.has(widget.name) && omitHint;
+              // Hide Schema-omitted sampler shells (steps/CFG/sampler/scheduler) — empty disabled sliders look adjustable.
+              if (schemaUnused && ['steps', 'cfg', 'sampler_name', 'scheduler', 'sampler'].includes(widget.name)) return null;
               // cleanup-serious: strength/denoise only when a reference image is connected (WaveSpeed strength etc.).
               const isStrengthField = widget.name === 'denoise' || widget.name === 'strength';
               let strengthNeedsImage = false;

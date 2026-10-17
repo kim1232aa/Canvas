@@ -404,6 +404,13 @@ describe('standard workflow presets (21 T2I + 6 I2V)', () => {
     expect(ckpt.values.execution_blocked_reason).toBe(p.pendingRecipe);
     expect(p.spatialFrames?.[0]?.params.executionBlockedReason).toBe(p.pendingRecipe);
     expect(p.nodes.some(n => n.type === 'LoRALoader')).toBe(false);
+    // Official OpenAPI fields only — drives KSampler hide of steps/CFG (no empty shells).
+    const props = JSON.parse(String(ckpt.values.custom_parameters || '{}'))?._canvas?.schemaProperties;
+    expect(props).toEqual(expect.arrayContaining(['prompt', 'lora_url', 'lora_weight', 'aspect_ratio']));
+    expect(props).not.toEqual(expect.arrayContaining(['steps', 'cfg', 'guidance_scale', 'num_inference_steps']));
+    const ks = p.nodes.find(n => n.type === 'KSampler')!;
+    expect(ks.values.steps).toBeUndefined();
+    expect(ks.values.cfg).toBeUndefined();
   });
 
   it('former empty-model T2I cards now carry a proven catalog model (no 待配置)', () => {

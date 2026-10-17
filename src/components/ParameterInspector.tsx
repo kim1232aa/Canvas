@@ -589,15 +589,23 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
             </div>
           </div>
 
-          {/* Steps & CFG Sliders */}
+          {/* Steps / CFG / sampler / scheduler: hide when Schema omits or static table says unsupported (no empty adjustable shells). */}
+          {(greySteps || omitSteps || greyCfg || omitCfg) && (
+            <p role="note" data-testid="inspector-sampler-unsupported" className="text-[11px] text-slate-400 leading-relaxed">
+              此模型不支持{[
+                (greySteps || omitSteps) ? '步数' : null,
+                (greyCfg || omitCfg) ? 'CFG' : null,
+              ].filter(Boolean).join('、')}
+            </p>
+          )}
+          {!(greySteps || omitSteps) && (
           <div className="space-y-1">
             <div className="flex flex-wrap justify-between gap-x-2 gap-y-1 text-slate-400 text-[10px] font-mono">
               <span className="flex items-center gap-1.5" title="采样步数：FLUX 推荐 4~28 步，SDXL 推荐 25~30 步">
                 STEPS (采样步数)
-                {greySteps && <FieldStatusBadge status="unsupported" />}
-                {!greySteps && <SchemaSendBadge status={sendSteps} omitTitle={SCHEMA_OMIT_REASON} />}
+                <SchemaSendBadge status={sendSteps} omitTitle={SCHEMA_OMIT_REASON} />
               </span>
-              <span className={`font-bold whitespace-nowrap shrink-0 ${omitSteps ? 'text-slate-500 line-through' : 'text-cyan-400'}`} title={omitSteps ? '该端点不支持，不发送' : undefined}>{greySteps ? '—' : `${params.steps} 步`}</span>
+              <span className="font-bold whitespace-nowrap shrink-0 text-cyan-400">{`${params.steps} 步`}</span>
             </div>
             <input
               type="range"
@@ -605,20 +613,20 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
               max={80}
               step={1}
               value={params.steps}
-              disabled={greySteps}
               onChange={(e) => update({ steps: parseInt(e.target.value) })}
-              className="w-full h-1.5 bg-[#252833] rounded appearance-none cursor-pointer accent-cyan-400 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="w-full h-1.5 bg-[#252833] rounded appearance-none cursor-pointer accent-cyan-400"
             />
           </div>
+          )}
 
+          {!(greyCfg || omitCfg) && (
           <div className="space-y-1">
             <div className="flex flex-wrap justify-between gap-x-2 gap-y-1 text-slate-400 text-[10px] font-mono">
               <span className="flex items-center gap-1.5" title="提示词引导系数：FLUX 推荐 3.5，SDXL 推荐 7.0~8.0">
                 CFG SCALE (提示词引导系数)
-                {greyCfg && <FieldStatusBadge status="unsupported" />}
-                {!greyCfg && <SchemaSendBadge status={sendCfg} omitTitle={SCHEMA_OMIT_REASON} />}
+                <SchemaSendBadge status={sendCfg} omitTitle={SCHEMA_OMIT_REASON} />
               </span>
-              <span className={`font-bold whitespace-nowrap shrink-0 ${omitCfg ? 'text-slate-500 line-through' : 'text-cyan-400'}`} title={omitCfg ? '该端点不支持，不发送' : undefined}>{greyCfg ? '—' : (params.cfg?.toFixed(1) ?? '未设置')}</span>
+              <span className="font-bold whitespace-nowrap shrink-0 text-cyan-400">{params.cfg?.toFixed(1) ?? '未设置'}</span>
             </div>
             <input
               type="range"
@@ -626,25 +634,25 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
               max={20.0}
               step={0.1}
               value={params.cfg}
-              disabled={greyCfg}
               onChange={(e) => update({ cfg: parseFloat(e.target.value) })}
-              className="w-full h-1.5 bg-[#252833] rounded appearance-none cursor-pointer accent-cyan-400 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="w-full h-1.5 bg-[#252833] rounded appearance-none cursor-pointer accent-cyan-400"
             />
           </div>
+          )}
 
           {/* Sampler & Scheduler Selection */}
+          {(!(greySampler || omitSampler) || !(greyScheduler || omitScheduler)) && (
           <div className="grid grid-cols-2 gap-2">
+            {!(greySampler || omitSampler) && (
             <div className="space-y-1">
               <label className="text-slate-400 text-[10px] font-mono flex items-center gap-1.5">
                 SAMPLER (采样算法)
-                {greySampler && <FieldStatusBadge status="unsupported" />}
-                {!greySampler && <SchemaSendBadge status={sendSampler} omitTitle={SCHEMA_OMIT_REASON} />}
+                <SchemaSendBadge status={sendSampler} omitTitle={SCHEMA_OMIT_REASON} />
               </label>
               <select
                 value={params.sampler}
-                disabled={greySampler}
                 onChange={(e) => update({ sampler: e.target.value })}
-                className="w-full bg-[#111216] border border-[#2b2d38] rounded-lg px-2 py-1.5 text-slate-200 text-[11px] font-mono outline-none disabled:opacity-40 disabled:cursor-not-allowed"
+                className="w-full bg-[#111216] border border-[#2b2d38] rounded-lg px-2 py-1.5 text-slate-200 text-[11px] font-mono outline-none"
               >
                 {SAMPLER_OPTIONS.map((s, idx) => (
                   <option key={`sampler-${s.value}-${idx}`} value={s.value}>
@@ -653,18 +661,18 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                 ))}
               </select>
             </div>
+            )}
 
+            {!(greyScheduler || omitScheduler) && (
             <div className="space-y-1">
               <label className="text-slate-400 text-[10px] font-mono flex items-center gap-1.5">
                 SCHEDULER (调度器)
-                {greyScheduler && <FieldStatusBadge status="unsupported" />}
-                {!greyScheduler && <SchemaSendBadge status={sendScheduler} omitTitle={SCHEMA_OMIT_REASON} />}
+                <SchemaSendBadge status={sendScheduler} omitTitle={SCHEMA_OMIT_REASON} />
               </label>
               <select
                 value={params.scheduler}
-                disabled={greyScheduler}
                 onChange={(e) => update({ scheduler: e.target.value })}
-                className="w-full bg-[#111216] border border-[#2b2d38] rounded-lg px-2 py-1.5 text-slate-200 text-[11px] font-mono outline-none disabled:opacity-40 disabled:cursor-not-allowed"
+                className="w-full bg-[#111216] border border-[#2b2d38] rounded-lg px-2 py-1.5 text-slate-200 text-[11px] font-mono outline-none"
               >
                 {SCHEDULER_OPTIONS.map((sc, idx) => (
                   <option key={`scheduler-${sc.value}-${idx}`} value={sc.value}>
@@ -673,7 +681,9 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                 ))}
               </select>
             </div>
+            )}
           </div>
+          )}
 
           {/* Denoise (img2img) */}
           <div className="space-y-1">

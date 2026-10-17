@@ -59,11 +59,11 @@ describe('cleanup-2026-10-17 key + I2V + sampler disable', () => {
     expect(pre2(nodes, [], 'v', () => ['prompt'])).toBeNull();
     expect(pre2(nodes, [], 'v', () => ['image_url'])).toBe('图生视频要先连一张参考图');
   });
-  it('C KSampler shows one unused line and disables schema-omitted sampler widgets', () => {
+  it('C KSampler shows one unused line and hides schema-omitted sampler widgets', () => {
     const src = rf('src/components/NodeItem.tsx', 'utf8');
-    expect(src).toContain('这家接口不用这几个参数');
+    expect(src).toContain('此模型不支持：');
     expect(src).toContain('SAMPLER_SCHEMA_WIDGETS');
-    expect(src).toContain('SAMPLER_SCHEMA_WIDGETS.has(widget.name) && omitHint');
+    expect(src).toContain("schemaUnused && ['steps', 'cfg', 'sampler_name', 'scheduler', 'sampler'].includes(widget.name)) return null");
   });
 });
 
@@ -98,9 +98,10 @@ describe('cleanup-serious toast / SaveImage / strength', () => {
     expect(app).toContain("output !== undefined && n.type === 'SaveImage'");
     expect(app).toContain('filename_prefix: prefix');
   });
-  it('KSampler unused line uses empty placeholder not 该服务…', () => {
+  it('KSampler schema-omitted steps/CFG are hidden (no empty adjustable shells)', () => {
     const src = rf('src/components/NodeItem.tsx', 'utf8');
-    expect(src).toContain("placeholder={schemaUnused ? ''");
+    expect(src).toContain("schemaUnused && ['steps', 'cfg', 'sampler_name', 'scheduler', 'sampler'].includes(widget.name)) return null");
+    expect(src).toContain('data-testid="node-sampler-unused"');
   });
   it('denoise/strength disabled without reference image when Schema declares it', () => {
     const src = rf('src/components/NodeItem.tsx', 'utf8');
