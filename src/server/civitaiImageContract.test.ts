@@ -45,12 +45,13 @@ describe('Civitai image request contract', () => {
     const { extractWorkflowParameters } = await import('../utils/graphEngine');
     const preset = WORKFLOW_PRESETS.find(p => p.id === 'std-civitai-t2i')!;
     expect(preset).toBeTruthy();
-    const params = extractWorkflowParameters(preset.nodes, preset.connections);
+    const nodes = preset.nodes.map(n => n.type === 'CLIPTextEncode' && !(n.values as any)?.text ? { ...n, values: { ...n.values, text: '填入配方/用户指定' } } : n);
+    const params = extractWorkflowParameters(nodes, preset.connections);
     expect(params.targetProvider).toBe('civitai');
     expect(params.civitaiEngine).toBe('comfy');
     expect(params.civitaiEcosystem).toBe('krea2');
     expect(params.checkpointModel).toBe('turbo');
-    const input = await buildCivitaiImageInput({ model: params.checkpointModel, prompt: params.positivePrompt || '填入配方/用户指定', engine: params.civitaiEngine, ecosystem: params.civitaiEcosystem, comfyModel: params.civitaiModel || 'turbo', loras: [] }, api({}));
+    const input = await buildCivitaiImageInput({ model: params.checkpointModel, prompt: params.positivePrompt, engine: params.civitaiEngine, ecosystem: params.civitaiEcosystem, comfyModel: params.civitaiModel || 'turbo', loras: [] }, api({}));
     expect(input).toMatchObject({ engine: 'comfy', ecosystem: 'krea2', model: 'turbo' });
   });
   it('rejects clearly typed adapters or embeddings as a traditional base model', async () => {
