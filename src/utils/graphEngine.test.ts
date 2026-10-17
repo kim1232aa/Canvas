@@ -43,6 +43,10 @@ describe('graphEngine - B2 & L2a & L2b 拓扑反向追踪与参数抽取隔离�
       { id: 'ks', fromNodeId: 'k', fromSocketId: 'LATENT', toNodeId: 's', toSocketId: 'images', type: 'LATENT' },
     ];
     expect(() => extractWorkflowParameters([ckpt, pos, samp, save], edgesNoLora, 's')).toThrow(/官方要真 LoRA 地址/);
+    // Empty prompt + pendingRecipe: LoRA reason must win over 请填写提示词 (was masked before).
+    const emptyPos = createNode('p', 'CLIPTextEncode', { text: '' });
+    expect(() => extractWorkflowParameters([ckpt, emptyPos, samp, save], edgesNoLora, 's')).toThrow(/真 LoRA 地址.*载入后挂上/);
+    expect(() => extractWorkflowParameters([ckpt, emptyPos, samp, save], edgesNoLora, 'k')).toThrow(/真 LoRA 地址/);
     const lora = createNode('l', 'LoRALoader', {
       lora_name: 'https://example.test/real-lora.safetensors',
       strength_model: 1,

@@ -987,6 +987,14 @@ export function extractWorkflowParameters(
     if (!targetProvider) throw new Error('请选择执行服务商；不会从模型名称猜测引擎');
   }
 
+  // pendingRecipe lock comes before the prompt check: the early subgraph guard runs before the model-chain
+  // Checkpoint is in subgraphNodeIds, so resolve it here and report 缺 LoRA first (TopBar appends 请填写提示词).
+  {
+    const lockNode = modelCheckpoint(nodes, connections, execNode.id);
+    const lockReason = lockNode?.values?.execution_blocked_reason;
+    if (lockReason && !loras.some(l => String(l.name || '').trim())) throw new Error(String(lockReason));
+  }
+
   // 4. Validate mandatory positive prompt (L2b: NO fallback to hardcoded string!)
   if (!positivePrompt || !positivePrompt.trim()) {
     throw new Error('请填写提示词');
