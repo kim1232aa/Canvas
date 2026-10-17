@@ -131,11 +131,11 @@ function buildStandardT2i(spec: StdSpec): WorkflowPreset {
     id: posId,
     type: 'CLIPTextEncode',
     title: '正向提示词',
-    pos: { x: hasLora ? 760 : 400, y: 80 },
+    pos: { x: hasLora ? 760 : 400, y: 140 },
     width: 400,
     inputs: NODE_DEFINITIONS.CLIPTextEncode.inputs,
     outputs: NODE_DEFINITIONS.CLIPTextEncode.outputs,
-    values: { text: STD_PROMPT_PLACEHOLDER },
+    values: { text: '' },
   });
   connections.push({
     id: `${prefix}-c-clip-pos`,
@@ -249,7 +249,7 @@ function buildStandardT2i(spec: StdSpec): WorkflowPreset {
       pos: { x: 260, y: 160 },
       width: 480,
       height: 480,
-      prompt: STD_PROMPT_PLACEHOLDER,
+      prompt: '',
       negativePrompt: '',
       params: {
         checkpoint: spec.ckpt,
@@ -291,7 +291,7 @@ function buildStandardT2i(spec: StdSpec): WorkflowPreset {
     provider,
     previewImage: '',
     tags: [provider, '标准', '文生图'],
-    description: '该供应商标准文生图骨架；提示词请填入配方或用户指定。',
+    description: '该供应商标准文生图流程；提示词请填配方或用户指定。',
     loraNames: loraList.map(l => l.name).filter(Boolean),
     ...(spec.pendingRecipe ? { pendingRecipe: spec.pendingRecipe } : {}),
     nodes,
@@ -313,7 +313,7 @@ function buildGeminiT2i(): WorkflowPreset {
     provider,
     previewImage: '',
     tags: [provider, '标准', '文生图'],
-    description: '该供应商标准文生图骨架；提示词请填入配方或用户指定。',
+    description: '该供应商标准文生图流程；提示词请填配方或用户指定。',
     loraNames: [],
     nodes: [
       {
@@ -324,7 +324,7 @@ function buildGeminiT2i(): WorkflowPreset {
         width: 400,
         inputs: NODE_DEFINITIONS.CLIPTextEncode.inputs,
         outputs: NODE_DEFINITIONS.CLIPTextEncode.outputs,
-        values: { text: STD_PROMPT_PLACEHOLDER },
+        values: { text: '' },
       },
       {
         id: 'std-gemini-imagen',
@@ -358,7 +358,7 @@ function buildGeminiT2i(): WorkflowPreset {
         pos: { x: 260, y: 160 },
         width: 480,
         height: 480,
-        prompt: STD_PROMPT_PLACEHOLDER,
+        prompt: '',
         negativePrompt: '',
         params: {
           checkpoint: GEMINI_DEFAULT_MODEL,
@@ -410,7 +410,7 @@ function buildStandardI2v(spec: { provider: string; model: string }): WorkflowPr
     provider,
     previewImage: '',
     tags: [provider, '标准', '图生视频'],
-    description: '该供应商标准图生视频骨架；提示词请填入配方或用户指定。',
+    description: '该供应商标准图生视频流程；提示词请填配方或用户指定。',
     loraNames: [],
     nodes: [
       {
@@ -477,7 +477,7 @@ function buildStandardI2v(spec: { provider: string; model: string }): WorkflowPr
         pos: { x: 260, y: 160 },
         width: 480,
         height: 480,
-        prompt: STD_PROMPT_PLACEHOLDER,
+        prompt: '',
         negativePrompt: '',
         params: {
           checkpoint: spec.model,

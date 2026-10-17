@@ -41,7 +41,7 @@ canvas, svg {
 .studio-run span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .studio-run, .studio-action { white-space: nowrap; flex-shrink: 0; }
 .studio-run { flex-shrink: 1; }
-/* fix11 #1: below 1180px the tool dock parks left of the minimap (ModernToolDock max-[1180px]:right-[254px]);  icon-only for compactable actions (label kept in title/aria-label); rows never wrap. */
+/* fix11 #1: below 1180px the tool dock parks left of the minimap (ModernToolDock max-[1180px]:right-[220px]);  icon-only for compactable actions (label kept in title/aria-label); rows never wrap. */
 @media (max-width: 1180px) { .studio-action[data-compact] > span { display: none; } .studio-brand { display: none; } [data-dock-compact] > span { display: none; } }
 .studio-run:hover:not(:disabled):not(:focus) { background: #06a1c4; }
 .studio-run:focus { background: #0891b2; outline: none; }

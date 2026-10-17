@@ -428,7 +428,12 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
             </div>
           </div>
 
-          {params.executionBlockedReason && <p role="alert" className="text-sm text-amber-200">{params.executionBlockedReason} · 仅载入，不能立即运行；请保留来源，创建新的显式生成分支。</p>}
+          {params.executionBlockedReason && (() => {
+            const reason = String(params.executionBlockedReason);
+            const pendingStyle = /载入后挂上再运行|待配方|真 LoRA 地址/.test(reason);
+            const suffix = pendingStyle ? '' : ' · 仅载入，不能立即运行；请保留来源，创建新的显式生成分支。';
+            return <p role="alert" className="text-sm text-amber-200">{reason}{suffix}</p>;
+          })()}
           {params.unresolvedModel && <p role="alert" className="text-sm text-amber-200">底模尚未核实，必须重新选择已核实资源。</p>}
           {params.requireReferenceImage && <p role="note" className="text-sm text-amber-200">编辑输入需要明确参考图；展示样图不作为输入。</p>}
           {params.targetProvider === 'video' && <label className="block text-sm text-slate-300">实际视频服务商<select aria-label="实际视频服务商" value={params.videoProvider || ''} onChange={e=>update({videoProvider:e.target.value || undefined})} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2"><option value="">请选择实际 provider</option><option value="fal">Fal</option><option value="agnes">Agnes</option><option value="grok_compat">Grok 兼容中转</option>{params.videoProvider && !['fal','agnes','grok_compat'].includes(params.videoProvider) && <option value={params.videoProvider}>{params.videoProvider}</option>}</select></label>}

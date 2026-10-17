@@ -201,7 +201,7 @@ describe('standard workflow presets (21 T2I + 6 I2V)', () => {
     expect(frame.params.height).toBe(1024);
     expect(frame.params.batchSize).toBe(1);
     expect(frame.params.loras).toHaveLength(3);
-    expect(frame.prompt).toBe(STD_PROMPT_PLACEHOLDER);
+    expect(frame.prompt).toBe('');
     expect(frame.params.customParameters).toBe(JSON.stringify({ 'result image count': 1 }));
   });
 

@@ -143,7 +143,8 @@ export function measureChromeInsets(container: Element | null, margin = 12): Fit
   const c = container.getBoundingClientRect();
   document.querySelectorAll('[data-canvas-chrome="top"]').forEach((el) => {
     const r = el.getBoundingClientRect();
-    if (r.height > 0) out.top = Math.max(out.top, r.bottom - c.top + margin);
+    // +8: keep node titles (first ~24px of card) fully below sticky top bar
+    if (r.height > 0) out.top = Math.max(out.top, r.bottom - c.top + margin + 8);
   });
   // fix11.2: only chrome whose box sits in the bottom band counts. Collapsed exec-log is also
   // tagged bottom even when parked under the top bar (fix11.1); counting it would inflate

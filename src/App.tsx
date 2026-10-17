@@ -1804,7 +1804,7 @@ export default function App() {
     if (canvas.transform) setTransform(canvas.transform);
     setSelectedFrameId(canvas.spatialFrames?.[0]?.id || null);
     setSelectedNodeId(null);
-    if (!canvas.transform) setTimeout(handleResetView, 60);
+    if (!canvas.transform) setTimeout(handleResetView, 180);
   };
 
   const handleSaveProject = async (name?: string, asNew = false) => {
@@ -1904,7 +1904,7 @@ export default function App() {
       setConnections(JSON.parse(JSON.stringify(preset.connections)));
       setSpatialFrames(JSON.parse(JSON.stringify(preset.spatialFrames || [])));
       if (preset.spatialFrames?.[0]) setSelectedFrameId(preset.spatialFrames[0].id);
-      setTimeout(handleResetView, 60);
+      setTimeout(handleResetView, 180);
     } else {
       const timestamp = Date.now();
       const idMap = new Map<string, string>();
@@ -1939,7 +1939,7 @@ export default function App() {
       setNodes((prev) => [...prev, ...newNodes]);
       setConnections((prev) => [...prev, ...newConnections]);
       setSpatialFrames((prev) => [...prev, ...newFrames]);
-      setTimeout(handleResetView, 60);
+      setTimeout(handleResetView, 180);
     }
   };
 
@@ -2125,6 +2125,23 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodeSetKey]);
 
+  // 待配方等黄字会撑高顶栏：状态出现后再检查一次，避免节点标题仍被顶栏盖住。
+  useEffect(() => {
+    if (!runDisabledReason) return;
+    const raf = requestAnimationFrame(() => {
+      const el = document.querySelector('[data-testid="canvas-container"]') as HTMLElement | null;
+      if (!el) return;
+      const insets = measureChromeInsets(el);
+      const cTop = el.getBoundingClientRect().top + insets.top;
+      const tops = nodes.map((n) => document.getElementById(`node-${n.id}`)?.getBoundingClientRect().top).filter((v): v is number => typeof v === 'number');
+      if (!tops.length) return;
+      const minTop = Math.min(...tops);
+      if (minTop < cTop) setTransform((t) => ({ ...t, y: t.y + (cTop - minTop) }));
+    });
+    return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runDisabledReason]);
+
   // Reset view to fit all elements
   const handleResetView = () => {
     // clean-1358 #1 + clean-1613 #1: Fit View uses the canvas container; graph mode ignores leftover spatial frames;
@@ -2194,7 +2211,7 @@ export default function App() {
     } else {
       setToast({ type: 'success', title: '已应用到画布', message: result.imageApplied ? '图已落到保存图像节点，参数已写回。' : '参数已写回。' });
     }
-    setTimeout(handleResetView, 60);
+    setTimeout(handleResetView, 180);
   };
 
 
@@ -2954,7 +2971,7 @@ export default function App() {
           if (data.nodes) setNodes(data.nodes);
           if (data.connections) setConnections(data.connections);
           if (data.spatialFrames) setSpatialFrames(data.spatialFrames);
-          setTimeout(handleResetView, 60);
+          setTimeout(handleResetView, 180);
         }}
         onClearCanvas={handleClearCanvas}
         initialTab={workflowPresetsInitialTab}

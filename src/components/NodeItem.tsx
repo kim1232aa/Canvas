@@ -36,7 +36,7 @@ import { isCanvasFieldUnsupported, isCanvasWidgetUnsupported, LORA_UNSUPPORTED_T
 import { readDeclaredSchemaProperties, SCHEMA_OMIT_REASON, canvasFieldMatchesSchema } from '../utils/schemaSendHint';
 import { schemaSendStatus } from '../utils/schemaSendStatus';
 /** KSampler params that must be disabled when the endpoint Schema omits them (cleanup-2026-10-17). */
-const SAMPLER_SCHEMA_WIDGETS = new Set(['steps', 'cfg', 'sampler_name', 'scheduler', 'sampler']);
+const SAMPLER_SCHEMA_WIDGETS = new Set(['steps', 'cfg', 'sampler_name', 'scheduler', 'sampler', 'seed']);
 import { checkpointNodeTitle, ksamplerNodeTitle, loraLoaderNodeTitle, LORA_LOADER_TYPES } from '../utils/providerLabels';
 import { errorBannerText, priorRunErrorLabel, LOCAL_BLOCK_NODE_LINE } from '../utils/apiFailure';
 import { formatRecordTime } from '../services/executionTrace';
@@ -486,7 +486,14 @@ export const NodeItem: React.FC<NodeItemProps> = ({
       {/* Node Body & Widgets (hidden if collapsed) */}
       {!isCollapsed && (
         <div className="px-3 pb-3 pt-1 space-y-3 border-t border-[#252730]">
-          {node.values.execution_blocked_reason && <p role="alert" className="text-amber-200">{node.values.execution_blocked_reason}</p>}
+          {node.values.execution_blocked_reason && (() => {
+            const reason = String(node.values.execution_blocked_reason);
+            // MuAPI pendingRecipe 等已写清「载入后挂上再运行」的人话：不再叠「仅载入…」后缀。
+            // 「来源执行链尚未接入」等其它拦截仍保留「仅载入，不能立即运行」。
+            const pendingStyle = /载入后挂上再运行|待配方|真 LoRA 地址/.test(reason);
+            const suffix = pendingStyle ? '' : ' · 仅载入，不能立即运行；请保留来源，创建新的显式生成分支。';
+            return <p role="alert" className="text-amber-200">{reason}{suffix}</p>;
+          })()}
           {(node.values.import_unresolved_resource === true || node.values.unresolvedResource === true) && <p role="alert" className="text-amber-200">资源尚未核实，请从目录或公开 metadata 查验后重新选择。</p>}
           {modelChainBreakMessage && <p role="alert" data-testid="node-model-chain-break" className="p-2 rounded bg-amber-950/50 border border-amber-500/50 text-amber-100 text-[11px] leading-relaxed [overflow-wrap:break-word]">{modelChainBreakMessage}</p>}
           {/* clean-1333 #5/#6: only the node that caused the block gets a red box, with the SAME reason as the toast. */}
@@ -910,7 +917,9 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                 try { hasRef = JSON.parse(schemaCustomParameters || '{}')?._canvas?.hasReferenceImage === true; } catch { /* */ }
                 if (declared && declared.size > 0 && canvasFieldMatchesSchema('denoise', declared) && !hasRef) strengthNeedsImage = true;
               }
-              const greyThis = unsupported || schemaUnused || strengthNeedsImage;
+              const seedCtrlGrey = widget.name === 'control_after_generate' && (greySeed || schemaSendStatus(currentProvider, 'seed', node.values?.seed, node.values?.custom_parameters, readDeclaredSchemaProperties(schemaCustomParameters), schemaCustomParameters) === 'not_sent');
+              const greyThis = unsupported || schemaUnused || strengthNeedsImage || seedCtrlGrey;
+              const emptyCtrl = widget.name === 'control_after_generate' && (value === undefined || value === null || value === '');
               return (
                 <div key={widget.name} className={`space-y-1 `}>
                   <div className="flex flex-wrap items-center justify-between gap-1.5">
@@ -922,7 +931,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                     value={greyThis ? '' : (value ?? '')}
                     disabled={greyThis}
                     title={greyThis ? '该服务商不支持' : omitHint ? SCHEMA_OMIT_REASON : ((opts.find((o) => o.value === value)?.label as string) || (value != null && value !== '' ? String(value) : widget.label))}
-                    aria-label={schemaUnused ? widget.label : (greyThis ? `${widget.name}（该服务商不支持）` : widget.label)}
+                    aria-label={schemaUnused || seedCtrlGrey ? widget.label : (greyThis ? `${widget.name}（该服务商不支持）` : widget.label)}
                     onMouseDown={(e) => e.stopPropagation()}
                     onPointerDown={(e) => e.stopPropagation()}
                     onKeyDown={(e) => e.stopPropagation()}
@@ -938,6 +947,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                       <option value="">该服务商不支持</option>
                     ) : (
                       <>
+                        {emptyCtrl && <option value="">未设置</option>}
                         {!isValueInOpts && value && <option value={value}>{value}</option>}
                         {opts.map((opt, idx) => (
                           <option key={`${widget.name}-${opt.value}-${idx}`} value={opt.value}>
@@ -983,7 +993,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                   </div>
                   <textarea
                     rows={4}
-                    value={greyThisNegative ? '' : (value || '')}
+                    value={greyThisNegative ? '' : ((value === '填入配方/用户指定' ? '' : value) || '')}
                     disabled={greyThisNegative}
                     title={greyThisNegative ? '该服务商不支持' : undefined}
                     aria-label={greyThisNegative ? 'negative（该服务商不支持）' : widget.label}
@@ -994,53 +1004,65 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                       if (greyThisNegative) return;
                       onUpdateValue(node.id, widget.name, e.target.value);
                     }}
-                    placeholder={greyThisNegative ? '该服务商不支持' : widget.placeholder}
+                    placeholder={greyThisNegative ? '该服务商不支持' : (widget.placeholder || '填入配方/用户指定')}
                     className={greyThisNegative
                       ? 'w-full bg-[#0d0e12] border border-[#22242c] rounded-lg p-2.5 text-slate-600 text-xs font-mono leading-relaxed outline-none resize-y cursor-not-allowed shadow-inner'
-                      : 'w-full bg-[#121316] border border-[#2d303a] focus:border-cyan-500 rounded-lg p-2.5 text-slate-200 text-xs font-mono leading-relaxed outline-none resize-y select-text cursor-text shadow-inner'}
+                      : 'w-full bg-[#121316] border border-[#2d303a] focus:border-cyan-500 rounded-lg p-2.5 text-slate-200 text-xs font-mono leading-relaxed outline-none resize-y select-text cursor-text shadow-inner placeholder:text-slate-500'}
                   />
                 </div>
               );
             }
 
             if (widget.type === 'seed') {
+              const seedSend = schemaSendStatus(currentProvider, 'seed', node.values?.seed, node.values?.custom_parameters, readDeclaredSchemaProperties(schemaCustomParameters), schemaCustomParameters);
+              const seedSchemaUnused = seedSend === 'not_sent';
+              const seedGrey = greySeed || seedSchemaUnused;
+              const seedControl = node.values.control_after_generate;
+              const seedEmpty = value === undefined || value === null || value === '';
+              const seedPlaceholder = seedGrey
+                ? '该服务商不支持'
+                : seedEmpty && seedControl === 'randomize'
+                  ? '随机（运行时生成）'
+                  : seedEmpty
+                    ? '未设置'
+                    : undefined;
               return (
                 <div key={widget.name} className="space-y-1">
                   <div className="flex flex-wrap items-center justify-between gap-1.5">
                     <label className="text-slate-400 font-mono text-[11px] block whitespace-nowrap shrink-0" data-testid={`widget-label-${widget.name}`} title={widget.title || undefined}>{widget.label}</label>
-                    {greySeed && null}
-                    {!greySeed && null}
+                    {seedGrey && null}
+                    {!seedGrey && null}
                   </div>
                   <div className="flex items-center gap-1.5">
                     <input
                       type="number"
-                      value={greySeed ? '' : (value ?? '')}
-                      disabled={greySeed}
-                      placeholder={greySeed ? '该服务商不支持' : undefined}
-                      title={greySeed ? '该服务商不支持' : undefined}
-                      aria-label={greySeed ? 'seed（该服务商不支持）' : 'seed'}
+                      value={seedGrey ? '' : (value ?? '')}
+                      disabled={seedGrey}
+                      placeholder={seedPlaceholder}
+                      title={seedGrey ? '该服务商不支持' : (seedEmpty && seedControl === 'randomize' ? '随机：每次运行时生成种子' : undefined)}
+                      aria-label={seedGrey ? 'seed（该服务商不支持）' : 'seed'}
                       onMouseDown={(e) => e.stopPropagation()}
                       onPointerDown={(e) => e.stopPropagation()}
                       onKeyDown={(e) => e.stopPropagation()}
                       onChange={(e) => {
-                        if (greySeed) return;
+                        if (seedGrey) return;
                         onUpdateValue(node.id, widget.name, e.target.value === '' ? undefined : parseInt(e.target.value));
                       }}
-                      className={greySeed
+                      className={seedGrey
                         ? 'flex-1 bg-[#0d0e12] border border-[#22242c] rounded-lg px-2.5 py-1.5 text-slate-600 font-mono text-xs cursor-not-allowed outline-none'
-                        : 'flex-1 bg-[#121316] border border-[#2d303a] focus:border-cyan-500 rounded-lg px-2.5 py-1.5 text-slate-200 font-mono text-xs outline-none select-text cursor-text'}
+                        : 'flex-1 bg-[#121316] border border-[#2d303a] focus:border-cyan-500 rounded-lg px-2.5 py-1.5 text-slate-200 font-mono text-xs outline-none select-text cursor-text placeholder:text-slate-500'}
                     />
                     <button
                       type="button"
-                      onClick={greySeed ? undefined : handleRandomSeed}
-                      disabled={greySeed}
-                      className={greySeed
+                      onClick={seedGrey ? undefined : handleRandomSeed}
+                      disabled={seedGrey}
+                      className={seedGrey
                         ? 'p-1.5 bg-[#0d0e12] text-slate-600 rounded-lg border border-[#22242c] cursor-not-allowed pointer-events-none'
                         : 'p-1.5 bg-[#252730] hover:bg-[#30333e] text-slate-300 hover:text-white rounded-lg border border-[#353744] transition-colors'}
-                      title={greySeed ? '该服务商不支持' : '生成随机种子'}
-                      aria-label={greySeed ? '随机种子（该服务商不支持）' : '生成随机种子'}
+                      title={seedGrey ? '该服务商不支持' : '生成随机种子'}
+                      aria-label={seedGrey ? '随机种子（该服务商不支持）' : '生成随机种子'}
                     >
-                      <Dices className={`w-4 h-4 ${greySeed ? 'text-slate-600' : 'text-cyan-400'}`} />
+                      <Dices className={`w-4 h-4 ${seedGrey ? 'text-slate-600' : 'text-cyan-400'}`} />
                     </button>
                   </div>
                 </div>
