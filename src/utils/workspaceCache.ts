@@ -55,7 +55,7 @@ export function resetRunState(project: CanvasProject): CanvasProject {
     ...project,
     nodes: (project.nodes || []).map((n: any) => {
       const { errorMessage: _e, errorAt: _ea, upstreamFailed: _u, upstreamFailedTitle: _ut, upstreamLocalBlocked: _l, localBlockReason: _lr, localBlockTitle: _lt, executionProgress: _p, ...rest } = n || {};
-      // Schema-derived data cached in custom_parameters is per page session: badges/Schema fields must wait for a user action.
+      // Drop ephemeral Schema session flags only; keep scoped schemaProperties so omit UI (hide steps/CFG) survives hard refresh before live GET.
       const values = rest.values ? { ...rest.values, ...(typeof rest.values.custom_parameters === 'string' ? { custom_parameters: stripDerivedSchema(rest.values.custom_parameters) } : {}) } : rest.values;
       // Outputs are kept (user data) but flagged as from before the refresh, with their original time when known.
       const hasOutput = !!rest.outputData;
@@ -69,12 +69,23 @@ export function resetRunState(project: CanvasProject): CanvasProject {
   } as CanvasProject;
 }
 
-/** Drops Schema-derived keys (schemaProperties / schemaConfirmedFields / schemaUnprobed / schemaUnavailable) from _canvas; user JSON and flags stay. */
+/**
+ * On page reload: drop ephemeral Schema session flags only.
+ * Keep schemaProperties (+ scope) so Schema-omit UI (hide steps/CFG shells) still works before/without a live Schema GET.
+ * Live GET still wins via withCachedSchemaProperties when cache is ready.
+ */
 export function stripDerivedSchema(cp: string): string {
   try {
     const o = JSON.parse(cp);
     if (!o || typeof o !== 'object' || !o._canvas) return cp;
-    const { schemaProperties: _a, schemaConfirmedFields: _b, schemaUnprobed: _c, schemaUnavailable: _d, schemaLoading: _f, hasReferenceImage: _g, ...canvas } = o._canvas;
+    const {
+      schemaLoading: _loading,
+      schemaUnavailable: _unavailable,
+      hasReferenceImage: _ref,
+      schemaUnprobed: _unprobed,
+      schemaConfirmedFields: _confirmed,
+      ...canvas
+    } = o._canvas;
     if (Object.keys(canvas).length === Object.keys(o._canvas).length) return cp;
     return JSON.stringify({ ...o, _canvas: canvas }, null, 2);
   } catch { return cp; }
