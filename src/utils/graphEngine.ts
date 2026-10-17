@@ -108,10 +108,12 @@ export function clearNodeExecutionErrors(
       upstreamLocalBlocked: undefined,
       upstreamFailed: false,
       upstreamFailedTitle: undefined,
+      upstreamFailedFromId: undefined,
       state: (n.state === 'error' ? 'idle' : n.state) as NodeInstance['state'],
       errorMessage: undefined,
       errorAt: undefined,
       errorKind: undefined,
+      errorModel: undefined,
       executionProgress: n.state === 'error' ? 0 : n.executionProgress,
       ...(n.state === 'error' && MEDIA_OUTPUT_NODE_TYPES.has(n.type) ? { outputData: undefined } : {}),
     };

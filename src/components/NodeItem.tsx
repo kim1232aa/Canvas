@@ -208,7 +208,6 @@ export const NodeItem: React.FC<NodeItemProps> = ({
   if (zoomedOut) {
     if (node.localBlockReason && node.state !== 'running') zoomAlerts.push({ tone: 'rose', text: `⛔ ${node.localBlockTitle || '本地拦截'}：${node.localBlockReason}` });
     if (loraMismatchNote) zoomAlerts.push({ tone: 'amber', text: `⚠ LoRA 来源 ${String(node.values.resource_source)} ≠ 当前 ${String(currentProvider || node.values?.targetProvider)}` });
-    if (node.errorMessage && node.state !== 'running') zoomAlerts.push({ tone: 'rose', text: `✕ ${nodeErrorHeadline}` });
     const notSent = (def.widgets || []).filter((w: any) => w.type === 'number' || w.type === 'select' || w.type === 'text' || w.type === 'textarea').filter((w: any) => {
       const isWH = w.name === 'width' || w.name === 'height';
       if ((isWH && greyWidthHeight) || isCanvasWidgetUnsupported(currentProvider, currentCheckpoint, w.name)) return true;
@@ -400,10 +399,9 @@ export const NodeItem: React.FC<NodeItemProps> = ({
         </div>
       )}
 
-      {/* Node error message banner — clean-1651/0006: labelled 上一次 + 北京时间; show whenever errorMessage remains (not only state===error), so clearing local 宽高拦截 never hides a prior upstream failure. */}
-      {/* One error display per node: when zoomed out the screen-size strip above carries it, so the inner banner is hidden. */}
-      {node.errorMessage && node.state !== 'running' && !zoomedOut && (
-        <div className="mx-3 mt-2 p-2 bg-rose-950/40 border border-rose-800/60 rounded-lg text-[11px] text-rose-100 leading-relaxed flex items-start gap-1.5">
+      {/* Node error message banner — always inside the node, below the title bar (never absolute above: that covered title + buttons). */}
+      {node.errorMessage && node.state !== 'running' && (
+        <div className="mx-3 mt-2 p-2 bg-rose-950/40 border border-rose-800/60 rounded-lg text-[11px] text-rose-100 leading-relaxed flex items-start gap-1.5" data-testid="node-error-strip">
           <AlertTriangle className="w-3.5 h-3.5 text-rose-300 shrink-0 mt-0.5" />
           <div className="min-w-0 flex-1 max-h-48 overflow-y-auto" data-testid="node-error-banner">
             <div className={`[overflow-wrap:anywhere] whitespace-pre-wrap ${schemaErr ? 'font-semibold' : ''}`} data-testid="node-error-headline">{nodeErrorHeadline}</div>

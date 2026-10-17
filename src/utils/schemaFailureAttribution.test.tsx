@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { executeWorkflow, clearNodeExecutionErrors } from './graphEngine';
-import { schemaFailureHeadline, schemaFailureNodeMessage, schemaFailureTargetId, isSchemaPrefetchError, schemaFailureToast, schemaFailureToastBody } from './schemaFailure';
+import { schemaFailureHeadline, schemaFailureNodeMessage, schemaFailureTargetId, isSchemaPrefetchError, schemaFailureToast, schemaFailureToastBody, failedNodeDisplayTitle, upstreamFailedLine, shouldClearSchemaFailureOnModelChange, clearSchemaFailureFromModelChange, isSchemaFailureToastForModel, schemaFailureModel } from './schemaFailure';
 import { toastFromRunError } from './apiFailure';
 import { schemaPrefetchFailureData } from '../engines/drivers/SchemaProviderDriver';
 import { EngineRegistry } from '../engines/EngineRegistry';
@@ -168,9 +168,101 @@ describe('NodeItem shows one plain schema error (headline + collapsed 详情), n
     expect(count(html, `没出图：找不到模型 ${MODEL}`)).toBe(2); // visible text + 异常 chip tooltip only
   });
 
-  it('zoomed out: strip only, inner banner hidden (never both)', () => {
+  it('zoomed out: error stays inside the node below the title (never floats above covering buttons)', () => {
     const html = render(0.5);
-    expect(html).toContain('node-zoom-alerts');
-    expect(html).not.toContain('data-testid="node-error-banner"');
+    expect(html).toContain('data-testid="node-error-banner"');
+    expect(html).toContain('data-testid="node-error-strip"');
+    expect(html).toContain('data-testid="node-error-details"');
+    expect(html).toContain(`没出图：找不到模型 ${MODEL}，请检查模型名`);
+    // Must not float a duplicate error above the header
+    expect(html).not.toContain('node-zoom-alerts');
+    // Title + action buttons still rendered (clickable; strip is below header in DOM order)
+    expect(html.indexOf('data-testid="node-header-title"')).toBeLessThan(html.indexOf('data-testid="node-error-strip"'));
+  });
+});
+
+describe('changing the model clears the schema-miss that described the old value', () => {
+  const failed = 'nonexistent-model-e2e-isolation';
+  const loader = (extra: Partial<NodeInstance> = {}) =>
+    ({
+      ...node('c', 'CheckpointLoaderSimple', { targetProvider: 'openworks', ckpt_name: failed }),
+      state: 'error',
+      errorMessage: schemaFailureNodeMessage(schemaErr()),
+      errorKind: 'schema' as const,
+      errorModel: failed,
+      errorAt: '2026-10-17T07:35:20.000Z',
+      ...extra,
+    }) as NodeInstance;
+  const save = (fromId = 'c') =>
+    ({
+      ...node('s', 'SaveImage'),
+      state: 'idle',
+      upstreamFailed: true,
+      upstreamFailedTitle: '加载底模 (Tensor.Art OpenWorks)',
+      upstreamFailedFromId: fromId,
+    }) as NodeInstance;
+
+  it('change model → model node error, downstream upstreamFailed, and matching toast all clear', () => {
+    expect(shouldClearSchemaFailureOnModelChange(loader(), 'real-model-id')).toBe(true);
+    const after = clearSchemaFailureFromModelChange([loader(), save()], 'c');
+    expect(after[0].errorMessage).toBeUndefined();
+    expect(after[0].errorKind).toBeUndefined();
+    expect(after[0].errorModel).toBeUndefined();
+    expect(after[0].state).toBe('idle');
+    expect(after[1].upstreamFailed).toBe(false);
+    expect(after[1].upstreamFailedTitle).toBeUndefined();
+    expect(after[1].upstreamFailedFromId).toBeUndefined();
+    // Toast headline carries the model from the failed GET (schemaFailureModel), not the node field alone
+    const toast = schemaFailureToast(schemaErr(400), '运行：保存图像');
+    expect(toast.title).toContain(MODEL);
+    expect(isSchemaFailureToastForModel(toast, MODEL)).toBe(true);
+    expect(isSchemaFailureToastForModel(toast, 'other-model')).toBe(false);
+    // App clears using the recorded errorModel on the node (which we store from schemaFailureModel at fail time)
+    expect(isSchemaFailureToastForModel(toast, schemaFailureModel(schemaErr()))).toBe(true);
+  });
+
+  it('unrelated field change → nothing clears', () => {
+    const n = loader();
+    // Same model value means shouldClear is false (caller must not invoke clear)
+    expect(shouldClearSchemaFailureOnModelChange(n, failed)).toBe(false);
+    const after = clearSchemaFailureFromModelChange([n, save()], 'other-node');
+    expect(after[0].errorMessage).toBeTruthy();
+    expect(after[0].errorKind).toBe('schema');
+    expect(after[1].upstreamFailed).toBe(true);
+  });
+
+  it('change model back to the failed value → stays red (never cleared)', () => {
+    expect(shouldClearSchemaFailureOnModelChange(loader(), failed)).toBe(false);
+    expect(shouldClearSchemaFailureOnModelChange(loader(), `  ${failed}  `)).toBe(false);
+  });
+
+  it('error from a different cause stays', () => {
+    const other = {
+      ...node('c', 'CheckpointLoaderSimple', { targetProvider: 'openworks', ckpt_name: failed }),
+      state: 'error' as const,
+      errorMessage: 'HTTP 401：密钥无效',
+      errorAt: '2026-10-17T07:35:20.000Z',
+    } as NodeInstance;
+    expect(shouldClearSchemaFailureOnModelChange(other, 'new-model')).toBe(false);
+    const after = clearSchemaFailureFromModelChange([other], 'c');
+    expect(after[0].errorMessage).toBe('HTTP 401：密钥无效');
+    expect(after[0].state).toBe('error');
+  });
+
+  it('App: schema catch stores errorModel; ckpt_name change uses the clear helpers', () => {
+    const app = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
+    expect(app).toContain('errorModel: schemaFailureModel(err');
+    expect(app).toContain('upstreamFailedFromId: schemaNodeId');
+    expect(app).toContain('shouldClearSchemaFailureOnModelChange(targetNode, value)');
+    expect(app).toContain('clearSchemaFailureFromModelChange(prev, nodeId)');
+    expect(app).toContain('isSchemaFailureToastForModel(prev, failedModel)');
+    expect(schemaFailureModel(schemaErr())).toBe(MODEL);
+  });
+
+  it('downstream SaveImage shows only 「没出图，原因见<title>」', () => {
+    const ck = { ...node('c', 'CheckpointLoaderSimple', { targetProvider: 'openworks', ckpt_name: failed }), title: '旧标题' } as NodeInstance;
+    const title = failedNodeDisplayTitle(ck);
+    expect(title).toBe('加载底模 (Tensor.Art OpenWorks)');
+    expect(upstreamFailedLine(title)).toBe(`没出图，原因见${title}`);
   });
 });

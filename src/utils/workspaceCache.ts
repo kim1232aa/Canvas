@@ -54,7 +54,7 @@ export function resetRunState(project: CanvasProject): CanvasProject {
   return {
     ...project,
     nodes: (project.nodes || []).map((n: any) => {
-      const { errorMessage: _e, errorAt: _ea, upstreamFailed: _u, upstreamFailedTitle: _ut, upstreamLocalBlocked: _l, localBlockReason: _lr, localBlockTitle: _lt, executionProgress: _p, ...rest } = n || {};
+      const { errorMessage: _e, errorAt: _ea, errorKind: _ek, errorModel: _em, upstreamFailed: _u, upstreamFailedTitle: _ut, upstreamFailedFromId: _uf, upstreamLocalBlocked: _l, localBlockReason: _lr, localBlockTitle: _lt, executionProgress: _p, ...rest } = n || {};
       // Drop ephemeral Schema session flags only; keep scoped schemaProperties so omit UI (hide steps/CFG) survives hard refresh before live GET.
       const values = rest.values ? { ...rest.values, ...(typeof rest.values.custom_parameters === 'string' ? { custom_parameters: stripDerivedSchema(rest.values.custom_parameters) } : {}) } : rest.values;
       // Outputs are kept (user data) but flagged as from before the refresh, with their original time when known.

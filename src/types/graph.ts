@@ -88,10 +88,14 @@ export interface NodeInstance {
   errorAt?: string;
   /** 'schema' = model-schema lookup failed before any generation request; shown on the model node as a plain headline + raw body. */
   errorKind?: 'schema';
+  /** Model id (ckpt_name) that caused the schema-miss; used to clear when the user changes the model. */
+  errorModel?: string;
   /** Set on downstream branch nodes when this run failed upstream (no media produced). */
   upstreamFailed?: boolean;
   /** Display title of the node that failed this run; downstream shows 「没出图，原因见<title>」. */
   upstreamFailedTitle?: string;
+  /** Node id whose failure set upstreamFailed on this node. */
+  upstreamFailedFromId?: string;
   /** The failure was a local block (no request left the machine), not an upstream failure. */
   upstreamLocalBlocked?: boolean;
   /** clean-1333 #6: set ONLY on the node that caused a local block — the specific reason (same text as the toast). */

@@ -104,3 +104,50 @@ export function failedNodeDisplayTitle(n: NodeInstance): string {
 export function upstreamFailedLine(failedTitle?: string): string {
   return failedTitle ? `没出图，原因见${failedTitle}` : '没出图';
 }
+
+/** True when this node carries a schema-miss for a recorded model that the user just changed away from. */
+export function shouldClearSchemaFailureOnModelChange(node: NodeInstance, nextModel: string): boolean {
+  if (node.errorKind !== 'schema' || !node.errorMessage) return false;
+  const failed = String(node.errorModel ?? '').trim();
+  if (!failed) return false;
+  return String(nextModel ?? '').trim() !== failed;
+}
+
+/**
+ * Drop the schema-miss on modelNodeId and the 「没出图，原因见…」 line on nodes that point at it.
+ * Leaves errors of other kinds / other nodes alone.
+ */
+export function clearSchemaFailureFromModelChange(nodes: NodeInstance[], modelNodeId: string): NodeInstance[] {
+  return nodes.map((n) => {
+    if (n.id === modelNodeId && n.errorKind === 'schema') {
+      return {
+        ...n,
+        state: (n.state === 'error' ? 'idle' : n.state) as NodeInstance['state'],
+        errorMessage: undefined,
+        errorAt: undefined,
+        errorKind: undefined,
+        errorModel: undefined,
+      };
+    }
+    if (n.upstreamFailedFromId === modelNodeId) {
+      return {
+        ...n,
+        upstreamFailed: false,
+        upstreamFailedTitle: undefined,
+        upstreamFailedFromId: undefined,
+      };
+    }
+    return n;
+  });
+}
+
+/** Toast from this schema-miss: title mentions the failed model (headline). */
+export function isSchemaFailureToastForModel(toast: { type?: string; title?: string; message?: string } | null | undefined, failedModel: string): boolean {
+  if (!toast) return false;
+  // App toasts set type:'error'; helper return value has no type — both accepted. Non-error toasts stay.
+  if (toast.type != null && toast.type !== 'error') return false;
+  const model = String(failedModel || '').trim();
+  if (!model) return false;
+  const blob = `${toast.title || ''}\n${toast.message || ''}`;
+  return blob.includes(model) && /没出图/.test(blob);
+}

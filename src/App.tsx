@@ -62,7 +62,7 @@ import { EngineRegistry } from './engines/EngineRegistry';
 import { NormalizedGenerateParams } from './engines/types';
 import { noteUserModelSelection, subscribeSchemaSelectResult } from './services/userModelSelection';
 import { hasModelSchemaFetch } from './utils/schemaSendHint';
-import { isSchemaPrefetchError, schemaFailureNodeMessage, schemaFailureTargetId, failedNodeDisplayTitle } from './utils/schemaFailure';
+import { isSchemaPrefetchError, schemaFailureNodeMessage, schemaFailureTargetId, failedNodeDisplayTitle, schemaFailureModel, shouldClearSchemaFailureOnModelChange, clearSchemaFailureFromModelChange, isSchemaFailureToastForModel } from './utils/schemaFailure';
 import { sizeOrUndef, widthHeightMismatch, localBlockTitle, schemaReadLine, localBlockCauseNodeIds, revealNodeTransform, sizeMismatchCleared } from './utils/localBlock';
 import { findNonOverlappingPos } from './utils/nodeOverlap';
 import { setCurrentRunTarget, beginRun, endRun, clearExecutionErrors, getExecutions, formatRecordTime, recordLocalEvent, currentRunAttach, ApiTraceError} from './services/executionTrace';
@@ -888,6 +888,18 @@ export default function App() {
         setToast((prev) => (prev && prev.type === 'error' && /宽高不齐|只填了宽|只填了高/.test(`${prev.title}\n${prev.message}`) ? null : prev));
       }
     }
+    // Schema-miss described the OLD model: changing ckpt_name away from it clears that node's red box,
+    // downstream 「没出图，原因见…」, and the matching bottom toast. Same model value → keep red.
+    if (
+      targetNode?.type === 'CheckpointLoaderSimple' &&
+      widgetName === 'ckpt_name' &&
+      shouldClearSchemaFailureOnModelChange(targetNode, value)
+    ) {
+      const failedModel = String(targetNode.errorModel || '');
+      setNodes((prev) => clearSchemaFailureFromModelChange(prev, nodeId));
+      setToast((prev) => (isSchemaFailureToastForModel(prev, failedModel) ? null : prev));
+    }
+
 
     // P0: switching engine/provider must drop leftover red-box errors on other nodes (Civitai etc.).
     if (widgetName === 'targetProvider' && targetNode && value !== targetNode.values?.targetProvider) {
@@ -1394,9 +1406,9 @@ export default function App() {
         }
         if (schemaNodeId) {
           // Error lives on the model node; sampler / other branch nodes are NOT marked 异常 (nothing was generated).
-          if (n.id === schemaNodeId) return { ...n, state: 'error' as NodeInstance['state'], executionProgress: 0, errorMessage: schemaNodeMsg, errorAt: new Date().toISOString(), errorKind: 'schema' as const, upstreamFailed: false, upstreamLocalBlocked: false };
+          if (n.id === schemaNodeId) return { ...n, state: 'error' as NodeInstance['state'], executionProgress: 0, errorMessage: schemaNodeMsg, errorAt: new Date().toISOString(), errorKind: 'schema' as const, errorModel: schemaFailureModel(err, n.values?.ckpt_name), upstreamFailed: false, upstreamLocalBlocked: false };
           if (!branch.ids.has(n.id)) return n;
-          return { ...n, state: 'idle' as NodeInstance['state'], executionProgress: 0, errorMessage: undefined, errorAt: undefined, errorKind: undefined, upstreamFailed: true, upstreamFailedTitle: failedTitle, upstreamLocalBlocked: false,
+          return { ...n, state: 'idle' as NodeInstance['state'], executionProgress: 0, errorMessage: undefined, errorAt: undefined, errorKind: undefined, upstreamFailed: true, upstreamFailedTitle: failedTitle, upstreamFailedFromId: schemaNodeId, upstreamLocalBlocked: false,
             outputData: shouldClearExecutionOutput(n.type, 'idle', undefined, '') ? undefined : n.outputData };
         }
         if (!branch.ids.has(n.id)) return n;
@@ -1411,6 +1423,7 @@ export default function App() {
           errorAt: isTarget ? new Date().toISOString() : undefined,
           upstreamFailed: !isTarget,
           upstreamFailedTitle: isTarget ? undefined : failedTitle,
+          upstreamFailedFromId: isTarget ? undefined : failedNodeId,
           upstreamLocalBlocked: false,
           outputData: clearOut ? undefined : n.outputData,
         };
