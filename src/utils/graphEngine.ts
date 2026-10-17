@@ -107,6 +107,7 @@ export function clearNodeExecutionErrors(
       localBlockLoraCount: undefined,
       upstreamLocalBlocked: undefined,
       upstreamFailed: false,
+      upstreamFailedTitle: undefined,
       state: (n.state === 'error' ? 'idle' : n.state) as NodeInstance['state'],
       errorMessage: undefined,
       errorAt: undefined,

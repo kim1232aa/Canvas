@@ -62,7 +62,7 @@ import { EngineRegistry } from './engines/EngineRegistry';
 import { NormalizedGenerateParams } from './engines/types';
 import { noteUserModelSelection, subscribeSchemaSelectResult } from './services/userModelSelection';
 import { hasModelSchemaFetch } from './utils/schemaSendHint';
-import { isSchemaPrefetchError, schemaFailureNodeMessage, schemaFailureTargetId } from './utils/schemaFailure';
+import { isSchemaPrefetchError, schemaFailureNodeMessage, schemaFailureTargetId, failedNodeDisplayTitle } from './utils/schemaFailure';
 import { sizeOrUndef, widthHeightMismatch, localBlockTitle, schemaReadLine, localBlockCauseNodeIds, revealNodeTransform, sizeMismatchCleared } from './utils/localBlock';
 import { findNonOverlappingPos } from './utils/nodeOverlap';
 import { setCurrentRunTarget, beginRun, endRun, clearExecutionErrors, getExecutions, formatRecordTime, recordLocalEvent, currentRunAttach, ApiTraceError} from './services/executionTrace';
@@ -1366,6 +1366,10 @@ export default function App() {
       const causeIds = new Set(localBlockedRun ? localBlockCauseNodeIds(activeNodes, branch.ids, blockData?.blockedField?.field) : []);
       if (localBlockedRun && !causeIds.size && branch.target) causeIds.add(branch.target.id);
       // Downstream of the failed node (e.g. VAE → SaveImage) also shows 「这次没有出图」, never 「等待生成图像…」.
+      // Downstream nodes point at the failing node by its header title instead of repeating the reason.
+      const failedNodeId = schemaNodeId ?? branch.target?.id;
+      const failedNode = failedNodeId ? activeNodes.find(x => x.id === failedNodeId) : undefined;
+      const failedTitle = failedNode ? failedNodeDisplayTitle(failedNode) : undefined;
       const downstream=new Set<string>();
       {const queue=branch.target?[branch.target.id]:[];while(queue.length){const id=queue.shift()!;for(const c of activeConns)if(c.fromNodeId===id&&!downstream.has(c.toNodeId)&&!branch.ids.has(c.toNodeId)){downstream.add(c.toNodeId);queue.push(c.toNodeId);}}}
       setNodes(prev=>prev.map(n=>{
@@ -1373,7 +1377,7 @@ export default function App() {
         // Those stay until the next successful run; only local chrome is layered on top.
         if (downstream.has(n.id)) {
           const keepErr = !!n.errorMessage;
-          return {...n,state:(keepErr?'error':'idle') as NodeInstance['state'],executionProgress:0,upstreamFailed:true,upstreamLocalBlocked:localBlockedRun,localBlockTitle:blockTitle,localBlockReason:undefined,outputData:undefined};
+          return {...n,state:(keepErr?'error':'idle') as NodeInstance['state'],executionProgress:0,upstreamFailed:true,upstreamFailedTitle:localBlockedRun?undefined:failedTitle,upstreamLocalBlocked:localBlockedRun,localBlockTitle:blockTitle,localBlockReason:undefined,outputData:undefined};
         }
         if (localBlockedRun) {
           if (!branch.ids.has(n.id) && !causeIds.has(n.id)) return n;
@@ -1392,7 +1396,7 @@ export default function App() {
           // Error lives on the model node; sampler / other branch nodes are NOT marked 异常 (nothing was generated).
           if (n.id === schemaNodeId) return { ...n, state: 'error' as NodeInstance['state'], executionProgress: 0, errorMessage: schemaNodeMsg, errorAt: new Date().toISOString(), errorKind: 'schema' as const, upstreamFailed: false, upstreamLocalBlocked: false };
           if (!branch.ids.has(n.id)) return n;
-          return { ...n, state: 'idle' as NodeInstance['state'], executionProgress: 0, errorMessage: undefined, errorAt: undefined, errorKind: undefined, upstreamFailed: true, upstreamLocalBlocked: false,
+          return { ...n, state: 'idle' as NodeInstance['state'], executionProgress: 0, errorMessage: undefined, errorAt: undefined, errorKind: undefined, upstreamFailed: true, upstreamFailedTitle: failedTitle, upstreamLocalBlocked: false,
             outputData: shouldClearExecutionOutput(n.type, 'idle', undefined, '') ? undefined : n.outputData };
         }
         if (!branch.ids.has(n.id)) return n;
@@ -1406,6 +1410,7 @@ export default function App() {
           errorMessage: isTarget ? errMsg : undefined,
           errorAt: isTarget ? new Date().toISOString() : undefined,
           upstreamFailed: !isTarget,
+          upstreamFailedTitle: isTarget ? undefined : failedTitle,
           upstreamLocalBlocked: false,
           outputData: clearOut ? undefined : n.outputData,
         };

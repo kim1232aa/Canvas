@@ -39,6 +39,7 @@ import { schemaSendStatus } from '../utils/schemaSendStatus';
 const SAMPLER_SCHEMA_WIDGETS = new Set(['steps', 'cfg', 'sampler_name', 'scheduler', 'sampler', 'seed']);
 import { checkpointNodeTitle, ksamplerNodeTitle, loraLoaderNodeTitle, LORA_LOADER_TYPES } from '../utils/providerLabels';
 import { errorBannerText, priorRunErrorLabel, LOCAL_BLOCK_NODE_LINE } from '../utils/apiFailure';
+import { upstreamFailedLine } from '../utils/schemaFailure';
 import { formatRecordTime } from '../services/executionTrace';
 import { loraSourceMismatch } from '../utils/loraSourceMismatch';
 import { EmphasizeLimit } from './TextEmphasis';
@@ -1342,8 +1343,12 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                 ) : (
                   node.upstreamFailed && node.state !== 'running' ? (
                   <div className="text-center p-4 text-rose-300" role="status">
+                    {node.upstreamLocalBlocked ? (<>
                     <p className="text-xs font-semibold">这次没有出图</p>
-                    <span className="text-[10px] mt-1 block font-mono text-rose-400/80">{node.upstreamLocalBlocked ? `${node.localBlockTitle || LOCAL_BLOCK_NODE_LINE.split('：')[0]}：原因见标红节点与执行记录` : '上游节点失败，原因见红框与执行记录'}</span>
+                    <span className="text-[10px] mt-1 block font-mono text-rose-400/80">{`${node.localBlockTitle || LOCAL_BLOCK_NODE_LINE.split('：')[0]}：原因见标红节点与执行记录`}</span>
+                    </>) : (
+                    <p className="text-xs font-semibold">{upstreamFailedLine(node.upstreamFailedTitle)}</p>
+                    )}
                   </div>
                   ) : (
                   <PreviewPlaceholder>

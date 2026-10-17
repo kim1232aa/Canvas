@@ -54,7 +54,7 @@ export function resetRunState(project: CanvasProject): CanvasProject {
   return {
     ...project,
     nodes: (project.nodes || []).map((n: any) => {
-      const { errorMessage: _e, errorAt: _ea, upstreamFailed: _u, upstreamLocalBlocked: _l, localBlockReason: _lr, localBlockTitle: _lt, executionProgress: _p, ...rest } = n || {};
+      const { errorMessage: _e, errorAt: _ea, upstreamFailed: _u, upstreamFailedTitle: _ut, upstreamLocalBlocked: _l, localBlockReason: _lr, localBlockTitle: _lt, executionProgress: _p, ...rest } = n || {};
       // Schema-derived data cached in custom_parameters is per page session: badges/Schema fields must wait for a user action.
       const values = rest.values ? { ...rest.values, ...(typeof rest.values.custom_parameters === 'string' ? { custom_parameters: stripDerivedSchema(rest.values.custom_parameters) } : {}) } : rest.values;
       // Outputs are kept (user data) but flagged as from before the refresh, with their original time when known.

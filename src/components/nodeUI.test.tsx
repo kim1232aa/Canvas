@@ -53,6 +53,6 @@ it('Chinese field labels for LoRA / KSampler / SaveImage widgets (no raw EN keys
 
 it('SaveImage shows failed state (not 等待生成图像) after upstream failure',()=>{
   const html=renderToStaticMarkup(<NodeItem {...props('SaveImage',{})} node={{...(props('SaveImage',{}) as any).node,upstreamFailed:true,state:'idle'}} />);
-  expect(html).toContain('这次没有出图');
+  expect(html).toContain('没出图');
   expect(html).not.toContain('等待生成图像');
 });

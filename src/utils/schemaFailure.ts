@@ -1,5 +1,6 @@
 import { Connection, NodeInstance } from '../types/graph';
 import { modelCheckpoint } from './inspectorParameters';
+import { checkpointNodeTitle, loraLoaderNodeTitle, LORA_LOADER_TYPES } from './providerLabels';
 
 /**
  * Model-schema lookup failure (GET /api/model-schema … non-2xx): the generation POST was never sent.
@@ -90,4 +91,16 @@ export function schemaFailureTargetId(nodes: NodeInstance[], connections: Connec
   if (viaChain) return viaChain.id;
   const loaders = nodes.filter((n) => n.type === 'CheckpointLoaderSimple' && !n.bypassed);
   return loaders.length === 1 ? loaders[0].id : undefined;
+}
+
+/** Header title the user sees on the failing node (same derivation as NodeItem for loader nodes). */
+export function failedNodeDisplayTitle(n: NodeInstance): string {
+  if (n.type === 'CheckpointLoaderSimple') return checkpointNodeTitle(n.values?.targetProvider, n.values?.ckpt_name);
+  if (LORA_LOADER_TYPES.has(n.type)) return loraLoaderNodeTitle(n.title, n.values?.lora_name);
+  return n.title;
+}
+
+/** Downstream (SaveImage etc.) one-liner after an upstream failure: points at the failing node, never repeats its reason. */
+export function upstreamFailedLine(failedTitle?: string): string {
+  return failedTitle ? `没出图，原因见${failedTitle}` : '没出图';
 }
