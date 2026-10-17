@@ -316,7 +316,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                     }
                     disabled={greyNegative}
                     className="shrink-0 text-[9px] text-slate-400 hover:text-white font-mono bg-[#121316] px-1.5 py-0.5 rounded border border-[#282a35] disabled:opacity-40 disabled:cursor-not-allowed"
-                    title={greyNegative ? '该服务商不支持负向提示词' : '填入通用排畸预设'}
+                    title={greyNegative ? '此模型不支持负向提示词' : '填入通用排畸预设'}
                   >
                     填入通用排畸
                   </button>
@@ -329,7 +329,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                   onPointerDown={(e) => e.stopPropagation()}
                   onKeyDown={(e) => e.stopPropagation()}
                   onChange={(e) => onChangeNegativePrompt(e.target.value)}
-                  placeholder={greyNegative ? '该服务商不支持负向提示词' : '输入需要避免的瑕疵特征 (如模糊、多肢体、水印等)...'}
+                  placeholder={greyNegative ? '此模型不支持负向提示词' : '输入需要避免的瑕疵特征 (如模糊、多肢体、水印等)...'}
                   className="w-full bg-[#111216] border border-[#2b2d38] focus:border-rose-400/80 rounded-lg p-2 text-slate-300 text-[11px] font-mono leading-relaxed outline-none resize-y select-text cursor-text shadow-inner disabled:opacity-40 disabled:cursor-not-allowed"
                 />
               </div>
@@ -509,7 +509,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
               <Info className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
               <div>
                 <span className="font-bold text-emerald-300">OpenAI 兼容中转：</span>
-                <span> 不是官方 OpenAI。支持 size / quality / output_format / background / moderation；seed、负向提示词、steps、CFG、采样器、LoRA 该服务商不支持（灰显，发送会 400）。</span>
+                <span> 不是官方 OpenAI。支持 size / quality / output_format / background / moderation；seed、负向提示词、steps、CFG、采样器、LoRA 此模型不支持（灰显，发送会 400）。</span>
               </div>
             </div>
           )}
@@ -519,7 +519,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
               <Info className="w-4 h-4 text-slate-300 shrink-0 mt-0.5" />
               <div>
                 <span className="font-bold text-slate-100">Grok 兼容中转：</span>
-                <span> 不是官方 xAI。支持 aspect_ratio / resolution；像素宽高、seed、负向、steps、CFG、LoRA 该服务商不支持。HTTP 503 grok_media_no_eligible_account 原样暴露，不换商。</span>
+                <span> 不是官方 xAI。支持 aspect_ratio / resolution；像素宽高、seed、负向、steps、CFG、LoRA 此模型不支持。HTTP 503 grok_media_no_eligible_account 原样暴露，不换商。</span>
               </div>
             </div>
           )}
@@ -551,7 +551,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                     type="button"
                     disabled={greySeed}
                     onClick={() => { if (!greySeed) update({ seedControl: mode }); }}
-                    title={greySeed ? '该服务商不支持' : undefined}
+                    title={greySeed ? '此模型不支持' : undefined}
                     className={`px-1.5 py-0.5 rounded text-[9px] font-mono whitespace-nowrap shrink-0 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-slate-400 ${
                       !greySeed && (params.seedControl || 'randomize') === mode
                         ? 'bg-cyan-500/25 text-cyan-300 font-bold border border-cyan-500/50'
@@ -568,9 +568,9 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                 type="number"
                 value={greySeed ? '' : params.seed}
                 disabled={greySeed}
-                placeholder={greySeed ? '该服务商不支持' : undefined}
-                title={greySeed ? '该服务商不支持' : undefined}
-                aria-label={greySeed ? 'seed（该服务商不支持）' : 'seed'}
+                placeholder={greySeed ? '此模型不支持' : undefined}
+                title={greySeed ? '此模型不支持' : undefined}
+                aria-label={greySeed ? 'seed（此模型不支持）' : 'seed'}
                 onMouseDown={(e) => e.stopPropagation()}
                 onKeyDown={(e) => e.stopPropagation()}
                 onChange={(e) => { if (!greySeed) update({ seed: parseInt(e.target.value) || 0 }); }}
@@ -703,7 +703,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
               value={greyDenoise || sendDenoise === 'no_image' ? 0 : (params.denoise ?? 0)}
               disabled={greyDenoise || sendDenoise === 'no_image'}
               onChange={(e) => { if (greyDenoise || sendDenoise === 'no_image') return; update({ denoise: parseFloat(e.target.value) }); }}
-              title={greyDenoise ? '该服务商不支持' : sendDenoise === 'no_image' ? '有参考图时才发送 strength（官方 Schema；WaveSpeed krea-v2 turbo-lora 等同）' : sendDenoise === 'not_sent' ? '该端点不支持，不发送' : undefined}
+              title={greyDenoise ? '此模型不支持' : sendDenoise === 'no_image' ? '有参考图时才发送 strength（官方 Schema；WaveSpeed krea-v2 turbo-lora 等同）' : sendDenoise === 'not_sent' ? '此模型不支持，不发送' : undefined}
               aria-disabled={greyDenoise || sendDenoise === 'not_sent' || sendDenoise === 'no_image' || undefined}
               data-unsupported={sendDenoise === 'not_sent' || undefined}
               className={`w-full h-1.5 bg-[#252833] rounded appearance-none cursor-pointer accent-cyan-400 disabled:opacity-40 disabled:cursor-not-allowed ${sendDenoise === 'not_sent' ? 'opacity-40 grayscale accent-slate-500' : ''}`}
@@ -1009,8 +1009,8 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                   max={10}
                   value={greyNumImages ? '' : (params.batchSize ?? 1)}
                   disabled={greyNumImages}
-                  title={greyNumImages ? '该服务商不支持' : undefined}
-                  placeholder={greyNumImages ? '该服务商不支持' : undefined}
+                  title={greyNumImages ? '此模型不支持' : undefined}
+                  placeholder={greyNumImages ? '此模型不支持' : undefined}
                   onChange={(e) => {
                     if (greyNumImages) return;
                     update({ batchSize: Math.max(1, Math.min(10, parseInt(e.target.value) || 1)) });
@@ -1064,8 +1064,8 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                   max={4}
                   value={greyNumImages ? '' : (params.batchSize ?? 1)}
                   disabled={greyNumImages}
-                  title={greyNumImages ? '该服务商不支持' : undefined}
-                  placeholder={greyNumImages ? '该服务商不支持' : undefined}
+                  title={greyNumImages ? '此模型不支持' : undefined}
+                  placeholder={greyNumImages ? '此模型不支持' : undefined}
                   onChange={(e) => {
                     if (greyNumImages) return;
                     update({ batchSize: Math.max(1, Math.min(4, parseInt(e.target.value) || 1)) });

@@ -394,6 +394,7 @@ export default function App() {
     if (!nodes.length) return undefined;
     const readinessFrom = (p: ReturnType<typeof extractWorkflowParameters>) =>
       generationReadiness({
+        executionBlockedReason: p.executionBlockedReason,
         hfProvider: p.hfProvider,
         provider: p.videoProvider || p.targetProvider,
         model: p.checkpointModel,
@@ -423,7 +424,13 @@ export default function App() {
           return plainFailureConclusion(error2?.message) || EXEC_NODE_MISSING;
         }
       }
-      return plainFailureConclusion(error?.message) || error?.message || '工作流连接不完整';
+      const msg = plainFailureConclusion(error?.message) || error?.message || '工作流连接不完整';
+      // extract 先抛 pendingRecipe（缺 LoRA）时还没查提示词：黄字补上「请填写提示词」。
+      const boardHasPrompt = nodes.some((n) => n.type === 'CLIPTextEncode' && String(n.values?.text || '').trim());
+      if (!boardHasPrompt && /真 LoRA 地址|待配方|载入后挂上再运行/.test(String(msg)) && !String(msg).includes('提示词')) {
+        return `${msg}；请填写提示词`;
+      }
+      return msg;
     }
   }, [canvasMode, selectedFrameId, spatialFrames, nodes, connections, selectedNodeId, runTargetState]);
 

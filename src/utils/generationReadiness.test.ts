@@ -15,4 +15,9 @@ describe('generation button readiness', () => {
     expect(generationReadiness({...valid, provider: ''})).toContain('服务商');
     expect(generationReadiness({...valid, prompt: ''})).toContain('提示词');
   });
+  it('pendingRecipe then prompt: LoRA lock first, append 请填写提示词 when both missing', () => {
+    const lora = '官方要真 LoRA 地址（训练任务返回的那种），配方里还没有；载入后挂上再运行。';
+    expect(generationReadiness({...valid, executionBlockedReason: lora, prompt: ''})).toBe(`${lora}；请填写提示词`);
+    expect(generationReadiness({...valid, executionBlockedReason: lora, prompt: 'cat'})).toBe(lora);
+  });
 });

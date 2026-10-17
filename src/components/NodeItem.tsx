@@ -35,8 +35,11 @@ import { FieldStatusBadge, SchemaSendBadge } from './FieldStatusBadge';
 import { isCanvasFieldUnsupported, isCanvasWidgetUnsupported, LORA_UNSUPPORTED_TITLE, LORA_BYPASS_LABEL } from '../utils/resolveCheckpoint';
 import { readDeclaredSchemaProperties, SCHEMA_OMIT_REASON, canvasFieldMatchesSchema } from '../utils/schemaSendHint';
 import { schemaSendStatus } from '../utils/schemaSendStatus';
-/** KSampler params hidden when the endpoint Schema omits them (no empty adjustable shells). */
-const SAMPLER_SCHEMA_WIDGETS = new Set(['steps', 'cfg', 'sampler_name', 'scheduler', 'sampler', 'seed']);
+/** KSampler / related widgets: Schema-omit → hide entirely (雁: no 「不支持」 complaint on the node). */
+const SAMPLER_SCHEMA_WIDGETS = new Set(['steps', 'cfg', 'sampler_name', 'scheduler', 'sampler', 'seed', 'denoise', 'control_after_generate']);
+const filledCanvasValue = (v: unknown) =>
+  v !== undefined && v !== null && !(typeof v === 'string' && v.trim() === '') && !(typeof v === 'number' && Number.isNaN(v));
+
 import { checkpointNodeTitle, ksamplerNodeTitle, loraLoaderNodeTitle, LORA_LOADER_TYPES } from '../utils/providerLabels';
 import { errorBannerText, priorRunErrorLabel, LOCAL_BLOCK_NODE_LINE } from '../utils/apiFailure';
 import { upstreamFailedLine } from '../utils/schemaFailure';
@@ -516,16 +519,6 @@ export const NodeItem: React.FC<NodeItemProps> = ({
             <p className="text-slate-400">引擎和生态必须显式选择；AIR、sampler/scheduler 与引擎是否兼容由上游验证。</p>
           </div>}
           {node.type === 'AIVideoNode' && <label className="block text-slate-300">视频分辨率 (resolution)<input aria-label="视频分辨率 (resolution)" value={node.values.resolution || ''} onMouseDown={e=>e.stopPropagation()} onChange={e=>onUpdateValue(node.id,'resolution',e.target.value)} placeholder="未填写；按端点 Schema 指定" className="w-full rounded border border-slate-700 bg-[#121316] p-2" /></label>}
-          {/* Schema omits steps/CFG/sampler/scheduler → hide widgets (no empty adjustable shells); one plain line. */}
-          {node.type === 'KSampler' && (() => {
-            const declared = readDeclaredSchemaProperties(schemaCustomParameters);
-            if (!declared || declared.size === 0) return null; // Schema not loaded — don't invent
-            const names = ['steps', 'cfg', 'sampler_name', 'scheduler'] as const;
-            const labels: Record<(typeof names)[number], string> = { steps: '步数', cfg: 'CFG', sampler_name: '采样器', scheduler: '调度器' };
-            const unused = names.filter((name) => schemaSendStatus(currentProvider, name, node.values?.[name], node.values?.custom_parameters, declared, schemaCustomParameters) === 'not_sent');
-            if (!unused.length) return null;
-            return <p role="note" data-testid="node-sampler-unused" className="text-[11px] text-slate-400 leading-relaxed">此模型不支持：{unused.map((n) => labels[n]).join('、')}</p>;
-          })()}
           {/* Widgets according to definition */}
           {def.widgets?.filter(widget => showUnsupported || !(isCanvasWidgetUnsupported(currentProvider, currentCheckpoint, widget.name) || (node.type === 'CLIPTextEncodeNegative' && widget.name === 'text' && greyNegative))).map((widget) => {
             const value = node.values[widget.name];
@@ -585,7 +578,11 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               // cleanup-2026-10-17: sampler params omitted by Schema are DISABLED (not 「能调但不发送」).
               const schemaUnused = SAMPLER_SCHEMA_WIDGETS.has(widget.name) && omitHint;
               // Hide Schema-omitted sampler shells (steps/CFG/sampler/scheduler) — empty disabled sliders look adjustable.
-              if (schemaUnused && ['steps', 'cfg', 'sampler_name', 'scheduler', 'sampler'].includes(widget.name)) return null;
+              // 雁: Schema 未声明 → 整格隐藏；仅当用户填了值却发不出去时留一行提醒（无灰框/空滑块）。
+              if (SAMPLER_SCHEMA_WIDGETS.has(widget.name) && (schemaUnused || unsupported)) {
+                if (!filledCanvasValue(node.values?.[widget.name])) return null;
+                return <p key={widget.name} role="note" data-testid={`node-filled-not-sent-${widget.name}`} className="text-[11px] text-amber-300/90 leading-relaxed">{widget.label}已填，此模型不支持，不会发送</p>;
+              }
               // cleanup-serious: strength/denoise only when a reference image is connected (WaveSpeed strength etc.).
               const isStrengthField = widget.name === 'denoise' || widget.name === 'strength';
               let strengthNeedsImage = false;
@@ -911,7 +908,11 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               // cleanup-2026-10-17: sampler params omitted by Schema are DISABLED (not 「能调但不发送」).
               const schemaUnused = SAMPLER_SCHEMA_WIDGETS.has(widget.name) && omitHint;
               // Hide Schema-omitted sampler shells (steps/CFG/sampler/scheduler) — empty disabled sliders look adjustable.
-              if (schemaUnused && ['steps', 'cfg', 'sampler_name', 'scheduler', 'sampler'].includes(widget.name)) return null;
+              // 雁: Schema 未声明 → 整格隐藏；仅当用户填了值却发不出去时留一行提醒（无灰框/空滑块）。
+              if (SAMPLER_SCHEMA_WIDGETS.has(widget.name) && (schemaUnused || unsupported)) {
+                if (!filledCanvasValue(node.values?.[widget.name])) return null;
+                return <p key={widget.name} role="note" data-testid={`node-filled-not-sent-${widget.name}`} className="text-[11px] text-amber-300/90 leading-relaxed">{widget.label}已填，此模型不支持，不会发送</p>;
+              }
               // cleanup-serious: strength/denoise only when a reference image is connected (WaveSpeed strength etc.).
               const isStrengthField = widget.name === 'denoise' || widget.name === 'strength';
               let strengthNeedsImage = false;
@@ -921,8 +922,13 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                 try { hasRef = JSON.parse(schemaCustomParameters || '{}')?._canvas?.hasReferenceImage === true; } catch { /* */ }
                 if (declared && declared.size > 0 && canvasFieldMatchesSchema('denoise', declared) && !hasRef) strengthNeedsImage = true;
               }
-              const seedCtrlGrey = widget.name === 'control_after_generate' && (greySeed || schemaSendStatus(currentProvider, 'seed', node.values?.seed, node.values?.custom_parameters, readDeclaredSchemaProperties(schemaCustomParameters), schemaCustomParameters) === 'not_sent');
-              const greyThis = unsupported || schemaUnused || strengthNeedsImage || seedCtrlGrey;
+              const seedCtrlUnused = widget.name === 'control_after_generate' && (greySeed || schemaSendStatus(currentProvider, 'seed', node.values?.seed, node.values?.custom_parameters, readDeclaredSchemaProperties(schemaCustomParameters), schemaCustomParameters) === 'not_sent');
+              // 生成后种子随 seed：Schema 无 seed → 整行隐藏
+              if (seedCtrlUnused) {
+                if (!filledCanvasValue(value)) return null;
+                return <p key={widget.name} role="note" data-testid="node-filled-not-sent-control_after_generate" className="text-[11px] text-amber-300/90 leading-relaxed">{widget.label}已填，此模型不支持，不会发送</p>;
+              }
+              const greyThis = unsupported || schemaUnused || strengthNeedsImage;
               const emptyCtrl = widget.name === 'control_after_generate' && (value === undefined || value === null || value === '');
               return (
                 <div key={widget.name} className={`space-y-1 `}>
@@ -935,7 +941,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                     value={greyThis ? '' : (value ?? '')}
                     disabled={greyThis}
                     title={greyThis ? '该服务商不支持' : omitHint ? SCHEMA_OMIT_REASON : ((opts.find((o) => o.value === value)?.label as string) || (value != null && value !== '' ? String(value) : widget.label))}
-                    aria-label={schemaUnused || seedCtrlGrey ? widget.label : (greyThis ? `${widget.name}（该服务商不支持）` : widget.label)}
+                    aria-label={greyThis ? `${widget.name}（此模型不支持）` : widget.label}
                     onMouseDown={(e) => e.stopPropagation()}
                     onPointerDown={(e) => e.stopPropagation()}
                     onKeyDown={(e) => e.stopPropagation()}
@@ -1020,12 +1026,15 @@ export const NodeItem: React.FC<NodeItemProps> = ({
             if (widget.type === 'seed') {
               const seedSend = schemaSendStatus(currentProvider, 'seed', node.values?.seed, node.values?.custom_parameters, readDeclaredSchemaProperties(schemaCustomParameters), schemaCustomParameters);
               const seedSchemaUnused = seedSend === 'not_sent';
-              const seedGrey = greySeed || seedSchemaUnused;
+              const seedUnsupported = greySeed || seedSchemaUnused;
+              // Schema 无 seed → 整行隐藏（含骰子）；仅用户填了值却发不出去时提醒一行。
+              if (seedUnsupported) {
+                if (!filledCanvasValue(value)) return null;
+                return <p key={widget.name} role="note" data-testid="node-filled-not-sent-seed" className="text-[11px] text-amber-300/90 leading-relaxed">种子已填，此模型不支持，不会发送</p>;
+              }
               const seedControl = node.values.control_after_generate;
               const seedEmpty = value === undefined || value === null || value === '';
-              const seedPlaceholder = seedGrey
-                ? '该服务商不支持'
-                : seedEmpty && seedControl === 'randomize'
+              const seedPlaceholder = seedEmpty && seedControl === 'randomize'
                   ? '随机（运行时生成）'
                   : seedEmpty
                     ? '未设置'
@@ -1034,39 +1043,30 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                 <div key={widget.name} className="space-y-1">
                   <div className="flex flex-wrap items-center justify-between gap-1.5">
                     <label className="text-slate-400 font-mono text-[11px] block whitespace-nowrap shrink-0" data-testid={`widget-label-${widget.name}`} title={widget.title || undefined}>{widget.label}</label>
-                    {seedGrey && null}
-                    {!seedGrey && null}
                   </div>
                   <div className="flex items-center gap-1.5">
                     <input
                       type="number"
-                      value={seedGrey ? '' : (value ?? '')}
-                      disabled={seedGrey}
+                      value={value ?? ''}
                       placeholder={seedPlaceholder}
-                      title={seedGrey ? '该服务商不支持' : (seedEmpty && seedControl === 'randomize' ? '随机：每次运行时生成种子' : undefined)}
-                      aria-label={seedGrey ? 'seed（该服务商不支持）' : 'seed'}
+                      title={seedEmpty && seedControl === 'randomize' ? '随机：每次运行时生成种子' : undefined}
+                      aria-label="seed"
                       onMouseDown={(e) => e.stopPropagation()}
                       onPointerDown={(e) => e.stopPropagation()}
                       onKeyDown={(e) => e.stopPropagation()}
                       onChange={(e) => {
-                        if (seedGrey) return;
                         onUpdateValue(node.id, widget.name, e.target.value === '' ? undefined : parseInt(e.target.value));
                       }}
-                      className={seedGrey
-                        ? 'flex-1 bg-[#0d0e12] border border-[#22242c] rounded-lg px-2.5 py-1.5 text-slate-600 font-mono text-xs cursor-not-allowed outline-none'
-                        : 'flex-1 bg-[#121316] border border-[#2d303a] focus:border-cyan-500 rounded-lg px-2.5 py-1.5 text-slate-200 font-mono text-xs outline-none select-text cursor-text placeholder:text-slate-500'}
+                      className="flex-1 bg-[#121316] border border-[#2d303a] focus:border-cyan-500 rounded-lg px-2.5 py-1.5 text-slate-200 font-mono text-xs outline-none select-text cursor-text placeholder:text-slate-500"
                     />
                     <button
                       type="button"
-                      onClick={seedGrey ? undefined : handleRandomSeed}
-                      disabled={seedGrey}
-                      className={seedGrey
-                        ? 'p-1.5 bg-[#0d0e12] text-slate-600 rounded-lg border border-[#22242c] cursor-not-allowed pointer-events-none'
-                        : 'p-1.5 bg-[#252730] hover:bg-[#30333e] text-slate-300 hover:text-white rounded-lg border border-[#353744] transition-colors'}
-                      title={seedGrey ? '该服务商不支持' : '生成随机种子'}
-                      aria-label={seedGrey ? '随机种子（该服务商不支持）' : '生成随机种子'}
+                      onClick={handleRandomSeed}
+                      className="p-1.5 bg-[#252730] hover:bg-[#30333e] text-slate-300 hover:text-white rounded-lg border border-[#353744] transition-colors"
+                      title="生成随机种子"
+                      aria-label="生成随机种子"
                     >
-                      <Dices className={`w-4 h-4 ${seedGrey ? 'text-slate-600' : 'text-cyan-400'}`} />
+                      <Dices className="w-4 h-4 text-cyan-400" />
                     </button>
                   </div>
                 </div>
@@ -1081,7 +1081,11 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               // cleanup-2026-10-17: sampler params omitted by Schema are DISABLED (not 「能调但不发送」).
               const schemaUnused = SAMPLER_SCHEMA_WIDGETS.has(widget.name) && omitHint;
               // Hide Schema-omitted sampler shells (steps/CFG/sampler/scheduler) — empty disabled sliders look adjustable.
-              if (schemaUnused && ['steps', 'cfg', 'sampler_name', 'scheduler', 'sampler'].includes(widget.name)) return null;
+              // 雁: Schema 未声明 → 整格隐藏；仅当用户填了值却发不出去时留一行提醒（无灰框/空滑块）。
+              if (SAMPLER_SCHEMA_WIDGETS.has(widget.name) && (schemaUnused || unsupported)) {
+                if (!filledCanvasValue(node.values?.[widget.name])) return null;
+                return <p key={widget.name} role="note" data-testid={`node-filled-not-sent-${widget.name}`} className="text-[11px] text-amber-300/90 leading-relaxed">{widget.label}已填，此模型不支持，不会发送</p>;
+              }
               // cleanup-serious: strength/denoise only when a reference image is connected (WaveSpeed strength etc.).
               const isStrengthField = widget.name === 'denoise' || widget.name === 'strength';
               let strengthNeedsImage = false;
