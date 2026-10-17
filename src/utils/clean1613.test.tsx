@@ -86,7 +86,7 @@ describe('clean-1613 #1 Fit View — after taller nodes / model switch, usable b
     expect(mini).toContain('left: vpMapX');
     expect(mini).toContain('top: vpMapY');
     expect(mini).not.toContain('Math.max(vpMapX, 0)');
-    expect(mini).toContain("data-canvas-chrome=\"right\"");
+    expect(mini).toContain("data-canvas-chrome=\"left\"");
     expect(mini).toContain('canvasMode');
   });
 });

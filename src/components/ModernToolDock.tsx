@@ -108,7 +108,7 @@ export const ModernToolDock: React.FC<ModernToolDockProps> = ({
   ];
 
   return (
-    <div data-canvas-chrome="bottom" data-testid="modern-tool-dock" className="absolute bottom-6 left-1/2 -translate-x-1/2 max-[1180px]:left-auto max-[1180px]:translate-x-0 max-[1180px]:right-[220px] z-40 flex items-center gap-2 pointer-events-auto">
+    <div data-canvas-chrome="bottom" data-testid="modern-tool-dock" className="absolute bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 pointer-events-auto">
       {/* Floating Main Dock Pill */}
       <div className="bg-[#14151b]/95 backdrop-blur-2xl border border-[#272935] rounded-2xl px-3 py-1.5 shadow-2xl flex flex-nowrap items-center gap-2 text-xs whitespace-nowrap">
         {/* Add Node Dropdown Trigger */}

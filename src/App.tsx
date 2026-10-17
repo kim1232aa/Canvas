@@ -191,7 +191,7 @@ export default function App() {
   const [modelHubInitialProvider, setModelHubInitialProvider] = useState<string | undefined>(undefined);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
   const [isParamsDrawerOpen, setIsParamsDrawerOpen] = useState(false);
-  const [isMinimapOpen, setIsMinimapOpen] = useState(true);
+  const [isMinimapOpen, setIsMinimapOpen] = useState(false);
   const [targetLoRANodeId, setTargetLoRANodeId] = useState<string | null>(null);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
   const [inspectingMediaItem, setInspectingMediaItem] = useState<any | null>(null);

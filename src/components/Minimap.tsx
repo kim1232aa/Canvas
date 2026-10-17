@@ -26,7 +26,7 @@ export const Minimap: React.FC<MinimapProps> = ({
     return (
       <button
         onClick={onToggle}
-        className="absolute bottom-24 right-6 z-20 p-2.5 rounded-xl bg-[#16171d]/90 backdrop-blur-md border border-[#2b2d37] text-slate-400 hover:text-white shadow-xl hover:bg-[#20222a] transition-all"
+        className="absolute bottom-24 left-6 z-20 p-2.5 rounded-xl bg-[#16171d]/90 backdrop-blur-md border border-[#2b2d37] text-slate-400 hover:text-white shadow-xl hover:bg-[#20222a] transition-all"
         title="打开小地图 (Minimap)"
       >
         <Map className="w-4 h-4" />
@@ -98,7 +98,7 @@ export const Minimap: React.FC<MinimapProps> = ({
   };
 
   return (
-    <div data-canvas-chrome="right" className="absolute bottom-24 right-6 z-20 flex flex-col items-end gap-1.5 pointer-events-auto">
+    <div data-canvas-chrome="left" className="absolute bottom-24 left-6 z-20 flex flex-col items-start gap-1.5 pointer-events-auto">
       <div className="bg-[#14151a]/95 backdrop-blur-xl border border-[#272932] rounded-xl p-2 shadow-2xl shadow-black/80">
         <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono pb-1.5 px-1 border-b border-[#22242c]">
           <span>RADAR MINIMAP</span>
