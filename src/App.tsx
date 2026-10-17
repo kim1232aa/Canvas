@@ -3076,8 +3076,8 @@ export default function App() {
               );
             })()}
             <div className="max-w-xl min-w-0 text-xs">
-              <div className="font-bold text-sm tracking-wide flex items-center gap-2">
-                <span>{toast.title}</span>
+              <div className="font-bold text-sm tracking-wide flex items-start gap-2 min-w-0">
+                <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere] break-words" data-testid="toast-title">{toast.title}</span>
                 {toast.type === 'success' && (
                   <span className="text-[10px] font-mono px-1.5 py-0.2 bg-emerald-500/20 text-emerald-300 rounded border border-emerald-500/30">
                     完成

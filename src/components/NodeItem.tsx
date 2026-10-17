@@ -332,9 +332,9 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                 className={
                   node.type === 'AIVideoNode'
                     ? 'font-bold text-[13px] text-white tracking-wide min-w-0 flex-1 whitespace-normal break-words leading-snug'
-                    : LORA_LOADER_TYPES.has(node.type)
+                    : LORA_LOADER_TYPES.has(node.type) || node.type === 'CheckpointLoaderSimple'
                       ? 'font-bold text-[13px] text-white tracking-wide min-w-0 flex-1 whitespace-normal [overflow-wrap:anywhere] leading-snug'
-                      : 'font-bold text-[13px] text-white truncate tracking-wide'
+                      : 'font-bold text-[13px] text-white truncate tracking-wide min-w-0 flex-1'
                 }
                 title={hoverTitle}
               >
@@ -356,7 +356,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
             </div>
           )}
           {node.state === 'error' && (
-            <div className="flex items-center gap-1 text-[10px] font-mono text-rose-400 bg-rose-950/60 px-1.5 py-0.5 rounded border border-rose-800/40" title={node.errorMessage ? nodeErrorHeadline : undefined}>
+            <div className="flex items-center gap-1 shrink-0 text-[10px] font-mono text-rose-400 bg-rose-950/60 px-1.5 py-0.5 rounded border border-rose-800/40" title={node.errorMessage ? nodeErrorHeadline : undefined} data-testid="node-error-badge">
               <AlertTriangle className="w-3 h-3" />
               <span>异常</span>
             </div>
@@ -404,9 +404,14 @@ export const NodeItem: React.FC<NodeItemProps> = ({
       {node.errorMessage && node.state !== 'running' && !zoomedOut && (
         <div className="mx-3 mt-2 p-2 bg-rose-950/40 border border-rose-800/60 rounded-lg text-[11px] text-rose-100 leading-relaxed flex items-start gap-1.5">
           <AlertTriangle className="w-3.5 h-3.5 text-rose-300 shrink-0 mt-0.5" />
-          <div className="min-w-0 flex-1 max-h-32 overflow-y-auto" data-testid="node-error-banner">
+          <div className="min-w-0 flex-1 max-h-48 overflow-y-auto" data-testid="node-error-banner">
             <div className={`[overflow-wrap:anywhere] whitespace-pre-wrap ${schemaErr ? 'font-semibold' : ''}`} data-testid="node-error-headline">{nodeErrorHeadline}</div>
-            {nodeErrorRaw && <pre className="mt-1 whitespace-pre-wrap [overflow-wrap:anywhere] font-mono text-[10px] text-rose-200/90" data-testid="node-error-raw">{nodeErrorRaw}</pre>}
+            {nodeErrorRaw ? (
+              <details className="mt-1" data-testid="node-error-details">
+                <summary className="cursor-pointer text-rose-200/90 text-[10px] select-none">详情</summary>
+                <pre className="mt-1 whitespace-pre-wrap [overflow-wrap:anywhere] font-mono text-[10px] text-rose-200/90" data-testid="node-error-raw">{nodeErrorRaw}</pre>
+              </details>
+            ) : null}
           </div>
         </div>
       )}
@@ -481,7 +486,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
       {/* Node Body & Widgets (hidden if collapsed) */}
       {!isCollapsed && (
         <div className="px-3 pb-3 pt-1 space-y-3 border-t border-[#252730]">
-          {node.values.execution_blocked_reason && <p role="alert" className="text-amber-200">{node.values.execution_blocked_reason} · 仅载入，不能立即运行；请保留来源，创建新的显式生成分支。</p>}
+          {node.values.execution_blocked_reason && <p role="alert" className="text-amber-200">{node.values.execution_blocked_reason}</p>}
           {(node.values.import_unresolved_resource === true || node.values.unresolvedResource === true) && <p role="alert" className="text-amber-200">资源尚未核实，请从目录或公开 metadata 查验后重新选择。</p>}
           {modelChainBreakMessage && <p role="alert" data-testid="node-model-chain-break" className="p-2 rounded bg-amber-950/50 border border-amber-500/50 text-amber-100 text-[11px] leading-relaxed [overflow-wrap:break-word]">{modelChainBreakMessage}</p>}
           {/* clean-1333 #5/#6: only the node that caused the block gets a red box, with the SAME reason as the toast. */}

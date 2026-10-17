@@ -396,6 +396,16 @@ describe('standard workflow presets (21 T2I + 6 I2V)', () => {
     expect(presetSummary(preset('std-aimlapi-t2i')).cfg).toBeUndefined();
   });
 
+  it('MuAPI pendingRecipe gates TopBar via execution_blocked_reason (plain copy, no API field names)', () => {
+    const p = preset('std-muapi-t2i');
+    expect(p.pendingRecipe).toContain('官方要真 LoRA 地址');
+    expect(p.pendingRecipe).not.toMatch(/lora_url/i);
+    const ckpt = p.nodes.find(n => n.type === 'CheckpointLoaderSimple')!;
+    expect(ckpt.values.execution_blocked_reason).toBe(p.pendingRecipe);
+    expect(p.spatialFrames?.[0]?.params.executionBlockedReason).toBe(p.pendingRecipe);
+    expect(p.nodes.some(n => n.type === 'LoRALoader')).toBe(false);
+  });
+
   it('former empty-model T2I cards now carry a proven catalog model (no 待配置)', () => {
     const filled: Record<string, string> = {
       muapi: 'flux-1-dev-style-lora-inference',

@@ -5,7 +5,8 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { executeWorkflow, clearNodeExecutionErrors } from './graphEngine';
-import { schemaFailureHeadline, schemaFailureNodeMessage, schemaFailureTargetId, isSchemaPrefetchError } from './schemaFailure';
+import { schemaFailureHeadline, schemaFailureNodeMessage, schemaFailureTargetId, isSchemaPrefetchError, schemaFailureToast, schemaFailureToastBody } from './schemaFailure';
+import { toastFromRunError } from './apiFailure';
 import { schemaPrefetchFailureData } from '../engines/drivers/SchemaProviderDriver';
 import { EngineRegistry } from '../engines/EngineRegistry';
 import { NodeItem } from '../components/NodeItem';
@@ -95,6 +96,35 @@ describe('model-schema failure is attributed to the model (loader) node, not the
     expect(c.errorKind).toBeUndefined();
   });
 
+  it('re-run start clears SaveImage upstreamFailed overlay (这次没有出图) even with no errorMessage', () => {
+    const nodes = [
+      { ...node('c', 'CheckpointLoaderSimple'), state: 'error', errorMessage: schemaFailureNodeMessage(schemaErr()), errorKind: 'schema', upstreamFailed: false },
+      { ...node('s', 'SaveImage'), state: 'idle', upstreamFailed: true, upstreamLocalBlocked: false },
+    ] as NodeInstance[];
+    const cleared = clearNodeExecutionErrors(nodes);
+    expect(cleared[0].errorMessage).toBeUndefined();
+    expect(cleared[0].upstreamFailed).toBe(false);
+    expect(cleared[1].upstreamFailed).toBe(false);
+    expect(cleared[1].upstreamLocalBlocked).toBeUndefined();
+  });
+
+  it('toast title = headline (full model name), body = one status line, no duplicated HTTP', () => {
+    const t = schemaFailureToast(schemaErr(400), '运行：保存图像');
+    expect(t.title).toBe(`没出图：找不到模型 ${MODEL}，请检查模型名`);
+    expect(t.title).toContain(MODEL); // full name, never ellipsized in the string
+    expect(t.message.split('\n')[0]).toBe(schemaFailureToastBody(400));
+    expect(t.message.split('\n')[0]).toBe('查模型参数时返回 HTTP 400，生成请求没有发出去');
+    expect(t.title).not.toMatch(/^HTTP /);
+    // no 「HTTP 400 · HTTP 400」
+    expect(t.title).not.toContain('HTTP 400 · HTTP 400');
+    expect(t.message).toContain(RAW); // raw stays under 展开全文
+    expect(t.message).toContain('运行：保存图像');
+    // toastFromRunError routes SchemaPrefetchError the same way
+    const via = toastFromRunError(schemaErr(400), '运行：保存图像')!;
+    expect(via.title).toBe(t.title);
+    expect(via.message.split('\n')[0]).toBe(t.message.split('\n')[0]);
+  });
+
   it('App: run start uses the full clear (not keepUpstreamFailures) and the catch targets the loader on schema failure', () => {
     const app = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
     const start = app.indexOf('setIsExecuting(true);');
@@ -107,7 +137,7 @@ describe('model-schema failure is attributed to the model (loader) node, not the
   });
 });
 
-describe('NodeItem shows one plain schema error (headline + raw), no 上一次/URL headline, no duplicate', () => {
+describe('NodeItem shows one plain schema error (headline + collapsed 详情), no 上一次/URL headline, no duplicate', () => {
   const render = (zoom: number) => {
     const def = (NODE_DEFINITIONS as any).CheckpointLoaderSimple;
     return renderToStaticMarkup(
@@ -123,10 +153,15 @@ describe('NodeItem shows one plain schema error (headline + raw), no 上一次/U
   };
   const count = (s: string, sub: string) => s.split(sub).length - 1;
 
-  it('normal zoom: inner banner only, headline + raw body, no strip', () => {
+  it('normal zoom: headline visible; raw only inside collapsed 详情; 异常 badge does not replace title', () => {
     const html = render(1);
     expect(html).toContain(`没出图：找不到模型 ${MODEL}，请检查模型名`);
+    expect(html).toContain('data-testid="node-error-details"');
+    expect(html).toContain('详情');
     expect(html).toContain('data-testid="node-error-raw"');
+    expect(html).toContain('tool not found'); // RAW is HTML-escaped in markup; content still present inside <details>
+    expect(html).toContain('data-testid="node-error-badge"');
+    expect(html).toContain('shrink-0'); // badge must not cover the title
     expect(html).not.toContain('node-zoom-alerts');
     expect(html).not.toContain('上一次');
     expect(html).not.toContain('GET /api/model-schema');

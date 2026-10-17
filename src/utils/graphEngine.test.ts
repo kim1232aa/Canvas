@@ -27,6 +27,40 @@ describe('graphEngine - B2 & L2a & L2b 拓扑反向追踪与参数抽取隔离�
     expect(()=>extractWorkflowParameters([createNode('v','AIVideoNode',{model:'fal-ai/minimax/video-01',targetProvider:'fal',prompt:'test',source_lora_air:'original-source',execution_blocked_reason:'来源执行链尚未接入'})],[])).toThrow(/来源执行链尚未接入/);
     expect(()=>extractWorkflowParameters([createNode('v','AIVideoNode',{model:'fal-ai/minimax/video-01',targetProvider:'fal',prompt:'test',source_lora_air:'original-source'})],[])).toThrow(/来源.*执行链/);
   });
+  it('pendingRecipe execution_blocked_reason locks extract until a real LoRA is hung', () => {
+    const ckpt = createNode('c', 'CheckpointLoaderSimple', {
+      ckpt_name: 'flux-1-dev-style-lora-inference',
+      targetProvider: 'muapi',
+      execution_blocked_reason: '官方要真 LoRA 地址（训练任务返回的那种），配方里还没有；载入后挂上再运行。',
+    });
+    const pos = createNode('p', 'CLIPTextEncode', { text: '填入配方/用户指定' });
+    const samp = createNode('k', 'KSampler', {});
+    const save = createNode('s', 'SaveImage', { filename_prefix: 'std_muapi' });
+    const edgesNoLora: Connection[] = [
+      { id: 'cm', fromNodeId: 'c', fromSocketId: 'MODEL', toNodeId: 'k', toSocketId: 'model', type: 'MODEL' },
+      { id: 'cp', fromNodeId: 'c', fromSocketId: 'CLIP', toNodeId: 'p', toSocketId: 'clip', type: 'CLIP' },
+      { id: 'pk', fromNodeId: 'p', fromSocketId: 'CONDITIONING', toNodeId: 'k', toSocketId: 'positive', type: 'CONDITIONING' },
+      { id: 'ks', fromNodeId: 'k', fromSocketId: 'LATENT', toNodeId: 's', toSocketId: 'images', type: 'LATENT' },
+    ];
+    expect(() => extractWorkflowParameters([ckpt, pos, samp, save], edgesNoLora, 's')).toThrow(/官方要真 LoRA 地址/);
+    const lora = createNode('l', 'LoRALoader', {
+      lora_name: 'https://example.test/real-lora.safetensors',
+      strength_model: 1,
+      strength_clip: 1,
+    });
+    const edgesWithLora: Connection[] = [
+      { id: 'cl', fromNodeId: 'c', fromSocketId: 'MODEL', toNodeId: 'l', toSocketId: 'model', type: 'MODEL' },
+      { id: 'clc', fromNodeId: 'c', fromSocketId: 'CLIP', toNodeId: 'l', toSocketId: 'clip', type: 'CLIP' },
+      { id: 'lk', fromNodeId: 'l', fromSocketId: 'MODEL', toNodeId: 'k', toSocketId: 'model', type: 'MODEL' },
+      { id: 'lp', fromNodeId: 'l', fromSocketId: 'CLIP', toNodeId: 'p', toSocketId: 'clip', type: 'CLIP' },
+      { id: 'pk', fromNodeId: 'p', fromSocketId: 'CONDITIONING', toNodeId: 'k', toSocketId: 'positive', type: 'CONDITIONING' },
+      { id: 'ks', fromNodeId: 'k', fromSocketId: 'LATENT', toNodeId: 's', toSocketId: 'images', type: 'LATENT' },
+    ];
+    expect(extractWorkflowParameters([ckpt, lora, pos, samp, save], edgesWithLora, 's')).toMatchObject({
+      checkpointModel: 'flux-1-dev-style-lora-inference',
+      targetProvider: 'muapi',
+    });
+  });
   it('requires explicit reference input for editing checkpoints even when a thumbnail exists',()=>{
     const c=createNode('c','CheckpointLoaderSimple',{ckpt_name:'agnes-image-2.5',targetProvider:'agnes',prompt:'test',require_reference_image:true});
     expect(()=>extractWorkflowParameters([c],[])).toThrow(/编辑输入.*参考图/);

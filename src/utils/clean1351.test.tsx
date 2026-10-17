@@ -26,7 +26,10 @@ describe('clean-1351 #1 toast first line = upstream raw body only', () => {
   });
   it('legacy message-only SchemaPrefetchError is unwrapped too', () => {
     const err = Object.assign(new Error(`GET /api/model-schema?provider=together&model=m → HTTP 401 · 生成 POST 未发送\n${wrapper}`), { name: 'SchemaPrefetchError' });
-    expect(toastFromRunError(err)!.message).toContain(upstream);
+    const t = toastFromRunError(err)!;
+    expect(t.title).toContain('读取模型 m');
+    expect(t.message.split('\n')[0]).toBe('查模型参数时返回 HTTP 401，生成请求没有发出去');
+    expect(t.message).toContain(upstream); // unwrapped rawResponse under 展开全文
   });
 });
 

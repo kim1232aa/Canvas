@@ -756,7 +756,7 @@ export const WorkflowPresetsModal: React.FC<WorkflowPresetsModalProps> = ({
                           </div>
                         )}
 
-                        {blockedReason && <p id={`preset-blocked-${preset.id}`} className="text-[11px] text-amber-300">{baseBlockedReason ? '待配置' : '待配方'}：{blockedReason}</p>}
+                        {blockedReason && <p id={`preset-blocked-${preset.id}`} className="text-[11px] text-amber-300">{preset.pendingRecipe ? '待配方' : '待配置'}：{blockedReason}</p>}
                         {/* Action Buttons */}
                         <div className="pt-2 border-t border-[#232532] flex items-center gap-2">
                           {onLoadAndRunPreset && (
@@ -768,11 +768,13 @@ export const WorkflowPresetsModal: React.FC<WorkflowPresetsModalProps> = ({
                                 onLoadAndRunPreset(preset);
                                 onClose();
                               }}
-                              className="flex-1 py-2 px-3 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/25 active:scale-95 transition-all ring-1 ring-emerald-400/40"
+                              className={blockedReason
+                                ? 'flex-1 py-2 px-3 rounded-xl bg-slate-700/80 text-slate-400 font-bold text-xs flex items-center justify-center gap-1.5 cursor-not-allowed border border-slate-600/60 shadow-none ring-0'
+                                : 'flex-1 py-2 px-3 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/25 active:scale-95 transition-all ring-1 ring-emerald-400/40'}
                               title={blockedReason || '载入画布并运行工作流'}
                             >
-                              <Play className="w-3.5 h-3.5 fill-white" />
-                              <span>{blockedReason ? (baseBlockedReason ? '待配置，不能立即运行' : '待配方，不能立即运行') : '载入并立即运行'}</span>
+                              <Play className={`w-3.5 h-3.5 ${blockedReason ? 'fill-slate-500 text-slate-500' : 'fill-white'}`} />
+                              <span>{blockedReason ? (preset.pendingRecipe ? '待配方，不能立即运行' : '待配置，不能立即运行') : '载入并立即运行'}</span>
                             </button>
                           )}
 

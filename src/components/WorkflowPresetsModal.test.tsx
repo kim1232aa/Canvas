@@ -17,10 +17,12 @@ describe('preset modal blocked archives', () => {
     expect(html).toContain('krea-2-turbo');
     expect(html).not.toContain('preset-blocked-std-sensenova-t2i');
     expect(html).not.toContain('preset-blocked-std-sogni-t2i');
-    // MuAPI flux-1-dev-style-lora-inference: lora_url is REQUIRED by the official table and no recipe has a real one → 待配方, run disabled.
+    // MuAPI flux-1-dev-style-lora-inference: official table requires a real trainer LoRA URL; no recipe → 待配方, run disabled (grey, not emerald).
     expect(html).toContain('preset-blocked-std-muapi-t2i');
-    expect(html).toContain('待配方：lora_url 为必填');
-    expect(html).toMatch(/<button[^>]*disabled=""[^>]*[\s\S]*?待配方，不能立即运行/);
+    expect(html).toContain('待配方：官方要真 LoRA 地址');
+    expect(html).not.toMatch(/preset-blocked-std-muapi-t2i[\s\S]{0,200}lora_url/);
+    expect(html).toMatch(/待配方，不能立即运行/);
+    expect(html).toMatch(/bg-slate-700\/80[^"]*"[^>]*disabled=""|disabled=""[^>]*bg-slate-700\/80/);
     expect(html).not.toContain('待配置：');
     expect(html).toContain('仅载入');
     expect(html).toContain('追加合并到当前画布，不覆盖已有内容');

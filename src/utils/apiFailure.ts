@@ -1,5 +1,6 @@
 import { formatBeijingHms } from '../services/executionTrace';
 import { LORA_UNSUPPORTED_MESSAGE } from './resolveCheckpoint';
+import { isSchemaPrefetchError, schemaFailureToast } from './schemaFailure';
 
 /** ModelScope upstream 「模型不存在」— plain primary for exec-log / node banner. */
 export const MODELSCOPE_MODEL_MISSING_CN = '魔搭国内站找不到这个模型或 LoRA';
@@ -255,20 +256,17 @@ export const TOAST_BODY_FIRST_LINE_MAX = 400;
 /** Toast for an upstream HTTP failure: title 「HTTP <code>」; first line = upstream body verbatim (cut, never rewritten); full body below. */
 /** clean-1149 #1: run-catch toast. Prefer structured err.data; else SchemaPrefetchError / any Error carrying upstreamStatus. */
 export function toastFromRunError(err: any, runLine?: string): { title: string; message: string } | null {
+  // Schema lookup miss: title = plain headline (full model name); body = one status line.
+  // Never title 「HTTP N」 (contradicted 「生成请求没有发出去」) and never 「HTTP N · HTTP N」.
+  if (isSchemaPrefetchError(err) || (err && typeof err === 'object' && err.name === 'SchemaPrefetchError')) {
+    return schemaFailureToast(err, runLine);
+  }
   const data = err?.data;
   const fromData = upstreamFailureToast(data, runLine);
   if (fromData) return fromData;
-  // SchemaPrefetchError historically had only message text — recover status+body if .data was missing.
-  if (err && typeof err === 'object' && (err.name === 'SchemaPrefetchError' || /GET .+ → HTTP \d+/.test(String(err.message || '')))) {
-    const m = String(err.message || '');
-    const statusMatch = m.match(/→ HTTP (\d+)/);
-    const status = statusMatch ? Number(statusMatch[1]) : (typeof err.status === 'number' ? err.status : null);
-    if (status != null) {
-      const body = m.includes('\n') ? m.split('\n').slice(1).join('\n').replace(/\n失败记录写入历史失败：[\s\S]*$/, '').trim() : '';
-      let upstreamBody = body; let localWrapper: string | undefined;
-      try { const w = JSON.parse(body); if (w && typeof w === 'object' && w.rawResponse != null) { upstreamBody = typeof w.rawResponse === 'string' ? w.rawResponse : JSON.stringify(w.rawResponse); localWrapper = body; } } catch { /* raw upstream text */ }
-      return upstreamFailureToast({ upstreamStatus: status, upstreamResponseBody: upstreamBody, localWrapper }, runLine);
-    }
+  // Legacy message-only schema prefetch (name missing but message shape matches).
+  if (err && typeof err === 'object' && /GET .+ → HTTP \d+/.test(String(err.message || ''))) {
+    return schemaFailureToast(err, runLine);
   }
   return null;
 }

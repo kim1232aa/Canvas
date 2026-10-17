@@ -46,7 +46,7 @@ canvas, svg {
 .studio-run:hover:not(:disabled):not(:focus) { background: #06a1c4; }
 .studio-run:focus { background: #0891b2; outline: none; }
 .studio-run:focus-visible { outline: 2px solid #67e8f9; outline-offset: 2px; }
-.studio-run:disabled { opacity: .5; cursor: not-allowed; background: #0891b2; }
+.studio-run:disabled { opacity: 1; cursor: not-allowed; background: #334155; color: #94a3b8; }
 .studio-action:disabled { opacity: .5; cursor: not-allowed; }
 .studio-action:focus-visible { outline: 2px solid #67e8f9; outline-offset: 2px; }
 @media (max-width: 640px) { .studio-toolbar {padding: 10px;} .studio-action {padding: .4rem .5rem;} }

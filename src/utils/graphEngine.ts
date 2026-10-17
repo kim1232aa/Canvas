@@ -75,7 +75,9 @@ export function clearNodeExecutionErrors(
   const keep = !!opts?.keepUpstreamFailures;
   return nodes.map((n) => {
     const hasLocal = !!(n.localBlockReason || n.localBlockTitle || n.upstreamLocalBlocked);
-    const hasUpstream = !!(n.state === 'error' || n.errorMessage);
+    // upstreamFailed alone (SaveImage 「这次没有出图」) must also clear on a new Run — otherwise the
+    // prior-run overlay sticks even when the model-node red box was wiped.
+    const hasUpstream = !!(n.state === 'error' || n.errorMessage || n.upstreamFailed);
     if (!hasLocal && !hasUpstream) return n;
     if (keep) {
       // Drop local-block marks only; leave errorMessage / errorAt for 「上一次」badge (clean-0006).
@@ -104,6 +106,7 @@ export function clearNodeExecutionErrors(
       localBlockField: undefined,
       localBlockLoraCount: undefined,
       upstreamLocalBlocked: undefined,
+      upstreamFailed: false,
       state: (n.state === 'error' ? 'idle' : n.state) as NodeInstance['state'],
       errorMessage: undefined,
       errorAt: undefined,
@@ -668,8 +671,10 @@ export function extractWorkflowParameters(
   }
 
   const pendingNodes = Array.from(subgraphNodeIds).map(id=>nodeMap.get(id)).filter((n):n is NodeInstance=>Boolean(n));
+  // pendingRecipe boards set execution_blocked_reason until a real LoRA is hung; do not keep TopBar locked after that.
+  const hasRealLoraOnSubgraph = pendingNodes.some(n => n.type === 'LoRALoader' && String(n.values?.lora_name || '').trim());
   for(const n of pendingNodes) {
-    if(n.values.execution_blocked_reason)throw new Error(String(n.values.execution_blocked_reason));
+    if(n.values.execution_blocked_reason && !hasRealLoraOnSubgraph)throw new Error(String(n.values.execution_blocked_reason));
     if(n.values.source_lora_air)throw new Error('来源 LoRA 执行链尚未接入；请保留此历史档案，创建新的显式生成分支');
   }
   // 3. Node-specific parameter extraction
@@ -1003,7 +1008,9 @@ export function extractWorkflowParameters(
   const recipeValues = recipeNode.values;
   const isModelUnresolved = (recipeValues.import_unresolved_resource === true || recipeValues.unresolvedResource === true) && recipeValues.resourceVerified !== true;
   if (isModelUnresolved) throw new Error(`底模 ${checkpointModel || '未指定'} 尚未核实，请重新选择已核实资源`);
-  if (recipeValues.execution_blocked_reason) throw new Error(String(recipeValues.execution_blocked_reason));
+  const hasRealLora = loras.some(l => String(l.name || '').trim());
+  // pendingRecipe: clear TopBar lock once a real LoRA is on the chain (same rule as the early subgraph guard).
+  if (recipeValues.execution_blocked_reason && !hasRealLora) throw new Error(String(recipeValues.execution_blocked_reason));
   if (recipeValues.source_lora_air) throw new Error('来源 LoRA 执行链尚未接入；请保留此历史档案，创建新的显式生成分支');
   if (recipeValues.require_reference_image === true && !initImageUrl) throw new Error('编辑输入需要明确参考图，请选择或上传参考图');
   const recipe = recipeNode.values;
@@ -1011,7 +1018,7 @@ export function extractWorkflowParameters(
   return {
     requireReferenceImage: recipe.require_reference_image === true,
     unresolvedModel: isModelUnresolved,
-    executionBlockedReason: strOrUndef(recipe.execution_blocked_reason),
+    executionBlockedReason: hasRealLora ? undefined : strOrUndef(recipe.execution_blocked_reason),
     sourceLoraAir: strOrUndef(recipe.source_lora_air),
     watermark: targetProvider === 'sensenova' && typeof recipe.watermark === 'boolean' ? recipe.watermark : undefined,
     promptExtend: targetProvider === 'sensenova' && typeof recipe.prompt_extend === 'boolean' ? recipe.prompt_extend : undefined,

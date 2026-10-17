@@ -94,6 +94,8 @@ function buildStandardT2i(spec: StdSpec): WorkflowPreset {
       ckpt_name: spec.ckpt,
       targetProvider: target,
       ...(spec.checkpointExtra || {}),
+      // 待配方: also gate TopBar run after 仅载入 (card button alone is not enough).
+      ...(spec.pendingRecipe ? { execution_blocked_reason: spec.pendingRecipe } : {}),
     },
   };
 
@@ -252,6 +254,7 @@ function buildStandardT2i(spec: StdSpec): WorkflowPreset {
       params: {
         checkpoint: spec.ckpt,
         targetProvider: target as SpatialFrame['params']['targetProvider'],
+        ...(spec.pendingRecipe ? { executionBlockedReason: spec.pendingRecipe } : {}),
         seed: spec.compact ? undefined : keep('seed', seed),
         seedControl: 'fixed',
         steps: spec.compact ? undefined : keep('steps', steps),
@@ -546,7 +549,8 @@ const STD_SPECS: StdSpec[] = [
     hasLora: false,
     hasNegative: false,
     omit: ['seed', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise'],
-    pendingRecipe: 'lora_url 为必填，官方写明须填 flux-1-dev-style-lora-trainer 训练任务返回的 LoRA 地址；配方里还没有真地址，载入后挂上真 LoRA 再运行，不能空着跑。',
+    // Official OpenAPI: lora_url REQUIRED (trainer task URL). No accepted-run recipe → pendingRecipe (plain UI copy, no API field names).
+    pendingRecipe: '官方要真 LoRA 地址（训练任务返回的那种），配方里还没有；载入后挂上再运行。',
   },
   // Schema (temp/e2e/wavespeed/recipe-33530948/wavespeed-flux-dev-lora-schema.json): steps 1–50; accepted run hist_1792224305224_meynb used 36 steps / CFG 3.5 (Schema default was 28), size, seed, loras; no negative/sampler/scheduler.
   { provider: 'wavespeed', ckpt: 'wavespeed-ai/flux-dev-lora', hasLora: true, hasNegative: false, steps: 36, cfg: 3.5, omit: ['sampler', 'scheduler', 'denoise'],
