@@ -2,6 +2,12 @@
 
 完整交接见 [HANDOFF.md](HANDOFF.md)：先列用户铁律，再列 16 个产品板块、主要供应商与其他驱动的验收状态、模型中心/LoRA 中心缺口和后续工单。**按下面各日期及路由范围读取验收事实，不再沿用 10-04 的“Civitai/Fal 未测”结论，也不以历史通过替代新修复的真实复验。**
 
+## 2026-10-19 本地路由生命周期修复与测试语义收紧（本地 Mocked 集成验证，非供应商真实生成验收）
+
+- **mountNoFetch.test.tsx 语义断言收紧**：将泛化的全局文本断言替换为对 `FieldStatusBadge`（will_send 状态/文案）及 `SchemaChoiceControls`（schema-badge-* 且具有肯定发送状态）的精确语义断言，避免正文或用户提示词中的字面字样被误判；正向控制分别渲染真实的 `FieldStatusBadge` 与 `SchemaChoiceControls` 组件确保断言有效性；对比带保存 Schema（ws/kr/ve）与无保存 Schema（to，`{}`）节点的提示差异，确保在无 Schema 证据时不虚构不支持。
+- **videoGenerateRoute 伪断连修复与生命周期测试**：将客户端断开判定从 `req.on('close')`（会在 POST 请求体读取完毕时立即触发）修正为 `res.on('close')` 且校验 `!res.writableEnded`，在请求正常完成或终止时清理监听器；客户端主动中断时退出轮询循环，且不再向 `keyPoolManager` 记入失败惩罚（仅影响 NanoGPT/Agnes/Grok 等本地轮询分支，不代表上游远端任务已取消或已节约计费）；新增 Express 集成测试通过 Grok 兼容轮询分支验证正常完成、真断连快速退出与模拟上游 429 报错惩罚保留。
+- **本地验证**：`npm run lint` 0 报错；`npx vitest run` 全量通过（JSON 报告已落盘）；`node hosting/build.mjs && node hosting/check-hosting.mjs` 全过；`git diff --check` 0 异常。注：本轮为纯本地 Mocked HTTP/DOM 集成测试，不替代供应商真实生成验收。
+
 **合并范围说明**：保留 origin/main 已有的验收事实与功能说明，以及本地 incoming `72f5372` 的 2026-10-12 接线修复记录。10-10 Runware 的 `PASS_GENERATION` 仅指当时实测路径；10-12 `lora` 字段修复尚未上游复验，余额不足不是生成成功。ModelsLab 的订阅限制仍只记 `PASS_BILLING`，参考图 `/img2img` 修复未完成真实复验。10-09 资产库旧 base64 不自动迁移是当时状态，10-12 新增打开资产库时上传的接线记录，不代表已逐项真实验收。下文 10-06/10-05 的状态及待验项限各自当时范围，后续 SenseNova、Fal、媒体架构进展按 10-10/10-09 记录并列保留，不提升任何验收等级。
 
 ## 2026-10-16 晚间（Asia/Tokyo）
