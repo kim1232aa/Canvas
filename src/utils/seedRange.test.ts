@@ -16,7 +16,7 @@ const modelscopeCnBoard = (seed: number, control: string = 'fixed') => {
 describe('seed range from model Schema', () => {
   it('ModelScope static Schema has official seed range [0, 2^31-1] (hint / random)', () => {
     const r = seedRangeFor('modelscope', 'Tongyi-MAI/Z-Image-Turbo');
-    expect(r).toEqual({ min: 0, max: 2147483647, source: 'https://modelscope.csdn.net/691c36ee82fbe0098caca391.html' });
+    expect(r).toEqual({ min: 0, max: 2147483647, source: 'https://www.modelscope.cn/docs/model-service/API-Inference/intro' });
     expect(seedRangeFor('modelscope_ai', 'Tongyi-MAI/Z-Image-Turbo')).toEqual(r);
   });
   it('ModelScope out-of-range seed is NOT hard-blocked (product: hint only, upstream verbatim)', () => {
