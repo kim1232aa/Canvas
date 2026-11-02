@@ -1426,3 +1426,32 @@ describe('LoRA strength — no silent 0.8 (iron rule)', () => {
     generateSpy.mockRestore();
   });
 });
+
+describe('ModelsLab batch propagation', () => {
+  it('carries graph batch_size unchanged through the driver request body', async () => {
+    const { ModelsLabDriver } = await import('../engines/drivers/ModelsLabDriver');
+    const originalFetch = globalThis.fetch;
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
+      mediaUrl: 'https://example.test/result.png',
+      model: 'flux',
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    globalThis.fetch = fetchMock as any;
+    const node: NodeInstance = {
+      id: 'model', type: 'CheckpointLoaderSimple', title: 'model',
+      pos: { x: 0, y: 0 }, inputs: [], outputs: [],
+      values: { ckpt_name: 'flux', targetProvider: 'modelslab', prompt: 'test image', batch_size: 3 },
+    };
+    const generate = vi.spyOn(EngineRegistry, 'generate').mockImplementation((provider, params, keys) =>
+      new ModelsLabDriver().generate(params, keys || {})
+    );
+    try {
+      await executeWorkflow([node], [], () => {}, undefined, node.id);
+      expect(generate.mock.calls[0][1]).toMatchObject({ batchSize: 3, extraParams: { samples: 3 } });
+      const requestBody = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
+      expect(requestBody.samples).toBe(3);
+    } finally {
+      globalThis.fetch = originalFetch;
+      vi.restoreAllMocks();
+    }
+  });
+});

@@ -48,6 +48,8 @@ export interface NormalizedGenerateParams {
   steps?: number;
   cfg?: number;
   seed?: number;
+  /** Requested number of output images, forwarded as provider-native samples where supported. */
+  batchSize?: number;
   denoise?: number;
   image_url?: string; // 核心：图生图 (img2img) 或 图生视频 (img2video) 的输入源图 URL
   loras?: Array<{

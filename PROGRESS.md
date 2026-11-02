@@ -1,5 +1,31 @@
 # 交接状态更新（用户于 2026-10-04 要求）
 
+## 2026-11-03 逐供应商 API 核对与回归
+
+- 按仓库供应商逐家核对公开官方资料与当前实现，来源、核查范围、尚未核实项和接线缺口见 `docs/api-integration-review-2026-11-02.md`。没有使用真实密钥或调用真实生成。
+- 修正 Replicate 固定版本预测端点、HF Space 下载失败误报成功、Together/AIMLAPI 图片 MIME、WaveSpeed 不可识别输出误报成功、Runware/ModelsLab 目录错误被吞，以及 Civitai 视频工作流终态错误；Mage 要求显式模型，不再按静态名单阻止手输值或静默修改 seed。共享驱动不再依据模型名称猜测视频任务或虚构 CLIP 强度。
+- 使供应商 smoke 脚本的项目路径可移植，未运行这些脚本；调整过时的测试断言以反映当前 DeepInfra LoRA 限制与视频时长标签。
+- 最终 `npm run lint`、`npm run build`、`npm test -- --maxWorkers=4`（206 文件、1681 项）及 `node hosting/check-hosting.mjs` 均通过。上述测试为本地或模拟验证，不代表第三方生成已通过。Civitai 新视频变体与其他文档中标出的能力缺口仍待按实际 Schema 接线和验证。
+
+## 2026-11-02 继续核对官方 API（本地验证，未进行真实生成）
+
+- Civitai Wan 2.1 的标准模型/帧率字段改为官方 OpenAPI 的 `diffusionModel`/`fps`，自定义 JSON 保留原样。来源：https://orchestration.civitai.com/openapi/v2-consumers.json 。当前静态引擎列表仍会拒绝官方已列出的 `ltx2.3` 和 Wan 2.2/Comfy；这些变体需要按对应动态 Schema 完整接线，尚未修复或验证。
+- ModelsLab 画布批量数量从执行链传到 `samples`；显式输入要求正整数，不写死上限，具体范围交上游判定。官方通用参数说明：https://docs.modelslab.com/llms.txt 。
+- Fal 视频不再按 `dev` 等模型名猜类型并拒绝；上游错误展示真实状态、响应体和端点。HF 精确仓库补查失败时保留普通结果，并向界面暴露部分结果警告及真实错误。
+- Venice 图像支持官方文档中的二进制响应及 JSON base64 图片格式，并核对图片内容类型与签名。来源：https://docs.venice.ai/api-reference/endpoint/image/generate.md 。
+- AIMLAPI 模型实时 Schema 若明确说明 `auto` 选项会回退，自动默认或显式选择该值时明确拦截并要求选择非回退路由；不据此断言其他未声明的路由不会回退。例证：https://api.aimlapi.com/docs-json?model=alibaba%2Fz-image-turbo-lora&endpoint=openai%2Fimage-generations 。
+- 验证：生产构建和本地 Worker 检查通过；全量测试 1656 通过、2 失败，两项均为本次修改前已记录的 Venice/DeepInfra LoRA 断言与视频时长标签断言。TypeScript 检查仍受既有 live-smoke 脚本绝对导入路径和 videoSchemaFields 测试类型错误阻断。供应商真实生成未运行；单元/本地模拟验证不代表前端真实出图。其他可能的回退、未支持视频变体及未知上游默认仍需按官方证据继续调查。
+
+## 2026-11-02 API 集成透明性检查与修复（本地测试，未进行真实生成）
+
+- 用户重申项目最高规则：网络查证后再断言；错误、实际路由和参数透明可见；禁止静默回退、虚假自愈和硬编码集成。见 `CLAUDE.md`。
+- Sogni：目录有精确匹配且返回有效 `ui.min/max` 时，超范围显式拒绝、不截断；范围未知保留原值并显示未核实提示和目录查询错误。界面保留目录范围，未知时使用无固定区间的数值输入；移除静态 LoRA 模型白名单。依据官方协议 https://github.com/Sogni-AI/sogni-protocol/blob/main/schemas/tools/generate_image.schema.json；当前锁定版本也记载上游会限制超范围值。未验证真实上游行为或实际出图。
+- Gemini：图像路由未由用户指定响应模态时请求 IMAGE；保留用户显式配置。依据 Google 官方 https://github.com/googleapis/googleapis/blob/master/google/ai/generativelanguage/v1beta/generative_service.proto 中 response_modalities 空列表等同 text 的说明。尚未以真实密钥验证生成。
+- AIMLAPI：不再按模型名猜测 LoRA 支持或为目录模型虚构参数 schema；保留上游明确字段，实际请求继续使用动态 docs-json schema。
+- ModelsLab、Mage、Replicate：处理提交或轮询中异常 JSON 和任务错误时保留原始响应、实际 HTTP 状态与端点，不把本站 502 当成上游 502。模型中心遇到无对应目录的初始供应商明确提示，不自动加载 Civitai 或全部目录。
+- 验证：生产构建和本地 Worker 存储/认证检查通过；全量测试 1634 通过、2 失败，为先前已有的 Venice/DeepInfra LoRA 断言和视频时长标签断言。类型检查仍因 smoke 脚本旧绝对路径与 `videoSchemaFields.test.ts` 类型错误失败。未运行真实供应商生成；部分官方文档域名受网络策略限制，覆盖范围不是全供应商审计。
+- 后续：MuAPI、Krea、AIMLAPI、Venice 的视频目录到视频驱动路径尚未打通；当前视频路由明确返回未接入，不应标为已支持。范围未知时 Sogni 上游如何处理仍需用户授权下的真实前端验证。
+
 完整交接见 [HANDOFF.md](HANDOFF.md)：先列用户铁律，再列 16 个产品板块、主要供应商与其他驱动的验收状态、模型中心/LoRA 中心缺口和后续工单。**按下面各日期及路由范围读取验收事实，不再沿用 10-04 的“Civitai/Fal 未测”结论，也不以历史通过替代新修复的真实复验。**
 
 ## 2026-10-19 本地路由生命周期修复与测试语义收紧（本地 Mocked 集成验证，非供应商真实生成验收）

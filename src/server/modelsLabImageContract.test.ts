@@ -4,6 +4,7 @@ import {
   parseModelsLabResponse,
   buildModelsLabFetchRequest,
   sanitizeModelsLabPayload,
+  inspectModelsLabPollBody,
 } from './modelsLabImageContract';
 
 describe('ModelsLab Image Contract', () => {
@@ -76,6 +77,15 @@ describe('ModelsLab Image Contract', () => {
     expect(() => buildModelsLabImageRequest({ model: 'flux', prompt: 'test', loras: [{ name: 'style-lora' }] }, 'test-key')).toThrow(/严禁静默兜底为 0\.8/);
   });
 
+  it.each([1.5, 0, -1, '2'])('rejects an invalid explicit samples value instead of rounding or defaulting (%s)', (samples) => {
+    expect(() => buildModelsLabImageRequest({ model: 'flux', prompt: 'p', samples }, 'test-key')).toThrow(/samples/);
+  });
+
+  it('preserves positive integer sample counts without imposing a provider-specific maximum', () => {
+    const req = buildModelsLabImageRequest({ model: 'custom-model', prompt: 'p', samples: 5 }, 'test-key');
+    expect(req.payload.samples).toBe(5);
+  });
+
   it('builds official fetch request for async polling', () => {
     const fetchReq = buildModelsLabFetchRequest(12345, 'my-key');
     expect(fetchReq.endpoint).toBe('https://modelslab.com/api/v6/images/fetch');
@@ -118,17 +128,37 @@ describe('ModelsLab Image Contract', () => {
     })).toThrow(/Invalid API key.*Check your key/);
   });
 
+  it('preserves malformed 2xx poll response text instead of turning it into a pending empty object', () => {
+    const rawResponse = '<html>upstream maintenance</html>';
+    expect(inspectModelsLabPollBody(rawResponse)).toMatchObject({
+      kind: 'invalid-json',
+      rawResponse,
+    });
+  });
+
+  it('keeps task-level failure distinct from HTTP failure and retains exact poll response', () => {
+    const rawResponse = JSON.stringify({ status: 'error', message: 'queue failed', tip: 'retry later' });
+    expect(inspectModelsLabPollBody(rawResponse)).toEqual({
+      kind: 'task-error',
+      rawResponse,
+      data: { status: 'error', message: 'queue failed', tip: 'retry later' },
+    });
+  });
+
   it('fetch endpoint never nests the generation route, whichever route base URL was configured', () => {
     for (const base of ['https://modelslab.com/api/v6/images/img2img', 'https://modelslab.com/api/v6/images/text2img', 'https://modelslab.com/']) {
       expect(buildModelsLabFetchRequest(1, 'k', base).endpoint).toBe('https://modelslab.com/api/v6/images/fetch');
     }
   });
 
-  it('merges custom JSON (including explicit model_id and samples) and records overrides without exposing the key', () => {
-    const req = buildModelsLabImageRequest({ model: 'flux', prompt: 'p', custom_parameters: { model_id: 'sdxl', samples: 2, enhance_prompt: 'yes' } }, 'secret-key');
+  it('lets custom JSON explicitly override graph batch samples and records the actual override', () => {
+    const req = buildModelsLabImageRequest({ model: 'flux', prompt: 'p', samples: 3, custom_parameters: { model_id: 'sdxl', samples: 2, enhance_prompt: 'yes' } }, 'secret-key');
     expect(req.payload).toMatchObject({ model_id: 'sdxl', samples: 2, enhance_prompt: 'yes', key: 'secret-key' });
     expect(req.actualModel).toBe('sdxl');
-    expect(req.overrides.map((o) => o.field)).toEqual(['model_id', 'samples']);
+    expect(req.overrides).toEqual(expect.arrayContaining([
+      expect.objectContaining({ field: 'model_id', requested: 'flux', custom: 'sdxl' }),
+      expect.objectContaining({ field: 'samples', requested: 3, custom: 2 }),
+    ]));
     expect(() => buildModelsLabImageRequest({ model: 'flux', prompt: 'p', custom_parameters: { key: 'other' } }, 'secret-key')).toThrow(/凭据/);
   });
 

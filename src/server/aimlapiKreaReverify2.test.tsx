@@ -52,7 +52,7 @@ describe('P0 3 image_size from the official Schema (generic choice controls)', (
     expect(fields.map((f) => f.key)).not.toEqual(expect.arrayContaining(['seed', 'num_inference_steps', 'loras', 'prompt', 'model']));
   });
   it('enum image_size from custom_parameters is sent verbatim with steps 8 + LoRA 0.85 + seed', async () => {
-    const r = await submit({ model: MODEL, prompt: 'p', steps: 8, seed: 42, custom_parameters: { image_size: 'square_hd' }, loras: [{ path: 'ostris/z_image_turbo_childrens_drawings', strength: 0.85 }] });
+    const r = await submit({ model: MODEL, prompt: 'p', steps: 8, seed: 42, custom_parameters: { provider: 'alibaba', image_size: 'square_hd' }, loras: [{ path: 'ostris/z_image_turbo_childrens_drawings', strength: 0.85 }] });
     expect(r.upstreamBody).toMatchObject({ image_size: 'square_hd', num_inference_steps: 8, seed: 42, loras: [{ path: 'ostris/z_image_turbo_childrens_drawings', scale: 0.85 }] });
     expect(r.status).toBe(403);
   });
@@ -97,7 +97,7 @@ describe('P0 1 / P1 8 / P2 11–12 history modal', () => {
 
 describe('P1 7 local-block card shows the blocked value', () => {
   it('server error carries blockedField → history item → 「17 步（超出 1–8，未发送）」', async () => {
-    const r = await submit({ model: MODEL, prompt: 'p', steps: 17, seed: 42 });
+    const r = await submit({ model: MODEL, prompt: 'p', steps: 17, seed: 42, custom_parameters: { provider: 'alibaba' } });
     expect(r.status).toBe(400);
     expect(r.payload.blockedField).toMatchObject({ from: 'steps', field: 'num_inference_steps', value: 17, minimum: 1, maximum: 8 });
     const item: any = buildLocalRejectionHistoryItem('/api/schema-provider/aimlapi/submit', { model: MODEL, prompt: 'p', steps: 17 }, 400, r.payload);

@@ -26,12 +26,18 @@ function createMockDeps(overrides: Partial<ReplicateRouteDeps> = {}): {
         status: 'succeeded',
         output: ['https://replicate.delivery/out.png'],
       }),
-      text: async () => '',
+      text: async () => JSON.stringify({
+        id: 'pred_default',
+        status: 'succeeded',
+        output: ['https://replicate.delivery/out.png'],
+      }),
     }));
 
   const wrappedUpstreamFetch = vi.fn(async (meta: any, url: string, options: any) => {
     fetchCalls.push({ meta, url, options });
-    return rawUpstreamFetch(meta, url, options);
+    const response = await rawUpstreamFetch(meta, url, options);
+    if (typeof response.text === 'function') return response;
+    return { ...response, text: async () => JSON.stringify(await response.json()) };
   });
 
   const defaultDeps: ReplicateRouteDeps = {
@@ -195,6 +201,91 @@ describe('replicateRoutes', () => {
       expect(recordedResults[0][2]).toBe(true);
     });
 
+    it('reads a pinned version schema and submits/polls that version through the official /predictions route', async () => {
+      const version = '50adaf2d3c7a8b6099dd81e58e6dd27d2c317c52d007bc019c67040c22941234';
+      const model = `custom-owner/custom-model:${version}`;
+      const base = 'https://api.replicate.com/v1';
+      const schemaUrl = `${base}/models/custom-owner/custom-model/versions/${version}`;
+      const pollUrl = `${base}/predictions/pred_versioned`;
+      const schemaResponse = JSON.stringify({
+        openapi_schema: {
+          components: {
+            schemas: {
+              Input: { type: 'object', properties: { prompt: { type: 'string' } } },
+            },
+          },
+        },
+      });
+      const submitResponse = JSON.stringify({ id: 'pred_versioned', status: 'starting', urls: { get: pollUrl } });
+      const pollResponse = JSON.stringify({ id: 'pred_versioned', status: 'succeeded', output: ['https://replicate.delivery/versioned.png'] });
+      const { deps, fetchCalls, persistedCalls } = createMockDeps({
+        upstreamFetch: vi.fn(async (_meta: any, url: string, options: any) => {
+          if (url === schemaUrl && options.method === 'GET') return { ok: true, status: 200, text: async () => schemaResponse };
+          if (url === `${base}/predictions` && options.method === 'POST') return { ok: true, status: 201, text: async () => submitResponse };
+          if (url === pollUrl && options.method === 'GET') return { ok: true, status: 200, text: async () => pollResponse };
+          throw new Error(`unexpected Replicate request ${options.method} ${url}`);
+        }),
+      });
+      const handler = handleReplicateGenerate(deps);
+      const req: any = { body: { model, prompt: 'pinned version prompt' }, path: '/api/engine/replicate/generate' };
+      const res = createMockRes();
+
+      await handler(req, res);
+
+      expect(res.statusCode).toBe(200);
+      expect(fetchCalls.map((call) => [call.options.method, call.url])).toEqual([
+        ['GET', schemaUrl],
+        ['POST', `${base}/predictions`],
+        ['GET', pollUrl],
+      ]);
+      expect(JSON.parse(String(fetchCalls[1].options.body))).toEqual({
+        version: model,
+        input: { prompt: 'pinned version prompt' },
+      });
+      expect(persistedCalls[0].images).toEqual(['https://replicate.delivery/versioned.png']);
+    });
+
+    it('allows caller-declared Input schema after pinned-schema lookup fails and labels it unverified', async () => {
+      const version = '50adaf2d3c7a8b6099dd81e58e6dd27d2c317c52d007bc019c67040c22941234';
+      const model = `custom-owner/custom-model:${version}`;
+      const base = 'https://api.replicate.com/v1';
+      const schemaUrl = `${base}/models/custom-owner/custom-model/versions/${version}`;
+      const pollUrl = `${base}/predictions/pred_caller_schema`;
+      const { deps, fetchCalls } = createMockDeps({
+        upstreamFetch: vi.fn(async (_meta: any, url: string, options: any) => {
+          if (url === schemaUrl && options.method === 'GET') return { ok: false, status: 404, text: async () => 'version schema unavailable' };
+          if (url === `${base}/predictions` && options.method === 'POST') return {
+            ok: true, status: 201,
+            text: async () => JSON.stringify({ id: 'pred_caller_schema', status: 'starting', urls: { get: pollUrl } }),
+          };
+          if (url === pollUrl && options.method === 'GET') return {
+            ok: true, status: 200,
+            text: async () => JSON.stringify({ id: 'pred_caller_schema', status: 'succeeded', output: ['https://replicate.delivery/caller-schema.png'] }),
+          };
+          throw new Error(`unexpected Replicate request ${options.method} ${url}`);
+        }),
+      });
+      const handler = handleReplicateGenerate(deps);
+      const req: any = {
+        body: { model, prompt: 'caller schema prompt', inputSchemaProperties: { prompt: { type: 'string' } } },
+        path: '/api/engine/replicate/generate',
+      };
+      const res = createMockRes();
+
+      await handler(req, res);
+
+      expect(res.statusCode).toBe(200);
+      expect(fetchCalls.map((call) => [call.options.method, call.url])).toEqual([
+        ['GET', schemaUrl],
+        ['POST', `${base}/predictions`],
+        ['GET', pollUrl],
+      ]);
+      expect(JSON.parse(String(fetchCalls[1].options.body))).toEqual({ version: model, input: { prompt: 'caller schema prompt' } });
+      expect(res.data.schemaSource).toBe('caller-inputSchemaProperties');
+      expect(res.data.schemaValidation).toContain('not verified against the requested version');
+      expect(res.data.schemaFetch).toMatchObject({ url: schemaUrl, status: 404, body: 'version schema unavailable' });
+    });
+
     it('preserves full upstream error transparency on 402 Insufficient Credit without fallback', async () => {
       const { deps, recordedResults } = createMockDeps({
         upstreamFetch: vi.fn(async () => ({
@@ -322,6 +413,50 @@ describe('replicateRoutes', () => {
       expect(res.data.error).toContain('网络/协议错误');
       expect(res.data.errorSource).toBe('network');
       expect(recordedResults[0][2]).toBe(false);
+    });
+
+    it('preserves malformed submit response text and the actual upstream status', async () => {
+      const raw = '{"message":"provider detail"';
+      const { deps, recordedResults } = createMockDeps({
+        upstreamFetch: vi.fn(async () => ({ ok: true, status: 201, text: async () => raw })),
+      });
+      const handler = handleReplicateGenerate(deps);
+      const req: any = {
+        body: { model: 'owner/name', prompt: 'test', inputSchemaProperties: { prompt: {} } },
+        path: '/api/engine/replicate/generate',
+      };
+      const res = createMockRes();
+
+      await handler(req, res);
+
+      expect(res.statusCode).toBe(502);
+      expect(res.data.rawResponse).toBe(raw);
+      expect(res.data.upstreamStatus).toBe(201);
+      expect(res.data.error).toContain('JSON 解析失败');
+      expect(recordedResults[0][5]).toBe(201);
+    });
+
+    it('preserves malformed poll response text and the actual upstream status', async () => {
+      const raw = 'poll provider detail: invalid JSON';
+      const { deps, recordedResults } = createMockDeps({
+        upstreamFetch: vi.fn(async (_meta: any, url: string) => url.includes('/models/')
+          ? { ok: true, status: 201, text: async () => JSON.stringify({ id: 'pred_poll', status: 'processing', urls: { get: 'https://api.replicate.com/v1/predictions/pred_poll' } }) }
+          : { ok: true, status: 206, text: async () => raw }),
+      });
+      const handler = handleReplicateGenerate(deps);
+      const req: any = {
+        body: { model: 'owner/name', prompt: 'test', inputSchemaProperties: { prompt: {} } },
+        path: '/api/engine/replicate/generate',
+      };
+      const res = createMockRes();
+
+      await handler(req, res);
+
+      expect(res.statusCode).toBe(502);
+      expect(res.data.rawResponse).toBe(raw);
+      expect(res.data.upstreamStatus).toBe(206);
+      expect(res.data.error).toContain('JSON 解析失败');
+      expect(recordedResults[0][5]).toBe(206);
     });
   });
 

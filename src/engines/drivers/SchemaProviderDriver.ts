@@ -25,6 +25,33 @@ function asRecord(value: unknown): JsonRecord {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as JsonRecord : {};
 }
 
+/** Accept only provider outputs with an explicit URL; never stringify unknown objects into fake media locators. */
+export function schemaProviderOutputUrl(result: unknown): string | undefined {
+  const record = asRecord(result);
+  if (typeof record.imageUrl === 'string' && record.imageUrl.trim()) return record.imageUrl.trim();
+  const outputs = Array.isArray(record.outputs) ? record.outputs : [];
+  for (const output of outputs) {
+    if (typeof output === 'string' && output.trim()) return output.trim();
+    const url = asRecord(output).url;
+    if (typeof url === 'string' && url.trim()) return url.trim();
+  }
+  return undefined;
+}
+
+function sogniRangeValidationNotice(submitBody:unknown):string|undefined {
+  const actualRequest=asRecord(asRecord(submitBody).actualRequest);
+  const mapping=Array.isArray(actualRequest.mapping)?actualRequest.mapping:[];
+  const check=mapping.find((entry:any)=>entry?.from==='Sogni LoRA strength range check');
+  if(!check)return undefined;
+  const unknown=Array.isArray(check.unknown)?check.unknown:[];
+  const failure=asRecord(check.lookupFailure);
+  if(check.status!=='unknown' && !unknown.length)return undefined;
+  const details=failure.error
+    ? `目录查询失败${failure.upstreamStatus ? ` HTTP ${failure.upstreamStatus}` : ''} (${failure.endpoint || check.sourceUrl || '公开目录'})：${failure.upstreamResponseBody || failure.error}`
+    : unknown.map((item:any)=>`${item.id || 'LoRA'}：${item.reason || '范围未知'}`).join('；');
+  return `Sogni LoRA 强度范围未能完整核实，已按原值提交，未修改参数；上游可能按其规则处理。${details}`;
+}
+
 async function readBody(response: Response): Promise<unknown> {
   const text = await response.text();
   if (!text) return '';
@@ -169,8 +196,14 @@ export class SchemaProviderDriver extends BaseEngineDriver {
       method: 'POST', headers, body: JSON.stringify(body),
     }, `${this.name} task submission`);
     const submitBody = await readBody(submitResponse);
-    if (!submitResponse.ok) throw failure(`${this.name} submit failed`, submitResponse, submitBody);
+    if (!submitResponse.ok) {
+      const err=failure(`${this.name} submit failed`,submitResponse,submitBody);
+      const rangeWarning=this.id==='sogni'?sogniRangeValidationNotice(submitBody):undefined;
+      if(rangeWarning){err.message+=`; ${rangeWarning}`;(err as any).data={loraRangeWarning:rangeWarning,submitResponse:submitBody};}
+      throw err;
+    }
     const submitted = asRecord(submitBody);
+    const rangeWarning=this.id==='sogni'?sogniRangeValidationNotice(submitBody):undefined;
     const taskId = String(submitted.taskId || '').trim();
     const pollUrl = String(submitted.pollUrl || '').trim();
     if (!taskId || !pollUrl) {
@@ -191,9 +224,22 @@ export class SchemaProviderDriver extends BaseEngineDriver {
       lastResponse = pollBody;
       if (status === 'completed' || status === 'succeeded' || status === 'success') {
         const outputs = Array.isArray(result.outputs) ? result.outputs : [];
-        const firstOutput = asRecord(outputs[0]);
-        const mediaUrl = String(result.imageUrl || firstOutput.url || outputs[0] || '').trim();
-        if (!mediaUrl) throw new Error(`${this.name} task ${taskId} reported ${status} without a media URL; response body: ${JSON.stringify(pollBody)}`);
+        const mediaUrl = schemaProviderOutputUrl(result);
+        if (!mediaUrl) {
+          const responseBody = typeof pollBody === 'string' ? pollBody : JSON.stringify(pollBody);
+          const endpoint = typeof result.endpoint === 'string' ? result.endpoint : pollUrl;
+          const protocolError = new Error(`${this.name} upstream protocol error: task ${taskId} reported ${status} without a supported media URL; endpoint: ${endpoint}; response body: ${responseBody}`);
+          protocolError.name = 'SchemaProviderProtocolError';
+          (protocolError as any).data = {
+            errorSource: 'upstream-protocol',
+            endpoint,
+            upstreamStatus: typeof result.upstreamStatus === 'number' ? result.upstreamStatus : pollResponse.status,
+            upstreamStatusText: `status: ${status}`,
+            upstreamResponseBody: responseBody,
+            rawResponse: pollBody,
+          };
+          throw protocolError;
+        }
         const actualRequest:any=submitted.actualRequest;
         const sent:any=this.id==='sogni'?actualRequest?.parameters?.input?.steps?.[0]?.arguments:this.id==='novita'?actualRequest?.parameters?.request:actualRequest?.parameters;
         const sentLoras=this.id==='sogni'?(sent?.loras || []).map((name:string,index:number)=>({name,strength:sent?.loraStrengths?.[index]})):(sent?.styles || sent?.loras || sent?.lora_list || sent?.model_id || (sent?.lora_url?[{path:sent.lora_url,scale:sent.lora_weight}]:[])).map((l:any)=>typeof l==='string'?{name:l}:{...l,name:l.name || l.path || l.model || l.model_name || l.id,strength:l.scale ?? l.weight ?? l.strength});
@@ -204,8 +250,8 @@ export class SchemaProviderDriver extends BaseEngineDriver {
         let saved:any;let historyWarning:string|undefined;
         try {
           const saveResponse=await request(`/api/schema-provider/${this.id}/save-result`,{method:'POST',headers,body:JSON.stringify({taskId,outputs,metadata,workflowSnapshot})},`${this.name} output persistence`);
-          saved=await readBody(saveResponse);historyWarning=saved?.historyWarning;
-        } catch(error:any) {historyWarning=`上游已生成，保存失败：${error.message}`;saved={error:error.message,stack:error.stack,cause:error.cause};}
+          saved=await readBody(saveResponse);historyWarning=[saved?.historyWarning,rangeWarning].filter(Boolean).join('；') || undefined;
+        } catch(error:any) {historyWarning=[rangeWarning,`上游已生成，保存失败：${error.message}`].filter(Boolean).join('；');saved={error:error.message,stack:error.stack,cause:error.cause};}
         return {
           mediaUrl:saved?.historyItems?.[0]?.url || mediaUrl,
           mediaType: result.mediaType === 'video' ? 'video' : 'image',
@@ -223,7 +269,7 @@ export class SchemaProviderDriver extends BaseEngineDriver {
       }
       if (status === 'waiting_for_user') {
         const reason = result.waitingReason ?? result.pauseReason ?? result.pausedReason ?? result.error ?? result.message;
-        const err = new Error(`${this.name} task ${taskId} is waiting_for_user; upstream pause reason: ${typeof reason === 'string' ? reason : JSON.stringify(reason ?? '(not provided)')}; full response body: ${JSON.stringify(pollBody)}`);
+        const err = new Error(`${this.name} task ${taskId} is waiting_for_user; upstream pause reason: ${typeof reason === 'string' ? reason : JSON.stringify(reason ?? '(not provided)')}; full response body: ${JSON.stringify(pollBody)}${rangeWarning?`; ${rangeWarning}`:''}`);
         // fix3 G: structured data so toast/title carry HTTP + task status + body (not 「响应体为空」).
         (err as any).data = {
           ...asRecord(pollBody),
@@ -231,19 +277,21 @@ export class SchemaProviderDriver extends BaseEngineDriver {
           upstreamStatusText: `status: ${status}${typeof reason === 'string' && reason ? ` · ${reason}` : ''}`,
           upstreamResponseBody: typeof pollBody === 'string' ? pollBody : JSON.stringify(pollBody),
           rawResponse: pollBody,
+          ...(rangeWarning?{loraRangeWarning:rangeWarning}:{}),
           executionTrace: result.executionTrace ?? result.taskExecutionTrace,
           historyItem: result.historyItem,
         };
         throw err;
       }
       if (['failed', 'sandbox_mock', 'partial_failure', 'cancelled', 'canceled', 'timeout', 'timed_out', 'deleted', 'error'].includes(status)) {
-        const err = new Error(`${this.name} task ${taskId} ended with status=${status}; response body: ${JSON.stringify(pollBody)}`);
+        const err = new Error(`${this.name} task ${taskId} ended with status=${status}; response body: ${JSON.stringify(pollBody)}${rangeWarning?`; ${rangeWarning}`:''}`);
         (err as any).data = {
           ...asRecord(pollBody),
           upstreamStatus: typeof result.upstreamStatus === 'number' ? result.upstreamStatus : 200,
           upstreamStatusText: `status: ${status}`,
           upstreamResponseBody: typeof pollBody === 'string' ? pollBody : JSON.stringify(pollBody),
           rawResponse: pollBody,
+          ...(rangeWarning?{loraRangeWarning:rangeWarning}:{}),
           executionTrace: result.executionTrace ?? result.taskExecutionTrace,
           historyItem: result.historyItem,
         };

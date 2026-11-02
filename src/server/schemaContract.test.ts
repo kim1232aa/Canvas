@@ -350,7 +350,7 @@ describe('provider contract (16): schema-route providers', () => {
     }, () => 'k');
   });
 
-  it('Sogni krea-2-turbo: loras + loraStrengths equal length; seed/guidance/negativePrompt sent; steps 不会发送; incompatible model refused locally', async () => {
+  it('Sogni sends explicit LoRAs for schema selectors without a local model allowlist; missing strength still blocks', async () => {
     const declared = ['prompt', 'model', 'width', 'height', 'numberOfVariations', 'negativePrompt', 'starting_image_strength', 'sourceImageIndex', 'seed', 'guidance', 'aspectRatio', 'loras', 'loraStrengths'];
     let upstream: any;
     await withFixture(async (_url, init) => { upstream = JSON.parse(String(init?.body || '{}')); return json({ data: { workflow: { workflowId: 's1' } } }); }, async (baseUrl, calls) => {
@@ -362,13 +362,58 @@ describe('provider contract (16): schema-route providers', () => {
       expect(sentFalse(b.actualRequest, 'steps')).toBeTruthy();
       expect(isSchemaOmitCandidate('sogni', 'steps', hintCustom(declared))).toBe(true);
       expectNoOmitBadge('sogni', declared, ['seed', 'cfg', 'width', 'height', 'negative_prompt']);
-      const n = calls.length;
       const bad = await submit(baseUrl, 'sogni', { model: 'z-turbo', prompt: 'x', loras: [{ path: 'krea2-amateur', strength: 1 }] });
-      expect(bad.error).toMatch(/不接受 LoRA/);
+      expect(bad.taskId).toBeTruthy();
+      expect(bad.actualRequest.parameters.input.steps[0].arguments).toMatchObject({model:'z-turbo',loras:['krea2-amateur'],loraStrengths:[1]});
+      expect(bad.actualRequest.mapping.find((m:any)=>m.from==='loras')).toMatchObject({capability:'Official generate_image schema describes LoRA support as Krea 2 based; selector-to-worker compatibility is not dynamically declared here'});
       const noStrength = await submit(baseUrl, 'sogni', { model: 'krea-2-turbo', prompt: 'x', loras: [{ path: 'krea2-amateur' }] });
       expect(noStrength.error).toMatch(/显式强度/);
-      expect(calls.length).toBe(n);
+      expect(calls.filter((c)=>c.init?.method==='POST' && c.url.endsWith('/v1/creative-agent/workflows'))).toHaveLength(2);
     }, () => 'k');
+  });
+
+  it('Sogni range checks use exact live LoRA IDs, include custom JSON overrides, and expose unknown lookup without guessing', async () => {
+    let failDirectory=false;
+    const submitted:any[]=[];
+    await withFixture(async (url,init) => {
+      if(url.endsWith('/v1/loras/comfy')) {
+        if(failDirectory)throw Object.assign(new Error('fixture directory unavailable'),{status:503,rawResponse:'catalog offline',endpoint:url});
+        return json({data:[{loraId:'krea2-detail-enhancer',ui:{min:-2,max:5,step:0.1}}]});
+      }
+      if(init?.method==='POST' && url.endsWith('/v1/creative-agent/workflows')) {
+        submitted.push(JSON.parse(String(init.body)));
+        return json({data:{workflow:{workflowId:`range-${submitted.length}`}}},201);
+      }
+      throw new Error(`Unexpected fixture route: ${url}`);
+    }, async (baseUrl,calls) => {
+      const outside=await submit(baseUrl,'sogni',{model:'krea-2-turbo',prompt:'x',loras:[{path:'krea2-detail-enhancer',strength:5.01}]});
+      expect(outside.error).toMatch(/超出官方目录范围 \[-2, 5\]/);
+      expect(outside.errorSource).toBe('local');
+      expect(outside.blockedField).toMatchObject({field:'loraStrengths',resourceId:'krea2-detail-enhancer',minimum:-2,maximum:5});
+      expect(submitted).toHaveLength(0);
+
+      const boundary=await submit(baseUrl,'sogni',{model:'krea-2-turbo',prompt:'x',loras:[{path:'krea2-detail-enhancer',strength:5}]});
+      expect(boundary.actualRequest.parameters.input.steps[0].arguments.loraStrengths).toEqual([5]);
+      expect(boundary.actualRequest.mapping.find((m:any)=>m.from==='Sogni LoRA strength range check')).toMatchObject({status:'checked',checked:[{id:'krea2-detail-enhancer',minimum:-2,maximum:5}]});
+
+      const customOverride=await submit(baseUrl,'sogni',{model:'krea-2-turbo',prompt:'x',custom_parameters:{loras:['krea2-detail-enhancer'],loraStrengths:[-2.01]}});
+      expect(customOverride.error).toMatch(/超出官方目录范围/);
+      expect(customOverride.blockedField).toMatchObject({value:-2.01,minimum:-2,maximum:5});
+      expect(submitted).toHaveLength(1);
+
+      const unmatched=await submit(baseUrl,'sogni',{model:'krea-2-turbo',prompt:'x',loras:[{path:'personal-owned-lora',strength:100}]});
+      const unmatchedCheck=unmatched.actualRequest.mapping.find((m:any)=>m.from==='Sogni LoRA strength range check');
+      expect(unmatchedCheck).toMatchObject({status:'checked',unknown:[{id:'personal-owned-lora'}]});
+      expect(unmatched.actualRequest.parameters.input.steps[0].arguments.loras).toEqual(['personal-owned-lora']);
+
+      failDirectory=true;
+      const directoryFailure=await submit(baseUrl,'sogni',{model:'krea-2-turbo',prompt:'x',loras:[{path:'krea2-detail-enhancer',strength:99}]});
+      const failureCheck=directoryFailure.actualRequest.mapping.find((m:any)=>m.from==='Sogni LoRA strength range check');
+      expect(failureCheck).toMatchObject({status:'unknown',lookupFailure:{endpoint:'https://api.sogni.ai/v1/loras/comfy',upstreamStatus:503,upstreamResponseBody:'catalog offline'}});
+      expect(directoryFailure.actualRequest.parameters.input.steps[0].arguments.loraStrengths).toEqual([99]);
+      expect(submitted).toHaveLength(3);
+      expect(calls.filter(c=>c.url==='https://api.sogni.ai/v1/loras/comfy')).toHaveLength(5);
+    });
   });
 
   it('Sogni billing: waiting_for_user + insufficient_credit → poll status + failed historyItem (not completed)', async () => {

@@ -1,7 +1,7 @@
 import express from 'express';
 import fs from 'node:fs';
-import { registerSchemaProviderRoutes } from '/workspace/canvas/Canvas-main/src/server/schemaProviders.ts';
-const env=Object.fromEntries(fs.readFileSync('/workspace/canvas/Canvas-main/.env','utf8').split('\n').filter(l=>/^KREA_API_KEY=/.test(l)).map(l=>[l.split('=')[0],l.slice(l.indexOf('=')+1).trim().replace(/^["']|["']$/g,'')]));
+import { registerSchemaProviderRoutes } from '../src/server/schemaProviders.ts';
+const env=Object.fromEntries(fs.readFileSync(new URL('../.env', import.meta.url),'utf8').split('\n').filter(l=>/^KREA_API_KEY=/.test(l)).map(l=>[l.split('=')[0],l.slice(l.indexOf('=')+1).trim().replace(/^["']|["']$/g,'')]));
 const KEYS=(env.KREA_API_KEY||'').split(',').map((s:string)=>s.trim()).filter(Boolean);const KEY=KEYS[Number(process.env.KREA_KEY_INDEX||0)]||'';
 const app=express();app.use(express.json());
 const history:any[]=[];

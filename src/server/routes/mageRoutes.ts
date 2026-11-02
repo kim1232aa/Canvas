@@ -78,17 +78,33 @@ export function handleMageGenerate(deps: MageRouteDeps) {
         });
       }
 
-      const data = await upstream.json().catch(() => ({}));
+      const upstreamRaw = await upstream.text();
+      let data: any;
+      try {
+        data = JSON.parse(upstreamRaw);
+      } catch (parseErr: any) {
+        const error = `Mage 上游 JSON 解析失败: ${parseErr.message}`;
+        deps.keyPoolManager.recordResult('mage', apiKey, false, Date.now() - startTime, error, upstream.status);
+        return res.status(502).json({
+          error,
+          upstreamStatus: upstream.status,
+          errorSource: 'upstream',
+          endpoint,
+          rawResponse: upstreamRaw,
+          actualRequest,
+        });
+      }
       let parsed: ReturnType<typeof parseMageRequestResponse>;
       try {
         parsed = parseMageRequestResponse(data);
       } catch (parseErr: any) {
-        deps.keyPoolManager.recordResult('mage', apiKey, false, Date.now() - startTime, parseErr.message, 502);
+        deps.keyPoolManager.recordResult('mage', apiKey, false, Date.now() - startTime, parseErr.message, upstream.status);
         return res.status(502).json({
           error: parseErr.message,
+          upstreamStatus: upstream.status,
           errorSource: 'upstream',
           endpoint,
-          rawResponse: data,
+          rawResponse: upstreamRaw,
           actualRequest,
         });
       }
@@ -155,17 +171,31 @@ export function handleMageGenerate(deps: MageRouteDeps) {
             });
           }
 
-          pollData = await pollResp.json().catch(() => ({}));
+          const pollRaw = await pollResp.text();
+          try {
+            pollData = JSON.parse(pollRaw);
+          } catch (pollJsonErr: any) {
+            const error = `Mage 轮询上游 JSON 解析失败: ${pollJsonErr.message}`;
+            deps.keyPoolManager.recordResult('mage', apiKey, false, Date.now() - startTime, error, pollResp.status);
+            return res.status(502).json({
+              error,
+              upstreamStatus: pollResp.status,
+              errorSource: 'upstream',
+              endpoint: pollUrl,
+              rawResponse: pollRaw,
+              actualRequest,
+            });
+          }
           try {
             parsed = parseMageRequestResponse(pollData);
           } catch (pollParseErr: any) {
-            deps.keyPoolManager.recordResult('mage', apiKey, false, Date.now() - startTime, pollParseErr.message, 502);
+            deps.keyPoolManager.recordResult('mage', apiKey, false, Date.now() - startTime, pollParseErr.message, pollResp.status);
             return res.status(502).json({
               error: pollParseErr.message,
-              upstreamStatus: 502,
+              upstreamStatus: pollResp.status,
               errorSource: 'upstream',
               endpoint: pollUrl,
-              rawResponse: pollData,
+              rawResponse: pollRaw,
               actualRequest,
             });
           }

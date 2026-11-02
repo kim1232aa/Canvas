@@ -71,6 +71,26 @@ export type CategoryFilter = 'all' | 'checkpoint' | 'lora' | 'video' | 'edit';
 export type ProviderTab = 'all' | 'civitai' | 'fal' | 'tensorart' | 'modelscope' | 'modelscope_ai' | 'huggingface' | 'nanogpt' | 'gemini' | 'muapi' | 'wavespeed' | 'sogni' | 'krea' | 'together' | 'aimlapi' | 'novita' | 'venice' | 'deepinfra' | 'openworks' | 'runware' | 'modelslab' | 'agnes' | 'sensenova' | 'openai_compat' | 'grok_compat' | 'replicate' | 'mage';
 export type ModelSortOption = 'downloads' | 'rating' | 'likes' | 'name_asc' | 'name_desc' | 'bookmarked';
 
+const PROVIDERS_WITHOUT_MODEL_DIRECTORY = new Set(['openai_compat', 'grok_compat', 'agnes']);
+const MODEL_DIRECTORY_PROVIDERS = new Set<ProviderTab>([
+  'all', 'civitai', 'fal', 'tensorart', 'modelscope', 'modelscope_ai', 'huggingface', 'nanogpt', 'gemini',
+  'muapi', 'wavespeed', 'sogni', 'krea', 'together', 'aimlapi', 'novita', 'venice', 'deepinfra',
+  'openworks', 'runware', 'modelslab', 'sensenova', 'replicate', 'mage',
+]);
+
+export function resolveModelHubInitialProvider(initialProvider?: string): ProviderTab | null {
+  if (!initialProvider) return 'civitai';
+  if (PROVIDERS_WITHOUT_MODEL_DIRECTORY.has(initialProvider)) return null;
+  return MODEL_DIRECTORY_PROVIDERS.has(initialProvider as ProviderTab) ? initialProvider as ProviderTab : null;
+}
+
+export function shouldLoadModelHubDirectory(
+  unsupportedDirectoryProvider: string | null,
+  explicitlySelectedProvider = false,
+): boolean {
+  return !unsupportedDirectoryProvider || explicitlySelectedProvider;
+}
+
 const ARCHITECTURE_TAGS = [
   { id: 'all', label: '全部架构' },
   { id: 'flux', label: 'FLUX.1' },
@@ -164,6 +184,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
   const [civitaiCursor, setCivitaiCursor] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [modelsData, setModelsData] = useState<Record<string, any[]>>({});
+  const [unsupportedDirectoryProvider, setUnsupportedDirectoryProvider] = useState<string | null>(null);
   const [providerErrors, setProviderErrors] = useState<Record<string, string>>({});
   const [catalogNotices, setCatalogNotices] = useState<Record<string, string>>({});
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -234,8 +255,10 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
     sort = sortOption,
     arch = selectedArch,
     isLoadMore = false,
-    catalogTag = ''
+    catalogTag = '',
+    explicitlySelectedProvider = false,
   ) => {
+    if (!shouldLoadModelHubDirectory(unsupportedDirectoryProvider, explicitlySelectedProvider)) return;
     if (isLoadMore && morePending.current) return;
     const version = isLoadMore ? requestVersion.current : ++requestVersion.current;
     morePending.current = isLoadMore;
@@ -277,6 +300,12 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
       if (version !== requestVersion.current) return;
       const errors: Record<string, string> = {};
       const validData: Record<string, any[]> = {};
+
+      if ((data as any).errors && typeof (data as any).errors === 'object') {
+        for (const [providerKey, message] of Object.entries((data as any).errors)) {
+          if (typeof message === 'string' && message) errors[providerKey] = message;
+        }
+      }
 
       const pag = data._pagination || {};
       if (pag.huggingface?.nextCursor) {
@@ -369,10 +398,13 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
   };
 
   const handleProviderChange = (newProv: ProviderTab) => {
+    if (unsupportedDirectoryProvider && newProv === 'all') return;
+    const leavingUnsupportedProvider = Boolean(unsupportedDirectoryProvider);
+    setUnsupportedDirectoryProvider(null);
     setActiveProvider(newProv);
     setCustomId('');
     setImportError(null);
-    loadModels(newProv, activeCategory, query, sortOption, selectedArch, false);
+    loadModels(newProv, activeCategory, query, sortOption, selectedArch, false, '', leavingUnsupportedProvider);
   };
 
   const handleSortChange = (newSort: ModelSortOption) => {
@@ -383,10 +415,19 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       const targetCat = initialCategory || 'all';
-      const targetProvider = (initialProvider && !['openai_compat', 'grok_compat', 'agnes'].includes(initialProvider) && ['civitai','fal','tensorart','modelscope','modelscope_ai','huggingface','nanogpt','gemini','muapi','wavespeed','sogni','krea','together','aimlapi','novita','venice','deepinfra','openworks','runware','modelslab','sensenova','replicate','mage'].includes(initialProvider)) ? initialProvider as ProviderTab : 'civitai';
-      setActiveProvider(targetProvider);
+      const targetProvider = resolveModelHubInitialProvider(initialProvider);
+      if (!targetProvider && initialProvider) {
+        setActiveProvider('all');
+        setActiveCategory(targetCat);
+        setError(null);
+        setUnsupportedDirectoryProvider(initialProvider);
+        return;
+      }
+      setUnsupportedDirectoryProvider(null);
+      const providerToLoad = targetProvider || 'civitai';
+      setActiveProvider(providerToLoad);
       setActiveCategory(targetCat);
-      loadModels(targetProvider, targetCat, query, sortOption, selectedArch, false);
+      loadModels(providerToLoad, targetCat, query, sortOption, selectedArch, false);
     }
     return () => { requestVersion.current += 1; };
   }, [isOpen, initialCategory, initialProvider]);
@@ -395,7 +436,9 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
 
   // Flatten or select current provider models
   let displayList: any[] = [];
-  if (activeProvider === 'all') {
+  if (unsupportedDirectoryProvider) {
+    displayList = [];
+  } else if (activeProvider === 'all') {
     Object.entries(modelsData).forEach(([provKey, list]) => {
       if (Array.isArray(list)) {
         displayList.push(...list.map((item) => ({ ...item, _sourceProvider: provKey })));
@@ -586,11 +629,13 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
             { id: 'replicate', name: 'Replicate' },
             { id: 'mage', name: 'Mage' },
           ].map((tab) => {
-            const isActive = activeProvider === tab.id;
+            const isActive = !unsupportedDirectoryProvider && activeProvider === tab.id;
             return (
               <button
                 key={tab.id}
                 onClick={() => handleProviderChange(tab.id as any)}
+                disabled={Boolean(unsupportedDirectoryProvider && tab.id === 'all')}
+                title={unsupportedDirectoryProvider && tab.id === 'all' ? '请先选择具体提供商目录' : undefined}
                 className={`pb-2.5 px-3 font-semibold transition-all relative whitespace-nowrap text-xs shrink-0 ${
                   isActive ? 'text-cyan-400 font-bold' : 'text-slate-400 hover:text-slate-200'
                 }`}
@@ -926,7 +971,12 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
               </div>
             </div>
           )}
-          {activeProvider === 'all' && !loading && <p className="mb-4 text-sm text-slate-400">当前展示各服务商目录摘要。选择单个服务商后继续检索或翻页。</p>}
+          {unsupportedDirectoryProvider && (
+            <div role="status" className="mb-4 px-4 py-3 rounded-lg bg-amber-950/20 border border-amber-500/30 text-amber-200 text-sm">
+              当前模型中心没有 {friendlyProviderLabel(unsupportedDirectoryProvider)} 的对应目录，未请求其他提供商目录。可手动选择上方页签查看其他目录。
+            </div>
+          )}
+          {activeProvider === 'all' && !loading && !unsupportedDirectoryProvider && <p className="mb-4 text-sm text-slate-400">当前展示各服务商目录摘要。选择单个服务商后继续检索或翻页。</p>}
           {loading ? (
             <div className="h-64 flex flex-col items-center justify-center gap-3 text-slate-400">
               <Loader2 className="w-8 h-8 animate-spin text-cyan-400" />
@@ -948,11 +998,12 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                 </p>
               </div>
               <div className="flex items-center gap-2 mt-2">
-                <button
+                {!unsupportedDirectoryProvider && <button
                   onClick={() => {
                     setQuery('');
                     setActiveCategory('all');
                     setSelectedArch('all');
+                    setUnsupportedDirectoryProvider(null);
                     setActiveProvider('all');
                     loadModels('all', 'all', '', sortOption, 'all');
                   }}
@@ -960,7 +1011,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                 >
                   <Sparkles className="w-3.5 h-3.5" />
                   <span>清除筛选并重新加载</span>
-                </button>
+                </button>}
                 {error && (
                   <button
                     onClick={() => loadModels(activeProvider, activeCategory, query, sortOption)}

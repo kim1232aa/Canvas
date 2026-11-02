@@ -44,7 +44,7 @@ describe('video Schema fields', () => {
     expect(videoSchemaField('fal', WAN, 'num_frames')).toMatchObject({ state: 'declared', min: 81, max: 100 });
     expect(videoSchemaField('fal', WAN, 'fps')).toMatchObject({ state: 'declared', min: 5, max: 24 });
     expect(videoSchemaField('fal', WAN, 'duration').state).toBe('absent');
-    expect(videoSchemaField('fal', WAN, 'aspect_ratio').options).toEqual(['9:16', '16:9']);
+    expect(videoSchemaField('fal', WAN, 'aspect_ratio')).toMatchObject({ state: 'declared', options: ['9:16', '16:9'] });
   });
   it('Kling V3 I2V: aspect_ratio absent (no invent); T2V declared', async () => {
     const I2V = 'fal-ai/kling-video/v3/standard/image-to-video';
@@ -53,7 +53,7 @@ describe('video Schema fields', () => {
     await load(T2V, { prompt: {}, duration: { enum: ['3','4','5','6','7','8','9','10','11','12','13','14','15'] }, aspect_ratio: { enum: ['16:9','9:16','1:1'] } });
     expect(videoSchemaField('fal', I2V, 'aspect_ratio').state).toBe('absent');
     expect(videoSchemaValueIssue('fal', I2V, 'aspect_ratio', '16:9')).toContain('不接收');
-    expect(videoSchemaField('fal', T2V, 'aspect_ratio').options).toEqual(['16:9','9:16','1:1']);
+    expect(videoSchemaField('fal', T2V, 'aspect_ratio')).toMatchObject({ state: 'declared', options: ['16:9','9:16','1:1'] });
     expect(videoDurationBounds('fal', T2V).options).toEqual(['3','4','5','6','7','8','9','10','11','12','13','14','15']);
   });
 

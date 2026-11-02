@@ -1,0 +1,34 @@
+# API 集成核对记录 — 2026-11-02
+
+本轮逐项检查仓库声明的供应商及通用视频执行路径。证据是当前代码、官方公开文档/OpenAPI/SDK，以及少量不带密钥的目录 GET；未使用真实密钥，也未提交生成任务。下表中的“核对”仅指列出的接口形状，不代表所有模型、参数、账户或网页端生成已通过。兼容中转的行为取决于用户实际配置的服务，官方 xAI/OpenAI 文档不能证明任意中转完全兼容。
+
+| 供应商/路由 | 本轮资料和核对范围 | 结果与边界 |
+| --- | --- | --- |
+| Fal | [目录及模型 OpenAPI](https://api.fal.ai/v1/models?endpoint_id=fal-ai/flux-lora&expand=openapi-3.0)、[队列文档](https://fal.ai/docs/documentation/model-apis/inference/queue)；鉴权、所选端点、视频错误处理 | 已去除视频按名称猜测类型与错误状态写错；未逐个模型验证。 |
+| Hugging Face | [Hub API](https://huggingface.co/docs/hub/api)、[推理 SDK Fal adapter](https://github.com/huggingface/huggingface_hub/blob/main/src/huggingface_hub/inference/_providers/fal_ai.py)、[Z-Image Space Schema](https://tongyi-mai-z-image-turbo.hf.space/gradio_api/info) | 精确仓库补查错误与 Space 下载失败误报成功已修；其他 provider/model 组合未全部验证。 |
+| Replicate | [OpenAPI](https://api.replicate.com/openapi.json)；带版本与不带版本的预测提交、schema 查询和轮询 | 版本预测端点已修；调用方 schema 未经版本验证会标记。没有可用 schema 的手写 JSON 专用路径仍受限。 |
+| Civitai | [消费端 OpenAPI](https://orchestration.civitai.com/openapi/v2-consumers.json)、[Wan recipe](https://github.com/civitai/civitai-developer-docs/blob/main/orchestration/recipes/wan.md)、[LTX recipe](https://github.com/civitai/civitai-developer-docs/blob/main/orchestration/recipes/ltx2.md) | Wan 2.1 字段映射已修；静态 engine/版本限制仍拒绝官方 `ltx2.3` 和 Wan 2.2/Comfy 等变体，需按具体 Schema 接线。 |
+| Google Gemini | [官方生成协议](https://github.com/googleapis/googleapis/blob/master/google/ai/generativelanguage/v1beta/generative_service.proto)、[JS SDK 类型](https://github.com/googleapis/js-genai/blob/main/src/types.ts)；图像配置和响应模态 | 图像输出模态已补；没有真实密钥测试或模型逐项能力验证。 |
+| ModelScope CN | [API-Inference 文档](https://modelscope.cn/docs/model-service/API-Inference/intro)；站点与令牌隔离的本地代码 | 官方文档正文未能从 SPA 页面可靠提取，具体 REST 契约未完全核对；视频路径明确未接入。 |
+| ModelScope AI | [ModelScope 官方项目](https://github.com/modelscope/modelscope)；国际站与 CN 路由隔离 | 官方托管推理 REST 契约未取得充分证据；不能据此断言全部正确。 |
+| SenseNova | [项目官方入口](https://platform.sensenova.cn/)；本地 chat 和图像路由、错误处理 | 未取得足以验证各模型图像/推理参数的官方原始文档，能力未确认。 |
+| Agnes | [图像 2.5 Flash](https://wiki.agnes-ai.com/en/docs/agnes-image-25-flash.md)、[视频 2.5](https://wiki.agnes-ai.com/en/docs/agnes-video-25.md)；图像提交、视频提交与轮询 | 所核对字段/路径形状一致；视频每 5 秒轮询，官方建议 1–2 秒。未验证真实模型生成。 |
+| OpenAI 兼容中转 | [OpenAI OpenAPI](https://github.com/openai/openai-openapi)；图像生成和编辑请求形状 | 只核对标准请求示例；用户自设中转的端点和能力未确认。 |
+| Grok/xAI 兼容中转 | [xAI Imagine 文档](https://docs.x.ai/developers/model-capabilities/imagine.md)；图像与视频核心字段 | 示例形状有对应关系；自设中转不等同官方 xAI，兼容性未实测。 |
+| AIMLAPI | [官方 SDK](https://github.com/aimlapi/aimlapi-sdk-node)、[示例模型 Schema](https://api.aimlapi.com/docs-json?model=alibaba%2Fz-image-turbo-lora&endpoint=openai%2Fimage-generations) | 能力不再从名称猜测；官方 Schema 明示的自动回退会拦截。base64 输出 MIME 已修；其他模型未逐项核实。 |
+| Venice | [图像 API](https://docs.venice.ai/api-reference/endpoint/image/generate.md)、[视频队列](https://docs.venice.ai/api-reference/endpoint/video/queue) | 二进制、JSON base64 格式处理已修；没有真实生成。 |
+| Novita | [官方文档索引](https://docs.novita.ai/llms-full.txt)；V3 提交及 task-result 轮询 | 所查请求形状和路径有官方依据；默认 JPEG 注入及目录对 checkpoint 的 LoRA 能力声明仍需逐模型复核。 |
+| DeepInfra | [OpenAPI](https://api.deepinfra.com/openapi.json)、[图像生成](https://docs.deepinfra.com/apis/image-generation) | 所查动态 Schema 与 OpenAI 兼容图像路径相符；输出真实图片格式不能从示例外推所有模型。 |
+| Together | [官方 TypeScript SDK 图像接口](https://github.com/togethercomputer/together-typescript/blob/main/src/resources/images.ts)、[Python 图像接口](https://github.com/togethercomputer/together-python/blob/main/src/together/resources/images.py)、[视频接口](https://github.com/togethercomputer/together-python/blob/main/src/together/resources/videos.py) | base64 MIME 硬编码已修；其他模型与视频参数未全部核验。 |
+| MuAPI | [OpenAPI](https://api.muapi.ai/openapi.json)、[模型目录](https://api.muapi.ai/api/v1/models) | 核对目录、认证、提交及任务查询形状；未做生成或逐模型核验。 |
+| WaveSpeed | [REST 文档](https://wavespeed.ai/docs/rest-api)、[示例模型](https://wavespeed.ai/models/wavespeed-ai/krea-v2/turbo-lora/llms.txt) | 已避免把未知输出对象转成假 URL；轮询错误立即报告，不自动重试，上游任务可能仍运行。 |
+| Krea | [OpenAPI](https://api.krea.ai/openapi.json) | 核对图像/视频操作、styles、jobs；未授权 styles 请求返回 401，未验证账户权限和生成。 |
+| Sogni | [工作流 API](https://docs.sogni.ai/api-reference/workflows/)、[LoRA 目录](https://api.sogni.ai/v1/loras/comfy)、[协议 Schema](https://github.com/Sogni-AI/sogni-protocol/blob/main/schemas/tools/generate_image.schema.json) | 已校验目录能确认的 LoRA 强度并披露未知/查询失败；未知兼容性及真实生成仍需验证。 |
+| Runware | [模型搜索](https://runware.ai/docs/models-api/model-search.md)、[任务轮询](https://runware.ai/docs/models-api/task-polling.md)、[认证](https://runware.ai/docs/models-api/authentication.md) | 目录异常响应与错误透传已修；未验证所有模型或运行时生成。 |
+| ModelsLab | [官方文档索引](https://docs.modelslab.com/llms.txt)；认证、图像任务和 fetch | 批量数传递、目录和轮询异常透明处理已修；未做真实生成。 |
+| Mage | [Mango API](https://docs.mage.space/api/models/mango)；鉴权、Mango 提交/状态 | 已要求显式模型并保留用户指定 ID，seed 不再静默取整；当前只接 Mango 路由，其他架构未接入。 |
+| NanoGPT | [图像生成](https://docs.nano-gpt.com/api-reference/endpoint/image-api-generate.md)、[模型端点](https://docs.nano-gpt.com/api-reference/endpoint/image-api-model-endpoints.md)、[视频](https://docs.nano-gpt.com/api-reference/endpoint/video-generation.md) | 图像核心路径/鉴权已对照；视频终态与错误透传仍有待修正，需区分本站与上游 HTTP。 |
+| Tensor.Art TAMS | [集成 FAQ](https://tams-docs.tensor.art/docs/api/guide/integration-faq/)、[模型详情](https://tams-docs.tensor.art/docs/api/apis/tams-api-v-1-service-get-model/) | 当前生成路由明确返回本地未接入；页面正文/权限不足以验证完整任务链。 |
+| Tensor.Art OpenWorks | [官方工具技能](https://github.com/Tensor-Art/tensorart-skills/blob/master/skills/tensorart-generate/SKILL.md)；工具目录、任务创建/查询代码 | 与 TAMS 分开处理；官方 skill 不是完整 API Schema，未知状态/缺失任务 ID 的错误透明度仍需检查。 |
+
+`video` 是画布执行驱动而不是独立供应商。MuAPI、Krea、AIMLAPI、Venice 的部分视频目录到画布视频执行路径仍未接通，不应把目录存在视为已支持。

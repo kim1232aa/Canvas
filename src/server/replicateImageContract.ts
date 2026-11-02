@@ -125,9 +125,11 @@ export function buildReplicatePredictionRequest(
       throw new Error('Replicate 模型格式无效，需为 owner/name、owner/name:version 或 64位十六进制版本号');
     }
     canonicalModelName = `${owner}/${name}`;
-    endpoint = `${cleanBaseUrl}/models/${owner}/${name}/predictions`;
+    // Replicate's model-name route accepts only its latest-version request schema.
+    // A pinned model/version must use POST /predictions with version in the body.
+    endpoint = `${cleanBaseUrl}/predictions`;
     isVersionBased = Boolean(versionPart);
-    if (versionPart) versionToSet = versionPart;
+    if (versionPart) versionToSet = rawModel;
   } else if (rawModel.includes('/')) {
     const [owner, name] = rawModel.split('/');
     if (!owner || !name) {
@@ -143,6 +145,7 @@ export function buildReplicatePredictionRequest(
   if (body.version && typeof body.version === 'string' && body.version.trim()) {
     versionToSet = body.version.trim();
     isVersionBased = true;
+    endpoint = `${cleanBaseUrl}/predictions`;
   }
 
   const schemaProps =

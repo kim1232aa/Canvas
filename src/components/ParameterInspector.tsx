@@ -745,6 +745,14 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
               {params.loras.map((lora, idx) => {
                 const compat = validateLoraCompatibility(params.checkpoint, (lora as any).baseModel, lora.name, params.targetProvider);
                 const loraUnsupported = greyLoras || Boolean(compat.endpointUnsupported);
+                const rawRange=(lora as any).strengthRange;
+                const strengthRange=rawRange && typeof rawRange.min==='number' && Number.isFinite(rawRange.min) && typeof rawRange.max==='number' && Number.isFinite(rawRange.max) && rawRange.min<=rawRange.max
+                  ? rawRange as {min:number;max:number;step?:number}
+                  : undefined;
+                const sogniRangeUnknown=params.targetProvider==='sogni' && !strengthRange;
+                const strengthInputMin=params.targetProvider==='sogni'?strengthRange?.min:-1.5;
+                const strengthInputMax=params.targetProvider==='sogni'?strengthRange?.max:2.0;
+                const strengthInputStep=params.targetProvider==='sogni'?(strengthRange?.step ?? 'any'):0.05;
                 return (
                   <div key={idx} className={`bg-[#121318] p-2.5 rounded-lg border space-y-2 ${loraUnsupported ? 'border-slate-700/60 opacity-70' : 'border-[#282a35]'}`}>
                     <div className="flex items-center justify-between">
@@ -800,7 +808,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                   {/* Weight: never show mid-slider when strength unset (no silent 0.8) */}
                   <div className="space-y-1">
                     <div className="flex justify-between text-[10px] font-mono text-slate-400">
-                      <span>强度 (STRENGTH，必填)</span>
+                      <span>强度 (STRENGTH，必填) {params.targetProvider==='sogni' && <span className="text-slate-500">{strengthRange?`官方目录范围 [${strengthRange.min}, ${strengthRange.max}]`:'官方目录范围未知，运行时核验'}</span>}</span>
                       <span className={`font-bold ${parseExplicitLoraStrength(lora.modelStrength) == null ? 'text-amber-300' : 'text-purple-300'}`}>
                         {parseExplicitLoraStrength(lora.modelStrength) != null ? Number(lora.modelStrength).toFixed(2) : '未设置'}
                       </span>
@@ -809,9 +817,9 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                       <div className="flex items-center gap-2">
                         <input
                           type="number"
-                          min={-1.5}
-                          max={2.0}
-                          step={0.05}
+                          min={strengthInputMin}
+                          max={strengthInputMax}
+                          step={strengthInputStep}
                           value=""
                           placeholder="未设置"
                           disabled={loraUnsupported}
@@ -831,10 +839,10 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                       </div>
                     ) : (
                       <input
-                        type="range"
-                        min={-1.5}
-                        max={2.0}
-                        step={0.05}
+                        type={sogniRangeUnknown?'number':'range'}
+                        min={strengthInputMin}
+                        max={strengthInputMax}
+                        step={strengthInputStep}
                         value={Number(lora.modelStrength)}
                         disabled={loraUnsupported}
                         title={loraUnsupported ? LORA_UNSUPPORTED_TITLE : undefined}

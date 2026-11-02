@@ -26,7 +26,9 @@ describe('fix10 labels/fonts', () => {
   it('duration label 视频时长 (duration) + unit 秒 suffix, send key unchanged', () => {
     const w = NODE_DEFINITIONS.AIVideoNode.widgets.find((x) => x.name === 'duration')!;
     expect(w.label).toBe('视频时长（秒）'); expect(w.unit).toBe('秒');
-    expect(render({ model: ID, targetProvider: 'fal' })).toMatch(/data-testid="widget-unit-duration"[^>]*>秒</);
+    const html = render({ model: ID, targetProvider: 'fal' });
+    expect(html).toMatch(/<label[^>]*>视频时长（秒）<\/label>/);
+    expect(html).toMatch(/aria-label="视频时长（秒）"/);
   });
   it('model hub contrast classes', () => {
     const s = readFileSync('src/components/ModelHubModal.tsx', 'utf8');

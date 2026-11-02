@@ -41,13 +41,7 @@ export abstract class BaseEngineDriver implements IEngineDriver {
    */
   protected normalizeGenerateParams(params: NormalizedGenerateParams): NormalizedGenerateParams {
     if (!params.model?.trim()) throw new Error('模型为必填项（model is required）');
-    const isVideo = Boolean(
-      params.isVideo ||
-      params.videoDuration ||
-      params.model.includes('video') ||
-      params.model.includes('wan2.1-t2v') ||
-      params.model.includes('wan/v2.1')
-    );
+    const isVideo = params.isVideo ?? (this.id === 'video' || params.videoDuration != null);
 
     return {
       prompt: (params.prompt || '').trim(),
@@ -59,9 +53,10 @@ export abstract class BaseEngineDriver implements IEngineDriver {
       steps: params.steps !== undefined ? Number(params.steps) : undefined,
       cfg: params.cfg !== undefined ? Number(params.cfg) : undefined,
       seed: typeof params.seed === 'number' ? params.seed : undefined,
+      batchSize: typeof params.batchSize === 'number' ? params.batchSize : undefined,
       denoise: typeof params.denoise === 'number' ? params.denoise : undefined,
       image_url: params.image_url?.trim() || undefined,
-      isVideo: params.isVideo || isVideo || undefined,
+      isVideo,
       videoDuration: isVideo && params.videoDuration !== undefined ? Number(params.videoDuration) : undefined,
       videoFps: isVideo && params.videoFps !== undefined ? Number(params.videoFps) : undefined,
       videoFrames: isVideo && params.videoFrames !== undefined ? Number(params.videoFrames) : undefined,
@@ -77,7 +72,7 @@ export abstract class BaseEngineDriver implements IEngineDriver {
         url: l.url,
         strength: l.strength != null || l.modelStrength != null ? Number(l.strength ?? l.modelStrength) : undefined,
         modelStrength: l.modelStrength != null || l.strength != null ? Number(l.modelStrength ?? l.strength) : undefined,
-        clipStrength: l.clipStrength != null || l.strength != null ? Number(l.clipStrength ?? l.strength) : undefined,
+        clipStrength: l.clipStrength != null ? Number(l.clipStrength) : undefined,
         civitaiId: l.civitaiId,
         triggers: l.triggers,
       })),
@@ -114,12 +109,7 @@ export abstract class BaseEngineDriver implements IEngineDriver {
   ): Promise<NormalizedGenerateResult> {
     if (!rawParams.model?.trim()) throw new Error('模型为必填项（model is required）');
     const hasImage = Boolean(rawParams.image_url);
-    const isVideo = Boolean(
-      rawParams.isVideo ||
-      rawParams.videoDuration ||
-      rawParams.model.includes('video') ||
-      rawParams.model.includes('wan2.1-t2v')
-    );
+    const isVideo = rawParams.isVideo ?? (this.id === 'video' || rawParams.videoDuration != null);
 
     const requiredCap: EngineCapability = isVideo
       ? hasImage ? 'img2video' : 'text2video'

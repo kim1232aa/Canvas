@@ -32,6 +32,28 @@ export interface ModelsLabErrorResponse {
 
 export type ModelsLabResponse = ModelsLabSuccessResponse | ModelsLabProcessingResponse | ModelsLabErrorResponse;
 
+export type ModelsLabPollBodyInspection =
+  | { kind: 'invalid-json'; rawResponse: string; parseError: string }
+  | { kind: 'task-error'; rawResponse: string; data: Record<string, any> }
+  | { kind: 'data'; rawResponse: string; data: Record<string, any> };
+
+/** Keep the original 2xx poll body available when JSON decoding or task execution fails. */
+export function inspectModelsLabPollBody(rawResponse: string): ModelsLabPollBodyInspection {
+  let data: unknown;
+  try {
+    data = JSON.parse(rawResponse);
+  } catch (error: any) {
+    return { kind: 'invalid-json', rawResponse, parseError: String(error?.message || error) };
+  }
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    return { kind: 'invalid-json', rawResponse, parseError: '轮询响应必须是 JSON 对象' };
+  }
+  const record = data as Record<string, any>;
+  return record.status === 'error'
+    ? { kind: 'task-error', rawResponse, data: record }
+    : { kind: 'data', rawResponse, data: record };
+}
+
 export function buildModelsLabImageRequest(
   body: Record<string, unknown>,
   apiKey: string,
@@ -43,11 +65,21 @@ export function buildModelsLabImageRequest(
   const modelId = String(body.model_id || body.model || '').trim();
   if (!modelId) throw new Error('ModelsLab 模型为必填项（model_id is required）');
 
+  const requestedSamples = body.samples ?? body.num_images;
+  if (requestedSamples !== undefined && requestedSamples !== null) {
+    if (typeof requestedSamples !== 'number' || !Number.isFinite(requestedSamples) || !Number.isInteger(requestedSamples)) {
+      throw new Error('ModelsLab samples 必须是有限整数');
+    }
+    if (requestedSamples <= 0) {
+      throw new Error('ModelsLab samples 必须是正整数');
+    }
+  }
+
   const payload: Record<string, unknown> = {
     key: apiKey,
     prompt,
     model_id: modelId,
-    samples: typeof body.samples === 'number' && body.samples > 0 ? Math.round(body.samples) : typeof body.num_images === 'number' && body.num_images > 0 ? Math.round(body.num_images) : 1,
+    samples: requestedSamples === undefined || requestedSamples === null ? 1 : requestedSamples,
   };
 
   const neg = String(body.negative_prompt || body.negativePrompt || '').trim();

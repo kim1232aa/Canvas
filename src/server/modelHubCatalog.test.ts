@@ -103,6 +103,15 @@ describe('ModelHub and Backend Directory Architecture', () => {
       expect(serverSource).not.toContain('(results as any).grok_compatNotice');
       expect(serverSource).not.toContain('(results as any).agnesNotice');
     });
+
+    it('HF exact repo supplement failures are returned as partial errors while keeping ordinary results', () => {
+      expect(serverSource).toContain('lookupExactHuggingFaceRepo(rawSearch, rawModelList');
+      expect(serverSource).toContain('(results as any).huggingfaceExactLookupError = exactLookup.error');
+      expect(serverSource).toContain('catalogNoticesAccum.huggingface =');
+      expect(modelHubModalSource).toContain('(data as any).errors');
+      expect(modelHubModalSource).toContain('if (prov !== \'all\' && errors[prov])');
+      expect(modelHubModalSource).toContain("key === 'catalogNotices'");
+    });
   });
 
   describe('Fal LoRA-named generation endpoints stay Checkpoint', () => {

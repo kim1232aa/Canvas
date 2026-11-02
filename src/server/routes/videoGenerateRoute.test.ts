@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import express from 'express';
 import http from 'http';
+import { EventEmitter } from 'node:events';
 import { handleVideoGenerate, type VideoGenerateRouteDeps } from './videoGenerateRoute.ts';
 
 describe('videoGenerateRoute lifecycle and client disconnect handling (grok_compat polling branch)', () => {
@@ -315,5 +316,44 @@ describe('videoGenerateRoute lifecycle and client disconnect handling (grok_comp
       ['grok_compat', 'mock-key', false, expect.any(Number), 'Upstream Rate Limited', 429],
     ]);
     expect(capturedRes?.listenerCount('close')).toBe(baselineCloseListeners);
+  });
+
+  it('sends a custom Fal dev endpoint unchanged and preserves an actual 402 balance response', async () => {
+    const rawResponse = '{"message":"Exhausted balance: add credits"}';
+    let capturedUrl = '';
+    let capturedOptions: any;
+    const { deps, recordedResults } = createMockDeps({
+      upstreamFetch: vi.fn(async (_meta: any, url: string, options: any) => {
+        capturedUrl = url;
+        capturedOptions = options;
+        return new Response(rawResponse, { status: 402, headers: { 'Content-Type': 'application/json' } });
+      }),
+    });
+    const res: any = new EventEmitter();
+    res.statusCode = 200;
+    res.writableEnded = false;
+    res.destroyed = false;
+    res.headersSent = false;
+    res.status = (code: number) => { res.statusCode = code; return res; };
+    res.json = (body: any) => { res.data = body; return res; };
+
+    await handleVideoGenerate(deps)({
+      body: { provider: 'fal', model: 'fal-ai/custom-dev-video', prompt: 'test video' },
+      headers: {},
+      path: '/api/video/generate',
+    } as any, res);
+
+    expect(capturedUrl).toBe('https://fal.run/fal-ai/custom-dev-video');
+    expect(JSON.parse(capturedOptions.body)).toEqual({ prompt: 'test video' });
+    expect(res.statusCode).toBe(402);
+    expect(res.data.error).toContain('[402]');
+    expect(res.data.error).not.toContain('[403]');
+    expect(res.data.upstreamStatus).toBe(402);
+    expect(res.data.rawResponse).toBe(rawResponse);
+    expect(res.data.errorSource).toBe('upstream');
+    expect(res.data.endpoint).toBe(capturedUrl);
+    expect(recordedResults).toEqual([
+      ['fal', 'mock-key', false, expect.any(Number), rawResponse, 402],
+    ]);
   });
 });

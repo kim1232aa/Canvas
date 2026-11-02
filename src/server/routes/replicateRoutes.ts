@@ -49,14 +49,19 @@ export function handleReplicateGenerate(deps: ReplicateRouteDeps) {
     let liveProps: Record<string, unknown> | undefined;
     let schemaFetch: ReplicateSchemaFetchFailure | undefined;
     const hasClientProps = reqBody.inputSchemaProperties && typeof reqBody.inputSchemaProperties === 'object' && !Array.isArray(reqBody.inputSchemaProperties);
-    if (!hasClientProps && reqBody.model && !hasReplicateStaticSpec(String(reqBody.model))) {
+    if (reqBody.model) {
       // Generic live-schema lookup (visible GET in executionTrace); no model-name branches.
       const ref = parseReplicateModelRef(String(reqBody.model));
+      const explicitVersion = ref.version || (typeof reqBody.version === 'string' ? reqBody.version.trim() : '');
+      // Exact-version schema lookup is possible only when the request identifies its owner/name.
+      // A bare version hash remains usable with caller-provided schema properties.
+      const mustReadPinnedVersionSchema = Boolean(explicitVersion && ref.owner && ref.name);
+      const shouldReadLiveSchema = mustReadPinnedVersionSchema || (!hasClientProps && !hasReplicateStaticSpec(String(reqBody.model)));
       const cleanBase = baseUrl.replace(/\/+$/, '');
       const schemaUrl = ref.owner && ref.name
-        ? `${cleanBase}/models/${encodeURIComponent(ref.owner)}/${encodeURIComponent(ref.name)}${ref.version ? `/versions/${encodeURIComponent(ref.version)}` : ''}`
+        ? `${cleanBase}/models/${encodeURIComponent(ref.owner)}/${encodeURIComponent(ref.name)}${explicitVersion ? `/versions/${encodeURIComponent(explicitVersion)}` : ''}`
         : null;
-      if (schemaUrl) {
+      if (shouldReadLiveSchema && schemaUrl) {
         try {
           const sr = await deps.upstreamFetch(
             { provider: 'replicate', route: req.path, model: String(reqBody.model), key: apiKey },
@@ -76,7 +81,39 @@ export function handleReplicateGenerate(deps: ReplicateRouteDeps) {
           schemaFetch = { url: schemaUrl, status: null, body: String(e?.message || e) };
         }
       }
+      // A pinned version can have an Input schema different from the model's latest/static schema.
+      // Never fall back to that other schema if the exact version's live schema could not be read.
+      if (mustReadPinnedVersionSchema && !liveProps && !hasClientProps) {
+        const error = new ReplicateSchemaMissingError(String(reqBody.model), schemaFetch);
+        const sf = error.schemaFetch;
+        const upstreamAnswered = Boolean(sf && sf.status !== null && (sf.status < 200 || sf.status >= 300));
+        return res.status(error.httpStatus).json({
+          error: error.message,
+          errorSource: upstreamAnswered ? 'upstream' : sf && sf.status === null ? 'network' : 'local',
+          upstreamStatus: sf?.status ?? null,
+          blocked: 'schema_missing',
+          model: error.model,
+          schemaFetch: error.schemaFetch ?? null,
+          actualRequest: null,
+          notSent: true,
+        });
+      }
     }
+
+    const schemaSource = liveProps
+      ? 'replicate-live-schema'
+      : hasClientProps
+        ? 'caller-inputSchemaProperties'
+        : reqBody.model && hasReplicateStaticSpec(String(reqBody.model))
+          ? 'static-provider-schema'
+          : 'unknown';
+    const schemaValidation = liveProps
+      ? 'live schema loaded for the requested model/version'
+      : hasClientProps
+        ? 'caller-supplied schema; not verified against the requested version'
+        : schemaSource === 'static-provider-schema'
+          ? 'static schema; not verified against a pinned version'
+          : 'unknown';
 
     let mapped: ReturnType<typeof buildReplicatePredictionRequest>;
     try {
@@ -158,17 +195,35 @@ export function handleReplicateGenerate(deps: ReplicateRouteDeps) {
         });
       }
 
-      const data = await upstream.json().catch(() => ({}));
+      const upstreamRaw = await upstream.text();
+      let data: any;
+      try {
+        data = JSON.parse(upstreamRaw);
+      } catch (parseErr: any) {
+        const error = `Replicate 上游 JSON 解析失败: ${parseErr.message}`;
+        deps.keyPoolManager.recordResult('replicate', apiKey, false, Date.now() - startTime, error, upstream.status);
+        return res.status(502).json({
+          error,
+          upstreamStatus: upstream.status,
+          errorSource: 'upstream',
+          endpoint,
+          rawResponse: upstreamRaw,
+          actualRequest,
+          parameterOmissions: mapped.omitted,
+          schemaFields: mapped.schemaFields,
+        });
+      }
       let parsed: ReturnType<typeof parseReplicatePredictionResponse>;
       try {
         parsed = parseReplicatePredictionResponse(data, baseUrl);
       } catch (parseErr: any) {
-        deps.keyPoolManager.recordResult('replicate', apiKey, false, Date.now() - startTime, parseErr.message, 502);
+        deps.keyPoolManager.recordResult('replicate', apiKey, false, Date.now() - startTime, parseErr.message, upstream.status);
         return res.status(502).json({
           error: parseErr.message,
+          upstreamStatus: upstream.status,
           errorSource: 'upstream',
           endpoint,
-          rawResponse: data,
+          rawResponse: upstreamRaw,
           actualRequest,
         });
       }
@@ -233,18 +288,32 @@ export function handleReplicateGenerate(deps: ReplicateRouteDeps) {
             });
           }
 
-          pollData = await pollResp.json().catch(() => ({}));
+          const pollRaw = await pollResp.text();
+          try {
+            pollData = JSON.parse(pollRaw);
+          } catch (pollJsonErr: any) {
+            const error = `Replicate 轮询上游 JSON 解析失败: ${pollJsonErr.message}`;
+            deps.keyPoolManager.recordResult('replicate', apiKey, false, Date.now() - startTime, error, pollResp.status);
+            return res.status(502).json({
+              error,
+              upstreamStatus: pollResp.status,
+              errorSource: 'upstream',
+              endpoint: pollUrl,
+              rawResponse: pollRaw,
+              actualRequest,
+            });
+          }
           try {
             parsed = parseReplicatePredictionResponse(pollData);
           } catch (pollParseErr: any) {
             const errMsg = `Replicate 任务失败: ${pollParseErr.message}`;
-            deps.keyPoolManager.recordResult('replicate', apiKey, false, Date.now() - startTime, errMsg, 502);
+            deps.keyPoolManager.recordResult('replicate', apiKey, false, Date.now() - startTime, errMsg, pollResp.status);
             return res.status(502).json({
               error: errMsg,
-              upstreamStatus: 502,
+              upstreamStatus: pollResp.status,
               errorSource: 'upstream',
               endpoint: pollUrl,
-              rawResponse: pollData,
+              rawResponse: pollRaw,
               actualRequest,
             });
           }
@@ -312,6 +381,9 @@ export function handleReplicateGenerate(deps: ReplicateRouteDeps) {
             overrides: mapped.overrides,
             parameterOmissions: mapped.omitted,
             schemaFields: mapped.schemaFields,
+            schemaSource,
+            schemaValidation,
+            schemaFetch: schemaFetch ?? null,
             upstreamEndpoint: endpoint,
           },
         },
@@ -327,6 +399,9 @@ export function handleReplicateGenerate(deps: ReplicateRouteDeps) {
             overrides: mapped.overrides,
             parameterOmissions: mapped.omitted,
             schemaFields: mapped.schemaFields,
+            schemaSource,
+            schemaValidation,
+            schemaFetch: schemaFetch ?? null,
             upstreamEndpoint: endpoint,
           },
         }

@@ -27,6 +27,7 @@ describe('ModelsLabDriver', () => {
       steps: 28,
       cfg: 3.5,
       seed: 7,
+      batchSize: 3,
       scheduler: 'Euler',
       loras: [{ name: 'detail-lora', strength: 0.6 }],
       apiKey: 'fixture-modelslab-key',
@@ -55,17 +56,9 @@ describe('ModelsLabDriver', () => {
       steps: 28,
       cfg: 3.5,
       seed: 7,
+      samples: 3,
       scheduler: 'Euler',
-      loras: [{
-        name: 'detail-lora',
-        path: undefined,
-        url: undefined,
-        strength: 0.6,
-        modelStrength: 0.6,
-        clipStrength: 0.6,
-        civitaiId: undefined,
-        triggers: undefined,
-      }],
+      loras: [{ name: 'detail-lora', strength: 0.6, modelStrength: 0.6 }],
       workflowSnapshot: { nodes: [] },
     });
     expect(result).toMatchObject({

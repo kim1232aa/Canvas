@@ -24,13 +24,13 @@ export function buildCivitaiVideoInput(body: Record<string, any>) {
     engine,
     ...(body.version ? { version: body.version } : {}),
     ...(body.provider ? { provider: body.provider } : {}),
-    ...(body.model ? { model: body.model } : {}),
+    ...(body.model ? (engine === 'wan' ? { diffusionModel: body.model } : { model: body.model }) : {}),
     prompt: body.prompt,
     ...(Number.isFinite(body.cfg) ? { cfgScale: body.cfg } : {}),
   };
   // 2026-11-02：seed / videoDuration 无本轮 Researchy fetchedAt → 不本地拦范围，整数则原样映射，上游错原文回。
   // steps/fps/width/height 仍按 OpenAPI 注释页 https://orchestration.civitai.com/openapi/v2-consumers.json 的宽整数界（待 Researchy 重核）。
-  for (const [from,to,min,max] of [['steps','steps',10,50],['fps','frameRate',1,2147483647],['width','width',1,2147483647],['height','height',1,2147483647]] as const) {
+  for (const [from,to,min,max] of [['steps','steps',10,50],['fps',engine === 'wan' ? 'fps' : 'frameRate',1,2147483647],['width','width',1,2147483647],['height','height',1,2147483647]] as const) {
     if (body[from] === undefined) continue;
     if (!Number.isInteger(body[from]) || body[from] < min || body[from] > max) throw new Error(`${from} 必须为 ${min}–${max} 的整数`);
     input[to]=body[from];

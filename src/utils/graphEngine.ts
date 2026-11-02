@@ -1300,6 +1300,7 @@ export async function executeWorkflow(
     if (engProv === 'tensorart' && params.batchSize !== undefined) extraParams.count = params.batchSize;
     if (engProv === 'nanogpt' && params.batchSize !== undefined) extraParams.n=params.batchSize;
     if (engProv === 'fal' && params.batchSize !== undefined) extraParams.n=params.batchSize;
+    if (engProv === 'modelslab' && params.batchSize !== undefined) extraParams.samples = params.batchSize;
     if (grokish && params.videoFps !== undefined) {
       omissions.push({field: 'videoFps', value: params.videoFps, reason: 'Grok 兼容中转的视频契约没有 videoFps 字段；保留原值不作为请求参数'});
     }
@@ -1353,6 +1354,7 @@ export async function executeWorkflow(
       steps: params.steps,
       cfg: params.cfg,
       seed: params.seed,
+      batchSize: params.batchSize,
       denoise: params.denoise,
       image_url: params.initImageUrl,
       isVideo: params.isVideo,

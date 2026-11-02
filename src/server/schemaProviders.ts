@@ -180,8 +180,6 @@ export function sizeStringSeparator(spec:any):string|null {
   return null;
 }
 type Provider=keyof typeof schemaProviders;
-/** Sogni generate_image selectors whose protocol schema accepts `loras` (sogni-protocol generate_image.schema.json, loras.description). */
-export const SOGNI_LORA_IMAGE_MODELS:readonly string[]=['krea-2-turbo','dark-beast-krea2'];
 
 /** Krea catalog rows derived from the live official OpenAPI document. Only
  *  POST /generate/image|video/... operations are generation endpoints. */
@@ -215,9 +213,8 @@ export function togetherCatalogRows(models:any[]) {
     pricing:m.pricing,metadata:m,
   }));
 }
-export function togetherImageOutputs(response:any):string[] {
-  const data=Array.isArray(response?.data)?response.data:[];
-  return data.map((d:any)=>d?.url || (d?.b64_json?`data:image/jpeg;base64,${d.b64_json}`:undefined)).filter(Boolean);
+export function togetherImageOutputs(response:any,endpoint='https://api.together.ai/v1/images/generations'):string[] {
+  return imageOutputsBySignature(response,'Together',endpoint);
 }
 export function togetherVideoOutputs(job:any):string[] {
   const url=job?.outputs?.video_url;return url?[String(url)]:[];
@@ -249,37 +246,6 @@ export function deepinfraImageOutputs(response:any):string[] {
 /** In-memory completed image tasks (DeepInfra images API is synchronous). */
 const deepinfraSyncTasks=new Map<string,{status:string;outputs:string[];rawResponse:any;error?:any}>();
 
-/** Catalog hint shared by AIMLAPI image models (docs 2026-10-15 Z-Image / Flux 2 LoRA shapes). Seed has no shared minimum here — per-model bounds come from official docs-json only (2026-11-02: removed catalog seed.minimum:1 local refuse). */
-export const aimlapiImageInputSchema={type:'object',required:['model','prompt'],properties:{
-  model:{type:'string'},prompt:{type:'string',maxLength:4000},
-  image_size:{anyOf:[{type:'object',properties:{width:{type:'integer',minimum:512,maximum:2048},height:{type:'integer',minimum:512,maximum:2048}}},
-    {type:'string',enum:['square_hd','square','portrait_4_3','portrait_16_9','landscape_4_3','landscape_16_9']}],default:'landscape_4_3'},
-  output_format:{type:'string',enum:['jpeg','png','webp'],default:'png'},
-  enable_prompt_expansion:{type:'boolean',default:true},
-  num_inference_steps:{type:'integer',minimum:1,maximum:50},
-  seed:{type:'integer'},num_images:{type:'number',minimum:1,maximum:4,default:1},
-  guidance_scale:{type:'number',minimum:0,maximum:20},
-  enable_safety_checker:{type:'boolean',default:true},
-  acceleration:{type:'string',enum:['none','regular','high'],default:'regular'},
-}} as const;
-/** Same as aimlapiImageInputSchema plus official loras[{path,scale}] (count limit = loras.maxItems:3 below; source: https://docs.aimlapi.com/api-references/image-models/alibaba-cloud/z-image-turbo-lora · OpenAPI maxItems:3, Researchy 抓取 2026-10-16 13:17:24 北京时间; scale 0–4, no default scale). */
-export const aimlapiLoraImageInputSchema={type:'object',required:['model','prompt'],properties:{
-  ...aimlapiImageInputSchema.properties,
-  loras:{type:'array',maxItems:3,items:{type:'object',required:['path'],properties:{
-    path:{type:'string',description:'URL or HuggingFace owner/repo'},
-    scale:{type:'number',minimum:0,maximum:4,description:'Scale factor for LoRA application (no official default; must be explicit).'},
-  }},description:'List of LoRA weights to apply (maximum 3).'},
-}} as const;
-/** Catalog hint only — NOT a per-model contract. Duration/resolution/seed enums vary by model
- * (e.g. Pixverse V5.5 i2v official docs.aimlapi.com enum [5,8,10] — must NOT be applied to every AIMLAPI video).
- * Live generate uses per-model official docs-json via /api/model-schema; no local enum refuse from this object.
- * 2026-11-02 audit: removed hardcoded duration/resolution enums (no Researchy fetchedAt on this constant; 张冠李戴). */
-export const aimlapiVideoInputSchema={type:'object',required:['model','prompt'],properties:{
-  model:{type:'string'},prompt:{type:'string'},image_url:{type:'string'},
-  seed:{type:'integer'},duration:{type:'integer'},
-  resolution:{type:'string'},
-  negative_prompt:{type:'string'},style:{type:'string'},
-}} as const;
 function aimlapiIsImageModel(m:any):boolean {
   const out=m?.modalities?.output;const type=String(m?.type||'');const tags=Array.isArray(m?.tags)?m.tags:[];
   return (Array.isArray(out)&&out.includes('image')) || /image/i.test(type) || tags.includes('playground:image');
@@ -287,10 +253,6 @@ function aimlapiIsImageModel(m:any):boolean {
 function aimlapiIsVideoModel(m:any):boolean {
   const out=m?.modalities?.output;const type=String(m?.type||'');const tags=Array.isArray(m?.tags)?m.tags:[];
   return (Array.isArray(out)&&out.includes('video')) || /video/i.test(type) || tags.includes('playground:video');
-}
-/** True when official model id is a documented LoRA-capable image endpoint (…lora…). */
-export function aimlapiModelSupportsLora(id:string):boolean {
-  return /lora/i.test(String(id||''));
 }
 /** Normalize GET /v1/models → canvas rows (image + video). Dedupes by id preferring image-generations. */
 export function aimlapiCatalogRows(models:any[]) {
@@ -303,21 +265,48 @@ export function aimlapiCatalogRows(models:any[]) {
     const prev=byId.get(m.id);
     // Prefer text-to-image generations over edit/duplicate aliases with same id.
     if(prev && (isEdit || (isVideo===false && /image-edit/i.test(String(prev.type||''))===false && prev._preferGen)))continue;
-    const supportsLora=!isVideo && aimlapiModelSupportsLora(m.id);
+    // Catalog capability/schema is unknown unless the provider actually returned it.
+    // Model names are labels, not evidence of request fields.
+    const supportsLora=typeof m.supportsLora==='boolean'?m.supportsLora:
+      m.parameters?.properties && Object.hasOwn(m.parameters.properties,'loras')?true:undefined;
     byId.set(m.id,{
       id:m.id,name:m.info?.name || m.id,category:isVideo?'text-to-video':(isEdit?'image-to-image':'text-to-image'),
       family:m.info?.developer || String(m.id).split('/')[0],description:m.info?.description || '',
       type:isVideo?'video':'image',endpoint:isVideo?'/video/generations':'/images/generations',
-      parameters:isVideo?aimlapiVideoInputSchema:(supportsLora?aimlapiLoraImageInputSchema:aimlapiImageInputSchema),
+      parameters:m.parameters,
       supportsLora,tags:m.tags || [],modalities:m.modalities,capabilities:m.capabilities,
       docsUrl:m.info?.docsUrl,metadata:m,_preferGen:!isEdit && !isVideo,
     });
   }
   return [...byId.values()].map(({_preferGen,...row})=>row);
 }
-export function aimlapiImageOutputs(response:any):string[] {
+export function aimlapiImageOutputs(response:any,endpoint='https://api.aimlapi.com/v1/images/generations'):string[] {
+  return imageOutputsBySignature(response,'AIMLAPI',endpoint);
+}
+function detectedImageMime(bytes:Buffer):string|undefined {
+  if(bytes.length>=8 && bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])))return 'image/png';
+  if(bytes.length>=3 && bytes[0]===0xff && bytes[1]===0xd8 && bytes[2]===0xff)return 'image/jpeg';
+  if(bytes.length>=12 && bytes.toString('ascii',0,4)==='RIFF' && bytes.toString('ascii',8,12)==='WEBP')return 'image/webp';
+  return undefined;
+}
+function imageOutputsBySignature(response:any,provider:string,endpoint:string):string[] {
   const data=Array.isArray(response?.data)?response.data:[];
-  return data.map((d:any)=>d?.url || (d?.b64_json?`data:image/png;base64,${d.b64_json}`:undefined)).filter(Boolean);
+  return data.map((item:any,index:number)=>{
+    if(typeof item?.url==='string' && item.url)return item.url;
+    const encoded=item?.b64_json;
+    if(typeof encoded!=='string' || !encoded)
+      throw Object.assign(new Error(`${provider} data[${index}] 未包含 url 或 b64_json；上游响应已保留。`),{status:502,errorSource:'upstream-protocol',rawResponse:response,endpoint});
+    if(!/^[A-Za-z0-9+/]+={0,2}$/.test(encoded))
+      throw Object.assign(new Error(`${provider} data[${index}].b64_json 不是有效 Base64 图片；上游响应已保留，未推断 MIME 类型。`),{status:502,errorSource:'upstream-protocol',rawResponse:response,endpoint});
+    let bytes:Buffer;try{bytes=Buffer.from(encoded,'base64');}catch{
+      throw Object.assign(new Error(`${provider} data[${index}].b64_json 无法解码；上游响应已保留。`),{status:502,errorSource:'upstream-protocol',rawResponse:response,endpoint});
+    }
+    const mime=detectedImageMime(bytes);
+    const canonicalBase64=bytes.toString('base64').replace(/=+$/,'');
+    if(!mime || canonicalBase64!==encoded.replace(/=+$/,''))
+      throw Object.assign(new Error(`${provider} data[${index}].b64_json 不是可识别的 PNG、JPEG 或 WebP 图片；上游响应已保留，未推断 MIME 类型。`),{status:502,errorSource:'upstream-protocol',rawResponse:response,endpoint});
+    return `data:${mime};base64,${encoded}`;
+  }).filter(Boolean) as string[];
 }
 export function aimlapiVideoOutputs(job:any):string[] {
   const candidates=[job?.video?.url,job?.video_url,job?.url,job?.output?.url,job?.outputs?.video_url,
@@ -329,6 +318,40 @@ export function openApiRequestSchema(doc:any):any|null {
   for(const item of Object.values(doc?.paths || {}) as any[]) {
     const schema=item?.post?.requestBody?.content?.['application/json']?.schema;
     if(schema?.properties && typeof schema.properties==='object')return schema;
+  }
+  return null;
+}
+
+/** Detect only a schema-declared automatic fallback selector; field names/models are never inferred. */
+export function schemaAutoFallbackSelection(payload:Record<string,unknown>,schema:any,sourceUrl?:string):{field:string;value:unknown;description:string;sourceUrl?:string}|null {
+  const properties=schema?.properties;
+  if(!properties || typeof properties!=='object')return null;
+  const branches=(s:any):any[]=>[s,...(s?.anyOf||[]),...(s?.oneOf||[]),...(s?.allOf||[])].flatMap((x:any,i:number)=>i===0?[x]:branches(x));
+  const auto=(v:any)=>typeof v==='string' && v.trim().toLowerCase()==='auto';
+  for(const [field,fieldSchema] of Object.entries(properties) as Array<[string,any]>) {
+    const variants=branches(fieldSchema);
+    const descriptions:string[]=variants.map((v:any):string=>typeof v.description==='string'?v.description:'').filter(Boolean);
+    const description=descriptions.join(' ');
+    // Require a positive, local relationship in the same clause. Mere co-occurrence
+    // (e.g. "auto has no fallback; manual uses fallback") is not enough evidence.
+    const saysAutoFallback=descriptions.some(text=>text.split(/[;\n]+/).some(clause=>{
+      const match=clause.match(/\bauto\b[\s\S]{0,180}\b(?:uses?|runs?|triggers?|invokes?|follows?)\b[\s\S]{0,180}\bfallback\b/i)
+        || clause.match(/\bauto\b[\s\S]{0,100}\b(?:will|can|may)\s+fallback\b/i);
+      return Boolean(match && !/\b(?:no|not|never|without)\b/i.test(match[0]));
+    }));
+    if(!saysAutoFallback)continue;
+    const values=variants.flatMap(v=>[
+      ...(Array.isArray(v.enum)?v.enum:[]),
+      ...(Object.hasOwn(v,'const')?[v.const]:[]),
+      ...(Object.hasOwn(v,'default')?[v.default]:[]),
+      ...(Object.hasOwn(v,'example')?[v.example]:[]),
+    ]);
+    const proseDefault=/\bauto\b.{0,24}\(\s*default\s*\)/i.test(description) || /\bdefault\s*(?:is|:|=)?\s*`?auto`?\b/i.test(description);
+    const hasAutoChoice=values.some(auto) || proseDefault;
+    if(!hasAutoChoice)continue;
+    const hasExplicit=Object.hasOwn(payload,field) && payload[field]!==undefined && payload[field]!==null && payload[field]!=='';
+    const selected=hasExplicit?payload[field]:variants.find(v=>Object.hasOwn(v,'default'))?.default ?? (proseDefault?'auto':undefined);
+    if(auto(selected))return {field,value:selected,description,...(sourceUrl?{sourceUrl}:{})};
   }
   return null;
 }
@@ -490,12 +513,30 @@ export function veniceCatalogRows(models:any[]) {
     };
   });
 }
-export function veniceImageOutputs(response:any):string[] {
+function veniceImageMime(format:string):string|undefined {
+  return ({jpeg:'image/jpeg',jpg:'image/jpeg',png:'image/png',webp:'image/webp'} as Record<string,string>)[String(format||'').toLowerCase()];
+}
+function veniceImageBytesMatch(bytes:Buffer,mime:string):boolean {
+  if(mime==='image/png')return bytes.length>=8 && bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]));
+  if(mime==='image/jpeg')return bytes.length>=3 && bytes[0]===0xff && bytes[1]===0xd8 && bytes[2]===0xff;
+  if(mime==='image/webp')return bytes.length>=12 && bytes.toString('ascii',0,4)==='RIFF' && bytes.toString('ascii',8,12)==='WEBP';
+  return false;
+}
+export function veniceImageOutputs(response:any,format='webp'):string[] {
   const images=Array.isArray(response?.images)?response.images:[];
+  const expectedMime=veniceImageMime(format);
   return images.map((img:any)=>{
     if(typeof img!=='string' || !img)return undefined;
-    if(img.startsWith('data:') || img.startsWith('http://') || img.startsWith('https://'))return img;
-    return `data:image/webp;base64,${img}`;
+    if(img.startsWith('http://') || img.startsWith('https://'))return img;
+    const uri=img.match(/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/]+={0,2})$/i);
+    if(uri) {
+      const mime=uri[1].toLowerCase(),bytes=Buffer.from(uri[2],'base64');
+      return veniceImageBytesMatch(bytes,mime)?`data:${mime};base64,${uri[2]}`:undefined;
+    }
+    if(!expectedMime || !/^[A-Za-z0-9+/]+={0,2}$/.test(img))return undefined;
+    let bytes:Buffer;try{bytes=Buffer.from(img,'base64');}catch{return undefined;}
+    if(!bytes.length || !veniceImageBytesMatch(bytes,expectedMime))return undefined;
+    return `data:${expectedMime};base64,${img}`;
   }).filter(Boolean) as string[];
 }
 export function veniceVideoStatus(raw:any):string {
@@ -514,6 +555,23 @@ interface Dependencies {
   /** Upstream call segments recorded so far in the CURRENT server request (generationContext). Optional: tests may omit. */
   traces?:()=>any[];
   durable:(url:string)=>Promise<any>;
+}
+
+export async function parseVeniceImageResponse(r:Response,url:string) {
+  const contentType=String(r.headers.get('content-type')||'').split(';')[0].trim().toLowerCase();
+  const bytes=Buffer.from(await r.arrayBuffer());
+  const rawText=()=>new TextDecoder().decode(bytes);
+  if(!r.ok)throw Object.assign(new Error(`HTTP ${r.status}: ${rawText()}`),{status:r.status,rawResponse:rawText(),endpoint:url,errorSource:'upstream'});
+  if(contentType.startsWith('image/')) {
+    if(!veniceImageMime(contentType.slice(6)) || !veniceImageBytesMatch(bytes,contentType))
+      throw Object.assign(new Error(`HTTP ${r.status}: Venice 返回无效图像内容（Content-Type ${contentType}）`),{status:r.status,rawResponse:`<${contentType} ${bytes.length} bytes>`,endpoint:url,errorSource:'upstream-protocol'});
+    const data={__veniceBinaryImage:true,contentType,base64:bytes.toString('base64')};
+    return {data,status:r.status,raw:JSON.stringify(data)};
+  }
+  const raw=rawText();let data:any;try{data=JSON.parse(raw);}catch{}
+  if(!data || data.status==='error' || (typeof data.code==='number' && data.code!==200))
+    throw Object.assign(new Error(`HTTP ${r.status}: ${raw}`),{status:r.status,rawResponse:raw,endpoint:url,errorSource:'upstream-protocol'});
+  return {data,status:r.status,raw};
 }
 
 /** Authenticated upstream reader for one provider. Throws structured errors with
@@ -622,6 +680,45 @@ export function isSogniPersonalLoraRow(m:any):boolean {
   return id.startsWith('personal-') || m?._personal===true || m?.ui?.category==='personal';
 }
 
+export type SogniLoraStrengthRange = {min:number;max:number;step?:number};
+/** Read only a complete, ordered numeric range published by Sogni for this exact LoRA row. */
+export function sogniLoraStrengthRange(item:any):SogniLoraStrengthRange|undefined {
+  const ui=item?.ui;
+  const min=ui?.min,max=ui?.max;
+  if(typeof min!=='number' || !Number.isFinite(min) || typeof max!=='number' || !Number.isFinite(max) || min>max)return undefined;
+  const step=ui?.step;
+  return {min,max,...(typeof step==='number' && Number.isFinite(step) && step>0?{step}:{})};
+}
+/** Match only exact LoRA resource IDs; unknown/custom/personal resources stay unvalidated, never guessed. */
+export function validateSogniLoraStrengthRanges(loras:unknown,strengths:unknown,rows:unknown):{
+  checked:Array<{id:string;strength:number;minimum:number;maximum:number}>;
+  unknown:Array<{id:string;reason:string}>;
+  violations:Array<{id:string;strength:number;minimum:number;maximum:number}>;
+} {
+  const ids=Array.isArray(loras)?loras:[];
+  const values=Array.isArray(strengths)?strengths:[];
+  const catalog=Array.isArray(rows)?rows:[];
+  const checked=[] as Array<{id:string;strength:number;minimum:number;maximum:number}>;
+  const unknown=[] as Array<{id:string;reason:string}>;
+  const violations=[] as Array<{id:string;strength:number;minimum:number;maximum:number}>;
+  for(let i=0;i<ids.length;i++){
+    const id=typeof ids[i]==='string'?ids[i]:'';
+    if(!id){unknown.push({id:String(ids[i] ?? ''),reason:'资源标识不是目录可核实的字符串'});continue;}
+    const row=catalog.find((candidate:any)=>String(candidate?.loraId || candidate?.slug || candidate?.id || '')===id);
+    if(!row){unknown.push({id,reason:'公开 LoRA 目录无完全匹配的资源 ID；未推断范围'});continue;}
+    const range=sogniLoraStrengthRange(row);
+    if(!range){unknown.push({id,reason:'目录条目没有完整且有效的 ui.min/ui.max；未推断范围'});continue;}
+    const raw=strengths===undefined?1:values[i]; // Official protocol default applies only when the entire array is omitted.
+    if(raw===undefined){unknown.push({id,reason:'loraStrengths 缺少对应位置；未假设该项默认值'});continue;}
+    const strength=raw;
+    if(typeof strength!=='number' || !Number.isFinite(strength)){unknown.push({id,reason:'强度不是有限 JSON number；未执行范围判断'});continue;}
+    const entry={id,strength,minimum:range.min,maximum:range.max};
+    checked.push(entry);
+    if(strength<range.min || strength>range.max)violations.push(entry);
+  }
+  return {checked,unknown,violations};
+}
+
 /** Cover resolution for Sogni LoRA items:
  *  Reads directly and dynamically from Sogni's upstream `ui.examples`.
  *  Strictly adheres to project rules: NO hardcoded mappings, NO mock covers. */
@@ -674,7 +771,7 @@ export function normalizeSchemaProviderItems(provider:Provider,rows:any[],opts:{
     baseModelSource:provider==='krea' && wantsLora && Array.isArray(m.models)?'官方 GET /styles items[].models（Compatible model names），原值显示':(wantsLora && Array.isArray(m.compatibleModels) && compatibleModelsCount(m.compatibleModels)>1?`官方列出可兼容底模共 ${compatibleModelsCount(m.compatibleModels)} 个，卡片只显示第一个名字`:undefined),baseModel:(provider==='krea' && wantsLora && Array.isArray(m.models)?m.models.join(', '):undefined) || m.family || m.tierId || compatibleModelsLabel(m.compatibleModels) || (Array.isArray(m.modelIds)?m.modelIds[0]:undefined),description:m.description || '',tags:m.tags || [],
     imageUrl:m.image_url || m.cover_url || (Array.isArray(m.urls)?m.urls[0]:undefined) || m.thumbnail || sogniLoraCover(m)?.url || '',imageCaption:sogniLoraCover(m)?.caption,
     creator:m.ui?.creator || m.owner?.name,externalUrl:m.ui?.sourceUrl,
-    sourceUrl:opts.sourceUrl,metadata:m,modelIds:m.modelIds,loraStrength:m.ui?.default,supportsLora:provider==='venice'||provider==='deepinfra'?false:provider==='together'?undefined:provider==='aimlapi'||provider==='novita'?Boolean(m.supportsLora ?? m.parameters?.properties?.loras):provider==='krea'?Boolean(m.parameters?.properties?.styles):JSON.stringify(m.input_fields || m.api_schema || m.parameters || '').includes('lora'),
+    sourceUrl:opts.sourceUrl,metadata:m,modelIds:m.modelIds,loraStrength:m.ui?.default,loraStrengthRange:provider==='sogni'?sogniLoraStrengthRange(m):undefined,supportsLora:provider==='venice'||provider==='deepinfra'?false:provider==='together'?undefined:provider==='aimlapi'?(typeof m.supportsLora==='boolean'?m.supportsLora:(m.parameters?.properties && Object.hasOwn(m.parameters.properties,'loras')?true:undefined)):provider==='novita'?Boolean(m.supportsLora ?? m.parameters?.properties?.loras):provider==='krea'?Boolean(m.parameters?.properties?.styles):JSON.stringify(m.input_fields || m.api_schema || m.parameters || '').includes('lora'),
     badge:wantsLora?(isSogniPersonalLoraRow(m)?'我的个人 LoRA':'官方 LoRA 资源'):'官方模型端点',resourceKind:wantsLora?'adapter':'model-endpoint'}))
     .filter((m:any)=>m.id && (!query || (m.id+' '+m.name+' '+m.description).toLowerCase().includes(query)));
 }
@@ -833,6 +930,7 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
   const read=async(req:express.Request,provider:Provider,url:string,init?:RequestInit,credential?:Credential)=>{
     const {key,headers}=credential || credentials(req,provider);
     const r=await dep.fetch({provider,route:req.path,model:req.body?.model || req.query.model,key},url,{...init,headers:{...headers,...init?.headers},signal:AbortSignal.timeout(60000)});
+    if(provider==='venice' && new URL(url).pathname.endsWith('/image/generate'))return parseVeniceImageResponse(r,url);
     const raw=await r.text();let data:any;try{data=JSON.parse(raw);}catch{}
     if(!r.ok || !data || data.status==='error' || (typeof data.code==='number' && data.code!==200)) {
       throw Object.assign(new Error(`HTTP ${r.status}: ${raw}`),{status:r.status,rawResponse:raw,endpoint:url,errorSource:r.ok?'upstream-protocol':'upstream'});
@@ -1101,9 +1199,6 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
         const resource=(l:any)=>l.path || l.url || l.civitaiId || l.name;
         const strength=(l:any)=>l.strength ?? l.modelStrength;
         if(provider==='sogni') {
-          // Sogni protocol generate_image.schema.json `loras.description`: "Accepted only by the five Krea 2 based models";
-          // generate_image selectors = krea-2-turbo / dark-beast-krea2. Upstream silently filters public LoRAs on other models → refuse locally.
-          if(!SOGNI_LORA_IMAGE_MODELS.includes(model))throw Object.assign(new Error(`Sogni 模型 ${model} 不接受 LoRA（官方协议 loras 仅 Krea 2 系：${SOGNI_LORA_IMAGE_MODELS.join(' / ')}；上游会静默丢弃，不能假生效）。未发送生成请求。`),{status:400,errorSource:'local'});
           const bad=loras.find((l:any)=>!Number.isFinite(Number(strength(l))) || strength(l)===null || strength(l)===undefined || strength(l)==='');
           if(bad)throw Object.assign(new Error(`Sogni LoRA ${resource(bad)} 缺少显式强度；省略 loraStrengths 时上游一律用 1.0（非目录默认），不会代填。未发送生成请求。`),{status:400,errorSource:'local'});
           payload.loras=loras.map(resource);payload.loraStrengths=loras.map((l:any)=>Number(strength(l)));
@@ -1132,7 +1227,7 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
           else if(Object.hasOwn(props,'lora_url') && loras.length===1) {payload.lora_url=resource(loras[0]);if(Object.hasOwn(props,'lora_weight'))payload.lora_weight=strength(loras[0]);}
           else throw Object.assign(new Error(`端点 ${model} 的官方 Schema 没有 loras / lora_list / model_id / lora_url 字段；未发送生成请求，不会发明 path+scale。请换支持 LoRA 的模型或移除 LoRA 节点`),{status:400,errorSource:'local'});
         }
-        mapping.push({from:'loras',to:provider==='sogni'?'loras + loraStrengths':provider==='krea'?'styles':Object.hasOwn(payload,'model_id')?'model_id':Object.hasOwn(payload,'image_loras')?'image_loras':Object.hasOwn(payload,'lora_list')?'lora_list':Object.hasOwn(payload,'lora_url')?'lora_url + lora_weight':'loras',requested:loras,value:payload.styles || payload.loras || payload.model_id || payload.image_loras || payload.lora_list || {url:payload.lora_url,weight:payload.lora_weight},strengths:payload.loraStrengths,note:'仅记录已提交的 LoRA 参数；生成成功不证明上游实际应用了 LoRA。独立 CLIP 强度没有对应字段时不会假称生效。'});
+        mapping.push({from:'loras',to:provider==='sogni'?'loras + loraStrengths':provider==='krea'?'styles':Object.hasOwn(payload,'model_id')?'model_id':Object.hasOwn(payload,'image_loras')?'image_loras':Object.hasOwn(payload,'lora_list')?'lora_list':Object.hasOwn(payload,'lora_url')?'lora_url + lora_weight':'loras',requested:loras,value:payload.styles || payload.loras || payload.model_id || payload.image_loras || payload.lora_list || {url:payload.lora_url,weight:payload.lora_weight},strengths:payload.loraStrengths,...(provider==='sogni'?{capability:'Official generate_image schema describes LoRA support as Krea 2 based; selector-to-worker compatibility is not dynamically declared here'}:{}),note:provider==='sogni'?'按选择器与 LoRA ID 原样提交；兼容性及字段实际应用仍以 workflow 结果为准。':'仅记录已提交的 LoRA 参数；生成成功不证明上游实际应用了 LoRA。独立 CLIP 强度没有对应字段时不会假称生效。'});
       }
       blockStage=undefined;
       // custom_parameters are scoped to the CURRENT model Schema: undeclared keys (e.g. left over from another provider/model) are not sent while Schema matching is on.
@@ -1146,6 +1241,34 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
       if(provider==='together')payload.model=model;
       if(provider==='aimlapi')payload.model=model;
       if(provider==='deepinfra')payload.model=model;
+      const automaticFallback=schemaAutoFallbackSelection(payload,definition.inputSchema,definition.schemaSource);
+      if(automaticFallback) {
+        const source=automaticFallback.sourceUrl || '(官方 Schema 来源 URL 未返回)';
+        const description=automaticFallback.description;
+        throw Object.assign(new Error(`${provider} 官方 Schema 字段 ${automaticFallback.field} 的描述声明 auto 会触发 fallback（${description}）；当前值 ${JSON.stringify(automaticFallback.value)}，未发送生成请求。请在自定义参数中明确选择该 Schema 提供的非 auto 路由。来源：${source}。此检查仅覆盖 Schema 已声明的行为，不代表已排除其他未声明的路由行为。`),{status:400,errorSource:'local',schemaSource:automaticFallback.sourceUrl,blockedField:{field:automaticFallback.field,value:automaticFallback.value,reason:'实时官方 Schema 明确声明 auto fallback',source:automaticFallback.sourceUrl}});
+      }
+      if(provider==='sogni' && Array.isArray(payload.loras) && payload.loras.length) {
+        const rangeSourceUrl=schemaProviders.sogni.root+'/v1/loras/comfy';
+        let directoryRows:any[]|undefined;
+        let directoryFailure:any;
+        try {
+          // This public directory is keyed by LoRA ID. Do not pass the hosted-tool selector
+          // (e.g. krea-2-turbo) as modelId: it is a different identifier namespace.
+          const rangeReader=makeSchemaProviderReader('sogni',dep.fetch,'',req.path);
+          ({rows:directoryRows}=await fetchSchemaProviderRows('sogni',rangeReader,{lora:true}));
+        } catch(e:any) { directoryFailure=e; }
+        const rangeCheck=directoryRows
+          ? validateSogniLoraStrengthRanges(payload.loras,payload.loraStrengths,directoryRows)
+          : {checked:[],unknown:payload.loras.map((id:any)=>({id:String(id ?? ''),reason:'公开 LoRA 目录请求失败；范围未知，未推断'})),violations:[]};
+        mapping.push({from:'Sogni LoRA strength range check',to:null,sourceUrl:rangeSourceUrl,
+          status:directoryRows?'checked':'unknown',checked:rangeCheck.checked,unknown:rangeCheck.unknown,
+          ...(directoryFailure?{lookupFailure:{endpoint:directoryFailure.endpoint || rangeSourceUrl,upstreamStatus:directoryFailure.status ?? null,upstreamResponseBody:directoryFailure.rawResponse ?? null,error:directoryFailure.message || String(directoryFailure)}}:{})});
+        if(rangeCheck.violations.length) {
+          const first=rangeCheck.violations[0];
+          const reason=`LoRA ${first.id} 强度 ${first.strength} 超出官方目录范围 [${first.minimum}, ${first.maximum}]`;
+          throw Object.assign(new Error(`Sogni ${reason}（来源：${rangeSourceUrl}）；未发送生成请求，未自动截断。`),{status:400,errorSource:'local',blockedField:{field:'loraStrengths',value:first.strength,resourceId:first.id,minimum:first.minimum,maximum:first.maximum,source:rangeSourceUrl},rangeValidation:{sourceUrl:rangeSourceUrl,...rangeCheck}});
+        }
+      }
       {
         // Map canvas width/height → official image_size object when schema declares it.
         if(packSizeIntoImageSize && !Object.hasOwn(payload,'image_size')) {
@@ -1219,7 +1342,7 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
       const {data,status}=await read(req,provider,definition.endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(requestBody)},credential);
       if(provider==='together' && (definition as any).mediaKind!=='video') {
         // Images API is synchronous (docs.together.ai/docs/inference/images/overview). Store result for poll compatibility.
-        const outputs=togetherImageOutputs(data);
+        const outputs=togetherImageOutputs(data,definition.endpoint);
         if(!outputs.length)throw Object.assign(new Error('Together 图像响应没有 url/b64_json'),{status,rawResponse:data,endpoint:definition.endpoint,errorSource:'upstream-protocol'});
         const taskId=String(data.id || randomUUID());
         togetherSyncTasks.set(taskId,{status:'completed',outputs,rawResponse:data});
@@ -1228,7 +1351,7 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
       }
       if(provider==='aimlapi' && (definition as any).mediaKind!=='video') {
         // Images API is synchronous (docs.aimlapi.com image models). Store result for poll compatibility.
-        const outputs=aimlapiImageOutputs(data);
+        const outputs=aimlapiImageOutputs(data,definition.endpoint);
         if(!outputs.length)throw Object.assign(new Error('AIMLAPI 图像响应没有 url/b64_json'),{status,rawResponse:data,endpoint:definition.endpoint,errorSource:'upstream-protocol'});
         const taskId=String(data.id || randomUUID());
         aimlapiSyncTasks.set(taskId,{status:'completed',outputs,rawResponse:data});
@@ -1246,7 +1369,9 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
       }
       if(provider==='venice' && (definition as any).mediaKind!=='video') {
         // Image generate is synchronous (docs.venice.ai image/generate) — images[] base64.
-        const outputs=veniceImageOutputs(data);
+        const outputs=data?.__veniceBinaryImage
+          ? [`data:${data.contentType};base64,${data.base64}`]
+          : veniceImageOutputs(data,String(requestBody?.format || 'webp'));
         if(!outputs.length)throw Object.assign(new Error('Venice 图像响应没有 images[]'),{status,rawResponse:data,endpoint:definition.endpoint,errorSource:'upstream-protocol'});
         const taskId=String(data.id || randomUUID());
         veniceSyncTasks.set(taskId,{status:'completed',outputs,rawResponse:data});

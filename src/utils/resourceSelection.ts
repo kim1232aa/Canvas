@@ -1,5 +1,7 @@
 export interface ResourceSelection {
  name:string;provider?:string;civitaiId?:string;triggerWords?:string;baseModel?:string;downloadUrl?:string;resourceVerified?:boolean;resource_source?:string;resource_kind?:string;fromCatalog?:boolean;isCatalog?:boolean;
+ /** Exact Sogni ui.min/ui.max copied from the matched official LoRA catalog row. */
+ loraStrengthRange?:{min:number;max:number;step?:number};
  /** Explicit LoRA strengths when the user/catalog provided them; never invent 0.8. */
  modelStrength?:number;clipStrength?:number;
 }
@@ -146,7 +148,11 @@ export function selectionFromMetadata(provider:string,metadata:any,kind:string,r
    : id;
  if(!name)throw new Error('metadata 未返回可核实的资源标识');
  const words=version.trainedWords || metadata.triggerWords || metadata.trainedWords || [];
- return {name,provider,civitaiId:provider==='civitai'?name:undefined,triggerWords:Array.isArray(words)?words.join(', '):String(words),baseModel:version.baseModel || metadata.baseModel,downloadUrl:file?.downloadUrl || metadata.downloadUrl,resourceVerified:true,resource_source:provider,resource_kind:effectiveKind || kind};
+ const rawRange=provider==='sogni'?metadata.loraStrengthRange:undefined;
+ const loraStrengthRange=rawRange && typeof rawRange.min==='number' && Number.isFinite(rawRange.min) && typeof rawRange.max==='number' && Number.isFinite(rawRange.max) && rawRange.min<=rawRange.max
+   ? {min:rawRange.min,max:rawRange.max,...(typeof rawRange.step==='number' && Number.isFinite(rawRange.step) && rawRange.step>0?{step:rawRange.step}:{})}
+   : undefined;
+ return {name,provider,civitaiId:provider==='civitai'?name:undefined,triggerWords:Array.isArray(words)?words.join(', '):String(words),baseModel:version.baseModel || metadata.baseModel,downloadUrl:file?.downloadUrl || metadata.downloadUrl,...(loraStrengthRange?{loraStrengthRange}:{}),resourceVerified:true,resource_source:provider,resource_kind:effectiveKind || kind};
 }
 export function verifiedSelectionOrExplicitIntent(provider:string,metadata:any):Partial<ResourceSelection> {
  try { return selectionFromMetadata(provider,metadata,'lora'); }
@@ -185,12 +191,12 @@ export function replaceSelectedResource(previous:Record<string,any>,selection:Re
  const explicitWeightUrl = isExplicitLoraWeightUrl(selection.downloadUrl) || isExplicitLoraWeightUrl(selection.name);
  const isVerified = (selection.resourceVerified ?? (isFromCatalog ? true : false)) || explicitWeightUrl;
  if(!isVerified && !isFromCatalog){
-  const clean=Object.fromEntries(Object.entries(previous).filter(([key])=>!['civitaiId','civitai_id','resource_source','resource_kind','resourceVerified','resource_verified','download_url','downloadUrl'].includes(key)));
+  const clean=Object.fromEntries(Object.entries(previous).filter(([key])=>!['civitaiId','civitai_id','resource_source','resource_kind','resourceVerified','resource_verified','download_url','downloadUrl','lora_strength_min','lora_strength_max','lora_strength_step'].includes(key)));
   return {...clean,[field]:selection.name,resourceVerified:false,import_unresolved_resource:true,unresolvedResource:true,import_resource_reason:'新资源未经公开 metadata 核实，请重新选择已验证资源'};
  }
  const downloadUrl = selection.downloadUrl || (explicitWeightUrl ? String(selection.name).trim() : undefined);
- const clean=Object.fromEntries(Object.entries(previous).filter(([key])=>!['civitaiId','civitai_id','resource_source','resource_kind','resourceVerified','resource_verified','download_url','downloadUrl','import_unresolved_resource','unresolvedResource','import_unresolved_reason','import_resource_reason','unresolvedReason','resource_unresolved_reason'].includes(key)));
- return {...clean,[field]:selection.name,civitai_id:selection.civitaiId,resource_source:selection.resource_source || selection.provider,resource_kind:selection.resource_kind || (explicitWeightUrl ? 'lora' : undefined),download_url:downloadUrl,resourceVerified:true,trigger_words:selection.triggerWords || '',base_model:selection.baseModel || ''};
+ const clean=Object.fromEntries(Object.entries(previous).filter(([key])=>!['civitaiId','civitai_id','resource_source','resource_kind','resourceVerified','resource_verified','download_url','downloadUrl','lora_strength_min','lora_strength_max','lora_strength_step','import_unresolved_resource','unresolvedResource','import_unresolved_reason','import_resource_reason','unresolvedReason','resource_unresolved_reason'].includes(key)));
+ return {...clean,[field]:selection.name,civitai_id:selection.civitaiId,resource_source:selection.resource_source || selection.provider,resource_kind:selection.resource_kind || (explicitWeightUrl ? 'lora' : undefined),download_url:downloadUrl,resourceVerified:true,trigger_words:selection.triggerWords || '',base_model:selection.baseModel || '',...(selection.loraStrengthRange?{lora_strength_min:selection.loraStrengthRange.min,lora_strength_max:selection.loraStrengthRange.max,...(selection.loraStrengthRange.step?{lora_strength_step:selection.loraStrengthRange.step}:{})}:{})};
 }
 
 /** Build the LoRA object sent to generate: AIR in name/path → civitaiId; never keep a stale weight path beside an AIR. */

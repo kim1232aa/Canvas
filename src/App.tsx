@@ -2306,6 +2306,10 @@ export default function App() {
       resourceVerified: n.values?.resourceVerified,
       resource_source: n.values?.resource_source,
       resource_kind: n.values?.resource_kind,
+      strengthRange: typeof n.values?.lora_strength_min === 'number' && typeof n.values?.lora_strength_max === 'number'
+        && Number.isFinite(n.values.lora_strength_min) && Number.isFinite(n.values.lora_strength_max) && n.values.lora_strength_min <= n.values.lora_strength_max
+        ? {min:n.values.lora_strength_min,max:n.values.lora_strength_max,...(typeof n.values?.lora_strength_step === 'number' && n.values.lora_strength_step > 0 ? {step:n.values.lora_strength_step}:{})}
+        : undefined,
     }))
     .filter((l) => l.name.length > 0);
 

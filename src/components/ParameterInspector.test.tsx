@@ -1,5 +1,6 @@
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { ParameterInspector } from './ParameterInspector';
 import type { ComfyParameters } from '../types/graph';
 
@@ -40,5 +41,18 @@ describe('ParameterInspector ComfyUI API JSON export', () => {
 
     expect(writeText).not.toHaveBeenCalled();
     expect(alert).toHaveBeenCalledWith('请先选择采样器与调度器，否则复制的 JSON 会包含你未选择的参数');
+  });
+});
+
+describe('ParameterInspector Sogni LoRA strength control', () => {
+  it('uses the exact catalog range when present and leaves the numeric control unbounded when unknown', () => {
+    const known=renderToStaticMarkup(<ParameterInspector params={params({targetProvider:'sogni',loras:[{name:'known',modelStrength:3,baseModel:'',strengthRange:{min:-2,max:5,step:0.1}}] as any})} onChange={noop} onOpenCivitai={noop}/>);
+    expect(known).toContain('官方目录范围 [-2, 5]');
+    expect(known).toContain('type="range" min="-2" max="5" step="0.1"');
+    const unknown=renderToStaticMarkup(<ParameterInspector params={params({targetProvider:'sogni',loras:[{name:'custom',modelStrength:12,baseModel:''}] as any})} onChange={noop} onOpenCivitai={noop}/>);
+    expect(unknown).toContain('官方目录范围未知，运行时核验');
+    expect(unknown).toContain('type="number" step="any"');
+    expect(unknown).not.toContain('min="-1.5"');
+    expect(unknown).not.toContain('max="2"');
   });
 });

@@ -595,16 +595,6 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
       });
     }
 
-    // Guard against image models accidentally routed here
-    if (
-      (lowerModel.includes('flux') || lowerModel.includes('schnell') || lowerModel.includes('sdxl') || lowerModel.includes('dev')) &&
-      !lowerModel.includes('video')
-    ) {
-      return res.status(400).json({
-        error: `模型 "${model}" 是图像生成模型，而非 AI 视频生成大模型。生成视频请在视频节点中选择 Wan 2.1 (fal-ai/wan/v2.1/text-to-video) 或 LTX-Video。`,
-      });
-    }
-
     let endpoint = normalizeFalEndpoint(model, true);
     if (!endpoint) {
       return res.status(400).json({ error: `不认识这个模型: ${model}` });
@@ -614,6 +604,7 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
     try { builtVideo = buildFalVideoRequest(endpoint, req.body); }
     catch (error: any) { return res.status(400).json({ error: error.message, errorSource: 'local' }); }
     const payload = builtVideo.payload;
+    const upstreamEndpoint = `https://fal.run/${endpoint}`;
     generationContext.getStore()?.traces.push(sanitizeGenerationMetadata({
       stage: 'parameter-mapping', provider: 'fal', endpoint,
       beforeCustom: builtVideo.beforeCustom, customParameters: builtVideo.customParameters,
@@ -623,7 +614,7 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
     const falVideoStart = Date.now();
     const upstreamResp = await upstreamFetch(
       { provider: 'fal', route: req.path, model: endpoint, key: falKey },
-      `https://fal.run/${endpoint}`,
+      upstreamEndpoint,
       {
         method: 'POST',
         headers: {
@@ -638,11 +629,15 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
       const errorText = await upstreamResp.text();
       keyPoolManager.recordResult('fal', falKey, false, Date.now() - falVideoStart, errorText, upstreamResp.status);
       let friendlyError = `AI 视频服务商执行失败 [${upstreamResp.status}]: ${errorText}`;
-      if (upstreamResp.status === 403 || errorText.includes('Exhausted balance')) {
-        friendlyError = `Fal.ai 接口执行失败 [403]: ${errorText}。当前请求保持 provider=fal，不会自动改用其他供应商。`;
+      if (upstreamResp.status === 403) {
+        friendlyError = `Fal.ai 接口执行失败 [${upstreamResp.status}]: ${errorText}。当前请求保持 provider=fal，不会自动改用其他供应商。`;
       }
       return res.status(upstreamResp.status).json({
         error: friendlyError,
+        upstreamStatus: upstreamResp.status,
+        rawResponse: errorText,
+        errorSource: 'upstream',
+        endpoint: upstreamEndpoint,
       });
     }
 

@@ -67,6 +67,7 @@ export class ModelsLabDriver extends BaseEngineDriver {
       steps: params.steps,
       cfg: params.cfg,
       seed: params.seed,
+      samples: params.batchSize,
       image_url: params.image_url,
       denoise: params.denoise,
       scheduler: params.scheduler,

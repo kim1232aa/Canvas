@@ -3,21 +3,21 @@
 import express from 'express';
 import { describe, expect, it } from 'vitest';
 import docsJson from './__fixtures__/aimlapi-z-image-turbo-lora.docs-json.json';
-import { registerSchemaProviderRoutes, schemaConstraintViolation, openApiRequestSchema } from './schemaProviders';
+import { registerSchemaProviderRoutes, schemaConstraintViolation, openApiRequestSchema, schemaAutoFallbackSelection } from './schemaProviders';
 import { extractWorkflowParameters } from '../utils/graphEngine';
 
 const MODEL = 'alibaba/z-image-turbo-lora';
 const DOCS = 'https://api.aimlapi.com/docs-json?model=alibaba%2Fz-image-turbo-lora';
 const RAW403 = '{"title":"Forbidden","status":403,"message":"You\'ve run out of funds. Please top up your balance or update your payment method to continue: https://aimlapi.com/app/billing/"}';
 
-async function submit(body: any) {
+async function submit(body: any, schema: any = docsJson, docsUrl = DOCS) {
   const calls: Array<{ url: string; init?: RequestInit }> = [];
   const app = express();
   registerSchemaProviderRoutes(app as any, {
     fetch: async (_m: any, url: string, init?: RequestInit) => {
       calls.push({ url, init });
-      if (url.includes('/models')) return new Response(JSON.stringify({ data: [{ id: MODEL, type: 'image', modalities: { output: ['image'] }, info: { name: 'Z-Image Turbo LoRA', docsJson: DOCS } }] }), { status: 200 });
-      if (url === DOCS) return new Response(JSON.stringify(docsJson), { status: 200 });
+      if (url.includes('/models')) return new Response(JSON.stringify({ data: [{ id: MODEL, type: 'image', modalities: { output: ['image'] }, info: { name: 'Z-Image Turbo LoRA', docsJson: docsUrl } }] }), { status: 200 });
+      if (url === docsUrl) return new Response(JSON.stringify(schema), { status: 200 });
       if (url.endsWith('/images/generations')) return new Response(RAW403, { status: 403, statusText: 'Forbidden' });
       throw new Error('unexpected ' + url);
     },
@@ -57,7 +57,7 @@ describe('AIMLAPI z-image-turbo-lora P0', () => {
   });
 
   it('(a) steps 17 → local 400, no upstream POST, value not clamped', async () => {
-    const r = await submit({ model: MODEL, prompt: 'p', steps: 17, cfg: 3.5, seed: 424242, loras: [{ path: 'ostris/z_image_turbo_childrens_drawings', strength: 0.85 }] });
+    const r = await submit({ model: MODEL, prompt: 'p', steps: 17, cfg: 3.5, seed: 424242, loras: [{ path: 'ostris/z_image_turbo_childrens_drawings', strength: 0.85 }], custom_parameters: { provider: 'alibaba' } });
     expect(r.status).toBe(400);
     expect(r.payload.errorSource).toBe('local');
     expect(r.payload.error).toMatch(/num_inference_steps=17 超出官方 Schema 范围 \[1, 8\]/);
@@ -69,13 +69,49 @@ describe('AIMLAPI z-image-turbo-lora P0', () => {
     const params: any = extractWorkflowParameters(nodes as any, connections as any, 'ks' as any);
     expect(params.loras[0]).toMatchObject({ name: 'ostris/z_image_turbo_childrens_drawings', modelStrength: 0.85 });
     const r = await submit({ model: MODEL, prompt: params.positivePrompt, steps: params.steps, cfg: params.cfg, seed: params.seed, width: params.width, height: params.height,
-      loras: params.loras.map((l: any) => ({ name: l.name, strength: l.modelStrength, modelStrength: l.modelStrength })) });
+      loras: params.loras.map((l: any) => ({ name: l.name, strength: l.modelStrength, modelStrength: l.modelStrength })), custom_parameters: { provider: 'alibaba' } });
     expect(r.upstreamBody.loras).toEqual([{ path: 'ostris/z_image_turbo_childrens_drawings', scale: 0.85 }]);
     expect(r.upstreamBody.num_inference_steps).toBe(8);
     expect(r.upstreamBody.image_size).toEqual({ width: 1024, height: 1024 });
     expect(r.upstreamBody).not.toHaveProperty('guidance_scale');
     expect(r.status).toBe(403);
     expect(JSON.stringify(r.payload)).toContain("You've run out of funds");
+  });
+});
+
+describe('Runtime schema-declared automatic fallback is never silent', () => {
+  const source='https://api.aimlapi.com/docs-json?model=alibaba%2Fz-image-turbo-lora&endpoint=openai%2Fimage-generations';
+  const routingSchema={openapi:'3.0.0',paths:{'/v1/images/generations':{post:{requestBody:{content:{'application/json':{schema:{type:'object',properties:{
+    model:{type:'string'},prompt:{type:'string'},provider:{type:'string',description:'Provider routing override. `alibaba` runs native Alibaba with no fallback; `fal` runs the fal.ai mirror; `auto` (default) uses the Alibaba -> fal.ai fallback chain. Case-insensitive.',example:'auto'},
+  }}}}}}}}};
+  it('recognizes the positively described default only from the live request schema field', () => {
+    expect(openApiRequestSchema(routingSchema)?.properties?.provider).toBeDefined();
+    expect(schemaAutoFallbackSelection({model:MODEL,prompt:'p'},openApiRequestSchema(routingSchema),source)).toMatchObject({field:'provider',value:'auto',sourceUrl:source});
+  });
+  it.each([undefined, 'auto'])('blocks implicit or explicit auto before upstream POST (%s)', async (provider) => {
+    const r=await submit({model:MODEL,prompt:'p',...(provider===undefined?{}:{custom_parameters:{provider}})},routingSchema,source);
+    expect(r.status).toBe(400);
+    expect(r.payload.errorSource).toBe('local');
+    expect(r.payload.error).toContain('fallback');
+    expect(r.payload.error).toContain(source);
+    expect(r.payload.error).toContain('明确选择');
+    expect(r.upstreamBody).toBeUndefined();
+  });
+  it.each(['alibaba','fal'])('preserves a user-selected non-auto provider value (%s)', async (provider) => {
+    const r=await submit({model:MODEL,prompt:'p',custom_parameters:{provider}},routingSchema,source);
+    expect(r.upstreamBody.provider).toBe(provider);
+  });
+  it('does not infer fallback behavior from an unrelated schema with no fallback declaration', async () => {
+    const schema={openapi:'3.0.0',paths:{'/v1/images/generations':{post:{requestBody:{content:{'application/json':{schema:{type:'object',properties:{model:{type:'string'},prompt:{type:'string'},strategy:{type:'string',default:'auto',description:'Automatic strategy selection.'}}}}}}}}}};
+    const r=await submit({model:MODEL,prompt:'p'},schema,source);
+    expect(r.status).toBe(403);
+    expect(r.upstreamBody).not.toBeUndefined();
+  });
+  it('does not mistake fallback elsewhere in the description for auto fallback', async () => {
+    const schema={openapi:'3.0.0',paths:{'/v1/images/generations':{post:{requestBody:{content:{'application/json':{schema:{type:'object',properties:{model:{type:'string'},prompt:{type:'string'},provider:{type:'string',default:'auto',description:'`auto` has no fallback; manual selection uses the fallback chain.'}}}}}}}}}};
+    const r=await submit({model:MODEL,prompt:'p'},schema,source);
+    expect(r.status).toBe(403);
+    expect(r.upstreamBody.provider).toBeUndefined();
   });
 });
 

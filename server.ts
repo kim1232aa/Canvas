@@ -1,4 +1,7 @@
 import {registerSchemaProviderRoutes,makeSchemaProviderReader,fetchSchemaProviderRows,normalizeSchemaProviderItems,resolveSchemaRefs} from './src/server/schemaProviders.ts';
+import { lookupExactHuggingFaceRepo } from './src/server/huggingFaceExactRepoSearch.ts';
+import { classifyCivitaiVideoPoll } from './src/server/civitaiVideoPoll.ts';
+import { readHuggingFaceSpaceImageResponse } from './src/server/huggingFaceSpaceImage.ts';
 import { buildModelScopeImagePayload } from './src/server/modelScopeImageContract';
 import { MODELSCOPE_REGIONS, buildLoraListRequest, parseLoraListResponse } from './src/server/modelScopeLoraList.ts';
 import {isHuggingFaceLora} from './src/utils/hfResource.ts';
@@ -20,9 +23,11 @@ import { registerOpenWorksRoutes } from './src/server/openWorksProvider.ts';
 import {buildNanoImagePayload} from './src/schemas/nanoImageApi.ts';
 import { registerSenseNovaRoutes } from './src/server/routes/sensenovaRoutes.ts';
 import {buildRunwareImageRequest, parseRunwareImageResponse} from './src/server/runwareImageContract.ts';
-import {buildModelsLabImageRequest, parseModelsLabResponse, buildModelsLabFetchRequest, sanitizeModelsLabPayload} from './src/server/modelsLabImageContract.ts';
+import {buildModelsLabImageRequest, parseModelsLabResponse, buildModelsLabFetchRequest, sanitizeModelsLabPayload, inspectModelsLabPollBody} from './src/server/modelsLabImageContract.ts';
+import { parseModelsLabCatalogResponse, parseRunwareCatalogResponse } from './src/server/modelCatalogResponse.ts';
 import {falImageFieldGate} from './src/server/falImageContract.ts';
 import {buildCivitaiImageRequest, CivitaiAmbiguousError} from './src/server/civitaiImageContract.ts';
+import { withGeminiImageResponseModality } from './src/server/geminiImageConfig.ts';
 import {civitaiImageHistory} from './src/server/civitaiHistoryContract.ts';
 import { handleCivitaiModels, handleHuggingFaceModelInfo, handleTensorArtModelInfo, handleCredentialPresence, handleCivitaiModelDetail, handleCivitaiModelVersion } from './src/server/routes/civitaiModelRoutes.ts';
 import { handleExtractCivitaiWorkflow } from './src/server/routes/civitaiWorkflowRoute.ts';
@@ -1868,22 +1873,16 @@ app.get("/api/models", async (req, res) => {
           let rawModelList: any[] = Array.isArray(hfData) ? [...hfData] : [];
 
           // If user searched for an exact repo path (e.g. username/repo-name), fetch that exact model directly if not present
-          if (searchStr && searchStr.includes('/') && !rawModelList.some((m) => m.id?.toLowerCase() === searchStr.toLowerCase())) {
-            try {
-              const exactUrl = `https://huggingface.co/api/models/${rawSearch.split('/').map(encodeURIComponent).join('/')}?expand[]=siblings&expand[]=tags&expand[]=likes&expand[]=pipeline_tag&expand[]=author&expand[]=cardData`;
-              const exactResp = await upstreamFetch(
-                { provider: 'huggingface', route: req.path, model: searchStr, key: hfToken },
-                exactUrl,
-                { headers: hfHeaders, signal: AbortSignal.timeout(8000) }
-              );
-              if (exactResp.ok) {
-                const exactModel = await exactResp.json();
-                if (exactModel && exactModel.id) {
-                  rawModelList.unshift(exactModel);
-                }
-              }
-            } catch (exactErr) {
-              // Ignore if not found
+          if (searchStr && searchStr.includes('/')) {
+            const exactLookup = await lookupExactHuggingFaceRepo(rawSearch, rawModelList, (exactUrl) => upstreamFetch(
+              { provider: 'huggingface', route: req.path, model: searchStr, key: hfToken },
+              exactUrl,
+              { headers: hfHeaders, signal: AbortSignal.timeout(8000) }
+            ));
+            if (exactLookup.model) rawModelList.unshift(exactLookup.model);
+            if (exactLookup.error) {
+              catalogNoticesAccum.huggingface = `${exactLookup.error.error}${exactLookup.error.status === null ? '（无 HTTP 响应）' : ` [HTTP ${exactLookup.error.status}]`}${exactLookup.error.details ? `：${exactLookup.error.details}` : ''}；普通搜索结果仍保留，但精确仓库补查未确认。端点：${exactLookup.error.endpoint}`;
+              (results as any).huggingfaceExactLookupError = exactLookup.error;
             }
           }
 
@@ -2582,6 +2581,8 @@ app.get("/api/models", async (req, res) => {
     // Runware live model search or lookup-only notice
     if (provider === 'all' || provider === 'runware') {
       tasks.push((async () => {
+        let rwEndpoint = 'https://api.runware.ai/v1';
+        let rwUpstreamStatus: number | undefined;
         try {
           const runwareKey = (req.headers['x-runware-key'] as string) || keyPoolManager.getNextKey('runware', undefined) || defaultKeys.runwareKey;
           if (!runwareKey) {
@@ -2617,6 +2618,7 @@ app.get("/api/models", async (req, res) => {
               ...(archFilter && archFilter !== 'all' ? { architecture: archFilter } : {}),
             };
             const rwBaseUrl = String(req.headers['x-runware-base-url'] || cloudSettings['runwareBaseUrl'] || defaultKeys.runwareBaseUrl || 'https://api.runware.ai/v1').trim().replace(/\/+$/, '');
+            rwEndpoint = rwBaseUrl;
             const rwResp = await upstreamFetch(
               { provider: 'runware', route: req.path, model: 'modelSearch', key: runwareKey },
               rwBaseUrl,
@@ -2630,18 +2632,13 @@ app.get("/api/models", async (req, res) => {
                 signal: AbortSignal.timeout(8000),
               }
             );
-            if (!rwResp.ok) {
-              const errText = await rwResp.text().catch(() => '');
-              results.runware = {
-                error: `Runware 上游请求失败 (${rwResp.status})`,
-                status: rwResp.status,
-                details: errText.slice(0, 300),
-                endpoint: 'https://api.runware.ai/v1',
-              } as any;
+            rwUpstreamStatus = rwResp.status;
+            const rawResponse = await rwResp.text();
+            const parsedCatalog = parseRunwareCatalogResponse(rwResp.status, rawResponse, runwareKey);
+            if (!parsedCatalog.ok) {
+              results.runware = { ...parsedCatalog, endpoint: sanitizeGenerationMetadata(rwEndpoint) } as any;
             } else {
-              const rwData = await rwResp.json().catch(() => ({}));
-              const taskResult = Array.isArray(rwData?.data) ? rwData.data[0] : null;
-              const rawList = Array.isArray(taskResult?.results) ? taskResult.results : [];
+              const { results: rawList, totalResults: upstreamTotal } = parsedCatalog.data;
               const mapped = rawList.map((r: any) => ({
                 id: r.air || r.id || r.name,
                 name: r.name || r.air,
@@ -2659,13 +2656,13 @@ app.get("/api/models", async (req, res) => {
               }));
               const filtered = mapped.filter((m: any) => matchCategory(m) && matchSearch(m));
               results.runware = filtered;
-              const total = typeof taskResult?.totalResults === 'number' ? taskResult.totalResults : filtered.length;
+              const total = typeof upstreamTotal === 'number' ? upstreamTotal : filtered.length;
               pagination.runware = {
                 page: pageParam,
                 limit: limitParam,
                 total,
                 hasMore: pageParam * limitParam < total,
-                sourceUrl: 'https://api.runware.ai/v1',
+                sourceUrl: sanitizeGenerationMetadata(rwEndpoint),
                 sourceNotice: 'live-api (modelSearch)',
               };
             }
@@ -2673,8 +2670,11 @@ app.get("/api/models", async (req, res) => {
         } catch (rwErr: any) {
           results.runware = {
             error: rwErr.message || 'Runware 请求失败',
-            status: rwErr.status ?? null,
-            endpoint: 'https://api.runware.ai/v1',
+            status: rwErr.status ?? rwUpstreamStatus ?? null,
+            ...((rwErr.status ?? rwUpstreamStatus) !== undefined ? { upstreamStatus: rwErr.status ?? rwUpstreamStatus } : {}),
+            errorSource: rwErr.errorSource || ((rwErr.status ?? rwUpstreamStatus) !== undefined ? 'upstream' : 'network'),
+            details: rwErr.message || String(rwErr),
+            endpoint: sanitizeGenerationMetadata(rwEndpoint),
           } as any;
         }
       })());
@@ -2683,6 +2683,8 @@ app.get("/api/models", async (req, res) => {
     // ModelsLab live models list or lookup-only notice
     if (provider === 'all' || provider === 'modelslab') {
       tasks.push((async () => {
+        let mlListEndpoint = 'https://modelslab.com/api/v4/dreambooth/model_list';
+        let mlUpstreamStatus: number | undefined;
         try {
           const modelslabKey = (req.headers['x-modelslab-key'] as string) || keyPoolManager.getNextKey('modelslab', undefined) || defaultKeys.modelslabKey;
           if (!modelslabKey) {
@@ -2698,7 +2700,7 @@ app.get("/api/models", async (req, res) => {
             catalogNoticesAccum.modelslab = 'ModelsLab 官方模型列表需要 API Key (MODELSLAB_API_KEY)；支持直接在上方输入框中输入模型 ID / lora_model ID。';
           } else {
             const mlBaseUrl = String(req.headers['x-modelslab-base-url'] || cloudSettings['modelslabBaseUrl'] || defaultKeys.modelslabBaseUrl || 'https://modelslab.com').trim().replace(/\/+$/, '');
-            const mlListEndpoint = `${mlBaseUrl}/api/v4/dreambooth/model_list`;
+            mlListEndpoint = `${mlBaseUrl}/api/v4/dreambooth/model_list`;
             const mlResp = await upstreamFetch(
               { provider: 'modelslab', route: req.path, model: 'dreambooth/model_list', key: modelslabKey },
               mlListEndpoint,
@@ -2709,17 +2711,13 @@ app.get("/api/models", async (req, res) => {
                 signal: AbortSignal.timeout(15000),
               }
             );
-            if (!mlResp.ok) {
-              const errText = await mlResp.text().catch(() => '');
-              results.modelslab = {
-                error: `ModelsLab 上游请求失败 (${mlResp.status})`,
-                status: mlResp.status,
-                details: errText.slice(0, 300),
-                endpoint: 'https://modelslab.com/api/v4/dreambooth/model_list',
-              } as any;
+            mlUpstreamStatus = mlResp.status;
+            const rawResponse = await mlResp.text();
+            const parsedCatalog = parseModelsLabCatalogResponse(mlResp.status, rawResponse, modelslabKey);
+            if (!parsedCatalog.ok) {
+              results.modelslab = { ...parsedCatalog, endpoint: sanitizeGenerationMetadata(mlListEndpoint) } as any;
             } else {
-              const mlData = await mlResp.json().catch(() => []);
-              const rawList = Array.isArray(mlData) ? mlData : [];
+              const rawList = parsedCatalog.data;
               // Official POST /api/v4/dreambooth/model_list rows: model_subcategory==='lora' are LoRA adapters
               // (docs: https://docs.modelslab.com/image-generation/community-models/dreambooth-lora).
               const mapped = rawList.map((m: any) => {
@@ -2748,7 +2746,7 @@ app.get("/api/models", async (req, res) => {
                 limit: limitParam,
                 total: filtered.length,
                 hasMore: offset + limitParam < filtered.length,
-                sourceUrl: 'https://modelslab.com/api/v4/dreambooth/model_list',
+                sourceUrl: sanitizeGenerationMetadata(mlListEndpoint),
                 sourceNotice: 'live-api (dreambooth/model_list; lora=model_subcategory)',
               };
             }
@@ -2756,8 +2754,11 @@ app.get("/api/models", async (req, res) => {
         } catch (mlErr: any) {
           results.modelslab = {
             error: mlErr.message || 'ModelsLab 请求失败',
-            status: mlErr.status ?? null,
-            endpoint: 'https://modelslab.com/api/v4/dreambooth/model_list',
+            status: mlErr.status ?? mlUpstreamStatus ?? null,
+            ...((mlErr.status ?? mlUpstreamStatus) !== undefined ? { upstreamStatus: mlErr.status ?? mlUpstreamStatus } : {}),
+            errorSource: mlErr.errorSource || ((mlErr.status ?? mlUpstreamStatus) !== undefined ? 'upstream' : 'network'),
+            details: mlErr.message || String(mlErr),
+            endpoint: sanitizeGenerationMetadata(mlListEndpoint),
           } as any;
         }
       })());
@@ -2923,6 +2924,11 @@ app.get("/api/models", async (req, res) => {
         if (typeof v === 'string' && !finalCatalogNotices[k.replace(/Notice$/, '')]) {
           finalCatalogNotices[k.replace(/Notice$/, '')] = v;
         }
+        delete (results as any)[k];
+        continue;
+      }
+      if (k === 'huggingfaceExactLookupError') {
+        finalErrors.huggingface = `${(v as any).error}${(v as any).details ? `: ${(v as any).details}` : ''} (HTTP ${(v as any).status ?? 'network/local error'}; ${(v as any).endpoint})`;
         delete (results as any)[k];
         continue;
       }
@@ -3381,15 +3387,21 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
 
         const orchData = await orchResp.json();
         completedMediaUrl = extractCivitaiBlobUrl(orchData);
+        const initialOutcome = classifyCivitaiVideoPoll(orchData, completedMediaUrl, orchResp.status, 'https://orchestration.civitai.com/v2/consumer/workflows?wait=100', String(orchData.id || orchData.token || ''));
+        if (initialOutcome.kind === 'failed' || initialOutcome.kind === 'succeeded-without-output') {
+          keyPoolManager.recordResult('civitai', apiKey, false, Date.now() - startTime, JSON.stringify(orchData), orchResp.status);
+          return res.status(initialOutcome.httpStatus).json(initialOutcome.response);
+        }
         if (!completedMediaUrl && (orchData.id || orchData.token)) {
           const workflowId = orchData.id || orchData.token;
           for (let i = 0; i < 20; i++) {
             await new Promise((r) => setTimeout(r, 3000));
             let pollResp: Response;
+            const pollEndpoint = `https://orchestration.civitai.com/v2/consumer/workflows/${workflowId}`;
             try {
               pollResp = await upstreamFetch(
                 { provider: 'civitai', route: '/api/civitai/generate/poll', model: String(workflowId), key: apiKey },
-                `https://orchestration.civitai.com/v2/consumer/workflows/${workflowId}`,
+                pollEndpoint,
                 {
                   headers: { Authorization: `Bearer ${apiKey}` },
                 }
@@ -3407,18 +3419,16 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
               });
             }
             const pollData = await pollResp.json();
-            const status = (pollData.status || '').toLowerCase();
-              if (status === 'failed' || status === 'expired' || status === 'canceled') {
-                keyPoolManager.recordResult('civitai', apiKey, false, Date.now() - startTime, `Status: ${pollData.status}`);
-                return res.status(500).json({
-                  error: `Civitai 视频任务渲染失败 [状态: ${pollData.status}]: ${pollData.error || pollData.reason || 'Job failed on Civitai cluster'}`,
-                });
-              }
-              const url = extractCivitaiBlobUrl(pollData);
-              if (url) {
-                completedMediaUrl = url;
-                break;
-              }
+            const url = extractCivitaiBlobUrl(pollData);
+            const outcome = classifyCivitaiVideoPoll(pollData, url, pollResp.status, pollEndpoint, String(workflowId));
+            if (outcome.kind === 'failed' || outcome.kind === 'succeeded-without-output') {
+              keyPoolManager.recordResult('civitai', apiKey, false, Date.now() - startTime, JSON.stringify(pollData), pollResp.status);
+              return res.status(outcome.httpStatus).json(outcome.response);
+            }
+            if (outcome.kind === 'output') {
+              completedMediaUrl = outcome.url;
+              break;
+            }
             }
           }
 
@@ -3858,20 +3868,38 @@ app.post('/api/engine/modelslab/generate', async (req, res) => {
             actualRequest,
           });
         }
-        const pollData = await polled.json().catch(() => ({}));
+        const pollRawResponse = await polled.text();
+        const pollInspection = inspectModelsLabPollBody(pollRawResponse);
+        if (pollInspection.kind === 'invalid-json') {
+          const errorText = `ModelsLab 轮询 HTTP ${polled.status} 返回无效 JSON: ${pollInspection.parseError}`;
+          keyPoolManager.recordResult('modelslab', apiKey, false, Date.now() - startTime, errorText, polled.status);
+          return res.status(502).json({
+            error: errorText,
+            localStatus: 502,
+            upstreamStatus: polled.status,
+            errorSource: 'upstream',
+            details: pollInspection.parseError,
+            rawResponse: pollInspection.rawResponse,
+            endpoint: fetchReq.endpoint,
+            actualRequest,
+          });
+        }
+        const pollData = pollInspection.data;
         if (pollData.status === 'success') {
           parsed = parseModelsLabResponse(pollData);
           finalImageUrl = parsed.imageUrl;
           break;
-        } else if (pollData.status === 'error') {
+        } else if (pollInspection.kind === 'task-error') {
           const errMsg = `ModelsLab 异步任务失败: ${pollData.message || '未知错误'}${pollData.tip ? ` (${pollData.tip})` : ''}`;
-          keyPoolManager.recordResult('modelslab', apiKey, false, Date.now() - startTime, errMsg, 502);
+          keyPoolManager.recordResult('modelslab', apiKey, false, Date.now() - startTime, errMsg, polled.status);
           return res.status(502).json({
             error: errMsg,
-            upstreamStatus: 502,
+            localStatus: 502,
+            upstreamStatus: polled.status,
+            upstreamStatusText: `task status=${pollData.status}`,
             errorSource: 'upstream',
             endpoint: fetchReq.endpoint,
-            rawResponse: pollData,
+            rawResponse: pollInspection.rawResponse,
             actualRequest,
           });
         }
@@ -4343,19 +4371,40 @@ app.post(['/api/huggingface/generate', '/api/engine/huggingface/generate'], asyn
         });
       }
 
-      const imgResp = await upstreamFetch(
-        { provider: 'huggingface', route: '/api/huggingface/generate', model, key: hfToken },
-        genUrl,
-        { headers: hfToken ? { 'Authorization': `Bearer ${hfToken}` } : {} }
-      );
-      if (imgResp.ok) {
-        const buf = await imgResp.arrayBuffer();
-        const base64 = Buffer.from(buf).toString('base64');
-        const mimeType = imgResp.headers.get('content-type') || 'image/png';
-        dataUrl = await externalizeMedia(`data:${mimeType};base64,${base64}`);
-      } else {
-        dataUrl = genUrl;
+      let imgResp: Response;
+      try {
+        imgResp = await upstreamFetch(
+          { provider: 'huggingface', route: '/api/huggingface/generate', model, key: hfToken },
+          genUrl,
+          { headers: hfToken ? { 'Authorization': `Bearer ${hfToken}` } : {} }
+        );
+      } catch (error: any) {
+        return res.status(502).json({
+          error: `Hugging Face Z-Image-Turbo 图像下载网络失败: ${error.message}`,
+          errorSource: 'network',
+          endpoint: genUrl,
+          actualRequest: zActual,
+          model,
+        });
       }
+      const imageResult = await readHuggingFaceSpaceImageResponse(imgResp, genUrl);
+      if (!imageResult.ok) {
+        const isProtocolError = imageResult.kind === 'protocol';
+        return res.status(isProtocolError ? 502 : imageResult.status).json({
+          error: isProtocolError
+            ? `Hugging Face Z-Image-Turbo 上游返回非图像或空图像响应 [${imageResult.status}]`
+            : `Hugging Face Z-Image-Turbo 图像下载失败 [${imageResult.status}]`,
+          errorSource: isProtocolError ? 'upstream-protocol' : 'upstream',
+          upstreamStatus: imageResult.status,
+          endpoint: imageResult.endpoint,
+          contentType: imageResult.contentType,
+          details: imageResult.body,
+          ...(imageResult.kind === 'protocol' ? { bodyBase64: imageResult.bodyBase64 } : {}),
+          actualRequest: zActual,
+          model,
+        });
+      }
+      dataUrl = await externalizeMedia(imageResult.dataUrl);
     } else if (hfProvider === 'fal-ai') {
       // Official HF SDK routing + live inferenceProviderMapping.
       // No provider failover. Billing/402 may try the next KeyPool key (billingKeyRotate); other errors stop.
@@ -5068,7 +5117,7 @@ app.post(['/api/gemini/generate', '/api/engine/gemini/generate'], async (req, re
     };
     const custom = applyCustomParameters({ model, config }, Object.keys(geminiCustomRequest.config).length || customModel !== undefined ? geminiCustomRequest : undefined);
     const actualModel = String(custom.actualModel || model);
-    const sentConfig = (custom.payload.config || {}) as Record<string, any>;
+    const sentConfig = withGeminiImageResponseModality((custom.payload.config || {}) as Record<string, any>);
     const geminiOverrides = custom.overrides;
     const actualRequest = { model: actualModel, contents: { parts }, config: sentConfig };
     const contentResponse = await upstreamSdkCall(

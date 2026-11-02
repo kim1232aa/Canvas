@@ -20,6 +20,14 @@ it('atomically replaces verified identity and clears stale unresolved markers on
  for(const key of ['civitaiId','import_unresolved_resource','unresolvedResource','import_unresolved_reason'])expect(next).not.toHaveProperty(key);
  expect(replaceSelectedResource(previous,{name:'manual-name',resourceVerified:false},'lora_name').import_unresolved_resource).toBe(true);
 });
+it('carries only the exact Sogni catalog range through Hub selection into the LoRA node',()=>{
+ const selected=selectionFromMetadata('sogni',{id:'krea2-detail-enhancer',type:'LoRA',loraStrengthRange:{min:-2,max:5,step:0.1}},'lora');
+ expect(selected.loraStrengthRange).toEqual({min:-2,max:5,step:0.1});
+ expect(replaceSelectedResource({},selected,'lora_name')).toMatchObject({lora_strength_min:-2,lora_strength_max:5,lora_strength_step:0.1});
+ const unknown=selectionFromMetadata('sogni',{id:'manual-id',type:'LoRA',loraStrengthRange:{min:-1}},'lora');
+ expect(unknown.loraStrengthRange).toBeUndefined();
+ expect(replaceSelectedResource({lora_strength_min:-2,lora_strength_max:5},{...unknown},'lora_name')).not.toHaveProperty('lora_strength_min');
+});
 it('requires an explicit version when a model id has multiple versions',()=>{
  expect(()=>selectionFromMetadata('civitai',{id:705606,type:'Checkpoint',modelVersions:[{id:2787743,air:'urn:air:flux1:checkpoint:civitai:705606@2787743'},{id:2855460,air:'urn:air:flux1:checkpoint:civitai:705606@2855460'}]},'checkpoint')).toThrow(/version|版本/);
 });

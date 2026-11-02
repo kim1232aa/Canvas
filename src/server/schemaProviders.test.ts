@@ -1,6 +1,6 @@
 import express from 'express';
 import { describe, expect, it } from 'vitest';
-import { fetchSchemaProviderRows, isSogniPersonalLoraRow, normalizeSchemaProviderItems, registerSchemaProviderRoutes, resolveSchemaRefs, sogniLoraCover, upstreamReferenceUrlIssue } from './schemaProviders';
+import { fetchSchemaProviderRows, isSogniPersonalLoraRow, normalizeSchemaProviderItems, registerSchemaProviderRoutes, resolveSchemaRefs, sogniLoraCover, sogniLoraStrengthRange, upstreamReferenceUrlIssue, validateSogniLoraStrengthRanges } from './schemaProviders';
 
 async function withFixture(
   upstream: (url: string, init?: RequestInit) => Promise<Response>,
@@ -117,6 +117,47 @@ describe('Sogni LoRA catalog covers', () => {
     ],{lora:true,sourceUrl:'https://api.sogni.ai/v1/loras/comfy'});
     expect(mine).toMatchObject({id:'personal-abc',badge:'我的个人 LoRA',baseModel:'krea2_turbo_fp8_scaled'});
     expect(pub.badge).toBe('官方 LoRA 资源');
+  });
+});
+
+describe('Sogni LoRA strength ranges', () => {
+  it('uses only complete numeric ranges from exact catalog rows and accepts both inclusive boundaries', () => {
+    const rows=[{loraId:'bipolar',ui:{min:-3,max:5,step:0.1}},{loraId:'personal-owned',ui:{min:0.2,max:1}}];
+    expect(sogniLoraStrengthRange(rows[0])).toEqual({min:-3,max:5,step:0.1});
+    expect(validateSogniLoraStrengthRanges(['bipolar','personal-owned'],[-3,1],rows)).toMatchObject({
+      checked:[{id:'bipolar',minimum:-3,maximum:5},{id:'personal-owned',minimum:0.2,maximum:1}],unknown:[],violations:[],
+    });
+  });
+  it('flags only values beyond the returned per-LoRA bounds; it does not clamp them', () => {
+    const result=validateSogniLoraStrengthRanges(['a','b'],[5.01,-2],[
+      {loraId:'a',ui:{min:-2,max:5}},
+      {loraId:'b',ui:{min:-1,max:3}},
+    ]);
+    expect(result.violations).toEqual([
+      {id:'a',strength:5.01,minimum:-2,maximum:5},
+      {id:'b',strength:-2,minimum:-1,maximum:3},
+    ]);
+  });
+  it('leaves unmatched IDs and incomplete or malformed catalog ranges unknown without inventing bounds', () => {
+    const rows=[
+      {loraId:'partial',ui:{min:-1}},
+      {loraId:'reversed',ui:{min:2,max:-2}},
+      {loraId:'string-range',ui:{min:'-1',max:'1'}},
+    ];
+    expect(sogniLoraStrengthRange(rows[0])).toBeUndefined();
+    const result=validateSogniLoraStrengthRanges(['personal-abc','partial','reversed','string-range'],[50,50,50,50],rows);
+    expect(result.checked).toEqual([]);
+    expect(result.violations).toEqual([]);
+    expect(result.unknown).toHaveLength(4);
+  });
+  it('uses the official omitted-array default only when the entire strength array is absent', () => {
+    expect(validateSogniLoraStrengthRanges(['a'],undefined,[{loraId:'a',ui:{min:2,max:4}}]).violations)
+      .toEqual([{id:'a',strength:1,minimum:2,maximum:4}]);
+    expect(validateSogniLoraStrengthRanges(['a'],[],[{loraId:'a',ui:{min:2,max:4}}]).unknown[0].reason)
+      .toMatch(/缺少对应位置/);
+    const nullValue=validateSogniLoraStrengthRanges(['a'],[null],[{loraId:'a',ui:{min:-1,max:1}}]);
+    expect(nullValue.violations).toEqual([]);
+    expect(nullValue.unknown[0].reason).toMatch(/JSON number/);
   });
 });
 

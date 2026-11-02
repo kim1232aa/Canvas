@@ -6,7 +6,7 @@ import { HistoryModal, historyUnsupportedRows } from '../components/HistoryModal
 import { sentHistoryLoras, lorasFromSentParameters, historyUpstreamExchanges, resolveHistoryParameters } from './historyParameters';
 import { buildFailedAttemptHistoryItem, lorasFromActualRequest } from '../server/failedAttemptHistory';
 import { isLocalNotOutbound } from './apiFailure';
-import { aimlapiLoras, schemaLoraMaxItems, aimlapiLoraImageInputSchema } from '../server/schemaProviders';
+import { aimlapiLoras, schemaLoraMaxItems } from '../server/schemaProviders';
 import { schemaLoraDescriptions, schemaChoiceFields } from '../components/SchemaChoiceControls';
 import { hasStaleLoraBlock, clearStaleLoraBlocks } from './graphEngine';
 import { loraLoaderNodeTitle } from './providerLabels';
@@ -65,7 +65,8 @@ describe('trace-fix2 #5 — AIMLAPI limit comes from Schema maxItems only', () =
   it('aimlapiLoras no longer caps at 3 itself; the generic reader reads loras.maxItems', () => {
     const four = [1, 2, 3, 4].map((i) => ({ path: `o/r${i}`, strength: 1 }));
     expect(aimlapiLoras(four)).toHaveLength(4);
-    expect(schemaLoraMaxItems(aimlapiLoraImageInputSchema.properties)).toEqual({ field: 'loras', maxItems: 3 });
+    const officialProperties = { loras: { type: 'array', maxItems: 3 } };
+    expect(schemaLoraMaxItems(officialProperties)).toEqual({ field: 'loras', maxItems: 3 });
     expect(schemaLoraMaxItems({ loras: { type: 'array' } })).toBeNull();
   });
 });

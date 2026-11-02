@@ -7,9 +7,10 @@ import {
 } from './mageImageContract';
 
 describe('mageImageContract', () => {
-  it('builds official mango payload with prompt + model_id defaults', () => {
+  it('builds a Mango request with the explicitly selected model', () => {
     const mapped = buildMageImageRequest({
       prompt: 'Editorial portrait in soft daylight, 35mm film look',
+      model_id: 'mango-v3',
       aspect_ratio: '4:5',
     });
     expect(mapped.endpoint).toBe('https://api.mage.space/v1/mango/generate');
@@ -59,9 +60,16 @@ describe('mageImageContract', () => {
     ).toThrow(/negative_prompt/);
   });
 
-  it('rejects unknown model_id / aspect_ratio', () => {
-    expect(() => buildMageImageRequest({ prompt: 'x', model_id: 'flux' })).toThrow(/model_id/);
-    expect(() => buildMageImageRequest({ prompt: 'x', aspect_ratio: '7:7' })).toThrow(/aspect_ratio/);
+  it('requires an explicit model and forwards an unknown model unchanged', () => {
+    expect(() => buildMageImageRequest({ prompt: 'x' })).toThrow(/模型为必填项/);
+    expect(buildMageImageRequest({ prompt: 'x', model_id: 'custom-model' }).payload.model_id).toBe('custom-model');
+    expect(() => buildMageImageRequest({ prompt: 'x', model_id: 'mango-v3', aspect_ratio: '7:7' })).toThrow(/aspect_ratio/);
+  });
+
+  it('does not silently round or discard an explicitly supplied seed', () => {
+    expect(() => buildMageImageRequest({ prompt: 'x', model_id: 'mango-v3', seed: 1.5 })).toThrow(/seed/);
+    expect(() => buildMageImageRequest({ prompt: 'x', model_id: 'mango-v3', seed: '42' })).toThrow(/seed/);
+    expect(buildMageImageRequest({ prompt: 'x', model_id: 'mango-v3', seed: 42 }).payload.seed).toBe(42);
   });
 
   it('parses completed and pending responses', () => {

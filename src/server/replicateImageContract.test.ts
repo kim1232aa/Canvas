@@ -45,13 +45,27 @@ describe('replicateImageContract', () => {
         prompt: 'cyberpunk street',
       });
 
-      expect(result.endpoint).toBe('https://api.replicate.com/v1/models/black-forest-labs/flux-dev/predictions');
+      expect(result.endpoint).toBe('https://api.replicate.com/v1/predictions');
       expect(result.isVersionBased).toBe(true);
       expect(result.actualModel).toBe(`black-forest-labs/flux-dev:${hex64}`);
-      expect(result.payload.version).toBe(hex64);
+      expect(result.payload.version).toBe(`black-forest-labs/flux-dev:${hex64}`);
       expect(result.payload.input).toEqual({
         prompt: 'cyberpunk street',
       });
+    });
+
+    it('uses /predictions when a version is explicitly supplied for an unpinned model name', () => {
+      const version = '50adaf2d3c7a8b6099dd81e58e6dd27d2c317c52d007bc019c67040c22941234';
+      const result = buildReplicatePredictionRequest({
+        model: 'owner/model',
+        version,
+        prompt: 'version-specific prompt',
+        inputSchemaProperties: { prompt: {} },
+      });
+      expect(result.endpoint).toBe('https://api.replicate.com/v1/predictions');
+      expect(result.payload).toEqual({ version, input: { prompt: 'version-specific prompt' } });
+      expect(result.actualModel).toBe('owner/model');
+      expect(result.isVersionBased).toBe(true);
     });
 
     it('builds request for 64-hex version string directly', () => {

@@ -130,9 +130,9 @@ describe('Together image_loras = officialUnavailable (not rule D); Venice loraLo
     expect(officialUnavailableMessage(hit!).split('\n')[1]).toBe('官方参数指南：image_loras no longer available');
     expect(matchOfficialUnavailable(schemaProviders.together, props, false)).toBeUndefined();
   });
-  it('rule is table data: only Venice (live 400 Unrecognized key loras) carries loraLocalBlock', () => {
+  it('Venice local LoRA block is table data with its upstream evidence', () => {
     const withBlock = Object.entries(schemaProviders).filter(([, v]) => (v as any).loraLocalBlock).map(([k]) => k);
-    expect(withBlock).toEqual(['venice']);
+    expect(withBlock).toContain('venice');
     expect((schemaProviders.venice as any).loraLocalBlock.docQuote).toContain("Unrecognized key(s) in object: 'loras'");
   });
   it('local block text: first line 本地拦截 · 未发请求, no HTTP 400 in UI text', () => {

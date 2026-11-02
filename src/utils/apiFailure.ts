@@ -84,17 +84,23 @@ export function plainFailureConclusion(detail: string | null | undefined): strin
  */
 export function plainErrorMessage(err: unknown): string {
   const raw = err instanceof Error ? err.message : String(err ?? '执行遇到错误');
+  const rangeWarning = err && typeof err === 'object' && typeof (err as any).data?.loraRangeWarning === 'string'
+    ? String((err as any).data.loraRangeWarning)
+    : '';
+  const withRangeWarning = (message: string) => rangeWarning && !message.includes(rangeWarning)
+    ? `${message}；${rangeWarning}`
+    : message;
   const first = raw.split('\n')[0];
   // Local rejection: verbatim, no rewrite / slice — must not look like upstream failure or success.
-  if (first.startsWith('未出站，本地拦截') || first.startsWith('本地拦截 · ')) return first;
+  if (first.startsWith('未出站，本地拦截') || first.startsWith('本地拦截 · ')) return withRangeWarning(first);
   // fix4: HTTP lines → short summary (no raw JSON in node banner / top bar).
-  if (/^HTTP \d{3}\b/.test(first) || first.startsWith('{')) return shortUpstreamSummary(first);
+  if (/^HTTP \d{3}\b/.test(first) || first.startsWith('{')) return withRangeWarning(shortUpstreamSummary(first));
   const plain = plainFailureConclusion(first) || plainFailureConclusion(raw);
-  if (plain) return plain;
+  if (plain) return withRangeWarning(plain);
   if (isBillingFailureText(first) || isBillingFailureText(raw)) {
-    return extractUpstreamMessage(raw) || first;
+    return withRangeWarning(extractUpstreamMessage(raw) || first);
   }
-  return unicodeSafeSlice(first, 120);
+  return withRangeWarning(unicodeSafeSlice(first, 120));
 }
 
 /** Node / frame error banner: billing pass-through stays full; other lines stay short. */

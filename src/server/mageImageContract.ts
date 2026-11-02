@@ -66,19 +66,17 @@ export function buildMageImageRequest(
     throw new Error(`Mage Mango 官方 Schema 不接受这些画布字段，不会静默丢弃：${refused.join(', ')}`);
   }
 
-  const modelRaw = String(body.model_id || body.model || 'mango-v3').trim();
-  if (!(MAGE_MODEL_IDS as readonly string[]).includes(modelRaw)) {
-    throw new Error(`Mage model_id 必须是 ${MAGE_MODEL_IDS.join(' | ')}，收到：${modelRaw}`);
-  }
-  const modelId = modelRaw as MageModelId;
+  const modelId = String(body.model_id || body.model || '').trim();
+  if (!modelId) throw new Error('模型为必填项（model is required）');
 
   const payload: Record<string, unknown> = {
     prompt,
     model_id: modelId,
   };
 
-  if (typeof body.seed === 'number' && Number.isFinite(body.seed)) {
-    payload.seed = Math.round(body.seed);
+  if (body.seed !== undefined && body.seed !== null) {
+    if (typeof body.seed !== 'number' || !Number.isSafeInteger(body.seed)) throw new Error('Mage seed 必须是安全整数或 null，未发送生成请求');
+    payload.seed = body.seed;
   } else if (body.seed === null) {
     payload.seed = null;
   }
