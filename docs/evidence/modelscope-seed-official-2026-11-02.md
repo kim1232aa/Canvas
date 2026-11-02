@@ -35,3 +35,10 @@
 - 三路搜索：WebSearch/Brave 更易命中个人文 raoxiaoya（同表）；agy 归纳范围一致；**定稿以官方社区号文 + intro 现页为准**，不以个人文升格。
 - API400 旁证 `[-1,2147483647]` 与表下限冲突 → **不硬拦**，失败原样显示。
 - VERIFY 状态：已核一致。
+
+## 主证升级（2026-11-02 ~19:00 JST）
+Researchy 浏览器渲染确认：中英文官网 API-Inference intro 参数表现页均有 seed（Random seed，可选 int，示例 12345，`[0,2^31-1]`）。
+- https://www.modelscope.cn/docs/model-service/API-Inference/intro
+- https://www.modelscope.ai/docs/model-service/API-Inference/intro?lang=en
+截图：`temp/e2e/video-schema/modelscope-seed-2026-11-02i/`
+官方社区号《码上生花》改为辅证。产品结论不变。

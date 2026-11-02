@@ -241,7 +241,7 @@
     "https://developer.aliyun.com/article/1689282",
     "https://modelscope.cn/headlines/article/960"
   ],
-  "_auditStatus": "2026-11-02 ~19:05 JST：产品定 seed 写进动态 Schema [0,2^31-1] 提示不硬拦；canvas-dev 改 providerSchema+seedRangeIssue。\n2026-11-02 ~18:55 JST：雁纠正「官方有 seed、是你没搜」——找到魔搭ModelScope社区《码上生花》API 参数表含 seed [0, 2³¹-1]；learn/2577 同文。升 seedOfficialStatus=已核一致；与 API400 的 -1 冲突已记。徽章不动。未推送。\n2026-11-02 ~19:00 JST：雁「官方有 seed」——纠偏升已核一致 [0,2^31-1]；废「现页无字段」。\n2026-11-02 ~17:42 JST：按画布——400 仅旁证、不升已核；VERIFY 改「现页无 seed 字段」。\n2026-11-02 ~17:40 JST：雁追问「为何不核实」——再核：文档仍无 Schema；官方 API 400 范围已记，措辞改为文档/错误体分开写。\n2026-11-02 ~15:37 JST：画布认可魔搭国际站配方+目录 LoRA 干净接通；升 canvasAcceptance/acceptanceBadge=已出图。种子超范围改 42 已记（API 400 原文）。未推送。\n2026-11-02 ~15:15 JST：Researchy 02e 定稿——魔搭 seed 未核实（不拦）；勿套百炼。\n2026-11-02 ~04:55 JST：Researchy 02c 纠偏——ModelScope seed 回待核；勿套百炼。\n2026-11-02 ~04:46 JST：Researchy——ModelScope seed 继续待核；百炼范围不当魔搭。\n2026-10-16 ~23:33 北京：@tinkabot 等明示再升徽章；intl 仍未收口。 2026-10-16 ~23:10 北京：fix16 PARTIAL；新卡 429 insufficient balance 已记、不自升 PASS_BILLING；fix16.1 进行中。 2026-10-16 ~23:00 北京：fix15/15.1 收口=接线形状过；不升 PASS_GENERATION/PASS_BILLING（401 非欠费）。 2026-10-16 ~22:51 北京：fix15 挑刺严重1（历史未发送灰字）——不收口。 2026-10-16 ~22:50 北京：fix15 hist_gfkr9 loras map 对、401 绑账号；证据 已清理 仍未收口、不升出图。 2026-10-16 ~23:24：fix14 收口；canvas-dev 开 intl+loras。徽章仍未收口。 2026-10-16 ~23:18：intl 跟画布私信+Researchy——根 api-inference.modelscope.ai/v1；loras（禁 path/scale）；置信度中低等 Key 实测。不升徽章。 2026-10-16 ~23:11：画布下一批=魔搭国际站+LoRA（等 Researchy）；intl 不升徽章。 2026-10-16 22:06 JST tinkabot：按画布对齐——中国站+LoRA=能出图；国际站 LoRA=未收口（撤回 intl PASS_GENERATION）。2026-10-15 05:40：已对齐 v2 modelscope.md / Researchy 05:29；官方参数表无 sampler/scheduler/denoise；cfg→guidance。字段徽章仍以前端实测为准；2026-10-16 12:00 国际站 + LoRA 收口 PASS_GENERATION（附缺口）：参数规则依据中国站官方文档（11:52 实时抓取）；国际站官方文档正文当前取不到，待补",
+  "_auditStatus": "2026-11-02 ~19:05 JST：主证升级——中英文 intro 现页参数表有 seed [0,2^31-1]（Researchy 浏览器拍）；社区号文降辅证。产品不变；不硬拦 -1。未推送。\n2026-11-02 ~19:05 JST：产品定 seed 写进动态 Schema [0,2^31-1] 提示不硬拦；canvas-dev 改 providerSchema+seedRangeIssue。\n2026-11-02 ~18:55 JST：雁纠正「官方有 seed、是你没搜」——找到魔搭ModelScope社区《码上生花》API 参数表含 seed [0, 2³¹-1]；learn/2577 同文。升 seedOfficialStatus=已核一致；与 API400 的 -1 冲突已记。徽章不动。未推送。\n2026-11-02 ~19:00 JST：雁「官方有 seed」——纠偏升已核一致 [0,2^31-1]；废「现页无字段」。\n2026-11-02 ~17:42 JST：按画布——400 仅旁证、不升已核；VERIFY 改「现页无 seed 字段」。\n2026-11-02 ~17:40 JST：雁追问「为何不核实」——再核：文档仍无 Schema；官方 API 400 范围已记，措辞改为文档/错误体分开写。\n2026-11-02 ~15:37 JST：画布认可魔搭国际站配方+目录 LoRA 干净接通；升 canvasAcceptance/acceptanceBadge=已出图。种子超范围改 42 已记（API 400 原文）。未推送。\n2026-11-02 ~15:15 JST：Researchy 02e 定稿——魔搭 seed 未核实（不拦）；勿套百炼。\n2026-11-02 ~04:55 JST：Researchy 02c 纠偏——ModelScope seed 回待核；勿套百炼。\n2026-11-02 ~04:46 JST：Researchy——ModelScope seed 继续待核；百炼范围不当魔搭。\n2026-10-16 ~23:33 北京：@tinkabot 等明示再升徽章；intl 仍未收口。 2026-10-16 ~23:10 北京：fix16 PARTIAL；新卡 429 insufficient balance 已记、不自升 PASS_BILLING；fix16.1 进行中。 2026-10-16 ~23:00 北京：fix15/15.1 收口=接线形状过；不升 PASS_GENERATION/PASS_BILLING（401 非欠费）。 2026-10-16 ~22:51 北京：fix15 挑刺严重1（历史未发送灰字）——不收口。 2026-10-16 ~22:50 北京：fix15 hist_gfkr9 loras map 对、401 绑账号；证据 已清理 仍未收口、不升出图。 2026-10-16 ~23:24：fix14 收口；canvas-dev 开 intl+loras。徽章仍未收口。 2026-10-16 ~23:18：intl 跟画布私信+Researchy——根 api-inference.modelscope.ai/v1；loras（禁 path/scale）；置信度中低等 Key 实测。不升徽章。 2026-10-16 ~23:11：画布下一批=魔搭国际站+LoRA（等 Researchy）；intl 不升徽章。 2026-10-16 22:06 JST tinkabot：按画布对齐——中国站+LoRA=能出图；国际站 LoRA=未收口（撤回 intl PASS_GENERATION）。2026-10-15 05:40：已对齐 v2 modelscope.md / Researchy 05:29；官方参数表无 sampler/scheduler/denoise；cfg→guidance。字段徽章仍以前端实测为准；2026-10-16 12:00 国际站 + LoRA 收口 PASS_GENERATION（附缺口）：参数规则依据中国站官方文档（11:52 实时抓取）；国际站官方文档正文当前取不到，待补",
   "nextBatch": {
     "at": "2026-10-16 ~23:00 北京",
     "focus": "fix16 UI 五项",
@@ -311,8 +311,8 @@
     "evidence": "temp/e2e/modelscope-intl-lora-recipe-2026-11-02/NOTES.md"
   },
   "seedOfficialStatus20261102": {
-    "docsPage": "官方有 seed 字段（社区号 API 参数表）",
-    "status": "已核一致（字段+官方表范围；不硬拦）",
+    "docsPage": "中英文官网 intro 现页参数表有 seed（浏览器渲染；主证）",
+    "status": "已核一致（字段+官方表范围）",
     "officialTable": {
       "urls": [
         "https://modelscope.csdn.net/691c36ee82fbe0098caca391.html",
@@ -325,6 +325,21 @@
       "message": "seed must be in [-1, 2147483647]",
       "note": "旁证，含 -1；不覆盖官方表，不硬拦"
     },
-    "updatedAt": "2026-11-02T19:00+09:00"
+    "updatedAt": "2026-11-02T19:00+09:00",
+    "primaryUrls": [
+      "https://www.modelscope.cn/docs/model-service/API-Inference/intro",
+      "https://www.modelscope.ai/docs/model-service/API-Inference/intro?lang=en"
+    ],
+    "tableQuote": "seed / Random seed | 可选 | int | 12345 | [0,2^31-1]",
+    "secondarySource": {
+      "title": "码上生花（官方社区号，辅证）",
+      "url": "https://modelscope.csdn.net/691c36ee82fbe0098caca391.html"
+    },
+    "impl": "可发；范围提示 [0,2^31-1]；-1 冲突不硬拦；超范围原样报错",
+    "fetchedAt": "2026-11-02 ~19:00 JST",
+    "evidence": [
+      "docs/evidence/modelscope-seed-official-2026-11-02.md",
+      "temp/e2e/video-schema/modelscope-seed-2026-11-02i/"
+    ]
   }
 }
