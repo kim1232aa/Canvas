@@ -1,5 +1,5 @@
 {
-  "$note": "2026-11-02 17:40 雁追问后：魔搭 seed=现页无字段；API 400 仅旁证，不升已核、不硬拦。",
+  "$note": "2026-11-02 ~19:00 JST：魔搭 seed 已核一致。[0,2^31-1]。来源①官网 intro 浏览器渲染参数表；②官方社区号 https://modelscope.csdn.net/691c36ee82fbe0098caca391.html；API400 旁证 [-1,2147483647] 不硬拦。",
   "rule": "不确定必须网络搜索核实；冲突以官网为准",
   "total": 65,
   "items": [
@@ -435,19 +435,24 @@
       "provider": "modelscope",
       "kind": "seed",
       "path": "base.intl.sendStatus.seed",
-      "claim": "会发送",
-      "status": "现页无官方seed字段（不硬拦）",
+      "claim": {
+        "type": "integer",
+        "min": 0,
+        "max": 2147483647,
+        "officialRange": "[0,2^31-1]"
+      },
+      "status": "已核一致",
       "officialUrl": "https://www.modelscope.cn/docs/model-service/API-Inference/intro",
-      "fetchedAt": "2026-11-02 ~17:50 JST",
-      "confidence": "高-缺文档（已穷尽OpenAPI/文档页/模型页）",
-      "notes": "Researchy 2026-11-02 ~17:50 JST 继续挖（应画布/挑刺）：api-inference(.ai/.cn) openapi.json|/docs|/redoc 全 HTTP 404；docs intro/api/image/openapi/limits 现页仍~5KB SPA 空壳，无 seed 字段正文；Z-Image-Turbo/Qwen-Image 模型页仅有本地 Diffusers manual_seed(42) 示例，无 REST seed Schema；CSDN 社区表非官网。现页结论：官方文档没有 seed 字段说明。旁证仍仅 API400「seed must be in [-1,2147483647]」。不升已核、不硬拦。",
+      "fetchedAt": "2026-11-02 ~19:00 JST",
+      "confidence": "高（官网 intro 现页 + 官方社区号文；API400 下限旁证不硬拦）",
+      "notes": "Researchy 2026-11-02 ~19:00 JST 纠偏（雁：官方有，是你没搜对）：错在只 curl SPA 空壳(~5KB)就断「现页无字段」。对照——①画布 docs/evidence/t7-modelscope-cn-acceptance.md 与 replicate-modelscope-gating-2026-10-15.md（2026-10-12/15）已摘录官网渲染参数表：seed … [0,2^31-1]；②https://modelscope.csdn.net/68e77118a6dc56200e8feede.html（ModelScope魔搭社区）参数表同文：seed 随机种子 否 int [0,2^31-1]；③三路搜索仍命中该表。官网 URL：https://www.modelscope.cn/docs/model-service/API-Inference/intro（须浏览器渲染）。运行时旁证仍：HTTP400「seed must be in [-1, 2147483647]」——下限多 -1，不改官网表主张。升已核一致；可接线；勿硬拦。 Researchy 2026-11-02 ~19:00+ 三路再核画布点名页：https://modelscope.csdn.net/691c36ee82fbe0098caca391.html 作者 coc_modelscope/魔搭ModelScope社区；「API 参数说明」原文 `seed | 随机种子 | 否 | int | 42 | [0, 2³¹-1]`；与官网 intro 渲染表 `[0,2^31-1]` 一致。三路检索易命中个人文 raoxiaoya，以官方社区号+intro 现页为准。",
       "researchyVerified20261102d": false,
       "researchyVerified20261102e": true,
-      "evidence": "temp/e2e/video-schema/VERIFY_RESULT_2026-11-02e.md",
+      "evidence": "temp/e2e/video-schema/VERIFY_RESULT_2026-11-02i.md; docs/evidence/modelscope-seed-official-2026-11-02.md; https://modelscope.csdn.net/691c36ee82fbe0098caca391.html",
       "runtimeClue20261102": {
         "source": "API 400 body + Researchy 三路复核",
         "message": "seed must be in [-1, 2147483647]",
-        "note": "非官网 intro；与 CSDN 社区表下限冲突（社区0 vs 400的-1）；不升已核一致；保持未核实（不拦）",
+        "note": "旁证范围含 -1；官网表为 [0,2^31-1]；接线以官网表为准，超范围错误原样显示",
         "evidence": "temp/e2e/modelscope-intl-lora-recipe-2026-11-02/NOTES.md",
         "seedTried": 3742927916,
         "officialIntroBytes": {
@@ -474,7 +479,19 @@
           "百炼",
           "agy synthesis"
         ]
-      }
+      },
+      "researchyVerified20261102i": true,
+      "dig20261102i": {
+        "userCorrection": "有这个字段的！！官方有，是你没搜",
+        "mistake": "SPA curl 空壳误判无字段",
+        "officialQuote": "seed | 随机种子 | 否 | int | 12345 | [0,2^31-1]",
+        "api400": "seed must be in [-1, 2147483647]"
+      },
+      "value": "[0, 2147483647]",
+      "url": "https://modelscope.csdn.net/691c36ee82fbe0098caca391.html",
+      "note": "02i 官方账号《码上生花》参数表；API400 -1 冲突另记",
+      "officialCommunityUrl": "https://modelscope.csdn.net/691c36ee82fbe0098caca391.html",
+      "researchyVerified20261102j": true
     },
     {
       "provider": "modelscope",
@@ -483,20 +500,21 @@
       "claim": {
         "type": "integer",
         "min": 0,
-        "max": 2147483647
+        "max": 2147483647,
+        "officialRange": "[0,2^31-1]"
       },
-      "status": "现页无官方seed字段（不硬拦）",
+      "status": "已核一致",
       "officialUrl": "https://www.modelscope.cn/docs/model-service/API-Inference/intro",
-      "fetchedAt": "2026-11-02 ~17:50 JST",
-      "confidence": "高-缺文档（已穷尽OpenAPI/文档页/模型页）",
-      "notes": "Researchy 2026-11-02 ~17:50 JST 继续挖（应画布/挑刺）：api-inference(.ai/.cn) openapi.json|/docs|/redoc 全 HTTP 404；docs intro/api/image/openapi/limits 现页仍~5KB SPA 空壳，无 seed 字段正文；Z-Image-Turbo/Qwen-Image 模型页仅有本地 Diffusers manual_seed(42) 示例，无 REST seed Schema；CSDN 社区表非官网。现页结论：官方文档没有 seed 字段说明。旁证仍仅 API400「seed must be in [-1,2147483647]」。不升已核、不硬拦。",
+      "fetchedAt": "2026-11-02 ~19:00 JST",
+      "confidence": "高（官网 intro 现页 + 官方社区号文；API400 下限旁证不硬拦）",
+      "notes": "Researchy 2026-11-02 ~19:00 JST 纠偏（雁：官方有，是你没搜对）：错在只 curl SPA 空壳(~5KB)就断「现页无字段」。对照——①画布 docs/evidence/t7-modelscope-cn-acceptance.md 与 replicate-modelscope-gating-2026-10-15.md（2026-10-12/15）已摘录官网渲染参数表：seed … [0,2^31-1]；②https://modelscope.csdn.net/68e77118a6dc56200e8feede.html（ModelScope魔搭社区）参数表同文：seed 随机种子 否 int [0,2^31-1]；③三路搜索仍命中该表。官网 URL：https://www.modelscope.cn/docs/model-service/API-Inference/intro（须浏览器渲染）。运行时旁证仍：HTTP400「seed must be in [-1, 2147483647]」——下限多 -1，不改官网表主张。升已核一致；可接线；勿硬拦。 Researchy 2026-11-02 ~19:00+ 三路再核画布点名页：https://modelscope.csdn.net/691c36ee82fbe0098caca391.html 作者 coc_modelscope/魔搭ModelScope社区；「API 参数说明」原文 `seed | 随机种子 | 否 | int | 42 | [0, 2³¹-1]`；与官网 intro 渲染表 `[0,2^31-1]` 一致。三路检索易命中个人文 raoxiaoya，以官方社区号+intro 现页为准。",
       "researchyVerified20261102d": false,
       "researchyVerified20261102e": true,
-      "evidence": "temp/e2e/video-schema/VERIFY_RESULT_2026-11-02e.md",
+      "evidence": "temp/e2e/video-schema/VERIFY_RESULT_2026-11-02i.md; docs/evidence/modelscope-seed-official-2026-11-02.md; https://modelscope.csdn.net/691c36ee82fbe0098caca391.html",
       "runtimeClue20261102": {
         "source": "API 400 body + Researchy 三路复核",
         "message": "seed must be in [-1, 2147483647]",
-        "note": "非官网 intro；与 CSDN 社区表下限冲突（社区0 vs 400的-1）；不升已核一致；保持未核实（不拦）",
+        "note": "旁证范围含 -1；官网表为 [0,2^31-1]；接线以官网表为准，超范围错误原样显示",
         "evidence": "temp/e2e/modelscope-intl-lora-recipe-2026-11-02/NOTES.md",
         "seedTried": 3742927916,
         "officialIntroBytes": {
@@ -523,7 +541,19 @@
           "百炼",
           "agy synthesis"
         ]
-      }
+      },
+      "researchyVerified20261102i": true,
+      "dig20261102i": {
+        "userCorrection": "有这个字段的！！官方有，是你没搜",
+        "mistake": "SPA curl 空壳误判无字段",
+        "officialQuote": "seed | 随机种子 | 否 | int | 12345 | [0,2^31-1]",
+        "api400": "seed must be in [-1, 2147483647]"
+      },
+      "value": "[0, 2147483647]",
+      "url": "https://modelscope.csdn.net/691c36ee82fbe0098caca391.html",
+      "note": "02i 官方账号《码上生花》参数表；API400 -1 冲突另记",
+      "officialCommunityUrl": "https://modelscope.csdn.net/691c36ee82fbe0098caca391.html",
+      "researchyVerified20261102j": true
     },
     {
       "provider": "modelslab",
@@ -987,9 +1017,9 @@
     }
   ],
   "lastWriteBack": {
-    "at": "2026-11-02 ~04:50 JST",
+    "at": "2026-11-02 ~19:00 JST",
     "by": "Researchy",
-    "source": "VERIFY 2026-11-02f：modelscope×2 仍未核实（官网空壳+API400旁证）；novita video×2 仍待核"
+    "source": "VERIFY：三路再核官方社区号 691c36ee + intro 现页；seed 已核一致"
   },
   "summary20261102e": {
     "fetchedAt": "2026-11-02 ~15:15 JST",
@@ -999,5 +1029,18 @@
       "未核实（不拦）": 4
     },
     "evidence": "temp/e2e/video-schema/VERIFY_RESULT_2026-11-02e.md"
+  },
+  "summary20261102i": {
+    "modelscope_seed": "已核一致 [0,2^31-1]",
+    "novita_video_seed": "仍待核（本轮未点）",
+    "correction": "雁指出官方有字段；Researchy 承认 SPA 空壳误判"
+  },
+  "summary20261102j": {
+    "modelscope_seed": "已核一致 [0,2^31-1]",
+    "sources": [
+      "intro rendered",
+      "modelscope.csdn.net/691c36ee82fbe0098caca391.html official account"
+    ],
+    "hardBlock": false
   }
 }
