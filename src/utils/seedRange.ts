@@ -29,6 +29,9 @@ export function randomSeedFor(provider?: string | null, model?: string | null, r
 /** Precheck message when a seed is outside the Schema range; null when fine / no range declared. The value is never changed. */
 export function seedRangeIssue(provider: string | undefined | null, model: string | undefined | null, seed: unknown, label?: string): string | null {
   if (seed === undefined || seed === null || seed === '') return null;
+  // 魔搭：Schema 可写范围作提示/随机种子，但不做运行前死拦（官方表 [0,2^31-1] 与上游 400 [-1,2^31-1] 冲突；超范围原样报上游）
+  const p = String(provider || '').trim();
+  if (p === 'modelscope' || p === 'modelscope_ai') return null;
   const r = seedRangeFor(provider, model); if (!r) return null;
   const n = Number(seed);
   if (!Number.isInteger(n) || n < r.min || n > r.max)

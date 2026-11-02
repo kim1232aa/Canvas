@@ -672,12 +672,14 @@ const SENSENOVA_MODELS: ModelSpec[] = [
 
 // Model cards show a minimal hosted REST contract, not the local Diffusers parameter schema.
 const MODELSCOPE_DOC = 'https://www.modelscope.cn/models/Tongyi-MAI/Z-Image-Turbo';
+/** 官方社区号《API 参数说明》seed 表（非个人博客）：https://modelscope.csdn.net/691c36ee82fbe0098caca391.html */
+const MODELSCOPE_SEED_DOC = 'https://modelscope.csdn.net/691c36ee82fbe0098caca391.html';
 const MODELSCOPE_MODELS: ModelSpec[] = (['modelscope','modelscope_ai'] as const).map(provider=>({
   provider,id:'modelscope-hosted-image',label:'ModelScope 云端图像 API（模型能力需核实）',source:MODELSCOPE_DOC,
   fields:{
-    ...Object.fromEntries(['negative_prompt','seed','steps','cfg','width','height'].map(key=>[key,{status:'unverified' as const,source:MODELSCOPE_DOC,note:'本地 Diffusers 参数不能证明云端 REST 支持；显式提交将提示未核实'}])),
-    // 2026-11-02 全部核实：status unverified、无 Researchy fetchedAt → 不写 min/max，不做本地越界拦截；有 live /api/model-schema 时走动态范围，否则原样发、上游错原文回。
-    seed:{status:'unverified' as const,source:'https://modelscope.cn/docs/model-service/API-Inference/intro',type:'integer' as const,note:'未核实上下限；不本地拦截种子；上游 400 原文回传'},
+    ...Object.fromEntries(['negative_prompt','steps','cfg','width','height'].map(key=>[key,{status:'unverified' as const,source:MODELSCOPE_DOC,note:'本地 Diffusers 参数不能证明云端 REST 支持；显式提交将提示未核实'}])),
+    // 2026-11-02 产品：官方表有 seed [0,2^31-1]，写进 Schema 可发+提示范围；不做运行前死拦（与上游 400 含 -1 冲突时原样报错）
+    seed:{status:'supported' as const,source:MODELSCOPE_SEED_DOC,type:'integer' as const,min:0,max:2147483647,note:'官方社区号表 [0, 2³¹-1]；可发；范围仅提示/随机用，不本地死拦；超范围原样报上游'},
     loras:{status:'supported',source:MODELSCOPE_DOC,note:'单一仓库 ID 或最多六项权重映射，总和 1；底模兼容性仍由所选模型决定'},
     ...Object.fromEntries(['sampler','scheduler','denoise'].map(key=>[key,{status:'unverified' as const,source:MODELSCOPE_DOC,note:'当前官方云端 REST 资料未核实对应字段；未知能力不按 unsupported 本地拦截'}])),
   },
