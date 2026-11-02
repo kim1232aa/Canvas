@@ -13,6 +13,7 @@ const PROVIDERS = {
   aimlapi: { name: 'AIMLAPI', color: '#7c3aed', key: 'aimlapiKey', header: 'x-aimlapi-key' },
   novita: { name: 'Novita', color: '#16a34a', key: 'novitaKey', header: 'x-novita-key' },
   venice: { name: 'Venice', color: '#a855f7', key: 'veniceKey', header: 'x-venice-key' },
+  deepinfra: { name: 'DeepInfra', color: '#0f766e', key: 'deepinfraKey', header: 'x-deepinfra-key' },
   // OpenWorks shares the Tensor.Art key slot (ak_tensor_… Access Key); server rejects TAMS Bearer keys locally.
   openworks: { name: 'Tensor.Art OpenWorks', color: '#8b5cf6', key: 'tensorartKey', header: 'x-tensorart-key' },
 } as const;

@@ -259,7 +259,7 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
         if (currentReqId !== activeReqIdRef.current) return;
 
         const pag = liveData._pagination || {};
-        const noticeEntry = Object.entries(liveData as Record<string, unknown>).find(([k, v]) => (k === 'catalogNotice' || k.endsWith('Notice')) && typeof v === 'string');
+        const noticeEntry = Object.entries(liveData as Record<string, unknown>).find(([k, v]) => (k === 'catalogNotice' || (k.endsWith('Notice') && k !== 'personalNotice')) && typeof v === 'string');
         setCatalogNotice(noticeEntry ? (noticeEntry[1] as string) : null);
         const ev = catalogEvidenceFrom(liveData, prov);
         setCatalogEvidence(ev ? { ...ev, provider: prov } : null);
@@ -293,7 +293,7 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
           : liveData;
 
         Object.entries(sourceMap).forEach(([provKey, list]) => {
-          if (provKey === '_pagination' || provKey === 'pagination' || provKey === 'catalogNotices' || provKey === 'errors' || provKey === 'results') return;
+          if (provKey === '_pagination' || provKey === 'pagination' || provKey === 'catalogNotices' || provKey === 'errors' || provKey === 'results' || provKey === 'personalNotice' || provKey === 'personalLibrary' || provKey === 'personalSourceUrl' || provKey === 'catalogNotice') return;
           if (Array.isArray(list)) {
             list.forEach((m: any) => {
               // Prefer metadata; Fal/schema endpoint catalogs with "lora" in id are gen models, not weights.
@@ -719,6 +719,7 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
             { id: 'aimlapi', name: 'AIMLAPI' },
             { id: 'novita', name: 'Novita' },
             { id: 'venice', name: 'Venice' },
+            { id: 'deepinfra', name: 'DeepInfra' },
             { id: 'runware', name: 'Runware' },
             { id: 'modelslab', name: 'ModelsLab' },
             { id: 'replicate', name: 'Replicate' },
@@ -727,6 +728,13 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
             return (
               <button
                 key={tab.id}
+                type="button"
+                data-testid={`lora-hub-tab-${tab.id}`}
+                aria-selected={isActive}
+                aria-current={isActive ? 'page' : undefined}
+                ref={(el) => {
+                  if (isActive && el) el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+                }}
                 onClick={() => {
                   setModels([]);
                   setSelectedArch('all');
@@ -734,13 +742,15 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
                   if (tab.id === activeProvider) fetchModels(tab.id as any, query, sort, 'all', false);
                   else setActiveProvider(tab.id as any);
                 }}
-                className={`pb-2.5 px-3.5 font-semibold transition-all relative whitespace-nowrap text-xs flex items-center gap-1.5 shrink-0 ${
-                  isActive ? 'text-cyan-400 font-bold' : 'text-slate-400 hover:text-slate-200'
+                className={`pb-2 pt-1.5 px-3.5 font-semibold transition-all relative whitespace-nowrap text-xs flex items-center gap-1.5 shrink-0 rounded-md ${
+                  isActive
+                    ? 'text-cyan-200 font-bold bg-cyan-500/15 ring-1 ring-cyan-400/70'
+                    : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
                 <span>{tab.name}</span>
                 {isActive && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-purple-400 to-cyan-400" />
+                  <div className="absolute bottom-0 left-1 right-1 h-0.5 bg-gradient-to-r from-purple-400 to-cyan-400" />
                 )}
               </button>
             );
@@ -856,11 +866,11 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
           </div>
         )}
         {activeProvider === 'sogni' && (
-          <div className="px-6 pt-3">
-            <div className="rounded-lg border border-purple-800/40 bg-purple-950/25 p-3 text-xs leading-relaxed text-purple-200">
-              <p className="font-semibold text-purple-300">Sogni 官方 LoRA 目录说明：</p>
+          <div className="px-6 pt-3 space-y-2">
+            <div className="rounded-lg border border-purple-800/40 bg-purple-950/25 p-3 text-xs leading-relaxed text-purple-200" data-testid="sogni-comfy-catalog-notice">
+              <p className="font-semibold text-purple-300">Sogni 官方公开 LoRA 目录 <span className="ml-2 text-[10px] font-medium text-cyan-300/90" data-testid="sogni-current-provider-chip">当前源：Sogni</span></p>
               <p className="text-slate-300 mt-1">
-                Sogni 官方公开目录（<code>/v1/loras/comfy</code>）收录的 LoRA 为 Krea-2 专用参数调节滑块（如画质增强、景深复杂度、暮光质感等）。上游文档在评测时统一使用标准测试场景（黄色长裙行人基准图）进行控制变量采样，卡片预览图为官方在不同强度下的调节效果对照帧，非独立艺术海报；无示例的模型已真实标注为 [上游目录未提供封面]。
+                仅展示官方公开目录 <code>GET /v1/loras/comfy</code>（无需登录）。个人库 / Unlimited 目录不在本页提供。卡片预览为上游示例帧；无示例时标注为上游未提供封面。
               </p>
             </div>
           </div>
@@ -972,6 +982,7 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
                               loading="lazy"
                             />
                             <div className="absolute inset-0 bg-gradient-to-t from-[#191a24]/90 via-transparent to-black/35 pointer-events-none" />
+                            <span className="absolute bottom-8 left-2 right-10 text-[11px] font-semibold leading-snug text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)] line-clamp-2 pointer-events-none" title={model.name}>{model.name}</span>
                             {model.previewCaption && (
                               <span className="absolute bottom-2 left-2 text-[9px] px-1.5 py-0.5 rounded bg-black/70 text-slate-300">{model.previewCaption}</span>
                             )}
@@ -998,8 +1009,8 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
                           >
                             {model.provider}
                           </span>
-                          <span title={model.baseModelSource ? `兼容模型：${baseArch}（来源：${model.baseModelSource}）` : undefined} className="text-[9px] px-2 py-0.5 rounded-full bg-black/75 backdrop-blur-md text-cyan-300 font-mono border border-cyan-500/30">
-                            {model.baseModelSource ? `兼容模型：${baseArch}` : baseArch}
+                          <span title={model.baseModelSource ? `兼容底模：${baseArch}（${model.baseModelSource}）` : (model.baseModel || undefined)} className="text-[9px] px-2 py-0.5 rounded-full bg-black/75 backdrop-blur-md text-cyan-300 font-mono border border-cyan-500/30 max-w-[70%] truncate">
+                            {baseArch}
                           </span>
                         </div>
 

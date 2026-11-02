@@ -12,9 +12,7 @@ export function buildFalVideoRequest(endpoint: string, body: Record<string, unkn
   if (provided(body.cfg) && provided(body.guidance_scale) && Number(body.cfg) !== Number(body.guidance_scale)) fail('cfg 与 guidance_scale 不一致；请只提供一个来源或相同值');
   const wan21 = ['fal-ai/wan-t2v', 'fal-ai/wan-i2v'].includes(endpoint);
   if (wan21 && provided(body.duration)) fail('Wan 2.1 不支持 duration；请提供 num_frames');
-  if (wan21) for (const [field, min, max] of [['fps', 5, 24], ['num_frames', 81, 100]] as const) {
-    if (provided(body[field]) && (!Number.isInteger(Number(body[field])) || Number(body[field]) < min || Number(body[field]) > max)) fail(`${field} 须为 ${min}–${max} 的整数`);
-  }
+  // 2026-11-02: no local fps/num_frames range refuse — bounds come from live OpenAPI via UI Schema; upstream rejects.
   const payload: Record<string, unknown> = {};
   const fieldStatus: Record<string, string> = {};
   const fields: Array<[string, FieldKey | undefined, string]> = [
@@ -76,9 +74,7 @@ export function buildFalVideoRequest(endpoint: string, body: Record<string, unkn
   const actual = { ...payload, ...mappedCustom };
   if (wan21 && provided(actual.duration)) fail('Wan 2.1 不支持 duration；请提供 num_frames');
   if (wan21 && provided(mappedCustom.fps)) { actual.frames_per_second = mappedCustom.fps; delete actual.fps; }
-  if (wan21) for (const [field, min, max] of [['frames_per_second', 5, 24], ['num_frames', 81, 100]] as const) {
-    if (provided(actual[field]) && (!Number.isInteger(Number(actual[field])) || Number(actual[field]) < min || Number(actual[field]) > max)) fail(`${field} 须为 ${min}–${max} 的整数`);
-  }
+  // 2026-11-02: no local frames_per_second/num_frames range refuse (dynamic Schema / upstream).
   const reference = actual[falVideoImageField(endpoint)];
   if ((endpoint.includes('text-to-video') || endpoint === 'fal-ai/wan-t2v') && (provided(siteReference) || provided(customReference) || provided(actual.end_image_url))) fail('这个端点不支持参考图');
   if ((isKlingV3(endpoint) && endpoint.endsWith('/image-to-video') || endpoint === 'fal-ai/wan-i2v') && !provided(reference)) fail(`${falVideoImageField(endpoint)}（或 image_url）为必填项`);
@@ -97,10 +93,11 @@ export const isKlingV3 = (endpoint: string): boolean => /^fal-ai\/kling-video\/v
 export const falVideoImageField = (endpoint: string): 'start_image_url' | 'image_url' =>
   isKlingV3(endpoint) && endpoint.endsWith('/image-to-video') ? 'start_image_url' : 'image_url';
 
+/** Normalize Kling V3 duration to integer-seconds string. No local range gate (upstream rejects). */
 export function klingV3Duration(value: unknown): string {
   const seconds = Number(value);
-  if (value === '' || value === null || value === undefined || !Number.isInteger(seconds) || seconds < 3 || seconds > 15) {
-    throw new Error('Kling V3 duration 只接受 3–15 的整数秒');
+  if (value === '' || value === null || value === undefined || !Number.isInteger(seconds)) {
+    throw new Error('Kling V3 duration 须为整数秒');
   }
   return String(seconds);
 }

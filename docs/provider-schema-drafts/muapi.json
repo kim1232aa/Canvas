@@ -94,10 +94,18 @@
       "WanLoRAI2VRequest"
     ],
     "wanLora": {
-      "duration": [
-        5,
-        10
-      ],
+      "duration": {
+        "draftClaim": [
+          5,
+          10
+        ],
+        "officialVerify": {
+          "status": "冲突以官网为准",
+          "official": "int default 5 no enum",
+          "url": "https://muapi.ai/playground/wan2.1-lora-t2v/llms.txt",
+          "fetchedAt": "2026-11-02 ~04:41 JST"
+        }
+      },
       "resolution": [
         "480p",
         "720p"
@@ -136,7 +144,7 @@
     "https://muapi.ai/docs/authentication",
     "https://api.muapi.ai/openapi.json"
   ],
-  "_auditStatus": "2026-10-17 ~19:30 北京：画布挑刺认 MuAPI「待配方」两处严重已清（卡主按钮灰+「待配方，不能立即运行」；仅载入后顶栏运行灰、黄字缺真 LoRA）；证据 temp/e2e/workflow-hub/muapi-pending-recipe-fix/；只算防呆显示，不升出图徽章。2026-10-17 20:07 JST：画布认 MuAPI hub「待配方」仅预设展示过关（证据 muapi-pending-recipe/），不升出图徽章；挑刺主按钮/顶栏仍开着未收。2026-10-17 20:04 JST：工作流中心预设端点 flux-1-dev-style-lora-inference 按当日 openapi 记字段（lora_url 必填；无步数/CFG/种子/负向）；卡「待配方」不升徽章。2026-10-16 16:31：fix5 UI 收口（非升 PASS）——strength 显示澄清 + aspect_ratio 进尺寸行；证据 已清理。2026-10-16 14:42：fix3-1530 升 PASS_BILLING（loras[{path,scale}]/resolution 1k → 402）。2026-10-16 14:50：fix2-1340 FAIL（resolution 本地拦合规；LoRA item 映射待供应商配置 path/scale）。2026-10-16 12:37：rekey-1230 字段已核，不收口、徽章未升。2026-10-15 03:26：引用的 docs/provider-api-audit 旧审计仅留作对比、不再引用；以 docs/provider-api-audit-v2/ 与 DIFF.md 为准；本草案凡依据旧审计的结论一律视为未核实，等 Researchy 新调查",
+  "_auditStatus": "2026-11-02 ~04:55 JST：Researchy 02c——MuAPI seed 按端点；style-lora-inference 无 seed。\n2026-11-02 ~04:41 JST：Researchy——MuAPI wanLora duration 冲突：草案[5,10] vs 官网 int 默认5 无枚举，禁止硬拦；aspect/resolution 可按官网。\n2026-11-02 ~04:39 JST：Researchy 对照表写回 researchyVerified20261102（种子/时长/比例已核一致条目）；未核条目仍待核、禁止当拦截；徽章不动。\n2026-10-17 ~22:18 北京：画布收 MuAPI「待配方」终轮——官方没有的字段（步数/CFG/种子/去噪）整格藏掉不留字；顶栏黄字先缺 LoRA 再缺提示词；证据 temp/e2e/workflow-hub/muapi-pending-recipe-detail/06-topbar-lora-first.png；只算防呆，acceptanceBadge 仍未验证（未出图）。2026-10-17 ~19:30 北京：画布挑刺认 MuAPI「待配方」两处严重已清（卡主按钮灰+「待配方，不能立即运行」；仅载入后顶栏运行灰、黄字缺真 LoRA）；证据 temp/e2e/workflow-hub/muapi-pending-recipe-fix/；只算防呆显示，不升出图徽章。2026-10-17 20:07 JST：画布认 MuAPI hub「待配方」仅预设展示过关（证据 muapi-pending-recipe/），不升出图徽章；挑刺主按钮/顶栏仍开着未收。2026-10-17 20:04 JST：工作流中心预设端点 flux-1-dev-style-lora-inference 按当日 openapi 记字段（lora_url 必填；无步数/CFG/种子/负向）；卡「待配方」不升徽章。2026-10-16 16:31：fix5 UI 收口（非升 PASS）——strength 显示澄清 + aspect_ratio 进尺寸行；证据 已清理。2026-10-16 14:42：fix3-1530 升 PASS_BILLING（loras[{path,scale}]/resolution 1k → 402）。2026-10-16 14:50：fix2-1340 FAIL（resolution 本地拦合规；LoRA item 映射待供应商配置 path/scale）。2026-10-16 12:37：rekey-1230 字段已核，不收口、徽章未升。2026-10-15 03:26：引用的 docs/provider-api-audit 旧审计仅留作对比、不再引用；以 docs/provider-api-audit-v2/ 与 DIFF.md 为准；本草案凡依据旧审计的结论一律视为未核实，等 Researchy 新调查",
   "requestFieldsVerified": {
     "run": "已清理 hist_1792125133065_2ffvp）",
     "endpoint": "POST https://api.muapi.ai/api/v1/krea-v2-turbo-lora",
@@ -202,7 +210,7 @@
   },
   "hubPreset": {
     "model": "flux-1-dev-style-lora-inference",
-    "at": "2026-10-17 19:30 北京",
+    "at": "2026-10-17 22:18 北京",
     "endpoint": "POST /api/v1/flux-1-dev-style-lora-inference",
     "openapiCapture": "temp/e2e/workflow-hub/muapi-openapi-20261017-1646.json",
     "required": [
@@ -219,12 +227,53 @@
       "cfg/guidance",
       "seed",
       "negative_prompt",
-      "width/height"
+      "width/height",
+      "denoise/去噪"
     ],
     "lora_url_note": "官方 description：须为 flux-1-dev-style-lora-trainer 完成后 outputs 返回的 URL",
-    "productState": "待配方展示+防呆严重挑刺已过；无真 lora_url 前不冲出图；acceptanceBadge 仍未验证（未出图）",
+    "productState": "待配方防呆终轮已收（字段整藏+顶栏先 LoRA）；无真 lora_url 前不冲出图；acceptanceBadge 仍未验证（未出图）",
     "acceptanceBadge": "未验证",
-    "displayAccept": "2026-10-17 画布：预设展示过关；2026-10-17 ~19:29 北京 画布挑刺：防呆两处严重清了（卡灰按钮、顶栏运行锁+黄字缺真 LoRA）。不算接通出图。证据 temp/e2e/workflow-hub/muapi-pending-recipe-fix/",
-    "pickOpen": "防呆严重两项已收（2026-10-17 ~19:29 北京 画布挑刺：这屏没挑到严重）。细节瑕疵（骨架文案/占位白字/种子/小地图等）等雁是否现在改；出图徽章仍未验证，等真配方。"
+    "displayAccept": "2026-10-17 画布：预设展示过关；~19:29 防呆两处严重清；~22:18 画布收终轮（官方无字段整藏不留字；顶栏先缺 LoRA 再缺提示词）。不算接通出图。证据 temp/e2e/workflow-hub/muapi-pending-recipe-detail/06-topbar-lora-first.png",
+    "pickOpen": "防呆终轮已收（2026-10-17 ~22:18 北京 画布）。重开条件（~22:19 画布）：有真 lora_url 时预设须带能填地址的 LoRA 挂载位，不能只靠黄字；挑刺细节：节点内重复黄字、尺寸节点 batch_size 被底栏挡、「。；」连写，并下一批。出图徽章仍未验证。"
+  },
+  "researchyVerified20261102": {
+    "fetchedAt": "2026-11-02 ~04:55 JST",
+    "items": [
+      {
+        "field": "video.wanLora.seed",
+        "value": "false（llms 入参无 seed）",
+        "url": "https://muapi.ai/playground/wan2.1-lora-t2v/llms.txt",
+        "status": "已核一致"
+      },
+      {
+        "field": "video.wanLora.aspect_ratio",
+        "value": "16:9|9:16",
+        "url": "https://muapi.ai/playground/wan2.1-lora-t2v/llms.txt",
+        "status": "已核一致"
+      },
+      {
+        "field": "video.wanLora.duration",
+        "value": "int 默认 5；官网无枚举——草案勿写死 [5,10] 硬拦",
+        "url": "https://muapi.ai/playground/wan2.1-lora-t2v/llms.txt",
+        "status": "冲突以官网为准",
+        "draftWas": "[5,10] 写死",
+        "official": "int default 5, no enum"
+      },
+      {
+        "field": "video.wanLora.resolution",
+        "value": "480p|720p（Researchy）",
+        "url": "https://muapi.ai/playground/wan2.1-lora-t2v/llms.txt",
+        "status": "已核一致"
+      },
+      {
+        "field": "image.seed",
+        "value": "按端点 OpenAPI：多数有 seed（常 -1）；flux-1-dev-style-lora-inference 无 seed",
+        "url": "https://api.muapi.ai/openapi.json",
+        "status": "已核一致",
+        "conflictNote": "文档页 flux-dev 写有 seed，同路径 OpenAPI ImageRequest 无 seed → 以端点 OpenAPI 为准"
+      }
+    ],
+    "conflictNote": "duration：草案 [5,10] vs 官网无枚举 → 不硬拦，原样发或仅跟 OpenAPI int",
+    "evidence": "temp/e2e/video-schema/VERIFY_RESULT_2026-11-02c.md"
   }
 }

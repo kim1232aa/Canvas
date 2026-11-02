@@ -232,11 +232,53 @@
     "docs/provider-api-audit-v2/civitai.md",
     "docs/provider-api-audit-v2/DIFF.md"
   ],
-  "_auditStatus": "2026-10-15 04:58：补 OpenAPI 核实 sdcpp Dev 字段为 steps/cfgScale；flux1-kontext 无 LoRA。字段徽章仍以前端实测为准",
+  "_auditStatus": "2026-11-02 ~04:55 JST：Researchy 02c——Civitai 各引擎 seed 已核；WAN 无通用 seed 勿发。\n2026-10-15 04:58：补 OpenAPI 核实 sdcpp Dev 字段为 steps/cfgScale；flux1-kontext 无 LoRA。字段徽章仍以前端实测为准",
   "flux2DevPaths": {
     "native": "engine flux2 + model dev；numInferenceSteps 4–50 默认28、guidanceScale 0–20 默认2.5、loras[{air,strength}]（官方推荐）",
     "sdcpp": "engine sdcpp + ecosystem flux2Dev；steps 4–50 默认20、cfgScale 1–20 默认1、sampleMethod/schedule/negativePrompt；loras 为 object map；createVariant 用 strength 0–1",
     "rule": "引擎与字段名、LoRA 形状必须配套，不得混发（原生 array ≠ sdcpp map）",
     "source": "OpenAPI Flux2DevSdCpp*ImageGenInput 2026-10-15 curl https://developer.civitai.com/openapi/v2-consumers.json；配方 https://developer.civitai.com/orchestration/recipes/flux2.md；evidence researchy-claim-sdcpp-nanogpt-kontext-2026-10-15.md"
+  },
+  "researchyVerified20261102": {
+    "fetchedAt": "2026-11-02 ~04:55 JST",
+    "items": [
+      {
+        "field": "image.flux1.sdcpp.seed",
+        "value": "int64 默认 random",
+        "url": "https://developer.civitai.com/orchestration/recipes/flux1",
+        "status": "已核一致"
+      },
+      {
+        "field": "image.flux1.comfy.seed",
+        "value": "有 seed（配方表）",
+        "url": "https://developer.civitai.com/orchestration/recipes/flux1",
+        "status": "已核一致"
+      },
+      {
+        "field": "image.flux2.seed",
+        "value": "int64 默认 random（klein/dev/flex 共用）",
+        "url": "https://developer.civitai.com/orchestration/recipes/flux2",
+        "status": "已核一致"
+      },
+      {
+        "field": "image.krea-v2.seed",
+        "value": "uint32；批内共用",
+        "url": "https://developer.civitai.com/orchestration/recipes/krea",
+        "status": "已核一致"
+      },
+      {
+        "field": "image.textToImage.seed",
+        "value": "int64 0–4294967295；未填随机",
+        "url": "https://developer.civitai.com/orchestration/reference/operations/InvokeTextToImageStepTemplate",
+        "status": "已核一致"
+      },
+      {
+        "field": "video.wan.seed",
+        "value": "Common parameters 无 seed——勿当通用字段发",
+        "url": "https://developer.civitai.com/orchestration/recipes/wan",
+        "status": "已核一致（官网未列）"
+      }
+    ],
+    "evidence": "temp/e2e/video-schema/VERIFY_RESULT_2026-11-02c.md"
   }
 }

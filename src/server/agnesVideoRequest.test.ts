@@ -42,7 +42,10 @@ describe('Agnes video advanced request contract', () => {
     expect(() => buildAgnesVideoRequest(model, { image_url: 'a', custom_parameters: { mode: 'reference', images: ['b'] } })).toThrow(/mode|媒体/);
   });
   it('rejects verified invalid final fields locally and never invents unknown model schema', () => {
-    for (const custom_parameters of [{ seconds: '3' }, { n: 2 }, { mode: 'reference' }, { mode: 'text', first_frame: 'a' }, { mode: 'keyframe', images: ['a'] }, { size: '1280x720' }]) expect(() => buildAgnesVideoRequest(model, { custom_parameters })).toThrow();
+    // seconds out-of-old-4–12 range: no local reject; integer → string pass-through
+    expect(buildAgnesVideoRequest(model, { custom_parameters: { seconds: '3' } }).payload.seconds).toBe('3');
+    expect(buildAgnesVideoRequest(model, { duration: 13 }).payload.seconds).toBe('13');
+    for (const custom_parameters of [{ n: 2 }, { mode: 'reference' }, { mode: 'text', first_frame: 'a' }, { mode: 'keyframe', images: ['a'] }, { size: '1280x720' }]) expect(() => buildAgnesVideoRequest(model, { custom_parameters })).toThrow();
     expect(() => buildAgnesVideoRequest('agnes-video-2.5-flash', { custom_parameters: { size: '2K' } })).toThrow(/720P/);
     expect(() => buildAgnesVideoRequest('agnes-video-2.5-flash', { mode: 'reference', videos: [{ url: 'a' }] })).toThrow(/videos/);
     expect(buildAgnesVideoRequest('custom-video', { size: '8K', custom_parameters: { seconds: 0, future: false } }).payload).toMatchObject({ size: '8K', seconds: 0, future: false });

@@ -33,7 +33,7 @@ export const SCHEDULER_OPTIONS = [
 export interface BaseModelOption {
   label: string;
   value: string;
-  provider: 'fal' | 'agnes' | 'civitai' | 'modelscope' | 'modelscope_ai' | 'huggingface' | 'nanogpt' | 'gemini' | 'sensenova' | 'video' | 'tensorart' | 'openai_compat' | 'grok_compat' | 'muapi' | 'wavespeed' | 'sogni' | 'krea' | 'together' | 'aimlapi' | 'novita' | 'venice' | 'openworks' | 'runware' | 'modelslab' | 'replicate';
+  provider: 'fal' | 'agnes' | 'civitai' | 'modelscope' | 'modelscope_ai' | 'huggingface' | 'nanogpt' | 'gemini' | 'sensenova' | 'video' | 'tensorart' | 'openai_compat' | 'grok_compat' | 'muapi' | 'wavespeed' | 'sogni' | 'krea' | 'together' | 'aimlapi' | 'novita' | 'venice' | 'openworks' | 'runware' | 'modelslab' | 'replicate' | 'mage';
   category?: 'checkpoint' | 'video' | 'reasoning' | 'edit' | 'lora';
 }
 
@@ -80,6 +80,10 @@ export const BASE_MODELS: BaseModelOption[] = [
   { label: '🔁 [Grok 兼容中转] Imagine Video (grok-imagine-video)', value: 'grok-imagine-video', provider: 'grok_compat', category: 'video' },
   { label: '🔁 [Grok 兼容中转] Imagine Video 1.5 (grok-imagine-video-1.5)', value: 'grok-imagine-video-1.5', provider: 'grok_compat', category: 'video' },
 
+  // ===================== MAGE =====================
+  { label: '🪄 [Mage] Mango 3 (mango-v3)', value: 'mango-v3', provider: 'mage', category: 'checkpoint' },
+  { label: '🪄 [Mage] Mango 3 Turbo (mango-v3-turbo)', value: 'mango-v3-turbo', provider: 'mage', category: 'checkpoint' },
+  { label: '🪄 [Mage] Mango 3S (mango-v3s)', value: 'mango-v3s', provider: 'mage', category: 'checkpoint' },
   // ===================== REPLICATE =====================
   { label: '🔥 [Replicate] FLUX.1 Schnell (black-forest-labs/flux-schnell)', value: 'black-forest-labs/flux-schnell', provider: 'replicate', category: 'checkpoint' },
   { label: '🔥 [Replicate] FLUX.1 [dev] (black-forest-labs/flux-dev)', value: 'black-forest-labs/flux-dev', provider: 'replicate', category: 'checkpoint' },
@@ -133,6 +137,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
           { label: 'Venice', value: 'venice' },
           { label: 'Tensor.Art OpenWorks', value: 'openworks' },
           { label: '⚡ Replicate 官方云平台', value: 'replicate' },
+          { label: '🪄 Mage (Mango)', value: 'mage' },
         ],
       },
       {
@@ -955,6 +960,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
         options: [
           { label: '未选择 (请先选择模型)', value: '' },
           { label: '[Fal] Wan 2.1 Text-to-Video (legacy)', value: 'fal-ai/wan-t2v', provider: 'fal' },
+          { label: '[Fal] Wan 2.1 T2V LoRA', value: 'fal-ai/wan-t2v-lora', provider: 'fal' },
           { label: '[Fal] Wan 2.7 Text-to-Video', value: 'fal-ai/wan/v2.7/text-to-video', provider: 'fal' },
           { label: '[Fal] Wan 2.7 Image-to-Video', value: 'fal-ai/wan/v2.7/image-to-video', provider: 'fal' },
           { label: '[Fal] Kling V3 Standard Text-to-Video', value: 'fal-ai/kling-video/v3/standard/text-to-video', provider: 'fal' },
@@ -983,7 +989,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
         default: '',
         placeholder: '输入负向排畸特征...',
       },
-      { name: 'num_frames', label: 'Wan 帧数 (81–100)', type: 'number', default: '', min: 81, max: 100, step: 1 },
+      { name: 'num_frames', label: '帧数 (num_frames)', type: 'number', default: '', step: 1 },
       {
         name: 'duration',
         label: '视频时长（秒）',
@@ -994,16 +1000,10 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
       },
       {
         name: 'fps',
-        label: '渲染帧率 (FPS)',
+        label: '帧率 (fps / frames_per_second)',
         type: 'number',
-        min: 5, max: 24, step: 1,
+        step: 1,
         default: '',
-        options: [
-          { label: '未指定', value: '' },
-          { label: '16 fps (标准动态)', value: 16 },
-          { label: '24 fps (电影胶片帧率)', value: 24 },
-          { label: '30 fps (高流畅)', value: 30 },
-        ],
       },
       {
         name: 'aspect_ratio',
@@ -1011,11 +1011,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
         type: 'select',
         default: '',
         options: [
-          { label: '未指定', value: '' },
-          { label: '16:9 (电影横屏 1280x720)', value: '16:9' },
-          { label: '9:16 (短视频竖屏 720x1280)', value: '9:16' },
-          { label: '1:1 (正方形 1024x1024)', value: '1:1' },
-          { label: '4:3 (经典比例 1024x768)', value: '4:3' },
+          { label: '未指定（以所选模型官方 Schema 为准）', value: '' },
         ],
       },
     ],

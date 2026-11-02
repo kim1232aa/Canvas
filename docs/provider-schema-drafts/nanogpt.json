@@ -122,5 +122,41 @@
     "https://docs.nano-gpt.com (Image API, Video Generation, Video Status, authentication.md)",
     "docs/provider-api-audit-v2/nanogpt.md"
   ],
-  "_auditStatus": "2026-10-15 04:58：已对齐 v2 nanogpt.md：按每模型 supported_parameters 决定发送；未声明字段标不会发送、默认不发；实测 243 模型仅 nano-banana-2.1 声明 seed，无模型声明 steps/guidance。徽章仍以前端实测为准"
+  "_auditStatus": "2026-11-02 ~04:55 JST：Researchy 02c——NanoGPT seed 按模型、不保证复现。\n2026-11-02 ~04:39 JST：Researchy 对照表写回 researchyVerified20261102（种子/时长/比例已核一致条目）；未核条目仍待核、禁止当拦截；徽章不动。\n2026-10-15 04:58：已对齐 v2 nanogpt.md：按每模型 supported_parameters 决定发送；未声明字段标不会发送、默认不发；实测 243 模型仅 nano-banana-2.1 声明 seed，无模型声明 steps/guidance。徽章仍以前端实测为准",
+  "researchyVerified20261102": {
+    "fetchedAt": "2026-11-02 ~04:55 JST",
+    "items": [
+      {
+        "field": "video.duration",
+        "value": "秒字符串按模型变；勿写死全局",
+        "url": "https://docs.nano-gpt.com/api-reference/endpoint/video-generation",
+        "status": "已核一致"
+      },
+      {
+        "field": "video.seconds",
+        "value": "仅 Sora 4/8/12",
+        "url": "https://docs.nano-gpt.com/api-reference/endpoint/video-generation",
+        "status": "已核一致"
+      },
+      {
+        "field": "image.commonFields.seed",
+        "value": "per model；不保证复现",
+        "url": "https://docs.nano-gpt.com/api-reference/image-generation",
+        "status": "已核一致"
+      },
+      {
+        "field": "image.seed",
+        "value": "optional；查 supported_parameters",
+        "url": "https://docs.nano-gpt.com/api-reference/endpoint/image-api-generate",
+        "status": "已核一致"
+      },
+      {
+        "field": "video.fields.seed",
+        "value": "optional；omit/blank/-1 随机；不保证相同输出",
+        "url": "https://docs.nano-gpt.com/api-reference/endpoint/video-generation",
+        "status": "已核一致"
+      }
+    ],
+    "evidence": "temp/e2e/video-schema/VERIFY_RESULT_2026-11-02c.md"
+  }
 }

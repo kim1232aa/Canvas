@@ -22,10 +22,12 @@ export type ProviderId =
   | 'aimlapi'
   | 'novita'
   | 'venice'
+  | 'deepinfra'
   | 'openworks'
   | 'runware'
   | 'modelslab'
-  | 'replicate';
+  | 'replicate'
+  | 'mage';
 
 export interface ModelSpec {
   id: string;

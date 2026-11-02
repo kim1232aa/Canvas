@@ -20,15 +20,15 @@ describe('Fal Kling V3 official contract', () => {
     expect(falVideoImageField('fal-ai/wan-i2v')).toBe('image_url');
   });
 
-  it('V3 duration is a string enum "3".."15"', () => {
+  it('V3 duration normalizes integer seconds to string; no local range reject', () => {
     expect(klingV3Duration(5)).toBe('5');
     expect(klingV3Duration('12')).toBe('12');
     expect(klingV3Duration(3)).toBe('3');
     expect(klingV3Duration(15)).toBe('15');
-    expect(() => klingV3Duration(2)).toThrow(/3–15/);
-    expect(() => klingV3Duration(16)).toThrow(/3–15/);
-    expect(() => klingV3Duration(4.5)).toThrow(/3–15/);
-    expect(() => klingV3Duration('abc')).toThrow(/3–15/);
+    expect(klingV3Duration(2)).toBe('2');
+    expect(klingV3Duration(16)).toBe('16');
+    expect(() => klingV3Duration(4.5)).toThrow(/整数/);
+    expect(() => klingV3Duration('abc')).toThrow(/整数/);
   });
 
   it('schema table has V3 entries: cfg_scale wire, negative_prompt supported, no local block', () => {

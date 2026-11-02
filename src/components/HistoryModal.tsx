@@ -747,7 +747,19 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
                         </details>
                       )}
                       {!item.status && <UpstreamExchanges item={item} />}
-                    </div>); return hasOutputMedia(item) ? <><p className="text-[11px] text-slate-400 font-mono [overflow-wrap:anywhere]" data-testid="history-success-model">模型: {displayValue(item.actualModel || item.model)}</p><details className="text-[11px]" data-testid="history-success-debug"><summary className="cursor-pointer text-slate-400">参数与排错（点开查看）</summary>{dbg}</details></> : dbg; })()}
+                    </div>); return hasOutputMedia(item) ? <>
+                      <p className="text-[11px] text-slate-400 font-mono [overflow-wrap:anywhere]" data-testid="history-success-model">模型: {displayValue(item.actualModel || item.model)}</p>
+                      {!generationPostNotSent(item) && sentHistoryLoras(item).length > 0 && (
+                        <div className="mt-1 flex flex-wrap gap-1" data-testid="history-success-face-loras">
+                          {sentHistoryLoras(item).map((l, i) => (
+                            <span key={i} title={l.name} className="max-w-full min-w-0 inline-flex flex-wrap items-center gap-y-0.5 text-[10px] bg-purple-950/60 text-purple-300 border border-purple-800/40 px-1.5 py-0.5 rounded" data-testid="history-success-face-lora">
+                              <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere]">LoRA: {l.name} ({l.strength === undefined ? '未发送强度' : String(l.strength)})</span>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <details className="text-[11px]" data-testid="history-success-debug"><summary className="cursor-pointer text-slate-400">参数与排错（点开查看）</summary>{dbg}</details>
+                    </> : dbg; })()}
 
                     <div className="pt-2 border-t border-[#2a2c35] flex items-center justify-between text-xs">
                       <div className="flex items-center gap-1.5">

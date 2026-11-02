@@ -5,14 +5,13 @@ import {spatialRequestParameters} from '../../utils/frontendParameters';
 import type {SpatialFrame} from '../../types/graph';
 const original=globalThis.fetch;
 afterEach(()=>globalThis.fetch=original);
-it('Agnes video submits duration 3 for final server builder validation',async()=>{
+it('Agnes video duration 3 is not locally range-rejected; builder normalizes to seconds string',async()=>{
   const request=vi.fn(async (_url,init)=>{
     const body=JSON.parse(String(init?.body));
-    try { buildAgnesVideoRequest(body.model,body); }
-    catch(error) { return new Response(JSON.stringify({error:(error as Error).message,errorSource:'local'}),{status:400}); }
-    throw new Error('Expected final builder rejection');
+    const built=buildAgnesVideoRequest(body.model,body);
+    return new Response(JSON.stringify({error:`forwarded seconds=${built.payload.seconds}`,errorSource:'fixture'}),{status:400});
   });globalThis.fetch=request;
-  await expect(new AgnesDriver().generate({model:'agnes-video-2.5',prompt:'robot',videoDuration:3,aspectRatio:'16:9',extraParams:{size:'1080P'}},{})).rejects.toThrow(/4–12|4-12/);
+  await expect(new AgnesDriver().generate({model:'agnes-video-2.5',prompt:'robot',videoDuration:3,aspectRatio:'16:9',extraParams:{size:'1080P'}},{})).rejects.toThrow(/forwarded seconds=3/);
   expect(request).toHaveBeenCalledTimes(1);
   expect(request.mock.calls[0][0]).toBe('/api/video/generate');
   expect(JSON.parse(request.mock.calls[0][1].body).duration).toBe(3);

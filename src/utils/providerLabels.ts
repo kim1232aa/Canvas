@@ -23,10 +23,12 @@ export const PROVIDER_TITLE_LABEL: Record<string, string> = {
   aimlapi: 'AIMLAPI',
   novita: 'Novita',
   venice: 'Venice',
+  deepinfra: 'DeepInfra',
   openworks: 'Tensor.Art OpenWorks',
   runware: 'Runware',
   modelslab: 'ModelsLab',
   replicate: 'Replicate',
+  mage: 'Mage',
 };
 
 /** Closed-source / non-Comfy cloud engines that must not show leftover Comfy sampler badges. */

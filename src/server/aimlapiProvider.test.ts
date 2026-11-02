@@ -59,6 +59,12 @@ describe('AIMLAPI provider (official docs 2026-10-15)', () => {
     expect(aimlapiVideoOutputs({ status: 'queued' })).toEqual([]);
   });
 
+  it('catalog video schema has no hardcoded duration/resolution enum (2026-11-02)', () => {
+    expect((aimlapiVideoInputSchema as any).properties.duration.enum).toBeUndefined();
+    expect((aimlapiVideoInputSchema as any).properties.resolution.enum).toBeUndefined();
+    expect((aimlapiImageInputSchema as any).properties.seed.minimum).toBeUndefined();
+  });
+
   it('LoRA schema declares path+scale; non-LoRA schema does not', () => {
     expect((aimlapiLoraImageInputSchema as any).properties.loras.maxItems).toBe(3);
     expect((aimlapiLoraImageInputSchema as any).properties.loras.items.properties.scale.maximum).toBe(4);

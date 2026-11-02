@@ -1,0 +1,123 @@
+{
+  "canvasAcceptance": "欠费已记、未真出图（2026-11-02 画布：欠费已记直接收；要买 Gem）",
+  "$schemaNote": "草案 — 仅声明。真相源：官方 Mage API Mango / Authentication / Account（2026-11-02 抓取）。密钥禁止写入本文件。",
+  "id": "mage",
+  "displayName": "Mage",
+  "auth": {
+    "envVar": "MAGE_API_KEY",
+    "header": "Authorization",
+    "scheme": "Bearer",
+    "keyPrefix": "mage_sk_",
+    "keyRule": "只进环境变量/本机配置，禁止写入草案/Git；群里已明文出现过，请到 Mage API Keys 立刻轮换",
+    "docs": "https://docs.mage.space/api/authentication"
+  },
+  "base": {
+    "root": "https://api.mage.space",
+    "v1": "https://api.mage.space/v1"
+  },
+  "catalog": {
+    "listArchitectures": "GET /v1/architectures",
+    "docs": "https://docs.mage.space/api/endpoints/list-architectures",
+    "note": "每架构独立 POST /v1/{architecture}/generate；本轮用户点名 Mango"
+  },
+  "predict": {
+    "mode": "async",
+    "submit": {
+      "method": "POST",
+      "path": "/v1/{architecture}/generate",
+      "mango": "/v1/mango/generate",
+      "accept": "202 Accepted → poll status_url；Idempotency-Key 可选",
+      "auth": true
+    },
+    "status": {
+      "method": "GET",
+      "path": "/v1/requests/{request_id}/status",
+      "or": "响应里的 status_url"
+    },
+    "cancel": {
+      "method": "POST",
+      "path": "/v1/requests/{request_id}/cancel"
+    },
+    "account": {
+      "method": "GET",
+      "path": "/v1/account",
+      "returns": "gems balance"
+    }
+  },
+  "image": {
+    "mango": {
+      "endpoint": "POST /v1/mango/generate",
+      "required": [
+        "prompt"
+      ],
+      "optional": {
+        "seed": "integer | null；省略=随机",
+        "model_id": "mango | mango-v2 | mango-v3s | mango-v3(default) | mango-v3-turbo",
+        "aspect_ratio": "21:9|16:9|3:2|5:4|1:1|4:5(default)|2:3|9:16|9:21",
+        "resolution": "按变体：mango 1K–4K；mango-v2 2K–4K；mango-v3s 2K|3K；mango-v3 / turbo 1K|2K；默认 2K",
+        "image": "参考图 https 或 data URL",
+        "additional_images": "额外参考图数组"
+      },
+      "mentions": "prompt 内 @handle 挂已保存 Characters/References（v2+；每请求合计≤10）；未解析或模型不支持 → 400 invalid_config，不扣 gems",
+      "gemsDefault": 135,
+      "source": "https://docs.mage.space/api/models/mango",
+      "fetchedAt": "2026-11-02 ~03:35 JST"
+    },
+    "otherArchitectures": "同基址还有 flux2/guava/sdxl_plus/anima 等；本草案以用户点名的 mango 为主，接其它家时按该模型页 OpenAPI 动态挂参"
+  },
+  "video": {
+    "supported": "官方有 cherry/plum/lemon 等 /v1/{arch}/generate；本轮未展开",
+    "docs": "https://docs.mage.space/api/models/overview"
+  },
+  "lora": {
+    "mangoApi": "unsupported_on_documented_schema",
+    "rule": "Mango 官方 OpenAPI 无 LoRA 字段；一致性靠 Characters/References（prompt @handle）。产品站有「LoRAs on Mage」页，但 API 已抓的 mango / sdxl_plus generate schema 均未声明 lora——禁止空挂假 LoRA；若要挂须另核声明了 LoRA 字段的架构页后再补。",
+    "productLorasPage": "https://docs.mage.space/features/loras",
+    "fetchedAt": "2026-11-02 ~03:35 JST",
+    "researchy20261102": "模型页明文 LoRA: No；与 OpenAPI 无 LoRA 字段一致"
+  },
+  "billing": {
+    "currency": "gems",
+    "notes": [
+      "API 只吃 Gems；会员无限量不覆盖 API",
+      "账户须先有成功付费（任意 Gem 包或套餐），否则 402 payment_required；注册赠送 Gems 仅 App 可用",
+      "余额不足 402 insufficient_gems + gems_required；欠费原样展示",
+      "GET /v1/account 查余额；成功后 billing.gems_charged"
+    ],
+    "docs": "https://docs.mage.space/api/billing"
+  },
+  "contractTestHint": "MAGE_API_KEY → GET /v1/account；有余额则 POST /v1/mango/generate {prompt, model_id:mango-v3, aspect_ratio} → poll status_url → result.url 落到保存节点；402 原样进历史。勿发 LoRA 假字段。",
+  "sources": [
+    "https://docs.mage.space/api/models/mango",
+    "https://docs.mage.space/api/authentication",
+    "https://docs.mage.space/api/quickstart",
+    "https://docs.mage.space/api/billing",
+    "https://docs.mage.space/api/endpoints/get-account",
+    "https://docs.mage.space/api/overview",
+    "https://docs.mage.space/features/loras"
+  ],
+  "_auditStatus": "2026-11-02 ~04:41 JST：Researchy——Mage mango aspect 与官网完全一致。\n2026-11-02 ~04:39 JST：Researchy 对照表写回 researchyVerified20261102（种子/时长/比例已核一致条目）；未核条目仍待核、禁止当拦截；徽章不动。\n2026-11-02 ~04:30 JST：雁定——额度问题不要卡，跳过；欠费已记家不排队等充值；有额度时再冲真图，不当当前主阻塞。\n2026-11-02 ~04:08 JST：画布明示——标记按「欠费已记」收，别再等点收；欠费原文进历史即可；挑刺只审真出图或串桶假话。ModelsLab 串桶（弹窗未含 LoRA vs 历史有）另修，与欠费标记分开。\n2026-11-02 ~04:08 JST：画布按雁定收——Replicate/ModelsLab/Mage 三家欠费原样透传证据已收，不当假成功、不以充值挡进度；未真出图不算接通。ModelsLab 另有串桶：弹窗「本次请求未含 LoRA」但历史请求体有 LoRA——交 canvas-dev 修，与欠费验收分开。雁问「欠费的为什么还要审核」→ 欠费本身不必再审；只审串桶这类真问题。\n2026-11-02 ~04:07 JST：雁定——欠费原样透传、如实记历史即可，不当假成功、不把充值当进度卡点；有额度再冲真图落保存节点。ModelsLab/Replicate/Mage 欠费证据已交；徽章仍等画布点收后再改（不自升接通）。\n2026-11-02 ~04:07 JST：canvas-dev——Mage 标准六节点板已打到官方 402（要买 Gem），证据 temp/e2e/mage/fe-billing-2026-11-02/，交挑刺审；不算接通；徽章仍未验证。\n2026-11-02 ~03:36 JST：Researchy 三路核——Bearer；POST /v1/mango/generate + body model_id；poll status_url；Mango 模型页 LoRA: No；402 insufficient_gems/payment_required 原样。画布：Key 已进本机；排队接，不挡 ModelsLab/Replicate 截图；没买 Gem 只做欠费验收、不算接通。徽章仍未验证。\n2026-11-02 ~03:35 JST：雁贴 https://docs.mage.space/api/models/mango + Key——新建 mage.json（新家）；Key 只进 MAGE_API_KEY/本机，未写入草案；群里明文请轮换。首接建议 Mango 异步出图；徽章未验证。",
+  "acceptanceBadge": "欠费已记",
+  "productNote": "2026-11-02：新家。主路径先 Mango 出图落到保存节点；参数按官方表动态挂；Mango 不挂假 LoRA。；画布排队，不插队挡 ModelsLab/Replicate；未买 Gem≠接通；2026-11-02 雁：额度不卡、跳过",
+  "sendEvidence": {
+    "billing20261102": "temp/e2e/mage/fe-billing-2026-11-02/"
+  },
+  "billingAccept20261102": "欠费已记（画布明示直接收）；未接通",
+  "researchyVerified20261102": {
+    "fetchedAt": "2026-11-02 ~04:39 JST",
+    "items": [
+      {
+        "field": "image.mango.seed",
+        "value": "integer|null 省略=随机",
+        "url": "https://docs.mage.space/api/models/mango",
+        "status": "已核一致"
+      },
+      {
+        "field": "image.mango.aspect_ratio",
+        "value": "默认 4:5；枚举 21:9…9:21",
+        "url": "https://docs.mage.space/api/models/mango",
+        "status": "已核一致"
+      }
+    ]
+  }
+}

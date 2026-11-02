@@ -43,7 +43,8 @@ export function buildAgnesVideoRequest(model: string, body: Record<string, unkno
     if (provided(payload.size)) payload.size = agnesVideoSize(payload.size, model);
     if (provided(payload.seconds)) {
       const seconds = Number(payload.seconds);
-      if (!Number.isInteger(seconds) || seconds < 4 || seconds > 12) fail('Agnes Video seconds 只接受 4–12 的整数秒');
+      // No local 4–12 range gate (no Researchy fetchedAt this round); type-normalize integer → string, upstream rejects.
+      if (!Number.isInteger(seconds)) fail('seconds / duration 必须为整数');
       payload.seconds = String(seconds);
     }
     if (provided(payload.seed)) {
@@ -63,7 +64,9 @@ export function buildAgnesVideoRequest(model: string, body: Record<string, unkno
     if (Array.isArray(payload.audios) && payload.audios.length > 3) fail('audios 数量超过官方限制');
     if (Array.isArray(payload.videos) && payload.videos.length > (model.endsWith('-flash') ? 0 : 1)) fail('videos 数量超过所选模型官方限制');
     for (const key of ['video_url', 'video_path', 'video_reference', 'input_reference', 'reference_url', 'width', 'height', 'fps', 'num_frames', 'quality', 'num_inference_steps']) if (provided(payload[key])) fail(`该服务商不支持: ${key}（Agnes Video 2.5）`);
-    if (provided(payload.aspect_ratio) && !['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'].includes(String(payload.aspect_ratio))) fail('aspect_ratio 不在官方支持列表');
+    // 2026-11-02: no local aspect_ratio enum refuse. Official six (21:9/16:9/4:3/1:1/3:4/9:16) verified on
+    // https://wiki.agnes-ai.com/en/docs/agnes-video-25 but Agnes has no machine-readable /api/model-schema yet —
+    // pass through; upstream 400 if outside list. UI must not invent options without Schema.
   }
   const overrides = Object.fromEntries(Object.entries(mappedCustom).filter(([key, value]) => Object.hasOwn(beforeCustom, key) && JSON.stringify(beforeCustom[key]) !== JSON.stringify(value)).map(([key, value]) => [key, { before: beforeCustom[key], after: value }]));
   const fieldStatus = Object.fromEntries(Object.keys(payload).map(key => [key, knownModel && officialFields.has(key) ? 'supported' : 'unverified']));

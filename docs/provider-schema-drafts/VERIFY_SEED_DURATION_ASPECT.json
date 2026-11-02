@@ -1,0 +1,1003 @@
+{
+  "$note": "2026-11-02 17:40 雁追问后：魔搭 seed=现页无字段；API 400 仅旁证，不升已核、不硬拦。",
+  "rule": "不确定必须网络搜索核实；冲突以官网为准",
+  "total": 65,
+  "items": [
+    {
+      "provider": "aimlapi",
+      "kind": "seed",
+      "path": "video.parametersPixverseV55I2v.seed",
+      "claim": {
+        "type": "integer",
+        "supported": true
+      },
+      "status": "已核一致",
+      "officialUrl": "https://docs.aimlapi.com/api-references/video-models/pixverse/v5-5-image-to-video",
+      "fetchedAt": "2026-11-02 ~04:45 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "optional int",
+      "researchyVerified20261102": true
+    },
+    {
+      "provider": "aimlapi",
+      "kind": "sizeDuration",
+      "path": "image.parametersByModel.alibaba/z-image-turbo-lora.acceleration",
+      "claim": {
+        "enum": [
+          "none",
+          "regular",
+          "high"
+        ]
+      },
+      "status": "已核一致",
+      "officialUrl": "https://docs.aimlapi.com/api-references/image-models/alibaba-cloud/z-image-turbo-lora",
+      "fetchedAt": "2026-11-02 ~04:39 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "none/regular/high；默认 regular（补记）"
+    },
+    {
+      "provider": "aimlapi",
+      "kind": "sizeDuration",
+      "path": "video.parametersPixverseV55I2v.duration",
+      "claim": {
+        "type": "integer",
+        "enum": [
+          5,
+          8,
+          10
+        ],
+        "note": "1080p 不支持 8s"
+      },
+      "status": "已核一致",
+      "officialUrl": "https://docs.aimlapi.com/api-references/video-models/pixverse/v5-5-image-to-video",
+      "fetchedAt": "2026-11-02 ~04:39 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "enum 5/8/10；1080p 不支持 8s（Researchy 三路+官网）"
+    },
+    {
+      "provider": "aimlapi",
+      "kind": "sizeDuration",
+      "path": "video.parametersPixverseV55I2v.resolution",
+      "claim": {
+        "enum": [
+          "360p",
+          "540p",
+          "720p",
+          "1080p"
+        ],
+        "default": "720p"
+      },
+      "status": "已核一致",
+      "officialUrl": "https://docs.aimlapi.com/api-references/video-models/pixverse/v5-5-image-to-video",
+      "fetchedAt": "2026-11-02 ~04:39 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "360p–1080p 默认 720p"
+    },
+    {
+      "provider": "civitai",
+      "kind": "seed",
+      "path": "image.byEngine.flux1 sdcpp.seed",
+      "claim": "int64 default random",
+      "status": "已核一致",
+      "officialUrl": "https://developer.civitai.com/orchestration/recipes/flux1",
+      "fetchedAt": "2026-11-02 ~04:55 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "官网 Flux1 sdcpp 参数表：seed 默认 random、类型 int64。三路+官网 2026-11-02。",
+      "researchyVerified20261102": true
+    },
+    {
+      "provider": "civitai",
+      "kind": "seed",
+      "path": "image.byEngine.flux1 comfy.seed",
+      "claim": true,
+      "status": "已核一致",
+      "officialUrl": "https://developer.civitai.com/orchestration/recipes/flux1",
+      "fetchedAt": "2026-11-02 ~04:55 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "Flux1 配方 sdcpp/kontext 明确列 seed(int64)；comfy 差异表未把 seed 列为独缺字段，完整字段见 ComfyFlux1* schema。本轮按「支持 seed」与配方一致。三路+官网 2026-11-02。",
+      "researchyVerified20261102": true
+    },
+    {
+      "provider": "civitai",
+      "kind": "seed",
+      "path": "image.byEngine.flux2 klein.seed",
+      "claim": "int64",
+      "status": "已核一致",
+      "officialUrl": "https://developer.civitai.com/orchestration/recipes/flux2",
+      "fetchedAt": "2026-11-02 ~04:55 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "Flux2 Common parameters：seed 默认 random、类型 int64。三路+官网 2026-11-02。",
+      "researchyVerified20261102": true
+    },
+    {
+      "provider": "civitai",
+      "kind": "seed",
+      "path": "image.byEngine.flux2 dev/flex.seed",
+      "claim": true,
+      "status": "已核一致",
+      "officialUrl": "https://developer.civitai.com/orchestration/recipes/flux2",
+      "fetchedAt": "2026-11-02 ~04:55 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "Flux2 共用参数含 seed(int64, 默认 random)，覆盖 dev/flex。三路+官网 2026-11-02。",
+      "researchyVerified20261102": true
+    },
+    {
+      "provider": "civitai",
+      "kind": "seed",
+      "path": "image.byEngine.krea v2.seed",
+      "claim": "uint32 批内共用",
+      "status": "已核一致",
+      "officialUrl": "https://developer.civitai.com/orchestration/recipes/krea",
+      "fetchedAt": "2026-11-02 ~04:55 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "Krea v2 参数表：seed 默认 random、uint32；quantity>1 时批内共用同一 seed。三路+官网 2026-11-02。",
+      "researchyVerified20261102": true
+    },
+    {
+      "provider": "civitai",
+      "kind": "seed",
+      "path": "image.textToImage.fields.seed",
+      "claim": "0–4294967295",
+      "status": "已核一致",
+      "officialUrl": "https://developer.civitai.com/orchestration/reference/operations/InvokeTextToImageStepTemplate",
+      "fetchedAt": "2026-11-02 ~04:55 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "TextToImageInput.seed：integer(int64) required 标记但未填则随机；min 0 max 4294967295。三路+官网 2026-11-02。",
+      "researchyVerified20261102": true
+    },
+    {
+      "provider": "civitai",
+      "kind": "seed",
+      "path": "video.wan.seed",
+      "claim": "未列为 fal 路径通用字段",
+      "status": "已核一致",
+      "officialUrl": "https://developer.civitai.com/orchestration/recipes/wan",
+      "fetchedAt": "2026-11-02 ~04:55 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "WAN 配方 Common parameters 未列 seed；fal 路径通用字段表无 seed。与「未列为 fal 路径通用字段」一致。三路+官网 2026-11-02。",
+      "researchyVerified20261102": true
+    },
+    {
+      "provider": "civitai",
+      "kind": "sizeDuration",
+      "path": "base.orchestration",
+      "claim": "https://orchestration.civitai.com/v2/consumer",
+      "status": "已核一致",
+      "officialUrl": "https://developer.civitai.com/orchestration/reference/",
+      "fetchedAt": "2026-11-02 ~04:55 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "官网约定 Base URL https://orchestration.civitai.com；consumer 入口 /v2/consumer。claim URL 一致。三路+官网 2026-11-02。",
+      "researchyVerified20261102": true
+    },
+    {
+      "provider": "fal",
+      "kind": "seed",
+      "path": "image.fal-ai/flux-lora.seed",
+      "claim": {
+        "type": "integer",
+        "echoed": true
+      },
+      "status": "已核一致",
+      "officialUrl": "https://fal.ai/models/fal-ai/flux-lora/llms.txt",
+      "fetchedAt": "2026-11-02 ~04:39 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "optional integer；出参回传所用 seed"
+    },
+    {
+      "provider": "fal",
+      "kind": "seed",
+      "path": "image.fal-ai/krea-2/turbo/lora.seed",
+      "claim": {
+        "type": "integer",
+        "note": "image i uses seed+i"
+      },
+      "status": "已核一致",
+      "officialUrl": "https://fal.ai/models/fal-ai/krea-2/turbo/lora/llms.txt",
+      "fetchedAt": "2026-11-02 ~04:45 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "optional int；seed+i"
+    },
+    {
+      "provider": "fal",
+      "kind": "seed",
+      "path": "video.fal-ai/wan-t2v-lora.seed",
+      "claim": {
+        "type": "integer"
+      },
+      "status": "已核一致",
+      "officialUrl": "https://fal.ai/models/fal-ai/wan-t2v-lora/api",
+      "fetchedAt": "2026-11-02 ~04:39 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "integer"
+    },
+    {
+      "provider": "fal",
+      "kind": "sizeDuration",
+      "path": "video.fal-ai/wan-t2v-lora.resolution",
+      "claim": {
+        "enum": [
+          "480p",
+          "580p",
+          "720p"
+        ],
+        "default": "480p"
+      },
+      "status": "已核一致",
+      "officialUrl": "https://fal.ai/models/fal-ai/wan-t2v-lora/api",
+      "fetchedAt": "2026-11-02 ~04:39 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "480p/580p/720p"
+    },
+    {
+      "provider": "fal",
+      "kind": "sizeDuration",
+      "path": "video.fal-ai/wan-t2v-lora.aspect_ratio",
+      "claim": {
+        "enum": [
+          "16:9",
+          "9:16"
+        ],
+        "default": "16:9"
+      },
+      "status": "已核一致",
+      "officialUrl": "https://fal.ai/models/fal-ai/wan-t2v-lora/api",
+      "fetchedAt": "2026-11-02 ~04:39 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "16:9|9:16 默认 16:9"
+    },
+    {
+      "provider": "fal",
+      "kind": "sizeDuration",
+      "path": "video.fal-ai/kling-video/v3/standard/image-to-video.fields.duration",
+      "claim": {
+        "sendStatus": "会发送",
+        "wireType": "string",
+        "example": "5",
+        "note": "实发字符串 duration=\"5\"，非数字",
+        "sendEvidence": "hist_1792140360652_bq6y0"
+      },
+      "status": "已核一致",
+      "officialUrl": "https://fal.ai/models/fal-ai/kling-video/v3/standard/image-to-video/api",
+      "fetchedAt": "2026-11-02 ~04:41 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "字符串枚举 \"3\"…\"15\" 默认 \"5\""
+    },
+    {
+      "provider": "fal",
+      "kind": "sizeDuration",
+      "path": "video.fal-ai/kling-video/v3/standard/image-to-video.fields.aspect_ratio",
+      "claim": {
+        "sendStatus": "未填写，不发送",
+        "note": "本轮画面比例空；actualRequest 无 aspect_ratio"
+      },
+      "status": "已核一致",
+      "officialUrl": "https://fal.ai/models/fal-ai/kling-video/v3/standard/image-to-video/api",
+      "fetchedAt": "2026-11-02 ~04:45 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "官网 I2V Input Schema 无 aspect_ratio（比例跟 start_image）；T2V 才有 16:9/9:16/1:1。claim「不发送」正确"
+    },
+    {
+      "provider": "huggingface",
+      "kind": "seed",
+      "path": "image.request.parameters.seed",
+      "claim": {
+        "type": "integer"
+      },
+      "status": "已核一致",
+      "officialUrl": "https://huggingface.co/docs/inference-providers/main/en/tasks/text-to-image",
+      "fetchedAt": "2026-11-02 ~04:55 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "Inference Providers text-to-image Request.parameters.seed：integer，Seed for the random number generator。三路+官网 2026-11-02。",
+      "researchyVerified20261102": true
+    },
+    {
+      "provider": "huggingface",
+      "kind": "seed",
+      "path": "video.request.parameters.seed",
+      "claim": true,
+      "status": "已核一致",
+      "officialUrl": "https://huggingface.co/docs/inference-providers/tasks/text-to-video",
+      "fetchedAt": "2026-11-02 ~04:55 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "Inference Providers text-to-video Request.parameters.seed：integer。三路+官网 2026-11-02。",
+      "researchyVerified20261102": true
+    },
+    {
+      "provider": "krea",
+      "kind": "seed",
+      "path": "image.parametersByEndpoint.krea/krea-2/{medium|large|medium-turbo}.seed",
+      "claim": {
+        "type": "number|null"
+      },
+      "status": "已核一致",
+      "officialUrl": "https://www.krea.ai/docs/developers/krea-2/overview",
+      "fetchedAt": "2026-11-02 ~04:45 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "number 可选",
+      "researchyVerified20261102": true
+    },
+    {
+      "provider": "krea",
+      "kind": "seed",
+      "path": "image.parametersByEndpoint.ideogram/ideogram-4.5.seed",
+      "claim": {
+        "type": "integer",
+        "min": 0,
+        "max": 2147483647
+      },
+      "status": "已核一致",
+      "officialUrl": "https://www.krea.ai/docs/api-reference/image/ideogram-45",
+      "fetchedAt": "2026-11-02 ~04:45 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "0–2147483647",
+      "researchyVerified20261102": true
+    },
+    {
+      "provider": "krea",
+      "kind": "seed",
+      "path": "video.samples.bytedance/seedance-2",
+      "claim": {
+        "duration": "4-15 default 5",
+        "resolution": [
+          "480p",
+          "720p",
+          "1080p",
+          "4k"
+        ],
+        "seed": true,
+        "aspect_ratio": true
+      },
+      "status": "已核一致",
+      "officialUrl": "https://www.krea.ai/docs/api-reference/video/seedance-20",
+      "fetchedAt": "2026-11-02 ~04:39 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "OpenAPI 有 seed 整数"
+    },
+    {
+      "provider": "krea",
+      "kind": "seed",
+      "path": "video.samples.bytedance/seedance-2.seed",
+      "claim": true,
+      "status": "已核一致",
+      "officialUrl": "https://www.krea.ai/docs/api-reference/video/seedance-20",
+      "fetchedAt": "2026-11-02 ~04:39 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "OpenAPI 有 seed 整数"
+    },
+    {
+      "provider": "krea",
+      "kind": "seed",
+      "path": "video.samples.kling/kling-2.5.seed",
+      "claim": false,
+      "status": "已核一致",
+      "officialUrl": "https://www.krea.ai/docs/api-reference/video/kling-25",
+      "fetchedAt": "2026-11-02 ~04:39 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "OpenAPI 无 seed；additionalProperties false"
+    },
+    {
+      "provider": "krea",
+      "kind": "seed",
+      "path": "video.samples.minimax/hailuo-02.seed",
+      "claim": false,
+      "status": "已核一致",
+      "officialUrl": "https://www.krea.ai/docs/api-reference/video/hailuo-02",
+      "fetchedAt": "2026-11-02 ~04:39 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "无 seed"
+    },
+    {
+      "provider": "krea",
+      "kind": "seed",
+      "path": "video.samples.google/veo-3.seed",
+      "claim": false,
+      "status": "已核一致",
+      "officialUrl": "https://www.krea.ai/docs/api-reference/video/veo-31",
+      "fetchedAt": null,
+      "confidence": null,
+      "notes": "Veo 3 已日落；当前官方 Veo 3.1 OpenAPI requestBody 无 seed，且 additionalProperties:false。claim「False/不发」正确。勿听二手源说有 seed。三路+官网 2026-11-02。",
+      "researchyVerified20261102": true
+    },
+    {
+      "provider": "krea",
+      "kind": "sizeDuration",
+      "path": "video.samples.bytedance/seedance-2.duration",
+      "claim": "4-15 default 5",
+      "status": "已核一致",
+      "officialUrl": "https://www.krea.ai/docs/developers/seedance",
+      "fetchedAt": "2026-11-02 ~04:39 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "min 4 max 15 default 5"
+    },
+    {
+      "provider": "krea",
+      "kind": "sizeDuration",
+      "path": "video.samples.minimax/hailuo-02.duration",
+      "claim": "6-10",
+      "status": "已核一致",
+      "officialUrl": "https://www.krea.ai/docs/api-reference/video/hailuo-02",
+      "fetchedAt": "2026-11-02 ~04:39 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "minimum:6 maximum:10 连续区间默认 6；无 seed。Hailuo 2.3 才是仅 6|10 离散"
+    },
+    {
+      "provider": "mage",
+      "kind": "seed",
+      "path": "image.mango.optional.seed",
+      "claim": "integer | null；省略=随机",
+      "status": "已核一致",
+      "officialUrl": "https://docs.mage.space/api/models/mango",
+      "fetchedAt": "2026-11-02 ~04:39 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "integer|null；省略=随机；aspect_ratio 默认 4:5 枚举 21:9…9:21"
+    },
+    {
+      "provider": "modelscope",
+      "kind": "seed",
+      "path": "base.intl.sendStatus.seed",
+      "claim": "会发送",
+      "status": "现页无官方seed字段（不硬拦）",
+      "officialUrl": "https://www.modelscope.cn/docs/model-service/API-Inference/intro",
+      "fetchedAt": "2026-11-02 ~17:50 JST",
+      "confidence": "高-缺文档（已穷尽OpenAPI/文档页/模型页）",
+      "notes": "Researchy 2026-11-02 ~17:50 JST 继续挖（应画布/挑刺）：api-inference(.ai/.cn) openapi.json|/docs|/redoc 全 HTTP 404；docs intro/api/image/openapi/limits 现页仍~5KB SPA 空壳，无 seed 字段正文；Z-Image-Turbo/Qwen-Image 模型页仅有本地 Diffusers manual_seed(42) 示例，无 REST seed Schema；CSDN 社区表非官网。现页结论：官方文档没有 seed 字段说明。旁证仍仅 API400「seed must be in [-1,2147483647]」。不升已核、不硬拦。",
+      "researchyVerified20261102d": false,
+      "researchyVerified20261102e": true,
+      "evidence": "temp/e2e/video-schema/VERIFY_RESULT_2026-11-02e.md",
+      "runtimeClue20261102": {
+        "source": "API 400 body + Researchy 三路复核",
+        "message": "seed must be in [-1, 2147483647]",
+        "note": "非官网 intro；与 CSDN 社区表下限冲突（社区0 vs 400的-1）；不升已核一致；保持未核实（不拦）",
+        "evidence": "temp/e2e/modelscope-intl-lora-recipe-2026-11-02/NOTES.md",
+        "seedTried": 3742927916,
+        "officialIntroBytes": {
+          "modelscope.ai": 5099,
+          "modelscope.cn": 5049
+        }
+      },
+      "researchyVerified20261102f": true,
+      "statusMeaning": "已三路检索+现页；缺官方Schema正文，故不标已核一致",
+      "apiErrorEvidence": {
+        "message": "seed must be in [-1, 2147483647]",
+        "endpoint": "https://api-inference.modelscope.ai/v1/images/generations",
+        "historyFail": "hist_1793601169875_kbzcg",
+        "role": "旁证，非官网 Schema"
+      },
+      "researchyVerified20261102h": true,
+      "dig20261102h": {
+        "openapiEndpoints": "404 on api-inference openapi.json/docs/redoc (.ai+.cn)",
+        "docsPages": "SPA shells ~5KB, no seed schema text",
+        "modelPages": "only local Diffusers manual_seed; no REST seed table",
+        "runtime旁证": "HTTP 400 seed must be in [-1, 2147483647]",
+        "rejected": [
+          "CSDN community table",
+          "百炼",
+          "agy synthesis"
+        ]
+      }
+    },
+    {
+      "provider": "modelscope",
+      "kind": "seed",
+      "path": "image.parametersQwenImage.seed",
+      "claim": {
+        "type": "integer",
+        "min": 0,
+        "max": 2147483647
+      },
+      "status": "现页无官方seed字段（不硬拦）",
+      "officialUrl": "https://www.modelscope.cn/docs/model-service/API-Inference/intro",
+      "fetchedAt": "2026-11-02 ~17:50 JST",
+      "confidence": "高-缺文档（已穷尽OpenAPI/文档页/模型页）",
+      "notes": "Researchy 2026-11-02 ~17:50 JST 继续挖（应画布/挑刺）：api-inference(.ai/.cn) openapi.json|/docs|/redoc 全 HTTP 404；docs intro/api/image/openapi/limits 现页仍~5KB SPA 空壳，无 seed 字段正文；Z-Image-Turbo/Qwen-Image 模型页仅有本地 Diffusers manual_seed(42) 示例，无 REST seed Schema；CSDN 社区表非官网。现页结论：官方文档没有 seed 字段说明。旁证仍仅 API400「seed must be in [-1,2147483647]」。不升已核、不硬拦。",
+      "researchyVerified20261102d": false,
+      "researchyVerified20261102e": true,
+      "evidence": "temp/e2e/video-schema/VERIFY_RESULT_2026-11-02e.md",
+      "runtimeClue20261102": {
+        "source": "API 400 body + Researchy 三路复核",
+        "message": "seed must be in [-1, 2147483647]",
+        "note": "非官网 intro；与 CSDN 社区表下限冲突（社区0 vs 400的-1）；不升已核一致；保持未核实（不拦）",
+        "evidence": "temp/e2e/modelscope-intl-lora-recipe-2026-11-02/NOTES.md",
+        "seedTried": 3742927916,
+        "officialIntroBytes": {
+          "modelscope.ai": 5099,
+          "modelscope.cn": 5049
+        }
+      },
+      "researchyVerified20261102f": true,
+      "statusMeaning": "已三路检索+现页；缺官方Schema正文，故不标已核一致",
+      "apiErrorEvidence": {
+        "message": "seed must be in [-1, 2147483647]",
+        "endpoint": "https://api-inference.modelscope.ai/v1/images/generations",
+        "historyFail": "hist_1793601169875_kbzcg",
+        "role": "旁证，非官网 Schema"
+      },
+      "researchyVerified20261102h": true,
+      "dig20261102h": {
+        "openapiEndpoints": "404 on api-inference openapi.json/docs/redoc (.ai+.cn)",
+        "docsPages": "SPA shells ~5KB, no seed schema text",
+        "modelPages": "only local Diffusers manual_seed; no REST seed table",
+        "runtime旁证": "HTTP 400 seed must be in [-1, 2147483647]",
+        "rejected": [
+          "CSDN community table",
+          "百炼",
+          "agy synthesis"
+        ]
+      }
+    },
+    {
+      "provider": "modelslab",
+      "kind": "seed",
+      "path": "image.fields.seed",
+      "claim": "integer 或 null",
+      "status": "已核一致",
+      "officialUrl": "https://docs.modelslab.com/image-generation/realtime-stable-diffusion/text-to-image",
+      "fetchedAt": "2026-11-02 ~04:55 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "OpenAPI RealtimeCommonImageGenerationParams.seed：integer|null；同 seed 复现，null 随机。llms.txt 亦列 common seed。三路+官网 2026-11-02。",
+      "researchyVerified20261102": true
+    },
+    {
+      "provider": "muapi",
+      "kind": "seed",
+      "path": "image.seed",
+      "claim": {
+        "supported": "按端点 OpenAPI：部分路径有 seed（默认常 -1）；工作流中心预设 flux-1-dev-style-lora-inference 无 seed",
+        "note": "禁止用「≥69 有 seed」概括当前卡；以该 path 的 requestBody 为准"
+      },
+      "status": "已核一致",
+      "officialUrl": "https://api.muapi.ai/openapi.json",
+      "fetchedAt": "2026-11-02 ~04:55 JST",
+      "confidence": "Researchy 三路+OpenAPI+文档页",
+      "notes": "按端点：多数 schema 有 seed（常 default -1）；flux-1-dev-style-lora-inference 的 Flux1DevStyleLoraInferenceRequest 无 seed（prompt/lora_url/lora_weight/aspect_ratio/webhook_url）。冲突旁注：https://muapi.ai/docs/flux-dev 写 seed -1~9999999999，但同路径 OpenAPI ImageRequest 无 seed 字段。三路+官网 2026-11-02。",
+      "researchyVerified20261102": true
+    },
+    {
+      "provider": "muapi",
+      "kind": "seed",
+      "path": "video.wanLora.seed",
+      "claim": false,
+      "status": "已核一致",
+      "officialUrl": "https://muapi.ai/playground/wan2.1-lora-t2v/llms.txt",
+      "fetchedAt": "2026-11-02 ~04:39 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "入参无 seed；duration 默认 5；aspect 16:9|9:16"
+    },
+    {
+      "provider": "nanogpt",
+      "kind": "seed",
+      "path": "image.commonFields.seed",
+      "claim": {
+        "supported": "per model",
+        "guarantee": false
+      },
+      "status": "已核一致",
+      "officialUrl": "https://docs.nano-gpt.com/api-reference/image-generation",
+      "fetchedAt": "2026-11-02 ~04:55 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "seed 为 per-model discoverable；不保证相同结果。与 claim supported=per model / guarantee=false 一致。三路+官网 2026-11-02。",
+      "researchyVerified20261102": true
+    },
+    {
+      "provider": "nanogpt",
+      "kind": "seed",
+      "path": "image.seed",
+      "claim": {
+        "supported": "per model; 2026-10-15 实测 243 个模型仅 nano-banana-2.1 声明"
+      },
+      "status": "已核一致",
+      "officialUrl": "https://docs.nano-gpt.com/api-reference/endpoint/image-api-generate",
+      "fetchedAt": "2026-11-02 ~04:55 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "Generate Images：seed optional integer；须查 supported_parameters。不保证复现。三路+官网 2026-11-02。",
+      "researchyVerified20261102": true
+    },
+    {
+      "provider": "nanogpt",
+      "kind": "seed",
+      "path": "video.fields.seed",
+      "claim": "可选，不保证复现",
+      "status": "已核一致",
+      "officialUrl": "https://docs.nano-gpt.com/api-reference/endpoint/video-generation",
+      "fetchedAt": "2026-11-02 ~04:55 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "video seed：number|string 可选；omit/blank/-1 随机；不保证相同输出；部分模型回传 seed。三路+官网 2026-11-02。",
+      "researchyVerified20261102": true
+    },
+    {
+      "provider": "novita",
+      "kind": "seed",
+      "path": "image.mingOpenaiImages.seed",
+      "claim": {
+        "supported": false,
+        "reason": "文档未列"
+      },
+      "status": "已核一致",
+      "officialUrl": "https://docs.novita.ai/api-reference/model-apis-ming-image-txt2img",
+      "fetchedAt": "2026-11-02 ~04:45 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "无 seed 勿发",
+      "researchyVerified20261102": true
+    },
+    {
+      "provider": "novita",
+      "kind": "seed",
+      "path": "image.poll.seedEcho",
+      "claim": "extra.seed (string)",
+      "status": "已核一致",
+      "officialUrl": "https://docs.novita.ai/api-reference/model-apis-task-result",
+      "fetchedAt": "2026-11-02 ~04:45 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "extra.seed string",
+      "researchyVerified20261102": true
+    },
+    {
+      "provider": "novita",
+      "kind": "seed",
+      "path": "video.txt2videoParamsFromSdk.seed",
+      "claim": {
+        "supported": true
+      },
+      "status": "未核实（不拦）",
+      "officialUrl": null,
+      "fetchedAt": "2026-11-02 ~15:15 JST",
+      "confidence": "低→中（索引有 seed、现页 404；现页优先）",
+      "notes": "Researchy 2026-11-02e 三路+抓取：检索摘要写 seed，现页 HTTP 404。不升已核；前端不硬拦；有端点 Schema 再动态跟。",
+      "researchyVerified20261102d": false,
+      "researchyVerified20261102e": true,
+      "evidence": "temp/e2e/video-schema/VERIFY_RESULT_2026-11-02e.md"
+    },
+    {
+      "provider": "novita",
+      "kind": "seed",
+      "path": "video.img2videoParamsFromSdk.seed",
+      "claim": {
+        "supported": true
+      },
+      "status": "未核实（不拦）",
+      "officialUrl": null,
+      "fetchedAt": "2026-11-02 ~15:15 JST",
+      "confidence": "低→中（索引有 seed、现页 404；现页优先）",
+      "notes": "Researchy 2026-11-02e 三路+抓取：检索摘要写 seed，现页 HTTP 404。不升已核；前端不硬拦；有端点 Schema 再动态跟。",
+      "researchyVerified20261102d": false,
+      "researchyVerified20261102e": true,
+      "evidence": "temp/e2e/video-schema/VERIFY_RESULT_2026-11-02e.md"
+    },
+    {
+      "provider": "replicate",
+      "kind": "seed",
+      "path": "image.parameters.seed",
+      "claim": {
+        "type": "integer",
+        "supported": true,
+        "caveat": "go_fast=true 时不保证确定性"
+      },
+      "status": "已核一致",
+      "officialUrl": "https://replicate.com/black-forest-labs/flux-schnell/llms.txt",
+      "fetchedAt": "2026-11-02 ~04:42 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "integer；go_fast 不保证"
+    },
+    {
+      "provider": "replicate",
+      "kind": "seed",
+      "path": "sendEvidence.actualRequestInput.seed",
+      "claim": 7,
+      "status": "已核一致",
+      "officialUrl": "https://replicate.com/black-forest-labs/flux-schnell/llms.txt",
+      "fetchedAt": "2026-11-02 ~04:42 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "integer；go_fast 不保证"
+    },
+    {
+      "provider": "replicate",
+      "kind": "sizeDuration",
+      "path": "image.parameters.aspect_ratio",
+      "claim": {
+        "type": "enum",
+        "default": "1:1",
+        "note": "无独立 width/height"
+      },
+      "status": "已核一致",
+      "officialUrl": "https://replicate.com/black-forest-labs/flux-schnell/llms.txt",
+      "fetchedAt": "2026-11-02 ~04:42 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "枚举默认 1:1（flux-schnell 样本）"
+    },
+    {
+      "provider": "sogni",
+      "kind": "seed",
+      "path": "image.seed",
+      "claim": {
+        "supported": true,
+        "type": "Uint32",
+        "via": [
+          "SDK seed",
+          "POST :id/reseed seed_overrides"
+        ],
+        "caveat": "多图只固定其中一张"
+      },
+      "status": "已核一致",
+      "officialUrl": "https://sdk-docs.sogni.ai/interfaces/VideoProjectParams.html",
+      "fetchedAt": "2026-11-02 ~04:45 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "Uint32 / reseed"
+    },
+    {
+      "provider": "sogni",
+      "kind": "seed",
+      "path": "video.arguments.durationByModel.seedance2/mini",
+      "claim": "4-15s",
+      "status": "已核一致",
+      "officialUrl": "https://docs.sogni.ai/api-reference/direct-generation/",
+      "fetchedAt": "2026-11-02 ~04:45 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "按模型区间；见 researchyVerified"
+    },
+    {
+      "provider": "sogni",
+      "kind": "seed",
+      "path": "video.arguments.durationByModel.seedance2-5",
+      "claim": "4-30s",
+      "status": "已核一致",
+      "officialUrl": "https://docs.sogni.ai/api-reference/direct-generation/",
+      "fetchedAt": "2026-11-02 ~04:45 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "按模型区间；见 researchyVerified"
+    },
+    {
+      "provider": "sogni",
+      "kind": "seed",
+      "path": "video.seed",
+      "claim": "reseed seed_overrides；省略则随机",
+      "status": "已核一致",
+      "officialUrl": "https://sdk-docs.sogni.ai/interfaces/VideoProjectParams.html",
+      "fetchedAt": "2026-11-02 ~04:45 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "Uint32 / reseed"
+    },
+    {
+      "provider": "sogni",
+      "kind": "sizeDuration",
+      "path": "video.arguments.durationByModel",
+      "claim": {
+        "ltx": "2-20s",
+        "seedance2/mini": "4-15s",
+        "seedance2-5": "4-30s",
+        "happyhorse": "3-15s",
+        "wan3": "2-30s",
+        "h3": "~5.2-15.1s @24fps"
+      },
+      "status": "已核一致",
+      "officialUrl": "https://docs.sogni.ai/api-reference/direct-generation/",
+      "fetchedAt": "2026-11-02 ~04:45 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "按模型区间；见 researchyVerified"
+    },
+    {
+      "provider": "tensorart-tams",
+      "kind": "seed",
+      "path": "image.parameters.inputInitialize.seed",
+      "claim": {
+        "type": "int64|string",
+        "random": "-1 (文档) / omit|0 (OpenAPI)",
+        "max": 4294967295
+      },
+      "status": "已核一致",
+      "officialUrl": "https://tams-docs.tensor.art/docs/api/guide/workspace-api-example/",
+      "fetchedAt": "2026-11-02 ~04:55 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "官方示例 inputInitialize.seed 用 -1 或 \"-1\"（int|string）；签名文档同为 seed:-1。本轮 OpenAPI Spec 链接 404，未能复核 claim 中 omit|0 与 max 4294967295；以文档示例定论随机值为 -1。另见 https://tams-docs.tensor.art/docs/api/signature/signature_build/ 。三路+官网 2026-11-02。",
+      "researchyVerified20261102": true
+    },
+    {
+      "provider": "together",
+      "kind": "seed",
+      "path": "image.parameters.seed",
+      "claim": {
+        "type": "integer",
+        "supported": true
+      },
+      "status": "已核一致",
+      "officialUrl": "https://docs.together.ai/docs/inference/images/parameters",
+      "fetchedAt": "2026-11-02 ~04:42 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "integer；同 seed+prompt+model+参数可复现；FLUX/Kontext 表均 ✓"
+    },
+    {
+      "provider": "together",
+      "kind": "seed",
+      "path": "video.parameters.seed",
+      "claim": {
+        "type": "integer",
+        "supported": true
+      },
+      "status": "已核一致",
+      "officialUrl": "https://docs.together.ai/docs/inference/videos/parameters",
+      "fetchedAt": "2026-11-02 ~04:42 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "图/视频 integer seed"
+    },
+    {
+      "provider": "together",
+      "kind": "sizeDuration",
+      "path": "video.parameters.fps",
+      "claim": {
+        "type": "integer",
+        "rangeDoc": "15-60"
+      },
+      "status": "已核一致",
+      "officialUrl": "https://docs.together.ai/docs/inference/videos/parameters",
+      "fetchedAt": "2026-11-02 ~04:42 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "15–60"
+    },
+    {
+      "provider": "venice",
+      "kind": "seed",
+      "path": "image.parameters.seed",
+      "claim": {
+        "type": "integer",
+        "min": -999999999,
+        "max": 999999999,
+        "default": 0,
+        "supported": true,
+        "note": "未提供则随机（描述）",
+        "sendStatus": "会发送",
+        "sendEvidence": "FE actualRequest 2026-10-15 venice-sd35"
+      },
+      "status": "已核一致",
+      "officialUrl": "https://docs.venice.ai/api-reference/endpoint/image/generate",
+      "fetchedAt": "2026-11-02 ~04:43 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "-999999999～999999999；省略随机"
+    },
+    {
+      "provider": "venice",
+      "kind": "seed",
+      "path": "video.parameters.seed",
+      "claim": {
+        "supported": false,
+        "reason": "QueueVideoRequest OpenAPI 属性列表未出现；勿臆造"
+      },
+      "status": "已核一致",
+      "officialUrl": "https://docs.venice.ai/api-reference/endpoint/video/queue",
+      "fetchedAt": "2026-11-02 ~04:43 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "无此字段别造"
+    },
+    {
+      "provider": "venice",
+      "kind": "sizeDuration",
+      "path": "image.parameters.resolution",
+      "claim": {
+        "type": "string",
+        "examples": [
+          "1K",
+          "2K",
+          "4K"
+        ],
+        "when": "constraints.resolutions present (with aspect_ratio)",
+        "sendStatus": "待确认",
+        "sendEvidence": "同上 Researchy 2026-10-15；未前端实测不升会发送"
+      },
+      "status": "已核一致",
+      "officialUrl": "https://docs.venice.ai/api-reference/endpoint/image/generate",
+      "fetchedAt": "2026-11-02 ~04:43 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "勿套全站"
+    },
+    {
+      "provider": "wavespeed",
+      "kind": "seed",
+      "path": "image.examples.wavespeed-ai/krea-v2/turbo-lora.seed",
+      "claim": {
+        "type": "integer",
+        "random": -1
+      },
+      "status": "已核一致",
+      "officialUrl": "https://wavespeed.ai/docs/docs-api/wavespeed-ai/krea-v2-turbo-lora",
+      "fetchedAt": "2026-11-02 ~04:43 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "integer；-1=随机"
+    },
+    {
+      "provider": "wavespeed",
+      "kind": "seed",
+      "path": "image.examples.wavespeed-ai/z-image/turbo.seed",
+      "claim": {
+        "type": "integer",
+        "random": -1
+      },
+      "status": "已核一致",
+      "officialUrl": "https://wavespeed.ai/docs/docs-api/wavespeed-ai/z-image-turbo",
+      "fetchedAt": "2026-11-02 ~04:43 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "integer；-1=随机"
+    },
+    {
+      "provider": "wavespeed",
+      "kind": "seed",
+      "path": "video.examples.hunyuan t2v.seed",
+      "claim": true,
+      "status": "已核一致",
+      "officialUrl": "https://wavespeed.ai/docs/docs-api/wavespeed-ai/hunyuan-video-t2v",
+      "fetchedAt": "2026-11-02 ~04:45 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "−1=随机"
+    },
+    {
+      "provider": "wavespeed",
+      "kind": "seed",
+      "path": "requestFieldsVerified.actualRequest.seed",
+      "claim": true,
+      "status": "已核一致",
+      "officialUrl": "https://wavespeed.ai/docs/docs-api/wavespeed-ai/krea-v2-turbo-lora",
+      "fetchedAt": "2026-11-02 ~04:45 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "多家 WaveSpeed 端点 schema 均有 seed；本地实测发送与官网字段一致"
+    },
+    {
+      "provider": "wavespeed",
+      "kind": "sizeDuration",
+      "path": "image.examples.wavespeed-ai/krea-v2/turbo-lora.resolution",
+      "claim": {
+        "enum": [
+          "1k",
+          "2k"
+        ]
+      },
+      "status": "已核一致",
+      "officialUrl": "https://wavespeed.ai/docs/docs-api/wavespeed-ai/krea-v2-turbo-lora",
+      "fetchedAt": "2026-11-02 ~04:43 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "仅 1k/2k"
+    },
+    {
+      "provider": "agnes",
+      "kind": "sizeDuration",
+      "path": "video.aspect_ratio",
+      "claim": {
+        "enum": [
+          "21:9",
+          "16:9",
+          "4:3",
+          "1:1",
+          "3:4",
+          "9:16"
+        ],
+        "default": "16:9"
+      },
+      "status": "已核一致",
+      "officialUrl": "https://www.agnes-ai.com/en/docs/agnes-video-25",
+      "fetchedAt": "2026-11-02 ~04:41 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "越界上游 400；可跟六项对齐硬拦"
+    },
+    {
+      "provider": "agnes",
+      "kind": "sizeDuration",
+      "path": "video.seconds",
+      "claim": "string \"4\"–\"12\" default \"5\"",
+      "status": "已核一致",
+      "officialUrl": "https://www.agnes-ai.com/en/docs/agnes-video-25",
+      "fetchedAt": "2026-11-02 ~04:41 JST",
+      "confidence": "Researchy 三路+官网",
+      "notes": "类型字符串；勿本地拒合法 4–12"
+    }
+  ],
+  "lastWriteBack": {
+    "at": "2026-11-02 ~04:50 JST",
+    "by": "Researchy",
+    "source": "VERIFY 2026-11-02f：modelscope×2 仍未核实（官网空壳+API400旁证）；novita video×2 仍待核"
+  },
+  "summary20261102e": {
+    "fetchedAt": "2026-11-02 ~15:15 JST",
+    "pendingClosedAs": "未核实（不拦）",
+    "counts": {
+      "已核一致": 61,
+      "未核实（不拦）": 4
+    },
+    "evidence": "temp/e2e/video-schema/VERIFY_RESULT_2026-11-02e.md"
+  }
+}

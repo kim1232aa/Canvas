@@ -16,6 +16,7 @@ const EXPECTED_T2I_PROVIDERS = [
   'aimlapi',
   'novita',
   'venice',
+  'deepinfra',
   'sogni',
   'replicate',
   'runware',
@@ -23,6 +24,7 @@ const EXPECTED_T2I_PROVIDERS = [
   'gemini',
   'agnes',
   'sensenova',
+  'mage',
   'civitai',
 ] as const;
 
@@ -39,12 +41,16 @@ const EXPECTED_I2V_PROVIDERS = [
 const HAS_LORA = new Set([
   'tensorart',
   'wavespeed',
+  'modelslab',
+  'replicate',
 ]);
 
-/** Real LoRAs from accepted runs (evidence: hist ids in presets.ts). */
+/** Real LoRAs from accepted runs or official docs recipe IDs (evidence in presets.ts). */
 const PREFILLED_LORA: Record<string, Array<[string, number]>> = {
   wavespeed: [['https://huggingface.co/comfyanonymous/flux_RealismLora_converted_comfyui/resolve/main/flux_realism_lora.safetensors', 1.1]],
   tensorart: [['1015214543296590260', 1], ['1029661490430387503', 1], ['1015863436619315552', 1]],
+  modelslab: [['xl-realistic-cake-art-sty', 0.45]],
+  replicate: [['fofr/flux-80s-cyberpunk', 1]],
 };
 
 const ALLOWED_PROMPT = new Set(['', STD_PROMPT_PLACEHOLDER]);
@@ -59,10 +65,10 @@ function expectedT2iId(provider: string): string {
   return provider === 'modelscope_ai' ? 'std-modelscope-ai-t2i' : `std-${provider}-t2i`;
 }
 
-describe('standard workflow presets (21 T2I + 6 I2V)', () => {
-  it('exports exactly 27 presets (21 T2I + 6 I2V)', () => {
-    expect(WORKFLOW_PRESETS).toHaveLength(27);
-    expect(t2i()).toHaveLength(21);
+describe('standard workflow presets (23 T2I + 6 I2V)', () => {
+  it('exports exactly 29 presets (23 T2I + 6 I2V)', () => {
+    expect(WORKFLOW_PRESETS).toHaveLength(29);
+    expect(t2i()).toHaveLength(23);
     expect(i2v()).toHaveLength(6);
   });
 
@@ -73,7 +79,7 @@ describe('standard workflow presets (21 T2I + 6 I2V)', () => {
   it('covers each T2I provider id exactly once', () => {
     const providers = t2i().map(p => p.provider).sort();
     expect(providers).toEqual([...EXPECTED_T2I_PROVIDERS].sort());
-    expect(new Set(providers).size).toBe(21);
+    expect(new Set(providers).size).toBe(23);
   });
 
   it('I2V providers are exactly the locked set (no modelscope/together/krea/aimlapi)', () => {
@@ -139,7 +145,7 @@ describe('standard workflow presets (21 T2I + 6 I2V)', () => {
     }
   });
 
-  it('never ships an empty LoRALoader; only WaveSpeed + OpenWorks keep filled LoRAs', () => {
+  it('never ships an empty LoRALoader; only providers in HAS_LORA keep filled LoRAs', () => {
     for (const p of WORKFLOW_PRESETS) {
       const loras = p.nodes.filter(n => n.type === 'LoRALoader');
       for (const n of loras) {
@@ -419,7 +425,7 @@ describe('standard workflow presets (21 T2I + 6 I2V)', () => {
       aimlapi: 'alibaba/z-image-turbo-lora',
       novita: 'dreamshaper_8_93211.safetensors',
       venice: 'venice-sd35',
-      modelslab: 'flux',
+      modelslab: 'tamarin-xl-v1',
       gemini: 'gemini-3.1-flash-image',
     };
     for (const [prov, model] of Object.entries(filled)) {

@@ -61,6 +61,7 @@ const ALLOWED_CLOUD_SETTINGS_FIELDS = new Set([
   'aimlapiKey',
   'novitaKey',
   'veniceKey',
+  'deepinfraKey',
   'wavespeedKey',
   'sogniKey',
   'runwareKey',
@@ -68,6 +69,8 @@ const ALLOWED_CLOUD_SETTINGS_FIELDS = new Set([
   'modelslabKey',
   'modelslabBaseUrl',
   'replicateKey',
+  'mageKey',
+  'mageBaseUrl',
 ]);
 
 interface BackendSettingsModalProps {
@@ -182,8 +185,8 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
     const known: ProviderId[] = [
       'fal', 'gemini', 'openai_compat', 'grok_compat', 'agnes', 'sensenova', 'civitai',
       'huggingface', 'modelscope', 'modelscope_ai', 'nanogpt', 'tensorart', 'muapi',
-      'wavespeed', 'krea', 'together', 'aimlapi', 'novita', 'venice', 'sogni',
-      'runware', 'modelslab', 'replicate',
+      'wavespeed', 'krea', 'together', 'aimlapi', 'novita', 'venice', 'deepinfra', 'sogni',
+      'runware', 'modelslab', 'replicate', 'mage',
     ];
     if (!known.includes(id as ProviderId)) return;
     setActiveMainTab('providers');
@@ -427,6 +430,18 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       popularModels: [],
     },
     {
+      id: 'deepinfra',
+      name: friendlyProviderLabel('deepinfra'),
+      badge: '官方 /models/list',
+      docsUrl: 'https://docs.deepinfra.com/apis/image-generation',
+      description: '使用 DeepInfra API Key（Bearer，环境变量 DEEPINFRA_API_KEY）。目录 GET https://api.deepinfra.com/models/list（type=text-to-image）；图像 POST /v1/openai/images/generations（同步 b64_json；参数 prompt/model/size/n）。个人/私有 LoRA 需先在控制台部署（docs.deepinfra.com/private-models/lora-image），未部署不准假挂。欠费 HTTP 402 You need positive balance…。失败原样显示状态码与响应体。',
+      apiUrl: 'https://api.deepinfra.com',
+      keyName: 'deepinfraKey',
+      keyPlaceholder: 'DeepInfra API Key',
+      status: 'unconfigured',
+      popularModels: ['black-forest-labs/FLUX-1-schnell'],
+    },
+    {
       id: 'sogni',
       name: friendlyProviderLabel('sogni'),
       badge: 'REST Creative Workflows',
@@ -471,6 +486,18 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       apiUrl: 'https://api.replicate.com/v1',
       keyName: 'replicateKey',
       keyPlaceholder: 'r8_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx (REPLICATE_API_TOKEN)',
+      status: 'unconfigured',
+      popularModels: [],
+    },
+    {
+      id: 'mage',
+      name: friendlyProviderLabel('mage'),
+      badge: 'Mango 图像 API',
+      docsUrl: 'https://docs.mage.space/api/models/mango',
+      description: '配置 Mage API Key (mage_sk_...)。官方 Mango 出图；无传统 LoRA，角色用 prompt 里 @handle；按 Gems 计费。',
+      apiUrl: 'https://api.mage.space',
+      keyName: 'mageKey',
+      keyPlaceholder: 'mage_sk_… (MAGE_API_KEY)',
       status: 'unconfigured',
       popularModels: [],
     },
@@ -896,7 +923,8 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
                 currentProvider.id === 'agnes' ||
                 currentProvider.id === 'sensenova' ||
                 currentProvider.id === 'runware' ||
-                currentProvider.id === 'modelslab') && (
+                currentProvider.id === 'modelslab' ||
+                currentProvider.id === 'mage') && (
                 <div className="bg-[#111216] border border-[#252733] rounded-xl p-3 space-y-1.5">
                   <label className="text-slate-300 text-[11px] font-semibold flex items-center gap-1.5">
                     Base URL（{currentProvider.id === 'openai_compat' || currentProvider.id === 'grok_compat' ? '兼容中转，必填，不硬编码域名' : '可选自定义端点'}）
@@ -915,7 +943,9 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
                                 ? 'sensenovaBaseUrl'
                                 : currentProvider.id === 'runware'
                                   ? 'runwareBaseUrl'
-                                  : 'modelslabBaseUrl'
+                                  : currentProvider.id === 'mage'
+                                    ? 'mageBaseUrl'
+                                    : 'modelslabBaseUrl'
                       ] || '',
                     )}
                     onChange={(e) => {
@@ -930,7 +960,9 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
                                 ? 'sensenovaBaseUrl'
                                 : currentProvider.id === 'runware'
                                   ? 'runwareBaseUrl'
-                                  : 'modelslabBaseUrl';
+                                  : currentProvider.id === 'mage'
+                                    ? 'mageBaseUrl'
+                                    : 'modelslabBaseUrl';
                       setKeys((prev) => ({ ...prev, [field]: e.target.value }));
                     }}
                     placeholder={
@@ -940,6 +972,8 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
                           ? 'https://your-relay.example  （缺 /v1 时服务端补 /v1）'
                           : currentProvider.id === 'runware'
                             ? 'https://api.runware.ai/v1'
+                            : currentProvider.id === 'mage'
+                              ? 'https://api.mage.space'
                             : currentProvider.id === 'modelslab'
                               ? 'https://modelslab.com'
                               : 'https://...'

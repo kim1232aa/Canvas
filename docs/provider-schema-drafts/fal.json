@@ -269,7 +269,7 @@
     "docs/provider-api-audit-v2/fal.md",
     "docs/provider-api-audit-v2/DIFF.md"
   ],
-  "_auditStatus": "2026-10-16 16:54：画布正式收口 Kling V3 i2v PASS_BILLING（挑刺无严重 + Researchy TOP_UP 核）；2026-10-16 16:53：Kling V3 standard i2v 升 PASS_BILLING（非 PASS_GENERATION）——hist_1792140360652_bq6y0；403 TOP_UP；actualRequest start_image_url+duration\"5\"；证据 已清理 切分后进程。勿写成出片。2026-10-15 04:45 v2 已核（fal.md + DIFF 04:44）：目录 GET /v1/models 无 key 200；lock threshold FAQ 已有；krea-2/turbo/lora 无 steps/guidance、loras≤3。字段徽章仍以前端实测为准",
+  "_auditStatus": "2026-11-02 ~04:45 JST：Researchy——Fal krea-2/turbo/lora.seed。\n2026-11-02 ~04:42 JST：Researchy——Fal Kling v3 I2V 无 aspect_ratio；勿捏比例控件。\n2026-11-02 ~04:41 JST：Researchy——Fal Kling v3 I2V duration 字符串 3–15；wan-t2v-lora 帧81–100/帧率5–24；wan/v2.2-a14b/lora 另一套勿混。\n2026-11-02 ~04:39 JST：Researchy 对照表写回 researchyVerified20261102（种子/时长/比例已核一致条目）；未核条目仍待核、禁止当拦截；徽章不动。\n2026-10-16 16:54：画布正式收口 Kling V3 i2v PASS_BILLING（挑刺无严重 + Researchy TOP_UP 核）；2026-10-16 16:53：Kling V3 standard i2v 升 PASS_BILLING（非 PASS_GENERATION）——hist_1792140360652_bq6y0；403 TOP_UP；actualRequest start_image_url+duration\"5\"；证据 已清理 切分后进程。勿写成出片。2026-10-15 04:45 v2 已核（fal.md + DIFF 04:44）：目录 GET /v1/models 无 key 200；lock threshold FAQ 已有；krea-2/turbo/lora 无 steps/guidance、loras≤3。字段徽章仍以前端实测为准",
   "acceptanceBadgeVideoKlingV3I2v": "PASS_BILLING",
   "sendEvidence": {
     "kling_v3_standard_i2v_1637": {
@@ -291,5 +291,77 @@
       "researchy": "TOP_UP=lock threshold；PASS_BILLING 依据成立",
       "formalClose": "2026-10-16 16:54"
     }
+  },
+  "researchyVerified20261102": {
+    "fetchedAt": "2026-11-02 ~04:45 JST",
+    "items": [
+      {
+        "field": "video.wan-t2v-lora.aspect_ratio",
+        "value": "16:9|9:16 默认 16:9",
+        "url": "https://fal.ai/models/fal-ai/wan-t2v-lora/api",
+        "status": "已核一致"
+      },
+      {
+        "field": "video.wan-t2v-lora.resolution",
+        "value": "480p/580p/720p",
+        "url": "https://fal.ai/models/fal-ai/wan-t2v-lora/api",
+        "status": "已核一致"
+      },
+      {
+        "field": "video.wan-t2v-lora.duration",
+        "value": "无秒字段；num_frames 81–100、fps 5–24",
+        "url": "https://fal.ai/models/fal-ai/wan-t2v-lora/api",
+        "status": "已核一致"
+      },
+      {
+        "field": "video.wan-t2v-lora.seed",
+        "value": "integer",
+        "url": "https://fal.ai/models/fal-ai/wan-t2v-lora/api",
+        "status": "已核一致"
+      },
+      {
+        "field": "image.flux-lora.seed",
+        "value": "optional integer；出参回传",
+        "url": "https://fal.ai/models/fal-ai/flux-lora/llms.txt",
+        "status": "已核一致"
+      },
+      {
+        "field": "video.kling-v3-standard-i2v.duration",
+        "value": "字符串枚举 \"3\"…\"15\" 默认 \"5\"",
+        "url": "https://fal.ai/models/fal-ai/kling-video/v3/standard/image-to-video/api",
+        "status": "已核一致"
+      },
+      {
+        "field": "video.wan-t2v-lora.num_frames",
+        "value": "81–100 默认 81",
+        "url": "https://fal.ai/models/fal-ai/wan-t2v-lora/llms.txt",
+        "status": "已核一致"
+      },
+      {
+        "field": "video.wan-t2v-lora.frames_per_second",
+        "value": "5–24 默认 16",
+        "url": "https://fal.ai/models/fal-ai/wan-t2v-lora/llms.txt",
+        "status": "已核一致"
+      },
+      {
+        "field": "video.wan-v2.2-a14b-lora.num_frames",
+        "value": "另一套：帧 17–161、帧率 4–60；勿与 wan-t2v-lora 混用",
+        "url": "https://fal.ai/models/fal-ai/wan-t2v-lora/llms.txt",
+        "status": "已核一致",
+        "note": "型号分叉"
+      },
+      {
+        "field": "video.kling-v3-standard-i2v.aspect_ratio",
+        "value": "官网无此字段；比例跟首帧；T2V 才有 16:9/9:16/1:1——勿给 I2V 捏比例控件",
+        "url": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/kling-video/v3/standard/image-to-video",
+        "status": "已核一致（字段不存在）"
+      },
+      {
+        "field": "image.krea-2/turbo/lora.seed",
+        "value": "optional integer；Image i 用 seed+i",
+        "url": "https://fal.ai/models/fal-ai/krea-2/turbo/lora/llms.txt",
+        "status": "已核一致"
+      }
+    ]
   }
 }

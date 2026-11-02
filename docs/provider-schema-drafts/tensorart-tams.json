@@ -136,7 +136,7 @@
     "https://tams-docs.tensor.art/docs/api/guide/integration-faq/",
     "https://tams-docs.tensor.art/docs/use-cases/basic/component/lora/"
   ],
-  "_auditStatus": "2026-10-16 ~23:11 JST：画布正式收口 fix13.1；证据 已清理，PID 3611920。@tinkabot 不升出图徽章。 2026-10-16 ~22:57 JST：fix13.1 CODE_ONLY（UI 五条）；PID 3611920；证据 docs/evidence/fix13.1-2026-10-16.md。对照表仍 CODE_ONLY、不升出图。 2026-10-16 ~22:53 JST：画布正式收口 fix13（清理+主机+口径）；证据 已清理，PID 3576628。建任务 BLOCKED——**对照表保持 CODE_ONLY、不升出图徽章**（画布@tinkabot）。下一批 fix13.1 仅 UI 细节。 2026-10-16 ~22:52 JST：画布 fix13 前端四项复验过（清理+主机+Together），证据 已清理，PID 3576628；已交挑刺。建任务仍 BLOCKED，**不升出图徽章**。 2026-10-16 ~22:35 JST fix13 CODE_ONLY（canvas-dev PID 3576628；证据 docs/evidence/fix13-2026-10-16.md）。未升徽章；等画布验收。无 TAMS 令牌未测建任务。 2026-10-16 22:16 Researchy 再核 preferredHost=ap-east-1.tensorart.cloud。2026-10-16 22:12：雁口径——报错先查是否用错接口。2026-10-16 22:10：Researchy 确认出图 POST ap-east-1.tensorart.cloud/v1/jobs + Bearer/TAMS-SHA256-RSA，非 OpenWorks。2026-10-15 03:26：引用的 docs/provider-api-audit 旧审计仅留作对比、不再引用；以 docs/provider-api-audit-v2/ 与 DIFF.md 为准；本草案凡依据旧审计的结论一律视为未核实，等 Researchy 新调查",
+  "_auditStatus": "2026-11-02 ~04:55 JST：Researchy 02c——TAMS seed 示例 -1；OpenAPI Spec 404 部分未核。\n2026-10-16 ~23:11 JST：画布正式收口 fix13.1；证据 已清理，PID 3611920。@tinkabot 不升出图徽章。 2026-10-16 ~22:57 JST：fix13.1 CODE_ONLY（UI 五条）；PID 3611920；证据 docs/evidence/fix13.1-2026-10-16.md。对照表仍 CODE_ONLY、不升出图。 2026-10-16 ~22:53 JST：画布正式收口 fix13（清理+主机+口径）；证据 已清理，PID 3576628。建任务 BLOCKED——**对照表保持 CODE_ONLY、不升出图徽章**（画布@tinkabot）。下一批 fix13.1 仅 UI 细节。 2026-10-16 ~22:52 JST：画布 fix13 前端四项复验过（清理+主机+Together），证据 已清理，PID 3576628；已交挑刺。建任务仍 BLOCKED，**不升出图徽章**。 2026-10-16 ~22:35 JST fix13 CODE_ONLY（canvas-dev PID 3576628；证据 docs/evidence/fix13-2026-10-16.md）。未升徽章；等画布验收。无 TAMS 令牌未测建任务。 2026-10-16 22:16 Researchy 再核 preferredHost=ap-east-1.tensorart.cloud。2026-10-16 22:12：雁口径——报错先查是否用错接口。2026-10-16 22:10：Researchy 确认出图 POST ap-east-1.tensorart.cloud/v1/jobs + Bearer/TAMS-SHA256-RSA，非 OpenWorks。2026-10-15 03:26：引用的 docs/provider-api-audit 旧审计仅留作对比、不再引用；以 docs/provider-api-audit-v2/ 与 DIFF.md 为准；本草案凡依据旧审计的结论一律视为未核实，等 Researchy 新调查",
   "researchyConfirm": {
     "fetchedAt": "2026-10-16 ~22:10 CST（Researchy 群内）",
     "createJob": "POST https://ap-east-1.tensorart.cloud/v1/jobs（stages）",
@@ -189,5 +189,18 @@
       "pid": "3611920",
       "note": "01/03/04 过；02 OpenWorks 空态双层 SKIP"
     }
+  },
+  "researchyVerified20261102": {
+    "fetchedAt": "2026-11-02 ~04:55 JST",
+    "items": [
+      {
+        "field": "image.parameters.inputInitialize.seed",
+        "value": "示例 -1 或 \"-1\"（int|string）；OpenAPI Spec 本轮 404，omit|0 与 max 未核",
+        "url": "https://tams-docs.tensor.art/docs/api/guide/workspace-api-example/",
+        "status": "已核一致",
+        "caveat": "OpenAPI Spec 404；勿臆造 max"
+      }
+    ],
+    "evidence": "temp/e2e/video-schema/VERIFY_RESULT_2026-11-02c.md"
   }
 }

@@ -28,10 +28,20 @@ export function buildCivitaiVideoInput(body: Record<string, any>) {
     prompt: body.prompt,
     ...(Number.isFinite(body.cfg) ? { cfgScale: body.cfg } : {}),
   };
-  for (const [from,to,min,max] of [['steps','steps',10,50],['seed','seed',-2147483648,2147483647],['videoDuration','duration',1,30],['fps','frameRate',1,2147483647],['width','width',1,2147483647],['height','height',1,2147483647]] as const) {
+  // 2026-11-02：seed / videoDuration 无本轮 Researchy fetchedAt → 不本地拦范围，整数则原样映射，上游错原文回。
+  // steps/fps/width/height 仍按 OpenAPI 注释页 https://orchestration.civitai.com/openapi/v2-consumers.json 的宽整数界（待 Researchy 重核）。
+  for (const [from,to,min,max] of [['steps','steps',10,50],['fps','frameRate',1,2147483647],['width','width',1,2147483647],['height','height',1,2147483647]] as const) {
     if (body[from] === undefined) continue;
     if (!Number.isInteger(body[from]) || body[from] < min || body[from] > max) throw new Error(`${from} 必须为 ${min}–${max} 的整数`);
     input[to]=body[from];
+  }
+  if (body.seed !== undefined) {
+    if (!Number.isInteger(body.seed)) throw new Error('seed 必须为整数');
+    input.seed = body.seed;
+  }
+  if (body.videoDuration !== undefined) {
+    if (!Number.isInteger(body.videoDuration)) throw new Error('videoDuration 必须为整数');
+    input.duration = body.videoDuration;
   }
   if (body.image_url) input.sourceImage=body.image_url;
   if (body.loras?.length) input.loras=body.loras.map((l:any)=>{

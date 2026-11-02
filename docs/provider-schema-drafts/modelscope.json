@@ -1,5 +1,5 @@
 {
-  "canvasAcceptance": "未验证（2026-10-17 14:40 北京：测试截图已全删，按雁标准「画布里出图、落保存节点、历史有缩略图」当前 0 家；以前的出图/欠费标记一律作废，官方字段结论保留；在画布重跑出图并有节点图+历史缩略图后再单独改）",
+  "canvasAcceptance": "已出图（2026-11-02 ~15:37 JST，画布认可干净接通）：魔搭国际站 modelscope.ai，Tongyi-MAI/Z-Image-Turbo + 目录 LoRA LcarsPicturesDatabase/ST-TNG-Rooms-Z-Image-Turbo-v1 强度 1；civitai.red/images/33530948 配方原文提示词；种子配方超范围改 42（上游 400：seed must be in [-1, 2147483647]）；步数 36、guidance 3.5、尺寸 832×1216。图落保存图像节点；历史成功卡 hist_1793601246474_lzcd0。证据 temp/e2e/modelscope-intl-lora-recipe-2026-11-02/（01-workflow · 02-node-result · 03-history）。历史卡 LoRA 名截断「Turb…」等挑刺是否严重；未推送。",
   "$schemaNote": "草案 — 仅声明。真相源: docs/provider-api-audit-v2/modelscope.md + DIFF.md（Researchy 2026-10-15）",
   "id": "modelscope",
   "displayName": "ModelScope（魔搭 CN / 国际站）",
@@ -223,7 +223,9 @@
       "canvasIntl": "国际站接线同字段名 loras；形状跟 CN 模型页；置信度中低待 Key 实测"
     },
     "not": "path / url / strength / scale 数组（国际站与中国站均勿发）",
-    "canvasRule": "多 LoRA 强度和 ≠ 1 时本地拒绝并说明，禁止自动归一化（黑盒改值）"
+    "canvasRule": "多 LoRA 强度和 ≠ 1 时本地拒绝并说明，禁止自动归一化（黑盒改值）",
+    "canvasIntl": "国际站接线字段 loras（map {repoId: weight}）；2026-11-02 画布干净接通实测：POST api-inference.modelscope.ai/v1/images/generations 带 loras 权重 1 出图",
+    "canvasAcceptanceNote": "intl+catalog LoRA 已出图；见 canvasAcceptance"
   },
   "billing": {
     "insufficientHints": [],
@@ -236,7 +238,7 @@
     "https://developer.aliyun.com/article/1689282",
     "https://modelscope.cn/headlines/article/960"
   ],
-  "_auditStatus": "2026-10-16 ~23:33 北京：@tinkabot 等明示再升徽章；intl 仍未收口。 2026-10-16 ~23:10 北京：fix16 PARTIAL；新卡 429 insufficient balance 已记、不自升 PASS_BILLING；fix16.1 进行中。 2026-10-16 ~23:00 北京：fix15/15.1 收口=接线形状过；不升 PASS_GENERATION/PASS_BILLING（401 非欠费）。 2026-10-16 ~22:51 北京：fix15 挑刺严重1（历史未发送灰字）——不收口。 2026-10-16 ~22:50 北京：fix15 hist_gfkr9 loras map 对、401 绑账号；证据 已清理 仍未收口、不升出图。 2026-10-16 ~23:24：fix14 收口；canvas-dev 开 intl+loras。徽章仍未收口。 2026-10-16 ~23:18：intl 跟画布私信+Researchy——根 api-inference.modelscope.ai/v1；loras（禁 path/scale）；置信度中低等 Key 实测。不升徽章。 2026-10-16 ~23:11：画布下一批=魔搭国际站+LoRA（等 Researchy）；intl 不升徽章。 2026-10-16 22:06 JST tinkabot：按画布对齐——中国站+LoRA=能出图；国际站 LoRA=未收口（撤回 intl PASS_GENERATION）。2026-10-15 05:40：已对齐 v2 modelscope.md / Researchy 05:29；官方参数表无 sampler/scheduler/denoise；cfg→guidance。字段徽章仍以前端实测为准；2026-10-16 12:00 国际站 + LoRA 收口 PASS_GENERATION（附缺口）：参数规则依据中国站官方文档（11:52 实时抓取）；国际站官方文档正文当前取不到，待补",
+  "_auditStatus": "2026-11-02 ~17:42 JST：按画布——400 仅旁证、不升已核；VERIFY 改「现页无 seed 字段」。\n2026-11-02 ~17:40 JST：雁追问「为何不核实」——再核：文档仍无 Schema；官方 API 400 范围已记，措辞改为文档/错误体分开写。\n2026-11-02 ~15:37 JST：画布认可魔搭国际站配方+目录 LoRA 干净接通；升 canvasAcceptance/acceptanceBadge=已出图。种子超范围改 42 已记（API 400 原文）。未推送。\n2026-11-02 ~15:15 JST：Researchy 02e 定稿——魔搭 seed 未核实（不拦）；勿套百炼。\n2026-11-02 ~04:55 JST：Researchy 02c 纠偏——ModelScope seed 回待核；勿套百炼。\n2026-11-02 ~04:46 JST：Researchy——ModelScope seed 继续待核；百炼范围不当魔搭。\n2026-10-16 ~23:33 北京：@tinkabot 等明示再升徽章；intl 仍未收口。 2026-10-16 ~23:10 北京：fix16 PARTIAL；新卡 429 insufficient balance 已记、不自升 PASS_BILLING；fix16.1 进行中。 2026-10-16 ~23:00 北京：fix15/15.1 收口=接线形状过；不升 PASS_GENERATION/PASS_BILLING（401 非欠费）。 2026-10-16 ~22:51 北京：fix15 挑刺严重1（历史未发送灰字）——不收口。 2026-10-16 ~22:50 北京：fix15 hist_gfkr9 loras map 对、401 绑账号；证据 已清理 仍未收口、不升出图。 2026-10-16 ~23:24：fix14 收口；canvas-dev 开 intl+loras。徽章仍未收口。 2026-10-16 ~23:18：intl 跟画布私信+Researchy——根 api-inference.modelscope.ai/v1；loras（禁 path/scale）；置信度中低等 Key 实测。不升徽章。 2026-10-16 ~23:11：画布下一批=魔搭国际站+LoRA（等 Researchy）；intl 不升徽章。 2026-10-16 22:06 JST tinkabot：按画布对齐——中国站+LoRA=能出图；国际站 LoRA=未收口（撤回 intl PASS_GENERATION）。2026-10-15 05:40：已对齐 v2 modelscope.md / Researchy 05:29；官方参数表无 sampler/scheduler/denoise；cfg→guidance。字段徽章仍以前端实测为准；2026-10-16 12:00 国际站 + LoRA 收口 PASS_GENERATION（附缺口）：参数规则依据中国站官方文档（11:52 实时抓取）；国际站官方文档正文当前取不到，待补",
   "nextBatch": {
     "at": "2026-10-16 ~23:00 北京",
     "focus": "fix16 UI 五项",
@@ -248,11 +250,68 @@
     "pid": "3634115",
     "note": "UI only；与 intl LoRA 接线无关"
   },
-  "canvasRuleBadge": "2026-10-16 ~23:33 北京：画布@tinkabot 等明示再升徽章；下一轮主验收=有额度家真出图 PASS_GENERATION（先 WaveSpeed）",
+  "canvasRuleBadge": "2026-11-02：intl+LoRA 画布干净接通已升；其余站点/字段仍按实测单改",
   "fix16_1": {
     "status": "重拍中",
     "pid": "3714746",
     "evidence": "已清理",
     "docs": "docs/evidence/fix16.1-2026-10-16.md"
+  },
+  "researchyVerified20261102": {
+    "fetchedAt": "2026-11-02 ~04:55 JST",
+    "items": [
+      {
+        "field": "image.seed",
+        "value": "魔搭 REST/intro 未能定论；百炼 Qwen-Image 范围不当魔搭",
+        "url": null,
+        "status": "待核",
+        "note": "Researchy 02c 纠偏"
+      },
+      {
+        "field": "image.parametersQwenImage.seed",
+        "value": "百炼文档非魔搭——待核",
+        "url": "https://www.alibabacloud.com/help/en/model-studio/qwen-image-api",
+        "status": "待核",
+        "note": "勿混"
+      }
+    ],
+    "evidence": "temp/e2e/video-schema/VERIFY_RESULT_2026-11-02c.md"
+  },
+  "researchyVerified20261102e": {
+    "fetchedAt": "2026-11-02 ~15:15 JST",
+    "items": [
+      {
+        "field": "base.intl.sendStatus.seed",
+        "status": "未核实（不拦）",
+        "url": "https://www.modelscope.cn/docs/model-service/API-Inference/intro",
+        "note": "intro 空壳；勿套百炼"
+      },
+      {
+        "field": "image.parametersQwenImage.seed",
+        "status": "未核实（不拦）",
+        "url": "https://www.modelscope.cn/docs/model-service/API-Inference/intro",
+        "note": "无官方范围；勿套百炼"
+      }
+    ],
+    "evidence": "temp/e2e/video-schema/VERIFY_RESULT_2026-11-02e.md",
+    "impl": "前端不硬拦；有 Schema 再动态跟"
+  },
+  "acceptanceBadge": "已出图（国际站 + 目录 LoRA 强度 1；配方原文；种子改 42）",
+  "acceptanceBadgeEvidence": "temp/e2e/modelscope-intl-lora-recipe-2026-11-02",
+  "runtimeSeedRangeFromApi400": {
+    "fetchedAt": "2026-11-02 ~15:30 JST",
+    "source": "upstream HTTP 400 body on recipe seed 3742927916",
+    "message": "seed must be in [-1, 2147483647]",
+    "requestId": "d6a95015-ed1b-4dfe-a9b4-5476071e5ed1",
+    "historyFail": "hist_1793601169875_kbzcg",
+    "note": "非官网 Schema 正文；实测错误体线索。官方 intro 仍空壳→VERIFY 仍「未核实（不拦）」；前端勿写死硬拦，可跟端点动态。",
+    "evidence": "temp/e2e/modelscope-intl-lora-recipe-2026-11-02/NOTES.md"
+  },
+  "seedOfficialStatus20261102": {
+    "docsPage": "现页没有 seed 字段（intro SPA 空壳；openapi 404）",
+    "docsUrl": "https://www.modelscope.cn/docs/model-service/API-Inference/intro",
+    "api400旁证": "seed must be in [-1, 2147483647]（非官网 Schema，禁止升已核）",
+    "impl": "不硬拦；失败原样显示；继续挖官方正文/OpenAPI/模型页",
+    "fetchedAt": "2026-11-02 ~17:40 JST"
   }
 }

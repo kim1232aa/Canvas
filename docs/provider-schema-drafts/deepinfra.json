@@ -1,0 +1,156 @@
+{
+  "canvasAcceptance": "欠费验收过、未真出图（2026-11-02 ~03:23 JST 画布明示；402 原样显示；充值真出图后再升）",
+  "$schemaNote": "草案 — 仅声明。真相源：官方 Image Generation + LoRA for Image Generation（2026-11-02 抓取）。密钥禁止写入本文件。",
+  "id": "deepinfra",
+  "displayName": "DeepInfra",
+  "auth": {
+    "envVar": "DEEPINFRA_API_KEY",
+    "header": "Authorization",
+    "scheme": "Bearer",
+    "keyRule": "只进环境变量，禁止写入草案/Git；群里明文已出现过，建议轮换"
+  },
+  "base": {
+    "root": "https://api.deepinfra.com",
+    "openaiCompat": "https://api.deepinfra.com/v1/openai"
+  },
+  "catalog": {
+    "imageModels": "https://deepinfra.com/models（text-to-image）",
+    "note": "公共模型走 OpenAI-compatible images；挂 Civitai LoRA 需先部署私人 image LoRA（Initializing→Running）",
+    "probe20261102": {
+      "publicImageModels": "~55（含 FLUX；画布探测）",
+      "privateLoraDeployments": "无 Running；个人 LoRA 暂不可挂",
+      "productOrder": "先接公共出图落到保存节点；私有 LoRA 等仪表盘部署后再开",
+      "evidence": "temp/e2e/deepinfra/key-probe-2026-11-02/",
+      "at": "2026-11-02 ~03:15 JST 画布"
+    }
+  },
+  "predict": {
+    "mode": "sync",
+    "imageOpenAI": {
+      "method": "POST",
+      "path": "/v1/openai/images/generations",
+      "altPathNote": "OpenAPI 亦见 /v1/images/generations；文档主推 /v1/openai/images/generations",
+      "auth": true
+    },
+    "imageDirectDeploy": {
+      "method": "POST",
+      "path": "https://api.deepinfra.com/{owner}/{deployName}",
+      "note": "私人 LoRA 部署直调；body 含 prompt + lora_scale"
+    }
+  },
+  "image": {
+    "openaiCompat": {
+      "required": [
+        "prompt"
+      ],
+      "optional": {
+        "model": "默认 FLUX Schnell（文档）；私人 LoRA 部署用 yourname/yourmodel",
+        "size": "如 1024x1024",
+        "n": "张数",
+        "response_format": "仅 b64_json（官方明文）",
+        "quality": "仅兼容字段",
+        "style": "仅兼容字段"
+      },
+      "source": "https://docs.deepinfra.com/apis/image-generation",
+      "fetchedAt": "2026-11-02 ~03:14 JST"
+    }
+  },
+  "video": {
+    "supported": "文档有 Text to Video API；本草案未展开（本轮用户点名的是 image LoRA）",
+    "docs": "https://docs.deepinfra.com/apis/text-to-video"
+  },
+  "lora": {
+    "mode": "private_image_lora_deployment",
+    "productNote": "官方「LoRA for Image Generation」不是请求里临时塞 URL：须 Dashboard 新建 Deployment → LoRA text to image，填名称/底模/公开 Civitai URL；Running 后 model=yourname/yourmodel",
+    "sourceOnly": "仅公开 Civitai 模型",
+    "inference": {
+      "direct": {
+        "url": "POST https://api.deepinfra.com/yourname/yourmodel",
+        "fields": {
+          "prompt": "required",
+          "lora_scale": "0.0–1.0"
+        }
+      },
+      "openaiCompat": {
+        "url": "POST https://api.deepinfra.com/v1/openai/images/generations",
+        "fields": {
+          "model": "yourname/yourmodel",
+          "prompt": "required",
+          "lora_scale": "文档示例在直调路径；OpenAI 兼容示例仅 model+prompt——lora_scale 是否进兼容路径待前端实测，勿猜"
+        }
+      }
+    },
+    "deployUiFields": [
+      "LoRA model name",
+      "Base Model",
+      "Civitai URL"
+    ],
+    "apiCreate": {
+      "docs": "https://docs.deepinfra.com/api-reference/lora-adapters/create-lora",
+      "note": "有 Create Lora API（base_model/lora_name/source.civitai）；画布若要「一键挂」须再核 OpenAPI，本轮只声明文档页结论"
+    },
+    "source": "https://docs.deepinfra.com/private-models/lora-image",
+    "fetchedAt": "2026-11-02 ~03:14 JST"
+  },
+  "billing": {
+    "probe": "交给 canvas-dev 用 DEEPINFRA_API_KEY 查余额/试调；欠费原样显示",
+    "acceptanceRule": "有额度必须画布真出图落到保存节点；仅欠费可走余额不足验收",
+    "probe20261102": {
+      "keyAccepted": true,
+      "balance": 0,
+      "publicGenerate": "402 需要正余额（原文交界面）",
+      "privateLoraDeploys": "空",
+      "evidence": "temp/e2e/deepinfra/key-probe-2026-11-02/",
+      "at": "2026-11-02 ~03:18 JST"
+    },
+    "acceptance": {
+      "status": "欠费验收过",
+      "at": "2026-11-02 ~03:23 JST",
+      "by": "画布",
+      "evidence": [
+        "temp/e2e/deepinfra/02-run-402.png",
+        "temp/e2e/deepinfra/03-history-402.png"
+      ]
+    }
+  },
+  "contractTestHint": [
+    "公共：POST /v1/openai/images/generations prompt+size+n，response_format=b64_json",
+    "私人 LoRA：须已有 Running 部署；直调带 lora_scale 0–1；勿伪造部署名",
+    "禁止把密钥写入仓库或草案"
+  ],
+  "sources": [
+    {
+      "url": "https://docs.deepinfra.com/private-models/lora-image",
+      "at": "2026-11-02 ~03:14 JST",
+      "note": "雁点名"
+    },
+    {
+      "url": "https://docs.deepinfra.com/apis/image-generation",
+      "at": "2026-11-02 ~03:14 JST"
+    },
+    {
+      "url": "https://api.deepinfra.com/openapi.json",
+      "at": "索引见 llms.txt"
+    }
+  ],
+  "_auditStatus": "2026-11-02 ~04:30 JST：雁定——额度问题不要卡，跳过；欠费已记家不排队等充值；有额度时再冲真图，不当当前主阻塞。\n2026-11-02 ~03:24 JST：挑刺认欠费照实报；画布：402 英文原文保留勿改成「请充值」摘要；下次真出图须用配方原文，禁用演示句 astronaut；节点标题遮挡并出图主线。徽章仍「欠费验收过（未真出图）」。\n2026-11-02 ~03:23 JST：画布明示——DeepInfra 公共出图「欠费验收过、未真出图」：402 原文进界面+历史；不算接通；充值真出图后再升。\n2026-11-02 ~03:22 JST：canvas-dev 公共 FLUX 已接线——点运行上游 402「要正余额」原样进界面+历史；证据 temp/e2e/deepinfra/01-workflow-before.png · 02-run-402.png · 03-history-402.png；私有 LoRA 仍无部署。画布未明示收「余额不足验收」，acceptanceBadge 仍未验证。\n2026-11-02 ~03:18 JST：canvas-dev 探测——Key 有效但余额 0，公开文生图上游 402「需要正余额」；私有 LoRA 部署列表空。画布优先级仍是：充值后先接公共出图；私有 LoRA 等仪表盘 Running。徽章未验证。\n2026-11-02 ~03:15 JST：画布定——DeepInfra 新家；Key 已本机配置；公共文生图目录约55可接先出图；私有 LoRA 无 Running 部署暂挂不上；徽章仍未验证。探测 temp/e2e/deepinfra/key-probe-2026-11-02/\n2026-11-02 ~03:14 JST：雁点名加 DeepInfra（LoRA image 文档+Key）。新建 deepinfra.json；官方字段来自 Image Generation + LoRA for Image Generation；徽章未验证；Key 未写入。",
+  "acceptanceBadge": "欠费验收过（未真出图）",
+  "sendEvidence": {
+    "at": "2026-11-02 ~03:22 JST",
+    "route": "公共 FLUX 标准板 → 运行",
+    "upstream": "402 要正余额",
+    "ui": "界面+历史原样显示，无假成功",
+    "paths": [
+      "temp/e2e/deepinfra/01-workflow-before.png",
+      "temp/e2e/deepinfra/02-run-402.png",
+      "temp/e2e/deepinfra/03-history-402.png"
+    ],
+    "badgeNote": "画布已收欠费验收；未真出图，不算接通"
+  },
+  "nextAccept": {
+    "need": "充值后真出图落到保存节点+历史缩略图",
+    "promptRule": "必须配方原文，禁止演示句",
+    "errorDisplay": "402 英文原文保留"
+  },
+  "productNote": "；2026-11-02 雁：额度不卡、跳过"
+}

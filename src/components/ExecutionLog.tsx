@@ -60,6 +60,7 @@ export function providerPlainSiteName(route: string | null | undefined): string 
   if (/\/api\/schema-provider\/aimlapi\b/.test(r) || /[?&]provider=aimlapi\b/.test(r)) return 'AIMLAPI';
   if (/\/api\/schema-provider\/novita\b/.test(r)) return 'Novita';
   if (/\/api\/schema-provider\/venice\b/.test(r)) return 'Venice';
+  if (/\/api\/schema-provider\/deepinfra\b/.test(r) || /[?&]provider=deepinfra\b/.test(r)) return 'DeepInfra';
   if (/\/api\/schema-provider\/together\b/.test(r)) return 'Together';
   if (/\/api\/schema-provider\/muapi\b/.test(r)) return 'MuAPI';
   if (/\/api\/schema-provider\/wavespeed\b/.test(r)) return 'WaveSpeed';
@@ -337,6 +338,7 @@ export function providerLabelFromRoute(route: string | null | undefined): string
   if (/\/api\/schema-provider\/aimlapi\b/.test(r)) return 'AIMLAPI';
   if (/\/api\/schema-provider\/novita\b/.test(r)) return 'Novita';
   if (/\/api\/schema-provider\/venice\b/.test(r)) return 'Venice';
+  if (/\/api\/schema-provider\/deepinfra\b/.test(r) || /[?&]provider=deepinfra\b/.test(r)) return 'DeepInfra';
   if (/\/api\/schema-provider\/together\b/.test(r)) return 'Together';
   return null;
 }

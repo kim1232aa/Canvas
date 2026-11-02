@@ -498,7 +498,7 @@ function buildStandardI2v(spec: { provider: string; model: string }): WorkflowPr
 }
 
 /**
- * 21 standard text-to-image + 6 standard image-to-video.
+ * 23 standard text-to-image + 6 standard image-to-video.
  * SenseNova/Sogni stay on the roster (雁: every listed provider keeps a standard card).
  * Sogni: protocol selector krea-2-turbo (LoRA via loras+loraStrengths; no steps/cfg in schema).
  * SenseNova: sensenova-u1.5-lite (official Token Plan; no LoRA in image Schema).
@@ -574,16 +574,25 @@ const STD_SPECS: StdSpec[] = [
   { provider: 'novita', ckpt: 'dreamshaper_8_93211.safetensors', hasLora: false, steps: 20, cfg: 7, omit: ['scheduler', 'denoise'] },
   // docs/evidence/venice-api-2026-10-15.md:51/54: catalog 200 lists venice-sd35; seed/steps/cfg_scale/size/negative sent; no custom loras.
   { provider: 'venice', ckpt: 'venice-sd35', hasLora: false, steps: 20, cfg: 7.5, omit: ['sampler', 'scheduler', 'denoise'] },
+  // DeepInfra public T2I: docs.deepinfra.com/apis/image-generation + OpenAPI OpenAIImagesGenerationsIn — prompt/model/size/n/response_format only; hasLora:false (private LoRA needs dashboard deploy).
+  { provider: 'deepinfra', ckpt: 'black-forest-labs/FLUX-1-schnell', hasLora: false, hasNegative: false, omit: ['steps', 'cfg', 'sampler', 'scheduler', 'denoise'] },
   // Sogni: catalog krea2_turbo_fp8_scaled (temp/e2e/sogni/model-catalog.json) guidance min=max=default=1, steps default 8.
   // Driver (schemaProviders.ts:971 cfg→guidance) sends guidance; generate_image tool Schema has no steps → steps sent:false (schemaContract.test.ts:351-361) → steps omitted to avoid an empty shell.
   { provider: 'sogni', ckpt: 'krea-2-turbo', hasLora: false, cfg: 1, omit: ['steps', 'sampler', 'scheduler', 'denoise'] },
-  // providerSchema.ts flux-schnell: seed, steps 1–4, aspect_ratio; cfg/negative/size/sampler/scheduler/denoise/loras unsupported.
-  { provider: 'replicate', ckpt: 'black-forest-labs/flux-schnell', hasLora: false, hasNegative: false, steps: 4, omit: ['cfg', 'sampler', 'scheduler', 'denoise'] },
+  // Live OpenAPI GET /v1/models/black-forest-labs/flux-dev-lora + default_example: lora_weights=fofr/flux-80s-cyberpunk, lora_scale=1, guidance=3, steps=28.
+  // Official docs example also cites fofr/flux-pixar-cars; default_example LoRA is the acceptance recipe id.
+  { provider: 'replicate', ckpt: 'black-forest-labs/flux-dev-lora', hasLora: true, hasNegative: false, steps: 28, cfg: 3, omit: ['sampler', 'scheduler', 'denoise'],
+    loras: [{ name: 'fofr/flux-80s-cyberpunk', strength: 1, source: 'replicate.com/black-forest-labs/flux-dev-lora default_example' }] },
   // providerSchema.ts runware:100@1: steps/cfg supported; no accepted-run LoRA → no LoRA node.
   { provider: 'runware', ckpt: 'runware:100@1', hasLora: false, steps: 4, cfg: 1, omit: ['sampler', 'scheduler', 'denoise'] },
-  // providerSchema.ts flux + t7-modelslab-acceptance.md: steps/cfg supported; no accepted-run LoRA → no LoRA node.
-  { provider: 'modelslab', ckpt: 'flux', hasLora: false, hasNegative: false, steps: 20, cfg: 7, omit: ['sampler', 'denoise'] },
+  // docs.modelslab.com/.../dreambooth-lora body example: model_id tamarin-xl-v1 + lora_model xl-realistic-cake-art-sty @ 0.45.
+  // flux preset dropped as default: official note says flux rejects SD-trained LoRAs / negative_prompt.
+  { provider: 'modelslab', ckpt: 'tamarin-xl-v1', hasLora: true, hasNegative: true, steps: 20, cfg: 7.5, width: 512, height: 512, scheduler: 'UniPCMultistepScheduler', omit: ['sampler', 'denoise'],
+    loras: [{ name: 'xl-realistic-cake-art-sty', strength: 0.45, source: 'https://docs.modelslab.com/image-generation/community-models/dreambooth-lora' }] },
   { provider: 'agnes', ckpt: 'agnes-image-2.5-flash', hasLora: false, compact: true, checkpointExtra: { size: '2K', aspect_ratio: '1:1' } },
+  // docs.mage.space/api/models/mango: no LoRA; prompt + model_id + aspect_ratio/resolution; characters via @handle.
+  // Mage Mango API has no steps/cfg/sampler/LoRA; board still uses full sampler+VAE topology (雁: no compact). Omit unsupported diffusion fields.
+  { provider: 'mage', ckpt: 'mango-v3', hasLora: false, hasNegative: false, omit: ['steps', 'cfg', 'sampler', 'scheduler', 'denoise'], checkpointExtra: { aspect_ratio: '4:5', resolution: '2K' } },
   // providerSchema.ts sensenova-u1.5-lite: width/height/size only.
   { provider: 'sensenova', ckpt: 'sensenova-u1.5-lite', hasLora: false, hasNegative: false, omit: ['seed', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise'] },
   // providerSchema.ts comfy:krea2: sampler/scheduler/seed supported, steps/cfg unverified; loras + negative unsupported (docs/evidence/civitai-krea-no-lora-2026-10-14.md).

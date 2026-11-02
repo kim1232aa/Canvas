@@ -1,0 +1,836 @@
+{
+  "$note": "2026-11-02 ~04:34 JST 更正（雁点名幻觉）：本文件只是从现有 provider-schema-drafts 扫出的字段线索清单，不是官方文档抓取。表内一切 min/max/enum/时长/比例数字一律视为【未核】，禁止前端据此生成/拦截种子或时长；与官网冲突以官网为准；要用某家范围必须先三路搜官方并在草案里写 source+fetchedAt。此前「供前端点选验」表述作废——那是把不确定当可做，属幻觉。",
+  "quotaRule": "额度跳过；欠费已记家不挡",
+  "providers": [
+    {
+      "file": "aimlapi.json",
+      "id": "aimlapi",
+      "badge": null,
+      "seedFields": [
+        {
+          "path": "video.parametersPixverseV55I2v.seed",
+          "value": {
+            "type": "integer",
+            "supported": true
+          }
+        }
+      ],
+      "sizeDurationFields": [
+        {
+          "path": "image.parametersByModel.alibaba/z-image-turbo-lora.acceleration",
+          "value": {
+            "enum": [
+              "none",
+              "regular",
+              "high"
+            ]
+          }
+        },
+        {
+          "path": "video.poll.query.generation_id",
+          "value": "required"
+        },
+        {
+          "path": "video.parametersPixverseV55I2v.duration",
+          "value": {
+            "type": "integer",
+            "enum": [
+              5,
+              8,
+              10
+            ],
+            "note": "1080p 不支持 8s"
+          }
+        },
+        {
+          "path": "video.parametersPixverseV55I2v.resolution",
+          "value": {
+            "enum": [
+              "360p",
+              "540p",
+              "720p",
+              "1080p"
+            ],
+            "default": "720p"
+          }
+        },
+        {
+          "path": "video.parametersPixverseV55I2v.fps",
+          "value": {
+            "supported": false,
+            "reason": "该 schema 未文档化 fps"
+          }
+        }
+      ]
+    },
+    {
+      "file": "civitai.json",
+      "id": "civitai",
+      "badge": null,
+      "seedFields": [
+        {
+          "path": "image.byEngine.flux1 sdcpp.seed",
+          "value": "int64 default random"
+        },
+        {
+          "path": "image.byEngine.flux1 comfy.seed",
+          "value": true
+        },
+        {
+          "path": "image.byEngine.flux2 klein.seed",
+          "value": "int64"
+        },
+        {
+          "path": "image.byEngine.flux2 dev/flex.seed",
+          "value": true
+        },
+        {
+          "path": "image.byEngine.krea v2.seed",
+          "value": "uint32 批内共用"
+        },
+        {
+          "path": "image.textToImage.fields.seed",
+          "value": "0–4294967295"
+        },
+        {
+          "path": "video.wan.seed",
+          "value": "未列为 fal 路径通用字段"
+        }
+      ],
+      "sizeDurationFields": [
+        {
+          "path": "base.orchestration",
+          "value": "https://orchestration.civitai.com/v2/consumer"
+        },
+        {
+          "path": "image.byEngine.krea v2.aspectRatio",
+          "value": true
+        },
+        {
+          "path": "video.wan.operations",
+          "value": [
+            "text-to-video",
+            "image-to-video",
+            "reference-to-video",
+            "edit-video"
+          ]
+        },
+        {
+          "path": "video.wan.fps",
+          "value": "未列（fal 路径）"
+        }
+      ]
+    },
+    {
+      "file": "deepinfra.json",
+      "id": "deepinfra",
+      "badge": "欠费验收过（未真出图）",
+      "seedFields": [],
+      "sizeDurationFields": []
+    },
+    {
+      "file": "fal.json",
+      "id": "fal",
+      "badge": null,
+      "seedFields": [
+        {
+          "path": "image.fal-ai/flux-lora.seed",
+          "value": {
+            "type": "integer",
+            "echoed": true
+          }
+        },
+        {
+          "path": "image.fal-ai/krea-2/turbo/lora.seed",
+          "value": {
+            "type": "integer",
+            "note": "image i uses seed+i"
+          }
+        },
+        {
+          "path": "video.fal-ai/wan-t2v-lora.seed",
+          "value": {
+            "type": "integer"
+          }
+        }
+      ],
+      "sizeDurationFields": [
+        {
+          "path": "image.fal-ai/krea-2/turbo/lora.acceleration",
+          "value": true
+        },
+        {
+          "path": "video.fal-ai/wan-t2v-lora.resolution",
+          "value": {
+            "enum": [
+              "480p",
+              "580p",
+              "720p"
+            ],
+            "default": "480p"
+          }
+        },
+        {
+          "path": "video.fal-ai/wan-t2v-lora.aspect_ratio",
+          "value": {
+            "enum": [
+              "16:9",
+              "9:16"
+            ],
+            "default": "16:9"
+          }
+        },
+        {
+          "path": "video.fal-ai/wan-t2v-lora.duration",
+          "value": {
+            "supported": false,
+            "reason": "用 num_frames/frames_per_second，无秒数字段"
+          }
+        },
+        {
+          "path": "video.fal-ai/kling-video/v3/standard/image-to-video.fields.duration",
+          "value": {
+            "sendStatus": "会发送",
+            "wireType": "string",
+            "example": "5",
+            "note": "实发字符串 duration=\"5\"，非数字",
+            "sendEvidence": "hist_1792140360652_bq6y0"
+          }
+        },
+        {
+          "path": "video.fal-ai/kling-video/v3/standard/image-to-video.fields.aspect_ratio",
+          "value": {
+            "sendStatus": "未填写，不发送",
+            "note": "本轮画面比例空；actualRequest 无 aspect_ratio"
+          }
+        },
+        {
+          "path": "video.fal-ai/kling-video/v3/standard/image-to-video.notPassGeneration",
+          "value": true
+        },
+        {
+          "path": "sendEvidence.kling_v3_standard_i2v_1637.actualRequest.duration",
+          "value": "5"
+        }
+      ]
+    },
+    {
+      "file": "huggingface.json",
+      "id": "huggingface",
+      "badge": null,
+      "seedFields": [
+        {
+          "path": "image.request.parameters.seed",
+          "value": {
+            "type": "integer"
+          }
+        },
+        {
+          "path": "video.request.parameters.seed",
+          "value": true
+        }
+      ],
+      "sizeDurationFields": []
+    },
+    {
+      "file": "krea.json",
+      "id": "krea",
+      "badge": null,
+      "seedFields": [
+        {
+          "path": "image.parametersByEndpoint.krea/krea-2/{medium|large|medium-turbo}.seed",
+          "value": {
+            "type": "number|null"
+          }
+        },
+        {
+          "path": "image.parametersByEndpoint.ideogram/ideogram-4.5.seed",
+          "value": {
+            "type": "integer",
+            "min": 0,
+            "max": 2147483647
+          }
+        },
+        {
+          "path": "video.samples.bytedance/seedance-2",
+          "value": {
+            "duration": "4-15 default 5",
+            "resolution": [
+              "480p",
+              "720p",
+              "1080p",
+              "4k"
+            ],
+            "seed": true,
+            "aspect_ratio": true
+          }
+        },
+        {
+          "path": "video.samples.bytedance/seedance-2.seed",
+          "value": true
+        },
+        {
+          "path": "video.samples.kling/kling-2.5.seed",
+          "value": false
+        },
+        {
+          "path": "video.samples.minimax/hailuo-02.seed",
+          "value": false
+        },
+        {
+          "path": "video.samples.google/veo-3.seed",
+          "value": false
+        }
+      ],
+      "sizeDurationFields": [
+        {
+          "path": "image.parametersByEndpoint.krea/krea-2/{medium|large|medium-turbo}.aspect_ratio",
+          "value": {
+            "required": true
+          }
+        },
+        {
+          "path": "image.parametersByEndpoint.krea/krea-2/{medium|large|medium-turbo}.resolution",
+          "value": {
+            "example": "1K"
+          }
+        },
+        {
+          "path": "video.samples.bytedance/seedance-2.duration",
+          "value": "4-15 default 5"
+        },
+        {
+          "path": "video.samples.bytedance/seedance-2.resolution",
+          "value": [
+            "480p",
+            "720p",
+            "1080p",
+            "4k"
+          ]
+        },
+        {
+          "path": "video.samples.bytedance/seedance-2.aspect_ratio",
+          "value": true
+        },
+        {
+          "path": "video.samples.kling/kling-2.5.duration",
+          "value": [
+            5,
+            10
+          ]
+        },
+        {
+          "path": "video.samples.minimax/hailuo-02.duration",
+          "value": "6-10"
+        },
+        {
+          "path": "video.samples.minimax/hailuo-02.resolution",
+          "value": [
+            "512p",
+            "768p",
+            "1080p"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "mage.json",
+      "id": "mage",
+      "badge": "欠费已记",
+      "seedFields": [
+        {
+          "path": "image.mango.optional.seed",
+          "value": "integer | null；省略=随机"
+        }
+      ],
+      "sizeDurationFields": [
+        {
+          "path": "image.mango.optional.aspect_ratio",
+          "value": "21:9|16:9|3:2|5:4|1:1|4:5(default)|2:3|9:16|9:21"
+        },
+        {
+          "path": "image.mango.optional.resolution",
+          "value": "按变体：mango 1K–4K；mango-v2 2K–4K；mango-v3s 2K|3K；mango-v3 / turbo 1K|2K；默认 2K"
+        }
+      ]
+    },
+    {
+      "file": "modelscope.json",
+      "id": "modelscope",
+      "badge": null,
+      "seedFields": [
+        {
+          "path": "base.intl.sendStatus.seed",
+          "value": "会发送"
+        },
+        {
+          "path": "image.parametersQwenImage.seed",
+          "value": {
+            "type": "integer",
+            "min": 0,
+            "max": 2147483647
+          }
+        }
+      ],
+      "sizeDurationFields": []
+    },
+    {
+      "file": "modelslab.json",
+      "id": "modelslab",
+      "badge": "欠费已记",
+      "seedFields": [
+        {
+          "path": "image.fields.seed",
+          "value": "integer 或 null"
+        }
+      ],
+      "sizeDurationFields": []
+    },
+    {
+      "file": "muapi.json",
+      "id": "muapi",
+      "badge": "未验证",
+      "seedFields": [
+        {
+          "path": "image.seed",
+          "value": {
+            "supported": "按端点 OpenAPI：部分路径有 seed（默认常 -1）；工作流中心预设 flux-1-dev-style-lora-inference 无 seed",
+            "note": "禁止用「≥69 有 seed」概括当前卡；以该 path 的 requestBody 为准"
+          }
+        },
+        {
+          "path": "video.wanLora.seed",
+          "value": false
+        }
+      ],
+      "sizeDurationFields": [
+        {
+          "path": "video.wanLora.duration",
+          "value": [
+            5,
+            10
+          ]
+        },
+        {
+          "path": "video.wanLora.resolution",
+          "value": [
+            "480p",
+            "720p"
+          ]
+        },
+        {
+          "path": "video.wanLora.aspect_ratio",
+          "value": true
+        },
+        {
+          "path": "video.fps",
+          "value": {
+            "supported": "无统一字段；按 schema"
+          }
+        },
+        {
+          "path": "sendEvidence.fix3_1530.actualRequest.resolution",
+          "value": "1k"
+        }
+      ]
+    },
+    {
+      "file": "nanogpt.json",
+      "id": "nanogpt",
+      "badge": null,
+      "seedFields": [
+        {
+          "path": "image.commonFields.seed",
+          "value": {
+            "supported": "per model",
+            "guarantee": false
+          }
+        },
+        {
+          "path": "image.seed",
+          "value": {
+            "supported": "per model; 2026-10-15 实测 243 个模型仅 nano-banana-2.1 声明"
+          }
+        },
+        {
+          "path": "video.fields.seed",
+          "value": "可选，不保证复现"
+        }
+      ],
+      "sizeDurationFields": [
+        {
+          "path": "image.commonFields.resolution",
+          "value": "1k/2k/4k per model"
+        },
+        {
+          "path": "image.commonFields.aspect_ratio",
+          "value": "per model"
+        },
+        {
+          "path": "video.fields.duration|seconds",
+          "value": "字符串秒（Sora 用 seconds）"
+        },
+        {
+          "path": "video.fields.resolution",
+          "value": true
+        },
+        {
+          "path": "video.fields.aspect_ratio|aspect",
+          "value": true
+        }
+      ]
+    },
+    {
+      "file": "novita.json",
+      "id": "novita",
+      "badge": "未验证",
+      "seedFields": [
+        {
+          "path": "image.mingOpenaiImages.seed",
+          "value": {
+            "supported": false,
+            "reason": "文档未列"
+          }
+        },
+        {
+          "path": "image.poll.seedEcho",
+          "value": "extra.seed (string)"
+        },
+        {
+          "path": "video.txt2videoParamsFromSdk.seed",
+          "value": {
+            "supported": true
+          }
+        },
+        {
+          "path": "video.img2videoParamsFromSdk.seed",
+          "value": {
+            "supported": true
+          }
+        }
+      ],
+      "sizeDurationFields": []
+    },
+    {
+      "file": "replicate.json",
+      "id": "replicate",
+      "badge": "欠费已记",
+      "seedFields": [
+        {
+          "path": "image.parameters.seed",
+          "value": {
+            "type": "integer",
+            "supported": true,
+            "caveat": "go_fast=true 时不保证确定性"
+          }
+        },
+        {
+          "path": "sendEvidence.actualRequestInput.seed",
+          "value": 7
+        }
+      ],
+      "sizeDurationFields": [
+        {
+          "path": "image.parameters.aspect_ratio",
+          "value": {
+            "type": "enum",
+            "default": "1:1",
+            "note": "无独立 width/height"
+          }
+        }
+      ]
+    },
+    {
+      "file": "sogni.json",
+      "id": "sogni",
+      "badge": "未验证",
+      "seedFields": [
+        {
+          "path": "image.seed",
+          "value": {
+            "supported": true,
+            "type": "Uint32",
+            "via": [
+              "SDK seed",
+              "POST :id/reseed seed_overrides"
+            ],
+            "caveat": "多图只固定其中一张"
+          }
+        },
+        {
+          "path": "video.arguments.durationByModel.seedance2/mini",
+          "value": "4-15s"
+        },
+        {
+          "path": "video.arguments.durationByModel.seedance2-5",
+          "value": "4-30s"
+        },
+        {
+          "path": "video.seed",
+          "value": "reseed seed_overrides；省略则随机"
+        }
+      ],
+      "sizeDurationFields": [
+        {
+          "path": "catalog.loraPersonal.limits.perGeneration",
+          "value": 8
+        },
+        {
+          "path": "video.arguments.durationByModel",
+          "value": {
+            "ltx": "2-20s",
+            "seedance2/mini": "4-15s",
+            "seedance2-5": "4-30s",
+            "happyhorse": "3-15s",
+            "wan3": "2-30s",
+            "h3": "~5.2-15.1s @24fps"
+          }
+        },
+        {
+          "path": "video.fps",
+          "value": {
+            "supported": false,
+            "reason": "无通用 fps 参数；H3 源片要求 24fps"
+          }
+        }
+      ]
+    },
+    {
+      "file": "tensorart-openworks.json",
+      "id": "tensorart-openworks",
+      "badge": "已出图（全参数+LoRA 已发送；LoRA 是否生效未证实）",
+      "seedFields": [],
+      "sizeDurationFields": []
+    },
+    {
+      "file": "tensorart-tams.json",
+      "id": "tensorart-tams",
+      "badge": "未验证",
+      "seedFields": [
+        {
+          "path": "image.parameters.inputInitialize.seed",
+          "value": {
+            "type": "int64|string",
+            "random": "-1 (文档) / omit|0 (OpenAPI)",
+            "max": 4294967295
+          }
+        }
+      ],
+      "sizeDurationFields": []
+    },
+    {
+      "file": "together.json",
+      "id": "together",
+      "badge": "未验证",
+      "seedFields": [
+        {
+          "path": "image.parameters.seed",
+          "value": {
+            "type": "integer",
+            "supported": true
+          }
+        },
+        {
+          "path": "video.parameters.seed",
+          "value": {
+            "type": "integer",
+            "supported": true
+          }
+        }
+      ],
+      "sizeDurationFields": [
+        {
+          "path": "video.parameters.fps",
+          "value": {
+            "type": "integer",
+            "rangeDoc": "15-60"
+          }
+        },
+        {
+          "path": "video.parameters.resolution",
+          "value": {
+            "type": "string",
+            "note": "Wan 2.7 等用 720P/1080P"
+          }
+        },
+        {
+          "path": "video.parameters.ratio",
+          "value": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    {
+      "file": "venice.json",
+      "id": "venice",
+      "badge": null,
+      "seedFields": [
+        {
+          "path": "image.parameters.seed",
+          "value": {
+            "type": "integer",
+            "min": -999999999,
+            "max": 999999999,
+            "default": 0,
+            "supported": true,
+            "note": "未提供则随机（描述）",
+            "sendStatus": "会发送",
+            "sendEvidence": "FE actualRequest 2026-10-15 venice-sd35"
+          }
+        },
+        {
+          "path": "video.parameters.seed",
+          "value": {
+            "supported": false,
+            "reason": "QueueVideoRequest OpenAPI 属性列表未出现；勿臆造"
+          }
+        }
+      ],
+      "sizeDurationFields": [
+        {
+          "path": "image.parameters.resolution",
+          "value": {
+            "type": "string",
+            "examples": [
+              "1K",
+              "2K",
+              "4K"
+            ],
+            "when": "constraints.resolutions present (with aspect_ratio)",
+            "sendStatus": "待确认",
+            "sendEvidence": "同上 Researchy 2026-10-15；未前端实测不升会发送"
+          }
+        },
+        {
+          "path": "image.parameters.negative_prompt.maxLength",
+          "value": 7500
+        },
+        {
+          "path": "video.durationEnumExamples",
+          "value": [
+            "5s",
+            "10s",
+            "auto",
+            "-1"
+          ]
+        },
+        {
+          "path": "video.parameters.fps",
+          "value": {
+            "supported": false,
+            "reason": "无通用 fps；增强模型有 target_fps 16–120"
+          }
+        },
+        {
+          "path": "video.parameters.aspect_ratio",
+          "value": {
+            "optional": true
+          }
+        },
+        {
+          "path": "video.parameters.resolution",
+          "value": {
+            "examples": [
+              "480p",
+              "720p",
+              "1080p"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "file": "wavespeed.json",
+      "id": "wavespeed",
+      "badge": "已出图（同会话 + LoRA 已发送 + 尺寸在板上；LoRA 是否生效未证实）",
+      "seedFields": [
+        {
+          "path": "image.examples.wavespeed-ai/krea-v2/turbo-lora.seed",
+          "value": {
+            "type": "integer",
+            "random": -1
+          }
+        },
+        {
+          "path": "image.examples.wavespeed-ai/z-image/turbo.seed",
+          "value": {
+            "type": "integer",
+            "random": -1
+          }
+        },
+        {
+          "path": "video.examples.hunyuan t2v.seed",
+          "value": true
+        },
+        {
+          "path": "requestFieldsVerified.actualRequest.seed",
+          "value": true
+        }
+      ],
+      "sizeDurationFields": [
+        {
+          "path": "image.examples.wavespeed-ai/krea-v2/turbo-lora.aspect_ratio",
+          "value": true
+        },
+        {
+          "path": "image.examples.wavespeed-ai/krea-v2/turbo-lora.resolution",
+          "value": {
+            "enum": [
+              "1k",
+              "2k"
+            ]
+          }
+        },
+        {
+          "path": "image.examples.wavespeed-ai/z-image/turbo.aspect_ratio",
+          "value": {
+            "supported": false
+          }
+        },
+        {
+          "path": "image.examples.wavespeed-ai/z-image/turbo.resolution",
+          "value": {
+            "supported": false
+          }
+        },
+        {
+          "path": "video.examples.wan 2.2 i2v-lora.duration",
+          "value": true
+        },
+        {
+          "path": "video.fps",
+          "value": {
+            "supported": "per api_schema; 通用指南未列"
+          }
+        },
+        {
+          "path": "requestFieldsVerified.actualRequest.resolution",
+          "value": "1k"
+        },
+        {
+          "path": "requestFieldsVerified.actualRequest.aspect_ratio",
+          "value": "1:1"
+        }
+      ]
+    }
+  ],
+  "authority": "none",
+  "officialVerifyRequired": true,
+  "hallucinationAudit": {
+    "flaggedAt": "2026-11-02 ~04:34 JST",
+    "by": "tinkabot",
+    "issue": "扫旧草案后直接甩给房间当种子/时长线索，未对本轮数字做网络核验",
+    "ruleRestated": "不确定的必须网络搜索核实；本地草案不能当真相",
+    "numericExamplesNeedingOfficialSearch": [
+      "krea ideogram seed 0..2147483647",
+      "modelscope QwenImage seed 0..2147483647",
+      "venice image seed -999999999..999999999",
+      "fal wan-t2v-lora aspect_ratio/duration enums",
+      "aimlapi Pixverse duration enum",
+      "sogni seedance2 duration 4-15s / 4-30s",
+      "muapi wanLora duration/aspect",
+      "wavespeed aspect_ratio/duration examples"
+    ]
+  }
+}

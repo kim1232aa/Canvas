@@ -371,15 +371,25 @@ describe('provider contract (16): schema-route providers', () => {
     }, () => 'k');
   });
 
-  it('Sogni billing: waiting_for_user + insufficient_credit passed through verbatim (not completed)', async () => {
+  it('Sogni billing: waiting_for_user + insufficient_credit → poll status + failed historyItem (not completed)', async () => {
     const task = { data: { workflow: { workflowId: 's2', status: 'waiting_for_user', waitingReason: 'insufficient_credit', steps: [] } } };
+    const records: any[] = [];
     await withFixture(async (url) => url.includes('/workflows/s2') ? json(task) : json({ data: { workflow: { workflowId: 's2' } } }), async (baseUrl) => {
       const s = await submit(baseUrl, 'sogni', { model: 'krea-2-turbo', prompt: 'x' });
-      const poll = await (await fetch(`${baseUrl}${s.pollUrl}`)).json() as any;
+      expect(s.taskId).toBe('s2');
+      expect(s.credentialRef).toBeTruthy();
+      const pollRes = await fetch(`${baseUrl}${s.pollUrl}`, { headers: { 'x-canvas-credential-ref': s.credentialRef } });
+      // history write is async on the poll route; flush one macrotask
+      await new Promise((r) => setTimeout(r, 0));
+      const poll = await pollRes.json() as any;
       expect(poll.status).toBe('waiting_for_user');
       expect(poll.waitingReason).toBe('insufficient_credit');
       expect(poll.rawResponse).toEqual(task);
-    }, () => 'k');
+      expect(poll.historyItem?.status).toBe('failed');
+      expect(poll.historyItem?.upstreamStatusText).toMatch(/waiting_for_user.*insufficient_credit/);
+      expect(records).toHaveLength(1);
+      expect(records[0].status).toBe('failed');
+    }, () => 'k', async (url) => ({ ok: true, dataUrl: url }), (item) => { records.push(item); return item; });
   });
 });
 

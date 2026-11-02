@@ -217,7 +217,7 @@
     "https://wavespeed.ai/docs/docs-api/wavespeed-ai/z-image-turbo-lora",
     "https://wavespeed.ai/docs/docs-api/wavespeed-ai/flux-dev-lora"
   ],
-  "_auditStatus": "2026-10-16 ~23:33 北京：下一批主验 WaveSpeed 真出图；tinkabot 等明示再升。 2026-10-16 15:12：fix3-1510 升 PASS_GENERATION。2026-10-16 15:35：fix3-1510 真出图暂不收口（等挑刺确认 aspect_ratio 补拍）。2026-10-16 14:46：fix2-1320 真出图但不收口 FAIL_UI；strength 官方字段默认 0.8 仅 image 时用，本轮为上游回显非我方发送。2026-10-16 12:37：新 Key 复验请求字段已核（不收口，徽章未升）。2026-10-15 07:13 tinkabot 撤回：clean-0544 整套退回，Krea/z-image 出图仅作线索，不算证实。2026-10-15 07:09：clean-0544（已退回）线索显示 krea-v2/turbo-lora actualRequest=aspect_ratio+resolution+seed+loras[{path:.safetensors直链,scale}]（无 size/steps/cfg）；z-image/turbo-lora size 'W*H' 无 aspect_ratio/resolution。前序 2026-10-15 06:38：认领 Researchy 06:30——补 contractTestHint（Krea path=.safetensors 直链；z-image 允许 owner/name；1402 原样失败不改写）。前序 06:30 Researchy 已写 lora.path.perModelDoc；06:02：尺寸分两族。",
+  "_auditStatus": "2026-11-02 ~04:45 JST：Researchy——WaveSpeed hunyuan t2v.seed。\n2026-11-02 ~04:43 JST：Researchy——WaveSpeed krea-v2/turbo-lora seed/-1、resolution 仅1k|2k；z-image/turbo seed。\n2026-10-16 ~23:33 北京：下一批主验 WaveSpeed 真出图；tinkabot 等明示再升。 2026-10-16 15:12：fix3-1510 升 PASS_GENERATION。2026-10-16 15:35：fix3-1510 真出图暂不收口（等挑刺确认 aspect_ratio 补拍）。2026-10-16 14:46：fix2-1320 真出图但不收口 FAIL_UI；strength 官方字段默认 0.8 仅 image 时用，本轮为上游回显非我方发送。2026-10-16 12:37：新 Key 复验请求字段已核（不收口，徽章未升）。2026-10-15 07:13 tinkabot 撤回：clean-0544 整套退回，Krea/z-image 出图仅作线索，不算证实。2026-10-15 07:09：clean-0544（已退回）线索显示 krea-v2/turbo-lora actualRequest=aspect_ratio+resolution+seed+loras[{path:.safetensors直链,scale}]（无 size/steps/cfg）；z-image/turbo-lora size 'W*H' 无 aspect_ratio/resolution。前序 2026-10-15 06:38：认领 Researchy 06:30——补 contractTestHint（Krea path=.safetensors 直链；z-image 允许 owner/name；1402 原样失败不改写）。前序 06:30 Researchy 已写 lora.path.perModelDoc；06:02：尺寸分两族。",
   "requestFieldsVerified": {
     "actualRequest": {
       "prompt": true,
@@ -262,5 +262,34 @@
     "at": "2026-10-16 ~23:33 北京",
     "plan": "画布：fix16.1 快收后立刻 WaveSpeed 真出图 PASS_GENERATION（已知有额度）",
     "tinkabot": "等明示再升徽章"
+  },
+  "researchyVerified20261102": {
+    "fetchedAt": "2026-11-02 ~04:45 JST",
+    "items": [
+      {
+        "field": "image.krea-v2/turbo-lora.seed",
+        "value": "integer；-1=随机",
+        "url": "https://wavespeed.ai/docs/docs-api/wavespeed-ai/krea-v2-turbo-lora",
+        "status": "已核一致"
+      },
+      {
+        "field": "image.krea-v2/turbo-lora.resolution",
+        "value": "仅 1k / 2k",
+        "url": "https://wavespeed.ai/docs/docs-api/wavespeed-ai/krea-v2-turbo-lora",
+        "status": "已核一致"
+      },
+      {
+        "field": "image.z-image/turbo.seed",
+        "value": "integer；-1=随机",
+        "url": "https://wavespeed.ai/docs/docs-api/wavespeed-ai/z-image-turbo",
+        "status": "已核一致"
+      },
+      {
+        "field": "video.hunyuan-t2v.seed",
+        "value": "optional int；−1=随机",
+        "url": "https://wavespeed.ai/docs/docs-api/wavespeed-ai/hunyuan-video-t2v",
+        "status": "已核一致"
+      }
+    ]
   }
 }

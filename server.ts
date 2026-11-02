@@ -27,6 +27,7 @@ import {civitaiImageHistory} from './src/server/civitaiHistoryContract.ts';
 import { handleCivitaiModels, handleHuggingFaceModelInfo, handleTensorArtModelInfo, handleCredentialPresence, handleCivitaiModelDetail, handleCivitaiModelVersion } from './src/server/routes/civitaiModelRoutes.ts';
 import { handleExtractCivitaiWorkflow } from './src/server/routes/civitaiWorkflowRoute.ts';
 import { registerReplicateRoutes } from './src/server/routes/replicateRoutes.ts';
+import { registerMageRoutes } from './src/server/routes/mageRoutes.ts';
 import { registerVideoGenerateRoutes } from './src/server/routes/videoGenerateRoute.ts';
 import crypto from 'crypto';
 import dotenv from 'dotenv';
@@ -204,6 +205,7 @@ const LARGE_BODY_ROUTES = new Set([
   '/api/schema-provider/aimlapi/submit',
   '/api/schema-provider/novita/submit',
   '/api/schema-provider/venice/submit',
+  '/api/schema-provider/deepinfra/submit',
   '/api/schema-provider/openworks/submit',
   '/api/schema-provider/muapi/save-result',
   '/api/schema-provider/wavespeed/save-result',
@@ -213,6 +215,7 @@ const LARGE_BODY_ROUTES = new Set([
   '/api/schema-provider/aimlapi/save-result',
   '/api/schema-provider/novita/save-result',
   '/api/schema-provider/venice/save-result',
+  '/api/schema-provider/deepinfra/save-result',
   '/api/schema-provider/openworks/save-result',
   '/api/fal/generate',
   '/api/engine/fal/generate',
@@ -229,6 +232,8 @@ const LARGE_BODY_ROUTES = new Set([
   '/api/engine/modelslab/generate',
   '/api/engine/replicate/generate',
   '/api/replicate/generate',
+  '/api/engine/mage/generate',
+  '/api/mage/generate',
   '/api/media',
   '/api/tensorart/generate',
   '/api/engine/tensorart/generate',
@@ -564,6 +569,7 @@ const defaultKeys: Record<string, string> = {
   aimlapiKey: process.env.AIMLAPI_KEY || '',
   novitaKey: process.env.NOVITA_API_KEY || '',
   veniceKey: process.env.VENICE_API_KEY || '',
+  deepinfraKey: process.env.DEEPINFRA_API_KEY || '',
   // Traceable: TENSORART_KEY_ENV_SOURCE records which env name supplied the key (first non-empty of the chain).
   tensorartKey: process.env.TENSORART_API_KEY || process.env.TENSORART_KEY || process.env.TENSORART || '',
   tensorartBaseUrl: process.env.TENSORART_BASE_URL || '',
@@ -589,6 +595,8 @@ const defaultKeys: Record<string, string> = {
   modelslabBaseUrl: process.env.MODELSLAB_BASE_URL || '',
   replicateKey: process.env.REPLICATE_API_TOKEN || process.env.REPLICATE_API_KEY || '',
   replicateBaseUrl: process.env.REPLICATE_BASE_URL || '',
+  mageKey: process.env.MAGE_API_KEY || process.env.MAGE_KEY || '',
+  mageBaseUrl: process.env.MAGE_BASE_URL || '',
 };
 
 // Pool key sources per provider: settings.json fields (in order), then the defaultKeys (env) field.
@@ -601,6 +609,7 @@ const POOL_KEY_FIELDS: Record<string, { settings: string[]; env: string }> = {
   aimlapi: {settings:['aimlapiKey'],env:'aimlapiKey'},
   novita: {settings:['novitaKey'],env:'novitaKey'},
   venice: {settings:['veniceKey'],env:'veniceKey'},
+  deepinfra: {settings:['deepinfraKey'],env:'deepinfraKey'},
   fal: { settings: ['falKey'], env: 'falKey' },
   agnes: { settings: ['agnesKey'], env: 'agnesKey' },
   sensenova: { settings: ['sensenovaKey'], env: 'sensenovaKey' },
@@ -616,6 +625,7 @@ const POOL_KEY_FIELDS: Record<string, { settings: string[]; env: string }> = {
   runware: { settings: ['runwareKey'], env: 'runwareKey' },
   modelslab: { settings: ['modelslabKey'], env: 'modelslabKey' },
   replicate: { settings: ['replicateKey'], env: 'replicateKey' },
+  mage: { settings: ['mageKey'], env: 'mageKey' },
 };
 
 // Multi-Key Pool & High-Availability Round-Robin Load Balancer
@@ -978,7 +988,7 @@ if (!cloudSettings || Object.keys(cloudSettings).length === 0) {
 // Agnes / SenseNova / OpenAI-compat / Grok-compat key + base URL resolution (A1/A2).
 // Key: header (comma-separated rotates) > pool (settings + env, comma-separated). Base URL: header > settings > env > verified official default (only where declared below).
 // A custom base URL requires a custom key — server keys are never sent to a user-supplied host.
-type AuthProvider = 'agnes' | 'sensenova' | 'openai_compat' | 'grok_compat' | 'runware' | 'modelslab' | 'replicate' | 'nanogpt';
+type AuthProvider = 'agnes' | 'sensenova' | 'openai_compat' | 'grok_compat' | 'runware' | 'modelslab' | 'replicate' | 'nanogpt' | 'mage';
 const AUTH_META: Record<AuthProvider, { headerPrefix: string; settingsBaseName: string; envName: string; keyEnvName?: string; defaultBaseUrl?: string }> = {
   agnes: { headerPrefix: 'x-agnes', settingsBaseName: 'agnesBaseUrl', envName: 'AGNES', keyEnvName: 'AGNES_API_KEY', defaultBaseUrl: 'https://apihub.agnes-ai.com/v1' },
   sensenova: { headerPrefix: 'x-sensenova', settingsBaseName: 'sensenovaBaseUrl', envName: 'SENSENOVA', defaultBaseUrl: 'https://token.sensenova.cn/v1' },
@@ -988,6 +998,7 @@ const AUTH_META: Record<AuthProvider, { headerPrefix: string; settingsBaseName: 
   modelslab: { headerPrefix: 'x-modelslab', settingsBaseName: 'modelslabBaseUrl', envName: 'MODELSLAB', keyEnvName: 'MODELSLAB_API_KEY', defaultBaseUrl: 'https://modelslab.com' },
   replicate: { headerPrefix: 'x-replicate', settingsBaseName: 'replicateBaseUrl', envName: 'REPLICATE', keyEnvName: 'REPLICATE_API_TOKEN', defaultBaseUrl: 'https://api.replicate.com/v1' },
   nanogpt: { headerPrefix: 'x-nanogpt', settingsBaseName: 'nanogptBaseUrl', envName: 'NANOGPT', keyEnvName: 'NANOGPT_KEY', defaultBaseUrl: 'https://api.nano-gpt.com/api/v1' },
+  mage: { headerPrefix: 'x-mage', settingsBaseName: 'mageBaseUrl', envName: 'MAGE', keyEnvName: 'MAGE_API_KEY', defaultBaseUrl: 'https://api.mage.space' },
 };
 
 function normalizeAuthBaseUrl(provider: AuthProvider, raw: string): string {
@@ -2673,76 +2684,73 @@ app.get("/api/models", async (req, res) => {
     if (provider === 'all' || provider === 'modelslab') {
       tasks.push((async () => {
         try {
-          if (cat === 'lora') {
+          const modelslabKey = (req.headers['x-modelslab-key'] as string) || keyPoolManager.getNextKey('modelslab', undefined) || defaultKeys.modelslabKey;
+          if (!modelslabKey) {
             results.modelslab = [];
             pagination.modelslab = {
-              page: 1,
+              page: pageParam,
               limit: limitParam,
               total: 0,
               hasMore: false,
-              sourceUrl: 'https://modelslab.com',
-              sourceNotice: 'lookup-only (no public lora directory)',
+              sourceUrl: 'https://modelslab.com/api/v4/dreambooth/model_list',
+              sourceNotice: 'lookup-only (no api key configured)',
             };
-            catalogNoticesAccum.modelslab = 'ModelsLab 暂无公开 LoRA 实时检索目录；如需使用 LoRA，请在生成节点中直接填入 lora_model ID（或用户微调模型 ID）。';
+            catalogNoticesAccum.modelslab = 'ModelsLab 官方模型列表需要 API Key (MODELSLAB_API_KEY)；支持直接在上方输入框中输入模型 ID / lora_model ID。';
           } else {
-            const modelslabKey = (req.headers['x-modelslab-key'] as string) || keyPoolManager.getNextKey('modelslab', undefined) || defaultKeys.modelslabKey;
-            if (!modelslabKey) {
-              results.modelslab = [];
-              pagination.modelslab = {
-                page: pageParam,
-                limit: limitParam,
-                total: 0,
-                hasMore: false,
-                sourceUrl: 'https://modelslab.com/api/v4/dreambooth/model_list',
-                sourceNotice: 'lookup-only (no api key configured)',
-              };
-              catalogNoticesAccum.modelslab = 'ModelsLab 官方模型列表需要 API Key (MODELSLAB_API_KEY)；支持直接在上方输入框中输入模型 ID (如 midjourney、anything-v3 等) 按 ID 选用。';
+            const mlBaseUrl = String(req.headers['x-modelslab-base-url'] || cloudSettings['modelslabBaseUrl'] || defaultKeys.modelslabBaseUrl || 'https://modelslab.com').trim().replace(/\/+$/, '');
+            const mlListEndpoint = `${mlBaseUrl}/api/v4/dreambooth/model_list`;
+            const mlResp = await upstreamFetch(
+              { provider: 'modelslab', route: req.path, model: 'dreambooth/model_list', key: modelslabKey },
+              mlListEndpoint,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key: modelslabKey }),
+                signal: AbortSignal.timeout(15000),
+              }
+            );
+            if (!mlResp.ok) {
+              const errText = await mlResp.text().catch(() => '');
+              results.modelslab = {
+                error: `ModelsLab 上游请求失败 (${mlResp.status})`,
+                status: mlResp.status,
+                details: errText.slice(0, 300),
+                endpoint: 'https://modelslab.com/api/v4/dreambooth/model_list',
+              } as any;
             } else {
-              const mlBaseUrl = String(req.headers['x-modelslab-base-url'] || cloudSettings['modelslabBaseUrl'] || defaultKeys.modelslabBaseUrl || 'https://modelslab.com').trim().replace(/\/+$/, '');
-              const mlListEndpoint = `${mlBaseUrl}/api/v4/dreambooth/model_list`;
-              const mlResp = await upstreamFetch(
-                { provider: 'modelslab', route: req.path, model: 'dreambooth/model_list', key: modelslabKey },
-                mlListEndpoint,
-                {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ key: modelslabKey }),
-                  signal: AbortSignal.timeout(15000),
-                }
-              );
-              if (!mlResp.ok) {
-                const errText = await mlResp.text().catch(() => '');
-                results.modelslab = {
-                  error: `ModelsLab 上游请求失败 (${mlResp.status})`,
-                  status: mlResp.status,
-                  details: errText.slice(0, 300),
-                  endpoint: 'https://modelslab.com/api/v4/dreambooth/model_list',
-                } as any;
-              } else {
-                const mlData = await mlResp.json().catch(() => []);
-                const rawList = Array.isArray(mlData) ? mlData : [];
-                const mapped = rawList.map((m: any) => ({
+              const mlData = await mlResp.json().catch(() => []);
+              const rawList = Array.isArray(mlData) ? mlData : [];
+              // Official POST /api/v4/dreambooth/model_list rows: model_subcategory==='lora' are LoRA adapters
+              // (docs: https://docs.modelslab.com/image-generation/community-models/dreambooth-lora).
+              const mapped = rawList.map((m: any) => {
+                const isLora = String(m.model_subcategory || '').toLowerCase() === 'lora';
+                return {
                   id: m.model_id,
                   name: m.model_name || m.model_id,
-                  category: 'checkpoint',
+                  category: isLora ? 'lora' : 'checkpoint',
                   provider: 'modelslab',
-                  type: 'Checkpoint',
+                  type: isLora ? 'lora' : 'Checkpoint',
+                  // modelslab is in MODEL_ENDPOINT_CATALOG_PROVIDERS; mark adapters explicitly
+                  // so isLoraWeightResource accepts them (docs dreambooth-lora lora_model IDs).
+                  resourceKind: isLora ? 'adapter' : 'model-endpoint',
                   imageUrl: m.screenshots || null,
                   description: m.description || null,
                   sourceUrl: `https://modelslab.com/models/${m.model_id}`,
-                }));
-                const filtered = mapped.filter((m: any) => matchCategory(m) && matchSearch(m));
-                const offset = (pageParam - 1) * limitParam;
-                results.modelslab = filtered.slice(offset, offset + limitParam);
-                pagination.modelslab = {
-                  page: pageParam,
-                  limit: limitParam,
-                  total: filtered.length,
-                  hasMore: offset + limitParam < filtered.length,
-                  sourceUrl: 'https://modelslab.com/api/v4/dreambooth/model_list',
-                  sourceNotice: 'live-api (dreambooth/model_list)',
+                  baseModel: m.model_category || null,
+                  tags: [m.model_category, m.model_subcategory, m.model_format].filter(Boolean),
                 };
-              }
+              });
+              const filtered = mapped.filter((m: any) => matchCategory(m) && matchSearch(m));
+              const offset = (pageParam - 1) * limitParam;
+              results.modelslab = filtered.slice(offset, offset + limitParam);
+              pagination.modelslab = {
+                page: pageParam,
+                limit: limitParam,
+                total: filtered.length,
+                hasMore: offset + limitParam < filtered.length,
+                sourceUrl: 'https://modelslab.com/api/v4/dreambooth/model_list',
+                sourceNotice: 'live-api (dreambooth/model_list; lora=model_subcategory)',
+              };
             }
           }
         } catch (mlErr: any) {
@@ -2883,6 +2891,20 @@ app.get("/api/models", async (req, res) => {
       catalogNoticesAccum.sensenova = 'SenseNova 官方没有公开模型列表 API；支持按模型 ID 选用，不能把本地白名单当作远端目录。';
     }
 
+
+    if (provider === 'all' || provider === 'mage') {
+      results.mage = [];
+      pagination.mage = {
+        page: 1,
+        limit: limitParam,
+        total: 0,
+        hasMore: false,
+        sourceUrl: 'https://docs.mage.space/api/models/mango',
+        sourceNotice: 'lookup-only (no public remote catalog; model_id enum on Mango docs)',
+      };
+      catalogNoticesAccum.mage = 'Mage 无公开远端模型检索目录；请按官方 model_id 选用（mango / mango-v2 / mango-v3s / mango-v3 / mango-v3-turbo）。空列表是 lookup-only。';
+    }
+
     await Promise.allSettled(tasks);
 
     for (const k of Object.keys(results)) {
@@ -2890,6 +2912,8 @@ app.get("/api/models", async (req, res) => {
         results[k] = sortList(results[k]);
       }
     }
+
+
 
     const finalCatalogNotices: Record<string, string> = { ...catalogNoticesAccum };
     const finalErrors: Record<string, string> = {};
@@ -2986,6 +3010,7 @@ app.post(['/api/fal/generate', '/api/generate', '/api/engine/fal/generate'], asy
     if (isProvided(req.body.safety_tolerance)) payload.safety_tolerance=req.body.safety_tolerance;
     if (typeof req.body.enable_safety_checker === 'boolean') payload.enable_safety_checker=req.body.enable_safety_checker;
     if (typeof req.body.raw === 'boolean') payload.raw=req.body.raw;
+
 
     // F5: image_size must be official enum (when endpoint is in static schema) or { width, height } object
     let finalImageSize: any = undefined;
@@ -3912,6 +3937,14 @@ registerReplicateRoutes(app, {
   keyPoolManager,
   respondWithGeneratedImages,
   recordHistoryItem,
+  sanitizeGenerationMetadata,
+});
+
+registerMageRoutes(app, {
+  resolveProviderAuth,
+  upstreamFetch,
+  keyPoolManager,
+  respondWithGeneratedImages,
   sanitizeGenerationMetadata,
 });
 
@@ -5292,7 +5325,7 @@ async function testSingleProviderKey(
 
   try {
     if (['muapi','wavespeed','sogni','krea','together','aimlapi','novita','venice'].includes(prov)) {
-      const urls:Record<string,string>={muapi:'https://api.muapi.ai/api/v1/models',wavespeed:'https://api.wavespeed.ai/api/v3/models',sogni:'https://api.sogni.ai/v1/creative-agent/workflows?limit=1',krea:'https://api.krea.ai/styles?limit=1',together:'https://api.together.ai/v1/models',aimlapi:'https://api.aimlapi.com/v2/billing',novita:'https://api.novita.ai/openapi/v1/billing/balance/detail',venice:'https://api.venice.ai/api/v1/models?type=image'};
+      const urls:Record<string,string>={muapi:'https://api.muapi.ai/api/v1/models',wavespeed:'https://api.wavespeed.ai/api/v3/models',sogni:'https://api.sogni.ai/v1/creative-agent/workflows?limit=1',krea:'https://api.krea.ai/styles?limit=1',together:'https://api.together.ai/v1/models',aimlapi:'https://api.aimlapi.com/v2/billing',novita:'https://api.novita.ai/openapi/v1/billing/balance/detail',venice:'https://api.venice.ai/api/v1/models?type=image',deepinfra:'https://api.deepinfra.com/v1/me'};
       const resp=await upstreamFetch({provider:prov,route:routePath,key:singleKey},urls[prov],{headers:prov==='muapi'?{'x-api-key':singleKey}:{Authorization:`Bearer ${singleKey}`}});
       const raw=await resp.text();
       return {maskedKey,status:resp.ok?(prov==='muapi'?'warning':'ok'):'error',latency:Date.now()-startTime,message:`HTTP ${resp.status} · ${urls[prov]} · ${resp.ok?'只读接口可访问；尚未验证生成权限':'原始响应：'+raw}`};
@@ -5625,6 +5658,7 @@ const VALID_STRATEGY_PROVIDERS = new Set([
   'runware',
   'modelslab',
   'replicate',
+  'mage',
 ]);
 const VALID_STRATEGIES = new Set(['round_robin']);
 
@@ -6258,7 +6292,7 @@ app.post('/api/cloud/projects/:id/clone', (req, res) => {
 // 10. Server-Side Settings / Credentials Storage
 // ==========================================
 const ALLOWED_SETTINGS_SECRET = new Set([
-  'muapiKey', 'wavespeedKey', 'sogniKey', 'kreaKey', 'togetherKey', 'aimlapiKey', 'novitaKey', 'veniceKey',
+  'muapiKey', 'wavespeedKey', 'sogniKey', 'kreaKey', 'togetherKey', 'aimlapiKey', 'novitaKey', 'veniceKey', 'deepinfraKey',
   'falKey',
   'agnesKey',
   'sensenovaKey',
@@ -6275,6 +6309,7 @@ const ALLOWED_SETTINGS_SECRET = new Set([
   'runwareKey',
   'modelslabKey',
   'replicateKey',
+  'mageKey',
 ]);
 
 const ALLOWED_SETTINGS_PLAIN = new Set([
@@ -6286,6 +6321,7 @@ const ALLOWED_SETTINGS_PLAIN = new Set([
   'modelslabBaseUrl',
   'replicateBaseUrl',
   'nanogptBaseUrl',
+  'mageBaseUrl',
 ]);
 
 const ALLOWED_SETTINGS = new Set([...ALLOWED_SETTINGS_SECRET, ...ALLOWED_SETTINGS_PLAIN]);

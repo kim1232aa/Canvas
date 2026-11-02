@@ -21,8 +21,8 @@ export class ModelsLabDriver extends BaseEngineDriver {
       id: 'flux',
       name: 'FLUX.1 ModelsLab',
       type: 'image',
-      description: 'ModelsLab 托管 FLUX.1 图像生成',
-      supportsLora: true,
+      description: 'ModelsLab 托管 FLUX.1 图像生成（官方：不支持 SD 训练的 LoRA / negative_prompt）',
+      supportsLora: false,
     },
     {
       id: 'sdxl',
@@ -36,6 +36,13 @@ export class ModelsLabDriver extends BaseEngineDriver {
       name: 'DreamShaper V8',
       type: 'image',
       description: 'DreamShaper V8 社区微调模型',
+      supportsLora: true,
+    },
+    {
+      id: 'tamarin-xl-v1',
+      name: 'Tamarin XL v1',
+      type: 'image',
+      description: '官方 dreambooth-lora 文档示例底模（可挂 lora_model）',
       supportsLora: true,
     },
   ];

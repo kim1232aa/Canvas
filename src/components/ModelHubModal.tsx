@@ -68,7 +68,7 @@ interface ModelHubModalProps {
 }
 
 export type CategoryFilter = 'all' | 'checkpoint' | 'lora' | 'video' | 'edit';
-export type ProviderTab = 'all' | 'civitai' | 'fal' | 'tensorart' | 'modelscope' | 'modelscope_ai' | 'huggingface' | 'nanogpt' | 'gemini' | 'muapi' | 'wavespeed' | 'sogni' | 'krea' | 'together' | 'aimlapi' | 'novita' | 'venice' | 'openworks' | 'runware' | 'modelslab' | 'agnes' | 'sensenova' | 'openai_compat' | 'grok_compat' | 'replicate';
+export type ProviderTab = 'all' | 'civitai' | 'fal' | 'tensorart' | 'modelscope' | 'modelscope_ai' | 'huggingface' | 'nanogpt' | 'gemini' | 'muapi' | 'wavespeed' | 'sogni' | 'krea' | 'together' | 'aimlapi' | 'novita' | 'venice' | 'deepinfra' | 'openworks' | 'runware' | 'modelslab' | 'agnes' | 'sensenova' | 'openai_compat' | 'grok_compat' | 'replicate' | 'mage';
 export type ModelSortOption = 'downloads' | 'rating' | 'likes' | 'name_asc' | 'name_desc' | 'bookmarked';
 
 const ARCHITECTURE_TAGS = [
@@ -81,7 +81,7 @@ const ARCHITECTURE_TAGS = [
   { id: 'illustrious', label: 'Illustrious' },
   { id: 'qwen', label: 'Qwen-Image' },
   { id: 'z-image', label: 'Z-Image' },
-  {id:'krea',label:'Krea'}, {id:'together',label:'Together'}, {id:'aimlapi',label:'AIMLAPI'}, {id:'novita',label:'Novita'}, {id:'venice',label:'Venice'}, {id:'chroma',label:'Chroma'}, {id:'hunyuan',label:'Hunyuan'}, {id:'kolors',label:'Kolors'}, {id:'pixart',label:'PixArt'}, {id:'auraflow',label:'AuraFlow'}, {id:'anima',label:'Anima'}, {id:'ernie',label:'ERNIE'}, {id:'hidream',label:'HiDream'},
+  {id:'krea',label:'Krea'}, {id:'together',label:'Together'}, {id:'aimlapi',label:'AIMLAPI'}, {id:'novita',label:'Novita'}, {id:'venice',label:'Venice'}, {id:'deepinfra',label:'DeepInfra'}, {id:'chroma',label:'Chroma'}, {id:'hunyuan',label:'Hunyuan'}, {id:'kolors',label:'Kolors'}, {id:'pixart',label:'PixArt'}, {id:'auraflow',label:'AuraFlow'}, {id:'anima',label:'Anima'}, {id:'ernie',label:'ERNIE'}, {id:'hidream',label:'HiDream'},
 ];
 
 interface ArchitectureFields { baseModel?: unknown; id?: unknown; name?: unknown; description?: unknown; tags?: unknown }
@@ -383,7 +383,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       const targetCat = initialCategory || 'all';
-      const targetProvider = (initialProvider && !['openai_compat', 'grok_compat', 'agnes'].includes(initialProvider) && ['civitai','fal','tensorart','modelscope','modelscope_ai','huggingface','nanogpt','gemini','muapi','wavespeed','sogni','krea','together','aimlapi','novita','venice','openworks','runware','modelslab','sensenova','replicate'].includes(initialProvider)) ? initialProvider as ProviderTab : 'civitai';
+      const targetProvider = (initialProvider && !['openai_compat', 'grok_compat', 'agnes'].includes(initialProvider) && ['civitai','fal','tensorart','modelscope','modelscope_ai','huggingface','nanogpt','gemini','muapi','wavespeed','sogni','krea','together','aimlapi','novita','venice','deepinfra','openworks','runware','modelslab','sensenova','replicate','mage'].includes(initialProvider)) ? initialProvider as ProviderTab : 'civitai';
       setActiveProvider(targetProvider);
       setActiveCategory(targetCat);
       loadModels(targetProvider, targetCat, query, sortOption, selectedArch, false);
@@ -575,6 +575,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
             { id: 'aimlapi', name: 'AIMLAPI' },
             { id: 'novita', name: 'Novita' },
             { id: 'venice', name: 'Venice' },
+            { id: 'deepinfra', name: 'DeepInfra' },
             { id: 'openworks', name: 'Tensor.Art OpenWorks' },
             { id: 'runware', name: 'Runware' },
             { id: 'modelslab', name: 'ModelsLab' },
@@ -583,6 +584,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
             { id: 'openai_compat', name: 'OpenAI 兼容中转' },
             { id: 'grok_compat', name: 'Grok 兼容中转' },
             { id: 'replicate', name: 'Replicate' },
+            { id: 'mage', name: 'Mage' },
           ].map((tab) => {
             const isActive = activeProvider === tab.id;
             return (
@@ -722,6 +724,8 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                 ? '输入 WaveSpeed 模型端点/模型 ID'
                 : activeProvider === 'sogni'
                 ? '输入 Sogni 协议模型标识或 LoRA 标识'
+                : activeProvider === 'mage'
+                ? '输入 Mage model_id（mango / mango-v2 / mango-v3s / mango-v3 / mango-v3-turbo）'
                 : activeProvider === 'all' ? '请先在上方选择服务商，避免将 ID 发往错误平台。' : '输入 Civitai 模型 ID / AIR URN'}
             </span>
           </div>
@@ -748,6 +752,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                   : activeProvider === 'sogni' ? '输入 Sogni 模型 ID...'
                   : activeProvider === 'sensenova' ? '输入官方 SenseNova 图像模型 ID（如 sensenova-u1.5-lite）...'
                   : activeProvider === 'agnes' ? '输入 Agnes 模型 ID...'
+                  : activeProvider === 'mage' ? '输入 Mage model_id（如 mango-v3）...'
                   : activeProvider === 'openai_compat' || activeProvider === 'grok_compat' ? '输入已配置中转实际支持的模型 ID...'
                   : activeProvider === 'all' ? '请先选择服务商'
                   : '输入 Civitai ID (如 133005) 或 URN...'

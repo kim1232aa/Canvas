@@ -72,6 +72,9 @@ describe('ModelHub and Backend Directory Architecture', () => {
     it('ModelsLab live model list uses dreambooth/model_list and handles missing key gracefully', () => {
       expect(serverSource).toContain('dreambooth/model_list');
       expect(serverSource).toContain('catalogNoticesAccum.modelslab');
+      // LoRA tab must classify model_subcategory===lora as adapters (not empty fake notice).
+      expect(serverSource).toContain("String(m.model_subcategory || '').toLowerCase() === 'lora'");
+      expect(serverSource).toContain("resourceKind: isLora ? 'adapter' : 'model-endpoint'");
     });
 
     it('does not present OpenWorks tool names as Tensor checkpoint catalog rows', () => {

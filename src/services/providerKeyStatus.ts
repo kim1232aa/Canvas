@@ -19,6 +19,7 @@ function keyHeadersFromStored(): Record<string, string> {
   put('x-aimlapi-key', keys.aimlapiKey);
   put('x-novita-key', keys.novitaKey);
   put('x-venice-key', keys.veniceKey);
+  put('x-deepinfra-key', keys.deepinfraKey);
   put('x-fal-key', keys.falKey);
   put('x-agnes-key', keys.agnesKey);
   put('x-sensenova-key', keys.sensenovaKey);
@@ -34,6 +35,7 @@ function keyHeadersFromStored(): Record<string, string> {
   put('x-runware-key', keys.runwareKey);
   put('x-modelslab-key', keys.modelslabKey);
   put('x-replicate-key', keys.replicateKey);
+  put('x-mage-key', keys.mageKey);
   return out;
 }
 

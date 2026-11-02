@@ -25,7 +25,7 @@ describe('Fal video site-to-wire contract', () => {
   });
   it('checks aliases before overrides and validates the actual Wan wire', () => {
     expect(() => buildFalVideoRequest(i2v, { image_url: 'a', start_image_url: 'b', custom_parameters: { image_url: 'b' } })).toThrow(/不一致/);
-    expect(() => buildFalVideoRequest('fal-ai/wan-i2v', { image_url: 'a', custom_parameters: { frames_per_second: 30 } })).toThrow(/5.*24/);
+    expect(buildFalVideoRequest('fal-ai/wan-i2v', { image_url: 'a', custom_parameters: { frames_per_second: 30 } }).payload).toMatchObject({ frames_per_second: 30 });
     expect(() => buildFalVideoRequest(i2v, { image_url: 'a', custom_parameters: { seed: 1 } })).toThrow(/seed/);
     expect(() => buildFalVideoRequest(i2v, { image_url: 'a', custom_parameters: { provider: 'other' } })).toThrow(/路由/);
     const built = buildFalVideoRequest(i2v, { image_url: 'a', custom_parameters: { start_image_url: 'b' } });
@@ -58,9 +58,9 @@ describe('Fal video site-to-wire contract', () => {
     for (const custom_parameters of [null, [], 'abc']) expect(() => buildFalVideoRequest(i2v, { image_url: 'a', custom_parameters })).toThrow(/object|对象/);
     expect(() => buildFalVideoRequest('fal-ai/wan-i2v', { image_url: 'a', cfg: 2, guidance_scale: 3 })).toThrow(/cfg.*guidance_scale/);
   });
-  it('limits Wan 2.1 fps and frames only and maps its actual wire', () => {
+  it('maps Wan 2.1 fps/frames wire; no local range refuse (Schema/upstream)', () => {
     expect(buildFalVideoRequest('fal-ai/wan-i2v', { image_url: 'a', fps: 24, num_frames: 100 }).payload).toMatchObject({ frames_per_second: 24, num_frames: 100 });
-    expect(() => buildFalVideoRequest('fal-ai/wan-i2v', { image_url: 'a', fps: 25 })).toThrow(/5.*24/);
-    expect(() => buildFalVideoRequest('fal-ai/wan-i2v', { image_url: 'a', num_frames: 80 })).toThrow(/81.*100/);
+    expect(buildFalVideoRequest('fal-ai/wan-i2v', { image_url: 'a', fps: 25 }).payload).toMatchObject({ frames_per_second: 25 });
+    expect(buildFalVideoRequest('fal-ai/wan-i2v', { image_url: 'a', num_frames: 80 }).payload).toMatchObject({ num_frames: 80 });
   });
 });

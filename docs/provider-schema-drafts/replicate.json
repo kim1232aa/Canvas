@@ -1,12 +1,13 @@
 {
-  "canvasAcceptance": "未验证（2026-10-17 14:40 北京：测试截图已全删，按雁标准「画布里出图、落保存节点、历史有缩略图」当前 0 家；以前的出图/欠费标记一律作废，官方字段结论保留；在画布重跑出图并有节点图+历史缩略图后再单独改）",
+  "canvasAcceptance": "欠费已记、未真出图（2026-11-02 画布：欠费已记直接收）",
   "$schemaNote": "草案 — 仅声明。真相源: docs/provider-api-audit-v2/replicate.md + DIFF.md (2026-10-15)",
   "id": "replicate",
   "displayName": "Replicate",
   "auth": {
     "envVar": "REPLICATE_API_TOKEN",
     "header": "Authorization",
-    "scheme": "Bearer"
+    "scheme": "Bearer",
+    "keyRule": "只进环境变量/本机配置，禁止写入草案；群里明文建议轮换"
   },
   "base": {
     "root": "https://api.replicate.com/v1"
@@ -152,7 +153,19 @@
     },
     "maxLoras": 2,
     "not": "Comfy strength_model / loras[] 数组",
-    "unsupportedModels": "schema 无这些字段 → 不挂载"
+    "unsupportedModels": "schema 无这些字段 → 不挂载",
+    "canvasRule20261102": {
+      "at": "2026-11-02 ~03:24 JST",
+      "rule": "真挂 LoRA 用带 lora_weights 的模型（如 flux-dev-lora）；禁止 flux-schnell 空挂",
+      "by": "画布"
+    },
+    "canvasProbe20261102b": {
+      "at": "2026-11-02 ~03:31 JST",
+      "by": "canvas-dev",
+      "model": "flux-dev-lora",
+      "result": "能登无额度；欠费验收进行中；待历史确认 lora_weights",
+      "badge": "仍未验证"
+    }
   },
   "billing": {
     "insufficientHints": [],
@@ -166,8 +179,8 @@
     "https://replicate.com/black-forest-labs/flux-schnell/api",
     "https://replicate.com/api/models/black-forest-labs/flux-schnell/versions"
   ],
-  "_auditStatus": "2026-10-16 ~10:55：1049 收口 PASS_BILLING（欠费 402，非真出图）。flux-dev-lora seed/steps/guidance/lora_weights/lora_scale 升「会发送」；extra_lora 未实发仍待确认",
-  "acceptanceBadge": "未验证",
+  "_auditStatus": "2026-11-02 ~04:42 JST：Researchy——Replicate 图 seed/aspect_ratio（flux-schnell 样本）；go_fast 时 seed 不保证。\n2026-11-02 ~04:30 JST：雁定——额度问题不要卡，跳过；欠费已记家不排队等充值；有额度时再冲真图，不当当前主阻塞。\n2026-11-02 ~04:08 JST：画布明示——标记按「欠费已记」收，别再等点收；欠费原文进历史即可；挑刺只审真出图或串桶假话。ModelsLab 串桶（弹窗未含 LoRA vs 历史有）另修，与欠费标记分开。\n2026-11-02 ~04:08 JST：画布按雁定收——Replicate/ModelsLab/Mage 三家欠费原样透传证据已收，不当假成功、不以充值挡进度；未真出图不算接通。ModelsLab 另有串桶：弹窗「本次请求未含 LoRA」但历史请求体有 LoRA——交 canvas-dev 修，与欠费验收分开。雁问「欠费的为什么还要审核」→ 欠费本身不必再审；只审串桶这类真问题。\n2026-11-02 ~04:07 JST：雁定——欠费原样透传、如实记历史即可，不当假成功、不把充值当进度卡点；有额度再冲真图落保存节点。ModelsLab/Replicate/Mage 欠费证据已交；徽章仍等画布点收后再改（不自升接通）。\n2026-11-02 ~04:07 JST：画布确认——Replicate 欠费挑刺已过，只证明路由通，没额度不算接通。徽章仍未验证。\n2026-11-02 ~04:06 JST：画布挑刺验 Replicate 欠费三张——flux-dev-lora+真 LoRA；历史可见 lora_weights/强度；上游 Insufficient credit；可当欠费验收、不算接通。提示词仍是短示例非配方。徽章仍未验证（等画布明示升欠费标记/真出图）。\n2026-11-02 ~03:31 JST：canvas-dev——Key 能登无额度；标准板已换 flux-dev-lora，正在跑带真 LoRA 的欠费验收；工作流/点运行已拍，差历史确认 lora_weights 透传；徽章仍未验证，等画布明示。画布优先：先出图落保存节点；易用三眼验；模块化跟接不挡主路径。\n2026-11-02 ~03:30 JST：Researchy 三路核——按模型 schema 挂参；flux-dev-lora 用 lora_weights/lora_scale（及 extra_*）；禁止写成通用 lora_url；与草案一致。画布：有额度 Replicate 插队真出图冲第 3 家。徽章仍未验证。\n2026-11-02 ~03:24 JST：画布定——Replicate 本有；Key 已换且本机探测通过；真挂 LoRA 须用带 lora_weights 的模型（如 flux-dev-lora），勿在 flux-schnell 上空挂；徽章仍未验证，等画布真出图/明示。\n2026-11-02 ~03:24 JST：雁贴官方 docs + 新 Key——Replicate 草案本有，非新开；Key 只进 REPLICATE_API_TOKEN/本机配置，未写入草案；徽章不因换 Key 自升，等画布真出图/明示。\n2026-10-16 ~10:55：1049 收口 PASS_BILLING（欠费 402，非真出图）。flux-dev-lora seed/steps/guidance/lora_weights/lora_scale 升「会发送」；extra_lora 未实发仍待确认",
+  "acceptanceBadge": "欠费已记",
   "sendEvidence": {
     "run": "已清理",
     "pid": "2620869 @10:48:41",
@@ -210,5 +223,32 @@
         "output_*"
       ]
     }
+  },
+  "pick刺Billing20261102": {
+    "at": "2026-11-02 ~04:06 JST",
+    "by": "画布挑刺 · 纯视觉挑刺",
+    "result": "欠费验收可过、非接通",
+    "note": "配方提示词真出图轮再换"
+  },
+  "billingAccept20261102": "欠费已记（画布明示直接收）；未接通",
+  "productNote": "；2026-11-02 雁：额度不卡、跳过",
+  "researchyVerified20261102": {
+    "fetchedAt": "2026-11-02 ~04:42 JST",
+    "items": [
+      {
+        "field": "image.seed",
+        "value": "integer；go_fast=true 时不保证复现",
+        "url": "https://replicate.com/black-forest-labs/flux-schnell/llms.txt",
+        "status": "已核一致",
+        "modelNote": "flux-schnell 文档样本；按目标模型 openapi 为准"
+      },
+      {
+        "field": "image.aspect_ratio",
+        "value": "有比例枚举、默认 1:1",
+        "url": "https://replicate.com/black-forest-labs/flux-schnell/llms.txt",
+        "status": "已核一致",
+        "modelNote": "flux-schnell；勿套全站所有模型"
+      }
+    ]
   }
 }

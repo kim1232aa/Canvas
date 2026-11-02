@@ -22,6 +22,7 @@ import { SchemaProviderDriver } from './drivers/SchemaProviderDriver';
 import { RunwareDriver } from './drivers/RunwareDriver';
 import { ModelsLabDriver } from './drivers/ModelsLabDriver';
 import { ReplicateDriver } from './drivers/ReplicateDriver';
+import { MageDriver } from './drivers/MageDriver';
 
 /**
  * 引擎注册管理中心 (Central Engine Registry Shell)
@@ -55,10 +56,12 @@ export class EngineRegistryClass {
     this.register(new SchemaProviderDriver('aimlapi'));
     this.register(new SchemaProviderDriver('novita'));
     this.register(new SchemaProviderDriver('venice'));
+    this.register(new SchemaProviderDriver('deepinfra'));
     this.register(new SchemaProviderDriver('openworks'));
     this.register(new RunwareDriver());
     this.register(new ModelsLabDriver());
     this.register(new ReplicateDriver());
+    this.register(new MageDriver());
   }
 
   /**

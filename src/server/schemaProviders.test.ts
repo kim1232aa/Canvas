@@ -1,6 +1,6 @@
 import express from 'express';
 import { describe, expect, it } from 'vitest';
-import { normalizeSchemaProviderItems, registerSchemaProviderRoutes, resolveSchemaRefs, sogniLoraCover, upstreamReferenceUrlIssue } from './schemaProviders';
+import { fetchSchemaProviderRows, isSogniPersonalLoraRow, normalizeSchemaProviderItems, registerSchemaProviderRoutes, resolveSchemaRefs, sogniLoraCover, upstreamReferenceUrlIssue } from './schemaProviders';
 
 async function withFixture(
   upstream: (url: string, init?: RequestInit) => Promise<Response>,
@@ -94,9 +94,49 @@ describe('Sogni LoRA catalog covers', () => {
     expect(item.imageUrl).toBe('');
   });
   it('maps compatible models, creator and source page from the Sogni row', () => {
-    const [item]=normalizeSchemaProviderItems('sogni',[{loraId:'krea2-detail-enhancer',name:'Detail Enhancer',compatibleModels:[{modelId:'a',name:'Krea 2 Turbo'},{modelId:'b',name:'Dark Beast Krea 2 v3'}],ui:{creator:'alcaitiff',sourceUrl:'https://civitai.com/models/2729908',examples:[example('+1')]}}],{lora:true,sourceUrl:'https://api.sogni.ai/v1/loras/comfy'});
-    expect(item).toMatchObject({id:'krea2-detail-enhancer',baseModel:'Krea 2 Turbo 等 2 个',creator:'alcaitiff',externalUrl:'https://civitai.com/models/2729908',imageCaption:'+1'});
+    const [item]=normalizeSchemaProviderItems('sogni',[{loraId:'krea2-detail-enhancer',name:'Detail Enhancer',compatibleModels:[{modelId:'a',name:'Krea 2 Turbo'},{modelId:'b',name:'Dark Beast Krea 2 v3'}],ui:{creator:'alcaitiff',sourceUrl:'https://civitai.com/models/2729908',default:1,examples:[example('+1')]}}],{lora:true,sourceUrl:'https://api.sogni.ai/v1/loras/comfy'});
+    // Card/chip shows first compatible name only; count lives in baseModelSource tooltip.
+    expect(item).toMatchObject({id:'krea2-detail-enhancer',baseModel:'Krea 2 Turbo',creator:'alcaitiff',externalUrl:'https://civitai.com/models/2729908',imageCaption:'+1'});
+    expect(String(item.baseModelSource||'')).toMatch(/可兼容底模共 2 个/);
     expect(item.imageUrl).toContain('cdn.sogni.ai');
+  });
+  it('skips shared baseline_off frames and prefers the strongest positive example', () => {
+    const cover=sogniLoraCover({ui:{default:1,examples:[
+      {url:'https://cdn.sogni.ai/ComfyUI/lora-examples/baseline_off.jpg',caption:'Off'},
+      {url:'https://cdn.sogni.ai/ComfyUI/lora-examples/a_pos3.jpg',caption:'+3'},
+      {url:'https://cdn.sogni.ai/ComfyUI/lora-examples/a_pos1.jpg',caption:'+1'},
+    ]}});
+    expect(cover).toEqual({url:'https://cdn.sogni.ai/ComfyUI/lora-examples/a_pos3.jpg',caption:'+3'});
+  });
+  it('tags personal-… rows as 我的个人 LoRA and keeps public badge for comfy ids', () => {
+    expect(isSogniPersonalLoraRow({loraId:'personal-abc',ui:{category:'personal'}})).toBe(true);
+    expect(isSogniPersonalLoraRow({loraId:'krea2-detail-enhancer'})).toBe(false);
+    const [mine,pub]=normalizeSchemaProviderItems('sogni',[
+      {loraId:'personal-abc',name:'My style',modelIds:['krea2_turbo_fp8_scaled'],ui:{category:'personal',default:1}},
+      {loraId:'krea2-detail-enhancer',name:'Detail Enhancer',ui:{}},
+    ],{lora:true,sourceUrl:'https://api.sogni.ai/v1/loras/comfy'});
+    expect(mine).toMatchObject({id:'personal-abc',badge:'我的个人 LoRA',baseModel:'krea2_turbo_fp8_scaled'});
+    expect(pub.badge).toBe('官方 LoRA 资源');
+  });
+});
+
+describe('Sogni public LoRA catalog (comfy only)', () => {
+  const json=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json'}});
+  it('returns only GET /v1/loras/comfy rows and never calls personal endpoints', async () => {
+    await withFixture(async (url) => {
+      if (url.includes('/v1/loras/comfy')) return json({status:'success',data:[{loraId:'krea2-detail-enhancer',name:'Detail Enhancer',ui:{}}]});
+      if (url.includes('/v1/loras/personal')) throw new Error(`personal must not be called: ${url}`);
+      throw new Error(`unexpected ${url}`);
+    }, async (baseUrl, calls) => {
+      const res = await (await fetch(`${baseUrl}/api/models?provider=sogni&type=lora&limit=50`)).json() as any;
+      const rows = res.sogni || res.results?.sogni || [];
+      expect(rows.some((r:any)=>r.id==='krea2-detail-enhancer')).toBe(true);
+      expect(rows.every((r:any)=>r.badge==='官方 LoRA 资源')).toBe(true);
+      expect(res.personalNotice).toBeFalsy();
+      expect(res.personalLibrary).toBeFalsy();
+      expect(calls.every(c=>c.url.includes('/v1/loras/comfy'))).toBe(true);
+      expect(calls.some(c=>c.url.includes('/v1/loras/personal'))).toBe(false);
+    }, () => 'test-sogni-key');
   });
 });
 

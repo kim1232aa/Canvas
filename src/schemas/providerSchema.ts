@@ -14,7 +14,7 @@ import {TENSOR_JOB_DOC} from './tensorModelApi';
 export type FieldStatus = 'supported' | 'unverified' | 'unsupported' | 'deprecated';
 export const FIELD_STATUSES: readonly FieldStatus[] = ['supported', 'unverified', 'unsupported', 'deprecated'];
 
-export type Provider = 'gemini' | 'fal' | 'civitai' | 'openai_compat' | 'grok_compat' | 'agnes' | 'huggingface' | 'nanogpt' | 'tensorart' | 'sensenova' | 'modelscope' | 'modelscope_ai' | 'runware' | 'modelslab' | 'replicate';
+export type Provider = 'gemini' | 'fal' | 'civitai' | 'openai_compat' | 'grok_compat' | 'agnes' | 'huggingface' | 'nanogpt' | 'tensorart' | 'sensenova' | 'modelscope' | 'modelscope_ai' | 'runware' | 'modelslab' | 'replicate' | 'mage';
 
 /** 画布侧字段名；上游字段名不同时写在 FieldSpec.wire */
 export type FieldKey =
@@ -676,8 +676,8 @@ const MODELSCOPE_MODELS: ModelSpec[] = (['modelscope','modelscope_ai'] as const)
   provider,id:'modelscope-hosted-image',label:'ModelScope 云端图像 API（模型能力需核实）',source:MODELSCOPE_DOC,
   fields:{
     ...Object.fromEntries(['negative_prompt','seed','steps','cfg','width','height'].map(key=>[key,{status:'unverified' as const,source:MODELSCOPE_DOC,note:'本地 Diffusers 参数不能证明云端 REST 支持；显式提交将提示未核实'}])),
-    // seed range: official API-Inference Qwen-Image parameter table (docs/provider-schema-drafts/modelscope.json parametersQwenImage.seed). Status stays as-is; range only drives seed generation + precheck.
-    seed:{status:'unverified' as const,source:'https://modelscope.cn/docs/model-service/API-Inference/intro',type:'integer' as const,min:-1,max:2147483647,note:'上游实测 400 原文：seed must be in [-1, 2147483647]（官方参数表写 0 起）；越界运行前拦截'},
+    // 2026-11-02 全部核实：status unverified、无 Researchy fetchedAt → 不写 min/max，不做本地越界拦截；有 live /api/model-schema 时走动态范围，否则原样发、上游错原文回。
+    seed:{status:'unverified' as const,source:'https://modelscope.cn/docs/model-service/API-Inference/intro',type:'integer' as const,note:'未核实上下限；不本地拦截种子；上游 400 原文回传'},
     loras:{status:'supported',source:MODELSCOPE_DOC,note:'单一仓库 ID 或最多六项权重映射，总和 1；底模兼容性仍由所选模型决定'},
     ...Object.fromEntries(['sampler','scheduler','denoise'].map(key=>[key,{status:'unverified' as const,source:MODELSCOPE_DOC,note:'当前官方云端 REST 资料未核实对应字段；未知能力不按 unsupported 本地拦截'}])),
   },
@@ -748,7 +748,12 @@ const MODELSLAB_MODELS: ModelSpec[] = [
     id: 'flux',
     label: 'ModelsLab FLUX.1',
     source: MODELSLAB_DOC,
-    fields: { ...MODELSLAB_COMMON_FIELDS },
+    // Official note: flux rejects negative_prompt and SD-trained LoRAs.
+    fields: {
+      ...MODELSLAB_COMMON_FIELDS,
+      negative_prompt: { status: 'unsupported' as const, source: MODELSLAB_DOC, note: 'model_id:flux does not support negative_prompt' },
+      loras: { status: 'unsupported' as const, source: MODELSLAB_DOC, note: 'model_id:flux does not support LoRA trained on SD models' },
+    },
   },
   {
     provider: 'modelslab',
@@ -762,6 +767,13 @@ const MODELSLAB_MODELS: ModelSpec[] = [
     id: 'dream-shaper-v8',
     label: 'ModelsLab DreamShaper V8',
     source: MODELSLAB_DOC,
+    fields: { ...MODELSLAB_COMMON_FIELDS },
+  },
+  {
+    provider: 'modelslab',
+    id: 'tamarin-xl-v1',
+    label: 'ModelsLab Tamarin XL v1',
+    source: 'https://docs.modelslab.com/image-generation/community-models/dreambooth-lora',
     fields: { ...MODELSLAB_COMMON_FIELDS },
   },
 ];
@@ -856,6 +868,86 @@ const REPLICATE_MODELS: ModelSpec[] = [
   },
 ];
 
+
+// ---------- Mage.space Mango (https://docs.mage.space/api/models/mango) ----------
+const MAGE_DOC = 'https://docs.mage.space/api/models/mango';
+const MAGE_ASPECT = vals(['21:9', '16:9', '3:2', '5:4', '1:1', '4:5', '2:3', '9:16', '9:21'], 'supported');
+const MAGE_RES_V3 = vals(['1K', '2K'], 'supported');
+const MAGE_RES_V3S = vals(['2K', '3K'], 'supported');
+const MAGE_RES_V2 = vals(['2K', '3K', '4K'], 'supported');
+const MAGE_RES_V1 = vals(['1K', '2K', '3K', '4K'], 'supported');
+
+const mageUnsupported = (extra: FieldKey[] = []) =>
+  unsupported(MAGE_DOC, ['width', 'height', 'negative_prompt', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'loras', 'image_size', 'shift', 'num_images', 'size', 'quality', 'output_format', 'background', 'moderation', ...extra], 'Mango 官方 Schema 无此字段；角色一致性用 prompt @handle 或参考图');
+
+const MAGE_MODELS: ModelSpec[] = [
+  {
+    provider: 'mage',
+    id: 'mango-v3',
+    label: 'Mango 3 (default)',
+    source: MAGE_DOC,
+    fields: {
+      aspect_ratio: enumField(MAGE_DOC, MAGE_ASPECT, { providerDefault: '4:5' }),
+      resolution: enumField(MAGE_DOC, MAGE_RES_V3, { providerDefault: '2K' }),
+      seed: { status: 'supported', source: MAGE_DOC, type: 'integer' },
+      image: { status: 'supported', source: MAGE_DOC, type: 'string', note: 'reference image https or data URL' },
+      ...mageUnsupported(),
+    },
+  },
+  {
+    provider: 'mage',
+    id: 'mango-v3-turbo',
+    label: 'Mango 3 Turbo',
+    source: MAGE_DOC,
+    fields: {
+      aspect_ratio: enumField(MAGE_DOC, MAGE_ASPECT, { providerDefault: '4:5' }),
+      resolution: enumField(MAGE_DOC, MAGE_RES_V3, { providerDefault: '2K' }),
+      seed: { status: 'supported', source: MAGE_DOC, type: 'integer' },
+      image: { status: 'supported', source: MAGE_DOC, type: 'string' },
+      ...mageUnsupported(),
+    },
+  },
+  {
+    provider: 'mage',
+    id: 'mango-v3s',
+    label: 'Mango 3S',
+    source: MAGE_DOC,
+    fields: {
+      aspect_ratio: enumField(MAGE_DOC, MAGE_ASPECT, { providerDefault: '4:5' }),
+      resolution: enumField(MAGE_DOC, MAGE_RES_V3S, { providerDefault: '2K' }),
+      seed: { status: 'supported', source: MAGE_DOC, type: 'integer' },
+      image: { status: 'supported', source: MAGE_DOC, type: 'string' },
+      ...mageUnsupported(),
+    },
+  },
+  {
+    provider: 'mage',
+    id: 'mango-v2',
+    label: 'Mango 2',
+    source: MAGE_DOC,
+    fields: {
+      aspect_ratio: enumField(MAGE_DOC, MAGE_ASPECT, { providerDefault: '4:5' }),
+      resolution: enumField(MAGE_DOC, MAGE_RES_V2, { providerDefault: '2K' }),
+      seed: { status: 'supported', source: MAGE_DOC, type: 'integer' },
+      image: { status: 'supported', source: MAGE_DOC, type: 'string' },
+      ...mageUnsupported(),
+    },
+  },
+  {
+    provider: 'mage',
+    id: 'mango',
+    label: 'Mango',
+    source: MAGE_DOC,
+    fields: {
+      aspect_ratio: enumField(MAGE_DOC, MAGE_ASPECT, { providerDefault: '4:5' }),
+      resolution: enumField(MAGE_DOC, MAGE_RES_V1, { providerDefault: '2K' }),
+      seed: { status: 'supported', source: MAGE_DOC, type: 'integer' },
+      image: { status: 'supported', source: MAGE_DOC, type: 'string' },
+      ...mageUnsupported(),
+    },
+  },
+];
+
 export const PROVIDER_SCHEMA: readonly ModelSpec[] = [
   ...MODELSCOPE_MODELS,
   ...GEMINI_MODELS,
@@ -871,6 +963,7 @@ export const PROVIDER_SCHEMA: readonly ModelSpec[] = [
   ...RUNWARE_MODELS,
   ...MODELSLAB_MODELS,
   ...REPLICATE_MODELS,
+  ...MAGE_MODELS,
 ];
 
 const INDEX = new Map(PROVIDER_SCHEMA.map((m) => [`${m.provider}/${m.id}`, m]));

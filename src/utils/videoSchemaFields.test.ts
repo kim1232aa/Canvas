@@ -33,4 +33,28 @@ describe('video Schema fields', () => {
     expect(videoSchemaField('fal', 'fal-ai/never-loaded', 'duration').state).toBe('unknown');
     expect(videoSchemaValueIssue('fal', 'fal-ai/never-loaded', 'duration', 99)).toBeNull();
   });
+  it('unwraps anyOf min/max for wan num_frames / frames_per_second; fps alias', async () => {
+    const WAN = 'fal-ai/wan-t2v-lora';
+    await load(WAN, {
+      prompt: {},
+      aspect_ratio: { enum: ['9:16', '16:9'] },
+      num_frames: { default: 81, anyOf: [{ type: 'integer', minimum: 81, maximum: 100 }, { type: 'null' }] },
+      frames_per_second: { default: 16, anyOf: [{ type: 'integer', minimum: 5, maximum: 24 }, { type: 'null' }] },
+    });
+    expect(videoSchemaField('fal', WAN, 'num_frames')).toMatchObject({ state: 'declared', min: 81, max: 100 });
+    expect(videoSchemaField('fal', WAN, 'fps')).toMatchObject({ state: 'declared', min: 5, max: 24 });
+    expect(videoSchemaField('fal', WAN, 'duration').state).toBe('absent');
+    expect(videoSchemaField('fal', WAN, 'aspect_ratio').options).toEqual(['9:16', '16:9']);
+  });
+  it('Kling V3 I2V: aspect_ratio absent (no invent); T2V declared', async () => {
+    const I2V = 'fal-ai/kling-video/v3/standard/image-to-video';
+    const T2V = 'fal-ai/kling-video/v3/standard/text-to-video';
+    await load(I2V, { prompt: {}, start_image_url: {}, duration: { enum: ['3','4','5','6','7','8','9','10','11','12','13','14','15'] } });
+    await load(T2V, { prompt: {}, duration: { enum: ['3','4','5','6','7','8','9','10','11','12','13','14','15'] }, aspect_ratio: { enum: ['16:9','9:16','1:1'] } });
+    expect(videoSchemaField('fal', I2V, 'aspect_ratio').state).toBe('absent');
+    expect(videoSchemaValueIssue('fal', I2V, 'aspect_ratio', '16:9')).toContain('不接收');
+    expect(videoSchemaField('fal', T2V, 'aspect_ratio').options).toEqual(['16:9','9:16','1:1']);
+    expect(videoDurationBounds('fal', T2V).options).toEqual(['3','4','5','6','7','8','9','10','11','12','13','14','15']);
+  });
+
 });

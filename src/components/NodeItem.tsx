@@ -1,6 +1,6 @@
 import { ensureModelSchema } from '../services/modelSchemaCache';
 import {PreviewPlaceholder} from './PreviewPlaceholder';
-import {videoDurationBounds, videoSchemaField, videoSchemaValueIssue} from '../utils/frontendParameters';
+import {videoSchemaField, videoSchemaValueIssue} from '../utils/frontendParameters';
 import {ProviderModelSelect} from './ProviderModelSelect';
 import {noteUserModelSelection} from '../services/userModelSelection';
 import React from 'react';
@@ -524,29 +524,45 @@ export const NodeItem: React.FC<NodeItemProps> = ({
             const value = node.values[widget.name];
             if (widget.name === 'civitai_id' && (node.values.targetProvider || currentProvider || '') !== 'civitai') return null;
             if (widget.name === 'fal_model_name' && !((node.values.targetProvider || currentProvider) === 'fal' && node.values.ckpt_name === 'fal-ai/lora')) return null;
-            if (node.type === 'AIVideoNode') {
-              const wan = node.values.targetProvider === 'fal' && /wan-t2v|wan-i2v|wan\/v2\.1/.test(node.values.model || '');
-              if ((widget.name === 'duration' && wan) || (widget.name === 'num_frames' && !wan)) return null;
-              if (widget.name === 'duration' || widget.name === 'aspect_ratio') {
-                // videoschema: options come from the selected endpoint's official Schema; absent field → no control.
-                ensureModelSchema(node.values.targetProvider, node.values.model);
-                const vf = videoSchemaField(node.values.targetProvider, node.values.model, widget.name);
-                const issue = videoSchemaValueIssue(node.values.targetProvider, node.values.model, widget.name, value);
-                if (vf.state === 'absent' && !issue) return null;
-                if (vf.state !== 'unknown' && (vf.state === 'absent' || vf.options)) {
-                  const opts = vf.state === 'declared' ? vf.options! : [];
-                  const cur = value === undefined || value === null ? '' : String(value);
-                  return <div key={widget.name} className="space-y-1" data-testid={`video-schema-${widget.name}`}>
-                    <label className="text-slate-400 font-mono text-[11px] block whitespace-nowrap">{widget.label}</label>
-                    {opts.length > 0 && <select aria-label={widget.label} value={cur} onMouseDown={e=>e.stopPropagation()} onPointerDown={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()} onChange={e=>onUpdateValue(node.id, widget.name, e.target.value === '' ? undefined : (opts.find(o=>String(o)===e.target.value) as any))} className={`w-full bg-[#121316] border ${issue ? 'border-rose-500' : 'border-[#2d303a]'} rounded-lg px-2.5 py-1.5 text-slate-200 text-xs font-mono outline-none`}>
-                      <option value="">未选择（不提交）</option>
-                      {issue && cur && <option value={cur}>{cur}（不可用）</option>}
-                      {opts.map(o=><option key={String(o)} value={String(o)}>{widget.name === 'duration' ? `${o} 秒` : String(o)}</option>)}
-                    </select>}
-                    {issue && <p role="alert" className="text-[11px] text-rose-300">{issue}<button type="button" className="ml-2 underline" onMouseDown={e=>e.stopPropagation()} onClick={()=>onUpdateValue(node.id, widget.name, undefined)}>清除</button></p>}
-                  </div>;
-                }
+            if (node.type === 'AIVideoNode' && ['duration', 'aspect_ratio', 'num_frames', 'fps'].includes(widget.name)) {
+              // Live Schema only: absent → hide (e.g. Kling V3 I2V has no aspect_ratio). No model-name invent.
+              ensureModelSchema(node.values.targetProvider, node.values.model);
+              const vf = videoSchemaField(node.values.targetProvider, node.values.model, widget.name);
+              const issue = videoSchemaValueIssue(node.values.targetProvider, node.values.model, widget.name, value);
+              if (vf.state === 'absent' && !issue) return null;
+              const cur = value === undefined || value === null ? '' : String(value);
+              if (vf.state === 'unknown') {
+                // Schema not ready: free input, do not invent enums (no fake aspect/duration lists).
+                return <div key={widget.name} className="space-y-1" data-testid={`video-schema-pending-${widget.name}`}>
+                  <label className="text-slate-400 font-mono text-[11px] block whitespace-nowrap">{widget.label}</label>
+                  <input aria-label={widget.label} type={widget.name === 'aspect_ratio' ? 'text' : 'number'} step={widget.step || 1} value={cur} placeholder="等待官方 Schema…" onMouseDown={e=>e.stopPropagation()} onPointerDown={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()} onChange={e=>onUpdateValue(node.id, widget.name, e.target.value === '' ? undefined : (widget.name === 'aspect_ratio' ? e.target.value : parseFloat(e.target.value)))} className="w-full bg-[#121316] border border-[#2d303a] rounded-lg px-2.5 py-1.5 text-slate-200 text-xs font-mono outline-none" />
+                  <p className="text-[10px] text-slate-500">可选值以所选模型官方 Schema 为准；未读到前不限制、不捏选项。</p>
+                </div>;
               }
+              if (vf.state === 'declared' && vf.options?.length) {
+                return <div key={widget.name} className="space-y-1" data-testid={`video-schema-${widget.name}`}>
+                  <label className="text-slate-400 font-mono text-[11px] block whitespace-nowrap">{widget.label}</label>
+                  <select aria-label={widget.label} value={cur} onMouseDown={e=>e.stopPropagation()} onPointerDown={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()} onChange={e=>onUpdateValue(node.id, widget.name, e.target.value === '' ? undefined : (vf.options!.find(o=>String(o)===e.target.value) as any))} className={`w-full bg-[#121316] border ${issue ? 'border-rose-500' : 'border-[#2d303a]'} rounded-lg px-2.5 py-1.5 text-slate-200 text-xs font-mono outline-none`}>
+                    <option value="">未选择（不提交）</option>
+                    {issue && cur && <option value={cur}>{cur}（不可用）</option>}
+                    {vf.options.map(o=><option key={String(o)} value={String(o)}>{widget.name === 'duration' ? `${o} 秒` : String(o)}</option>)}
+                  </select>
+                  {issue && <p role="alert" className="text-[11px] text-rose-300">{issue}<button type="button" className="ml-2 underline" onMouseDown={e=>e.stopPropagation()} onClick={()=>onUpdateValue(node.id, widget.name, undefined)}>清除</button></p>}
+                </div>;
+              }
+              if (vf.state === 'declared') {
+                return <div key={widget.name} className="space-y-1" data-testid={`video-schema-${widget.name}`}>
+                  <label className="text-slate-400 font-mono text-[11px] block whitespace-nowrap">{widget.label}{vf.min !== undefined || vf.max !== undefined ? `（Schema ${vf.min ?? '…'}–${vf.max ?? '…'}）` : ''}</label>
+                  <input aria-label={widget.label} type="number" min={vf.min} max={vf.max} step={widget.step || 1} value={cur} onMouseDown={e=>e.stopPropagation()} onPointerDown={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()} onChange={e=>onUpdateValue(node.id, widget.name, e.target.value === '' ? undefined : parseFloat(e.target.value))} className={`w-full bg-[#121316] border ${issue ? 'border-rose-500' : 'border-[#2d303a]'} rounded-lg px-2.5 py-1.5 text-slate-200 text-xs font-mono outline-none`} />
+                  {issue && <p role="alert" className="text-[11px] text-rose-300">{issue}<button type="button" className="ml-2 underline" onMouseDown={e=>e.stopPropagation()} onClick={()=>onUpdateValue(node.id, widget.name, undefined)}>清除</button></p>}
+                </div>;
+              }
+              if (issue) {
+                return <div key={widget.name} className="space-y-1" data-testid={`video-schema-${widget.name}`}>
+                  <p role="alert" className="text-[11px] text-rose-300">{issue}<button type="button" className="ml-2 underline" onMouseDown={e=>e.stopPropagation()} onClick={()=>onUpdateValue(node.id, widget.name, undefined)}>清除</button></p>
+                </div>;
+              }
+              return null;
             }
             if (widget.name === 'hf_provider') {
               if ((node.values.targetProvider || currentProvider) !== 'huggingface') return null;
@@ -1106,8 +1122,8 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                   <div className="relative">
                   <input
                     type="number"
-                    min={node.type === 'AIVideoNode' ? widget.name === 'duration' ? videoDurationBounds(node.values.targetProvider, node.values.model || '').min : ['fal-ai/wan-t2v','fal-ai/wan-i2v'].includes(node.values.model) ? widget.min : undefined : widget.min}
-                    max={node.type === 'AIVideoNode' ? widget.name === 'duration' ? videoDurationBounds(node.values.targetProvider, node.values.model || '').max : ['fal-ai/wan-t2v','fal-ai/wan-i2v'].includes(node.values.model) ? widget.max : undefined : widget.max}
+                    min={widget.min}
+                    max={widget.max}
                     step={widget.step}
                     value={greyThis ? '' : (value ?? '')}
                     disabled={greyThis}

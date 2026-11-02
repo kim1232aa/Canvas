@@ -2,7 +2,7 @@ import { noteUserModelSelection } from '../services/userModelSelection';
 import { civitaiEngines, civitaiEcosystemsFor } from '../schemas/providerSchema';
 import { ensureModelSchema, withCachedSchemaProperties } from '../services/modelSchemaCache';
 import {ApiParameterEditor} from './ApiParameterEditor';
-import {videoDurationBounds, videoSchemaValueIssue} from '../utils/frontendParameters';
+import {videoDurationBounds, videoSchemaField, videoSchemaValueIssue} from '../utils/frontendParameters';
 import {ProviderModelSelect} from './ProviderModelSelect';
 import React from 'react';
 import {
@@ -123,7 +123,9 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
     : (params.checkpoint || '');
   const fieldUnsupported = (field: FieldKey) =>
     Boolean(schemaProvider && schemaModel && getFieldSpec(schemaProvider, schemaModel, field)?.status === 'unsupported');
-  const isFalWan = params.targetProvider === 'fal' && ['fal-ai/wan-t2v', 'fal-ai/wan-i2v'].includes(params.checkpoint || '');
+  const wanFramesField = videoSchemaField(params.videoProvider || params.targetProvider, params.checkpoint, 'num_frames');
+  const wanFpsField = videoSchemaField(params.videoProvider || params.targetProvider, params.checkpoint, 'fps');
+  const isFalWan = wanFramesField.state === 'declared';
   const greySeed = isGemini || isOpenAiCompat || isGrokCompat || fieldUnsupported('seed');
   const greySteps = isOpenAiCompat || isGrokCompat || fieldUnsupported('steps');
   const greyCfg = isOpenAiCompat || isGrokCompat || fieldUnsupported('cfg');
@@ -370,6 +372,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                 { id: 'aimlapi', label: 'AIMLAPI' },
                 { id: 'novita', label: 'Novita' },
                 { id: 'venice', label: 'Venice' },
+                { id: 'deepinfra', label: 'DeepInfra' },
                 { id: 'openworks', label: 'Tensor.Art OpenWorks' },
               ].map((p) => {
                 const isSelected = params.targetProvider === p.id;
@@ -885,14 +888,14 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
         </div>
 
         {isFalWan && <section className="bg-[#1a1b22] border border-[#272933] rounded-xl p-3 space-y-3">
-          <h4 className="font-semibold text-slate-200">Wan 视频参数</h4>
-          <p className="text-sm text-amber-200">此端点不接收秒数 duration。请按帧数与帧率设置；不会将秒数换算为帧数。</p>
+          <h4 className="font-semibold text-slate-200">帧数 / 帧率（来自官方 Schema）</h4>
+          <p className="text-sm text-amber-200">此端点 Schema 声明了 num_frames；不接收秒数 duration。范围以 Schema 为准。</p>
           <div className="grid grid-cols-2 gap-3">
-            <label className="text-sm text-slate-400">帧数 num_frames
-              <input aria-label="视频帧数" type="number" min={81} max={100} step={1} value={params.videoFrames ?? ''} placeholder="未填写" onChange={e => update({videoFrames: e.target.value === '' ? undefined : Number(e.target.value)})} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2 text-slate-200" />
+            <label className="text-sm text-slate-400">帧数 num_frames{wanFramesField.min!==undefined||wanFramesField.max!==undefined?`（${wanFramesField.min??'…'}–${wanFramesField.max??'…'}）`:''}
+              <input aria-label="视频帧数" type="number" min={wanFramesField.state==='declared'?wanFramesField.min:undefined} max={wanFramesField.state==='declared'?wanFramesField.max:undefined} step={1} value={params.videoFrames ?? ''} placeholder="未填写" onChange={e => update({videoFrames: e.target.value === '' ? undefined : Number(e.target.value)})} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2 text-slate-200" />
             </label>
             <label className="text-sm text-slate-400">帧率 frames_per_second
-              <input aria-label="视频帧率" type="number" min={5} max={24} step={1} value={params.videoFps ?? ''} placeholder="未填写" onChange={e => update({videoFps: e.target.value === '' ? undefined : Number(e.target.value)})} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2 text-slate-200" />
+              <input aria-label="视频帧率" type="number" min={wanFpsField.state==='declared'?wanFpsField.min:undefined} max={wanFpsField.state==='declared'?wanFpsField.max:undefined} step={1} value={params.videoFps ?? ''} placeholder="未填写" onChange={e => update({videoFps: e.target.value === '' ? undefined : Number(e.target.value)})} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2 text-slate-200" />
             </label>
           </div>
           {params.videoDuration !== undefined && <p className="text-sm text-amber-200">画布保留的时长 {params.videoDuration} 秒不适用于此端点。<button type="button" className="ml-2 text-cyan-300 underline" onClick={() => update({videoDuration: undefined})}>清除此时长</button></p>}

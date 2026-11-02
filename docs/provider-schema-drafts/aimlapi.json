@@ -293,7 +293,7 @@
     "2026-10-16 fix5 UI：历史尺寸行不再与「响应体 505 B」混淆（挑刺过）；证据 已清理 PASS。"
   ],
   "contractTestHint": "z-image-turbo-lora: width+height→image_size, steps 1-8 (20 本地拒绝), seed≥1, loras[{path,scale:0.85}] 必发（aimlapi-0006 已证实会发送，至 403）；cfg/negative 标不会发送",
-  "_auditStatus": "2026-10-16 16:31：fix5 UI 收口（非升 PASS）——尺寸行不再与「响应体 505 B」混淆；证据 已清理 PASS_BILLING（aimlapi-0006）。2026-10-16 ~01:00 JST tinkabot：认领 aimlapi-0006（挑刺过）——loras[{path,scale}]/image_size/num_inference_steps/seed 升「会发送」；欠费 403 接线非真出图。前序 2026-10-15 03:26：旧审计仅对比；以 v2 与 DIFF 为准。",
+  "_auditStatus": "2026-11-02 ~04:45 JST：Researchy——AIMLAPI Pixverse V5.5 I2V seed。\n2026-11-02 ~04:39 JST：Researchy 对照表写回 researchyVerified20261102（种子/时长/比例已核一致条目）；未核条目仍待核、禁止当拦截；徽章不动。\n2026-10-16 16:31：fix5 UI 收口（非升 PASS）——尺寸行不再与「响应体 505 B」混淆；证据 已清理 PASS_BILLING（aimlapi-0006）。2026-10-16 ~01:00 JST tinkabot：认领 aimlapi-0006（挑刺过）——loras[{path,scale}]/image_size/num_inference_steps/seed 升「会发送」；欠费 403 接线非真出图。前序 2026-10-15 03:26：旧审计仅对比；以 v2 与 DIFF 为准。",
   "fix5Ui": {
     "verdict": "UI_CLOSED",
     "notPassUpgrade": true,
@@ -301,5 +301,34 @@
     "evidence": "已清理",
     "shot": "01-aimlapi-size-and-unsupported.png",
     "at": "2026-10-16 16:31"
+  },
+  "researchyVerified20261102": {
+    "fetchedAt": "2026-11-02 ~04:45 JST",
+    "items": [
+      {
+        "field": "video.pixverseV55I2v.duration",
+        "value": "enum 5/8/10；1080p 不支持 8s",
+        "url": "https://docs.aimlapi.com/api-references/video-models/pixverse/v5-5-image-to-video",
+        "status": "已核一致"
+      },
+      {
+        "field": "video.pixverseV55I2v.resolution",
+        "value": "360p–1080p 默认 720p",
+        "url": "https://docs.aimlapi.com/api-references/video-models/pixverse/v5-5-image-to-video",
+        "status": "已核一致"
+      },
+      {
+        "field": "image.z-image-turbo-lora.acceleration",
+        "value": "none/regular/high 默认 regular",
+        "url": "https://docs.aimlapi.com/api-references/image-models/alibaba-cloud/z-image-turbo-lora",
+        "status": "已核一致"
+      },
+      {
+        "field": "video.pixverseV55I2v.seed",
+        "value": "optional integer；省略随机",
+        "url": "https://docs.aimlapi.com/api-references/video-models/pixverse/v5-5-image-to-video",
+        "status": "已核一致"
+      }
+    ]
   }
 }

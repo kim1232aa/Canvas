@@ -27,8 +27,10 @@ const EMPTY_KEYS: ApiKeysState = {
   aimlapiKey: '',
   novitaKey: '',
   veniceKey: '',
+  deepinfraKey: '',
   sogniKey: '',
   replicateKey: '',
+  mageKey: '',
 };
 
 export const getStoredApiKeys = (): ApiKeysState => {
@@ -491,7 +493,10 @@ const fetchLiveModelsOnce = async (
   if (keys.aimlapiKey) headers['x-aimlapi-key'] = keys.aimlapiKey;
   if (keys.novitaKey) headers['x-novita-key'] = keys.novitaKey;
   if (keys.veniceKey) headers['x-venice-key'] = keys.veniceKey;
+  if (keys.deepinfraKey) headers['x-deepinfra-key'] = keys.deepinfraKey;
   if (keys.replicateKey) headers['x-replicate-key'] = keys.replicateKey;
+  if (keys.mageKey) headers['x-mage-key'] = keys.mageKey;
+  if (keys.mageBaseUrl) headers['x-mage-base-url'] = keys.mageBaseUrl;
   if (keys.geminiKey) headers['x-gemini-key'] = keys.geminiKey;
 
   const safeQuery = sanitizeCatalogQuery(query);
@@ -586,6 +591,8 @@ export const fetchReplicateModelInfo = async (model: string) => {
   const keys = getStoredApiKeys();
   const headers: Record<string, string> = {};
   if (keys.replicateKey) headers['x-replicate-key'] = keys.replicateKey;
+  if (keys.mageKey) headers['x-mage-key'] = keys.mageKey;
+  if (keys.mageBaseUrl) headers['x-mage-base-url'] = keys.mageBaseUrl;
 
   const resp = await fetch(`/api/replicate/model-info?model=${encodeURIComponent(model)}`, { headers });
   if (!resp.ok) {

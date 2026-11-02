@@ -107,5 +107,23 @@
     "https://huggingface.co/docs/inference-providers/main/tasks/text-to-video",
     "https://huggingface.co/docs/inference-providers/pricing"
   ],
-  "_auditStatus": "2026-10-15 03:26：引用的 docs/provider-api-audit 旧审计仅留作对比、不再引用；以 docs/provider-api-audit-v2/ 与 DIFF.md 为准；本草案凡依据旧审计的结论一律视为未核实，等 Researchy 新调查"
+  "_auditStatus": "2026-11-02 ~04:55 JST：Researchy 02c——HF seed 再确认。\n2026-11-02 ~04:46 JST：Researchy——HF 文生图/文生视频 parameters.seed integer。\n2026-10-15 03:26：引用的 docs/provider-api-audit 旧审计仅留作对比、不再引用；以 docs/provider-api-audit-v2/ 与 DIFF.md 为准；本草案凡依据旧审计的结论一律视为未核实，等 Researchy 新调查",
+  "researchyVerified20261102": {
+    "fetchedAt": "2026-11-02 ~04:55 JST",
+    "items": [
+      {
+        "field": "image.parameters.seed",
+        "value": "integer",
+        "url": "https://huggingface.co/docs/inference-providers/main/en/tasks/text-to-image",
+        "status": "已核一致"
+      },
+      {
+        "field": "video.parameters.seed",
+        "value": "integer",
+        "url": "https://huggingface.co/docs/inference-providers/tasks/text-to-video",
+        "status": "已核一致"
+      }
+    ],
+    "evidence": "temp/e2e/video-schema/VERIFY_RESULT_2026-11-02c.md"
+  }
 }

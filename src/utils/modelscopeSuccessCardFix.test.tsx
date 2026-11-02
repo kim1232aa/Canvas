@@ -58,6 +58,25 @@ describe('seed: one source of truth (fix 2)', () => {
   });
 });
 
+describe('success card face shows sent LoRA (detail polish)', () => {
+  it('shows LoRA name and strength outside the debug fold when present', () => {
+    const html = render([item]);
+    expect(html).toContain('data-testid="history-success-face-loras"');
+    expect(html).toContain('data-testid="history-success-face-lora"');
+    expect(html).toContain('LoRA: LcarsPicturesDatabase/ST-TNG-Rooms-Z-Image-Turbo-v1 (1)');
+    // Face block sits before the collapsed debug fold, so it is visible without expanding.
+    const faceIdx = html.indexOf('data-testid="history-success-face-loras"');
+    const debugIdx = html.indexOf('data-testid="history-success-debug"');
+    expect(faceIdx).toBeGreaterThan(-1);
+    expect(debugIdx).toBeGreaterThan(faceIdx);
+  });
+  it('omits the face LoRA block when nothing was sent', () => {
+    const bare = { ...item, loras: [], requestMetadata: { ...item.requestMetadata, actualParameters: { ...item.requestMetadata.actualParameters, loras: undefined }, submissions: [{ ...item.requestMetadata.submissions[0], parameters: { ...item.requestMetadata.submissions[0].parameters, loras: undefined } }] } };
+    const html = render([bare]);
+    expect(html).not.toContain('data-testid="history-success-face-loras"');
+  });
+});
+
 describe('model 实际发送 chip (fix 3)', () => {
   it('chip when the submitted model equals the shown model', () => {
     expect(historyModelSent(item)).toBe(true);

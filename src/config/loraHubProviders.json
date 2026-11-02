@@ -86,6 +86,11 @@
     },
     "together": {
       "supportsCustomImport": false
+    },
+    "deepinfra": {
+      "supportsCustomImport": false,
+      "idFormat": "个人/私有 LoRA 需先在 DeepInfra 控制台部署为 Running；公共文生图无 LoRA 字段，不准假挂",
+      "placeholder": "需先在 DeepInfra 控制台部署个人 LoRA"
     }
   }
 }
