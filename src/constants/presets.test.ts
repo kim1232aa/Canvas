@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { WORKFLOW_PRESETS, STD_PROMPT_PLACEHOLDER, presetSummary } from './presets';
 import { correctPresetLayout } from './presetResources';
+import { generationReadiness } from '../utils/generationReadiness';
 
 const EXPECTED_T2I_PROVIDERS = [
   'huggingface',
@@ -270,6 +271,18 @@ describe('standard workflow presets (23 T2I + 6 I2V)', () => {
     expect(loader('std-sogni-t2i')!.values.targetProvider).toBe('sogni');
     // No accepted-run LoRA → no LoRALoader node (empty shell forbidden)
     expect(lora('std-sogni-t2i')).toBeUndefined();
+  });
+
+  it('Krea standard preset leaves provider-specific model selection to the live catalog without a persistent execution lock', () => {
+    const p=preset('std-krea-t2i');
+    const ckpt=loader(p.id)!;
+    const frame=p.spatialFrames![0];
+    expect(ckpt.values.ckpt_name).toBe('');
+    expect(ckpt.values.execution_blocked_reason).toBeUndefined();
+    expect(frame.params.checkpoint).toBe('');
+    expect(frame.params.executionBlockedReason).toBeUndefined();
+    expect(p.description).toMatch(/实时 Krea 模型目录/);
+    expect(generationReadiness({provider:'krea',model:'image/krea/krea-2/medium-turbo',prompt:'test',executionBlockedReason:frame.params.executionBlockedReason})).toBeUndefined();
   });
 
   it('does not put foreign provider ids into T2I nodes (except tensorart→openworks)', () => {

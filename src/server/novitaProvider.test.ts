@@ -19,14 +19,17 @@ describe('Novita provider (official docs 2026-10-15)', () => {
     expect(schemaProviders.novita.header).toBe('x-novita-key');
   });
 
-  it('catalog keeps checkpoints, marks LoRA support, uses sd_name_in_api', () => {
+  it('catalog keeps checkpoints, preserves reported LoRA tri-state, uses sd_name_in_api', () => {
     const rows = novitaCatalogRows([
       { sd_name_in_api: 'sd_xl_base_1.0.safetensors', name: 'SDXL', type: { name: 'checkpoint' }, base_model: 'SDXL 1.0', status: 1 },
+      { sd_name_in_api: 'explicit-yes', name: 'Explicit yes', type: { name: 'checkpoint' }, supportsLora: true },
+      { sd_name_in_api: 'explicit-no', name: 'Explicit no', type: { name: 'checkpoint' }, supportsLora: false },
+      { sd_name_in_api: 'null-unknown', name: 'Null unknown', type: { name: 'checkpoint' }, supportsLora: null },
       { sd_name_in_api: 'weight_slider_v2_91681', name: 'slider', type: { name: 'lora' }, base_model: 'SD 1.5', status: 1 },
       { name: 'no-id', type: { name: 'checkpoint' } },
     ]);
-    expect(rows.map(r => r.id)).toEqual(['sd_xl_base_1.0.safetensors']);
-    expect(rows[0].supportsLora).toBe(true);
+    expect(rows.map(r => r.id)).toEqual(['sd_xl_base_1.0.safetensors','explicit-yes','explicit-no','null-unknown']);
+    expect(rows.map(r => r.supportsLora)).toEqual([undefined,true,false,undefined]);
     expect((rows[0] as any).parameters).toBeUndefined();
     expect(rows[0].endpoint).toBe('/v3/async/txt2img');
   });
@@ -41,12 +44,14 @@ describe('Novita provider (official docs 2026-10-15)', () => {
     expect(rows[0].loraId).toBe('more_details_59655');
   });
 
-  it('checkpoint list exposes supportsLora', () => {
+  it('normalization preserves true/false and leaves absent LoRA evidence unknown', () => {
     const items = normalizeSchemaProviderItems('novita', novitaCatalogRows([
-      { sd_name_in_api: 'dreamshaper_8_93211.safetensors', name: 'DreamShaper', type: { name: 'checkpoint' }, base_model: 'SD 1.5' },
+      { sd_name_in_api: 'explicit-yes', name: 'Explicit yes', type: { name: 'checkpoint' }, supportsLora: true },
+      { sd_name_in_api: 'explicit-no', name: 'Explicit no', type: { name: 'checkpoint' }, supportsLora: false },
+      { sd_name_in_api: 'unknown', name: 'Unknown', type: { name: 'checkpoint' } },
     ]), { sourceUrl: 'https://api.novita.ai/v3/model' });
-    expect(items).toHaveLength(1);
-    expect(items[0].supportsLora).toBe(true);
+    expect(items.map(item => item.supportsLora)).toEqual([true,false,undefined]);
+    expect(items[2].metadata?.parameters).toBeUndefined();
   });
 
 

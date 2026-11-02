@@ -45,12 +45,21 @@ describe('DeepInfra provider (official docs 2026-11-02)', () => {
     expect(items[0].supportsLora).toBe(false);
   });
 
-  it('image outputs from data[].b64_json (official response_format)', () => {
-    expect(deepinfraImageOutputs({ data: [{ b64_json: 'abc' }] })).toEqual([
-      'data:image/png;base64,abc',
+  it('detects returned MIME from PNG/JPEG/WebP signatures, preserves URLs, and rejects unknown bytes', () => {
+    const png=Buffer.from([137,80,78,71,13,10,26,10,0]).toString('base64');
+    const jpeg=Buffer.from([0xff,0xd8,0xff,0xd9]).toString('base64');
+    const webp=Buffer.from('RIFF\x04\x00\x00\x00WEBP','binary').toString('base64');
+    expect(deepinfraImageOutputs({ data: [
+      { b64_json: png },{ b64_json: jpeg },{ b64_json: webp },{ url: 'https://a' },
+    ] })).toEqual([
+      `data:image/png;base64,${png}`,`data:image/jpeg;base64,${jpeg}`,`data:image/webp;base64,${webp}`,'https://a',
     ]);
     expect(deepinfraImageOutputs({ data: [{ url: 'https://a' }] })).toEqual(['https://a']);
     expect(deepinfraImageOutputs({ data: [] })).toEqual([]);
+    const raw={data:[{b64_json:'abc'}]};
+    try { deepinfraImageOutputs(raw,'https://custom.example/deepinfra/images'); throw new Error('expected malformed-image rejection'); }
+    catch(e:any) { expect(e).toMatchObject({status:502,errorSource:'upstream-protocol',rawResponse:raw,endpoint:'https://custom.example/deepinfra/images'}); }
+    expect(() => deepinfraImageOutputs({ data: [{ b64_json: '%%%=' }] })).toThrow(/有效 Base64/);
   });
 
   it('declares honest LoRA local block (no empty-shell personal LoRA)', () => {

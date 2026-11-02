@@ -4,7 +4,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createMediaStore } from './mediaStore';
-import { registerSchemaProviderRoutes } from './schemaProviders';
+import { registerSchemaProviderRoutes, sogniSchemaSource } from './schemaProviders';
+import { sogniGenerateImageSchemaFixture } from './fixtures/sogniGenerateImageSchema';
 import { MEDIA_INPUT_ROUTES } from './mediaContract';
 
 let dir: string;
@@ -39,6 +40,7 @@ async function withFixture(
   registerSchemaProviderRoutes(app, {
     fetch: async (_meta, url, init) => {
       calls.push({ url, init });
+      if(url===sogniSchemaSource)return Response.json(sogniGenerateImageSchemaFixture);
       return upstream(url, init);
     },
     key: () => 'test-key',

@@ -71,6 +71,12 @@ it('uses model-specific duration bounds and keeps custom Civitai recipe selector
   const blocked=render('AIVideoNode',{targetProvider:'civitai',model:'',execution_blocked_reason:'来源执行链尚未接入',require_reference_image:true});
   expect(blocked).toContain('来源执行链尚未接入');expect(blocked).toContain('仅载入，不能立即运行');expect(blocked).toContain('编辑输入需要明确参考图');
 });
+it('prompts an unconfigured Krea checkpoint to choose from its live model catalog and clears the note after selection',()=>{
+  const noop=()=>{};const def=NODE_DEFINITIONS.CheckpointLoaderSimple;
+  const render=(ckpt_name:string)=>renderToStaticMarkup(<NodeItem node={{id:'krea-node',type:'CheckpointLoaderSimple',title:'Krea',pos:{x:0,y:0},inputs:def.inputs,outputs:def.outputs,values:{targetProvider:'krea',ckpt_name}}} isSelected={false} zoom={1} onSelect={noop} onStartDrag={noop} onUpdateValue={noop} onDeleteNode={noop} onToggleCollapse={noop} onToggleBypass={noop} onStartConnecting={noop} onEndConnecting={noop} currentProvider="krea" currentCheckpoint={ckpt_name} />);
+  expect(render('')).toContain('请从实时 Krea 官方模型目录选择生成端点');
+  expect(render('image/krea/krea-2/medium-turbo')).not.toContain('krea-live-model-selection-note');
+});
 it('advances only an actual seed and respects integer boundaries', () => {
   expect(nextSeedAfterGeneration(null, 'increment')).toBeUndefined();
   expect(nextSeedAfterGeneration(42, 'increment')).toBe(43);

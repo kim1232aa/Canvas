@@ -5,6 +5,7 @@ import {
   buildModelsLabFetchRequest,
   sanitizeModelsLabPayload,
   inspectModelsLabPollBody,
+  inspectModelsLabImageResponseBody,
 } from './modelsLabImageContract';
 
 describe('ModelsLab Image Contract', () => {
@@ -126,6 +127,27 @@ describe('ModelsLab Image Contract', () => {
       message: 'Invalid API key',
       tip: 'Check your key in dashboard',
     })).toThrow(/Invalid API key.*Check your key/);
+  });
+
+  it('keeps the actual 2xx status and complete body for semantic and protocol failures', () => {
+    const semanticBody = JSON.stringify({ status: 'error', code: 'insufficient_balance', message: 'plan exhausted' });
+    expect(inspectModelsLabImageResponseBody(semanticBody, 200)).toMatchObject({
+      kind: 'semantic-error', upstreamStatus: 200, rawResponse: semanticBody,
+    });
+
+    const invalidBody = `<html>${'maintenance '.repeat(60)}</html>`;
+    expect(inspectModelsLabImageResponseBody(invalidBody, 200)).toMatchObject({
+      kind: 'protocol-error', upstreamStatus: 200, rawResponse: invalidBody,
+    });
+  });
+
+  it('redacts an echoed credential while retaining the rest of the ModelsLab response', () => {
+    const key = 'fixture-modelslab-private-key';
+    const body = JSON.stringify({ status: 'error', message: `bad key ${key}` });
+    const inspected = inspectModelsLabImageResponseBody(body, 200, key);
+    expect(inspected.kind).toBe('semantic-error');
+    expect(inspected.rawResponse).toContain('[credential redacted]');
+    expect(inspected.rawResponse).not.toContain(key);
   });
 
   it('preserves malformed 2xx poll response text instead of turning it into a pending empty object', () => {

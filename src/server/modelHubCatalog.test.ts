@@ -8,11 +8,12 @@ const civitaiModalSource = readFileSync(new URL('../components/CivitaiModal.tsx'
 
 describe('ModelHub and Backend Directory Architecture', () => {
   describe('Schema Provider Catalog (Sogni, MuAPI, WaveSpeed)', () => {
-    it('Sogni checkpoint catalog correctly attributes versioned protocol schema', () => {
+    it('Sogni sync helper does not serve a bundled selector snapshot', () => {
       const res = getSchemaProviderCatalog('sogni', { type: 'checkpoint', limit: 50 });
-      expect(res.sourceNotice).toBe('versioned-protocol-schema (@sogni-ai/sogni-protocol@1.0.0-alpha.46)');
-      expect(res.items.length).toBeGreaterThan(0);
-      expect(res.items[0].provider).toBe('sogni');
+      expect(res.sourceNotice).toBe('live-official-generate_image-schema (queried by asynchronous /api/models)');
+      expect(res.items).toEqual([]);
+      expect(res.sourceUrl).toBe('https://raw.githubusercontent.com/Sogni-AI/sogni-protocol/main/schemas/tools/generate_image.schema.json');
+      expect(res.catalogNotice).toContain('does not return a bundled snapshot');
       expect(res.total).toBe(res.items.length);
       expect(res.hasMore).toBe(false);
     });
@@ -38,10 +39,10 @@ describe('ModelHub and Backend Directory Architecture', () => {
       expect(res.hasMore).toBe(false);
     });
 
-    it('pagination calculation bounds hasMore accurately without hardcoding true', () => {
+    it('synchronous Sogni helper does not paginate a stale bundled selector list', () => {
       const page1 = getSchemaProviderCatalog('sogni', { page: 1, limit: 2 });
-      expect(page1.items.length).toBe(2);
-      expect(page1.hasMore).toBe(true);
+      expect(page1.items).toEqual([]);
+      expect(page1.hasMore).toBe(false);
 
       const pageAll = getSchemaProviderCatalog('sogni', { page: 1, limit: 100 });
       expect(pageAll.hasMore).toBe(false);

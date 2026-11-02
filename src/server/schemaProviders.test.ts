@@ -1,19 +1,22 @@
 import express from 'express';
 import { describe, expect, it } from 'vitest';
-import { fetchSchemaProviderRows, isSogniPersonalLoraRow, normalizeSchemaProviderItems, registerSchemaProviderRoutes, resolveSchemaRefs, sogniLoraCover, sogniLoraStrengthRange, upstreamReferenceUrlIssue, validateSogniLoraStrengthRanges } from './schemaProviders';
+import { fetchSchemaProviderRows, fetchSogniGenerateImageSchema, isSogniPersonalLoraRow, normalizeSchemaProviderItems, registerSchemaProviderRoutes, resolveSchemaRefs, sogniLoraCover, sogniLoraStrengthRange, sogniSchemaSource, upstreamReferenceUrlIssue, validateSogniLoraStrengthRanges } from './schemaProviders';
+import { sogniGenerateImageSchemaFixture } from './fixtures/sogniGenerateImageSchema';
 
 async function withFixture(
   upstream: (url: string, init?: RequestInit) => Promise<Response>,
-  run: (baseUrl: string, calls: Array<{ url: string; init?: RequestInit }>) => Promise<void>,
+  run: (baseUrl: string, calls: Array<{ url: string; init?: RequestInit; meta?: any }>) => Promise<void>,
   key: (provider: string, override?: string) => string = () => '',
   durable: (url: string) => Promise<any> = async (url) => ({ ok: true, dataUrl: url }),
   record: (item: any) => any = (item) => item,
+  sogniSchemaResponse?: (url:string,init?:RequestInit)=>Promise<Response>,
 ) {
-  const calls: Array<{ url: string; init?: RequestInit }> = [];
+  const calls: Array<{ url: string; init?: RequestInit; meta?: any }> = [];
   const app = express();
   registerSchemaProviderRoutes(app, {
-    fetch: async (_meta, url, init) => {
-      calls.push({ url, init });
+    fetch: async (meta, url, init) => {
+      calls.push({ url, init, meta });
+      if(url===sogniSchemaSource)return sogniSchemaResponse?sogniSchemaResponse(url,init):json(sogniGenerateImageSchemaFixture);
       return upstream(url, init);
     },
     key,
@@ -178,6 +181,83 @@ describe('Sogni public LoRA catalog (comfy only)', () => {
       expect(calls.every(c=>c.url.includes('/v1/loras/comfy'))).toBe(true);
       expect(calls.some(c=>c.url.includes('/v1/loras/personal'))).toBe(false);
     }, () => 'test-sogni-key');
+  });
+});
+
+describe('Sogni live hosted-tool Schema',()=>{
+  it('builds selector rows and generation schema from the official live document without sending a Sogni key to GitHub',async()=>{
+    await withFixture(async(url,init)=>{
+      if(url==='https://api.sogni.ai/v1/model-catalog?mediaType=image&include=parameters')return json({data:{models:[{id:'krea2_turbo_fp8_scaled',name:'Krea 2 Turbo worker'}]}});
+      if(init?.method==='POST'&&url==='https://api.sogni.ai/v1/creative-agent/workflows')return json({data:{workflow:{workflowId:'live-selector-task'}}},201);
+      throw new Error(`Unexpected fixture URL: ${url}`);
+    },async(baseUrl,calls)=>{
+      const catalogResponse=await fetch(`${baseUrl}/api/models?provider=sogni`,{headers:{'x-sogni-key':'sogni-secret'}});
+      const catalog=await catalogResponse.json() as any;
+      expect(catalog.sogni.some((row:any)=>row.id==='flux-3-klein')).toBe(true);
+      expect(catalog.pagination.sogni.sourceUrl).toBe(sogniSchemaSource);
+      expect(catalog.pagination.sogni.sourceNotice).toBe('live-official-generate_image-schema');
+
+      const schemaResponse=await fetch(`${baseUrl}/api/model-schema?provider=sogni&model=flux-3-klein`,{headers:{'x-sogni-key':'sogni-secret'}});
+      const schema=await schemaResponse.json() as any;
+      expect(schema.inputSchema.properties.model.enum).toContain('flux-3-klein');
+      expect(schema.sourceUrl).toBe(sogniSchemaSource);
+
+      const submitResponse=await fetch(`${baseUrl}/api/schema-provider/sogni/submit`,{
+        method:'POST',headers:{'Content-Type':'application/json','x-canvas-credential-ref':schema.credentialRef},
+        body:JSON.stringify({model:'flux-3-klein',prompt:'live schema test',custom_parameters:{guidance:7.25}}),
+      });
+      const submitted=await submitResponse.json() as any;
+      expect(submitted.taskId).toBe('live-selector-task');
+      expect(submitted.actualRequest.parameters.input.steps[0].arguments).toMatchObject({model:'flux-3-klein',guidance:7.25});
+
+      const githubCalls=calls.filter(c=>c.url===sogniSchemaSource);
+      expect(githubCalls.length).toBeGreaterThanOrEqual(2);
+      for(const call of githubCalls){
+        expect(call.meta).toMatchObject({provider:'sogni',key:''});
+        const headers=new Headers(call.init?.headers);
+        expect(headers.has('authorization')).toBe(false);
+        expect(headers.has('x-sogni-key')).toBe(false);
+      }
+      const submitCall=calls.find(c=>c.url==='https://api.sogni.ai/v1/creative-agent/workflows');
+      expect(submitCall?.meta?.key).toBe('sogni-secret');
+      expect(new Headers(submitCall?.init?.headers).get('authorization')).toBe('Bearer sogni-secret');
+
+      const workersResponse=await fetch(`${baseUrl}/api/models?provider=sogni&catalog=workers`,{headers:{'x-sogni-key':'sogni-secret'}});
+      const workers=await workersResponse.json() as any;
+      expect(workers.sogni.map((row:any)=>row.id)).toEqual(['krea2_turbo_fp8_scaled']);
+      expect(workers.pagination.sogni.sourceUrl).toContain('/v1/model-catalog');
+      expect(workers.sogni.some((row:any)=>row.id==='flux-3-klein')).toBe(false);
+    },()=> 'sogni-secret');
+  });
+
+  it('reports official-schema HTTP failure without selectors or a generation request; it never falls back to the bundled package',async()=>{
+    await withFixture(async()=>{throw new Error('generation endpoint must not be reached');},async(baseUrl,calls)=>{
+      const catalogResponse=await fetch(`${baseUrl}/api/models?provider=sogni`,{headers:{'x-sogni-key':'sogni-secret'}});
+      const catalog=await catalogResponse.json() as any;
+      expect(catalogResponse.status).toBe(503);
+      expect(catalog.error).toContain('HTTP 503');
+      expect(catalog.rawResponse).toBe('official schema temporarily unavailable');
+      expect(catalog.endpoint).toBe(sogniSchemaSource);
+      expect(catalog.sogni).toBeUndefined();
+
+      const submitResponse=await fetch(`${baseUrl}/api/schema-provider/sogni/submit`,{method:'POST',headers:{'Content-Type':'application/json','x-sogni-key':'sogni-secret'},body:JSON.stringify({model:'krea-2-turbo',prompt:'must not submit'})});
+      const submit=await submitResponse.json() as any;
+      expect(submitResponse.status).toBe(503);
+      expect(submit.endpoint).toBe(sogniSchemaSource);
+      expect(calls.some(c=>c.url==='https://api.sogni.ai/v1/creative-agent/workflows')).toBe(false);
+      expect(calls.every(c=>c.url===sogniSchemaSource)).toBe(true);
+      expect(calls.every(c=>c.meta?.key==='')).toBe(true);
+    },()=> 'sogni-secret',undefined,undefined,async()=>new Response('official schema temporarily unavailable',{status:503}));
+  });
+
+  it('exposes network failure as network error and does not retry or use a stale Schema',async()=>{
+    let meta:any;let init:RequestInit|undefined;
+    const error=await fetchSogniGenerateImageSchema(async(m,_url,i)=>{meta=m;init=i;throw new Error('socket refused');},'/test','flux-3-klein').then(()=>null,e=>e);
+    expect(error).toMatchObject({status:502,errorSource:'network',endpoint:sogniSchemaSource});
+    expect(error.message).toContain('no HTTP response was received');
+    expect(meta).toMatchObject({provider:'sogni',key:''});
+    expect(new Headers(init?.headers).has('authorization')).toBe(false);
+    expect(new Headers(init?.headers).has('x-sogni-key')).toBe(false);
   });
 });
 

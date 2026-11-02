@@ -32,6 +32,8 @@ type StdSpec = {
   source?: string;
   /** Extra KSampler defaults from the endpoint Schema (e.g. seed). */
   seed?: number;
+  /** Preset card guidance for configuration that must come from a live provider catalog. */
+  description?: string;
   /** Skip EmptyLatent+KSampler+VAE; Checkpoint→CLIP→Save (agnes). */
   compact?: boolean;
   /** Official Schema requires a resource no accepted-run recipe has (e.g. MuAPI lora_url). Card is 待配方, run disabled; never filled with a made-up value. */
@@ -291,7 +293,7 @@ function buildStandardT2i(spec: StdSpec): WorkflowPreset {
     provider,
     previewImage: '',
     tags: [provider, '标准', '文生图'],
-    description: '该供应商标准文生图流程；提示词请填配方或用户指定。',
+    description: spec.description || '该供应商标准文生图流程；提示词请填配方或用户指定。',
     loraNames: loraList.map(l => l.name).filter(Boolean),
     ...(spec.pendingRecipe ? { pendingRecipe: spec.pendingRecipe } : {}),
     nodes,
@@ -565,8 +567,9 @@ const STD_SPECS: StdSpec[] = [
   { provider: 'wavespeed', ckpt: 'wavespeed-ai/flux-dev-lora', hasLora: true, hasNegative: false, steps: 36, cfg: 3.5, omit: ['sampler', 'scheduler', 'denoise'],
     // Accepted run hist_1792224305224_meynb (temp/e2e/wavespeed/recipe-33530948/recipe.json): HF mirror, SHA256 == Civitai 706528.
     loras: [{ name: 'https://huggingface.co/comfyanonymous/flux_RealismLora_converted_comfyui/resolve/main/flux_realism_lora.safetensors', strength: 1.1, source: 'hist_1792224305224_meynb' }] },
-  // Preset model krea-2-turbo → Krea 2 API body has no steps/guidance_scale (https://www.krea.ai/docs/developers/krea-2/overview.md; krea.json krea/krea-2/*). steps 25 / guidance_scale 3 belong to bfl/flux-1-dev only → omitted here. No accepted-run LoRA → no LoRA node.
-  { provider: 'krea', ckpt: 'krea-2-turbo', hasLora: false, omit: ['steps', 'cfg', 'sampler', 'scheduler', 'denoise'] },
+  // Krea model IDs are live OpenAPI operation paths (e.g. image/krea/krea-2/medium-turbo), not Sogni's krea-2-turbo selector.
+  // Leave the model empty so the user chooses an exact current endpoint from Krea's live catalog; do not alias across providers.
+  { provider: 'krea', ckpt: '', hasLora: false, omit: ['steps', 'cfg', 'sampler', 'scheduler', 'denoise'], description: '请载入后从实时 Krea 模型目录选择一个官方生成端点；模板不会预选底模。' },
   { provider: 'together', ckpt: 'black-forest-labs/FLUX.2-dev', hasLora: false, steps: 20, cfg: 1, omit: ['sampler', 'scheduler', 'denoise'] },
   // docs/evidence/aimlapi-lora-p0-2026-10-15.md + aimlapi.json: steps 1–8, no guidance_scale → omit cfg. No accepted-run LoRA → no LoRA node.
   { provider: 'aimlapi', ckpt: 'alibaba/z-image-turbo-lora', hasLora: false, hasNegative: false, steps: 8, omit: ['cfg', 'sampler', 'scheduler', 'denoise'] },

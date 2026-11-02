@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { SchemaProviderDriver, schemaProviderOutputUrl } from './SchemaProviderDriver';
+import { SchemaProviderDriver, schemaProviderOutputUrl, waveSpeedBase64ImageDataUrl } from './SchemaProviderDriver';
 import { clearSharedGet, beginSharedGetAction } from '../../services/sharedGet';
 import { plainErrorMessage } from '../../utils/apiFailure';
 import type { NormalizedGenerateParams } from '../types';
@@ -142,6 +142,17 @@ describe('SchemaProviderDriver · output URL protocol validation', () => {
     expect(schemaProviderOutputUrl({ outputs: [{ url: '  data:image/png;base64,AA==  ' }] })).toBe('data:image/png;base64,AA==');
   });
 
+  it('detects WaveSpeed base64 MIME from PNG, JPEG, and WebP byte signatures', () => {
+    const encoded=(bytes:number[])=>btoa(String.fromCharCode(...bytes));
+    const png=encoded([137,80,78,71,13,10,26,10]);
+    const jpeg=encoded([255,216,255,0]);
+    const webp=encoded([82,73,70,70,0,0,0,0,87,69,66,80]);
+    expect(waveSpeedBase64ImageDataUrl(png)).toBe(`data:image/png;base64,${png}`);
+    expect(waveSpeedBase64ImageDataUrl(jpeg)).toBe(`data:image/jpeg;base64,${jpeg}`);
+    expect(waveSpeedBase64ImageDataUrl(webp)).toBe(`data:image/webp;base64,${webp}`);
+    expect(waveSpeedBase64ImageDataUrl('not-an-image')).toBeUndefined();
+  });
+
   it('does not stringify an unknown structured output into a false success', async () => {
     const upstreamBody = { status: 'completed', outputs: [{ type: 'image', metadata: { id: 'asset-1' } }], endpoint: 'https://api.wavespeed.ai/api/v3/predictions/task-1/result', upstreamStatus: 200 };
     mockFetch.mockImplementation(async (input: URL | RequestInfo, init?: RequestInit) => {
@@ -180,5 +191,60 @@ describe('SchemaProviderDriver · output URL protocol validation', () => {
     await vi.runAllTimersAsync();
     const result = await pending;
     expect(result.mediaUrl).toBe('https://cdn.example/valid.png');
+  });
+
+  it('wraps naked base64 only when the submitted WaveSpeed schema parameter enabled it', async () => {
+    const png=btoa(String.fromCharCode(137,80,78,71,13,10,26,10));
+    let savedOutputs:unknown;
+    mockFetch.mockImplementation(async (input: URL | RequestInfo, init?: RequestInit) => {
+      const u=String(input);const method=String(init?.method || 'GET').toUpperCase();
+      if(u.includes('/api/model-schema')&&method==='GET')return jsonResponse({credentialRef:'wave-cred',inputSchema:{type:'object',properties:{prompt:{type:'string'},enable_base64_output:{type:'boolean'}}}});
+      if(u.includes('/api/schema-provider/wavespeed/submit')&&method==='POST')return jsonResponse({taskId:'task-base64',pollUrl:'/api/schema-provider/wavespeed/tasks/task-base64',actualRequest:{endpoint:'https://api.wavespeed.ai/api/v3/wavespeed-ai/z-image/turbo-lora',parameters:{prompt:'p',enable_base64_output:true}}});
+      if(u.includes('/api/schema-provider/wavespeed/tasks/task-base64')&&method==='GET')return jsonResponse({status:'completed',outputs:[png],endpoint:'https://api.wavespeed.ai/api/v3/predictions/task-base64/result',upstreamStatus:200});
+      if(u.includes('/api/schema-provider/wavespeed/save-result')&&method==='POST'){
+        savedOutputs=JSON.parse(String(init?.body)).outputs;
+        return jsonResponse({historyItems:[]});
+      }
+      return jsonResponse({error:`unexpected ${method} ${u}`},500);
+    });
+
+    const pending=driver.generate({prompt:'p',model:'wavespeed-ai/z-image/turbo-lora',extraParams:{custom_parameters:{enable_base64_output:true}}},{wavespeedKey:'fixture'});
+    await vi.runAllTimersAsync();
+    await vi.runAllTimersAsync();
+    const result=await pending;
+    expect(result.mediaUrl).toBe(`data:image/png;base64,${png}`);
+    expect(savedOutputs).toEqual([`data:image/png;base64,${png}`]);
+  });
+
+  it('preserves a normal URL in WaveSpeed base64 mode and errors on unsupported bytes with the request and response', async () => {
+    const upstreamBody={status:'completed',outputs:['https://cdn.example/image.png'],endpoint:'https://api.wavespeed.ai/api/v3/predictions/task-url/result',upstreamStatus:200};
+    mockFetch.mockImplementation(async (input: URL | RequestInfo, init?: RequestInit) => {
+      const u=String(input);const method=String(init?.method || 'GET').toUpperCase();
+      if(u.includes('/api/model-schema')&&method==='GET')return jsonResponse({credentialRef:'wave-cred',inputSchema:{type:'object',properties:{prompt:{type:'string'},enable_base64_output:{type:'boolean'}}}});
+      if(u.includes('/api/schema-provider/wavespeed/submit')&&method==='POST')return jsonResponse({taskId:'task-url',pollUrl:'/api/schema-provider/wavespeed/tasks/task-url',actualRequest:{endpoint:'https://api.wavespeed.ai/api/v3/example',parameters:{enable_base64_output:true}}});
+      if(u.includes('/api/schema-provider/wavespeed/tasks/task-url')&&method==='GET')return jsonResponse(upstreamBody);
+      if(u.includes('/api/schema-provider/wavespeed/save-result')&&method==='POST')return jsonResponse({historyItems:[]});
+      return jsonResponse({error:`unexpected ${method} ${u}`},500);
+    });
+    const urlPending=driver.generate({prompt:'p',model:'wavespeed-ai/example'},{wavespeedKey:'fixture'});
+    await vi.runAllTimersAsync();await vi.runAllTimersAsync();
+    expect((await urlPending).mediaUrl).toBe('https://cdn.example/image.png');
+
+    mockFetch.mockReset();clearSharedGet();beginSharedGetAction();
+    const invalidBody={status:'completed',outputs:['YWJjZA=='],endpoint:'https://api.wavespeed.ai/api/v3/predictions/task-invalid/result',upstreamStatus:200};
+    const actualRequest={endpoint:'https://api.wavespeed.ai/api/v3/example',parameters:{enable_base64_output:true}};
+    mockFetch.mockImplementation(async (input: URL | RequestInfo, init?: RequestInit) => {
+      const u=String(input);const method=String(init?.method || 'GET').toUpperCase();
+      if(u.includes('/api/model-schema')&&method==='GET')return jsonResponse({credentialRef:'wave-cred',inputSchema:{type:'object',properties:{prompt:{type:'string'},enable_base64_output:{type:'boolean'}}}});
+      if(u.includes('/api/schema-provider/wavespeed/submit')&&method==='POST')return jsonResponse({taskId:'task-invalid',pollUrl:'/api/schema-provider/wavespeed/tasks/task-invalid',actualRequest});
+      if(u.includes('/api/schema-provider/wavespeed/tasks/task-invalid')&&method==='GET')return jsonResponse(invalidBody);
+      return jsonResponse({error:`unexpected ${method} ${u}`},500);
+    });
+    const invalidPending=driver.generate({prompt:'p',model:'wavespeed-ai/example'},{wavespeedKey:'fixture'}).then(()=>null,error=>error);
+    await vi.runAllTimersAsync();
+    const error=await invalidPending;
+    expect(error).toMatchObject({name:'SchemaProviderProtocolError',message:expect.stringContaining('not a supported PNG, JPEG, or WebP image signature')});
+    expect(error.data).toMatchObject({errorSource:'upstream-protocol',endpoint:invalidBody.endpoint,rawResponse:invalidBody,actualRequest});
+    expect(mockFetch.mock.calls.some(([url])=>String(url).includes('/save-result'))).toBe(false);
   });
 });

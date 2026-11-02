@@ -7,23 +7,25 @@ import fs from 'node:fs';
 import path from 'node:path';
 import express from 'express';
 import { describe, expect, it } from 'vitest';
-import { registerSchemaProviderRoutes } from './schemaProviders';
+import { registerSchemaProviderRoutes, sogniSchemaSource } from './schemaProviders';
+import { sogniGenerateImageSchemaFixture } from './fixtures/sogniGenerateImageSchema';
 import { isSchemaOmitCandidate } from '../utils/schemaSendHint';
 
 const draft = (id: string) => JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../docs/provider-schema-drafts', id + '.json'), 'utf8'));
 
 async function withFixture(
   upstream: (url: string, init?: RequestInit) => Promise<Response>,
-  run: (baseUrl: string, calls: Array<{ url: string; init?: RequestInit }>) => Promise<void>,
+  run: (baseUrl: string, calls: Array<{ url: string; init?: RequestInit; meta?: any }>) => Promise<void>,
   key: (provider: string, override?: string) => string = () => '',
   durable: (url: string) => Promise<any> = async (url) => ({ ok: true, dataUrl: url }),
   record: (item: any) => any = (item) => item,
 ) {
-  const calls: Array<{ url: string; init?: RequestInit }> = [];
+  const calls: Array<{ url: string; init?: RequestInit; meta?: any }> = [];
   const app = express();
   registerSchemaProviderRoutes(app, {
-    fetch: async (_meta, url, init) => {
-      calls.push({ url, init });
+    fetch: async (meta, url, init) => {
+      calls.push({ url, init, meta });
+      if(url===sogniSchemaSource)return json(sogniGenerateImageSchemaFixture);
       return upstream(url, init);
     },
     key,

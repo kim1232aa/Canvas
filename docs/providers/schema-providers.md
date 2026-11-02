@@ -6,7 +6,7 @@
 | --- | --- | --- | --- | --- |
 | MuAPI | `GET https://api.muapi.ai/api/v1/models` + `/openapi.json` | 目录 `endpoint_url` 对应的 `/api/v1/…` POST；`x-api-key` | `/api/v1/predictions/{request_id}/result` | 按 Schema 使用 `loras` / `lora_list` 的 `{path,scale}`，或 `model_id` 的 `{model,weight}`，或单个 `lora_url,lora_weight` |
 | WaveSpeed | `GET https://api.wavespeed.ai/api/v3/models` 中每个端点的 `api_schema` | `model_run` 指定的原生 POST 路径；Bearer | `/api/v3/predictions/{id}/result` | 所选端点声明的 `loras:[{path,scale}]`；例如 `wavespeed-ai/krea-v2/turbo-lora` |
-| Sogni | 官方 `@sogni-ai/sogni-protocol@1.0.0-alpha.46` 的 `generate_image` Schema | `POST https://api.sogni.ai/v1/creative-agent/workflows`；Bearer；明确的 `generate_image` step | `/v1/creative-agent/workflows/{workflowId}` | 官方资源 ID 数组 `loras` 与对应位置的 `loraStrengths`；公开资源目录 `/v1/loras/comfy` |
+| Sogni | 每次读取官方 [live `generate_image` Schema](https://raw.githubusercontent.com/Sogni-AI/sogni-protocol/main/schemas/tools/generate_image.schema.json) | `POST https://api.sogni.ai/v1/creative-agent/workflows`；Bearer；明确的 `generate_image` step | `/v1/creative-agent/workflows/{workflowId}` | 官方资源 ID 数组 `loras` 与对应位置的 `loraStrengths`；公开资源目录 `/v1/loras/comfy` |
 
 ## 目录身份与分页
 
@@ -61,4 +61,4 @@ Sogni 参考图位于工作流外层 `media_references:[{kind:"image",url:"https
 - https://docs.sogni.ai/sogni-intelligence/creative-agent-workflows/
 - https://docs.sogni.ai/api-reference/direct-generation/
 
-端点目录会变更，运行时以所选原生模型返回的最新 Schema 为准；Sogni 的固定版本升级需要复核官方工具协议。
+端点目录会变更，运行时以所选原生模型返回的最新 Schema 为准。Sogni hosted-tool selector 和参数 Schema 从上方官方 raw URL 实时读取；读取失败时明确报错，不回退到 npm 包或旧缓存。Sogni worker 目录 (`/v1/model-catalog`) 使用另一套 ID，保持分开显示，不自动替换成 hosted-tool selector。

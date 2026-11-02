@@ -3,12 +3,6 @@ import { applyCustomParameters, parseCustomObject, type CustomOverride } from '.
 /** Official docs: https://docs.mage.space/api/models/mango */
 export const MAGE_DOC = 'https://docs.mage.space/api/models/mango';
 export const MAGE_DEFAULT_BASE = 'https://api.mage.space';
-export const MAGE_MODEL_IDS = ['mango', 'mango-v2', 'mango-v3s', 'mango-v3', 'mango-v3-turbo'] as const;
-export const MAGE_ASPECT_RATIOS = ['21:9', '16:9', '3:2', '5:4', '1:1', '4:5', '2:3', '9:16', '9:21'] as const;
-export const MAGE_RESOLUTIONS = ['1K', '2K', '3K', '4K'] as const;
-
-export type MageModelId = (typeof MAGE_MODEL_IDS)[number];
-
 export interface MageImageRequest {
   endpoint: string;
   payload: Record<string, unknown>;
@@ -88,9 +82,6 @@ export function buildMageImageRequest(
         ? body.aspectRatio.trim()
         : '';
   if (aspect) {
-    if (!(MAGE_ASPECT_RATIOS as readonly string[]).includes(aspect)) {
-      throw new Error(`Mage aspect_ratio 必须是 ${MAGE_ASPECT_RATIOS.join(' | ')}，收到：${aspect}`);
-    }
     payload.aspect_ratio = aspect;
   }
 
@@ -103,9 +94,6 @@ export function buildMageImageRequest(
           ? body.size.trim()
           : '';
   if (resolution) {
-    if (!(MAGE_RESOLUTIONS as readonly string[]).includes(resolution)) {
-      throw new Error(`Mage resolution 必须是 ${MAGE_RESOLUTIONS.join(' | ')}，收到：${resolution}`);
-    }
     payload.resolution = resolution;
   }
 

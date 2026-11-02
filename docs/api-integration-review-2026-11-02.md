@@ -2,6 +2,16 @@
 
 本轮逐项检查仓库声明的供应商及通用视频执行路径。证据是当前代码、官方公开文档/OpenAPI/SDK，以及少量不带密钥的目录 GET；未使用真实密钥，也未提交生成任务。下表中的“核对”仅指列出的接口形状，不代表所有模型、参数、账户或网页端生成已通过。兼容中转的行为取决于用户实际配置的服务，官方 xAI/OpenAI 文档不能证明任意中转完全兼容。
 
+## 2026-11-03 续查及固定表盘点
+
+- SenseNova 官方站加载的文档正文列有需 Bearer 的 `GET https://token.sensenova.cn/v1/models`；应用已改为按配置凭据读取目录。`reasoning` 与 `reasoning_content` 原始字段分别保留。未用真实密钥验证账号权限。
+- Sogni 的 hosted-tool selector 和 Schema 改为实时读取[官方仓库文件](https://github.com/Sogni-AI/sogni-protocol/blob/main/schemas/tools/generate_image.schema.json)。本次在线 Schema 的 enum 有 30 项，本地旧 alpha.46 包有 27 项；两者 `schemaVersion` 均为 `2026-07-18.1`，因此不能仅凭版本字符串断言内容相同。worker 目录的 ID 空间保持独立。获取失败会报告错误，不用旧包兜底。
+- Civitai videoGen 根据[官方视频 OpenAPI](https://orchestration.civitai.com/v2/consumer/recipes/videoGen/openapi.json)解析用户指定的 engine/version/provider/operation 及字段形状，不再依赖固定 engine 列表。Wan 2.1 与 LTX2.3 的实际官方 Schema 做过离线映射测试；未提交真实生成。Schema 请求失败会报错并停止，不自动换用静态表或猜测字段。
+- Krea 旧预设错误填入 Sogni selector，已改为要求用户在实时目录选择。Novita 目录不再对所有 checkpoint 虚构 `supportsLora: true`；未知能力保留未知。DeepInfra 图像 MIME 根据结果字节识别；WaveSpeed 在用户明确请求 base64 时按实际字节识别。
+- 模型选择器不再在最新查询失败或返回空列表时把上次目录作为当前目录；用户当前选择仍可见。Mage 不再使用固定的比例和分辨率本地白名单，原值交上游判定。
+- 仍有固定数据：`src/schemas/providerSchema.ts` 包含 Gemini、Fal、Civitai、Replicate 等本地模型字段/能力快照，部分会用于参数映射或本地判断；`src/constants/presets.ts` 含预填的工作流模型；部分 `src/engines/drivers/*` 的 `supportedModels` 为静态元数据。Novita 的 `src/config/providerDeclarations/novita.txt2img.json` 是静态通用端点声明，不是实时的逐模型 Schema。这些尚未全部替换为实时 API，不能称所有硬编码均已移除。
+- ModelScope 官方文档目前仍未取得足够可读的 REST 合同；其他表格中的官方示例也不能证明全部模型、账户、参数及真实生成行为。
+
 | 供应商/路由 | 本轮资料和核对范围 | 结果与边界 |
 | --- | --- | --- |
 | Fal | [目录及模型 OpenAPI](https://api.fal.ai/v1/models?endpoint_id=fal-ai/flux-lora&expand=openapi-3.0)、[队列文档](https://fal.ai/docs/documentation/model-apis/inference/queue)；鉴权、所选端点、视频错误处理 | 已去除视频按名称猜测类型与错误状态写错；未逐个模型验证。 |

@@ -38,6 +38,20 @@ export function schemaProviderOutputUrl(result: unknown): string | undefined {
   return undefined;
 }
 
+/** WaveSpeed's opt-in base64 mode returns naked base64, so MIME must come from the bytes. */
+export function waveSpeedBase64ImageDataUrl(value: string): string | undefined {
+  if (!value || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value) || value.length % 4 === 1) return undefined;
+  let binary: string;
+  try { binary = globalThis.atob(value); } catch { return undefined; }
+  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+  let mime: string | undefined;
+  if (bytes.length >= 8 && [137, 80, 78, 71, 13, 10, 26, 10].every((byte, i) => bytes[i] === byte)) mime = 'image/png';
+  else if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) mime = 'image/jpeg';
+  else if (bytes.length >= 12 && String.fromCharCode(...bytes.slice(0, 4)) === 'RIFF' && String.fromCharCode(...bytes.slice(8, 12)) === 'WEBP') mime = 'image/webp';
+  if (!mime) return undefined;
+  return `data:${mime};base64,${value}`;
+}
+
 function sogniRangeValidationNotice(submitBody:unknown):string|undefined {
   const actualRequest=asRecord(asRecord(submitBody).actualRequest);
   const mapping=Array.isArray(actualRequest.mapping)?actualRequest.mapping:[];
@@ -224,11 +238,27 @@ export class SchemaProviderDriver extends BaseEngineDriver {
       lastResponse = pollBody;
       if (status === 'completed' || status === 'succeeded' || status === 'success') {
         const outputs = Array.isArray(result.outputs) ? result.outputs : [];
-        const mediaUrl = schemaProviderOutputUrl(result);
+        const actualRequest:any=submitted.actualRequest;
+        const sentParameters=asRecord(asRecord(actualRequest).parameters);
+        const waveSpeedBase64Enabled=this.id==='wavespeed' && sentParameters.enable_base64_output===true;
+        let unsupportedBase64Output=false;
+        const normalizedOutputs=waveSpeedBase64Enabled?outputs.map((output:any)=>{
+          if(typeof output!=='string')return output;
+          const candidate=output.trim();
+          if(/^(?:https?:\/\/|data:)/i.test(candidate))return output;
+          const dataUrl=waveSpeedBase64ImageDataUrl(candidate);
+          if(!dataUrl)unsupportedBase64Output=true;
+          return dataUrl || output;
+        }):outputs;
+        const normalizedResult={...result,outputs:normalizedOutputs};
+        const mediaUrl=unsupportedBase64Output?undefined:schemaProviderOutputUrl(normalizedResult);
         if (!mediaUrl) {
           const responseBody = typeof pollBody === 'string' ? pollBody : JSON.stringify(pollBody);
           const endpoint = typeof result.endpoint === 'string' ? result.endpoint : pollUrl;
-          const protocolError = new Error(`${this.name} upstream protocol error: task ${taskId} reported ${status} without a supported media URL; endpoint: ${endpoint}; response body: ${responseBody}`);
+          const reason=unsupportedBase64Output
+            ? 'enable_base64_output=true produced content that is not a supported PNG, JPEG, or WebP image signature'
+            : 'without a supported media URL';
+          const protocolError = new Error(`${this.name} upstream protocol error: task ${taskId} reported ${status} ${reason}; endpoint: ${endpoint}; response body: ${responseBody}`);
           protocolError.name = 'SchemaProviderProtocolError';
           (protocolError as any).data = {
             errorSource: 'upstream-protocol',
@@ -237,10 +267,10 @@ export class SchemaProviderDriver extends BaseEngineDriver {
             upstreamStatusText: `status: ${status}`,
             upstreamResponseBody: responseBody,
             rawResponse: pollBody,
+            actualRequest,
           };
           throw protocolError;
         }
-        const actualRequest:any=submitted.actualRequest;
         const sent:any=this.id==='sogni'?actualRequest?.parameters?.input?.steps?.[0]?.arguments:this.id==='novita'?actualRequest?.parameters?.request:actualRequest?.parameters;
         const sentLoras=this.id==='sogni'?(sent?.loras || []).map((name:string,index:number)=>({name,strength:sent?.loraStrengths?.[index]})):(sent?.styles || sent?.loras || sent?.lora_list || sent?.model_id || (sent?.lora_url?[{path:sent.lora_url,scale:sent.lora_weight}]:[])).map((l:any)=>typeof l==='string'?{name:l}:{...l,name:l.name || l.path || l.model || l.model_name || l.id,strength:l.scale ?? l.weight ?? l.strength});
         const owPrompt=(()=>{if(typeof sent?.prompt==='string'&&sent.prompt.trim())return sent.prompt;const map=Array.isArray(actualRequest?.mapping)?actualRequest.mapping:[];const mp=map.find((m:any)=>m?.from==='prompt'&&m?.sent&&typeof m.value==='string');if(mp)return mp.value;const inputs=Array.isArray(sent?.inputs)?sent.inputs:[];const first=inputs.find((x:any)=>x&&(x.type==='STRING'||typeof x.value==='string')&&(x.name==null||x.name==='prompt'));return typeof first?.value==='string'?first.value:undefined;})();
@@ -249,7 +279,7 @@ export class SchemaProviderDriver extends BaseEngineDriver {
         const metadata={model:params.model,actualModel:params.model,prompt:owPrompt,negativePrompt:sent?.negative_prompt ?? sent?.negativePrompt,seed:typeof sent?.seed==='number' && sent.seed>=0?sent.seed:null,steps:sent?.num_inference_steps ?? sent?.steps ?? null,cfg:sent?.guidance_scale ?? sent?.guidance ?? sent?.cfg_scale ?? sent?.cfg ?? null,width:Number.isFinite(owWidth)?owWidth:null,height:Number.isFinite(owHeight)?owHeight:null,loras:sentLoras,workflowSnapshot,requestMetadata:{actualRequest,submit:submitBody,poll:pollBody}};
         let saved:any;let historyWarning:string|undefined;
         try {
-          const saveResponse=await request(`/api/schema-provider/${this.id}/save-result`,{method:'POST',headers,body:JSON.stringify({taskId,outputs,metadata,workflowSnapshot})},`${this.name} output persistence`);
+          const saveResponse=await request(`/api/schema-provider/${this.id}/save-result`,{method:'POST',headers,body:JSON.stringify({taskId,outputs:normalizedOutputs,metadata,workflowSnapshot})},`${this.name} output persistence`);
           saved=await readBody(saveResponse);historyWarning=[saved?.historyWarning,rangeWarning].filter(Boolean).join('；') || undefined;
         } catch(error:any) {historyWarning=[rangeWarning,`上游已生成，保存失败：${error.message}`].filter(Boolean).join('；');saved={error:error.message,stack:error.stack,cause:error.cause};}
         return {

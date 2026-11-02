@@ -4,8 +4,7 @@ import nodePath from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import type express from 'express';
 import YAML from 'yaml';
-import sogniImageSchema from '@sogni-ai/sogni-protocol/schemas/tools/generate_image.schema.json' with {type:'json'};
-const sogniSchemaSource='@sogni-ai/sogni-protocol@1.0.0-alpha.46/schemas/tools/generate_image.schema.json';
+export const sogniSchemaSource='https://raw.githubusercontent.com/Sogni-AI/sogni-protocol/main/schemas/tools/generate_image.schema.json';
 
 // Protocol adapters are separate from canvas nodes. Model paths and fields come
 // from live provider metadata. No model aliases, replacement or submit retries.
@@ -238,10 +237,9 @@ export function deepinfraCatalogRows(models:any[]) {
     };
   }).filter((r:any)=>r.id);
 }
-/** Official response_format is b64_json only (docs.deepinfra.com/apis/image-generation). */
-export function deepinfraImageOutputs(response:any):string[] {
-  const data=Array.isArray(response?.data)?response.data:[];
-  return data.map((d:any)=>d?.url || (d?.b64_json?`data:image/png;base64,${d.b64_json}`:undefined)).filter(Boolean);
+/** Official response_format is b64_json only; MIME is detected from returned bytes, not inferred. */
+export function deepinfraImageOutputs(response:any,endpoint='https://api.deepinfra.com/v1/openai/images/generations'):string[] {
+  return imageOutputsBySignature(response,'DeepInfra',endpoint);
 }
 /** In-memory completed image tasks (DeepInfra images API is synchronous). */
 const deepinfraSyncTasks=new Map<string,{status:string;outputs:string[];rawResponse:any;error?:any}>();
@@ -448,7 +446,8 @@ export function novitaCatalogRows(models:any[]) {
   }).map((m:any)=>({
     id:m.sd_name_in_api || m.sd_name,name:m.name || m.model_name || m.sd_name_in_api || m.sd_name,
     category:'text-to-image',family:m.base_model || '',description:m.model_details?.description || '',
-    type:'image',endpoint:'/v3/async/txt2img',supportsLora:true,
+    type:'image',endpoint:'/v3/async/txt2img',
+    ...(typeof m.supportsLora==='boolean'?{supportsLora:m.supportsLora}:{}),
     cover_url:m.cover_url,base_model:m.base_model,tags:m.tags || [],metadata:m,
   }));
 }
@@ -557,6 +556,41 @@ interface Dependencies {
   durable:(url:string)=>Promise<any>;
 }
 
+/** Fetch the public Sogni hosted-tool Schema without forwarding any Sogni credential to GitHub. */
+export async function fetchSogniGenerateImageSchema(
+  depFetch: Dependencies['fetch'],
+  route: string,
+  model = '(catalog)',
+): Promise<{schema:any;sourceUrl:string}> {
+  const meta={provider:'sogni',route,model,key:''};
+  let response:Response;
+  try {
+    response=await depFetch(meta,sogniSchemaSource,{headers:{Accept:'application/json'},signal:AbortSignal.timeout(60000)});
+  } catch (cause:any) {
+    const error=Object.assign(new Error(`Network error fetching Sogni official generate_image Schema; no HTTP response was received. GET ${sogniSchemaSource}: ${cause?.message || cause}`),{
+      status:502,errorSource:'network',endpoint:sogniSchemaSource,cause,
+    });
+    throw error;
+  }
+  const raw=await response.text();
+  if(!response.ok)throw Object.assign(new Error(`Sogni official generate_image Schema GET ${sogniSchemaSource} → HTTP ${response.status}: ${raw}`),{
+    status:response.status,errorSource:'upstream',endpoint:sogniSchemaSource,rawResponse:raw,
+  });
+  let schema:any;
+  try{schema=JSON.parse(raw);}catch(cause:any){
+    throw Object.assign(new Error(`Sogni official generate_image Schema GET ${sogniSchemaSource} returned invalid JSON: ${cause?.message || cause}; body: ${raw}`),{
+      status:502,errorSource:'upstream-protocol',endpoint:sogniSchemaSource,rawResponse:raw,cause,
+    });
+  }
+  const modelEnum=schema?.properties?.model?.enum;
+  if(!schema || typeof schema!=='object' || !schema.properties || !Array.isArray(modelEnum) || modelEnum.length===0 || modelEnum.some((id:any)=>typeof id!=='string' || !id.trim())) {
+    throw Object.assign(new Error(`Sogni official generate_image Schema GET ${sogniSchemaSource} has no non-empty string properties.model.enum; body: ${raw}`),{
+      status:502,errorSource:'upstream-protocol',endpoint:sogniSchemaSource,rawResponse:raw,
+    });
+  }
+  return {schema,sourceUrl:sogniSchemaSource};
+}
+
 export async function parseVeniceImageResponse(r:Response,url:string) {
   const contentType=String(r.headers.get('content-type')||'').split(';')[0].trim().toLowerCase();
   const bytes=Buffer.from(await r.arrayBuffer());
@@ -589,7 +623,7 @@ export function makeSchemaProviderReader(provider:Provider,depFetch:Dependencies
 }
 
 /** Live catalog rows for a provider (or schema-enum selectors for Sogni hosted tools). */
-export async function fetchSchemaProviderRows(provider:Provider,read:ReturnType<typeof makeSchemaProviderReader>,opts:{lora?:boolean;model?:string;catalog?:string;cursor?:string;limit?:number}={}) {
+export async function fetchSchemaProviderRows(provider:Provider,read:ReturnType<typeof makeSchemaProviderReader>,opts:{lora?:boolean;model?:string;catalog?:string;cursor?:string;limit?:number;selectorSchema?:any;selectorSchemaSource?:string}={}) {
   if(opts.lora && provider==='sogni') {
     // Product (雁 2026-11-02): no personal library in Hub — official public catalog only.
     // Docs: https://docs.sogni.ai/api-reference/ (GET /v1/loras/comfy, needs no authentication).
@@ -636,7 +670,11 @@ export async function fetchSchemaProviderRows(provider:Provider,read:ReturnType<
       notice:'无 LoRA 目录接口。此供应商未声明独立 LoRA 目录；请在 LoRA 节点输入资源 URL，并选择支持 LoRA 的模型端点。'};
   }
   if(provider==='sogni' && opts.catalog!=='workers') {
-    return {rows:sogniImageSchema.properties.model.enum.map((id:string)=>({id,name:id,parameters:sogniImageSchema,namespace:'hosted-tool-selector'})),sourceUrl:sogniSchemaSource};
+    const modelEnum=opts.selectorSchema?.properties?.model?.enum;
+    if(!opts.selectorSchema || !Array.isArray(modelEnum) || modelEnum.length===0)throw Object.assign(new Error(`Sogni live hosted-tool Schema is required to build selectors; no bundled or cached fallback is used. Source: ${opts.selectorSchemaSource || sogniSchemaSource}`),{
+      status:502,errorSource:'upstream-protocol',endpoint:opts.selectorSchemaSource || sogniSchemaSource,
+    });
+    return {rows:modelEnum.map((id:string)=>({id,name:id,parameters:opts.selectorSchema,namespace:'hosted-tool-selector'})),sourceUrl:opts.selectorSchemaSource || sogniSchemaSource};
   }
   const sourceUrl=schemaProviders[provider].root+schemaProviders[provider].catalog;
   const {data}=await read(sourceUrl);
@@ -771,7 +809,7 @@ export function normalizeSchemaProviderItems(provider:Provider,rows:any[],opts:{
     baseModelSource:provider==='krea' && wantsLora && Array.isArray(m.models)?'官方 GET /styles items[].models（Compatible model names），原值显示':(wantsLora && Array.isArray(m.compatibleModels) && compatibleModelsCount(m.compatibleModels)>1?`官方列出可兼容底模共 ${compatibleModelsCount(m.compatibleModels)} 个，卡片只显示第一个名字`:undefined),baseModel:(provider==='krea' && wantsLora && Array.isArray(m.models)?m.models.join(', '):undefined) || m.family || m.tierId || compatibleModelsLabel(m.compatibleModels) || (Array.isArray(m.modelIds)?m.modelIds[0]:undefined),description:m.description || '',tags:m.tags || [],
     imageUrl:m.image_url || m.cover_url || (Array.isArray(m.urls)?m.urls[0]:undefined) || m.thumbnail || sogniLoraCover(m)?.url || '',imageCaption:sogniLoraCover(m)?.caption,
     creator:m.ui?.creator || m.owner?.name,externalUrl:m.ui?.sourceUrl,
-    sourceUrl:opts.sourceUrl,metadata:m,modelIds:m.modelIds,loraStrength:m.ui?.default,loraStrengthRange:provider==='sogni'?sogniLoraStrengthRange(m):undefined,supportsLora:provider==='venice'||provider==='deepinfra'?false:provider==='together'?undefined:provider==='aimlapi'?(typeof m.supportsLora==='boolean'?m.supportsLora:(m.parameters?.properties && Object.hasOwn(m.parameters.properties,'loras')?true:undefined)):provider==='novita'?Boolean(m.supportsLora ?? m.parameters?.properties?.loras):provider==='krea'?Boolean(m.parameters?.properties?.styles):JSON.stringify(m.input_fields || m.api_schema || m.parameters || '').includes('lora'),
+    sourceUrl:opts.sourceUrl,metadata:m,modelIds:m.modelIds,loraStrength:m.ui?.default,loraStrengthRange:provider==='sogni'?sogniLoraStrengthRange(m):undefined,supportsLora:provider==='venice'||provider==='deepinfra'?false:provider==='together'?undefined:provider==='aimlapi'?(typeof m.supportsLora==='boolean'?m.supportsLora:(m.parameters?.properties && Object.hasOwn(m.parameters.properties,'loras')?true:undefined)):provider==='novita'?(typeof m.supportsLora==='boolean'?m.supportsLora:undefined):provider==='krea'?Boolean(m.parameters?.properties?.styles):JSON.stringify(m.input_fields || m.api_schema || m.parameters || '').includes('lora'),
     badge:wantsLora?(isSogniPersonalLoraRow(m)?'我的个人 LoRA':'官方 LoRA 资源'):'官方模型端点',resourceKind:wantsLora?'adapter':'model-endpoint'}))
     .filter((m:any)=>m.id && (!query || (m.id+' '+m.name+' '+m.description).toLowerCase().includes(query)));
 }
@@ -829,14 +867,15 @@ export function getSchemaProviderCatalog(
       catalogNotice = 'DeepInfra 公共文生图无 LoRA 字段；个人/私有 LoRA 需先在 DeepInfra 控制台部署为 Running（docs.deepinfra.com/private-models/lora-image），部署列表为空时不准假挂。';
     }
   }
+  if(provider==='sogni' && type!=='lora')catalogNotice='Sogni hosted-tool selectors are fetched live by /api/models; this synchronous helper does not return a bundled snapshot.';
 
   const providerMeta = schemaProviders[provider] as any;
   // LoRA Hub: never advertise the model catalog URL as a LoRA catalog source.
   const noLoraCatalog = type === 'lora' && !['novita', 'sogni', 'krea'].includes(provider);
-  const sourceUrl = noLoraCatalog ? undefined : (providerMeta.sourceUrl || `${providerMeta.root || ''}${providerMeta.catalog || ''}`);
+  const sourceUrl = noLoraCatalog ? undefined : provider==='sogni' && type!=='lora' ? sogniSchemaSource : (providerMeta.sourceUrl || `${providerMeta.root || ''}${providerMeta.catalog || ''}`);
   let sourceNotice: string;
   if (provider === 'sogni') {
-    sourceNotice = 'versioned-protocol-schema (@sogni-ai/sogni-protocol@1.0.0-alpha.46)';
+    sourceNotice = 'live-official-generate_image-schema (queried by asynchronous /api/models)';
   } else if (provider === 'muapi') {
     sourceNotice = 'openapi-spec-schema (@muapi/openapi-spec)';
   } else if (provider === 'wavespeed') {
@@ -855,14 +894,7 @@ export function getSchemaProviderCatalog(
     type === 'lora'
       ? []
       : provider === 'sogni'
-      ? sogniImageSchema.properties.model.enum.map((v: string) => ({
-          id: v,
-          name: v,
-          category: 'model',
-          provider: 'sogni',
-          sourceUrl,
-          type: 'checkpoint',
-        }))
+      ? []
       : definition
       ? Object.keys(definition).map((v) => ({
           id: v,
@@ -1074,7 +1106,10 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
       if(!inputSchema)throw schemaUnavailableBlock('DeepInfra',model,`GET ${specUrl} 中没有 POST /v1/images/generations requestBody schema`,specUrl);
       return {provider,model,sourceUrl,endpoint,inputSchema,modelMetadata:entry,schemaStatus:'official-openapi-runtime',schemaSource:specUrl,schemaUnprobed:true,mediaKind:'image'};
     }
-    if(provider==='sogni')return {provider,model,sourceUrl:sogniSchemaSource,endpoint:schemaProviders.sogni.root+'/v1/creative-agent/workflows',inputSchema:sogniImageSchema,schemaVersion:sogniImageSchema.schemaVersion,note:'模型 selector 来自固定版本的官方工具 Schema；实时 worker 目录属于另一种 ID，不会自动转换。'};
+    if(provider==='sogni') {
+      const {schema,sourceUrl}=await fetchSogniGenerateImageSchema(dep.fetch,req.path,model);
+      return {provider,model,sourceUrl,endpoint:schemaProviders.sogni.root+'/v1/creative-agent/workflows',inputSchema:schema,schemaVersion:schema.schemaVersion,note:'模型 selector 与 generate_image 参数来自实时官方 Schema；实时 worker 目录属于另一种 ID，不会自动转换。'};
+    }
     const {rows,sourceUrl}=await list(req,provider,credential);
     const entry=rows.find((x:any)=>(provider==='wavespeed'?x.model_id:x.id)===model);
     if(provider==='wavespeed') {
@@ -1106,11 +1141,14 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
       const wantsLora=String(req.query.type || req.query.category).toLowerCase()==='lora' || String(req.query.category).toLowerCase()==='lora';
       const key=dep.key(provider,req.headers[schemaProviders[provider].header] as string);
       const read=makeSchemaProviderReader(provider,dep.fetch,key,req.path);
-      const {rows,sourceUrl,notice,nextCursor,noLoraCatalog,personalNotice,personalLibrary,personalSourceUrl}=await fetchSchemaProviderRows(provider,read,{lora:wantsLora,model:req.query.model as string,catalog:req.query.catalog as string,cursor:req.query.cursor as string,limit:provider==='krea'&&wantsLora?Math.min(1000,Math.max(1,Number(req.query.limit)||50)):undefined}) as any;
+      const liveSogniSchema=provider==='sogni' && !wantsLora && req.query.catalog!=='workers'
+        ? await fetchSogniGenerateImageSchema(dep.fetch,req.path)
+        : undefined;
+      const {rows,sourceUrl,notice,nextCursor,noLoraCatalog,personalNotice,personalLibrary,personalSourceUrl}=await fetchSchemaProviderRows(provider,read,{lora:wantsLora,model:req.query.model as string,catalog:req.query.catalog as string,cursor:req.query.cursor as string,limit:provider==='krea'&&wantsLora?Math.min(1000,Math.max(1,Number(req.query.limit)||50)):undefined,selectorSchema:liveSogniSchema?.schema,selectorSchemaSource:liveSogniSchema?.sourceUrl}) as any;
       const items=normalizeSchemaProviderItems(provider,rows,{lora:wantsLora,sourceUrl:sourceUrl || '',category:String(req.query.category || 'checkpoint'),query:String(req.query.query || '')});
       const page=nextCursor!==undefined?1:Math.max(1,Number(req.query.page)||1),limit=nextCursor!==undefined?items.length||1:Math.min(100,Math.max(1,Number(req.query.limit)||50)); // upstream-cursor: upstream already paged
       const pagingNotice = provider === 'sogni' && !wantsLora && req.query.catalog !== 'workers'
-        ? 'versioned-official-schema-selectors (@sogni-ai/sogni-protocol@1.0.0-alpha.46)'
+        ? 'live-official-generate_image-schema'
         : 'local-slice-of-live-upstream-catalog';
       const paginationData = {
         page,
@@ -1360,7 +1398,7 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
       }
       if(provider==='deepinfra') {
         // Images API is synchronous (docs.deepinfra.com/apis/image-generation; response_format b64_json). Store for poll compatibility.
-        const outputs=deepinfraImageOutputs(data);
+        const outputs=deepinfraImageOutputs(data,definition.endpoint);
         if(!outputs.length)throw Object.assign(new Error('DeepInfra 图像响应没有 url/b64_json'),{status,rawResponse:data,endpoint:definition.endpoint,errorSource:'upstream-protocol'});
         const taskId=String(data.id || randomUUID());
         deepinfraSyncTasks.set(taskId,{status:'completed',outputs,rawResponse:data});

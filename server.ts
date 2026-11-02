@@ -1,12 +1,13 @@
-import {registerSchemaProviderRoutes,makeSchemaProviderReader,fetchSchemaProviderRows,normalizeSchemaProviderItems,resolveSchemaRefs} from './src/server/schemaProviders.ts';
+import {registerSchemaProviderRoutes,makeSchemaProviderReader,fetchSchemaProviderRows,fetchSogniGenerateImageSchema,normalizeSchemaProviderItems,resolveSchemaRefs} from './src/server/schemaProviders.ts';
 import { lookupExactHuggingFaceRepo } from './src/server/huggingFaceExactRepoSearch.ts';
 import { classifyCivitaiVideoPoll } from './src/server/civitaiVideoPoll.ts';
+import { fetchSenseNovaModelCatalog } from './src/server/senseNovaCatalog.ts';
 import { readHuggingFaceSpaceImageResponse } from './src/server/huggingFaceSpaceImage.ts';
 import { buildModelScopeImagePayload } from './src/server/modelScopeImageContract';
 import { MODELSCOPE_REGIONS, buildLoraListRequest, parseLoraListResponse } from './src/server/modelScopeLoraList.ts';
 import {isHuggingFaceLora} from './src/utils/hfResource.ts';
 import {isLoraWeightResource} from './src/utils/isLoraWeightResource.ts';
-import {buildCivitaiVideoInput} from './src/schemas/civitaiVideo.ts';
+import {buildCivitaiVideoInput, CIVITAI_VIDEO_OPENAPI_URL} from './src/schemas/civitaiVideo.ts';
 import express from 'express';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { describeKeySelection, keyUsagesFromTrace, type KeyUsage } from './src/server/keyUsage.ts';
@@ -22,8 +23,8 @@ import { isOpenWorksAccessKey, pickTamsBearerKey, parseTensorArtKeys, TAMS_BEARE
 import { registerOpenWorksRoutes } from './src/server/openWorksProvider.ts';
 import {buildNanoImagePayload} from './src/schemas/nanoImageApi.ts';
 import { registerSenseNovaRoutes } from './src/server/routes/sensenovaRoutes.ts';
-import {buildRunwareImageRequest, parseRunwareImageResponse} from './src/server/runwareImageContract.ts';
-import {buildModelsLabImageRequest, parseModelsLabResponse, buildModelsLabFetchRequest, sanitizeModelsLabPayload, inspectModelsLabPollBody} from './src/server/modelsLabImageContract.ts';
+import {buildRunwareImageRequest, inspectRunwareImageResponseBody} from './src/server/runwareImageContract.ts';
+import {buildModelsLabImageRequest, parseModelsLabResponse, buildModelsLabFetchRequest, sanitizeModelsLabPayload, inspectModelsLabPollBody, inspectModelsLabImageResponseBody} from './src/server/modelsLabImageContract.ts';
 import { parseModelsLabCatalogResponse, parseRunwareCatalogResponse } from './src/server/modelCatalogResponse.ts';
 import {falImageFieldGate} from './src/server/falImageContract.ts';
 import {buildCivitaiImageRequest, CivitaiAmbiguousError} from './src/server/civitaiImageContract.ts';
@@ -2537,7 +2538,10 @@ app.get("/api/models", async (req, res) => {
               const spKey = keyPoolManager.getNextKey(sp, undefined) || '';
               const spRead = makeSchemaProviderReader(sp, upstreamFetch, spKey, req.path);
               const wantsLora = cat === 'lora';
-              const spRows = await fetchSchemaProviderRows(sp, spRead, { lora: wantsLora });
+              const liveSogniSchema = sp === 'sogni' && !wantsLora
+                ? await fetchSogniGenerateImageSchema(upstreamFetch, req.path)
+                : undefined;
+              const spRows = await fetchSchemaProviderRows(sp, spRead, { lora: wantsLora, selectorSchema:liveSogniSchema?.schema, selectorSchemaSource:liveSogniSchema?.sourceUrl });
               const { rows, sourceUrl, notice } = spRows;
               const noLoraCatalog = 'noLoraCatalog' in spRows && spRows.noLoraCatalog === true;
               const spItems = normalizeSchemaProviderItems(sp, rows, {
@@ -2549,7 +2553,7 @@ app.get("/api/models", async (req, res) => {
               const filtered = spItems.filter((m: any) => matchCategory(m) && matchSearch(m));
               results[sp] = filtered.slice((pageParam - 1) * limitParam, pageParam * limitParam);
               const spNotice = sp === 'sogni' && !wantsLora
-                ? 'versioned-official-schema-selectors (@sogni-ai/sogni-protocol@1.0.0-alpha.46)'
+                ? 'live-official-generate_image-schema'
                 : sp === 'sogni' && wantsLora
                 ? 'lookup-only (no public lora directory)'
                 : 'local-slice-of-live-upstream-catalog';
@@ -2879,17 +2883,55 @@ app.get("/api/models", async (req, res) => {
     }
 
     if (provider === 'all' || provider === 'sensenova') {
-      results.sensenova = [];
+      const auth = resolveProviderAuth(req, 'sensenova');
+      const modelsEndpoint = auth.baseUrl ? `${auth.baseUrl}/models` : 'https://token.sensenova.cn/v1/models';
       pagination.sensenova = {
         page: pageParam,
         limit: limitParam,
         total: 0,
         hasMore: false,
-        sourceUrl: 'https://www.sensetime.com',
-        sourceNotice: 'lookup-only (catalogAvailable:false; official public model list API unavailable)',
-        catalogAvailable: false,
+        sourceUrl: modelsEndpoint,
+        sourceNotice: 'authenticated live-api (GET /v1/models)',
+        catalogAvailable: true,
       };
-      catalogNoticesAccum.sensenova = 'SenseNova 官方没有公开模型列表 API；支持按模型 ID 选用，不能把本地白名单当作远端目录。';
+      catalogNoticesAccum.sensenova = 'SenseNova 官方 GET /v1/models 需要 API Key；配置密钥后读取实时模型列表。';
+      if (auth.error) {
+        results.sensenova = { error: auth.error, errorSource: 'local', endpoint: modelsEndpoint } as any;
+      } else {
+        tasks.push((async () => {
+          try {
+            const catalog = await fetchSenseNovaModelCatalog({ upstreamFetch }, auth.baseUrl, auth.apiKey);
+            if (!catalog.ok) {
+              results.sensenova = {
+                error: catalog.error,
+                status: catalog.status,
+                details: catalog.details,
+                endpoint: catalog.endpoint,
+                errorSource: catalog.errorSource,
+              } as any;
+              return;
+            }
+            const matched = catalog.items.filter((item) => matchCategory(item) && matchSearch(item));
+            const start = (pageParam - 1) * limitParam;
+            results.sensenova = matched.slice(start, start + limitParam);
+            pagination.sensenova = {
+              page: pageParam,
+              limit: limitParam,
+              total: matched.length,
+              hasMore: start + limitParam < matched.length,
+              sourceUrl: catalog.endpoint,
+              sourceNotice: 'authenticated live-api (GET /v1/models)',
+              catalogAvailable: true,
+            };
+          } catch (error: any) {
+            results.sensenova = {
+              error: `SenseNova 模型列表请求失败: ${error.message}`,
+              endpoint: modelsEndpoint,
+              errorSource: 'network',
+            } as any;
+          }
+        })());
+      }
     }
 
 
@@ -3359,29 +3401,118 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
 
     try {
       if (isVideo) {
-        let videoInput;
-        try {videoInput=buildCivitaiVideoInput(req.body);} catch(error:any) {return res.status(400).json({error:error.message});}
-
-        const orchResp = await upstreamFetch(
-          { provider: 'civitai', route: req.path, model, key: apiKey },
-          'https://orchestration.civitai.com/v2/consumer/workflows?wait=100',
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${apiKey}`,
-            },
-            body: JSON.stringify({
-              steps: [{ $type: 'videoGen', input: videoInput }],
-            }),
+        let videoInput: Record<string, any>;
+        let videoSchemaStatus: 'official-openapi' | 'custom-selector-override';
+        let videoSchemaCustomFieldsUnvalidated = false;
+        let videoSchemaFields: string[] | undefined;
+        let videoSchemaSelected: string[] | undefined;
+        let videoSchemaFetch: { endpoint: string; status: number | null; body?: string; error?: string } | undefined;
+        let videoOverrides: unknown[] = [];
+        let openApi: unknown;
+        try {
+          const schemaResp = await upstreamFetch(
+            { provider: 'civitai', route: `${req.path}:video-schema`, model: String(req.body.engine || ''), readOnly: true },
+            CIVITAI_VIDEO_OPENAPI_URL,
+            { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(20000) },
+          );
+          const schemaRaw = await schemaResp.text();
+          if (!schemaResp.ok) {
+            videoSchemaFetch = { endpoint: CIVITAI_VIDEO_OPENAPI_URL, status: schemaResp.status, body: schemaRaw };
+          } else {
+            try {
+              openApi = JSON.parse(schemaRaw);
+              videoSchemaFetch = { endpoint: CIVITAI_VIDEO_OPENAPI_URL, status: schemaResp.status };
+            } catch (error: any) {
+              videoSchemaFetch = { endpoint: CIVITAI_VIDEO_OPENAPI_URL, status: schemaResp.status, body: schemaRaw, error: `JSON 解析失败: ${error.message}` };
+            }
           }
-        );
+        } catch (error: any) {
+          videoSchemaFetch = { endpoint: CIVITAI_VIDEO_OPENAPI_URL, status: null, error: String(error?.message || error) };
+        }
+
+        if (!openApi) {
+          const upstreamResponded = videoSchemaFetch?.status !== undefined && videoSchemaFetch.status !== null;
+          return res.status(502).json({
+            error: `Civitai 视频官方 Schema 不可用，未发送生成请求：${videoSchemaFetch?.error || `HTTP ${videoSchemaFetch?.status ?? 'network'}`}`,
+            errorSource: videoSchemaFetch?.status === null ? 'network' : videoSchemaFetch?.error ? 'upstream-protocol' : 'upstream',
+            ...(upstreamResponded ? { upstreamStatus: videoSchemaFetch?.status } : {}),
+            endpoint: CIVITAI_VIDEO_OPENAPI_URL,
+            schemaStatus: 'unknown',
+            schemaSource: CIVITAI_VIDEO_OPENAPI_URL,
+            schemaFetch: videoSchemaFetch,
+            actualRequest: null,
+            notSent: true,
+          });
+        }
+        try {
+          const built = buildCivitaiVideoInput(req.body, openApi);
+          videoInput = built.payload;
+          videoSchemaStatus = built.schemaStatus;
+          videoSchemaCustomFieldsUnvalidated = built.customParametersUnvalidated;
+          videoSchemaFields = built.schemaFields;
+          videoSchemaSelected = built.schemaSelected;
+          videoOverrides = built.overrides;
+        } catch (schemaOrMappingError: any) {
+          return res.status(400).json({
+            error: String(schemaOrMappingError?.message || schemaOrMappingError),
+            errorSource: 'local',
+            schemaStatus: 'official-openapi',
+            schemaSource: CIVITAI_VIDEO_OPENAPI_URL,
+            schemaFetch: videoSchemaFetch,
+            schemaSelectionError: String(schemaOrMappingError?.message || schemaOrMappingError),
+            actualRequest: null,
+            notSent: true,
+          });
+        }
+        const videoRequestMetadata = {
+          schemaStatus: videoSchemaStatus,
+          schemaValidation: videoSchemaStatus === 'custom-selector-override'
+            ? 'custom selector override was explicitly applied; final input is not validated against the selected schema branch'
+            : videoSchemaCustomFieldsUnvalidated
+              ? 'custom_parameters contains fields absent from the selected schema; fields are preserved and left for upstream validation'
+              : 'input fields mapped from the explicitly selected official schema branch',
+          schemaSource: CIVITAI_VIDEO_OPENAPI_URL,
+          schemaFetch: videoSchemaFetch,
+          ...(videoSchemaFields ? { schemaFields: videoSchemaFields } : {}),
+          ...(videoSchemaSelected ? { schemaSelected: videoSchemaSelected } : {}),
+          ...(videoOverrides.length ? { overrides: videoOverrides } : {}),
+          actualRequest: { steps: [{ $type: 'videoGen', input: videoInput }] },
+          endpoint: 'https://orchestration.civitai.com/v2/consumer/workflows?wait=100',
+        };
+        generationContext.getStore()?.traces.push({ stage: 'civitai-video-schema-mapping', provider: 'civitai', ...sanitizeGenerationMetadata(videoRequestMetadata) });
+
+        const workflowEndpoint = 'https://orchestration.civitai.com/v2/consumer/workflows?wait=100';
+        let orchResp: Response;
+        try {
+          orchResp = await upstreamFetch(
+            { provider: 'civitai', route: req.path, model, key: apiKey },
+            workflowEndpoint,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${apiKey}`,
+              },
+              body: JSON.stringify(videoRequestMetadata.actualRequest),
+            }
+          );
+        } catch (error: any) {
+          return res.status(502).json({
+            error: `Civitai 视频提交网络错误: ${error.message}`,
+            errorSource: 'network',
+            ...videoRequestMetadata,
+          });
+        }
 
         if (!orchResp.ok) {
           const errText = await orchResp.text();
           keyPoolManager.recordResult('civitai', apiKey, false, Date.now() - startTime, errText, orchResp.status);
           return res.status(orchResp.status).json({
             error: `Civitai 视频生成接口返回错误 [${orchResp.status}]: ${errText}`,
+            errorSource: 'upstream',
+            upstreamStatus: orchResp.status,
+            rawResponse: errText,
+            ...videoRequestMetadata,
           });
         }
 
@@ -3464,6 +3595,7 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
           provider: usedProvider,
           model,
           historyItem: item,
+          ...videoRequestMetadata,
         });
       }
 
@@ -3697,6 +3829,9 @@ app.post('/api/engine/runware/generate', async (req, res) => {
   }
 
   const endpoint = mapped.endpoint;
+  let receivedStatus: number | undefined;
+  let receivedBody: string | undefined;
+  let imageResponseParsed = false;
   try {
     const upstream = await upstreamFetch(
       { provider: 'runware', route: req.path, model: mapped.actualModel, key: apiKey },
@@ -3710,6 +3845,7 @@ app.post('/api/engine/runware/generate', async (req, res) => {
         body: JSON.stringify(mapped.payload),
       }
     );
+    receivedStatus = upstream.status;
 
     if (!upstream.ok) {
       const rawResponse = await upstream.text();
@@ -3724,20 +3860,22 @@ app.post('/api/engine/runware/generate', async (req, res) => {
       });
     }
 
-    const data = await upstream.json();
-    let parsed: ReturnType<typeof parseRunwareImageResponse>;
-    try {
-      parsed = parseRunwareImageResponse(data, mapped.payload[0]?.outputFormat);
-    } catch (parseErr: any) {
-      keyPoolManager.recordResult('runware', apiKey, false, Date.now() - startTime, parseErr.message, 502);
+    receivedBody = await upstream.text();
+    const inspected = inspectRunwareImageResponseBody(receivedBody, upstream.status, mapped.payload[0]?.outputFormat, apiKey);
+    if (inspected.kind !== 'success') {
+      keyPoolManager.recordResult('runware', apiKey, false, Date.now() - startTime, inspected.error, inspected.upstreamStatus);
       return res.status(502).json({
-        error: parseErr.message,
-        errorSource: 'upstream',
+        error: inspected.error,
+        localStatus: 502,
+        upstreamStatus: inspected.upstreamStatus,
+        errorSource: inspected.kind === 'semantic-error' ? 'upstream' : 'upstream-protocol',
         endpoint,
-        rawResponse: data,
+        rawResponse: inspected.rawResponse,
         actualRequest: mapped.payload,
       });
     }
+    const parsed = inspected.parsed;
+    imageResponseParsed = true;
 
     keyPoolManager.recordResult('runware', apiKey, true, Date.now() - startTime);
 
@@ -3763,8 +3901,11 @@ app.post('/api/engine/runware/generate', async (req, res) => {
     keyPoolManager.recordResult('runware', apiKey, false, Date.now() - startTime, error.message);
     return res.status(502).json({
       error: `Runware 图像接口网络/协议错误：${error.message}`,
-      errorSource: 'network',
+      localStatus: 502,
+      ...(receivedStatus !== undefined ? { upstreamStatus: receivedStatus } : {}),
+      errorSource: receivedStatus === undefined ? 'network' : imageResponseParsed ? 'local' : 'upstream-protocol',
       endpoint,
+      ...(receivedBody !== undefined ? { rawResponse: receivedBody.split(apiKey).join('[credential redacted]') } : {}),
       stack: error.stack,
     });
   }
@@ -3788,6 +3929,9 @@ app.post('/api/engine/modelslab/generate', async (req, res) => {
 
   const endpoint = mapped.endpoint;
   const actualRequest = sanitizeModelsLabPayload(mapped.payload);
+  let receivedStatus: number | undefined;
+  let receivedBody: string | undefined;
+  let imageResponseParsed = false;
   try {
     const upstream = await upstreamFetch(
       { provider: 'modelslab', route: req.path, model: mapped.actualModel, key: apiKey },
@@ -3798,6 +3942,7 @@ app.post('/api/engine/modelslab/generate', async (req, res) => {
         body: JSON.stringify(mapped.payload),
       }
     );
+    receivedStatus = upstream.status;
 
     if (!upstream.ok) {
       const rawResponse = await upstream.text();
@@ -3812,20 +3957,23 @@ app.post('/api/engine/modelslab/generate', async (req, res) => {
       });
     }
 
-    const data = await upstream.json();
-    let parsed: ReturnType<typeof parseModelsLabResponse>;
-    try {
-      parsed = parseModelsLabResponse(data);
-    } catch (parseErr: any) {
-      keyPoolManager.recordResult('modelslab', apiKey, false, Date.now() - startTime, parseErr.message, 502);
+    receivedBody = await upstream.text();
+    const inspected = inspectModelsLabImageResponseBody(receivedBody, upstream.status, apiKey);
+    if (inspected.kind !== 'success') {
+      keyPoolManager.recordResult('modelslab', apiKey, false, Date.now() - startTime, inspected.error, inspected.upstreamStatus);
       return res.status(502).json({
-        error: parseErr.message,
-        errorSource: 'upstream',
+        error: inspected.error,
+        localStatus: 502,
+        upstreamStatus: inspected.upstreamStatus,
+        errorSource: inspected.kind === 'semantic-error' ? 'upstream' : 'upstream-protocol',
         endpoint,
-        rawResponse: data,
+        rawResponse: inspected.rawResponse,
+        ...(inspected.data !== undefined ? { parsedResponse: inspected.data } : {}),
         actualRequest,
       });
     }
+    let parsed: ReturnType<typeof parseModelsLabResponse> = inspected.parsed;
+    imageResponseParsed = true;
 
     let finalImageUrl = parsed.imageUrl;
 
@@ -3949,8 +4097,11 @@ app.post('/api/engine/modelslab/generate', async (req, res) => {
     keyPoolManager.recordResult('modelslab', apiKey, false, Date.now() - startTime, error.message);
     return res.status(502).json({
       error: `ModelsLab 图像接口网络/协议错误：${error.message}`,
-      errorSource: 'network',
+      localStatus: 502,
+      ...(receivedStatus !== undefined ? { upstreamStatus: receivedStatus } : {}),
+      errorSource: receivedStatus === undefined ? 'network' : imageResponseParsed ? 'local' : 'upstream-protocol',
       endpoint,
+      ...(receivedBody !== undefined ? { rawResponse: receivedBody.split(apiKey).join('[credential redacted]') } : {}),
       stack: error.stack,
     });
   }

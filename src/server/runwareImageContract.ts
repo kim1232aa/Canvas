@@ -171,3 +171,31 @@ export function parseRunwareImageResponse(response: RunwareImageResponse, output
     taskUUID: first.taskUUID,
   };
 }
+
+export type RunwareImageBodyInspection =
+  | { kind: 'success'; upstreamStatus: number; rawResponse: string; data: RunwareImageResponse; parsed: ReturnType<typeof parseRunwareImageResponse> }
+  | { kind: 'semantic-error' | 'protocol-error'; upstreamStatus: number; rawResponse: string; error: string; data?: RunwareImageResponse };
+
+/** Parse one received HTTP body while retaining its actual status and exact text for the caller. */
+export function inspectRunwareImageResponseBody(responseBody: string, upstreamStatus: number, outputFormat = 'PNG', secret?: string): RunwareImageBodyInspection {
+  const rawResponse = secret ? responseBody.split(secret).join('[credential redacted]') : responseBody;
+  let data: RunwareImageResponse;
+  try {
+    data = JSON.parse(rawResponse) as RunwareImageResponse;
+  } catch (cause) {
+    const message = cause instanceof Error ? cause.message : String(cause);
+    return { kind: 'protocol-error', upstreamStatus, rawResponse, error: `Runware 上游 HTTP ${upstreamStatus} 返回无效 JSON: ${message}` };
+  }
+  try {
+    return { kind: 'success', upstreamStatus, rawResponse, data, parsed: parseRunwareImageResponse(data, outputFormat) };
+  } catch (cause) {
+    const error = cause instanceof Error ? cause.message : String(cause);
+    return {
+      kind: Array.isArray(data?.errors) && data.errors.length > 0 ? 'semantic-error' : 'protocol-error',
+      upstreamStatus,
+      rawResponse,
+      error,
+      data,
+    };
+  }
+}

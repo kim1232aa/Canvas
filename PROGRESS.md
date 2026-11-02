@@ -1,5 +1,12 @@
 # 交接状态更新（用户于 2026-10-04 要求）
 
+## 2026-11-03 后续官方证据与固定数据核查
+
+- 继续检索官方文档和公开 Schema；盘点见 `docs/api-integration-review-2026-11-02.md` 的续查节。SenseNova 官方 `/v1/models` 经凭据实时读取，保留原始 reasoning 字段；Sogni selector/Schema 改读官方实时文件且不回退本地旧包；模型选择器失败或空结果不再回退旧目录。
+- Civitai 视频改用官方实时 OpenAPI 的 variant Schema 映射；Krea 错误预设模型改为让用户选实时 endpoint；Novita 未经证实的 LoRA 能力改为未知；Mage 移除固定比例/分辨率白名单。WaveSpeed 显式 base64 输出和 DeepInfra 输出按实际字节识别；Runware/ModelsLab 提交错误保留真实上游状态与原文。
+- 仍有未移除的静态数据：`src/schemas/providerSchema.ts` 的供应商模型字段快照、部分驱动 `supportedModels`、工作流预设和 Novita 通用端点声明；其中部分会影响本地映射或判断，不可称为全部动态。ModelScope 官方 REST 契约仍未取得足够可读证据。
+- 验证：`npm run build`、`npm run lint`、`npm test -- --maxWorkers=4`（208 文件、1709 项）及 `node hosting/check-hosting.mjs` 通过；Civitai Wan2.1、LTX2.3 还用本地下载的官方实时 Schema 离线检验字段映射。没有使用真实密钥或调用供应商生成，不能将其标为真实出图通过。
+
 ## 2026-11-03 逐供应商 API 核对与回归
 
 - 按仓库供应商逐家核对公开官方资料与当前实现，来源、核查范围、尚未核实项和接线缺口见 `docs/api-integration-review-2026-11-02.md`。没有使用真实密钥或调用真实生成。

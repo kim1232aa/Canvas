@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildRunwareImageRequest, parseRunwareImageResponse } from './runwareImageContract';
+import { buildRunwareImageRequest, inspectRunwareImageResponseBody, parseRunwareImageResponse } from './runwareImageContract';
 
 describe('Runware Image Contract', () => {
   it('builds a valid imageInference task payload array', () => {
@@ -96,6 +96,29 @@ describe('Runware Image Contract', () => {
     expect(() => parseRunwareImageResponse({
       errors: [{ code: 'INSUFFICIENT_CREDITS', message: 'You have no balance remaining' }],
     })).toThrow(/You have no balance remaining/);
+  });
+
+  it('retains the actual HTTP status and full body for 2xx semantic and protocol errors', () => {
+    const semanticBody = JSON.stringify({ errors: [
+      { code: 'INSUFFICIENT_CREDITS', message: 'No balance', taskUUID: 'task-a' },
+      { code: 'OTHER_ERROR', message: 'Second task error', taskUUID: 'task-b' },
+    ] });
+    expect(inspectRunwareImageResponseBody(semanticBody, 200)).toMatchObject({
+      kind: 'semantic-error', upstreamStatus: 200, rawResponse: semanticBody,
+    });
+
+    const invalidBody = `<html>${'provider error '.repeat(60)}</html>`;
+    expect(inspectRunwareImageResponseBody(invalidBody, 200)).toMatchObject({
+      kind: 'protocol-error', upstreamStatus: 200, rawResponse: invalidBody,
+    });
+  });
+
+  it('redacts an echoed credential from the retained response body', () => {
+    const key = 'fixture-private-key';
+    const body = JSON.stringify({ errors: [{ message: `invalid key ${key}` }] });
+    const inspected = inspectRunwareImageResponseBody(body, 200, 'PNG', key);
+    expect(inspected.rawResponse).toContain('[credential redacted]');
+    expect(inspected.rawResponse).not.toContain(key);
   });
 
   it('merges custom JSON into the task, keeps explicit model and numberResults, and records overrides', () => {

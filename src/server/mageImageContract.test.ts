@@ -63,7 +63,8 @@ describe('mageImageContract', () => {
   it('requires an explicit model and forwards an unknown model unchanged', () => {
     expect(() => buildMageImageRequest({ prompt: 'x' })).toThrow(/模型为必填项/);
     expect(buildMageImageRequest({ prompt: 'x', model_id: 'custom-model' }).payload.model_id).toBe('custom-model');
-    expect(() => buildMageImageRequest({ prompt: 'x', model_id: 'mango-v3', aspect_ratio: '7:7' })).toThrow(/aspect_ratio/);
+    expect(buildMageImageRequest({ prompt: 'x', model_id: 'mango-v3', aspect_ratio: '7:7', resolution: '5K' }).payload)
+      .toMatchObject({ aspect_ratio: '7:7', resolution: '5K' });
   });
 
   it('does not silently round or discard an explicitly supplied seed', () => {

@@ -63,8 +63,10 @@ export function handleSenseNovaChat(deps: SenseNovaRouteDeps) {
       const message = data.choices?.[0]?.message;
       return res.json({
         content: message?.content || '',
-        // SenseNova returns chain-of-thought in message.reasoning (not reasoning_content)
-        reasoningContent: message?.reasoning || '',
+        // Preserve both documented provider fields independently; the compatibility alias remains for existing callers.
+        reasoning: message?.reasoning ?? '',
+        reasoning_content: message?.reasoning_content ?? '',
+        reasoningContent: message?.reasoning || message?.reasoning_content || '',
         model: data.model || model,
         usage: data.usage,
       });

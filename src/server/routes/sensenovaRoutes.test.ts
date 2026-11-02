@@ -128,6 +128,60 @@ describe('sensenovaRoutes', () => {
       expect(fetchCalls[0].url).toBe('https://token.sensenova.cn/v1/chat/completions');
       expect(recordedResults[0][2]).toBe(true);
     });
+
+    it('preserves reasoning and reasoning_content independently when both are returned', async () => {
+      const { deps } = createMockDeps({
+        upstreamFetch: vi.fn(async () => ({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            model: 'deepseek-v4-flash',
+            choices: [{ message: { content: 'answer', reasoning: 'provider reasoning', reasoning_content: 'compat reasoning content' } }],
+          }),
+          text: async () => '',
+        })),
+      });
+      const handler = handleSenseNovaChat(deps);
+      const res = createMockRes();
+      await handler({ body: { model: 'deepseek-v4-flash', messages: [] }, path: '/api/sensenova/chat' } as any, res);
+
+      expect(res.data).toMatchObject({
+        content: 'answer',
+        reasoning: 'provider reasoning',
+        reasoning_content: 'compat reasoning content',
+        reasoningContent: 'provider reasoning',
+      });
+    });
+
+    it('maps documented reasoning_content into the legacy alias when reasoning is absent', async () => {
+      const { deps } = createMockDeps({
+        upstreamFetch: vi.fn(async () => ({
+          ok: true,
+          status: 200,
+          json: async () => ({ choices: [{ message: { content: 'answer', reasoning_content: 'documented field' } }] }),
+          text: async () => '',
+        })),
+      });
+      const res = createMockRes();
+      await handleSenseNovaChat(deps)({ body: { model: 'deepseek-v4-flash', messages: [] }, path: '/api/sensenova/chat' } as any, res);
+
+      expect(res.data).toMatchObject({ reasoning: '', reasoning_content: 'documented field', reasoningContent: 'documented field' });
+    });
+
+    it('uses non-empty reasoning_content for the legacy alias when reasoning is an empty string', async () => {
+      const { deps } = createMockDeps({
+        upstreamFetch: vi.fn(async () => ({
+          ok: true,
+          status: 200,
+          json: async () => ({ choices: [{ message: { content: 'answer', reasoning: '', reasoning_content: 'documented field' } }] }),
+          text: async () => '',
+        })),
+      });
+      const res = createMockRes();
+      await handleSenseNovaChat(deps)({ body: { model: 'deepseek-v4-flash', messages: [] }, path: '/api/sensenova/chat' } as any, res);
+
+      expect(res.data).toMatchObject({ reasoning: '', reasoning_content: 'documented field', reasoningContent: 'documented field' });
+    });
   });
 
   describe('handleSenseNovaGenerate', () => {

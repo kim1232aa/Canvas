@@ -24,7 +24,7 @@ const nativeControl = (tree: any, label: string) => {
   return control;
 };
 const mockHooks = () => {
-  vi.spyOn(React, 'useRef').mockReturnValue({current: null});
+  vi.spyOn(React, 'useRef').mockImplementation(((initial: unknown) => ({current: initial})) as any);
   vi.spyOn(React, 'useState').mockImplementation(((value: unknown) => [value, noop]) as any);
 };
 afterEach(() => vi.restoreAllMocks());

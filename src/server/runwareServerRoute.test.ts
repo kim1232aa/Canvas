@@ -7,7 +7,7 @@ describe('Server Runware and ModelsLab Routes Contract', () => {
   it('Runware route is registered in LARGE_BODY_ROUTES and calls buildRunwareImageRequest', () => {
     expect(serverSource).toContain("'/api/engine/runware/generate'");
     expect(serverSource).toContain('buildRunwareImageRequest');
-    expect(serverSource).toContain('parseRunwareImageResponse');
+    expect(serverSource).toContain('inspectRunwareImageResponseBody');
     expect(serverSource).toContain("provider: 'runware'");
   });
 
@@ -31,5 +31,14 @@ describe('Server Runware and ModelsLab Routes Contract', () => {
   it('masks apiKey in ModelsLab responses and uses official fetch contract for async jobs', () => {
     expect(serverSource).toContain('sanitizeModelsLabPayload');
     expect(serverSource).toContain('buildModelsLabFetchRequest');
+  });
+
+  it('keeps 2xx semantic/protocol failures tied to the real first-response status and endpoint', () => {
+    expect(serverSource).toContain('inspectRunwareImageResponseBody(receivedBody, upstream.status');
+    expect(serverSource).toContain('inspectModelsLabImageResponseBody(receivedBody, upstream.status');
+    expect(serverSource).toContain('upstreamStatus: inspected.upstreamStatus');
+    expect(serverSource).toContain("inspected.kind === 'semantic-error' ? 'upstream' : 'upstream-protocol'");
+    expect(serverSource).toContain('rawResponse: inspected.rawResponse');
+    expect(serverSource).toContain('endpoint,');
   });
 });

@@ -7,9 +7,8 @@ describe('preset modal blocked archives', () => {
   it('renders unselected models without fabricated families and disables blocked run actions', () => {
     const html = renderToStaticMarkup(<WorkflowPresetsModal isOpen onClose={vi.fn()} onLoadPreset={vi.fn()} onLoadAndRunPreset={vi.fn()} currentNodes={[]} currentConnections={[]} currentSpatialFrames={[]} onImportWorkflowData={vi.fn()} onClearCanvas={vi.fn()} />);
     expect(html).not.toContain('FLUX / SDXL');
-    // Every standard card now carries a proven catalog model → no empty-model shell, no 待配置 for a missing model.
-    expect(html).not.toContain('模型未选择/待重选');
-    expect(html).not.toContain('请先载入并选择模型');
+    // The Krea preset requires selecting a model from the current directory.
+    expect(html).toContain('模型未选择/待重选');
     // SenseNova/Sogni stay on roster with official default models (ids only appear in DOM when blocked).
     expect(html).toContain('SenseNova · 标准文生图');
     expect(html).toContain('Sogni · 标准文生图');
@@ -23,7 +22,7 @@ describe('preset modal blocked archives', () => {
     expect(html).not.toMatch(/preset-blocked-std-muapi-t2i[\s\S]{0,200}lora_url/);
     expect(html).toMatch(/待配方，不能立即运行/);
     expect(html).toMatch(/bg-slate-700\/80[^"]*"[^>]*disabled=""|disabled=""[^>]*bg-slate-700\/80/);
-    expect(html).not.toContain('待配置：');
+    expect(html).toContain('待配置：');
     expect(html).toContain('仅载入');
     expect(html).toContain('追加合并到当前画布，不覆盖已有内容');
   });

@@ -221,3 +221,31 @@ export function parseModelsLabResponse(data: unknown): { status: 'success' | 'pr
 
   throw new Error(`ModelsLab 未知响应状态: ${(res as any).status}`);
 }
+
+export type ModelsLabImageBodyInspection =
+  | { kind: 'success'; upstreamStatus: number; rawResponse: string; data: unknown; parsed: ReturnType<typeof parseModelsLabResponse> }
+  | { kind: 'semantic-error' | 'protocol-error'; upstreamStatus: number; rawResponse: string; error: string; data?: unknown };
+
+/** Retain the received HTTP status and exact response text for JSON and task-level failures. */
+export function inspectModelsLabImageResponseBody(responseBody: string, upstreamStatus: number, secret?: string): ModelsLabImageBodyInspection {
+  const rawResponse = secret ? responseBody.split(secret).join('[credential redacted]') : responseBody;
+  let data: any;
+  try {
+    data = JSON.parse(rawResponse);
+  } catch (cause) {
+    const message = cause instanceof Error ? cause.message : String(cause);
+    return { kind: 'protocol-error', upstreamStatus, rawResponse, error: `ModelsLab 上游 HTTP ${upstreamStatus} 返回无效 JSON: ${message}` };
+  }
+  try {
+    return { kind: 'success', upstreamStatus, rawResponse, data, parsed: parseModelsLabResponse(data) };
+  } catch (cause) {
+    const error = cause instanceof Error ? cause.message : String(cause);
+    return {
+      kind: data?.status === 'error' ? 'semantic-error' : 'protocol-error',
+      upstreamStatus,
+      rawResponse,
+      error,
+      data,
+    };
+  }
+}
