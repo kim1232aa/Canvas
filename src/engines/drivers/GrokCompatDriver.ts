@@ -45,11 +45,7 @@ export class GrokCompatDriver extends BaseEngineDriver {
     if (effectiveKey) headers['x-grok-compat-key'] = effectiveKey;
     if (effectiveBaseUrl) headers['x-grok-compat-base-url'] = effectiveBaseUrl;
 
-    const isVideo = Boolean(
-      params.isVideo ||
-      params.videoDuration ||
-      params.model.includes('video')
-    );
+    const isVideo = Boolean(params.isVideo || params.videoDuration != null);
 
     if (isVideo) {
       const extra = params.extraParams || {};

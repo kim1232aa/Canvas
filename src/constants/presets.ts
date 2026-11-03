@@ -579,8 +579,8 @@ const STD_SPECS: StdSpec[] = [
   { provider: 'venice', ckpt: 'venice-sd35', hasLora: false, steps: 20, cfg: 7.5, omit: ['sampler', 'scheduler', 'denoise'] },
   // DeepInfra public T2I: docs.deepinfra.com/apis/image-generation + OpenAPI OpenAIImagesGenerationsIn — prompt/model/size/n/response_format only; hasLora:false (private LoRA needs dashboard deploy).
   { provider: 'deepinfra', ckpt: 'black-forest-labs/FLUX-1-schnell', hasLora: false, hasNegative: false, omit: ['steps', 'cfg', 'sampler', 'scheduler', 'denoise'] },
-  // Sogni: catalog krea2_turbo_fp8_scaled (temp/e2e/sogni/model-catalog.json) guidance min=max=default=1, steps default 8.
-  // Driver (schemaProviders.ts:971 cfg→guidance) sends guidance; generate_image tool Schema has no steps → steps sent:false (schemaContract.test.ts:351-361) → steps omitted to avoid an empty shell.
+  // Sogni hosted-tool selector: live official generate_image.schema.json enum includes krea-2-turbo (verified 2026-11-03, 30 models). Not a Krea API path.
+  // Driver maps cfg→guidance; Schema has no steps → omit steps. LoRA via loras+loraStrengths when catalog confirms.
   { provider: 'sogni', ckpt: 'krea-2-turbo', hasLora: false, cfg: 1, omit: ['steps', 'sampler', 'scheduler', 'denoise'] },
   // Live OpenAPI GET /v1/models/black-forest-labs/flux-dev-lora + default_example: lora_weights=fofr/flux-80s-cyberpunk, lora_scale=1, guidance=3, steps=28.
   // Official docs example also cites fofr/flux-pixar-cars; default_example LoRA is the acceptance recipe id.

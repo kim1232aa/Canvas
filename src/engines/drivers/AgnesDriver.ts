@@ -94,7 +94,7 @@ export class AgnesDriver extends BaseEngineDriver {
       headers['x-agnes-base-url'] = effectiveBaseUrl;
     }
 
-    const isVideo=Boolean(params.isVideo || params.model.includes('video'));
+    const isVideo=Boolean(params.isVideo || params.videoDuration != null);
     const omissionEntries = [
       ['width', params.width],
       ['height', params.height],

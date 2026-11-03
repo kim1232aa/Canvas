@@ -20,13 +20,8 @@ export class FalDriver extends BaseEngineDriver {
     if (!params.model) throw new Error('模型为必填项（model is required）');
     const effectiveKey = params.apiKey || keys.falKey || this.defaultKey;
     const keyHeader: Record<string, string> = effectiveKey ? { 'x-fal-key': effectiveKey } : {};
-    const isVideo = Boolean(
-      params.isVideo ||
-      params.model.includes('video') ||
-      params.model.includes('wan2.1-t2v') ||
-      params.model.includes('image-to-video') ||
-      params.model.includes('text-to-video')
-    );
+    // Prefer the normalized flag from BaseEngineDriver; do not guess from model id strings.
+    const isVideo = Boolean(params.isVideo || params.videoDuration != null);
 
     // No client-side model swap; the server reports any documented t2v→i2v endpoint mapping via wasAdapted.
     const finalModel = params.model;

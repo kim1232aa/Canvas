@@ -439,7 +439,7 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       keyName: 'deepinfraKey',
       keyPlaceholder: 'DeepInfra API Key',
       status: 'unconfigured',
-      popularModels: ['black-forest-labs/FLUX-1-schnell'],
+      popularModels: [], // no static shortcut; Hub reads live GET /models/list
     },
     {
       id: 'sogni',
