@@ -1,5 +1,11 @@
 # ComfyCanvas Studio：开发交接、产品缺口与验收手册
 
+## 2026-11-03 标准图生视频预设「仅载入」名单（产品核）
+
+| 项 | 判定 | 要点 / 证据 |
+| --- | --- | --- |
+| std-*-i2v 仅载入 6/6 | **产品过（仅载入，不算出视频）** | 硬刷新·未点跑·生成请求 0·未上传参考图。Fal 重拍三节点 replace（`dee07f8`）+ duration5/1080p/`wan/v2.7`；WS 5s/480p；Civitai 5s/1080p+Schema灰字；MuAPI 5s/720p；Replicate `minimax/video-01` 无 duration/aspect/fps/resolution 空壳。**记注**：Novita Schema HTTP 404 `SVD-XT`（**代码已修 dedicated img2video 声明路径，待仅载入重拍清 toast**）（已读 Schema、非生成）；Replicate 空负向框仍在（官方无负向，后排清）。证据 `temp/e2e/presets-video-2026-11-03/`（v01～v06 + RESULT）。代码 `397ca00` · `dee07f8`。 |
+
 ## 2026-11-03 标准文生图预设「仅载入」名单（产品核①）
 
 | 项 | 判定 | 要点 / 证据 |

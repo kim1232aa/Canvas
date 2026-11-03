@@ -1044,6 +1044,11 @@ export const NodeItem: React.FC<NodeItemProps> = ({
             }
 
             if (widget.type === 'textarea') {
+              // I2V presets: hide empty negative when seeded schemaProperties omits it (e.g. Replicate minimax/video-01).
+              if (node.type === 'AIVideoNode' && widget.name === 'negative_prompt') {
+                const seededNeg = readDeclaredSchemaProperties(node.values.custom_parameters);
+                if (seededNeg && !canvasFieldMatchesSchema('negative_prompt', seededNeg) && !filledCanvasValue(value)) return null;
+              }
               const isPositiveCLIP = node.type === 'CLIPTextEncode';
               const isNegativeCLIP =
                 node.type === 'CLIPTextEncodeNegative' ||

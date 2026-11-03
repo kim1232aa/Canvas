@@ -1,0 +1,120 @@
+{
+  "_doc": "Novita POST /v3/async/img2video — dedicated model_name enum (SVD / SVD-XT), NOT GET /v3/model checkpoints. Body is flat fields + optional extra (SDK Img2VideoRequest), not {extra,request}. Transcribed 2026-11-03 from live official SDK/types + python example + blog curl; live GET /v3/model?filter.query=SVD returns 0 rows.",
+  "provider": "novita",
+  "operation": "POST /v3/async/img2video",
+  "endpointPath": "/v3/async/img2video",
+  "requestWrapper": null,
+  "resultEndpoint": "GET /v3/async/task-result?task_id=",
+  "dedicatedModels": ["SVD-XT", "SVD"],
+  "sources": [
+    "https://raw.githubusercontent.com/novitalabs/javascript-sdk/main/src/types.ts",
+    "https://github.com/novitalabs/javascript-sdk/blob/main/src/types.ts",
+    "https://raw.githubusercontent.com/novitalabs/python-sdk/main/examples/img2video.py",
+    "https://blogs.novita.ai/transforming-images-with-ease-image-to-video-ai-api/",
+    "https://docs.novita.ai/guides/model-apis-rate-limits.md"
+  ],
+  "fetchedAt": "2026-11-03",
+  "alignedWith": "official JS SDK Img2VideoModel + Img2VideoRequest; live catalog probe filter.query=SVD → 0",
+  "inputSchema": {
+    "type": "object",
+    "required": ["model_name", "image_file", "frames_num", "frames_per_second", "seed", "image_file_resize_mode", "steps"],
+    "properties": {
+      "model_name": {
+        "type": "string",
+        "enum": ["SVD-XT", "SVD"],
+        "description": "官方 img2video 专用 model_name 枚举（JS SDK Img2VideoModel）；不是 GET /v3/model checkpoint 的 sd_name_in_api（来源 https://raw.githubusercontent.com/novitalabs/javascript-sdk/main/src/types.ts · 抓取 2026-11-03）",
+        "x-source": "https://raw.githubusercontent.com/novitalabs/javascript-sdk/main/src/types.ts",
+        "x-fetchedAt": "2026-11-03",
+        "x-liveConfirmed": false,
+        "x-liveConfirmedBy": null,
+        "x-liveConfirmedAt": null
+      },
+      "image_file": {
+        "type": "string",
+        "description": "输入图 base64 或 SDK 接受的 URL（python example 用 URL；blog curl 用 base64）（来源 https://raw.githubusercontent.com/novitalabs/python-sdk/main/examples/img2video.py · 抓取 2026-11-03）",
+        "x-source": "https://raw.githubusercontent.com/novitalabs/python-sdk/main/examples/img2video.py",
+        "x-fetchedAt": "2026-11-03",
+        "x-liveConfirmed": false,
+        "x-liveConfirmedBy": null,
+        "x-liveConfirmedAt": null
+      },
+      "frames_num": {
+        "type": "integer",
+        "description": "生成帧数；官方示例 25（来源 https://blogs.novita.ai/transforming-images-with-ease-image-to-video-ai-api/ · 抓取 2026-11-03）",
+        "x-source": "https://blogs.novita.ai/transforming-images-with-ease-image-to-video-ai-api/",
+        "x-fetchedAt": "2026-11-03",
+        "x-liveConfirmed": false,
+        "x-liveConfirmedBy": null,
+        "x-liveConfirmedAt": null
+      },
+      "frames_per_second": {
+        "type": "integer",
+        "description": "帧率字段名 frames_per_second（不是 fps）；官方示例默认 6（来源 https://raw.githubusercontent.com/novitalabs/javascript-sdk/main/src/types.ts · 抓取 2026-11-03）",
+        "x-source": "https://raw.githubusercontent.com/novitalabs/javascript-sdk/main/src/types.ts",
+        "x-fetchedAt": "2026-11-03",
+        "x-liveConfirmed": false,
+        "x-liveConfirmedBy": null,
+        "x-liveConfirmedAt": null
+      },
+      "seed": {
+        "type": "integer",
+        "description": "随机种子（来源 https://raw.githubusercontent.com/novitalabs/javascript-sdk/main/src/types.ts · 抓取 2026-11-03）",
+        "x-source": "https://raw.githubusercontent.com/novitalabs/javascript-sdk/main/src/types.ts",
+        "x-fetchedAt": "2026-11-03",
+        "x-liveConfirmed": false,
+        "x-liveConfirmedBy": null,
+        "x-liveConfirmedAt": null
+      },
+      "image_file_resize_mode": {
+        "type": "string",
+        "enum": ["ORIGINAL_RESOLUTION", "CROP_TO_ASPECT_RATIO"],
+        "description": "Img2VideoResizeMode（来源 https://raw.githubusercontent.com/novitalabs/javascript-sdk/main/src/types.ts · 抓取 2026-11-03）",
+        "x-source": "https://raw.githubusercontent.com/novitalabs/javascript-sdk/main/src/types.ts",
+        "x-fetchedAt": "2026-11-03",
+        "x-liveConfirmed": false,
+        "x-liveConfirmedBy": null,
+        "x-liveConfirmedAt": null
+      },
+      "steps": {
+        "type": "integer",
+        "description": "采样步数；官方示例 20/30（来源 https://raw.githubusercontent.com/novitalabs/python-sdk/main/examples/img2video.py · 抓取 2026-11-03）",
+        "x-source": "https://raw.githubusercontent.com/novitalabs/python-sdk/main/examples/img2video.py",
+        "x-fetchedAt": "2026-11-03",
+        "x-liveConfirmed": false,
+        "x-liveConfirmedBy": null,
+        "x-liveConfirmedAt": null
+      },
+      "motion_bucket_id": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 255,
+        "description": "可选运动桶；SDK 范围 1–255（来源 https://raw.githubusercontent.com/novitalabs/javascript-sdk/main/src/types.ts · 抓取 2026-11-03）",
+        "x-source": "https://raw.githubusercontent.com/novitalabs/javascript-sdk/main/src/types.ts",
+        "x-fetchedAt": "2026-11-03",
+        "x-liveConfirmed": false,
+        "x-liveConfirmedBy": null,
+        "x-liveConfirmedAt": null
+      },
+      "cond_aug": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1,
+        "description": "可选条件增强；SDK 范围 0–1（来源 https://raw.githubusercontent.com/novitalabs/javascript-sdk/main/src/types.ts · 抓取 2026-11-03）",
+        "x-source": "https://raw.githubusercontent.com/novitalabs/javascript-sdk/main/src/types.ts",
+        "x-fetchedAt": "2026-11-03",
+        "x-liveConfirmed": false,
+        "x-liveConfirmedBy": null,
+        "x-liveConfirmedAt": null
+      },
+      "enable_frame_interpolation": {
+        "type": "boolean",
+        "description": "可选帧插值（blog curl / python example）（来源 https://blogs.novita.ai/transforming-images-with-ease-image-to-video-ai-api/ · 抓取 2026-11-03）",
+        "x-source": "https://blogs.novita.ai/transforming-images-with-ease-image-to-video-ai-api/",
+        "x-fetchedAt": "2026-11-03",
+        "x-liveConfirmed": false,
+        "x-liveConfirmedBy": null,
+        "x-liveConfirmedAt": null
+      }
+    }
+  }
+}

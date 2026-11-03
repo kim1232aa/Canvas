@@ -551,7 +551,6 @@ function buildStandardI2v(spec: I2vSpec): WorkflowPreset {
     targetProvider: provider,
     model: spec.model,
     prompt: '',
-    negative_prompt: '',
     // Front-door: I2V needs a real reference image; LoadImage starts empty so readiness / node note fire.
     require_reference_image: true,
     custom_parameters: JSON.stringify({
@@ -561,6 +560,8 @@ function buildStandardI2v(spec: I2vSpec): WorkflowPreset {
       },
     }),
   };
+  // Only seed negative when the endpoint Schema lists it — avoid empty Replicate negative shell.
+  if (spec.schemaProperties.includes('negative_prompt')) vidValues.negative_prompt = '';
   if (spec.duration !== undefined) vidValues.duration = spec.duration;
   if (spec.resolution !== undefined) vidValues.resolution = spec.resolution;
   if (spec.aspect_ratio !== undefined) vidValues.aspect_ratio = spec.aspect_ratio;

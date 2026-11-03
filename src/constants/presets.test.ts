@@ -122,6 +122,12 @@ describe('standard workflow presets (23 T2I + 6 I2V)', () => {
       expect(String(vid.values.model), prov).toBe(model);
       expect(String(vid.values.model).length, `${prov} non-empty`).toBeGreaterThan(0);
     }
+    // Replicate minimax/video-01 Schema has no negative_prompt — do not seed empty shell.
+    const rep = preset('std-replicate-i2v').nodes.find(n => n.type === 'AIVideoNode')!;
+    expect(Object.prototype.hasOwnProperty.call(rep.values, 'negative_prompt')).toBe(false);
+    const nov = preset('std-novita-i2v').nodes.find(n => n.type === 'AIVideoNode')!;
+    expect(nov.values.num_frames).toBe(25);
+    expect(nov.values.fps).toBe(6);
   });
 
   it('I2V seeds official duration/resolution/frames only — no empty shells, no fake 1024 WH, require_reference_image', () => {

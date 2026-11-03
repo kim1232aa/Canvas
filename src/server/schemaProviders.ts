@@ -457,6 +457,13 @@ export function loadProviderDeclaration(provider:string,endpointPath:string,dir=
   for(const f of files){const d=JSON.parse(nodeFs.readFileSync(nodePath.join(dir,f),'utf8'));if(d.provider===provider && d.endpointPath===endpointPath && d.inputSchema)return {...d,file:'src/config/providerDeclarations/'+f};}
   return null;
 }
+/** Official Novita img2video model_name values (SVD / SVD-XT). Not present in GET /v3/model checkpoints. */
+export function novitaImg2VideoDedicatedModels(decl:any=loadProviderDeclaration('novita','/v3/async/img2video')):string[] {
+  if(!decl)return [];
+  if(Array.isArray(decl.dedicatedModels))return decl.dedicatedModels.map((x:any)=>String(x));
+  const en=decl.inputSchema?.properties?.model_name?.enum;
+  return Array.isArray(en)?en.map((x:any)=>String(x)):[];
+}
 
 export function novitaLoraCatalogRows(models:any[]) {
   return (Array.isArray(models)?models:[]).filter((m:any)=>{
@@ -1079,6 +1086,14 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
       return {provider,model,sourceUrl,endpoint,inputSchema,modelMetadata:{...entry,parameters:undefined},schemaStatus:'official-docs-json',schemaSource:docsJson,mediaKind:isVideo?'video':'image'};
     }
     if(provider==='novita') {
+      // Dedicated img2video models (SVD / SVD-XT) are official POST /v3/async/img2video model_name values —
+      // JS SDK Img2VideoModel enum — and are NOT checkpoints in GET /v3/model (live filter.query=SVD → 0).
+      const img2Decl=loadProviderDeclaration(provider,'/v3/async/img2video');
+      if(img2Decl && novitaImg2VideoDedicatedModels(img2Decl).includes(model)) {
+        const endpoint=schemaProviders.novita.root+'/v3/async/img2video';
+        const schemaSource=(img2Decl.sources||[]).join(' ; ');
+        return {provider,model,sourceUrl:schemaSource || endpoint,endpoint,inputSchema:img2Decl.inputSchema,modelMetadata:{id:model,name:model,category:'image-to-video',type:'video',endpoint:'/v3/async/img2video'},schemaStatus:'official-html-declaration',schemaSource,declaration:{file:img2Decl.file,sources:img2Decl.sources,fetchedAt:img2Decl.fetchedAt},schemaUnprobed:true,schemaConfirmedFields:Object.entries(img2Decl.inputSchema.properties||{}).filter(([,v]:any)=>v?.['x-liveConfirmed']===true).map(([k])=>k),mediaKind:'video'};
+      }
       const {rows,sourceUrl}=await list(req,provider,credential);
       const entry=rows.find((x:any)=>x.id===model);
       if(!entry)throw Object.assign(new Error(`Novita /v3/model 中没有 checkpoint ${model}`),{status:404,errorSource:'local',endpoint:sourceUrl});

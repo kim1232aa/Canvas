@@ -7,6 +7,8 @@ import {
   novitaTaskStatus,
   novitaOutputs,
   normalizeSchemaProviderItems,
+  novitaImg2VideoDedicatedModels,
+  loadProviderDeclaration,
 } from './schemaProviders';
 import * as mod from './schemaProviders';
 
@@ -83,5 +85,13 @@ describe('Novita provider (official docs 2026-10-15)', () => {
     expect((mod as any).novitaImageInputSchema).toBeUndefined();
     expect((mod as any).novitaVideoInputSchema).toBeUndefined();
     expect(Object.keys(mod).filter(k => /^novita.*InputSchema$/i.test(k))).toEqual([]);
+  });
+
+  it('img2video dedicated models are SVD-XT/SVD, not /v3/model checkpoints', () => {
+    expect(novitaImg2VideoDedicatedModels()).toEqual(['SVD-XT', 'SVD']);
+    const d = loadProviderDeclaration('novita', '/v3/async/img2video');
+    expect(d?.inputSchema?.properties?.frames_num).toBeTruthy();
+    expect(d?.inputSchema?.properties?.frames_per_second).toBeTruthy();
+    expect(schemaProviders.novita.catalog).toContain('filter.types=checkpoint');
   });
 });
