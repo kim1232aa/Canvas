@@ -45,8 +45,10 @@ describe('send-as-built dry run (driver → our server route body)', () => {
   for (const [id, make, model] of drivers) {
     it(id, async () => {
       const bodies: string[] = [];
-      vi.stubGlobal('fetch', vi.fn(async (_u: any, init?: any) => {
-        if (init?.body) bodies.push(typeof init.body === 'string' ? init.body : JSON.stringify(init.body));
+      vi.stubGlobal('fetch', vi.fn(async (u: any, init?: any) => {
+        const url = String(u);
+        if (!init?.body && /model-schema|schema/.test(url)) return new Response(JSON.stringify({ ok: true, inputSchema: { properties: { prompt: {} } }, properties: ['prompt'] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        if (init?.body && !/prefetch-failure|\/api\/history/.test(url)) bodies.push(typeof init.body === 'string' ? init.body : JSON.stringify(init.body));
         return new Response(JSON.stringify({ ok: false, error: 'dry-run stop' }), { status: 418, headers: { 'Content-Type': 'application/json' } });
       }));
       let thrown = '';

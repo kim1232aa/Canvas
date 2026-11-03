@@ -3057,43 +3057,12 @@ app.post(['/api/fal/generate', '/api/generate', '/api/engine/fal/generate'], asy
     if (typeof req.body.raw === 'boolean') payload.raw=req.body.raw;
 
 
-    // F5: image_size must be official enum (when endpoint is in static schema) or { width, height } object
+    // 2026-11-04 (雁): size sent as filled — no enum/range refusal, no rounding, no one-side refusal.
     let finalImageSize: any = undefined;
-    if (isProvided(image_size)) {
-      if (typeof image_size === 'string') {
-        const allowedEnums = ['square_hd', 'square', 'portrait_4_3', 'portrait_16_9', 'landscape_4_3', 'landscape_16_9'];
-        const knownSpec = getModelSpec('fal', endpoint);
-        if (knownSpec && !allowedEnums.includes(image_size)) {
-          return res.status(400).json({
-            error: `该服务商不支持此 image_size 枚举: "${image_size}"。允许值为: ${allowedEnums.join(', ')}，或提供 {width, height} 对象`,
-          });
-        }
-        finalImageSize = image_size;
-      } else if (typeof image_size === 'object' && image_size !== null) {
-        const w = Number(image_size.width);
-        const h = Number(image_size.height);
-        if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0 || w > 14142 || h > 14142) {
-          return res.status(400).json({
-            error: `无法表达的尺寸: image_size { width: ${image_size.width}, height: ${image_size.height} }。宽高必须为 1~14142 之间的正数。`,
-          });
-        }
-        finalImageSize = { width: Math.round(w), height: Math.round(h) };
-      } else {
-        return res.status(400).json({ error: '无效的 image_size 格式，必须为枚举字符串或 {width, height} 对象' });
-      }
-    } else if (isProvided(req.body.width) || isProvided(req.body.height)) {
-      if (!isProvided(req.body.width) || !isProvided(req.body.height)) {
-        return res.status(400).json({ error: '提供尺寸时 width 与 height 必须同时提供' });
-      }
-      const w = Number(req.body.width);
-      const h = Number(req.body.height);
-      if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0 || w > 14142 || h > 14142) {
-        return res.status(400).json({
-          error: `无法表达的尺寸: width=${req.body.width}, height=${req.body.height}。宽高必须为 1~14142 之间的正数。`,
-        });
-      }
-      finalImageSize = { width: Math.round(w), height: Math.round(h) };
-    }
+    if (isProvided(image_size)) finalImageSize = image_size;
+    else if (isProvided(req.body.width) && isProvided(req.body.height)) finalImageSize = { width: req.body.width, height: req.body.height };
+    else { if (isProvided(req.body.width)) payload.width = req.body.width; if (isProvided(req.body.height)) payload.height = req.body.height; }
+    if (isProvided(req.body.sampler_name)) payload.sampler_name = req.body.sampler_name;
     if (finalImageSize) payload.image_size = finalImageSize;
 
     // Live OpenAPI required for outbound (static FAL_MODELS is UI clue only). Prefer queue OpenAPI (no key).
