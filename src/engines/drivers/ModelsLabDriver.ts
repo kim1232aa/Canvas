@@ -21,8 +21,8 @@ export class ModelsLabDriver extends BaseEngineDriver {
       id: 'flux',
       name: 'FLUX.1 ModelsLab',
       type: 'image',
-      description: 'ModelsLab 托管 FLUX.1 图像生成（官方：不支持 SD 训练的 LoRA / negative_prompt）',
-      supportsLora: false,
+      description: 'ModelsLab 托管 FLUX.1 图像生成（官方支持 lora_model/lora_strength；勿挂 SD 系 LoRA 到 flux）',
+      supportsLora: true,
     },
     {
       id: 'sdxl',

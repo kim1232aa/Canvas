@@ -134,11 +134,17 @@ async function tracedFetchOnce(input:RequestInfo|URL,init?:RequestInit,category:
   try {
     const response=await fetch(input,withCanvasOrigin(route,init));
     const raw=await response.clone().text();
-    let data:any=raw;try{data=JSON.parse(raw);}catch{}
-    record.status=response.status;record.response=data;record.state=response.ok && data?.ok!==false?'complete':'error';
+    let data:any=raw;let jsonParseError:string|undefined;
+    try{data=JSON.parse(raw);}catch(e:any){jsonParseError=String(e?.message||e);}
+    const contentType=String(response.headers.get('content-type')||'').toLowerCase();
+    const expectedJson=contentType.includes('application/json')||contentType.includes('+json');
+    // Iron rule: never treat a 2xx JSON-declared body that failed to parse as complete/success.
+    const parseBlocksSuccess=Boolean(jsonParseError && expectedJson && raw.trim());
+    record.status=response.status;record.response=parseBlocksSuccess?{error:`响应声明 JSON 但解析失败: ${jsonParseError}`,rawResponse:raw,parseError:jsonParseError,stack:new Error(jsonParseError).stack}:data;
+    record.state=response.ok && data?.ok!==false && !parseBlocksSuccess?'complete':'error';
     records=[...records];emit();
-    if(!response.ok || data?.ok===false){
-      const error=new ApiTraceError(response.status,data,route,raw);
+    if(!response.ok || data?.ok===false || parseBlocksSuccess){
+      const error=new ApiTraceError(response.status,record.response,route,raw);
       record.stack=error.stack;
       throw error;
     }

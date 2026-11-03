@@ -602,7 +602,10 @@ export async function parseVeniceImageResponse(r:Response,url:string) {
     const data={__veniceBinaryImage:true,contentType,base64:bytes.toString('base64')};
     return {data,status:r.status,raw:JSON.stringify(data)};
   }
-  const raw=rawText();let data:any;try{data=JSON.parse(raw);}catch{}
+  const raw=rawText();let data:any;
+  try{data=JSON.parse(raw);}catch(parseErr:any){
+    throw Object.assign(new Error(`HTTP ${r.status}: 响应非 JSON: ${parseErr?.message || parseErr}\n${raw}`),{status:r.status,rawResponse:raw,endpoint:url,errorSource:'upstream-protocol',stack:parseErr?.stack});
+  }
   if(!data || data.status==='error' || (typeof data.code==='number' && data.code!==200))
     throw Object.assign(new Error(`HTTP ${r.status}: ${raw}`),{status:r.status,rawResponse:raw,endpoint:url,errorSource:'upstream-protocol'});
   return {data,status:r.status,raw};
@@ -614,7 +617,10 @@ export function makeSchemaProviderReader(provider:Provider,depFetch:Dependencies
   const headers=key?{[schemaProviders[provider].auth]:provider==='muapi'?key:`Bearer ${key}`}:{};
   return async(url:string,init?:RequestInit)=>{
     const r=await depFetch({provider,route,key},url,{...init,headers:{...headers,...init?.headers},signal:AbortSignal.timeout(60000)});
-    const raw=await r.text();let data:any;try{data=JSON.parse(raw);}catch{}
+    const raw=await r.text();let data:any;
+    try{data=JSON.parse(raw);}catch(parseErr:any){
+      throw Object.assign(new Error(`HTTP ${r.status}: 响应非 JSON: ${parseErr?.message || parseErr}\n${raw}`),{status:r.status,rawResponse:raw,endpoint:url,errorSource:r.ok?'upstream-protocol':'upstream',stack:parseErr?.stack});
+    }
     if(!r.ok || !data || data.status==='error' || (typeof data.code==='number' && data.code!==200)) {
       throw Object.assign(new Error(`HTTP ${r.status}: ${raw}`),{status:r.status,rawResponse:raw,endpoint:url,errorSource:r.ok?'upstream-protocol':'upstream'});
     }
@@ -963,7 +969,10 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
     const {key,headers}=credential || credentials(req,provider);
     const r=await dep.fetch({provider,route:req.path,model:req.body?.model || req.query.model,key},url,{...init,headers:{...headers,...init?.headers},signal:AbortSignal.timeout(60000)});
     if(provider==='venice' && new URL(url).pathname.endsWith('/image/generate'))return parseVeniceImageResponse(r,url);
-    const raw=await r.text();let data:any;try{data=JSON.parse(raw);}catch{}
+    const raw=await r.text();let data:any;
+    try{data=JSON.parse(raw);}catch(parseErr:any){
+      throw Object.assign(new Error(`HTTP ${r.status}: 响应非 JSON: ${parseErr?.message || parseErr}\n${raw}`),{status:r.status,rawResponse:raw,endpoint:url,errorSource:r.ok?'upstream-protocol':'upstream',stack:parseErr?.stack});
+    }
     if(!r.ok || !data || data.status==='error' || (typeof data.code==='number' && data.code!==200)) {
       throw Object.assign(new Error(`HTTP ${r.status}: ${raw}`),{status:r.status,rawResponse:raw,endpoint:url,errorSource:r.ok?'upstream-protocol':'upstream'});
     }
@@ -1526,7 +1535,10 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
           const outputs=meta.downloadUrl?[meta.downloadUrl,dataUrl]:[dataUrl];
           return res.json({status:'completed',outputs,rawResponse:{note:'binary video body',contentType:ctype,bytes:buf.length,download_url:meta.downloadUrl},upstreamStatus:r.status,endpoint,credentialRef:credential.credentialRef});
         }
-        const raw=await r.text();let data:any;try{data=JSON.parse(raw);}catch{}
+        const raw=await r.text();let data:any;
+        try{data=JSON.parse(raw);}catch(parseErr:any){
+          throw Object.assign(new Error(`HTTP ${r.status}: 响应非 JSON: ${parseErr?.message || parseErr}\n${raw}`),{status:r.status,rawResponse:raw,endpoint,errorSource:r.ok?'upstream-protocol':'upstream',stack:parseErr?.stack});
+        }
         if(!r.ok || !data)throw Object.assign(new Error(`HTTP ${r.status}: ${raw}`),{status:r.status,rawResponse:raw,endpoint,errorSource:r.ok?'upstream-protocol':'upstream'});
         const status=veniceVideoStatus(data.status);
         const outputs=[data.video_url,data.url,data.download_url,meta.downloadUrl].filter((u:any)=>typeof u==='string' && u).map(String);

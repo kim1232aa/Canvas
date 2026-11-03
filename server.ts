@@ -4501,6 +4501,7 @@ app.post(['/api/huggingface/generate', '/api/engine/huggingface/generate'], asyn
 
       const streamText = await sseResp.text();
       let genUrl = '';
+      const sseParseErrors: string[] = [];
       const lines = streamText.split('\n');
       for (const line of lines) {
         if (line.startsWith('data: ')) {
@@ -4510,7 +4511,9 @@ app.post(['/api/huggingface/generate', '/api/engine/huggingface/generate'], asyn
               if (typeof parsed[2] === 'number' && Number.isSafeInteger(parsed[2])) sentSeed = parsed[2];
               genUrl = parsed[0][0].image?.url || parsed[0][0].image?.path || '';
             }
-          } catch (e) {}
+          } catch (e: any) {
+            sseParseErrors.push(String(e?.message || e));
+          }
         }
       }
 
@@ -4518,6 +4521,7 @@ app.post(['/api/huggingface/generate', '/api/engine/huggingface/generate'], asyn
         return res.status(500).json({
           error: 'Hugging Face Z-Image-Turbo 未能产生有效图像产物',
           details: streamText,
+          parseErrors: sseParseErrors.length ? sseParseErrors : undefined,
           model,
         });
       }

@@ -127,11 +127,13 @@ export class CivitaiDriver extends BaseEngineDriver {
         }
 
         const pollText = await statusResp.text();
-        let statusData: any = {};
+        let statusData: any;
         try {
           statusData = JSON.parse(pollText);
-        } catch {
-          continue;
+        } catch (parseErr: any) {
+          throw new Error(
+            `Civitai 轮询响应非 JSON [HTTP ${statusResp.status}]: ${parseErr?.message || parseErr}\n${pollText.slice(0, 2000)}`
+          );
         }
         const foundUrl = statusData.mediaUrl;
         const status = (statusData.status || '').toLowerCase();
