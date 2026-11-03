@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { GenerationHistoryItem } from '../types/providers';
 import { extractEmbeddedGenerationParameters, resolveHistoryParameters, sentHistoryLoras, historyParameterSourceLabel } from './historyParameters';
+import { buildLocalRejectionHistoryItem } from '../server/failedAttemptHistory';
 
 const baseItem = (): GenerationHistoryItem => ({
   id: 'hist-1',
@@ -247,6 +248,30 @@ describe('Mage local_blocked schemaFields → width/height 该端点不支持 (n
     expect(r.height).toMatchObject({ value: 1024, source: 'unsupported' });
     expect(historyParameterSourceLabel(r.height.source)).toBe('该端点不支持 · 未发送');
     expect(r.seed.source).toBe('intended');
+    expect(historyParameterSourceLabel(r.seed.source)).toBe('拟发送（未出站）');
+  });
+});
+
+
+
+describe('buildLocalRejectionHistoryItem roundtrip Mage WxH → 本地拦截 / 该端点不支持', () => {
+  it('persists schemaFields+blockedField and chips resolve correctly', () => {
+    const body = {
+      error: 'Mage Mango 官方 Schema 不接受这些画布字段，不会静默丢弃：width, height',
+      errorSource: 'local',
+      schemaFields: ['prompt', 'model_id', 'seed', 'aspect_ratio', 'resolution', 'image', 'additional_images'],
+      blockedField: { from: 'width', value: 1024, reason: 'Mage Mango 官方 Schema 不接受这些画布字段，不会静默丢弃：width, height' },
+    };
+    const intended = {
+      provider: 'mage', model: 'mango-v3', model_id: 'mango-v3', prompt: 'p',
+      seed: 42, aspect_ratio: '4:5', resolution: '2K', width: 1024, height: 1024, loras: [],
+    };
+    const item: any = buildLocalRejectionHistoryItem('/api/engine/mage/generate', intended, 400, body, { errorSource: 'local' });
+    expect(item.requestMetadata.schemaFields).toEqual(body.schemaFields);
+    expect(item.requestMetadata.blockedField).toEqual(body.blockedField);
+    const r = resolveHistoryParameters(item);
+    expect(historyParameterSourceLabel(r.width.source)).toBe('本地拦截');
+    expect(historyParameterSourceLabel(r.height.source)).toBe('该端点不支持 · 未发送');
     expect(historyParameterSourceLabel(r.seed.source)).toBe('拟发送（未出站）');
   });
 });

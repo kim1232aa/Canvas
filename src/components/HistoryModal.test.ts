@@ -42,6 +42,7 @@ describe('Y1-UI History empty fields display 「未填写」', () => {
 });
 
 import {
+  historySizeChipVisible,
   filterHistory,
   historyFilterCounts,
   historyFilterCountLabel,
@@ -294,5 +295,18 @@ describe('resolveHistoryItemForApply', () => {
     });
     expect(called).toBe(0);
     expect(out).toBe(withSnap);
+  });
+});
+
+
+describe('Mage local-block size chip (blocked ≠ hide)', () => {
+  it('shows chip for blocked / unsupported / intended / sent; hides only not-sent / unknown', () => {
+    expect(historySizeChipVisible('blocked', true)).toBe(true);
+    expect(historySizeChipVisible('unsupported', true)).toBe(true);
+    expect(historySizeChipVisible('intended', true)).toBe(true);
+    expect(historySizeChipVisible('sent', true)).toBe(true);
+    expect(historySizeChipVisible('not-sent', true)).toBe(false);
+    expect(historySizeChipVisible('unknown', true)).toBe(false);
+    expect(historySizeChipVisible('blocked', false)).toBe(false);
   });
 });
