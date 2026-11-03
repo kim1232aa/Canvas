@@ -17,13 +17,13 @@
 | fix12 | CLOSED（挑刺过） | 「共 N 项」摘要 + 900 执行记录 under-top；PID 3473149 / ticks 14993784；`/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-fix12-accept-2157/` **已收口** |
 | Together `image_loras` | BLOCKED | 等有效 Key |
 | TAMS Bearer | BLOCKED | 既有鉴权阻塞不变 |
-| ModelScope 国际站 LoRA E2E | pending | — |
+| ModelScope 国际站 LoRA E2E | **CLOSED** PASS_GENERATION 2026-11-03 | hist `hist_1793706156544_8obck`；Lcars@1；`temp/e2e/modelscope-ai-fe-gen-2026-11-03/`；不宣称 I2V |
 | civitai.red 付费 LoRA 复跑 | pending | — |
 | 视频更多供应商（Fal 之后） | pending | 预设/App 拆分未批准 |
 | Parked UI | — | 无 parked |
 
 ### 既有供应商等级（不降级）
-WaveSpeed `PASS_GENERATION`；MuAPI / Sogni / HF→fal-ai / Fal（含 Kling V3 i2v）/ ModelScope CN 等按 HANDOFF §3.2 与各 evidence 保持原判定。Krea / AIMLAPI / Novita / Replicate 等以已有 evidence 为准，本文件不另升格。
+WaveSpeed `PASS_GENERATION`；ModelScope AI / ModelScope CN `PASS_GENERATION`（2026-11-03）；MuAPI / Sogni / HF→fal-ai / Fal（含 Kling V3 i2v）等按 HANDOFF §3.2 与各 evidence 保持原判定。本晚无 FUNDED_I2V，不宣称出视频。Krea / AIMLAPI / Novita / Replicate 等以已有 evidence 为准，本文件不另升格。
 
 ---
 

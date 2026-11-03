@@ -1,5 +1,18 @@
 # ComfyCanvas Studio：开发交接、产品缺口与验收手册
 
+## 2026-11-03 魔搭 AI 国际站前端真出图（产品核）
+
+| 项 | 判定 | 要点 / 证据 |
+| --- | --- | --- |
+| 魔搭 AI Z-Image-Turbo+Lcars LoRA | **PASS_GENERATION** | hist `hist_1793706156544_8obck`（北京 19:42:36）；保存节点新图+历史缩略同图；配方陶瓷机器人 prompt；**实际发送 LoRA** `LcarsPicturesDatabase/ST-TNG-Rooms-Z-Image-Turbo-v1`@**1**（`actualParameters.loras`）；另发 model/`832x1216`/steps8/guidance1/seed42/negative `blurry`。证据 `temp/e2e/modelscope-ai-fe-gen-2026-11-03/01～03`（RESULT 本地不进仓）。冒烟先行见 `modelscope-ai-smoke-2026-11-03/`。**不宣称 I2V**。今日文生图已齐：WS / OW / 魔搭 CN / **魔搭 AI**。 |
+
+## 2026-11-03 晚间：本晚无 FUNDED_I2V（生成线已收）
+
+| 项 | 判定 | 要点 / 证据 |
+| --- | --- | --- |
+| WaveSpeed I2V | **本晚无 FUNDED_I2V** | WS 余额 **$0.008** ≪ 标准图生视频约 **$0.15**；**未**点跑任何 I2V。视频仅载入 **6/6 产品过**（不算出视频；Novita/Replicate 记注已清）。证据 `temp/e2e/balance-probe-2026-11-03-evening/PROBE.md` · `presets-video-2026-11-03/RESULT.md`。 |
+| 本晚生成线 | **已收** | 有额度文生图：魔搭 AI FE 已 PASS。已知欠费家禁连刷；无 FUNDED_I2V → 本晚不再冲视频点跑。 |
+
 ## 2026-11-03 Novita I2V Schema + Replicate 空负向（产品核）
 
 | 项 | 判定 | 要点 / 证据 |
@@ -108,7 +121,7 @@
 | Fal Kling V3 i2v | 2026-10-16 前端 403 TOP_UP → **PASS_BILLING**（fix10.1），不外推其他视频模型 |
 | Together `image_loras` | **BLOCKED**，等有效 Key |
 | TAMS Bearer | **BLOCKED**（账户/鉴权，既有 `BLOCKED_AUTH` 不变） |
-| ModelScope 国际站 LoRA E2E | **pending** |
+| ModelScope 国际站 LoRA E2E | **CLOSED（2026-11-03 PASS_GENERATION）** — hist `hist_1793706156544_8obck`；Lcars@1；`temp/e2e/modelscope-ai-fe-gen-2026-11-03/`；不宣称 I2V |
 | civitai.red 付费 LoRA 复跑 | **pending** |
 | 视频：Fal 之后更多供应商 | **pending**；预设/App 拆分 **未批准** |
 
@@ -351,7 +364,7 @@
 | **Hugging Face** | Hub 目录；显式 HF Inference / Z-Image Space / HF→fal-ai；2026-10-08 前端复验 FLUX.1-dev + HF LoRA | **PASS_BILLING（HF→fal-ai）** | 实际请求到 HF Router `fal-ai/flux-lora`，LoRA safetensors URL + 0.55、Steps 24、CFG 3.2、Seed 314159 进入请求，上游 402 no remaining credits。旧 Z-Image Space BLOCKED_ENV 只代表旧 Space 路由；证据：docs/evidence/t7-huggingface-acceptance.md |
 | **Fal.ai** | 原生端点、图像尺寸/LoRA 参数、目录/Schema；`fal-ai/flux-lora` 已从当前网页重现；2026-10-16 Kling V3 i2v 再验 | **PASS_BILLING**（图像 LoRA 2026-10-06；Kling V3 i2v 2026-10-16） | 图像：完整 HF safetensors URL + 0.8 → 403 TOP_UP（`docs/evidence/t7-fal-acceptance.md`）。视频：`fal-ai/kling-video/v3/standard/image-to-video` 前端提交，历史 `q1cbe` 403 TOP_UP 原样、model 无零宽（`docs/evidence/fix10.1-2026-10-16.md`）。均非出图；不外推其他 Fal 视频模型 |
 | **ModelScope CN** | CN 域名与独立 Token；当前网页已真实提交 `Tongyi-MAI/Z-Image-Turbo` | **PASS_BILLING（2026-10-06 前端实测）** | 上游 `https://api-inference.modelscope.cn/v1/images/generations` 返回 429，响应体明确 `insufficient balance`。证据：`docs/evidence/t7-modelscope-cn-acceptance.md` |
-| **ModelScope AI** | AI 域名独立路由；当前网页已真实提交 `Tongyi-MAI/Z-Image-Turbo` | **BLOCKED_AUTH（2026-10-06 前端实测）** | 上游 `api-inference.modelscope.ai` 返回 401，原文要求先绑定 Alibaba Cloud 账户；不是欠费。证据：`docs/evidence/t7-modelscope-ai-acceptance.md` |
+| **ModelScope AI** | AI 域名独立路由；Z-Image-Turbo + Lcars LoRA | **PASS_GENERATION（2026-11-03 前端实测；优先于 2026-10-06 BLOCKED_AUTH）** | hist `hist_1793706156544_8obck`；实际发送 LoRA `LcarsPicturesDatabase/ST-TNG-Rooms-Z-Image-Turbo-v1`@1。证据：`temp/e2e/modelscope-ai-fe-gen-2026-11-03/`。历史 10-06 曾 401 账户未绑（`docs/evidence/t7-modelscope-ai-acceptance.md`），不降级本条。**不外推 I2V**。 |
 | **NanoGPT** | `/api/v1/images`、模型 endpoint 元数据、尺寸/输入转换；当前网页已按模型元数据把 resolution 改为 `1k` 后真实提交 | **BLOCKED_AUTH（2026-10-06 前端实测）** | 上游 401 `Invalid session` / `invalid_api_key`。unknown 能力不再统一当 unsupported；凭据修复后需用新的完整参考作品参数重测。证据：`docs/evidence/t7-nanogpt-acceptance.md` |
 | **Tensor.Art / TAMS** | 真实数字模型 ID 查询；不抓 HTML 目录、不用 OpenWorks 图片冒充 TAMS | **BLOCKED_AUTH（2026-10-06 前端实测）** | 查询 `672797109289765558` 到真实 TAMS endpoint，业务体 `unauthorized / app not found`；HTTP 404 不能写成模型不存在。证据：`docs/evidence/t7-tensorart-acceptance.md` |
 | **MuAPI** | 设置、模型单家标签、目录/OpenAPI、通用 submit/poll/save-result、Schema 参数与 LoRA 映射 | **PASS_BILLING（2026-10-05 前端实测）** | 目录 147 个与官方一致；余额 0.0000 USD；提交 HTTP 402 INSUFFICIENT_CREDITS 原样透传。证据：docs/evidence/t7-muapi-acceptance.md。LoRA 真实出图待账户充值后复测 |
