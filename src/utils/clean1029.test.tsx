@@ -49,7 +49,7 @@ describe('clean-1029 #2 local block line shared by LoRA node / Save node / toast
 describe('clean-1029 #3 four field states, no 待确认', () => {
   it('labels', () => {
     expect(FIELD_STATUS_LABEL.not_sent).toBe('Schema 不支持，不发送');
-    expect(FIELD_STATUS_LABEL.schema_unavailable).toBe('Schema 不可用，字段不会发送');
+    expect(FIELD_STATUS_LABEL.schema_unavailable).toBe('Schema 不可用，字段按所填原样发送');
     expect(schemaFieldBadge(undefined, 'png').text).toBe('未填写，不发送（Schema 默认：png）');
     expect(schemaFieldBadge(undefined, undefined).text).toBe('未填写，不发送');
     expect(schemaFieldBadge('webp', 'png').text).toBe('会发送 webp');

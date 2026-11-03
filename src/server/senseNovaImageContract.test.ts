@@ -42,8 +42,8 @@ it('uses the official edits images array and leaves source URL intact', () => {
     expect(() => buildSenseNovaImageRequest({ ...base, custom_parameters: { endpoint: '/images/edits' } })).toThrow(/路由|凭据/);
     expect(() => buildSenseNovaImageRequest({ ...base, custom_parameters: { api_key: 'x' } })).toThrow(/路由|凭据/);
   });
-  it('rejects loopback image sources and accepts data-image URLs', () => {
-    expect(()=>buildSenseNovaImageRequest({...base,image_url:'http://127.0.0.1/image.png'})).toThrow(/本机/);
+  it('sends loopback image sources as filled and accepts data-image URLs', () => {
+    expect(buildSenseNovaImageRequest({...base,image_url:'http://127.0.0.1/image.png'}).payload.images).toEqual([{image_url:'http://127.0.0.1/image.png'}]);
     expect(buildSenseNovaImageRequest({...base,image_url:'data:image/png;base64,AAAA'}).endpoint).toBe('/images/edits');
   });
 });

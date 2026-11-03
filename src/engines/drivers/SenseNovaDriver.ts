@@ -31,16 +31,13 @@ export class SenseNovaDriver extends BaseEngineDriver {
     if (effectiveKey) headers['x-sensenova-key'] = effectiveKey;
     if (params.baseUrl) headers['x-sensenova-base-url'] = params.baseUrl;
 
-    const unsupported: Array<[string, unknown]> = [
-      ['negative_prompt',params.negative_prompt],['seed',params.seed],['steps',params.steps],['cfg',params.cfg],
-      ['sampler_name',params.sampler_name],['scheduler',params.scheduler],['denoise',params.denoise],
-      ['loras',params.loras?.length ? params.loras : undefined],
-    ];
-    const parameterOmissions=unsupported.filter(([,value])=>value !== undefined && value !== null && value !== '').map(([field,value])=>({field,value,reason:'SenseNova U1.5 Lite 图像接口没有该扩散字段；未发送上游'}));
     const extra=params.extraParams || {};
     const body={
       model:params.model,prompt:params.prompt,image_url:params.image_url,
       width:params.width,height:params.height,
+      // 雁 rule: every filled value is sent as filled.
+      negative_prompt:params.negative_prompt,seed:params.seed,steps:params.steps,cfg:params.cfg,sampler_name:params.sampler_name,scheduler:params.scheduler,denoise:params.denoise,
+      ...(params.loras?.length ? {loras:params.loras} : {}),
       ...(extra.size ? {size:extra.size} : {}),
       ...(extra.watermark !== undefined ? {watermark:extra.watermark} : {}),
       ...(extra.prompt_extend !== undefined ? {prompt_extend:extra.prompt_extend} : {}),
@@ -48,7 +45,6 @@ export class SenseNovaDriver extends BaseEngineDriver {
       response_format:'b64_json',
       ...(extra.custom_parameters && typeof extra.custom_parameters === 'object' ? { custom_parameters: extra.custom_parameters } : {}),
       workflowSnapshot:params.workflowSnapshot,
-      parameterOmissions,
     };
     const resp=await fetch('/api/engine/sensenova/generate',{method:'POST',headers,body:JSON.stringify(body)});
     if (!resp.ok) {

@@ -24,37 +24,29 @@ describe('real model APIs cannot use tool / foreign resource IDs',()=>{
 });
 describe('Nano normalized API uses live per-model capabilities',()=>{
   const endpoint={supported_parameters:{resolutions:['1024x1024','768x1024'],max_output_images:4},capabilities:{image_to_image:false}};
-  it('maps explicit dimensions; does not replace unsupported sizes or invent fields',()=>{
+  it('maps explicit dimensions to resolution and sends any size as filled (no local refusal)',()=>{
     expect(buildNanoImagePayload({model:'flux-schnell',prompt:'robot',width:768,height:1024,n:1},endpoint).payload).toEqual({model:'flux-schnell',prompt:'robot',resolution:'768x1024',n:1});
-    expect(()=>buildNanoImagePayload({model:'flux-schnell',width:512,height:512},endpoint)).toThrow(/不支持/);
-    expect(()=>buildNanoImagePayload({model:'flux-schnell',resolution:'1k'},endpoint)).toThrow(/官方支持值/);
+    expect(buildNanoImagePayload({model:'flux-schnell',width:512,height:512},endpoint).payload.resolution).toBe('512x512');
+    expect(buildNanoImagePayload({model:'flux-schnell',resolution:'1k'},endpoint).payload.resolution).toBe('1k');
   });
-  it('undeclared seed/steps/cfg are 不会发送: omitted from payload (catalog-driven)',()=>{
-    const seed=buildNanoImagePayload({model:'flux-schnell',prompt:'x',seed:42},endpoint);
-    expect(seed.payload.seed).toBeUndefined();
-    expect(seed.capabilityNotes).toEqual([expect.objectContaining({field:'seed',capability:'not_sent'})]);
-    const np=buildNanoImagePayload({model:'flux-schnell',prompt:'x',negative_prompt:'blur',steps:8,cfg:3.5},endpoint);
-    expect(np.payload.negative_prompt).toBeUndefined();
-    expect(np.payload.steps).toBeUndefined();
-    expect(np.payload.cfg).toBeUndefined();
-    expect(np.capabilityNotes.map((n:any)=>n.field).sort()).toEqual(['cfg','negative_prompt','steps']);
-    const declared=buildNanoImagePayload({model:'nano-banana-2.1',prompt:'x',seed:7},{supported_parameters:{seed:{min:0},resolutions:['1024x1024']},capabilities:{}});
-    expect(declared.payload.seed).toBe(7);
+  it('undeclared seed/steps/cfg/negative are sent as filled and noted',()=>{
+    const r=buildNanoImagePayload({model:'flux-schnell',prompt:'x',seed:42,negative_prompt:'blur',steps:8,cfg:3.5},endpoint);
+    expect(r.payload).toMatchObject({seed:42,negative_prompt:'blur',steps:8,cfg:3.5});
+    expect(r.capabilityNotes.map((n:any)=>n.field).sort()).toEqual(['cfg','negative_prompt','seed','steps']);
   });
-  it('LoRA: refuse when undeclared (audit 2026-10-15); {path,scale} only when supported_parameters.loras declared',()=>{
-    expect(()=>buildNanoImagePayload({model:'flux-schnell',prompt:'x',loras:[{name:'https://cdn.example.com/a.safetensors',strength:0.8}]},endpoint)).toThrow(/未声明 loras|无通用 LoRA/);
+  it('LoRA: sent as {path,scale} whether or not supported_parameters declares loras',()=>{
+    expect(buildNanoImagePayload({model:'flux-schnell',prompt:'x',loras:[{name:'https://cdn.example.com/a.safetensors',strength:0.8}]},endpoint).payload.loras).toEqual([{path:'https://cdn.example.com/a.safetensors',scale:0.8}]);
     const loraEndpoint={supported_parameters:{loras:{max_items:3,item:{path:'HTTPS URL',scale:'number'}}},capabilities:{}};
     const declared=buildNanoImagePayload({model:'minimax-h3/text-to-image',prompt:'x',loras:[{path:'https://cdn.example.com/b.safetensors',strength:0.6}]},loraEndpoint);
     expect(declared.payload.loras).toEqual([{path:'https://cdn.example.com/b.safetensors',scale:0.6}]);
     expect(declared.capabilityNotes).toEqual([expect.objectContaining({field:'loras',capability:'supported'})]);
-    expect(()=>buildNanoImagePayload({model:'minimax-h3/text-to-image',prompt:'x',loras:[{name:'local-file',strength:1}]},loraEndpoint)).toThrow(/HTTPS/);
   });
   it('Nano explicit model override wins and credential overrides are rejected',()=>{
     expect(buildNanoImagePayload({model:'flux-schnell',prompt:'x',custom_parameters:{model:'custom-model'}},endpoint).payload.model).toBe('custom-model');
     expect(()=>buildNanoImagePayload({model:'flux-schnell',prompt:'x',custom_parameters:{endpoint:'https://evil.test'}},endpoint)).toThrow();
   });
-  it('only enables image input when that model advertises it',()=>{
-    expect(()=>buildNanoImagePayload({model:'flux-schnell',image_url:'https://example.test/image.png'},endpoint)).toThrow(/图生图/);
+  it('sends a reference image as filled even when the model metadata says image_to_image=false',()=>{
+    expect(buildNanoImagePayload({model:'flux-schnell',image_url:'https://example.test/image.png'},endpoint).payload.input_references).toEqual([{type:'image_url',image_url:{url:'https://example.test/image.png'}}]);
     expect(buildNanoImagePayload({model:'image-edit',image_url:'data:image/png;base64,x'}, {...endpoint,input_reference_constraints:{max_items:16}}).payload.input_references).toEqual([{type:'image_url',image_url:{url:'data:image/png;base64,x'}}]);
   });
 });

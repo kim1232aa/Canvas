@@ -59,12 +59,12 @@ describe('cleanup-2026-10-17 key + I2V + sampler disable', () => {
     expect(pre2(nodes, [], 'v', () => ['prompt'])).toBeNull();
     expect(pre2(nodes, [], 'v', () => ['image_url'])).toBe('图生视频要先连一张参考图');
   });
-  it('C KSampler hides schema-omitted widgets; only filled-not-sent gets a one-line note', () => {
+  it('C KSampler hides empty schema-omitted widgets; no filled-not-sent note (雁 removal list)', () => {
     const src = rf('src/components/NodeItem.tsx', 'utf8');
     expect(src).not.toContain('data-testid="node-sampler-unused"');
     expect(src).toContain('SAMPLER_SCHEMA_WIDGETS');
-    expect(src).toContain('node-filled-not-sent');
-    expect(src).toContain('已填，此模型不支持，不会发送');
+    expect(src).not.toContain('node-filled-not-sent');
+    expect(src).not.toContain('已填，此模型不支持，不会发送');
   });
 });
 

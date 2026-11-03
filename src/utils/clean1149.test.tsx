@@ -97,7 +97,7 @@ describe('clean-1149 #7 generation grouped by run with counts', () => {
 
 describe('clean-1149 #8–9 DOM labels', () => {
   it('schema_unavailable badge text is full; dropdown empty option is short （不发送）', () => {
-    expect(FIELD_STATUS_LABEL.schema_unavailable).toBe('Schema 不可用，字段不会发送');
+    expect(FIELD_STATUS_LABEL.schema_unavailable).toBe('Schema 不可用，字段按所填原样发送');
     const html = renderToStaticMarkup(
       <SchemaChoiceControls
         inputSchema={{ properties: { output_format: { type: 'string', enum: ['jpeg', 'png'], default: 'jpeg' } } }}

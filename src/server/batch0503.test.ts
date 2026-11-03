@@ -132,11 +132,11 @@ describe('batch-0503 · 3 sdcpp flux2Dev fields + kontext LoRA refuse', () => {
 });
 
 describe('batch-0503 · 4 NanoGPT catalog-driven send', () => {
-  it('only sends seed when supported_parameters declares it', () => {
+  it('sends seed/steps/cfg as filled even when supported_parameters does not declare them', () => {
     const bare = { supported_parameters: { resolutions: ['1024x1024'] }, capabilities: {} };
     const a = buildNanoImagePayload({ model: 'flux-schnell', prompt: 'x', seed: 42, steps: 8, cfg: 3 }, bare);
-    expect(a.payload).toEqual({ model: 'flux-schnell', prompt: 'x' });
-    expect(a.capabilityNotes.every((n) => n.capability === 'not_sent')).toBe(true);
+    expect(a.payload).toEqual({ model: 'flux-schnell', prompt: 'x', seed: 42, steps: 8, cfg: 3 });
+    expect(a.capabilityNotes.every((n) => n.capability === 'undeclared_sent')).toBe(true);
     const withSeed = buildNanoImagePayload(
       { model: 'nano-banana-2.1', prompt: 'x', seed: 7 },
       { supported_parameters: { seed: { min: 0 }, resolutions: ['1024x1024'] }, capabilities: {} },

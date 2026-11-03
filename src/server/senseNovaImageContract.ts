@@ -33,16 +33,7 @@ export function buildSenseNovaImageRequest(body: Json): SenseNovaImageRequest {
   const passThrough: Json = Object.fromEntries(sentUnsupported.map((k) => [k, body[k]]));
 
   const imageUrl = typeof body.image_url === 'string' ? body.image_url.trim() : '';
-  if (imageUrl && !/^https?:\/\//i.test(imageUrl) && !/^data:image\/[\w.+-]+;base64,/i.test(imageUrl)) {
-    throw new Error('SenseNova 图像编辑只接受公开 HTTP(S) URL 或带 MIME 前缀的 Base64 Data URL');
-  }
-  if (imageUrl && /^https?:\/\//i.test(imageUrl)) {
-    const url = new URL(imageUrl);
-    const hostname = url.hostname.toLowerCase();
-    if (hostname === 'localhost' || hostname.endsWith('.localhost') || /^127\./.test(hostname) || hostname === '::1' || hostname === '[::1]') {
-      throw new Error('SenseNova 上游无法读取本机/回环地址的参考图');
-    }
-  }
+  // 雁 rule: reference URL sent as filled (local/loopback/non-HTTP included); upstream error shown verbatim.
 
   const width = body.width;
   const height = body.height;

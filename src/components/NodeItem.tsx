@@ -616,10 +616,9 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               // cleanup-2026-10-17: sampler params omitted by Schema are DISABLED (not 「能调但不发送」).
               const schemaUnused = SAMPLER_SCHEMA_WIDGETS.has(widget.name) && omitHint;
               // Hide Schema-omitted / unsupported / preset-seeded omit shells — empty disabled enums look adjustable.
-              // 雁: 未声明或官方不支持 → 整格隐藏；仅当用户填了值却发不出去时留一行提醒（无灰框/空「未指定」）。
+              // 雁: 未声明或官方不支持 → 整格隐藏；填了值则照常显示并照发（雁：不扣参数）。
               if (hideSamplerShell(widget.name, unsupported, omitHint, schemaCustomParameters)) {
                 if (!filledCanvasValue(node.values?.[widget.name])) return null;
-                return <p key={widget.name} role="note" data-testid={`node-filled-not-sent-${widget.name}`} className="text-[11px] text-amber-300/90 leading-relaxed">{widget.label}已填，此模型不支持，不会发送</p>;
               }
               // cleanup-serious: strength/denoise only when a reference image is connected (WaveSpeed strength etc.).
               const isStrengthField = widget.name === 'denoise' || widget.name === 'strength';
@@ -970,10 +969,9 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               // cleanup-2026-10-17: sampler params omitted by Schema are DISABLED (not 「能调但不发送」).
               const schemaUnused = SAMPLER_SCHEMA_WIDGETS.has(widget.name) && omitHint;
               // Hide Schema-omitted / unsupported / preset-seeded omit shells — empty disabled enums look adjustable.
-              // 雁: 未声明或官方不支持 → 整格隐藏；仅当用户填了值却发不出去时留一行提醒（无灰框/空「未指定」）。
+              // 雁: 未声明或官方不支持 → 整格隐藏；填了值则照常显示并照发（雁：不扣参数）。
               if (hideSamplerShell(widget.name, unsupported, omitHint, schemaCustomParameters)) {
                 if (!filledCanvasValue(node.values?.[widget.name])) return null;
-                return <p key={widget.name} role="note" data-testid={`node-filled-not-sent-${widget.name}`} className="text-[11px] text-amber-300/90 leading-relaxed">{widget.label}已填，此模型不支持，不会发送</p>;
               }
               // cleanup-serious: strength/denoise only when a reference image is connected (WaveSpeed strength etc.).
               const isStrengthField = widget.name === 'denoise' || widget.name === 'strength';
@@ -988,7 +986,6 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               // 生成后种子随 seed：Schema 无 seed → 整行隐藏
               if (seedCtrlUnused) {
                 if (!filledCanvasValue(value)) return null;
-                return <p key={widget.name} role="note" data-testid="node-filled-not-sent-control_after_generate" className="text-[11px] text-amber-300/90 leading-relaxed">{widget.label}已填，此模型不支持，不会发送</p>;
               }
               const greyThis = unsupported || schemaUnused || strengthNeedsImage;
               const emptyCtrl = widget.name === 'control_after_generate' && (value === undefined || value === null || value === '');
@@ -1099,7 +1096,6 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               // Schema 无 seed → 整行隐藏（含骰子）；仅用户填了值却发不出去时提醒一行。Mage seed=42 stays visible.
               if (seedUnsupported) {
                 if (!filledCanvasValue(value)) return null;
-                return <p key={widget.name} role="note" data-testid="node-filled-not-sent-seed" className="text-[11px] text-amber-300/90 leading-relaxed">种子已填，此模型不支持，不会发送</p>;
               }
               const seedControl = node.values.control_after_generate;
               const seedEmpty = value === undefined || value === null || value === '';
@@ -1150,10 +1146,9 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               // cleanup-2026-10-17: sampler params omitted by Schema are DISABLED (not 「能调但不发送」).
               const schemaUnused = SAMPLER_SCHEMA_WIDGETS.has(widget.name) && omitHint;
               // Hide Schema-omitted / unsupported / preset-seeded omit shells — empty disabled enums look adjustable.
-              // 雁: 未声明或官方不支持 → 整格隐藏；仅当用户填了值却发不出去时留一行提醒（无灰框/空「未指定」）。
+              // 雁: 未声明或官方不支持 → 整格隐藏；填了值则照常显示并照发（雁：不扣参数）。
               if (hideSamplerShell(widget.name, unsupported, omitHint, schemaCustomParameters)) {
                 if (!filledCanvasValue(node.values?.[widget.name])) return null;
-                return <p key={widget.name} role="note" data-testid={`node-filled-not-sent-${widget.name}`} className="text-[11px] text-amber-300/90 leading-relaxed">{widget.label}已填，此模型不支持，不会发送</p>;
               }
               // cleanup-serious: strength/denoise only when a reference image is connected (WaveSpeed strength etc.).
               const isStrengthField = widget.name === 'denoise' || widget.name === 'strength';

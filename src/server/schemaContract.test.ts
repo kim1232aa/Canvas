@@ -300,11 +300,11 @@ describe('provider contract (16): builder / route-handler providers', () => {
     expect(readFileSync(path.resolve(__dirname, './routes/videoGenerateRoute.ts'), 'utf8')).toContain('if (tamsVideoRefusal) return res.status(400)');
   });
 
-  it('NanoGPT: LoRA refused without supported_parameters.loras; declared seed sent; billing text verbatim', () => {
+  it('NanoGPT: LoRA sent as filled without supported_parameters.loras; declared seed sent; billing text verbatim', () => {
     const ep = { supported_parameters: { seed: { min: 0 }, resolutions: ['1024x768'] } };
     const { payload } = buildNanoImagePayload({ model: 'm', prompt: 'x', seed: 42, width: 1024, height: 768 }, ep);
     expect(payload).toMatchObject({ seed: 42, resolution: '1024x768' });
-    expect(() => buildNanoImagePayload({ model: 'm', prompt: 'x', loras: [{ path: 'https://a', strength: 1 }] }, ep)).toThrow(/未声明 loras/);
+    expect(buildNanoImagePayload({ model: 'm', prompt: 'x', loras: [{ path: 'https://a', strength: 1 }] }, ep).payload.loras).toEqual([{ path: 'https://a', scale: 1 }]);
     expect(serverSrc).toContain('error: `NanoGPT 生图失败 [${response.status}]: ${errorText}`');
   });
 

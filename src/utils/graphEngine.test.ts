@@ -304,14 +304,14 @@ describe('graphEngine - B2 & L2a & L2b 拓扑反向追踪与参数抽取隔离�
     await executeWorkflow(nodes, connections, () => {}, undefined, 'sampler');
     const sent = generateSpy.mock.calls[0][1];
     expect(sent.extraParams).toMatchObject({ hf_provider:'fal-ai', resolution:'1k', shift:3, random_seed:false, gallery_images:[] });
-    expect(sent.extraParams.omissions ?? []).toEqual([]);
+    expect(sent.extraParams?.omissions ?? []).toEqual([]);
   });
-  it('records grok videoFps omission without sending the unsupported field', async () => {
+  it('sends grok videoFps as filled (no omission)', async () => {
     const node = createNode('video', 'AIVideoNode', {model:'grok-video-model', targetProvider:'grok_compat', prompt:'a moving scene', fps:24});
     const spy = vi.spyOn(EngineRegistry, 'generate').mockResolvedValue({mediaUrl:'https://example.test/out.mp4',mediaType:'video',provider:'grok_compat',providerId:'grok_compat',model:'grok-video-model',seed:null});
     await executeWorkflow([node], [], () => {}, undefined, 'video');
-    expect(spy.mock.calls[0][1].videoFps).toBeUndefined();
-    expect(spy.mock.calls[0][1].extraParams).toMatchObject({omissions:[{field:'videoFps',value:24,reason:'Grok 兼容中转的视频契约没有 videoFps 字段；保留原值不作为请求参数'}]});
+    expect(spy.mock.calls[0][1].videoFps).toBe(24);
+    expect(spy.mock.calls[0][1].extraParams?.omissions).toBeUndefined();
   });
 
   it('records the local LoRA trigger prompt transformation in the workflow metadata', async () => {

@@ -1289,9 +1289,6 @@ export async function executeWorkflow(
     if (engProv === 'nanogpt' && params.batchSize !== undefined) extraParams.n=params.batchSize;
     if (engProv === 'fal' && params.batchSize !== undefined) extraParams.n=params.batchSize;
     if (engProv === 'modelslab' && params.batchSize !== undefined) extraParams.samples = params.batchSize;
-    if (grokish && params.videoFps !== undefined) {
-      omissions.push({field: 'videoFps', value: params.videoFps, reason: 'Grok 兼容中转的视频契约没有 videoFps 字段；保留原值不作为请求参数'});
-    }
     if (omissions.length) {
       extraParams.omissions = omissions;
       extraParams.parameterOmissions = omissions;
@@ -1347,7 +1344,7 @@ export async function executeWorkflow(
       image_url: params.initImageUrl,
       isVideo: params.isVideo,
       videoDuration: params.videoDuration,
-      videoFps: grokish ? undefined : params.videoFps,
+      videoFps: params.videoFps, // 雁 rule: sent as filled on every provider
       videoFrames: params.videoFrames,
       aspectRatio: params.videoAspectRatio || params.aspectRatio,
       imageSize: params.imageSize,

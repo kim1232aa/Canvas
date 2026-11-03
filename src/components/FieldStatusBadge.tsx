@@ -14,7 +14,7 @@ export const FIELD_STATUS_LABEL: Record<BadgeStatus, string> = {
   pending: 'Schema 未读取',
   loading: 'Schema 加载中…',
   no_image: '无参考图 · 不发送',
-  schema_unavailable: 'Schema 不可用，字段不会发送',
+  schema_unavailable: 'Schema 不可用，字段按所填原样发送',
 };
 
 const FIELD_STATUS_CLASS: Record<BadgeStatus, string> = {
@@ -36,7 +36,7 @@ export const SCHEMA_SEND_TITLE = {
   will_send: '模型 Schema 已声明该字段（含别名），已填值会原样发送；以执行记录 actualRequest 为准。',
   pending: '模型 Schema 尚未读取（选用模型后才会读取）。读到后：已填 → 会发送；未填 → 未填写，不发送；不在 Schema → Schema 不支持。以执行记录 actualRequest 为准。',
   loading: '正在加载模型 Schema，加载完成后显示是否发送。',
-  schema_unavailable: '模型 Schema 读取失败（原文见执行记录）：运行时 Schema GET 失败则生成请求不会发出，这些字段不会发送。',
+  schema_unavailable: '模型 Schema 读取失败（原文见执行记录）；生成请求仍按所填原样发送，上游决定。',
 } as const;
 
 /** Renders 会发送 / 未填写·不发送 / Schema 不支持 / Schema 未读取 for a schemaSendStatus() result. */
