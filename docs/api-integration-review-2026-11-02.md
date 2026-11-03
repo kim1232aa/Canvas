@@ -10,7 +10,7 @@
 - Krea 旧预设错误填入 Sogni selector，已改为要求用户在实时目录选择。Novita 目录不再对所有 checkpoint 虚构 `supportsLora: true`；未知能力保留未知。DeepInfra 图像 MIME 根据结果字节识别；WaveSpeed 在用户明确请求 base64 时按实际字节识别。
 - 模型选择器不再在最新查询失败或返回空列表时把上次目录作为当前目录；用户当前选择仍可见。Mage 不再使用固定的比例和分辨率本地白名单，原值交上游判定。
 - 仍有固定数据：`src/schemas/providerSchema.ts` 包含 Gemini、Fal、Civitai、Replicate 等本地模型字段/能力快照，部分会用于参数映射或本地判断；`src/constants/presets.ts` 含预填的工作流模型；部分 `src/engines/drivers/*` 的 `supportedModels` 为静态元数据。Novita 的 `src/config/providerDeclarations/novita.txt2img.json` 是静态通用端点声明，不是实时的逐模型 Schema。这些尚未全部替换为实时 API，不能称所有硬编码均已移除。
-- ModelScope 官方文档目前仍未取得足够可读的 REST 合同；其他表格中的官方示例也不能证明全部模型、账户、参数及真实生成行为。
+- ModelScope：2026-11-02 后补核——中英文 [API-Inference intro](https://www.modelscope.cn/docs/model-service/API-Inference/intro) 浏览器现页参数表有可选 `seed`（`[0, 2³¹-1]`）；curl SPA 仍可能空壳。API 400 旁证 `seed must be in [-1, 2147483647]`，与表下限冲突则提示不硬拦、失败原样。详见 `docs/evidence/modelscope-seed-official-2026-11-02.md`。其余模型/账户/视频路径仍未全核；本审计分支未用真密钥生成。
 
 | 供应商/路由 | 本轮资料和核对范围 | 结果与边界 |
 | --- | --- | --- |
@@ -19,8 +19,8 @@
 | Replicate | [OpenAPI](https://api.replicate.com/openapi.json)；带版本与不带版本的预测提交、schema 查询和轮询 | 版本预测端点已修；调用方 schema 未经版本验证会标记。没有可用 schema 的手写 JSON 专用路径仍受限。 |
 | Civitai | [消费端 OpenAPI](https://orchestration.civitai.com/openapi/v2-consumers.json)、[Wan recipe](https://github.com/civitai/civitai-developer-docs/blob/main/orchestration/recipes/wan.md)、[LTX recipe](https://github.com/civitai/civitai-developer-docs/blob/main/orchestration/recipes/ltx2.md) | Wan 2.1 字段映射已修；静态 engine/版本限制仍拒绝官方 `ltx2.3` 和 Wan 2.2/Comfy 等变体，需按具体 Schema 接线。 |
 | Google Gemini | [官方生成协议](https://github.com/googleapis/googleapis/blob/master/google/ai/generativelanguage/v1beta/generative_service.proto)、[JS SDK 类型](https://github.com/googleapis/js-genai/blob/main/src/types.ts)；图像配置和响应模态 | 图像输出模态已补；没有真实密钥测试或模型逐项能力验证。 |
-| ModelScope CN | [API-Inference 文档](https://modelscope.cn/docs/model-service/API-Inference/intro)；站点与令牌隔离的本地代码 | 官方文档正文未能从 SPA 页面可靠提取，具体 REST 契约未完全核对；视频路径明确未接入。 |
-| ModelScope AI | [ModelScope 官方项目](https://github.com/modelscope/modelscope)；国际站与 CN 路由隔离 | 官方托管推理 REST 契约未取得充分证据；不能据此断言全部正确。 |
+| ModelScope CN | [API-Inference 文档](https://modelscope.cn/docs/model-service/API-Inference/intro)（浏览器现页）；[seed 核实记录](./evidence/modelscope-seed-official-2026-11-02.md)；站点与令牌隔离的本地代码 | `seed` 字段已核：可选 int，官方表现页 `[0, 2³¹-1]`；上游 400 旁证含 `-1`。curl SPA 仍可能空；完整 REST/全模型未核；视频路径明确未接入。 |
+| ModelScope AI | [国际站 intro](https://www.modelscope.ai/docs/model-service/API-Inference/intro?lang=en)；与 CN 路由隔离 | 国际站 intro 现页同有 `seed`/`[0,2^31-1]`；托管推理全契约与逐模型能力仍未全核，不能断言全部正确。 |
 | SenseNova | [项目官方入口](https://platform.sensenova.cn/)；本地 chat 和图像路由、错误处理 | 未取得足以验证各模型图像/推理参数的官方原始文档，能力未确认。 |
 | Agnes | [图像 2.5 Flash](https://wiki.agnes-ai.com/en/docs/agnes-image-25-flash.md)、[视频 2.5](https://wiki.agnes-ai.com/en/docs/agnes-video-25.md)；图像提交、视频提交与轮询 | 所核对字段/路径形状一致；视频每 5 秒轮询，官方建议 1–2 秒。未验证真实模型生成。 |
 | OpenAI 兼容中转 | [OpenAI OpenAPI](https://github.com/openai/openai-openapi)；图像生成和编辑请求形状 | 只核对标准请求示例；用户自设中转的端点和能力未确认。 |
