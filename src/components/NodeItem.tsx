@@ -1293,7 +1293,15 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               {node.outputData && node.stalePriorOutput && <p data-testid="stale-prior-output-label" role="status" className="rounded border border-amber-500/50 bg-amber-950/50 px-2 py-1 text-[11px] text-amber-100">上次结果，不是本次</p>}
               {node.outputData && node.restoredFromPreviousSession && !node.stalePriorOutput && <p data-testid="restored-output-label" className="rounded border border-slate-500/60 bg-slate-800/70 px-2 py-1 text-[11px] text-slate-200">{restoredOutputLabel(node.restoredFromPreviousSession)}</p>}
               {node.outputData && node.state === 'error' && !node.stalePriorOutput && <p data-testid="stale-error-output-label" role="status" className="rounded border border-amber-500/50 bg-amber-950/50 px-2 py-1 text-[11px] text-amber-100">上次结果，不是本次</p>}
-              <div className="relative aspect-video w-full rounded-lg bg-[#121316] border border-[#2d303a] overflow-hidden flex items-center justify-center group">
+              {(() => {
+                const showUpstreamFailPreview = !node.outputData && !!node.upstreamFailed && node.state !== 'running';
+                return (
+              <div
+                data-testid={showUpstreamFailPreview ? 'upstream-fail-preview' : 'media-preview'}
+                className={showUpstreamFailPreview
+                  ? 'relative w-full min-h-[9rem] max-h-80 rounded-lg bg-[#121316] border border-[#2d303a] overflow-y-auto flex items-start justify-start group'
+                  : 'relative aspect-video w-full rounded-lg bg-[#121316] border border-[#2d303a] overflow-hidden flex items-center justify-center group'}
+              >
                 {node.outputData ? (
                   typeof node.outputData === 'string' &&
                   (node.outputData.includes('.mp4') || node.outputData.includes('mixkit') || node.type === 'SaveVideo' || node.type === 'AIVideoNode') ? (
@@ -1360,7 +1368,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                   )
                 ) : (
                   node.upstreamFailed && node.state !== 'running' ? (
-                  <div className="text-center p-4 text-rose-300" role="status">
+                  <div className="w-full text-left px-3 py-3 text-rose-300" role="status">
                     {node.upstreamLocalBlocked ? (<>
                     <p className="text-xs font-semibold">这次没有出图</p>
                     <span className="text-[10px] mt-1 block font-mono text-rose-400/80">{`${node.localBlockTitle || LOCAL_BLOCK_NODE_LINE.split('：')[0]}：原因见标红节点与执行记录`}</span>
@@ -1380,6 +1388,8 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                   )
                 )}
               </div>
+                );
+              })()}
             </div>
           )}
 

@@ -80,3 +80,32 @@ it('SaveImage failure display uses historyFacingErrorMessage (Magento bind / JSO
   expect(html).not.toContain('原因见采样器');
   expect(html).not.toMatch(/>HTTP 401 Unauthorized</);
 });
+
+it('SaveImage upstream-fail preview is scrollable (not aspect-video clip box)',()=>{
+  const msg='魔搭国际站 (modelscope.ai) API 提交失败 [401]: {"errors":{"message":"Please bind your Alibaba Cloud account before use. You can bind it at: https://modelscope.ai/my/settings/account"},"request_id":"abc"}';
+  const html=renderToStaticMarkup(<NodeItem {...props('SaveImage',{})} node={{...(props('SaveImage',{}) as any).node,upstreamFailed:true,upstreamFailedTitle:'采样器',upstreamFailedMessage:msg,state:'idle'}} />);
+  expect(html).toContain('data-testid="upstream-fail-preview"');
+  expect(html).toContain('overflow-y-auto');
+  expect(html).toContain('min-h-[9rem]');
+  expect(html).toContain('max-h-80');
+  expect(html).toContain('items-start');
+  expect(html).toContain('justify-start');
+  expect(html).toContain('text-left');
+  // failure box must not force aspect-video / overflow-hidden clip
+  const failChunk=html.split('data-testid="upstream-fail-preview"')[1].split('role="status"')[0];
+  expect(failChunk).not.toContain('aspect-video');
+  expect(failChunk).not.toContain('overflow-hidden');
+  expect(html).toContain('bind your Alibaba Cloud account');
+  expect(html).toContain('魔搭国际站');
+});
+
+it('SaveImage success/waiting preview keeps aspect-video overflow-hidden',()=>{
+  const waiting=renderToStaticMarkup(<NodeItem {...props('SaveImage',{})} />);
+  expect(waiting).toContain('data-testid="media-preview"');
+  expect(waiting).toContain('aspect-video');
+  expect(waiting).toContain('overflow-hidden');
+  const success=renderToStaticMarkup(<NodeItem {...props('SaveImage',{})} node={{...(props('SaveImage',{}) as any).node,outputData:'https://example.com/out.png',state:'success'}} />);
+  expect(success).toContain('data-testid="media-preview"');
+  expect(success).toContain('aspect-video');
+  expect(success).toContain('overflow-hidden');
+});
