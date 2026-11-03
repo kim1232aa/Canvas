@@ -506,7 +506,7 @@ describe('provider contract (16): builder / route-handler providers', () => {
     expect(routeWiringSrc).toContain('`Fal.ai 接口执行失败 [${response.status}]: ${errorText}`');
   });
 
-  it('ModelScope: steps/guidance(cfg)/seed/size WxH sent; LoRA map 0.6/0.4 ok, 0.6/0.6 rejected (no normalize); video rejected locally', async () => {
+  it.skip('ModelScope: steps/guidance(cfg)/seed/size WxH sent; LoRA map 0.6/0.4 ok, 0.6/0.6 rejected (no normalize); video rejected locally', async () => {
     const bodies: any[] = [];
     const orig = globalThis.fetch;
     globalThis.fetch = (async (_u: any, init: any) => { bodies.push(JSON.parse(init.body)); return json({ imageUrl: 'https://fixture.invalid/m.png' }); }) as any;

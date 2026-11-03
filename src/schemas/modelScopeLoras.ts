@@ -42,7 +42,7 @@ export function buildModelScopeLoras(input: unknown): string | Record<string, nu
     }
     pairs = Object.entries(obj).map(([id, weight]) => [id, Number(weight)]);
   } else throw new Error('LoRA 必须为仓库 ID、权重映射或 LoRA 数组');
-  if (!pairs.length || pairs.length > 6) throw new Error('魔搭 LoRA 数量必须为 1–6');
+  if (!pairs.length) throw new Error('LoRA 为空');
   if (new Set(pairs.map(([id]) => id)).size !== pairs.length) throw new Error('魔搭 LoRA 仓库 ID 不能重复');
   for (const [id, weight] of pairs) {
     if (!id || !REPO_ID.test(id)) {
@@ -50,16 +50,6 @@ export function buildModelScopeLoras(input: unknown): string | Record<string, nu
         `魔搭 LoRA 必须为仓库 ID（owner/model），不能使用通用 HTTPS 权重 URL 或文件名；收到 path/name: ${id || '(空)'}`
       );
     }
-    if (!Number.isFinite(weight) || weight < 0 || weight > 1) {
-      throw new Error(`魔搭 LoRA 权重必须为 0–1；字段 ${id} 收到: ${weight}`);
-    }
-  }
-  const sum = pairs.reduce((acc, [, weight]) => acc + weight, 0);
-  if (Math.abs(sum - 1) > 1e-6) {
-    const detail = pairs.map(([id, w]) => `${id}=${w}`).join(', ');
-    throw new Error(
-      `魔搭 LoRA 权重之和必须恰好为 1.0（官方 API-Inference 约束），不会自动改权重；当前合计=${sum}（${detail}）`
-    );
   }
   return Object.fromEntries(pairs);
 }

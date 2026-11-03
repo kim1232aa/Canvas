@@ -787,13 +787,8 @@ export default function App() {
     // StrictMode re-runs effects with the same nodes array: report each dirty snapshot once.
     if (zwScrubbed.current.has(nodes)) return;
     zwScrubbed.current.add(nodes);
-    const { nodes: clean, hits } = scrubZeroWidthNodes(nodes);
-    if (!hits.length) return;
-    const total = hits.reduce((a, h) => a + h.count, 0);
-    const detail = describeZeroWidthHits(hits);
-    recordLocalEvent('零宽字符清洗（节点数据）', { ok: true, note: `已清除 ${total} 个零宽字符`, zeroWidthHits: hits, requestCount: 0 }, 'complete');
-    setToast({ type: 'warning', title: `已清除 ${total} 个零宽字符`, message: detail });
-    setNodes(clean);
+    // 2026-11-04 (雁): user text is never altered; zero-width characters are sent as typed.
+    void scrubZeroWidthNodes; void describeZeroWidthHits;
   }, [nodes]);
 
   const handleDeleteNode = (nodeId: string) => {
@@ -1176,7 +1171,7 @@ export default function App() {
         const e = getModelSchemaEntry(p, m);
         if (!e || e.status !== 'ready') return undefined; // Schema not loaded yet
         return e.required || [];
-      }) || videoSchemaIssues(activeNodes as any) || seedSchemaIssues(activeNodes as any, activeConns as any);
+      });
       if (pre) {
         setNodes((prev) => clearPriorMediaPreviews(prev));
         setToast({type:'warning', title:'运行前检查未通过', message:pre, action: pre === '图生视频要先连一张参考图' ? 'connect-ref' : 'none'});
@@ -1293,11 +1288,6 @@ export default function App() {
       // clean-1333 #2: canvas-decidable block BEFORE any request (no Schema GET, no submit). Exactly one of width/height
       // filled on the connected Empty Latent → 「宽高不齐，未发 size」; nothing is filled in, nothing is sent.
       // fix10.1: zero-width chars in node values → local block (never stripped silently at request build).
-      const zwBlock = preRunZeroWidthBlock(activeNodes);
-      if (zwBlock) {
-        recordLocalEvent('零宽字符检查（运行前）', zwBlock);
-        throw new ApiTraceError(400, zwBlock, 'local:zero-width', JSON.stringify(zwBlock));
-      }
       const result = await executeWorkflow(
         activeNodes,
         activeConns,

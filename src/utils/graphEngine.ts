@@ -943,8 +943,7 @@ export function extractWorkflowParameters(
     } else {
       // ws-sizenode: the board's Empty Latent is the only size source. A loader that still carries its own
       // width/height that disagrees is a hidden second copy — block instead of silently picking one.
-      const conflict = latentLoaderSizeConflict(ckpt.values, { width, height });
-      if (conflict) throw new Error(conflict);
+      // Empty Latent is the size source; the loader copy is not used (no run block).
     }
   } else {
     checkpointModel = (execNode.values.model || execNode.values.ckpt_name || '').trim();

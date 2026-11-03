@@ -852,7 +852,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
                         title={applyDisabled ? applyDisabledReason(item, !!brokenIds[item.id]) : undefined}
                       >
                         <Sparkles className="w-3 h-3" />
-                        应用到画布
+                        照这组参数再来一张
                       </button>
                     </div>
                   </div>

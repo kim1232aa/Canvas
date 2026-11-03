@@ -5330,19 +5330,13 @@ app.post(['/api/gemini/generate', '/api/engine/gemini/generate'], async (req, re
       return res.status(400).json({ error: '该服务商不支持: image_url 为非 data: URL（Google Gemini 仅接受内联 base64 参考图）', unsupported: ['image_url'] });
     }
 
-    if (modelStatus('gemini',model,new Date().toISOString().slice(0,10))==='deprecated') return res.status(400).json({error:`${model} 已由 Google 下线，请明确选择当前可用模型；不会自动替换`,model,source:'https://ai.google.dev/gemini-api/docs/deprecations'});
+    // deprecated models are still sent as chosen; upstream answers.
     // 按所选模型验证参数；未知能力不猜测。
     const fieldStatus: Record<string, string> = {};
     for (const [field, value] of [['aspect_ratio', aspect_ratio], ['image_size', image_size]] as const) {
       if (!isProvided(value)) continue;
       const status = valueStatus('gemini', model, field, value);
       fieldStatus[field] = status;
-      if (status === 'unsupported') {
-        const listed = fieldOptions('gemini', model, field).map((v) => (v.status === 'supported' ? v.value : `${v.value}(未核实)`));
-        return res.status(400).json({
-          error: `该服务商不支持此 ${field} 取值: "${value}"。${model} 官方仅支持: ${listed.join(', ') || '（官方未列出）'}`,
-        });
-      }
     }
 
     const customKey = (req.headers['x-gemini-key'] as string) || '';

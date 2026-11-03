@@ -202,7 +202,7 @@ export function normalizeForComfyUI(
       cfg: params.cfg,
       sampler_name: params.sampler,
       scheduler: params.scheduler,
-      denoise: params.denoise ?? 1.0,
+      denoise: params.denoise,
     },
   };
 
