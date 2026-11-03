@@ -193,6 +193,10 @@ describe('resolveCheckpoint — canvas NodeItem grey (compat)', () => {
     expect(isCanvasFieldUnsupported('gemini', '', 'seed')).toBe(false); // no silent first-model
     expect(isCanvasFieldUnsupported('gemini', 'gemini-3.1-flash-image', 'negative_prompt')).toBe(true);
     expect(isCanvasFieldUnsupported('fal', 'fal-ai/flux/dev', 'seed')).toBe(false);
+    // Mage Mango: official Schema has aspect_ratio/resolution/seed, not pixel WH
+    expect(isCanvasFieldUnsupported('mage', 'mango-v3', 'width')).toBe(true);
+    expect(isCanvasFieldUnsupported('mage', 'mango-v3', 'height')).toBe(true);
+    expect(isCanvasFieldUnsupported('mage', 'mango-v3', 'seed')).toBe(false);
   });
 
   it('canvasWidgetFieldKey maps KSampler widgets to schema FieldKeys', () => {

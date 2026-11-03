@@ -109,3 +109,81 @@ it('SaveImage success/waiting preview keeps aspect-video overflow-hidden',()=>{
   expect(success).toContain('aspect-video');
   expect(success).toContain('overflow-hidden');
 });
+
+it('Mage checkpoint surfaces aspect_ratio/resolution from preset; EmptyLatent hides blank WH shells', () => {
+  const cp = JSON.stringify({
+    _canvas: {
+      scope: { provider: 'mage', model: 'mango-v3' },
+      schemaProperties: ['prompt', 'seed', 'aspect_ratio', 'resolution'],
+    },
+  });
+  const ckpt = renderToStaticMarkup(
+    <NodeItem
+      {...props('CheckpointLoaderSimple', {
+        ckpt_name: 'mango-v3',
+        targetProvider: 'mage',
+        aspect_ratio: '4:5',
+        resolution: '2K',
+        custom_parameters: cp,
+      })}
+      currentProvider="mage"
+      currentCheckpoint="mango-v3"
+      schemaCustomParameters={cp}
+    />,
+  );
+  expect(ckpt).toContain('data-testid="ckpt-aspect_ratio"');
+  expect(ckpt).toContain('4:5');
+  expect(ckpt).toContain('data-testid="ckpt-resolution"');
+  expect(ckpt).toContain('2K');
+
+  const lat = renderToStaticMarkup(
+    <NodeItem
+      {...props('EmptyLatentImage', { batch_size: 1 })}
+      currentProvider="mage"
+      currentCheckpoint="mango-v3"
+      schemaCustomParameters={cp}
+    />,
+  );
+  // omit width/height + empty → no blank shells; batch_size stays
+  expect(lat).not.toContain('data-testid="widget-label-width"');
+  expect(lat).not.toContain('data-testid="widget-label-height"');
+  expect(lat).toContain('data-testid="widget-label-batch_size"');
+});
+
+it('DeepInfra omit seed hides empty seed/seed_mode shells; Mage filled seed 42 stays', () => {
+  const diCp = JSON.stringify({
+    _canvas: {
+      scope: { provider: 'deepinfra', model: 'black-forest-labs/FLUX-1-schnell' },
+      schemaProperties: ['prompt', 'width', 'height', 'size', 'image_size'],
+    },
+  });
+  const di = renderToStaticMarkup(
+    <NodeItem
+      {...props('KSampler', {})}
+      currentProvider="deepinfra"
+      currentCheckpoint="black-forest-labs/FLUX-1-schnell"
+      schemaCustomParameters={diCp}
+    />,
+  );
+  expect(di).not.toContain('data-testid="widget-label-seed"');
+  expect(di).not.toContain('未设置');
+  expect(di).not.toContain('data-testid="widget-label-control_after_generate"');
+
+  const mageCp = JSON.stringify({
+    _canvas: {
+      scope: { provider: 'mage', model: 'mango-v3' },
+      schemaProperties: ['prompt', 'seed', 'aspect_ratio', 'resolution'],
+    },
+  });
+  const mage = renderToStaticMarkup(
+    <NodeItem
+      {...props('KSampler', { seed: 42, control_after_generate: 'fixed' })}
+      currentProvider="mage"
+      currentCheckpoint="mango-v3"
+      schemaCustomParameters={mageCp}
+    />,
+  );
+  expect(mage).toContain('data-testid="widget-label-seed"');
+  expect(mage).toMatch(/value="42"|42/);
+  expect(mage).not.toContain('node-filled-not-sent-seed');
+});

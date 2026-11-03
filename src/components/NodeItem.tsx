@@ -32,21 +32,22 @@ import { EngineRegistry } from '../engines/EngineRegistry';
 import { GeminiFieldSelect, GeminiModelBadge } from './GeminiFieldSelect';
 import { fieldOptions, getFieldSpec, resolveSchemaModelId } from '../schemas/providerSchema';
 import { FieldStatusBadge, SchemaSendBadge } from './FieldStatusBadge';
-import { isCanvasFieldUnsupported, isCanvasWidgetUnsupported, LORA_UNSUPPORTED_TITLE, LORA_BYPASS_LABEL } from '../utils/resolveCheckpoint';
+import { isCanvasFieldUnsupported, isCanvasWidgetUnsupported, LORA_UNSUPPORTED_TITLE, LORA_BYPASS_LABEL, toSchemaProvider } from '../utils/resolveCheckpoint';
 import { readDeclaredSchemaProperties, SCHEMA_OMIT_REASON, canvasFieldMatchesSchema, isDeclaredSchemaFieldOmitted } from '../utils/schemaSendHint';
 import { schemaSendStatus } from '../utils/schemaSendStatus';
-/** KSampler / related widgets: Schema-omit → hide entirely (雁: no 「不支持」 complaint on the node). */
+/** KSampler + EmptyLatent size widgets: Schema-omit / unsupported → hide empty shells (雁: no blank adjustable boxes). */
 const SAMPLER_SCHEMA_WIDGETS = new Set(['steps', 'cfg', 'sampler_name', 'scheduler', 'sampler', 'seed', 'denoise', 'control_after_generate']);
+const HIDE_EMPTY_OMIT_WIDGETS = new Set([...SAMPLER_SCHEMA_WIDGETS, 'width', 'height']);
 const filledCanvasValue = (v: unknown) =>
   v !== undefined && v !== null && !(typeof v === 'string' && v.trim() === '') && !(typeof v === 'number' && Number.isNaN(v));
-/** Hide empty KSampler shells: static unsupported, Schema-badge omit, or seeded schemaProperties omit (shared preset path). */
+/** Hide empty shells: static unsupported, Schema-badge omit, or seeded schemaProperties omit (shared preset path). */
 const hideSamplerShell = (
   widgetName: string,
   unsupported: boolean,
   omitHint: boolean,
   schemaCustomParameters?: string,
 ) =>
-  SAMPLER_SCHEMA_WIDGETS.has(widgetName) &&
+  HIDE_EMPTY_OMIT_WIDGETS.has(widgetName) &&
   (unsupported ||
     omitHint ||
     isDeclaredSchemaFieldOmitted(widgetName, schemaCustomParameters, readDeclaredSchemaProperties(schemaCustomParameters)));
@@ -840,7 +841,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                 );
               }
 
-              // CheckpointLoaderSimple + grok_compat: schema-backed aspect_ratio / resolution
+              // CheckpointLoaderSimple: schema-backed aspect_ratio / resolution (mage / grok / HF / … — never invent fields)
               if (
                 node.type === 'CheckpointLoaderSimple' &&
                 (widget.name === 'aspect_ratio' || widget.name === 'resolution')
@@ -849,33 +850,57 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                 if (prov === 'nanogpt' && widget.name === 'resolution') {
                   return <label key={widget.name} className="block text-sm text-slate-400">NanoGPT resolution<input value={value || ''} placeholder="按模型填写，如 1024x1024 / 1k" onChange={e=>onUpdateValue(node.id,'resolution',e.target.value)} onMouseDown={e=>e.stopPropagation()} className="mt-1 w-full bg-[#121316] border border-[#2d303a] rounded-lg p-2 text-slate-200"/><span className="text-xs">提交前查询所选模型支持值；与潜空间尺寸冲突时会提示。</span></label>;
                 }
-                if (prov !== 'grok_compat' && prov !== 'huggingface') return null;
-                const schemaModel = resolveSchemaModelId(prov as 'grok_compat' | 'huggingface', node.values?.ckpt_name || currentCheckpoint);
-                if (!schemaModel) return null;
-                const opts = fieldOptions(prov as 'grok_compat' | 'huggingface', schemaModel, widget.name as 'aspect_ratio' | 'resolution');
-                if (!opts.length) return null;
-                const staleValue = value && !opts.some((option) => option.value === value);
+                const schemaProv = toSchemaProvider(prov);
+                const schemaModel = schemaProv
+                  ? resolveSchemaModelId(schemaProv, node.values?.ckpt_name || currentCheckpoint)
+                  : undefined;
+                const opts = schemaProv && schemaModel
+                  ? fieldOptions(schemaProv, schemaModel, widget.name as 'aspect_ratio' | 'resolution')
+                  : [];
                 const stop = (e: React.SyntheticEvent) => e.stopPropagation();
-                return (
-                  <div key={widget.name} className="space-y-1">
-                    <label className="text-slate-400 font-mono text-[11px] block" title={widget.title || undefined}>{widget.label}</label>
-                    <select
-                      value={value || ''}
-                      onMouseDown={stop}
-                      onPointerDown={stop}
-                      onKeyDown={stop}
-                      onChange={(e) => onUpdateValue(node.id, widget.name, e.target.value)}
-                      className="w-full bg-[#121316] border border-[#2d303a] focus:border-cyan-500 rounded-lg px-2.5 py-1.5 text-slate-200 text-xs font-mono outline-none cursor-pointer"
-                    >
-                      <option value="">未选择（不传）</option>
-                      {staleValue && <option value={value}>旧值与当前模型不兼容：{value}</option>}
-                      {opts.map((v) => (
-                        <option key={v.value} value={v.value}>{v.value}</option>
-                      ))}
-                    </select>
-                    {staleValue && <p role="alert" className="text-amber-300 text-xs">旧值与当前模型不兼容；提交会被拒绝，请选择支持值或明确清空。</p>}
-                  </div>
-                );
+                if (opts.length) {
+                  const staleValue = value && !opts.some((option) => option.value === value);
+                  return (
+                    <div key={widget.name} className="space-y-1" data-testid={`ckpt-${widget.name}`}>
+                      <label className="text-slate-400 font-mono text-[11px] block" title={widget.title || undefined}>{widget.label}</label>
+                      <select
+                        value={value || ''}
+                        aria-label={widget.label}
+                        onMouseDown={stop}
+                        onPointerDown={stop}
+                        onKeyDown={stop}
+                        onChange={(e) => onUpdateValue(node.id, widget.name, e.target.value)}
+                        className="w-full bg-[#121316] border border-[#2d303a] focus:border-cyan-500 rounded-lg px-2.5 py-1.5 text-slate-200 text-xs font-mono outline-none cursor-pointer"
+                      >
+                        <option value="">未选择（不传）</option>
+                        {staleValue && <option value={value}>旧值与当前模型不兼容：{value}</option>}
+                        {opts.map((v) => (
+                          <option key={v.value} value={v.value}>{v.value}</option>
+                        ))}
+                      </select>
+                      {staleValue && <p role="alert" className="text-amber-300 text-xs">旧值与当前模型不兼容；提交会被拒绝，请选择支持值或明确清空。</p>}
+                    </div>
+                  );
+                }
+                // Preset/schema seeded a concrete value but local enum table is empty — surface the value only (no invented options).
+                if (filledCanvasValue(value)) {
+                  return (
+                    <div key={widget.name} className="space-y-1" data-testid={`ckpt-${widget.name}`}>
+                      <label className="text-slate-400 font-mono text-[11px] block" title={widget.title || undefined}>{widget.label}</label>
+                      <input
+                        type="text"
+                        value={String(value)}
+                        aria-label={widget.label}
+                        onMouseDown={stop}
+                        onPointerDown={stop}
+                        onKeyDown={stop}
+                        onChange={(e) => onUpdateValue(node.id, widget.name, e.target.value)}
+                        className="w-full bg-[#121316] border border-[#2d303a] focus:border-cyan-500 rounded-lg px-2.5 py-1.5 text-slate-200 text-xs font-mono outline-none"
+                      />
+                    </div>
+                  );
+                }
+                return null;
               }
 
               if (node.type === 'GoogleImagenNode') {
@@ -949,7 +974,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                 try { hasRef = JSON.parse(schemaCustomParameters || '{}')?._canvas?.hasReferenceImage === true; } catch { /* */ }
                 if (declared && declared.size > 0 && canvasFieldMatchesSchema('denoise', declared) && !hasRef) strengthNeedsImage = true;
               }
-              const seedCtrlUnused = widget.name === 'control_after_generate' && (greySeed || schemaSendStatus(currentProvider, 'seed', node.values?.seed, node.values?.custom_parameters, readDeclaredSchemaProperties(schemaCustomParameters), schemaCustomParameters) === 'not_sent');
+              const seedCtrlUnused = widget.name === 'control_after_generate' && (greySeed || schemaSendStatus(currentProvider, 'seed', node.values?.seed, node.values?.custom_parameters, readDeclaredSchemaProperties(schemaCustomParameters), schemaCustomParameters) === 'not_sent' || isDeclaredSchemaFieldOmitted('seed', schemaCustomParameters, readDeclaredSchemaProperties(schemaCustomParameters)));
               // 生成后种子随 seed：Schema 无 seed → 整行隐藏
               if (seedCtrlUnused) {
                 if (!filledCanvasValue(value)) return null;
@@ -1053,8 +1078,10 @@ export const NodeItem: React.FC<NodeItemProps> = ({
             if (widget.type === 'seed') {
               const seedSend = schemaSendStatus(currentProvider, 'seed', node.values?.seed, node.values?.custom_parameters, readDeclaredSchemaProperties(schemaCustomParameters), schemaCustomParameters);
               const seedSchemaUnused = seedSend === 'not_sent';
-              const seedUnsupported = greySeed || seedSchemaUnused;
-              // Schema 无 seed → 整行隐藏（含骰子）；仅用户填了值却发不出去时提醒一行。
+              // Badge path (SCHEMA_SCOPED) OR preset-seeded schemaProperties omit (DeepInfra / ModelScope shared path).
+              const seedOmitted = seedSchemaUnused || isDeclaredSchemaFieldOmitted('seed', schemaCustomParameters, readDeclaredSchemaProperties(schemaCustomParameters));
+              const seedUnsupported = greySeed || seedOmitted;
+              // Schema 无 seed → 整行隐藏（含骰子）；仅用户填了值却发不出去时提醒一行。Mage seed=42 stays visible.
               if (seedUnsupported) {
                 if (!filledCanvasValue(value)) return null;
                 return <p key={widget.name} role="note" data-testid="node-filled-not-sent-seed" className="text-[11px] text-amber-300/90 leading-relaxed">种子已填，此模型不支持，不会发送</p>;

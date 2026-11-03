@@ -20,6 +20,7 @@ const SCHEMA_PROVIDERS: readonly Provider[] = [
   'runware',
   'modelslab',
   'replicate',
+  'mage',
 ];
 
 export function toSchemaProvider(provider: string | undefined | null): Provider | undefined {

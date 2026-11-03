@@ -69,4 +69,14 @@ describe('isDeclaredSchemaFieldOmitted (preset/Schema seed, no badge gate)', () 
     expect(isDeclaredSchemaFieldOmitted('sampler_name', '{}')).toBe(false);
     expect(isDeclaredSchemaFieldOmitted('sampler_name', undefined)).toBe(false);
   });
+  it('DeepInfra-like omit seed + Mage-like omit width (non-SCHEMA_SCOPED)', () => {
+    const di = withSchema(['prompt', 'width', 'height', 'size', 'image_size']);
+    expect(isDeclaredSchemaFieldOmitted('seed', di)).toBe(true);
+    expect(isDeclaredSchemaFieldOmitted('steps', di)).toBe(true);
+    expect(isDeclaredSchemaFieldOmitted('width', di)).toBe(false);
+    const mage = withSchema(['prompt', 'seed', 'aspect_ratio', 'resolution']);
+    expect(isDeclaredSchemaFieldOmitted('width', mage)).toBe(true);
+    expect(isDeclaredSchemaFieldOmitted('height', mage)).toBe(true);
+    expect(isDeclaredSchemaFieldOmitted('seed', mage)).toBe(false);
+  });
 });
