@@ -1,5 +1,11 @@
 # ComfyCanvas Studio：开发交接、产品缺口与验收手册
 
+## 2026-11-03 Replicate 前端欠费透传（产品核）
+
+| 项 | 判定 | 要点 / 证据 |
+| --- | --- | --- |
+| Replicate flux-dev-lora | **PASS_BILLING**（非出图） | hist `hist_1793694045414_wjmvl`；节点+历史同款 HTTP 402 Insufficient credit；actualRequest 含 `lora_weights=fofr/flux-80s-cyberpunk` @1 + guidance/steps/aspect 等。证据 `temp/e2e/replicate-fe-2026-11-03/rep-01～03`。下一步：先探仍有额度的家冲真出图（勿再连刷欠费卡）；候选 Runware / Agnes / SenseNova / 魔搭 CN / Sogni。 |
+
 ## 2026-11-03 OpenWorks 前端真出图（产品核）
 
 | 项 | 判定 | 要点 / 证据 |
