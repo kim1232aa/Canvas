@@ -109,7 +109,7 @@
     "evidence": "已清理（OpenWorks LoRA/参数探针 02:39–02:50）：photoreal_studio_z_image 上 seed/steps/cfg/sampler/LoRA 无论 positional、named 还是顶层，上游都 200 不报错但不生效（同 seed 两次 sha256 不同）；23 个条目均未声明这些字段",
     "current": "产品口径（2026-11-03 画布）：全参数+真 LoRA 仍发送；历史标「已发送」不标「已生效」。官方 tool/list 仅登记 prompt/width/height/count 只作登记事实，不当砍参依据；四字段工具壳不作废全参数。TAMS 入口已撤，勿混。"
   },
-  "contractTestHint": "全参数+LoRA 发送（产品口径 2026-11-03；对齐已验收 hist_1793693239642_fo6ux）；历史标已发送非已生效；官方 tool/list 四字段不当砍参依据；视频按 outputs[].format==video；未声明工具本地拒绝；TAMS 已撤",
+  "contractTestHint": "全参数+LoRA 发送（产品口径 2026-11-03；对齐已验收 hist_1793693239642_fo6ux）；历史标已发送非已生效；官方 tool/list 四字段不当砍参依据；视频按 outputs[].format==video；未声明工具照发（已撤本地拒绝，上游返回原样显示）；TAMS 已撤",
   "canvasWiring": {
     "keep": "OpenWorks 真生图路径：测通才留（非整包删）",
     "cut": [

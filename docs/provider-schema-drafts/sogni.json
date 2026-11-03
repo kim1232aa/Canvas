@@ -267,7 +267,7 @@
       "insufficient_credit": "原样进历史，额度不卡进度"
     }
   },
-  "contractTestHint": "krea-2-turbo + 2 LoRA → loras 与 loraStrengths 等长；非 krea-2-turbo/dark-beast-krea2 模型挂公开 LoRA 应本地拒绝（防上游静默过滤）；loras/comfy 的 ui.min/max 作本地校验（服务端会 clamp）",
+  "contractTestHint": "krea-2-turbo + 2 LoRA → loras 与 loraStrengths 等长；非 krea-2-turbo/dark-beast-krea2 模型挂公开 LoRA 应照发（已撤本地拒绝，上游返回原样显示）（防上游静默过滤）；loras/comfy 的 ui.min/max 作本地校验（服务端会 clamp）",
   "sources": [
     "https://docs.sogni.ai/sogni-intelligence/creative-agent-workflows/",
     "https://docs.sogni.ai/api-reference/direct-generation/",

@@ -103,7 +103,7 @@
       "scale": "number"
     },
     "maxItems": 3,
-    "rule": "模型 supported_parameters 声明 loras 才开放；未声明本地拒绝",
+    "rule": "模型 supported_parameters 声明 loras 才开放；未声明照发（已撤本地拒绝，上游返回原样显示）",
     "source": "Researchy 2026-10-15 实测 /api/v1/image-models?detailed=true + https://docs.nano-gpt.com/api-reference/endpoint/image-api-generate.md"
   },
   "billing": {
@@ -117,7 +117,7 @@
     ],
     "balanceSignal": "remainingBalance (video submit)"
   },
-  "contractTestHint": "minimax-h3/text-to-image 挂 ≤3 LoRA → loras[{path,scale}] 发出；其他模型挂 LoRA 本地拒绝；seed 仅 nano-banana-2.1 发送；steps/cfg 一律标不会发送",
+  "contractTestHint": "minimax-h3/text-to-image 挂 ≤3 LoRA → loras[{path,scale}] 发出；其他模型挂 LoRA 照发（已撤本地拒绝，上游返回原样显示）；seed 仅 nano-banana-2.1 发送；steps/cfg 一律标不会发送",
   "sources": [
     "https://docs.nano-gpt.com (Image API, Video Generation, Video Status, authentication.md)",
     "docs/provider-api-audit-v2/nanogpt.md"

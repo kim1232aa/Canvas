@@ -232,7 +232,7 @@
       "canvasIntl": "国际站接线同字段名 loras；形状跟 CN 模型页；置信度中低待 Key 实测"
     },
     "not": "path / url / strength / scale 数组（国际站与中国站均勿发）",
-    "canvasRule": "多 LoRA 强度和 ≠ 1 时本地拒绝并说明，禁止自动归一化（黑盒改值）",
+    "canvasRule": "多 LoRA 强度和 ≠ 1 时照发（已撤本地拒绝，上游返回原样显示）并说明，禁止自动归一化（黑盒改值）",
     "canvasIntl": "国际站接线字段 loras（map {repoId: weight}）；2026-11-02 画布干净接通实测：POST api-inference.modelscope.ai/v1/images/generations 带 loras 权重 1 出图",
     "canvasAcceptanceNote": "intl+catalog LoRA 已出图；见 canvasAcceptance"
   },
@@ -240,7 +240,7 @@
     "insufficientHints": [],
     "note": "魔粒/免费额度；402 原文未抓到；原样展示"
   },
-  "contractTestHint": "Qwen-Image: 画布 steps→steps, cfg→guidance, seed→seed, 宽高→size 'WxH'；2 LoRA 0.6/0.4 → loras map；0.6/0.6 本地拒绝；填 sampler_name/scheduler/denoise → 不得进入上游 payload（omit +「该端点不支持」）",
+  "contractTestHint": "Qwen-Image: 画布 steps→steps, cfg→guidance, seed→seed, 宽高→size 'WxH'；2 LoRA 0.6/0.4 → loras map；0.6/0.6 照发（已撤本地拒绝，上游返回原样显示）；填 sampler_name/scheduler/denoise → 不得进入上游 payload（omit +「该端点不支持」）",
   "sources": [
     "https://modelscope.cn/docs/model-service/API-Inference/intro",
     "https://modelscope.cn/models/Qwen/Qwen-Image-2512",

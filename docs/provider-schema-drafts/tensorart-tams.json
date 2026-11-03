@@ -129,7 +129,7 @@
     "insufficientHints": [],
     "http402": "未文档化；原样上报"
   },
-  "contractTestHint": "seed→inputInitialize.seed；steps/cfg/宽高→diffusion.*；LoRA→diffusion.lora.items[{loraModel,weight}]；宽高非 64 倍数本地拒绝",
+  "contractTestHint": "seed→inputInitialize.seed；steps/cfg/宽高→diffusion.*；LoRA→diffusion.lora.items[{loraModel,weight}]；宽高非 64 倍数照发（已撤本地拒绝，上游返回原样显示）",
   "sources": [
     "https://echoing-swagger.oss-cn-shanghai.aliyuncs.com/tams/tams_api.swagger.online.json",
     "https://tams-docs.tensor.art/docs/api/signature/signature_build/",

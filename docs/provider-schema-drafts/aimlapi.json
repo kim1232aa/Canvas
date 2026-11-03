@@ -71,7 +71,7 @@
           "type": "integer",
           "min": 1,
           "max": 8,
-          "outOfRange": "超 8 本地拒绝，禁止截断",
+          "outOfRange": "超 8 照发（已撤本地拒绝，上游返回原样显示），禁止截断",
           "sendStatus": "会发送",
           "sendEvidence": "canvas-e2e-aimlapi-0006（挑刺过、画布收口，欠费接线 PASS_BILLING）：alibaba/z-image-turbo-lora + ostris/z_image_turbo_childrens_drawings @0.85；actualRequest.loras=[{path,scale:0.85}]；上游 HTTP 403 欠费原文；证据 已清理 + docs/evidence/aimlapi-fake-lora-live-403-summary.json；Researchy 对照官网 OpenAPI 一致；本轮 steps=8（schema 上限）入 actualRequest"
         },
@@ -292,7 +292,7 @@
     "2026-10-16 aimlapi-0006：z-image-turbo-lora actualRequest 证实 loras[{path,scale}]/image_size/num_inference_steps/seed 会发送（至上游 403 欠费）；挑刺过、画布收口。cfg/negative 仍不会发送。",
     "2026-10-16 fix5 UI：历史尺寸行不再与「响应体 505 B」混淆（挑刺过）；证据 已清理 PASS。"
   ],
-  "contractTestHint": "z-image-turbo-lora: width+height→image_size, steps 1-8 (20 本地拒绝), seed≥1, loras[{path,scale:0.85}] 必发（aimlapi-0006 已证实会发送，至 403）；cfg/negative 标不会发送",
+  "contractTestHint": "z-image-turbo-lora: width+height→image_size, steps 1-8 (20 照发（已撤本地拒绝，上游返回原样显示）), seed≥1, loras[{path,scale:0.85}] 必发（aimlapi-0006 已证实会发送，至 403）；cfg/negative 标不会发送",
   "_auditStatus": "2026-11-04 ~06:05 JST：雁澄清从未要求本地拦截；草案撤销所有拦截建议，改为照发+原样显示错误；「官方明文拒绝才拦」口径作废。\n2026-11-04：Researchy——provider=auto 官方 Alibaba→fal 兜底；画布对隐式/显式 auto 本地拦算出站前防静默换端，不算误拦；出站须手选 alibaba|fal。徽章不动。\n2026-11-02 ~04:45 JST：Researchy——AIMLAPI Pixverse V5.5 I2V seed。\n2026-11-02 ~04:39 JST：Researchy 对照表写回 researchyVerified20261102（种子/时长/比例已核一致条目）；未核条目仍待核、禁止当拦截；徽章不动。\n2026-10-16 16:31：fix5 UI 收口（非升 PASS）——尺寸行不再与「响应体 505 B」混淆；证据 已清理 PASS_BILLING（aimlapi-0006）。2026-10-16 ~01:00 JST tinkabot：认领 aimlapi-0006（挑刺过）——loras[{path,scale}]/image_size/num_inference_steps/seed 升「会发送」；欠费 403 接线非真出图。前序 2026-10-15 03:26：旧审计仅对比；以 v2 与 DIFF 为准。",
   "fix5Ui": {
     "verdict": "UI_CLOSED",

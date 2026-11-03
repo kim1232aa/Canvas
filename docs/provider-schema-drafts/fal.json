@@ -337,7 +337,7 @@
     ],
     "http402": "未文档化；原样展示上游响应"
   },
-  "contractTestHint": "flux-lora: steps/cfg/seed/宽高→image_size/loras 必发；krea-2 turbo lora: steps/cfg 必标不会发送、第 4 个 LoRA 本地拒绝；Authorization 头必须以 'Key ' 开头；视频 Kling V3 standard i2v：actualRequest 须含 start_image_url+duration(字符串)；PASS_BILLING（bq6y0，403 TOP_UP，非出片）",
+  "contractTestHint": "flux-lora: steps/cfg/seed/宽高→image_size/loras 必发；krea-2 turbo lora: steps/cfg 必标不会发送、第 4 个 LoRA 照发（已撤本地拒绝，上游返回原样显示）；Authorization 头必须以 'Key ' 开头；视频 Kling V3 standard i2v：actualRequest 须含 start_image_url+duration(字符串)；PASS_BILLING（bq6y0，403 TOP_UP，非出片）",
   "sources": [
     "https://fal.ai/models/fal-ai/flux-lora/api",
     "https://fal.ai/models/fal-ai/krea-2/turbo/lora/api",
