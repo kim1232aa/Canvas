@@ -705,7 +705,8 @@ const STD_SPECS: StdSpec[] = [
     hasNegative: false,
     steps: 8,
     cfg: 1,
-    omit: ['denoise'],
+    // providerSchema comfy:krea2: width/height unsupported (official Krea recipe); omit pixels so EmptyLatent has no 假 1024 壳.
+    omit: ['denoise', 'width', 'height'],
     checkpointExtra: { civitai_engine: 'comfy', civitai_ecosystem: 'krea2', civitai_model: 'turbo' },
   },
 ];

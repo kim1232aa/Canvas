@@ -319,6 +319,15 @@ describe('standard workflow presets (23 T2I + 6 I2V)', () => {
     expect(lora('std-civitai-t2i')).toBeUndefined();
   });
 
+  it('Civitai krea2 omits EmptyLatent pixels (Schema width/height unsupported)', () => {
+    const p = preset('std-civitai-t2i');
+    const lat = p.nodes.find(n => n.type === 'EmptyLatentImage')!;
+    expect(lat.values.width).toBeUndefined();
+    expect(lat.values.height).toBeUndefined();
+    expect(p.spatialFrames?.[0]?.params?.width).toBeUndefined();
+    expect(p.spatialFrames?.[0]?.params?.height).toBeUndefined();
+  });
+
   it('agnes stays compact Checkpoint→CLIP→Save with placeholder prompt', () => {
     const p = preset('std-agnes-t2i');
     expect(p.nodes.map(n => n.type)).toEqual(['CheckpointLoaderSimple', 'CLIPTextEncode', 'SaveImage']);
