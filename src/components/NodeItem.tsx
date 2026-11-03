@@ -37,7 +37,7 @@ import { readDeclaredSchemaProperties, SCHEMA_OMIT_REASON, canvasFieldMatchesSch
 import { schemaSendStatus } from '../utils/schemaSendStatus';
 /** KSampler + EmptyLatent size widgets: Schema-omit / unsupported → hide empty shells (雁: no blank adjustable boxes). */
 const SAMPLER_SCHEMA_WIDGETS = new Set(['steps', 'cfg', 'sampler_name', 'scheduler', 'sampler', 'seed', 'denoise', 'control_after_generate']);
-const HIDE_EMPTY_OMIT_WIDGETS = new Set([...SAMPLER_SCHEMA_WIDGETS, 'width', 'height']);
+const HIDE_EMPTY_OMIT_WIDGETS = new Set([...SAMPLER_SCHEMA_WIDGETS, 'width', 'height', 'batch_size']);
 const filledCanvasValue = (v: unknown) =>
   v !== undefined && v !== null && !(typeof v === 'string' && v.trim() === '') && !(typeof v === 'number' && Number.isNaN(v));
 /** Hide empty shells: static unsupported, Schema-badge omit, or seeded schemaProperties omit (shared preset path). */

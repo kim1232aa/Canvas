@@ -235,7 +235,9 @@ function buildStandardT2i(spec: StdSpec): WorkflowPreset {
         values: Object.fromEntries(Object.entries({
           width: keep('width', width),
           height: keep('height', height),
-          batch_size: 1,
+          // Endpoint sizes via checkpoint size/aspect_ratio (Agnes/Mage): no pixel fields → no batch_size shell either
+          // (not in that Schema, never sent). Omit-empty rule: the node shows no blank/unsent widgets.
+          batch_size: omit.has('width') && omit.has('height') ? undefined : 1,
         }).filter(([, v]) => v !== undefined)),
       },
       {

@@ -587,7 +587,7 @@ describe('standard workflow presets (23 T2I + 6 I2V)', () => {
     const lat = p.nodes.find(n => n.type === 'EmptyLatentImage')!;
     expect(lat.values.width).toBeUndefined();
     expect(lat.values.height).toBeUndefined();
-    expect(lat.values.batch_size).toBe(1);
+    expect(lat.values.batch_size).toBeUndefined(); // not in Mage Schema, never sent → no shell
     const ks = p.nodes.find(n => n.type === 'KSampler')!;
     expect(ks.values.seed).toBe(42);
     expect(ks.values.steps).toBeUndefined();
@@ -656,5 +656,6 @@ describe('standard workflow presets (23 T2I + 6 I2V)', () => {
     const lat = preset('std-agnes-t2i').nodes.find(n => n.type === 'EmptyLatentImage')!;
     expect(lat.values.width).toBeUndefined();
     expect(lat.values.height).toBeUndefined();
+    expect(lat.values.batch_size).toBeUndefined(); // Agnes sizes via size+ratio (wiki.agnes-ai.com/en/docs/agnes-image-25-flash); no shell
   });
 });
