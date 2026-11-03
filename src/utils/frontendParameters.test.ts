@@ -17,10 +17,10 @@ describe('explicit frontend request contracts', () => {
     const sent=spatialRequestParameters(frame({videoProvider:'fal',videoDuration:12,aspectRatio:'9:16'},{mediaType:'video',videoDuration:5,videoAspectRatio:'16:9'}));
     expect(sent.videoDuration).toBe(12);expect(sent.aspectRatio).toBe('9:16');
   });
-  it('does not manufacture Gemini seed or request pixel dimensions and records retained display values',()=>{
-    const sent=spatialRequestParameters(frame({targetProvider:'gemini',seedControl:'randomize',seed:0},{referenceImageUrl:'ref.png'}));
-    expect(sent.width).toBeUndefined();expect(sent.height).toBeUndefined();expect(sent.seed).toBeUndefined();expect(sent.denoise).toBeUndefined();
-    expect(sent.extraParams?.omissions).toEqual(expect.arrayContaining([expect.objectContaining({field:'width',value:1024}),expect.objectContaining({field:'seed',value:0}),expect.objectContaining({field:'seedControl',value:'randomize'}),expect.objectContaining({field:'denoise',value:0})]));
+  it('Gemini: filled pixels and denoise are sent as filled; nothing withheld',()=>{
+    const sent=spatialRequestParameters(frame({targetProvider:'gemini',seedControl:'fixed',seed:0},{referenceImageUrl:'ref.png'}));
+    expect(sent).toMatchObject({width:1024,height:1024,seed:0,denoise:0});
+    expect(sent.extraParams?.omissions).toBeUndefined();
   });
   it('routes the video framework through an explicit provider and keeps advanced false/zero values', () => {
     const sent = spatialRequestParameters(frame({videoProvider:'fal',resolution:'720p',customParameters:'{"generate_audio":false,"cfg_scale":0}'},{imageUrl:'output.png',referenceImageUrl:'reference.png',mediaType:'video'}));
@@ -55,12 +55,11 @@ describe('explicit frontend request contracts', () => {
   it('does not reuse output or preset artwork as a generation input', () => {
     expect(spatialRequestParameters(frame({targetProvider:'fal'},{imageUrl:'previous-output.png'})).image_url).toBeUndefined();
   });
-  it('keeps Civitai engine selection and quantity, and omits only conflicting Agnes dimensions transparently', () => {
+  it('keeps Civitai engine selection and quantity, and sends Agnes pixel dimensions as filled alongside size', () => {
     expect(spatialRequestParameters(frame({targetProvider:'civitai',civitaiEngine:'comfy',civitaiEcosystem:'other',civitaiModel:'custom',batchSize:0}))).toMatchObject({width:1024,height:1024,extraParams:{engine:'comfy',ecosystem:'other',comfyModel:'custom',quantity:0}});
     const sent = spatialRequestParameters(frame({targetProvider:'agnes',size:'2K'}));
-    expect(sent.width).toBeUndefined();
-    expect(sent.height).toBeUndefined();
-    expect(sent.extraParams?.omissions).toEqual(expect.arrayContaining([expect.objectContaining({field:'width',value:1024}),expect.objectContaining({field:'height',value:1024})]));
+    expect(sent).toMatchObject({width:1024,height:1024,extraParams:{size:'2K'}});
+    expect(sent.extraParams?.omissions).toBeUndefined();
   });
   it('lists unresolved resource identifiers before submitting', () => {
     expect(() => spatialRequestParameters(frame({targetProvider:'civitai',loras:[{name:'original',civitaiId:'123',unresolvedResource:true,modelStrength:0,clipStrength:0,triggerWords:''}]}))).toThrow(/123.*重新选择/);

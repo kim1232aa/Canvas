@@ -3774,19 +3774,16 @@ app.post(['/api/engine/agnes/generate', '/api/agnes/generate'], async (req, res)
   try {
     const { prompt, model, image_url } = req.body;
     if (!model) return res.status(400).json({ error: '模型为必填项（model is required）' });
-    if (model === 'agnes-image-2.5-flash' && rejectUnsupported(res, 'Agnes AI', req.body, ['width', 'height', 'negative_prompt', 'seed', 'cfg', 'guidance_scale', 'steps', 'loras','sampler_name','scheduler','denoise'])) return;
-
-    const explicitSize = req.body.extraParams?.size || req.body.size || (model !== 'agnes-image-2.5-flash' && isProvided(req.body.width) && isProvided(req.body.height) ? `${req.body.width}x${req.body.height}` : undefined);
+    // 雁 rule: every filled value is sent as filled (docs fields size/ratio; others top-level under their own name).
+    const explicitSize = req.body.extraParams?.size || req.body.size;
     const payload: any = {
       model,
       prompt,
       ...(isProvided(explicitSize) ? { size: explicitSize } : {}),
       ...(typeof req.body.return_base64 === 'boolean' ? { return_base64: req.body.return_base64 } : {}),
     };
-    if (model !== 'agnes-image-2.5-flash') {
-      for (const f of ['width', 'height', 'negative_prompt', 'seed', 'cfg', 'guidance_scale', 'steps', 'loras', 'sampler_name', 'scheduler', 'denoise']) {
-        if (isProvided(req.body[f])) payload[f] = req.body[f];
-      }
+    for (const f of ['width', 'height', 'negative_prompt', 'seed', 'cfg', 'guidance_scale', 'steps', 'loras', 'sampler_name', 'scheduler', 'denoise', 'resolution']) {
+      if (isProvided(req.body[f])) payload[f] = req.body[f];
     }
     const ratio = req.body.aspectRatio || req.body.aspect_ratio || req.body.ratio;
     if (isProvided(ratio)) payload.ratio = ratio;
@@ -3798,7 +3795,6 @@ app.post(['/api/engine/agnes/generate', '/api/agnes/generate'], async (req, res)
     const custom = applyCustomParameters(payload, req.body.custom_parameters);
     const sentPayload = custom.payload;
     const actualModel = custom.actualModel || model;
-    if (actualModel === 'agnes-image-2.5-flash' && !sentPayload.size) return res.status(400).json({error:'Agnes size 为必填项：当前 Image 2.5 Flash 请选择 1K / 2K / 3K / 4K',errorSource:'local'});
     const requestedParameters = sanitizeGenerationMetadata(Object.fromEntries(Object.entries(req.body).filter(([key]) => key !== 'workflowSnapshot')));
 
     const upstream = await upstreamFetch(
@@ -5273,13 +5269,8 @@ app.post(['/api/gemini/generate', '/api/engine/gemini/generate'], async (req, re
       return res.status(400).json({ error: '模型为必填项（model is required）' });
     }
 
-    // E1: 收到 width/height 返回 400
-    if (isProvided(req.body.width) || isProvided(req.body.height)) {
-      return res.status(400).json({
-        error: '该服务商不支持: width/height。Google Gemini 仅支持 aspect_ratio 或 image_size（按模型取值表）',
-        unsupported: [isProvided(req.body.width) ? 'width' : '', isProvided(req.body.height) ? 'height' : ''].filter(Boolean),
-      });
-    }
+    // 雁 rule: filled width/height are sent as filled (forwarded into config under their own name); upstream decides.
+    rejectUnsupported(res, 'Google Gemini', req.body, ['width', 'height']);
 
     // Imagen is shut down (https://ai.google.dev/gemini-api/docs/imagen); all image models use generateContent,
     // which has no negative prompt / cfg / steps / LoRA / seed（ImageConfig 仅 aspectRatio+imageSize）。

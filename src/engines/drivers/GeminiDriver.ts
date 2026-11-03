@@ -55,7 +55,9 @@ export class GeminiDriver extends BaseEngineDriver {
     const body: Record<string, any> = {
       prompt: params.prompt,
       model: params.model,
-      parameterOmissions: params.extraParams?.omissions,
+      // 雁 rule: every filled canvas value is sent as filled; the server forwards it into config under its own name.
+      width: params.width, height: params.height, negative_prompt: params.negative_prompt, seed: params.seed,
+      steps: params.steps, cfg: params.cfg, sampler_name: params.sampler_name, scheduler: params.scheduler, denoise: params.denoise,
       ...(params.extraParams?.custom_parameters && typeof params.extraParams.custom_parameters === 'object' ? { custom_parameters: params.extraParams.custom_parameters } : {}),
     };
     if (params.aspectRatio && typeof params.aspectRatio === 'string' && params.aspectRatio.trim() !== '') {

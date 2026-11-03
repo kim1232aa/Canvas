@@ -90,22 +90,14 @@ export function spatialRequestParameters(frame: SpatialFrame): NormalizedGenerat
   if (provider === 'tensorart') extraParams.count = p.batchSize;
   if (provider === 'huggingface') {
     if (p.hfProvider) extraParams.hf_provider = p.hfProvider;
-    if (p.hfProvider === 'z-image-space') {
-      for (const [key,value] of Object.entries({shift:p.shift,random_seed:p.randomSeed,gallery_images:p.galleryImages})) if (value !== undefined) extraParams[key] = value;
-    }
+    for (const [key,value] of Object.entries({shift:p.shift,random_seed:p.randomSeed,gallery_images:p.galleryImages})) if (value !== undefined) extraParams[key] = value;
   }
-  const isGemini = provider === 'gemini';
-  const omitDimensions = isGemini || (provider === 'agnes' && Boolean(p.size));
-  if (omitDimensions) extraParams.omissions = ['width','height'].map(field => ({field,value:p[field as 'width' | 'height'],reason:isGemini ? 'Gemini 使用 aspect_ratio / image_size；保留展示像素尺寸，不作为请求参数' : 'Agnes size 已指定；此路由不提交像素宽高'}));
-  if (isGemini) {
-    const omitted = Object.entries({seed:p.seed,seedControl:p.seedControl === 'randomize' ? p.seedControl : undefined,denoise:frame.referenceImageUrl ? p.denoise : undefined}).filter(([,value])=>value !== undefined).map(([field,value])=>({field,value,reason:'此 Gemini 图像路由未接入该控制；保留原值，不制造随机种子或重绘值'}));
-    extraParams.omissions = [...(extraParams.omissions as unknown[]),...omitted];
-  }
+  // 雁 rule: every filled value is sent as filled (no per-provider withholding of pixels/seed/denoise).
   const isVideo = frame.mediaType === 'video' || p.targetProvider === 'video';
   return {prompt:frame.prompt,negative_prompt:frame.negativePrompt,model:p.checkpoint,provider,targetProvider:provider,
-    width:omitDimensions ? undefined : p.width,height:omitDimensions ? undefined : p.height,steps:p.steps,cfg:p.cfg,
-    seed:isGemini ? undefined : p.seedControl === 'randomize' ? randomSeedFor(provider, p.checkpoint) : p.seed,
-    image_url:frame.referenceImageUrl,denoise:!isGemini && frame.referenceImageUrl ? p.denoise : undefined,
+    width:p.width,height:p.height,steps:p.steps,cfg:p.cfg,
+    seed:p.seedControl === 'randomize' ? randomSeedFor(provider, p.checkpoint) : p.seed,
+    image_url:frame.referenceImageUrl,denoise:p.denoise,
     sampler_name:p.sampler,scheduler:p.scheduler,isVideo,
     videoDuration:isVideo ? (Object.hasOwn(p,'videoDuration') ? p.videoDuration : frame.videoDuration) : undefined,
     videoFps:isVideo ? (Object.hasOwn(p,'videoFps') ? p.videoFps : frame.videoFps) : undefined,videoFrames:isVideo ? p.videoFrames : undefined,

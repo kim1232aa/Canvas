@@ -4,13 +4,13 @@ import { NormalizedGenerateParams } from '../types';
 import { EngineRegistry } from '../EngineRegistry';
 
 describe('GeminiDriver', () => {
-  it('sends spatial retained values as parameterOmissions without inventing seed or pixel controls',async()=>{
+  it('sends filled spatial width/height/denoise as filled (no withholding)',async()=>{
     const {spatialRequestParameters}=await import('../../utils/frontendParameters');
     let body:any;
     globalThis.fetch=vi.fn(async (_url,init)=>{body=JSON.parse(String(init?.body));return new Response(JSON.stringify({imageUrl:'https://example.test/out.png'}));});
     await new GeminiDriver().generate(spatialRequestParameters({id:'f',title:'Gemini',pos:{x:0,y:0},width:400,height:400,prompt:'test',negativePrompt:'',createdAt:0,status:'idle',params:{checkpoint:'gemini-3.1-flash-image',targetProvider:'gemini',width:1024,height:1024,batchSize:1,denoise:0,seedControl:'randomize',loras:[]}}),{});
-    expect(body.seed).toBeUndefined();expect(body.width).toBeUndefined();
-    expect(body.parameterOmissions).toEqual(expect.arrayContaining([expect.objectContaining({field:'width',value:1024}),expect.objectContaining({field:'seedControl',value:'randomize'})]));
+    expect(body).toMatchObject({width:1024,height:1024,denoise:0});
+    expect(body).not.toHaveProperty('parameterOmissions');
   });
   const driver = new GeminiDriver();
   const originalFetch = globalThis.fetch;

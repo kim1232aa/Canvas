@@ -24,16 +24,15 @@ it('Agnes video goes to the video route with duration / resolution; never images
   expect(JSON.parse(request.mock.calls[0][1].body)).toMatchObject({provider:'agnes',model:'agnes-video-2.5',duration:8,size:'1080P',aspect_ratio:'16:9'});
 });
 
-it('Agnes image sends only verified image fields and records stale canvas omissions',async()=>{
+it('Agnes image 2.1 sends every filled canvas field as filled',async()=>{
   const request=vi.fn().mockResolvedValue(new Response(JSON.stringify({error:'missing key'}), { status: 400 }));globalThis.fetch=request;
   await expect(new AgnesDriver().generate({
     model:'agnes-image-2.1-flash',prompt:'terrarium library',negative_prompt:'blurry',width:1024,height:1024,seed:314159,steps:24,cfg:3.2,sampler_name:'euler',scheduler:'karras',denoise:1,loras:[],extraParams:{resolution:'1k'}
   },{})).rejects.toThrow('missing key');
   expect(request.mock.calls[0][0]).toBe('/api/engine/agnes/generate');
   const body=JSON.parse(request.mock.calls[0][1].body);
-  expect(body).toMatchObject({model:'agnes-image-2.1-flash',prompt:'terrarium library'});
-  for(const field of ['width','height','negative_prompt','seed','steps','cfg','sampler_name','scheduler','denoise']) expect(body).not.toHaveProperty(field);
-  expect(body.parameterOmissions.map((x:any)=>x.field)).toEqual(expect.arrayContaining(['width','height','negative_prompt','seed','steps','cfg','sampler_name','scheduler','denoise','resolution']));
+  expect(body).toMatchObject({model:'agnes-image-2.1-flash',prompt:'terrarium library',negative_prompt:'blurry',width:1024,height:1024,seed:314159,steps:24,cfg:3.2,sampler_name:'euler',scheduler:'karras',denoise:1,resolution:'1k'});
+  expect(body).not.toHaveProperty('parameterOmissions');
 });
 it('Agnes video does not send an empty loras array (upstream rejects the field), but keeps real LoRAs for the server to refuse',async()=>{
   const request=vi.fn().mockResolvedValue(new Response(JSON.stringify({error:'stop'}),{status:400}));globalThis.fetch=request;
@@ -61,40 +60,26 @@ it('Agnes video keeps an explicit size over the node resolution and rejects a co
   expect(request).not.toHaveBeenCalled();
 });
 
-it('Agnes Image 2.5 sends current size/ratio fields and records stale canvas omissions',async()=>{
+it('Agnes Image 2.5 sends size/ratio plus every filled canvas field as filled',async()=>{
   const request=vi.fn().mockResolvedValue(new Response(JSON.stringify({error:'missing key'}), { status: 400 }));globalThis.fetch=request;
   await expect(new AgnesDriver().generate({
     model:'agnes-image-2.5-flash',prompt:'terrarium library',negative_prompt:'blurry',width:1024,height:1024,seed:314159,steps:24,cfg:3.2,sampler_name:'euler',scheduler:'karras',denoise:1,loras:[],aspectRatio:'4:3',imageSize:'2K',extraParams:{resolution:'1k'}
   },{})).rejects.toThrow('missing key');
   expect(request.mock.calls[0][0]).toBe('/api/engine/agnes/generate');
   const body=JSON.parse(request.mock.calls[0][1].body);
-  expect(body).toMatchObject({model:'agnes-image-2.5-flash',prompt:'terrarium library',aspect_ratio:'4:3',size:'2K'});
-  for(const field of ['width','height','negative_prompt','seed','steps','cfg','sampler_name','scheduler','denoise']) expect(body).not.toHaveProperty(field);
-  expect(body.parameterOmissions.map((x:any)=>x.field)).toEqual(expect.arrayContaining(['width','height','negative_prompt','seed','steps','cfg','sampler_name','scheduler','denoise','resolution']));
+  expect(body).toMatchObject({model:'agnes-image-2.5-flash',prompt:'terrarium library',aspect_ratio:'4:3',size:'2K',negative_prompt:'blurry',width:1024,height:1024,seed:314159,steps:24,cfg:3.2,sampler_name:'euler',scheduler:'karras',denoise:1,resolution:'1k'});
+  expect(body).not.toHaveProperty('parameterOmissions');
 });
 
-it('preserves frontend dimension omissions in the local execution request without resubmitting dimensions',async()=>{
+it('spatial frame request: filled seed 0 and height are sent as filled, nothing withheld',async()=>{
   const request=vi.fn().mockResolvedValue(new Response(JSON.stringify({error:'missing key'}), {status:400}));globalThis.fetch=request;
   const frame:SpatialFrame={id:'frame',title:'Image',pos:{x:0,y:0},width:360,height:360,prompt:'library',negativePrompt:'',status:'idle',createdAt:0,
     params:{targetProvider:'agnes',checkpoint:'agnes-image-2.5-flash',size:'2K',aspectRatio:'4:3',width:0,height:768,denoise:1,batchSize:1,seedControl:'fixed',seed:0,loras:[]}};
   const params=spatialRequestParameters(frame);
-  const omissions=params.extraParams!.omissions;
-  expect(params.width).toBeUndefined();expect(params.height).toBeUndefined();
   await expect(new AgnesDriver().generate(params,{})).rejects.toThrow('missing key');
   const body=JSON.parse(request.mock.calls[0][1].body);
-  expect(body.parameterOmissions).toEqual(expect.arrayContaining(omissions));
-  expect(body.parameterOmissions).toContainEqual({field:'seed',value:0,reason:'Agnes image endpoint schema does not accept this canvas field'});
-  expect(body).not.toHaveProperty('width');expect(body).not.toHaveProperty('height');
-  expect(params.extraParams!.omissions).toEqual(omissions);
-});
-
-it('deduplicates overlapping omissions by field and preserves the original omission detail',async()=>{
-  const request=vi.fn().mockResolvedValue(new Response(JSON.stringify({error:'missing key'}), {status:400}));globalThis.fetch=request;
-  const omission={field:'width',value:0,reason:'Original canvas width was omitted locally'};
-  await expect(new AgnesDriver().generate({model:'agnes-image-2.5-flash',prompt:'library',width:0,height:768,extraParams:{omissions:[omission,omission]}},{})).rejects.toThrow('missing key');
-  const body=JSON.parse(request.mock.calls[0][1].body);
-  expect(body.parameterOmissions.filter((entry:{field:string})=>entry.field==='width')).toEqual([omission]);
-  expect(body.parameterOmissions.filter((entry:{field:string})=>entry.field==='height')).toHaveLength(1);
+  expect(body).toMatchObject({size:'2K',aspect_ratio:'4:3',seed:0,denoise:1});
+  expect(body).not.toHaveProperty('parameterOmissions');
 });
 
 it.each([

@@ -94,24 +94,9 @@ export class AgnesDriver extends BaseEngineDriver {
       headers['x-agnes-base-url'] = effectiveBaseUrl;
     }
 
-    const isVideo=Boolean(params.isVideo || params.videoDuration != null);
-    const omissionEntries = [
-      ['width', params.width],
-      ['height', params.height],
-      ['negative_prompt', params.negative_prompt],
-      ['seed', params.seed],
-      ['steps', params.steps],
-      ['cfg', params.cfg],
-      ['sampler_name', params.sampler_name],
-      ['scheduler', params.scheduler],
-      ['denoise', params.denoise],
-      ['resolution', params.extraParams?.resolution],
-    ].filter(([, value]) => value !== undefined && value !== null && value !== '');
-    const upstreamOmissions = Array.isArray(params.extraParams?.omissions) ? params.extraParams.omissions : [];
-    const parameterOmissions = [
-      ...upstreamOmissions,
-      ...omissionEntries.map(([field, value]) => ({field,value,reason:'Agnes image endpoint schema does not accept this canvas field'})),
-    ].filter((entry, index, entries) => entries.findIndex(candidate => candidate.field === entry.field) === index);
+    // Declared catalog type (supportedModels), not a model-name guess.
+    const isVideo=Boolean(params.isVideo || params.videoDuration != null || this.supportedModels.find(m=>m.id===params.model)?.type==='video');
+    // 雁 rule: every filled value is sent as filled. Agnes docs name size/ratio; the rest go top-level under their own name.
     const imageRequestBody = {
       workflowSnapshot: params.workflowSnapshot,
       model: params.model,
@@ -119,8 +104,17 @@ export class AgnesDriver extends BaseEngineDriver {
       image_url: params.image_url,
       aspect_ratio: params.aspectRatio,
       size: params.extraParams?.size || params.imageSize,
+      width: params.width,
+      height: params.height,
+      negative_prompt: params.negative_prompt,
+      seed: params.seed,
+      steps: params.steps,
+      cfg: params.cfg,
+      sampler_name: params.sampler_name,
+      scheduler: params.scheduler,
+      denoise: params.denoise,
+      resolution: params.extraParams?.resolution,
       ...(Array.isArray(params.loras) && params.loras.length > 0 ? { loras: params.loras } : {}),
-      parameterOmissions,
       ...(params.extraParams?.custom_parameters && typeof params.extraParams.custom_parameters === 'object' ? { custom_parameters: params.extraParams.custom_parameters } : {}),
     };
     const videoResolution = params.extraParams?.resolution;
