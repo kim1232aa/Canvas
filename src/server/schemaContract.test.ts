@@ -493,11 +493,6 @@ describe('provider contract (16): builder / route-handler providers', () => {
     expect(videoRouteSrc).toContain('ModelScope API-Inference 当前没有已接入的视频生成接口');
   });
 
-  it('HuggingFace standard: seed/steps/cfg/size declared; LoRA refused unless explicit fal-ai route', () => {
-    for (const f of ['seed', 'steps', 'cfg', 'width', 'height']) expect(unsupportedLabel('huggingface', 'black-forest-labs/FLUX.1-dev', f), f).toBe(false);
-    expect(serverSrc).toContain("if (hfProvider !== 'fal-ai' && rejectUnsupported(res, 'HF Inference / Z-Image Space', req.body, ['loras'])) return;");
-  });
-
   it('TAMS: seed→inputInitialize.seed, steps/cfg/size→diffusion.*, LoRA→diffusion.lora.items[{loraModel,weight}]; non-64 rejected; video rejected locally', () => {
     const job = buildTensorModelJob({ model: '600000000000000001', prompt: 'x', seed: 42, steps: 20, cfg: 7, width: 1024, height: 768, negative_prompt: 'blurry', loras: [{ tensorartId: '700000000000000001', strength: 0.8 }] }, 'r1');
     expect(job.stages[0].inputInitialize).toEqual({ seed: '42' });

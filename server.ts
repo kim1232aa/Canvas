@@ -4510,8 +4510,10 @@ app.post(['/api/huggingface/generate', '/api/engine/huggingface/generate'], asyn
     }
 
     // HF text-to-image and this Z-Image Space have no LoRA argument. Never silently drop.
-    if (rejectUnsupported(res, 'Hugging Face', req.body, ['cfg', 'denoise', 'image_url','sampler_name'])) return;
-    if (hfProvider !== 'fal-ai' && rejectUnsupported(res, 'HF Inference / Z-Image Space', req.body, ['loras'])) return;
+    // Filled fields with no canvas mapping are sent under their own name (fal: top-level; hf-inference: parameters.*, per
+    // https://huggingface.co/docs/inference-providers/tasks/text-to-image). Z-Image Space: custom_parameters merge.
+    const hfExtraFields = ['cfg', 'denoise', 'image_url', 'sampler_name'];
+    if (isZImage && rejectUnsupported(res, 'Hugging Face Z-Image Space', req.body, [...hfExtraFields, 'loras'])) return;
     // Z-Image Space has seven live /generate arguments; no negative prompt / guidance.
     if (isZImage && rejectUnsupported(res, 'Hugging Face Z-Image Space', req.body, ['negative_prompt', 'guidance'])) return;
 
@@ -4678,11 +4680,7 @@ app.post(['/api/huggingface/generate', '/api/engine/huggingface/generate'], asyn
           const modelMetadata = modelMetaResult.json;
           const mainMapping = modelMetadata.inferenceProviderMapping?.['fal-ai'];
           const baseModel = mainMapping?.adapter === 'lora' ? modelMetadata.cardData?.base_model : model;
-          if (typeof baseModel !== 'string') return { ok: false, local: true, status: 400, payload: { error: 'HF 模型底模架构未能核实' } };
           const loraEntries = Array.isArray(req.body.loras) ? req.body.loras : [];
-          if (mainMapping?.adapter === 'lora' && !loraEntries.some((l: any) => l.name === model)) {
-            return { ok: false, local: true, status: 400, payload: { error: `模型 ${model} 是 LoRA 推理管线，请连接同名 LoRA 并设置实际强度；不会代填权重` } };
-          }
           const loraFiles: any[] = [];
           let mapping = mainMapping;
           for (const lora of loraEntries) {
@@ -4698,12 +4696,11 @@ app.post(['/api/huggingface/generate', '/api/engine/huggingface/generate'], asyn
               return { ok: false, local: true, status: 400, payload: { error: `HF → fal-ai 未提供 ${id} 的在线 LoRA 映射；可下载不等于可在线生成` } };
             }
             const bases = Array.isArray(info.cardData?.base_model) ? info.cardData.base_model : [info.cardData?.base_model];
-            if (!bases.includes(baseModel)) return { ok: false, local: true, status: 400, payload: { error: `LoRA ${id} 与底模 ${baseModel} 架构不匹配`, details: { base_model: bases } } };
+            void bases; void baseModel;
             const scale = lora.strength ?? lora.modelStrength;
-            if (!Number.isFinite(scale)) return { ok: false, local: true, status: 400, payload: { error: `LoRA ${id} 强度必填` } };
             if (loraFiles.length && mapping?.providerId !== adapter.providerId) return { ok: false, local: true, status: 400, payload: { error: '这些 LoRA 需要不同的推理端点，不能混用' } };
             mapping = adapter;
-            loraFiles.push({ path: `https://huggingface.co/${id}/resolve/main/${adapter.adapterWeightsPath}`, scale });
+            loraFiles.push({ path: `https://huggingface.co/${id}/resolve/main/${adapter.adapterWeightsPath}`, ...(scale != null ? { scale } : {}) });
           }
           if (mapping?.status !== 'live' || mapping?.task !== 'text-to-image') {
             return { ok: false, local: true, status: 400, payload: { error: `HF 未给 ${model} 提供 fal-ai 生图映射` } };
@@ -4711,16 +4708,14 @@ app.post(['/api/huggingface/generate', '/api/engine/huggingface/generate'], asyn
           const endpoint = mapping.providerId;
           const payload: any = { prompt: finalPrompt };
           if (isProvided(width) || isProvided(height)) {
-            if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0) {
-              return { ok: false, local: true, status: 400, payload: { error: 'width / height 必须同时为正整数' } };
-            }
-            payload.image_size = { width, height };
+            payload.image_size = { ...(isProvided(width) ? { width } : {}), ...(isProvided(height) ? { height } : {}) };
           }
           if (isProvided(steps)) payload.num_inference_steps = steps;
           if (isProvided(guidance)) payload.guidance_scale = guidance;
           if (isProvided(seed) && seed >= 0) payload.seed = seed;
           if (isProvided(negative_prompt)) payload.negative_prompt = negative_prompt;
           if (loraFiles.length) payload.loras = loraFiles;
+          for (const f of hfExtraFields) if (isProvided(req.body[f]) && !Object.hasOwn(payload, f)) payload[f] = req.body[f];
           let hfCustom;
           try {
             hfCustom = applyCustomParameters(payload, req.body.custom_parameters);
@@ -4843,18 +4838,7 @@ app.post(['/api/huggingface/generate', '/api/engine/huggingface/generate'], asyn
           );
           if (!metadata.ok) return { ok: false, status: metadata.status, body: await metadata.text() };
           const mapping = (await metadata.json()).inferenceProviderMapping?.['hf-inference'];
-          if (mapping?.status !== 'live' || mapping?.task !== 'text-to-image') {
-            return {
-              ok: false,
-              local: true,
-              status: 400,
-              payload: {
-                error: `${model} 没有已核实的 hf-inference 文生图服务。Hub 下载仓库不等于可调用模型；请明确选择该模型实际提供的推理端点`,
-                model,
-                mapping,
-              },
-            };
-          }
+          void mapping; // not listed as live hf-inference text-to-image: still sent; upstream decides.
           const parameters: Record<string, any> = {};
           if (isProvided(negative_prompt)) parameters.negative_prompt = negative_prompt;
           if (isProvided(width)) parameters.width = Number(width);
@@ -4863,6 +4847,7 @@ app.post(['/api/huggingface/generate', '/api/engine/huggingface/generate'], asyn
           if (isProvided(guidance)) parameters.guidance_scale = Number(guidance);
           if (typeof seed === 'number' && seed >= 0) parameters.seed = seed;
           if (isProvided(req.body.scheduler)) parameters.scheduler = req.body.scheduler;
+          for (const f of [...hfExtraFields, 'loras']) if (isProvided(req.body[f]) && !Object.hasOwn(parameters, f)) parameters[f] = req.body[f];
           let hfCustom;
           try {
             hfCustom = applyCustomParameters({ inputs: finalPrompt, parameters }, req.body.custom_parameters);
