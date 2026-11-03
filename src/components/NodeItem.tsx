@@ -524,27 +524,47 @@ export const NodeItem: React.FC<NodeItemProps> = ({
             <label className="block text-slate-300">SenseNova output_format<input type="text" aria-label="SenseNova output_format" value={node.values.output_format ?? ''} onMouseDown={e=>e.stopPropagation()} onPointerDown={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()} onChange={e=>onUpdateValue(node.id,'output_format',e.target.value === '' ? undefined : e.target.value)} placeholder="png / jpeg / webp；留空不显式传" className="mt-1 w-full rounded border border-slate-700 bg-[#121316] p-2 focus-visible:outline-2 focus-visible:outline-cyan-400" /><span className="text-slate-400">本站支持 png/jpeg/webp；官方编辑文档也列 jpg，但本站尚未接通。自定义原值保留。</span></label>
             {(['watermark', 'prompt_extend'] as const).map(field => <label key={field} className="block text-slate-300">SenseNova {field}<select aria-label={`SenseNova ${field}`} value={typeof node.values[field] === 'boolean' ? String(node.values[field]) : ''} onMouseDown={e=>e.stopPropagation()} onPointerDown={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()} onChange={e=>onUpdateValue(node.id,field,e.target.value === '' ? undefined : e.target.value === 'true')} className="mt-1 w-full rounded border border-slate-700 bg-[#121316] p-2 focus-visible:outline-2 focus-visible:outline-cyan-400"><option value="">未设置（不显式传）</option><option value="false">false（关闭）</option><option value="true">true（开启）</option></select></label>)}
           </div>}
-          {['CheckpointLoaderSimple','AIVideoNode'].includes(node.type) && node.values.targetProvider === 'civitai' && <div className="space-y-2">
+          {node.type === 'CheckpointLoaderSimple' && node.values.targetProvider === 'civitai' && <div className="space-y-2">
             <label className="block text-slate-300">Civitai engine<select aria-label="Civitai engine" value={node.values.civitai_engine || ''} onMouseDown={e=>e.stopPropagation()} onChange={e=>onUpdateValue(node.id,'civitai_engine',e.target.value)} className="w-full rounded border border-slate-700 bg-[#121316] p-2"><option value="">请选择引擎</option><option value="sdcpp">sdcpp</option><option value="comfy">comfy</option>{node.values.civitai_engine && !['sdcpp','comfy'].includes(node.values.civitai_engine) && <option value={node.values.civitai_engine}>{node.values.civitai_engine}</option>}</select></label>
             <label className="block text-slate-300">Civitai ecosystem<input aria-label="Civitai ecosystem" value={node.values.civitai_ecosystem || ''} onMouseDown={e=>e.stopPropagation()} onChange={e=>onUpdateValue(node.id,'civitai_ecosystem',e.target.value)} placeholder="显式填写生态，如 sdxl；自定义值保留" className="w-full rounded border border-slate-700 bg-[#121316] p-2" /></label>
             <label className="block text-slate-300">Civitai model<input aria-label="Civitai model" value={node.values.civitai_model || ''} onMouseDown={e=>e.stopPropagation()} onChange={e=>onUpdateValue(node.id,'civitai_model',e.target.value)} placeholder="按所选引擎填写 model selector" className="w-full rounded border border-slate-700 bg-[#121316] p-2" /></label>
             <p className="text-slate-400">引擎和生态必须显式选择；AIR、sampler/scheduler 与引擎是否兼容由上游验证。</p>
           </div>}
-          {node.type === 'AIVideoNode' && <label className="block text-slate-300">视频分辨率 (resolution)<input aria-label="视频分辨率 (resolution)" value={node.values.resolution || ''} onMouseDown={e=>e.stopPropagation()} onChange={e=>onUpdateValue(node.id,'resolution',e.target.value)} placeholder="未填写；按端点 Schema 指定" className="w-full rounded border border-slate-700 bg-[#121316] p-2" /></label>}
+          {node.type === 'AIVideoNode' && (() => {
+            // Same Schema / seeded-schemaProperties gate as duration — never a permanent empty resolution shell.
+            ensureModelSchema(node.values.targetProvider, node.values.model);
+            const vf = videoSchemaField(node.values.targetProvider, node.values.model, 'resolution');
+            const seeded = readDeclaredSchemaProperties(node.values.custom_parameters);
+            if (vf.state === 'absent') return null;
+            if (vf.state === 'unknown') {
+              if (seeded && !canvasFieldMatchesSchema('resolution', seeded)) return null;
+              // No seed + empty → hide permanent blank resolution shell on I2V presets without resolution.
+              if (!seeded && !filledCanvasValue(node.values.resolution)) return null;
+            }
+            const cur = node.values.resolution === undefined || node.values.resolution === null ? '' : String(node.values.resolution);
+            if (vf.state === 'declared' && vf.options?.length) {
+              return <label className="block text-slate-300">视频分辨率 (resolution)<select aria-label="视频分辨率 (resolution)" value={cur} onMouseDown={e=>e.stopPropagation()} onChange={e=>onUpdateValue(node.id,'resolution',e.target.value === '' ? undefined : e.target.value)} className="w-full rounded border border-slate-700 bg-[#121316] p-2"><option value="">未选择（不提交）</option>{vf.options.map(o=><option key={String(o)} value={String(o)}>{String(o)}</option>)}</select></label>;
+            }
+            return <label className="block text-slate-300">视频分辨率 (resolution)<input aria-label="视频分辨率 (resolution)" value={cur} onMouseDown={e=>e.stopPropagation()} onChange={e=>onUpdateValue(node.id,'resolution',e.target.value === '' ? undefined : e.target.value)} placeholder="按端点 Schema 指定" className="w-full rounded border border-slate-700 bg-[#121316] p-2" /></label>;
+          })()}
           {/* Widgets according to definition */}
           {def.widgets?.filter(widget => showUnsupported || !(isCanvasWidgetUnsupported(currentProvider, currentCheckpoint, widget.name) || (node.type === 'CLIPTextEncodeNegative' && widget.name === 'text' && greyNegative))).map((widget) => {
             const value = node.values[widget.name];
             if (widget.name === 'civitai_id' && (node.values.targetProvider || currentProvider || '') !== 'civitai') return null;
             if (widget.name === 'fal_model_name' && !((node.values.targetProvider || currentProvider) === 'fal' && node.values.ckpt_name === 'fal-ai/lora')) return null;
             if (node.type === 'AIVideoNode' && ['duration', 'aspect_ratio', 'num_frames', 'fps'].includes(widget.name)) {
-              // Live Schema only: absent → hide (e.g. Kling V3 I2V has no aspect_ratio). No model-name invent.
+              // Live Schema: absent → hide. Seeded schemaProperties (I2V presets): hide fields the endpoint does not declare — no empty shells while Schema is cold.
               ensureModelSchema(node.values.targetProvider, node.values.model);
               const vf = videoSchemaField(node.values.targetProvider, node.values.model, widget.name);
               const issue = videoSchemaValueIssue(node.values.targetProvider, node.values.model, widget.name, value);
               if (vf.state === 'absent' && !issue) return null;
               const cur = value === undefined || value === null ? '' : String(value);
               if (vf.state === 'unknown') {
-                // Schema not ready: free input, do not invent enums (no fake aspect/duration lists).
+                const seeded = readDeclaredSchemaProperties(node.values.custom_parameters);
+                // Preset-seeded schemaProperties: hide fields the endpoint does not declare (no empty shells).
+                // No seed list → keep free input until live Schema (non-preset boards).
+                if (seeded && !canvasFieldMatchesSchema(widget.name, seeded)) return null;
+                // Schema not ready: free input, do not invent enums.
                 return <div key={widget.name} className="space-y-1" data-testid={`video-schema-pending-${widget.name}`}>
                   <label className="text-slate-400 font-mono text-[11px] block whitespace-nowrap">{widget.label}</label>
                   <input aria-label={widget.label} type={widget.name === 'aspect_ratio' ? 'text' : 'number'} step={widget.step || 1} value={cur} placeholder="等待官方 Schema…" onMouseDown={e=>e.stopPropagation()} onPointerDown={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()} onChange={e=>onUpdateValue(node.id, widget.name, e.target.value === '' ? undefined : (widget.name === 'aspect_ratio' ? e.target.value : parseFloat(e.target.value)))} className="w-full bg-[#121316] border border-[#2d303a] rounded-lg px-2.5 py-1.5 text-slate-200 text-xs font-mono outline-none" />

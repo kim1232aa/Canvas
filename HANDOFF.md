@@ -1,5 +1,12 @@
 # ComfyCanvas Studio：开发交接、产品缺口与验收手册
 
+## 2026-11-03 标准文生图预设「仅载入」名单（产品核①）
+
+| 项 | 判定 | 要点 / 证据 |
+| --- | --- | --- |
+| std-*-t2i 仅载入 23/23 | **产品过（仅载入，不算出图）** | 硬刷新·未点跑·生成请求 0。含 `b0f70c5` 后重拍 18/19/22（ModelsLab UniPC / Civitai euler+simple / Novita euler，琥珀假阴性已消）。空壳 omit（Mage/DeepInfra/HF 等）已对。Gemini 宽高 null aria 记注不挡。证据 `temp/e2e/presets-official-2026-11-03/`（03～28 + RESULT 终稿）。代码 fa40610 / aee263f / 5d24c58 / 3e986fc / b0f70c5。 |
+| std-*-i2v 仅载入（下一刀） | **代码已改 · 待仅载入截图** | 6 家：fal/wavespeed/civitai/novita/muapi/replicate。官方 duration/resolution/frames 已种子；空壳 + 假 1024 WH 去掉；`require_reference_image`；拍摄计划 `temp/e2e/presets-video-2026-11-03/PLAN-VIDEO.md`（v01～v06）。不算出图。 |
+
 ## 2026-11-03 魔搭国内站前端真出图（产品核）
 
 | 项 | 判定 | 要点 / 证据 |

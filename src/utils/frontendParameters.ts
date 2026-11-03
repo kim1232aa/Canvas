@@ -39,9 +39,10 @@ function schemaPropParts(d: any): {min?: number; max?: number; options?: Array<s
 /** Canvas widget name → official Schema property names (fps ↔ frames_per_second; duration ↔ seconds). */
 const VIDEO_SCHEMA_ALIASES: Record<string, string[]> = {
   duration: ['duration', 'seconds'],
-  aspect_ratio: ['aspect_ratio'],
-  num_frames: ['num_frames'],
+  aspect_ratio: ['aspect_ratio', 'aspectRatio'],
+  num_frames: ['num_frames', 'frames_num'],
   fps: ['fps', 'frames_per_second'],
+  resolution: ['resolution'],
 };
 
 export function videoDurationBounds(provider: string | undefined, model: string): {min?: number; max?: number; options?: Array<string | number>} {
@@ -138,7 +139,7 @@ export function videoSchemaField(provider: string | undefined, model: string | u
   return out;
 }
 
-const VIDEO_FIELD_LABEL: Record<string,string> = {duration:'视频时长（秒）', aspect_ratio:'画面比例', num_frames:'帧数', fps:'帧率'};
+const VIDEO_FIELD_LABEL: Record<string,string> = {duration:'视频时长（秒）', aspect_ratio:'画面比例', num_frames:'帧数', fps:'帧率', resolution:'视频分辨率'};
 /** Stored value vs Schema. Never clamps: returns a human reason when the stored value is not allowed (run must be blocked). */
 export function videoSchemaValueIssue(provider: string | undefined, model: string | undefined, field: string, value: unknown): string | null {
   if (value === undefined || value === null || value === '') return null;
@@ -157,7 +158,7 @@ export function videoSchemaIssues(nodes: Array<{type:string; title?:string; bypa
   for (const n of nodes) {
     if (n.type !== 'AIVideoNode' || n.bypassed) continue;
     const p = String(n.values?.targetProvider || ''); const m = String(n.values?.model || '');
-    for (const f of ['duration', 'aspect_ratio', 'num_frames', 'fps']) {
+    for (const f of ['duration', 'aspect_ratio', 'num_frames', 'fps', 'resolution']) {
       const r = videoSchemaValueIssue(p, m, f, n.values?.[f]);
       if (r) return r;
     }

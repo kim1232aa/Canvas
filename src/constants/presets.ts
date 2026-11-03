@@ -448,23 +448,95 @@ function buildGeminiT2i(): WorkflowPreset {
   };
 }
 
-/** I2V providers locked by Researchy field-check (2026-10-17). */
-const I2V_SPECS: Array<{ provider: string; model: string }> = [
-  // fal: nodes.ts / field-check
-  { provider: 'fal', model: 'fal-ai/wan/v2.7/image-to-video' },
-  // wavespeed: field-check docs URL wan-2.2-image-to-video → model_id slash form (audit POST /api/v3/{model_id})
-  { provider: 'wavespeed', model: 'wavespeed-ai/wan-2.2/image-to-video' },
-  // civitai: Orchestration videoGen engine id (audit wan.md / civitaiVideo.ts OFFICIAL engines)
-  { provider: 'civitai', model: 'wan' },
-  // novita: audit img2video exampleModel SVD-XT
-  { provider: 'novita', model: 'SVD-XT' },
-  // muapi: field-check wan2.7-image-to-video (endpoint id without /api/v1/)
-  { provider: 'muapi', model: 'wan2.7-image-to-video' },
-  // replicate: audit/official HTTP example minimax/video-01
-  { provider: 'replicate', model: 'minimax/video-01' },
+/**
+ * I2V providers locked by Researchy field-check (2026-10-17).
+ * Seed ONLY official duration / resolution / frames fields (live OpenAPI or provider docs, 2026-11-03).
+ * Unsupported keys are omitted entirely (no empty shells). schemaProperties lets NodeItem hide
+ * duration/aspect/fps/num_frames/resolution before a live Schema GET (same pattern as T2I omit).
+ */
+type I2vSpec = {
+  provider: string;
+  model: string;
+  /** Official seconds when the endpoint declares duration (not invent). */
+  duration?: number;
+  /** Official resolution tier when the endpoint declares resolution. */
+  resolution?: string;
+  /** Official aspect when the endpoint declares aspect_ratio / aspectRatio for this I2V mode. */
+  aspect_ratio?: string;
+  /** Official frame count (e.g. Novita SVD-XT frames_num=25). */
+  num_frames?: number;
+  /** Official fps / frames_per_second (e.g. Novita = 6). */
+  fps?: number;
+  /** Declared Schema property names for hide-before-Schema (aliases included). */
+  schemaProperties: string[];
+  /** Evidence URL / path — audit trail only. */
+  source: string;
+};
+
+const I2V_SPECS: I2vSpec[] = [
+  // fal OpenAPI 2026-11-03: duration enum 2–15 default 5; resolution 720p|1080p default 1080p; no aspect_ratio / fps / num_frames input.
+  {
+    provider: 'fal',
+    model: 'fal-ai/wan/v2.7/image-to-video',
+    duration: 5,
+    resolution: '1080p',
+    schemaProperties: [
+      'prompt', 'image_url', 'end_image_url', 'video_url', 'audio_url',
+      'resolution', 'duration', 'negative_prompt', 'enable_prompt_expansion', 'seed', 'enable_safety_checker',
+    ],
+    source: 'https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/wan/v2.7/image-to-video',
+  },
+  // WaveSpeed docs: duration 5|8 default 5; resolution 480p|720p default 480p; image required; no aspect_ratio / fps.
+  {
+    provider: 'wavespeed',
+    model: 'wavespeed-ai/wan-2.2/image-to-video',
+    duration: 5,
+    resolution: '480p',
+    schemaProperties: ['prompt', 'image', 'resolution', 'negative_prompt', 'last_image', 'duration', 'seed'],
+    source: 'https://wavespeed.ai/docs/docs-api/wavespeed-ai/wan-2.2-image-to-video',
+  },
+  // Civitai wan.md image-to-video example: duration 5 + resolution 1080p; aspect often from source image on I2V.
+  {
+    provider: 'civitai',
+    model: 'wan',
+    duration: 5,
+    resolution: '1080p',
+    schemaProperties: [
+      'prompt', 'images', 'startImage', 'endImage', 'resolution', 'duration', 'enablePromptExpansion',
+    ],
+    source: 'https://developer.civitai.com/orchestration/recipes/wan.md',
+  },
+  // Novita img2video SVD-XT: frames_num=25, frames_per_second=6 only; no duration / aspect_ratio / resolution tier.
+  {
+    provider: 'novita',
+    model: 'SVD-XT',
+    num_frames: 25,
+    fps: 6,
+    schemaProperties: [
+      'model_name', 'image_file', 'frames_num', 'frames_per_second', 'seed',
+      'image_file_resize_mode', 'steps', 'motion_bucket_id', 'cond_aug',
+    ],
+    source: 'https://github.com/novitalabs/python-sdk examples/img2video + docs/provider-schema-drafts/novita.json',
+  },
+  // MuAPI llms.txt: duration 2–15 default 5; resolution 720p|1080p default 720p; no aspect_ratio / fps.
+  {
+    provider: 'muapi',
+    model: 'wan2.7-image-to-video',
+    duration: 5,
+    resolution: '720p',
+    schemaProperties: ['prompt', 'image_url', 'last_image', 'audio_url', 'resolution', 'duration', 'negative_prompt'],
+    source: 'https://muapi.ai/playground/wan2.7-image-to-video/llms.txt',
+  },
+  // Replicate minimax/video-01 llms.txt: prompt / prompt_optimizer / first_frame_image / subject_reference only — fixed ~6s, aspect from first frame.
+  {
+    provider: 'replicate',
+    model: 'minimax/video-01',
+    schemaProperties: ['prompt', 'prompt_optimizer', 'first_frame_image', 'subject_reference'],
+    source: 'https://replicate.com/minimax/video-01/llms.txt',
+  },
 ];
 
-function buildStandardI2v(spec: { provider: string; model: string }): WorkflowPreset {
+function buildStandardI2v(spec: I2vSpec): WorkflowPreset {
   const provider = spec.provider;
   const id = `std-${provider}-i2v`;
   const prefix = id;
@@ -474,6 +546,42 @@ function buildStandardI2v(spec: { provider: string; model: string }): WorkflowPr
   // Single prompt source: AIVideoNode.values.prompt (「视频描述」).
   // graphEngine reads CLIP→positive first when wired; a separate CLIP node would shadow this field.
   // Runtime submit uses params.prompt from that one field (SchemaProviderDriver / WaveSpeed).
+  // Only seed official fields — never write empty duration/fps/aspect_ratio shells.
+  const vidValues: Record<string, unknown> = {
+    targetProvider: provider,
+    model: spec.model,
+    prompt: '',
+    negative_prompt: '',
+    // Front-door: I2V needs a real reference image; LoadImage starts empty so readiness / node note fire.
+    require_reference_image: true,
+    custom_parameters: JSON.stringify({
+      _canvas: {
+        scope: { provider, model: spec.model },
+        schemaProperties: spec.schemaProperties,
+      },
+    }),
+  };
+  if (spec.duration !== undefined) vidValues.duration = spec.duration;
+  if (spec.resolution !== undefined) vidValues.resolution = spec.resolution;
+  if (spec.aspect_ratio !== undefined) vidValues.aspect_ratio = spec.aspect_ratio;
+  if (spec.num_frames !== undefined) vidValues.num_frames = spec.num_frames;
+  if (spec.fps !== undefined) vidValues.fps = spec.fps;
+
+  const frameParams: SpatialFrame['params'] = {
+    checkpoint: spec.model,
+    targetProvider: provider as SpatialFrame['params']['targetProvider'],
+    seedControl: 'fixed',
+    batchSize: 1,
+    loras: [],
+    videoProvider: provider,
+    requireReferenceImage: true,
+  };
+  if (spec.duration !== undefined) frameParams.videoDuration = spec.duration;
+  if (spec.fps !== undefined) frameParams.videoFps = spec.fps;
+  if (spec.num_frames !== undefined) frameParams.videoFrames = spec.num_frames;
+  if (spec.aspect_ratio !== undefined) frameParams.aspectRatio = spec.aspect_ratio;
+  // No fake width/height 1024 — video size is resolution / source image, not EmptyLatent pixels.
+
   return {
     id,
     name: `${friendly(provider)} · 标准图生视频`,
@@ -481,7 +589,7 @@ function buildStandardI2v(spec: { provider: string; model: string }): WorkflowPr
     provider,
     previewImage: '',
     tags: [provider, '标准', '图生视频'],
-    description: '该供应商标准图生视频流程；提示词请填配方或用户指定。',
+    description: '该供应商标准图生视频流程；提示词请填配方或用户指定。须先在「加载参考图」放入图片。',
     loraNames: [],
     nodes: [
       {
@@ -502,15 +610,7 @@ function buildStandardI2v(spec: { provider: string; model: string }): WorkflowPr
         width: 340,
         inputs: NODE_DEFINITIONS.AIVideoNode.inputs,
         outputs: NODE_DEFINITIONS.AIVideoNode.outputs,
-        values: {
-          targetProvider: provider,
-          model: spec.model,
-          prompt: '',
-          negative_prompt: '',
-          duration: '',
-          fps: '',
-          aspect_ratio: '',
-        },
+        values: vidValues,
       },
       {
         id: saveId,
@@ -550,16 +650,7 @@ function buildStandardI2v(spec: { provider: string; model: string }): WorkflowPr
         height: 480,
         prompt: '',
         negativePrompt: '',
-        params: {
-          checkpoint: spec.model,
-          targetProvider: provider as SpatialFrame['params']['targetProvider'],
-          seedControl: 'fixed',
-          width: 1024,
-          height: 1024,
-          batchSize: 1,
-          loras: [],
-          videoProvider: provider,
-        },
+        params: frameParams,
         status: 'idle',
         imageUrl: '',
         createdAt: Date.now(),

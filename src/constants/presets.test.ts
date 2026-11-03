@@ -124,6 +124,46 @@ describe('standard workflow presets (23 T2I + 6 I2V)', () => {
     }
   });
 
+  it('I2V seeds official duration/resolution/frames only — no empty shells, no fake 1024 WH, require_reference_image', () => {
+    const expectByProv: Record<string, { duration?: number; resolution?: string; num_frames?: number; fps?: number; hide: string[] }> = {
+      fal: { duration: 5, resolution: '1080p', hide: ['aspect_ratio', 'fps', 'num_frames'] },
+      wavespeed: { duration: 5, resolution: '480p', hide: ['aspect_ratio', 'fps', 'num_frames'] },
+      civitai: { duration: 5, resolution: '1080p', hide: ['aspect_ratio', 'fps', 'num_frames'] },
+      novita: { num_frames: 25, fps: 6, hide: ['duration', 'aspect_ratio', 'resolution'] },
+      muapi: { duration: 5, resolution: '720p', hide: ['aspect_ratio', 'fps', 'num_frames'] },
+      replicate: { hide: ['duration', 'aspect_ratio', 'fps', 'num_frames', 'resolution'] },
+    };
+    for (const p of i2v()) {
+      const vid = p.nodes.find(n => n.type === 'AIVideoNode')!;
+      const load = p.nodes.find(n => n.type === 'LoadImage')!;
+      expect(load.values.image_url ?? '', p.id).toBe('');
+      expect(vid.values.require_reference_image, p.id).toBe(true);
+      expect(Object.prototype.hasOwnProperty.call(vid.values, 'duration') && vid.values.duration === '', `${p.id} empty duration shell`).toBe(false);
+      expect(Object.prototype.hasOwnProperty.call(vid.values, 'fps') && vid.values.fps === '', `${p.id} empty fps shell`).toBe(false);
+      expect(Object.prototype.hasOwnProperty.call(vid.values, 'aspect_ratio') && vid.values.aspect_ratio === '', `${p.id} empty aspect shell`).toBe(false);
+      const frame = p.spatialFrames![0];
+      expect(frame.params.width, `${p.id} fake WH`).toBeUndefined();
+      expect(frame.params.height, `${p.id} fake WH`).toBeUndefined();
+      expect(frame.params.requireReferenceImage, p.id).toBe(true);
+      const exp = expectByProv[p.provider];
+      expect(exp, p.provider).toBeDefined();
+      if (exp.duration !== undefined) expect(vid.values.duration, p.id).toBe(exp.duration);
+      else expect(vid.values.duration, p.id).toBeUndefined();
+      if (exp.resolution !== undefined) expect(vid.values.resolution, p.id).toBe(exp.resolution);
+      else expect(vid.values.resolution, p.id).toBeUndefined();
+      if (exp.num_frames !== undefined) expect(vid.values.num_frames, p.id).toBe(exp.num_frames);
+      else expect(vid.values.num_frames, p.id).toBeUndefined();
+      if (exp.fps !== undefined) expect(vid.values.fps, p.id).toBe(exp.fps);
+      else expect(vid.values.fps, p.id).toBeUndefined();
+      for (const key of exp.hide) {
+        expect(vid.values[key], `${p.id} should omit ${key}`).toBeUndefined();
+      }
+      const custom = JSON.parse(String(vid.values.custom_parameters));
+      expect(Array.isArray(custom._canvas.schemaProperties), p.id).toBe(true);
+      expect(custom._canvas.schemaProperties.length, p.id).toBeGreaterThan(0);
+    }
+  });
+
   it('T2I uses std-*-t2i ids and category', () => {
     for (const p of t2i()) {
       expect(p.id).toBe(expectedT2iId(p.provider));
