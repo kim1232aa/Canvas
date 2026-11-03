@@ -206,3 +206,14 @@ it('Agnes checkpoint surfaces size + aspect_ratio from preset (no invented optio
   expect(ckpt).toContain('data-testid="ckpt-size"');
   expect(ckpt).toContain('2K');
 });
+
+it('HF fal-ai route hides empty Z-Image Space-only controls (no blank shells / false 必填); Space route still shows them', () => {
+  const v = { ckpt_name: 'Tongyi-MAI/Z-Image-Turbo', targetProvider: 'huggingface' };
+  const fal = renderToStaticMarkup(<NodeItem {...props('CheckpointLoaderSimple', { ...v, hf_provider: 'fal-ai' })} currentProvider="huggingface" currentCheckpoint="Tongyi-MAI/Z-Image-Turbo"/>);
+  expect(fal).not.toContain('未选择（不传）');
+  expect(fal).not.toContain('必填；官方默认 3.0');
+  expect(fal).not.toContain('使用 KSampler 种子');
+  expect(fal).not.toContain('新建本次结果集');
+  const space = renderToStaticMarkup(<NodeItem {...props('CheckpointLoaderSimple', { ...v, hf_provider: 'z-image-space' })} currentProvider="huggingface" currentCheckpoint="Tongyi-MAI/Z-Image-Turbo"/>);
+  expect(space).toContain('使用 KSampler 种子');
+});

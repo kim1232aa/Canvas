@@ -592,6 +592,11 @@ export const NodeItem: React.FC<NodeItemProps> = ({
             }
             if (LORA_LOADER_TYPES.has(node.type) && widget.name === 'strength_clip' && !providerSendsSeparateClipStrength(currentProvider)) return <p key={widget.name} data-testid="clip-strength-not-sent" className="text-xs text-slate-400">{CLIP_STRENGTH_NOT_SENT_NOTE}</p>;
 
+            // Z-Image Space-only controls (resolution / shift / random_seed / gallery_images): on any other HF route
+            // (e.g. fal-ai/z-image/turbo, whose documented input has none of them) an empty one is an empty shell → hidden.
+            if (node.type === 'CheckpointLoaderSimple' && ['resolution', 'shift', 'random_seed', 'gallery_images'].includes(widget.name)
+              && String(node.values?.targetProvider || currentProvider || '') === 'huggingface' && node.values?.hf_provider !== 'z-image-space'
+              && !filledCanvasValue(node.values?.[widget.name]) && !(Array.isArray(node.values?.[widget.name]) && node.values[widget.name].length)) return null;
             if (node.type === 'CheckpointLoaderSimple' && widget.name === 'shift') {
               const prov = String(node.values?.targetProvider || currentProvider || '');
               const model = node.values?.ckpt_name || currentCheckpoint;
