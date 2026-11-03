@@ -402,9 +402,9 @@ export function buttonSummary(records:ExecutionRecord[], open=false):string {
     return `${pending.length} 个请求中`;
   }
   const plain = humanSummaryText(latestError);
-  // Local block: the bar's first words are 「本地拦截 · 未发请求」, then which run, then the local reason verbatim.
+  // Local block: the bar's first words are 「没有发出去」, then which run, then the local reason verbatim.
   if (isLocalNotOutbound(latestError.response)) {
-    const rest = plain.replace(/^本地拦截 · (?:未发请求|已读 Schema、未发生成)\s*/, '').replace(/^未出站，本地拦截[：:]?\s*/, '');
+    const rest = plain.replace(/^没有发出去 · (?:未发请求|已读 Schema、未发生成)\s*/, '').replace(/^没有发出去[：:]?\s*/, '');
     return `${localBlockTitle(latestError.response)} · ${latestError.runLabel || '本次'}${rest ? ` · ${rest}` : ''}`;
   }
   // Catalog / Schema GET failure is not a generation request — say so instead of implying a run failed.

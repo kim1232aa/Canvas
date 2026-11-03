@@ -72,7 +72,7 @@ export function schemaFailureToastBody(status?: number): string {
 /**
  * Toast for schema-lookup miss: title = plain headline (full model name, never truncated);
  * body first line = status once in plain words; raw upstream under 「展开全文」.
- * Does not reuse 「HTTP N」 as the title (that contradicted 「本地拦截、未发请求」).
+ * Does not reuse 「HTTP N」 as the title (that contradicted 「没有发出去」).
  */
 export function schemaFailureToast(err: unknown, runLine?: string): { title: string; message: string } {
   const model = schemaFailureModel(err);

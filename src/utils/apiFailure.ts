@@ -96,7 +96,7 @@ export function plainErrorMessage(err: unknown): string {
     : message;
   const first = raw.split('\n')[0];
   // Local rejection: verbatim, no rewrite / slice — must not look like upstream failure or success.
-  if (first.startsWith('未出站，本地拦截') || first.startsWith('本地拦截 · ')) return withRangeWarning(first);
+  if (first.startsWith('没有发出去') || first.startsWith('没有发出去 · ')) return withRangeWarning(first);
   // fix4: HTTP lines → short summary (no raw JSON in node banner / top bar).
   if (/^HTTP \d{3}\b/.test(first) || first.startsWith('{')) return withRangeWarning(shortUpstreamSummary(first));
   const plain = plainFailureConclusion(first) || plainFailureConclusion(raw);
@@ -112,7 +112,7 @@ export function errorBannerText(detail: string | null | undefined): string {
   if (!detail) return '';
   const first = String(detail).split('\n')[0];
   // Local rejection: verbatim, no rewrite / slice — must not look like upstream failure or success.
-  if (first.startsWith('未出站，本地拦截') || first.startsWith('本地拦截 · ')) return first;
+  if (first.startsWith('没有发出去') || first.startsWith('没有发出去 · ')) return first;
   // fix4: short summary for KSampler / node red bar (JSON details → history card).
   if (/^HTTP \d{3}\b/.test(first) || first.startsWith('{')) return shortUpstreamSummary(first);
   const plain = plainFailureConclusion(first) || plainFailureConclusion(detail);
@@ -150,7 +150,7 @@ export function shortUpstreamSummary(detail: string | null | undefined): string 
   if (!detail) return '';
   const first = String(detail).split(/\r?\n/)[0].trim();
   if (!first) return '';
-  if (first.startsWith('未出站，本地拦截') || first.startsWith('本地拦截 · ')) return first;
+  if (first.startsWith('没有发出去') || first.startsWith('没有发出去 · ')) return first;
   // Prefer HTTP head up to (but not including) a trailing JSON object/array.
   // Keeps 「HTTP 403 Forbidden」 and 「HTTP 200 · task status=…」 intact.
   const httpHead = first.match(/^(HTTP\s+\d{3}\b[^\{\[]*)/i);
@@ -174,13 +174,13 @@ export function shortUpstreamSummary(detail: string | null | undefined): string 
 }
 
 
-export const LOCAL_NOT_OUTBOUND = '未出站，本地拦截';
+export const LOCAL_NOT_OUTBOUND = '没有发出去';
 
 /** True when the server rejected locally and no generation request (non-GET) reached any upstream. */
 export function isLocalNotOutbound(data: any): boolean {
   if (!data || typeof data !== 'object' || data.errorSource !== 'local') return false;
   // trace-fix2 P3: a task poll carries only its own GET in executionTrace; the task ledger (taskExecutionTrace) and a
-  // recorded history card that went upstream prove the generation POST already left → never 「本地拦截」.
+  // recorded history card that went upstream prove the generation POST already left → never 「没有发出去」.
   const traces = [
     ...(Array.isArray(data.executionTrace) ? data.executionTrace : []),
     ...(Array.isArray(data.taskExecutionTrace) ? data.taskExecutionTrace : []),
@@ -190,17 +190,17 @@ export function isLocalNotOutbound(data: any): boolean {
   return !traces.some((t: any) => t && t.endpoint && t.method && t.method !== 'GET' && !t.readOnly);
 }
 
-/** 「未出站，本地拦截：<本地错误原文>」 — reason verbatim, never sliced. */
+/** 「没有发出去：<本地错误原文>」 — reason verbatim, never sliced. */
 export function localNotOutboundText(data: any): string {
   const detail = data?.error ?? (typeof data === 'string' ? data : '');
   const text = String(detail);
-  if (text.startsWith('本地拦截 · ')) return text;
+  if (text.startsWith('没有发出去 · ')) return text;
   // clean-1333 #3: the submit route read (or reused) the Schema before refusing — never claim nothing went out.
   const gets = data && typeof data === 'object' && Array.isArray(data.executionTrace) ? data.executionTrace.filter((t: any) => String(t?.method || '').toUpperCase() === 'GET' || t?.readOnly) : [];
   const schemaFailed = !!(data?.schemaRead?.failed || (!data?.schemaRead && gets.length && gets.some((t: any) => t.status === null || t.status >= 400)));
-  if (schemaFailed) return `本地拦截 · Schema 读取失败、未发生成：${text.replace(/^未出站，本地拦截[：:]?\s*/, '')}`;
+  if (schemaFailed) return `没有发出去：${text.replace(/^没有发出去[：:]?\s*/, '')}`;
   const schemaRead = !!(data && typeof data === 'object' && (data.schemaRead || gets.length));
-  if (schemaRead) return `本地拦截 · 已读 Schema、未发生成：${text.replace(/^未出站，本地拦截[：:]?\s*/, '')}`;
+  if (schemaRead) return `没有发出去：${text.replace(/^没有发出去[：:]?\s*/, '')}`;
   return text.startsWith(LOCAL_NOT_OUTBOUND) ? text : `${LOCAL_NOT_OUTBOUND}：${text}`;
 }
 
@@ -361,16 +361,16 @@ export function describeApiFailure(appStatus: number, data: any, route: string) 
   return `${head} · ${source} · ${status != null ? `上游 HTTP ${status} / ` : ''}网站 HTTP ${appStatus} · ${endpoint || route}`;
 }
 
-/** Toast title for a local block: first line always 「本地拦截 · 未发请求」. */
-export const LOCAL_BLOCK_TOAST_TITLE = '本地拦截 · 未发请求';
+/** Toast title for a local block: first line always 「没有发出去」. */
+export const LOCAL_BLOCK_TOAST_TITLE = '没有发出去';
 /** clean-1029: one copy source for toast title, exec log and every node in the blocked branch (LoRA / Save). */
 /** Zero-request blocks only (canvas-side). Schema-dependent blocks use localBlockTitle() from utils/localBlock (clean-1333 #3). */
 export const LOCAL_BLOCK_NODE_LINE = `${LOCAL_BLOCK_TOAST_TITLE}：没有请求离开本机，原因见红框与执行记录`;
-/** Local reason for the toast body: the route's own `error` text verbatim (from the raw response body), minus a duplicated 「本地拦截 · 未发请求」 head line. */
+/** Local reason for the toast body: the route's own `error` text verbatim (from the raw response body), minus a duplicated 「没有发出去」 head line. */
 export function localBlockToastReason(rawBody: string): string {
   let text = String(rawBody || '');
   try { const d = JSON.parse(text); if (d && typeof d.error === 'string') text = d.error; } catch { /* non-JSON body: shown as-is */ }
-  return text.replace(/^(?:本地拦截 · 未发请求|本地拦截 · 已读 Schema、未发生成|本地拦截 · Schema 读取失败、未发生成|未出站，本地拦截)[：:]?\s*\n?/, '').trim() || text;
+  return text.replace(/^(?:没有发出去|没有发出去|没有发出去|没有发出去)[：:]?\s*\n?/, '').trim() || text;
 }
 
 

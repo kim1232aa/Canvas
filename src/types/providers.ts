@@ -134,7 +134,7 @@ export interface GenerationHistoryItem {
   status?: 'failed' | 'local_blocked';
   /** 'direct' = request did not come from the Canvas UI (no x-canvas-origin) → 「本机直调」. */
   requestOrigin?: 'browser' | 'direct';
-  /** 'local_blocked' → 「未出站，本地拦截」 */
+  /** 'local_blocked' → 「没有发出去」 */
   statusLabel?: string;
   upstreamStatus?: number | null;
   upstreamStatusText?: string | null;

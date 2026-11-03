@@ -63,7 +63,7 @@ export function buildTaskFailureHistoryItem(providerName:string,sub:{model:strin
     upstreamResponseBody:typeof raw==='string'?raw:JSON.stringify(raw),httpStatus,error:typeof body?.error==='string'?body.error:(firstUpstreamMessage(body?.error) ?? firstUpstreamMessage(raw) ?? (body?.error?JSON.stringify(body.error):(typeof body?.waitingReason==='string'?body.waitingReason:null))),errorSource:body?.errorSource ?? 'upstream',
     requestMetadata:{route:'schema-provider task poll',actualRequest:sub.actualRequest}};
 }
-export const LOCAL_BLOCK_PREFIX='本地拦截 · 已读 Schema、未发生成'; // clean-1333 #3: submit always read (or reused) the Schema first
+export const LOCAL_BLOCK_PREFIX='没有发出去'; // clean-1333 #3: submit always read (or reused) the Schema first
 /**
  * 「拟发送（未出站）」 for a local block: the Schema-scoped request the endpoint would have received (same mapping as a real
  * submit), plus the canvas LoRAs that were NOT sent (name + strength only, no canvas-internal fields). Diagnostics
@@ -203,8 +203,8 @@ export function kreaJobOutputs(job:any):string[] {
   return [];
 }
 /** Together/Novita/Venice: no built-in request Schema (画布 2026-10-15). Catalog rows carry no `parameters`; only a genuine official runtime Schema may populate it. */
-// Iron rule 3: no built-in Schema / guessed endpoint fallback. Missing official Schema → local 400 (未出站，本地拦截), no POST.
-export const schemaUnavailableBlock=(providerName:string,model:string,reason:string,sourceUrl:string|null,extra:Record<string,unknown>={})=>Object.assign(new Error(`未出站，本地拦截：${providerName} 模型 ${model} 官方 Schema 不可用（${reason}；来源 ${sourceUrl ?? '无'}）；未发送生成请求，不使用内置 Schema 或猜测端点兜底。`),{status:400,errorSource:'local',schemaUrl:sourceUrl,...extra});
+// Iron rule 3: no built-in Schema / guessed endpoint fallback. Missing official Schema → local 400 (没有发出去), no POST.
+export const schemaUnavailableBlock=(providerName:string,model:string,reason:string,sourceUrl:string|null,extra:Record<string,unknown>={})=>Object.assign(new Error(`没有发出去：${providerName} 模型 ${model} 官方 Schema 不可用（${reason}；来源 ${sourceUrl ?? '无'}）；未发送生成请求，不使用内置 Schema 或猜测端点兜底。`),{status:400,errorSource:'local',schemaUrl:sourceUrl,...extra});
 /** Normalize GET /v1/models array → canvas catalog rows (image + video only). */
 export function togetherCatalogRows(models:any[]) {
   return (Array.isArray(models)?models:[]).filter((m:any)=>m && (m.type==='image' || m.type==='video')).map((m:any)=>({
@@ -658,7 +658,7 @@ export async function fetchSchemaProviderRows(provider:Provider,read:ReturnType<
     // Generic: sourceUrl here is ONLY a declared LoRA catalog endpoint. Model catalog URLs must not appear in LoRA Hub.
     if(provider==='together') {
       return {rows:[],noLoraCatalog:true,
-        notice:'无 LoRA 目录接口。Together serverless image_loras：官方参数指南明文 no longer available（抓取 2026-10-16 15:08:58）；挂 LoRA 本地拦截，不补 loraItemFields。'};
+        notice:'无 LoRA 目录接口。Together serverless image_loras：官方参数指南明文 no longer available（抓取 2026-10-16 15:08:58）；挂 LoRA 没有发出去，不补 loraItemFields。'};
     }
     if(provider==='aimlapi') {
       return {rows:[],noLoraCatalog:true,
@@ -673,7 +673,7 @@ export async function fetchSchemaProviderRows(provider:Provider,read:ReturnType<
     }
     if(provider==='venice') {
       return {rows:[],noLoraCatalog:true,
-        notice:'无 LoRA 目录接口（仅 lora_strength）。Venice 官方无自定义 loras[]；挂自定义 LoRA 会本地拦截（未发请求）。'};
+        notice:'无 LoRA 目录接口（仅 lora_strength）。Venice 官方无自定义 loras[]；挂自定义 LoRA 会没有发出去（未发请求）。'};
     }
     if(provider==='deepinfra') {
       return {rows:[],noLoraCatalog:true,
@@ -870,13 +870,13 @@ export function getSchemaProviderCatalog(
     } else if (provider === 'sogni') {
       catalogNotice = 'Sogni 暂无公共 LoRA 实时搜索接口；如需使用 LoRA，请在生成节点中直接填入 Sogni 协议支持的 LoRA 标识符或下载直链。';
     } else if (provider === 'together') {
-      catalogNotice = 'Together serverless image_loras：官方参数指南明文 no longer available（抓取 2026-10-16 15:08:58）；挂 LoRA 本地拦截，不补 loraItemFields。';
+      catalogNotice = 'Together serverless image_loras：官方参数指南明文 no longer available（抓取 2026-10-16 15:08:58）；挂 LoRA 没有发出去，不补 loraItemFields。';
     } else if (provider === 'aimlapi') {
       catalogNotice = 'AIMLAPI 无独立 LoRA 目录；在 LoRA 节点填 HF owner/repo 或 URL（loras[].path），scale 0–4 须显式传；仅用于官方含 loras 的模型。';
     } else if (provider === 'novita') {
       catalogNotice = 'Novita LoRA 目录来自 GET /v3/model?filter.types=lora；字段为 request.loras[{model_name,strength}]，strength [0,1] 须显式传。';
     } else if (provider === 'venice') {
-      catalogNotice = '无 LoRA 目录接口（仅 lora_strength）。Venice 官方无自定义 loras[]；挂自定义 LoRA 会本地拦截（未发请求）。';
+      catalogNotice = '无 LoRA 目录接口（仅 lora_strength）。Venice 官方无自定义 loras[]；挂自定义 LoRA 会没有发出去（未发请求）。';
     } else if (provider === 'deepinfra') {
       catalogNotice = 'DeepInfra 公共文生图无 LoRA 字段；个人/私有 LoRA 需先在 DeepInfra 控制台部署为 Running（docs.deepinfra.com/private-models/lora-image），部署列表为空时不准假挂。';
     }
@@ -1071,7 +1071,7 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
       const isVideo=entry.type==='video' || entry.category==='text-to-video';
       const endpoint=isVideo?(schemaProviders.aimlapi as any).videoRoot+'/video/generations':schemaProviders.aimlapi.root+'/images/generations';
       // Official per-model OpenAPI only: catalog info.docsJson (api.aimlapi.com/docs-json?model=…).
-      // Iron rule 3: no static snapshot fallback — missing/failed docs-json → local 400 (未出站，本地拦截) with URL + upstream status/body verbatim.
+      // Iron rule 3: no static snapshot fallback — missing/failed docs-json → local 400 (没有发出去) with URL + upstream status/body verbatim.
       const docsJson=entry.metadata?.info?.docsJson;
       // No docs / unreadable docs: still send as built; the read failure is kept verbatim in schemaReadError.
       let inputSchema:any=null;let schemaReadError:string|undefined;
@@ -1427,7 +1427,7 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
       if(ledger?.length)item.requestMetadata={...item.requestMetadata,executionTrace:[...ledger]};
       // trace-fix2 P3/P4: the task was submitted upstream (POST in the ledger) and upstream reported the failure → errorSource
       // 'upstream' (route provenance; the middleware keeps it), and the full task ledger (submit POST + every poll) rides along
-      // as taskExecutionTrace so the canvas never classifies it as 「本地拦截」 from this poll's GET-only request trace.
+      // as taskExecutionTrace so the canvas never classifies it as 「没有发出去」 from this poll's GET-only request trace.
       const provenance={errorSource:typeof body?.errorSource==='string'?body.errorSource:'upstream',...(ledger?.length?{taskExecutionTrace:[...ledger]}:{})};
       Promise.resolve(dep.record(item)).then((saved:any)=>json({...body,...provenance,historyItem:saved})).catch((e:any)=>json({...body,...provenance,historyWarning:`失败记录写入历史失败：${e?.message || e}`}));
       return res;

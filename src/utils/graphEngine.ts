@@ -1155,7 +1155,7 @@ export async function executeWorkflow(
         l
       );
       // Schema-driven providers: LoRA support is decided only by the server provider
-      // table (unified 「本地拦截 · 未发请求」 + history) or by upstream verbatim — no
+      // table (unified 「没有发出去」 + history) or by upstream verbatim — no
       // name-heuristic frontend gate.
       if (!compat.compatible && !isSchemaDrivenProvider(params.targetProvider)) {
         const reason = `LoRA [${l.name}] 与底模 [${params.checkpointModel}] 架构不兼容，拒绝静默丢弃执行`;

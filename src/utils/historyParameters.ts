@@ -408,7 +408,7 @@ export const historyParameterSourceLabel = (source: HistoryParameterSource): str
     case 'not-sent': return '未发送';
     case 'schema-unrecorded': return '未发送（Schema 未记录）';
     case 'unsupported': return HISTORY_UNSUPPORTED_LABEL;
-    case 'blocked': return '本地拦截';
+    case 'blocked': return '没有发出去';
     case 'passed-through': return HISTORY_PASS_THROUGH_LABEL;
     case 'intended': return '拟发送（未出站）';
     default: return '旧记录未保存';

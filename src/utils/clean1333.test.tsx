@@ -115,16 +115,16 @@ describe('clean-1333 #3 wording follows the request log', () => {
     const reused = { errorSource: 'local', error: 'x', schemaRead: { reused: true, readAt: '2026-10-15T05:39:45.149Z' } };
     expect(schemaReadLine(reused)).toContain('复用 13:39:45');
     expect(schemaReadLine(reused)).toContain('未重新请求');
-    expect(localNotOutboundText(fetched)).toBe('本地拦截 · 已读 Schema、未发生成：x');
+    expect(localNotOutboundText(fetched)).toBe('没有发出去：x');
     for (const t of [localBlockTitle(fetched), schemaReadLine(fetched), localNotOutboundText(fetched)]) expect(t).not.toMatch(/未发请求|没有请求离开本机/);
   });
   it('server LOCAL_BLOCK_PREFIX and throw texts say 未发生成 / 未发送生成请求', () => {
     const src = read('../server/schemaProviders.ts');
-    expect(src).toContain("export const LOCAL_BLOCK_PREFIX='本地拦截 · 已读 Schema、未发生成'");
+    expect(src).toContain("export const LOCAL_BLOCK_PREFIX='没有发出去'");
     expect(src).not.toContain('未发送请求');
   });
   it('a toast reason strips any of the three heads', () => {
-    expect(localBlockToastReason(JSON.stringify({ error: '本地拦截 · 已读 Schema、未发生成\nVenice 官方原文：「x」' }))).toBe('Venice 官方原文：「x」');
+    expect(localBlockToastReason(JSON.stringify({ error: '没有发出去\nVenice 官方原文：「x」' }))).toBe('Venice 官方原文：「x」');
   });
   it('z-image/turbo + LoRA: the block reuses the select-time Schema (0 upstream GETs at run) and says so', async () => {
     const s = serverApp();

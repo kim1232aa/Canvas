@@ -20,7 +20,7 @@ export class TensorArtDriver extends BaseEngineDriver {
 
     // 2026-10-17 规则：清掉失效 TAMS 路由调用，失败原样报，严禁静默切换 provider / 换端点
     throw new Error(
-      'Tensor.Art TAMS 出图入口已下线。请在底模选服务商「Tensor.Art OpenWorks」，走 /api/schema-provider/openworks/submit → 官方 POST https://openapi.tensor.art/openworks/v1/task（Echo-Access-Key / ak_tensor_…）。未出站，本地拦截。'
+      'Tensor.Art TAMS 出图入口已下线。请在底模选服务商「Tensor.Art OpenWorks」，走 /api/schema-provider/openworks/submit → 官方 POST https://openapi.tensor.art/openworks/v1/task（Echo-Access-Key / ak_tensor_…）。'
     );
   }
 }

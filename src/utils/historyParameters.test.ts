@@ -235,7 +235,7 @@ describe('Mage pass-through WxH (official additionalProperties:true)', () => {
       passThroughFields: ['width', 'height'],
     },
   };
-  it('labels forwarded WxH as 官方参数表未列 · 已原样转交 (never 没用上 / 本地拦截)', () => {
+  it('labels forwarded WxH as 官方参数表未列 · 已原样转交 (never 没用上 / 没有发出去)', () => {
     const r = resolveHistoryParameters(base);
     expect(r.width).toMatchObject({ value: 1024, source: 'passed-through' });
     expect(historyParameterSourceLabel(r.width.source)).toBe(HISTORY_PASS_THROUGH_LABEL);

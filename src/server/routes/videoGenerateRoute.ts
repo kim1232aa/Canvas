@@ -148,7 +148,7 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
       if (tamsVideoRefusal) return res.status(400).json({ error: tamsVideoRefusal, errorSource: 'local', provider: reqProvider, model });
       // OpenWorks video models are served by the generic schema provider `openworks` (POST /api/schema-provider/openworks/submit).
       return res.status(400).json({
-        error: `Tensor.Art 视频路由只处理 TAMS；模型 ${model || '(空)'} 不是 TAMS 视频接口。OpenWorks 视频模型请在模型中心选择「Tensor.Art OpenWorks」服务商（通用 Schema 路由）。未出站，本地拦截。`,
+        error: `Tensor.Art 视频路由只处理 TAMS；模型 ${model || '(空)'} 不是 TAMS 视频接口。OpenWorks 视频模型请在模型中心选择「Tensor.Art OpenWorks」服务商（通用 Schema 路由）。`,
         errorSource: 'local', provider: reqProvider, model,
       });
     }

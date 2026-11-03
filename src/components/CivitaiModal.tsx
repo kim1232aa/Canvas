@@ -574,7 +574,7 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
     }
     if (activeProvider === 'venice' || activeProvider === 'together') {
       // No FE hard-block: support status comes only from the server provider table
-      // (local block → 「本地拦截 · 未发请求」 + history card; 待确认 → sent verbatim).
+      // (local block → 「没有发出去」 + history card; 待确认 → sent verbatim).
       onSelectLoRA({provider:activeProvider,name:rawVal,civitaiId:undefined,triggerWords:'',baseModel:undefined});
       onClose();
       return;

@@ -18,8 +18,8 @@ it('keeps local validation distinct from an upstream rejection',()=>{
 it('maps Civitai Krea refuse to plain LoRA conclusion without schema jargon',()=>{
   const jargon='Civitai Krea v2 官方不接受 LoRA、负面提示词或宽高像素（见 https://developer.civitai.com/orchestration/recipes/krea）。请改用 Flux 2 / Qwen 配方，或换到官方支持 LoRA 的供应商端点。';
   expect(plainFailureConclusion(jargon)).toBe('请换支持 LoRA 的模型或先不用这条');
-  // 2026-10-15 hard rule: local rejection that never left the server → 「未出站，本地拦截：<原文>」, no rewrite.
-  expect(userFacingApiFailure(400,{errorSource:'local',error:jargon},'/api/engine/civitai/generate')).toBe(`未出站，本地拦截：${jargon}`);
+  // 2026-10-15 hard rule: local rejection that never left the server → 「没有发出去：<原文>」, no rewrite.
+  expect(userFacingApiFailure(400,{errorSource:'local',error:jargon},'/api/engine/civitai/generate')).toBe(`没有发出去：${jargon}`);
 });
 it('unicodeSafeSlice never cuts mid-grapheme',()=>{
   const s='Civitai Krea v2 官方不接受 LoRA、负面提示词或宽高像素（见 https://example.com）';

@@ -102,7 +102,7 @@ export function buildFailedAttemptHistoryItem(
   };
 }
 
-export const LOCAL_BLOCKED_LABEL = '未出站，本地拦截';
+export const LOCAL_BLOCKED_LABEL = '没有发出去';
 /** Generation entry points (all providers): local rejections here are history. */
 export const isGenerationRoute = (path: string) => /\/(generate|submit)$/.test(path);
 

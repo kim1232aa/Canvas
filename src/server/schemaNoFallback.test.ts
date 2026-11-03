@@ -23,7 +23,7 @@ describe('no Schema/endpoint fallback (iron rule 3)', () => {
     for (const p of ['Together', 'Novita', 'Venice']) {
       const e: any = schemaUnavailableBlock(p, 'm', '目录项没有 parameters', 'https://x/models');
       expect(e.status).toBe(400); expect(e.errorSource).toBe('local');
-      expect(e.message).toMatch(/^未出站，本地拦截：/); expect(e.message).toContain('https://x/models');
+      expect(e.message).toMatch(/^没有发出去：/); expect(e.message).toContain('https://x/models');
       expect(e.message).toContain('不使用内置 Schema');
     }
   });
@@ -31,7 +31,7 @@ describe('no Schema/endpoint fallback (iron rule 3)', () => {
     const r = await submit('wavespeed', { code: 200, data: [{ model_id: 'vendor/m', type: 'text-to-image' }] }, 'vendor/m');
     expect(r.status).toBe(400);
     expect(r.payload.errorSource).toBe('local');
-    expect(r.payload.error).toContain('未出站，本地拦截');
+    expect(r.payload.error).toContain('没有发出去');
     expect(r.payload.error).toContain('model_run');
     expect(r.payload.error).toContain('https://api.wavespeed.ai/api/v3/models');
     expect(JSON.stringify(r.payload)).not.toContain('/api/v3/vendor/m');
@@ -40,7 +40,7 @@ describe('no Schema/endpoint fallback (iron rule 3)', () => {
     expect(isGenerationRoute('/api/schema-provider/wavespeed/submit')).toBe(true);
     const h = buildLocalRejectionHistoryItem('/api/schema-provider/wavespeed/submit', { model: 'vendor/m', prompt: 'p' }, r.status, r.payload);
     expect(h.status).toBe('local_blocked'); expect(h.upstreamStatus ?? null).toBeNull();
-    expect(JSON.stringify(h)).toContain('未出站，本地拦截');
+    expect(JSON.stringify(h)).toContain('没有发出去');
   });
   it('WaveSpeed model_run without request_schema → local 400, no POST', async () => {
     const r = await submit('wavespeed', { code: 200, data: [{ model_id: 'vendor/m', api_schema: { api_schemas: [{ type: 'model_run', method: 'POST', server: 'https://api.wavespeed.ai', api_path: '/api/v3/vendor/m' }] } }] }, 'vendor/m');
@@ -60,7 +60,7 @@ describe('no Schema/endpoint fallback (iron rule 3)', () => {
     expect(reqBody.request.seed).toBe(42);
     expect(reqBody.request.steps).toBe(20);
     expect(reqBody.request.guidance_scale).toBe(7);
-    expect(String(r.payload?.error || '')).not.toContain('未出站，本地拦截');
+    expect(String(r.payload?.error || '')).not.toContain('没有发出去');
   });
   for (const [p, catalog, model, specUrl] of [
     ['together', [{ id: 'black-forest-labs/FLUX.2-dev', type: 'image' }], 'black-forest-labs/FLUX.2-dev', officialOpenApiSources.together],

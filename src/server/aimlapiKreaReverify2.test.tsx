@@ -79,7 +79,7 @@ describe('P0 1 / P1 8 / P2 11–12 history modal', () => {
   it('counts only entries with real output media', () => {
     expect([failedItem({}), blocked, ok].filter(hasOutputMedia)).toHaveLength(1);
     expect(html).toContain('data-testid="history-output-count">1 张出图');
-    expect(html).toContain('未出图 2 条（上游失败 1 · 本地拦截 1）');
+    expect(html).toContain('未出图 2 条（上游失败 1 · 没有发出去 1）');
   });
   // superseded 2026-11-04: history card shows plain values, no per-field badges
   it.skip('labels sampler and scheduler separately', () => {
@@ -92,7 +92,7 @@ describe('P0 1 / P1 8 / P2 11–12 history modal', () => {
   });
   // superseded 2026-11-04: history card shows plain values, no per-field badges
   it.skip('disabled 应用到画布 says why', () => {
-    expect(applyDisabledReason(blocked, false)).toMatch(/本地拦截/);
+    expect(applyDisabledReason(blocked, false)).toMatch(/没有发出去/);
     expect(applyDisabledReason(failedItem({}), false)).toMatch(/上游请求失败/);
     expect(html).toContain('data-testid="history-apply-disabled-reason"');
   });

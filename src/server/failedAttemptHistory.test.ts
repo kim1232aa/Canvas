@@ -45,7 +45,7 @@ describe('buildFailedAttemptHistoryItem', () => {
 import { buildLocalRejectionHistoryItem, isGenerationRoute, LOCAL_BLOCKED_LABEL } from './failedAttemptHistory';
 
 describe('buildLocalRejectionHistoryItem', () => {
-  it('status 未出站，本地拦截, verbatim reason, intended snapshot, no upstream fields', () => {
+  it('status 没有发出去, verbatim reason, intended snapshot, no upstream fields', () => {
     const reason = 'Civitai Krea v2 官方不接受 LoRA、负面提示词或宽高像素（见 https://developer.civitai.com/orchestration/recipes/krea）。';
     const item = buildLocalRejectionHistoryItem('/api/engine/civitai/generate', { prompt: 'p', model: 'krea2', loras: [{ name: 'x', strength: 1 }], workflowSnapshot: { big: 1 } }, 400, { error: reason });
     expect(item.status).toBe('local_blocked');

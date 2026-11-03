@@ -193,7 +193,7 @@ describe('ReplicateDriver', () => {
   });
 
   it('surfaces schema-missing block error verbatim (upstream first line)', async () => {
-    const err = 'HTTP 404: {"detail":"Model not found"} (https://api.replicate.com/v1/models/a/b)\n本地拦截：拿不到该模型 Schema，未发送 /predictions（model=a/b）';
+    const err = 'HTTP 404: {"detail":"Model not found"} (https://api.replicate.com/v1/models/a/b)\n没有发出去：拿不到该模型 Schema，未发送 /predictions（model=a/b）';
     mockFetch.mockResolvedValueOnce(jsonResponse({ error: err, blocked: 'schema_missing', notSent: true }, 404));
     await expect(driver.generate({ prompt: 'x', model: 'a/b' } as any, { replicateKey: FIXTURE_KEY })).rejects.toThrow(err);
   });

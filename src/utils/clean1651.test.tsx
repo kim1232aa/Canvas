@@ -113,7 +113,7 @@ describe('clean-1651 #3 upstream failure badge — 上一次 + 北京时间; kee
       localBlockReason: undefined,
     }, {
       id: 'latent', type: 'EmptyLatentImage', state: 'idle',
-      localBlockReason: '宽高不齐', localBlockTitle: '本地拦截 · 未发请求',
+      localBlockReason: '宽高不齐', localBlockTitle: '没有发出去',
     }];
     const kept = clearNodeExecutionErrors(nodes, { keepUpstreamFailures: true });
     expect(kept[0].errorMessage).toBe('HTTP 401 Unauthorized');
@@ -134,10 +134,10 @@ describe('clean-1651 #3 upstream failure badge — 上一次 + 北京时间; kee
       id: 'save', type: 'SaveImage', state: 'idle',
       errorMessage: 'HTTP 401 Unauthorized', errorAt: '2026-10-15T16:16:55.000Z',
       upstreamFailed: true, upstreamLocalBlocked: true,
-      localBlockTitle: '本地拦截 · 未发请求', localBlockReason: undefined,
+      localBlockTitle: '没有发出去', localBlockReason: undefined,
     }, {
       id: 'latent', type: 'EmptyLatentImage', state: 'idle',
-      localBlockReason: '宽高不齐：只填了宽', localBlockTitle: '本地拦截 · 未发请求',
+      localBlockReason: '宽高不齐：只填了宽', localBlockTitle: '没有发出去',
     }];
     const after = clearNodeExecutionErrors(nodes, { keepUpstreamFailures: true });
     expect(after[0].errorMessage).toBe('HTTP 401 Unauthorized');
@@ -158,7 +158,7 @@ describe('clean-1651 #3 upstream failure badge — 上一次 + 北京时间; kee
     const nodes: any[] = [{
       id: 'save', type: 'SaveImage', state: 'error',
       errorMessage: 'HTTP 401 Unauthorized', errorAt: '2026-10-15T16:16:55.000Z',
-      upstreamLocalBlocked: true, localBlockTitle: '本地拦截 · 未发请求',
+      upstreamLocalBlocked: true, localBlockTitle: '没有发出去',
     }];
     const localOnly = clearNodeExecutionErrors(nodes, { keepUpstreamFailures: true });
     expect(localOnly[0].errorMessage).toBe('HTTP 401 Unauthorized');

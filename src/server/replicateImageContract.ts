@@ -42,7 +42,7 @@ export class ReplicateSchemaMissingError extends Error {
   /** HTTP status the route must answer with: upstream status when the schema GET got a non-2xx answer. */
   httpStatus: number;
   constructor(model: string, schemaFetch?: ReplicateSchemaFetchFailure) {
-    const local = `本地拦截：拿不到该模型 Schema，未发送 /predictions（model=${model}）`;
+    const local = `没有发出去：拿不到该模型 Schema，未发送 /predictions（model=${model}）`;
     let first: string;
     let httpStatus: number;
     if (!schemaFetch) {

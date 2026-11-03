@@ -52,7 +52,7 @@ describe('1 Venice local block: 拟发送 = Schema-scoped fields only', () => {
     const r = await veniceSubmit(SHOT29);
     expect(r.status).toBe(400);
     expect(r.posts).toHaveLength(0);
-    expect(r.payload.error.split('\n')[0]).toBe('本地拦截 · 已读 Schema、未发生成'); // clean-1333 #3
+    expect(r.payload.error.split('\n')[0]).toBe('没有发出去'); // clean-1333 #3
     const p = r.payload.proposedRequest;
     expect(p.endpoint).toBe('https://api.venice.ai/api/v1/image/generate');
     const text = JSON.stringify(p.parameters);
@@ -164,12 +164,12 @@ describe('4 / 6 / 9 / 10 helpers', () => {
     expect(html).toMatch(/overflow-x-hidden whitespace-pre-wrap \[overflow-wrap:anywhere\][^>]*data-testid="history-failed-body"/);
     expect(html).toContain('/workspace/x.ts:1'); // verbatim
   });
-  it('9 local-block toast first line + reason verbatim; bar starts with 本地拦截 · 未发请求', () => {
-    expect(LOCAL_BLOCK_TOAST_TITLE).toBe('本地拦截 · 未发请求');
-    const raw = JSON.stringify({ error: '本地拦截 · 未发请求\nVenice 官方原文：「x」\n来源：https://docs.venice.ai', errorSource: 'local' });
+  it('9 local-block toast first line + reason verbatim; bar starts with 没有发出去', () => {
+    expect(LOCAL_BLOCK_TOAST_TITLE).toBe('没有发出去');
+    const raw = JSON.stringify({ error: '没有发出去\nVenice 官方原文：「x」\n来源：https://docs.venice.ai', errorSource: 'local' });
     expect(localBlockToastReason(raw)).toBe('Venice 官方原文：「x」\n来源：https://docs.venice.ai');
-    const rec: any = { id: 3, state: 'error', method: 'POST', route: '/api/schema-provider/venice/submit', status: 400, runLabel: '第 3 次运行', response: { error: '本地拦截 · 未发请求\nVenice 官方原文：「x」', errorSource: 'local', executionTrace: [] } };
-    expect(buttonSummary([rec]).startsWith('本地拦截 · 未发请求 · 第 3 次运行')).toBe(true);
+    const rec: any = { id: 3, state: 'error', method: 'POST', route: '/api/schema-provider/venice/submit', status: 400, runLabel: '第 3 次运行', response: { error: '没有发出去\nVenice 官方原文：「x」', errorSource: 'local', executionTrace: [] } };
+    expect(buttonSummary([rec]).startsWith('没有发出去 · 第 3 次运行')).toBe(true);
   });
   it('10 status words kept together; successful GET has no repeated second line; polls are light', () => {
     const r: any = { id: 4, state: 'error', method: 'GET', route: '/api/models?provider=together', status: 401, response: {} };

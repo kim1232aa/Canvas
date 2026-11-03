@@ -102,7 +102,7 @@ export interface NodeInstance {
   upstreamLocalBlocked?: boolean;
   /** clean-1333 #6: set ONLY on the node that caused a local block — the specific reason (same text as the toast). */
   localBlockReason?: string;
-  /** 「本地拦截 · 未发请求」 (zero requests) or 「本地拦截 · 已读 Schema、未发生成」 — matches the request log. */
+  /** 「没有发出去」 (zero requests) or 「没有发出去」 — matches the request log. */
   localBlockTitle?: string;
   /** trace-fix2 #10: Schema field that caused the local block (e.g. 'loras') and the active LoRA node count at block time. */
   localBlockField?: string;

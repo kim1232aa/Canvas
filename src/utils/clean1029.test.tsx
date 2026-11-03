@@ -41,7 +41,7 @@ describe('clean-1029 #2 local block line shared by LoRA node / Save node / toast
     expect(LOCAL_BLOCK_NODE_LINE.startsWith(LOCAL_BLOCK_TOAST_TITLE)).toBe(true);
     const node = read('../components/NodeItem.tsx');
     expect(node).toContain('data-testid="node-local-block"');
-    expect(node).not.toContain("'本地拦截 · 未发请求：");
+    expect(node).not.toContain("'没有发出去：");
     expect(read('../components/ExecutionLog.tsx')).toContain('${localBlockTitle(latestError.response)} · ${latestError.runLabel'); // clean-1333 #3
   });
 });

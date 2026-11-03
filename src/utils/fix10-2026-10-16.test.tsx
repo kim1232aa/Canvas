@@ -43,7 +43,7 @@ describe('fix10 execution categories', () => {
     await tracedFetch('/api/fal/generate', { method: 'POST', body: '{}' });
     await tracedFetch('/api/models?provider=x', {}, 'catalog');
     beginSharedGetAction(); await sharedGetJson('/api/model-schema?provider=x&model=y');
-    recordLocalEvent('本地拦截 测试', { error: 'x' });
+    recordLocalEvent('没有发出去 测试', { error: 'x' });
     const rs = getExecutions().slice(0, 4);
     expect(rs.map((r) => r.category)).toEqual(['local', 'schema', 'catalog', 'generation']);
     expect(categoryCounts(rs)).toEqual({ generation: 1, aux: 2, local: 1 });

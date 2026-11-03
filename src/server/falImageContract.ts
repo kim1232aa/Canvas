@@ -17,7 +17,7 @@ export class FalSchemaMissingError extends Error {
   schemaFetch?: FalSchemaFetchFailure;
   httpStatus: number;
   constructor(endpoint: string, schemaFetch?: FalSchemaFetchFailure) {
-    const local = `本地拦截：拿不到该端点 Schema，未发送 fal.run（endpoint=${endpoint}）`;
+    const local = `没有发出去：拿不到该端点 Schema，未发送 fal.run（endpoint=${endpoint}）`;
     let first: string;
     let httpStatus: number;
     if (!schemaFetch) {

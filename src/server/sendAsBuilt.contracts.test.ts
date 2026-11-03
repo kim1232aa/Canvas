@@ -22,4 +22,10 @@ describe('send as built — filled params appear in the outbound body', () => {
     expect(inputs).toContain('"value":768');
     expect(inputs).toContain('"name":"foo"');
   });
+  it('OpenWorks sends a LoRA with no strength (path only), never refuses', () => {
+    const schema = openWorksInputSchema({ inputs: [{ type: 'STRING', name: 'prompt' }] });
+    const built: any = buildOpenWorksRequest('m', schema, { prompt: 'p', loras: [{ name: 'lora-1' }] });
+    expect(built.ok).toBe(true);
+    expect(JSON.stringify(built.parameters)).toContain('lora-1');
+  });
 });

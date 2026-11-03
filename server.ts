@@ -324,10 +324,10 @@ app.use((req, res, next) => {
     const payload = {error:error.message,errorSource:'local'};
     // Only a user's run from the canvas UI writes a local-rejection card; scripts / smoke checks / non-UI calls never do.
     if (req.method !== 'POST' || !isGenerationRoute(req.path) || requestOriginOf(req) !== 'browser') return res.status(400).json(payload);
-    // Local rejection before any upstream call — still history (未出站，本地拦截).
+    // Local rejection before any upstream call — still history (没有发出去).
     return void recordHistoryItem({...buildLocalRejectionHistoryItem(req.path, sanitizeGenerationMetadata(req.body), 400, payload), requestOrigin: requestOriginOf(req)} as any)
       .then(item => res.status(400).json({...payload, historyItem: item}))
-      .catch((e:any) => res.status(400).json({...payload, historyWarning:`本地拦截记录写入历史失败：${e?.message || e}`}));
+      .catch((e:any) => res.status(400).json({...payload, historyWarning:`没有发出去记录写入历史失败：${e?.message || e}`}));
   }
   const snapshot = req.body?.workflowSnapshot;
   if (snapshot !== undefined && (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot))) return res.status(400).json({error: 'workflowSnapshot 必须为对象',errorSource:'local'});
@@ -4449,7 +4449,7 @@ app.post(['/api/tensorart/generate', '/api/engine/tensorart/generate'], async (r
     // 2026-10-17 产品改口：Tensor.Art 只保留 OpenWorks 真出图；本路由不再执行 TAMS /v1/jobs。
     const requestedModelOrTool = String(req.body.toolName || req.body.model || '').trim();
     return res.status(410).json({
-      error: 'Tensor.Art TAMS 出图入口已下线。请在底模选服务商「Tensor.Art OpenWorks」，走 /api/schema-provider/openworks/submit → 官方 POST https://openapi.tensor.art/openworks/v1/task（Echo-Access-Key / ak_tensor_…）。未出站，本地拦截。',
+      error: 'Tensor.Art TAMS 出图入口已下线。请在底模选服务商「Tensor.Art OpenWorks」，走 /api/schema-provider/openworks/submit → 官方 POST https://openapi.tensor.art/openworks/v1/task（Echo-Access-Key / ak_tensor_…）。',
       errorSource: 'local',
       requestedModel: requestedModelOrTool,
       openWorksSubmit: '/api/schema-provider/openworks/submit',

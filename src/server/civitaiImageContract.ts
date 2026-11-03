@@ -29,7 +29,7 @@ export class CivitaiSchemaMissingError extends Error {
   httpStatus: number;
   schemaFetch?: CivitaiSchemaFetchFailure;
   constructor(schemaFetch?: CivitaiSchemaFetchFailure) {
-    const local = '本地拦截：拿不到 Civitai imageGen 官方 OpenAPI，未发送 workflows';
+    const local = '没有发出去：拿不到 Civitai imageGen 官方 OpenAPI，未发送 workflows';
     let first: string;
     let httpStatus: number;
     if (!schemaFetch) {

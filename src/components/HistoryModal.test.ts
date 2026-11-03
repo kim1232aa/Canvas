@@ -76,7 +76,7 @@ describe('fix17 history filter + fail fold helpers', () => {
   const blocked = item({
     id: 'b1',
     status: 'local_blocked',
-    statusLabel: '未出站，本地拦截',
+    statusLabel: '没有发出去',
     error: 'field blocked\nsecond',
   });
   const hist = [out, fail, blocked];
@@ -102,7 +102,7 @@ describe('fix17 history filter + fail fold helpers', () => {
 
   it('historyFailStatusText uses HTTP code / local label, no rewrite', () => {
     expect(historyFailStatusText(fail)).toBe('HTTP 429 Too Many Requests');
-    expect(historyFailStatusText(blocked)).toBe('未出站，本地拦截');
+    expect(historyFailStatusText(blocked)).toBe('没有发出去');
     expect(historyFailStatusText(item({ id: 'n', status: 'failed', networkError: { message: 'x', cause: null } }))).toBe('网络错误（无状态码）');
   });
 

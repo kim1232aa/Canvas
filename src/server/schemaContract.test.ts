@@ -163,7 +163,7 @@ describe('provider contract: declared fields must be sent', () => {
       return json({ models: [{ type: { name: 'checkpoint' }, sd_name_in_api: 'sdxl_base.safetensors' }] });
     }, async (baseUrl) => {
       const b = await submit(baseUrl, 'novita', { model: 'sdxl_base.safetensors', prompt: 'x', ...CANVAS });
-      expect(String(b.error || '')).not.toContain('未出站，本地拦截');
+      expect(String(b.error || '')).not.toContain('没有发出去');
       expect(posts).toBe(1);
     }, () => 'k');
   });

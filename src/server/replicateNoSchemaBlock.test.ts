@@ -23,7 +23,7 @@ describe('Replicate no-schema local block (iron rule 4)', () => {
     expect(() => buildReplicatePredictionRequest({ model: 'someone/unknown-model', prompt: 'x', cfg: 3 }))
       .toThrow(ReplicateSchemaMissingError);
     expect(() => buildReplicatePredictionRequest({ model: 'someone/unknown-model', prompt: 'x' }))
-      .toThrow('本地拦截：拿不到该模型 Schema，未发送 /predictions（model=someone/unknown-model）');
+      .toThrow('没有发出去：拿不到该模型 Schema，未发送 /predictions（model=someone/unknown-model）');
     // Table row alone must not authorize outbound (flux-schnell has a static row).
     expect(() => buildReplicatePredictionRequest({ model: 'black-forest-labs/flux-schnell', prompt: 'x' }))
       .toThrow(ReplicateSchemaMissingError);
@@ -37,7 +37,7 @@ describe('Replicate no-schema local block (iron rule 4)', () => {
     expect(res.statusCode).toBe(404);
     const [first, second] = res.body.error.split('\n');
     expect(first.startsWith(`HTTP 404: ${upstreamBody}`)).toBe(true);
-    expect(second).toBe('本地拦截：拿不到该模型 Schema，未发送 /predictions（model=someone/unknown-model）');
+    expect(second).toBe('没有发出去：拿不到该模型 Schema，未发送 /predictions（model=someone/unknown-model）');
     expect(res.body.upstreamStatus).toBe(404);
     expect(res.body.errorSource).toBe('upstream');
     expect(res.body.blocked).toBe('schema_missing');
@@ -66,7 +66,7 @@ describe('Replicate no-schema local block (iron rule 4)', () => {
     await handleReplicateGenerate(d)({ path: '/x', body: { model: 'a'.repeat(64), prompt: 'x' } } as any, res);
     expect(res.statusCode).toBe(400);
     expect(res.body.error.split('\n')[0]).toContain('无上游请求');
-    expect(res.body.error).toContain('本地拦截：拿不到该模型 Schema，未发送 /predictions');
+    expect(res.body.error).toContain('没有发出去：拿不到该模型 Schema，未发送 /predictions');
     expect(d.upstreamFetch).not.toHaveBeenCalled();
   });
 
@@ -82,7 +82,7 @@ describe('Replicate no-schema local block (iron rule 4)', () => {
 
   it('history: middleware local-block item keeps upstream 404 status and verbatim error', async () => {
     const { buildFailedAttemptHistoryItem, buildLocalRejectionHistoryItem } = await import('./failedAttemptHistory');
-    const err = 'HTTP 404: {"detail":"nf"} (u)\n本地拦截：拿不到该模型 Schema，未发送 /predictions（model=a/b）';
+    const err = 'HTTP 404: {"detail":"nf"} (u)\n没有发出去：拿不到该模型 Schema，未发送 /predictions（model=a/b）';
     const body = { error: err, actualRequest: null, notSent: true };
     const ctx = { traces: [{ method: 'GET', endpoint: 'u', status: 404 }], submissions: [] } as any;
     expect(buildFailedAttemptHistoryItem(ctx, { model: 'a/b' }, 404, body)).toBeNull();
@@ -105,7 +105,7 @@ describe('Replicate no-schema local block (iron rule 4)', () => {
 
   it('history: local-block item mirrors route-provided errorSource/upstreamStatus; defaults to local otherwise', async () => {
     const { buildLocalRejectionHistoryItem } = await import('./failedAttemptHistory');
-    const body = { error: 'HTTP 404: x (u)\n本地拦截', errorSource: 'upstream', upstreamStatus: 404 };
+    const body = { error: 'HTTP 404: x (u)\n没有发出去', errorSource: 'upstream', upstreamStatus: 404 };
     const up = buildLocalRejectionHistoryItem('/api/engine/replicate/generate', { model: 'a/b' }, 404, body, { errorSource: 'upstream', upstreamStatus: 404 });
     expect(up.errorSource).toBe('upstream');
     expect(up.upstreamStatus).toBe(404);

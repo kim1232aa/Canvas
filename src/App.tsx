@@ -2115,7 +2115,7 @@ export default function App() {
   useEffect(() => {
     if (!hasStaleLoraBlock(nodes)) return;
     setNodes((prev) => clearStaleLoraBlocks(prev));
-    setToast((prev) => (prev && prev.type === 'error' && /LoRA/.test(`${prev.title}\n${prev.message}`) && /本地拦截/.test(`${prev.title}\n${prev.message}`) ? null : prev));
+    setToast((prev) => (prev && prev.type === 'error' && /LoRA/.test(`${prev.title}\n${prev.message}`) && /没有发出去/.test(`${prev.title}\n${prev.message}`) ? null : prev));
   }, [nodes]);
 
   // trace-fix2 #15: when the node set is (re)loaded — first paint, workflow load, 「一键清空全部」 reset — no node may sit

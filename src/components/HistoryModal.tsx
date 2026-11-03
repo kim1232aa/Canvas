@@ -30,7 +30,7 @@ export function historyHeaderCounts(history: GenerationHistoryItem[]): { output:
 
 /** Card timestamp in the viewer's local zone (same formatter as the exec log). */
 /**
- * fix17: history filter. 「失败」= every generation record without output media (上游失败 + 本地拦截 + 其他).
+ * fix17: history filter. 「失败」= every generation record without output media (上游失败 + 没有发出去 + 其他).
  * hist-count-2026-10-17: failed parameter-table GETs are their own chip 「查参数表失败」 (shown only when present),
  * so 全部 = 已出图 + 失败 + 查参数表失败. The cards themselves stay visible under 全部.
  */
@@ -58,7 +58,7 @@ export function historyFilterCountLabel(
 }
 /** fix17: one-line fold status — the same status text the expanded card shows (no new wording). */
 export function historyFailStatusText(item: GenerationHistoryItem): string {
-  if (item.status === 'local_blocked') return item.statusLabel || '未出站，本地拦截';
+  if (item.status === 'local_blocked') return item.statusLabel || '没有发出去';
   return item.upstreamStatus != null ? `HTTP ${item.upstreamStatus}${item.upstreamStatusText ? ` ${item.upstreamStatusText}` : ''}` : (item.networkError ? '网络错误（无状态码）' : '无上游状态码');
 }
 /** fix17: first line of the upstream original text, verbatim (no rewriting). */
@@ -97,7 +97,7 @@ const sourceClass: Record<ResolvedHistoryParameter['source'], string> = {
 /** Shape glyph per status so the three main chips differ even at thumbnail size / without colour: ● solid, ◌ dashed, ⊘ struck. */
 export const SOURCE_GLYPH: Partial<Record<ResolvedHistoryParameter['source'], string>> = { sent: '●', upstream: '●', intended: '◌', unsupported: '⊘', 'not-sent': '○', blocked: '⛔' };
 export const sourceChipText = (source: ResolvedHistoryParameter['source']) => `${SOURCE_GLYPH[source] ? `${SOURCE_GLYPH[source]} ` : ''}${historyParameterSourceLabel(source)}`;
-/** Size row chip: show for blocked (本地拦截) and unsupported; hide only empty/unknown/plain 未发送. */
+/** Size row chip: show for blocked (没有发出去) and unsupported; hide only empty/unknown/plain 未发送. */
 export const historySizeChipVisible = (source: ResolvedHistoryParameter['source'], hasCanvasValue: boolean) => !!hasCanvasValue && source !== 'not-sent' && source !== 'unknown';
 const sourceBadge = (_param: ResolvedHistoryParameter): React.ReactNode => null;
 const _legacySourceBadge = (param: ResolvedHistoryParameter) => {
@@ -343,7 +343,7 @@ const HistoryCardFace: React.FC<{ item: GenerationHistoryItem; resolved: Record<
 };
 /** Why 「应用到画布」 is disabled — shown as tooltip + visible hint. */
 export const applyDisabledReason = (item: GenerationHistoryItem, broken: boolean): string => {
-  if (item.status === 'local_blocked') return '未出站，本地拦截：这次没有出图，没有结果可应用到画布';
+  if (item.status === 'local_blocked') return '没有发出去：这次没有出图，没有结果可应用到画布';
   if (item.status === 'failed') return '上游请求失败：这次没有出图，没有结果可应用到画布';
   if (!item.url) return '这条记录没有输出图片，无法应用到画布';
   if (broken) return '预览加载失败，无法应用到画布';
@@ -541,7 +541,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
                 </span>
                 {nonOutputCount > 0 && (
                   <span className="text-xs font-medium px-2 py-0.5 rounded-full border border-slate-500/60 text-slate-200 bg-slate-700/40" data-testid="history-non-output-count" data-badge-level="secondary">
-                    未出图 {nonOutputCount} 条{partialLoaded ? '（已载）' : ''}（上游失败 {failedCount} · 本地拦截 {localBlockedCount}{nonOutputCount - failedCount - localBlockedCount > 0 ? ` · 其他 ${nonOutputCount - failedCount - localBlockedCount}` : ''}）
+                    未出图 {nonOutputCount} 条{partialLoaded ? '（已载）' : ''}（上游失败 {failedCount} · 没有发出去 {localBlockedCount}{nonOutputCount - failedCount - localBlockedCount > 0 ? ` · 其他 ${nonOutputCount - failedCount - localBlockedCount}` : ''}）
                   </span>
                 )}
                 {schemaFetchCount > 0 && (
@@ -632,7 +632,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
                   <details className="px-3 py-1 text-[11px]" data-testid="history-debug"><summary className="cursor-pointer text-slate-400">排错详情</summary>
                   <div className="relative bg-[#16151a] overflow-hidden p-3 text-[11px] font-mono border-b border-dashed border-slate-600 flex flex-col" data-testid="history-local-blocked-entry">
                     <div className="flex flex-wrap items-center gap-1.5 mb-2">
-                      <span className="px-1.5 py-0.5 rounded bg-slate-600/80 text-white text-[10px]">{item.statusLabel || '未出站，本地拦截'}</span>
+                      <span className="px-1.5 py-0.5 rounded bg-slate-600/80 text-white text-[10px]">{item.statusLabel || '没有发出去'}</span>
                       <span className="px-1.5 py-0.5 rounded border border-slate-500/50 text-slate-300 text-[10px]">未调用任何上游 · 无上游状态码</span>{item.requestOrigin === 'direct' && <span className="px-1.5 py-0.5 rounded border border-amber-500/50 text-amber-200 text-[10px]" data-testid="history-direct-call" title="请求不是从画布界面发出的（没有 x-canvas-origin），例如 curl / 脚本">本机直调</span>}
                       <span className="text-cyan-300 text-[10px]">{displayValue(canonicalProviderLabel(item.actualProvider || item.provider))}</span>
                     </div>

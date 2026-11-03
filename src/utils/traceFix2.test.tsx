@@ -44,7 +44,7 @@ describe('trace-fix2 P2 — parallel LoRA name/strength arrays', () => {
   });
 });
 
-describe('trace-fix2 P3/P4 — outbound failure is never 「本地拦截」', () => {
+describe('trace-fix2 P3/P4 — outbound failure is never 「没有发出去」', () => {
   it('poll response with only its own GET but a task ledger containing the POST → not local', () => {
     const data = { ok: false, errorSource: 'local', executionTrace: [{ method: 'GET', endpoint: 'https://u/x', status: 200 }], taskExecutionTrace: sogni.requestMetadata.executionTrace };
     expect(isLocalNotOutbound(data)).toBe(false);
@@ -104,7 +104,7 @@ describe('trace-fix2 #10 — stale LoRA block is cleared', () => {
     expect(hasStaleLoraBlock(nodes)).toBe(false);
   });
   it('legacy LoRA chrome without a recorded count → stale', () => {
-    expect(hasStaleLoraBlock([lora('a', { localBlockTitle: '本地拦截 · 已读 Schema、未发生成' })] as any)).toBe(true);
+    expect(hasStaleLoraBlock([lora('a', { localBlockTitle: '没有发出去' })] as any)).toBe(true);
   });
 });
 

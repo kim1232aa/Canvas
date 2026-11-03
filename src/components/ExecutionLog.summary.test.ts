@@ -63,7 +63,7 @@ describe('ExecutionLog plain summary (LoRA unsupported polish)', () => {
   it('humanSummaryText is next-step only; no method/path/schema jargon', () => {
     const text = humanSummaryText(kreaError);
     // 2026-10-15 hard rule: local block shown verbatim with 未出站 prefix (no plain rewrite).
-    expect(text).toBe(`未出站，本地拦截：${(kreaError.response as any).error}`);
+    expect(text).toBe(`没有发出去：${(kreaError.response as any).error}`);
     expect(text).not.toMatch(/这模型不能挂 LoRA/);
     expect(text).not.toMatch(/POST|\/api\/|schema|comfy:krea2|HTTP/);
   });

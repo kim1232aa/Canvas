@@ -1,16 +1,16 @@
 /**
  * clean-1333: one source for local-block wording, so the toast, the node and the execution log say the same thing as the
  * request log.
- *  - Zero requests (decided on the canvas, before any fetch): 「本地拦截 · 未发请求」.
- *  - Decided by the backend submit route after it read (or reused) the model Schema: 「本地拦截 · 已读 Schema、未发生成」,
+ *  - Zero requests (decided on the canvas, before any fetch): 「没有发出去」.
+ *  - Decided by the backend submit route after it read (or reused) the model Schema: 「没有发出去」,
  *    plus whether this run issued the Schema GET or reused an earlier read. Never 「未发请求」 / 「没有请求离开本机」 there.
  * clean-1358: size pairing is Schema-driven (pair vs single-side); reveal pans the full cause node into the usable box.
  */
 import { formatRecordTime } from '../services/executionTrace';
 
-export const LOCAL_BLOCK_ZERO_TITLE = '本地拦截 · 未发请求';
-export const LOCAL_BLOCK_SCHEMA_TITLE = '本地拦截 · 已读 Schema、未发生成';
-export const LOCAL_BLOCK_SCHEMA_FAILED_TITLE = '本地拦截 · Schema 读取失败、未发生成';
+export const LOCAL_BLOCK_ZERO_TITLE = '没有发出去';
+export const LOCAL_BLOCK_SCHEMA_TITLE = '没有发出去';
+export const LOCAL_BLOCK_SCHEMA_FAILED_TITLE = '没有发出去';
 
 export type SchemaReadInfo = { fetched?: boolean; reused?: boolean; failed?: boolean; readAt?: string; reusedFrom?: string };
 

@@ -11,19 +11,19 @@ describe('local 400 never reached upstream', () => {
     expect(isLocalNotOutbound({ ...local, executionTrace: [{ method: 'POST', endpoint: 'x', status: 200 }] })).toBe(false);
     expect(isLocalNotOutbound({ ...local, errorSource: 'upstream' })).toBe(false);
   });
-  it('first line = 未出站，本地拦截：<verbatim>', () => {
+  it('first line = 没有发出去：<verbatim>', () => {
     const line = userFacingApiFailure(400, local, '/api/krea/generate');
-    expect(line).toBe('未出站，本地拦截：该服务商不支持: loras（krea）');
-    expect(describeApiFailure(400, local, '/r')).toMatch(/^未出站，本地拦截：.*未调用任何上游/);
+    expect(line).toBe('没有发出去：该服务商不支持: loras（krea）');
+    expect(describeApiFailure(400, local, '/r')).toMatch(/^没有发出去：.*未调用任何上游/);
     expect(errorBannerText(`${line}\nmore`)).toBe(line);
     expect(plainErrorMessage(new Error(line))).toBe(line);
   });
   it('long local reason is not sliced', () => {
     const long = { ...local, error: 'x'.repeat(300) };
-    expect(userFacingApiFailure(400, long, '/r')).toBe(`未出站，本地拦截：${'x'.repeat(300)}`);
+    expect(userFacingApiFailure(400, long, '/r')).toBe(`没有发出去：${'x'.repeat(300)}`);
   });
   it('execution log summary', () => {
-    expect(humanSummaryText({ id: 1, state: 'error', status: 400, route: '/r', response: local } as any)).toBe('未出站，本地拦截：该服务商不支持: loras（krea）');
+    expect(humanSummaryText({ id: 1, state: 'error', status: 400, route: '/r', response: local } as any)).toBe('没有发出去：该服务商不支持: loras（krea）');
   });
 });
 
@@ -52,18 +52,18 @@ describe('upstream failure first line (all providers)', () => {
 
 describe('no double prefix', () => {
   it('server message already prefixed', () => {
-    const d = { errorSource: 'local', error: '未出站，本地拦截：AIMLAPI 官方 Schema 不可用', executionTrace: [{ method: 'GET', endpoint: 'docs', status: 503 }] };
-    expect(userFacingApiFailure(400, d, '/r')).toBe('本地拦截 · Schema 读取失败、未发生成：AIMLAPI 官方 Schema 不可用'); // clean-1333 #3: a GET went out (503) — never 「未出站」
+    const d = { errorSource: 'local', error: '没有发出去：AIMLAPI 官方 Schema 不可用', executionTrace: [{ method: 'GET', endpoint: 'docs', status: 503 }] };
+    expect(userFacingApiFailure(400, d, '/r')).toBe('没有发出去：AIMLAPI 官方 Schema 不可用'); // clean-1333 #3: a GET went out (503) — never 「未出站」
   });
 });
 
 describe('read-only catalog POST is not outbound generation', () => {
   it('local block after OpenWorks /tool/list (POST 200) headlines the local reason, not HTTP 200', async () => {
     const { upstreamFailureParts, userFacingApiFailure } = await import('./apiFailure');
-    const data = { error: 'OpenWorks 模型 m：x。未出站，本地拦截。', errorSource: 'local', executionTrace: [{ method: 'POST', endpoint: 'https://openapi.tensor.art/openworks/v1/tool/list', status: 200, readOnly: true, responseBody: '{"code":"0"}' }] };
+    const data = { error: 'OpenWorks 模型 m：x。', errorSource: 'local', executionTrace: [{ method: 'POST', endpoint: 'https://openapi.tensor.art/openworks/v1/tool/list', status: 200, readOnly: true, responseBody: '{"code":"0"}' }] };
     expect(isLocalNotOutbound(data)).toBe(true);
     expect(upstreamFailureParts(data)).toBeNull();
-    expect(userFacingApiFailure(400, data, '/r')).toMatch(/^本地拦截/);
+    expect(userFacingApiFailure(400, data, '/r')).toMatch(/^没有发出去/);
     expect(userFacingApiFailure(400, data, '/r')).not.toMatch(/HTTP 200/);
   });
 });

@@ -133,7 +133,7 @@ export const ProviderMatrixModal: React.FC<ProviderMatrixModalProps> = ({
       badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
       description: '官方 OpenWorks：Echo-Access-Key + POST /tool/list、/task、/task/query。画布服务商 id 为 openworks；密钥槽 tensorartKey（ak_tensor_…）。已下线 TAMS 双轨。',
       models: [{ name: '实时 /tool/list 目录（如 photoreal_studio_z_image）', steps: '上游 inputs Schema', resolution: 'image width / height', speed: '按 estimatedCost' }],
-      loraSupport: '目录 inputs 未声明 LoRA 时不发送；探针证实上游忽略的字段本地拦截。',
+      loraSupport: '目录 inputs 未声明 LoRA 时不发送；探针证实上游忽略的字段没有发出去。',
       promptLanguage: '由所选工具 Schema 决定',
       keyFormat: 'ak_tensor_… / ak_tusi…（Echo-Access-Key）',
       features: ['真出图 /task', '上游目录 Schema', '无 TAMS 双轨'],

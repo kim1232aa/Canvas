@@ -116,7 +116,7 @@ describe('clean-1613 #2 viewport pan — one complete row under the current run'
     expect(isViewportPanRecord(row)).toBe(true);
     const parts = requestLineParts(row);
     expect(parts.status).toContain('视口操作');
-    expect(parts.status).not.toMatch(/请求失败|本地拦截/);
+    expect(parts.status).not.toMatch(/请求失败|没有发出去/);
     const groups = groupGenByRun([row]);
     expect(groups).toHaveLength(1);
     expect(groups[0].label).toBe(attach.runLabel);

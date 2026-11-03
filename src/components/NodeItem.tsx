@@ -221,7 +221,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
   const nodeErrorHeadline = schemaErr ? String(node.errorMessage).split('\n')[0] : priorRunErrorLabel(node.errorMessage, node.errorAt);
   const nodeErrorRaw = schemaErr ? String(node.errorMessage).split('\n').slice(1).join('\n') : '';
   if (zoomedOut) {
-    if (node.localBlockReason && node.state !== 'running') zoomAlerts.push({ tone: 'rose', text: `⛔ ${node.localBlockTitle || '本地拦截'}：${node.localBlockReason}` });
+    if (node.localBlockReason && node.state !== 'running') zoomAlerts.push({ tone: 'rose', text: `⛔ ${node.localBlockTitle || '没有发出去'}：${node.localBlockReason}` });
     if (loraMismatchNote) zoomAlerts.push({ tone: 'amber', text: `⚠ LoRA 来源 ${String(node.values.resource_source)} ≠ 当前 ${String(currentProvider || node.values?.targetProvider)}` });
     const notSent = (def.widgets || []).filter((w: any) => w.type === 'number' || w.type === 'select' || w.type === 'text' || w.type === 'textarea').filter((w: any) => {
       const isWH = w.name === 'width' || w.name === 'height';

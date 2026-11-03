@@ -209,26 +209,16 @@ export function buildOpenWorksRequest(model: string, inputSchema: ReturnType<typ
   }
 
   const rawLoras = Array.isArray(body?.loras) ? body.loras : [];
-  const loraItems: Array<{ name: string; strength: number }> = [];
+  const loraItems: Array<{ name: string; strength: unknown }> = [];
   for (const l of rawLoras) {
     if (!l || typeof l !== 'object') continue;
     const id = String((l as any).name || (l as any).id || (l as any).loraModel || (l as any).path || (l as any).model || '').trim();
     if (!id) continue;
-    // Iron rule: never invent LoRA strength (no ?? 1 / ?? 0.8). Missing/non-finite → local block, no outbound.
-    const hasStrength = (l as any).strength != null || (l as any).weight != null || (l as any).scale != null;
-    if (!hasStrength) {
-      errors.push(`LoRA「${id}」缺少强度（strength/weight/scale）；未出站，本地拦截，不静默默认`);
-      continue;
-    }
+    // Strength sent as filled; none filled → none sent (never invented).
     const wRaw = (l as any).strength ?? (l as any).weight ?? (l as any).scale;
-    const w = Number(wRaw);
-    if (!Number.isFinite(w)) {
-      errors.push(`LoRA「${id}」强度非法（${JSON.stringify(wRaw)}）；未出站，本地拦截，不静默默认`);
-      continue;
-    }
+    const w = wRaw == null || wRaw === '' ? undefined : (Number.isFinite(Number(wRaw)) ? Number(wRaw) : wRaw);
     loraItems.push({ name: id, strength: w });
   }
-  if (errors.length) return { ok: false, error: `OpenWorks 模型 ${model}：${errors.join('；')}。未出站，本地拦截。`, mapping };
   if (loraItems.length) {
     const primary = loraItems[0];
     const ids = loraItems.map((x) => x.name).join(',');
@@ -272,8 +262,8 @@ export function registerOpenWorksRoutes(app: express.Express, dep: Deps) {
   const keyOf = (req: express.Request) => {
     const key = dep.resolveKey(req);
     if (!key) throw Object.assign(new Error('未配置 Tensor.Art OpenWorks Access Key（ak_tensor_… / ak_tusi…）'), { status: 400, errorSource: 'local' });
-    if (/[\s,;]/.test(key)) throw Object.assign(new Error(`Tensor.Art OpenWorks Key 含多个值（逗号/分号/空白分隔，共 ${key.split(/[\s,;]+/).filter(Boolean).length} 个）；Echo-Access-Key 只能放一个，不会替你挑。请在设置页只填一个 ak_tensor_…。未出站，本地拦截。`), { status: 400, errorSource: 'local' });
-    if (!isOpenWorksAccessKey(key) && !key.startsWith('ak_tusi')) throw Object.assign(new Error('当前 Tensor.Art Key 不是 OpenWorks Access Key（ak_tensor_… / ak_tusi…）；TAMS Bearer Key 不能用于 OpenWorks。未出站，本地拦截。'), { status: 400, errorSource: 'local' });
+    if (/[\s,;]/.test(key)) throw Object.assign(new Error(`Tensor.Art OpenWorks Key 含多个值（逗号/分号/空白分隔，共 ${key.split(/[\s,;]+/).filter(Boolean).length} 个）；Echo-Access-Key 只能放一个，不会替你挑。请在设置页只填一个 ak_tensor_…。`), { status: 400, errorSource: 'local' });
+    if (!isOpenWorksAccessKey(key) && !key.startsWith('ak_tusi')) throw Object.assign(new Error('当前 Tensor.Art Key 不是 OpenWorks Access Key（ak_tensor_… / ak_tusi…）；TAMS Bearer Key 不能用于 OpenWorks。'), { status: 400, errorSource: 'local' });
     return key;
   };
   const catalog = async (req: express.Request, key: string) => {
