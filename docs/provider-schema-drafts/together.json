@@ -1,5 +1,5 @@
 {
-  "canvasAcceptance": "未验证（2026-10-17 14:40 北京：测试截图已全删，按雁标准「画布里出图、落保存节点、历史有缩略图」当前 0 家；以前的出图/欠费标记一律作废，官方字段结论保留；在画布重跑出图并有节点图+历史缩略图后再单独改）",
+  "canvasAcceptance": "契约对齐、未出图（2026-11-03 画布产品核）：公共 /images/generations 跟参数页——image_loras no longer available，不挂假 LoRA；预设无 LoRA/采样器；OpenAPI 仍列字段 ≠ 可发。证据 Canvas-main/temp/e2e/together-contract-2026-11-03/NOTES.md；来源 docs.together.ai parameters / Create image|video OpenAPI。有效 Key 真发仍待另验。",
   "$schemaNote": "草案 — 仅声明。真相源: docs/provider-api-audit-v2/together.md + DIFF.md (2026-10-15)",
   "id": "together",
   "displayName": "Together",
@@ -230,7 +230,7 @@
     "checked": "Researchy 2026-10-15 06:02 curl parameters.md+openapi.yaml；参数页 reject 仍在，OpenAPI 仍列未 deprecated；tinkabot 06:13 按房间规则纠正草案为待确认"
   },
   "contractTestHint": "Together 公共生图：节点不得挂 serverless image_loras 假控件；若 payload 仍含 image_loras，上游拒绝须原样展示。Dedicated LoRA 不在本路径验收。seed/steps/guidance_scale/宽高 升会发送仍待有效 Key 实测。",
-  "_auditStatus": "2026-11-02 ~04:42 JST：Researchy——Together 图/视频 seed；视频 fps 15–60。\n2026-10-16 ~23:11 JST：画布正式收口 fix13.1；证据 已清理，PID 3611920。@tinkabot 不升出图徽章。 2026-10-16 ~22:57 JST：fix13.1 CODE_ONLY（UI 五条）；PID 3611920；证据 docs/evidence/fix13.1-2026-10-16.md。对照表仍 CODE_ONLY、不升出图。 2026-10-16 ~22:53 JST：画布正式收口 fix13（清理+主机+口径）；证据 已清理，PID 3576628。建任务 BLOCKED——**对照表保持 CODE_ONLY、不升出图徽章**（画布@tinkabot）。下一批 fix13.1 仅 UI 细节。 2026-10-16 ~22:52 JST：画布 fix13 前端四项复验过（清理+主机+Together），证据 已清理，PID 3576628；已交挑刺。建任务仍 BLOCKED，**不升出图徽章**。 2026-10-16 ~22:35 JST fix13 CODE_ONLY（canvas-dev PID 3576628；证据 docs/evidence/fix13-2026-10-16.md）。未升徽章；等画布验收。无 TAMS 令牌未测建任务。 2026-10-16 22:27：画布再确认——公共路径不挂假 LoRA；Dedicated 另开；误发原样报错；非「拆本地拦/真发 image_loras」产品项。勿升 PASS。;2026-10-16 22:07：画布拍板——公共路径不挂假 LoRA（Researchy 参数页）；Dedicated 另开；非拦截产品。2026-10-16 22:07 JST：记入 Researchy 群内核（参数页不可用 / OpenAPI 仍列 / overview 写 Supports LoRAs 三处冲突）；产品口径仍为有 Key 真发。2026-10-16 22:06 JST tinkabot：画布撤回 Together image_loras 本地拦——有 Key 真发、错了原样显示；等 Researchy 核文档后 canvas-dev 拆代码。2026-10-16 15:58：Together 缓存重试 BLOCKED（刷新后仍 Schema 未读取，未点生成；证据 tg-retry-01-before.png + 99-together-retry.txt）；需有效 Key 才能验 image_loras 拦截；画布确认维持 CODE_ONLY。2026-10-16 15:24：fix4 CODE_ONLY Together 官方不可用拦截已接线，等前端验收。2026-10-16 15:14 fix4：canvas-dev 已实现 officialUnavailableParams 本地拦（CODE_ONLY）。2026-10-16 15:10：通用规则「官方明文不可用可拦」+ Together 单独拦截（非 D）。2026-10-16 15:09：image_loras 定案本地拦（官方明文不可用）。2026-10-15 06:38：补 live",
+  "_auditStatus": "2026-11-03 晚：画布产品核 Together 契约对照 CONTRACT 对齐（不出图）；跟参数页不挂假 LoRA；证据 together-contract-2026-11-03/NOTES.md。徽章=契约对齐，不升出图。\n2026-11-02 ~04:42 JST：Researchy——Together 图/视频 seed；视频 fps 15–60。\n2026-10-16 ~23:11 JST：画布正式收口 fix13.1；证据 已清理，PID 3611920。@tinkabot 不升出图徽章。 2026-10-16 ~22:57 JST：fix13.1 CODE_ONLY（UI 五条）；PID 3611920；证据 docs/evidence/fix13.1-2026-10-16.md。对照表仍 CODE_ONLY、不升出图。 2026-10-16 ~22:53 JST：画布正式收口 fix13（清理+主机+口径）；证据 已清理，PID 3576628。建任务 BLOCKED——**对照表保持 CODE_ONLY、不升出图徽章**（画布@tinkabot）。下一批 fix13.1 仅 UI 细节。 2026-10-16 ~22:52 JST：画布 fix13 前端四项复验过（清理+主机+Together），证据 已清理，PID 3576628；已交挑刺。建任务仍 BLOCKED，**不升出图徽章**。 2026-10-16 ~22:35 JST fix13 CODE_ONLY（canvas-dev PID 3576628；证据 docs/evidence/fix13-2026-10-16.md）。未升徽章；等画布验收。无 TAMS 令牌未测建任务。 2026-10-16 22:27：画布再确认——公共路径不挂假 LoRA；Dedicated 另开；误发原样报错；非「拆本地拦/真发 image_loras」产品项。勿升 PASS。;2026-10-16 22:07：画布拍板——公共路径不挂假 LoRA（Researchy 参数页）；Dedicated 另开；非拦截产品。2026-10-16 22:07 JST：记入 Researchy 群内核（参数页不可用 / OpenAPI 仍列 / overview 写 Supports LoRAs 三处冲突）；产品口径仍为有 Key 真发。2026-10-16 22:06 JST tinkabot：画布撤回 Together image_loras 本地拦——有 Key 真发、错了原样显示；等 Researchy 核文档后 canvas-dev 拆代码。2026-10-16 15:58：Together 缓存重试 BLOCKED（刷新后仍 Schema 未读取，未点生成；证据 tg-retry-01-before.png + 99-together-retry.txt）；需有效 Key 才能验 image_loras 拦截；画布确认维持 CODE_ONLY。2026-10-16 15:24：fix4 CODE_ONLY Together 官方不可用拦截已接线，等前端验收。2026-10-16 15:14 fix4：canvas-dev 已实现 officialUnavailableParams 本地拦（CODE_ONLY）。2026-10-16 15:10：通用规则「官方明文不可用可拦」+ Together 单独拦截（非 D）。2026-10-16 15:09：image_loras 定案本地拦（官方明文不可用）。2026-10-15 06:38：补 live",
   "loraDecision": {
     "date": "2026-10-16 22:07 JST（画布拍板）",
     "decision": "公共生图不挂假 LoRA（跟参数页）；Dedicated 另开；误发错误原样显示；不作「拦截产品」验收",
@@ -259,7 +259,7 @@
       "pid": "3576628"
     }
   },
-  "acceptanceBadge": "未验证",
+  "acceptanceBadge": "契约对齐（未出图）",
   "fix13_1": {
     "status": "CLOSED",
     "pid": "3611920",
@@ -294,6 +294,17 @@
         "url": "https://docs.together.ai/docs/inference/videos/parameters",
         "status": "已核一致"
       }
+    ]
+  },
+  "contractAlign20261103": {
+    "status": "CONTRACT",
+    "notGeneration": true,
+    "ruling": "公共路径跟参数页：image_loras 不可用；OpenAPI 仍列 ≠ 可发；overview Supports LoRAs 冲突已记",
+    "evidence": "temp/e2e/together-contract-2026-11-03/NOTES.md",
+    "sources": [
+      "https://docs.together.ai/docs/inference/images/parameters",
+      "https://docs.together.ai/reference/post-images-generations",
+      "https://docs.together.ai/reference/create-videos"
     ]
   }
 }

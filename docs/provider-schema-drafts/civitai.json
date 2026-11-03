@@ -1,5 +1,5 @@
 {
-  "canvasAcceptance": "未验证（2026-10-17 14:40 北京：测试截图已全删，按雁标准「画布里出图、落保存节点、历史有缩略图」当前 0 家；以前的出图/欠费标记一律作废，官方字段结论保留；在画布重跑出图并有节点图+历史缩略图后再单独改）",
+  "canvasAcceptance": "接线欠费过关、未真出图（2026-11-03 画布）：SD1 AIR+LoRA 同次点跑上游 insufficientBuzz 原样；actualRequest LoRA 82098@87153 @0.7；hist_1793692148134_ca449；证据 temp/e2e/fal-civitai-fe-2026-11-03/civitai-01～03。",
   "$schemaNote": "草案 — 仅声明。2026-11-03：图像/视频出站以实时 OpenAPI 为准；byEngine 快照会过期，不写死尺寸字段名；本地表不当真相。",
   "id": "civitai",
   "displayName": "Civitai Orchestration",
@@ -253,7 +253,7 @@
     "docs/provider-api-audit-v2/civitai.md",
     "docs/provider-api-audit-v2/DIFF.md"
   ],
-  "_auditStatus": "2026-11-03 ~15:00 JST：写入 researchyOutboundContract20261103（Civitai 三 recipe；LoRA 三形：Comfy 数字 map / flux2·Wan 数组 / textToImage additionalNetworks；engine=krea/krea3）。liveUrls 改 recipes/*/openapi.yaml。settled 项已记；Krea steps/cfg 拒法仍待核。不升徽章。\n2026-11-03：写入 snapshotGaps（Krea unverified vs unsupported、additionalNetworks 壳）。不升徽章。\n2026-11-03 画布←Researchy：图像须跟实时/逐模型 OpenAPI；本地 providerSchema 快照会过期不当真相；不写死尺寸字段名（image_size / width+height / aspect_ratio 等以该模型 Schema 为准）；不升徽章。\n2026-11-02 ~04:55 JST：Researchy 02c——Civitai 各引擎 seed 已核；WAN 无通用 seed 勿发。\n2026-10-15 04:58：补 OpenAPI 核实 sdcpp Dev 字段为 steps/cfgScale；flux1-kontext 无 LoRA。字段徽章仍以前端实测为准",
+  "_auditStatus": "2026-11-03：画布认 Civitai SD1 AIR+LoRA 接线欠费过关 hist_1793692148134_ca449（insufficientBuzz）；不算真出图。\n2026-11-03 ~15:00 JST：写入 researchyOutboundContract20261103（Civitai 三 recipe；LoRA 三形：Comfy 数字 map / flux2·Wan 数组 / textToImage additionalNetworks；engine=krea/krea3）。liveUrls 改 recipes/*/openapi.yaml。settled 项已记；Krea steps/cfg 拒法仍待核。不升徽章。\n2026-11-03：写入 snapshotGaps（Krea unverified vs unsupported、additionalNetworks 壳）。不升徽章。\n2026-11-03 画布←Researchy：图像须跟实时/逐模型 OpenAPI；本地 providerSchema 快照会过期不当真相；不写死尺寸字段名（image_size / width+height / aspect_ratio 等以该模型 Schema 为准）；不升徽章。\n2026-11-02 ~04:55 JST：Researchy 02c——Civitai 各引擎 seed 已核；WAN 无通用 seed 勿发。\n2026-10-15 04:58：补 OpenAPI 核实 sdcpp Dev 字段为 steps/cfgScale；flux1-kontext 无 LoRA。字段徽章仍以前端实测为准",
   "flux2DevPaths": {
     "native": "engine flux2 + model dev；numInferenceSteps 4–50 默认28、guidanceScale 0–20 默认2.5、loras[{air,strength}]（官方推荐）",
     "sdcpp": "engine sdcpp + ecosystem flux2Dev；steps 4–50 默认20、cfgScale 1–20 默认1、sampleMethod/schedule/negativePrompt；loras 为 object map；createVariant 用 strength 0–1",
@@ -407,5 +407,6 @@
     "triPath": "Researchy 三路 WebSearch+Brave+agy；本机再核 OpenAPI/llms",
     "conflictsWithPriorDraft": "草案曾写 krea 调用 engine:fal model:krea2——官方 imageGen engine 枚举含 krea/krea3（fal 为另一引擎）；krea2 多见为 model/ecosystem 值。flux2 flex/klein LoRA 形状本机多为 object，不完全等于 Researchy「Flux2Dev/Wan=array」简表——已按变体分列。",
     "badge": "不升"
-  }
+  },
+  "acceptanceBadge": "欠费已记（insufficientBuzz；未真出图）"
 }
