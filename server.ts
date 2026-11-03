@@ -6232,6 +6232,8 @@ function slimHistoryForList(item: any) {
       ...mdRest,
       // Keep actualRequest for seed/prompt chips; omit poll/submit/trace blobs from the list.
       actualRequest: md.actualRequest,
+      // Outbound request of each submission (endpoint + sent body + status) — the request actually sent; response blobs dropped.
+      ...(Array.isArray(submissions) ? { submissions: submissions.map((x: any) => x && typeof x === 'object' ? { endpoint: x.endpoint, parameters: x.parameters, status: x.status } : x) } : {}),
       route: md.route,
       hasExecutionTrace: Array.isArray(executionTrace) && executionTrace.length > 0,
     },

@@ -1332,7 +1332,13 @@ export default function App() {
       let historyLoaded = true;
       let freshHistory: GenerationHistoryItem[] | undefined;
       await loadHistoryFirstPage().then((h) => { freshHistory = h; }).catch(() => { historyLoaded = false; });
-      const runItem = findRunHistoryItem(getExecutions().filter((r) => r.runSeq === thisRunSeq && r.method.toUpperCase() !== 'GET').map((r) => r.response), freshHistory);
+      // Match by the response's history id, else by the exact output URL this run produced (no guessing by time/model).
+      let runItem = findRunHistoryItem(getExecutions().filter((r) => r.runSeq === thisRunSeq && r.method.toUpperCase() !== 'GET').map((r) => r.response), freshHistory)
+        ?? (result.imageUrl ? freshHistory?.find((h) => h.url === result.imageUrl) : undefined);
+      // List rows are slim; read the full record so the toast shows the request actually sent (endpoint + body).
+      if (runItem && !historyActualRequest(runItem)) {
+        try { runItem = await fetchHistoryItem(runItem.id); } catch (e: any) { result.historyWarning = [result.historyWarning, `读取完整历史记录失败：${e?.message || e}`].filter(Boolean).join('；'); }
+      }
 
       // Trigger high visibility toast
       setToast({
