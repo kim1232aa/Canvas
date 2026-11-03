@@ -4682,6 +4682,7 @@ app.post(['/api/huggingface/generate', '/api/engine/huggingface/generate'], asyn
           const baseModel = mainMapping?.adapter === 'lora' ? modelMetadata.cardData?.base_model : model;
           const loraEntries = Array.isArray(req.body.loras) ? req.body.loras : [];
           const loraFiles: any[] = [];
+          const loraEndpoints: any[] = [];
           let mapping = mainMapping;
           for (const lora of loraEntries) {
             const id = String(lora.name || '');
@@ -4698,8 +4699,10 @@ app.post(['/api/huggingface/generate', '/api/engine/huggingface/generate'], asyn
             const bases = Array.isArray(info.cardData?.base_model) ? info.cardData.base_model : [info.cardData?.base_model];
             void bases; void baseModel;
             const scale = lora.strength ?? lora.modelStrength;
-            if (loraFiles.length && mapping?.providerId !== adapter.providerId) return { ok: false, local: true, status: 400, payload: { error: '这些 LoRA 需要不同的推理端点，不能混用' } };
-            mapping = adapter;
+            // 雁 rule: mixed-endpoint LoRAs are not stopped locally. Endpoint = first LoRA's adapter (same as single-LoRA);
+            // every LoRA is sent; each LoRA's own providerId is recorded in loraEndpoints for the trace. Upstream decides.
+            loraEndpoints.push({ lora: id, providerId: adapter.providerId });
+            if (!loraFiles.length) mapping = adapter;
             loraFiles.push({ path: `https://huggingface.co/${id}/resolve/main/${adapter.adapterWeightsPath}`, ...(scale != null ? { scale } : {}) });
           }
           if (mapping?.status !== 'live' || mapping?.task !== 'text-to-image') {
@@ -4730,7 +4733,7 @@ app.post(['/api/huggingface/generate', '/api/engine/huggingface/generate'], asyn
             url,
             { method: 'POST', headers, body: JSON.stringify(sentPayload) },
           );
-          if (!submit.ok) return { ok: false, status: submit.status, body: await submit.text() };
+          if (!submit.ok) return { ok: false, status: submit.status, body: await submit.text(), endpoint: url, loraEndpoints };
           let result = await submit.json();
           if (!result.request_id || !result.response_url) {
             return { ok: false, local: true, status: 502, payload: { error: 'HF → fal-ai 未返回任务 ID / 结果地址', details: result } };
@@ -4766,7 +4769,7 @@ app.post(['/api/huggingface/generate', '/api/engine/huggingface/generate'], asyn
           }
           return {
             ok: true,
-            value: { generatedImages, sentPayload, hfCustom, baseModel, endpoint, url, generated, loraEntries },
+            value: { generatedImages, sentPayload, hfCustom, baseModel, endpoint, url, generated, loraEntries, loraEndpoints },
           };
         },
       });
@@ -4785,7 +4788,7 @@ app.post(['/api/huggingface/generate', '/api/engine/huggingface/generate'], asyn
         });
       }
 
-      const { generatedImages, sentPayload, hfCustom, baseModel, endpoint, url, generated, loraEntries } = falRotated.value;
+      const { generatedImages, sentPayload, hfCustom, baseModel, endpoint, url, generated, loraEntries, loraEndpoints } = falRotated.value;
       return await respondWithGeneratedImages(
         res,
         generatedImages,
@@ -4805,6 +4808,7 @@ app.post(['/api/huggingface/generate', '/api/engine/huggingface/generate'], asyn
             overrides: hfCustom.overrides,
             actualParameters: sentPayload,
             upstreamEndpoint: url,
+            loraEndpoints,
             keyRotation: falRotated.keyRotation,
           },
         },

@@ -27,24 +27,15 @@ describe('no Schema/endpoint fallback (iron rule 3)', () => {
       expect(e.message).toContain('不使用内置 Schema');
     }
   });
-  it('WaveSpeed row without model_run → local 400, no POST, no guessed endpoint, local_blocked history', async () => {
+  it('WaveSpeed row without model_run → sent to official POST /api/v3/{model_id} (docs submit-task), no local stop', async () => {
     const r = await submit('wavespeed', { code: 200, data: [{ model_id: 'vendor/m', type: 'text-to-image' }] }, 'vendor/m');
-    expect(r.status).toBe(400);
-    expect(r.payload.errorSource).toBe('local');
-    expect(r.payload.error).toContain('没有发出去');
-    expect(r.payload.error).toContain('model_run');
-    expect(r.payload.error).toContain('https://api.wavespeed.ai/api/v3/models');
-    expect(JSON.stringify(r.payload)).not.toContain('/api/v3/vendor/m');
-    expect(r.posts).toEqual([]);
-    // server.ts middleware turns local 4xx on generation routes into local_blocked history
-    expect(isGenerationRoute('/api/schema-provider/wavespeed/submit')).toBe(true);
-    const h = buildLocalRejectionHistoryItem('/api/schema-provider/wavespeed/submit', { model: 'vendor/m', prompt: 'p' }, r.status, r.payload);
-    expect(h.status).toBe('local_blocked'); expect(h.upstreamStatus ?? null).toBeNull();
-    expect(JSON.stringify(h)).toContain('没有发出去');
+    expect(r.posts.length).toBe(1);
+    expect(r.posts[0].url).toBe('https://api.wavespeed.ai/api/v3/vendor/m');
+    expect(String(r.payload?.error || '')).not.toContain('没有发出去');
   });
-  it('WaveSpeed model_run without request_schema → local 400, no POST', async () => {
+  it('WaveSpeed model_run without request_schema → still sent, no local stop', async () => {
     const r = await submit('wavespeed', { code: 200, data: [{ model_id: 'vendor/m', api_schema: { api_schemas: [{ type: 'model_run', method: 'POST', server: 'https://api.wavespeed.ai', api_path: '/api/v3/vendor/m' }] } }] }, 'vendor/m');
-    expect(r.status).toBe(400); expect(r.payload.error).toContain('request_schema'); expect(r.posts).toEqual([]);
+    expect(r.posts.length).toBe(1); expect(r.posts[0].url).toBe('https://api.wavespeed.ai/api/v3/vendor/m');
   });
   it('novita: no OpenAPI but HTML declaration in config → POST /v3/async/txt2img with request{model_name,loras} (2026-10-16)', async () => {
     const r = await submit('novita', { models: [{ sd_name_in_api: 'sd_xl_base_1.0.safetensors', type: { name: 'checkpoint' } }] }, 'sd_xl_base_1.0.safetensors', {

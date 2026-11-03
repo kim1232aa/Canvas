@@ -1129,12 +1129,15 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
     const {rows,sourceUrl}=await list(req,provider,credential);
     const entry=rows.find((x:any)=>(provider==='wavespeed'?x.model_id:x.id)===model);
     if(provider==='wavespeed') {
-      if(!entry)throw Object.assign(new Error(`WaveSpeed ${sourceUrl} 中没有模型 ${model}`),{status:404,errorSource:'local',endpoint:sourceUrl});
-      const definition=entry.api_schema?.api_schemas?.find((s:any)=>s.type==='model_run' && s.method==='POST');
-      if(!definition?.api_path || !definition?.server)throw schemaUnavailableBlock('WaveSpeed',model,'目录项没有 api_schema.api_schemas[type=model_run, method=POST]',sourceUrl);
+      const definition=entry?.api_schema?.api_schemas?.find((s:any)=>s.type==='model_run' && s.method==='POST');
+      // 雁 rule: no local stop. Not in catalog / no model_run → official submit pattern POST {root}/api/v3/{model_id}
+      // (https://wavespeed.ai/docs/submit-task); upstream 404/400 shown verbatim.
+      if(!entry || !definition?.api_path || !definition?.server || !definition.request_schema) {
+        const endpoint=schemaProviders.wavespeed.root+'/api/v3/'+String(model).split('/').map(encodeURIComponent).join('/');
+        return {provider,model,sourceUrl,endpoint,inputSchema:undefined,modelMetadata:entry,schemaStatus:!entry?'not-in-catalog':'catalog-no-model_run',endpointSource:'https://wavespeed.ai/docs/submit-task'};
+      }
       const endpoint=new URL(definition.api_path,definition.server).href;
       if(new URL(endpoint).origin!==schemaProviders.wavespeed.root)throw Object.assign(new Error('目录端点的主机不属于所选供应商，未发送密钥'),{status:400,errorSource:'local',endpoint});
-      if(!definition.request_schema)throw schemaUnavailableBlock('WaveSpeed',model,'model_run 没有 request_schema',sourceUrl);
       return {provider,model,sourceUrl,endpoint,inputSchema:definition.request_schema,modelMetadata:entry,schemaStatus:'catalog-model_run'};
     }
     throw new Error('Missing provider schema');
@@ -1206,7 +1209,7 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
       const custom={...req.body.custom_parameters};const canvas=custom._canvas || {};const only=canvas.parametersOnly===true;const schemaFieldsOnly=canvas.schemaFieldsOnly!==false;delete custom._canvas;
       payload={prompt:req.body.prompt};mapping=[];
       workflowOptions=provider==='sogni'?{...canvas.workflowOptions}:{};
-      if(provider==='sogni' && ((custom.model!==undefined && custom.model!==model) || Object.hasOwn(workflowOptions,'input')))throw Object.assign(new Error('请通过模型选择器指定 Sogni model；_canvas.workflowOptions 只接收工作流外层参数，不能覆盖 input'),{status:400,errorSource:'local'});
+      // 雁 rule: user-supplied custom model / workflowOptions.input are sent as filled (no local stop); upstream decides.
       const props=definition.inputSchema?.properties || {};
       const aliases:Record<string,string[]>=provider==='sogni'?{negative_prompt:['negativePrompt'],cfg:['guidance'],denoise:['starting_image_strength']}:GENERIC_PAYLOAD_ALIASES;
       // Schema-driven: image_size declared as {width,height} object (and no top-level width/height) → canvas width/height go there.
@@ -1222,10 +1225,9 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
         const plan=planCanvasField(name,{declared:definition.inputSchema?new Set(Object.keys(props)):null,hasReferenceImage:filled(req.body.image_url),schemaFieldsOnly:!!schemaFieldsOnly,aliases,fallbackTarget:provider==='sogni'?aliases[name]?.[0]:undefined});
         if(packSizeIntoSizeString && (name==='width' || name==='height') && !filled(req.body.size))continue; // mapped below as width+height → size string
         if(provider==='sogni' && name==='image_url') {
-          const issue=upstreamReferenceUrlIssue(String(value));
-          if(issue)throw Object.assign(new Error(`Sogni 当前集成没有已核实的私有图片上传流程：${issue}。请提供上游可访问的公网图片 URL；未发送该参考图。`),{status:400,errorSource:'local'});
+          const issue=upstreamReferenceUrlIssue(String(value)); // recorded only; sent as filled (雁 rule)
           if(!Object.hasOwn(workflowOptions,'media_references'))workflowOptions.media_references=[{kind:'image',url:value}];payload.sourceImageIndex=-1;
-          mapping.push({from:name,to:'media_references + sourceImageIndex',value,scope:'workflow'});continue;
+          mapping.push({from:name,to:'media_references + sourceImageIndex',value,scope:'workflow',...(issue?{note:issue}:{})});continue;
         }
         const target=plan.target as string;
         if(!plan.send) {payload[target || name]=value;mapping.push({from:name,to:target || name,value,schemaDeclared:false});continue;}
@@ -1273,7 +1275,7 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
         mapping.push({from:'custom_parameters.'+key,to:key,value,overrides:Object.hasOwn(payload,key)?payload[key]:undefined,schemaDeclared:declared});
       }
       Object.assign(payload,custom);
-      if(provider==='sogni')payload.model=model;
+      if(provider==='sogni' && !Object.hasOwn(custom,'model'))payload.model=model;
       if(provider==='together')payload.model=model;
       if(provider==='aimlapi')payload.model=model;
       if(provider==='deepinfra')payload.model=model;
@@ -1345,7 +1347,7 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
         if(payload.cfg_scale!==undefined && payload.cfg_scale!==null && payload.cfg_scale!=='')payload.cfg_scale=Number(payload.cfg_scale);
       }
       if(only)mapping.push({from:'canvas parameters and LoRA nodes',to:null,reason:'用户选择了仅提交 JSON 与提示词'});
-      const requestBody=provider==='sogni'?{...workflowOptions,input:{title:'Canvas · '+model,steps:[{id:'image1',toolName:'generate_image',arguments:payload}]}}:provider==='novita'?(()=>{const extra=(payload.extra && typeof payload.extra==='object')?payload.extra:{response_image_type:'jpeg'};const {extra:_e,...request}=payload;return {extra,request:{...request,model_name:model}};})():payload;
+      const requestBody=provider==='sogni'?{...workflowOptions,input:Object.hasOwn(workflowOptions,'input')?workflowOptions.input:{title:'Canvas · '+model,steps:[{id:'image1',toolName:'generate_image',arguments:payload}]}}:provider==='novita'?(()=>{const extra=(payload.extra && typeof payload.extra==='object')?payload.extra:{response_image_type:'jpeg'};const {extra:_e,...request}=payload;return {extra,request:{...request,model_name:model}};})():payload;
       actualRequest={endpoint:definition.endpoint,parameters:requestBody,mapping:mapping.map(m=>({...m,finalValue:Object.hasOwn(payload,m.to)?payload[m.to]:m.scope==='workflow'?workflowOptions.media_references:undefined})),parametersOnly:only,schemaFieldsOnly,...(definition.inputSchema?.properties?{schemaFields:Object.keys(definition.inputSchema.properties)}:{})};
       const {data,status}=await read(req,provider,definition.endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(requestBody)},credential);
       if(provider==='together' && (definition as any).mediaKind!=='video') {

@@ -235,28 +235,49 @@ describe('schema provider submit wire review (item 8)', () => {
     });
   });
 
-  it('rejects private short-ref in Sogni with clear 400 without pretending it was uploaded to public cloud', async () => {
+  it('sends a WaveSpeed model that is not in the catalog to POST /api/v3/{model_id} with all filled params; upstream 404 verbatim', async () => {
     const store = createMediaStore(dir);
-    const mediaUrl = store.saveDataUrl(DATA_URL);
+    let upstreamUrl = ''; let upstreamBody: any;
+    await withFixture(store, async (url, init) => {
+      if (url.endsWith('/api/v3/models')) return Response.json({ data: [] });
+      if (init?.method === 'POST' && url.startsWith('https://api.wavespeed.ai/api/v3/')) {
+        upstreamUrl = url; upstreamBody = JSON.parse(init.body as string);
+        return new Response('{"code":404,"message":"model not found"}', { status: 404, headers: { 'Content-Type': 'application/json' } });
+      }
+      throw new Error(`Unexpected URL: ${url}`);
+    }, async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/api/schema-provider/wavespeed/submit`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: 'vendor/not-listed/v1', prompt: 'p', seed: 3, steps: 9, custom_parameters: { foo: 'bar' } }),
+      });
+      const body = await response.json() as any;
+      expect(upstreamUrl).toBe('https://api.wavespeed.ai/api/v3/vendor/not-listed/v1');
+      expect(upstreamBody).toMatchObject({ prompt: 'p', seed: 3, foo: 'bar' });
+      expect(response.status).toBe(404);
+      expect(JSON.stringify(body)).toContain('model not found');
+    });
+  });
 
-    await withFixture(store, async () => {
-      throw new Error('Upstream must not be called when Sogni input is invalid');
+  it('sends a private/local Sogni reference URL as filled and shows the upstream 400 verbatim (no local stop)', async () => {
+    const store = createMediaStore(dir);
+    const mediaUrl = 'http://192.168.1.20/ref.png';
+    let upstreamBody: any;
+    await withFixture(store, async (url, init) => {
+      if (init?.method === 'POST' && url.endsWith('/v1/creative-agent/workflows')) {
+        upstreamBody = JSON.parse(init.body as string);
+        return new Response('{"error":"media url not reachable"}', { status: 400, headers: { 'Content-Type': 'application/json' } });
+      }
+      throw new Error(`Unexpected URL: ${url}`);
     }, async (baseUrl) => {
       const response = await fetch(`${baseUrl}/api/schema-provider/sogni/submit`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'krea-2-turbo',
-          prompt: 'test prompt',
-          image_url: mediaUrl,
-        }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: 'krea-2-turbo', prompt: 'test prompt', image_url: mediaUrl, seed: 7, custom_parameters: { _canvas: { workflowOptions: { input: { title: 'mine', steps: [] } } }, model: 'other-model' } }),
       });
-
       const body = await response.json() as any;
+      expect(upstreamBody.media_references).toEqual([{ kind: 'image', url: mediaUrl }]);
+      expect(upstreamBody.input).toEqual({ title: 'mine', steps: [] });
       expect(response.status).toBe(400);
-      expect(body.errorSource).toBe('local');
-      expect(body.error).toContain('Sogni 当前集成没有已核实的私有图片上传流程');
-      expect(body.error).toContain('公网图片 URL');
+      expect(JSON.stringify(body)).toContain('media url not reachable');
     });
   });
 
