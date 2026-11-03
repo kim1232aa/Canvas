@@ -77,7 +77,7 @@ export function buildMageImageRequest(
   };
 
   if (body.seed !== undefined && body.seed !== null) {
-    if (typeof body.seed !== 'number' || !Number.isSafeInteger(body.seed)) throw new Error('Mage seed 必须是安全整数或 null，未发送生成请求');
+    if (typeof body.seed !== 'number' && typeof body.seed !== 'string') throw new Error('Mage seed 格式无法发送');
     payload.seed = body.seed;
   } else if (body.seed === null) {
     payload.seed = null;

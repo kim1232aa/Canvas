@@ -996,10 +996,11 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
     if(officialSpecCache.has(url))return officialSpecCache.get(url);
     let r:Response,raw:string;
     try{r=await dep.fetch({provider,route:req.path,model,key:''} as any,url,{signal:AbortSignal.timeout(60000)});raw=await r.text();}
-    catch(e:any){throw schemaUnavailableBlock(providerName,model,`GET ${url} → ${e?.message || e}`,url);}
-    if(!r.ok)throw schemaUnavailableBlock(providerName,model,`GET ${url} → HTTP ${r.status} ${raw}`,url,{upstreamStatus:r.status,upstreamResponseBody:raw});
+    // Spec unreadable: generation still goes out as built (no schema mapping); the raw failure is logged verbatim.
+    catch(e:any){console.warn(`[schema] ${providerName} ${model}: GET ${url} → ${e?.message || e}`);return null;}
+    if(!r.ok){console.warn(`[schema] ${providerName} ${model}: GET ${url} → HTTP ${r.status} ${raw}`);return null;}
     let doc:any;
-    try{doc=YAML.parse(raw);}catch(e:any){throw schemaUnavailableBlock(providerName,model,`GET ${url} 返回内容无法解析为 OpenAPI：${e?.message}`,url);}
+    try{doc=YAML.parse(raw);}catch(e:any){console.warn(`[schema] ${providerName} ${model}: GET ${url} parse: ${e?.message}`);return null;}
     officialSpecCache.set(url,doc);
     return doc;
   };
@@ -1052,38 +1053,33 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
     }
     if(provider==='krea') {
       const {rows,sourceUrl}=await list(req,provider,credential);
-      const entry=rows.find((x:any)=>x.id===model);
-      if(!entry)throw Object.assign(new Error(`Krea 官方 OpenAPI 中没有生成端点 /generate/${model}`),{status:404,errorSource:'local',endpoint:sourceUrl});
-      return {provider,model,sourceUrl,endpoint:schemaProviders.krea.root+entry.endpoint,inputSchema:entry.parameters || null,modelMetadata:{...entry,parameters:undefined},schemaStatus:'openapi'};
+      const entry:any=rows.find((x:any)=>x.id===model) ?? {id:model,notInCatalog:true}; // not in catalog: send the user's model id; upstream decides
+      return {provider,model,sourceUrl,endpoint:schemaProviders.krea.root+(entry.endpoint ?? `/generate/${model}`),inputSchema:entry.parameters || null,modelMetadata:{...entry,parameters:undefined},schemaStatus:'openapi'};
     }
     if(provider==='together') {
       const {rows,sourceUrl}=await list(req,provider,credential);
-      const entry=rows.find((x:any)=>x.id===model);
-      if(!entry)throw Object.assign(new Error(`Together /models 中没有模型 ${model}`),{status:404,errorSource:'local',endpoint:sourceUrl});
+      const entry:any=rows.find((x:any)=>x.id===model) ?? {id:model,notInCatalog:true}; // not in catalog: send the user's model id; upstream decides
       const isVideo=entry.type==='video' || entry.category==='text-to-video';
       const endpoint=isVideo?(schemaProviders.together as any).videoRoot+'/videos':schemaProviders.together.root+'/images/generations';
       const specUrl=officialOpenApiSources.together;const opPath=isVideo?'/videos':'/images/generations';
       const inputSchema=openApiPathRequestSchema(await readOfficialSpec(req,provider,'Together',model,specUrl),opPath);
-      if(!inputSchema)throw schemaUnavailableBlock('Together',model,`GET ${specUrl} 中没有 POST ${opPath} requestBody schema`,specUrl);
       return {provider,model,sourceUrl,endpoint,inputSchema,modelMetadata:entry,schemaStatus:'official-openapi-runtime',schemaSource:specUrl,schemaUnprobed:true,mediaKind:isVideo?'video':'image'};
     }
     if(provider==='aimlapi') {
       const {rows,sourceUrl}=await list(req,provider,credential);
-      const entry=rows.find((x:any)=>x.id===model);
-      if(!entry)throw Object.assign(new Error(`AIMLAPI /v1/models 中没有模型 ${model}`),{status:404,errorSource:'local',endpoint:sourceUrl});
+      const entry:any=rows.find((x:any)=>x.id===model) ?? {id:model,notInCatalog:true}; // not in catalog: send the user's model id; upstream decides
       const isVideo=entry.type==='video' || entry.category==='text-to-video';
       const endpoint=isVideo?(schemaProviders.aimlapi as any).videoRoot+'/video/generations':schemaProviders.aimlapi.root+'/images/generations';
       // Official per-model OpenAPI only: catalog info.docsJson (api.aimlapi.com/docs-json?model=…).
       // Iron rule 3: no static snapshot fallback — missing/failed docs-json → local 400 (未出站，本地拦截) with URL + upstream status/body verbatim.
       const docsJson=entry.metadata?.info?.docsJson;
-      const block=(reason:string,extra:Record<string,unknown>={})=>Object.assign(new Error(`未出站，本地拦截：AIMLAPI 模型 ${model} 官方 Schema 不可用（${reason}）；未发送生成请求，不使用内置 Schema 兜底。`),{status:400,errorSource:'local',schemaUrl:docsJson ?? null,...extra});
-      if(typeof docsJson!=='string' || !docsJson)throw block('目录项没有 info.docsJson');
-      if(new URL(docsJson).origin!==new URL(schemaProviders.aimlapi.root).origin)throw block(`docsJson 主机不属于 AIMLAPI：${docsJson}`);
-      let doc:any;
-      try{doc=(await read(req,provider,docsJson,undefined,credential)).data;}
-      catch(e:any){throw block(`GET ${docsJson} → ${e.status!=null?`HTTP ${e.status} `:''}${e.rawResponse ?? e.message}`,{upstreamStatus:e.status ?? null,upstreamResponseBody:e.rawResponse ?? null,rawResponse:e.rawResponse});}
-      const inputSchema=openApiRequestSchema(doc);
-      if(!inputSchema)throw block(`GET ${docsJson} 返回的 OpenAPI 中没有 POST requestBody schema`);
+      // No docs / unreadable docs: still send as built; the read failure is kept verbatim in schemaReadError.
+      let inputSchema:any=null;let schemaReadError:string|undefined;
+      if(typeof docsJson==='string' && docsJson && new URL(docsJson).origin===new URL(schemaProviders.aimlapi.root).origin) {
+        try{inputSchema=openApiRequestSchema((await read(req,provider,docsJson,undefined,credential)).data);}
+        catch(e:any){schemaReadError=`GET ${docsJson} → ${e.status!=null?`HTTP ${e.status} `:''}${e.rawResponse ?? e.message}`;}
+      }
+      if(schemaReadError)return {provider,model,sourceUrl,endpoint,inputSchema,schemaReadError,modelMetadata:{...entry,parameters:undefined},schemaStatus:'official-docs-json',schemaSource:docsJson,mediaKind:isVideo?'video':'image'};
       return {provider,model,sourceUrl,endpoint,inputSchema,modelMetadata:{...entry,parameters:undefined},schemaStatus:'official-docs-json',schemaSource:docsJson,mediaKind:isVideo?'video':'image'};
     }
     if(provider==='novita') {
@@ -1096,39 +1092,34 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
         return {provider,model,sourceUrl:schemaSource || endpoint,endpoint,inputSchema:img2Decl.inputSchema,modelMetadata:{id:model,name:model,category:'image-to-video',type:'video',endpoint:'/v3/async/img2video'},schemaStatus:'official-html-declaration',schemaSource,declaration:{file:img2Decl.file,sources:img2Decl.sources,fetchedAt:img2Decl.fetchedAt},schemaUnprobed:true,schemaConfirmedFields:Object.entries(img2Decl.inputSchema.properties||{}).filter(([,v]:any)=>v?.['x-liveConfirmed']===true).map(([k])=>k),mediaKind:'video'};
       }
       const {rows,sourceUrl}=await list(req,provider,credential);
-      const entry=rows.find((x:any)=>x.id===model);
-      if(!entry)throw Object.assign(new Error(`Novita /v3/model 中没有 checkpoint ${model}`),{status:404,errorSource:'local',endpoint:sourceUrl});
+      const entry:any=rows.find((x:any)=>x.id===model) ?? {id:model,notInCatalog:true}; // not in catalog: send the user's model id; upstream decides
       const isVideo=entry.type==='video' || /video/i.test(entry.category||'');
       const endpoint=schemaProviders.novita.root+(isVideo?'/v3/async/txt2video':'/v3/async/txt2img');
       // No machine-readable official schema: use the configurable HTML-transcribed declaration (src/config/providerDeclarations), if present.
       const decl=entry.parameters?null:loadProviderDeclaration(provider,isVideo?'/v3/async/txt2video':'/v3/async/txt2img');
       if(!entry.parameters && decl)return {provider,model,sourceUrl,endpoint,inputSchema:decl.inputSchema,modelMetadata:entry,schemaStatus:'official-html-declaration',schemaSource:decl.sources.join(' ; '),declaration:{file:decl.file,sources:decl.sources,fetchedAt:decl.fetchedAt},schemaUnprobed:true,schemaConfirmedFields:Object.entries(decl.inputSchema.properties||{}).filter(([,v]:any)=>v?.['x-liveConfirmed']===true).map(([k])=>k),mediaKind:isVideo?'video':'image'};
-      if(!entry.parameters)throw schemaUnavailableBlock('Novita',model,'目录项没有 parameters；Novita 官方未提供可机读的 txt2img 参数 schema（无 OpenAPI：novita.ai/docs/openapi.json 与 docs.novita.ai/openapi.json 均 404；官方索引 https://docs.novita.ai/llms.txt 不含 txt2img 参考页；https://docs.novita.ai/llms-full.txt 仅有 /v3/async/txt2img 的 curl 示例，无参数定义；List Models 仅覆盖 LLM：https://novita.ai/docs/api-reference/model-apis-llm-list-models.md），且 src/config/providerDeclarations 中没有该端点的声明，因此保持拦截',sourceUrl);
+      // No machine-readable schema: send as built (inputSchema null).
       // No fetchable official OpenAPI for Novita (docs 404, 画布 2026-10-15) → catalog rows carry no parameters → always blocked above.
       const inputSchema=entry.parameters;
       return {provider,model,sourceUrl,endpoint,inputSchema,modelMetadata:{...entry,parameters:undefined},schemaStatus:'upstream-catalog',mediaKind:isVideo?'video':'image'};
     }
     if(provider==='venice') {
       const {rows,sourceUrl}=await list(req,provider,credential);
-      const entry=rows.find((x:any)=>x.id===model);
-      if(!entry)throw Object.assign(new Error(`Venice /models 中没有模型 ${model}`),{status:404,errorSource:'local',endpoint:sourceUrl});
+      const entry:any=rows.find((x:any)=>x.id===model) ?? {id:model,notInCatalog:true}; // not in catalog: send the user's model id; upstream decides
       const isVideo=entry.type==='video' || /video/i.test(entry.category||'');
       const endpoint=schemaProviders.venice.root+(isVideo?'/video/queue':'/image/generate');
       const specUrl=officialOpenApiSources.venice;const opPath=isVideo?'/video/queue':'/image/generate';
       const base=openApiPathRequestSchema(await readOfficialSpec(req,provider,'Venice',model,specUrl),opPath);
-      if(!base)throw schemaUnavailableBlock('Venice',model,`GET ${specUrl} 中没有 POST ${opPath} requestBody schema`,specUrl);
       const inputSchema=applyModelSpecConstraints(base,entry.constraints);
       return {provider,model,sourceUrl,endpoint,inputSchema,modelMetadata:entry,schemaStatus:'official-openapi-runtime',schemaSource:specUrl,constraintsSource:sourceUrl,schemaUnprobed:true,mediaKind:isVideo?'video':'image'};
     }
     if(provider==='deepinfra') {
       const {rows,sourceUrl}=await list(req,provider,credential);
-      const entry=rows.find((x:any)=>x.id===model);
-      if(!entry)throw Object.assign(new Error(`DeepInfra /models/list 中没有 text-to-image 模型 ${model}`),{status:404,errorSource:'local',endpoint:sourceUrl});
+      const entry:any=rows.find((x:any)=>x.id===model) ?? {id:model,notInCatalog:true}; // not in catalog: send the user's model id; upstream decides
       // Docs: POST https://api.deepinfra.com/v1/openai/images/generations (Bearer). OpenAPI twin path /v1/images/generations supplies the request schema (required model+prompt; size/n/response_format).
       const endpoint=schemaProviders.deepinfra.root+'/v1/openai/images/generations';
       const specUrl=officialOpenApiSources.deepinfra;
       const inputSchema=openApiPathRequestSchema(await readOfficialSpec(req,provider,'DeepInfra',model,specUrl),'/v1/images/generations');
-      if(!inputSchema)throw schemaUnavailableBlock('DeepInfra',model,`GET ${specUrl} 中没有 POST /v1/images/generations requestBody schema`,specUrl);
       return {provider,model,sourceUrl,endpoint,inputSchema,modelMetadata:entry,schemaStatus:'official-openapi-runtime',schemaSource:specUrl,schemaUnprobed:true,mediaKind:'image'};
     }
     if(provider==='sogni') {

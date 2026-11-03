@@ -57,7 +57,6 @@ export function buildFalVideoRequest(
 
   const hasDuration = 'duration' in props;
   const hasNumFrames = 'num_frames' in props;
-  if (provided(body.duration) && !hasDuration && hasNumFrames) fail('当前端点 OpenAPI 不支持 duration；请提供 num_frames');
 
   const cfgWire = (['guidance_scale', 'guide_scale', 'cfg_scale', 'cfg'] as const).find((w) => w in props) ?? 'guidance_scale';
   const imageWire = falVideoImageFieldFromLive(props);
@@ -68,7 +67,8 @@ export function buildFalVideoRequest(
     if (pair) {
       const wire = pair[1].find((w) => w in props);
       if (!wire) {
-        if (provided(value)) fail(`该服务商不支持: ${field}（Fal.ai Video ${endpoint} 官方 OpenAPI 未声明）`);
+        // Not declared in the live OpenAPI: sent unchanged under the canvas name; upstream decides.
+        if (provided(value)) mapped[field] = value;
         return;
       }
       if (Object.hasOwn(mapped, wire) && JSON.stringify(mapped[wire]) !== JSON.stringify(value)) fail(`${field} 与 ${wire} 不一致`);
@@ -81,7 +81,7 @@ export function buildFalVideoRequest(
       mapped[field] = field === 'seed' && provided(value) ? Number(value) : value;
       return;
     }
-    if (provided(value)) fail(`该服务商不支持: ${field}（Fal.ai Video ${endpoint} 官方 OpenAPI 未声明）`);
+    if (provided(value)) mapped[field] = value; // undeclared: sent unchanged
   };
 
   const mapInputs = (source: Record<string, unknown>) => {
@@ -103,13 +103,12 @@ export function buildFalVideoRequest(
 
   if (provided(body.resolution) && 'resolution' in props) {
     const resSchema = props.resolution as { enum?: unknown[] } | undefined;
-    if (Array.isArray(resSchema?.enum) && !resSchema.enum.includes(body.resolution)) fail(`${endpoint} resolution 取值不支持`);
+    void resSchema;
   }
   if (provided(body.image_url) && provided(body.start_image_url) && body.image_url !== body.start_image_url) fail('image_url 与 start_image_url 不一致');
   const siteReference = provided(body.start_image_url) ? body.start_image_url : body.image_url;
   if (provided(siteReference)) {
-    if (!imageWire) fail('这个端点不支持参考图');
-    payload[imageWire] = siteReference;
+    payload[imageWire ?? 'image_url'] = siteReference;
   }
 
   const beforeCustom = { ...payload };
@@ -124,8 +123,7 @@ export function buildFalVideoRequest(
   if (hasCustomReference) {
     delete mappedCustom.image_url;
     delete mappedCustom.start_image_url;
-    if (!imageWire) fail('这个端点不支持参考图');
-    mappedCustom[imageWire] = customReference;
+    mappedCustom[imageWire ?? 'image_url'] = customReference;
   }
 
   const effectiveCfg = Object.hasOwn(custom, 'cfg') ? custom.cfg : body.cfg;
@@ -136,7 +134,6 @@ export function buildFalVideoRequest(
   if (Object.hasOwn(custom, 'cfg') || Object.hasOwn(custom, 'guidance_scale')) {
     delete mappedCustom.cfg;
     delete mappedCustom.guidance_scale;
-    if (!(cfgWire in props)) fail(`该服务商不支持: cfg（Fal.ai Video ${endpoint} 官方 OpenAPI 未声明）`);
     mappedCustom[cfgWire] = Object.hasOwn(custom, 'cfg') ? custom.cfg : custom.guidance_scale;
   }
 
@@ -146,11 +143,8 @@ export function buildFalVideoRequest(
       .map(([key, value]) => [key, { before: payload[key], after: value }]),
   );
   const actual = { ...payload, ...mappedCustom };
-  if (provided(actual.duration) && !hasDuration && hasNumFrames) fail('当前端点 OpenAPI 不支持 duration；请提供 num_frames');
 
   const reference = imageWire ? actual[imageWire] : undefined;
-  if (!imageWire && (provided(siteReference) || provided(customReference) || provided(actual.end_image_url))) fail('这个端点不支持参考图');
-  if (endpoint.includes('text-to-video') && (provided(siteReference) || provided(customReference) || provided(actual.end_image_url))) fail('这个端点不支持参考图');
   if (endpoint === 'fal-ai/wan/v2.7/image-to-video') {
     if (!provided(reference) && !provided(actual.video_url)) fail('image_url 或 video_url 为必填项');
   } else if (imageWire && (endpoint.endsWith('/image-to-video') || endpoint === 'fal-ai/wan-i2v') && !provided(reference)) {

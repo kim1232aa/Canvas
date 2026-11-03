@@ -136,9 +136,11 @@ export function buildOpenWorksRequest(model: string, inputSchema: ReturnType<typ
   const custom = { ...(body?.custom_parameters && typeof body.custom_parameters === 'object' ? body.custom_parameters : {}) };
   delete custom._canvas;
   const errors: string[] = [];
+  // Fields the catalog Schema does not list: sent as named extras under their own name (upstream decides).
+  const extras: Array<[string, string, unknown]> = [];
 
   for (const [k, v] of Object.entries(custom)) {
-    if (!Object.hasOwn(props, k)) { errors.push(`JSON 字段「${k}」不在该模型 Schema 中`); continue; }
+    if (!Object.hasOwn(props, k)) { extras.push([`custom_parameters.${k}`, k, v]); continue; }
     values[k] = v; mapping.push({ from: `custom_parameters.${k}`, to: k, value: v, sent: true });
   }
   const canvasFields = ['prompt', 'negative_prompt', 'width', 'height', 'image_url', 'denoise', 'sampler_name', 'scheduler', 'duration', 'ratio', 'size', 'count'];
@@ -148,20 +150,13 @@ export function buildOpenWorksRequest(model: string, inputSchema: ReturnType<typ
     const target = [field, ...(CANVAS_TO_SCHEMA_ALIASES[field] || [])].find((n) => Object.hasOwn(props, n));
     if (!target) {
       // negative_prompt may still go as a named live extra below when Schema omits it
-      if (field !== 'negative_prompt') mapping.push({ from: field, to: null, value: v, sent: false, reason: '该模型 Schema 未声明对应字段，不会发送' });
+      if (field !== 'negative_prompt') extras.push([field, field, v]);
       continue;
     }
     if (Object.hasOwn(values, target)) { mapping.push({ from: field, to: target, value: v, sent: false, reason: 'JSON 已显式填写同名字段' }); continue; }
     values[target] = v; mapping.push({ from: field, to: target, value: v, sent: true });
   }
-  if (errors.length) return { ok: false, error: `OpenWorks 模型 ${model}：${errors.join('；')}。未出站，本地拦截。`, mapping };
-
   const ordered = Object.entries(props).sort((a: any, b: any) => a[1]['x-openworks-position'] - b[1]['x-openworks-position']);
-  const missing = ordered.filter(([k]) => !isFilled(values[k])).map(([k]) => k);
-  if (missing.length) return { ok: false, error: `OpenWorks 模型 ${model} 的 Schema 必填项没有取值：${missing.map((k) => `「${k}」`).join('、')}（不会用空串/null 占位）。请在 API 参数 JSON 中按 Schema 字段名填写。未出站，本地拦截。`, mapping };
-  for (const [k, spec] of ordered) { const e = typeError(k, spec, values[k]); if (e) errors.push(e); }
-  if (errors.length) return { ok: false, error: `OpenWorks 模型 ${model}：${errors.join('；')}。未出站，本地拦截。`, mapping };
-
   const inputs: Array<{ type: string; name?: string; value: unknown }> = ordered.map(([k, spec]: any) => ({ type: spec['x-openworks-type'], value: values[k] }));
   const flat: Record<string, unknown> = {};
 
@@ -170,6 +165,8 @@ export function buildOpenWorksRequest(model: string, inputSchema: ReturnType<typ
     inputs.push({ type, name, value });
     mapping.push({ from, to: name, value, sent: true, reason: 'live-tested named extra (雁 2026-10-17)' });
   };
+  const extraType = (v: unknown) => typeof v === 'number' ? (Number.isInteger(v) ? 'INT' : 'FLOAT') : typeof v === 'boolean' ? 'BOOLEAN' : 'STRING';
+  for (const [from, name, v] of extras) pushNamed(from, name, extraType(v), v);
 
   const seed = body?.seed;
   if (isFilled(seed)) {
@@ -292,9 +289,10 @@ export function registerOpenWorksRoutes(app: express.Express, dep: Deps) {
     if (!model) throw Object.assign(new Error('请选择模型'), { status: 400, errorSource: 'local' });
     const entry = (await catalog(req, key)).find((e: any) => e?.name === model);
     const kind = entry && openWorksMediaKind(entry);
-    if (!entry || !kind) throw Object.assign(new Error(`OpenWorks 目录中没有图像/视频模型「${model}」；未出站，本地拦截。`), { status: 400, errorSource: 'local' });
+    // Not in catalog: still send the user's model name; upstream decides.
+    void kind;
     const base = openWorksBaseUrl(key);
-    return { provider: OPENWORKS_PROVIDER, model, sourceUrl: OPENWORKS_DOC_URL, catalogUrl: `${base}/tool/list`, endpoint: `${base}/task`, inputSchema: openWorksInputSchema(entry), schemaStatus: 'upstream-catalog-inputs', mediaKind: kind, modelMetadata: { description: entry.description, estimatedCost: entry.estimatedCost, outputs: entry.outputs } };
+    return { provider: OPENWORKS_PROVIDER, model, sourceUrl: OPENWORKS_DOC_URL, catalogUrl: `${base}/tool/list`, endpoint: `${base}/task`, inputSchema: openWorksInputSchema(entry), schemaStatus: 'upstream-catalog-inputs', mediaKind: kind, modelMetadata: { description: entry?.description, estimatedCost: entry?.estimatedCost, outputs: entry?.outputs } };
   };
   const fail = (res: express.Response, e: any) => res.status(e?.status || 500).json({ error: e?.message || String(e), errorSource: e?.errorSource || 'local', rawResponse: e?.rawResponse, upstreamStatus: e?.upstreamStatus });
 

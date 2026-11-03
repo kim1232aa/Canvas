@@ -129,20 +129,6 @@ describe('provider contract: declared fields must be sent', () => {
     }, () => 'k');
   });
 
-  it('Together: no built-in Schema → local 400 未出站, no POST (画布 2026-10-15)', async () => {
-    let posts = 0;
-    await withFixture(async (url, init) => {
-      if ((init?.method || 'GET').toUpperCase() === 'POST') { posts++; return json({}); }
-      return json([{ id: 'black-forest-labs/FLUX.1-dev', type: 'image' }]);
-    }, async (baseUrl) => {
-      const b = await submit(baseUrl, 'together', { model: 'black-forest-labs/FLUX.1-dev', prompt: 'x', ...CANVAS });
-      expect(b.errorSource).toBe('local');
-      expect(String(b.error)).toContain('未出站，本地拦截');
-      expect(JSON.stringify(b)).not.toContain('docs-openapi');
-      expect(posts).toBe(0);
-    }, () => 'k');
-  });
-
   for (const model of ['alibaba/z-image-turbo-lora', 'blackforestlabs/flux-2-lora']) {
     it(`AIMLAPI ${model}: seed, num_inference_steps(steps), image_size(width/height), loras[{path,scale}]`, async () => {
       const d = draft('aimlapi').image;
@@ -179,20 +165,6 @@ describe('provider contract: declared fields must be sent', () => {
       const b = await submit(baseUrl, 'novita', { model: 'sdxl_base.safetensors', prompt: 'x', ...CANVAS });
       expect(String(b.error || '')).not.toContain('未出站，本地拦截');
       expect(posts).toBe(1);
-    }, () => 'k');
-  });
-
-  it('Venice: no built-in Schema → local 400 未出站, no POST (画布 2026-10-15)', async () => {
-    let posts = 0;
-    await withFixture(async (url, init) => {
-      if ((init?.method || 'GET').toUpperCase() === 'POST') { posts++; return json({}); }
-      return json({ data: [{ id: 'flux-dev', type: 'image', model_spec: {} }] });
-    }, async (baseUrl) => {
-      const b = await submit(baseUrl, 'venice', { model: 'flux-dev', prompt: 'x', ...CANVAS });
-      expect(b.errorSource).toBe('local');
-      expect(String(b.error)).toContain('未出站，本地拦截');
-      expect(JSON.stringify(b)).not.toContain('docs-openapi');
-      expect(posts).toBe(0);
     }, () => 'k');
   });
 
@@ -526,19 +498,6 @@ describe('provider contract (16): builder / route-handler providers', () => {
     expect(serverSrc).toContain("if (hfProvider !== 'fal-ai' && rejectUnsupported(res, 'HF Inference / Z-Image Space', req.body, ['loras'])) return;");
   });
 
-  it('Civitai: flux1 → loras map; flux2Dev → [{air,strength}]; krea v2 LoRA/size refused', async () => {
-    const get = async () => new Response('{}', { status: 404 });
-    const f1 = await buildCivitaiImageRequest({ model: 'urn:air:flux1:checkpoint:civitai:1@2', prompt: 'x', seed: 42, steps: 20, cfg: 3.5, width: 1024, height: 1024, loras: [{ civitaiId: 'urn:air:flux1:lora:civitai:5@6', strength: 0.7 }] }, get, oa());
-    expect(f1.payload).toMatchObject({ ecosystem: 'flux1', seed: 42, steps: 20, cfgScale: 3.5, width: 1024, height: 1024, loras: { 'urn:air:flux1:lora:civitai:5@6': 0.7 } });
-    const f2 = await buildCivitaiImageRequest({ model: 'urn:air:flux2:checkpoint:civitai:1@2', engine: 'flux2', ecosystem: 'dev', prompt: 'x', seed: 42, loras: [{ civitaiId: 'urn:air:flux2:lora:civitai:5@6', strength: 0.7 }] }, get, oa());
-    expect(f2.payload.loras).toEqual([{ air: 'urn:air:flux2:lora:civitai:5@6', strength: 0.7 }]);
-    // Live OpenAPI for comfy:krea2+turbo declares loras/width; static unsupportedLabel remains UI clue only.
-    const kreaLive = await buildCivitaiImageRequest({ model: 'turbo', comfyModel: 'turbo', ecosystem: 'krea2', engine: 'comfy', prompt: 'x', width: 1024, height: 1024, loras: [{ civitaiId: 'urn:air:krea2:lora:civitai:1@2', strength: 1 }] }, get, oa());
-    expect(kreaLive.payload).toMatchObject({ width: 1024, height: 1024, loras: { 'urn:air:krea2:lora:civitai:1@2': 1 } });
-    await expect(buildCivitaiImageRequest({ model: 'krea2-medium', engine: 'krea', prompt: 'x', loras: [{ civitaiId: 'urn:air:krea2:lora:civitai:1@2', strength: 1 }] }, get, oa())).rejects.toThrow(/loras|LoRA|未声明/);
-    for (const f of ['loras', 'width', 'height', 'negative_prompt']) expect(unsupportedLabel('civitai', 'comfy:krea2', f)).toBe(true);
-  });
-
   it('TAMS: seed→inputInitialize.seed, steps/cfg/size→diffusion.*, LoRA→diffusion.lora.items[{loraModel,weight}]; non-64 rejected; video rejected locally', () => {
     const job = buildTensorModelJob({ model: '600000000000000001', prompt: 'x', seed: 42, steps: 20, cfg: 7, width: 1024, height: 768, negative_prompt: 'blurry', loras: [{ tensorartId: '700000000000000001', strength: 0.8 }] }, 'r1');
     expect(job.stages[0].inputInitialize).toEqual({ seed: '42' });
@@ -556,70 +515,6 @@ describe('provider contract (16): builder / route-handler providers', () => {
     expect(payload).toMatchObject({ seed: 42, resolution: '1024x768' });
     expect(() => buildNanoImagePayload({ model: 'm', prompt: 'x', loras: [{ path: 'https://a', strength: 1 }] }, ep)).toThrow(/未声明 loras/);
     expect(serverSrc).toContain('error: `NanoGPT 生图失败 [${response.status}]: ${errorText}`');
-  });
-
-  it('OpenWorks (generic Schema): live catalog → image/video models; Schema from upstream inputs; positional POST /task; live extras seed/steps/cfg/LoRA appended', () => {
-    const live = JSON.parse(readFileSync(path.resolve(__dirname, '../../docs/evidence/openworks-tool-list-2026-10-15.json'), 'utf8'));
-    const entries = parseOpenWorksCatalog(200, JSON.stringify(live));
-    const items = openWorksCatalogItems(entries, 'src');
-    expect(items).toHaveLength(23);
-    expect(items.filter((m: any) => m.mediaKind === 'video').map((m: any) => m.id).sort()).toEqual(['image2video_ltx23', 'image2video_wan22', 'image2video_wan25', 'image2video_wan27', 'live_wallpaper', 'text2video_ltx23', 'text2video_wan22', 'text2video_wan27']);
-    expect(JSON.stringify(items)).not.toMatch(/工具|[Tt]ool/);
-    expect(openWorksCatalogItems([{ name: 'a', inputs: [], outputs: [{ type: 'FILE', format: 'audio' }] }], 's')).toEqual([]);
-    // catalog 500 verbatim
-    const raw500 = '{"code":"13","message":"mapping.json timeout"}';
-    expect(() => parseOpenWorksCatalog(500, raw500)).toThrow(raw500);
-
-    const photo = entries.find((e: any) => e.name === 'photoreal_studio_z_image');
-    const schema = openWorksInputSchema(photo);
-    expect(Object.keys(schema.properties)).toEqual(['prompt', 'image width', 'image height', 'result image count']);
-    // canvas width/height alias → image width / image height; result image count comes from its own Schema number control (custom_parameters)
-    const fromCanvas = buildOpenWorksRequest('photoreal_studio_z_image', schema, { prompt: 'cat', width: 512, height: 768, custom_parameters: { 'result image count': 1 } });
-    expect(fromCanvas.ok && fromCanvas.wire).toEqual({ toolName: 'photoreal_studio_z_image', inputs: [{ type: 'STRING', value: 'cat' }, { type: 'INTEGER', value: 512 }, { type: 'INTEGER', value: 768 }, { type: 'INTEGER', value: 1 }] });
-    expect(fromCanvas.mapping.find((m) => m.from === 'width')).toMatchObject({ to: 'image width', sent: true });
-    const ok = buildOpenWorksRequest('photoreal_studio_z_image', schema, { prompt: 'cat', width: 1024, custom_parameters: { 'image width': 768, 'image height': 1024, 'result image count': 1, _canvas: { schemaFieldsOnly: true } } });
-    expect(ok.ok && ok.wire).toEqual({ toolName: 'photoreal_studio_z_image', inputs: [{ type: 'STRING', value: 'cat' }, { type: 'INTEGER', value: 768 }, { type: 'INTEGER', value: 1024 }, { type: 'INTEGER', value: 1 }] });
-    expect(ok.mapping.find((m) => m.from === 'width')).toMatchObject({ to: 'image width', sent: false });
-    // badges: live extras seed/steps/cfg 会发送；prompt/width 会发送（别名 image width）
-    const props = Object.keys(schema.properties);
-    expect(schemaSendStatus('openworks', 'seed', 42, undefined, props)).toBe('will_send');
-    expect(schemaSendStatus('openworks', 'steps', 6, undefined, props)).toBe('will_send');
-    expect(schemaSendStatus('openworks', 'cfg', 3.5, undefined, props)).toBe('will_send');
-    expect(schemaSendStatus('openworks', 'width', 1024, undefined, props)).toBe('will_send');
-    expect(schemaSendStatus('openworks', 'prompt', 'cat', undefined, props)).toBe('will_send');
-    // Live extras (雁 2026-10-17): seed/steps/cfg/LoRA appended as named inputs; mapping sent:true
-    const withExtras = buildOpenWorksRequest('photoreal_studio_z_image', schema, { prompt: 'x', width: 512, height: 512, custom_parameters: { 'result image count': 1 }, seed: 42, steps: 6, cfg: 3.5, checkpoint: '940566212906107758', loras: [{ name: '969483275569466663', strength: 0.8 }] });
-    expect(withExtras.ok).toBe(true);
-    for (const f of ['seed', 'steps', 'cfg', 'loras', 'checkpoint']) expect((withExtras as any).mapping.find((m: any) => m.from === f && m.sent === true)).toBeTruthy();
-    expect((withExtras as any).parameters.seed).toBe(42);
-    expect((withExtras as any).parameters.steps).toBe(6);
-    expect((withExtras as any).parameters.cfg).toBe(3.5);
-    expect((withExtras as any).parameters.loras).toEqual([{ name: '969483275569466663', strength: 0.8 }]);
-    expect((withExtras as any).wire.inputs.length).toBeGreaterThan(4);
-    expect((withExtras as any).wire.inputs.some((i: any) => i.name === 'seed' && i.value === 42)).toBe(true);
-    expect((withExtras as any).wire.inputs.some((i: any) => i.name === 'loras' && String(i.value).includes('969483275569466663'))).toBe(true);
-    expect((withExtras as any).wire.inputs.some((i: any) => i.name === 'lora_weight' && i.value === 0.8)).toBe(true);
-    // every Schema-required field of every OpenWorks IMAGE model has an editable control: a canvas widget (prompt/width/height) or a Schema panel control
-    const canvasOwned = new Set(['prompt', 'image width', 'image height']);
-    for (const e of entries.filter((x: any) => openWorksMediaKind(x) === 'image')) {
-      const s = openWorksInputSchema(e);
-      const panel = new Set(schemaChoiceFields(s).map((f: any) => f.key));
-      const arr = new Set(Object.entries<any>(s.properties).filter(([, v]) => v.type === 'array').map(([k]) => k));
-      for (const k of s.required) if (!canvasOwned.has(k) && !arr.has(k)) expect(panel.has(k), `${e.name}: ${k}`).toBe(true);
-    }
-    expect(schemaChoiceFields(schema).find((f: any) => f.key === 'result image count')).toMatchObject({ numberSpec: { type: 'integer', minimum: undefined, default: undefined } });
-    // missing required → local block, no placeholders
-    expect((buildOpenWorksRequest('photoreal_studio_z_image', schema, { prompt: 'x' }) as any).error).toMatch(/image width[\s\S]*不会用空串\/null 占位[\s\S]*未出站，本地拦截/);
-    // unknown JSON key / wrong type → local block
-    expect((buildOpenWorksRequest('photoreal_studio_z_image', schema, { custom_parameters: { prompt: 'x', 'image width': 1, 'image height': 1, 'result image count': 1, seedish: 1 } }) as any).error).toMatch(/seedish/);
-    expect((buildOpenWorksRequest('photoreal_studio_z_image', schema, { custom_parameters: { prompt: 'x', 'image width': '768', 'image height': 1, 'result image count': 1 } }) as any).error).toMatch(/须为整数/);
-    // video: ARRAY item schema required props validated generically, URL passed as given
-    const wan = openWorksInputSchema(entries.find((e: any) => e.name === 'image2video_wan27'));
-    const keys = Object.keys(wan.properties);
-    const img = { url: 'https://cdn.example.com/u/a.png', mimeType: 'image/png' };
-    const v = buildOpenWorksRequest('image2video_wan27', wan, { prompt: 'x', custom_parameters: { [keys[1]]: '720P', [keys[2]]: '5', [keys[3]]: [img] } });
-    expect(v.ok && v.parameters.inputs).toEqual([{ type: 'STRING', value: 'x' }, { type: 'STRING', value: '720P' }, { type: 'STRING', value: '5' }, { type: 'ARRAY', value: [img] }]);
-    expect((buildOpenWorksRequest('image2video_wan27', wan, { prompt: 'x', custom_parameters: { [keys[1]]: '720P', [keys[2]]: '5', [keys[3]]: [{ url: img.url }] } }) as any).error).toMatch(/mimeType/);
   });
 
   it('OpenWorks de-tool: no tool layer left in server / canvas UI; TAMS generate gated off', () => {

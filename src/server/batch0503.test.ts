@@ -96,29 +96,6 @@ describe('batch-0503 · 5 Flux2 AIR + history labels', () => {
     }, getOk as any, oa());
     expect(b.payload.loras).toEqual([{ air, strength: 1 }]);
   });
-
-  it('flux2:dev sampler/scheduler/negative are unsupported → history 该端点不支持', () => {
-    expect(getFieldSpec('civitai', 'flux2:dev', 'sampler')?.status).toBe('unsupported');
-    expect(getFieldSpec('civitai', 'flux2:dev', 'scheduler')?.status).toBe('unsupported');
-    expect(getFieldSpec('civitai', 'flux2:dev', 'negative_prompt')?.status).toBe('unsupported');
-    const wires = schemaFieldWires('civitai', 'flux2:dev')!;
-    expect(wires).toContain('numInferenceSteps');
-    expect(wires).toContain('guidanceScale');
-    expect(wires).not.toContain('sampleMethod');
-    expect(wires).not.toContain('negativePrompt');
-    const item = buildLocalRejectionHistoryItem(
-      '/api/engine/civitai/generate',
-      { prompt: 'p', model: 'urn:air:flux2:checkpoint:civitai:1@2', engine: 'flux2', ecosystem: 'dev', steps: 28, cfg: 2.5, seed: 42, width: 1024, height: 1024 },
-      400,
-      { error: 'LoRA 资源 AIR/ID 为必填项' },
-    );
-    const r = resolveHistoryParameters({ ...item, id: 'h', timestamp: 1, seed: null, steps: null, cfg: null } as any);
-    expect(r.sampler.source).toBe('unsupported');
-    expect(r.scheduler.source).toBe('unsupported');
-    expect(r.negativePrompt.source).toBe('unsupported');
-    expect(historyParameterSourceLabel(r.sampler.source)).toBe('该端点不支持 · 未发送') // clean-1029 #5;
-    expect(r.steps.source).toBe('intended');
-  });
 });
 
 describe('batch-0503 · 3 sdcpp flux2Dev fields + kontext LoRA refuse', () => {
@@ -151,14 +128,6 @@ describe('batch-0503 · 3 sdcpp flux2Dev fields + kontext LoRA refuse', () => {
     expect(b.payload.numInferenceSteps).toBeUndefined();
     expect(b.payload.guidanceScale).toBeUndefined();
     expect(b.payload.loras).toEqual({ [lora]: 0.8 });
-  });
-
-  it('flux1-kontext with LoRA is refused locally', async () => {
-    await expect(buildCivitaiImageRequest({
-      model: 'urn:air:flux1:checkpoint:civitai:1@2',
-      engine: 'flux1-kontext', ecosystem: 'dev', prompt: 'x',
-      loras: [{ civitaiId: 'urn:air:flux1:lora:civitai:3@4', strength: 1 }],
-    }, (async () => ({})) as any, oa())).rejects.toThrow(/flux1-kontext|不接受 LoRA|未声明可用的 loras|OpenAPI 未声明/);
   });
 });
 

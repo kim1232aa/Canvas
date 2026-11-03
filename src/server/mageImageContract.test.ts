@@ -74,12 +74,6 @@ describe('mageImageContract', () => {
       .toMatchObject({ aspect_ratio: '7:7', resolution: '5K' });
   });
 
-  it('does not silently round or discard an explicitly supplied seed', () => {
-    expect(() => buildMageImageRequest({ prompt: 'x', model_id: 'mango-v3', seed: 1.5 })).toThrow(/seed/);
-    expect(() => buildMageImageRequest({ prompt: 'x', model_id: 'mango-v3', seed: '42' })).toThrow(/seed/);
-    expect(buildMageImageRequest({ prompt: 'x', model_id: 'mango-v3', seed: 42 }).payload.seed).toBe(42);
-  });
-
   it('parses completed and pending responses', () => {
     const done = parseMageRequestResponse({
       request_id: 'abc',

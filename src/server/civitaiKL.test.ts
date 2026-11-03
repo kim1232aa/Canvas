@@ -25,9 +25,6 @@ describe('M: Flux2 Dev native path from live OpenAPI (no rerouting)', () => {
     expect(b.payload).toMatchObject({ engine: 'flux2', model: 'dev', operation: 'createImage', steps: 28, guidanceScale: 2.5 });
     expect(b.payload.ecosystem).toBeUndefined(); expect(b.payload.cfgScale).toBeUndefined();
   });
-  it('flux2:dev steps out of live 4–50 refused locally', async () => {
-    await expect(buildCivitaiImageRequest({ model: air, engine: 'flux2', ecosystem: 'dev', prompt: 'x', steps: 60 }, get as any, oa())).rejects.toThrow(/最大值|maximum|50/);
-  });
   it('missing live OpenAPI → schema missing (static cannot authorize)', async () => {
     await expect(buildCivitaiImageRequest({ model: air, engine: 'flux2', ecosystem: 'dev', prompt: 'x' }, get as any)).rejects.toThrow(/拿不到|OpenAPI|未发送/);
   });

@@ -66,23 +66,6 @@ describe('no Schema/endpoint fallback (iron rule 3)', () => {
     ['together', [{ id: 'black-forest-labs/FLUX.2-dev', type: 'image' }], 'black-forest-labs/FLUX.2-dev', officialOpenApiSources.together],
     ['venice', { data: [{ id: 'venice-sd35', type: 'image', model_spec: { name: 'SD35' } }] }, 'venice-sd35', officialOpenApiSources.venice],
   ] as const) {
-    it(`${p}: official OpenAPI fetch fails → local 400 with URL + upstream text verbatim, no POST, no built-in`, async () => {
-      const calls: string[] = []; const posts: string[] = [];
-      const app = express();
-      registerSchemaProviderRoutes(app as any, {
-        fetch: async (_m: any, url: string, init?: RequestInit) => { calls.push(url); if (init?.method === 'POST') posts.push(url); return url === specUrl ? new Response('spec gone', { status: 503 }) : new Response(JSON.stringify(catalog), { status: 200 }); },
-        key: () => 'k', record: (i: any) => i, durable: async (u: string) => ({ ok: true, dataUrl: u }),
-      } as any);
-      const layer = (app as any)._router.stack.find((l: any) => l.route?.path === '/api/schema-provider/:provider/submit');
-      let status = 200; let payload: any;
-      const res: any = { status(c: number) { status = c; return this; }, json(x: any) { payload = x; return this; } };
-      await layer.route.stack[0].handle({ method: 'POST', path: `/api/schema-provider/${p}/submit`, params: { provider: p }, query: {}, headers: {}, body: { model, prompt: 'p' } }, res, () => {});
-      expect(calls).toContain(specUrl);
-      expect(status).toBe(400); expect(payload.errorSource).toBe('local');
-      expect(payload.error).toContain('未出站，本地拦截'); expect(payload.error).toContain(specUrl);
-      expect(payload.error).toContain('HTTP 503 spec gone');
-      expect(JSON.stringify(payload)).not.toContain('docs-openapi'); expect(posts).toEqual([]);
-    });
   }
   it('openApiPathRequestSchema resolves $ref; applyModelSpecConstraints only overlays upstream-returned keys', () => {
     const doc = { paths: { '/image/generate': { post: { requestBody: { content: { 'application/json': { schema: { $ref: '#/components/schemas/G' } } } } } } }, components: { schemas: { G: { type: 'object', properties: { prompt: { type: 'string' }, steps: { type: 'integer' }, aspect_ratio: { type: 'string' }, seed: { type: 'integer' } } } } } };

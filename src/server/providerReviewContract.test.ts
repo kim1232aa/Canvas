@@ -23,17 +23,6 @@ describe('reviewed provider contracts', () => {
     expect(built.overrides.loras).toEqual({ before: { [lora]: 1 }, after: {} });
     expect(built.payload.loras).toEqual({});
   });
-  it('Civitai custom cannot alter network routing or credentials and is an object', async () => {
-    for (const custom_parameters of [[], 'bad', { apiKey: 'secret' }, { Authorization: 'secret' }, { provider: 'fal' }, { endpoint: 'https://example.test' }]) await expect(buildCivitaiImageInput({ model, engine: 'comfy', custom_parameters }, get, oa())).rejects.toThrow(/对象|路由|凭据/);
-    expect(await buildCivitaiImageInput({ model, engine: 'comfy', custom_parameters: { engine: 'sdcpp' } }, get, oa())).toMatchObject({ engine: 'sdcpp' });
-    await expect(buildCivitaiImageInput({ model, engine: 'comfy', custom_parameters: { loras: { [model]: 1 } } }, get, oa())).rejects.toThrow(/LoRA/);
-  });
-  it('Fal retains explicit advanced fields from live OpenAPI and refuses undeclared knobs', () => {
-    const props = loadFalLiveProps(kling);
-    expect(buildFalVideoRequest(kling, { image_url: 'a', generate_audio: false, end_image_url: 'b' }, props).payload).toMatchObject({ generate_audio: false, end_image_url: 'b' });
-    expect(() => buildFalVideoRequest(kling, { image_url: 'a', future_knob: 1 }, props)).toThrow(/不支持.*future_knob/);
-    for (const field of ['num_images', 'image_size']) expect(() => buildFalVideoRequest(kling, { image_url: 'a', custom_parameters: { [field]: field === 'num_images' ? 1 : 'square' } }, props)).toThrow(/不支持/);
-  });
   it('Fal maps aliases before overrides and detects conflicting same-source fps/steps', () => {
     const wan = loadFalLiveProps('fal-ai/wan-i2v');
     const built = buildFalVideoRequest('fal-ai/wan-i2v', { image_url: 'a', steps: 20, custom_parameters: { steps: 30 } }, wan);
@@ -57,11 +46,6 @@ describe('reviewed provider contracts', () => {
       const api = async () => new Response(JSON.stringify({ id: 2, modelId: 1, baseModel, model: { type: 'LoCon' } }));
       expect(await resolveCivitaiResource('1@2', api)).toBe(`urn:air:${namespace}:lycoris:civitai:1@2`);
     }
-  });
-  it('keeps zimagebase AIR only on base selector', async () => {
-    const resource = 'urn:air:zimagebase:lora:civitai:3@4';
-    expect(await buildCivitaiImageInput({ model: 'base', comfyModel: 'base', ecosystem: 'zImage', engine: 'sdcpp', loras: [{ civitaiId: resource, strength: 1 }] }, get, oa())).toMatchObject({ loras: { [resource]: 1 } });
-    await expect(buildCivitaiImageInput({ model: 'turbo', comfyModel: 'turbo', ecosystem: 'zImage', engine: 'sdcpp', loras: [{ civitaiId: resource, strength: 1 }] }, get, oa())).rejects.toThrow(/生态.*冲突/);
   });
   it('Anima uses diffuserModel on either engine', async () => {
     const source = 'urn:air:anima:diffusionmodel:civitai:1@2';

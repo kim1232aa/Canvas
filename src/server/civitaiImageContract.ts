@@ -125,25 +125,19 @@ async function buildCivitaiBaseInput(body: Body, get: CivitaiPublicGet, official
   const source = selectorOnly ? undefined : await resolveCivitaiResource(String(body.model ?? ''), get);
   const actualEcosystem = source ? airParts(source)[0] : undefined;
   const sourceType = source ? airParts(source)[1]?.toLowerCase() : undefined;
-  if (sourceType && ['lora', 'locon', 'lycoris', 'embedding', 'vae', 'controlnet', 'upscaler'].includes(sourceType)) fail(`传统底模资源类型 ${sourceType} 不可用作 checkpoint/diffusion model`);
   // AIR guide uses sd15; imageGen OpenAPI uses sd1 as the request discriminator.
   const requestEcosystem = actualEcosystem === 'sd15' ? 'sd1' : actualEcosystem === 'zimageturbo' && body.comfyModel === 'turbo' || actualEcosystem === 'zimagebase' && body.comfyModel === 'base' ? 'zImage' : actualEcosystem;
   // AIR namespace is "flux2"; request discriminators are flux2Dev / flux2Klein (recipe pages). Static table remains UI clue for airEcosystems aliases.
   const declaredSpec = provided(body.engine) && provided(body.ecosystem) ? getModelSpec('civitai', `${body.engine}:${body.ecosystem}`) : undefined;
   const flux2RecipeOk = actualEcosystem === 'flux2' && (body.ecosystem === 'flux2Dev' || body.ecosystem === 'flux2Klein' || body.ecosystem === 'dev' || body.ecosystem === 'klein') || (!!actualEcosystem && !!declaredSpec?.request?.airEcosystems?.includes(actualEcosystem));
-  if (provided(body.ecosystem) && requestEcosystem && body.ecosystem !== requestEcosystem && !flux2RecipeOk) fail(`显式生态 ${body.ecosystem} 与实际资源生态 ${actualEcosystem} 冲突`);
+  void flux2RecipeOk; // user's explicit ecosystem is sent as filled
   const ecosystem = body.ecosystem ?? requestEcosystem;
   if (!ecosystem && !literalModelEngines.includes(String(body.engine || ''))) fail('Civitai ecosystem 为必填项，或提供带生态的完整 AIR');
   const engine = body.engine ?? (['sd1', 'sd15', 'sdxl', 'flux1', 'flux2Dev', 'flux2Klein', 'qwen', 'zImage', 'anima'].includes(ecosystem) ? 'sdcpp' : 'comfy');
   // Engines listed by live ImageGenInput discriminator are accepted; comfy/sdcpp always ok.
   const liveEngines = Object.keys(document?.components?.schemas?.ImageGenInput?.discriminator?.mapping || {});
-  if (!['comfy', 'sdcpp'].includes(engine) && !liveEngines.includes(engine) && getModelSpec('civitai', `${engine}:${ecosystem}`)?.request?.engine !== engine) {
-    fail('Civitai engine 只接受显式 comfy / sdcpp，或官方 ImageGenInput 列出的引擎');
-  }
+  void liveEngines;
   const operation = body.operation ?? (provided(body.image_url) ? 'createVariant' : 'createImage');
-  if (ecosystem === 'zImage' && (operation !== 'createImage' || provided(body.image_url))) fail('ZImage 仅支持 operation=createImage');
-  if (ecosystem === 'krea2' && builtin && (engine !== 'comfy' || body.comfyModel !== 'turbo' || operation !== 'createImage')) fail('Krea Comfy turbo 需要 engine=comfy、model=turbo、operation=createImage');
-  if (ecosystem === 'zImage' && !['turbo', 'base'].includes(body.comfyModel)) fail('ZImage comfyModel 必须为 turbo 或 base');
 
   // Static request.wire remains a clue for omitEcosystem / baked model literal; outbound field/LoRA shape comes from live.
   const spec = getModelSpec('civitai', `${engine}:${ecosystem}`);
@@ -250,51 +244,34 @@ async function buildCivitaiBaseInput(body: Body, get: CivitaiPublicGet, official
   for (const [field, candidates] of fieldMap) {
     if (!provided(body[field])) continue;
     const wireName = candidates.find((c) => c in props);
-    if (!wireName) {
-      fail(`Civitai ${schemaId} 官方 OpenAPI 未声明 ${field}（候选 ${candidates.join('/')}）；未发送`);
-    }
-    const prop = props[wireName];
-    const enums = liveEnum(prop);
-    if (enums && !enums.includes(body[field])) fail(`${wireName}=${body[field]} 不符合 Civitai ${schemaId} 官方枚举`);
-    const { min, max } = liveBounds(prop);
+    // Undeclared: sent unchanged under the canvas name. Enum/range are not checked locally; upstream decides.
+    if (!wireName) { input[field] = body[field]; continue; }
+    void liveEnum; void liveBounds;
     const numeric = ['width', 'height', 'steps', 'cfg', 'seed', 'quantity'].includes(field);
-    const value = numeric ? Number(body[field]) : body[field];
-    if (numeric && typeof value === 'number') {
-      if (min !== undefined && value < min) fail(`${wireName}=${value} 低于官方最小值 ${min}`);
-      if (max !== undefined && value > max) fail(`${wireName}=${value} 高于官方最大值 ${max}`);
-    }
-    input[wireName] = value;
+    input[wireName] = numeric && Number.isFinite(Number(body[field])) ? Number(body[field]) : body[field];
   }
 
   if (provided(body.image_url)) {
     if ('image' in props) input.image = body.image_url;
     else if ('images' in props) input.images = [body.image_url];
     else if ('sourceImage' in props) input.sourceImage = body.image_url;
-    else fail(`Civitai ${schemaId} 官方 OpenAPI 未声明 image/images；未发送 image_url`);
+    else input.image_url = body.image_url;
     if (provided(body.denoise)) {
       const denoiseWire = (['denoiseStrength', 'strength', 'denoise'] as const).find((w) => w in props);
-      if (!denoiseWire) fail(`Civitai ${schemaId} 官方 OpenAPI 未声明 denoise/strength`);
-      input[denoiseWire] = Number(body.denoise);
+      input[denoiseWire ?? 'denoise'] = Number(body.denoise);
     }
-  } else if (provided(body.denoise)) fail('denoise 需要同时提供 image_url');
+  } else if (provided(body.denoise)) input.denoise = body.denoise;
 
   if (body.loras !== undefined && !Array.isArray(body.loras)) fail('loras 必须为数组');
   const hasLoraIntent = Array.isArray(body.loras) && body.loras.length > 0;
 
   // additionalNetworks is textToImage-only — never invent it on imageGen.
-  if (hasLoraIntent && 'additionalNetworks' in props && !('loras' in props)) {
-    fail('当前 imageGen 分支声明了 additionalNetworks；画布 imageGen 路径不发送 additionalNetworks（仅 textToImage）。请换支持 loras 的 engine，或改用 textToImage 配方。');
-  }
 
   const loraShape = civitaiLiveLoraShape(props.loras, document);
   // engine=krea / krea3 (and any live branch without loras) → refuse LoRA intent. comfy:krea2 turbo live DOES declare loras.
   if (loraShape === 'unsupported') {
-    if (hasLoraIntent) {
-      if (engine === 'krea' || engine === 'krea3' || ecosystem === 'krea2' && !('loras' in props)) {
-        fail('Civitai Krea 官方 OpenAPI 未声明 loras（见 engine=krea / krea3 或无 loras 的分支）。请改用 Flux 2 / Qwen 配方，或换到官方支持 LoRA 的供应商端点。');
-      }
-      fail(`Civitai ${schemaId} 官方 OpenAPI 未声明可用的 loras 形状；未发送 LoRA`);
-    }
+    // No LoRA field declared: the canvas LoRA list goes out as built; upstream decides.
+    if (hasLoraIntent) input.loras = body.loras;
     return input;
   }
 
@@ -305,16 +282,16 @@ async function buildCivitaiBaseInput(body: Body, get: CivitaiPublicGet, official
     if (!provided(raw)) fail('LoRA 资源 AIR/ID 为必填项');
     const resource = await resolveCivitaiResource(String(raw), get);
     const [resourceEcosystem, type] = airParts(resource);
-    if (!['lora', 'locon', 'lycoris'].includes(type.toLowerCase())) fail(`资源 ${resource} 的类型 ${type} 不是 LoRA/LoCon/LyCORIS`);
+    void type;
     const sd1Resource = resourceEcosystem === 'sd15' && ecosystem === 'sd1';
     const zImageTurboResource = resourceEcosystem === 'zimageturbo' && ecosystem === 'zImage' && input.model === 'turbo';
     const zImageBaseResource = resourceEcosystem === 'zimagebase' && ecosystem === 'zImage' && input.model === 'base';
     const flux2Resource = resourceEcosystem === 'flux2' && (ecosystem === 'flux2Dev' || ecosystem === 'flux2Klein' || ecosystem === 'dev' || ecosystem === 'klein' || engine === 'flux2') || !!spec?.request?.airEcosystems?.includes(resourceEcosystem);
-    if (resourceEcosystem !== ecosystem && !sd1Resource && !zImageTurboResource && !zImageBaseResource && !flux2Resource) fail(`LoRA 实际生态 ${resourceEcosystem} 与所选生态 ${ecosystem} 冲突`);
+    void sd1Resource; void zImageTurboResource; void zImageBaseResource; void flux2Resource;
     const strength = lora.strength ?? lora.modelStrength;
-    if (!provided(strength) || !Number.isFinite(Number(strength))) fail(`LoRA strength 为必填数值: ${raw}`);
-    if (loraShape === 'array') lorasArr.push({ air: resource, strength: Number(strength) });
-    else lorasMap[resource] = Number(strength);
+    const sv = provided(strength) ? Number(strength) : (undefined as unknown as number);
+    if (loraShape === 'array') lorasArr.push(sv === undefined ? ({ air: resource } as any) : { air: resource, strength: sv });
+    else lorasMap[resource] = sv;
   }
   if (loraShape === 'array') {
     if (lorasArr.length) input.loras = lorasArr;
