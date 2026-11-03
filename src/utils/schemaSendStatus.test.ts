@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { schemaSendStatus } from './schemaSendStatus';
+import { isDeclaredSchemaFieldOmitted } from './schemaSendHint';
 
 const withSchema = (props: string[]) => JSON.stringify({ _canvas: { schemaProperties: props } });
 
@@ -53,4 +54,19 @@ describe('seed / negative_prompt badges', () => {
     expect(schemaSendStatus('muapi', 'aspect_ratio', '1:1', cp)).toBe('will_send');
   });
 
+});
+
+describe('isDeclaredSchemaFieldOmitted (preset/Schema seed, no badge gate)', () => {
+  it('declared props without sampler → omitted true (ModelScope / non-SCHEMA_SCOPED seed path)', () => {
+    const cp = withSchema(['prompt', 'seed', 'steps', 'guidance', 'loras']);
+    expect(isDeclaredSchemaFieldOmitted('sampler_name', cp)).toBe(true);
+    expect(isDeclaredSchemaFieldOmitted('scheduler', cp)).toBe(true);
+    expect(isDeclaredSchemaFieldOmitted('denoise', cp)).toBe(true);
+    expect(isDeclaredSchemaFieldOmitted('steps', cp)).toBe(false);
+    expect(isDeclaredSchemaFieldOmitted('seed', cp)).toBe(false);
+  });
+  it('no declared props → false (never fake omit)', () => {
+    expect(isDeclaredSchemaFieldOmitted('sampler_name', '{}')).toBe(false);
+    expect(isDeclaredSchemaFieldOmitted('sampler_name', undefined)).toBe(false);
+  });
 });

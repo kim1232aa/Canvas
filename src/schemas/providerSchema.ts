@@ -682,7 +682,8 @@ const MODELSCOPE_MODELS: ModelSpec[] = (['modelscope','modelscope_ai'] as const)
     // 2026-11-02 产品：官网 intro 表 seed [0,2^31-1]，写进 Schema 可发+提示；不做运行前死拦（上游 400 含 -1 冲突时原样报错）
     seed:{status:'supported' as const,source:MODELSCOPE_SEED_DOC,type:'integer' as const,min:0,max:2147483647,note:'官网 intro 参数表 [0, 2³¹-1]（中英现页）；可发；范围仅提示/随机用，不本地死拦；超范围原样报上游'},
     loras:{status:'supported',source:MODELSCOPE_DOC,note:'单一仓库 ID 或最多六项权重映射，总和 1；底模兼容性仍由所选模型决定'},
-    ...Object.fromEntries(['sampler','scheduler','denoise'].map(key=>[key,{status:'unverified' as const,source:MODELSCOPE_DOC,note:'当前官方云端 REST 资料未核实对应字段；未知能力不按 unsupported 本地拦截'}])),
+    // Official API-Inference param table has no sampler/scheduler/denoise (docs/provider-schema-drafts/modelscope.json unsupportedWireFields). Hide empty KSampler shells via isCanvasWidgetUnsupported; contract already omits them from payload.
+    ...unsupported(MODELSCOPE_DOC, ['sampler', 'scheduler', 'denoise'], '官方 API-Inference 参数表无采样器/调度器/去噪；不发送、画布不挂空壳'),
   },
 }));
 

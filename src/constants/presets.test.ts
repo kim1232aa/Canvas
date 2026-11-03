@@ -44,6 +44,8 @@ const HAS_LORA = new Set([
   'wavespeed',
   'modelslab',
   'replicate',
+  'modelscope',
+  'modelscope_ai',
 ]);
 
 /** Real LoRAs from accepted runs or official docs recipe IDs (evidence in presets.ts). */
@@ -52,6 +54,8 @@ const PREFILLED_LORA: Record<string, Array<[string, number]>> = {
   tensorart: [['1015214543296590260', 1], ['1029661490430387503', 1], ['1015863436619315552', 1]],
   modelslab: [['xl-realistic-cake-art-sty', 0.45]],
   replicate: [['fofr/flux-80s-cyberpunk', 1]],
+  modelscope: [['suayptalha/Z-Image-Turbo-Realism-LoRA', 1]],
+  modelscope_ai: [['LcarsPicturesDatabase/ST-TNG-Rooms-Z-Image-Turbo-v1', 1]],
 };
 
 const ALLOWED_PROMPT = new Set(['', STD_PROMPT_PLACEHOLDER]);
@@ -209,7 +213,11 @@ describe('standard workflow presets (23 T2I + 6 I2V)', () => {
     expect(frame.params.batchSize).toBe(1);
     expect(frame.params.loras).toHaveLength(3);
     expect(frame.prompt).toBe('');
-    expect(frame.params.customParameters).toBe(JSON.stringify({ 'result image count': 1 }));
+    const frameCp = JSON.parse(String(frame.params.customParameters));
+    expect(frameCp['result image count']).toBe(1);
+    // omit sampler/scheduler/denoise → shared schemaProperties seed (no empty shells); keep OpenWorks extras.
+    expect(frameCp._canvas?.schemaProperties).toEqual(expect.arrayContaining(['prompt', 'seed', 'steps', 'loras']));
+    expect(frameCp._canvas?.schemaProperties).not.toEqual(expect.arrayContaining(['sampler', 'scheduler', 'denoise']));
   });
 
   it('keeps a single Checkpoint targetProvider (tensorart → openworks)', () => {
@@ -339,7 +347,7 @@ describe('standard workflow presets (23 T2I + 6 I2V)', () => {
 
   it('prefills only LoRAs proven in accepted runs, chained ckpt → lora1 → … → prompts/sampler', () => {
     for (const [prov, expected] of Object.entries(PREFILLED_LORA)) {
-      const p = preset(`std-${prov}-t2i`);
+      const p = preset(expectedT2iId(prov));
       const loras = p.nodes.filter(n => n.type === 'LoRALoader');
       expect(loras.map(n => [n.values.lora_name, n.values.strength_model]), prov).toEqual(expected);
       expect(p.spatialFrames![0].params.loras.map(l => [l.name, l.modelStrength])).toEqual(expected);
@@ -445,5 +453,62 @@ describe('standard workflow presets (23 T2I + 6 I2V)', () => {
       const p = preset(prov === 'gemini' ? 'std-gemini-t2i' : `std-${prov}-t2i`);
       expect(presetSummary(p).model, prov).toBe(model);
     }
+  });
+
+  it('ModelScope CN/intl presets mount accepted LoRAs and omit sampler/scheduler shells', () => {
+    for (const id of ['std-modelscope-t2i', 'std-modelscope-ai-t2i'] as const) {
+      const p = preset(id);
+      const ks = p.nodes.find(n => n.type === 'KSampler')!;
+      expect(ks.values.steps).toBe(8);
+      expect(ks.values.cfg).toBe(1);
+      expect(ks.values.seed).toBe(42);
+      expect(ks.values.sampler_name).toBeUndefined();
+      expect(ks.values.scheduler).toBeUndefined();
+      expect(ks.values.denoise).toBeUndefined();
+      const lat = p.nodes.find(n => n.type === 'EmptyLatentImage')!;
+      expect(lat.values.width).toBe(832);
+      expect(lat.values.height).toBe(1216);
+      expect(p.nodes.some(n => n.type === 'LoRALoader')).toBe(true);
+      // Shared omit → schemaProperties seed (MuAPI path): sampler aliases absent so NodeItem can hide empty shells.
+      const ckpt = p.nodes.find(n => n.type === 'CheckpointLoaderSimple')!;
+      const props = JSON.parse(String(ckpt.values.custom_parameters || '{}'))?._canvas?.schemaProperties as string[] | undefined;
+      expect(props && props.length > 0, id).toBe(true);
+      expect(props).toEqual(expect.arrayContaining(['prompt', 'seed', 'steps', 'guidance', 'loras']));
+      expect(props).not.toEqual(expect.arrayContaining(['sampler', 'sampler_name', 'scheduler', 'denoise']));
+    }
+    expect(lora('std-modelscope-t2i')!.values.lora_name).toBe('suayptalha/Z-Image-Turbo-Realism-LoRA');
+    expect(lora('std-modelscope-ai-t2i')!.values.lora_name).toBe('LcarsPicturesDatabase/ST-TNG-Rooms-Z-Image-Turbo-v1');
+  });
+
+  it('Mage omits EmptyLatent pixel size; aspect_ratio/resolution live on checkpoint (no compact)', () => {
+    const p = preset('std-mage-t2i');
+    expect(p.nodes.map(n => n.type)).toEqual([
+      'CheckpointLoaderSimple', 'CLIPTextEncode', 'EmptyLatentImage', 'KSampler', 'VAEDecode', 'SaveImage',
+    ]);
+    const ckpt = loader(p.id)!;
+    expect(ckpt.values).toMatchObject({ ckpt_name: 'mango-v3', aspect_ratio: '4:5', resolution: '2K' });
+    const lat = p.nodes.find(n => n.type === 'EmptyLatentImage')!;
+    expect(lat.values.width).toBeUndefined();
+    expect(lat.values.height).toBeUndefined();
+    expect(lat.values.batch_size).toBe(1);
+    const ks = p.nodes.find(n => n.type === 'KSampler')!;
+    expect(ks.values.seed).toBe(42);
+    expect(ks.values.steps).toBeUndefined();
+    expect(ks.values.cfg).toBeUndefined();
+    expect(ks.values.sampler_name).toBeUndefined();
+    const frame = p.spatialFrames![0];
+    expect(frame.params.width).toBeUndefined();
+    expect(frame.params.height).toBeUndefined();
+    expect(frame.params.aspectRatio).toBe('4:5');
+    expect(frame.params.resolution).toBe('2K');
+  });
+
+  it('DeepInfra public FLUX omits seed/steps/cfg shells (official size/n path only)', () => {
+    const ks = preset('std-deepinfra-t2i').nodes.find(n => n.type === 'KSampler')!;
+    expect(ks.values.seed).toBeUndefined();
+    expect(ks.values.steps).toBeUndefined();
+    expect(ks.values.cfg).toBeUndefined();
+    expect(ks.values.sampler_name).toBeUndefined();
+    expect(preset('std-deepinfra-t2i').nodes.find(n => n.type === 'EmptyLatentImage')!.values.width).toBe(1024);
   });
 });

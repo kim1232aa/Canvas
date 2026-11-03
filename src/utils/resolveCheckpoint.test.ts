@@ -298,6 +298,17 @@ describe('Fal / Agnes / HF / NanoGPT grey on engine switch (schema-driven)', () 
     expect(sanitizeFrameLoras('fal', 'fal-ai/flux/schnell', left)).toEqual(left);
   });
 
+  it('ModelScope CN/intl: sampler/scheduler/denoise unsupported → empty KSampler shells hide', () => {
+    for (const prov of ['modelscope', 'modelscope_ai'] as const) {
+      expect(isCanvasFieldUnsupported(prov, 'Tongyi-MAI/Z-Image-Turbo', 'sampler')).toBe(true);
+      expect(isCanvasFieldUnsupported(prov, 'Tongyi-MAI/Z-Image-Turbo', 'scheduler')).toBe(true);
+      expect(isCanvasFieldUnsupported(prov, 'Tongyi-MAI/Z-Image-Turbo', 'denoise')).toBe(true);
+      expect(isCanvasWidgetUnsupported(prov, 'Tongyi-MAI/Z-Image-Turbo', 'sampler_name')).toBe(true);
+      expect(isCanvasFieldUnsupported(prov, 'Tongyi-MAI/Z-Image-Turbo', 'steps')).toBe(false);
+      expect(isCanvasFieldUnsupported(prov, 'Tongyi-MAI/Z-Image-Turbo', 'seed')).toBe(false);
+    }
+  });
+
   it('empty Fal checkpoint: LoRA greys with plain empty-checkpoint copy; values kept; not sent; flux-lora stays usable', () => {
     const left = [{ name: 'koda.safetensors', modelStrength: 0.8 }];
 

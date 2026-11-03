@@ -33,12 +33,23 @@ import { GeminiFieldSelect, GeminiModelBadge } from './GeminiFieldSelect';
 import { fieldOptions, getFieldSpec, resolveSchemaModelId } from '../schemas/providerSchema';
 import { FieldStatusBadge, SchemaSendBadge } from './FieldStatusBadge';
 import { isCanvasFieldUnsupported, isCanvasWidgetUnsupported, LORA_UNSUPPORTED_TITLE, LORA_BYPASS_LABEL } from '../utils/resolveCheckpoint';
-import { readDeclaredSchemaProperties, SCHEMA_OMIT_REASON, canvasFieldMatchesSchema } from '../utils/schemaSendHint';
+import { readDeclaredSchemaProperties, SCHEMA_OMIT_REASON, canvasFieldMatchesSchema, isDeclaredSchemaFieldOmitted } from '../utils/schemaSendHint';
 import { schemaSendStatus } from '../utils/schemaSendStatus';
 /** KSampler / related widgets: Schema-omit → hide entirely (雁: no 「不支持」 complaint on the node). */
 const SAMPLER_SCHEMA_WIDGETS = new Set(['steps', 'cfg', 'sampler_name', 'scheduler', 'sampler', 'seed', 'denoise', 'control_after_generate']);
 const filledCanvasValue = (v: unknown) =>
   v !== undefined && v !== null && !(typeof v === 'string' && v.trim() === '') && !(typeof v === 'number' && Number.isNaN(v));
+/** Hide empty KSampler shells: static unsupported, Schema-badge omit, or seeded schemaProperties omit (shared preset path). */
+const hideSamplerShell = (
+  widgetName: string,
+  unsupported: boolean,
+  omitHint: boolean,
+  schemaCustomParameters?: string,
+) =>
+  SAMPLER_SCHEMA_WIDGETS.has(widgetName) &&
+  (unsupported ||
+    omitHint ||
+    isDeclaredSchemaFieldOmitted(widgetName, schemaCustomParameters, readDeclaredSchemaProperties(schemaCustomParameters)));
 
 import { checkpointNodeTitle, ksamplerNodeTitle, loraLoaderNodeTitle, LORA_LOADER_TYPES } from '../utils/providerLabels';
 import { errorBannerText, priorRunErrorLabel, LOCAL_BLOCK_NODE_LINE } from '../utils/apiFailure';
@@ -593,9 +604,9 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               const omitHint = sendStatus === 'not_sent';
               // cleanup-2026-10-17: sampler params omitted by Schema are DISABLED (not 「能调但不发送」).
               const schemaUnused = SAMPLER_SCHEMA_WIDGETS.has(widget.name) && omitHint;
-              // Hide Schema-omitted sampler shells (steps/CFG/sampler/scheduler) — empty disabled sliders look adjustable.
-              // 雁: Schema 未声明 → 整格隐藏；仅当用户填了值却发不出去时留一行提醒（无灰框/空滑块）。
-              if (SAMPLER_SCHEMA_WIDGETS.has(widget.name) && (schemaUnused || unsupported)) {
+              // Hide Schema-omitted / unsupported / preset-seeded omit shells — empty disabled enums look adjustable.
+              // 雁: 未声明或官方不支持 → 整格隐藏；仅当用户填了值却发不出去时留一行提醒（无灰框/空「未指定」）。
+              if (hideSamplerShell(widget.name, unsupported, omitHint, schemaCustomParameters)) {
                 if (!filledCanvasValue(node.values?.[widget.name])) return null;
                 return <p key={widget.name} role="note" data-testid={`node-filled-not-sent-${widget.name}`} className="text-[11px] text-amber-300/90 leading-relaxed">{widget.label}已填，此模型不支持，不会发送</p>;
               }
@@ -923,9 +934,9 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               const omitHint = sendStatus === 'not_sent';
               // cleanup-2026-10-17: sampler params omitted by Schema are DISABLED (not 「能调但不发送」).
               const schemaUnused = SAMPLER_SCHEMA_WIDGETS.has(widget.name) && omitHint;
-              // Hide Schema-omitted sampler shells (steps/CFG/sampler/scheduler) — empty disabled sliders look adjustable.
-              // 雁: Schema 未声明 → 整格隐藏；仅当用户填了值却发不出去时留一行提醒（无灰框/空滑块）。
-              if (SAMPLER_SCHEMA_WIDGETS.has(widget.name) && (schemaUnused || unsupported)) {
+              // Hide Schema-omitted / unsupported / preset-seeded omit shells — empty disabled enums look adjustable.
+              // 雁: 未声明或官方不支持 → 整格隐藏；仅当用户填了值却发不出去时留一行提醒（无灰框/空「未指定」）。
+              if (hideSamplerShell(widget.name, unsupported, omitHint, schemaCustomParameters)) {
                 if (!filledCanvasValue(node.values?.[widget.name])) return null;
                 return <p key={widget.name} role="note" data-testid={`node-filled-not-sent-${widget.name}`} className="text-[11px] text-amber-300/90 leading-relaxed">{widget.label}已填，此模型不支持，不会发送</p>;
               }
@@ -1096,9 +1107,9 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               const omitHint = sendStatus === 'not_sent';
               // cleanup-2026-10-17: sampler params omitted by Schema are DISABLED (not 「能调但不发送」).
               const schemaUnused = SAMPLER_SCHEMA_WIDGETS.has(widget.name) && omitHint;
-              // Hide Schema-omitted sampler shells (steps/CFG/sampler/scheduler) — empty disabled sliders look adjustable.
-              // 雁: Schema 未声明 → 整格隐藏；仅当用户填了值却发不出去时留一行提醒（无灰框/空滑块）。
-              if (SAMPLER_SCHEMA_WIDGETS.has(widget.name) && (schemaUnused || unsupported)) {
+              // Hide Schema-omitted / unsupported / preset-seeded omit shells — empty disabled enums look adjustable.
+              // 雁: 未声明或官方不支持 → 整格隐藏；仅当用户填了值却发不出去时留一行提醒（无灰框/空「未指定」）。
+              if (hideSamplerShell(widget.name, unsupported, omitHint, schemaCustomParameters)) {
                 if (!filledCanvasValue(node.values?.[widget.name])) return null;
                 return <p key={widget.name} role="note" data-testid={`node-filled-not-sent-${widget.name}`} className="text-[11px] text-amber-300/90 leading-relaxed">{widget.label}已填，此模型不支持，不会发送</p>;
               }

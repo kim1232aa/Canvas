@@ -101,7 +101,7 @@ describe('cleanup-serious toast / SaveImage / strength', () => {
   });
   it('KSampler schema-omitted steps/CFG/seed/denoise are hidden (no empty adjustable shells)', () => {
     const src = rf('src/components/NodeItem.tsx', 'utf8');
-    expect(src).toContain("SAMPLER_SCHEMA_WIDGETS.has(widget.name) && (schemaUnused || unsupported)");
+    expect(src).toContain("hideSamplerShell");
     expect(src).toContain('filledCanvasValue');
     expect(src).not.toContain('data-testid="node-sampler-unused"');
   });

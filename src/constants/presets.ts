@@ -27,7 +27,7 @@ type StdSpec = {
    * KSampler/frame params the provider's local Schema marks unsupported (providerSchema.ts /
    * provider evidence). Omitted fields are not stored, so graphEngine's numOrUndef never sends them.
    */
-  omit?: Array<'seed' | 'steps' | 'cfg' | 'sampler' | 'scheduler' | 'denoise'>;
+  omit?: Array<'seed' | 'steps' | 'cfg' | 'sampler' | 'scheduler' | 'denoise' | 'width' | 'height'>;
   /** Where the model / Schema facts come from (shown nowhere; audit trail for reviewers). */
   source?: string;
   /** Extra KSampler defaults from the endpoint Schema (e.g. seed). */
@@ -46,6 +46,54 @@ function presetId(provider: string): string {
 
 function friendly(provider: string): string {
   return PROVIDER_TITLE_LABEL[provider] || provider;
+}
+
+/**
+ * Seed Checkpoint custom_parameters._canvas.schemaProperties from StdSpec.omit (MuAPI path).
+ * Listed props = fields the endpoint accepts; omitted sampler/scheduler/denoise stay off the list
+ * so NodeItem hideSamplerShell / schemaSendStatus can hide empty widgets before a live Schema GET.
+ * Never overwrites an existing schemaProperties array (MuAPI / hand-seeded).
+ */
+function schemaPropertiesForOmit(spec: StdSpec, omit: Set<NonNullable<StdSpec['omit']>[number]>): string[] {
+  const props: string[] = ['prompt'];
+  if (!omit.has('seed')) props.push('seed');
+  if (!omit.has('steps')) props.push('steps', 'num_inference_steps');
+  if (!omit.has('cfg')) props.push('guidance', 'guidance_scale', 'cfg', 'cfg_scale');
+  if (!omit.has('width') && !omit.has('height')) props.push('width', 'height', 'size', 'image_size');
+  if (typeof spec.checkpointExtra?.aspect_ratio === 'string') props.push('aspect_ratio');
+  if (typeof spec.checkpointExtra?.resolution === 'string') props.push('resolution');
+  if (typeof spec.checkpointExtra?.size === 'string' && !props.includes('size')) props.push('size');
+  if (spec.hasNegative !== false) props.push('negative_prompt');
+  const hasRealLora = (spec.loras ?? []).some((l) => Boolean(l.name));
+  if (hasRealLora || spec.hasLora) props.push('loras', 'lora_url', 'lora_weight', 'lora_weights');
+  // Omitted sampler/scheduler/denoise intentionally absent — empty shells must hide.
+  return props;
+}
+
+function mergeOmitSchemaProperties(
+  existing: unknown,
+  spec: StdSpec,
+  omit: Set<NonNullable<StdSpec['omit']>[number]>,
+  target: string,
+): string | undefined {
+  if (omit.size === 0) {
+    return typeof existing === 'string' ? existing : existing != null ? JSON.stringify(existing) : undefined;
+  }
+  let base: Record<string, unknown> = {};
+  if (typeof existing === 'string' && existing.trim()) {
+    try { base = JSON.parse(existing); } catch { base = {}; }
+  } else if (existing && typeof existing === 'object') {
+    base = { ...(existing as Record<string, unknown>) };
+  }
+  const canvas = (base._canvas && typeof base._canvas === 'object' ? { ...(base._canvas as Record<string, unknown>) } : {}) as Record<string, unknown>;
+  const already = canvas.schemaProperties;
+  if (Array.isArray(already) && already.length > 0) {
+    return JSON.stringify(base);
+  }
+  canvas.scope = { provider: target, model: spec.ckpt };
+  canvas.schemaProperties = schemaPropertiesForOmit(spec, omit);
+  base._canvas = canvas;
+  return JSON.stringify(base);
 }
 
 function buildStandardT2i(spec: StdSpec): WorkflowPreset {
@@ -84,6 +132,11 @@ function buildStandardT2i(spec: StdSpec): WorkflowPreset {
   const modelSrc = hasLora ? lastLora : ckptId;
   const clipSrc = hasLora ? lastLora : ckptId;
 
+  const extra = { ...(spec.checkpointExtra || {}) } as Record<string, unknown>;
+  const mergedCp = mergeOmitSchemaProperties(extra.custom_parameters, spec, omit, target);
+  if (mergedCp !== undefined) extra.custom_parameters = mergedCp;
+  else delete extra.custom_parameters;
+
   const checkpoint: NodeInstance = {
     id: ckptId,
     type: 'CheckpointLoaderSimple',
@@ -95,7 +148,7 @@ function buildStandardT2i(spec: StdSpec): WorkflowPreset {
     values: {
       ckpt_name: spec.ckpt,
       targetProvider: target,
-      ...(spec.checkpointExtra || {}),
+      ...extra,
       // 待配方: also gate TopBar run after 仅载入 (card button alone is not enough).
       ...(spec.pendingRecipe ? { execution_blocked_reason: spec.pendingRecipe } : {}),
     },
@@ -189,7 +242,11 @@ function buildStandardT2i(spec: StdSpec): WorkflowPreset {
         width: 280,
         inputs: [],
         outputs: NODE_DEFINITIONS.EmptyLatentImage.outputs,
-        values: { width, height, batch_size: 1 },
+        values: Object.fromEntries(Object.entries({
+          width: keep('width', width),
+          height: keep('height', height),
+          batch_size: 1,
+        }).filter(([, v]) => v !== undefined)),
       },
       {
         id: sampId,
@@ -264,8 +321,8 @@ function buildStandardT2i(spec: StdSpec): WorkflowPreset {
         sampler: spec.compact ? undefined : keep('sampler', sampler),
         scheduler: spec.compact ? undefined : keep('scheduler', scheduler),
         denoise: spec.compact ? undefined : keep('denoise', 1),
-        width,
-        height,
+        width: keep('width', width),
+        height: keep('height', height),
         batchSize: 1,
         loras: loraList.map(l => ({ name: l.name, modelStrength: l.strength, clipStrength: l.strength, triggerWords: '' })),
         ...(spec.checkpointExtra?.civitai_engine
@@ -275,9 +332,16 @@ function buildStandardT2i(spec: StdSpec): WorkflowPreset {
               civitaiModel: spec.checkpointExtra.civitai_model as string,
             }
           : {}),
-        ...(spec.checkpointExtra?.size ? { size: spec.checkpointExtra.size as string, aspectRatio: (spec.checkpointExtra.aspect_ratio as string) || '1:1' } : {}),
-        ...(typeof spec.checkpointExtra?.custom_parameters === 'string'
-          ? { customParameters: spec.checkpointExtra.custom_parameters as string }
+        // Size tokens from checkpointExtra when the endpoint uses aspect/resolution (Agnes/Mage), not EmptyLatent pixels.
+        ...((spec.checkpointExtra?.size || spec.checkpointExtra?.aspect_ratio || spec.checkpointExtra?.resolution)
+          ? {
+              ...(typeof spec.checkpointExtra.size === 'string' ? { size: spec.checkpointExtra.size } : {}),
+              ...(typeof spec.checkpointExtra.resolution === 'string' ? { resolution: spec.checkpointExtra.resolution } : {}),
+              ...(typeof spec.checkpointExtra.aspect_ratio === 'string' ? { aspectRatio: spec.checkpointExtra.aspect_ratio } : {}),
+            }
+          : {}),
+        ...(typeof checkpoint.values.custom_parameters === 'string'
+          ? { customParameters: checkpoint.values.custom_parameters as string }
           : {}),
       },
       status: 'idle',
@@ -511,9 +575,31 @@ function buildStandardI2v(spec: { provider: string; model: string }): WorkflowPr
 const STD_SPECS: StdSpec[] = [
   // Preset model = Tongyi-MAI/Z-Image-Turbo Space (providerSchema.ts:495-505): steps supported, cfg unsupported; server.ts:4211/4216 rejects cfg/guidance for this route → cfg omitted (would 400). HF Inference rows (num_inference_steps+guidance_scale) apply to other HF models.
   { provider: 'huggingface', ckpt: 'Tongyi-MAI/Z-Image-Turbo', hasLora: false, hasNegative: false, steps: 8, omit: ['cfg', 'sampler', 'scheduler', 'denoise'] },
-  // providerSchema.ts modelscope-hosted-image: loras supported in Schema but no accepted-run LoRA id → no LoRA node.
-  { provider: 'modelscope', ckpt: 'Tongyi-MAI/Z-Image-Turbo', hasLora: false, steps: 8, cfg: 1 },
-  { provider: 'modelscope_ai', ckpt: 'Tongyi-MAI/Z-Image-Turbo', hasLora: false, steps: 8, cfg: 1 },
+  // Official API-Inference: size/steps/guidance/seed/negative_prompt/loras; sampler/scheduler/denoise not on REST table → omit (no empty shells).
+  // CN accepted hist_1793695144423_1ms48: Realism LoRA@1, 832×1216, steps8, guidance1, seed42.
+  {
+    provider: 'modelscope',
+    ckpt: 'Tongyi-MAI/Z-Image-Turbo',
+    hasLora: true,
+    loras: [{ name: 'suayptalha/Z-Image-Turbo-Realism-LoRA', strength: 1, source: 'hist_1793695144423_1ms48' }],
+    steps: 8,
+    cfg: 1,
+    width: 832,
+    height: 1216,
+    omit: ['sampler', 'scheduler', 'denoise'],
+  },
+  // Intl accepted temp/e2e/modelscope-intl-lora-2026-11-02: Lcars LoRA@1 (CN rejects this id).
+  {
+    provider: 'modelscope_ai',
+    ckpt: 'Tongyi-MAI/Z-Image-Turbo',
+    hasLora: true,
+    loras: [{ name: 'LcarsPicturesDatabase/ST-TNG-Rooms-Z-Image-Turbo-v1', strength: 1, source: 'temp/e2e/modelscope-intl-lora-2026-11-02' }],
+    steps: 8,
+    cfg: 1,
+    width: 832,
+    height: 1216,
+    omit: ['sampler', 'scheduler', 'denoise'],
+  },
   // providerSchema.ts flux-schnell: resolution/num_images only; seed/negative/steps/cfg/sampler/scheduler/denoise/loras unsupported.
   { provider: 'nanogpt', ckpt: 'flux-schnell', hasLora: false, hasNegative: false, omit: ['seed', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise'] },
   // providerSchema.ts fal-ai/flux/schnell: seed, steps 1–12, cfg 1–20, image_size; negative/sampler/scheduler/loras unsupported.
@@ -578,7 +664,8 @@ const STD_SPECS: StdSpec[] = [
   // docs/evidence/venice-api-2026-10-15.md:51/54: catalog 200 lists venice-sd35; seed/steps/cfg_scale/size/negative sent; no custom loras.
   { provider: 'venice', ckpt: 'venice-sd35', hasLora: false, steps: 20, cfg: 7.5, omit: ['sampler', 'scheduler', 'denoise'] },
   // DeepInfra public T2I: docs.deepinfra.com/apis/image-generation + OpenAPI OpenAIImagesGenerationsIn — prompt/model/size/n/response_format only; hasLora:false (private LoRA needs dashboard deploy).
-  { provider: 'deepinfra', ckpt: 'black-forest-labs/FLUX-1-schnell', hasLora: false, hasNegative: false, omit: ['steps', 'cfg', 'sampler', 'scheduler', 'denoise'] },
+  // Official OpenAI images path: prompt/model/size/n/response_format (+quality/style); no seed/steps/cfg/sampler/LoRA on public FLUX-schnell.
+  { provider: 'deepinfra', ckpt: 'black-forest-labs/FLUX-1-schnell', hasLora: false, hasNegative: false, omit: ['seed', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise'] },
   // Sogni hosted-tool selector: live official generate_image.schema.json enum includes krea-2-turbo (verified 2026-11-03, 30 models). Not a Krea API path.
   // Driver maps cfg→guidance; Schema has no steps → omit steps. LoRA via loras+loraStrengths when catalog confirms.
   { provider: 'sogni', ckpt: 'krea-2-turbo', hasLora: false, cfg: 1, omit: ['steps', 'sampler', 'scheduler', 'denoise'] },
@@ -593,9 +680,9 @@ const STD_SPECS: StdSpec[] = [
   { provider: 'modelslab', ckpt: 'tamarin-xl-v1', hasLora: true, hasNegative: true, steps: 20, cfg: 7.5, width: 512, height: 512, scheduler: 'UniPCMultistepScheduler', omit: ['sampler', 'denoise'],
     loras: [{ name: 'xl-realistic-cake-art-sty', strength: 0.45, source: 'https://docs.modelslab.com/image-generation/community-models/dreambooth-lora' }] },
   { provider: 'agnes', ckpt: 'agnes-image-2.5-flash', hasLora: false, compact: true, checkpointExtra: { size: '2K', aspect_ratio: '1:1' } },
-  // docs.mage.space/api/models/mango: no LoRA; prompt + model_id + aspect_ratio/resolution; characters via @handle.
-  // Mage Mango API has no steps/cfg/sampler/LoRA; board still uses full sampler+VAE topology (雁: no compact). Omit unsupported diffusion fields.
-  { provider: 'mage', ckpt: 'mango-v3', hasLora: false, hasNegative: false, omit: ['steps', 'cfg', 'sampler', 'scheduler', 'denoise'], checkpointExtra: { aspect_ratio: '4:5', resolution: '2K' } },
+  // docs.mage.space/api/models/mango OpenAPI (fetched 2026-11-03): prompt + seed + model_id + aspect_ratio + resolution (+ refs); no LoRA/steps/cfg/sampler; no width/height pixels.
+  // Board keeps sampler+VAE topology (雁: no compact) but omits EmptyLatent pixel size — size lives on checkpoint aspect_ratio/resolution.
+  { provider: 'mage', ckpt: 'mango-v3', hasLora: false, hasNegative: false, omit: ['steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'width', 'height'], checkpointExtra: { aspect_ratio: '4:5', resolution: '2K' } },
   // providerSchema.ts sensenova-u1.5-lite: width/height/size only.
   { provider: 'sensenova', ckpt: 'sensenova-u1.5-lite', hasLora: false, hasNegative: false, omit: ['seed', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise'] },
   // providerSchema.ts comfy:krea2: sampler/scheduler/seed supported, steps/cfg unverified; loras + negative unsupported (docs/evidence/civitai-krea-no-lora-2026-10-14.md).

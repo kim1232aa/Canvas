@@ -128,18 +128,16 @@ export function canvasFieldMatchesSchema(
 }
 
 /**
- * True only when we KNOW the official Schema will not accept this canvas field.
- * - No declared Schema props → false (never fake「不会发送」).
- * - Declared props include field or alias → false (will send).
- * - Declared props omit field and aliases → true.
+ * Declared schemaProperties omit this canvas field (no provider badge gate).
+ * Used by NodeItem to hide empty KSampler shells when a preset/Schema seeds
+ * _canvas.schemaProperties on providers outside SCHEMA_SCOPED_BADGES (e.g. ModelScope).
+ * Without declared props → false (never fake omission).
  */
-export function isSchemaOmitCandidate(
-  provider: string | undefined | null,
+export function isDeclaredSchemaFieldOmitted(
   fieldOrWidget: string,
   customParameters?: string | null,
   schemaProperties?: Set<string> | string[] | Record<string, unknown> | null,
 ): boolean {
-  if (!hasSchemaSendBadges(provider)) return false;
   if (!isSchemaFieldsOnlyEnabled(customParameters)) return false;
   const field = String(fieldOrWidget || '').toLowerCase().trim();
   if (!OMIT_CANDIDATE.has(field)) return false;
@@ -153,11 +151,26 @@ export function isSchemaOmitCandidate(
           : new Set(Object.keys(schemaProperties))
       : readDeclaredSchemaProperties(customParameters);
 
-  // Hard rule: without Schema evidence, do not claim omission.
   if (!declared || declared.size === 0) return false;
+  return !canvasFieldMatchesSchema(field, declared);
+}
+
+/**
+ * True only when we KNOW the official Schema will not accept this canvas field.
+ * - No declared Schema props → false (never fake「不会发送」).
+ * - Declared props include field or alias → false (will send).
+ * - Declared props omit field and aliases → true.
+ */
+export function isSchemaOmitCandidate(
+  provider: string | undefined | null,
+  fieldOrWidget: string,
+  customParameters?: string | null,
+  schemaProperties?: Set<string> | string[] | Record<string, unknown> | null,
+): boolean {
+  if (!hasSchemaSendBadges(provider)) return false;
   // OpenWorks live extras (雁 2026-10-17): seed/steps/cfg/neg/loras are appended as named inputs even when catalog omits them.
-  if (String(provider || '').toLowerCase().trim() === 'openworks' && ['seed', 'steps', 'cfg', 'cfg_scale', 'negative_prompt', 'loras', 'styles'].includes(field)) {
+  if (String(provider || '').toLowerCase().trim() === 'openworks' && ['seed', 'steps', 'cfg', 'cfg_scale', 'negative_prompt', 'loras', 'styles'].includes(String(fieldOrWidget || '').toLowerCase().trim())) {
     return false;
   }
-  return !canvasFieldMatchesSchema(field, declared);
+  return isDeclaredSchemaFieldOmitted(fieldOrWidget, customParameters, schemaProperties);
 }
