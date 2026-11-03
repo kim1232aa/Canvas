@@ -98,18 +98,6 @@ export function schemaPrefetchFailureData(status: number, body: string): Record<
   return { upstreamStatus: status, upstreamResponseBody: body };
 }
 
-async function prefetchFailure(getUrl: string, status: number, body: string, params: NormalizedGenerateParams, provider: string): Promise<Error> {
-  let historyNote = '';
-  try {
-    const r = await globalThis.fetch('/api/history/prefetch-failure', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-canvas-origin': 'browser-ui' }, body: JSON.stringify({ getUrl, status, body, provider, model: params.model, prompt: params.prompt, loras: params.loras }) });
-    if (!r.ok) historyNote = `\n失败记录写入历史失败：HTTP ${r.status} ${await r.text()}`;
-  } catch (e) { historyNote = `\n失败记录写入历史失败：${e instanceof Error ? e.message : String(e)}`; }
-  const error = new Error(`GET ${getUrl} → HTTP ${status} · 生成 POST 未发送\n${body}${historyNote}`);
-  error.name = 'SchemaPrefetchError';
-  (error as any).data = schemaPrefetchFailureData(status, body);
-  return error;
-}
-
 async function request(url: string, init: RequestInit, context: string, options?: { trace?: boolean }): Promise<Response> {
   // Schema/catalog plumbing may set trace:false so ExecutionLog is not flooded with
   // GET /api/model-schema labeled as fake 「出图完成」; submit/poll/save stay traced.
@@ -167,15 +155,24 @@ export class SchemaProviderDriver extends BaseEngineDriver {
     if (prior?.currentAction && prior.settledAt) {
       recordLocalEvent(`Schema 复用 · ${this.id} · ${params.model}`, { ok: true, note: '复用，未重新请求', reusedAt: prior.settledAt, reusedOk: !!prior.ok, reusedStatus: prior.status ?? null }, 'complete');
     }
+    // 雁 rule: a failed Schema GET never stops the generation POST. The failure (status + first 2000 chars of body)
+    // is recorded in the exec log and in the request trace; the POST goes out as built and its result is shown verbatim.
+    let schemaPrefetchFailure: Record<string, unknown> | undefined;
     try {
       const shared = await sharedGetJson(schemaUrl, keyHeaders);
       schemaResponse = { ok: shared.ok, status: shared.status };
       schemaBody = shared.data ?? '';
     } catch (cause) {
       if (!isApiTraceError(cause)) throw cause;
-      throw await prefetchFailure(schemaUrl, cause.appStatus, cause.rawBody, params, this.id);
+      schemaResponse = { ok: false, status: cause.appStatus };
+      schemaBody = cause.rawBody;
     }
-    if (!schemaResponse.ok) throw await prefetchFailure(schemaUrl, schemaResponse.status, typeof schemaBody === 'string' ? schemaBody : JSON.stringify(schemaBody), params, this.id);
+    if (!schemaResponse.ok) {
+      const raw = typeof schemaBody === 'string' ? schemaBody : JSON.stringify(schemaBody);
+      schemaPrefetchFailure = { getUrl: schemaUrl, status: schemaResponse.status, ...schemaPrefetchFailureData(schemaResponse.status, raw.slice(0, 2000)), truncated: raw.length > 2000, note: '查参数表失败；生成 POST 仍按所填参数发送' };
+      recordLocalEvent(`Schema GET 失败 · ${this.id} · ${params.model}`, { ok: false, ...schemaPrefetchFailure }, 'error');
+      schemaBody = {};
+    }
     const credentialRef = String(asRecord(schemaBody).credentialRef || '').trim();
     if (credentialRef) headers['x-canvas-credential-ref'] = credentialRef;
     const workflowSnapshot = params.workflowSnapshot;
@@ -210,6 +207,7 @@ export class SchemaProviderDriver extends BaseEngineDriver {
       clip_skip: extra.clip_skip ?? extra.clipSkip ?? customSrc.clip_skip,
       custom_parameters: custom,
       workflowSnapshot,
+      ...(schemaPrefetchFailure ? { schemaPrefetchFailure } : {}),
     };
 
     const submitResponse = await request(`/api/schema-provider/${this.id}/submit`, {
@@ -218,6 +216,7 @@ export class SchemaProviderDriver extends BaseEngineDriver {
     const submitBody = await readBody(submitResponse);
     if (!submitResponse.ok) {
       const err=failure(`${this.name} submit failed`,submitResponse,submitBody);
+      if(schemaPrefetchFailure){err.message+=`\n（此前 GET ${schemaUrl} → HTTP ${schemaPrefetchFailure.status}）`;(err as any).data={...(err as any).data,schemaPrefetchFailure};}
       const rangeWarning=this.id==='sogni'?sogniRangeValidationNotice(submitBody):undefined;
       if(rangeWarning){err.message+=`; ${rangeWarning}`;(err as any).data={loraRangeWarning:rangeWarning,submitResponse:submitBody};}
       throw err;
@@ -282,7 +281,7 @@ export class SchemaProviderDriver extends BaseEngineDriver {
         const owPrompt=(()=>{if(typeof sent?.prompt==='string'&&sent.prompt.trim())return sent.prompt;const map=Array.isArray(actualRequest?.mapping)?actualRequest.mapping:[];const mp=map.find((m:any)=>m?.from==='prompt'&&m?.sent&&typeof m.value==='string');if(mp)return mp.value;const inputs=Array.isArray(sent?.inputs)?sent.inputs:[];const first=inputs.find((x:any)=>x&&(x.type==='STRING'||typeof x.value==='string')&&(x.name==null||x.name==='prompt'));return typeof first?.value==='string'?first.value:undefined;})();
         const owWidth=typeof sent?.width==='number'?sent.width:(Array.isArray(sent?.inputs)?Number(sent.inputs.filter((x:any)=>x&&!x.name&&(x.type==='INTEGER'||typeof x.value==='number'))[0]?.value):undefined);
         const owHeight=typeof sent?.height==='number'?sent.height:(Array.isArray(sent?.inputs)?Number(sent.inputs.filter((x:any)=>x&&!x.name&&(x.type==='INTEGER'||typeof x.value==='number'))[1]?.value):undefined);
-        const metadata={model:params.model,actualModel:params.model,prompt:owPrompt,negativePrompt:sent?.negative_prompt ?? sent?.negativePrompt,seed:typeof sent?.seed==='number' && sent.seed>=0?sent.seed:null,steps:sent?.num_inference_steps ?? sent?.steps ?? null,cfg:sent?.guidance_scale ?? sent?.guidance ?? sent?.cfg_scale ?? sent?.cfg ?? null,width:Number.isFinite(owWidth)?owWidth:null,height:Number.isFinite(owHeight)?owHeight:null,loras:sentLoras,workflowSnapshot,requestMetadata:{actualRequest,submit:submitBody,poll:pollBody}};
+        const metadata={model:params.model,actualModel:params.model,prompt:owPrompt,negativePrompt:sent?.negative_prompt ?? sent?.negativePrompt,seed:typeof sent?.seed==='number' && sent.seed>=0?sent.seed:null,steps:sent?.num_inference_steps ?? sent?.steps ?? null,cfg:sent?.guidance_scale ?? sent?.guidance ?? sent?.cfg_scale ?? sent?.cfg ?? null,width:Number.isFinite(owWidth)?owWidth:null,height:Number.isFinite(owHeight)?owHeight:null,loras:sentLoras,workflowSnapshot,requestMetadata:{actualRequest,submit:submitBody,poll:pollBody,...(schemaPrefetchFailure?{schemaPrefetchFailure}:{})}};
         let saved:any;let historyWarning:string|undefined;
         try {
           const saveResponse=await request(`/api/schema-provider/${this.id}/save-result`,{method:'POST',headers,body:JSON.stringify({taskId,outputs:normalizedOutputs,metadata,workflowSnapshot})},`${this.name} output persistence`);

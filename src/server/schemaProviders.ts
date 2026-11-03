@@ -1039,7 +1039,26 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
     return {rows,sourceUrl};
   };
 
+  // 雁 rule: a failed catalog lookup (upstream HTTP error, e.g. Cloudflare 403) must not stop the generation send.
+  // The failure is recorded verbatim (status + first 2000 chars of body) on the definition as catalogLookupFailure.
+  const catalogFailures=new WeakMap<express.Request,any>();
+  const listForSchema=async(req:express.Request,provider:Provider,credential?:Credential):Promise<{rows:any[],sourceUrl:string}>=>{
+    try{return await list(req,provider,credential);}
+    catch(e:any){
+      const upstreamStatus=e?.upstreamStatus ?? (e?.errorSource==='local'?undefined:e?.status);
+      if(e?.errorSource==='local')throw e; // local can't-send (e.g. missing key) stays a stop
+      const sourceUrl=schemaProviders[provider].root+schemaProviders[provider].catalog;
+      const raw=String(e?.rawResponse ?? e?.upstreamResponseBody ?? e?.message ?? e);
+      catalogFailures.set(req,{endpoint:e?.endpoint || sourceUrl,upstreamStatus:upstreamStatus ?? null,upstreamResponseBody:raw.slice(0,2000),truncated:raw.length>2000,error:String(e?.message || e).slice(0,2000),note:'目录/参数表查询失败；生成请求仍按所填参数发送'});
+      return {rows:[],sourceUrl};
+    }
+  };
   const modelSchema=async(req:express.Request,provider:Provider,model:string,credential?:Credential)=>{
+    const d:any=await modelSchemaInner(req,provider,model,credential);
+    const f=catalogFailures.get(req);catalogFailures.delete(req);
+    return f?{...d,catalogLookupFailure:f}:d;
+  };
+  const modelSchemaInner=async(req:express.Request,provider:Provider,model:string,credential?:Credential)=>{
     if(provider==='muapi') {
       const sourceUrl=schemaProviders.muapi.root+'/openapi.json';
       const [{data:document},{rows,catalogUrl}]=await Promise.all([read(req,provider,sourceUrl,undefined,credential),list(req,provider,credential).then(x=>({...x,catalogUrl:x.sourceUrl}))]);
@@ -1052,12 +1071,12 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
       return {provider,model,sourceUrl,catalogUrl,endpoint:schemaProviders.muapi.root+endpoint,inputSchema:input?resolveSchemaRefs(input,document):null,modelMetadata:entry};
     }
     if(provider==='krea') {
-      const {rows,sourceUrl}=await list(req,provider,credential);
+      const {rows,sourceUrl}=await listForSchema(req,provider,credential);
       const entry:any=rows.find((x:any)=>x.id===model) ?? {id:model,notInCatalog:true}; // not in catalog: send the user's model id; upstream decides
       return {provider,model,sourceUrl,endpoint:schemaProviders.krea.root+(entry.endpoint ?? `/generate/${model}`),inputSchema:entry.parameters || null,modelMetadata:{...entry,parameters:undefined},schemaStatus:'openapi'};
     }
     if(provider==='together') {
-      const {rows,sourceUrl}=await list(req,provider,credential);
+      const {rows,sourceUrl}=await listForSchema(req,provider,credential);
       const entry:any=rows.find((x:any)=>x.id===model) ?? {id:model,notInCatalog:true}; // not in catalog: send the user's model id; upstream decides
       const isVideo=entry.type==='video' || entry.category==='text-to-video';
       const endpoint=isVideo?(schemaProviders.together as any).videoRoot+'/videos':schemaProviders.together.root+'/images/generations';
@@ -1066,7 +1085,7 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
       return {provider,model,sourceUrl,endpoint,inputSchema,modelMetadata:entry,schemaStatus:'official-openapi-runtime',schemaSource:specUrl,schemaUnprobed:true,mediaKind:isVideo?'video':'image'};
     }
     if(provider==='aimlapi') {
-      const {rows,sourceUrl}=await list(req,provider,credential);
+      const {rows,sourceUrl}=await listForSchema(req,provider,credential);
       const entry:any=rows.find((x:any)=>x.id===model) ?? {id:model,notInCatalog:true}; // not in catalog: send the user's model id; upstream decides
       const isVideo=entry.type==='video' || entry.category==='text-to-video';
       const endpoint=isVideo?(schemaProviders.aimlapi as any).videoRoot+'/video/generations':schemaProviders.aimlapi.root+'/images/generations';
@@ -1091,7 +1110,7 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
         const schemaSource=(img2Decl.sources||[]).join(' ; ');
         return {provider,model,sourceUrl:schemaSource || endpoint,endpoint,inputSchema:img2Decl.inputSchema,modelMetadata:{id:model,name:model,category:'image-to-video',type:'video',endpoint:'/v3/async/img2video'},schemaStatus:'official-html-declaration',schemaSource,declaration:{file:img2Decl.file,sources:img2Decl.sources,fetchedAt:img2Decl.fetchedAt},schemaUnprobed:true,schemaConfirmedFields:Object.entries(img2Decl.inputSchema.properties||{}).filter(([,v]:any)=>v?.['x-liveConfirmed']===true).map(([k])=>k),mediaKind:'video'};
       }
-      const {rows,sourceUrl}=await list(req,provider,credential);
+      const {rows,sourceUrl}=await listForSchema(req,provider,credential);
       const entry:any=rows.find((x:any)=>x.id===model) ?? {id:model,notInCatalog:true}; // not in catalog: send the user's model id; upstream decides
       const isVideo=entry.type==='video' || /video/i.test(entry.category||'');
       const endpoint=schemaProviders.novita.root+(isVideo?'/v3/async/txt2video':'/v3/async/txt2img');
@@ -1104,7 +1123,7 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
       return {provider,model,sourceUrl,endpoint,inputSchema,modelMetadata:{...entry,parameters:undefined},schemaStatus:'upstream-catalog',mediaKind:isVideo?'video':'image'};
     }
     if(provider==='venice') {
-      const {rows,sourceUrl}=await list(req,provider,credential);
+      const {rows,sourceUrl}=await listForSchema(req,provider,credential);
       const entry:any=rows.find((x:any)=>x.id===model) ?? {id:model,notInCatalog:true}; // not in catalog: send the user's model id; upstream decides
       const isVideo=entry.type==='video' || /video/i.test(entry.category||'');
       const endpoint=schemaProviders.venice.root+(isVideo?'/video/queue':'/image/generate');
@@ -1114,7 +1133,7 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
       return {provider,model,sourceUrl,endpoint,inputSchema,modelMetadata:entry,schemaStatus:'official-openapi-runtime',schemaSource:specUrl,constraintsSource:sourceUrl,schemaUnprobed:true,mediaKind:isVideo?'video':'image'};
     }
     if(provider==='deepinfra') {
-      const {rows,sourceUrl}=await list(req,provider,credential);
+      const {rows,sourceUrl}=await listForSchema(req,provider,credential);
       const entry:any=rows.find((x:any)=>x.id===model) ?? {id:model,notInCatalog:true}; // not in catalog: send the user's model id; upstream decides
       // Docs: POST https://api.deepinfra.com/v1/openai/images/generations (Bearer). OpenAPI twin path /v1/images/generations supplies the request schema (required model+prompt; size/n/response_format).
       const endpoint=schemaProviders.deepinfra.root+'/v1/openai/images/generations';
@@ -1126,7 +1145,7 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
       const {schema,sourceUrl}=await fetchSogniGenerateImageSchema(dep.fetch,req.path,model);
       return {provider,model,sourceUrl,endpoint:schemaProviders.sogni.root+'/v1/creative-agent/workflows',inputSchema:schema,schemaVersion:schema.schemaVersion,note:'模型 selector 与 generate_image 参数来自实时官方 Schema；实时 worker 目录属于另一种 ID。'};
     }
-    const {rows,sourceUrl}=await list(req,provider,credential);
+    const {rows,sourceUrl}=await listForSchema(req,provider,credential);
     const entry=rows.find((x:any)=>(provider==='wavespeed'?x.model_id:x.id)===model);
     if(provider==='wavespeed') {
       const definition=entry?.api_schema?.api_schemas?.find((s:any)=>s.type==='model_run' && s.method==='POST');
@@ -1151,7 +1170,7 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
   app.get('/api/model-schema',async(req,res,next)=>{
     const provider=String(req.query.provider || '');if(!valid(provider))return next();
     try{const credential=credentials(req,provider,{create:true});const model=String(req.query.model || '');const definition=await modelSchema(req,provider,model,credential);
-      const readAt=new Date().toISOString();schemaReads.set(schemaReadKey(provider,model,credential),{definition,readAt});
+      const readAt=new Date().toISOString();if(!(definition as any).catalogLookupFailure)schemaReads.set(schemaReadKey(provider,model,credential),{definition,readAt});
       res.json({...definition,credentialRef:credential.credentialRef,schemaRead:{fetched:true,readAt,route:'/api/model-schema'}});}catch(e){fail(res,e);}
   });
   app.get('/api/models',async(req,res,next)=>{
@@ -1204,7 +1223,7 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
       const credential=credentials(req,provider,{create:true});
       const remembered=schemaReads.get(schemaReadKey(provider,model,credential));
       if(remembered){definition=remembered.definition;schemaRead={fetched:false,reused:true,readAt:remembered.readAt,reusedFrom:'/api/model-schema',note:'复用，未重新请求'};}
-      else{schemaRead={fetched:true,readAt:new Date().toISOString()};definition=await modelSchema(req,provider,model,credential);schemaReads.set(schemaReadKey(provider,model,credential),{definition,readAt:schemaRead.readAt});}
+      else{schemaRead={fetched:true,readAt:new Date().toISOString()};definition=await modelSchema(req,provider,model,credential);if(!definition.catalogLookupFailure)schemaReads.set(schemaReadKey(provider,model,credential),{definition,readAt:schemaRead.readAt});}
       schemaLoaded=true;
       const custom={...req.body.custom_parameters};const canvas=custom._canvas || {};const only=canvas.parametersOnly===true;const schemaFieldsOnly=canvas.schemaFieldsOnly!==false;delete custom._canvas;
       payload={prompt:req.body.prompt};mapping=[];
@@ -1348,7 +1367,7 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
       }
       if(only)mapping.push({from:'canvas parameters and LoRA nodes',to:null,reason:'用户选择了仅提交 JSON 与提示词'});
       const requestBody=provider==='sogni'?{...workflowOptions,input:Object.hasOwn(workflowOptions,'input')?workflowOptions.input:{title:'Canvas · '+model,steps:[{id:'image1',toolName:'generate_image',arguments:payload}]}}:provider==='novita'?(()=>{const extra=(payload.extra && typeof payload.extra==='object')?payload.extra:{response_image_type:'jpeg'};const {extra:_e,...request}=payload;return {extra,request:{...request,model_name:model}};})():payload;
-      actualRequest={endpoint:definition.endpoint,parameters:requestBody,mapping:mapping.map(m=>({...m,finalValue:Object.hasOwn(payload,m.to)?payload[m.to]:m.scope==='workflow'?workflowOptions.media_references:undefined})),parametersOnly:only,schemaFieldsOnly,...(definition.inputSchema?.properties?{schemaFields:Object.keys(definition.inputSchema.properties)}:{})};
+      actualRequest={endpoint:definition.endpoint,...(definition.catalogLookupFailure?{catalogLookupFailure:definition.catalogLookupFailure}:{}),...(req.body.schemaPrefetchFailure?{schemaPrefetchFailure:req.body.schemaPrefetchFailure}:{}),parameters:requestBody,mapping:mapping.map(m=>({...m,finalValue:Object.hasOwn(payload,m.to)?payload[m.to]:m.scope==='workflow'?workflowOptions.media_references:undefined})),parametersOnly:only,schemaFieldsOnly,...(definition.inputSchema?.properties?{schemaFields:Object.keys(definition.inputSchema.properties)}:{})};
       const {data,status}=await read(req,provider,definition.endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(requestBody)},credential);
       if(provider==='together' && (definition as any).mediaKind!=='video') {
         // Images API is synchronous (docs.together.ai/docs/inference/images/overview). Store result for poll compatibility.
