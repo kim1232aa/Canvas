@@ -40,7 +40,12 @@ export function handleMageGenerate(deps: MageRouteDeps) {
     try {
       mapped = buildMageImageRequest(req.body || {}, baseUrl || MAGE_DEFAULT_BASE);
     } catch (error: any) {
-      return res.status(400).json({ error: error.message, errorSource: 'local' });
+      return res.status(400).json({
+        error: error.message,
+        errorSource: 'local',
+        ...(Array.isArray(error?.schemaFields) ? { schemaFields: error.schemaFields } : {}),
+        ...(error?.blockedField && typeof error.blockedField === 'object' ? { blockedField: error.blockedField } : {}),
+      });
     }
 
     const endpoint = mapped.endpoint;

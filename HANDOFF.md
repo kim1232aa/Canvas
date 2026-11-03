@@ -1,5 +1,12 @@
 # ComfyCanvas Studio：开发交接、产品缺口与验收手册
 
+## 2026-11-04 非消耗：Replicate 步数透明 + 本地拦截展示
+
+| 项 | 判定 | 要点 / 证据 |
+| --- | --- | --- |
+| Replicate 步数 20vs28 | **无静默改参（代码+既有 hist）** | hist `wjmvl`/`woe56`：UI 快照与 `num_inference_steps` 均为 **28**；builder 不代填 Schema 默认。回归：显式 20→发 20；未填不注入 28。FE 新拍 **待**（可复用 `replicate-fe-2026-11-03`）。 |
+| 历史本地拦截 | **原因可读；宽高误标已修** | Mage `ujkp4`：拦 width/height 正确；旧展示「拟发送」已改为拒收带 `schemaFields`/`blockedField` →「本地拦截」/「该端点不支持」。魔搭空负向「未发送」属实，未改。证据 `temp/e2e/replicate-steps-local-block-2026-11-04/RESULT.md`。 |
+
 ## 2026-11-03 晚间非消耗三刀（产品核）
 
 | 项 | 判定 | 要点 / 证据 |

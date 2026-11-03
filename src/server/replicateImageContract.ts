@@ -199,6 +199,8 @@ export function buildReplicatePredictionRequest(
     place('seed', 'seed', Math.round(body.seed), ['seed'], 'seed');
   }
 
+  // Iron: send the canvas steps as-is. Never substitute live Schema default (flux-dev-lora default 28)
+  // when the UI shows another value, and never invent steps when the board omitted them.
   const steps = body.steps ?? body.num_inference_steps ?? body.numInferenceSteps;
   if (typeof steps === 'number' && Number.isFinite(steps) && steps > 0) {
     place('steps', 'steps', Math.round(steps), ['num_inference_steps', 'steps'], 'num_inference_steps');

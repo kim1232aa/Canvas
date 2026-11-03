@@ -224,3 +224,29 @@ describe('aspect_ratio-only endpoint: canvas width/height → 该端点不支持
     expect(historyParameterSourceLabel(r.width.source)).toBe('该端点不支持 · 未发送');
   });
 });
+
+describe('Mage local_blocked schemaFields → width/height 该端点不支持 (not 拟发送)', () => {
+  it('route schemaFields mark refused canvas WxH as unsupported', () => {
+    const blocked: any = {
+      id: 'mage-wh', status: 'local_blocked', statusLabel: '未出站，本地拦截',
+      provider: 'mage', model: 'mango-v3', url: '', timestamp: 1,
+      error: 'Mage Mango 官方 Schema 不接受这些画布字段，不会静默丢弃：width, height',
+      requestMetadata: {
+        schemaFields: ['prompt', 'model_id', 'seed', 'aspect_ratio', 'resolution', 'image', 'additional_images'],
+        intendedRequest: {
+          model: 'mango-v3', model_id: 'mango-v3', prompt: 'p', seed: 42,
+          aspect_ratio: '4:5', resolution: '2K', width: 1024, height: 1024, loras: [],
+        },
+        blockedField: { from: 'width', value: 1024, reason: 'Mage Mango 官方 Schema 不接受这些画布字段，不会静默丢弃：width, height' },
+        postSent: false,
+      },
+    };
+    const r = resolveHistoryParameters(blocked);
+    expect(r.width.source).toBe('blocked');
+    expect(historyParameterSourceLabel(r.width.source)).toBe('本地拦截');
+    expect(r.height).toMatchObject({ value: 1024, source: 'unsupported' });
+    expect(historyParameterSourceLabel(r.height.source)).toBe('该端点不支持 · 未发送');
+    expect(r.seed.source).toBe('intended');
+    expect(historyParameterSourceLabel(r.seed.source)).toBe('拟发送（未出站）');
+  });
+});

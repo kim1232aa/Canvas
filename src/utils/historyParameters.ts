@@ -311,7 +311,10 @@ export function resolveHistoryParameters(item: GenerationHistoryItem): Record<Hi
   // width/height keys: only discrete fields count — aspect_ratio-only Schema ⇒ user-set WxH is unsupported (task C).
   const sizeLacksAliases = (key: HistoryParameterKey): string[] =>
     key === 'size' ? [...FIELD_KEYS.size, 'width', 'height'] : FIELD_KEYS[key];
-  const intendedLacks = (key: HistoryParameterKey) => !!intendedSchemaProps && !sizeLacksAliases(key).some((k) => intendedSchemaProps!.map(String).includes(k));
+  // Route-supplied schemaFields (e.g. Mage local refuse) count the same as _canvas.schemaProperties:
+  // canvas leftovers must read 该端点不支持 · 未发送, never 拟发送（未出站）.
+  const intendedDeclared = intendedSchemaProps ?? schemaFields;
+  const intendedLacks = (key: HistoryParameterKey) => !!intendedDeclared && !sizeLacksAliases(key).some((k) => intendedDeclared!.map(String).includes(k));
   const endpointLacks = (key: HistoryParameterKey) => !!schemaFields && !sizeLacksAliases(key).some((k) => schemaFields!.includes(k));
   // Same verdict for local-blocked and real outbound cards: Schema recorded → 该端点不支持 / 未发送; not recorded → say so, never guess.
   const schemaKnown = !!schemaFields || !!intendedSchemaProps;
@@ -343,9 +346,14 @@ export function resolveHistoryParameters(item: GenerationHistoryItem): Record<Hi
     const legacy = legacyValue(item, key);
     if (intendedRaw) {
       const v = key === 'size' ? normalizeSize(readKeys(intended, FIELD_KEYS[key])) : readKeys(intended, [...FIELD_KEYS[key], ...(key === 'sampler' ? ['sampler_name'] : [])]);
-      result[key] = hasMeaningfulValue(v) && !intendedLacks(key)
-        ? { key, value: v, source: 'intended' }
-        : { key, value: undefined, source: absentSource(key) };
+      if (hasMeaningfulValue(v) && !intendedLacks(key)) {
+        result[key] = { key, value: v, source: 'intended' };
+      } else if (hasMeaningfulValue(v) && intendedLacks(key)) {
+        // Keep the board value so humans see what was refused — label 该端点不支持 · 未发送 (never blank 拟发送).
+        result[key] = { key, value: v, source: 'unsupported', requested: v };
+      } else {
+        result[key] = { key, value: undefined, source: absentSource(key) };
+      }
       return;
     }
 

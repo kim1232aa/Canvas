@@ -36,6 +36,34 @@ const REFUSED_CANVAS_FIELDS = [
   'height',
 ] as const;
 
+/** Official Mango wire fields (docs.mage.space/api/models/mango) — history uses these to label canvas leftovers as 该端点不支持, never 拟发送. */
+export const MAGE_SCHEMA_FIELDS = [
+  'prompt',
+  'model_id',
+  'seed',
+  'aspect_ratio',
+  'resolution',
+  'image',
+  'additional_images',
+] as const;
+
+/** Local refuse with schemaFields so history cards do not mark rejected canvas fields as 拟发送. */
+export class MageSchemaRefuseError extends Error {
+  readonly errorSource = 'local' as const;
+  readonly schemaFields: string[];
+  readonly refusedFields: string[];
+  readonly blockedField: { from: string; value: unknown; reason: string };
+  constructor(refused: string[], body: Record<string, unknown>) {
+    const reason = `Mage Mango 官方 Schema 不接受这些画布字段，不会静默丢弃：${refused.join(', ')}`;
+    super(reason);
+    this.name = 'MageSchemaRefuseError';
+    this.schemaFields = [...MAGE_SCHEMA_FIELDS];
+    this.refusedFields = refused;
+    const primary = refused[0];
+    this.blockedField = { from: primary, value: body[primary], reason };
+  }
+}
+
 /** Mango has no LoRA fields — refuse non-empty loras[] instead of silently dropping. */
 export function assertNoMageLoras(body: Record<string, unknown>): void {
   const loras = body.loras;
@@ -57,7 +85,7 @@ export function buildMageImageRequest(
 
   const refused = REFUSED_CANVAS_FIELDS.filter((name) => isProvided(body[name]));
   if (refused.length) {
-    throw new Error(`Mage Mango 官方 Schema 不接受这些画布字段，不会静默丢弃：${refused.join(', ')}`);
+    throw new MageSchemaRefuseError([...refused], body);
   }
 
   const modelId = String(body.model_id || body.model || '').trim();

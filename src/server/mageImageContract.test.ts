@@ -4,6 +4,8 @@ import {
   parseMageRequestResponse,
   assertNoMageLoras,
   MAGE_DOC,
+  MAGE_SCHEMA_FIELDS,
+  MageSchemaRefuseError,
 } from './mageImageContract';
 
 describe('mageImageContract', () => {
@@ -58,6 +60,20 @@ describe('mageImageContract', () => {
     expect(() =>
       buildMageImageRequest({ prompt: 'x', negative_prompt: 'blur', width: 512, height: 512 })
     ).toThrow(/negative_prompt/);
+  });
+
+  it('refuse carries schemaFields + blockedField so history does not label width as 拟发送', () => {
+    try {
+      buildMageImageRequest({ prompt: 'x', model_id: 'mango-v3', width: 1024, height: 1024, aspect_ratio: '4:5' });
+      throw new Error('expected refuse');
+    } catch (e: any) {
+      expect(e).toBeInstanceOf(MageSchemaRefuseError);
+      expect(e.schemaFields).toEqual([...MAGE_SCHEMA_FIELDS]);
+      expect(e.refusedFields).toEqual(expect.arrayContaining(['width', 'height']));
+      expect(e.blockedField.from).toBe('width');
+      expect(e.blockedField.value).toBe(1024);
+      expect(String(e.message)).toMatch(/width, height/);
+    }
   });
 
   it('requires an explicit model and forwards an unknown model unchanged', () => {

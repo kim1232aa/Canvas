@@ -19,6 +19,35 @@ const SEEDREAM_PROPS = Object.fromEntries(
 
 describe('replicateImageContract', () => {
   describe('buildReplicatePredictionRequest', () => {
+
+    it('never substitutes Schema default 28 for an explicit UI steps=20', () => {
+      const props = Object.fromEntries(
+        ['prompt', 'num_inference_steps', 'guidance', 'seed', 'lora_weights', 'lora_scale'].map((k) => [k, k === 'num_inference_steps' ? { default: 28 } : {}]),
+      );
+      const result = buildReplicatePredictionRequest({
+        model: 'black-forest-labs/flux-dev-lora',
+        prompt: 'p',
+        steps: 20,
+        cfg: 3,
+        seed: 42,
+        loras: [{ path: 'fofr/flux-80s-cyberpunk', strength: 1 }],
+      }, undefined, props);
+      expect((result.payload.input as any).num_inference_steps).toBe(20);
+      expect((result.payload.input as any).num_inference_steps).not.toBe(28);
+    });
+
+    it('omits num_inference_steps when the board did not provide steps (no Schema-default fill)', () => {
+      const props = Object.fromEntries(
+        ['prompt', 'num_inference_steps', 'guidance'].map((k) => [k, k === 'num_inference_steps' ? { default: 28 } : {}]),
+      );
+      const result = buildReplicatePredictionRequest({
+        model: 'black-forest-labs/flux-dev-lora',
+        prompt: 'p',
+        cfg: 3,
+      }, undefined, props);
+      expect((result.payload.input as any).num_inference_steps).toBeUndefined();
+    });
+
     it('builds request for named model without version', () => {
       const result = buildReplicatePredictionRequest({
         model: 'black-forest-labs/flux-schnell',
