@@ -1,3 +1,4 @@
+import type { HistoryCounts } from '../utils/historyCounts';
 import {tracedFetch} from './executionTrace';
 import {normalizeTensorArtModelInfo} from '../utils/tensorArtModelInfo';
 import { ApiKeysState, CivitaiSearchResult, GenerationHistoryItem, ProviderId } from '../types/providers';
@@ -405,6 +406,8 @@ export type HistoryPage = {
   limit: number;
   offset: number;
   hasMore: boolean;
+  /** Whole-history counts (server); absent on old servers. */
+  counts?: HistoryCounts;
 };
 
 export const fetchHistory = async (): Promise<GenerationHistoryItem[]> => {
@@ -429,6 +432,7 @@ export const fetchHistoryPage = async (opts?: { limit?: number; offset?: number 
     limit: typeof page?.limit === 'number' ? page.limit : limit,
     offset: typeof page?.offset === 'number' ? page.offset : offset,
     hasMore: !!page?.hasMore,
+    ...(page?.counts && page.counts.header && page.counts.filters ? { counts: page.counts } : {}),
   };
 };
 

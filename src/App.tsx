@@ -262,6 +262,7 @@ export default function App() {
   const [history, setHistory] = useState<GenerationHistoryItem[]>([]);
   const [historyTotal, setHistoryTotal] = useState(0);
   const [historyHasMore, setHistoryHasMore] = useState(false);
+  const [historyCountsAll, setHistoryCountsAll] = useState<HistoryPage['counts']>(undefined);
   const [historyLoadingMore, setHistoryLoadingMore] = useState(false);
 
   const applyHistoryPage = useCallback((page: HistoryPage, mode: 'replace' | 'append') => {
@@ -272,6 +273,12 @@ export default function App() {
     });
     setHistoryTotal(page.total);
     setHistoryHasMore(!!page.hasMore);
+    setHistoryCountsAll(page.counts);
+  }, []);
+
+  /** Re-read whole-history counts (1-item page) after a local change; on failure drop them so the UI falls back to 「已载」 subset labels. */
+  const refreshHistoryCounts = useCallback(() => {
+    fetchHistoryPage({ limit: 1, offset: 0 }).then((p) => setHistoryCountsAll(p.counts), () => setHistoryCountsAll(undefined));
   }, []);
 
   const loadHistoryFirstPage = useCallback(async (): Promise<GenerationHistoryItem[]> => {
@@ -2077,6 +2084,7 @@ export default function App() {
       if (!ok && url) {
         await deleteHistoryItem(url);
       }
+      refreshHistoryCounts();
       setToast({ type: 'success', title: '资产已删除', message: '已从服务器和资产库永久移除' });
     } catch (e) {
       console.error('Delete history item error:', e);
@@ -2098,6 +2106,7 @@ export default function App() {
     try {
       const { deleteHistoryBatch } = await import('./services/api');
       await deleteHistoryBatch(ids);
+      refreshHistoryCounts();
       setToast({ type: 'success', title: '批量资产已删除', message: `已成功移除 ${ids.length} 项生成资产` });
     } catch (e) {
       console.error('Batch delete history items error:', e);
@@ -2111,6 +2120,7 @@ export default function App() {
       setHistory([]);
       setHistoryTotal(0);
       setHistoryHasMore(false);
+      setHistoryCountsAll(undefined);
       setToast({ type: 'success', title: '历史记录已清空', message: '所有生成记录已从服务器永久移除' });
     }
   };
@@ -2943,6 +2953,7 @@ export default function App() {
         history={history}
         hasMore={historyHasMore}
         historyTotal={historyTotal}
+        historyCounts={historyCountsAll}
         loadingMore={historyLoadingMore}
         onLoadMore={loadHistoryMore}
         onApplyPrompt={(prompt, negPrompt) => {

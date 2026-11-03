@@ -1,4 +1,6 @@
 import {registerSchemaProviderRoutes,makeSchemaProviderReader,fetchSchemaProviderRows,fetchSogniGenerateImageSchema,normalizeSchemaProviderItems,resolveSchemaRefs} from './src/server/schemaProviders.ts';
+import { historyCounts } from './src/utils/historyCounts';
+import type { GenerationHistoryItem } from './src/types/providers';
 import { lookupExactHuggingFaceRepo } from './src/server/huggingFaceExactRepoSearch.ts';
 import { classifyCivitaiVideoPoll } from './src/server/civitaiVideoPoll.ts';
 import { fetchSenseNovaModelCatalog } from './src/server/senseNovaCatalog.ts';
@@ -6254,7 +6256,8 @@ app.get('/api/history', (req, res) => {
   const offset = Math.max(0, parseInt(String(rawOffset ?? '0'), 10) || 0);
   const slice = generationHistory.slice(offset, offset + limit);
   const items = full ? slice : slice.map(slimHistoryForList);
-  return res.json({ items, total, limit, offset, hasMore: offset + items.length < total });
+  // Header/chip counts over the WHOLE history, so 已出图 does not shrink as new records push old ones off page 1.
+  return res.json({ items, total, limit, offset, hasMore: offset + items.length < total, counts: historyCounts(generationHistory as unknown as GenerationHistoryItem[]) });
 });
 
 app.get('/api/history/:id', (req, res) => {

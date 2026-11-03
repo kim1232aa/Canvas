@@ -11,41 +11,22 @@ import { splitActualRequest, ACTUAL_META_LABEL } from '../utils/actualRequestDis
 import { requestedNotSentLoras, notSentLoraLabel, generationPostNotSent, historySeedStatement, historySeedRowText, historySeedUpstreamMissingNote, historyUpstreamTaskId, otherSentParameters, formatHistorySize, historySizeMismatchNote, formatResolvedHistoryParameter, hasOutputMedia, historyFieldOrigins, historyParameterSourceLabel, resolveHistoryParameters, sentHistoryLoras, historyModelSent, upstreamErrorMessage, historyKeyUsageLabels, historyActualRequest, isSchemaFetchFailure, historyUpstreamExchanges, groupUpstreamExchanges, terminalSuccessIndex, upstreamBodyStatus, upstreamSegmentStatusLabel, upstreamCallTime, upstreamSegmentLabel, extractUpstreamEcho, upstreamEchoContrast, unwrapGenerationParameters, valueAtPath, type UpstreamExchangeRow, type ResolvedHistoryParameter } from '../utils/historyParameters';
 import { PROVIDER_UPSTREAM_ECHO_PATH } from '../config/providerDisplayHints';
 
-/**
- * Header counts by record kind (only items with real output media count as 出图).
- * hist-count-2026-10-17: a failed parameter-table / catalog GET (isSchemaFetchFailure) is not a generation request —
- * counted on its own as schemaFetch, never in failed (上游失败) / 未出图.
- */
-export function historyHeaderCounts(history: GenerationHistoryItem[]): { output: number; failed: number; localBlocked: number; schemaFetch: number; nonOutput: number } {
-  const generation = history.filter((i) => !isSchemaFetchFailure(i));
-  const output = generation.filter(hasOutputMedia).length;
-  return {
-    output,
-    failed: generation.filter((i) => i.status === 'failed').length,
-    localBlocked: generation.filter((i) => i.status === 'local_blocked').length,
-    schemaFetch: history.length - generation.length,
-    nonOutput: generation.length - output,
-  };
-}
-
 /** Card timestamp in the viewer's local zone (same formatter as the exec log). */
 /**
  * fix17: history filter. 「失败」= every generation record without output media (上游失败 + 没有发出去 + 其他).
  * hist-count-2026-10-17: failed parameter-table GETs are their own chip 「查参数表失败」 (shown only when present),
  * so 全部 = 已出图 + 失败 + 查参数表失败. The cards themselves stay visible under 全部.
  */
-export type HistoryFilter = 'all' | 'output' | 'failed' | 'schema';
+export type { HistoryFilter } from '../utils/historyCounts';
+import type { HistoryFilter } from '../utils/historyCounts';
+export { historyHeaderCounts, historyFilterCounts, type HistoryCounts } from '../utils/historyCounts';
+import { historyHeaderCounts, historyFilterCounts, type HistoryCounts } from '../utils/historyCounts';
 export const HISTORY_FILTERS: [HistoryFilter, string][] = [['all', '全部'], ['output', '已出图'], ['failed', '失败']];
 export const SCHEMA_FETCH_FILTER: [HistoryFilter, string] = ['schema', '查参数表失败'];
 export function filterHistory(history: GenerationHistoryItem[], f: HistoryFilter): GenerationHistoryItem[] {
   if (f === 'all') return history;
   if (f === 'schema') return history.filter(isSchemaFetchFailure);
   return history.filter((i) => !isSchemaFetchFailure(i) && (f === 'output') === hasOutputMedia(i));
-}
-export function historyFilterCounts(history: GenerationHistoryItem[]): Record<HistoryFilter, number> {
-  const schema = history.filter(isSchemaFetchFailure).length;
-  const output = history.filter((i) => !isSchemaFetchFailure(i) && hasOutputMedia(i)).length;
-  return { all: history.length, output, failed: history.length - schema - output, schema };
 }
 /** Chip count text: when only a page is loaded, say 「已载 N」 so chips do not look like the full total. */
 export function historyFilterCountLabel(
@@ -441,6 +422,8 @@ interface HistoryModalProps {
   /** Server-side pagination: parent loads slim pages via fetchHistoryPage. */
   hasMore?: boolean;
   historyTotal?: number;
+  /** Counts over the whole server history (from /api/history). When present, header/chips use them, not the loaded page. */
+  historyCounts?: HistoryCounts;
   loadingMore?: boolean;
   onLoadMore?: () => void;
   onApplyPrompt: (prompt: string, negPrompt?: string) => void;
@@ -456,6 +439,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
   history,
   hasMore = false,
   historyTotal,
+  historyCounts,
   loadingMore = false,
   onLoadMore,
   onApplyPrompt,
@@ -514,15 +498,17 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
   };
 
   const selectedResolved = selectedImage ? resolveHistoryParameters(selectedImage) : null;
-  const { output: outputCount, nonOutput: nonOutputCount, failed: failedCount, localBlocked: localBlockedCount, schemaFetch: schemaFetchCount } = historyHeaderCounts(history);
-  const filterCounts = historyFilterCounts(history);
+  const { output: outputCount, nonOutput: nonOutputCount, failed: failedCount, localBlocked: localBlockedCount, schemaFetch: schemaFetchCount } = historyCounts?.header ?? historyHeaderCounts(history);
+  const filterCounts = historyCounts?.filters ?? historyFilterCounts(history);
   const filteredHistory = filterHistory(history, historyFilter);
   /** Parent already paginates; render all loaded items (filter is client-side on loaded set). */
   const visibleHistory = filteredHistory;
   const showLoadMore = !!onLoadMore && hasMore;
   const partialLoaded =
     (typeof historyTotal === 'number' && historyTotal > history.length) || hasMore;
-  const filterCountOpts = { historyTotal, historyLength: history.length, hasMore };
+  // Server counts cover all records → never 「已载」; only the loaded-page fallback is partial.
+  const countsPartial = !historyCounts && partialLoaded;
+  const filterCountOpts = historyCounts ? { historyLength: history.length, hasMore: false } : { historyTotal, historyLength: history.length, hasMore };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
@@ -537,16 +523,16 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
               <h2 className="text-lg font-bold text-white flex items-center gap-2">
                 生成历史
                 <span data-badge-level="primary" className="text-sm font-semibold px-2.5 py-0.5 rounded-full bg-purple-500/20 text-purple-200 border border-purple-500/40" data-testid="history-output-count">
-                  {outputCount} 张出图{partialLoaded ? '（已载）' : ''}
+                  {outputCount} 张出图{countsPartial ? '（已载）' : ''}
                 </span>
                 {nonOutputCount > 0 && (
                   <span className="text-xs font-medium px-2 py-0.5 rounded-full border border-slate-500/60 text-slate-200 bg-slate-700/40" data-testid="history-non-output-count" data-badge-level="secondary">
-                    未出图 {nonOutputCount} 条{partialLoaded ? '（已载）' : ''}（上游失败 {failedCount} · 没有发出去 {localBlockedCount}{nonOutputCount - failedCount - localBlockedCount > 0 ? ` · 其他 ${nonOutputCount - failedCount - localBlockedCount}` : ''}）
+                    未出图 {nonOutputCount} 条{countsPartial ? '（已载）' : ''}（上游失败 {failedCount} · 没有发出去 {localBlockedCount}{nonOutputCount - failedCount - localBlockedCount > 0 ? ` · 其他 ${nonOutputCount - failedCount - localBlockedCount}` : ''}）
                   </span>
                 )}
                 {schemaFetchCount > 0 && (
                   <span className="text-xs font-medium px-2 py-0.5 rounded-full border border-slate-500/60 text-slate-300 bg-slate-800/40" data-testid="history-schema-fetch-count" data-badge-level="secondary" title="查模型参数表的请求失败，出图请求没有发出，不算出图失败">
-                    查参数表失败 {schemaFetchCount} 条{partialLoaded ? '（已载）' : ''}（出图请求未发）
+                    查参数表失败 {schemaFetchCount} 条{countsPartial ? '（已载）' : ''}（出图请求未发）
                   </span>
                 )}
               </h2>
@@ -587,7 +573,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
               {(filterCounts.schema > 0 ? [...HISTORY_FILTERS, SCHEMA_FETCH_FILTER] : HISTORY_FILTERS).map(([key, label]) => (
                 <button key={key} type="button" role="tab" aria-selected={historyFilter === key} data-testid={`history-filter-${key}`} onClick={() => setHistoryFilter(key)}
                   className={`px-3 py-1 rounded-full border transition-colors ${historyFilter === key ? 'bg-purple-500/25 border-purple-400 text-white font-semibold' : 'border-slate-600 text-slate-300 hover:border-slate-400'}`}>
-                  {label}{partialLoaded ? ' · ' : ' '}<span data-testid={`history-filter-count-${key}`}>{historyFilterCountLabel(filterCounts[key], filterCountOpts)}</span>
+                  {label}{countsPartial ? ' · ' : ' '}<span data-testid={`history-filter-count-${key}`}>{historyFilterCountLabel(filterCounts[key], filterCountOpts)}</span>
                 </button>
               ))}
             </div>
