@@ -1002,7 +1002,7 @@
       "officialUrl": "https://www.agnes-ai.com/en/docs/agnes-video-25",
       "fetchedAt": "2026-11-02 ~04:41 JST",
       "confidence": "Researchy 三路+官网",
-      "notes": "越界上游 400；可跟六项对齐硬拦"
+      "notes": "越界上游 400；照发不本地拦，上游返回原样显示（2026-11-04 雁）"
     },
     {
       "provider": "agnes",
