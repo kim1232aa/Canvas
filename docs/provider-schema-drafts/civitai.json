@@ -232,7 +232,7 @@
     "docs/provider-api-audit-v2/civitai.md",
     "docs/provider-api-audit-v2/DIFF.md"
   ],
-  "_auditStatus": "2026-11-03 画布←Researchy：图像须跟实时/逐模型 OpenAPI；本地 providerSchema 快照会过期不当真相；不写死尺寸字段名（image_size / width+height / aspect_ratio 等以该模型 Schema 为准）；不升徽章。\n2026-11-02 ~04:55 JST：Researchy 02c——Civitai 各引擎 seed 已核；WAN 无通用 seed 勿发。\n2026-10-15 04:58：补 OpenAPI 核实 sdcpp Dev 字段为 steps/cfgScale；flux1-kontext 无 LoRA。字段徽章仍以前端实测为准",
+  "_auditStatus": "2026-11-03：写入 snapshotGaps（Krea unverified vs unsupported、additionalNetworks 壳）。不升徽章。\n2026-11-03 画布←Researchy：图像须跟实时/逐模型 OpenAPI；本地 providerSchema 快照会过期不当真相；不写死尺寸字段名（image_size / width+height / aspect_ratio 等以该模型 Schema 为准）；不升徽章。\n2026-11-02 ~04:55 JST：Researchy 02c——Civitai 各引擎 seed 已核；WAN 无通用 seed 勿发。\n2026-10-15 04:58：补 OpenAPI 核实 sdcpp Dev 字段为 steps/cfgScale；flux1-kontext 无 LoRA。字段徽章仍以前端实测为准",
   "flux2DevPaths": {
     "native": "engine flux2 + model dev；numInferenceSteps 4–50 默认28、guidanceScale 0–20 默认2.5、loras[{air,strength}]（官方推荐）",
     "sdcpp": "engine sdcpp + ecosystem flux2Dev；steps 4–50 默认20、cfgScale 1–20 默认1、sampleMethod/schedule/negativePrompt；loras 为 object map；createVariant 用 strength 0–1",
@@ -292,5 +292,21 @@
     ],
     "badge": "不升",
     "note": "核对表若仍写「静态拒绝 ltx2.3」已过时——以 OpenAPI 为准"
+  },
+  "snapshotGaps20261103": {
+    "at": "2026-11-03",
+    "source": "/workspace/canvas/temp/risk-scan-2026-11-03.md",
+    "gaps": [
+      "Krea v2：草案 steps/cfg/宽高/LoRA=unsupported；本地快照 steps/cfg=unverified（可能仍发出）——冲突，接线应以「不会发送/拒」或官方再核为准",
+      "Krea 调用：草案写 engine:fal model:krea2；快照用 comfy+ecosystem krea2——engine 字面值待官方核",
+      "textToImage additionalNetworks：须 AIR→{strength,...} 对象，不是简单 {AIR:strength} 数字 map",
+      "视频 engines 静态名单勿当白名单（ltx2.3 走 live OpenAPI）"
+    ],
+    "badge": "不升",
+    "officialVerifyRequired": [
+      "Krea steps/cfg 是否明文拒",
+      "Krea engine 字面值",
+      "additionalNetworks.strength min/max"
+    ]
   }
 }

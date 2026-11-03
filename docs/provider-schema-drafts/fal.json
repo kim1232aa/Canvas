@@ -270,7 +270,7 @@
     "docs/provider-api-audit-v2/fal.md",
     "docs/provider-api-audit-v2/DIFF.md"
   ],
-  "_auditStatus": "2026-11-03 画布←Researchy：图像须跟实时/逐模型 OpenAPI；本地 providerSchema 快照会过期不当真相；不写死尺寸字段名（image_size / width+height / aspect_ratio 等以该模型 Schema 为准）；不升徽章。\n2026-11-02 ~04:45 JST：Researchy——Fal krea-2/turbo/lora.seed。\n2026-11-02 ~04:42 JST：Researchy——Fal Kling v3 I2V 无 aspect_ratio；勿捏比例控件。\n2026-11-02 ~04:41 JST：Researchy——Fal Kling v3 I2V duration 字符串 3–15；wan-t2v-lora 帧81–100/帧率5–24；wan/v2.2-a14b/lora 另一套勿混。\n2026-11-02 ~04:39 JST：Researchy 对照表写回 researchyVerified20261102（种子/时长/比例已核一致条目）；未核条目仍待核、禁止当拦截；徽章不动。\n2026-10-16 16:54：画布正式收口 Kling V3 i2v PASS_BILLING（挑刺无严重 + Researchy TOP_UP 核）；2026-10-16 16:53：Kling V3 standard i2v 升 PASS_BILLING（非 PASS_GENERATION）——hist_1792140360652_bq6y0；403 TOP_UP；actualRequest start_image_url+duration\"5\"；证据 已清理 切分后进程。勿写成出片。2026-10-15 04:45 v2 已核（fal.md + DIFF 04:44）：目录 GET /v1/models 无 key 200；lock threshold FAQ 已有；krea-2/turbo/lora 无 steps/guidance、loras≤3。字段徽章仍以前端实测为准",
+  "_auditStatus": "2026-11-03：写入 snapshotGaps（Kling duration 缺行、wan-t2v-lora 不在快照）。不升徽章。\n2026-11-03 画布←Researchy：图像须跟实时/逐模型 OpenAPI；本地 providerSchema 快照会过期不当真相；不写死尺寸字段名（image_size / width+height / aspect_ratio 等以该模型 Schema 为准）；不升徽章。\n2026-11-02 ~04:45 JST：Researchy——Fal krea-2/turbo/lora.seed。\n2026-11-02 ~04:42 JST：Researchy——Fal Kling v3 I2V 无 aspect_ratio；勿捏比例控件。\n2026-11-02 ~04:41 JST：Researchy——Fal Kling v3 I2V duration 字符串 3–15；wan-t2v-lora 帧81–100/帧率5–24；wan/v2.2-a14b/lora 另一套勿混。\n2026-11-02 ~04:39 JST：Researchy 对照表写回 researchyVerified20261102（种子/时长/比例已核一致条目）；未核条目仍待核、禁止当拦截；徽章不动。\n2026-10-16 16:54：画布正式收口 Kling V3 i2v PASS_BILLING（挑刺无严重 + Researchy TOP_UP 核）；2026-10-16 16:53：Kling V3 standard i2v 升 PASS_BILLING（非 PASS_GENERATION）——hist_1792140360652_bq6y0；403 TOP_UP；actualRequest start_image_url+duration\"5\"；证据 已清理 切分后进程。勿写成出片。2026-10-15 04:45 v2 已核（fal.md + DIFF 04:44）：目录 GET /v1/models 无 key 200；lock threshold FAQ 已有；krea-2/turbo/lora 无 steps/guidance、loras≤3。字段徽章仍以前端实测为准",
   "acceptanceBadgeVideoKlingV3I2v": "PASS_BILLING",
   "sendEvidence": {
     "kling_v3_standard_i2v_1637": {
@@ -373,6 +373,16 @@
     "liveUrls": [
       "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=<id>",
       "https://api.fal.ai/v1/models?endpoint_id=<id>&expand=openapi-3.0"
+    ],
+    "badge": "不升"
+  },
+  "snapshotGaps20261103": {
+    "at": "2026-11-03",
+    "source": "/workspace/canvas/temp/risk-scan-2026-11-03.md",
+    "gaps": [
+      "Kling V3 i2v：草案 duration 字符串 3–15 会发送；providerSchema FAL_MODELS 缺 duration 行（出站靠合同代码塞）",
+      "fal-ai/wan-t2v-lora 在草案、不在 FAL_MODELS；勿把 wan-t2v 快照套到 LoRA/v2.7 端点",
+      "VideoDriver 有 wan/v2.7/*、minimax/video-01 等，FAL_MODELS 无行——须跟实时 OpenAPI"
     ],
     "badge": "不升"
   }
