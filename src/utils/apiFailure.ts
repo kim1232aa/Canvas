@@ -20,6 +20,10 @@ export function extractUpstreamMessage(text: string): string | null {
     if (obj?.error && typeof obj.error === 'object' && typeof obj.error.message === 'string' && obj.error.message.trim()) {
       return obj.error.message.trim();
     }
+    // ModelScope / Magento: {"errors":{"message":"Please bind your Alibaba Cloud account…"}}
+    if (obj?.errors && typeof obj.errors === 'object' && typeof obj.errors.message === 'string' && obj.errors.message.trim()) {
+      return obj.errors.message.trim();
+    }
   } catch {
     /* not JSON — leave original */
   }
@@ -367,6 +371,28 @@ export function localBlockToastReason(rawBody: string): string {
   let text = String(rawBody || '');
   try { const d = JSON.parse(text); if (d && typeof d.error === 'string') text = d.error; } catch { /* non-JSON body: shown as-is */ }
   return text.replace(/^(?:本地拦截 · 未发请求|本地拦截 · 已读 Schema、未发生成|本地拦截 · Schema 读取失败、未发生成|未出站，本地拦截)[：:]?\s*\n?/, '').trim() || text;
+}
+
+
+/**
+ * Same string history persists as item.error (route `error` / recorded historyItem.error).
+ * Save Image / downstream upstreamFailedMessage must reuse this — not the short 「HTTP N Unauthorized」 banner.
+ * Falls back to extracted upstream body message when error field is absent.
+ */
+export function historyFacingErrorMessage(err: unknown): string | undefined {
+  const data = err && typeof err === 'object' ? (err as { data?: any }).data : undefined;
+  if (!data || typeof data !== 'object') return undefined;
+  const hist = data.historyItem && typeof data.historyItem === 'object' ? data.historyItem : null;
+  const fromHist = typeof hist?.error === 'string' ? hist.error.trim() : '';
+  const fromRoute = typeof data.error === 'string' ? data.error.trim() : '';
+  const candidate = fromHist || fromRoute;
+  if (candidate) return candidate;
+  const body =
+    (typeof data.upstreamResponseBody === 'string' && data.upstreamResponseBody) ||
+    (typeof data.details === 'string' && data.details) ||
+    '';
+  if (!body) return undefined;
+  return extractUpstreamMessage(body) || body.split(/\r?\n/)[0].trim() || undefined;
 }
 
 /** A run error is a local block iff its structured response body says so (errorSource local, no non-GET trace) — never by message text. */

@@ -4,6 +4,8 @@ import {renderToStaticMarkup} from 'react-dom/server';
 import {NodeItem} from './NodeItem';
 import {ParameterInspector} from './ParameterInspector';
 import {NODE_DEFINITIONS} from '../constants/nodes';
+import { historyFacingErrorMessage } from '../utils/apiFailure';
+import { upstreamFailedLine } from '../utils/schemaFailure';
 const noop=()=>{};
 const props=(type:string,values:any={})=>({node:{id:'n',type,title:type,pos:{x:0,y:0},inputs:NODE_DEFINITIONS[type].inputs,outputs:NODE_DEFINITIONS[type].outputs,values},isSelected:false,zoom:1,onSelect:noop,onStartDrag:noop,onUpdateValue:noop,onDeleteNode:noop,onToggleCollapse:noop,onToggleBypass:noop,onStartConnecting:noop,onEndConnecting:noop});
 const elements=(tree:any):any[]=>!tree?[]:Array.isArray(tree)?tree.flatMap(elements):typeof tree==='object'&&tree.props?[tree,...elements(tree.props.children)]:[];
@@ -63,4 +65,18 @@ it('SaveImage shows upstream error text verbatim when provided',()=>{
   expect(html).toContain(msg);
   expect(html).not.toContain('原因见采样器');
   expect(html).not.toContain('等待生成图像');
+});
+
+it('SaveImage failure display uses historyFacingErrorMessage (Magento bind / JSON body)',()=>{
+  const histError='魔搭国际站 (modelscope.ai) API 提交失败 [401]: {"errors":{"message":"Please bind your Alibaba Cloud account before use. You can bind it at: https://modelscope.ai/my/settings/account"},"request_id":"abc"}';
+  const err={data:{error:histError,historyItem:{error:histError},upstreamStatus:401,upstreamResponseBody:'{"errors":{"message":"Please bind your Alibaba Cloud account before use."}}'}};
+  const msg=historyFacingErrorMessage(err)!;
+  expect(msg).toContain('bind your Alibaba Cloud account');
+  expect(msg).toContain('"errors"');
+  expect(upstreamFailedLine('采样器', msg)).toBe(msg);
+  const html=renderToStaticMarkup(<NodeItem {...props('SaveImage',{})} node={{...(props('SaveImage',{}) as any).node,upstreamFailed:true,upstreamFailedTitle:'采样器',upstreamFailedMessage:msg,state:'idle'}} />);
+  expect(html).toContain('bind your Alibaba Cloud account');
+  expect(html).toContain('魔搭国际站');
+  expect(html).not.toContain('原因见采样器');
+  expect(html).not.toMatch(/>HTTP 401 Unauthorized</);
 });

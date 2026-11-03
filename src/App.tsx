@@ -74,7 +74,7 @@ import { executeWorkflow, extractWorkflowParameters, resolveTargetNode, shouldCl
 import { getModelSchemaEntry } from './services/modelSchemaCache';
 import { fetchProviderKeyStatus, providerKeyConfigured } from './services/providerKeyStatus';
 import { friendlyProviderLabel } from './utils/providerLabels';
-import { toastFromRunError, plainFailureConclusion, plainErrorMessage, unicodeSafeSlice, EXEC_NODE_MISSING, localBlockToastReason, upstreamFailureToast } from './utils/apiFailure';
+import { toastFromRunError, plainFailureConclusion, plainErrorMessage, historyFacingErrorMessage, unicodeSafeSlice, EXEC_NODE_MISSING, localBlockToastReason, upstreamFailureToast } from './utils/apiFailure';
 import { applyAIVideoModelSelection } from './utils/videoProvider';
 import {
   PREVIEW_HANG_MS,
@@ -1379,6 +1379,8 @@ export default function App() {
       const schemaFail = !localBlockedRun && isSchemaPrefetchError(err);
       const schemaNodeMsg = schemaFail ? schemaFailureNodeMessage(err) : undefined;
       const errMsg = schemaNodeMsg ? schemaNodeMsg.split('\n')[0] : plainErrorMessage(err);
+      // Save Image / downstream: reuse history item.error (bind / JSON body), not short 「HTTP 401 Unauthorized」.
+      const upstreamMsg = schemaNodeMsg || historyFacingErrorMessage(err) || errMsg;
       // clean-1333 #3/#5/#6: one title for toast / node / exec log, chosen from what was actually requested.
       const blockData = localBlockedRun ? (err as any).data : undefined;
       const blockTitle = localBlockedRun ? localBlockTitle(blockData) : undefined;
@@ -1407,7 +1409,7 @@ export default function App() {
         // Those stay until the next successful run; only local chrome is layered on top.
         if (downstream.has(n.id)) {
           const keepErr = !!n.errorMessage;
-          return {...n,state:(keepErr?'error':'idle') as NodeInstance['state'],executionProgress:0,upstreamFailed:true,upstreamFailedTitle:localBlockedRun?undefined:failedTitle,upstreamFailedMessage:localBlockedRun?undefined:(schemaNodeMsg||errMsg),upstreamFailedFromId:localBlockedRun?undefined:failedNodeId,upstreamLocalBlocked:localBlockedRun,localBlockTitle:blockTitle,localBlockReason:undefined,outputData:undefined};
+          return {...n,state:(keepErr?'error':'idle') as NodeInstance['state'],executionProgress:0,upstreamFailed:true,upstreamFailedTitle:localBlockedRun?undefined:failedTitle,upstreamFailedMessage:localBlockedRun?undefined:upstreamMsg,upstreamFailedFromId:localBlockedRun?undefined:failedNodeId,upstreamLocalBlocked:localBlockedRun,localBlockTitle:blockTitle,localBlockReason:undefined,outputData:undefined};
         }
         if (localBlockedRun) {
           if (!branch.ids.has(n.id) && !causeIds.has(n.id)) return n;
@@ -1426,7 +1428,7 @@ export default function App() {
           // Error lives on the model node; sampler / other branch nodes are NOT marked 异常 (nothing was generated).
           if (n.id === schemaNodeId) return { ...n, state: 'error' as NodeInstance['state'], executionProgress: 0, errorMessage: schemaNodeMsg, errorAt: new Date().toISOString(), errorKind: 'schema' as const, errorModel: schemaFailureModel(err, n.values?.ckpt_name), upstreamFailed: false, upstreamLocalBlocked: false };
           if (!branch.ids.has(n.id)) return n;
-          return { ...n, state: 'idle' as NodeInstance['state'], executionProgress: 0, errorMessage: undefined, errorAt: undefined, errorKind: undefined, upstreamFailed: true, upstreamFailedTitle: failedTitle, upstreamFailedMessage: schemaNodeMsg || errMsg, upstreamFailedFromId: schemaNodeId, upstreamLocalBlocked: false,
+          return { ...n, state: 'idle' as NodeInstance['state'], executionProgress: 0, errorMessage: undefined, errorAt: undefined, errorKind: undefined, upstreamFailed: true, upstreamFailedTitle: failedTitle, upstreamFailedMessage: upstreamMsg, upstreamFailedFromId: schemaNodeId, upstreamLocalBlocked: false,
             outputData: shouldClearExecutionOutput(n.type, 'idle', undefined, '') ? undefined : n.outputData };
         }
         if (!branch.ids.has(n.id)) return n;
@@ -1441,7 +1443,7 @@ export default function App() {
           errorAt: isTarget ? new Date().toISOString() : undefined,
           upstreamFailed: !isTarget,
           upstreamFailedTitle: isTarget ? undefined : failedTitle,
-          upstreamFailedMessage: isTarget ? undefined : (schemaNodeMsg || errMsg),
+          upstreamFailedMessage: isTarget ? undefined : upstreamMsg,
           upstreamFailedFromId: isTarget ? undefined : failedNodeId,
           upstreamLocalBlocked: false,
           outputData: clearOut ? undefined : n.outputData,

@@ -319,8 +319,9 @@ describe('real flow: schema-400 with SaveImage downstream of sampler (outside br
 describe('SaveImage upstream message + same-session restore (App wiring)', () => {
   it('failure path copies upstreamFailedMessage; success path sticks image and drops restored banner', () => {
     const app = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
-    expect(app).toContain('upstreamFailedMessage:localBlockedRun?undefined:(schemaNodeMsg||errMsg)');
-    expect(app).toContain('upstreamFailedMessage: schemaNodeMsg || errMsg');
+    expect(app).toContain('const upstreamMsg = schemaNodeMsg || historyFacingErrorMessage(err) || errMsg');
+    expect(app).toContain('upstreamFailedMessage:localBlockedRun?undefined:upstreamMsg');
+    expect(app).toContain('upstreamFailedMessage: upstreamMsg');
     expect(app).toContain('putHistoryImageOnSaveNodes(next, result.imageUrl)');
     expect(app).toContain("const dropRestored = output !== undefined || state === 'running' || state === 'success' || clearingOutput");
   });

@@ -1,5 +1,5 @@
 import {it,expect} from 'vitest';
-import {describeApiFailure, plainFailureConclusion, plainErrorMessage, userFacingApiFailure, unicodeSafeSlice, errorBannerText, isBillingFailureText, MODELSCOPE_MODEL_MISSING_CN, MODELSCOPE_MODEL_MISSING_AI, EXEC_NODE_MISSING} from './apiFailure';
+import {describeApiFailure, plainFailureConclusion, plainErrorMessage, userFacingApiFailure, unicodeSafeSlice, errorBannerText, isBillingFailureText, MODELSCOPE_MODEL_MISSING_CN, MODELSCOPE_MODEL_MISSING_AI, EXEC_NODE_MISSING, extractUpstreamMessage, historyFacingErrorMessage, shortUpstreamSummary} from './apiFailure';
 it('distinguishes app 200 from upstream 403 and explains a challenge without guessing balance',()=>{
  const data={ok:false,tensorart:{error:'catalog failed',status:403},executionTrace:[{status:403,endpoint:'https://tensor.art/models/',responseBody:'<html>challenges.cloudflare.com cf_chl</html>'}]};
  const text=describeApiFailure(200,data,'/api/models');
@@ -106,4 +106,38 @@ it('透传 AIMLAPI HTTP 403 run-out-of-funds message — full, no mid-message el
 it('does not treat Cloudflare challenge 403 as billing pass-through', () => {
   expect(isBillingFailureText('HTTP 403: <html>challenges.cloudflare.com cf_chl</html>')).toBe(false);
   expect(userFacingApiFailure(403, { error: 'Forbidden' }, '/api/models')).toMatch(/Forbidden/);
+});
+
+
+it('extractUpstreamMessage reads ModelScope errors.message (bind account)', () => {
+  const body = '{"errors":{"message":"Please bind your Alibaba Cloud account before use. You can bind it at: https://modelscope.ai/my/settings/account"},"request_id":"2f99b065-cd8d-42ac-bdd0-8ed2b02ad0ce"}';
+  expect(extractUpstreamMessage(body)).toContain('bind your Alibaba Cloud account');
+  expect(shortUpstreamSummary(`HTTP 401 Unauthorized ${body}`)).toContain('bind your Alibaba Cloud account');
+  expect(shortUpstreamSummary(`HTTP 401 Unauthorized ${body}`)).not.toMatch(/^HTTP 401 Unauthorized$/);
+});
+
+it('historyFacingErrorMessage reuses history item.error (Magento 401 bind), not short HTTP status', () => {
+  const histError = '魔搭国际站 (modelscope.ai) API 提交失败 [401]: {"errors":{"message":"Please bind your Alibaba Cloud account before use. You can bind it at: https://modelscope.ai/my/settings/account"},"request_id":"2f99b065-cd8d-42ac-bdd0-8ed2b02ad0ce"}';
+  const body = '{"errors":{"message":"Please bind your Alibaba Cloud account before use. You can bind it at: https://modelscope.ai/my/settings/account"},"request_id":"2f99b065-cd8d-42ac-bdd0-8ed2b02ad0ce"}';
+  const err = {
+    name: 'ApiTraceError',
+    message: `HTTP 401 Unauthorized\ntech\n${histError}`,
+    data: {
+      error: histError,
+      errorSource: 'upstream',
+      upstreamStatus: 401,
+      upstreamStatusText: 'Unauthorized',
+      upstreamResponseBody: body,
+      details: body,
+      historyItem: { error: histError, status: 'failed', upstreamStatus: 401, upstreamResponseBody: body },
+      executionTrace: [{ method: 'POST', endpoint: 'https://api-inference.modelscope.ai/v1/images/generations', status: 401, statusText: 'Unauthorized', responseBody: body }],
+    },
+  };
+  const facing = historyFacingErrorMessage(err)!;
+  expect(facing).toBe(histError);
+  expect(facing).toContain('bind your Alibaba Cloud account');
+  expect(facing).toContain('"errors"');
+  // Short banner path still exists for sampler / status bar — Save Image must not stop there.
+  expect(plainErrorMessage(Object.assign(new Error(err.message), { data: err.data }))).toMatch(/HTTP 401/);
+  expect(facing).not.toMatch(/^HTTP 401 Unauthorized$/);
 });
