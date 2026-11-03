@@ -1,5 +1,5 @@
 import {tracedFetch as fetch} from '../../services/executionTrace';
-import { BaseEngineDriver } from '../BaseEngineDriver';
+import { BaseEngineDriver, withFilledCanvasParams } from '../BaseEngineDriver';
 import {
   NormalizedGenerateParams,
   NormalizedGenerateResult,
@@ -76,7 +76,7 @@ export class CivitaiDriver extends BaseEngineDriver {
     const response = await fetch('/api/engine/civitai/generate', {
       method: 'POST',
       headers,
-      body: JSON.stringify({ ...payload, workflowSnapshot: params.workflowSnapshot }),
+      body: JSON.stringify({ ...withFilledCanvasParams({ ...payload }, params, ['denoise','sampler_name','scheduler']), workflowSnapshot: params.workflowSnapshot }),
     });
 
     if (!response.ok) {

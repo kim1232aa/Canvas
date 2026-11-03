@@ -61,22 +61,10 @@ const CANVAS_PASS_THROUGH_FIELDS = [
 
 export const MAGE_PASS_THROUGH_NOTE = '官方参数表未列，已原样转交，是否生效以出图为准';
 
-/** Mango has no LoRA fields — refuse non-empty loras[] instead of silently dropping. */
-export function assertNoMageLoras(body: Record<string, unknown>): void {
-  const loras = body.loras;
-  if (Array.isArray(loras) && loras.length > 0) {
-    throw new Error(
-      'Mage Mango 官方文档无 LoRA 字段；一致性请用 prompt 里的 @handle 或参考图。禁止发送 loras[]。'
-    );
-  }
-}
-
 export function buildMageImageRequest(
   body: Record<string, unknown>,
   baseUrl = MAGE_DEFAULT_BASE
 ): MageImageRequest {
-  assertNoMageLoras(body);
-
   const prompt = String(body.prompt || '').trim();
   if (!prompt) throw new Error('Mage Prompt 必填（prompt is required）');
 
@@ -144,6 +132,11 @@ export function buildMageImageRequest(
   }
 
   const passThroughFields: string[] = [];
+  // LoRA list: Mango lists no LoRA field; send as built (pass-through), upstream decides.
+  if (Array.isArray(body.loras) && body.loras.length > 0) {
+    payload.loras = body.loras;
+    passThroughFields.push('loras');
+  }
   for (const name of CANVAS_PASS_THROUGH_FIELDS) {
     if (isProvided(body[name])) {
       payload[name] = body[name];
@@ -152,17 +145,7 @@ export function buildMageImageRequest(
   }
 
   const customObject = parseCustomObject(body.custom_parameters);
-  if (customObject) {
-    for (const banned of ['loras', 'lora', 'lora_weights', 'lora_model']) {
-      if (Object.hasOwn(customObject, banned)) {
-        throw new Error(`自定义 JSON 不可注入 Mage 不支持的 LoRA 字段：${banned}`);
-      }
-    }
-  }
   const custom = applyCustomParameters(payload, customObject);
-  if (Object.hasOwn(custom.payload, 'loras') || Object.hasOwn(custom.payload, 'lora_weights')) {
-    throw new Error('Mage Mango 禁止在上游载荷中出现 LoRA 字段');
-  }
 
   const cleanBase = String(baseUrl || MAGE_DEFAULT_BASE).replace(/\/+$/, '');
   return {

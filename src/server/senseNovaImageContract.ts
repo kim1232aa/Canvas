@@ -14,14 +14,7 @@ const sizePattern = /^(\d{3,4})x(\d{3,4})$/;
 function imageSize(value: unknown): string {
   const raw = String(value ?? 'auto').trim();
   if (raw === 'auto' || raw === '2K' || raw === '4K') return raw;
-  const match = sizePattern.exec(raw);
-  if (!match) throw new Error('SenseNova size 必须为 auto、2K、4K 或宽x高（例如 1024x1024）');
-  const width = Number(match[1]);
-  const height = Number(match[2]);
-  if (width < 512 || height < 512 || width > 4096 || height > 4096 ||
-      width % 32 !== 0 || height % 32 !== 0 || Math.max(width / height, height / width) > 3) {
-    throw new Error('SenseNova 尺寸须为 512–4096、32 的倍数且宽高比不超过 3:1');
-  }
+  void sizePattern;
   return raw;
 }
 
@@ -36,7 +29,8 @@ export function buildSenseNovaImageRequest(body: Json): SenseNovaImageRequest {
     const val = body[name];
     return isProvided(val) && !(Array.isArray(val) && val.length === 0);
   });
-  if (sentUnsupported.length) throw new Error(`SenseNova 图像接口未声明这些扩散字段，不会静默丢弃：${sentUnsupported.join(', ')}`);
+  // Fields the official schema does not declare are still sent as filled (upstream decides).
+  const passThrough: Json = Object.fromEntries(sentUnsupported.map((k) => [k, body[k]]));
 
   const imageUrl = typeof body.image_url === 'string' ? body.image_url.trim() : '';
   if (imageUrl && !/^https?:\/\//i.test(imageUrl) && !/^data:image\/[\w.+-]+;base64,/i.test(imageUrl)) {
@@ -52,18 +46,13 @@ export function buildSenseNovaImageRequest(body: Json): SenseNovaImageRequest {
 
   const width = body.width;
   const height = body.height;
-  if (isProvided(width) !== isProvided(height)) throw new Error('SenseNova width/height 必须同时提供');
   const dimensionSize = isProvided(width) && isProvided(height) ? `${width}x${height}` : undefined;
+  if (isProvided(width) !== isProvided(height)) { if (isProvided(width)) passThrough.width = width; if (isProvided(height)) passThrough.height = height; }
   const size = imageSize(body.size ?? dimensionSize ?? 'auto');
 
   const n = body.n === undefined ? 1 : Number(body.n);
-  if (model === 'sensenova-u1.5-lite' && n !== 1) throw new Error('SenseNova U1.5 Lite 当前仅支持 n=1');
   const outputFormat = body.output_format ?? 'png';
-  if (!['png','jpeg','webp'].includes(String(outputFormat))) throw new Error('SenseNova output_format 仅支持 png/jpeg/webp');
   const responseFormat = body.response_format ?? 'b64_json';
-  if (!['url','b64_json'].includes(String(responseFormat))) throw new Error('SenseNova response_format 仅支持 url/b64_json');
-  if (isProvided(body.watermark) && typeof body.watermark !== 'boolean') throw new Error('SenseNova watermark 必须为 boolean');
-  if (isProvided(body.prompt_extend) && typeof body.prompt_extend !== 'boolean') throw new Error('SenseNova prompt_extend 必须为 boolean');
 
   const payload: Json = {
     model,
@@ -72,8 +61,9 @@ export function buildSenseNovaImageRequest(body: Json): SenseNovaImageRequest {
     n,
     output_format: outputFormat,
     response_format: responseFormat,
-    ...(isProvided(body.watermark) ? { watermark: Boolean(body.watermark) } : {}),
-    ...(isProvided(body.prompt_extend) ? { prompt_extend: Boolean(body.prompt_extend) } : {}),
+    ...(isProvided(body.watermark) ? { watermark: body.watermark } : {}),
+    ...(isProvided(body.prompt_extend) ? { prompt_extend: body.prompt_extend } : {}),
+    ...passThrough,
   };
   const base = imageUrl ? { ...payload, images: [{image_url:imageUrl}] } : payload;
   const custom = applyCustomParameters(base, body.custom_parameters);

@@ -169,14 +169,8 @@ export function buildReplicatePredictionRequest(
   const declaredWire = (_fieldKey: string, candidates: string[], _legacy: string): string | null => {
     return candidates.find((w) => w in schemaProps) ?? null;
   };
-  const omit = (from: string, value: unknown, wires: string[]) =>
-    omitted.push({
-      from,
-      to: null,
-      value,
-      sent: false,
-      reason: `该端点不支持：Replicate ${canonicalModelName} 官方 Input Schema 未声明 ${wires.join(' / ')}；未发送`,
-    });
+  // Field the schema does not declare: sent unchanged under the canvas name; upstream decides.
+  const omit = (from: string, value: unknown, _wires: string[]) => { input[from] = value; };
   const place = (fieldKey: string, from: string, value: unknown, candidates: string[], legacy: string) => {
     const wire = declaredWire(fieldKey, candidates, legacy);
     if (!wire) { omit(from, value, candidates); return; }
@@ -225,10 +219,8 @@ export function buildReplicatePredictionRequest(
     }
   }
 
-  const resolveReplicateLoraEntry = (entry: unknown): { path: string; scale: number } => {
-    if (typeof entry === 'string') {
-      throw new Error('Replicate LoRA 条目必须显式提供权重 (strength / lora_scale)，严禁仅传字符串并静默兜底为 1.0');
-    }
+  const resolveReplicateLoraEntry = (entry: unknown): { path: string; scale?: number } => {
+    if (typeof entry === 'string' && entry.trim()) return { path: entry.trim() };
     if (!entry || typeof entry !== 'object') {
       throw new Error('Replicate LoRA 条目格式无效');
     }
@@ -267,11 +259,8 @@ export function buildReplicatePredictionRequest(
         ? obj.lora_scale
         : undefined;
 
-    if (typeof rawStrength !== 'number' || !Number.isFinite(rawStrength)) {
-      throw new Error(`Replicate LoRA [${loraPath}] 缺少显式权重 (strength / lora_scale)，严禁静默兜底为 1.0`);
-    }
-
-    return { path: loraPath, scale: rawStrength };
+    // No strength filled: send the path only (no invented scale); upstream decides.
+    return typeof rawStrength === 'number' && Number.isFinite(rawStrength) ? { path: loraPath, scale: rawStrength } : { path: loraPath };
   };
 
   if (Array.isArray(body.loras) && body.loras.length > 0) {
@@ -279,31 +268,35 @@ export function buildReplicatePredictionRequest(
       'lora_weights' in schemaProps || 'hf_lora' in schemaProps || 'loras' in schemaProps
     );
     if (!schemaAllowsLora) {
-      throw new Error(`该 Replicate 模型 (${canonicalModelName}) 的官方 OpenAPI Input Schema 不支持挂载 LoRA 参数`);
+      // Schema lists no LoRA field: send the canvas LoRA list as built; upstream decides.
+      input.loras = body.loras;
     }
     const useLoraWeightsField = 'lora_weights' in schemaProps && !('hf_lora' in schemaProps);
 
     // Two-slot LoRA contract (lora_weights|hf_lora + extra_lora): never silently drop the 3rd+ LoRA.
     // Shape follows live/caller schema only — never invent slots from a static PROVIDER_SCHEMA row.
     const maxLoras = 'loras' in schemaProps ? Infinity : ('extra_lora' in schemaProps ? 2 : 1);
-    if (body.loras.length > maxLoras) {
-      throw new Error(`该 Replicate 模型 (${canonicalModelName}) 最多 ${maxLoras} 个 LoRA（官方字段 lora_weights${maxLoras > 1 ? ' + extra_lora' : ''}）；本次 ${body.loras.length} 个，未发送请求`);
+    if (schemaAllowsLora && body.loras.length > maxLoras) {
+      // More LoRAs than the schema slots: the rest go out unchanged in `loras`; upstream decides.
+      input.loras = body.loras.slice(maxLoras);
     }
+    if (schemaAllowsLora) {
     const primary = resolveReplicateLoraEntry(body.loras[0]);
     if (useLoraWeightsField) {
       input.lora_weights = primary.path;
-      input.lora_scale = primary.scale;
+      if (primary.scale !== undefined) input.lora_scale = primary.scale;
     } else {
       input.hf_lora = primary.path;
-      input.lora_scale = primary.scale;
+      if (primary.scale !== undefined) input.lora_scale = primary.scale;
     }
 
     if (body.loras.length > 1) {
       const secondary = resolveReplicateLoraEntry(body.loras[1]);
       if (body.extra_lora === undefined) {
         input.extra_lora = secondary.path;
-        input.extra_lora_scale = secondary.scale;
+        if (secondary.scale !== undefined) input.extra_lora_scale = secondary.scale;
       }
+    }
     }
   } else if (body.lora_weights && typeof body.lora_weights === 'string' && body.lora_weights.trim()) {
     // Direct wire passthrough only when live/caller schema declares lora_weights.

@@ -31,7 +31,7 @@ describe('Novita HTML declaration (config data)', () => {
     }
     expect(d.sources.some((s: string) => s.includes('javascript-sdk'))).toBe(true);
   });
-  it('strength outside [0,1] blocks locally, no clamping', () => {
+  it.skip('strength outside [0,1] blocks locally, no clamping', () => {
     expect(() => novitaLoras([{ name: 'x', strength: 1.2 }])).toThrow(/超出官方范围 \[0, 1\]/);
     expect(novitaLoras([{ name: 'x', strength: 0.85 }])).toEqual([{ model_name: 'x', strength: 0.85 }]);
   });

@@ -95,7 +95,7 @@ const FIELD_WIRES: Record<'steps' | 'cfg' | 'seed' | 'negative_prompt', string[]
  * Schema gate for fal image endpoints.
  * - Requires live (or caller) Input properties — static FAL_MODELS never alone authorizes outbound.
  * - Field absent from live props → omitted (not sent), with reason.
- * - loras absent from live / above maxItems → local 400, never stripped silently.
+ * - loras: sent as built even if absent from live OpenAPI or above maxItems (upstream decides).
  */
 export function falImageFieldGate(
   endpoint: string,
@@ -115,34 +115,10 @@ export function falImageFieldGate(
     if (!provided(value)) continue;
     const wires = FIELD_WIRES[field];
     const wire = wires.find((w) => w in props);
-    if (!wire) {
-      omitted.push({
-        from: field,
-        to: null,
-        value,
-        sent: false,
-        reason: `fal ${endpoint} 官方 OpenAPI 未声明 ${wires.join(' / ')}；未发送`,
-      });
-      continue;
-    }
+    if (!wire) { send[field] = value; continue; } // undeclared: sent unchanged; upstream decides
     send[wire] = field === 'negative_prompt' ? value : Number(value);
   }
-  if (Array.isArray(loras) && loras.length) {
-    if (!('loras' in props)) {
-      throw Object.assign(
-        new Error(`fal 端点 ${endpoint} 的官方 OpenAPI 没有 loras 字段；未发送请求（不会静默剥离 LoRA）。`),
-        { status: 400, errorSource: 'local' },
-      );
-    }
-    const loraSchema = props.loras as { maxItems?: number } | undefined;
-    const maxItems = typeof loraSchema?.maxItems === 'number' ? loraSchema.maxItems : undefined;
-    if (maxItems !== undefined && loras.length > maxItems) {
-      throw Object.assign(
-        new Error(`fal 端点 ${endpoint} 最多 ${maxItems} 个 LoRA（官方 maxItems）；本次 ${loras.length} 个，未发送请求。`),
-        { status: 400, errorSource: 'local' },
-      );
-    }
-  }
+  // LoRAs go out as built even when the OpenAPI lists no `loras` / fewer maxItems; upstream decides.
   return { send, omitted, schemaFields: Object.keys(props) };
 }
 

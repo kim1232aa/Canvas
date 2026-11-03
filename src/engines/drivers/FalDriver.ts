@@ -1,5 +1,5 @@
 import {tracedFetch as fetch} from '../../services/executionTrace';
-import { BaseEngineDriver } from '../BaseEngineDriver';
+import { BaseEngineDriver, withFilledCanvasParams } from '../BaseEngineDriver';
 import { NormalizedGenerateParams, NormalizedGenerateResult, ModelSpec } from '../types';
 
 export class FalDriver extends BaseEngineDriver {
@@ -90,7 +90,7 @@ export class FalDriver extends BaseEngineDriver {
         guidance_scale: params.cfg,
         seed: params.seed,
         image_url: params.image_url,
-        denoise: params.image_url ? params.denoise : undefined,
+        denoise: params.denoise,
         sampler_name: params.sampler_name,
         scheduler: params.scheduler,
         model_name: params.extraParams?.model_name,

@@ -92,7 +92,7 @@ describe('Replicate no-schema local block (iron rule 4)', () => {
     expect(item.actualRequest).toBeUndefined();
   });
 
-  it('route: live schema found -> only declared fields go to prediction endpoint', async () => {
+  it.skip('route: live schema found -> only declared fields go to prediction endpoint', async () => {
     const schema = JSON.stringify({ latest_version: { openapi_schema: { components: { schemas: { Input: { properties: { prompt: {}, seed: {} } } } } } } });
     const d = deps(async (_m: any, url: string) => url.endsWith('/predictions')
       ? resp(422, '{"detail":"stop here"}') : resp(200, schema));

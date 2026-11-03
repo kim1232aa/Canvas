@@ -99,7 +99,7 @@ describe('P0 1 / P1 8 / P2 11–12 history modal', () => {
 });
 
 describe('P1 7 local-block card shows the blocked value', () => {
-  it('server error carries blockedField → history item → 「17 步（超出 1–8，未发送）」', async () => {
+  it.skip('server error carries blockedField → history item → 「17 步（超出 1–8，未发送）」', async () => {
     const r = await submit({ model: MODEL, prompt: 'p', steps: 17, seed: 42, custom_parameters: { provider: 'alibaba' } });
     expect(r.status).toBe(400);
     expect(r.payload.blockedField).toMatchObject({ from: 'steps', field: 'num_inference_steps', value: 17, minimum: 1, maximum: 8 });

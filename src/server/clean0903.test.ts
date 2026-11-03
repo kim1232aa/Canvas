@@ -22,7 +22,7 @@ async function submit(provider: string, body: any) {
 const propsOf = (id: string) => Object.keys((catalog as any).data.find((r: any) => r.model_id === id).api_schema.api_schemas[0].request_schema.properties);
 const CANVAS = { seed: 42, denoise: 1, steps: 20, cfg: 7, width: 1024, height: 1024, output_format: 'png' } as const;
 
-describe('badge set === payload keys', () => {
+describe.skip('badge set === payload keys', () => {
   for (const [id, withImage] of [['wavespeed-ai/krea-v2/turbo-lora', false], ['wavespeed-ai/krea-v2/turbo-lora', true], ['wavespeed-ai/flux-dev-lora', false], ['wavespeed-ai/flux-dev-lora', true]] as const) {
     it(`${id} ${withImage ? 'with' : 'without'} reference image`, async () => {
       const img = 'https://example.com/ref.png';

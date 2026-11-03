@@ -1,5 +1,5 @@
 import {tracedFetch as fetch} from '../../services/executionTrace';
-import { BaseEngineDriver } from '../BaseEngineDriver';
+import { BaseEngineDriver, withFilledCanvasParams } from '../BaseEngineDriver';
 import {
   NormalizedGenerateParams,
   NormalizedGenerateResult,
@@ -92,6 +92,7 @@ export class GrokCompatDriver extends BaseEngineDriver {
     if (extra.response_format) body.response_format = extra.response_format;
     if (extra.custom_parameters && typeof extra.custom_parameters === 'object') body.custom_parameters = extra.custom_parameters;
 
+    withFilledCanvasParams(body, params, ['negative_prompt','seed','steps','cfg','width','height','sampler_name','scheduler','denoise','loras']);
     const resp = await fetch('/api/engine/grok_compat/generate', {
       method: 'POST',
       headers,

@@ -1,5 +1,5 @@
 import { tracedFetch as fetch } from '../../services/executionTrace';
-import { BaseEngineDriver } from '../BaseEngineDriver';
+import { BaseEngineDriver, withFilledCanvasParams } from '../BaseEngineDriver';
 import {
   NormalizedGenerateParams,
   NormalizedGenerateResult,
@@ -112,7 +112,7 @@ export class ReplicateDriver extends BaseEngineDriver {
     const resp = await fetch('/api/engine/replicate/generate', {
       method: 'POST',
       headers,
-      body: JSON.stringify(body),
+      body: JSON.stringify(withFilledCanvasParams(body as Record<string, unknown>, params, ['negative_prompt','seed','steps','cfg','width','height','sampler_name','scheduler','denoise','loras'])),
     });
 
     if (!resp.ok) {

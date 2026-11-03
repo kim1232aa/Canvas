@@ -153,3 +153,13 @@ export abstract class BaseEngineDriver implements IEngineDriver {
     keys: Record<string, string>
   ): Promise<NormalizedChatResult>;
 }
+
+/** 2026-11-04 (雁): every user-filled canvas param goes out as-is. Adds the listed canvas fields the driver did not already map. */
+export function withFilledCanvasParams(body: Record<string, unknown>, params: NormalizedGenerateParams, keys: Array<keyof NormalizedGenerateParams>): Record<string, unknown> {
+  for (const k of keys) {
+    const v = params[k];
+    if (v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0)) continue;
+    if (body[k as string] === undefined) body[k as string] = v;
+  }
+  return body;
+}

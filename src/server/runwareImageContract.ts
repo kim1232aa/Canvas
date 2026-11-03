@@ -3,7 +3,7 @@ import { applyCustomParameters, type CustomOverride } from './customParameters';
 
 export interface RunwareLora {
   model: string;
-  weight: number;
+  weight?: number;
 }
 
 export interface RunwareTask {
@@ -83,9 +83,6 @@ export function buildRunwareImageRequest(body: Record<string, unknown>, baseUrl 
     task.seedImage = seedImage;
     const strength = body.strength ?? body.denoise;
     if (typeof strength === 'number' && Number.isFinite(strength)) {
-      if (strength <= 0 || strength > 1) {
-        throw new Error(`Runware 重绘强度 (strength/denoise=${strength}) 超出官方有效范围 (0, 1]，严禁静默截断`);
-      }
       task.strength = Number(strength);
     }
   }
@@ -124,10 +121,7 @@ export function buildRunwareImageRequest(body: Record<string, unknown>, baseUrl 
             : typeof (item as any).weight === 'number'
             ? (item as any).weight
             : undefined;
-        if (typeof rawWeight !== 'number' || !Number.isFinite(rawWeight)) {
-          throw new Error(`Runware LoRA [${loraModel}] 缺少显式权重 (weight/strength)，严禁静默兜底为 1.0`);
-        }
-        loras.push({ model: loraModel, weight: rawWeight });
+        loras.push(typeof rawWeight === 'number' && Number.isFinite(rawWeight) ? { model: loraModel, weight: rawWeight } : { model: loraModel });
       }
     }
     if (loras.length > 0) {

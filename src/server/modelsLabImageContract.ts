@@ -87,12 +87,9 @@ export function buildModelsLabImageRequest(
 
   const hasWidth = typeof body.width === 'number' && Number.isFinite(body.width) && body.width > 0;
   const hasHeight = typeof body.height === 'number' && Number.isFinite(body.height) && body.height > 0;
-  if (hasWidth !== hasHeight) {
-    throw new Error('ModelsLab 宽高 (width / height) 必须同时显式提供或同时留空，严禁单边静默兜底 512');
-  }
+  if (hasWidth) payload.width = Math.round(body.width as number);
+  if (hasHeight) payload.height = Math.round(body.height as number);
   if (hasWidth && hasHeight) {
-    payload.width = Math.round(body.width as number);
-    payload.height = Math.round(body.height as number);
   }
 
   if (typeof body.steps === 'number' && body.steps > 0) {
@@ -124,11 +121,8 @@ export function buildModelsLabImageRequest(
             : typeof (item as any).scale === 'number'
             ? (item as any).scale
             : undefined;
-        if (typeof rawStr !== 'number' || !Number.isFinite(rawStr)) {
-          throw new Error(`ModelsLab LoRA [${name}] 缺少显式权重 (strength)，严禁静默兜底为 0.8`);
-        }
         loraModels.push(name);
-        loraStrengths.push(rawStr);
+        loraStrengths.push(typeof rawStr === 'number' && Number.isFinite(rawStr) ? rawStr : (null as any));
       }
     }
     if (loraModels.length > 0) {

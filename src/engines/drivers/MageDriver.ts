@@ -1,5 +1,5 @@
 import { tracedFetch as fetch } from '../../services/executionTrace';
-import { BaseEngineDriver } from '../BaseEngineDriver';
+import { BaseEngineDriver, withFilledCanvasParams } from '../BaseEngineDriver';
 import {
   NormalizedGenerateParams,
   NormalizedGenerateResult,
@@ -61,11 +61,6 @@ export class MageDriver extends BaseEngineDriver {
     keys: Record<string, string>
   ): Promise<NormalizedGenerateResult> {
     if (!params.model?.trim()) throw new Error('模型为必填项（model is required）');
-    if (Array.isArray(params.loras) && params.loras.length > 0) {
-      throw new Error(
-        'Mage Mango 官方文档无 LoRA 字段；一致性请用 prompt 里的 @handle 或参考图。禁止发送 loras[]。'
-      );
-    }
 
     const effectiveKey = params.apiKey || keys.mageKey || '';
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -92,6 +87,7 @@ export class MageDriver extends BaseEngineDriver {
       loras: Array.isArray(params.loras) ? params.loras : [],
     };
 
+    withFilledCanvasParams(body, params, ['negative_prompt','seed','steps','cfg','width','height','sampler_name','scheduler','denoise','loras']);
     const resp = await fetch('/api/engine/mage/generate', {
       method: 'POST',
       headers,

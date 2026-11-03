@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   buildMageImageRequest,
   parseMageRequestResponse,
-  assertNoMageLoras,
   MAGE_DOC,
   MAGE_SCHEMA_FIELDS,
 } from './mageImageContract';
@@ -42,14 +41,9 @@ describe('mageImageContract', () => {
     });
   });
 
-  it('refuses non-empty loras[]', () => {
-    expect(() =>
-      buildMageImageRequest({
-        prompt: 'x',
-        loras: [{ name: 'fake-lora', strength: 1 }],
-      })
-    ).toThrow(/无 LoRA/);
-    expect(() => assertNoMageLoras({ loras: [{ name: 'x' }] })).toThrow(/无 LoRA/);
+  it('sends loras[] as built (no local refusal)', () => {
+    const m = buildMageImageRequest({ prompt: 'x', model_id: 'mango-v3', loras: [{ name: 'fake-lora', strength: 1 }] });
+    expect(m.payload.loras).toEqual([{ name: 'fake-lora', strength: 1 }]);
   });
 
   it('forwards schema-unlisted canvas fields unchanged (official additionalProperties:true pass-through)', () => {

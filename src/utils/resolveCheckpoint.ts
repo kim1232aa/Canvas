@@ -389,10 +389,14 @@ export const LORA_BYPASS_LABEL = '暂时不用这个 LoRA';
  * Uses providerSchema only — never an unrelated canvas checkpoint.
  * message is plain Chinese for UI; official refuse detail stays in server fail()/exec log.
  */
+/** 2026-11-04 (雁): never block/grey/omit locally; send as built. */
+const SEND_AS_BUILT: boolean = true;
 export function isLoraUnsupportedOnEndpoint(
   provider: string | undefined,
   model: string | undefined
 ): { unsupported: boolean; message?: string } {
+  // 2026-11-04 (雁): LoRA is never blocked or greyed locally — it is sent as built and the upstream answer shown verbatim.
+  if (SEND_AS_BUILT) return { unsupported: false };
   const modelId = (model || '').trim();
   let prov = (provider || '').toLowerCase().trim();
   if (!prov && modelId.startsWith('fal-ai/')) prov = 'fal';
@@ -539,6 +543,8 @@ export function isCanvasFieldUnsupported(
   model: string | undefined,
   field: CanvasGreyField
 ): boolean {
+  // 2026-11-04 (雁): no local greying/omission — every filled param is sent; upstream decides.
+  if (SEND_AS_BUILT) return false;
   const schemaProv = toSchemaProvider(provider);
   if (!schemaProv) return false;
   const modelId = String(model || '').trim();

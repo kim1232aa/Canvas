@@ -172,13 +172,17 @@ async function upstreamFetch(meta: UpstreamMeta, url: string, init?: RequestInit
   }
 }
 
-// Owner rule: params a provider does not support → explicit 400, never silently dropped.
+// 2026-11-04 (雁): never refuse or drop a filled param. Fields this route does not map are forwarded unchanged
+// via custom_parameters (merged into the upstream payload by applyCustomParameters); upstream decides.
 const isProvided = (v: any) => v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && v.length === 0);
-const rejectUnsupported = (res: express.Response, provider: string, body: any, fields: string[]): boolean => {
-  const bad = fields.filter((f) => isProvided(body?.[f]));
-  if (bad.length === 0) return false;
-  res.status(400).json({ error: `该服务商不支持: ${bad.join(', ')}（${provider}）`, unsupported: bad });
-  return true;
+const rejectUnsupported = (_res: express.Response, _provider: string, body: any, fields: string[]): boolean => {
+  const filled = fields.filter((f) => isProvided(body?.[f]));
+  if (!filled.length || !body) return false;
+  let custom: Record<string, unknown> = {};
+  try { custom = parseCustomObject(body.custom_parameters) || {}; } catch { return false; }
+  for (const f of filled) if (!Object.hasOwn(custom, f)) custom[f] = body[f];
+  body.custom_parameters = custom;
+  return false;
 };
 
 // SDK calls (@google/genai, @huggingface/inference) are logged through the same sink.
@@ -1053,21 +1057,14 @@ function getProviderBaseUrl(provider: AuthProvider): { baseUrl: string; error?: 
 }
 
 function rejectSchemaEnum(
-  res: express.Response,
-  provider: SchemaProvider,
-  model: string,
-  field: FieldKey,
-  value: unknown,
+  _res: express.Response,
+  _provider: SchemaProvider,
+  _model: string,
+  _field: FieldKey,
+  _value: unknown,
 ): boolean {
-  if (!isProvided(value)) return false;
-  const status = valueStatus(provider, model, field, value as string | number);
-  if (status !== 'unsupported') return false;
-  const listed = fieldOptions(provider, model, field).map((v) => v.value);
-  res.status(400).json({
-    error: `该服务商不支持此 ${field} 取值: "${value}"。${model} 官方仅支持: ${listed.join(', ') || '（官方未列出）'}`,
-    unsupported: [field],
-  });
-  return true;
+  // 2026-11-04 (雁): enum values are sent as filled; upstream decides.
+  return false;
 }
 
 // Helper to create GoogleGenAI client with key rotation and standard aistudio-build telemetry
@@ -3165,51 +3162,34 @@ app.post(['/api/fal/generate', '/api/generate', '/api/engine/fal/generate'], asy
     if (falGate.omitted.length) generationContext.getStore()?.traces.push(sanitizeGenerationMetadata({ stage: 'parameter-omissions', provider: 'fal', endpoint, omitted: falGate.omitted, schemaFields: falGate.schemaFields }));
     if (image_url) {
       // Capability from live OpenAPI only — never guess text-only from endpoint name regex.
-      if (!falLiveAcceptsImageUrl(liveProps)) {
-        return res.status(400).json({
-          error: `该 Fal 端点官方 OpenAPI 未声明 image_url/image；未发送图生图参数（endpoint=${endpoint}）`,
-          errorSource: 'local',
-          endpoint,
-          blocked: 'image_url_undeclared',
-          schemaFields: falGate.schemaFields,
-          notSent: true,
-        });
-      }
-      const imageWire = (['image_url', 'image', 'input_image', 'start_image_url'] as const).find((w) => w in liveProps!)!;
+      // Wire from live OpenAPI; if none is declared the canvas field goes out unchanged as image_url.
+      const imageWire = (['image_url', 'image', 'input_image', 'start_image_url'] as const).find((w) => w in liveProps!) ?? 'image_url';
       payload[imageWire] = image_url;
       if (typeof denoise === 'number') {
-        const strengthWire = falLiveStrengthWire(liveProps);
-        if (!strengthWire) {
-          return res.status(400).json({
-            error: `该 Fal 端点官方 OpenAPI 未声明 strength/denoise；未发送 denoise（endpoint=${endpoint}）`,
-            errorSource: 'local',
-            endpoint,
-            unsupported: ['denoise'],
-            notSent: true,
-          });
-        }
+        const strengthWire = falLiveStrengthWire(liveProps) ?? 'denoise';
         payload[strengthWire] = denoise;
       }
     } else if (isProvided(denoise)) {
-      return res.status(400).json({ error: 'denoise 仅在提供 image_url（图生图）时有效', unsupported: ['denoise'] });
+      payload.denoise = denoise;
     }
 
     const actualModel = endpoint;
 
     if (Array.isArray(loras) && loras.length > 0) {
       // F8: 所选端点不支持 LoRA 时返回「该服务商不支持」
-      const badLora = loras.find((l: any) => !(l?.path || l?.url) || !isProvided(l?.scale ?? l?.strength ?? l?.modelStrength));
+      // Only a LoRA with no path/url cannot be sent (no Civitai-ID → URL rewriting: would leak the Civitai token).
+      const badLora = loras.find((l: any) => !(l?.path || l?.url));
       if (badLora) {
         // V2: no `?? 0.8` strength fallback, no Civitai-ID → download-URL rewriting (would leak the Civitai token to Fal).
         return res.status(400).json({
-          error: '每个 LoRA 必须提供可直接访问的 path/url 与 scale（强度）；服务端不会代填强度，也不会把 Civitai token 拼进下载链接发给 Fal',
+          error: 'LoRA 没有可直接访问的 path/url，无法发送',
           lora: badLora,
         });
       }
-      payload.loras = loras.map((l: any) => ({
-        path: l.path || l.url,
-        scale: Number(l.scale ?? l.strength ?? l.modelStrength),
-      }));
+      payload.loras = loras.map((l: any) => {
+        const raw = l.scale ?? l.strength ?? l.modelStrength;
+        return isProvided(raw) ? { path: l.path || l.url, scale: Number(raw) } : { path: l.path || l.url };
+      });
     }
 
     const custom = applyCustomParameters(payload, req.body.custom_parameters);
@@ -4026,7 +4006,7 @@ app.post('/api/engine/runware/generate', async (req, res) => {
       cfg: task.CFGScale ?? null,
       width: task.width ?? null,
       height: task.height ?? null,
-      loras: (task.lora || []).map(l => ({ name: l.model, strength: l.weight })),
+      loras: (task.lora || []).map(l => ({ name: l.model, strength: l.weight as number })),
       requestMetadata: { requestedParameters: sanitizeGenerationMetadata(Object.fromEntries(Object.entries(req.body).filter(([key]) => key !== 'workflowSnapshot'))), actualParameters: mapped.payload, overrides: mapped.overrides, upstreamEndpoint: endpoint },
     }, {
       label: 'Runware',

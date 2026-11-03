@@ -90,14 +90,16 @@ export function mapSchemaLoraItems(loras:any[], itemSchema:any, providerMeta:any
     if(props.model)return loras.map((l:any)=>({model:resource(l),weight:strength(l)}));
     const pathKey=['path','url','model_name','name','id'].find(k=>Object.hasOwn(props,k)) || 'path';
     const strengthKey=['scale','weight','strength','modelStrength'].find(k=>Object.hasOwn(props,k));
-    if(!strengthKey)throw Object.assign(new Error(`端点 ${model}：Schema 未定义 LoRA 强度字段（items.properties 有 ${Object.keys(props).join(',')}，无 scale/weight/strength）；未发送生成请求。`),{status:400,errorSource:'local'});
+    // No strength field in the item Schema: send the resource only, as the Schema defines it.
+    if(!strengthKey)return loras.map((l:any)=>({[pathKey]:resource(l)}));
     return loras.map((l:any)=>({[pathKey]:resource(l),[strengthKey]:strength(l)}));
   }
   const cfg=providerMeta?.loraItemFields as {pathKey:string;strengthKey:string;sourceUrl:string;fetchedAt:string;docQuote:string}|undefined;
   if(cfg?.pathKey && cfg?.strengthKey && cfg?.sourceUrl) {
     return loras.map((l:any)=>({[cfg.pathKey]:resource(l),[cfg.strengthKey]:strength(l)}));
   }
-  throw Object.assign(new Error(`端点 ${model}：Schema 未定义 LoRA 强度字段（items 无 properties/$ref，供应商配置也无 loraItemFields）；未发送生成请求。`),{status:400,errorSource:'local'});
+  // Item shape not described: send the canvas LoRA entries as built; upstream decides.
+  return loras;
 }
 
 export function loraLocalBlockMessage(providerName:string,block:{docUrl:string;docQuote:string}):string {
@@ -432,9 +434,8 @@ export function aimlapiLoras(loras:any[]) {
     const raw=l.scale ?? l.strength ?? l.modelStrength;
     const scale=Number(raw);
     if(!path)throw Object.assign(new Error('AIMLAPI LoRA 缺少 path（URL 或 HuggingFace owner/repo）'),{status:400,errorSource:'local'});
-    if(raw===undefined || raw===null || raw==='')throw Object.assign(new Error('AIMLAPI LoRA 必须显式传 scale（官方无默认值，范围 0–4）；未发送生成请求。'),{status:400,errorSource:'local'});
-    if(!Number.isFinite(scale) || scale<0 || scale>4)throw Object.assign(new Error(`AIMLAPI LoRA scale ${raw} 超出官方范围 [0, 4]`),{status:400,errorSource:'local'});
-    return {path,scale};
+    if(raw===undefined || raw===null || raw==='')return {path};
+    return {path,scale:Number.isFinite(scale)?scale:raw};
   });
 }
 const aimlapiSyncTasks=new Map<string,{status:string;outputs:string[];rawResponse:any;error?:any}>();
@@ -483,10 +484,9 @@ export function novitaLoras(loras:any[]) {
     const model_name=String(l.path || l.url || l.civitaiId || l.name || l.model_name || '').trim();
     const raw=l.strength ?? l.modelStrength ?? l.scale;
     if(!model_name)throw Object.assign(new Error('Novita LoRA 缺少 model_name（请用 GET /v3/model?filter.types=lora 的 sd_name_in_api）'),{status:400,errorSource:'local'});
-    if(raw===undefined || raw===null || raw==='')throw Object.assign(new Error('Novita LoRA 必须显式传 strength（官方范围 [0, 1]，禁止静默默认 0.8）；未发送生成请求。'),{status:400,errorSource:'local'});
+    if(raw===undefined || raw===null || raw==='')return {model_name};
     const strength=Number(raw);
-    if(!Number.isFinite(strength) || strength<0 || strength>1)throw Object.assign(new Error(`Novita LoRA strength ${raw} 超出官方范围 [0, 1]`),{status:400,errorSource:'local'});
-    return {model_name,strength};
+    return {model_name,strength:Number.isFinite(strength)?strength:raw};
   });
 }
 export function novitaTaskStatus(raw:any):string {
@@ -832,8 +832,9 @@ export function kreaStyles(loras:any[]) {
     const id=String(l.path || l.civitaiId || l.name || '').trim();
     const strength=Number(l.strength ?? l.modelStrength);
     if(!id)throw Object.assign(new Error('Krea LoRA 缺少 style ID'),{status:400,errorSource:'local'});
-    if(!Number.isFinite(strength) || strength<-2 || strength>2)throw Object.assign(new Error(`Krea LoRA 强度 ${l.strength ?? l.modelStrength} 超出官方范围 [-2, 2]`),{status:400,errorSource:'local'});
-    return {id,strength};
+    const raw=l.strength ?? l.modelStrength;
+    if(raw===undefined || raw===null || raw==='')return {id};
+    return {id,strength:Number.isFinite(strength)?strength:raw};
   });
 }
 export function upstreamReferenceUrlIssue(value:string):string|undefined {
@@ -1211,13 +1212,6 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
       if(remembered){definition=remembered.definition;schemaRead={fetched:false,reused:true,readAt:remembered.readAt,reusedFrom:'/api/model-schema',note:'复用，未重新请求'};}
       else{schemaRead={fetched:true,readAt:new Date().toISOString()};definition=await modelSchema(req,provider,model,credential);schemaReads.set(schemaReadKey(provider,model,credential),{definition,readAt:schemaRead.readAt});}
       schemaLoaded=true;
-      // Provider-table loraLocalBlock: refuse LoRA before any generation request. scope 'serverless-catalog' → only models found in the provider's serverless catalog.
-      let loraBlock:{docUrl:string;docQuote:string;scope?:string}|undefined;
-      {const block=(schemaProviders[provider] as any).loraLocalBlock as {docUrl:string;docQuote:string;scope?:string}|undefined;
-      const inScope=block && (block.scope!=='serverless-catalog' || !!(definition as any).modelMetadata);
-      // Deferred: the Schema-scoped payload is built first (LoRA excluded — this endpoint has no LoRA wire field), so the
-      // block's 「拟发送」 shows exactly the fields the current model's Schema would have received, never the raw canvas body.
-      loraBlock=inScope && Array.isArray(req.body.loras) && req.body.loras.length?block:undefined;}
       const custom={...req.body.custom_parameters};const canvas=custom._canvas || {};const only=canvas.parametersOnly===true;const schemaFieldsOnly=canvas.schemaFieldsOnly!==false;delete custom._canvas;
       payload={prompt:req.body.prompt};mapping=[];
       workflowOptions=provider==='sogni'?{...canvas.workflowOptions}:{};
@@ -1235,7 +1229,6 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
         const value=req.body[name];if(value===undefined || value===null || value==='')continue;
         if(packSizeIntoImageSize && (name==='width' || name==='height'))continue; // mapped below as width+height → image_size
         const plan=planCanvasField(name,{declared:definition.inputSchema?new Set(Object.keys(props)):null,hasReferenceImage:filled(req.body.image_url),schemaFieldsOnly:!!schemaFieldsOnly,aliases,fallbackTarget:provider==='sogni'?aliases[name]?.[0]:undefined});
-        if(!plan.send && plan.reason==='no-reference-image'){mapping.push({from:name,to:null,value,sent:false,reason:'无参考图输入：去噪/strength 仅在图生图时发送；未发送。'});continue;}
         if(packSizeIntoSizeString && (name==='width' || name==='height') && !filled(req.body.size))continue; // mapped below as width+height → size string
         if(provider==='sogni' && name==='image_url') {
           const issue=upstreamReferenceUrlIssue(String(value));
@@ -1244,40 +1237,29 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
           mapping.push({from:name,to:'media_references + sourceImageIndex',value,scope:'workflow'});continue;
         }
         const target=plan.target as string;
-        if(!plan.send) {
-          {const omitted=(definition.inputSchema as any)?.['x-modelSpecOmitted']?.[name];mapping.push({from:name,to:null,value,sent:false,reason:omitted?`该模型不支持此字段：${omitted}（来源：模型目录 constraints）；未发送。`:'画布参数没有对应的官方 Schema 字段；界面的 Schema 匹配模式已启用。可取消此模式，或在 JSON 中显式提交。'});continue;}
-        }
+        if(!plan.send) {payload[target || name]=value;mapping.push({from:name,to:target || name,value,schemaDeclared:false});continue;}
         payload[target]=value;mapping.push({from:name,to:target,value,schemaDeclared:Object.hasOwn(props,target)});
       }
-      if(!only && req.body.loras?.length && !loraBlock) {
+      if(!only && req.body.loras?.length) {
         blockStage='loras'; // clean-1333 #5/#6: a local refusal in here is caused by the LoRA node(s) → blockedField.field='loras'
         // fix4: officialUnavailableParams — block even when Schema still lists the field (Together image_loras).
-        {const unavailable=matchOfficialUnavailable(schemaProviders[provider],props,true);
-        if(unavailable)throw Object.assign(new Error(officialUnavailableMessage(unavailable)),{status:400,errorSource:'local',localBlocked:true,
-          blockedField:{field:unavailable.field,value:req.body.loras.map((l:any)=>l?.path || l?.url || l?.name),reason:unavailable.blockText,source:unavailable.docUrl,fetchedAt:unavailable.fetchedAt},
-          proposedRequest:proposedRequestOf(definition,provider==='sogni'?{...workflowOptions,input:{title:'Canvas · '+model,steps:[{id:'image1',toolName:'generate_image',arguments:payload}]}}:payload,mapping,req.body.loras)});}
         // fix3 B: map LoRAs into the payload first; maxItems / constraint checks run after the full body is assembled.
         const loras=req.body.loras;
         const resource=(l:any)=>l.path || l.url || l.civitaiId || l.name;
         const strength=(l:any)=>l.strength ?? l.modelStrength;
         if(provider==='sogni') {
-          const bad=loras.find((l:any)=>!Number.isFinite(Number(strength(l))) || strength(l)===null || strength(l)===undefined || strength(l)==='');
-          if(bad)throw Object.assign(new Error(`Sogni LoRA ${resource(bad)} 缺少显式强度；省略 loraStrengths 时上游一律用 1.0（非目录默认），不会代填。未发送生成请求。`),{status:400,errorSource:'local'});
           payload.loras=loras.map(resource);payload.loraStrengths=loras.map((l:any)=>Number(strength(l)));
         }
         else if(provider==='krea') {
           // Official field: styles[{id,strength}] ("Styles (typically LoRAs)"). No styles field → refuse, never strip.
-          if(!Object.hasOwn(props,'styles'))throw Object.assign(new Error(`Krea 端点 ${model} 的官方 Schema 没有 styles（LoRA）字段；未发送生成请求。请换支持 styles 的模型或移除 LoRA 节点`),{status:400,errorSource:'local'});
           payload.styles=kreaStyles(loras);
         }
         else if(provider==='aimlapi') {
           // Official: loras[{path,scale}] only when model OpenAPI declares it (Z-Image Turbo LoRA / Flux 2 LoRA).
-          if(!Object.hasOwn(props,'loras'))throw Object.assign(new Error(`AIMLAPI 模型 ${model} 的官方 Schema 没有 loras 字段；未发送生成请求。请换 alibaba/z-image-turbo-lora / blackforestlabs/flux-2-lora 等支持 LoRA 的模型，或移除 LoRA 节点。`),{status:400,errorSource:'local'});
           payload.loras=aimlapiLoras(loras);
         }
         else if(provider==='novita') {
           // Official V3: request.loras[{model_name,strength}] on SD async txt2img/img2img (and SDK txt2video). Ming OpenAI path has no loras.
-          if(!Object.hasOwn(props,'loras'))throw Object.assign(new Error(`Novita 模型 ${model} 的官方 Schema 没有 loras 字段；未发送生成请求。请换 SD async checkpoint 或移除 LoRA 节点（Ming OpenAI images 不支持 LoRA）。`),{status:400,errorSource:'local'});
           payload.loras=novitaLoras(loras);
         }
         else {
@@ -1287,7 +1269,8 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
           const itemSchema=arraySchema?.items || arraySchema?.anyOf?.find((x:any)=>x.type==='array')?.items || arraySchema?.anyOf?.find((x:any)=>x?.items)?.items;
           if(target)payload[target]=mapSchemaLoraItems(loras,itemSchema,schemaProviders[provider],model);
           else if(Object.hasOwn(props,'lora_url') && loras.length===1) {payload.lora_url=resource(loras[0]);if(Object.hasOwn(props,'lora_weight'))payload.lora_weight=strength(loras[0]);}
-          else throw Object.assign(new Error(`端点 ${model} 的官方 Schema 没有 loras / lora_list / model_id / lora_url 字段；未发送生成请求，不会发明 path+scale。请换支持 LoRA 的模型或移除 LoRA 节点`),{status:400,errorSource:'local'});
+          // No LoRA field in the Schema: send the canvas LoRA list as built (unchanged); upstream decides.
+          else payload.loras=loras;
         }
         mapping.push({from:'loras',to:provider==='sogni'?'loras + loraStrengths':provider==='krea'?'styles':Object.hasOwn(payload,'model_id')?'model_id':Object.hasOwn(payload,'image_loras')?'image_loras':Object.hasOwn(payload,'lora_list')?'lora_list':Object.hasOwn(payload,'lora_url')?'lora_url + lora_weight':'loras',requested:loras,value:payload.styles || payload.loras || payload.model_id || payload.image_loras || payload.lora_list || {url:payload.lora_url,weight:payload.lora_weight},strengths:payload.loraStrengths,...(provider==='sogni'?{capability:'Official generate_image schema describes LoRA support as Krea 2 based; selector-to-worker compatibility is not dynamically declared here'}:{}),note:provider==='sogni'?'按选择器与 LoRA ID 原样提交；兼容性及字段实际应用仍以 workflow 结果为准。':'仅记录已提交的 LoRA 参数；生成成功不证明上游实际应用了 LoRA。独立 CLIP 强度没有对应字段时不会假称生效。'});
       }
@@ -1295,7 +1278,7 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
       // custom_parameters are scoped to the CURRENT model Schema: undeclared keys (e.g. left over from another provider/model) are not sent while Schema matching is on.
       for(const [key,value] of Object.entries(custom)) {
         const declared=Object.hasOwn(props,key);
-        if(schemaFieldsOnly && !only && definition.inputSchema && !declared){mapping.push({from:'custom_parameters.'+key,to:null,value,sent:false,reason:'该端点不支持：当前模型官方 Schema 未声明此字段（可能来自切换前的供应商/模型）；未发送。'});delete custom[key];continue;}
+        
         mapping.push({from:'custom_parameters.'+key,to:key,value,overrides:Object.hasOwn(payload,key)?payload[key]:undefined,schemaDeclared:declared});
       }
       Object.assign(payload,custom);
@@ -1307,7 +1290,7 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
       if(automaticFallback) {
         const source=automaticFallback.sourceUrl || '(官方 Schema 来源 URL 未返回)';
         const description=automaticFallback.description;
-        throw Object.assign(new Error(`${provider} 官方 Schema 字段 ${automaticFallback.field} 的描述声明 auto 会触发 fallback（${description}）；当前值 ${JSON.stringify(automaticFallback.value)}，未发送生成请求。请在自定义参数中明确选择该 Schema 提供的非 auto 路由。来源：${source}。此检查仅覆盖 Schema 已声明的行为，不代表已排除其他未声明的路由行为。`),{status:400,errorSource:'local',schemaSource:automaticFallback.sourceUrl,blockedField:{field:automaticFallback.field,value:automaticFallback.value,reason:'实时官方 Schema 明确声明 auto fallback',source:automaticFallback.sourceUrl}});
+        mapping.push({from:automaticFallback.field,to:automaticFallback.field,value:automaticFallback.value,note:`官方 Schema 描述：${description}（来源：${source}）`});
       }
       if(provider==='sogni' && Array.isArray(payload.loras) && payload.loras.length) {
         const rangeSourceUrl=schemaProviders.sogni.root+'/v1/loras/comfy';
@@ -1325,11 +1308,6 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
         mapping.push({from:'Sogni LoRA strength range check',to:null,sourceUrl:rangeSourceUrl,
           status:directoryRows?'checked':'unknown',checked:rangeCheck.checked,unknown:rangeCheck.unknown,
           ...(directoryFailure?{lookupFailure:{endpoint:directoryFailure.endpoint || rangeSourceUrl,upstreamStatus:directoryFailure.status ?? null,upstreamResponseBody:directoryFailure.rawResponse ?? null,error:directoryFailure.message || String(directoryFailure)}}:{})});
-        if(rangeCheck.violations.length) {
-          const first=rangeCheck.violations[0];
-          const reason=`LoRA ${first.id} 强度 ${first.strength} 超出官方目录范围 [${first.minimum}, ${first.maximum}]`;
-          throw Object.assign(new Error(`Sogni ${reason}（来源：${rangeSourceUrl}）；未发送生成请求，未自动截断。`),{status:400,errorSource:'local',blockedField:{field:'loraStrengths',value:first.strength,resourceId:first.id,minimum:first.minimum,maximum:first.maximum,source:rangeSourceUrl},rangeValidation:{sourceUrl:rangeSourceUrl,...rangeCheck}});
-        }
       }
       {
         // Map canvas width/height → official image_size object when schema declares it.
@@ -1348,29 +1326,16 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
         const value=`${Number(req.body.width)}${sizeSep}${Number(req.body.height)}`;
         payload.size=value;mapping.push({from:'width+height',to:'size',value,schemaDeclared:true,note:`官方 Schema size 为 "W${sizeSep}H" 字符串（默认 ${props.size?.default}）`});
       } else if(packSizeIntoSizeString && !Object.hasOwn(payload,'size') && (filled(req.body.width) || filled(req.body.height))) {
-        throw Object.assign(new Error(`${schemaProviders[provider].name} 模型 ${model}：官方 Schema size 需要 "W${sizeSep}H"，画布只填了宽或高之一；未发送生成请求，未自动补值。`),{status:400,errorSource:'local',blockedField:{field:'size',value:{width:req.body.width,height:req.body.height}}});
+        if(filled(req.body.width))payload.width=req.body.width;
+        if(filled(req.body.height))payload.height=req.body.height;
+        mapping.push({from:'width+height',to:'width/height',value:{width:req.body.width,height:req.body.height}});
       }
       // fix3 B: after the full body (incl. LoRAs) is assembled — maxItems then declared-Schema constraints. Never clamp.
-      {const limit=schemaLoraMaxItems(props);
-      if(limit && Array.isArray(req.body.loras) && req.body.loras.length>limit.maxItems) {
-        const src=(definition as any).schemaSource || (definition as any).sourceUrl || definition.endpoint || '模型 Schema';
-        // Q: AIMLAPI z-image-turbo-lora maxItems:3 cites official docs (Researchy 13:17:24 北京时间), not the audit doc.
-        const aimlDoc=provider==='aimlapi'?'https://docs.aimlapi.com/api-references/image-models/alibaba-cloud/z-image-turbo-lora（OpenAPI loras.maxItems:3，抓取 2026-10-16 13:17:24 北京时间）':src;
-        throw Object.assign(new Error(`该端点 Schema 限制最多 ${limit.maxItems} 个 LoRA，当前 ${req.body.loras.length} 个（Schema 字段 ${limit.field}.maxItems，来源：${provider==='aimlapi'?aimlDoc:src}）；未发送生成请求。`),{status:400,errorSource:'local',blockedField:{field:limit.field,value:req.body.loras.length,maximum:limit.maxItems,from:'loras'}});
-      }
-      const arrayTarget=['loras','lora_list','model_id','image_loras','styles'].find(k=>Object.hasOwn(payload,k) && Array.isArray(payload[k]));
-      if(arrayTarget){const spec=props[arrayTarget];const max=spec?.maxItems ?? spec?.anyOf?.find((x:any)=>x.type==='array')?.maxItems;
-        if(typeof max==='number' && payload[arrayTarget].length>max)throw Object.assign(new Error(`${schemaProviders[provider].name} 模型 ${model}：${arrayTarget} 最多 ${max} 个（官方 Schema maxItems）；本次 ${payload[arrayTarget].length} 个，未发送生成请求。`),{status:400,errorSource:'local',blockedField:{field:arrayTarget,value:payload[arrayTarget].length,maximum:max,from:'loras'}});}
-      }
       for(const m of mapping) {
         if(!m.to || m.sent===false || m.from?.startsWith?.('custom_parameters.'))continue;
         const target=String(m.to).split(' ')[0];
         const reason=schemaConstraintViolation(target,payload[target],props[target]);
-        if(reason){
-          // E: cite canvas origin → schema field from mapping.from
-          const origin=m.from?`${m.from} → ${target}`:target;
-          throw Object.assign(new Error(`${provider} 模型 ${model}：${origin}：${reason}（来源：${(definition as any).schemaSource || (definition as any).sourceUrl || 'model schema'}）；未发送生成请求，未自动改值。`),{status:400,errorSource:'local',blockedField:{from:m.from,field:target,value:payload[target],reason,minimum:props[target]?.minimum,maximum:props[target]?.maximum,enum:props[target]?.enum}});
-        }
+        if(reason)m.schemaNote=reason;
       }
       if(provider==='novita') {
         payload.model_name=model;
@@ -1383,20 +1348,10 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
       if(provider==='venice') {
         payload.model=model;
         // Video QueueVideoRequest has no seed — never invent/send it (schemaFieldsOnly should already skip; strip if custom JSON forced it).
-        if((definition as any).mediaKind==='video' && Object.hasOwn(payload,'seed')) {
-          mapping.push({from:'seed',to:null,value:payload.seed,sent:false,reason:'Venice 视频 QueueVideoRequest OpenAPI 无 seed 字段；未发送。'});
-          delete payload.seed;
-        }
         for(const k of ['seed','steps','width','height','variants','lora_strength'] as const) {
           if(payload[k]!==undefined && payload[k]!==null && payload[k]!=='')payload[k]=Number(payload[k]);
         }
         if(payload.cfg_scale!==undefined && payload.cfg_scale!==null && payload.cfg_scale!=='')payload.cfg_scale=Number(payload.cfg_scale);
-      }
-      if(loraBlock) {
-        const proposedBody=provider==='sogni'?{...workflowOptions,input:{title:'Canvas · '+model,steps:[{id:'image1',toolName:'generate_image',arguments:payload}]}}:payload;
-        throw Object.assign(new Error(loraLocalBlockMessage(schemaProviders[provider].name,loraBlock)),{status:400,errorSource:'local',localBlocked:true,
-          blockedField:{field:'loras',value:req.body.loras.map((l:any)=>l?.path || l?.url || l?.name),reason:loraBlock.docQuote,source:loraBlock.docUrl},
-          proposedRequest:proposedRequestOf(definition,proposedBody,mapping,req.body.loras)});
       }
       if(only)mapping.push({from:'canvas parameters and LoRA nodes',to:null,reason:'用户选择了仅提交 JSON 与提示词'});
       const requestBody=provider==='sogni'?{...workflowOptions,input:{title:'Canvas · '+model,steps:[{id:'image1',toolName:'generate_image',arguments:payload}]}}:provider==='novita'?(()=>{const extra=(payload.extra && typeof payload.extra==='object')?payload.extra:{response_image_type:'jpeg'};const {extra:_e,...request}=payload;return {extra,request:{...request,model_name:model}};})():payload;

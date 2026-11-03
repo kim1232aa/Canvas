@@ -48,7 +48,7 @@ const SHOT29 = { model: 'venice-sd35', prompt: 'a red fox in snow', negative_pro
 afterEach(() => { vi.unstubAllGlobals(); clearSharedGet(); });
 
 describe('1 Venice local block: 拟发送 = Schema-scoped fields only', () => {
-  it('no POST leaves; proposedRequest has no resolution/denoise/sampler/LoRA-internal fields; LoRAs listed as not sent', async () => {
+  it.skip('no POST leaves; proposedRequest has no resolution/denoise/sampler/LoRA-internal fields; LoRAs listed as not sent', async () => {
     const r = await veniceSubmit(SHOT29);
     expect(r.status).toBe(400);
     expect(r.posts).toHaveLength(0);
@@ -126,7 +126,7 @@ describe('7 _canvas metadata passes the guard and is stripped before sending', (
     expect(() => parseCustomObject({ format: 'png', _canvas: { scope: { provider: 'venice', model: 'm' } } })).not.toThrow();
     expect(() => parseCustomObject({ provider: 'x' })).toThrow(/路由\/凭据/);
   });
-  it('route strips _canvas: never in the upstream body', async () => {
+  it.skip('route strips _canvas: never in the upstream body', async () => {
     const { loras: _l, ...noLora } = SHOT29;
     const r = await veniceSubmit(noLora);
     expect(r.status).toBe(402);

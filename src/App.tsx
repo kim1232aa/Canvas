@@ -1298,18 +1298,6 @@ export default function App() {
         recordLocalEvent('零宽字符检查（运行前）', zwBlock);
         throw new ApiTraceError(400, zwBlock, 'local:zero-width', JSON.stringify(zwBlock));
       }
-      if (canvasMode === 'graph') {
-        let ext: ReturnType<typeof extractWorkflowParameters> | undefined;
-        try { ext = extractWorkflowParameters(activeNodes, activeConns, runTargetId); } catch { /* graph validation is reported by executeWorkflow */ }
-        const ck = activeNodes.find((n) => n.type === 'CheckpointLoaderSimple' && !n.bypassed);
-        const pairing = getModelSizePairing(ck?.values?.targetProvider, ck?.values?.ckpt_name);
-        const mismatch = ext ? widthHeightMismatch(ext.width, ext.height, pairing) : null;
-        if (mismatch) {
-          const data = { ok: false, errorSource: 'local', localOnly: true, requestCount: 0, error: mismatch, blockedField: { field: 'size', value: { width: ext?.width ?? null, height: ext?.height ?? null }, reason: mismatch } };
-          recordLocalEvent('画布尺寸检查（Empty Latent 宽高）', data);
-          throw new ApiTraceError(400, data, 'local:size-check', JSON.stringify(data));
-        }
-      }
       const result = await executeWorkflow(
         activeNodes,
         activeConns,

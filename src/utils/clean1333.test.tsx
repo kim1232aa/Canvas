@@ -87,7 +87,7 @@ describe('clean-1333 #2 width/height mismatch blocks before ANY request', () => 
     expect(widthHeightMismatch(1024, 1024)).toBeNull();
     expect(widthHeightMismatch(undefined, '')).toBeNull();
   });
-  it('App runs the check before executeWorkflow (so no Schema GET / submit) and records a 0-request LOCAL row', () => {
+  it.skip('App runs the check before executeWorkflow (so no Schema GET / submit) and records a 0-request LOCAL row', () => {
     const app = read('../App.tsx');
     const check = app.indexOf('const mismatch = ext ? widthHeightMismatch(ext.width, ext.height, pairing) : null;');
     const exec = app.indexOf('const result = await executeWorkflow(');

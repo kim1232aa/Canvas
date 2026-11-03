@@ -1,5 +1,5 @@
 import {tracedFetch as fetch} from '../../services/executionTrace';
-import { BaseEngineDriver } from '../BaseEngineDriver';
+import { BaseEngineDriver, withFilledCanvasParams } from '../BaseEngineDriver';
 import { NormalizedGenerateParams, NormalizedGenerateResult, ModelSpec } from '../types';
 import { httpErrorMessage } from '../compatRelay';
 import { filterRealLoraEntries } from '../../utils/resolveCheckpoint';
@@ -62,6 +62,7 @@ export class OpenAICompatDriver extends BaseEngineDriver {
       body.loras = realLoras;
     }
 
+    withFilledCanvasParams(body, params, ['negative_prompt','seed','steps','cfg','width','height','sampler_name','scheduler','denoise','loras']);
     const resp = await fetch('/api/engine/openai_compat/generate', {
       method: 'POST',
       headers,

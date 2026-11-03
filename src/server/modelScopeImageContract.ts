@@ -21,8 +21,8 @@ export function buildModelScopeImagePayload(body: Record<string, any>): ModelSco
   const payload: Record<string, unknown> = { model: body.model, prompt: body.prompt || '' };
   const parameterMappings: ModelScopeImagePayload['parameterMappings'] = [];
   const omitted: ModelScopeImagePayload['omitted'] = [];
-  const omit = (from: string, value: unknown) =>
-    omitted.push({ from, to: null, value, sent: false, reason: `该端点不支持：魔搭 API-Inference 官方参数表无 ${from}；未发送（${MODELSCOPE_IMAGE_DOC}）` });
+  // Field not in the official table: sent unchanged; upstream decides.
+  const omit = (from: string, value: unknown) => { payload[from] = value; };
 
   const { width, height } = body;
   if (isProvided(width) && isProvided(height)) {

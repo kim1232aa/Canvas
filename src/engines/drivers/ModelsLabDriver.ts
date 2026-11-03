@@ -1,5 +1,5 @@
 import { tracedFetch as fetch } from '../../services/executionTrace';
-import { BaseEngineDriver } from '../BaseEngineDriver';
+import { BaseEngineDriver, withFilledCanvasParams } from '../BaseEngineDriver';
 import {
   NormalizedGenerateParams,
   NormalizedGenerateResult,
@@ -86,7 +86,7 @@ export class ModelsLabDriver extends BaseEngineDriver {
       resp = await fetch('/api/engine/modelslab/generate', {
         method: 'POST',
         headers,
-        body: JSON.stringify(body),
+        body: JSON.stringify(withFilledCanvasParams(body as Record<string, unknown>, params, ['negative_prompt','seed','steps','cfg','width','height','sampler_name','scheduler','denoise','loras'])),
       });
     } catch (error) {
       throw new Error(parseModelsLabFailure(error));

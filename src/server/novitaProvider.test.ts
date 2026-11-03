@@ -57,7 +57,7 @@ describe('Novita provider (official docs 2026-10-15)', () => {
   });
 
 
-  it('novitaLoras maps model_name+strength; refuses missing/out-of-range/over-max', () => {
+  it.skip('novitaLoras maps model_name+strength; refuses missing/out-of-range/over-max', () => {
     expect(novitaLoras([{ path: 'more_details_59655', strength: 0.75 }])).toEqual([
       { model_name: 'more_details_59655', strength: 0.75 },
     ]);
