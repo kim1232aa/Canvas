@@ -43,17 +43,6 @@ describe('fix5 AIMLAPI size row never shows raw-response byte count', () => {
     },
   };
 
-  // superseded 2026-11-04: history card shows plain values, no per-field badges
-  it.skip('尺寸 = square · 实际发送；HTML 无「尺寸: 505」', () => {
-    const size = formatHistorySize(resolveHistoryParameters(failed));
-    expect(size).toMatchObject({ text: 'square', source: 'sent' });
-    const html = modal([failed]);
-    expect(html).toContain('history-size');
-    expect(html).toContain('square');
-    expect(html).not.toMatch(/尺寸:[^<]*505/);
-    // cleanup-2026-10-17: unsupported fold replaced by one 「这次没用上」 line (only for user-filled values).
-  });
-
   it('上游响应折叠写「响应体 505 B」，不把裸「505 字节」当尺寸', () => {
     const ref = { kind: 'raw-response', url: '/x', size: 505 };
     expect(upstreamBodyToggleText(ref, false)).toBe('上游响应原文（响应体 505 B，点开读取）');
@@ -78,18 +67,6 @@ describe('fix5 aspect_ratio becomes the history size row (generic, not WaveSpeed
       },
     },
   };
-
-  // superseded 2026-11-04: history card shows plain values, no per-field badges
-  it.skip('sent aspect_ratio → 尺寸行 16:9 · 实际发送；不进「该端点不支持」折叠', () => {
-    const resolved = resolveHistoryParameters(muapiSent);
-    expect(formatHistorySize(resolved)).toMatchObject({ text: '16:9', source: 'sent' });
-    expect(historyUnsupportedRows(resolved).map((r) => r.key)).not.toContain('size');
-    expect(otherSentParameters(muapiSent).map((p) => p.key)).toContain('resolution');
-    expect(otherSentParameters(muapiSent).map((p) => p.key)).not.toContain('aspect_ratio');
-    const html = modal([muapiSent]);
-    expect(html).toContain('history-size');
-    expect(html).toMatch(/16:9/);
-  });
 
   it('schema has aspect_ratio but not sent → 尺寸「未发送」, not 「该端点不支持」', () => {
     const noAr = {

@@ -20,11 +20,6 @@ const failed: any = {
 const html = renderToStaticMarkup(<HistoryModal isOpen onClose={() => {}} history={[failed]} onApplyPrompt={() => {}} onDeleteItem={() => {}} onClearAll={() => {}} />);
 
 describe('fix16.1 real render paths', () => {
-  // superseded 2026-11-04: history card shows plain values, no per-field badges
-  it.skip('#1 seed note is its own full-width line (basis-full), separate from 实际发送 chip', () => {
-    expect(html).toMatch(/data-testid="history-seed"[^>]*>|class="basis-full[^"]*"[^>]*data-testid="history-seed"/);
-    expect(html).toMatch(/class="basis-full text-slate-500" data-testid="history-seed-upstream-note">上游未返回种子/);
-  });
   it('#2 JSON prompt line gets break points at spaces (no single nowrap span)', () => {
     const j = renderToStaticMarkup(<JsonNoMidBreak value={{ prompt: 'a starship corridor interior, cinematic lighting' }} />);
     expect(j).not.toContain('<span class="whitespace-nowrap">  &quot;prompt&quot;: &quot;a starship corridor interior, cinematic lighting&quot;</span>');

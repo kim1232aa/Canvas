@@ -211,46 +211,6 @@ describe('provider contract (16): schema-route providers', () => {
     request_schema: { properties: { prompt: { type: 'string' }, seed: { type: 'integer' }, aspect_ratio: { type: 'string' }, resolution: { type: 'string', enum: ['1k', '2k'] }, strength: { type: 'number' },
       loras: { type: 'array', maxItems: 3, items: { type: 'object', properties: { path: { type: 'string' }, scale: { type: 'number' } } } } } } }] } };
 
-  it.skip('WaveSpeed krea-v2/turbo-lora: seed + loras[{path,scale}] sent; steps/cfg NOT sent and badged 不会发送', async () => {
-    const declared = Object.keys(wsRow.api_schema.api_schemas[0].request_schema.properties);
-    let upstream: any;
-    await withFixture(async (url, init) => {
-      if (url.includes('/api/v3/models')) return json({ code: 200, data: [wsRow] });
-      upstream = JSON.parse(String(init?.body || '{}'));
-      return json({ code: 200, data: { id: 'w1' } });
-    }, async (baseUrl, calls) => {
-      const b = await submit(baseUrl, 'wavespeed', { model: WS_MODEL, prompt: 'x', seed: 42, steps: 6, cfg: 3.5, loras: [{ path: 'owner/lora', strength: 0.9 }] });
-      expect(b.actualRequest.parameters).toMatchObject({ seed: 42, loras: [{ path: 'owner/lora', scale: 0.9 }] });
-      expect(b.actualRequest.parameters).not.toHaveProperty('num_inference_steps');
-      expect(b.actualRequest.parameters).not.toHaveProperty('guidance_scale');
-      expect(upstream).toEqual(b.actualRequest.parameters);
-      expect(sentFalse(b.actualRequest, 'steps')).toBeTruthy();
-      expect(sentFalse(b.actualRequest, 'cfg')).toBeTruthy();
-      expect(sentFalse(b.actualRequest, 'seed')).toBeUndefined();
-      expect(isSchemaOmitCandidate('wavespeed', 'steps', hintCustom(declared))).toBe(true);
-      expect(isSchemaOmitCandidate('wavespeed', 'cfg', hintCustom(declared))).toBe(true);
-      expectNoOmitBadge('wavespeed', declared, ['seed']);
-      expect(String((calls.at(-1)!.init!.headers as any).Authorization)).toBe('Bearer k');
-    }, () => 'k');
-  });
-
-  it.skip('P0 aspect: filled aspect_ratio/resolution reach WaveSpeed when declared; undeclared output_format is sent:false; off-enum resolution blocked with official enum', async () => {
-    let upstream: any;
-    await withFixture(async (url, init) => {
-      if (url.includes('/api/v3/models')) return json({ code: 200, data: [wsRow] });
-      upstream = JSON.parse(String(init?.body || '{}'));
-      return json({ code: 200, data: { id: 'w2' } });
-    }, async (baseUrl) => {
-      const b = await submit(baseUrl, 'wavespeed', { model: WS_MODEL, prompt: 'x', seed: 1, aspect_ratio: '16:9', resolution: '2k', output_format: 'png' });
-      expect(b.actualRequest.parameters).toMatchObject({ aspect_ratio: '16:9', resolution: '2k' });
-      expect(b.actualRequest.parameters).not.toHaveProperty('output_format');
-      expect(sentFalse(b.actualRequest, 'output_format')).toBeTruthy();
-      expect(upstream).toEqual(b.actualRequest.parameters);
-      const bad = await submit(baseUrl, 'wavespeed', { model: WS_MODEL, prompt: 'x', resolution: '4K' });
-      expect(bad.errorSource).toBe('local'); expect(bad.error).toContain('["1k","2k"]');
-    }, () => 'k');
-  });
-
   it('P0-1: unfilled fields with an upstream default are NOT sent (no default injection); filled custom field IS sent', async () => {
     let upstream: any;
     await withFixture(async (url, init) => {
@@ -292,28 +252,6 @@ describe('provider contract (16): schema-route providers', () => {
     return onSubmit(url, JSON.parse(String(init?.body || '{}')));
   };
 
-  it.skip('MuAPI: per-endpoint LoRA field (loras / lora_list / lora_url+lora_weight), x-api-key auth, declared fields sent', async () => {
-    const bodies: Record<string, any> = {};
-    await withFixture(muFixture((url, body) => { bodies[url.split('/').pop()!] = body; return json({ request_id: 'm-' + url.split('/').pop() }); }), async (baseUrl, calls) => {
-      const lora = [{ path: 'https://hf.co/a.safetensors', strength: 0.8 }];
-      const a = await submit(baseUrl, 'muapi', { model: 'krea-v2-turbo-lora', prompt: 'x', seed: 42, steps: 6, cfg: 3.5, loras: lora });
-      expect(a.actualRequest.parameters).toMatchObject({ seed: 42, loras: [{ path: lora[0].path, scale: 0.8 }] });
-      expect(sentFalse(a.actualRequest, 'steps')).toBeTruthy();
-      expect(sentFalse(a.actualRequest, 'cfg')).toBeTruthy();
-      const b = await submit(baseUrl, 'muapi', { model: 'flux-2-klein-4b-text-to-image-lora', prompt: 'x', seed: 42, width: 1024, height: 768, loras: lora });
-      expect(b.actualRequest.parameters).toMatchObject({ seed: 42, width: 1024, height: 768, lora_list: [{ path: lora[0].path, scale: 0.8 }] });
-      expect(b.actualRequest.parameters).not.toHaveProperty('loras');
-      const c = await submit(baseUrl, 'muapi', { model: 'flux_dev_lora_image', prompt: 'x', seed: 42, steps: 6, cfg: 3.5, width: 1024, height: 768, loras: lora });
-      expect(c.actualRequest.parameters).toMatchObject({ seed: 42, num_inference_steps: 6, guidance_scale: 3.5, width: 1024, height: 768, lora_url: lora[0].path, lora_weight: 0.8 });
-      expectNoOmitBadge('muapi', Object.keys(muDoc.paths['/api/v1/flux_dev_lora_image'].post.requestBody.content['application/json'].schema.properties), ['seed', 'steps', 'cfg', 'width', 'height']);
-      expect(bodies['krea-v2-turbo-lora']).toEqual(a.actualRequest.parameters);
-      expect(bodies['flux_dev_lora_image']).toEqual(c.actualRequest.parameters);
-      const two = await submit(baseUrl, 'muapi', { model: 'flux_dev_lora_image', prompt: 'x', loras: [...lora, { path: 'https://hf.co/b.safetensors', strength: 0.5 }] });
-      expect(two.error).toMatch(/lora_url/);
-      expect((calls.at(-1)!.init!.headers as any)['x-api-key']).toBe('k');
-    }, () => 'k');
-  });
-
   it('MuAPI sandbox: is_test mock result is NOT reported as completed', async () => {
     await withFixture(async (url, init) => {
       if (url.includes('/predictions/')) return json({ status: 'completed', outputs: ['https://mock.invalid/x.png'], is_test: true });
@@ -325,72 +263,6 @@ describe('provider contract (16): schema-route providers', () => {
       expect(poll.outputs).toEqual([]);
       expect(poll.rawResponse.is_test).toBe(true);
     }, () => 'k');
-  });
-
-  it.skip('Sogni sends explicit LoRAs for schema selectors without a local model allowlist; missing strength still blocks', async () => {
-    const declared = ['prompt', 'model', 'width', 'height', 'numberOfVariations', 'negativePrompt', 'starting_image_strength', 'sourceImageIndex', 'seed', 'guidance', 'aspectRatio', 'loras', 'loraStrengths'];
-    let upstream: any;
-    await withFixture(async (_url, init) => { upstream = JSON.parse(String(init?.body || '{}')); return json({ data: { workflow: { workflowId: 's1' } } }); }, async (baseUrl, calls) => {
-      const b = await submit(baseUrl, 'sogni', { model: 'krea-2-turbo', prompt: 'x', ...CANVAS, loras: [{ path: 'krea2-detail-enhancer', strength: 3 }, { path: 'krea2-amateur', strength: -2 }] });
-      const args = b.actualRequest.parameters.input.steps[0].arguments;
-      expect(args).toMatchObject({ model: 'krea-2-turbo', seed: 42, guidance: 3.5, width: 1024, height: 768, negativePrompt: 'blurry', loras: ['krea2-detail-enhancer', 'krea2-amateur'], loraStrengths: [3, -2] });
-      expect(args.loras.length).toBe(args.loraStrengths.length);
-      expect(upstream).toEqual(b.actualRequest.parameters);
-      expect(sentFalse(b.actualRequest, 'steps')).toBeTruthy();
-      expect(isSchemaOmitCandidate('sogni', 'steps', hintCustom(declared))).toBe(true);
-      expectNoOmitBadge('sogni', declared, ['seed', 'cfg', 'width', 'height', 'negative_prompt']);
-      const bad = await submit(baseUrl, 'sogni', { model: 'z-turbo', prompt: 'x', loras: [{ path: 'krea2-amateur', strength: 1 }] });
-      expect(bad.taskId).toBeTruthy();
-      expect(bad.actualRequest.parameters.input.steps[0].arguments).toMatchObject({model:'z-turbo',loras:['krea2-amateur'],loraStrengths:[1]});
-      expect(bad.actualRequest.mapping.find((m:any)=>m.from==='loras')).toMatchObject({capability:'Official generate_image schema describes LoRA support as Krea 2 based; selector-to-worker compatibility is not dynamically declared here'});
-      const noStrength = await submit(baseUrl, 'sogni', { model: 'krea-2-turbo', prompt: 'x', loras: [{ path: 'krea2-amateur' }] });
-      expect(noStrength.error).toMatch(/显式强度/);
-      expect(calls.filter((c)=>c.init?.method==='POST' && c.url.endsWith('/v1/creative-agent/workflows'))).toHaveLength(2);
-    }, () => 'k');
-  });
-
-  it.skip('Sogni range checks use exact live LoRA IDs, include custom JSON overrides, and expose unknown lookup without guessing', async () => {
-    let failDirectory=false;
-    const submitted:any[]=[];
-    await withFixture(async (url,init) => {
-      if(url.endsWith('/v1/loras/comfy')) {
-        if(failDirectory)throw Object.assign(new Error('fixture directory unavailable'),{status:503,rawResponse:'catalog offline',endpoint:url});
-        return json({data:[{loraId:'krea2-detail-enhancer',ui:{min:-2,max:5,step:0.1}}]});
-      }
-      if(init?.method==='POST' && url.endsWith('/v1/creative-agent/workflows')) {
-        submitted.push(JSON.parse(String(init.body)));
-        return json({data:{workflow:{workflowId:`range-${submitted.length}`}}},201);
-      }
-      throw new Error(`Unexpected fixture route: ${url}`);
-    }, async (baseUrl,calls) => {
-      const outside=await submit(baseUrl,'sogni',{model:'krea-2-turbo',prompt:'x',loras:[{path:'krea2-detail-enhancer',strength:5.01}]});
-      expect(outside.error).toMatch(/超出官方目录范围 \[-2, 5\]/);
-      expect(outside.errorSource).toBe('local');
-      expect(outside.blockedField).toMatchObject({field:'loraStrengths',resourceId:'krea2-detail-enhancer',minimum:-2,maximum:5});
-      expect(submitted).toHaveLength(0);
-
-      const boundary=await submit(baseUrl,'sogni',{model:'krea-2-turbo',prompt:'x',loras:[{path:'krea2-detail-enhancer',strength:5}]});
-      expect(boundary.actualRequest.parameters.input.steps[0].arguments.loraStrengths).toEqual([5]);
-      expect(boundary.actualRequest.mapping.find((m:any)=>m.from==='Sogni LoRA strength range check')).toMatchObject({status:'checked',checked:[{id:'krea2-detail-enhancer',minimum:-2,maximum:5}]});
-
-      const customOverride=await submit(baseUrl,'sogni',{model:'krea-2-turbo',prompt:'x',custom_parameters:{loras:['krea2-detail-enhancer'],loraStrengths:[-2.01]}});
-      expect(customOverride.error).toMatch(/超出官方目录范围/);
-      expect(customOverride.blockedField).toMatchObject({value:-2.01,minimum:-2,maximum:5});
-      expect(submitted).toHaveLength(1);
-
-      const unmatched=await submit(baseUrl,'sogni',{model:'krea-2-turbo',prompt:'x',loras:[{path:'personal-owned-lora',strength:100}]});
-      const unmatchedCheck=unmatched.actualRequest.mapping.find((m:any)=>m.from==='Sogni LoRA strength range check');
-      expect(unmatchedCheck).toMatchObject({status:'checked',unknown:[{id:'personal-owned-lora'}]});
-      expect(unmatched.actualRequest.parameters.input.steps[0].arguments.loras).toEqual(['personal-owned-lora']);
-
-      failDirectory=true;
-      const directoryFailure=await submit(baseUrl,'sogni',{model:'krea-2-turbo',prompt:'x',loras:[{path:'krea2-detail-enhancer',strength:99}]});
-      const failureCheck=directoryFailure.actualRequest.mapping.find((m:any)=>m.from==='Sogni LoRA strength range check');
-      expect(failureCheck).toMatchObject({status:'unknown',lookupFailure:{endpoint:'https://api.sogni.ai/v1/loras/comfy',upstreamStatus:503,upstreamResponseBody:'catalog offline'}});
-      expect(directoryFailure.actualRequest.parameters.input.steps[0].arguments.loraStrengths).toEqual([99]);
-      expect(submitted).toHaveLength(3);
-      expect(calls.filter(c=>c.url==='https://api.sogni.ai/v1/loras/comfy')).toHaveLength(5);
-    });
   });
 
   it('Sogni billing: waiting_for_user + insufficient_credit → poll status + failed historyItem (not completed)', async () => {
@@ -416,82 +288,6 @@ describe('provider contract (16): schema-route providers', () => {
 });
 
 describe('provider contract (16): builder / route-handler providers', () => {
-  it.skip('Replicate flux-dev-lora: steps→num_inference_steps, cfg→guidance, seed, LoRA→lora_weights+extra_lora; width/height not sent; 3rd LoRA refused', async () => {
-    const d = draft('replicate');
-    expect(d.lora.maxLoras).toBe(2);
-    const two = [{ path: 'owner/a', strength: 0.8 }, { path: 'owner/b', strength: 0.4 }];
-    const liveProps = Object.fromEntries(
-      ['prompt', 'aspect_ratio', 'seed', 'num_inference_steps', 'guidance', 'image', 'prompt_strength', 'lora_weights', 'lora_scale', 'extra_lora', 'extra_lora_scale', 'num_outputs', 'output_format'].map((k) => [k, {}]),
-    );
-    const body = { model: 'black-forest-labs/flux-dev-lora', prompt: 'x', seed: 42, steps: 6, cfg: 3.5, width: 1024, height: 768, aspect_ratio: '4:3', loras: two };
-    const built = buildReplicatePredictionRequest(body, undefined, liveProps);
-    expect(built.payload.input).toMatchObject({ seed: 42, num_inference_steps: 6, guidance: 3.5, aspect_ratio: '4:3', lora_weights: 'owner/a', lora_scale: 0.8, extra_lora: 'owner/b', extra_lora_scale: 0.4 });
-    expect(built.payload.input).not.toHaveProperty('width');
-    expect(built.omitted!.map((o) => o.from)).toEqual(['width', 'height']);
-    for (const f of ['seed', 'steps', 'cfg', 'loras']) expect(unsupportedLabel('replicate', 'black-forest-labs/flux-dev-lora', f), f).toBe(false);
-    for (const f of ['width', 'height']) expect(unsupportedLabel('replicate', 'black-forest-labs/flux-dev-lora', f)).toBe(true);
-    expect(() => buildReplicatePredictionRequest({ ...body, loras: [...two, { path: 'owner/c', strength: 0.2 }] }, undefined, liveProps)).toThrow(/最多 2 个 LoRA/);
-    // real route handler with fixture upstream: GET live schema, then POST predictions; upstream body === actualRequest
-    const sent: any[] = [];
-    const raw = '{"detail":"You have insufficient credit to run this model."}';
-    const schemaRaw = JSON.stringify({ latest_version: { openapi_schema: { components: { schemas: { Input: { properties: liveProps } } } } } });
-    const res: any = { statusCode: 200, body: undefined, status(c: number) { this.statusCode = c; return this; }, json(p: any) { this.body = p; return this; } };
-    await handleReplicateGenerate({
-      resolveProviderAuth: () => ({ apiKey: 'k', baseUrl: 'https://api.replicate.com/v1' }),
-      upstreamFetch: async (_m: any, url: string, init: any) => {
-        sent.push({ url, init });
-        if (String(url).includes('/models/black-forest-labs/flux-dev-lora') && !String(url).endsWith('/predictions') && (!init || init.method === 'GET' || init.method === undefined)) {
-          return new Response(schemaRaw, { status: 200, headers: { 'Content-Type': 'application/json' } });
-        }
-        return new Response(raw, { status: 402 });
-      },
-      keyPoolManager: { recordResult: () => {} }, respondWithGeneratedImages: async () => { throw new Error('must not succeed'); },
-    } as any)({ body, path: '/api/replicate/generate', headers: {} } as any, res);
-    const pred = sent.find((s) => String(s.url).endsWith('/predictions'));
-    expect(pred).toBeTruthy();
-    expect(JSON.parse(pred.init.body)).toEqual(res.body.actualRequest);
-    expect(res.statusCode).toBe(402);
-    expect(res.body.rawResponse).toBe(raw);
-    expect(res.body.parameterOmissions.map((o: any) => o.from)).toEqual(['width', 'height']);
-  });
-
-  it.skip('fal flux-lora: steps/cfg/seed sent; krea-2 turbo lora: steps/cfg NOT sent + labeled, 4th LoRA refused; Authorization: Key', () => {
-    const fluxProps = loadFalLiveProps('fal-ai/flux-lora');
-    const kreaProps = loadFalLiveProps('fal-ai/krea-2/turbo/lora');
-    const schnellProps = loadFalLiveProps('fal-ai/flux/schnell');
-    const flux = falImageFieldGate('fal-ai/flux-lora', { steps: 6, cfg: 3.5, seed: 42 }, [{ path: 'a', scale: 1 }], fluxProps);
-    expect(flux.send).toEqual({ num_inference_steps: 6, guidance_scale: 3.5, seed: 42 });
-    expect(flux.omitted).toEqual([]);
-    const krea = falImageFieldGate('fal-ai/krea-2/turbo/lora', { steps: 6, cfg: 3.5, seed: 42 }, [1, 2, 3].map((i) => ({ path: 'p' + i, scale: 1 })), kreaProps);
-    expect(krea.send).toEqual({ seed: 42 });
-    expect(krea.omitted.map((o) => o.from)).toEqual(['steps', 'cfg']);
-    for (const f of ['steps', 'cfg']) expect(unsupportedLabel('fal', 'fal-ai/krea-2/turbo/lora', f)).toBe(true);
-    expect(unsupportedLabel('fal', 'fal-ai/krea-2/turbo/lora', 'seed')).toBe(false);
-    expect(() => falImageFieldGate('fal-ai/krea-2/turbo/lora', {}, [1, 2, 3, 4].map((i) => ({ path: 'p' + i, scale: 1 })), kreaProps)).toThrow(/最多 3 个/);
-    expect(() => falImageFieldGate('fal-ai/flux/schnell', {}, [{ path: 'a', scale: 1 }], schnellProps)).toThrow(/没有 loras/);
-    expect(() => falImageFieldGate('fal-ai/flux-lora', { seed: 1 }, [], undefined)).toThrow(FalSchemaMissingError);
-    // route wiring: gate is used, auth header is Key, upstream errors pass text verbatim
-    expect(serverSrc).toContain('falGate = falImageFieldGate(endpoint,');
-    expect(serverSrc).toContain('falQueueOpenApiUrl');
-    expect(routeWiringSrc.match(/'Authorization': `Key \$\{falKey\}`/g)?.length).toBeGreaterThanOrEqual(2);
-    expect(routeWiringSrc).not.toMatch(/Authorization['"]?: `Bearer \$\{falKey\}`/);
-    expect(routeWiringSrc).toContain('`Fal.ai 接口执行失败 [${response.status}]: ${errorText}`');
-  });
-
-  it.skip('ModelScope: steps/guidance(cfg)/seed/size WxH sent; LoRA map 0.6/0.4 ok, 0.6/0.6 rejected (no normalize); video rejected locally', async () => {
-    const bodies: any[] = [];
-    const orig = globalThis.fetch;
-    globalThis.fetch = (async (_u: any, init: any) => { bodies.push(JSON.parse(init.body)); return json({ imageUrl: 'https://fixture.invalid/m.png' }); }) as any;
-    try {
-      await new ModelScopeDriver().generate({ prompt: 'x', model: 'Qwen/Qwen-Image', seed: 42, steps: 6, cfg: 3.5, width: 1024, height: 768, loras: [{ name: 'a', path: 'o/a', strength: 0.6 }, { name: 'b', path: 'o/b', strength: 0.4 }] } as any, { modelscopeToken: 'k' });
-    } finally { globalThis.fetch = orig; }
-    expect(bodies[0]).toMatchObject({ seed: 42, steps: 6, guidance: 3.5, width: 1024, height: 768 });
-    expect(serverSrc).toContain('buildModelScopeImagePayload(');
-    expect(buildModelScopeImagePayload(bodies[0]).payload).toMatchObject({ size: '1024x768', guidance: 3.5, steps: 6, seed: 42 });
-    expect(buildModelScopeLoras(bodies[0].loras)).toEqual({ 'o/a': 0.6, 'o/b': 0.4 });
-    expect(() => buildModelScopeLoras([{ path: 'o/a', strength: 0.6 }, { path: 'o/b', strength: 0.6 }])).toThrow(/恰好为 1.0/);
-    expect(videoRouteSrc).toContain('ModelScope API-Inference 当前没有已接入的视频生成接口');
-  });
 
   it('TAMS: seed→inputInitialize.seed, steps/cfg/size→diffusion.*, LoRA→diffusion.lora.items[{loraModel,weight}]; non-64 rejected; video rejected locally', () => {
     const job = buildTensorModelJob({ model: '600000000000000001', prompt: 'x', seed: 42, steps: 20, cfg: 7, width: 1024, height: 768, negative_prompt: 'blurry', loras: [{ tensorartId: '700000000000000001', strength: 0.8 }] }, 'r1');

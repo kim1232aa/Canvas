@@ -56,16 +56,6 @@ describe('Novita provider (official docs 2026-10-15)', () => {
     expect(items[2].metadata?.parameters).toBeUndefined();
   });
 
-
-  it.skip('novitaLoras maps model_name+strength; refuses missing/out-of-range/over-max', () => {
-    expect(novitaLoras([{ path: 'more_details_59655', strength: 0.75 }])).toEqual([
-      { model_name: 'more_details_59655', strength: 0.75 },
-    ]);
-    expect(() => novitaLoras([{ path: 'a' }])).toThrow(/strength/);
-    expect(() => novitaLoras([{ path: 'a', strength: 1.5 }])).toThrow(/\[0, 1\]/);
-    expect(() => novitaLoras([{ path: 'a', strength: 0.8 }, { path: 'b', strength: 0.8 }, { path: 'c', strength: 0.8 }, { path: 'd', strength: 0.8 }, { path: 'e', strength: 0.8 }, { path: 'f', strength: 0.8 }])).not.toThrow(); // max-5 unverified (search snapshot, original 404): no local block
-  });
-
   it('novitaTaskStatus maps official enums to canvas vocabulary', () => {
     expect(novitaTaskStatus('TASK_STATUS_SUCCEED')).toBe('completed');
     expect(novitaTaskStatus('TASK_STATUS_FAILED')).toBe('failed');

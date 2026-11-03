@@ -33,11 +33,6 @@ describe('Krea provider (official OpenAPI)', () => {
     const items = normalizeSchemaProviderItems('krea', [{ id: 'abc', title: 'Watercolor', models: ['flux_dev'], cover_url: 'https://c/x.png', owner: { name: 'u' } }], { lora: true, sourceUrl: 's' });
     expect(items[0]).toMatchObject({ id: 'abc', name: 'Watercolor', type: 'LoRA', baseModel: 'flux_dev', imageUrl: 'https://c/x.png', creator: 'u' });
   });
-  it.skip('canvas LoRA nodes → styles[{id,strength}]; out-of-range strength refused', () => {
-    expect(kreaStyles([{ name: 'abc', strength: 0.8 }])).toEqual([{ id: 'abc', strength: 0.8 }]);
-    expect(() => kreaStyles([{ name: 'abc', strength: 3 }])).toThrow(/\[-2, 2\]/);
-    expect(() => kreaStyles([{ strength: 1 }])).toThrow(/style ID/);
-  });
   it('job outputs from result.urls (string[] or {url}[])', () => {
     expect(kreaJobOutputs({ result: { urls: ['https://a'] } })).toEqual(['https://a']);
     expect(kreaJobOutputs({ result: { urls: [{ type: 'preview', url: 'https://b' }] } })).toEqual(['https://b']);

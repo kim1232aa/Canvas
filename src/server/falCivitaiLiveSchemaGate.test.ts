@@ -14,14 +14,6 @@ describe('Fal/Civitai live schema gate', () => {
     expect(() => falImageFieldGate('fal-ai/krea-2/turbo/lora', { seed: 1 }, [])).toThrow(FalSchemaMissingError);
   });
 
-  it.skip('Fal image: krea live omits steps/cfg; maxItems=3 from live', () => {
-    const props = loadFalLiveProps('fal-ai/krea-2/turbo/lora');
-    const gated = falImageFieldGate('fal-ai/krea-2/turbo/lora', { steps: 6, cfg: 3, seed: 9 }, [{ path: 'a', scale: 1 }], props);
-    expect(gated.send).toEqual({ seed: 9 });
-    expect(gated.omitted.map((o) => o.from).sort()).toEqual(['cfg', 'steps']);
-    expect(() => falImageFieldGate('fal-ai/krea-2/turbo/lora', {}, [1, 2, 3, 4].map((i) => ({ path: 'p' + i, scale: 1 })), props)).toThrow(/最多 3/);
-  });
-
   it('Fal video: live missing → throw; live present → send declared only', () => {
     expect(() => buildFalVideoRequest('fal-ai/wan-i2v', { image_url: 'a' })).toThrow(FalSchemaMissingError);
     const props = loadFalLiveProps('fal-ai/wan-i2v');

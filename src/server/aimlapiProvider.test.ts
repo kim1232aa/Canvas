@@ -72,14 +72,4 @@ describe('AIMLAPI provider (official docs 2026-10-15)', () => {
     expect(aimlapiVideoOutputs({ status: 'completed', video: { url: 'https://v.mp4' } })).toEqual(['https://v.mp4']);
     expect(aimlapiVideoOutputs({ status: 'queued' })).toEqual([]);
   });
-
-  it.skip('aimlapiLoras maps path+scale and refuses missing/out-of-range scale', () => {
-    expect(aimlapiLoras([{ path: 'ostris/z_image_turbo_childrens_drawings', strength: 0.85 }])).toEqual([
-      { path: 'ostris/z_image_turbo_childrens_drawings', scale: 0.85 },
-    ]);
-    expect(() => aimlapiLoras([{ path: 'a/b' }])).toThrow(/scale/);
-    expect(() => aimlapiLoras([{ path: 'a/b', scale: 5 }])).toThrow(/\[0, 4\]/);
-    // trace-fix2 #5: count limit is no longer hard-coded here — submit reads loras.maxItems via schemaLoraMaxItems.
-    expect(aimlapiLoras([{ path: 'a', scale: 1 }, { path: 'b', scale: 1 }, { path: 'c', scale: 1 }, { path: 'd', scale: 1 }])).toHaveLength(4);
-  });
 });

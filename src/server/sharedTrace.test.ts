@@ -138,10 +138,4 @@ describe('WaveSpeed submit → polls → save-result / failure: every segment la
     expect(records[0].requestMetadata.executionTrace.filter((t: any) => /predictions/.test(t.endpoint))).toHaveLength(2);
     expect(records[0].requestMetadata.actualRequest).toEqual(sub.actualRequest);
   });
-  it.skip('4 LoRAs > WaveSpeed Schema maxItems 3 → local 400 with N/M + Schema source, no POST', async () => {
-    const { call } = setup([]);
-    const l = { path: 'https://e/a.safetensors', strength: 1 };
-    const r = await call('/api/schema-provider/:provider/submit', { method: 'POST', path: '/api/schema-provider/wavespeed/submit', params: { provider: 'wavespeed' }, body: { model: 'wavespeed-ai/krea-v2/turbo-lora', prompt: 'p', loras: [l, l, l, l] } });
-    expect(r.error).toContain('该端点 Schema 限制最多 3 个 LoRA，当前 4 个'); expect(r.error).toContain('https://api.wavespeed.ai/api/v3/models');
-  });
 });

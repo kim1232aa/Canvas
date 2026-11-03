@@ -50,32 +50,6 @@ describe('SpatialFrameItem LoRA visible copy (same sentences as node/inspector)'
     expect(compat.message).not.toMatch(/底模架构不匹配/);
   });
 
-  it.skip('Fal empty checkpoint: frame banner includes fuller unsupported sentence, not only 4-char chip', () => {
-    const banner = getSpatialFrameLoraBanner('fal', '', [fluxLora]);
-    expect(banner).not.toBeNull();
-    expect(banner!.kind).toBe('unsupported');
-    expect(banner!.title).toBe(LORA_UNSUPPORTED_TITLE);
-
-    const endpoint = isLoraUnsupportedOnEndpoint('fal', '');
-    expect(endpoint.unsupported).toBe(true);
-    expect(banner!.message).toBe(endpoint.message);
-    expect(banner!.message).toBe(LORA_UNSUPPORTED_EMPTY_CHECKPOINT);
-    expect(banner!.message.length).toBeGreaterThan(LORA_UNSUPPORTED_TITLE.length);
-  });
-
-  it.skip('fal-ai/flux-lora stays usable (no unsupported banner); flux/dev stays grey unsupported', () => {
-    const usable = getSpatialFrameLoraBanner('fal', 'fal-ai/flux-lora', [fluxLora]);
-    expect(usable === null || usable.kind !== 'unsupported').toBe(true);
-
-    const greyDev = getSpatialFrameLoraBanner('fal', 'fal-ai/flux/dev', [fluxLora]);
-    expect(greyDev?.kind).toBe('unsupported');
-    expect(greyDev?.message).toBe(LORA_UNSUPPORTED_MESSAGE);
-
-    const greySchnell = getSpatialFrameLoraBanner('fal', 'fal-ai/flux/schnell', [fluxLora]);
-    expect(greySchnell?.kind).toBe('unsupported');
-    expect(greySchnell?.message).toBe(LORA_UNSUPPORTED_MESSAGE);
-  });
-
   it('returns null when no loras', () => {
     expect(getSpatialFrameLoraBanner('fal', '', [])).toBeNull();
   });

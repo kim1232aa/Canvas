@@ -82,17 +82,6 @@ describe('clean-1029 #4 CLIP strength hidden unless sent separately', () => {
   });
 });
 
-describe('clean-1029 #5 history 尺寸 unsupported chip readable', () => {
-  // superseded 2026-11-04: history card shows plain values, no per-field badges
-  it.skip('label explicit, chip not struck, value struck separately', () => {
-    expect(historyParameterSourceLabel('unsupported' as any)).toBe(HISTORY_UNSUPPORTED_LABEL);
-    expect(HISTORY_UNSUPPORTED_LABEL).toBe('该端点不支持 · 未发送');
-    const m = read('../components/HistoryModal.tsx');
-    expect(m).not.toMatch(/unsupported: '[^']*line-through/);
-    expect(m).toContain('history-size-unsent-value');
-  });
-});
-
 describe('clean-1029 #6 no 「将运行节点」 hover tip', () => {
   it('TopBar run button has no hover title covering the label; reason stays in status line', () => {
     const t = read('../components/TopBar.tsx');

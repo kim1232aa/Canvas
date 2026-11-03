@@ -7,21 +7,6 @@ describe('fix16 history card polish', () => {
   const histSrc = readFileSync(join(__dirname, '../components/HistoryModal.tsx'), 'utf8');
   const appSrc = readFileSync(join(__dirname, '../App.tsx'), 'utf8');
 
-  // superseded 2026-11-04: history card shows plain values, no per-field badges
-  it.skip('#1 history-other-sent has own title and sits before 未发送 folds with spacing', () => {
-    const title = histSrc.indexOf('data-testid="history-other-sent-title"');
-    const other = histSrc.indexOf('data-testid="history-other-sent"');
-    const unrec = histSrc.indexOf('<UnrecordedFold keys={unrecorded}');
-    const unsup = histSrc.indexOf('<UnsupportedFold rows={unsupportedRows}');
-    expect(title).toBeGreaterThan(0);
-    expect(other).toBeGreaterThan(0);
-    expect(other).toBeLessThan(unrec);
-    expect(other).toBeLessThan(unsup);
-    // className carries mb-2 before the testid attribute
-    expect(histSrc).toMatch(/mb-2[^>]*data-testid="history-other-sent"/);
-    expect(histSrc).toMatch(/data-testid="history-other-sent-title"[^>]*>实际发送</);
-  });
-
   it('#2 seed: 「实际发送」 and 「上游未返回种子」 are two places, not one vague paren', () => {
     expect(seedStatement(42, undefined)).toBe('种子 42（实际发送）。上游未返回种子');
     expect(seedStatement(42, null)).toBe('种子 42（实际发送）。上游未返回种子');

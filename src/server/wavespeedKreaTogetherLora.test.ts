@@ -27,27 +27,9 @@ const lora = [{ path: 'https://example.com/a.safetensors', strength: 0.8 }];
 const schemaOf = (id: string) => (catalog as any).data.find((r: any) => r.model_id === id).api_schema.api_schemas[0].request_schema;
 
 describe('WaveSpeed Krea family: resolution + aspect_ratio, no size', () => {
-  it.skip('turbo-lora sends filled aspect_ratio + resolution 2k + loras{path,scale}; width/height/steps/cfg/output_format marked unsent', async () => {
-    const r = await submit('wavespeed', { model: 'wavespeed-ai/krea-v2/turbo-lora', prompt: 'p', seed: 42, denoise: 0.7, width: 1024, height: 1024, steps: 20, cfg: 7, output_format: 'png',
-      custom_parameters: { aspect_ratio: '16:9', resolution: '2k' }, loras: lora });
-    expect(r.status).toBe(200);
-    expect(r.sent).toEqual({ prompt: 'p', seed: 42, aspect_ratio: '16:9', resolution: '2k', loras: [{ path: 'https://example.com/a.safetensors', scale: 0.8 }] });
-    expect(r.sent).not.toHaveProperty('size');
-    const unsent = r.payload.actualRequest.mapping.filter((m: any) => m.sent === false).map((m: any) => m.from).sort();
-    expect(unsent).toEqual(['cfg', 'denoise', 'height', 'output_format', 'steps', 'width']);
-  });
   it('canvas-level aspect_ratio/resolution (not custom JSON) also reach the request', async () => {
     const r = await submit('wavespeed', { model: 'wavespeed-ai/krea-v2/turbo-lora', prompt: 'p', aspect_ratio: '3:2', resolution: '2k' });
     expect(r.sent).toMatchObject({ aspect_ratio: '3:2', resolution: '2k' });
-  });
-  it.skip('resolution outside official enum → local 400, no POST, local_blocked', async () => {
-    const r = await submit('wavespeed', { model: 'wavespeed-ai/krea-v2/turbo-lora', prompt: 'p', resolution: '4k' });
-    expect(r.status).toBe(400); expect(r.posts).toEqual([]); expect(r.payload.error).toContain('["1k","2k"]');
-    expect(buildLocalRejectionHistoryItem('/api/schema-provider/wavespeed/submit', { model: 'm' }, r.status, r.payload).status).toBe('local_blocked');
-  });
-  it.skip('4 LoRAs > official maxItems 3 → local 400, no POST', async () => {
-    const r = await submit('wavespeed', { model: 'wavespeed-ai/krea-v2/turbo-lora', prompt: 'p', loras: [...lora, ...lora, ...lora, ...lora] });
-    expect(r.status).toBe(400); expect(r.posts).toEqual([]); expect(r.payload.error).toContain('maxItems');
   });
   it('panel exposes aspect_ratio + resolution enum controls from the Schema', () => {
     const f = schemaChoiceFields(schemaOf('wavespeed-ai/krea-v2/turbo-lora'));
@@ -63,27 +45,7 @@ describe('WaveSpeed Krea family: resolution + aspect_ratio, no size', () => {
 
 describe('WaveSpeed size family: size "W*H" + output_format, no aspect_ratio/resolution', () => {
   for (const id of ['wavespeed-ai/z-image/turbo-lora', 'wavespeed-ai/flux-dev-lora']) {
-    it.skip(`${id}: width/height pack to size "W*H"; aspect_ratio/resolution unsent`, async () => {
-      const r = await submit('wavespeed', { model: id, prompt: 'p', width: 768, height: 1344, output_format: 'webp', aspect_ratio: '16:9', resolution: '2k', loras: lora });
-      expect(r.status).toBe(200);
-      expect(r.sent.size).toBe('768*1344'); expect(r.sent.output_format).toBe('webp');
-      expect(r.sent).not.toHaveProperty('aspect_ratio'); expect(r.sent).not.toHaveProperty('resolution');
-      expect(r.sent).not.toHaveProperty('width'); expect(r.sent).not.toHaveProperty('height');
-      const unsent = r.payload.actualRequest.mapping.filter((m: any) => m.sent === false).map((m: any) => m.from).sort();
-      expect(unsent).toEqual(['aspect_ratio', 'resolution']);
-      const props = Object.keys(schemaOf(id).properties);
-      expect(isSchemaOmitCandidate('wavespeed', 'width', '{}', props)).toBe(false);
-      expect(isSchemaOmitCandidate('wavespeed', 'aspect_ratio', '{}', props)).toBe(true);
-    });
   }
-  it.skip('size per-side range 256~1536 enforced locally (no clamp)', async () => {
-    const r = await submit('wavespeed', { model: 'wavespeed-ai/z-image/turbo-lora', prompt: 'p', width: 2048, height: 1024 });
-    expect(r.status).toBe(400); expect(r.posts).toEqual([]); expect(r.payload.error).toContain('2048');
-  });
-  it.skip('only width filled → local 400, no auto-fill', async () => {
-    const r = await submit('wavespeed', { model: 'wavespeed-ai/z-image/turbo-lora', prompt: 'p', width: 1024 });
-    expect(r.status).toBe(400); expect(r.posts).toEqual([]);
-  });
   it('no width/height → size not sent (upstream default applies, not ours)', async () => {
     const r = await submit('wavespeed', { model: 'wavespeed-ai/z-image/turbo-lora', prompt: 'p' });
     expect(r.sent).toEqual({ prompt: 'p' });
@@ -112,17 +74,6 @@ async function submitTogether(body: any, catalogRows: any[]) {
 }
 
 describe('Together image_loras = officialUnavailable (not rule D); Venice loraLocalBlock is table data', () => {
-  it.skip('Together + LoRA: Schema still has image_loras path+scale but officialUnavailableParams blocks locally', async () => {
-    const r = await submitTogether({ model: 'black-forest-labs/FLUX.2-dev', prompt: 'p', loras: lora }, [{ id: 'black-forest-labs/FLUX.2-dev', type: 'image' }]);
-    expect((schemaProviders.together as any).loraLocalBlock).toBeUndefined();
-    expect((schemaProviders.together as any).officialUnavailableParams?.[0]?.field).toBe('image_loras');
-    expect(r.posts).toHaveLength(0); // no generation POST
-    expect(r.status).toBe(400);
-    expect(String(r.payload?.error || '')).toContain('官方参数指南：image_loras no longer available');
-    expect(String(r.payload?.error || '')).toContain('No longer available');
-    expect(r.payload?.errorSource).toBe('local');
-    expect(r.payload?.blockedField?.field).toBe('image_loras');
-  });
   it('matchOfficialUnavailable hits even when Schema properties exist (not rule D)', () => {
     const props = { prompt: { type: 'string' }, image_loras: { type: 'array', items: { type: 'object', properties: { path: { type: 'string' }, scale: { type: 'number' } } } } };
     const hit = matchOfficialUnavailable(schemaProviders.together, props, true);

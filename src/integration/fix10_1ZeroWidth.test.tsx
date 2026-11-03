@@ -53,20 +53,6 @@ describe('fix10.1 zero-width scrub / block', () => {
     const b = preRunZeroWidthBlock(dirty)!; expect(b.requestCount).toBe(0); expect(String(b.error)).toContain('model');
     expect(preRunZeroWidthBlock(nodes)).toBeNull();
   });
-  it.skip('real App: dirty board in localStorage → store cleaned, toast shown, local exec-log event, persisted clean', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } })));
-    const b = { id: 'b1', name: 'zw', nodes: [vnode({ model: ID.replace(/\//g, '/\u200B'), targetProvider: 'fal' })], connections: [], spatialFrames: [] };
-    localStorage.setItem(BOARDS_KEY, JSON.stringify([b])); localStorage.setItem(ACTIVE_BOARD_KEY, 'b1'); localStorage.setItem(MODE_KEY, 'graph');
-    const App = (await import('../App')).default;
-    const el = document.createElement('div'); document.body.appendChild(el); root = createRoot(el);
-    await act(async () => { root.render(<StrictMode><App /></StrictMode>); });
-    for (let i = 0; i < 4; i++) await act(async () => { await new Promise((r) => setTimeout(r, 60)); });
-    expect(document.body.textContent).toContain('已清除 4 个零宽字符');
-    expect(getExecutions().some((r) => r.route === '零宽字符清洗（节点数据）' && r.category === 'local')).toBe(true);
-    const d = document.querySelector('[data-testid="node-custom-model-display"]')!;
-    expect(d.textContent).toBe(ID);
-    expect(ZW.test(localStorage.getItem(BOARDS_KEY) || '')).toBe(false);
-  });
 });
 
 describe('fix10.1 exec-log button vs dock', () => {

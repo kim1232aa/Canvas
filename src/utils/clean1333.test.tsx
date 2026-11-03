@@ -87,14 +87,6 @@ describe('clean-1333 #2 width/height mismatch blocks before ANY request', () => 
     expect(widthHeightMismatch(1024, 1024)).toBeNull();
     expect(widthHeightMismatch(undefined, '')).toBeNull();
   });
-  it.skip('App runs the check before executeWorkflow (so no Schema GET / submit) and records a 0-request LOCAL row', () => {
-    const app = read('../App.tsx');
-    const check = app.indexOf('const mismatch = ext ? widthHeightMismatch(ext.width, ext.height, pairing) : null;');
-    const exec = app.indexOf('const result = await executeWorkflow(');
-    expect(check).toBeGreaterThan(0);
-    expect(check).toBeLessThan(exec);
-    expect(app).toContain("recordLocalEvent('画布尺寸检查（Empty Latent 宽高）', data)");
-  });
   it('the LOCAL row says 未发请求 · 0 个请求; title is the zero-request one; cause node = Empty Latent', () => {
     const data = { ok: false, errorSource: 'local', error: widthHeightMismatch(1024, undefined), blockedField: { field: 'size' } };
     const r = recordLocalEvent('画布尺寸检查（Empty Latent 宽高）', data);

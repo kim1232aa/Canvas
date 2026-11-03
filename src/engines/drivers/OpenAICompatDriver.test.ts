@@ -26,43 +26,6 @@ describe('OpenAICompatDriver', () => {
     );
   });
 
-  it.skip('转发 key/baseUrl 头；有真实 LoRA 时写入 loras，仍不写 seed/negative/steps/cfg', async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ imageUrl: 'data:image/png;base64,aaa', model: 'gpt-image-2' }), { status: 200 }));
-
-    const params: NormalizedGenerateParams = {
-      prompt: 'tiny red square',
-      model: 'gpt-image-2',
-      seed: 123,
-      steps: 20,
-      cfg: 7,
-      negative_prompt: 'blur',
-      loras: [{ name: 'x', strength: 1 }],
-      extraParams: { size: '1024x1024', quality: 'low' },
-    };
-
-    await driver.generate(params, {
-      openaiCompatKey: 'sk-test',
-      openaiCompatBaseUrl: 'https://relay.example/v1',
-    });
-
-    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
-    const [url, init] = (globalThis.fetch as any).mock.calls[0];
-    expect(url).toBe('/api/engine/openai_compat/generate');
-    expect(init.headers['x-openai-compat-key']).toBe('sk-test');
-    expect(init.headers['x-openai-compat-base-url']).toBe('https://relay.example/v1');
-    const body = JSON.parse(init.body);
-    expect(body.model).toBe('gpt-image-2');
-    expect(body.prompt).toBe('tiny red square');
-    expect(body.size).toBe('1024x1024');
-    expect(body.quality).toBe('low');
-    expect(body.seed).toBeUndefined();
-    expect(body.negative_prompt).toBeUndefined();
-    expect(body.steps).toBeUndefined();
-    expect(body.cfg).toBeUndefined();
-    expect(body.loras).toHaveLength(1);
-    expect(body.loras[0]).toEqual(expect.objectContaining({ name: 'x', strength: 1 }));
-  });
-
   it('loras: [] 时请求体不含 loras 键', async () => {
     globalThis.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ imageUrl: 'data:image/png;base64,aaa', model: 'gpt-image-2' }), { status: 200 }));
 
@@ -98,23 +61,6 @@ describe('OpenAICompatDriver', () => {
     const body = JSON.parse(init.body);
     expect(body.loras).toHaveLength(1);
     expect(body.loras[0].name).toBe('LoRA');
-  });
-
-  it.skip('empty / whitespace-only LoRA name → 请求体不含 loras 键', async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ imageUrl: 'data:image/png;base64,aaa', model: 'gpt-image-2' }), { status: 200 }));
-
-    await driver.generate(
-      {
-        prompt: 'tiny red square',
-        model: 'gpt-image-2',
-        loras: [{ name: '  ', strength: 1, path: 'https://x' }],
-      },
-      { openaiCompatKey: 'sk-test' },
-    );
-
-    const [, init] = (globalThis.fetch as any).mock.calls[0];
-    const body = JSON.parse(init.body);
-    expect(Object.prototype.hasOwnProperty.call(body, 'loras')).toBe(false);
   });
 
   it('省略 loras 时请求体不含 loras 键', async () => {

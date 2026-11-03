@@ -66,18 +66,6 @@ describe('ModelsLab Image Contract', () => {
     expect(req.payload.strength).toBe(0.6);
   });
 
-  it.skip('throws error when apiKey, prompt, or model is missing', () => {
-    expect(() => buildModelsLabImageRequest({ prompt: 'test', model: 'flux' }, '')).toThrow(/API Key 必填/);
-    expect(() => buildModelsLabImageRequest({ model: 'flux' }, 'test-key')).toThrow(/提示词为必填项/);
-    expect(() => buildModelsLabImageRequest({ prompt: 'test' }, 'test-key')).toThrow(/模型为必填项/);
-    const noDimReq = buildModelsLabImageRequest({ model: 'flux', prompt: 'test' }, 'test-key');
-    expect(noDimReq.payload.width).toBeUndefined();
-    expect(noDimReq.payload.height).toBeUndefined();
-    expect(noDimReq.payload.seed).toBeUndefined();
-    expect(() => buildModelsLabImageRequest({ model: 'flux', prompt: 'test', width: 1024 }, 'test-key')).toThrow(/严禁单边静默兜底 512/);
-    expect(() => buildModelsLabImageRequest({ model: 'flux', prompt: 'test', loras: [{ name: 'style-lora' }] }, 'test-key')).toThrow(/严禁静默兜底为 0\.8/);
-  });
-
   it.each([1.5, 0, -1, '2'])('rejects an invalid explicit samples value instead of rounding or defaulting (%s)', (samples) => {
     expect(() => buildModelsLabImageRequest({ model: 'flux', prompt: 'p', samples }, 'test-key')).toThrow(/samples/);
   });

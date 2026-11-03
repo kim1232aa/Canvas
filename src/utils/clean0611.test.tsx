@@ -47,25 +47,6 @@ const SHOT29 = { model: 'venice-sd35', prompt: 'a red fox in snow', negative_pro
 
 afterEach(() => { vi.unstubAllGlobals(); clearSharedGet(); });
 
-describe('1 Venice local block: 拟发送 = Schema-scoped fields only', () => {
-  it.skip('no POST leaves; proposedRequest has no resolution/denoise/sampler/LoRA-internal fields; LoRAs listed as not sent', async () => {
-    const r = await veniceSubmit(SHOT29);
-    expect(r.status).toBe(400);
-    expect(r.posts).toHaveLength(0);
-    expect(r.payload.error.split('\n')[0]).toBe('没有发出去'); // clean-1333 #3
-    const p = r.payload.proposedRequest;
-    expect(p.endpoint).toBe('https://api.venice.ai/api/v1/image/generate');
-    const text = JSON.stringify(p.parameters);
-    for (const k of ['resolution', 'denoise', 'sampler_name', 'modelStrength', 'clipStrength', 'civitaiId', 'triggers', 'loras', '_canvas', '"cfg"']) expect(text).not.toContain(k);
-    expect(p.parameters).toMatchObject({ prompt: 'a red fox in snow', width: 1024, height: 1024, seed: 42, cfg_scale: 7.5, format: 'png', model: 'venice-sd35' });
-    for (const k of Object.keys(p.parameters)) expect(p.schemaFields).toContain(k);
-    expect(p.requestedLoras).toEqual([{ name: SHOT29.loras[0].path, strength: 0.75 }]);
-    const item = buildLocalRejectionHistoryItem('/api/schema-provider/venice/submit', SHOT29, 400, r.payload);
-    expect(item.requestMetadata.intendedRequest.parameters).toEqual(p.parameters);
-    expect(requestedNotSentLoras(item as any)).toEqual([{ name: SHOT29.loras[0].path, strength: 0.75 }]);
-  });
-});
-
 describe('2 「实际发送」 shows only what went upstream', () => {
   it('schemaFields / mapping / flags move to a separate not-sent section, values untouched', () => {
     const actual = { endpoint: 'e', parameters: { seed: 42, format: 'png' }, mapping: [{ from: 'seed' }], parametersOnly: false, schemaFieldsOnly: true, schemaFields: ['seed', 'format'] };
@@ -125,16 +106,6 @@ describe('7 _canvas metadata passes the guard and is stripped before sending', (
   it('guard accepts root _canvas.scope.provider; still refuses a real routing key', () => {
     expect(() => parseCustomObject({ format: 'png', _canvas: { scope: { provider: 'venice', model: 'm' } } })).not.toThrow();
     expect(() => parseCustomObject({ provider: 'x' })).toThrow(/路由\/凭据/);
-  });
-  it.skip('route strips _canvas: never in the upstream body', async () => {
-    const { loras: _l, ...noLora } = SHOT29;
-    const r = await veniceSubmit(noLora);
-    expect(r.status).toBe(402);
-    expect(r.posts).toHaveLength(1);
-    const sent = JSON.parse(String(r.posts[0].init!.body));
-    expect(sent._canvas).toBeUndefined();
-    expect(sent.format).toBe('png');
-    expect(sent.resolution).toBeUndefined();
   });
 });
 

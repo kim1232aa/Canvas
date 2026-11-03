@@ -48,38 +48,6 @@ describe('replicateImageContract', () => {
       expect((result.payload.input as any).num_inference_steps).toBeUndefined();
     });
 
-    it.skip('builds request for named model without version', () => {
-      const result = buildReplicatePredictionRequest({
-        model: 'black-forest-labs/flux-schnell',
-        prompt: 'a futuristic cityscape at sunset',
-        negative_prompt: 'blurry, low quality',
-        width: 1024,
-        height: 768,
-        aspect_ratio: '16:9',
-        seed: 42,
-        steps: 4,
-        cfg: 3.5,
-      }, undefined, SCHNELL_PROPS);
-
-      expect(result.endpoint).toBe('https://api.replicate.com/v1/models/black-forest-labs/flux-schnell/predictions');
-      expect(result.isVersionBased).toBe(false);
-      expect(result.actualModel).toBe('black-forest-labs/flux-schnell');
-      expect(result.headers).toEqual({
-        'Content-Type': 'application/json',
-        'Prefer': 'wait',
-      });
-      expect(result.payload.version).toBeUndefined();
-      expect(result.payload.input).toEqual({
-        prompt: 'a futuristic cityscape at sunset',
-        aspect_ratio: '16:9',
-        seed: 42,
-        num_inference_steps: 4,
-      });
-      // Official flux-schnell Input Schema: no width/height, negative_prompt, guidance/guidance_scale → not sent, recorded.
-      expect(result.omitted?.map((o) => o.from)).toEqual(['negative_prompt', 'width', 'height', 'cfg']);
-      expect(result.omitted?.every((o) => o.reason.startsWith('该端点不支持'))).toBe(true);
-    });
-
     it('builds request for named model with version in owner/name:version format', () => {
       const hex64 = '50adaf2d3c7a8b6099dd81e58e6dd27d2c317c52d007bc019c67040c22941234';
       const result = buildReplicatePredictionRequest({
@@ -185,58 +153,6 @@ describe('replicateImageContract', () => {
           loras: [{ name: 'urn:air:flux1:lora:civitai:12345@67890', modelStrength: 0.65 }],
         }, undefined, FLUX_DEV_LORA_PROPS)
       ).toThrow(/严禁从 Civitai ID 或 AIR 猜测拼接下载链接/);
-    });
-
-    it.skip('rejects LoRA entries without explicit numeric strength instead of defaulting to 1.0', () => {
-      expect(() =>
-        buildReplicatePredictionRequest({
-          model: 'black-forest-labs/flux-dev-lora',
-          prompt: 'styled portrait',
-          loras: ['alexp/flux-ghibli'],
-        }, undefined, FLUX_DEV_LORA_PROPS)
-      ).toThrow(/严禁仅传字符串并静默兜底为 1\.0/);
-
-      expect(() =>
-        buildReplicatePredictionRequest({
-          model: 'black-forest-labs/flux-dev-lora',
-          prompt: 'styled portrait',
-          loras: [{ path: 'alexp/flux-ghibli' }],
-        }, undefined, FLUX_DEV_LORA_PROPS)
-      ).toThrow(/缺少显式权重.*严禁静默兜底为 1\.0/);
-    });
-
-    it.skip('rejects loras when model inputSchemaProperties does not support LoRA fields', () => {
-      expect(() =>
-        buildReplicatePredictionRequest(
-          {
-            model: 'black-forest-labs/flux-schnell',
-            prompt: 'fast render',
-            loras: [{ path: 'alexp/flux-ghibli', strength: 0.8 }],
-          },
-          'https://api.replicate.com/v1',
-          { prompt: {}, aspect_ratio: {}, num_inference_steps: {} }
-        )
-      ).toThrow(/官方 OpenAPI Input Schema 不支持挂载 LoRA 参数/);
-    });
-
-    it.skip('rejects loras for flux-schnell via live props without LoRA fields (never invent hf_lora)', () => {
-      expect(() =>
-        buildReplicatePredictionRequest({
-          model: 'black-forest-labs/flux-schnell',
-          prompt: 'fast render',
-          loras: [{ path: 'alexp/flux-ghibli', strength: 0.8 }],
-        }, undefined, SCHNELL_PROPS)
-      ).toThrow(/官方 OpenAPI Input Schema 不支持挂载 LoRA 参数/);
-    });
-
-    it.skip('rejects loras for flux-dev via live props without LoRA fields (LoRA belongs on flux-dev-lora)', () => {
-      expect(() =>
-        buildReplicatePredictionRequest({
-          model: 'black-forest-labs/flux-dev',
-          prompt: 'portrait',
-          loras: [{ path: 'fofr/flux-pixar-cars', strength: 0.9 }],
-        }, undefined, FLUX_DEV_PROPS)
-      ).toThrow(/官方 OpenAPI Input Schema 不支持挂载 LoRA 参数/);
     });
 
     it('applies custom_parameters and records overrides', () => {

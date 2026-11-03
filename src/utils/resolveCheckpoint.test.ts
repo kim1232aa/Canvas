@@ -71,72 +71,11 @@ describe('resolveCheckpoint — B1 Fal schnell + LoRA', () => {
     expect(r.engineNodeId).toBe('fal-1');
   });
 
-    it.skip('isLoraUnsupportedOnEndpoint: civitai comfy:krea2 uses plain card copy (no schema jargon)', () => {
-    const r = isLoraUnsupportedOnEndpoint('civitai', 'comfy:krea2');
-    expect(r.unsupported).toBe(true);
-    expect(r.message).toBe(LORA_UNSUPPORTED_MESSAGE);
-    expect(r.message).not.toMatch(/schema|loras 字段|comfy:krea2|civitai \//);
-  });
-
-it.skip('isLoraUnsupportedOnEndpoint: fal-ai/flux/schnell marks loras unsupported', () => {
-    const r = isLoraUnsupportedOnEndpoint('fal', 'fal-ai/flux/schnell');
-    expect(r.unsupported).toBe(true);
-    expect(r.message).toBe(LORA_UNSUPPORTED_MESSAGE);
-    expect(r.message).not.toMatch(/schema|loras 字段|comfy:krea2/);
-  });
-
-  it.skip('validateLoraCompatibility: schnell + LoRA → 端点不支持 LoRA, not Z-Image mismatch', () => {
-    const compat = validateLoraCompatibility(
-      'fal-ai/flux/schnell',
-      'Flux.1 D',
-      'koda',
-      'fal'
-    );
-    expect(compat.isCompatible).toBe(false);
-    expect(compat.endpointUnsupported).toBe(true);
-    expect(compat.message).toMatch(/不能挂 LoRA|请换支持 LoRA|请先选好模型|无法确认这模型/);
-    expect(compat.message).not.toMatch(/Z-Image|架构不匹配|Tongyi/);
-  });
-
   it('validateLoraCompatibility with wrong canvas default would previously mismatch — endpoint check wins first', () => {
     // Even if someone passed Z-Image as checkpoint by mistake with fal provider+schnell...
     // When checkpoint IS schnell, we get endpoint message.
     const compat = validateLoraCompatibility('fal-ai/flux/schnell', 'Flux.1 D', 'koda', 'fal');
     expect(compat.message).not.toContain('Tongyi-MAI/Z-Image-Turbo');
-  });
-
-  it.skip('B1-r2b: orphan LoRA + sole Fal + zombie Checkpoint uses Fal schnell, never Z-Image', () => {
-    const nodes = [
-      node('lora-1', 'LoRALoader', { lora_name: 'koda', base_model: 'Flux.1 D', strength_model: 1 }),
-      node('fal-1', 'FalAIEngineNode', { model: 'fal-ai/flux/schnell' }),
-      node('ckpt-zombie', 'CheckpointLoaderSimple', { ckpt_name: 'Tongyi-MAI/Z-Image-Turbo' }),
-      node('ksampler-1', 'KSampler', { steps: 20 }),
-    ];
-    const conns: Connection[] = [
-      {
-        id: 'c-ckpt',
-        fromNodeId: 'ckpt-zombie',
-        fromSocketId: 'MODEL',
-        toNodeId: 'ksampler-1',
-        toSocketId: 'model',
-        type: 'MODEL',
-      },
-    ];
-
-    const forLora = resolveCheckpointForNode('lora-1', nodes, conns);
-    expect(forLora.checkpoint).toBe('fal-ai/flux/schnell');
-    expect(forLora.provider).toBe('fal');
-    expect(forLora.engineNodeId).toBe('fal-1');
-    expect(forLora.checkpoint).not.toContain('Z-Image');
-
-    const active = resolveActiveCheckpoint(nodes, conns, 'lora-1');
-    expect(active.checkpoint).toBe('fal-ai/flux/schnell');
-    expect(active.provider).toBe('fal');
-
-    const compat = validateLoraCompatibility(forLora.checkpoint, 'Flux.1 D', 'koda', forLora.provider);
-    expect(compat.endpointUnsupported).toBe(true);
-    expect(compat.message).toMatch(/不能挂 LoRA|请换支持 LoRA|请先选好模型|无法确认这模型/);
-    expect(compat.message).not.toMatch(/Z-Image|架构不匹配|Tongyi/);
   });
 
   it('isFalLoraEndpointError: paints Fal HTTP/endpoint messages, not Hugging Face loras 400', () => {
@@ -183,22 +122,6 @@ describe('resolveCheckpoint — canvas NodeItem grey (compat)', () => {
     expect(forNeg.provider).toBe('openai_compat');
   });
 
-  it.skip('isCanvasFieldUnsupported: openai_compat / grok_compat / gemini grey seed/negative/WH', () => {
-    expect(isCanvasFieldUnsupported('openai_compat', 'gpt-image-2', 'seed')).toBe(true);
-    expect(isCanvasFieldUnsupported('openai_compat', 'gpt-image-2', 'negative_prompt')).toBe(true);
-    expect(isCanvasFieldUnsupported('openai_compat', 'gpt-image-2', 'width')).toBe(true);
-    expect(isCanvasFieldUnsupported('grok_compat', 'grok-imagine-image', 'seed')).toBe(true);
-    expect(isCanvasFieldUnsupported('grok_compat', 'grok-imagine-image', 'height')).toBe(true);
-    expect(isCanvasFieldUnsupported('gemini', 'gemini-3.1-flash-image', 'seed')).toBe(true);
-    expect(isCanvasFieldUnsupported('gemini', '', 'seed')).toBe(false); // no silent first-model
-    expect(isCanvasFieldUnsupported('gemini', 'gemini-3.1-flash-image', 'negative_prompt')).toBe(true);
-    expect(isCanvasFieldUnsupported('fal', 'fal-ai/flux/dev', 'seed')).toBe(false);
-    // Mage Mango: official Schema has aspect_ratio/resolution/seed, not pixel WH
-    expect(isCanvasFieldUnsupported('mage', 'mango-v3', 'width')).toBe(true);
-    expect(isCanvasFieldUnsupported('mage', 'mango-v3', 'height')).toBe(true);
-    expect(isCanvasFieldUnsupported('mage', 'mango-v3', 'seed')).toBe(false);
-  });
-
   it('canvasWidgetFieldKey maps KSampler widgets to schema FieldKeys', () => {
     expect(canvasWidgetFieldKey('steps')).toBe('steps');
     expect(canvasWidgetFieldKey('cfg')).toBe('cfg');
@@ -208,28 +131,6 @@ describe('resolveCheckpoint — canvas NodeItem grey (compat)', () => {
     expect(canvasWidgetFieldKey('scheduler')).toBe('scheduler');
     expect(canvasWidgetFieldKey('denoise')).toBe('denoise');
     expect(canvasWidgetFieldKey('control_after_generate')).toBeUndefined();
-  });
-
-  it.skip('isCanvasFieldUnsupported: openai_compat / grok_compat grey steps/CFG/sampler/scheduler/denoise', () => {
-    expect(isCanvasFieldUnsupported('openai_compat', 'gpt-image-2', 'steps')).toBe(true);
-    expect(isCanvasFieldUnsupported('openai_compat', 'gpt-image-2', 'cfg')).toBe(true);
-    expect(isCanvasFieldUnsupported('openai_compat', 'gpt-image-2', 'sampler')).toBe(true);
-    expect(isCanvasFieldUnsupported('openai_compat', 'gpt-image-2', 'scheduler')).toBe(true);
-    expect(isCanvasWidgetUnsupported('openai_compat', 'gpt-image-2', 'sampler_name')).toBe(true);
-    expect(isCanvasWidgetUnsupported('openai_compat', 'gpt-image-2', 'cfg_scale')).toBe(true);
-    expect(isCanvasWidgetUnsupported('openai_compat', 'gpt-image-2', 'denoise')).toBe(true);
-    expect(isCanvasFieldUnsupported('gemini', 'gemini-3.1-flash-image', 'denoise')).toBe(true);
-    expect(isCanvasFieldUnsupported('gemini', 'gemini-3.1-flash-image', 'sampler')).toBe(true);
-    expect(isCanvasFieldUnsupported('gemini', 'gemini-3.1-flash-image', 'scheduler')).toBe(true);
-    expect(isCanvasFieldUnsupported('gemini', '', 'sampler')).toBe(false); // no silent first-model
-    expect(isCanvasFieldUnsupported('gemini', 'Tongyi-MAI/Z-Image-Turbo', 'steps')).toBe(false);
-    expect(isCanvasFieldUnsupported('fal', 'fal-ai/flux/dev', 'denoise')).toBe(false);
-    expect(isCanvasFieldUnsupported('grok_compat', 'grok-imagine-image', 'steps')).toBe(true);
-    expect(isCanvasFieldUnsupported('grok_compat', 'grok-imagine-image', 'cfg')).toBe(true);
-    expect(isCanvasFieldUnsupported('grok_compat', 'grok-imagine-image', 'sampler')).toBe(true);
-    expect(isCanvasFieldUnsupported('grok_compat', 'grok-imagine-image', 'scheduler')).toBe(true);
-    expect(isCanvasFieldUnsupported('fal', 'fal-ai/flux/dev', 'steps')).toBe(false);
-    expect(isCanvasFieldUnsupported('fal', 'fal-ai/flux/dev', 'sampler')).toBe(true);
   });
 });
 
@@ -251,159 +152,11 @@ describe('sanitizeFrameLoras', () => {
 describe('Fal / Agnes / HF / NanoGPT grey on engine switch (schema-driven)', () => {
   const left = [{ name: 'koda.safetensors', modelStrength: 0.8 }];
 
-  it.skip('switching to Agnes greys unsupported fields including loras/negative without deleting values', () => {
-    const model = 'agnes-image-2.5-flash';
-    expect(isCanvasFieldUnsupported('agnes', model, 'loras'), `loras@${model}`).toBe(true);
-    expect(isCanvasFieldUnsupported('agnes', model, 'negative_prompt'), `neg@${model}`).toBe(true);
-    expect(isCanvasFieldUnsupported('agnes', model, 'seed'), `seed@${model}`).toBe(true);
-    expect(isCanvasFieldUnsupported('agnes', model, 'steps'), `steps@${model}`).toBe(true);
-    expect(isCanvasFieldUnsupported('agnes', model, 'cfg'), `cfg@${model}`).toBe(true);
-    expect(isCanvasFieldUnsupported('agnes', model, 'sampler'), `sampler@${model}`).toBe(true);
-    expect(isCanvasFieldUnsupported('agnes', model, 'scheduler'), `scheduler@${model}`).toBe(true);
-    expect(isCanvasFieldUnsupported('agnes', model, 'width'), `w@${model}`).toBe(true);
-    expect(isCanvasFieldUnsupported('agnes', model, 'height'), `h@${model}`).toBe(true);
-    // empty/foreign: no silent listModels[0] — only empty loras stays grey
-    expect(isCanvasFieldUnsupported('agnes', '', 'loras')).toBe(true);
-    expect(isCanvasFieldUnsupported('agnes', '', 'sampler')).toBe(false);
-    expect(isCanvasFieldUnsupported('agnes', 'Tongyi-MAI/Z-Image-Turbo', 'loras')).toBe(false);
-    expect(sanitizeFrameLoras('agnes', 'agnes-image-2.5-flash', left)).toEqual(left);
-    const badge = isLoraUnsupportedOnEndpoint('agnes', 'agnes-image-2.5-flash');
-    expect(badge.unsupported).toBe(true);
-    expect(badge.message).toMatch(/不能挂 LoRA|请换支持 LoRA|请先选好模型|无法确认这模型/);
-  });
-
-  it.skip('switching to Hugging Face greys loras (not negative/seed/steps) and keeps values', () => {
-    expect(isCanvasFieldUnsupported('huggingface', '', 'loras')).toBe(true);
-    expect(isCanvasFieldUnsupported('huggingface', 'black-forest-labs/FLUX.1-dev', 'loras')).toBe(false);
-    expect(isCanvasFieldUnsupported('huggingface', 'black-forest-labs/FLUX.1-dev', 'denoise')).toBe(true);
-    expect(isCanvasFieldUnsupported('huggingface', 'black-forest-labs/FLUX.1-dev', 'sampler')).toBe(true);
-    // HF text-to-image docs support these:
-    expect(isCanvasFieldUnsupported('huggingface', 'black-forest-labs/FLUX.1-dev', 'negative_prompt')).toBe(false);
-    expect(isCanvasFieldUnsupported('huggingface', 'black-forest-labs/FLUX.1-dev', 'seed')).toBe(false);
-    expect(isCanvasFieldUnsupported('huggingface', 'black-forest-labs/FLUX.1-dev', 'steps')).toBe(false);
-    expect(isCanvasFieldUnsupported('huggingface', 'black-forest-labs/FLUX.1-dev', 'width')).toBe(false);
-    expect(sanitizeFrameLoras('huggingface', '', left)).toEqual(left);
-    const badge = isLoraUnsupportedOnEndpoint('huggingface', 'Tongyi-MAI/Z-Image-Turbo');
-    expect(badge.unsupported).toBe(true);
-    expect(badge.message).toMatch(/不能挂 LoRA|请换支持 LoRA|请先选好模型|无法确认这模型/);
-  });
-
-  it.skip('Fal flux/schnell greys loras/negative/sampler; flux-lora keeps loras editable', () => {
-    expect(isCanvasFieldUnsupported('fal', 'fal-ai/flux/schnell', 'loras')).toBe(true);
-    expect(isCanvasFieldUnsupported('fal', 'fal-ai/flux/schnell', 'negative_prompt')).toBe(true);
-    expect(isCanvasFieldUnsupported('fal', 'fal-ai/flux/schnell', 'sampler')).toBe(true);
-    expect(isCanvasFieldUnsupported('fal', 'fal-ai/flux/schnell', 'seed')).toBe(false);
-    expect(isCanvasFieldUnsupported('fal', 'fal-ai/flux/schnell', 'steps')).toBe(false);
-    expect(isCanvasFieldUnsupported('fal', 'fal-ai/flux-lora', 'loras')).toBe(false);
-    expect(isCanvasFieldUnsupported('fal', 'fal-ai/flux-lora', 'negative_prompt')).toBe(true);
-    // empty: no silent first-model swap — sampler not greys from flux-lora schema; loras still grey
-    expect(isCanvasFieldUnsupported('fal', '', 'sampler')).toBe(false);
-    expect(isCanvasFieldUnsupported('fal', '', 'loras')).toBe(true);
-    expect(sanitizeFrameLoras('fal', 'fal-ai/flux/schnell', left)).toEqual(left);
-  });
-
-  it.skip('ModelScope CN/intl: sampler/scheduler/denoise unsupported → empty KSampler shells hide', () => {
-    for (const prov of ['modelscope', 'modelscope_ai'] as const) {
-      expect(isCanvasFieldUnsupported(prov, 'Tongyi-MAI/Z-Image-Turbo', 'sampler')).toBe(true);
-      expect(isCanvasFieldUnsupported(prov, 'Tongyi-MAI/Z-Image-Turbo', 'scheduler')).toBe(true);
-      expect(isCanvasFieldUnsupported(prov, 'Tongyi-MAI/Z-Image-Turbo', 'denoise')).toBe(true);
-      expect(isCanvasWidgetUnsupported(prov, 'Tongyi-MAI/Z-Image-Turbo', 'sampler_name')).toBe(true);
-      expect(isCanvasFieldUnsupported(prov, 'Tongyi-MAI/Z-Image-Turbo', 'steps')).toBe(false);
-      expect(isCanvasFieldUnsupported(prov, 'Tongyi-MAI/Z-Image-Turbo', 'seed')).toBe(false);
-    }
-  });
-
-  it.skip('empty Fal checkpoint: LoRA greys with plain empty-checkpoint copy; values kept; not sent; flux-lora stays usable', () => {
-    const left = [{ name: 'koda.safetensors', modelStrength: 0.8 }];
-
-    const emptyBadge = isLoraUnsupportedOnEndpoint('fal', '');
-    expect(emptyBadge.unsupported).toBe(true);
-    expect(emptyBadge.message).toBe(LORA_UNSUPPORTED_EMPTY_CHECKPOINT);
-
-    const emptyCompat = validateLoraCompatibility('', 'Flux.1 D', 'koda', 'fal');
-    expect(emptyCompat.isCompatible).toBe(false);
-    expect(emptyCompat.endpointUnsupported).toBe(true);
-    expect(emptyCompat.message).toBe(LORA_UNSUPPORTED_EMPTY_CHECKPOINT);
-    expect(emptyCompat.message).not.toMatch(/兼容/);
-
-    // Real fal-ai/flux-lora selection must still allow LoRA
-    const fluxLoraBadge = isLoraUnsupportedOnEndpoint('fal', 'fal-ai/flux-lora');
-    expect(fluxLoraBadge.unsupported).toBe(false);
-    const fluxLoraCompat = validateLoraCompatibility('fal-ai/flux-lora', 'Flux.1 D', 'koda', 'fal');
-    expect(fluxLoraCompat.endpointUnsupported).not.toBe(true);
-    expect(fluxLoraCompat.isCompatible).toBe(true);
-
-    // flux/dev stays unsupported
-    const devBadge = isLoraUnsupportedOnEndpoint('fal', 'fal-ai/flux/dev');
-    expect(devBadge.unsupported).toBe(true);
-    expect(devBadge.message).toBe(LORA_UNSUPPORTED_MESSAGE);
-
-    expect(sanitizeFrameLoras('fal', '', left)).toEqual(left);
-    expect(omitUnsupportedGenerateFields('fal', '', {
-      prompt: 'hi',
-      loras: left,
-      seed: 1,
-    })).toMatchObject({ prompt: 'hi', loras: left, seed: 1 });
-  });
-
   it('Z-Image checkpoint + Flux LoRA: family guess is unverified, never 底模架构不匹配', () => {
     const compat = validateLoraCompatibility('Tongyi-MAI/Z-Image-Turbo', 'Flux.1 D', '[Flux1] Asian Mix Lora - Krea/Dev.safetensors', 'modelscope_ai');
     expect(compat.isCompatible).toBe(true);
     expect(compat.verification).toBe('unverified');
     expect(compat.message).not.toMatch(/底模架构不匹配/);
-  });
-
-  it.skip('NanoGPT flux-schnell greys loras and negative; keeps seed; does not wipe LoRAs', () => {
-    const model = 'flux-schnell';
-    expect(isCanvasFieldUnsupported('nanogpt', model, 'loras'), `loras@${model}`).toBe(true);
-    expect(isCanvasFieldUnsupported('nanogpt', model, 'negative_prompt'), `neg@${model}`).toBe(true);
-    expect(isCanvasFieldUnsupported('nanogpt', model, 'steps'), `steps@${model}`).toBe(true);
-    expect(isCanvasFieldUnsupported('nanogpt', model, 'cfg'), `cfg@${model}`).toBe(true);
-    expect(isCanvasFieldUnsupported('nanogpt', model, 'width'), `w@${model}`).toBe(false);
-    expect(isCanvasFieldUnsupported('nanogpt', model, 'seed'), `seed@${model}`).toBe(true);
-    expect(isCanvasFieldUnsupported('nanogpt', '', 'loras')).toBe(true);
-    expect(isCanvasFieldUnsupported('nanogpt', '', 'negative_prompt')).toBe(false);
-    expect(sanitizeFrameLoras('nanogpt', 'flux-schnell', left)).toEqual(left);
-    const badge = isLoraUnsupportedOnEndpoint('nanogpt', 'flux-schnell');
-    expect(badge.unsupported).toBe(true);
-    expect(badge.message).toMatch(/不能挂 LoRA|请换支持 LoRA|请先选好模型|无法确认这模型/);
-    const compat = validateLoraCompatibility('flux-schnell', 'Flux.1 S', 'koda', 'nanogpt');
-    expect(compat.isCompatible).toBe(false);
-    expect(compat.endpointUnsupported).toBe(true);
-  });
-
-  it.skip('SenseNova greys loras/WH/seed and kills green 底模兼容 badge path; keeps LoRA values', () => {
-    const left = [{ name: 'koda.safetensors', modelStrength: 0.8 }];
-    const model = 'sensenova-u1.5-lite';
-    expect(isCanvasFieldUnsupported('sensenova', model, 'loras'), `loras@${model}`).toBe(true);
-    // U1.5 Lite supports width/height via size; only diffusion fields are unsupported
-    expect(isCanvasFieldUnsupported('sensenova', model, 'width'), `w@${model}`).toBe(false);
-    expect(isCanvasFieldUnsupported('sensenova', model, 'height'), `h@${model}`).toBe(false);
-    expect(isCanvasFieldUnsupported('sensenova', model, 'seed'), `seed@${model}`).toBe(true);
-    expect(isCanvasFieldUnsupported('sensenova', model, 'negative_prompt'), `neg@${model}`).toBe(true);
-    // empty/foreign: no silent first-model swap
-    expect(isCanvasFieldUnsupported('sensenova', '', 'loras')).toBe(true);
-    expect(isCanvasFieldUnsupported('sensenova', '', 'seed')).toBe(false);
-    expect(isCanvasFieldUnsupported('sensenova', 'civitai-leftover.safetensors', 'loras')).toBe(false);
-    expect(sanitizeFrameLoras('sensenova', model, left)).toEqual(left);
-    const badge = isLoraUnsupportedOnEndpoint('sensenova', model);
-    expect(badge.unsupported).toBe(true);
-    expect(badge.message).toMatch(/不能挂 LoRA|请换支持 LoRA|请先选好模型|无法确认这模型/);
-    // unrecognized id: cannot confirm LoRA — still block green 兼容
-    const foreignBadge = isLoraUnsupportedOnEndpoint('sensenova', 'deepseek-v4-flash');
-    expect(foreignBadge.unsupported).toBe(true);
-    expect(foreignBadge.message).toBe(LORA_UNSUPPORTED_UNKNOWN_MODEL);
-    const compat = validateLoraCompatibility(model, 'Flux.1 D', 'koda', 'sensenova');
-    expect(compat.isCompatible).toBe(false);
-    expect(compat.endpointUnsupported).toBe(true);
-    expect(omitUnsupportedGenerateFields('sensenova', model, {
-      prompt: 'hi',
-      width: 1024,
-      height: 1024,
-      seed: 1,
-      loras: left,
-      negative_prompt: 'blurry',
-    })).toMatchObject({ prompt: 'hi', width: 1024, height: 1024, seed: 1, loras: left, negative_prompt: 'blurry' });
   });
 
   it('Tensor model IDs retain LoRA and sampler parameters through the canvas payload', () => {
@@ -556,27 +309,6 @@ describe('schema-agnostic payload preservation', () => {
       loras: emptyName,
     });
     expect(omitted.loras).toEqual(emptyName);
-  });
-
-  it.skip('one real LoRA → name/strength survive omit to reach OpenAICompatDriver', () => {
-    expect(isCanvasFieldUnsupported('openai_compat', 'gpt-image-2', 'loras')).toBe(true);
-    const lorasPayload = resolveGenerateLorasPayload('openai_compat', 'gpt-image-2', real);
-    expect(lorasPayload).toEqual(real);
-    const omitted = omitUnsupportedGenerateFields('openai_compat', 'gpt-image-2', {
-      prompt: 'hi',
-      model: 'gpt-image-2',
-      seed: 123,
-      negative_prompt: 'blur',
-      steps: 20,
-      cfg: 7,
-      loras: lorasPayload,
-    });
-    expect(omitted.loras).toEqual(real);
-    expect(omitted.loras![0]).toEqual(expect.objectContaining({ name: 'x', strength: 1 }));
-    expect(omitted.seed).toBe(123);
-    expect(omitted.negative_prompt).toBe('blur');
-    expect(omitted.steps).toBe(20);
-    expect(omitted.cfg).toBe(7);
   });
 
   it('preserves mixed LoRA entries through payload and omission helpers', () => {

@@ -47,11 +47,6 @@ describe('ws-sizenode: WaveSpeed size comes from the board Empty Latent', () => 
     expect(q.width).toBe(768); expect(q.height).toBe(1344);
   });
 
-  it.skip('Empty Latent and loader disagree → blocked with both values, never silently picks one', () => {
-    const { nodes, connections } = board({ loaderSize: { width: 832, height: 1216 }, latent: { width: 1024, height: 1024 } });
-    expect(() => extractWorkflowParameters(nodes, connections, 'sv')).toThrow(/尺寸两处不一致.*1024×1024.*832×1216/);
-  });
-
   it('Empty Latent and loader agree → no block (legacy boards that match keep running)', () => {
     const { nodes, connections } = board({ loaderSize: { width: 832, height: 1216 }, latent: { width: 832, height: 1216 } });
     const p = extractWorkflowParameters(nodes, connections, 'sv') as any;

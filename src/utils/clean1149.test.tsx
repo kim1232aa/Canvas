@@ -61,32 +61,6 @@ describe('clean-1149 #2 custom JSON never becomes /api/models?query={…}', () =
   });
 });
 
-describe('clean-1149 #3 history 尺寸: one chip, label not struck', () => {
-  // superseded 2026-11-04: history card shows plain values, no per-field badges
-  it.skip('unsupported with canvas value → value struck once + chip; without value → chip only', () => {
-    const withVal = formatHistorySize({
-      width: { key: 'width', value: 1024, source: 'unsupported' },
-      height: { key: 'height', value: 768, source: 'unsupported' },
-      size: { key: 'size', value: undefined, source: 'unsupported' },
-    } as any);
-    expect(withVal.canvasValue).toBe('1024×768');
-    expect(withVal.text).toBe('1024×768');
-    expect(historyParameterSourceLabel(withVal.source)).toBe(HISTORY_UNSUPPORTED_LABEL);
-
-    const noVal = formatHistorySize({
-      width: { key: 'width', value: undefined, source: 'unsupported' },
-      height: { key: 'height', value: undefined, source: 'unsupported' },
-      size: { key: 'size', value: undefined, source: 'unsupported' },
-    } as any);
-    expect(noVal.text).toBe('');
-    expect(noVal.canvasValue).toBeUndefined();
-
-    const modal = read('../components/HistoryModal.tsx');
-    expect(modal).toContain('history-size-unsent-value');
-    expect(modal).not.toMatch(/unsupported: '[^']*line-through/);
-  });
-});
-
 describe('clean-1149 #4 LoRA Hub / hub ops named correctly', () => {
   it('opening LoRA Hub / 底模中心 begins a named operation (not 第 N 次运行)', () => {
     expect(read('../components/CivitaiModal.tsx')).toContain("beginTraceOperation('打开 LoRA Hub')");

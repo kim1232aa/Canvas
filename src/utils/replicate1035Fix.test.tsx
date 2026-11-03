@@ -44,15 +44,3 @@ describe('1035 #1 actualRequest = outbound body only; schemaFields in 本地记�
     expect(html).toContain('本地记录（未发给上游）');
   });
 });
-
-describe('1035 #2 尺寸 absent state renders like 采样器/调度器/负向 (no chip box)', () => {
-  // superseded 2026-11-04: history card shows plain values, no per-field badges
-  it.skip('no ⊘ chip on 尺寸 when no value is shown', () => {
-    const html = renderToStaticMarkup(<HistoryModal isOpen onClose={() => {}} history={[{ id: 'h', ...failed() } as any]} onApplyPrompt={() => {}} onDeleteItem={() => {}} onClearAll={() => {}} />);
-    // fix5: Schema has aspect_ratio ⇒ size row shows 「未发送」 (not folded into 该端点不支持)
-    expect(html).toContain('data-testid="history-size"');
-    expect(html).toMatch(/data-testid="history-size"[^>]*>尺寸: 未发送/);
-    expect(html).not.toMatch(/data-unsupported-key="size"/);
-    expect(html).not.toContain('history-unsupported-fold'); // cleanup-2026-10-17
-  });
-});

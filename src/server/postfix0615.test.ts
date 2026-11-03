@@ -30,13 +30,6 @@ const ws = (url: string, init?: RequestInit, poll?: any) => {
 const schemaOf = (id: string) => (catalog as any).data.find((r: any) => r.model_id === id).api_schema.api_schemas[0].request_schema;
 
 describe('1. custom_parameters scoped to the current model Schema', () => {
-  it.skip('server: leftover Krea aspect_ratio/resolution in custom JSON are not sent to z-image (size model) — 该端点不支持', async () => {
-    const call = app((u, i) => ws(u, i));
-    const r = await call('/api/schema-provider/:provider/submit', 'post', { params: { provider: 'wavespeed' }, body: { model: 'wavespeed-ai/z-image/turbo-lora', prompt: 'p', width: 768, height: 1344, custom_parameters: { aspect_ratio: '16:9', resolution: '2k' } } });
-    expect(r.payload.actualRequest.parameters).toEqual({ prompt: 'p', size: '768*1344' });
-    const m = r.payload.actualRequest.mapping.filter((x: any) => x.from.startsWith('custom_parameters.'));
-    expect(m.every((x: any) => x.sent === false && /该端点不支持/.test(x.reason))).toBe(true);
-  });
   it('front: switching provider/model drops the previous model\'s undeclared keys, keeps declared, records scope', () => {
     const krea = JSON.stringify({ aspect_ratio: '16:9', resolution: '2k', _canvas: { scope: { provider: 'wavespeed', model: 'wavespeed-ai/krea-v2/turbo-lora' } } });
     const out = JSON.parse(rescopeCustomParameters(krea, 'venice', 'venice-sd35', ['prompt', 'width', 'height', 'format', 'lora_strength'])!);

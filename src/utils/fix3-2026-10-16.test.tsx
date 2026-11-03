@@ -30,10 +30,6 @@ describe('fix3 A/B proposedRequest + D lora item mapping', () => {
     expect((schemaProviders.muapi as any).loraItemFields.sourceUrl).toBe('https://api.muapi.ai/openapi.json');
   });
 
-  it.skip('mapSchemaLoraItems throws when neither Schema nor config defines strength field', () => {
-    expect(() => mapSchemaLoraItems([{ path: 'a' }], { type: 'object' }, {}, 'm')).toThrow(/Schema 未定义 LoRA 强度字段/);
-  });
-
   it('proposedRequestOf keeps mapped parameters (not canvas internals)', () => {
     const p = proposedRequestOf(
       { endpoint: 'https://api.example/x', inputSchema: { properties: { prompt: {}, loras: {} } } },
