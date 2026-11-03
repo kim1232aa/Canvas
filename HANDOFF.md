@@ -1,5 +1,13 @@
 # ComfyCanvas Studio：开发交接、产品缺口与验收手册
 
+## 2026-11-03 晚间非消耗三刀（产品核）
+
+| 项 | 判定 | 要点 / 证据 |
+| --- | --- | --- |
+| 视频 presets RESULT 终稿 | **产品过（仅载入）** | 6/6；Novita Schema200 / Replicate 无空负向；不算出视频。 |
+| Together 契约对照 | **CONTRACT 对齐（不出图）** | 跟官网参数页：`image_loras` no longer available；公共接口不挂假 LoRA；预设无 LoRA/采样器。OpenAPI 仍列字段 ≠ 可发。证据 `Canvas-main/temp/e2e/together-contract-2026-11-03/NOTES.md`。来源 docs.together.ai parameters。 |
+| 硬编码扫描 | **产品过（两处已修）** | popularModels 全空；`237407c`：OpenWorks 缺 LoRA 强度本地拦（去 `??1`）；`provider=all` +deepinfra/openworks。`SCHEMA_DRIVEN` 缺 deepinfra **后排**。证据 `…/hardcode-scan-2026-11-03/SCAN.md`。 |
+
 ## 2026-11-03 魔搭 AI 国际站前端真出图（产品核）
 
 | 项 | 判定 | 要点 / 证据 |
