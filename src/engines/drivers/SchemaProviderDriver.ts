@@ -161,7 +161,7 @@ export class SchemaProviderDriver extends BaseEngineDriver {
     try {
       const shared = await sharedGetJson(schemaUrl, keyHeaders);
       schemaResponse = { ok: shared.ok, status: shared.status };
-      schemaBody = shared.data ?? '';
+      schemaBody = shared.data ?? shared.raw ?? '';
     } catch (cause) {
       if (!isApiTraceError(cause)) throw cause;
       schemaResponse = { ok: false, status: cause.appStatus };

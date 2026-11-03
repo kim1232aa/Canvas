@@ -248,3 +248,26 @@ describe('SchemaProviderDriver · output URL protocol validation', () => {
     expect(mockFetch.mock.calls.some(([url])=>String(url).includes('/save-result'))).toBe(false);
   });
 });
+
+describe('SchemaProviderDriver · Together schema GET failure never stops the POST', () => {
+  beforeEach(() => { mockFetch.mockReset(); clearSharedGet(); beginSharedGetAction(); });
+  afterEach(() => { vi.clearAllMocks(); clearSharedGet(); });
+  it('GET /api/model-schema 403 (Cloudflare) → submit POST still sent with all filled params; upstream error verbatim', async () => {
+    const CF = '<!DOCTYPE html><title>Attention Required! | Cloudflare</title>';
+    let submitBody: any;
+    mockFetch.mockImplementation(async (input: URL | RequestInfo, init?: RequestInit) => {
+      const u = String(input); const method = String(init?.method || 'GET').toUpperCase();
+      if (u.includes('/api/model-schema') && method === 'GET') return new Response(CF, { status: 403 });
+      if (u.includes('/api/schema-provider/together/submit') && method === 'POST') {
+        submitBody = JSON.parse(String(init?.body));
+        return jsonResponse({ error: 'upstream says no', upstreamStatus: 402 }, 402);
+      }
+      throw new Error(`unexpected ${method} ${u}`);
+    });
+    const params = { model: 'black-forest-labs/FLUX.2-dev', prompt: 'p', seed: 42, steps: 28, width: 1024, height: 768, cfg: 3.5 } as NormalizedGenerateParams;
+    await expect(new SchemaProviderDriver('together').generate(params, { togetherKey: 'k' })).rejects.toThrow(/upstream says no/);
+    expect(submitBody).toMatchObject({ model: 'black-forest-labs/FLUX.2-dev', prompt: 'p', seed: 42, steps: 28, width: 1024, height: 768, cfg: 3.5 });
+    expect(submitBody.schemaPrefetchFailure).toMatchObject({ status: 403 });
+    expect(JSON.stringify(submitBody.schemaPrefetchFailure)).toContain('Attention Required');
+  });
+});

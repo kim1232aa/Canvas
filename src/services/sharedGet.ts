@@ -9,7 +9,7 @@
  */
 import { tracedFetch } from './executionTrace';
 
-export type SharedGetResult = { ok: boolean; status: number; data: any };
+export type SharedGetResult = { ok: boolean; status: number; data: any; raw?: string };
 type Entry = { epoch: number; p: Promise<SharedGetResult>; settledAt?: string; ok?: boolean; status?: number };
 const store = new Map<string, Entry>();
 const listeners = new Set<() => void>();
@@ -29,7 +29,7 @@ export function sharedGetJson(url: string, headers: Record<string, string> = {},
   if (hit && hit.epoch === epoch && !opts.force) return hit.p;
   const doFetch = opts.fetchImpl ?? ((u: string, i: RequestInit) => tracedFetch(u, i, 'schema'));
   const p: Promise<SharedGetResult> = doFetch(url, { method: 'GET', headers })
-    .then(async (r) => ({ ok: r.ok, status: r.status, data: await r.json().catch(() => null) }));
+    .then(async (r) => { const raw = await r.text(); let data: any = null; try { data = JSON.parse(raw); } catch { /* non-JSON: raw kept verbatim */ } return { ok: r.ok, status: r.status, data, raw }; });
   const entry: Entry = { epoch, p };
   store.set(key, entry);
   // clean-1333 #7: remember when / how it settled so a reuse can be shown as 「复用上次失败（北京时间 HH:MM:SS）」.
