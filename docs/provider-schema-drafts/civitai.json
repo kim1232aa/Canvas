@@ -1,6 +1,6 @@
 {
   "canvasAcceptance": "未验证（2026-10-17 14:40 北京：测试截图已全删，按雁标准「画布里出图、落保存节点、历史有缩略图」当前 0 家；以前的出图/欠费标记一律作废，官方字段结论保留；在画布重跑出图并有节点图+历史缩略图后再单独改）",
-  "$schemaNote": "草案 — 仅声明。真相源: docs/provider-api-audit-v2/civitai.md + DIFF.md (2026-10-15)",
+  "$schemaNote": "草案 — 仅声明。2026-11-03：图像/视频出站以实时 OpenAPI 为准；byEngine 快照会过期，不写死尺寸字段名；本地表不当真相。",
   "id": "civitai",
   "displayName": "Civitai Orchestration",
   "auth": {
@@ -232,7 +232,7 @@
     "docs/provider-api-audit-v2/civitai.md",
     "docs/provider-api-audit-v2/DIFF.md"
   ],
-  "_auditStatus": "2026-11-02 ~04:55 JST：Researchy 02c——Civitai 各引擎 seed 已核；WAN 无通用 seed 勿发。\n2026-10-15 04:58：补 OpenAPI 核实 sdcpp Dev 字段为 steps/cfgScale；flux1-kontext 无 LoRA。字段徽章仍以前端实测为准",
+  "_auditStatus": "2026-11-03 画布←Researchy：图像须跟实时/逐模型 OpenAPI；本地 providerSchema 快照会过期不当真相；不写死尺寸字段名（image_size / width+height / aspect_ratio 等以该模型 Schema 为准）；不升徽章。\n2026-11-02 ~04:55 JST：Researchy 02c——Civitai 各引擎 seed 已核；WAN 无通用 seed 勿发。\n2026-10-15 04:58：补 OpenAPI 核实 sdcpp Dev 字段为 steps/cfgScale；flux1-kontext 无 LoRA。字段徽章仍以前端实测为准",
   "flux2DevPaths": {
     "native": "engine flux2 + model dev；numInferenceSteps 4–50 默认28、guidanceScale 0–20 默认2.5、loras[{air,strength}]（官方推荐）",
     "sdcpp": "engine sdcpp + ecosystem flux2Dev；steps 4–50 默认20、cfgScale 1–20 默认1、sampleMethod/schedule/negativePrompt；loras 为 object map；createVariant 用 strength 0–1",
@@ -280,5 +280,17 @@
       }
     ],
     "evidence": "temp/e2e/video-schema/VERIFY_RESULT_2026-11-02c.md"
+  },
+  "schemaPolicy20261103": {
+    "at": "2026-11-03",
+    "by": "画布（Researchy 三路核后）",
+    "rule": "图像/视频均跟官方 OpenAPI / recipe 动态解析；禁止静态引擎名单卡死（含 videoGen engine/version）",
+    "sizeFields": "不写死 width/height/size；按 engine+recipe OpenAPI（如 TextToImageInput / ImageGen）逐变体读取",
+    "liveUrls": [
+      "https://orchestration.civitai.com/openapi/v2-consumers.json",
+      "https://orchestration.civitai.com/v2/consumer/recipes/videoGen/openapi.json"
+    ],
+    "badge": "不升",
+    "note": "核对表若仍写「静态拒绝 ltx2.3」已过时——以 OpenAPI 为准"
   }
 }

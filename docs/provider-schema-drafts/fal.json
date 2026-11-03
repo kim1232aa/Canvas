@@ -1,6 +1,6 @@
 {
   "canvasAcceptance": "未验证（2026-10-17 14:40 北京：测试截图已全删，按雁标准「画布里出图、落保存节点、历史有缩略图」当前 0 家；以前的出图/欠费标记一律作废，官方字段结论保留；在画布重跑出图并有节点图+历史缩略图后再单独改）",
-  "$schemaNote": "草案 — 仅声明。真相源: docs/provider-api-audit-v2/fal.md + DIFF.md (2026-10-15)",
+  "$schemaNote": "草案 — 仅声明。2026-11-03：出站合同以逐模型实时 OpenAPI 为准；下方 image.* 示例会过期，接线须现拉 Schema，不写死尺寸字段名。旧真相源 docs/provider-api-audit-v2/fal.md 仅对照。",
   "id": "fal",
   "displayName": "fal.ai",
   "auth": {
@@ -76,7 +76,8 @@
           "enum preset",
           "{width,height}"
         ],
-        "canvasMapping": "width+height → image_size"
+        "canvasMapping": "width+height → image_size",
+        "policy": "示例字段；其他端点勿假定同名——以该 endpoint 实时 OpenAPI 为准（2026-11-03）"
       },
       "loras": {
         "maxItems": "any (merged)"
@@ -269,7 +270,7 @@
     "docs/provider-api-audit-v2/fal.md",
     "docs/provider-api-audit-v2/DIFF.md"
   ],
-  "_auditStatus": "2026-11-02 ~04:45 JST：Researchy——Fal krea-2/turbo/lora.seed。\n2026-11-02 ~04:42 JST：Researchy——Fal Kling v3 I2V 无 aspect_ratio；勿捏比例控件。\n2026-11-02 ~04:41 JST：Researchy——Fal Kling v3 I2V duration 字符串 3–15；wan-t2v-lora 帧81–100/帧率5–24；wan/v2.2-a14b/lora 另一套勿混。\n2026-11-02 ~04:39 JST：Researchy 对照表写回 researchyVerified20261102（种子/时长/比例已核一致条目）；未核条目仍待核、禁止当拦截；徽章不动。\n2026-10-16 16:54：画布正式收口 Kling V3 i2v PASS_BILLING（挑刺无严重 + Researchy TOP_UP 核）；2026-10-16 16:53：Kling V3 standard i2v 升 PASS_BILLING（非 PASS_GENERATION）——hist_1792140360652_bq6y0；403 TOP_UP；actualRequest start_image_url+duration\"5\"；证据 已清理 切分后进程。勿写成出片。2026-10-15 04:45 v2 已核（fal.md + DIFF 04:44）：目录 GET /v1/models 无 key 200；lock threshold FAQ 已有；krea-2/turbo/lora 无 steps/guidance、loras≤3。字段徽章仍以前端实测为准",
+  "_auditStatus": "2026-11-03 画布←Researchy：图像须跟实时/逐模型 OpenAPI；本地 providerSchema 快照会过期不当真相；不写死尺寸字段名（image_size / width+height / aspect_ratio 等以该模型 Schema 为准）；不升徽章。\n2026-11-02 ~04:45 JST：Researchy——Fal krea-2/turbo/lora.seed。\n2026-11-02 ~04:42 JST：Researchy——Fal Kling v3 I2V 无 aspect_ratio；勿捏比例控件。\n2026-11-02 ~04:41 JST：Researchy——Fal Kling v3 I2V duration 字符串 3–15；wan-t2v-lora 帧81–100/帧率5–24；wan/v2.2-a14b/lora 另一套勿混。\n2026-11-02 ~04:39 JST：Researchy 对照表写回 researchyVerified20261102（种子/时长/比例已核一致条目）；未核条目仍待核、禁止当拦截；徽章不动。\n2026-10-16 16:54：画布正式收口 Kling V3 i2v PASS_BILLING（挑刺无严重 + Researchy TOP_UP 核）；2026-10-16 16:53：Kling V3 standard i2v 升 PASS_BILLING（非 PASS_GENERATION）——hist_1792140360652_bq6y0；403 TOP_UP；actualRequest start_image_url+duration\"5\"；证据 已清理 切分后进程。勿写成出片。2026-10-15 04:45 v2 已核（fal.md + DIFF 04:44）：目录 GET /v1/models 无 key 200；lock threshold FAQ 已有；krea-2/turbo/lora 无 steps/guidance、loras≤3。字段徽章仍以前端实测为准",
   "acceptanceBadgeVideoKlingV3I2v": "PASS_BILLING",
   "sendEvidence": {
     "kling_v3_standard_i2v_1637": {
@@ -363,5 +364,16 @@
         "status": "已核一致"
       }
     ]
+  },
+  "schemaPolicy20261103": {
+    "at": "2026-11-03",
+    "by": "画布（Researchy 三路核后）",
+    "rule": "逐模型实时 OpenAPI（endpoint_id → openapi）；禁止把本地字段快照当当前合同",
+    "sizeFields": "不写死尺寸字段名；flux-lora 现页多为 image_size，其他端点可能不同——以该 endpoint OpenAPI 为准",
+    "liveUrls": [
+      "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=<id>",
+      "https://api.fal.ai/v1/models?endpoint_id=<id>&expand=openapi-3.0"
+    ],
+    "badge": "不升"
   }
 }
