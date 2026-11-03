@@ -74,7 +74,7 @@
       "imageGen": "POST /recipes/imageGen",
       "textToImage": "POST /recipes/textToImage（OpenAPI TextToImageInput）",
       "videoGen": "POST /recipes/videoGen",
-      "note": "engine 专属 recipe（flux1/flux2/krea/wan…）字段名可能与 textToImage 不同；按 recipe 区分，禁止混用"
+      "note": "engine 专属字段按 recipe+OpenAPI；textToImage 的 additionalNetworks 禁止写进 imageGen/videoGen；旧 /openapi/imageGen 404，用 recipes/<name>/openapi.yaml"
     }
   },
   "image": {
@@ -128,8 +128,13 @@
         ],
         "loras": "unsupported",
         "negative_prompt": "unsupported",
-        "call": "engine:\"fal\", model:\"krea2\"",
-        "creativity": true
+        "call": "官方 engine 字面值含 krea / krea3（2026-11-03 imageGen OpenAPI）；旧草稿 engine:\"fal\" model:\"krea2\" 与枚举冲突——fal 为另一引擎，krea2 多见 model/档位",
+        "creativity": true,
+        "engineLiteralsVerified": [
+          "krea",
+          "krea3"
+        ],
+        "stepsCfgReject": "仍 officialVerifyRequired：OpenAPI 未在本轮证明「明文拒 steps/cfg」的拦截措辞"
       }
     },
     "fieldNameWarning": "cfgScale vs guidanceScale、steps vs numInferenceSteps 按引擎切换；flux2.dev 发 cfgScale/steps → 400（Researchy 2026-10-15 recipes/flux2.md 复核）",
@@ -150,6 +155,20 @@
       },
       "loraShape": "additionalNetworks（不是简单 {AIR:strength} 也不是 [{air,strength}]）",
       "vsEngineRecipes": "flux1/flux2/krea 等 engine recipe 仍按 byEngine；与 textToImage 并存，不矛盾（DIFF.md）"
+    },
+    "imageGenNote": {
+      "at": "2026-11-03 ~15:00 JST",
+      "noAdditionalNetworks": true,
+      "polymorphicEngine": true,
+      "engineLiteralsInclude": [
+        "krea",
+        "krea3"
+      ],
+      "loraShapes": {
+        "Comfy*": "object AIR→number",
+        "flux2+dev / wan": "array {air,strength}",
+        "forbid": "勿把 additionalNetworks 写入 imageGen"
+      }
     }
   },
   "video": {
@@ -191,9 +210,11 @@
   },
   "lora": {
     "shapes": {
-      "textToImage.additionalNetworks": "{\"<AIR>\": {\"strength\": number|null, \"triggerWord\"?, \"type\"?}} — OpenAPI ImageJobNetworkParams",
-      "flux1/flux2-klein recipe map": "{ \"<AIR>\": strength }（旧 recipe 文档）",
-      "flux2-dev recipe array": "[{ air, strength }]"
+      "1_comfy_object_map": "imageGen Comfy*（如 Flux1 create）：loras = 对象，AIR→数字强度（additionalProperties:number）",
+      "2_flux2_wan_array": "imageGen flux2+dev / wan：loras = [{air,strength}]（ImageGenInputLora；strength 默认1，0–4）",
+      "3_textToImage_additionalNetworks": "仅 textToImage：additionalNetworks = AIR→{strength?,triggerWord?,type?}；禁止写进 imageGen/videoGen",
+      "video_comfy_object": "videoGen ComfyLtx* 等：loras = object AIR→number",
+      "video_wan_array": "videoGen Wan：loras = array VideoGenInputLora{air,strength}"
     },
     "strengthRange": {
       "textToImage": "OpenAPI 无 min/max → 待确认至实测；Site 模型描述里的权重范围仅自由文本",
@@ -222,7 +243,7 @@
     "http402": "未文档化为欠费码；欠费看 step canceled",
     "uiRule": "必须展示 step 状态与原因；submit 2xx ≠ 成功"
   },
-  "contractTestHint": "textToImage → additionalNetworks map（AIR→{strength}），非 [{air,strength}]；flux1 recipe → loras map；flux2 dev → numInferenceSteps/guidanceScale + loras array（发 steps/cfgScale → 上游 400）；krea v2 挂 LoRA/宽高/steps/cfg 本地拒绝或标不会发送；flux1-kontext 挂 LoRA → 上游 400；Buzz 用尽 → step canceled（非专用 HTTP 402）；sdcpp+flux2Dev → steps/cfgScale + loras map（勿发 numInferenceSteps/guidanceScale）；flux2 pro/max 无 LoRA/steps/cfg",
+  "contractTestHint": "textToImage → additionalNetworks map（AIR→{strength}），非 [{air,strength}]，且勿写入 imageGen；imageGen Comfy* → loras 对象 AIR→number；imageGen flux2+dev / wan → loras array[{air,strength}]；flux2 flex/klein 按该变体（多见 object）；engine 字面值 krea/krea3（勿再写 fal+krea2）；krea steps/cfg 拒法仍待核，勿臆造拦截文案；Buzz 用尽 → step canceled（非专用 HTTP 402）",
   "sources": [
     "https://developer.civitai.com/llms.txt",
     "https://orchestration.civitai.com/openapi/v2-consumers.json",
@@ -232,7 +253,7 @@
     "docs/provider-api-audit-v2/civitai.md",
     "docs/provider-api-audit-v2/DIFF.md"
   ],
-  "_auditStatus": "2026-11-03：写入 snapshotGaps（Krea unverified vs unsupported、additionalNetworks 壳）。不升徽章。\n2026-11-03 画布←Researchy：图像须跟实时/逐模型 OpenAPI；本地 providerSchema 快照会过期不当真相；不写死尺寸字段名（image_size / width+height / aspect_ratio 等以该模型 Schema 为准）；不升徽章。\n2026-11-02 ~04:55 JST：Researchy 02c——Civitai 各引擎 seed 已核；WAN 无通用 seed 勿发。\n2026-10-15 04:58：补 OpenAPI 核实 sdcpp Dev 字段为 steps/cfgScale；flux1-kontext 无 LoRA。字段徽章仍以前端实测为准",
+  "_auditStatus": "2026-11-03 ~15:00 JST：写入 researchyOutboundContract20261103（Civitai 三 recipe；LoRA 三形：Comfy 数字 map / flux2·Wan 数组 / textToImage additionalNetworks；engine=krea/krea3）。liveUrls 改 recipes/*/openapi.yaml。settled 项已记；Krea steps/cfg 拒法仍待核。不升徽章。\n2026-11-03：写入 snapshotGaps（Krea unverified vs unsupported、additionalNetworks 壳）。不升徽章。\n2026-11-03 画布←Researchy：图像须跟实时/逐模型 OpenAPI；本地 providerSchema 快照会过期不当真相；不写死尺寸字段名（image_size / width+height / aspect_ratio 等以该模型 Schema 为准）；不升徽章。\n2026-11-02 ~04:55 JST：Researchy 02c——Civitai 各引擎 seed 已核；WAN 无通用 seed 勿发。\n2026-10-15 04:58：补 OpenAPI 核实 sdcpp Dev 字段为 steps/cfgScale；flux1-kontext 无 LoRA。字段徽章仍以前端实测为准",
   "flux2DevPaths": {
     "native": "engine flux2 + model dev；numInferenceSteps 4–50 默认28、guidanceScale 0–20 默认2.5、loras[{air,strength}]（官方推荐）",
     "sdcpp": "engine sdcpp + ecosystem flux2Dev；steps 4–50 默认20、cfgScale 1–20 默认1、sampleMethod/schedule/negativePrompt；loras 为 object map；createVariant 用 strength 0–1",
@@ -282,31 +303,109 @@
     "evidence": "temp/e2e/video-schema/VERIFY_RESULT_2026-11-02c.md"
   },
   "schemaPolicy20261103": {
-    "at": "2026-11-03",
+    "at": "2026-11-03 ~15:00 JST",
     "by": "画布（Researchy 三路核后）",
     "rule": "图像/视频均跟官方 OpenAPI / recipe 动态解析；禁止静态引擎名单卡死（含 videoGen engine/version）",
     "sizeFields": "不写死 width/height/size；按 engine+recipe OpenAPI（如 TextToImageInput / ImageGen）逐变体读取",
     "liveUrls": [
-      "https://orchestration.civitai.com/openapi/v2-consumers.json",
-      "https://orchestration.civitai.com/v2/consumer/recipes/videoGen/openapi.json"
+      "https://orchestration.civitai.com/v2/consumer/recipes/textToImage/openapi.yaml",
+      "https://orchestration.civitai.com/v2/consumer/recipes/imageGen/openapi.yaml",
+      "https://orchestration.civitai.com/v2/consumer/recipes/videoGen/openapi.yaml"
     ],
     "badge": "不升",
-    "note": "核对表若仍写「静态拒绝 ltx2.3」已过时——以 OpenAPI 为准"
+    "note": "旧 /openapi/imageGen 404；核对表若仍写静态拒绝已过时——以 recipes OpenAPI 为准；badge 不升"
   },
   "snapshotGaps20261103": {
-    "at": "2026-11-03",
+    "at": "2026-11-03 ~15:00 JST",
     "source": "/workspace/canvas/temp/risk-scan-2026-11-03.md",
     "gaps": [
-      "Krea v2：草案 steps/cfg/宽高/LoRA=unsupported；本地快照 steps/cfg=unverified（可能仍发出）——冲突，接线应以「不会发送/拒」或官方再核为准",
-      "Krea 调用：草案写 engine:fal model:krea2；快照用 comfy+ecosystem krea2——engine 字面值待官方核",
-      "textToImage additionalNetworks：须 AIR→{strength,...} 对象，不是简单 {AIR:strength} 数字 map",
-      "视频 engines 静态名单勿当白名单（ltx2.3 走 live OpenAPI）"
+      "Krea steps/cfg/宽高/LoRA：草案仍标 unsupported，但「明文拒」措辞未从 OpenAPI 证明——继续 officialVerifyRequired",
+      "Krea 调用：engine 字面值已核为 krea/krea3；旧 fal+krea2 写法作废",
+      "textToImage additionalNetworks：须 AIR→{strength,...} 对象，不是简单 {AIR:strength} 数字 map（已核）",
+      "视频 engines 静态名单勿当白名单（ltx2.3 走 live OpenAPI）",
+      "flux2 flex/klein：本机 OpenAPI LoRA 多为 object map，勿与 flux2+dev 数组混用"
     ],
     "badge": "不升",
     "officialVerifyRequired": [
-      "Krea steps/cfg 是否明文拒",
-      "Krea engine 字面值",
-      "additionalNetworks.strength min/max"
+      "Krea steps/cfg 是否明文拒（拦截措辞仍未从 OpenAPI 证明）",
+      "additionalNetworks.strength min/max（OpenAPI 仍无 min/max）"
+    ],
+    "settledByResearchy20261103": [
+      "imageGen engine 枚举含 krea / krea3（本机 OpenAPI）",
+      "additionalNetworks 仅 textToImage；imageGen/videoGen 计数=0",
+      "LoRA 形状三分：Comfy 对象数字 map；flux2+dev/Wan 数组；textToImage additionalNetworks"
+    ],
+    "officialVerifySettled": [
+      "Krea engine 字面值 = krea / krea3",
+      "additionalNetworks 仅 textToImage",
+      "LoRA 形状：Comfy map / flux2+dev·Wan array / textToImage additionalNetworks"
     ]
+  },
+  "researchyOutboundContract20261103": {
+    "at": "2026-11-03 ~15:00 JST",
+    "status": "已核一致（本机 recipes/*/openapi.yaml + Researchy 三路）",
+    "conclusion": "三套 recipe 字段勿混：①textToImage 才有 additionalNetworks（AIR→{strength?,triggerWord?,type?}）；②imageGen 无 additionalNetworks，靠 engine 多态；③videoGen 同无 additionalNetworks。LoRA 形状：Comfy*=对象 AIR→number；flux2+dev / Wan=数组 [{air,strength}]。engine 字面值含 krea / krea3。",
+    "recipes": {
+      "textToImage": {
+        "path": "POST /v2/consumer/recipes/textToImage",
+        "additionalNetworks": true,
+        "shape": "object AIR → ImageJobNetworkParams{strength?, triggerWord?, type?}",
+        "openapi": "https://orchestration.civitai.com/v2/consumer/recipes/textToImage/openapi.yaml"
+      },
+      "imageGen": {
+        "path": "POST /v2/consumer/recipes/imageGen",
+        "additionalNetworks": false,
+        "note": "禁止把 textToImage 的 additionalNetworks 写进 imageGen",
+        "engineEnumSample": [
+          "openai",
+          "flux1-kontext",
+          "flux1-pro",
+          "flux2",
+          "google",
+          "wan",
+          "gemini",
+          "sdcpp",
+          "comfy",
+          "seedream",
+          "grok",
+          "fal",
+          "qwen",
+          "krea",
+          "krea3"
+        ],
+        "loraByEngine": {
+          "comfy": "loras = object additionalProperties:number（AIR→强度数字 map）",
+          "flux2+model=dev": "loras = array of ImageGenInputLora{air必填, strength默认1, 0–4}",
+          "wan": "loras = array of ImageGenInputLora{air, strength}",
+          "flux2 flex/klein 等": "本机 OpenAPI 多见 object map——按该变体 schema，勿一律套 dev 数组"
+        },
+        "openapi": "https://orchestration.civitai.com/v2/consumer/recipes/imageGen/openapi.yaml"
+      },
+      "videoGen": {
+        "path": "POST /v2/consumer/recipes/videoGen",
+        "additionalNetworks": false,
+        "loraByEngine": {
+          "wan": "loras = array VideoGenInputLora{air, strength}",
+          "ComfyLtx23 等": "loras = object AIR→number map"
+        },
+        "openapi": "https://orchestration.civitai.com/v2/consumer/recipes/videoGen/openapi.yaml"
+      }
+    },
+    "legacyOpenApiNote": "旧路径 /openapi/imageGen 现 404；改用 .../recipes/<name>/openapi.yaml",
+    "sources": [
+      "https://orchestration.civitai.com/v2/consumer/recipes/textToImage/openapi.yaml",
+      "https://orchestration.civitai.com/v2/consumer/recipes/imageGen/openapi.yaml",
+      "https://orchestration.civitai.com/v2/consumer/recipes/videoGen/openapi.yaml",
+      "http://developer.civitai.com/orchestration/reference/operations/InvokeTextToImageStepTemplate",
+      "https://developer.civitai.com/orchestration/reference/operations/InvokeImageGenStepTemplate",
+      "https://developer.civitai.com/orchestration/reference/operations/InvokeVideoGenStepTemplate"
+    ],
+    "liveFetch": {
+      "at": "2026-11-03 14:58–14:58 JST（本机 curl 全 200）",
+      "results": "tti/imageGen/videoGen yaml 均 HTTP 200；imageGen/videoGen additionalNetworks 计数=0；engine 含 krea/krea3"
+    },
+    "triPath": "Researchy 三路 WebSearch+Brave+agy；本机再核 OpenAPI/llms",
+    "conflictsWithPriorDraft": "草案曾写 krea 调用 engine:fal model:krea2——官方 imageGen engine 枚举含 krea/krea3（fal 为另一引擎）；krea2 多见为 model/ecosystem 值。flux2 flex/klein LoRA 形状本机多为 object，不完全等于 Researchy「Flux2Dev/Wan=array」简表——已按变体分列。",
+    "badge": "不升"
   }
 }

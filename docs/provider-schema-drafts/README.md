@@ -14,6 +14,7 @@
 - **真相源**: `../provider-api-audit-v2/*.md` + `DIFF.md`（Researchy 全量重查完成，2026-10-15）。旧 `provider-api-audit/` 仅对比用，勿引用。
 - **原则**: 有证据才写；官方无能力则标 `unsupported`；禁止静默默认强度；禁止把兼容中当官方。
 - **覆盖**: 16 家全部落盘（2026-10-15）。
+- **2026-11-03 出站合同**：Fal/Civitai/Replicate 已按 Researchy+本机 OpenAPI/llms 写入 `researchyOutboundContract20261103`（按端点/recipe/模型分 schema；徽章不升）。
 
 | 文件 | 供应商 | 图生 | 视频 | LoRA（图） |
 |------|--------|------|------|------------|
@@ -25,14 +26,14 @@
 | novita.json | Novita | async txt2img + task-result | async txt2video/img2video + task-result | txt2img：`request.loras[{model_name,strength}]` **会发送~~（novita-1019 PASS_BILLING 至 403）；seed/steps/guidance_scale 等同轮证实 |
 | venice.json | Venice | 按 constraints 三类尺寸（像素 width/height 待确认（clean-0544 仅线索）；比例仅 aspect_ratio；档位 aspect_ratio+resolution）；seed/steps/cfg_scale 像素已证实会发送；negative_prompt 待确认；lora_strength 草案待确认（空值 UI「未填写，不发送」，2026-10-16 废「待确认」徽章；live 过校验至 402）；自定义 LoRA 本地拒（live 上游 400）；视频勿发 seed；历史勿误标已实发 cfg |
 | krea.json | Krea | async per-path + `/jobs/{id}` | async per-path | flux-1-dev：`styles[{id,strength}]` ~~（未验证）会发送**（krea-0936 至 402）；steps/seed/guidance_scale 同轮证实会发送 |
-| replicate.json | Replicate | predictions async / `Prefer: wait` | 同 predictions | flux-dev-lora `lora_weights`+`extra_lora`，scale -1..3，最多 2；~~PASS_BILLING~~（未验证）（1049，402）：seed/num_inference_steps/guidance/lora_weights/lora_scale 会发送，extra_lora 待确认 |；**2026-11-02 画布**：挂 LoRA 用 flux-dev-lora 等，勿 schnell 空挂；换 Key 探测过，**未验证**；**2026-11-02 欠费已记**（未接通）
+| replicate.json | Replicate | predictions async / `Prefer: wait`；**2026-11-03** schnell 无 LoRA/宽高；dev-lora 有 lora_weights+extra_*；schnell+LoRA 用 flux-schnell-lora；徽章不升（欠费已记） | 同 predictions | flux-dev-lora `lora_weights`+`extra_lora`，scale -1..3，最多 2；~~PASS_BILLING~~（未验证）（1049，402）：seed/num_inference_steps/guidance/lora_weights/lora_scale 会发送，extra_lora 待确认 |；**2026-11-02 画布**：挂 LoRA 用 flux-dev-lora 等，勿 schnell 空挂；换 Key 探测过，**未验证**；**2026-11-02 欠费已记**（未接通）
 | wavespeed.json | WaveSpeed | 尺寸分两族：Krea=`aspect_ratio`+`resolution`(1k|2k)；z-image/flux-dev-lora=`size` `W*H`；POST `/{model_id}`+poll | 同机制 | `loras[{path,scale 0-4}]`≤3(Krea)；path 按模型页（Krea=.safetensors 直链；z-image=owner/name 或直链）；不可达→1402 原样失败；Wan 高/低噪分开；~~fix3-1510 PASS_GENERATION~~（未验证）（aspect_ratio 1:1 + loras scale 0.85 + resolution 1k；挑刺已撤项；上游回显 strength 默认已分栏） |
 | muapi.json | MuAPI | POST `/api/v1/{endpoint}` + poll | 同机制 | **hub 预设 flux-1-dev-style-lora-inference**（2026-10-17）：官方仅 prompt + 必填 lora_url + lora_weight/aspect_ratio；无步数/CFG/种子/负向；卡「待配方」禁空跑；2026-10-17 挑刺认防呆两项已过（卡灰按钮+顶栏锁）；**未验证**不升徽章；`loras` / `lora_list` / `lora_url+lora_weight` 按端点；rekey-1230 krea-v2-turbo-lora 字段与 openapi 一致、402 进历史，缺上游交互区与 LoRA 底模不匹配提示不收口；LoRA 上限：Schema 没写，只有 description 写了最多 3 个，画布不拦（Researchy 12:45 核）；fix2-1340 FAIL：resolution 本地拦合规；Krea loras items 无 properties，待供应商配置 path/scale（不准猜 strength）；~~fix3-1530 PASS_BILLING~~（未验证）（loras[{path,scale:0.75}]+resolution 1k → 402；挑刺无严重）；**fix5 UI 收口**（strength「Schema 声明，本次请求未含」+ aspect_ratio 进尺寸行 jczni 16:9；勿升 PASS；证据 fix5-accept-1618）；**2026-10-17 ~22:18 画布收防呆终轮**（无字段整藏+顶栏先 LoRA；**未验证**不升徽章） |
 | sogni.json | Sogni | ~~PASS_BILLING（fix3-1440，卡 r4oww）~~（未验证）：loras+loraStrengths[0.8] → POST 201/GET waiting_for_user·insufficient_credit；Researchy 15:12 官方一致；挑刺无严重 |；**2026-11-02** 补 Personal LoRAs 官方字段（导入/catalog/强度(0,1]/限额）；**未验证**不升徽章；Key 不进草案；**2026-11-02**：空库+179 界面；`waiting_for_user` 按失败显示；额度跳过；**未验证**
-| fal.json | fal.ai（`Key` 鉴权） | queue.fal.run；目录 `GET /v1/models` 无 key | queue，输出 `video`；~~Kling V3 standard i2v PASS_BILLING~~（未验证）（bq6y0，403 TOP_UP，非出片；start_image_url+duration"5"；证据 fal-kling-i2v-1637） | `loras[{path,scale}]`；krea2 最多 3；flux-lora 无上限 |
+| fal.json | fal.ai（`Key` 鉴权） | queue.fal.run；目录 `GET /v1/models` 无 key；**2026-11-03** 出站按端点：`image_size`+`loras[{path,scale}]`（flux-krea-lora 同；flux/krea 无 loras；勿裸 fal-ai/krea）；徽章不升 | queue，输出 `video`；~~Kling V3 standard i2v PASS_BILLING~~（未验证）（bq6y0，403 TOP_UP，非出片；start_image_url+duration"5"；证据 fal-kling-i2v-1637） | `loras[{path,scale}]`；krea2 最多 3；flux-lora 无上限 |
 | modelscope.json | ModelScope CN / 国际站 | CN+LoRA 能出图；**国际站未收口**（loras 形状过；fix16 见 429 insufficient balance，~~待画布明示才可 PASS_BILLING~~（未验证）；不自升） | **unsupported** | `loras` map，权重和=1，最多 6 |
 | huggingface.json | HF Inference Providers | task API sync bytes | task API `num_frames` | 标准 schema **unsupported** |
-| civitai.json | Civitai | workflows + `textToImage`/`imageGen` recipes | workflows videoGen | textToImage=`additionalNetworks` map；engine recipe 另有 map/array；krea v2 等 **unsupported** |
+| civitai.json | Civitai | workflows + `textToImage`/`imageGen` recipes；**2026-11-03** 三形 LoRA：Comfy 数字 map / flux2·Wan 数组 / 仅 textToImage 用 additionalNetworks；engine=`krea`/`krea3`；徽章不升 | workflows videoGen | textToImage=`additionalNetworks` map；Comfy=`loras` 对象；flux2+dev/Wan=`[{air,strength}]`；krea steps/cfg 拒法仍待核 |
 | tensorart-tams.json | TAMS | `POST https://ap-east-1.tensorart.cloud/v1/jobs` stages（Researchy 22:10；Bearer 或 TAMS-SHA256-RSA；**非** OpenWorks/`ak_tensor`） | **unsupported**（仅 AnimateDiff/workflow） | `lora.items[{loraModel,weight}]` |
 | tensorart-openworks.json | OpenWorks | **非整包删**；真生图测通留；拆钥匙池混用/`ak`冒充/误导入口（2026-10-16 画布） | 工具勿接 | 发送（雁定，生效未证实） |
 | nanogpt.json | NanoGPT | sync `/v1/images` | async `generate-video` + status | 按模型声明（minimax-h3 `loras[{path,scale}]` ≤3） |
@@ -45,7 +46,7 @@
 | 文件 | 供应商 | contractTestHint |
 |------|--------|-----------------|
 | aimlapi.json | AIMLAPI | z-image-turbo-lora: width+height→image_size, steps 1-8 (20 本地拒绝), seed≥1, loras[{path,scale:0.85}] 必发（aimlapi-0006 已证实会发送，至 403）；cfg/negative 标不会发送；fix5 UI：尺寸行≠响应体 505 B（勿升 PASS） |
-| civitai.json | Civitai Orchestration | textToImage → additionalNetworks map（AIR→{strength}），非 [{air,strength}]；flux1 recipe → loras map；flux2 dev → numInferenceSteps/guidanceScale + loras array（发 steps/cfgScale → 上游 400）；krea v2 挂 LoRA/宽高/steps/cfg 本地拒绝或标不会发送；flux1-kontext 挂 LoRA → 上游 400；Buzz 用尽 → step canceled（非专用 HTTP 402）；sdcpp+flux2Dev → steps/cfgScale + loras map（勿发 numInferenceSteps/guidanceScale）；flux2 pro/max 无 LoRA/steps/cfg |
+| civitai.json | Civitai Orchestration | textToImage → additionalNetworks（勿写入 imageGen）；imageGen Comfy* → loras 对象 AIR→number；flux2+dev/wan → loras[{air,strength}]；engine 字面值 krea/krea3；krea steps/cfg 拒法仍待核；Buzz 用尽 → step canceled |
 | fal.json | fal.ai | flux-lora: steps/cfg/seed/宽高→image_size/loras 必发；krea-2 turbo lora: steps/cfg 必标不会发送、第 4 个 LoRA 本地拒绝；Authorization 头必须以 'Key ' 开头；~~视频 Kling V3 standard i2v PASS_BILLING~~（未验证）（bq6y0，403 TOP_UP，非出片；start_image_url+duration"5"） |
 | huggingface.json | Hugging Face Inference Providers | text-to-image: seed/steps/cfg/宽高 进 parameters.*；挂 LoRA 且 provider 非原生 LoRA 端点 → 本地拒绝 |
 | krea.json | Krea | async per-path + `/jobs/{id}` | async per-path | flux-1-dev：`styles[{id,strength}]` **会发送**（krea-0936 至 402）；steps/seed/guidance_scale 同轮证实会发送 |

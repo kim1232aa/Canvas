@@ -77,10 +77,16 @@
           "{width,height}"
         ],
         "canvasMapping": "width+height → image_size",
-        "policy": "示例字段；其他端点勿假定同名——以该 endpoint 实时 OpenAPI 为准（2026-11-03）"
+        "policy": "本端点尺寸字段名=image_size（枚举|{width,height}）；禁止发裸 width/height；其他端点仍以实时 OpenAPI 为准（2026-11-03）"
       },
       "loras": {
-        "maxItems": "any (merged)"
+        "type": "array",
+        "items": "LoraWeight{path required, scale default 1, min 0, max 4}",
+        "maxItems": "OpenAPI 无上限（any number merged）",
+        "verified": "2026-11-03 OpenAPI + llms"
+      },
+      "prompt": {
+        "required": true
       }
     },
     "fal-ai/krea-2/turbo/lora": {
@@ -98,7 +104,8 @@
           "landscape_4_3",
           "landscape_16_9"
         ],
-        "orObject": "{width,height} ≤14142"
+        "orObject": "{width,height} ≤14142",
+        "policy": "尺寸字段名=image_size，禁止裸 width/height"
       },
       "num_images": true,
       "acceleration": true,
@@ -111,9 +118,78 @@
         "supported": false
       },
       "loras": {
-        "maxItems": 3
+        "type": "array",
+        "items": "LoRAInput{path, scale}",
+        "maxItems": 3,
+        "note": "llms：maximum 3（2026-11-03）"
       },
-      "openapiVerified": "2026-10-15 queue openapi.json Krea2TurboLoraInput：无 num_inference_steps/guidance_scale；loras maxItems 3；scale 0-4"
+      "openapiVerified": "2026-10-15 queue openapi.json Krea2TurboLoraInput：无 num_inference_steps/guidance_scale；loras maxItems 3；scale 0-4",
+      "prompt": {
+        "required": true
+      }
+    },
+    "fal-ai/flux-krea-lora": {
+      "prompt": {
+        "required": true
+      },
+      "image_size": {
+        "anyOf": [
+          "enum preset",
+          "{width,height}"
+        ],
+        "default": "landscape_4_3",
+        "policy": "尺寸字段名=image_size，禁止裸 width/height（2026-11-03 llms）"
+      },
+      "num_inference_steps": {
+        "type": "integer",
+        "default": 28,
+        "range": "1-50",
+        "canvasField": "steps"
+      },
+      "guidance_scale": {
+        "type": "number",
+        "default": 3.5,
+        "range": "0-35",
+        "canvasField": "cfg"
+      },
+      "seed": {
+        "type": "integer"
+      },
+      "loras": {
+        "type": "array",
+        "items": "LoraWeight{path required, scale default 1, 0–4}",
+        "maxItems": "无上限（merged）"
+      },
+      "openapiVerified": "2026-11-03 llms.txt 与 flux-lora 同形"
+    },
+    "fal-ai/flux/krea": {
+      "prompt": {
+        "required": true
+      },
+      "image_size": {
+        "anyOf": [
+          "enum preset",
+          "{width,height}"
+        ],
+        "default": "landscape_4_3",
+        "policy": "尺寸字段名=image_size，禁止裸 width/height"
+      },
+      "num_inference_steps": {
+        "default": 28,
+        "range": "1-50"
+      },
+      "guidance_scale": {
+        "default": 4.5,
+        "range": "1-20"
+      },
+      "seed": {
+        "type": "integer"
+      },
+      "loras": {
+        "supported": false,
+        "reason": "该端点无 loras 字段（2026-11-03 llms）；挂 LoRA 用 fal-ai/flux-krea-lora"
+      },
+      "openapiVerified": "2026-11-03 llms.txt：无 loras"
     }
   },
   "video": {
@@ -231,6 +307,7 @@
       "scale": {
         "type": "number",
         "default": 1,
+        "range": "0-4",
         "rangeKrea": "0-4"
       },
       "weight_name": {
@@ -241,8 +318,10 @@
     "unsupported": "schema 无 loras → 拒绝（上游 422），禁止静默剥离",
     "maxItemsByEndpoint": {
       "fal-ai/flux-lora": "OpenAPI 原文 any number of LoRAs（无 maxItems）",
-      "fal-ai/krea-2/turbo/lora": "maxItems=3（OpenAPI）"
-    }
+      "fal-ai/krea-2/turbo/lora": "maxItems=3（OpenAPI）",
+      "fal-ai/flux-krea-lora": "同 flux-lora：无 maxItems"
+    },
+    "shape": "loras:[{path,scale}]（非 width/height；非 SD 系字段名）"
   },
   "billing": {
     "model": "prepaid credits；成功产出计费；排队与 500+ 不计费；422 已耗 GPU 可能计费",
@@ -270,7 +349,7 @@
     "docs/provider-api-audit-v2/fal.md",
     "docs/provider-api-audit-v2/DIFF.md"
   ],
-  "_auditStatus": "2026-11-03：写入 snapshotGaps（Kling duration 缺行、wan-t2v-lora 不在快照）。不升徽章。\n2026-11-03 画布←Researchy：图像须跟实时/逐模型 OpenAPI；本地 providerSchema 快照会过期不当真相；不写死尺寸字段名（image_size / width+height / aspect_ratio 等以该模型 Schema 为准）；不升徽章。\n2026-11-02 ~04:45 JST：Researchy——Fal krea-2/turbo/lora.seed。\n2026-11-02 ~04:42 JST：Researchy——Fal Kling v3 I2V 无 aspect_ratio；勿捏比例控件。\n2026-11-02 ~04:41 JST：Researchy——Fal Kling v3 I2V duration 字符串 3–15；wan-t2v-lora 帧81–100/帧率5–24；wan/v2.2-a14b/lora 另一套勿混。\n2026-11-02 ~04:39 JST：Researchy 对照表写回 researchyVerified20261102（种子/时长/比例已核一致条目）；未核条目仍待核、禁止当拦截；徽章不动。\n2026-10-16 16:54：画布正式收口 Kling V3 i2v PASS_BILLING（挑刺无严重 + Researchy TOP_UP 核）；2026-10-16 16:53：Kling V3 standard i2v 升 PASS_BILLING（非 PASS_GENERATION）——hist_1792140360652_bq6y0；403 TOP_UP；actualRequest start_image_url+duration\"5\"；证据 已清理 切分后进程。勿写成出片。2026-10-15 04:45 v2 已核（fal.md + DIFF 04:44）：目录 GET /v1/models 无 key 200；lock threshold FAQ 已有；krea-2/turbo/lora 无 steps/guidance、loras≤3。字段徽章仍以前端实测为准",
+  "_auditStatus": "2026-11-03 ~15:00 JST：写入 researchyOutboundContract20261103（Fal 出站：loras[{path,scale}]+image_size；补 flux-krea-lora / flux/krea；勿裸 fal-ai/krea）。本机 curl OpenAPI/llms 全 200。不升徽章。\n2026-11-03：写入 snapshotGaps（Kling duration 缺行、wan-t2v-lora 不在快照）。不升徽章。\n2026-11-03 画布←Researchy：图像须跟实时/逐模型 OpenAPI；本地 providerSchema 快照会过期不当真相；不写死尺寸字段名（image_size / width+height / aspect_ratio 等以该模型 Schema 为准）；不升徽章。\n2026-11-02 ~04:45 JST：Researchy——Fal krea-2/turbo/lora.seed。\n2026-11-02 ~04:42 JST：Researchy——Fal Kling v3 I2V 无 aspect_ratio；勿捏比例控件。\n2026-11-02 ~04:41 JST：Researchy——Fal Kling v3 I2V duration 字符串 3–15；wan-t2v-lora 帧81–100/帧率5–24；wan/v2.2-a14b/lora 另一套勿混。\n2026-11-02 ~04:39 JST：Researchy 对照表写回 researchyVerified20261102（种子/时长/比例已核一致条目）；未核条目仍待核、禁止当拦截；徽章不动。\n2026-10-16 16:54：画布正式收口 Kling V3 i2v PASS_BILLING（挑刺无严重 + Researchy TOP_UP 核）；2026-10-16 16:53：Kling V3 standard i2v 升 PASS_BILLING（非 PASS_GENERATION）——hist_1792140360652_bq6y0；403 TOP_UP；actualRequest start_image_url+duration\"5\"；证据 已清理 切分后进程。勿写成出片。2026-10-15 04:45 v2 已核（fal.md + DIFF 04:44）：目录 GET /v1/models 无 key 200；lock threshold FAQ 已有；krea-2/turbo/lora 无 steps/guidance、loras≤3。字段徽章仍以前端实测为准",
   "acceptanceBadgeVideoKlingV3I2v": "PASS_BILLING",
   "sendEvidence": {
     "kling_v3_standard_i2v_1637": {
@@ -384,6 +463,71 @@
       "fal-ai/wan-t2v-lora 在草案、不在 FAL_MODELS；勿把 wan-t2v 快照套到 LoRA/v2.7 端点",
       "VideoDriver 有 wan/v2.7/*、minimax/video-01 等，FAL_MODELS 无行——须跟实时 OpenAPI"
     ],
+    "badge": "不升"
+  },
+  "researchyOutboundContract20261103": {
+    "at": "2026-11-03 ~15:00 JST",
+    "status": "已核一致（本机 OpenAPI/llms + Researchy 三路）",
+    "conclusion": "LoRA 端点用 loras:[{path,scale}]；尺寸字段是 image_size（枚举或 {width,height}），不是裸 width/height。无 LoRA 的 krea/flux 端点没有 loras。勿用裸 fal-ai/krea。",
+    "endpointTable": [
+      {
+        "endpoint": "fal-ai/flux-lora",
+        "required": [
+          "prompt"
+        ],
+        "lora": "loras[] LoraWeight{path必填, scale默认1, 0–4}",
+        "size": "image_size"
+      },
+      {
+        "endpoint": "fal-ai/flux-krea-lora",
+        "required": [
+          "prompt"
+        ],
+        "lora": "同 LoraWeight",
+        "size": "image_size"
+      },
+      {
+        "endpoint": "fal-ai/krea-2/turbo/lora",
+        "required": [
+          "prompt"
+        ],
+        "lora": "loras[] max 3 LoRAInput{path,scale}",
+        "size": "image_size"
+      },
+      {
+        "endpoint": "fal-ai/flux/krea",
+        "required": [
+          "prompt"
+        ],
+        "lora": "无 loras",
+        "size": "image_size"
+      },
+      {
+        "endpoint": "fal-ai/krea-2/turbo",
+        "required": [
+          "prompt"
+        ],
+        "lora": "无 loras",
+        "size": "image_size",
+        "note": "本轮未再抓 llms；按 Researchy，与 flux/krea 同类"
+      }
+    ],
+    "doNotUse": [
+      "fal-ai/krea（裸路径；目录用 fal-ai/flux/krea、fal-ai/flux-krea-lora、fal-ai/krea-2/...）"
+    ],
+    "sources": [
+      "https://api.fal.ai/v1/models?endpoint_id=fal-ai/flux-lora&expand=openapi-3.0",
+      "https://fal.ai/models/fal-ai/flux-lora/llms.txt",
+      "https://fal.ai/models/fal-ai/flux-krea-lora/llms.txt",
+      "https://fal.ai/models/fal-ai/flux/krea/llms.txt",
+      "https://fal.ai/models/fal-ai/krea-2/turbo/lora/llms.txt"
+    ],
+    "liveFetch": {
+      "at": "2026-11-03 14:58–14:58 JST（本机 curl 全 200）",
+      "results": "全部 HTTP 200；OpenAPI LoraWeight path required / scale 0–4 default 1；llms 与 Researchy 一致"
+    },
+    "triPath": "Researchy 三路 WebSearch+Brave+agy；本机再核 OpenAPI/llms",
+    "conflictsWithPriorDraft": "无实质冲突；补齐 flux-krea-lora / flux/krea 行，强化「勿裸 width/height」",
     "badge": "不升"
   }
 }
