@@ -1,6 +1,8 @@
-> **画布验收状态：2 家已出图（OpenWorks 2026-11-03 再认 + WaveSpeed），其余未验证**。OpenWorks 本轮同次点跑全参+3 LoRA 已落节点；徽章仍只写「已发送」不写「已生效」。
+> **画布验收状态：今日真出图 3 家（WaveSpeed、OpenWorks、魔搭国内站）；其余未验证或仅欠费接线。** OpenWorks/魔搭 LoRA 只写「已发送」不写「已生效」。
 
 > **OpenWorks（2026-11-03 画布再认）：** 同次点跑真出图——配方原文+底模/种子/步数/CFG/负向+三枚真 LoRA，图落保存节点，历史 hist_1793693239642_fo6ux；只写「已发送」不写「已生效」。证据 /workspace/canvas/temp/e2e/openworks-fe-gen-2026-11-03/。此前 10-17 hist_1792223105137_bhlop 仍算已出图。
+
+> **魔搭国内站（2026-11-03 画布认可）：** Tongyi-MAI/Z-Image-Turbo + Realism LoRA，图落保存节点，历史 hist_1793695144423_1ms48。证据 /workspace/canvas/temp/e2e/modelscope-cn-fe-gen-2026-11-03/。
 
 > **WaveSpeed（2026-10-17 ~16:14 画布认可）：** 第二家在画布真出图——flux-dev-lora + Realism LoRA 1.1，同一会话出图落保存节点，历史成功卡 hist_1792224305224_meynb；尺寸改由空潜空间节点 832×1216 发出。证据 /workspace/canvas/temp/e2e/wavespeed/recipe-33530948/。
 
