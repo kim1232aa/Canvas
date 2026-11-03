@@ -2,7 +2,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { CivitaiDriver } from '../engines/drivers/CivitaiDriver';
 const originalFetch = globalThis.fetch;
 afterEach(() => { globalThis.fetch = originalFetch; });
-import { buildCivitaiImageInput, buildCivitaiImageRequest, resolveCivitaiResource } from './civitaiImageContract';
+import { buildCivitaiImageInput, buildCivitaiImageRequest, resolveCivitaiResource, CivitaiSchemaMissingError } from './civitaiImageContract';
+import { loadCivitaiImageGenOpenApi } from './fixtures/liveSchemaFixtures';
+const oa = () => loadCivitaiImageGenOpenApi();
 
 const air = 'urn:air:sdxl:checkpoint:civitai:12@34';
 const api = (rows: Record<string, unknown>) => async (url: string) => new Response(JSON.stringify(rows[url.split('/').pop()!] ?? {}), { status: url.includes('model-versions') ? 200 : 404 });
@@ -10,10 +12,10 @@ const api = (rows: Record<string, unknown>) => async (url: string) => new Respon
 describe('Civitai resource identity', () => {
   it('resolves explicit JSON model override and records the actual resource', async () => {
     const actual = 'urn:air:sdxl:checkpoint:civitai:56@78';
-    const built = await buildCivitaiImageRequest({ model: air, prompt: 'a', custom_parameters: { model: actual, cfgScale: 0 } }, api({}));
+    const built = await buildCivitaiImageRequest({ model: air, prompt: 'a', custom_parameters: { model: actual, cfgScale: 0 } }, api({}), oa());
     expect(built.payload.model).toBe(actual);
     expect(built.payload.cfgScale).toBe(0);
-    await expect(buildCivitaiImageRequest({ model: air, custom_parameters: { headers: { authorization: 'x' } } }, api({}))).rejects.toThrow();
+    await expect(buildCivitaiImageRequest({ model: air, custom_parameters: { headers: { authorization: 'x' } } }, api({}), oa())).rejects.toThrow();
   });
   it('keeps API AIR including ecosystem, file and resource kind intact', async () => {
     const exact = 'urn:air:illustrious:diffusionmodel:civitai:12@34+56';
@@ -51,64 +53,65 @@ describe('Civitai image request contract', () => {
     expect(params.civitaiEngine).toBe('comfy');
     expect(params.civitaiEcosystem).toBe('krea2');
     expect(params.checkpointModel).toBe('turbo');
-    const input = await buildCivitaiImageInput({ model: params.checkpointModel, prompt: params.positivePrompt, engine: params.civitaiEngine, ecosystem: params.civitaiEcosystem, comfyModel: params.civitaiModel || 'turbo', loras: [] }, api({}));
+    const input = await buildCivitaiImageInput({ model: params.checkpointModel, prompt: params.positivePrompt, engine: params.civitaiEngine, ecosystem: params.civitaiEcosystem, comfyModel: params.civitaiModel || 'turbo', loras: [] }, api({}), oa());
     expect(input).toMatchObject({ engine: 'comfy', ecosystem: 'krea2', model: 'turbo' });
   });
   it('rejects clearly typed adapters or embeddings as a traditional base model', async () => {
     for (const type of ['lora', 'lycoris', 'locon', 'embedding', 'vae', 'controlnet', 'upscaler']) {
-      await expect(buildCivitaiImageInput({ model: `urn:air:sdxl:${type}:civitai:1@2`, engine: 'comfy' }, api({}))).rejects.toThrow(/底模.*类型/);
+      await expect(buildCivitaiImageInput({ model: `urn:air:sdxl:${type}:civitai:1@2`, engine: 'comfy' }, api({}), oa())).rejects.toThrow(/底模.*类型/);
     }
-    expect(await buildCivitaiImageInput({ model: 'urn:air:flux1:diffusionmodel:civitai:1@2', engine: 'sdcpp' }, api({}))).toMatchObject({ diffuserModel: 'urn:air:flux1:diffusionmodel:civitai:1@2' });
+    expect(await buildCivitaiImageInput({ model: 'urn:air:flux1:diffusionmodel:civitai:1@2', engine: 'sdcpp' }, api({}), oa())).toMatchObject({ diffuserModel: 'urn:air:flux1:diffusionmodel:civitai:1@2' });
   });
   it('maps documented SD1 AIR namespace to the request discriminator without rewriting resources', async () => {
     const source = 'urn:air:sd15:checkpoint:civitai:1@2';
     const lora = 'urn:air:sd15:lora:civitai:3@4';
-    expect(await buildCivitaiImageInput({ model: source, engine: 'sdcpp', ecosystem: 'sd1', loras: [{ civitaiId: lora, strength: 0.5 }] }, api({}))).toMatchObject({ ecosystem: 'sd1', model: source, loras: { [lora]: 0.5 } });
-    expect(await buildCivitaiImageInput({ model: source, engine: 'sdcpp' }, api({}))).toMatchObject({ ecosystem: 'sd1', model: source });
+    expect(await buildCivitaiImageInput({ model: source, engine: 'sdcpp', ecosystem: 'sd1', loras: [{ civitaiId: lora, strength: 0.5 }] }, api({}), oa())).toMatchObject({ ecosystem: 'sd1', model: source, loras: { [lora]: 0.5 } });
+    expect(await buildCivitaiImageInput({ model: source, engine: 'sdcpp' }, api({}), oa())).toMatchObject({ ecosystem: 'sd1', model: source });
   });
   it('does not infer arbitrary family aliases or extend turbo resources to a base selector', async () => {
-    for (const ecosystem of ['zimage', 'ZImageTurbo', 'flux1']) await expect(buildCivitaiImageInput({ model: 'turbo', engine: 'sdcpp', ecosystem: 'zImage', comfyModel: 'turbo', loras: [{ civitaiId: `urn:air:${ecosystem}:lora:civitai:1@2`, strength: 1 }] }, api({}))).rejects.toThrow(/生态.*冲突/);
-    await expect(buildCivitaiImageInput({ model: 'base', engine: 'sdcpp', ecosystem: 'zImage', comfyModel: 'base', loras: [{ civitaiId: 'urn:air:zimageturbo:lora:civitai:1@2', strength: 1 }] }, api({}))).rejects.toThrow(/生态.*冲突/);
+    for (const ecosystem of ['zimage', 'ZImageTurbo', 'flux1']) await expect(buildCivitaiImageInput({ model: 'turbo', engine: 'sdcpp', ecosystem: 'zImage', comfyModel: 'turbo', loras: [{ civitaiId: `urn:air:${ecosystem}:lora:civitai:1@2`, strength: 1 }] }, api({}), oa())).rejects.toThrow(/生态.*冲突/);
+    await expect(buildCivitaiImageInput({ model: 'base', engine: 'sdcpp', ecosystem: 'zImage', comfyModel: 'base', loras: [{ civitaiId: 'urn:air:zimageturbo:lora:civitai:1@2', strength: 1 }] }, api({}), oa())).rejects.toThrow(/生态.*冲突/);
   });
   it('keeps Comfy SDXL sampler and source AIR in model', async () => {
-    const input = await buildCivitaiImageInput({ model: air, engine: 'comfy', ecosystem: 'sdxl', sampler_name: 'dpmpp_2m', scheduler: 'normal', prompt: 'scene' }, async () => { throw new Error('unexpected lookup'); });
+    const input = await buildCivitaiImageInput({ model: air, engine: 'comfy', ecosystem: 'sdxl', sampler_name: 'dpmpp_2m', scheduler: 'normal', prompt: 'scene' }, async () => { throw new Error('unexpected lookup'); }, oa());
     expect(input).toMatchObject({ engine: 'comfy', ecosystem: 'sdxl', model: air, sampler: 'dpmpp_2m', scheduler: 'normal' });
     expect(input).not.toHaveProperty('diffusionModel');
   });
   it('passes actual Civitai driver engine/ecosystem/selector through the server builder', async () => {
     let input: Record<string, unknown> | undefined;
     globalThis.fetch = async (_url, init) => {
-      input = await buildCivitaiImageInput(JSON.parse(String(init?.body)), api({}));
+      input = await buildCivitaiImageInput(JSON.parse(String(init?.body)), api({}), oa());
       return new Response(JSON.stringify({ imageUrl: 'https://example.com/out.png', mediaUrl: 'https://example.com/out.png' }));
     };
     await new CivitaiDriver().generate({ model: 'turbo', prompt: 'scene', extraParams: { engine: 'sdcpp', ecosystem: 'zImage', comfyModel: 'turbo' } }, {});
     expect(input).toMatchObject({ engine: 'sdcpp', ecosystem: 'zImage', model: 'turbo', operation: 'createImage' });
   });
   it('uses sdcpp enums without renaming a Comfy sampler', async () => {
-    const input = await buildCivitaiImageInput({ model: air, engine: 'sdcpp', sampler_name: 'dpm++2m', scheduler: 'discrete' }, api({}));
+    const input = await buildCivitaiImageInput({ model: air, engine: 'sdcpp', sampler_name: 'dpm++2m', scheduler: 'discrete' }, api({}), oa());
     expect(input).toMatchObject({ model: air, sampleMethod: 'dpm++2m', schedule: 'discrete' });
-    await expect(buildCivitaiImageInput({ model: air, engine: 'sdcpp', sampler_name: 'dpmpp_2m' }, api({}))).rejects.toThrow(/sampleMethod/);
-    await expect(buildCivitaiImageInput({ model: air, engine: 'sdcpp', scheduler: 'normal' }, api({}))).rejects.toThrow(/schedule/);
+    await expect(buildCivitaiImageInput({ model: air, engine: 'sdcpp', sampler_name: 'dpmpp_2m' }, api({}), oa())).rejects.toThrow(/sampleMethod/);
+    await expect(buildCivitaiImageInput({ model: air, engine: 'sdcpp', scheduler: 'normal' }, api({}), oa())).rejects.toThrow(/schedule/);
   });
   it('rejects ecosystem mismatch without family guessing', async () => {
-    await expect(buildCivitaiImageInput({ model: air, engine: 'comfy', ecosystem: 'flux1' }, api({}))).rejects.toThrow(/生态.*冲突/);
+    await expect(buildCivitaiImageInput({ model: air, engine: 'comfy', ecosystem: 'flux1' }, api({}), oa())).rejects.toThrow(/生态.*冲突/);
   });
   it('ZImage selector skips AIR resolution and only creates images', async () => {
-    const input = await buildCivitaiImageInput({ model: 'turbo', comfyModel: 'turbo', ecosystem: 'zImage', engine: 'sdcpp', prompt: 'scene' }, async () => { throw new Error('selector must not resolve'); });
+    const input = await buildCivitaiImageInput({ model: 'turbo', comfyModel: 'turbo', ecosystem: 'zImage', engine: 'sdcpp', prompt: 'scene' }, async () => { throw new Error('selector must not resolve'); }, oa());
     expect(input).toMatchObject({ engine: 'sdcpp', ecosystem: 'zImage', model: 'turbo', operation: 'createImage' });
-    await expect(buildCivitaiImageInput({ model: 'base', comfyModel: 'base', ecosystem: 'zImage', engine: 'sdcpp', image_url: 'a' }, api({}))).rejects.toThrow(/createImage/);
+    await expect(buildCivitaiImageInput({ model: 'base', comfyModel: 'base', ecosystem: 'zImage', engine: 'sdcpp', image_url: 'a' }, api({}), oa())).rejects.toThrow(/createImage/);
   });
-  it('Krea2 rejects LoRA intent and never emits loras (official recipe)', async () => {
+  it('comfy:krea2+turbo follows live OpenAPI (declares loras/size); engine=krea still refuses LoRA', async () => {
     const lora = 'urn:air:krea2:locon:civitai:1@2';
-    await expect(buildCivitaiImageInput({ model: 'turbo', comfyModel: 'turbo', ecosystem: 'krea2', engine: 'comfy', loras: [{ civitaiId: lora, strength: 0.8 }] }, api({}))).rejects.toThrow(/Krea v2|不接受 LoRA/);
-    const bare = await buildCivitaiImageInput({ model: 'turbo', comfyModel: 'turbo', ecosystem: 'krea2', engine: 'comfy', prompt: 'scene' }, api({}));
+    const withLora = await buildCivitaiImageInput({ model: 'turbo', comfyModel: 'turbo', ecosystem: 'krea2', engine: 'comfy', prompt: 'scene', loras: [{ civitaiId: lora, strength: 0.8 }] }, api({}), oa());
+    expect(withLora).toMatchObject({ engine: 'comfy', ecosystem: 'krea2', model: 'turbo', loras: { [lora]: 0.8 } });
+    await expect(buildCivitaiImageInput({ model: 'krea2-medium', engine: 'krea', prompt: 'scene', loras: [{ civitaiId: lora, strength: 0.8 }] }, api({}), oa())).rejects.toThrow(/未声明|LoRA|loras/);
+    const bare = await buildCivitaiImageInput({ model: 'turbo', comfyModel: 'turbo', ecosystem: 'krea2', engine: 'comfy', prompt: 'scene' }, api({}), oa());
     expect(bare).toMatchObject({ engine: 'comfy', ecosystem: 'krea2', model: 'turbo' });
-    expect(bare).not.toHaveProperty('loras');
     expect(bare).not.toHaveProperty('diffusionModel');
   });
-  it('Krea2 rejects negative_prompt and width/height per official recipe', async () => {
-    await expect(buildCivitaiImageInput({ model: 'turbo', comfyModel: 'turbo', ecosystem: 'krea2', engine: 'comfy', negative_prompt: 'blur' }, api({}))).rejects.toThrow(/负面|Krea/);
-    await expect(buildCivitaiImageInput({ model: 'turbo', comfyModel: 'turbo', ecosystem: 'krea2', engine: 'comfy', width: 1024, height: 1024 }, api({}))).rejects.toThrow(/宽高|Krea/);
+  it('comfy:krea2+turbo live declares negativePrompt/width — sends when provided', async () => {
+    const n = await buildCivitaiImageInput({ model: 'turbo', comfyModel: 'turbo', ecosystem: 'krea2', engine: 'comfy', prompt: 'scene', negative_prompt: 'blur', width: 1024, height: 1024 }, api({}), oa());
+    expect(n).toMatchObject({ negativePrompt: 'blur', width: 1024, height: 1024 });
   });
   it('Flux2 Dev builds loras[] {air,strength} (not Klein map)', async () => {
     const lora = 'urn:air:flux2:lora:civitai:3@4';
@@ -118,7 +121,7 @@ describe('Civitai image request contract', () => {
       ecosystem: 'dev',
       prompt: 'x',
       loras: [{ civitaiId: lora, strength: 0.7 }],
-    }, api({}));
+    }, api({}), oa());
     expect(input.loras).toEqual([{ air: lora, strength: 0.7 }]);
   });
   it('Flux2 Klein still builds AIR→strength loras map', async () => {
@@ -129,16 +132,19 @@ describe('Civitai image request contract', () => {
       ecosystem: 'flux2Klein',
       prompt: 'x',
       loras: [{ civitaiId: lora, strength: 0.5 }],
-    }, api({}));
+    }, api({}), oa());
     expect(input).toMatchObject({ ecosystem: 'flux2Klein', loras: { [lora]: 0.5 } });
   });
   it('Flux1 still builds AIR→strength loras map', async () => {
     const lora = 'urn:air:flux1:lora:civitai:3@4';
-    const input = await buildCivitaiImageInput({ model: 'urn:air:flux1:checkpoint:civitai:1@2', engine: 'comfy', ecosystem: 'flux1', loras: [{ civitaiId: lora, strength: 0.7 }] }, api({}));
+    const input = await buildCivitaiImageInput({ model: 'urn:air:flux1:checkpoint:civitai:1@2', engine: 'comfy', ecosystem: 'flux1', loras: [{ civitaiId: lora, strength: 0.7 }] }, api({}), oa());
     expect(input).toMatchObject({ ecosystem: 'flux1', loras: { [lora]: 0.7 } });
   });
-  it('rejects checkpoint masquerading as LoRA and preserves unknown ecosystem knobs', async () => {
-    await expect(buildCivitaiImageInput({ model: air, loras: [{ civitaiId: air, strength: 1 }] }, api({}))).rejects.toThrow(/LoRA/);
-    expect(await buildCivitaiImageInput({ model: 'urn:air:future:checkpoint:civitai:1@2', engine: 'comfy', sampler_name: 'future_sampler' }, api({}))).toMatchObject({ ecosystem: 'future', sampler: 'future_sampler' });
+  it('rejects checkpoint masquerading as LoRA; unknown ecosystem cannot invent a live branch', async () => {
+    await expect(buildCivitaiImageInput({ model: air, loras: [{ civitaiId: air, strength: 1 }] }, api({}), oa())).rejects.toThrow(/LoRA/);
+    await expect(buildCivitaiImageInput({ model: 'urn:air:future:checkpoint:civitai:1@2', engine: 'comfy', sampler_name: 'future_sampler' }, api({}), oa())).rejects.toThrow(/官方 Schema 不含|ecosystem=future/);
+  });
+  it('live OpenAPI missing → CivitaiSchemaMissingError (no static outbound)', async () => {
+    await expect(buildCivitaiImageRequest({ model: 'urn:air:flux1:checkpoint:civitai:1@2', prompt: 'x', engine: 'comfy', ecosystem: 'flux1' }, api({}))).rejects.toBeInstanceOf(CivitaiSchemaMissingError);
   });
 });

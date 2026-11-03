@@ -3,6 +3,8 @@ import { beginRun, clearExecutionErrors, getExecutions } from '../services/execu
 import { catalogEvidenceFrom } from '../components/CivitaiModal';
 import { applyLoraNameToNodeValues, normalizeLoraPayloadItem } from '../utils/resourceSelection';
 import { buildCivitaiImageRequest } from './civitaiImageContract';
+import { loadCivitaiImageGenOpenApi } from './fixtures/liveSchemaFixtures';
+const oa = () => loadCivitaiImageGenOpenApi();
 import { getFieldSpec, schemaFieldWires } from '../schemas/providerSchema';
 import { buildLocalRejectionHistoryItem } from './failedAttemptHistory';
 import { resolveHistoryParameters, historyParameterSourceLabel } from '../utils/historyParameters';
@@ -91,7 +93,7 @@ describe('batch-0503 · 5 Flux2 AIR + history labels', () => {
       model: 'urn:air:flux2:checkpoint:civitai:2165902@2439067',
       engine: 'flux2', ecosystem: 'dev', prompt: 'cat',
       loras: [{ name: air, path: staleHf, civitaiId: '', strength: 1 }],
-    }, getOk as any);
+    }, getOk as any, oa());
     expect(b.payload.loras).toEqual([{ air, strength: 1 }]);
   });
 
@@ -141,7 +143,7 @@ describe('batch-0503 · 3 sdcpp flux2Dev fields + kontext LoRA refuse', () => {
       image_url: 'https://image.civitai.com/a.jpeg', denoise: 0.5,
       steps: 20, cfg: 1, negative_prompt: 'blur',
       loras: [{ civitaiId: lora, strength: 0.8 }],
-    }, getOk as any);
+    }, getOk as any, oa());
     expect(b.payload).toMatchObject({
       engine: 'sdcpp', ecosystem: 'flux2Dev', operation: 'createVariant',
       steps: 20, cfgScale: 1, negativePrompt: 'blur',
@@ -156,7 +158,7 @@ describe('batch-0503 · 3 sdcpp flux2Dev fields + kontext LoRA refuse', () => {
       model: 'urn:air:flux1:checkpoint:civitai:1@2',
       engine: 'flux1-kontext', ecosystem: 'dev', prompt: 'x',
       loras: [{ civitaiId: 'urn:air:flux1:lora:civitai:3@4', strength: 1 }],
-    }, (async () => ({})) as any)).rejects.toThrow(/flux1-kontext|不接受 LoRA/);
+    }, (async () => ({})) as any, oa())).rejects.toThrow(/flux1-kontext|不接受 LoRA|未声明可用的 loras|OpenAPI 未声明/);
   });
 });
 

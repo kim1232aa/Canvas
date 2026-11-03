@@ -214,7 +214,8 @@ import { readFileSync } from 'node:fs';
 import { getFieldSpec } from '../schemas/providerSchema';
 import { buildReplicatePredictionRequest } from './replicateImageContract';
 import { handleReplicateGenerate } from './routes/replicateRoutes';
-import { falImageFieldGate } from './falImageContract';
+import { falImageFieldGate, FalSchemaMissingError } from './falImageContract';
+import { loadFalLiveProps } from './fixtures/liveSchemaFixtures';
 import { buildModelScopeLoras } from '../schemas/modelScopeLoras';
 import { buildModelScopeImagePayload } from './modelScopeImageContract';
 import { buildTensorModelJob, tamsVideoUnsupported } from '../schemas/tensorModelApi';
@@ -223,6 +224,8 @@ import { schemaSendStatus } from '../utils/schemaSendStatus';
 import { schemaChoiceFields } from '../components/SchemaChoiceControls';
 import { buildNanoImagePayload } from '../schemas/nanoImageApi';
 import { buildCivitaiImageRequest } from './civitaiImageContract';
+import { loadCivitaiImageGenOpenApi } from './fixtures/liveSchemaFixtures';
+const oa = () => loadCivitaiImageGenOpenApi();
 import { ModelScopeDriver } from '../engines/drivers/ModelScopeDriver';
 
 const serverSrc = readFileSync(path.resolve(__dirname, '../../server.ts'), 'utf8');
@@ -481,18 +484,23 @@ describe('provider contract (16): builder / route-handler providers', () => {
   });
 
   it('fal flux-lora: steps/cfg/seed sent; krea-2 turbo lora: steps/cfg NOT sent + labeled, 4th LoRA refused; Authorization: Key', () => {
-    const flux = falImageFieldGate('fal-ai/flux-lora', { steps: 6, cfg: 3.5, seed: 42 }, [{ path: 'a', scale: 1 }]);
+    const fluxProps = loadFalLiveProps('fal-ai/flux-lora');
+    const kreaProps = loadFalLiveProps('fal-ai/krea-2/turbo/lora');
+    const schnellProps = loadFalLiveProps('fal-ai/flux/schnell');
+    const flux = falImageFieldGate('fal-ai/flux-lora', { steps: 6, cfg: 3.5, seed: 42 }, [{ path: 'a', scale: 1 }], fluxProps);
     expect(flux.send).toEqual({ num_inference_steps: 6, guidance_scale: 3.5, seed: 42 });
     expect(flux.omitted).toEqual([]);
-    const krea = falImageFieldGate('fal-ai/krea-2/turbo/lora', { steps: 6, cfg: 3.5, seed: 42 }, [1, 2, 3].map((i) => ({ path: 'p' + i, scale: 1 })));
+    const krea = falImageFieldGate('fal-ai/krea-2/turbo/lora', { steps: 6, cfg: 3.5, seed: 42 }, [1, 2, 3].map((i) => ({ path: 'p' + i, scale: 1 })), kreaProps);
     expect(krea.send).toEqual({ seed: 42 });
     expect(krea.omitted.map((o) => o.from)).toEqual(['steps', 'cfg']);
     for (const f of ['steps', 'cfg']) expect(unsupportedLabel('fal', 'fal-ai/krea-2/turbo/lora', f)).toBe(true);
     expect(unsupportedLabel('fal', 'fal-ai/krea-2/turbo/lora', 'seed')).toBe(false);
-    expect(() => falImageFieldGate('fal-ai/krea-2/turbo/lora', {}, [1, 2, 3, 4].map((i) => ({ path: 'p' + i, scale: 1 })))).toThrow(/最多 3 个/);
-    expect(() => falImageFieldGate('fal-ai/flux/schnell', {}, [{ path: 'a', scale: 1 }])).toThrow(/没有 loras/);
+    expect(() => falImageFieldGate('fal-ai/krea-2/turbo/lora', {}, [1, 2, 3, 4].map((i) => ({ path: 'p' + i, scale: 1 })), kreaProps)).toThrow(/最多 3 个/);
+    expect(() => falImageFieldGate('fal-ai/flux/schnell', {}, [{ path: 'a', scale: 1 }], schnellProps)).toThrow(/没有 loras/);
+    expect(() => falImageFieldGate('fal-ai/flux-lora', { seed: 1 }, [], undefined)).toThrow(FalSchemaMissingError);
     // route wiring: gate is used, auth header is Key, upstream errors pass text verbatim
     expect(serverSrc).toContain('falGate = falImageFieldGate(endpoint,');
+    expect(serverSrc).toContain('falQueueOpenApiUrl');
     expect(routeWiringSrc.match(/'Authorization': `Key \$\{falKey\}`/g)?.length).toBeGreaterThanOrEqual(2);
     expect(routeWiringSrc).not.toMatch(/Authorization['"]?: `Bearer \$\{falKey\}`/);
     expect(routeWiringSrc).toContain('`Fal.ai 接口执行失败 [${response.status}]: ${errorText}`');
@@ -520,12 +528,14 @@ describe('provider contract (16): builder / route-handler providers', () => {
 
   it('Civitai: flux1 → loras map; flux2Dev → [{air,strength}]; krea v2 LoRA/size refused', async () => {
     const get = async () => new Response('{}', { status: 404 });
-    const f1 = await buildCivitaiImageRequest({ model: 'urn:air:flux1:checkpoint:civitai:1@2', prompt: 'x', seed: 42, steps: 20, cfg: 3.5, width: 1024, height: 1024, loras: [{ civitaiId: 'urn:air:flux1:lora:civitai:5@6', strength: 0.7 }] }, get);
+    const f1 = await buildCivitaiImageRequest({ model: 'urn:air:flux1:checkpoint:civitai:1@2', prompt: 'x', seed: 42, steps: 20, cfg: 3.5, width: 1024, height: 1024, loras: [{ civitaiId: 'urn:air:flux1:lora:civitai:5@6', strength: 0.7 }] }, get, oa());
     expect(f1.payload).toMatchObject({ ecosystem: 'flux1', seed: 42, steps: 20, cfgScale: 3.5, width: 1024, height: 1024, loras: { 'urn:air:flux1:lora:civitai:5@6': 0.7 } });
-    const f2 = await buildCivitaiImageRequest({ model: 'urn:air:flux2:checkpoint:civitai:1@2', engine: 'flux2', ecosystem: 'dev', prompt: 'x', seed: 42, loras: [{ civitaiId: 'urn:air:flux2:lora:civitai:5@6', strength: 0.7 }] }, get);
+    const f2 = await buildCivitaiImageRequest({ model: 'urn:air:flux2:checkpoint:civitai:1@2', engine: 'flux2', ecosystem: 'dev', prompt: 'x', seed: 42, loras: [{ civitaiId: 'urn:air:flux2:lora:civitai:5@6', strength: 0.7 }] }, get, oa());
     expect(f2.payload.loras).toEqual([{ air: 'urn:air:flux2:lora:civitai:5@6', strength: 0.7 }]);
-    await expect(buildCivitaiImageRequest({ model: 'turbo', comfyModel: 'turbo', ecosystem: 'krea2', engine: 'comfy', prompt: 'x', loras: [{ civitaiId: 'urn:air:krea2:lora:civitai:1@2', strength: 1 }] }, get)).rejects.toThrow(/不接受 LoRA/);
-    await expect(buildCivitaiImageRequest({ model: 'turbo', comfyModel: 'turbo', ecosystem: 'krea2', engine: 'comfy', prompt: 'x', width: 1024, height: 1024 }, get)).rejects.toThrow(/宽高/);
+    // Live OpenAPI for comfy:krea2+turbo declares loras/width; static unsupportedLabel remains UI clue only.
+    const kreaLive = await buildCivitaiImageRequest({ model: 'turbo', comfyModel: 'turbo', ecosystem: 'krea2', engine: 'comfy', prompt: 'x', width: 1024, height: 1024, loras: [{ civitaiId: 'urn:air:krea2:lora:civitai:1@2', strength: 1 }] }, get, oa());
+    expect(kreaLive.payload).toMatchObject({ width: 1024, height: 1024, loras: { 'urn:air:krea2:lora:civitai:1@2': 1 } });
+    await expect(buildCivitaiImageRequest({ model: 'krea2-medium', engine: 'krea', prompt: 'x', loras: [{ civitaiId: 'urn:air:krea2:lora:civitai:1@2', strength: 1 }] }, get, oa())).rejects.toThrow(/loras|LoRA|未声明/);
     for (const f of ['loras', 'width', 'height', 'negative_prompt']) expect(unsupportedLabel('civitai', 'comfy:krea2', f)).toBe(true);
   });
 

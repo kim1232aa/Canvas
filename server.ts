@@ -26,8 +26,8 @@ import { registerSenseNovaRoutes } from './src/server/routes/sensenovaRoutes.ts'
 import {buildRunwareImageRequest, inspectRunwareImageResponseBody} from './src/server/runwareImageContract.ts';
 import {buildModelsLabImageRequest, parseModelsLabResponse, buildModelsLabFetchRequest, sanitizeModelsLabPayload, inspectModelsLabPollBody, inspectModelsLabImageResponseBody} from './src/server/modelsLabImageContract.ts';
 import { parseModelsLabCatalogResponse, parseRunwareCatalogResponse } from './src/server/modelCatalogResponse.ts';
-import {falImageFieldGate} from './src/server/falImageContract.ts';
-import {buildCivitaiImageRequest, CivitaiAmbiguousError} from './src/server/civitaiImageContract.ts';
+import {falImageFieldGate, falQueueOpenApiUrl, extractFalInputProperties, FalSchemaMissingError, falLiveAcceptsImageUrl, falLiveStrengthWire, type FalSchemaFetchFailure} from './src/server/falImageContract.ts';
+import {buildCivitaiImageRequest, CivitaiAmbiguousError, CivitaiSchemaMissingError, CIVITAI_IMAGE_OPENAPI_URL, type CivitaiSchemaFetchFailure} from './src/server/civitaiImageContract.ts';
 import { withGeminiImageResponseModality } from './src/server/geminiImageConfig.ts';
 import {civitaiImageHistory} from './src/server/civitaiHistoryContract.ts';
 import { handleCivitaiModels, handleHuggingFaceModelInfo, handleTensorArtModelInfo, handleCredentialPresence, handleCivitaiModelDetail, handleCivitaiModelVersion } from './src/server/routes/civitaiModelRoutes.ts';
@@ -3099,19 +3099,96 @@ app.post(['/api/fal/generate', '/api/generate', '/api/engine/fal/generate'], asy
     }
     if (finalImageSize) payload.image_size = finalImageSize;
 
-    let falGate: ReturnType<typeof falImageFieldGate>;
-    try { falGate = falImageFieldGate(endpoint, { steps: num_inference_steps, cfg: guidance_scale, seed, negative_prompt: negative_prompt || undefined }, loras); }
-    catch (error: any) { return res.status(400).json({ error: error.message, errorSource: 'local', endpoint }); }
-    Object.assign(payload, falGate.send);
-    if (falGate.omitted.length) generationContext.getStore()?.traces.push(sanitizeGenerationMetadata({ stage: 'parameter-omissions', provider: 'fal', endpoint, omitted: falGate.omitted }));
-    if (image_url) {
-      const isKnownTextOnly = Boolean(getModelSpec('fal', endpoint)) && !/(?:image-to-image|img2img|edit|inpaint|redux|kontext|controlnet|upscal|outpaint|relight)/i.test(endpoint);
-      if (isKnownTextOnly) {
-        return res.status(400).json({ error: '图生图必须使用官方 image-to-image / edit / kontext / redux 端点，例如 fal-ai/flux-lora/image-to-image' });
+    // Live OpenAPI required for outbound (static FAL_MODELS is UI clue only). Prefer queue OpenAPI (no key).
+    let liveProps: Record<string, unknown> | undefined;
+    let schemaFetch: FalSchemaFetchFailure | undefined;
+    const hasClientProps = req.body.inputSchemaProperties && typeof req.body.inputSchemaProperties === 'object' && !Array.isArray(req.body.inputSchemaProperties);
+    if (hasClientProps) {
+      liveProps = req.body.inputSchemaProperties as Record<string, unknown>;
+    } else {
+      const schemaUrl = falQueueOpenApiUrl(endpoint);
+      try {
+        const sr = await upstreamFetch(
+          { provider: 'fal', route: `${req.path}:schema`, model: endpoint, key: falKey, readOnly: true },
+          schemaUrl,
+          { headers: falKey ? { Authorization: `Key ${falKey}` } : {}, signal: AbortSignal.timeout(30000) },
+        );
+        const raw = await sr.text().catch(() => '');
+        if (!sr.ok) {
+          schemaFetch = { url: schemaUrl, status: sr.status, body: raw };
+        } else {
+          let parsed: unknown;
+          try { parsed = JSON.parse(raw); } catch { parsed = undefined; }
+          liveProps = extractFalInputProperties(parsed);
+          if (!liveProps) schemaFetch = { url: schemaUrl, status: sr.status, body: raw };
+        }
+      } catch (e: any) {
+        schemaFetch = { url: schemaUrl, status: null, body: String(e?.message || e) };
       }
-      payload.image_url = image_url;
+    }
+    if (!liveProps) {
+      const error = new FalSchemaMissingError(endpoint, schemaFetch);
+      const sf = error.schemaFetch;
+      const upstreamAnswered = Boolean(sf && sf.status !== null && (sf.status < 200 || sf.status >= 300));
+      return res.status(error.httpStatus).json({
+        error: error.message,
+        errorSource: upstreamAnswered ? 'upstream' : sf && sf.status === null ? 'network' : 'local',
+        upstreamStatus: sf?.status ?? null,
+        blocked: 'schema_missing',
+        endpoint: error.endpoint,
+        schemaFetch: error.schemaFetch ?? null,
+        actualRequest: null,
+        notSent: true,
+      });
+    }
+
+    let falGate: ReturnType<typeof falImageFieldGate>;
+    try { falGate = falImageFieldGate(endpoint, { steps: num_inference_steps, cfg: guidance_scale, seed, negative_prompt: negative_prompt || undefined }, loras, liveProps, schemaFetch); }
+    catch (error: any) {
+      if (error instanceof FalSchemaMissingError) {
+        const sf = error.schemaFetch;
+        const upstreamAnswered = Boolean(sf && sf.status !== null && (sf.status < 200 || sf.status >= 300));
+        return res.status(error.httpStatus).json({
+          error: error.message,
+          errorSource: upstreamAnswered ? 'upstream' : sf && sf.status === null ? 'network' : 'local',
+          upstreamStatus: sf?.status ?? null,
+          blocked: 'schema_missing',
+          endpoint: error.endpoint,
+          schemaFetch: error.schemaFetch ?? null,
+          actualRequest: null,
+          notSent: true,
+        });
+      }
+      return res.status(400).json({ error: error.message, errorSource: 'local', endpoint });
+    }
+    Object.assign(payload, falGate.send);
+    if (falGate.omitted.length) generationContext.getStore()?.traces.push(sanitizeGenerationMetadata({ stage: 'parameter-omissions', provider: 'fal', endpoint, omitted: falGate.omitted, schemaFields: falGate.schemaFields }));
+    if (image_url) {
+      // Capability from live OpenAPI only — never guess text-only from endpoint name regex.
+      if (!falLiveAcceptsImageUrl(liveProps)) {
+        return res.status(400).json({
+          error: `该 Fal 端点官方 OpenAPI 未声明 image_url/image；未发送图生图参数（endpoint=${endpoint}）`,
+          errorSource: 'local',
+          endpoint,
+          blocked: 'image_url_undeclared',
+          schemaFields: falGate.schemaFields,
+          notSent: true,
+        });
+      }
+      const imageWire = (['image_url', 'image', 'input_image', 'start_image_url'] as const).find((w) => w in liveProps!)!;
+      payload[imageWire] = image_url;
       if (typeof denoise === 'number') {
-        payload.strength = denoise;
+        const strengthWire = falLiveStrengthWire(liveProps);
+        if (!strengthWire) {
+          return res.status(400).json({
+            error: `该 Fal 端点官方 OpenAPI 未声明 strength/denoise；未发送 denoise（endpoint=${endpoint}）`,
+            errorSource: 'local',
+            endpoint,
+            unsupported: ['denoise'],
+            notSent: true,
+          });
+        }
+        payload[strengthWire] = denoise;
       }
     } else if (isProvided(denoise)) {
       return res.status(400).json({ error: 'denoise 仅在提供 image_url（图生图）时有效', unsupported: ['denoise'] });
@@ -3600,7 +3677,65 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
       }
 
       // --- ImageGen ---
-      const builtImage = await buildCivitaiImageRequest(req.body, civitaiPublicGet(req.path, String(model)));
+      // Live imageGen OpenAPI required (static CIVITAI_MODELS is UI clue only). Mirror videoGen gate.
+      let imageOpenApi: unknown;
+      let imageSchemaFetch: CivitaiSchemaFetchFailure | undefined;
+      try {
+        const schemaResp = await upstreamFetch(
+          { provider: 'civitai', route: `${req.path}:image-schema`, model: String(req.body.engine || model || ''), readOnly: true },
+          CIVITAI_IMAGE_OPENAPI_URL,
+          { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(20000) },
+        );
+        const schemaRaw = await schemaResp.text();
+        if (!schemaResp.ok) {
+          imageSchemaFetch = { url: CIVITAI_IMAGE_OPENAPI_URL, status: schemaResp.status, body: schemaRaw };
+        } else {
+          try {
+            imageOpenApi = JSON.parse(schemaRaw);
+            imageSchemaFetch = { url: CIVITAI_IMAGE_OPENAPI_URL, status: schemaResp.status, body: '' };
+          } catch (error: any) {
+            imageSchemaFetch = { url: CIVITAI_IMAGE_OPENAPI_URL, status: schemaResp.status, body: schemaRaw };
+          }
+        }
+      } catch (error: any) {
+        imageSchemaFetch = { url: CIVITAI_IMAGE_OPENAPI_URL, status: null, body: String(error?.message || error) };
+      }
+      if (!imageOpenApi) {
+        const error = new CivitaiSchemaMissingError(imageSchemaFetch);
+        const sf = error.schemaFetch;
+        const upstreamAnswered = Boolean(sf && sf.status !== null && (sf.status < 200 || sf.status >= 300));
+        return res.status(error.httpStatus).json({
+          error: error.message,
+          errorSource: upstreamAnswered ? 'upstream' : sf && sf.status === null ? 'network' : 'local',
+          upstreamStatus: sf?.status ?? null,
+          blocked: 'schema_missing',
+          endpoint: CIVITAI_IMAGE_OPENAPI_URL,
+          schemaSource: CIVITAI_IMAGE_OPENAPI_URL,
+          schemaFetch: error.schemaFetch ?? null,
+          actualRequest: null,
+          notSent: true,
+        });
+      }
+      let builtImage;
+      try {
+        builtImage = await buildCivitaiImageRequest(req.body, civitaiPublicGet(req.path, String(model)), imageOpenApi, imageSchemaFetch);
+      } catch (schemaErr: any) {
+        if (schemaErr instanceof CivitaiSchemaMissingError) {
+          const sf = schemaErr.schemaFetch;
+          const upstreamAnswered = Boolean(sf && sf.status !== null && (sf.status < 200 || sf.status >= 300));
+          return res.status(schemaErr.httpStatus).json({
+            error: schemaErr.message,
+            errorSource: upstreamAnswered ? 'upstream' : sf && sf.status === null ? 'network' : 'local',
+            upstreamStatus: sf?.status ?? null,
+            blocked: 'schema_missing',
+            schemaSource: CIVITAI_IMAGE_OPENAPI_URL,
+            schemaFetch: schemaErr.schemaFetch ?? null,
+            actualRequest: null,
+            notSent: true,
+          });
+        }
+        throw schemaErr;
+      }
       const genInput = builtImage.payload;
       submittedImageParameters = genInput;
       generationContext.getStore()?.traces.push(sanitizeGenerationMetadata({ stage: 'parameter-mapping', provider: 'civitai', beforeCustom: builtImage.beforeCustom, customParameters: builtImage.customParameters, overrides: builtImage.overrides, actualParameters: genInput }));

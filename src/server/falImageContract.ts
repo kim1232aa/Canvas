@@ -1,34 +1,157 @@
-import { getModelSpec, type FieldKey } from '../schemas/providerSchema';
-
-const provided = (v: unknown) => v !== undefined && v !== null && v !== '';
-const DEFAULT_WIRE: Record<string, string> = { steps: 'num_inference_steps', cfg: 'guidance_scale', seed: 'seed', negative_prompt: 'negative_prompt' };
+/**
+ * Fal image outbound gate: live OpenAPI Input properties only.
+ * Static PROVIDER_SCHEMA / FAL_MODELS is a UI clue and must never alone authorize outbound.
+ */
 
 export type FalOmission = { from: string; to: null; value: unknown; sent: false; reason: string };
 
+export interface FalSchemaFetchFailure {
+  url: string;
+  status: number | null;
+  body: string;
+}
+
+/** Thrown when live (or caller-supplied) Fal Input properties are missing: nothing is POSTed to fal.run. */
+export class FalSchemaMissingError extends Error {
+  endpoint: string;
+  schemaFetch?: FalSchemaFetchFailure;
+  httpStatus: number;
+  constructor(endpoint: string, schemaFetch?: FalSchemaFetchFailure) {
+    const local = `本地拦截：拿不到该端点 Schema，未发送 fal.run（endpoint=${endpoint}）`;
+    let first: string;
+    let httpStatus: number;
+    if (!schemaFetch) {
+      first = '无上游请求：缺少 live OpenAPI Input properties，未向上游发出任何请求';
+      httpStatus = 400;
+    } else if (schemaFetch.status === null) {
+      first = `无上游响应：Schema 拉取网络错误 ${schemaFetch.url}: ${schemaFetch.body}`;
+      httpStatus = 502;
+    } else if (schemaFetch.status >= 400 || schemaFetch.status < 200) {
+      first = `HTTP ${schemaFetch.status}: ${schemaFetch.body} (${schemaFetch.url})`;
+      httpStatus = schemaFetch.status;
+    } else {
+      first = `HTTP ${schemaFetch.status}: ${schemaFetch.body} (${schemaFetch.url})`;
+      httpStatus = 422;
+    }
+    super(`${first}\n${local}`);
+    this.name = 'FalSchemaMissingError';
+    this.endpoint = endpoint;
+    this.schemaFetch = schemaFetch;
+    this.httpStatus = httpStatus;
+  }
+}
+
+/** Official per-endpoint queue OpenAPI (no key). Prefer this when expand=openapi-3.0 fails. */
+export const falQueueOpenApiUrl = (endpointId: string): string =>
+  `https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=${encodeURIComponent(endpointId)}`;
+
+/** Platform catalog expand URL (may return expansion_failed for some endpoints). */
+export const falExpandOpenApiUrl = (endpointId: string): string =>
+  `https://api.fal.ai/v1/models?endpoint_id=${encodeURIComponent(endpointId)}&expand=openapi-3.0`;
+
+const provided = (v: unknown) => v !== undefined && v !== null && v !== '';
+
+/** Extract request-body Input properties from a Fal queue/platform OpenAPI document. */
+export function extractFalInputProperties(openapi: unknown): Record<string, unknown> | undefined {
+  const doc = openapi as any;
+  if (!doc || typeof doc !== 'object') return undefined;
+  const fromPaths = (): Record<string, unknown> | undefined => {
+    for (const pathItem of Object.values(doc.paths || {})) {
+      const post = (pathItem as any)?.post;
+      const schema =
+        post?.requestBody?.content?.['application/json']?.schema ||
+        post?.requestBody?.content?.['application/json; charset=utf-8']?.schema;
+      if (!schema) continue;
+      if (schema.$ref && typeof schema.$ref === 'string') {
+        const name = schema.$ref.split('/').pop();
+        const props = name ? doc.components?.schemas?.[name]?.properties : undefined;
+        if (props && typeof props === 'object' && !Array.isArray(props)) return props;
+      }
+      if (schema.properties && typeof schema.properties === 'object' && !Array.isArray(schema.properties)) {
+        return schema.properties;
+      }
+    }
+    return undefined;
+  };
+  const fromExpandRecord = (): Record<string, unknown> | undefined => {
+    const record = Array.isArray(doc.models)
+      ? doc.models.find((m: any) => m?.openapi || m?.['openapi-3.0'] || m?.openapi_schema) || doc.models[0]
+      : undefined;
+    const nested = record?.openapi || record?.['openapi-3.0'] || record?.openapi_schema;
+    if (nested) return extractFalInputProperties(nested);
+    return undefined;
+  };
+  return fromPaths() || fromExpandRecord();
+}
+
+const FIELD_WIRES: Record<'steps' | 'cfg' | 'seed' | 'negative_prompt', string[]> = {
+  steps: ['num_inference_steps', 'steps'],
+  cfg: ['guidance_scale', 'guide_scale', 'cfg_scale', 'cfg'],
+  seed: ['seed'],
+  negative_prompt: ['negative_prompt'],
+};
+
 /**
- * Schema gate for fal image endpoints (PROVIDER_SCHEMA is the single declaration).
- * - Field declared `unsupported` → not sent, recorded as an omission (shown as「不会发送」).
- * - Endpoint not in the table → sent as before (upstream decides; no invented omission).
- * - loras on an endpoint whose schema says unsupported, or above the declared max → local 400, never stripped.
+ * Schema gate for fal image endpoints.
+ * - Requires live (or caller) Input properties — static FAL_MODELS never alone authorizes outbound.
+ * - Field absent from live props → omitted (not sent), with reason.
+ * - loras absent from live / above maxItems → local 400, never stripped silently.
  */
-export function falImageFieldGate(endpoint: string, values: Partial<Record<'steps' | 'cfg' | 'seed' | 'negative_prompt', unknown>>, loras: unknown[] = []) {
-  const spec = getModelSpec('fal', endpoint);
+export function falImageFieldGate(
+  endpoint: string,
+  values: Partial<Record<'steps' | 'cfg' | 'seed' | 'negative_prompt', unknown>>,
+  loras: unknown[] = [],
+  liveInputProperties?: Record<string, unknown>,
+  schemaFetchFailure?: FalSchemaFetchFailure,
+) {
+  if (!liveInputProperties || typeof liveInputProperties !== 'object' || Array.isArray(liveInputProperties)) {
+    throw new FalSchemaMissingError(endpoint, schemaFetchFailure);
+  }
+  const props = liveInputProperties;
   const send: Record<string, unknown> = {};
   const omitted: FalOmission[] = [];
   for (const field of ['steps', 'cfg', 'seed', 'negative_prompt'] as const) {
     const value = values[field];
     if (!provided(value)) continue;
-    const fs = spec?.fields[field as FieldKey];
-    if (fs?.status === 'unsupported') {
-      omitted.push({ from: field, to: null, value, sent: false, reason: `fal ${endpoint} 官方 Schema 无 ${DEFAULT_WIRE[field]}；未发送（${fs.source}）` });
+    const wires = FIELD_WIRES[field];
+    const wire = wires.find((w) => w in props);
+    if (!wire) {
+      omitted.push({
+        from: field,
+        to: null,
+        value,
+        sent: false,
+        reason: `fal ${endpoint} 官方 OpenAPI 未声明 ${wires.join(' / ')}；未发送`,
+      });
       continue;
     }
-    send[fs?.wire || DEFAULT_WIRE[field]] = field === 'negative_prompt' ? value : Number(value);
+    send[wire] = field === 'negative_prompt' ? value : Number(value);
   }
   if (Array.isArray(loras) && loras.length) {
-    const ls = spec?.fields.loras;
-    if (ls?.status === 'unsupported') throw Object.assign(new Error(`fal 端点 ${endpoint} 的官方 Schema 没有 loras 字段；未发送请求（不会静默剥离 LoRA）。`), { status: 400, errorSource: 'local' });
-    if (ls?.max !== undefined && loras.length > ls.max) throw Object.assign(new Error(`fal 端点 ${endpoint} 最多 ${ls.max} 个 LoRA（官方 maxItems）；本次 ${loras.length} 个，未发送请求。`), { status: 400, errorSource: 'local' });
+    if (!('loras' in props)) {
+      throw Object.assign(
+        new Error(`fal 端点 ${endpoint} 的官方 OpenAPI 没有 loras 字段；未发送请求（不会静默剥离 LoRA）。`),
+        { status: 400, errorSource: 'local' },
+      );
+    }
+    const loraSchema = props.loras as { maxItems?: number } | undefined;
+    const maxItems = typeof loraSchema?.maxItems === 'number' ? loraSchema.maxItems : undefined;
+    if (maxItems !== undefined && loras.length > maxItems) {
+      throw Object.assign(
+        new Error(`fal 端点 ${endpoint} 最多 ${maxItems} 个 LoRA（官方 maxItems）；本次 ${loras.length} 个，未发送请求。`),
+        { status: 400, errorSource: 'local' },
+      );
+    }
   }
-  return { send, omitted };
+  return { send, omitted, schemaFields: Object.keys(props) };
+}
+
+/** True when live OpenAPI declares an image reference field the canvas can fill. */
+export function falLiveAcceptsImageUrl(liveInputProperties: Record<string, unknown>): boolean {
+  return ['image_url', 'image', 'input_image', 'start_image_url'].some((w) => w in liveInputProperties);
+}
+
+/** Strength / denoise wire from live props, if any. */
+export function falLiveStrengthWire(liveInputProperties: Record<string, unknown>): string | null {
+  return (['strength', 'denoise', 'prompt_strength'] as const).find((w) => w in liveInputProperties) ?? null;
 }

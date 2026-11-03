@@ -1,6 +1,7 @@
 import type { Request, Response as ExpressResponse } from 'express';
 import { tamsVideoUnsupported } from '../../schemas/tensorModelApi.ts';
 import { buildFalVideoRequest } from '../falVideoContract.ts';
+import { falQueueOpenApiUrl, extractFalInputProperties, FalSchemaMissingError, type FalSchemaFetchFailure } from '../falImageContract.ts';
 import { buildAgnesVideoRequest, agnesVideoId } from '../agnesVideoRequest.ts';
 import { applyCustomParameters } from '../customParameters.ts';
 import { sanitizeGenerationMetadata } from '../../utils/generationMetadata.ts';
@@ -600,9 +601,67 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
       return res.status(400).json({ error: `不认识这个模型: ${model}` });
     }
 
+    let liveProps: Record<string, unknown> | undefined;
+    let schemaFetch: FalSchemaFetchFailure | undefined;
+    const hasClientProps = req.body?.inputSchemaProperties && typeof req.body.inputSchemaProperties === 'object' && !Array.isArray(req.body.inputSchemaProperties);
+    if (hasClientProps) {
+      liveProps = req.body.inputSchemaProperties as Record<string, unknown>;
+    } else {
+      const schemaUrl = falQueueOpenApiUrl(endpoint);
+      try {
+        const sr = await upstreamFetch(
+          { provider: 'fal', route: `${req.path}:schema`, model: endpoint, key: falKey, readOnly: true },
+          schemaUrl,
+          { headers: falKey ? { Authorization: `Key ${falKey}` } : {}, signal: AbortSignal.timeout(30000) },
+        );
+        const raw = await sr.text().catch(() => '');
+        if (!sr.ok) {
+          schemaFetch = { url: schemaUrl, status: sr.status, body: raw };
+        } else {
+          let parsed: unknown;
+          try { parsed = JSON.parse(raw); } catch { parsed = undefined; }
+          liveProps = extractFalInputProperties(parsed);
+          if (!liveProps) schemaFetch = { url: schemaUrl, status: sr.status, body: raw };
+        }
+      } catch (e: any) {
+        schemaFetch = { url: schemaUrl, status: null, body: String(e?.message || e) };
+      }
+    }
+    if (!liveProps) {
+      const error = new FalSchemaMissingError(endpoint, schemaFetch);
+      const sf = error.schemaFetch;
+      const upstreamAnswered = Boolean(sf && sf.status !== null && (sf.status < 200 || sf.status >= 300));
+      return res.status(error.httpStatus).json({
+        error: error.message,
+        errorSource: upstreamAnswered ? 'upstream' : sf && sf.status === null ? 'network' : 'local',
+        upstreamStatus: sf?.status ?? null,
+        blocked: 'schema_missing',
+        endpoint,
+        schemaFetch: error.schemaFetch ?? null,
+        actualRequest: null,
+        notSent: true,
+      });
+    }
+
     let builtVideo;
-    try { builtVideo = buildFalVideoRequest(endpoint, req.body); }
-    catch (error: any) { return res.status(400).json({ error: error.message, errorSource: 'local' }); }
+    try { builtVideo = buildFalVideoRequest(endpoint, req.body, liveProps, schemaFetch); }
+    catch (error: any) {
+      if (error instanceof FalSchemaMissingError) {
+        const sf = error.schemaFetch;
+        const upstreamAnswered = Boolean(sf && sf.status !== null && (sf.status < 200 || sf.status >= 300));
+        return res.status(error.httpStatus).json({
+          error: error.message,
+          errorSource: upstreamAnswered ? 'upstream' : sf && sf.status === null ? 'network' : 'local',
+          upstreamStatus: sf?.status ?? null,
+          blocked: 'schema_missing',
+          endpoint: error.endpoint,
+          schemaFetch: error.schemaFetch ?? null,
+          actualRequest: null,
+          notSent: true,
+        });
+      }
+      return res.status(400).json({ error: error.message, errorSource: 'local' });
+    }
     const payload = builtVideo.payload;
     const upstreamEndpoint = `https://fal.run/${endpoint}`;
     generationContext.getStore()?.traces.push(sanitizeGenerationMetadata({

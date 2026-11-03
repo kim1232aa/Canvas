@@ -1,3 +1,4 @@
+import { loadFalLiveProps } from '../../server/fixtures/liveSchemaFixtures';
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { VideoDriver } from './VideoDriver';
 import { NormalizedGenerateParams } from '../types';
@@ -11,7 +12,7 @@ describe('VideoDriver (F3/F4) 参数转发与错误处理', () => {
       const body=JSON.parse(String(init?.body));
       expect(body.image_url).toBe('https://example.test/reference.png');
       expect(body).not.toHaveProperty('start_image_url');
-      upstream=buildFalVideoRequest(body.model,body).payload;
+      upstream=buildFalVideoRequest(body.model,body, loadFalLiveProps(String(body.model))).payload;
       return new Response(JSON.stringify({videoUrl:'https://example.test/result.mp4'}));
     });
     await new VideoDriver().generate({prompt:'orbit',model:'fal-ai/kling-video/v3/standard/image-to-video',targetProvider:'fal',image_url:'https://example.test/reference.png',videoDuration:12,extraParams:{custom_parameters:{generate_audio:false,cfg_scale:0}}},{});
