@@ -655,11 +655,12 @@ function buildStandardI2v(spec: I2vSpec): WorkflowPreset {
  * I2V: fal/wavespeed/civitai/novita/muapi/replicate.
  */
 const STD_SPECS: StdSpec[] = [
-  // Preset model = Tongyi-MAI/Z-Image-Turbo Space (providerSchema.ts:495-505): steps supported, cfg unsupported; server.ts:4211/4216 rejects cfg/guidance for this route → cfg omitted (would 400). HF Inference rows (num_inference_steps+guidance_scale) apply to other HF models.
-  { provider: 'huggingface', ckpt: 'Tongyi-MAI/Z-Image-Turbo', hasLora: false, hasNegative: false, steps: 8,
-    // Z-Image Space: resolution enum (not EmptyLatent pixels); width/height unsupported in providerSchema.
-    omit: ['cfg', 'sampler', 'scheduler', 'denoise', 'width', 'height'],
-    checkpointExtra: { resolution: '1024x1024 ( 1:1 )' },
+  // HF route = fal-ai: live https://huggingface.co/api/models/Tongyi-MAI/Z-Image-Turbo?expand[]=inferenceProviderMapping
+  // (2026-11-04) lists fal-ai (fal-ai/z-image/turbo) status live, task text-to-image; hf-inference is not listed.
+  // server.ts fal-ai branch sends width/height → image_size, steps → num_inference_steps, seed. Route preset so it runs unchanged.
+  { provider: 'huggingface', ckpt: 'Tongyi-MAI/Z-Image-Turbo', hasLora: false, hasNegative: false, steps: 8, width: 1024, height: 1024,
+    omit: ['cfg', 'sampler', 'scheduler', 'denoise'],
+    checkpointExtra: { hf_provider: 'fal-ai' },
   },
   // Official API-Inference: size/steps/guidance/seed/negative_prompt/loras; sampler/scheduler/denoise not on REST table → omit (no empty shells).
   // CN accepted hist_1793695144423_1ms48: Realism LoRA@1, 832×1216, steps8, guidance1, seed42.

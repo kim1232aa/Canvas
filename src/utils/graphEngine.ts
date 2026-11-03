@@ -1272,27 +1272,15 @@ export async function executeWorkflow(
     }
     if (params.background) extraParams.background = params.background;
     if (params.moderation) extraParams.moderation = params.moderation;
-    if (params.resolution) {
-      if (params.targetProvider === 'huggingface' && params.hfProvider !== 'z-image-space') {
-        omissions.push({field: 'resolution', value: params.resolution, reason: `Hugging Face 该路由（hfProvider=${params.hfProvider || '未指定'}）未采用像素分辨率字段；保留原值不作为请求参数`});
-      } else {
-        extraParams.resolution = params.resolution;
-      }
-    }
+    // 雁 rule: a filled resolution is always sent as filled (no route-based withholding).
+    if (params.resolution) extraParams.resolution = params.resolution;
     if (params.falModelName) extraParams.model_name=params.falModelName;
     if (params.targetProvider === 'huggingface') {
       if (params.hfProvider) extraParams.hf_provider = params.hfProvider;
-      // resolution / shift / random_seed / gallery_images belong to the verified Z-Image Space contract only.
-      // Keeping them on HF Inference or HF→fal-ai causes a local reject before the real provider is reached.
-      if (params.hfProvider === 'z-image-space') {
-        if (params.shift !== undefined) extraParams.shift = params.shift;
-        if (params.randomSeed !== undefined) extraParams.random_seed = params.randomSeed;
-        if (params.galleryImages !== undefined) extraParams.gallery_images = params.galleryImages;
-      } else {
-        if (params.shift !== undefined) omissions.push({ field: 'shift', value: params.shift, reason: '非 z-image-space 的 HF 路由不支持 shift 字段；保留原值不作为请求参数' });
-        if (params.randomSeed !== undefined) omissions.push({ field: 'random_seed', value: params.randomSeed, reason: '非 z-image-space 的 HF 路由不支持 random_seed 字段；保留原值不作为请求参数' });
-        if (params.galleryImages !== undefined) omissions.push({ field: 'gallery_images', value: params.galleryImages, reason: '非 z-image-space 的 HF 路由不支持 gallery_images 字段；保留原值不作为请求参数' });
-      }
+      // 雁 rule: filled values are sent on every HF route (server forwards undeclared fields as filled; upstream decides).
+      if (params.shift !== undefined) extraParams.shift = params.shift;
+      if (params.randomSeed !== undefined) extraParams.random_seed = params.randomSeed;
+      if (params.galleryImages !== undefined) extraParams.gallery_images = params.galleryImages;
     }
     if (grokOrOpenAi && params.batchSize != null && Number(params.batchSize) > 0) {
       extraParams.n = Number(params.batchSize);

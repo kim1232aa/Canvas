@@ -59,3 +59,16 @@ describe('std presets dry-run (load → extract, no send)', () => {
   }
   it("print table", () => { if (process.env.DRY_TABLE) console.log("\n" + rows.join("\n")); });
 });
+
+describe('HF standard preset dry-run builds a sendable request', () => {
+  it('std-huggingface-t2i: route set, seed/steps/size present', () => {
+    const p = WORKFLOW_PRESETS.find((x) => x.id === 'std-huggingface-t2i')!;
+    const tid = resolveRunTarget(p.nodes as any, p.connections as any, undefined, undefined).id;
+    const x: any = extractWorkflowParameters(p.nodes as any, p.connections as any, tid);
+    expect(x.targetProvider).toBe('huggingface');
+    expect(x.hfProvider).toBe('fal-ai');
+    expect(typeof x.seed).toBe('number');
+    expect(x.steps).toBe(8);
+    expect([x.width, x.height]).toEqual([1024, 1024]);
+  });
+});

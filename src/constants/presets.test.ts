@@ -641,12 +641,12 @@ describe('standard workflow presets (23 T2I + 6 I2V)', () => {
     expect(p.spatialFrames![0].params.aspectRatio).toBe('1:1');
   });
 
-  it('Hugging Face Z-Image omits pixels; resolution enum on checkpoint', () => {
+  it('Hugging Face Z-Image ships the live fal-ai route and 1024x1024 pixels', () => {
     const p = preset('std-huggingface-t2i');
-    expect(loader(p.id)!.values.resolution).toBe('1024x1024 ( 1:1 )');
+    expect(loader(p.id)!.values.hf_provider).toBe('fal-ai');
     const lat = p.nodes.find(n => n.type === 'EmptyLatentImage')!;
-    expect(lat.values.width).toBeUndefined();
-    expect(lat.values.height).toBeUndefined();
+    expect(lat.values.width).toBe(1024);
+    expect(lat.values.height).toBe(1024);
     expect(p.nodes.find(n => n.type === 'KSampler')!.values.steps).toBe(8);
   });
 

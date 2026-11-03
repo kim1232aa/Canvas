@@ -290,7 +290,7 @@ describe('graphEngine - B2 & L2a & L2b 拓扑反向追踪与参数抽取隔离�
     expect(extracted).toMatchObject({targetProvider: 'huggingface', checkpointModel: 'Tongyi-MAI/Z-Image-Turbo', hfProvider: 'z-image-space', resolution: '1152x896 ( 9:7 )', shift: 3.2, seed: 42, steps: 8});
   });
 
-  it('does not send Z-Image-only fields when HF explicitly routes through fal-ai', async () => {
+  it('sends every filled HF field as filled when routed through fal-ai (no withholding)', async () => {
     const nodes = [
       createNode('checkpoint', 'CheckpointLoaderSimple', {targetProvider: 'huggingface', ckpt_name: 'black-forest-labs/FLUX.1-dev', hf_provider: 'fal-ai', resolution: '1k', shift: 3, random_seed: false, gallery_images: []}),
       createNode('sampler', 'KSampler', {seed: 314159, control_after_generate: 'fixed', steps: 24, cfg: 3.2}),
@@ -303,19 +303,8 @@ describe('graphEngine - B2 & L2a & L2b 拓扑反向追踪与参数抽取隔离�
     const generateSpy = vi.spyOn(EngineRegistry, 'generate').mockResolvedValue({mediaUrl:'data:image/png;base64,abc',mediaType:'image',provider:'Hugging Face',providerId:'huggingface',model:'black-forest-labs/FLUX.1-dev',seed:314159});
     await executeWorkflow(nodes, connections, () => {}, undefined, 'sampler');
     const sent = generateSpy.mock.calls[0][1];
-    expect(sent.extraParams).toMatchObject({
-      hf_provider:'fal-ai',
-      omissions:[
-        {field:'resolution',value:'1k',reason:'Hugging Face 该路由（hfProvider=fal-ai）未采用像素分辨率字段；保留原值不作为请求参数'},
-        {field:'shift',value:3,reason:'非 z-image-space 的 HF 路由不支持 shift 字段；保留原值不作为请求参数'},
-        {field:'random_seed',value:false,reason:'非 z-image-space 的 HF 路由不支持 random_seed 字段；保留原值不作为请求参数'},
-        {field:'gallery_images',value:[],reason:'非 z-image-space 的 HF 路由不支持 gallery_images 字段；保留原值不作为请求参数'},
-      ],
-    });
-    expect(sent.extraParams).not.toHaveProperty('resolution');
-    expect(sent.extraParams).not.toHaveProperty('shift');
-    expect(sent.extraParams).not.toHaveProperty('random_seed');
-    expect(sent.extraParams).not.toHaveProperty('gallery_images');
+    expect(sent.extraParams).toMatchObject({ hf_provider:'fal-ai', resolution:'1k', shift:3, random_seed:false, gallery_images:[] });
+    expect(sent.extraParams.omissions ?? []).toEqual([]);
   });
   it('records grok videoFps omission without sending the unsupported field', async () => {
     const node = createNode('video', 'AIVideoNode', {model:'grok-video-model', targetProvider:'grok_compat', prompt:'a moving scene', fps:24});
@@ -1290,7 +1279,7 @@ describe('graphEngine - F4 AIVideoNode provider sync / reject empty & mismatch',
     expect(snapshot?.requestMetadata?.promptTransform?.prependedTriggerWords).toContain('asian girl');
   });
 
-  it('records parameter omissions for shift, random_seed, gallery_images, and resolution on HF non-z-image route', async () => {
+  it('sends shift, random_seed, gallery_images and resolution as filled on HF non-z-image route', async () => {
     const nodes = [
       createNode('hf-ckpt', 'CheckpointLoaderSimple', {
         ckpt_name: 'stabilityai/stable-diffusion-xl-base-1.0',
@@ -1321,15 +1310,7 @@ describe('graphEngine - F4 AIVideoNode provider sync / reject empty & mismatch',
 
     expect(genSpy).toHaveBeenCalled();
     const extra = genSpy.mock.calls[0][1].extraParams;
-    const omissions = extra?.parameterOmissions || extra?.omissions;
-    expect(omissions).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ field: 'resolution', value: '1024x1024' }),
-        expect.objectContaining({ field: 'shift', value: 3.0 }),
-        expect.objectContaining({ field: 'random_seed', value: true }),
-        expect.objectContaining({ field: 'gallery_images', value: ['https://example.test/img1.png'] }),
-      ])
-    );
+    expect(extra).toMatchObject({ resolution: '1024x1024', shift: 3.0, random_seed: true, gallery_images: ['https://example.test/img1.png'] });
   });
 });
 
