@@ -217,11 +217,21 @@ export function buildOpenWorksRequest(model: string, inputSchema: ReturnType<typ
     if (!l || typeof l !== 'object') continue;
     const id = String((l as any).name || (l as any).id || (l as any).loraModel || (l as any).path || (l as any).model || '').trim();
     if (!id) continue;
-    const wRaw = (l as any).strength ?? (l as any).weight ?? (l as any).scale ?? 1;
+    // Iron rule: never invent LoRA strength (no ?? 1 / ?? 0.8). Missing/non-finite → local block, no outbound.
+    const hasStrength = (l as any).strength != null || (l as any).weight != null || (l as any).scale != null;
+    if (!hasStrength) {
+      errors.push(`LoRA「${id}」缺少强度（strength/weight/scale）；未出站，本地拦截，不静默默认`);
+      continue;
+    }
+    const wRaw = (l as any).strength ?? (l as any).weight ?? (l as any).scale;
     const w = Number(wRaw);
-    const weight = Number.isFinite(w) ? w : 1;
-    loraItems.push({ name: id, strength: weight });
+    if (!Number.isFinite(w)) {
+      errors.push(`LoRA「${id}」强度非法（${JSON.stringify(wRaw)}）；未出站，本地拦截，不静默默认`);
+      continue;
+    }
+    loraItems.push({ name: id, strength: w });
   }
+  if (errors.length) return { ok: false, error: `OpenWorks 模型 ${model}：${errors.join('；')}。未出站，本地拦截。`, mapping };
   if (loraItems.length) {
     const primary = loraItems[0];
     const ids = loraItems.map((x) => x.name).join(',');

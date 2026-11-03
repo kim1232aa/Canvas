@@ -50,8 +50,9 @@ describe('ModelHub and Backend Directory Architecture', () => {
   });
 
   describe('Server /api/models Multi-Provider Aggregation', () => {
-    it('provider=all covers muapi, wavespeed, sogni, runware, modelslab, sensenova, openai_compat, grok_compat, agnes', () => {
-      expect(serverSource).toContain("['muapi', 'wavespeed', 'sogni', 'krea', 'together', 'aimlapi', 'novita', 'venice']");
+    it('provider=all covers muapi, wavespeed, sogni, deepinfra, openworks, runware, modelslab, sensenova, openai_compat, grok_compat, agnes', () => {
+      expect(serverSource).toContain("['muapi', 'wavespeed', 'sogni', 'krea', 'together', 'aimlapi', 'novita', 'venice', 'deepinfra']");
+      expect(serverSource).toContain("provider === 'all' || provider === 'openworks'");
       expect(serverSource).toContain("provider === 'all' || provider === 'runware'");
       expect(serverSource).toContain("provider === 'all' || provider === 'modelslab'");
       expect(serverSource).toContain("provider === 'all' || provider === 'sensenova'");

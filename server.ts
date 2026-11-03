@@ -2493,7 +2493,7 @@ app.get("/api/models", async (req, res) => {
     }
 
     // Tensor.Art OpenWorks: live upstream catalog; image/video entries are ordinary models (src/server/openWorksProvider.ts).
-    if (provider === 'openworks') {
+    if (provider === 'all' || provider === 'openworks') {
       tasks.push((async () => {
         try {
           const { items, sourceUrl } = await openWorks.catalogItems(req as any);
@@ -2529,9 +2529,9 @@ app.get("/api/models", async (req, res) => {
 
     // Schema-driven providers (MuAPI / WaveSpeed / Sogni) join the "all" aggregation or direct query.
     // Each keeps its own source and error; one provider's failure never drops the others.
-    if (provider === "all" || provider === 'muapi' || provider === 'wavespeed' || provider === 'sogni' || provider === 'krea' || provider === 'together' || provider === 'aimlapi' || provider === 'novita' || provider === 'venice') {
+    if (provider === "all" || provider === 'muapi' || provider === 'wavespeed' || provider === 'sogni' || provider === 'krea' || provider === 'together' || provider === 'aimlapi' || provider === 'novita' || provider === 'venice' || provider === 'deepinfra') {
       tasks.push((async () => {
-        const sps = (provider === 'all' ? ['muapi', 'wavespeed', 'sogni', 'krea', 'together', 'aimlapi', 'novita', 'venice'] : [provider]) as ('muapi' | 'wavespeed' | 'sogni' | 'krea' | 'together' | 'aimlapi' | 'novita' | 'venice')[];
+        const sps = (provider === 'all' ? ['muapi', 'wavespeed', 'sogni', 'krea', 'together', 'aimlapi', 'novita', 'venice', 'deepinfra'] : [provider]) as ('muapi' | 'wavespeed' | 'sogni' | 'krea' | 'together' | 'aimlapi' | 'novita' | 'venice' | 'deepinfra')[];
         await Promise.allSettled(
           sps.map(async (sp) => {
             try {

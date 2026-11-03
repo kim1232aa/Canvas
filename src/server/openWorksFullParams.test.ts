@@ -46,7 +46,29 @@ describe('OpenWorks full-params submit (雁 2026-10-17 15:27)', () => {
     expect(b.schemaFields).toEqual(expect.arrayContaining(['seed', 'steps', 'cfg', 'loras', 'checkpoint', 'negative_prompt']));
   });
 
-  it('board badges: seed/steps/cfg/negative/LoRA 会发送; LoRA node not greyed out by Schema', () => {
+  it('LoRA without strength → local block (no silent ?? 1)', () => {
+    const b = buildOpenWorksRequest('photoreal_studio_z_image', schema, {
+      ...BOARD,
+      loras: [{ name: '969483275569466663' }],
+    });
+    expect(b.ok).toBe(false);
+    if (b.ok) return;
+    expect(b.error).toMatch(/缺少强度/);
+    expect(b.error).toMatch(/未出站，本地拦截/);
+    expect(b.error).not.toMatch(/\?\? 1/);
+  });
+
+  it('LoRA non-finite strength → local block (no silent default 1)', () => {
+    const b = buildOpenWorksRequest('photoreal_studio_z_image', schema, {
+      ...BOARD,
+      loras: [{ name: '969483275569466663', strength: 'nope' }],
+    });
+    expect(b.ok).toBe(false);
+    if (b.ok) return;
+    expect(b.error).toMatch(/强度非法/);
+  });
+
+    it('board badges: seed/steps/cfg/negative/LoRA 会发送; LoRA node not greyed out by Schema', () => {
     const props = Object.keys(schema.properties);
     for (const f of ['seed', 'steps', 'cfg', 'negative_prompt', 'loras']) {
       expect(isSchemaOmitCandidate('openworks', f, undefined, props), f).toBe(false);
