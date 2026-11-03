@@ -7,8 +7,6 @@ describe('preset modal blocked archives', () => {
   it('renders unselected models without fabricated families and disables blocked run actions', () => {
     const html = renderToStaticMarkup(<WorkflowPresetsModal isOpen onClose={vi.fn()} onLoadPreset={vi.fn()} onLoadAndRunPreset={vi.fn()} currentNodes={[]} currentConnections={[]} currentSpatialFrames={[]} onImportWorkflowData={vi.fn()} onClearCanvas={vi.fn()} />);
     expect(html).not.toContain('FLUX / SDXL');
-    // The Krea preset requires selecting a model from the current directory.
-    expect(html).toContain('模型未选择/待重选');
     // SenseNova/Sogni stay on roster with official default models (ids only appear in DOM when blocked).
     expect(html).toContain('SenseNova · 标准文生图');
     expect(html).toContain('Sogni · 标准文生图');
@@ -16,11 +14,9 @@ describe('preset modal blocked archives', () => {
     expect(html).toContain('krea-2-turbo');
     expect(html).not.toContain('preset-blocked-std-sensenova-t2i');
     expect(html).not.toContain('preset-blocked-std-sogni-t2i');
-    // MuAPI flux-1-dev-style-lora-inference: official table requires a real trainer LoRA URL; no recipe → 待配方, run disabled (grey, not emerald).
-    expect(html).toContain('preset-blocked-std-muapi-t2i');
-    expect(html).toContain('待配方：官方要真 LoRA 地址');
-    expect(html).not.toMatch(/preset-blocked-std-muapi-t2i[\s\S]{0,200}lora_url/);
-    expect(html).toMatch(/待配方，不能立即运行/);
+    // Default presets are runnable as loaded (no 待配方 lock on Krea/MuAPI).
+    expect(html).not.toContain('preset-blocked-std-muapi-t2i');
+    expect(html).not.toContain('preset-blocked-std-krea-t2i');
     expect(html).toMatch(/bg-slate-700\/80[^"]*"[^>]*disabled=""|disabled=""[^>]*bg-slate-700\/80/);
     expect(html).toContain('待配置：');
     expect(html).toContain('仅载入');
@@ -34,7 +30,5 @@ describe('preset modal blocked archives', () => {
     expect(html).toContain('请先载入并选择参考图');
     expect(html).toMatch(/preset-blocked-std-fal-i2v[\s\S]{0,1200}title="清空当前画布并载入此工作流"/);
     expect(html).not.toMatch(/preset-blocked-std-fal-i2v[\s\S]{0,1200}title="仅追加载入待配置模板，不覆盖已有画布"/);
-    // Pending-recipe T2I still appends.
-    expect(html).toMatch(/preset-blocked-std-muapi-t2i[\s\S]{0,1200}title="仅追加载入待配置模板，不覆盖已有画布"/);
   });
 });

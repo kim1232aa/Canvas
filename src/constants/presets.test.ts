@@ -196,13 +196,14 @@ describe('standard workflow presets (23 T2I + 6 I2V)', () => {
     }
   });
 
-  it('never ships an empty LoRALoader; only providers in HAS_LORA keep filled LoRAs', () => {
+  it('only MuAPI (Schema-required LoRA, no recipe) ships an empty LoRA mount point; others carry real LoRAs', () => {
     for (const p of WORKFLOW_PRESETS) {
       const loras = p.nodes.filter(n => n.type === 'LoRALoader');
       for (const n of loras) {
+        if (p.id === 'std-muapi-t2i') continue;
         expect(String(n.values.lora_name ?? '').length, `${p.id} empty LoRA shell`).toBeGreaterThan(0);
       }
-      if (!HAS_LORA.has(p.provider)) {
+      if (!HAS_LORA.has(p.provider) && p.id !== 'std-muapi-t2i') {
         expect(loras, p.id).toHaveLength(0);
       }
     }
@@ -327,16 +328,13 @@ describe('standard workflow presets (23 T2I + 6 I2V)', () => {
     expect(lora('std-sogni-t2i')).toBeUndefined();
   });
 
-  it('Krea standard preset leaves provider-specific model selection to the live catalog without a persistent execution lock', () => {
+  it('Krea standard preset ships a live official endpoint with its required aspect_ratio + resolution', () => {
     const p=preset('std-krea-t2i');
     const ckpt=loader(p.id)!;
-    const frame=p.spatialFrames![0];
-    expect(ckpt.values.ckpt_name).toBe('');
+    expect(ckpt.values).toMatchObject({ ckpt_name: 'image/krea/krea-2/medium-turbo', aspect_ratio: '1:1', resolution: '1K' });
     expect(ckpt.values.execution_blocked_reason).toBeUndefined();
-    expect(frame.params.checkpoint).toBe('');
-    expect(frame.params.executionBlockedReason).toBeUndefined();
-    expect(p.description).toMatch(/实时 Krea 模型目录/);
-    expect(generationReadiness({provider:'krea',model:'image/krea/krea-2/medium-turbo',prompt:'test',executionBlockedReason:frame.params.executionBlockedReason})).toBeUndefined();
+    expect(p.spatialFrames![0].params.checkpoint).toBe('image/krea/krea-2/medium-turbo');
+    expect(p.nodes.some(n => n.type === 'CLIPTextEncodeNegative')).toBe(false);
   });
 
   it('does not put foreign provider ids into T2I nodes (except tensorart→openworks)', () => {
@@ -407,9 +405,13 @@ describe('standard workflow presets (23 T2I + 6 I2V)', () => {
     }
   });
 
-  it('agnes stays compact Checkpoint→CLIP→Save with placeholder prompt', () => {
+  it('agnes image output (VAEDecode IMAGE) feeds SaveImage; no CONDITIONING→SaveImage edge', () => {
     const p = preset('std-agnes-t2i');
-    expect(p.nodes.map(n => n.type)).toEqual(['CheckpointLoaderSimple', 'CLIPTextEncode', 'SaveImage']);
+    const save = p.nodes.find(n => n.type === 'SaveImage')!;
+    const into = p.connections.filter(c => c.toNodeId === save.id);
+    expect(into).toHaveLength(1);
+    expect(into[0].type).toBe('IMAGE');
+    expect(p.nodes.find(n => n.id === into[0].fromNodeId)!.type).toBe('VAEDecode');
     expect(loader(p.id)!.values.ckpt_name).toBe('agnes-image-2.5-flash');
   });
 
@@ -511,18 +513,15 @@ describe('standard workflow presets (23 T2I + 6 I2V)', () => {
     expect(presetSummary(preset('std-aimlapi-t2i')).cfg).toBeUndefined();
   });
 
-  it('MuAPI pendingRecipe gates TopBar via execution_blocked_reason (plain copy, no API field names)', () => {
+  it('MuAPI ships a visible LoRA mount point (official lora_weight default 1) and no local run lock', () => {
     const p = preset('std-muapi-t2i');
-    expect(p.pendingRecipe).toContain('官方要真 LoRA 地址');
-    expect(p.pendingRecipe).not.toMatch(/lora_url/i);
     const ckpt = p.nodes.find(n => n.type === 'CheckpointLoaderSimple')!;
-    expect(ckpt.values.execution_blocked_reason).toBe(p.pendingRecipe);
-    expect(p.spatialFrames?.[0]?.params.executionBlockedReason).toBe(p.pendingRecipe);
-    expect(p.nodes.some(n => n.type === 'LoRALoader')).toBe(false);
-    // Official OpenAPI fields only — drives KSampler hide of steps/CFG (no empty shells).
+    expect(ckpt.values.execution_blocked_reason).toBeUndefined();
+    expect(p.pendingRecipe).toBeUndefined();
+    const l = p.nodes.find(n => n.type === 'LoRALoader')!;
+    expect(l.values).toMatchObject({ lora_name: '', strength_model: 1 });
     const props = JSON.parse(String(ckpt.values.custom_parameters || '{}'))?._canvas?.schemaProperties;
     expect(props).toEqual(expect.arrayContaining(['prompt', 'lora_url', 'lora_weight', 'aspect_ratio']));
-    expect(props).not.toEqual(expect.arrayContaining(['steps', 'cfg', 'guidance_scale', 'num_inference_steps']));
     const ks = p.nodes.find(n => n.type === 'KSampler')!;
     expect(ks.values.steps).toBeUndefined();
     expect(ks.values.cfg).toBeUndefined();
@@ -641,9 +640,11 @@ describe('standard workflow presets (23 T2I + 6 I2V)', () => {
     expect(p.nodes.find(n => n.type === 'KSampler')!.values.steps).toBe(8);
   });
 
-  it('Agnes compact keeps official size 2K + aspect_ratio 1:1 on checkpoint', () => {
+  it('Agnes keeps official size 2K + aspect_ratio 1:1 on checkpoint; no pixel width/height', () => {
     const ckpt = loader('std-agnes-t2i')!;
     expect(ckpt.values).toMatchObject({ size: '2K', aspect_ratio: '1:1', ckpt_name: 'agnes-image-2.5-flash' });
-    expect(preset('std-agnes-t2i').nodes.some(n => n.type === 'EmptyLatentImage')).toBe(false);
+    const lat = preset('std-agnes-t2i').nodes.find(n => n.type === 'EmptyLatentImage')!;
+    expect(lat.values.width).toBeUndefined();
+    expect(lat.values.height).toBeUndefined();
   });
 });

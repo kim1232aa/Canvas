@@ -34,8 +34,8 @@ type StdSpec = {
   seed?: number;
   /** Preset card guidance for configuration that must come from a live provider catalog. */
   description?: string;
-  /** Skip EmptyLatent+KSampler+VAE; Checkpoint→CLIP→Save (agnes). */
-  compact?: boolean;
+  /** Empty LoRA node (mount point) when the official Schema takes a LoRA but no accepted recipe has one. */
+  loraMount?: { strength: number; source: string };
   /** Official Schema requires a resource no accepted-run recipe has (e.g. MuAPI lora_url). Card is 待配方, run disabled; never filled with a made-up value. */
   pendingRecipe?: string;
 };
@@ -108,6 +108,9 @@ function buildStandardT2i(spec: StdSpec): WorkflowPreset {
   const prefix = id.replace(/[^a-z0-9]+/gi, '-');
   // Empty LoRA path/id = empty shell (forbidden). Only real accepted-run LoRAs become nodes.
   const loraList = (spec.loras ?? []).filter(l => Boolean(l.name));
+  // Schema requires a LoRA but no recipe has a real one: show ONE visible mount point (official default weight)
+  // so the user can paste the real resource; never a made-up value.
+  if (loraList.length === 0 && spec.loraMount) loraList.push({ name: '', strength: spec.loraMount.strength, source: spec.loraMount.source });
   const hasLora = loraList.length > 0;
   const steps = spec.steps ?? 20;
   const cfg = spec.cfg ?? 7;
@@ -206,27 +209,7 @@ function buildStandardT2i(spec: StdSpec): WorkflowPreset {
     type: 'CLIP',
   });
 
-  if (spec.compact) {
-    nodes.push({
-      id: saveId,
-      type: 'SaveImage',
-      title: '保存图像',
-      pos: { x: hasLora ? 1220 : 860, y: 120 },
-      width: 300,
-      inputs: NODE_DEFINITIONS.SaveImage.inputs,
-      outputs: [],
-      values: { filename_prefix: prefixName },
-    });
-    // Agnes-style: CLIP conditioning → SaveImage (driver reads prompt from CLIP node)
-    connections.push({
-      id: `${prefix}-c-pos-save`,
-      fromNodeId: posId,
-      fromSocketId: 'CONDITIONING',
-      toNodeId: saveId,
-      toSocketId: 'images',
-      type: 'CONDITIONING',
-    });
-  } else {
+  {
     if (hasNegative) nodes.push({
         id: negId,
         type: 'CLIPTextEncodeNegative',
@@ -319,13 +302,13 @@ function buildStandardT2i(spec: StdSpec): WorkflowPreset {
         checkpoint: spec.ckpt,
         targetProvider: target as SpatialFrame['params']['targetProvider'],
         ...(spec.pendingRecipe ? { executionBlockedReason: spec.pendingRecipe } : {}),
-        seed: spec.compact ? undefined : keep('seed', seed),
+        seed: keep('seed', seed),
         seedControl: 'fixed',
-        steps: spec.compact ? undefined : keep('steps', steps),
-        cfg: spec.compact ? undefined : keep('cfg', cfg),
-        sampler: spec.compact ? undefined : keep('sampler', sampler),
-        scheduler: spec.compact ? undefined : keep('scheduler', scheduler),
-        denoise: spec.compact ? undefined : keep('denoise', 1),
+        steps: keep('steps', steps),
+        cfg: keep('cfg', cfg),
+        sampler: keep('sampler', sampler),
+        scheduler: keep('scheduler', scheduler),
+        denoise: keep('denoise', 1),
         width: keep('width', width),
         height: keep('height', height),
         batchSize: 1,
@@ -752,8 +735,8 @@ const STD_SPECS: StdSpec[] = [
         },
       }),
     },
-    // Official OpenAPI: lora_url REQUIRED (trainer task URL). No accepted-run recipe → pendingRecipe (plain UI copy, no API field names).
-    pendingRecipe: '官方要真 LoRA 地址（训练任务返回的那种），配方里还没有；载入后挂上再运行。',
+    // Official OpenAPI: lora_url REQUIRED (trainer task URL), lora_weight default 1.0. No accepted-run URL → empty visible LoRA node to mount one.
+    loraMount: { strength: 1, source: 'https://api.muapi.ai/openapi.json Flux1DevStyleLoraInferenceRequest' },
   },
   // Schema (temp/e2e/wavespeed/recipe-33530948/wavespeed-flux-dev-lora-schema.json): steps 1–50; accepted run hist_1792224305224_meynb used 36 steps / CFG 3.5 (Schema default was 28), size, seed, loras; no negative/sampler/scheduler.
   { provider: 'wavespeed', ckpt: 'wavespeed-ai/flux-dev-lora', hasLora: true, hasNegative: false, steps: 36, cfg: 3.5, omit: ['sampler', 'scheduler', 'denoise'],
@@ -761,7 +744,11 @@ const STD_SPECS: StdSpec[] = [
     loras: [{ name: 'https://huggingface.co/comfyanonymous/flux_RealismLora_converted_comfyui/resolve/main/flux_realism_lora.safetensors', strength: 1.1, source: 'hist_1792224305224_meynb' }] },
   // Krea model IDs are live OpenAPI operation paths (e.g. image/krea/krea-2/medium-turbo), not Sogni's krea-2-turbo selector.
   // Leave the model empty so the user chooses an exact current endpoint from Krea's live catalog; do not alias across providers.
-  { provider: 'krea', ckpt: '', hasLora: false, omit: ['steps', 'cfg', 'sampler', 'scheduler', 'denoise'], description: '请载入后从实时 Krea 模型目录选择一个官方生成端点；模板不会预选底模。' },
+  // Live https://api.krea.ai/openapi.json (2026-11-04) POST /generate/image/krea/krea-2/medium-turbo: required prompt+aspect_ratio+resolution(enum 1K);
+  // seed optional; no width/height/negative/steps/cfg/sampler. LoRA = styles (no accepted-run style id → none).
+  { provider: 'krea', ckpt: 'image/krea/krea-2/medium-turbo', hasLora: false, hasNegative: false,
+    omit: ['steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'width', 'height'],
+    checkpointExtra: { aspect_ratio: '1:1', resolution: '1K' } },
   { provider: 'together', ckpt: 'black-forest-labs/FLUX.2-dev', hasLora: false, steps: 20, cfg: 1, omit: ['sampler', 'scheduler', 'denoise'] },
   // docs/evidence/aimlapi-lora-p0-2026-10-15.md + aimlapi.json: steps 1–8, no guidance_scale → omit cfg. No accepted-run LoRA → no LoRA node.
   { provider: 'aimlapi', ckpt: 'alibaba/z-image-turbo-lora', hasLora: false, hasNegative: false, steps: 8, omit: ['cfg', 'sampler', 'scheduler', 'denoise'] },
@@ -788,7 +775,11 @@ const STD_SPECS: StdSpec[] = [
   // flux preset dropped as default: official note says flux rejects SD-trained LoRAs / negative_prompt.
   { provider: 'modelslab', ckpt: 'tamarin-xl-v1', hasLora: true, hasNegative: true, steps: 20, cfg: 7.5, width: 512, height: 512, scheduler: 'UniPCMultistepScheduler', omit: ['sampler', 'denoise'],
     loras: [{ name: 'xl-realistic-cake-art-sty', strength: 0.45, source: 'https://docs.modelslab.com/image-generation/community-models/dreambooth-lora' }] },
-  { provider: 'agnes', ckpt: 'agnes-image-2.5-flash', hasLora: false, compact: true, checkpointExtra: { size: '2K', aspect_ratio: '1:1' } },
+  // providerSchema.ts agnesUnsupported (wiki.agnes-ai.com agnes-image-25-flash): only prompt + size + ratio. Same full
+  // topology as Mage (image output → SaveImage); compact CLIP CONDITIONING→SaveImage was a wrong-type edge.
+  { provider: 'agnes', ckpt: 'agnes-image-2.5-flash', hasLora: false, hasNegative: false,
+    omit: ['seed', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'width', 'height'],
+    checkpointExtra: { size: '2K', aspect_ratio: '1:1' } },
   // docs.mage.space/api/models/mango OpenAPI (fetched 2026-11-03): prompt + seed + model_id + aspect_ratio + resolution (+ refs); no LoRA/steps/cfg/sampler; no width/height pixels.
   // Board keeps sampler+VAE topology (雁: no compact) but omits EmptyLatent pixel size — size lives on checkpoint aspect_ratio/resolution.
   { provider: 'mage', ckpt: 'mango-v3', hasLora: false, hasNegative: false, omit: ['steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'width', 'height'], checkpointExtra: { aspect_ratio: '4:5', resolution: '2K' } },
