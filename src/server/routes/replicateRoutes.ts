@@ -4,7 +4,6 @@ import {
   parseReplicatePredictionResponse,
   parseReplicateModelRef,
   extractReplicateInputProperties,
-  hasReplicateStaticSpec,
   ReplicateSchemaMissingError,
   type ReplicateSchemaFetchFailure,
 } from '../replicateImageContract';
@@ -56,11 +55,14 @@ export function handleReplicateGenerate(deps: ReplicateRouteDeps) {
       // Exact-version schema lookup is possible only when the request identifies its owner/name.
       // A bare version hash remains usable with caller-provided schema properties.
       const mustReadPinnedVersionSchema = Boolean(explicitVersion && ref.owner && ref.name);
-      const shouldReadLiveSchema = mustReadPinnedVersionSchema || (!hasClientProps && !hasReplicateStaticSpec(String(reqBody.model)));
       const cleanBase = baseUrl.replace(/\/+$/, '');
       const schemaUrl = ref.owner && ref.name
         ? `${cleanBase}/models/${encodeURIComponent(ref.owner)}/${encodeURIComponent(ref.name)}${explicitVersion ? `/versions/${encodeURIComponent(explicitVersion)}` : ''}`
         : null;
+      // ALWAYS read live openapi_schema for outbound when we can form a schema URL, unless this
+      // request already carries inputSchemaProperties from /api/model-schema (reuse). A pinned
+      // version still forces the exact-version GET. Static PROVIDER_SCHEMA must NEVER skip live.
+      const shouldReadLiveSchema = Boolean(schemaUrl) && (mustReadPinnedVersionSchema || !hasClientProps);
       if (shouldReadLiveSchema && schemaUrl) {
         try {
           const sr = await deps.upstreamFetch(
@@ -81,9 +83,9 @@ export function handleReplicateGenerate(deps: ReplicateRouteDeps) {
           schemaFetch = { url: schemaUrl, status: null, body: String(e?.message || e) };
         }
       }
-      // A pinned version can have an Input schema different from the model's latest/static schema.
-      // Never fall back to that other schema if the exact version's live schema could not be read.
-      if (mustReadPinnedVersionSchema && !liveProps && !hasClientProps) {
+      // Fail closed: live (or caller-supplied) schema required for outbound. Static table is UI clue only —
+      // never authorize /predictions from a stale PROVIDER_SCHEMA row alone.
+      if (!liveProps && !hasClientProps && schemaUrl) {
         const error = new ReplicateSchemaMissingError(String(reqBody.model), schemaFetch);
         const sf = error.schemaFetch;
         const upstreamAnswered = Boolean(sf && sf.status !== null && (sf.status < 200 || sf.status >= 300));
@@ -104,16 +106,12 @@ export function handleReplicateGenerate(deps: ReplicateRouteDeps) {
       ? 'replicate-live-schema'
       : hasClientProps
         ? 'caller-inputSchemaProperties'
-        : reqBody.model && hasReplicateStaticSpec(String(reqBody.model))
-          ? 'static-provider-schema'
-          : 'unknown';
+        : 'unknown';
     const schemaValidation = liveProps
       ? 'live schema loaded for the requested model/version'
       : hasClientProps
         ? 'caller-supplied schema; not verified against the requested version'
-        : schemaSource === 'static-provider-schema'
-          ? 'static schema; not verified against a pinned version'
-          : 'unknown';
+        : 'unknown';
 
     let mapped: ReturnType<typeof buildReplicatePredictionRequest>;
     try {

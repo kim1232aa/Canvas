@@ -445,24 +445,36 @@ describe('provider contract (16): builder / route-handler providers', () => {
     const d = draft('replicate');
     expect(d.lora.maxLoras).toBe(2);
     const two = [{ path: 'owner/a', strength: 0.8 }, { path: 'owner/b', strength: 0.4 }];
+    const liveProps = Object.fromEntries(
+      ['prompt', 'aspect_ratio', 'seed', 'num_inference_steps', 'guidance', 'image', 'prompt_strength', 'lora_weights', 'lora_scale', 'extra_lora', 'extra_lora_scale', 'num_outputs', 'output_format'].map((k) => [k, {}]),
+    );
     const body = { model: 'black-forest-labs/flux-dev-lora', prompt: 'x', seed: 42, steps: 6, cfg: 3.5, width: 1024, height: 768, aspect_ratio: '4:3', loras: two };
-    const built = buildReplicatePredictionRequest(body);
+    const built = buildReplicatePredictionRequest(body, undefined, liveProps);
     expect(built.payload.input).toMatchObject({ seed: 42, num_inference_steps: 6, guidance: 3.5, aspect_ratio: '4:3', lora_weights: 'owner/a', lora_scale: 0.8, extra_lora: 'owner/b', extra_lora_scale: 0.4 });
     expect(built.payload.input).not.toHaveProperty('width');
     expect(built.omitted!.map((o) => o.from)).toEqual(['width', 'height']);
     for (const f of ['seed', 'steps', 'cfg', 'loras']) expect(unsupportedLabel('replicate', 'black-forest-labs/flux-dev-lora', f), f).toBe(false);
     for (const f of ['width', 'height']) expect(unsupportedLabel('replicate', 'black-forest-labs/flux-dev-lora', f)).toBe(true);
-    expect(() => buildReplicatePredictionRequest({ ...body, loras: [...two, { path: 'owner/c', strength: 0.2 }] })).toThrow(/最多 2 个 LoRA/);
-    // real route handler with fixture upstream: upstream body === actualRequest, failure body verbatim
+    expect(() => buildReplicatePredictionRequest({ ...body, loras: [...two, { path: 'owner/c', strength: 0.2 }] }, undefined, liveProps)).toThrow(/最多 2 个 LoRA/);
+    // real route handler with fixture upstream: GET live schema, then POST predictions; upstream body === actualRequest
     const sent: any[] = [];
     const raw = '{"detail":"You have insufficient credit to run this model."}';
+    const schemaRaw = JSON.stringify({ latest_version: { openapi_schema: { components: { schemas: { Input: { properties: liveProps } } } } } });
     const res: any = { statusCode: 200, body: undefined, status(c: number) { this.statusCode = c; return this; }, json(p: any) { this.body = p; return this; } };
     await handleReplicateGenerate({
       resolveProviderAuth: () => ({ apiKey: 'k', baseUrl: 'https://api.replicate.com/v1' }),
-      upstreamFetch: async (_m: any, url: string, init: any) => { sent.push({ url, init }); return new Response(raw, { status: 402 }); },
+      upstreamFetch: async (_m: any, url: string, init: any) => {
+        sent.push({ url, init });
+        if (String(url).includes('/models/black-forest-labs/flux-dev-lora') && !String(url).endsWith('/predictions') && (!init || init.method === 'GET' || init.method === undefined)) {
+          return new Response(schemaRaw, { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
+        return new Response(raw, { status: 402 });
+      },
       keyPoolManager: { recordResult: () => {} }, respondWithGeneratedImages: async () => { throw new Error('must not succeed'); },
     } as any)({ body, path: '/api/replicate/generate', headers: {} } as any, res);
-    expect(JSON.parse(sent[0].init.body)).toEqual(res.body.actualRequest);
+    const pred = sent.find((s) => String(s.url).endsWith('/predictions'));
+    expect(pred).toBeTruthy();
+    expect(JSON.parse(pred.init.body)).toEqual(res.body.actualRequest);
     expect(res.statusCode).toBe(402);
     expect(res.body.rawResponse).toBe(raw);
     expect(res.body.parameterOmissions.map((o: any) => o.from)).toEqual(['width', 'height']);

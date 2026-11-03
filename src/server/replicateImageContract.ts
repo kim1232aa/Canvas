@@ -35,7 +35,7 @@ export interface ReplicateSchemaFetchFailure {
   body: string;
 }
 
-/** Thrown when neither a live OpenAPI Input schema nor a PROVIDER_SCHEMA row exists: nothing is sent upstream. */
+/** Thrown when neither a live OpenAPI Input schema nor caller-supplied inputSchemaProperties exists: nothing is sent upstream. Static PROVIDER_SCHEMA is UI clue only and never alone authorizes outbound. */
 export class ReplicateSchemaMissingError extends Error {
   model: string;
   schemaFetch?: ReplicateSchemaFetchFailure;
@@ -159,28 +159,15 @@ export function buildReplicatePredictionRequest(
   };
   const omitted: Array<{ from: string; to: null; value: unknown; sent: false; reason: string }> = [];
 
-  // Declared-field gate (generic, no per-model branches): live OpenAPI Input props win; else the
-  // PROVIDER_SCHEMA row for this model. A filled field the schema does not declare is NOT sent and is
-  // recorded in `omitted` with reason 「该端点不支持」. When neither source exists the request is blocked locally.
-  const staticSpec = getModelSpec('replicate', canonicalModelName);
-  const schemaFields: string[] | undefined = schemaProps
-    ? Object.keys(schemaProps)
-    : staticSpec
-    ? Object.entries(staticSpec.fields)
-        .filter(([, f]) => (f as any)?.status === 'supported')
-        .map(([k, f]) => String((f as any)?.wire || k))
-    : undefined;
-  // Iron rule 4: no live schema and no table row → block locally, never send guessed legacy field names.
-  if (!schemaFields) throw new ReplicateSchemaMissingError(rawModel, schemaFetchFailure);
-  /** Returns the wire name to send, or null when the schema does not declare this field. */
-  const declaredWire = (fieldKey: string, candidates: string[], legacy: string): string | null => {
-    if (schemaProps) return candidates.find((w) => w in schemaProps) ?? null;
-    if (staticSpec) {
-      const f = (staticSpec.fields as Record<string, any>)[fieldKey];
-      if (!f || f.status !== 'supported') return null;
-      return String(f.wire || candidates[0]);
-    }
-    return legacy;
+  // Declared-field gate (generic, no per-model branches): live OpenAPI Input props or caller-supplied
+  // inputSchemaProperties (from this request's /api/model-schema) only. Static PROVIDER_SCHEMA is a UI
+  // badge/clue and must NOT alone authorize outbound or decide the omitted set. Undeclared filled
+  // fields are NOT sent (omitted, reason 「该端点不支持」). No live/caller schema → local block.
+  if (!schemaProps) throw new ReplicateSchemaMissingError(rawModel, schemaFetchFailure);
+  const schemaFields: string[] = Object.keys(schemaProps);
+  /** Returns the wire name to send, or null when the live/caller schema does not declare this field. */
+  const declaredWire = (_fieldKey: string, candidates: string[], _legacy: string): string | null => {
+    return candidates.find((w) => w in schemaProps) ?? null;
   };
   const omit = (from: string, value: unknown, wires: string[]) =>
     omitted.push({
@@ -219,17 +206,17 @@ export function buildReplicatePredictionRequest(
 
   const cfg = body.cfg ?? body.guidance ?? body.guidance_scale ?? body.guidanceScale ?? body.cfgScale;
   if (typeof cfg === 'number' && Number.isFinite(cfg) && cfg > 0) {
-    // Wire name comes from live Input / PROVIDER_SCHEMA only (guidance vs guidance_scale); no model-name branch.
+    // Wire name comes from live/caller Input schema only (guidance vs guidance_scale); no model-name branch.
     place('cfg', 'cfg', Number(cfg), ['guidance', 'guidance_scale'], 'guidance');
   }
 
   const imageUrl = String(body.image_url || body.imageUrl || body.image || body.input_image || '').trim();
   if (imageUrl) {
-    // Prefer the wire the live/static schema declares (image vs input_image); never guess undeclared names.
+    // Prefer the wire the live/caller schema declares (image vs input_image); never guess undeclared names.
     const preferInputImage = Boolean(body.input_image && !body.image && !body.image_url && !body.imageUrl);
     const imgCandidates = preferInputImage ? ['input_image', 'image'] : ['image', 'input_image'];
     place('image', 'image_url', imageUrl, imgCandidates, imgCandidates[0]);
-    // denoise / prompt_strength only when declared (PROVIDER_SCHEMA uses field key denoise → wire prompt_strength).
+    // denoise / prompt_strength only when declared by live/caller schema (wire prompt_strength or strength).
     const strength = body.prompt_strength ?? body.denoise ?? body.strength;
     if (typeof strength === 'number' && Number.isFinite(strength)) {
       place('denoise', 'denoise', Number(strength), ['prompt_strength', 'strength'], 'prompt_strength');
@@ -286,21 +273,17 @@ export function buildReplicatePredictionRequest(
   };
 
   if (Array.isArray(body.loras) && body.loras.length > 0) {
-    const staticLora = staticSpec ? (staticSpec.fields as Record<string, any>).loras : undefined;
-    const schemaAllowsLora = schemaProps
-      ? ('lora_weights' in schemaProps || 'hf_lora' in schemaProps || 'loras' in schemaProps)
-      : staticLora?.status === 'supported';
+    const schemaAllowsLora = (
+      'lora_weights' in schemaProps || 'hf_lora' in schemaProps || 'loras' in schemaProps
+    );
     if (!schemaAllowsLora) {
       throw new Error(`该 Replicate 模型 (${canonicalModelName}) 的官方 OpenAPI Input Schema 不支持挂载 LoRA 参数`);
     }
-    const useLoraWeightsField = schemaProps
-      ? ('lora_weights' in schemaProps && !('hf_lora' in schemaProps))
-      : String(staticLora?.wire || 'lora_weights') === 'lora_weights';
+    const useLoraWeightsField = 'lora_weights' in schemaProps && !('hf_lora' in schemaProps);
 
     // Two-slot LoRA contract (lora_weights|hf_lora + extra_lora): never silently drop the 3rd+ LoRA.
-    const maxLoras = schemaProps
-      ? ('loras' in schemaProps ? Infinity : ('extra_lora' in schemaProps ? 2 : 1))
-      : 2; // static PROVIDER_SCHEMA rows that support LoRA document the two-slot official contract
+    // Shape follows live/caller schema only — never invent slots from a static PROVIDER_SCHEMA row.
+    const maxLoras = 'loras' in schemaProps ? Infinity : ('extra_lora' in schemaProps ? 2 : 1);
     if (body.loras.length > maxLoras) {
       throw new Error(`该 Replicate 模型 (${canonicalModelName}) 最多 ${maxLoras} 个 LoRA（官方字段 lora_weights${maxLoras > 1 ? ' + extra_lora' : ''}）；本次 ${body.loras.length} 个，未发送请求`);
     }
@@ -321,12 +304,8 @@ export function buildReplicatePredictionRequest(
       }
     }
   } else if (body.lora_weights && typeof body.lora_weights === 'string' && body.lora_weights.trim()) {
-    // Direct wire passthrough only when schema/static declares lora_weights.
-    const allows =
-      (schemaProps && 'lora_weights' in schemaProps) ||
-      (!schemaProps && (staticSpec?.fields as any)?.loras?.status === 'supported' &&
-        String((staticSpec?.fields as any)?.loras?.wire || 'lora_weights') === 'lora_weights');
-    if (!allows) {
+    // Direct wire passthrough only when live/caller schema declares lora_weights.
+    if (!('lora_weights' in schemaProps)) {
       omit('lora_weights', body.lora_weights, ['lora_weights']);
     } else {
       input.lora_weights = body.lora_weights.trim();
@@ -335,11 +314,7 @@ export function buildReplicatePredictionRequest(
       }
     }
   } else if (body.hf_lora && typeof body.hf_lora === 'string' && body.hf_lora.trim()) {
-    const allows = schemaProps
-      ? 'hf_lora' in schemaProps
-      : (staticSpec?.fields as any)?.loras?.status === 'supported' &&
-        String((staticSpec?.fields as any)?.loras?.wire || '') === 'hf_lora';
-    if (!allows) {
+    if (!('hf_lora' in schemaProps)) {
       omit('hf_lora', body.hf_lora, ['hf_lora']);
     } else {
       input.hf_lora = body.hf_lora.trim();

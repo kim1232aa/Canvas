@@ -19,11 +19,14 @@ function deps(fetchImpl: any) {
 }
 
 describe('Replicate no-schema local block (iron rule 4)', () => {
-  it('contract: no live schema and no table row -> throws, nothing built', () => {
+  it('contract: no live/caller schema -> throws even when a static PROVIDER_SCHEMA row exists', () => {
     expect(() => buildReplicatePredictionRequest({ model: 'someone/unknown-model', prompt: 'x', cfg: 3 }))
       .toThrow(ReplicateSchemaMissingError);
     expect(() => buildReplicatePredictionRequest({ model: 'someone/unknown-model', prompt: 'x' }))
       .toThrow('本地拦截：拿不到该模型 Schema，未发送 /predictions（model=someone/unknown-model）');
+    // Table row alone must not authorize outbound (flux-schnell has a static row).
+    expect(() => buildReplicatePredictionRequest({ model: 'black-forest-labs/flux-schnell', prompt: 'x' }))
+      .toThrow(ReplicateSchemaMissingError);
   });
 
   it('route: schema fetch 404 -> blocked, body passed through verbatim, no prediction POST', async () => {

@@ -4,6 +4,19 @@ import {
   parseReplicatePredictionResponse,
 } from './replicateImageContract';
 
+const SCHNELL_PROPS = Object.fromEntries(
+  ['seed', 'prompt', 'go_fast', 'megapixels', 'num_outputs', 'aspect_ratio', 'output_format', 'output_quality', 'num_inference_steps', 'disable_safety_checker'].map((k) => [k, {}]),
+);
+const FLUX_DEV_PROPS = Object.fromEntries(
+  ['prompt', 'aspect_ratio', 'seed', 'num_inference_steps', 'guidance', 'image', 'prompt_strength', 'num_outputs', 'output_format', 'output_quality', 'go_fast', 'megapixels', 'disable_safety_checker'].map((k) => [k, {}]),
+);
+const FLUX_DEV_LORA_PROPS = Object.fromEntries(
+  ['aspect_ratio', 'prompt', 'seed', 'num_inference_steps', 'guidance', 'image', 'prompt_strength', 'lora_weights', 'lora_scale', 'extra_lora', 'extra_lora_scale', 'num_outputs', 'output_format', 'output_quality', 'go_fast', 'megapixels', 'disable_safety_checker', 'hf_api_token', 'civitai_api_token'].map((k) => [k, {}]),
+);
+const SEEDREAM_PROPS = Object.fromEntries(
+  ['prompt', 'aspect_ratio', 'width', 'height', 'seed', 'guidance_scale', 'size', 'go_fast'].map((k) => [k, {}]),
+);
+
 describe('replicateImageContract', () => {
   describe('buildReplicatePredictionRequest', () => {
     it('builds request for named model without version', () => {
@@ -17,7 +30,7 @@ describe('replicateImageContract', () => {
         seed: 42,
         steps: 4,
         cfg: 3.5,
-      });
+      }, undefined, SCHNELL_PROPS);
 
       expect(result.endpoint).toBe('https://api.replicate.com/v1/models/black-forest-labs/flux-schnell/predictions');
       expect(result.isVersionBased).toBe(false);
@@ -43,7 +56,7 @@ describe('replicateImageContract', () => {
       const result = buildReplicatePredictionRequest({
         model: `black-forest-labs/flux-dev:${hex64}`,
         prompt: 'cyberpunk street',
-      });
+      }, undefined, FLUX_DEV_PROPS);
 
       expect(result.endpoint).toBe('https://api.replicate.com/v1/predictions');
       expect(result.isVersionBased).toBe(true);
@@ -96,7 +109,7 @@ describe('replicateImageContract', () => {
           { path: 'https://huggingface.co/owner/lora/resolve/main/weights.safetensors', strength: 0.8 },
           { path: 'https://huggingface.co/owner/lora-second/resolve/main/weights.safetensors', strength: 0.5 },
         ],
-      });
+      }, undefined, FLUX_DEV_LORA_PROPS);
 
       const input = result.payload.input as Record<string, unknown>;
       expect(input.image).toBe('https://example.com/source.png');
@@ -133,7 +146,7 @@ describe('replicateImageContract', () => {
           model: 'black-forest-labs/flux-dev-lora',
           prompt: 'portrait of a warrior',
           loras: [{ civitaiId: '2746042', strength: 0.75 }],
-        })
+        }, undefined, FLUX_DEV_LORA_PROPS)
       ).toThrow(/严禁从 Civitai ID 或 AIR 猜测拼接下载链接/);
 
       expect(() =>
@@ -141,7 +154,7 @@ describe('replicateImageContract', () => {
           model: 'black-forest-labs/flux-dev-lora',
           prompt: 'portrait of a warrior',
           loras: [{ name: 'urn:air:flux1:lora:civitai:12345@67890', modelStrength: 0.65 }],
-        })
+        }, undefined, FLUX_DEV_LORA_PROPS)
       ).toThrow(/严禁从 Civitai ID 或 AIR 猜测拼接下载链接/);
     });
 
@@ -151,7 +164,7 @@ describe('replicateImageContract', () => {
           model: 'black-forest-labs/flux-dev-lora',
           prompt: 'styled portrait',
           loras: ['alexp/flux-ghibli'],
-        })
+        }, undefined, FLUX_DEV_LORA_PROPS)
       ).toThrow(/严禁仅传字符串并静默兜底为 1\.0/);
 
       expect(() =>
@@ -159,7 +172,7 @@ describe('replicateImageContract', () => {
           model: 'black-forest-labs/flux-dev-lora',
           prompt: 'styled portrait',
           loras: [{ path: 'alexp/flux-ghibli' }],
-        })
+        }, undefined, FLUX_DEV_LORA_PROPS)
       ).toThrow(/缺少显式权重.*严禁静默兜底为 1\.0/);
     });
 
@@ -177,23 +190,32 @@ describe('replicateImageContract', () => {
       ).toThrow(/官方 OpenAPI Input Schema 不支持挂载 LoRA 参数/);
     });
 
-    it('rejects loras for flux-schnell via PROVIDER_SCHEMA alone (no live props, never invent hf_lora)', () => {
+    it('static PROVIDER_SCHEMA alone cannot authorize outbound (schema missing)', () => {
+      expect(() =>
+        buildReplicatePredictionRequest({
+          model: 'black-forest-labs/flux-schnell',
+          prompt: 'fast render',
+        })
+      ).toThrow(/拿不到该模型 Schema/);
+    });
+
+    it('rejects loras for flux-schnell via live props without LoRA fields (never invent hf_lora)', () => {
       expect(() =>
         buildReplicatePredictionRequest({
           model: 'black-forest-labs/flux-schnell',
           prompt: 'fast render',
           loras: [{ path: 'alexp/flux-ghibli', strength: 0.8 }],
-        })
+        }, undefined, SCHNELL_PROPS)
       ).toThrow(/官方 OpenAPI Input Schema 不支持挂载 LoRA 参数/);
     });
 
-    it('rejects loras for flux-dev via PROVIDER_SCHEMA (LoRA belongs on flux-dev-lora)', () => {
+    it('rejects loras for flux-dev via live props without LoRA fields (LoRA belongs on flux-dev-lora)', () => {
       expect(() =>
         buildReplicatePredictionRequest({
           model: 'black-forest-labs/flux-dev',
           prompt: 'portrait',
           loras: [{ path: 'fofr/flux-pixar-cars', strength: 0.9 }],
-        })
+        }, undefined, FLUX_DEV_PROPS)
       ).toThrow(/官方 OpenAPI Input Schema 不支持挂载 LoRA 参数/);
     });
 
@@ -207,7 +229,7 @@ describe('replicateImageContract', () => {
           go_fast: true,
           output_quality: 90,
         },
-      });
+      }, undefined, SEEDREAM_PROPS);
 
       const input = result.payload.input as Record<string, unknown>;
       expect(input.guidance_scale).toBe(5.5);
@@ -228,7 +250,8 @@ describe('replicateImageContract', () => {
           model: 'black-forest-labs/flux-schnell',
           prompt: 'mountain view',
         },
-        'https://my-replicate-proxy.internal/v1///'
+        'https://my-replicate-proxy.internal/v1///',
+        SCHNELL_PROPS,
       );
 
       expect(result.endpoint).toBe('https://my-replicate-proxy.internal/v1/models/black-forest-labs/flux-schnell/predictions');

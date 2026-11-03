@@ -116,7 +116,48 @@ describe('replicateRoutes', () => {
     });
 
     it('generates image successfully on immediate succeeded response', async () => {
-      const { deps, recordedResults, persistedCalls, fetchCalls } = createMockDeps();
+      // Models with a static PROVIDER_SCHEMA row must still GET live openapi_schema before POST.
+      const schemaBody = JSON.stringify({
+        latest_version: {
+          openapi_schema: {
+            components: {
+              schemas: {
+                Input: {
+                  type: 'object',
+                  properties: {
+                    prompt: { type: 'string' },
+                    aspect_ratio: { type: 'string' },
+                    seed: { type: 'integer' },
+                    num_inference_steps: { type: 'integer' },
+                    num_outputs: { type: 'integer' },
+                    output_format: { type: 'string' },
+                    go_fast: { type: 'boolean' },
+                    megapixels: { type: 'string' },
+                    output_quality: { type: 'integer' },
+                    disable_safety_checker: { type: 'boolean' },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
+      const predBody = JSON.stringify({
+        id: 'pred_default',
+        status: 'succeeded',
+        output: ['https://replicate.delivery/out.png'],
+      });
+      const { deps, recordedResults, persistedCalls, fetchCalls } = createMockDeps({
+        upstreamFetch: vi.fn(async (_meta: any, url: string, options: any) => {
+          if (url === 'https://api.replicate.com/v1/models/black-forest-labs/flux-schnell' && options?.method === 'GET') {
+            return { ok: true, status: 200, text: async () => schemaBody };
+          }
+          if (url === 'https://api.replicate.com/v1/models/black-forest-labs/flux-schnell/predictions' && options?.method === 'POST') {
+            return { ok: true, status: 200, text: async () => predBody };
+          }
+          throw new Error(`unexpected Replicate request ${options?.method} ${url}`);
+        }),
+      });
       const handler = handleReplicateGenerate(deps);
 
       const req: any = {
@@ -133,10 +174,13 @@ describe('replicateRoutes', () => {
       await handler(req, res);
 
       expect(res.statusCode).toBe(200);
-      expect(fetchCalls).toHaveLength(1);
-      expect(fetchCalls[0].url).toBe('https://api.replicate.com/v1/models/black-forest-labs/flux-schnell/predictions');
-      expect(fetchCalls[0].options.headers.Authorization).toBe('Bearer r8_test_key_123');
-      expect(fetchCalls[0].options.headers.Prefer).toBe('wait');
+      expect(fetchCalls.map((c) => [c.options.method, c.url])).toEqual([
+        ['GET', 'https://api.replicate.com/v1/models/black-forest-labs/flux-schnell'],
+        ['POST', 'https://api.replicate.com/v1/models/black-forest-labs/flux-schnell/predictions'],
+      ]);
+      expect(fetchCalls[1].options.headers.Authorization).toBe('Bearer r8_test_key_123');
+      expect(fetchCalls[1].options.headers.Prefer).toBe('wait');
+      expect(res.data.schemaSource).toBe('replicate-live-schema');
 
       expect(persistedCalls).toHaveLength(1);
       expect(persistedCalls[0].images).toEqual(['https://replicate.delivery/out.png']);
@@ -146,6 +190,30 @@ describe('replicateRoutes', () => {
       expect(recordedResults).toHaveLength(1);
       expect(recordedResults[0][0]).toBe('replicate');
       expect(recordedResults[0][2]).toBe(true); // success
+    });
+
+    it('blocks outbound when live schema GET fails even if a static PROVIDER_SCHEMA row exists', async () => {
+      const { deps, fetchCalls } = createMockDeps({
+        upstreamFetch: vi.fn(async () => ({
+          ok: false,
+          status: 503,
+          text: async () => 'schema upstream unavailable',
+        })),
+      });
+      const handler = handleReplicateGenerate(deps);
+      const req: any = {
+        body: { model: 'black-forest-labs/flux-schnell', prompt: 'x' },
+        path: '/api/engine/replicate/generate',
+      };
+      const res = createMockRes();
+      await handler(req, res);
+      expect(res.statusCode).toBe(503);
+      expect(res.data.blocked).toBe('schema_missing');
+      expect(res.data.notSent).toBe(true);
+      expect(res.data.actualRequest).toBeNull();
+      expect(fetchCalls).toHaveLength(1);
+      expect(fetchCalls[0].options.method).toBe('GET');
+      expect(fetchCalls.some((c) => String(c.url).endsWith('/predictions'))).toBe(false);
     });
 
     it('polls until succeeded when initial response is processing', async () => {
