@@ -95,7 +95,7 @@
     "officialNote": "官方 tool/list 中 photoreal_studio_z_image 仅登记 prompt/width/height/count（docs/evidence/openworks-tool-list-2026-10-17.json）；登记≠砍参：产品仍发全参数+LoRA；是否生效未证实"
   },
   "mapping": {
-    "canvasFields": "仅当 Schema 属性名等于画布字段或 CANVAS_TO_SCHEMA_ALIASES 别名时发送（与徽标同表）；否则 sent:false 不会发送",
+    "canvasFields": "仅当 Schema 属性名等于画布字段或 CANVAS_TO_SCHEMA_ALIASES 别名时发送（与徽标同表）；否则（官方表无此字段）也照发；上游不认则原样显示报错",
     "customJson": "键必须为 Schema 属性名，否则本地 400"
   },
   "probeGated": {
@@ -122,7 +122,7 @@
     "userRule": "2026-10-16 雁：有能出图的接口可留，不要那些工具",
     "canvasRule": "2026-10-16 画布：别整包删；只拆混用/冒充/误导入口；真生图测通再留"
   },
-  "_auditStatus": "2026-11-03 ~17:13 JST：画布认可本次同次点跑真出图 hist_1793693239642_fo6ux（全参+3 LoRA）；证据 /workspace/canvas/temp/e2e/openworks-fe-gen-2026-11-03/；徽章仍「已出图（生效未证实）」不抬已生效。canvas-dev 另有 SchemaProviderDriver checkpoint 上提未提交改动，非草案范围。\n2026-11-03 画布纠偏：OpenWorks 禁止写回「只发四项/四字段砍参」；全参数+真 LoRA 发送；tool/list 四字段不当砍参；TAMS 已撤。已改正 probeGated.current / contractTestHint；徽章仍「已出图（生效未证实）」不自升。\n2026-10-17 ~15:00 北京：画布拍板只发四项；全参数发送作废；hist_wgtkk 出图但多发参数→仍未验证。等四项干净重跑。 | 2026-10-16 ~23:11 JST：画布正式收口 fix13.1；证据 已清理，PID 3611920。@tinkabot 不升出图徽章。 2026-10-16 ~22:57 JST：fix13.1 CODE_ONLY（UI 五条）；PID 3611920；证据 docs/evidence/fix13.1-2026-10-16.md。对照表仍 CODE_ONLY、不升出图。 2026-10-16 ~22:53 JST：画布正式收口 fix13（清理+主机+口径）；证据 已清理，PID 3576628。建任务 BLOCKED——**对照表保持 CODE_ONLY、不升出图徽章**（画布@tinkabot）。下一批 fix13.1 仅 UI 细节。 2026-10-16 ~22:52 JST：画布 fix13 前端四项复验过（清理+主机+Together），证据 已清理，PID 3576628；已交挑刺。建任务仍 BLOCKED，**不升出图徽章**。 2026-10-16 ~22:35 JST fix13 CODE_ONLY（canvas-dev PID 3576628；证据 d",
+  "_auditStatus": "2026-11-04 ~06:10 JST：雁定——用户设的参数一律照发，禁止扣参/置灰/不发；草案内所有「不发送」建议作废。\n2026-11-03 ~17:13 JST：画布认可本次同次点跑真出图 hist_1793693239642_fo6ux（全参+3 LoRA）；证据 /workspace/canvas/temp/e2e/openworks-fe-gen-2026-11-03/；徽章仍「已出图（生效未证实）」不抬已生效。canvas-dev 另有 SchemaProviderDriver checkpoint 上提未提交改动，非草案范围。\n2026-11-03 画布纠偏：OpenWorks 禁止写回「只发四项/四字段砍参」；全参数+真 LoRA 发送；tool/list 四字段不当砍参；TAMS 已撤。已改正 probeGated.current / contractTestHint；徽章仍「已出图（生效未证实）」不自升。\n2026-10-17 ~15:00 北京：画布拍板只发四项；全参数发送作废；hist_wgtkk 出图但多发参数→仍未验证。等四项干净重跑。 | 2026-10-16 ~23:11 JST：画布正式收口 fix13.1；证据 已清理，PID 3611920。@tinkabot 不升出图徽章。 2026-10-16 ~22:57 JST：fix13.1 CODE_ONLY（UI 五条）；PID 3611920；证据 docs/evidence/fix13.1-2026-10-16.md。对照表仍 CODE_ONLY、不升出图。 2026-10-16 ~22:53 JST：画布正式收口 fix13（清理+主机+口径）；证据 已清理，PID 3576628。建任务 BLOCKED——**对照表保持 CODE_ONLY、不升出图徽章**（画布@tinkabot）。下一批 fix13.1 仅 UI 细节。 2026-10-16 ~22:52 JST：画布 fix13 前端四项复验过（清理+主机+Together），证据 已清理，PID 3576628；已交挑刺。建任务仍 BLOCKED，**不升出图徽章**。 2026-10-16 ~22:35 JST fix13 CODE_ONLY（canvas-dev PID 3576628；证据 d",
   "fix13": {
     "status": "CODE_ONLY",
     "kept": "openWorksProvider.ts + schema-provider/openworks/* 真生图路径",

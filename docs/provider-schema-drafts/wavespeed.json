@@ -206,7 +206,7 @@
       500
     ]
   },
-  "contractTestHint": "krea-v2/turbo-lora: actualRequest 须含 aspect_ratio+resolution(1k|2k)、seed、loras[{path,scale}]；path 须为 direct .safetensors URL（该模型页只写这一种）；不得发 size/steps/cfg；steps/cfg 标不会发送。z-image/turbo(-lora): 须含 size 'W*H'（及 schema 声明的 output_format）；path 可为 owner/name 或 .safetensors 直链；不得发 aspect_ratio/resolution(1k|2k)。不可达/非公开 path → 上游 status=failed code=1402 原样失败（画布不改写 path）。线索（clean-0544 整套退回，不算 PASS）：Krea hist_1792014675785_924um 出图成功；z-image hist_1792014824657_5o7wt。",
+  "contractTestHint": "krea-v2/turbo-lora: actualRequest 须含 aspect_ratio+resolution(1k|2k)、seed、loras[{path,scale}]；path 须为 direct .safetensors URL（该模型页只写这一种）；官方该模型页无 size/steps/cfg（事实），用户填了就照发；上游不认则原样显示报错。z-image/turbo(-lora): 须含 size 'W*H'（及 schema 声明的 output_format）；path 可为 owner/name 或 .safetensors 直链；官方无 aspect_ratio/resolution（事实），用户填了就照发；上游不认则原样显示报错。不可达/非公开 path → 上游 status=failed code=1402 原样失败（画布不改写 path）。线索（clean-0544 整套退回，不算 PASS）：Krea hist_1792014675785_924um 出图成功；z-image hist_1792014824657_5o7wt。",
   "sources": [
     "https://wavespeed.ai/docs/get-started-api",
     "https://wavespeed.ai/docs/lora-training-usage",
@@ -217,7 +217,7 @@
     "https://wavespeed.ai/docs/docs-api/wavespeed-ai/z-image-turbo-lora",
     "https://wavespeed.ai/docs/docs-api/wavespeed-ai/flux-dev-lora"
   ],
-  "_auditStatus": "2026-11-02 ~04:45 JST：Researchy——WaveSpeed hunyuan t2v.seed。\n2026-11-02 ~04:43 JST：Researchy——WaveSpeed krea-v2/turbo-lora seed/-1、resolution 仅1k|2k；z-image/turbo seed。\n2026-10-16 ~23:33 北京：下一批主验 WaveSpeed 真出图；tinkabot 等明示再升。 2026-10-16 15:12：fix3-1510 升 PASS_GENERATION。2026-10-16 15:35：fix3-1510 真出图暂不收口（等挑刺确认 aspect_ratio 补拍）。2026-10-16 14:46：fix2-1320 真出图但不收口 FAIL_UI；strength 官方字段默认 0.8 仅 image 时用，本轮为上游回显非我方发送。2026-10-16 12:37：新 Key 复验请求字段已核（不收口，徽章未升）。2026-10-15 07:13 tinkabot 撤回：clean-0544 整套退回，Krea/z-image 出图仅作线索，不算证实。2026-10-15 07:09：clean-0544（已退回）线索显示 krea-v2/turbo-lora actualRequest=aspect_ratio+resolution+seed+loras[{path:.safetensors直链,scale}]（无 size/steps/cfg）；z-image/turbo-lora size 'W*H' 无 aspect_ratio/resolution。前序 2026-10-15 06:38：认领 Researchy 06:30——补 contractTestHint（Krea path=.safetensors 直链；z-image 允许 owner/name；1402 原样失败不改写）。前序 06:30 Researchy 已写 lora.path.perModelDoc；06:02：尺寸分两族。",
+  "_auditStatus": "2026-11-04 ~06:10 JST：雁定——用户设的参数一律照发，禁止扣参/置灰/不发；草案内所有「不发送」建议作废。\n2026-11-02 ~04:45 JST：Researchy——WaveSpeed hunyuan t2v.seed。\n2026-11-02 ~04:43 JST：Researchy——WaveSpeed krea-v2/turbo-lora seed/-1、resolution 仅1k|2k；z-image/turbo seed。\n2026-10-16 ~23:33 北京：下一批主验 WaveSpeed 真出图；tinkabot 等明示再升。 2026-10-16 15:12：fix3-1510 升 PASS_GENERATION。2026-10-16 15:35：fix3-1510 真出图暂不收口（等挑刺确认 aspect_ratio 补拍）。2026-10-16 14:46：fix2-1320 真出图但不收口 FAIL_UI；strength 官方字段默认 0.8 仅 image 时用，本轮为上游回显非我方发送。2026-10-16 12:37：新 Key 复验请求字段已核（不收口，徽章未升）。2026-10-15 07:13 tinkabot 撤回：clean-0544 整套退回，Krea/z-image 出图仅作线索，不算证实。2026-10-15 07:09：clean-0544（已退回）线索显示 krea-v2/turbo-lora actualRequest=aspect_ratio+resolution+seed+loras[{path:.safetensors直链,scale}]（无 size/steps/cfg）；z-image/turbo-lora size 'W*H' 无 aspect_ratio/resolution。前序 2026-10-15 06:38：认领 Researchy 06:30——补 contractTestHint（Krea path=.safetensors 直链；z-image 允许 owner/name；1402 原样失败不改写）。前序 06:30 Researchy 已写 lora.path.perModelDoc；06:02：尺寸分两族。",
   "requestFieldsVerified": {
     "actualRequest": {
       "prompt": true,

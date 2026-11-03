@@ -93,7 +93,7 @@
       "reason": "task 参数表无 loras/adapters"
     },
     "viaProviderNative": "如 fal-ai/flux-lora 经 HF 路由或 Custom Provider Key；字段跟该 provider（参见 fal.json）",
-    "uiRule": "仅 HF 标准 parameters 时隐藏 LoRA 挂载"
+    "uiRule": "HF 标准 parameters 官方无 loras（事实）；LoRA 挂载不隐藏，用户挂了就照发；上游不认则原样显示报错"
   },
   "billing": {
     "model": "PAYG 透传 provider 费率；PRO/Team/Enterprise 每月 $2 credits；Custom Provider Key 则 provider 直账单",
@@ -107,7 +107,7 @@
     "https://huggingface.co/docs/inference-providers/main/tasks/text-to-video",
     "https://huggingface.co/docs/inference-providers/pricing"
   ],
-  "_auditStatus": "2026-11-04 ~06:05 JST：雁澄清从未要求本地拦截；草案撤销所有拦截建议，改为照发+原样显示错误；「官方明文拒绝才拦」口径作废。\n2026-11-02 ~04:55 JST：Researchy 02c——HF seed 再确认。\n2026-11-02 ~04:46 JST：Researchy——HF 文生图/文生视频 parameters.seed integer。\n2026-10-15 03:26：引用的 docs/provider-api-audit 旧审计仅留作对比、不再引用；以 docs/provider-api-audit-v2/ 与 DIFF.md 为准；本草案凡依据旧审计的结论一律视为未核实，等 Researchy 新调查",
+  "_auditStatus": "2026-11-04 ~06:10 JST：雁定——用户设的参数一律照发，禁止扣参/置灰/不发；草案内所有「不发送」建议作废。\n2026-11-04 ~06:05 JST：雁澄清从未要求本地拦截；草案撤销所有拦截建议，改为照发+原样显示错误；「官方明文拒绝才拦」口径作废。\n2026-11-02 ~04:55 JST：Researchy 02c——HF seed 再确认。\n2026-11-02 ~04:46 JST：Researchy——HF 文生图/文生视频 parameters.seed integer。\n2026-10-15 03:26：引用的 docs/provider-api-audit 旧审计仅留作对比、不再引用；以 docs/provider-api-audit-v2/ 与 DIFF.md 为准；本草案凡依据旧审计的结论一律视为未核实，等 Researchy 新调查",
   "researchyVerified20261102": {
     "fetchedAt": "2026-11-02 ~04:55 JST",
     "items": [
