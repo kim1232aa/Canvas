@@ -272,13 +272,11 @@ describe('resolveHistoryItemForApply', () => {
     expect(out.workflowSnapshot).toEqual(full.workflowSnapshot);
   });
 
-  it('keeps slim item when fetch fails (no pretend restore)', async () => {
+  it('rethrows the raw fetch error (no silent fallback to slim item)', async () => {
     const slim = item({ id: 'hist_fail', url: 'https://x/a.png', hasWorkflowSnapshot: true } as any);
-    const out = await resolveHistoryItemForApply(slim as any, async () => {
-      throw new Error('network');
-    });
-    expect(out).toBe(slim);
-    expect((out as any).workflowSnapshot).toBeUndefined();
+    await expect(resolveHistoryItemForApply(slim as any, async () => {
+      throw new Error('network 502');
+    })).rejects.toThrow('network 502');
   });
 
   it('does not fetch when snapshot already present', async () => {

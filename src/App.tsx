@@ -2199,35 +2199,24 @@ export default function App() {
     });
   };
 
-  /** History / 详情「应用到画布」：图→SaveImage、参数写回节点；有快照还原连线，无则 toast「这条没存工作流」。 */
+  /** History「照这组参数再来一张」：清空画布，换成这条记录的工作流和实际发送的值。拉取或构建失败原样报错，画布不动。 */
   const handleApplyHistoryToCanvas = async (item: GenerationHistoryItem & { hasWorkflowSnapshot?: boolean }) => {
-    let full: GenerationHistoryItem & { hasWorkflowSnapshot?: boolean } = item;
-    if (item?.hasWorkflowSnapshot && !item.workflowSnapshot && item.id) {
-      try {
+    let result;
+    try {
+      let full: GenerationHistoryItem & { hasWorkflowSnapshot?: boolean } = item;
+      if (item?.hasWorkflowSnapshot && !item.workflowSnapshot && item.id) {
         full = await fetchHistoryItem(item.id);
-      } catch {
-        full = item;
       }
+      result = applyHistoryToCanvas({ item: full, nodes, connections, spatialFrames });
+    } catch (e) {
+      setToast({ type: 'error', title: '没能还原这条记录', message: e instanceof Error ? e.message : String(e) });
+      return;
     }
-    const result = applyHistoryToCanvas({
-      item: full,
-      nodes,
-      connections,
-      spatialFrames,
-    });
     setNodes(result.nodes);
     setConnections(result.connections);
-    if (result.spatialFrames) {
-      setSpatialFrames(result.spatialFrames);
-      if (result.spatialFrames[0]?.id) setSelectedFrameId(result.spatialFrames[0].id);
-    }
-    if (result.notice) {
-      setToast({ type: 'info', title: result.notice, message: '已把图和参数写回节点；这条记录没有工作流快照，连线未还原。' });
-    } else if (result.restoredFromSnapshot) {
-      setToast({ type: 'success', title: '已应用到画布', message: result.imageApplied ? '图已落到保存图像节点，参数与工作流已还原。' : '参数与工作流已还原。' });
-    } else {
-      setToast({ type: 'success', title: '已应用到画布', message: result.imageApplied ? '图已落到保存图像节点，参数已写回。' : '参数已写回。' });
-    }
+    setSpatialFrames(result.spatialFrames || []);
+    if (result.spatialFrames?.[0]?.id) setSelectedFrameId(result.spatialFrames[0].id);
+    setToast({ type: 'success', title: '已换成这条记录的工作流', message: '' });
     setTimeout(handleResetView, 180);
   };
 

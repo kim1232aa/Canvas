@@ -57,47 +57,39 @@ const successItem = (over: Partial<HistoryApplyItem> = {}): HistoryApplyItem => 
 });
 
 describe('applyHistoryToCanvas', () => {
-  it('no-snapshot path surfaces 这条没存工作流 and still applies image + params', () => {
+  it('no-snapshot: clears canvas, builds provider std preset, fills recorded sent values only', () => {
     const { nodes, connections } = baseGraph();
+    const before = JSON.stringify({ nodes, connections });
     const item = successItem({ workflowSnapshot: undefined, hasWorkflowSnapshot: false });
-    const out = applyHistoryToCanvas({ item, nodes, connections });
+    const out = applyHistoryToCanvas({ item, nodes, connections, spatialFrames: [{ id: 'old-frame' } as any] });
+    expect(JSON.stringify({ nodes, connections })).toBe(before); // input not mutated
+    expect(out.nodes.some((n) => ['ckpt', 'pos', 'neg', 'latent', 'samp', 'save'].includes(n.id))).toBe(false);
+    expect(out.spatialFrames).toEqual([]);
+    expect(out.nodes.every((n) => n.id.startsWith('std-'))).toBe(true);
+    expect(new Set(out.nodes.map((n) => n.id)).size).toBe(out.nodes.length);
     expect(out.restoredFromSnapshot).toBe(false);
-    expect(out.notice).toBe(NO_WORKFLOW_SNAPSHOT_MSG);
-    expect(out.imageApplied).toBe(true);
-    const save = out.nodes.find((n) => n.type === 'SaveImage')!;
-    expect(save.outputData).toBe('https://cdn.example/out.png');
-    expect(out.nodes.find((n) => n.type === 'CLIPTextEncode')!.values.text).toBe('Low camera angle, portrait');
-    expect(out.nodes.find((n) => n.type === 'EmptyLatentImage')!.values).toMatchObject({ width: 768, height: 1344 });
-    expect(out.nodes.find((n) => n.type === 'CheckpointLoaderSimple')!.values.ckpt_name).toBe('photoreal_studio_z_image');
-    expect(out.nodes.find((n) => n.type === 'KSampler')!.values.seed).toBe(42);
-    expect(out.applied.imageUrl).toBe('https://cdn.example/out.png');
-    expect(out.applied.prompt).toBe('Low camera angle, portrait');
-    expect(out.applied.model).toBe('photoreal_studio_z_image');
-    expect(out.applied.width).toBe(768);
-    expect(out.applied.height).toBe(1344);
+    expect(out.nodes.find((n) => n.type === 'CLIPTextEncode')!.values.text).toBe(item.prompt);
+    expect(out.nodes.find((n) => n.type === 'CheckpointLoaderSimple')!.values.ckpt_name).toBe(item.actualModel);
+    const ks = out.nodes.find((n) => n.type === 'KSampler')!;
+    expect(ks.values).toMatchObject({ seed: 42, steps: 20, cfg: 7 });
+    expect(out.nodes.find((n) => n.type === 'SaveImage')!.outputData).toBe(item.url);
   });
 
-  it('does not invent LoRA when history had none', () => {
+  it('no-snapshot: values missing from the record stay empty (no preset defaults)', () => {
     const { nodes, connections } = baseGraph();
-    nodes.push(node({ id: 'lora1', type: 'LoRALoader', values: { lora_name: 'keep-me', strength_model: 0.5 } }));
-    const out = applyHistoryToCanvas({ item: successItem({ loras: [] }), nodes, connections });
-    const lora = out.nodes.find((n) => n.type === 'LoRALoader')!;
-    expect(lora.values.lora_name).toBe('keep-me');
-    expect(out.applied.loraCount).toBe(0);
+    const item = successItem({ seed: null, steps: null, cfg: null, sampler: null, scheduler: null, url: '' });
+    const out = applyHistoryToCanvas({ item, nodes, connections });
+    const ks = out.nodes.find((n) => n.type === 'KSampler')!;
+    expect(ks.values.seed).toBeUndefined();
+    expect(ks.values.steps).toBeUndefined();
+    expect(ks.values.cfg).toBeUndefined();
+    expect(ks.values.sampler_name).toBeUndefined();
+    expect(out.imageApplied).toBe(false);
   });
 
-  it('restores LoRA name + strength onto existing LoRALoader when history has loras', () => {
+  it('no-snapshot with unknown provider throws (no silent fallback)', () => {
     const { nodes, connections } = baseGraph();
-    nodes.push(node({ id: 'lora1', type: 'LoRALoader', values: { lora_name: 'old', strength_model: 0.2 } }));
-    const out = applyHistoryToCanvas({
-      item: successItem({ loras: [{ name: 'style-v2', strength: 0.85 }] }),
-      nodes,
-      connections,
-    });
-    const lora = out.nodes.find((n) => n.type === 'LoRALoader')!;
-    expect(lora.values.lora_name).toBe('style-v2');
-    expect(lora.values.strength_model).toBe(0.85);
-    expect(out.applied.loraCount).toBe(1);
+    expect(() => applyHistoryToCanvas({ item: successItem({ provider: 'nope', actualProvider: 'nope' }), nodes, connections })).toThrow();
   });
 
   it('snapshot path restores nodes/connections and puts image on SaveImage', () => {
@@ -134,13 +126,9 @@ describe('applyHistoryToCanvas', () => {
 
   it('hasWorkflowSnapshot flag alone without object is treated as no snapshot', () => {
     const { nodes, connections } = baseGraph();
-    const out = applyHistoryToCanvas({
-      item: successItem({ hasWorkflowSnapshot: true, workflowSnapshot: undefined }),
-      nodes,
-      connections,
-    });
+    const out = applyHistoryToCanvas({ item: successItem({ hasWorkflowSnapshot: true }), nodes, connections });
     expect(out.restoredFromSnapshot).toBe(false);
-    expect(out.notice).toBe(NO_WORKFLOW_SNAPSHOT_MSG);
+    expect(out.nodes.some((n) => n.id === 'ckpt')).toBe(false);
   });
 
   it('historyItemToApplyParams passes imageUrl / size / prompt / model through (full handler payload)', () => {

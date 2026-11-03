@@ -357,11 +357,7 @@ export async function resolveHistoryItemForApply(
   fetchFn: (id: string) => Promise<GenerationHistoryItem> = fetchHistoryItem,
 ): Promise<GenerationHistoryItem & { hasWorkflowSnapshot?: boolean }> {
   if (item.hasWorkflowSnapshot && !item.workflowSnapshot) {
-    try {
-      return await fetchFn(item.id);
-    } catch {
-      return item;
-    }
+    return await fetchFn(item.id);
   }
   return item;
 }
@@ -837,8 +833,8 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
                         onClick={async () => {
                           if (applyDisabled) return;
                           if (onApplyToCanvas) {
-                            const full = await resolveHistoryItemForApply(item as GenerationHistoryItem & { hasWorkflowSnapshot?: boolean });
-                            await onApplyToCanvas(full);
+                            // App fetches the full record and shows the raw error if that fails.
+                            await onApplyToCanvas(item as GenerationHistoryItem & { hasWorkflowSnapshot?: boolean });
                           } else {
                             onApplyPrompt(item.prompt || '', item.negativePrompt || undefined);
                           }

@@ -1,11 +1,12 @@
 /**
- * History 「应用到画布」：把成功记录的图、参数、（若有）工作流快照还原到画布。
- * 无快照时仍应用图与已有参数，并返回 notice「这条没存工作流」——绝不假装整图已还原。
+ * History 「照这组参数再来一张」：清空当前画布，换成这条记录的工作流（有快照用快照，没有用该供应商标准预设），
+ * 填入记录里实际发送的值；记录里没有的值留空，不用默认值补。
  */
 import type { Connection, NodeInstance, SpatialFrame } from '../types/graph';
 import { saveImagePrefixFor } from './saveImagePrefix';
 import { providerIdFromHistory } from './providerLabels';
 import type { GenerationHistoryItem } from '../types/providers';
+import { WORKFLOW_PRESETS } from '../constants/presets';
 
 export const NO_WORKFLOW_SNAPSHOT_MSG = '这条没存工作流';
 
@@ -96,7 +97,7 @@ export function putHistoryImageOnSaveNodes(nodes: NodeInstance[], imageUrl: stri
 }
 
 /** Overlay board-requested history fields onto matching node types. Does not invent LoRA nodes. */
-export function patchHistoryParamsOntoNodes(nodes: NodeInstance[], item: HistoryApplyItem): {
+export function patchHistoryParamsOntoNodes(nodes: NodeInstance[], item: HistoryApplyItem, clearMissing = false): {
   nodes: NodeInstance[];
   applied: ApplyHistoryOutput['applied'];
 } {
@@ -112,7 +113,18 @@ export function patchHistoryParamsOntoNodes(nodes: NodeInstance[], item: History
   let loraIdx = 0;
   const imageUrl = imageUrlOf(item);
 
-  const next = nodes.map((n) => {
+  const blank = (n: NodeInstance): NodeInstance => {
+    if (!clearMissing) return n;
+    const v = { ...n.values };
+    if (n.type === 'CLIPTextEncode' || n.type === 'CLIPTextEncodeNegative') v.text = '';
+    if (n.type === 'KSampler') for (const k of ['seed', 'steps', 'cfg', 'sampler_name', 'scheduler']) delete v[k];
+    if (n.type === 'EmptyLatentImage' || n.type === 'CheckpointLoaderSimple') { delete v.width; delete v.height; }
+    if (n.type === 'CheckpointLoaderSimple') v.ckpt_name = '';
+    if (n.type === 'LoRALoader') { v.lora_name = ''; delete v.strength_model; delete v.strength_clip; }
+    if (n.type === 'CivitaiLoRABrowserNode') { v.selected_model_name = ''; delete v.strength_model; }
+    return { ...n, values: v };
+  };
+  const next = nodes.map(blank).map((n) => {
     if (n.type === 'CLIPTextEncode' && prompt !== undefined) {
       return { ...n, values: { ...n.values, text: prompt } };
     }
@@ -269,11 +281,10 @@ export function applyHistoryToCanvas(input: ApplyHistoryInput): ApplyHistoryOutp
     // Spatial-only snapshot (no node graph)
     if (snap.frame && (!Array.isArray(snap.nodes) || snap.nodes.length === 0)) {
       const frame = applySpatialFrame(item, snap.frame);
-      const patched = patchHistoryParamsOntoNodes(clone(input.nodes), item);
-      const withImage = putHistoryImageOnSaveNodes(patched.nodes, imageUrl);
+      const patched = patchHistoryParamsOntoNodes([], item);
       return {
-        nodes: withImage.nodes,
-        connections: input.connections,
+        nodes: [],
+        connections: [],
         spatialFrames: [frame],
         restoredFromSnapshot: true,
         imageApplied: !!(imageUrl || frame.imageUrl),
@@ -291,7 +302,7 @@ export function applyHistoryToCanvas(input: ApplyHistoryInput): ApplyHistoryOutp
       const spatialFrames =
         snap.frame
           ? [applySpatialFrame(item, snap.frame)]
-          : input.spatialFrames;
+          : [];
       return {
         nodes: patched.nodes,
         connections: baseConns,
@@ -303,22 +314,35 @@ export function applyHistoryToCanvas(input: ApplyHistoryInput): ApplyHistoryOutp
     }
   }
 
-  // No usable snapshot — patch current canvas; never pretend a full graph restore.
-  const patched = patchHistoryParamsOntoNodes(clone(input.nodes), item);
-  const withImage = putHistoryImageOnSaveNodes(patched.nodes, imageUrl);
+  // No usable snapshot — canvas is cleared; build this provider's standard preset and fill recorded values only.
+  const preset = standardPresetForHistory(item);
+  if (!preset) {
+    throw new Error(`没有 ${item.actualProvider || item.provider || '未知供应商'} 的标准预设，无法还原这条记录`);
+  }
+  const built = patchHistoryParamsOntoNodes(clone(preset.nodes), item, true);
+  const withImage = putHistoryImageOnSaveNodes(built.nodes, imageUrl);
   return {
     nodes: withImage.nodes,
-    connections: input.connections,
-    spatialFrames: input.spatialFrames,
-    notice: NO_WORKFLOW_SNAPSHOT_MSG,
+    connections: clone(preset.connections),
+    spatialFrames: [],
     restoredFromSnapshot: false,
     imageApplied: withImage.imageApplied,
     applied: {
-      ...patched.applied,
+      ...built.applied,
       imageUrl,
       loraCount: Array.isArray(item.loras) ? item.loras.filter((l) => l?.name).length : 0,
     },
   };
+}
+
+/** Standard (std-*) preset for the record's provider; video records prefer the i2v preset. */
+export function standardPresetForHistory(item: HistoryApplyItem) {
+  const pid = providerIdFromHistory(item.actualProvider || item.provider || undefined);
+  if (!pid) return undefined;
+  const std = WORKFLOW_PRESETS.filter((p) => p.id.startsWith('std-') && (p.provider === pid
+    || p.nodes.some((n) => n.type === 'CheckpointLoaderSimple' && n.values?.targetProvider === pid)));
+  const video = item.mediaType === 'video' || !!item.videoUrl;
+  return std.find((p) => p.category.includes('视频') === video) || std[0];
 }
 
 /** Build the apply payload ImageDetailModal / HistoryModal share (params + image + snapshot). */
