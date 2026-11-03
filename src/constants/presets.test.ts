@@ -1,3 +1,4 @@
+import { PRESET_RECIPE_PROMPTS } from './presetRecipePrompts';
 import { describe, expect, it } from 'vitest';
 import { WORKFLOW_PRESETS, STD_PROMPT_PLACEHOLDER, presetSummary } from './presets';
 import { correctPresetLayout } from './presetResources';
@@ -58,7 +59,8 @@ const PREFILLED_LORA: Record<string, Array<[string, number]>> = {
   modelscope_ai: [['LcarsPicturesDatabase/ST-TNG-Rooms-Z-Image-Turbo-v1', 1]],
 };
 
-const ALLOWED_PROMPT = new Set(['', STD_PROMPT_PLACEHOLDER]);
+// Only documented recipe prompts (presetRecipePrompts.ts, each with a source) or empty.
+const ALLOWED_PROMPT = new Set(['', STD_PROMPT_PLACEHOLDER, ...Object.values(PRESET_RECIPE_PROMPTS).flatMap(r => [r.prompt, r.negative ?? ''])]);
 
 const preset = (id: string) => WORKFLOW_PRESETS.find(p => p.id === id)!;
 const loader = (id: string) => preset(id).nodes.find(n => n.type === 'CheckpointLoaderSimple');
@@ -104,7 +106,7 @@ describe('standard workflow presets (23 T2I + 6 I2V)', () => {
       expect(vid.values.targetProvider).toBe(p.provider);
       expect(typeof vid.values.model).toBe('string');
       // Canonical prompt: AIVideoNode.values.prompt only (no twin CLIP box)
-      expect(vid.values.prompt ?? '').toBe('');
+      expect(vid.values.prompt).toBe(PRESET_RECIPE_PROMPTS[p.id].prompt);
     }
     expect(preset('std-fal-i2v').nodes.find(n => n.type === 'AIVideoNode')!.values.model).toBe(
       'fal-ai/wan/v2.7/image-to-video',
@@ -175,6 +177,14 @@ describe('standard workflow presets (23 T2I + 6 I2V)', () => {
       expect(p.id).toBe(expectedT2iId(p.provider));
       expect(p.category).toBe('标准文生图');
       expect(p.tags).toEqual(expect.arrayContaining([p.provider, '标准', '文生图']));
+    }
+  });
+
+  it('every std preset ships a documented recipe prompt with a source', () => {
+    for (const p of WORKFLOW_PRESETS.filter(x => x.id.startsWith('std-'))) {
+      const r = PRESET_RECIPE_PROMPTS[p.id];
+      expect(r?.prompt, p.id).toBeTruthy();
+      expect(r.source, p.id).toBeTruthy();
     }
   });
 
@@ -259,7 +269,7 @@ describe('standard workflow presets (23 T2I + 6 I2V)', () => {
     expect(frame.params.height).toBe(1024);
     expect(frame.params.batchSize).toBe(1);
     expect(frame.params.loras).toHaveLength(3);
-    expect(frame.prompt).toBe('');
+    expect(frame.prompt).toBe(PRESET_RECIPE_PROMPTS['std-tensorart-t2i'].prompt);
     const frameCp = JSON.parse(String(frame.params.customParameters));
     expect(frameCp['result image count']).toBe(1);
     // omit sampler/scheduler/denoise → shared schemaProperties seed (no empty shells); keep OpenWorks extras.

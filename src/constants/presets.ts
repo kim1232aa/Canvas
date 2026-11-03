@@ -1,6 +1,7 @@
 import { WorkflowPreset, NodeInstance, Connection, SpatialFrame } from '../types/graph';
 import { NODE_DEFINITIONS } from './nodes';
 import { PROVIDER_TITLE_LABEL } from '../utils/providerLabels';
+import { PRESET_RECIPE_PROMPTS } from './presetRecipePrompts';
 
 /** Prompt text allowed in standard presets — never invent creative prompts. */
 export const STD_PROMPT_PLACEHOLDER = '填入配方/用户指定';
@@ -119,6 +120,7 @@ function buildStandardT2i(spec: StdSpec): WorkflowPreset {
   const width = spec.width ?? 1024;
   const height = spec.height ?? 1024;
   const hasNegative = spec.hasNegative !== false;
+  const recipe = PRESET_RECIPE_PROMPTS[id];
   const seed = spec.seed ?? 42;
   const omit = new Set(spec.omit ?? []);
   const keep = <T,>(k: NonNullable<StdSpec['omit']>[number], v: T): T | undefined => (omit.has(k) ? undefined : v);
@@ -198,7 +200,7 @@ function buildStandardT2i(spec: StdSpec): WorkflowPreset {
     width: 400,
     inputs: NODE_DEFINITIONS.CLIPTextEncode.inputs,
     outputs: NODE_DEFINITIONS.CLIPTextEncode.outputs,
-    values: { text: '' },
+    values: { text: recipe?.prompt ?? '' },
   });
   connections.push({
     id: `${prefix}-c-clip-pos`,
@@ -218,7 +220,7 @@ function buildStandardT2i(spec: StdSpec): WorkflowPreset {
         width: 400,
         inputs: NODE_DEFINITIONS.CLIPTextEncodeNegative.inputs,
         outputs: NODE_DEFINITIONS.CLIPTextEncodeNegative.outputs,
-        values: { text: '' },
+        values: { text: (hasNegative && recipe?.negative) || '' },
       });
     nodes.push(
       {
@@ -296,8 +298,8 @@ function buildStandardT2i(spec: StdSpec): WorkflowPreset {
       pos: { x: 260, y: 160 },
       width: 480,
       height: 480,
-      prompt: '',
-      negativePrompt: '',
+      prompt: recipe?.prompt ?? '',
+      negativePrompt: (hasNegative && recipe?.negative) || '',
       params: {
         checkpoint: spec.ckpt,
         targetProvider: target as SpatialFrame['params']['targetProvider'],
@@ -378,7 +380,7 @@ function buildGeminiT2i(): WorkflowPreset {
         width: 400,
         inputs: NODE_DEFINITIONS.CLIPTextEncode.inputs,
         outputs: NODE_DEFINITIONS.CLIPTextEncode.outputs,
-        values: { text: '' },
+        values: { text: PRESET_RECIPE_PROMPTS[id]?.prompt ?? '' },
       },
       {
         id: 'std-gemini-imagen',
@@ -412,7 +414,7 @@ function buildGeminiT2i(): WorkflowPreset {
         pos: { x: 260, y: 160 },
         width: 480,
         height: 480,
-        prompt: '',
+        prompt: PRESET_RECIPE_PROMPTS[id]?.prompt ?? '',
         negativePrompt: '',
         params: {
           checkpoint: GEMINI_DEFAULT_MODEL,
@@ -533,7 +535,7 @@ function buildStandardI2v(spec: I2vSpec): WorkflowPreset {
   const vidValues: Record<string, unknown> = {
     targetProvider: provider,
     model: spec.model,
-    prompt: '',
+    prompt: PRESET_RECIPE_PROMPTS[id]?.prompt ?? '',
     // Front-door: I2V needs a real reference image; LoadImage starts empty so readiness / node note fire.
     require_reference_image: true,
     custom_parameters: JSON.stringify({
@@ -632,7 +634,7 @@ function buildStandardI2v(spec: I2vSpec): WorkflowPreset {
         pos: { x: 260, y: 160 },
         width: 480,
         height: 480,
-        prompt: '',
+        prompt: PRESET_RECIPE_PROMPTS[id]?.prompt ?? '',
         negativePrompt: '',
         params: frameParams,
         status: 'idle',

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { WORKFLOW_PRESETS } from './presets';
 import { NODE_DEFINITIONS } from './nodes';
+import { PRESET_RECIPE_PROMPTS } from './presetRecipePrompts';
 import { extractWorkflowParameters, modelChainBreak, resolveRunTarget } from '../utils/graphEngine';
 
 /** Dry-run lever: every std preset, loaded as-is, must resolve to a runnable request (no network). */
@@ -32,11 +33,10 @@ describe('std presets dry-run (load → extract, no send)', () => {
         if (!p.connections.some((c) => c.toNodeId === n.id && c.toSocketId === i.id)) issues.push(`unconnected ${n.type}.${i.id}`);
       }
       const emptyPrompt = !p.nodes.some((n) => String(n.values?.text ?? n.values?.prompt ?? '').trim());
-      if (emptyPrompt) notes.push('prompt empty (recipe not seeded)');
-      // Simulate only the user-supplied inputs a preset cannot ship: prompt text + reference image.
+      if (emptyPrompt) issues.push('prompt empty (no recipe seeded)');
+      notes.push(`prompt: ${PRESET_RECIPE_PROMPTS[p.id]?.source ?? 'NONE'}`);
+      // Simulate only the user-supplied input a preset cannot ship: the I2V reference image.
       const nodes = p.nodes.map((n) => ({ ...n, values: { ...n.values,
-        ...(n.type === 'CLIPTextEncode' && !n.values.text ? { text: 'DRYRUN' } : {}),
-        ...(n.type === 'AIVideoNode' && !n.values.prompt ? { prompt: 'DRYRUN' } : {}),
         ...(n.type === 'LoadImage' ? { image_url: 'https://example.com/ref.png' } : {}) } }));
       let tid: string | undefined;
       try { tid = resolveRunTarget(nodes as any, p.connections as any, undefined, undefined).id; } catch (e: any) { issues.push(`run target: ${e.message}`); }
