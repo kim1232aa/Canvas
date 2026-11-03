@@ -18,10 +18,6 @@ describe('Replicate declared-field gate (generic, schema-driven)', () => {
     expect(r.omitted!.every((o) => /^该端点不支持/.test(o.reason))).toBe(true);
     expect(r.schemaFields).toEqual(Object.keys(SCHNELL_PROPS));
   });
-  it('without schemaProps: static PROVIDER_SCHEMA alone cannot authorize outbound', () => {
-    expect(() => buildReplicatePredictionRequest({ model: 'black-forest-labs/flux-schnell', ...filled }))
-      .toThrow(/拿不到该模型 Schema/);
-  });
   it.skip('a schema that declares guidance gets cfg→guidance; one that declares negative_prompt keeps it (no model-name branch)', () => {
     const r = buildReplicatePredictionRequest({ model: 'someone/custom-model', ...filled }, undefined, { prompt: {}, guidance: {}, negative_prompt: {} });
     expect(r.payload.input).toEqual({ prompt: 'p', guidance: 3.5, negative_prompt: 'blurry' });

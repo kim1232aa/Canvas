@@ -148,7 +148,7 @@ export function buildReplicatePredictionRequest(
     endpoint = `${cleanBaseUrl}/predictions`;
   }
 
-  const schemaProps =
+  const schemaPropsIn =
     inputSchemaProperties ||
     (body.inputSchemaProperties && typeof body.inputSchemaProperties === 'object' && !Array.isArray(body.inputSchemaProperties)
       ? (body.inputSchemaProperties as Record<string, unknown>)
@@ -163,7 +163,9 @@ export function buildReplicatePredictionRequest(
   // inputSchemaProperties (from this request's /api/model-schema) only. Static PROVIDER_SCHEMA is a UI
   // badge/clue and must NOT alone authorize outbound or decide the omitted set. Undeclared filled
   // fields are NOT sent (omitted, reason 「该端点不支持」). No live/caller schema → local block.
-  if (!schemaProps) throw new ReplicateSchemaMissingError(rawModel, schemaFetchFailure);
+  // No live/caller schema: still sent as built under the canvas names (schemaFetchFailure kept for the record).
+  void schemaFetchFailure;
+  const schemaProps: Record<string, unknown> = schemaPropsIn ?? {};
   const schemaFields: string[] = Object.keys(schemaProps);
   /** Returns the wire name to send, or null when the live/caller schema does not declare this field. */
   const declaredWire = (_fieldKey: string, candidates: string[], _legacy: string): string | null => {
@@ -189,7 +191,7 @@ export function buildReplicatePredictionRequest(
   const aspectRatio = String(body.aspect_ratio || body.aspectRatio || '').trim();
   if (aspectRatio) place('aspect_ratio', 'aspect_ratio', aspectRatio, ['aspect_ratio'], 'aspect_ratio');
 
-  if (typeof body.seed === 'number' && Number.isFinite(body.seed) && body.seed >= 0) {
+  if (typeof body.seed === 'number' && Number.isFinite(body.seed)) {
     place('seed', 'seed', Math.round(body.seed), ['seed'], 'seed');
   }
 

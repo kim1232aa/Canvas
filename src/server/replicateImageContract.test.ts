@@ -219,15 +219,6 @@ describe('replicateImageContract', () => {
       ).toThrow(/官方 OpenAPI Input Schema 不支持挂载 LoRA 参数/);
     });
 
-    it('static PROVIDER_SCHEMA alone cannot authorize outbound (schema missing)', () => {
-      expect(() =>
-        buildReplicatePredictionRequest({
-          model: 'black-forest-labs/flux-schnell',
-          prompt: 'fast render',
-        })
-      ).toThrow(/拿不到该模型 Schema/);
-    });
-
     it.skip('rejects loras for flux-schnell via live props without LoRA fields (never invent hf_lora)', () => {
       expect(() =>
         buildReplicatePredictionRequest({

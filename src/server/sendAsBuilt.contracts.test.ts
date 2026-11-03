@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildAgnesVideoRequest } from './agnesVideoRequest';
 import { buildMageImageRequest } from './mageImageContract';
+import { buildReplicatePredictionRequest } from './replicateImageContract';
 import { buildOpenWorksRequest, openWorksInputSchema } from './openWorksProvider';
 
 // 雁 2026-11-04: every filled parameter goes out as filled; upstream decides.
@@ -27,5 +28,9 @@ describe('send as built — filled params appear in the outbound body', () => {
     const built: any = buildOpenWorksRequest('m', schema, { prompt: 'p', loras: [{ name: 'lora-1' }] });
     expect(built.ok).toBe(true);
     expect(JSON.stringify(built.parameters)).toContain('lora-1');
+  });
+  it('Replicate with no readable schema still sends the filled fields under their canvas names', () => {
+    const r: any = buildReplicatePredictionRequest({ model: 'owner/name', prompt: 'p', steps: 30, cfg: 4, seed: -1, width: 640 } as any, 'https://api.replicate.com/v1', undefined as any);
+    expect(r.payload.input).toMatchObject({ prompt: 'p', steps: 30, cfg: 4, seed: -1, width: 640 });
   });
 });

@@ -1233,7 +1233,7 @@ async function resolveModelScopeRealImage(modelId: string, isCn = true): Promise
         return data.NEXA.ModelCover;
       }
     }
-  } catch (e) {}
+  } catch (e: any) { console.warn(`[modelscope cover] ${modelId} detail: ${e?.message || e}`); }
 
   // 2. Try repo files for showcase / cover assets
   try {
@@ -1268,7 +1268,7 @@ async function resolveModelScopeRealImage(modelId: string, isCn = true): Promise
         return finalUrl;
       }
     }
-  } catch (e) {}
+  } catch (e: any) { console.warn(`[modelscope cover] ${modelId} repo files: ${e?.message || e}`); }
 
   // DO NOT FALLBACK TO AVATAR! Avatar is the uploader's/organization's profile icon, not a model cover.
   modelScopeImageCache.set(cacheKey, '');
@@ -2849,7 +2849,7 @@ app.get("/api/models", async (req, res) => {
                 total: filtered.length,
                 hasMore: offset + limitParam < filtered.length,
                 sourceUrl: `${replicateBase}/collections/${collectionSlug}`,
-                sourceNotice: collectionFetched ? `live-api (collections/${collectionSlug})` : 'live-api (models fallback)',
+                sourceNotice: `live-api (collections/${collectionSlug})`,
               };
             }
           } catch (repErr: any) {

@@ -35,15 +35,16 @@ export function loadWorkspaceCache(fallback: CanvasProject[], storage: Pick<Stor
   let projects = fallback;
   let currentId: string | null = null;
   let mode: CanvasMode = 'graph';
+  let cacheError: string | undefined;
   try {
     const saved = JSON.parse(storage.getItem(BOARDS_KEY) || 'null');
     if (Array.isArray(saved) && saved.length && saved.every(isCanvasProject)) projects = stripInlineMedia(saved);
     currentId = storage.getItem(ACTIVE_BOARD_KEY);
     mode = storage.getItem(MODE_KEY) === 'spatial' ? 'spatial' : 'graph';
-  } catch { /* Keep a usable workspace when an older cache cannot be read. */ }
+  } catch (e: any) { cacheError = `本地画布缓存读取失败：${e?.message || e}`; console.warn(cacheError); }
   projects = projects.map(migrateTensorWorkflow).map(resetRunState);
   const active = projects.find(p => p.id === currentId) || projects[0];
-  return {projects, active, mode};
+  return {projects, active, mode, ...(cacheError ? { cacheError } : {})};
 }
 
 /**

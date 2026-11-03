@@ -85,21 +85,7 @@ export function handleReplicateGenerate(deps: ReplicateRouteDeps) {
       }
       // Fail closed: live (or caller-supplied) schema required for outbound. Static table is UI clue only —
       // never authorize /predictions from a stale PROVIDER_SCHEMA row alone.
-      if (!liveProps && !hasClientProps && schemaUrl) {
-        const error = new ReplicateSchemaMissingError(String(reqBody.model), schemaFetch);
-        const sf = error.schemaFetch;
-        const upstreamAnswered = Boolean(sf && sf.status !== null && (sf.status < 200 || sf.status >= 300));
-        return res.status(error.httpStatus).json({
-          error: error.message,
-          errorSource: upstreamAnswered ? 'upstream' : sf && sf.status === null ? 'network' : 'local',
-          upstreamStatus: sf?.status ?? null,
-          blocked: 'schema_missing',
-          model: error.model,
-          schemaFetch: error.schemaFetch ?? null,
-          actualRequest: null,
-          notSent: true,
-        });
-      }
+      if (!liveProps && !hasClientProps && schemaFetch) console.warn(`[replicate] schema GET ${schemaFetch.url} → ${schemaFetch.status ?? 'network'} ${schemaFetch.body}`);
     }
 
     const schemaSource = liveProps

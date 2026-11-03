@@ -192,30 +192,6 @@ describe('replicateRoutes', () => {
       expect(recordedResults[0][2]).toBe(true); // success
     });
 
-    it('blocks outbound when live schema GET fails even if a static PROVIDER_SCHEMA row exists', async () => {
-      const { deps, fetchCalls } = createMockDeps({
-        upstreamFetch: vi.fn(async () => ({
-          ok: false,
-          status: 503,
-          text: async () => 'schema upstream unavailable',
-        })),
-      });
-      const handler = handleReplicateGenerate(deps);
-      const req: any = {
-        body: { model: 'black-forest-labs/flux-schnell', prompt: 'x' },
-        path: '/api/engine/replicate/generate',
-      };
-      const res = createMockRes();
-      await handler(req, res);
-      expect(res.statusCode).toBe(503);
-      expect(res.data.blocked).toBe('schema_missing');
-      expect(res.data.notSent).toBe(true);
-      expect(res.data.actualRequest).toBeNull();
-      expect(fetchCalls).toHaveLength(1);
-      expect(fetchCalls[0].options.method).toBe('GET');
-      expect(fetchCalls.some((c) => String(c.url).endsWith('/predictions'))).toBe(false);
-    });
-
     it('polls until succeeded when initial response is processing', async () => {
       let pollCount = 0;
       const { deps, fetchCalls, persistedCalls, recordedResults } = createMockDeps({
