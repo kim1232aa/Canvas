@@ -574,7 +574,11 @@ function buildStandardI2v(spec: { provider: string; model: string }): WorkflowPr
  */
 const STD_SPECS: StdSpec[] = [
   // Preset model = Tongyi-MAI/Z-Image-Turbo Space (providerSchema.ts:495-505): steps supported, cfg unsupported; server.ts:4211/4216 rejects cfg/guidance for this route → cfg omitted (would 400). HF Inference rows (num_inference_steps+guidance_scale) apply to other HF models.
-  { provider: 'huggingface', ckpt: 'Tongyi-MAI/Z-Image-Turbo', hasLora: false, hasNegative: false, steps: 8, omit: ['cfg', 'sampler', 'scheduler', 'denoise'] },
+  { provider: 'huggingface', ckpt: 'Tongyi-MAI/Z-Image-Turbo', hasLora: false, hasNegative: false, steps: 8,
+    // Z-Image Space: resolution enum (not EmptyLatent pixels); width/height unsupported in providerSchema.
+    omit: ['cfg', 'sampler', 'scheduler', 'denoise', 'width', 'height'],
+    checkpointExtra: { resolution: '1024x1024 ( 1:1 )' },
+  },
   // Official API-Inference: size/steps/guidance/seed/negative_prompt/loras; sampler/scheduler/denoise not on REST table → omit (no empty shells).
   // CN accepted hist_1793695144423_1ms48: Realism LoRA@1, 832×1216, steps8, guidance1, seed42.
   {
@@ -601,7 +605,11 @@ const STD_SPECS: StdSpec[] = [
     omit: ['sampler', 'scheduler', 'denoise'],
   },
   // providerSchema.ts flux-schnell: resolution/num_images only; seed/negative/steps/cfg/sampler/scheduler/denoise/loras unsupported.
-  { provider: 'nanogpt', ckpt: 'flux-schnell', hasLora: false, hasNegative: false, omit: ['seed', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise'] },
+  { provider: 'nanogpt', ckpt: 'flux-schnell', hasLora: false, hasNegative: false,
+    // providerSchema flux-schnell: resolution enum + num_images; seed/steps/cfg/sampler unsupported; pixels not the wire field.
+    omit: ['seed', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'width', 'height'],
+    checkpointExtra: { resolution: '1024x1024' },
+  },
   // providerSchema.ts fal-ai/flux/schnell: seed, steps 1–12, cfg 1–20, image_size; negative/sampler/scheduler/loras unsupported.
   { provider: 'fal', ckpt: 'fal-ai/flux/schnell', hasLora: false, hasNegative: false, steps: 4, cfg: 1, omit: ['sampler', 'scheduler', 'denoise'] },
   // OpenWorks-only: full params + LoRA (openWorksProvider.ts OPENWORKS_LIVE_EXTRAS: seed/steps/cfg/negative_prompt/loras/checkpoint).
@@ -636,9 +644,10 @@ const STD_SPECS: StdSpec[] = [
     ckpt: 'flux-1-dev-style-lora-inference',
     hasLora: false,
     hasNegative: false,
-    omit: ['seed', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise'],
-    // Official OpenAPI (2026-10-17): seed schemaProperties so KSampler hides steps/CFG before live Schema GET returns.
+    // Official OpenAPI Flux1DevStyleLoraInferenceRequest: prompt/lora_url/lora_weight/aspect_ratio(default 1:1)/webhook_url — no width/height pixels.
+    omit: ['seed', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'width', 'height'],
     checkpointExtra: {
+      aspect_ratio: '1:1',
       custom_parameters: JSON.stringify({
         _canvas: {
           scope: { provider: 'muapi', model: 'flux-1-dev-style-lora-inference' },
@@ -671,7 +680,10 @@ const STD_SPECS: StdSpec[] = [
   { provider: 'sogni', ckpt: 'krea-2-turbo', hasLora: false, cfg: 1, omit: ['steps', 'sampler', 'scheduler', 'denoise'] },
   // Live OpenAPI GET /v1/models/black-forest-labs/flux-dev-lora + default_example: lora_weights=fofr/flux-80s-cyberpunk, lora_scale=1, guidance=3, steps=28.
   // Official docs example also cites fofr/flux-pixar-cars; default_example LoRA is the acceptance recipe id.
-  { provider: 'replicate', ckpt: 'black-forest-labs/flux-dev-lora', hasLora: true, hasNegative: false, steps: 28, cfg: 3, omit: ['sampler', 'scheduler', 'denoise'],
+  { provider: 'replicate', ckpt: 'black-forest-labs/flux-dev-lora', hasLora: true, hasNegative: false, steps: 28, cfg: 3,
+    // providerSchema + draft: aspect_ratio (+ megapixels); width/height unsupported on flux-dev-lora.
+    omit: ['sampler', 'scheduler', 'denoise', 'width', 'height'],
+    checkpointExtra: { aspect_ratio: '1:1' },
     loras: [{ name: 'fofr/flux-80s-cyberpunk', strength: 1, source: 'replicate.com/black-forest-labs/flux-dev-lora default_example' }] },
   // providerSchema.ts runware:100@1: steps/cfg supported; no accepted-run LoRA → no LoRA node.
   { provider: 'runware', ckpt: 'runware:100@1', hasLora: false, steps: 4, cfg: 1, omit: ['sampler', 'scheduler', 'denoise'] },

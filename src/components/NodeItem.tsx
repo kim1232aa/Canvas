@@ -841,10 +841,10 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                 );
               }
 
-              // CheckpointLoaderSimple: schema-backed aspect_ratio / resolution (mage / grok / HF / … — never invent fields)
+              // CheckpointLoaderSimple: schema-backed aspect_ratio / resolution / size (mage / Agnes / HF / … — never invent fields)
               if (
                 node.type === 'CheckpointLoaderSimple' &&
-                (widget.name === 'aspect_ratio' || widget.name === 'resolution')
+                (widget.name === 'aspect_ratio' || widget.name === 'resolution' || widget.name === 'size')
               ) {
                 const prov = String(node.values?.targetProvider || currentProvider || '').trim();
                 if (prov === 'nanogpt' && widget.name === 'resolution') {
@@ -855,7 +855,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                   ? resolveSchemaModelId(schemaProv, node.values?.ckpt_name || currentCheckpoint)
                   : undefined;
                 const opts = schemaProv && schemaModel
-                  ? fieldOptions(schemaProv, schemaModel, widget.name as 'aspect_ratio' | 'resolution')
+                  ? fieldOptions(schemaProv, schemaModel, widget.name as 'aspect_ratio' | 'resolution' | 'size')
                   : [];
                 const stop = (e: React.SyntheticEvent) => e.stopPropagation();
                 if (opts.length) {

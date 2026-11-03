@@ -187,3 +187,22 @@ it('DeepInfra omit seed hides empty seed/seed_mode shells; Mage filled seed 42 s
   expect(mage).toMatch(/value="42"|42/);
   expect(mage).not.toContain('node-filled-not-sent-seed');
 });
+
+it('Agnes checkpoint surfaces size + aspect_ratio from preset (no invented options)', () => {
+  const ckpt = renderToStaticMarkup(
+    <NodeItem
+      {...props('CheckpointLoaderSimple', {
+        ckpt_name: 'agnes-image-2.5-flash',
+        targetProvider: 'agnes',
+        aspect_ratio: '1:1',
+        size: '2K',
+      })}
+      currentProvider="agnes"
+      currentCheckpoint="agnes-image-2.5-flash"
+    />,
+  );
+  expect(ckpt).toContain('data-testid="ckpt-aspect_ratio"');
+  expect(ckpt).toContain('1:1');
+  expect(ckpt).toContain('data-testid="ckpt-size"');
+  expect(ckpt).toContain('2K');
+});

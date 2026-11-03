@@ -151,6 +151,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
       // grok_compat: options filled from providerSchema at render time (NodeItem)
       { name: 'aspect_ratio', label: '画面比例 (aspect_ratio)', type: 'select', default: '', options: [] },
       { name: 'resolution', label: '分辨率 (resolution)', type: 'select', default: '', options: [] },
+      { name: 'size', label: '尺寸档 (size)', type: 'select', default: '', options: [] },
       { name: 'shift', label: '时间偏移 (shift)', type: 'number', default: '', min: 1, max: 10, step: 0.1 },
       { name: 'random_seed', label: '种子策略', type: 'select', default: '', options: [] },
       { name: 'gallery_images', label: '结果集', type: 'select', default: '', options: [] },
@@ -162,6 +163,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
       ckpt_name: '',
       aspect_ratio: '',
       resolution: '',
+      size: '',
     },
   },
 

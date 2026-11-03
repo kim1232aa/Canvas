@@ -511,4 +511,51 @@ describe('standard workflow presets (23 T2I + 6 I2V)', () => {
     expect(ks.values.sampler_name).toBeUndefined();
     expect(preset('std-deepinfra-t2i').nodes.find(n => n.type === 'EmptyLatentImage')!.values.width).toBe(1024);
   });
+
+  it('Replicate flux-dev-lora omits EmptyLatent pixels; aspect_ratio 1:1 on checkpoint', () => {
+    const p = preset('std-replicate-t2i');
+    const ckpt = loader(p.id)!;
+    expect(ckpt.values.aspect_ratio).toBe('1:1');
+    const lat = p.nodes.find(n => n.type === 'EmptyLatentImage')!;
+    expect(lat.values.width).toBeUndefined();
+    expect(lat.values.height).toBeUndefined();
+    expect(p.spatialFrames![0].params.aspectRatio).toBe('1:1');
+    expect(p.spatialFrames![0].params.width).toBeUndefined();
+    expect(lora(p.id)!.values.lora_name).toBe('fofr/flux-80s-cyberpunk');
+  });
+
+  it('NanoGPT flux-schnell omits pixels; resolution 1024x1024 on checkpoint', () => {
+    const p = preset('std-nanogpt-t2i');
+    expect(loader(p.id)!.values.resolution).toBe('1024x1024');
+    const lat = p.nodes.find(n => n.type === 'EmptyLatentImage')!;
+    expect(lat.values.width).toBeUndefined();
+    expect(lat.values.height).toBeUndefined();
+    const ks = p.nodes.find(n => n.type === 'KSampler')!;
+    expect(ks.values.seed).toBeUndefined();
+    expect(ks.values.steps).toBeUndefined();
+  });
+
+  it('MuAPI omits EmptyLatent pixels; aspect_ratio 1:1 (OpenAPI default) on checkpoint', () => {
+    const p = preset('std-muapi-t2i');
+    expect(loader(p.id)!.values.aspect_ratio).toBe('1:1');
+    const lat = p.nodes.find(n => n.type === 'EmptyLatentImage')!;
+    expect(lat.values.width).toBeUndefined();
+    expect(lat.values.height).toBeUndefined();
+    expect(p.spatialFrames![0].params.aspectRatio).toBe('1:1');
+  });
+
+  it('Hugging Face Z-Image omits pixels; resolution enum on checkpoint', () => {
+    const p = preset('std-huggingface-t2i');
+    expect(loader(p.id)!.values.resolution).toBe('1024x1024 ( 1:1 )');
+    const lat = p.nodes.find(n => n.type === 'EmptyLatentImage')!;
+    expect(lat.values.width).toBeUndefined();
+    expect(lat.values.height).toBeUndefined();
+    expect(p.nodes.find(n => n.type === 'KSampler')!.values.steps).toBe(8);
+  });
+
+  it('Agnes compact keeps official size 2K + aspect_ratio 1:1 on checkpoint', () => {
+    const ckpt = loader('std-agnes-t2i')!;
+    expect(ckpt.values).toMatchObject({ size: '2K', aspect_ratio: '1:1', ckpt_name: 'agnes-image-2.5-flash' });
+    expect(preset('std-agnes-t2i').nodes.some(n => n.type === 'EmptyLatentImage')).toBe(false);
+  });
 });
