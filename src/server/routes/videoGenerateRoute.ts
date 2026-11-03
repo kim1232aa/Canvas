@@ -580,7 +580,7 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
     // ModelScope API-Inference has no video generation endpoint (Item 6) → explicit 400, never fall through to another provider.
     if (isModelScopeTarget) {
       return res.status(400).json({
-        error: `ModelScope API-Inference 当前没有已接入的视频生成接口（model: ${model || '(空)'}）。本请求保持 provider=${reqProvider}，不会自动改用其他供应商。`,
+        error: `ModelScope API-Inference 当前没有已接入的视频生成接口（model: ${model || '(空)'}）。本请求保持 provider=${reqProvider}。`,
       });
     }
 
@@ -592,7 +592,7 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
 
     if (!falKey) {
       return res.status(400).json({
-        error: '未配置 Fal.ai 密钥。当前视频请求明确选择了 provider=fal；请配置有效 Fal.ai API Key。系统不会自动改用其他供应商。',
+        error: '未配置 Fal.ai 密钥。当前视频请求明确选择了 provider=fal；请配置有效 Fal.ai API Key。',
       });
     }
 
@@ -689,7 +689,7 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
       keyPoolManager.recordResult('fal', falKey, false, Date.now() - falVideoStart, errorText, upstreamResp.status);
       let friendlyError = `AI 视频服务商执行失败 [${upstreamResp.status}]: ${errorText}`;
       if (upstreamResp.status === 403) {
-        friendlyError = `Fal.ai 接口执行失败 [${upstreamResp.status}]: ${errorText}。当前请求保持 provider=fal，不会自动改用其他供应商。`;
+        friendlyError = `Fal.ai 接口执行失败 [${upstreamResp.status}]: ${errorText}`;
       }
       return res.status(upstreamResp.status).json({
         error: friendlyError,

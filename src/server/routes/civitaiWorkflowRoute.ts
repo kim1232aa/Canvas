@@ -975,7 +975,7 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
           { id: 'huggingface', name: 'Hugging Face', badge: '需重选模型', description: '请明确选择 Hub 模型及实际在线推理路由' },
           { id: 'muapi', name: 'MuAPI', badge: '需重选端点', description: '请从 MuAPI 目录选择真实 endpoint_url；不映射 Civitai 模型名' },
           { id: 'wavespeed', name: 'WaveSpeed', badge: '需重选端点', description: '请从 WaveSpeed 目录选择完整 model_id；不映射 Civitai 模型名' },
-          { id: 'sogni', name: 'Sogni', badge: '需重选 selector', description: '请从当前官方工具 Schema selector 选择模型；worker ID 不自动转换' },
+          { id: 'sogni', name: 'Sogni', badge: '需重选 selector', description: '请从当前官方工具 Schema selector 选择模型' },
           { id: 'sensenova', name: 'SenseNova', badge: '需重选模型', description: '请按当前商汤接口配置选择模型；不使用导入来源名替代' },
           { id: 'agnes', name: 'Agnes AI', badge: '需重选模型', description: '请按当前 Agnes 接口配置选择模型；不自动套默认模型' },
           { id: 'gemini', name: 'Google Gemini', badge: '需重选模型', description: '请从 Gemini 模型选项明确选择实际生图模型' },

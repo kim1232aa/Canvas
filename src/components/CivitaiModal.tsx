@@ -1,6 +1,5 @@
 import { beginTraceOperation } from '../services/executionTrace';
 import { getStoredApiKeys } from '../services/api';
-import {TensorCatalogNotice} from './TensorCatalogNotice';
 import {isCivitaiAir,selectionFromExplicitLoraUrl,selectionFromMetadata,verifiedSelectionOrExplicitIntent,verifyCivitaiSelection,type ResourceSelection} from '../utils/resourceSelection';
 import {isLoraWeightResource} from '../utils/isLoraWeightResource';
 import {isTensorArtLoraType} from '../utils/tensorArtModelInfo';
@@ -860,31 +859,6 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
         </div>
         )}
 
-        {activeProvider === 'tensorart' && (
-          <div className="px-6 pt-3">
-            <TensorCatalogNotice />
-          </div>
-        )}
-        {activeProvider === 'sogni' && (
-          <div className="px-6 pt-3 space-y-2">
-            <div className="rounded-lg border border-purple-800/40 bg-purple-950/25 p-3 text-xs leading-relaxed text-purple-200" data-testid="sogni-comfy-catalog-notice">
-              <p className="font-semibold text-purple-300">Sogni 官方公开 LoRA 目录 <span className="ml-2 text-[10px] font-medium text-cyan-300/90" data-testid="sogni-current-provider-chip">当前源：Sogni</span></p>
-              <p className="text-slate-300 mt-1">
-                仅展示官方公开目录 <code>GET /v1/loras/comfy</code>（无需登录）。个人库 / Unlimited 目录不在本页提供。卡片预览为上游示例帧；无示例时标注为上游未提供封面。
-              </p>
-            </div>
-          </div>
-        )}
-        {activeProvider === 'fal' && (
-          <div className="px-6 pt-3">
-            <div className="rounded-lg border border-amber-800/40 bg-amber-950/25 p-3 text-xs leading-relaxed text-amber-200">
-              <p className="font-semibold text-amber-300">Fal.ai 目录类型说明：</p>
-              <p className="text-slate-300 mt-1">
-                Fal.ai 官方模型目录仅列出云端推理端点（如文生图、图生图生成器），无独立的公开 LoRA 权重库。若需使用特定 LoRA，请在上方输入 LoRA 权重 URL 或 Civitai/HF 直链，并在底模中心选用支持加载 LoRA 的 Fal 基础端点。
-              </p>
-            </div>
-          </div>
-        )}
         {errorMsg && (
           <div className="px-6 py-2 bg-red-950/20 border-b border-red-800/20 text-red-300 text-xs flex items-center justify-between shrink-0 animate-in slide-in-from-top-1 duration-200">
             <div className="flex items-center gap-2">
@@ -934,11 +908,6 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
                 ) : (
                   <p className="text-[11px] text-slate-500 mt-2" data-testid="lora-hub-empty-subtext">
                     请尝试清空筛选关键词、切换底模架构或直接在上方输入任意模型 ID 动态载入
-                  </p>
-                )}
-                {catalogNotice && !(shownEvidence?.noUpstreamCall && shownEvidence?.message && catalogNotice.includes(shownEvidence.message.split('。')[0])) && (
-                  <p className="text-[11px] text-amber-300/90 mt-2 max-w-md mx-auto leading-relaxed" data-testid="lora-hub-catalog-notice">
-                    {catalogNotice}
                   </p>
                 )}
               </div>

@@ -501,7 +501,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
           {params.targetProvider === 'sensenova' && (
             <div className="space-y-2 rounded-lg border border-amber-500/30 bg-amber-950/20 p-3">
               <p className="text-amber-200">商汤日日新 · 图像生成与编辑：U 系列使用图像接口，不作为 Chat 模型。LLM 提示词润色使用另行选择的对话模型，与图像生成分开。</p>
-              <label className="block text-sm text-slate-300">SenseNova size<input type="text" aria-label="SenseNova size" value={params.size ?? ''} onChange={e=>update({size:e.target.value === '' ? undefined : e.target.value})} placeholder="auto / 2048x2048；留空时按画布宽高(如1024x1024)发送，无宽高则 auto" className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2 focus-visible:outline-2 focus-visible:outline-cyan-400" /><span className="text-amber-200">官方文档写 2K/4K 常量，但本次上游对这两个值返回 400：invalid size, should be auto or WIDTHxHEIGHT。建议明确填写像素尺寸或 auto；原值保留，不自动转换，也不在此限制提交。</span></label>
+              <label className="block text-sm text-slate-300">SenseNova size<input type="text" aria-label="SenseNova size" value={params.size ?? ''} onChange={e=>update({size:e.target.value === '' ? undefined : e.target.value})} placeholder="auto / 2048x2048；留空时按画布宽高(如1024x1024)发送，无宽高则 auto" className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2 focus-visible:outline-2 focus-visible:outline-cyan-400" /><span className="text-amber-200">官方文档写 2K/4K 常量，但本次上游对这两个值返回 400：invalid size, should be auto or WIDTHxHEIGHT。建议明确填写像素尺寸或 auto；原值保留，也不在此限制提交。</span></label>
               <label className="block text-sm text-slate-300">SenseNova output_format<input type="text" aria-label="SenseNova output_format" value={params.outputFormat ?? ''} onChange={e=>update({outputFormat:e.target.value === '' ? undefined : e.target.value})} placeholder="png / jpeg / webp；留空不显式传" className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2 focus-visible:outline-2 focus-visible:outline-cyan-400" /><span className="text-slate-400">本站支持 png/jpeg/webp；官方编辑文档也列 jpg，但本站尚未接通。自定义原值保留。</span></label>
               {([['watermark', 'watermark'], ['prompt_extend', 'promptExtend']] as const).map(([field, param]) => <label key={field} className="block text-sm text-slate-300">SenseNova {field}<select aria-label={`SenseNova ${field}`} value={typeof params[param] === 'boolean' ? String(params[param]) : ''} onChange={e=>update({[param]:e.target.value === '' ? undefined : e.target.value === 'true'})} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2 focus-visible:outline-2 focus-visible:outline-cyan-400"><option value="">未设置（不显式传）</option><option value="false">false（关闭）</option><option value="true">true（开启）</option></select></label>)}
             </div>
@@ -914,12 +914,6 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
           <span className="font-semibold text-slate-200 text-[11px] block">
             📐 潜空间画幅比例 (Latent Canvas Dimensions)
           </span>
-          {omitWidthHeight && schemaDeclaresAspectRatio && (
-            <p className="text-[11px] text-amber-200 flex flex-wrap items-center gap-1.5" data-testid="latent-ratio-schema-owned">
-              <FieldStatusBadge status="not_sent" />
-              本模型官方 Schema 只有 aspect_ratio、没有像素宽高：下方画幅预设与宽高不会发送；实际发送的是「官方 Schema 字段」里的 aspect_ratio。
-            </p>
-          )}
 
           <div className="grid grid-cols-5 gap-1.5">
             {aspectRatios.map((ar) => {

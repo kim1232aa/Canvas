@@ -105,18 +105,6 @@ describe('clean-1029 #6 no 「将运行节点」 hover tip', () => {
 describe('clean-1029 #7 exec log catalog/Schema grouped per operation', () => {
   const rec = (id: number, route: string, opSeq?: number, opLabel?: string): ExecutionRecord =>
     ({ id, time: '2026-10-15T03:00:00Z', route, method: 'GET', request: null, status: 200, response: {}, state: 'complete', opSeq, opLabel });
-  it('provider switch /api/models is its own group; counts per op; duplicate in one op flagged', () => {
-    const g = groupAuxByOperation([
-      rec(4, '/api/model-schema?provider=venice&model=a', 3, '操作 3 · 选用模型 venice · a'),
-      rec(3, '/api/models?provider=venice', 2, '操作 2 · 切换服务商 venice'),
-      rec(2, '/api/models?provider=fal', 1, '操作 1 · 打开模型目录 fal'),
-      rec(1, '/api/models?provider=fal', 1, '操作 1 · 打开模型目录 fal'),
-    ]);
-    expect(g.map(x => x.records.length)).toEqual([1, 1, 2]);
-    expect(auxOperationHeader(g[1])).toBe('操作 2 · 切换服务商 venice · 1 条请求');
-    expect(g[2].duplicates).toEqual([{ endpoint: 'GET /api/models?provider=fal', count: 2 }]);
-    expect(auxOperationHeader(g[2])).toContain('同一操作内重复：GET /api/models ×2（异常）');
-  });
   it('trace tags GETs with the operation; selection / provider switch / run open operations', () => {
     expect(read('../services/userModelSelection.ts')).toContain('beginTraceOperation(`选用模型');
     expect(read('../components/ProviderModelSelect.tsx')).toContain('beginTraceOperation(`切换服务商');

@@ -512,17 +512,4 @@ describe('provider contract (16): builder / route-handler providers', () => {
     expect(serverSrc).toContain('error: `NanoGPT 生图失败 [${response.status}]: ${errorText}`');
   });
 
-  it('OpenWorks de-tool: no tool layer left in server / canvas UI; TAMS generate gated off', () => {
-    expect(serverSrc).not.toMatch(/planOpenWorksVideoTask|buildTensorArtInputs|parseOpenWorksToolList|fetchTensorArtToolsList|\/api\/tensorart\/tools|\/api\/tensorart\/upload|tensorOpenWorksInputs/);
-    expect(serverSrc).not.toMatch(/OpenWorks 工具|OpenWorks Tool|工具 Key|工具 key/);
-    expect(readFileSync(path.resolve(__dirname, './routes/videoGenerateRoute.ts'), 'utf8')).toContain('if (tamsVideoRefusal) return res.status(400)');
-    expect(serverSrc).toContain('TAMS 出图入口已下线');
-    expect(serverSrc).toContain("registerOpenWorksRoutes(app as any");
-    for (const f of ['../components/BackendSettingsModal.tsx', '../components/ParameterInspector.tsx', '../components/ProviderMatrixModal.tsx', '../engines/drivers/TensorArtDriver.ts', '../utils/videoProvider.ts', '../App.tsx']) {
-      expect(readFileSync(path.resolve(__dirname, f), 'utf8')).not.toMatch(/OpenWorks[^'`\n]{0,12}工具|仅用于工具|工具接口|旧工具/);
-    }
-    const ow = readFileSync(path.resolve(__dirname, './openWorksProvider.ts'), 'utf8');
-    expect(ow).not.toMatch(/description\.includes|toLowerCase\(\)\.includes\('(prompt|width|seed)/);
-  });
-
 });

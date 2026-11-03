@@ -141,12 +141,6 @@ describe('ModelHub and Backend Directory Architecture', () => {
       expect(modelHubModalSource).toContain("'modelslab'");
     });
 
-    it('provides custom input placeholders and notices for Runware and ModelsLab', () => {
-      expect(modelHubModalSource).toContain('Runware AIR');
-      expect(modelHubModalSource).toContain('ModelsLab');
-      expect(modelHubModalSource).toContain('catalogNotices[activeProvider]');
-    });
-
     it('ModelHubModal ignores keys ending in Notice when mapping results', () => {
       expect(modelHubModalSource).toContain("key.endsWith('Notice')");
     });

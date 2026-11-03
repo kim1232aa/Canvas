@@ -1,4 +1,3 @@
-import {TensorCatalogNotice} from './TensorCatalogNotice';
 import React from 'react';
 import {fetchLiveModelsShared, isCustomParametersJsonQuery, sanitizeCatalogQuery} from '../services/api';
 import {noteUserModelSelection, schemaReuseFor, subscribeSchemaReuse} from '../services/userModelSelection';
@@ -69,7 +68,6 @@ export function ProviderModelSelect({provider,value,onChange}:{provider:string;v
   const catalogCount = hasCurrentResult ? currentLive.length : 0;
   const stop=(e:React.SyntheticEvent)=>e.stopPropagation();
   return <div className="space-y-2" onMouseDown={stop} onPointerDown={stop} onKeyDown={stop}>
-    {provider==='tensorart' && <TensorCatalogNotice />}
     {provider==='krea' && !value && <p role="status" data-testid="krea-live-model-selection-note" className="rounded border border-cyan-900/60 bg-cyan-950/20 p-2 text-xs text-cyan-200">请从实时 Krea 官方模型目录选择生成端点；此模板未预选其他服务商的模型标识。</p>}
     <input aria-label="搜索当前供应商模型" type="search" value={query} onFocus={arm} onChange={e=>{arm();const v=e.target.value;setQuery(isCustomParametersJsonQuery(v)?'':v);}} placeholder={provider==='tensorart' ? '输入 Tensor 模型 ID 或模型链接查询' : '搜索模型名称或 ID'} className="w-full rounded-lg border border-[#2d303a] bg-[#121316] p-2 text-sm text-slate-200" />
     <select aria-label="当前供应商底模" title={selected?.label ? `${selected.label} · ${value}` : value || undefined} value={invalid ? '' : value || ''} onFocus={arm} onMouseDown={arm} onChange={e=>{onChange(e.target.value);noteUserModelSelection(provider,e.target.value);}} className="w-full rounded-lg border border-[#2d303a] bg-[#121316] p-2 text-sm text-slate-200">

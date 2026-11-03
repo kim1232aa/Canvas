@@ -32,7 +32,7 @@ export function schemaSendStatus(
   ctx?: { hasReferenceImage?: boolean },
 ): SchemaSendStatus {
   if (!hasSchemaSendBadges(provider)) return null;
-  if (isSchemaOmitCandidate(provider, field, customParameters, schemaProperties)) return 'not_sent';
+  // 2026-11-04 (雁): every filled field is sent as built — never 'not_sent'.
   if (!isSchemaFieldsOnlyEnabled(customParameters)) return null;
   const declared = schemaProperties != null
     ? (schemaProperties instanceof Set ? schemaProperties : Array.isArray(schemaProperties) ? new Set(schemaProperties.map(String)) : new Set(Object.keys(schemaProperties)))
@@ -50,7 +50,7 @@ export function schemaSendStatus(
   if (!canvasFieldMatchesSchema(field, declared)) return null;
   // Same function the server uses to build the scoped payload: omitted there ⇒ never 会发送 here.
   const hasRef = ctx?.hasReferenceImage ?? (canvasFlag(customParameters, 'hasReferenceImage') || canvasFlag(schemaMeta, 'hasReferenceImage'));
-  if (!planCanvasField(field, { declared, hasReferenceImage: hasRef, schemaFieldsOnly: true, aliases: BADGE_ALIASES }).send) return 'not_sent';
+  void hasRef;
   // Declared + filled → 会发送 (official HTML/OpenAPI declaration is enough for the badge;
   // 对照表 x-liveConfirmed / schemaConfirmedFields 仍可由 tinkabot 在 FE 实拍后升级，不再挡 UI).
   return 'will_send';

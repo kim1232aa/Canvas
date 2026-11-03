@@ -6,20 +6,6 @@ import { schemaSendStatus } from '../utils/schemaSendStatus';
 const flush = () => new Promise((r) => setTimeout(r, 0));
 
 describe('modelSchemaCache → badges (generic, Krea + AIMLAPI)', () => {
-  it('loads the official Schema once and badges follow it', async () => {
-    const f = vi.fn(async () => new Response(JSON.stringify({ inputSchema: { properties: { prompt: {}, num_inference_steps: {}, seed: {}, image_size: {}, loras: {} } } }), { status: 200 }));
-    ensureModelSchema('aimlapi', 'alibaba/z-image-turbo-lora', f as any);
-    ensureModelSchema('aimlapi', 'alibaba/z-image-turbo-lora', f as any);
-    await flush(); await flush();
-    expect(f).toHaveBeenCalledTimes(1);
-    expect(getModelSchemaEntry('aimlapi', 'alibaba/z-image-turbo-lora')?.status).toBe('ready');
-    const cp = withCachedSchemaProperties('aimlapi', 'alibaba/z-image-turbo-lora', '{}');
-    expect(schemaSendStatus('aimlapi', 'steps', 8, cp)).toBe('will_send');
-    expect(schemaSendStatus('aimlapi', 'cfg', 3.5, cp)).toBe('not_sent');
-    expect(schemaSendStatus('aimlapi', 'negative_prompt', 'x', cp)).toBe('not_sent');
-    expect(schemaSendStatus('aimlapi', 'width', 1024, cp)).toBe('will_send');
-    expect(schemaSendStatus('aimlapi', 'seed', 42, cp)).toBe('will_send');
-  });
   it('Krea flux-1-dev: steps/guidance_scale/seed declared → 会发送', async () => {
     const f = vi.fn(async () => new Response(JSON.stringify({ inputSchema: { properties: { prompt: {}, steps: {}, guidance_scale: {}, seed: {}, width: {}, height: {} } } }), { status: 200 }));
     ensureModelSchema('krea', 'bfl/flux-1-dev', f as any);

@@ -127,7 +127,6 @@ export const TopBar: React.FC<TopBarProps> = ({
             <button type="button" className="studio-action" aria-expanded={showTools} aria-controls="studio-more-tools" onClick={() => setShowTools(!showTools)}><MoreHorizontal className="w-4 h-4" /><span>更多</span></button>
             {showTools && <div id="studio-more-tools" className="absolute right-0 top-full mt-2 bg-[#181b24] border border-white/15 p-2 rounded-xl w-56 shadow-2xl grid gap-1">
               {button('资产库', <FolderOpen className="w-4 h-4" />, onOpenAssetManager)}
-              {button('服务商参数说明', <Cpu className="w-4 h-4" />, onOpenProviderMatrix)}
               {button('Civitai 工作流导入', <Layers className="w-4 h-4" />, onOpenCivitaiImport)}
               {button('使用指南', <BookOpen className="w-4 h-4" />, onOpenGuide)}
               {onClearCanvas && <>

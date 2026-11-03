@@ -33,7 +33,6 @@ import { CivitaiModal } from './components/CivitaiModal';
 import { HistoryModal } from './components/HistoryModal';
 import { ComfyGuideModal } from './components/ComfyGuideModal';
 import { WorkflowPresetsModal } from './components/WorkflowPresetsModal';
-import { ProviderMatrixModal } from './components/ProviderMatrixModal';
 import { CanvasManagerModal, CanvasProject } from './components/CanvasManagerModal';
 import { AssetManagerModal, MediaAsset } from './components/AssetManagerModal';
 import { ImageDetailModal } from './components/ImageDetailModal';
@@ -2402,7 +2401,6 @@ export default function App() {
           setIsWorkflowPresetsOpen(true);
         }}
         onOpenCivitaiImport={handleOpenCivitaiImport}
-        onOpenProviderMatrix={() => setIsProviderMatrixOpen(true)}
         onOpenCanvasManager={() => setIsCanvasManagerOpen(true)}
         onOpenCloudProjects={() => setIsCloudProjectsOpen(true)}
         onSaveProject={() => {handleSaveProject().catch(() => {});}}
@@ -2987,15 +2985,6 @@ export default function App() {
         initialTab={workflowPresetsInitialTab}
       />
 
-      {/* Provider Matrix & Connection Wire Guide Modal */}
-      <ProviderMatrixModal
-        isOpen={isProviderMatrixOpen}
-        onClose={() => setIsProviderMatrixOpen(false)}
-        onOpenSettings={() => {
-          setIsProviderMatrixOpen(false);
-          setIsSettingsOpen(true);
-        }}
-      />
 
       {/* Multi-Canvas Project Boards Manager Modal */}
       <CanvasManagerModal

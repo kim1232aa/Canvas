@@ -1012,7 +1012,6 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
                   <div className="font-bold text-[11px]">🔄 顺序轮询 (Round-Robin)</div>
                   <div className="text-[10px] text-slate-400 mt-1 leading-tight">每个独立新请求按配置顺序选择 Key；历史失败状态只用于展示，不会触发故障切换、低延迟改路或自动重试。</div>
                 </button>
-                <p className="text-[10px] text-amber-300/80 leading-relaxed">已禁用 Failover / Best Latency：失败请求不会因为 401/403/429/网络错误自动换另一把 Key。异步任务仍必须使用提交时绑定的凭据引用继续轮询。</p>
               </div>
 
               {/* Server key pool (masked) — read-only, above browser custom keys */}

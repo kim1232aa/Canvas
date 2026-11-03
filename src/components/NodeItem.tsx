@@ -376,11 +376,6 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               <span>异常</span>
             </div>
           )}
-          {LORA_LOADER_TYPES.has(node.type) && !String(node.values?.lora_name || '').trim() && (
-            <div className="flex items-center gap-1 text-[10px] font-mono text-amber-200 bg-amber-950/60 px-1.5 py-0.5 rounded border border-amber-500/50" data-testid="lora-unfilled-badge">
-              <span>未填 · 不会发送</span>
-            </div>
-          )}
         </div>
 
         {/* Action icons */}
@@ -513,14 +508,9 @@ export const NodeItem: React.FC<NodeItemProps> = ({
           {/* clean-1333 #5/#6: only the node that caused the block gets a red box, with the SAME reason as the toast. */}
           {node.localBlockReason && node.state !== 'running' && <div role="status" data-testid="node-local-block" className="p-2 rounded bg-rose-950/50 border border-rose-500/50 text-rose-100 text-[11px] leading-relaxed [overflow-wrap:break-word] whitespace-pre-wrap overflow-visible"><p className="font-semibold" data-testid="node-local-block-title">{node.localBlockTitle || LOCAL_BLOCK_NODE_LINE.split('：')[0]}</p><p data-testid="node-local-block-reason" className="overflow-visible"><EmphasizeLimit text={node.localBlockReason} /></p></div>}
           {node.values.require_reference_image === true && <p role="note" className="text-amber-200">编辑输入需要明确参考图；展示样图不作为输入。</p>}
-          {currentProvider === 'agnes' && !currentCheckpoint?.includes('video') && ['KSampler', 'EmptyLatentImage', 'CLIPTextEncodeNegative'].includes(node.type) && (
-            <p role="alert" className="p-2 rounded bg-rose-950/40 border border-rose-800/40 text-rose-300 text-[11px] leading-relaxed">
-              Agnes AI 图像模型为云端简易接口，不使用 {node.type === 'KSampler' ? 'KSampler 采样器' : node.type === 'EmptyLatentImage' ? '空潜空间' : '负向提示词'}；请直接连接「加载底模 -&gt; CLIP 正向提示词 -&gt; 保存图像」。
-            </p>
-          )}
           {node.type === 'CheckpointLoaderSimple' && node.values.targetProvider === 'sensenova' && <div className="space-y-2">
             <label className="block text-slate-300">SenseNova size<input type="text" aria-label="SenseNova size" aria-describedby={`sensenova-size-note-${node.id}`} value={node.values.size ?? ''} onMouseDown={e=>e.stopPropagation()} onPointerDown={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()} onChange={e=>onUpdateValue(node.id,'size',e.target.value === '' ? undefined : e.target.value)} placeholder="auto / 2048x2048；留空时按画布宽高(如1024x1024)发送，无宽高则 auto" className="mt-1 w-full rounded border border-slate-700 bg-[#121316] p-2 focus-visible:outline-2 focus-visible:outline-cyan-400" /></label>
-            <p id={`sensenova-size-note-${node.id}`} role="note" className="text-amber-200">官方文档写 2K/4K 常量，但本次上游对这两个值返回 400：invalid size, should be auto or WIDTHxHEIGHT。建议明确填写像素尺寸或 auto；原值保留，不自动转换，也不在此限制提交。</p>
+            <p id={`sensenova-size-note-${node.id}`} role="note" className="text-amber-200">官方文档写 2K/4K 常量，但本次上游对这两个值返回 400：invalid size, should be auto or WIDTHxHEIGHT。建议明确填写像素尺寸或 auto；原值保留，也不在此限制提交。</p>
             <label className="block text-slate-300">SenseNova output_format<input type="text" aria-label="SenseNova output_format" value={node.values.output_format ?? ''} onMouseDown={e=>e.stopPropagation()} onPointerDown={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()} onChange={e=>onUpdateValue(node.id,'output_format',e.target.value === '' ? undefined : e.target.value)} placeholder="png / jpeg / webp；留空不显式传" className="mt-1 w-full rounded border border-slate-700 bg-[#121316] p-2 focus-visible:outline-2 focus-visible:outline-cyan-400" /><span className="text-slate-400">本站支持 png/jpeg/webp；官方编辑文档也列 jpg，但本站尚未接通。自定义原值保留。</span></label>
             {(['watermark', 'prompt_extend'] as const).map(field => <label key={field} className="block text-slate-300">SenseNova {field}<select aria-label={`SenseNova ${field}`} value={typeof node.values[field] === 'boolean' ? String(node.values[field]) : ''} onMouseDown={e=>e.stopPropagation()} onPointerDown={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()} onChange={e=>onUpdateValue(node.id,field,e.target.value === '' ? undefined : e.target.value === 'true')} className="mt-1 w-full rounded border border-slate-700 bg-[#121316] p-2 focus-visible:outline-2 focus-visible:outline-cyan-400"><option value="">未设置（不显式传）</option><option value="false">false（关闭）</option><option value="true">true（开启）</option></select></label>)}
           </div>}
@@ -638,7 +628,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                 const declared = readDeclaredSchemaProperties(schemaCustomParameters);
                 let hasRef = false;
                 try { hasRef = JSON.parse(schemaCustomParameters || '{}')?._canvas?.hasReferenceImage === true; } catch { /* */ }
-                if (declared && declared.size > 0 && canvasFieldMatchesSchema('denoise', declared) && !hasRef) strengthNeedsImage = true;
+                if (declared && declared.size > 0 && canvasFieldMatchesSchema('denoise', declared) && !hasRef) strengthNeedsImage = false;
               }
               const greyThis = unsupported || schemaUnused || strengthNeedsImage;
               return (
@@ -752,7 +742,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                         id={`custom-model-${node.id}`}
                         value={String(value || '')}
                         placeholder={currentProv === 'civitai' ? '完整 AIR 或 modelId@versionId' : currentProv === 'tensorart' ? '输入模型 ID 或 tensor.art/models/… 链接' : '输入当前服务商的模型 ID / Repo ID'}
-                        title="须使用当前服务商真实可调用的模型 ID，不会自动切换供应商"
+                        title="须使用当前服务商真实可调用的模型 ID"
                         onChange={(v) => onUpdateValue(node.id, widget.name, v)}
                         onCommit={(v) => { noteUserModelSelection(currentProv, v); }}
                       />
@@ -992,7 +982,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                 const declared = readDeclaredSchemaProperties(schemaCustomParameters);
                 let hasRef = false;
                 try { hasRef = JSON.parse(schemaCustomParameters || '{}')?._canvas?.hasReferenceImage === true; } catch { /* */ }
-                if (declared && declared.size > 0 && canvasFieldMatchesSchema('denoise', declared) && !hasRef) strengthNeedsImage = true;
+                if (declared && declared.size > 0 && canvasFieldMatchesSchema('denoise', declared) && !hasRef) strengthNeedsImage = false;
               }
               const seedCtrlUnused = widget.name === 'control_after_generate' && (greySeed || schemaSendStatus(currentProvider, 'seed', node.values?.seed, node.values?.custom_parameters, readDeclaredSchemaProperties(schemaCustomParameters), schemaCustomParameters) === 'not_sent' || isDeclaredSchemaFieldOmitted('seed', schemaCustomParameters, readDeclaredSchemaProperties(schemaCustomParameters)));
               // 生成后种子随 seed：Schema 无 seed → 整行隐藏
@@ -1172,7 +1162,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                 const declared = readDeclaredSchemaProperties(schemaCustomParameters);
                 let hasRef = false;
                 try { hasRef = JSON.parse(schemaCustomParameters || '{}')?._canvas?.hasReferenceImage === true; } catch { /* */ }
-                if (declared && declared.size > 0 && canvasFieldMatchesSchema('denoise', declared) && !hasRef) strengthNeedsImage = true;
+                if (declared && declared.size > 0 && canvasFieldMatchesSchema('denoise', declared) && !hasRef) strengthNeedsImage = false;
               }
               const greyThis = unsupported || schemaUnused || strengthNeedsImage;
               return (
@@ -1276,14 +1266,6 @@ export const NodeItem: React.FC<NodeItemProps> = ({
             return null;
           })}
 
-          {(def.widgets || []).some(widget => isCanvasWidgetUnsupported(currentProvider, currentCheckpoint, widget.name) || (node.type === 'CLIPTextEncodeNegative' && widget.name === 'text' && greyNegative)) && (
-            <div className="pt-2 border-t border-slate-700/40">
-              <button type="button" onClick={(event) => {event.stopPropagation(); setShowUnsupported(!showUnsupported);}} aria-expanded={showUnsupported} className="text-xs text-slate-400 hover:text-slate-200 text-left">
-                {showUnsupported ? '收起接口不使用的参数' : '查看此接口不使用的参数'}
-              </button>
-              {!showUnsupported && <p className="text-xs text-slate-500 mt-1">当前服务商接口不接收这些字段；保留在画布中供切换其他兼容模型时使用。</p>}
-            </div>
-          )}
 
           {node.type === 'LoRALoader' && node.values.lora_name && (() => {
             const note = loraSourceMismatch(node.values.resource_source, currentProvider || node.values?.targetProvider, node.values.base_model);
@@ -1354,7 +1336,6 @@ export const NodeItem: React.FC<NodeItemProps> = ({
             (node.type === 'VAEDecode' && node.outputData)) && (
             <div className="mt-2 space-y-2">
               {node.outputData && node.stalePriorOutput && <p data-testid="stale-prior-output-label" role="status" className="rounded border border-amber-500/50 bg-amber-950/50 px-2 py-1 text-[11px] text-amber-100">上次结果，不是本次</p>}
-              {node.outputData && node.restoredFromPreviousSession && !node.stalePriorOutput && <p data-testid="restored-output-label" className="rounded border border-slate-500/60 bg-slate-800/70 px-2 py-1 text-[11px] text-slate-200">{restoredOutputLabel(node.restoredFromPreviousSession)}</p>}
               {node.outputData && node.state === 'error' && !node.stalePriorOutput && <p data-testid="stale-error-output-label" role="status" className="rounded border border-amber-500/50 bg-amber-950/50 px-2 py-1 text-[11px] text-amber-100">上次结果，不是本次</p>}
               {(() => {
                 const showUpstreamFailPreview = !node.outputData && !!node.upstreamFailed && node.state !== 'running';

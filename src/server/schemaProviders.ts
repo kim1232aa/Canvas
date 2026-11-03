@@ -1124,7 +1124,7 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
     }
     if(provider==='sogni') {
       const {schema,sourceUrl}=await fetchSogniGenerateImageSchema(dep.fetch,req.path,model);
-      return {provider,model,sourceUrl,endpoint:schemaProviders.sogni.root+'/v1/creative-agent/workflows',inputSchema:schema,schemaVersion:schema.schemaVersion,note:'模型 selector 与 generate_image 参数来自实时官方 Schema；实时 worker 目录属于另一种 ID，不会自动转换。'};
+      return {provider,model,sourceUrl,endpoint:schemaProviders.sogni.root+'/v1/creative-agent/workflows',inputSchema:schema,schemaVersion:schema.schemaVersion,note:'模型 selector 与 generate_image 参数来自实时官方 Schema；实时 worker 目录属于另一种 ID。'};
     }
     const {rows,sourceUrl}=await list(req,provider,credential);
     const entry=rows.find((x:any)=>(provider==='wavespeed'?x.model_id:x.id)===model);

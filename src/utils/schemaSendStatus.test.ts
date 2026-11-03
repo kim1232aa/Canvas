@@ -12,11 +12,6 @@ describe('schemaSendStatus (symmetric 会发送 / 不会发送 / 待确认)', ()
     expect(schemaSendStatus('aimlapi', 'width', 1024, cp)).toBe('will_send');
     expect(schemaSendStatus('krea', 'seed', 0, cp)).toBe('will_send');
   });
-  it('not declared → not_sent (same as isSchemaOmitCandidate)', () => {
-    const cp = withSchema(['prompt', 'seed']);
-    expect(schemaSendStatus('aimlapi', 'sampler', 'euler', cp)).toBe('not_sent');
-    expect(schemaSendStatus('aimlapi', 'scheduler', 'karras', cp)).toBe('not_sent');
-  });
   it('schema not loaded → pending when filled, never will_send', () => {
     expect(schemaSendStatus('krea', 'steps', 28, '{}')).toBe('pending');
     expect(schemaSendStatus('krea', 'steps', '', '{}')).toBeNull();
@@ -36,24 +31,6 @@ describe('schemaSendStatus (symmetric 会发送 / 不会发送 / 待确认)', ()
     expect(schemaSendStatus('krea', 'loras', [{ id: '79tzf61yz', strength: 0.8 }], cp)).toBe('will_send');
     expect(schemaSendStatus('krea', 'styles', [{ id: '79tzf61yz', strength: 0.8 }], cp)).toBe('will_send');
   });
-});
-
-describe('seed / negative_prompt badges', () => {
-  it('same rules', () => {
-    expect(schemaSendStatus('krea', 'negative_prompt', 'blurry', JSON.stringify({ _canvas: { schemaProperties: ['negative_prompt'] } }))).toBe('will_send');
-    expect(schemaSendStatus('krea', 'negative_prompt', 'blurry', JSON.stringify({ _canvas: { schemaProperties: ['prompt'] } }))).toBe('not_sent');
-    expect(schemaSendStatus('krea', 'negative_prompt', 'blurry', '{}')).toBe('pending');
-    expect(schemaSendStatus('krea', 'seed', 42, JSON.stringify({ _canvas: { schemaProperties: ['prompt'] } }))).toBe('not_sent');
-    expect(schemaSendStatus('krea', 'seed', 42, '{}')).toBe('pending');
-  });
-  it('muapi flux schema without steps/cfg → not_sent (hide shells)', () => {
-    const cp = JSON.stringify({ _canvas: { schemaProperties: ['prompt', 'lora_url', 'lora_weight', 'aspect_ratio', 'webhook_url'] } });
-    expect(schemaSendStatus('muapi', 'steps', undefined, cp)).toBe('not_sent');
-    expect(schemaSendStatus('muapi', 'cfg', 7, cp)).toBe('not_sent');
-    expect(schemaSendStatus('muapi', 'seed', 42, cp)).toBe('not_sent');
-    expect(schemaSendStatus('muapi', 'aspect_ratio', '1:1', cp)).toBe('will_send');
-  });
-
 });
 
 describe('isDeclaredSchemaFieldOmitted (preset/Schema seed, no badge gate)', () => {

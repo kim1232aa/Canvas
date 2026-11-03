@@ -1,5 +1,4 @@
 import { beginTraceOperation } from '../services/executionTrace';
-import {TensorCatalogNotice} from './TensorCatalogNotice';
 import {isExplicitLoraWeightUrl,selectionFromExplicitLoraUrl,selectionFromMetadata,verifyCivitaiSelection,type ResourceSelection} from '../utils/resourceSelection';
 import {isLoraWeightResource} from '../utils/isLoraWeightResource';
 import { friendlyProviderLabel } from '../utils/providerLabels';
@@ -960,15 +959,6 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                   <span className="text-[9px] opacity-50 px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20">部分请求受限</span>
                 </div>
               ))}
-            </div>
-          )}
-          {activeProvider === 'tensorart' && <TensorCatalogNotice />}
-          {activeProvider !== 'all' && catalogNotices[activeProvider] && (
-            <div className="mb-4 px-4 py-2.5 rounded-lg bg-cyan-950/20 border border-cyan-500/30 text-cyan-300 text-xs flex items-start gap-2.5">
-              <Info className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
-              <div className="flex-1 leading-relaxed">
-                <span>{catalogNotices[activeProvider]}</span>
-              </div>
             </div>
           )}
           {unsupportedDirectoryProvider && (

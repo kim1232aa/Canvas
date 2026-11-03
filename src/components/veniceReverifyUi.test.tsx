@@ -66,10 +66,3 @@ describe('Venice reverify UI · checkpoint not blanked on same-provider panel pa
     expect(patched.values.targetProvider).toBe('aimlapi');
   });
 });
-
-describe('Venice reverify UI · LoRA hub notice not duplicated', () => {
-  it('CivitaiModal skips yellow catalogNotice when empty conclusion already carries noUpstreamCall message', () => {
-    const src = readFileSync(resolve(__dirname, 'CivitaiModal.tsx'), 'utf8');
-    expect(src).toMatch(/shownEvidence\?\.noUpstreamCall && shownEvidence\?\.message/);
-  });
-});

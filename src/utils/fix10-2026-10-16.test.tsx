@@ -52,12 +52,6 @@ describe('fix10 execution categories', () => {
   it('category beats route heuristic (GET /api/models with category generation counts as generation)', () => {
     expect(isNonGenerationRecord({ method: 'GET', route: '/api/models', category: 'generation' } as any)).toBe(false);
   });
-  it('button summary: 生成请求 N · 目录/Schema M', () => {
-    const rows: any[] = [{ category: 'catalog', state: 'complete' }, { category: 'catalog', state: 'complete' }, { category: 'schema', state: 'complete' }];
-    expect(countsLabel(rows)).toBe('生成请求 0 · 目录/Schema 3');
-    expect(buttonSummary(rows as any)).toBe('生成请求 0 · 目录/Schema 3');
-    expect(buttonSummary([...rows, { category: 'local', state: 'complete' }, { category: 'generation', state: 'complete' }] as any)).toBe('生成请求 1 · 目录/Schema 3 · 本地 1');
-  });
   it('call sites pass category', () => {
     expect(readFileSync('src/services/api.ts', 'utf8')).toContain("{ headers }, 'catalog')");
     expect(readFileSync('src/services/sharedGet.ts', 'utf8')).toContain("tracedFetch(u, i, 'schema')");

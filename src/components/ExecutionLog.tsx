@@ -392,7 +392,7 @@ export function buttonSummary(records:ExecutionRecord[], open=false):string {
   const latestError = live.find(r => r.state === 'error');
   if (!latestError) {
     const pending = live.filter(r => r.state === 'pending');
-    if (!pending.length) return countsLabel(records);
+    if (!pending.length) return '执行记录';
     // Schema/catalog GETs are not generation — do not say 「N 个请求中」 (looks like a run).
     if (pending.every(isNonGenerationRecord)) {
       return pending.length === 1
@@ -475,7 +475,7 @@ export function groupAuxByOperation(aux: ExecutionRecord[]): AuxOperationGroup[]
   return [...groups.values()];
 }
 export const auxOperationHeader = (g: AuxOperationGroup) =>
-  `${g.label} · ${countLine(g.records)}${g.duplicates.length ? ` · 同一操作内重复：${g.duplicates.map(d => `${d.endpoint.split('?')[0]} ×${d.count}`).join('；')}（异常）` : ''}`;
+  `${g.label}${g.duplicates.length ? ` · 同一操作内重复：${g.duplicates.map(d => `${d.endpoint.split('?')[0]} ×${d.count}`).join('；')}（异常）` : ''}`;
 
 const EXEC_BTN_MIN=320, GAP=12; // fix11 #2: room for 「执行记录 · 生成请求 N · 目录/Schema M」 (session requests, not history 出图)
 /** fix12 #2: when forced under top chrome, drop further so the pill does not read as a second toolbar row. */
@@ -577,7 +577,6 @@ export function ExecutionLog(){
     </button>
     {open&&<section aria-label="执行记录" data-testid="exec-log-panel" data-canvas-chrome="left" className="absolute bottom-12 left-0 w-[min(760px,92vw)] max-h-[calc(100vh-15rem)] overflow-auto rounded-2xl border border-slate-600 bg-[#111620] px-5 pt-5 pb-24 scroll-pb-24 shadow-2xl text-sm text-slate-200">
       <div className="flex justify-between mb-3"><h2 className="font-semibold text-lg">请求与执行记录</h2><button onClick={()=>setOpen(false)}>关闭</button></div>
-      <p className="text-slate-400 mb-4">这里能查到每次生成发了什么、在哪一步出错；密钥不会显示。是否出图，以画布上的结果为准。</p>
       {!records.length&&<p>本会话尚未发出请求。</p>}
       {(()=>{const gen=records.filter(r=>!isNonGenerationRecord(r));const aux=records.filter(r=>isNonGenerationRecord(r));const renderRow=(r:ExecutionRecord)=>{
         const parts=requestLineParts(r);

@@ -32,15 +32,6 @@ describe('#1 Schema panel shows lora_weights and send badges (flux-dev-lora live
   it('without a LoRA node lora_weights is 未填写，不发送; node surface without graph says 取自画布 LoRA 节点', () => {
     expect(renderToStaticMarkup(<SchemaChoiceControls inputSchema={rawInput} openapi={openapi} value={cp} onChange={() => {}} canvasLoras={[]} />)).toMatch(/schema-badge-lora_weights[^>]*>未填写，不发送/);
   });
-  it('seed / steps / CFG(guidance) / LoRA get 会发送; sampler / negative / size get Schema 不支持', () => {
-    expect(schemaSendStatus('replicate', 'seed', 7, cp)).toBe('will_send');
-    expect(schemaSendStatus('replicate', 'steps', 28, cp)).toBe('will_send');
-    expect(schemaSendStatus('replicate', 'cfg', 3, cp)).toBe('will_send');
-    expect(schemaSendStatus('replicate', 'loras', [{ name: 'x' }], cp)).toBe('will_send');
-    expect(schemaSendStatus('replicate', 'sampler', 'euler_ancestral', cp)).toBe('not_sent');
-    expect(schemaSendStatus('replicate', 'negative_prompt', 'blurry', cp)).toBe('not_sent');
-    expect(schemaSendStatus('replicate', 'width', 512, cp)).toBe('not_sent');
-  });
   it('canvas LoRA order matches run extraction (nearest sampler first); bypassed skipped', () => {
     const nodes = [{ id: 'c', type: 'CheckpointLoaderSimple' }, { id: 'a', type: 'LoRALoader', values: { lora_name: 'A' } }, { id: 'b', type: 'LoRALoader', values: { lora_name: 'B' } }, { id: 'x', type: 'LoRALoader', bypassed: true, values: { lora_name: 'X' } }];
     const conns = [{ fromNodeId: 'c', toNodeId: 'a', toSocketId: 'model' }, { fromNodeId: 'a', toNodeId: 'b', toSocketId: 'model' }, { fromNodeId: 'c', toNodeId: 'x', toSocketId: 'model' }];
