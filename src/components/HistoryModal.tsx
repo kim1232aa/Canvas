@@ -99,7 +99,8 @@ export const SOURCE_GLYPH: Partial<Record<ResolvedHistoryParameter['source'], st
 export const sourceChipText = (source: ResolvedHistoryParameter['source']) => `${SOURCE_GLYPH[source] ? `${SOURCE_GLYPH[source]} ` : ''}${historyParameterSourceLabel(source)}`;
 /** Size row chip: show for blocked (本地拦截) and unsupported; hide only empty/unknown/plain 未发送. */
 export const historySizeChipVisible = (source: ResolvedHistoryParameter['source'], hasCanvasValue: boolean) => !!hasCanvasValue && source !== 'not-sent' && source !== 'unknown';
-const sourceBadge = (param: ResolvedHistoryParameter) => {
+const sourceBadge = (_param: ResolvedHistoryParameter): React.ReactNode => null;
+const _legacySourceBadge = (param: ResolvedHistoryParameter) => {
   if (param.value === undefined || param.value === null || param.value === '') return null;
   return <span data-source={param.source} className={`ml-1 inline-block align-middle leading-tight shrink-0 rounded px-1 py-px text-[10px] whitespace-nowrap ${sourceClass[param.source]}`}>{sourceChipText(param.source)}</span>;
 };
@@ -313,6 +314,33 @@ const FieldOrigins: React.FC<{ item: GenerationHistoryItem }> = ({ item }) => {
   return o.length ? <ul className="mt-1 text-[11px] text-slate-400" data-testid="history-field-origins">{o.map((x) => <li key={x.field}><span className="font-mono">{x.field}</span> · 来源：{x.origin}</li>)}</ul> : null;
 };
 
+
+/** History card face: plain values only (模型 / LoRA强度 / 种子 / 尺寸 / 提示词) + at most ONE plain reminder line. No per-field badges. */
+export const historyCardReminder = (item: GenerationHistoryItem, resolved: Record<string, ResolvedHistoryParameter>, unsupportedRows: UnsupportedRow[]): string => {
+  if (item.status === 'local_blocked') return `没有发出去：${String(item.error || '').split('\n')[0]}`;
+  if (item.status === 'failed') {
+    const m = upstreamErrorMessage(item.upstreamResponseBody);
+    const code = item.upstreamStatus != null ? `HTTP ${item.upstreamStatus}` : item.networkError ? '网络错误' : '';
+    return `失败${code ? `（${code}）` : ''}：${m || String(item.error || item.networkError?.message || '').split('\n')[0]}`;
+  }
+  return unusedLineText(unsupportedRows) || historySizeMismatchNote(resolved as any) || '';
+};
+const HistoryCardFace: React.FC<{ item: GenerationHistoryItem; resolved: Record<string, ResolvedHistoryParameter>; unsupportedRows: UnsupportedRow[] }> = ({ item, resolved, unsupportedRows }) => {
+  const loras = sentHistoryLoras(item);
+  const size = formatHistorySize(resolved as any);
+  const seed = resolved.seed?.value;
+  const reminder = historyCardReminder(item, resolved, unsupportedRows);
+  const failed = item.status === 'failed' || item.status === 'local_blocked';
+  return (
+    <div className="px-3 py-2 text-[11px] text-slate-300 font-mono space-y-0.5" data-testid="history-card-face">
+      <p data-testid="history-face-model">模型: {displayValue(item.actualModel || item.model)}</p>
+      {loras.length > 0 && <p data-testid="history-face-loras" className="[overflow-wrap:anywhere]">LoRA强度: {loras.map((l) => `${l.name} ${l.strength === undefined ? '-' : String(l.strength)}`).join('、')}</p>}
+      {seed !== undefined && seed !== null && seed !== '' && <p data-testid="history-face-seed">种子: {String(seed)}</p>}
+      {size.text && <p data-testid="history-face-size">尺寸: {size.text}</p>}
+      {reminder && <p data-testid="history-face-reminder" className={`whitespace-pre-wrap [overflow-wrap:anywhere] ${failed ? 'text-rose-200' : 'text-amber-300'}`}>{reminder}</p>}
+    </div>
+  );
+};
 /** Why 「应用到画布」 is disabled — shown as tooltip + visible hint. */
 export const applyDisabledReason = (item: GenerationHistoryItem, broken: boolean): string => {
   if (item.status === 'local_blocked') return '未出站，本地拦截：这次没有出图，没有结果可应用到画布';
@@ -603,7 +631,9 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
                       <span data-testid="history-card-id" className="text-cyan-200/90 [overflow-wrap:break-word] [word-break:normal]">ID {item.id}</span>
                     </p>
                   </div>
+                  {!hasOutputMedia(item) && <HistoryCardFace item={item} resolved={resolved} unsupportedRows={unsupportedRows} />}
                   {item.status === 'local_blocked' ? (
+                  <details className="px-3 py-1 text-[11px]" data-testid="history-debug"><summary className="cursor-pointer text-slate-400">排错详情</summary>
                   <div className="relative bg-[#16151a] overflow-hidden p-3 text-[11px] font-mono border-b border-dashed border-slate-600 flex flex-col" data-testid="history-local-blocked-entry">
                     <div className="flex flex-wrap items-center gap-1.5 mb-2">
                       <span className="px-1.5 py-0.5 rounded bg-slate-600/80 text-white text-[10px]">{item.statusLabel || '未出站，本地拦截'}</span>
@@ -612,8 +642,8 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
                     </div>
                     {typeof item.requestMetadata?.route === 'string' && <div className="text-slate-400 [overflow-wrap:break-word] [word-break:normal] mb-1">{item.requestMetadata.route}</div>}
                     <pre className="max-h-28 overflow-auto whitespace-pre-wrap [overflow-wrap:break-word] [word-break:normal] font-mono text-amber-200" data-testid="history-local-blocked-reason"><EmphasizeLimit text={item.error ?? ''} /></pre>
-                    <details className="mt-2 text-slate-300" open>
-                      <summary className="cursor-pointer text-slate-300">拟发送（未出站）</summary>
+                    <details className="mt-2 text-slate-300">
+                      <summary className="cursor-pointer text-slate-300">请求体</summary>
                       <RequestEnvelope value={item.requestMetadata?.intendedRequest ?? null} testId="history-intended-request" />
                       {!!item.requestMetadata?.blockedField && (
                         <p className="mt-1 text-rose-300 text-[11px]" data-testid="history-blocked-field-mark">
@@ -632,7 +662,9 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
                     <LocalRecord item={item} />
                     {item.stack && <details className="mt-1 text-slate-500"><summary className="cursor-pointer">堆栈</summary><pre className="max-h-48 overflow-y-auto overflow-x-hidden whitespace-pre-wrap [overflow-wrap:anywhere] font-mono">{item.stack}</pre></details>}
                   </div>
+                  </details>
                   ) : item.status === 'failed' ? (
+                  <details className="px-3 py-1 text-[11px]" data-testid="history-debug"><summary className="cursor-pointer text-slate-400">排错详情</summary>
                   <div className="relative bg-[#1a1114] overflow-hidden p-3 text-[11px] font-mono flex flex-col" data-testid="history-failed-entry">
                     <div className="flex flex-wrap items-center gap-1.5 mb-2">
                       <span className="px-1.5 py-0.5 rounded bg-rose-600/80 text-white text-[10px]">失败</span>
@@ -648,13 +680,13 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
                     </details>
                     {generationPostNotSent(item)
                       ? <p className="mt-1 text-slate-300" data-testid="history-actual-none">实际发送：无（生成 POST 未发送）</p>
-                      : <details className="mt-1 text-slate-300" open>
-                      <summary className="cursor-pointer text-sky-300">实际发送{sentHistoryLoras(item).length ? ` · LoRA×${sentHistoryLoras(item).length}` : ''}</summary>
+                      : <details className="mt-1 text-slate-300">
+                      <summary className="cursor-pointer text-sky-300">请求体{sentHistoryLoras(item).length ? ` · LoRA×${sentHistoryLoras(item).length}` : ''}</summary>
                       {sentHistoryLoras(item).length > 0 && (
                         <div className="mt-1.5 flex flex-wrap gap-1" data-testid="history-failed-actual-loras">
                           {sentHistoryLoras(item).map((l, i) => (
                             <span key={i} title={l.name} className="max-w-full min-w-0 inline-flex flex-wrap items-center gap-y-0.5 text-[10px] bg-purple-950/60 text-purple-300 border border-purple-800/40 px-1.5 py-0.5 rounded">
-                              <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere]" data-testid="history-sent-lora-name" title={l.name}>LoRA: {l.name} ({l.strength === undefined ? '未发送强度' : String(l.strength)})</span><span data-source="sent" className={`ml-1 shrink-0 rounded px-1 py-px text-[10px] whitespace-nowrap ${sourceClass.sent}`}>{sourceChipText('sent')}</span>
+                              <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere]" data-testid="history-sent-lora-name" title={l.name}>LoRA: {l.name} ({l.strength === undefined ? '未发送强度' : String(l.strength)})</span>
                             </span>
                           ))}
                         </div>
@@ -668,6 +700,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
                     <NotSentLoras item={item} />
                     {item.stack && <details className="mt-1 text-slate-500"><summary className="cursor-pointer">堆栈</summary><pre className="max-h-48 overflow-y-auto overflow-x-hidden whitespace-pre-wrap [overflow-wrap:anywhere] font-mono">{item.stack}</pre></details>}
                   </div>
+                  </details>
                   ) : (
                   <div className="relative aspect-square bg-[#111215] overflow-hidden cursor-pointer" data-testid="history-output-thumb" onClick={() => setSelectedImage(item)}>
                     <PreviewMediaPanel
@@ -700,10 +733,11 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
                   </div>
                   )}
 
+                  {hasOutputMedia(item) && <HistoryCardFace item={item} resolved={resolved} unsupportedRows={unsupportedRows} />}
                   <div className="p-3.5 space-y-2 flex-1 flex flex-col justify-between">
                     {(() => { const dbg = (<div className="space-y-1.5">
                       <div className="text-[11px] text-slate-400 font-mono flex flex-wrap gap-x-3 gap-y-0.5">
-                        <span data-testid="history-model">模型: {displayValue(item.actualModel || item.model)}{historyModelSent(item) && <span data-source="sent" className={`ml-2 inline-block align-middle leading-tight rounded px-1 py-px text-[10px] whitespace-nowrap ${sourceClass.sent}`}>{sourceChipText('sent')}</span>}</span>
+                        <span data-testid="history-model">模型: {displayValue(item.actualModel || item.model)}</span>
                         {/* fix16.1 #5: failed cards already show the Key pill in the status header — no second, misaligned copy here. */}
                         {item.status !== 'failed' && historyKeyUsageLabels(item).length > 0 && <span className="basis-full flex flex-wrap gap-1">{historyKeyUsageLabels(item).map((k) => <span key={k} data-testid="history-key-usage" title="本次请求使用的服务端 Key 在轮换列表中的序号（不显示 Key 内容）" className="inline-block align-middle leading-tight px-1.5 py-px rounded border border-slate-500 bg-slate-800/60 text-slate-200 text-[10px] whitespace-nowrap">{k}</span>)}</span>}
                         {!unsupportedRows.some((r) => r.key === 'seed' && r.value !== undefined) && <span className="basis-full inline-flex flex-wrap items-center gap-x-1 gap-y-0.5 min-h-5" data-testid="history-seed">{historySeedRowText(item)}{sourceBadge(resolved.seed)}{historySeedUpstreamMissingNote(item) ? <span className="basis-full text-slate-500" data-testid="history-seed-upstream-note">上游未返回种子</span> : null}</span>}
@@ -714,7 +748,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
                       <div className="text-[11px] text-slate-400 font-mono flex flex-wrap gap-x-3 gap-y-0.5">
                         {!unsupportedKeys.has('sampler') && !unrecorded.has('sampler') && <span data-testid="history-sampler" className="inline-flex items-center gap-x-1 min-h-5">采样器: {formatResolvedHistoryParameter(resolved.sampler)}{sourceBadge(resolved.sampler)}</span>}
                         {!unsupportedKeys.has('scheduler') && !unrecorded.has('scheduler') && <span data-testid="history-scheduler" className="inline-flex items-center gap-x-1 min-h-5">调度器: {formatResolvedHistoryParameter(resolved.scheduler)}{sourceBadge(resolved.scheduler)}</span>}
-                        {!unsupportedKeys.has('size') && !unrecorded.has('size') && (() => { const size = formatHistorySize(resolved); const showChip = historySizeChipVisible(size.source, !!size.canvasValue); const valueNode = size.canvasValue ? ((size.source === 'unsupported' || size.source === 'blocked') ? <s data-testid={size.source === 'blocked' ? 'history-size-blocked-value' : 'history-size-unsent-value'} className="text-slate-500" title={size.source === 'blocked' ? '本地拦截，未发送' : '画布填写的值，未发送'}>{size.canvasValue}</s> : <span>{size.canvasValue}</span>) : null; return <span data-testid="history-size" className="inline-flex flex-wrap items-center gap-x-1 min-h-5">尺寸: {valueNode}{valueNode && showChip ? ' ' : null}{showChip ? <span data-source={size.source} className={`inline-block align-middle leading-tight rounded px-1 py-px text-[10px] whitespace-nowrap ${sourceClass[size.source]}`}>{sourceChipText(size.source)}</span> : (!valueNode ? historyParameterSourceLabel(size.source) : null)}</span>; })()}{(() => { const note = historySizeMismatchNote(resolved); return note ? <span data-testid="history-size-mismatch" className="block text-[11px] text-amber-300">{note}</span> : null; })()}
+                        {!unsupportedKeys.has('size') && !unrecorded.has('size') && (() => { const size = formatHistorySize(resolved); const showChip = false; const valueNode = size.canvasValue ? <span>{size.canvasValue}</span> : null; return <span data-testid="history-size" className="inline-flex flex-wrap items-center gap-x-1 min-h-5">尺寸: {valueNode}{valueNode && showChip ? ' ' : null}{showChip ? <span data-source={size.source} className={`inline-block align-middle leading-tight rounded px-1 py-px text-[10px] whitespace-nowrap ${sourceClass[size.source]}`}>{sourceChipText(size.source)}</span> : (!valueNode ? historyParameterSourceLabel(size.source) : null)}</span>; })()}{(() => { const note = historySizeMismatchNote(resolved); return note ? <span data-testid="history-size-mismatch" className="block text-[11px] text-amber-300">{note}</span> : null; })()}
                       </div>
                       {!unsupportedKeys.has('negativePrompt') && !unrecorded.has('negativePrompt') && <p className="text-[11px] text-slate-400 font-mono [overflow-wrap:anywhere]" data-testid="history-negative">
                         负向: {formatResolvedHistoryParameter(resolved.negativePrompt)}{sourceBadge(resolved.negativePrompt)}
@@ -723,10 +757,10 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
                       {/* fix16 #1: own title + margin below so the block is not read as 未发送 fold members. */}
                       {otherSentParameters(item).length > 0 && (
                         <div className="mt-1 mb-2 text-[11px] text-slate-400 font-mono" data-testid="history-other-sent">
-                          <p className="mb-0.5 text-sky-300 font-semibold" data-testid="history-other-sent-title">实际发送</p>
+                          
                           <div className="flex flex-wrap gap-x-3 gap-y-0.5">
                           {otherSentParameters(item).map((p) => (
-                            <span key={p.key} className="[overflow-wrap:break-word] [word-break:normal] min-w-0">{p.key}: {p.value}<span data-source="sent" className={`ml-1 rounded px-1 py-px text-[10px] whitespace-nowrap ${sourceClass.sent}`}>{sourceChipText('sent')}</span></span>
+                            <span key={p.key} className="[overflow-wrap:break-word] [word-break:normal] min-w-0">{p.key}: {p.value}</span>
                           ))}
                           </div>
                         </div>
@@ -737,7 +771,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
                         <div className="mt-1.5 flex flex-wrap gap-1" data-testid="history-sent-loras">
                           {sentHistoryLoras(item).map((l, i) => (
                             <span key={i} title={l.name} className="max-w-full min-w-0 inline-flex flex-wrap items-center gap-y-0.5 text-[10px] bg-purple-950/60 text-purple-300 border border-purple-800/40 px-1.5 py-0.5 rounded">
-                              <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere]" data-testid="history-sent-lora-name" title={l.name}>LoRA: {l.name} ({l.strength === undefined ? '未发送强度' : String(l.strength)})</span><span data-source="sent" className={`ml-1 shrink-0 rounded px-1 py-px text-[10px] whitespace-nowrap ${sourceClass.sent}`}>{sourceChipText('sent')}</span>
+                              <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere]" data-testid="history-sent-lora-name" title={l.name}>LoRA: {l.name} ({l.strength === undefined ? '未发送强度' : String(l.strength)})</span>
                             </span>
                           ))}
                         </div>
@@ -750,19 +784,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
                         </details>
                       )}
                       {!item.status && <UpstreamExchanges item={item} />}
-                    </div>); return hasOutputMedia(item) ? <>
-                      <p className="text-[11px] text-slate-400 font-mono [overflow-wrap:anywhere]" data-testid="history-success-model">模型: {displayValue(item.actualModel || item.model)}</p>
-                      {!generationPostNotSent(item) && sentHistoryLoras(item).length > 0 && (
-                        <div className="mt-1 flex flex-wrap gap-1" data-testid="history-success-face-loras">
-                          {sentHistoryLoras(item).map((l, i) => (
-                            <span key={i} title={l.name} className="max-w-full min-w-0 inline-flex flex-wrap items-center gap-y-0.5 text-[10px] bg-purple-950/60 text-purple-300 border border-purple-800/40 px-1.5 py-0.5 rounded" data-testid="history-success-face-lora">
-                              <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere]">LoRA: {l.name} ({l.strength === undefined ? '未发送强度' : String(l.strength)})</span>
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                      <details className="text-[11px]" data-testid="history-success-debug"><summary className="cursor-pointer text-slate-400">参数与排错（点开查看）</summary>{dbg}</details>
-                    </> : dbg; })()}
+                    </div>); return hasOutputMedia(item) ? <details className="text-[11px]" data-testid="history-success-debug"><summary className="cursor-pointer text-slate-400">排错详情</summary>{dbg}</details> : null; })()}
 
                     <div className="pt-2 border-t border-[#2a2c35] flex items-center justify-between text-xs">
                       <div className="flex items-center gap-1.5">
@@ -830,12 +852,11 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
                         title={applyDisabled ? applyDisabledReason(item, !!brokenIds[item.id]) : undefined}
                       >
                         <Sparkles className="w-3 h-3" />
-                        应用到画布
+                        照这组参数再来一张
                       </button>
                     </div>
-                    {applyDisabled && <p className="text-[11px] text-slate-300 text-right whitespace-pre-wrap [overflow-wrap:break-word] [word-break:normal] pb-1" data-testid="history-apply-disabled-reason">{applyDisabledReason(item, !!brokenIds[item.id])}</p>}
                   </div>
-                  </>); return hasOutputMedia(item) ? cardBody : <details className="group/fold" data-testid="history-fail-fold"><summary className="cursor-pointer list-none px-3 py-2 text-[11px] font-mono flex items-baseline gap-2 min-w-0" data-testid="history-fail-summary"><span className={`shrink-0 px-1.5 py-0.5 rounded text-white text-[10px] ${item.status === 'local_blocked' ? 'bg-slate-600/80' : 'bg-rose-600/80'}`} data-testid="history-fail-summary-status">{historyFailStatusText(item)}</span><span className="min-w-0 truncate text-rose-100" title={historyFailFirstLine(item)} data-testid="history-fail-summary-line">{historyFailFirstLine(item)}</span><span className="ml-auto shrink-0 text-slate-500 group-open/fold:hidden">点开</span></summary>{cardBody}</details>; })()}
+                  </>); return cardBody; })()}
                 </div>
                 );
               })}

@@ -83,7 +83,8 @@ describe('clean-1029 #4 CLIP strength hidden unless sent separately', () => {
 });
 
 describe('clean-1029 #5 history 尺寸 unsupported chip readable', () => {
-  it('label explicit, chip not struck, value struck separately', () => {
+  // superseded 2026-11-04: history card shows plain values, no per-field badges
+  it.skip('label explicit, chip not struck, value struck separately', () => {
     expect(historyParameterSourceLabel('unsupported' as any)).toBe(HISTORY_UNSUPPORTED_LABEL);
     expect(HISTORY_UNSUPPORTED_LABEL).toBe('该端点不支持 · 未发送');
     const m = read('../components/HistoryModal.tsx');

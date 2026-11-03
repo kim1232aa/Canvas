@@ -310,3 +310,17 @@ describe('Mage local-block size chip (blocked ≠ hide)', () => {
     expect(historySizeChipVisible('blocked', false)).toBe(false);
   });
 });
+
+import { historyCardReminder } from './HistoryModal';
+import { describe as d2, it as i2, expect as e2 } from 'vitest';
+d2('history card face (2026-11-04 simplification)', () => {
+  i2('failed card: one plain reason line, upstream text verbatim', () => {
+    const item: any = { id: 'f', status: 'failed', upstreamStatus: 402, upstreamResponseBody: JSON.stringify({ error: { code: 'insufficient_gems', message: 'too low' } }), timestamp: 1 };
+    const line = historyCardReminder(item, {} as any, []);
+    e2(line).toMatch(/^失败（HTTP 402）：/);
+    e2(line).toMatch(/too low/);
+  });
+  i2('success card: no line when nothing unused', () => {
+    e2(historyCardReminder({ id: 's', url: 'x', timestamp: 1 } as any, {} as any, [])).toBe('');
+  });
+});

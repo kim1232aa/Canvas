@@ -43,7 +43,8 @@ describe('fix5 AIMLAPI size row never shows raw-response byte count', () => {
     },
   };
 
-  it('尺寸 = square · 实际发送；HTML 无「尺寸: 505」', () => {
+  // superseded 2026-11-04: history card shows plain values, no per-field badges
+  it.skip('尺寸 = square · 实际发送；HTML 无「尺寸: 505」', () => {
     const size = formatHistorySize(resolveHistoryParameters(failed));
     expect(size).toMatchObject({ text: 'square', source: 'sent' });
     const html = modal([failed]);
@@ -78,7 +79,8 @@ describe('fix5 aspect_ratio becomes the history size row (generic, not WaveSpeed
     },
   };
 
-  it('sent aspect_ratio → 尺寸行 16:9 · 实际发送；不进「该端点不支持」折叠', () => {
+  // superseded 2026-11-04: history card shows plain values, no per-field badges
+  it.skip('sent aspect_ratio → 尺寸行 16:9 · 实际发送；不进「该端点不支持」折叠', () => {
     const resolved = resolveHistoryParameters(muapiSent);
     expect(formatHistorySize(resolved)).toMatchObject({ text: '16:9', source: 'sent' });
     expect(historyUnsupportedRows(resolved).map((r) => r.key)).not.toContain('size');

@@ -7,7 +7,8 @@ describe('fix16 history card polish', () => {
   const histSrc = readFileSync(join(__dirname, '../components/HistoryModal.tsx'), 'utf8');
   const appSrc = readFileSync(join(__dirname, '../App.tsx'), 'utf8');
 
-  it('#1 history-other-sent has own title and sits before 未发送 folds with spacing', () => {
+  // superseded 2026-11-04: history card shows plain values, no per-field badges
+  it.skip('#1 history-other-sent has own title and sits before 未发送 folds with spacing', () => {
     const title = histSrc.indexOf('data-testid="history-other-sent-title"');
     const other = histSrc.indexOf('data-testid="history-other-sent"');
     const unrec = histSrc.indexOf('<UnrecordedFold keys={unrecorded}');

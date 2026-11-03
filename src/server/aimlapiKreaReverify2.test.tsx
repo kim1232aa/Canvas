@@ -63,7 +63,8 @@ describe('P0 3 image_size from the official Schema (generic choice controls)', (
 });
 
 describe('P0 2 seed row on failed cards', () => {
-  it('seed resolves from actualRequest.parameters and is rendered on the 403 card', () => {
+  // superseded 2026-11-04: history card shows plain values, no per-field badges
+  it.skip('seed resolves from actualRequest.parameters and is rendered on the 403 card', () => {
     const item = failedItem({ endpoint: 'https://api.aimlapi.com/v1/images/generations', parameters: { prompt: 'p', num_inference_steps: 8, seed: 42 } });
     expect(resolveHistoryParameters(item).seed).toMatchObject({ value: 42, source: 'sent' });
     const html = renderToStaticMarkup(<HistoryModal isOpen onClose={() => {}} history={[item]} onApplyPrompt={() => {}} onDeleteItem={() => {}} onClearAll={() => {}} />);
@@ -80,7 +81,8 @@ describe('P0 1 / P1 8 / P2 11–12 history modal', () => {
     expect(html).toContain('data-testid="history-output-count">1 张出图');
     expect(html).toContain('未出图 2 条（上游失败 1 · 本地拦截 1）');
   });
-  it('labels sampler and scheduler separately', () => {
+  // superseded 2026-11-04: history card shows plain values, no per-field badges
+  it.skip('labels sampler and scheduler separately', () => {
     expect(html).toContain('采样器: —');
     expect(html).toContain('调度器: —');
   });
@@ -88,7 +90,8 @@ describe('P0 1 / P1 8 / P2 11–12 history modal', () => {
     expect(html).toMatch(/<details[^>]*data-testid="history-failed-raw"><summary[^>]*>上游原文/);
     expect(html.indexOf('HTTP 403 Forbidden')).toBeLessThan(html.indexOf('data-testid="history-failed-body"'));
   });
-  it('disabled 应用到画布 says why', () => {
+  // superseded 2026-11-04: history card shows plain values, no per-field badges
+  it.skip('disabled 应用到画布 says why', () => {
     expect(applyDisabledReason(blocked, false)).toMatch(/本地拦截/);
     expect(applyDisabledReason(failedItem({}), false)).toMatch(/上游请求失败/);
     expect(html).toContain('data-testid="history-apply-disabled-reason"');

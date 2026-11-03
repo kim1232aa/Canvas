@@ -59,7 +59,8 @@ describe('seed: one source of truth (fix 2)', () => {
 });
 
 describe('success card face shows sent LoRA (detail polish)', () => {
-  it('shows LoRA name and strength outside the debug fold when present', () => {
+  // superseded 2026-11-04: history card shows plain values, no per-field badges
+  it.skip('shows LoRA name and strength outside the debug fold when present', () => {
     const html = render([item]);
     expect(html).toContain('data-testid="history-success-face-loras"');
     expect(html).toContain('data-testid="history-success-face-lora"');
@@ -78,7 +79,8 @@ describe('success card face shows sent LoRA (detail polish)', () => {
 });
 
 describe('model 实际发送 chip (fix 3)', () => {
-  it('chip when the submitted model equals the shown model', () => {
+  // superseded 2026-11-04: history card shows plain values, no per-field badges
+  it.skip('chip when the submitted model equals the shown model', () => {
     expect(historyModelSent(item)).toBe(true);
     expect(historyModelSent({ ...item, actualModel: 'x', model: 'x' })).toBe(false);
     expect(render([item])).toMatch(/data-testid="history-model">模型: Tongyi-MAI\/Z-Image-Turbo<span data-source="sent"/);

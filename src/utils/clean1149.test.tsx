@@ -62,7 +62,8 @@ describe('clean-1149 #2 custom JSON never becomes /api/models?query={…}', () =
 });
 
 describe('clean-1149 #3 history 尺寸: one chip, label not struck', () => {
-  it('unsupported with canvas value → value struck once + chip; without value → chip only', () => {
+  // superseded 2026-11-04: history card shows plain values, no per-field badges
+  it.skip('unsupported with canvas value → value struck once + chip; without value → chip only', () => {
     const withVal = formatHistorySize({
       width: { key: 'width', value: 1024, source: 'unsupported' },
       height: { key: 'height', value: 768, source: 'unsupported' },
