@@ -108,6 +108,7 @@ export function clearNodeExecutionErrors(
       upstreamLocalBlocked: undefined,
       upstreamFailed: false,
       upstreamFailedTitle: undefined,
+      upstreamFailedMessage: undefined,
       upstreamFailedFromId: undefined,
       state: (n.state === 'error' ? 'idle' : n.state) as NodeInstance['state'],
       errorMessage: undefined,

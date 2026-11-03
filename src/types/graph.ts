@@ -92,8 +92,10 @@ export interface NodeInstance {
   errorModel?: string;
   /** Set on downstream branch nodes when this run failed upstream (no media produced). */
   upstreamFailed?: boolean;
-  /** Display title of the node that failed this run; downstream shows 「没出图，原因见<title>」. */
+  /** Display title of the node that failed this run; fallback pointer when no message was copied. */
   upstreamFailedTitle?: string;
+  /** Same failure text already shown on the failing node / history — SaveImage shows this verbatim. */
+  upstreamFailedMessage?: string;
   /** Node id whose failure set upstreamFailed on this node. */
   upstreamFailedFromId?: string;
   /** The failure was a local block (no request left the machine), not an upstream failure. */

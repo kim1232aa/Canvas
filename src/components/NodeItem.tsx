@@ -1365,7 +1365,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                     <p className="text-xs font-semibold">这次没有出图</p>
                     <span className="text-[10px] mt-1 block font-mono text-rose-400/80">{`${node.localBlockTitle || LOCAL_BLOCK_NODE_LINE.split('：')[0]}：原因见标红节点与执行记录`}</span>
                     </>) : (
-                    <p className="text-xs font-semibold">{upstreamFailedLine(node.upstreamFailedTitle)}</p>
+                    <p className="text-xs font-semibold whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{upstreamFailedLine(node.upstreamFailedTitle, node.upstreamFailedMessage)}</p>
                     )}
                   </div>
                   ) : (

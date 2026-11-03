@@ -223,9 +223,10 @@ export function recordLocalEvent(route:string,response:Record<string,unknown>,st
 /** fix10: category of a row; pre-fix10 restored rows (no category) are reported as 'legacy'. */
 export function recordCategory(r:Pick<ExecutionRecord,'category'>):ExecutionCategory|'legacy'{return r.category ?? 'legacy';}
 export const CATEGORY_LABEL:Record<ExecutionCategory|'legacy',string>={generation:'生成',catalog:'目录',schema:'Schema',local:'本地',legacy:'旧记录'};
-/** fix10: bottom-bar counts. 生成 = category generation; 目录/Schema = catalog + schema; 本地 (LOCAL events, no request) counted separately. */
+/** fix10: bottom-bar counts. Session exec-log request categories only — not history 「张出图/未出图」. */
 export function categoryCounts(rs:Pick<ExecutionRecord,'category'>[]):{generation:number;aux:number;local:number}{
   let generation=0,aux=0,local=0;for(const r of rs){const c=r.category;if(c==='generation')generation++;else if(c==='catalog'||c==='schema')aux++;else if(c==='local')local++;}
   return {generation,aux,local};
 }
-export const countsLabel=(rs:Pick<ExecutionRecord,'category'>[])=>{const c=categoryCounts(rs);return `生成 ${c.generation} · 目录/Schema ${c.aux}${c.local?` · 本地 ${c.local}`:''}`;};
+/** Label uses 「生成请求」so the corner badge is not read as history 出图 count. */
+export const countsLabel=(rs:Pick<ExecutionRecord,'category'>[])=>{const c=categoryCounts(rs);return `生成请求 ${c.generation} · 目录/Schema ${c.aux}${c.local?` · 本地 ${c.local}`:''}`;};

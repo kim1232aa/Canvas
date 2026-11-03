@@ -477,7 +477,7 @@ export function groupAuxByOperation(aux: ExecutionRecord[]): AuxOperationGroup[]
 export const auxOperationHeader = (g: AuxOperationGroup) =>
   `${g.label} · ${countLine(g.records)}${g.duplicates.length ? ` · 同一操作内重复：${g.duplicates.map(d => `${d.endpoint.split('?')[0]} ×${d.count}`).join('；')}（异常）` : ''}`;
 
-const EXEC_BTN_MIN=320, GAP=12; // fix11 #2: room for the full 「执行记录 · 生成 N · 目录/Schema M」 label
+const EXEC_BTN_MIN=320, GAP=12; // fix11 #2: room for 「执行记录 · 生成请求 N · 目录/Schema M」 (session requests, not history 出图)
 /** fix12 #2: when forced under top chrome, drop further so the pill does not read as a second toolbar row. */
 export const EXEC_TOP_PARK_GAP=28;
 /** fix10.1 / fix11.1 / fix12: pure layout calc (unit-tested). dock = dock's viewport rect; returns fixed-position style for the collapsed button.

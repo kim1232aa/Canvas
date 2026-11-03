@@ -100,8 +100,10 @@ export function failedNodeDisplayTitle(n: NodeInstance): string {
   return n.title;
 }
 
-/** Downstream (SaveImage etc.) one-liner after an upstream failure: points at the failing node, never repeats its reason. */
-export function upstreamFailedLine(failedTitle?: string): string {
+/** Downstream (SaveImage etc.) failure surface: prefer the same upstream text already on the failing node / history. */
+export function upstreamFailedLine(failedTitle?: string, failedMessage?: string): string {
+  const msg = String(failedMessage || '').trim();
+  if (msg) return msg;
   return failedTitle ? `没出图，原因见${failedTitle}` : '没出图';
 }
 
@@ -134,6 +136,7 @@ export function clearSchemaFailureFromModelChange(nodes: NodeInstance[], modelNo
         ...n,
         upstreamFailed: false,
         upstreamFailedTitle: undefined,
+        upstreamFailedMessage: undefined,
         upstreamFailedFromId: undefined,
       };
     }
@@ -180,6 +183,7 @@ export function applySchemaMissNodeMarks(
         executionProgress: 0,
         upstreamFailed: true,
         upstreamFailedTitle: failedTitle,
+        upstreamFailedMessage: schemaNodeMsg,
         upstreamFailedFromId: schemaNodeId,
         upstreamLocalBlocked: false,
         localBlockTitle: undefined,
@@ -210,6 +214,7 @@ export function applySchemaMissNodeMarks(
       errorKind: undefined,
       upstreamFailed: true,
       upstreamFailedTitle: failedTitle,
+      upstreamFailedMessage: schemaNodeMsg,
       upstreamFailedFromId: schemaNodeId,
       upstreamLocalBlocked: false,
     };

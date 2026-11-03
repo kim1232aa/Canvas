@@ -259,11 +259,13 @@ describe('changing the model clears the schema-miss that described the old value
     expect(schemaFailureModel(schemaErr())).toBe(MODEL);
   });
 
-  it('downstream SaveImage shows only 「没出图，原因见<title>」', () => {
+  it('downstream SaveImage prefers verbatim upstream message over 「原因见<title>」', () => {
     const ck = { ...node('c', 'CheckpointLoaderSimple', { targetProvider: 'openworks', ckpt_name: failed }), title: '旧标题' } as NodeInstance;
     const title = failedNodeDisplayTitle(ck);
     expect(title).toBe('加载底模 (Tensor.Art OpenWorks)');
     expect(upstreamFailedLine(title)).toBe(`没出图，原因见${title}`);
+    const bind = 'Please bind your Alibaba Cloud account before use.';
+    expect(upstreamFailedLine(title, bind)).toBe(bind);
   });
 });
 
@@ -294,8 +296,9 @@ describe('real flow: schema-400 with SaveImage downstream of sampler (outside br
     expect(ckAfter.errorModel).toBe(MODEL); // from failed GET
     expect(saveAfter.upstreamFailed).toBe(true);
     expect(saveAfter.upstreamFailedTitle).toBe(failedTitle);
+    expect(saveAfter.upstreamFailedMessage).toBe(schemaFailureNodeMessage(err));
     expect(saveAfter.upstreamFailedFromId).toBe('c'); // must be set — this was the bug
-    expect(upstreamFailedLine(saveAfter.upstreamFailedTitle)).toBe(`没出图，原因见${failedTitle}`);
+    expect(upstreamFailedLine(saveAfter.upstreamFailedTitle, saveAfter.upstreamFailedMessage)).toBe(schemaFailureNodeMessage(err));
 
     // User switches model away from the failed value (same as App handleUpdateNodeValue for ckpt_name)
     expect(shouldClearSchemaFailureOnModelChange(ckAfter, 'photoreal_studio_z_image')).toBe(true);
@@ -303,6 +306,7 @@ describe('real flow: schema-400 with SaveImage downstream of sampler (outside br
     expect(afterClear.find((n) => n.id === 'c')!.errorMessage).toBeUndefined();
     expect(afterClear.find((n) => n.id === 's')!.upstreamFailed).toBe(false);
     expect(afterClear.find((n) => n.id === 's')!.upstreamFailedTitle).toBeUndefined();
+    expect(afterClear.find((n) => n.id === 's')!.upstreamFailedMessage).toBeUndefined();
     expect(afterClear.find((n) => n.id === 's')!.upstreamFailedFromId).toBeUndefined();
   });
 
@@ -312,3 +316,12 @@ describe('real flow: schema-400 with SaveImage downstream of sampler (outside br
   });
 });
 
+describe('SaveImage upstream message + same-session restore (App wiring)', () => {
+  it('failure path copies upstreamFailedMessage; success path sticks image and drops restored banner', () => {
+    const app = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
+    expect(app).toContain('upstreamFailedMessage:localBlockedRun?undefined:(schemaNodeMsg||errMsg)');
+    expect(app).toContain('upstreamFailedMessage: schemaNodeMsg || errMsg');
+    expect(app).toContain('putHistoryImageOnSaveNodes(next, result.imageUrl)');
+    expect(app).toContain("const dropRestored = output !== undefined || state === 'running' || state === 'success' || clearingOutput");
+  });
+});

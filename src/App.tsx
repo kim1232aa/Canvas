@@ -11,7 +11,7 @@ import {readInspectorParameters,patchInspectorBranchNode,patchSpatialParameters,
 import {explicitProvider,graphBranch,catalogModelTarget} from './utils/graphEditing';
 import {attachLoraToBranch,findLoraTarget,removeLoraFromBranch} from './utils/attachLora';
 import { parseExplicitLoraStrength } from './utils/loraStrength';
-import { applyHistoryToCanvas } from './utils/applyHistoryToCanvas';
+import { applyHistoryToCanvas, putHistoryImageOnSaveNodes } from './utils/applyHistoryToCanvas';
 import {isInvalidTensorModel} from './utils/modelCatalog';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { scrubZeroWidthNodes, describeZeroWidthHits, preRunZeroWidthBlock } from './utils/zeroWidth';
@@ -1244,6 +1244,9 @@ export default function App() {
       setNodes((prev) =>
         prev.map((n) => {
           if (n.id === nodeId) {
+            const clearingOutput = output === undefined && shouldClearExecutionOutput(n.type, state, output, errorMessage);
+            // success / new output / clearing preview must drop 刷新前的结果 — same-session generate must not keep the banner.
+            const dropRestored = output !== undefined || state === 'running' || state === 'success' || clearingOutput;
             return {
               ...n,
               state,
@@ -1252,7 +1255,7 @@ export default function App() {
               outputData:
                 output !== undefined
                   ? output
-                  : shouldClearExecutionOutput(n.type, state, output, errorMessage)
+                  : clearingOutput
                     ? undefined
                     : n.outputData,
               errorMessage: state === 'running' || state === 'success'
@@ -1265,10 +1268,13 @@ export default function App() {
                   : n.errorAt),
               errorKind: state === 'running' || state === 'success' || errorMessage !== undefined ? undefined : n.errorKind,
               upstreamFailed: state === 'running' || state === 'success' ? false : n.upstreamFailed,
+              upstreamFailedTitle: state === 'running' || state === 'success' ? undefined : n.upstreamFailedTitle,
+              upstreamFailedMessage: state === 'running' || state === 'success' ? undefined : n.upstreamFailedMessage,
+              upstreamFailedFromId: state === 'running' || state === 'success' ? undefined : n.upstreamFailedFromId,
               // This session produced (or is replacing) the output: no longer a 刷新前的结果; remember when it arrived.
-              outputAt: output !== undefined ? new Date().toISOString() : n.outputAt,
-              restoredFromPreviousSession: output !== undefined || state === 'running' ? undefined : n.restoredFromPreviousSession,
-              stalePriorOutput: output !== undefined || state === 'running' ? undefined : n.stalePriorOutput,
+              outputAt: output !== undefined ? new Date().toISOString() : (clearingOutput ? undefined : n.outputAt),
+              restoredFromPreviousSession: dropRestored ? undefined : n.restoredFromPreviousSession,
+              stalePriorOutput: dropRestored ? undefined : n.stalePriorOutput,
               // cleanup-serious: only retitle SaveImage prefix when a NEW image from this run lands.
               values: (output !== undefined && n.type === 'SaveImage') ? (() => {
                 const ck = prev.find((x) => x.type === 'CheckpointLoaderSimple' && !x.bypassed);
@@ -1321,7 +1327,12 @@ export default function App() {
       setExecutionStatusText(`成功完成 (${result.provider})`);
       setExecutionProgress(100);
       // clean-1651 A: successful run clears all prior upstream failure badges.
-      setNodes(prev => clearNodeExecutionErrors(prev).map(node => node.id === result.executingNodeId ? {...node, values: {...node.values, seed: nextSeedAfterGeneration(result.seed, node.values.control_after_generate) ?? node.values.seed}} : node));
+      // Also force THIS-session image onto SaveImage and drop 刷新前的结果 (covers saveNodes miss / stale banner).
+      setNodes(prev => {
+        let next = clearNodeExecutionErrors(prev);
+        if (result.imageUrl) next = putHistoryImageOnSaveNodes(next, result.imageUrl).nodes;
+        return next.map(node => node.id === result.executingNodeId ? {...node, values: {...node.values, seed: nextSeedAfterGeneration(result.seed, node.values.control_after_generate) ?? node.values.seed}} : node);
+      });
 
       // Sync output to active Spatial Frame so infinite canvas updates simultaneously
       const isVid = Boolean(result.isVideo || result.imageUrl?.includes('.mp4') || result.model?.includes('video'));
@@ -1396,7 +1407,7 @@ export default function App() {
         // Those stay until the next successful run; only local chrome is layered on top.
         if (downstream.has(n.id)) {
           const keepErr = !!n.errorMessage;
-          return {...n,state:(keepErr?'error':'idle') as NodeInstance['state'],executionProgress:0,upstreamFailed:true,upstreamFailedTitle:localBlockedRun?undefined:failedTitle,upstreamFailedFromId:localBlockedRun?undefined:failedNodeId,upstreamLocalBlocked:localBlockedRun,localBlockTitle:blockTitle,localBlockReason:undefined,outputData:undefined};
+          return {...n,state:(keepErr?'error':'idle') as NodeInstance['state'],executionProgress:0,upstreamFailed:true,upstreamFailedTitle:localBlockedRun?undefined:failedTitle,upstreamFailedMessage:localBlockedRun?undefined:(schemaNodeMsg||errMsg),upstreamFailedFromId:localBlockedRun?undefined:failedNodeId,upstreamLocalBlocked:localBlockedRun,localBlockTitle:blockTitle,localBlockReason:undefined,outputData:undefined};
         }
         if (localBlockedRun) {
           if (!branch.ids.has(n.id) && !causeIds.has(n.id)) return n;
@@ -1415,7 +1426,7 @@ export default function App() {
           // Error lives on the model node; sampler / other branch nodes are NOT marked 异常 (nothing was generated).
           if (n.id === schemaNodeId) return { ...n, state: 'error' as NodeInstance['state'], executionProgress: 0, errorMessage: schemaNodeMsg, errorAt: new Date().toISOString(), errorKind: 'schema' as const, errorModel: schemaFailureModel(err, n.values?.ckpt_name), upstreamFailed: false, upstreamLocalBlocked: false };
           if (!branch.ids.has(n.id)) return n;
-          return { ...n, state: 'idle' as NodeInstance['state'], executionProgress: 0, errorMessage: undefined, errorAt: undefined, errorKind: undefined, upstreamFailed: true, upstreamFailedTitle: failedTitle, upstreamFailedFromId: schemaNodeId, upstreamLocalBlocked: false,
+          return { ...n, state: 'idle' as NodeInstance['state'], executionProgress: 0, errorMessage: undefined, errorAt: undefined, errorKind: undefined, upstreamFailed: true, upstreamFailedTitle: failedTitle, upstreamFailedMessage: schemaNodeMsg || errMsg, upstreamFailedFromId: schemaNodeId, upstreamLocalBlocked: false,
             outputData: shouldClearExecutionOutput(n.type, 'idle', undefined, '') ? undefined : n.outputData };
         }
         if (!branch.ids.has(n.id)) return n;
@@ -1430,6 +1441,7 @@ export default function App() {
           errorAt: isTarget ? new Date().toISOString() : undefined,
           upstreamFailed: !isTarget,
           upstreamFailedTitle: isTarget ? undefined : failedTitle,
+          upstreamFailedMessage: isTarget ? undefined : (schemaNodeMsg || errMsg),
           upstreamFailedFromId: isTarget ? undefined : failedNodeId,
           upstreamLocalBlocked: false,
           outputData: clearOut ? undefined : n.outputData,

@@ -56,3 +56,11 @@ it('SaveImage shows failed state (not 等待生成图像) after upstream failure
   expect(html).toContain('没出图');
   expect(html).not.toContain('等待生成图像');
 });
+
+it('SaveImage shows upstream error text verbatim when provided',()=>{
+  const msg='Please bind your Alibaba Cloud account before use.';
+  const html=renderToStaticMarkup(<NodeItem {...props('SaveImage',{})} node={{...(props('SaveImage',{}) as any).node,upstreamFailed:true,upstreamFailedTitle:'采样器',upstreamFailedMessage:msg,state:'idle'}} />);
+  expect(html).toContain(msg);
+  expect(html).not.toContain('原因见采样器');
+  expect(html).not.toContain('等待生成图像');
+});
