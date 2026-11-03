@@ -1,5 +1,4 @@
 {
-  "canvasAcceptance": "未验证（2026-10-17 14:40 北京：测试截图已全删，按雁标准「画布里出图、落保存节点、历史有缩略图」当前 0 家；以前的出图/欠费标记一律作废，官方字段结论保留；在画布重跑出图并有节点图+历史缩略图后再单独改）",
   "$schemaNote": "草案 — 仅声明。真相源: docs/provider-api-audit/muapi.md (2026-10-15)",
   "id": "muapi",
   "displayName": "MuAPI",
@@ -8,12 +7,8 @@
     "primary": {
       "header": "x-api-key"
     },
-    "alsoAccepted": {
-      "header": "Authorization",
-      "scheme": "Bearer"
-    },
     "oauth": "POST /oauth/token client_credentials, 1h",
-    "sandboxWarning": "Sandbox key 返回 mock 不计费 — 验收禁止用 sandbox key 当 PASS_GENERATION"
+    "sandboxWarning": "Sandbox key 返回 mock 不计费 — 验收禁止用 sandbox key 当 真出图"
   },
   "base": {
     "root": "https://api.muapi.ai"
@@ -136,21 +131,18 @@
       "header X-MuAPI-Cost-USD",
       "body cost.amount_usd"
     ],
-    "insufficientHints": [],
     "note": "未文档化 402；按实测原样记录"
   },
-  "contractTestHint": "krea-v2-turbo-lora → loras[]；flux-2-klein → lora_list[]；flux1 style → lora_url+lora_weight；同一画布 LoRA 节点按端点换字段名",
   "sources": [
     "https://muapi.ai/docs/authentication",
     "https://api.muapi.ai/openapi.json"
   ],
-  "_auditStatus": "2026-11-04 ~06:05 JST：雁澄清从未要求本地拦截；草案撤销所有拦截建议，改为照发+原样显示错误；「官方明文拒绝才拦」口径作废。\n2026-11-02 ~04:55 JST：Researchy 02c——MuAPI seed 按端点；style-lora-inference 无 seed。\n2026-11-02 ~04:41 JST：Researchy——MuAPI wanLora duration 冲突：草案[5,10] vs 官网 int 默认5 无枚举，禁止硬拦；aspect/resolution 可按官网。\n2026-11-02 ~04:39 JST：Researchy 对照表写回 researchyVerified20261102（种子/时长/比例已核一致条目）；未核条目仍待核、禁止当拦截；徽章不动。\n2026-10-17 ~22:18 北京：画布收 MuAPI「待配方」终轮——官方没有的字段（步数/CFG/种子/去噪）整格藏掉不留字；顶栏黄字先缺 LoRA 再缺提示词；证据 temp/e2e/workflow-hub/muapi-pending-recipe-detail/06-topbar-lora-first.png；只算防呆，acceptanceBadge 仍未验证（未出图）。2026-10-17 ~19:30 北京：画布挑刺认 MuAPI「待配方」两处严重已清（卡主按钮灰+「待配方，不能立即运行」；仅载入后顶栏运行灰、黄字缺真 LoRA）；证据 temp/e2e/workflow-hub/muapi-pending-recipe-fix/；只算防呆显示，不升出图徽章。2026-10-17 20:07 JST：画布认 MuAPI hub「待配方」仅预设展示过关（证据 muapi-pending-recipe/），不升出图徽章；挑刺主按钮/顶栏仍开着未收。2026-10-17 20:04 JST：工作流中心预设端点 flux-1-dev-style-lora-inference 按当日 openapi 记字段（lora_url 必填；无步数/CFG/种子/负向）；卡「待配方」不升徽章。2026-10-16 16:31：fix5 UI 收口（非升 PASS）——strength 显示澄清 + aspect_ratio 进尺寸行；证据 已清理。2026-10-16 14:42：fix3-1530 升 PASS_BILLING（loras[{path,scale}]/resolution 1k → 402）。2026-10-16 14:50：fix2-1340 FAIL（resolution 本地拦合规；LoRA item 映射待供应商配置 path/scale）。2026-10-16 12:37：rekey-1230 字段已核，不收口、徽章未升。2026-10-15 03:26：引用的 docs/provider-api-audit 旧审计仅留作对比、不再引用；以 docs/provider-api-audit-v2/ 与 DIFF.md 为准；本草案凡依据旧审计的结论一律视为未核实，等 Researchy 新调查",
   "requestFieldsVerified": {
     "run": "已清理 hist_1792125133065_2ffvp）",
     "endpoint": "POST https://api.muapi.ai/api/v1/krea-v2-turbo-lora",
     "status": "字段与官方 openapi.json（12:29 抓取）一致：prompt/seed/resolution/aspect_ratio/loras[{path,scale}]；steps/CFG/采样器/宽高/负向词 标该端点不支持 · 未发送",
     "upstream": "402 INSUFFICIENT_CREDITS 原文透传，进历史，有 Key #0",
-    "closure": "画布收口 PASS_BILLING（fix3-1530，挑刺无严重）",
+    "closure": "画布收口 欠费已如实显示（fix3-1530，挑刺无严重）",
     "loraMaxItems": {
       "value": null,
       "status": "官方 Schema 未写上限（openapi.json 12:45:00 抓取，loras 类型 array 或 null，无 maxItems）；只在 description 原文写了 \"List of LoRAs to apply (maximum 3)\"；画布不解析、不拦",
@@ -162,7 +154,6 @@
       ],
       "descriptionDisplay": "待实现（下一批）：LoRA 区旁原样显示 description；前端验收过再改成现状"
     },
-    "acceptanceBadge": "未验证",
     "retest_fix2_1340": {
       "run": "已清理 hist_1792129505860_hvuig）",
       "verdict": "FAIL（本地拦截，请求未出站）",
@@ -173,11 +164,9 @@
         "configStatus": "待实现（下一批）",
         "openapi": "https://api.muapi.ai/openapi.json"
       },
-      "acceptanceBadge": "未验证",
       "localBlockNote": "（历史记录，旧行为已撤销）Empty Latent 1024x1024 不在 resolution enum [1k,2k]，未自动改值，来源 openapi.json；今后照发（不本地拦截）；上游返回原样显示"
     }
   },
-  "acceptanceBadge": "未验证",
   "sendEvidence": {
     "fix3_1530": {
       "run": "已清理 hist_1792132514936_nav55）",
@@ -193,18 +182,15 @@
       },
       "upstream": "HTTP 402 INSUFFICIENT_CREDITS 原样",
       "挑刺": "无严重",
-      "note": "Schema 清单仍含 strength 字段名（端点 schema），实发强度键是 scale——属显示澄清，不挡收口",
-      "acceptanceBadge": "未验证"
+      "note": "Schema 清单仍含 strength 字段名（端点 schema），实发强度键是 scale——属显示澄清，不挡收口"
     },
     "fix5_ui": {
       "run": "已清理",
       "verdict": "UI_CLOSED",
-      "notPassUpgrade": true,
       "items": [
         "strength 标注「Schema 声明，本次请求未含」（02-muapi-nav55-strength-label.png）",
         "aspect_ratio 通用进尺寸行；jczni 16:9 实发（03-muapi-aspect-ratio-size-row.png）"
       ],
-      "acceptanceBadge": "未验证",
       "at": "2026-10-16 16:31"
     }
   },
@@ -231,9 +217,7 @@
       "denoise/去噪"
     ],
     "lora_url_note": "官方 description：须为 flux-1-dev-style-lora-trainer 完成后 outputs 返回的 URL",
-    "productState": "待配方防呆终轮已收（字段整藏+顶栏先 LoRA）；无真 lora_url 前不冲出图；acceptanceBadge 仍未验证（未出图）",
-    "acceptanceBadge": "未验证",
-    "displayAccept": "2026-10-17 画布：预设展示过关；~19:29 防呆两处严重清；~22:18 画布收终轮（官方无字段整藏不留字；顶栏先缺 LoRA 再缺提示词）。不算接通出图。证据 temp/e2e/workflow-hub/muapi-pending-recipe-detail/06-topbar-lora-first.png",
+    "productState": "待配方防呆终轮已收（字段整藏+顶栏先 LoRA）；无真 lora_url 前不冲出图；仍未出图（未出图）",
     "pickOpen": "防呆终轮已收（2026-10-17 ~22:18 北京 画布）。重开条件（~22:19 画布）：有真 lora_url 时预设须带能填地址的 LoRA 挂载位，不能只靠黄字；挑刺细节：节点内重复黄字、尺寸节点 batch_size 被底栏挡、「。；」连写，并下一批。出图徽章仍未验证。"
   },
   "researchyVerified20261102": {

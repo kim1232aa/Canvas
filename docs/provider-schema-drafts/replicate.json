@@ -1,5 +1,4 @@
 {
-  "canvasAcceptance": "接线欠费过关、未真出图（2026-11-03 画布）：同次点跑上游 402 余额不足原样报出，请求含真 LoRA；不算真出图。证据 /workspace/canvas/temp/e2e/replicate-fe-2026-11-03/rep-01～03 · hist_1793694045414_wjmvl。此前 2026-11-02 欠费已记。",
   "$schemaNote": "草案 — 仅声明。2026-11-03：出站以模型版本实时 openapi_schema 为准；示例参数（flux-dev-lora）会过期，不写死尺寸字段名；本地快照不当真相。",
   "id": "replicate",
   "displayName": "Replicate",
@@ -265,8 +264,7 @@
       "at": "2026-11-02 ~03:31 JST",
       "by": "canvas-dev",
       "model": "flux-dev-lora",
-      "result": "能登无额度；欠费验收进行中；待历史确认 lora_weights",
-      "badge": "仍未验证"
+      "result": "能登无额度；欠费验收进行中；待历史确认 lora_weights"
     },
     "officialVerify20261103": {
       "at": "2026-11-03 ~14:53 JST",
@@ -288,8 +286,7 @@
         "WebFetch": "flux-schnell llms.txt 无 LoRA 字段",
         "agy-search": "一致：基座 schnell 无 LoRA；需 *-lora 变体",
         "grok_search": "首轮无结果；标明缺一路"
-      },
-      "badge": "不升；仍欠费已记/未真出图"
+      }
     },
     "models": {
       "flux-dev-lora": [
@@ -306,10 +303,8 @@
     }
   },
   "billing": {
-    "insufficientHints": [],
     "note": "官方 http.md 未摘到明确 402；以实测码记 evidence，4xx 原样上报"
   },
-  "contractTestHint": "flux-dev-lora: 画布 steps→num_inference_steps, cfg→guidance, seed→seed, LoRA[0]→lora_weights+lora_scale, LoRA[1]→extra_lora+extra_lora_scale；第 3 个 LoRA 照发（不本地拦截），上游返回原样显示；flux-schnell: 官方 Input 无 negative_prompt/guidance/guidance_scale/width/height → （官方事实）；用户填了就照发，上游不认则原样显示报错；无 Schema（无 live Input.properties 且无表行）→ 照发 /predictions，上游不认则原样显示报错；挂 LoRA 另可选官方 *-lora 变体（如 flux-schnell-lora），基座 flux-schnell 无 lora_weights",
   "sources": [
     "https://replicate.com/docs/reference/http",
     "https://replicate.com/docs/topics/predictions/create-a-prediction",
@@ -317,8 +312,6 @@
     "https://replicate.com/black-forest-labs/flux-schnell/api",
     "https://replicate.com/api/models/black-forest-labs/flux-schnell/versions"
   ],
-  "_auditStatus": "2026-11-04 ~06:10 JST：雁定——用户设的参数一律照发，禁止扣参/置灰/不发；草案内所有「不发送」建议作废。\n2026-11-04 ~06:05 JST：雁澄清从未要求本地拦截；草案撤销所有拦截建议，改为照发+原样显示错误；「官方明文拒绝才拦」口径作废。\n2026-11-03 ~17:25 JST：画布认 Replicate 接线欠费过关（402+真 LoRA 已发）；不算真出图；证据 temp/e2e/replicate-fe-2026-11-03/。徽章不抬。\n2026-11-03 ~15:02 JST：canvas-dev da438e1——生成必读 live openapi；静态快照只留 UI 线索、不可跳过 live/兜底发送；草案 schemaPolicy 已对齐。徽章不升。\n2026-11-03 ~15:00 JST：写入 researchyOutboundContract20261103（schnell vs dev-lora vs schnell-lora 字段表；无 width/height/negative；schnell 无 LoRA）。本机 llms 全 200。不升徽章（欠费已记）。\n2026-11-03：写入 snapshotGaps（extra_lora/go_fast 未进快照、LoRA 上限未编码）。不升徽章。\n2026-11-03 画布←Researchy：图像须跟实时/逐模型 OpenAPI；本地 providerSchema 快照会过期不当真相；不写死尺寸字段名（image_size / width+height / aspect_ratio 等以该模型 Schema 为准）；不升徽章。\n2026-11-03：再核——flux-dev-lora 有 lora_weights；flux-schnell 无；勿 schnell 空挂。徽章不升。\n2026-11-02 ~04:42 JST：Researchy——Replicate 图 seed/aspect_ratio（flux-schnell 样本）；go_fast 时 seed 不保证。\n2026-11-02 ~04:30 JST：雁定——额度问题不要卡，跳过；欠费已记家不排队等充值；有额度时再冲真图，不当当前主阻塞。\n2026-11-02 ~04:08 JST：画布明示——标记按「欠费已记」收，别再等点收；欠费原文进历史即可；挑刺只审真出图或串桶假话。ModelsLab 串桶（弹窗未含 LoRA vs 历史有）另修，与欠费标记分开。\n2026-11-02 ~04:08 JST：画布按雁定收——Replicate/ModelsLab/Mage 三家欠费原样透传证据已收，不当假成功、不以充值挡进度；未真出图不算接通。ModelsLab 另有串桶：弹窗「本次请求未含 LoRA」但历史请求体有 LoRA——交 canvas-dev 修，与欠费验收分开。雁问「欠费的为什么还要审核」→ 欠费本身不必再审；只审串桶这类真问题。\n2026-11-02 ~04:07 JST：雁定——欠费原样透传、如实记历史即可，不当假成功、不把充值当进度卡点；有额度再冲真图落保存节点。ModelsLab/Replicate/Mage 欠费证据已交；徽章仍等画布点收后再改（不自升接通）。\n2026-11-02 ~04:07 JST：画布确认——Replicate 欠费挑刺已过，只证明路由通，没额度不算接通。徽章仍未验证。\n2026-11-02 ~04:06 JST：画布挑刺验 Replicate 欠费三张——flux-dev-lora+真 LoRA；历史可见 lora_weights/强度；上游 Insufficient credit；可当欠费验收、不算接通。提示词仍是短示例非配方。徽章仍未验证（等画布明示升欠费标记/真出图）。\n2026-11-02 ~03:31 JST：canvas-dev——Key 能登无额度；标准板已换 flux-dev-lora，正在跑带真 LoRA 的欠费验收；工作流/点运行已拍，差历史确认 lora_weights 透传；徽章仍未验证，等画布明示。画布优先：先出图落保存节点；易用三眼验；模块化跟接不挡主路径。\n2026-11-02 ~03:30 JST：Researchy 三路核——按模型 schema 挂参；flux-dev-lora 用 lora_weights/lora_scale（及 extra_*）；禁止写成通用 lora_url；与草案一致。画布：有额度 Replicate 插队真出图冲第 3 家。徽章仍未验证。\n2026-11-02 ~03:24 JST：画布定——Replicate 本有；Key 已换且本机探测通过；真挂 LoRA 须用带 lora_weights 的模型（如 flux-dev-lora），勿在 flux-schnell 上空挂；徽章仍未验证，等画布真出图/明示。\n2026-11-02 ~03:24 JST：雁贴官方 docs + 新 Key——Replicate 草案本有，非新开；Key 只进 REPLICATE_API_TOKEN/本机配置，未写入草案；徽章不因换 Key 自升，等画布真出图/明示。\n2026-10-16 ~10:55：1049 收口 PASS_BILLING（欠费 402，非真出图）。flux-dev-lora seed/steps/guidance/lora_weights/lora_scale 升「会发送」；extra_lora 未实发仍待确认",
-  "acceptanceBadge": "欠费已记（未真出图）",
   "sendEvidence": {
     "run": "已清理",
     "pid": "2620869 @10:48:41",
@@ -331,8 +324,7 @@
       "lora_weights": "fofr/flux-pixar-cars",
       "lora_scale": 0.85
     },
-    "localOnly": "schemaFields 只在「本地记录」，未发上游",
-    "acceptedBy": "画布挑刺 1049 无严重 + Researchy 对官方 Schema 核实"
+    "localOnly": "schemaFields 只在「本地记录」，未发上游"
   },
   "sendStatus": {
     "flux-dev-lora": {
@@ -368,7 +360,6 @@
     "result": "欠费验收可过、非接通",
     "note": "配方提示词真出图轮再换"
   },
-  "billingAccept20261102": "欠费已记（画布明示直接收）；未接通",
   "productNote": "；2026-11-02 雁：额度不卡、跳过",
   "researchyVerified20261102": {
     "fetchedAt": "2026-11-02 ~04:42 JST",
@@ -398,7 +389,6 @@
     "liveUrls": [
       "GET https://api.replicate.com/v1/models/{owner}/{name}/versions/{id} → openapi_schema"
     ],
-    "badge": "不升（仍欠费已记）",
     "staticSnapshot": "providerSchema 静态表只作 UI 线索，不能授权出站；无 live props 旧版拦截（ReplicateSchemaMissingError，代码 da438e1）已撤销，改照发+原样显示；禁止用静态表跳过 live 或兜底发送（代码 da438e1）",
     "codeAlign": {
       "commit": "da438e1",
@@ -412,8 +402,7 @@
       "extra_lora / go_fast / megapixels / output_* 草案仍待确认，且未进静态 FieldSpec",
       "LoRA 最多 2、scale -1..3 未编码进快照能力表（易让 UI 以为可无限挂）",
       "ideogram/seedream 快照 source 粗，须跟版本 openapi_schema"
-    ],
-    "badge": "不升（欠费已记）"
+    ]
   },
   "researchyOutboundContract20261103": {
     "at": "2026-11-03 ~15:00 JST",
@@ -461,7 +450,6 @@
       "results": "三份 llms.txt 均 HTTP 200；与表一致"
     },
     "triPath": "Researchy 三路 WebSearch+Brave+agy；本机再核 OpenAPI/llms",
-    "conflictsWithPriorDraft": "无冲突；补 flux-schnell-lora 独立行（仅一路 LoRA，无 extra_*）。先前 officialVerify 已写 schnell 无 LoRA / dev-lora 有——保持。",
-    "badge": "不升（仍欠费已记/未真出图）"
+    "conflictsWithPriorDraft": "无冲突；补 flux-schnell-lora 独立行（仅一路 LoRA，无 extra_*）。先前 officialVerify 已写 schnell 无 LoRA / dev-lora 有——保持。"
   }
 }

@@ -1,5 +1,4 @@
 {
-  "canvasAcceptance": "欠费已记、未真出图（2026-11-02）；弹窗串桶已修过挑刺",
   "$schemaNote": "草案 — 仅声明。ModelsLab 画布本有；本轮按官方 Dreambooth LoRA 页补字段（2026-11-02 抓取）。密钥禁止写入。",
   "id": "modelslab",
   "displayName": "ModelsLab",
@@ -78,8 +77,7 @@
       "lora": "xl-realistic-cake-art-sty",
       "strength": 0.45,
       "catalogCountApprox": 1791,
-      "result": "目录通；真出图上游要求订阅套餐；字段路由通",
-      "badge": "仍未验证"
+      "result": "目录通；真出图上游要求订阅套餐；字段路由通"
     },
     "officialVerify20261103": {
       "at": "2026-11-03 ~14:55 JST",
@@ -96,7 +94,6 @@
         "WebFetch": "https://docs.modelslab.com/image-generation/flux/flux-text-to-image 正文+OpenAPI 含 lora_model/lora_strength",
         "grok_search": "本轮无结果；以 WebSearch+agy+WebFetch 为准并标明缺一路"
       },
-      "badge": "不升；仍欠费已记/未真出图",
       "codeAlign20261103": {
         "at": "2026-11-03 ~14:55 JST",
         "by": "canvas-dev",
@@ -104,20 +101,13 @@
         "change": "flux supportsLora: false → true；description 对齐官方",
         "pushed": true,
         "draftChecked": true,
-        "badge": "不升；仍欠费已记/未真出图",
         "note": "已合主线（见 499d379 一带）；本地冲突已消"
       }
     }
   },
   "billing": {
-    "probe": "交给 canvas-dev 用 MODELSLAB_API_KEY 探测；欠费/错误原样显示",
-    "acceptanceRule": "有额度必须画布真出图落到保存节点"
+    "probe": "交给 canvas-dev 用 MODELSLAB_API_KEY 探测；欠费/错误原样显示"
   },
-  "contractTestHint": [
-    "POST /text2img：key+model_id+prompt；挂 LoRA 时带 lora_model+lora_strength",
-    "processing 须走 fetch_result，不得当完成",
-    "禁止密钥写入仓库"
-  ],
   "sources": [
     {
       "url": "https://docs.modelslab.com/image-generation/community-models/dreambooth-lora#lora",
@@ -125,14 +115,11 @@
       "note": "雁点名"
     }
   ],
-  "_auditStatus": "2026-11-04：Researchy 再核 FLUX 官方 lora_model/lora_strength；本地目录已标支持 LoRA，旧「写死不支持」已对齐。徽章不动。\n2026-11-03 ~15:02 JST：主线已含 flux supportsLora:true（499d379 一带）；草案改 pushed=true。徽章仍欠费已记。\n2026-11-03 ~14:55 JST：canvas-dev 本地改 flux supportsLora:true（未 push）；草案对齐冲突已消；三路核官网仍有 lora_model/lora_strength（grok_search 空）；徽章不升。\n2026-11-03：官方核——flux 有 lora_model/lora_strength；本地 supportsLora:false 冲突，交 canvas-dev 改标签；徽章不升。\n2026-11-02 ~04:55 JST：Researchy 02c——ModelsLab seed integer|null。\n2026-11-02 ~04:30 JST：雁定——额度问题不要卡，跳过；欠费已记家不排队等充值；有额度时再冲真图，不当当前主阻塞。\n2026-11-02 ~04:15 JST：画布挑刺——ModelsLab 弹窗与历史 LoRA 已对上（含 LoRA 1 个）；串桶关闭；仍订阅不足、非真出图；欠费已记不动。证据 temp/e2e/modelslab/toast-lora-fix-2026-11-02/\n2026-11-02 ~04:09 JST：canvas-dev——ModelsLab 弹窗串桶已改（lora_model 字符串计入含 LoRA）；正重跑界面，截图后交挑刺；欠费已记不动；未真出图不算接通。\n2026-11-02 ~04:08 JST：画布明示——标记按「欠费已记」收，别再等点收；欠费原文进历史即可；挑刺只审真出图或串桶假话。ModelsLab 串桶（弹窗未含 LoRA vs 历史有）另修，与欠费标记分开。\n2026-11-02 ~04:08 JST：画布按雁定收——Replicate/ModelsLab/Mage 三家欠费原样透传证据已收，不当假成功、不以充值挡进度；未真出图不算接通。ModelsLab 另有串桶：弹窗「本次请求未含 LoRA」但历史请求体有 LoRA——交 canvas-dev 修，与欠费验收分开。雁问「欠费的为什么还要审核」→ 欠费本身不必再审；只审串桶这类真问题。\n2026-11-02 ~04:07 JST：雁定——欠费原样透传、如实记历史即可，不当假成功、不把充值当进度卡点；有额度再冲真图落保存节点。ModelsLab/Replicate/Mage 欠费证据已交；徽章仍等画布点收后再改（不自升接通）。\n2026-11-02 ~04:07 JST：canvas-dev——ModelsLab 欠费三张已齐 temp/e2e/modelslab/fe-billing-2026-11-02/；订阅不足，不算接通；徽章仍未验证，等画布/挑刺明示。\n2026-11-02 ~03:31 JST：canvas-dev——ModelsLab 订阅不足排队验（与 Replicate 欠费同序：带真 LoRA 原样报错）。徽章仍未验证。\n2026-11-02 ~03:30 JST：canvas-dev 报——社区 LoRA 已按文档挂：底模 tamarin-xl-v1 + LoRA xl-realistic-cake-art-sty（0.45）；LoRA 中心能拉官方目录约 1791 条；探活目录通，真出图被上游拦「需订阅套餐」原样返回；路由+LoRA 字段通，真出图等订套餐后再跑；徽章仍未验证（画布未明示欠费/订阅验收）。\n2026-11-02 ~03:23 JST：Researchy 核——body key 鉴权；lora_strength 类型文档冲突勿写死；flux 底勿挂 SD LoRA；徽章仍未验证。\n2026-11-02 ~03:23 JST：画布定——ModelsLab 本来就有，不是新开；Key 本机配置；按官方挂真 lora_model+强度验收；flux 底模挂不了 SD 系 LoRA，底模须匹配；徽章仍未验证。\n2026-11-02 ~03:23 JST：雁点名加 ModelsLab（Dreambooth LoRA 文档+Key）。新建 modelslab.json；徽章未验证；Key 未写入。",
-  "acceptanceBadge": "欠费已记",
   "sendEvidence": {
     "billing20261102": "temp/e2e/modelslab/fe-billing-2026-11-02/",
     "toastLoraFix20261102": "temp/e2e/modelslab/toast-lora-fix-2026-11-02/"
   },
   "productNote": "非新供应商；换 Key + 核 LoRA 路由；有额度真出图，欠费/订阅不足原样显示；2026-11-02 雁：额度不卡、跳过",
-  "billingAccept20261102": "欠费已记（画布明示直接收）；未接通",
   "openBug": {
     "id": "modelslab-lora-toast-mismatch",
     "status": "closed",

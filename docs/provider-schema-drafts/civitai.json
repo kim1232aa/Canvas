@@ -1,5 +1,4 @@
 {
-  "canvasAcceptance": "接线欠费过关、未真出图（2026-11-03 画布）：SD1 AIR+LoRA 同次点跑上游 insufficientBuzz 原样；actualRequest LoRA 82098@87153 @0.7；hist_1793692148134_ca449；证据 temp/e2e/fal-civitai-fe-2026-11-03/civitai-01～03。",
   "$schemaNote": "草案 — 仅声明。2026-11-03：图像/视频出站以实时 OpenAPI 为准；byEngine 快照会过期，不写死尺寸字段名；本地表不当真相。",
   "id": "civitai",
   "displayName": "Civitai Orchestration",
@@ -234,17 +233,10 @@
     "currency": "Buzz",
     "preview": "whatif=true",
     "freeTier": "GET /v2/consumer/free-tier",
-    "insufficientHints": [
-      {
-        "behavior": "Buzz 用尽 → orchestrator 将 step 标 canceled（提交可能仍 200/202）",
-        "source": "developer.civitai.com/orchestration/guide/errors-and-retries.md（cv_err.md L99）"
-      }
-    ],
     "httpErrors": "ProblemDetails status/title/errors；400/401/403/404/409",
     "http402": "未文档化为欠费码；欠费看 step canceled",
     "uiRule": "必须展示 step 状态与原因；submit 2xx ≠ 成功"
   },
-  "contractTestHint": "textToImage → additionalNetworks map（AIR→{strength}），非 [{air,strength}]，且勿写入 imageGen；imageGen Comfy* → loras 对象 AIR→number；imageGen flux2+dev / wan → loras array[{air,strength}]；flux2 flex/klein 按该变体（多见 object）；engine 字面值 krea/krea3（勿再写 fal+krea2）；krea steps/cfg 拒法仍待核，勿臆造拦截文案；Buzz 用尽 → step canceled（非专用 HTTP 402）",
   "sources": [
     "https://developer.civitai.com/llms.txt",
     "https://orchestration.civitai.com/openapi/v2-consumers.json",
@@ -254,7 +246,6 @@
     "docs/provider-api-audit-v2/civitai.md",
     "docs/provider-api-audit-v2/DIFF.md"
   ],
-  "_auditStatus": "2026-11-04 ~06:05 JST：雁澄清从未要求本地拦截；草案撤销所有拦截建议，改为照发+原样显示错误；「官方明文拒绝才拦」口径作废。\n2026-11-03：画布认 Civitai SD1 AIR+LoRA 接线欠费过关 hist_1793692148134_ca449（insufficientBuzz）；不算真出图。\n2026-11-03 ~15:00 JST：写入 researchyOutboundContract20261103（Civitai 三 recipe；LoRA 三形：Comfy 数字 map / flux2·Wan 数组 / textToImage additionalNetworks；engine=krea/krea3）。liveUrls 改 recipes/*/openapi.yaml。settled 项已记；Krea steps/cfg 拒法仍待核。不升徽章。\n2026-11-03：写入 snapshotGaps（Krea unverified vs unsupported、additionalNetworks 壳）。不升徽章。\n2026-11-03 画布←Researchy：图像须跟实时/逐模型 OpenAPI；本地 providerSchema 快照会过期不当真相；不写死尺寸字段名（image_size / width+height / aspect_ratio 等以该模型 Schema 为准）；不升徽章。\n2026-11-02 ~04:55 JST：Researchy 02c——Civitai 各引擎 seed 已核；WAN 无通用 seed 勿发。\n2026-10-15 04:58：补 OpenAPI 核实 sdcpp Dev 字段为 steps/cfgScale；flux1-kontext 无 LoRA。字段徽章仍以前端实测为准",
   "flux2DevPaths": {
     "native": "engine flux2 + model dev；numInferenceSteps 4–50 默认28、guidanceScale 0–20 默认2.5、loras[{air,strength}]（官方推荐）",
     "sdcpp": "engine sdcpp + ecosystem flux2Dev；steps 4–50 默认20、cfgScale 1–20 默认1、sampleMethod/schedule/negativePrompt；loras 为 object map；createVariant 用 strength 0–1",
@@ -313,7 +304,6 @@
       "https://orchestration.civitai.com/v2/consumer/recipes/imageGen/openapi.yaml",
       "https://orchestration.civitai.com/v2/consumer/recipes/videoGen/openapi.yaml"
     ],
-    "badge": "不升",
     "note": "旧 /openapi/imageGen 404；核对表若仍写静态拒绝已过时——以 recipes OpenAPI 为准；badge 不升"
   },
   "snapshotGaps20261103": {
@@ -326,7 +316,6 @@
       "视频 engines 静态名单勿当白名单（ltx2.3 走 live OpenAPI）",
       "flux2 flex/klein：本机 OpenAPI LoRA 多为 object map，勿与 flux2+dev 数组混用"
     ],
-    "badge": "不升",
     "officialVerifyRequired": [
       "Krea steps/cfg 是否明文拒（拦截措辞仍未从 OpenAPI 证明）",
       "additionalNetworks.strength min/max（OpenAPI 仍无 min/max）"
@@ -406,8 +395,6 @@
       "results": "tti/imageGen/videoGen yaml 均 HTTP 200；imageGen/videoGen additionalNetworks 计数=0；engine 含 krea/krea3"
     },
     "triPath": "Researchy 三路 WebSearch+Brave+agy；本机再核 OpenAPI/llms",
-    "conflictsWithPriorDraft": "草案曾写 krea 调用 engine:fal model:krea2——官方 imageGen engine 枚举含 krea/krea3（fal 为另一引擎）；krea2 多见为 model/ecosystem 值。flux2 flex/klein LoRA 形状本机多为 object，不完全等于 Researchy「Flux2Dev/Wan=array」简表——已按变体分列。",
-    "badge": "不升"
-  },
-  "acceptanceBadge": "欠费已记（insufficientBuzz；未真出图）"
+    "conflictsWithPriorDraft": "草案曾写 krea 调用 engine:fal model:krea2——官方 imageGen engine 枚举含 krea/krea3（fal 为另一引擎）；krea2 多见为 model/ecosystem 值。flux2 flex/klein LoRA 形状本机多为 object，不完全等于 Researchy「Flux2Dev/Wan=array」简表——已按变体分列。"
+  }
 }

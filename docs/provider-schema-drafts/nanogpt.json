@@ -1,5 +1,4 @@
 {
-  "canvasAcceptance": "未验证（2026-10-17 14:40 北京：测试截图已全删，按雁标准「画布里出图、落保存节点、历史有缩略图」当前 0 家；以前的出图/欠费标记一律作废，官方字段结论保留；在画布重跑出图并有节点图+历史缩略图后再单独改）",
   "$schemaNote": "草案 — 仅声明。真相源: docs/provider-api-audit-v2/nanogpt.md + DIFF.md (2026-10-15)",
   "id": "nanogpt",
   "displayName": "NanoGPT",
@@ -107,22 +106,12 @@
     "source": "Researchy 2026-10-15 实测 /api/v1/image-models?detailed=true + https://docs.nano-gpt.com/api-reference/endpoint/image-api-generate.md"
   },
   "billing": {
-    "insufficientHints": [
-      {
-        "status": 402
-      },
-      {
-        "errorType": "INSUFFICIENT_BALANCE"
-      }
-    ],
     "balanceSignal": "remainingBalance (video submit)"
   },
-  "contractTestHint": "minimax-h3/text-to-image 挂 ≤3 LoRA → loras[{path,scale}] 发出；其他模型挂 LoRA 照发（已撤本地拒绝，上游返回原样显示）；seed 仅 nano-banana-2.1 发送；steps/cfg 官方无模型声明，用户填了就照发；上游不认则原样显示报错",
   "sources": [
     "https://docs.nano-gpt.com (Image API, Video Generation, Video Status, authentication.md)",
     "docs/provider-api-audit-v2/nanogpt.md"
   ],
-  "_auditStatus": "2026-11-04 ~06:10 JST：雁定——用户设的参数一律照发，禁止扣参/置灰/不发；草案内所有「不发送」建议作废。\n2026-11-04 ~06:05 JST：雁澄清从未要求本地拦截；草案撤销所有拦截建议，改为照发+原样显示错误；「官方明文拒绝才拦」口径作废。\n2026-11-02 ~04:55 JST：Researchy 02c——NanoGPT seed 按模型、不保证复现。\n2026-11-02 ~04:39 JST：Researchy 对照表写回 researchyVerified20261102（种子/时长/比例已核一致条目）；未核条目仍待核、不拦截（照发）；徽章不动。\n2026-10-15 04:58：已对齐 v2 nanogpt.md：按每模型 supported_parameters 决定发送；未声明字段〔已作废：用户填了就照发〕；实测 243 模型仅 nano-banana-2.1 声明 seed，无模型声明 steps/guidance。徽章仍以前端实测为准",
   "researchyVerified20261102": {
     "fetchedAt": "2026-11-02 ~04:55 JST",
     "items": [

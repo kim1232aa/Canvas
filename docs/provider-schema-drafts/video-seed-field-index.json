@@ -5,7 +5,6 @@
     {
       "file": "aimlapi.json",
       "id": "aimlapi",
-      "badge": null,
       "seedFields": [
         {
           "path": "video.parametersPixverseV55I2v.seed",
@@ -66,7 +65,6 @@
     {
       "file": "civitai.json",
       "id": "civitai",
-      "badge": null,
       "seedFields": [
         {
           "path": "image.byEngine.flux1 sdcpp.seed",
@@ -124,14 +122,12 @@
     {
       "file": "deepinfra.json",
       "id": "deepinfra",
-      "badge": "欠费验收过（未真出图）",
       "seedFields": [],
       "sizeDurationFields": []
     },
     {
       "file": "fal.json",
       "id": "fal",
-      "badge": null,
       "seedFields": [
         {
           "path": "image.fal-ai/flux-lora.seed",
@@ -217,7 +213,6 @@
     {
       "file": "huggingface.json",
       "id": "huggingface",
-      "badge": null,
       "seedFields": [
         {
           "path": "image.request.parameters.seed",
@@ -235,7 +230,6 @@
     {
       "file": "krea.json",
       "id": "krea",
-      "badge": null,
       "seedFields": [
         {
           "path": "image.parametersByEndpoint.krea/krea-2/{medium|large|medium-turbo}.seed",
@@ -336,7 +330,6 @@
     {
       "file": "mage.json",
       "id": "mage",
-      "badge": "欠费已记",
       "seedFields": [
         {
           "path": "image.mango.optional.seed",
@@ -357,7 +350,6 @@
     {
       "file": "modelscope.json",
       "id": "modelscope",
-      "badge": null,
       "seedFields": [
         {
           "path": "base.intl.sendStatus.seed",
@@ -377,7 +369,6 @@
     {
       "file": "modelslab.json",
       "id": "modelslab",
-      "badge": "欠费已记",
       "seedFields": [
         {
           "path": "image.fields.seed",
@@ -389,7 +380,6 @@
     {
       "file": "muapi.json",
       "id": "muapi",
-      "badge": "未验证",
       "seedFields": [
         {
           "path": "image.seed",
@@ -437,7 +427,6 @@
     {
       "file": "nanogpt.json",
       "id": "nanogpt",
-      "badge": null,
       "seedFields": [
         {
           "path": "image.commonFields.seed",
@@ -483,7 +472,6 @@
     {
       "file": "novita.json",
       "id": "novita",
-      "badge": "未验证",
       "seedFields": [
         {
           "path": "image.mingOpenaiImages.seed",
@@ -514,7 +502,6 @@
     {
       "file": "replicate.json",
       "id": "replicate",
-      "badge": "欠费已记",
       "seedFields": [
         {
           "path": "image.parameters.seed",
@@ -543,7 +530,6 @@
     {
       "file": "sogni.json",
       "id": "sogni",
-      "badge": "未验证",
       "seedFields": [
         {
           "path": "image.seed",
@@ -598,14 +584,12 @@
     {
       "file": "tensorart-openworks.json",
       "id": "tensorart-openworks",
-      "badge": "已出图（全参数+LoRA 已发送；LoRA 是否生效未证实）",
       "seedFields": [],
       "sizeDurationFields": []
     },
     {
       "file": "tensorart-tams.json",
       "id": "tensorart-tams",
-      "badge": "未验证",
       "seedFields": [
         {
           "path": "image.parameters.inputInitialize.seed",
@@ -621,7 +605,6 @@
     {
       "file": "together.json",
       "id": "together",
-      "badge": "未验证",
       "seedFields": [
         {
           "path": "image.parameters.seed",
@@ -664,7 +647,6 @@
     {
       "file": "venice.json",
       "id": "venice",
-      "badge": null,
       "seedFields": [
         {
           "path": "image.parameters.seed",
@@ -743,7 +725,6 @@
     {
       "file": "wavespeed.json",
       "id": "wavespeed",
-      "badge": "已出图（同会话 + LoRA 已发送 + 尺寸在板上；LoRA 是否生效未证实）",
       "seedFields": [
         {
           "path": "image.examples.wavespeed-ai/krea-v2/turbo-lora.seed",
@@ -816,21 +797,5 @@
     }
   ],
   "authority": "none",
-  "officialVerifyRequired": true,
-  "hallucinationAudit": {
-    "flaggedAt": "2026-11-02 ~04:34 JST",
-    "by": "tinkabot",
-    "issue": "扫旧草案后直接甩给房间当种子/时长线索，未对本轮数字做网络核验",
-    "ruleRestated": "不确定的必须网络搜索核实；本地草案不能当真相",
-    "numericExamplesNeedingOfficialSearch": [
-      "krea ideogram seed 0..2147483647",
-      "modelscope QwenImage seed 0..2147483647",
-      "venice image seed -999999999..999999999",
-      "fal wan-t2v-lora aspect_ratio/duration enums",
-      "aimlapi Pixverse duration enum",
-      "sogni seedance2 duration 4-15s / 4-30s",
-      "muapi wanLora duration/aspect",
-      "wavespeed aspect_ratio/duration examples"
-    ]
-  }
+  "officialVerifyRequired": true
 }
