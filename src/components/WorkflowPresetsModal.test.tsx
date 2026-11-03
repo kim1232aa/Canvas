@@ -26,4 +26,15 @@ describe('preset modal blocked archives', () => {
     expect(html).toContain('仅载入');
     expect(html).toContain('追加合并到当前画布，不覆盖已有内容');
   });
+
+  it('I2V 仅载入 uses replace title when only blocked by require_reference_image', () => {
+    const html = renderToStaticMarkup(<WorkflowPresetsModal isOpen onClose={vi.fn()} onLoadPreset={vi.fn()} onLoadAndRunPreset={vi.fn()} currentNodes={[]} currentConnections={[]} currentSpatialFrames={[]} onImportWorkflowData={vi.fn()} onClearCanvas={vi.fn()} />);
+    // Run stays blocked; 仅载入 must replace (not append) so video presets do not stack on the default board.
+    expect(html).toContain('preset-blocked-std-fal-i2v');
+    expect(html).toContain('请先载入并选择参考图');
+    expect(html).toMatch(/preset-blocked-std-fal-i2v[\s\S]{0,1200}title="清空当前画布并载入此工作流"/);
+    expect(html).not.toMatch(/preset-blocked-std-fal-i2v[\s\S]{0,1200}title="仅追加载入待配置模板，不覆盖已有画布"/);
+    // Pending-recipe T2I still appends.
+    expect(html).toMatch(/preset-blocked-std-muapi-t2i[\s\S]{0,1200}title="仅追加载入待配置模板，不覆盖已有画布"/);
+  });
 });

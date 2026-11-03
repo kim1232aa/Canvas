@@ -630,13 +630,19 @@ export const WorkflowPresetsModal: React.FC<WorkflowPresetsModalProps> = ({
                   // Card + board share one source: nodes (presetSummary). Never read a parallel params copy.
                   const summary = presetSummary(preset);
                   const checkpoint = summary.model || '模型未选择/待重选';
-                  const baseBlockedReason = preset.nodes.find(n => n.values.execution_blocked_reason)?.values.execution_blocked_reason
+                  // Incomplete config (no model / unresolved / pending recipe) → 仅载入 appends so it does not wipe the board.
+                  // require_reference_image alone is expected after I2V load — still block 载入并立即运行, but 仅载入 must replace like T2I.
+                  const configBlockedReason = preset.nodes.find(n => n.values.execution_blocked_reason)?.values.execution_blocked_reason
                     || preset.spatialFrames?.find(f => f.params.executionBlockedReason)?.params.executionBlockedReason
                     || (preset.nodes.some(n => n.values.import_unresolved_resource) || preset.spatialFrames?.some(f => f.params.unresolvedModel || f.params.loras.some(l => l.unresolvedResource)) ? '存在未核实资源或底模，请先载入并显式重选。' : '')
                     || (checkpoint === '模型未选择/待重选' ? '请先载入并选择模型。' : '')
-                    || (preset.nodes.some(n => n.values.require_reference_image) || preset.spatialFrames?.some(f => f.params.requireReferenceImage && !f.referenceImageUrl) ? '请先载入并选择参考图。' : '');
-                  // 待配方: official Schema needs a resource the recipes lack (e.g. MuAPI lora_url) — separate from 待配置 (user must pick a model/resource).
-                  const blockedReason = baseBlockedReason || preset.pendingRecipe || '';
+                    || preset.pendingRecipe
+                    || '';
+                  const needsReferenceImage = preset.nodes.some(n => n.values.require_reference_image)
+                    || Boolean(preset.spatialFrames?.some(f => f.params.requireReferenceImage && !f.referenceImageUrl));
+                  const blockedReason = configBlockedReason
+                    || (needsReferenceImage ? '请先载入并选择参考图。' : '');
+                  const loadMode: 'replace' | 'append' = configBlockedReason ? 'append' : 'replace';
 
                   return (
                     <div
@@ -780,11 +786,11 @@ export const WorkflowPresetsModal: React.FC<WorkflowPresetsModalProps> = ({
 
                           <button
                             onClick={() => {
-                              onLoadPreset(preset, blockedReason ? 'append' : 'replace');
+                              onLoadPreset(preset, loadMode);
                               onClose();
                             }}
                             className={`${onLoadAndRunPreset ? 'px-3' : 'flex-1'} py-2 rounded-xl bg-[#222430] hover:bg-[#2d3040] text-slate-200 hover:text-white border border-[#313444] font-semibold text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all`}
-                            title={blockedReason ? '仅追加载入待配置模板，不覆盖已有画布' : '清空当前画布并载入此工作流'}
+                            title={loadMode === 'append' ? '仅追加载入待配置模板，不覆盖已有画布' : '清空当前画布并载入此工作流'}
                           >
                             <Play className="w-3.5 h-3.5 fill-cyan-400" />
                             <span>{onLoadAndRunPreset ? '仅载入' : '载入画布 (覆盖)'}</span>
