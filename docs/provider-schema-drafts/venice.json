@@ -123,7 +123,7 @@
       },
       "aspect_ratio": {
         "type": "string",
-        "when": "constraints.aspectRatios present; Qwen family rejects width/height with HTTP 400",
+        "when": "constraints.aspectRatios present; official: Qwen family rejects width/height with HTTP 400; others ignore — canvas sends as-is, upstream response shown verbatim (no local block)",
         "sendStatus": "待确认",
         "sendEvidence": "Researchy 2026-10-15 live：docs.venice.ai Generate Images · Sizing Options + GET /models?type=image model_spec.constraints。前端未按模型约束实测 actualRequest 前不升会发送。",
         "sources": [
@@ -287,10 +287,10 @@
         "shape": "{ image, strength?: 0.1-1 }",
         "requires": "model supportsStyleReferences"
       },
-      "uiRule": "用户挂自定义 LoRA → 应拒绝；勿静默丢弃或伪造 loras[]",
+      "uiRule": "用户挂自定义 LoRA → 照发（不本地拦截），勿静默丢弃或伪造；上游 400 原样显示",
       "customLoras": {
-        "sendStatus": "不会发送",
-        "sendEvidence": "FE 2026-10-15：挂 0.85 本地拦截；canvas-dev 实测 2026-10-15 上游 400「Unrecognized key(s) in object: 'loras'」→ 本地拦截有实测依据（docs/evidence/together-venice-lora-live-probe-2026-10-15.md）"
+        "sendStatus": "照发（上游 400 原样显示）",
+        "sendEvidence": "FE 2026-10-15：挂 0.85 本地拦截；canvas-dev 实测 2026-10-15 上游 400「Unrecognized key(s) in object: 'loras'」→ 上游会 400 原样显示，不本地拦截（docs/evidence/together-venice-lora-live-probe-2026-10-15.md）"
       }
     },
     "sources": [
@@ -322,11 +322,11 @@
   },
   "acceptanceNotes": [
     "图像同步、视频异步 — 勿混用轮询模型",
-    "无通用自定义 LoRA；只有 lora_strength（0–100）；挂自定义 → 本地拒绝",
+    "无通用自定义 LoRA；只有 lora_strength（0–100）；挂自定义 → 照发（不本地拦截）；上游返回原样显示",
     "视频不要发 seed（除非将来 OpenAPI 新增）",
     "按 /models constraints 切换 width/height vs aspect_ratio/resolution",
     "欠费展示真实 402 正文，勿改写成成功",
-    "2026-10-15 clean-0544：venice-sd35 actualRequest 证实 width/height/negative_prompt/seed/steps/cfg_scale 会发送（至 402）；height>1280 本地拦。aspect_ratio/resolution/lora_strength/format 仍待确认。",
+    "2026-10-15 clean-0544：venice-sd35 actualRequest 证实 width/height/negative_prompt/seed/steps/cfg_scale 会发送（至 402）；height>1280 旧版本地拦（已撤销，改照发+原样显示）。aspect_ratio/resolution/lora_strength/format 仍待确认。",
     "2026-10-16：UI 废「待确认」徽章；空字段「未填写，不发送」；填值以 actualRequest 验收。"
   ],
   "runtimeSchema": {
@@ -334,8 +334,8 @@
     "use": "接口级 OpenAPI 叠加按模型 constraints；字段经实测才标会发送",
     "checked": "Researchy v2 + 画布 FE 2026-10-15"
   },
-  "contractTestHint": "按 model_spec.constraints 分三类发尺寸，禁止一律宽高：①像素（如 venice-sd35）actualRequest 须含 width/height（clean-0544 线索：会发、height>1280 本地拦；该轮整套退回，待干净轮证实）；②比例（Qwen 族）只发 aspect_ratio，发宽高会 400；③档位（nano-banana/gpt-image-2）发 aspect_ratio+resolution。另：seed/steps/cfg_scale 像素模型会发送已证实；negative_prompt 待确认（clean-0544 仅线索）；lora_strength：空值 UI 写「未填写，不发送」（2026-10-16 画布废「待确认」徽章）；填了须发出；草案 sendStatus 仍待确认至被认过的 FE actualRequest（live 过校验至 402）；自定义 LoRA 本地拒（live 上游 400 Unrecognized key loras）；视频勿发 seed；历史徽标不得把已实发 cfg_scale 标未发送。",
-  "_auditStatus": "2026-11-02 ~04:43 JST：Researchy——Venice 图 seed 范围；视频无 seed；resolution 勿套全站。\n2026-10-16 ~09:30 JST tinkabot：对齐画布拍板——UI 不加回「待确认」；空值「未填写，不发送」；草案 lora_strength 等仍待确认至被认 FE 实发。前序 2026-10-15 07:13：clean-0544 整套退回，宽高/negative 仅线索。 2026-10-15 07:13 tinkabot 撤回：clean-0544 已整套退回，width/height/negative_prompt 回退待确认，仅保留为线索。2026-10-15 07:09 tinkabot：认领 clean-0544——venice-sd35 干净会话 actualRequest 含 width/height/negative_prompt→ 升会发送；height=1344 本地拦坐实 max 1280。前序 06:38：live probe lora_strength/自定义 LoRA。aspect_ratio/resolution/lora_strength/format 仍待确认（本轮未测比例/档位模型；lora_strength 无 FE actualRequest 键）。",
+  "contractTestHint": "按 model_spec.constraints 分三类发尺寸，禁止一律宽高：①像素（如 venice-sd35）actualRequest 须含 width/height（clean-0544 线索：会发、height>1280 旧版本地拦已撤销，改照发；该轮整套退回，待干净轮证实）；②比例（Qwen 族）只发 aspect_ratio，发宽高会 400；③档位（nano-banana/gpt-image-2）发 aspect_ratio+resolution。另：seed/steps/cfg_scale 像素模型会发送已证实；negative_prompt 待确认（clean-0544 仅线索）；lora_strength：空值 UI 写「未填写，不发送」（2026-10-16 画布废「待确认」徽章）；填了须发出；草案 sendStatus 仍待确认至被认过的 FE actualRequest（live 过校验至 402）；自定义 LoRA 本地拒（live 上游 400 Unrecognized key loras）；视频勿发 seed；历史徽标不得把已实发 cfg_scale 标未发送。",
+  "_auditStatus": "2026-11-04 ~06:05 JST：雁澄清从未要求本地拦截；草案撤销所有拦截建议，改为照发+原样显示错误；「官方明文拒绝才拦」口径作废。\n2026-11-02 ~04:43 JST：Researchy——Venice 图 seed 范围；视频无 seed；resolution 勿套全站。\n2026-10-16 ~09:30 JST tinkabot：对齐画布拍板——UI 不加回「待确认」；空值「未填写，不发送」；草案 lora_strength 等仍待确认至被认 FE 实发。前序 2026-10-15 07:13：clean-0544 整套退回，宽高/negative 仅线索。 2026-10-15 07:13 tinkabot 撤回：clean-0544 已整套退回，width/height/negative_prompt 回退待确认，仅保留为线索。2026-10-15 07:09 tinkabot：认领 clean-0544——venice-sd35 干净会话 actualRequest 含 width/height/negative_prompt→ 升会发送；height=1344 本地拦坐实 max 1280。前序 06:38：live probe lora_strength/自定义 LoRA。aspect_ratio/resolution/lora_strength/format 仍待确认（本轮未测比例/档位模型；lora_strength 无 FE actualRequest 键）。",
   "researchyVerified20261102": {
     "fetchedAt": "2026-11-02 ~04:43 JST",
     "items": [

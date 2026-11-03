@@ -134,7 +134,8 @@
           "krea",
           "krea3"
         ],
-        "stepsCfgReject": "仍 officialVerifyRequired：OpenAPI 未在本轮证明「明文拒 steps/cfg」的拦截措辞"
+        "stepsCfgReject": "官方未明文拒 steps/cfg；照发（不本地拦截）；上游返回原样显示",
+        "sendPolicy": "官方称 Krea v2 不接受 LoRA/负面提示词/宽高（事实保留）；画布仍照发（不本地拦截）；上游返回原样显示"
       }
     },
     "fieldNameWarning": "cfgScale vs guidanceScale、steps vs numInferenceSteps 按引擎切换；flux2.dev 发 cfgScale/steps → 400（Researchy 2026-10-15 recipes/flux2.md 复核）",
@@ -253,7 +254,7 @@
     "docs/provider-api-audit-v2/civitai.md",
     "docs/provider-api-audit-v2/DIFF.md"
   ],
-  "_auditStatus": "2026-11-03：画布认 Civitai SD1 AIR+LoRA 接线欠费过关 hist_1793692148134_ca449（insufficientBuzz）；不算真出图。\n2026-11-03 ~15:00 JST：写入 researchyOutboundContract20261103（Civitai 三 recipe；LoRA 三形：Comfy 数字 map / flux2·Wan 数组 / textToImage additionalNetworks；engine=krea/krea3）。liveUrls 改 recipes/*/openapi.yaml。settled 项已记；Krea steps/cfg 拒法仍待核。不升徽章。\n2026-11-03：写入 snapshotGaps（Krea unverified vs unsupported、additionalNetworks 壳）。不升徽章。\n2026-11-03 画布←Researchy：图像须跟实时/逐模型 OpenAPI；本地 providerSchema 快照会过期不当真相；不写死尺寸字段名（image_size / width+height / aspect_ratio 等以该模型 Schema 为准）；不升徽章。\n2026-11-02 ~04:55 JST：Researchy 02c——Civitai 各引擎 seed 已核；WAN 无通用 seed 勿发。\n2026-10-15 04:58：补 OpenAPI 核实 sdcpp Dev 字段为 steps/cfgScale；flux1-kontext 无 LoRA。字段徽章仍以前端实测为准",
+  "_auditStatus": "2026-11-04 ~06:05 JST：雁澄清从未要求本地拦截；草案撤销所有拦截建议，改为照发+原样显示错误；「官方明文拒绝才拦」口径作废。\n2026-11-03：画布认 Civitai SD1 AIR+LoRA 接线欠费过关 hist_1793692148134_ca449（insufficientBuzz）；不算真出图。\n2026-11-03 ~15:00 JST：写入 researchyOutboundContract20261103（Civitai 三 recipe；LoRA 三形：Comfy 数字 map / flux2·Wan 数组 / textToImage additionalNetworks；engine=krea/krea3）。liveUrls 改 recipes/*/openapi.yaml。settled 项已记；Krea steps/cfg 拒法仍待核。不升徽章。\n2026-11-03：写入 snapshotGaps（Krea unverified vs unsupported、additionalNetworks 壳）。不升徽章。\n2026-11-03 画布←Researchy：图像须跟实时/逐模型 OpenAPI；本地 providerSchema 快照会过期不当真相；不写死尺寸字段名（image_size / width+height / aspect_ratio 等以该模型 Schema 为准）；不升徽章。\n2026-11-02 ~04:55 JST：Researchy 02c——Civitai 各引擎 seed 已核；WAN 无通用 seed 勿发。\n2026-10-15 04:58：补 OpenAPI 核实 sdcpp Dev 字段为 steps/cfgScale；flux1-kontext 无 LoRA。字段徽章仍以前端实测为准",
   "flux2DevPaths": {
     "native": "engine flux2 + model dev；numInferenceSteps 4–50 默认28、guidanceScale 0–20 默认2.5、loras[{air,strength}]（官方推荐）",
     "sdcpp": "engine sdcpp + ecosystem flux2Dev；steps 4–50 默认20、cfgScale 1–20 默认1、sampleMethod/schedule/negativePrompt；loras 为 object map；createVariant 用 strength 0–1",

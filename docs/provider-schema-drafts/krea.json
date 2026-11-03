@@ -242,7 +242,7 @@
     "https://www.krea.ai/docs/developers/api-keys-and-billing.md",
     "https://www.krea.ai/docs/developers/job-lifecycle.md"
   ],
-  "_auditStatus": "2026-11-02 ~04:45 JST：Researchy——Krea krea-2/Ideogram seed；Veo 3.1 无 seed（Agy 臆造作废）。\n2026-11-02 ~04:39 JST：Researchy 对照表写回 researchyVerified20261102（种子/时长/比例已核一致条目）；未核条目仍待核、禁止当拦截；徽章不动。\n2026-10-16 ~09:53 JST tinkabot：认领 krea-0936（挑刺过）——steps/seed/guidance_scale/styles 升「会发送」。前序 2026-10-15 03:26：旧审计仅对比；以 v2 与 DIFF 为准。",
+  "_auditStatus": "2026-11-04 ~06:05 JST：雁澄清从未要求本地拦截；草案撤销所有拦截建议，改为照发+原样显示错误；「官方明文拒绝才拦」口径作废。\n2026-11-02 ~04:45 JST：Researchy——Krea krea-2/Ideogram seed；Veo 3.1 无 seed（Agy 臆造作废）。\n2026-11-02 ~04:39 JST：Researchy 对照表写回 researchyVerified20261102（种子/时长/比例已核一致条目）；未核条目仍待核、不拦截（照发）；徽章不动。\n2026-10-16 ~09:53 JST tinkabot：认领 krea-0936（挑刺过）——steps/seed/guidance_scale/styles 升「会发送」。前序 2026-10-15 03:26：旧审计仅对比；以 v2 与 DIFF 为准。",
   "flux1DevLive": {
     "width/height": "512–2368（实时 OpenAPI）",
     "strength": "去噪强度，默认1，非 LoRA",

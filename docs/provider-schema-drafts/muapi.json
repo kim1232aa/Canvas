@@ -144,7 +144,7 @@
     "https://muapi.ai/docs/authentication",
     "https://api.muapi.ai/openapi.json"
   ],
-  "_auditStatus": "2026-11-02 ~04:55 JST：Researchy 02c——MuAPI seed 按端点；style-lora-inference 无 seed。\n2026-11-02 ~04:41 JST：Researchy——MuAPI wanLora duration 冲突：草案[5,10] vs 官网 int 默认5 无枚举，禁止硬拦；aspect/resolution 可按官网。\n2026-11-02 ~04:39 JST：Researchy 对照表写回 researchyVerified20261102（种子/时长/比例已核一致条目）；未核条目仍待核、禁止当拦截；徽章不动。\n2026-10-17 ~22:18 北京：画布收 MuAPI「待配方」终轮——官方没有的字段（步数/CFG/种子/去噪）整格藏掉不留字；顶栏黄字先缺 LoRA 再缺提示词；证据 temp/e2e/workflow-hub/muapi-pending-recipe-detail/06-topbar-lora-first.png；只算防呆，acceptanceBadge 仍未验证（未出图）。2026-10-17 ~19:30 北京：画布挑刺认 MuAPI「待配方」两处严重已清（卡主按钮灰+「待配方，不能立即运行」；仅载入后顶栏运行灰、黄字缺真 LoRA）；证据 temp/e2e/workflow-hub/muapi-pending-recipe-fix/；只算防呆显示，不升出图徽章。2026-10-17 20:07 JST：画布认 MuAPI hub「待配方」仅预设展示过关（证据 muapi-pending-recipe/），不升出图徽章；挑刺主按钮/顶栏仍开着未收。2026-10-17 20:04 JST：工作流中心预设端点 flux-1-dev-style-lora-inference 按当日 openapi 记字段（lora_url 必填；无步数/CFG/种子/负向）；卡「待配方」不升徽章。2026-10-16 16:31：fix5 UI 收口（非升 PASS）——strength 显示澄清 + aspect_ratio 进尺寸行；证据 已清理。2026-10-16 14:42：fix3-1530 升 PASS_BILLING（loras[{path,scale}]/resolution 1k → 402）。2026-10-16 14:50：fix2-1340 FAIL（resolution 本地拦合规；LoRA item 映射待供应商配置 path/scale）。2026-10-16 12:37：rekey-1230 字段已核，不收口、徽章未升。2026-10-15 03:26：引用的 docs/provider-api-audit 旧审计仅留作对比、不再引用；以 docs/provider-api-audit-v2/ 与 DIFF.md 为准；本草案凡依据旧审计的结论一律视为未核实，等 Researchy 新调查",
+  "_auditStatus": "2026-11-04 ~06:05 JST：雁澄清从未要求本地拦截；草案撤销所有拦截建议，改为照发+原样显示错误；「官方明文拒绝才拦」口径作废。\n2026-11-02 ~04:55 JST：Researchy 02c——MuAPI seed 按端点；style-lora-inference 无 seed。\n2026-11-02 ~04:41 JST：Researchy——MuAPI wanLora duration 冲突：草案[5,10] vs 官网 int 默认5 无枚举，禁止硬拦；aspect/resolution 可按官网。\n2026-11-02 ~04:39 JST：Researchy 对照表写回 researchyVerified20261102（种子/时长/比例已核一致条目）；未核条目仍待核、禁止当拦截；徽章不动。\n2026-10-17 ~22:18 北京：画布收 MuAPI「待配方」终轮——官方没有的字段（步数/CFG/种子/去噪）整格藏掉不留字；顶栏黄字先缺 LoRA 再缺提示词；证据 temp/e2e/workflow-hub/muapi-pending-recipe-detail/06-topbar-lora-first.png；只算防呆，acceptanceBadge 仍未验证（未出图）。2026-10-17 ~19:30 北京：画布挑刺认 MuAPI「待配方」两处严重已清（卡主按钮灰+「待配方，不能立即运行」；仅载入后顶栏运行灰、黄字缺真 LoRA）；证据 temp/e2e/workflow-hub/muapi-pending-recipe-fix/；只算防呆显示，不升出图徽章。2026-10-17 20:07 JST：画布认 MuAPI hub「待配方」仅预设展示过关（证据 muapi-pending-recipe/），不升出图徽章；挑刺主按钮/顶栏仍开着未收。2026-10-17 20:04 JST：工作流中心预设端点 flux-1-dev-style-lora-inference 按当日 openapi 记字段（lora_url 必填；无步数/CFG/种子/负向）；卡「待配方」不升徽章。2026-10-16 16:31：fix5 UI 收口（非升 PASS）——strength 显示澄清 + aspect_ratio 进尺寸行；证据 已清理。2026-10-16 14:42：fix3-1530 升 PASS_BILLING（loras[{path,scale}]/resolution 1k → 402）。2026-10-16 14:50：fix2-1340 FAIL（resolution 本地拦合规；LoRA item 映射待供应商配置 path/scale）。2026-10-16 12:37：rekey-1230 字段已核，不收口、徽章未升。2026-10-15 03:26：引用的 docs/provider-api-audit 旧审计仅留作对比、不再引用；以 docs/provider-api-audit-v2/ 与 DIFF.md 为准；本草案凡依据旧审计的结论一律视为未核实，等 Researchy 新调查",
   "requestFieldsVerified": {
     "run": "已清理 hist_1792125133065_2ffvp）",
     "endpoint": "POST https://api.muapi.ai/api/v1/krea-v2-turbo-lora",
@@ -166,15 +166,15 @@
     "retest_fix2_1340": {
       "run": "已清理 hist_1792129505860_hvuig）",
       "verdict": "FAIL（本地拦截，请求未出站）",
-      "localBlockOk": "Empty Latent 1024x1024 不在 resolution enum [1k,2k]，未自动改值，来源 openapi.json",
       "loraItemShape": {
         "official": "KreaV2TurboLoraRequest.loras = anyOf[array of {type:object, additionalProperties:true}, null]，items 无 properties；scale 只在 description 示例；同文件有 LoraItem{path,scale 0-4} 但该端点未 $ref（Researchy 14:49:59 JST）",
         "cardBug": "拟发送 JSON 显示 path+strength/modelStrength/clipStrength（前端原始体），芯片写未发送；canvas-dev：服务端映射放行时会发 {path,scale}，卡上拟发送不是映射后体",
-        "productRule": "供应商配置声明 LoRA item 字段映射 path/scale（带来源链接+抓取时间）；引擎只读配置。无 Schema properties/$ref 且无配置 → 本地拦「Schema 未定义 LoRA 强度字段」。不准猜 strength/modelStrength/clipStrength，也不准把默认 {path,scale} 当通用兜底。",
+        "productRule": "供应商配置声明 LoRA item 字段映射 path/scale（带来源链接+抓取时间）；引擎只读配置。无 Schema properties/$ref 且无配置 → 照发（不本地拦截），历史里提示「Schema 未定义 LoRA 强度字段」，上游返回原样显示。不准猜 strength/modelStrength/clipStrength，也不准把默认 {path,scale} 当通用兜底。",
         "configStatus": "待实现（下一批）",
         "openapi": "https://api.muapi.ai/openapi.json"
       },
-      "acceptanceBadge": "未验证"
+      "acceptanceBadge": "未验证",
+      "localBlockNote": "（历史记录，旧行为已撤销）Empty Latent 1024x1024 不在 resolution enum [1k,2k]，未自动改值，来源 openapi.json；今后照发（不本地拦截）；上游返回原样显示"
     }
   },
   "acceptanceBadge": "未验证",

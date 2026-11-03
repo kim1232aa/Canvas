@@ -100,14 +100,14 @@
     "insufficientHints": [],
     "note": "402 未文档化；原样展示"
   },
-  "contractTestHint": "text-to-image: seed/steps/cfg/宽高 进 parameters.*；挂 LoRA 且 provider 非原生 LoRA 端点 → 本地拒绝",
+  "contractTestHint": "text-to-image: seed/steps/cfg/宽高 进 parameters.*；挂 LoRA 且 provider 非原生 LoRA 端点 → 照发（不本地拦截）；上游返回原样显示",
   "sources": [
     "https://huggingface.co/docs/inference-providers/index",
     "https://huggingface.co/docs/inference-providers/main/tasks/text-to-image",
     "https://huggingface.co/docs/inference-providers/main/tasks/text-to-video",
     "https://huggingface.co/docs/inference-providers/pricing"
   ],
-  "_auditStatus": "2026-11-02 ~04:55 JST：Researchy 02c——HF seed 再确认。\n2026-11-02 ~04:46 JST：Researchy——HF 文生图/文生视频 parameters.seed integer。\n2026-10-15 03:26：引用的 docs/provider-api-audit 旧审计仅留作对比、不再引用；以 docs/provider-api-audit-v2/ 与 DIFF.md 为准；本草案凡依据旧审计的结论一律视为未核实，等 Researchy 新调查",
+  "_auditStatus": "2026-11-04 ~06:05 JST：雁澄清从未要求本地拦截；草案撤销所有拦截建议，改为照发+原样显示错误；「官方明文拒绝才拦」口径作废。\n2026-11-02 ~04:55 JST：Researchy 02c——HF seed 再确认。\n2026-11-02 ~04:46 JST：Researchy——HF 文生图/文生视频 parameters.seed integer。\n2026-10-15 03:26：引用的 docs/provider-api-audit 旧审计仅留作对比、不再引用；以 docs/provider-api-audit-v2/ 与 DIFF.md 为准；本草案凡依据旧审计的结论一律视为未核实，等 Researchy 新调查",
   "researchyVerified20261102": {
     "fetchedAt": "2026-11-02 ~04:55 JST",
     "items": [
