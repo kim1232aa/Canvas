@@ -79,4 +79,19 @@ describe('isDeclaredSchemaFieldOmitted (preset/Schema seed, no badge gate)', () 
     expect(isDeclaredSchemaFieldOmitted('height', mage)).toBe(true);
     expect(isDeclaredSchemaFieldOmitted('seed', mage)).toBe(false);
   });
+  it('ModelsLab/Civitai/Novita-like seeds: supported sampler fields are NOT omitted', () => {
+    // ModelsLab: scheduler declared, sampler not → only sampler omitted.
+    const ml = withSchema(['prompt', 'seed', 'steps', 'guidance', 'scheduler', 'loras']);
+    expect(isDeclaredSchemaFieldOmitted('scheduler', ml)).toBe(false);
+    expect(isDeclaredSchemaFieldOmitted('sampler_name', ml)).toBe(true);
+    // Civitai krea2: both sampler + scheduler declared.
+    const cv = withSchema(['prompt', 'seed', 'steps', 'sampler', 'sampler_name', 'scheduler']);
+    expect(isDeclaredSchemaFieldOmitted('sampler_name', cv)).toBe(false);
+    expect(isDeclaredSchemaFieldOmitted('scheduler', cv)).toBe(false);
+    expect(isDeclaredSchemaFieldOmitted('denoise', cv)).toBe(true);
+    // Novita: sampler_name declared; scheduler absent → omit.
+    const nv = withSchema(['prompt', 'seed', 'steps', 'guidance', 'sampler', 'sampler_name']);
+    expect(isDeclaredSchemaFieldOmitted('sampler_name', nv)).toBe(false);
+    expect(isDeclaredSchemaFieldOmitted('scheduler', nv)).toBe(true);
+  });
 });

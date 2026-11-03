@@ -50,9 +50,9 @@ function friendly(provider: string): string {
 
 /**
  * Seed Checkpoint custom_parameters._canvas.schemaProperties from StdSpec.omit (MuAPI path).
- * Listed props = fields the endpoint accepts; omitted sampler/scheduler/denoise stay off the list
- * so NodeItem hideSamplerShell / schemaSendStatus can hide empty widgets before a live Schema GET.
- * Never overwrites an existing schemaProperties array (MuAPI / hand-seeded).
+ * Listed props = fields the endpoint accepts (including sampler/scheduler/denoise when NOT omitted).
+ * Omitted sampler/scheduler/denoise stay off the list so NodeItem hideSamplerShell can hide empty
+ * widgets before a live Schema GET. Never overwrites an existing schemaProperties array (MuAPI / hand-seeded).
  */
 function schemaPropertiesForOmit(spec: StdSpec, omit: Set<NonNullable<StdSpec['omit']>[number]>): string[] {
   const props: string[] = ['prompt'];
@@ -66,7 +66,12 @@ function schemaPropertiesForOmit(spec: StdSpec, omit: Set<NonNullable<StdSpec['o
   if (spec.hasNegative !== false) props.push('negative_prompt');
   const hasRealLora = (spec.loras ?? []).some((l) => Boolean(l.name));
   if (hasRealLora || spec.hasLora) props.push('loras', 'lora_url', 'lora_weight', 'lora_weights');
-  // Omitted sampler/scheduler/denoise intentionally absent — empty shells must hide.
+  // Include ONLY non-omitted sampler/scheduler/denoise. Omitting them keeps them off the
+  // list so hideSamplerShell can hide empty widgets. Seeding a supported value while leaving
+  // the field off this list falsely triggers 「已填，此模型不支持」amber (ModelsLab/Civitai/Novita).
+  if (!omit.has('sampler')) props.push('sampler', 'sampler_name');
+  if (!omit.has('scheduler')) props.push('scheduler');
+  if (!omit.has('denoise')) props.push('denoise', 'strength');
   return props;
 }
 

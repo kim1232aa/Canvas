@@ -328,6 +328,39 @@ describe('standard workflow presets (23 T2I + 6 I2V)', () => {
     expect(p.spatialFrames?.[0]?.params?.height).toBeUndefined();
   });
 
+  it('ModelsLab/Civitai/Novita seed Schema-supported sampler fields into schemaProperties (no false amber omit)', () => {
+    // ModelsLab: official scheduler (UniPC…); sampler unsupported → omit keeps it off the list.
+    {
+      const p = preset('std-modelslab-t2i');
+      const ks = p.nodes.find(n => n.type === 'KSampler')!;
+      expect(ks.values.scheduler).toBe('UniPCMultistepScheduler');
+      expect(ks.values.sampler_name).toBeUndefined();
+      const props = JSON.parse(String(loader(p.id)!.values.custom_parameters || '{}'))?._canvas?.schemaProperties as string[];
+      expect(props).toEqual(expect.arrayContaining(['scheduler', 'steps', 'guidance', 'seed', 'loras']));
+      expect(props).not.toEqual(expect.arrayContaining(['sampler', 'sampler_name', 'denoise']));
+    }
+    // Civitai krea2: providerSchema marks sampler+scheduler supported; width/height omitted.
+    {
+      const p = preset('std-civitai-t2i');
+      const ks = p.nodes.find(n => n.type === 'KSampler')!;
+      expect(ks.values.sampler_name).toBe('euler');
+      expect(ks.values.scheduler).toBe('simple');
+      const props = JSON.parse(String(loader(p.id)!.values.custom_parameters || '{}'))?._canvas?.schemaProperties as string[];
+      expect(props).toEqual(expect.arrayContaining(['sampler', 'sampler_name', 'scheduler', 'seed', 'steps']));
+      expect(props).not.toEqual(expect.arrayContaining(['denoise', 'width', 'height']));
+    }
+    // Novita: SdImageRequest has sampler_name; no scheduler → omit scheduler/denoise only.
+    {
+      const p = preset('std-novita-t2i');
+      const ks = p.nodes.find(n => n.type === 'KSampler')!;
+      expect(ks.values.sampler_name).toBe('euler');
+      expect(ks.values.scheduler).toBeUndefined();
+      const props = JSON.parse(String(loader(p.id)!.values.custom_parameters || '{}'))?._canvas?.schemaProperties as string[];
+      expect(props).toEqual(expect.arrayContaining(['sampler', 'sampler_name', 'steps', 'guidance', 'seed']));
+      expect(props).not.toEqual(expect.arrayContaining(['scheduler', 'denoise']));
+    }
+  });
+
   it('agnes stays compact Checkpoint→CLIP→Save with placeholder prompt', () => {
     const p = preset('std-agnes-t2i');
     expect(p.nodes.map(n => n.type)).toEqual(['CheckpointLoaderSimple', 'CLIPTextEncode', 'SaveImage']);
