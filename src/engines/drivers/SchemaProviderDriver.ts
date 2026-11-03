@@ -180,7 +180,13 @@ export class SchemaProviderDriver extends BaseEngineDriver {
     if (credentialRef) headers['x-canvas-credential-ref'] = credentialRef;
     const workflowSnapshot = params.workflowSnapshot;
     const extra = asRecord(params.extraParams);
-    const custom = asRecord(extra.custom_parameters);
+    const customSrc = asRecord(extra.custom_parameters);
+    const custom = { ...customSrc };
+    // OpenWorks checkpoint/clip_skip are live named extras (body.checkpoint), not catalog Schema keys.
+    // Leaving them inside custom_parameters makes buildOpenWorksRequest local-400 「不在该模型 Schema」.
+    if (this.id === 'openworks') {
+      for (const k of ['checkpoint', 'sdModel', 'sd_model', 'clip_skip', 'clipSkip']) delete custom[k];
+    }
     const body = {
       model: params.model,
       prompt: params.prompt,
@@ -200,8 +206,8 @@ export class SchemaProviderDriver extends BaseEngineDriver {
       resolution: extra.resolution,
       output_format: extra.output_format,
       loras: params.loras,
-      checkpoint: extra.checkpoint ?? extra.sdModel ?? custom.checkpoint ?? custom.sdModel,
-      clip_skip: extra.clip_skip ?? extra.clipSkip ?? custom.clip_skip,
+      checkpoint: extra.checkpoint ?? extra.sdModel ?? customSrc.checkpoint ?? customSrc.sdModel,
+      clip_skip: extra.clip_skip ?? extra.clipSkip ?? customSrc.clip_skip,
       custom_parameters: custom,
       workflowSnapshot,
     };

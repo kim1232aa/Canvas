@@ -1,5 +1,41 @@
 # ComfyCanvas Studio：开发交接、产品缺口与验收手册
 
+## 2026-11-03 OpenWorks 前端真出图（产品核）
+
+| 项 | 判定 | 要点 / 证据 |
+| --- | --- | --- |
+| OpenWorks 配方+3 LoRA | **PASS_GENERATION** | hist `hist_1793693239642_fo6ux`；保存节点新图+历史缩略；实际发送 checkpoint/seed1388322349/steps10/cfg1/neg/三 LoRA@1。证据 `temp/e2e/openworks-fe-gen-2026-11-03/ow-01～03`。驱动侧：custom_parameters 内 checkpoint/clip_skip 提到命名字段以免本地 Schema 400（本提交 SchemaProviderDriver）。下一步 Replicate 前端真跑。 |
+
+
+## 2026-11-03 Civitai Option A 前端欠费透传（产品核）
+
+| 项 | 判定 | 要点 / 证据 |
+| --- | --- | --- |
+| Civitai SD1 AIR+LoRA | **PASS_BILLING**（非出图） | hist `hist_1793692148134_ca449`；节点+历史同款 `insufficientBuzz`；actualRequest LoRA `82098@87153` @0.7。证据 `temp/e2e/fal-civitai-fe-2026-11-03/civitai-01～03`。下一步 **OpenWorks** 冲真出图（WaveSpeed 今日已落过不刷）。 |
+
+
+## 2026-11-03 Fal flux-lora 前端欠费透传（产品核）
+
+| 项 | 判定 | 要点 / 证据 |
+| --- | --- | --- |
+| Fal `fal-ai/flux-lora` | **PASS_BILLING**（非出图） | hist `hist_1793690450573_bmwwg`；节点+历史同款 `403 User is locked. Reason: TOP_UP.`；actualRequest 含 LoRA path@1.1 与 seed/steps/guidance/size。证据 `temp/e2e/fal-civitai-fe-2026-11-03/fal-01～03`。下一步 Civitai Option A 冲真出图；失败卡视觉暂缓。 |
+
+
+## 2026-11-03 保存节点失败原文透传（产品核）
+
+| 项 | 判定 | 要点 / 证据 |
+| --- | --- | --- |
+| 保存节点失败文案 | **产品过**（失败透传，非出图） | 节点预览与历史同款完整上游原文（含 Please bind Alibaba Cloud…）；不再「原因见采样器」、不只 HTTP 401。hist `hist_1793689648253_aks0z`。证据 `temp/e2e/ux-saveimage-badge-2026-11-03/06-saveimage-unclipped.png` + `06-history-same-run.png`。角标「生成请求」与历史「张出图」分列。 |
+
+
+
+## 2026-11-03 WaveSpeed 同会话落图（产品核）
+
+| 项 | 判定 | 要点 / 证据 |
+| --- | --- | --- |
+| WaveSpeed 同会话重交 | **PASS_GENERATION**（产品核；补此前混态拒收） | hist `hist_1793687045083_fuctj`；保存节点松鼠图无「不是本次会话」；角标「生成请求 13」；actualRequest 含 LoRA path+scale1.1、seed42、steps36、guidance3.5、832×1216。证据 `/workspace/canvas/temp/e2e/wavespeed/fe-same-session-2026-11-03/`（01–03+NOTES）。既有 WaveSpeed PASS 不降级。 |
+| 失败态保存节点露上游原文 | **已过**（见上节 2026-11-03 保存节点失败原文透传） | — |
+
 ## 2026-10-16 晚间当前状态（优先于下文更早日期标题）
 
 ### fix15.1 / fix16（本段优先）
