@@ -59,11 +59,6 @@ export function plainFailureConclusion(detail: string | null | undefined): strin
   ) {
     return LORA_UNSUPPORTED_MESSAGE;
   }
-  // HF / KeyPool billing rotate — keep first-line plain; do not invent paths.
-  if (/几把都额度不够|这把额度不够，已换下一把|这把额度不够|前 \d+ 把额度不够，已换到有额度的/.test(text)) {
-    const m = text.match(/几把都额度不够|这把额度不够，已换下一把|这把额度不够|前 \d+ 把额度不够，已换到有额度的/);
-    return m ? m[0] : text;
-  }
   // ModelScope CN/AI: upstream 500 「模型不存在」 / apiInferModelDownload — never leave JSON/[500] on the primary line.
   if (
     (/魔搭|modelscope/i.test(text) && /模型不存在/.test(text)) ||

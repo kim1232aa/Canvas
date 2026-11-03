@@ -54,7 +54,7 @@ describe('model-schema failure is attributed to the model (loader) node, not the
       .rejects.toMatchObject({ name: 'SchemaPrefetchError' });
     const last = (id: string) => calls.filter((c) => c[0] === id).at(-1);
     expect(last('c')?.[1]).toBe('error');
-    expect(last('c')?.[2]?.split('\n')[0]).toBe(`没出图：找不到模型 ${MODEL}，请检查模型名`);
+    expect(last('c')?.[2]?.split('\n')[0]).toBe(`读取模型 ${MODEL} 的参数失败（HTTP 400）`);
     expect(last('c')?.[2]).toContain(RAW); // upstream body verbatim below the headline
     expect(last('k')?.[1]).toBe('idle'); // left running → reset (runningIds), never error
     expect(last('s')?.[1]).toBe('idle');
@@ -72,13 +72,13 @@ describe('model-schema failure is attributed to the model (loader) node, not the
   it('copy: full model name (never truncated), headline + raw body; non-400/404 not claimed as 找不到', () => {
     expect(isSchemaPrefetchError(schemaErr())).toBe(true);
     const msg = schemaFailureNodeMessage(schemaErr());
-    expect(msg.split('\n')[0]).toBe(`没出图：找不到模型 ${MODEL}，请检查模型名`);
+    expect(msg.split('\n')[0]).toBe(`读取模型 ${MODEL} 的参数失败（HTTP 400）`);
     expect(msg.split('\n').slice(1).join('\n')).toBe(RAW);
     expect(msg).not.toContain('/api/model-schema');
     expect(msg).not.toContain('上一次');
-    expect(schemaFailureHeadline(MODEL, 404)).toContain('找不到模型');
-    expect(schemaFailureHeadline(MODEL, 401)).toBe(`没出图：读取模型 ${MODEL} 的参数失败（HTTP 401），请检查 API Key`);
-    expect(schemaFailureHeadline(MODEL, 503)).toBe(`没出图：读取模型 ${MODEL} 的参数失败（HTTP 503）`);
+    expect(schemaFailureHeadline(MODEL, 404)).toBe(`读取模型 ${MODEL} 的参数失败（HTTP 404）`);
+    expect(schemaFailureHeadline(MODEL, 401)).toBe(`读取模型 ${MODEL} 的参数失败（HTTP 401）`);
+    expect(schemaFailureHeadline(MODEL, 503)).toBe(`读取模型 ${MODEL} 的参数失败（HTTP 503）`);
   });
 
   it('target resolution walks SaveImage → VAE → KSampler → loader', () => {
@@ -110,10 +110,10 @@ describe('model-schema failure is attributed to the model (loader) node, not the
 
   it('toast title = headline (full model name), body = one status line, no duplicated HTTP', () => {
     const t = schemaFailureToast(schemaErr(400), '运行：保存图像');
-    expect(t.title).toBe(`没出图：找不到模型 ${MODEL}，请检查模型名`);
+    expect(t.title).toBe(`读取模型 ${MODEL} 的参数失败（HTTP 400）`);
     expect(t.title).toContain(MODEL); // full name, never ellipsized in the string
     expect(t.message.split('\n')[0]).toBe(schemaFailureToastBody(400));
-    expect(t.message.split('\n')[0]).toBe('查模型参数时返回 HTTP 400，生成请求没有发出去');
+    expect(t.message.split('\n')[0]).toBe('查模型参数时返回 HTTP 400');
     expect(t.title).not.toMatch(/^HTTP /);
     // no 「HTTP 400 · HTTP 400」
     expect(t.title).not.toContain('HTTP 400 · HTTP 400');
@@ -155,7 +155,7 @@ describe('NodeItem shows one plain schema error (headline + collapsed 详情), n
 
   it('normal zoom: headline visible; raw only inside collapsed 详情; 异常 badge does not replace title', () => {
     const html = render(1);
-    expect(html).toContain(`没出图：找不到模型 ${MODEL}，请检查模型名`);
+    expect(html).toContain(`读取模型 ${MODEL} 的参数失败（HTTP 400）`);
     expect(html).toContain('data-testid="node-error-details"');
     expect(html).toContain('详情');
     expect(html).toContain('data-testid="node-error-raw"');
@@ -165,7 +165,7 @@ describe('NodeItem shows one plain schema error (headline + collapsed 详情), n
     expect(html).not.toContain('node-zoom-alerts');
     expect(html).not.toContain('上一次');
     expect(html).not.toContain('GET /api/model-schema');
-    expect(count(html, `没出图：找不到模型 ${MODEL}`)).toBe(2); // visible text + 异常 chip tooltip only
+    expect(count(html, `读取模型 ${MODEL} 的参数失败（HTTP 400）`)).toBe(2); // visible text + 异常 chip tooltip only
   });
 
   it('zoomed out: error stays inside the node below the title (never floats above covering buttons)', () => {
@@ -173,7 +173,7 @@ describe('NodeItem shows one plain schema error (headline + collapsed 详情), n
     expect(html).toContain('data-testid="node-error-banner"');
     expect(html).toContain('data-testid="node-error-strip"');
     expect(html).toContain('data-testid="node-error-details"');
-    expect(html).toContain(`没出图：找不到模型 ${MODEL}，请检查模型名`);
+    expect(html).toContain(`读取模型 ${MODEL} 的参数失败（HTTP 400）`);
     // Must not float a duplicate error above the header
     expect(html).not.toContain('node-zoom-alerts');
     // Title + action buttons still rendered (clickable; strip is below header in DOM order)

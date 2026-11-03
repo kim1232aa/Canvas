@@ -30,9 +30,9 @@ describe('clean-1149 #1 Schema GET 401 toast = HTTP status + upstream body', () 
   it('toastFromRunError recovers SchemaPrefetchError without .data → plain headline title', () => {
     const err = Object.assign(new Error(`GET /api/model-schema?provider=together&model=x → HTTP 401 · 生成 POST 未发送\n${body}`), { name: 'SchemaPrefetchError' });
     const t = toastFromRunError(err, '运行：保存图像')!;
-    expect(t.title).toBe('没出图：读取模型 x 的参数失败（HTTP 401），请检查 API Key');
+    expect(t.title).toBe('读取模型 x 的参数失败（HTTP 401）');
     expect(t.title).not.toMatch(/^HTTP /);
-    expect(t.message.split('\n')[0]).toBe('查模型参数时返回 HTTP 401，生成请求没有发出去');
+    expect(t.message.split('\n')[0]).toBe('查模型参数时返回 HTTP 401');
     expect(t.message).toContain(body); // full body under 展开全文
   });
   it('err.data from prefetchFailure → same plain schema toast', () => {

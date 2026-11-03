@@ -29,9 +29,9 @@ it('unicodeSafeSlice never cuts mid-grapheme',()=>{
 });
 
 it('maps HF billing key-rotate summary without path jargon',()=>{
-  expect(plainFailureConclusion('几把都额度不够')).toBe('几把都额度不够');
-  expect(userFacingApiFailure(402,{error:'几把都额度不够',keyRotation:{summary:'几把都额度不够'}},'/api/engine/huggingface/generate')).toBe('几把都额度不够');
-  expect(userFacingApiFailure(402,{error:'x',keyRotation:{summary:'这把额度不够，已换下一把'}},'/api/x')).toBe('这把额度不够，已换下一把');
+  expect(plainFailureConclusion('几把都额度不够')).toBeNull(); // no invented summary mapping
+  expect(userFacingApiFailure(402,{error:'x',keyRotation:{summary:'hf_0...a: HTTP 402: Purchase pre-paid credits'}},'/api/engine/huggingface/generate')).toBe('hf_0...a: HTTP 402: Purchase pre-paid credits');
+  expect(userFacingApiFailure(402,{error:'x',keyRotation:{summary:'完成\nhf_0...a: HTTP 402: no credits'}},'/api/x')).toBe('完成\nhf_0...a: HTTP 402: no credits');
 });
 
 it('maps ModelScope CN 模型不存在 to plain conclusion without JSON or [500]',()=>{

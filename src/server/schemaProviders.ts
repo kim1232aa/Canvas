@@ -625,6 +625,7 @@ export function makeSchemaProviderReader(provider:Provider,depFetch:Dependencies
   return async(url:string,init?:RequestInit)=>{
     const r=await depFetch({provider,route,key},url,{...init,headers:{...headers,...init?.headers},signal:AbortSignal.timeout(60000)});
     const raw=await r.text();let data:any;
+    if(!r.ok){let d:any;try{d=JSON.parse(raw);}catch{/* raw verbatim */}if(d===undefined)throw Object.assign(new Error(`HTTP ${r.status}: ${raw}`),{status:r.status,rawResponse:raw,endpoint:url,errorSource:'upstream'});}
     try{data=JSON.parse(raw);}catch(parseErr:any){
       throw Object.assign(new Error(`HTTP ${r.status}: 响应非 JSON: ${parseErr?.message || parseErr}\n${raw}`),{status:r.status,rawResponse:raw,endpoint:url,errorSource:r.ok?'upstream-protocol':'upstream',stack:parseErr?.stack});
     }

@@ -37,7 +37,7 @@ describe('summarizeKeyRotation', () => {
   const billing = (i: number): KeyAttemptRecord => ({
     index: i,
     maskedKey: `hf_${i}...xxxx`,
-    result: '额度不够',
+    result: 'HTTP 402: no remaining credits',
     status: 402,
     responseBody: 'no remaining credits',
     outcome: 'billing',
@@ -52,22 +52,22 @@ describe('summarizeKeyRotation', () => {
   const auth = (i: number): KeyAttemptRecord => ({
     index: i,
     maskedKey: `hf_${i}...zzzz`,
-    result: '鉴权失败',
+    result: 'HTTP 401: Unauthorized',
     status: 401,
     responseBody: 'Unauthorized',
     outcome: 'fatal',
   });
 
-  it('success after one billing fail → 这把额度不够，已换下一把', () => {
-    expect(summarizeKeyRotation([billing(0), ok(1)])).toBe('这把额度不够，已换下一把');
+  it('success after one billing fail → 完成 + the failed key upstream text verbatim', () => {
+    expect(summarizeKeyRotation([billing(0), ok(1)])).toBe('完成\nhf_0...xxxx: HTTP 402: no remaining credits');
   });
 
-  it('all billing → 几把都额度不够', () => {
-    expect(summarizeKeyRotation([billing(0), billing(1), billing(2)])).toBe('几把都额度不够');
+  it('all billing → one verbatim upstream line per key', () => {
+    expect(summarizeKeyRotation([billing(0), billing(1), billing(2)])).toBe([0,1,2].map(i=>`hf_${i}...xxxx: HTTP 402: no remaining credits`).join('\n'));
   });
 
-  it('single billing → 这把额度不够', () => {
-    expect(summarizeKeyRotation([billing(0)])).toBe('这把额度不够');
+  it('single billing → that key upstream text verbatim', () => {
+    expect(summarizeKeyRotation([billing(0)])).toBe('hf_0...xxxx: HTTP 402: no remaining credits');
   });
 
   it('clean success with no billing → 完成', () => {
@@ -96,10 +96,10 @@ describe('runWithBillingKeyRotate', () => {
     if (!out.ok) return;
     expect(seen).toEqual(['hf_aaaa1111aaaa', 'hf_bbbb2222bbbb']);
     expect(out.attempts).toHaveLength(2);
-    expect(out.attempts[0]).toMatchObject({outcome: 'billing', result: '额度不够', status: 402});
+    expect(out.attempts[0]).toMatchObject({outcome: 'billing', result: 'HTTP 402: You have no remaining credits', status: 402});
     expect(out.attempts[0].responseBody).toContain('no remaining credits');
     expect(out.attempts[1]).toMatchObject({outcome: 'success', result: '成功'});
-    expect(out.keyRotation.summary).toBe('这把额度不够，已换下一把');
+    expect(out.keyRotation.summary).toContain('HTTP 402: You have no remaining credits');
     expect(out.value).toEqual({image: 'ok'});
   });
 
@@ -116,7 +116,7 @@ describe('runWithBillingKeyRotate', () => {
     if (out.ok) return;
     expect(out.attempts).toHaveLength(1);
     expect(out.attempts[0].outcome).toBe('fatal');
-    expect(out.attempts[0].result).toBe('鉴权失败');
+    expect(out.attempts[0].result).toBe('HTTP 401: Unauthorized');
     expect(out.lastStatus).toBe(401);
   });
 
@@ -131,7 +131,7 @@ describe('runWithBillingKeyRotate', () => {
     if (out.ok) return;
     expect(out.attempts).toHaveLength(2);
     expect(out.attempts.every((a) => a.outcome === 'billing')).toBe(true);
-    expect(out.keyRotation.summary).toBe('几把都额度不够');
+    expect(out.keyRotation.summary).toContain('HTTP 402: INSUFFICIENT_CREDITS');
     expect(out.lastStatus).toBe(402);
     expect(out.lastBody).toContain('INSUFFICIENT_CREDITS');
   });
@@ -147,7 +147,7 @@ describe('runWithBillingKeyRotate', () => {
     expect(attempt).toHaveBeenCalledTimes(1);
     expect(out.ok).toBe(false);
     if (out.ok) return;
-    expect(out.keyRotation.summary).toBe('这把额度不够');
+    expect(out.keyRotation.summary).toContain('HTTP 402: no remaining credits');
     expect(out.keyRotation.pinned).toBe(true);
   });
 
@@ -161,7 +161,7 @@ describe('runWithBillingKeyRotate', () => {
     });
     expect(attempt).toHaveBeenCalledTimes(1);
     if (out.ok) return;
-    expect(out.attempts[0].result).toBe('上游服务异常');
+    expect(out.attempts[0].result).toBe('HTTP 502: bad gateway');
   });
 
   it('local validation stops without rotate and keeps payload', async () => {
@@ -186,7 +186,7 @@ describe('runWithBillingKeyRotate', () => {
 
 describe('plainResultForAttempt + buildKeyRotationPayload', () => {
   it('keeps attempt rows short and free of path jargon', () => {
-    expect(plainResultForAttempt('billing', 402, 'x')).toBe('额度不够');
+    expect(plainResultForAttempt('billing', 402, 'x')).toBe('HTTP 402: x');
     expect(plainResultForAttempt('success', 200)).toBe('成功');
     const payload = buildKeyRotationPayload(
       [

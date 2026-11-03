@@ -51,9 +51,9 @@ export function schemaFailureRawBody(err: unknown): string {
  */
 export function schemaFailureHeadline(model: string, status?: number): string {
   const name = model || '（未填模型名）';
-  if (status === undefined || status === 400 || status === 404) return `没出图：找不到模型 ${name}，请检查模型名`;
-  if (status === 401 || status === 403) return `没出图：读取模型 ${name} 的参数失败（HTTP ${status}），请检查 API Key`;
-  return `没出图：读取模型 ${name} 的参数失败（HTTP ${status}）`;
+  // 雁 rule: status + upstream body only; no guessed cause (no 「请检查 API Key / 模型名」).
+  if (status === undefined) return `读取模型 ${name} 的参数失败`;
+  return `读取模型 ${name} 的参数失败（HTTP ${status}）`;
 }
 
 /** Node errorMessage: headline on line 1, upstream body verbatim below (UI shows raw behind a collapsed 「详情」). */
@@ -65,8 +65,8 @@ export function schemaFailureNodeMessage(err: unknown, fallbackModel?: string): 
 
 /** One plain body line for the toast — status once, no duplicated HTTP, no copy of the node headline. */
 export function schemaFailureToastBody(status?: number): string {
-  if (status === undefined) return '查模型参数失败，生成请求没有发出去';
-  return `查模型参数时返回 HTTP ${status}，生成请求没有发出去`;
+  if (status === undefined) return '查模型参数失败';
+  return `查模型参数时返回 HTTP ${status}`;
 }
 
 /**
@@ -152,7 +152,7 @@ export function isSchemaFailureToastForModel(toast: { type?: string; title?: str
   const model = String(failedModel || '').trim();
   if (!model) return false;
   const blob = `${toast.title || ''}\n${toast.message || ''}`;
-  return blob.includes(model) && /没出图/.test(blob);
+  return blob.includes(model) && /读取模型 .* 的参数失败/.test(blob);
 }
 
 /**

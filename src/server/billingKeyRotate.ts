@@ -9,7 +9,7 @@ export type BillingAttemptOutcome = 'billing' | 'success' | 'fatal';
 export interface KeyAttemptRecord {
   index: number;
   maskedKey: string;
-  /** One short plain Chinese line for the attempt row (额度不够 / 成功 / 鉴权失败 …). */
+  /** Attempt row: 「成功」 or upstream 「HTTP <status>: <body>」 verbatim. */
   result: string;
   status: number | null;
   responseBody?: string;
@@ -34,50 +34,23 @@ export function isBillingCreditsError(status: number | null | undefined, bodyTex
   );
 }
 
+/** 雁 rule: the attempt row is the upstream status + body verbatim — never our own summary. */
 export function plainResultForAttempt(
   outcome: BillingAttemptOutcome,
   status: number | null,
   bodyText?: string,
 ): string {
   if (outcome === 'success') return '成功';
-  if (outcome === 'billing') return '额度不够';
-  if (status === 401 || status === 403) return '鉴权失败';
-  if (status != null && status >= 500) return '上游服务异常';
-  if (status === 400 || status === 422) return '参数或请求不被接受';
-  if (status === 429) return '请求过于频繁';
-  const first = String(bodyText || '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 60);
-  return first || (status != null ? `失败 HTTP ${status}` : '失败');
+  return `HTTP ${status ?? '—'}: ${String(bodyText ?? '')}`;
 }
 
-/**
- * One plain Chinese conclusion for the exec-log first line.
- * Never stacks paths / schema jargon.
- */
+/** Per-key lines, upstream text verbatim: 「<masked key>: HTTP <status>: <body>」. */
 export function summarizeKeyRotation(attempts: KeyAttemptRecord[]): string {
   if (!attempts.length) return '请求失败';
-  const billingCount = attempts.filter((a) => a.outcome === 'billing').length;
   const success = attempts.some((a) => a.outcome === 'success');
-  const last = attempts[attempts.length - 1];
-
-  if (success) {
-    if (billingCount === 0) return '完成';
-    if (billingCount === 1) return '这把额度不够，已换下一把';
-    return `前 ${billingCount} 把额度不够，已换到有额度的`;
-  }
-
-  if (billingCount === attempts.length) {
-    if (attempts.length === 1) return '这把额度不够';
-    return '几把都额度不够';
-  }
-
-  if (billingCount > 0 && last.outcome === 'fatal') {
-    return `换过 ${billingCount} 把后仍失败：${last.result}`;
-  }
-
-  return last.result || '请求失败';
+  const failed = attempts.filter((a) => a.outcome !== 'success').map((a) => `${a.maskedKey}: ${a.result}`);
+  if (success) return failed.length ? ['完成', ...failed].join('\n') : '完成';
+  return failed.join('\n');
 }
 
 export function buildKeyRotationPayload(
