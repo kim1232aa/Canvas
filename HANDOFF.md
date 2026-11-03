@@ -1,5 +1,11 @@
 # ComfyCanvas Studio：开发交接、产品缺口与验收手册
 
+## 2026-11-03 魔搭国内站前端真出图（产品核）
+
+| 项 | 判定 | 要点 / 证据 |
+| --- | --- | --- |
+| 魔搭 CN Z-Image-Turbo+Realism LoRA | **PASS_GENERATION** | hist `hist_1793695144423_1ms48`；保存节点新图+历史缩略同图；实际发送 model/prompt/832x1216/steps8/guidance1/seed42/`loras` Realism@1。证据 `temp/e2e/modelscope-cn-fe-gen-2026-11-03/01～03`。余额探针：Runware/Agnes/SenseNova 无 Key；Sogni CF1010。今日有额度落图已齐 WS/OW/魔搭CN；下一步改标准工作流预设或视频其余家，勿再连刷欠费卡。 |
+
 ## 2026-11-03 Replicate 前端欠费透传（产品核）
 
 | 项 | 判定 | 要点 / 证据 |
