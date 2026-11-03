@@ -58,9 +58,10 @@ describe('MageDriver', () => {
     expect(body.resolution).toBe('2K');
     expect(body.seed).toBe(11);
     expect(body.loras).toEqual([]);
+    // User-filled width/height are forwarded as-is (Mango additionalProperties:true pass-through).
+    expect(body.width).toBe(1024);
+    expect(body.height).toBeDefined();
     for (const banned of [
-      'width',
-      'height',
       'steps',
       'cfg',
       'negative_prompt',

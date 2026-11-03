@@ -43,8 +43,6 @@ export function handleMageGenerate(deps: MageRouteDeps) {
       return res.status(400).json({
         error: error.message,
         errorSource: 'local',
-        ...(Array.isArray(error?.schemaFields) ? { schemaFields: error.schemaFields } : {}),
-        ...(error?.blockedField && typeof error.blockedField === 'object' ? { blockedField: error.blockedField } : {}),
       });
     }
 
@@ -80,6 +78,8 @@ export function handleMageGenerate(deps: MageRouteDeps) {
           endpoint,
           rawResponse,
           actualRequest,
+          passThroughFields: mapped.passThroughFields,
+          schemaFields: mapped.schemaFields,
         });
       }
 
@@ -97,6 +97,8 @@ export function handleMageGenerate(deps: MageRouteDeps) {
           endpoint,
           rawResponse: upstreamRaw,
           actualRequest,
+          passThroughFields: mapped.passThroughFields,
+          schemaFields: mapped.schemaFields,
         });
       }
       let parsed: ReturnType<typeof parseMageRequestResponse>;
@@ -111,6 +113,8 @@ export function handleMageGenerate(deps: MageRouteDeps) {
           endpoint,
           rawResponse: upstreamRaw,
           actualRequest,
+          passThroughFields: mapped.passThroughFields,
+          schemaFields: mapped.schemaFields,
         });
       }
 
@@ -133,6 +137,8 @@ export function handleMageGenerate(deps: MageRouteDeps) {
             endpoint,
             rawResponse: data,
             actualRequest,
+            passThroughFields: mapped.passThroughFields,
+            schemaFields: mapped.schemaFields,
           });
         }
 
@@ -152,6 +158,8 @@ export function handleMageGenerate(deps: MageRouteDeps) {
               errorSource: 'network',
               endpoint: pollUrl,
               actualRequest,
+              passThroughFields: mapped.passThroughFields,
+              schemaFields: mapped.schemaFields,
               stack: pollNetErr.stack,
             });
           }
@@ -173,6 +181,8 @@ export function handleMageGenerate(deps: MageRouteDeps) {
               rawResponse: pollErrText,
               endpoint: pollUrl,
               actualRequest,
+              passThroughFields: mapped.passThroughFields,
+              schemaFields: mapped.schemaFields,
             });
           }
 
@@ -189,6 +199,8 @@ export function handleMageGenerate(deps: MageRouteDeps) {
               endpoint: pollUrl,
               rawResponse: pollRaw,
               actualRequest,
+              passThroughFields: mapped.passThroughFields,
+              schemaFields: mapped.schemaFields,
             });
           }
           try {
@@ -202,6 +214,8 @@ export function handleMageGenerate(deps: MageRouteDeps) {
               endpoint: pollUrl,
               rawResponse: pollRaw,
               actualRequest,
+              passThroughFields: mapped.passThroughFields,
+              schemaFields: mapped.schemaFields,
             });
           }
         }
@@ -215,6 +229,8 @@ export function handleMageGenerate(deps: MageRouteDeps) {
             endpoint: pollUrl,
             rawResponse: pollData,
             actualRequest,
+            passThroughFields: mapped.passThroughFields,
+            schemaFields: mapped.schemaFields,
           });
         }
       }
@@ -227,6 +243,8 @@ export function handleMageGenerate(deps: MageRouteDeps) {
           endpoint,
           rawResponse: pollData,
           actualRequest,
+          passThroughFields: mapped.passThroughFields,
+          schemaFields: mapped.schemaFields,
         });
       }
 
@@ -244,14 +262,18 @@ export function handleMageGenerate(deps: MageRouteDeps) {
           seed: typeof actualRequest.seed === 'number' ? actualRequest.seed : parsed.seed ?? null,
           steps: null,
           cfg: null,
-          width: null,
-          height: null,
+          // Official Request.result.width/height = upstream actual output pixels (not the canvas value).
+          width: parsed.width ?? null,
+          height: parsed.height ?? null,
           loras: [],
           requestMetadata: {
             requestedParameters: sanitize(
               Object.fromEntries(Object.entries(req.body || {}).filter(([k]) => k !== 'workflowSnapshot'))
             ),
             actualParameters: actualRequest,
+            schemaFields: mapped.schemaFields,
+            passThroughFields: mapped.passThroughFields,
+            ...(parsed.width && parsed.height ? { effectiveParameters: { width: parsed.width, height: parsed.height } } : {}),
             overrides: mapped.overrides,
             upstreamEndpoint: endpoint,
           },
@@ -265,6 +287,8 @@ export function handleMageGenerate(deps: MageRouteDeps) {
             actualModel: mapped.actualModel,
             requestId: parsed.requestId ?? null,
             actualRequest,
+            passThroughFields: mapped.passThroughFields,
+            schemaFields: mapped.schemaFields,
             overrides: mapped.overrides,
             upstreamEndpoint: endpoint,
           },

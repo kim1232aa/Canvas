@@ -5,6 +5,9 @@ export const MAGE_DOC = 'https://docs.mage.space/api/models/mango';
 export const MAGE_DEFAULT_BASE = 'https://api.mage.space';
 export interface MageImageRequest {
   endpoint: string;
+  /** Canvas fields forwarded unchanged though the official schema does not list them. */
+  passThroughFields: string[];
+  schemaFields: string[];
   payload: Record<string, unknown>;
   overrides: CustomOverride[];
   actualModel: string;
@@ -16,6 +19,9 @@ export interface MageParsedResponse {
   isPending: boolean;
   imageUrl?: string;
   seed?: number | null;
+  /** Official Request.result.width/height — upstream actual output pixels. */
+  width?: number;
+  height?: number;
   statusUrl?: string;
   cancelUrl?: string;
   raw: unknown;
@@ -23,7 +29,24 @@ export interface MageParsedResponse {
 
 const isProvided = (value: unknown): boolean => value !== undefined && value !== null && value !== '';
 
-const REFUSED_CANVAS_FIELDS = [
+/** Official Mango wire fields (docs.mage.space/api/models/mango OpenAPI properties). */
+export const MAGE_SCHEMA_FIELDS = [
+  'prompt',
+  'model_id',
+  'seed',
+  'aspect_ratio',
+  'resolution',
+  'image',
+  'additional_images',
+] as const;
+
+/**
+ * Canvas fields the Mango Schema does not list. The official request schema is
+ * `additionalProperties: true` and the doc says "Fields the schema does not list pass
+ * through to the model unchanged." — so these are forwarded as filled (never dropped,
+ * never renamed, never refused locally). Whether they take effect is decided upstream.
+ */
+const CANVAS_PASS_THROUGH_FIELDS = [
   'negative_prompt',
   'steps',
   'cfg',
@@ -36,33 +59,7 @@ const REFUSED_CANVAS_FIELDS = [
   'height',
 ] as const;
 
-/** Official Mango wire fields (docs.mage.space/api/models/mango) — history uses these to label canvas leftovers as 该端点不支持, never 拟发送. */
-export const MAGE_SCHEMA_FIELDS = [
-  'prompt',
-  'model_id',
-  'seed',
-  'aspect_ratio',
-  'resolution',
-  'image',
-  'additional_images',
-] as const;
-
-/** Local refuse with schemaFields so history cards do not mark rejected canvas fields as 拟发送. */
-export class MageSchemaRefuseError extends Error {
-  readonly errorSource = 'local' as const;
-  readonly schemaFields: string[];
-  readonly refusedFields: string[];
-  readonly blockedField: { from: string; value: unknown; reason: string };
-  constructor(refused: string[], body: Record<string, unknown>) {
-    const reason = `Mage Mango 官方 Schema 不接受这些画布字段，不会静默丢弃：${refused.join(', ')}`;
-    super(reason);
-    this.name = 'MageSchemaRefuseError';
-    this.schemaFields = [...MAGE_SCHEMA_FIELDS];
-    this.refusedFields = refused;
-    const primary = refused[0];
-    this.blockedField = { from: primary, value: body[primary], reason };
-  }
-}
+export const MAGE_PASS_THROUGH_NOTE = '官方参数表未列，已原样转交，是否生效以出图为准';
 
 /** Mango has no LoRA fields — refuse non-empty loras[] instead of silently dropping. */
 export function assertNoMageLoras(body: Record<string, unknown>): void {
@@ -82,11 +79,6 @@ export function buildMageImageRequest(
 
   const prompt = String(body.prompt || '').trim();
   if (!prompt) throw new Error('Mage Prompt 必填（prompt is required）');
-
-  const refused = REFUSED_CANVAS_FIELDS.filter((name) => isProvided(body[name]));
-  if (refused.length) {
-    throw new MageSchemaRefuseError([...refused], body);
-  }
 
   const modelId = String(body.model_id || body.model || '').trim();
   if (!modelId) throw new Error('模型为必填项（model is required）');
@@ -151,6 +143,14 @@ export function buildMageImageRequest(
     if (extras.length) payload.additional_images = extras;
   }
 
+  const passThroughFields: string[] = [];
+  for (const name of CANVAS_PASS_THROUGH_FIELDS) {
+    if (isProvided(body[name])) {
+      payload[name] = body[name];
+      passThroughFields.push(name);
+    }
+  }
+
   const customObject = parseCustomObject(body.custom_parameters);
   if (customObject) {
     for (const banned of ['loras', 'lora', 'lora_weights', 'lora_model']) {
@@ -168,6 +168,8 @@ export function buildMageImageRequest(
   return {
     endpoint: `${cleanBase}/v1/mango/generate`,
     payload: custom.payload,
+    passThroughFields,
+    schemaFields: [...MAGE_SCHEMA_FIELDS],
     overrides: custom.overrides,
     actualModel: String(custom.payload.model_id || modelId),
   };
@@ -196,6 +198,8 @@ export function parseMageRequestResponse(data: unknown): MageParsedResponse {
     isPending: status === 'completed' ? false : isPending,
     imageUrl,
     seed: typeof result?.seed === 'number' ? result.seed : null,
+    width: typeof result?.width === 'number' && result.width > 0 ? result.width : undefined,
+    height: typeof result?.height === 'number' && result.height > 0 ? result.height : undefined,
     statusUrl: typeof raw.status_url === 'string' ? raw.status_url : undefined,
     cancelUrl: typeof raw.cancel_url === 'string' ? raw.cancel_url : undefined,
     raw,

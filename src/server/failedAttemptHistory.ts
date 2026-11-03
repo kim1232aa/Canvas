@@ -98,7 +98,7 @@ export function buildFailedAttemptHistoryItem(
     stack: typeof responseBody.stack === 'string' ? responseBody.stack : null,
     // trace-fix2 P1: the upstream segments of this request (e.g. the submit POST that came back 402) are the card's
     // 上游交互 — recorded verbatim, same objects upstreamFetch wrote.
-    requestMetadata: { route: context.route, ...(actualRequest ? { actualRequest } : {}), ...(schemaFields ? { schemaFields } : {}), keyUsages: keyUsagesFromTrace(traces), executionTrace: traces.filter((t) => isRecord(t) && t.endpoint && t.method) },
+    requestMetadata: { route: context.route, ...(actualRequest ? { actualRequest } : {}), ...(schemaFields ? { schemaFields } : {}), ...(Array.isArray(responseBody.passThroughFields) ? { passThroughFields: responseBody.passThroughFields.map(String) } : {}), keyUsages: keyUsagesFromTrace(traces), executionTrace: traces.filter((t) => isRecord(t) && t.endpoint && t.method) },
   };
 }
 

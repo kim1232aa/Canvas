@@ -23,6 +23,7 @@ export type HistoryParameterSource =
   | 'blocked'
   | 'intended'
   | 'unsupported'
+  | 'passed-through'
   | 'unknown';
 
 export interface ResolvedHistoryParameter {
@@ -329,6 +330,12 @@ export function resolveHistoryParameters(item: GenerationHistoryItem): Record<Hi
       if (!Object.prototype.hasOwnProperty.call(unsentMapping, canvasKey)) unsentMapping[canvasKey] = m.value;
     }
   }
+  // Route-recorded fields the official schema does not list but were forwarded unchanged (e.g. Mage additionalProperties:true).
+  const passThrough = new Set<string>([
+    ...(Array.isArray(metadata.passThroughFields) ? metadata.passThroughFields.map(String) : []),
+    ...(isRecord(metadata.actualRequest) && Array.isArray(metadata.actualRequest.passThroughFields) ? metadata.actualRequest.passThroughFields.map(String) : []),
+  ]);
+  const isPassThrough = (key: HistoryParameterKey) => FIELD_KEYS[key].some((k) => passThrough.has(k)) || (key === 'sampler' && passThrough.has('sampler_name'));
   const result = {} as Record<HistoryParameterKey, ResolvedHistoryParameter>;
   (Object.keys(FIELD_KEYS) as HistoryParameterKey[]).forEach((key) => {
     const requestedValue = readKeys(requested, FIELD_KEYS[key]) ?? readKeys(unsentMapping, FIELD_KEYS[key]);
@@ -366,7 +373,7 @@ export function resolveHistoryParameters(item: GenerationHistoryItem): Record<Hi
       return;
     }
     if (hasMeaningfulValue(sentValue)) {
-      result[key] = { key, value: sentValue, source: 'sent', requested: requestedValue, sent: sentValue, upstream: upstreamValue };
+      result[key] = { key, value: sentValue, source: isPassThrough(key) ? 'passed-through' : 'sent', requested: requestedValue, sent: sentValue, upstream: upstreamValue };
       return;
     }
     if (hasSentEvidence) {
@@ -388,6 +395,8 @@ export function resolveHistoryParameters(item: GenerationHistoryItem): Record<Hi
 }
 
 /** clean-1029: readable (no strike-through on the label) and explicit — the canvas value was NOT sent because the endpoint lacks the field. */
+/** Field the official schema does not list, forwarded unchanged; effect decided upstream (never 「没用上」). */
+export const HISTORY_PASS_THROUGH_LABEL = '官方参数表未列 · 已原样转交，是否生效以出图为准';
 export const HISTORY_UNSUPPORTED_LABEL = '该端点不支持 · 未发送';
 export const historyParameterSourceLabel = (source: HistoryParameterSource): string => {
   switch (source) {
@@ -400,6 +409,7 @@ export const historyParameterSourceLabel = (source: HistoryParameterSource): str
     case 'schema-unrecorded': return '未发送（Schema 未记录）';
     case 'unsupported': return HISTORY_UNSUPPORTED_LABEL;
     case 'blocked': return '本地拦截';
+    case 'passed-through': return HISTORY_PASS_THROUGH_LABEL;
     case 'intended': return '拟发送（未出站）';
     default: return '旧记录未保存';
   }
@@ -883,3 +893,15 @@ export function terminalSuccessIndex(item: GenerationHistoryItem, rows: Upstream
 
 /** Segment label 「第 n / N 段」 or 「第 a–b 段」 (1-based). */
 export const upstreamSegmentLabel = (start: number, end: number, total: number) => start === end ? `第 ${start + 1} / ${total} 段` : `第 ${start + 1}–${end + 1} / ${total} 段`;
+
+/**
+ * One line when the upstream-reported output size (response) differs from what the canvas sent.
+ * Generic: compares resolved width/height upstream vs sent; no provider special-casing.
+ */
+export function historySizeMismatchNote(resolved: Record<HistoryParameterKey, ResolvedHistoryParameter>): string | null {
+  const w = resolved.width; const h = resolved.height;
+  if (w?.source !== 'upstream' || h?.source !== 'upstream') return null;
+  if (!hasMeaningfulValue(w.sent) || !hasMeaningfulValue(h.sent)) return null;
+  if (Number(w.sent) === Number(w.upstream) && Number(h.sent) === Number(h.upstream)) return null;
+  return `画布填的 ${w.sent}×${h.sent}，上游实际出图 ${w.upstream}×${h.upstream}`;
+}

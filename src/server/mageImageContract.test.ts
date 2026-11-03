@@ -5,7 +5,6 @@ import {
   assertNoMageLoras,
   MAGE_DOC,
   MAGE_SCHEMA_FIELDS,
-  MageSchemaRefuseError,
 } from './mageImageContract';
 
 describe('mageImageContract', () => {
@@ -53,27 +52,25 @@ describe('mageImageContract', () => {
     expect(() => assertNoMageLoras({ loras: [{ name: 'x' }] })).toThrow(/无 LoRA/);
   });
 
-  it('refuses unsupported canvas diffusion fields', () => {
-    expect(() =>
-      buildMageImageRequest({ prompt: 'x', steps: 20, cfg: 7 })
-    ).toThrow(/steps.*cfg|cfg.*steps/);
-    expect(() =>
-      buildMageImageRequest({ prompt: 'x', negative_prompt: 'blur', width: 512, height: 512 })
-    ).toThrow(/negative_prompt/);
+  it('forwards schema-unlisted canvas fields unchanged (official additionalProperties:true pass-through)', () => {
+    const mapped = buildMageImageRequest({ prompt: 'x', model_id: 'mango-v3', width: 1024, height: 768, aspect_ratio: '4:5', steps: 20, negative_prompt: 'blur' });
+    expect(mapped.payload).toMatchObject({ width: 1024, height: 768, steps: 20, negative_prompt: 'blur', aspect_ratio: '4:5' });
+    expect(mapped.passThroughFields).toEqual(expect.arrayContaining(['width', 'height', 'steps', 'negative_prompt']));
+    expect(mapped.passThroughFields).not.toContain('aspect_ratio');
+    expect(mapped.schemaFields).toEqual([...MAGE_SCHEMA_FIELDS]);
   });
 
-  it('refuse carries schemaFields + blockedField so history does not label width as 拟发送', () => {
-    try {
-      buildMageImageRequest({ prompt: 'x', model_id: 'mango-v3', width: 1024, height: 1024, aspect_ratio: '4:5' });
-      throw new Error('expected refuse');
-    } catch (e: any) {
-      expect(e).toBeInstanceOf(MageSchemaRefuseError);
-      expect(e.schemaFields).toEqual([...MAGE_SCHEMA_FIELDS]);
-      expect(e.refusedFields).toEqual(expect.arrayContaining(['width', 'height']));
-      expect(e.blockedField.from).toBe('width');
-      expect(e.blockedField.value).toBe(1024);
-      expect(String(e.message)).toMatch(/width, height/);
-    }
+  it('empty width/height are not invented', () => {
+    const mapped = buildMageImageRequest({ prompt: 'x', model_id: 'mango-v3', width: '', height: null });
+    expect(mapped.payload).not.toHaveProperty('width');
+    expect(mapped.payload).not.toHaveProperty('height');
+    expect(mapped.passThroughFields).toEqual([]);
+  });
+
+  it('parses upstream result.width/height', () => {
+    const p = parseMageRequestResponse({ status: 'completed', result: { url: 'https://x/a.png', width: 896, height: 1120, seed: 1 } });
+    expect(p.width).toBe(896);
+    expect(p.height).toBe(1120);
   });
 
   it('requires an explicit model and forwards an unknown model unchanged', () => {

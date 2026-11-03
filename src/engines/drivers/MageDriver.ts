@@ -73,13 +73,15 @@ export class MageDriver extends BaseEngineDriver {
     if (params.baseUrl) headers['x-mage-base-url'] = params.baseUrl;
 
     const extra = params.extraParams || {};
-    // Board may carry EmptyLatent width/height and sampler shells; Mage Mango Schema
-    // only accepts official fields — never forward unsupported canvas params (contract refuses).
+    // Mango request schema is additionalProperties:true ("Fields the schema does not list pass
+    // through to the model unchanged") — forward user-filled width/height as-is; route labels them.
     const body: Record<string, unknown> = {
       model: params.model,
       model_id: params.model,
       prompt: params.prompt,
       seed: params.seed,
+      ...(params.width !== undefined && params.width !== null && !Number.isNaN(Number(params.width)) ? { width: params.width } : {}),
+      ...(params.height !== undefined && params.height !== null && !Number.isNaN(Number(params.height)) ? { height: params.height } : {}),
       aspect_ratio: params.aspectRatio || extra.aspect_ratio,
       resolution: extra.resolution || params.imageSize,
       image_url: params.image_url,
