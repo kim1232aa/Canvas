@@ -1,17 +1,24 @@
 # ComfyCanvas Studio：开发交接、产品缺口与验收手册
 
+## 2026-11-03 Novita I2V Schema + Replicate 空负向（产品核）
+
+| 项 | 判定 | 要点 / 证据 |
+| --- | --- | --- |
+| Novita std-i2v Schema | **产品过（仅载入，不算出视频）** | `e8cdf1f`：`SVD-XT` 走 dedicated img2video Schema，不再查 `/v3/model` checkpoint。重拍 `v04`/`v04b`：无 404 toast；帧数 **25** / 帧率 **6**；目录/Schema 2；生成请求 0。 |
+| Replicate 空负向 | **产品过（仅载入）** | 同提交：`minimax/video-01` 无负向控件；重拍 `v06`/`v06b` 仅见提示词，无空负向框；生成请求 0。证据同目录 `temp/e2e/presets-video-2026-11-03/`。 |
+
 ## 2026-11-03 标准图生视频预设「仅载入」名单（产品核）
 
 | 项 | 判定 | 要点 / 证据 |
 | --- | --- | --- |
-| std-*-i2v 仅载入 6/6 | **产品过（仅载入，不算出视频）** | 硬刷新·未点跑·生成请求 0·未上传参考图。Fal 重拍三节点 replace（`dee07f8`）+ duration5/1080p/`wan/v2.7`；WS 5s/480p；Civitai 5s/1080p+Schema灰字；MuAPI 5s/720p；Replicate `minimax/video-01` 无 duration/aspect/fps/resolution 空壳。**记注**：Novita Schema HTTP 404 `SVD-XT`（**代码已修 dedicated img2video 声明路径，待仅载入重拍清 toast**）（已读 Schema、非生成）；Replicate 空负向框仍在（官方无负向，后排清）。证据 `temp/e2e/presets-video-2026-11-03/`（v01～v06 + RESULT）。代码 `397ca00` · `dee07f8`。 |
+| std-*-i2v 仅载入 6/6 | **产品过（仅载入，不算出视频）** | 硬刷新·未点跑·生成请求 0·未上传参考图。Fal 重拍三节点 replace（`dee07f8`）+ duration5/1080p/`wan/v2.7`；WS 5s/480p；Civitai 5s/1080p+Schema灰字；MuAPI 5s/720p；Replicate `minimax/video-01` 无 duration/aspect/fps/resolution 空壳。**Novita Schema 已修+FE**：`e8cdf1f` 后 `v04`/`v04b` Schema HTTP 200 `SVD-XT`（无 `/v3/model` 404），frames25/fps6；Replicate `v06`/`v06b` 空负向框已藏。证据 `temp/e2e/presets-video-2026-11-03/`（v01～v06 + RESULT）。代码 `397ca00` · `dee07f8` · `e8cdf1f`。 |
 
 ## 2026-11-03 标准文生图预设「仅载入」名单（产品核①）
 
 | 项 | 判定 | 要点 / 证据 |
 | --- | --- | --- |
 | std-*-t2i 仅载入 23/23 | **产品过（仅载入，不算出图）** | 硬刷新·未点跑·生成请求 0。含 `b0f70c5` 后重拍 18/19/22（ModelsLab UniPC / Civitai euler+simple / Novita euler，琥珀假阴性已消）。空壳 omit（Mage/DeepInfra/HF 等）已对。Gemini 宽高 null aria 记注不挡。证据 `temp/e2e/presets-official-2026-11-03/`（03～28 + RESULT 终稿）。代码 fa40610 / aee263f / 5d24c58 / 3e986fc / b0f70c5。 |
-| std-*-i2v 仅载入 6/6 | **仅载入证据已交 · 待核**（不算出视频） | 硬刷新·未点跑·生成请求 0。Fal 重拍三节点+duration5+1080p；WaveSpeed/Civitai/MuAPI/Replicate 字段 OK；Novita 404 Schema 记注；Replicate 空负向记注。证据 `temp/e2e/presets-video-2026-11-03/`（v01～v06 + RESULT）。代码 `397ca00` + `dee07f8`。 |
+| std-*-i2v 仅载入 6/6 | **产品过（仅载入，不算出视频）** | 见上节「标准图生视频预设」；Novita Schema `e8cdf1f`+FE `v04` 已清 404；Replicate 空负向已藏。证据同 `presets-video-2026-11-03/`。 |
 
 ## 2026-11-03 魔搭国内站前端真出图（产品核）
 
