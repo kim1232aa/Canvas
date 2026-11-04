@@ -396,7 +396,6 @@ export function resolveHistoryParameters(item: GenerationHistoryItem): Record<Hi
 /** clean-1029: readable (no strike-through on the label) and explicit — the canvas value was NOT sent because the endpoint lacks the field. */
 /** Field the official schema does not list, forwarded unchanged; effect decided upstream (never 「没用上」). */
 export const HISTORY_PASS_THROUGH_LABEL = '官方参数表未列 · 已原样转交，是否生效以出图为准';
-export const HISTORY_UNSUPPORTED_LABEL = '该端点不支持 · 未发送';
 export const historyParameterSourceLabel = (source: HistoryParameterSource): string => {
   switch (source) {
     case 'upstream': return '上游实际';
@@ -406,7 +405,7 @@ export const historyParameterSourceLabel = (source: HistoryParameterSource): str
     case 'legacy': return '旧记录';
     case 'not-sent': return '未发送';
     case 'schema-unrecorded': return '未发送（Schema 未记录）';
-    case 'unsupported': return HISTORY_UNSUPPORTED_LABEL;
+    case 'unsupported': return '未发送';
     case 'blocked': return '没有发出去';
     case 'passed-through': return HISTORY_PASS_THROUGH_LABEL;
     case 'intended': return '拟发送（未出站）';
@@ -615,7 +614,7 @@ export function notSentLoraLabel(item: GenerationHistoryItem, name: string): str
     || canvasProps
     || undefined;
   if (!fields) return '未发送（Schema 未记录）';
-  return fields.some((f: unknown) => /lora/i.test(String(f))) ? '未发送' : HISTORY_UNSUPPORTED_LABEL;
+  return fields.some((f: unknown) => /lora/i.test(String(f))) ? '未发送' : '未发送';
 }
 
 function schemaPropertiesOf(item: GenerationHistoryItem): string[] | undefined {

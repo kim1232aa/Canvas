@@ -2,7 +2,8 @@
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('../services/api', () => ({ getStoredApiKeys: () => ({}) }));
 import { ensureModelSchema } from '../services/modelSchemaCache';
-import { videoDurationBounds, videoSchemaField, videoSchemaValueIssue, videoSchemaIssues } from './frontendParameters';
+import * as fp from './frontendParameters';
+const { videoDurationBounds, videoSchemaField } = fp;
 const flush = () => new Promise((r) => setTimeout(r, 0));
 const load = async (model: string, properties: any) => { ensureModelSchema('fal', model, (async () => new Response(JSON.stringify({ inputSchema: { properties } }), { status: 200 })) as any); await flush(); await flush(); };
 const K26 = 'fal-ai/kling-video/v2.6/pro/text-to-video', K3I = 'fal-ai/kling-video/v3/standard/image-to-video', K3T = 'fal-ai/kling-video/v3/standard/text-to-video';
@@ -21,17 +22,12 @@ describe('video Schema fields', () => {
     expect(videoSchemaField('fal', K3I, 'aspect_ratio').state).toBe('absent');
     expect(videoSchemaField('fal', K3T, 'aspect_ratio').state).toBe('declared');
   });
-  it('never clamps: out-of-enum stored value is invalid and blocks run', async () => {
-    await load(K26, { duration: { enum: ['5', '10'] } });
-    expect(videoSchemaValueIssue('fal', K26, 'duration', 15)).toContain('不在这个模型的可选值里');
-    expect(videoSchemaValueIssue('fal', K26, 'duration', '10')).toBeNull();
-    expect(videoSchemaValueIssue('fal', K3I, 'aspect_ratio', '16:9')).toBeNull(); // 雁: filled value sent as-is, no local 不接收 text
-    expect(videoSchemaIssues([{ type: 'AIVideoNode', values: { targetProvider: 'fal', model: K3I, duration: '12', aspect_ratio: '' } }])).toBeNull();
-    expect(videoSchemaIssues([{ type: 'AIVideoNode', values: { targetProvider: 'fal', model: K26, duration: 15 } }])).toMatch(/视频时长（秒）/);
+  it('雁: no local value check/run block — the pre-run Schema value checker is gone', () => {
+    expect((fp as any).videoSchemaValueIssue).toBeUndefined();
+    expect((fp as any).videoSchemaIssues).toBeUndefined();
   });
   it('Schema not loaded → unknown, no invented limits', () => {
     expect(videoSchemaField('fal', 'fal-ai/never-loaded', 'duration').state).toBe('unknown');
-    expect(videoSchemaValueIssue('fal', 'fal-ai/never-loaded', 'duration', 99)).toBeNull();
   });
   it('unwraps anyOf min/max for wan num_frames / frames_per_second; fps alias', async () => {
     const WAN = 'fal-ai/wan-t2v-lora';
@@ -52,15 +48,8 @@ describe('video Schema fields', () => {
     await load(I2V, { prompt: {}, start_image_url: {}, duration: { enum: ['3','4','5','6','7','8','9','10','11','12','13','14','15'] } });
     await load(T2V, { prompt: {}, duration: { enum: ['3','4','5','6','7','8','9','10','11','12','13','14','15'] }, aspect_ratio: { enum: ['16:9','9:16','1:1'] } });
     expect(videoSchemaField('fal', I2V, 'aspect_ratio').state).toBe('absent');
-    expect(videoSchemaValueIssue('fal', I2V, 'aspect_ratio', '16:9')).toBeNull();
     expect(videoSchemaField('fal', T2V, 'aspect_ratio')).toMatchObject({ state: 'declared', options: ['16:9','9:16','1:1'] });
     expect(videoDurationBounds('fal', T2V).options).toEqual(['3','4','5','6','7','8','9','10','11','12','13','14','15']);
   });
 
-});
-
-describe('雁 2026-11-04: no local 不接收 verdict', () => {
-  it('absent field with a stored value yields no issue text', () => {
-    expect(videoSchemaValueIssue('fal', 'fal-ai/never-loaded', 'fps', 16)).toBeNull();
-  });
 });

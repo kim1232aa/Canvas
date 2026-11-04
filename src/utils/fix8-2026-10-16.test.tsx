@@ -5,11 +5,11 @@ import { describe, expect, it } from 'vitest';
 import { NodeItem } from '../components/NodeItem';
 import { BASE_MODELS, NODE_DEFINITIONS } from '../constants/nodes';
 const noop = () => {};
-const ID = 'fal-ai/kling-video/v3/standard/image-to-video';
+const ID = 'fal-ai/kling-video/v3/standard/image-to-video/team-custom'; // not a catalog option → custom box shows it (catalog entries select in the dropdown, box stays empty)
 const render = (model: string) => { const d = NODE_DEFINITIONS.AIVideoNode; return renderToStaticMarkup(<NodeItem node={{ id: 'v1', type: 'AIVideoNode', title: d.title, pos: { x: 0, y: 0 }, width: 320, inputs: d.inputs, outputs: d.outputs, values: { model, targetProvider: 'fal', provider: 'fal' }, state: 'idle' } as any} isSelected={false} zoom={1} onSelect={noop} onStartDrag={noop} onUpdateValue={noop} onDeleteNode={noop} onToggleCollapse={noop} onToggleBypass={noop} onStartConnecting={noop} onEndConnecting={noop} />); };
 describe('fix8', () => {
   it('selected label shown in full wrap line', () => {
-    const html = render(ID);
+    const html = render('fal-ai/kling-video/v3/standard/image-to-video');
     const m = html.match(/data-testid="node-video-model-label"[^>]*>([^<]*)</)!; expect(m).toBeTruthy();
     expect(m[0]).toMatch(/overflow-wrap:anywhere/); expect(m[0]).not.toMatch(/truncate/);
     expect(m[1]).toBe('[Fal] Kling V3 Standard Image-to-Video'); 

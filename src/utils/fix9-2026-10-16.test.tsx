@@ -7,7 +7,7 @@ import { NodeItem } from '../components/NodeItem';
 import { NODE_DEFINITIONS } from '../constants/nodes';
 import { WORKFLOW_PRESETS as PRESETS } from '../constants/presets';
 const noop = () => {};
-const ID = 'fal-ai/kling-video/v3/standard/image-to-video';
+const ID = 'fal-ai/kling-video/v3/standard/image-to-video/team-custom'; // not a catalog option → custom box shows it (catalog entries select in the dropdown, box stays empty)
 const render = (model: string) => { const d = NODE_DEFINITIONS.AIVideoNode; return renderToStaticMarkup(<NodeItem node={{ id: 'v1', type: 'AIVideoNode', title: d.title, pos: { x: 0, y: 0 }, width: 320, inputs: d.inputs, outputs: d.outputs, values: { model, targetProvider: 'fal', provider: 'fal' }, state: 'idle' } as any} isSelected={false} zoom={1} onSelect={noop} onStartDrag={noop} onUpdateValue={noop} onDeleteNode={noop} onToggleCollapse={noop} onToggleBypass={noop} onStartConnecting={noop} onEndConnecting={noop} />); };
 const count = (h: string, s: string) => h.split(s).length - 1;
 describe('fix9', () => {
@@ -16,10 +16,14 @@ describe('fix9', () => {
       expect(readFileSync(f, 'utf8')).not.toMatch(/damo\/wan2\.1-t2i(?![-\w])/);
     expect(JSON.stringify(PRESETS)).not.toContain('damo/wan2.1-t2i');
   });
-  it('model shown once as text: name line + id only in custom box, no id line', () => {
-    const h = render(ID).replace(/<select[\s\S]*?<\/select>/g, '');
+  it('catalog model: selected in the dropdown, name line once, custom box empty (no duplicate)', () => {
+    const CAT = 'fal-ai/kling-video/v3/standard/image-to-video';
+    const full = render(CAT);
+    expect(full).toMatch(new RegExp(`<option value="${CAT}" selected=""`));
+    expect(full).not.toContain('自定义视频端点');
+    const h = full.replace(/<select[\s\S]*?<\/select>/g, '');
     expect(h).not.toContain('node-video-model-id');
-    expect(count(h.replace(/<wbr\/>/g, ''), `>${ID}<`)).toBe(1);
+    expect(count(h.replace(/<wbr\/>/g, ''), `>${CAT}<`)).toBe(0);
     expect(count(h, '>[Fal] Kling V3 Standard Image-to-Video<')).toBe(1);
     expect(h).toMatch(/data-testid="node-video-model-label"[^>]*font-mono/);
   });

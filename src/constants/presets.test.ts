@@ -143,12 +143,12 @@ describe('standard workflow presets (23 T2I + 6 I2V)', () => {
 
   it('I2V seeds official duration/resolution/frames only — no empty shells, no fake 1024 WH, require_reference_image', () => {
     const expectByProv: Record<string, { duration?: number; resolution?: string; num_frames?: number; fps?: number; hide: string[] }> = {
-      fal: { duration: 5, fps: 16, hide: [] },
-      wavespeed: { duration: 5, fps: 16, hide: [] },
+      fal: { num_frames: 81, resolution: '480p', fps: 16, hide: [] },
+      wavespeed: { duration: 5, hide: [] },
       civitai: { fps: 24, hide: [] },
       novita: { num_frames: 25, fps: 6, hide: ['duration', 'aspect_ratio', 'resolution'] },
-      muapi: { duration: 5, fps: 16, hide: [] },
-      replicate: { duration: 5, fps: 16, hide: [] },
+      muapi: { duration: 5, resolution: '480p', hide: [] },
+      replicate: { num_frames: 81, resolution: '480p', hide: [] },
     };
     for (const p of i2v()) {
       const vid = p.nodes.find(n => n.type === 'AIVideoNode')!;

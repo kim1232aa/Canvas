@@ -12,7 +12,7 @@ import { dockAvoidingStyle } from '../components/ExecutionLog';
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 const ZW = /[\u200B\u200C\u200D\uFEFF\u2060]/;
-const ID = 'fal-ai/kling-video/v3/standard/image-to-video';
+const ID = 'fal-ai/kling-video/v3/standard/image-to-video/team-custom'; // not a catalog option → custom box shows it (catalog entries select in the dropdown, box stays empty)
 const noop = () => {};
 let root: Root;
 const vnode = (values: any) => ({ id: 'v1', type: 'AIVideoNode', title: D.AIVideoNode.title, pos: { x: 0, y: 0 }, width: 320, inputs: D.AIVideoNode.inputs, outputs: D.AIVideoNode.outputs, values, state: 'idle' });

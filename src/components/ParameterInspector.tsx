@@ -2,7 +2,7 @@ import { noteUserModelSelection } from '../services/userModelSelection';
 import { civitaiEngines, civitaiEcosystemsFor } from '../schemas/providerSchema';
 import { ensureModelSchema, withCachedSchemaProperties } from '../services/modelSchemaCache';
 import {ApiParameterEditor} from './ApiParameterEditor';
-import {videoDurationBounds, videoSchemaField, videoSchemaValueIssue} from '../utils/frontendParameters';
+import {videoDurationBounds, videoSchemaField} from '../utils/frontendParameters';
 import {ProviderModelSelect} from './ProviderModelSelect';
 import React from 'react';
 import {
@@ -317,7 +317,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                     }
                     disabled={greyNegative}
                     className="shrink-0 text-[9px] text-slate-400 hover:text-white font-mono bg-[#121316] px-1.5 py-0.5 rounded border border-[#282a35] disabled:opacity-40 disabled:cursor-not-allowed"
-                    title={greyNegative ? '此模型不支持负向提示词' : '填入通用排畸预设'}
+                    title={'填入通用排畸预设'}
                   >
                     填入通用排畸
                   </button>
@@ -330,7 +330,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                   onPointerDown={(e) => e.stopPropagation()}
                   onKeyDown={(e) => e.stopPropagation()}
                   onChange={(e) => onChangeNegativePrompt(e.target.value)}
-                  placeholder={greyNegative ? '此模型不支持负向提示词' : '输入需要避免的瑕疵特征 (如模糊、多肢体、水印等)...'}
+                  placeholder={'输入需要避免的瑕疵特征 (如模糊、多肢体、水印等)...'}
                   className="w-full bg-[#111216] border border-[#2b2d38] focus:border-rose-400/80 rounded-lg p-2 text-slate-300 text-[11px] font-mono leading-relaxed outline-none resize-y select-text cursor-text shadow-inner disabled:opacity-40 disabled:cursor-not-allowed"
                 />
               </div>
@@ -437,7 +437,6 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
             return <p role="alert" className="text-sm text-amber-200">{reason}{suffix}</p>;
           })()}
           {params.unresolvedModel && <p role="alert" className="text-sm text-amber-200">底模尚未核实，必须重新选择已核实资源。</p>}
-          {params.requireReferenceImage && <p role="note" className="text-sm text-amber-200">编辑输入需要明确参考图；展示样图不作为输入。</p>}
           {params.targetProvider === 'video' && <label className="block text-sm text-slate-300">实际视频服务商<select aria-label="实际视频服务商" value={params.videoProvider || ''} onChange={e=>update({videoProvider:e.target.value || undefined})} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2"><option value="">请选择实际 provider</option><option value="fal">Fal</option><option value="agnes">Agnes</option><option value="grok_compat">Grok 兼容中转</option>{params.videoProvider && !['fal','agnes','grok_compat'].includes(params.videoProvider) && <option value={params.videoProvider}>{params.videoProvider}</option>}</select></label>}
           {(params.targetProvider === 'civitai' || (params.targetProvider === 'video' && params.videoProvider === 'civitai')) && <div className="space-y-2 rounded-lg border border-slate-700 p-3">
             <label className="block text-sm text-slate-300">Civitai engine<select aria-label="Civitai engine" value={params.civitaiEngine || ''} onChange={e=>update({civitaiEngine:e.target.value || undefined})} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2"><option value="">请选择引擎</option>{civitaiEngines().map(e=><option key={e} value={e}>{e}</option>)}{params.civitaiEngine && !civitaiEngines().includes(params.civitaiEngine) && <option value={params.civitaiEngine}>{params.civitaiEngine}</option>}</select></label>
@@ -445,7 +444,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
             <label className="block text-sm text-slate-300">Civitai model<input aria-label="Civitai model" value={params.civitaiModel || ''} onChange={e=>update({civitaiModel:e.target.value || undefined})} placeholder="按官方 recipe 填写 model selector" className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2" /></label>
           </div>}
           {(params.targetProvider === 'video' || params.videoProvider || params.checkpoint?.includes('video')) && <div className="space-y-2">
-            <label className="block text-sm text-slate-300">视频时长（秒）<span className="relative block">{(()=>{const db=videoDurationBounds(params.videoProvider || params.targetProvider,params.checkpoint);return db.options ? <select aria-label="视频时长（秒）" value={params.videoDuration === undefined ? '' : String(params.videoDuration)} onChange={e=>{const hit=db.options!.find(o=>String(o)===e.target.value);update({videoDuration:hit as any});}} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2 pr-8"><option value="">未选择（不提交）</option>{params.videoDuration !== undefined && !db.options.some(o=>String(o)===String(params.videoDuration)) && <option value={String(params.videoDuration)}>{String(params.videoDuration)} 秒（不可用）</option>}{db.options.map(o=><option key={String(o)} value={String(o)}>{String(o)} 秒</option>)}</select> : <input aria-label="视频时长（秒）" type="number" min={db.min} max={db.max} step={1} value={params.videoDuration ?? ''} onChange={e=>update({videoDuration:e.target.value === '' ? undefined : Number(e.target.value)})} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2 pr-8" />;})()}<span aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-[calc(50%-2px)] text-slate-400">秒</span></span><span className="text-sm text-slate-400">可选值来自端点官方 Schema（duration）；Schema 未读取时不限制，未填写不提交。</span>{(()=>{const iss=videoSchemaValueIssue(params.videoProvider || params.targetProvider,params.checkpoint,'duration',params.videoDuration);return iss ? <span role="alert" className="block text-sm text-rose-300">{iss}</span> : null;})()}</label>
+            <label className="block text-sm text-slate-300">视频时长（秒）<span className="relative block">{(()=>{const db=videoDurationBounds(params.videoProvider || params.targetProvider,params.checkpoint);return db.options ? <select aria-label="视频时长（秒）" value={params.videoDuration === undefined ? '' : String(params.videoDuration)} onChange={e=>{const hit=db.options!.find(o=>String(o)===e.target.value);update({videoDuration:(hit ?? (e.target.value===''?undefined:e.target.value)) as any});}} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2 pr-8"><option value="">未选择（不提交）</option>{params.videoDuration !== undefined && !db.options.some(o=>String(o)===String(params.videoDuration)) && <option value={String(params.videoDuration)}>{String(params.videoDuration)} 秒</option>}{db.options.map(o=><option key={String(o)} value={String(o)}>{String(o)} 秒</option>)}</select> : <input aria-label="视频时长（秒）" type="number" min={db.min} max={db.max} step={1} value={params.videoDuration ?? ''} onChange={e=>update({videoDuration:e.target.value === '' ? undefined : Number(e.target.value)})} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2 pr-8" />;})()}<span aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-[calc(50%-2px)] text-slate-400">秒</span></span><span className="text-sm text-slate-400">可选值来自端点官方 Schema（duration）；Schema 未读取时不限制，未填写不提交。</span></label>
             <label className="block text-sm text-slate-300">视频 resolution<input aria-label="视频 resolution" value={params.resolution || ''} onChange={e=>update({resolution:e.target.value || undefined})} placeholder="按所选端点填写；未设置保留空" className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2" /></label>
           </div>}
           {params.targetProvider === 'fal' && params.checkpoint === 'fal-ai/lora' && <label className="block text-sm text-slate-300">SD LoRA 底模 model_name<input className="mt-1 w-full bg-[#111216] border border-slate-700 rounded-lg p-2" value={params.falModelName || ''} onChange={e => update({falModelName:e.target.value})} placeholder="必填：底模仓库 ID 或 URL" /></label>}
@@ -503,7 +502,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                     type="button"
                     disabled={greySeed}
                     onClick={() => { if (!greySeed) update({ seedControl: mode }); }}
-                    title={greySeed ? '此模型不支持' : undefined}
+                    title={undefined}
                     className={`px-1.5 py-0.5 rounded text-[9px] font-mono whitespace-nowrap shrink-0 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-slate-400 ${
                       !greySeed && (params.seedControl || 'randomize') === mode
                         ? 'bg-cyan-500/25 text-cyan-300 font-bold border border-cyan-500/50'
@@ -520,9 +519,9 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                 type="number"
                 value={greySeed ? '' : params.seed}
                 disabled={greySeed}
-                placeholder={greySeed ? '此模型不支持' : undefined}
-                title={greySeed ? '此模型不支持' : undefined}
-                aria-label={greySeed ? 'seed（此模型不支持）' : 'seed'}
+                placeholder={undefined}
+                title={undefined}
+                aria-label="seed"
                 onMouseDown={(e) => e.stopPropagation()}
                 onKeyDown={(e) => e.stopPropagation()}
                 onChange={(e) => { if (!greySeed) update({ seed: parseInt(e.target.value) || 0 }); }}
@@ -542,14 +541,6 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
           </div>
 
           {/* Steps / CFG / sampler / scheduler: hide when Schema omits or static table says unsupported (no empty adjustable shells). */}
-          {(greySteps || omitSteps || greyCfg || omitCfg) && (
-            <p role="note" data-testid="inspector-sampler-unsupported" className="text-[11px] text-slate-400 leading-relaxed">
-              此模型不支持{[
-                (greySteps || omitSteps) ? '步数' : null,
-                (greyCfg || omitCfg) ? 'CFG' : null,
-              ].filter(Boolean).join('、')}
-            </p>
-          )}
           {!(greySteps || omitSteps) && (
           <div className="space-y-1">
             <div className="flex flex-wrap justify-between gap-x-2 gap-y-1 text-slate-400 text-[10px] font-mono">
@@ -655,7 +646,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
               value={greyDenoise || sendDenoise === 'no_image' ? 0 : (params.denoise ?? 0)}
               disabled={greyDenoise || sendDenoise === 'no_image'}
               onChange={(e) => { if (greyDenoise || sendDenoise === 'no_image') return; update({ denoise: parseFloat(e.target.value) }); }}
-              title={greyDenoise ? '此模型不支持' : sendDenoise === 'no_image' ? '有参考图时才发送 strength（官方 Schema；WaveSpeed krea-v2 turbo-lora 等同）' : sendDenoise === 'not_sent' ? '此模型不支持，不发送' : undefined}
+              title={sendDenoise === 'no_image' ? '有参考图时才发送 strength（官方 Schema；WaveSpeed krea-v2 turbo-lora 等同）' : undefined}
               aria-disabled={greyDenoise || sendDenoise === 'not_sent' || sendDenoise === 'no_image' || undefined}
               data-unsupported={sendDenoise === 'not_sent' || undefined}
               className={`w-full h-1.5 bg-[#252833] rounded appearance-none cursor-pointer accent-cyan-400 disabled:opacity-40 disabled:cursor-not-allowed ${sendDenoise === 'not_sent' ? 'opacity-40 grayscale accent-slate-500' : ''}`}
@@ -962,8 +953,8 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                   max={10}
                   value={greyNumImages ? '' : (params.batchSize ?? 1)}
                   disabled={greyNumImages}
-                  title={greyNumImages ? '此模型不支持' : undefined}
-                  placeholder={greyNumImages ? '此模型不支持' : undefined}
+                  title={undefined}
+                  placeholder={undefined}
                   onChange={(e) => {
                     if (greyNumImages) return;
                     update({ batchSize: Math.max(1, Math.min(10, parseInt(e.target.value) || 1)) });
@@ -1017,8 +1008,8 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                   max={4}
                   value={greyNumImages ? '' : (params.batchSize ?? 1)}
                   disabled={greyNumImages}
-                  title={greyNumImages ? '此模型不支持' : undefined}
-                  placeholder={greyNumImages ? '此模型不支持' : undefined}
+                  title={undefined}
+                  placeholder={undefined}
                   onChange={(e) => {
                     if (greyNumImages) return;
                     update({ batchSize: Math.max(1, Math.min(4, parseInt(e.target.value) || 1)) });

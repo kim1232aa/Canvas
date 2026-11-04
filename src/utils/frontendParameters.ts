@@ -19,8 +19,8 @@ function schemaPropParts(d: any): {min?: number; max?: number; options?: Array<s
   const collectEnum = (node: any): Array<string | number> => {
     if (!node || typeof node !== 'object') return [];
     if (Array.isArray(node.enum)) return node.enum.filter((v: unknown) => typeof v === 'string' || typeof v === 'number');
-    if (Array.isArray(node.anyOf)) return node.anyOf.flatMap(collectEnum);
-    return [];
+    // OpenAPI composition (Replicate/Cog: allOf:[{enum}]; Fal: anyOf; oneOf) — same rule for every provider.
+    return ['anyOf', 'oneOf', 'allOf'].flatMap((k) => Array.isArray(node[k]) ? node[k].flatMap(collectEnum) : []);
   };
   const opts = collectEnum(d);
   if (opts.length) out.options = opts;
@@ -30,7 +30,7 @@ function schemaPropParts(d: any): {min?: number; max?: number; options?: Array<s
     if (out.max === undefined && typeof node.maximum === 'number') out.max = node.maximum;
   };
   takeMinMax(d);
-  if (Array.isArray(d.anyOf)) for (const branch of d.anyOf) {
+  for (const k of ['anyOf', 'oneOf', 'allOf']) if (Array.isArray(d[k])) for (const branch of d[k]) {
     if (branch && typeof branch === 'object' && branch.type !== 'null') takeMinMax(branch);
   }
   return out;
@@ -40,7 +40,7 @@ function schemaPropParts(d: any): {min?: number; max?: number; options?: Array<s
 const VIDEO_SCHEMA_ALIASES: Record<string, string[]> = {
   duration: ['duration', 'seconds'],
   aspect_ratio: ['aspect_ratio', 'aspectRatio'],
-  num_frames: ['num_frames', 'frames_num'],
+  num_frames: ['num_frames', 'frames_num', 'frames'],
   fps: ['fps', 'frames_per_second'],
   resolution: ['resolution'],
 };
@@ -131,28 +131,3 @@ export function videoSchemaField(provider: string | undefined, model: string | u
   return out;
 }
 
-const VIDEO_FIELD_LABEL: Record<string,string> = {duration:'视频时长（秒）', aspect_ratio:'画面比例', num_frames:'帧数', fps:'帧率', resolution:'视频分辨率'};
-/** Stored value vs Schema. Never clamps: returns a human reason when the stored value is not allowed (run must be blocked). */
-export function videoSchemaValueIssue(provider: string | undefined, model: string | undefined, field: string, value: unknown): string | null {
-  if (value === undefined || value === null || value === '') return null;
-  const f = videoSchemaField(provider, model, field);
-  const label = VIDEO_FIELD_LABEL[field] || field;
-  if (f.state !== 'declared') return null;
-  if (f.options && !f.options.some((o) => String(o) === String(value))) return `${label}：「${String(value)}」不在这个模型的可选值里（${f.options.join(' / ')}），请重新选择`;
-  const n = Number(value);
-  if (!f.options && Number.isFinite(n) && ((f.min !== undefined && n < f.min) || (f.max !== undefined && n > f.max))) return `${label}：「${String(value)}」超出这个模型的范围（${f.min ?? ''}–${f.max ?? ''}），请重新填写`;
-  return null;
-}
-
-/** All video Schema issues on AIVideoNodes among `nodes` (for pre-run blocking). */
-export function videoSchemaIssues(nodes: Array<{type:string; title?:string; bypassed?:boolean; values?:Record<string,any>}>): string | null {
-  for (const n of nodes) {
-    if (n.type !== 'AIVideoNode' || n.bypassed) continue;
-    const p = String(n.values?.targetProvider || ''); const m = String(n.values?.model || '');
-    for (const f of ['duration', 'aspect_ratio', 'num_frames', 'fps', 'resolution']) {
-      const r = videoSchemaValueIssue(p, m, f, n.values?.[f]);
-      if (r) return r;
-    }
-  }
-  return null;
-}

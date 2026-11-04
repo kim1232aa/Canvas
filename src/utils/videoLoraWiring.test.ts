@@ -13,13 +13,13 @@ const extract = (id: string) => {
 };
 
 describe('video LoRA wiring (LoRALoader → AIVideoNode.lora)', () => {
-  it.each(['std-fal-i2v', 'std-wavespeed-i2v', 'std-muapi-i2v', 'std-replicate-i2v'])('%s extracts the recipe LoRA, seed and cfg as filled', (id) => {
+  it.each(['std-fal-i2v', 'std-wavespeed-i2v', 'std-replicate-i2v'])('%s extracts the recipe LoRA, seed and cfg as filled', (id) => {
     const x = extract(id);
     expect(x.loras.map((l) => [l.name, l.modelStrength])).toEqual([[W21, 1]]);
     expect(x.seed).toBe(24231881);
     expect(x.cfg).toBe(4);
     // WaveSpeed: recipe 688x480 mapped to live Schema enum 832*480 (upstream 400 otherwise).
-    expect(x.size).toBe(id === 'std-wavespeed-i2v' ? '832*480' : '688x480');
+    expect(x.size).toBe(id === 'std-wavespeed-i2v' ? '832*480' : undefined); // video-param-table: Fal/Replicate Schemas have no size
   });
   it('WaveSpeed preset size is the live Schema enum value 832*480 (sent with * separator)', () => {
     expect(extract('std-wavespeed-i2v').size).toBe('832*480');

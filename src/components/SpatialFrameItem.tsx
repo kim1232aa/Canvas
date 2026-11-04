@@ -140,23 +140,9 @@ export const SpatialFrameItem: React.FC<SpatialFrameItemProps> = ({
           <span className="font-bold text-white tracking-wide truncate text-[13px]">
             {frame.title}
           </span>
-          {(() => {
-            const whUnsupported =
-              isCanvasFieldUnsupported(frame.params.targetProvider, frame.params.checkpoint, 'width') ||
-              isCanvasFieldUnsupported(frame.params.targetProvider, frame.params.checkpoint, 'height');
-            return whUnsupported ? (
-              <span
-                className="text-[10px] font-mono bg-rose-950/40 border border-rose-500/50 text-rose-300 px-1.5 py-0.5 rounded shrink-0"
-                title="当前引擎不支持像素宽高，请用画面比例 / 尺寸档位"
-              >
-                不支持宽高
-              </span>
-            ) : (
-              <span className="text-[10px] font-mono text-slate-400 bg-[#1c1d25] px-2 py-0.5 rounded border border-[#2b2d38]">
-                {frame.params.width}×{frame.params.height}
-              </span>
-            );
-          })()}
+          <span className="text-[10px] font-mono text-slate-400 bg-[#1c1d25] px-2 py-0.5 rounded border border-[#2b2d38]">
+            {frame.params.width}×{frame.params.height}
+          </span>
         </div>
 
         {/* Header Actions */}
@@ -232,8 +218,7 @@ export const SpatialFrameItem: React.FC<SpatialFrameItemProps> = ({
               (void unsupported, false) ? (
                 <span
                   className="text-slate-600 flex items-center gap-1"
-                  title="该服务商不支持"
-                  aria-label={`${field}（该服务商不支持）`}
+                  aria-label={field}
                 >
                   <span>—</span>
                   <FieldStatusBadge status="unsupported" />
@@ -269,8 +254,8 @@ export const SpatialFrameItem: React.FC<SpatialFrameItemProps> = ({
                     ? 'text-slate-600 cursor-not-allowed opacity-40 pointer-events-none'
                     : 'text-slate-400 hover:text-white'
                 }`}
-                title={seedUnsupported ? '该服务商不支持' : '摇随机种子'}
-                aria-label={seedUnsupported ? 'seed（该服务商不支持）' : '摇随机种子'}
+                title="摇随机种子"
+                aria-label="摇随机种子"
               >
                 <span>{seedUnsupported ? '—' : frame.params.seed}</span>
                 <Dices className={`w-3 h-3 ${seedUnsupported ? 'text-slate-600' : 'text-cyan-400'}`} />

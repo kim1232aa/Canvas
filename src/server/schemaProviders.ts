@@ -817,10 +817,11 @@ export function normalizeSchemaProviderItems(provider:Provider,rows:any[],opts:{
   const category=(opts.category || 'checkpoint').toLowerCase();
   let filtered=rows;
   if(!wantsLora && category==='checkpoint' && provider!=='sogni')filtered=filtered.filter((m:any)=>provider==='krea'||provider==='together'||provider==='aimlapi'||provider==='novita'||provider==='venice'||provider==='deepinfra'?m.category==='text-to-image':provider==='muapi'?m.group_of==='image':/^(text.to.image|image.to.image|lora.support)$/i.test(m.category || m.type || ''));
-  if(!wantsLora && category==='video')filtered=filtered.filter((m:any)=>/video/i.test(m.category || m.type || ''));
+  const isVideoRow=(m:any)=>provider==='muapi'&&m.group_of?m.group_of==='video':/video/i.test(m.category || m.type || '');
+  if(!wantsLora && category==='video')filtered=filtered.filter(isVideoRow);
   const query=(opts.query || '').toLowerCase();
   return filtered.map((m:any)=>({id:wantsLora?(provider==='krea'?m.id:(m.loraId || m.slug)):(m.model_id || m.id || m.endpoint_url || m.name),name:m.name || m.title || m.ui?.label || m.model_id || m.id,
-    provider:schemaProviders[provider].name,category:wantsLora?'LoRA':/video/i.test(m.category || m.type || '')?'Video':'Checkpoint',type:wantsLora?'LoRA':'Checkpoint',
+    provider:schemaProviders[provider].name,category:wantsLora?'LoRA':isVideoRow(m)?'Video':'Checkpoint',type:wantsLora?'LoRA':'Checkpoint',
     baseModelSource:provider==='krea' && wantsLora && Array.isArray(m.models)?'官方 GET /styles items[].models（Compatible model names），原值显示':(wantsLora && Array.isArray(m.compatibleModels) && compatibleModelsCount(m.compatibleModels)>1?`官方列出可兼容底模共 ${compatibleModelsCount(m.compatibleModels)} 个，卡片只显示第一个名字`:undefined),baseModel:(provider==='krea' && wantsLora && Array.isArray(m.models)?m.models.join(', '):undefined) || m.family || m.tierId || compatibleModelsLabel(m.compatibleModels) || (Array.isArray(m.modelIds)?m.modelIds[0]:undefined),description:m.description || '',tags:m.tags || [],
     imageUrl:m.image_url || m.cover_url || (Array.isArray(m.urls)?m.urls[0]:undefined) || m.thumbnail || sogniLoraCover(m)?.url || '',imageCaption:sogniLoraCover(m)?.caption,
     creator:m.ui?.creator || m.owner?.name,externalUrl:m.ui?.sourceUrl,

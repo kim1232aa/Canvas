@@ -476,11 +476,13 @@ const I2V_SPECS: I2vSpec[] = [
   {
     provider: 'fal',
     model: 'fal-ai/wan-i2v-lora',
-    duration: 5,
+    // video-param-table.md §1: Schema has no duration/size → num_frames 81 (integer 81–100), resolution 480p (default 720p), aspect_ratio 16:9.
+    num_frames: 81,
+    resolution: '480p',
+    aspect_ratio: '16:9',
     fps: 16,
     seed: 24231881,
     cfg: 4,
-    size: '688x480',
     loras: [{ name: 'https://huggingface.co/Remade-AI/matrix-shot/resolve/main/matrix_shot.safetensors', strength: 1, source: 'https://civitai.red/images/84050423' }],
     schemaProperties: [
       'prompt', 'image_url', 'negative_prompt', 'loras', 'seed', 'guide_scale', 'frames_per_second', 'num_frames',
@@ -493,7 +495,7 @@ const I2V_SPECS: I2vSpec[] = [
     provider: 'wavespeed',
     model: 'wavespeed-ai/wan-2.1/i2v-480p-lora',
     duration: 5,
-    fps: 16,
+    // video-param-table.md §2: request_schema has no fps (additionalProperties:false) → not filled.
     seed: 24231881,
     cfg: 4,
     // Recipe 688x480 → WaveSpeed live Schema size enum ["832*480","480*832"] (upstream 400 on 688x480): closest landscape 832*480.
@@ -533,28 +535,28 @@ const I2V_SPECS: I2vSpec[] = [
     source: 'https://github.com/novitalabs/python-sdk examples/img2video + docs/provider-schema-drafts/novita.json',
   },
   // Recipe https://civitai.red/images/84050423 → MuAPI same-family wan2.1-lora-i2v (openapi.json WanLoRAI2VRequest: lora_list[LoraItem{path,scale}], duration 5|10, resolution).
-  // Schema lists no seed/cfg/size/negative: recipe values still sent as filled (雁 rule); upstream decides.
   {
     provider: 'muapi',
     model: 'wan2.1-lora-i2v',
     duration: 5,
-    fps: 16,
-    seed: 24231881,
-    cfg: 4,
-    size: '688x480',
+    // video-param-table.md §3: WanLoRAI2VRequest has no seed/cfg/fps/size/negative → not filled; resolution 480p, aspect_ratio 16:9.
+    resolution: '480p',
+    aspect_ratio: '16:9',
     loras: [{ name: 'https://huggingface.co/Remade-AI/matrix-shot/resolve/main/matrix_shot.safetensors', strength: 1, source: 'https://civitai.red/images/84050423' }],
-    schemaProperties: ['prompt', 'image_url', 'lora_list', 'aspect_ratio', 'resolution', 'quality', 'duration', 'seed'],
+    schemaProperties: ['prompt', 'image_url', 'lora_list', 'aspect_ratio', 'resolution', 'quality', 'duration'],
     source: 'https://api.muapi.ai/openapi.json#/paths/~1api~1v1~1wan2.1-lora-i2v',
   },
   // Recipe https://civitai.red/images/84050423 → Replicate same-family wan-video/wan2.1-with-lora (llms.txt: image, lora_url, lora_strength_model, seed, sample_guide_scale, frames).
   {
     provider: 'replicate',
     model: 'wan-video/wan2.1-with-lora',
-    duration: 5,
-    fps: 16,
+    // video-param-table.md §4: Schema has no fps/duration/size → frames 81 (enum 17|33|49|65|81), resolution 480p, aspect_ratio 16:9, model 14b.
+    num_frames: 81,
+    resolution: '480p',
+    aspect_ratio: '16:9',
+    recipeExtra: { model: '14b' },
     seed: 24231881,
     cfg: 4,
-    size: '688x480',
     loras: [{ name: 'https://huggingface.co/Remade-AI/matrix-shot/resolve/main/matrix_shot.safetensors', strength: 1, source: 'https://civitai.red/images/84050423' }],
     schemaProperties: ['prompt', 'negative_prompt', 'image', 'aspect_ratio', 'frames', 'resolution', 'lora_url', 'lora_strength_model', 'lora_strength_clip', 'sample_steps', 'sample_guide_scale', 'sample_shift', 'seed'],
     source: 'https://replicate.com/wan-video/wan2.1-with-lora/llms.txt',

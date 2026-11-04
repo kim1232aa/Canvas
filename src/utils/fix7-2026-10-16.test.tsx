@@ -9,7 +9,7 @@ import { NodeItem } from '../components/NodeItem';
 import { BASE_MODELS, NODE_DEFINITIONS } from '../constants/nodes';
 
 const noop = () => {};
-const KLING_I2V = 'fal-ai/kling-video/v3/standard/image-to-video';
+const KLING_I2V = 'fal-ai/kling-video/v3/standard/image-to-video/team-custom'; // not a catalog option → custom box shows it (catalog entries select in the dropdown, box stays empty)
 
 function renderVideoNode(opts: { title?: string; model?: string; width?: number } = {}) {
   const def = NODE_DEFINITIONS.AIVideoNode;

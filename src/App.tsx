@@ -4,7 +4,7 @@ import { saveImagePrefixFor } from './utils/saveImagePrefix';
 import { findActualRequest, countActualRequestLoras } from './utils/actualRequestLoras';
 import { modelSchemaVersion, subscribeModelSchema, getModelSizePairing } from './services/modelSchemaCache';
 import {migrateTensorWorkflow} from './utils/legacyTensorWorkflow';
-import {spatialRequestParameters, videoSchemaIssues} from './utils/frontendParameters';
+import {spatialRequestParameters} from './utils/frontendParameters';
 import {seedSchemaIssues} from './utils/seedRange';
 import {replaceSelectedResource,applyLoraNameToNodeValues,type ResourceSelection} from './utils/resourceSelection';
 import {readInspectorParameters,patchInspectorBranchNode,patchSpatialParameters,variationReference,modelCheckpoint,clearLoaderSize,loadersFedByLatent} from './utils/inspectorParameters';
@@ -1635,11 +1635,6 @@ export default function App() {
       const source=lora.provider==='tensor'?'tensorart':lora.provider;
       if(!chosen.provider || !chosen.checkpoint || (source && source!==chosen.provider))throw new Error('请先选择同平台底模，LoRA 不会自动修改供应商或底模');
       if(isInvalidTensorModel(chosen.provider,chosen.checkpoint))throw new Error('Tensor.Art 模型 API 只接受 TAMS 数字模型 ID 挂载 LoRA，请先选择真实 Tensor 模型 ID');
-      const civitaiSchemaId = chosen.provider === 'civitai' && canvasMode==='spatial' && frame?.params.civitaiEngine && frame?.params.civitaiEcosystem
-        ? `${frame.params.civitaiEngine}:${frame.params.civitaiEcosystem}`
-        : undefined;
-      const unsupported=isLoraUnsupportedOnEndpoint(chosen.provider, civitaiSchemaId || chosen.checkpoint);
-      if(unsupported.unsupported)throw new Error(unsupported.message || '所选端点不支持 LoRA');
     } catch(error:any) {setToast({type:'error',title:'LoRA 未挂载',message:error.message});return;}
     const selected={...lora,triggerWords:lora.triggerWords || '',civitaiId:chosen.provider==='civitai'?lora.civitaiId:undefined};
     if (canvasMode==='spatial') {

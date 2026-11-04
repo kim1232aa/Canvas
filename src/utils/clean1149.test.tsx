@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import { toastFromRunError, upstreamFailureToast, TOAST_BODY_FIRST_LINE_MAX } from './apiFailure';
 import { schemaPrefetchFailureData } from '../engines/drivers/SchemaProviderDriver';
 import { isCustomParametersJsonQuery, sanitizeCatalogQuery } from '../services/api';
-import { formatHistorySize, HISTORY_UNSUPPORTED_LABEL, historyParameterSourceLabel } from './historyParameters';
+import { formatHistorySize, historyParameterSourceLabel } from './historyParameters';
 import { formatRecordTime, CANVAS_TIME_ZONE, CANVAS_TIME_ZONE_LABEL } from '../services/executionTrace';
 import { groupAuxByOperation, groupGenByRun, genRunHeader, auxOperationHeader } from '../components/ExecutionLog';
 import type { ExecutionRecord } from '../services/executionTrace';

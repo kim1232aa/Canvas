@@ -1,6 +1,7 @@
-import { ensureModelSchema } from '../services/modelSchemaCache';
+import { ensureModelSchema, getModelSchemaEntry } from '../services/modelSchemaCache';
 import {PreviewPlaceholder} from './PreviewPlaceholder';
-import {videoSchemaField, videoSchemaValueIssue} from '../utils/frontendParameters';
+import { useLiveVideoModelMatch } from '../hooks/useLiveVideoModelMatch';
+import {videoSchemaField} from '../utils/frontendParameters';
 import {ProviderModelSelect} from './ProviderModelSelect';
 import {noteUserModelSelection} from '../services/userModelSelection';
 import React from 'react';
@@ -96,6 +97,14 @@ interface NodeItemProps {
   canvasLoras?: Array<{ name: string }>;
 }
 
+/** Official names already represented on the AI video node (widgets, sockets, model routing) — not repeated as Schema inputs. */
+const VIDEO_SCHEMA_COVERED = new Set(['prompt', 'negative_prompt', 'negativePrompt', 'seed', 'num_frames', 'frames_num', 'frames', 'duration', 'seconds', 'fps', 'frames_per_second', 'aspect_ratio', 'aspectRatio', 'resolution',
+  'image', 'image_url', 'start_image_url', 'sourceImage', 'images', 'image_file', 'loras', 'lora_list', 'lora_url', 'lora_strength_model', 'lora_strength_clip', 'lora_weight', 'diffusionModel', 'model_name', 'webhook_url']);
+/** Node widgets that pick the route (provider / endpoint), not upstream inputs: a Schema field with the same name (e.g. an input called `model`) is its own input, stored in custom_parameters. */
+const VIDEO_ROUTING_WIDGETS = new Set(['model', 'targetProvider']);
+const VIDEO_CFG_WIRES = new Set(['guidance_scale', 'guide_scale', 'sample_guide_scale', 'cfg_scale', 'cfgScale', 'cfg', 'guidance']);
+const VIDEO_EXTRA_PARAM_KEYS = ['cfg', 'steps', 'shift', 'size', 'width', 'height'] as const;
+
 export const NodeItem: React.FC<NodeItemProps> = ({
   node,
   isSelected,
@@ -134,6 +143,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
 
   const uploadInput = React.useRef<HTMLInputElement>(null);
   const [showUnsupported, setShowUnsupported] = React.useState(false);
+  const liveVideoMatch = useLiveVideoModelMatch(node.type === 'AIVideoNode' ? String(node.values?.targetProvider || '').trim() : '', node.type === 'AIVideoNode' ? String(node.values?.model || '').trim() : '');
   const greySeed = isCanvasFieldUnsupported(currentProvider, currentCheckpoint, 'seed');
   const greyNegative = isCanvasFieldUnsupported(currentProvider, currentCheckpoint, 'negative_prompt');
   const greyWidth = isCanvasFieldUnsupported(currentProvider, currentCheckpoint, 'width');
@@ -343,7 +353,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                   node.type === 'AIVideoNode'
                     ? 'font-bold text-[13px] text-white tracking-wide min-w-0 flex-1 whitespace-normal break-words leading-snug'
                     : LORA_LOADER_TYPES.has(node.type) || node.type === 'CheckpointLoaderSimple'
-                      ? 'font-bold text-[13px] text-white truncate tracking-wide min-w-0 flex-1'
+                      ? 'font-bold text-[13px] text-white tracking-wide min-w-0 flex-1 whitespace-normal [overflow-wrap:anywhere] leading-snug'
                       : 'font-bold text-[13px] text-white truncate tracking-wide min-w-0 flex-1'
                 }
                 title={hoverTitle}
@@ -490,7 +500,6 @@ export const NodeItem: React.FC<NodeItemProps> = ({
           {(node.values.import_unresolved_resource === true || node.values.unresolvedResource === true) && <p role="alert" className="text-amber-200">资源尚未核实，请从目录或公开 metadata 查验后重新选择。</p>}
           {modelChainBreakMessage && <p role="alert" data-testid="node-model-chain-break" className="p-2 rounded bg-amber-950/50 border border-amber-500/50 text-amber-100 text-[11px] leading-relaxed [overflow-wrap:break-word]">{modelChainBreakMessage}</p>}
           {/* clean-1333 #5/#6: only the node that caused the block gets a red box, with the SAME reason as the toast. */}
-          {node.values.require_reference_image === true && <p role="note" className="text-amber-200">编辑输入需要明确参考图；展示样图不作为输入。</p>}
           {node.type === 'CheckpointLoaderSimple' && node.values.targetProvider === 'sensenova' && <div className="space-y-2">
             <label className="block text-slate-300">SenseNova size<input type="text" aria-label="SenseNova size" value={node.values.size ?? ''} onMouseDown={e=>e.stopPropagation()} onPointerDown={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()} onChange={e=>onUpdateValue(node.id,'size',e.target.value === '' ? undefined : e.target.value)} placeholder="auto / 2048x2048；留空时按画布宽高(如1024x1024)发送，无宽高则 auto" className="mt-1 w-full rounded border border-slate-700 bg-[#121316] p-2 focus-visible:outline-2 focus-visible:outline-cyan-400" /></label>
             <label className="block text-slate-300">SenseNova output_format<input type="text" aria-label="SenseNova output_format" value={node.values.output_format ?? ''} onMouseDown={e=>e.stopPropagation()} onPointerDown={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()} onChange={e=>onUpdateValue(node.id,'output_format',e.target.value === '' ? undefined : e.target.value)} placeholder="png / jpeg / webp；留空不显式传" className="mt-1 w-full rounded border border-slate-700 bg-[#121316] p-2 focus-visible:outline-2 focus-visible:outline-cyan-400" /><span className="text-slate-400">本站支持 png/jpeg/webp；官方编辑文档也列 jpg，但本站尚未接通。自定义原值保留。</span></label>
@@ -519,6 +528,51 @@ export const NodeItem: React.FC<NodeItemProps> = ({
             }
             return <label className="block text-slate-300">视频分辨率 (resolution)<input aria-label="视频分辨率 (resolution)" value={cur} onMouseDown={e=>e.stopPropagation()} onChange={e=>onUpdateValue(node.id,'resolution',e.target.value === '' ? undefined : e.target.value)} placeholder="按端点 Schema 指定" className="w-full rounded border border-slate-700 bg-[#121316] p-2" /></label>;
           })()}
+          {/* AIVideoNode: filled params without a widget (preset cfg/steps/shift/size…) stay visible and editable; sent as filled. */}
+          {node.type === 'AIVideoNode' && VIDEO_EXTRA_PARAM_KEYS.filter((k) => !def.widgets?.some((w) => w.name === k) && filledCanvasValue(node.values?.[k]) && !(getModelSchemaEntry(node.values.targetProvider, node.values.model)?.propertiesObj?.[k])).map((k) => {
+            const v = node.values[k];
+            const numeric = typeof v === 'number';
+            return <div key={`video-extra-${k}`} className="space-y-1" data-testid={`video-extra-${k}`}>
+              <label className="text-slate-400 font-mono text-[11px] block whitespace-nowrap">{k}</label>
+              <input aria-label={k} type={numeric ? 'number' : 'text'} step="any" value={String(v)} onMouseDown={e=>e.stopPropagation()} onPointerDown={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()} onChange={e=>onUpdateValue(node.id, k, e.target.value === '' ? undefined : (numeric && Number.isFinite(Number(e.target.value)) ? Number(e.target.value) : e.target.value))} className="w-full bg-[#121316] border border-[#2d303a] rounded-lg px-2.5 py-1.5 text-slate-200 text-xs font-mono outline-none" />
+            </div>;
+          })}
+          {/* AIVideoNode: every official Schema property of the selected model gets an input (enum → dropdown) under its official name.
+              Fields already on the node (prompt/seed/duration/…/cfg) and reference/LoRA sockets are not repeated. Values live in custom_parameters and are sent as filled. */}
+          {node.type === 'AIVideoNode' && (() => {
+            const entry = getModelSchemaEntry(node.values.targetProvider, node.values.model);
+            const props: Record<string, any> = (entry?.status === 'ready' && entry.propertiesObj) || {};
+            let custom: Record<string, any> = {};
+            try { const c = typeof node.values.custom_parameters === 'string' ? JSON.parse(node.values.custom_parameters || '{}') : (node.values.custom_parameters || {}); if (c && typeof c === 'object' && !Array.isArray(c)) custom = c; } catch { /* invalid JSON: leave as is */ }
+            const schemaKeys = Object.keys(props).filter((k) => !VIDEO_SCHEMA_COVERED.has(k) && (VIDEO_ROUTING_WIDGETS.has(k) || !def.widgets?.some((w) => w.name === k)) && !(VIDEO_CFG_WIRES.has(k) && filledCanvasValue(node.values?.cfg)));
+            // Every filled custom_parameters value (preset recipe extras such as shift / width / height) is an editable input too,
+            // whether or not the Schema has loaded or lists it — it is sent as filled, so it must be visible.
+            const customKeys = Object.keys(custom).filter((k) => k !== '_canvas' && filledCanvasValue(custom[k]) && !schemaKeys.includes(k) && (VIDEO_ROUTING_WIDGETS.has(k) || !def.widgets?.some((w) => w.name === k)));
+            const keys = [...schemaKeys, ...customKeys];
+            const onValues = (k: string) => !VIDEO_ROUTING_WIDGETS.has(k) && filledCanvasValue(node.values?.[k]);
+            const write = (k: string, v: unknown) => { if (onValues(k)) { onUpdateValue(node.id, k, v); return; } const next = { ...custom }; if (v === undefined) delete next[k]; else next[k] = v; onUpdateValue(node.id, 'custom_parameters', JSON.stringify(next)); };
+            return keys.map((k) => {
+              const d = props[k] || {};
+              const variants = [d, ...(Array.isArray(d.anyOf) ? d.anyOf : []), ...(Array.isArray(d.oneOf) ? d.oneOf : []), ...(Array.isArray(d.allOf) ? d.allOf : [])];
+              const en = variants.find((x: any) => Array.isArray(x?.enum))?.enum as unknown[] | undefined;
+              const type = variants.find((x: any) => x?.type && x.type !== 'null')?.type;
+              const cur = onValues(k) ? node.values[k] : custom[k];
+              const curStr = cur === undefined || cur === null ? '' : typeof cur === 'object' ? JSON.stringify(cur) : String(cur);
+              const stop = { onMouseDown: (e: React.SyntheticEvent) => e.stopPropagation(), onPointerDown: (e: React.SyntheticEvent) => e.stopPropagation(), onKeyDown: (e: React.SyntheticEvent) => e.stopPropagation() };
+              const cls = 'w-full bg-[#121316] border border-[#2d303a] rounded-lg px-2.5 py-1.5 text-slate-200 text-xs font-mono outline-none';
+              const opts = en ?? (type === 'boolean' ? [true, false] : undefined);
+              return <div key={`video-schema-prop-${k}`} className="space-y-1" data-testid={`video-schema-prop-${k}`}>
+                <label className="text-slate-400 font-mono text-[11px] block whitespace-nowrap">{k}</label>
+                {opts
+                  ? <select aria-label={k} value={curStr} {...stop} onChange={(e) => { const hit = opts.find((o) => String(o) === e.target.value); write(k, e.target.value === '' ? undefined : (hit ?? e.target.value)); }} className={cls}>
+                      <option value="">未选择（不提交）</option>
+                      {curStr && !opts.some((o) => String(o) === curStr) && <option value={curStr}>{curStr}</option>}
+                      {opts.map((o) => <option key={String(o)} value={String(o)}>{String(o)}</option>)}
+                    </select>
+                  : <input aria-label={k} type={type === 'integer' || type === 'number' ? 'number' : 'text'} step="any" value={curStr} {...stop} onChange={(e) => { const raw = e.target.value; write(k, raw === '' ? undefined : (type === 'integer' || type === 'number') && Number.isFinite(Number(raw)) ? Number(raw) : raw); }} className={cls} />}
+              </div>;
+            });
+          })()}
           {/* Widgets according to definition */}
           {def.widgets?.map((widget) => {
             const value = node.values[widget.name];
@@ -528,7 +582,6 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               // Live Schema: absent → hide. Seeded schemaProperties (I2V presets): hide fields the endpoint does not declare — no empty shells while Schema is cold.
               ensureModelSchema(node.values.targetProvider, node.values.model);
               const vf = videoSchemaField(node.values.targetProvider, node.values.model, widget.name);
-              const issue = videoSchemaValueIssue(node.values.targetProvider, node.values.model, widget.name, value);
               // 雁: a filled value is sent as-is — its control stays visible and editable whatever the Schema says.
               const filled = filledCanvasValue(value);
               if (vf.state === 'absent' && !filled) return null;
@@ -546,24 +599,17 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               if (vf.state === 'declared' && vf.options?.length) {
                 return <div key={widget.name} className="space-y-1" data-testid={`video-schema-${widget.name}`}>
                   <label className="text-slate-400 font-mono text-[11px] block whitespace-nowrap">{widget.label}</label>
-                  <select aria-label={widget.label} value={cur} onMouseDown={e=>e.stopPropagation()} onPointerDown={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()} onChange={e=>onUpdateValue(node.id, widget.name, e.target.value === '' ? undefined : (vf.options!.find(o=>String(o)===e.target.value) as any))} className={`w-full bg-[#121316] border ${issue ? 'border-rose-500' : 'border-[#2d303a]'} rounded-lg px-2.5 py-1.5 text-slate-200 text-xs font-mono outline-none`}>
+                  <select aria-label={widget.label} value={cur} onMouseDown={e=>e.stopPropagation()} onPointerDown={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()} onChange={e=>onUpdateValue(node.id, widget.name, e.target.value === '' ? undefined : ((vf.options!.find(o=>String(o)===e.target.value) ?? e.target.value) as any))} className={`w-full bg-[#121316] border border-[#2d303a] rounded-lg px-2.5 py-1.5 text-slate-200 text-xs font-mono outline-none`}>
                     <option value="">未选择（不提交）</option>
-                    {issue && cur && <option value={cur}>{cur}（不可用）</option>}
+                    {cur && !vf.options.some(o=>String(o)===cur) && <option value={cur}>{cur}</option>}
                     {vf.options.map(o=><option key={String(o)} value={String(o)}>{widget.name === 'duration' ? `${o} 秒` : String(o)}</option>)}
                   </select>
-                  {issue && <p role="alert" className="text-[11px] text-rose-300">{issue}<button type="button" className="ml-2 underline" onMouseDown={e=>e.stopPropagation()} onClick={()=>onUpdateValue(node.id, widget.name, undefined)}>清除</button></p>}
                 </div>;
               }
               if (vf.state === 'declared') {
                 return <div key={widget.name} className="space-y-1" data-testid={`video-schema-${widget.name}`}>
-                  <label className="text-slate-400 font-mono text-[11px] block whitespace-nowrap">{widget.label}{vf.min !== undefined || vf.max !== undefined ? `（Schema ${vf.min ?? '…'}–${vf.max ?? '…'}）` : ''}</label>
-                  <input aria-label={widget.label} type="number" min={vf.min} max={vf.max} step={widget.step || 1} value={cur} onMouseDown={e=>e.stopPropagation()} onPointerDown={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()} onChange={e=>onUpdateValue(node.id, widget.name, e.target.value === '' ? undefined : parseFloat(e.target.value))} className={`w-full bg-[#121316] border ${issue ? 'border-rose-500' : 'border-[#2d303a]'} rounded-lg px-2.5 py-1.5 text-slate-200 text-xs font-mono outline-none`} />
-                  {issue && <p role="alert" className="text-[11px] text-rose-300">{issue}<button type="button" className="ml-2 underline" onMouseDown={e=>e.stopPropagation()} onClick={()=>onUpdateValue(node.id, widget.name, undefined)}>清除</button></p>}
-                </div>;
-              }
-              if (issue) {
-                return <div key={widget.name} className="space-y-1" data-testid={`video-schema-${widget.name}`}>
-                  <p role="alert" className="text-[11px] text-rose-300">{issue}<button type="button" className="ml-2 underline" onMouseDown={e=>e.stopPropagation()} onClick={()=>onUpdateValue(node.id, widget.name, undefined)}>清除</button></p>
+                  <label className="text-slate-400 font-mono text-[11px] block whitespace-nowrap">{widget.label}</label>
+                  <input aria-label={widget.label} type={cur !== '' && !Number.isFinite(Number(cur)) ? 'text' : 'number'} step={widget.step || 1} value={cur} onMouseDown={e=>e.stopPropagation()} onPointerDown={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()} onChange={e=>onUpdateValue(node.id, widget.name, e.target.value === '' ? undefined : (Number.isFinite(Number(e.target.value)) ? parseFloat(e.target.value) : e.target.value))} className={`w-full bg-[#121316] border border-[#2d303a] rounded-lg px-2.5 py-1.5 text-slate-200 text-xs font-mono outline-none`} />
                 </div>;
               }
               return null;
@@ -693,7 +739,9 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                 const currentProv = node.values?.targetProvider || '';
                 const providerOpts = opts.filter((o: any) => o.provider === currentProv);
                 const otherOpts = [] as typeof opts;
-                const isCustom = !providerOpts.some((o) => o.value === value) && Boolean(value);
+                const liveMatch = liveVideoMatch;
+                const inStatic = providerOpts.some((o) => o.value === value);
+                const isCustom = !inStatic && !liveMatch && Boolean(value);
 
                 return (
                   <div key={widget.name} className="space-y-1.5">
@@ -739,7 +787,9 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                 const currentProv = String(node.values?.targetProvider || '').trim();
                 const providerOpts = opts.filter((o: any) => o.provider === currentProv);
                 const otherOpts = [] as typeof opts;
-                const isCustom = !providerOpts.some((o) => o.value === value) && Boolean(value);
+                const liveMatch = liveVideoMatch;
+                const inStatic = providerOpts.some((o) => o.value === value);
+                const isCustom = !inStatic && !liveMatch && Boolean(value);
 
                 return (
                   <div key={widget.name} className="space-y-1.5">
@@ -767,7 +817,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                     <select
                       data-testid="node-video-model-select"
                       value={value || ''}
-                      title={(opts.find((o) => o.value === value)?.label as string) || (value ? String(value) : '未选择 (请先选择模型)')}
+                      title={(opts.find((o) => o.value === value)?.label as string) || liveMatch?.label || (value ? String(value) : '未选择 (请先选择模型)')}
                       onMouseDown={(e) => e.stopPropagation()}
                       onPointerDown={(e) => e.stopPropagation()}
                       onKeyDown={(e) => e.stopPropagation()}
@@ -779,6 +829,9 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                         <option key={`custom-video-${value}`} value={value}>
                           ★ [自定义视频端点] {value}
                         </option>
+                      )}
+                      {liveMatch && !inStatic && (
+                        <option key={`live-video-${liveMatch.value}`} value={liveMatch.value}>{liveMatch.label}</option>
                       )}
                       {currentProv && providerOpts.length > 0 && (
                         <optgroup label={`🎬 ${currentProv.toUpperCase()} 官方推荐视频大模型`}>
@@ -812,7 +865,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                         className="text-[0.875rem] leading-[1.5] text-slate-300 font-mono whitespace-normal [word-break:normal] [overflow-wrap:anywhere]"
                         title={String(value)}
                       >
-                        {(() => { const o = opts.find((x) => x.value === value) as any; if (!o) return `★ [自定义视频端点]`; return o.provider && o.provider !== currentProv ? `[${String(o.provider).toUpperCase()}] ${o.label}` : String(o.label); })()}
+                        {(() => { const o = opts.find((x) => x.value === value) as any; if (!o && liveMatch) return liveMatch.label; if (!o) return `★ [自定义视频端点]`; return o.provider && o.provider !== currentProv ? `[${String(o.provider).toUpperCase()}] ${o.label}` : String(o.label); })()}
                       </p>
                     ) : null}
 
@@ -821,7 +874,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                       <label htmlFor={`custom-model-${node.id}`} data-testid="node-custom-model-label" className="text-slate-400 font-mono text-[11px] block">自定义模型 (model)</label>
                       <CustomModelIdField
                         id={`custom-model-${node.id}`}
-                        value={String(value || '')}
+                        value={isCustom ? String(value || '') : ''}
                         placeholder="或输入任意视频端点 (如 fal-ai/wan-t2v)"
                         title="支持直接输入任意 Fal.ai / Tensor.Art / ModelScope 视频端点"
                         onChange={(v) => onUpdateValue(node.id, widget.name, v)}

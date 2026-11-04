@@ -7,7 +7,7 @@ import { upstreamFailureToast, LOCAL_BLOCK_NODE_LINE, LOCAL_BLOCK_TOAST_TITLE, T
 import { schemaFieldBadge, SchemaChoiceControls } from '../components/SchemaChoiceControls';
 import { FIELD_STATUS_LABEL } from '../components/FieldStatusBadge';
 import { providerSendsSeparateClipStrength } from './loraClipStrength';
-import { historyParameterSourceLabel, HISTORY_UNSUPPORTED_LABEL } from './historyParameters';
+import { historyParameterSourceLabel } from './historyParameters';
 import { groupAuxByOperation, auxOperationHeader } from '../components/ExecutionLog';
 import type { ExecutionRecord } from '../services/executionTrace';
 

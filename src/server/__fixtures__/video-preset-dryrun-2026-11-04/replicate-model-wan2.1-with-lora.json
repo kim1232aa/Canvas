@@ -1,0 +1,58 @@
+{
+ "cover_image_url": "https://tjzk.replicate.delivery/models_models_featured_image/6069c99f-38c7-433a-8a38-d6bd906e6773/wan-lora-cover.webp",
+ "created_at": "2025-03-10T10:50:50.146372Z",
+ "default_example": {
+  "completed_at": "2025-03-10T14:52:27.712452Z",
+  "created_at": "2025-03-10T14:45:04.239000Z",
+  "data_removed": false,
+  "error": null,
+  "id": "swdwvq9tdxrme0cng2281bmcwc",
+  "input": {
+   "model": "14b",
+   "frames": 81,
+   "prompt": "flat color 2d animation of a portrait of woman with white hair and green eyes, dynamic scene",
+   "lora_url": "https://huggingface.co/motimalu/wan-flat-color-v2/resolve/main/wan_flat_color_v2.safetensors",
+   "aspect_ratio": "16:9",
+   "sample_shift": 8,
+   "sample_steps": 30,
+   "lora_strength_clip": 1,
+   "sample_guide_scale": 5,
+   "lora_strength_model": 1
+  },
+  "is_free_trial_prediction": false,
+  "logs": "Random seed set to: 2381169083\nChecking inputs\n====================================\nChecking weights\nConverting LoraLoader node 49 to LoraLoaderFromURL\n\u2705 umt5_xxl_fp16.safetensors exists in ComfyUI/models/text_encoders\n\u2705 wan_2.1_vae.safetensors exists in ComfyUI/models/vae\n\u2705 wan2.1_t2v_14B_bf16.safetensors exists in ComfyUI/models/diffusion_models\n====================================\nRunning workflow\n[ComfyUI] got prompt\nExecuting node 37, title: Load Diffusion Model, class type: UNETLoader\n[ComfyUI] model weight dtype torch.bfloat16, manual cast: None\n[ComfyUI] model_type FLOW\nExecuting node 49, title: Load LoRA, class type: LoraLoaderFromURL\n[ComfyUI] Requested to load WanTEModel\nExecuting node 6, title: CLIP Text Encode (Positive Prompt), class type: CLIPTextEncode\n[ComfyUI] loaded completely 140527.45920448302 10835.4765625 True\nExecuting node 48, title: ModelSamplingSD3, class type: ModelSamplingSD3\nExecuting node 3, title: KSampler, class type: KSampler\n[ComfyUI] Requested to load WAN21\n[ComfyUI] loaded completely 123801.93451991271 27251.406372070312 True\n[ComfyUI]\n[ComfyUI] 0%|          | 0/30 [00:00<?, ?it/s]\n[ComfyUI] 3%|\u258e         | 1/30 [00:06<03:00,  6.21s/it]\n[ComfyUI] 7%|\u258b         | 2/30 [00:15<03:37,  7.76s/it]\n[ComfyUI] 10%|\u2588         | 3/30 [00:23<03:42,  8.26s/it]\n[ComfyUI] 13%|\u2588\u258e        | 4/30 [00:32<03:40,  8.50s/it]\n[ComfyUI] 17%|\u2588\u258b        | 5/30 [00:41<03:36,  8.64s/it]\n[ComfyUI] 20%|\u2588\u2588        | 6/30 [00:50<03:29,  8.73s/it]\n[ComfyUI] 23%|\u2588\u2588\u258e       | 7/30 [00:59<03:22,  8.78s/it]\n[ComfyUI] 27%|\u2588\u2588\u258b       | 8/30 [01:08<03:14,  8.82s/it]\n[ComfyUI] 30%|\u2588\u2588\u2588       | 9/30 [01:17<03:05,  8.85s/it]\n[ComfyUI] 33%|\u2588\u2588\u2588\u258e      | 10/30 [01:26<02:57,  8.86s/it]\n[ComfyUI] 37%|\u2588\u2588\u2588\u258b      | 11/30 [01:35<02:48,  8.88s/it]\n[ComfyUI] 40%|\u2588\u2588\u2588\u2588      | 12/30 [01:43<02:40,  8.89s/it]\n[ComfyUI] 43%|\u2588\u2588\u2588\u2588\u258e     | 13/30 [01:52<02:31,  8.90s/it]\n[ComfyUI] 47%|\u2588\u2588\u2588\u2588\u258b     | 14/30 [02:01<02:22,  8.90s/it]\n[ComfyUI] 50%|\u2588\u2588\u2588\u2588\u2588     | 15/30 [02:10<02:13,  8.90s/it]\n[ComfyUI] 53%|\u2588\u2588\u2588\u2588\u2588\u258e    | 16/30 [02:19<02:04,  8.90s/it]\n[ComfyUI] 57%|\u2588\u2588\u2588\u2588\u2588\u258b    | 17/30 [02:28<01:55,  8.91s/it]\n[ComfyUI] 60%|\u2588\u2588\u2588\u2588\u2588\u2588    | 18/30 [02:37<01:46,  8.90s/it]\n[ComfyUI] 63%|\u2588\u2588\u2588\u2588\u2588\u2588\u258e   | 19/30 [02:46<01:37,  8.91s/it]\n[ComfyUI] 67%|\u2588\u2588\u2588\u2588\u2588\u2588\u258b   | 20/30 [02:55<01:29,  8.91s/it]\n[ComfyUI] 70%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588   | 21/30 [03:04<01:20,  8.91s/it]\n[ComfyUI] 73%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258e  | 22/30 [03:13<01:11,  8.91s/it]\n[ComfyUI] 77%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258b  | 23/30 [03:21<01:02,  8.91s/it]\n[ComfyUI] 80%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588  | 24/30 [03:30<00:53,  8.91s/it]\n[ComfyUI] 83%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258e | 25/30 [03:39<00:44,  8.91s/it]\n[ComfyUI] 87%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258b | 26/30 [03:48<00:35,  8.91s/it]\n[ComfyUI] 90%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588 | 27/30 [03:57<00:26,  8.91s/it]\n[ComfyUI] 93%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258e| 28/30 [04:06<00:17,  8.91s/it]\n[ComfyUI] 97%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258b| 29/30 [04:15<00:08,  8.91s/it]\n[ComfyUI] 100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 30/30 [04:27<00:00,  9.71s/it]\nExecuting node 8, title: VAE Decode, class type: VAEDecode\nExecuting node 50, title: Video Combine \ud83c\udfa5\ud83c\udd65\ud83c\udd57\ud83c\udd62, class type: VHS_VideoCombine\n[ComfyUI] 100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 30/30 [04:27<00:00,  8.90s/it]\n[ComfyUI] Prompt executed in 392.13 seconds\noutputs:  {'50': {'gifs': [{'filename': 'R8_Wan_00001.mp4', 'subfolder': '', 'type': 'output', 'format': 'video/h264-mp4', 'frame_rate': 16.0, 'workflow': 'R8_Wan_00001.png', 'fullpath': '/tmp/outputs/R8_Wan_00001.mp4'}]}}\n====================================\nR8_Wan_00001.png\nR8_Wan_00001.mp4",
+  "metrics": {
+   "predict_time": 392.32474699,
+   "total_time": 443.473452
+  },
+  "model": "wan-video/wan2.1-with-lora",
+  "output": [
+   "https://replicate.delivery/xezq/EVxdGGJo5m6hDxI2Saz3pOeLwUOEegyijKf2ToWHaBQX1VuoA/R8_Wan_00001.mp4"
+  ],
+  "source": "web",
+  "started_at": "2025-03-10T14:45:55.387705Z",
+  "status": "succeeded",
+  "urls": {
+   "stream": "https://stream.replicate.com/v1/files/bcwr-ljynnsvgwvxa3r5b53cd3ydxoajxlphdh3vfyefzpmfalhxancoq",
+   "get": "https://api.replicate.com/v1/predictions/swdwvq9tdxrme0cng2281bmcwc",
+   "cancel": "https://api.replicate.com/v1/predictions/swdwvq9tdxrme0cng2281bmcwc/cancel"
+  },
+  "version": "0615656dcf90c621b2fe05bddc3c87db422dda0aad7b0a681fa641d8749e9fd3"
+ },
+ "description": "Run Wan2.1 14b or 1.3b with a lora",
+ "github_url": "https://github.com/replicate/cog-comfyui-wan-with-lora",
+ "latest_version": {
+  "id": "c48fa8ec65b13143cb552ab98ea17984eab9d70e9fe99479117de40a2a7f9ed0",
+  "created_at": "2025-03-17T14:20:30.861742Z",
+  "cog_version": "0.14.1"
+ },
+ "license_url": "https://github.com/replicate/cog-comfyui-wan-with-lora/blob/main/LICENSE",
+ "name": "wan2.1-with-lora",
+ "owner": "wan-video",
+ "is_official": false,
+ "paper_url": null,
+ "run_count": 50951,
+ "url": "https://replicate.com/wan-video/wan2.1-with-lora",
+ "visibility": "public",
+ "weights_url": null
+}

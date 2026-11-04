@@ -6,7 +6,7 @@ export class FalVideoContractError extends Error {
   readonly status = 400;
 }
 
-const CONTROLS = /^(?:model|provider|endpoint|inference_provider|custom_parameters|workflowSnapshot|isVideo|targetProvider|inputSchemaProperties)$|api.?key|authorization|credential|password|secret|token/i;
+const CONTROLS = /^(?:_canvas|model|provider|endpoint|inference_provider|custom_parameters|workflowSnapshot|isVideo|targetProvider|inputSchemaProperties)$|api.?key|authorization|credential|password|secret|token/i;
 
 /** Canvas field → candidate upstream wires (first match in live props wins). */
 const CANVAS_WIRES: Array<[string, string[]]> = [
@@ -93,19 +93,30 @@ export function buildFalVideoRequest(
     return mapped;
   };
 
-  // LoRA item shape comes only from the live OpenAPI item properties (e.g. LoraWeight {path, scale}).
+  // LoRA item shape comes only from the live OpenAPI item properties (e.g. LoraWeight {path, scale}):
+  // each item carries exactly the declared keys; canvas-internal keys (modelStrength/clipStrength/civitaiId/name/triggers…) are not sent.
   const loraItemProps = (props.loras as any)?.items?.properties;
-  if (Array.isArray(body.loras) && body.loras.length && loraItemProps && typeof loraItemProps === 'object') {
+  const mapLoraItems = (list: unknown): unknown => {
+    if (!Array.isArray(list) || !list.length || !loraItemProps || typeof loraItemProps !== 'object') return list;
     const pathKey = ['path', 'url', 'model_name', 'name', 'id'].find((k) => Object.hasOwn(loraItemProps, k));
     const strengthKey = ['scale', 'weight', 'strength'].find((k) => Object.hasOwn(loraItemProps, k));
-    if (pathKey) {
-      body = { ...body, loras: body.loras.map((l: any) => {
-        const item: Record<string, unknown> = { [pathKey]: l?.path || l?.url || l?.downloadUrl || l?.civitaiId || l?.name };
-        const sv = l?.strength ?? l?.modelStrength ?? l?.scale;
-        if (strengthKey && sv !== undefined && sv !== null && sv !== '') item[strengthKey] = sv;
-        return item;
-      }) };
-    }
+    if (!pathKey) return list;
+    return list.map((l: any) => {
+      if (typeof l === 'string') return { [pathKey]: l };
+      const item: Record<string, unknown> = { [pathKey]: l?.[pathKey] || l?.path || l?.url || l?.downloadUrl || l?.civitaiId || l?.name };
+      const sv = l?.[strengthKey ?? ''] ?? l?.strength ?? l?.modelStrength ?? l?.scale;
+      if (strengthKey && sv !== undefined && sv !== null && sv !== '') item[strengthKey] = Number(sv);
+      for (const k of Object.keys(loraItemProps)) if (k !== pathKey && k !== strengthKey && provided(l?.[k])) item[k] = l[k];
+      return item;
+    });
+  };
+  if (Array.isArray(body.loras)) body = { ...body, loras: mapLoraItems(body.loras) };
+  // Canvas-internal metadata (`_canvas`) never goes upstream; every user-filled key still does.
+  if (body.custom_parameters && typeof body.custom_parameters === 'object' && !Array.isArray(body.custom_parameters)) {
+    const { _canvas: _meta, ...rest } = body.custom_parameters as Record<string, unknown>;
+    void _meta;
+    if (Array.isArray(rest.loras)) rest.loras = mapLoraItems(rest.loras);
+    body = { ...body, custom_parameters: rest };
   }
   const payload: Record<string, unknown> = mapInputs(body);
   const fieldStatus: Record<string, string> = {};

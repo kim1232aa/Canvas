@@ -68,7 +68,7 @@ it('uses model-specific duration bounds and keeps custom Civitai recipe selector
   expect(civitai).not.toContain('读取所选模型的官方 Schema');
   expect(render('CheckpointLoaderSimple',{targetProvider:'fal',ckpt_name:'custom'})).not.toContain('Civitai engine');
   const blocked=render('AIVideoNode',{targetProvider:'civitai',model:'',execution_blocked_reason:'来源执行链尚未接入',require_reference_image:true});
-  expect(blocked).toContain('来源执行链尚未接入');expect(blocked).toContain('仅载入，不能立即运行');expect(blocked).toContain('编辑输入需要明确参考图');
+  expect(blocked).toContain('来源执行链尚未接入');expect(blocked).toContain('仅载入，不能立即运行');expect(blocked).not.toContain('展示样图不作为输入'); // 雁 never asked for this note
 });
 it('prompts an unconfigured Krea checkpoint to choose from its live model catalog and clears the note after selection',()=>{
   const noop=()=>{};const def=NODE_DEFINITIONS.CheckpointLoaderSimple;

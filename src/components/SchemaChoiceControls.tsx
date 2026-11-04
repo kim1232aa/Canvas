@@ -112,7 +112,6 @@ const parse = (value?: string): Record<string, any> | null => {
  * So a filled value is 「会发送 <value>」; an unfilled one is 「未填写，不发送」.
  */
 export const UNFILLED_NOT_SENT = '未填写，不发送';
-export const NOT_IN_SCHEMA_NOT_SENT = 'Schema 不支持，不发送';
 const scalarDefault = (d: unknown): string | undefined => d === undefined || d === null || typeof d === 'object' ? undefined : String(d);
 /**
  * clean-1029 four-state label (no 「待确认」): a filled key is in the body and sent verbatim; an unfilled key is not sent,

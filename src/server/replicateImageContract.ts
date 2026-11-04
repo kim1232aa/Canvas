@@ -223,6 +223,9 @@ export function buildReplicatePredictionRequest(
 
   const aspectRatio = String(body.aspect_ratio || body.aspectRatio || '').trim();
   if (aspectRatio) place('aspect_ratio', 'aspect_ratio', aspectRatio, ['aspect_ratio'], 'aspect_ratio');
+  // Canvas video resolution (e.g. 480p) — filled value sent as-is (was silently dropped: no placement existed).
+  const resolution = String(body.resolution ?? '').trim();
+  if (resolution) place('resolution', 'resolution', resolution, ['resolution'], 'resolution');
 
   if (typeof body.seed === 'number' && Number.isFinite(body.seed)) {
     place('seed', 'seed', Math.round(body.seed), ['seed'], 'seed');
