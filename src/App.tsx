@@ -46,7 +46,7 @@ import {
 } from './types/graph';
 import { ApiKeysState, GenerationHistoryItem } from './types/providers';
 import { WORKFLOW_PRESETS } from './constants/presets';
-import { NODE_DEFINITIONS } from './constants/nodes';
+import { NODE_DEFINITIONS, engineNodeTypeFor } from './constants/nodes';
 import { CategoryFilter } from './components/ModelHubModal';
 import {
   fetchHistoryItem,
@@ -2837,13 +2837,7 @@ export default function App() {
             setNodes((prev) => [...prev, newNode]);
             setSelectedNodeId(newNodeId);
           } else if (extraData?.preferEngineNode) {
-            const engineType =
-              detectedProvider === 'replicate' ? 'ReplicateEngineNode' :
-              detectedProvider === 'fal' ? 'FalAIEngineNode' :
-              detectedProvider === 'modelscope' ? 'ModelScopeNode' :
-              detectedProvider === 'modelscope_ai' ? 'ModelScopeAiNode' :
-              detectedProvider === 'nanogpt' ? 'NanoGPTNode' :
-              detectedProvider === 'gemini' ? 'GoogleImagenNode' : null;
+            const engineType = engineNodeTypeFor(detectedProvider) ?? null;
 
             if (engineType && NODE_DEFINITIONS[engineType]) {
               const def = NODE_DEFINITIONS[engineType];

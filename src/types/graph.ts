@@ -69,6 +69,8 @@ export interface NodeDefinition {
   widgets: WidgetDef[];
   defaultValues: Record<string, any>;
   colorTag?: string;
+  /** Provider whose all-in-one engine this node is (declaration drives Model Hub「添加一体化引擎节点」). */
+  engineProvider?: string;
 }
 
 export interface NodeInstance {

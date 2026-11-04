@@ -1,3 +1,4 @@
+import { engineNodeTypeFor } from '../constants/nodes';
 import { beginTraceOperation } from '../services/executionTrace';
 import {isExplicitLoraWeightUrl,selectionFromExplicitLoraUrl,selectionFromMetadata,verifyCivitaiSelection,type ResourceSelection} from '../utils/resourceSelection';
 import {isLoraWeightResource} from '../utils/isLoraWeightResource';
@@ -995,7 +996,8 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                 const providerLabel = friendlyProviderLabel(providerKey) || String(providerName);
                 // Prefer type/category/resourceKind — do not treat Fal gen endpoints with "lora" in id as weights.
                 const isLora = isLoraWeightResource(m, providerKey || m.provider || m._sourceProvider);
-                const isVideo = m.category === 'Video' || modelId.toLowerCase().includes('video') || modelId.toLowerCase().includes('wan2.1-t2v');
+                // Declared by the catalog normalizer (category Video / MotionModule), never guessed from the model id.
+                const isVideo = m.category === 'Video' || m.type === 'MotionModule';
                 let resource:ResourceSelection={name:String(modelId),provider:providerKey,resourceVerified:false};
                 try {resource=selectionFromMetadata(providerKey,m,isLora?'lora':'checkpoint');}catch{/* Incomplete catalog metadata does not clear unresolved imports. */}
                 const trainedWords = m.trainedWords || [];
@@ -1439,7 +1441,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                                 </button>
                               </div>
 
-                              {onAddModelNode && ['fal', 'replicate', 'modelscope', 'modelscope_ai', 'nanogpt', 'gemini'].includes(providerKey) && (
+                              {onAddModelNode && engineNodeTypeFor(providerKey) && (
                                 <button
                                   onClick={() => {
                                     onAddModelNode(resource.name, displayName, providerKey, {...m,...resource, preferEngineNode: true});

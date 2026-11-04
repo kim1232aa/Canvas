@@ -658,11 +658,14 @@ export async function fetchSchemaProviderRows(provider:Provider,read:ReturnType<
         notice:'无 LoRA 目录接口。请在 LoRA 节点填 HuggingFace owner/repo 或权重 URL（loras[].path）；scale 0–4 须显式传；仅挂到官方 Schema 含 loras 的模型。'};
     }
     if(provider==='novita') {
-      const sourceUrl=schemaProviders.novita.root+'/v3/model?filter.types=lora&filter.visibility=public&pagination.limit=100';
+      // Official Get Model (https://novita.ai/docs/api-reference/model-apis-get-model): pagination.limit (0,100],
+      // pagination.cursor (empty = from start), response pagination.next_cursor → next page's cursor.
+      const sourceUrl=schemaProviders.novita.root+'/v3/model?filter.types=lora&filter.visibility=public&pagination.limit=100'+(opts.cursor?'&pagination.cursor='+encodeURIComponent(opts.cursor):'');
       const {data}=await read(sourceUrl);
       const models=data?.models;
       if(!Array.isArray(models))throw Object.assign(new Error('Novita LoRA 目录响应没有 models 数组'),{status:502,rawResponse:data,endpoint:sourceUrl,errorSource:'upstream-protocol'});
-      return {rows:novitaLoraCatalogRows(models),sourceUrl};
+      const next=data?.pagination?.next_cursor;
+      return {rows:novitaLoraCatalogRows(models),sourceUrl,nextCursor:typeof next==='string' && next && next!==opts.cursor?next:null};
     }
     if(provider==='venice') {
       return {rows:[],noLoraCatalog:true,
@@ -861,7 +864,7 @@ export function getSchemaProviderCatalog(
     } else if (provider === 'wavespeed') {
       catalogNotice = 'WaveSpeed 目前未提供公开 LoRA 实时检索目录；如需使用自定义 LoRA，请在生成节点中直接填入可公开访问的模型权重 URL。';
     } else if (provider === 'sogni') {
-      catalogNotice = 'Sogni 暂无公共 LoRA 实时搜索接口；如需使用 LoRA，请在生成节点中直接填入 Sogni 协议支持的 LoRA 标识符或下载直链。';
+      catalogNotice = 'Sogni LoRA 目录由 /api/models?type=lora 实时读取；此同步辅助函数不返回快照。';
     } else if (provider === 'together') {
       catalogNotice = 'Together serverless image_loras：官方参数指南明文 no longer available（抓取 2026-10-16 15:08:58）；挂 LoRA 没有发出去，不补 loraItemFields。';
     } else if (provider === 'aimlapi') {

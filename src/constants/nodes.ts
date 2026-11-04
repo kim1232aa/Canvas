@@ -44,7 +44,6 @@ export const BASE_MODELS: BaseModelOption[] = [
   { label: '🇨🇳 [魔搭] Tongyi-MAI Z-Image-Turbo (API Token)', value: 'Tongyi-MAI/Z-Image-Turbo', provider: 'modelscope', category: 'checkpoint' },
   { label: '🇨🇳 [魔搭] SDXL 1.0 官方基模 (AI-ModelScope/stable-diffusion-xl-base-1.0)', value: 'AI-ModelScope/stable-diffusion-xl-base-1.0', provider: 'modelscope', category: 'checkpoint' },
   { label: '🇨🇳 [魔搭] FLUX.1 [dev] (AI-ModelScope/flux.1-dev)', value: 'AI-ModelScope/flux.1-dev', provider: 'modelscope', category: 'checkpoint' },
-  { label: '🇨🇳 [魔搭] Qwen-VL-Plus 视觉解析 (qwen/qwen-vl-plus)', value: 'qwen/qwen-vl-plus', provider: 'modelscope', category: 'edit' },
   { label: '🇨🇳 [魔搭] Kolors 旗舰基模 (Kwai-Kolors/Kolors)', value: 'Kwai-Kolors/Kolors', provider: 'modelscope', category: 'checkpoint' },
 
   // ===================== HUGGING FACE =====================
@@ -52,8 +51,6 @@ export const BASE_MODELS: BaseModelOption[] = [
   { label: '🤗 [HF] FLUX.1-dev (black-forest-labs/FLUX.1-dev)', value: 'black-forest-labs/FLUX.1-dev', provider: 'huggingface', category: 'checkpoint' },
   { label: '🤗 [HF] SDXL 1.0 (stabilityai/stable-diffusion-xl-base-1.0)', value: 'stabilityai/stable-diffusion-xl-base-1.0', provider: 'huggingface', category: 'checkpoint' },
   { label: '🤗 [HF] Stable Diffusion 3.5 Large (stabilityai/stable-diffusion-3.5-large)', value: 'stabilityai/stable-diffusion-3.5-large', provider: 'huggingface', category: 'checkpoint' },
-  { label: '🤗 [HF] Kolors (Kwai-Kolors/Kolors)', value: 'Kwai-Kolors/Kolors', provider: 'huggingface', category: 'checkpoint' },
-  { label: '🤗 [HF] SD 1.5 (runwayml/stable-diffusion-v1-5)', value: 'runwayml/stable-diffusion-v1-5', provider: 'huggingface', category: 'checkpoint' },
 
   { label: '🤗 [HF] Z-Image-Turbo（官方 Space）', value: 'Tongyi-MAI/Z-Image-Turbo', provider: 'huggingface', category: 'checkpoint' },
 
@@ -655,6 +652,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
 
   ModelScopeNode: {
     type: 'ModelScopeNode',
+    engineProvider: 'modelscope',
     title: '魔搭 CN (modelscope.cn 国内站)',
     category: 'providers',
     colorTag: '#6366f1',
@@ -692,6 +690,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
 
   ModelScopeAiNode: {
     type: 'ModelScopeAiNode',
+    engineProvider: 'modelscope_ai',
     title: '魔搭 AI (modelscope.ai 国际站)',
     category: 'providers',
     colorTag: '#7c3aed',
@@ -729,6 +728,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
 
   NanoGPTNode: {
     type: 'NanoGPTNode',
+    engineProvider: 'nanogpt',
     title: 'NanoGPT Fast Engine',
     category: 'providers',
     colorTag: '#06b6d4',
@@ -768,6 +768,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
 
   FalAIEngineNode: {
     type: 'FalAIEngineNode',
+    engineProvider: 'fal',
     title: 'Fal.ai 旗舰推理引擎',
     category: 'providers',
     colorTag: '#00f0ff',
@@ -829,6 +830,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
 
   ReplicateEngineNode: {
     type: 'ReplicateEngineNode',
+    engineProvider: 'replicate',
     title: 'Replicate 官方推理引擎',
     category: 'providers',
     colorTag: '#ea580c',
@@ -890,6 +892,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
 
   GoogleImagenNode: {
     type: 'GoogleImagenNode',
+    engineProvider: 'gemini',
     title: 'Google Gemini 生图 (官方直连引擎)',
     category: 'providers',
     colorTag: '#4285F4',
@@ -1110,3 +1113,8 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
     },
   },
 };
+/** All-in-one engine node type declared for a provider (NodeDefinition.engineProvider); undefined when none is declared. */
+export function engineNodeTypeFor(provider: string | undefined): string | undefined {
+  if (!provider) return undefined;
+  return Object.values(NODE_DEFINITIONS).find((d) => d.engineProvider === provider)?.type;
+}

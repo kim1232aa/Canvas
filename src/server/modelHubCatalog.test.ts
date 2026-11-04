@@ -21,7 +21,8 @@ describe('ModelHub and Backend Directory Architecture', () => {
     it('Sogni LoRA catalog returns empty list with explicit catalogNotice', () => {
       const res = getSchemaProviderCatalog('sogni', { type: 'lora' });
       expect(res.items).toEqual([]);
-      expect(res.catalogNotice).toContain('Sogni 暂无公共 LoRA 实时搜索接口');
+      expect(res.catalogNotice).toContain('Sogni LoRA 目录由 /api/models?type=lora 实时读取');
+      expect(res.catalogNotice).not.toContain('暂无公共 LoRA');
       expect(res.hasMore).toBe(false);
     });
 
