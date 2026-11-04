@@ -1,5 +1,6 @@
 import {registerSchemaProviderRoutes,makeSchemaProviderReader,fetchSchemaProviderRows,fetchSogniGenerateImageSchema,normalizeSchemaProviderItems,resolveSchemaRefs} from './src/server/schemaProviders.ts';
 import { historyCounts, isServedHistoryItem } from './src/utils/historyCounts';
+import { requestLogLines, writeRequestLog } from './src/server/requestLog.ts';
 import type { GenerationHistoryItem } from './src/types/providers';
 import { lookupExactHuggingFaceRepo } from './src/server/huggingFaceExactRepoSearch.ts';
 import { classifyCivitaiVideoPoll } from './src/server/civitaiVideoPoll.ts';
@@ -322,7 +323,8 @@ app.use((req, res, next) => {
   if (!isApiPath(req.path)) return next();
   try { parseCustomObject(req.body?.custom_parameters); }
   catch (error: any) {
-    // Failures are not history (雁 2026-11-04): the node/run log shows this error.
+    // Failures are not history (雁 2026-11-04): the node shows this error; the request log keeps it.
+    try { writeRequestLog(__dirname, requestLogLines(req.path, [], {...req.body, error:error.message, errorSource:'local'}, 400)); } catch { /* log write is best-effort; response below is unchanged */ }
     return res.status(400).json({error:error.message,errorSource:'local'});
   }
   const snapshot = req.body?.workflowSnapshot;
@@ -340,6 +342,7 @@ app.use((req, res, next) => {
       }
     }
     // Failures are not written to history (雁 2026-11-04); the response carries status + verbatim upstream body to the node.
+    try { writeRequestLog(__dirname, requestLogLines(req.path, context.traces, body, res.statusCode)); } catch (e: any) { console.error('[request-log] write failed', e?.message || e); }
     void externalizeMedia(body).then(stored => json(stored)).catch(next);
     return res;
   }) as typeof res.json;
