@@ -59,7 +59,7 @@ import { formatRecordTime } from '../services/executionTrace';
 import { loraSourceMismatch } from '../utils/loraSourceMismatch';
 import { EmphasizeLimit } from './TextEmphasis';
 import { CustomModelIdField } from './CustomModelIdField';
-import { providerSendsSeparateClipStrength, CLIP_STRENGTH_NOT_SENT_NOTE } from '../utils/loraClipStrength';
+import { providerSendsSeparateClipStrength } from '../utils/loraClipStrength';
 
 /** fix16.1 #3: render text with <wbr> after '/' and '-' — break points without inserting invisible characters. */
 export const BreakAfterSlashDash: React.FC<{ text: string }> = ({ text }) => {
@@ -590,7 +590,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               if ((node.values.targetProvider || currentProvider) !== 'huggingface') return null;
               return <label key={widget.name} className="block text-sm text-slate-400">HF 推理端点<select value={value || ''} onChange={e=>onUpdateValue(node.id,'hf_provider',e.target.value)} onMouseDown={e=>e.stopPropagation()} className="mt-1 w-full bg-[#121316] rounded-lg border border-[#2d303a] p-2 text-slate-200"><option value="">请选择实际执行路由</option><option value="hf-inference">HF Inference</option><option value="z-image-space">Z-Image 官方 Space</option><option value="fal-ai">HF Inference Providers → fal-ai（HF Token 计费）</option></select></label>;
             }
-            if (LORA_LOADER_TYPES.has(node.type) && widget.name === 'strength_clip' && !providerSendsSeparateClipStrength(currentProvider)) return <p key={widget.name} data-testid="clip-strength-not-sent" className="text-xs text-slate-400">{CLIP_STRENGTH_NOT_SENT_NOTE}</p>;
+            if (LORA_LOADER_TYPES.has(node.type) && widget.name === 'strength_clip' && !providerSendsSeparateClipStrength(currentProvider)) return null;
 
             // Z-Image Space-only controls (resolution / shift / random_seed / gallery_images): on any other HF route
             // (e.g. fal-ai/z-image/turbo, whose documented input has none of them) an empty one is an empty shell → hidden.

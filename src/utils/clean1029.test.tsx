@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import { upstreamFailureToast, LOCAL_BLOCK_NODE_LINE, LOCAL_BLOCK_TOAST_TITLE, TOAST_BODY_FIRST_LINE_MAX } from './apiFailure';
 import { schemaFieldBadge, SchemaChoiceControls } from '../components/SchemaChoiceControls';
 import { FIELD_STATUS_LABEL } from '../components/FieldStatusBadge';
-import { providerSendsSeparateClipStrength, CLIP_STRENGTH_NOT_SENT_NOTE } from './loraClipStrength';
+import { providerSendsSeparateClipStrength } from './loraClipStrength';
 import { historyParameterSourceLabel, HISTORY_UNSUPPORTED_LABEL } from './historyParameters';
 import { groupAuxByOperation, auxOperationHeader } from '../components/ExecutionLog';
 import type { ExecutionRecord } from '../services/executionTrace';
@@ -75,9 +75,9 @@ describe('clean-1029 #3 four field states, no 待确认', () => {
 });
 
 describe('clean-1029 #4 CLIP strength hidden unless sent separately', () => {
-  it('no provider sends it separately → note for all (incl. venice / wavespeed)', () => {
+  it('no provider sends it separately → hidden for all, no note (incl. venice / wavespeed)', () => {
     for (const p of ['venice', 'wavespeed', 'fal', 'civitai', 'replicate']) expect(providerSendsSeparateClipStrength(p)).toBe(false);
-    expect(CLIP_STRENGTH_NOT_SENT_NOTE).toContain('不独立发送');
+    expect(read('../components/NodeItem.tsx')).not.toContain('clip-strength-not-sent');
     expect(read('../components/NodeItem.tsx')).toContain("!providerSendsSeparateClipStrength(currentProvider)");
   });
 });
