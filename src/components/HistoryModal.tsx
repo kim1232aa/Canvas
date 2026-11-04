@@ -595,7 +595,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
                           : 'image'
                       }
                       alt={item.prompt || ''}
-                      mediaClassName="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      mediaClassName="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
                       videoProps={{ loop: true, muted: true, preload: 'none' }}
                     />
                     <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-md px-2 py-0.5 rounded text-[11px] font-mono text-cyan-300 border border-cyan-500/30">

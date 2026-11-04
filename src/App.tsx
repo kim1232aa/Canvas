@@ -2135,11 +2135,23 @@ export default function App() {
       const el = document.querySelector('[data-testid="canvas-container"]') as HTMLElement | null;
       if (!el) return;
       const insets = measureChromeInsets(el);
-      const cTop = el.getBoundingClientRect().top + insets.top;
-      const tops = nodes.map((n) => document.getElementById(`node-${n.id}`)?.getBoundingClientRect().top).filter((v): v is number => typeof v === 'number');
-      if (!tops.length) return;
-      const minTop = Math.min(...tops);
+      const box = el.getBoundingClientRect();
+      const cTop = box.top + insets.top;
+      // Bottom dock (data-canvas-chrome="bottom") is chrome too: node bottoms must stay above it.
+      const cBottom = box.bottom - insets.bottom;
+      const rects = nodes.map((n) => document.getElementById(`node-${n.id}`)?.getBoundingClientRect()).filter((r): r is DOMRect => !!r);
+      if (!rects.length) return;
+      const minTop = Math.min(...rects.map((r) => r.top));
+      const maxBottom = Math.max(...rects.map((r) => r.bottom));
+      if (maxBottom - minTop > cBottom - cTop) {
+        // Taller than the usable band: zoom-to-fit inside the chrome insets (nodes never moved).
+        const nodeEl = (id: string) => document.getElementById(`node-${id}`);
+        const all = fitItemsForMode('graph', nodes, spatialFrames, (id) => nodeEl(id)?.offsetHeight || undefined, (id) => nodeEl(id)?.offsetWidth || undefined);
+        setTransform(computeFitTransform(all, { width: box.width, height: box.height }, { insets, minScale: 0.05 }));
+        return;
+      }
       if (minTop < cTop) setTransform((t) => ({ ...t, y: t.y + (cTop - minTop) }));
+      else if (maxBottom > cBottom) setTransform((t) => ({ ...t, y: t.y - (maxBottom - cBottom) }));
     });
     return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
