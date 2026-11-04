@@ -1,5 +1,11 @@
 # 交接状态更新（用户于 2026-10-04 要求）
 
+## 2026-11-05 供应商复核、Civitai 导入闭环与 HF 真实复验
+
+- 按用户要求重新调查官方 API，不把旧交接文档当作事实。Civitai 修复均先以失败测试复现：导入器生成的 `civitai:modelId@versionId` 现在可由生成解析器接受；数组形 `loras[{air,strength}]` 在历史中不再变成索引 `0/1` 与 `NaN`；只有 `clipStrength` 时明确本地拒发并要求模型强度，不再静默让上游套用默认强度。对应修复分别提交并推送，测试通过不代表 Civitai 真实生成已验收。
+- Hugging Face → fal-ai 真实前端复验：Z-Image Turbo + LoRA，7 节点、9 连线，实际发送 1216×832、12 步、CFG 1、固定种子与 `loras[{path,scale:0.9}]`。模型元数据 HTTP 200；指定 fal-ai 端点的四次计费尝试均 HTTP 402，原文要求购买预付费额度或订阅 PRO，记 **PASS_BILLING**，没有图片。完整证据见 `docs/evidence/t7-huggingface-current-acceptance.md` 与同目录 Z-Image JSON/截图。
+- 本轮完整本地回归曾达到 229 文件、1689 项通过；该数字只对应上述 Civitai 强度修复提交，不能外推后续文档或其他供应商。初始网络 `fetch failed` 没有 HTTP 响应，单独记环境故障，不冒充供应商结果。
+
 ## 2026-11-03 后续官方证据与固定数据核查
 
 - 继续检索官方文档和公开 Schema；盘点见 `docs/api-integration-review-2026-11-02.md` 的续查节。SenseNova 官方 `/v1/models` 经凭据实时读取，保留原始 reasoning 字段；Sogni selector/Schema 改读官方实时文件且不回退本地旧包；模型选择器失败或空结果不再回退旧目录。

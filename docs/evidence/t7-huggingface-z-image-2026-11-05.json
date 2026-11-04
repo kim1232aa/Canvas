@@ -1,0 +1,383 @@
+{
+  "date": "2026-11-05",
+  "result": "PASS_BILLING",
+  "workflowSnapshot": {
+    "name": "Z-Image 创作画布",
+    "nodes": [
+      {
+        "id": "std-huggingface-t2i-ckpt",
+        "type": "CheckpointLoaderSimple",
+        "title": "加载底模 (Hugging Face)",
+        "pos": {
+          "x": 50,
+          "y": 120
+        },
+        "width": 300,
+        "inputs": [],
+        "outputs": [
+          {
+            "id": "MODEL",
+            "name": "MODEL",
+            "type": "MODEL",
+            "label": "MODEL"
+          },
+          {
+            "id": "CLIP",
+            "name": "CLIP",
+            "type": "CLIP",
+            "label": "CLIP"
+          },
+          {
+            "id": "VAE",
+            "name": "VAE",
+            "type": "VAE",
+            "label": "VAE"
+          }
+        ],
+        "values": {
+          "ckpt_name": "renderartist/Technically-Color-Z-Image-Turbo",
+          "targetProvider": "huggingface",
+          "hf_provider": "fal-ai",
+          "custom_parameters": "{\"_canvas\":{\"scope\":{\"provider\":\"huggingface\",\"model\":\"renderartist/Technically-Color-Z-Image-Turbo\"},\"schemaProperties\":[\"prompt\",\"seed\",\"steps\",\"num_inference_steps\",\"guidance\",\"guidance_scale\",\"cfg\",\"cfg_scale\",\"width\",\"height\",\"size\",\"image_size\",\"loras\",\"lora_url\",\"lora_weight\",\"lora_weights\"]}}"
+        },
+        "state": "idle",
+        "executionProgress": 0,
+        "upstreamFailed": false,
+        "upstreamLocalBlocked": false
+      },
+      {
+        "id": "std-huggingface-t2i-lora",
+        "type": "LoRALoader",
+        "title": "加载 LoRA",
+        "pos": {
+          "x": 400,
+          "y": 80
+        },
+        "width": 300,
+        "inputs": [
+          {
+            "id": "model",
+            "name": "model",
+            "type": "MODEL",
+            "label": "MODEL"
+          },
+          {
+            "id": "clip",
+            "name": "clip",
+            "type": "CLIP",
+            "label": "CLIP"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "MODEL",
+            "name": "MODEL",
+            "type": "MODEL",
+            "label": "MODEL"
+          },
+          {
+            "id": "CLIP",
+            "name": "CLIP",
+            "type": "CLIP",
+            "label": "CLIP"
+          }
+        ],
+        "values": {
+          "lora_name": "renderartist/Technically-Color-Z-Image-Turbo",
+          "strength_model": 0.9,
+          "strength_clip": 0.9,
+          "trigger_words": ""
+        },
+        "state": "idle",
+        "executionProgress": 0,
+        "upstreamFailed": false,
+        "upstreamLocalBlocked": false
+      },
+      {
+        "id": "std-huggingface-t2i-pos",
+        "type": "CLIPTextEncode",
+        "title": "正向提示词",
+        "pos": {
+          "x": 760,
+          "y": 140
+        },
+        "width": 400,
+        "inputs": [
+          {
+            "id": "clip",
+            "name": "clip",
+            "type": "CLIP",
+            "label": "CLIP"
+          },
+          {
+            "id": "image",
+            "name": "image",
+            "type": "IMAGE",
+            "label": "image"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "CONDITIONING",
+            "name": "CONDITIONING",
+            "type": "CONDITIONING",
+            "label": "CONDITIONING"
+          }
+        ],
+        "values": {
+          "text": "t3chnic4lly A gritty documentary-style photograph capturing a tightly packed crowd of muscular old men in black suits, dancing energetically within a dark industrial warehouse. The old men's faces show exaggerated expressions of joy. Sweat glistens on their faces. The lighting is provided by harsh, direct on-camera flash, creating stark white highlights, deep shadows, and significant motion blur among the moving figures. Industrial commercial lasers cut through the dark, highlighting dust motes. Concrete pillars and exposed structural beams are visible in the crowded background. The film grain is heavy."
+        },
+        "state": "idle",
+        "executionProgress": 0,
+        "upstreamFailed": false,
+        "upstreamLocalBlocked": false
+      },
+      {
+        "id": "std-huggingface-t2i-lat",
+        "type": "EmptyLatentImage",
+        "title": "尺寸（空潜空间）",
+        "pos": {
+          "x": 50,
+          "y": 659
+        },
+        "width": 280,
+        "inputs": [],
+        "outputs": [
+          {
+            "id": "LATENT",
+            "name": "LATENT",
+            "type": "LATENT",
+            "label": "LATENT"
+          }
+        ],
+        "values": {
+          "width": 1216,
+          "height": 832,
+          "batch_size": 1
+        },
+        "state": "idle",
+        "executionProgress": 0,
+        "upstreamFailed": false,
+        "upstreamLocalBlocked": false
+      },
+      {
+        "id": "std-huggingface-t2i-samp",
+        "type": "KSampler",
+        "title": "采样器",
+        "pos": {
+          "x": 1220,
+          "y": 200
+        },
+        "width": 300,
+        "inputs": [
+          {
+            "id": "model",
+            "name": "model",
+            "type": "MODEL",
+            "label": "MODEL"
+          },
+          {
+            "id": "positive",
+            "name": "positive",
+            "type": "CONDITIONING",
+            "label": "positive"
+          },
+          {
+            "id": "negative",
+            "name": "negative",
+            "type": "CONDITIONING",
+            "label": "negative"
+          },
+          {
+            "id": "latent_image",
+            "name": "latent_image",
+            "type": "LATENT",
+            "label": "latent_image"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "LATENT",
+            "name": "LATENT",
+            "type": "LATENT",
+            "label": "LATENT"
+          }
+        ],
+        "values": {
+          "seed": 1840591390,
+          "control_after_generate": "fixed",
+          "steps": 12,
+          "cfg": 1
+        },
+        "state": "error",
+        "executionProgress": 0,
+        "errorAt": "2026-11-04T20:54:49.334Z",
+        "upstreamFailed": false,
+        "upstreamLocalBlocked": false
+      },
+      {
+        "id": "std-huggingface-t2i-vae",
+        "type": "VAEDecode",
+        "title": "VAE 解码",
+        "pos": {
+          "x": 1580,
+          "y": 200
+        },
+        "width": 260,
+        "inputs": [
+          {
+            "id": "samples",
+            "name": "samples",
+            "type": "LATENT",
+            "label": "samples"
+          },
+          {
+            "id": "vae",
+            "name": "vae",
+            "type": "VAE",
+            "label": "vae"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "IMAGE",
+            "name": "IMAGE",
+            "type": "IMAGE",
+            "label": "IMAGE"
+          }
+        ],
+        "values": {},
+        "state": "idle",
+        "executionProgress": 0,
+        "upstreamFailed": false,
+        "upstreamLocalBlocked": false
+      },
+      {
+        "id": "std-huggingface-t2i-save",
+        "type": "SaveImage",
+        "title": "保存图像",
+        "pos": {
+          "x": 1900,
+          "y": 200
+        },
+        "width": 300,
+        "inputs": [
+          {
+            "id": "images",
+            "name": "images",
+            "type": "IMAGE",
+            "label": "images"
+          }
+        ],
+        "outputs": [],
+        "values": {
+          "filename_prefix": "std_huggingface"
+        },
+        "state": "idle",
+        "executionProgress": 0,
+        "upstreamFailed": false,
+        "upstreamLocalBlocked": false
+      }
+    ],
+    "connections": [
+      {
+        "id": "std-huggingface-t2i-c-model-lora",
+        "fromNodeId": "std-huggingface-t2i-ckpt",
+        "fromSocketId": "MODEL",
+        "toNodeId": "std-huggingface-t2i-lora",
+        "toSocketId": "model",
+        "type": "MODEL"
+      },
+      {
+        "id": "std-huggingface-t2i-c-clip-lora",
+        "fromNodeId": "std-huggingface-t2i-ckpt",
+        "fromSocketId": "CLIP",
+        "toNodeId": "std-huggingface-t2i-lora",
+        "toSocketId": "clip",
+        "type": "CLIP"
+      },
+      {
+        "id": "std-huggingface-t2i-c-clip-pos",
+        "fromNodeId": "std-huggingface-t2i-lora",
+        "fromSocketId": "CLIP",
+        "toNodeId": "std-huggingface-t2i-pos",
+        "toSocketId": "clip",
+        "type": "CLIP"
+      },
+      {
+        "id": "std-huggingface-t2i-c-model-samp",
+        "fromNodeId": "std-huggingface-t2i-lora",
+        "fromSocketId": "MODEL",
+        "toNodeId": "std-huggingface-t2i-samp",
+        "toSocketId": "model",
+        "type": "MODEL"
+      },
+      {
+        "id": "std-huggingface-t2i-c-pos-samp",
+        "fromNodeId": "std-huggingface-t2i-pos",
+        "fromSocketId": "CONDITIONING",
+        "toNodeId": "std-huggingface-t2i-samp",
+        "toSocketId": "positive",
+        "type": "CONDITIONING"
+      },
+      {
+        "id": "std-huggingface-t2i-c-lat-samp",
+        "fromNodeId": "std-huggingface-t2i-lat",
+        "fromSocketId": "LATENT",
+        "toNodeId": "std-huggingface-t2i-samp",
+        "toSocketId": "latent_image",
+        "type": "LATENT"
+      },
+      {
+        "id": "std-huggingface-t2i-c-samp-vae",
+        "fromNodeId": "std-huggingface-t2i-samp",
+        "fromSocketId": "LATENT",
+        "toNodeId": "std-huggingface-t2i-vae",
+        "toSocketId": "samples",
+        "type": "LATENT"
+      },
+      {
+        "id": "std-huggingface-t2i-c-ckpt-vae",
+        "fromNodeId": "std-huggingface-t2i-ckpt",
+        "fromSocketId": "VAE",
+        "toNodeId": "std-huggingface-t2i-vae",
+        "toSocketId": "vae",
+        "type": "VAE"
+      },
+      {
+        "id": "std-huggingface-t2i-c-vae-save",
+        "fromNodeId": "std-huggingface-t2i-vae",
+        "fromSocketId": "IMAGE",
+        "toNodeId": "std-huggingface-t2i-save",
+        "toSocketId": "images",
+        "type": "IMAGE"
+      }
+    ]
+  },
+  "actualUpstreamRequest": {
+    "provider": "Hugging Face Inference Providers → fal-ai",
+    "model": "Tongyi-MAI/Z-Image-Turbo",
+    "method": "POST",
+    "endpoint": "https://router.huggingface.co/fal-ai/fal-ai/z-image/turbo/lora?_subdomain=queue",
+    "requestBody": {
+      "prompt": "t3chnic4lly A gritty documentary-style photograph capturing a tightly packed crowd of muscular old men in black suits, dancing energetically within a dark industrial warehouse. The old men's faces show exaggerated expressions of joy. Sweat glistens on their faces. The lighting is provided by harsh, direct on-camera flash, creating stark white highlights, deep shadows, and significant motion blur among the moving figures. Industrial commercial lasers cut through the dark, highlighting dust motes. Concrete pillars and exposed structural beams are visible in the crowded background. The film grain is heavy.",
+      "image_size": {
+        "width": 1216,
+        "height": 832
+      },
+      "num_inference_steps": 12,
+      "guidance_scale": 1,
+      "seed": 1840591390,
+      "loras": [
+        {
+          "path": "https://huggingface.co/renderartist/Technically-Color-Z-Image-Turbo/resolve/main/Technically_Color_Z_Image_Turbo_v1_renderartist_2000.safetensors",
+          "scale": 0.9
+        }
+      ]
+    },
+    "status": 402,
+    "responseBody": {
+      "error": "Purchase pre-paid credits to continue using Inference Providers. Alternatively, subscribe to PRO to get monthly included credits."
+    }
+  }
+}

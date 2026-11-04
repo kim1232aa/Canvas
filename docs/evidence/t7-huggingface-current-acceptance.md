@@ -1,5 +1,20 @@
 # T7 Hugging Face current acceptance — PASS_BILLING
 
+## 2026-11-05 Z-Image Turbo + LoRA 复验
+
+验收入口仍是真实前端 ComfyCanvas Studio，不是终端直调。显式选择 `Hugging Face Inference Providers → fal-ai`，画布为 7 个节点、9 条连线；完整节点、连线、实际请求体和响应原文见 `t7-huggingface-z-image-2026-11-05.json`，前端终态截图见 `shots/t7-huggingface-z-image-402-2026-11-05.png`。
+
+- 底模：`renderartist/Technically-Color-Z-Image-Turbo`；实时模型元数据请求返回 HTTP 200。
+- 实际上游模型：`Tongyi-MAI/Z-Image-Turbo`；端点：`POST https://router.huggingface.co/fal-ai/fal-ai/z-image/turbo/lora?_subdomain=queue`。
+- 实际参数：`image_size={width:1216,height:832}`、`num_inference_steps=12`、`guidance_scale=1`、`seed=1840591390`。
+- 实际 LoRA：`https://huggingface.co/renderartist/Technically-Color-Z-Image-Turbo/resolve/main/Technically_Color_Z_Image_Turbo_v1_renderartist_2000.safetensors`，`scale=0.9`。请求体确实包含 `loras[{path,scale}]`，不是只连了画布节点。
+- 四次 KeyPool 计费尝试均到达同一指定端点并返回 HTTP 402；每次上游原文均为：`{"error":"Purchase pre-paid credits to continue using Inference Providers. Alternatively, subscribe to PRO to get monthly included credits."}`。
+- 结论仅为此样本的 **PASS_BILLING**：没有图片，不记 PASS_GENERATION，也没有切换供应商、模型或端点。
+
+此前的 `fetch failed` 发生在模型元数据 GET，未收到 HTTP 响应，记为网络环境问题；恢复网络后才得到上述 200 与 402，不能把前一次网络失败混入供应商计费结论。
+
+## 2026-10-08 FLUX.1-dev + LoRA 验收
+
 日期：2026-10-08。验收入口：真实前端 ComfyCanvas Studio；显式选择 Hugging Face 的 `HF Inference Providers → fal-ai` 路由，不是直接 API 测试。
 
 ## 结论
