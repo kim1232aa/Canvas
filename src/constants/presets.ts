@@ -791,9 +791,9 @@ const STD_SPECS: StdSpec[] = [
   { provider: 'deepinfra', ckpt: 'black-forest-labs/FLUX-1-schnell', hasLora: false, hasNegative: false, omit: ['seed', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise'] },
   // Sogni hosted-tool selector: live official generate_image.schema.json enum includes krea-2-turbo (verified 2026-11-03, 30 models). Not a Krea API path.
   // Driver maps cfg→guidance; Schema has no steps → omit steps. LoRA via loras+loraStrengths when catalog confirms.
-  // Recipe https://civitai.red/images/146243000 (verbatim seed/steps 7/cfg 1.3/euler/928x1152; Sogni schema has no steps, sent as-is). 7 recipe LoRAs; only civitai 3081555 (Kodachrome 0.8) is in Sogni catalog — others not substituted.
-  { provider: 'sogni', ckpt: 'krea-2-turbo', hasLora: true, seed: 934059315, steps: 7, cfg: 1.3, sampler: 'euler', width: 928, height: 1152,
-    loras: [{ name: 'krea2-kodachrome-photo', strength: 0.8, source: 'https://civitai.red/images/146243000' }],
+  // Recipe https://civitai.red/images/142361732 (verbatim seed/steps 10/cfg 1/euler/768x1376; Sogni schema has no steps, sent as-is). Single recipe LoRA civitai 3129219 (weight 1) = Sogni catalog krea2-fever-dream-mood.
+  { provider: 'sogni', ckpt: 'krea-2-turbo', hasLora: true, seed: 64107730, steps: 10, cfg: 1, sampler: 'euler', width: 768, height: 1376,
+    loras: [{ name: 'krea2-fever-dream-mood', strength: 1, source: 'https://civitai.red/images/142361732' }],
     omit: ['scheduler', 'denoise'] },
   // Live OpenAPI GET /v1/models/black-forest-labs/flux-dev-lora + default_example: lora_weights=fofr/flux-80s-cyberpunk, lora_scale=1, guidance=3, steps=28.
   // Official docs example also cites fofr/flux-pixar-cars; default_example LoRA is the acceptance recipe id.
