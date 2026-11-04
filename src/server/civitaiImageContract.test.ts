@@ -94,6 +94,15 @@ describe('Civitai image request contract', () => {
     }, api({}), oa());
     expect(input.loras).toEqual([{ air: lora, strength: 0.7 }]);
   });
+  it('rejects clip-only LoRA strength instead of silently invoking an upstream default', async () => {
+    const lora = 'urn:air:flux2:lora:civitai:3@4';
+    await expect(buildCivitaiImageInput({
+      model: 'urn:air:flux2:checkpoint:civitai:1@2',
+      engine: 'flux2',
+      ecosystem: 'dev',
+      loras: [{ civitaiId: lora, clipStrength: 0.7 }],
+    }, api({}), oa())).rejects.toThrow(/clipStrength.*modelStrength|clipStrength.*strength|模型强度/);
+  });
   it('Flux2 Klein still builds AIR→strength loras map', async () => {
     const lora = 'urn:air:flux2:lora:civitai:5@6';
     const input = await buildCivitaiImageInput({

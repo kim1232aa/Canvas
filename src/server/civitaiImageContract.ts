@@ -290,6 +290,9 @@ async function buildCivitaiBaseInput(body: Body, get: CivitaiPublicGet, official
     const flux2Resource = resourceEcosystem === 'flux2' && (ecosystem === 'flux2Dev' || ecosystem === 'flux2Klein' || ecosystem === 'dev' || ecosystem === 'klein' || engine === 'flux2') || !!spec?.request?.airEcosystems?.includes(resourceEcosystem);
     void sd1Resource; void zImageTurboResource; void zImageBaseResource; void flux2Resource;
     const strength = lora.strength ?? lora.modelStrength;
+    if (!provided(strength) && provided(lora.clipStrength)) {
+      fail('本地未发送：Civitai LoRA 只有 clipStrength，没有可映射到 loras.strength 的模型强度；请填写 strength/modelStrength，不把 CLIP 强度冒充模型强度');
+    }
     const sv = provided(strength) ? Number(strength) : (undefined as unknown as number);
     if (loraShape === 'array') lorasArr.push(sv === undefined ? ({ air: resource } as any) : { air: resource, strength: sv });
     else lorasMap[resource] = sv;
