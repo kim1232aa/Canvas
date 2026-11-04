@@ -4,6 +4,8 @@ import {
   parseReplicatePredictionResponse,
   parseReplicateModelRef,
   extractReplicateInputProperties,
+  extractReplicateModelRoute,
+  type ReplicateLiveModelRoute,
   ReplicateSchemaMissingError,
   type ReplicateSchemaFetchFailure,
 } from '../replicateImageContract';
@@ -47,6 +49,7 @@ export function handleReplicateGenerate(deps: ReplicateRouteDeps) {
     const reqBody = (req.body || {}) as Record<string, any>;
     let liveProps: Record<string, unknown> | undefined;
     let schemaFetch: ReplicateSchemaFetchFailure | undefined;
+    let liveModel: ReplicateLiveModelRoute | undefined;
     const hasClientProps = reqBody.inputSchemaProperties && typeof reqBody.inputSchemaProperties === 'object' && !Array.isArray(reqBody.inputSchemaProperties);
     if (reqBody.model) {
       // Generic live-schema lookup (visible GET in executionTrace); no model-name branches.
@@ -62,7 +65,9 @@ export function handleReplicateGenerate(deps: ReplicateRouteDeps) {
       // ALWAYS read live openapi_schema for outbound when we can form a schema URL, unless this
       // request already carries inputSchemaProperties from /api/model-schema (reuse). A pinned
       // version still forces the exact-version GET. Static PROVIDER_SCHEMA must NEVER skip live.
-      const shouldReadLiveSchema = Boolean(schemaUrl) && (mustReadPinnedVersionSchema || !hasClientProps);
+      // Unpinned owner/name: the model GET also decides the route (is_official / latest_version), so always read it.
+      const needsRouteInfo = Boolean(ref.owner && ref.name && !explicitVersion);
+      const shouldReadLiveSchema = Boolean(schemaUrl) && (mustReadPinnedVersionSchema || !hasClientProps || needsRouteInfo);
       if (shouldReadLiveSchema && schemaUrl) {
         try {
           const sr = await deps.upstreamFetch(
@@ -76,8 +81,9 @@ export function handleReplicateGenerate(deps: ReplicateRouteDeps) {
           } else {
             let parsedSchema: unknown;
             try { parsedSchema = JSON.parse(raw); } catch { parsedSchema = undefined; }
-            liveProps = extractReplicateInputProperties(parsedSchema);
-            if (!liveProps) schemaFetch = { url: schemaUrl, status: sr.status, body: raw };
+            if (needsRouteInfo) liveModel = extractReplicateModelRoute(parsedSchema);
+            if (!hasClientProps || mustReadPinnedVersionSchema) liveProps = extractReplicateInputProperties(parsedSchema);
+            if (!liveProps && !hasClientProps) schemaFetch = { url: schemaUrl, status: sr.status, body: raw };
           }
         } catch (e: any) {
           schemaFetch = { url: schemaUrl, status: null, body: String(e?.message || e) };
@@ -101,7 +107,7 @@ export function handleReplicateGenerate(deps: ReplicateRouteDeps) {
 
     let mapped: ReturnType<typeof buildReplicatePredictionRequest>;
     try {
-      mapped = buildReplicatePredictionRequest(reqBody, baseUrl, liveProps, schemaFetch);
+      mapped = buildReplicatePredictionRequest(reqBody, baseUrl, liveProps, schemaFetch, liveModel);
     } catch (error: any) {
       if (error instanceof ReplicateSchemaMissingError) {
         const sf = error.schemaFetch;
@@ -122,9 +128,9 @@ export function handleReplicateGenerate(deps: ReplicateRouteDeps) {
       let proposedRequest: Record<string, unknown> | undefined;
       let excluded: string | undefined;
       let preview: ReturnType<typeof buildReplicatePredictionRequest> | undefined;
-      try { preview = buildReplicatePredictionRequest(reqBody, baseUrl, liveProps, schemaFetch); } catch {
+      try { preview = buildReplicatePredictionRequest(reqBody, baseUrl, liveProps, schemaFetch, liveModel); } catch {
         if (reqBody.custom_parameters !== undefined) {
-          try { preview = buildReplicatePredictionRequest({ ...reqBody, custom_parameters: undefined }, baseUrl, liveProps, schemaFetch); excluded = error.message; } catch { /* no buildable proposal: card shows raw canvas snapshot */ }
+          try { preview = buildReplicatePredictionRequest({ ...reqBody, custom_parameters: undefined }, baseUrl, liveProps, schemaFetch, liveModel); excluded = error.message; } catch { /* no buildable proposal: card shows raw canvas snapshot */ }
         }
       }
       if (preview) {
@@ -168,7 +174,7 @@ export function handleReplicateGenerate(deps: ReplicateRouteDeps) {
           upstream.status
         );
         return res.status(upstream.status).json({
-          error: `Replicate 图像接口上游 HTTP ${upstream.status}: ${rawResponse}`,
+          error: `Replicate ${reqBody.isVideo ? '视频' : '图像'}接口上游 HTTP ${upstream.status}: ${rawResponse}`,
           upstreamStatus: upstream.status,
           errorSource: 'upstream',
           endpoint,
@@ -395,7 +401,7 @@ export function handleReplicateGenerate(deps: ReplicateRouteDeps) {
     } catch (error: any) {
       deps.keyPoolManager.recordResult('replicate', apiKey, false, Date.now() - startTime, error.message);
       return res.status(502).json({
-        error: `Replicate 图像接口网络/协议错误：${error.message}`,
+        error: `Replicate ${reqBody.isVideo ? '视频' : '图像'}接口网络/协议错误：${error.message}`,
         errorSource: 'network',
         endpoint,
         stack: error.stack,

@@ -240,7 +240,7 @@ describe('replicateRoutes', () => {
       await handler(req, res);
 
       expect(res.statusCode).toBe(200);
-      expect(fetchCalls).toHaveLength(3); // 1 initial + 2 polls
+      expect(fetchCalls).toHaveLength(4); // 1 model GET (route: is_official/latest_version) + 1 initial + 2 polls
       expect(persistedCalls[0].images).toEqual(['https://replicate.delivery/async-out.png']);
       expect(recordedResults[0][2]).toBe(true);
     });

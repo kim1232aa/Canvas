@@ -11,6 +11,25 @@ export interface ReplicatePredictionRequest {
   overrides: CustomOverride[];
   actualModel: string;
   isVersionBased: boolean;
+  /** Why this endpoint was chosen (live model GET is_official / latest_version, or the model ref itself). */
+  routeReason?: string;
+}
+
+/** Route facts read from the live GET /v1/models/{owner}/{name} object (no model-name branching). */
+export interface ReplicateLiveModelRoute {
+  isOfficial?: boolean;
+  latestVersionId?: string;
+}
+
+/** Reads is_official + latest_version.id from a live Replicate model object. */
+export function extractReplicateModelRoute(data: unknown): ReplicateLiveModelRoute | undefined {
+  const d = data as any;
+  if (!d || typeof d !== 'object') return undefined;
+  const isOfficial = typeof d.is_official === 'boolean' ? d.is_official : undefined;
+  const id = d.latest_version?.id;
+  const latestVersionId = typeof id === 'string' && id.trim() ? id.trim() : undefined;
+  if (isOfficial === undefined && !latestVersionId) return undefined;
+  return { isOfficial, latestVersionId };
 }
 
 export type ReplicateParsedResponse =
@@ -93,7 +112,8 @@ export function buildReplicatePredictionRequest(
   body: Record<string, unknown>,
   baseUrl = 'https://api.replicate.com/v1',
   inputSchemaProperties?: Record<string, unknown>,
-  schemaFetchFailure?: ReplicateSchemaFetchFailure
+  schemaFetchFailure?: ReplicateSchemaFetchFailure,
+  liveModel?: ReplicateLiveModelRoute
 ): ReplicatePredictionRequest {
   const rawModel = String(body.model || '').trim();
   if (!rawModel) {
@@ -113,6 +133,7 @@ export function buildReplicatePredictionRequest(
   let isVersionBased = false;
   let versionToSet: string | undefined;
   let canonicalModelName = rawModel;
+  let routeReason: string | undefined;
 
   if (isHex64) {
     endpoint = `${cleanBaseUrl}/predictions`;
@@ -136,8 +157,21 @@ export function buildReplicatePredictionRequest(
       throw new Error('Replicate 模型格式无效，需为 owner/name、owner/name:version 或 64位十六进制版本号');
     }
     canonicalModelName = `${owner}/${name}`;
-    endpoint = `${cleanBaseUrl}/models/${owner}/${name}/predictions`;
-    isVersionBased = false;
+    // Replicate docs: POST /models/{owner}/{name}/predictions is for official models only; every other model
+    // needs POST /predictions with a version. Decided up front from the live model object — never retried on 404.
+    if (liveModel?.isOfficial === false) {
+      if (!liveModel.latestVersionId) {
+        throw new Error(`Replicate 社区模型 ${canonicalModelName} 需要 version，但上游模型信息没有 latest_version.id，未发送`);
+      }
+      endpoint = `${cleanBaseUrl}/predictions`;
+      versionToSet = liveModel.latestVersionId;
+      isVersionBased = true;
+      routeReason = `is_official=false → POST /predictions version=latest_version.id ${liveModel.latestVersionId}`;
+    } else {
+      endpoint = `${cleanBaseUrl}/models/${owner}/${name}/predictions`;
+      isVersionBased = false;
+      routeReason = liveModel?.isOfficial === true ? 'is_official=true → POST /models/{owner}/{name}/predictions' : 'model ref owner/name (no live is_official)';
+    }
   } else {
     throw new Error('Replicate 模型格式无效，需为 owner/name、owner/name:version 或 64位十六进制版本号');
   }
@@ -367,6 +401,7 @@ export function buildReplicatePredictionRequest(
     isVersionBased,
     omitted,
     schemaFields,
+    ...(routeReason ? { routeReason } : {}),
   };
 }
 

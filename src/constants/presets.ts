@@ -496,7 +496,8 @@ const I2V_SPECS: I2vSpec[] = [
     fps: 16,
     seed: 24231881,
     cfg: 4,
-    size: '688x480',
+    // Recipe 688x480 → WaveSpeed live Schema size enum ["832*480","480*832"] (upstream 400 on 688x480): closest landscape 832*480.
+    size: '832*480',
     loras: [{ name: 'https://huggingface.co/Remade-AI/matrix-shot/resolve/main/matrix_shot.safetensors', strength: 1, source: 'https://civitai.red/images/84050423' }],
     schemaProperties: ['prompt', 'image', 'negative_prompt', 'loras', 'size', 'num_inference_steps', 'duration', 'guidance_scale', 'flow_shift', 'seed'],
     source: 'https://wavespeed.ai/docs/docs-api/wavespeed-ai/wan-2.1-i2v-480p-lora',

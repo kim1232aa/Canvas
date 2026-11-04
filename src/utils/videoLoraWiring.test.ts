@@ -18,7 +18,11 @@ describe('video LoRA wiring (LoRALoader → AIVideoNode.lora)', () => {
     expect(x.loras.map((l) => [l.name, l.modelStrength])).toEqual([[W21, 1]]);
     expect(x.seed).toBe(24231881);
     expect(x.cfg).toBe(4);
-    expect(x.size).toBe('688x480');
+    // WaveSpeed: recipe 688x480 mapped to live Schema enum 832*480 (upstream 400 otherwise).
+    expect(x.size).toBe(id === 'std-wavespeed-i2v' ? '832*480' : '688x480');
+  });
+  it('WaveSpeed preset size is the live Schema enum value 832*480 (sent with * separator)', () => {
+    expect(extract('std-wavespeed-i2v').size).toBe('832*480');
   });
   it('civitai extracts the AIR LoRA', () => {
     const x = extract('std-civitai-i2v');
