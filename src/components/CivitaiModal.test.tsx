@@ -128,3 +128,41 @@ it('provider=all refuses HTTPS LoRA URL paste until a concrete provider tab is c
   expect(input.onClose).not.toHaveBeenCalled();
 });
 
+it('选用 LoRA preserves the verified version AIR instead of replacing it with the bare model ID', () => {
+  const air = 'urn:air:sdxl:lora:civitai:123@456';
+  const model = {
+    id: 'civitai-123',
+    resourceId: 'adapter.safetensors',
+    name: 'Public adapter',
+    provider: 'Civitai',
+    providerKey: 'civitai',
+    baseModel: 'SDXL 1.0',
+    creator: 'tester',
+    previewImg: '',
+    triggerWords: 'portrait',
+    civitaiId: '123',
+    selection: { provider: 'civitai', name: air, civitaiId: air, resourceVerified: true },
+  };
+  let stateCall = 0;
+  vi.spyOn(React, 'useState').mockImplementation(((initial: any) => [
+    stateCall++ === 5 ? [model] : initial,
+    vi.fn(),
+  ]) as any);
+  vi.spyOn(React, 'useEffect').mockImplementation(() => {});
+  vi.spyOn(React, 'useRef').mockReturnValue({ current: 0 });
+  const onSelectLoRAWithBaseModel = vi.fn();
+  const tree = CivitaiModal({
+    isOpen: true,
+    initialProvider: 'civitai',
+    onSelectLoRA: vi.fn(),
+    onSelectLoRAWithBaseModel,
+    onClose: vi.fn(),
+    onAddLoRANodeToCanvas: vi.fn(),
+  });
+  const button = elements(tree).find((el) => el.type === 'button' && String(el.props.title || '').startsWith('将此 LoRA'));
+
+  expect(button).toBeDefined();
+  button.props.onClick();
+  expect(onSelectLoRAWithBaseModel).toHaveBeenCalledWith(expect.objectContaining({ civitaiId: air, resourceVerified: true }));
+});
+

@@ -1076,7 +1076,7 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
                                         ...(model.selection || {}),
                                         name: cleanName,
                                         provider: model.selection?.provider || (model.providerKey as any),
-                                        civitaiId: model.civitaiId,
+                                        civitaiId: model.selection?.civitaiId || model.civitaiId,
                                         triggerWords: model.triggerWords,
                                         baseModel: model.baseModel || undefined,
                                       });
