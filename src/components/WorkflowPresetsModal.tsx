@@ -1116,6 +1116,17 @@ Steps: 28, Sampler: DPM++ 2M Karras, CFG scale: 4.5, Seed: 136947637, Size: 1024
                           </div>
                         )}
 
+                        {extractedPreset.importWarnings?.map((warning) => (
+                          <div key={warning.field} className="bg-amber-950/30 border border-amber-700/50 rounded-lg p-2.5">
+                            <span className="text-[10px] text-amber-300 font-semibold">
+                              来源参数 {warning.field} = {String(warning.value)} 未发送
+                            </span>
+                            <p className="mt-1 text-[11px] text-amber-100/80 leading-relaxed">
+                              {warning.reason}
+                            </p>
+                          </div>
+                        ))}
+
                         {/* Other metadata (Civitai Authentic Metadata Inspection Panel) */}
                         {extractedPreset.otherMetadata && (
                           <div className="bg-[#14151e] border border-[#2d3042] rounded-xl overflow-hidden shadow-sm">

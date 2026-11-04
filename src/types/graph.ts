@@ -146,6 +146,7 @@ export interface WorkflowPreset {
   /** 待配方: the endpoint needs a real resource (e.g. a required lora_url) the recipes do not provide yet. Card shows 待配方 and 立即运行 stays disabled. */
   pendingRecipe?: string;
   architectureExplanation?: string;
+  importWarnings?: Array<{ field: string; value: unknown; sent: false; reason: string }>;
   otherMetadata?: {
     baseModel?: string;
     modelFile?: string;

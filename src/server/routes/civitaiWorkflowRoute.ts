@@ -204,6 +204,7 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
       let loras: Array<{ name: string; displayName?: string; strength?: number | null; civitaiId?: string; triggers?: string; baseModel?: string }> = [];
       let steps: number | null = null;
       let cfg: number | null = null;
+      let clipSkip: number | null = null;
       let sampler = '';
       let scheduler = '';
       let denoise: number | null = null;
@@ -287,6 +288,9 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
         const cfgMatch = fullText.match(/CFG scale:\s*([\d.]+)/i);
         if (cfgMatch) cfg = parseFloat(cfgMatch[1]);
 
+        const clipSkipMatch = fullText.match(/Clip skip:\s*(\d+)/i);
+        if (clipSkipMatch) clipSkip = parseInt(clipSkipMatch[1], 10);
+
         const seedMatch = fullText.match(/Seed:\s*(\d+)/i);
         if (seedMatch) seed = parseInt(seedMatch[1], 10);
 
@@ -354,6 +358,7 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
         if (meta.scheduler) scheduler = mapScheduler(meta.scheduler);
         if (meta.steps !== undefined && meta.steps !== null) steps = parseInt(String(meta.steps), 10);
         if (meta.cfgScale !== undefined && meta.cfgScale !== null) cfg = parseFloat(String(meta.cfgScale));
+        if (meta.clipSkip !== undefined && meta.clipSkip !== null && Number.isFinite(Number(meta.clipSkip))) clipSkip = Number(meta.clipSkip);
         if (meta.denoise !== undefined && meta.denoise !== null) denoise = parseFloat(String(meta.denoise));
         if (meta.seed !== undefined && meta.seed !== null) seed = parseInt(String(meta.seed), 10);
         if (meta.Size) {
@@ -873,6 +878,13 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
         );
       }
 
+      const importWarnings = clipSkip === null ? [] : [{
+        field: 'clipSkip',
+        value: clipSkip,
+        sent: false,
+        reason: `当前导入器未建立到 ${chosenEngineName} 的经 Schema 核实的 CLIP Skip 映射；原值已保留为来源元数据，未向上游发送。`,
+      }];
+
       const otherMetadata = {
         prompt: prompt || '',
         negativePrompt: negativePrompt || '',
@@ -883,6 +895,7 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
         scheduler: scheduler || null,
         steps,
         cfgScale: cfg,
+        clipSkip,
         seed,
         denoise,
         width,
@@ -918,6 +931,7 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
         loraNames: loras.map((l) => l.name),
         description: `从 ${extractSource} 逆向解析提取的工作流。作者: ${creatorName || '未知'}，底模: ${checkpoint || '未指定'}，LoRA 数量: ${loras.length}。${multiVersionNote}${engineExplanation ? ` 说明: ${engineExplanation}` : ''}`,
         architectureExplanation: engineExplanation,
+        importWarnings,
         selectedMultiVersion: selectedMultiVersionInfo || null,
         nodes,
         connections,

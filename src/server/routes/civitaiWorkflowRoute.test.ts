@@ -412,6 +412,62 @@ describe('Civitai Routes and Workflow Contract Tests', () => {
     });
   });
 
+  describe('Civitai CLIP Skip import transparency', () => {
+    it('preserves raw Clip skip as source metadata and explicitly reports that it was not sent', async () => {
+      const handler = handleExtractCivitaiWorkflow(createMockWorkflowDeps(vi.fn()));
+      const res = createMockRes();
+
+      await handler({
+        body: {
+          rawText: 'a portrait\nNegative prompt: blur\nSteps: 20, CFG scale: 7, Clip skip: 2, Model: pixel-wave',
+          engine: 'civitai',
+        },
+      } as any, res);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.data.otherMetadata.clipSkip).toBe(2);
+      expect(res.data.preset.importWarnings).toEqual([
+        expect.objectContaining({ field: 'clipSkip', value: 2, sent: false }),
+      ]);
+      expect(res.data.preset.spatialFrames[0].prompt).not.toMatch(/Clip skip/i);
+    });
+
+    it('preserves image meta.clipSkip and reports the unmapped parameter', async () => {
+      const nextData = {
+        props: {
+          pageProps: {
+            trpcState: {
+              json: {
+                queries: [
+                  {
+                    queryKey: [['image', 'getGenerationData']],
+                    state: { data: { meta: { prompt: 'a portrait', Model: 'pixel-wave', clipSkip: 3 }, resources: [] } },
+                  },
+                  { queryKey: [['image', 'get']], state: { data: { id: 1234567, metadata: {} } } },
+                ],
+              },
+            },
+          },
+        },
+      };
+      const mockFetch = vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        text: async () => `<script id="__NEXT_DATA__" type="application/json">${JSON.stringify(nextData)}</script>`,
+      }));
+      const handler = handleExtractCivitaiWorkflow(createMockWorkflowDeps(mockFetch));
+      const res = createMockRes();
+
+      await handler({ body: { url: 'https://civitai.com/images/1234567' } } as any, res);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.data.otherMetadata.clipSkip).toBe(3);
+      expect(res.data.preset.importWarnings).toEqual([
+        expect.objectContaining({ field: 'clipSkip', value: 3, sent: false }),
+      ]);
+    });
+  });
+
   describe('HIGH 6: No artificial fallback defaults', () => {
     it('does not forge artificial defaults for duration, fps, aspect_ratio, denoise, or fake VAE', async () => {
       const mockFetch = vi.fn();
