@@ -375,6 +375,43 @@ describe('Civitai Routes and Workflow Contract Tests', () => {
     });
   });
 
+  describe('Civitai media type detection', () => {
+    it.each([
+      ['positive prompt', { prompt: 'a portrait in wan 2 style', Model: 'pixel-wave' }],
+      ['model label', { prompt: 'a portrait', Model: 'wan 2' }],
+      ['MiniMax prompt', { prompt: 'a portrait with hailuo framing', Model: 'pixel-wave' }],
+    ])('does not infer video from the %s without video media metadata', async (_label, meta) => {
+      const nextData = {
+        props: {
+          pageProps: {
+            trpcState: {
+              json: {
+                queries: [
+                  { queryKey: [['image', 'getGenerationData']], state: { data: { meta, resources: [] } } },
+                  { queryKey: [['image', 'get']], state: { data: { id: 12, user: { username: 'tester' }, metadata: {} } } },
+                ],
+              },
+            },
+          },
+        },
+      };
+      const mockFetch = vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        text: async () => `<script id="__NEXT_DATA__" type="application/json">${JSON.stringify(nextData)}</script>`,
+      }));
+      const handler = handleExtractCivitaiWorkflow(createMockWorkflowDeps(mockFetch));
+      const res = createMockRes();
+
+      await handler({ body: { url: 'https://civitai.com/images/1234567' } } as any, res);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.data.parsedMeta.mediaType).toBe('image');
+      expect(res.data.preset.nodes.some((node: any) => node.type === 'AIVideoNode')).toBe(false);
+      expect(res.data.preset.nodes.some((node: any) => node.type === 'KSampler')).toBe(true);
+    });
+  });
+
   describe('HIGH 6: No artificial fallback defaults', () => {
     it('does not forge artificial defaults for duration, fps, aspect_ratio, denoise, or fake VAE', async () => {
       const mockFetch = vi.fn();

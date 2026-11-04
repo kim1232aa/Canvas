@@ -369,9 +369,9 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
         if (meta.vae) detectedVae = meta.vae;
         if (meta.engine) detectedEngine = meta.engine;
 
-        const isWanVideo = /wan[-_ ]?2/i.test(prompt) || /wan[-_ ]?2/i.test(rawModelName);
-        const isMinimaxVideo = /minimax/i.test(prompt) || /hailuo/i.test(prompt);
-        isVideo = isWanVideo || isMinimaxVideo || Boolean(imgGet?.metadata?.duration);
+        // Prompt text and model labels are not media-type evidence. Only the
+        // source media's actual duration metadata may select a video workflow.
+        isVideo = Boolean(imgGet?.metadata?.duration);
         if (imgGet?.metadata?.duration) {
           videoDuration = imgGet.metadata.duration;
         }
