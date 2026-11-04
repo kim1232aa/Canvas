@@ -67,7 +67,7 @@ const PREFILLED_LORA: Record<string, Array<[string, number]>> = {
   muapi: [['https://huggingface.co/renderartist/coloringbookflux/resolve/main/c0l0ringb00k_Flux_v1_renderartist.safetensors', 1]],
   fal: [['https://huggingface.co/renderartist/coloringbookflux/resolve/main/c0l0ringb00k_Flux_v1_renderartist.safetensors', 1]],
   novita: [['epi_noiseoffset2_14333', 0.65], ['more_details_59655', 0.4]],
-  sogni: [['krea2-kodachrome-photo', 1]],
+  sogni: [['krea2-kodachrome-photo', 0.8]],
   modelscope_ai: [['LcarsPicturesDatabase/ST-TNG-Rooms-Z-Image-Turbo-v1', 1]],
 };
 
@@ -356,7 +356,7 @@ describe('standard workflow presets (23 T2I + 6 I2V)', () => {
     expect(lora('std-sensenova-t2i')).toBeUndefined();
     expect(loader('std-sogni-t2i')!.values.ckpt_name).toBe('krea-2-turbo');
     expect(loader('std-sogni-t2i')!.values.targetProvider).toBe('sogni');
-    // Recipe civitai.red/images/135792474 LoRA
+    // Recipe civitai.red/images/146243000 LoRA
     expect(lora('std-sogni-t2i')!.values.lora_name).toBe('krea2-kodachrome-photo');
   });
 
@@ -533,10 +533,10 @@ describe('standard workflow presets (23 T2I + 6 I2V)', () => {
     expect(ks('std-huggingface-t2i').cfg).toBe(1);
     expect(ks('std-krea-t2i').steps).toBeUndefined();
     expect(ks('std-krea-t2i').cfg).toBeUndefined();
-    // Sogni recipe civitai.red/images/135792474: steps 10 / cfg 1 copied verbatim and sent as-is.
-    expect(ks('std-sogni-t2i').steps).toBe(10);
-    expect(ks('std-sogni-t2i').cfg).toBe(1);
-    expect(ks('std-sogni-t2i').seed).toBe(986523810839230);
+    // Sogni recipe civitai.red/images/146243000: steps 7 / cfg 1.3 copied verbatim and sent as-is.
+    expect(ks('std-sogni-t2i').steps).toBe(7);
+    expect(ks('std-sogni-t2i').cfg).toBe(1.3);
+    expect(ks('std-sogni-t2i').seed).toBe(934059315);
   });
 
   it('AIMLAPI shows steps only (official schema has no guidance_scale/cfg)', () => {
