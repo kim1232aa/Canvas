@@ -278,6 +278,26 @@ const FieldOrigins: React.FC<{ item: GenerationHistoryItem }> = ({ item }) => {
 };
 
 
+/** Sources that mean the value really went upstream (or came back from it). Anything else is omitted from the caption. */
+const SENT_SOURCES = new Set<ResolvedHistoryParameter['source']>(['sent', 'upstream', 'image-metadata', 'passed-through', 'requested', 'legacy']);
+const CAPTION_LABEL: Record<string, string> = { negativePrompt: '负向', seed: 'Seed', steps: 'Steps', cfg: 'CFG', sampler: 'Sampler', scheduler: 'Scheduler', size: 'Size' };
+/** Big-image caption: one line of `Label: value` joined by · for only the fields actually sent; '' entries dropped. */
+export const historyCaptionSent = (resolved: Record<string, ResolvedHistoryParameter>, keys: string[]): string[] => {
+  const parts = keys.flatMap((k) => {
+    if (k === 'size') {
+      const sz = formatHistorySize(resolved as any);
+      return sz.text && SENT_SOURCES.has(sz.source) && sz.source !== 'blocked' ? [`Size: ${sz.text}`] : [];
+    }
+    const p = resolved[k];
+    if (!p || !SENT_SOURCES.has(p.source)) return [];
+    if (p.value === undefined || p.value === null || String(p.value).trim() === '') return [];
+    return [`${CAPTION_LABEL[k]}: ${formatResolvedHistoryParameter(p, k === 'steps' ? ' 步' : '')}`];
+  });
+  return parts.length ? [parts.join(' · ')] : [];
+};
+/** Card face LoRA line: name × strength under the existing 「LoRA」 label (same format as the big-image caption). */
+export const historyFaceLoraText = (loras: { name: string; strength?: unknown }[]): string =>
+  `LoRA: ${loras.map((l) => (l.strength === undefined ? l.name : `${l.name} × ${String(l.strength)}`)).join('；')}`;
 /** History card face: plain values only (模型 / LoRA强度 / 种子 / 尺寸 / 提示词) + at most ONE plain reminder line. No per-field badges. */
 export const historyCardReminder = (item: GenerationHistoryItem, resolved: Record<string, ResolvedHistoryParameter>, unsupportedRows: UnsupportedRow[]): string => {
   if (item.status === 'local_blocked') return `没有发出去：${String(item.error || '').split('\n')[0]}`;
@@ -295,9 +315,9 @@ const HistoryCardFace: React.FC<{ item: GenerationHistoryItem; resolved: Record<
   return (
     <div className="px-3 py-2 text-[11px] text-slate-300 font-mono space-y-0.5" data-testid="history-card-face">
       <p data-testid="history-face-model">模型: {displayValue(item.actualModel || item.model)}</p>
-      {loras.length > 0 && <p data-testid="history-face-loras" className="[overflow-wrap:anywhere]">LoRA强度: {loras.map((l) => `${l.name} ${l.strength === undefined ? '-' : String(l.strength)}`).join('、')}</p>}
-      {seed !== undefined && seed !== null && seed !== '' && <p data-testid="history-face-seed">种子: {String(seed)}</p>}
-      {size.text && <p data-testid="history-face-size">尺寸: {size.text}</p>}
+      {loras.length > 0 && <p data-testid="history-face-loras" className="[overflow-wrap:anywhere]">{historyFaceLoraText(loras)}</p>}
+      {seed !== undefined && seed !== null && seed !== '' && resolved.seed && SENT_SOURCES.has(resolved.seed.source) && <p data-testid="history-face-seed">种子: {String(seed)}</p>}
+      {size.text && SENT_SOURCES.has(size.source) && <p data-testid="history-face-size">尺寸: {size.text}</p>}
     </div>
   );
 };
@@ -556,7 +576,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
                 >
                   {(() => { const cardBody = (<>
                   <div className="px-3 pt-2.5 pb-2 border-b border-[#2d303a] space-y-0.5" data-testid="history-card-meta">
-                    <p className={`text-xs font-medium whitespace-normal [overflow-wrap:anywhere] ${item.prompt && item.prompt.trim() ? 'text-slate-100' : 'text-slate-400 italic'}`} title={item.prompt || ''} data-testid="history-card-title">{displayValue(item.prompt)}</p>
+                    <p className={`text-xs font-medium whitespace-normal [overflow-wrap:anywhere] line-clamp-3 ${item.prompt && item.prompt.trim() ? 'text-slate-100' : 'text-slate-400 italic'}`} title={item.prompt || ''} data-testid="history-card-title">{displayValue(item.prompt)}</p>
                     {/* Re-runs share a prompt: the run's own time + history id are the distinguishing line, so they're prominent (no invented marker). */}
                     <p className="text-xs text-cyan-100 font-mono font-semibold flex flex-wrap gap-x-2">
                       <span data-testid="history-card-time">{historyCardTime(item.timestamp)}</span>
@@ -714,18 +734,12 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
                 {displayValue(selectedImage.prompt)}
               </p>
               {selectedResolved && <>
-                <p className="text-slate-300 font-mono text-[11px]">
-                  负向: {formatResolvedHistoryParameter(selectedResolved.negativePrompt)}{sourceBadge(selectedResolved.negativePrompt)}
-                </p>
+                {historyCaptionSent(selectedResolved, ['negativePrompt']).map((t) => <p key={t} className="text-slate-300 font-mono text-[11px]">{t}</p>)}
                 <p className="text-slate-400 font-mono text-[11px]">
                   {displayValue(canonicalProviderLabel(selectedImage.actualProvider || selectedImage.provider))} | Model: {displayValue(selectedImage.actualModel || selectedImage.model)}
                 </p>
-                <p className="text-slate-300 font-mono text-[11px]">
-                  Seed: {formatResolvedHistoryParameter(selectedResolved.seed)}{sourceBadge(selectedResolved.seed)} · Steps: {formatResolvedHistoryParameter(selectedResolved.steps, ' 步')}{sourceBadge(selectedResolved.steps)} · CFG: {formatResolvedHistoryParameter(selectedResolved.cfg)}{sourceBadge(selectedResolved.cfg)}
-                </p>
-                <p className="text-slate-300 font-mono text-[11px]">
-                  Sampler: {formatResolvedHistoryParameter(selectedResolved.sampler)}{sourceBadge(selectedResolved.sampler)} · Scheduler: {formatResolvedHistoryParameter(selectedResolved.scheduler)}{sourceBadge(selectedResolved.scheduler)} · Size: {formatHistorySize(selectedResolved).text}
-                </p>
+                {historyCaptionSent(selectedResolved, ['seed', 'steps', 'cfg']).map((t) => <p key={t} className="text-slate-300 font-mono text-[11px]">{t}</p>)}
+                {historyCaptionSent(selectedResolved, ['sampler', 'scheduler', 'size']).map((t) => <p key={t} className="text-slate-300 font-mono text-[11px]">{t}</p>)}
               </>}
               <p className="text-slate-300">LoRA: {selectedImage.loras?.length ? selectedImage.loras.map(l => `${l.name} × ${l.strength}`).join('；') : '未使用'}</p>
             </div>
