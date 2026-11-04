@@ -21,6 +21,9 @@ describe('Civitai resource identity', () => {
     const exact = 'urn:air:illustrious:diffusionmodel:civitai:12@34+56';
     expect(await resolveCivitaiResource('12@34', api({34: { id: 34, modelId: 12, air: exact }}))).toBe(exact);
   });
+  it('resolves the civitai:modelId@versionId reference emitted by workflow import', async () => {
+    expect(await resolveCivitaiResource('civitai:12@34', api({34: { id: 34, modelId: 12, air }}))).toBe(air);
+  });
   it('checks modelId before trusting API AIR', async () => {
     await expect(resolveCivitaiResource('99@34', api({34: { id: 34, modelId: 12, air }}))).rejects.toThrow(/modelId/);
   });

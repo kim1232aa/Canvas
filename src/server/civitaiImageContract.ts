@@ -88,7 +88,7 @@ export async function resolveCivitaiResource(rawInput: string, get: CivitaiPubli
   const input = rawInput.trim();
   const air = canonicalAir(input);
   if (air) return air;
-  const pair = /^(\d+)@(\d+)$/.exec(input);
+  const pair = /^(?:civitai:)?(\d+)@(\d+)$/.exec(input);
   if (pair) {
     const version = await readApi(get, `https://civitai.com/api/v1/model-versions/${pair[2]}`);
     if (!version) return fail(`找不到 Civitai versionId=${pair[2]}`);
