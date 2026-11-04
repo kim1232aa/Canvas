@@ -1,5 +1,17 @@
 # ComfyCanvas Studio：开发交接、产品缺口与验收手册
 
+## 2026-11-04 当前终态总览（唯一基线，优先于下文全部历史记录）
+
+- **最新 HEAD**：`db34fa7`（`main` 与 `origin/main` 严格同步；全量测试 229 文件 / 1686 用例全通过，`tsc --noEmit` 0 错误）。
+- **核心架构准则（2026-11-04 收敛落地）**：
+  1. **有值照发，撤除本地拦截**：彻底移除 `rejectUnsupported` / `rejectSchemaEnum` 与本地 400 预检拦截；凡是用户在节点或高级设置填写的参数，一律原样组装发往上游服务商；若上游拒绝，节点单次原生展示上游返回的真实 HTTP 状态码与原始错误体，不静默 Fallback、不吞错。
+  2. **UI 去工程化**：移除开发期的执行日志面板（execution-log）、冗余运行 Toast、节点支持性角标及红条；历史记录仅保留成功产出媒体的有效记录，卡片仅展示真实发出的参数，支持「照这组参数再来一张」一键回填。
+  3. **视频与预设**：WaveSpeed / MuAPI / Replicate / Fal / Civitai 图生视频与视频 LoRA 链路已接通；全部标准预设（T2I/I2V）严格采用真实配方页（civitai.red / tensor.art）的参数与提示词。
+- **当前剩余外部阻塞（代码已就绪，非代码缺陷）**：
+  - **MuAPI 文生图预设**：官方 Schema 明确要求必填真实训练产物 `lora_url`，未填前上游拒绝出图（卡片保持「待配方」提示）。
+  - **真机视频出片（Funded I2V）**：WaveSpeed 账户余额不足（$0.008 < $0.15）；ModelScope 官方云端 REST API 无视频端点。
+  - **凭证与额度待就绪**：Together（官方已下线 `image_loras`）、Tensor.Art TAMS Bearer、civitai.red 付费 LoRA（Buzz 限制）。
+
 ## 2026-11-04 非消耗：Replicate 步数透明 + 本地拦截展示
 
 | 项 | 判定 | 要点 / 证据 |
@@ -96,9 +108,9 @@
 | WaveSpeed 同会话重交 | **PASS_GENERATION**（产品核；补此前混态拒收） | hist `hist_1793687045083_fuctj`；保存节点松鼠图无「不是本次会话」；角标「生成请求 13」；actualRequest 含 LoRA path+scale1.1、seed42、steps36、guidance3.5、832×1216。证据 `/workspace/canvas/temp/e2e/wavespeed/fe-same-session-2026-11-03/`（01–03+NOTES）。既有 WaveSpeed PASS 不降级。 |
 | 失败态保存节点露上游原文 | **已过**（见上节 2026-11-03 保存节点失败原文透传） | — |
 
-## 2026-10-16 晚间当前状态（优先于下文更早日期标题）
+## 2026-10-16 晚间历史状态（仅作归档，以文首 2026-11-04 终态为准）
 
-### fix15.1 / fix16（本段优先）
+### fix15.1 / fix16（本段为历史归档）
 | 项 | 判定 | 要点 / 证据 |
 | --- | --- | --- |
 | **fix15.1** | **CLOSED**（挑刺无严重；接线形状过，非 PASS_BILLING/GENERATION） | 实际发送块移到未发送折叠前。证据 `docs/evidence/fix15.1-2026-10-16.md`、`/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-fix15.1-accept-2254/` |
@@ -307,7 +319,7 @@
 | Sites project_id | `appgprj_6abf7823b9648191aed7e4c4f10bbea8` |
 | 历史已成功发布部署 | `appgdep_6ac22888c5708191ab2bb63304361b66`，环境 revision 4 |
 | 2026-10-06 收尾前本地 HEAD | `d75d1d4`；本轮收尾提交完成后以 `git log -1` / `origin/main` 为准，不再把此哈希当最终版本 |
-| 当前活跃工作目录 | `/workspace/canvas/Canvas-main`（2026-10-16 HEAD `2d76382` = origin/main） |
+| 当前活跃工作目录 | `/workspace/canvas/Canvas-main`（当前 HEAD 见文首 `db34fa7`；历史 2026-10-16 快照为 `2d76382`） |
 | 历史验证（2026-10-04 前） | 35 个测试文件、267 个测试通过；仅作历史追溯 |
 | 2026-10-08 当前回归 | `npm run lint` PASS；`npm test` 40 files / 295 tests PASS；`npm run build` PASS（含 frontend + hosting worker 构建）。仍不替代真实前端/上游验收 |
 

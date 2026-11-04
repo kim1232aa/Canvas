@@ -1,4 +1,6 @@
 
+> **最新基准提示（2026-11-04）**：本项目已于 2026-11-04 完成全量「有值照发、撤除本地拦截」与「UI 去工程化」架构收敛。最新产品事实、设计准则与全部已知缺口请优先查阅 [HANDOFF.md](HANDOFF.md) 顶部的「2026-11-04 当前终态总览」。下文各章节保留为历史阶段的问题演进与归档记录。
+
 ## fix16（2026-10-16）CODE_ONLY 冻等重拍
 - 五项历史卡 UI：见 `docs/evidence/fix16-2026-10-16.md`；PID 3695091。未改供应商接线。
 > 2026-10-16 晚间追加（Asia/Tokyo；北京=JST−1）：UI fix10.1 / fix11.2 已 CLOSED；fix12 当时为 CODE_ONLY 待前端重拍，现已 CLOSED（见文末）。Git `2d76382` 已推 `kim1232aa/Canvas` main；`.env` 未进仓。Together image_loras / TAMS Bearer / ModelScope intl LoRA / civitai.red 付费 LoRA 仍挂起。不发明 PASS。详见下方「开/闭」与 HANDOFF 同日条。
