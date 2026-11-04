@@ -1,5 +1,5 @@
 import {registerSchemaProviderRoutes,makeSchemaProviderReader,fetchSchemaProviderRows,fetchSogniGenerateImageSchema,normalizeSchemaProviderItems,resolveSchemaRefs} from './src/server/schemaProviders.ts';
-import { civitaiVideoBaseModels, parseCivitaiAir, civitaiVersionVideoRow, replicateSearchVideoModels, resolveCivitaiVersions } from "./src/server/videoCatalogOfficial";
+import { civitaiVideoBaseModels, parseCivitaiAir, civitaiVersionVideoRow, replicateSearchVideoModels, resolveCivitaiVersions } from './src/server/videoCatalogOfficial.ts';
 import { historyCounts, isServedHistoryItem } from './src/utils/historyCounts';
 import { requestLogLines, writeRequestLog } from './src/server/requestLog.ts';
 import { sentHistoryNumbers } from './src/server/historySent.ts';
