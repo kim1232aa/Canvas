@@ -23,7 +23,7 @@ async function dispatch(pathname: string, body: any, settings: Record<string, st
   const req: any = {method: 'POST', path: pathname, originalUrl: pathname, url: pathname, body, headers: {}, params: {}, query: {}, get: () => undefined, header: () => undefined};
   return new Promise<any>((resolve, reject) => {
     let status = 200;
-    const res: any = {statusCode: 200, status(c: number) { status = c; this.statusCode = c; return this; }, json(v: any) { resolve({status, payload: v}); return this; }, setHeader: () => {}, getHeader: () => {}, headersSent: false};
+    const res: any = {statusCode: 200, status(c: number) { status = c; this.statusCode = c; return this; }, json(v: any) { resolve({status, payload: v}); return this; }, setHeader: () => {}, getHeader: () => {}, on: () => {}, headersSent: false};
     requestContext.run({origin: 'https://fixture.test', authenticatedUserId: 'o', ownerUserId: 'o', settings, store: store(), pending: []} as any, async () => {
       try {
         mod.refreshHostedKeyPool();

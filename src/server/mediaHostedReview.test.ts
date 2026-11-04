@@ -16,7 +16,7 @@ async function dispatch(app:any,pathname:string,body:any,store:CanvasStore) {
  const req:any={method:'POST',path:pathname,originalUrl:pathname,body,headers:{},params:{},query:{}};
  let payload:any, status=200;
  const response=new Promise<any>((resolve,reject)=>{
-  const res:any={statusCode:200,status(code:number){status=code;this.statusCode=code;return this;},json(value:any){payload=value;resolve({status,payload});return this;},setHeader:()=>{},getHeader:()=>{},headersSent:false};
+  const res:any={statusCode:200,status(code:number){status=code;this.statusCode=code;return this;},json(value:any){payload=value;resolve({status,payload});return this;},setHeader:()=>{},getHeader:()=>{},on:()=>{},headersSent:false};
   const next=(error?:any)=>{if(error)reject(error);};
   requestContext.run({origin:'https://fixture.test',authenticatedUserId:'fixture-owner',ownerUserId:'fixture-owner',settings:{geminiKey:'fixture-credential'},store,pending:[]},async()=>{
    try {
