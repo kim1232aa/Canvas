@@ -1,4 +1,5 @@
 import {registerSchemaProviderRoutes,makeSchemaProviderReader,fetchSchemaProviderRows,fetchSogniGenerateImageSchema,normalizeSchemaProviderItems,resolveSchemaRefs} from './src/server/schemaProviders.ts';
+import { civitaiVideoBaseModels, parseCivitaiAir, civitaiVersionVideoRow, replicateSearchVideoModels, resolveCivitaiVersions } from "./src/server/videoCatalogOfficial";
 import { historyCounts, isServedHistoryItem } from './src/utils/historyCounts';
 import { requestLogLines, writeRequestLog } from './src/server/requestLog.ts';
 import { sentHistoryNumbers } from './src/server/historySent.ts';
@@ -2053,6 +2054,44 @@ app.get("/api/models", async (req, res) => {
                   externalUrl: `https://civitai.com/models/${m.id}`,
                   trainedWords: Array.isArray((m.modelVersions || [])[0]?.trainedWords) ? (m.modelVersions || [])[0].trainedWords : [],
                 }));
+                if (cat === "video") {
+                  // Video checkpoints (e.g. Wan): types=Checkpoint&baseModels=<video base models from GET /api/v1/enums>
+                  // https://developer.civitai.com/site/reference/models.md
+                  const enumsResp = await upstreamFetch({ provider: 'civitai', route: req.path, model: 'enums', key: civitaiToken }, 'https://civitai.com/api/v1/enums', { headers: civitaiHeaders, signal: AbortSignal.timeout(15000) });
+                  const videoBases = enumsResp.ok ? civitaiVideoBaseModels(await enumsResp.json()) : [];
+                  const air = parseCivitaiAir(searchStr);
+                  if (!videoBases.length) mappedCivitai.length = 0;
+                  if (air && videoBases.length) {
+                    const vResp = await upstreamFetch({ provider: 'civitai', route: req.path, model: `model-version:${air.versionId}`, key: civitaiToken }, `https://civitai.com/api/v1/model-versions/${air.versionId}`, { headers: civitaiHeaders, signal: AbortSignal.timeout(15000) });
+                    const row = vResp.ok ? civitaiVersionVideoRow(await vResp.json(), videoBases) : undefined;
+                    mappedCivitai.length = 0;
+                    if (row) mappedCivitai.push(row);
+                  } else if (videoBases.length) {
+                    const cp = new URLSearchParams({ limit: String(limitParam), sort: civitaiSort, nsfw: "false", types: "Checkpoint" });
+                    for (const b of videoBases) cp.append("baseModels", b);
+                    if (searchStr) cp.append("query", searchStr);
+                    const cpResp = await upstreamFetch({ provider: 'civitai', route: req.path, model: 'video-checkpoints', key: civitaiToken }, `https://civitai.com/api/v1/models?${cp.toString()}`, { headers: civitaiHeaders, signal: AbortSignal.timeout(30000) });
+                    const cpItems = cpResp.ok ? ((await cpResp.json()).items || []) : [];
+                    // Every row id = official air from GET /model-versions/{id} (https://developer.civitai.com/site/guide/air.md); unresolved rows are dropped.
+                    const motionItems = (cData.items || []);
+                    const pairs: Array<{ m: any; v: any }> = [];
+                    for (const m of motionItems) { const v = (m.modelVersions || [])[0]; if (v) pairs.push({ m, v }); }
+                    for (const m of cpItems) { const v = (m.modelVersions || []).find((x: any) => videoBases.includes(x.baseModel)); if (v) pairs.push({ m, v }); }
+                    // One (newest) version per model, ordered by the official download count so the bounded air budget goes to the most used rows.
+                    pairs.sort((a, b) => (b.m.stats?.downloadCount || 0) - (a.m.stats?.downloadCount || 0));
+                    const { versions, fetched } = await resolveCivitaiVersions(pairs.map((p) => String(p.v.id)), async (id) => {
+                      const r = await upstreamFetch({ provider: 'civitai', route: req.path, model: `model-version:${id}`, key: civitaiToken }, `https://civitai.com/api/v1/model-versions/${id}`, { headers: civitaiHeaders, signal: AbortSignal.timeout(15000) });
+                      return r.ok ? r.json() : null;
+                    });
+                    console.log(`[Models Discovery] Civitai video: ${pairs.length} versions listed, ${fetched} model-version GETs, ${versions.size} with air`);
+                    mappedCivitai.length = 0;
+                    for (const { m, v } of pairs) {
+                      const full = versions.get(String(v.id));
+                      if (!full) continue;
+                      mappedCivitai.push({ id: full.air, name: `${m.name} · ${v.name}`, provider: "Civitai", type: m.type, category: "Video", baseModel: v.baseModel, downloads: v.stats?.downloadCount || m.stats?.downloadCount || 0, imageUrl: v.images?.[0]?.url || "", externalUrl: `https://civitai.com/models/${m.id}?modelVersionId=${v.id}` });
+                    }
+                  }
+                }
                 results.civitai = mappedCivitai;
                 const nextCursor = cData.metadata?.nextCursor || null;
                 pagination.civitai = { nextCursor, hasMore: Boolean(nextCursor) };
@@ -2801,6 +2840,30 @@ app.get("/api/models", async (req, res) => {
             } as any;
           }
 
+            if (!results.replicate && cat === 'video' && searchStr) {
+              // Official search (beta) includes community models: https://replicate.com/docs/reference/http#search
+              const searchEndpoint = `${replicateBase}/search?query=${encodeURIComponent(searchStr)}&limit=50`;
+              const sResp = await upstreamFetch(
+                { provider: 'replicate', route: req.path, model: `search:${searchStr}`, key: replicateKey },
+                searchEndpoint,
+                { headers: repHeaders, signal: AbortSignal.timeout(10000) }
+              );
+              if (sResp.ok) {
+                const seen = new Set(collectionModels.map((m: any) => `${m.owner}/${m.name}`));
+                const hits = replicateSearchVideoModels(await sResp.json()).filter((m: any) => !seen.has(`${m.owner}/${m.name}`)).slice(0, 10);
+                // Search rows return latest_version:null; models.get gives the version the label shows: https://replicate.com/docs/reference/http#models.get
+                const full = await Promise.all(hits.map(async (m: any) => {
+                  if (m.latest_version?.id) return m;
+                  const g = await upstreamFetch({ provider: 'replicate', route: req.path, model: `${m.owner}/${m.name}`, key: replicateKey }, `${replicateBase}/models/${m.owner}/${m.name}`, { headers: repHeaders, signal: AbortSignal.timeout(10000) }).catch(() => null);
+                  return g && g.ok ? { ...m, ...(await g.json()), metadata: m.metadata } : m;
+                }));
+                for (const m of full) { seen.add(`${m.owner}/${m.name}`); collectionModels.push(m); }
+              } else {
+                const rawErr = await sResp.text().catch(() => '');
+                console.warn(`[Models Discovery] Replicate search HTTP ${sResp.status}: ${rawErr}`);
+              }
+            }
+
             if (!results.replicate) {
               for (const m of collectionModels) {
                 const modelId = m.owner && m.name ? `${m.owner}/${m.name}` : m.id || m.name || '';
@@ -2829,6 +2892,8 @@ app.get("/api/models", async (req, res) => {
                   badge: m.owner || parsed.badge,
                   imageUrl: m.cover_image_url || m.default_example?.output || "",
                   externalUrl: `https://replicate.com/${modelId}`,
+                  latest_version: m.latest_version?.id ? { id: m.latest_version.id } : undefined,
+                  is_official: typeof m.is_official === 'boolean' ? m.is_official : undefined,
                   description: m.description || "",
                   tags: ["replicate", cat === 'video' ? 'video' : cat === 'lora' ? 'lora' : 'checkpoint', parsed.baseModel.toLowerCase()],
                 });

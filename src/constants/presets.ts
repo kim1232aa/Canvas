@@ -512,7 +512,6 @@ const I2V_SPECS: I2vSpec[] = [
     fps: 24,
     seed: 1715864103,
     cfg: 3,
-    size: '480x832',
     recipeExtra: { width: 480, height: 832, shift: 7 },
     selectors: { engine: 'wan', version: 'v2.2', provider: 'comfy' },
     loras: [{ name: 'urn:air:wanvideo-22-i2v-a14b:lora:civitai:1902817@2153813', strength: 1, source: 'https://civitai.red/images/111400580' }],
