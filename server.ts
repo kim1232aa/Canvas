@@ -181,22 +181,31 @@ const forwardUnmappedFields = (_res: express.Response, _provider: string, body: 
   const filled = fields.filter((f) => isProvided(body?.[f]));
   if (!filled.length || !body) return false;
   let custom: Record<string, unknown> = {};
-  try { custom = parseCustomObject(body.custom_parameters) || {}; } catch { return false; }
+  // Malformed custom_parameters must stop the request (the global middleware already 400s it to the node);
+  // never swallow the parse error and send without the filled fields.
+  custom = parseCustomObject(body.custom_parameters) || {};
   for (const f of filled) if (!Object.hasOwn(custom, f)) custom[f] = body[f];
   body.custom_parameters = custom;
   return false;
 };
 
 // SDK calls (@google/genai, @huggingface/inference) are logged through the same sink.
+// Request log (temp/logs) reads traces; SDK calls record the exact request object they were given as requestBody.
+const sdkTrace = (meta: UpstreamMeta & { upstream: string; parameters?: unknown }, status: number | null, startedAt: number, error?: string) => {
+  generationContext.getStore()?.traces.push({provider:meta.provider, model:meta.model, method:'POST', endpoint:meta.upstream, requestBody:meta.parameters!==undefined?sanitizeGenerationMetadata(meta.parameters):undefined, status, ...(error?{error}:{}), keyUsage:meta.key?keyPoolManager.describeKey(meta.provider, meta.key):undefined, durationMs:Date.now()-startedAt, startedAt:new Date(startedAt).toISOString()});
+};
 async function upstreamSdkCall<T>(meta: UpstreamMeta & { upstream: string; parameters?:unknown }, fn: () => Promise<T>): Promise<T> {
   const startedAt = Date.now();
   try {
     const out = await fn();
     if (meta.parameters) generationContext.getStore()?.submissions.push({endpoint:meta.upstream,parameters:sanitizeGenerationMetadata(meta.parameters),status:200});
+    sdkTrace(meta, 200, startedAt);
     logUpstream(meta, meta.upstream, 200, startedAt);
     return out;
   } catch (e: any) {
-    logUpstream(meta, meta.upstream, Number(e?.status || e?.statusCode || e?.httpResponse?.status || 0), startedAt, e?.message || String(e));
+    const status = Number(e?.status || e?.statusCode || e?.httpResponse?.status || 0);
+    sdkTrace(meta, status || null, startedAt, e?.message || String(e));
+    logUpstream(meta, meta.upstream, status, startedAt, e?.message || String(e));
     throw e;
   }
 }

@@ -918,6 +918,8 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
       // aspect_ratio / image_size 的选项按所选模型从 providerSchema 取，由 GeminiFieldSelect 渲染
       { name: 'aspect_ratio', label: '画面比例 (aspect_ratio)', type: 'select', default: '', options: [] },
       { name: 'image_size', label: 'image_size', type: 'select', default: '', options: [] },
+      // 雁: every param fillable; empty = not sent. server.ts forwards seed via generationConfig extraBody.
+      { name: 'seed', label: '种子', type: 'seed', default: '' },
     ],
     defaultValues: {
       model: '',

@@ -802,6 +802,10 @@ export function extractWorkflowParameters(
     }
     aspectRatio = execNode.values.aspect_ratio || undefined;
     imageSize = execNode.values.image_size || undefined;
+    seed = numOrUndef(execNode.values.seed);
+    // The node shows width/height boxes; filled values are sent (server forwards them via extraBody).
+    width = numOrUndef(execNode.values.width);
+    height = numOrUndef(execNode.values.height);
     customParameters = execNode.values.custom_parameters;
   } else if (execNode.type === 'ModelScopeNode' || execNode.type === 'ModelScopeAiNode') {
     isVideo = false;
