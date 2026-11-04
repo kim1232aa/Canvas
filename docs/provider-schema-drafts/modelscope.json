@@ -35,8 +35,8 @@
         "guidance": "会发送",
         "seed": "会发送",
         "loras": "会发送（fix15 证实 map {repoId:1}，无 path/scale）",
-        "sampler": "旧代码观察：当时被扣下未发（ModelScopeDriver.ts:43 记一笔不发）；属扣参违规，2026-11-04 画布令改为照发，待日志证实",
-        "scheduler": "同 sampler：旧代码扣下未发，属违规，待改照发并以日志证实",
+        "sampler": "会发送（sampler_name；2026-11-04 14:16 JST 魔搭 CN 真跑日志证实，hist_1793769370924_ysr4f，上游 200 SUCCEED；是否被上游采用未知）",
+        "scheduler": "会发送（同 sampler 那次日志证实；denoise 亦同；是否被上游采用未知）",
         "loraMultiFileChoice": "待确认（只传仓库 ID，文档未写多 safetensors 时用哪个）"
       },
       "pendingNote": "2026-10-16 ~23:00 北京：画布收口——intl 仅接线形状过；401≠欠费；双徽章都不升。fix16 UI 细节批进行中。",
