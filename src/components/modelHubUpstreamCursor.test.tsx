@@ -37,3 +37,17 @@ describe('Model Hub load-more follows upstream cursor', () => {
     root.unmount();
   });
 });
+
+describe('Model Hub 按 ID 选用 uses the tab provider own term', () => {
+  it.each([['novita', 'Novita sd_name_in_api'], ['openworks', 'OpenWorks 工具 name']])('%s tab never says Civitai', async (prov, term) => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ [prov]: [], _pagination: {} }), { status: 200 })));
+    const el = document.createElement('div');
+    const root = createRoot(el);
+    await act(async () => root.render(<ModelHubModal isOpen onClose={() => {}} onSelectModel={() => {}} initialCategory="lora" initialProvider={prov} />));
+    const input = el.querySelector('[data-testid="hub-custom-id"]') as HTMLInputElement;
+    expect(input.placeholder).toContain(term);
+    expect(el.textContent).not.toContain('Civitai 模型 ID');
+    expect(input.placeholder).not.toContain('Civitai');
+    root.unmount();
+  });
+});

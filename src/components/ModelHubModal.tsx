@@ -776,7 +776,11 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                 ? '输入 Sogni 协议模型标识或 LoRA 标识'
                 : activeProvider === 'mage'
                 ? '输入 Mage model_id（mango / mango-v2 / mango-v3s / mango-v3 / mango-v3-turbo）'
-                : activeProvider === 'all' ? '请先在上方选择服务商，避免将 ID 发往错误平台。' : '输入 Civitai 模型 ID / AIR URN'}
+                : activeProvider === 'all' ? '请先在上方选择服务商，避免将 ID 发往错误平台。'
+                : activeProvider === 'civitai' ? '输入 Civitai 模型 ID / AIR URN'
+                : activeProvider === 'novita' ? '输入 Novita sd_name_in_api'
+                : activeProvider === 'openworks' ? '输入 OpenWorks 工具 name'
+                : '输入模型 / LoRA ID'}
             </span>
           </div>
           <div className="flex items-center gap-2 flex-1 max-w-md">
@@ -805,7 +809,10 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                   : activeProvider === 'mage' ? '输入 Mage model_id（如 mango-v3）...'
                   : activeProvider === 'openai_compat' || activeProvider === 'grok_compat' ? '输入已配置中转实际支持的模型 ID...'
                   : activeProvider === 'all' ? '请先选择服务商'
-                  : '输入 Civitai ID (如 133005) 或 URN...'
+                  : activeProvider === 'civitai' ? '输入 Civitai ID (如 133005) 或 URN...'
+                  : activeProvider === 'novita' ? '输入 Novita sd_name_in_api...'
+                  : activeProvider === 'openworks' ? '输入 OpenWorks 工具 name...'
+                  : '输入模型 / LoRA ID...'
               }
               id="custom-tensor-template-input-modelhub"
               aria-label="自定义模型或 LoRA ID"
