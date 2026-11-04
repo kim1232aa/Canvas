@@ -33,10 +33,10 @@ describe('video result lands on SaveVideo (declared mediaType, no URL/name guess
 
 describe('Civitai i2v preset declares wan.md selectors; driver does not guess video from model name', () => {
   afterEach(() => vi.unstubAllGlobals());
-  it('std-civitai-i2v AIVideoNode carries engine/version/provider/operation', () => {
+  it('std-civitai-i2v AIVideoNode carries wan.md v2.2 comfy selectors (only LoRA route)', () => {
     const p = WORKFLOW_PRESETS.find((x) => x.id === 'std-civitai-i2v')!;
     const vid = p.nodes.find((n) => n.type === 'AIVideoNode')!;
-    expect(vid.values.video_selectors).toEqual({ engine: 'wan', version: 'v2.6', provider: 'fal', operation: 'image-to-video' });
+    expect(vid.values.video_selectors).toEqual({ engine: 'wan', version: 'v2.2', provider: 'comfy' });
   });
 
   it('model name containing image-to-video is NOT treated as video without isVideo', async () => {

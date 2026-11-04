@@ -460,44 +460,66 @@ type I2vSpec = {
   selectors?: Record<string, string>;
   /** Evidence URL / path — audit trail only. */
   source: string;
+  /** Recipe values copied verbatim (temp/audit-2026-11-04/recipe-mapping-log.md); sent as filled. */
+  seed?: number;
+  cfg?: number;
+  size?: string;
+  /** Extra recipe fields sent as-is via custom_parameters (e.g. Civitai comfy width/height/shift). */
+  recipeExtra?: Record<string, unknown>;
+  /** Recipe LoRAs (URL or provider-hosted id) → LoRALoader chained into AIVideoNode.lora. */
+  loras?: Array<{ name: string; strength: number; source: string }>;
 };
 
 const I2V_SPECS: I2vSpec[] = [
-  // fal OpenAPI 2026-11-03: duration enum 2–15 default 5; resolution 720p|1080p default 1080p; no aspect_ratio / fps / num_frames input.
+  // Recipe https://civitai.red/images/84050423 (Wan 2.1 I2V 14B 480p + Matrix Bullet Time LoRA) → Fal same-family fal-ai/wan-i2v-lora.
+  // Live OpenAPI 2026-11-04: loras[LoraWeight{path,scale}], seed, guide_scale, frames_per_second, num_frames, resolution 480p|720p.
   {
     provider: 'fal',
-    model: 'fal-ai/wan/v2.7/image-to-video',
+    model: 'fal-ai/wan-i2v-lora',
     duration: 5,
-    resolution: '1080p',
+    fps: 16,
+    seed: 24231881,
+    cfg: 4,
+    size: '688x480',
+    loras: [{ name: 'https://huggingface.co/Remade-AI/matrix-shot/resolve/main/matrix_shot.safetensors', strength: 1, source: 'https://civitai.red/images/84050423' }],
     schemaProperties: [
-      'prompt', 'image_url', 'end_image_url', 'video_url', 'audio_url',
-      'resolution', 'duration', 'negative_prompt', 'enable_prompt_expansion', 'seed', 'enable_safety_checker',
+      'prompt', 'image_url', 'negative_prompt', 'loras', 'seed', 'guide_scale', 'frames_per_second', 'num_frames',
+      'resolution', 'aspect_ratio', 'num_inference_steps', 'shift', 'enable_prompt_expansion', 'reverse_video', 'turbo_mode', 'enable_safety_checker',
     ],
-    source: 'https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/wan/v2.7/image-to-video',
+    source: 'https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/wan-i2v-lora',
   },
-  // WaveSpeed docs: duration 5|8 default 5; resolution 480p|720p default 480p; image required; no aspect_ratio / fps.
+  // Same recipe → WaveSpeed same-family wavespeed-ai/wan-2.1/i2v-480p-lora (docs: loras[].path/scale, size, duration 5|10, guidance_scale, seed).
   {
     provider: 'wavespeed',
-    model: 'wavespeed-ai/wan-2.2/image-to-video',
+    model: 'wavespeed-ai/wan-2.1/i2v-480p-lora',
     duration: 5,
-    resolution: '480p',
-    schemaProperties: ['prompt', 'image', 'resolution', 'negative_prompt', 'last_image', 'duration', 'seed'],
-    source: 'https://wavespeed.ai/docs/docs-api/wavespeed-ai/wan-2.2-image-to-video',
+    fps: 16,
+    seed: 24231881,
+    cfg: 4,
+    size: '688x480',
+    loras: [{ name: 'https://huggingface.co/Remade-AI/matrix-shot/resolve/main/matrix_shot.safetensors', strength: 1, source: 'https://civitai.red/images/84050423' }],
+    schemaProperties: ['prompt', 'image', 'negative_prompt', 'loras', 'size', 'num_inference_steps', 'duration', 'guidance_scale', 'flow_shift', 'seed'],
+    source: 'https://wavespeed.ai/docs/docs-api/wavespeed-ai/wan-2.1-i2v-480p-lora',
   },
-  // Civitai wan.md image-to-video example: duration 5 + resolution 1080p; aspect often from source image on I2V.
+  // Recipe https://civitai.red/images/111400580 (Wan 2.2 I2V-A14B checkpoint 1817671@2114157 + Cinematic Flare low LoRA)
+  // → Civitai videoGen wan v2.2 comfy (wan.md: only v2.2 comfy takes loras[{air,strength}]; diffusionModel AIR; width/height; cfgScale; seed).
   {
     provider: 'civitai',
-    model: 'wan',
-    duration: 5,
-    resolution: '1080p',
-    // wan.md「image-to-video」example (fetched 2026-11-04): engine wan / version v2.6 / provider fal / operation image-to-video.
-    selectors: { engine: 'wan', version: 'v2.6', provider: 'fal', operation: 'image-to-video' },
+    model: 'urn:air:wanvideo-22-i2v-a14b:checkpoint:civitai:1817671@2114157',
+    fps: 24,
+    seed: 1715864103,
+    cfg: 3,
+    size: '480x832',
+    recipeExtra: { width: 480, height: 832, shift: 7 },
+    selectors: { engine: 'wan', version: 'v2.2', provider: 'comfy' },
+    loras: [{ name: 'urn:air:wanvideo-22-i2v-a14b:lora:civitai:1902817@2153813', strength: 1, source: 'https://civitai.red/images/111400580' }],
     schemaProperties: [
-      'prompt', 'images', 'startImage', 'endImage', 'resolution', 'duration', 'enablePromptExpansion',
+      'prompt', 'sourceImage', 'images', 'diffusionModel', 'width', 'height', 'cfgScale', 'seed', 'steps', 'fps', 'duration',
+      'loras', 'negativePrompt', 'sampler', 'scheduler', 'shift',
     ],
     source: 'https://developer.civitai.com/orchestration/recipes/wan.md',
   },
-  // Novita img2video SVD-XT: frames_num=25, frames_per_second=6 only; no duration / aspect_ratio / resolution tier.
+  // Novita img2video SVD-XT: no recipe (Researchy: no Novita video LoRA endpoint found) — unchanged.
   {
     provider: 'novita',
     model: 'SVD-XT',
@@ -509,21 +531,32 @@ const I2V_SPECS: I2vSpec[] = [
     ],
     source: 'https://github.com/novitalabs/python-sdk examples/img2video + docs/provider-schema-drafts/novita.json',
   },
-  // MuAPI llms.txt: duration 2–15 default 5; resolution 720p|1080p default 720p; no aspect_ratio / fps.
+  // Recipe https://civitai.red/images/84050423 → MuAPI same-family wan2.1-lora-i2v (openapi.json WanLoRAI2VRequest: lora_list[LoraItem{path,scale}], duration 5|10, resolution).
+  // Schema lists no seed/cfg/size/negative: recipe values still sent as filled (雁 rule); upstream decides.
   {
     provider: 'muapi',
-    model: 'wan2.7-image-to-video',
+    model: 'wan2.1-lora-i2v',
     duration: 5,
-    resolution: '720p',
-    schemaProperties: ['prompt', 'image_url', 'last_image', 'audio_url', 'resolution', 'duration', 'negative_prompt'],
-    source: 'https://muapi.ai/playground/wan2.7-image-to-video/llms.txt',
+    fps: 16,
+    seed: 24231881,
+    cfg: 4,
+    size: '688x480',
+    loras: [{ name: 'https://huggingface.co/Remade-AI/matrix-shot/resolve/main/matrix_shot.safetensors', strength: 1, source: 'https://civitai.red/images/84050423' }],
+    schemaProperties: ['prompt', 'image_url', 'lora_list', 'aspect_ratio', 'resolution', 'quality', 'duration', 'seed'],
+    source: 'https://api.muapi.ai/openapi.json#/paths/~1api~1v1~1wan2.1-lora-i2v',
   },
-  // Replicate minimax/video-01 llms.txt: prompt / prompt_optimizer / first_frame_image / subject_reference only — fixed ~6s, aspect from first frame.
+  // Recipe https://civitai.red/images/84050423 → Replicate same-family wan-video/wan2.1-with-lora (llms.txt: image, lora_url, lora_strength_model, seed, sample_guide_scale, frames).
   {
     provider: 'replicate',
-    model: 'minimax/video-01',
-    schemaProperties: ['prompt', 'prompt_optimizer', 'first_frame_image', 'subject_reference'],
-    source: 'https://replicate.com/minimax/video-01/llms.txt',
+    model: 'wan-video/wan2.1-with-lora',
+    duration: 5,
+    fps: 16,
+    seed: 24231881,
+    cfg: 4,
+    size: '688x480',
+    loras: [{ name: 'https://huggingface.co/Remade-AI/matrix-shot/resolve/main/matrix_shot.safetensors', strength: 1, source: 'https://civitai.red/images/84050423' }],
+    schemaProperties: ['prompt', 'negative_prompt', 'image', 'aspect_ratio', 'frames', 'resolution', 'lora_url', 'lora_strength_model', 'lora_strength_clip', 'sample_steps', 'sample_guide_scale', 'sample_shift', 'seed'],
+    source: 'https://replicate.com/wan-video/wan2.1-with-lora/llms.txt',
   },
 ];
 
@@ -545,14 +578,20 @@ function buildStandardI2v(spec: I2vSpec): WorkflowPreset {
     // Front-door: I2V needs a real reference image; LoadImage starts empty so readiness / node note fire.
     require_reference_image: true,
     custom_parameters: JSON.stringify({
+      ...(spec.recipeExtra ?? {}),
       _canvas: {
         scope: { provider, model: spec.model },
         schemaProperties: spec.schemaProperties,
       },
     }),
   };
+  if (spec.seed !== undefined) { vidValues.seed = spec.seed; vidValues.control_after_generate = 'fixed'; }
+  if (spec.cfg !== undefined) vidValues.cfg = spec.cfg;
+  if (spec.size !== undefined) vidValues.size = spec.size;
+  const i2vLoras = spec.loras ?? [];
+  const loraNodeIds = i2vLoras.map((_, i) => `${prefix}-lora${i === 0 ? '' : `-${i + 1}`}`);
   // Only seed negative when the endpoint Schema lists it — avoid empty Replicate negative shell.
-  if (spec.schemaProperties.includes('negative_prompt')) vidValues.negative_prompt = '';
+  if (spec.schemaProperties.includes('negative_prompt')) vidValues.negative_prompt = PRESET_RECIPE_PROMPTS[id]?.negative ?? '';
   if (spec.duration !== undefined) vidValues.duration = spec.duration;
   if (spec.resolution !== undefined) vidValues.resolution = spec.resolution;
   if (spec.aspect_ratio !== undefined) vidValues.aspect_ratio = spec.aspect_ratio;
@@ -565,7 +604,7 @@ function buildStandardI2v(spec: I2vSpec): WorkflowPreset {
     targetProvider: provider as SpatialFrame['params']['targetProvider'],
     seedControl: 'fixed',
     batchSize: 1,
-    loras: [],
+    loras: i2vLoras.map(l => ({ name: l.name, modelStrength: l.strength, clipStrength: l.strength, triggerWords: '' })),
     videoProvider: provider,
     requireReferenceImage: true,
   };
@@ -575,7 +614,7 @@ function buildStandardI2v(spec: I2vSpec): WorkflowPreset {
   if (spec.aspect_ratio !== undefined) frameParams.aspectRatio = spec.aspect_ratio;
   // No fake width/height 1024 — video size is resolution / source image, not EmptyLatent pixels.
 
-  return {
+  const preset: WorkflowPreset = {
     id,
     name: `${friendly(provider)} · 标准图生视频`,
     category: '标准图生视频',
@@ -583,7 +622,7 @@ function buildStandardI2v(spec: I2vSpec): WorkflowPreset {
     previewImage: '',
     tags: [provider, '标准', '图生视频'],
     description: '该供应商标准图生视频流程；提示词请填配方或用户指定。须先在「加载参考图」放入图片。',
-    loraNames: [],
+    loraNames: i2vLoras.map(l => l.name),
     nodes: [
       {
         id: loadId,
@@ -650,6 +689,24 @@ function buildStandardI2v(spec: I2vSpec): WorkflowPreset {
       },
     ],
   };
+  // Recipe LoRAs: LoRALoader chain → AIVideoNode.lora (graphEngine traces it; server maps into the endpoint's declared LoRA field).
+  i2vLoras.forEach((l, i) => {
+    preset.nodes.push({
+      id: loraNodeIds[i],
+      type: 'LoRALoader',
+      title: '加载 LoRA',
+      pos: { x: 50, y: 520 + i * 340 },
+      width: 300,
+      inputs: NODE_DEFINITIONS.LoRALoader.inputs,
+      outputs: NODE_DEFINITIONS.LoRALoader.outputs,
+      values: { lora_name: l.name, strength_model: l.strength, strength_clip: l.strength, trigger_words: '' },
+    });
+    if (i > 0) preset.connections.push({ id: `${prefix}-c-lora-chain-${i + 1}`, fromNodeId: loraNodeIds[i - 1], fromSocketId: 'MODEL', toNodeId: loraNodeIds[i], toSocketId: 'model', type: 'MODEL' });
+  });
+  if (loraNodeIds.length) {
+    preset.connections.push({ id: `${prefix}-c-lora-vid`, fromNodeId: loraNodeIds[loraNodeIds.length - 1], fromSocketId: 'MODEL', toNodeId: vidId, toSocketId: 'lora', type: 'MODEL' });
+  }
+  return preset;
 }
 
 /**

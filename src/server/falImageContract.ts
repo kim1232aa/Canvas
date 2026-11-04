@@ -52,6 +52,20 @@ export const falExpandOpenApiUrl = (endpointId: string): string =>
 const provided = (v: unknown) => v !== undefined && v !== null && v !== '';
 
 /** Extract request-body Input properties from a Fal queue/platform OpenAPI document. */
+/** Inline array `items.$ref` (e.g. loras → LoraWeight) from the same OpenAPI document so item shapes are readable. */
+export function inlineFalItemRefs(props: Record<string, unknown>, openapi: unknown): Record<string, unknown> {
+  const schemas = (openapi as any)?.components?.schemas;
+  if (!schemas) return props;
+  const out: Record<string, unknown> = { ...props };
+  for (const [key, value] of Object.entries(props)) {
+    const ref = (value as any)?.items?.$ref;
+    if (typeof ref === 'string' && ref.startsWith('#/components/schemas/') && schemas[ref.slice(21)]) {
+      out[key] = { ...(value as any), items: schemas[ref.slice(21)] };
+    }
+  }
+  return out;
+}
+
 export function extractFalInputProperties(openapi: unknown): Record<string, unknown> | undefined {
   const doc = openapi as any;
   if (!doc || typeof doc !== 'object') return undefined;

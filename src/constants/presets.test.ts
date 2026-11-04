@@ -111,7 +111,9 @@ describe('standard workflow presets (23 T2I + 6 I2V)', () => {
       expect(p.id).toBe(`std-${p.provider}-i2v`);
       expect(p.category).toBe('标准图生视频');
       expect(p.tags).toEqual(expect.arrayContaining([p.provider, '标准', '图生视频']));
-      expect(p.nodes.map(n => n.type)).toEqual(['LoadImage', 'AIVideoNode', 'SaveVideo']);
+      expect(p.nodes.map(n => n.type)).toEqual(p.provider === 'novita'
+        ? ['LoadImage', 'AIVideoNode', 'SaveVideo']
+        : ['LoadImage', 'AIVideoNode', 'SaveVideo', 'LoRALoader']);
       expect(p.nodes.some(n => n.type === 'CLIPTextEncode')).toBe(false);
       expect(p.connections.some(c => c.toSocketId === 'positive')).toBe(false);
       const vid = p.nodes.find(n => n.type === 'AIVideoNode')!;
@@ -120,25 +122,20 @@ describe('standard workflow presets (23 T2I + 6 I2V)', () => {
       // Canonical prompt: AIVideoNode.values.prompt only (no twin CLIP box)
       expect(vid.values.prompt).toBe(PRESET_RECIPE_PROMPTS[p.id]?.prompt ?? '');
     }
-    expect(preset('std-fal-i2v').nodes.find(n => n.type === 'AIVideoNode')!.values.model).toBe(
-      'fal-ai/wan/v2.7/image-to-video',
-    );
+    // Recipe base → same-family LoRA endpoints (temp/audit-2026-11-04/recipe-mapping-log.md).
     const i2vModels: Record<string, string> = {
-      fal: 'fal-ai/wan/v2.7/image-to-video',
-      wavespeed: 'wavespeed-ai/wan-2.2/image-to-video',
-      civitai: 'wan',
+      fal: 'fal-ai/wan-i2v-lora',
+      wavespeed: 'wavespeed-ai/wan-2.1/i2v-480p-lora',
+      civitai: 'urn:air:wanvideo-22-i2v-a14b:checkpoint:civitai:1817671@2114157',
       novita: 'SVD-XT',
-      muapi: 'wan2.7-image-to-video',
-      replicate: 'minimax/video-01',
+      muapi: 'wan2.1-lora-i2v',
+      replicate: 'wan-video/wan2.1-with-lora',
     };
     for (const [prov, model] of Object.entries(i2vModels)) {
       const vid = preset(`std-${prov}-i2v`).nodes.find(n => n.type === 'AIVideoNode')!;
       expect(String(vid.values.model), prov).toBe(model);
       expect(String(vid.values.model).length, `${prov} non-empty`).toBeGreaterThan(0);
     }
-    // Replicate minimax/video-01 Schema has no negative_prompt — do not seed empty shell.
-    const rep = preset('std-replicate-i2v').nodes.find(n => n.type === 'AIVideoNode')!;
-    expect(Object.prototype.hasOwnProperty.call(rep.values, 'negative_prompt')).toBe(false);
     const nov = preset('std-novita-i2v').nodes.find(n => n.type === 'AIVideoNode')!;
     expect(nov.values.num_frames).toBe(25);
     expect(nov.values.fps).toBe(6);
@@ -146,12 +143,12 @@ describe('standard workflow presets (23 T2I + 6 I2V)', () => {
 
   it('I2V seeds official duration/resolution/frames only — no empty shells, no fake 1024 WH, require_reference_image', () => {
     const expectByProv: Record<string, { duration?: number; resolution?: string; num_frames?: number; fps?: number; hide: string[] }> = {
-      fal: { duration: 5, resolution: '1080p', hide: ['aspect_ratio', 'fps', 'num_frames'] },
-      wavespeed: { duration: 5, resolution: '480p', hide: ['aspect_ratio', 'fps', 'num_frames'] },
-      civitai: { duration: 5, resolution: '1080p', hide: ['aspect_ratio', 'fps', 'num_frames'] },
+      fal: { duration: 5, fps: 16, hide: [] },
+      wavespeed: { duration: 5, fps: 16, hide: [] },
+      civitai: { fps: 24, hide: [] },
       novita: { num_frames: 25, fps: 6, hide: ['duration', 'aspect_ratio', 'resolution'] },
-      muapi: { duration: 5, resolution: '720p', hide: ['aspect_ratio', 'fps', 'num_frames'] },
-      replicate: { hide: ['duration', 'aspect_ratio', 'fps', 'num_frames', 'resolution'] },
+      muapi: { duration: 5, fps: 16, hide: [] },
+      replicate: { duration: 5, fps: 16, hide: [] },
     };
     for (const p of i2v()) {
       const vid = p.nodes.find(n => n.type === 'AIVideoNode')!;
@@ -235,14 +232,16 @@ describe('standard workflow presets (23 T2I + 6 I2V)', () => {
         if (p.id === 'std-muapi-t2i') continue;
         expect(String(n.values.lora_name ?? '').length, `${p.id} empty LoRA shell`).toBeGreaterThan(0);
       }
-      if (!HAS_LORA.has(p.provider) && p.id !== 'std-muapi-t2i') {
+      if (!HAS_LORA.has(p.provider) && p.id !== 'std-muapi-t2i' && p.category !== '标准图生视频') {
         expect(loras, p.id).toHaveLength(0);
       }
     }
     expect(lora('std-tensorart-t2i')).toBeDefined();
     expect(lora('std-wavespeed-t2i')).toBeDefined();
     for (const p of i2v()) {
-      expect(lora(p.id)).toBeUndefined();
+      const vidLora = p.connections.find(c => c.toSocketId === 'lora' && c.toNodeId === `${p.id}-vid`);
+      if (p.provider === 'novita') expect(vidLora, p.id).toBeUndefined();
+      else expect(p.nodes.find(n => n.id === vidLora?.fromNodeId)?.type, p.id).toBe('LoRALoader');
     }
   });
 

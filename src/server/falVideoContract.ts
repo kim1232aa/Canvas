@@ -93,6 +93,20 @@ export function buildFalVideoRequest(
     return mapped;
   };
 
+  // LoRA item shape comes only from the live OpenAPI item properties (e.g. LoraWeight {path, scale}).
+  const loraItemProps = (props.loras as any)?.items?.properties;
+  if (Array.isArray(body.loras) && body.loras.length && loraItemProps && typeof loraItemProps === 'object') {
+    const pathKey = ['path', 'url', 'model_name', 'name', 'id'].find((k) => Object.hasOwn(loraItemProps, k));
+    const strengthKey = ['scale', 'weight', 'strength'].find((k) => Object.hasOwn(loraItemProps, k));
+    if (pathKey) {
+      body = { ...body, loras: body.loras.map((l: any) => {
+        const item: Record<string, unknown> = { [pathKey]: l?.path || l?.url || l?.downloadUrl || l?.civitaiId || l?.name };
+        const sv = l?.strength ?? l?.modelStrength ?? l?.scale;
+        if (strengthKey && sv !== undefined && sv !== null && sv !== '') item[strengthKey] = sv;
+        return item;
+      }) };
+    }
+  }
   const payload: Record<string, unknown> = mapInputs(body);
   const fieldStatus: Record<string, string> = {};
   for (const [field] of CANVAS_WIRES) {

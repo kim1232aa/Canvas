@@ -48,5 +48,25 @@ export const PRESET_RECIPE_PROMPTS: Record<string, RecipePrompt> = {
   "std-fal-t2i": {
     "prompt": "c0l0ringb00k coloring book page, simple cute dragon, white background",
     "source": "https://civitai.red/images/31247708"
+  },
+  "std-fal-i2v": {
+    "prompt": "a woman dancing happily in the middle of a street under a neon sign, cars drive into her and she dances over them",
+    "source": "https://civitai.red/images/84050423"
+  },
+  "std-wavespeed-i2v": {
+    "prompt": "a woman dancing happily in the middle of a street under a neon sign, cars drive into her and she dances over them",
+    "source": "https://civitai.red/images/84050423"
+  },
+  "std-muapi-i2v": {
+    "prompt": "a woman dancing happily in the middle of a street under a neon sign, cars drive into her and she dances over them",
+    "source": "https://civitai.red/images/84050423"
+  },
+  "std-replicate-i2v": {
+    "prompt": "a woman dancing happily in the middle of a street under a neon sign, cars drive into her and she dances over them",
+    "source": "https://civitai.red/images/84050423"
+  },
+  "std-civitai-i2v": {
+    "prompt": "summer",
+    "source": "https://civitai.red/images/111400580"
   }
 };

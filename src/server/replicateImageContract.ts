@@ -264,7 +264,16 @@ export function buildReplicatePredictionRequest(
     return typeof rawStrength === 'number' && Number.isFinite(rawStrength) ? { path: loraPath, scale: rawStrength } : { path: loraPath };
   };
 
-  if (Array.isArray(body.loras) && body.loras.length > 0) {
+  // Single-URL LoRA slot declared by the model Schema (e.g. wan-video/wan2.1-with-lora: lora_url + lora_strength_model).
+  const urlSlotStrengthKey = ['lora_strength_model', 'lora_strength', 'lora_scale'].find((k) => k in schemaProps);
+  if (Array.isArray(body.loras) && body.loras.length > 0 && 'lora_url' in schemaProps
+    && !('lora_weights' in schemaProps || 'hf_lora' in schemaProps || 'loras' in schemaProps)) {
+    const primary = resolveReplicateLoraEntry(body.loras[0]);
+    input.lora_url = primary.path;
+    if (primary.scale !== undefined && urlSlotStrengthKey) input[urlSlotStrengthKey] = primary.scale;
+    // More LoRAs than the one declared slot: the rest go out unchanged in `loras`; upstream decides.
+    if (body.loras.length > 1) input.loras = body.loras.slice(1);
+  } else if (Array.isArray(body.loras) && body.loras.length > 0) {
     const schemaAllowsLora = (
       'lora_weights' in schemaProps || 'hf_lora' in schemaProps || 'loras' in schemaProps
     );

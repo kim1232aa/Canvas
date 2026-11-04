@@ -746,10 +746,16 @@ export function extractWorkflowParameters(
     }
     resolution = strOrUndef(execNode.values.resolution);
     size = strOrUndef(execNode.values.size);
+    // Filled recipe values (e.g. preset cfg/steps) are sent as filled; the route maps them to the endpoint's declared field.
+    steps = numOrUndef(execNode.values.steps);
+    cfg = numOrUndef(execNode.values.cfg ?? execNode.values.guidance_scale);
     seed = (execNode.values.control_after_generate ?? execNode.values.seedControl) === 'randomize'
       ? Math.floor(Math.random() * 1000000000)
       : numOrUndef(execNode.values.seed);
     customParameters = execNode.values.custom_parameters;
+    // LoRALoader chain wired into the video node's lora socket; the server maps it into the endpoint's declared LoRA field.
+    const videoLoraConn = connections.find((c) => c.toNodeId === execNode.id && c.toSocketId === 'lora');
+    if (videoLoraConn) traceLorasUpstream(videoLoraConn.fromNodeId, connections, nodeMap, loras, subgraphNodeIds);
   } else if (execNode.type === 'FalAIEngineNode') {
     isVideo = false;
     targetProvider = 'fal';
@@ -1173,7 +1179,8 @@ export async function executeWorkflow(
       // Schema-driven providers: LoRA support is decided only by the server provider
       // table (unified 「没有发出去」 + history) or by upstream verbatim — no
       // name-heuristic frontend gate.
-      if (!compat.compatible && !isSchemaDrivenProvider(params.targetProvider)) {
+      // Video: the endpoint's live Schema / upstream decides LoRA fit (no name-based local gate).
+      if (!compat.compatible && !params.isVideo && !isSchemaDrivenProvider(params.targetProvider)) {
         const reason = `LoRA [${l.name}] 与底模 [${params.checkpointModel}] 架构不兼容，拒绝静默丢弃执行`;
         if (l.nodeId) {
           onNodeStateChange(l.nodeId, 'error', 0, undefined, reason);

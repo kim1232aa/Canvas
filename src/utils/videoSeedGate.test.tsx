@@ -14,14 +14,14 @@ const renderVideoNode = (presetId: string) => {
 };
 
 describe('AI 视频 seed box gated by preset-declared schema', () => {
-  it.each(['std-novita-i2v', 'std-fal-i2v', 'std-wavespeed-i2v'])('%s shows an empty seed box', (id) => {
+  it.each(['std-novita-i2v', 'std-fal-i2v', 'std-wavespeed-i2v', 'std-muapi-i2v', 'std-civitai-i2v', 'std-replicate-i2v'])('%s shows the seed box', (id) => {
     vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {}))); // cold Schema (never resolves) = real first paint
     const html = renderVideoNode(id);
     expect(html).toContain('种子 (seed)');
   });
-  it.each(['std-muapi-i2v', 'std-civitai-i2v', 'std-replicate-i2v'])('%s has no seed box', (id) => {
+  it('recipe I2V presets show the recipe seed; Novita (no recipe) stays empty', () => {
     vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
-    const html = renderVideoNode(id);
-    expect(html).not.toContain('种子 (seed)');
+    expect(renderVideoNode('std-fal-i2v')).toContain('value="24231881"');
+    expect(renderVideoNode('std-civitai-i2v')).toContain('value="1715864103"');
   });
 });

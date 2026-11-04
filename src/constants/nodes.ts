@@ -941,6 +941,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
       { id: 'positive', name: 'positive', type: 'CONDITIONING', label: 'prompt' },
       { id: 'negative', name: 'negative', type: 'CONDITIONING', label: 'negative' },
       { id: 'init_image', name: 'init_image', type: 'IMAGE', label: 'init_image' },
+      { id: 'lora', name: 'lora', type: 'MODEL', label: 'lora_model' },
     ],
     outputs: [
       { id: 'VIDEO', name: 'VIDEO', type: 'VIDEO', label: 'VIDEO' },

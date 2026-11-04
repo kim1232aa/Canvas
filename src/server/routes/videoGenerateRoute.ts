@@ -1,7 +1,7 @@
 import type { Request, Response as ExpressResponse } from 'express';
 import { tamsVideoUnsupported } from '../../schemas/tensorModelApi.ts';
 import { buildFalVideoRequest } from '../falVideoContract.ts';
-import { falQueueOpenApiUrl, extractFalInputProperties, FalSchemaMissingError, type FalSchemaFetchFailure } from '../falImageContract.ts';
+import { falQueueOpenApiUrl, extractFalInputProperties, inlineFalItemRefs, FalSchemaMissingError, type FalSchemaFetchFailure } from '../falImageContract.ts';
 import { buildAgnesVideoRequest, agnesVideoId } from '../agnesVideoRequest.ts';
 import { applyCustomParameters } from '../customParameters.ts';
 import { sanitizeGenerationMetadata } from '../../utils/generationMetadata.ts';
@@ -602,6 +602,7 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
           let parsed: unknown;
           try { parsed = JSON.parse(raw); } catch { parsed = undefined; }
           liveProps = extractFalInputProperties(parsed);
+          if (liveProps) liveProps = inlineFalItemRefs(liveProps, parsed);
           if (!liveProps) schemaFetch = { url: schemaUrl, status: sr.status, body: raw };
         }
       } catch (e: any) {

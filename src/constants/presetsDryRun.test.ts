@@ -29,7 +29,7 @@ describe('std presets dry-run (load → extract, no send)', () => {
       }
       // required (non-optional) inputs connected
       for (const n of p.nodes) for (const i of ((NODE_DEFINITIONS as any)[n.type]?.inputs || [])) {
-        if (i.optional || ['image','negative'].includes(i.id) || (n.type==='AIVideoNode' && i.id==='positive') || (n.type==='GoogleImagenNode' && i.id==='negative') || (n.type==='CLIPTextEncode' && p.id==='std-gemini-t2i' && i.id==='clip')) continue;
+        if (i.optional || ['image','negative'].includes(i.id) || (n.type==='AIVideoNode' && (i.id==='positive' || i.id==='lora')) || (n.type==='LoRALoader' && p.nodes.some((v) => v.type==='AIVideoNode')) || (n.type==='GoogleImagenNode' && i.id==='negative') || (n.type==='CLIPTextEncode' && p.id==='std-gemini-t2i' && i.id==='clip')) continue;
         if (!p.connections.some((c) => c.toNodeId === n.id && c.toSocketId === i.id)) issues.push(`unconnected ${n.type}.${i.id}`);
       }
       const emptyPrompt = !p.nodes.some((n) => String(n.values?.text ?? n.values?.prompt ?? '').trim());
