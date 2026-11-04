@@ -523,7 +523,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
             const value = node.values[widget.name];
             if (widget.name === 'civitai_id' && (node.values.targetProvider || currentProvider || '') !== 'civitai') return null;
             if (widget.name === 'fal_model_name' && !((node.values.targetProvider || currentProvider) === 'fal' && node.values.ckpt_name === 'fal-ai/lora')) return null;
-            if (node.type === 'AIVideoNode' && ['duration', 'aspect_ratio', 'num_frames', 'fps'].includes(widget.name)) {
+            if (node.type === 'AIVideoNode' && ['duration', 'aspect_ratio', 'num_frames', 'fps', 'seed'].includes(widget.name)) {
               // Live Schema: absent → hide. Seeded schemaProperties (I2V presets): hide fields the endpoint does not declare — no empty shells while Schema is cold.
               ensureModelSchema(node.values.targetProvider, node.values.model);
               const vf = videoSchemaField(node.values.targetProvider, node.values.model, widget.name);

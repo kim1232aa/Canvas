@@ -181,6 +181,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
   const [hasMore, setHasMore] = useState(true);
   const [page, setPage] = useState(1);
   const [hfCursor, setHfCursor] = useState<string | null>(null);
+  const [upstreamCursor, setUpstreamCursor] = useState<string | null>(null);
   const [civitaiCursor, setCivitaiCursor] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [modelsData, setModelsData] = useState<Record<string, any[]>>({});
@@ -274,12 +275,13 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
       setCatalogNotices({});
       setHfCursor(null);
       setCivitaiCursor(null);
+      setUpstreamCursor(null);
       setPage(1);
       setHasMore(true);
     }
     try {
       const typeParam = cat === 'lora' ? 'LORA' : 'Checkpoint';
-      const liveCursor = isLoadMore ? (hfCursor || civitaiCursor || '') : '';
+      const liveCursor = isLoadMore ? (upstreamCursor || hfCursor || civitaiCursor || '') : '';
       const livePage = isLoadMore ? page + 1 : 1;
       const archQuery = arch === 'all' ? '' : arch;
 
@@ -314,6 +316,9 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
       if (pag.civitai?.nextCursor) {
         setCivitaiCursor(pag.civitai.nextCursor);
       }
+      // Generic upstream-cursor paging (Krea /styles next_cursor, Novita pagination.next_cursor …): send back exactly what upstream returned.
+      const upstreamPaged = prov !== 'all' ? (pag as any)[prov] : undefined;
+      if (upstreamPaged?.paging === 'upstream-cursor') setUpstreamCursor(upstreamPaged.nextCursor || null);
       if (pag.modelscope?.page) {
         setPage(pag.modelscope.page);
       } else if (pag.tensorart?.page) {

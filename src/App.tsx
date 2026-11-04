@@ -1,4 +1,5 @@
 import { computeFitTransform, measureChromeInsets, fitItemsForMode } from './utils/fitView';
+import { useFitRequest } from './utils/useFitRequest';
 import { saveImagePrefixFor } from './utils/saveImagePrefix';
 import { findActualRequest, countActualRequestLoras } from './utils/actualRequestLoras';
 import { modelSchemaVersion, subscribeModelSchema, getModelSizePairing } from './services/modelSchemaCache';
@@ -1822,7 +1823,7 @@ export default function App() {
     if (canvas.transform) setTransform(canvas.transform);
     setSelectedFrameId(canvas.spatialFrames?.[0]?.id || null);
     setSelectedNodeId(null);
-    if (!canvas.transform) setTimeout(handleResetView, 180);
+    if (!canvas.transform) requestFit();
   };
 
   const handleSaveProject = async (name?: string, asNew = false) => {
@@ -1922,7 +1923,7 @@ export default function App() {
       setConnections(JSON.parse(JSON.stringify(preset.connections)));
       setSpatialFrames(JSON.parse(JSON.stringify(preset.spatialFrames || [])));
       if (preset.spatialFrames?.[0]) setSelectedFrameId(preset.spatialFrames[0].id);
-      setTimeout(handleResetView, 180);
+      requestFit();
     } else {
       const timestamp = Date.now();
       const idMap = new Map<string, string>();
@@ -1957,7 +1958,7 @@ export default function App() {
       setNodes((prev) => [...prev, ...newNodes]);
       setConnections((prev) => [...prev, ...newConnections]);
       setSpatialFrames((prev) => [...prev, ...newFrames]);
-      setTimeout(handleResetView, 180);
+      requestFit();
     }
   };
 
@@ -2215,6 +2216,9 @@ export default function App() {
     });
   };
 
+  // Fit after the next commit with the fresh node set (every preset load/replace, board switch, history apply).
+  const requestFit = useFitRequest(handleResetView);
+
   /** History「照这组参数再来一张」：清空画布，换成这条记录的工作流和实际发送的值。拉取或构建失败原样报错，画布不动。 */
   const handleApplyHistoryToCanvas = async (item: GenerationHistoryItem & { hasWorkflowSnapshot?: boolean }) => {
     let result;
@@ -2233,7 +2237,7 @@ export default function App() {
     setSpatialFrames(result.spatialFrames || []);
     if (result.spatialFrames?.[0]?.id) setSelectedFrameId(result.spatialFrames[0].id);
     setToast({ type: 'success', title: '已换成这条记录的工作流', message: '' });
-    setTimeout(handleResetView, 180);
+    requestFit();
   };
 
 
@@ -2990,7 +2994,7 @@ export default function App() {
           if (data.nodes) setNodes(data.nodes);
           if (data.connections) setConnections(data.connections);
           if (data.spatialFrames) setSpatialFrames(data.spatialFrames);
-          setTimeout(handleResetView, 180);
+          requestFit();
         }}
         onClearCanvas={handleClearCanvas}
         initialTab={workflowPresetsInitialTab}
