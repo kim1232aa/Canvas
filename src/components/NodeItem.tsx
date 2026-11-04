@@ -33,7 +33,7 @@ import { GeminiFieldSelect, GeminiModelBadge } from './GeminiFieldSelect';
 import { fieldOptions, getFieldSpec, resolveSchemaModelId } from '../schemas/providerSchema';
 import { FieldStatusBadge, SchemaSendBadge } from './FieldStatusBadge';
 import { isCanvasFieldUnsupported, isCanvasWidgetUnsupported, LORA_UNSUPPORTED_TITLE, LORA_BYPASS_LABEL, toSchemaProvider } from '../utils/resolveCheckpoint';
-import { readDeclaredSchemaProperties, SCHEMA_OMIT_REASON, canvasFieldMatchesSchema, isDeclaredSchemaFieldOmitted } from '../utils/schemaSendHint';
+import { readDeclaredSchemaProperties, canvasFieldMatchesSchema, isDeclaredSchemaFieldOmitted } from '../utils/schemaSendHint';
 import { schemaSendStatus } from '../utils/schemaSendStatus';
 /** KSampler + EmptyLatent size widgets: Schema-omit / unsupported → hide empty shells (雁: no blank adjustable boxes). */
 const SAMPLER_SCHEMA_WIDGETS = new Set(['steps', 'cfg', 'sampler_name', 'scheduler', 'sampler', 'seed', 'denoise', 'control_after_generate']);
@@ -216,12 +216,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
   const zoomScale = typeof zoom === 'number' && zoom > 1.5 ? zoom / 100 : zoom;
   const zoomedOut = typeof zoomScale === 'number' && zoomScale > 0 && zoomScale < 0.75;
   const zoomAlerts: Array<{ tone: 'rose' | 'amber'; text: string }> = [];
-  // Schema failure: line 1 = plain headline (full model name), rest = upstream body verbatim. Others keep 上一次 label.
-  const schemaErr = node.errorKind === 'schema' && !!node.errorMessage;
-  const nodeErrorHeadline = schemaErr ? String(node.errorMessage).split('\n')[0] : priorRunErrorLabel(node.errorMessage, node.errorAt);
-  const nodeErrorRaw = schemaErr ? String(node.errorMessage).split('\n').slice(1).join('\n') : '';
   if (zoomedOut) {
-    if (node.localBlockReason && node.state !== 'running') zoomAlerts.push({ tone: 'rose', text: `⛔ ${node.localBlockTitle || '没有发出去'}：${node.localBlockReason}` });
     if (loraMismatchNote) zoomAlerts.push({ tone: 'amber', text: `⚠ LoRA 来源 ${String(node.values.resource_source)} ≠ 当前 ${String(currentProvider || node.values?.targetProvider)}` });
     const notSent = (def.widgets || []).filter((w: any) => w.type === 'number' || w.type === 'select' || w.type === 'text' || w.type === 'textarea').filter((w: any) => {
       const isWH = w.name === 'width' || w.name === 'height';
@@ -370,12 +365,6 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               <span>就绪</span>
             </div>
           )}
-          {node.state === 'error' && (
-            <div className="flex items-center gap-1 shrink-0 text-[10px] font-mono text-rose-400 bg-rose-950/60 px-1.5 py-0.5 rounded border border-rose-800/40" title={node.errorMessage ? nodeErrorHeadline : undefined} data-testid="node-error-badge">
-              <AlertTriangle className="w-3 h-3" />
-              <span>异常</span>
-            </div>
-          )}
         </div>
 
         {/* Action icons */}
@@ -414,13 +403,8 @@ export const NodeItem: React.FC<NodeItemProps> = ({
         <div className="mx-3 mt-2 p-2 bg-rose-950/40 border border-rose-800/60 rounded-lg text-[11px] text-rose-100 leading-relaxed flex items-start gap-1.5" data-testid="node-error-strip">
           <AlertTriangle className="w-3.5 h-3.5 text-rose-300 shrink-0 mt-0.5" />
           <div className="min-w-0 flex-1 max-h-48 overflow-y-auto" data-testid="node-error-banner">
-            <div className={`[overflow-wrap:anywhere] whitespace-pre-wrap ${schemaErr ? 'font-semibold' : ''}`} data-testid="node-error-headline">{nodeErrorHeadline}</div>
-            {nodeErrorRaw ? (
-              <details className="mt-1" data-testid="node-error-details">
-                <summary className="cursor-pointer text-rose-200/90 text-[10px] select-none">详情</summary>
-                <pre className="mt-1 whitespace-pre-wrap [overflow-wrap:anywhere] font-mono text-[10px] text-rose-200/90" data-testid="node-error-raw">{nodeErrorRaw}</pre>
-              </details>
-            ) : null}
+            {/* 雁 2026-11-04: the upstream text verbatim (status + full body), nothing else. */}
+            <div className="[overflow-wrap:anywhere] whitespace-pre-wrap" data-testid="node-error-headline">{node.errorMessage}</div>
           </div>
         </div>
       )}
@@ -506,11 +490,9 @@ export const NodeItem: React.FC<NodeItemProps> = ({
           {(node.values.import_unresolved_resource === true || node.values.unresolvedResource === true) && <p role="alert" className="text-amber-200">资源尚未核实，请从目录或公开 metadata 查验后重新选择。</p>}
           {modelChainBreakMessage && <p role="alert" data-testid="node-model-chain-break" className="p-2 rounded bg-amber-950/50 border border-amber-500/50 text-amber-100 text-[11px] leading-relaxed [overflow-wrap:break-word]">{modelChainBreakMessage}</p>}
           {/* clean-1333 #5/#6: only the node that caused the block gets a red box, with the SAME reason as the toast. */}
-          {node.localBlockReason && node.state !== 'running' && <div role="status" data-testid="node-local-block" className="p-2 rounded bg-rose-950/50 border border-rose-500/50 text-rose-100 text-[11px] leading-relaxed [overflow-wrap:break-word] whitespace-pre-wrap overflow-visible"><p className="font-semibold" data-testid="node-local-block-title">{node.localBlockTitle || LOCAL_BLOCK_NODE_LINE.split('：')[0]}</p><p data-testid="node-local-block-reason" className="overflow-visible"><EmphasizeLimit text={node.localBlockReason} /></p></div>}
           {node.values.require_reference_image === true && <p role="note" className="text-amber-200">编辑输入需要明确参考图；展示样图不作为输入。</p>}
           {node.type === 'CheckpointLoaderSimple' && node.values.targetProvider === 'sensenova' && <div className="space-y-2">
-            <label className="block text-slate-300">SenseNova size<input type="text" aria-label="SenseNova size" aria-describedby={`sensenova-size-note-${node.id}`} value={node.values.size ?? ''} onMouseDown={e=>e.stopPropagation()} onPointerDown={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()} onChange={e=>onUpdateValue(node.id,'size',e.target.value === '' ? undefined : e.target.value)} placeholder="auto / 2048x2048；留空时按画布宽高(如1024x1024)发送，无宽高则 auto" className="mt-1 w-full rounded border border-slate-700 bg-[#121316] p-2 focus-visible:outline-2 focus-visible:outline-cyan-400" /></label>
-            <p id={`sensenova-size-note-${node.id}`} role="note" className="text-amber-200">官方文档写 2K/4K 常量，但本次上游对这两个值返回 400：invalid size, should be auto or WIDTHxHEIGHT。建议明确填写像素尺寸或 auto；原值保留，也不在此限制提交。</p>
+            <label className="block text-slate-300">SenseNova size<input type="text" aria-label="SenseNova size" value={node.values.size ?? ''} onMouseDown={e=>e.stopPropagation()} onPointerDown={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()} onChange={e=>onUpdateValue(node.id,'size',e.target.value === '' ? undefined : e.target.value)} placeholder="auto / 2048x2048；留空时按画布宽高(如1024x1024)发送，无宽高则 auto" className="mt-1 w-full rounded border border-slate-700 bg-[#121316] p-2 focus-visible:outline-2 focus-visible:outline-cyan-400" /></label>
             <label className="block text-slate-300">SenseNova output_format<input type="text" aria-label="SenseNova output_format" value={node.values.output_format ?? ''} onMouseDown={e=>e.stopPropagation()} onPointerDown={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()} onChange={e=>onUpdateValue(node.id,'output_format',e.target.value === '' ? undefined : e.target.value)} placeholder="png / jpeg / webp；留空不显式传" className="mt-1 w-full rounded border border-slate-700 bg-[#121316] p-2 focus-visible:outline-2 focus-visible:outline-cyan-400" /><span className="text-slate-400">本站支持 png/jpeg/webp；官方编辑文档也列 jpg，但本站尚未接通。自定义原值保留。</span></label>
             {(['watermark', 'prompt_extend'] as const).map(field => <label key={field} className="block text-slate-300">SenseNova {field}<select aria-label={`SenseNova ${field}`} value={typeof node.values[field] === 'boolean' ? String(node.values[field]) : ''} onMouseDown={e=>e.stopPropagation()} onPointerDown={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()} onChange={e=>onUpdateValue(node.id,field,e.target.value === '' ? undefined : e.target.value === 'true')} className="mt-1 w-full rounded border border-slate-700 bg-[#121316] p-2 focus-visible:outline-2 focus-visible:outline-cyan-400"><option value="">未设置（不显式传）</option><option value="false">false（关闭）</option><option value="true">true（开启）</option></select></label>)}
           </div>}
@@ -518,7 +500,6 @@ export const NodeItem: React.FC<NodeItemProps> = ({
             <label className="block text-slate-300">Civitai engine<select aria-label="Civitai engine" value={node.values.civitai_engine || ''} onMouseDown={e=>e.stopPropagation()} onChange={e=>onUpdateValue(node.id,'civitai_engine',e.target.value)} className="w-full rounded border border-slate-700 bg-[#121316] p-2"><option value="">请选择引擎</option><option value="sdcpp">sdcpp</option><option value="comfy">comfy</option>{node.values.civitai_engine && !['sdcpp','comfy'].includes(node.values.civitai_engine) && <option value={node.values.civitai_engine}>{node.values.civitai_engine}</option>}</select></label>
             <label className="block text-slate-300">Civitai ecosystem<input aria-label="Civitai ecosystem" value={node.values.civitai_ecosystem || ''} onMouseDown={e=>e.stopPropagation()} onChange={e=>onUpdateValue(node.id,'civitai_ecosystem',e.target.value)} placeholder="显式填写生态，如 sdxl；自定义值保留" className="w-full rounded border border-slate-700 bg-[#121316] p-2" /></label>
             <label className="block text-slate-300">Civitai model<input aria-label="Civitai model" value={node.values.civitai_model || ''} onMouseDown={e=>e.stopPropagation()} onChange={e=>onUpdateValue(node.id,'civitai_model',e.target.value)} placeholder="按所选引擎填写 model selector" className="w-full rounded border border-slate-700 bg-[#121316] p-2" /></label>
-            <p className="text-slate-400">引擎和生态必须显式选择；AIR、sampler/scheduler 与引擎是否兼容由上游验证。</p>
           </div>}
           {node.type === 'AIVideoNode' && (() => {
             // Same Schema / seeded-schemaProperties gate as duration — never a permanent empty resolution shell.
@@ -557,8 +538,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                 // Schema not ready: free input, do not invent enums.
                 return <div key={widget.name} className="space-y-1" data-testid={`video-schema-pending-${widget.name}`}>
                   <label className="text-slate-400 font-mono text-[11px] block whitespace-nowrap">{widget.label}</label>
-                  <input aria-label={widget.label} type={widget.name === 'aspect_ratio' ? 'text' : 'number'} step={widget.step || 1} value={cur} placeholder="等待官方 Schema…" onMouseDown={e=>e.stopPropagation()} onPointerDown={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()} onChange={e=>onUpdateValue(node.id, widget.name, e.target.value === '' ? undefined : (widget.name === 'aspect_ratio' ? e.target.value : parseFloat(e.target.value)))} className="w-full bg-[#121316] border border-[#2d303a] rounded-lg px-2.5 py-1.5 text-slate-200 text-xs font-mono outline-none" />
-                  <p className="text-[10px] text-slate-500">可选值以所选模型官方 Schema 为准；未读到前不限制、不捏选项。</p>
+                  <input aria-label={widget.label} type={widget.name === 'aspect_ratio' ? 'text' : 'number'} step={widget.step || 1} value={cur}  onMouseDown={e=>e.stopPropagation()} onPointerDown={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()} onChange={e=>onUpdateValue(node.id, widget.name, e.target.value === '' ? undefined : (widget.name === 'aspect_ratio' ? e.target.value : parseFloat(e.target.value)))} className="w-full bg-[#121316] border border-[#2d303a] rounded-lg px-2.5 py-1.5 text-slate-200 text-xs font-mono outline-none" />
                 </div>;
               }
               if (vf.state === 'declared' && vf.options?.length) {
@@ -652,7 +632,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                       value={greyThis ? '' : (value ?? '')}
                       disabled={greyThis}
                       placeholder={schemaUnused ? '' : strengthNeedsImage ? '需接参考图' : (greyThis ? '该服务商不支持' : undefined)}
-                      title={schemaUnused ? '这家接口不用这几个参数' : strengthNeedsImage ? '有参考图时才发送 strength（官方 Schema）' : (greyThis ? '该服务商不支持' : undefined)}
+                      title={schemaUnused ? '这家接口不用这几个参数' : (greyThis ? '该服务商不支持' : undefined)}
                       aria-label={schemaUnused ? widget.label : (greyThis ? `${widget.name}（该服务商不支持）` : widget.label)}
                       onMouseDown={(e) => e.stopPropagation()}
                       onPointerDown={(e) => e.stopPropagation()}
@@ -673,7 +653,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                     step={widget.step || 0.1}
                     value={greyThis ? (widget.min ?? 0) : (value ?? widget.min ?? 0)}
                     disabled={greyThis}
-                    title={schemaUnused ? '这家接口不用这几个参数' : strengthNeedsImage ? '有参考图时才发送 strength（官方 Schema）' : (greyThis ? '该服务商不支持' : undefined)}
+                    title={schemaUnused ? '这家接口不用这几个参数' : (greyThis ? '该服务商不支持' : undefined)}
                     aria-label={schemaUnused ? widget.label : (greyThis ? `${widget.name}（该服务商不支持）` : widget.label)}
                     onMouseDown={(e) => e.stopPropagation()}
                     onPointerDown={(e) => e.stopPropagation()}
@@ -1004,7 +984,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                   <select
                     value={greyThis ? '' : (value ?? '')}
                     disabled={greyThis}
-                    title={greyThis ? '该服务商不支持' : omitHint ? SCHEMA_OMIT_REASON : ((opts.find((o) => o.value === value)?.label as string) || (value != null && value !== '' ? String(value) : widget.label))}
+                    title={greyThis ? '该服务商不支持' : ((opts.find((o) => o.value === value)?.label as string) || (value != null && value !== '' ? String(value) : widget.label))}
                     aria-label={greyThis ? `${widget.name}（此模型不支持）` : widget.label}
                     onMouseDown={(e) => e.stopPropagation()}
                     onPointerDown={(e) => e.stopPropagation()}
@@ -1181,7 +1161,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                     value={greyThis ? '' : (value ?? '')}
                     disabled={greyThis}
                     placeholder={schemaUnused ? '' : strengthNeedsImage ? '需接参考图' : (greyThis ? '该服务商不支持' : undefined)}
-                    title={schemaUnused ? '这家接口不用这几个参数' : strengthNeedsImage ? '有参考图时才发送 strength（官方 Schema）' : (greyThis ? '该服务商不支持' : omitHint ? SCHEMA_OMIT_REASON : undefined)}
+                    title={schemaUnused ? '这家接口不用这几个参数' : (greyThis ? '该服务商不支持' : undefined)}
                     aria-label={schemaUnused ? widget.label : (greyThis ? `${widget.name}（该服务商不支持）` : omitHint ? `${widget.label}（该端点不支持）` : widget.label)}
                     onMouseDown={(e) => e.stopPropagation()}
                     onPointerDown={(e) => e.stopPropagation()}
@@ -1338,7 +1318,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               {node.outputData && node.stalePriorOutput && <p data-testid="stale-prior-output-label" role="status" className="rounded border border-amber-500/50 bg-amber-950/50 px-2 py-1 text-[11px] text-amber-100">上次结果，不是本次</p>}
               {node.outputData && node.state === 'error' && !node.stalePriorOutput && <p data-testid="stale-error-output-label" role="status" className="rounded border border-amber-500/50 bg-amber-950/50 px-2 py-1 text-[11px] text-amber-100">上次结果，不是本次</p>}
               {(() => {
-                const showUpstreamFailPreview = !node.outputData && !!node.upstreamFailed && node.state !== 'running';
+                const showUpstreamFailPreview = false; // failure shows only on the node that failed (雁 2026-11-04)
                 return (
               <div
                 data-testid={showUpstreamFailPreview ? 'upstream-fail-preview' : 'media-preview'}
@@ -1411,16 +1391,6 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                     </>
                   )
                 ) : (
-                  node.upstreamFailed && node.state !== 'running' ? (
-                  <div className="w-full text-left px-3 py-3 text-rose-300" role="status">
-                    {node.upstreamLocalBlocked ? (<>
-                    <p className="text-xs font-semibold">这次没有出图</p>
-                    <span className="text-[10px] mt-1 block font-mono text-rose-400/80">{`${node.localBlockTitle || LOCAL_BLOCK_NODE_LINE.split('：')[0]}：原因见标红节点与执行记录`}</span>
-                    </>) : (
-                    <p className="text-xs font-semibold whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{upstreamFailedLine(node.upstreamFailedTitle, node.upstreamFailedMessage)}</p>
-                    )}
-                  </div>
-                  ) : (
                   <PreviewPlaceholder>
                     <p className="text-xs">
                       {node.type === 'SaveVideo' || node.type === 'AIVideoNode' ? '等待渲染动态视频...' : '等待生成图像...'}
@@ -1429,7 +1399,6 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                       {node.type === 'AIVideoNode' && !node.values?.model ? '请先选择模型' : '运行工作流后在此显示'}
                     </span>
                   </PreviewPlaceholder>
-                  )
                 )}
               </div>
                 );

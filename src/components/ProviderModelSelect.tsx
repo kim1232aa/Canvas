@@ -80,13 +80,12 @@ export function ProviderModelSelect({provider,value,onChange}:{provider:string;v
         {options.map(row=><option key={row.value} value={row.value} title={`${row.label} · ${row.value}`}>{row.label}</option>)}
       </optgroup>}
     </select>
-    <SchemaReuseNote provider={provider} model={value} />
     <div className="flex items-center justify-between gap-2 text-xs text-slate-400" role="status">
       <span data-testid="provider-model-catalog-status">{currentLoading ? '正在查询模型目录…' : currentError ? '查询失败' : catalogCount ? `目录已返回 ${catalogCount} 个模型` : value ? '已选底模' : provider==='tensorart' && !query ? '等待输入模型 ID（未请求上游）' : query ? '未找到匹配模型' : '当前目录页暂无底模；可切换分类或输入 ID'}</span>
       <button type="button" disabled={currentLoading} onClick={()=>{beginTraceOperation(`刷新目录 ${provider}`);setArmed(true);setReload(x=>x+1);}} className="text-cyan-300 disabled:opacity-40">{provider==='tensorart' ? '查询 ID' : '刷新目录'}</button>
     </div>
     {currentHasMore && <button type="button" disabled={currentLoading} onClick={loadMore} className="w-full rounded-lg border border-cyan-900 p-2 text-sm text-cyan-300 disabled:opacity-40">加载更多模型</button>}
-    {currentError && <div role="alert" className="rounded-lg border border-rose-900/60 p-2 text-xs text-rose-200"><p>{currentError.split('\n')[0]}</p><details className="mt-2"><summary className="cursor-pointer">完整响应与错误堆栈</summary><pre className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap break-all select-text">{currentError}</pre></details></div>}
+    {currentError && <div role="alert" className="rounded-lg border border-rose-900/60 p-2 text-xs text-rose-200"><pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all select-text">{currentError}</pre></div>}
     {invalid && <p role="alert" className="text-sm text-rose-300">请输入有效的 Tensor 模型 ID 或模型页面链接。</p>}
   </div>;
 }

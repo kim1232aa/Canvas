@@ -3,7 +3,6 @@ import { saveImagePrefixFor } from './utils/saveImagePrefix';
 import { findActualRequest, countActualRequestLoras } from './utils/actualRequestLoras';
 import { modelSchemaVersion, subscribeModelSchema, getModelSizePairing } from './services/modelSchemaCache';
 import {migrateTensorWorkflow} from './utils/legacyTensorWorkflow';
-import {ExecutionLog} from './components/ExecutionLog';
 import {spatialRequestParameters, videoSchemaIssues} from './utils/frontendParameters';
 import {seedSchemaIssues} from './utils/seedRange';
 import {replaceSelectedResource,applyLoraNameToNodeValues,type ResourceSelection} from './utils/resourceSelection';
@@ -678,10 +677,9 @@ export default function App() {
       const startTime = Date.now();
       let tracker: any = null;
       tracker = setInterval(() => {
-        const elapsed = Math.floor((Date.now() - startTime) / 1000);
         handleUpdateFrame(frameId, {
           executionProgress: 60,
-          executionStage: `${p.targetProvider.toUpperCase()} 云端计算中 (已耗时 ${elapsed}s)...`,
+          executionStage: '生成中…',
         });
       }, 1000);
 
@@ -1218,15 +1216,6 @@ export default function App() {
     setIsExecuting(true);
     const thisRunSeq = beginRun();
     // clean-1005: select-model + run share one action — do NOT bump the sharedGet epoch here (reuse the Schema GET).
-    // Toast line: target node + LoRA count actually in this run's generation request (read from the traced request body).
-    const runToastLine = (runItem?: GenerationHistoryItem) => {
-      // Derived from the server's actualRequest echo (what was really sent), any LoRA-carrying field.
-      const posts = getExecutions().filter((r) => r.runSeq === thisRunSeq && r.method.toUpperCase() !== 'GET');
-      // Same source as the history card: the recorded entry's outbound request (actualRequest or submission), else the response echo.
-      const actual = (runItem ? historyActualRequest(runItem) : undefined) ?? posts.map((r) => findActualRequest(r.response)).find(Boolean);
-      const n = countActualRequestLoras(actual);
-      return `运行：${runTarget?.title ?? '未知节点'} · 本次请求${posts.length ? (actual ? (n ? `含 LoRA ${n} 个` : '未含 LoRA') : '未返回 actualRequest') : '未发出生成请求'}`;
-    };
     setCurrentRunTarget(runTarget ? `${runTarget.title}${runTarget.auto ? '（未选中节点，按输出节点）' : ''}` : null);
     setExecutionProgress(5);
     setExecutionStatusText('正在调度模型与 LoRA 权重...');
@@ -1352,10 +1341,9 @@ export default function App() {
         type: result.historyWarning || workflowOmissions.length ? 'warning' : 'success',
         title: '工作流运行成功！',
         message: [
-          runToastLine(runItem),
           result.historyWarning,
           workflowOmissions.length ? `请求参数未提交项：${workflowOmissions.map(item => `${item.field}=${item.value}：${item.reason}`).join('；')}` : undefined,
-          `由 ${result.provider} 渲染完成，${runItem ? historySeedStatement(runItem) : '种子：未找到本次历史记录，无法核对实际发送 / 上游返回'}。${historyLoaded ? '可在历史记录查看实际参数和工作流' : '历史记录读取失败，请重新打开历史记录'}`,
+          historyLoaded ? undefined : '历史记录读取失败，请重新打开历史记录',
         ].filter(Boolean).join('；'),
         imageUrl: result.imageUrl,
       });
@@ -1399,15 +1387,18 @@ export default function App() {
         // Those stay until the next successful run; only local chrome is layered on top.
         if (downstream.has(n.id)) {
           const keepErr = !!n.errorMessage;
-          return {...n,state:(keepErr?'error':'idle') as NodeInstance['state'],executionProgress:0,upstreamFailed:true,upstreamFailedTitle:localBlockedRun?undefined:failedTitle,upstreamFailedMessage:localBlockedRun?undefined:upstreamMsg,upstreamFailedFromId:localBlockedRun?undefined:failedNodeId,upstreamLocalBlocked:localBlockedRun,localBlockTitle:blockTitle,localBlockReason:undefined,outputData:undefined};
+          // 雁 2026-11-04: downstream nodes that never ran show no error; only the failed node does.
+          void keepErr;
+          return {...n,state:'idle' as NodeInstance['state'],executionProgress:0,upstreamFailed:false,upstreamFailedTitle:undefined,upstreamFailedMessage:undefined,upstreamFailedFromId:undefined,upstreamLocalBlocked:false,localBlockTitle:undefined,localBlockReason:undefined,outputData:undefined};
         }
         if (localBlockedRun) {
           if (!branch.ids.has(n.id) && !causeIds.has(n.id)) return n;
           const cause = causeIds.has(n.id);
           const keepErr = !!n.errorMessage;
           // No generic red box on the other branch nodes (clean-1333 #6): they go back to idle unless they still carry a prior upstream badge.
-          return {...n,state:(cause?'idle':keepErr?'error':'idle') as NodeInstance['state'],executionProgress:0,upstreamFailed:false,upstreamLocalBlocked:false,
-            localBlockTitle:cause?blockTitle:undefined,localBlockReason:cause?blockReason:undefined,
+          return {...n,state:(cause?'error':keepErr?'error':'idle') as NodeInstance['state'],executionProgress:0,upstreamFailed:false,upstreamLocalBlocked:false,
+            ...(cause?{errorMessage:blockReason,errorAt:new Date().toISOString()}:{}),
+            localBlockTitle:undefined,localBlockReason:undefined,
             // trace-fix2 #10: remember which field caused it and, for LoRA blocks, the LoRA count it was decided on.
             localBlockField:cause?blockField:undefined,localBlockLoraCount:cause && loraBlock?blockLoraCount:undefined,
             // cleanup-serious: failed/blocked run must not keep showing the prior SaveImage as this run's result.
@@ -1418,7 +1409,7 @@ export default function App() {
           // Error lives on the model node; sampler / other branch nodes are NOT marked 异常 (nothing was generated).
           if (n.id === schemaNodeId) return { ...n, state: 'error' as NodeInstance['state'], executionProgress: 0, errorMessage: schemaNodeMsg, errorAt: new Date().toISOString(), errorKind: 'schema' as const, errorModel: schemaFailureModel(err, n.values?.ckpt_name), upstreamFailed: false, upstreamLocalBlocked: false };
           if (!branch.ids.has(n.id)) return n;
-          return { ...n, state: 'idle' as NodeInstance['state'], executionProgress: 0, errorMessage: undefined, errorAt: undefined, errorKind: undefined, upstreamFailed: true, upstreamFailedTitle: failedTitle, upstreamFailedMessage: upstreamMsg, upstreamFailedFromId: schemaNodeId, upstreamLocalBlocked: false,
+          return { ...n, state: 'idle' as NodeInstance['state'], executionProgress: 0, errorMessage: undefined, errorAt: undefined, errorKind: undefined, upstreamFailed: false, upstreamFailedTitle: undefined, upstreamFailedMessage: undefined, upstreamFailedFromId: undefined, upstreamLocalBlocked: false,
             outputData: shouldClearExecutionOutput(n.type, 'idle', undefined, '') ? undefined : n.outputData };
         }
         if (!branch.ids.has(n.id)) return n;
@@ -1429,22 +1420,19 @@ export default function App() {
           ...n,
           state: nextState,
           executionProgress: 0,
-          errorMessage: isTarget ? errMsg : undefined,
+          // The failed node shows the full upstream text verbatim (status + body); nothing on the others.
+          errorMessage: isTarget ? upstreamMsg : undefined,
           errorAt: isTarget ? new Date().toISOString() : undefined,
-          upstreamFailed: !isTarget,
-          upstreamFailedTitle: isTarget ? undefined : failedTitle,
-          upstreamFailedMessage: isTarget ? undefined : upstreamMsg,
-          upstreamFailedFromId: isTarget ? undefined : failedNodeId,
+          upstreamFailed: false,
+          upstreamFailedTitle: undefined,
+          upstreamFailedMessage: undefined,
+          upstreamFailedFromId: undefined,
           upstreamLocalBlocked: false,
           outputData: clearOut ? undefined : n.outputData,
         };
       }));
 
-      setToast(localBlockedRun
-        ? { type: 'error', title: blockTitle!, message: `${blockReason}\n${schemaReadLine(blockData)}\n运行：${runTarget?.title ?? '未知节点'} · 生成请求未发出` }
-        : (toastFromRunError(err, `运行：${runTarget?.title ?? '未知节点'}`)
-          ? { type: 'error', ...toastFromRunError(err, `运行：${runTarget?.title ?? '未知节点'}`)! }
-          : { type: 'error', title: '请求未完成', message: `${runToastLine()}；${errMsg}` }));
+      // 雁 2026-11-04: no failure toast; the error shows once, on the failed node.
       // clean-1358 #4 + clean-1613 #2: pan only after writing ONE exec-log row 「视口平移至原因节点」.
       // Capture run attach BEFORE finally/endRun clears currentRunLabel; record OUTSIDE setState (StrictMode would double-fire).
       // state 'complete' — pan is not a request failure (no 请求失败 / 较早失败).
@@ -1673,7 +1661,7 @@ export default function App() {
     noteUserModelSelection(provider, modelId)?.then((r) => {
       if (!(r.ok && r.data?.inputSchema?.properties)) return;
       setNodes((prev) => prev.map((n) => n.type === 'CheckpointLoaderSimple' && n.values?.ckpt_name === modelId && n.values?.targetProvider === provider && (n.values?.import_unresolved_resource || n.values?.unresolvedResource)
-        ? { ...n, values: { ...n.values, resourceVerified: true, import_unresolved_resource: false, unresolvedResource: false, import_resource_reason: undefined, resource_source: `${provider} 官方 Schema（GET /api/model-schema · HTTP ${r.status}）` } }
+        ? { ...n, values: { ...n.values, resourceVerified: true, import_unresolved_resource: false, unresolvedResource: false, import_resource_reason: undefined, resource_source: provider } }
         : n));
     }, () => {});
     const lowerId = modelId.toLowerCase();
@@ -2391,7 +2379,6 @@ export default function App() {
 
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-[#0c0d11] select-none font-sans">
-      <ExecutionLog />
       {/* Top Header Bar */}
       <TopBar
         nodeCount={nodes.length}

@@ -7,33 +7,7 @@ describe('fix16 history card polish', () => {
   const histSrc = readFileSync(join(__dirname, '../components/HistoryModal.tsx'), 'utf8');
   const appSrc = readFileSync(join(__dirname, '../App.tsx'), 'utf8');
 
-  it('#2 seed: 「实际发送」 and 「上游未返回种子」 are two places, not one vague paren', () => {
-    expect(seedStatement(42, undefined)).toBe('种子 42（实际发送）。上游未返回种子');
-    expect(seedStatement(42, null)).toBe('种子 42（实际发送）。上游未返回种子');
-    const item = {
-      status: 'failed',
-      requestMetadata: {
-        actualRequest: { endpoint: 'https://e.example/v1', parameters: { seed: 42, prompt: 'p' } },
-      },
-    } as any;
-    expect(historySeedStatement(item)).toBe('种子 42（实际发送）。上游未返回种子');
-    expect(historySeedRowText(item)).toBe('种子 42');
-    expect(historySeedUpstreamMissingNote(item)).toBe(true);
-    expect(histSrc).toContain('data-testid="history-seed-upstream-note"');
-    expect(histSrc).toContain('上游未返回种子');
-    expect(seedStatement(7, undefined)).not.toContain('实际发送；上游未返回');
-  });
 
-  it('#3 prompt and LoRA name: no truncate/ellipsis; wrap allowed', () => {
-    const idx = histSrc.indexOf('data-testid="history-card-title"');
-    expect(idx).toBeGreaterThan(0);
-    const titleBlock = histSrc.slice(Math.max(0, idx - 220), idx + 40);
-    expect(titleBlock).not.toMatch(/\btruncate\b/);
-    expect(titleBlock).toMatch(/overflow-wrap:anywhere/);
-    expect(histSrc).toContain('data-testid="history-sent-lora-name"');
-    expect(histSrc).toMatch(/history-sent-lora-name[\s\S]{0,120}\{l\.name\}/);
-    expect(histSrc).not.toContain('loraDisplayName(');
-  });
 
   it('#4 未发送 fold rows do not repeat fold-title suffix', () => {
     const unrecStart = histSrc.indexOf('function UnrecordedFold');

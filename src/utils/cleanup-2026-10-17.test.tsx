@@ -13,7 +13,7 @@ describe('cleanup-2026-10-17', () => {
     expect(node).not.toContain('视频自定义参数 JSON');
     expect(node).not.toContain('<ApiParameterEditor');
     expect(readFileSync('src/components/ParameterInspector.tsx', 'utf8')).not.toContain('视频自定义参数 JSON');
-    expect(readFileSync('src/components/ApiParameterEditor.tsx', 'utf8')).toContain('textarea readOnly');
+    expect(readFileSync('src/components/ApiParameterEditor.tsx', 'utf8')).not.toContain('<textarea');
     expect(readFileSync('src/components/Canvas.tsx', 'utf8')).toContain("def.type !== 'AIVideoNode'");
   });
   it('#3 no auto base-model swap button', () => expect(node).not.toContain('一键自动配对前置底模'));

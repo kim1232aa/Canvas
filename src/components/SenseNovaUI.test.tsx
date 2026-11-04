@@ -29,15 +29,6 @@ const mockHooks = () => {
 };
 afterEach(() => vi.restoreAllMocks());
 
-it('shows the raw inherited SenseNova size with an editable label and the documented upstream disagreement', () => {
-  const props = nodeProps({targetProvider: 'sensenova', ckpt_name: 'custom-image-model', size: '2K'});
-  const html = renderToStaticMarkup(<NodeItem {...props}/>);
-  expect(html).toMatch(/<label[^>]*>[\s\S]*?<input[^>]*aria-label="SenseNova size"[^>]*value="2K"/);
-  expect(html).toContain('auto / 2048x2048');
-  expect(html).toContain('2K/4K');
-  expect(html).toContain('invalid size, should be auto or WIDTHxHEIGHT');
-  expect(props.node.values.size).toBe('2K');
-});
 
 it.each(['auto', '2048x2048', ''] as const)('updates only the node size for %j without a forced default', value => {
   mockHooks();
@@ -108,16 +99,6 @@ it('shows the current optional output format and saves or clears it in both edit
   expect(renderToStaticMarkup(<NodeItem {...props}/>)).toContain('本站支持 png/jpeg/webp');
 });
 
-it('describes SenseNova U image generation and editing separately from LLM prompt refinement', () => {
-  const html = renderToStaticMarkup(<ParameterInspector params={parameters({size: '2K'})} onChange={noop} onOpenCivitai={noop}/>);
-  expect(html).toContain('aria-label="SenseNova size"');
-  expect(html).toContain('value="2K"');
-  expect(html).toContain('图像生成与编辑');
-  expect(html).toContain('U 系列');
-  expect(html).toContain('LLM');
-  expect(html).not.toContain('商汤思考(LLM)');
-  expect(html).not.toContain('连线至 FLUX.1 或 SDXL');
-});
 
 it.each([false, true, undefined])('renders and updates the two native SenseNova boolean tri-states from %j', value => {
   mockHooks();

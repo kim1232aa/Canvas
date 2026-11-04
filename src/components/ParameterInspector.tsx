@@ -229,7 +229,6 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
           </div>
           <div>
             <h3 className="font-bold text-white text-xs tracking-wide">{title}</h3>
-            <span className="text-[10px] text-slate-400 font-mono">按所选端点核实参数能力</span>
           </div>
         </div>
         <div className="flex items-center gap-1.5">
@@ -444,7 +443,6 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
             <label className="block text-sm text-slate-300">Civitai engine<select aria-label="Civitai engine" value={params.civitaiEngine || ''} onChange={e=>update({civitaiEngine:e.target.value || undefined})} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2"><option value="">请选择引擎</option>{civitaiEngines().map(e=><option key={e} value={e}>{e}</option>)}{params.civitaiEngine && !civitaiEngines().includes(params.civitaiEngine) && <option value={params.civitaiEngine}>{params.civitaiEngine}</option>}</select></label>
             <label className="block text-sm text-slate-300">Civitai ecosystem<input aria-label="Civitai ecosystem" value={params.civitaiEcosystem || ''} onChange={e=>update({civitaiEcosystem:e.target.value || undefined})} list="civitai-ecosystems" placeholder="显式填写生态；未知生态保留" className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2" /><datalist id="civitai-ecosystems">{civitaiEcosystemsFor(params.civitaiEngine || '').map(x=><option key={x} value={x} />)}</datalist></label>
             <label className="block text-sm text-slate-300">Civitai model<input aria-label="Civitai model" value={params.civitaiModel || ''} onChange={e=>update({civitaiModel:e.target.value || undefined})} placeholder="按官方 recipe 填写 model selector" className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2" /></label>
-            <p className="text-sm text-slate-400">不自动填写引擎或更换模型。AIR 和引擎兼容性以 metadata / 上游响应为准。</p>
           </div>}
           {(params.targetProvider === 'video' || params.videoProvider || params.checkpoint?.includes('video')) && <div className="space-y-2">
             <label className="block text-sm text-slate-300">视频时长（秒）<span className="relative block">{(()=>{const db=videoDurationBounds(params.videoProvider || params.targetProvider,params.checkpoint);return db.options ? <select aria-label="视频时长（秒）" value={params.videoDuration === undefined ? '' : String(params.videoDuration)} onChange={e=>{const hit=db.options!.find(o=>String(o)===e.target.value);update({videoDuration:hit as any});}} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2 pr-8"><option value="">未选择（不提交）</option>{params.videoDuration !== undefined && !db.options.some(o=>String(o)===String(params.videoDuration)) && <option value={String(params.videoDuration)}>{String(params.videoDuration)} 秒（不可用）</option>}{db.options.map(o=><option key={String(o)} value={String(o)}>{String(o)} 秒</option>)}</select> : <input aria-label="视频时长（秒）" type="number" min={db.min} max={db.max} step={1} value={params.videoDuration ?? ''} onChange={e=>update({videoDuration:e.target.value === '' ? undefined : Number(e.target.value)})} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2 pr-8" />;})()}<span aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-[calc(50%-2px)] text-slate-400">秒</span></span><span className="text-sm text-slate-400">可选值来自端点官方 Schema（duration）；Schema 未读取时不限制，未填写不提交。</span>{(()=>{const iss=videoSchemaValueIssue(params.videoProvider || params.targetProvider,params.checkpoint,'duration',params.videoDuration);return iss ? <span role="alert" className="block text-sm text-rose-300">{iss}</span> : null;})()}</label>
@@ -466,66 +464,18 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
             </div>
           )}
 
-          {(params.targetProvider === 'modelscope' || params.targetProvider === 'modelscope_ai') && <p role="note" className="rounded-lg border border-amber-800/40 p-3 text-sm text-amber-200">魔搭云端已核实提示词、模型与 LoRA 格式；其余参数按请求原样发送，是否接受以本次上游响应为准。Qwen Image Edit 支持参考图。模型目录中的仓库不保证已开通在线推理。</p>}
           {['civitai','fal','modelscope','modelscope_ai','huggingface','muapi','wavespeed','sogni','krea','together','aimlapi','novita','venice','openworks','replicate'].includes(params.targetProvider) && <ApiParameterEditor provider={params.targetProvider} model={params.checkpoint} value={params.customParameters} onChange={customParameters=>update({customParameters})} canvasLoras={params.loras ?? []} />}
-          {params.targetProvider === 'replicate' && (
-            <div className="p-2.5 bg-orange-950/20 border border-orange-500/30 rounded-lg text-[10px] text-orange-300/90 leading-relaxed flex items-start gap-2">
-              <Info className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
-              <div>
-                <span className="font-bold text-orange-300">Replicate 官方原生架构：</span>
-                <span> 使用 Replicate 官方模型运行平台。支持 FLUX.1 (FLUX.1-dev 支持 hf_lora)、SDXL、Ideogram 等模型。支持自定义参数注入与异步执行轮询。</span>
-              </div>
-            </div>
-          )}
-          {/* Engine Parameter Notice Banner */}
-          {params.targetProvider === 'agnes' && (
-            <div className="p-2.5 bg-rose-950/20 border border-rose-500/30 rounded-lg text-[10px] text-rose-300/90 leading-relaxed flex items-start gap-2">
-              <Info className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-              <div>
-                <span className="font-bold text-rose-300">Agnes AI 官方原生架构：</span>
-                <span> 使用当前选择的 Agnes 模型。界面中禁用的参数不会生效；实际提交字段与上游响应可在生成历史中查看。</span>
-              </div>
-            </div>
-          )}
 
-          {params.targetProvider === 'gemini' && (
-            <div className="p-2.5 bg-cyan-950/20 border border-cyan-500/30 rounded-lg text-[10px] text-cyan-300/90 leading-relaxed flex items-start gap-2">
-              <Info className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
-              <div>
-                <span className="font-bold text-cyan-300">Google Gemini 官方直连：</span>
-                <span> 由 Google 前沿多模态大模型直接渲染（generateContent）。不支持宽高像素，请在下方「画幅」区选择 aspect_ratio / image_size（取值随模型变化，未选择则不传）。</span>
-              </div>
-            </div>
-          )}
 
           {params.targetProvider === 'sensenova' && (
             <div className="space-y-2 rounded-lg border border-amber-500/30 bg-amber-950/20 p-3">
-              <p className="text-amber-200">商汤日日新 · 图像生成与编辑：U 系列使用图像接口，不作为 Chat 模型。LLM 提示词润色使用另行选择的对话模型，与图像生成分开。</p>
               <label className="block text-sm text-slate-300">SenseNova size<input type="text" aria-label="SenseNova size" value={params.size ?? ''} onChange={e=>update({size:e.target.value === '' ? undefined : e.target.value})} placeholder="auto / 2048x2048；留空时按画布宽高(如1024x1024)发送，无宽高则 auto" className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2 focus-visible:outline-2 focus-visible:outline-cyan-400" /><span className="text-amber-200">官方文档写 2K/4K 常量，但本次上游对这两个值返回 400：invalid size, should be auto or WIDTHxHEIGHT。建议明确填写像素尺寸或 auto；原值保留，也不在此限制提交。</span></label>
               <label className="block text-sm text-slate-300">SenseNova output_format<input type="text" aria-label="SenseNova output_format" value={params.outputFormat ?? ''} onChange={e=>update({outputFormat:e.target.value === '' ? undefined : e.target.value})} placeholder="png / jpeg / webp；留空不显式传" className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2 focus-visible:outline-2 focus-visible:outline-cyan-400" /><span className="text-slate-400">本站支持 png/jpeg/webp；官方编辑文档也列 jpg，但本站尚未接通。自定义原值保留。</span></label>
               {([['watermark', 'watermark'], ['prompt_extend', 'promptExtend']] as const).map(([field, param]) => <label key={field} className="block text-sm text-slate-300">SenseNova {field}<select aria-label={`SenseNova ${field}`} value={typeof params[param] === 'boolean' ? String(params[param]) : ''} onChange={e=>update({[param]:e.target.value === '' ? undefined : e.target.value === 'true'})} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2 focus-visible:outline-2 focus-visible:outline-cyan-400"><option value="">未设置（不显式传）</option><option value="false">false（关闭）</option><option value="true">true（开启）</option></select></label>)}
             </div>
           )}
 
-          {params.targetProvider === 'openai_compat' && (
-            <div className="p-2.5 bg-emerald-950/20 border border-emerald-500/30 rounded-lg text-[10px] text-emerald-300/90 leading-relaxed flex items-start gap-2">
-              <Info className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-              <div>
-                <span className="font-bold text-emerald-300">OpenAI 兼容中转：</span>
-                <span> 不是官方 OpenAI。支持 size / quality / output_format / background / moderation；seed、负向提示词、steps、CFG、采样器、LoRA 此模型不支持（灰显，发送会 400）。</span>
-              </div>
-            </div>
-          )}
 
-          {params.targetProvider === 'grok_compat' && (
-            <div className="p-2.5 bg-slate-900/40 border border-slate-400/30 rounded-lg text-[10px] text-slate-200/90 leading-relaxed flex items-start gap-2">
-              <Info className="w-4 h-4 text-slate-300 shrink-0 mt-0.5" />
-              <div>
-                <span className="font-bold text-slate-100">Grok 兼容中转：</span>
-                <span> 不是官方 xAI。支持 aspect_ratio / resolution；像素宽高、seed、负向、steps、CFG、LoRA 此模型不支持。HTTP 503 grok_media_no_eligible_account 原样暴露，不换商。</span>
-              </div>
-            </div>
-          )}
 
         </div>
 
@@ -536,7 +486,6 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
               <Sliders className="w-3.5 h-3.5 text-blue-400" />
               KSampler 采样器核心参数
             </span>
-            <span className="text-[10px] text-slate-500 font-mono">端点能力</span>
           </div>
 
           {/* Seed & Seed Control */}
@@ -896,8 +845,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
         </div>
 
         {isFalWan && <section className="bg-[#1a1b22] border border-[#272933] rounded-xl p-3 space-y-3">
-          <h4 className="font-semibold text-slate-200">帧数 / 帧率（来自官方 Schema）</h4>
-          <p className="text-sm text-amber-200">此端点 Schema 声明了 num_frames；不接收秒数 duration。范围以 Schema 为准。</p>
+          <h4 className="font-semibold text-slate-200">帧数 / 帧率</h4>
           <div className="grid grid-cols-2 gap-3">
             <label className="text-sm text-slate-400">帧数 num_frames{wanFramesField.min!==undefined||wanFramesField.max!==undefined?`（${wanFramesField.min??'…'}–${wanFramesField.max??'…'}）`:''}
               <input aria-label="视频帧数" type="number" min={wanFramesField.state==='declared'?wanFramesField.min:undefined} max={wanFramesField.state==='declared'?wanFramesField.max:undefined} step={1} value={params.videoFrames ?? ''} placeholder="未填写" onChange={e => update({videoFrames: e.target.value === '' ? undefined : Number(e.target.value)})} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2 text-slate-200" />

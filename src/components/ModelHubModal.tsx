@@ -902,34 +902,6 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
 
         {importError && <div role="alert" className="px-6 py-3 bg-rose-950/40 text-rose-200 border-b border-rose-800/40 break-words">ID 查询 / 选用失败：{importError}</div>}
 
-        {/* Category Description Banner */}
-        <div className="px-6 py-2 bg-gradient-to-r from-cyan-950/30 via-purple-950/30 to-indigo-950/30 border-b border-cyan-900/20 flex items-center justify-between text-[11px] text-cyan-300">
-          <div className="flex items-center gap-2">
-            <Info className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-            <span>
-              {activeCategory === 'checkpoint' && (
-                <><strong>底模中心 (Base Model Hub):</strong> 点击「应用为底模」可将当前画板前置 Checkpoint 切换为此模型；点击「添加底模节点」可创建 Load Checkpoint 节点。</>
-              )}
-              {activeCategory === 'lora' && (
-                activeProvider === 'nanogpt' ? (
-                  <><strong>引擎特性提示:</strong> NanoGPT 为即开即用聚合模型推理端点，非独立的 LoRA 权重社区仓库。如需挂载社区 LoRA，请切换至 Civitai、Hugging Face、魔搭 (ModelScope) 或 Tensor.Art (吐司) 标签页。</>
-                ) : (
-                  <><strong>LoRA 枢纽 (LoRA Hub):</strong> 按资源 ID 挂载 LoRA；Tensor.Art 需先选同架构底模，Hugging Face 需选支持 LoRA 的端点；点击「挂载到当前取景框」可加入叠加矩阵。</>
-                )
-              )}
-              {activeCategory === 'video' && (
-                <><strong>视频模型目录:</strong> 任务类型、输入图片与时长能力由所选端点决定；可直接在画布中创建视频生成节点。</>
-              )}
-              {activeCategory === 'all' && (
-                <><strong>全生态大模型矩阵:</strong> 目录展示模型资源；在线生成和 LoRA 兼容性由所选端点核实，下载能力不代表 API 可生成。</>
-              )}
-              {activeCategory === 'edit' && (
-                <><strong>编辑与控制资源:</strong> 选择前请核对端点要求的输入图片与参数。</>
-              )}
-            </span>
-          </div>
-        </div>
-
         {/* Models Grid */}
         <div className="flex-1 p-6 pb-24 overflow-y-auto bg-[#121318] scrollbar-thin scrollbar-thumb-white/10 hover:scrollbar-thumb-white/20">
           {error && (
@@ -1244,7 +1216,6 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                           </div>
 
                           <p className="mt-2 text-sm text-slate-400 font-mono break-all" title={String(modelId)}>{isLora ? 'LoRA ID' : '模型 ID'} · {modelId}</p>
-                          <p className="mt-2 text-sm text-slate-400">目录资源 · 生成权限与参数能力需由所选端点核实</p>
                           {/* Stats Tags */}
                           <div className="flex flex-wrap gap-1.5 mt-2">
                             {typeof m.downloads === 'number' && m.downloads > 0 && (

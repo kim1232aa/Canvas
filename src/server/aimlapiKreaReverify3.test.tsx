@@ -28,14 +28,6 @@ describe('P0-1 size row reads the sent value, never the raw-response byte count'
 });
 
 
-describe('本机直调 label', () => {
-  it('direct-origin entries are labelled; UI fetches tag x-canvas-origin', () => {
-    const html = modal([{ id: 'd', status: 'failed', url: '', provider: 'aimlapi', model: 'm', loras: [], requestOrigin: 'direct', upstreamStatus: 403 }]);
-    expect(html).toContain('本机直调');
-    expect((withCanvasOrigin('/api/models', { headers: { a: '1' } }) as any).headers).toEqual({ a: '1', 'x-canvas-origin': 'browser-ui' });
-    expect(withCanvasOrigin('https://api.krea.ai/styles', undefined)).toBeUndefined();
-  });
-});
 
 describe('stale selection after deleting a node', () => {
   it('a deleted selected/run node is an error (节点已删除，请重新选择), never auto-picked', () => {

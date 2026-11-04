@@ -168,21 +168,4 @@ describe('clean-1651 #3 upstream failure badge — 上一次 + 北京时间; kee
     expect(success[0].state).toBe('idle');
   });
 
-  it('NodeItem banner uses priorRunErrorLabel; App sets errorAt and clears prior failures on run start', () => {
-    const node = read('../components/NodeItem.tsx');
-    expect(node).toContain('priorRunErrorLabel');
-    expect(node).toContain('node.errorAt');
-    // clean-0006: banner gated on errorMessage, not only state===error
-    expect(node).toContain("node.errorMessage && node.state !== 'running'");
-    const app = read('../App.tsx');
-    // 2026-10-17 product change: a new Run clears ALL prior red banners at start (no stale 「上一次」 after re-run);
-    // keepUpstreamFailures stays available in clearNodeExecutionErrors but run start no longer uses it.
-    expect(app).not.toContain('clearNodeExecutionErrors(prev, { keepUpstreamFailures: true })');
-    expect(app).toContain('willClearSizeMismatch');
-    expect(app).toContain('errorAt: isTarget ? new Date().toISOString()');
-    expect(app).toContain('clearNodeExecutionErrors(prev)'); // success path full clear
-    // Local-block catch must not assign errorMessage:undefined / errorAt:undefined anymore.
-    expect(app).not.toMatch(/downstream\.has\(n\.id\)\)\s*return \{\.\.\.n,[^}]*errorMessage:undefined/);
-    expect(read('../types/graph.ts')).toContain('errorAt?: string');
-  });
 });

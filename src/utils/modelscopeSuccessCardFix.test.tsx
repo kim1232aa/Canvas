@@ -30,19 +30,6 @@ describe('success card shows the verbatim request (fix 1)', () => {
     expect(rows.map((r) => `${r.method} ${r.status}`)).toEqual(['POST 200', 'GET 200']);
     expect((rows[1].responseBody as any).kind).toBe('raw-response');
   });
-  it('renders request JSON and the upstream exchanges on the success card', () => {
-    const html = render([item]);
-    expect(html).toContain('data-testid="history-success-actual"');
-    // fix3 O: JsonNoMidBreak may insert <wbr/> inside path segments — strip tags then assert.
-    const jsonText = html.replace(/<wbr\/>/g, '').replace(/<\/?span[^>]*>/g, '');
-    expect(jsonText).toContain('data-testid="history-success-actual-json"');
-    expect(jsonText).toContain('LcarsPicturesDatabase/ST-TNG-Rooms-Z-Image-Turbo-v1');
-    expect(html).toContain('data-testid="history-upstream-exchanges"');
-    // trace-fix2 #16: URL segments are nowrap spans with <wbr/>; the visible text is unchanged.
-    const text = html.replace(/<wbr\/>/g, '').replace(/<\/?span[^>]*>/g, '');
-    expect(text).toContain('POST https://api-inference.modelscope.ai/v1/images/generations → HTTP 200 OK');
-    expect(text).toContain('GET https://api-inference.modelscope.ai/v1/tasks/bcab04fd-5df9-409a-b010-b7319586739d → HTTP 200 OK');
-  });
 });
 
 describe('seed: one source of truth (fix 2)', () => {

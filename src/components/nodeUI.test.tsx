@@ -53,51 +53,9 @@ it('Chinese field labels for LoRA / KSampler / SaveImage widgets (no raw EN keys
   expect(save).not.toMatch(/>filename_prefix</);
 });
 
-it('SaveImage shows failed state (not 等待生成图像) after upstream failure',()=>{
-  const html=renderToStaticMarkup(<NodeItem {...props('SaveImage',{})} node={{...(props('SaveImage',{}) as any).node,upstreamFailed:true,state:'idle'}} />);
-  expect(html).toContain('没出图');
-  expect(html).not.toContain('等待生成图像');
-});
 
-it('SaveImage shows upstream error text verbatim when provided',()=>{
-  const msg='Please bind your Alibaba Cloud account before use.';
-  const html=renderToStaticMarkup(<NodeItem {...props('SaveImage',{})} node={{...(props('SaveImage',{}) as any).node,upstreamFailed:true,upstreamFailedTitle:'采样器',upstreamFailedMessage:msg,state:'idle'}} />);
-  expect(html).toContain(msg);
-  expect(html).not.toContain('原因见采样器');
-  expect(html).not.toContain('等待生成图像');
-});
 
-it('SaveImage failure display uses historyFacingErrorMessage (Magento bind / JSON body)',()=>{
-  const histError='魔搭国际站 (modelscope.ai) API 提交失败 [401]: {"errors":{"message":"Please bind your Alibaba Cloud account before use. You can bind it at: https://modelscope.ai/my/settings/account"},"request_id":"abc"}';
-  const err={data:{error:histError,historyItem:{error:histError},upstreamStatus:401,upstreamResponseBody:'{"errors":{"message":"Please bind your Alibaba Cloud account before use."}}'}};
-  const msg=historyFacingErrorMessage(err)!;
-  expect(msg).toContain('bind your Alibaba Cloud account');
-  expect(msg).toContain('"errors"');
-  expect(upstreamFailedLine('采样器', msg)).toBe(msg);
-  const html=renderToStaticMarkup(<NodeItem {...props('SaveImage',{})} node={{...(props('SaveImage',{}) as any).node,upstreamFailed:true,upstreamFailedTitle:'采样器',upstreamFailedMessage:msg,state:'idle'}} />);
-  expect(html).toContain('bind your Alibaba Cloud account');
-  expect(html).toContain('魔搭国际站');
-  expect(html).not.toContain('原因见采样器');
-  expect(html).not.toMatch(/>HTTP 401 Unauthorized</);
-});
 
-it('SaveImage upstream-fail preview is scrollable (not aspect-video clip box)',()=>{
-  const msg='魔搭国际站 (modelscope.ai) API 提交失败 [401]: {"errors":{"message":"Please bind your Alibaba Cloud account before use. You can bind it at: https://modelscope.ai/my/settings/account"},"request_id":"abc"}';
-  const html=renderToStaticMarkup(<NodeItem {...props('SaveImage',{})} node={{...(props('SaveImage',{}) as any).node,upstreamFailed:true,upstreamFailedTitle:'采样器',upstreamFailedMessage:msg,state:'idle'}} />);
-  expect(html).toContain('data-testid="upstream-fail-preview"');
-  expect(html).toContain('overflow-y-auto');
-  expect(html).toContain('min-h-[9rem]');
-  expect(html).toContain('max-h-80');
-  expect(html).toContain('items-start');
-  expect(html).toContain('justify-start');
-  expect(html).toContain('text-left');
-  // failure box must not force aspect-video / overflow-hidden clip
-  const failChunk=html.split('data-testid="upstream-fail-preview"')[1].split('role="status"')[0];
-  expect(failChunk).not.toContain('aspect-video');
-  expect(failChunk).not.toContain('overflow-hidden');
-  expect(html).toContain('bind your Alibaba Cloud account');
-  expect(html).toContain('魔搭国际站');
-});
 
 it('SaveImage success/waiting preview keeps aspect-video overflow-hidden',()=>{
   const waiting=renderToStaticMarkup(<NodeItem {...props('SaveImage',{})} />);

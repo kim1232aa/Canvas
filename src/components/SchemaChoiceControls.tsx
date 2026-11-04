@@ -175,18 +175,6 @@ export function SchemaChoiceControls({
   };
   return (
     <div className="rounded-xl border border-slate-700 bg-[#111620] p-3 text-xs text-slate-200 space-y-2" data-testid="schema-choice-controls" onPointerDown={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
-      <p className="text-slate-400">官方 Schema 字段{sourceUrl ? <>（来源：<UrlText url={sourceUrl} />）</> : ''}</p>
-      {loraDescriptions.map((d) => (
-        <details key={d.key} className="rounded border border-purple-500/50 bg-purple-950/40 px-2 py-1 text-purple-100" data-testid={`schema-lora-description-${d.key}`}>
-          <summary className="cursor-pointer [overflow-wrap:anywhere]">
-            <span className="font-mono">{d.key}</span>
-            <span className="text-purple-300/90"> · 官方 Schema 说明</span>
-            <span className="ml-1 text-[10px] text-purple-300/70">（点开看全文 · 仅显示，不解析）</span>
-            <span className="mt-0.5 block line-clamp-2 font-mono text-[11px] text-purple-200/90">{d.description}</span>
-          </summary>
-          <p className="mt-1 font-mono text-[11px] whitespace-pre-wrap [overflow-wrap:anywhere] border-t border-purple-800/50 pt-1">{d.description}</p>
-        </details>
-      ))}
       {fields.map((f) => {
         const current = body?.[f.key];
         const isObj = current && typeof current === 'object' && !Array.isArray(current);

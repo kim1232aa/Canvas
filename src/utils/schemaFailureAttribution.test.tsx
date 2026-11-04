@@ -137,49 +137,6 @@ describe('model-schema failure is attributed to the model (loader) node, not the
   });
 });
 
-describe('NodeItem shows one plain schema error (headline + collapsed 详情), no 上一次/URL headline, no duplicate', () => {
-  const render = (zoom: number) => {
-    const def = (NODE_DEFINITIONS as any).CheckpointLoaderSimple;
-    return renderToStaticMarkup(
-      <NodeItem
-        node={{ id: 'c', type: 'CheckpointLoaderSimple', title: def.title, pos: { x: 0, y: 0 }, width: 320, inputs: def.inputs, outputs: def.outputs,
-          values: { targetProvider: 'openworks', ckpt_name: MODEL }, state: 'error',
-          errorMessage: schemaFailureNodeMessage(schemaErr()), errorAt: '2026-10-17T07:35:20.000Z', errorKind: 'schema' } as any}
-        isSelected={false} zoom={zoom}
-        onSelect={() => {}} onStartDrag={() => {}} onUpdateValue={() => {}} onDeleteNode={() => {}} onToggleCollapse={() => {}}
-        onToggleBypass={() => {}} onStartConnecting={() => {}} onEndConnecting={() => {}}
-      />,
-    );
-  };
-  const count = (s: string, sub: string) => s.split(sub).length - 1;
-
-  it('normal zoom: headline visible; raw only inside collapsed 详情; 异常 badge does not replace title', () => {
-    const html = render(1);
-    expect(html).toContain(`读取模型 ${MODEL} 的参数失败（HTTP 400）`);
-    expect(html).toContain('data-testid="node-error-details"');
-    expect(html).toContain('详情');
-    expect(html).toContain('data-testid="node-error-raw"');
-    expect(html).toContain('tool not found'); // RAW is HTML-escaped in markup; content still present inside <details>
-    expect(html).toContain('data-testid="node-error-badge"');
-    expect(html).toContain('shrink-0'); // badge must not cover the title
-    expect(html).not.toContain('node-zoom-alerts');
-    expect(html).not.toContain('上一次');
-    expect(html).not.toContain('GET /api/model-schema');
-    expect(count(html, `读取模型 ${MODEL} 的参数失败（HTTP 400）`)).toBe(2); // visible text + 异常 chip tooltip only
-  });
-
-  it('zoomed out: error stays inside the node below the title (never floats above covering buttons)', () => {
-    const html = render(0.5);
-    expect(html).toContain('data-testid="node-error-banner"');
-    expect(html).toContain('data-testid="node-error-strip"');
-    expect(html).toContain('data-testid="node-error-details"');
-    expect(html).toContain(`读取模型 ${MODEL} 的参数失败（HTTP 400）`);
-    // Must not float a duplicate error above the header
-    expect(html).not.toContain('node-zoom-alerts');
-    // Title + action buttons still rendered (clickable; strip is below header in DOM order)
-    expect(html.indexOf('data-testid="node-header-title"')).toBeLessThan(html.indexOf('data-testid="node-error-strip"'));
-  });
-});
 
 describe('changing the model clears the schema-miss that described the old value', () => {
   const failed = 'nonexistent-model-e2e-isolation';
@@ -249,15 +206,6 @@ describe('changing the model clears the schema-miss that described the old value
     expect(after[0].state).toBe('error');
   });
 
-  it('App: schema catch stores errorModel; ckpt_name change uses the clear helpers', () => {
-    const app = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
-    expect(app).toContain('errorModel: schemaFailureModel(err');
-    expect(app).toContain('upstreamFailedFromId: schemaNodeId');
-    expect(app).toContain('shouldClearSchemaFailureOnModelChange(targetNode, value)');
-    expect(app).toContain('clearSchemaFailureFromModelChange(prev, nodeId)');
-    expect(app).toContain('isSchemaFailureToastForModel(prev, failedModel)');
-    expect(schemaFailureModel(schemaErr())).toBe(MODEL);
-  });
 
   it('downstream SaveImage prefers verbatim upstream message over 「原因见<title>」', () => {
     const ck = { ...node('c', 'CheckpointLoaderSimple', { targetProvider: 'openworks', ckpt_name: failed }), title: '旧标题' } as NodeInstance;
@@ -310,19 +258,5 @@ describe('real flow: schema-400 with SaveImage downstream of sampler (outside br
     expect(afterClear.find((n) => n.id === 's')!.upstreamFailedFromId).toBeUndefined();
   });
 
-  it('App downstream.has path records upstreamFailedFromId (not only the schema branch path)', () => {
-    const app = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
-    expect(app).toMatch(/downstream\.has\([\s\S]*?upstreamFailedFromId:\s*localBlockedRun\s*\?\s*undefined\s*:\s*failedNodeId/);
-  });
 });
 
-describe('SaveImage upstream message + same-session restore (App wiring)', () => {
-  it('failure path copies upstreamFailedMessage; success path sticks image and drops restored banner', () => {
-    const app = readFileSync(resolve(__dirname, '../App.tsx'), 'utf8');
-    expect(app).toContain('const upstreamMsg = schemaNodeMsg || historyFacingErrorMessage(err) || errMsg');
-    expect(app).toContain('upstreamFailedMessage:localBlockedRun?undefined:upstreamMsg');
-    expect(app).toContain('upstreamFailedMessage: upstreamMsg');
-    expect(app).toContain('putHistoryImageOnSaveNodes(next, result.imageUrl)');
-    expect(app).toContain("const dropRestored = output !== undefined || state === 'running' || state === 'success' || clearingOutput");
-  });
-});

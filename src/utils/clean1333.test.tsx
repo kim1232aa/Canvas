@@ -164,15 +164,6 @@ describe('clean-1333 #5/#6 only the cause node shows the reason (same text as th
     expect(localBlockCauseNodeIds(nodes, new Set(['ck', 'l1', 'ks', 'lat']), 'loras')).toEqual(['l1']);
     expect(localBlockCauseNodeIds(nodes, new Set(['ck', 'l1', 'ks', 'lat']), 'steps')).toEqual([]);
   });
-  it('App: red box text = localBlockToastReason (toast body); other branch nodes get no generic box', () => {
-    const app = read('../App.tsx');
-    expect(app).toContain('const blockReason = localBlockedRun ? localBlockToastReason(err.rawBody) : undefined;');
-    expect(app).toContain('localBlockReason:cause?blockReason:undefined');
-    expect(app).toContain('title: blockTitle!, message: `${blockReason}');
-    const node = read('../components/NodeItem.tsx');
-    expect(node).toContain('node.localBlockReason && node.state !== \'running\'');
-    expect(node).not.toContain('{node.upstreamLocalBlocked && node.state !== \'running\' && <p');
-  });
   it('server marks LoRA-section refusals with blockedField.field = loras', () => {
     expect(read('../server/schemaProviders.ts')).toContain("e.blockedField={field:blockStage,reason:e.message}");
   });
@@ -225,10 +216,5 @@ describe('clean-1333 #7 reuse of a failed Schema GET is labelled and logged', ()
     expect(row.method).toBe('LOCAL');
     expect((row.response as any).note).toBe('复用，未重新请求');
     expect(schemaReuseFor('together', 'm-1333')?.label).toMatch(/^复用上次失败（北京时间 \d{2}:\d{2}:\d{2}）$/);
-  });
-  it('the label is rendered under the model select with the retry hint', () => {
-    const src = read('../components/ProviderModelSelect.tsx');
-    expect(src).toContain('<SchemaReuseNote provider={provider} model={value} />');
-    expect(src).toContain('复用，未重新请求。要重试：点刷新，或换一个模型。');
   });
 });

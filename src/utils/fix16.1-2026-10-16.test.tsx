@@ -37,13 +37,6 @@ describe('fix16.1 real render paths', () => {
     expect(src).toContain('data-testid="lora-name-input"');
     expect(src).toMatch(/<textarea[\s\S]{0,400}lora-name-input|lora-name-input[\s\S]{0,800}whitespace-pre-wrap/);
   });
-  it('#4 CFG row: same label source/size classes as steps (uniform min-h-5, no provider special case)', () => {
-    const src0 = readFileSync(join(__dirname, '../components/HistoryModal.tsx'), 'utf8');
-    expect(src0).toContain('data-testid="history-cfg" className="basis-full inline-flex flex-wrap items-center gap-x-1 gap-y-0.5 min-h-5">CFG:');
-    expect(src0).toContain('data-testid="history-steps" className="basis-full inline-flex flex-wrap items-center gap-x-1 gap-y-0.5 min-h-5">步数:');
-    const src = readFileSync(join(__dirname, '../components/HistoryModal.tsx'), 'utf8');
-    expect(src).not.toMatch(/modelscope[^\n]*CFG|cFG/);
-  });
   it('#5 failed card: Key pill only in status header (no second misaligned copy)', () => {
     expect((html.match(/data-testid="history-key-usage"/g) || []).length).toBeLessThanOrEqual(1);
   });

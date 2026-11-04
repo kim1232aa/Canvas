@@ -19,7 +19,6 @@ it('inspector retains custom ecosystem and explicit video provider controls',()=
   expect(html).toContain('实际视频服务商');expect(html).toContain('视频 resolution');expect(html).not.toContain('视频自定义参数 JSON'); // cleanup-2026-10-17 #2
   const civ=renderToStaticMarkup(<ParameterInspector params={{...params,targetProvider:'civitai',civitaiEngine:'comfy',civitaiEcosystem:'custom-ecosystem',civitaiModel:'custom-model'}} onChange={noop} onOpenCivitai={noop} />);
   expect(civ).toContain('custom-ecosystem');expect(civ).toContain('custom-model');expect(civ).toContain('Civitai engine');
-  expect(civ).toContain('aria-label="请求参数 JSON 预览（只读）"'); // cleanup-2026-10-17 #2
   expect(civ).not.toContain('读取所选模型的官方 Schema');
 });
 it('shows essential studio actions and explains a disabled run', () => {

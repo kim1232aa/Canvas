@@ -85,10 +85,3 @@ describe('#4 seed row does not repeat 实际发送 next to the chip', () => {
   });
 });
 
-describe('#3 negative row no longer clipped', () => {
-  it('HistoryModal negative row has no line-clamp', () => {
-    const src = readFileSync('src/components/HistoryModal.tsx', 'utf8');
-    expect(src).toMatch(/data-testid="history-negative"/);
-    expect(src).not.toMatch(/line-clamp-1">\s*负向/);
-  });
-});

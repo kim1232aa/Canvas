@@ -30,21 +30,8 @@ describe('clean-1029 #1 toast = HTTP status + upstream body verbatim', () => {
     expect(t.message).toContain('完整上游响应原文');
     expect(t.message).toContain(long);
   });
-  it('App uses the shared toast and no longer prefixes runToastLine on upstream failures', () => {
-    const app = read('../App.tsx');
-    expect(app).toMatch(/toastFromRunError\(err/);
-  });
 });
 
-describe('clean-1029 #2 local block line shared by LoRA node / Save node / toast / log', () => {
-  it('one copy source', () => {
-    expect(LOCAL_BLOCK_NODE_LINE.startsWith(LOCAL_BLOCK_TOAST_TITLE)).toBe(true);
-    const node = read('../components/NodeItem.tsx');
-    expect(node).toContain('data-testid="node-local-block"');
-    expect(node).not.toContain("'没有发出去：");
-    expect(read('../components/ExecutionLog.tsx')).toContain('${localBlockTitle(latestError.response)} · ${latestError.runLabel'); // clean-1333 #3
-  });
-});
 
 describe('clean-1029 #3 four field states, no 待确认', () => {
   it('labels', () => {
