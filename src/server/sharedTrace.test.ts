@@ -3,7 +3,7 @@
 import express from 'express';
 import { describe, expect, it } from 'vitest';
 import fx from './__fixtures__sharedtrace-2026-10-16.json';
-import { appendTaskTraces, taskTraces, isTaskFailureBody, firstUpstreamMessage, schemaLoraMaxItems, buildTaskFailureHistoryItem, registerSchemaProviderRoutes } from './schemaProviders';
+import { appendTaskTraces, taskTraces, isTaskFailureBody, firstUpstreamMessage, schemaLoraMaxItems, registerSchemaProviderRoutes } from './schemaProviders';
 import { keyUsagesFromTrace } from './keyUsage';
 import { countActualRequestLoras } from '../utils/actualRequestLoras';
 import { loraDisplayName } from '../utils/loraDisplayName';
@@ -33,9 +33,6 @@ describe('generic terminal non-success', () => {
     const raw = { status: 'success', data: { workflow: { status: 'waiting_for_user', waitingReason: 'insufficient_credit', events: [{ type: 'debit', msg: 'Debit Error: Insufficient funds\nmore' }] } } };
     expect(firstUpstreamMessage(raw)).toBe('Debit Error: Insufficient funds');
     expect(firstUpstreamMessage('plain text\nline2')).toBe('plain text');
-    const item = buildTaskFailureHistoryItem('Sogni', { model: 'krea-2-turbo', actualRequest: { endpoint: 'e' } }, { status: 'waiting_for_user', waitingReason: 'insufficient_credit', rawResponse: raw, upstreamStatus: 200 }, 200);
-    expect(item.status).toBe('failed'); expect(item.error).toBe('Debit Error: Insufficient funds'); expect(item.upstreamStatusText).toBe('task status=waiting_for_user · insufficient_credit');
-    expect(item.requestMetadata.actualRequest).toEqual({ endpoint: 'e' });
   });
 });
 
@@ -129,13 +126,10 @@ describe('WaveSpeed submit → polls → save-result / failure: every segment la
     expect(keyUsagesFromTrace(rm.executionTrace)).toEqual([{ provider: 'wavespeed', index: 1, count: 2, source: 'pool' }]);
     expect(taskTraces.has('wavespeed:ws1')).toBe(false);
   });
-  it('failure: non-success status with error → failed card with ledger + verbatim message', async () => {
+  it('failure: non-success status with error → no history record', async () => {
     const { records, call } = setup([{ code: 200, data: { status: 'processing' } }, { code: 200, data: { status: 'failed', error: 'Insufficient credits\ntrace' } }]);
     const sub = await call('/api/schema-provider/:provider/submit', { method: 'POST', path: '/api/schema-provider/wavespeed/submit', params: { provider: 'wavespeed' }, body: { model: 'wavespeed-ai/krea-v2/turbo-lora', prompt: 'p' } });
     for (let i = 0; i < 2; i++) await call('/api/schema-provider/:provider/tasks/:taskId', { method: 'GET', path: '/x', params: { provider: 'wavespeed', taskId: 'ws1' }, headers: { 'x-canvas-credential-ref': sub.credentialRef } });
-    expect(records).toHaveLength(1);
-    expect(records[0].status).toBe('failed');
-    expect(records[0].requestMetadata.executionTrace.filter((t: any) => /predictions/.test(t.endpoint))).toHaveLength(2);
-    expect(records[0].requestMetadata.actualRequest).toEqual(sub.actualRequest);
+    expect(records).toHaveLength(0); // failed runs are not history (雁 2026-11-04)
   });
 });

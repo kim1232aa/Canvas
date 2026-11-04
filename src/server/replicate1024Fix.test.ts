@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { handleReplicateGenerate } from './routes/replicateRoutes';
 import { buildReplicatePredictionRequest, extractReplicateInputProperties } from './replicateImageContract';
-import { buildLocalRejectionHistoryItem, buildFailedAttemptHistoryItem } from './failedAttemptHistory';
 import { resolveHistoryParameters, historyParameterSourceLabel, notSentLoraLabel, requestedNotSentLoras } from '../utils/historyParameters';
 
 const liveRaw = readFileSync('docs/evidence/replicate-flux-dev-lora-openapi-2026-10-16.json', 'utf8');

@@ -265,7 +265,7 @@ describe('provider contract (16): schema-route providers', () => {
     }, () => 'k');
   });
 
-  it('Sogni billing: waiting_for_user + insufficient_credit → poll status + failed historyItem (not completed)', async () => {
+  it('Sogni billing: waiting_for_user + insufficient_credit → poll status , no history record (not completed)', async () => {
     const task = { data: { workflow: { workflowId: 's2', status: 'waiting_for_user', waitingReason: 'insufficient_credit', steps: [] } } };
     const records: any[] = [];
     await withFixture(async (url) => url.includes('/workflows/s2') ? json(task) : json({ data: { workflow: { workflowId: 's2' } } }), async (baseUrl) => {
@@ -279,10 +279,9 @@ describe('provider contract (16): schema-route providers', () => {
       expect(poll.status).toBe('waiting_for_user');
       expect(poll.waitingReason).toBe('insufficient_credit');
       expect(poll.rawResponse).toEqual(task);
-      expect(poll.historyItem?.status).toBe('failed');
-      expect(poll.historyItem?.upstreamStatusText).toMatch(/waiting_for_user.*insufficient_credit/);
-      expect(records).toHaveLength(1);
-      expect(records[0].status).toBe('failed');
+      // Failed runs are not history (雁 2026-11-04): the verbatim task body goes to the node only.
+      expect(poll.historyItem).toBeUndefined();
+      expect(records).toHaveLength(0);
     }, () => 'k', async (url) => ({ ok: true, dataUrl: url }), (item) => { records.push(item); return item; });
   });
 });

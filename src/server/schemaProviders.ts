@@ -55,14 +55,6 @@ export const schemaProviders = {
 
 /** Local LoRA block reason from provider-table data: verbatim official doc quote + URL. */
 const taskSubmissions=new Map<string,{model:string;prompt?:string;negative_prompt?:string;actualRequest:any}>();
-/** History item for an async task that ended in upstream failure: verbatim task body + what was actually sent. */
-export function buildTaskFailureHistoryItem(providerName:string,sub:{model:string;prompt?:string;negative_prompt?:string;actualRequest:any},body:any,httpStatus:number):Record<string,any> {
-  const raw=body?.rawResponse ?? body;
-  return {status:'failed',url:'',prompt:sub.prompt ?? null,negativePrompt:sub.negative_prompt ?? null,provider:providerName,actualProvider:providerName,model:sub.model,actualModel:sub.model,loras:[],
-    upstreamStatus:typeof body?.upstreamStatus==='number'?body.upstreamStatus:null,upstreamStatusText:typeof body?.status==='string'?`task status=${body.status}${typeof body?.waitingReason==='string' && body.waitingReason?` · ${body.waitingReason}`:''}`:null,upstreamEndpoint:body?.endpoint ?? sub.actualRequest?.endpoint ?? null,
-    upstreamResponseBody:typeof raw==='string'?raw:JSON.stringify(raw),httpStatus,error:typeof body?.error==='string'?body.error:(firstUpstreamMessage(body?.error) ?? firstUpstreamMessage(raw) ?? (body?.error?JSON.stringify(body.error):(typeof body?.waitingReason==='string'?body.waitingReason:null))),errorSource:body?.errorSource ?? 'upstream',
-    requestMetadata:{route:'schema-provider task poll',actualRequest:sub.actualRequest}};
-}
 export const LOCAL_BLOCK_PREFIX='没有发出去'; // clean-1333 #3: submit always read (or reused) the Schema first
 /**
  * 「拟发送（未出站）」 for a local block: the Schema-scoped request the endpoint would have received (same mapping as a real
@@ -1445,14 +1437,12 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
       if(sub && typeof body?.status==='string' && SUCCESS_TASK_STATUSES.includes(body.status.toLowerCase()))taskSubmissions.delete(taskKey);
       if(!sub || !(failedStatus || res.statusCode>=400))return json(body);
       taskSubmissions.delete(taskKey);taskTraces.delete(taskKey);
-      const item=buildTaskFailureHistoryItem(schemaProviders[provider].name,sub,body,res.statusCode);
-      if(ledger?.length)item.requestMetadata={...item.requestMetadata,executionTrace:[...ledger]};
+      // Failed task: not written to history (雁 2026-11-04); the node gets the verbatim task body.
       // trace-fix2 P3/P4: the task was submitted upstream (POST in the ledger) and upstream reported the failure → errorSource
       // 'upstream' (route provenance; the middleware keeps it), and the full task ledger (submit POST + every poll) rides along
       // as taskExecutionTrace so the canvas never classifies it as 「没有发出去」 from this poll's GET-only request trace.
       const provenance={errorSource:typeof body?.errorSource==='string'?body.errorSource:'upstream',...(ledger?.length?{taskExecutionTrace:[...ledger]}:{})};
-      Promise.resolve(dep.record(item)).then((saved:any)=>json({...body,...provenance,historyItem:saved})).catch((e:any)=>json({...body,...provenance,historyWarning:`失败记录写入历史失败：${e?.message || e}`}));
-      return res;
+      return json({...body,...provenance});
     }) as any;}
     try {
       const taskKey=`${provider}:${req.params.taskId}`;

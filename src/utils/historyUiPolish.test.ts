@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { canonicalProviderLabel, PROVIDER_TITLE_LABEL } from './providerLabels';
 import { resolveHistoryParameters, historyParameterSourceLabel } from './historyParameters';
-import { buildFailedAttemptHistoryItem } from '../server/failedAttemptHistory';
 
 // Live AIMLAPI docs-json?model=alibaba/z-image-turbo-lora request properties (fetched 2026-10-15).
 const AIML_FIELDS = ['acceleration','enable_prompt_expansion','enable_safety_checker','image_size','loras','model','num_images','num_inference_steps','output_format','prompt','provider','seed'];
@@ -28,9 +27,5 @@ describe('unsupported vs unsent (schema-driven)', () => {
   it('declared in Schema but not in actualRequest → 未发送', () => {
     const r = resolveHistoryParameters(base([...AIML_FIELDS,'guidance_scale','negative_prompt']));
     expect(historyParameterSourceLabel(r.cfg.source)).toBe('未发送');
-  });
-  it('failed attempt keeps route schemaFields', () => {
-    const item = buildFailedAttemptHistoryItem({ route:'/r', traces:[], submissions:[{endpoint:'e',parameters:{prompt:'p'},status:403}] }, {}, 403, { actualRequest:{ schemaFields: AIML_FIELDS } });
-    expect(item!.requestMetadata.actualRequest.schemaFields).toEqual(AIML_FIELDS);
   });
 });

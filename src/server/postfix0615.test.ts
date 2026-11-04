@@ -2,7 +2,7 @@
 import express from 'express';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import catalog from './__fixtures__wavespeed-live-2026-10-15.json';
-import { registerSchemaProviderRoutes, buildTaskFailureHistoryItem } from './schemaProviders';
+import { registerSchemaProviderRoutes } from './schemaProviders';
 import { rescopeCustomParameters } from '../utils/customParameterScope';
 import { sharedGetJson, clearSharedGet, beginSharedGetAction } from '../services/sharedGet';
 import { otherSentParameters } from '../utils/historyParameters';
@@ -71,23 +71,16 @@ describe('2. one GET per real change', () => {
   });
 });
 
-describe('3. every async run writes history (upstream task failure)', () => {
-  it('WaveSpeed task status=failed → ONE failed history item with verbatim upstream error + actualRequest', async () => {
+describe('3. failed async task is not history (雁 2026-11-04)', () => {
+  it('WaveSpeed task status=failed → no history record; poll body keeps the verbatim upstream error', async () => {
     const records: any[] = [];
     const poll = { code: 200, data: { id: 'task-1', status: 'failed', error: 'Failed to load LoRA: Could not download the input from huggingface.co (HTTP 401).', outputs: [] } };
     const call = app((u, i) => ws(u, i, poll), records);
-    await call('/api/schema-provider/:provider/submit', 'post', { params: { provider: 'wavespeed' }, body: { model: 'wavespeed-ai/krea-v2/turbo-lora', prompt: 'p', custom_parameters: { aspect_ratio: '16:9', resolution: '2k' }, loras: [{ path: 'https://huggingface.co/krea/krea2-realism-lora', strength: 0.8 }] } });
+    await call('/api/schema-provider/:provider/submit', 'post', { params: { provider: 'wavespeed' }, body: { model: 'wavespeed-ai/krea-v2/turbo-lora', prompt: 'p' } });
     const p1 = await call('/api/schema-provider/:provider/tasks/:taskId', 'get', { params: { provider: 'wavespeed', taskId: 'task-1' } });
-    await call('/api/schema-provider/:provider/tasks/:taskId', 'get', { params: { provider: 'wavespeed', taskId: 'task-1' } });
-    expect(records).toHaveLength(1);
-    expect(records[0]).toMatchObject({ status: 'failed', provider: 'WaveSpeed', model: 'wavespeed-ai/krea-v2/turbo-lora', prompt: 'p' });
-    expect(records[0].error).toContain('Failed to load LoRA'); // verbatim, no path rewrite
-    expect(records[0].requestMetadata.actualRequest.parameters).toMatchObject({ aspect_ratio: '16:9', resolution: '2k', loras: [{ path: 'https://huggingface.co/krea/krea2-realism-lora', scale: 0.8 }] });
-    expect(p1.payload.historyItem).toBeTruthy();
-  });
-  it('builder keeps upstream body verbatim', () => {
-    const h = buildTaskFailureHistoryItem('X', { model: 'm', actualRequest: { endpoint: 'e', parameters: {} } }, { status: 'failed', error: 'E', rawResponse: { a: 1 } }, 200);
-    expect(h.upstreamResponseBody).toBe('{"a":1}'); expect(h.status).toBe('failed');
+    expect(records).toHaveLength(0);
+    expect(p1.payload.historyItem).toBeUndefined();
+    expect(JSON.stringify(p1.payload)).toContain('Failed to load LoRA');
   });
 });
 

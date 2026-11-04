@@ -1,5 +1,5 @@
 import {registerSchemaProviderRoutes,makeSchemaProviderReader,fetchSchemaProviderRows,fetchSogniGenerateImageSchema,normalizeSchemaProviderItems,resolveSchemaRefs} from './src/server/schemaProviders.ts';
-import { historyCounts } from './src/utils/historyCounts';
+import { historyCounts, isServedHistoryItem } from './src/utils/historyCounts';
 import type { GenerationHistoryItem } from './src/types/providers';
 import { lookupExactHuggingFaceRepo } from './src/server/huggingFaceExactRepoSearch.ts';
 import { classifyCivitaiVideoPoll } from './src/server/civitaiVideoPoll.ts';
@@ -50,7 +50,6 @@ import { enrichPoolStatsWithServerBaseUrl } from './src/utils/poolStatsEnrich.ts
 import { mapSampler, mapScheduler, resolveImportedNegativePrompt, resolveImportedCheckpointRef, resolveRawImportNegativeSamplerScheduler } from './src/utils/civitaiImportMap.ts';
 import { persistRemoteUrlAsDataUrl as persistRemoteUrlAsDataUrlRaw, requireDurableHistoryMediaUrl as requireDurableHistoryMediaUrlRaw } from './src/utils/persistMediaAsDataUrl.ts';
 import { createMediaStore } from './src/server/mediaStore.ts';
-import { buildFailedAttemptHistoryItem, buildLocalRejectionHistoryItem, buildPrefetchFailureHistoryItem, isGenerationRoute } from './src/server/failedAttemptHistory.ts';
 import {MEDIA_INPUT_ROUTES, MEDIA_SANDBOX_CSP, storageError} from './src/server/mediaContract.ts';
 import path from 'path';
 import fs from 'fs';
@@ -323,13 +322,8 @@ app.use((req, res, next) => {
   if (!isApiPath(req.path)) return next();
   try { parseCustomObject(req.body?.custom_parameters); }
   catch (error: any) {
-    const payload = {error:error.message,errorSource:'local'};
-    // Only a user's run from the canvas UI writes a local-rejection card; scripts / smoke checks / non-UI calls never do.
-    if (req.method !== 'POST' || !isGenerationRoute(req.path) || requestOriginOf(req) !== 'browser') return res.status(400).json(payload);
-    // Local rejection before any upstream call — still history (没有发出去).
-    return void recordHistoryItem({...buildLocalRejectionHistoryItem(req.path, sanitizeGenerationMetadata(req.body), 400, payload), requestOrigin: requestOriginOf(req)} as any)
-      .then(item => res.status(400).json({...payload, historyItem: item}))
-      .catch((e:any) => res.status(400).json({...payload, historyWarning:`没有发出去记录写入历史失败：${e?.message || e}`}));
+    // Failures are not history (雁 2026-11-04): the node/run log shows this error.
+    return res.status(400).json({error:error.message,errorSource:'local'});
   }
   const snapshot = req.body?.workflowSnapshot;
   if (snapshot !== undefined && (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot))) return res.status(400).json({error: 'workflowSnapshot 必须为对象',errorSource:'local'});
@@ -337,10 +331,6 @@ app.use((req, res, next) => {
   const context = {route:req.path,requestOrigin:requestOriginOf(req),submissions:[],traces:[],workflowSnapshot:snapshot ? sanitizeGenerationMetadata(snapshot) : undefined};
   const json = res.json.bind(res);
   res.json = ((body:any) => {
-    // Route-provided provenance (before the middleware fills defaults) — history must mirror it.
-    const routeProvenance = body && typeof body==='object' && !Array.isArray(body)
-      ? {errorSource: typeof body.errorSource==='string' ? body.errorSource : undefined, upstreamStatus: typeof body.upstreamStatus==='number' ? body.upstreamStatus : undefined}
-      : undefined;
     if (body && typeof body==='object' && !Array.isArray(body)) {
       body.executionTrace=context.traces;
       if (req.path !== '/api/models' && Object.entries(body).some(([k,v]:any)=>k!=='executionTrace' && v?.error))body.ok=false;
@@ -349,15 +339,8 @@ app.use((req, res, next) => {
         body.stack ||= new Error(body.error || 'Request failed').stack;
       }
     }
-    const isFailure = body && typeof body==='object' && !Array.isArray(body) && (res.statusCode>=400 || body.ok===false) && req.method==='POST' && !/^\/api\/history/.test(req.path);
-    const failedItem = isFailure
-      ? (buildFailedAttemptHistoryItem(context, req.body, res.statusCode, body)
-        ?? (isGenerationRoute(req.path) && context.requestOrigin === 'browser' ? buildLocalRejectionHistoryItem(req.path, sanitizeGenerationMetadata(req.body), res.statusCode, body, routeProvenance) : null))
-      : null;
-    const recorded = failedItem
-      ? generationContext.run(context, () => recordHistoryItem(failedItem as any)).then(item => {body.historyItem ||= item;}).catch((e:any) => {body.historyWarning = `失败记录写入历史失败：${e?.message || e}`;})
-      : Promise.resolve();
-    void recorded.then(() => externalizeMedia(body)).then(stored => json(stored)).catch(next);
+    // Failures are not written to history (雁 2026-11-04); the response carries status + verbatim upstream body to the node.
+    void externalizeMedia(body).then(stored => json(stored)).catch(next);
     return res;
   }) as typeof res.json;
   return generationContext.run(context,next);
@@ -6247,21 +6230,23 @@ app.get('/api/history', (req, res) => {
   const rawOffset = req.query.offset;
   const wantsPage = rawLimit != null || rawOffset != null || String(req.query.format || '') === 'page';
   const full = String(req.query.full || '') === '1';
-  const total = generationHistory.length;
+  // History serves only records that produced media; old failure records in history.json stay on disk, unserved.
+  const served = generationHistory.filter((h: any) => isServedHistoryItem(h));
+  const total = served.length;
   if (!wantsPage) {
     // Default: full chronology, slim records (no workflowSnapshot dump).
-    return res.json(full ? generationHistory : generationHistory.map(slimHistoryForList));
+    return res.json(full ? served : served.map(slimHistoryForList));
   }
   const limit = Math.min(100, Math.max(1, parseInt(String(rawLimit ?? '40'), 10) || 40));
   const offset = Math.max(0, parseInt(String(rawOffset ?? '0'), 10) || 0);
-  const slice = generationHistory.slice(offset, offset + limit);
+  const slice = served.slice(offset, offset + limit);
   const items = full ? slice : slice.map(slimHistoryForList);
   // Header/chip counts over the WHOLE history, so 已出图 does not shrink as new records push old ones off page 1.
-  return res.json({ items, total, limit, offset, hasMore: offset + items.length < total, counts: historyCounts(generationHistory as unknown as GenerationHistoryItem[]) });
+  return res.json({ items, total, limit, offset, hasMore: offset + items.length < total, counts: historyCounts(served as unknown as GenerationHistoryItem[]) });
 });
 
 app.get('/api/history/:id', (req, res) => {
-  const item = generationHistory.find((h: any) => h && h.id === req.params.id);
+  const item = generationHistory.find((h: any) => h && h.id === req.params.id && isServedHistoryItem(h));
   if (!item) return res.status(404).json({ error: '未找到该历史记录', errorSource: 'local' });
   return res.json(item);
 });
@@ -6420,16 +6405,6 @@ app.delete('/api/history/:id', (req, res) => {
   });
   writeJsonFile(HISTORY_FILE, generationHistory);
   return res.json({ success: true, remaining: generationHistory.length });
-});
-
-// Catalog/Schema GET failed before generation → failed history card (POST never sent).
-app.post('/api/history/prefetch-failure', async (req, res) => {
-  let item: Record<string, any>;
-  // Written only by a user's run in the canvas UI (driver sets x-canvas-origin); never by load / hydrate / scripts.
-  if (requestOriginOf(req) !== 'browser') return res.status(403).json({ error: '仅画布界面里的一次运行可写入预取失败记录（缺少 x-canvas-origin: browser-ui）；未写入历史', errorSource: 'local' });
-  try { item = buildPrefetchFailureHistoryItem(req.body); } catch (e: any) { return res.status(400).json({ error: e.message }); }
-  try { const saved = await recordHistoryItem({ ...item, requestOrigin: requestOriginOf(req) } as any); return res.json({ ok: true, historyItem: saved }); }
-  catch (e: any) { return res.status(500).json({ error: `失败记录写入历史失败：${e?.message || e}` }); }
 });
 
 app.post('/api/history/delete-batch', (req, res) => {

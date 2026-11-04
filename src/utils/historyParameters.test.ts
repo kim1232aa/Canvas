@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { GenerationHistoryItem } from '../types/providers';
 import { extractEmbeddedGenerationParameters, resolveHistoryParameters, sentHistoryLoras, historyParameterSourceLabel, HISTORY_PASS_THROUGH_LABEL, historySizeMismatchNote } from './historyParameters';
-import { buildLocalRejectionHistoryItem } from '../server/failedAttemptHistory';
 
 const baseItem = (): GenerationHistoryItem => ({
   id: 'hist-1',

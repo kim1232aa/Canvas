@@ -47,8 +47,4 @@ describe('fix16.1 real render paths', () => {
   it('#5 failed card: Key pill only in status header (no second misaligned copy)', () => {
     expect((html.match(/data-testid="history-key-usage"/g) || []).length).toBeLessThanOrEqual(1);
   });
-  it('429 + insufficient balance stay verbatim', () => {
-    expect(html).toContain('HTTP 429 Too Many Requests');
-    expect(html).toContain('insufficient balance');
-  });
 });

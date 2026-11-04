@@ -432,7 +432,7 @@ export const fetchHistoryPage = async (opts?: { limit?: number; offset?: number 
     limit: typeof page?.limit === 'number' ? page.limit : limit,
     offset: typeof page?.offset === 'number' ? page.offset : offset,
     hasMore: !!page?.hasMore,
-    ...(page?.counts && page.counts.header && page.counts.filters ? { counts: page.counts } : {}),
+    ...(page?.counts && typeof page.counts.output === 'number' ? { counts: page.counts } : {}),
   };
 };
 

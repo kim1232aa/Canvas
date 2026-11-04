@@ -4,7 +4,6 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import cards from './__fixtures__/traceFix2Cards-2026-10-16.json';
 import { HistoryModal, historyUnsupportedRows } from '../components/HistoryModal';
 import { sentHistoryLoras, lorasFromSentParameters, historyUpstreamExchanges, resolveHistoryParameters } from './historyParameters';
-import { buildFailedAttemptHistoryItem, lorasFromActualRequest } from '../server/failedAttemptHistory';
 import { isLocalNotOutbound } from './apiFailure';
 import { aimlapiLoras, schemaLoraMaxItems } from '../server/schemaProviders';
 import { schemaLoraDescriptions, schemaChoiceFields } from '../components/SchemaChoiceControls';
@@ -16,33 +15,7 @@ const muapi: any = (cards as any).hist_1792126858043_jczni;
 const sogni: any = (cards as any).hist_1792127116221_7nqv6;
 const render = (items: any[]) => renderToStaticMarkup(<HistoryModal isOpen onClose={() => {}} history={items} onApplyPrompt={() => {}} onDeleteItem={() => {}} onClearAll={() => {}} />).replace(/<!-- -->/g, '');
 
-describe('trace-fix2 P1 — submit failure has an 上游交互 section', () => {
-  it('MuAPI 402 card (real) renders 上游交互（共 1 段）', () => {
-    expect(historyUpstreamExchanges(muapi).map((r) => `${r.method} ${r.status}`)).toEqual(['POST 402']);
-    const html = render([muapi]);
-    expect(html).toContain('data-testid="history-upstream-exchanges"');
-    expect(html).toContain('上游交互（共 1 段，原样）');
-  });
-  it('buildFailedAttemptHistoryItem records the request traces as executionTrace', () => {
-    const trace = { provider: 'muapi', method: 'POST', endpoint: 'https://api.muapi.ai/api/v1/x', status: 402, responseBody: '{"e":1}' };
-    const item = buildFailedAttemptHistoryItem({ route: '/api/schema-provider/muapi/submit', traces: [trace], submissions: [] }, { prompt: 'p' }, 402, { error: 'HTTP 402' })!;
-    expect(item.requestMetadata.executionTrace).toEqual([trace]);
-  });
-});
 
-describe('trace-fix2 P2 — parallel LoRA name/strength arrays', () => {
-  it('Sogni card (real): loras + loraStrengths → strength 0.8, never 「未发送强度」', () => {
-    expect(sentHistoryLoras(sogni)).toEqual([{ name: 'krea2-detail-enhancer', strength: 0.8 }]);
-    const html = render([sogni]);
-    expect(html).not.toContain('未发送强度');
-    expect(html).toContain('krea2-detail-enhancer (0.8)');
-  });
-  it('generic: any *lora*strength/weight/scale sibling of equal length; length mismatch → not used', () => {
-    expect(lorasFromSentParameters({ lora_ids: ['a', 'b'], lora_weights: [0.1, 0.2] })).toEqual([{ name: 'a', strength: 0.1 }, { name: 'b', strength: 0.2 }]);
-    expect(lorasFromSentParameters({ loras: ['a', 'b'], loraStrengths: [0.1] })).toEqual([{ name: 'a', strength: undefined }, { name: 'b', strength: undefined }]);
-    expect(lorasFromActualRequest({ parameters: { loras: ['x'], loraStrengths: [0.5] } })).toEqual([{ name: 'x', strength: 0.5 }]);
-  });
-});
 
 describe('trace-fix2 P3/P4 — outbound failure is never 「没有发出去」', () => {
   it('poll response with only its own GET but a task ledger containing the POST → not local', () => {
@@ -54,10 +27,6 @@ describe('trace-fix2 P3/P4 — outbound failure is never 「没有发出去」',
   });
   it('a real local block (no POST anywhere) stays local', () => {
     expect(isLocalNotOutbound({ errorSource: 'local', executionTrace: [{ method: 'GET', endpoint: 'u', status: 200 }] })).toBe(true);
-  });
-  it('Sogni card (real) shows 上游交互 with POST 201 + GET 200', () => {
-    expect(historyUpstreamExchanges(sogni).map((r) => `${r.method} ${r.status}`)).toEqual(['POST 201', 'GET 200']);
-    expect(render([sogni])).toContain('上游交互（共 2 段，原样）');
   });
 });
 

@@ -5,7 +5,6 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import docsJson from './__fixtures__/aimlapi-z-image-turbo-lora.docs-json.json';
 import { openApiRequestSchema, registerSchemaProviderRoutes } from './schemaProviders';
-import { buildLocalRejectionHistoryItem } from './failedAttemptHistory';
 import { formatHistorySize, formatResolvedHistoryParameter, hasOutputMedia, resolveHistoryParameters } from '../utils/historyParameters';
 import { HistoryModal, applyDisabledReason } from '../components/HistoryModal';
 import { schemaChoiceFields } from '../components/SchemaChoiceControls';
@@ -62,20 +61,6 @@ describe('P0 3 image_size from the official Schema (generic choice controls)', (
   });
 });
 
-describe('P0 1 / P1 8 / P2 11–12 history modal', () => {
-  const ok: any = { id: 'ok', url: 'https://cdn/x.png', prompt: 'p', provider: 'krea', model: 'm', loras: [] };
-  const blocked: any = { id: 'b', status: 'local_blocked', url: '', prompt: 'p', provider: 'aimlapi', model: MODEL, loras: [], error: 'x', requestMetadata: { route: '/r', intendedRequest: { steps: 17 } } };
-  const html = renderToStaticMarkup(<HistoryModal isOpen onClose={() => {}} history={[failedItem({ endpoint: 'x', parameters: { seed: 42 } }), blocked, ok]} onApplyPrompt={() => {}} onDeleteItem={() => {}} onClearAll={() => {}} />);
-  it('counts only entries with real output media', () => {
-    expect([failedItem({}), blocked, ok].filter(hasOutputMedia)).toHaveLength(1);
-    expect(html).toContain('data-testid="history-output-count">1 张出图');
-    expect(html).toContain('未出图 2 条（上游失败 1 · 没有发出去 1）');
-  });
-  it('raw upstream JSON is collapsed under a details after the status line', () => {
-    expect(html).toMatch(/<details[^>]*data-testid="history-failed-raw"><summary[^>]*>上游原文/);
-    expect(html.indexOf('HTTP 403 Forbidden')).toBeLessThan(html.indexOf('data-testid="history-failed-body"'));
-  });
-});
 
 describe('P2 9 local-zone time format', () => {
   it('2026-10-15 02:48:15（北京时间）', () => {

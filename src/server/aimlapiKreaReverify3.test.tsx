@@ -27,24 +27,6 @@ describe('P0-1 size row reads the sent value, never the raw-response byte count'
   });
 });
 
-describe('P0-2 local_blocked card shows the full would-be-sent params incl. LoRA', () => {
-  const blocked: any = { id: 'b', status: 'local_blocked', url: '', provider: 'aimlapi', model: 'm', loras: [], error: 'x',
-    requestMetadata: { route: '/api/schema-provider/aimlapi/submit',
-      intendedRequest: { model: 'm', prompt: 'p', steps: 17, seed: 42, custom_parameters: { image_size: 'square_hd' }, loras: [{ path: 'ostris/z', strength: 0.85 }] },
-      blockedField: { from: 'steps', field: 'num_inference_steps', value: 17, minimum: 1, maximum: 8 },
-      executionTrace: [{ endpoint: 'x', status: 200, responseBody: { kind: 'raw-response', size: 3675 } }] } };
-  it('seed / size intended, steps blocked, LoRA row present, no 上游实际', () => {
-    const r = resolveHistoryParameters(blocked);
-    expect(r.seed).toMatchObject({ value: 42, source: 'intended' });
-    expect(r.size).toMatchObject({ value: 'square_hd', source: 'intended' });
-    expect(r.steps.source).toBe('blocked');
-    expect(sentHistoryLoras(blocked)).toEqual([{ name: 'ostris/z', strength: 0.85 }]);
-    const html = modal([blocked]);
-    expect(html).not.toContain('上游实际');
-    expect(html).toContain('LoRA · 拟发送（未出站）: ostris/z (0.85)'); expect(html).not.toContain('LoRA: ostris/z'); // fix3 C: mapped intended loras → 拟发送
-    expect(html).toContain('拟发送（未出站）');
-  });
-});
 
 describe('本机直调 label', () => {
   it('direct-origin entries are labelled; UI fetches tag x-canvas-origin', () => {

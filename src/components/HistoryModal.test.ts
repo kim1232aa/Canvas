@@ -43,12 +43,8 @@ describe('Y1-UI History empty fields display 「未填写」', () => {
 
 import {
   historySizeChipVisible,
-  filterHistory,
-  historyFilterCounts,
-  historyFilterCountLabel,
   historyFailStatusText,
   historyFailFirstLine,
-  HISTORY_FILTERS,
   resolveHistoryItemForApply,
 } from './HistoryModal';
 import type { GenerationHistoryItem } from '../types/providers';
@@ -81,24 +77,7 @@ describe('fix17 history filter + fail fold helpers', () => {
   });
   const hist = [out, fail, blocked];
 
-  it('HISTORY_FILTERS is 全部 / 已出图 / 失败', () => {
-    expect(HISTORY_FILTERS.map(([k, l]) => [k, l])).toEqual([
-      ['all', '全部'],
-      ['output', '已出图'],
-      ['failed', '失败'],
-    ]);
-  });
 
-  it('historyFilterCounts: all = output + failed, counts match list lengths', () => {
-    const c = historyFilterCounts(hist);
-    expect(c).toEqual({ all: 3, output: 1, failed: 2, schema: 0 });
-    expect(filterHistory(hist, 'all')).toHaveLength(c.all);
-    expect(filterHistory(hist, 'output')).toHaveLength(c.output);
-    expect(filterHistory(hist, 'failed')).toHaveLength(c.failed);
-    expect(filterHistory(hist, 'output').every((i) => !!i.url)).toBe(true);
-    expect(filterHistory(hist, 'failed').every((i) => !i.url || i.status === 'failed' || i.status === 'local_blocked')).toBe(true);
-    expect(filterHistory(hist, 'failed').map((i) => i.id)).toEqual(['f1', 'b1']);
-  });
 
   it('historyFailStatusText uses HTTP code / local label, no rewrite', () => {
     expect(historyFailStatusText(fail)).toBe('HTTP 429 Too Many Requests');
@@ -168,53 +147,7 @@ describe('HistoryModal server pagination (load more)', () => {
     expect(html).not.toContain('data-testid="history-load-more"');
   });
 
-  it('filter count shows 已载 when historyTotal > history.length', () => {
-    const items = [
-      item({ id: 'a', url: 'https://x/a.png', prompt: 'one' }),
-      item({ id: 'b', status: 'failed', upstreamStatus: 500, prompt: 'two' }),
-    ];
-    const html = renderToStaticMarkup(
-      React.createElement(HistoryModal, {
-        isOpen: true,
-        onClose: () => {},
-        history: items,
-        hasMore: true,
-        historyTotal: 190,
-        loadingMore: false,
-        onLoadMore: () => {},
-        onApplyPrompt: () => {},
-        onDeleteItem: () => {},
-        onClearAll: () => {},
-      }),
-    );
-    expect(html).toContain('data-testid="history-filter-count-all"');
-    expect(html).toContain('已载 2');
-    expect(html).toContain('全部');
-    // header badges clarify loaded-only
-    expect(html).toContain('（已载）');
-    // plain 「全部 2」 style must NOT appear as bare number alone looking like total
-    expect(html).not.toMatch(/history-filter-count-all">2</);
-  });
 
-  it('filter count is plain number when all loaded', () => {
-    const items = [item({ id: 'a', url: 'https://x/a.png' })];
-    const html = renderToStaticMarkup(
-      React.createElement(HistoryModal, {
-        isOpen: true,
-        onClose: () => {},
-        history: items,
-        hasMore: false,
-        historyTotal: 1,
-        onLoadMore: () => {},
-        onApplyPrompt: () => {},
-        onDeleteItem: () => {},
-        onClearAll: () => {},
-      }),
-    );
-    expect(html).toMatch(/history-filter-count-all">1</);
-    expect(html).not.toContain('已载 1');
-    expect(html).not.toContain('（已载）');
-  });
 
   it('load-more wrap is outside scroll panel (sibling footer)', () => {
     const html = renderToStaticMarkup(
@@ -243,18 +176,6 @@ describe('HistoryModal server pagination (load more)', () => {
   });
 });
 
-describe('historyFilterCountLabel', () => {
-  it('returns 已载 N when total > loaded or hasMore', () => {
-    expect(historyFilterCountLabel(24, { historyTotal: 190, historyLength: 24, hasMore: true })).toBe('已载 24');
-    expect(historyFilterCountLabel(3, { historyTotal: 190, historyLength: 24 })).toBe('已载 3');
-    expect(historyFilterCountLabel(21, { historyLength: 24, hasMore: true })).toBe('已载 21');
-  });
-
-  it('returns plain count when fully loaded', () => {
-    expect(historyFilterCountLabel(24, { historyTotal: 24, historyLength: 24, hasMore: false })).toBe('24');
-    expect(historyFilterCountLabel(5, { historyLength: 5 })).toBe('5');
-  });
-});
 
 
 describe('resolveHistoryItemForApply', () => {

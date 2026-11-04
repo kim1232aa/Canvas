@@ -17,26 +17,8 @@ import { PROVIDER_UPSTREAM_ECHO_PATH } from '../config/providerDisplayHints';
  * hist-count-2026-10-17: failed parameter-table GETs are their own chip 「查参数表失败」 (shown only when present),
  * so 全部 = 已出图 + 失败 + 查参数表失败. The cards themselves stay visible under 全部.
  */
-export type { HistoryFilter } from '../utils/historyCounts';
-import type { HistoryFilter } from '../utils/historyCounts';
-export { historyHeaderCounts, historyFilterCounts, type HistoryCounts } from '../utils/historyCounts';
-import { historyHeaderCounts, historyFilterCounts, type HistoryCounts } from '../utils/historyCounts';
-export const HISTORY_FILTERS: [HistoryFilter, string][] = [['all', '全部'], ['output', '已出图'], ['failed', '失败']];
-export const SCHEMA_FETCH_FILTER: [HistoryFilter, string] = ['schema', '查参数表失败'];
-export function filterHistory(history: GenerationHistoryItem[], f: HistoryFilter): GenerationHistoryItem[] {
-  if (f === 'all') return history;
-  if (f === 'schema') return history.filter(isSchemaFetchFailure);
-  return history.filter((i) => !isSchemaFetchFailure(i) && (f === 'output') === hasOutputMedia(i));
-}
-/** Chip count text: when only a page is loaded, say 「已载 N」 so chips do not look like the full total. */
-export function historyFilterCountLabel(
-  count: number,
-  opts: { historyTotal?: number; historyLength: number; hasMore?: boolean },
-): string {
-  const partial =
-    (typeof opts.historyTotal === 'number' && opts.historyTotal > opts.historyLength) || !!opts.hasMore;
-  return partial ? `已载 ${count}` : String(count);
-}
+export type { HistoryCounts } from '../utils/historyCounts';
+import type { HistoryCounts } from '../utils/historyCounts';
 /** fix17: one-line fold status — the same status text the expanded card shows (no new wording). */
 export function historyFailStatusText(item: GenerationHistoryItem): string {
   if (item.status === 'local_blocked') return item.statusLabel || '没有发出去';
@@ -451,7 +433,6 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
   const [selectedImage, setSelectedImage] = React.useState<GenerationHistoryItem | null>(null);
   const [brokenIds, setBrokenIds] = React.useState<Record<string, true>>({});
   const [copyError, setCopyError] = React.useState('');
-  const [historyFilter, setHistoryFilter] = React.useState<HistoryFilter>('all');
 
   if (!isOpen) return null;
 
@@ -498,17 +479,13 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
   };
 
   const selectedResolved = selectedImage ? resolveHistoryParameters(selectedImage) : null;
-  const { output: outputCount, nonOutput: nonOutputCount, failed: failedCount, localBlocked: localBlockedCount, schemaFetch: schemaFetchCount } = historyCounts?.header ?? historyHeaderCounts(history);
-  const filterCounts = historyCounts?.filters ?? historyFilterCounts(history);
-  const filteredHistory = filterHistory(history, historyFilter);
-  /** Parent already paginates; render all loaded items (filter is client-side on loaded set). */
-  const visibleHistory = filteredHistory;
+  const outputCount = historyCounts?.output ?? history.filter(hasOutputMedia).length;
+  const visibleHistory = history;
   const showLoadMore = !!onLoadMore && hasMore;
   const partialLoaded =
     (typeof historyTotal === 'number' && historyTotal > history.length) || hasMore;
-  // Server counts cover all records → never 「已载」; only the loaded-page fallback is partial.
+  // Server count covers all records → never 「已载」; only the loaded-page fallback is partial.
   const countsPartial = !historyCounts && partialLoaded;
-  const filterCountOpts = historyCounts ? { historyLength: history.length, hasMore: false } : { historyTotal, historyLength: history.length, hasMore };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
@@ -525,16 +502,6 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
                 <span data-badge-level="primary" className="text-sm font-semibold px-2.5 py-0.5 rounded-full bg-purple-500/20 text-purple-200 border border-purple-500/40" data-testid="history-output-count">
                   {outputCount} 张出图{countsPartial ? '（已载）' : ''}
                 </span>
-                {nonOutputCount > 0 && (
-                  <span className="text-xs font-medium px-2 py-0.5 rounded-full border border-slate-500/60 text-slate-200 bg-slate-700/40" data-testid="history-non-output-count" data-badge-level="secondary">
-                    未出图 {nonOutputCount} 条{countsPartial ? '（已载）' : ''}（上游失败 {failedCount} · 没有发出去 {localBlockedCount}{nonOutputCount - failedCount - localBlockedCount > 0 ? ` · 其他 ${nonOutputCount - failedCount - localBlockedCount}` : ''}）
-                  </span>
-                )}
-                {schemaFetchCount > 0 && (
-                  <span className="text-xs font-medium px-2 py-0.5 rounded-full border border-slate-500/60 text-slate-300 bg-slate-800/40" data-testid="history-schema-fetch-count" data-badge-level="secondary" title="查模型参数表的请求失败，出图请求没有发出，不算出图失败">
-                    查参数表失败 {schemaFetchCount} 条{countsPartial ? '（已载）' : ''}（出图请求未发）
-                  </span>
-                )}
               </h2>
               <p className="text-xs text-slate-400">
                 查看生成结果、实际发送的参数与工作流，导出 JSON 以便复用
@@ -568,24 +535,10 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
         {/* Content */}
         <div className="flex-1 p-6 overflow-y-auto bg-[#141518]">
           {copyError && <p role="alert" className="mb-3 text-sm text-rose-300">{copyError}</p>}
-          {history.length > 0 && (
-            <div className="mb-4 flex items-center gap-2 text-xs" role="tablist" data-testid="history-filter-bar">
-              {(filterCounts.schema > 0 ? [...HISTORY_FILTERS, SCHEMA_FETCH_FILTER] : HISTORY_FILTERS).map(([key, label]) => (
-                <button key={key} type="button" role="tab" aria-selected={historyFilter === key} data-testid={`history-filter-${key}`} onClick={() => setHistoryFilter(key)}
-                  className={`px-3 py-1 rounded-full border transition-colors ${historyFilter === key ? 'bg-purple-500/25 border-purple-400 text-white font-semibold' : 'border-slate-600 text-slate-300 hover:border-slate-400'}`}>
-                  {label}{countsPartial ? ' · ' : ' '}<span data-testid={`history-filter-count-${key}`}>{historyFilterCountLabel(filterCounts[key], filterCountOpts)}</span>
-                </button>
-              ))}
-            </div>
-          )}
           {history.length === 0 ? (
             <div className="h-64 flex flex-col items-center justify-center gap-3 text-slate-400">
               <ImageIcon className="w-12 h-12 text-slate-600" />
               <p className="text-sm">暂无生成记录。点击右侧「Queue Prompt」开始运行工作流！</p>
-            </div>
-          ) : visibleHistory.length === 0 ? (
-            <div className="h-40 flex flex-col items-center justify-center gap-2 text-slate-400" data-testid="history-filter-empty">
-              <p className="text-sm">当前筛选下没有记录</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 items-start">
@@ -601,8 +554,8 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
                 return (
                 <div
                   key={item.id}
-                  data-card-state={hasOutputMedia(item) ? 'success' : item.status || 'unknown'}
-                  className={`bg-[#1e2026] border rounded-xl overflow-hidden shadow-lg flex flex-col min-w-0 group transition-all ${hasOutputMedia(item) ? 'border-emerald-500/70 border-t-4 border-t-emerald-400' : item.status === 'failed' ? 'border-rose-700/60 border-t-4 border-t-rose-500' : item.status === 'local_blocked' ? 'border-slate-600 border-t-4 border-t-slate-400' : 'border-[#2d303a] hover:border-cyan-500/40'}`}
+                  data-card-state="success"
+                  className="bg-[#1e2026] border rounded-xl overflow-hidden shadow-lg flex flex-col min-w-0 group transition-all border-emerald-500/70 border-t-4 border-t-emerald-400"
                 >
                   {(() => { const cardBody = (<>
                   <div className="px-3 pt-2.5 pb-2 border-b border-[#2d303a] space-y-0.5" data-testid="history-card-meta">
@@ -613,77 +566,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
                       <span data-testid="history-card-id" className="text-cyan-200/90 [overflow-wrap:break-word] [word-break:normal]">ID {item.id}</span>
                     </p>
                   </div>
-                  {!hasOutputMedia(item) && <HistoryCardFace item={item} resolved={resolved} unsupportedRows={unsupportedRows} />}
-                  {item.status === 'local_blocked' ? (
-                  <details className="px-3 py-1 text-[11px]" data-testid="history-debug"><summary className="cursor-pointer text-slate-400">排错详情</summary>
-                  <div className="relative bg-[#16151a] overflow-hidden p-3 text-[11px] font-mono border-b border-dashed border-slate-600 flex flex-col" data-testid="history-local-blocked-entry">
-                    <div className="flex flex-wrap items-center gap-1.5 mb-2">
-                      <span className="px-1.5 py-0.5 rounded bg-slate-600/80 text-white text-[10px]">{item.statusLabel || '没有发出去'}</span>
-                      <span className="px-1.5 py-0.5 rounded border border-slate-500/50 text-slate-300 text-[10px]">未调用任何上游 · 无上游状态码</span>{item.requestOrigin === 'direct' && <span className="px-1.5 py-0.5 rounded border border-amber-500/50 text-amber-200 text-[10px]" data-testid="history-direct-call" title="请求不是从画布界面发出的（没有 x-canvas-origin），例如 curl / 脚本">本机直调</span>}
-                      <span className="text-cyan-300 text-[10px]">{displayValue(canonicalProviderLabel(item.actualProvider || item.provider))}</span>
-                    </div>
-                    {typeof item.requestMetadata?.route === 'string' && <div className="text-slate-400 [overflow-wrap:break-word] [word-break:normal] mb-1">{item.requestMetadata.route}</div>}
-                    <pre className="max-h-28 overflow-auto whitespace-pre-wrap [overflow-wrap:break-word] [word-break:normal] font-mono text-amber-200" data-testid="history-local-blocked-reason"><EmphasizeLimit text={item.error ?? ''} /></pre>
-                    <details className="mt-2 text-slate-300">
-                      <summary className="cursor-pointer text-slate-300">请求体</summary>
-                      <RequestEnvelope value={item.requestMetadata?.intendedRequest ?? null} testId="history-intended-request" />
-                      {!!item.requestMetadata?.blockedField && (
-                        <p className="mt-1 text-rose-300 text-[11px]" data-testid="history-blocked-field-mark">
-                          拦截字段（原值未改）：
-                          <span className="font-mono text-rose-200">
-                            {String((item.requestMetadata.blockedField as any).from || '')}
-                            {(item.requestMetadata.blockedField as any).from ? ' → ' : ''}
-                            {String((item.requestMetadata.blockedField as any).field || '')}
-                            {' = '}
-                            {JSON.stringify((item.requestMetadata.blockedField as any).value)}
-                          </span>
-                        </p>
-                      )}
-                    </details>
-                    <NotSentLoras item={item} />
-                    <LocalRecord item={item} />
-                    {item.stack && <details className="mt-1 text-slate-500"><summary className="cursor-pointer">堆栈</summary><pre className="max-h-48 overflow-y-auto overflow-x-hidden whitespace-pre-wrap [overflow-wrap:anywhere] font-mono">{item.stack}</pre></details>}
-                  </div>
-                  </details>
-                  ) : item.status === 'failed' ? (
-                  <details className="px-3 py-1 text-[11px]" data-testid="history-debug"><summary className="cursor-pointer text-slate-400">排错详情</summary>
-                  <div className="relative bg-[#1a1114] overflow-hidden p-3 text-[11px] font-mono flex flex-col" data-testid="history-failed-entry">
-                    <div className="flex flex-wrap items-center gap-1.5 mb-2">
-                      <span className="px-1.5 py-0.5 rounded bg-rose-600/80 text-white text-[10px]">失败</span>
-                      <span className="min-w-0 max-w-full px-1.5 py-0.5 rounded border border-rose-500/50 text-rose-200 text-[10px] whitespace-normal break-words [overflow-wrap:anywhere]">{item.upstreamStatus != null ? `HTTP ${item.upstreamStatus}${item.upstreamStatusText ? ` ${item.upstreamStatusText}` : ''}` : (item.networkError ? '网络错误（无状态码）' : '无上游状态码')}</span>
-                      {generationPostNotSent(item) && <span className="px-1.5 py-0.5 rounded bg-slate-600/80 text-white text-[10px]" data-testid="history-post-not-sent">生成 POST 未发送</span>}{historyKeyUsageLabels(item).map((k) => <span key={k} data-testid="history-key-usage" title="本次请求使用的服务端 Key 在轮换列表中的序号（不显示 Key 内容）" className="px-1.5 py-0.5 rounded border border-slate-500/50 text-slate-200 text-[10px] whitespace-nowrap">{k}</span>)}
-                      <span className="text-cyan-300 text-[10px]">{displayValue(canonicalProviderLabel(item.actualProvider || item.provider))}</span>{item.requestOrigin === 'direct' && <span className="px-1.5 py-0.5 rounded border border-amber-500/50 text-amber-200 text-[10px]" data-testid="history-direct-call" title="请求不是从画布界面发出的（没有 x-canvas-origin），例如 curl / 脚本">本机直调</span>}
-                    </div>
-                    {(() => { const m = upstreamErrorMessage(item.upstreamResponseBody); return m ? <p className="mb-1 text-rose-100 whitespace-pre-wrap [overflow-wrap:anywhere]" data-testid="history-failed-upstream-message">上游原文：{m}</p> : null; })()}
-                    {item.upstreamEndpoint && <div className="text-slate-400 mb-1" data-testid="history-failed-endpoint"><UrlNoMidBreak text={String(item.upstreamEndpoint)} /></div>}
-                    <details className="text-rose-200" data-testid="history-failed-raw">
-                      <summary className="cursor-pointer text-rose-300">上游原文（原样，点开查看）</summary>
-                      <pre className="max-h-48 overflow-y-auto overflow-x-hidden whitespace-pre-wrap [overflow-wrap:anywhere] font-mono text-rose-200" data-testid="history-failed-body">{item.upstreamResponseBody ?? item.networkError?.message ?? item.error ?? ''}</pre>
-                    </details>
-                    {generationPostNotSent(item)
-                      ? <p className="mt-1 text-slate-300" data-testid="history-actual-none">实际发送：无（生成 POST 未发送）</p>
-                      : <details className="mt-1 text-slate-300">
-                      <summary className="cursor-pointer text-sky-300">请求体{sentHistoryLoras(item).length ? ` · LoRA×${sentHistoryLoras(item).length}` : ''}</summary>
-                      {sentHistoryLoras(item).length > 0 && (
-                        <div className="mt-1.5 flex flex-wrap gap-1" data-testid="history-failed-actual-loras">
-                          {sentHistoryLoras(item).map((l, i) => (
-                            <span key={i} title={l.name} className="max-w-full min-w-0 inline-flex flex-wrap items-center gap-y-0.5 text-[10px] bg-purple-950/60 text-purple-300 border border-purple-800/40 px-1.5 py-0.5 rounded">
-                              <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere]" data-testid="history-sent-lora-name" title={l.name}>LoRA: {l.name} ({l.strength === undefined ? '未发送强度' : String(l.strength)})</span>
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                      <RequestEnvelope value={historyActualRequest(item) ?? null} testId="history-failed-actual" label="实际发送（我方请求体）" />
-                      <UpstreamEchoBlock item={item} />
-                      <FieldOrigins item={item} />
-                    </details>}
-                    <UpstreamExchanges item={item} />
-                    <LocalRecord item={item} />
-                    <NotSentLoras item={item} />
-                    {item.stack && <details className="mt-1 text-slate-500"><summary className="cursor-pointer">堆栈</summary><pre className="max-h-48 overflow-y-auto overflow-x-hidden whitespace-pre-wrap [overflow-wrap:anywhere] font-mono">{item.stack}</pre></details>}
-                  </div>
-                  </details>
-                  ) : (
+                  {(
                   <div className="relative aspect-square bg-[#111215] overflow-hidden cursor-pointer" data-testid="history-output-thumb" onClick={() => setSelectedImage(item)}>
                     <PreviewMediaPanel
                       id={item.id}

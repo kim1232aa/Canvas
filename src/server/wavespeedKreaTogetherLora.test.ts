@@ -5,7 +5,6 @@ import { describe, expect, it } from 'vitest';
 import catalog from './__fixtures__wavespeed-live-2026-10-15.json';
 import { registerSchemaProviderRoutes, schemaProviders, sizeStringSeparator, schemaConstraintViolation, officialOpenApiSources, loraLocalBlockMessage, officialUnavailableMessage, matchOfficialUnavailable } from './schemaProviders';
 import { userFacingApiFailure, describeApiFailure } from '../utils/apiFailure';
-import { buildLocalRejectionHistoryItem } from './failedAttemptHistory';
 import { isSchemaOmitCandidate } from '../utils/schemaSendHint';
 import { schemaChoiceFields } from '../components/SchemaChoiceControls';
 
@@ -85,12 +84,5 @@ describe('Together image_loras = officialUnavailable (not rule D); Venice loraLo
     const withBlock = Object.entries(schemaProviders).filter(([, v]) => (v as any).loraLocalBlock).map(([k]) => k);
     expect(withBlock).toContain('venice');
     expect((schemaProviders.venice as any).loraLocalBlock.docQuote).toContain("Unrecognized key(s) in object: 'loras'");
-  });
-  it('local block text: first line 没有发出去, no HTTP 400 in UI text', () => {
-    const payload = { errorSource: 'local', error: loraLocalBlockMessage('Venice', (schemaProviders.venice as any).loraLocalBlock) };
-    expect(payload.error.split('\n')[0]).toBe('没有发出去'); // clean-1333 #3
-    expect(userFacingApiFailure(400, payload, '/api/schema-provider/venice/submit')).not.toMatch(/HTTP 400/);
-    expect(describeApiFailure(400, payload, '/api/schema-provider/venice/submit')).not.toMatch(/HTTP 400/);
-    expect(buildLocalRejectionHistoryItem('/api/schema-provider/venice/submit', { model: 'm' }, 400, payload).status).toBe('local_blocked');
   });
 });

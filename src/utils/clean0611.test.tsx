@@ -4,7 +4,6 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { registerSchemaProviderRoutes } from '../server/schemaProviders';
-import { buildLocalRejectionHistoryItem, buildPrefetchFailureHistoryItem } from '../server/failedAttemptHistory';
 import { parseCustomObject } from '../server/customParameters';
 import { splitActualRequest } from './actualRequestDisplay';
 import { historySeedStatement, seedStatement, sentSeedFromActualRequest, requestedNotSentLoras, generationPostNotSent } from './historyParameters';
@@ -54,13 +53,6 @@ describe('2 「实际发送」 shows only what went upstream', () => {
     expect(sent).toEqual({ endpoint: 'e', parameters: { seed: 42, format: 'png' } });
     expect(meta).toEqual({ mapping: [{ from: 'seed' }], parametersOnly: false, schemaFieldsOnly: true, schemaFields: ['seed', 'format'] });
     expect(splitActualRequest({ foo: 1 })).toEqual({ sent: { foo: 1 }, meta: null });
-  });
-  it('402 card: 实际发送 block has no schemaFields; diagnostics fold labelled 未发给上游', () => {
-    const item: any = { id: 'h', status: 'failed', upstreamStatus: 402, url: '', requestMetadata: { actualRequest: { endpoint: 'https://api.venice.ai/api/v1/image/generate', parameters: { seed: 42 }, schemaFields: ['seed', 'width'] } } };
-    const html = renderToStaticMarkup(<HistoryModal isOpen onClose={() => {}} history={[item]} onApplyPrompt={() => {}} onDeleteItem={() => {}} onClearAll={() => {}} />);
-    const block = html.split('data-testid="history-failed-actual">')[1].split('</pre>')[0];
-    expect(block).not.toContain('schemaFields');
-    expect(html).toContain('画布诊断（未发给上游）');
   });
 });
 
@@ -124,16 +116,6 @@ describe('4 / 6 / 9 / 10 helpers', () => {
   it('4 a fresh catalog GET failure in this session reads as non-generation on the bar', () => {
     const r: any = { id: 2, state: 'error', method: 'GET', route: '/api/model-schema?provider=together&model=m', status: 401, response: { error: 'Unauthorized' } };
     expect(buttonSummary([r]).startsWith('目录 / Schema 请求失败（非生成请求）')).toBe(true);
-  });
-  it('6 prefetch failure card: 生成 POST 未发送 + LoRA row, text wraps (no sideways overflow)', () => {
-    const item: any = { id: 'h', ...buildPrefetchFailureHistoryItem({ getUrl: '/api/model-schema?provider=together&model=m', status: 401, body: '{"error":{"message":"Unauthorized"},"stack":"Error at /workspace/x.ts:1"}', provider: 'together', model: 'm', loras: [{ path: 'https://h/a.safetensors', strength: 0.75, clipStrength: 1 }] }) };
-    expect(generationPostNotSent(item)).toBe(true);
-    expect(requestedNotSentLoras(item)).toEqual([{ name: 'https://h/a.safetensors', strength: 0.75 }]);
-    const html = renderToStaticMarkup(<HistoryModal isOpen onClose={() => {}} history={[item]} onApplyPrompt={() => {}} onDeleteItem={() => {}} onClearAll={() => {}} />);
-    expect(html).toContain('data-testid="history-post-not-sent">生成 POST 未发送');
-    expect(html).toContain('LoRA · 未发送（Schema 未记录）: https://h/a.safetensors (0.75)');
-    expect(html).toMatch(/overflow-x-hidden whitespace-pre-wrap \[overflow-wrap:anywhere\][^>]*data-testid="history-failed-body"/);
-    expect(html).toContain('/workspace/x.ts:1'); // verbatim
   });
   it('9 local-block toast first line + reason verbatim; bar starts with 没有发出去', () => {
     expect(LOCAL_BLOCK_TOAST_TITLE).toBe('没有发出去');

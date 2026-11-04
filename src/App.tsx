@@ -131,7 +131,7 @@ export default function App() {
     title: string;
     message: string;
     imageUrl?: string;
-    /** Primary action: default history; key-missing → api-settings; I2V missing image → connect-ref (never 查看历史). */
+    /** Primary action: success → history (failures are not history); key-missing → api-settings; I2V missing image → connect-ref (never 查看历史). */
     action?: 'history' | 'api-settings' | 'connect-ref' | 'none';
     /** When action is api-settings: provider id to select in BackendSettingsModal (e.g. gemini). */
     actionProviderId?: string;
@@ -3137,7 +3137,8 @@ export default function App() {
 
             <div className="flex items-center gap-2 shrink-0 ml-2">
               {(() => {
-                const act = toast.action ?? (toast.type === 'success' || toast.type === 'error' ? 'history' : 'none');
+                const act = toast.action ?? (toast.type === 'success' ? 'history' : 'none');
+                if (act === 'history' && toast.type !== 'success') return null; // failed runs are not history (雁 2026-11-04)
                 if (act === 'api-settings') return (
                   <button type="button" data-testid="toast-action-api-settings" onClick={() => {
                     if (toast?.actionProviderId) setSettingsInitialProvider(toast.actionProviderId);

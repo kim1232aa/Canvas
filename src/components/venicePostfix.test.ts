@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { schemaFieldBadge } from './SchemaChoiceControls';
-import { historyHeaderCounts, historyCardTime } from './HistoryModal';
+import { historyCardTime } from './HistoryModal';
 import { nonGenerationOrigin, humanSummaryText } from './ExecutionLog';
 import { upstreamHttpFirstLine } from '../utils/apiFailure';
 
@@ -19,10 +19,6 @@ describe('P0-1 badge derives from the actualRequest rule (key present in body �
 });
 
 describe('P0-2 / P0-3 history header + card meta', () => {
-  it('counts output vs failed vs local_blocked separately', () => {
-    const h: any[] = [{ id: 'a', url: '/m/1' }, { id: 'b', status: 'failed', url: '' }, { id: 'c', status: 'failed' }, { id: 'd', status: 'local_blocked' }];
-    expect(historyHeaderCounts(h)).toEqual({ output: 1, failed: 2, localBlocked: 1, schemaFetch: 0, nonOutput: 3 });
-  });
   it('card time is local-formatted; missing timestamp is explicit', () => {
     expect(historyCardTime(Date.UTC(2026, 9, 14, 20, 2, 34))).toMatch(/^2026-10-1\d \d{2}:02:34（.+）$/);
     expect(historyCardTime(undefined)).toBe('时间未记录');

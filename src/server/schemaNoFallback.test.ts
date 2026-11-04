@@ -2,7 +2,6 @@
 import express from 'express';
 import { describe, expect, it } from 'vitest';
 import { registerSchemaProviderRoutes, schemaUnavailableBlock, officialOpenApiSources, openApiPathRequestSchema, applyModelSpecConstraints } from './schemaProviders';
-import { buildLocalRejectionHistoryItem, isGenerationRoute } from './failedAttemptHistory';
 
 async function submit(provider: string, catalog: any, model: string, bodyExtra: Record<string, unknown> = {}) {
   const calls: Array<{ url: string; init?: RequestInit }> = []; const records: any[] = [];

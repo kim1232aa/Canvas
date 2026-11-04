@@ -218,11 +218,3 @@ it('HF fal-ai route hides empty Z-Image Space-only controls (no blank shells / f
   expect(space).toContain('使用 KSampler 种子');
 });
 
-it('history header 已出图 uses whole-history server counts, not the loaded page (no 「已载」 shrink)', async () => {
-  const { HistoryModal } = await import('./HistoryModal');
-  const item: any = { id: 'h1', status: 'failed', timestamp: 1, prompt: 'p', provider: 'x', model: 'm', url: '' };
-  const counts: any = { header: { output: 9, failed: 3, localBlocked: 0, schemaFetch: 0, nonOutput: 3 }, filters: { all: 40, output: 9, failed: 31, schema: 0 } };
-  const html = renderToStaticMarkup(<HistoryModal isOpen onClose={noop} history={[item]} hasMore historyTotal={40} historyCounts={counts} onApplyPrompt={noop as any} onApplyToCanvas={noop as any} onDeleteItem={noop as any} onClearAll={noop}/>);
-  expect(html).toMatch(/9 张出图</);
-  expect(html).not.toContain('（已载）');
-});

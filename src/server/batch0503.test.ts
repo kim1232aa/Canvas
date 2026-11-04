@@ -6,7 +6,6 @@ import { buildCivitaiImageRequest } from './civitaiImageContract';
 import { loadCivitaiImageGenOpenApi } from './fixtures/liveSchemaFixtures';
 const oa = () => loadCivitaiImageGenOpenApi();
 import { getFieldSpec, schemaFieldWires } from '../schemas/providerSchema';
-import { buildLocalRejectionHistoryItem } from './failedAttemptHistory';
 import { resolveHistoryParameters, historyParameterSourceLabel } from '../utils/historyParameters';
 import { buildNanoImagePayload } from '../schemas/nanoImageApi';
 import { fetchSchemaProviderRows, schemaProviders } from './schemaProviders';
