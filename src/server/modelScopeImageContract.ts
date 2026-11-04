@@ -15,7 +15,7 @@ export interface ModelScopeImagePayload {
   schemaFields: string[];
 }
 
-/** Schema-driven: only declared fields are sent; anything else filled is recorded as 「该端点不支持」. Throws on invalid LoRA. */
+/** Every filled canvas field is sent: official table fields as mapped, others (sampler_name / scheduler / denoise …) under their canvas name; upstream decides. Empty values are left out. Throws on invalid LoRA. */
 export function buildModelScopeImagePayload(body: Record<string, any>): ModelScopeImagePayload {
   const declared = new Set<string>(MODELSCOPE_IMAGE_SCHEMA_FIELDS);
   const payload: Record<string, unknown> = { model: body.model, prompt: body.prompt || '' };

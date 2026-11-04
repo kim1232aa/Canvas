@@ -40,7 +40,7 @@ export class ModelScopeDriver extends BaseEngineDriver {
         site: 'cn',
         loras: params.loras?.length ? params.loras.map((l: any) => (typeof l === 'object' && l !== null ? { ...l, strength: l.strength ?? l.modelStrength ?? l.scale } : l)) : undefined,
         image_url: params.image_url,
-        // sampler / scheduler / denoise are forwarded only so the route can record them as 「该端点不支持」 (never sent upstream).
+        // sampler_name / scheduler / denoise: user-filled values are sent upstream under these names (雁: 照发；上游不认显示原话).
         sampler_name: params.sampler_name,
         scheduler: params.scheduler,
         denoise: params.denoise,

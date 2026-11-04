@@ -80,7 +80,7 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const requestOriginOf = (req: express.Request): 'browser' | 'direct' => String(req.headers['x-canvas-origin'] || '') === 'browser-ui' ? 'browser' : 'direct';
 const generationContext = new AsyncLocalStorage<{ workflowSnapshot?: Record<string, unknown>; route: string; schemaFields?: string[]; requestOrigin?: 'browser' | 'direct'; traces: any[]; submissions: Array<{ endpoint: string; parameters: unknown; status: number }> }>();
-/** Route declares the endpoint's Schema field wires for this request, so every history record (success or failure) can tell 该端点不支持 from Schema 未记录. */
+/** Route declares the endpoint's official Schema field list for this request (record only; it never filters what is sent). */
 const declareSchemaFields = (fields: unknown) => { const c = generationContext.getStore(); if (c && Array.isArray(fields)) c.schemaFields = fields.map(String); };
 app.set('case sensitive routing', true);
 const cliPortIndex=process.argv.indexOf('--port');
