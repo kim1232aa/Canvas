@@ -68,7 +68,7 @@ it('SaveImage success/waiting preview keeps aspect-video overflow-hidden',()=>{
   expect(success).toContain('overflow-hidden');
 });
 
-it('Mage checkpoint surfaces aspect_ratio/resolution from preset; EmptyLatent hides blank WH shells', () => {
+it('Mage checkpoint surfaces aspect_ratio/resolution from preset; EmptyLatent keeps WH fillable (雁: never hide)', () => {
   const cp = JSON.stringify({
     _canvas: {
       scope: { provider: 'mage', model: 'mango-v3' },
@@ -102,13 +102,13 @@ it('Mage checkpoint surfaces aspect_ratio/resolution from preset; EmptyLatent hi
       schemaCustomParameters={cp}
     />,
   );
-  // omit width/height + empty → no blank shells; batch_size stays
-  expect(lat).not.toContain('data-testid="widget-label-width"');
-  expect(lat).not.toContain('data-testid="widget-label-height"');
+  // omit width/height: still visible & fillable (empty = not sent)
+  expect(lat).toContain('data-testid="widget-label-width"');
+  expect(lat).toContain('data-testid="widget-label-height"');
   expect(lat).toContain('data-testid="widget-label-batch_size"');
 });
 
-it('DeepInfra omit seed hides empty seed/seed_mode shells; Mage filled seed 42 stays', () => {
+it('DeepInfra omit seed keeps seed/seed_mode fillable; Mage filled seed 42 stays', () => {
   const diCp = JSON.stringify({
     _canvas: {
       scope: { provider: 'deepinfra', model: 'black-forest-labs/FLUX-1-schnell' },
@@ -123,9 +123,8 @@ it('DeepInfra omit seed hides empty seed/seed_mode shells; Mage filled seed 42 s
       schemaCustomParameters={diCp}
     />,
   );
-  expect(di).not.toContain('data-testid="widget-label-seed"');
-  expect(di).not.toContain('未设置');
-  expect(di).not.toContain('data-testid="widget-label-control_after_generate"');
+  expect(di).toContain('data-testid="widget-label-seed"');
+  expect(di).toContain('data-testid="widget-label-control_after_generate"');
 
   const mageCp = JSON.stringify({
     _canvas: {
@@ -176,3 +175,18 @@ it('HF fal-ai route hides empty Z-Image Space-only controls (no blank shells / f
   expect(space).toContain('使用 KSampler 种子');
 });
 
+
+it('雁: omit presets (ModelScope CN/AI, HF, Fal, OpenWorks, nanogpt, openai/grok/gemini) keep sampler/scheduler/denoise/seed/negative visible, empty and editable', () => {
+  const omit = JSON.stringify({ _canvas: { schemaProperties: ['prompt', 'size', 'steps', 'guidance', 'seed', 'loras'] } });
+  for (const prov of ['modelscope', 'modelscope_ai', 'huggingface', 'fal', 'tensorart', 'nanogpt', 'openai_compat', 'grok_compat', 'gemini']) {
+    const html = renderToStaticMarkup(
+      <NodeItem {...props('KSampler', { custom_parameters: omit })} currentProvider={prov} currentCheckpoint="Tongyi-MAI/Z-Image-Turbo" schemaCustomParameters={omit} />,
+    );
+    for (const f of ['sampler_name', 'scheduler', 'denoise', 'seed']) expect(html, `${prov} ${f}`).toContain(`data-testid="widget-label-${f}"`);
+    expect(html, prov).not.toContain('该服务商不支持');
+    expect(html, prov).not.toContain('该端点不支持');
+    expect(html, prov).not.toMatch(/<(input|select|textarea)[^>]*disabled/);
+    const neg = renderToStaticMarkup(<NodeItem {...props('CLIPTextEncodeNegative', {})} currentProvider={prov} currentCheckpoint="x" schemaCustomParameters={omit} />);
+    expect(neg, prov).toMatch(/<textarea(?![^>]*disabled)/);
+  }
+});

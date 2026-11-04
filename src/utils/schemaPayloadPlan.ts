@@ -22,7 +22,7 @@ const WIDGET_TO_BODY: Record<string, string> = { sampler: 'sampler_name' };
 
 export type FieldPlan =
   | { send: true; target: string }
-  | { send: false; reason: 'no-reference-image' | 'not-in-schema'; target?: string };
+  | { send: false; reason: never; target?: string };
 
 export function planCanvasField(
   field: string,
@@ -37,10 +37,9 @@ export function planCanvasField(
   },
 ): FieldPlan {
   const name = WIDGET_TO_BODY[field] || field;
-  if (name === 'denoise' && !ctx.hasReferenceImage) return { send: false, reason: 'no-reference-image' };
   const aliases = ctx.aliases || GENERIC_PAYLOAD_ALIASES;
   const has = (k: string) => !!ctx.declared && ctx.declared.has(k);
   const target = has(name) ? name : (aliases[name] || []).find(has) || ctx.fallbackTarget || name;
-  if (ctx.schemaFieldsOnly && ctx.declared && !ctx.declared.has(target)) return { send: false, reason: 'not-in-schema', target };
+  // 雁 2026-11-04: a filled field is always sent (undeclared → under its own/alias name); no send:false plans.
   return { send: true, target };
 }

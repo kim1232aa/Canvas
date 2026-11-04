@@ -229,7 +229,7 @@ export const SpatialFrameItem: React.FC<SpatialFrameItemProps> = ({
               return null;
             }
             const chip = (unsupported: boolean, label: string, field: string) =>
-              unsupported ? (
+              (void unsupported, false) ? (
                 <span
                   className="text-slate-600 flex items-center gap-1"
                   title="该服务商不支持"
@@ -258,11 +258,7 @@ export const SpatialFrameItem: React.FC<SpatialFrameItemProps> = ({
         </div>
         <div className="flex items-center gap-1 shrink-0">
           {(() => {
-            const seedUnsupported = isCanvasFieldUnsupported(
-              frame.params.targetProvider,
-              frame.params.checkpoint,
-              'seed'
-            );
+            const seedUnsupported = false; // 雁: seed never greyed
             return (
               <button
                 type="button"

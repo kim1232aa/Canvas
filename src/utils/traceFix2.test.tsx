@@ -51,15 +51,6 @@ describe('trace-fix2 #6/#8 — Schema title/description shown verbatim', () => {
   });
 });
 
-describe('trace-fix2 #7 — unsupported rows fold into one', () => {
-  it('MuAPI card: rows with source unsupported are listed once, card shows 「该端点不支持 N 项 · 未发送」', () => {
-    const rows = historyUnsupportedRows(resolveHistoryParameters(muapi) as any);
-    expect(rows.length).toBeGreaterThan(1);
-    const html = render([muapi]);
-    expect(html).not.toContain(`该端点不支持 ${rows.length} 项 · 未发送`); // cleanup-2026-10-17: one 「这次没用上」 line instead
-    expect(html).not.toContain('data-testid="history-cfg"');
-  });
-});
 
 describe('trace-fix2 #10 — stale LoRA block is cleared', () => {
   const lora = (id: string, extra: any = {}) => ({ id, type: 'LoRALoader', title: '', pos: { x: 0, y: 0 }, values: {}, inputs: [], outputs: [], ...extra });

@@ -519,7 +519,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
             return <label className="block text-slate-300">视频分辨率 (resolution)<input aria-label="视频分辨率 (resolution)" value={cur} onMouseDown={e=>e.stopPropagation()} onChange={e=>onUpdateValue(node.id,'resolution',e.target.value === '' ? undefined : e.target.value)} placeholder="按端点 Schema 指定" className="w-full rounded border border-slate-700 bg-[#121316] p-2" /></label>;
           })()}
           {/* Widgets according to definition */}
-          {def.widgets?.filter(widget => showUnsupported || !(isCanvasWidgetUnsupported(currentProvider, currentCheckpoint, widget.name) || (node.type === 'CLIPTextEncodeNegative' && widget.name === 'text' && greyNegative))).map((widget) => {
+          {def.widgets?.map((widget) => {
             const value = node.values[widget.name];
             if (widget.name === 'civitai_id' && (node.values.targetProvider || currentProvider || '') !== 'civitai') return null;
             if (widget.name === 'fal_model_name' && !((node.values.targetProvider || currentProvider) === 'fal' && node.values.ckpt_name === 'fal-ai/lora')) return null;
@@ -602,9 +602,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               const schemaUnused = SAMPLER_SCHEMA_WIDGETS.has(widget.name) && omitHint;
               // Hide Schema-omitted / unsupported / preset-seeded omit shells — empty disabled enums look adjustable.
               // 雁: 未声明或官方不支持 → 整格隐藏；填了值则照常显示并照发（雁：不扣参数）。
-              if (hideSamplerShell(widget.name, unsupported, omitHint, schemaCustomParameters)) {
-                if (!filledCanvasValue(node.values?.[widget.name])) return null;
-              }
+              // 雁: never hide sampler/scheduler/denoise; omit presets just keep them empty (empty = not sent).
               // cleanup-serious: strength/denoise only when a reference image is connected (WaveSpeed strength etc.).
               const isStrengthField = widget.name === 'denoise' || widget.name === 'strength';
               let strengthNeedsImage = false;
@@ -614,7 +612,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                 try { hasRef = JSON.parse(schemaCustomParameters || '{}')?._canvas?.hasReferenceImage === true; } catch { /* */ }
                 if (declared && declared.size > 0 && canvasFieldMatchesSchema('denoise', declared) && !hasRef) strengthNeedsImage = false;
               }
-              const greyThis = unsupported || schemaUnused || strengthNeedsImage;
+              const greyThis = false; void unsupported; void schemaUnused; void strengthNeedsImage;
               return (
                 <div key={widget.name} className={`space-y-1 `}>
                   <div className="flex flex-wrap items-center justify-between text-slate-400 font-mono text-[11px] gap-1.5">
@@ -932,8 +930,8 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                             null
                           </div>
                           <div className="grid grid-cols-2 gap-2">
-                            <input type="number" disabled placeholder="width" aria-label="width（该服务商不支持）" className="w-full bg-[#0d0e12] border border-[#22242c] rounded-lg px-2.5 py-1.5 text-slate-600 font-mono text-xs cursor-not-allowed" />
-                            <input type="number" disabled placeholder="height" aria-label="height（该服务商不支持）" className="w-full bg-[#0d0e12] border border-[#22242c] rounded-lg px-2.5 py-1.5 text-slate-600 font-mono text-xs cursor-not-allowed" />
+                            <input type="number" placeholder="width" aria-label="width" value={node.values?.width ?? ''} onMouseDown={stop} onPointerDown={stop} onKeyDown={stop} onChange={(e) => onUpdateValue(node.id, 'width', e.target.value === '' ? undefined : Number(e.target.value))} className="w-full bg-[#121316] border border-[#2d303a] focus:border-cyan-500 rounded-lg px-2.5 py-1.5 text-slate-200 font-mono text-xs outline-none" />
+                            <input type="number" placeholder="height" aria-label="height" value={node.values?.height ?? ''} onMouseDown={stop} onPointerDown={stop} onKeyDown={stop} onChange={(e) => onUpdateValue(node.id, 'height', e.target.value === '' ? undefined : Number(e.target.value))} className="w-full bg-[#121316] border border-[#2d303a] focus:border-cyan-500 rounded-lg px-2.5 py-1.5 text-slate-200 font-mono text-xs outline-none" />
                           </div>
                         </div>
                       )}
@@ -955,9 +953,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               const schemaUnused = SAMPLER_SCHEMA_WIDGETS.has(widget.name) && omitHint;
               // Hide Schema-omitted / unsupported / preset-seeded omit shells — empty disabled enums look adjustable.
               // 雁: 未声明或官方不支持 → 整格隐藏；填了值则照常显示并照发（雁：不扣参数）。
-              if (hideSamplerShell(widget.name, unsupported, omitHint, schemaCustomParameters)) {
-                if (!filledCanvasValue(node.values?.[widget.name])) return null;
-              }
+              // 雁: never hide sampler/scheduler/denoise; omit presets just keep them empty (empty = not sent).
               // cleanup-serious: strength/denoise only when a reference image is connected (WaveSpeed strength etc.).
               const isStrengthField = widget.name === 'denoise' || widget.name === 'strength';
               let strengthNeedsImage = false;
@@ -969,10 +965,8 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               }
               const seedCtrlUnused = widget.name === 'control_after_generate' && (greySeed || schemaSendStatus(currentProvider, 'seed', node.values?.seed, node.values?.custom_parameters, readDeclaredSchemaProperties(schemaCustomParameters), schemaCustomParameters) === 'not_sent' || isDeclaredSchemaFieldOmitted('seed', schemaCustomParameters, readDeclaredSchemaProperties(schemaCustomParameters)));
               // 生成后种子随 seed：Schema 无 seed → 整行隐藏
-              if (seedCtrlUnused) {
-                if (!filledCanvasValue(value)) return null;
-              }
-              const greyThis = unsupported || schemaUnused || strengthNeedsImage;
+              void seedCtrlUnused;
+              const greyThis = false; void unsupported; void schemaUnused; void strengthNeedsImage;
               const emptyCtrl = widget.name === 'control_after_generate' && (value === undefined || value === null || value === '');
               return (
                 <div key={widget.name} className={`space-y-1 `}>
@@ -1019,14 +1013,14 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               // I2V presets: hide empty negative when seeded schemaProperties omits it (e.g. Replicate minimax/video-01).
               if (node.type === 'AIVideoNode' && widget.name === 'negative_prompt') {
                 const seededNeg = readDeclaredSchemaProperties(node.values.custom_parameters);
-                if (seededNeg && !canvasFieldMatchesSchema('negative_prompt', seededNeg) && !filledCanvasValue(value)) return null;
+                void seededNeg;
               }
               const isPositiveCLIP = node.type === 'CLIPTextEncode';
               const isNegativeCLIP =
                 node.type === 'CLIPTextEncodeNegative' ||
                 widget.name === 'negative' ||
                 widget.name === 'negative_prompt';
-              const greyThisNegative = isNegativeCLIP && greyNegative;
+              const greyThisNegative = false; void greyNegative;
               return (
                 <div key={widget.name} className="space-y-1">
                   <div className="flex items-center justify-between gap-1.5">
@@ -1079,9 +1073,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               const seedOmitted = seedSchemaUnused || isDeclaredSchemaFieldOmitted('seed', schemaCustomParameters, readDeclaredSchemaProperties(schemaCustomParameters));
               const seedUnsupported = greySeed || seedOmitted;
               // Schema 无 seed → 整行隐藏（含骰子）；仅用户填了值却发不出去时提醒一行。Mage seed=42 stays visible.
-              if (seedUnsupported) {
-                if (!filledCanvasValue(value)) return null;
-              }
+              void seedUnsupported; // 雁: seed always visible & fillable; empty = not sent.
               const seedControl = node.values.control_after_generate;
               const seedEmpty = value === undefined || value === null || value === '';
               const seedPlaceholder = seedEmpty && seedControl === 'randomize'
@@ -1132,9 +1124,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               const schemaUnused = SAMPLER_SCHEMA_WIDGETS.has(widget.name) && omitHint;
               // Hide Schema-omitted / unsupported / preset-seeded omit shells — empty disabled enums look adjustable.
               // 雁: 未声明或官方不支持 → 整格隐藏；填了值则照常显示并照发（雁：不扣参数）。
-              if (hideSamplerShell(widget.name, unsupported, omitHint, schemaCustomParameters)) {
-                if (!filledCanvasValue(node.values?.[widget.name])) return null;
-              }
+              // 雁: never hide sampler/scheduler/denoise; omit presets just keep them empty (empty = not sent).
               // cleanup-serious: strength/denoise only when a reference image is connected (WaveSpeed strength etc.).
               const isStrengthField = widget.name === 'denoise' || widget.name === 'strength';
               let strengthNeedsImage = false;
@@ -1144,7 +1134,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                 try { hasRef = JSON.parse(schemaCustomParameters || '{}')?._canvas?.hasReferenceImage === true; } catch { /* */ }
                 if (declared && declared.size > 0 && canvasFieldMatchesSchema('denoise', declared) && !hasRef) strengthNeedsImage = false;
               }
-              const greyThis = unsupported || schemaUnused || strengthNeedsImage;
+              const greyThis = false; void unsupported; void schemaUnused; void strengthNeedsImage;
               return (
                 <div key={widget.name} className={`space-y-1 `}>
                   <div className="flex flex-wrap items-center justify-between gap-1.5">
@@ -1162,7 +1152,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                     disabled={greyThis}
                     placeholder={schemaUnused ? '' : strengthNeedsImage ? '需接参考图' : (greyThis ? '该服务商不支持' : undefined)}
                     title={schemaUnused ? '这家接口不用这几个参数' : (greyThis ? '该服务商不支持' : undefined)}
-                    aria-label={schemaUnused ? widget.label : (greyThis ? `${widget.name}（该服务商不支持）` : omitHint ? `${widget.label}（该端点不支持）` : widget.label)}
+                    aria-label={schemaUnused ? widget.label : (greyThis ? `${widget.name}（该服务商不支持）` : widget.label)}
                     onMouseDown={(e) => e.stopPropagation()}
                     onPointerDown={(e) => e.stopPropagation()}
                     onKeyDown={(e) => e.stopPropagation()}
@@ -1172,9 +1162,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                     }}
                     className={greyThis
                       ? 'w-full bg-[#0d0e12] border border-[#22242c] rounded-lg px-2.5 py-1.5 text-slate-600 font-mono text-xs cursor-not-allowed outline-none'
-                      : omitHint
-                        ? 'w-full bg-[#121316] border border-amber-700/50 focus:border-amber-500 rounded-lg pl-2.5 pr-7 py-1.5 text-slate-200 font-mono text-xs outline-none select-text cursor-text'
-                        : 'w-full bg-[#121316] border border-[#2d303a] focus:border-cyan-500 rounded-lg pl-2.5 pr-7 py-1.5 text-slate-200 font-mono text-xs outline-none select-text cursor-text'}
+                      : 'w-full bg-[#121316] border border-[#2d303a] focus:border-cyan-500 rounded-lg pl-2.5 pr-7 py-1.5 text-slate-200 font-mono text-xs outline-none select-text cursor-text'}
                   />
                   {widget.unit && <span data-testid={`widget-unit-${widget.name}`} aria-hidden="true" className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-xs">{widget.unit}</span>}
                   </div>

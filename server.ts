@@ -177,7 +177,7 @@ async function upstreamFetch(meta: UpstreamMeta, url: string, init?: RequestInit
 // 2026-11-04 (雁): never refuse or drop a filled param. Fields this route does not map are forwarded unchanged
 // via custom_parameters (merged into the upstream payload by applyCustomParameters); upstream decides.
 const isProvided = (v: any) => v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && v.length === 0);
-const rejectUnsupported = (_res: express.Response, _provider: string, body: any, fields: string[]): boolean => {
+const forwardUnmappedFields = (_res: express.Response, _provider: string, body: any, fields: string[]): boolean => {
   const filled = fields.filter((f) => isProvided(body?.[f]));
   if (!filled.length || !body) return false;
   let custom: Record<string, unknown> = {};
@@ -3230,7 +3230,7 @@ app.post(['/api/fal/generate', '/api/generate', '/api/engine/fal/generate'], asy
 // ==========================================
 registerVideoGenerateRoutes(app, {
   isProvided,
-  rejectUnsupported,
+  forwardUnmappedFields,
   rejectSchemaEnum,
   normalizeFalEndpoint,
   resolveProviderAuth,
@@ -4217,12 +4217,7 @@ app.post(['/api/engine/openai_compat/generate', '/api/openai_compat/generate'], 
       n,
     } = req.body;
     if (!model) return res.status(400).json({ error: '模型为必填项（model is required）' });
-    if (rejectUnsupported(res, 'openai_compat', req.body, ['seed', 'negative_prompt', 'steps', 'cfg', 'guidance_scale', 'sampler', 'sampler_name', 'scheduler', 'loras'])) return;
-    if (rejectSchemaEnum(res, 'openai_compat', model, 'size', size)) return;
-    if (rejectSchemaEnum(res, 'openai_compat', model, 'quality', quality)) return;
-    if (rejectSchemaEnum(res, 'openai_compat', model, 'output_format', output_format)) return;
-    if (rejectSchemaEnum(res, 'openai_compat', model, 'background', background)) return;
-    if (rejectSchemaEnum(res, 'openai_compat', model, 'moderation', moderation)) return;
+    if (forwardUnmappedFields(res, 'openai_compat', req.body, ['seed', 'negative_prompt', 'steps', 'cfg', 'guidance_scale', 'sampler', 'sampler_name', 'scheduler', 'denoise', 'loras', 'width', 'height'])) return;
 
     const payload: Record<string, unknown> = { model, prompt };
     if (isProvided(size)) payload.size = size;
@@ -4296,9 +4291,7 @@ app.post(['/api/engine/grok_compat/generate', '/api/grok_compat/generate'], asyn
   try {
     const { prompt, model, image_url, aspect_ratio, resolution, n, response_format } = req.body;
     if (!model) return res.status(400).json({ error: '模型为必填项（model is required）' });
-    if (rejectUnsupported(res, 'grok_compat', req.body, ['seed', 'negative_prompt', 'steps', 'cfg', 'guidance_scale', 'loras', 'width', 'height', 'sampler', 'sampler_name', 'scheduler'])) return;
-    if (rejectSchemaEnum(res, 'grok_compat', model, 'aspect_ratio', aspect_ratio)) return;
-    if (rejectSchemaEnum(res, 'grok_compat', model, 'resolution', resolution)) return;
+    if (forwardUnmappedFields(res, 'grok_compat', req.body, ['seed', 'negative_prompt', 'steps', 'cfg', 'guidance_scale', 'loras', 'width', 'height', 'sampler', 'sampler_name', 'scheduler', 'denoise'])) return;
 
     const payload: Record<string, unknown> = { model, prompt };
     if (isProvided(aspect_ratio)) payload.aspect_ratio = aspect_ratio;
@@ -4497,9 +4490,9 @@ app.post(['/api/huggingface/generate', '/api/engine/huggingface/generate'], asyn
     // Filled fields with no canvas mapping are sent under their own name (fal: top-level; hf-inference: parameters.*, per
     // https://huggingface.co/docs/inference-providers/tasks/text-to-image). Z-Image Space: custom_parameters merge.
     const hfExtraFields = ['cfg', 'denoise', 'image_url', 'sampler_name'];
-    if (isZImage && rejectUnsupported(res, 'Hugging Face Z-Image Space', req.body, [...hfExtraFields, 'loras'])) return;
+    if (isZImage && forwardUnmappedFields(res, 'Hugging Face Z-Image Space', req.body, [...hfExtraFields, 'loras'])) return;
     // Z-Image Space has seven live /generate arguments; no negative prompt / guidance.
-    if (isZImage && rejectUnsupported(res, 'Hugging Face Z-Image Space', req.body, ['negative_prompt', 'guidance'])) return;
+    if (isZImage && forwardUnmappedFields(res, 'Hugging Face Z-Image Space', req.body, ['negative_prompt', 'guidance'])) return;
 
     const finalPrompt = prompt || '';
     let dataUrl = '';
@@ -4511,7 +4504,7 @@ app.post(['/api/huggingface/generate', '/api/engine/huggingface/generate'], asyn
 
     if (isZImage) {
       // H2: 🌟 Direct integration with verified official Tongyi-MAI/Z-Image-Turbo Gradio Space on Hugging Face (Public Space)
-      if (rejectUnsupported(res, 'Hugging Face Z-Image Space', req.body, ['width', 'height', 'sampler_name', 'scheduler'])) return;
+      if (forwardUnmappedFields(res, 'Hugging Face Z-Image Space', req.body, ['width', 'height', 'sampler_name', 'scheduler'])) return;
       let gradioPayload;
       try {
         gradioPayload = buildZImagePayload(req.body);
@@ -4633,7 +4626,7 @@ app.post(['/api/huggingface/generate', '/api/engine/huggingface/generate'], asyn
     } else if (hfProvider === 'fal-ai') {
       // Official HF SDK routing + live inferenceProviderMapping.
       // No provider failover. Billing/402 may try the next KeyPool key (billingKeyRotate); other errors stop.
-      if (rejectUnsupported(res,'HF → fal-ai',req.body,['scheduler','resolution','shift','random_seed','gallery_images'])) return;
+      if (forwardUnmappedFields(res,'HF → fal-ai',req.body,['scheduler','resolution','shift','random_seed','gallery_images'])) return;
 
       const falRotated = await runWithBillingKeyRotate({
         keys: hfAttemptPlan.keys,
@@ -5258,14 +5251,12 @@ app.post(['/api/gemini/generate', '/api/engine/gemini/generate'], async (req, re
     }
 
     // 雁 rule: filled width/height are sent as filled (forwarded into config under their own name); upstream decides.
-    rejectUnsupported(res, 'Google Gemini', req.body, ['width', 'height']);
+    forwardUnmappedFields(res, 'Google Gemini', req.body, ['width', 'height']);
+    const GEMINI_NO_SDK_SLOT_FIELDS = ['width', 'height', 'negative_prompt', 'cfg', 'guidance_scale', 'steps', 'loras', 'seed', 'sampler_name', 'scheduler', 'denoise'];
 
     // Imagen is shut down (https://ai.google.dev/gemini-api/docs/imagen); all image models use generateContent,
     // which has no negative prompt / cfg / steps / LoRA / seed（ImageConfig 仅 aspectRatio+imageSize）。
-    if (rejectUnsupported(res, 'Google Gemini', req.body, ['negative_prompt', 'cfg', 'guidance_scale', 'steps', 'loras', 'seed','sampler_name','scheduler','denoise'])) return;
-    if (image_url && !(typeof image_url === 'string' && image_url.startsWith('data:'))) {
-      return res.status(400).json({ error: '该服务商不支持: image_url 为非 data: URL（Google Gemini 仅接受内联 base64 参考图）', unsupported: ['image_url'] });
-    }
+    if (forwardUnmappedFields(res, 'Google Gemini', req.body, ['negative_prompt', 'cfg', 'guidance_scale', 'steps', 'loras', 'seed','sampler_name','scheduler','denoise'])) return;
 
     // deprecated models are still sent as chosen; upstream answers.
     // 按所选模型验证参数；未知能力不猜测。
@@ -5304,6 +5295,10 @@ app.post(['/api/gemini/generate', '/api/engine/gemini/generate'], async (req, re
         },
       });
     }
+    else if (image_url && typeof image_url === 'string') {
+      // 雁: non-data: URLs are sent as filled (REST fileData.fileUri); upstream decides.
+      parts.unshift({ fileData: { fileUri: image_url } });
+    }
 
     // 只放用户实际传了的字段；seed 该服务商不支持（不写入 generationConfig）
     const config: Record<string, any> = {};
@@ -5311,7 +5306,13 @@ app.post(['/api/gemini/generate', '/api/engine/gemini/generate'], async (req, re
     // Custom JSON accepts the REST shape (generationConfig) or SDK shape (config); other top-level fields are
     // SDK config fields too. Nested objects such as imageConfig are deep-merged so unedited fields survive.
     const geminiCustom = parseCustomObject(req.body.custom_parameters) || {};
-    const { model: customModel, generationConfig: customGenerationConfig, config: customConfig, ...customTopLevel } = geminiCustom as Record<string, any>;
+    const { model: customModel, generationConfig: customGenerationConfig, config: customConfig, ...customTopLevelAll } = geminiCustom as Record<string, any>;
+    // @google/genai 2.26 generateContentConfigToMldev copies only known config keys and silently drops the rest.
+    // Canvas fields with no SDK slot are therefore sent through config.httpOptions.extraBody.generationConfig
+    // (merged verbatim into the REST body by the SDK), under their own names; Google's raw reply is shown.
+    const customTopLevel: Record<string, any> = { ...customTopLevelAll };
+    const extraGenerationConfig: Record<string, any> = {};
+    for (const f of GEMINI_NO_SDK_SLOT_FIELDS) if (Object.hasOwn(customTopLevel, f)) { extraGenerationConfig[f] = customTopLevel[f]; delete customTopLevel[f]; }
     const geminiCustomRequest = {
       ...(customModel !== undefined ? { model: customModel } : {}),
       config: { ...customTopLevel, ...(customConfig || {}), ...(customGenerationConfig || {}) },
@@ -5319,6 +5320,11 @@ app.post(['/api/gemini/generate', '/api/engine/gemini/generate'], async (req, re
     const custom = applyCustomParameters({ model, config }, Object.keys(geminiCustomRequest.config).length || customModel !== undefined ? geminiCustomRequest : undefined);
     const actualModel = String(custom.actualModel || model);
     const sentConfig = withGeminiImageResponseModality((custom.payload.config || {}) as Record<string, any>);
+    if (Object.keys(extraGenerationConfig).length) {
+      const http = (sentConfig.httpOptions || {}) as Record<string, any>;
+      const eb = (http.extraBody || {}) as Record<string, any>;
+      sentConfig.httpOptions = { ...http, extraBody: { ...eb, generationConfig: { ...(eb.generationConfig || {}), ...extraGenerationConfig } } };
+    }
     const geminiOverrides = custom.overrides;
     const actualRequest = { model: actualModel, contents: { parts }, config: sentConfig };
     const contentResponse = await upstreamSdkCall(

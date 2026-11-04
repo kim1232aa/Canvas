@@ -18,14 +18,6 @@ describe('runD follow-ups', () => {
   it('J: schema loading → neutral loading state, not 待确认', () => {
     expect(schemaSendStatus('novita', 'seed', 1, cp({ schemaLoading: true }))).toBe('loading');
   });
-  it('I: field absent from endpoint schema → 该端点不支持; declared but unfilled → 未发送', () => {
-    const item: any = { id: 'x', status: 'failed', requestMetadata: { actualRequest: { endpoint: 'e', parameters: { steps: 20 }, schemaFields: ['prompt', 'steps', 'width', 'height', 'strength'] } } };
-    const r = resolveHistoryParameters(item);
-    expect(r.sampler.source).toBe('unsupported');
-    expect(r.negativePrompt.source).toBe('unsupported');
-    expect(r.size.source).toBe('not-sent');
-    expect(historyParameterSourceLabel('unsupported')).toBe('该端点不支持 · 未发送') // clean-1029 #5;
-  });
   it('D: top-level strength labelled as KSampler denoise', () => {
     const item: any = { id: 'x', requestMetadata: { actualRequest: { mapping: [{ from: 'denoise', to: 'strength', value: 1 }] } } };
     expect(historyFieldOrigins(item)).toEqual([{ field: 'strength', origin: 'KSampler 去噪强度' }]);

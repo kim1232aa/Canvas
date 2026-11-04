@@ -63,20 +63,6 @@ const failed: any = {
   requestMetadata: { actualRequest: { input: { prompt: 'p', seed: 7, num_inference_steps: 28, guidance: 3, lora_weights: 'fofr/flux-pixar-cars', lora_scale: 0.85 } } },
 };
 
-describe('#2 local_blocked 拟发送 chips follow Schema capability', () => {
-  it('sampler / negative / width / height → unsupported; size 未发送 via aspect_ratio; seed/steps/cfg stay 拟发送', () => {
-    const r = resolveHistoryParameters(blocked);
-    expect(r.sampler.source).toBe('unsupported');
-    expect(r.negativePrompt.source).toBe('unsupported');
-    expect(r.width.source).toBe('unsupported');
-    expect(r.height.source).toBe('unsupported');
-    // Schema lists aspect_ratio ⇒ size row is plain 未发送 (fix5), not 「该端点不支持」
-    expect(r.size.source).toBe('not-sent');
-    expect(r.seed.source).toBe('intended');
-    expect(r.steps.source).toBe('intended');
-    expect(r.cfg.source).toBe('intended');
-  });
-});
 
 describe('#4 seed row does not repeat 实际发送 next to the chip', () => {
   it('row text omits 实际发送; standalone statement unchanged', () => {

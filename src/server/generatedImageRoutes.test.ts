@@ -19,7 +19,7 @@ async function invoke(provider: string, body: Record<string, unknown>, failedUrl
   const scope: Record<string, unknown> = {
     app: { post: (paths: string[], callback: Function) => paths.forEach(path => routes.set(path, callback)) },
     resolveProviderAuth: () => ({ apiKey: 'fixture-key', baseUrl: 'https://example.test/v1' }),
-    rejectUnsupported: () => false,
+    forwardUnmappedFields: () => false,
     rejectSchemaEnum: () => false,
     rejectSchemaModel: () => false,
     isProvided,

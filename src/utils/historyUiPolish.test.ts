@@ -16,14 +16,6 @@ describe('canonicalProviderLabel', () => {
 describe('unsupported vs unsent (schema-driven)', () => {
   const base = (schemaFields?: string[]) => ({ id:'f', status:'failed', url:'', provider:'aimlapi', model:'alibaba/z-image-turbo-lora', loras:[],
     requestMetadata:{ actualRequest:{ endpoint:'x', parameters:{ prompt:'p', seed:1, num_inference_steps:8 }, ...(schemaFields?{schemaFields}:{}) } } } as any);
-  it('fields absent from Schema → 该端点不支持', () => {
-    const r = resolveHistoryParameters(base(AIML_FIELDS));
-    for (const k of ['cfg','sampler','scheduler','negativePrompt'] as const) {
-      if (!(k in r)) continue;
-      expect(historyParameterSourceLabel(r[k].source)).toBe('该端点不支持 · 未发送') // clean-1029 #5;
-    }
-    expect(r.cfg.source).toBe('unsupported');
-  });
   it('declared in Schema but not in actualRequest → 未发送', () => {
     const r = resolveHistoryParameters(base([...AIML_FIELDS,'guidance_scale','negative_prompt']));
     expect(historyParameterSourceLabel(r.cfg.source)).toBe('未发送');

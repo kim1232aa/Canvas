@@ -27,6 +27,6 @@ describe('history big-image caption lists only sent values', () => {
 describe('history card LoRA line', () => {
   it('labels name and strength correctly', () => {
     expect(historyFaceLoraText([{ name: 'ST-TNG-Rooms', strength: 1 }])).toBe('LoRA: ST-TNG-Rooms × 1');
-    expect(historyFaceLoraText([{ name: 'a', strength: 0.8 }, { name: 'b' }])).toBe('LoRA: a × 0.8；b');
+    expect(historyFaceLoraText([{ name: 'a', strength: 0.8 }, { name: 'b' }])).toBe('LoRA: a × 0.8\nb');
   });
 });

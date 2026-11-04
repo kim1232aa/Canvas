@@ -315,11 +315,13 @@ export function resolveHistoryParameters(item: GenerationHistoryItem): Record<Hi
   // Route-supplied schemaFields (e.g. Mage local refuse) count the same as _canvas.schemaProperties:
   // canvas leftovers must read 该端点不支持 · 未发送, never 拟发送（未出站）.
   const intendedDeclared = intendedSchemaProps ?? schemaFields;
-  const intendedLacks = (key: HistoryParameterKey) => !!intendedDeclared && !sizeLacksAliases(key).some((k) => intendedDeclared!.map(String).includes(k));
-  const endpointLacks = (key: HistoryParameterKey) => !!schemaFields && !sizeLacksAliases(key).some((k) => schemaFields!.includes(k));
+  // 雁 2026-11-04: no 「该端点不支持 · 未发送」 verdicts — every filled field is sent; history shows only the recorded request.
+  void intendedDeclared; void sizeLacksAliases;
+  const intendedLacks = (_key: HistoryParameterKey) => false;
+  const endpointLacks = (_key: HistoryParameterKey) => false;
   // Same verdict for local-blocked and real outbound cards: Schema recorded → 该端点不支持 / 未发送; not recorded → say so, never guess.
   const schemaKnown = !!schemaFields || !!intendedSchemaProps;
-  const absentSource = (key: HistoryParameterKey): HistoryParameterSource => endpointLacks(key) || intendedLacks(key) ? 'unsupported' : schemaKnown ? 'not-sent' : 'schema-unrecorded';
+  const absentSource = (_key: HistoryParameterKey): HistoryParameterSource => schemaKnown ? 'not-sent' : 'schema-unrecorded';
   // Schema-driven envelopes record each canvas value the Schema did not take as mapping {from, value, sent:false}.
   // Those board values are the 「这次没用上」 values when no requestedParameters were recorded (generic, by canvas name).
   const unsentMapping: AnyRecord = {};
@@ -355,9 +357,6 @@ export function resolveHistoryParameters(item: GenerationHistoryItem): Record<Hi
       const v = key === 'size' ? normalizeSize(readKeys(intended, FIELD_KEYS[key])) : readKeys(intended, [...FIELD_KEYS[key], ...(key === 'sampler' ? ['sampler_name'] : [])]);
       if (hasMeaningfulValue(v) && !intendedLacks(key)) {
         result[key] = { key, value: v, source: 'intended' };
-      } else if (hasMeaningfulValue(v) && intendedLacks(key)) {
-        // Keep the board value so humans see what was refused — label 该端点不支持 · 未发送 (never blank 拟发送).
-        result[key] = { key, value: v, source: 'unsupported', requested: v };
       } else {
         result[key] = { key, value: undefined, source: absentSource(key) };
       }
@@ -388,7 +387,7 @@ export function resolveHistoryParameters(item: GenerationHistoryItem): Record<Hi
       result[key] = { key, value: legacy, source: 'legacy' };
       return;
     }
-    result[key] = { key, value: undefined, source: endpointLacks(key) ? 'unsupported' : hasAnyMetadata ? 'not-sent' : 'unknown' };
+    result[key] = { key, value: undefined, source: hasAnyMetadata ? 'not-sent' : 'unknown' };
   });
 
   return result;

@@ -10,7 +10,7 @@ import type { FieldKey, Provider as SchemaProvider } from '../../schemas/provide
 
 export interface VideoGenerateRouteDeps {
   isProvided: (v: any) => boolean;
-  rejectUnsupported: (
+  forwardUnmappedFields: (
     res: ExpressResponse,
     provider: string,
     body: any,
@@ -51,7 +51,7 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
   return async (req: Request, res: ExpressResponse) => {
     const {
       isProvided,
-      rejectUnsupported,
+      forwardUnmappedFields,
       rejectSchemaEnum,
       normalizeFalEndpoint,
       resolveProviderAuth,
@@ -171,7 +171,7 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
       try {
         // NanoGPT video submit: POST api.nano-gpt.com/api/generate-video
         // duration is a STRING, seed/negative_prompt are passed through
-        if (rejectUnsupported(res, 'NanoGPT Video', req.body, ['steps', 'cfg', 'guidance_scale', 'loras'])) return;
+        if (forwardUnmappedFields(res, 'NanoGPT Video', req.body, ['steps', 'cfg', 'guidance_scale', 'loras'])) return;
         const nanoPayload: any = { model, prompt };
         if (isProvided(duration)) nanoPayload.duration = String(duration);
         if (isProvided(aspect_ratio)) nanoPayload.aspect_ratio = aspect_ratio;
@@ -297,7 +297,7 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
       if (auth.error) return res.status(400).json({ error: auth.error });
       const { apiKey: agnesKey, baseUrl: agnesBaseUrl } = auth;
       const startTime = Date.now();
-      if (rejectUnsupported(res, 'Agnes AI Video', req.body, ['negative_prompt', 'steps', 'cfg', 'guidance_scale', 'loras'])) return;
+      if (forwardUnmappedFields(res, 'Agnes AI Video', req.body, ['negative_prompt', 'steps', 'cfg', 'guidance_scale', 'loras'])) return;
 
       let builtAgnes;
       try { builtAgnes = buildAgnesVideoRequest(model, req.body); }
@@ -431,10 +431,8 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
       if (auth.error) return res.status(400).json({ error: auth.error });
       const { apiKey: grokKey, baseUrl: grokBase } = auth;
       const startTime = Date.now();
-      if (rejectUnsupported(res, 'grok_compat', req.body, ['seed', 'negative_prompt', 'steps', 'cfg', 'guidance_scale', 'loras', 'width', 'height', 'fps'])) return;
+      if (forwardUnmappedFields(res, 'grok_compat', req.body, ['seed', 'negative_prompt', 'steps', 'cfg', 'guidance_scale', 'loras', 'width', 'height', 'fps'])) return;
       const grokResolution = req.body.resolution;
-      if (rejectSchemaEnum(res, 'grok_compat', model, 'aspect_ratio', aspect_ratio)) return;
-      if (rejectSchemaEnum(res, 'grok_compat', model, 'resolution', grokResolution)) return;
 
       const grokPayload: Record<string, unknown> = { model, prompt };
       if (isProvided(duration)) grokPayload.duration = Number(duration);

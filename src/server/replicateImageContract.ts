@@ -159,11 +159,10 @@ export function buildReplicatePredictionRequest(
   };
   const omitted: Array<{ from: string; to: null; value: unknown; sent: false; reason: string }> = [];
 
-  // Declared-field gate (generic, no per-model branches): live OpenAPI Input props or caller-supplied
-  // inputSchemaProperties (from this request's /api/model-schema) only. Static PROVIDER_SCHEMA is a UI
-  // badge/clue and must NOT alone authorize outbound or decide the omitted set. Undeclared filled
-  // fields are NOT sent (omitted, reason 「该端点不支持」). No live/caller schema → local block.
-  // No live/caller schema: still sent as built under the canvas names (schemaFetchFailure kept for the record).
+  // Wire-name mapping (generic, no per-model branches): when the live OpenAPI Input props or caller-supplied
+  // inputSchemaProperties declare a matching name, the filled value is sent under that name. A filled field the
+  // schema does not declare is still sent unchanged under its canvas name, and with no live/caller schema the
+  // request is sent as built; Replicate decides and its raw reply is shown. Nothing filled is dropped here.
   void schemaFetchFailure;
   const schemaProps: Record<string, unknown> = schemaPropsIn ?? {};
   const schemaFields: string[] = Object.keys(schemaProps);

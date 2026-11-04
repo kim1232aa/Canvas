@@ -39,28 +39,20 @@ export const Z_IMAGE_RESOLUTIONS: string[] = [
 
 export const Z_IMAGE_PARAMETERS = ['prompt', 'resolution', 'seed', 'steps', 'shift', 'random_seed', 'gallery_images'] as const;
 
+// 雁 2026-11-04: no local pre-block. Values are sent exactly as filled (no enum/range checks); the Space decides.
+// /gradio_api/call/generate is positional. Filled fields outside the seven official parameters are appended
+// after them in the same `data` array (in custom_parameters order) so they still leave the box; the Space's raw
+// reply (e.g. an argument-count error) is shown on the node.
 export function buildZImagePayload(rawInput: Record<string, unknown>) {
   const custom = rawInput.custom_parameters;
   const customEntries = custom && typeof custom === 'object' && !Array.isArray(custom) ? Object.entries(custom) : [];
-  const unknown = customEntries.map(([field]) => field).filter((field) => !(Z_IMAGE_PARAMETERS as readonly string[]).includes(field));
-  if (unknown.length) {
-    throw new Error(`Z-Image Space /generate 按位置提交，自定义 JSON 字段 ${unknown.join(', ')} 不在官方签名中（${Z_IMAGE_PARAMETERS.join(', ')}）；无法确定位置，未提交`);
-  }
+  const extra = customEntries.filter(([field]) => !(Z_IMAGE_PARAMETERS as readonly string[]).includes(field));
   const overrides = customEntries.map(([field, value]) => ({ field, requested: rawInput[field], custom: value, applied: true }));
   const input: Record<string, unknown> = { ...rawInput, ...Object.fromEntries(customEntries) };
-  if (typeof input.resolution !== 'string' || !Z_IMAGE_RESOLUTIONS.includes(input.resolution)) {
-    throw new Error('请为 Z-Image 选择官方 resolution 分辨率选项');
+  for (const field of ['resolution', 'seed', 'steps', 'shift', 'random_seed', 'gallery_images'] as const) {
+    if (input[field] === undefined || input[field] === null || input[field] === '') throw new Error(`Z-Image 必须填写 ${field}`);
   }
-  // The live schema lists seed as an integer with no upper bound. JS must still
-  // represent it exactly; the Space source explicitly accepts -1 for random.
-  for (const [field, min, max] of [['seed', -1, Number.MAX_SAFE_INTEGER], ['steps', 1, 100], ['shift', 1, 10]] as const) {
-    const value = input[field];
-    if (typeof value !== 'number' || !Number.isFinite(value) || value < min || value > max || (field !== 'shift' && !Number.isInteger(value))) {
-      throw new Error(`Z-Image 必须填写有效的 ${field}（${min}–${max}${field === 'shift' ? '' : '，整数'}）`);
-    }
-  }
-  if (typeof input.random_seed !== 'boolean') throw new Error('Z-Image 必须提供 random_seed 布尔值');
-  if (!Array.isArray(input.gallery_images)) throw new Error('Z-Image 必须提供 gallery_images 数组');
-  const data = Z_IMAGE_PARAMETERS.map((field) => field === 'prompt' ? input.prompt ?? '' : input[field]);
-  return { data, overrides, actualParameters: Object.fromEntries(Z_IMAGE_PARAMETERS.map((field, index) => [field, data[index]])) };
+  const data = [...Z_IMAGE_PARAMETERS.map((field) => field === 'prompt' ? input.prompt ?? '' : input[field]), ...extra.map(([, v]) => v)];
+  const actualParameters = Object.fromEntries([...Z_IMAGE_PARAMETERS.map((field, index) => [field, data[index]]), ...extra]);
+  return { data, overrides, actualParameters };
 }

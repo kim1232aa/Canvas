@@ -65,8 +65,8 @@ export const CANVAS_TO_SCHEMA_ALIASES: Record<string, string[]> = {
   styles: ['styles', 'loras', 'image_loras', 'lora_list'],
 };
 
-export const SCHEMA_OMIT_REASON =
-  '官方 Schema 未声明对应字段（含别名）时不会发送；以执行记录 mapping（sent:false）为准。Schema 已声明的字段会原样发送，不显示本标记。';
+// 雁 2026-11-04: filled fields are always sent, so there is no omit reason to show.
+export const SCHEMA_OMIT_REASON = '';
 
 export function isSchemaFieldsOnlyEnabled(customParameters?: string | null): boolean {
   try {

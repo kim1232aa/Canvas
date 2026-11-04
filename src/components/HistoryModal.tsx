@@ -279,7 +279,8 @@ const FieldOrigins: React.FC<{ item: GenerationHistoryItem }> = ({ item }) => {
 
 
 /** Sources that mean the value really went upstream (or came back from it). Anything else is omitted from the caption. */
-const SENT_SOURCES = new Set<ResolvedHistoryParameter['source']>(['sent', 'upstream', 'image-metadata', 'passed-through', 'requested', 'legacy']);
+// Only values found in the recorded actual request / upstream reply (never requested-only or legacy board values).
+const SENT_SOURCES = new Set<ResolvedHistoryParameter['source']>(['sent', 'upstream', 'image-metadata', 'passed-through']);
 const CAPTION_LABEL: Record<string, string> = { negativePrompt: '负向', seed: 'Seed', steps: 'Steps', cfg: 'CFG', sampler: 'Sampler', scheduler: 'Scheduler', size: 'Size' };
 /** Big-image caption: one line of `Label: value` joined by · for only the fields actually sent; '' entries dropped. */
 export const historyCaptionSent = (resolved: Record<string, ResolvedHistoryParameter>, keys: string[]): string[] => {
@@ -297,7 +298,7 @@ export const historyCaptionSent = (resolved: Record<string, ResolvedHistoryParam
 };
 /** Card face LoRA line: name × strength under the existing 「LoRA」 label (same format as the big-image caption). */
 export const historyFaceLoraText = (loras: { name: string; strength?: unknown }[]): string =>
-  `LoRA: ${loras.map((l) => (l.strength === undefined ? l.name : `${l.name} × ${String(l.strength)}`)).join('；')}`;
+  `LoRA: ${loras.map((l) => (l.strength === undefined ? l.name : `${l.name} × ${String(l.strength)}`)).join('\n')}`; // one LoRA per line: no separator left dangling at a wrap
 /** History card face: plain values only (模型 / LoRA强度 / 种子 / 尺寸 / 提示词) + at most ONE plain reminder line. No per-field badges. */
 export const historyCardReminder = (item: GenerationHistoryItem, resolved: Record<string, ResolvedHistoryParameter>, unsupportedRows: UnsupportedRow[]): string => {
   if (item.status === 'local_blocked') return `没有发出去：${String(item.error || '').split('\n')[0]}`;
@@ -315,7 +316,7 @@ const HistoryCardFace: React.FC<{ item: GenerationHistoryItem; resolved: Record<
   return (
     <div className="px-3 py-2 text-[11px] text-slate-300 font-mono space-y-0.5" data-testid="history-card-face">
       <p data-testid="history-face-model">模型: {displayValue(item.actualModel || item.model)}</p>
-      {loras.length > 0 && <p data-testid="history-face-loras" className="[overflow-wrap:anywhere]">{historyFaceLoraText(loras)}</p>}
+      {loras.length > 0 && <p data-testid="history-face-loras" className="whitespace-pre-line [overflow-wrap:anywhere]">{historyFaceLoraText(loras)}</p>}
       {seed !== undefined && seed !== null && seed !== '' && resolved.seed && SENT_SOURCES.has(resolved.seed.source) && <p data-testid="history-face-seed">种子: {String(seed)}</p>}
       {size.text && SENT_SOURCES.has(size.source) && <p data-testid="history-face-size">尺寸: {size.text}</p>}
     </div>
@@ -391,17 +392,9 @@ function UnrecordedFold({ keys, resolved }: { keys: Set<string>; resolved: Recor
 
 /** trace-fix2 #7: card rows whose verdict is 「该端点不支持 · 未发送」 (Schema-derived source 'unsupported'), in card order. */
 export type UnsupportedRow = { key: 'seed' | 'steps' | 'cfg' | 'sampler' | 'scheduler' | 'size' | 'negativePrompt'; label: string; value?: string };
-export function historyUnsupportedRows(resolved: Record<string, ResolvedHistoryParameter>): UnsupportedRow[] {
-  const out: UnsupportedRow[] = [];
-  // Board value: resolved value, else the canvas value recorded as requested / mapping sent:false (never shown as 实际发送).
-  const fmt = (x: unknown) => (x !== undefined && x !== null && x !== '' ? String(x) : undefined);
-  const v = (p?: ResolvedHistoryParameter) => (p ? fmt(p.value) ?? fmt(p.requested) : undefined);
-  const one = (key: UnsupportedRow['key'], label: string) => { const p = resolved[key]; if (p?.source === 'unsupported') out.push({ key, label, value: v(p) }); };
-  one('seed', '种子'); one('steps', '步数'); one('cfg', 'CFG'); one('sampler', '采样器'); one('scheduler', '调度器');
-  const size = formatHistorySize(resolved as any);
-  if (size.source === 'unsupported') out.push({ key: 'size', label: '尺寸', value: size.canvasValue });
-  one('negativePrompt', '负向');
-  return out;
+// 雁 2026-11-04: nothing is labelled 「该端点不支持 · 未发送」 any more; history lists only the recorded request.
+export function historyUnsupportedRows(_resolved: Record<string, ResolvedHistoryParameter>): UnsupportedRow[] {
+  return [];
 }
 /** cleanup-2026-10-17: ONE line 「这次没用上：…」 listing only user-filled params the endpoint Schema does not declare. No fold wall. */
 export const unusedLineText = (rows: UnsupportedRow[]) => {
@@ -605,7 +598,6 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
                       mediaClassName="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                       videoProps={{ loop: true, muted: true, preload: 'none' }}
                     />
-                    {hasOutputMedia(item) && <div className="absolute top-2 right-2 px-1.5 py-0.5 rounded bg-emerald-600 text-white text-[11px] font-bold" data-testid="history-success-badge">✓ 出图成功</div>}
                     <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-md px-2 py-0.5 rounded text-[11px] font-mono text-cyan-300 border border-cyan-500/30">
                       {displayValue(canonicalProviderLabel(item.actualProvider || item.provider))}
                     </div>
@@ -715,8 +707,8 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
           className="fixed inset-0 z-60 bg-black/95 flex items-center justify-center p-4 cursor-pointer"
           onClick={() => setSelectedImage(null)}
         >
-          <div className="relative max-w-4xl max-h-[90vh] flex flex-col items-center" onClick={(e) => e.stopPropagation()}>
-            <div className="relative min-h-[40vh] w-full max-w-xl flex items-center justify-center border border-[#333] rounded-lg bg-[#111215] overflow-hidden">
+          <div className="relative max-w-4xl max-h-[95vh] overflow-y-auto flex flex-col items-center" onClick={(e) => e.stopPropagation()}>
+            <div className="relative shrink-0 min-h-[40vh] w-full flex items-center justify-center border border-[#333] rounded-lg bg-[#111215]">
               <PreviewMediaPanel
                 id={selectedImage.id}
                 url={selectedImage.url}
@@ -725,7 +717,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
                 onRecovered={clearBroken}
                 kind="image"
                 alt={selectedImage.prompt || ''}
-                mediaClassName="max-h-[75vh] w-auto rounded-lg shadow-2xl object-contain border border-[#333]"
+                mediaClassName="block max-h-[75vh] max-w-full w-auto h-auto rounded-lg shadow-2xl object-contain border border-[#333]"
                 failureHint="链接失效或无法拉取"
               />
             </div>
@@ -741,7 +733,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
                 {historyCaptionSent(selectedResolved, ['seed', 'steps', 'cfg']).map((t) => <p key={t} className="text-slate-300 font-mono text-[11px]">{t}</p>)}
                 {historyCaptionSent(selectedResolved, ['sampler', 'scheduler', 'size']).map((t) => <p key={t} className="text-slate-300 font-mono text-[11px]">{t}</p>)}
               </>}
-              <p className="text-slate-300">LoRA: {selectedImage.loras?.length ? selectedImage.loras.map(l => `${l.name} × ${l.strength}`).join('；') : '未使用'}</p>
+              <p className="text-slate-300 whitespace-pre-line">LoRA: {selectedImage.loras?.length ? selectedImage.loras.map(l => `${l.name} × ${l.strength}`).join('\n') : '未使用'}</p>
             </div>
             <button
               onClick={() => setSelectedImage(null)}

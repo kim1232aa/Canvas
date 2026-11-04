@@ -126,38 +126,38 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
   const wanFramesField = videoSchemaField(params.videoProvider || params.targetProvider, params.checkpoint, 'num_frames');
   const wanFpsField = videoSchemaField(params.videoProvider || params.targetProvider, params.checkpoint, 'fps');
   const isFalWan = wanFramesField.state === 'declared';
-  const greySeed = isGemini || isOpenAiCompat || isGrokCompat || fieldUnsupported('seed');
-  const greySteps = isOpenAiCompat || isGrokCompat || fieldUnsupported('steps');
-  const greyCfg = isOpenAiCompat || isGrokCompat || fieldUnsupported('cfg');
-  const greySampler = isOpenAiCompat || isGrokCompat || fieldUnsupported('sampler');
-  const greyScheduler = isOpenAiCompat || isGrokCompat || fieldUnsupported('scheduler');
-  const greyDenoise = isOpenAiCompat || isGrokCompat || fieldUnsupported('denoise');
+  const greySeed = false; // 雁: never grey/omit filled params (was: isGemini || isOpenAiCompat || isGrokCompat || fieldUnsupported('seed'))
+  const greySteps = false; // 雁: never grey/omit filled params (was: isOpenAiCompat || isGrokCompat || fieldUnsupported('steps'))
+  const greyCfg = false; // 雁: never grey/omit filled params (was: isOpenAiCompat || isGrokCompat || fieldUnsupported('cfg'))
+  const greySampler = false; // 雁: never grey/omit filled params (was: isOpenAiCompat || isGrokCompat || fieldUnsupported('sampler'))
+  const greyScheduler = false; // 雁: never grey/omit filled params (was: isOpenAiCompat || isGrokCompat || fieldUnsupported('scheduler'))
+  const greyDenoise = false; // 雁: never grey/omit filled params (was: isOpenAiCompat || isGrokCompat || fieldUnsupported('denoise'))
   const endpointLoraUnsupported = isLoraUnsupportedOnEndpoint(
     params.targetProvider,
     civitaiSchemaId || params.checkpoint,
   ).unsupported;
-  const greyLoras = isOpenAiCompat || isGrokCompat || fieldUnsupported('loras') || endpointLoraUnsupported;
-  const greyWidthHeight = isGemini || isOpenAiCompat || isGrokCompat || fieldUnsupported('width') || fieldUnsupported('height');
-  const greyNegative = isOpenAiCompat || isGrokCompat || fieldUnsupported('negative_prompt');
-  const greyNumImages = fieldUnsupported('num_images');
+  const greyLoras = false; // 雁: never grey/omit filled params (was: isOpenAiCompat || isGrokCompat || fieldUnsupported('loras') || endpointLoraUnsupported)
+  const greyWidthHeight = false; // 雁: never grey/omit filled params (was: isGemini || isOpenAiCompat || isGrokCompat || fieldUnsupported('width') || fieldUnsupported('height'))
+  const greyNegative = false; // 雁: never grey/omit filled params (was: isOpenAiCompat || isGrokCompat || fieldUnsupported('negative_prompt'))
+  const greyNumImages = false; // 雁: never grey/omit filled params (was: fieldUnsupported('num_images'))
   ensureModelSchema(params.targetProvider, params.checkpoint);
   const customParamsJson = withCachedSchemaProperties(params.targetProvider, params.checkpoint, params.customParameters);
   const sendSteps = schemaSendStatus(params.targetProvider, 'steps', (params as any).steps, customParamsJson);
-  const omitSteps = sendSteps === 'not_sent';
+  const omitSteps = false; // 雁: never grey/omit filled params (was: sendSteps === 'not_sent')
   const sendCfg = schemaSendStatus(params.targetProvider, 'cfg', (params as any).cfg, customParamsJson);
-  const omitCfg = sendCfg === 'not_sent';
+  const omitCfg = false; // 雁: never grey/omit filled params (was: sendCfg === 'not_sent')
   const sendSampler = schemaSendStatus(params.targetProvider, 'sampler', (params as any).sampler, customParamsJson);
-  const omitSampler = sendSampler === 'not_sent';
+  const omitSampler = false; // 雁: never grey/omit filled params (was: sendSampler === 'not_sent')
   const sendScheduler = schemaSendStatus(params.targetProvider, 'scheduler', (params as any).scheduler, customParamsJson);
-  const omitScheduler = sendScheduler === 'not_sent';
+  const omitScheduler = false; // 雁: never grey/omit filled params (was: sendScheduler === 'not_sent')
   const sendDenoiseUnscoped = schemaSendStatus(params.targetProvider, 'denoise', (params as any).denoise, customParamsJson, undefined, undefined, { hasReferenceImage: true });
   const sendDenoiseSchema = schemaSendStatus(params.targetProvider, 'denoise', (params as any).denoise, customParamsJson, undefined, undefined, { hasReferenceImage: hasImageInput !== false });
   // Same plan as the payload: no reference image ⇒ omitted; keep the specific 「无参考图」 wording when the Schema would otherwise accept it.
   const sendDenoise = sendDenoiseSchema === 'not_sent' && sendDenoiseUnscoped !== 'not_sent' && hasImageInput === false ? 'no_image' as const : sendDenoiseSchema;
-  const omitDenoise = sendDenoise === 'not_sent';
+  const omitDenoise = false; // 雁: never grey/omit filled params (was: sendDenoise === 'not_sent')
   const sendWidthHeight = schemaSendStatus(params.targetProvider, 'width', (params as any).width, customParamsJson);
   const sendLoras = schemaSendStatus(params.targetProvider, 'loras', params.loras?.length ? params.loras : undefined, customParamsJson);
-  const omitWidthHeight = sendWidthHeight === 'not_sent';
+  const omitWidthHeight = false; // 雁: never grey/omit filled params (was: sendWidthHeight === 'not_sent')
   const schemaDeclaresAspectRatio = !!readDeclaredSchemaProperties(customParamsJson)?.has('aspect_ratio');
   const schemaSelect = (field: FieldKey, value: string, onChange: (v: string) => void, label: string) => {
     if (!schemaProvider || !schemaModel) return null;
@@ -871,7 +871,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                   key={ar.label}
                   disabled={greyWidthHeight}
                   onClick={() => handleAspectRatioPreset(ar.w, ar.h)}
-                  title={omitWidthHeight ? '该端点不支持：本模型不接收像素宽高' : undefined}
+                  
                   className={`py-1.5 rounded-lg text-center transition-all disabled:opacity-40 disabled:cursor-not-allowed ${omitWidthHeight ? 'opacity-40 ' : ''}${
                     isActive
                       ? 'bg-cyan-500/20 border border-cyan-500/50 text-cyan-300 font-bold'

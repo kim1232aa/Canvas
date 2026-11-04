@@ -13,8 +13,10 @@ describe('official Z-Image Space contract', () => {
     const incomplete: Record<string, unknown> = {...input}; delete incomplete[field];
     expect(() => buildZImagePayload(incomplete)).toThrow(field);
   });
-  it.each([{seed: -2}, {seed: Number.MAX_SAFE_INTEGER + 1}, {steps: 101}, {steps: 1.5}, {shift: 0}, {shift: NaN}, {resolution: '960x1440 ( 2:3 )'}])('rejects invalid values %j', (invalid) => {
-    expect(() => buildZImagePayload({...input, ...invalid})).toThrow();
+  it.each([{seed: -2}, {seed: Number.MAX_SAFE_INTEGER + 1}, {steps: 101}, {steps: 1.5}, {shift: 0}, {resolution: '960x1440 ( 2:3 )'}])('sends out-of-range / off-list value %j unchanged (no local pre-block)', (v) => {
+    const built = buildZImagePayload({...input, ...v});
+    const [k, val] = Object.entries(v)[0];
+    expect(built.actualParameters[k]).toBe(val);
   });
 });
 
@@ -28,10 +30,12 @@ describe('Z-Image custom JSON maps by live Gradio parameter name', () => {
       {field: 'prompt', requested: 'test', custom: 'advanced prompt', applied: true},
     ]);
   });
-  it('validates overridden values with the same live contract', () => {
-    expect(() => buildZImagePayload({...input, custom_parameters: {steps: 500}})).toThrow(/steps/);
+  it('sends overridden values unchanged, even out of range', () => {
+    expect(buildZImagePayload({...input, custom_parameters: {steps: 500}}).data[3]).toBe(500);
   });
-  it('rejects names absent from the live /generate signature rather than guessing a position', () => {
-    expect(() => buildZImagePayload({...input, custom_parameters: {guidance_scale: 4}})).toThrow(/guidance_scale.*prompt, resolution, seed, steps, shift, random_seed, gallery_images/);
+  it('appends filled fields outside the seven-position signature to data (sent, upstream decides) and records them', () => {
+    const built = buildZImagePayload({...input, custom_parameters: {guidance_scale: 4, width: 640, negative_prompt: 'blurry'}});
+    expect(built.data).toEqual(['test', '1152x896 ( 9:7 )', 42, 8, 3, false, [], 4, 640, 'blurry']);
+    expect(built.actualParameters).toMatchObject({guidance_scale: 4, width: 640, negative_prompt: 'blurry'});
   });
 });
