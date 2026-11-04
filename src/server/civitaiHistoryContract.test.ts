@@ -13,6 +13,10 @@ describe('Civitai normalized submission history', () => {
     expect(built.overrides.cfgScale).toEqual({ before: 7, after: 2 });
     await expect(buildCivitaiImageRequest({ model, cfg: 7, cfgScale: 2 }, get, oa())).rejects.toThrow(/不一致/);
   });
+  it('preserves array-shaped live Schema LoRA AIRs and strengths', () => {
+    const lora = 'urn:air:flux2:lora:civitai:3@4';
+    expect(civitaiImageHistory({ model, loras: [{ air: lora, strength: 0.65 }] }).loras).toEqual([{ name: lora, strength: 0.65 }]);
+  });
   it('success and pending share actual submission values, then overlay confirmed upstream values', async () => {
     const built = await buildCivitaiImageRequest({ model, engine: 'comfy', prompt: 'A', negative_prompt: 'A negative', cfg: 7, custom_parameters: { prompt: 'B', negativePrompt: 'B negative', cfgScale: 2, seed: 0 } }, get, oa());
     const pending = civitaiImageHistory(built.payload);

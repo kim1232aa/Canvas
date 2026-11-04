@@ -9,6 +9,8 @@ export function civitaiImageHistory(submitted: Record<string, any>, effective?: 
     sampler: actual.sampleMethod ?? actual.sampler ?? null,
     scheduler: actual.schedule ?? actual.scheduler ?? null,
     width: number('width'), height: number('height'),
-    loras: Object.entries(actual.loras ?? {}).map(([name, strength]) => ({ name, strength: Number(strength) })),
+    loras: Array.isArray(actual.loras)
+      ? actual.loras.map((lora: Record<string, any>) => ({ name: lora.air, strength: Number(lora.strength) }))
+      : Object.entries(actual.loras ?? {}).map(([name, strength]) => ({ name, strength: Number(strength) })),
   };
 }
