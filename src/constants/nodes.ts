@@ -958,6 +958,11 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
           { label: 'Fal.ai', value: 'fal' },
           { label: 'Agnes AI', value: 'agnes' },
           { label: '🔁 Grok 兼容中转', value: 'grok_compat' },
+          { label: 'WaveSpeed', value: 'wavespeed' },
+          { label: 'MuAPI', value: 'muapi' },
+          { label: 'Novita', value: 'novita' },
+          { label: '⚡ Replicate 官方云平台', value: 'replicate' },
+          { label: '🌟 Civitai 官方原生引擎', value: 'civitai' },
         ],
       },
       {
