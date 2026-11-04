@@ -140,7 +140,7 @@
   "requestFieldsVerified": {
     "run": "已清理 hist_1792125133065_2ffvp）",
     "endpoint": "POST https://api.muapi.ai/api/v1/krea-v2-turbo-lora",
-    "status": "字段与官方 openapi.json（12:29 抓取）一致：prompt/seed/resolution/aspect_ratio/loras[{path,scale}]；steps/CFG/采样器/宽高/负向词 标该端点不支持 · 未发送",
+    "status": "字段与官方 openapi.json（12:29 抓取）一致：prompt/seed/resolution/aspect_ratio/loras[{path,scale}]；steps/CFG/采样器/宽高/负向词 官方 openapi 未列（事实）；旧版「该端点不支持 · 未发送」属扣参已作废——用户填了照发，上游不认原样显示（2026-11-04 雁）",
     "upstream": "402 INSUFFICIENT_CREDITS 原文透传，进历史，有 Key #0",
     "closure": "画布收口 欠费已如实显示（fix3-1530，挑刺无严重）",
     "loraMaxItems": {
