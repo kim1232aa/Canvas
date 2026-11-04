@@ -343,7 +343,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                   node.type === 'AIVideoNode'
                     ? 'font-bold text-[13px] text-white tracking-wide min-w-0 flex-1 whitespace-normal break-words leading-snug'
                     : LORA_LOADER_TYPES.has(node.type) || node.type === 'CheckpointLoaderSimple'
-                      ? 'font-bold text-[13px] text-white tracking-wide min-w-0 flex-1 whitespace-normal [overflow-wrap:anywhere] leading-snug'
+                      ? 'font-bold text-[13px] text-white truncate tracking-wide min-w-0 flex-1'
                       : 'font-bold text-[13px] text-white truncate tracking-wide min-w-0 flex-1'
                 }
                 title={hoverTitle}
@@ -506,9 +506,10 @@ export const NodeItem: React.FC<NodeItemProps> = ({
             ensureModelSchema(node.values.targetProvider, node.values.model);
             const vf = videoSchemaField(node.values.targetProvider, node.values.model, 'resolution');
             const seeded = readDeclaredSchemaProperties(node.values.custom_parameters);
-            if (vf.state === 'absent') return null;
+            const resFilled = filledCanvasValue(node.values.resolution);
+            if (vf.state === 'absent' && !resFilled) return null;
             if (vf.state === 'unknown') {
-              if (seeded && !canvasFieldMatchesSchema('resolution', seeded)) return null;
+              if (seeded && !canvasFieldMatchesSchema('resolution', seeded) && !resFilled) return null;
               // No seed + empty → hide permanent blank resolution shell on I2V presets without resolution.
               if (!seeded && !filledCanvasValue(node.values.resolution)) return null;
             }
@@ -528,13 +529,14 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               ensureModelSchema(node.values.targetProvider, node.values.model);
               const vf = videoSchemaField(node.values.targetProvider, node.values.model, widget.name);
               const issue = videoSchemaValueIssue(node.values.targetProvider, node.values.model, widget.name, value);
-              if (vf.state === 'absent' && !issue) return null;
+              // 雁: a filled value is sent as-is — its control stays visible and editable whatever the Schema says.
+              const filled = filledCanvasValue(value);
+              if (vf.state === 'absent' && !filled) return null;
               const cur = value === undefined || value === null ? '' : String(value);
-              if (vf.state === 'unknown') {
+              if (vf.state === 'unknown' || vf.state === 'absent') {
                 const seeded = readDeclaredSchemaProperties(node.values.custom_parameters);
-                // Preset-seeded schemaProperties: hide fields the endpoint does not declare (no empty shells).
-                // No seed list → keep free input until live Schema (non-preset boards).
-                if (seeded && !canvasFieldMatchesSchema(widget.name, seeded)) return null;
+                // Hide only empty fields the seeded Schema does not declare (no empty shells).
+                if (vf.state === 'unknown' && seeded && !canvasFieldMatchesSchema(widget.name, seeded) && !filled) return null;
                 // Schema not ready: free input, do not invent enums.
                 return <div key={widget.name} className="space-y-1" data-testid={`video-schema-pending-${widget.name}`}>
                   <label className="text-slate-400 font-mono text-[11px] block whitespace-nowrap">{widget.label}</label>

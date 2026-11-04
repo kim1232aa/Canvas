@@ -109,7 +109,7 @@ export function spatialRequestParameters(frame: SpatialFrame): NormalizedGenerat
 /**
  * videoschema-2026-10-17: per-field view of the selected endpoint's official Schema (/api/model-schema cache).
  * state: 'unknown' (Schema not read → caller keeps its generic control, nothing invented),
- *        'absent'  (Schema read, field not declared → hide the control; never a fake 「不发送」 row),
+ *        'absent'  (Schema read, field not declared → hide only an empty control; a filled value stays editable and is sent as-is),
  *        'declared' (options from enum, or min/max).
  */
 export type VideoSchemaField = {state:'unknown'} | {state:'absent'} | {state:'declared'; options?: Array<string|number>; min?: number; max?: number};
@@ -137,7 +137,6 @@ export function videoSchemaValueIssue(provider: string | undefined, model: strin
   if (value === undefined || value === null || value === '') return null;
   const f = videoSchemaField(provider, model, field);
   const label = VIDEO_FIELD_LABEL[field] || field;
-  if (f.state === 'absent') return `${label}：这个模型不接收此参数，画布上还存着「${String(value)}」，请清除后再运行`;
   if (f.state !== 'declared') return null;
   if (f.options && !f.options.some((o) => String(o) === String(value))) return `${label}：「${String(value)}」不在这个模型的可选值里（${f.options.join(' / ')}），请重新选择`;
   const n = Number(value);

@@ -25,7 +25,7 @@ describe('video Schema fields', () => {
     await load(K26, { duration: { enum: ['5', '10'] } });
     expect(videoSchemaValueIssue('fal', K26, 'duration', 15)).toContain('不在这个模型的可选值里');
     expect(videoSchemaValueIssue('fal', K26, 'duration', '10')).toBeNull();
-    expect(videoSchemaValueIssue('fal', K3I, 'aspect_ratio', '16:9')).toContain('不接收');
+    expect(videoSchemaValueIssue('fal', K3I, 'aspect_ratio', '16:9')).toBeNull(); // 雁: filled value sent as-is, no local 不接收 text
     expect(videoSchemaIssues([{ type: 'AIVideoNode', values: { targetProvider: 'fal', model: K3I, duration: '12', aspect_ratio: '' } }])).toBeNull();
     expect(videoSchemaIssues([{ type: 'AIVideoNode', values: { targetProvider: 'fal', model: K26, duration: 15 } }])).toMatch(/视频时长（秒）/);
   });
@@ -52,9 +52,15 @@ describe('video Schema fields', () => {
     await load(I2V, { prompt: {}, start_image_url: {}, duration: { enum: ['3','4','5','6','7','8','9','10','11','12','13','14','15'] } });
     await load(T2V, { prompt: {}, duration: { enum: ['3','4','5','6','7','8','9','10','11','12','13','14','15'] }, aspect_ratio: { enum: ['16:9','9:16','1:1'] } });
     expect(videoSchemaField('fal', I2V, 'aspect_ratio').state).toBe('absent');
-    expect(videoSchemaValueIssue('fal', I2V, 'aspect_ratio', '16:9')).toContain('不接收');
+    expect(videoSchemaValueIssue('fal', I2V, 'aspect_ratio', '16:9')).toBeNull();
     expect(videoSchemaField('fal', T2V, 'aspect_ratio')).toMatchObject({ state: 'declared', options: ['16:9','9:16','1:1'] });
     expect(videoDurationBounds('fal', T2V).options).toEqual(['3','4','5','6','7','8','9','10','11','12','13','14','15']);
   });
 
+});
+
+describe('雁 2026-11-04: no local 不接收 verdict', () => {
+  it('absent field with a stored value yields no issue text', () => {
+    expect(videoSchemaValueIssue('fal', 'fal-ai/never-loaded', 'fps', 16)).toBeNull();
+  });
 });

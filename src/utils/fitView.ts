@@ -153,7 +153,8 @@ export function measureChromeInsets(container: Element | null, margin = 12): Fit
     const r = el.getBoundingClientRect();
     if (r.height <= 0) return;
     if (r.bottom < c.bottom - Math.min(160, c.height * 0.25)) return;
-    out.bottom = Math.max(out.bottom, c.bottom - r.top + margin);
+    // Extra bottom padding = toolbar height so late-growing nodes (AI video preview) clear the dock.
+    out.bottom = Math.max(out.bottom, c.bottom - r.top + margin + r.height);
   });
   document.querySelectorAll('[data-canvas-chrome="left"]').forEach((el) => {
     const r = el.getBoundingClientRect();
