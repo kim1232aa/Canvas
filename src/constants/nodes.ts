@@ -33,7 +33,7 @@ export const SCHEDULER_OPTIONS = [
 export interface BaseModelOption {
   label: string;
   value: string;
-  provider: 'fal' | 'agnes' | 'civitai' | 'modelscope' | 'modelscope_ai' | 'huggingface' | 'nanogpt' | 'gemini' | 'sensenova' | 'video' | 'tensorart' | 'openai_compat' | 'grok_compat' | 'muapi' | 'wavespeed' | 'sogni' | 'krea' | 'together' | 'aimlapi' | 'novita' | 'venice' | 'openworks' | 'runware' | 'modelslab' | 'replicate' | 'mage';
+  provider: 'fal' | 'agnes' | 'civitai' | 'modelscope' | 'modelscope_ai' | 'huggingface' | 'nanogpt' | 'gemini' | 'sensenova' | 'video' | 'tensorart' | 'openai_compat' | 'grok_compat' | 'muapi' | 'wavespeed' | 'sogni' | 'krea' | 'together' | 'aimlapi' | 'novita' | 'venice' | 'deepinfra' | 'openworks' | 'runware' | 'modelslab' | 'replicate' | 'mage';
   category?: 'checkpoint' | 'video' | 'reasoning' | 'edit' | 'lora';
 }
 
@@ -132,6 +132,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
           { label: 'AIMLAPI', value: 'aimlapi' },
           { label: 'Novita', value: 'novita' },
           { label: 'Venice', value: 'venice' },
+          { label: 'DeepInfra', value: 'deepinfra' },
           { label: 'Tensor.Art OpenWorks', value: 'openworks' },
           { label: '⚡ Replicate 官方云平台', value: 'replicate' },
           { label: '🪄 Mage (Mango)', value: 'mage' },
