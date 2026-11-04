@@ -34,6 +34,12 @@ describe('Gemini generateContent node seed', () => {
     expect(input).not.toMatch(/disabled|readonly/i);
     expect(input).toMatch(/value=""/);
   });
+  it('width / height row shows no stray literal text (was a bare `null` JSX text node)', () => {
+    const html = render(geminiNode(preset().nodes));
+    const row = html.match(/width \/ height<\/label>([\s\S]*?)<\/div>/)?.[1];
+    expect(row).toBe('');
+    expect(html).not.toMatch(/>\s*null\s*</);
+  });
   it('filled seed reaches the outgoing body; empty seed is not sent', async () => {
     const filled = await sentBody(1234);
     expect(filled).toBeTruthy();

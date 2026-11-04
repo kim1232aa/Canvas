@@ -927,7 +927,6 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                         <div className="space-y-1">
                           <div className="flex items-center justify-between gap-1.5">
                             <label className="text-slate-500 font-mono text-[11px]">width / height</label>
-                            null
                           </div>
                           <div className="grid grid-cols-2 gap-2">
                             <input type="number" placeholder="width" aria-label="width" value={node.values?.width ?? ''} onMouseDown={stop} onPointerDown={stop} onKeyDown={stop} onChange={(e) => onUpdateValue(node.id, 'width', e.target.value === '' ? undefined : Number(e.target.value))} className="w-full bg-[#121316] border border-[#2d303a] focus:border-cyan-500 rounded-lg px-2.5 py-1.5 text-slate-200 font-mono text-xs outline-none" />
