@@ -45,7 +45,6 @@ export class AgnesDriver extends BaseEngineDriver {
       id: 'agnes-video-2.5-flash',
       name: 'Agnes Video 2.5 Flash (图生视频 / 动态运镜)',
       type: 'video',
-      description: '文生视频 / 图生视频；时长与分辨率以官方 Schema 为准',
       supportsLora: false,
     },
     {
