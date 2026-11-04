@@ -904,3 +904,11 @@ export function historySizeMismatchNote(resolved: Record<HistoryParameterKey, Re
   if (Number(w.sent) === Number(w.upstream) && Number(h.sent) === Number(h.upstream)) return null;
   return `画布填的 ${w.sent}×${h.sent}，上游实际出图 ${w.upstream}×${h.upstream}`;
 }
+
+/** 「参数与工作流」: every parameter in the record's actual sent request snapshot, values only (verbatim keys). */
+export function historySentParameterValues(item: GenerationHistoryItem): Record<string, unknown> {
+  const req = historyActualRequest(item);
+  if (!req) return {};
+  const sent = unwrapGenerationParameters(req);
+  return isRecord(sent) ? Object.fromEntries(Object.entries(sent).filter(([, v]) => v !== undefined)) : {};
+}

@@ -8,7 +8,12 @@ import { WORKFLOW_PRESETS } from '../constants/presets';
 import { executeWorkflow } from './graphEngine';
 
 const noop = () => {};
-const preset = () => structuredClone(WORKFLOW_PRESETS.find((p) => p.id === 'std-gemini-t2i')!);
+// std-gemini-t2i ships no recipe prompt (empty); simulate the user typing one (test-only).
+const preset = () => {
+  const p = structuredClone(WORKFLOW_PRESETS.find((x) => x.id === 'std-gemini-t2i')!);
+  for (const n of p.nodes) if (n.type === 'CLIPTextEncode') n.values = { ...n.values, text: 'USER_TYPED_TEST_PROMPT' };
+  return p;
+};
 const geminiNode = (nodes: any[]) => nodes.find((n) => n.type === 'GoogleImagenNode');
 const render = (node: any) => renderToStaticMarkup(<NodeItem node={{ ...node, state: 'idle' }} isSelected={false} zoom={1} onSelect={noop} onStartDrag={noop} onUpdateValue={noop} onDeleteNode={noop} onToggleCollapse={noop} onToggleBypass={noop} onStartConnecting={noop} onEndConnecting={noop} />);
 

@@ -33,11 +33,20 @@ describe('std presets dry-run (load → extract, no send)', () => {
         if (!p.connections.some((c) => c.toNodeId === n.id && c.toSocketId === i.id)) issues.push(`unconnected ${n.type}.${i.id}`);
       }
       const emptyPrompt = !p.nodes.some((n) => String(n.values?.text ?? n.values?.prompt ?? '').trim());
-      if (emptyPrompt) issues.push('prompt empty (no recipe seeded)');
+      const hasRecipe = Boolean(PRESET_RECIPE_PROMPTS[p.id]);
+      if (hasRecipe === emptyPrompt) issues.push(hasRecipe ? 'recipe prompt not loaded' : 'prompt filled without a recipe');
+      // No recipe → loads empty and extraction must refuse (no fallback prompt).
+      if (!hasRecipe) {
+        try { extractWorkflowParameters(p.nodes as any, p.connections as any, resolveRunTarget(p.nodes as any, p.connections as any, undefined, undefined).id); issues.push('empty prompt was not refused'); }
+        catch (e: any) { if (e.message !== '请填写提示词') issues.push(`empty prompt: ${e.message}`); }
+      }
       notes.push(`prompt: ${PRESET_RECIPE_PROMPTS[p.id]?.source ?? 'NONE'}`);
       // Simulate only the user-supplied input a preset cannot ship: the I2V reference image.
       const nodes = p.nodes.map((n) => ({ ...n, values: { ...n.values,
-        ...(n.type === 'LoadImage' ? { image_url: 'https://example.com/ref.png' } : {}) } }));
+        ...(n.type === 'LoadImage' ? { image_url: 'https://example.com/ref.png' } : {}),
+        // Simulate the user typing a prompt into an empty (no-recipe) preset; test-only, never shipped.
+        ...(!hasRecipe && n.type === 'CLIPTextEncode' ? { text: 'USER_TYPED_TEST_PROMPT' } : {}),
+        ...(!hasRecipe && n.type === 'AIVideoNode' ? { prompt: 'USER_TYPED_TEST_PROMPT' } : {}) } }));
       let tid: string | undefined;
       try { tid = resolveRunTarget(nodes as any, p.connections as any, undefined, undefined).id; } catch (e: any) { issues.push(`run target: ${e.message}`); }
       let req: string = 'n/a';
@@ -62,7 +71,8 @@ describe('std presets dry-run (load → extract, no send)', () => {
 
 describe('HF standard preset dry-run builds a sendable request', () => {
   it('std-huggingface-t2i: route set, seed/steps/size present', () => {
-    const p = WORKFLOW_PRESETS.find((x) => x.id === 'std-huggingface-t2i')!;
+    const p0 = WORKFLOW_PRESETS.find((x) => x.id === 'std-huggingface-t2i')!;
+    const p = { ...p0, nodes: p0.nodes.map((n) => (n.type === 'CLIPTextEncode' ? { ...n, values: { ...n.values, text: 'USER_TYPED_TEST_PROMPT' } } : n)) };
     const tid = resolveRunTarget(p.nodes as any, p.connections as any, undefined, undefined).id;
     const x: any = extractWorkflowParameters(p.nodes as any, p.connections as any, tid);
     expect(x.targetProvider).toBe('huggingface');

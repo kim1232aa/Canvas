@@ -8,7 +8,7 @@ import { EmphasizeLimit, UrlNoMidBreak, JsonNoMidBreak } from './TextEmphasis';
 import { formatRecordTime } from '../services/executionTrace';
 import { isApplyToCanvasDisabled, type PreviewSettleState } from '../utils/previewHang';
 import { splitActualRequest, ACTUAL_META_LABEL } from '../utils/actualRequestDisplay';
-import { requestedNotSentLoras, notSentLoraLabel, generationPostNotSent, historySeedStatement, historySeedRowText, historySeedUpstreamMissingNote, historyUpstreamTaskId, otherSentParameters, formatHistorySize, historySizeMismatchNote, formatResolvedHistoryParameter, hasOutputMedia, historyFieldOrigins, historyParameterSourceLabel, resolveHistoryParameters, sentHistoryLoras, historyModelSent, upstreamErrorMessage, historyKeyUsageLabels, historyActualRequest, isSchemaFetchFailure, historyUpstreamExchanges, groupUpstreamExchanges, terminalSuccessIndex, upstreamBodyStatus, upstreamSegmentStatusLabel, upstreamCallTime, upstreamSegmentLabel, extractUpstreamEcho, upstreamEchoContrast, unwrapGenerationParameters, valueAtPath, type UpstreamExchangeRow, type ResolvedHistoryParameter } from '../utils/historyParameters';
+import { requestedNotSentLoras, notSentLoraLabel, generationPostNotSent, historySeedStatement, historySeedRowText, historySeedUpstreamMissingNote, historyUpstreamTaskId, otherSentParameters, formatHistorySize, historySizeMismatchNote, formatResolvedHistoryParameter, hasOutputMedia, historySentParameterValues, historyFieldOrigins, historyParameterSourceLabel, resolveHistoryParameters, sentHistoryLoras, historyModelSent, upstreamErrorMessage, historyKeyUsageLabels, historyActualRequest, isSchemaFetchFailure, historyUpstreamExchanges, groupUpstreamExchanges, terminalSuccessIndex, upstreamBodyStatus, upstreamSegmentStatusLabel, upstreamCallTime, upstreamSegmentLabel, extractUpstreamEcho, upstreamEchoContrast, unwrapGenerationParameters, valueAtPath, type UpstreamExchangeRow, type ResolvedHistoryParameter } from '../utils/historyParameters';
 import { PROVIDER_UPSTREAM_ECHO_PATH } from '../config/providerDisplayHints';
 
 /** Card timestamp in the viewer's local zone (same formatter as the exec log). */
@@ -470,10 +470,10 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
   const downloadProvenance = async (item: GenerationHistoryItem) => {
     let full = item;
     if ((item as any).hasWorkflowSnapshot && !item.workflowSnapshot) {
-      try { full = await fetchHistoryItem(item.id); } catch { /* export slim record */ }
+      try { full = await fetchHistoryItem(item.id); } catch (e: any) { setCopyError(`读取完整记录失败：${e?.message || e}`); return; }
     }
     const resolved = resolveHistoryParameters(full);
-    const body = {format: 'comfycanvas-generation', version: 2, provider: full.actualProvider || full.provider, model: full.actualModel || full.model, parameters: Object.fromEntries(Object.entries(resolved).map(([key,value])=>[key,{value:value.value ?? null,source:value.source,requested:value.requested ?? null,sent:value.sent ?? null,upstream:value.upstream ?? null}])), loras: full.loras, requestMetadata: full.requestMetadata, workflowSnapshot: full.workflowSnapshot};
+    const body = {format: 'comfycanvas-generation', version: 2, provider: full.actualProvider || full.provider, model: full.actualModel || full.model, sentParameters: historySentParameterValues(full), parameters: Object.fromEntries(Object.entries(resolved).map(([key,value])=>[key,{value:value.value ?? null,source:value.source,requested:value.requested ?? null,sent:value.sent ?? null,upstream:value.upstream ?? null}])), loras: full.loras, requestMetadata: full.requestMetadata, workflowSnapshot: full.workflowSnapshot};
     const url = URL.createObjectURL(new Blob([JSON.stringify(body, null, 2)], {type: 'application/json'}));
     handleDownload(url, `generation-${full.id}.json`);
     setTimeout(() => URL.revokeObjectURL(url), 1000);

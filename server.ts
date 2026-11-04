@@ -1,6 +1,7 @@
 import {registerSchemaProviderRoutes,makeSchemaProviderReader,fetchSchemaProviderRows,fetchSogniGenerateImageSchema,normalizeSchemaProviderItems,resolveSchemaRefs} from './src/server/schemaProviders.ts';
 import { historyCounts, isServedHistoryItem } from './src/utils/historyCounts';
 import { requestLogLines, writeRequestLog } from './src/server/requestLog.ts';
+import { sentHistoryNumbers } from './src/server/historySent.ts';
 import type { GenerationHistoryItem } from './src/types/providers';
 import { lookupExactHuggingFaceRepo } from './src/server/huggingFaceExactRepoSearch.ts';
 import { classifyCivitaiVideoPoll } from './src/server/civitaiVideoPoll.ts';
@@ -333,13 +334,20 @@ app.use((req, res, next) => {
   try { parseCustomObject(req.body?.custom_parameters); }
   catch (error: any) {
     // Failures are not history (雁 2026-11-04): the node shows this error; the request log keeps it.
-    try { writeRequestLog(__dirname, requestLogLines(req.path, [], {...req.body, error:error.message, errorSource:'local'}, 400)); } catch { /* log write is best-effort; response below is unchanged */ }
+    try { writeRequestLog(__dirname, requestLogLines(req.path, [], {...req.body, error:error.message, errorSource:'local'}, 400)); } catch (e: any) { console.error('[request-log] write failed', e?.message || e); }
     return res.status(400).json({error:error.message,errorSource:'local'});
   }
   const snapshot = req.body?.workflowSnapshot;
   if (snapshot !== undefined && (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot))) return res.status(400).json({error: 'workflowSnapshot 必须为对象',errorSource:'local'});
   // Canvas frontend tags its own requests (tracedFetch → x-canvas-origin: browser-ui); anything else is a direct call (curl / script) → 「本机直调」.
   const context = {route:req.path,requestOrigin:requestOriginOf(req),submissions:[],traces:[],workflowSnapshot:snapshot ? sanitizeGenerationMetadata(snapshot) : undefined};
+  // Every upstream call is logged: on res.json, or on close when the route ended without JSON (stream/abort/res.end).
+  let logged = false;
+  const logOnce = (body: any) => {
+    if (logged) return; logged = true;
+    try { writeRequestLog(__dirname, requestLogLines(req.path, context.traces, body, res.statusCode)); } catch (e: any) { console.error('[request-log] write failed', e?.message || e); }
+  };
+  res.on('close', () => logOnce({ ...(res.writableEnded ? {} : { error: 'client closed before response', errorSource: 'local' }) }));
   const json = res.json.bind(res);
   res.json = ((body:any) => {
     if (body && typeof body==='object' && !Array.isArray(body)) {
@@ -351,7 +359,7 @@ app.use((req, res, next) => {
       }
     }
     // Failures are not written to history (雁 2026-11-04); the response carries status + verbatim upstream body to the node.
-    try { writeRequestLog(__dirname, requestLogLines(req.path, context.traces, body, res.statusCode)); } catch (e: any) { console.error('[request-log] write failed', e?.message || e); }
+    logOnce(body);
     void externalizeMedia(body).then(stored => json(stored)).catch(next);
     return res;
   }) as typeof res.json;
@@ -908,8 +916,11 @@ const MAX_HISTORY_COUNT = 500;
 
 // Helper to record history safely both in memory and file
 const recordHistoryItem = async (rawItem: Partial<GeneratedItem>): Promise<GeneratedItem> => {
-  const item = rawItem;
+  // Fill missing top-level numbers from what was actually sent (e.g. ModelScope size "832x1216").
   const provenance = generationContext.getStore();
+  const sentNums = sentHistoryNumbers({...(rawItem.requestMetadata as any), ...(provenance && !Array.isArray((rawItem.requestMetadata as any)?.submissions) ? {submissions: provenance.submissions} : {})});
+  const item: Partial<GeneratedItem> = {...rawItem};
+  for (const k of ['width','height','seed','steps','cfg'] as const) if (typeof (item as any)[k] !== 'number' && sentNums[k] !== undefined) (item as any)[k] = sentNums[k];
   const fullItem: GeneratedItem = await externalizeMedia({
     ...item,
     ...(provenance?.requestOrigin && !(item as any).requestOrigin ? {requestOrigin: provenance.requestOrigin} : {}),

@@ -106,7 +106,7 @@ describe('standard workflow presets (23 T2I + 6 I2V)', () => {
       expect(vid.values.targetProvider).toBe(p.provider);
       expect(typeof vid.values.model).toBe('string');
       // Canonical prompt: AIVideoNode.values.prompt only (no twin CLIP box)
-      expect(vid.values.prompt).toBe(PRESET_RECIPE_PROMPTS[p.id].prompt);
+      expect(vid.values.prompt).toBe(PRESET_RECIPE_PROMPTS[p.id]?.prompt ?? '');
     }
     expect(preset('std-fal-i2v').nodes.find(n => n.type === 'AIVideoNode')!.values.model).toBe(
       'fal-ai/wan/v2.7/image-to-video',
@@ -180,11 +180,21 @@ describe('standard workflow presets (23 T2I + 6 I2V)', () => {
     }
   });
 
-  it('every std preset ships a documented recipe prompt with a source', () => {
-    for (const p of WORKFLOW_PRESETS.filter(x => x.id.startsWith('std-'))) {
-      const r = PRESET_RECIPE_PROMPTS[p.id];
-      expect(r?.prompt, p.id).toBeTruthy();
-      expect(r.source, p.id).toBeTruthy();
+  it('every preset recipe prompt cites a real recipe page URL (no hist_/doc/official-example/family sources)', () => {
+    const RECIPE_PAGE = /^https:\/\/(civitai\.(com|red)\/images\/\d+|tensor\.art\/images\/\d+)$/;
+    for (const [id, r] of Object.entries(PRESET_RECIPE_PROMPTS)) {
+      expect(r.source, id).toMatch(RECIPE_PAGE);
+      expect(r.source, id).not.toMatch(/hist_|docs\/|family|example/i);
+      expect(r.prompt, id).toBeTruthy();
+    }
+  });
+
+  it('presets without a recipe load with an empty prompt (never filled in)', () => {
+    for (const p of WORKFLOW_PRESETS.filter(x => x.id.startsWith('std-') && !PRESET_RECIPE_PROMPTS[x.id])) {
+      for (const n of p.nodes) {
+        if (n.type === 'CLIPTextEncode') expect(String(n.values.text ?? ''), p.id).toBe('');
+        if (n.type === 'AIVideoNode') expect(String(n.values.prompt ?? ''), p.id).toBe('');
+      }
     }
   });
 
