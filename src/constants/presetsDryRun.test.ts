@@ -78,7 +78,7 @@ describe('HF standard preset dry-run builds a sendable request', () => {
     expect(x.targetProvider).toBe('huggingface');
     expect(x.hfProvider).toBe('fal-ai');
     expect(typeof x.seed).toBe('number');
-    expect(x.steps).toBe(8);
-    expect([x.width, x.height]).toEqual([1024, 1024]);
+    expect(x.steps).toBe(12);
+    expect([x.width, x.height]).toEqual([1216, 832]);
   });
 });

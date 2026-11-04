@@ -14,5 +14,39 @@ export const PRESET_RECIPE_PROMPTS: Record<string, RecipePrompt> = {
   "std-wavespeed-t2i": {
     "prompt": "A professional photograph of a quirky squirrel with a fiery red mohawk, energetically playing a whimsical drum set in a vibrant autumn forest. The drum kit is entirely imagined, with bass drums made from hollowed, oversized chestnuts that have been polished to a gleaming finish. The snare drum is crafted from a woven basket of intertwined twigs and leaves, producing a crisp, earthy sound. Cymbals are formed from large, dry maple leaves, their edges curled and textured, hanging on thin branch stands. Smaller acorns serve as tom-toms, and the hi-hat is composed of overlapping oak leaves, delicately stacked on a twig frame. Every element of the drum set is organic, blending seamlessly into the forest floor, which is blanketed in a rich layer of autumn leaves, as the squirrel’s paws expertly tap the instruments, filling the scene with the imagined rhythm of nature",
     "source": "https://civitai.red/images/33530948"
+  },
+  "std-huggingface-t2i": {
+    "prompt": "t3chnic4lly A gritty documentary-style photograph capturing a tightly packed crowd of muscular old men in black suits, dancing energetically within a dark industrial warehouse. The old men's faces show exaggerated expressions of joy. Sweat glistens on their faces. The lighting is provided by harsh, direct on-camera flash, creating stark white highlights, deep shadows, and significant motion blur among the moving figures. Industrial commercial lasers cut through the dark, highlighting dust motes. Concrete pillars and exposed structural beams are visible in the crowded background. The film grain is heavy.",
+    "source": "https://civitai.red/images/113739497"
+  },
+  "std-modelscope-t2i": {
+    "prompt": "t3chnic4lly A gritty documentary-style photograph capturing a tightly packed crowd of muscular old men in black suits, dancing energetically within a dark industrial warehouse. The old men's faces show exaggerated expressions of joy. Sweat glistens on their faces. The lighting is provided by harsh, direct on-camera flash, creating stark white highlights, deep shadows, and significant motion blur among the moving figures. Industrial commercial lasers cut through the dark, highlighting dust motes. Concrete pillars and exposed structural beams are visible in the crowded background. The film grain is heavy.",
+    "source": "https://civitai.red/images/113739497"
+  },
+  "std-aimlapi-t2i": {
+    "prompt": "t3chnic4lly A gritty documentary-style photograph capturing a tightly packed crowd of muscular old men in black suits, dancing energetically within a dark industrial warehouse. The old men's faces show exaggerated expressions of joy. Sweat glistens on their faces. The lighting is provided by harsh, direct on-camera flash, creating stark white highlights, deep shadows, and significant motion blur among the moving figures. Industrial commercial lasers cut through the dark, highlighting dust motes. Concrete pillars and exposed structural beams are visible in the crowded background. The film grain is heavy.",
+    "source": "https://civitai.red/images/113739497"
+  },
+  "std-muapi-t2i": {
+    "prompt": "c0l0ringb00k coloring book page, simple cute dragon, white background",
+    "source": "https://civitai.red/images/31247708"
+  },
+  "std-replicate-t2i": {
+    "prompt": "c0l0ringb00k coloring book page, simple cute dragon, white background",
+    "source": "https://civitai.red/images/31247708"
+  },
+  "std-novita-t2i": {
+    "prompt": "Astartes, silhouette, monochrome, greyscale, BREAK <lora:epi_noiseoffset2:0.65>, <lora:more_details:0.4>,",
+    "negative": "BadDream, UnrealisticDream,",
+    "source": "https://civitai.red/images/28785255"
+  },
+  "std-sogni-t2i": {
+    "prompt": "An astronaut floating weightless in a bulky, high-tech red spacesuit with a large spherical visor,  capturing a distorted reflection of a glowing space warping cylindrical wormhole. The scene is filled with streaks of white and crimson light, creating a heavy sense of motion blur and warp-speed velocity. Cinematic sci-fi film still with a photorealistic digital finish. The color palette is dominated by high-contrast crimson and stark white. An extreme close-up with a wide-angle lens creates a fish-eye distortion on the helmet, emphasizing a shallow depth of field. The mood is intense, chaotic, and adrenaline-fueled.",
+    "negative": "unknown",
+    "source": "https://civitai.red/images/135792474"
+  },
+  "std-fal-t2i": {
+    "prompt": "c0l0ringb00k coloring book page, simple cute dragon, white background",
+    "source": "https://civitai.red/images/31247708"
   }
 };

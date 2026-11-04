@@ -665,21 +665,26 @@ const STD_SPECS: StdSpec[] = [
   // HF route = fal-ai: live https://huggingface.co/api/models/Tongyi-MAI/Z-Image-Turbo?expand[]=inferenceProviderMapping
   // (2026-11-04) lists fal-ai (fal-ai/z-image/turbo) status live, task text-to-image; hf-inference is not listed.
   // server.ts fal-ai branch sends width/height → image_size, steps → num_inference_steps, seed. Route preset so it runs unchanged.
-  { provider: 'huggingface', ckpt: 'Tongyi-MAI/Z-Image-Turbo', hasLora: false, hasNegative: false, steps: 8, width: 1024, height: 1024,
-    omit: ['cfg', 'sampler', 'scheduler', 'denoise'],
+  // Recipe https://civitai.red/images/113739497 (verbatim: seed/steps/cfg/size/LoRA@0.9; sampler 'Undefined' → none). HF LoRA route: model = the LoRA repo
+  // (inferenceProviderMapping fal-ai live, providerId fal-ai/z-image/turbo/lora); server sends the same-repo LoRA scale.
+  { provider: 'huggingface', ckpt: 'renderartist/Technically-Color-Z-Image-Turbo', hasLora: true, hasNegative: false,
+    loras: [{ name: 'renderartist/Technically-Color-Z-Image-Turbo', strength: 0.9, source: 'https://civitai.red/images/113739497' }],
+    seed: 1840591390, steps: 12, cfg: 1, width: 1216, height: 832,
+    omit: ['sampler', 'scheduler', 'denoise'],
     checkpointExtra: { hf_provider: 'fal-ai' },
   },
   // Official API-Inference: size/steps/guidance/seed/negative_prompt/loras; sampler/scheduler/denoise not on REST table → omit (no empty shells).
-  // CN accepted hist_1793695144423_1ms48: Realism LoRA@1, 832×1216, steps8, guidance1, seed42.
+  // Recipe https://civitai.red/images/113739497 (verbatim): Technically Color Z LoRA@0.9 via the 魔搭 mirror hf/renderartist-Technically-Color-Z-Image-Turbo (sha256 = civitai).
   {
     provider: 'modelscope',
     ckpt: 'Tongyi-MAI/Z-Image-Turbo',
     hasLora: true,
-    loras: [{ name: 'suayptalha/Z-Image-Turbo-Realism-LoRA', strength: 1, source: 'hist_1793695144423_1ms48' }],
-    steps: 8,
+    loras: [{ name: 'hf/renderartist-Technically-Color-Z-Image-Turbo', strength: 0.9, source: 'https://civitai.red/images/113739497' }],
+    seed: 1840591390,
+    steps: 12,
     cfg: 1,
-    width: 832,
-    height: 1216,
+    width: 1216,
+    height: 832,
     omit: ['sampler', 'scheduler', 'denoise'],
   },
   // Intl accepted temp/e2e/modelscope-intl-lora-2026-11-02: Lcars LoRA@1 (CN rejects this id).
@@ -701,7 +706,10 @@ const STD_SPECS: StdSpec[] = [
     checkpointExtra: { resolution: '1024x1024' },
   },
   // providerSchema.ts fal-ai/flux/schnell: seed, steps 1–12, cfg 1–20, image_size; negative/sampler/scheduler/loras unsupported.
-  { provider: 'fal', ckpt: 'fal-ai/flux/schnell', hasLora: false, hasNegative: false, steps: 4, cfg: 1, omit: ['sampler', 'scheduler', 'denoise'] },
+  // Recipe https://civitai.red/images/31247708 (verbatim; base FLUX.1-dev → fal-ai/flux-lora, live OpenAPI 2026-11-04: prompt/loras/seed/num_inference_steps/guidance_scale/image_size).
+  { provider: 'fal', ckpt: 'fal-ai/flux-lora', hasLora: true, hasNegative: false, seed: 2100162238, steps: 41, cfg: 3.5, width: 1216, height: 832,
+    loras: [{ name: 'https://huggingface.co/renderartist/coloringbookflux/resolve/main/c0l0ringb00k_Flux_v1_renderartist.safetensors', strength: 1, source: 'https://civitai.red/images/31247708' }],
+    omit: ['sampler', 'scheduler', 'denoise'] },
   // OpenWorks-only: full params + LoRA (openWorksProvider.ts OPENWORKS_LIVE_EXTRAS: seed/steps/cfg/negative_prompt/loras/checkpoint).
   // Accepted run hist_1792223105137_bhlop: sampler/scheduler「该端点不支持，未发送」.
   {
@@ -732,21 +740,24 @@ const STD_SPECS: StdSpec[] = [
   {
     provider: 'muapi',
     ckpt: 'flux-1-dev-style-lora-inference',
-    hasLora: false,
     hasNegative: false,
     // Official OpenAPI Flux1DevStyleLoraInferenceRequest: prompt/lora_url/lora_weight/aspect_ratio(default 1:1)/webhook_url — no width/height pixels.
-    omit: ['seed', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'width', 'height'],
+    // Recipe https://civitai.red/images/31247708: seed kept and sent as-is (official body has no seed; upstream answer shown verbatim — 雁 room 2026-11-04).
+    seed: 2100162238,
+    omit: ['steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'width', 'height'],
     checkpointExtra: {
       aspect_ratio: '1:1',
       custom_parameters: JSON.stringify({
         _canvas: {
           scope: { provider: 'muapi', model: 'flux-1-dev-style-lora-inference' },
-          schemaProperties: ['prompt', 'lora_url', 'lora_weight', 'aspect_ratio', 'webhook_url'],
+          // 'seed' is NOT in the official body: listed so the recipe seed that is sent stays visible (no hidden send).
+          schemaProperties: ['prompt', 'lora_url', 'lora_weight', 'aspect_ratio', 'webhook_url', 'seed'],
         },
       }),
     },
     // Official OpenAPI: lora_url REQUIRED (trainer task URL), lora_weight default 1.0. No accepted-run URL → empty visible LoRA node to mount one.
-    loraMount: { strength: 1, source: 'https://api.muapi.ai/openapi.json Flux1DevStyleLoraInferenceRequest' },
+    hasLora: true,
+    loras: [{ name: 'https://huggingface.co/renderartist/coloringbookflux/resolve/main/c0l0ringb00k_Flux_v1_renderartist.safetensors', strength: 1, source: 'https://civitai.red/images/31247708' }],
   },
   // Schema (temp/e2e/wavespeed/recipe-33530948/wavespeed-flux-dev-lora-schema.json): steps 1–50; accepted run hist_1792224305224_meynb used 36 steps / CFG 3.5 (Schema default was 28), size, seed, loras; no negative/sampler/scheduler.
   { provider: 'wavespeed', ckpt: 'wavespeed-ai/flux-dev-lora', hasLora: true, hasNegative: false, steps: 36, cfg: 3.5, omit: ['sampler', 'scheduler', 'denoise'],
@@ -761,9 +772,18 @@ const STD_SPECS: StdSpec[] = [
     checkpointExtra: { aspect_ratio: '1:1', resolution: '1K' } },
   { provider: 'together', ckpt: 'black-forest-labs/FLUX.2-dev', hasLora: false, steps: 20, cfg: 1, omit: ['sampler', 'scheduler', 'denoise'] },
   // docs/evidence/aimlapi-lora-p0-2026-10-15.md + aimlapi.json: steps 1–8, no guidance_scale → omit cfg. No accepted-run LoRA → no LoRA node.
-  { provider: 'aimlapi', ckpt: 'alibaba/z-image-turbo-lora', hasLora: false, hasNegative: false, steps: 8, omit: ['cfg', 'sampler', 'scheduler', 'denoise'] },
+  // Recipe https://civitai.red/images/113739497 (verbatim incl. cfg 1 — sent as-is; upstream decides).
+  { provider: 'aimlapi', ckpt: 'alibaba/z-image-turbo-lora', hasLora: true, hasNegative: false, seed: 1840591390, steps: 12, cfg: 1, width: 1216, height: 832,
+    loras: [{ name: 'https://huggingface.co/renderartist/Technically-Color-Z-Image-Turbo/resolve/main/Technically_Color_Z_Image_Turbo_v1_renderartist_2000.safetensors', strength: 0.9, source: 'https://civitai.red/images/113739497' }],
+    omit: ['sampler', 'scheduler', 'denoise'] },
   // docs/evidence/novita-api-2026-10-15.md:51/54: catalog model; Schema has steps/cfg; no accepted-run LoRA → no LoRA node.
-  { provider: 'novita', ckpt: 'dreamshaper_8_93211.safetensors', hasLora: false, steps: 20, cfg: 7, omit: ['scheduler', 'denoise'] },
+  // Recipe https://civitai.red/images/28785255 (verbatim; Hires fix + klF8Anime2 VAE in the recipe are not preset fields).
+  { provider: 'novita', ckpt: 'dreamshaper_8_93211.safetensors', hasLora: true, seed: 548949743, steps: 15, cfg: 6.5, sampler: 'Euler a', width: 512, height: 768,
+    loras: [
+      { name: 'epi_noiseoffset2_14333', strength: 0.65, source: 'https://civitai.red/images/28785255' },
+      { name: 'more_details_59655', strength: 0.4, source: 'https://civitai.red/images/28785255' },
+    ],
+    omit: ['scheduler', 'denoise'] },
   // docs/evidence/venice-api-2026-10-15.md:51/54: catalog 200 lists venice-sd35; seed/steps/cfg_scale/size/negative sent; no custom loras.
   { provider: 'venice', ckpt: 'venice-sd35', hasLora: false, steps: 20, cfg: 7.5, omit: ['sampler', 'scheduler', 'denoise'] },
   // DeepInfra public T2I: docs.deepinfra.com/apis/image-generation + OpenAPI OpenAIImagesGenerationsIn — prompt/model/size/n/response_format only; hasLora:false (private LoRA needs dashboard deploy).
@@ -771,14 +791,18 @@ const STD_SPECS: StdSpec[] = [
   { provider: 'deepinfra', ckpt: 'black-forest-labs/FLUX-1-schnell', hasLora: false, hasNegative: false, omit: ['seed', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise'] },
   // Sogni hosted-tool selector: live official generate_image.schema.json enum includes krea-2-turbo (verified 2026-11-03, 30 models). Not a Krea API path.
   // Driver maps cfg→guidance; Schema has no steps → omit steps. LoRA via loras+loraStrengths when catalog confirms.
-  { provider: 'sogni', ckpt: 'krea-2-turbo', hasLora: false, cfg: 1, omit: ['steps', 'sampler', 'scheduler', 'denoise'] },
+  // Recipe https://civitai.red/images/135792474 (verbatim incl. steps 10 / sampler Euler — sent as-is; Sogni schema has no steps). LoRA from Sogni catalog (sourceUrl = civitai 3081555).
+  { provider: 'sogni', ckpt: 'krea-2-turbo', hasLora: true, seed: 986523810839230, steps: 10, cfg: 1, sampler: 'Euler', width: 1248, height: 1920,
+    loras: [{ name: 'krea2-kodachrome-photo', strength: 1, source: 'https://civitai.red/images/135792474' }],
+    omit: ['scheduler', 'denoise'] },
   // Live OpenAPI GET /v1/models/black-forest-labs/flux-dev-lora + default_example: lora_weights=fofr/flux-80s-cyberpunk, lora_scale=1, guidance=3, steps=28.
   // Official docs example also cites fofr/flux-pixar-cars; default_example LoRA is the acceptance recipe id.
-  { provider: 'replicate', ckpt: 'black-forest-labs/flux-dev-lora', hasLora: true, hasNegative: false, steps: 28, cfg: 3,
+  // Recipe https://civitai.red/images/31247708 (verbatim seed/steps/cfg/LoRA; size 1216x832 not a field on flux-dev-lora → aspect_ratio stays).
+  { provider: 'replicate', ckpt: 'black-forest-labs/flux-dev-lora', hasLora: true, hasNegative: false, seed: 2100162238, steps: 41, cfg: 3.5,
     // providerSchema + draft: aspect_ratio (+ megapixels); width/height unsupported on flux-dev-lora.
     omit: ['sampler', 'scheduler', 'denoise', 'width', 'height'],
     checkpointExtra: { aspect_ratio: '1:1' },
-    loras: [{ name: 'fofr/flux-80s-cyberpunk', strength: 1, source: 'replicate.com/black-forest-labs/flux-dev-lora default_example' }] },
+    loras: [{ name: 'renderartist/coloringbookflux', strength: 1, source: 'https://civitai.red/images/31247708' }] },
   // providerSchema.ts runware:100@1: steps/cfg supported; no accepted-run LoRA → no LoRA node.
   { provider: 'runware', ckpt: 'runware:100@1', hasLora: false, steps: 4, cfg: 1, omit: ['sampler', 'scheduler', 'denoise'] },
   // docs.modelslab.com/.../dreambooth-lora body example: model_id tamarin-xl-v1 + lora_model xl-realistic-cake-art-sty @ 0.45.

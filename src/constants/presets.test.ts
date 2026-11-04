@@ -47,6 +47,12 @@ const HAS_LORA = new Set([
   'replicate',
   'modelscope',
   'modelscope_ai',
+  'huggingface',
+  'aimlapi',
+  'muapi',
+  'novita',
+  'sogni',
+  'fal',
 ]);
 
 /** Real LoRAs from accepted runs or official docs recipe IDs (evidence in presets.ts). */
@@ -54,8 +60,14 @@ const PREFILLED_LORA: Record<string, Array<[string, number]>> = {
   wavespeed: [['https://huggingface.co/comfyanonymous/flux_RealismLora_converted_comfyui/resolve/main/flux_realism_lora.safetensors', 1.1]],
   tensorart: [['1015214543296590260', 1], ['1029661490430387503', 1], ['1015863436619315552', 1]],
   modelslab: [['xl-realistic-cake-art-sty', 0.45]],
-  replicate: [['fofr/flux-80s-cyberpunk', 1]],
-  modelscope: [['suayptalha/Z-Image-Turbo-Realism-LoRA', 1]],
+  replicate: [['renderartist/coloringbookflux', 1]],
+  modelscope: [['hf/renderartist-Technically-Color-Z-Image-Turbo', 0.9]],
+  huggingface: [['renderartist/Technically-Color-Z-Image-Turbo', 0.9]],
+  aimlapi: [['https://huggingface.co/renderartist/Technically-Color-Z-Image-Turbo/resolve/main/Technically_Color_Z_Image_Turbo_v1_renderartist_2000.safetensors', 0.9]],
+  muapi: [['https://huggingface.co/renderartist/coloringbookflux/resolve/main/c0l0ringb00k_Flux_v1_renderartist.safetensors', 1]],
+  fal: [['https://huggingface.co/renderartist/coloringbookflux/resolve/main/c0l0ringb00k_Flux_v1_renderartist.safetensors', 1]],
+  novita: [['epi_noiseoffset2_14333', 0.65], ['more_details_59655', 0.4]],
+  sogni: [['krea2-kodachrome-photo', 1]],
   modelscope_ai: [['LcarsPicturesDatabase/ST-TNG-Rooms-Z-Image-Turbo-v1', 1]],
 };
 
@@ -216,7 +228,7 @@ describe('standard workflow presets (23 T2I + 6 I2V)', () => {
     }
   });
 
-  it('only MuAPI (Schema-required LoRA, no recipe) ships an empty LoRA mount point; others carry real LoRAs', () => {
+  it('presets carry real recipe LoRAs; no empty LoRA mount point', () => {
     for (const p of WORKFLOW_PRESETS) {
       const loras = p.nodes.filter(n => n.type === 'LoRALoader');
       for (const n of loras) {
@@ -344,8 +356,8 @@ describe('standard workflow presets (23 T2I + 6 I2V)', () => {
     expect(lora('std-sensenova-t2i')).toBeUndefined();
     expect(loader('std-sogni-t2i')!.values.ckpt_name).toBe('krea-2-turbo');
     expect(loader('std-sogni-t2i')!.values.targetProvider).toBe('sogni');
-    // No accepted-run LoRA → no LoRALoader node (empty shell forbidden)
-    expect(lora('std-sogni-t2i')).toBeUndefined();
+    // Recipe civitai.red/images/135792474 LoRA
+    expect(lora('std-sogni-t2i')!.values.lora_name).toBe('krea2-kodachrome-photo');
   });
 
   it('Krea standard preset ships a live official endpoint with its required aspect_ratio + resolution', () => {
@@ -417,7 +429,7 @@ describe('standard workflow presets (23 T2I + 6 I2V)', () => {
     {
       const p = preset('std-novita-t2i');
       const ks = p.nodes.find(n => n.type === 'KSampler')!;
-      expect(ks.values.sampler_name).toBe('euler');
+      expect(ks.values.sampler_name).toBe('Euler a'); // recipe civitai.red/images/28785255
       expect(ks.values.scheduler).toBeUndefined();
       const props = JSON.parse(String(loader(p.id)!.values.custom_parameters || '{}'))?._canvas?.schemaProperties as string[];
       expect(props).toEqual(expect.arrayContaining(['sampler', 'sampler_name', 'steps', 'guidance', 'seed']));
@@ -517,20 +529,20 @@ describe('standard workflow presets (23 T2I + 6 I2V)', () => {
 
   it('steps/CFG follow the preset model Schema (no shells): HF Z-Image steps only, Krea 2 none, Sogni guidance only', () => {
     const ks = (id: string) => preset(id).nodes.find(n => n.type === 'KSampler')!.values;
-    expect(ks('std-huggingface-t2i').steps).toBe(8);
-    expect(ks('std-huggingface-t2i').cfg).toBeUndefined();
+    expect(ks('std-huggingface-t2i').steps).toBe(12);
+    expect(ks('std-huggingface-t2i').cfg).toBe(1);
     expect(ks('std-krea-t2i').steps).toBeUndefined();
     expect(ks('std-krea-t2i').cfg).toBeUndefined();
-    expect(ks('std-sogni-t2i').steps).toBeUndefined();
+    // Sogni recipe civitai.red/images/135792474: steps 10 / cfg 1 copied verbatim and sent as-is.
+    expect(ks('std-sogni-t2i').steps).toBe(10);
     expect(ks('std-sogni-t2i').cfg).toBe(1);
-    expect(presetSummary(preset('std-sogni-t2i'))).toMatchObject({ cfg: 1, steps: undefined });
+    expect(ks('std-sogni-t2i').seed).toBe(986523810839230);
   });
 
   it('AIMLAPI shows steps only (official schema has no guidance_scale/cfg)', () => {
     const ks = preset('std-aimlapi-t2i').nodes.find(n => n.type === 'KSampler')!;
-    expect(ks.values.steps).toBe(8);
-    expect(ks.values.cfg).toBeUndefined();
-    expect(presetSummary(preset('std-aimlapi-t2i')).cfg).toBeUndefined();
+    // Recipe civitai.red/images/113739497 values copied verbatim (cfg 1 sent as-is).
+    expect(ks.values).toMatchObject({ steps: 12, cfg: 1, seed: 1840591390 });
   });
 
   it('MuAPI ships a visible LoRA mount point (official lora_weight default 1) and no local run lock', () => {
@@ -539,7 +551,8 @@ describe('standard workflow presets (23 T2I + 6 I2V)', () => {
     expect(ckpt.values.execution_blocked_reason).toBeUndefined();
     expect(p.pendingRecipe).toBeUndefined();
     const l = p.nodes.find(n => n.type === 'LoRALoader')!;
-    expect(l.values).toMatchObject({ lora_name: '', strength_model: 1 });
+    expect(l.values).toMatchObject({ lora_name: 'https://huggingface.co/renderartist/coloringbookflux/resolve/main/c0l0ringb00k_Flux_v1_renderartist.safetensors', strength_model: 1 });
+    expect(p.nodes.find(n => n.type === 'KSampler')!.values.seed).toBe(2100162238);
     const props = JSON.parse(String(ckpt.values.custom_parameters || '{}'))?._canvas?.schemaProperties;
     expect(props).toEqual(expect.arrayContaining(['prompt', 'lora_url', 'lora_weight', 'aspect_ratio']));
     const ks = p.nodes.find(n => n.type === 'KSampler')!;
@@ -566,15 +579,15 @@ describe('standard workflow presets (23 T2I + 6 I2V)', () => {
     for (const id of ['std-modelscope-t2i', 'std-modelscope-ai-t2i'] as const) {
       const p = preset(id);
       const ks = p.nodes.find(n => n.type === 'KSampler')!;
-      expect(ks.values.steps).toBe(8);
+      const cn = id === 'std-modelscope-t2i'; // CN = recipe civitai.red/images/113739497
+      expect(ks.values.steps).toBe(cn ? 12 : 8);
       expect(ks.values.cfg).toBe(1);
-      expect(ks.values.seed).toBe(42);
+      expect(ks.values.seed).toBe(cn ? 1840591390 : 42);
       expect(ks.values.sampler_name).toBeUndefined();
       expect(ks.values.scheduler).toBeUndefined();
       expect(ks.values.denoise).toBeUndefined();
       const lat = p.nodes.find(n => n.type === 'EmptyLatentImage')!;
-      expect(lat.values.width).toBe(832);
-      expect(lat.values.height).toBe(1216);
+      expect([lat.values.width, lat.values.height]).toEqual(cn ? [1216, 832] : [832, 1216]);
       expect(p.nodes.some(n => n.type === 'LoRALoader')).toBe(true);
       // Shared omit → schemaProperties seed (MuAPI path): sampler aliases absent so NodeItem can hide empty shells.
       const ckpt = p.nodes.find(n => n.type === 'CheckpointLoaderSimple')!;
@@ -583,7 +596,7 @@ describe('standard workflow presets (23 T2I + 6 I2V)', () => {
       expect(props).toEqual(expect.arrayContaining(['prompt', 'seed', 'steps', 'guidance', 'loras']));
       expect(props).not.toEqual(expect.arrayContaining(['sampler', 'sampler_name', 'scheduler', 'denoise']));
     }
-    expect(lora('std-modelscope-t2i')!.values.lora_name).toBe('suayptalha/Z-Image-Turbo-Realism-LoRA');
+    expect(lora('std-modelscope-t2i')!.values.lora_name).toBe('hf/renderartist-Technically-Color-Z-Image-Turbo');
     expect(lora('std-modelscope-ai-t2i')!.values.lora_name).toBe('LcarsPicturesDatabase/ST-TNG-Rooms-Z-Image-Turbo-v1');
   });
 
@@ -628,7 +641,7 @@ describe('standard workflow presets (23 T2I + 6 I2V)', () => {
     expect(lat.values.height).toBeUndefined();
     expect(p.spatialFrames![0].params.aspectRatio).toBe('1:1');
     expect(p.spatialFrames![0].params.width).toBeUndefined();
-    expect(lora(p.id)!.values.lora_name).toBe('fofr/flux-80s-cyberpunk');
+    expect(lora(p.id)!.values.lora_name).toBe('renderartist/coloringbookflux');
   });
 
   it('NanoGPT flux-schnell omits pixels; resolution 1024x1024 on checkpoint', () => {
@@ -655,9 +668,10 @@ describe('standard workflow presets (23 T2I + 6 I2V)', () => {
     const p = preset('std-huggingface-t2i');
     expect(loader(p.id)!.values.hf_provider).toBe('fal-ai');
     const lat = p.nodes.find(n => n.type === 'EmptyLatentImage')!;
-    expect(lat.values.width).toBe(1024);
-    expect(lat.values.height).toBe(1024);
-    expect(p.nodes.find(n => n.type === 'KSampler')!.values.steps).toBe(8);
+    expect(lat.values.width).toBe(1216);
+    expect(lat.values.height).toBe(832);
+    expect(p.nodes.find(n => n.type === 'KSampler')!.values.steps).toBe(12);
+    expect(loader(p.id)!.values.ckpt_name).toBe('renderartist/Technically-Color-Z-Image-Turbo');
   });
 
   it('Agnes keeps official size 2K + aspect_ratio 1:1 on checkpoint; no pixel width/height', () => {
