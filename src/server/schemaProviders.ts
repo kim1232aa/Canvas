@@ -611,7 +611,7 @@ export async function parseVeniceImageResponse(r:Response,url:string) {
   }
   const raw=rawText();let data:any;
   try{data=JSON.parse(raw);}catch(parseErr:any){
-    throw Object.assign(new Error(`HTTP ${r.status}: 响应非 JSON: ${parseErr?.message || parseErr}\n${raw}`),{status:r.status,rawResponse:raw,endpoint:url,errorSource:'upstream-protocol',stack:parseErr?.stack});
+    throw Object.assign(new Error(r.ok?`HTTP ${r.status}: 响应非 JSON: ${parseErr?.message || parseErr}\n${raw}`:`HTTP ${r.status}: ${raw}`),{status:r.status,rawResponse:raw,endpoint:url,errorSource:'upstream-protocol',stack:parseErr?.stack});
   }
   if(!data || data.status==='error' || (typeof data.code==='number' && data.code!==200))
     throw Object.assign(new Error(`HTTP ${r.status}: ${raw}`),{status:r.status,rawResponse:raw,endpoint:url,errorSource:'upstream-protocol'});
@@ -627,7 +627,7 @@ export function makeSchemaProviderReader(provider:Provider,depFetch:Dependencies
     const raw=await r.text();let data:any;
     if(!r.ok){let d:any;try{d=JSON.parse(raw);}catch{/* raw verbatim */}if(d===undefined)throw Object.assign(new Error(`HTTP ${r.status}: ${raw}`),{status:r.status,rawResponse:raw,endpoint:url,errorSource:'upstream'});}
     try{data=JSON.parse(raw);}catch(parseErr:any){
-      throw Object.assign(new Error(`HTTP ${r.status}: 响应非 JSON: ${parseErr?.message || parseErr}\n${raw}`),{status:r.status,rawResponse:raw,endpoint:url,errorSource:r.ok?'upstream-protocol':'upstream',stack:parseErr?.stack});
+      throw Object.assign(new Error(r.ok?`HTTP ${r.status}: 响应非 JSON: ${parseErr?.message || parseErr}\n${raw}`:`HTTP ${r.status}: ${raw}`),{status:r.status,rawResponse:raw,endpoint:url,errorSource:r.ok?'upstream-protocol':'upstream',stack:parseErr?.stack});
     }
     if(!r.ok || !data || data.status==='error' || (typeof data.code==='number' && data.code!==200)) {
       throw Object.assign(new Error(`HTTP ${r.status}: ${raw}`),{status:r.status,rawResponse:raw,endpoint:url,errorSource:r.ok?'upstream-protocol':'upstream'});
@@ -980,7 +980,7 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
     if(provider==='venice' && new URL(url).pathname.endsWith('/image/generate'))return parseVeniceImageResponse(r,url);
     const raw=await r.text();let data:any;
     try{data=JSON.parse(raw);}catch(parseErr:any){
-      throw Object.assign(new Error(`HTTP ${r.status}: 响应非 JSON: ${parseErr?.message || parseErr}\n${raw}`),{status:r.status,rawResponse:raw,endpoint:url,errorSource:r.ok?'upstream-protocol':'upstream',stack:parseErr?.stack});
+      throw Object.assign(new Error(r.ok?`HTTP ${r.status}: 响应非 JSON: ${parseErr?.message || parseErr}\n${raw}`:`HTTP ${r.status}: ${raw}`),{status:r.status,rawResponse:raw,endpoint:url,errorSource:r.ok?'upstream-protocol':'upstream',stack:parseErr?.stack});
     }
     if(!r.ok || !data || data.status==='error' || (typeof data.code==='number' && data.code!==200)) {
       throw Object.assign(new Error(`HTTP ${r.status}: ${raw}`),{status:r.status,rawResponse:raw,endpoint:url,errorSource:r.ok?'upstream-protocol':'upstream'});
@@ -1520,7 +1520,7 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
         }
         const raw=await r.text();let data:any;
         try{data=JSON.parse(raw);}catch(parseErr:any){
-          throw Object.assign(new Error(`HTTP ${r.status}: 响应非 JSON: ${parseErr?.message || parseErr}\n${raw}`),{status:r.status,rawResponse:raw,endpoint,errorSource:r.ok?'upstream-protocol':'upstream',stack:parseErr?.stack});
+          throw Object.assign(new Error(r.ok?`HTTP ${r.status}: 响应非 JSON: ${parseErr?.message || parseErr}\n${raw}`:`HTTP ${r.status}: ${raw}`),{status:r.status,rawResponse:raw,endpoint,errorSource:r.ok?'upstream-protocol':'upstream',stack:parseErr?.stack});
         }
         if(!r.ok || !data)throw Object.assign(new Error(`HTTP ${r.status}: ${raw}`),{status:r.status,rawResponse:raw,endpoint,errorSource:r.ok?'upstream-protocol':'upstream'});
         const status=veniceVideoStatus(data.status);

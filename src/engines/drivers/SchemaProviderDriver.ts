@@ -169,7 +169,7 @@ export class SchemaProviderDriver extends BaseEngineDriver {
     }
     if (!schemaResponse.ok) {
       const raw = typeof schemaBody === 'string' ? schemaBody : JSON.stringify(schemaBody);
-      schemaPrefetchFailure = { getUrl: schemaUrl, status: schemaResponse.status, ...schemaPrefetchFailureData(schemaResponse.status, raw.slice(0, 2000)), truncated: raw.length > 2000, note: '查参数表失败；生成 POST 仍按所填参数发送' };
+      schemaPrefetchFailure = { getUrl: schemaUrl, status: schemaResponse.status, ...schemaPrefetchFailureData(schemaResponse.status, raw), note: '查参数表失败；生成 POST 仍按所填参数发送' };
       recordLocalEvent(`Schema GET 失败 · ${this.id} · ${params.model}`, { ok: false, ...schemaPrefetchFailure }, 'error');
       schemaBody = {};
     }
