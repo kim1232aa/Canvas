@@ -32,7 +32,7 @@ describe('ReplicateDriver', () => {
     expect(driver.name).toBe('Replicate');
     expect(driver.label).toBe('Replicate 官方云平台');
     expect(driver.badgeColor).toBe('#ea580c');
-    expect(driver.capabilities).toEqual(['text2img', 'img2img']);
+    expect(driver.capabilities).toEqual(['text2img', 'img2img', 'text2video', 'img2video']);
     expect(driver.defaultBaseUrl).toBe('https://api.replicate.com/v1');
     expect(driver.supportedModels.length).toBeGreaterThanOrEqual(5);
 

@@ -53,11 +53,13 @@ describe('Civitai i2v preset declares wan.md selectors; driver does not guess vi
     expect(body).toMatchObject({ isVideo: true, engine: 'wan', version: 'v2.6', provider: 'fal', operation: 'image-to-video' });
   });
 
-  it('Replicate driver refuses a video node before any request (no image-only path reuse)', async () => {
-    const f = vi.fn();
+  it('Replicate driver routes a video node to its live-Schema predictions route with isVideo (no local refusal, no model-name guess)', async () => {
+    let body: any;
+    const f = vi.fn(async (_u: string, o: any) => { body = JSON.parse(o.body); return new Response(JSON.stringify({ error: 'HTTP 402: x' }), { status: 402 }); });
     vi.stubGlobal('fetch', f);
-    await expect(new ReplicateDriver().generate({ model: 'minimax/video-01', prompt: 'p', isVideo: true, image_url: 'https://i/x.png' } as any, {})).rejects.toThrow(/img2video/);
-    expect(f).not.toHaveBeenCalled();
+    await expect(new ReplicateDriver().generate({ model: 'minimax/video-01', prompt: 'p', isVideo: true, image_url: 'https://i/x.png' } as any, {})).rejects.toThrow(/402/);
+    expect(f.mock.calls[0][0]).toBe('/api/engine/replicate/generate');
+    expect(body).toMatchObject({ model: 'minimax/video-01', isVideo: true, image_url: 'https://i/x.png' });
   });
 });
 

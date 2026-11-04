@@ -12,7 +12,8 @@ export class ReplicateDriver extends BaseEngineDriver {
   readonly label = 'Replicate 官方云平台';
   readonly badgeColor = '#ea580c';
   readonly description = 'Replicate 官方模型运行平台，支持 FLUX.1、SDXL、Ideogram、Wan 等社区与官方模型。';
-  readonly capabilities = ['text2img', 'img2img'] as const;
+  // Video: same live-Schema predictions route (e.g. wan-video/wan2.1-with-lora: image, lora_url, frames).
+  readonly capabilities = ['text2img', 'img2img', 'text2video', 'img2video'] as const;
   readonly defaultBaseUrl = 'https://api.replicate.com/v1';
   readonly defaultKey = '';
 
@@ -97,6 +98,11 @@ export class ReplicateDriver extends BaseEngineDriver {
       steps: params.steps,
       cfg: params.cfg,
       seed: params.seed,
+      isVideo: params.isVideo || undefined,
+      aspect_ratio: params.aspectRatio,
+      duration: params.videoDuration,
+      fps: params.videoFps,
+      num_frames: params.videoFrames,
       loras: Array.isArray(params.loras)
         ? params.loras.map((l: any) => (typeof l === 'object' && l !== null ? {
             ...l,
@@ -130,12 +136,12 @@ export class ReplicateDriver extends BaseEngineDriver {
     const data = await resp.json();
     const mediaUrl = data.mediaUrl || data.imageUrl;
     if (!mediaUrl) {
-      throw new Error('Replicate 返回缺少图像输出 URL');
+      throw new Error(`Replicate 返回缺少${params.isVideo ? '视频' : '图像'}输出 URL`);
     }
 
     return {
       mediaUrl,
-      mediaType: 'image',
+      mediaType: params.isVideo ? 'video' : 'image',
       provider: 'Replicate',
       providerId: 'replicate',
       model: data.model || params.model,

@@ -122,7 +122,9 @@ export class SchemaProviderDriver extends BaseEngineDriver {
   readonly label: string;
   readonly badgeColor: string;
   readonly description: string;
-  readonly capabilities = ['text2img', 'img2img'] as const;
+  // Video goes through the same Schema-driven submit/poll route as images: the selected model's live Schema
+  // (WaveSpeed catalog model_run / MuAPI openapi.json) decides the wire names; nothing here is model-specific.
+  readonly capabilities = ['text2img', 'img2img', 'text2video', 'img2video'] as const;
   readonly supportedModels: ModelSpec[] = [];
 
   constructor(provider: SchemaProviderId) {
@@ -202,6 +204,10 @@ export class SchemaProviderDriver extends BaseEngineDriver {
       size: extra.size,
       resolution: extra.resolution,
       output_format: extra.output_format,
+      // Video fields: sent as filled; the server maps them by the model Schema (e.g. duration 5|10).
+      duration: params.videoDuration,
+      fps: params.videoFps,
+      num_frames: params.videoFrames,
       loras: params.loras,
       checkpoint: extra.checkpoint ?? extra.sdModel ?? customSrc.checkpoint ?? customSrc.sdModel,
       clip_skip: extra.clip_skip ?? extra.clipSkip ?? customSrc.clip_skip,
@@ -289,7 +295,7 @@ export class SchemaProviderDriver extends BaseEngineDriver {
         } catch(error:any) {historyWarning=[rangeWarning,`上游已生成，保存失败：${error.message}`].filter(Boolean).join('；');saved={error:error.message,stack:error.stack,cause:error.cause};}
         return {
           mediaUrl:saved?.historyItems?.[0]?.url || mediaUrl,
-          mediaType: result.mediaType === 'video' ? 'video' : 'image',
+          mediaType: result.mediaType === 'video' || params.isVideo ? 'video' : 'image',
           provider: this.name,
           providerId: this.id,
           model: params.model,

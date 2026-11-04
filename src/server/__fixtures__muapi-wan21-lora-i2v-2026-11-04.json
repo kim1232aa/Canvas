@@ -1,0 +1,247 @@
+{
+ "paths": {
+  "/api/v1/wan2.1-lora-i2v": {
+   "post": {
+    "tags": [
+     "Video: Image-to-Video"
+    ],
+    "summary": "wan2.1-lora-i2v",
+    "operationId": "wan21_lora_i2v_api_v1_wan2_1_lora_i2v_post",
+    "parameters": [
+     {
+      "name": "webhook",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "title": "Webhook"
+      }
+     },
+     {
+      "name": "team_id",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Team Id"
+      }
+     },
+     {
+      "name": "x-api-key",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "title": "X-Api-Key"
+      }
+     },
+     {
+      "name": "x-embed-code",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "X-Embed-Code"
+      }
+     },
+     {
+      "name": "x-agent-embed-code",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "X-Agent-Embed-Code"
+      }
+     },
+     {
+      "name": "x-whitelabel-studio",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "X-Whitelabel-Studio"
+      }
+     },
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/WanLoRAI2VRequest"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    },
+    "description": "Animate images using Wan 2.1 with LoRA fine-tuning. Input: image, text prompt, LoRA weights. Output: video. Use for: custom style animation."
+   }
+  }
+ },
+ "components": {
+  "schemas": {
+   "WanLoRAI2VRequest": {
+    "properties": {
+     "prompt": {
+      "type": "string",
+      "title": "Prompt"
+     },
+     "image_url": {
+      "type": "string",
+      "maxLength": 2083,
+      "minLength": 1,
+      "format": "uri",
+      "title": "Image Url"
+     },
+     "lora_list": {
+      "items": {
+       "$ref": "#/components/schemas/LoraItem"
+      },
+      "type": "array",
+      "title": "Lora List",
+      "default": []
+     },
+     "aspect_ratio": {
+      "type": "string",
+      "enum": [
+       "16:9",
+       "9:16"
+      ],
+      "title": "Aspect Ratio",
+      "default": "16:9"
+     },
+     "resolution": {
+      "type": "string",
+      "enum": [
+       "480p",
+       "720p"
+      ],
+      "title": "Resolution",
+      "default": "480p"
+     },
+     "quality": {
+      "type": "string",
+      "enum": [
+       "medium",
+       "high"
+      ],
+      "title": "Quality",
+      "default": "medium"
+     },
+     "duration": {
+      "type": "integer",
+      "enum": [
+       5,
+       10
+      ],
+      "title": "Duration",
+      "default": 5
+     },
+     "webhook_url": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 2083,
+        "minLength": 1,
+        "format": "uri"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Webhook Url"
+     }
+    },
+    "type": "object",
+    "required": [
+     "prompt",
+     "image_url"
+    ],
+    "title": "WanLoRAI2VRequest"
+   },
+   "LoraItem": {
+    "properties": {
+     "path": {
+      "type": "string",
+      "title": "Path"
+     },
+     "scale": {
+      "type": "number",
+      "maximum": 4.0,
+      "minimum": 0.0,
+      "title": "Scale"
+     }
+    },
+    "type": "object",
+    "required": [
+     "path",
+     "scale"
+    ],
+    "title": "LoraItem"
+   }
+  }
+ }
+}

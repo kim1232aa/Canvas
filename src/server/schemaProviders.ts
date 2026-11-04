@@ -10,12 +10,18 @@ export const sogniSchemaSource='https://raw.githubusercontent.com/Sogni-AI/sogni
 // from live provider metadata. No model aliases, replacement or submit retries.
 export const schemaProviders = {
   muapi: {name:'MuAPI',root:'https://api.muapi.ai',catalog:'/api/v1/models',header:'x-muapi-key',auth:'x-api-key',
+    // Official: WanLoRAI2VRequest.image_url is format uri maxLength 2083 → a canvas data: URL is uploaded first via
+    // POST /api/v1/upload_file (multipart field `file`, response {url}). https://muapi.ai/docs/file-upload
+    referenceUpload:{kind:'multipart',path:'/api/v1/upload_file',docUrl:'https://muapi.ai/docs/file-upload'},
     // LoRA item fields when the endpoint's items Schema has no properties/$ref (KreaV2TurboLoraRequest.loras).
     // Official OpenAPI description example — not a code guess. Fetched live 2026-10-16 13:59:41 Beijing.
     loraItemFields:{pathKey:'path',strengthKey:'scale',sourceUrl:'https://api.muapi.ai/openapi.json',fetchedAt:'2026-10-16 13:59:41（北京时间）',
       docQuote:"List of LoRAs to apply (maximum 3). Example: [{'path': '...', 'scale': 1.0}]"},
   },
   wavespeed: {name:'WaveSpeed',root:'https://api.wavespeed.ai',catalog:'/api/v3/models',header:'x-wavespeed-key',auth:'Authorization',
+    // Official: local files go through the direct-upload ticket (POST /api/v3/media/uploads {filename,size} → PUT data.upload.url
+    // with data.upload.headers only, never the API key) and data.download_url goes into the model's image field. https://wavespeed.ai/docs/upload-files
+    referenceUpload:{kind:'ticket',path:'/api/v3/media/uploads',docUrl:'https://wavespeed.ai/docs/upload-files'},
     // Path (dot-separated) to the upstream echo of the submitted input in POST/poll JSON. Used only for display contrast.
     upstreamEchoPath:'data.input',
   },
@@ -946,6 +952,48 @@ export function getSchemaProviderCatalog(
   };
 }
 
+/** Decode a data: URL into bytes + MIME (no guessing: MIME must be declared in the URL). */
+export function decodeDataUrl(value:string):{mime:string;bytes:Buffer}{
+  const m=/^data:([^;,]+)((?:;[^;,]*)*?)(;base64)?,(.*)$/s.exec(value);
+  if(!m || !m[1])throw Object.assign(new Error('参考图 data URL 无法解析（缺少 MIME）'),{status:400,errorSource:'local'});
+  return {mime:m[1],bytes:m[3]?Buffer.from(m[4],'base64'):Buffer.from(decodeURIComponent(m[4]),'utf8')};
+}
+function referenceFilename(mime:string){const ext=(mime.split('/')[1]||'bin').replace('jpeg','jpg').replace(/[^a-z0-9]/gi,'');return `reference.${ext}`;}
+function uploadFailure(label:string,endpoint:string,status:number,raw:string){
+  return Object.assign(new Error(`${label} HTTP ${status}: ${raw}`),{status,rawResponse:raw,endpoint,errorSource:'upstream'});
+}
+/** Official reference-image upload (MuAPI upload_file multipart / WaveSpeed media/uploads ticket). Returns the hosted URL. */
+export async function uploadSchemaProviderReference(provider:Provider,upload:{kind:string;path:string;docUrl:string},dataUrl:string,credential:{key:string;headers:Record<string,string>},req:express.Request,dep:Pick<Dependencies,'fetch'>):Promise<string>{
+  const {mime,bytes}=decodeDataUrl(dataUrl);
+  const filename=referenceFilename(mime);
+  const endpoint=schemaProviders[provider].root+upload.path;
+  const meta={provider,route:req.path,model:req.body?.model,key:credential.key};
+  if(upload.kind==='multipart') {
+    const form=new FormData();form.append('file',new Blob([new Uint8Array(bytes)],{type:mime}),filename);
+    const r=await dep.fetch(meta,endpoint,{method:'POST',headers:{...credential.headers},body:form,signal:AbortSignal.timeout(120000)});
+    const raw=await r.text();
+    if(!r.ok)throw uploadFailure('参考图上传失败',endpoint,r.status,raw);
+    let data:any;try{data=JSON.parse(raw);}catch{throw Object.assign(uploadFailure('参考图上传响应非 JSON',endpoint,r.status,raw),{errorSource:'upstream-protocol'});}
+    const url=data?.url;
+    if(typeof url!=='string' || !url)throw Object.assign(uploadFailure('参考图上传响应没有 url',endpoint,r.status,raw),{errorSource:'upstream-protocol'});
+    return url;
+  }
+  if(upload.kind==='ticket') {
+    const r=await dep.fetch(meta,endpoint,{method:'POST',headers:{...credential.headers,'Content-Type':'application/json'},body:JSON.stringify({filename,size:bytes.length,content_type:mime}),signal:AbortSignal.timeout(60000)});
+    const raw=await r.text();
+    if(!r.ok)throw uploadFailure('参考图上传票据失败',endpoint,r.status,raw);
+    let data:any;try{data=JSON.parse(raw);}catch{throw Object.assign(uploadFailure('参考图上传票据响应非 JSON',endpoint,r.status,raw),{errorSource:'upstream-protocol'});}
+    const ticket=data?.data ?? data;
+    const putUrl=ticket?.upload?.url;const downloadUrl=ticket?.download_url;
+    if(typeof putUrl!=='string' || typeof downloadUrl!=='string')throw Object.assign(uploadFailure('参考图上传票据缺少 upload.url / download_url',endpoint,r.status,raw),{errorSource:'upstream-protocol'});
+    // Docs: the upload URL is a temporary credential — never send the API key there, never log it.
+    const put=await globalThis.fetch(putUrl,{method:'PUT',headers:{...(ticket.upload.headers||{})},body:new Uint8Array(bytes),signal:AbortSignal.timeout(120000)});
+    if(!put.ok)throw uploadFailure('参考图 PUT 上传失败（上传 URL 按官方要求不记录）',endpoint+' → upload.url',put.status,await put.text().catch(()=>''));
+    return downloadUrl;
+  }
+  throw Object.assign(new Error(`未知参考图上传方式 ${upload.kind}`),{status:500,errorSource:'local'});
+}
+
 export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencies) {
   const valid=(value:string):value is Provider=>Object.hasOwn(schemaProviders,value);
   const credentialHeader='x-canvas-credential-ref';
@@ -1234,7 +1282,7 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
       const sizeSep=sizeStringSeparator(props.size);
       const packSizeIntoSizeString=!only && !packSizeIntoImageSize && sizeSep!==null && !Object.hasOwn(props,'width') && !Object.hasOwn(props,'height');
       const filled=(v:any)=>v!==undefined && v!==null && v!=='';
-      if(!only)for(const name of ['negative_prompt','width','height','size','steps','cfg','seed','image_url','denoise','sampler_name','scheduler','aspect_ratio','resolution','output_format']) {
+      if(!only)for(const name of ['negative_prompt','width','height','size','steps','cfg','seed','image_url','denoise','sampler_name','scheduler','aspect_ratio','resolution','output_format','duration','fps','num_frames']) {
         const value=req.body[name];if(value===undefined || value===null || value==='')continue;
         if(packSizeIntoImageSize && (name==='width' || name==='height'))continue; // mapped below as width+height → image_size
         const plan=planCanvasField(name,{declared:definition.inputSchema?new Set(Object.keys(props)):null,hasReferenceImage:filled(req.body.image_url),schemaFieldsOnly:!!schemaFieldsOnly,aliases,fallbackTarget:provider==='sogni'?aliases[name]?.[0]:undefined});
@@ -1360,6 +1408,22 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
           if(payload[k]!==undefined && payload[k]!==null && payload[k]!=='')payload[k]=Number(payload[k]);
         }
         if(payload.cfg_scale!==undefined && payload.cfg_scale!==null && payload.cfg_scale!=='')payload.cfg_scale=Number(payload.cfg_scale);
+      }
+      {
+        // Reference image: when the Schema wants a URI, a canvas data: URL goes to the provider's official upload API first and
+        // the returned URL is what the model receives. http(s) URLs, and data URLs for plain-string fields, go out unchanged. Upload failures surface the upstream status + body verbatim.
+        const refMap=mapping.find((m:any)=>m.from==='image_url');
+        const upload=(schemaProviders[provider] as any).referenceUpload;
+        const refTarget=refMap?.to as string|undefined;
+        // Schema-driven: only when the model Schema declares the reference field as format "uri" (a data: URL cannot satisfy it).
+        const refSpec=refTarget?props[refTarget]:undefined;
+        const wantsUri=[refSpec,...(refSpec?.anyOf||[]),...(refSpec?.oneOf||[])].some((x:any)=>x?.format==='uri');
+        if(upload && refTarget && wantsUri && typeof payload[refTarget]==='string' && payload[refTarget].startsWith('data:')) {
+          const url=await uploadSchemaProviderReference(provider,upload,payload[refTarget],credential,req,dep);
+          payload[refTarget]=url;
+          refMap.value=`(data URL, ${String(req.body.image_url).length} chars)`;
+          mapping.push({from:'image_url (data URL)',to:refTarget,value:url,uploadedVia:schemaProviders[provider].root+upload.path,docUrl:upload.docUrl});
+        }
       }
       if(only)mapping.push({from:'canvas parameters and LoRA nodes',to:null,reason:'用户选择了仅提交 JSON 与提示词'});
       const requestBody=provider==='sogni'?{...workflowOptions,input:Object.hasOwn(workflowOptions,'input')?workflowOptions.input:{title:'Canvas · '+model,steps:[{id:'image1',toolName:'generate_image',arguments:payload}]}}:provider==='novita'?(()=>{const extra=(payload.extra && typeof payload.extra==='object')?payload.extra:{response_image_type:'jpeg'};const {extra:_e,...request}=payload;return {extra,request:{...request,model_name:model}};})():payload;

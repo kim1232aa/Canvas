@@ -214,7 +214,9 @@ export function handleReplicateGenerate(deps: ReplicateRouteDeps) {
 
       const sleep = deps.sleep || ((ms: number) => new Promise((r) => setTimeout(r, ms)));
       const pollStartTime = Date.now();
-      const maxPollDuration = 60000;
+      // Video predictions run for minutes; images keep the 60s window.
+      const isVideo = reqBody.isVideo === true;
+      const maxPollDuration = isVideo ? 10 * 60 * 1000 : 60000;
       let pollData: any = data;
 
       if (parsed.isPending) {
@@ -304,7 +306,7 @@ export function handleReplicateGenerate(deps: ReplicateRouteDeps) {
         }
 
         if (parsed.isPending) {
-          const timeoutMsg = 'Replicate 图像生成超时 (60s)';
+          const timeoutMsg = isVideo ? 'Replicate 视频生成超时 (10min)' : 'Replicate 图像生成超时 (60s)';
           deps.keyPoolManager.recordResult('replicate', apiKey, false, Date.now() - startTime, timeoutMsg, 504);
           return res.status(504).json({
             error: timeoutMsg,

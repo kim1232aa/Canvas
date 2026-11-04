@@ -198,13 +198,19 @@ export function buildReplicatePredictionRequest(
   // when the UI shows another value, and never invent steps when the board omitted them.
   const steps = body.steps ?? body.num_inference_steps ?? body.numInferenceSteps;
   if (typeof steps === 'number' && Number.isFinite(steps) && steps > 0) {
-    place('steps', 'steps', Math.round(steps), ['num_inference_steps', 'steps'], 'num_inference_steps');
+    place('steps', 'steps', Math.round(steps), ['num_inference_steps', 'steps', 'sample_steps'], 'num_inference_steps');
   }
 
   const cfg = body.cfg ?? body.guidance ?? body.guidance_scale ?? body.guidanceScale ?? body.cfgScale;
   if (typeof cfg === 'number' && Number.isFinite(cfg) && cfg > 0) {
     // Wire name comes from live/caller Input schema only (guidance vs guidance_scale); no model-name branch.
-    place('cfg', 'cfg', Number(cfg), ['guidance', 'guidance_scale'], 'guidance');
+    place('cfg', 'cfg', Number(cfg), ['guidance', 'guidance_scale', 'sample_guide_scale'], 'guidance');
+  }
+
+  // Video fields (filled values only): wire name from the live/caller Input schema, else sent under the canvas name.
+  for (const [from, candidates] of [['num_frames', ['num_frames', 'frames']], ['fps', ['fps', 'frames_per_second']], ['duration', ['duration']]] as const) {
+    const v = body[from];
+    if (typeof v === 'number' && Number.isFinite(v)) place(from, from, v, [...candidates], candidates[0]);
   }
 
   const imageUrl = String(body.image_url || body.imageUrl || body.image || body.input_image || '').trim();
