@@ -318,6 +318,112 @@ describe('videoGenerateRoute lifecycle and client disconnect handling (grok_comp
     expect(capturedRes?.listenerCount('close')).toBe(baselineCloseListeners);
   });
 
+  function makeMockRes() {
+    const res: any = new EventEmitter();
+    res.statusCode = 200;
+    res.writableEnded = false;
+    res.destroyed = false;
+    res.headersSent = false;
+    res.status = (code: number) => { res.statusCode = code; return res; };
+    res.json = (body: any) => { res.data = body; return res; };
+    return res;
+  }
+
+  const FAL_SCHEMA_OK = JSON.stringify({
+    paths: {
+      '/fal-ai/veo3': {
+        post: { requestBody: { content: { 'application/json': { schema: { properties: { prompt: { type: 'string' } } } } } } },
+      },
+    },
+  });
+
+  it('Fal video uses the official queue lifecycle: submit 202 → poll status → fetch result', async () => {
+    const seen: Array<{ url: string; options: any }> = [];
+    const statusUrl = 'https://queue.fal.run/fal-ai/veo3/requests/req-v1/status';
+    const responseUrl = 'https://queue.fal.run/fal-ai/veo3/requests/req-v1';
+    let statusPolls = 0;
+    const { deps, recordedResults } = createMockDeps({
+      upstreamFetch: vi.fn(async (meta: any, url: string, options: any) => {
+        if (meta?.readOnly && url.startsWith('https://fal.ai/api/openapi/queue/openapi.json')) {
+          return new Response(FAL_SCHEMA_OK, { status: 200 });
+        }
+        seen.push({ url, options });
+        if (url === 'https://queue.fal.run/fal-ai/veo3') {
+          return new Response(JSON.stringify({ request_id: 'req-v1', status_url: statusUrl, response_url: responseUrl }), { status: 202 });
+        }
+        if (url === statusUrl) {
+          statusPolls++;
+          return statusPolls === 1
+            ? new Response(JSON.stringify({ status: 'IN_QUEUE', queue_position: 1 }), { status: 202 })
+            : new Response(JSON.stringify({ status: 'COMPLETED' }), { status: 200 });
+        }
+        if (url === responseUrl) {
+          return new Response(JSON.stringify({ video: { url: 'https://fal.media/files/v.mp4' }, seed: 7 }), { status: 200 });
+        }
+        return new Response('Not Found', { status: 404 });
+      }),
+    });
+    const res = makeMockRes();
+
+    await handleVideoGenerate(deps)({
+      body: { provider: 'fal', model: 'fal-ai/veo3', prompt: 'queue lifecycle video' },
+      headers: {},
+      path: '/api/video/generate',
+    } as any, res);
+
+    // The defect: route must NOT call synchronous https://fal.run/{endpoint} for long video tasks.
+    expect(seen.some((c) => c.url.startsWith('https://fal.run/'))).toBe(false);
+    expect(seen[0].url).toBe('https://queue.fal.run/fal-ai/veo3');
+    expect(seen[0].options.method).toBe('POST');
+    expect(JSON.parse(seen[0].options.body)).toEqual({ prompt: 'queue lifecycle video' });
+    expect(statusPolls).toBe(2); // pending (IN_QUEUE) then COMPLETED
+
+    expect(res.statusCode).toBe(200);
+    expect(res.data.videoUrl).toBe('data:video/mp4;base64,AAAA');
+    expect(res.data.seed).toBe(7);
+    expect(res.data.exactEndpointCalled).toBe('https://queue.fal.run/fal-ai/veo3');
+    expect(recordedResults).toEqual([
+      ['fal', 'mock-key', true, expect.any(Number)],
+    ]);
+  });
+
+  it('Fal queue result non-2xx is passed through (status + raw body), never fabricated as success', async () => {
+    const detail = '{"detail":[{"msg":"Input validation failed"}]}';
+    const { deps, recordedResults } = createMockDeps({
+      upstreamFetch: vi.fn(async (meta: any, url: string) => {
+        if (meta?.readOnly && url.startsWith('https://fal.ai/api/openapi/queue/openapi.json')) {
+          return new Response(FAL_SCHEMA_OK, { status: 200 });
+        }
+        if (url === 'https://queue.fal.run/fal-ai/veo3') {
+          return new Response(JSON.stringify({ request_id: 'req-bad' }), { status: 202 });
+        }
+        if (url === 'https://queue.fal.run/fal-ai/veo3/requests/req-bad/status') {
+          return new Response(JSON.stringify({ status: 'COMPLETED' }), { status: 200 });
+        }
+        if (url === 'https://queue.fal.run/fal-ai/veo3/requests/req-bad') {
+          return new Response(detail, { status: 422 });
+        }
+        return new Response('Not Found', { status: 404 });
+      }),
+    });
+    const res = makeMockRes();
+
+    await handleVideoGenerate(deps)({
+      body: { provider: 'fal', model: 'fal-ai/veo3', prompt: 'bad input' },
+      headers: {},
+      path: '/api/video/generate',
+    } as any, res);
+
+    expect(res.statusCode).toBe(422);
+    expect(res.data.upstreamStatus).toBe(422);
+    expect(res.data.rawResponse).toBe(detail);
+    expect(res.data.errorSource).toBe('upstream');
+    expect(res.data.videoUrl).toBeUndefined();
+    expect(recordedResults).toEqual([
+      ['fal', 'mock-key', false, expect.any(Number), detail, 422],
+    ]);
+  });
+
   it('sends a custom Fal dev endpoint unchanged and preserves an actual 402 balance response', async () => {
     const rawResponse = '{"message":"Exhausted balance: add credits"}';
     let capturedUrl = '';
@@ -347,7 +453,7 @@ describe('videoGenerateRoute lifecycle and client disconnect handling (grok_comp
       path: '/api/video/generate',
     } as any, res);
 
-    expect(capturedUrl).toBe('https://fal.run/fal-ai/custom-dev-video');
+    expect(capturedUrl).toBe('https://queue.fal.run/fal-ai/custom-dev-video');
     expect(JSON.parse(capturedOptions.body)).toEqual({ prompt: 'test video' });
     expect(res.statusCode).toBe(402);
     expect(res.data.error).toContain('[402]');

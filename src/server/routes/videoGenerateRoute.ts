@@ -2,6 +2,7 @@ import type { Request, Response as ExpressResponse } from 'express';
 import { tamsVideoUnsupported } from '../../schemas/tensorModelApi.ts';
 import { buildFalVideoRequest } from '../falVideoContract.ts';
 import { falQueueOpenApiUrl, extractFalInputProperties, inlineFalItemRefs, FalSchemaMissingError, type FalSchemaFetchFailure } from '../falImageContract.ts';
+import { falQueueSubmitUrl, runFalQueueLifecycle } from '../falQueueLifecycle.ts';
 import { buildAgnesVideoRequest, agnesVideoId } from '../agnesVideoRequest.ts';
 import { applyCustomParameters } from '../customParameters.ts';
 import { sanitizeGenerationMetadata } from '../../utils/generationMetadata.ts';
@@ -645,7 +646,10 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
       return res.status(400).json({ error: error.message, errorSource: 'local' });
     }
     const payload = builtVideo.payload;
-    const upstreamEndpoint = `https://fal.run/${endpoint}`;
+    // Fal official queue lifecycle for long-running video endpoints:
+    // submit to queue.fal.run (202 + request_id) → poll status → fetch stored result.
+    // Never use the synchronous https://fal.run host for these long tasks.
+    const upstreamEndpoint = falQueueSubmitUrl(endpoint);
     generationContext.getStore()?.traces.push(sanitizeGenerationMetadata({
       stage: 'parameter-mapping', provider: 'fal', endpoint,
       beforeCustom: builtVideo.beforeCustom, customParameters: builtVideo.customParameters,
@@ -653,37 +657,49 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
     }));
 
     const falVideoStart = Date.now();
-    const upstreamResp = await upstreamFetch(
-      { provider: 'fal', route: req.path, model: endpoint, key: falKey },
-      upstreamEndpoint,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Key ${falKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      }
-    );
+    const outcome = await runFalQueueLifecycle({
+      endpoint,
+      apiKey: falKey,
+      payload,
+      fetchFn: (url, options) => upstreamFetch(
+        { provider: 'fal', route: req.path, model: endpoint, key: falKey },
+        url,
+        options,
+      ),
+      sleep: (ms) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
+    });
 
-    if (!upstreamResp.ok) {
-      const errorText = await upstreamResp.text();
-      keyPoolManager.recordResult('fal', falKey, false, Date.now() - falVideoStart, errorText, upstreamResp.status);
-      let friendlyError = `AI 视频服务商执行失败 [${upstreamResp.status}]: ${errorText}`;
-      if (upstreamResp.status === 403) {
-        friendlyError = `Fal.ai 接口执行失败 [${upstreamResp.status}]: ${errorText}`;
+    if (!outcome.ok) {
+      if (outcome.status !== null) {
+        // Real upstream answer (submit/status/result): pass status + raw body through verbatim.
+        keyPoolManager.recordResult('fal', falKey, false, Date.now() - falVideoStart, outcome.body, outcome.status);
+        let friendlyError = `AI 视频服务商执行失败 [${outcome.status}]: ${outcome.body}`;
+        if (outcome.status === 403) {
+          friendlyError = `Fal.ai 接口执行失败 [${outcome.status}]: ${outcome.body}`;
+        }
+        return res.status(outcome.status).json({
+          error: friendlyError,
+          upstreamStatus: outcome.status,
+          rawResponse: outcome.body,
+          errorSource: 'upstream',
+          endpoint: outcome.url,
+          queueStage: outcome.stage,
+          ...(outcome.requestId ? { requestId: outcome.requestId } : {}),
+        });
       }
-      return res.status(upstreamResp.status).json({
-        error: friendlyError,
-        upstreamStatus: upstreamResp.status,
-        rawResponse: errorText,
-        errorSource: 'upstream',
-        endpoint: upstreamEndpoint,
+      // Client-side timeout: report the request_id, never fabricate a result.
+      keyPoolManager.recordResult('fal', falKey, false, Date.now() - falVideoStart, outcome.body);
+      return res.status(504).json({
+        error: `Fal.ai 视频队列等待超时: ${outcome.body}`,
+        errorSource: 'local',
+        endpoint: outcome.url,
+        queueStage: outcome.stage,
+        ...(outcome.requestId ? { requestId: outcome.requestId } : {}),
       });
     }
 
     keyPoolManager.recordResult('fal', falKey, true, Date.now() - falVideoStart);
-    const vData = await upstreamResp.json();
+    const vData = outcome.data;
     const videoUrl = vData.video?.url;
     if (!videoUrl) {
       return res.status(502).json({ error: 'AI 视频接口返回数据中未包含视频 URL (video.url)' });
@@ -718,7 +734,7 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
       model: endpoint,
       actualModel: endpoint,
       requestedModel: model,
-      exactEndpointCalled: `https://fal.run/${endpoint}`,
+      exactEndpointCalled: upstreamEndpoint,
       seed: usedVideoSeed,
       historyItem: item,
     });
