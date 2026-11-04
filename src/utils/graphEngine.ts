@@ -158,6 +158,8 @@ export interface WorkflowExtraction {
   videoFrames?: number;
   falModelName?: string;
   videoAspectRatio?: string;
+  /** Declared upstream variant selectors on the AIVideoNode (e.g. Civitai engine/version/provider/operation). */
+  videoSelectors?: Record<string, string>;
   aspectRatio?: string;
   imageSize?: string;
   size?: string;
@@ -692,6 +694,7 @@ export function extractWorkflowParameters(
   let videoFrames: number | undefined;
   let falModelName: string | undefined;
   let videoAspectRatio: string | undefined = undefined;
+  let videoSelectors: Record<string, string> | undefined = undefined;
   let aspectRatio: string | undefined = undefined;
   let imageSize: string | undefined = undefined;
   let size: string | undefined = undefined;
@@ -733,6 +736,14 @@ export function extractWorkflowParameters(
     videoDuration = numOrUndef(execNode.values.duration);
     videoFps = numOrUndef(execNode.values.fps);
     videoAspectRatio = strOrUndef(execNode.values.aspect_ratio);
+    const declaredSelectors = execNode.values.video_selectors;
+    if (declaredSelectors !== undefined) {
+      if (!declaredSelectors || typeof declaredSelectors !== 'object' || Array.isArray(declaredSelectors)
+        || !Object.values(declaredSelectors).every((v) => typeof v === 'string' && v.trim() !== '')) {
+        throw new Error('视频节点 video_selectors 必须是非空字符串组成的对象');
+      }
+      videoSelectors = { ...(declaredSelectors as Record<string, string>) };
+    }
     resolution = strOrUndef(execNode.values.resolution);
     size = strOrUndef(execNode.values.size);
     seed = (execNode.values.control_after_generate ?? execNode.values.seedControl) === 'randomize'
@@ -1064,6 +1075,7 @@ export function extractWorkflowParameters(
     videoFrames,
     falModelName,
     videoAspectRatio,
+    videoSelectors,
     aspectRatio,
     imageSize,
     size,
@@ -1267,6 +1279,7 @@ export async function executeWorkflow(
     if (engProv === 'civitai') {
       for (const [key,value] of Object.entries({engine:params.civitaiEngine,ecosystem:params.civitaiEcosystem,comfyModel:params.civitaiModel,quantity:params.batchSize})) if (value !== undefined && value !== '') extraParams[key] = value;
     }
+    if (params.videoSelectors) Object.assign(extraParams, params.videoSelectors);
     if (params.size) extraParams.size = params.size;
     if (params.quality) extraParams.quality = params.quality;
     if (params.outputFormat) extraParams.output_format = params.outputFormat;

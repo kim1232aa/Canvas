@@ -323,7 +323,11 @@ describe('videoGenerateRoute lifecycle and client disconnect handling (grok_comp
     let capturedUrl = '';
     let capturedOptions: any;
     const { deps, recordedResults } = createMockDeps({
-      upstreamFetch: vi.fn(async (_meta: any, url: string, options: any) => {
+      upstreamFetch: vi.fn(async (meta: any, url: string, options: any) => {
+        // Outbound gate reads the live Fal OpenAPI first (fake network: minimal schema declaring prompt only).
+        if (meta?.readOnly && url.startsWith('https://fal.ai/api/openapi/queue/openapi.json')) {
+          return new Response(JSON.stringify({ paths: { '/fal-ai/custom-dev-video': { post: { requestBody: { content: { 'application/json': { schema: { properties: { prompt: { type: 'string' } } } } } } } } } }), { status: 200 });
+        }
         capturedUrl = url;
         capturedOptions = options;
         return new Response(rawResponse, { status: 402, headers: { 'Content-Type': 'application/json' } });

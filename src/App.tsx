@@ -1303,12 +1303,13 @@ export default function App() {
       // Also force THIS-session image onto SaveImage and drop 刷新前的结果 (covers saveNodes miss / stale banner).
       setNodes(prev => {
         let next = clearNodeExecutionErrors(prev);
-        if (result.imageUrl) next = putHistoryImageOnSaveNodes(next, result.imageUrl).nodes;
+        if (result.imageUrl) next = putHistoryImageOnSaveNodes(next, result.imageUrl, result.isVideo === true ? 'video' : 'image').nodes;
         return next.map(node => node.id === result.executingNodeId ? {...node, values: {...node.values, seed: nextSeedAfterGeneration(result.seed, node.values.control_after_generate) ?? node.values.seed}} : node);
       });
 
       // Sync output to active Spatial Frame so infinite canvas updates simultaneously
-      const isVid = Boolean(result.isVideo || result.imageUrl?.includes('.mp4') || result.model?.includes('video'));
+      // Declared by the executed node type (AIVideoNode → isVideo); never guessed from URL or model name.
+      const isVid = result.isVideo === true;
       const frameSyncData = {
         status: 'success' as const,
         imageUrl: isVid ? undefined : result.imageUrl,

@@ -456,6 +456,8 @@ type I2vSpec = {
   fps?: number;
   /** Declared Schema property names for hide-before-Schema (aliases included). */
   schemaProperties: string[];
+  /** Declared upstream variant selectors sent as-is (e.g. Civitai videoGen engine/version/provider/operation). */
+  selectors?: Record<string, string>;
   /** Evidence URL / path — audit trail only. */
   source: string;
 };
@@ -488,6 +490,8 @@ const I2V_SPECS: I2vSpec[] = [
     model: 'wan',
     duration: 5,
     resolution: '1080p',
+    // wan.md「image-to-video」example (fetched 2026-11-04): engine wan / version v2.6 / provider fal / operation image-to-video.
+    selectors: { engine: 'wan', version: 'v2.6', provider: 'fal', operation: 'image-to-video' },
     schemaProperties: [
       'prompt', 'images', 'startImage', 'endImage', 'resolution', 'duration', 'enablePromptExpansion',
     ],
@@ -554,6 +558,7 @@ function buildStandardI2v(spec: I2vSpec): WorkflowPreset {
   if (spec.aspect_ratio !== undefined) vidValues.aspect_ratio = spec.aspect_ratio;
   if (spec.num_frames !== undefined) vidValues.num_frames = spec.num_frames;
   if (spec.fps !== undefined) vidValues.fps = spec.fps;
+  if (spec.selectors) vidValues.video_selectors = { ...spec.selectors };
 
   const frameParams: SpatialFrame['params'] = {
     checkpoint: spec.model,

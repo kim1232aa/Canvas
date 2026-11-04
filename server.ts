@@ -1309,24 +1309,10 @@ function extractModelMetadata(
   let category: 'Checkpoint' | 'LoRA' | 'Video' | 'Edit' = 'Checkpoint';
   let type: 'Checkpoint' | 'LORA' | 'MotionModule' | 'Tools' | 'Reasoning' = 'Checkpoint';
 
+  // Video only when the upstream declares it (task / pipeline tag / tag), never from id/name substrings.
   const isVideo =
     taskLower.includes('video') ||
-    taskLower === 'text-to-video' ||
-    taskLower === 'image-to-video' ||
-    taskLower === 'video-to-video' ||
-    idLower.includes('video') ||
-    idLower.includes('wan2.1-t2v') ||
-    idLower.includes('wan2.2-t2v') ||
-    idLower.includes('text2video') ||
-    idLower.includes('image2video') ||
-    idLower.includes('live_wallpaper') ||
-    idLower.includes('ltx') ||
-    idLower.includes('kling') ||
-    idLower.includes('minimax') ||
-    idLower.includes('hailuo') ||
-    idLower.includes('cogvideo') ||
-    idLower.includes('hunyuan-video') ||
-    tagsLower.some((t) => t.includes('video') || t.includes('wallpaper'));
+    tagsLower.some((t) => t.includes('video'));
 
   const isEdit =
     !isVideo &&
@@ -3418,11 +3404,8 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
       });
     }
 
-    const isVideo =
-      req.body.isVideo === true ||
-      (typeof model === 'string' &&
-        (model.includes('text-to-video') ||
-          model.includes('image-to-video')));
+    // Declared by the caller (AIVideoNode → isVideo:true); never inferred from model-name substrings.
+    const isVideo = req.body.isVideo === true;
 
     let completedMediaUrl = '';
     let completedImages: Array<{ url: string; seed?: number }> = [];

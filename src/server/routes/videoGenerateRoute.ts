@@ -118,7 +118,6 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
     } = req.body;
 
     if (!model) return res.status(400).json({ error: '模型为必填项（model is required）' });
-    const lowerModel = String(model).toLowerCase().trim();
     const reqProvider = (inputProvider || '').toLowerCase().trim();
     const VIDEO_PROVIDERS = ['tensorart', 'tensor', 'nanogpt', 'agnes', 'modelscope', 'modelscope_ai', 'fal', 'civitai', 'grok_compat'];
     if (!reqProvider) {
@@ -130,17 +129,11 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
     if (reqProvider === 'civitai') {
       return res.status(400).json({ error: 'Civitai 视频请走 /api/civitai/generate（isVideo: true），本路由不代理，也不会改用其他供应商。' });
     }
-    const byModel = false;
 
     // 1. Tensor.Art TAMS (OpenWorks video = schema provider `openworks`)
     const isTensorArtTarget =
       reqProvider === 'tensorart' ||
-      reqProvider === 'tensor' ||
-      (byModel && (
-        lowerModel.startsWith('text2video_') ||
-        lowerModel.startsWith('image2video_') ||
-        lowerModel === 'live_wallpaper' ||
-        lowerModel.includes('tensor')));
+      reqProvider === 'tensor';
 
     if (isTensorArtTarget) {
       // TAMS numeric model IDs have no generic video job API → local refusal before key lookup or any upstream call.
@@ -155,11 +148,7 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
 
     // 2. NanoGPT Video API (https://api.nano-gpt.com/api/generate-video)
     const isNanoGptTarget =
-      reqProvider === 'nanogpt' ||
-      (byModel && (
-        lowerModel.includes('nanogpt') ||
-        (lowerModel.includes('wan') && !lowerModel.includes('fal') && !lowerModel.includes('damo') && !lowerModel.includes('text2video')) ||
-        (lowerModel.includes('kling') && !lowerModel.includes('fal'))));
+      reqProvider === 'nanogpt';
 
     if (isNanoGptTarget) {
       const nanoKey = keyPoolManager.getNextKey('nanogpt', (req.headers['x-nanogpt-key'] as string) || undefined);
@@ -292,7 +281,7 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
     }
 
     // 3. Agnes AI Video: POST /v1/videos → poll GET /agnesapi?video_id=&model_name=
-    if (reqProvider === 'agnes' || (byModel && lowerModel.startsWith('agnes-video'))) {
+    if (reqProvider === 'agnes') {
       const auth = resolveProviderAuth(req, 'agnes');
       if (auth.error) return res.status(400).json({ error: auth.error });
       const { apiKey: agnesKey, baseUrl: agnesBaseUrl } = auth;
@@ -426,7 +415,7 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
 
     // 3b. Grok / xAI 兼容中转视频：POST /videos/generations → poll GET /videos/{request_id}
     // 503 grok_media_no_eligible_account 必须原样返回，绝不静默换商。
-    if (reqProvider === 'grok_compat' || (byModel && lowerModel.startsWith('grok-imagine-video'))) {
+    if (reqProvider === 'grok_compat') {
       const auth = resolveProviderAuth(req, 'grok_compat');
       if (auth.error) return res.status(400).json({ error: auth.error });
       const { apiKey: grokKey, baseUrl: grokBase } = auth;
@@ -567,13 +556,7 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
     // 4. ModelScope Wan 2.1 Video support
     const isModelScopeTarget =
       reqProvider === 'modelscope' ||
-      reqProvider === 'modelscope_ai' ||
-      (byModel && (
-        lowerModel.startsWith('damo/') ||
-        lowerModel.startsWith('modelscope') ||
-        lowerModel.includes('cogvideox') ||
-        (lowerModel.includes('wan2.1-t2v') && !lowerModel.includes('fal-ai')) ||
-        (lowerModel.includes('wan2.1-i2v') && !lowerModel.includes('fal-ai'))));
+      reqProvider === 'modelscope_ai';
 
     // ModelScope API-Inference has no video generation endpoint (Item 6) → explicit 400, never fall through to another provider.
     if (isModelScopeTarget) {

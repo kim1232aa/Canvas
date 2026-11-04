@@ -19,7 +19,7 @@ export class CivitaiDriver extends BaseEngineDriver {
   readonly label = 'Civitai 官方原生';
   readonly badgeColor = '#2563eb';
   readonly description = 'Civitai 官方生成服务 (Orchestration API)，按官方 recipe 提交所选模型与 LoRA；模型须启用在线生成，具体能力与权限以服务商响应为准。';
-  readonly capabilities = ['text2img', 'img2img', 'text2video'] as const;
+  readonly capabilities = ['text2img', 'img2img', 'text2video', 'img2video'] as const;
 
     readonly supportedModels: ModelSpec[] = [];
 
@@ -28,10 +28,8 @@ export class CivitaiDriver extends BaseEngineDriver {
     keys: Record<string, string>
   ): Promise<NormalizedGenerateResult> {
     if (!params.model) throw new Error('模型为必填项（model is required）');
-    const isVideo =
-      params.isVideo === true ||
-      params.model.includes('text-to-video') ||
-      params.model.includes('image-to-video');
+    // Video vs image comes only from the declared node type (AIVideoNode → isVideo), never from model-name substrings.
+    const isVideo = params.isVideo === true;
     const civKey = params.apiKey || keys.civitai || keys.CIVITAI_API_TOKEN || keys.civitaiKey || '';
 
     // Only send values the caller actually provided — no fabricated defaults.

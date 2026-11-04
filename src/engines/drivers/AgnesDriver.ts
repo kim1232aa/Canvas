@@ -45,9 +45,7 @@ export class AgnesDriver extends BaseEngineDriver {
       id: 'agnes-video-2.5-flash',
       name: 'Agnes Video 2.5 Flash (图生视频 / 动态运镜)',
       type: 'video',
-      description: '支持纯文本或输入源图生成 5 秒高清流畅运镜视频',
-      defaultSteps: 25,
-      defaultCfg: 4.5,
+      description: '文生视频 / 图生视频；时长与分辨率以官方 Schema 为准',
       supportsLora: false,
     },
     {
@@ -55,8 +53,6 @@ export class AgnesDriver extends BaseEngineDriver {
       name: 'Agnes Video 2.5 (高精影视级视频)',
       type: 'video',
       description: '电影质感动态生成',
-      defaultSteps: 30,
-      defaultCfg: 5.0,
       supportsLora: false,
     },
     {

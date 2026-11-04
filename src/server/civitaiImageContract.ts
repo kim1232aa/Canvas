@@ -178,7 +178,8 @@ async function buildCivitaiBaseInput(body: Body, get: CivitaiPublicGet, official
   } catch (e: any) {
     fail(String(e?.message || e));
   }
-  const props = selected.properties;
+  if (!selected) fail('Civitai imageGen 输入 Schema 未选中（selectImageGenInputSchema 未返回结果），未发送');
+  const props = selected!.properties;
 
   const input: Body = {
     engine: wire.engine ?? engine,

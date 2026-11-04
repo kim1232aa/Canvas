@@ -69,8 +69,11 @@ export function historyHasUsableSnapshot(item: HistoryApplyItem): boolean {
   return false;
 }
 
-/** Put result image on Save Image (all of them); if none, on PreviewImage. */
-export function putHistoryImageOnSaveNodes(nodes: NodeInstance[], imageUrl: string | undefined): {
+/**
+ * Put the result on its sink nodes. Image: Save Image (all of them); if none, PreviewImage.
+ * Video (declared mediaType, never guessed from the URL/model name): Save Video nodes only.
+ */
+export function putHistoryImageOnSaveNodes(nodes: NodeInstance[], imageUrl: string | undefined, mediaType: 'image' | 'video' = 'image'): {
   nodes: NodeInstance[];
   imageApplied: boolean;
 } {
@@ -78,7 +81,7 @@ export function putHistoryImageOnSaveNodes(nodes: NodeInstance[], imageUrl: stri
   const hasSave = nodes.some((n) => n.type === 'SaveImage');
   let imageApplied = false;
   const next = nodes.map((n) => {
-    const hit = hasSave ? n.type === 'SaveImage' : n.type === 'PreviewImage';
+    const hit = mediaType === 'video' ? n.type === 'SaveVideo' : hasSave ? n.type === 'SaveImage' : n.type === 'PreviewImage';
     if (!hit) return n;
     imageApplied = true;
     return {
@@ -296,7 +299,7 @@ export function applyHistoryToCanvas(input: ApplyHistoryInput): ApplyHistoryOutp
       const baseNodes = clone(snap.nodes) as NodeInstance[];
       const baseConns = clone((snap.connections || []) as Connection[]);
       // Snapshot was sanitized without outputData — reinject this run's image.
-      const withImage = putHistoryImageOnSaveNodes(baseNodes, imageUrl);
+      const withImage = putHistoryImageOnSaveNodes(baseNodes, imageUrl, item.mediaType === 'video' ? 'video' : 'image');
       // Overlay history card fields (board-requested) so unused-but-shown values still land.
       const patched = patchHistoryParamsOntoNodes(withImage.nodes, item);
       const spatialFrames =
@@ -320,7 +323,7 @@ export function applyHistoryToCanvas(input: ApplyHistoryInput): ApplyHistoryOutp
     throw new Error(`没有 ${item.actualProvider || item.provider || '未知供应商'} 的标准预设，无法还原这条记录`);
   }
   const built = patchHistoryParamsOntoNodes(clone(preset.nodes), item, true);
-  const withImage = putHistoryImageOnSaveNodes(built.nodes, imageUrl);
+  const withImage = putHistoryImageOnSaveNodes(built.nodes, imageUrl, item.mediaType === 'video' ? 'video' : 'image');
   return {
     nodes: withImage.nodes,
     connections: clone(preset.connections),

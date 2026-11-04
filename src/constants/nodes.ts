@@ -996,6 +996,8 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
         default: '',
         placeholder: '输入负向排畸特征...',
       },
+      // Empty by default; filled value is sent as-is. Hidden when the preset's declared Schema has no seed.
+      { name: 'seed', label: '种子 (seed)', type: 'number', default: '', step: 1 },
       { name: 'num_frames', label: '帧数 (num_frames)', type: 'number', default: '', step: 1 },
       {
         name: 'duration',
