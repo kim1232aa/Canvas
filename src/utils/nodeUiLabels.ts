@@ -7,16 +7,9 @@
  * NOTE: As per team agreement, this file maps labels at render time without modifying src/constants/nodes.ts.
  */
 
-export interface LabelPair {
-  label: string;
-  sublabel?: string;
-  description?: string;
-}
-
 /** Node title friendly display mappings */
 export const NODE_TITLE_MAP: Record<string, string> = {
-  KSampler: 'KSampler 采样生成器',
-  CheckpointLoaderSimple: '基础大模型 (Checkpoint)',
+  KSampler: 'KSampler 采样器',
   EmptyLatentImage: '画布尺寸设定 (Latent)',
   CLIPTextEncode: '正向提示词 (CLIP)',
   CLIPTextEncodeNegative: '负向提示词 (Negative)',
@@ -39,32 +32,25 @@ export const NODE_TITLE_MAP: Record<string, string> = {
 
 /** Widget friendly display mappings */
 export const WIDGET_LABEL_MAP: Record<string, string> = {
-  seed: '随机种子',
-  control_after_generate: '运行后控制',
-  steps: '迭代步数',
-  cfg: '提示词相关性 (CFG)',
-  sampler_name: '采样算法',
-  scheduler: '调度器',
-  denoise: '去噪强度',
   width: '图像宽度',
   height: '图像高度',
   batch_size: '生成张数',
-  ckpt_name: '大模型名称',
+  seed: '随机种子',
+  control_after_generate: '运行后控制',
+  steps: '步数',
+  cfg: '提示词相关性 (CFG)',
+  sampler_name: '采样器',
+  scheduler: '调度器',
+  denoise: '去噪强度',
+  filename_prefix: '文件名前缀',
+  trigger_words: '触发词',
   lora_name: 'LoRA 名称',
   strength_model: 'LoRA 强度',
   strength_clip: '文本权重',
-  trigger_words: '触发词',
-  filename_prefix: '文件名前缀',
-  text: '提示词文本',
-  prompt: '提示词',
-  negative_prompt: '负向提示词',
-  image_url: '参考图地址',
   aspect_ratio: '画幅比例',
   resolution: '分辨率',
   size: '画幅尺寸',
   output_format: '输出格式',
-  duration: '视频时长 (秒)',
-  fps: '帧率 (FPS)',
 };
 
 /** Socket port friendly display mappings */
@@ -108,10 +94,6 @@ export const SCHEMA_FIELD_LABEL_MAP: Record<string, { label: string; desc?: stri
 
 export function formatNodeDisplayTitle(type: string, currentTitle?: string): string {
   if (NODE_TITLE_MAP[type]) {
-    // If the node has a custom user-renamed title that is different from default type name, keep it
-    if (currentTitle && currentTitle !== type && !currentTitle.startsWith(type)) {
-      return `${currentTitle} · ${NODE_TITLE_MAP[type]}`;
-    }
     return NODE_TITLE_MAP[type];
   }
   return currentTitle || type;

@@ -1,4 +1,4 @@
-import { formatSocketDisplayName } from '../utils/nodeUiLabels';
+import { formatSocketDisplayName, formatNodeDisplayTitle, formatWidgetLabel } from '../utils/nodeUiLabels';
 import { NodeErrorDisclosure } from './NodeErrorDisclosure';
 import { ensureModelSchema, getModelSchemaEntry } from '../services/modelSchemaCache';
 import {PreviewPlaceholder} from './PreviewPlaceholder';
@@ -345,7 +345,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                   ? checkpointNodeTitle(node.values.targetProvider,node.values.ckpt_name)
                 : LORA_LOADER_TYPES.has(node.type)
                   ? loraLoaderNodeTitle(node.title, node.values?.lora_name)
-                  : node.title;
+                  : formatNodeDisplayTitle(node.type, node.title);
             const loraFull = LORA_LOADER_TYPES.has(node.type) ? String(node.values?.lora_name || '').trim() : '';
             const hoverTitle = loraFull
               ? loraFull
@@ -673,7 +673,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                   <div className="flex flex-wrap items-center justify-between text-slate-400 font-mono text-[11px] gap-1.5">
                     {/* clean-1333 #6: label never wraps (「去噪强 / 度」); a long badge drops to its own line instead. */}
                     <span className="flex flex-wrap items-center gap-1.5 min-w-0" title={widget.title || undefined}>
-                      <span className="whitespace-nowrap shrink-0" data-testid={`widget-label-${widget.name}`}>{widget.label}</span>
+                      <span className="whitespace-nowrap shrink-0" data-testid={`widget-label-${widget.name}`}>{formatWidgetLabel(widget.name, widget.label)}</span>
                       {unsupported && null}
                       {!unsupported && null}
                     </span>
@@ -916,7 +916,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                   const staleValue = value && !opts.some((option) => option.value === value);
                   return (
                     <div key={widget.name} className="space-y-1" data-testid={`ckpt-${widget.name}`}>
-                      <label className="text-slate-400 font-mono text-[11px] block" title={widget.title || undefined}>{widget.label}</label>
+                      <label className="text-slate-400 font-mono text-[11px] block" title={widget.title || undefined}>{formatWidgetLabel(widget.name, widget.label)}</label>
                       <select
                         value={value || ''}
                         aria-label={widget.label}
@@ -940,7 +940,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                 if (filledCanvasValue(value)) {
                   return (
                     <div key={widget.name} className="space-y-1" data-testid={`ckpt-${widget.name}`}>
-                      <label className="text-slate-400 font-mono text-[11px] block" title={widget.title || undefined}>{widget.label}</label>
+                      <label className="text-slate-400 font-mono text-[11px] block" title={widget.title || undefined}>{formatWidgetLabel(widget.name, widget.label)}</label>
                       <input
                         type="text"
                         value={String(value)}
@@ -1032,7 +1032,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               return (
                 <div key={widget.name} className={`space-y-1 `}>
                   <div className="flex flex-wrap items-center justify-between gap-1.5">
-                    <label className="text-slate-400 font-mono text-[11px] block whitespace-nowrap shrink-0" data-testid={`widget-label-${widget.name}`} title={widget.title || undefined}>{widget.label}</label>
+                    <label className="text-slate-400 font-mono text-[11px] block whitespace-nowrap shrink-0" data-testid={`widget-label-${widget.name}`} title={widget.title || undefined}>{formatWidgetLabel(widget.name, widget.label)}</label>
                     {unsupported && null}
                     {!unsupported && null}
                   </div>
@@ -1145,7 +1145,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               return (
                 <div key={widget.name} className="space-y-1">
                   <div className="flex flex-wrap items-center justify-between gap-1.5">
-                    <label className="text-slate-400 font-mono text-[11px] block whitespace-nowrap shrink-0" data-testid={`widget-label-${widget.name}`} title={widget.title || undefined}>{widget.label}</label>
+                    <label className="text-slate-400 font-mono text-[11px] block whitespace-nowrap shrink-0" data-testid={`widget-label-${widget.name}`} title={widget.title || undefined}>{formatWidgetLabel(widget.name, widget.label)}</label>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <input
@@ -1199,7 +1199,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               return (
                 <div key={widget.name} className={`space-y-1 `}>
                   <div className="flex flex-wrap items-center justify-between gap-1.5">
-                    <label className="text-slate-400 font-mono text-[11px] block whitespace-nowrap shrink-0" data-testid={`widget-label-${widget.name}`} title={widget.title || undefined}>{widget.label}</label>
+                    <label className="text-slate-400 font-mono text-[11px] block whitespace-nowrap shrink-0" data-testid={`widget-label-${widget.name}`} title={widget.title || undefined}>{formatWidgetLabel(widget.name, widget.label)}</label>
                     {unsupported && null}
                     {!unsupported && null}
                   </div>
@@ -1237,7 +1237,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               return (
                 <div key={widget.name} className="space-y-1">
                   <div className="flex items-center justify-between">
-                    <label className="text-slate-400 font-mono text-[11px]" title={widget.title || undefined}>{widget.label}</label>
+                    <label className="text-slate-400 font-mono text-[11px]" title={widget.title || undefined}>{formatWidgetLabel(widget.name, widget.label)}</label>
                     {isLoraName && onOpenCivitaiPicker && (
                       <button
                         onClick={() => onOpenCivitaiPicker(node.id)}
