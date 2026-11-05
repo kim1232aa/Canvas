@@ -86,6 +86,28 @@ MuAPI 模型 `wan2.1-lora-i2v`，480p，5 秒，16:9，同一 matrix-shot LoRA�
 
 Novita 预设是 `SVD-XT`，25 帧、6 fps，提示词为空。第一次点击被页面本地拦住（「请填写提示词」），没有请求。补了一句提示词后再点，这是该模型的第一次上游尝试，返回 403 `NOT_ENOUGH_BALANCE`。该预设没有 LoRA 字段。
 
+## 第二轮：此前未点过的五家（文生视频，各点一次）
+
+模型取自本次重新打开的官方页，不取仓库草稿。每家都是画布点击。
+
+| 服务商 | 模型 | 上游端点 | 状态 | 原文 |
+| --- | --- | --- | --- | --- |
+| Together | `Wan-AI/wan2.7-t2v` | https://api.together.ai/v2/videos | 401 | invalid api key |
+| AIMLAPI | `alibaba/wan-2-6-t2v` | https://api.aimlapi.com/v2/video/generations | 403 | You've run out of funds |
+| Venice | `wan-2.5-preview-text-to-video` | https://api.venice.ai/api/v1/video/queue | 402 | Insufficient USD or Diem balance |
+| Krea | `video/kling/kling-2.5` | https://api.krea.ai/generate/video/kling/kling-2.5 | 402 | API balance is separate from workspace compute balance, top up API balance |
+| Sogni | `ltx25` | https://api.sogni.ai/v1/creative-agent/workflows | 201 后轮询 | status `waiting_for_user`，waitingReason `insufficient_credit` |
+
+来源：Together [Wan 2.7 quickstart](https://docs.together.ai/docs/wan2.7-t2v-quickstart)，AIMLAPI [Wan 2.6 text-to-video](https://docs.aimlapi.com/api-references/video-models/alibaba-cloud/wan-2.6-text-to-video)，Venice [Video Generation](https://docs.venice.ai/guides/media/video-generation)，Krea [Text to Video](https://docs.krea.ai/developers/examples/text-to-video)，Sogni [generate_video.schema.json](https://raw.githubusercontent.com/Sogni-AI/sogni-protocol/main/schemas/tools/generate_video.schema.json)。
+
+Together 第一次点击打到了 `/v1/images/generations`。原因：目录接口 401 后没有行，占位记录没有 type，服务端猜成图像端点。已修：视频节点带 `isVideo: true`，目录失败且调用方声明视频时改走 `/v2/videos`，并且不复用这次失败留下的图像路由缓存。修后的点击才是上表那条 401。测试：`src/server/schemaCatalogFailureSends.test.ts`。
+
+Krea 第一次用了 `kling/kling-2.5`，服务端拼成 `/generate/kling/kling-2.5`，返回 404 Endpoint not found。官方路径是 `/generate/video/kling/kling-2.5`，所以第二次把模型 id 写成 `video/kling/kling-2.5`，得到 402。两次都是这一家，未超两次。
+
+Sogni 的 `generate_video` 只有 MiniMax H3 接受 `loras`，`ltx25` 明确不接受，所以这次没有挂 LoRA。提交返回 workflowId，轮询到 `waiting_for_user / insufficient_credit`，没有视频 URL。
+
+五家里没有一家返回视频。节点播放、SaveVideo、历史因此仍然没有可验证的成功样本。
+
 三次发出的字段（提示词已截断，参考图是上传后的本站 `/api/media/…`，不是外链）：
 
 - Fal：model `fal-ai/wan-i2v-lora`，num_frames 81，fps 16，resolution 480p，aspect_ratio 16:9，seed 24231881，cfg 4，loras `[{path: https://huggingface.co/Remade-AI/matrix-shot/resolve/main/matrix_shot.safetensors, scale: 1}]`。节点原文：`Fal.ai 接口执行失败 [403]`，errorSource upstream。
