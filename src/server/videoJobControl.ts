@@ -6,10 +6,10 @@
  *   https://docs.fal.ai/model-endpoints/queue
  * - Replicate: POST /v1/predictions/{id}/cancel.
  *   https://replicate.com/docs/reference/http
- * - Civitai: POST /v2/consumer/workflows/{id}/cancel is the path the orchestration
- *   API exposes next to GetWorkflow. The results page documents the canceled
- *   terminal state and says a started step is billed.
- *   https://developer.civitai.com/orchestration/guide/results-and-webhooks.md
+ * - Civitai: PUT /v2/consumer/workflows/{workflowId} with body { "status": "canceled" }.
+ *   UpdateWorkflowRequest.status is the enum ["canceled"].
+ *   https://orchestration.civitai.com/openapi/v2-consumers.json (operation UpdateWorkflow)
+ *   https://developer.civitai.com/orchestration/reference/operations/UpdateWorkflow
  * - Krea: DELETE /jobs/{job_id}. https://docs.krea.ai/developers/examples/text-to-video
  *   (poll section; the OpenAPI lists DELETE /jobs/{job_id}).
  * - Sogni: POST /v1/creative-agent/workflows/{id}/cancel.
@@ -46,7 +46,7 @@ export function videoCancelPlan(target: VideoCancelTarget): VideoCancelPlan | { 
     return { method: 'PUT', url: target.cancelUrl };
   }
   if (provider === 'replicate') return { method: 'POST', url: `https://api.replicate.com/v1/predictions/${encodeURIComponent(target.jobId)}/cancel` };
-  if (provider === 'civitai') return { method: 'POST', url: `https://orchestration.civitai.com/v2/consumer/workflows/${encodeURIComponent(target.jobId)}/cancel` };
+  if (provider === 'civitai') return { method: 'PUT', url: `https://orchestration.civitai.com/v2/consumer/workflows/${encodeURIComponent(target.jobId)}`, body: { status: 'canceled' } };
   if (provider === 'krea') return { method: 'DELETE', url: `https://api.krea.ai/jobs/${encodeURIComponent(target.jobId)}` };
   if (provider === 'sogni') return { method: 'POST', url: `https://api.sogni.ai/v1/creative-agent/workflows/${encodeURIComponent(target.jobId)}/cancel` };
   return { unsupported: `${provider} 的视频取消接口未核实，没有发送取消请求。` };

@@ -111,7 +111,7 @@ Sogni 的 `generate_video` 只有 MiniMax H3 接受 `loras`，`ltx25` 明确不�
 ## 本轮补开的官方页（取消与是否有视频接口）
 
 - Replicate 有取消：`POST /v1/predictions/{id}/cancel`。[HTTP API](https://replicate.com/docs/reference/http) 的 “Cancel a prediction”。
-- Civitai 结果页把 `canceled` 列为终态，并写明已开始的步骤仍会计费。[Results & Webhooks](https://developer.civitai.com/orchestration/guide/results-and-webhooks.md)。取消请求发到 `POST /v2/consumer/workflows/{id}/cancel`。该路径是按 GetWorkflow 的同级资源拼的，页面没有单独的取消示例，标为按资源约定，不是逐字引用。
+- Civitai 取消是官方 `PUT /v2/consumer/workflows/{workflowId}`，请求体 `{ "status": "canceled" }`。`UpdateWorkflowRequest.status` 的枚举只有 `canceled`。来源：[Update workflow](https://developer.civitai.com/orchestration/reference/operations/UpdateWorkflow)，以及本次下载的 `https://orchestration.civitai.com/openapi/v2-consumers.json`（operationId `UpdateWorkflow`）。之前发到 `POST .../workflows/{id}/cancel` 是本地拼的，已删除，不再发送。
 - Krea 轮询是 `GET /jobs/{job_id}`，文档写每 5 秒。[Text to Video](https://docs.krea.ai/developers/examples/text-to-video)。取消用 `DELETE /jobs/{job_id}`，来自同一组 API 的任务资源，页面示例只给了轮询。
 - Sogni 工作流可取消：`POST /v1/creative-agent/workflows/{id}/cancel`。本次点击的 schema 没有写取消，取消路径沿用 Sogni 工作流 API 的同级资源。
 - Fal 取消见此前的 queue 页：`PUT {cancel_url}`。
@@ -130,13 +130,15 @@ Sogni 的 `generate_video` 只有 MiniMax H3 接受 `loras`，`ltx25` 明确不�
 
 没有视频产物。节点预览、SaveVideo、历史播放因而没有可验证的成功样本。
 
-## 状态行与取消（评审退回后补上）
+## 状态行与取消（评审第二轮）
 
-运行中的视频节点显示一行状态，文案来自 `videoProgressLine`：阶段、上游状态原文、本地已等待秒数和本地预算分开写。读取是节点上的按钮「刷新这个视频任务的状态」，点一次打 `GET /api/video/status?provider=`。不用定时器：`NodeItem` 被静态渲染测试直接当函数调用，那些测试只替掉了 `useState` 和 `useRef`，加 `useEffect` 会在没有 React dispatcher 时崩溃。
+运行中的视频节点挂 `<VideoJobStatus>`。它自己每 3 秒读 `GET /api/video/status?provider=`，显示阶段、上游状态原文、本地已等待秒数和本地预算。轮询 hook 在子组件里：把 `NodeItem` 当函数调用的测试只会拿到这个元素的描述，不会执行 hook。
 
-取消按钮「停止这个视频任务」打 `POST /api/video/cancel`。有文档的才发：Fal `PUT {cancel_url}`，Replicate `POST /v1/predictions/{id}/cancel`，Civitai `POST /v2/consumer/workflows/{id}/cancel`，Krea `DELETE /jobs/{id}`，Sogni `POST /v1/creative-agent/workflows/{id}/cancel`。NanoGPT、WaveSpeed、MuAPI、Novita、Together、AIMLAPI、Venice 返回 409，正文写明没有取消接口，不发上游请求。
+状态由各家轮询写入：Fal（`runFalQueueLifecycle`）、NanoGPT（`/api/video/generate`）、Civitai（`runCivitaiVideoPoll`，`server.ts` 的 isVideo 分支调用它）、Replicate（视频预测轮询）、SchemaProviderDriver（仅 `isVideo === true`，覆盖 Krea、Sogni 以及其余走该驱动的视频任务）。任务成功、失败或本地预算耗尽时删除记录；超过预算加 60 秒仍无人清理的记录由 TTL 删除。
+
+取消按钮「停止这个视频任务」打 `POST /api/video/cancel`。有文档的才发：Fal `PUT {cancel_url}`，Replicate `POST /v1/predictions/{id}/cancel`，Civitai `PUT /v2/consumer/workflows/{id}` body `{ "status": "canceled" }`，Krea `DELETE /jobs/{id}`，Sogni `POST /v1/creative-agent/workflows/{id}/cancel`。NanoGPT、WaveSpeed、MuAPI、Novita、Together、AIMLAPI、Venice 返回 409，正文写明没有取消接口，不发上游请求。
 
 ## 尚未完成
 
 - 付费点击：图生视频 6 家（Fal、WaveSpeed、Replicate、Civitai、MuAPI、Novita）和图生之外的文生视频 5 家（Together、AIMLAPI、Venice、Krea、Sogni）都在提交或轮询阶段被账单或鉴权拒绝。没有任何视频 URL，所以节点播放、SaveVideo、历史都没有可验证的成功样本。这两个任务按 tower 决定保持 dropped。
-- Civitai 的回归测试覆盖的是 `civitaiVideoPollPlan` 的总等待（大于 60 秒、不超过 10 分钟）和间隔常量，不是用假时钟驱动 `server.ts` 里的完整 handler。
+- Civitai 的 `runCivitaiVideoPoll` 是 `server.ts` isVideo 分支调用的循环。测试用假时钟：前 7 次 `processing`、第 8 次返回视频（累计等待超过旧的 60 秒）；一直 `scheduled` 直到 10 分钟预算，结果是本地超时，带 workflowId 和 endpoint，路由把它写成 504 `errorSource: local`。图像请求的 socket 仍是 `civitaiGenerateSocketMs(false) === 120000`。

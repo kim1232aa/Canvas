@@ -16,7 +16,7 @@ describe('video cancel plans', () => {
       throw new Error('documented cancel provider was marked unsupported');
     }
     expect(replicate.url).toBe('https://api.replicate.com/v1/predictions/p1/cancel');
-    expect(civitai.method).toBe('POST');
+    expect(civitai).toEqual({ method: 'PUT', url: 'https://orchestration.civitai.com/v2/consumer/workflows/wf1', body: { status: 'canceled' } });
     expect(krea).toMatchObject({ method: 'DELETE', url: 'https://api.krea.ai/jobs/j1' });
     expect(sogni.url).toContain('/workflows/wf2/cancel');
   });
