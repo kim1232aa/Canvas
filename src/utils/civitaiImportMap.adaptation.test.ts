@@ -433,5 +433,19 @@ describe('Cross-Provider Civitai Recipe Adaptation Engine', () => {
       const result = adaptCivitaiRecipeToProvider(recipeWithHash404, 'civitai');
       expect(result.warnings).toContain('哈希未在 Civitai 找到: LORA:sdxl/sinfully_stylish_sdxl (033c44dfb8)');
     });
+
+    it('P2-1 (Round 4): unmapped sampler is marked unsupported and not mapped as will-send', () => {
+      const unmappedRecipe: CivitaiRecipeInput = {
+        baseModel: 'SDXL 1.0',
+        sampler: 'totally_unknown_custom',
+        engine: 'sdcpp',
+      };
+      const result = adaptCivitaiRecipeToProvider(unmappedRecipe, 'civitai');
+      expect(result.fields.sampler.status).toBe('unsupported');
+      expect(result.fields.sampler.mappedValue).toBeUndefined();
+      expect(result.fields.sampler.humanMessage).toContain('不在 Civitai sdcpp 官方枚举内，未映射');
+      expect(result.unsupportedFields).toContain('sampler');
+      expect(result.warnings.some((w) => w.includes('未在 Civitai 官方枚举中'))).toBe(true);
+    });
   });
 });

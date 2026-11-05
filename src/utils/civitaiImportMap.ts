@@ -1050,16 +1050,24 @@ export function adaptCivitaiRecipeToProvider(
   const schedulerVal = recipe.scheduler || '';
   if (provider === 'civitai') {
     const isComfy = (recipe.engine || '').toLowerCase() === 'comfy';
-    const mappedSampler = mapSampler(samplerVal, isComfy ? 'comfy' : 'sdcpp') || samplerVal;
+    const mapped = mapSampler(samplerVal, isComfy ? 'comfy' : 'sdcpp');
+    const isUnmapped = Boolean(samplerVal && !mapped);
+    const mappedSampler = mapped;
     fields.sampler = {
       field: 'sampler',
       originalValue: samplerVal,
       targetField: isComfy ? 'sampler' : 'sampleMethod',
-      mappedValue: mappedSampler,
-      status: samplerVal ? 'mapped' : 'not_applicable',
-      humanMessage: `按 Civitai 引擎映射为 ${isComfy ? 'sampler (comfy)' : 'sampleMethod (sdcpp)'}: ${mappedSampler || '默认'}`,
+      mappedValue: mappedSampler || undefined,
+      status: isUnmapped ? 'unsupported' : (samplerVal ? 'mapped' : 'not_applicable'),
+      humanMessage: isUnmapped
+        ? `采样器 "${samplerVal}" 不在 Civitai ${isComfy ? 'Comfy' : 'sdcpp'} 官方枚举内，未映射；上游请求不会发送此未知采样器。`
+        : `按 Civitai 引擎映射为 ${isComfy ? 'sampler (comfy)' : 'sampleMethod (sdcpp)'}: ${mappedSampler || '默认'}`,
       source: 'https://developer.civitai.com/orchestration/recipes/sdxl.md',
     };
+    if (isUnmapped) {
+      unsupportedFields.push('sampler');
+      warnings.push(`采样器 "${samplerVal}" 未在 Civitai 官方枚举中，未映射。`);
+    }
     fields.scheduler = {
       field: 'scheduler',
       originalValue: schedulerVal,
