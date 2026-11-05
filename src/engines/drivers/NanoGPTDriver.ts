@@ -80,7 +80,8 @@ export class NanoGPTDriver extends BaseEngineDriver {
     }
 
     // Normalized Image API: server validates fields against live model endpoint metadata.
-    const resp = await fetch('/api/nanogpt/generate', {
+    const endpoint = '/api/nanogpt/generate';
+    const resp = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -111,17 +112,34 @@ export class NanoGPTDriver extends BaseEngineDriver {
     });
 
     if (!resp.ok) {
-      const err = await resp.json().catch(() => ({ error: 'NanoGPT 生成失败' }));
-      throw new Error(err.details || err.error || `NanoGPT 错误 (${resp.status})`);
+      const rawBody = await resp.text().catch(() => '');
+      let errMessage = `NanoGPT 图像路由 ${endpoint} 返回 HTTP ${resp.status}: ${rawBody}`;
+      try {
+        const errObj = JSON.parse(rawBody);
+        const detail = errObj.details || errObj.error;
+        if (detail) {
+          errMessage = `NanoGPT 图像路由 ${endpoint} 返回 HTTP ${resp.status}: ${typeof detail === 'object' ? JSON.stringify(detail) : detail}`;
+        }
+      } catch {}
+      throw new Error(errMessage);
     }
 
     const data = await resp.json();
+    if (!data.imageUrl && !data.mediaUrl) {
+      throw new Error(`NanoGPT 图像路由返回缺少 imageUrl: ${JSON.stringify(data)}`);
+    }
+    if (!data.model) {
+      throw new Error(`NanoGPT 图像路由返回缺少 model: ${JSON.stringify(data)}`);
+    }
+
     return {
-      mediaUrl: data.imageUrl,
+      mediaUrl: data.imageUrl || data.mediaUrl,
       mediaType: 'image',
-      provider: this.name,
+      provider: data.provider || this.name,
       providerId: this.id,
-      model: data.model || params.model,
+      model: data.model,
+      actualModel: data.actualModel || data.model,
+      actualProvider: data.actualProvider || this.name,
       requestedModel: params.model,
       seed: data.historyItem?.seed ?? null,
       rawResponse: data,

@@ -143,6 +143,48 @@ describe('NanoGPTDriver', () => {
     const [url] = vi.mocked(tracedFetch).mock.calls[0];
     expect(url).toBe('/api/nanogpt/generate');
     expect(result.mediaUrl).toBe('https://example.com/image.png');
+    expect(result.model).toBe('flux-schnell');
+  });
+
+  it('image branch surfaces HTTP status, endpoint, and verbatim body on failure', async () => {
+    const driver = new NanoGPTDriver();
+
+    vi.mocked(tracedFetch).mockResolvedValueOnce({
+      ok: false,
+      status: 401,
+      text: async () => '{"error":{"message":"Invalid session","type":"invalid_request_error","code":"invalid_api_key"}}',
+    } as any);
+
+    await expect(
+      driver.generate(
+        {
+          model: 'flux-schnell',
+          prompt: 'test prompt',
+        } as any,
+        { nanogptKey: 'key-123' }
+      )
+    ).rejects.toThrow(/NanoGPT 图像路由 \/api\/nanogpt\/generate 返回 HTTP 401: \{"message":"Invalid session","type":"invalid_request_error","code":"invalid_api_key"\}/);
+  });
+
+  it('image branch throws with raw response when model is missing from response', async () => {
+    const driver = new NanoGPTDriver();
+
+    vi.mocked(tracedFetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        imageUrl: 'https://example.com/image.png',
+      }),
+    } as any);
+
+    await expect(
+      driver.generate(
+        {
+          model: 'flux-schnell',
+          prompt: 'test prompt',
+        } as any,
+        { nanogptKey: 'key-123' }
+      )
+    ).rejects.toThrow(/NanoGPT 图像路由返回缺少 model: \{"imageUrl":"https:\/\/example\.com\/image\.png"\}/);
   });
 
   it('routes through EngineRegistry when targetProvider is nanogpt and isVideo is true', async () => {
