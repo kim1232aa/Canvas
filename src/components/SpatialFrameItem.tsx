@@ -446,7 +446,7 @@ export const SpatialFrameItem: React.FC<SpatialFrameItemProps> = ({
         {/* Positive Prompt Textarea */}
         <div className="space-y-1">
           <div className="flex items-center justify-between text-[11px] text-slate-400">
-            <span className="font-semibold text-slate-300">正向提示词 (Positive)</span>
+            <span className="font-semibold text-slate-300">正向提示词</span>
             <button
               onClick={handleRefine}
               disabled={isRefining || !frame.prompt}
@@ -587,7 +587,7 @@ export const SpatialFrameItem: React.FC<SpatialFrameItemProps> = ({
           ) : (
             <>
               <Play className="w-3.5 h-3.5 fill-white" />
-              <span>生成此选区 (Queue Frame)</span>
+              <span>生成此选区画板</span>
             </>
           )}
         </button>
