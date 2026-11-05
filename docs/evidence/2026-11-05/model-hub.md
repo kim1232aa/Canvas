@@ -124,14 +124,16 @@
   - 判定结果：**PASS_BILLING**。
   - 截图凭证：[novita-result.png](./model-hub/novita-result.png)
 
-### 2. 服务商 2：Fal.ai（FLUX.1 架构元数据完全匹配）
+### 2. 服务商 2：Fal.ai 与 Hugging Face（FLUX.1 架构实测与中立未知芯片）
+- **Fal.ai 架构元数据规范声明**：
+  - Fal.ai 官方接口（`GET https://api.fal.ai/v1/models`）返回的是在线生成/推理端点列表（如 `fal-ai/lora`、`fal-ai/flux-lora`），官方元数据中**不包含任何模型架构或 base_model 字段**。
+  - 根据「严禁名称猜测、严禁虚假断言」准则，系统严禁从端点名称子串猜测架构，Fal 卡片一律真实置 `baseModel: undefined`，在模型中心挂载按钮上真实展示中立未知芯片：`挂载到所选底模 架构未知，无法判断兼容`。
+  - 截图凭证：[fal-chip.png](./model-hub/fal-chip.png)（清晰呈显 `Stable Diffusion with LoRAs`、`FLUX 3 Klein Text to Image LoRA` 等 Fal 官方端点卡片上的 `挂载到所选底模 架构未知，无法判断兼容` 灰标）。
+- **Hugging Face LoRA 架构元数据匹配**：
+  - 真实带有 `cardData.base_model` / `base_model:` tag 的 HF 社区 LoRA（如 `nerogar/lora` 与 `flux-loras`，元数据声明 `base_model: "black-forest-labs/FLUX.1-dev"`），在底模为 FLUX.1 时准确显示 `挂载到所选底模 兼容 black-forest-labs/FLUX.1-dev`；而跨架构 FLUX.2 LoRA（如 `FLux_Klein_9B_NSFW`）则准确呈现拦截警示芯片：`底模架构不匹配 架构不兼容 (black-forest-labs/FLUX.2-klein-base-9B ≠ FLUX.1 [dev])`。
+  - 截图凭证：[hf-chip.png](./model-hub/hf-chip.png)。
 - **选取的 Checkpoint**：`FLUX.1 [dev] with LoRAs` (`fal-ai/flux-lora`)
-  - **上游接口**：`GET https://api.fal.ai/v1/models`
-  - **底模元数据字段与取值**：`item.baseModel: "FLUX.1"`（归一化为 `flux-1`）。
 - **选取的 LoRA**：`watercolor.safetensors` (`https://huggingface.co/nerogar/lora/resolve/main/watercolor.safetensors`)
-  - **LoRA 元数据字段与取值**：`baseModel: "FLUX.1"`（归一化为 `flux-1`）。
-- **兼容性芯片**：双方元数据均为 FLUX.1 架构，芯片显示 `兼容 black-forest-labs/FLUX.1-dev`。
-  - 截图凭证：[fal-chip.png](./model-hub/fal-chip.png)
 - **纯净画布与真实请求日志 (temp/logs/requests-2026-11-05.jsonl)**：
   - 时间：`2026-11-05T22:54:38+09:00`
   - 请求端点：`POST https://fal.run/fal-ai/flux-lora`
@@ -170,34 +172,37 @@
   - **跨架构拦截**：`Detail Tweaker XL` (SDXL 1.0) 正确显示警示红标：`底模架构不匹配 架构不兼容 (SDXL 1.0 ≠ SD 1.5)`；`Not Artists Styles` (Pony) 显示 `底模架构不匹配 架构不兼容 (Pony ≠ SD 1.5)`。
   - **中立未知状态（如 Krea 等）**：Krea 芯片严格读取 `items[].models`，当未指明架构或元数据缺失时，显示中立灰标 `架构未知，无法判断兼容`，绝不虚假断言。
   - 截图凭证：[civitai-chip.png](./model-hub/civitai-chip.png)
-- **纯净画布与真实请求日志 (temp/logs/requests-2026-11-05.jsonl)**：
-  - 时间：`2026-11-05T23:35:10+09:00`
-  - 请求端点：`POST https://orchestration.civitai.com/v2/consumer/workflows?wait=100`
-  - 请求体：
-    ```json
-    {
-      "steps": [
-        {
-          "$type": "imageGen",
-          "input": {
-            "engine": "sdcpp",
-            "ecosystem": "sd1",
-            "operation": "createImage",
-            "model": "urn:air:sd1:checkpoint:civitai:4201@130072",
-            "prompt": "a tranquil zen garden in morning mist",
-            "loras": {
-              "urn:air:sd1:lora:civitai:82098@87153": 0.8
+- **纯净画布与真实请求日志 (temp/logs/requests-2026-11-05.jsonl 及 temp/extract-e2e-logs.mjs 提取)**：
+  - **POST 记录 1 (23:35:10)**：
+    - 时间：`2026-11-05T23:35:10+09:00`
+    - 请求端点：`POST https://orchestration.civitai.com/v2/consumer/workflows?wait=100`
+    - 请求体：
+      ```json
+      {
+        "steps": [
+          {
+            "$type": "imageGen",
+            "input": {
+              "engine": "sdcpp",
+              "ecosystem": "sd1",
+              "operation": "createImage",
+              "model": "urn:air:sd1:checkpoint:civitai:4201@130072",
+              "prompt": "a tranquil zen garden in morning mist",
+              "loras": {
+                "urn:air:sd1:lora:civitai:82098@87153": 0.8
+              }
             }
           }
-        }
-      ]
-    }
-    ```
-- **运行实测产物 (Verbatim)**：
-  - 状态码：`HTTP 400`
-  - 响应原文：`{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.1","title":"Bad Request","status":400,"detail":"insufficientBuzz","traceId":"00-416c953ed6ed9fe71da2a18e15a11e66-7e180bddab3e2781-02"}`
-  - 判定结果：**PASS_BILLING**（Buzz 为 Civitai 平台官方代币，insufficientBuzz 为官方真实算力余额拒绝错误，UI 采样器节点准确呈显真实错误）。
-  - 截图凭证：[civitai-result.png](./model-hub/civitai-result.png)
+        ]
+      }
+      ```
+    - 响应原文：`{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.1","title":"Bad Request","status":400,"detail":"insufficientBuzz","traceId":"00-416c953ed6ed9fe71da2a18e15a11e66-7e180bddab3e2781-02"}`
+  - **POST 记录 2 (00:09:20 / 干净画布)**：
+    - 时间：`2026-11-06T00:09:20+09:00`
+    - 请求端点：`POST https://orchestration.civitai.com/v2/consumer/workflows?wait=100`
+    - 响应原文：`{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.1","title":"Bad Request","status":400,"detail":"insufficientBuzz","traceId":"00-5e1bd42ce75ad7e952e9d8aff28d49b7-b90e7202bbd70ae0-02"}`
+  - **判定结果**：**PASS_BILLING**（Buzz 为 Civitai 平台官方代币，insufficientBuzz 为官方真实算力余额拒绝错误，UI 采样器节点准确呈显真实错误）。
+  - **干净画布截图凭证**：[civitai-result.png](./model-hub/civitai-result.png)（画布上 Civitai 节点加载 `urn:air:sd1:checkpoint:civitai:4201@130072`，单个 LoRA 节点清晰展示标题 `LoRA: Add More Details (82098@87153)`，无任何旧的 58390 残留，采样器节点与 Toast 准确呈显真实 400 insufficientBuzz 错误）。
 
 ---
 

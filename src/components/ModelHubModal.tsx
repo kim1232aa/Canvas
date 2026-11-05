@@ -281,64 +281,32 @@ export function checkHubLoraCompatibility(
   };
 }
 
-interface ArchitectureFields { baseModel?: unknown; id?: unknown; name?: unknown; description?: unknown; tags?: unknown }
+interface ArchitectureFields { baseModel?: unknown; architecture?: unknown; id?: unknown; name?: unknown; description?: unknown; tags?: unknown }
 
 function matchesArchitecture(m: ArchitectureFields, arch: string): boolean {
   if (!arch || arch === 'all') return true;
-  const target = arch.toLowerCase();
-  const baseModel = String(m.baseModel || '').toLowerCase();
-  const id = String(m.id || '').toLowerCase();
-  const name = String(m.name || '').toLowerCase();
-  const desc = String(m.description || '').toLowerCase();
-  const tags = Array.isArray(m.tags) ? m.tags.map((t: unknown) => String(t).toLowerCase()) : [];
+  const rawBase = m.baseModel || m.architecture;
+  if (!rawBase) return false;
+  const parsed = normalizeArchitectureFamily(String(rawBase));
+  if (parsed === 'unknown') return false;
 
-  if (target === 'flux') {
-    const parsed = normalizeArchitectureFamily(String(m.baseModel || ''));
-    if (parsed === 'flux-1') return true;
-    if (parsed === 'flux-2') return false;
-    const s = `${baseModel} ${id} ${name}`;
-    if (s.includes('flux.2') || s.includes('flux-2') || s.includes('flux 2')) return false;
-    return s.includes('flux.1') || s.includes('flux-1') || s.includes('flux_dev') || s.includes('flux_schnell');
-  }
-  if (target === 'sdxl') {
-    const parsed = normalizeArchitectureFamily(String(m.baseModel || ''));
-    if (parsed === 'sdxl') return true;
-    return baseModel.includes('sdxl') || baseModel.includes('stable-diffusion-xl');
-  }
-  if (target === 'wan') {
-    const parsed = normalizeArchitectureFamily(String(m.baseModel || ''));
-    if (parsed === 'wan-2.1') return true;
-    if (parsed === 'wan-2.2') return false;
-    const s = `${baseModel} ${id} ${name}`;
-    if (s.includes('2.2') || s.includes('2.5') || s.includes('2.7')) return false;
-    return s.includes('2.1');
-  }
-  if (target === 'sd15' || target === 'sd 1.5') {
-    return (
-      baseModel.includes('sd 1.5') ||
-      baseModel.includes('sd1.5') ||
-      baseModel.includes('sd 1') ||
-      id.includes('sd15') ||
-      id.includes('sd-1-5') ||
-      id.includes('sd1.5') ||
-      name.includes('sd 1.5') ||
-      name.includes('sd1.5') ||
-      tags.some(t => t.includes('sd 1.5') || t.includes('sd15'))
-    );
-  }
-  if (target === 'pony') {
-    return baseModel.includes('pony') || id.includes('pony') || name.includes('pony') || tags.some(t => t.includes('pony'));
-  }
-  if (target === 'illustrious') {
-    return baseModel.includes('illustrious') || id.includes('illustrious') || name.includes('illustrious') || tags.some(t => t.includes('illustrious'));
-  }
-  if (target === 'qwen') {
-    return baseModel.includes('qwen') || id.includes('qwen') || name.includes('qwen') || tags.some(t => t.includes('qwen'));
-  }
-  if (target === 'z-image') {
-    return baseModel.includes('z-image') || id.includes('z-image') || name.includes('z-image') || tags.some(t => t.includes('z-image'));
-  }
-  return baseModel.includes(target) || id.includes(target) || name.includes(target) || desc.includes(target) || tags.some(t => t.includes(target));
+  const target = arch.toLowerCase();
+  if (target === 'flux') return parsed === 'flux-1';
+  if (target === 'flux-2' || target === 'flux2') return parsed === 'flux-2';
+  if (target === 'sdxl') return parsed === 'sdxl';
+  if (target === 'wan') return parsed === 'wan-2.1';
+  if (target === 'wan-2.2' || target === 'wan2.2') return parsed === 'wan-2.2';
+  if (target === 'sd15' || target === 'sd 1.5') return parsed === 'sd15';
+  if (target === 'sd35' || target === 'sd 3.5') return parsed === 'sd35';
+  if (target === 'pony') return parsed === 'pony';
+  if (target === 'illustrious') return parsed === 'illustrious';
+  if (target === 'qwen') return parsed === 'qwen';
+  if (target === 'z-image') return parsed === 'z-image';
+  if (target === 'chroma') return parsed === 'chroma';
+  if (target === 'hunyuan') return parsed === 'hunyuan';
+  if (target === 'kolors') return parsed === 'kolors';
+
+  return parsed === target;
 }
 
 export const ModelHubModal: React.FC<ModelHubModalProps> = ({
@@ -853,7 +821,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
   };
 
   const getCustomIdPlaceholder = (prov: string) => {
-    if (prov === 'tensorart') return '输入 Tensor.Art / 吐司 模型 ID (如 672390779613802167)...';
+    if (prov === 'tensorart') return '输入 Tensor.Art / 吐司 纯数字模型或 LoRA ID...';
     if (prov === 'huggingface') return '输入 HF Repo ID (如 user/model-name)...';
     if (prov === 'modelscope' || prov === 'modelscope_ai') return '输入 ModelScope ID (如 damo/model-id)...';
     if (prov === 'fal') return '输入 Fal.ai Endpoint (如 fal-ai/...)...';
@@ -1104,7 +1072,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
             <span>
               <strong>按 ID 选用：</strong>
               {activeProvider === 'tensorart'
-                ? '输入 Tensor.Art / 吐司 模型 ID 或链接 (如 958694016000505570, 672390779613802167)'
+                ? '输入 Tensor.Art / 吐司 纯数字模型或 LoRA ID'
                 : activeProvider === 'huggingface'
                 ? '输入任意 Hugging Face 模型 ID (如 stabilityai/stable-diffusion-xl-base-1.0)'
                 : activeProvider === 'modelscope' || activeProvider === 'modelscope_ai'
@@ -1141,7 +1109,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
               type="text"
               placeholder={
                 activeProvider === 'tensorart'
-                  ? '输入 Tensor.Art / 吐司 模型 ID (如 672390779613802167)...'
+                  ? '输入 Tensor.Art / 吐司 纯数字模型或 LoRA ID...'
                   : activeProvider === 'huggingface'
                   ? '输入 HF Repo ID (如 user/model-name)...'
                   : activeProvider === 'modelscope' || activeProvider === 'modelscope_ai'

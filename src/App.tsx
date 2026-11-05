@@ -1702,18 +1702,8 @@ export default function App() {
     const isVideoModel =
       extraData?.category === 'Video' ||
       extraData?.type === 'MotionModule' ||
-      modelHubCategory === 'video' ||
-      lowerId.includes('video') ||
-      lowerId.includes('wan2.1-t2v') ||
-      lowerId.includes('wan2.2-t2v') ||
-      lowerId.startsWith('text2video_') ||
-      lowerId.startsWith('image2video_') ||
-      lowerId === 'live_wallpaper' ||
-      lowerId.includes('kling') ||
-      lowerId.includes('ltx') ||
-      lowerId.includes('minimax') ||
-      lowerId.includes('cogvideo') ||
-      lowerId.includes('hunyuan-video');
+      extraData?.type === 'Video' ||
+      modelHubCategory === 'video';
 
     if (canvasMode === 'spatial') {
       const frame=spatialFrames.find(f=>f.id===selectedFrameId);
@@ -2842,17 +2832,8 @@ export default function App() {
           const isVideoModel =
             extraData?.category === 'Video' ||
             extraData?.type === 'MotionModule' ||
-            modelHubCategory === 'video' ||
-            lowerId.includes('video') ||
-            lowerId.includes('wan2.1-t2v') ||
-            lowerId.includes('wan2') ||
-            lowerId.includes('text2video') ||
-            lowerId.includes('image2video') ||
-            lowerId.includes('ltx-video') ||
-            lowerId.includes('kling') ||
-            lowerId.includes('cogvideox') ||
-            lowerId.includes('minimax') ||
-            lowerId.includes('hunyuanvideo');
+            extraData?.type === 'Video' ||
+            modelHubCategory === 'video';
 
           if (isVideoModel) {
             const newNodeId = `node-video-${Date.now()}`;
