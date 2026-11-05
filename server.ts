@@ -6,6 +6,7 @@ import { sentHistoryNumbers } from './src/server/historySent.ts';
 import type { GenerationHistoryItem } from './src/types/providers';
 import { lookupExactHuggingFaceRepo } from './src/server/huggingFaceExactRepoSearch.ts';
 import { classifyCivitaiVideoPoll } from './src/server/civitaiVideoPoll.ts';
+import { CIVITAI_VIDEO_POLL_BUDGET_MS, CIVITAI_VIDEO_SOCKET_TIMEOUT_MS, CIVITAI_VIDEO_SUBMIT_WAIT_SECONDS, civitaiVideoPollDelayMs } from './src/server/civitaiVideoPollSchedule.ts';
 import { fetchSenseNovaModelCatalog } from './src/server/senseNovaCatalog.ts';
 import { readHuggingFaceSpaceImageResponse } from './src/server/huggingFaceSpaceImage.ts';
 import { buildModelScopeImagePayload } from './src/server/modelScopeImageContract';
@@ -62,12 +63,15 @@ import { EnvHttpProxyAgent, setGlobalDispatcher } from 'undici';
 
 dotenv.config();
 
-// Configure undici global dispatcher to extend headersTimeout to 5 minutes (prevents UND_ERR_HEADERS_TIMEOUT on long Civitai GPU renders)
+// Video polls (Civitai GetWorkflow, Fal queue, NanoGPT status) are one HTTP call each,
+// but a cold GPU accept can sit past 300s. 300s headersTimeout killed those reads
+// (UND_ERR_HEADERS_TIMEOUT) and the local 504 was easy to mistake for an upstream failure.
+// core5b: this block is the shared dispatcher; tell video7b before editing it.
 setGlobalDispatcher(
   new EnvHttpProxyAgent({
-    headersTimeout: 300000,
-    bodyTimeout: 300000,
-    connectTimeout: 30000,
+    headersTimeout: 600000,
+    bodyTimeout: 600000,
+    connectTimeout: 60000,
     ...(process.env.CANVAS_PROXY_CA ? {requestTls:{ca:fs.readFileSync(process.env.CANVAS_PROXY_CA)}} : {}),
   })
 );
@@ -3381,9 +3385,10 @@ app.get('/api/civitai/workflow/:id', async (req, res) => {
 });
 
 app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, res) => {
-  // Prevent socket timeout during long AI generation tasks
-  req.setTimeout(120000);
-  res.setTimeout(120000);
+  // Image stays 120s. Video uses the 10-minute local poll budget (official: several minutes).
+  const civitaiSocketMs = req.body?.isVideo === true ? CIVITAI_VIDEO_SOCKET_TIMEOUT_MS : 120000;
+  req.setTimeout(civitaiSocketMs);
+  res.setTimeout(civitaiSocketMs);
 
   try {
     const {
@@ -3512,11 +3517,11 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
           ...(videoSchemaSelected ? { schemaSelected: videoSchemaSelected } : {}),
           ...(videoOverrides.length ? { overrides: videoOverrides } : {}),
           actualRequest: { steps: [{ $type: 'videoGen', input: videoInput }] },
-          endpoint: 'https://orchestration.civitai.com/v2/consumer/workflows?wait=100',
+          endpoint: `https://orchestration.civitai.com/v2/consumer/workflows?wait=${CIVITAI_VIDEO_SUBMIT_WAIT_SECONDS}`,
         };
         generationContext.getStore()?.traces.push({ stage: 'civitai-video-schema-mapping', provider: 'civitai', ...sanitizeGenerationMetadata(videoRequestMetadata) });
 
-        const workflowEndpoint = 'https://orchestration.civitai.com/v2/consumer/workflows?wait=100';
+        const workflowEndpoint = `https://orchestration.civitai.com/v2/consumer/workflows?wait=${CIVITAI_VIDEO_SUBMIT_WAIT_SECONDS}`;
         let orchResp: Response;
         try {
           orchResp = await upstreamFetch(
@@ -3553,17 +3558,24 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
 
         const orchData = await orchResp.json();
         completedMediaUrl = extractCivitaiBlobUrl(orchData);
-        const initialOutcome = classifyCivitaiVideoPoll(orchData, completedMediaUrl, orchResp.status, 'https://orchestration.civitai.com/v2/consumer/workflows?wait=100', String(orchData.id || orchData.token || ''));
+        const initialOutcome = classifyCivitaiVideoPoll(orchData, completedMediaUrl, orchResp.status, workflowEndpoint, String(orchData.id || orchData.token || ''));
         if (initialOutcome.kind === 'failed' || initialOutcome.kind === 'succeeded-without-output') {
           keyPoolManager.recordResult('civitai', apiKey, false, Date.now() - startTime, JSON.stringify(orchData), orchResp.status);
           return res.status(initialOutcome.httpStatus).json(initialOutcome.response);
         }
+        let civitaiPollTimedOut = false;
+        let civitaiLastStatus = String(orchData?.status || '');
+        let civitaiLastResponse: unknown = orchData;
         if (!completedMediaUrl && (orchData.id || orchData.token)) {
           const workflowId = orchData.id || orchData.token;
-          for (let i = 0; i < 20; i++) {
-            await new Promise((r) => setTimeout(r, 3000));
+          const pollDeadline = Date.now() + CIVITAI_VIDEO_POLL_BUDGET_MS;
+          const pollEndpoint = `https://orchestration.civitai.com/v2/consumer/workflows/${workflowId}`;
+          for (let attempt = 0; Date.now() < pollDeadline; attempt++) {
+            const delay = civitaiVideoPollDelayMs(attempt);
+            if (Date.now() + delay >= pollDeadline) break;
+            await new Promise((r) => setTimeout(r, delay));
+            if (res.writableEnded || res.destroyed) return;
             let pollResp: Response;
-            const pollEndpoint = `https://orchestration.civitai.com/v2/consumer/workflows/${workflowId}`;
             try {
               pollResp = await upstreamFetch(
                 { provider: 'civitai', route: '/api/civitai/generate/poll', model: String(workflowId), key: apiKey },
@@ -3574,17 +3586,23 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
               );
             } catch (netErr: any) {
               keyPoolManager.recordResult('civitai', apiKey, false, Date.now() - startTime, netErr.message);
-              return res.status(502).json({ error: `Civitai 视频轮询网络异常: ${netErr.message}`, workflowId });
+              return res.status(502).json({ error: `Civitai 视频轮询网络异常: ${netErr.message}`, errorSource: 'network', workflowId, endpoint: pollEndpoint });
             }
             if (!pollResp.ok) {
               const errBody = await pollResp.text().catch(() => '');
               keyPoolManager.recordResult('civitai', apiKey, false, Date.now() - startTime, errBody, pollResp.status);
               return res.status(pollResp.status).json({
                 error: `Civitai 视频状态查询失败 [${pollResp.status}]: ${errBody}`,
+                errorSource: 'upstream',
+                upstreamStatus: pollResp.status,
                 workflowId,
+                endpoint: pollEndpoint,
+                rawResponse: errBody,
               });
             }
             const pollData = await pollResp.json();
+            civitaiLastResponse = pollData;
+            civitaiLastStatus = String(pollData?.status || '');
             const url = extractCivitaiBlobUrl(pollData);
             const outcome = classifyCivitaiVideoPoll(pollData, url, pollResp.status, pollEndpoint, String(workflowId));
             if (outcome.kind === 'failed' || outcome.kind === 'succeeded-without-output') {
@@ -3595,13 +3613,24 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
               completedMediaUrl = outcome.url;
               break;
             }
-            }
           }
+          civitaiPollTimedOut = !completedMediaUrl;
+        }
 
         // History for video: only record what was actually sent
         keyPoolManager.recordResult('civitai', apiKey, !!completedMediaUrl, Date.now() - startTime);
         if (!completedMediaUrl) {
-          return res.status(500).json({ error: 'Civitai 视频生成未能按时返回，请稍后在历史记录中查看或重试。' });
+          const workflowId = String(orchData.id || orchData.token || '');
+          return res.status(civitaiPollTimedOut ? 504 : 500).json({
+            error: civitaiPollTimedOut
+              ? `Civitai 视频仍未完成：本地等待预算 ${CIVITAI_VIDEO_POLL_BUDGET_MS}ms 已用尽（不是上游报错）。可继续查询 /api/civitai/workflow/${workflowId}`
+              : 'Civitai 视频提交成功但没有 workflow id，无法轮询。',
+            errorSource: 'local',
+            workflowId,
+            lastStatus: civitaiLastStatus,
+            endpoint: workflowId ? `https://orchestration.civitai.com/v2/consumer/workflows/${workflowId}` : workflowEndpoint,
+            rawResponse: civitaiLastResponse,
+          });
         }
 
         const durableVideoUrl = await persistRemoteUrlAsDataUrl(completedMediaUrl);

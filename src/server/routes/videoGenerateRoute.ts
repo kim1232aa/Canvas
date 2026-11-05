@@ -4,6 +4,7 @@ import { buildFalVideoRequest } from '../falVideoContract.ts';
 import { falQueueOpenApiUrl, extractFalInputProperties, inlineFalItemRefs, FalSchemaMissingError, type FalSchemaFetchFailure } from '../falImageContract.ts';
 import { falQueueSubmitUrl, runFalQueueLifecycle } from '../falQueueLifecycle.ts';
 import { buildAgnesVideoRequest, agnesVideoId } from '../agnesVideoRequest.ts';
+import { classifyNanoGptVideoStatus, NANO_GPT_VIDEO_POLL_BUDGET_MS, NANO_GPT_VIDEO_POLL_INTERVAL_MS } from '../nanoGptVideoStatus.ts';
 import { applyCustomParameters } from '../customParameters.ts';
 import { sanitizeGenerationMetadata } from '../../utils/generationMetadata.ts';
 import { resolveAgainstBaseOrigin } from '../../engines/compatRelay.ts';
@@ -43,6 +44,9 @@ export interface VideoGenerateRouteDeps {
   };
   recordHistoryItem: (item: any) => Promise<any> | any;
   requireDurableHistoryMediaUrl: (remoteUrl: string) => Promise<any>;
+  /** Test-only clock. Production uses Date.now / the route sleeper. */
+  now?: () => number;
+  sleep?: (ms: number) => Promise<void>;
   generationContext: {
     getStore: () => { traces: any[] } | undefined;
   };
@@ -62,6 +66,8 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
       requireDurableHistoryMediaUrl,
       generationContext,
     } = deps;
+    const now = deps.now ?? Date.now;
+    const sleep = deps.sleep;
 
     // Stop upstream polling when the browser disconnects (fail closed — no further upstream burns).
     // In Node.js HTTP, req emits 'close' as soon as the POST body stream ends.
@@ -102,9 +108,9 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
     });
 
     try {
-      // Some test/mocks omit setTimeout; only call when present. Value stays 300s.
-      if (typeof (req as any).setTimeout === 'function') (req as any).setTimeout(300000);
-      if (typeof (res as any).setTimeout === 'function') (res as any).setTimeout(300000);
+      // Video jobs outlast a 300s socket. Official NanoGPT sample polls ~10 min.
+      if (typeof (req as any).setTimeout === 'function') (req as any).setTimeout(NANO_GPT_VIDEO_POLL_BUDGET_MS + 120_000);
+      if (typeof (res as any).setTimeout === 'function') (res as any).setTimeout(NANO_GPT_VIDEO_POLL_BUDGET_MS + 120_000);
 
     const {
       prompt,
@@ -161,12 +167,19 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
       try {
         // NanoGPT video submit: POST api.nano-gpt.com/api/generate-video
         // duration is a STRING, seed/negative_prompt are passed through
-        if (forwardUnmappedFields(res, 'NanoGPT Video', req.body, ['steps', 'cfg', 'guidance_scale', 'loras'])) return;
+        if (forwardUnmappedFields(res, 'NanoGPT Video', req.body, ['loras'])) return;
         const nanoPayload: any = { model, prompt };
         if (isProvided(duration)) nanoPayload.duration = String(duration);
         if (isProvided(aspect_ratio)) nanoPayload.aspect_ratio = aspect_ratio;
         if (isProvided(seed)) nanoPayload.seed = Number(seed);
         if (isProvided(req.body.negative_prompt)) nanoPayload.negative_prompt = req.body.negative_prompt;
+        if (isProvided(fps)) nanoPayload.frames_per_second = Number(fps);
+        if (isProvided(req.body.num_frames)) nanoPayload.num_frames = Number(req.body.num_frames);
+        if (isProvided(req.body.resolution)) nanoPayload.resolution = req.body.resolution;
+        if (isProvided(steps)) nanoPayload.num_inference_steps = Number(steps);
+        if (isProvided(req.body.cfg)) nanoPayload.cfg_scale = Number(req.body.cfg);
+        else if (isProvided(req.body.guidance_scale)) nanoPayload.cfg_scale = Number(req.body.guidance_scale);
+        if (isProvided(req.body.shift)) nanoPayload.shift = Number(req.body.shift);
         if (image_url) {
           if (image_url.startsWith('data:')) nanoPayload.imageDataUrl = image_url;
           else nanoPayload.imageUrl = image_url;
@@ -195,28 +208,36 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
         let videoUrl = '';
         const runId = submitData.runId || submitData.id;
 
+        const statusEndpoint = `${nanoOrigin}/api/video/status?requestId=${encodeURIComponent(runId || '')}`;
+        let lastStatus = '';
+        let lastResponse: unknown = submitData;
         if (runId) {
-          // Poll: GET /api/video/status?requestId= → data.status → COMPLETED/FAILED, data.output.video.url
-          for (let i = 0; i < 70; i++) {
+          // Official sample: poll ~10 min at 5s. Local budget spent ≠ upstream failure.
+          const deadline = now() + NANO_GPT_VIDEO_POLL_BUDGET_MS;
+          while (now() < deadline) {
             if (clientClosed) {
               return; // client gone — stop polling, do not keep burning upstream
             }
-            try { await sleepOrAbort(2500); } catch (e: any) {
+            try {
+              if (sleep) await sleep(NANO_GPT_VIDEO_POLL_INTERVAL_MS);
+              else await sleepOrAbort(NANO_GPT_VIDEO_POLL_INTERVAL_MS);
+            } catch (e: any) {
               if (e?.clientDisconnected) {
                 return;
               }
               throw e;
             }
+            if (now() >= deadline) break;
             let statusRes: Response;
             try {
               statusRes = await upstreamFetch(
                 { provider: 'nanogpt', route: 'video/poll', model, key: nanoKey },
-                `${nanoOrigin}/api/video/status?requestId=${encodeURIComponent(runId)}`,
+                statusEndpoint,
                 { headers: { 'x-api-key': nanoKey } }
               );
             } catch (netErr: any) {
               keyPoolManager.recordResult('nanogpt', nanoKey, false, Date.now() - startTime, netErr.message);
-              return res.status(502).json({ error: `NanoGPT 视频状态查询网络异常: ${netErr.message}`, runId });
+              return res.status(502).json({ error: `NanoGPT 视频状态查询网络异常: ${netErr.message}`, errorSource: 'network', runId, endpoint: statusEndpoint });
             }
 
             if (!statusRes.ok) {
@@ -224,25 +245,55 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
               keyPoolManager.recordResult('nanogpt', nanoKey, false, Date.now() - startTime, errBody, statusRes.status);
               return res.status(statusRes.status).json({
                 error: `NanoGPT 视频状态查询失败 [${statusRes.status}]: ${errBody}`,
+                errorSource: 'upstream',
+                upstreamStatus: statusRes.status,
                 runId,
+                endpoint: statusEndpoint,
+                rawResponse: errBody,
               });
             }
 
             const statusData = await statusRes.json();
-            const st = String(statusData.data?.status || statusData.status || '').toUpperCase();
-            if (st === 'COMPLETED') {
-              videoUrl = statusData.data?.output?.video?.url || statusData.data?.output?.url || '';
+            lastResponse = statusData;
+            const classified = classifyNanoGptVideoStatus(statusData);
+            lastStatus = classified.status;
+            if (classified.kind === 'completed') {
+              videoUrl = classified.url;
               break;
-            } else if (st === 'FAILED' || st === 'CANCELED' || st === 'CANCELLED') {
-              keyPoolManager.recordResult('nanogpt', nanoKey, false, Date.now() - startTime, statusData.data?.error || 'FAILED');
-              return res.status(500).json({ error: `NanoGPT 视频生成失败: ${statusData.data?.error || statusData.data?.userFriendlyError || st}` });
+            }
+            if (classified.kind === 'completed-without-url') {
+              keyPoolManager.recordResult('nanogpt', nanoKey, false, Date.now() - startTime, 'COMPLETED without video URL');
+              return res.status(502).json({
+                error: 'NanoGPT 视频状态为 COMPLETED，但响应中没有视频 URL（videoUrl / data.output.video.url）。',
+                errorSource: 'upstream-protocol',
+                runId,
+                endpoint: statusEndpoint,
+                rawResponse: statusData,
+              });
+            }
+            if (classified.kind === 'failed') {
+              keyPoolManager.recordResult('nanogpt', nanoKey, false, Date.now() - startTime, classified.message);
+              return res.status(500).json({
+                error: `NanoGPT 视频生成失败: ${classified.message}`,
+                errorSource: 'upstream-task',
+                runId,
+                endpoint: statusEndpoint,
+                rawResponse: statusData,
+              });
             }
           }
         }
 
         if (!videoUrl) {
-          keyPoolManager.recordResult('nanogpt', nanoKey, false, Date.now() - startTime, 'Polling timeout');
-          return res.status(504).json({ error: 'NanoGPT 视频生成超时 (175s 未完成)，请稍后重试。' });
+          keyPoolManager.recordResult('nanogpt', nanoKey, false, Date.now() - startTime, 'local poll budget exhausted');
+          return res.status(504).json({
+            error: `NanoGPT 视频仍未完成：本地等待预算 ${NANO_GPT_VIDEO_POLL_BUDGET_MS}ms 已用尽（不是上游报错）。`,
+            errorSource: 'local',
+            runId: runId || null,
+            lastStatus,
+            lastResponse,
+            endpoint: statusEndpoint,
+          });
         }
 
         keyPoolManager.recordResult('nanogpt', nanoKey, true, Date.now() - startTime);
