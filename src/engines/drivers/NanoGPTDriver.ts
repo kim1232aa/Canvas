@@ -8,7 +8,7 @@ export class NanoGPTDriver extends BaseEngineDriver {
   readonly label = 'NanoGPT 极速接口';
   readonly badgeColor = '#f59e0b';
   readonly description = 'NanoGPT 闪电按需推理 API，无需订阅，秒级出片。';
-  readonly capabilities = ['text2img', 'img2img'] as const;
+  readonly capabilities = ['text2img', 'img2img', 'text2video', 'img2video'] as const;
   readonly defaultKey = '';
 
     readonly supportedModels: ModelSpec[] = [];
@@ -19,6 +19,52 @@ export class NanoGPTDriver extends BaseEngineDriver {
   ): Promise<NormalizedGenerateResult> {
     if (!params.model) throw new Error('模型为必填项（model is required）');
     const effectiveKey = params.apiKey || keys.nanogptKey || this.defaultKey;
+
+    const isVideo = Boolean(params.isVideo || params.videoDuration != null);
+    if (isVideo) {
+      const resp = await fetch('/api/video/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(effectiveKey ? { 'x-nanogpt-key': effectiveKey } : {}),
+        },
+        body: JSON.stringify({
+          workflowSnapshot: params.workflowSnapshot,
+          custom_parameters: params.extraParams?.custom_parameters,
+          prompt: params.prompt,
+          model: params.model,
+          provider: 'nanogpt',
+          aspect_ratio: params.aspectRatio,
+          image_url: params.image_url,
+          seed: params.seed,
+          duration: params.videoDuration,
+          negative_prompt: params.negative_prompt,
+          steps: params.steps,
+          cfg: params.cfg,
+          sampler_name: params.sampler_name,
+          scheduler: params.scheduler,
+        }),
+      });
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ error: 'NanoGPT 视频生成失败' }));
+        throw new Error(err.details || err.error || `NanoGPT 视频失败 (${resp.status})`);
+      }
+
+      const vData = await resp.json();
+      return {
+        mediaUrl: vData.videoUrl || vData.mediaUrl,
+        mediaType: 'video',
+        provider: vData.provider || this.name,
+        providerId: this.id,
+        model: vData.model || params.model,
+        actualModel: vData.actualModel || vData.model || params.model,
+        actualProvider: vData.actualProvider || vData.provider || this.name,
+        requestedModel: params.model,
+        seed: vData.seed ?? null,
+        rawResponse: vData,
+      };
+    }
 
     // Normalized Image API: server validates fields against live model endpoint metadata.
     const resp = await fetch('/api/nanogpt/generate', {

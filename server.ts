@@ -575,7 +575,8 @@ const migrateStoredMedia = <T,>(label: string, file: string, items: T[]): T[] =>
 generationHistory = migrateStoredMedia('history', HISTORY_FILE, generationHistory);
 cloudProjects = migrateStoredMedia('projects', PROJECTS_FILE, cloudProjects);
 
-const TENSORART_KEY_ENV_SOURCE = (['TENSORART_API_KEY', 'TENSORART_KEY', 'TENSORART'] as const).find((n) => String(process.env[n] || '').trim()) || '';
+const TENSORART_KEY_ENV_SOURCES = ['TENSORART_TAMS_TOKEN', 'TENSORART_API_KEY', 'TENSORART_KEY', 'TENSORART'] as const;
+const TENSORART_KEY_ENV_SOURCE = TENSORART_KEY_ENV_SOURCES.find((n) => String(process.env[n] || '').trim()) || '';
 const defaultKeys: Record<string, string> = {
   muapiKey: process.env.MUAPI_KEY || '',
   wavespeedKey: process.env.WAVESPEED_KEY || '',
@@ -587,7 +588,13 @@ const defaultKeys: Record<string, string> = {
   veniceKey: process.env.VENICE_API_KEY || '',
   deepinfraKey: process.env.DEEPINFRA_API_KEY || '',
   // Traceable: TENSORART_KEY_ENV_SOURCE records which env name supplied the key (first non-empty of the chain).
-  tensorartKey: process.env.TENSORART_API_KEY || process.env.TENSORART_KEY || process.env.TENSORART || '',
+  tensorartTamsToken: process.env.TENSORART_TAMS_TOKEN || '',
+  tensorartKey: [
+    process.env.TENSORART_TAMS_TOKEN,
+    process.env.TENSORART_API_KEY,
+    process.env.TENSORART_KEY,
+    process.env.TENSORART,
+  ].filter((v): v is string => Boolean(v && v.trim())).join(','),
   tensorartBaseUrl: process.env.TENSORART_BASE_URL || '',
   agnesKey: process.env.AGNES_API_KEY || process.env.AGNES_KEY || '',
   sensenovaKey: process.env.SENSENOVA_KEY || '',
@@ -634,7 +641,7 @@ const POOL_KEY_FIELDS: Record<string, { settings: string[]; env: string }> = {
   modelscope: { settings: ['modelscopeToken'], env: 'modelscopeToken' },
   modelscope_ai: { settings: ['modelscopeAiToken'], env: 'modelscopeAiToken' },
   nanogpt: { settings: ['nanogptKey'], env: 'nanogptKey' },
-  tensorart: { settings: ['tensorartKey'], env: 'tensorartKey' },
+  tensorart: { settings: ['tensorartKey', 'tensorartTamsToken'], env: 'tensorartKey' },
   gemini: { settings: ['geminiKey'], env: 'geminiKey' },
   openai_compat: { settings: ['openaiCompatKey'], env: 'openaiCompatKey' },
   grok_compat: { settings: ['grokCompatKey'], env: 'grokCompatKey' },
@@ -4303,13 +4310,14 @@ app.post(['/api/engine/grok_compat/generate', '/api/grok_compat/generate'], asyn
   const { apiKey, baseUrl } = auth;
 
   try {
-    const { prompt, model, image_url, aspect_ratio, resolution, n, response_format } = req.body;
+    const { prompt, model, image_url, aspect_ratio, resolution, n, response_format, quality } = req.body;
     if (!model) return res.status(400).json({ error: '模型为必填项（model is required）' });
     if (forwardUnmappedFields(res, 'grok_compat', req.body, ['seed', 'negative_prompt', 'steps', 'cfg', 'guidance_scale', 'loras', 'width', 'height', 'sampler', 'sampler_name', 'scheduler', 'denoise'])) return;
 
     const payload: Record<string, unknown> = { model, prompt };
     if (isProvided(aspect_ratio)) payload.aspect_ratio = aspect_ratio;
     if (isProvided(resolution)) payload.resolution = resolution;
+    if (isProvided(quality)) payload.quality = quality;
     if (isProvided(n)) payload.n = n;
     if (isProvided(response_format)) payload.response_format = response_format;
     const isEdit = Boolean(image_url);
@@ -4415,8 +4423,11 @@ function resolveTamsBearerKey(req: express.Request): string {
   return (
     pickTamsBearerKey(
       req.headers['x-tensorart-key'],
+      req.headers['x-tensorart-tams-token'],
       keyPoolManager.getKeys('tensorart'),
+      defaultKeys.tensorartTamsToken,
       defaultKeys.tensorartKey,
+      cloudSettings['tensorartTamsToken'],
       cloudSettings['tensorartKey']
     ) || ''
   );
@@ -4429,23 +4440,143 @@ app.post(['/api/tensorart/generate', '/api/engine/tensorart/generate'], async (r
 
   try {
     const startTime = Date.now();
-    const apiKey = resolveTensorArtKey(req);
+    const tamsKey = resolveTamsBearerKey(req);
 
-    if (!apiKey) {
+    if (!tamsKey) {
+      const anyKey = resolveTensorArtKey(req);
       return res.status(400).json({
-        error: '未配置 Tensor.Art API Key，请在右上角设置中填写您的 API Key。',
+        error: anyKey && isOpenWorksAccessKey(anyKey)
+          ? '当前配置的是 Tensor.Art OpenWorks Access Key (ak_tensor_...)，不能用于 TAMS 模型 API。画布模型 API 需要 TAMS Bearer Key（可在 https://tams.tensor.art/app 获取）。'
+          : '未配置 Tensor.Art TAMS API Key/Token，请在右上角设置中填写您的 TAMS Bearer Token（可在 https://tams.tensor.art/app 获取）。',
+        details: TAMS_BEARER_REQUIRED_HINT,
       });
     }
 
-    // 2026-10-17 产品改口：Tensor.Art 只保留 OpenWorks 真出图；本路由不再执行 TAMS /v1/jobs。
     const requestedModelOrTool = String(req.body.toolName || req.body.model || '').trim();
-    return res.status(410).json({
-      error: 'Tensor.Art TAMS 出图入口已下线。请在底模选服务商「Tensor.Art OpenWorks」，走 /api/schema-provider/openworks/submit → 官方 POST https://openapi.tensor.art/openworks/v1/task（Echo-Access-Key / ak_tensor_…）。',
-      errorSource: 'local',
-      requestedModel: requestedModelOrTool,
-      openWorksSubmit: '/api/schema-provider/openworks/submit',
-      docsUrl: 'https://github.com/Tensor-Art/tensorart-skills/tree/master/skills/tensorart-generate',
-    });
+    const isNumericModelId = /^\d{10,25}$/.test(requestedModelOrTool) || /^https:\/\/(?:www\.)?(?:tensor\.art|tusiart\.com)\/models\/\d{10,25}/.test(requestedModelOrTool);
+
+    if (!isNumericModelId) {
+      return res.status(400).json({
+        error: `Tensor.Art 模型 API 只接受 TAMS 数字模型 ID（收到 ${requestedModelOrTool || '(空)'}）。OpenWorks 模型请在模型中心选择「Tensor.Art OpenWorks」服务商。`,
+        errorSource: 'local',
+        requestedModel: requestedModelOrTool,
+      });
+    }
+
+    let payload;
+    try {
+      payload = buildTensorModelJob(req.body, crypto.randomUUID());
+    } catch (error: any) {
+      return res.status(400).json({ error: error.message });
+    }
+
+    const modelId = payload.stages[1].diffusion!.sdModel;
+    const origin = resolveTamsModelApiOrigin();
+    const headers = { Authorization: `Bearer ${tamsKey}`, 'Content-Type': 'application/json' };
+
+    // Query model metadata
+    const metadata = await upstreamFetch(
+      { provider: 'tensorart', route: req.path, model: modelId, key: tamsKey },
+      `${origin}/v1/models/${modelId}`,
+      { headers }
+    );
+    if (!metadata.ok) {
+      const details = await metadata.text();
+      return res.status(metadata.status).json({
+        error: `Tensor.Art 模型 API 鉴权 / 模型查询失败 [${metadata.status}]`,
+        details,
+        exactEndpointCalled: `${origin}/v1/models/${modelId}`,
+        requestedModel: modelId,
+      });
+    }
+    const checkpoint = (await metadata.json()).model;
+    if (checkpoint?.modelType && checkpoint.modelType !== 'CHECKPOINT') {
+      return res.status(400).json({ error: '所选模型不是 CHECKPOINT，不能作为底模', model: checkpoint });
+    }
+
+    // Submit job
+    const submitted = await upstreamFetch(
+      { provider: 'tensorart', route: req.path, model: modelId, key: tamsKey },
+      `${origin}/v1/jobs`,
+      { method: 'POST', headers, body: JSON.stringify(payload) }
+    );
+    if (!submitted.ok) {
+      const details = await submitted.text();
+      return res.status(submitted.status).json({
+        error: `Tensor.Art 模型任务提交失败 [${submitted.status}]`,
+        details,
+        exactEndpointCalled: `${origin}/v1/jobs`,
+      });
+    }
+    const accepted = await submitted.json();
+    const taskId = accepted.job?.id;
+    if (!taskId) {
+      return res.status(502).json({ error: 'Tensor.Art 未返回 job.id', details: accepted });
+    }
+
+    let job = accepted.job;
+    for (let attempt = 0; attempt < 75 && !['SUCCESS', 'FAILED', 'CANCELED'].includes(job.status); attempt++) {
+      await new Promise((r) => setTimeout(r, 2000));
+      const polled = await upstreamFetch(
+        { provider: 'tensorart', route: req.path, model: modelId, key: tamsKey },
+        `${origin}/v1/jobs/${taskId}`,
+        { headers }
+      );
+      if (!polled.ok) {
+        return res.status(polled.status).json({
+          error: `Tensor.Art 模型任务查询失败 [${polled.status}]`,
+          details: await polled.text(),
+          taskId,
+        });
+      }
+      job = (await polled.json()).job;
+      if (!job) return res.status(502).json({ error: 'Tensor.Art 查询缺少 job', taskId });
+    }
+
+    if (job.status !== 'SUCCESS') {
+      return res.status(job.status === 'FAILED' || job.status === 'CANCELED' ? 502 : 504).json({
+        error: `Tensor.Art 任务 ${job.status}: ${job.failedInfo?.reason || '任务未成功'}`,
+        details: job,
+        taskId,
+      });
+    }
+
+    const actualDiffusion = payload.stages[1].diffusion!;
+    const actualInitialize = payload.stages[0].inputInitialize!;
+    keyPoolManager.recordResult('tensorart', tamsKey, true, Date.now() - startTime);
+
+    return await respondWithGeneratedImages(
+      res,
+      job.successInfo?.images || [],
+      {
+        prompt: actualDiffusion.prompts?.[0]?.text ?? req.body.prompt,
+        negativePrompt: actualDiffusion.negativePrompts?.[0]?.text,
+        provider: 'Tensor.Art (模型 API)',
+        model: modelId,
+        actualModel: modelId,
+        seed: actualInitialize.seed !== undefined ? Number(actualInitialize.seed) : null,
+        steps: actualDiffusion.steps ?? null,
+        cfg: actualDiffusion.cfgScale ?? null,
+        loras: (actualDiffusion.lora?.items ?? []).map((l: any) => ({ name: l.loraModel, strength: l.weight })),
+        requestMetadata: {
+          requestedParameters: sanitizeGenerationMetadata(req.body),
+          customParameters: req.body.custom_parameters,
+          actualParameters: payload,
+        },
+      },
+      {
+        label: 'Tensor.Art 模型 API',
+        response: {
+          provider: 'Tensor.Art (模型 API)',
+          actualProvider: 'Tensor.Art (模型 API)',
+          model: modelId,
+          actualModel: modelId,
+          requestedModel: req.body.model,
+          taskId,
+          exactEndpointCalled: `${origin}/v1/jobs`,
+        },
+      }
+    );
   } catch (error: any) {
     return res.status(500).json({ error: `Tensor.Art 请求异常: ${error.message}` });
   }
@@ -4974,14 +5105,28 @@ app.post(
       const headerToken = isAiSite
         ? (req.headers['x-modelscope-ai-token'] as string)
         : (req.headers['x-modelscope-token'] as string);
-      const token = keyPoolManager.getNextKey(poolName, headerToken || undefined) || '';
-
-      if (!token) {
+      const msAttemptPlan = keyPoolManager.getAttemptKeys(poolName, headerToken || undefined);
+      if (!msAttemptPlan.keys.length) {
         return res.status(400).json({
           error: `未配置魔搭${isAiSite ? '国际站 (modelscope.ai)' : '国内站 (modelscope.cn)'} Token，请在右上角设置中填写您的 API Token。`,
           errorSource: 'local',
         });
       }
+
+      let msToken = msAttemptPlan.keys[0] || '';
+      let msKeyRotation: ReturnType<typeof buildKeyRotationPayload> | undefined;
+      const pushMsKeyAttempt = (rec: KeyAttemptRecord, key: string) => {
+        generationContext.getStore()?.traces.push({
+          stage: 'key-attempt',
+          provider: poolName,
+          maskedKey: rec.maskedKey,
+          result: rec.result,
+          status: rec.status,
+          responseBody: rec.responseBody,
+          outcome: rec.outcome,
+          keyUsage: keyPoolManager.describeKey(poolName, key) ?? undefined,
+        });
+      };
 
       const finalPrompt = prompt || '';
       let msBuilt: ReturnType<typeof buildModelScopeImagePayload>;
@@ -5000,60 +5145,72 @@ app.post(
         ? 'https://api-inference.modelscope.ai/v1'
         : 'https://api-inference.modelscope.cn/v1';
 
-      let submitResp;
-      try {
-        submitResp = await upstreamFetch(
-          { provider: poolName, route: req.path, model: msActualModel, key: token },
-          `${primaryDomain}/images/generations`,
-          {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json',
-              'X-ModelScope-Async-Mode': 'true',
-            },
-            body: JSON.stringify(msPayload),
+      const msRotated = await runWithBillingKeyRotate({
+        keys: msAttemptPlan.keys,
+        pinned: msAttemptPlan.pinned,
+        maskKey: (k) => keyPoolManager.maskKey(k),
+        onAttempt: pushMsKeyAttempt,
+        attempt: async (token) => {
+          msToken = token;
+          const submitResp = await upstreamFetch(
+            { provider: poolName, route: req.path, model: msActualModel, key: token },
+            `${primaryDomain}/images/generations`,
+            {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+                'X-ModelScope-Async-Mode': 'true',
+              },
+              body: JSON.stringify(msPayload),
+            }
+          );
+
+          if (!submitResp.ok) {
+            const errorText = await submitResp.text();
+            keyPoolManager.recordResult(poolName, token, false, Date.now() - startTime, errorText, submitResp.status);
+            return { ok: false, status: submitResp.status, body: errorText };
           }
-        );
 
-        if (!submitResp.ok) {
-          const errorText = await submitResp.text();
-          keyPoolManager.recordResult(poolName, token, false, Date.now() - startTime, errorText, submitResp.status);
-          let errObj: any = null;
-          try { errObj = JSON.parse(errorText); } catch {}
-          const errMsg = errObj?.Message || errObj?.message || errorText;
-          const isBalance = /insufficient balance|balance insufficient|余额不足|quota.*exceed|额度不足/i.test(errMsg);
+          keyPoolManager.recordResult(poolName, token, true, Date.now() - startTime);
+          const submitData = await submitResp.json();
+          return { ok: true, value: submitData };
+        },
+      });
 
-          const friendlyErr = isBalance
-            ? `魔搭${isAiSite ? '国际站 (modelscope.ai)' : '国内站 (modelscope.cn)'} 账户额度不足 [${submitResp.status}]: ${errMsg}`
-            : `魔搭${isAiSite ? '国际站 (modelscope.ai)' : '国内站 (modelscope.cn)'} API 提交失败 [${submitResp.status}]: ${errMsg}`;
+      msKeyRotation = msRotated.keyRotation;
+      if (!msRotated.ok) {
+        const errorText = msRotated.lastBody || '';
+        let errObj: any = null;
+        try { errObj = JSON.parse(errorText); } catch {}
+        const errMsg = errObj?.Message || errObj?.message || errorText;
+        const isBalance = /insufficient balance|balance insufficient|余额不足|quota.*exceed|额度不足/i.test(errMsg);
 
-          return res.status(submitResp.status).json({
-            error: friendlyErr,
-            details: errorText,
-            model,
-            provider: isAiSite ? 'ModelScope AI' : 'ModelScope CN',
-            actualRequest: {
-              endpoint: `${primaryDomain}/images/generations`,
-              parameters: msPayload,
-            },
-            requestMetadata: {
-              actualParameters: msPayload,
-              schemaFields: msSchemaFields,
-              parameterMappings,
-              parameterOmissions: msOmissions,
-              upstreamEndpoint: `${primaryDomain}/images/generations`,
-            },
-          });
-        }
-      } catch (e: any) {
-        return res.status(500).json({
-          error: `魔搭${isAiSite ? '国际站 (modelscope.ai)' : '国内站 (modelscope.cn)'} 网络请求失败: ${e.message}`,
+        const friendlyErr = isBalance
+          ? `魔搭${isAiSite ? '国际站 (modelscope.ai)' : '国内站 (modelscope.cn)'} 账户额度不足 [${msRotated.lastStatus}]: ${errMsg}`
+          : `魔搭${isAiSite ? '国际站 (modelscope.ai)' : '国内站 (modelscope.cn)'} API 提交失败 [${msRotated.lastStatus}]: ${errMsg}`;
+
+        return res.status(msRotated.lastStatus).json({
+          error: friendlyErr,
+          details: errorText,
+          model,
+          provider: isAiSite ? 'ModelScope AI' : 'ModelScope CN',
+          keyRotation: msKeyRotation,
+          actualRequest: {
+            endpoint: `${primaryDomain}/images/generations`,
+            parameters: msPayload,
+          },
+          requestMetadata: {
+            actualParameters: msPayload,
+            schemaFields: msSchemaFields,
+            parameterMappings,
+            parameterOmissions: msOmissions,
+            upstreamEndpoint: `${primaryDomain}/images/generations`,
+          },
         });
       }
 
-      keyPoolManager.recordResult(poolName, token, true, Date.now() - startTime);
-      const submitData = await submitResp.json();
+      const submitData = msRotated.value;
       let outputImages: string[] = Array.isArray(submitData.output_images) ? submitData.output_images : [];
       let imageUrl = outputImages[0];
 
@@ -5064,17 +5221,17 @@ app.post(
           let pollResp: Response;
           try {
             pollResp = await upstreamFetch(
-              { provider: poolName, route: req.path, model: msActualModel, key: token },
+              { provider: poolName, route: req.path, model: msActualModel, key: msToken },
               `${primaryDomain}/tasks/${taskId}`,
               {
                 headers: {
-                  'Authorization': `Bearer ${token}`,
+                  'Authorization': `Bearer ${msToken}`,
                   'X-ModelScope-Task-Type': 'image_generation',
                 },
               }
             );
           } catch (netErr: any) {
-            keyPoolManager.recordResult(poolName, token, false, Date.now() - startTime, netErr.message);
+            keyPoolManager.recordResult(poolName, msToken, false, Date.now() - startTime, netErr.message);
             return res.status(502).json({
               error: `魔搭${isAiSite ? '国际站' : '国内站'}任务状态查询网络异常: ${netErr.message}`,
               taskId,
@@ -5083,7 +5240,7 @@ app.post(
           }
           if (!pollResp.ok) {
             const errText = await pollResp.text().catch(() => '');
-            keyPoolManager.recordResult(poolName, token, false, Date.now() - startTime, errText, pollResp.status);
+            keyPoolManager.recordResult(poolName, msToken, false, Date.now() - startTime, errText, pollResp.status);
             return res.status(pollResp.status).json({
               error: `魔搭${isAiSite ? '国际站' : '国内站'}任务状态查询失败 [${pollResp.status}]: ${errText}`,
               taskId,
@@ -5126,10 +5283,10 @@ app.post(
         steps: msPayload.steps ?? null,
         cfg: msPayload.guidance ?? null,
         loras: typeof msPayload.loras === 'string' ? [{name: msPayload.loras, strength: 1}] : Object.entries(msPayload.loras || {}).map(([name, strength]) => ({name, strength: Number(strength)})),
-        requestMetadata: { requestedParameters: sanitizeGenerationMetadata(Object.fromEntries(Object.entries(req.body).filter(([key]) => key !== 'workflowSnapshot'))), actualParameters: msPayload, actualModel: msActualModel, customParameters: msCustom.customParameters, overrides: msCustom.overrides, parameterMappings, parameterOmissions: msOmissions, schemaFields: msSchemaFields, upstreamEndpoint: `${primaryDomain}/images/generations` },
+        requestMetadata: { requestedParameters: sanitizeGenerationMetadata(Object.fromEntries(Object.entries(req.body).filter(([key]) => key !== 'workflowSnapshot'))), actualParameters: msPayload, actualModel: msActualModel, customParameters: msCustom.customParameters, overrides: msCustom.overrides, parameterMappings, parameterOmissions: msOmissions, schemaFields: msSchemaFields, upstreamEndpoint: `${primaryDomain}/images/generations`, keyRotation: msKeyRotation },
       }, {
         label: `魔搭${isAiSite ? '国际站' : '国内站'}`,
-        response: { provider: providerName, model: msActualModel, requestedModel: model, actualModel: msActualModel, overrides: msCustom.overrides, parameterMappings, parameterOmissions: msOmissions },
+        response: { provider: providerName, model: msActualModel, requestedModel: model, actualModel: msActualModel, overrides: msCustom.overrides, parameterMappings, parameterOmissions: msOmissions, keyRotation: msKeyRotation },
       });
     } catch (error: any) {
       return res.status(500).json({ error: `魔搭社区调用失败: ${error.message}` });
@@ -5770,24 +5927,39 @@ async function testSingleProviderKey(
     }
 
     if (prov === 'tensorart' || prov === 'openworks') {
-      if (!singleKey) return {maskedKey,status:'error',latency:0,message:'未配置 Tensor.Art OpenWorks Access Key（ak_tensor_…）'};
-      if (!(isOpenWorksAccessKey(singleKey) || singleKey.startsWith('ak_'))) {
-        return {maskedKey,status:'error',latency:0,message:'本产品 Tensor.Art 仅 OpenWorks：请填 ak_tensor_… / ak_tusi…（Echo-Access-Key）。非 OpenWorks Key 不会当作 TAMS Bearer 使用。'};
+      if (!singleKey) return { maskedKey, status: 'error', latency: 0, message: '未配置 Tensor.Art API Key / Token' };
+      if (isOpenWorksAccessKey(singleKey) || singleKey.startsWith('ak_')) {
+        const base = singleKey.startsWith('ak_tusi') ? 'https://openapi.tusiart.cn/openworks/v1' : 'https://openapi.tensor.art/openworks/v1';
+        const resp = await upstreamFetch(
+          { provider: 'openworks', route: routePath, model: 'catalog', key: singleKey },
+          `${base}/tool/list`,
+          { method: 'POST', headers: { 'Content-Type': 'application/json', 'Echo-Access-Key': singleKey }, body: '{}' }
+        );
+        const latency = Date.now() - startTime;
+        const raw = await resp.text().catch(() => '');
+        let count = 0;
+        try { const j = JSON.parse(raw); count = Array.isArray(j?.data?.tools) ? j.data.tools.length : 0; } catch { /* raw */ }
+        if (resp.ok && (raw.includes('"code":"0"') || raw.includes('"code":0'))) {
+          return { maskedKey, status: 'ok', latency, message: `OpenWorks 目录连通（POST ${base}/tool/list；${count} 个工具）` };
+        }
+        return { maskedKey, status: resp.status === 429 ? 'rate_limited' : 'error', latency, message: `OpenWorks 鉴权/目录失败 [${resp.status}]: ${raw.slice(0, 300)}` };
       }
-      const base = singleKey.startsWith('ak_tusi') ? 'https://openapi.tusiart.cn/openworks/v1' : 'https://openapi.tensor.art/openworks/v1';
+      // TAMS Bearer key probe (query SD1.5 model info)
+      const origin = resolveTamsModelApiOrigin();
+      const testModelId = '613045163490732233';
       const resp = await upstreamFetch(
-        { provider: 'openworks', route: routePath, model: 'catalog', key: singleKey },
-        `${base}/tool/list`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json', 'Echo-Access-Key': singleKey }, body: '{}' }
+        { provider: 'tensorart', route: routePath, model: testModelId, key: singleKey },
+        `${origin}/v1/models/${testModelId}`,
+        { headers: { Authorization: `Bearer ${singleKey}` } }
       );
       const latency = Date.now() - startTime;
       const raw = await resp.text().catch(() => '');
-      let count = 0;
-      try { const j = JSON.parse(raw); count = Array.isArray(j?.data?.tools) ? j.data.tools.length : 0; } catch { /* raw */ }
-      if (resp.ok && (raw.includes('"code":"0"') || raw.includes('"code":0'))) {
-        return {maskedKey,status:'ok',latency,message:`OpenWorks 目录连通（POST ${base}/tool/list；${count} 个工具）`};
+      if (resp.ok) {
+        let name = 'SD1.5';
+        try { const j = JSON.parse(raw); name = j?.model?.name || name; } catch {}
+        return { maskedKey, status: 'ok', latency, message: `TAMS 模型 API 鉴权成功（GET /v1/models/${testModelId} · ${name}）` };
       }
-      return {maskedKey,status:resp.status===429?'rate_limited':'error',latency,message:`OpenWorks 鉴权/目录失败 [${resp.status}]: ${raw.slice(0,300)}`};
+      return { maskedKey, status: resp.status === 429 ? 'rate_limited' : 'error', latency, message: `TAMS 模型 API 鉴权/模型查询失败 [${resp.status}]: ${raw.slice(0, 300)}` };
     }
 
     if (prov === 'replicate') {

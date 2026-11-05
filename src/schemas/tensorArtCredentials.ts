@@ -31,4 +31,4 @@ export function pickTamsBearerKey(...sources: unknown[]): string | null {
 }
 
 export const TAMS_BEARER_REQUIRED_HINT =
-  '本产品 Tensor.Art 已只保留 OpenWorks 真出图（ak_tensor_… → openapi.tensor.art/openworks/v1）。TAMS Bearer / ap-east-1.tensorart.cloud 双轨入口已下线；请在底模选「Tensor.Art OpenWorks」。';
+  'Tensor.Art TAMS 模型 API 需要 TAMS Bearer Token（可在 https://tams.tensor.art/app 获取，格式为 UUID）。OpenWorks 的 ak_tensor_... 是独立工具密钥，不可用于 TAMS 模型 API。';

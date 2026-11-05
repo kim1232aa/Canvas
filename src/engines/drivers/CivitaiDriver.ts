@@ -104,10 +104,14 @@ export class CivitaiDriver extends BaseEngineDriver {
     if (!mediaUrl && data.pending && data.workflowId) {
       const workflowId = data.workflowId;
       const startTime = Date.now();
-      const maxTimeoutMs = 300000; // 5 minutes timeout
+      const maxTimeoutMs = isVideo ? 600000 : 300000; // 10 minutes timeout for video, 5 for image
+      const cadence = isVideo ? [2000, 5000, 10000, 15000, 30000] : [3000];
+      let attempt = 0;
 
       while (Date.now() - startTime < maxTimeoutMs) {
-        await new Promise((resolve) => setTimeout(resolve, 3000));
+        const delay = cadence[Math.min(attempt, cadence.length - 1)];
+        attempt++;
+        await new Promise((resolve) => setTimeout(resolve, delay));
         const statusResp = await fetch(`/api/civitai/workflow/${workflowId}`, {
           headers,
         });
@@ -118,6 +122,8 @@ export class CivitaiDriver extends BaseEngineDriver {
           try {
             const statusErrJson = JSON.parse(statusErrText);
             statusErrMsg = statusErrJson.error || statusErrMsg;
+            if (statusErrJson.errorSource) statusErrMsg += ` (errorSource: ${statusErrJson.errorSource})`;
+            if (statusErrJson.workflowId) statusErrMsg += ` [workflowId: ${statusErrJson.workflowId}]`;
           } catch {
             statusErrMsg = statusErrText.startsWith('<') ? `轮询状态接口返回 HTML 错误页面 [HTTP ${statusResp.status}]` : statusErrText;
           }
@@ -156,6 +162,14 @@ export class CivitaiDriver extends BaseEngineDriver {
             }`
           );
         }
+      }
+
+      if (!mediaUrl) {
+        throw new Error(
+          isVideo
+            ? `Civitai 视频任务仍未完成，已达到本地等待上限 (600s)；工作流 ID: ${workflowId} (errorSource: local)`
+            : `Civitai 图像生成任务超时 (300s)；工作流 ID: ${workflowId} (errorSource: local)`
+        );
       }
     }
 

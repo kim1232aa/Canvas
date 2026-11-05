@@ -101,7 +101,12 @@ export class EngineRegistryClass {
     keys: Record<string, string> = {}
   ): Promise<NormalizedGenerateResult> {
     const explicitProvider = params.targetProvider || params.provider;
-    const driver = this.getDriver(providerId === 'video' && explicitProvider && explicitProvider !== 'video' ? explicitProvider : providerId);
+    const isVideo = Boolean(params.isVideo || params.videoDuration != null);
+    const candidateId = providerId === 'video' && explicitProvider && explicitProvider !== 'video' ? explicitProvider : providerId;
+    let driver = this.getDriver(candidateId);
+    if (isVideo && (!driver || (!driver.capabilities.includes('text2video') && !driver.capabilities.includes('img2video')))) {
+      driver = this.getDriver('video');
+    }
     if (!driver) {
       throw new Error(`未找到执行引擎驱动: [${providerId}]。请确认引擎标识或前往右上角设置面板配置。`);
     }

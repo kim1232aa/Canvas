@@ -20,4 +20,28 @@ describe('Civitai pending result history', () => {
     expect(saved.map(item => [item.url, item.seed])).toEqual([['/api/media/a', 0], ['/api/media/b', 9]]);
     expect(result.historyWarning).toContain('one media failed');
   });
+
+  it('uses 600s budget with backoff cadence and surfaces workflowId + errorSource local on timeout', async () => {
+    vi.useFakeTimers();
+    vi.mocked(tracedFetch).mockImplementation(async (url) => {
+      if (String(url).includes('/generate')) {
+        return new Response(JSON.stringify({ pending: true, workflowId: 'wf-video-123' }));
+      }
+      if (String(url).includes('/workflow/wf-video-123')) {
+        return new Response(JSON.stringify({ status: 'processing', mediaUrl: null }));
+      }
+      return new Response(JSON.stringify({}));
+    });
+
+    const pending = new CivitaiDriver().generate(
+      { model: 'civitai:video@1', prompt: 'cat running', isVideo: true } as any,
+      {}
+    );
+
+    const promise = expect(pending).rejects.toThrow(
+      /Civitai 视频任务仍未完成，已达到本地等待上限 \(600s\)；工作流 ID: wf-video-123 \(errorSource: local\)/
+    );
+    await vi.runAllTimersAsync();
+    await promise;
+  });
 });

@@ -36,6 +36,15 @@ describe('Runware Image Contract', () => {
     expect(task).not.toHaveProperty('loras');
   });
 
+  it('maps scheduler when provided in request body', () => {
+    const req = buildRunwareImageRequest({
+      model: 'runware:100@1',
+      prompt: 'test scheduler',
+      scheduler: 'FlowMatchEulerDiscreteScheduler',
+    });
+    expect(req.payload[0].scheduler).toBe('FlowMatchEulerDiscreteScheduler');
+  });
+
   it('keeps explicit CFGScale 0 for Schnell and maps the official lora field', () => {
     const req = buildRunwareImageRequest({
       model: 'runware:100@1',
