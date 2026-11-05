@@ -63,9 +63,6 @@ import { GoogleGenAI } from '@google/genai';
 import { EnvHttpProxyAgent, setGlobalDispatcher } from 'undici';
 
 dotenv.config();
-if (!process.env.TOGETHER_API_KEY && fs.existsSync('/root/github/ComfyUI Web Studio/.env')) {
-  dotenv.config({ path: '/root/github/ComfyUI Web Studio/.env' });
-}
 
 // Video polls (Civitai GetWorkflow, Fal queue, NanoGPT status) are one HTTP call each,
 // but a cold GPU accept can sit past 300s. 300s headersTimeout killed those reads
@@ -3521,8 +3518,8 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
         }
         const videoAllowMature = (req.body.custom_parameters && typeof req.body.custom_parameters === 'object' && req.body.custom_parameters.allowMatureContent !== undefined)
           ? Boolean(req.body.custom_parameters.allowMatureContent)
-          : true;
-        const workflowEndpoint = `https://orchestration.civitai.com/v2/consumer/workflows?wait=${CIVITAI_VIDEO_SUBMIT_WAIT_SECONDS}&allowMatureContent=${videoAllowMature}`;
+          : (req.body.allowMatureContent !== undefined ? Boolean(req.body.allowMatureContent) : true);
+        const workflowEndpoint = `https://orchestration.civitai.com/v2/consumer/workflows?wait=${CIVITAI_VIDEO_SUBMIT_WAIT_SECONDS}`;
         const videoRequestMetadata = {
           schemaStatus: videoSchemaStatus,
           schemaValidation: videoSchemaStatus === 'custom-selector-override'
@@ -3535,7 +3532,10 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
           ...(videoSchemaFields ? { schemaFields: videoSchemaFields } : {}),
           ...(videoSchemaSelected ? { schemaSelected: videoSchemaSelected } : {}),
           ...(videoOverrides.length ? { overrides: videoOverrides } : {}),
-          actualRequest: { steps: [{ $type: 'videoGen', input: videoInput }] },
+          actualRequest: {
+            allowMatureContent: videoAllowMature,
+            steps: [{ $type: 'videoGen', input: videoInput }],
+          },
           endpoint: workflowEndpoint,
         };
         generationContext.getStore()?.traces.push({ stage: 'civitai-video-schema-mapping', provider: 'civitai', ...sanitizeGenerationMetadata(videoRequestMetadata) });
@@ -3744,11 +3744,22 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
 
       // POST /v2/consumer/workflows?wait=100 (integer seconds, max 100)
       // 用户最高原则（2026-11-05）：「我们不反对nsfw，有nsfw开关的都默认开启」
-      // 官方 Orchestration OpenAPI 参数 allowMatureContent: boolean 默认传 true
+      // 官方 Orchestration 文档 (https://developer.civitai.com/orchestration/guide/submitting-work) 规范：
+      // allowMatureContent 为 workflow JSON body 字段（与 steps 同级），非 query 参数
       const imageAllowMature = builtImage.customParameters?.allowMatureContent !== undefined
         ? Boolean(builtImage.customParameters.allowMatureContent)
-        : true;
-      const civitaiWorkflowUrl = `https://orchestration.civitai.com/v2/consumer/workflows?wait=100&allowMatureContent=${imageAllowMature}`;
+        : (req.body.allowMatureContent !== undefined ? Boolean(req.body.allowMatureContent) : true);
+      const civitaiWorkflowUrl = 'https://orchestration.civitai.com/v2/consumer/workflows?wait=100';
+      const actualWorkflowBody = {
+        allowMatureContent: imageAllowMature,
+        steps: [{ $type: 'imageGen', input: genInput }],
+      };
+      generationContext.getStore()?.traces.push(sanitizeGenerationMetadata({
+        stage: 'civitai-workflow-body',
+        provider: 'civitai',
+        endpoint: civitaiWorkflowUrl,
+        actualWorkflowBody,
+      }));
       const orchResp = await upstreamFetch(
         { provider: 'civitai', route: req.path, model, key: apiKey },
         civitaiWorkflowUrl,
@@ -3758,9 +3769,7 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
             'Content-Type': 'application/json',
             Authorization: `Bearer ${apiKey}`,
           },
-          body: JSON.stringify({
-            steps: [{ $type: 'imageGen', input: genInput }],
-          }),
+          body: JSON.stringify(actualWorkflowBody),
         }
       );
 
@@ -4295,7 +4304,6 @@ app.post(['/api/engine/openai_compat/generate', '/api/openai_compat/generate'], 
     if (isProvided(output_format)) payload.output_format = output_format;
     if (isProvided(background)) payload.background = background;
     if (isProvided(moderation)) payload.moderation = moderation;
-    else payload.moderation = 'low'; // 用户原则：「我们不反对nsfw，有nsfw开关的都默认开启」；OpenAI 官方 low 审核等级放开
     if (isProvided(n)) payload.n = n;
     const isEdit = Boolean(image_url);
     // Current official JSON edits contract uses images:[{image_url}], not image:string.
@@ -5549,13 +5557,6 @@ app.post(['/api/gemini/generate', '/api/engine/gemini/generate'], async (req, re
     const custom = applyCustomParameters({ model, config }, Object.keys(geminiCustomRequest.config).length || customModel !== undefined ? geminiCustomRequest : undefined);
     const actualModel = String(custom.actualModel || model);
     const sentConfig = withGeminiImageResponseModality((custom.payload.config || {}) as Record<string, any>);
-    // 用户最高原则（2026-11-05）：「我们不反对nsfw，有nsfw开关的都默认开启」
-    // Google Gemini 官方安全设置：BLOCK_NONE 放开内容过滤
-    if (!sentConfig.safetySettings) {
-      sentConfig.safetySettings = [
-        { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-      ];
-    }
     if (Object.keys(extraGenerationConfig).length) {
       const http = (sentConfig.httpOptions || {}) as Record<string, any>;
       const eb = (http.extraBody || {}) as Record<string, any>;

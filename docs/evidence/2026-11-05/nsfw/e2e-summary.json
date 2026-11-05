@@ -6,7 +6,7 @@
       "selectValue": "true"
     },
     "defaultOnLog": {
-      "time": "2026-11-06T04:41:10+09:00",
+      "time": "2026-11-06T05:38:58+09:00",
       "kind": "upstream",
       "route": "/api/schema-provider/together/submit",
       "provider": "together",
@@ -15,17 +15,23 @@
       "endpoint": "https://api.together.ai/v1/images/generations",
       "requestBody": {
         "prompt": "a cinematic masterpiece portrait, highly detailed",
-        "width": 1024,
-        "height": 1024,
-        "steps": 20,
+        "width": 1216,
+        "height": 832,
+        "steps": 12,
         "guidance_scale": 1,
-        "seed": 42,
+        "seed": 1840591390,
+        "image_loras": [
+          {
+            "path": "renderartist/Technically-Color-Z-Image-Turbo",
+            "scale": 0.9
+          }
+        ],
         "disable_safety_checker": true,
         "model": "black-forest-labs/FLUX.1-schnell"
       },
       "status": 401,
-      "responseBody": "{\n  \"id\": \"p88UiaZ-2kFHot-a55e559a1881d94a\",\n  \"error\": {\n    \"message\": \"Invalid API key provided. You can find your API key at https://api.together.ai/settings/api-keys.\",\n    \"type\": \"invalid_request_error\",\n    \"param\": null,\n    \"code\": \"invalid_api_key\"\n  }\n}",
-      "durationMs": 269,
+      "responseBody": "{\n  \"id\": \"p88nVYG-2kFHot-a55eaa467caed94a\",\n  \"error\": {\n    \"message\": \"Invalid API key provided. You can find your API key at https://api.together.ai/settings/api-keys.\",\n    \"type\": \"invalid_request_error\",\n    \"param\": null,\n    \"code\": \"invalid_api_key\"\n  }\n}",
+      "durationMs": 284,
       "keyIndex": {
         "provider": "together",
         "index": 0,
@@ -33,7 +39,7 @@
         "source": "pool"
       },
       "lookup": false,
-      "startedAt": "2026-11-05T19:41:10.080Z"
+      "startedAt": "2026-11-05T20:38:58.215Z"
     },
     "toggledOff": {
       "fieldFound": true,
@@ -41,7 +47,7 @@
       "selectValue": "false"
     },
     "toggledOffLog": {
-      "time": "2026-11-06T04:41:16+09:00",
+      "time": "2026-11-06T05:39:04+09:00",
       "kind": "upstream",
       "route": "/api/schema-provider/together/submit",
       "provider": "together",
@@ -50,17 +56,23 @@
       "endpoint": "https://api.together.ai/v1/images/generations",
       "requestBody": {
         "prompt": "a cinematic masterpiece portrait, highly detailed",
-        "width": 1024,
-        "height": 1024,
-        "steps": 20,
+        "width": 1216,
+        "height": 832,
+        "steps": 12,
         "guidance_scale": 1,
-        "seed": 42,
+        "seed": 1840591390,
+        "image_loras": [
+          {
+            "path": "renderartist/Technically-Color-Z-Image-Turbo",
+            "scale": 0.9
+          }
+        ],
         "disable_safety_checker": false,
         "model": "black-forest-labs/FLUX.1-schnell"
       },
       "status": 401,
-      "responseBody": "{\n  \"id\": \"p88UkTj-2kFHot-a55e55c27ea7d94a\",\n  \"error\": {\n    \"message\": \"Invalid API key provided. You can find your API key at https://api.together.ai/settings/api-keys.\",\n    \"type\": \"invalid_request_error\",\n    \"param\": null,\n    \"code\": \"invalid_api_key\"\n  }\n}",
-      "durationMs": 207,
+      "responseBody": "{\n  \"id\": \"p88nXHY-2kFHot-a55eaa6b5e28d94a\",\n  \"error\": {\n    \"message\": \"Invalid API key provided. You can find your API key at https://api.together.ai/settings/api-keys.\",\n    \"type\": \"invalid_request_error\",\n    \"param\": null,\n    \"code\": \"invalid_api_key\"\n  }\n}",
+      "durationMs": 245,
       "keyIndex": {
         "provider": "together",
         "index": 0,
@@ -68,7 +80,7 @@
         "source": "pool"
       },
       "lookup": false,
-      "startedAt": "2026-11-05T19:41:16.474Z"
+      "startedAt": "2026-11-05T20:39:04.143Z"
     }
   },
   "venice": {
@@ -78,26 +90,36 @@
       "selectValue": "false"
     },
     "defaultOnLog": {
-      "time": "2026-11-06T04:41:24+09:00",
+      "time": "2026-11-06T05:39:13+09:00",
       "kind": "upstream",
       "route": "/api/schema-provider/venice/submit",
       "provider": "venice",
-      "model": "fluently-xl",
+      "model": "venice-sd35",
       "method": "POST",
       "endpoint": "https://api.venice.ai/api/v1/image/generate",
       "requestBody": {
         "prompt": "a cinematic masterpiece portrait, highly detailed",
-        "width": 1024,
-        "height": 1024,
-        "steps": 20,
+        "width": 1216,
+        "height": 832,
+        "steps": 12,
         "cfg_scale": 1,
-        "seed": 42,
+        "seed": 1840591390,
+        "loras": [
+          {
+            "name": "renderartist/Technically-Color-Z-Image-Turbo",
+            "strength": 0.9,
+            "modelStrength": 0.9,
+            "clipStrength": 0.9,
+            "civitaiId": "",
+            "triggers": ""
+          }
+        ],
         "safe_mode": false,
-        "model": "fluently-xl"
+        "model": "venice-sd35"
       },
-      "status": 404,
-      "responseBody": "{\"error\":\"Specified model not found: fluently-xl. Did you mean: lustify-sdxl, flux-2-max, lustify-v7?\"}",
-      "durationMs": 86,
+      "status": 400,
+      "responseBody": "{\"details\":{\"_errors\":[\"Unrecognized key(s) in object: 'loras'\"],\"seed\":{\"_errors\":[\"Number must be less than or equal to 999999999\"]}},\"error\":\"Invalid request parameters\",\"issues\":[{\"code\":\"too_big\",\"maximum\":999999999,\"type\":\"number\",\"inclusive\":true,\"exact\":false,\"message\":\"Number must be less than or equal to 999999999\",\"path\":[\"seed\"]},{\"code\":\"unrecognized_keys\",\"keys\":[\"loras\"],\"path\":[],\"message\":\"Unrecognized key(s) in object: 'loras'\"}]}",
+      "durationMs": 225,
       "keyIndex": {
         "provider": "venice",
         "index": 0,
@@ -105,7 +127,7 @@
         "source": "pool"
       },
       "lookup": false,
-      "startedAt": "2026-11-05T19:41:24.421Z"
+      "startedAt": "2026-11-05T20:39:13.189Z"
     },
     "toggledOff": {
       "fieldFound": true,
@@ -113,26 +135,36 @@
       "selectValue": "true"
     },
     "toggledOffLog": {
-      "time": "2026-11-06T04:41:30+09:00",
+      "time": "2026-11-06T05:39:19+09:00",
       "kind": "upstream",
       "route": "/api/schema-provider/venice/submit",
       "provider": "venice",
-      "model": "fluently-xl",
+      "model": "venice-sd35",
       "method": "POST",
       "endpoint": "https://api.venice.ai/api/v1/image/generate",
       "requestBody": {
         "prompt": "a cinematic masterpiece portrait, highly detailed",
-        "width": 1024,
-        "height": 1024,
-        "steps": 20,
+        "width": 1216,
+        "height": 832,
+        "steps": 12,
         "cfg_scale": 1,
-        "seed": 42,
+        "seed": 1840591390,
+        "loras": [
+          {
+            "name": "renderartist/Technically-Color-Z-Image-Turbo",
+            "strength": 0.9,
+            "modelStrength": 0.9,
+            "clipStrength": 0.9,
+            "civitaiId": "",
+            "triggers": ""
+          }
+        ],
         "safe_mode": true,
-        "model": "fluently-xl"
+        "model": "venice-sd35"
       },
-      "status": 404,
-      "responseBody": "{\"error\":\"Specified model not found: fluently-xl. Did you mean: lustify-sdxl, flux-2-max, lustify-v7?\"}",
-      "durationMs": 144,
+      "status": 400,
+      "responseBody": "{\"details\":{\"_errors\":[\"Unrecognized key(s) in object: 'loras'\"],\"seed\":{\"_errors\":[\"Number must be less than or equal to 999999999\"]}},\"error\":\"Invalid request parameters\",\"issues\":[{\"code\":\"too_big\",\"maximum\":999999999,\"type\":\"number\",\"inclusive\":true,\"exact\":false,\"message\":\"Number must be less than or equal to 999999999\",\"path\":[\"seed\"]},{\"code\":\"unrecognized_keys\",\"keys\":[\"loras\"],\"path\":[],\"message\":\"Unrecognized key(s) in object: 'loras'\"}]}",
+      "durationMs": 165,
       "keyIndex": {
         "provider": "venice",
         "index": 0,
@@ -140,10 +172,20 @@
         "source": "pool"
       },
       "lookup": false,
-      "startedAt": "2026-11-05T19:41:30.623Z"
+      "startedAt": "2026-11-05T20:39:19.099Z"
     }
   },
-  "modelhub": {
+  "modelhubCivitai": {
+    "defaultOn": {
+      "toggleFound": true,
+      "toggleText": "NSFW: 已开启 (默认)"
+    },
+    "toggledOff": {
+      "toggleFound": true,
+      "toggleText": "NSFW: 已关闭"
+    }
+  },
+  "civitaiModalLora": {
     "defaultOn": {
       "toggleFound": true,
       "toggleText": "NSFW: 已开启 (默认)"

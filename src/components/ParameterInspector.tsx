@@ -443,6 +443,50 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
             <label className="block text-sm text-slate-300">Civitai engine<select aria-label="Civitai engine" value={params.civitaiEngine || ''} onChange={e=>update({civitaiEngine:e.target.value || undefined})} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2"><option value="">请选择引擎</option>{civitaiEngines().map(e=><option key={e} value={e}>{e}</option>)}{params.civitaiEngine && !civitaiEngines().includes(params.civitaiEngine) && <option value={params.civitaiEngine}>{params.civitaiEngine}</option>}</select></label>
             <label className="block text-sm text-slate-300">Civitai ecosystem<input aria-label="Civitai ecosystem" value={params.civitaiEcosystem || ''} onChange={e=>update({civitaiEcosystem:e.target.value || undefined})} list="civitai-ecosystems" placeholder="显式填写生态；未知生态保留" className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2" /><datalist id="civitai-ecosystems">{civitaiEcosystemsFor(params.civitaiEngine || '').map(x=><option key={x} value={x} />)}</datalist></label>
             <label className="block text-sm text-slate-300">Civitai model<input aria-label="Civitai model" value={params.civitaiModel || ''} onChange={e=>update({civitaiModel:e.target.value || undefined})} placeholder="按官方 recipe 填写 model selector" className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2" /></label>
+            {(() => {
+              let customObj: Record<string, any> = {};
+              try { customObj = JSON.parse(params.customParameters || '{}'); } catch {}
+              const currentVal = customObj.allowMatureContent !== undefined ? Boolean(customObj.allowMatureContent) : true;
+              return (
+                <div className="space-y-1 pt-1" data-testid="civitai-allow-mature-control">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm text-slate-300">Civitai allowMatureContent</label>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded border ${currentVal ? 'border-pink-500/60 bg-pink-950/40 text-pink-300 font-semibold' : 'border-amber-500/60 bg-amber-950/40 text-amber-300'}`}>
+                      {currentVal ? '会发送 true（项目默认开启 NSFW）' : '会发送 false（已手动设为严格安全过滤）'}
+                    </span>
+                  </div>
+                  <select
+                    aria-label="Civitai allowMatureContent"
+                    value={String(currentVal)}
+                    onChange={(e) => {
+                      const nextVal = e.target.value === 'true';
+                      const nextCustom = { ...customObj, allowMatureContent: nextVal };
+                      update({ customParameters: JSON.stringify(nextCustom, null, 2) });
+                    }}
+                    className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2 text-slate-200 text-xs font-mono"
+                  >
+                    <option value="true">true（允许成熟/成人内容，项目默认放开）</option>
+                    <option value="false">false（禁止成熟/成人内容，严格过滤）</option>
+                  </select>
+                  <div className="flex items-center justify-between text-[11px] text-pink-300/80 bg-pink-950/20 px-2 py-1 rounded border border-pink-900/30">
+                    <span>用户原则：“我们不反对nsfw，有nsfw开关的都默认开启”</span>
+                    {!currentVal && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextCustom = { ...customObj, allowMatureContent: true };
+                          update({ customParameters: JSON.stringify(nextCustom, null, 2) });
+                        }}
+                        className="text-[10px] text-cyan-300 hover:text-cyan-200 underline font-semibold ml-2 cursor-pointer shrink-0"
+                      >
+                        一键恢复放开默认
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-slate-400">官方 Orchestration 工作流 JSON body 根级字段（与 steps 同级）。需账户具备对应浏览等级与 Yellow Buzz。</p>
+                </div>
+              );
+            })()}
           </div>}
           {(params.targetProvider === 'video' || params.videoProvider || params.checkpoint?.includes('video')) && <div className="space-y-2">
             <label className="block text-sm text-slate-300">视频时长（秒）<span className="relative block">{(()=>{const db=videoDurationBounds(params.videoProvider || params.targetProvider,params.checkpoint);return db.options ? <select aria-label="视频时长（秒）" value={params.videoDuration === undefined ? '' : String(params.videoDuration)} onChange={e=>{const hit=db.options!.find(o=>String(o)===e.target.value);update({videoDuration:(hit ?? (e.target.value===''?undefined:e.target.value)) as any});}} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2 pr-8"><option value="">未选择（不提交）</option>{params.videoDuration !== undefined && !db.options.some(o=>String(o)===String(params.videoDuration)) && <option value={String(params.videoDuration)}>{String(params.videoDuration)} 秒</option>}{db.options.map(o=><option key={String(o)} value={String(o)}>{String(o)} 秒</option>)}</select> : <input aria-label="视频时长（秒）" type="number" min={db.min} max={db.max} step={1} value={params.videoDuration ?? ''} onChange={e=>update({videoDuration:e.target.value === '' ? undefined : Number(e.target.value)})} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2 pr-8" />;})()}<span aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-[calc(50%-2px)] text-slate-400">秒</span></span><span className="text-sm text-slate-400">可选值来自端点官方 Schema（duration）；Schema 未读取时不限制，未填写不提交。</span></label>

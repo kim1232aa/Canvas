@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   OFFICIAL_NSFW_FIELD_POLICIES,
+  UNVERIFIED_NSFW_FIELDS,
   findNsfwPolicy,
   isNsfwField,
   getNsfwPermissiveDefault,
@@ -9,7 +10,7 @@ import {
 } from './nsfw';
 
 describe('Official NSFW & Safety Policy Grounding', () => {
-  it('every official NSFW switch cites its official source URL and permissive value', () => {
+  it('verified official NSFW switches cite their verified official sources', () => {
     expect(OFFICIAL_NSFW_FIELD_POLICIES.enable_safety_checker).toMatchObject({
       field: 'enable_safety_checker',
       type: 'boolean',
@@ -50,36 +51,12 @@ describe('Official NSFW & Safety Policy Grounding', () => {
       docUrl: 'https://api.venice.ai/api/v1/swagger.yaml',
     });
 
-    expect(OFFICIAL_NSFW_FIELD_POLICIES.safety_checker).toMatchObject({
-      field: 'safety_checker',
-      type: 'enum',
-      permissiveValue: 'no',
-      upstreamDefault: 'yes',
-      docUrl: 'https://modelslab.com/docs/image-generation/text2img',
-    });
-
-    expect(OFFICIAL_NSFW_FIELD_POLICIES.nsfw_detection).toMatchObject({
-      field: 'nsfw_detection',
-      type: 'boolean',
-      permissiveValue: false,
-      upstreamDefault: true,
-      docUrl: 'https://docs.novita.ai/guides/model-apis-v2-to-v3-migration',
-    });
-
     expect(OFFICIAL_NSFW_FIELD_POLICIES.allowMatureContent).toMatchObject({
       field: 'allowMatureContent',
       type: 'boolean',
       permissiveValue: true,
       upstreamDefault: false,
-      docUrl: 'https://orchestration.civitai.com/v2/consumer/recipes/imageGen/openapi.json',
-    });
-
-    expect(OFFICIAL_NSFW_FIELD_POLICIES.checkNSFW).toMatchObject({
-      field: 'checkNSFW',
-      type: 'boolean',
-      permissiveValue: false,
-      upstreamDefault: false,
-      docUrl: 'https://docs.runware.ai',
+      docUrl: 'https://developer.civitai.com/orchestration/guide/submitting-work',
     });
 
     expect(OFFICIAL_NSFW_FIELD_POLICIES.nsfw).toMatchObject({
@@ -87,8 +64,21 @@ describe('Official NSFW & Safety Policy Grounding', () => {
       type: 'boolean',
       permissiveValue: true,
       upstreamDefault: false,
-      docUrl: 'https://civitai.com/api/v1/models',
+      docUrl: 'https://developer.civitai.com/site/reference/models',
     });
+  });
+
+  it('unverified or conflicting switches are documented and excluded from automatic injection', () => {
+    expect(UNVERIFIED_NSFW_FIELDS.checkNSFW.status).toBe('unverified');
+    expect(UNVERIFIED_NSFW_FIELDS.nsfw_detection.status).toBe('unverified_schema_mismatch');
+    expect(UNVERIFIED_NSFW_FIELDS.safety_checker.status).toBe('conflicting_documentation');
+    expect(UNVERIFIED_NSFW_FIELDS.safetySettings.status).toBe('unverified_in_schema');
+
+    // Must NOT be in official active policy mapping
+    expect(isNsfwField('checkNSFW')).toBe(false);
+    expect(isNsfwField('nsfw_detection')).toBe(false);
+    expect(isNsfwField('safety_checker')).toBe(false);
+    expect(isNsfwField('safetySettings')).toBe(false);
   });
 
   it('correctly matches policy by field name', () => {

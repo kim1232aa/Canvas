@@ -872,8 +872,8 @@ export function validateSogniLoraStrengthRanges(loras:unknown,strengths:unknown,
 /** Cover resolution for Sogni LoRA items:
  *  Reads directly and dynamically from Sogni's upstream `ui.examples`.
  *  Strictly adheres to project rules: NO hardcoded mappings, NO mock covers.
- *  User directive 2026-11-05: "我们不反对nsfw，有nsfw开关的都默认开启"
- *  Defaults to allowing mature examples (allowMature = true). */
+ *  When allowMature is true (e.g. via normalizeSchemaProviderItems with opts.nsfw !== false),
+ *  mature examples are included. Defaults to false when omitted for caller compatibility. */
 export function sogniLoraCover(m: any, allowMature: boolean = m?.allowMature ?? false): { url: string; caption: string } | undefined {
   const examples = Array.isArray(m?.ui?.examples) ? m.ui.examples : [];
   const usable = examples.filter((e: any) => {
