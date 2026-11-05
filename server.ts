@@ -2121,7 +2121,7 @@ app.get("/api/models", async (req, res) => {
                     description: meta.description || "",
                     tags: ["fal", isLoraReq ? "lora" : parsed.category.toLowerCase(), ...(meta.tags || [])],
                     trainedWords: Array.isArray(meta.trigger_words) ? meta.trigger_words : [],
-                    resourceKind: isLoraReq ? 'adapter' : 'model-endpoint',
+                    resourceKind: 'model-endpoint',
                   });
                 }
               } else if (respResult.status === 'fulfilled') {
