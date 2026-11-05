@@ -30,6 +30,40 @@ describe('CivitaiDriver history provenance', () => {
     expect(()=>spatialRequestParameters({...frame,params:{...frame.params,customParameters:'[]'}})).toThrow(/JSON 对象/);
     expect(bodies).toHaveLength(1);
   });
+  it('forwards clipSkip for SD1.5 but excludes it for SDXL based on ecosystem contract', async () => {
+    const bodies: any[] = [];
+    globalThis.fetch = vi.fn(async (_url, init) => {
+      bodies.push(JSON.parse(String(init?.body)));
+      return new Response(JSON.stringify({ imageUrl: 'https://example.test/out.png' }));
+    });
+    // SD1.5 with clip_skip
+    await new CivitaiDriver().generate({
+      prompt: 'test',
+      model: 'urn:air:sd1:checkpoint:civitai:4384@128713',
+      extraParams: { engine: 'sdcpp', ecosystem: 'sd1', clip_skip: 2 },
+    }, {});
+    expect(bodies[0].clipSkip).toBe(2);
+
+    // SDXL with clip_skip: must NOT send clipSkip
+    await new CivitaiDriver().generate({
+      prompt: 'test',
+      model: 'urn:air:sdxl:checkpoint:civitai:101055@128078',
+      extraParams: { engine: 'comfy', ecosystem: 'sdxl', clip_skip: 2 },
+    }, {});
+    expect(bodies[1]).not.toHaveProperty('clipSkip');
+
+    // From workflowSnapshot on SD1.5
+    await new CivitaiDriver().generate({
+      prompt: 'test',
+      model: 'urn:air:sd1:checkpoint:civitai:4384@128713',
+      workflowSnapshot: {
+        nodes: [
+          { id: 'n1', type: 'KSampler', values: { clip_skip: 2 } },
+        ],
+      },
+    }, {});
+    expect(bodies[2].clipSkip).toBe(2);
+  });
   const originalFetch = globalThis.fetch;
   const originalSetTimeout = globalThis.setTimeout;
 

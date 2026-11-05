@@ -1207,14 +1207,14 @@ export function adaptCivitaiRecipeToProvider(
       fields.clipSkip = {
         field: 'clipSkip',
         originalValue: clipSkipVal,
-        status: 'unsupported',
-        humanMessage: '尚未发送，原因：CivitaiDriver / civitaiImageContract 尚未映射 clipSkip',
+        targetField: 'clipSkip',
+        mappedValue: clipSkipVal,
+        status: clipSkipVal !== null && clipSkipVal !== undefined ? 'mapped' : 'not_applicable',
+        humanMessage: clipSkipVal !== null && clipSkipVal !== undefined
+          ? `作为 Civitai SD 1.5 clipSkip 发送 (${clipSkipVal})`
+          : 'Civitai SD 1.5 官方配方支持 clipSkip，当前配方未指定原值。',
         source: 'https://developer.civitai.com/orchestration/recipes/sd1.md',
       };
-      if (clipSkipVal !== null && clipSkipVal !== undefined) {
-        unsupportedFields.push('clipSkip');
-        warnings.push('Civitai SD 1.5 官方配方支持 clipSkip，但当前客户端 CivitaiDriver / civitaiImageContract 尚未映射该字段，尚未发送。');
-      }
     } else {
       fields.clipSkip = {
         field: 'clipSkip',
