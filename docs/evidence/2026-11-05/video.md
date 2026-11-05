@@ -209,21 +209,29 @@ WIRING: 7
 
 ## Sogni 视频 Schema hasReference 联动与横幅对比验证（M12 闭环）
 
-在真实 Chrome 浏览器（CDP 端口 9412，本地开发服务 127.0.0.1:3112）中实操测试两组工作流，验证 `useLiveVideoSchema` 在带参考图时首帧即加载 `animate_photo` Schema：
+在真实 Chrome 浏览器（CDP 端口 9412，本地开发服务 127.0.0.1:3112，视口宽度 1280×900）中实操测试，拍摄包含节点标题、连线、参考图底图与横幅的整段画布截图，验证 `useLiveVideoSchema` 在带参考图时首帧即加载 `animate_photo` Schema：
 
-1. **未接参考图（文生视频）**：
-   - 载入标准文生视频工作流（无 LoadImage 节点），将视频服务商切换为 Sogni，模型输入 `ltx25`。
+1. **未接参考图（文生视频 T2V）**：
+   - 载入标准文生视频工作流，将视频服务商切换为 Sogni，模型输入 `ltx25`。
+   - 画布上仅有 AI 视频节点与保存视频节点，AI 视频节点左侧 `图像 (IMAGE)`（`init_image`）插槽无任何输入连线。
    - `useLiveVideoSchema` 发出 `GET /api/model-schema?provider=sogni&model=ltx25&isVideo=true`（不带 hasReference 参数）。
    - 节点横幅即时呈现：`schemaStatus hosted-tool:generate_video · toolName generate_video · videoModel · 有参考图时提交走 animate_photo（实时 Schema）；Seedance 参考图字段未接通`。
-   - 截图存盘：`docs/evidence/2026-11-05/video/sogni-t2v-generate-video-banner-m12.png`。
+   - 截图存盘：`docs/evidence/2026-11-05/video/sogni-t2v-generate-video-banner-m12.png`（整段画布 1280×757，可见节点标题、无参考图连线事实与 generate_video 横幅）。
 
-2. **已接参考图（图生视频）**：
-   - 载入标准图生视频工作流（带 LoadImage 参考图节点并连线到 AIVideoNode 的 `init_image` 输入插槽），将视频服务商切换为 Sogni，模型输入 `ltx25`。
-   - `useLiveVideoSchema` 检测到参考图连线，发出 `GET /api/model-schema?provider=sogni&model=ltx25&isVideo=true&hasReference=true`。
+2. **边界验证：已接连线但参考图为空**：
+   - 载入标准图生视频工作流，`参考底图加载 (Load Image)` 节点与 AI 视频节点通过青色连线相连，但 LoadImage 内尚未填入图片（`image_url` 为空，显示占位符「输入图像 URL 或从资产库选择...」，且无图片缩略图）。
+   - 按照 `hasReferenceImageInput` 规则（要求必须有连线且来源节点图片非空），由于图片为空，`useLiveVideoSchema` 仍发送 `hasReference=false`。
+   - 节点横幅如实保持：`schemaStatus hosted-tool:generate_video · toolName generate_video · videoModel · ...`。
+   - 截图存盘：`docs/evidence/2026-11-05/video/sogni-i2v-empty-ref-generate-video-m12.png`（整段画布 1280×757，可见连线、空图状态与 generate_video 横幅）。
+
+3. **已接参考图（图生视频 I2V，LoadImage 含有效图片）**：
+   - 在已连线的 `参考底图加载 (Load Image)` 节点中填入真实参考图 URL（`/seed-ok-preview.png`），节点内呈现出真实的蓝色参考图预览卡片。
+   - 青色贝塞尔连线从 LoadImage 的 `图像 (IMAGE)` 端口直连 AI 视频节点的 `图像 (IMAGE)`（`init_image`）端口。
+   - `useLiveVideoSchema` 立即捕获到有效参考图输入，向服务端发出 `GET /api/model-schema?provider=sogni&model=ltx25&isVideo=true&hasReference=true`。
    - 节点横幅从首帧即显示 `animate_photo`（无需等待提交或后端驱动覆盖）：`schemaStatus hosted-tool:animate_photo · toolName animate_photo · videoModel · 有参考图时提交走 animate_photo（实时 Schema）；Seedance 参考图字段未接通`。
-   - 截图存盘：`docs/evidence/2026-11-05/video/sogni-i2v-animate-photo-banner-m12.png`。
+   - 截图存盘：`docs/evidence/2026-11-05/video/sogni-i2v-animate-photo-banner-m12.png`（整段画布 1280×757，可见 AI 视频节点标题、直连参考图输入连线、LoadImage 内真实预览图及 animate_photo 横幅）。
 
-两张截图均通过 `ReadMediaFile` 审查确认，无 API Key、无钱包地址、无个人敏感信息。
+所有截图均通过 `ReadMediaFile` 审查确认，图宽 1280，文字清晰可读，无 API Key、无钱包地址、无 SID 与签名 URL。
 
 ## 尚未完成
 
