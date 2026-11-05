@@ -2487,6 +2487,9 @@ app.get("/api/models", async (req, res) => {
         }
         if (!results.gemini) {
           results.gemini = geminiItems.filter((m) => matchCategory(m) && matchSearch(m));
+          if (cat === 'video' && results.gemini.length === 0) {
+            catalogNoticesAccum.gemini = 'Google Gemini 官方模型列表目前未包含 Veo 视频模型；支持在上方输入模型 ID 选用。';
+          }
         }
       })());
     }
@@ -2577,15 +2580,22 @@ app.get("/api/models", async (req, res) => {
               const spItems = normalizeSchemaProviderItems(sp, rows, {
                 lora: wantsLora,
                 sourceUrl,
-                category: cat === 'all' ? 'checkpoint' : cat,
+                category: cat,
                 query: '',
               });
               const filtered = spItems.filter((m: any) => matchCategory(m) && matchSearch(m));
               results[sp] = filtered.slice((pageParam - 1) * limitParam, pageParam * limitParam);
-              const spNotice = sp === 'sogni' && !wantsLora
+              const isVideoCat = cat === 'video';
+              const spNotice = sp === 'sogni' && !wantsLora && !isVideoCat
                 ? 'live-official-generate_image-schema'
                 : sp === 'sogni' && wantsLora
                 ? 'lookup-only (no public lora directory)'
+                : sp === 'sogni' && isVideoCat
+                ? 'lookup-only (no public video directory)'
+                : sp === 'novita' && isVideoCat
+                ? 'lookup-only (no public video directory)'
+                : sp === 'deepinfra' && isVideoCat
+                ? 'lookup-only (no public video directory)'
                 : 'local-slice-of-live-upstream-catalog';
               pagination[sp] = {
                 page: pageParam,
@@ -2599,6 +2609,15 @@ app.get("/api/models", async (req, res) => {
                 ...(noLoraCatalog ? { noLoraCatalog: true, message: notice } : {}),
               };
               if (notice) catalogNoticesAccum[sp] = notice;
+              if (isVideoCat && filtered.length === 0) {
+                if (sp === 'novita') {
+                  catalogNoticesAccum.novita = 'Novita AI 官方模型目录 API (GET /v3/model) 仅支持 checkpoint / lora，无公开视频模型列表；视频生成采用独立端点（如 Wan 2.5 / Wan 2.6 / Kling）。支持在上方输入模型 ID 选用。';
+                } else if (sp === 'sogni') {
+                  catalogNoticesAccum.sogni = 'Sogni 协议官方目前仅提供文生图端点与 LoRA 目录，无公开视频模型列表；支持按模型 ID 选用。';
+                } else if (sp === 'deepinfra') {
+                  catalogNoticesAccum.deepinfra = 'DeepInfra 官方公开模型列表为文生图（OpenAI images），无独立视频模型列表；支持按模型 ID 选用。';
+                }
+              }
             } catch (spErr: any) {
               results[sp] = {
                 error: spErr.message,

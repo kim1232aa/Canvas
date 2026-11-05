@@ -104,6 +104,20 @@ const ARCHITECTURE_TAGS = [
   {id:'krea',label:'Krea'}, {id:'together',label:'Together'}, {id:'aimlapi',label:'AIMLAPI'}, {id:'novita',label:'Novita'}, {id:'venice',label:'Venice'}, {id:'deepinfra',label:'DeepInfra'}, {id:'chroma',label:'Chroma'}, {id:'hunyuan',label:'Hunyuan'}, {id:'kolors',label:'Kolors'}, {id:'pixart',label:'PixArt'}, {id:'auraflow',label:'AuraFlow'}, {id:'anima',label:'Anima'}, {id:'ernie',label:'ERNIE'}, {id:'hidream',label:'HiDream'},
 ];
 
+const PROVIDER_EXAMPLE_IDS: Record<string, string[]> = {
+  tensorart: ['672390779613802167', '958694016000505570'],
+  mage: ['mango-v3', 'mango-v3-turbo', 'mango'],
+  agnes: ['agnes-image-2.5-flash'],
+  openai_compat: ['dall-e-3'],
+  grok_compat: ['grok-2-image'],
+  civitai: ['133005', 'urn:air:sdxl:checkpoint:civitai:133005@146033'],
+  novita: ['dreamshaper_8_93211.safetensors', 'wan-2.5-t2v-preview'],
+  huggingface: ['black-forest-labs/FLUX.1-schnell', 'stabilityai/stable-diffusion-xl-base-1.0'],
+  fal: ['fal-ai/flux/dev', 'fal-ai/kling-video/v1/standard/text-to-video'],
+  nanogpt: ['flux-schnell', 'wan-2.1/t2v-720p', 'kling-video/v1'],
+  replicate: ['black-forest-labs/flux-schnell', 'minimax/video-01'],
+};
+
 interface ArchitectureFields { baseModel?: unknown; id?: unknown; name?: unknown; description?: unknown; tags?: unknown }
 
 function matchesArchitecture(m: ArchitectureFields, arch: string): boolean {
@@ -524,6 +538,126 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
     return 0;
   });
 
+  const handleApplyCustomId = async (directId?: string) => {
+    const rawId = (directId || customId).trim();
+    if (importing || activeProvider === 'all' || !rawId) return;
+    const version = requestVersion.current;
+    setImporting(true);
+    setImportError(null);
+    try {
+      if (activeProvider === 'civitai') {
+        const resource = await verifyCivitaiSelection(rawId, activeCategory === 'lora' ? 'lora' : 'checkpoint');
+        if (version !== requestVersion.current) return;
+        if (activeCategory === 'lora') {
+          if (onSelectLoRAWithBaseModel) onSelectLoRAWithBaseModel(resource);
+          else if (onAddLora) onAddLora({ ...resource }); // never invent 0.8
+        } else onSelectModel(resource.name, resource.name, activeProvider, resource);
+        onClose();
+        return;
+      }
+      // LoRA Hub paste of an HTTP(S) weight URL: same executable attachment as LoRALoader typing.
+      if (activeCategory === 'lora' && isExplicitLoraWeightUrl(rawId)) {
+        const lora = selectionFromExplicitLoraUrl(activeProvider, rawId);
+        if (version !== requestVersion.current) return;
+        if (onSelectLoRAWithBaseModel) onSelectLoRAWithBaseModel(lora);
+        else if (onAddLora) onAddLora({ ...lora }); // strength must be explicit — never invent 0.8
+        else throw new Error('当前画布没有可挂载 LoRA 的入口，请先选择底模。');
+        onClose();
+        return;
+      }
+      if (activeProvider === 'replicate') {
+        const info = await fetchReplicateModelInfo(rawId);
+        if (version !== requestVersion.current) return;
+        const verifiedType = String(info?.category || info?.type || '').toLowerCase();
+        const isLora = ['lora', 'locon', 'lycoris', 'dora'].includes(verifiedType) || (activeCategory === 'lora' && rawId.toLowerCase().includes('lora'));
+        if (isLora) {
+          const words = info?.triggerWords || info?.trainedWords || [];
+          const lora = {
+            name: String(rawId),
+            provider: 'replicate',
+            civitaiId: undefined,
+            triggerWords: Array.isArray(words) ? words.join(', ') : String(words),
+            baseModel: info?.baseModel || undefined,
+            resourceVerified: true,
+            resource_source: 'replicate',
+            resource_kind: verifiedType,
+            downloadUrl: info?.downloadUrl,
+          };
+          if (onSelectLoRAWithBaseModel) onSelectLoRAWithBaseModel(lora);
+          else if (onAddLora) onAddLora({ ...lora }); // strength must be explicit — never invent 0.8
+          else onSelectModel(rawId, info?.name || rawId, 'replicate', info);
+        } else {
+          onSelectModel(rawId, info?.name || rawId, 'replicate', info);
+        }
+        onClose();
+        return;
+      }
+      let info: any = { id: rawId, name: rawId };
+      if (activeProvider === 'huggingface') info = await fetchHuggingFaceModelInfo(rawId);
+      if (activeProvider === 'tensorart') info = await fetchTensorArtModelInfo(rawId);
+      if (version !== requestVersion.current) return;
+      if (!info?.id) throw new Error('查询未返回模型 ID，请核对资源 ID 后重试。');
+      const verifiedType = String(info.category || info.type || info.modelType || '').toLowerCase();
+      if (activeCategory === 'lora' && ['huggingface', 'tensorart'].includes(activeProvider) && !['lora', 'locon', 'lycoris', 'dora'].includes(verifiedType)) {
+        throw new Error('资源元数据未标明为 LoRA，不能按当前分类把底模当作 LoRA 挂载');
+      }
+      const isLora = ['lora', 'locon', 'lycoris', 'dora'].includes(verifiedType) || (activeCategory === 'lora' && !['huggingface', 'tensorart'].includes(activeProvider));
+      if (isLora) {
+        const words = info.triggerWords || info.trainedWords || [];
+        const lora = {
+          name: String(info.id),
+          provider: activeProvider,
+          civitaiId: undefined,
+          triggerWords: Array.isArray(words) ? words.join(', ') : String(words),
+          baseModel: info.baseModel || undefined,
+          resourceVerified: ['huggingface', 'tensorart'].includes(activeProvider),
+          resource_source: activeProvider,
+          resource_kind: verifiedType,
+          downloadUrl: info.downloadUrl,
+        };
+        if (onSelectLoRAWithBaseModel) onSelectLoRAWithBaseModel(lora);
+        else if (onAddLora) onAddLora({ ...lora }); // strength must be explicit — never invent 0.8
+        else throw new Error('当前画布没有可挂载 LoRA 的入口，请先选择底模。');
+      } else {
+        onSelectModel(String(info.id), info.name || String(info.id), activeProvider, {
+          ...info,
+          resourceVerified: ['huggingface', 'tensorart'].includes(activeProvider),
+          resource_source: activeProvider,
+          resource_kind: verifiedType,
+        });
+      }
+      onClose();
+    } catch (err) {
+      if (version === requestVersion.current) setImportError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const getCustomIdPlaceholder = (prov: string) => {
+    if (prov === 'tensorart') return '输入 Tensor.Art / 吐司 模型 ID (如 672390779613802167)...';
+    if (prov === 'huggingface') return '输入 HF Repo ID (如 user/model-name)...';
+    if (prov === 'modelscope' || prov === 'modelscope_ai') return '输入 ModelScope ID (如 damo/model-id)...';
+    if (prov === 'fal') return '输入 Fal.ai Endpoint (如 fal-ai/...)...';
+    if (prov === 'nanogpt') return '输入 NanoGPT Model ID (如 qwen-image-2.1/text-to-image)...';
+    if (prov === 'gemini') return '输入 Gemini 模型 ID...';
+    if (prov === 'replicate') return '输入 Replicate 模型 ID (如 black-forest-labs/flux-schnell 或 ideogram-ai/ideogram-v2a)...';
+    if (prov === 'runware') return '输入 Runware AIR (如 civitai:xxxx@yyyy)...';
+    if (prov === 'modelslab') return '输入 ModelsLab 模型 ID (如 midjourney)...';
+    if (prov === 'muapi') return '输入 MuAPI 模型端点 ID...';
+    if (prov === 'wavespeed') return '输入 WaveSpeed 模型端点 ID...';
+    if (prov === 'sogni') return '输入 Sogni 模型 ID...';
+    if (prov === 'sensenova') return '输入官方 SenseNova 图像模型 ID（如 sensenova-u1.5-lite）...';
+    if (prov === 'agnes') return '输入 Agnes 模型 ID...';
+    if (prov === 'mage') return '输入 Mage model_id（如 mango-v3）...';
+    if (prov === 'openai_compat' || prov === 'grok_compat') return '输入已配置中转实际支持的模型 ID...';
+    if (prov === 'all') return '请先选择服务商';
+    if (prov === 'civitai') return '输入 Civitai ID (如 133005) 或 URN...';
+    if (prov === 'novita') return '输入 Novita sd_name_in_api...';
+    if (prov === 'openworks') return '输入 OpenWorks 工具 name...';
+    return '输入模型 / LoRA ID...';
+  };
+
   const handleCopyText = async (key: string, text: string) => {
     try { await navigator.clipboard.writeText(text); } catch { alert("复制失败，请检查剪贴板权限"); return; }
     setCopiedKey(key);
@@ -615,6 +749,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
             { id: 'fal', name: 'Fal.ai' },
             { id: 'nanogpt', name: 'NanoGPT' },
             { id: 'gemini', name: 'Google Gemini' },
+            { id: 'tensorart', name: 'Tensor.Art (TAMS)' },
             { id: 'muapi', name: 'MuAPI' },
             { id: 'wavespeed', name: 'WaveSpeed' },
             { id: 'sogni', name: 'Sogni' },
@@ -824,86 +959,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
             />
             <button
               disabled={importing || activeProvider === 'all' || !customId.trim()}
-              onClick={async () => {
-                if (importing || activeProvider === 'all' || !customId.trim()) return;
-                const version = requestVersion.current;
-                setImporting(true);
-                setImportError(null);
-                try {
-                  const rawId = customId.trim();
-                  if(activeProvider==='civitai') {
-                    const resource=await verifyCivitaiSelection(rawId,activeCategory==='lora'?'lora':'checkpoint');
-                    if(version !== requestVersion.current)return;
-                    if(activeCategory==='lora') {
-                      if(onSelectLoRAWithBaseModel)onSelectLoRAWithBaseModel(resource);
-                      else if(onAddLora)onAddLora({...resource}); // never invent 0.8
-                    } else onSelectModel(resource.name,resource.name,activeProvider,resource);
-                    onClose();return;
-                  }
-                  // LoRA Hub paste of an HTTP(S) weight URL: same executable attachment as LoRALoader typing.
-                  if (activeCategory === 'lora' && isExplicitLoraWeightUrl(rawId)) {
-                    const lora = selectionFromExplicitLoraUrl(activeProvider, rawId);
-                    if (version !== requestVersion.current) return;
-                    if (onSelectLoRAWithBaseModel) onSelectLoRAWithBaseModel(lora);
-                    else if (onAddLora) onAddLora({ ...lora }); // strength must be explicit — never invent 0.8
-                    else throw new Error('当前画布没有可挂载 LoRA 的入口，请先选择底模。');
-                    onClose();
-                    return;
-                  }
-                  if (activeProvider === 'replicate') {
-                    const info = await fetchReplicateModelInfo(rawId);
-                    if (version !== requestVersion.current) return;
-                    const verifiedType = String(info?.category || info?.type || '').toLowerCase();
-                    const isLora = ['lora', 'locon', 'lycoris', 'dora'].includes(verifiedType) || (activeCategory === 'lora' && rawId.toLowerCase().includes('lora'));
-                    if (isLora) {
-                      const words = info?.triggerWords || info?.trainedWords || [];
-                      const lora = {
-                        name: String(rawId),
-                        provider: 'replicate',
-                        civitaiId: undefined,
-                        triggerWords: Array.isArray(words) ? words.join(', ') : String(words),
-                        baseModel: info?.baseModel || undefined,
-                        resourceVerified: true,
-                        resource_source: 'replicate',
-                        resource_kind: verifiedType,
-                        downloadUrl: info?.downloadUrl,
-                      };
-                      if (onSelectLoRAWithBaseModel) onSelectLoRAWithBaseModel(lora);
-                      else if (onAddLora) onAddLora({ ...lora }); // strength must be explicit — never invent 0.8
-                      else onSelectModel(rawId, info?.name || rawId, 'replicate', info);
-                    } else {
-                      onSelectModel(rawId, info?.name || rawId, 'replicate', info);
-                    }
-                    onClose();
-                    return;
-                  }
-                  let info: any = { id: rawId, name: rawId };
-                  if (activeProvider === 'huggingface') info = await fetchHuggingFaceModelInfo(rawId);
-                  if (activeProvider === 'tensorart') info = await fetchTensorArtModelInfo(rawId);
-                  if (version !== requestVersion.current) return;
-                  if (!info?.id) throw new Error('查询未返回模型 ID，请核对资源 ID 后重试。');
-                  const verifiedType=String(info.category || info.type || info.modelType || '').toLowerCase();
-                  if(activeCategory==='lora' && ['huggingface','tensorart'].includes(activeProvider) && !['lora','locon','lycoris','dora'].includes(verifiedType))throw new Error('资源元数据未标明为 LoRA，不能按当前分类把底模当作 LoRA 挂载');
-                  const isLora = ['lora','locon','lycoris','dora'].includes(verifiedType) || (activeCategory==='lora' && !['huggingface','tensorart'].includes(activeProvider));
-                  if (isLora) {
-                    const words = info.triggerWords || info.trainedWords || [];
-                    const lora = { name: String(info.id), provider: activeProvider,
-                      civitaiId: undefined,
-                      triggerWords: Array.isArray(words) ? words.join(', ') : String(words),
-                      baseModel: info.baseModel || undefined,resourceVerified:['huggingface','tensorart'].includes(activeProvider),resource_source:activeProvider,resource_kind:verifiedType,downloadUrl:info.downloadUrl };
-                    if (onSelectLoRAWithBaseModel) onSelectLoRAWithBaseModel(lora);
-                    else if (onAddLora) onAddLora({ ...lora }); // strength must be explicit — never invent 0.8
-                    else throw new Error('当前画布没有可挂载 LoRA 的入口，请先选择底模。');
-                  } else {
-                    onSelectModel(String(info.id), info.name || String(info.id), activeProvider, {...info,resourceVerified:['huggingface','tensorart'].includes(activeProvider),resource_source:activeProvider,resource_kind:verifiedType});
-                  }
-                  onClose();
-                } catch (err) {
-                  if (version === requestVersion.current) setImportError(err instanceof Error ? err.message : String(err));
-                } finally {
-                  setImporting(false);
-                }
-              }}
+              onClick={() => handleApplyCustomId()}
               data-testid="hub-custom-id-apply"
               style={{ opacity: 1 }}
               className="px-3 py-1.5 rounded-lg bg-[#7e22ce] hover:bg-[#6b21a8] text-white disabled:bg-[#3b2d5e] disabled:text-[#e4dcf5] disabled:cursor-not-allowed font-bold text-xs whitespace-nowrap shadow-sm active:scale-95 transition-all cursor-pointer"
@@ -958,20 +1014,72 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
               <p className="font-medium text-xs">正在读取所选平台目录...</p>
             </div>
           ) : displayList.length === 0 ? (
-            <div className="h-72 flex flex-col items-center justify-center text-slate-400 space-y-3 p-6 bg-[#161720] rounded-2xl border border-[#262834]">
-              <Sparkles className="w-10 h-10 text-cyan-400/60" />
-              <div className="text-center">
+            <div className="min-h-72 flex flex-col items-center justify-center text-slate-400 space-y-3 p-6 bg-[#161720] rounded-2xl border border-[#262834]">
+              {catalogNotices[activeProvider] || activeProvider === 'tensorart' ? (
+                <Box className="w-10 h-10 text-purple-400" />
+              ) : (
+                <Sparkles className="w-10 h-10 text-cyan-400/60" />
+              )}
+              <div className="text-center max-w-xl">
                 <p className="text-sm font-bold text-white">
-                  {activeProvider === 'tensorart' ? '按模型 / LoRA ID 查询' : `当前目录页暂无所选分类资源`}
+                  {activeProvider === 'tensorart'
+                    ? '按模型 / LoRA ID 查询'
+                    : catalogNotices[activeProvider]
+                    ? `${friendlyProviderLabel(activeProvider)} · 官方无公开${activeCategory === 'lora' ? ' LoRA' : activeCategory === 'video' ? '视频模型' : ''}列表 API`
+                    : `当前目录页暂无所选分类资源`}
                 </p>
                 <p className="text-xs text-slate-400 mt-1">
                   {error
                     ? '目录请求失败，详见上方异常提示；可点重试。'
+                    : catalogNotices[activeProvider]
+                    ? catalogNotices[activeProvider]
                     : activeProvider === 'tensorart'
                       ? 'TAMS 没有列表 API；在上方输入真实资源 ID 查询详情。'
                       : '请尝试切换分类、服务商或输入更精准的关键词进行查询所选目录'}
                 </p>
               </div>
+
+              {(activeProvider === 'tensorart' || Boolean(catalogNotices[activeProvider]) || PROVIDERS_WITHOUT_MODEL_DIRECTORY.has(activeProvider)) && activeProvider !== 'all' && (
+                <div className="w-full max-w-lg mt-2 p-4 rounded-xl bg-[#191626] border border-purple-800/40 space-y-2.5 text-left">
+                  <div className="flex items-center gap-2 text-purple-300 font-semibold text-xs">
+                    <Zap className="w-4 h-4 text-purple-400" />
+                    <span>按 ID 直接选用（输入真实模型 ID 后挂载到画布）：</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={customId}
+                      onChange={(e) => { setCustomId(e.target.value); setImportError(null); }}
+                      placeholder={getCustomIdPlaceholder(activeProvider)}
+                      className="flex-1 bg-[#100d1c] border border-purple-800/60 rounded-lg px-3 py-1.5 text-xs text-purple-100 placeholder:text-[#b9a6e0] outline-none focus:border-purple-400 font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleApplyCustomId()}
+                      disabled={importing || !customId.trim()}
+                      className="px-3.5 py-1.5 rounded-lg bg-[#7e22ce] hover:bg-[#6b21a8] text-white disabled:bg-[#3b2d5e] disabled:text-[#e4dcf5] font-bold text-xs whitespace-nowrap shadow-sm cursor-pointer transition-all"
+                    >
+                      {importing ? '正在查询…' : '选用此 ID'}
+                    </button>
+                  </div>
+                  {PROVIDER_EXAMPLE_IDS[activeProvider]?.length > 0 && (
+                    <div className="flex items-center gap-1.5 flex-wrap text-[11px] text-slate-400 pt-1">
+                      <span>常用示例 ID:</span>
+                      {PROVIDER_EXAMPLE_IDS[activeProvider].map((ex) => (
+                        <button
+                          key={ex}
+                          type="button"
+                          onClick={() => { setCustomId(ex); }}
+                          className="px-2 py-0.5 rounded bg-[#231f38] text-purple-300 hover:text-white border border-purple-700/40 font-mono text-[10px] cursor-pointer hover:border-purple-400 transition-colors"
+                        >
+                          {ex}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="flex items-center gap-2 mt-2">
                 {!unsupportedDirectoryProvider && <button
                   onClick={() => {
@@ -982,7 +1090,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                     setActiveProvider('all');
                     loadModels('all', 'all', '', sortOption, 'all');
                   }}
-                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-cyan-600/30 transition-all flex items-center gap-1.5"
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-cyan-600/30 transition-all flex items-center gap-1.5 cursor-pointer"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
                   <span>清除筛选并重新加载</span>
@@ -990,7 +1098,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                 {error && (
                   <button
                     onClick={() => loadModels(activeProvider, activeCategory, query, sortOption)}
-                    className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs transition-all flex items-center gap-1.5 border border-slate-700"
+                    className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs transition-all flex items-center gap-1.5 border border-slate-700 cursor-pointer"
                   >
                     <RefreshCw className="w-3.5 h-3.5" />
                     <span>立即重试 (Retry)</span>
@@ -1248,7 +1356,30 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                                 {m.speed}
                               </span>
                             )}
+                            {m.latest_version?.id && (
+                              <span className="text-[10px] text-slate-400 font-mono bg-[#13141a] px-1.5 py-0.5 rounded border border-slate-800">
+                                版本: {String(m.latest_version.id).slice(0, 10)}…
+                              </span>
+                            )}
                           </div>
+
+                          {/* Real Model Description */}
+                          {m.description && (
+                            <p className="mt-2 text-[11px] text-slate-400 line-clamp-2 leading-relaxed bg-[#13141a]/60 p-2 rounded-lg border border-[#22242f]" title={m.description}>
+                              {m.description}
+                            </p>
+                          )}
+
+                          {/* Real Tags / Supported Tasks */}
+                          {Array.isArray(m.tags) && m.tags.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-2 max-h-12 overflow-hidden">
+                              {m.tags.slice(0, 5).map((t: string, idx: number) => (
+                                <span key={idx} className="text-[9px] px-1.5 py-0.5 rounded bg-[#181a24] text-slate-300 font-mono border border-slate-800/60">
+                                  #{String(t).replace(/^tag:/, '')}
+                                </span>
+                              ))}
+                            </div>
+                          )}
 
                           {/* Trigger words for LoRA */}
                           {trainedWords.length > 0 && (
