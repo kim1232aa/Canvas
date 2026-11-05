@@ -9,13 +9,15 @@ function normalizeToken(s: string): string {
   return (s || '').toLowerCase().trim();
 }
 
-export function mapSampler(s: string): string {
+export function mapSampler(s: string, engineOrProvider?: string): string {
   const lower = normalizeToken(s);
   if (!lower || EMPTY_TOKENS.has(lower)) return '';
   if (lower.includes('dpm++ 2m') || lower.includes('dpmpp_2m')) return 'dpmpp_2m';
   if (lower.includes('dpm++ sde') || lower.includes('dpmpp_sde')) return 'dpmpp_sde';
   if (lower.includes('dpm++ 3m sde') || lower.includes('dpmpp_3m_sde')) return 'dpmpp_3m_sde';
-  if (lower.includes('euler a') || lower.includes('euler_ancestral')) return 'euler_ancestral';
+  if (lower.includes('euler a') || lower.includes('euler_ancestral') || lower.includes('euler_a')) {
+    return engineOrProvider === 'comfy' ? 'euler_ancestral' : 'euler_a';
+  }
   if (lower.includes('er_sde_simple')) return 'er_sde_simple';
   if (lower.includes('er_sde')) return 'er_sde';
   if (lower.includes('heun')) return 'heun';
@@ -199,6 +201,7 @@ export interface ProviderLoraAdaptation {
   versionId?: number | string;
   air?: string;
   baseModel?: string;
+  canGenerate?: boolean;
   targetFormat?: 'air' | 'download_url' | 'repo_id' | 'catalog_id' | 'unsupported';
   sendableUrlOrId?: string;
   requiresAuthConsent?: boolean;
@@ -240,8 +243,10 @@ export interface CivitaiRecipeInput {
     baseModel?: string;
     downloadUrl?: string;
     requireAuth?: boolean;
+    canGenerate?: boolean;
     inferredFromPrompt?: boolean;
   }>;
+  hash404Warnings?: string[];
   prompt?: string;
   negativePrompt?: string;
   steps?: number | null;
@@ -346,6 +351,12 @@ export function adaptCivitaiRecipeToProvider(
   const fields: Record<string, FieldAdaptationDetail> = {};
   const unsupportedFields: string[] = [];
   const warnings: string[] = [];
+
+  if (Array.isArray(recipe.hash404Warnings)) {
+    for (const hw of recipe.hash404Warnings) {
+      warnings.push(hw);
+    }
+  }
 
   // Provider LoRA caps (P1-3)
   const capInfo = PROVIDER_LORA_CAPS[provider];
@@ -472,6 +483,7 @@ export function adaptCivitaiRecipeToProvider(
 
     // Check missing explicit strength (P1-4: no version id or no weight must not appear as "可直接发送" with scale 1)
     if (originalStrength === null || originalStrength === undefined || !Number.isFinite(originalStrength)) {
+      const isKenvaNoGen = l.canGenerate === false && provider === 'civitai';
       adaptedLoras.push({
         name: loraName,
         originalStrength: null,
@@ -479,11 +491,18 @@ export function adaptCivitaiRecipeToProvider(
         civitaiId: versionId,
         modelId,
         versionId,
+        air: l.air,
+        canGenerate: l.canGenerate,
         baseModel: loraBaseModel,
-        targetFormat: 'download_url',
-        status: 'requires_reselection',
-        reason: '缺少显式 LoRA 权重参数，禁止静默兜底 1.0；需在节点中设置强度后方可运行。',
+        targetFormat: isKenvaNoGen ? 'unsupported' : 'download_url',
+        status: isKenvaNoGen ? 'unsupported' : 'requires_reselection',
+        reason: isKenvaNoGen
+          ? '该资源在 Civitai 官方未启用在线生成 (canGenerate: false)，无法通过 Civitai Orchestration 官方算力执行；可在第三方供应商使用其直链，或在画布中移除该 LoRA。'
+          : '缺少显式 LoRA 权重参数，禁止静默兜底 1.0；需在节点中设置强度后方可运行。',
       });
+      if (isKenvaNoGen) {
+        warnings.push(`LoRA "${loraName}" 未在 Civitai 官方启用在线生成 (canGenerate: false)，无法使用 Civitai 官方算力运行。`);
+      }
       continue;
     }
 
@@ -513,7 +532,23 @@ export function adaptCivitaiRecipeToProvider(
     const canonicalAir = l.air || (modelId && versionId ? `urn:air:${effectiveEco}:lora:civitai:${modelId}@${versionId}` : '');
 
     if (provider === 'civitai') {
-      if (isArchMismatch) {
+      if (l.canGenerate === false) {
+        adaptedLoras.push({
+          name: loraName,
+          originalStrength,
+          originalClipStrength,
+          civitaiId: versionId,
+          modelId,
+          versionId,
+          air: canonicalAir || l.air,
+          baseModel: loraBaseModel,
+          canGenerate: false,
+          targetFormat: 'unsupported',
+          status: 'unsupported',
+          reason: `该资源在 Civitai 官方未启用在线生成 (canGenerate: false)，无法通过 Civitai Orchestration 官方算力执行；可在第三方供应商使用其直链，或在画布中移除该 LoRA。`,
+        });
+        warnings.push(`LoRA "${loraName}" 未在 Civitai 官方启用在线生成 (canGenerate: false)，无法使用 Civitai 官方算力运行。`);
+      } else if (isArchMismatch) {
         adaptedLoras.push({
           name: loraName,
           originalStrength,
@@ -992,13 +1027,15 @@ export function adaptCivitaiRecipeToProvider(
   const samplerVal = recipe.sampler || '';
   const schedulerVal = recipe.scheduler || '';
   if (provider === 'civitai') {
+    const isComfy = (recipe.engine || '').toLowerCase() === 'comfy';
+    const mappedSampler = mapSampler(samplerVal, isComfy ? 'comfy' : 'sdcpp') || samplerVal;
     fields.sampler = {
       field: 'sampler',
       originalValue: samplerVal,
-      targetField: 'sampleMethod / sampler',
-      mappedValue: samplerVal,
+      targetField: isComfy ? 'sampler' : 'sampleMethod',
+      mappedValue: mappedSampler,
       status: samplerVal ? 'mapped' : 'not_applicable',
-      humanMessage: `按 Civitai 引擎映射为 sampleMethod (sdcpp) 或 sampler (comfy): ${samplerVal || '默认'}`,
+      humanMessage: `按 Civitai 引擎映射为 ${isComfy ? 'sampler (comfy)' : 'sampleMethod (sdcpp)'}: ${mappedSampler || '默认'}`,
       source: 'https://developer.civitai.com/orchestration/recipes/sdxl.md',
     };
     fields.scheduler = {

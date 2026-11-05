@@ -17,7 +17,9 @@ describe('civitai import mappers (hard gates)', () => {
     expect(mapSampler('none')).toBe('');
     expect(mapSampler('totally_unknown_xyz')).toBe('');
     expect(mapSampler('euler')).toBe('euler');
-    expect(mapSampler('Euler a')).toBe('euler_ancestral');
+    expect(mapSampler('Euler a')).toBe('euler_a');
+    expect(mapSampler('Euler a', 'comfy')).toBe('euler_ancestral');
+    expect(mapSampler('Euler a', 'sdcpp')).toBe('euler_a');
     expect(mapSampler('DPM++ 2M')).toBe('dpmpp_2m');
   });
 

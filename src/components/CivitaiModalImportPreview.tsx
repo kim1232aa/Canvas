@@ -231,7 +231,9 @@ export const CivitaiModalImportPreview: React.FC<CivitaiModalImportPreviewProps>
                       )}
                       <span
                         className={`text-[9px] font-bold px-1.5 py-0.5 rounded font-mono ${
-                          isCompatible
+                          lora.canGenerate === false && selectedProvider === 'civitai'
+                            ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                            : isCompatible
                             ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
                             : isConsent
                             ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
@@ -240,7 +242,9 @@ export const CivitaiModalImportPreview: React.FC<CivitaiModalImportPreviewProps>
                             : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
                         }`}
                       >
-                        {isCompatible
+                        {lora.canGenerate === false && selectedProvider === 'civitai'
+                          ? 'Civitai 未启用在线生成'
+                          : isCompatible
                           ? '可直接发送'
                           : isConsent
                           ? '需授权鉴权凭据'

@@ -772,6 +772,93 @@ describe('Civitai Routes and Workflow Contract Tests', () => {
       const falAdaptation = res.data.preset.currentAdaptation;
       expect(falAdaptation.loras[0].status).toBe('compatible');
       expect(falAdaptation.loras[0].sendableUrlOrId).toContain('https://civitai.com/api/download/models/1527024?token=user_secret_token_123');
+
+      // P2-4: verify node in preset also has token in download_url
+      const loraNode = res.data.preset.nodes.find((n: any) => n.type === 'LoRALoader');
+      expect(loraNode).toBeDefined();
+      expect(loraNode.values.download_url).toBe('https://civitai.com/api/download/models/1527024?token=user_secret_token_123');
+    });
+
+    it('P2-1 & P2-2: preserves known weights from resources/prompt and reports 404 hashes in warnings', async () => {
+      const mockFetch = vi.fn(async (_meta: any, url: string) => {
+        if (url.includes('/api/v1/images')) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              items: [
+                {
+                  id: 11346154,
+                  baseModel: 'SD 1.5',
+                  meta: {
+                    prompt: 'a photo <lora:backlight_slider_v10:-1.5>, <lora:contrast_slider_v10:2>',
+                    sampler: 'Euler a',
+                    clipSkip: 2,
+                    resources: [
+                      { hash: '0ba50a104a1b', name: 'contrast_slider_v10', type: 'lora', weight: 2 },
+                      { hash: 'bce77b76fba3', name: 'backlight_slider_v10', type: 'lora' },
+                    ],
+                    hashes: {
+                      model: '93f7411be9',
+                      'lora:contrast_slider_v10': '0ba50a104a1b',
+                      'lora:backlight_slider_v10': 'bce77b76fba3',
+                      'lora:missing_404_lora': 'deadbeef404',
+                    },
+                  },
+                },
+              ],
+            }),
+          };
+        }
+        if (url.includes('by-hash/93f7411be9')) {
+          return { ok: true, status: 200, json: async () => ({ id: 393843, modelId: 94809, name: 'realcartoon3d_v15', baseModel: 'SD 1.5' }) };
+        }
+        if (url.includes('by-hash/0ba50a104a1b')) {
+          return { ok: true, status: 200, json: async () => ({ id: 10001, modelId: 20001, name: 'contrast_slider_v10', baseModel: 'SD 1.5' }) };
+        }
+        if (url.includes('by-hash/bce77b76fba3')) {
+          return { ok: true, status: 200, json: async () => ({ id: 10002, modelId: 20002, name: 'backlight_slider_v10', baseModel: 'SD 1.5' }) };
+        }
+        if (url.includes('by-hash/deadbeef404')) {
+          return { ok: false, status: 404, text: async () => 'Model not found' };
+        }
+        if (url.includes('/api/v1/model-versions/mini/')) {
+          return { ok: true, status: 200, json: async () => ({ canGenerate: true }) };
+        }
+        if (url.includes('/api/v1/model-versions/')) {
+          return { ok: true, status: 200, json: async () => ({ id: 10001, modelId: 20001, baseModel: 'SD 1.5' }) };
+        }
+        return { ok: false, status: 404, text: async () => 'Not found' };
+      });
+
+      const handler = handleExtractCivitaiWorkflow(createMockWorkflowDeps(mockFetch));
+      const res = createMockRes();
+
+      await handler({ body: { imageId: '11346154', engine: 'civitai' } } as any, res);
+
+      expect(res.statusCode).toBe(200);
+      const loras = res.data.preset.currentAdaptation.loras;
+      const contrast = loras.find((l: any) => l.name.includes('contrast'));
+      const backlight = loras.find((l: any) => l.name.includes('backlight'));
+
+      // P2-1: weights must be preserved!
+      expect(contrast).toBeDefined();
+      expect(contrast.originalStrength).toBe(2);
+      expect(contrast.scale).toBe(2);
+
+      expect(backlight).toBeDefined();
+      expect(backlight.originalStrength).toBe(-1.5);
+      expect(backlight.scale).toBe(-1.5);
+
+      // P2-2: 404 hash must be in importWarnings, never silently dropped!
+      const warnings = res.data.preset.importWarnings;
+      expect(warnings.some((w: any) => w.reason?.includes('deadbeef404'))).toBe(true);
+
+      // P1-1 (a): Euler a on sdcpp must map to euler_a on KSampler
+      const ksampler = res.data.preset.nodes.find((n: any) => n.type === 'KSampler');
+      expect(ksampler).toBeDefined();
+      expect(ksampler.values.sampler_name).toBe('euler_a');
+      expect(ksampler.values.clip_skip).toBe(2);
     });
   });
 });

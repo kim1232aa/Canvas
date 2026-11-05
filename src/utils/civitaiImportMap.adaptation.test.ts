@@ -386,5 +386,51 @@ describe('Cross-Provider Civitai Recipe Adaptation Engine', () => {
       expect(result.fields.scheduler.status).toBe('mapped');
       expect(result.fields.scheduler.targetField).toBe('scheduler');
     });
+
+    it('P1-1 (a): Civitai sdcpp maps Euler a to euler_a, comfy maps to euler_ancestral', () => {
+      const recipeSdcpp: CivitaiRecipeInput = {
+        baseModel: 'SDXL 1.0',
+        sampler: 'Euler a',
+        engine: 'sdcpp',
+      };
+      const resSdcpp = adaptCivitaiRecipeToProvider(recipeSdcpp, 'civitai');
+      expect(resSdcpp.fields.sampler.targetField).toBe('sampleMethod');
+      expect(resSdcpp.fields.sampler.mappedValue).toBe('euler_a');
+
+      const recipeComfy: CivitaiRecipeInput = {
+        baseModel: 'SDXL 1.0',
+        sampler: 'Euler a',
+        engine: 'comfy',
+      };
+      const resComfy = adaptCivitaiRecipeToProvider(recipeComfy, 'civitai');
+      expect(resComfy.fields.sampler.targetField).toBe('sampler');
+      expect(resComfy.fields.sampler.mappedValue).toBe('euler_ancestral');
+    });
+
+    it('P1-1 (b): canGenerate === false is unsupported on Civitai but allowed on third-party (Fal)', () => {
+      const recipeWithNoGenLora: CivitaiRecipeInput = {
+        baseModel: 'Pony V6',
+        loras: [
+          { name: 'Kenva', versionId: '454703', modelId: '366990', strength: 0.8, canGenerate: false, air: 'urn:air:sdxl:lora:civitai:366990@454703' },
+        ],
+      };
+      const civitaiResult = adaptCivitaiRecipeToProvider(recipeWithNoGenLora, 'civitai');
+      expect(civitaiResult.loras[0].status).toBe('unsupported');
+      expect(civitaiResult.loras[0].reason).toContain('canGenerate: false');
+      expect(civitaiResult.warnings.some((w) => w.includes('canGenerate: false'))).toBe(true);
+
+      const falResult = adaptCivitaiRecipeToProvider(recipeWithNoGenLora, 'fal');
+      expect(falResult.loras[0].status).toBe('compatible');
+      expect(falResult.loras[0].sendableUrlOrId).toContain('https://civitai.com/api/download/models/454703');
+    });
+
+    it('P2-2: hash404Warnings are preserved in provider warnings', () => {
+      const recipeWithHash404: CivitaiRecipeInput = {
+        baseModel: 'SDXL 1.0',
+        hash404Warnings: ['哈希未在 Civitai 找到: LORA:sdxl/sinfully_stylish_sdxl (033c44dfb8)'],
+      };
+      const result = adaptCivitaiRecipeToProvider(recipeWithHash404, 'civitai');
+      expect(result.warnings).toContain('哈希未在 Civitai 找到: LORA:sdxl/sinfully_stylish_sdxl (033c44dfb8)');
+    });
   });
 });

@@ -299,53 +299,27 @@
 
 ## 四、真实浏览器 UI 点击端到端（E2E）验收记录
 
-所有测试均在真实 Headless Chrome (端口 9401) 中由自动化脚本模拟用户真实点击 UI 完成，测试服务运行于本地端口 3101。真实截图均保存在 `temp/e2e/2026-11-05/civi2b/`。
+所有测试均在真实 Headless Chrome (端口 9401) 中由自动化脚本模拟用户真实点击 UI 完成，测试服务运行于本地端口 3101。
+**证据持久性说明**：所有关键截图均已完成限宽 <= 1280 像素、质量压缩至 JPEG 格式且单张均在 67KB–96KB（严格符合 <= 200KB 门禁），持久化提交保存在 `docs/evidence/2026-11-05/civitai-import/` 目录中。本任务提取的全部真实出站请求已完成脱敏后持久化归档于 `docs/evidence/2026-11-05/civitai-import/requests-m1.jsonl`，全文档 0 `temp/` 临时路径引用。
 
 ### 4.1 3 款不同生态真实 Civitai 作品导入测试
 
-| 序号 | 来源作品 / ID | 生态架构 | 挂载 LoRA 信息 | 适配状态与预览截图 |
+| 序号 | 来源作品 / ID | 生态架构 | 挂载 LoRA 信息 | 适配状态与截图归档 |
 | :--- | :--- | :--- | :--- | :--- |
-| **样例 1** | `https://civitai.com/images/64399178`<br>作者: `L10n_H34r7` | **FLUX.1 D** | 1. `Cinematic 1940s` (weight: 0.3, id: 1527024)<br>2. `Cinematic Octane` (weight: 0.2, id: 1526912) | 1. Civitai 原生适配：底模引用保留，LoRA 转为 AIR，负向提示词拦截（FLUX 官方配方无负向）。截图：`04-flux-import-preview.png`<br>2. Fal.ai 适配：底模标记需从目录选择，LoRA 转为下载直链，画幅映射为 `image_size: {832, 1216}`，步数映射为 `num_inference_steps`。截图：`05-flux-adapted-to-fal.png` |
-| **样例 2** | `https://civitai.com/images/12097475`<br>作者: `Stellaaa` | **Pony / SDXL** | 1. `pony/twilight_style` (weight: 0.8)<br>2. `pony/expressiveh` (weight: 0.8)<br>3. `pony/kenva` (weight: 0.8)<br>4. `pony/san_pony_v4`<br>5. `sdxl/sinfully_stylish_sdxl` | 底模架构匹配为 SDXL 家族；5 款 LoRA 全部精准提取并识别权重；保留负向提示词与 Euler a Karras 采样器配置。截图：`06-pony-sdxl-preview.png` |
-| **样例 3** | `https://civitai.com/images/11346154`<br>作者: `hcarolin` | **SD 1.5** | 1. `backlight_slider_v10` (weight: -1.5)<br>2. `contrast_slider_v10` (weight: 2.0) | 底模架构识别为 SD 1.5；双滑块 LoRA 及负向权重精准识别；`clipSkip` 保留为 2 并支持映射。截图：`07-sd15-preview.png` |
+| **样例 1** | `https://civitai.com/images/64399178`<br>作者: `L10n_H34r7` | **FLUX.1 D** | 1. `Cinematic 1940s` (weight: 0.3, id: 1527024)<br>2. `Cinematic Octane` (weight: 0.2, id: 1526912) | 1. Civitai 原生适配：底模引用保留，LoRA 转为规范 AIR，负向提示词拦截（FLUX 官方配方无负向）。截图：`docs/evidence/2026-11-05/civitai-import/e2e-01-flux-preview.jpg`<br>2. 画布应用：2 款 LoRA 链式串联为 LoRALoader 节点。截图：`docs/evidence/2026-11-05/civitai-import/e2e-02-flux-applied-canvas.jpg`<br>3. Fal.ai 适配：底模选择 `fal-ai/flux-lora`，LoRA 转为官方公开下载直链，步数与尺寸映射完整。 |
+| **样例 2** | `https://civitai.com/images/12097475`<br>作者: `Stellaaa` | **Pony / SDXL** | 1. `pony/twilight_style` (weight: 0.8)<br>2. `pony/expressiveh` (weight: 0.8)<br>3. `pony/kenva` (weight: 0.8, canGenerate: false)<br>4. `pony/san_pony_v4`<br>5. `sdxl/sinfully_stylish_sdxl` (404 未找到) | 底模架构通过哈希反查精确识别为 `urn:air:sdxl:checkpoint:civitai:257749@290640` (Pony V6)；Kenva 标识出 `Civitai 未启用在线生成 (canGenerate: false)`；404 哈希 `033c44dfb8` 显式呈现于警告横幅，绝无静默丢弃；未标注权重项标为「需设置强度」且 scale 置为空。预览截图：`docs/evidence/2026-11-05/civitai-import/e2e-06-pony-preview.jpg`；画布串联截图：`docs/evidence/2026-11-05/civitai-import/e2e-07-pony-applied-canvas.jpg`。 |
+| **样例 3** | `https://civitai.com/images/11346154`<br>作者: `hcarolin` | **SD 1.5** | 1. `backlight_slider_v10` (weight: -1.5)<br>2. `contrast_slider_v10` (weight: 2.0) | 底模架构通过哈希反查识别为 SD 1.5 AIR；双滑块 LoRA 及负向权重 `-1.5` 与 `2.0` 分别从 `meta.prompt` 和 `meta.resources` 完整保留；`clipSkip: 2` 保留并支持映射。预览截图：`docs/evidence/2026-11-05/civitai-import/e2e-09-sd15-preview.jpg`；画布截图：`docs/evidence/2026-11-05/civitai-import/e2e-10-sd15-applied-canvas.jpg`。 |
 
 ---
 
-### 4.2 真实提供商付费调用与真实上游返回记录
+### 4.2 真实提供商付费调用与真实上游返回记录（依 requests-m1.jsonl 原文核对）
 
-按照项目最高规则与验收规范，所有请求带满参数（包括 LoRA），请求端点透明，严格不静默降级、不假装成功、不自动换路。
+按照项目最高规则与验收规范，所有请求带满参数（包括 LoRA），请求端点透明，严格不静默降级、不假装成功、不自动换路。所有记录均可由 `docs/evidence/2026-11-05/civitai-import/requests-m1.jsonl` 原文精确复核。
 
-#### 1. Civitai 官方原生引擎调用
+#### 1. Civitai 官方原生引擎调用 (FLUX.1 D)
 
-- **UI 操作**：在画布上载入 Civitai SDXL 工作流（底模 `urn:air:sdxl:checkpoint:civitai:101055@128078`，LoRA `urn:air:sdxl:lora:civitai:122359@135867` 权重 0.85，Prompt, Negative, Steps: 20, CFG: 7, Sampler: euler），点击顶栏「运行：保存图像 (Save Image)」。
+- **UI 操作**：导入 FLUX 作品 `64399178`，一键生成工作流并载入画布，保持 Civitai 原生引擎（底模 `urn:air:flux1:checkpoint:civitai:618692@691639`，挂载 2 个规范 LoRA AIR），点击「运行：保存图像 (Save Image)」。
 - **请求端点**：`POST https://orchestration.civitai.com/v2/consumer/workflows?wait=100`
-- **发送请求体（敏感凭据已掩码）**：
-  ```json
-  {
-    "steps": [
-      {
-        "$type": "imageGen",
-        "input": {
-          "engine": "sdcpp",
-          "ecosystem": "sdxl",
-          "operation": "createImage",
-          "model": "urn:air:sdxl:checkpoint:civitai:101055@128078",
-          "prompt": "asian woman, 1girl, close up portrait, beautiful detailed eyes, natural skin texture, realistic lighting, shallow depth of field, 35mm film photography, masterpiece, sharp focus, 8k",
-          "negativePrompt": "blurry, bad anatomy, deformed fingers, low resolution, poorly drawn face, plastic skin, oversaturated",
-          "width": 1024,
-          "height": 1024,
-          "steps": 20,
-          "cfgScale": 7,
-          "sampleMethod": "euler",
-          "seed": 136947637,
-          "loras": {
-            "urn:air:sdxl:lora:civitai:122359@135867": 0.85
-          }
-        }
-      }
-    ]
-  }
-  ```
 - **上游 HTTP 状态码**：`400 Bad Request`
 - **上游响应体全文（原样未遮掩）**：
   ```json
@@ -354,29 +328,33 @@
     "title": "Bad Request",
     "status": 400,
     "detail": "insufficientBuzz",
-    "traceId": "00-fab48215cf9cd48be82b943820edfe7d-856860e65ab45f4a-02"
+    "traceId": "00-9996617eaa0f832b8f1ada9559753956-57597934ddcfed11-02"
   }
   ```
-- **UI 呈现与验收结论**：KSampler 节点直观呈现红色错误卡片并完整展示 `insufficientBuzz` 原文，符合验收标准；判定为 **PASS_BILLING**。截图：`temp/e2e/2026-11-05/civi2b/14-civitai-run-insufficient-buzz-node.png`。
+- **UI 呈现与验收结论**：KSampler 节点直观呈现红色错误卡片并完整展示 `insufficientBuzz` 原文，符合验收标准；判定为 **PASS_BILLING**。截图：`docs/evidence/2026-11-05/civitai-import/e2e-03-flux-civitai-run.jpg`。
 
 ---
 
-#### 2. Fal.ai 云端生成调用
+#### 2. Fal.ai 云端生成调用 (真正 fal-ai/flux-lora 端点)
 
-- **UI 操作**：底模切换至 Fal.ai（端点 `fal-ai/flux-lora`），LoRA 填入 `https://huggingface.co/XLabs-AI/flux-RealismLora/resolve/main/lora.safetensors`（权重 0.85），点击「运行：保存图像 (Save Image)」。
+- **UI 操作**：画布载入 FLUX 作品后，目标服务商切换至 Fal.ai，底模明确指定为支持 LoRA 的官方端点 `fal-ai/flux-lora`（其 OpenAPI Schema 严格包含 `loras: LoraWeight[]`），挂载两个导入的 LoRA 公开直链，点击「运行：保存图像 (Save Image)」。
 - **请求端点**：`POST https://fal.run/fal-ai/flux-lora`
 - **发送请求体（敏感凭据已掩码）**：
   ```json
   {
-    "prompt": "asian woman, 1girl, close up portrait, beautiful detailed eyes, natural skin texture, realistic lighting, shallow depth of field, 35mm film photography, masterpiece, sharp focus, 8k",
-    "image_size": { "width": 1024, "height": 1024 },
-    "num_inference_steps": 28,
-    "guidance_scale": 3.5,
-    "seed": 136947637,
+    "prompt": "A close-up of a face adorned with intricate black and blue patterns. The left side of the face is predominantly yellow, with symbols and doodles, while the right side is dark, featuring mechanical elements. The eye on the left is a striking shade of yellow, contrasting sharply with the surrounding patterns. The face is partially covered by a hooded garment, cinematic_1940s cinematic_octane",
+    "image_size": { "width": 832, "height": 1216 },
+    "num_inference_steps": 30,
+    "guidance_scale": 2.5,
+    "seed": 400776867,
     "loras": [
       {
-        "path": "https://huggingface.co/XLabs-AI/flux-RealismLora/resolve/main/lora.safetensors",
-        "scale": 0.85
+        "path": "https://civitai.com/api/download/models/1526912",
+        "scale": 0.2
+      },
+      {
+        "path": "https://civitai.com/api/download/models/1527024",
+        "scale": 0.3
       }
     ]
   }
@@ -388,26 +366,32 @@
     "detail": "User is locked. Reason: TOP_UP."
   }
   ```
-- **UI 呈现与验收结论**：KSampler 节点实时展示 `Fal.ai 接口执行失败 [403]: {"detail":"User is locked. Reason: TOP_UP."}`；判定为 **PASS_BILLING**。截图：`temp/e2e/2026-11-05/civi2b/15-fal-run-topup-card.png`。
+- **UI 呈现与验收结论**：KSampler 节点实时展示 `Fal.ai 接口执行失败 [403]: {"detail":"User is locked. Reason: TOP_UP."}`；判定为 **PASS_BILLING**。截图：`docs/evidence/2026-11-05/civitai-import/e2e-04-flux-fal-lora-run.jpg`。
 
 ---
 
-#### 3. WaveSpeed 云端生成调用
+#### 3. WaveSpeed 云端极速生成调用 (实际打到之端点)
 
-- **UI 操作**：底模切换至 WaveSpeed（模型 `wavespeed-ai/flux-dev-lora`），LoRA 选用 `https://huggingface.co/XLabs-AI/flux-RealismLora/resolve/main/lora.safetensors`（权重 0.85），点击「运行：保存图像 (Save Image)」。
-- **请求端点**：`POST https://api.wavespeed.ai/api/v3/wavespeed-ai/flux-dev-lora`
+- **UI 操作**：导入 FLUX 配方切换至 WaveSpeed，底模选择 `wavespeed-ai/p-h3-image/text-to-image-lora`，挂载导入的两个 LoRA 下载直链，点击「运行：保存图像 (Save Image)」。
+- **请求端点**：`POST https://api.wavespeed.ai/api/v3/wavespeed-ai/p-h3-image/text-to-image-lora`
 - **发送请求体（敏感凭据已掩码）**：
   ```json
   {
-    "prompt": "asian woman, 1girl, close up portrait, beautiful detailed eyes, natural skin texture, realistic lighting, shallow depth of field, 35mm film photography, masterpiece, sharp focus, 8k",
-    "size": "1024*1024",
-    "steps": 28,
-    "guidance_scale": 3.5,
-    "seed": 136947637,
+    "prompt": "A close-up of a face adorned with intricate black and blue patterns. The left side of the face is predominantly yellow, with symbols and doodles, while the right side is dark, featuring mechanical elements. The eye on the left is a striking shade of yellow, contrasting sharply with the surrounding patterns. The face is partially covered by a hooded garment, cinematic_1940s cinematic_octane",
+    "width": 832,
+    "height": 1216,
+    "steps": 30,
+    "cfg": 2.5,
+    "seed": 400776867,
+    "sampler_name": "euler",
     "loras": [
       {
-        "path": "https://huggingface.co/XLabs-AI/flux-RealismLora/resolve/main/lora.safetensors",
-        "scale": 0.85
+        "path": "https://civitai.com/api/download/models/1526912",
+        "scale": 0.2
+      },
+      {
+        "path": "https://civitai.com/api/download/models/1527024",
+        "scale": 0.3
       }
     ]
   }
@@ -420,103 +404,112 @@
     "message": "Insufficient credits. Please top up your account to continue."
   }
   ```
-- **UI 呈现与验收结论**：KSampler 节点实时展示 `HTTP 400: {"code":400,"message":"Insufficient credits. Please top up your account to continue."}`；判定为 **PASS_BILLING**。截图：`temp/e2e/2026-11-05/civi2b/17-wavespeed-run-insufficient-credits.png`。
-
-
----
-
-## 五、Round 2 审查缺陷修复与最终端到端验收记录 (P1-1 ~ P1-4, P2-1 ~ P2-4)
-
-### 5.1 Round 2 核心缺陷修复清单与架构升级
-
-针对审查者 `rev-m1` 在 Round 1 中提出的全部 4 项 P1 级缺陷与 4 项 P2 级改进，已完成全部修复与代码落地：
-
-#### 1. P1-1：「应用至画布」按钮断连修复 (`App.tsx` & `CivitaiModal.tsx`)
-- **根因**：原 `App.tsx` 实例化 `<CivitaiModal>` 时未注入 `onLoadWorkflowPreset` 属性，导致模态框中的「以此配置一键生成工作流并载入画布」按钮无法与宿主画布状态连通。
-- **修复**：
-  - 在 `src/App.tsx:2940` 注入 `onLoadWorkflowPreset={(preset) => handleLoadPreset(preset, 'replace')}`，直接复用应用核心预设替换载入能力。
-  - `CivitaiModalImportPreview.tsx` 点击后构建完整的工作流图（Nodes + Connections + GraphState），自动关闭弹窗并触发画布重绘与节点聚焦。
-- **提交与单测**：提交 `58071a3`，在 `CivitaiModal.test.tsx` 中新增回归用例，验证回调被触发且传递完整预设结构。
-
-#### 2. P1-2：Civitai REST 图片元数据 `modelId@versionId` 与权威 AIR / 下载直链解析
-- **根因**：官方 `GET /api/v1/images?imageId=xxx` 返回的 `meta.civitaiResources` 中仅有 `modelVersionId` 与 `weight`，缺少 `modelId` 与权威 AIR URN。
-- **修复**：
-  - 在 `src/server/routes/civitaiWorkflowRoute.ts` 实现 `resolveCivitaiVersionInfo` 与 `resolveCivitaiVersionByHash`。
-  - 自动向官方端点 `GET /api/v1/model-versions/{id}` 与 `/mini/{id}` 发起反查，补全真实的 `modelId`（如 1351798）、版本名、底模架构、下载直链及 canonical AIR（如 `urn:air:flux1:lora:civitai:1351798@1527024`）。
-  - AIR 格式严格遵守官方规范 `urn:air:{eco}:{type}:civitai:{modelId}@{versionId}`，直链严格采用官方 `https://civitai.com/api/download/models/{versionId}`。
-- **提交与单测**：提交 `653aecb`，在 `civitaiWorkflowRoute.test.ts` 中通过纯 REST 形态（仅含 `modelVersionId`）的 fixture 验证解析出完整 `modelId@versionId` 与 canonical AIR。
-
-#### 3. P1-3：多 LoRA 节点链式生成与目标供应商 LoRA 上限透明呈现
-- **根因**：原工作流构建逻辑仅支持单 LoRALoader 节点，或未串联连接线，导致导入多个 LoRA 时后序 LoRA 丢失或悬空；且未对供应商 LoRA 数量上限进行校验。
-- **修复**：
-  - 在 `civitaiWorkflowRoute.ts` 重构节点连线机制：多个 LoRA 生成串联的 `LoRALoader` 节点链，`MODEL` 与 `CLIP` 线路按次序首尾串接：
-    - `CheckpointLoaderSimple` (`MODEL`, `CLIP`) -> `LoRALoader_1` -> `LoRALoader_2` -> ... -> `LoRALoader_N` (`MODEL`, `CLIP`)
-    - 下游的 `CLIPTextEncode`（正负向提示词）连接链条末端 LoRALoader 的 `CLIP` 输出；`KSampler` 连接链条末端 LoRALoader 的 `MODEL` 输出。
-  - 在 `civitaiImportMap.ts` 配置各目标供应商 LoRA 上限透明矩阵（如 Replicate 最多 2 个、WaveSpeed 最多 3 个、Fal 推荐 3 个、ModelScope 最多 6 个）；超出上限的 LoRA 明确标记为 `unsupported` 并在警告中说明原因与被忽略的 LoRA 列表。
-- **提交与单测**：提交 `653aecb`，在 `civitaiWorkflowRoute.test.ts` 验证 2 个及 4 个 LoRA 生成完整串联的节点链与正确的输入输出连线。
-
-#### 4. P1-4：Pony / SD 1.5 底模解析、未知架构诚信与空权重处理
-- **根因**：
-  - 导入样例 2（Pony #12097475）与样例 3（SD 1.5 #11346154）在 REST 数据中仅有 `meta.Model` 名称或 `meta.hashes.model`，原逻辑未能解析其真实 AIR 与架构。
-  - 未知架构时原代码可能错误显示为兼容；未提供权重的 LoRA 曾静默默认赋 1.0。
-- **修复**：
-  - 通过 `meta.hashes.model` 调用官方端点 `GET /api/v1/model-versions/by-hash/{hash}` 进行权威哈希反查，成功将 Pony #12097475 解析为 `urn:air:sdxl:checkpoint:civitai:257749@290640` (Pony V6)，SD 1.5 #11346154 解析为 `urn:air:sd1:checkpoint:civitai:94809@393843`。
-  - 当架构未知时，`isCompatible` 严格判定为 `false`，UI 状态栏明确呈现「架构未知，无法确认兼容」，严禁误导用户为兼容。
-  - 未标注权重的 LoRA 将 `scale` 显式设为 `undefined`，状态标记为「需设置强度 (requires_weight)」，严禁在底层静默伪造默认 1.0。
-- **提交与单测**：提交 `653aecb`，覆盖哈希反查、未知架构状态阻断与空权重状态检查。
-
-#### 5. P2-1：`clipSkip` 精准拦截（仅 SDXL 拦截，SD 1.5 保留）
-- **修复**：在 `civitaiImportMap.ts` 中根据生态与端点细分：仅在 SDXL / Pony / Illustrious 针对 Civitai 官方算力进行拦截（因官方 SDXL 算力传 clipSkip 必 400）；SD 1.5 官方算力及支持 `clip_skip` 的第三方端点（如 `fal-ai/lora`、`tensorart`）正常保留并发送。
-- **提交与单测**：提交 `653aecb`，在 `civitaiImportMap.adaptation.test.ts` 验证 SD 1.5 支持而 SDXL 拦截。
-
-#### 6. P2-2：提示词内嵌 LoRA 标记为推断未核实
-- **修复**：对于从提示词正文中通过正则表达式提取出的 `<lora:name:weight>`，在 `CivitaiParsedRecipe` 中赋予 `inferredFromPrompt: true`，状态标记为 `requires_reselection`，UI 标为「从提示词推断，未核实」，严禁标记为可直接发送的资源。
-- **提交与单测**：提交 `653aecb`。
-
-#### 7. P2-3：真实 Token 授权流与下载直链拼接控制
-- **修复**：
-  - 通过官方 `/mini/{id}` 接口读取真实 `requireAuth` 标志；
-  - UI 针对需授权的资源展示专属授权开关，并明文指出将向哪个目标供应商发送 Token；
-  - 修复 `normalizeLoraPayloadItem`（提交 `b03c62d`），非 Civitai 供应商保留下载直链，且仅在用户明确授权时于下载直链后追加 `?token={token}`。
-- **提交与单测**：提交 `653aecb` 与 `b03c62d`。
-
-#### 8. P2-4：细化单引擎/端点参数判定
-- **修复**：严格区分 Civitai `sdcpp`（支持 negativePrompt）与 `comfy`（不支持）；Fal 区分 `fal-ai/lora`（支持 scheduler / clip_skip）与 `fal-ai/flux-lora`（仅支持 prompt、image_size、steps、guidance_scale、loras）。
-- **提交与单测**：提交 `653aecb`。
+- **UI 呈现与验收结论**：KSampler 节点实时展示 `HTTP 400: {"code":400,"message":"Insufficient credits. Please top up your account to continue."}`；判定为 **PASS_BILLING**。截图：`docs/evidence/2026-11-05/civitai-import/e2e-05-flux-wavespeed-run.jpg`。
 
 ---
 
-### 5.2 Round 2 真实浏览器 UI 点击与端到端运行验收记录
+#### 4. Civitai Pony #12097475 调用与真实上游返回记录（诚信记录原配方）
 
-所有测试在真实 Headless Chrome (端口 9401) 中由自动化脚本模拟用户在 UI 上的真实点击运行完成，前端运行于端口 3101。
-根据项目用户指令：**“原样完整透传上游账单/配额拒绝（如 insufficientBuzz, TOP_UP, Insufficient credits）视为临时通过（PASS_BILLING）”**。
-
-11 张高保真验证截图已持久化保存在 `temp/e2e/2026-11-05/civi2b/`：
-
-| 标号 | 截图文件路径 | 测试场景与 UI 操作 | 界面呈现与上游返回事实 | 验收判定 |
-| :--- | :--- | :--- | :--- | :--- |
-| **01** | `temp/e2e/2026-11-05/civi2b/e2e-01-flux-preview.png` | 导入 FLUX 作品 `64399178`，展示导入预览弹窗 | 展示规范 AIR（`urn:air:flux1:lora:civitai:1351798@1527024`）、参数映射表格及授权横幅 | **PASS** |
-| **02** | `temp/e2e/2026-11-05/civi2b/e2e-02-flux-applied-canvas.png` | 点击「以此配置一键生成工作流并载入画布」 | 弹窗自动关闭，画布成功载入 2 个串联的 `LoRALoader` 节点链与完整连接线 | **PASS** |
-| **03** | `temp/e2e/2026-11-05/civi2b/e2e-03-flux-civitai-run.png` | 在画布上切换至 Civitai 引擎，点击运行 | 上游 `POST https://orchestration.civitai.com/v2/consumer/workflows` 返回 `400 Bad Request`，体为 `{"detail":"insufficientBuzz"}`，KSampler 红色透明卡片报错 | **PASS_BILLING** |
-| **04** | `temp/e2e/2026-11-05/civi2b/e2e-04-flux-fal-run.png` | 画布切换至 Fal.ai（FLUX LoRA 直链），点击运行 | 上游 `POST https://fal.run/fal-ai/flux-lora` 返回 `403 Forbidden`，体为 `{"detail":"User is locked. Reason: TOP_UP."}`，KSampler 实时报错呈现 | **PASS_BILLING** |
-| **05** | `temp/e2e/2026-11-05/civi2b/e2e-05-flux-wavespeed-run.png` | 画布切换至 WaveSpeed（FLUX LoRA 直链），点击运行 | 上游 `POST https://api.wavespeed.ai/api/v3/wavespeed-ai/flux-dev-lora` 返回 `400 Bad Request`，体为 `{"message":"Insufficient credits"}`，KSampler 实时报错呈现 | **PASS_BILLING** |
-| **06** | `temp/e2e/2026-11-05/civi2b/e2e-06-pony-preview.png` | 导入 Pony 作品 `12097475`，展示导入预览弹窗 | 底模成功由哈希反查为 Pony V6 AIR，4 个 LoRA 识别；无权重项标为「需设置强度」 | **PASS** |
-| **07** | `temp/e2e/2026-11-05/civi2b/e2e-07-pony-applied-canvas.png` | 点击「以此配置一键生成工作流并载入画布」 | 画布成功生成由 4 个 `LoRALoader` 串联的节点链，下游 KSampler 与 Prompt 正确连入链尾 | **PASS** |
-| **08** | `temp/e2e/2026-11-05/civi2b/e2e-08-pony-civitai-run.png` | 在画布上点击 Civitai 引擎运行 Pony 工作流 | 上游 Civitai 返回官方 AIR 校验错误，透明呈现报错详情堆栈，无静默降级或吞错 | **PASS_BILLING** |
-| **09** | `temp/e2e/2026-11-05/civi2b/e2e-09-sd15-preview.png` | 导入 SD 1.5 作品 `11346154`，展示导入预览弹窗 | 底模成功反查为 SD 1.5 AIR，双滑块负权重 LoRA 精准识别，`clipSkip: 2` 被保留并标记支持 | **PASS** |
-| **10** | `temp/e2e/2026-11-05/civi2b/e2e-10-sd15-applied-canvas.png` | 点击「以此配置一键生成工作流并载入画布」 | 画布成功生成 2 个滑块 LoRA 串联链，负权重 `-1.5` 与 `2.0` 原样注入滑块参数 | **PASS** |
-| **11** | `temp/e2e/2026-11-05/civi2b/e2e-11-sd15-civitai-run.png` | 在画布上点击 Civitai 引擎运行 SD 1.5 工作流 | 上游 Civitai 返回 `400 Bad Request`，体为 `{"detail":"insufficientBuzz"}`，KSampler 红色卡片透明呈现 | **PASS_BILLING** |
+- **UI 操作与现场事实**：
+  1. 导入 Pony #12097475，预览界面已明确提示 Kenva 属于 `canGenerate: false` 资源（Civitai 官方未启用在线生成）；
+  2. 原配方一键应用至画布后，包含完整的 4 款 LoRA 链条；采样器映射修复为官方 sdcpp 枚举 `sampleMethod: "euler_a"`（非 `euler_ancestral`）；
+  3. 点击「运行：保存图像 (Save Image)」提交原配方至 Civitai Orchestration。
+- **请求端点**：`POST https://orchestration.civitai.com/v2/consumer/workflows?wait=100`
+- **发送请求体（关键字段摘录）**：
+  ```json
+  {
+    "steps": [
+      {
+        "$type": "imageGen",
+        "input": {
+          "engine": "sdcpp",
+          "ecosystem": "sdxl",
+          "operation": "createImage",
+          "model": "urn:air:sdxl:checkpoint:civitai:257749@290640",
+          "sampleMethod": "euler_a",
+          "loras": {
+            "urn:air:sdxl:lora:civitai:366990@454703": 0.8,
+            "urn:air:sdxl:lora:civitai:403664@450849": 0.8,
+            "urn:air:sdxl:lora:civitai:426086@474738": 0.8,
+            "urn:air:sdxl:lora:civitai:430635@480088": 0.8
+          }
+        }
+      }
+    ]
+  }
+  ```
+- **上游 HTTP 状态码**：`400 Bad Request`
+- **上游响应体全文（原样未遮掩）**：
+  ```json
+  {
+    "type": "https://tools.ietf.org/html/rfc9110#section-15.5.1",
+    "title": "One or more validation errors occurred.",
+    "status": 400,
+    "errors": {
+      "messages": [
+        "Pony Custom styles - Kenva is not enabled for generation. Please contact support@civitai.com if you believe this to be an error."
+      ]
+    }
+  }
+  ```
+- **验收结论与诚信记录**：严格按照主控纠偏指示，**原配方不可运行就如实记录真实原因，严禁自动静默排除后把缩水配方当原配方伪装 PASS_BILLING**。UI 上完整呈现了上游官方校验错误，预览中准确展示了 `Civitai 未启用在线生成 (canGenerate: false)`。截图：`docs/evidence/2026-11-05/civitai-import/e2e-08-pony-civitai-original-run.jpg`。
 
 ---
 
-### 5.3 自动化测试与工程质量全量检验
+#### 5. Civitai SD 1.5 #11346154 官方原生引擎调用
 
-1. **静态类型检查**：`npx tsc --noEmit` 耗时 5.2s，**0 错误**。
-2. **生产打包构建**：`npm run build` 耗时 12.8s，前端与服务端产物正常生成，**无告警中断**。
-3. **专属 Civitai 适配与元数据测试套件**：
-   - `src/utils/civitaiImportMap.adaptation.test.ts` (24 项全绿)
-   - `src/components/CivitaiModalImport.test.tsx` (5 项全绿)
-   - `src/server/routes/civitaiWorkflowRoute.test.ts` (23 项全绿)
-   - `src/utils/civitaiImportMap.test.ts` (16 项全绿)
-   - `src/components/CivitaiModal.test.tsx` (8 项全绿)
-   - **小计**：76 / 76 项测试全绿通过。
+- **UI 操作**：导入 SD 1.5 双滑块 LoRA 作品 `11346154`，一键生成工作流载入画布，底模为反查哈希生成的 SD 1.5 AIR，包含 `-1.5` 与 `2.0` 的双 LoRALoader 节点链，点击「运行：保存图像 (Save Image)」。
+- **请求端点**：`POST https://orchestration.civitai.com/v2/consumer/workflows?wait=100`
+- **上游 HTTP 状态码**：`400 Bad Request`
+- **上游响应体全文（原样未遮掩）**：
+  ```json
+  {
+    "type": "https://tools.ietf.org/html/rfc9110#section-15.5.1",
+    "title": "Bad Request",
+    "status": 400,
+    "detail": "insufficientBuzz",
+    "traceId": "00-fff408bea44bdd388e45864216d7342d-9450592c1bec5a31-02"
+  }
+  ```
+- **UI 呈现与验收结论**：KSampler 节点完整展示 `insufficientBuzz`，双滑块负权重精准传递；判定为 **PASS_BILLING**。截图：`docs/evidence/2026-11-05/civitai-import/e2e-11-sd15-civitai-run.jpg`。
+
+---
+
+## 五、Round 2 审查缺陷修复 (P1-1 ~ P1-4, P2-1 ~ P2-4) 最终闭环
+
+### 5.1 缺陷修复与架构升级清单
+
+1. **P1-1 (a) Civitai sdcpp 采样器映射纠正为 `euler_a`**：
+   - 在 `mapSampler` 与 `adaptCivitaiRecipeToProvider` 中区分引擎：针对 Civitai 默认的 `sdcpp` 引擎，`Euler a` 严格映射为 `euler_a`；针对 `comfy` 引擎映射为 `euler_ancestral`。
+   - 彻底消除了 Civitai 上游针对 `euler_ancestral` 的枚举转换 400 报错。
+2. **P1-1 (b) 读取 `/mini/{id}` 的 `canGenerate` 字段并如实标出**：
+   - `resolveCivitaiVersionInfo` 与 `resolveCivitaiVersionByHash` 完整提取 `mini.canGenerate`。
+   - 当 `canGenerate === false` 时，在 Civitai 目标下标记为 `unsupported`，UI 状态徽章明确呈现 `Civitai 未启用在线生成` 并解释具体原因，同时加入警告信息；第三方供应商直链不受此限。
+   - 遵守主控纠偏原则：不静默排除缩水配方，如实呈现原配方上游拒绝详情。
+3. **P1-2 真实端点对齐与证据持久化**：
+   - 明确选用 `fal-ai/flux-lora`（OpenAPI Schema 严格声明 `loras`），真实触发出站付费请求，拿到 `403 TOP_UP`。
+   - WaveSpeed 如实记录实际出站端点 `POST https://api.wavespeed.ai/api/v3/wavespeed-ai/p-h3-image/text-to-image-lora` 与 `Insufficient credits` 响应。
+   - 所有截图限宽 1280 压缩至高质量 JPEG，单张 67KB–96KB（严格 <=200KB），持久化提交至 `docs/evidence/2026-11-05/civitai-import/`，全文档 0 `temp/` 引用。
+4. **P2-1 保留已知权重参数**：
+   - 在 `civitaiWorkflowRoute.ts` 的哈希遍历中，优先从 `meta.resources` 提取已知权重（如 `contrast_slider_v10: 2`），未提供时从 `meta.prompt` 正则提取 `<lora:name:weight>`（如 `backlight_slider_v10: -1.5`），严禁无条件覆盖为 `strength: null`。
+5. **P2-2 哈希 404 严禁静默丢弃**：
+   - 对于 `by-hash/{hash}` 接口返回 404 的资源（如 `#12097475` 的 `033c44dfb8`），在 `civitaiWorkflowRoute.ts` 与 `adaptCivitaiRecipeToProvider` 中将其完整收集入 `importWarnings`，UI 显式呈现「哈希未在 Civitai 找到」，确保 0 资源静默消失。
+6. **P2-3 SD 1.5 clipSkip 出站一致性与传递**：
+   - 确保 `clipSkip` 正确从元数据提取并挂载至 `CheckpointLoaderSimple` 与 `KSampler` 的节点值 (`clip_skip: 2`)，预览表一致标识支持发送。
+7. **P2-4 Token 授权真实直链注入**：
+   - 当用户在 UI 明确授权后，画布上生成的 LoRA 节点 `download_url` 真实追加 `?token={token}`；未授权时不附带 token，确保凭据安全与预览表完全一致。
+
+---
+
+### 5.2 自动化测试与工程质量全量检验
+
+1. **TypeScript 静态检查**：`npx tsc --noEmit` 耗时 5.2s，**0 错误**。
+2. **专属 Civitai 单元测试套件**：5 个测试文件 **80 / 80 项测试全绿通过**：
+   - `src/utils/civitaiImportMap.adaptation.test.ts` (27 passed)
+   - `src/server/routes/civitaiWorkflowRoute.test.ts` (24 passed)
+   - `src/utils/civitaiImportMap.test.ts` (16 passed)
+   - `src/components/CivitaiModal.test.tsx` (8 passed)
+   - `src/components/CivitaiModalImport.test.tsx` (5 passed)
+3. **环境与凭据检查**：
+   - `git ls-files` 确认无临时文件、无未追踪垃圾文件；
+   - 敏感信息审查确认 `requests-m1.jsonl` 及所有提交文件无 API Key / 凭据泄漏。

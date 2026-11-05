@@ -2982,7 +2982,10 @@ export default function App() {
         onFillCurrentLoRANode={handleFillCurrentLoRANode}
         onAddLoRANodeToCanvas={handleAddLoRANodeToCanvas}
         onSelectLoRAWithBaseModel={handleSelectLoRAWithBaseModel}
-        onLoadWorkflowPreset={(preset) => handleLoadPreset(preset, 'replace')}
+        onLoadWorkflowPreset={(preset) => {
+          handleLoadPreset(preset, 'replace');
+          setCanvasMode('graph');
+        }}
       />
 
       {/* Generation History Modal */}
