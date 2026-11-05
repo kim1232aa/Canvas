@@ -105,6 +105,21 @@ import {
   LORA_LOADER_TYPES,
 } from './utils/providerLabels';
 
+export function formatExecutionStatusText(statusText: string, elapsedSec: number): string {
+  if (
+    statusText.startsWith('[4/5]') ||
+    statusText.includes('正在向') ||
+    statusText.includes('等待渲染') ||
+    statusText.includes('请求进行中') ||
+    statusText.includes('官方算力')
+  ) {
+    return elapsedSec < 2
+      ? '正在提交请求至云端服务商...'
+      : `等待上游返回结果 (已耗时 ${elapsedSec}秒)...`;
+  }
+  return statusText;
+}
+
 export default function App() {
   // Model Schema arrivals re-render inspector/canvas send badges.
   React.useSyncExternalStore(subscribeModelSchema, modelSchemaVersion);
@@ -1299,10 +1314,7 @@ export default function App() {
         (percent, statusText, details) => {
           setExecutionProgress(percent);
           const elapsed = Math.max(1, Math.floor((Date.now() - runStartTime) / 1000));
-          const cleanStatus = statusText.includes('正在向') || statusText.includes('等待渲染')
-            ? (elapsed < 2 ? '正在提交请求至云端服务商...' : `等待上游返回结果 (已耗时 ${elapsed}秒)...`)
-            : statusText;
-          setExecutionStatusText(cleanStatus);
+          setExecutionStatusText(formatExecutionStatusText(statusText, elapsed));
           if (Array.isArray(details?.omissions) && details.omissions.length) {
             workflowOmissions = details.omissions;
             setToast({type:'warning', title:'请求参数未提交项', message:workflowOmissions.map(item => `${item.field}=${item.value}：${item.reason}`).join('；')});

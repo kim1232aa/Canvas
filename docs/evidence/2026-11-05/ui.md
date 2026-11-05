@@ -102,8 +102,8 @@
   - **严禁主观猜词**：重构 `summarizeErrorMessage`，彻底移除依据关键字猜测原因的逻辑。标题严格遵循项目规范：`服务商 + HTTP 状态码 (若解析到) + 上游原始报错第一行`，杜绝臆造任何上游未作出的诊断。
   - **端点与状态透传**：`NodeItem` 从执行跟踪与节点状态中提取真实的 `endpoint`（如 `/api/wavespeed/generate`）与 `statusCode`（如 400、402），完整透传至 `NodeErrorDisclosure`。当字段不存在时不渲染空白行（无空行泄露）。
   - **分阶段运行反馈 (Staged Feedback)**：
-    - 阶段一（提交中 0-1s）：`正在提交请求 (正在调度模型与权重)...` / 节点显示 `正在提交...`。
-    - 阶段二（等待上游已耗时计时）：`等待上游返回 (已耗时 Xs)...` / 节点显示 `等待上游 (Xs)`（见截图 `18-staged-run-feedback.png`）。
+    - 阶段一（提交中 0-1s）：`正在提交请求至云端服务商...` / 节点显示 `正在提交...`。
+    - 阶段二（等待上游已耗时计时）：`等待上游返回结果 (已耗时 N秒)...` / 节点显示 `等待上游 (Ns)`（见截图 `18-staged-run-feedback.png`）。
     - 阶段三（终态响应）：成功显示 `生成完成 (provider) · 耗时 Xs`；失败显示 `生成失败: [错误摘要]`。
     - **计时器组件化解耦**：将秒级递增计时器完全封装入独立子组件 `<NodeRunElapsed state={node.state} type={node.type} />`，严格消除生产代码中的 `try/catch` 漏洞，保持 `NodeItem` Hook 列表极其稳定，同时完全兼容单元测试中直接调用 `NodeItem(props)` 的场景。
   - 提供 `复制诊断信息` 按钮，一键拷贝完整服务商、端点、状态码与原始响应体。
@@ -180,7 +180,7 @@
 - [`15-parameter-inspector.png`](./ui/15-parameter-inspector.png)：去工程黑话后的右侧参数总控台抽屉（纯中文提示词工作台标题）
 - [`16-spatial-mode.png`](./ui/16-spatial-mode.png)：画板（Spatial）模式实拍（主按钮自适应新建取景框居首，选区按钮文字为 `生成此选区画板`，提示词标题为 `正向提示词`，右侧抽屉提示词标题纯中文）
 - [`17-spatial-empty-onboarding.png`](./ui/17-spatial-empty-onboarding.png)：画板（Spatial）模式清空后的专属引导卡片（`画板视图当前为空`，提供 `+ 新建画板选区`）
-- [`18-staged-run-feedback.png`](./ui/18-staged-run-feedback.png)：图像运行中的分阶段反馈实录（`等待上游 (2s)` 与状态栏实时已耗时计时）
+- [`18-staged-run-feedback.png`](./ui/18-staged-run-feedback.png)：图像运行中的分阶段反馈实录（采样器节点实时显示 `等待上游 (2s)`，顶栏状态栏实时显示友好人话 `等待上游返回结果 (已耗时 2秒)...`）
 
 ---
 

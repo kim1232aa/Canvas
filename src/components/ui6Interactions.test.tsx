@@ -21,6 +21,7 @@ import { ComfyGuideModal } from './ComfyGuideModal';
 import { CloudProjectModal } from './CloudProjectModal';
 import { CanvasManagerModal } from './CanvasManagerModal';
 import { AssetManagerModal } from './AssetManagerModal';
+import { formatExecutionStatusText } from '../App';
 
 describe('NodeErrorDisclosure & summarizeErrorMessage (Project Transparency Rules)', () => {
   it('formats headline strictly as provider + HTTP status (if parsed) + verbatim first line with no guessed diagnosis', () => {
@@ -316,5 +317,25 @@ describe('BackendSettingsModal key-page links & key status failure reporting', (
     });
     c1.remove();
     c2.remove();
+  });
+
+  it('formatExecutionStatusText rewrites engineer progress strings to human-friendly copy', () => {
+    // Stage 4 initial submit (< 2s)
+    expect(
+      formatExecutionStatusText('[4/5] 正在向 WAVESPEED 官方算力提交任务并等待渲染回传...', 1)
+    ).toBe('正在提交请求至云端服务商...');
+
+    // Stage 4 ongoing request (>= 2s)
+    expect(
+      formatExecutionStatusText('[4/5] WAVESPEED 请求进行中 (已耗时 2s，等待上游确认状态)...', 2)
+    ).toBe('等待上游返回结果 (已耗时 2秒)...');
+
+    // Stage 4 ongoing request at 5s
+    expect(
+      formatExecutionStatusText('[4/5] NOVITA 请求进行中 (已耗时 5s，等待上游确认状态)...', 5)
+    ).toBe('等待上游返回结果 (已耗时 5秒)...');
+
+    // Non-progress messages left unchanged
+    expect(formatExecutionStatusText('准备环境...', 0)).toBe('准备环境...');
   });
 });
