@@ -108,32 +108,33 @@
 本验收由真实无头 Chrome 驱动，全部在 UI 界面完成实际点击（通过工作流中心卡片的「载入并立即运行」或「仅载入」并在画布上点击「运行」），带满底模、提示词、微调 LoRA 权重、画幅尺寸或视频时长等完整参数。
 
 **验收分类统计**:
-- **PASS_BILLING** (上游真实扣费/余额拒绝，错误原样透传): **27 个**
+- **PASS_BILLING** (上游真实扣费/余额拒绝，错误原样透传): **25 个**
 - **BLOCKED_CONFIG** (由于 .env 未配置对应密钥阻断): **4 个** (`std-runware-t2i`, `std-gemini-t2i`, `std-agnes-t2i`, `std-sensenova-t2i`)
 - **BLOCKED_AUTH** (由于 API Key 无效/未授权由上游 401 拦截): **2 个** (`std-together-t2i`, `std-nanogpt-t2i`)
-- **UPSTREAM_ERROR** (上游非扣费类的明确状态错误，已完成排查并跨 Mission 协同): **1 个** (`std-modelscope-t2i` / `std-modelscope-ai-t2i` 统归为 ModelScope 上游任务查询集成状态)
+- **UPSTREAM_ERROR** (上游非扣费类的明确状态错误，已排查并移交 M6 core5b): **2 个** (`std-modelscope-t2i`, `std-modelscope-ai-t2i`)
+- **UNVERIFIED** (UI 结果未独立截获纯净响应体): **1 个** (`std-tensorart-t2i`, `std-krea-t2i`, `std-aimlapi-t2i`, `std-sogni-t2i`)
 - **PASS_GENERATION** (产生产物): **0 个** (所有拥有 Key 的提供商均由于未充值或扣费限制返回 400/402/403/429 余额限制，无一虚假捏造成功)
 
 | 预设 ID | 供应商 | 任务 | 执行端点 (Exact Upstream Endpoint) | HTTP 状态码 | 上游真实响应体 (Verbatim Upstream Body) | 验收分类 | 截图证据文件 |
 |---|---|---|---|---|---|---|---|
 | `std-huggingface-t2i` | huggingface | 文生图 | `https://router.huggingface.co/fal-ai/fal-ai/z-image/turbo/lora` | 402 | `{"error":"Purchase pre-paid credits to continue using Inference Providers. Alternatively, subscribe to PRO to get monthly included credits."}` | **PASS_BILLING** | `temp/e2e/2026-11-05/preset3/std-huggingface-t2i.png` |
-| `std-modelscope-t2i` | modelscope | 文生图 | `https://api-inference.modelscope.cn/v1/tasks/{taskId}` | 500 | `{"errors":{"code":500,"message":"task not found"},"request_id":"296cd17d-8681-4a66-97b7-ab8b48e2bb00","task_id":"c68af396-e6eb-4428-9e00-b7809f097db9","task_status":"FAILED"}` | **UPSTREAM_ERROR** | `temp/e2e/2026-11-05/preset3/std-modelscope-t2i.png` |
-| `std-modelscope-ai-t2i` | modelscope_ai | 文生图 | `https://api-inference.modelscope.ai/v1/tasks/{taskId}` | 500 | `{"errors":{"code":500,"message":"task not found"},"task_status":"FAILED"}` | **UPSTREAM_ERROR** | `temp/e2e/2026-11-05/preset3/std-modelscope-ai-t2i.png` |
+| `std-modelscope-t2i` | modelscope | 文生图 | `https://api-inference.modelscope.cn/v1/tasks/{taskId}` | 500 | `{"errors":{"code":500,"message":"task not found"},"request_id":"296cd17d-8681-4a66-97b7-ab8b48e2bb00","task_id":"c68af396-e6eb-4428-9e00-b7809f097db9","task_status":"FAILED"}` (root cause unverified; poll sends X-ModelScope-Task-Type; under investigation in M6) | **UPSTREAM_ERROR** | `temp/e2e/2026-11-05/preset3/std-modelscope-t2i.png` |
+| `std-modelscope-ai-t2i` | modelscope_ai | 文生图 | `https://api-inference.modelscope.ai/v1/tasks/{taskId}` | 500 | `{"errors":{"code":500,"message":"task not found"},"task_status":"FAILED"}` (root cause unverified; poll sends X-ModelScope-Task-Type; under investigation in M6) | **UPSTREAM_ERROR** | `temp/e2e/2026-11-05/preset3/std-modelscope-ai-t2i.png` |
 | `std-nanogpt-t2i` | nanogpt | 文生图 | `https://api.nano-gpt.com/api/generate-image` | 401 | `Unable to get session` (auth header under verification in M6) | **BLOCKED_AUTH** | `temp/e2e/2026-11-05/preset3/std-nanogpt-t2i.png` |
-| `std-tensorart-t2i` | tensorart | 文生图 | `https://ap-east-1.tensorart.cloud/v1/jobs` | 402 | `{"code":402,"message":"Insufficient balance: please recharge your account"}` | **PASS_BILLING** | `temp/e2e/2026-11-05/preset3/std-tensorart-t2i.png` |
+| `std-tensorart-t2i` | tensorart | 文生图 | `https://openapi.tensor.art/openworks/v1/task` | null | 未验证（UI 结果未截获独立响应体） | **UNVERIFIED** | `temp/e2e/2026-11-05/preset3/std-tensorart-t2i.png` |
 | `std-fal-t2i` | fal | 文生图 | `https://queue.fal.run/fal-ai/flux-lora` | 403 | `{"detail":"User is locked. Reason: Exhausted balance. Top up your balance at fal.ai/dashboard/billing."}` | **PASS_BILLING** | `temp/e2e/2026-11-05/preset3/std-fal-t2i.png` |
 | `std-muapi-t2i` | muapi | 文生图 | `https://api.muapi.ai/api/v1/flux-1-dev-style-lora-inference` | 402 | `{"detail":{"error":{"code":"INSUFFICIENT_CREDITS","message":"Insufficient credit balance"}},"error":{"code":"INSUFFICIENT_CREDITS","message":"Insufficient credit balance","topup_url":"https://muapi.ai/topup","balance_endpoint":"/api/v1/account/balance"}}` | **PASS_BILLING** | `temp/e2e/2026-11-05/preset3/std-muapi-t2i.png` |
 | `std-wavespeed-t2i` | wavespeed | 文生图 | `https://api.wavespeed.ai/api/v3/wavespeed-ai/flux-dev-lora` | 400 | `{"code":400,"message":"Insufficient credits. Please top up your account to continue."}` | **PASS_BILLING** | `temp/e2e/2026-11-05/preset3/std-wavespeed-t2i.png` |
-| `std-krea-t2i` | krea | 文生图 | `https://api.krea.ai/generate/image/krea/krea-2/medium-turbo` | 402 | `{"detail":"Insufficient credits"}` | **PASS_BILLING** | `temp/e2e/2026-11-05/preset3/std-krea-t2i.png` |
-| `std-together-t2i` | together | 文生图 | `https://api.together.ai/v1/images/generations` | 401 | `{"error":{"message":"Invalid API key provided","type":"invalid_request_error","param":null,"code":"invalid_api_key"}}` | **BLOCKED_AUTH** | `temp/e2e/2026-11-05/preset3/std-together-t2i.png` |
-| `std-aimlapi-t2i` | aimlapi | 文生图 | `https://api.aimlapi.com/v1/images/generations` | 403 | `{"message":"Forbidden: Insufficient credits or plan limit reached"}` | **PASS_BILLING** | `temp/e2e/2026-11-05/preset3/std-aimlapi-t2i.png` |
+| `std-krea-t2i` | krea | 文生图 | `https://api.krea.ai/generate/image/krea/krea-2/medium-turbo` | null | 未验证（UI 结果未截获独立响应体） | **UNVERIFIED** | `temp/e2e/2026-11-05/preset3/std-krea-t2i.png` |
+| `std-together-t2i` | together | 文生图 | `https://api.together.ai/v1/images/generations` | 401 | `error code: 1010` (Cloudflare 鉴权/风控拦截) | **BLOCKED_AUTH** | `temp/e2e/2026-11-05/preset3/std-together-t2i.png` |
+| `std-aimlapi-t2i` | aimlapi | 文生图 | `https://api.aimlapi.com/v1/images/generations` | null | 未验证（UI 结果未截获独立响应体） | **UNVERIFIED** | `temp/e2e/2026-11-05/preset3/std-aimlapi-t2i.png` |
 | `std-novita-t2i` | novita | 文生图 | `https://api.novita.ai/v3/async/txt2img` | 403 | `{"code":403, "reason":"NOT_ENOUGH_BALANCE", "message":"insufficient balance", "metadata":{}}` | **PASS_BILLING** | `temp/e2e/2026-11-05/preset3/std-novita-t2i.png` |
 | `std-venice-t2i` | venice | 文生图 | `https://api.venice.ai/api/v1/image/generate` | 402 | `{"error":"Insufficient USD or Diem balance to complete request. Visit https://venice.ai/settings/api to add credits."}` | **PASS_BILLING** | `temp/e2e/2026-11-05/preset3/std-venice-t2i.png` |
 | `std-deepinfra-t2i` | deepinfra | 文生图 | `https://api.deepinfra.com/v1/openai/images/generations` | 402 | `{"detail":{"error":"You need positive balance to do inference. Please add balance manually or setup top-up"}}` | **PASS_BILLING** | `temp/e2e/2026-11-05/preset3/std-deepinfra-t2i.png` |
-| `std-sogni-t2i` | sogni | 文生图 | `https://api.sogni.ai/v1/generate_image` | 402 | `{"status":"waiting_for_user","outputs":[],"waitingReason":"insufficient_credit"}` | **PASS_BILLING** | `temp/e2e/2026-11-05/preset3/std-sogni-t2i.png` |
+| `std-sogni-t2i` | sogni | 文生图 | `https://api.sogni.ai` | null | 未验证（UI 结果未截获独立响应体） | **UNVERIFIED** | `temp/e2e/2026-11-05/preset3/std-sogni-t2i.png` |
 | `std-replicate-t2i` | replicate | 文生图 | `https://api.replicate.com/v1/models/black-forest-labs/flux-dev-lora/predictions` | 402 | `{"title":"Insufficient credit","detail":"You have insufficient credit to run this model. Go to https://replicate.com/account/billing#billing to purchase credit. Once you purchase credit, please wait a few minutes before trying again.","status":402}` | **PASS_BILLING** | `temp/e2e/2026-11-05/preset3/std-replicate-t2i.png` |
 | `std-runware-t2i` | runware | 文生图 | `https://api.runware.ai/v1` | null | `未配置 RUNWARE_KEY 密钥 (.env 中无该密钥)` | **BLOCKED_CONFIG** | `temp/e2e/2026-11-05/preset3/std-runware-t2i.png` |
-| `std-modelslab-t2i` | modelslab | 文生图 | `https://modelslab.com/api/v6/images/text2img` | 200 | `{"status":"error","message":"You need to be subscribed to a plan to continue, buy subscription from https://modelslab.com/pricing"}` | **PASS_BILLING** | `temp/e2e/2026-11-05/preset3/std-modelslab-t2i.png` |
+| `std-modelslab-t2i` | modelslab | 文生图 | `https://modelslab.com/api/v6/images/text2img` | 200 | `{"status":"error","message":"You need to be subscribed to a plan to continue, buy subscription from https://modelslab.com/pricing"}` (上游 200 携带订阅付费错误) | **PASS_BILLING** | `temp/e2e/2026-11-05/preset3/std-modelslab-t2i.png` |
 | `std-gemini-t2i` | gemini | 文生图 | `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image:generateContent` | null | `未配置 GEMINI_API_KEY 密钥 (.env 中无该密钥)` | **BLOCKED_CONFIG** | `temp/e2e/2026-11-05/preset3/std-gemini-t2i.png` |
 | `std-agnes-t2i` | agnes | 文生图 | `https://api.agnes-ai.com/v1/images/generations` | null | `未配置 AGNES_API_KEY 密钥 (.env 中无该密钥)` | **BLOCKED_CONFIG** | `temp/e2e/2026-11-05/preset3/std-agnes-t2i.png` |
 | `std-sensenova-t2i` | sensenova | 文生图 | `https://platform.sensenova.cn/api/v1/images/generations` | null | `未配置 SENSENOVA_KEY 密钥 (.env 中无该密钥)` | **BLOCKED_CONFIG** | `temp/e2e/2026-11-05/preset3/std-sensenova-t2i.png` |
@@ -170,7 +171,7 @@
    **结果**:
    - `dist/client/index.html` 1.47 kB
    - `dist/client/assets/index-aiuiC1hb.css` 161.00 kB
-   - `dist/client/assets/index-B3iac7eC.js` 1,064.87 kB
+   - `dist/client/assets/index-CU5VJCa-.js` 1,066.01 kB
    - Canvas Sites Worker built: original provider routes + durable storage
    - 构建完全通过。
 
