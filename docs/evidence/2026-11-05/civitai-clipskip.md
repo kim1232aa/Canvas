@@ -299,22 +299,21 @@ OpenAPI 现象与说明：
 
 ### 6.1 截图 1：`e2e-m11-sd15-01-import-preview.jpg`
 - **文件路径**：`docs/evidence/2026-11-05/civitai-clipskip/e2e-m11-sd15-01-import-preview.jpg`
-- **逐行可见文字与界面审查**：
+- **逐行可见文字与界面审查 (ReadMediaFile 原文核对)**：
   - 顶部标题行：「Civitai 配方导入与跨供应商适配 (Import & Adapt) 逐字段透明适配 · 官方契约对齐」
-  - 顶部标签切换器：「LoRA 模型库 (Browse)」、「✨ 配方导入与适配 (Import)」（粉红高亮选中）、「×」关闭按钮
-  - 资源输入框标签：「输入 Civitai 资源或生图参数文本: 支持图片链接 / 图号 / 模型版本 / webUI 复制文本」
-  - 输入框内容：`https://civitai.com/images/11346154`
-  - 快捷填入按钮组：
-    - 「FLUX.1 D 多LoRA (#64399178 · Cinematic 1940s & Octane)」
-    - 「Pony / SDXL 多LoRA (#12097475 · Twilight & Expressive)」
-    - 「📸 SD 1.5 双LoRA (#11346154 · Backlight & Contrast Sliders)」
-    - 「填入 WebUI / Civitai 生图参数文本样例」
-  - 底行提示：「实时反查 Civitai 官方元数据与各供应商输入契约，不伪造、不默认静默兜底」、「✨ 解析配方并预览适配」按钮
-  - 目标供应商切换行：「选择适配目标供应商 (Target Provider Adaptation): Civitai (原生生成引擎)」
-  - 供应商选项芯片：`Civitai 原生` (青色高亮)、`Fal.ai`、`Replicate`、`WaveSpeed`、`AIMLAPI`、`Novita AI`、`魔搭 CN`、`魔搭 AI`、`Hugging Face`、`Sogni`、`MuAPI`、`Tensor.Art`、`NanoGPT`、`AI Video`
-  - 架构适配指示卡：「底模架构与 LoRA 适配状态: 来源架构: SD 1.5 保留 Civitai 原始模型/版本引用 (urn:air:sd1:checkpoint:civitai:94809@393843); 是否具备在线生成权限以上游校验为准。」右侧绿色徽章：「架构兼容」
-  - 提取的 LoRA 列表条目：「提取的 LoRA 列表与目标供应商映射 (2 个) 无静默替换 · 格式与权限公开透明」
-    - 第一项：「v1.0 SD 1.5 权重: 2 可直接发送 以 Civitai AIR 规范传入 loras 映射字典 (权重: 2) 目标标识/URL: urn:air:sd1:lora:civitai:155496@174426」右侧按钮「选用此 LoRA」
+  - 顶部模式切换按钮：「LoRA 模型库 (Browse)」、「✨ 配方导入与适配 (Import)」（粉红高亮选中）、「×」关闭按钮
+  - 上部 LoRA 列表呈现卡片：
+    - LoRA 1：「v1.0 SD 1.5 权重: 2 可直接发送 以 Civitai AIR 规范传入 loras 映射字典 (权重: 2) 目标标识/URL: urn:air:sd1:lora:civitai:155496@174426 [选用此 LoRA]」
+    - LoRA 2：「v1.0 SD 1.5 权重: -1.5 可直接发送 以 Civitai AIR 规范传入 loras 映射字典 (权重: -1.5) 目标标识/URL: urn:air:sd1:lora:civitai:151576@169496 [选用此 LoRA]」
+  - 中部逐字段明细表表头：「逐字段官方接口适配明细 (Per-field Adaptation Outcome) 透明展示每个字段是否发送、字段名与依据 收起 ▲」
+  - 明细表滚动视图核心入镜行（逐行真实可见）：
+    - 采样算法 (Sampler) | 原值: "dpm++2m" | 按 Civitai 引擎映射为 sampleMethod (sdcpp): dpm++2m 目标字段: sampleMethod 依据: https://developer.civitai.com/orchestration/recipes/sdxl.md | 「✔ 将发送」
+    - 调度器 (Scheduler) | 原值: 未提供 | 按 Civitai 引擎映射为 schedule (sdcpp) 或 scheduler (comfy): 默认 目标字段: schedule / scheduler 依据: https://developer.civitai.com/orchestration/recipes/sdxl.md | 「— 不适用」
+    - **CLIP 跳过层数 (Clip Skip) | 原值: 2 | 作为 Civitai SD 1.5 clipSkip 发送 (2) 目标字段: clipSkip 依据: https://developer.civitai.com/orchestration/recipes/sd1.md | 「✔ 将发送」 (绿色徽章明确在镜)**
+    - 画幅尺寸 (Width x Height) | 原值: "512x768" | 作为宽高尺寸发送: 512x768 目标字段: width, height | 「✔ 将发送」
+    - 随机种子 (Seed) | 原值: 143848724 | 作为随机种子发送: 143848724 目标字段: seed | 「✔ 将发送」
+    - 去噪强度 (Denoise) | 原值: 未提供 | 纯文本生图模式无需去噪强度参数；仅在传入参考图进行图生图时生效。 | 「— 不适用」
+  - 底部操作栏：「当前选择引擎: Civitai (原生生成引擎)」、「✨ 以此配置一键生成工作流并载入画布」
 
 ### 6.2 截图 2：`e2e-m11-sd15-02-applied-canvas.jpg`
 - **文件路径**：`docs/evidence/2026-11-05/civitai-clipskip/e2e-m11-sd15-02-applied-canvas.jpg`
@@ -346,12 +345,21 @@ OpenAPI 现象与说明：
 
 ### 6.4 截图 4：`e2e-m11-non-sd15-01-preview.jpg`
 - **文件路径**：`docs/evidence/2026-11-05/civitai-clipskip/e2e-m11-non-sd15-01-preview.jpg`
-- **逐行可见文字与界面审查**：
-  - 模态弹窗标题：「Civitai 配方导入与跨供应商适配 (Import & Adapt)」
-  - 输入文本框：`https://civitai.com/images/64399178`
-  - 目标服务商：`Civitai 原生`
-  - 来源架构卡片：「底模架构与 LoRA 适配状态: 来源架构: Flux.1 D 保留 Civitai 原始模型/版本引用 (urn:air:flux1:checkpoint:civitai:618692@691639)」，绿色徽章「架构兼容」
-  - 提取 LoRA 列表条目：「Cinematic 1940s Flux.1 D 权重: 0.3 可直接发送」，目标标识 `urn:air:flux1:lora:civitai:1351798@1527024`
+- **逐行可见文字与界面审查 (ReadMediaFile 原文核对)**：
+  - 顶部标题行：「Civitai 配方导入与跨供应商适配 (Import & Adapt) 逐字段透明适配 · 官方契约对齐」
+  - 顶部模式切换按钮：「LoRA 模型库 (Browse)」、「✨ 配方导入与适配 (Import)」、「×」
+  - 上部 LoRA 列表呈现卡片：
+    - LoRA 1：「Cinematic 1940s Flux.1 D 权重: 0.3 可直接发送 以 Civitai AIR 规范传入 loras 映射字典 (权重: 0.3) 目标标识/URL: urn:air:flux1:lora:civitai:1351798@1527024 [选用此 LoRA]」
+    - LoRA 2：「Cinematic Octane Flux.1 D 权重: 0.2 可直接发送 以 Civitai AIR 规范传入 loras 映射字典 (权重: 0.2) 目标标识/URL: urn:air:flux1:lora:civitai:1351798@1526912 [选用此 LoRA]」
+  - 中部逐字段明细表表头：「逐字段官方接口适配明细 (Per-field Adaptation Outcome) 透明展示每个字段是否发送、字段名与依据 收起 ▲」
+  - 明细表滚动视图核心入镜行（逐行真实可见）：
+    - 采样算法 (Sampler) | 原值: 未提供 | 按 Civitai 引擎映射为 sampleMethod (sdcpp): 默认 目标字段: sampleMethod 依据: https://developer.civitai.com/orchestration/recipes/sdxl.md | 「— 不适用」
+    - 调度器 (Scheduler) | 原值: 未提供 | 按 Civitai 引擎映射为 schedule (sdcpp) 或 scheduler (comfy): 默认 目标字段: schedule / scheduler 依据: https://developer.civitai.com/orchestration/recipes/sdxl.md | 「— 不适用」
+    - **CLIP 跳过层数 (Clip Skip) | 原值: 2 | Civitai Flux.1 D 官方配方无 clipSkip 参数。 依据: https://developer.civitai.com/orchestration/recipes/flux1.md | 「✖ 不支持(已拦截)」 (黄色徽章明确在镜，透明给出排除原因)**
+    - 画幅尺寸 (Width x Height) | 原值: "832x1216" | 作为宽高尺寸发送: 832x1216 目标字段: width, height | 「✔ 将发送」
+    - 随机种子 (Seed) | 原值: 588815599 | 作为随机种子发送: 588815599 目标字段: seed | 「✔ 将发送」
+    - 去噪强度 (Denoise) | 原值: 未提供 | 纯文本生图模式无需去噪强度参数；仅在传入参考图进行图生图时生效。 | 「— 不适用」
+  - 底部操作栏：「当前选择引擎: Civitai (原生生成引擎)」、「✨ 以此配置一键生成工作流并载入画布」
 
 ### 6.5 截图 5：`e2e-m11-non-sd15-02-run-result.jpg`
 - **文件路径**：`docs/evidence/2026-11-05/civitai-clipskip/e2e-m11-non-sd15-02-run-result.jpg`
