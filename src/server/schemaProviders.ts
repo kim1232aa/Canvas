@@ -1175,7 +1175,9 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
       const specUrl=officialOpenApiSources.venice;const opPath=isVideo?'/video/queue':'/image/generate';
       const base=openApiPathRequestSchema(await readOfficialSpec(req,provider,'Venice',model,specUrl),opPath);
       const inputSchema=applyModelSpecConstraints(base,entry.constraints);
-      return {provider,model,sourceUrl,endpoint,inputSchema,modelMetadata:entry,schemaStatus:'official-openapi-runtime',schemaSource:specUrl,constraintsSource:sourceUrl,schemaUnprobed:true,mediaKind:isVideo?'video':'image'};
+      const hasLoraField=inputSchema?.properties && ['loras','styles','image_loras','lora_list','lora_url','lora_weights'].some(k=>Object.hasOwn(inputSchema.properties,k));
+      const schemaNotice=!hasLoraField && !isVideo ? `当前模型官方 Schema (${endpoint}) 未声明 loras 字段（仅支持 lora_strength、style_preset 等官方参数）；若画布包含自定义 LoRA 节点，上游接口将按真实契约校验并报出。` : undefined;
+      return {provider,model,sourceUrl,endpoint,inputSchema,modelMetadata:entry,schemaStatus:'official-openapi-runtime',schemaSource:specUrl,constraintsSource:sourceUrl,schemaUnprobed:true,mediaKind:isVideo?'video':'image',schemaNotice,loraNotice:schemaNotice};
     }
     if(provider==='deepinfra') {
       const {rows,sourceUrl}=await listForSchema(req,provider,credential);
