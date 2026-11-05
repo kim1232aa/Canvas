@@ -1326,13 +1326,14 @@ export async function executeWorkflow(
         name: l.name,
         path: explicitLoraPath(l),
         downloadUrl: l.downloadUrl,
+        provider: engProv,
         strength: l.modelStrength,
         modelStrength: l.modelStrength,
         clipStrength: l.clipStrength,
         civitaiId: l.civitaiId,
         triggers: l.triggerWords,
         baseModel: l.baseModel,
-      })),
+      }, engProv)),
       params.checkpointBaseModel
     );
 
