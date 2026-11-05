@@ -1117,8 +1117,9 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
     }
     if(provider==='krea') {
       const {rows,sourceUrl}=await listForSchema(req,provider,credential);
-      const entry:any=rows.find((x:any)=>x.id===model) ?? {id:model,notInCatalog:true}; // not in catalog: send the user's model id; upstream decides
-      return {provider,model,sourceUrl,endpoint:schemaProviders.krea.root+(entry.endpoint ?? `/generate/${model}`),inputSchema:entry.parameters || null,modelMetadata:{...entry,parameters:undefined},schemaStatus:'openapi'};
+      const entry:any=rows.find((x:any)=>x.id===model || x.id===`image/${model}` || x.id===`video/${model}` || x.endpoint===model || x.endpoint===`/generate/${model}` || x.endpoint===`/generate/image/${model}` || x.endpoint===`/generate/video/${model}`) ?? {id:model,notInCatalog:true}; // not in catalog: send the user's model id; upstream decides
+      const endpointPath = entry.endpoint ?? (model.startsWith('/generate/') ? model : (model.startsWith('image/') || model.startsWith('video/') ? `/generate/${model}` : `/generate/image/${model}`));
+      return {provider,model,sourceUrl,endpoint:schemaProviders.krea.root+endpointPath,inputSchema:entry.parameters || null,modelMetadata:{...entry,parameters:undefined},schemaStatus:'openapi'};
     }
     if(provider==='together') {
       const {rows,sourceUrl}=await listForSchema(req,provider,credential);
@@ -1179,7 +1180,7 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
     }
     if(provider==='deepinfra') {
       const {rows,sourceUrl}=await listForSchema(req,provider,credential);
-      const entry:any=rows.find((x:any)=>x.id===model) ?? {id:model,notInCatalog:true}; // not in catalog: send the user's model id; upstream decides
+      const entry:any=rows.find((x:any)=>x.id===model || x.id.replace(/\./g, '-')===model.replace(/\./g, '-') || x.name===model) ?? {id:model,notInCatalog:true}; // not in catalog: send the user's model id; upstream decides
       // Docs: POST https://api.deepinfra.com/v1/openai/images/generations (Bearer). OpenAPI twin path /v1/images/generations supplies the request schema (required model+prompt; size/n/response_format).
       const endpoint=schemaProviders.deepinfra.root+'/v1/openai/images/generations';
       const specUrl=officialOpenApiSources.deepinfra;
@@ -1342,7 +1343,7 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
       if(provider==='sogni' && !Object.hasOwn(custom,'model'))payload.model=model;
       if(provider==='together')payload.model=model;
       if(provider==='aimlapi')payload.model=model;
-      if(provider==='deepinfra')payload.model=model;
+      if(provider==='deepinfra')payload.model=definition?.modelMetadata?.id && !definition.modelMetadata.notInCatalog?definition.modelMetadata.id:model;
       const automaticFallback=schemaAutoFallbackSelection(payload,definition.inputSchema,definition.schemaSource);
       if(automaticFallback) {
         const source=automaticFallback.sourceUrl || '(官方 Schema 来源 URL 未返回)';
@@ -1590,11 +1591,20 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
       const endpoint=schemaProviders[provider].root+suffix+encodeURIComponent(req.params.taskId)+(provider==='sogni' || provider==='krea'?'':'/result');
       const {data,status:upstreamStatus}=await read(req,provider,endpoint,undefined,credential);
       const task=provider==='krea'?data:provider==='muapi'?data:provider==='wavespeed'?data.data:data.data?.workflow;
-      const status=task?.status;const outputs=provider==='krea'?kreaJobOutputs(task):provider==='sogni'?task?.steps?.flatMap((s:any)=>s.artifacts || []).map((a:any)=>a.url).filter(Boolean):task?.outputs || [];
+      let status=task?.status;
+      let error=task?.error;
+      if(provider==='sogni' && status==='waiting_for_user') {
+        const failEvent=(Array.isArray(task?.events)?task.events:[]).find((e:any)=>e.type==='step_failed'||e.message?.includes('Debit Error')||e.data?.errorType==='COST_LIMIT_EXCEEDED');
+        if(task?.waitingReason==='insufficient_credit' || failEvent) {
+          status='failed';
+          error=failEvent?.message || (task?.waitingReason==='insufficient_credit'?'Debit Error: Insufficient funds (insufficient_credit)':'Sogni workflow paused for user input');
+        }
+      }
+      const outputs=provider==='krea'?kreaJobOutputs(task):provider==='sogni'?task?.steps?.flatMap((s:any)=>s.artifacts || []).map((a:any)=>a.url).filter(Boolean):task?.outputs || [];
       if(!status)throw Object.assign(new Error('上游任务响应没有状态字段'),{status:upstreamStatus,rawResponse:data,endpoint,errorSource:'upstream-protocol'});
       // MuAPI sandbox keys return is_test mock results (docs/provider-api-audit/muapi.md §7). Never count as a real generation.
       if(provider==='muapi' && (data?.is_test===true || task?.is_test===true))return res.json({status:'sandbox_mock',upstreamTaskStatus:status,outputs:[],sandboxOutputs:outputs,error:`MuAPI sandbox key 返回 is_test mock 结果（上游 status=${status}），不是真实出图，不计为成功。请改用 Production key。`,rawResponse:data,upstreamStatus,endpoint,credentialRef:credential.credentialRef});
-      res.json({status,outputs,waitingReason:task?.waitingReason,error:task?.error,rawResponse:data,upstreamStatus,endpoint,credentialRef:credential.credentialRef});
+      res.json({status,outputs,waitingReason:task?.waitingReason,error,rawResponse:data,upstreamStatus,endpoint,credentialRef:credential.credentialRef});
     }catch(e){fail(res,e);}
   });
   // Persistence is a separate explicit stage; a storage failure never changes the

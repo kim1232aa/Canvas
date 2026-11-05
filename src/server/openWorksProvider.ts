@@ -143,11 +143,14 @@ export function buildOpenWorksRequest(model: string, inputSchema: ReturnType<typ
     if (!Object.hasOwn(props, k)) { extras.push([`custom_parameters.${k}`, k, v]); continue; }
     values[k] = v; mapping.push({ from: `custom_parameters.${k}`, to: k, value: v, sent: true });
   }
+  const OPENWORKS_ALIASES: Record<string, string[]> = {
+    count: ['result image count', 'image count', 'image_count', 'count', 'n', 'num_images', 'image_num'],
+  };
   const canvasFields = ['prompt', 'negative_prompt', 'width', 'height', 'image_url', 'denoise', 'sampler_name', 'scheduler', 'duration', 'ratio', 'size', 'count'];
   for (const field of canvasFields) {
     const v = body?.[field];
     if (!isFilled(v)) continue;
-    const target = [field, ...(CANVAS_TO_SCHEMA_ALIASES[field] || [])].find((n) => Object.hasOwn(props, n));
+    const target = [field, ...(CANVAS_TO_SCHEMA_ALIASES[field] || []), ...(OPENWORKS_ALIASES[field] || [])].find((n) => Object.hasOwn(props, n));
     if (!target) {
       // negative_prompt may still go as a named live extra below when Schema omits it
       if (field !== 'negative_prompt') extras.push([field, field, v]);
@@ -155,6 +158,12 @@ export function buildOpenWorksRequest(model: string, inputSchema: ReturnType<typ
     }
     if (Object.hasOwn(values, target)) { mapping.push({ from: field, to: target, value: v, sent: false, reason: 'JSON 已显式填写同名字段' }); continue; }
     values[target] = v; mapping.push({ from: field, to: target, value: v, sent: true });
+  }
+  const countProp = Object.keys(props).find((k) => /result image count|image count/i.test(k) || (OPENWORKS_ALIASES.count || []).includes(k));
+  if (countProp && !isFilled(values[countProp])) {
+    const defaultCount = Number(body?.count ?? body?.image_num ?? body?.num_images ?? body?.n ?? 1) || 1;
+    values[countProp] = defaultCount;
+    mapping.push({ from: 'count (auto)', to: countProp, value: defaultCount, sent: true });
   }
   const ordered = Object.entries(props).sort((a: any, b: any) => a[1]['x-openworks-position'] - b[1]['x-openworks-position']);
   const inputs: Array<{ type: string; name?: string; value: unknown }> = ordered.map(([k, spec]: any) => ({ type: spec['x-openworks-type'], value: values[k] }));

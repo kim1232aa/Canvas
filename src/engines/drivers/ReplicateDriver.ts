@@ -124,13 +124,17 @@ export class ReplicateDriver extends BaseEngineDriver {
     if (!resp.ok) {
       const raw = await resp.text();
       let msg = `Replicate 路由 HTTP ${resp.status}`;
+      let errJson: any;
       try {
-        const errJson = JSON.parse(raw);
+        errJson = JSON.parse(raw);
         msg = errJson.details || errJson.error || msg;
       } catch {
         msg = `${msg}: ${raw}`;
       }
-      throw new Error(msg);
+      const err = new Error(msg);
+      (err as any).status = resp.status;
+      (err as any).data = errJson;
+      throw err;
     }
 
     const data = await resp.json();
