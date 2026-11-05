@@ -160,7 +160,7 @@ export const CivitaiModalImportPreview: React.FC<CivitaiModalImportPreviewProps>
                 : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
             }`}
           >
-            {adaptation.isCompatible ? '架构兼容' : '存在不兼容项'}
+            {adaptation.isCompatible ? '架构兼容' : adaptation.baseModelArchitecture === 'unknown' || !adaptation.baseModelArchitecture ? '架构未知，无法确认兼容' : '存在不兼容项'}
           </span>
         </div>
 
@@ -246,6 +246,10 @@ export const CivitaiModalImportPreview: React.FC<CivitaiModalImportPreviewProps>
                           ? '需授权鉴权凭据'
                           : isMismatch
                           ? '架构不匹配'
+                          : lora.inferredFromPrompt
+                          ? '从提示词推断，未核实'
+                          : lora.originalStrength === null || lora.originalStrength === undefined
+                          ? '需设置强度'
                           : isReselect
                           ? '需在目标库选用'
                           : '无法发送'}
@@ -319,7 +323,7 @@ export const CivitaiModalImportPreview: React.FC<CivitaiModalImportPreviewProps>
             />
             <span className="text-[11px] text-amber-200 font-semibold select-none flex items-center gap-1.5">
               {tokenConsent ? <Unlock className="w-3.5 h-3.5 text-emerald-400" /> : <Lock className="w-3.5 h-3.5 text-amber-400" />}
-              <span>我已知晓安全风险，明确授权向该第三方供应商请求中附带 Civitai 下载授权</span>
+              <span>我已知晓安全风险，明确授权向 {adaptation.displayName} 发送带有 Civitai 登录 Token 的下载直链</span>
             </span>
           </label>
         </div>

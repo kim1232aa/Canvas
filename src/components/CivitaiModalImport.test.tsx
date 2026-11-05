@@ -117,7 +117,9 @@ describe('CivitaiModal Recipe Import and Cross-Provider Adaptation UI', () => {
           {
             name: 'Private LoRA',
             civitaiId: '999',
+            versionId: '999',
             baseModel: 'Flux.1 D',
+            strength: 0.8,
             requireAuth: true,
           },
         ],

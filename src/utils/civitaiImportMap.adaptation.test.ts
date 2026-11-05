@@ -98,10 +98,16 @@ describe('Cross-Provider Civitai Recipe Adaptation Engine', () => {
     });
 
     it('intercepts negative prompt on Flux.1 Comfy recipe', () => {
-      const result = adaptCivitaiRecipeToProvider(sampleFluxRecipe, 'civitai');
+      const result = adaptCivitaiRecipeToProvider({ ...sampleFluxRecipe, engine: 'comfy' }, 'civitai');
       expect(result.fields.negativePrompt.status).toBe('unsupported');
-      expect(result.fields.negativePrompt.humanMessage).toContain('FLUX.1 Comfy 官方配方无 negativePrompt 字段');
+      expect(result.fields.negativePrompt.humanMessage).toContain('FLUX.1 comfy 引擎官方配方不支持负向提示词');
       expect(result.unsupportedFields).toContain('negativePrompt');
+    });
+
+    it('allows negative prompt on Flux.1 sdcpp recipe', () => {
+      const result = adaptCivitaiRecipeToProvider({ ...sampleFluxRecipe, engine: 'sdcpp' }, 'civitai');
+      expect(result.fields.negativePrompt.status).toBe('mapped');
+      expect(result.fields.negativePrompt.targetField).toBe('negativePrompt');
     });
 
     it('detects architecture mismatch between base model and LoRA', () => {
@@ -142,7 +148,7 @@ describe('Cross-Provider Civitai Recipe Adaptation Engine', () => {
       const result = adaptCivitaiRecipeToProvider(sampleFluxRecipe, 'fal', { allowTokenInUrl: false });
       expect(result.loras[0].requiresAuthConsent).toBe(true);
       expect(result.loras[0].status).toBe('requires_consent');
-      expect(result.loras[0].reason).toContain('严禁在未经用户显式 UI 授权时向 Fal.ai 附带 Civitai API Token');
+      expect(result.loras[0].reason).toContain('严禁在未经用户显式 UI 授权时向');
     });
 
     it('allows download URL when token consent is granted', () => {
@@ -296,6 +302,89 @@ describe('Cross-Provider Civitai Recipe Adaptation Engine', () => {
         expect(map[p].fields).toBeDefined();
         expect(map[p].loras).toBeDefined();
       }
+    });
+  });
+
+  describe('10. P1-4 & P2 Findings Verification Tests', () => {
+    it('P1-4: unknown architecture reports "架构未知，无法确认兼容" and isCompatible is false', () => {
+      const unknownRecipe: CivitaiRecipeInput = {
+        prompt: 'test prompt',
+        baseModel: '', // unknown architecture
+        loras: [{ name: 'SomeLoRA', strength: 0.8, versionId: '123' }],
+      };
+      const result = adaptCivitaiRecipeToProvider(unknownRecipe, 'fal');
+      expect(result.isCompatible).toBe(false);
+      expect(result.baseModelStatus).toBe('requires_selection');
+      expect(result.baseModelMessage).toContain('架构未知，无法确认兼容');
+    });
+
+    it('P1-4: LoRA with no weight or versionId is marked requires_reselection and does NOT forge scale 1', () => {
+      const missingWeightRecipe: CivitaiRecipeInput = {
+        baseModel: 'SDXL 1.0',
+        loras: [
+          { name: 'LoRA Without Weight', civitaiId: '111', strength: null },
+          { name: 'LoRA Without VersionId', strength: 0.8 },
+        ],
+      };
+      const result = adaptCivitaiRecipeToProvider(missingWeightRecipe, 'fal');
+      expect(result.loras[0].status).toBe('requires_reselection');
+      expect(result.loras[0].scale).toBeUndefined();
+      expect(result.loras[0].reason).toContain('缺少显式 LoRA 权重参数，禁止静默兜底 1.0');
+
+      expect(result.loras[1].status).toBe('requires_reselection');
+      expect(result.loras[1].reason).toContain('缺少官方模型版本 ID');
+    });
+
+    it('P2-1: SD 1.5 clipSkip is mapped, not unsupported, on Civitai', () => {
+      const sd15Recipe: CivitaiRecipeInput = {
+        baseModel: 'SD 1.5',
+        clipSkip: 2,
+        checkpoint: 'urn:air:sd1:checkpoint:civitai:94809@393843',
+      };
+      const result = adaptCivitaiRecipeToProvider(sd15Recipe, 'civitai');
+      expect(result.fields.clipSkip.status).toBe('mapped');
+      expect(result.fields.clipSkip.targetField).toBe('clipSkip');
+      expect(result.unsupportedFields).not.toContain('clipSkip');
+    });
+
+    it('P2-2: prompt-inferred LoRA tag is marked requires_reselection with prompt inference warning', () => {
+      const promptInferredRecipe: CivitaiRecipeInput = {
+        baseModel: 'SDXL 1.0',
+        loras: [
+          { name: 'asianMix', strength: 0.85, inferredFromPrompt: true },
+        ],
+      };
+      const result = adaptCivitaiRecipeToProvider(promptInferredRecipe, 'fal');
+      expect(result.loras[0].status).toBe('requires_reselection');
+      expect(result.loras[0].inferredFromPrompt).toBe(true);
+      expect(result.loras[0].reason).toContain('从提示词标签 <lora:...> 推断，未经验证');
+      expect(result.loras[0].sendableUrlOrId).toBeUndefined();
+    });
+
+    it('P2-3: consent with token appends ?token= to outbound third-party URL', () => {
+      const authRecipe: CivitaiRecipeInput = {
+        baseModel: 'Flux.1 D',
+        loras: [
+          { name: 'AuthLoRA', versionId: '999888', strength: 0.8, requireAuth: true },
+        ],
+      };
+      const withToken = adaptCivitaiRecipeToProvider(authRecipe, 'fal', { allowTokenInUrl: true, civitaiToken: 'my_civitai_token_abc' });
+      expect(withToken.loras[0].status).toBe('compatible');
+      expect(withToken.loras[0].sendableUrlOrId).toBe('https://civitai.com/api/download/models/999888?token=my_civitai_token_abc');
+    });
+
+    it('P2-4: Fal fal-ai/lora supports clip_skip and scheduler on SDXL', () => {
+      const sdxlRecipe: CivitaiRecipeInput = {
+        baseModel: 'SDXL 1.0',
+        clipSkip: 2,
+        sampler: 'dpmpp_2m',
+        scheduler: 'karras',
+      };
+      const result = adaptCivitaiRecipeToProvider(sdxlRecipe, 'fal');
+      expect(result.fields.clipSkip.status).toBe('mapped');
+      expect(result.fields.clipSkip.targetField).toBe('clip_skip');
+      expect(result.fields.scheduler.status).toBe('mapped');
+      expect(result.fields.scheduler.targetField).toBe('scheduler');
     });
   });
 });
