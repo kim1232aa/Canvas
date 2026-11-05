@@ -104,19 +104,28 @@ const ARCHITECTURE_TAGS = [
   {id:'krea',label:'Krea'}, {id:'together',label:'Together'}, {id:'aimlapi',label:'AIMLAPI'}, {id:'novita',label:'Novita'}, {id:'venice',label:'Venice'}, {id:'deepinfra',label:'DeepInfra'}, {id:'chroma',label:'Chroma'}, {id:'hunyuan',label:'Hunyuan'}, {id:'kolors',label:'Kolors'}, {id:'pixart',label:'PixArt'}, {id:'auraflow',label:'AuraFlow'}, {id:'anima',label:'Anima'}, {id:'ernie',label:'ERNIE'}, {id:'hidream',label:'HiDream'},
 ];
 
-const PROVIDER_EXAMPLE_IDS: Record<string, string[]> = {
-  tensorart: ['672390779613802167', '958694016000505570'],
-  mage: ['mango-v3', 'mango-v3-turbo', 'mango'],
-  agnes: ['agnes-image-2.5-flash'],
-  openai_compat: ['dall-e-3'],
-  grok_compat: ['grok-2-image'],
-  civitai: ['133005', 'urn:air:sdxl:checkpoint:civitai:133005@146033'],
-  novita: ['dreamshaper_8_93211.safetensors', 'wan-2.5-t2v-preview'],
-  huggingface: ['black-forest-labs/FLUX.1-schnell', 'stabilityai/stable-diffusion-xl-base-1.0'],
-  fal: ['fal-ai/flux/dev', 'fal-ai/kling-video/v1/standard/text-to-video'],
-  nanogpt: ['flux-schnell', 'wan-2.1/t2v-720p', 'kling-video/v1'],
-  replicate: ['black-forest-labs/flux-schnell', 'minimax/video-01'],
-};
+export function getProviderFormatHint(prov: string): { format: string; docUrl?: string; docLabel?: string } {
+  if (prov === 'tensorart') return { format: '输入 Tensor.Art / 吐司模型页 URL 里的纯数字模型 ID (如从 https://tensor.art/models/... 复制)', docUrl: 'https://tensor.art', docLabel: 'Tensor.Art 官方模型库' };
+  if (prov === 'huggingface') return { format: '输入 Hugging Face 仓库 ID，格式为 owner/repo (如从 https://huggingface.co/models 复制)', docUrl: 'https://huggingface.co/models', docLabel: 'Hugging Face Models' };
+  if (prov === 'modelscope' || prov === 'modelscope_ai') return { format: '输入魔搭社区模型 ID，格式为 组织名/模型名', docUrl: prov === 'modelscope' ? 'https://modelscope.cn/models' : 'https://www.modelscope.ai/models', docLabel: '魔搭社区模型库' };
+  if (prov === 'fal') return { format: '输入 Fal.ai 官方端点路径 (如 fal-ai/...)', docUrl: 'https://fal.ai/models', docLabel: 'Fal.ai Models 目录' };
+  if (prov === 'nanogpt') return { format: '输入 NanoGPT 接口端点 ID (如 qwen-image-2.1/text-to-image 或 wan-2.1/t2v-720p)', docUrl: 'https://nano-gpt.com/models', docLabel: 'NanoGPT 模型中心' };
+  if (prov === 'replicate') return { format: '输入 Replicate 仓库 ID，格式为 owner/model-name', docUrl: 'https://replicate.com/explore', docLabel: 'Replicate Explore' };
+  if (prov === 'runware') return { format: '输入 Runware AIR 标识符 (如 civitai:...@... 或 runware:...)', docUrl: 'https://docs.runware.ai', docLabel: 'Runware 官方文档' };
+  if (prov === 'modelslab') return { format: '输入 ModelsLab 官方模型 ID 或 lora_model ID', docUrl: 'https://modelslab.com/models', docLabel: 'ModelsLab 模型库' };
+  if (prov === 'muapi') return { format: '输入 MuAPI 官方端点 ID', docUrl: 'https://muapi.ai', docLabel: 'MuAPI 官方网站' };
+  if (prov === 'wavespeed') return { format: '输入 WaveSpeed 官方端点 ID', docUrl: 'https://wavespeed.ai', docLabel: 'WaveSpeed 官方网站' };
+  if (prov === 'sogni') return { format: '输入 Sogni 协议模型 ID 或 LoRA 标识符', docUrl: 'https://docs.sogni.ai', docLabel: 'Sogni 官方文档' };
+  if (prov === 'krea') return { format: '输入 Krea 端点路径 (如 image/...) 或 style ID', docUrl: 'https://krea.ai', docLabel: 'Krea 官方网站' };
+  if (prov === 'sensenova') return { format: '输入商汤日日新官方模型 ID (如 sensenova-u1.5-lite)', docUrl: 'https://platform.sensenova.cn', docLabel: 'SenseNova 开放平台' };
+  if (prov === 'novita') return { format: '输入 Novita 官方 sd_name_in_api 或端点名称', docUrl: 'https://novita.ai/models', docLabel: 'Novita 模型库' };
+  if (prov === 'mage') return { format: '输入 Mage 官方 model_id (mango 系列)', docUrl: 'https://docs.mage.space/api/models/mango', docLabel: 'Mage Mango 文档' };
+  if (prov === 'agnes') return { format: '输入 Agnes 官方模型 ID (如 agnes-image-2.5-flash)', docUrl: 'https://agnes.ai', docLabel: 'Agnes AI 官方网站' };
+  if (prov === 'openai_compat' || prov === 'grok_compat') return { format: '输入您在 Base URL 目标服务上部署的实际模型 ID', docUrl: undefined, docLabel: undefined };
+  if (prov === 'civitai') return { format: '输入 Civitai 模型数字 ID 或 AIR URN (urn:air:...)', docUrl: 'https://civitai.com/models', docLabel: 'Civitai 模型库' };
+  if (prov === 'openworks') return { format: '输入 Tensor.Art OpenWorks 工具 name', docUrl: 'https://tensor.art', docLabel: 'Tensor.Art OpenWorks' };
+  return { format: '输入该平台支持的真实模型 / LoRA 资源 ID' };
+}
 
 interface ArchitectureFields { baseModel?: unknown; id?: unknown; name?: unknown; description?: unknown; tags?: unknown }
 
@@ -1062,21 +1071,33 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                       {importing ? '正在查询…' : '选用此 ID'}
                     </button>
                   </div>
-                  {PROVIDER_EXAMPLE_IDS[activeProvider]?.length > 0 && (
-                    <div className="flex items-center gap-1.5 flex-wrap text-[11px] text-slate-400 pt-1">
-                      <span>常用示例 ID:</span>
-                      {PROVIDER_EXAMPLE_IDS[activeProvider].map((ex) => (
-                        <button
-                          key={ex}
-                          type="button"
-                          onClick={() => { setCustomId(ex); }}
-                          className="px-2 py-0.5 rounded bg-[#231f38] text-purple-300 hover:text-white border border-purple-700/40 font-mono text-[10px] cursor-pointer hover:border-purple-400 transition-colors"
-                        >
-                          {ex}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                  {(() => {
+                    const hintInfo = getProviderFormatHint(activeProvider);
+                    return (
+                      <div className="space-y-1.5 pt-1 text-[11px]">
+                        {hintInfo.docUrl && (
+                          <div className="flex items-center gap-1.5 text-purple-300">
+                            <ExternalLink className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                            <span>查找模型 ID：可前往</span>
+                            <a
+                              href={hintInfo.docUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-cyan-300 hover:text-cyan-200 underline underline-offset-2 font-medium"
+                            >
+                              {hintInfo.docLabel || '服务商官方页面'}
+                            </a>
+                            <span>查找并复制真实 ID</span>
+                          </div>
+                        )}
+                        {hintInfo.format && (
+                          <p className="text-[10px] text-slate-400 font-mono">
+                            格式说明：{hintInfo.format}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
 
