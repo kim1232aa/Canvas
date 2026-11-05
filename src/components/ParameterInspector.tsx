@@ -109,6 +109,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
   const update = (partial: Partial<ComfyParameters>) => {
     onChange({ ...params, ...partial });
   };
+
   const isGemini = params.targetProvider === 'gemini';
   const isOpenAiCompat = params.targetProvider === 'openai_compat';
   const isGrokCompat = params.targetProvider === 'grok_compat';

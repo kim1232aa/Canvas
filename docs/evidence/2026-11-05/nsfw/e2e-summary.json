@@ -1,0 +1,156 @@
+{
+  "together": {
+    "defaultOn": {
+      "fieldFound": true,
+      "badgeText": "会发送 true（项目默认开启 NSFW）",
+      "selectValue": "true"
+    },
+    "defaultOnLog": {
+      "time": "2026-11-06T04:41:10+09:00",
+      "kind": "upstream",
+      "route": "/api/schema-provider/together/submit",
+      "provider": "together",
+      "model": "black-forest-labs/FLUX.1-schnell",
+      "method": "POST",
+      "endpoint": "https://api.together.ai/v1/images/generations",
+      "requestBody": {
+        "prompt": "a cinematic masterpiece portrait, highly detailed",
+        "width": 1024,
+        "height": 1024,
+        "steps": 20,
+        "guidance_scale": 1,
+        "seed": 42,
+        "disable_safety_checker": true,
+        "model": "black-forest-labs/FLUX.1-schnell"
+      },
+      "status": 401,
+      "responseBody": "{\n  \"id\": \"p88UiaZ-2kFHot-a55e559a1881d94a\",\n  \"error\": {\n    \"message\": \"Invalid API key provided. You can find your API key at https://api.together.ai/settings/api-keys.\",\n    \"type\": \"invalid_request_error\",\n    \"param\": null,\n    \"code\": \"invalid_api_key\"\n  }\n}",
+      "durationMs": 269,
+      "keyIndex": {
+        "provider": "together",
+        "index": 0,
+        "count": 1,
+        "source": "pool"
+      },
+      "lookup": false,
+      "startedAt": "2026-11-05T19:41:10.080Z"
+    },
+    "toggledOff": {
+      "fieldFound": true,
+      "badgeText": "会发送 false（已手动设为严格安全过滤）",
+      "selectValue": "false"
+    },
+    "toggledOffLog": {
+      "time": "2026-11-06T04:41:16+09:00",
+      "kind": "upstream",
+      "route": "/api/schema-provider/together/submit",
+      "provider": "together",
+      "model": "black-forest-labs/FLUX.1-schnell",
+      "method": "POST",
+      "endpoint": "https://api.together.ai/v1/images/generations",
+      "requestBody": {
+        "prompt": "a cinematic masterpiece portrait, highly detailed",
+        "width": 1024,
+        "height": 1024,
+        "steps": 20,
+        "guidance_scale": 1,
+        "seed": 42,
+        "disable_safety_checker": false,
+        "model": "black-forest-labs/FLUX.1-schnell"
+      },
+      "status": 401,
+      "responseBody": "{\n  \"id\": \"p88UkTj-2kFHot-a55e55c27ea7d94a\",\n  \"error\": {\n    \"message\": \"Invalid API key provided. You can find your API key at https://api.together.ai/settings/api-keys.\",\n    \"type\": \"invalid_request_error\",\n    \"param\": null,\n    \"code\": \"invalid_api_key\"\n  }\n}",
+      "durationMs": 207,
+      "keyIndex": {
+        "provider": "together",
+        "index": 0,
+        "count": 1,
+        "source": "pool"
+      },
+      "lookup": false,
+      "startedAt": "2026-11-05T19:41:16.474Z"
+    }
+  },
+  "venice": {
+    "defaultOn": {
+      "fieldFound": true,
+      "badgeText": "会发送 false（项目默认开启 NSFW）",
+      "selectValue": "false"
+    },
+    "defaultOnLog": {
+      "time": "2026-11-06T04:41:24+09:00",
+      "kind": "upstream",
+      "route": "/api/schema-provider/venice/submit",
+      "provider": "venice",
+      "model": "fluently-xl",
+      "method": "POST",
+      "endpoint": "https://api.venice.ai/api/v1/image/generate",
+      "requestBody": {
+        "prompt": "a cinematic masterpiece portrait, highly detailed",
+        "width": 1024,
+        "height": 1024,
+        "steps": 20,
+        "cfg_scale": 1,
+        "seed": 42,
+        "safe_mode": false,
+        "model": "fluently-xl"
+      },
+      "status": 404,
+      "responseBody": "{\"error\":\"Specified model not found: fluently-xl. Did you mean: lustify-sdxl, flux-2-max, lustify-v7?\"}",
+      "durationMs": 86,
+      "keyIndex": {
+        "provider": "venice",
+        "index": 0,
+        "count": 1,
+        "source": "pool"
+      },
+      "lookup": false,
+      "startedAt": "2026-11-05T19:41:24.421Z"
+    },
+    "toggledOff": {
+      "fieldFound": true,
+      "badgeText": "会发送 true（已手动设为严格安全过滤）",
+      "selectValue": "true"
+    },
+    "toggledOffLog": {
+      "time": "2026-11-06T04:41:30+09:00",
+      "kind": "upstream",
+      "route": "/api/schema-provider/venice/submit",
+      "provider": "venice",
+      "model": "fluently-xl",
+      "method": "POST",
+      "endpoint": "https://api.venice.ai/api/v1/image/generate",
+      "requestBody": {
+        "prompt": "a cinematic masterpiece portrait, highly detailed",
+        "width": 1024,
+        "height": 1024,
+        "steps": 20,
+        "cfg_scale": 1,
+        "seed": 42,
+        "safe_mode": true,
+        "model": "fluently-xl"
+      },
+      "status": 404,
+      "responseBody": "{\"error\":\"Specified model not found: fluently-xl. Did you mean: lustify-sdxl, flux-2-max, lustify-v7?\"}",
+      "durationMs": 144,
+      "keyIndex": {
+        "provider": "venice",
+        "index": 0,
+        "count": 1,
+        "source": "pool"
+      },
+      "lookup": false,
+      "startedAt": "2026-11-05T19:41:30.623Z"
+    }
+  },
+  "modelhub": {
+    "defaultOn": {
+      "toggleFound": true,
+      "toggleText": "NSFW: 已开启 (默认)"
+    },
+    "toggledOff": {
+      "toggleFound": true,
+      "toggleText": "NSFW: 已关闭"
+    }
+  }
+}

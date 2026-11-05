@@ -2,6 +2,7 @@ import { UrlText } from './UrlText';
 import React from 'react';
 import { CANVAS_TO_SCHEMA_ALIASES } from '../utils/schemaSendHint';
 import { formatSchemaFieldLabel } from '../utils/nodeUiLabels';
+import { findNsfwPolicy, type NsfwFieldPolicy } from '../utils/nsfw';
 
 /**
  * Generic node controls for official-Schema fields that no canvas widget maps to
@@ -27,8 +28,12 @@ export interface ChoiceField {
   numberSpec?: { type: 'integer' | 'number'; minimum?: number; maximum?: number; exclusiveMinimum?: boolean; default?: number; multipleOf?: number };
   /** Plain string field (no enum), e.g. Replicate lora_weights / image (format uri). */
   stringSpec?: { format?: string };
+  /** Boolean field (e.g. enable_safety_checker, disable_safety_checker, safe_mode). */
+  booleanSpec?: { default?: boolean };
   /** x-liveConfirmed flag (kept for callers; labels no longer depend on it). */
   liveConfirmed: boolean;
+  isNsfw?: boolean;
+  nsfwPolicy?: NsfwFieldPolicy;
 }
 
 /** Generic OpenAPI $ref resolver ('#/components/schemas/x') against the full document; cycles stop at the first repeat. */
@@ -76,17 +81,24 @@ export function schemaChoiceFields(inputSchema: any, doc?: any): ChoiceField[] {
     const enumValues = vs.flatMap((v) => (Array.isArray(v.enum) && (v.type === 'string' || v.enum.every((x: unknown) => typeof x === 'string')) ? v.enum : [])).map(String);
     const obj = vs.find((v) => v?.type === 'object' && v.properties?.width && v.properties?.height);
     const num = vs.find((v) => v?.type === 'integer' || v?.type === 'number');
+    const bool = vs.find((v) => v?.type === 'boolean');
     // Plain strings: only keys no canvas widget owns (own-widget aspect_ratio/resolution/format stay single-control).
-    const str = !enumValues.length && !obj && !num && !CANVAS_ALIAS_NAMES.has(key) ? vs.find((v) => v?.type === 'string') : undefined;
-    if (!enumValues.length && !obj && !num && !str) continue;
+    const str = !enumValues.length && !obj && !num && !bool && !CANVAS_ALIAS_NAMES.has(key) ? vs.find((v) => v?.type === 'string') : undefined;
+    if (!enumValues.length && !obj && !num && !str && !bool) continue;
     const isRequired = Array.isArray(inputSchema?.required) && inputSchema.required.includes(key);
-    if (enumValues.length === 1 && !obj && !num && !isRequired) continue; // a single allowed value is not a choice unless required by schema
+    if (enumValues.length === 1 && !obj && !num && !bool && !isRequired) continue; // a single allowed value is not a choice unless required by schema
+
+    const nsfwPolicy = findNsfwPolicy(key);
+    const isNsfw = Boolean(nsfwPolicy);
+    const defaultVal = isNsfw ? nsfwPolicy?.permissiveValue : (spec.default ?? vs.find((v) => v.default !== undefined)?.default);
+
     out.push({
       key,
       stringSpec: str ? { format: typeof str.format === 'string' ? str.format : undefined } : undefined,
+      booleanSpec: bool ? { default: typeof defaultVal === 'boolean' ? defaultVal : typeof spec.default === 'boolean' ? spec.default : vs.find((v) => typeof v?.default === 'boolean')?.default } : undefined,
       title: typeof spec.title === 'string' ? spec.title : vs.find((v) => typeof v.title === 'string')?.title,
       description: spec.description || vs.find((v) => v.description)?.description,
-      defaultValue: spec.default ?? vs.find((v) => v.default !== undefined)?.default,
+      defaultValue: defaultVal,
       enumValues: Array.from(new Set(enumValues)),
       sizeObject: obj ? { width: obj.properties.width, height: obj.properties.height } : undefined,
       numberSpec: num && !enumValues.length && !obj
@@ -95,11 +107,13 @@ export function schemaChoiceFields(inputSchema: any, doc?: any): ChoiceField[] {
             minimum: typeof num.minimum === 'number' ? num.minimum : undefined,
             maximum: typeof num.maximum === 'number' ? num.maximum : undefined,
             exclusiveMinimum: num.exclusiveMinimum === true,
-            default: typeof num.default === 'number' ? num.default : undefined,
+            default: typeof defaultVal === 'number' ? defaultVal : typeof num.default === 'number' ? num.default : undefined,
             multipleOf: typeof num.multipleOf === 'number' && num.multipleOf > 0 ? num.multipleOf : undefined,
           }
         : undefined,
       liveConfirmed: isLiveConfirmed(spec),
+      isNsfw,
+      nsfwPolicy,
     });
   }
   return out;
@@ -119,9 +133,26 @@ const scalarDefault = (d: unknown): string | undefined => d === undefined || d =
 /**
  * clean-1029 four-state label (no 「待确认」): a filled key is in the body and sent verbatim; an unfilled key is not sent,
  * with the Schema's own default shown only when the Schema declares one (never guessed).
+ * When the field is an official NSFW/safety switch, explicitly shows the project default and toggle state.
  */
-export function schemaFieldBadge(current: unknown, schemaDefault?: unknown): { kind: 'send' | 'not_sent'; text: string } {
-  if (current !== undefined) return { kind: 'send', text: `会发送 ${typeof current === 'object' ? JSON.stringify(current) : String(current)}` };
+export function schemaFieldBadge(current: unknown, schemaDefault?: unknown, nsfwPolicy?: NsfwFieldPolicy): { kind: 'send' | 'not_sent' | 'nsfw_permissive' | 'nsfw_restricted'; text: string } {
+  if (current !== undefined) {
+    if (nsfwPolicy) {
+      if (current === nsfwPolicy.permissiveValue) {
+        return { kind: 'nsfw_permissive', text: `会发送 ${String(current)}（项目默认开启 NSFW）` };
+      }
+      const isRestricted = nsfwPolicy.restrictedValue !== undefined
+        ? current === nsfwPolicy.restrictedValue
+        : (nsfwPolicy.type === 'boolean' && current === !nsfwPolicy.permissiveValue);
+      if (isRestricted) {
+        return { kind: 'nsfw_restricted', text: `会发送 ${String(current)}（已手动设为严格安全过滤）` };
+      }
+    }
+    return { kind: 'send', text: `会发送 ${typeof current === 'object' ? JSON.stringify(current) : String(current)}` };
+  }
+  if (nsfwPolicy) {
+    return { kind: 'not_sent', text: `${UNFILLED_NOT_SENT}（项目默认放开：${String(nsfwPolicy.permissiveValue)}）` };
+  }
   const d = scalarDefault(schemaDefault);
   return { kind: 'not_sent', text: d !== undefined ? `${UNFILLED_NOT_SENT}（Schema 默认：${d}）` : UNFILLED_NOT_SENT };
 }
@@ -167,6 +198,28 @@ export function SchemaChoiceControls({
   const fields = schemaChoiceFields(inputSchema, openapi);
   const loraDescriptions = schemaLoraDescriptions(inputSchema, openapi);
   const declaredKeys = Object.keys(inputSchema?.properties || {});
+
+  // Project NSFW Policy: "我们不反对nsfw，有nsfw开关的都默认开启"
+  // Transparently initialize declared official NSFW fields to their permissive values in custom_parameters.
+  const internals = (React as any).__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE || (React as any).__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED;
+  const isInsideRender = Boolean(internals?.H || internals?.ReactCurrentDispatcher?.current);
+  if (isInsideRender) {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    React.useEffect(() => {
+      const b = parse(value) || {};
+      let changed = false;
+      for (const f of fields) {
+        if (f.isNsfw && f.nsfwPolicy && b[f.key] === undefined) {
+          b[f.key] = f.nsfwPolicy.permissiveValue;
+          changed = true;
+        }
+      }
+      if (changed) {
+        onChange(JSON.stringify(b, null, 2));
+      }
+    }, [inputSchema, value, fields, onChange]);
+  }
+
   if (!fields.length && !loraDescriptions.length) return null;
   const body = parse(value);
   const write = (key: string, next: unknown) => {
@@ -198,11 +251,54 @@ export function SchemaChoiceControls({
                 const fromLora = current === undefined ? canvasLoraFieldValue(f.key, declaredKeys, canvasLoras) : undefined;
                 if (fromLora) return <span data-testid={`schema-badge-${f.key}`} className="text-[10px] px-1.5 py-0.5 rounded border border-emerald-500/50 text-emerald-300 [overflow-wrap:anywhere]">{`会发送 ${fromLora}（来自 LoRA 节点）`}</span>;
                 if (fromLora === null) return <span data-testid={`schema-badge-${f.key}`} className="text-[10px] px-1.5 py-0.5 rounded border border-slate-600 text-slate-400">取自画布 LoRA 节点（见参数面板）</span>;
-                const b = schemaFieldBadge(current, f.numberSpec?.default ?? f.defaultValue);
-                return <span data-testid={`schema-badge-${f.key}`} className={`text-[10px] px-1.5 py-0.5 rounded border ${b.kind === 'send' ? 'border-emerald-500/50 text-emerald-300' : 'border-slate-600 text-slate-400'}`}>{b.text}</span>;
+                const b = schemaFieldBadge(current, f.numberSpec?.default ?? f.defaultValue, f.nsfwPolicy);
+                const badgeStyle = b.kind === 'nsfw_permissive'
+                  ? 'border-pink-500/60 bg-pink-950/40 text-pink-300 font-semibold'
+                  : b.kind === 'nsfw_restricted'
+                  ? 'border-amber-500/60 bg-amber-950/40 text-amber-300'
+                  : b.kind === 'send'
+                  ? 'border-emerald-500/50 text-emerald-300'
+                  : 'border-slate-600 text-slate-400';
+                return <span data-testid={`schema-badge-${f.key}`} className={`text-[10px] px-1.5 py-0.5 rounded border ${badgeStyle}`}>{b.text}</span>;
               })()}
             </label>
-            {f.stringSpec ? (() => {
+            {f.booleanSpec ? (
+              <div className="space-y-1">
+                <select
+                  aria-label={f.key}
+                  disabled={!body}
+                  value={current === undefined ? '' : String(current)}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v === '') write(f.key, undefined);
+                    else write(f.key, v === 'true');
+                  }}
+                  className={`w-full rounded border px-2 py-1 font-mono text-xs ${
+                    f.isNsfw
+                      ? 'border-pink-500/50 bg-[#16121a] text-pink-200'
+                      : 'border-slate-600 bg-black/30 text-slate-200'
+                  }`}
+                >
+                  <option value="" title={unfilledLabel}>（不发送，使用服务商默认）</option>
+                  <option value="true">true {f.nsfwPolicy?.permissiveValue === true ? `(${f.nsfwPolicy.permissiveLabel})` : f.nsfwPolicy?.restrictedValue === true ? `(${f.nsfwPolicy.restrictedLabel})` : ''}</option>
+                  <option value="false">false {f.nsfwPolicy?.permissiveValue === false ? `(${f.nsfwPolicy.permissiveLabel})` : f.nsfwPolicy?.restrictedValue === false ? `(${f.nsfwPolicy.restrictedLabel})` : ''}</option>
+                </select>
+                {f.isNsfw && (
+                  <div className="flex items-center justify-between text-[11px] text-pink-300/80 bg-pink-950/20 px-2 py-1 rounded border border-pink-900/30">
+                    <span>用户原则：“我们不反对nsfw，有nsfw开关的都默认开启”</span>
+                    {current !== f.nsfwPolicy?.permissiveValue && (
+                      <button
+                        type="button"
+                        onClick={() => write(f.key, f.nsfwPolicy?.permissiveValue)}
+                        className="text-[10px] text-cyan-300 hover:text-cyan-200 underline font-semibold ml-2 cursor-pointer shrink-0"
+                      >
+                        一键恢复放开默认
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : f.stringSpec ? (() => {
               const fromLora = current === undefined ? canvasLoraFieldValue(f.key, declaredKeys, canvasLoras) : undefined;
               return (
                 <input
@@ -288,9 +384,23 @@ export function SchemaChoiceControls({
                   className="w-full rounded border border-slate-600 bg-black/30 px-2 py-1"
                 >
                   <option value="" title={unfilledLabel}>（不发送）</option>
-                  {f.enumValues.map((v) => <option key={v} value={v}>{v}</option>)}
+                  {f.enumValues.map((v) => <option key={v} value={v}>{v}{f.isNsfw && f.nsfwPolicy?.permissiveValue === v ? ` (${f.nsfwPolicy.permissiveLabel})` : ''}</option>)}
                   {f.sizeObject && <option value="__custom__">自定义宽高（width × height）</option>}
                 </select>
+                {f.isNsfw && (
+                  <div className="flex items-center justify-between text-[11px] text-pink-300/80 bg-pink-950/20 px-2 py-1 rounded border border-pink-900/30 mt-1">
+                    <span>用户原则：“我们不反对nsfw，有nsfw开关的都默认开启”</span>
+                    {current !== f.nsfwPolicy?.permissiveValue && (
+                      <button
+                        type="button"
+                        onClick={() => write(f.key, f.nsfwPolicy?.permissiveValue)}
+                        className="text-[10px] text-cyan-300 hover:text-cyan-200 underline font-semibold ml-2 cursor-pointer shrink-0"
+                      >
+                        一键恢复放开默认 ({String(f.nsfwPolicy?.permissiveValue)})
+                      </button>
+                    )}
+                  </div>
+                )}
                 {isObj && f.sizeObject && (
                   <div className="flex items-center gap-2">
                     {(['width', 'height'] as const).map((dim) => (

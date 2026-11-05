@@ -78,6 +78,15 @@ export function normalizeForFal(
     finalPrompt = `${allTriggers}, ${finalPrompt}`.trim();
   }
 
+  const custom = (() => {
+    try {
+      const parsed = JSON.parse(params.customParameters || '{}');
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    } catch {
+      return {};
+    }
+  })();
+
   const payload = {
     prompt: finalPrompt,
     negative_prompt: negativePrompt || undefined,
@@ -86,7 +95,10 @@ export function normalizeForFal(
     guidance_scale: params.cfg,
     seed: params.seed,
     loras: loras.length > 0 ? loras : undefined,
-    // H6: enable_safety_checker 不再写死；用户没传则不发，Fal 用自身默认值
+    // 用户原则（2026-11-05）：「我们不反对nsfw，有nsfw开关的都默认开启」
+    // 官方文档：https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/flux-lora
+    enable_safety_checker: custom.enable_safety_checker !== undefined ? custom.enable_safety_checker : false,
+    ...(custom.safety_tolerance !== undefined ? { safety_tolerance: custom.safety_tolerance } : {}),
   };
 
   return {
