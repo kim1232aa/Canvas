@@ -16,6 +16,12 @@ export const CIVITAI_VIDEO_POLL_BUDGET_MS = 10 * 60 * 1000;
  */
 export const CIVITAI_VIDEO_SUBMIT_WAIT_SECONDS = 60;
 export const CIVITAI_VIDEO_SOCKET_TIMEOUT_MS = 10 * 60 * 1000;
+export const CIVITAI_IMAGE_SOCKET_TIMEOUT_MS = 120_000;
+
+/** The socket server.ts sets on /api/civitai/generate. Image stays at 120s. */
+export function civitaiGenerateSocketMs(isVideo: boolean): number {
+  return isVideo ? CIVITAI_VIDEO_SOCKET_TIMEOUT_MS : CIVITAI_IMAGE_SOCKET_TIMEOUT_MS;
+}
 
 export interface CivitaiPollStep { delayMs: number; attempt: number }
 

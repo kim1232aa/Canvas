@@ -6,7 +6,7 @@ import { falQueueSubmitUrl, runFalQueueLifecycle } from '../falQueueLifecycle.ts
 import { buildAgnesVideoRequest, agnesVideoId } from '../agnesVideoRequest.ts';
 import { classifyNanoGptVideoStatus, NANO_GPT_VIDEO_POLL_BUDGET_MS, NANO_GPT_VIDEO_POLL_INTERVAL_MS } from '../nanoGptVideoStatus.ts';
 import { videoCancelPlan, videoProgressLine } from '../videoJobControl.ts';
-import { latestVideoJobStatus, readVideoJobStatus, updateVideoJobStatus } from '../videoJobStatus.ts';
+import { clearVideoJobStatus, latestVideoJobStatus, readVideoJobStatus, updateVideoJobStatus } from '../videoJobStatus.ts';
 import { applyCustomParameters } from '../customParameters.ts';
 import { sanitizeGenerationMetadata } from '../../utils/generationMetadata.ts';
 import { resolveAgainstBaseOrigin } from '../../engines/compatRelay.ts';
@@ -213,6 +213,11 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
         const statusEndpoint = `${nanoOrigin}/api/video/status?requestId=${encodeURIComponent(runId || '')}`;
         let lastStatus = '';
         let lastResponse: unknown = submitData;
+        const noteNano = (phase: 'submitted' | 'queued' | 'running', upstreamStatus?: string) => {
+          if (!runId) return;
+          updateVideoJobStatus({ jobId: String(runId), provider: 'nanogpt', phase, upstreamStatus, budgetMs: NANO_GPT_VIDEO_POLL_BUDGET_MS });
+        };
+        noteNano('submitted');
         if (runId) {
           // Official sample: poll ~10 min at 5s. Local budget spent ≠ upstream failure.
           const deadline = now() + NANO_GPT_VIDEO_POLL_BUDGET_MS;
@@ -259,11 +264,14 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
             lastResponse = statusData;
             const classified = classifyNanoGptVideoStatus(statusData);
             lastStatus = classified.status;
+            noteNano(/queue/i.test(classified.status) ? 'queued' : 'running', classified.status);
             if (classified.kind === 'completed') {
               videoUrl = classified.url;
+              clearVideoJobStatus(String(runId));
               break;
             }
             if (classified.kind === 'completed-without-url') {
+              clearVideoJobStatus(String(runId));
               keyPoolManager.recordResult('nanogpt', nanoKey, false, Date.now() - startTime, 'COMPLETED without video URL');
               return res.status(502).json({
                 error: 'NanoGPT 视频状态为 COMPLETED，但响应中没有视频 URL（videoUrl / data.output.video.url）。',
@@ -274,6 +282,7 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
               });
             }
             if (classified.kind === 'failed') {
+              clearVideoJobStatus(String(runId));
               keyPoolManager.recordResult('nanogpt', nanoKey, false, Date.now() - startTime, classified.message);
               return res.status(500).json({
                 error: `NanoGPT 视频生成失败: ${classified.message}`,
@@ -287,6 +296,7 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
         }
 
         if (!videoUrl) {
+          if (runId) clearVideoJobStatus(String(runId));
           keyPoolManager.recordResult('nanogpt', nanoKey, false, Date.now() - startTime, 'local poll budget exhausted');
           return res.status(504).json({
             error: `NanoGPT 视频仍未完成：本地等待预算 ${NANO_GPT_VIDEO_POLL_BUDGET_MS}ms 已用尽（不是上游报错）。`,
@@ -720,11 +730,14 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
         options,
       ),
       sleep: (ms) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
-      onStatus: (update) => updateVideoJobStatus({
-        jobId: update.requestId, provider: 'fal',
-        phase: update.status === 'IN_QUEUE' ? 'queued' : 'running',
-        upstreamStatus: update.status, budgetMs: 15 * 60 * 1000, cancelUrl: update.cancelUrl,
-      }),
+      onStatus: (update) => {
+        if (update.done) { clearVideoJobStatus(update.requestId); return; }
+        updateVideoJobStatus({
+          jobId: update.requestId, provider: 'fal',
+          phase: update.status === 'IN_QUEUE' ? 'queued' : 'running',
+          upstreamStatus: update.status, budgetMs: 15 * 60 * 1000, cancelUrl: update.cancelUrl,
+        });
+      },
     });
 
     if (!outcome.ok) {

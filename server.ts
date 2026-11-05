@@ -5,8 +5,8 @@ import { requestLogLines, writeRequestLog } from './src/server/requestLog.ts';
 import { sentHistoryNumbers } from './src/server/historySent.ts';
 import type { GenerationHistoryItem } from './src/types/providers';
 import { lookupExactHuggingFaceRepo } from './src/server/huggingFaceExactRepoSearch.ts';
-import { classifyCivitaiVideoPoll } from './src/server/civitaiVideoPoll.ts';
-import { CIVITAI_VIDEO_POLL_BUDGET_MS, CIVITAI_VIDEO_SOCKET_TIMEOUT_MS, CIVITAI_VIDEO_SUBMIT_WAIT_SECONDS, civitaiVideoPollPlan } from './src/server/civitaiVideoPollSchedule.ts';
+import { classifyCivitaiVideoPoll, runCivitaiVideoPoll } from './src/server/civitaiVideoPoll.ts';
+import { CIVITAI_VIDEO_POLL_BUDGET_MS, CIVITAI_VIDEO_SUBMIT_WAIT_SECONDS, civitaiGenerateSocketMs } from './src/server/civitaiVideoPollSchedule.ts';
 import { fetchSenseNovaModelCatalog } from './src/server/senseNovaCatalog.ts';
 import { readHuggingFaceSpaceImageResponse } from './src/server/huggingFaceSpaceImage.ts';
 import { buildModelScopeImagePayload } from './src/server/modelScopeImageContract';
@@ -3386,7 +3386,7 @@ app.get('/api/civitai/workflow/:id', async (req, res) => {
 
 app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, res) => {
   // Image stays 120s. Video uses the 10-minute local poll budget (official: several minutes).
-  const civitaiSocketMs = req.body?.isVideo === true ? CIVITAI_VIDEO_SOCKET_TIMEOUT_MS : 120000;
+  const civitaiSocketMs = civitaiGenerateSocketMs(req.body?.isVideo === true);
   req.setTimeout(civitaiSocketMs);
   res.setTimeout(civitaiSocketMs);
 
@@ -3567,51 +3567,47 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
         let civitaiLastStatus = String(orchData?.status || '');
         let civitaiLastResponse: unknown = orchData;
         if (!completedMediaUrl && (orchData.id || orchData.token)) {
-          const workflowId = orchData.id || orchData.token;
+          const workflowId = String(orchData.id || orchData.token);
           const pollEndpoint = `https://orchestration.civitai.com/v2/consumer/workflows/${workflowId}`;
-          for (const step of civitaiVideoPollPlan(CIVITAI_VIDEO_POLL_BUDGET_MS)) {
-            await new Promise((r) => setTimeout(r, step.delayMs));
-            if (res.writableEnded || res.destroyed) return;
-            let pollResp: Response;
-            try {
-              pollResp = await upstreamFetch(
-                { provider: 'civitai', route: '/api/civitai/generate/poll', model: String(workflowId), key: apiKey },
-                pollEndpoint,
-                {
-                  headers: { Authorization: `Bearer ${apiKey}` },
+          let pollResult: Awaited<ReturnType<typeof runCivitaiVideoPoll>>;
+          try {
+            pollResult = await runCivitaiVideoPoll({
+              workflowId,
+              endpoint: pollEndpoint,
+              extractUrl: extractCivitaiBlobUrl,
+              sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+              stillWaiting: () => !res.writableEnded && !res.destroyed,
+              fetchStatus: async () => {
+                const pollResp = await upstreamFetch(
+                  { provider: 'civitai', route: '/api/civitai/generate/poll', model: workflowId, key: apiKey },
+                  pollEndpoint,
+                  { headers: { Authorization: `Bearer ${apiKey}` } },
+                );
+                if (!pollResp.ok) {
+                  const errBody = await pollResp.text().catch(() => '');
+                  const error: any = new Error(`Civitai 视频状态查询失败 [${pollResp.status}]: ${errBody}`);
+                  error.httpStatus = pollResp.status;
+                  error.body = { error: error.message, errorSource: 'upstream', upstreamStatus: pollResp.status, workflowId, endpoint: pollEndpoint, rawResponse: errBody };
+                  throw error;
                 }
-              );
-            } catch (netErr: any) {
-              keyPoolManager.recordResult('civitai', apiKey, false, Date.now() - startTime, netErr.message);
-              return res.status(502).json({ error: `Civitai 视频轮询网络异常: ${netErr.message}`, errorSource: 'network', workflowId, endpoint: pollEndpoint });
-            }
-            if (!pollResp.ok) {
-              const errBody = await pollResp.text().catch(() => '');
-              keyPoolManager.recordResult('civitai', apiKey, false, Date.now() - startTime, errBody, pollResp.status);
-              return res.status(pollResp.status).json({
-                error: `Civitai 视频状态查询失败 [${pollResp.status}]: ${errBody}`,
-                errorSource: 'upstream',
-                upstreamStatus: pollResp.status,
-                workflowId,
-                endpoint: pollEndpoint,
-                rawResponse: errBody,
-              });
-            }
-            const pollData = await pollResp.json();
-            civitaiLastResponse = pollData;
-            civitaiLastStatus = String(pollData?.status || '');
-            const url = extractCivitaiBlobUrl(pollData);
-            const outcome = classifyCivitaiVideoPoll(pollData, url, pollResp.status, pollEndpoint, String(workflowId));
-            if (outcome.kind === 'failed' || outcome.kind === 'succeeded-without-output') {
-              keyPoolManager.recordResult('civitai', apiKey, false, Date.now() - startTime, JSON.stringify(pollData), pollResp.status);
-              return res.status(outcome.httpStatus).json(outcome.response);
-            }
-            if (outcome.kind === 'output') {
-              completedMediaUrl = outcome.url;
-              break;
-            }
+                return { data: await pollResp.json(), httpStatus: pollResp.status };
+              },
+            });
+          } catch (netErr: any) {
+            keyPoolManager.recordResult('civitai', apiKey, false, Date.now() - startTime, netErr.message, netErr.httpStatus);
+            if (netErr.body) return res.status(netErr.httpStatus).json(netErr.body);
+            return res.status(502).json({ error: `Civitai 视频轮询网络异常: ${netErr.message}`, errorSource: 'network', workflowId, endpoint: pollEndpoint });
           }
-          civitaiPollTimedOut = !completedMediaUrl;
+          if (res.writableEnded || res.destroyed) return;
+          civitaiLastStatus = pollResult.lastStatus || civitaiLastStatus;
+          civitaiLastResponse = pollResult.lastResponse ?? civitaiLastResponse;
+          const outcome = pollResult.outcome;
+          if (outcome.kind === 'failed' || outcome.kind === 'succeeded-without-output') {
+            keyPoolManager.recordResult('civitai', apiKey, false, Date.now() - startTime, JSON.stringify(outcome.response.rawResponse));
+            return res.status(outcome.httpStatus).json(outcome.response);
+          }
+          if (outcome.kind === 'output') completedMediaUrl = outcome.url;
+          civitaiPollTimedOut = pollResult.timedOut && !completedMediaUrl;
         }
 
         // History for video: only record what was actually sent
