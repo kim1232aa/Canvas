@@ -3,6 +3,7 @@ import express from 'express';
 import http from 'http';
 import { EventEmitter } from 'node:events';
 import { handleVideoGenerate, type VideoGenerateRouteDeps } from './videoGenerateRoute.ts';
+import { readVideoJobStatus, resetVideoJobStatusForTests } from '../videoJobStatus.ts';
 
 describe('videoGenerateRoute lifecycle and client disconnect handling (grok_compat polling branch)', () => {
   let server: http.Server | undefined;
@@ -18,6 +19,7 @@ describe('videoGenerateRoute lifecycle and client disconnect handling (grok_comp
       server = undefined;
     }
     vi.restoreAllMocks();
+    resetVideoJobStatusForTests();
   });
 
   function createMockDeps(overrides: Partial<VideoGenerateRouteDeps> = {}): {
@@ -385,6 +387,7 @@ describe('videoGenerateRoute lifecycle and client disconnect handling (grok_comp
     expect(recordedResults).toEqual([
       ['fal', 'mock-key', true, expect.any(Number)],
     ]);
+    expect(readVideoJobStatus('req-v1')).toBeUndefined();
   });
 
   it('Fal queue result non-2xx is passed through (status + raw body), never fabricated as success', async () => {
@@ -552,5 +555,31 @@ describe('videoGenerateRoute lifecycle and client disconnect handling (grok_comp
     expect(String(res.data.error)).not.toContain('175s');
     const polls = (deps.upstreamFetch as any).mock.calls.filter((c: any[]) => String(c[1]).includes('/api/video/status'));
     expect(polls.length).toBeGreaterThan(70);
+    expect(readVideoJobStatus('vid_slow')).toBeUndefined();
+  });
+
+  it('Fal queue poll throw still drops the job record', async () => {
+    const { deps } = createMockDeps({
+      upstreamFetch: vi.fn(async (meta: any, url: string) => {
+        if (meta?.readOnly && url.startsWith('https://fal.ai/api/openapi/queue/openapi.json')) {
+          return new Response(FAL_SCHEMA_OK, { status: 200 });
+        }
+        if (url === 'https://queue.fal.run/fal-ai/veo3') {
+          return new Response(JSON.stringify({
+            request_id: 'req-throw',
+            status_url: 'https://queue.fal.run/fal-ai/veo3/requests/req-throw/status',
+            cancel_url: 'https://queue.fal.run/fal-ai/veo3/requests/req-throw/cancel',
+          }), { status: 202 });
+        }
+        throw new Error('status socket hang up');
+      }),
+    });
+    const res = makeMockRes();
+    await handleVideoGenerate(deps)({
+      body: { provider: 'fal', model: 'fal-ai/veo3', prompt: 'throw during poll' },
+      headers: {},
+      path: '/api/video/generate',
+    } as any, res);
+    expect(readVideoJobStatus('req-throw')).toBeUndefined();
   });
 });

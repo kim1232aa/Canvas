@@ -15,7 +15,15 @@ export const CIVITAI_VIDEO_POLL_BUDGET_MS = 10 * 60 * 1000;
  * so a slow accept still returns the workflow id.
  */
 export const CIVITAI_VIDEO_SUBMIT_WAIT_SECONDS = 60;
-export const CIVITAI_VIDEO_SOCKET_TIMEOUT_MS = 10 * 60 * 1000;
+/** Schema fetch before submit. The route aborts it at 20s. */
+export const CIVITAI_VIDEO_SCHEMA_TIMEOUT_MS = 20_000;
+/** Room for the 22 poll round-trips and the video download after the sleeps. */
+export const CIVITAI_VIDEO_DOWNLOAD_MARGIN_MS = 120_000;
+/**
+ * Idle socket. Must outlast schema fetch + submit wait + the poll sleeps + the
+ * download, or Node destroys the socket before the 504 can be written.
+ */
+export const CIVITAI_VIDEO_SOCKET_TIMEOUT_MS = CIVITAI_VIDEO_POLL_BUDGET_MS + CIVITAI_VIDEO_SUBMIT_WAIT_SECONDS * 1000 + CIVITAI_VIDEO_SCHEMA_TIMEOUT_MS + CIVITAI_VIDEO_DOWNLOAD_MARGIN_MS + 1_000;
 export const CIVITAI_IMAGE_SOCKET_TIMEOUT_MS = 120_000;
 
 /** The socket server.ts sets on /api/civitai/generate. Image stays at 120s. */

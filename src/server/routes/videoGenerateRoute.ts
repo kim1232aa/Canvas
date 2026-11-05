@@ -6,7 +6,7 @@ import { falQueueSubmitUrl, runFalQueueLifecycle } from '../falQueueLifecycle.ts
 import { buildAgnesVideoRequest, agnesVideoId } from '../agnesVideoRequest.ts';
 import { classifyNanoGptVideoStatus, NANO_GPT_VIDEO_POLL_BUDGET_MS, NANO_GPT_VIDEO_POLL_INTERVAL_MS } from '../nanoGptVideoStatus.ts';
 import { videoCancelPlan, videoProgressLine } from '../videoJobControl.ts';
-import { clearVideoJobStatus, latestVideoJobStatus, readVideoJobStatus, updateVideoJobStatus } from '../videoJobStatus.ts';
+import { canvasNodeId, clearVideoJobStatus, latestVideoJobStatus, readVideoJobByNode, readVideoJobCredential, readVideoJobStatus, updateVideoJobStatus } from '../videoJobStatus.ts';
 import { applyCustomParameters } from '../customParameters.ts';
 import { sanitizeGenerationMetadata } from '../../utils/generationMetadata.ts';
 import { resolveAgainstBaseOrigin } from '../../engines/compatRelay.ts';
@@ -215,9 +215,10 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
         let lastResponse: unknown = submitData;
         const noteNano = (phase: 'submitted' | 'queued' | 'running', upstreamStatus?: string) => {
           if (!runId) return;
-          updateVideoJobStatus({ jobId: String(runId), provider: 'nanogpt', phase, upstreamStatus, budgetMs: NANO_GPT_VIDEO_POLL_BUDGET_MS });
+          updateVideoJobStatus({ jobId: String(runId), provider: 'nanogpt', phase, upstreamStatus, budgetMs: NANO_GPT_VIDEO_POLL_BUDGET_MS, credential: nanoKey, nodeId: canvasNodeId(req.body) });
         };
         noteNano('submitted');
+        try {
         if (runId) {
           // Official sample: poll ~10 min at 5s. Local budget spent ≠ upstream failure.
           const deadline = now() + NANO_GPT_VIDEO_POLL_BUDGET_MS;
@@ -267,11 +268,9 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
             noteNano(/queue/i.test(classified.status) ? 'queued' : 'running', classified.status);
             if (classified.kind === 'completed') {
               videoUrl = classified.url;
-              clearVideoJobStatus(String(runId));
               break;
             }
             if (classified.kind === 'completed-without-url') {
-              clearVideoJobStatus(String(runId));
               keyPoolManager.recordResult('nanogpt', nanoKey, false, Date.now() - startTime, 'COMPLETED without video URL');
               return res.status(502).json({
                 error: 'NanoGPT 视频状态为 COMPLETED，但响应中没有视频 URL（videoUrl / data.output.video.url）。',
@@ -282,7 +281,6 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
               });
             }
             if (classified.kind === 'failed') {
-              clearVideoJobStatus(String(runId));
               keyPoolManager.recordResult('nanogpt', nanoKey, false, Date.now() - startTime, classified.message);
               return res.status(500).json({
                 error: `NanoGPT 视频生成失败: ${classified.message}`,
@@ -296,7 +294,6 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
         }
 
         if (!videoUrl) {
-          if (runId) clearVideoJobStatus(String(runId));
           keyPoolManager.recordResult('nanogpt', nanoKey, false, Date.now() - startTime, 'local poll budget exhausted');
           return res.status(504).json({
             error: `NanoGPT 视频仍未完成：本地等待预算 ${NANO_GPT_VIDEO_POLL_BUDGET_MS}ms 已用尽（不是上游报错）。`,
@@ -338,6 +335,9 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
           duration,
           historyItem: item,
         });
+        } finally {
+          if (runId) clearVideoJobStatus(String(runId));
+        }
       } catch (nanoErr: any) {
         keyPoolManager.recordResult('nanogpt', nanoKey, false, Date.now() - startTime, nanoErr.message);
         return res.status(500).json({ error: `NanoGPT 视频接口请求异常: ${nanoErr.message}` });
@@ -720,7 +720,10 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
     }));
 
     const falVideoStart = Date.now();
-    const outcome = await runFalQueueLifecycle({
+    let falJobId: string | undefined;
+    let outcome: Awaited<ReturnType<typeof runFalQueueLifecycle>>;
+    try {
+    outcome = await runFalQueueLifecycle({
       endpoint,
       apiKey: falKey,
       payload,
@@ -731,14 +734,20 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
       ),
       sleep: (ms) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
       onStatus: (update) => {
-        if (update.done) { clearVideoJobStatus(update.requestId); return; }
+        falJobId = update.requestId;
+        if (update.done) return;
         updateVideoJobStatus({
           jobId: update.requestId, provider: 'fal',
           phase: update.status === 'IN_QUEUE' ? 'queued' : 'running',
           upstreamStatus: update.status, budgetMs: 15 * 60 * 1000, cancelUrl: update.cancelUrl,
+          credential: falKey,
+          nodeId: canvasNodeId(req.body),
         });
       },
     });
+    } finally {
+      if (falJobId) clearVideoJobStatus(falJobId);
+    }
 
     if (!outcome.ok) {
       if (outcome.status !== null) {
@@ -823,9 +832,17 @@ export function registerVideoGenerateRoutes(app: any, deps: VideoGenerateRouteDe
   app.post(['/api/video/generate', '/api/engine/video/generate'], handleVideoGenerate(deps));
   app.post('/api/video/cancel', handleVideoCancel(deps));
   app.get('/api/video/status', (req: Request, res: ExpressResponse) => {
+    const jobId = String(req.query.jobId || '').trim();
+    const nodeId = String(req.query.nodeId || '').trim();
     const provider = String(req.query.provider || '').trim().toLowerCase();
-    const snapshot = provider ? latestVideoJobStatus(provider) : undefined;
-    if (!snapshot) return res.status(404).json({ error: '没有正在进行的视频任务状态。', provider });
+    const snapshot = jobId
+      ? readVideoJobStatus(jobId)
+      : nodeId
+        ? readVideoJobByNode(nodeId)
+        : provider
+          ? latestVideoJobStatus(provider)
+          : undefined;
+    if (!snapshot) return res.status(404).json({ error: '没有正在进行的视频任务状态。', jobId: jobId || undefined, nodeId: nodeId || undefined, provider });
     res.json(snapshot);
   });
 }
@@ -835,16 +852,18 @@ export function registerVideoGenerateRoutes(app: any, deps: VideoGenerateRouteDe
  * returns its status and body unchanged. A provider with no documented cancel
  * gets 409 and no upstream request.
  */
-export function handleVideoCancel(deps: Pick<VideoGenerateRouteDeps, 'upstreamFetch' | 'keyPoolManager'>) {
+export function handleVideoCancel(deps: Pick<VideoGenerateRouteDeps, 'upstreamFetch'>) {
   return async (req: Request, res: ExpressResponse) => {
     const provider = String(req.body?.provider || '').trim().toLowerCase();
     const jobId = String(req.body?.jobId || '').trim();
-    const cancelUrl = typeof req.body?.cancelUrl === 'string' ? req.body.cancelUrl : undefined;
     if (!provider || !jobId) return res.status(400).json({ error: '取消需要 provider 和 jobId。', errorSource: 'local' });
-    const plan = videoCancelPlan({ provider, jobId, cancelUrl });
+    // The client never supplies the URL. Fal's cancel_url was stored when the job was submitted.
+    const stored = readVideoJobStatus(jobId);
+    const plan = videoCancelPlan({ provider, jobId, cancelUrl: provider === 'fal' ? stored?.cancelUrl : undefined });
     if ('unsupported' in plan) return res.status(409).json({ error: plan.unsupported, errorSource: 'local', provider, jobId, cancelled: false });
-    const key = deps.keyPoolManager.getNextKey(provider) || '';
+    const key = readVideoJobCredential(jobId) || '';
     const headers: Record<string, string> = {};
+    if (plan.body) headers['Content-Type'] = 'application/json';
     if (provider === 'fal' && key) headers.Authorization = `Key ${key}`;
     if ((provider === 'replicate' || provider === 'civitai') && key) headers.Authorization = `Bearer ${key}`;
     if ((provider === 'krea' || provider === 'sogni') && key) headers.Authorization = `Bearer ${key}`;

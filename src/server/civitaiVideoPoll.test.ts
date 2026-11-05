@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { classifyCivitaiVideoPoll, runCivitaiVideoPoll } from './civitaiVideoPoll';
-import { CIVITAI_VIDEO_POLL_BUDGET_MS, CIVITAI_VIDEO_SOCKET_TIMEOUT_MS, civitaiGenerateSocketMs } from './civitaiVideoPollSchedule';
+import { CIVITAI_VIDEO_DOWNLOAD_MARGIN_MS, CIVITAI_VIDEO_POLL_BUDGET_MS, CIVITAI_VIDEO_SCHEMA_TIMEOUT_MS, CIVITAI_VIDEO_SOCKET_TIMEOUT_MS, CIVITAI_VIDEO_SUBMIT_WAIT_SECONDS, civitaiGenerateSocketMs } from './civitaiVideoPollSchedule';
 import { latestVideoJobStatus, resetVideoJobStatusForTests } from './videoJobStatus';
 
 describe('Civitai video workflow poll terminal output handling', () => {
@@ -99,6 +99,35 @@ describe('Civitai video poll loop (the loop server.ts runs)', () => {
   it('keeps the image request socket at 120 seconds while video uses 10 minutes', () => {
     expect(civitaiGenerateSocketMs(false)).toBe(120_000);
     expect(civitaiGenerateSocketMs(true)).toBe(CIVITAI_VIDEO_SOCKET_TIMEOUT_MS);
-    expect(CIVITAI_VIDEO_SOCKET_TIMEOUT_MS).toBe(600_000);
+    expect(CIVITAI_VIDEO_SOCKET_TIMEOUT_MS).toBeGreaterThan(
+      CIVITAI_VIDEO_POLL_BUDGET_MS + CIVITAI_VIDEO_SUBMIT_WAIT_SECONDS * 1000 + CIVITAI_VIDEO_SCHEMA_TIMEOUT_MS + CIVITAI_VIDEO_DOWNLOAD_MARGIN_MS,
+    );
+  });
+
+  it('clears the job status when the client is gone before the next poll', async () => {
+    resetVideoJobStatusForTests();
+    const result = await runCivitaiVideoPoll({
+      workflowId: 'wf-gone',
+      endpoint,
+      extractUrl: () => '',
+      sleep: async () => {},
+      stillWaiting: () => false,
+      fetchStatus: async () => ({ data: { status: 'processing' }, httpStatus: 200 }),
+    });
+    expect(result.outcome).toEqual({ kind: 'pending' });
+    expect(result.polls).toBe(0);
+    expect(latestVideoJobStatus('civitai')).toBeUndefined();
+  });
+
+  it('clears the job status when fetchStatus throws', async () => {
+    resetVideoJobStatusForTests();
+    await expect(runCivitaiVideoPoll({
+      workflowId: 'wf-net',
+      endpoint,
+      extractUrl: () => '',
+      sleep: async () => {},
+      fetchStatus: async () => { throw new Error('poll 502'); },
+    })).rejects.toThrow('poll 502');
+    expect(latestVideoJobStatus('civitai')).toBeUndefined();
   });
 });

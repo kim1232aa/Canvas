@@ -417,6 +417,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
           {node.state === 'running' && node.type === 'AIVideoNode' && (
             <VideoJobStatus
               provider={String(node.values?.targetProvider || '').trim()}
+              nodeId={node.id}
               onUpdate={(key, value) => onUpdateValue(node.id, key, value)}
             />
           )}

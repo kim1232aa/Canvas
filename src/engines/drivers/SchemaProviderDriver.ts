@@ -1,7 +1,6 @@
 import { tracedFetch as fetch, isApiTraceError } from '../../services/executionTrace';
 import { sharedGetJson, peekSharedGetMeta } from '../../services/sharedGet';
 import { recordLocalEvent } from '../../services/executionTrace';
-import { clearVideoJobStatus, updateVideoJobStatus } from '../../server/videoJobStatus.ts';
 import { BaseEngineDriver } from '../BaseEngineDriver';
 import { ModelSpec, NormalizedGenerateParams, NormalizedGenerateResult } from '../types';
 
@@ -240,27 +239,17 @@ export class SchemaProviderDriver extends BaseEngineDriver {
     }
 
     const deadline = Date.now() + 10 * 60 * 1000;
-    const budgetMs = 10 * 60 * 1000;
     let lastStatus = 'not polled';
     let lastResponse: unknown;
-    const noteVideo = (upstreamStatus: string) => {
-      if (params.isVideo !== true) return;
-      updateVideoJobStatus({ jobId: taskId, provider: this.id, phase: 'running', upstreamStatus, budgetMs });
-    };
-    noteVideo('submitted');
     while (Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, 2_000));
       const pollResponse = await request(pollUrl, { method: 'GET', headers }, `${this.name} task poll`);
       const pollBody = await readBody(pollResponse);
-      if (!pollResponse.ok) {
-        if (params.isVideo === true) clearVideoJobStatus(taskId);
-        throw failure(`${this.name} task poll failed`, pollResponse, pollBody);
-      }
+      if (!pollResponse.ok) throw failure(`${this.name} task poll failed`, pollResponse, pollBody);
       const result = asRecord(pollBody);
       const status = String(result.status || '').toLowerCase();
       lastStatus = status || '(missing status)';
       lastResponse = pollBody;
-      noteVideo(lastStatus);
       if (status === 'completed' || status === 'succeeded' || status === 'success') {
         const outputs = Array.isArray(result.outputs) ? result.outputs : [];
         const actualRequest:any=submitted.actualRequest;
@@ -277,7 +266,6 @@ export class SchemaProviderDriver extends BaseEngineDriver {
         }):outputs;
         const normalizedResult={...result,outputs:normalizedOutputs};
         const mediaUrl=unsupportedBase64Output?undefined:schemaProviderOutputUrl(normalizedResult);
-        if (params.isVideo === true) clearVideoJobStatus(taskId);
         if (!mediaUrl) {
           const responseBody = typeof pollBody === 'string' ? pollBody : JSON.stringify(pollBody);
           const endpoint = typeof result.endpoint === 'string' ? result.endpoint : pollUrl;
@@ -324,7 +312,6 @@ export class SchemaProviderDriver extends BaseEngineDriver {
         };
       }
       if (status === 'waiting_for_user') {
-        if (params.isVideo === true) clearVideoJobStatus(taskId);
         const reason = result.waitingReason ?? result.pauseReason ?? result.pausedReason ?? result.error ?? result.message;
         const err = new Error(`${this.name} task ${taskId} is waiting_for_user; upstream pause reason: ${typeof reason === 'string' ? reason : JSON.stringify(reason ?? '(not provided)')}; full response body: ${JSON.stringify(pollBody)}${rangeWarning?`; ${rangeWarning}`:''}`);
         // fix3 G: structured data so toast/title carry HTTP + task status + body (not 「响应体为空」).
@@ -341,7 +328,6 @@ export class SchemaProviderDriver extends BaseEngineDriver {
         throw err;
       }
       if (['failed', 'sandbox_mock', 'partial_failure', 'cancelled', 'canceled', 'timeout', 'timed_out', 'deleted', 'error'].includes(status)) {
-        if (params.isVideo === true) clearVideoJobStatus(taskId);
         const err = new Error(`${this.name} task ${taskId} ended with status=${status}; response body: ${JSON.stringify(pollBody)}${rangeWarning?`; ${rangeWarning}`:''}`);
         (err as any).data = {
           ...asRecord(pollBody),
@@ -357,7 +343,6 @@ export class SchemaProviderDriver extends BaseEngineDriver {
       }
       // Unknown/nonterminal statuses remain visible in the eventual timeout error; never report false success.
     }
-    if (params.isVideo === true) clearVideoJobStatus(taskId);
     throw new Error(`${this.name} task ${taskId} timed out after 10 minutes; last status=${lastStatus}; last response body: ${JSON.stringify(lastResponse)}`);
   }
 }

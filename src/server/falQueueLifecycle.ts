@@ -112,6 +112,7 @@ export async function runFalQueueLifecycle(options: FalQueueLifecycleOptions): P
     // 2xx without a request_id cannot be tracked — fail closed, never pretend success.
     return fail('invalid', submitResp.status, submitBody, submitUrl, null);
   }
+  options.onStatus?.({ requestId, status: 'IN_QUEUE', cancelUrl: submitData?.cancel_url });
 
   // Prefer the convenience URLs returned by Fal; fall back to app-id based URLs per docs.
   let statusUrl = typeof submitData?.status_url === 'string' && submitData.status_url

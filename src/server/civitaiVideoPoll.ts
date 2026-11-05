@@ -72,6 +72,8 @@ export interface CivitaiVideoPollDeps {
   workflowId: string;
   endpoint: string;
   budgetMs?: number;
+  credential?: string;
+  nodeId?: string;
   /** Returns the parsed workflow body and the HTTP status of that poll. */
   fetchStatus: () => Promise<{ data: unknown; httpStatus: number }>;
   extractUrl: (data: unknown) => string;
@@ -101,27 +103,31 @@ export async function runCivitaiVideoPoll(deps: CivitaiVideoPollDeps): Promise<C
     phase: 'running',
     upstreamStatus,
     budgetMs,
+    credential: deps.credential,
+    nodeId: deps.nodeId,
   });
   note('');
   let polls = 0;
   let lastStatus = '';
   let lastResponse: unknown;
-  for (const step of civitaiVideoPollPlan(budgetMs)) {
-    await deps.sleep(step.delayMs);
-    if (deps.stillWaiting && !deps.stillWaiting()) {
-      return { outcome: { kind: 'pending' }, polls, timedOut: false, lastStatus, lastResponse };
+  try {
+    for (const step of civitaiVideoPollPlan(budgetMs)) {
+      await deps.sleep(step.delayMs);
+      if (deps.stillWaiting && !deps.stillWaiting()) {
+        return { outcome: { kind: 'pending' }, polls, timedOut: false, lastStatus, lastResponse };
+      }
+      const { data, httpStatus } = await deps.fetchStatus();
+      polls += 1;
+      lastResponse = data;
+      lastStatus = String((data as { status?: unknown })?.status || '');
+      note(lastStatus);
+      const outcome = classifyCivitaiVideoPoll(data, deps.extractUrl(data), httpStatus, deps.endpoint, deps.workflowId);
+      if (outcome.kind !== 'pending') {
+        return { outcome, polls, timedOut: false, lastStatus, lastResponse };
+      }
     }
-    const { data, httpStatus } = await deps.fetchStatus();
-    polls += 1;
-    lastResponse = data;
-    lastStatus = String((data as { status?: unknown })?.status || '');
-    note(lastStatus);
-    const outcome = classifyCivitaiVideoPoll(data, deps.extractUrl(data), httpStatus, deps.endpoint, deps.workflowId);
-    if (outcome.kind !== 'pending') {
-      clearVideoJobStatus(deps.workflowId);
-      return { outcome, polls, timedOut: false, lastStatus, lastResponse };
-    }
+    return { outcome: { kind: 'pending' }, polls, timedOut: true, lastStatus, lastResponse };
+  } finally {
+    clearVideoJobStatus(deps.workflowId);
   }
-  clearVideoJobStatus(deps.workflowId);
-  return { outcome: { kind: 'pending' }, polls, timedOut: true, lastStatus, lastResponse };
 }

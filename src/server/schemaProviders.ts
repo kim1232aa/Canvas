@@ -4,6 +4,7 @@ import nodePath from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import type express from 'express';
 import YAML from 'yaml';
+import { canvasNodeId, clearVideoJobStatus, readVideoJobStatus, updateVideoJobStatus } from './videoJobStatus.ts';
 export const sogniSchemaSource='https://raw.githubusercontent.com/Sogni-AI/sogni-protocol/main/schemas/tools/generate_image.schema.json';
 
 // Protocol adapters are separate from canvas nodes. Model paths and fields come
@@ -1517,10 +1518,12 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
         const taskId=String(queueId);
         veniceVideoTasks.set(taskId,{model,downloadUrl:typeof data.download_url==='string'?data.download_url:undefined});
         taskCredentialRefs.set(`${provider}:${taskId}`,credential.credentialRef!);taskSubmissions.set(`${provider}:${taskId}`,{model,prompt:req.body.prompt,negative_prompt:req.body.negative_prompt,actualRequest});
+        if(req.body.isVideo===true) noteSchemaVideoJob(provider,taskId,'submitted',credential.key,canvasNodeId(req.body));
         return res.status(status).json({taskId,pollUrl:`/api/schema-provider/${provider}/tasks/${encodeURIComponent(taskId)}`,credentialRef:credential.credentialRef,actualRequest,inputSchema:definition.inputSchema,rawResponse:data});
       }
       const taskId=provider==='together'||provider==='aimlapi'?data.id:provider==='novita'?data.task_id:provider==='krea'?data.job_id:provider==='muapi'?data.request_id:provider==='wavespeed'?data.data?.id:data.data?.workflow?.workflowId;
       if(!taskId)throw Object.assign(new Error('上游提交响应没有任务 ID'),{status,rawResponse:data,endpoint:definition.endpoint,errorSource:'upstream-protocol'});
+      if(req.body.isVideo===true) noteSchemaVideoJob(provider,String(taskId),'submitted',credential.key,canvasNodeId(req.body));
       taskCredentialRefs.set(`${provider}:${taskId}`,credential.credentialRef!);taskSubmissions.set(`${provider}:${taskId}`,{model,prompt:req.body.prompt,negative_prompt:req.body.negative_prompt,actualRequest});
       res.status(status).json({taskId,pollUrl:`/api/schema-provider/${provider}/tasks/${encodeURIComponent(taskId)}`,credentialRef:credential.credentialRef,actualRequest,inputSchema:definition.inputSchema,rawResponse:data});
     }catch(e:any){
@@ -1541,6 +1544,7 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
     // Every run writes history: a terminal upstream failure (status=failed…) or a poll error records ONE failed item for the submitted task.
     {const taskKey=`${provider}:${req.params.taskId}`;const json=res.json.bind(res);
     res.json=((body:any)=>{
+      if(readVideoJobStatus(req.params.taskId)) noteSchemaVideoJob(provider,req.params.taskId,String(body?.status||''));
       const sub=taskSubmissions.get(taskKey);
       // Every poll request's upstream segments join the task ledger (not just first/last).
       const ledger=sub || taskTraces.has(taskKey)?appendTaskTraces(taskKey,dep.traces?.()):undefined;
@@ -1639,7 +1643,7 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
       // MuAPI sandbox keys return is_test mock results (docs/provider-api-audit/muapi.md §7). Never count as a real generation.
       if(provider==='muapi' && (data?.is_test===true || task?.is_test===true))return res.json({status:'sandbox_mock',upstreamTaskStatus:status,outputs:[],sandboxOutputs:outputs,error:`MuAPI sandbox key 返回 is_test mock 结果（上游 status=${status}），不是真实出图，不计为成功。请改用 Production key。`,rawResponse:data,upstreamStatus,endpoint,credentialRef:credential.credentialRef});
       res.json({status,outputs,waitingReason:task?.waitingReason,error:task?.error,rawResponse:data,upstreamStatus,endpoint,credentialRef:credential.credentialRef});
-    }catch(e){fail(res,e);}
+    }catch(e){if(readVideoJobStatus(req.params.taskId)) clearVideoJobStatus(req.params.taskId);fail(res,e);}
   });
   // Persistence is a separate explicit stage; a storage failure never changes the
   // upstream generation outcome or silently discards its transient URL.
@@ -1660,4 +1664,13 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
       res.json({historyItems:saved,historyWarning:failures.length?'部分图片保存失败，生成结果仍可用':undefined,transientOutputs:failures});
     }catch(e){fail(res,e);}
   });
+}
+
+const SCHEMA_VIDEO_BUDGET_MS = 10 * 60 * 1000;
+const SCHEMA_VIDEO_DONE = ['completed', 'succeeded', 'success', 'failed', 'sandbox_mock', 'partial_failure', 'cancelled', 'canceled', 'timeout', 'timed_out', 'deleted', 'error', 'waiting_for_user'];
+
+/** Server-side record for a schema video job. Image submits never call this. */
+function noteSchemaVideoJob(provider: string, taskId: string, upstreamStatus: string, credential?: string, nodeId?: string): void {
+  if (SCHEMA_VIDEO_DONE.includes(upstreamStatus.toLowerCase())) { clearVideoJobStatus(taskId); return; }
+  updateVideoJobStatus({ jobId: taskId, provider, phase: upstreamStatus === 'submitted' ? 'submitted' : 'running', upstreamStatus, budgetMs: SCHEMA_VIDEO_BUDGET_MS, credential, nodeId });
 }

@@ -6,6 +6,7 @@ import { sentHistoryNumbers } from './src/server/historySent.ts';
 import type { GenerationHistoryItem } from './src/types/providers';
 import { lookupExactHuggingFaceRepo } from './src/server/huggingFaceExactRepoSearch.ts';
 import { classifyCivitaiVideoPoll, runCivitaiVideoPoll } from './src/server/civitaiVideoPoll.ts';
+import { canvasNodeId, clearVideoJobStatus } from './src/server/videoJobStatus.ts';
 import { CIVITAI_VIDEO_POLL_BUDGET_MS, CIVITAI_VIDEO_SUBMIT_WAIT_SECONDS, civitaiGenerateSocketMs } from './src/server/civitaiVideoPollSchedule.ts';
 import { fetchSenseNovaModelCatalog } from './src/server/senseNovaCatalog.ts';
 import { readHuggingFaceSpaceImageResponse } from './src/server/huggingFaceSpaceImage.ts';
@@ -3577,6 +3578,8 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
               extractUrl: extractCivitaiBlobUrl,
               sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
               stillWaiting: () => !res.writableEnded && !res.destroyed,
+              credential: apiKey,
+              nodeId: canvasNodeId(req.body),
               fetchStatus: async () => {
                 const pollResp = await upstreamFetch(
                   { provider: 'civitai', route: '/api/civitai/generate/poll', model: workflowId, key: apiKey },
@@ -3594,6 +3597,7 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
               },
             });
           } catch (netErr: any) {
+            clearVideoJobStatus(workflowId);
             keyPoolManager.recordResult('civitai', apiKey, false, Date.now() - startTime, netErr.message, netErr.httpStatus);
             if (netErr.body) return res.status(netErr.httpStatus).json(netErr.body);
             return res.status(502).json({ error: `Civitai 视频轮询网络异常: ${netErr.message}`, errorSource: 'network', workflowId, endpoint: pollEndpoint });

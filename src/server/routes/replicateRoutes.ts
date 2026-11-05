@@ -9,7 +9,7 @@ import {
   ReplicateSchemaMissingError,
   type ReplicateSchemaFetchFailure,
 } from '../replicateImageContract';
-import { clearVideoJobStatus, updateVideoJobStatus } from '../videoJobStatus.ts';
+import { canvasNodeId, clearVideoJobStatus, updateVideoJobStatus } from '../videoJobStatus.ts';
 
 export interface ReplicateRouteDeps {
   resolveProviderAuth: (
@@ -230,9 +230,10 @@ export function handleReplicateGenerate(deps: ReplicateRouteDeps) {
         const pollUrl = parsed.pollUrl || `${baseUrl.replace(/\/+$/, '')}/predictions/${parsed.predictionId}`;
         const noteReplicate = () => {
           if (!isVideo || !parsed.predictionId) return;
-          updateVideoJobStatus({ jobId: parsed.predictionId, provider: 'replicate', phase: 'running', upstreamStatus: parsed.status, budgetMs: maxPollDuration });
+          updateVideoJobStatus({ jobId: parsed.predictionId, provider: 'replicate', phase: 'running', upstreamStatus: parsed.status, budgetMs: maxPollDuration, credential: apiKey, nodeId: canvasNodeId(reqBody) });
         };
         noteReplicate();
+        try {
         while (parsed.isPending && Date.now() - pollStartTime < maxPollDuration) {
           await sleep(1000);
           let pollResp: any;
@@ -305,7 +306,6 @@ export function handleReplicateGenerate(deps: ReplicateRouteDeps) {
             parsed = parseReplicatePredictionResponse(pollData);
             noteReplicate();
           } catch (pollParseErr: any) {
-            if (isVideo && parsed.predictionId) clearVideoJobStatus(parsed.predictionId);
             const errMsg = `Replicate 任务失败: ${pollParseErr.message}`;
             deps.keyPoolManager.recordResult('replicate', apiKey, false, Date.now() - startTime, errMsg, pollResp.status);
             return res.status(502).json({
@@ -320,7 +320,6 @@ export function handleReplicateGenerate(deps: ReplicateRouteDeps) {
         }
 
         if (parsed.isPending) {
-          if (isVideo && parsed.predictionId) clearVideoJobStatus(parsed.predictionId);
           const timeoutMsg = isVideo ? 'Replicate 视频生成超时 (10min)' : 'Replicate 图像生成超时 (60s)';
           deps.keyPoolManager.recordResult('replicate', apiKey, false, Date.now() - startTime, timeoutMsg, 504);
           return res.status(504).json({
@@ -330,6 +329,9 @@ export function handleReplicateGenerate(deps: ReplicateRouteDeps) {
             rawResponse: pollData,
             actualRequest,
           });
+        }
+        } finally {
+          if (isVideo && parsed.predictionId) clearVideoJobStatus(parsed.predictionId);
         }
       }
 
@@ -344,7 +346,6 @@ export function handleReplicateGenerate(deps: ReplicateRouteDeps) {
       }
 
       const imageUrls = parsed.imageUrls?.length ? parsed.imageUrls : [parsed.imageUrl];
-      if (isVideo && parsed.predictionId) clearVideoJobStatus(parsed.predictionId);
       deps.keyPoolManager.recordResult('replicate', apiKey, true, Date.now() - startTime);
 
       const inputObj = (mapped.payload.input as Record<string, any>) || {};

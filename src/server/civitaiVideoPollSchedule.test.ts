@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CIVITAI_VIDEO_DOWNLOAD_MARGIN_MS,
   CIVITAI_VIDEO_POLL_BUDGET_MS,
+  CIVITAI_VIDEO_SCHEMA_TIMEOUT_MS,
   CIVITAI_VIDEO_SOCKET_TIMEOUT_MS,
   CIVITAI_VIDEO_SUBMIT_WAIT_SECONDS,
   civitaiVideoPollDelayMs,
@@ -28,8 +30,13 @@ describe('Civitai video poll schedule', () => {
     expect(plan.length).toBeGreaterThan(20);
   });
 
-  it('gives a video request a 10 minute socket and leaves the image timeout at 2 minutes', () => {
-    expect(CIVITAI_VIDEO_SOCKET_TIMEOUT_MS).toBe(600_000);
+  it('keeps the socket open past the submit wait, the poll budget, the schema fetch and the download', () => {
+    const floor =
+      CIVITAI_VIDEO_POLL_BUDGET_MS +
+      CIVITAI_VIDEO_SUBMIT_WAIT_SECONDS * 1000 +
+      CIVITAI_VIDEO_SCHEMA_TIMEOUT_MS +
+      CIVITAI_VIDEO_DOWNLOAD_MARGIN_MS;
+    expect(CIVITAI_VIDEO_SOCKET_TIMEOUT_MS).toBeGreaterThan(floor);
     expect(CIVITAI_VIDEO_SOCKET_TIMEOUT_MS).not.toBe(120_000);
   });
 });

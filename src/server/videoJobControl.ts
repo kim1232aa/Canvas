@@ -10,9 +10,10 @@
  *   UpdateWorkflowRequest.status is the enum ["canceled"].
  *   https://orchestration.civitai.com/openapi/v2-consumers.json (operation UpdateWorkflow)
  *   https://developer.civitai.com/orchestration/reference/operations/UpdateWorkflow
- * - Krea: DELETE /jobs/{job_id}. https://docs.krea.ai/developers/examples/text-to-video
- *   (poll section; the OpenAPI lists DELETE /jobs/{job_id}).
- * - Sogni: POST /v1/creative-agent/workflows/{id}/cancel.
+ * - Krea: DELETE /jobs/{id} while queued or processing.
+ *   https://docs.krea.ai/developers/job-lifecycle
+ *   OpenAPI: DELETE /jobs/{id} (bearerAuth).
+ * - Sogni: POST /v1/creative-agent/workflows/:id/cancel. Takes no body.
  *   https://docs.sogni.ai/api-reference/workflows
  *
  * No cancel endpoint was found on the fetched pages for NanoGPT, WaveSpeed,
@@ -42,7 +43,7 @@ export function videoCancelPlan(target: VideoCancelTarget): VideoCancelPlan | { 
     return { unsupported: `${provider} 官方文档没有视频任务取消接口。任务仍在上游运行，没有被取消。` };
   }
   if (provider === 'fal') {
-    if (!target.cancelUrl) return { unsupported: 'Fal 提交响应没有 cancel_url，无法取消。' };
+    if (!target.cancelUrl) return { unsupported: 'Fal 的任务记录里没有 cancel_url，没有发送取消请求。' };
     return { method: 'PUT', url: target.cancelUrl };
   }
   if (provider === 'replicate') return { method: 'POST', url: `https://api.replicate.com/v1/predictions/${encodeURIComponent(target.jobId)}/cancel` };
