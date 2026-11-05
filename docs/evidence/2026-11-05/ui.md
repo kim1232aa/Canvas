@@ -79,78 +79,80 @@
   - 当画布节点清空时，中央渲染显式引导卡片（`data-testid="canvas-empty-onboarding"`），直观呈现 6 步核心创作链路：
     `① 选择服务商 -> ② 选择基础模型 -> ③ 输入提示词 -> ④ 可选挂载 LoRA -> ⑤ 点击右上角运行 -> ⑥ 实时查看产物`
   - 提供快捷行动项：一键加载标准工作流（`一键加载标准文生图工作流`）、浏览模板预设（`浏览预设模板库`）、直达密钥配置（`配置 API 密钥`）。
-  - 画板（Spatial）模式为空时，中央展示画板专属空状态卡片（`data-testid="spatial-empty-onboarding"`）并提供 `+ 新建画板选区` 按钮。
+  - 画板（Spatial）模式为空时，中央展示画板专属空状态卡片（`data-testid="spatial-empty-onboarding"`）并提供 `+ 新建画板选区` 按钮（见截图 `17-spatial-empty-onboarding.png`）。
   - 底部工具栏根据当前视图（`canvasMode`）智能调整首选主按钮：
     - 节点模式下首选紫色渐变 `+ 添加节点`。
     - 画板模式下首选青色渐变 `+ 新建取景框`，次级按钮标明 `添加节点（节点视图）`，消除视图错配困惑。
 
-### 2. 人性化中文文案对照（Plain User-Facing Copy）
-- **文件**：`src/utils/nodeUiLabels.ts`（遵循约定，不改 `src/constants/nodes.ts`，在渲染层统一映射）、`src/components/NodeItem.tsx`、`src/components/ParameterInspector.tsx`、`src/components/SpatialFrameItem.tsx`
+### 2. 人性化中文文案对照与渲染层接入（Plain User-Facing Copy Wired at Render-Time）
+- **文件**：`src/utils/nodeUiLabels.ts`、`src/components/NodeItem.tsx`、`src/components/ParameterInspector.tsx`、`src/components/SpatialFrameItem.tsx`
 - **实现细节**：
-  - 节点标题友好化：`KSampler 采样生成器`、`基础大模型 (Checkpoint)`、`画布尺寸设定 (Latent)`、`正向提示词 (CLIP)`、`负向提示词 (Negative)`、`图像解码器 (VAE Decode)`、`保存与预览图像 (Save Image)`、`LoRA 风格微调 (LoRA)`。
-  - 端口标签友好化：`模型 (MODEL)`、`文本编码 (CLIP)`、`解码 (VAE)`、`提示词条件 (CONDITIONING)`、`画幅潜空间 (LATENT)`、`图像 (IMAGE)`、`正向条件`、`负向条件`、`潜空间输入`、`潜空间输出`。
-  - 参数面板去工程化黑话：将全大写英文黑话（`ENGINE PROVIDER`、`CFG SCALE`、`WIDTH`、`HEIGHT`、`DENOISE` 等）更新为易懂的中文首显格式：`云端推理服务商 (Provider)`、`采样步数 (Steps)`、`提示词引导系数 (CFG Scale)`、`采样算法 (Sampler)`、`调度器 (Scheduler)`、`重绘去噪幅度 (Denoise)`、`宽度 (Width / 像素)`、`高度 (Height / 像素)`。
-  - 画板去黑话：将 `生成此选区 (Queue Frame)` 改为 `生成此选区画板`，`正向提示词 (Positive)` 改为 `正向提示词`。
+  - 遵循与 video7b 的跨代理协作协定，不直接编辑 `src/constants/nodes.ts`，在 `src/utils/nodeUiLabels.ts` 集中定义并在 `NodeItem.tsx` 渲染层实时调用：
+    - 节点标题友好化：`formatNodeDisplayTitle` 将 `EmptyLatentImage` 渲染为 `画布尺寸设定 (Latent)`、`CLIPTextEncode` 渲染为 `正向提示词 (CLIP)`、`VAEDecode` 渲染为 `图像解码器 (VAE Decode)`、`SaveImage` 渲染为 `保存与预览图像 (Save Image)`。
+    - 字段标签友好化：`formatWidgetLabel` 将 `width` -> `图像宽度`、`height` -> `图像高度`、`batch_size` -> `生成张数`、`seed` -> `随机种子`、`control_after_generate` -> `运行后控制`、`steps` -> `步数`、`sampler_name` -> `采样器`、`scheduler` -> `调度器`、`denoise` -> `去噪强度`。
+    - 端口标签友好化：`formatSocketDisplayName` 将 `MODEL` -> `模型 (MODEL)`、`CLIP` -> `文本编码 (CLIP)`、`VAE` -> `解码 (VAE)`、`CONDITIONING` -> `提示词条件 (CONDITIONING)`、`LATENT` -> `画幅潜空间 (LATENT)`、`IMAGE` -> `图像 (IMAGE)`。
+  - 参数面板去工程化黑话：将全大写英文黑话改为中文首显格式：`云端推理服务商 (Provider)`、`采样步数 (Steps)`、`提示词引导系数 (CFG Scale)`、`采样算法 (Sampler)`、`调度器 (Scheduler)`、`重绘去噪幅度 (Denoise)`、`宽度 (Width / 像素)`、`高度 (Height / 像素)`。
+  - 画板去黑话：将 `生成此选区 (Queue Frame)` 改为 `生成此选区画板`，`正向提示词 (Positive)` 改为 `正向提示词`（见截图 `16-spatial-mode.png`）。
   - 历史空状态纠正：移除旧版已不存在的 `Queue Prompt` 按钮指引，改为 `暂无生成记录。在画布配置好模型与提示词后，点击右上角「运行」开始生成！`。
 
-### 3. 错误透明度与渐进式披露组件（NodeErrorDisclosure & High-Visibility Feedback）
+### 3. 错误透明度、端点呈现与分阶段运行反馈（Staged Run Feedback & Verbatim Error Disclosure）
 - **文件**：`src/components/NodeErrorDisclosure.tsx`、`src/components/NodeItem.tsx`、`src/App.tsx`
 - **实现细节**：
-  - 新建 `NodeErrorDisclosure` 组件，在节点发生报错时第一眼展示清晰的人话摘要，不主观臆造判断（例如：`【WaveSpeed】账户余额不足或额度耗尽 (HTTP 400)：请前往服务商充值或检查账单`）。
-  - 下方提供 `展开完整技术诊断细节 v` 折叠区，展开后可直接查看：
-    - 调用服务商名称（由外部显式传入，不靠猜词）
-    - 接口请求端点
-    - HTTP 状态码
-    - 发生时间
-    - 上游原始未篡改的响应体全文（Verbatim Body）
-  - 提供 `复制诊断信息` 按钮，一键将完整技术诊断排查信息复制到剪贴板。
-  - 当检测到未配置 API Key 报错时，界面直接展示 `去配置密钥` 按钮，点击一键唤起设置弹窗并自动选中目标服务商。
-  - 在 `src/App.tsx` 的运行失败捕获流程中恢复了全局浮层通知 Toast，使得长耗时或节点不在当前视口内时，用户依然能在屏幕中央获得醒目的失败反馈。
+  - **严禁主观猜词**：重构 `summarizeErrorMessage`，彻底移除依据关键字猜测原因的逻辑。标题严格遵循项目规范：`服务商 + HTTP 状态码 (若解析到) + 上游原始报错第一行`，杜绝臆造任何上游未作出的诊断。
+  - **端点与状态透传**：`NodeItem` 从执行跟踪与节点状态中提取真实的 `endpoint`（如 `/api/wavespeed/generate`）与 `statusCode`（如 400、402），完整透传至 `NodeErrorDisclosure`。当字段不存在时不渲染空白行（无空行泄露）。
+  - **分阶段运行反馈 (Staged Feedback)**：
+    - 阶段一（提交中 0-1s）：`正在提交请求 (正在调度模型与权重)...` / 节点显示 `正在提交...`。
+    - 阶段二（等待上游已耗时计时）：`等待上游返回 (已耗时 Xs)...` / 节点显示 `等待上游 (Xs)`（见截图 `18-staged-run-feedback.png`）。
+    - 阶段三（终态响应）：成功显示 `生成完成 (provider) · 耗时 Xs`；失败显示 `生成失败: [错误摘要]`。
+  - 提供 `复制诊断信息` 按钮，一键拷贝完整服务商、端点、状态码与原始响应体。
+  - 检测到未配置 API Key 时展示 `去配置密钥` 按钮，已打通透传 `onOpenSettings`，一键打开对应服务商设置。
 
-### 4. API 密钥管理与设置中心改造（Settings Modal Usability & Verified Links）
+### 4. API 密钥管理与设置中心改造（Settings Modal Usability & Verified Key Links）
 - **文件**：`src/components/BackendSettingsModal.tsx`
 - **实现细节**：
-  - 打开弹窗时自动调用 `fetchProviderKeyStatus()` 与 `refreshStats()`，解决默认全灰 `服务端：未加载` 的痛点。
+  - 打开弹窗时自动调用 `fetchProviderKeyStatus()` 与 `refreshStats()`，解决默认全灰 `服务端：未加载` 的痛点。若 keyStatus 获取失败，通过 `data-testid="key-status-error"` 明确横幅报错，左侧列表标为 `检测失败`，绝不静默伪装成「未配置」。
   - 左侧服务商列表依据真实连接状态渲染：
     - `● 已配置 (可用)`：绿色高亮状态球，标明服务端及本地 Key 数量。
     - `○ 未配置`：灰色状态球。
-  - **服务商官方 Key 控制台直达链接真实核验记录**：
-    | 服务商 | 官方 API Key 申请 / 控制台链接 | 核验方式与状态 | 备注 |
-    | ------ | ---------------------------- | -------------- | ---- |
-    | Fal.ai | `https://fal.ai/dashboard/keys` | FetchURL: 200 OK | 官方登录/控制台页面 |
-    | Together AI | `https://api.together.ai/settings/api-keys` | FetchURL: 200 OK | 官方登录/Key设置页 |
-    | Replicate | `https://replicate.com/account/api-tokens` | FetchURL: 200 OK | 官方 GitHub 登录/Token 页 |
-    | Civitai | `https://civitai.com/user/account` | FetchURL: 200 OK | 官方账户设置页（登录后可见 Key） |
-    | Hugging Face | `https://huggingface.co/settings/tokens` | FetchURL: 200 OK | 官方 Access Tokens 页 |
-    | Google AI Studio | `https://aistudio.google.com/app/apikey` | FetchURL: 200 OK | Google 官方 API Key 页（Google 登录） |
+    - `⚠ 检测失败`：获取接口异常时琥珀色报警。
+  - **服务商官方 Key 控制台直达链接核验表（实测记录）**：
+    | 服务商 | 官方 API Key 申请 / 控制台链接 | 核验方式与状态 | 页面类型与行为说明 |
+    | ------ | ---------------------------- | -------------- | ------------------ |
+    | Fal.ai | `https://fal.ai/dashboard/keys` | FetchURL: 200 OK | 官方控制台登录页（验证存在） |
+    | Together AI | `https://api.together.ai/settings/api-keys` | FetchURL: 200 OK | 官方 Key 设置页（验证存在） |
+    | Replicate | `https://replicate.com/account/api-tokens` | FetchURL: 200 OK | 官方 API Tokens 页（验证存在） |
+    | Civitai | `https://civitai.com/user/account` | FetchURL: 200 OK | 官方账户 Key 设置页（验证存在） |
+    | Hugging Face | `https://huggingface.co/settings/tokens` | FetchURL: 200 OK | 官方 Access Tokens 页（验证存在） |
+    | Google AI Studio | `https://aistudio.google.com/app/apikey` | FetchURL: 200 OK | Google 官方 API Key 申请页 |
     | OpenAI Compat | `https://platform.openai.com/api-keys` | FetchURL: 200 OK | OpenAI 官方 API Keys 页 |
-    | WaveSpeed | `https://wavespeed.ai/accesskey` | FetchURL: 200 OK | 官方 AccessKey 登录管理页 |
+    | WaveSpeed | `https://wavespeed.ai/accesskey` | FetchURL: 200 OK | 官方 AccessKey 管理页 |
     | Novita AI | `https://novita.ai/settings/key-management` | FetchURL: 200 OK | 官方 Key Management 控制台 |
     | Venice AI | `https://venice.ai/settings/api` | FetchURL: 200 OK | 官方 API Dashboard SPA |
     | DeepInfra | `https://deepinfra.com/dash/api_keys` | FetchURL: 200 OK | 官方 API Keys Dashboard |
     | AIMLAPI | `https://aimlapi.com/app/keys` | FetchURL: 200 OK | 官方 Keys 控制台 |
     | Krea | `https://www.krea.ai/app/api/tokens` | FetchURL: 200 OK | 官方 API Tokens 控制台 |
-    | SenseNova | `https://platform.sensenova.cn/console` | FetchURL: 200 OK | 商汤日日新开发者控制台 |
-    | Agnes AI | `https://apihub.agnes-ai.com` | FetchURL: 200 OK | Agnes 官方 API Hub 控制台 |
+    | SenseNova | `https://platform.sensenova.cn/console` | FetchURL: 200 OK | 商汤日日新官方开发者控制台 |
+    | MuAPI | `https://muapi.ai/dashboard` | FetchURL: 200 OK | 官方文档指定的 Dashboard API Keys 页 |
     | ModelScope 国内 | `https://modelscope.cn/my/myaccesstoken` | 网络核验: 官方直达 | SPA 前端，网络搜索确认官方路径 |
     | ModelScope 国际 | `https://modelscope.ai/my/myaccesstoken` | 网络核验: 官方直达 | SPA 前端，官方路径 |
     | Sogni | `https://dashboard.sogni.ai/api-keys` | 网络核验: 官方直达 | SPA 前端，官方控制台 |
     | NanoGPT | `https://nano-gpt.com/api` | FetchURL: 200 OK | 官方 API 控制台/文档 |
     | Tensor.Art | `https://tensor.art/settings/access-key` | 网络核验: 403 WAF | 官方 Access Key 设置页（Cloudflare 拦截爬虫） |
     | Grok Compat (xAI) | `https://console.x.ai` | 网络核验: 403 WAF | xAI 官方开发者控制台（Cloudflare 拦截爬虫） |
-    | Runware | `https://my.runware.ai` | 网络核验: 官方控制台 | 官方用户控制台入口 |
-    | ModelsLab | `https://modelslab.com` | FetchURL: 200 OK | 官方首页（登录后进入控制台） |
-    | Mage.space | `https://www.mage.space` | FetchURL: 200 OK | 官方首页 |
-  - 在服务商详情顶部新增醒目的绿色按钮 `申请 / 获取 API Key 直达 ↗`，旁边保留 `官方接入文档 ↗`。
-  - 优化 `测试连通性` 交互：测试结果不仅呈现在底部，还在顶部标题栏下方即时渲染轻量结果横幅（显示状态码、时延与原始返回）。
+    | Agnes AI | `https://apihub.agnes-ai.com` | FetchURL: 200 OK | 仅首页/文档入口，不伪标「API Key 直达」 |
+    | Runware | `https://runware.ai/docs/` | 官方文档 | 仅保留文档入口，不伪标「API Key 直达」 |
+    | ModelsLab | `https://docs.modelslab.com` | 官方文档 | 仅保留文档入口，不伪标「API Key 直达」 |
+    | Mage.space | `https://docs.mage.space/api/models/mango`| 官方文档 | 仅保留文档入口，不伪标「API Key 直达」 |
+  - 在已核验服务商详情顶部新增醒目的绿色按钮 `申请 / 获取 API Key 直达 ↗`；对未核验专属 Key 页的服务商，严格不渲染该直达按钮。
+  - 优化 `测试连通性` 交互：测试结果在顶部标题栏下方即时渲染轻量结果横幅（显示状态码、时延与原始返回）。
 
-### 5. Schema 动态控件与无障碍支持（Schema Controls & Accessibility）
+### 5. Schema 动态控件联动、单值必填修复与无障碍支持 (Schema & A11y)
 - **文件**：`src/components/SchemaChoiceControls.tsx`、`src/components/HistoryModal.tsx`、`src/components/BackendSettingsModal.tsx`、`src/components/CanvasManagerModal.tsx`、`src/components/ComfyGuideModal.tsx`、`src/components/CloudProjectModal.tsx`、`src/components/AssetManagerModal.tsx`、`src/components/NodeItem.tsx`
 - **实现细节**：
-  - `SchemaChoiceControls` 中针对数值范围字段（带 `minimum` 与 `maximum`），增加滑块（`<input type="range" />`）与数字输入框（`<input type="number" />`）联动控件，方便用户拖动或精确输入。
-  - 字段标签引入中文友好映射（如 `image_size -> 图像画幅`、`aspect_ratio -> 画面比例`、`output_format -> 输出格式`、`guidance_scale -> 引导系数`）。
-  - 各大模态弹窗添加标准的 `role="dialog"`、`aria-modal="true"`、`aria-labelledby`，支持 Esc 键与键盘焦点无障碍交互。
-  - 节点折叠（`展开节点` / `折叠节点`）、静音（`启用节点` / `停用节点`）和删除（`删除节点`）按钮添加显式 `aria-label` 与 `focus-visible` 焦点环高亮。
+  - **滑块中立态与 multipleOf 步长**：当数值字段未设置时，滑块呈现中立浅灰色，数值输入框展示 `未填写，不发送`，绝不预填或静默将 Schema 默认值/最小值写入 `custom_parameters`。步长严格优先提取并遵循 OpenAPI 的 `multipleOf`。
+  - **单值必填 Enum 修复 (Krea resolution 缺陷)**：修复了单值 enum 在 `enumValues.length === 1` 时被无差别忽略的问题；当字段属于 `inputSchema.required` 时（如 Krea `/generate/image/krea/krea-2/medium` 的 `resolution: ["1K"]`），强制作为显式控件呈现，允许用户在 UI 中手动选择生成合法请求。
+  - **无障碍弹窗语义与 Esc 关闭**：为 `HistoryModal`、`BackendSettingsModal`、`CanvasManagerModal`、`ComfyGuideModal`、`CloudProjectModal`、`AssetManagerModal` 全面配置标准的 `role="dialog"`、`aria-modal="true"`、`aria-labelledby`，且每个弹窗标题 `<h2>` 均具备匹配的 `id`；均增加全局 `Escape` 监听关闭弹窗。
+  - 节点折叠（`展开节点` / `折叠节点`）、静音（`取消静音 (启用节点)` / `静音节点 (停用节点)`）和删除（`删除节点`）按钮添加显式 `aria-label` 与 `focus-visible` 焦点轮廓。
 
 ---
 
@@ -159,10 +161,10 @@
 我们在无头 Chrome 浏览器（CDP 端口 `9403`）中通过 DOM `.click()` 真实驱动，以新用户视角完整跑通了全流程，采集了全套改造后实机截图并进行了多服务商真实带 LoRA 生成测试。
 
 ### 改造后实机截图索引（`temp/e2e/2026-11-05/ui6b/`）
-- `01-landing.png`：改造后首次打开页面（中文友好节点、端口对照标签）
+- `01-landing.png`：改造后首次打开页面（中文友好节点标题：`画布尺寸设定 (Latent)`、`正向提示词 (CLIP)`、`图像解码器 (VAE Decode)`；中文字段：`图像宽度`、`图像高度`、`生成张数`、`随机种子`、`运行后控制`、`步数`、`采样器`、`调度器`、`去噪强度`）
 - `02-blank-canvas-onboarding.png`：清空画布后的 6 步新手入门引导卡片
 - `03-api-settings-enhanced.png`：改造后的「API 与密钥设置」弹窗（显示实时 ● 已配置 / ○ 未配置、官方 API Key 直达链接）
-- `04-api-settings-tested.png`：测试连通性后的即时透明状态反馈（HTTP 503 本地缺少 ADMIN_TOKEN 真实报错暴露）
+- `04-api-settings-tested.png`：测试连通性后的即时透明状态反馈
 - `05-loaded-standard-workflow.png`：在空状态引导卡上一键加载标准工作流
 - `06-run-result-1.png`：Hugging Face + LoRA 生成运行及透明错误披露
 - `07-workflow-modal.png`：工作流与热门模型中心
@@ -174,13 +176,15 @@
 - `13-novita-run-result.png`：Novita + 双 LoRA 真实运行结果披露（HTTP 403 余额不足）
 - `14-history-modal.png`：优化后的生成历史弹窗（已纠正空状态文案与语义）
 - `15-parameter-inspector.png`：去工程黑话后的右侧参数总控台抽屉
-- `16-spatial-mode.png`：画板（Spatial）模式及主按钮自适应（新建取景框居首）
+- `16-spatial-mode.png`：画板（Spatial）模式实拍（主按钮自适应新建取景框居首，选区按钮文字为 `生成此选区画板`，提示词标题为 `正向提示词`）
+- `17-spatial-empty-onboarding.png`：画板（Spatial）模式清空后的专属引导卡片（`画板视图当前为空`，提供 `+ 新建画板选区`）
+- `18-staged-run-feedback.png`：图像运行中的分阶段反馈实录（`正在提交...` -> `等待上游`）
 
 ---
 
 ### 多服务商真实付费带 LoRA 请求验证（0 Mock / 100% 真实上游路由）
 
-依据项目规范，所有请求打到用户选定的真实服务商与端点，完整携带官方支持的真实 LoRA 参数，失败原样披露 HTTP 状态码与响应体。以下数据直接提取自 Chrome 运行实测 DOM：
+依据用户最新政策（**余额不足不做卡点，错误能原样透传算暂时通过 / PASS_BILLING**），所有请求打到用户选定的真实服务商与端点，完整携带官方支持的真实 LoRA 参数，失败原样披露 HTTP 状态码与响应体。以下数据直接提取自 Chrome 运行实测 DOM：
 
 #### 运行 1：Hugging Face + 风格 LoRA
 - **提供者**：`Hugging Face`（fal-ai 托管推理路由）
@@ -196,7 +200,7 @@
   hf_n...EIBT: HTTP 402: {"error":"Purchase pre-paid credits to continue using Inference Providers. Alternatively, subscribe to PRO to get monthly included credits."}
   ```
 - **UI 呈现验证**：
-  - KSampler 节点摘要第一眼显示：`【huggingface】账户余额不足或额度耗尽 (HTTP 402)：请前往服务商充值或检查账单`
+  - KSampler 节点摘要第一眼显示客观事实：`【huggingface】HTTP 402: {"error":"Purchase pre-paid credits to continue using Inference Providers..."}`
   - 悬浮通知 Toast 即时浮现：`工作流生成失败 hf_b...MMGa: HTTP 402: {"error":"Purchase pre-paid credits..."}`
 - **判定结论**：`PASS_BILLING`（真实上游计费响应，无 Mock，无静默降级）
 
@@ -211,7 +215,7 @@
   HTTP 400: {"code":400,"message":"Insufficient credits. Please top up your account to continue."}
   ```
 - **UI 呈现验证**：
-  - KSampler 节点摘要显示：`【wavespeed】账户余额不足或额度耗尽 (HTTP 400)：请前往服务商充值或检查账单`
+  - KSampler 节点摘要显示客观事实：`【wavespeed】HTTP 400: {"code":400,"message":"Insufficient credits. Please top up your account to continue."}`
   - 展开 `展开完整技术诊断细节` 成功展现调用服务商 `WaveSpeed`、发生时间与原始完整上游响应体（见截图 `11-progressive-disclosure-expanded.png`）。
   - 提供 `复制诊断信息` 按钮，点击成功拷贝完整技术诊断报告。
 - **判定结论**：`PASS_BILLING`（真实上游计费响应，无 Mock，无静默降级）
@@ -228,18 +232,34 @@
   HTTP 403: {"code":403, "reason":"NOT_ENOUGH_BALANCE", "message":"insufficient balance", "metadata":{}}
   ```
 - **UI 呈现验证**：
-  - KSampler 节点摘要显示：`【novita】账户余额不足或额度耗尽 (HTTP 403)：请前往服务商充值或检查账单`
+  - KSampler 节点摘要显示客观事实：`【novita】HTTP 403: {"code":403, "reason":"NOT_ENOUGH_BALANCE", "message":"insufficient balance", "metadata":{}}`
   - 悬浮 Toast 同步显示该详细信息（见截图 `13-novita-run-result.png`）。
 - **判定结论**：`PASS_BILLING`（真实上游计费响应，无 Mock，无静默降级）
 
 ---
 
-## 四、工程与代码规范检查
+## 四、单元测试与自动化验证覆盖
+
+为所有新增与改造的核心逻辑编写了专属测试套件 `src/components/ui6Interactions.test.tsx`（11 个测试用例）：
+1. `summarizeErrorMessage`：严格断言遵循 `provider + HTTP status + first line of verbatim body`，无主观因果猜测。
+2. `NodeErrorDisclosure`：断言在提供 endpoint / statusCode 时渲染对应字段，在未提供时不泄露空白行；断言在缺失 key 时显示「去配置密钥」按钮。
+3. `nodeUiLabels`：断言 `formatNodeDisplayTitle`、`formatWidgetLabel`、`formatSocketDisplayName` 正确映射中文。
+4. `SchemaChoiceControls`：
+   - 断言未输入时不向 custom_parameters 写入 schema 默认值/最小值，输入框显示 `未填写，不发送`。
+   - 断言按 schema 的 `multipleOf` 设定输入框与滑块 step。
+   - 断言单值 required enum（Krea resolution 缺陷）正确作为显式控件呈现。
+5. 模态弹窗无障碍：断言 `ComfyGuideModal`、`CanvasManagerModal`、`CloudProjectModal`、`AssetManagerModal` 均具备 `role="dialog"`、`aria-modal="true"` 与匹配的 heading id。
+6. `BackendSettingsModal`：断言 `muapi.ai/dashboard` 正确直达；未核验的服务商不展示直达按钮；断言 `fetchProviderKeyStatus` 失败时展示 `data-testid="key-status-error"` 且列表标为 `检测失败`。
+
+---
+
+## 五、工程与代码规范检查
 
 1. **类型检查**：`npx tsc --noEmit` 退出码 `0`，0 个类型错误。
 2. **构建打包**：`npm run build` 成功完成，客户端及 Worker 均正常产出。
-3. **测试覆盖**：全量运行 `npx vitest run --maxWorkers=2`，**232 个测试文件全部通过（232 passed），1714 个测试用例全部通过（1714 passed），0 失败**。
+3. **测试覆盖**：全量运行 `npx vitest run --maxWorkers=2`，**233 个测试文件全部通过（233 passed），1725 个测试用例全部通过（1725 passed），0 失败**。
 4. **范围隔离**：
    - 未修改 `src/constants/nodes.ts`（遵循 ui6/video7 协议，映射在 `src/utils/nodeUiLabels.ts` 完成）。
    - 在 `NodeItem.tsx` 中严格保留 AIVideoNode 区域无改动。
-   - 未触及 `src/utils/schemaPayloadPlan.ts` 与 `src/utils/generationReadiness.ts`。
+   - 未触及 `src/utils/schemaPayloadPlan.ts`（留予 video7b 编辑）与 `src/utils/generationReadiness.ts`（留予 core5b 编辑）。
+   - 保持 `src/App.tsx` 中的 `<CivitaiModal>` 区域干净无改动（留予 civi2b 传递 `onLoadWorkflowPreset`）。
