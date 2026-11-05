@@ -12,18 +12,40 @@ function normalizeToken(s: string): string {
 export function mapSampler(s: string, engineOrProvider?: string): string {
   const lower = normalizeToken(s);
   if (!lower || EMPTY_TOKENS.has(lower)) return '';
-  if (lower.includes('dpm++ 2m') || lower.includes('dpmpp_2m')) return 'dpmpp_2m';
-  if (lower.includes('dpm++ sde') || lower.includes('dpmpp_sde')) return 'dpmpp_sde';
-  if (lower.includes('dpm++ 3m sde') || lower.includes('dpmpp_3m_sde')) return 'dpmpp_3m_sde';
-  if (lower.includes('euler a') || lower.includes('euler_ancestral') || lower.includes('euler_a')) {
-    return engineOrProvider === 'comfy' ? 'euler_ancestral' : 'euler_a';
+  const isComfy = engineOrProvider === 'comfy';
+
+  if (isComfy) {
+    if (lower.includes('dpm++ 2m') || lower.includes('dpmpp_2m')) return 'dpmpp_2m';
+    if (lower.includes('dpm++ sde') || lower.includes('dpmpp_sde')) return 'dpmpp_sde';
+    if (lower.includes('dpm++ 3m sde') || lower.includes('dpmpp_3m_sde')) return 'dpmpp_3m_sde';
+    if (lower.includes('euler a') || lower.includes('euler_ancestral') || lower.includes('euler_a')) return 'euler_ancestral';
+    if (lower.includes('er_sde_simple')) return 'er_sde_simple';
+    if (lower.includes('er_sde')) return 'er_sde';
+    if (lower.includes('heun')) return 'heun';
+    if (lower.includes('ddim')) return 'ddim';
+    if (lower.includes('euler')) return 'euler';
+    if (lower.includes('uni_pc')) return 'uni_pc';
+    if (lower.includes('lms')) return 'lms';
+    return '';
   }
-  if (lower.includes('er_sde_simple')) return 'er_sde_simple';
-  if (lower.includes('er_sde')) return 'er_sde';
+
+  // Official Civitai sdcpp SdCppSampleMethod enum:
+  // euler, heun, dpm2, dpm++2s_a, dpm++2m, dpm++2mv2, ipndm, ipndm_v, ddim_trailing, euler_a, lcm, res_multistep, res_2s, tcd, er_sde
+  if (lower.includes('dpm++ 2m v2') || lower.includes('dpm++2mv2') || lower.includes('dpmpp_2m_v2')) return 'dpm++2mv2';
+  if (lower.includes('dpm++ 2m') || lower.includes('dpm++2m') || lower.includes('dpmpp_2m')) return 'dpm++2m';
+  if (lower.includes('dpm++ 2s a') || lower.includes('dpm++2s_a') || lower.includes('dpmpp_2s_ancestral') || lower.includes('dpmpp_2s_a')) return 'dpm++2s_a';
+  if (lower.includes('dpm2') || lower.includes('dpm_2')) return 'dpm2';
+  if (lower.includes('euler a') || lower.includes('euler_a') || lower.includes('euler_ancestral')) return 'euler_a';
   if (lower.includes('heun')) return 'heun';
-  if (lower.includes('ddim')) return 'ddim';
+  if (lower.includes('lcm')) return 'lcm';
+  if (lower.includes('tcd')) return 'tcd';
+  if (lower.includes('res_multistep') || lower.includes('res multistep')) return 'res_multistep';
+  if (lower.includes('res_2s') || lower.includes('res 2s')) return 'res_2s';
+  if (lower.includes('ipndm_v') || lower.includes('ipndm v')) return 'ipndm_v';
+  if (lower.includes('ipndm')) return 'ipndm';
+  if (lower.includes('ddim_trailing') || lower.includes('ddim trailing')) return 'ddim_trailing';
+  if (lower.includes('er_sde') || lower.includes('er sde') || lower.includes('er_sde_simple')) return 'er_sde';
   if (lower.includes('euler')) return 'euler';
-  // Unrecognized (including literal "Undefined") → empty, never forge euler
   return '';
 }
 
@@ -1177,12 +1199,14 @@ export function adaptCivitaiRecipeToProvider(
       fields.clipSkip = {
         field: 'clipSkip',
         originalValue: clipSkipVal,
-        targetField: 'clipSkip',
-        mappedValue: clipSkipVal,
-        status: clipSkipVal !== null ? 'mapped' : 'not_applicable',
-        humanMessage: `作为 SD 1.5 clipSkip 发送 (${clipSkipVal})`,
+        status: 'unsupported',
+        humanMessage: '尚未发送，原因：CivitaiDriver / civitaiImageContract 尚未映射 clipSkip',
         source: 'https://developer.civitai.com/orchestration/recipes/sd1.md',
       };
+      if (clipSkipVal !== null && clipSkipVal !== undefined) {
+        unsupportedFields.push('clipSkip');
+        warnings.push('Civitai SD 1.5 官方配方支持 clipSkip，但当前客户端 CivitaiDriver / civitaiImageContract 尚未映射该字段，尚未发送。');
+      }
     } else {
       fields.clipSkip = {
         field: 'clipSkip',

@@ -335,16 +335,17 @@ describe('Cross-Provider Civitai Recipe Adaptation Engine', () => {
       expect(result.loras[1].reason).toContain('缺少官方模型版本 ID');
     });
 
-    it('P2-1: SD 1.5 clipSkip is mapped, not unsupported, on Civitai', () => {
+    it('P1-1 (Round 3): SD 1.5 clipSkip on Civitai is marked unsupported with honest reason (CivitaiDriver not mapped)', () => {
       const sd15Recipe: CivitaiRecipeInput = {
         baseModel: 'SD 1.5',
         clipSkip: 2,
         checkpoint: 'urn:air:sd1:checkpoint:civitai:94809@393843',
       };
       const result = adaptCivitaiRecipeToProvider(sd15Recipe, 'civitai');
-      expect(result.fields.clipSkip.status).toBe('mapped');
-      expect(result.fields.clipSkip.targetField).toBe('clipSkip');
-      expect(result.unsupportedFields).not.toContain('clipSkip');
+      expect(result.fields.clipSkip.status).toBe('unsupported');
+      expect(result.fields.clipSkip.humanMessage).toContain('尚未发送，原因：CivitaiDriver / civitaiImageContract 尚未映射 clipSkip');
+      expect(result.unsupportedFields).toContain('clipSkip');
+      expect(result.warnings.some((w) => w.includes('CivitaiDriver / civitaiImageContract 尚未映射'))).toBe(true);
     });
 
     it('P2-2: prompt-inferred LoRA tag is marked requires_reselection with prompt inference warning', () => {

@@ -300,7 +300,7 @@
 ## 四、真实浏览器 UI 点击端到端（E2E）验收记录
 
 所有测试均在真实 Headless Chrome (端口 9401) 中由自动化脚本模拟用户真实点击 UI 完成，测试服务运行于本地端口 3101。
-**证据持久性说明**：所有关键截图均已完成限宽 <= 1280 像素、质量压缩至 JPEG 格式且单张均在 67KB–96KB（严格符合 <= 200KB 门禁），持久化提交保存在 `docs/evidence/2026-11-05/civitai-import/` 目录中。本任务提取的全部真实出站请求已完成脱敏后持久化归档于 `docs/evidence/2026-11-05/civitai-import/requests-m1.jsonl`，全文档 0 `temp/` 临时路径引用。
+**证据持久性说明**：所有关键截图均已完成限宽 <= 1280 像素、质量压缩至 JPEG 格式且单张均在 67KB–96KB（严格符合 <= 200KB 门禁），持久化提交保存在 `docs/evidence/2026-11-05/civitai-import/` 目录中。本任务提取的与结论相关的真实出站请求已完成脱敏后持久化归档于 `docs/evidence/2026-11-05/civitai-import/requests-m1.jsonl`，全文档 0 `temp/` 临时路径引用。
 
 ### 4.1 3 款不同生态真实 Civitai 作品导入测试
 
@@ -314,7 +314,7 @@
 
 ### 4.2 真实提供商付费调用与真实上游返回记录（依 requests-m1.jsonl 原文核对）
 
-按照项目最高规则与验收规范，所有请求带满参数（包括 LoRA），请求端点透明，严格不静默降级、不假装成功、不自动换路。所有记录均可由 `docs/evidence/2026-11-05/civitai-import/requests-m1.jsonl` 原文精确复核。
+按照项目最高规则与验收规范，所有请求带满参数（包括 LoRA），请求端点透明，严格不静默降级、不假装成功、不自动换路。与结论相关的请求记录均可由 `docs/evidence/2026-11-05/civitai-import/requests-m1.jsonl` 原文精确复核。
 
 #### 1. Civitai 官方原生引擎调用 (FLUX.1 D)
 
@@ -452,7 +452,7 @@
     }
   }
   ```
-- **验收结论与诚信记录**：严格按照主控纠偏指示，**原配方不可运行就如实记录真实原因，严禁自动静默排除后把缩水配方当原配方伪装 PASS_BILLING**。UI 上完整呈现了上游官方校验错误，预览中准确展示了 `Civitai 未启用在线生成 (canGenerate: false)`。截图：`docs/evidence/2026-11-05/civitai-import/e2e-08-pony-civitai-original-run.jpg`。
+- **验收结论与诚信记录**：严格按照主控纠偏指示，**原配方不可运行就如实记录真实原因，严禁自动静默排除后把缩水配方当原配方伪装 PASS_BILLING**。UI 上完整呈现了上游官方校验错误，预览中准确展示了 `Civitai 未启用在线生成 (canGenerate: false)`。判定分类为：**契约/资源拒绝，不算通过**。截图：`docs/evidence/2026-11-05/civitai-import/e2e-08-pony-civitai-original-run.jpg`。
 
 ---
 
@@ -475,27 +475,46 @@
 
 ---
 
-## 五、Round 2 审查缺陷修复 (P1-1 ~ P1-4, P2-1 ~ P2-4) 最终闭环
+### 4.3 终审执行判定分类对照表
+
+| 请求 / 点击场景 | 实际调用端点与日志索引 | 上游响应事实与状态 | 最终判定分类 |
+| :--- | :--- | :--- | :--- |
+| **Civitai FLUX.1 D** | `POST https://orchestration.civitai.com/v2/consumer/workflows` (i=255) | 400 Bad Request `{"detail":"insufficientBuzz"}` | **PASS_BILLING** |
+| **Civitai SD 1.5** | `POST https://orchestration.civitai.com/v2/consumer/workflows` (i=317) | 400 Bad Request `{"detail":"insufficientBuzz"}` | **PASS_BILLING** |
+| **Fal.ai FLUX LoRA** | `POST https://fal.run/fal-ai/flux-lora` (i=481) | 403 Forbidden `{"detail":"User is locked. Reason: TOP_UP."}` | **PASS_BILLING** |
+| **WaveSpeed FLUX LoRA** | `POST https://api.wavespeed.ai/api/v3/wavespeed-ai/p-h3-image/text-to-image-lora` (i=262) | 400 Bad Request `{"code":400,"message":"Insufficient credits"}` | **PASS_BILLING** |
+| **Civitai Pony 原配方** | `POST https://orchestration.civitai.com/v2/consumer/workflows` (i=511) | 400 Bad Request `"Pony Custom styles - Kenva is not enabled for generation"` (sampleMethod: `euler_a`, canGenerate: false) | **契约/资源拒绝，不算通过** |
+| **历史枚举错误 (已根除)** | 早期 `euler_ancestral` / `dpmpp_2m` | 400 Bad Request 枚举格式不匹配 | **契约拒绝，不算通过** |
+
+---
+
+## 五、Round 3 审查缺陷修复 (P1-1, P2-1 ~ P2-3) 最终闭环
 
 ### 5.1 缺陷修复与架构升级清单
 
-1. **P1-1 (a) Civitai sdcpp 采样器映射纠正为 `euler_a`**：
-   - 在 `mapSampler` 与 `adaptCivitaiRecipeToProvider` 中区分引擎：针对 Civitai 默认的 `sdcpp` 引擎，`Euler a` 严格映射为 `euler_a`；针对 `comfy` 引擎映射为 `euler_ancestral`。
-   - 彻底消除了 Civitai 上游针对 `euler_ancestral` 的枚举转换 400 报错。
-2. **P1-1 (b) 读取 `/mini/{id}` 的 `canGenerate` 字段并如实标出**：
+1. **P1-1 (Round 3) SD 1.5 clipSkip 预览真实性与未映射诚信说明**：
+   - 现阶段 `CivitaiDriver` 与 `civitaiImageContract` 属于 M6 任务范围，M1 严格遵从主控边界指令未越权编辑。
+   - `adaptCivitaiRecipeToProvider` 对 SD 1.5 在 Civitai 目标下的 `clipSkip` 如实标注为 `unsupported`（未发送），状态徽章显示「✖ 不支持(已拦截)」，说明明确记录「尚未发送，原因：CivitaiDriver / civitaiImageContract 尚未映射 clipSkip」，并在 `importWarnings` 中如实加入对应警告。
+   - 彻底杜绝了“出站未发送但预览写将发送”的反透明缺陷。待 M6 合并后主控授权范围扩充，再补齐真实出站字段并切换为「将发送」。
+2. **P1-1 (a) / P2-3 Civitai sdcpp 采样器枚举完整映射为官方规范**：
+   - 全量对齐 live OpenAPI `SdCppSampleMethod` 官方枚举（`euler`, `heun`, `dpm2`, `dpm++2s_a`, `dpm++2m`, `dpm++2mv2`, `ipndm`, `ipndm_v`, `ddim_trailing`, `euler_a`, `lcm`, `res_multistep`, `res_2s`, `tcd`, `er_sde`）：
+     - `DPM++ 2M` 严格映射为 `dpm++2m`（Comfy 引擎保留 `dpmpp_2m`）；
+     - `Euler a` 严格映射为 `euler_a`（Comfy 引擎保留 `euler_ancestral`）；
+     - 未在官方枚举中的采样器标为空/未映射，绝不臆造或盲猜；
+   - `handleExtractCivitaiWorkflow` 将解析出的 `detectedEngine` 完整注入 `recipeInput.engine`，使适配器能够感知具体引擎，不会在 comfy 模式下错误套用 sdcpp 规范。
+3. **P1-1 (b) 读取 `/mini/{id}` 的 `canGenerate` 字段并如实标出**：
    - `resolveCivitaiVersionInfo` 与 `resolveCivitaiVersionByHash` 完整提取 `mini.canGenerate`。
    - 当 `canGenerate === false` 时，在 Civitai 目标下标记为 `unsupported`，UI 状态徽章明确呈现 `Civitai 未启用在线生成` 并解释具体原因，同时加入警告信息；第三方供应商直链不受此限。
    - 遵守主控纠偏原则：不静默排除缩水配方，如实呈现原配方上游拒绝详情。
-3. **P1-2 真实端点对齐与证据持久化**：
+4. **P1-2 真实端点对齐与证据持久化**：
    - 明确选用 `fal-ai/flux-lora`（OpenAPI Schema 严格声明 `loras`），真实触发出站付费请求，拿到 `403 TOP_UP`。
    - WaveSpeed 如实记录实际出站端点 `POST https://api.wavespeed.ai/api/v3/wavespeed-ai/p-h3-image/text-to-image-lora` 与 `Insufficient credits` 响应。
    - 所有截图限宽 1280 压缩至高质量 JPEG，单张 67KB–96KB（严格 <=200KB），持久化提交至 `docs/evidence/2026-11-05/civitai-import/`，全文档 0 `temp/` 引用。
-4. **P2-1 保留已知权重参数**：
+5. **P2-1 保留已知权重参数**：
    - 在 `civitaiWorkflowRoute.ts` 的哈希遍历中，优先从 `meta.resources` 提取已知权重（如 `contrast_slider_v10: 2`），未提供时从 `meta.prompt` 正则提取 `<lora:name:weight>`（如 `backlight_slider_v10: -1.5`），严禁无条件覆盖为 `strength: null`。
-5. **P2-2 哈希 404 严禁静默丢弃**：
+   - 重新捕获 `e2e-09` 预览截图与 `e2e-10` 画布截图，完整展示滑块上的 `2.0` 与 `-1.5` 权重。
+6. **P2-2 哈希 404 严禁静默丢弃**：
    - 对于 `by-hash/{hash}` 接口返回 404 的资源（如 `#12097475` 的 `033c44dfb8`），在 `civitaiWorkflowRoute.ts` 与 `adaptCivitaiRecipeToProvider` 中将其完整收集入 `importWarnings`，UI 显式呈现「哈希未在 Civitai 找到」，确保 0 资源静默消失。
-6. **P2-3 SD 1.5 clipSkip 出站一致性与传递**：
-   - 确保 `clipSkip` 正确从元数据提取并挂载至 `CheckpointLoaderSimple` 与 `KSampler` 的节点值 (`clip_skip: 2`)，预览表一致标识支持发送。
 7. **P2-4 Token 授权真实直链注入**：
    - 当用户在 UI 明确授权后，画布上生成的 LoRA 节点 `download_url` 真实追加 `?token={token}`；未授权时不附带 token，确保凭据安全与预览表完全一致。
 
