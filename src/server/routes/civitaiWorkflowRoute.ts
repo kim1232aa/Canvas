@@ -6,6 +6,8 @@ import {
   resolveImportedCheckpointRef,
   resolveRawImportNegativeSamplerScheduler,
   isRawBaseModelArchitectureText,
+  buildAllProviderAdaptations,
+  type CivitaiRecipeInput,
 } from '../../utils/civitaiImportMap.ts';
 
 export interface CivitaiWorkflowDeps {
@@ -878,12 +880,43 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
         );
       }
 
-      const importWarnings = clipSkip === null ? [] : [{
-        field: 'clipSkip',
-        value: clipSkip,
-        sent: false,
-        reason: `当前导入器未建立到 ${chosenEngineName} 的经 Schema 核实的 CLIP Skip 映射；原值已保留为来源元数据，未向上游发送。`,
-      }];
+      const recipeInput: CivitaiRecipeInput = {
+        checkpoint,
+        baseModel: detectedBaseModel,
+        loras,
+        prompt,
+        negativePrompt,
+        steps,
+        cfg,
+        sampler,
+        scheduler,
+        seed,
+        clipSkip,
+        width,
+        height,
+        denoise,
+        hasInitImage: false,
+      };
+
+      const providerAdaptation = buildAllProviderAdaptations(recipeInput, {
+        allowTokenInUrl: Boolean(req.body?.consentCivitaiToken),
+      });
+      const currentAdaptation = providerAdaptation[targetProvider] || providerAdaptation['civitai'];
+
+      const importWarnings = [
+        ...(clipSkip !== null ? [{
+          field: 'clipSkip',
+          value: clipSkip,
+          sent: false,
+          reason: `当前导入器未建立到 ${chosenEngineName} 的经 Schema 核实的 CLIP Skip 映射；原值已保留为来源元数据，未向上游发送。`,
+        }] : []),
+        ...(currentAdaptation?.warnings?.map((w) => ({
+          field: 'adaptationWarning',
+          value: w,
+          sent: false,
+          reason: w,
+        })) || []),
+      ];
 
       const otherMetadata = {
         prompt: prompt || '',
@@ -936,6 +969,8 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
         nodes,
         connections,
         otherMetadata,
+        providerAdaptation,
+        currentAdaptation,
         spatialFrames: [
           {
             id: `frame-imp-${Date.now()}`,
@@ -987,6 +1022,9 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
           { id: 'modelscope', name: 'ModelScope CN', badge: '需重选模型', description: '国内站与来源 Civitai 不是同一资源命名空间' },
           { id: 'modelscope_ai', name: 'ModelScope AI', badge: '需重选模型', description: '国际站单独选择真实模型与账户，不与国内站互换' },
           { id: 'huggingface', name: 'Hugging Face', badge: '需重选模型', description: '请明确选择 Hub 模型及实际在线推理路由' },
+          { id: 'replicate', name: 'Replicate', badge: '需重选模型', description: '请从 Replicate 目录选择真实模型 (如 flux-dev-lora)' },
+          { id: 'aimlapi', name: 'AIMLAPI', badge: '需重选模型', description: '请从 AIMLAPI 目录选择真实模型，LoRA 支持公开权重直链' },
+          { id: 'novita', name: 'Novita AI', badge: '需重选模型', description: '请从 Novita 模型目录选择真实 sd_name_in_api' },
           { id: 'muapi', name: 'MuAPI', badge: '需重选端点', description: '请从 MuAPI 目录选择真实 endpoint_url；不映射 Civitai 模型名' },
           { id: 'wavespeed', name: 'WaveSpeed', badge: '需重选端点', description: '请从 WaveSpeed 目录选择完整 model_id；不映射 Civitai 模型名' },
           { id: 'sogni', name: 'Sogni', badge: '需重选 selector', description: '请从当前官方工具 Schema selector 选择模型' },

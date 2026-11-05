@@ -502,4 +502,43 @@ describe('Civitai Routes and Workflow Contract Tests', () => {
       expect(ksamplerNode.values.denoise).toBeUndefined();
     });
   });
+
+  describe('HIGH 7: Cross-provider adaptation in extract-workflow response', () => {
+    it('returns preset.providerAdaptation and preset.currentAdaptation with per-field outcomes', async () => {
+      const mockFetch = vi.fn();
+      const handler = handleExtractCivitaiWorkflow(createMockWorkflowDeps(mockFetch));
+
+      const req = {
+        body: {
+          rawText:
+            'masterpiece, 1girl, portrait, sunset <lora:AsianMix:0.8>\nNegative prompt: blurry, bad anatomy\nSteps: 25, Sampler: DPM++ 2M, Schedule type: Karras, CFG scale: 7, Seed: 12345, Size: 1024x1024, Model: sdxl_base_1.0.safetensors',
+          engine: 'fal',
+        },
+      } as any;
+      const res = createMockRes();
+
+      await handler(req, res);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.data.success).toBe(true);
+
+      const preset = res.data.preset;
+      expect(preset.providerAdaptation).toBeDefined();
+      expect(preset.currentAdaptation).toBeDefined();
+      expect(preset.currentAdaptation.provider).toBe('fal');
+
+      // Check per-field adaptation details on Fal
+      expect(preset.currentAdaptation.fields.prompt.status).toBe('mapped');
+      expect(preset.currentAdaptation.fields.size.mappedValue).toEqual({ width: 1024, height: 1024 });
+      expect(preset.currentAdaptation.fields.steps.targetField).toBe('num_inference_steps');
+      expect(preset.currentAdaptation.fields.cfg.targetField).toBe('guidance_scale');
+
+      // Also verifies other provider adaptations are precomputed
+      expect(preset.providerAdaptation.civitai).toBeDefined();
+      expect(preset.providerAdaptation.replicate).toBeDefined();
+      expect(preset.providerAdaptation.wavespeed).toBeDefined();
+      expect(preset.providerAdaptation.tensorart).toBeDefined();
+      expect(preset.providerAdaptation.modelscope).toBeDefined();
+    });
+  });
 });
