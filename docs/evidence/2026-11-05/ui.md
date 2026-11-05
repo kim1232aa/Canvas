@@ -161,25 +161,25 @@
 
 我们在无头 Chrome 浏览器（CDP 端口 `9403`）中通过 DOM `.click()` 真实驱动，以新用户视角完整跑通了全流程，采集了全套改造后实机截图并进行了多服务商真实带 LoRA 生成测试。
 
-### 改造后实机截图索引（`temp/e2e/2026-11-05/ui6b/`）
-- `01-landing.png`：改造后首次打开页面（中文友好节点标题：`画布尺寸设定 (Latent)`、`正向提示词 (CLIP)`、`图像解码器 (VAE Decode)`；中文字段：`图像宽度`、`图像高度`、`生成张数`、`随机种子`、`运行后控制`、`步数`、`采样器`、`调度器`、`去噪强度`）
-- `02-blank-canvas-onboarding.png`：清空画布后的 6 步新手入门引导卡片
-- `03-api-settings-enhanced.png`：改造后的「API 与密钥设置」弹窗（显示实时 ● 已配置 / ○ 未配置、官方 API Key 直达链接）
-- `04-api-settings-tested.png`：测试连通性后的即时透明状态反馈
-- `05-loaded-standard-workflow.png`：在空状态引导卡上一键加载标准工作流
-- `06-run-result-1.png`：Hugging Face + LoRA 生成运行及透明错误披露
-- `07-workflow-modal.png`：工作流与热门模型中心
-- `08-wavespeed-preset.png`：筛选搜索 WaveSpeed 工作流
-- `09-wavespeed-loaded.png`：载入 WaveSpeed + LoRA 标准工作流
-- `10-wavespeed-run-result.png`：WaveSpeed + LoRA 真实运行与渐进式错误披露
-- `11-progressive-disclosure-expanded.png`：展开查看 WaveSpeed 完整技术诊断细节（HTTP 400 原文与服务商信息）
-- `12-novita-loaded.png`：载入 Novita + 双 LoRA 链工作流
-- `13-novita-run-result.png`：Novita + 双 LoRA 真实运行结果披露（HTTP 403 余额不足）
-- `14-history-modal.png`：优化后的生成历史弹窗（已纠正空状态文案与语义）
-- `15-parameter-inspector.png`：去工程黑话后的右侧参数总控台抽屉
-- `16-spatial-mode.png`：画板（Spatial）模式实拍（主按钮自适应新建取景框居首，选区按钮文字为 `生成此选区画板`，提示词标题为 `正向提示词`）
-- `17-spatial-empty-onboarding.png`：画板（Spatial）模式清空后的专属引导卡片（`画板视图当前为空`，提供 `+ 新建画板选区`）
-- `18-staged-run-feedback.png`：图像运行中的分阶段反馈实录（`正在提交...` -> `等待上游`）
+### 改造后实机截图索引（已脱敏归档并纳入版本跟踪：`docs/evidence/2026-11-05/ui/`）
+- [`01-landing.png`](./ui/01-landing.png)：改造后首次打开页面（中文友好节点标题：`画布尺寸设定 (Latent)`、`正向提示词 (CLIP)`、`图像解码器 (VAE Decode)`；中文字段：`图像宽度`、`图像高度`、`生成张数`、`随机种子`、`运行后控制`、`步数`、`采样器`、`调度器`、`去噪强度`）
+- [`02-blank-canvas-onboarding.png`](./ui/02-blank-canvas-onboarding.png)：清空画布后的 6 步新手入门引导卡片
+- [`03-api-settings-enhanced.png`](./ui/03-api-settings-enhanced.png)：改造后的「API 与密钥设置」弹窗（显示实时 ● 已配置 / ○ 未配置、官方 API Key 直达链接）
+- [`04-api-settings-tested.png`](./ui/04-api-settings-tested.png)：测试连通性后的即时透明状态反馈
+- [`05-loaded-standard-workflow.png`](./ui/05-loaded-standard-workflow.png)：在空状态引导卡上一键加载标准工作流
+- [`06-run-result-1.png`](./ui/06-run-result-1.png)：Hugging Face + LoRA 生成运行及透明错误披露
+- [`07-workflow-modal.png`](./ui/07-workflow-modal.png)：工作流与热门模型中心
+- [`08-wavespeed-preset.png`](./ui/08-wavespeed-preset.png)：筛选搜索 WaveSpeed 工作流
+- [`09-wavespeed-loaded.png`](./ui/09-wavespeed-loaded.png)：载入 WaveSpeed + LoRA 标准工作流
+- [`10-wavespeed-run-result.png`](./ui/10-wavespeed-run-result.png)：WaveSpeed + LoRA 真实运行与渐进式错误披露
+- [`11-progressive-disclosure-expanded.png`](./ui/11-progressive-disclosure-expanded.png)：展开查看 WaveSpeed 完整技术诊断细节（服务商 wavespeed、端点 https://api.wavespeed.ai/api/v3/wavespeed-ai/flux-dev-lora、HTTP 400 原文）
+- [`12-novita-loaded.png`](./ui/12-novita-loaded.png)：载入 Novita + 双 LoRA 链工作流
+- [`13-novita-run-result.png`](./ui/13-novita-run-result.png)：Novita + 双 LoRA 真实运行结果披露（HTTP 403 余额不足）
+- [`14-history-modal.png`](./ui/14-history-modal.png)：优化后的生成历史弹窗（已纠正空状态文案与语义）
+- [`15-parameter-inspector.png`](./ui/15-parameter-inspector.png)：去工程黑话后的右侧参数总控台抽屉（纯中文提示词工作台标题）
+- [`16-spatial-mode.png`](./ui/16-spatial-mode.png)：画板（Spatial）模式实拍（主按钮自适应新建取景框居首，选区按钮文字为 `生成此选区画板`，提示词标题为 `正向提示词`，右侧抽屉提示词标题纯中文）
+- [`17-spatial-empty-onboarding.png`](./ui/17-spatial-empty-onboarding.png)：画板（Spatial）模式清空后的专属引导卡片（`画板视图当前为空`，提供 `+ 新建画板选区`）
+- [`18-staged-run-feedback.png`](./ui/18-staged-run-feedback.png)：图像运行中的分阶段反馈实录（`等待上游 (2s)` 与状态栏实时已耗时计时）
 
 ---
 
@@ -217,7 +217,7 @@
   ```
 - **UI 呈现验证**：
   - KSampler 节点摘要显示客观事实：`【wavespeed】HTTP 400: {"code":400,"message":"Insufficient credits. Please top up your account to continue."}`
-  - 展开 `展开完整技术诊断细节` 成功展现调用服务商 `WaveSpeed`、发生时间与原始完整上游响应体（见截图 `11-progressive-disclosure-expanded.png`）。
+  - 展开 `展开完整技术诊断细节` 成功展现调用服务商 `WaveSpeed`、发生时间与原始完整上游响应体（见截图 [`11-progressive-disclosure-expanded.png`](./ui/11-progressive-disclosure-expanded.png)）。
   - 提供 `复制诊断信息` 按钮，点击成功拷贝完整技术诊断报告。
 - **判定结论**：`PASS_BILLING`（真实上游计费响应，无 Mock，无静默降级）
 
@@ -234,14 +234,14 @@
   ```
 - **UI 呈现验证**：
   - KSampler 节点摘要显示客观事实：`【novita】HTTP 403: {"code":403, "reason":"NOT_ENOUGH_BALANCE", "message":"insufficient balance", "metadata":{}}`
-  - 悬浮 Toast 同步显示该详细信息（见截图 `13-novita-run-result.png`）。
+  - 悬浮 Toast 同步显示该详细信息（见截图 [`13-novita-run-result.png`](./ui/13-novita-run-result.png)）。
 - **判定结论**：`PASS_BILLING`（真实上游计费响应，无 Mock，无静默降级）
 
 ---
 
 ## 四、单元测试与自动化验证覆盖
 
-为所有新增与改造的核心逻辑编写了专属测试套件 `src/components/ui6Interactions.test.tsx`（11 个测试用例）：
+为所有新增与改造的核心逻辑编写了专属测试套件 `src/components/ui6Interactions.test.tsx`（13 个测试用例）：
 1. `summarizeErrorMessage`：严格断言遵循 `provider + HTTP status + first line of verbatim body`，无主观因果猜测。
 2. `NodeErrorDisclosure`：断言在提供 endpoint / statusCode 时渲染对应字段，在未提供时不泄露空白行；断言在缺失 key 时显示「去配置密钥」按钮。
 3. `nodeUiLabels`：断言 `formatNodeDisplayTitle`、`formatWidgetLabel`、`formatSocketDisplayName` 正确映射中文。

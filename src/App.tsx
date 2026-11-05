@@ -1220,16 +1220,13 @@ export default function App() {
     setCurrentRunTarget(runTarget ? `${runTarget.title}${runTarget.auto ? '（未选中节点，按输出节点）' : ''}` : null);
     const runStartTime = Date.now();
     setExecutionProgress(5);
-    setExecutionStatusText('正在提交请求 (正在调度模型与权重)...');
+    setExecutionStatusText('正在提交请求至云端服务商...');
     const stagedTimer = setInterval(() => {
       const elapsed = Math.floor((Date.now() - runStartTime) / 1000);
-      if (elapsed >= 1) {
-        setExecutionStatusText((prev) => {
-          if (!prev || prev.includes('完成') || prev.includes('失败')) return prev;
-          const prov = runTarget?.title ? `[${runTarget.title}] ` : '';
-          return `${prov}等待上游返回 (已耗时 ${elapsed}秒)...`;
-        });
-      }
+      setExecutionStatusText((prev) => {
+        if (!prev || prev.includes('完成') || prev.includes('失败')) return prev;
+        return elapsed < 2 ? '正在提交请求至云端服务商...' : `等待上游返回结果 (已耗时 ${elapsed}秒)...`;
+      });
     }, 1000);
     setToast(null); // drop stale global notices from prior hub/search/run
     // New run: clear every prior red banner / error state (local blocks AND prior upstream failures) before starting,
@@ -1301,7 +1298,11 @@ export default function App() {
         handleNodeStateChange,
         (percent, statusText, details) => {
           setExecutionProgress(percent);
-          setExecutionStatusText(statusText);
+          const elapsed = Math.max(1, Math.floor((Date.now() - runStartTime) / 1000));
+          const cleanStatus = statusText.includes('正在向') || statusText.includes('等待渲染')
+            ? (elapsed < 2 ? '正在提交请求至云端服务商...' : `等待上游返回结果 (已耗时 ${elapsed}秒)...`)
+            : statusText;
+          setExecutionStatusText(cleanStatus);
           if (Array.isArray(details?.omissions) && details.omissions.length) {
             workflowOmissions = details.omissions;
             setToast({type:'warning', title:'请求参数未提交项', message:workflowOmissions.map(item => `${item.field}=${item.value}：${item.reason}`).join('；')});
