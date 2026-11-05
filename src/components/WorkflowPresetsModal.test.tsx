@@ -42,6 +42,8 @@ describe('preset modal blocked archives', () => {
     // Upfront requirement badges
     expect(html).toContain('📷 需参考图');
     expect(html).toContain('✍️ 纯文本输入');
+    expect(html).toContain('✍️ 需填写提示词');
+    expect(html).toContain('该预设未预填提示词，载入画布后需填写提示词方可运行');
     // New standard T2V presets rendered
     expect(html).toContain('Fal.ai · 标准文生视频');
     expect(html).toContain('WaveSpeed · 标准文生视频');

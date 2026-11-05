@@ -121,11 +121,12 @@ describe('standard workflow presets (23 T2I + 5 T2V + 6 I2V)', () => {
       expect(p.nodes.some(n => n.type === 'LoadImage')).toBe(false);
       expect(p.nodes.some(n => n.type === 'AIVideoNode')).toBe(true);
       expect(p.nodes.some(n => n.type === 'SaveVideo')).toBe(true);
+      expect(p.nodes.some(n => n.type === 'LoRALoader')).toBe(false);
       const vid = p.nodes.find(n => n.type === 'AIVideoNode')!;
       expect(vid.values.targetProvider).toBe(p.provider);
       expect(vid.values.require_reference_image).toBe(false);
       expect(typeof vid.values.model).toBe('string');
-      expect(vid.values.prompt).toBe(PRESET_RECIPE_PROMPTS[p.id]?.prompt ?? '');
+      expect(vid.values.prompt).toBe('');
     }
   });
 

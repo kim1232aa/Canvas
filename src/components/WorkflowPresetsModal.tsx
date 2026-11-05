@@ -22,6 +22,7 @@ import {
   Cpu,
   Info,
   Database,
+  FileText,
 } from 'lucide-react';
 import { WORKFLOW_PRESETS, presetSummary } from '../constants/presets';
 import { NODE_DEFINITIONS } from '../constants/nodes';
@@ -704,6 +705,9 @@ export const WorkflowPresetsModal: React.FC<WorkflowPresetsModalProps> = ({
                     || '';
                   const needsReferenceImage = preset.nodes.some(n => n.values.require_reference_image)
                     || Boolean(preset.spatialFrames?.some(f => f.params.requireReferenceImage && !f.referenceImageUrl));
+                  const hasPrompt = Boolean(preset.spatialFrames?.[0]?.prompt?.trim())
+                    || preset.nodes.some(n => (n.type === 'CLIPTextEncode' && Boolean(String(n.values.text || '').trim())) || (n.type === 'AIVideoNode' && Boolean(String(n.values.prompt || '').trim())));
+                  const needsPrompt = !hasPrompt;
                   const blockedReason = configBlockedReason
                     || (needsReferenceImage ? '请先载入并选择参考图。' : '');
                   const keyConfigured = providerKeyConfigured(keyStatusMap, preset.provider);
@@ -740,6 +744,11 @@ export const WorkflowPresetsModal: React.FC<WorkflowPresetsModalProps> = ({
                           ) : (
                             <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-slate-900/80 text-slate-300 border border-slate-700/60 backdrop-blur-md">
                               ✍️ 纯文本输入
+                            </span>
+                          )}
+                          {needsPrompt && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-amber-950/80 text-amber-300 border border-amber-700/60 backdrop-blur-md">
+                              ✍️ 需填写提示词
                             </span>
                           )}
                         </div>
@@ -783,6 +792,12 @@ export const WorkflowPresetsModal: React.FC<WorkflowPresetsModalProps> = ({
                           <div className="p-2 rounded-xl bg-cyan-950/30 border border-cyan-800/40 text-cyan-300 text-[11px] font-mono flex items-center gap-1.5">
                             <Info className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
                             <span>图生视频：须在「加载参考图」放入有效图片后方可执行</span>
+                          </div>
+                        )}
+                        {needsPrompt && (
+                          <div className="p-2 rounded-xl bg-purple-950/30 border border-purple-800/40 text-purple-300 text-[11px] font-mono flex items-center gap-1.5">
+                            <FileText className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                            <span>该预设未预填提示词，载入画布后需填写提示词方可运行</span>
                           </div>
                         )}
 

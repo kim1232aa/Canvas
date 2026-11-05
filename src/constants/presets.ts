@@ -565,8 +565,10 @@ const I2V_SPECS: I2vSpec[] = [
 export type T2vSpec = I2vSpec;
 
 const T2V_SPECS: T2vSpec[] = [
-  // Fal Wan 2.1 T2V + Matrix Bullet Time LoRA.
-  // Live OpenAPI 2026-11-04: loras[LoraWeight{path,scale}], seed, guide_scale, frames_per_second, num_frames, resolution 480p|580p|720p, aspect_ratio 16:9|9:16.
+  // Fal Wan 2.1 T2V: live OpenAPI (2026-11-04) WanT2vLoraInput: prompt (required), negative_prompt, loras[LoraWeight{path,scale}],
+  // seed, frames_per_second (default 16), num_frames (default 81), resolution 480p|580p|720p, aspect_ratio 16:9|9:16.
+  // Note: guide_scale and shift are NOT in the live WanT2vLoraInput schema.
+  // No accepted T2V LoRA recipe exists yet; preset ships clean model endpoint without mismatched I2V LoRAs.
   {
     provider: 'fal',
     model: 'fal-ai/wan-t2v-lora',
@@ -574,59 +576,53 @@ const T2V_SPECS: T2vSpec[] = [
     resolution: '480p',
     aspect_ratio: '16:9',
     fps: 16,
-    seed: 24231881,
-    cfg: 4,
-    loras: [{ name: 'https://huggingface.co/Remade-AI/matrix-shot/resolve/main/matrix_shot.safetensors', strength: 1, source: 'https://civitai.red/images/84050423' }],
     schemaProperties: [
-      'prompt', 'negative_prompt', 'loras', 'seed', 'guide_scale', 'frames_per_second', 'num_frames',
-      'resolution', 'aspect_ratio', 'num_inference_steps', 'shift', 'enable_prompt_expansion', 'reverse_video', 'turbo_mode', 'enable_safety_checker',
+      'prompt', 'negative_prompt', 'loras', 'seed', 'frames_per_second', 'num_frames',
+      'resolution', 'aspect_ratio', 'num_inference_steps', 'enable_prompt_expansion', 'reverse_video', 'turbo_mode', 'enable_safety_checker',
     ],
     source: 'https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/wan-t2v-lora',
   },
-  // WaveSpeed Wan 2.1 T2V 480p LoRA.
-  // Live Schema api.wavespeed.ai/api/v3/models: loras[].path/scale, size ["832*480","480*832"], duration 5|10, guidance_scale, seed.
+  // WaveSpeed Wan 2.1 T2V 480p: live Schema api.wavespeed.ai/api/v3/models: prompt (required), negative_prompt,
+  // loras[].path/scale, size ["832*480","480*832"], duration 5|10, guidance_scale, flow_shift, seed.
+  // Ships clean model endpoint without mismatched I2V LoRAs.
   {
     provider: 'wavespeed',
     model: 'wavespeed-ai/wan-2.1/t2v-480p-lora',
     duration: 5,
-    seed: 24231881,
-    cfg: 4,
     size: '832*480',
-    loras: [{ name: 'https://huggingface.co/Remade-AI/matrix-shot/resolve/main/matrix_shot.safetensors', strength: 1, source: 'https://civitai.red/images/84050423' }],
     schemaProperties: ['prompt', 'negative_prompt', 'loras', 'size', 'num_inference_steps', 'duration', 'guidance_scale', 'flow_shift', 'seed'],
     source: 'https://wavespeed.ai/docs/docs-api/wavespeed-ai/wan-2.1-t2v-480p-lora',
   },
-  // Civitai videoGen wan v2.2 comfy (wan.md: comfy takes loras[{air,strength}]; diffusionModel AIR; width/height; cfgScale; seed).
-  // Official T2V AIR: urn:air:wanvideo-22-t2v-a14b:checkpoint:civitai:1817671@2114154
+  // Civitai videoGen wan v2.2 comfy: Wan Video 2.2 14B Text-to-Video checkpoint (AIR urn:air:wanvideo-22-t2v-a14b:checkpoint:civitai:1817671@2114154).
+  // Ships clean without cross-architecture I2V LoRA.
   {
     provider: 'civitai',
     model: 'urn:air:wanvideo-22-t2v-a14b:checkpoint:civitai:1817671@2114154',
     fps: 24,
-    seed: 1715864103,
     cfg: 3,
     recipeExtra: { width: 832, height: 480, shift: 7 },
     selectors: { engine: 'wan', version: 'v2.2', provider: 'comfy' },
-    loras: [{ name: 'urn:air:wanvideo-22-i2v-a14b:lora:civitai:1902817@2153813', strength: 1, source: 'https://civitai.red/images/111400580' }],
     schemaProperties: [
       'prompt', 'diffusionModel', 'width', 'height', 'cfgScale', 'seed', 'steps', 'fps', 'duration',
       'loras', 'negativePrompt', 'sampler', 'scheduler', 'shift',
     ],
     source: 'https://developer.civitai.com/orchestration/recipes/wan.md',
   },
-  // MuAPI Wan 2.1 T2V LoRA.
-  // Live OpenAPI https://api.muapi.ai/openapi.json WanLoRAT2VRequest: lora_list[LoraItem{path,scale}], duration 5|10, resolution 480p|720p, aspect_ratio 16:9|9:16.
+  // MuAPI Wan 2.1 T2V: live OpenAPI https://api.muapi.ai/openapi.json WanLoRAT2VRequest: prompt (required),
+  // lora_list[LoraItem{path,scale}], duration 5|10, resolution 480p|720p, aspect_ratio 16:9|9:16.
+  // Ships clean model endpoint without mismatched I2V LoRAs.
   {
     provider: 'muapi',
     model: 'wan2.1-lora-t2v',
     duration: 5,
     resolution: '480p',
     aspect_ratio: '16:9',
-    loras: [{ name: 'https://huggingface.co/Remade-AI/matrix-shot/resolve/main/matrix_shot.safetensors', strength: 1, source: 'https://civitai.red/images/84050423' }],
     schemaProperties: ['prompt', 'lora_list', 'aspect_ratio', 'resolution', 'quality', 'duration'],
     source: 'https://api.muapi.ai/openapi.json#/paths/~1api~1v1~1wan2.1-lora-t2v',
   },
   // Replicate Wan 2.1 with LoRA (text-to-video mode: no image input).
-  // Live schema: prompt, negative_prompt, aspect_ratio, frames, resolution, lora_url, lora_strength_model, sample_steps, sample_guide_scale, seed.
+  // Live schema: prompt (required), negative_prompt, aspect_ratio, frames, resolution, lora_url, lora_strength_model, sample_steps, sample_guide_scale, seed.
+  // Ships clean model endpoint without mismatched I2V LoRAs.
   {
     provider: 'replicate',
     model: 'wan-video/wan2.1-with-lora',
@@ -634,9 +630,6 @@ const T2V_SPECS: T2vSpec[] = [
     resolution: '480p',
     aspect_ratio: '16:9',
     recipeExtra: { model: '14b' },
-    seed: 24231881,
-    cfg: 4,
-    loras: [{ name: 'https://huggingface.co/Remade-AI/matrix-shot/resolve/main/matrix_shot.safetensors', strength: 1, source: 'https://civitai.red/images/84050423' }],
     schemaProperties: ['prompt', 'negative_prompt', 'aspect_ratio', 'frames', 'resolution', 'lora_url', 'lora_strength_model', 'lora_strength_clip', 'sample_steps', 'sample_guide_scale', 'sample_shift', 'seed'],
     source: 'https://replicate.com/wan-video/wan2.1-with-lora/api/schema',
   },

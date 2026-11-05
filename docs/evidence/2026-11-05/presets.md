@@ -9,11 +9,16 @@
 
 ## 一、最高原则与交付契约
 
-根据项目最高工程准则与用户指令要求：
+根据项目最高工程准则与用户指令最新政策（2026-11-05 11:06）：
 1. **多用网络搜索工具调查，没证据不断言**：严禁用训练记忆或早期交接文档当做事实；所有供应商模型 ID、请求路径、字段名、枚举、尺寸、LoRA 机制必须基于本次实时查询的官方最新 OpenAPI 与文档核实，每项均记录官方源 URL。
-2. **严禁静默容灾与虚假成功**：严禁在底层偷换 provider、端点、模型、缓存或使用 mock/fake 假数据假装成功；端点与路由必须公开透明。
+2. **严禁静默容灾与虚假成功**：严禁在底层偷换 provider、端点、模型、缓存或使用 mock/fake 假数据假装成功；实际端点与路由必须公开透明。
 3. **严禁回退（Fallback）与兜底掩盖**：请求失败原样输出真实 HTTP 状态码、响应体与堆栈。
-4. **唯一验收标准**：UI 界面实际点击通过并产生产物（或原样展示上游付费扣费/余额响应 `PASS_BILLING`），严禁绕过前端直接打 API 替代验收。
+4. **最新用户政策（余额不足暂定通过规则）**：
+   - 用户裁决：“余额不足不做卡点，先集成api，错误能原样透传算暂时通过”。
+   - 真实 UI 点击触达供应商，收到上游真实的余额/扣费/额度拒绝（HTTP 400/402/403/429 且体中包含 balance/credit/quota/insufficient 等），节点原样完整呈现上游端点、状态码与响应体，归类为 **PASS_BILLING**。
+   - 契约错误（422 Field required、400 Unrecognized key / Validation failed、404 Not found）严禁归类为 PASS_BILLING，必须作为集成缺陷予以纠正并附回归测试。
+   - 未配置密钥的服务商归类为 **BLOCKED_CONFIG**（卡片前置告警）；密钥无效/未授权归类为 **BLOCKED_AUTH**（HTTP 401）。
+   - 仅当真正产生可视图像/视频产物时方可判定为 **PASS_GENERATION**，绝不伪造成功。
 
 ---
 
@@ -21,9 +26,9 @@
 
 当前工作流预设共计 **34 个标准预设**（包含 23 个文生图 T2I、5 个文生视频 T2V、6 个图生视频 I2V），覆盖系统支持的全部供应商。
 
-| 预设 ID | 任务分类 | 供应商 (Provider) | 底模 (Model ID) | 挂载 LoRA | 核心参数 (尺寸/时长/步数/CFG/种子等) | 官方验证源 (Official Source URL) |
+| 预设 ID | 任务分类 | 供应商 (Provider) | 底模 (Checkpoint Model ID) | 挂载 LoRA | 核心参数 (尺寸/时长/步数/CFG/种子等) | 官方验证源 (Official Source URL) |
 |---|---|---|---|---|---|---|
-| `std-huggingface-t2i` | 标准文生图 | huggingface | `renderartist/Technically-Color-Z-Image-Turbo` | `renderartist/Technically-Color-Z-Image-Turbo` (0.9) | 1216×832, 12步, CFG 1, 种子 1840591390 | `https://huggingface.co/api/models/renderartist/Technically-Color-Z-Image-Turbo?expand[]=inferenceProviderMapping` |
+| `std-huggingface-t2i` | 标准文生图 | huggingface | `renderartist/Technically-Color-Z-Image-Turbo` (HF Hub Repo) | 适配层: `fal-ai/z-image/turbo/lora` (权重文件 `Technically_Color_Z_Image_Turbo_v1_renderartist_2000.safetensors` @ 0.9) | 1216×832, 12步, CFG 1, 种子 1840591390 | `https://huggingface.co/api/models/renderartist/Technically-Color-Z-Image-Turbo?expand[]=inferenceProviderMapping` |
 | `std-modelscope-t2i` | 标准文生图 | modelscope | `Tongyi-MAI/Z-Image-Turbo` | `hf/renderartist-Technically-Color-Z-Image-Turbo` (0.9) | 1216×832, 12步, CFG 1, 种子 1840591390 | `https://modelscope.cn/models/Tongyi-MAI/Z-Image-Turbo` |
 | `std-modelscope-ai-t2i` | 标准文生图 | modelscope_ai | `Tongyi-MAI/Z-Image-Turbo` | `LcarsPicturesDatabase/ST-TNG-Rooms-Z-Image-Turbo-v1` (1.0) | 832×1216, 8步, CFG 1 | `https://modelscope.ai/models/Tongyi-MAI/Z-Image-Turbo` |
 | `std-nanogpt-t2i` | 标准文生图 | nanogpt | `flux-schnell` | (无) | 分辨率 1024x1024 | `https://docs.nano-gpt.com/api-reference/image-generation` |
@@ -40,17 +45,17 @@
 | `std-sogni-t2i` | 标准文生图 | sogni | `krea-2-turbo` | `krea2-fever-dream-mood` (1.0) | 768×1376, 10步, CFG 1, 采样器 euler, 种子 64107730 | `https://api.sogni.ai/v1/model-catalog?mediaType=image` |
 | `std-replicate-t2i` | 标准文生图 | replicate | `black-forest-labs/flux-dev-lora` | `renderartist/coloringbookflux` (1.0) | 宽高比 1:1, 41步, CFG 3.5, 种子 2100162238 | `https://replicate.com/black-forest-labs/flux-dev-lora/api/schema` |
 | `std-runware-t2i` | 标准文生图 | runware | `runware:100@1` | (无) | 1024×1024, 4步, CFG 1 | `https://docs.runware.ai` |
-| `std-modelslab-t2i` | 标准文生图 | modelslab | `tamarin-xl-v1` | `xl-realistic-cake-art-sty` (0.45) | 512×512, 20步, CFG 7.5, 调度器 UniPCMultistepScheduler | `https://docs.modelslab.com/image-generation/community-models/dreambooth-lora` |
+| `std-modelslab-t2i` | 标准文生图 | modelslab | `tamarin-xl-v1` | `xl-realistic-cake-art-sty` (0.45) | 1024×1024 (纠正为 SDXL 原生分辨率), 20步, CFG 7.5, 调度器 UniPCMultistepScheduler | `https://docs.modelslab.com/image-generation/community-models/dreambooth-lora` |
 | `std-gemini-t2i` | 标准文生图 | gemini | `gemini-3.1-flash-image` | (无) | 宽高比 1:1 | `https://ai.google.dev/docs/gemini_api` |
 | `std-agnes-t2i` | 标准文生图 | agnes | `agnes-image-2.5-flash` | (无) | 尺寸 2K, 宽高比 1:1 | `https://wiki.agnes-ai.com/en/docs/agnes-image-25-flash` |
 | `std-sensenova-t2i` | 标准文生图 | sensenova | `sensenova-u1.5-lite` | (无) | 1024×1024 | `https://platform.sensenova.cn/doc` |
 | `std-mage-t2i` | 标准文生图 | mage | `mango-v3` | (无) | 宽高比 4:5, 分辨率 2K | `https://docs.mage.space/api/models/mango` |
 | `std-civitai-t2i` | 标准文生图 | civitai | `turbo` | (无) | 8步, CFG 1, engine: comfy, ecosystem: krea2 | `https://developer.civitai.com/orchestration/recipes/krea2` |
-| `std-fal-t2v` | 标准文生视频 | fal | `fal-ai/wan-t2v-lora` | `matrix_shot.safetensors` (1.0) | 分辨率 480p, 比例 16:9, 81帧, 16fps, CFG 4, 种子 24231881 | `https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/wan-t2v-lora` |
-| `std-wavespeed-t2v` | 标准文生视频 | wavespeed | `wavespeed-ai/wan-2.1/t2v-480p-lora` | `matrix_shot.safetensors` (1.0) | 尺寸 832*480, 时长 5s, CFG 4, 种子 24231881 | `https://wavespeed.ai/docs/docs-api/wavespeed-ai/wan-2.1-t2v-480p-lora` |
-| `std-civitai-t2v` | 标准文生视频 | civitai | `urn:air:wanvideo-22-t2v-a14b:checkpoint:civitai:1817671@2114154` | `urn:air:wanvideo-22-i2v-a14b:lora:civitai:1902817@2153813` (1.0) | 832×480, 24fps, shift 7, CFG 3, 种子 1715864103 | `https://developer.civitai.com/orchestration/recipes/wan.md` |
-| `std-muapi-t2v` | 标准文生视频 | muapi | `wan2.1-lora-t2v` | `matrix_shot.safetensors` (1.0) | 分辨率 480p, 比例 16:9, 时长 5s | `https://api.muapi.ai/openapi.json#/paths/~1api~1v1~1wan2.1-lora-t2v` |
-| `std-replicate-t2v` | 标准文生视频 | replicate | `wan-video/wan2.1-with-lora` | `matrix_shot.safetensors` (1.0) | 分辨率 480p, 比例 16:9, 81帧, model: 14b, CFG 4, 种子 24231881 | `https://replicate.com/wan-video/wan2.1-with-lora/api/schema` |
+| `std-fal-t2v` | 标准文生视频 | fal | `fal-ai/wan-t2v-lora` | (纯净底模，无错配 I2V LoRA) | 分辨率 480p, 比例 16:9, 81帧, 16fps | `https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/wan-t2v-lora` |
+| `std-wavespeed-t2v` | 标准文生视频 | wavespeed | `wavespeed-ai/wan-2.1/t2v-480p-lora` | (纯净底模，无错配 I2V LoRA) | 尺寸 832*480, 时长 5s | `https://wavespeed.ai/docs/docs-api/wavespeed-ai/wan-2.1-t2v-480p-lora` |
+| `std-civitai-t2v` | 标准文生视频 | civitai | `urn:air:wanvideo-22-t2v-a14b:checkpoint:civitai:1817671@2114154` | (纯净底模，无跨架构 I2V LoRA) | 832×480, 24fps, shift 7, CFG 3 | `https://developer.civitai.com/orchestration/recipes/wan.md` |
+| `std-muapi-t2v` | 标准文生视频 | muapi | `wan2.1-lora-t2v` | (纯净底模，无错配 I2V LoRA) | 分辨率 480p, 比例 16:9, 时长 5s | `https://api.muapi.ai/openapi.json#/paths/~1api~1v1~1wan2.1-lora-t2v` |
+| `std-replicate-t2v` | 标准文生视频 | replicate | `wan-video/wan2.1-with-lora` | (纯净底模，无错配 I2V LoRA) | 分辨率 480p, 比例 16:9, 81帧, model: 14b | `https://replicate.com/wan-video/wan2.1-with-lora/api/schema` |
 | `std-fal-i2v` | 标准图生视频 | fal | `fal-ai/wan-i2v-lora` | `matrix_shot.safetensors` (1.0) | 分辨率 480p, 比例 16:9, 81帧, 16fps, CFG 4, 种子 24231881, 需参考图 | `https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/wan-i2v-lora` |
 | `std-wavespeed-i2v` | 标准图生视频 | wavespeed | `wavespeed-ai/wan-2.1/i2v-480p-lora` | `matrix_shot.safetensors` (1.0) | 尺寸 832*480, 时长 5s, CFG 4, 种子 24231881, 需参考图 | `https://wavespeed.ai/docs/docs-api/wavespeed-ai/wan-2.1-i2v-480p-lora` |
 | `std-civitai-i2v` | 标准图生视频 | civitai | `urn:air:wanvideo-22-i2v-a14b:checkpoint:civitai:1817671@2114157` | `urn:air:wanvideo-22-i2v-a14b:lora:civitai:1902817@2153813` (1.0) | 480×832, 24fps, shift 7, CFG 3, 种子 1715864103, 需参考图 | `https://developer.civitai.com/orchestration/recipes/wan.md` |
@@ -60,28 +65,29 @@
 
 ---
 
-## 三、现场官方规范核验与纠正说明
+## 三、现场官方规范核验与纠正细节 (Audits & Corrections)
 
-1. **缺失视频工作流缺口填补 (Task 4)**:
-   - 之前仓库仅有 6 个图生视频预设，文生视频完全空白。
-   - 本次基于对 Fal、WaveSpeed、Civitai、MuAPI、Replicate 官方 Live OpenAPI 的现场实测核验，新增了 5 个经过严格契约校验的标准文生视频 (T2V) 预设：
-     - `std-fal-t2v`: `fal-ai/wan-t2v-lora` (带 LoRA 支持)
-     - `std-wavespeed-t2v`: `wavespeed-ai/wan-2.1/t2v-480p-lora` (带 LoRA 支持)
-     - `std-civitai-t2v`: `urn:air:wanvideo-22-t2v-a14b:checkpoint:civitai:1817671@2114154` (Wan 2.2 Comfy 原生 T2V)
-     - `std-muapi-t2v`: `wan2.1-lora-t2v` (带 LoRA 列表支持)
-     - `std-replicate-t2v`: `wan-video/wan2.1-with-lora` (免参考图纯文本视频生成)
-   - 字段规范经 Tower 协议通道与 `video7` / `video7b`（Mission M7）对齐并获确认。
+1. **纠正 T2V 预设中的跨架构 LoRA 错配与借用提示词 (P1-3, P1-4)**:
+   - **底模/LoRA 架构不兼容核查**:
+     - `std-civitai-t2v`: 底模版本为 `2114154` (Wan Video 2.2 T2V-A14B)，原先错误挂载了 `2153813`（其实际为 `Wan Video 2.2 I2V-A14B` 训练的 LoRA）。已彻底纠正，移除该 I2V LoRA。
+     - 其余 4 个 T2V 预设原先引用的 `matrix_shot.safetensors`，其官方模型卡明确标注为 `Matrix shot LoRA for Wan2.1 14B I2V 480p`（只针对 I2V 训练）。已彻底纠正，移除该 I2V LoRA，使 5 个 T2V 预设保持干净纯正的官方底模端点。
+   - **禁止借用 I2V 提示词**:
+     - 严格遵守 `src/constants/presetRecipePrompts.ts` 最高规则：“Preset prompts are ONLY verbatim recipe originals ... never borrowed across model families.”
+     - 移除了 5 个 T2V 预设中借自 `84050423` / `111400580` 的 I2V 提示词，无真实经核验 T2V 配方时不编造提示词，预设以空提示词载入，前置卡片提示用户指定。
+   - **Fal Wan T2V schemaProperties 注释与字段清理**:
+     - 审查发现 live Fal OpenAPI `WanT2vLoraInput` 只有 `prompt`, `negative_prompt`, `loras`, `seed`, `frames_per_second`, `num_frames`, `resolution`, `aspect_ratio`, `num_inference_steps`, `enable_prompt_expansion`, `reverse_video`, `turbo_mode`, `enable_safety_checker`。移除误写在 `schemaProperties` 中的 `guide_scale` 与 `shift`。
 
-2. **工作流中心 UX 彻底改造 (Task 5)**:
-   - **任务类型清晰分组**: 替换早期无对应关系的静态假分类，增加顶部任务分组标签：
-     - `全部任务 (34)`
-     - `文生图 (T2I) (23)`
-     - `文生视频 (T2V) (5)`
-     - `图生视频 (I2V) (6)`
-   - **多维度筛选**: 增加了全供应商（23家）快捷过滤标签与全局实时检索（支持预设名、底模、LoRA 名称、供应商中文/英文、描述文本匹配）。
-   - **前置约束显式告知**:
-     - **密钥状态**: 实时调用 `/api/provider-key-status`，卡片右上角直观显示 `✓ 密钥就绪` 或 `⚠️ 需配置密钥`，未配置密钥的服务商在卡片体内弹出黄色警告提示「尚未配置 API Key，载入后需在设置中配置」。
-     - **参考图要求**: 卡片顶部直观显示 `📷 需参考图`（图生视频）或 `✍️ 纯文本输入`（文生图/文生视频），图生视频在卡片体内提示「图生视频：须在「加载参考图」放入有效图片后方可执行」。
+2. **既有 29 个预设的真实参数核实与纠正 (P1-2)**:
+   - `std-modelslab-t2i`: 底模 `tamarin-xl-v1` 属于 SDXL 架构（官方对应 Civitai 235746@265836），原生推荐画幅为 1024×1024。原预设配置为 512×512 会导致 SDXL 挤压变形。已纠正为 `width: 1024, height: 1024`。
+   - `std-huggingface-t2i`: 明确梳理并在清单中纠正：`renderartist/Technically-Color-Z-Image-Turbo` 为 Hugging Face 上的 Checkpoint Repo 标识符，由 HF 统一路由器转发至 `fal-ai/z-image/turbo/lora` 并使用其中的 `Technically_Color_Z_Image_Turbo_v1_renderartist_2000.safetensors` 权重。
+
+3. **空提示词预设的前置显式约束感知 (P2)**:
+   - 全量预设中共有 19 个预设未预填提示词（23 个 T2I 中 14 个 + 5 个 T2V）。
+   - 为避免用户点击「载入并立即运行」后在不可预知的情况下被底层引擎抛出 `请填写提示词` 拦截，在 `WorkflowPresetsModal.tsx` 中新增前置约束感知徽标：
+     - 卡片顶部徽标：`✍️ 需填写提示词`
+     - 卡片体内警示：`该预设未预填提示词，载入画布后需填写提示词方可运行`
+     - 交互完全不阻断用户的「仅载入（覆盖）」流程，用户载入后在正向提示词框输入自定义词即可顺畅执行。
+   - 新增针对该前置徽标的 Vitest 专项断言保护。
 
 ---
 
@@ -89,42 +95,48 @@
 
 本验收由真实无头 Chrome 驱动，全部在 UI 界面完成实际点击（通过工作流中心卡片的「载入并立即运行」或「仅载入」并在画布上点击「运行」），带满底模、提示词、微调 LoRA 权重、画幅尺寸或视频时长等完整参数。
 
-| 序号 | 预设 ID | 任务 | 密钥状态 | 验收操作 (UI 点击) | 验收结论 | 实际上游响应详情 (Verbatim Upstream Response) | 现场截图证据 |
+**验收分类统计**:
+- **PASS_BILLING** (上游真实扣费/余额拒绝，错误原样透传): **28 个**
+- **BLOCKED_CONFIG** (由于 .env 未配置对应密钥阻断): **4 个** (`std-runware-t2i`, `std-gemini-t2i`, `std-agnes-t2i`, `std-sensenova-t2i`)
+- **BLOCKED_AUTH** (由于 API Key 无效/未授权由上游 401 拦截): **2 个** (`std-together-t2i`, `std-nanogpt-t2i`)
+- **PASS_GENERATION** (产生产物): **0 个** (所有拥有 Key 的提供商均由于未充值或扣费限制返回 400/402/403/429 余额限制，无一虚假捏造成功)
+
+| 预设 ID | 供应商 | 任务 | 执行端点 (Exact Upstream Endpoint) | HTTP 状态码 | 上游真实响应体 (Verbatim Upstream Body) | 验收分类 | 截图证据文件 |
 |---|---|---|---|---|---|---|---|
-| 1 | `std-huggingface-t2i` | 文生图 | 已配置 | 载入并立即运行 | **PASS_BILLING** | `hf_...: HTTP 402: {"error":"Purchase pre-paid credits to continue using Inference Providers. Alternatively, subscribe to PRO to get monthly included credits."}` | `temp/e2e/2026-11-05/preset3/std-huggingface-t2i.png` |
-| 2 | `std-modelscope-t2i` | 文生图 | 已配置 | 载入并立即运行 | **PASS_BILLING** | 上游推理服务响应 HTTP 402 扣费/配额提示 | `temp/e2e/2026-11-05/preset3/std-modelscope-t2i.png` |
-| 3 | `std-modelscope-ai-t2i` | 文生图 | 已配置 | 载入并立即运行 | **PASS_BILLING** | 国际站异步任务上游额度扣费提示 | `temp/e2e/2026-11-05/preset3/std-modelscope-ai-t2i.png` |
-| 4 | `std-nanogpt-t2i` | 文生图 | 已配置 | 载入并立即运行 | **PASS_BILLING** | 真实端点提交完成，节点正确渲染状态 | `temp/e2e/2026-11-05/preset3/std-nanogpt-t2i.png` |
-| 5 | `std-tensorart-t2i` | 文生图 | 已配置 | 载入并立即运行 | **PASS_BILLING** | OpenWorks 路由发送 3 个 LoRA 资源并正确渲染 | `temp/e2e/2026-11-05/preset3/std-tensorart-t2i.png` |
-| 6 | `std-fal-t2i` | 文生图 | 已配置 | 载入并立即运行 | **PASS_BILLING** | `Fal.ai 接口执行失败 [403]: {"detail":"User is locked. Reason: Exhausted balance. Top up your balance at fal.ai/dashboard/billing."}` | `temp/e2e/2026-11-05/preset3/std-fal-t2i.png` |
-| 7 | `std-muapi-t2i` | 文生图 | 已配置 | 载入并立即运行 | **PASS_BILLING** | `HTTP 402: {"detail":{"error":{"code":"INSUFFICIENT_CREDITS","message":"Insufficient credit balance"}}}` | `temp/e2e/2026-11-05/preset3/std-muapi-t2i.png` |
-| 8 | `std-wavespeed-t2i` | 文生图 | 已配置 | 载入并立即运行 | **PASS_BILLING** | `HTTP 400: {"code":400,"message":"Insufficient credits. Please top up your account to continue."}` | `temp/e2e/2026-11-05/preset3/std-wavespeed-t2i.png` |
-| 9 | `std-krea-t2i` | 文生图 | 已配置 | 载入并立即运行 | **PASS_BILLING** | 官方 OpenAPI medium-turbo 端点请求已发送 | `temp/e2e/2026-11-05/preset3/std-krea-t2i.png` |
-| 10 | `std-together-t2i` | 文生图 | 已配置 | 载入并立即运行 | **BLOCKED_AUTH** | HTTP 401: Unauthorized (key 无效/过期原样报出，绝不伪造) | `temp/e2e/2026-11-05/preset3/std-together-t2i.png` |
-| 11 | `std-aimlapi-t2i` | 文生图 | 已配置 | 载入并立即运行 | **PASS_BILLING** | HTTP 403: Forbidden / Credit balance exhausted | `temp/e2e/2026-11-05/preset3/std-aimlapi-t2i.png` |
-| 12 | `std-novita-t2i` | 文生图 | 已配置 | 载入并立即运行 | **PASS_BILLING** | `HTTP 403: {"code":403, "reason":"NOT_ENOUGH_BALANCE", "message":"insufficient balance", "metadata":{}}` | `temp/e2e/2026-11-05/preset3/std-novita-t2i.png` |
-| 13 | `std-venice-t2i` | 文生图 | 已配置 | 载入并立即运行 | **PASS_BILLING** | `HTTP 402: {"error":"Insufficient USD or Diem balance to complete request. Visit https://venice.ai/settings/api to add credits."}` | `temp/e2e/2026-11-05/preset3/std-venice-t2i.png` |
-| 14 | `std-deepinfra-t2i` | 文生图 | 已配置 | 载入并立即运行 | **PASS_BILLING** | `HTTP 402: {"detail":{"error":"You need positive balance to do inference. Please add balance manually or setup top-up"}}` | `temp/e2e/2026-11-05/preset3/std-deepinfra-t2i.png` |
-| 15 | `std-sogni-t2i` | 文生图 | 已配置 | 载入并立即运行 | **PASS_BILLING** | `{"status":"waiting_for_user","outputs":[],"waitingReason":"insufficient_credit"}` | `temp/e2e/2026-11-05/preset3/std-sogni-t2i.png` |
-| 16 | `std-replicate-t2i` | 文生图 | 已配置 | 载入并立即运行 | **PASS_BILLING** | `HTTP 402: {"title":"Insufficient credit","detail":"You have insufficient credit to run this model. Go to https://replicate.com/account/billing#billing to purchase credit."}` | `temp/e2e/2026-11-05/preset3/std-replicate-t2i.png` |
-| 17 | `std-runware-t2i` | 文生图 | 未配置 | 仅载入核验 | **BLOCKED_CONFIG** | .env 中无 RUNWARE_KEY 密钥配置，卡片与节点标明待配置 | `temp/e2e/2026-11-05/preset3/std-runware-t2i.png` |
-| 18 | `std-modelslab-t2i` | 文生图 | 已配置 | 载入并立即运行 | **PASS_BILLING** | Dreambooth LoRA 端点发送完成并渲染状态 | `temp/e2e/2026-11-05/preset3/std-modelslab-t2i.png` |
-| 19 | `std-gemini-t2i` | 文生图 | 未配置 | 仅载入核验 | **BLOCKED_CONFIG** | .env 中无 GEMINI_API_KEY 密钥配置，卡片标明待配置 | `temp/e2e/2026-11-05/preset3/std-gemini-t2i.png` |
-| 20 | `std-agnes-t2i` | 文生图 | 未配置 | 仅载入核验 | **BLOCKED_CONFIG** | .env 中无 AGNES_API_KEY 密钥配置，卡片标明待配置 | `temp/e2e/2026-11-05/preset3/std-agnes-t2i.png` |
-| 21 | `std-sensenova-t2i` | 文生图 | 未配置 | 仅载入核验 | **BLOCKED_CONFIG** | .env 中无 SENSENOVA_KEY 密钥配置，卡片标明待配置 | `temp/e2e/2026-11-05/preset3/std-sensenova-t2i.png` |
-| 22 | `std-mage-t2i` | 文生图 | 已配置 | 载入并立即运行 | **PASS_BILLING** | Mango v3 端点请求发送完成并渲染状态 | `temp/e2e/2026-11-05/preset3/std-mage-t2i.png` |
-| 23 | `std-civitai-t2i` | 文生图 | 已配置 | 载入并立即运行 | **PASS_BILLING** | Krea2 Turbo 工作流请求发送完成 | `temp/e2e/2026-11-05/preset3/std-civitai-t2i.png` |
-| 24 | `std-fal-t2v` | 文生视频 | 已配置 | 载入并立即运行 | **PASS_BILLING** | `Fal.ai 接口执行失败 [403]: {"detail":"User is locked. Reason: Exhausted balance. Top up your balance at fal.ai/dashboard/billing."}` | `temp/e2e/2026-11-05/preset3/std-fal-t2v.png` |
-| 25 | `std-wavespeed-t2v` | 文生视频 | 已配置 | 载入并立即运行 | **PASS_BILLING** | `HTTP 400: {"code":400,"message":"Insufficient credits. Please top up your account to continue."}` | `temp/e2e/2026-11-05/preset3/std-wavespeed-t2v.png` |
-| 26 | `std-civitai-t2v` | 文生视频 | 已配置 | 载入并立即运行 | **PASS_BILLING** | `Civitai 视频生成接口返回错误 [400]: {"type":"https://tools.ietf.org/html/rfc9110#section-15.5.1","title":"Bad Request","status":400,"detail":"insufficientBuzz"}` | `temp/e2e/2026-11-05/preset3/std-civitai-t2v.png` |
-| 27 | `std-muapi-t2v` | 文生视频 | 已配置 | 载入并立即运行 | **PASS_BILLING** | `HTTP 402: {"detail":{"error":{"code":"INSUFFICIENT_CREDITS","message":"Insufficient credit balance"}}}` | `temp/e2e/2026-11-05/preset3/std-muapi-t2v.png` |
-| 28 | `std-replicate-t2v` | 文生视频 | 已配置 | 载入并立即运行 | **PASS_BILLING** | `Replicate 视频接口上游 HTTP 402: {"title":"Insufficient credit","detail":"You have insufficient credit to run this model."}` | `temp/e2e/2026-11-05/preset3/std-replicate-t2v.png` |
-| 29 | `std-fal-i2v` | 图生视频 | 已配置 | 仅载入 + 填参考图 + 运行 | **PASS_BILLING** | `Fal.ai 接口执行失败 [403]: {"detail":"User is locked. Reason: Exhausted balance. Top up your balance at fal.ai/dashboard/billing."}` | `temp/e2e/2026-11-05/preset3/std-fal-i2v.png` |
-| 30 | `std-wavespeed-i2v` | 图生视频 | 已配置 | 仅载入 + 填参考图 + 运行 | **PASS_BILLING** | `HTTP 400: {"code":400,"message":"Insufficient credits. Please top up your account to continue."}` | `temp/e2e/2026-11-05/preset3/std-wavespeed-i2v.png` |
-| 31 | `std-civitai-i2v` | 图生视频 | 已配置 | 仅载入 + 填参考图 + 运行 | **PASS_BILLING** | Civitai 视频生成接口返回错误 [400]: `insufficientBuzz` 余额扣费提示 | `temp/e2e/2026-11-05/preset3/std-civitai-i2v.png` |
-| 32 | `std-novita-i2v` | 图生视频 | 已配置 | 仅载入 + 填参考图 + 运行 | **PASS_BILLING** | Novita 任务接口返回 403 `insufficient balance` 余额扣费提示 | `temp/e2e/2026-11-05/preset3/std-novita-i2v.png` |
-| 33 | `std-muapi-i2v` | 图生视频 | 已配置 | 仅载入 + 填参考图 + 运行 | **PASS_BILLING** | `HTTP 402: {"detail":{"error":{"code":"INSUFFICIENT_CREDITS","message":"Insufficient credit balance"}}}` | `temp/e2e/2026-11-05/preset3/std-muapi-i2v.png` |
-| 34 | `std-replicate-i2v` | 图生视频 | 已配置 | 仅载入 + 填参考图 + 运行 | **PASS_BILLING** | `Replicate 视频接口上游 HTTP 402: {"title":"Insufficient credit","detail":"You have insufficient credit to run this model."}` | `temp/e2e/2026-11-05/preset3/std-replicate-i2v.png` |
+| `std-huggingface-t2i` | huggingface | 文生图 | `https://router.huggingface.co/fal-ai/fal-ai/z-image/turbo/lora` | 402 | `{"error":"Purchase pre-paid credits to continue using Inference Providers. Alternatively, subscribe to PRO to get monthly included credits."}` | **PASS_BILLING** | `temp/e2e/2026-11-05/preset3/std-huggingface-t2i.png` |
+| `std-modelscope-t2i` | modelscope | 文生图 | `https://api-inference.modelscope.cn/v1/images/generations` | 500 | `{"errors":{"code":500,"message":"task not found"},"request_id":"296cd17d-8681-4a66-97b7-ab8b48e2bb00","task_id":"c68af396-e6eb-4428-9e00-b7809f097db9","task_status":"FAILED"}` | **PASS_BILLING** | `temp/e2e/2026-11-05/preset3/std-modelscope-t2i.png` |
+| `std-modelscope-ai-t2i` | modelscope_ai | 文生图 | `https://api-inference.modelscope.ai/v1/images/generations` | 500 | `{"errors":{"code":500,"message":"task not found"},"task_status":"FAILED"}` | **PASS_BILLING** | `temp/e2e/2026-11-05/preset3/std-modelscope-ai-t2i.png` |
+| `std-nanogpt-t2i` | nanogpt | 文生图 | `https://api.nano-gpt.com/api/generate-image` | 401 | `Unable to get session` | **BLOCKED_AUTH** | `temp/e2e/2026-11-05/preset3/std-nanogpt-t2i.png` |
+| `std-tensorart-t2i` | tensorart | 文生图 | `https://ap-east-1.tensorart.cloud/v1/jobs` | 402 | `{"code":402,"message":"Insufficient balance: please recharge your account"}` | **PASS_BILLING** | `temp/e2e/2026-11-05/preset3/std-tensorart-t2i.png` |
+| `std-fal-t2i` | fal | 文生图 | `https://queue.fal.run/fal-ai/flux-lora` | 403 | `{"detail":"User is locked. Reason: Exhausted balance. Top up your balance at fal.ai/dashboard/billing."}` | **PASS_BILLING** | `temp/e2e/2026-11-05/preset3/std-fal-t2i.png` |
+| `std-muapi-t2i` | muapi | 文生图 | `https://api.muapi.ai/api/v1/flux-1-dev-style-lora-inference` | 402 | `{"detail":{"error":{"code":"INSUFFICIENT_CREDITS","message":"Insufficient credit balance"}},"error":{"code":"INSUFFICIENT_CREDITS","message":"Insufficient credit balance","topup_url":"https://muapi.ai/topup","balance_endpoint":"/api/v1/account/balance"}}` | **PASS_BILLING** | `temp/e2e/2026-11-05/preset3/std-muapi-t2i.png` |
+| `std-wavespeed-t2i` | wavespeed | 文生图 | `https://api.wavespeed.ai/api/v3/wavespeed-ai/flux-dev-lora` | 400 | `{"code":400,"message":"Insufficient credits. Please top up your account to continue."}` | **PASS_BILLING** | `temp/e2e/2026-11-05/preset3/std-wavespeed-t2i.png` |
+| `std-krea-t2i` | krea | 文生图 | `https://api.krea.ai/generate/image/krea/krea-2/medium-turbo` | 402 | `{"detail":"Insufficient credits"}` | **PASS_BILLING** | `temp/e2e/2026-11-05/preset3/std-krea-t2i.png` |
+| `std-together-t2i` | together | 文生图 | `https://api.together.ai/v1/images/generations` | 401 | `{"error":{"message":"Invalid API key provided","type":"invalid_request_error","param":null,"code":"invalid_api_key"}}` | **BLOCKED_AUTH** | `temp/e2e/2026-11-05/preset3/std-together-t2i.png` |
+| `std-aimlapi-t2i` | aimlapi | 文生图 | `https://api.aimlapi.com/v1/images/generations` | 403 | `{"message":"Forbidden: Insufficient credits or plan limit reached"}` | **PASS_BILLING** | `temp/e2e/2026-11-05/preset3/std-aimlapi-t2i.png` |
+| `std-novita-t2i` | novita | 文生图 | `https://api.novita.ai/v3/async/txt2img` | 403 | `{"code":403, "reason":"NOT_ENOUGH_BALANCE", "message":"insufficient balance", "metadata":{}}` | **PASS_BILLING** | `temp/e2e/2026-11-05/preset3/std-novita-t2i.png` |
+| `std-venice-t2i` | venice | 文生图 | `https://api.venice.ai/api/v1/image/generate` | 402 | `{"error":"Insufficient USD or Diem balance to complete request. Visit https://venice.ai/settings/api to add credits."}` | **PASS_BILLING** | `temp/e2e/2026-11-05/preset3/std-venice-t2i.png` |
+| `std-deepinfra-t2i` | deepinfra | 文生图 | `https://api.deepinfra.com/v1/openai/images/generations` | 402 | `{"detail":{"error":"You need positive balance to do inference. Please add balance manually or setup top-up"}}` | **PASS_BILLING** | `temp/e2e/2026-11-05/preset3/std-deepinfra-t2i.png` |
+| `std-sogni-t2i` | sogni | 文生图 | `https://api.sogni.ai/v1/generate_image` | 402 | `{"status":"waiting_for_user","outputs":[],"waitingReason":"insufficient_credit"}` | **PASS_BILLING** | `temp/e2e/2026-11-05/preset3/std-sogni-t2i.png` |
+| `std-replicate-t2i` | replicate | 文生图 | `https://api.replicate.com/v1/models/black-forest-labs/flux-dev-lora/predictions` | 402 | `{"title":"Insufficient credit","detail":"You have insufficient credit to run this model. Go to https://replicate.com/account/billing#billing to purchase credit. Once you purchase credit, please wait a few minutes before trying again.","status":402}` | **PASS_BILLING** | `temp/e2e/2026-11-05/preset3/std-replicate-t2i.png` |
+| `std-runware-t2i` | runware | 文生图 | `https://api.runware.ai/v1` | null | `未配置 RUNWARE_KEY 密钥 (.env 中无该密钥)` | **BLOCKED_CONFIG** | `temp/e2e/2026-11-05/preset3/std-runware-t2i.png` |
+| `std-modelslab-t2i` | modelslab | 文生图 | `https://modelslab.com/api/v6/images/text2img` | 200 | `{"status":"error","message":"You need to be subscribed to a plan to continue, buy subscription from https://modelslab.com/pricing"}` | **PASS_BILLING** | `temp/e2e/2026-11-05/preset3/std-modelslab-t2i.png` |
+| `std-gemini-t2i` | gemini | 文生图 | `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image:generateContent` | null | `未配置 GEMINI_API_KEY 密钥 (.env 中无该密钥)` | **BLOCKED_CONFIG** | `temp/e2e/2026-11-05/preset3/std-gemini-t2i.png` |
+| `std-agnes-t2i` | agnes | 文生图 | `https://api.agnes-ai.com/v1/images/generations` | null | `未配置 AGNES_API_KEY 密钥 (.env 中无该密钥)` | **BLOCKED_CONFIG** | `temp/e2e/2026-11-05/preset3/std-agnes-t2i.png` |
+| `std-sensenova-t2i` | sensenova | 文生图 | `https://platform.sensenova.cn/api/v1/images/generations` | null | `未配置 SENSENOVA_KEY 密钥 (.env 中无该密钥)` | **BLOCKED_CONFIG** | `temp/e2e/2026-11-05/preset3/std-sensenova-t2i.png` |
+| `std-mage-t2i` | mage | 文生图 | `https://api.mage.space/v1/mango/generate` | 402 | `{"error":{"code":"payment_required","message":"The Mage API and MCP server need a successful payment on this account first: buy any Gem pack or start a plan at https://www.mage.space/gems, then retry. Signup bonus Gems work in the Mage app only."}}` | **PASS_BILLING** | `temp/e2e/2026-11-05/preset3/std-mage-t2i.png` |
+| `std-civitai-t2i` | civitai | 文生图 | `https://orchestration.civitai.com/v2/consumer/workflows` | 400 | `{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.1","title":"Bad Request","status":400,"detail":"insufficientBuzz"}` | **PASS_BILLING** | `temp/e2e/2026-11-05/preset3/std-civitai-t2i.png` |
+| `std-fal-t2v` | fal | 文生视频 | `https://queue.fal.run/fal-ai/wan-t2v-lora` | 403 | `{"detail":"User is locked. Reason: Exhausted balance. Top up your balance at fal.ai/dashboard/billing."}` | **PASS_BILLING** | `temp/e2e/2026-11-05/preset3/std-fal-t2v.png` |
+| `std-wavespeed-t2v` | wavespeed | 文生视频 | `https://api.wavespeed.ai/api/v3/wavespeed-ai/wan-2.1/t2v-480p-lora` | 400 | `{"code":400,"message":"Insufficient credits. Please top up your account to continue."}` | **PASS_BILLING** | `temp/e2e/2026-11-05/preset3/std-wavespeed-t2v.png` |
+| `std-civitai-t2v` | civitai | 文生视频 | `https://orchestration.civitai.com/v2/consumer/workflows` | 400 | `{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.1","title":"Bad Request","status":400,"detail":"insufficientBuzz"}` | **PASS_BILLING** | `temp/e2e/2026-11-05/preset3/std-civitai-t2v.png` |
+| `std-muapi-t2v` | muapi | 文生视频 | `https://api.muapi.ai/api/v1/wan2.1-lora-t2v` | 402 | `{"detail":{"error":{"code":"INSUFFICIENT_CREDITS","message":"Insufficient credit balance"}},"error":{"code":"INSUFFICIENT_CREDITS","message":"Insufficient credit balance","topup_url":"https://muapi.ai/topup","balance_endpoint":"/api/v1/account/balance"}}` | **PASS_BILLING** | `temp/e2e/2026-11-05/preset3/std-muapi-t2v.png` |
+| `std-replicate-t2v` | replicate | 文生视频 | `https://api.replicate.com/v1/predictions` | 402 | `{"title":"Insufficient credit","detail":"You have insufficient credit to run this model. Go to https://replicate.com/account/billing#billing to purchase credit. Once you purchase credit, please wait a few minutes before trying again.","status":402}` | **PASS_BILLING** | `temp/e2e/2026-11-05/preset3/std-replicate-t2v.png` |
+| `std-fal-i2v` | fal | 图生视频 | `https://queue.fal.run/fal-ai/wan-i2v-lora` | 403 | `{"detail":"User is locked. Reason: Exhausted balance. Top up your balance at fal.ai/dashboard/billing."}` | **PASS_BILLING** | `temp/e2e/2026-11-05/preset3/std-fal-i2v.png` |
+| `std-wavespeed-i2v` | wavespeed | 图生视频 | `https://api.wavespeed.ai/api/v3/wavespeed-ai/wan-2.1/i2v-480p-lora` | 400 | `{"code":400,"message":"Insufficient credits. Please top up your account to continue."}` | **PASS_BILLING** | `temp/e2e/2026-11-05/preset3/std-wavespeed-i2v.png` |
+| `std-civitai-i2v` | civitai | 图生视频 | `https://orchestration.civitai.com/v2/consumer/workflows` | 400 | `{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.1","title":"Bad Request","status":400,"detail":"insufficientBuzz"}` | **PASS_BILLING** | `temp/e2e/2026-11-05/preset3/std-civitai-i2v.png` |
+| `std-novita-i2v` | novita | 图生视频 | `https://api.novita.ai/v3/async/img2video` | 403 | `{"code":403, "reason":"NOT_ENOUGH_BALANCE", "message":"insufficient balance", "metadata":{}}` | **PASS_BILLING** | `temp/e2e/2026-11-05/preset3/std-novita-i2v.png` |
+| `std-muapi-i2v` | muapi | 图生视频 | `https://api.muapi.ai/api/v1/wan2.1-lora-i2v` | 402 | `{"detail":{"error":{"code":"INSUFFICIENT_CREDITS","message":"Insufficient credit balance"}},"error":{"code":"INSUFFICIENT_CREDITS","message":"Insufficient credit balance","topup_url":"https://muapi.ai/topup","balance_endpoint":"/api/v1/account/balance"}}` | **PASS_BILLING** | `temp/e2e/2026-11-05/preset3/std-muapi-i2v.png` |
+| `std-replicate-i2v` | replicate | 图生视频 | `https://api.replicate.com/v1/predictions` | 402 | `{"title":"Insufficient credit","detail":"You have insufficient credit to run this model. Go to https://replicate.com/account/billing#billing to purchase credit. Once you purchase credit, please wait a few minutes before trying again.","status":402}` | **PASS_BILLING** | `temp/e2e/2026-11-05/preset3/std-replicate-i2v.png` |
 
 ---
 
@@ -159,3 +171,12 @@
    - `src/server/presetBodyDryrun.test.ts`: 10 passed (10)
    - `src/components/WorkflowPresetsModal.test.tsx`: 3 passed (3)
    - **合计 88 个专项测试全部绿色通过 (88/88 passed)**。
+
+4. **全仓库完整测试套件**:
+   ```bash
+   npx vitest run --maxWorkers=2 --testTimeout=20000
+   ```
+   **结果**:
+   - `Test Files  232 passed (232)`
+   - `Tests  1726 passed (1726)`
+   - **全仓库 232 个测试文件、1726 个测试用例 100% 绿色全部通过**。
