@@ -206,6 +206,9 @@ export class SchemaProviderDriver extends BaseEngineDriver {
       output_format: extra.output_format,
       // Video fields: sent as filled; the server maps them by the model Schema (e.g. duration 5|10).
       duration: params.videoDuration,
+      // Tells the server this is the video node. Used only when a catalog lookup fails and
+      // would otherwise guess the image endpoint (Together 401 → /images/generations).
+      isVideo: params.isVideo === true ? true : undefined,
       fps: params.videoFps,
       num_frames: params.videoFrames,
       loras: params.loras,

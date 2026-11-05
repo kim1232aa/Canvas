@@ -1149,7 +1149,11 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
     if(provider==='together') {
       const {rows,sourceUrl}=await listForSchema(req,provider,credential);
       const entry:any=rows.find((x:any)=>x.id===model) ?? {id:model,notInCatalog:true}; // not in catalog: send the user's model id; upstream decides
-      const isVideo=entry.type==='video' || entry.category==='text-to-video';
+      // A failed catalog (401/403) returns no rows, so `entry` is the placeholder and has no type.
+      // Guessing the image endpoint would send a video model to /images/generations. The video node
+      // declares itself with isVideo; only then, and only when the catalog gave no answer, use /videos.
+      const catalogSilent=rows.length===0 && Boolean(catalogFailures.get(req));
+      const isVideo=entry.type==='video' || entry.category==='text-to-video' || (catalogSilent && req.body?.isVideo===true);
       const endpoint=isVideo?(schemaProviders.together as any).videoRoot+'/videos':schemaProviders.together.root+'/images/generations';
       const specUrl=officialOpenApiSources.together;const opPath=isVideo?'/videos':'/images/generations';
       const inputSchema=openApiPathRequestSchema(await readOfficialSpec(req,provider,'Together',model,specUrl),opPath);
@@ -1294,7 +1298,9 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
       const model=String(req.body.model || '').trim();if(!model)return res.status(400).json({error:'请选择模型',errorSource:'local'});
       const credential=credentials(req,provider,{create:true});
       const remembered=schemaReads.get(schemaReadKey(provider,model,credential));
-      if(remembered){definition=remembered.definition;schemaRead={fetched:false,reused:true,readAt:remembered.readAt,reusedFrom:'/api/model-schema',note:'复用，未重新请求'};}
+      // A remembered image route from a failed catalog (no rows, so no type) must not be reused for a video node.
+      const rememberedUsable=remembered && !(remembered.definition?.catalogLookupFailure && req.body?.isVideo===true && remembered.definition?.mediaKind!=='video');
+      if(rememberedUsable){definition=remembered.definition;schemaRead={fetched:false,reused:true,readAt:remembered.readAt,reusedFrom:'/api/model-schema',note:'复用，未重新请求'};}
       else{schemaRead={fetched:true,readAt:new Date().toISOString()};definition=await modelSchema(req,provider,model,credential);if(!definition.catalogLookupFailure)schemaReads.set(schemaReadKey(provider,model,credential),{definition,readAt:schemaRead.readAt});}
       schemaLoaded=true;
       const custom={...req.body.custom_parameters};const canvas=custom._canvas || {};const only=canvas.parametersOnly===true;const schemaFieldsOnly=canvas.schemaFieldsOnly!==false;delete custom._canvas;
