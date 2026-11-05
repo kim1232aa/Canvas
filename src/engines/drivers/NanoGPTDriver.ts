@@ -22,44 +22,57 @@ export class NanoGPTDriver extends BaseEngineDriver {
 
     const isVideo = Boolean(params.isVideo || params.videoDuration != null);
     if (isVideo) {
-      const resp = await fetch('/api/video/generate', {
+      // Official NanoGPT Video API (https://docs.nano-gpt.com/api-reference/endpoint/video-generation):
+      // Supported fields: model, prompt, imageUrl (image_url), duration, aspect_ratio, seed.
+      // Steps, cfg, sampler_name, scheduler are not in the official specification and are omitted.
+      const videoPayload: Record<string, any> = {
+        workflowSnapshot: params.workflowSnapshot,
+        custom_parameters: params.extraParams?.custom_parameters,
+        prompt: params.prompt,
+        model: params.model,
+        provider: 'nanogpt',
+      };
+      if (params.aspectRatio) videoPayload.aspect_ratio = params.aspectRatio;
+      if (params.image_url) videoPayload.image_url = params.image_url;
+      if (params.seed != null) videoPayload.seed = params.seed;
+      if (params.videoDuration != null) videoPayload.duration = params.videoDuration;
+
+      const endpoint = '/api/video/generate';
+      const resp = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...(effectiveKey ? { 'x-nanogpt-key': effectiveKey } : {}),
         },
-        body: JSON.stringify({
-          workflowSnapshot: params.workflowSnapshot,
-          custom_parameters: params.extraParams?.custom_parameters,
-          prompt: params.prompt,
-          model: params.model,
-          provider: 'nanogpt',
-          aspect_ratio: params.aspectRatio,
-          image_url: params.image_url,
-          seed: params.seed,
-          duration: params.videoDuration,
-          negative_prompt: params.negative_prompt,
-          steps: params.steps,
-          cfg: params.cfg,
-          sampler_name: params.sampler_name,
-          scheduler: params.scheduler,
-        }),
+        body: JSON.stringify(videoPayload),
       });
 
       if (!resp.ok) {
-        const err = await resp.json().catch(() => ({ error: 'NanoGPT 视频生成失败' }));
-        throw new Error(err.details || err.error || `NanoGPT 视频失败 (${resp.status})`);
+        const rawBody = await resp.text().catch(() => '');
+        let errMessage = `NanoGPT 视频路由 ${endpoint} 返回 HTTP ${resp.status}: ${rawBody}`;
+        try {
+          const errObj = JSON.parse(rawBody);
+          const detail = errObj.details || errObj.error;
+          if (detail) {
+            errMessage = `NanoGPT 视频路由 ${endpoint} 返回 HTTP ${resp.status}: ${typeof detail === 'object' ? JSON.stringify(detail) : detail}`;
+          }
+        } catch {}
+        throw new Error(errMessage);
       }
 
       const vData = await resp.json();
+      if (!vData.videoUrl) {
+        throw new Error(`NanoGPT 视频路由返回缺少 videoUrl: ${JSON.stringify(vData)}`);
+      }
+
       return {
-        mediaUrl: vData.videoUrl || vData.mediaUrl,
+        mediaUrl: vData.videoUrl,
         mediaType: 'video',
-        provider: vData.provider || this.name,
+        provider: vData.provider,
         providerId: this.id,
-        model: vData.model || params.model,
-        actualModel: vData.actualModel || vData.model || params.model,
-        actualProvider: vData.actualProvider || vData.provider || this.name,
+        model: vData.model,
+        actualModel: vData.actualModel,
+        actualProvider: vData.actualProvider,
         requestedModel: params.model,
         seed: vData.seed ?? null,
         rawResponse: vData,

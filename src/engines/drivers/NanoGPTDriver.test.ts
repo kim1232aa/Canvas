@@ -16,7 +16,7 @@ describe('NanoGPTDriver', () => {
     expect(tracedFetch).not.toHaveBeenCalled();
   });
 
-  it('declares video capabilities and routes video requests to /api/video/generate', async () => {
+  it('declares video capabilities, sends only official fields, and routes to /api/video/generate', async () => {
     const driver = new NanoGPTDriver();
     expect(driver.capabilities).toContain('text2video');
     expect(driver.capabilities).toContain('img2video');
@@ -27,6 +27,8 @@ describe('NanoGPTDriver', () => {
         videoUrl: 'https://example.com/video.mp4',
         provider: 'NanoGPT',
         model: 'wan-2.1-t2v',
+        actualModel: 'wan-2.1-t2v',
+        actualProvider: 'NanoGPT',
         seed: 42,
       }),
     } as any);
@@ -38,6 +40,12 @@ describe('NanoGPTDriver', () => {
         isVideo: true,
         videoDuration: 5,
         aspectRatio: '16:9',
+        seed: 42,
+        steps: 25,
+        cfg: 7.0,
+        sampler_name: 'Euler a',
+        scheduler: 'normal',
+        negative_prompt: 'bad quality',
       } as any,
       { nanogptKey: 'key-123' }
     );
@@ -53,10 +61,63 @@ describe('NanoGPTDriver', () => {
     expect(body.prompt).toBe('a dog dancing');
     expect(body.duration).toBe(5);
     expect(body.aspect_ratio).toBe('16:9');
+    expect(body.seed).toBe(42);
+
+    // Un-spec fields must be omitted
+    expect(body).not.toHaveProperty('steps');
+    expect(body).not.toHaveProperty('cfg');
+    expect(body).not.toHaveProperty('sampler_name');
+    expect(body).not.toHaveProperty('scheduler');
+    expect(body).not.toHaveProperty('negative_prompt');
 
     expect(result.mediaUrl).toBe('https://example.com/video.mp4');
     expect(result.mediaType).toBe('video');
+    expect(result.provider).toBe('NanoGPT');
     expect(result.seed).toBe(42);
+  });
+
+  it('surfaces HTTP status, endpoint, and verbatim body on failure without invented messages', async () => {
+    const driver = new NanoGPTDriver();
+
+    vi.mocked(tracedFetch).mockResolvedValueOnce({
+      ok: false,
+      status: 402,
+      text: async () => '{"error":"Insufficient balance, please top up"}',
+    } as any);
+
+    await expect(
+      driver.generate(
+        {
+          model: 'wan-2.1-t2v',
+          prompt: 'test prompt',
+          isVideo: true,
+        } as any,
+        { nanogptKey: 'key-123' }
+      )
+    ).rejects.toThrow(/NanoGPT 视频路由 \/api\/video\/generate 返回 HTTP 402: Insufficient balance, please top up/);
+  });
+
+  it('throws with raw response when videoUrl is missing, without fallback to mediaUrl or default names', async () => {
+    const driver = new NanoGPTDriver();
+
+    vi.mocked(tracedFetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        mediaUrl: 'https://example.com/fallback.mp4', // Should not be accepted as videoUrl
+        provider: 'FakeProvider',
+      }),
+    } as any);
+
+    await expect(
+      driver.generate(
+        {
+          model: 'wan-2.1-t2v',
+          prompt: 'test prompt',
+          isVideo: true,
+        } as any,
+        { nanogptKey: 'key-123' }
+      )
+    ).rejects.toThrow(/NanoGPT 视频路由返回缺少 videoUrl: \{"mediaUrl":"https:\/\/example\.com\/fallback\.mp4","provider":"FakeProvider"\}/);
   });
 
   it('routes image requests to /api/nanogpt/generate', async () => {

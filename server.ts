@@ -5310,7 +5310,11 @@ app.post(['/api/nanogpt/generate', '/api/engine/nanogpt/generate'], async (req, 
   try {
     const { prompt, model, resolution, aspect_ratio, seed, image_url } = req.body;
     if (!model) return res.status(400).json({ error: '模型为必填项（model is required）' });
-    const capabilityResponse = await upstreamFetch({provider:'nanogpt',route:'model-capabilities',model},`${nanoApiV1}/images/models/${encodeURI(model)}/endpoints`,{});
+    const capabilityResponse = await upstreamFetch(
+      { provider: 'nanogpt', route: 'model-capabilities', model },
+      `${nanoApiV1}/images/models/${encodeURI(model)}/endpoints`,
+      { headers: { Authorization: `Bearer ${nanoKey}`, 'x-api-key': nanoKey } }
+    );
     if (!capabilityResponse.ok) return res.status(capabilityResponse.status).json({error:`NanoGPT 模型能力查询失败 [${capabilityResponse.status}]`,details:await capabilityResponse.text()});
     const capabilities = await capabilityResponse.json();
     if (capabilities.id!==model || !Array.isArray(capabilities.endpoints) || capabilities.endpoints.length<1) return res.status(400).json({error:'NanoGPT 模型能力元数据未能核实',details:capabilities});
@@ -5324,7 +5328,11 @@ app.post(['/api/nanogpt/generate', '/api/engine/nanogpt/generate'], async (req, 
       `${nanoApiV1}/images`,
       {
         method: 'POST',
-        headers: { 'x-api-key': nanoKey, 'Content-Type': 'application/json' },
+        headers: {
+          Authorization: `Bearer ${nanoKey}`,
+          'x-api-key': nanoKey,
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify(payload),
       }
     );
@@ -5846,7 +5854,7 @@ async function testSingleProviderKey(
       const resp = await upstreamFetch(
         { provider: 'nanogpt', route: routePath, key: singleKey },
         nanoBalanceUrl,
-        { method: 'POST', headers: { 'x-api-key': singleKey } }
+        { method: 'POST', headers: { Authorization: `Bearer ${singleKey}`, 'x-api-key': singleKey, 'Content-Type': 'application/json' } }
       );
       const latency = Date.now() - startTime;
       if (resp.ok) {
