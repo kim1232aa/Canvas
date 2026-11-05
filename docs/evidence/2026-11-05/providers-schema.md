@@ -11,6 +11,8 @@
 
 ## 一、13 家供应商官方契约核查与双轨实测矩阵
 
+> **全局 LoRA 参数重要声明**：在本次所有前端 UI 实测运行中，画布连接的 LoRA 节点均使用默认的 Hugging Face 仓库标识 `renderartist/Technically-Color-Z-Image-Turbo`，而非各供应商的原生 LoRA ID（如 Sogni loraId、Krea style id、Novita sd_name、AIMLAPI/MuAPI path URL）。除 OpenWorks 成功出图外，其余供应商均在扣费/鉴权阶段即被上游拦截返回状态。
+
 | 序号 | 供应商 | 官方文档 / OpenAPI 权威溯源 URL | 鉴权方式 | 生命周期 | 生图核心端点 | LoRA 机制与入参格式 | UI 点击实测结果（真实界面节点报错 / 产物截图） | API 原生诊断与真实端点回包（辅助取证，非 UI 验收） | 最终判定分类 |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | 1 | **MuAPI** | `https://api.muapi.ai/openapi.json`<br>`https://muapi.ai/docs` | `x-api-key: <key>` | 异步：POST 返回 `request_id`，轮询 `GET /api/v1/predictions/{id}/result` | `POST /api/v1/{endpoint_url}` | 官方 OpenAPI 定义 `loras: [{path: string, scale: number}]` | **UI 验证通过**：选择文生图模型 `z-image-turbo-text-to-image-lora` 并连接 LoRA 节点点击运行，采样器节点原样报出 `HTTP 402: {"detail":{"error":{"code":"INSUFFICIENT_CREDITS","message":"Insufficient credit balance"}},"error":{"code":"INSUFFICIENT_CREDITS","message":"Insufficient credit balance","topup_url":"https://muapi.ai/topup","balance_endpoint":"/api/v1/account/balance"}}` (截图: `ui-muapi.png`)。<br>*注：首次测试因在下拉误选图生图模型 `bytedance-seededit-image` 未输入参考图，报 422 `image_url Field required` (CONTRACT_REJECTED)。* | 原生测试 `z-image-turbo-text-to-image-lora` 返回 HTTP 402 `INSUFFICIENT_CREDITS`。 | **PASS_BILLING** (真实上游扣费失败) |
