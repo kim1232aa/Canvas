@@ -1308,41 +1308,41 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                data-testid="civitai-quick-fill-krea"
-                onClick={() => {
-                  const val = 'https://civitai.com/images/136947637';
-                  setImportInput(val);
-                  handleExtractCivitaiWorkflow(val, importTargetProvider, tokenConsent);
-                }}
-                className="px-2.5 py-1.5 rounded-lg bg-pink-950/40 hover:bg-pink-900/50 text-pink-300 border border-pink-700/50 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-              >
-                <span>🔥 hinablue - AsianMix LoRA (#136947637 · Krea 2 Turbo)</span>
-              </button>
-
-              <button
-                type="button"
-                data-testid="civitai-quick-fill-sdxl"
-                onClick={() => {
-                  const val = 'https://civitai.com/images/102508931';
-                  setImportInput(val);
-                  handleExtractCivitaiWorkflow(val, importTargetProvider, tokenConsent);
-                }}
-                className="px-2.5 py-1.5 rounded-lg bg-cyan-950/40 hover:bg-cyan-900/50 text-cyan-300 border border-cyan-700/50 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-              >
-                <span>⭐ hinablue - 9527 Detail Realistic XL (#102508931 · SDXL)</span>
-              </button>
-
-              <button
-                type="button"
                 data-testid="civitai-quick-fill-flux"
                 onClick={() => {
-                  const val = 'https://civitai.com/images/142524199';
+                  const val = 'https://civitai.com/images/64399178';
                   setImportInput(val);
                   handleExtractCivitaiWorkflow(val, importTargetProvider, tokenConsent);
                 }}
                 className="px-2.5 py-1.5 rounded-lg bg-emerald-950/40 hover:bg-emerald-900/50 text-emerald-300 border border-emerald-700/50 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
               >
-                <span>📸 hinablue - 2758 FLUX 胶片街拍 (#142524199 · FLUX.1)</span>
+                <span>🚀 FLUX.1 D 多LoRA (#64399178 · Cinematic 1940s & Octane)</span>
+              </button>
+
+              <button
+                type="button"
+                data-testid="civitai-quick-fill-pony"
+                onClick={() => {
+                  const val = 'https://civitai.com/images/12097475';
+                  setImportInput(val);
+                  handleExtractCivitaiWorkflow(val, importTargetProvider, tokenConsent);
+                }}
+                className="px-2.5 py-1.5 rounded-lg bg-purple-950/40 hover:bg-purple-900/50 text-purple-300 border border-purple-700/50 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <span>⭐ Pony / SDXL 多LoRA (#12097475 · Twilight & Expressive)</span>
+              </button>
+
+              <button
+                type="button"
+                data-testid="civitai-quick-fill-sd15"
+                onClick={() => {
+                  const val = 'https://civitai.com/images/11346154';
+                  setImportInput(val);
+                  handleExtractCivitaiWorkflow(val, importTargetProvider, tokenConsent);
+                }}
+                className="px-2.5 py-1.5 rounded-lg bg-cyan-950/40 hover:bg-cyan-900/50 text-cyan-300 border border-cyan-700/50 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <span>📸 SD 1.5 双LoRA (#11346154 · Backlight & Contrast Sliders)</span>
               </button>
 
               <button

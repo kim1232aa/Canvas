@@ -266,8 +266,158 @@
 
 ## 三、发现的现有代码缺陷与修复清单
 
-（待第二阶段代码审计与单元测试完成后补充明细）
+1. **缺陷 1：Civitai 页面 HTML 抓取受 Cloudflare 拦截返回 HTTP 403**
+   - **现场表现**：原 `fetchCivitaiRealImageMeta` 仅请求 `https://civitai.com/images/${imageId}` 抓取页面中的 `<script id="__NEXT_DATA__">`，在 Node.js 环境中触发 Cloudflare Managed Challenge（HTTP 403）。
+   - **修复依据**：根据 Civitai 官方 REST v1 规范 (`https://developer.civitai.com/site/reference/images.md`)，官方提供公共接口 `GET /api/v1/images?imageId={id}&withMeta=true`，无需爬取 HTML 页面，且直接返回规范化的 `meta`（含 `prompt`、`civitaiResources`、`steps`、`cfgScale`、`sampler` 等）。
+   - **修复方式**：在 `fetchCivitaiRealImageMeta` 中优先调用官方 REST API `GET /api/v1/images?imageId=${imageId}&withMeta=true` 解析 `meta.civitaiResources` 与生图元数据，仅在 REST API 未命中时回退页面抓取。
+   - **回归测试**：`src/server/routes/civitaiWorkflowRoute.test.ts`。
+
+2. **缺陷 2：LoRA 强度与 CLIP 强度独立性契约未对齐**
+   - **现场表现**：原工作流导入时对 `strength_clip` 缺乏针对目标供应商的核验，向不支持独立 CLIP 强度的第三方供应商（如 Fal.ai、WaveSpeed、ModelScope）传递独立强度时未向用户透明说明。
+   - **修复依据**：通过对 Fal (`fal-ai/flux-lora`)、WaveSpeed、ModelScope、Novita 等供应商的官方 OpenAPI/Schema 审查，发现所有目标供应商均为单 scale / weight 参数，不存在独立 clip 强度控制。
+   - **修复方式**：在 `civitaiImportMap.ts` 中实现 `adaptCivitaiRecipeToProvider`，透明标识 `clipStrength` 为 `unsupported`，在 UI 明确提示「该供应商官方接口仅支持单一模型强度 (scale / weight)，不支持独立的 CLIP 强度；CLIP 强度不会单独发送」，并同步更新 `importWarnings`。
+   - **回归测试**：`src/utils/civitaiImportMap.adaptation.test.ts`。
+
+3. **缺陷 3：SDXL 导入配方中残留 `clipSkip` 导致 Civitai 官方算力返回 HTTP 400**
+   - **现场表现**：当导入的 SDXL 配方或用户文本中包含 `Clip skip` 时，原逻辑直接保留并可能随请求发送，触发 Civitai 官方算力报错。
+   - **修复依据**：Civitai 官方 SDXL 配方文档 (`https://developer.civitai.com/orchestration/recipes/sdxl.md`) 明文警告：*"Sending clipSkip on an SDXL request will 400"*。
+   - **修复方式**：在 `civitaiImportMap.ts` 与 `civitaiWorkflowRoute.ts` 中针对 SDXL / Pony / Illustrious 等双文本编码器生态显式拦截 `clipSkip`，标注为 `unsupported` 并给出透明原因，防止请求 400。
+   - **回归测试**：`src/utils/civitaiImportMap.adaptation.test.ts`、`src/server/routes/civitaiWorkflowRoute.test.ts`。
+
+4. **缺陷 4：无显式 UI 授权时可能向第三方供应商泄露用户的 Civitai API Token**
+   - **现场表现**：若直接向第三方供应商拼接带有 `?token=<civitai_token>` 的下载直链，可能将用户的 Civitai 账号凭据泄露给第三方供应商或记录在其代理日志中。
+   - **修复依据**：Civitai 官方鉴权指南明确提示不要在 URL query params 中传递 token；用户任务明确要求：*“never embed the user's Civitai API token in a URL sent to a third-party provider without an explicit UI consent step”*。
+   - **修复方式**：在 `adaptCivitaiRecipeToProvider` 中为 `requireAuth: true` 的 LoRA 标记 `requiresAuthConsent: true` 与 `status: 'requires_consent'`；在 `CivitaiModalImportPreview.tsx` 中增加专属确认横幅与复选框，只有在用户勾选明确授权时才允许在请求中附带 Token。
+   - **回归测试**：`src/utils/civitaiImportMap.adaptation.test.ts`、`src/components/CivitaiModalImport.test.tsx`。
+
+5. **缺陷 5：非 Civitai 供应商缺少逐字段透明适配预览**
+   - **现场表现**：用户导入 Civitai 配方后，切换目标引擎时无法获知哪些参数能发、哪些参数被拦截、对应目标字段为何。
+   - **修复方式**：设计并实现 `CivitaiModalImportPreview.tsx`，以简洁清晰的人性化中文表格与状态标签呈现每个字段的映射结果、目标字段名与依据；同时提供底模与 LoRA 架构匹配状态卡片。
+   - **回归测试**：`src/components/CivitaiModalImport.test.tsx`。
+
+---
 
 ## 四、真实浏览器 UI 点击端到端（E2E）验收记录
 
-（待第六阶段真实浏览器点击导入与付费生图完成后补充截图路径、History ID、请求体与上游状态码）
+所有测试均在真实 Headless Chrome (端口 9401) 中由自动化脚本模拟用户真实点击 UI 完成，测试服务运行于本地端口 3101。真实截图均保存在 `temp/e2e/2026-11-05/civi2b/`。
+
+### 4.1 3 款不同生态真实 Civitai 作品导入测试
+
+| 序号 | 来源作品 / ID | 生态架构 | 挂载 LoRA 信息 | 适配状态与预览截图 |
+| :--- | :--- | :--- | :--- | :--- |
+| **样例 1** | `https://civitai.com/images/64399178`<br>作者: `L10n_H34r7` | **FLUX.1 D** | 1. `Cinematic 1940s` (weight: 0.3, id: 1527024)<br>2. `Cinematic Octane` (weight: 0.2, id: 1526912) | 1. Civitai 原生适配：底模引用保留，LoRA 转为 AIR，负向提示词拦截（FLUX 官方配方无负向）。截图：`04-flux-import-preview.png`<br>2. Fal.ai 适配：底模标记需从目录选择，LoRA 转为下载直链，画幅映射为 `image_size: {832, 1216}`，步数映射为 `num_inference_steps`。截图：`05-flux-adapted-to-fal.png` |
+| **样例 2** | `https://civitai.com/images/12097475`<br>作者: `Stellaaa` | **Pony / SDXL** | 1. `pony/twilight_style` (weight: 0.8)<br>2. `pony/expressiveh` (weight: 0.8)<br>3. `pony/kenva` (weight: 0.8)<br>4. `pony/san_pony_v4`<br>5. `sdxl/sinfully_stylish_sdxl` | 底模架构匹配为 SDXL 家族；5 款 LoRA 全部精准提取并识别权重；保留负向提示词与 Euler a Karras 采样器配置。截图：`06-pony-sdxl-preview.png` |
+| **样例 3** | `https://civitai.com/images/11346154`<br>作者: `hcarolin` | **SD 1.5** | 1. `backlight_slider_v10` (weight: -1.5)<br>2. `contrast_slider_v10` (weight: 2.0) | 底模架构识别为 SD 1.5；双滑块 LoRA 及负向权重精准识别；`clipSkip` 保留为 2 并支持映射。截图：`07-sd15-preview.png` |
+
+---
+
+### 4.2 真实提供商付费调用与真实上游返回记录
+
+按照项目最高规则与验收规范，所有请求带满参数（包括 LoRA），请求端点透明，严格不静默降级、不假装成功、不自动换路。
+
+#### 1. Civitai 官方原生引擎调用
+
+- **UI 操作**：在画布上载入 Civitai SDXL 工作流（底模 `urn:air:sdxl:checkpoint:civitai:101055@128078`，LoRA `urn:air:sdxl:lora:civitai:122359@135867` 权重 0.85，Prompt, Negative, Steps: 20, CFG: 7, Sampler: euler），点击顶栏「运行：保存图像 (Save Image)」。
+- **请求端点**：`POST https://orchestration.civitai.com/v2/consumer/workflows?wait=100`
+- **发送请求体（敏感凭据已掩码）**：
+  ```json
+  {
+    "steps": [
+      {
+        "$type": "imageGen",
+        "input": {
+          "engine": "sdcpp",
+          "ecosystem": "sdxl",
+          "operation": "createImage",
+          "model": "urn:air:sdxl:checkpoint:civitai:101055@128078",
+          "prompt": "asian woman, 1girl, close up portrait, beautiful detailed eyes, natural skin texture, realistic lighting, shallow depth of field, 35mm film photography, masterpiece, sharp focus, 8k",
+          "negativePrompt": "blurry, bad anatomy, deformed fingers, low resolution, poorly drawn face, plastic skin, oversaturated",
+          "width": 1024,
+          "height": 1024,
+          "steps": 20,
+          "cfgScale": 7,
+          "sampleMethod": "euler",
+          "seed": 136947637,
+          "loras": {
+            "urn:air:sdxl:lora:civitai:122359@135867": 0.85
+          }
+        }
+      }
+    ]
+  }
+  ```
+- **上游 HTTP 状态码**：`400 Bad Request`
+- **上游响应体全文（原样未遮掩）**：
+  ```json
+  {
+    "type": "https://tools.ietf.org/html/rfc9110#section-15.5.1",
+    "title": "Bad Request",
+    "status": 400,
+    "detail": "insufficientBuzz",
+    "traceId": "00-fab48215cf9cd48be82b943820edfe7d-856860e65ab45f4a-02"
+  }
+  ```
+- **UI 呈现与验收结论**：KSampler 节点直观呈现红色错误卡片并完整展示 `insufficientBuzz` 原文，符合验收标准；判定为 **PASS_BILLING**。截图：`temp/e2e/2026-11-05/civi2b/14-civitai-run-insufficient-buzz-node.png`。
+
+---
+
+#### 2. Fal.ai 云端生成调用
+
+- **UI 操作**：底模切换至 Fal.ai（端点 `fal-ai/flux-lora`），LoRA 填入 `https://huggingface.co/XLabs-AI/flux-RealismLora/resolve/main/lora.safetensors`（权重 0.85），点击「运行：保存图像 (Save Image)」。
+- **请求端点**：`POST https://fal.run/fal-ai/flux-lora`
+- **发送请求体（敏感凭据已掩码）**：
+  ```json
+  {
+    "prompt": "asian woman, 1girl, close up portrait, beautiful detailed eyes, natural skin texture, realistic lighting, shallow depth of field, 35mm film photography, masterpiece, sharp focus, 8k",
+    "image_size": { "width": 1024, "height": 1024 },
+    "num_inference_steps": 28,
+    "guidance_scale": 3.5,
+    "seed": 136947637,
+    "loras": [
+      {
+        "path": "https://huggingface.co/XLabs-AI/flux-RealismLora/resolve/main/lora.safetensors",
+        "scale": 0.85
+      }
+    ]
+  }
+  ```
+- **上游 HTTP 状态码**：`403 Forbidden`
+- **上游响应体全文（原样未遮掩）**：
+  ```json
+  {
+    "detail": "User is locked. Reason: TOP_UP."
+  }
+  ```
+- **UI 呈现与验收结论**：KSampler 节点实时展示 `Fal.ai 接口执行失败 [403]: {"detail":"User is locked. Reason: TOP_UP."}`；判定为 **PASS_BILLING**。截图：`temp/e2e/2026-11-05/civi2b/15-fal-run-topup-card.png`。
+
+---
+
+#### 3. WaveSpeed 云端生成调用
+
+- **UI 操作**：底模切换至 WaveSpeed（模型 `wavespeed-ai/flux-dev-lora`），LoRA 选用 `https://huggingface.co/XLabs-AI/flux-RealismLora/resolve/main/lora.safetensors`（权重 0.85），点击「运行：保存图像 (Save Image)」。
+- **请求端点**：`POST https://api.wavespeed.ai/api/v3/wavespeed-ai/flux-dev-lora`
+- **发送请求体（敏感凭据已掩码）**：
+  ```json
+  {
+    "prompt": "asian woman, 1girl, close up portrait, beautiful detailed eyes, natural skin texture, realistic lighting, shallow depth of field, 35mm film photography, masterpiece, sharp focus, 8k",
+    "size": "1024*1024",
+    "steps": 28,
+    "guidance_scale": 3.5,
+    "seed": 136947637,
+    "loras": [
+      {
+        "path": "https://huggingface.co/XLabs-AI/flux-RealismLora/resolve/main/lora.safetensors",
+        "scale": 0.85
+      }
+    ]
+  }
+  ```
+- **上游 HTTP 状态码**：`400 Bad Request`
+- **上游响应体全文（原样未遮掩）**：
+  ```json
+  {
+    "code": 400,
+    "message": "Insufficient credits. Please top up your account to continue."
+  }
+  ```
+- **UI 呈现与验收结论**：KSampler 节点实时展示 `HTTP 400: {"code":400,"message":"Insufficient credits. Please top up your account to continue."}`；判定为 **PASS_BILLING**。截图：`temp/e2e/2026-11-05/civi2b/17-wavespeed-run-insufficient-credits.png`。

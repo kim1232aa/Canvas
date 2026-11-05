@@ -16,8 +16,51 @@ export interface CivitaiWorkflowDeps {
   upstreamFetch: (meta: any, url: string, options?: any) => Promise<any>;
 }
 
-// Helper to fetch real, authentic Civitai image generation metadata via __NEXT_DATA__
+// Helper to fetch real, authentic Civitai image generation metadata
 export async function fetchCivitaiRealImageMeta(imageId: string, upstreamFetch: (meta: any, url: string, options?: any) => Promise<any>) {
+  // 1. Try official Civitai REST v1 API first (reliable, public, withMeta=true returns generation data)
+  const restUrl = `https://civitai.com/api/v1/images?imageId=${imageId}&withMeta=true`;
+  try {
+    const restResp = await upstreamFetch(
+      { provider: 'civitai', route: 'image-metadata-api', model: imageId },
+      restUrl,
+      { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) ComfyCanvas/1.0', Accept: 'application/json' } }
+    );
+    if (restResp.ok) {
+      const restJson = await restResp.json().catch(() => null);
+      const item = restJson?.items?.[0];
+      if (item && item.meta) {
+        const meta = item.meta.meta || item.meta;
+        const resources = Array.isArray(meta.civitaiResources)
+          ? meta.civitaiResources.map((r: any) => ({
+              id: r.modelVersionId,
+              modelVersionId: r.modelVersionId,
+              name: r.modelVersionName || (r.type === 'checkpoint' ? 'Checkpoint' : 'LoRA'),
+              modelName: r.modelVersionName,
+              modelType: (r.type || '').toUpperCase(),
+              type: (r.type || '').toUpperCase(),
+              strength: r.weight,
+              baseModel: item.baseModel || meta.baseModel,
+            }))
+          : [];
+        return {
+          genData: { meta, resources },
+          imgGet: {
+            id: item.id,
+            url: item.url,
+            user: { username: item.username || '' },
+            metadata: { duration: meta.duration },
+          },
+          status: 200,
+          endpoint: restUrl,
+        };
+      }
+    }
+  } catch {
+    // Fall through to HTML scrape
+  }
+
+  // 2. Fallback to HTML __NEXT_DATA__
   const targetUrl = `https://civitai.com/images/${imageId}`;
   try {
     const resp = await upstreamFetch(
@@ -415,6 +458,21 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
               baseModel: detectedBaseModel,
             });
           });
+        }
+
+        // If no structured resources array, extract embedded <lora:name:strength> tags from positive prompt
+        if (loras.length === 0 && prompt.includes('<lora:')) {
+          const loraRegex = /<lora:([^:>]+)(?::([-\d.]+))?(?::([-\d.]+))?>/gi;
+          let match;
+          while ((match = loraRegex.exec(prompt)) !== null) {
+            loras.push({
+              name: match[1],
+              displayName: match[1].split('/').pop() || match[1],
+              strength: match[2] ? parseFloat(match[2]) : null,
+              triggers: '',
+              baseModel: detectedBaseModel,
+            });
+          }
         }
 
         presetTitle = `Civitai 作品 #${targetImageId}：${creatorName || '创作者'} 原作逆向工作流`;
