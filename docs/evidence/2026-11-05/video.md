@@ -76,6 +76,15 @@
 | 1 | Fal.ai · 标准图生视频 | POST /api/video/generate | https://queue.fal.run/fal-ai/wan-i2v-lora | 403 | User is locked. Reason: Exhausted balance |
 | 2 | WaveSpeed · 标准图生视频 | POST /api/schema-provider/wavespeed/submit | https://api.wavespeed.ai/api/v3/wavespeed-ai/wan-2.1/i2v-480p-lora | 400 | Insufficient credits. Please top up your account to continue. |
 | 3 | Replicate · 标准图生视频 | POST /api/engine/replicate/generate | https://api.replicate.com/v1/predictions | 402 | Insufficient credit |
+| 4 | Civitai · 标准图生视频 | POST /api/civitai/generate（isVideo） | orchestration.civitai.com videoGen | 400 | insufficientBuzz（traceId 00-19a6267860a085a3ac2c7d19a51d4b7a-6c15bfce02a1a825-02） |
+| 5 | MuAPI · 标准图生视频 | 参考图上传（生成 POST 未发出） | MuAPI upload_file | 403 | INSUFFICIENT_CREDITS |
+| 6 | Novita · 标准图生视频 | POST /api/schema-provider/novita/submit | Novita SVD-XT | 403 | NOT_ENOUGH_BALANCE |
+
+Civitai 模型 `urn:air:wanvideo-22-i2v-a14b:checkpoint:civitai:1817671@2114157`，LoRA `urn:air:wanvideo-22-i2v-a14b:lora:civitai:1902817@2153813`，cfg 3，480×832，fps 24，seed 1715864103，prompt `summer`。官方 [wan.md](https://developer.civitai.com/orchestration/recipes/wan.md) 写明 LoRA 只在 v2.2 Comfy。拒绝发生在提交，没有 workflow id，所以 10 分钟轮询没有被这次点击覆盖到。
+
+MuAPI 模型 `wan2.1-lora-i2v`，480p，5 秒，16:9，同一 matrix-shot LoRA。403 出在参考图上传，生成请求没有发出。
+
+Novita 预设是 `SVD-XT`，25 帧、6 fps，提示词为空。第一次点击被页面本地拦住（「请填写提示词」），没有请求。补了一句提示词后再点，这是该模型的第一次上游尝试，返回 403 `NOT_ENOUGH_BALANCE`。该预设没有 LoRA 字段。
 
 三次发出的字段（提示词已截断，参考图是上传后的本站 `/api/media/…`，不是外链）：
 
