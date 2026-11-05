@@ -19,7 +19,7 @@ const json = (f: string) => JSON.parse(readFileSync(FX + f, 'utf8'));
 const REF = 'https://example.com/ref.png';
 const LORA = 'https://huggingface.co/Remade-AI/matrix-shot/resolve/main/matrix_shot.safetensors';
 const T2V_LORA = 'https://huggingface.co/artificialguybr/Wan-BalancingAct-Redmond-Wan2.1-T2V-14B/resolve/main/Wan-BalancingAct-Redmond.safetensors';
-const CIVITAI_T2V_LORA = 'urn:air:wanvideo-22-t2v-a14b:lora:civitai:1837542@2186660';
+const CIVITAI_T2V_LORA = 'urn:air:wanvideo-22-t2v-a14b:lora:civitai:2247725@2530788';
 const log: Record<string, unknown> = {};
 const originalFetch = globalThis.fetch;
 

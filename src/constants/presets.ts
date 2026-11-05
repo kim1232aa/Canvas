@@ -596,8 +596,9 @@ const T2V_SPECS: T2vSpec[] = [
     source: 'https://wavespeed.ai/docs/docs-api/wavespeed-ai/wan-2.1-t2v-480p-lora',
   },
   // Civitai videoGen wan v2.2 comfy: Wan Video 2.2 14B Text-to-Video checkpoint (AIR urn:air:wanvideo-22-t2v-a14b:checkpoint:civitai:1817671@2114154).
-  // Real verified T2V LoRA trained on exact baseModel Wan Video 2.2 T2V-A14B:
-  // Civitai 1837542@2186660 (Wan2.2 - Korean Women / Txt2Vid - Seoullina v2.1; baseModel: Wan Video 2.2 T2V-A14B)
+  // Real neutral T2V LoRA trained on exact baseModel Wan Video 2.2 T2V-A14B:
+  // Stylized PBR Animation [WAN 2.2 T2V] (Civitai 2247725@2530788, nsfwLevel: 1, baseModel: Wan Video 2.2 T2V-A14B).
+  // Swapped from 1837542 per Tower P1-d (neutral public default content).
   {
     provider: 'civitai',
     model: 'urn:air:wanvideo-22-t2v-a14b:checkpoint:civitai:1817671@2114154',
@@ -605,7 +606,7 @@ const T2V_SPECS: T2vSpec[] = [
     cfg: 3,
     recipeExtra: { width: 832, height: 480, shift: 7 },
     selectors: { engine: 'wan', version: 'v2.2', provider: 'comfy' },
-    loras: [{ name: 'urn:air:wanvideo-22-t2v-a14b:lora:civitai:1837542@2186660', strength: 1, source: 'https://civitai.com/models/1837542?modelVersionId=2186660' }],
+    loras: [{ name: 'urn:air:wanvideo-22-t2v-a14b:lora:civitai:2247725@2530788', strength: 1, source: 'https://civitai.com/models/2247725?modelVersionId=2530788' }],
     schemaProperties: [
       'prompt', 'diffusionModel', 'width', 'height', 'cfgScale', 'seed', 'steps', 'fps', 'duration',
       'loras', 'negativePrompt', 'sampler', 'scheduler', 'shift',
