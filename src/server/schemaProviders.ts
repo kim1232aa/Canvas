@@ -230,6 +230,20 @@ export function togetherImageOutputs(response:any,endpoint='https://api.together
 export function togetherVideoOutputs(job:any):string[] {
   const url=job?.outputs?.video_url;return url?[String(url)]:[];
 }
+
+/**
+ * Together video start frame.
+ * https://docs.together.ai/reference/create-videos (fetched 2026-11-05):
+ * media.frame_images[{ input_image, frame }]. A flat image/image_url alias cannot say that.
+ * Only when the live schema declares `media` and does not already declare a top-level image field.
+ */
+export function togetherVideoFrameMedia(schema: any, imageUrl: unknown): { media: { frame_images: Array<{ input_image: string; frame: number }> } } | undefined {
+  if (typeof imageUrl !== 'string' || !imageUrl.trim()) return undefined;
+  const props = schema?.properties || {};
+  if (!Object.hasOwn(props, 'media')) return undefined;
+  if (['image', 'image_url', 'start_image', 'start_image_url'].some((k) => Object.hasOwn(props, k))) return undefined;
+  return { media: { frame_images: [{ input_image: imageUrl, frame: 0 }] } };
+}
 /** In-memory completed image tasks (Together images API is synchronous). */
 const togetherSyncTasks=new Map<string,{status:string;outputs:string[];rawResponse:any;error?:any}>();
 
@@ -1309,6 +1323,16 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
         const target=plan.target as string;
         if(!plan.send) {payload[target || name]=value;mapping.push({from:name,to:target || name,value,schemaDeclared:false});continue;}
         payload[target]=value;mapping.push({from:name,to:target,value,schemaDeclared:Object.hasOwn(props,target)});
+      }
+      if(!only && provider==='together' && (definition as any).mediaKind==='video') {
+        const frame=togetherVideoFrameMedia(definition.inputSchema, req.body.image_url);
+        if(frame && !payload.media) {
+          payload.media=frame.media;
+          const flat=mapping.find((m:any)=>m.from==='image_url');
+          if(flat) { flat.to='media.frame_images[0].input_image'; flat.schemaDeclared=true; }
+          else mapping.push({from:'image_url',to:'media.frame_images[0].input_image',value:req.body.image_url,schemaDeclared:true});
+        }
+        if(typeof payload.seconds==='number' || (typeof payload.seconds==='string' && payload.seconds!=='')) payload.seconds=String(payload.seconds);
       }
       if(!only && req.body.loras?.length) {
         blockStage='loras'; // clean-1333 #5/#6: a local refusal in here is caused by the LoRA node(s) → blockedField.field='loras'
