@@ -3,12 +3,27 @@ import { checkHubLoraCompatibility, normalizeArchitectureFamily } from './ModelH
 
 describe('ModelHubModal LoRA Architecture Compatibility Checking', () => {
   describe('normalizeArchitectureFamily (strict metadata-driven normalization)', () => {
-    it('normalizes official FLUX architecture metadata', () => {
-      expect(normalizeArchitectureFamily('FLUX.1')).toBe('flux');
-      expect(normalizeArchitectureFamily('flux_dev')).toBe('flux');
-      expect(normalizeArchitectureFamily('flux_schnell')).toBe('flux');
-      expect(normalizeArchitectureFamily('FLUX.1 [dev]')).toBe('flux');
-      expect(normalizeArchitectureFamily('bfl')).toBe('flux');
+    it('normalizes official FLUX.1 architecture metadata distinctly from FLUX.2', () => {
+      expect(normalizeArchitectureFamily('FLUX.1')).toBe('flux-1');
+      expect(normalizeArchitectureFamily('Flux.1 D')).toBe('flux-1');
+      expect(normalizeArchitectureFamily('Flux.1 S')).toBe('flux-1');
+      expect(normalizeArchitectureFamily('flux_dev')).toBe('flux-1');
+      expect(normalizeArchitectureFamily('flux_schnell')).toBe('flux-1');
+      expect(normalizeArchitectureFamily('FLUX.1 [dev]')).toBe('flux-1');
+      expect(normalizeArchitectureFamily('black-forest-labs/FLUX.1-dev')).toBe('flux-1');
+      expect(normalizeArchitectureFamily('black-forest-labs/FLUX.1-schnell')).toBe('flux-1');
+
+      // FLUX.2 is a distinct architecture family, NOT collapsed into FLUX.1
+      expect(normalizeArchitectureFamily('FLUX.2')).toBe('flux-2');
+      expect(normalizeArchitectureFamily('Flux.2 D')).toBe('flux-2');
+      expect(normalizeArchitectureFamily('Flux.2 Klein 9B')).toBe('flux-2');
+      expect(normalizeArchitectureFamily('black-forest-labs/FLUX.2-klein-base-9B')).toBe('flux-2');
+
+      // bfl is a vendor path segment, NOT an architecture
+      expect(normalizeArchitectureFamily('bfl')).toBe('unknown');
+
+      // Generic versionless 'flux' cannot determine version compatibility
+      expect(normalizeArchitectureFamily('flux')).toBe('unknown');
     });
 
     it('normalizes official SDXL architecture metadata', () => {
@@ -30,10 +45,18 @@ describe('ModelHubModal LoRA Architecture Compatibility Checking', () => {
       expect(normalizeArchitectureFamily('Z-Image-Turbo')).toBe('z-image');
     });
 
-    it('normalizes official Wan 2.1 video architecture metadata', () => {
-      expect(normalizeArchitectureFamily('Wan 2.1')).toBe('wan');
-      expect(normalizeArchitectureFamily('wan-2.1')).toBe('wan');
-      expect(normalizeArchitectureFamily('wan video')).toBe('wan');
+    it('normalizes official Wan 2.1 video architecture distinctly from Wan 2.2', () => {
+      expect(normalizeArchitectureFamily('Wan 2.1')).toBe('wan-2.1');
+      expect(normalizeArchitectureFamily('wan-2.1')).toBe('wan-2.1');
+      expect(normalizeArchitectureFamily('wan video 14b t2v')).toBe('wan-2.1');
+
+      // Wan 2.2 is distinct from Wan 2.1
+      expect(normalizeArchitectureFamily('Wan 2.2')).toBe('wan-2.2');
+      expect(normalizeArchitectureFamily('wan-2.2')).toBe('wan-2.2');
+      expect(normalizeArchitectureFamily('Wan Video 2.2 T2V-A14B')).toBe('wan-2.2');
+
+      // Generic 'wan' without version is unknown
+      expect(normalizeArchitectureFamily('wan')).toBe('unknown');
     });
 
     it('does NOT contain model name whitelists or fuzzy false matches', () => {
@@ -50,7 +73,7 @@ describe('ModelHubModal LoRA Architecture Compatibility Checking', () => {
   });
 
   describe('checkHubLoraCompatibility', () => {
-    it('metadata-driven match: FLUX base + FLUX LoRA', () => {
+    it('metadata-driven match: FLUX.1 base + FLUX.1 LoRA', () => {
       const res = checkHubLoraCompatibility('FLUX.1', 'flux_dev');
       expect(res.status).toBe('compatible');
       expect(res.compatible).toBe(true);
@@ -75,6 +98,24 @@ describe('ModelHubModal LoRA Architecture Compatibility Checking', () => {
       expect(res.chipLabel).toBe('兼容 SDXL 1.0');
     });
 
+    it('metadata-driven mismatch: FLUX.1 base + FLUX.2 LoRA must fail compatibility', () => {
+      const res = checkHubLoraCompatibility('FLUX.1', 'FLUX.2');
+      expect(res.status).toBe('mismatch');
+      expect(res.compatible).toBe(false);
+      expect(res.isMismatch).toBe(true);
+      expect(res.isUnknown).toBe(false);
+      expect(res.chipLabel).toBe('架构不兼容 (FLUX.2 ≠ FLUX.1)');
+    });
+
+    it('metadata-driven mismatch: Wan 2.1 base + Wan 2.2 LoRA must fail compatibility', () => {
+      const res = checkHubLoraCompatibility('Wan 2.1', 'Wan 2.2');
+      expect(res.status).toBe('mismatch');
+      expect(res.compatible).toBe(false);
+      expect(res.isMismatch).toBe(true);
+      expect(res.isUnknown).toBe(false);
+      expect(res.chipLabel).toBe('架构不兼容 (Wan 2.2 ≠ Wan 2.1)');
+    });
+
     it('metadata-driven mismatch: Qwen base + Z-Image LoRA', () => {
       const res = checkHubLoraCompatibility('Qwen-Image-2.1', 'Z-Image');
       expect(res.status).toBe('mismatch');
@@ -91,6 +132,15 @@ describe('ModelHubModal LoRA Architecture Compatibility Checking', () => {
       expect(res.isMismatch).toBe(true);
       expect(res.isUnknown).toBe(false);
       expect(res.chipLabel).toBe('架构不兼容 (SD 1.5 ≠ FLUX.1)');
+    });
+
+    it('unknown case: vendor token bfl produces unknown chip', () => {
+      const res = checkHubLoraCompatibility('bfl', 'FLUX.1');
+      expect(res.status).toBe('unknown');
+      expect(res.compatible).toBe(false);
+      expect(res.isMismatch).toBe(false);
+      expect(res.isUnknown).toBe(true);
+      expect(res.chipLabel).toBe('架构未知，无法判断兼容');
     });
 
     it('unknown case: checkpoint has no base-model metadata -> neutral chip, never claims compatible/incompatible', () => {

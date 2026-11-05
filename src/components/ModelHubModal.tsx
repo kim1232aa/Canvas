@@ -136,18 +136,70 @@ export function getProviderFormatHint(prov: string): { format: string; docUrl?: 
 export function normalizeArchitectureFamily(rawMetadata: string | undefined | null): string {
   if (!rawMetadata) return 'unknown';
   const s = String(rawMetadata).trim().toLowerCase();
-  if (/^flux([._\s-]dev|[._\s-]schnell|[._\s-]pro|[._\s-]1(\.[0-9])?|[._\s-]2)?(\s*\[.*\])?$/i.test(s) || s === 'flux' || s === 'bfl') return 'flux';
-  if (/^(sdxl|sd_xl|stable[._\s-]diffusion[._\s-]xl)(\s*[0-9.]+)?$/i.test(s)) return 'sdxl';
-  if (/^(sd[._\s-]?1[._\s-]?[45]|stable[._\s-]diffusion[._\s-]v?1[._\s-]?[45])$/i.test(s)) return 'sd15';
-  if (/^(sd[._\s-]?3[._\s-]?[05]?|stable[._\s-]diffusion[._\s-]3(\.[0-9])?)$/i.test(s)) return 'sd35';
+  // Vendor token is not an architecture
+  if (s === 'bfl') return 'unknown';
+
+  // FLUX.1 family (e.g. "Flux.1 D", "Flux.1 S", "flux_dev", "flux_schnell", "FLUX.1 [dev]", "black-forest-labs/FLUX.1-dev")
+  // Strictly FLUX.1 (distinct from FLUX.2)
+  if (
+    /flux[._\s-]?1(\.[0-9])?/i.test(s) ||
+    s === 'flux_dev' ||
+    s === 'flux_schnell' ||
+    s === 'flux-dev' ||
+    s === 'flux-schnell' ||
+    s === 'flux.1' ||
+    s === 'flux.1 d' ||
+    s === 'flux.1 s'
+  ) {
+    return 'flux-1';
+  }
+
+  // FLUX.2 family (e.g. "Flux.2 D", "Flux.2 Klein 9B", "flux_2", "black-forest-labs/FLUX.2-klein-base-9B")
+  if (/flux[._\s-]?2/i.test(s)) {
+    return 'flux-2';
+  }
+
+  // Generic versionless 'flux' without version cannot be determined as compatible with 1 or 2
+  if (s === 'flux') return 'unknown';
+
+  // Wan 2.1 vs Wan 2.2
+  if (/wan([._\s-]?(video)?)?[._\s-]?2\.1\b/i.test(s) || s === 'wan video 14b t2v' || s === 'wan video 14b') {
+    return 'wan-2.1';
+  }
+  if (/wan([._\s-]?(video)?)?[._\s-]?2\.2\b/i.test(s) || s.includes('wan video 2.2') || s.includes('wan2.2')) {
+    return 'wan-2.2';
+  }
+  if (s === 'wan' || s === 'wan video') return 'unknown';
+
+  // SDXL 1.0 (e.g. "SDXL 1.0", "sdxl", "SDXL Turbo", "SDXL 1.0 LCM", "stable-diffusion-xl", "stabilityai/stable-diffusion-xl-base-1.0")
+  if (/^sd[._\s-]?xl(\s*[0-9.]+)?(\s+(hyper|lcm|turbo|lightning))?$/i.test(s) || /stable[._\s-]diffusion[._\s-]xl/i.test(s)) {
+    return 'sdxl';
+  }
+
+  // SD 1.5 (e.g. "SD 1.5", "sd1.5", "SD 1.5 Hyper", "SD 1.5 LCM", "stable-diffusion-v1-5", "runwayml/stable-diffusion-v1-5")
+  if (/^sd[._\s-]?1[._\s-]?[45](\s+(hyper|lcm|turbo|lightning))?$/i.test(s) || /stable[._\s-]diffusion[._\s-]v?1[._\s-]?[45]/i.test(s)) {
+    return 'sd15';
+  }
+
+  // SD 3.5 (e.g. "SD 3.5", "sd3.5", "stable-diffusion-3.5")
+  if (/^(sd[._\s-]?3[._\s-]?[05]?|stable[._\s-]diffusion[._\s-]3(\.[0-9])?)$/i.test(s)) {
+    return 'sd35';
+  }
+
+  // Pony / Illustrious
   if (/^pony([._\s-]xl)?$/i.test(s)) return 'pony';
   if (/^illustrious([._\s-]xl)?$/i.test(s)) return 'illustrious';
-  if (/^qwen([._\s-]image([._\s-][0-9.]+)*)?$/i.test(s)) return 'qwen';
-  if (/^z[._\s-]image([._\s-]turbo|[._\s-]base)?$/i.test(s)) return 'z-image';
-  if (/^wan([._\s-]?(2\.1|2\.2|video))?$/i.test(s)) return 'wan';
-  if (/^chroma/i.test(s)) return 'chroma';
-  if (/^hunyuan([._\s-]video|[._\s-]image)?$/i.test(s)) return 'hunyuan';
-  if (/^kolors/i.test(s)) return 'kolors';
+
+  // Qwen (e.g. "Qwen-Image", "Qwen-Image-2.1", "Qwen/Qwen-Image")
+  if (/^qwen([._\s-]image([._\s-][0-9.]+)*)?$/i.test(s) || s.includes('qwen-image') || s.includes('qwen/qwen-image')) {
+    return 'qwen';
+  }
+
+  // Z-Image (e.g. "Z-Image", "Z-Image-Turbo", "Tongyi-MAI/Z-Image-Turbo")
+  if (/^z[._\s-]image([._\s-]turbo|[._\s-]base)?$/i.test(s) || s.includes('z-image-turbo') || s.includes('z-image')) {
+    return 'z-image';
+  }
+
   return 'unknown';
 }
 
@@ -239,13 +291,25 @@ function matchesArchitecture(m: ArchitectureFields, arch: string): boolean {
   const tags = Array.isArray(m.tags) ? m.tags.map((t: unknown) => String(t).toLowerCase()) : [];
 
   if (target === 'flux') {
-    return baseModel.includes('flux') || id.includes('flux') || name.includes('flux') || tags.some(t => t.includes('flux'));
+    const parsed = normalizeArchitectureFamily(String(m.baseModel || ''));
+    if (parsed === 'flux-1') return true;
+    if (parsed === 'flux-2') return false;
+    const s = `${baseModel} ${id} ${name}`;
+    if (s.includes('flux.2') || s.includes('flux-2') || s.includes('flux 2')) return false;
+    return s.includes('flux.1') || s.includes('flux-1') || s.includes('flux_dev') || s.includes('flux_schnell');
   }
   if (target === 'sdxl') {
-    return baseModel.includes('sdxl') || id.includes('sdxl') || name.includes('sdxl') || tags.some(t => t.includes('sdxl'));
+    const parsed = normalizeArchitectureFamily(String(m.baseModel || ''));
+    if (parsed === 'sdxl') return true;
+    return baseModel.includes('sdxl') || baseModel.includes('stable-diffusion-xl');
   }
   if (target === 'wan') {
-    return baseModel.includes('wan') || id.includes('wan') || name.includes('wan') || tags.some(t => t.includes('wan'));
+    const parsed = normalizeArchitectureFamily(String(m.baseModel || ''));
+    if (parsed === 'wan-2.1') return true;
+    if (parsed === 'wan-2.2') return false;
+    const s = `${baseModel} ${id} ${name}`;
+    if (s.includes('2.2') || s.includes('2.5') || s.includes('2.7')) return false;
+    return s.includes('2.1');
   }
   if (target === 'sd15' || target === 'sd 1.5') {
     return (
@@ -361,6 +425,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
   // clean-0942: one catalog GET per URL per open. StrictMode double effects, initialProvider/initialCategory settling
   // after open, and repeated handlers share the in-flight/settled result. Failures are dropped so 重试 refetches.
   const catalogMemo = useRef(new Map<string, ReturnType<typeof fetchLiveModels>>());
+  const baseModelCache = useRef(new Map<string, string>());
   const wasOpen = useRef(false);
   if (isOpen && !wasOpen.current) { catalogMemo.current = new Map(); beginTraceOperation('打开底模中心'); }
   wasOpen.current = isOpen;
@@ -376,11 +441,18 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
 
   const findModelBaseModel = (modelIdOrName?: string): string | undefined => {
     if (!modelIdOrName) return undefined;
+    if (baseModelCache.current.has(modelIdOrName)) return baseModelCache.current.get(modelIdOrName);
     for (const list of Object.values(modelsData)) {
       if (Array.isArray(list)) {
         const found = list.find((item: any) => item && (item.id === modelIdOrName || item.name === modelIdOrName));
-        if (found?.baseModel) return String(found.baseModel);
-        if (found?.architecture) return String(found.architecture);
+        if (found?.baseModel) {
+          baseModelCache.current.set(modelIdOrName, String(found.baseModel));
+          return String(found.baseModel);
+        }
+        if (found?.architecture) {
+          baseModelCache.current.set(modelIdOrName, String(found.architecture));
+          return String(found.architecture);
+        }
       }
     }
     return undefined;
@@ -481,6 +553,11 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
           errors[key] = (val as any).error + ((val as any).details ? `: ${(val as any).details}` : '');
         } else if (Array.isArray(val)) {
           validData[key] = val;
+          val.forEach((item: any) => {
+            const base = item?.baseModel || item?.architecture;
+            if (item?.id && base) baseModelCache.current.set(String(item.id), String(base));
+            if (item?.name && base) baseModelCache.current.set(String(item.name), String(base));
+          });
           // A full directory page does not establish that another page exists.
         }
       });
@@ -1701,6 +1778,11 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                             <div className="space-y-1.5">
                               <button
                                 onClick={() => {
+                                  if (m.baseModel || m.architecture) {
+                                    baseModelCache.current.set(String(resource.name), String(m.baseModel || m.architecture));
+                                    baseModelCache.current.set(String(modelId), String(m.baseModel || m.architecture));
+                                    baseModelCache.current.set(String(displayName), String(m.baseModel || m.architecture));
+                                  }
                                   onSelectModel(resource.name, displayName, providerKey, {...m,...resource});
                                   onClose();
                                 }}

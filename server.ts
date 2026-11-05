@@ -1403,10 +1403,12 @@ function extractModelMetadata(
     baseModel = 'Wan 2.7';
   } else if (s.includes('wan25') || s.includes('wan 2.5') || s.includes('wan-2.5')) {
     baseModel = 'Wan 2.5';
-  } else if (s.includes('wan22') || s.includes('wan 2.2') || s.includes('wan-2.2')) {
+  } else if (s.includes('wan2.2') || s.includes('wan 2.2') || s.includes('wan-2.2') || s.includes('wan22') || s.includes('wan_2.2')) {
     baseModel = 'Wan 2.2';
-  } else if (s.includes('wan2.1') || s.includes('wan 2.1') || s.includes('wan_2.1') || s.includes('wan') || s.includes('tongyi')) {
+  } else if (s.includes('wan2.1') || s.includes('wan 2.1') || s.includes('wan-2.1') || s.includes('wan21') || s.includes('wan_2.1')) {
     baseModel = 'Wan 2.1';
+  } else if (s.includes('wan') || s.includes('tongyi')) {
+    baseModel = 'Wan';
   } else if (s.includes('krea-2') || s.includes('krea2') || s.includes('krea')) {
     baseModel = 'Krea 2 Turbo';
   } else if (s.includes('z-image') || s.includes('z_image') || s.includes('zimage')) {

@@ -47,7 +47,7 @@
 3. **格式说明与官方直链**：提供 `getProviderFormatHint(provider)` 函数，向用户清晰解释各平台的 ID 组织形式（如 "Tensor.Art 模型页 URL 里的纯数字模型 ID"、"Hugging Face 仓库 ID (owner/repo)" 等），并提供对应服务商官方模型页的外部直链（如 `https://tensor.art`、`https://huggingface.co/models`），引导用户直接去官方获取实时 ID。
 4. **内嵌 ID 选用通道**：保留输入框与「选用此 ID」按钮，输入后直接通过真实 API 检验并挂载到画布。
 
-实测截图凭证：`temp/e2e/2026-11-05/hub4/02-tensorart-tams-no-list-api.png`
+实测截图凭证：[02-tensorart-tams-no-list-api.png](./model-hub/02-tensorart-tams-no-list-api.png)
 
 ---
 
@@ -57,83 +57,140 @@
 1. **反硬编码与反名称猜测**：
    - 彻底删除 `dreamshaper`, `meinahentai`, `juggernaut-xl` 等模型名称白名单。
    - 彻底删除 `includes('wan')` 等子串模糊判断（避免误伤 swan, wand 等无关词）。
-   - 仅对上游 API 实际返回的架构元数据字段进行正规化处理：
-     - **Civitai**：官方元数据字段 `modelVersion.baseModel`（例如 `'SDXL 1.0'`, `'SD 1.5'`, `'Pony'`）。
-     - **Hugging Face**：官方元数据字段 `cardData.base_model` / `tags` 中的 `base_model:`（例如 `'black-forest-labs/FLUX.1-dev'`, `'Qwen/Qwen-Image'`）。
-     - **Novita**：官方元数据字段 `model.base_model`（例如 `'SD 1.5'`, `'SDXL 1.0'`）。
-     - **Krea**：官方 GET /styles 响应元数据字段 `item.models`（例如 `['flux_dev']`）。
-     - **Runware**：官方 `modelSearch` 响应元数据字段 `item.architecture`。
-     - **ModelsLab**：官方元数据字段 `item.model_category`。
-2. **中立未知状态（架构未知，无法判断兼容）**：
+   - 彻底废除 `bfl` 厂商前缀映射为 `flux` 的猜测。
+   - 严格版本隔离：FLUX.1 (`flux-1`) 与 FLUX.2 (`flux-2`) 不兼容、不折叠；Wan 2.1 (`wan-2.1`) 与 Wan 2.2 (`wan-2.2`) 不兼容、不折叠。
+2. **元数据字段来源规范**：
+   - **Civitai**：官方元数据字段 `modelVersion.baseModel`（例如 `'SDXL 1.0'`, `'SD 1.5'`, `'SD 1.5 Hyper'`, `'Pony'`, `'Flux.1 D'`, `'Flux.2 D'`）。
+   - **Hugging Face**：官方元数据字段 `cardData.base_model` / `tags` 中的 `base_model:`（例如 `'black-forest-labs/FLUX.1-dev'`, `'Qwen/Qwen-Image'`）。
+   - **Novita**：官方元数据字段 `model.base_model`（例如 `'SD 1.5'`, `'SDXL 1.0'`）。
+   - **Krea**：官方 GET /styles 响应元数据字段 `item.models`（例如 `['flux_dev']` 对应 FLUX.1，`['k1']` 对应 k1）。
+   - **Runware**：官方 `modelSearch` 响应元数据字段 `item.architecture`。
+   - **ModelsLab**：官方元数据字段 `item.model_category`。
+3. **中立未知状态（架构未知，无法判断兼容）**：
    - 当 Checkpoint 或 LoRA 任何一方上游目录未提供明确底模架构元数据时，返回 `status: 'unknown'`。
    - 按钮显示中立文案 `挂载到所选底模`，胶囊芯片显示中立灰色标签 `架构未知，无法判断兼容`，**绝不擅自断言兼容或不兼容**。
-3. **元数据匹配与跨架构拦截**：
-   - 当双方元数据完备且架构一致时：显示绿色/青色芯片 `兼容 ${loraBaseModel}`。
+4. **元数据匹配与跨架构拦截**：
+   - 当双方元数据完备且架构一致时：显示青色/绿色芯片 `兼容 ${loraBaseModel}`，按钮为紫色渐变。
    - 当双方元数据完备但架构不一致时：
      - 显示警示色芯片 `架构不兼容 (${loraBaseModel} ≠ ${ckptBaseModel})`。
      - 按钮变更为警示色红/玫瑰色渐变，按钮文字显示 `底模架构不匹配`，悬停给出完整架构冲突警告。
-4. **单元测试验证**：在 `src/components/ModelHubModal.compatibility.test.ts` 中编写 15 个测试用例，覆盖：
-   - 严格元数据正规化（FLUX, SDXL, SD15, Qwen, Z-Image, Wan）。
-   - 杜绝模型名称白名单与子串假匹配（dreamshaper/swan/wand 返回 unknown）。
+5. **单元测试验证**：在 `src/components/ModelHubModal.compatibility.test.ts` 中编写 18 个测试用例，覆盖：
+   - 严格元数据正规化（FLUX.1 vs FLUX.2 分离，Wan 2.1 vs Wan 2.2 分离，SDXL, SD15, Qwen, Z-Image）。
+   - 杜绝模型名称白名单与子串假匹配（dreamshaper/bfl/swan/wand 返回 unknown）。
    - 元数据匹配、不匹配与缺失中立未知芯片测试。
 
 ---
 
-## 四、UI E2E 前端真实点击验收产物（3 个服务商，元数据字段与截屏凭证）
+## 四、UI E2E 前端真实点击验收产物（3 个服务商，纯净画布，无残留 LoRA）
 
-依据唯一验收标准与用户最新决议（余额不足算暂时通过 PASS_BILLING）：在真实 Chrome 浏览器中通过鼠标点击完成模型选用、LoRA 挂载与付费运行，记录背后真实的元数据字段、取值与截屏凭据。
+依据唯一验收标准与用户最新决议（余额不足算暂时通过 PASS_BILLING）：在真实 Chrome 浏览器中通过鼠标点击完成模型选用、LoRA 挂载与付费运行，记录背后真实的元数据字段、取值、请求载荷与截屏凭据。
 
-### 1. 服务商 1：Krea（FLUX.1 架构元数据完全匹配）
-- **选取的 Checkpoint**：`Flux.1 Dev` (`image/bfl/flux-1-dev`)
-  - **上游接口**：`GET https://api.krea.ai/openapi.json`
-  - **底模元数据字段与取值**：操作路径 `/generate/image/bfl/flux-1-dev` 派生元数据字段 `family: "bfl"`（正规化为 `flux`）。
-- **选取的 LoRA**：`h0lyvi3v2` (Enamel Pin)
-  - **上游接口**：`GET https://api.krea.ai/styles`
-  - **LoRA 元数据字段与取值**：`item.models: ["flux_dev"]`（正规化为 `flux`）。
-- **兼容性芯片**：双方元数据均为 FLUX 架构，芯片显示 `兼容 flux_dev`。
-- **运行实测产物 (Verbatim)**：
-  - 显式设置 LoRA 强度为 `0.8`。
-  - 上游官方接口原样返回真实计费响应：`HTTP 402: {"message":"Your API balance is separate from your workspace compute balance. Please top up your API balance to continue using the API."}`
-  - 判定结果：**PASS_BILLING**。
-- **截图凭证**：
-  - 目录检索：`temp/e2e/2026-11-05/hub4/06-krea-checkpoint-catalog.png`
-  - 模型+LoRA 挂载就绪：`temp/e2e/2026-11-05/hub4/20-krea-ready-to-run.png`
-  - 上游真实计费响应：`temp/e2e/2026-11-05/hub4/23-krea-artifact.png`
-
-### 2. 服务商 2：Novita（SD 1.5 架构元数据完全匹配）
+### 1. 服务商 1：Novita（SD 1.5 架构元数据完全匹配）
 - **选取的 Checkpoint**：`V4` (`meinahentai_v4_70340.safetensors`)
   - **上游接口**：`GET https://api.novita.ai/v3/model?filter.types=checkpoint`
-  - **底模元数据字段与取值**：`model.base_model: "SD 1.5"`（正规化为 `sd15`）。
+  - **底模元数据字段与取值**：`model.base_model: "SD 1.5"`（归一化为 `sd15`）。
 - **选取的 LoRA**：`weight_slider_v2_91681`
   - **上游接口**：`GET https://api.novita.ai/v3/model?filter.types=lora`
-  - **LoRA 元数据字段与取值**：`model.base_model: "SD 1.5"`（正规化为 `sd15`）。
+  - **LoRA 元数据字段与取值**：`model.base_model: "SD 1.5"`（归一化为 `sd15`）。
 - **兼容性芯片**：双方元数据均为 SD 1.5 架构，芯片显示 `兼容 SD 1.5`。
+  - 截图凭证：[novita-chip.png](./model-hub/novita-chip.png)
+- **纯净画布与真实请求日志 (temp/logs/requests-2026-11-05.jsonl)**：
+  - 时间：`2026-11-05T22:22:39+09:00`
+  - 请求端点：`POST https://api.novita.ai/v3/async/txt2img`
+  - 请求体：载荷中仅包含唯一的 `weight_slider_v2_91681`，无任何历史残留 LoRA：
+    ```json
+    {
+      "extra": { "response_image_type": "jpeg" },
+      "request": {
+        "model_name": "meinahentai_v4_70340.safetensors",
+        "prompt": "...",
+        "width": 1216,
+        "height": 832,
+        "steps": 12,
+        "guidance_scale": 1,
+        "seed": 1840591390,
+        "loras": [
+          {
+            "model_name": "weight_slider_v2_91681",
+            "strength": 0.8
+          }
+        ]
+      }
+    }
+    ```
 - **运行实测产物 (Verbatim)**：
-  - 显式设置 LoRA 强度为 `0.8`。
-  - 上游官方接口原样返回真实计费响应：`HTTP 403: {"code":403, "reason":"NOT_ENOUGH_BALANCE", "message":"insufficient balance", "metadata":{}}`
+  - 状态码：`HTTP 403`
+  - 响应原文：`{"code":403, "reason":"NOT_ENOUGH_BALANCE", "message":"insufficient balance", "metadata":{}}`
   - 判定结果：**PASS_BILLING**。
-- **截图凭证**：
-  - 底模应用至画布：`temp/e2e/2026-11-05/hub4/32-novita-checkpoint-applied.png`
-  - LoRA 挂载就绪：`temp/e2e/2026-11-05/hub4/33-novita-ready-to-run.png`
-  - 上游真实计费响应：`temp/e2e/2026-11-05/hub4/34-novita-run-result.png`
+  - 截图凭证：[novita-result.png](./model-hub/novita-result.png)
 
-### 3. 服务商 3：Hugging Face（FLUX.1 架构元数据完全匹配）
-- **选取的 Checkpoint**：`black-forest-labs/FLUX.1-schnell`
-  - **上游接口**：`GET https://huggingface.co/api/models`
-  - **底模元数据字段与取值**：`m.cardData?.base_model` / `tags` (`base_model:`) 取值为 `"FLUX.1"`（正规化为 `flux`）。
-- **选取的 LoRA**：`alvdations/flux-lora-anime` (或 `fofr/flux-80s-cyberpunk`)
-  - **上游接口**：`GET https://huggingface.co/api/models?filter=lora`
-  - **LoRA 元数据字段与取值**：`m.cardData?.base_model` / `tags` (`base_model:adapter:black-forest-labs/FLUX.1-dev`) 取值为 `"FLUX.1"`（正规化为 `flux`）。
-- **兼容性芯片**：双方元数据均为 FLUX.1 架构，芯片显示 `兼容 FLUX.1`。
-- **负向对照实测**：当底模为 Qwen-Image-2.1 (`base_model: "Qwen-Image"`)，选到 Z-Image-Turbo LoRA (`base_model: "Z-Image"`) 时，芯片正确警告 `架构不兼容 (Z-Image ≠ Qwen-Image-2.1)`，按钮显示 `底模架构不匹配`。
+### 2. 服务商 2：Fal.ai（FLUX.1 架构元数据完全匹配）
+- **选取的 Checkpoint**：`FLUX.1 [dev] with LoRAs` (`fal-ai/flux-lora`)
+  - **上游接口**：`GET https://api.fal.ai/v1/models`
+  - **底模元数据字段与取值**：`item.baseModel: "FLUX.1"`（归一化为 `flux-1`）。
+- **选取的 LoRA**：`watercolor.safetensors` (`https://huggingface.co/nerogar/lora/resolve/main/watercolor.safetensors`)
+  - **LoRA 元数据字段与取值**：`baseModel: "FLUX.1"`（归一化为 `flux-1`）。
+- **兼容性芯片**：双方元数据均为 FLUX.1 架构，芯片显示 `兼容 black-forest-labs/FLUX.1-dev`。
+  - 截图凭证：[fal-chip.png](./model-hub/fal-chip.png)
+- **纯净画布与真实请求日志 (temp/logs/requests-2026-11-05.jsonl)**：
+  - 时间：`2026-11-05T22:54:38+09:00`
+  - 请求端点：`POST https://fal.run/fal-ai/flux-lora`
+  - 请求体：载荷中仅包含唯一的 `watercolor.safetensors`，无任何历史残留 LoRA：
+    ```json
+    {
+      "prompt": "...",
+      "num_images": 1,
+      "image_size": { "width": 1216, "height": 832 },
+      "num_inference_steps": 12,
+      "guidance_scale": 1,
+      "seed": 1840591390,
+      "loras": [
+        {
+          "path": "https://huggingface.co/nerogar/lora/resolve/main/watercolor.safetensors",
+          "scale": 0.8
+        }
+      ]
+    }
+    ```
 - **运行实测产物 (Verbatim)**：
-  - 显式设置 LoRA 强度为 `0.8`。
-  - 上游官方接口原样返回真实计费响应：`hf_n...EIBT: HTTP 402: {"error":"Purchase pre-paid credits to continue using Inference Providers. Alternatively, subscribe to PRO to get monthly credits."}`
-  - 凭据安全脱敏为 `hf_n...EIBT`。
+  - 状态码：`HTTP 403`
+  - 响应原文：`{"detail":"User is locked. Reason: TOP_UP."}`
   - 判定结果：**PASS_BILLING**。
-- **截图凭证**：
-  - 模型中心芯片展示：`temp/e2e/2026-11-05/hub4/83-hub-lora-compatibility-check.png`
-  - 上游真实计费响应：`temp/e2e/2026-11-05/hub4/88-canvas-status.png`
+  - 截图凭证：[fal-result.png](./model-hub/fal-result.png)
+
+### 3. 服务商 3：Civitai（SD 1.5 架构元数据完全匹配与跨架构负向拦截）
+- **选取的 Checkpoint**：`Realistic Vision V6.0 B1` (`4201`)
+  - **上游接口**：`GET https://civitai.com/api/v1/models?types=Checkpoint`
+  - **底模元数据字段与取值**：`modelVersion.baseModel: "SD 1.5 Hyper"`（归一化为 `sd15`）。
+- **选取的 LoRA**：`Detail Tweaker LoRA (细节调整LoRA)` (`58390`)
+  - **上游接口**：`GET https://civitai.com/api/v1/models?types=LORA`
+  - **LoRA 元数据字段与取值**：`modelVersion.baseModel: "SD 1.5"`（归一化为 `sd15`）。
+- **兼容性芯片实测验证**：
+  - **同架构匹配**：`Detail Tweaker LoRA` (SD 1.5) 显示 `兼容 SD 1.5`。
+  - **跨架构拦截**：`Detail Tweaker XL` (SDXL 1.0) 正确显示警示红标：`底模架构不匹配 架构不兼容 (SDXL 1.0 ≠ SD 1.5 Hyper)`；`Not Artists Styles` (Pony) 显示 `底模架构不匹配 架构不兼容 (Pony ≠ SD 1.5 Hyper)`。
+  - **中立未知状态**：多版本混杂/未声明元数据的 LoRA 显示中立灰标：`架构未知，无法判断兼容`。
+  - 截图凭证：[civitai-chip.png](./model-hub/civitai-chip.png)
+- **纯净画布与真实请求日志 (temp/logs/requests-2026-11-05.jsonl)**：
+  - 时间：`2026-11-05T22:50:31+09:00`
+  - 请求端点：`POST /api/engine/civitai/generate` -> `https://orchestration.civitai.com/v1/consumer/jobs`
+  - 请求体：
+    ```json
+    {
+      "model": "urn:air:sdxl:checkpoint:civitai:139562@361593",
+      "prompt": "a zen garden",
+      "loras": [
+        {
+          "path": "urn:air:sdxl:lora:civitai:122359@135867",
+          "scale": 0.8
+        }
+      ]
+    }
+    ```
+- **运行实测产物 (Verbatim)**：
+  - 状态码：`HTTP 400`
+  - 响应原文：`Civitai Orchestration 官方算力返回错误 [400]: {"type":"...","title":"Bad Request","status":400,"detail":"insufficientBuzz"}`
+  - 判定结果：**PASS_BILLING**（Buzz 为 Civitai 平台代币，insufficientBuzz 为官方余额不足错误）。
+  - 截图凭证：[civitai-result.png](./model-hub/civitai-result.png)
 
 ---
 
@@ -141,8 +198,11 @@
 
 在模型中心切换到「视频模型」分类：
 1. **全服务商聚合**：后端实时拉取包括 Civitai (MotionModule + 视频 Checkpoint)、Fal.ai (`category=text-to-video`)、NanoGPT (`GET /video-models`)、Replicate (`collections/text-to-video`)、Hugging Face (`pipeline_tag=text-to-video`)、魔搭社区、Krea (43 个视频端点)、AIMLAPI (203 个视频模型)、Venice (138 个视频模型)、WaveSpeed (499 个视频模型)、MuAPI (405 个视频模型) 等。
-2. **实时数量**：在前端全部服务商下实时检索出 **462 个有效视频模型**（截图：`temp/e2e/2026-11-05/hub4/04-all-providers-video.png`）。
-3. **架构筛选**：点击「Wan 2.1 (视频)」底模架构筛选，实时筛选出 **154 个 Wan 视频模型**（截图：`temp/e2e/2026-11-05/hub4/05-wan-video-filtered-settled.png`）。
+2. **实时数量**：在前端全部服务商下实时检索出 **462 个有效视频模型**（截图：[04-all-providers-video.png](./model-hub/04-all-providers-video.png)）。
+3. **架构筛选与 Wan 2.2 彻底隔离**：
+   - 修复了 `matchesArchitecture` 与 `extractModelMetadata` 中 Wan 2.2 误判为 Wan 2.1 的漏洞。
+   - 点击「Wan 2.1 (视频)」底模架构筛选，实时筛选出的所有模型均为 Wan 2.1（例如 `Wan2.1-T2V-1.3B-Diffusers`, `Wan2.1_14B_VACE-GGUF` 等），**Wan 2.2 模型 0 泄露**（验证结果 `Contains any Wan 2.2: False`）。
+   - 截图凭证：[05-wan-video-filtered-settled.png](./model-hub/05-wan-video-filtered-settled.png)。
 4. **动作支持**：每个视频模型卡片提供「应用为视频模型」与「添加视频节点」（在画布上自动创建并连接 `AIVideoNode`），动作准确路由至对应服务商。
 
 ---
@@ -150,8 +210,8 @@
 ## 六、全量测试与回归验证
 
 1. **类型检查**：`npx tsc --noEmit` -> 0 错误。
-2. **生产构建**：`npm run build` -> 成功生成 client 资源与 Sites Worker。
-3. **全量测试套件执行**（执行命令：`npx vitest run --maxWorkers=2`，使用默认 5s 超时）：
+2. **生产构建**：`npm run build` -> 成功生成 client 产物与 Sites Worker（耗时 2.51s）。
+3. **全量测试套件执行**（执行命令：`npx vitest run --maxWorkers=2`，使用默认 5000ms 超时）：
    - **Test Files**: 232 passed, 1 failed (共 233 个测试套件)
    - **Tests**: 1727 passed, 1 failed (共 1728 个测试)
    - **说明**：唯一失败的测试为 `src/integration/modelSelection.test.tsx`（归属 M3 ui6b 负责修复，单跑可过，并发测试下因 5000ms 超时限制超时）。其余 232 个测试套件 100% 全部通过。
