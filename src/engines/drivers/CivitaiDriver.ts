@@ -89,8 +89,8 @@ export class CivitaiDriver extends BaseEngineDriver {
         })() ||
         ''
       ).toLowerCase();
-      const isKnownNonSd1 = eco && eco !== 'sd1' && eco !== 'sd15';
-      if (!isKnownNonSd1) {
+      const isSd1 = eco === 'sd1' || eco === 'sd15';
+      if (isSd1) {
         payload.clipSkip = Math.trunc(Number(rawClip));
       }
     }

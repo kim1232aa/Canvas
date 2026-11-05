@@ -63,6 +63,22 @@ describe('CivitaiDriver history provenance', () => {
       },
     }, {});
     expect(bodies[2].clipSkip).toBe(2);
+
+    // P2-2: no ecosystem, model is not an AIR URN, with clip_skip -> must NOT attach clipSkip
+    await new CivitaiDriver().generate({
+      prompt: 'test',
+      model: '12345@67890',
+      extraParams: { clip_skip: 2 },
+    }, {});
+    expect(bodies[3]).not.toHaveProperty('clipSkip');
+
+    // Positive case: explicit ecosystem sd1 with non-AIR model -> DOES attach clipSkip
+    await new CivitaiDriver().generate({
+      prompt: 'test',
+      model: '12345@67890',
+      extraParams: { ecosystem: 'sd1', clip_skip: 2 },
+    }, {});
+    expect(bodies[4].clipSkip).toBe(2);
   });
   const originalFetch = globalThis.fetch;
   const originalSetTimeout = globalThis.setTimeout;
