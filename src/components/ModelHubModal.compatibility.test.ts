@@ -35,6 +35,8 @@ describe('ModelHubModal LoRA Architecture Compatibility Checking', () => {
     it('normalizes official SD 1.5 architecture metadata', () => {
       expect(normalizeArchitectureFamily('SD 1.5')).toBe('sd15');
       expect(normalizeArchitectureFamily('sd1.5')).toBe('sd15');
+      expect(normalizeArchitectureFamily('sd1')).toBe('sd15');
+      expect(normalizeArchitectureFamily('urn:air:sd1:checkpoint:civitai:4201@130072')).toBe('sd15');
       expect(normalizeArchitectureFamily('stable-diffusion-v1-5')).toBe('sd15');
     });
 

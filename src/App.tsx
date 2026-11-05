@@ -2826,12 +2826,13 @@ export default function App() {
           (canvasMode==='spatial' && selectedFrameId ? spatialFrames.find((f) => f.id === selectedFrameId)?.params?.checkpoint : undefined) ||
           ''
         }
-        {...({
-          currentCheckpointBaseModel:
-            (resolvedActive as any).baseModel ||
-            ((canvasMode === 'spatial' && selectedFrameId ? spatialFrames.find((f) => f.id === selectedFrameId)?.params : undefined) as any)?.baseModel ||
-            '',
-        } as any)}
+        currentCheckpointBaseModel={
+          checkpointLoaderNode?.values?.base_model ||
+          checkpointLoaderNode?.values?.baseModel ||
+          checkpointLoaderNode?.values?.architecture ||
+          (canvasMode === 'spatial' && selectedFrameId ? spatialFrames.find((f) => f.id === selectedFrameId)?.params?.checkpoint : undefined) ||
+          undefined
+        }
         onSelectModel={handleSelectModelFromHub}
         onAddModelNode={(mId, mName, prov, extraData) => {
           const detectedProvider = explicitProvider(prov);

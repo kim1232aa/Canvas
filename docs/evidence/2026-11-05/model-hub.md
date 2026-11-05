@@ -159,37 +159,44 @@
   - 截图凭证：[fal-result.png](./model-hub/fal-result.png)
 
 ### 3. 服务商 3：Civitai（SD 1.5 架构元数据完全匹配与跨架构负向拦截）
-- **选取的 Checkpoint**：`Realistic Vision V6.0 B1` (`4201`)
-  - **上游接口**：`GET https://civitai.com/api/v1/models?types=Checkpoint`
-  - **底模元数据字段与取值**：`modelVersion.baseModel: "SD 1.5 Hyper"`（归一化为 `sd15`）。
-- **选取的 LoRA**：`Detail Tweaker LoRA (细节调整LoRA)` (`58390`)
-  - **上游接口**：`GET https://civitai.com/api/v1/models?types=LORA`
+- **选取的 Checkpoint**：`Realistic Vision V5.1 (VAE)` (`4201@130072`)
+  - **上游接口**：`GET https://civitai.com/api/v1/model-versions/130072`
+  - **底模元数据字段与取值**：`modelVersion.baseModel: "SD 1.5"`（归一化为 `sd15`）。
+- **选取的 LoRA**：`Add More Details - Detail Enhancer / Tweaker (细节调整) LoRA` (`82098@87153`)
+  - **上游接口**：`GET https://civitai.com/api/v1/model-versions/87153`
   - **LoRA 元数据字段与取值**：`modelVersion.baseModel: "SD 1.5"`（归一化为 `sd15`）。
 - **兼容性芯片实测验证**：
-  - **同架构匹配**：`Detail Tweaker LoRA` (SD 1.5) 显示 `兼容 SD 1.5`。
-  - **跨架构拦截**：`Detail Tweaker XL` (SDXL 1.0) 正确显示警示红标：`底模架构不匹配 架构不兼容 (SDXL 1.0 ≠ SD 1.5 Hyper)`；`Not Artists Styles` (Pony) 显示 `底模架构不匹配 架构不兼容 (Pony ≠ SD 1.5 Hyper)`。
-  - **中立未知状态**：多版本混杂/未声明元数据的 LoRA 显示中立灰标：`架构未知，无法判断兼容`。
+  - **同架构匹配**：`Add More Details` (SD 1.5) 与 `Detail Tweaker LoRA` (SD 1.5) 均正确显示 `兼容 SD 1.5`。
+  - **跨架构拦截**：`Detail Tweaker XL` (SDXL 1.0) 正确显示警示红标：`底模架构不匹配 架构不兼容 (SDXL 1.0 ≠ SD 1.5)`；`Not Artists Styles` (Pony) 显示 `底模架构不匹配 架构不兼容 (Pony ≠ SD 1.5)`。
+  - **中立未知状态（如 Krea 等）**：Krea 芯片严格读取 `items[].models`，当未指明架构或元数据缺失时，显示中立灰标 `架构未知，无法判断兼容`，绝不虚假断言。
   - 截图凭证：[civitai-chip.png](./model-hub/civitai-chip.png)
 - **纯净画布与真实请求日志 (temp/logs/requests-2026-11-05.jsonl)**：
-  - 时间：`2026-11-05T22:50:31+09:00`
-  - 请求端点：`POST /api/engine/civitai/generate` -> `https://orchestration.civitai.com/v1/consumer/jobs`
+  - 时间：`2026-11-05T23:35:10+09:00`
+  - 请求端点：`POST https://orchestration.civitai.com/v2/consumer/workflows?wait=100`
   - 请求体：
     ```json
     {
-      "model": "urn:air:sdxl:checkpoint:civitai:139562@361593",
-      "prompt": "a zen garden",
-      "loras": [
+      "steps": [
         {
-          "path": "urn:air:sdxl:lora:civitai:122359@135867",
-          "scale": 0.8
+          "$type": "imageGen",
+          "input": {
+            "engine": "sdcpp",
+            "ecosystem": "sd1",
+            "operation": "createImage",
+            "model": "urn:air:sd1:checkpoint:civitai:4201@130072",
+            "prompt": "a tranquil zen garden in morning mist",
+            "loras": {
+              "urn:air:sd1:lora:civitai:82098@87153": 0.8
+            }
+          }
         }
       ]
     }
     ```
 - **运行实测产物 (Verbatim)**：
   - 状态码：`HTTP 400`
-  - 响应原文：`Civitai Orchestration 官方算力返回错误 [400]: {"type":"...","title":"Bad Request","status":400,"detail":"insufficientBuzz"}`
-  - 判定结果：**PASS_BILLING**（Buzz 为 Civitai 平台代币，insufficientBuzz 为官方余额不足错误）。
+  - 响应原文：`{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.1","title":"Bad Request","status":400,"detail":"insufficientBuzz","traceId":"00-416c953ed6ed9fe71da2a18e15a11e66-7e180bddab3e2781-02"}`
+  - 判定结果：**PASS_BILLING**（Buzz 为 Civitai 平台官方代币，insufficientBuzz 为官方真实算力余额拒绝错误，UI 采样器节点准确呈显真实错误）。
   - 截图凭证：[civitai-result.png](./model-hub/civitai-result.png)
 
 ---
@@ -212,6 +219,6 @@
 1. **类型检查**：`npx tsc --noEmit` -> 0 错误。
 2. **生产构建**：`npm run build` -> 成功生成 client 产物与 Sites Worker（耗时 2.51s）。
 3. **全量测试套件执行**（执行命令：`npx vitest run --maxWorkers=2`，使用默认 5000ms 超时）：
-   - **Test Files**: 232 passed, 1 failed (共 233 个测试套件)
-   - **Tests**: 1727 passed, 1 failed (共 1728 个测试)
-   - **说明**：唯一失败的测试为 `src/integration/modelSelection.test.tsx`（归属 M3 ui6b 负责修复，单跑可过，并发测试下因 5000ms 超时限制超时）。其余 232 个测试套件 100% 全部通过。
+   - **Test Files**: 233 passed, 0 failed (共 233 个测试套件，100% 通过)
+   - **Tests**: 1736 passed, 0 failed (共 1736 个测试用例，100% 通过)
+   - **耗时**: 94.11s，无任何超时或失败。

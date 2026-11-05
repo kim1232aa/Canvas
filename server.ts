@@ -2043,19 +2043,27 @@ app.get("/api/models", async (req, res) => {
               if (cData.error) {
                 results.civitai = { error: cData.error } as any;
               } else {
-                const mappedCivitai = (cData.items || []).map((m: any) => ({
-                  id: String(m.id),
-                  name: m.name,
-                  provider: "Civitai",
-                  type: m.type,
-                  category: m.type === "LORA" ? "LoRA" : m.type === "MotionModule" ? "Video" : "Checkpoint",
-                  baseModel: (m.modelVersions || [])[0]?.baseModel || null,
-                  downloads: m.stats?.downloadCount || 0,
-                  rating: m.stats?.rating || 0,
-                  imageUrl: (m.modelVersions || [])[0]?.images?.[0]?.url || "",
-                  externalUrl: `https://civitai.com/models/${m.id}`,
-                  trainedWords: Array.isArray((m.modelVersions || [])[0]?.trainedWords) ? (m.modelVersions || [])[0].trainedWords : [],
-                }));
+                const mappedCivitai = (cData.items || []).map((m: any) => {
+                  const v = (m.modelVersions || [])[0];
+                  const versionId = v?.id;
+                  const resolvedId = versionId ? `${m.id}@${versionId}` : String(m.id);
+                  return {
+                    id: resolvedId,
+                    modelId: String(m.id),
+                    versionId: versionId ? String(versionId) : undefined,
+                    name: m.name,
+                    provider: "Civitai",
+                    type: m.type,
+                    category: m.type === "LORA" ? "LoRA" : m.type === "MotionModule" ? "Video" : "Checkpoint",
+                    baseModel: v?.baseModel || null,
+                    downloads: m.stats?.downloadCount || 0,
+                    rating: m.stats?.rating || 0,
+                    imageUrl: v?.images?.[0]?.url || "",
+                    externalUrl: versionId ? `https://civitai.com/models/${m.id}?modelVersionId=${versionId}` : `https://civitai.com/models/${m.id}`,
+                    trainedWords: Array.isArray(v?.trainedWords) ? v.trainedWords : [],
+                    modelVersions: m.modelVersions || [],
+                  };
+                });
                 if (cat === "video") {
                   // Video checkpoints (e.g. Wan): types=Checkpoint&baseModels=<video base models from GET /api/v1/enums>
                   // https://developer.civitai.com/site/reference/models.md

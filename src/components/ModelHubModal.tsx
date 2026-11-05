@@ -135,7 +135,9 @@ export function getProviderFormatHint(prov: string): { format: string; docUrl?: 
  */
 export function normalizeArchitectureFamily(rawMetadata: string | undefined | null): string {
   if (!rawMetadata) return 'unknown';
-  const s = String(rawMetadata).trim().toLowerCase();
+  let s = String(rawMetadata).trim().toLowerCase();
+  const airMatch = s.match(/^(?:urn:)?air:([^:]+):/i);
+  if (airMatch) s = airMatch[1].toLowerCase();
   // Vendor token is not an architecture
   if (s === 'bfl') return 'unknown';
 
@@ -176,8 +178,8 @@ export function normalizeArchitectureFamily(rawMetadata: string | undefined | nu
     return 'sdxl';
   }
 
-  // SD 1.5 (e.g. "SD 1.5", "sd1.5", "SD 1.5 Hyper", "SD 1.5 LCM", "stable-diffusion-v1-5", "runwayml/stable-diffusion-v1-5")
-  if (/^sd[._\s-]?1[._\s-]?[45](\s+(hyper|lcm|turbo|lightning))?$/i.test(s) || /stable[._\s-]diffusion[._\s-]v?1[._\s-]?[45]/i.test(s)) {
+  // SD 1.5 (e.g. "SD 1.5", "sd1", "sd1.5", "sd15", "SD 1.5 Hyper", "SD 1.5 LCM", "stable-diffusion-v1-5", "runwayml/stable-diffusion-v1-5")
+  if (/^sd[._\s-]?(1[._\s-]?[45]?|15)(\s+(hyper|lcm|turbo|lightning))?$/i.test(s) || /stable[._\s-]diffusion[._\s-]v?1[._\s-]?[45]/i.test(s) || s === 'sd1') {
     return 'sd15';
   }
 
@@ -442,9 +444,25 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
   const findModelBaseModel = (modelIdOrName?: string): string | undefined => {
     if (!modelIdOrName) return undefined;
     if (baseModelCache.current.has(modelIdOrName)) return baseModelCache.current.get(modelIdOrName);
+    const airMatch = modelIdOrName.match(/^(?:urn:)?air:([^:]+):[^:]+:[^:]+:(\d+@\d+|\d+)/i);
+    if (airMatch) {
+      const eco = airMatch[1].toLowerCase();
+      const modelVersion = airMatch[2];
+      if (baseModelCache.current.has(modelVersion)) return baseModelCache.current.get(modelVersion);
+      if (eco === 'sd1' || eco === 'sd15') return 'SD 1.5';
+      if (eco === 'sdxl') return 'SDXL 1.0';
+      if (eco === 'flux1') return 'FLUX.1 [dev]';
+      if (eco === 'flux2' || eco === 'flux2dev' || eco === 'flux2klein') return 'FLUX.2';
+      if (eco === 'wan2.1') return 'Wan 2.1';
+    }
+    const pairMatch = modelIdOrName.match(/(\d+)@(\d+)/);
     for (const list of Object.values(modelsData)) {
       if (Array.isArray(list)) {
-        const found = list.find((item: any) => item && (item.id === modelIdOrName || item.name === modelIdOrName));
+        const found = list.find((item: any) => item && (
+          item.id === modelIdOrName ||
+          item.name === modelIdOrName ||
+          (pairMatch && (item.id === pairMatch[0] || String(item.versionId) === pairMatch[2]))
+        ));
         if (found?.baseModel) {
           baseModelCache.current.set(modelIdOrName, String(found.baseModel));
           return String(found.baseModel);
