@@ -182,6 +182,15 @@ WIRING: 7
 
 截图里没有密钥、token、本机绝对路径。身份字段已打码。
 
+## UI 截图（rebase 到含 M1–M6 的 main 后再次点击，未点运行）
+
+画布仍是 `http://127.0.0.1:3107/`。操作：添加节点 → AI 视频生成节点 → 视频服务商选 Sogni → 自定义模型 `ltx25`。本次只确认横幅与选择器，没有点运行（上次同一账户已是免费档门闸 PASS_BILLING）。
+
+- 节点标题与 hosted-tool 横幅：`docs/evidence/2026-11-05/video/sogni-t2v-schema-banner-rebase.jpg`。标题「AI 视频（显式 Provider/Model）」。横幅原文：`schemaStatus hosted-tool:generate_video · toolName generate_video · videoModel · 有参考图时提交走 animate_photo（实时 Schema）；Seedance 参考图字段未接通`。
+- 全画布（节点顶部 + 运行按钮）：`docs/evidence/2026-11-05/video/sogni-t2v-schema-canvas-rebase.jpg`。右上角按钮「运行：AI 视频（显式 Provider/Model）」。画布上同时可见默认图像工作流节点，无密钥、无钱包、无 SID。
+- 运行按钮特写：`docs/evidence/2026-11-05/video/sogni-t2v-run-button-rebase.jpg`。文案「运行：AI 视频（显式 Provider/Model）」。
+- 滚到选择器后：`docs/evidence/2026-11-05/video/sogni-t2v-provider-model-rebase.jpg`。可见「视频服务商 (Provider)」= Sogni，「model (AI视频大模型)」= `ltx25`，其下只读标签也是 `ltx25`。
+
 三次发出的字段（提示词已截断，参考图是上传后的本站 `/api/media/…`，不是外链）：
 
 - Fal：model `fal-ai/wan-i2v-lora`，num_frames 81，fps 16，resolution 480p，aspect_ratio 16:9，seed 24231881，cfg 4，loras `[{path: https://huggingface.co/Remade-AI/matrix-shot/resolve/main/matrix_shot.safetensors, scale: 1}]`。节点原文：`Fal.ai 接口执行失败 [403]`，errorSource upstream。
