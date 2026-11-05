@@ -65,6 +65,7 @@ interface ModelHubModalProps {
   initialProvider?: string;
   isSpatialMode?: boolean;
   currentCheckpoint?: string;
+  currentCheckpointBaseModel?: string;
 }
 
 export type CategoryFilter = 'all' | 'checkpoint' | 'lora' | 'video' | 'edit';
@@ -127,60 +128,102 @@ export function getProviderFormatHint(prov: string): { format: string; docUrl?: 
   return { format: '输入该平台支持的真实模型 / LoRA 资源 ID' };
 }
 
-export function detectModelArchitecture(modelOrBase: string | undefined | null): string {
-  if (!modelOrBase) return 'unknown';
-  const s = String(modelOrBase).toLowerCase().trim();
-  if (s.includes('qwen')) return 'qwen';
-  if (s.includes('z-image') || s.includes('z_image') || s.includes('zimage')) return 'z-image';
-  if (s.includes('flux')) return 'flux';
-  if (s.includes('wan')) return 'wan';
-  if (s.includes('pony') || s.includes('pdxl')) return 'pony';
-  if (s.includes('illustrious') || s.includes('noobai')) return 'illustrious';
-  if (s.includes('sdxl') || s.includes('stable-diffusion-xl') || s.includes('animagine') || s.includes('juggernaut-xl')) return 'sdxl';
-  if (s.includes('sd 1.5') || s.includes('sd1.5') || s.includes('sd15') || s.includes('v1-5') || s.includes('stable-diffusion-v1-5') || s.includes('dreamshaper') || s.includes('meinahentai')) return 'sd15';
-  if (s.includes('sd 3.5') || s.includes('sd3.5') || s.includes('sd3') || s.includes('stable-diffusion-3')) return 'sd35';
-  if (s.includes('chroma')) return 'chroma';
-  if (s.includes('hunyuan')) return 'hunyuan';
-  if (s.includes('kolors')) return 'kolors';
+/**
+ * Normalize official architecture / baseModel metadata strings into canonical families.
+ * Strictly operates on architecture metadata strings returned by provider APIs,
+ * never on model names or whitelists.
+ */
+export function normalizeArchitectureFamily(rawMetadata: string | undefined | null): string {
+  if (!rawMetadata) return 'unknown';
+  const s = String(rawMetadata).trim().toLowerCase();
+  if (/^flux([._\s-]dev|[._\s-]schnell|[._\s-]pro|[._\s-]1(\.[0-9])?|[._\s-]2)?(\s*\[.*\])?$/i.test(s) || s === 'flux' || s === 'bfl') return 'flux';
+  if (/^(sdxl|sd_xl|stable[._\s-]diffusion[._\s-]xl)(\s*[0-9.]+)?$/i.test(s)) return 'sdxl';
+  if (/^(sd[._\s-]?1[._\s-]?[45]|stable[._\s-]diffusion[._\s-]v?1[._\s-]?[45])$/i.test(s)) return 'sd15';
+  if (/^(sd[._\s-]?3[._\s-]?[05]?|stable[._\s-]diffusion[._\s-]3(\.[0-9])?)$/i.test(s)) return 'sd35';
+  if (/^pony([._\s-]xl)?$/i.test(s)) return 'pony';
+  if (/^illustrious([._\s-]xl)?$/i.test(s)) return 'illustrious';
+  if (/^qwen([._\s-]image([._\s-][0-9.]+)*)?$/i.test(s)) return 'qwen';
+  if (/^z[._\s-]image([._\s-]turbo|[._\s-]base)?$/i.test(s)) return 'z-image';
+  if (/^wan([._\s-]?(2\.1|2\.2|video))?$/i.test(s)) return 'wan';
+  if (/^chroma/i.test(s)) return 'chroma';
+  if (/^hunyuan([._\s-]video|[._\s-]image)?$/i.test(s)) return 'hunyuan';
+  if (/^kolors/i.test(s)) return 'kolors';
   return 'unknown';
 }
 
-export function checkHubLoraCompatibility(
-  currentCheckpoint: string | undefined,
-  loraBaseModel: string | undefined,
-  loraIdOrName: string | undefined
-): { compatible: boolean; chipLabel: string; isMismatch: boolean; ckptArch: string; loraArch: string } {
-  const loraArch = detectModelArchitecture(loraBaseModel) !== 'unknown'
-    ? detectModelArchitecture(loraBaseModel)
-    : detectModelArchitecture(loraIdOrName);
-  const ckptArch = detectModelArchitecture(currentCheckpoint);
+export const detectModelArchitecture = normalizeArchitectureFamily;
 
-  if (!currentCheckpoint || ckptArch === 'unknown' || loraArch === 'unknown') {
+export type CompatibilityStatus = 'compatible' | 'mismatch' | 'unknown';
+
+export interface LoraCompatibilityResult {
+  status: CompatibilityStatus;
+  compatible: boolean;
+  isMismatch: boolean;
+  isUnknown: boolean;
+  chipLabel: string;
+  ckptArch: string;
+  loraArch: string;
+  ckptBaseModel?: string;
+  loraBaseModel?: string;
+}
+
+/**
+ * Compare checkpoint base-model metadata and LoRA base-model metadata.
+ * When an item has no such metadata, returns a neutral chip "架构未知，无法判断兼容"
+ * and NEVER claims compatible or incompatible.
+ */
+export function checkHubLoraCompatibility(
+  currentCheckpointBaseModel: string | undefined | null,
+  loraBaseModel: string | undefined | null
+): LoraCompatibilityResult {
+  const ckptBase = (currentCheckpointBaseModel || '').trim();
+  const loraBase = (loraBaseModel || '').trim();
+
+  const ckptArch = normalizeArchitectureFamily(ckptBase);
+  const loraArch = normalizeArchitectureFamily(loraBase);
+
+  // When either checkpoint or LoRA lacks explicit architecture metadata,
+  // show neutral chip "架构未知，无法判断兼容", never claim compatible or incompatible.
+  if (!ckptBase || !loraBase || ckptArch === 'unknown' || loraArch === 'unknown') {
     return {
-      compatible: true,
-      chipLabel: loraBaseModel || '未知底模',
+      status: 'unknown',
+      compatible: false,
       isMismatch: false,
+      isUnknown: true,
+      chipLabel: '架构未知，无法判断兼容',
       ckptArch,
       loraArch,
+      ckptBaseModel: ckptBase || undefined,
+      loraBaseModel: loraBase || undefined,
     };
   }
 
+  // Explicit cross-architecture mismatch
   if (ckptArch !== loraArch) {
     return {
+      status: 'mismatch',
       compatible: false,
-      chipLabel: `架构不兼容 (${loraBaseModel || loraArch} ≠ ${ckptArch})`,
       isMismatch: true,
+      isUnknown: false,
+      chipLabel: `架构不兼容 (${loraBase} ≠ ${ckptBase})`,
       ckptArch,
       loraArch,
+      ckptBaseModel: ckptBase,
+      loraBaseModel: loraBase,
     };
   }
 
+  // Explicit architecture match
   return {
+    status: 'compatible',
     compatible: true,
-    chipLabel: `兼容 ${loraBaseModel || ckptArch}`,
     isMismatch: false,
+    isUnknown: false,
+    chipLabel: `兼容 ${loraBase}`,
     ckptArch,
     loraArch,
+    ckptBaseModel: ckptBase,
+    loraBaseModel: loraBase,
   };
 }
 
@@ -246,6 +289,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
   initialProvider,
   isSpatialMode = false,
   currentCheckpoint,
+  currentCheckpointBaseModel,
 }) => {
   const [activeProvider, setActiveProvider] = useState<ProviderTab>('all');
   const [activeCategory, setActiveCategory] = useState<CategoryFilter>(initialCategory);
@@ -328,6 +372,18 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
     catalogMemo.current.set(k, p);
     p.catch(() => { if (catalogMemo.current.get(k) === p) catalogMemo.current.delete(k); });
     return p;
+  };
+
+  const findModelBaseModel = (modelIdOrName?: string): string | undefined => {
+    if (!modelIdOrName) return undefined;
+    for (const list of Object.values(modelsData)) {
+      if (Array.isArray(list)) {
+        const found = list.find((item: any) => item && (item.id === modelIdOrName || item.name === modelIdOrName));
+        if (found?.baseModel) return String(found.baseModel);
+        if (found?.architecture) return String(found.architecture);
+      }
+    }
+    return undefined;
   };
 
   const loadModels = async (
@@ -1201,8 +1257,9 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                 try {resource=selectionFromMetadata(providerKey,m,isLora?'lora':'checkpoint');}catch{/* Incomplete catalog metadata does not clear unresolved imports. */}
                 const trainedWords = m.trainedWords || [];
                 const isBookmarked = isModelBookmarked(m);
-                const baseArch = m.baseModel || '未知底模';
-                const compat = checkHubLoraCompatibility(currentCheckpoint, baseArch, modelId);
+                const baseArch = m.baseModel || m.architecture || '未知底模';
+                const resolvedCkptBase = currentCheckpointBaseModel || findModelBaseModel(currentCheckpoint);
+                const compat = checkHubLoraCompatibility(resolvedCkptBase, m.baseModel || m.architecture);
                 // fix14: skip baseArch when it duplicates the provider badge (e.g. OpenWorks + openworks).
                 const showBaseArchBadge =
                   Boolean(baseArch) &&
@@ -1503,22 +1560,32 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                                   className={`w-full py-1.5 px-2.5 rounded-xl font-bold transition-all shadow-md flex items-center justify-center gap-1.5 text-[11px] active:scale-98 ${
                                     compat.isMismatch
                                       ? 'bg-gradient-to-r from-amber-700 via-rose-700 to-red-700 hover:from-amber-600 hover:to-rose-600 text-white shadow-rose-700/30 border border-rose-500/50'
+                                      : compat.isUnknown
+                                      ? 'bg-[#22242e] hover:bg-[#2c303d] text-slate-300 border border-[#363949]'
                                       : 'bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-600 hover:from-purple-500 hover:to-cyan-500 text-white shadow-purple-600/30'
                                   }`}
                                   title={
                                     compat.isMismatch
-                                      ? `警告：当前画布底模为 ${compat.ckptArch}，而此 LoRA 为 ${compat.loraArch} 架构，跨架构挂载会导致上游报错或静默失真。`
-                                      : `挂载到当前同平台底模；生成前核实 ${baseArch} 架构`
+                                      ? `警告：当前画布底模元数据为 ${compat.ckptBaseModel}，而此 LoRA 元数据为 ${compat.loraBaseModel} 架构，跨架构挂载会导致上游报错或静默失真。`
+                                      : compat.isUnknown
+                                      ? '该资源上游目录未提供明确底模架构元数据，无法判断兼容性；生成时以上游接口校验为准。'
+                                      : `挂载到当前同平台底模；架构元数据：${baseArch}`
                                   }
                                 >
                                   {compat.isMismatch ? (
                                     <ShieldCheck className="w-3.5 h-3.5 text-amber-300" />
+                                  ) : compat.isUnknown ? (
+                                    <Info className="w-3.5 h-3.5 text-slate-400" />
                                   ) : (
                                     <Sparkles className="w-3.5 h-3.5 text-amber-300" />
                                   )}
                                   <span>{compat.isMismatch ? '底模架构不匹配' : '挂载到所选底模'}</span>
-                                  <span className={`text-[10px] px-1 py-0.2 rounded font-mono ${
-                                    compat.isMismatch ? 'bg-black/50 text-rose-200 border border-rose-500/40' : 'bg-black/30 text-cyan-200'
+                                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
+                                    compat.isMismatch
+                                      ? 'bg-black/50 text-rose-200 border border-rose-500/40'
+                                      : compat.isUnknown
+                                      ? 'bg-black/40 text-slate-300 border border-slate-700'
+                                      : 'bg-black/30 text-cyan-200'
                                   }`}>
                                     {compat.chipLabel}
                                   </span>
