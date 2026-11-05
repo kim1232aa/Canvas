@@ -6,6 +6,7 @@ describe('SenseNova authenticated model catalog', () => {
     const upstreamFetch = vi.fn(async () => new Response(JSON.stringify({ data: [
       { id: 'sensenova-u1.5-lite', name: 'SenseNova U1.5 Lite', input_modalities: ['text'], output_modalities: ['image'] },
       { id: 'deepseek-v4-flash', input_modalities: ['text'], output_modalities: ['text'] },
+      { id: 'sensenova-video-v1', name: 'SenseNova Video V1', input_modalities: ['text', 'image'], output_modalities: ['video'] },
     ] }), { status: 200, headers: { 'content-type': 'application/json' } }));
 
     const result = await fetchSenseNovaModelCatalog({ upstreamFetch }, 'https://token.sensenova.cn/v1/', 'fixture-key');
@@ -20,6 +21,7 @@ describe('SenseNova authenticated model catalog', () => {
       expect(result.items).toEqual([
         expect.objectContaining({ id: 'sensenova-u1.5-lite', name: 'SenseNova U1.5 Lite', category: 'checkpoint', tags: ['input:text', 'output:image'] }),
         expect.objectContaining({ id: 'deepseek-v4-flash', name: 'deepseek-v4-flash', category: 'reasoning', tags: ['input:text', 'output:text'] }),
+        expect.objectContaining({ id: 'sensenova-video-v1', name: 'SenseNova Video V1', category: 'video', tags: ['input:text', 'input:image', 'output:video'] }),
       ]);
     }
   });

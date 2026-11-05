@@ -143,11 +143,16 @@ export function buildOpenWorksRequest(model: string, inputSchema: ReturnType<typ
     if (!Object.hasOwn(props, k)) { extras.push([`custom_parameters.${k}`, k, v]); continue; }
     values[k] = v; mapping.push({ from: `custom_parameters.${k}`, to: k, value: v, sent: true });
   }
-  const canvasFields = ['prompt', 'negative_prompt', 'width', 'height', 'image_url', 'denoise', 'sampler_name', 'scheduler', 'duration', 'ratio', 'size', 'count'];
+  const OPENWORKS_ALIASES: Record<string, string[]> = {
+    count: ['result image count', 'image count', 'image_count', 'count', 'n', 'num_images', 'image_num'],
+    batch_size: ['result image count', 'image count', 'image_count', 'count', 'batch_size'],
+    image_num: ['result image count', 'image count', 'image_count', 'count', 'image_num'],
+  };
+  const canvasFields = ['prompt', 'negative_prompt', 'width', 'height', 'image_url', 'denoise', 'sampler_name', 'scheduler', 'duration', 'ratio', 'size', 'count', 'batch_size', 'image_num'];
   for (const field of canvasFields) {
     const v = body?.[field];
     if (!isFilled(v)) continue;
-    const target = [field, ...(CANVAS_TO_SCHEMA_ALIASES[field] || [])].find((n) => Object.hasOwn(props, n));
+    const target = [field, ...(CANVAS_TO_SCHEMA_ALIASES[field] || []), ...(OPENWORKS_ALIASES[field] || [])].find((n) => Object.hasOwn(props, n));
     if (!target) {
       // negative_prompt may still go as a named live extra below when Schema omits it
       if (field !== 'negative_prompt') extras.push([field, field, v]);

@@ -103,6 +103,18 @@ export function mapSchemaLoraItems(loras:any[], itemSchema:any, providerMeta:any
 export function loraLocalBlockMessage(providerName:string,block:{docUrl:string;docQuote:string}):string {
   return `${LOCAL_BLOCK_PREFIX}\n${providerName} 官方原文：「${block.docQuote}」\n来源：${block.docUrl}\n当前端点不接受 LoRA；请移除 LoRA 节点。`;
 }
+
+/** Non-blocking advisory notice derived strictly from the live schema properties (no hardcoded provider name or parameter list). */
+export function deriveSchemaNotice(endpoint: string, properties: Record<string, any> | undefined, isVideo: boolean = false): string | undefined {
+  if (isVideo) return undefined;
+  const props = properties || {};
+  const hasLoraField = ['loras', 'styles', 'image_loras', 'lora_list', 'lora_url', 'lora_weights'].some((k) => Object.hasOwn(props, k));
+  if (hasLoraField) return undefined;
+
+  const declaredStyleOrLoraKeys = Object.keys(props).filter((k) => /lora|style/i.test(k));
+  const supportedDesc = declaredStyleOrLoraKeys.length > 0 ? declaredStyleOrLoraKeys.join('、') : '无';
+  return `当前模型官方 Schema (${endpoint}) 未声明 loras 字段（官方声明的 LoRA/风格字段：${supportedDesc}）；若画布包含自定义 LoRA 节点，上游接口将按真实契约校验并报出。`;
+}
 /** Official-doc 「不可用 / 会拒绝」 field block (generic). Used when OpenAPI still lists the field but the parameter guide says it is unavailable. */
 export type OfficialUnavailableParam = {field:string;blockText:string;docQuote:string;docUrl:string;fetchedAt:string};
 export function officialUnavailableMessage(entry:OfficialUnavailableParam):string {
@@ -1175,7 +1187,8 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
       const specUrl=officialOpenApiSources.venice;const opPath=isVideo?'/video/queue':'/image/generate';
       const base=openApiPathRequestSchema(await readOfficialSpec(req,provider,'Venice',model,specUrl),opPath);
       const inputSchema=applyModelSpecConstraints(base,entry.constraints);
-      return {provider,model,sourceUrl,endpoint,inputSchema,modelMetadata:entry,schemaStatus:'official-openapi-runtime',schemaSource:specUrl,constraintsSource:sourceUrl,schemaUnprobed:true,mediaKind:isVideo?'video':'image'};
+      const schemaNotice=deriveSchemaNotice(endpoint,inputSchema?.properties,isVideo);
+      return {provider,model,sourceUrl,endpoint,inputSchema,modelMetadata:entry,schemaStatus:'official-openapi-runtime',schemaSource:specUrl,constraintsSource:sourceUrl,schemaUnprobed:true,mediaKind:isVideo?'video':'image',schemaNotice,loraNotice:schemaNotice};
     }
     if(provider==='deepinfra') {
       const {rows,sourceUrl}=await listForSchema(req,provider,credential);
@@ -1590,7 +1603,8 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
       const endpoint=schemaProviders[provider].root+suffix+encodeURIComponent(req.params.taskId)+(provider==='sogni' || provider==='krea'?'':'/result');
       const {data,status:upstreamStatus}=await read(req,provider,endpoint,undefined,credential);
       const task=provider==='krea'?data:provider==='muapi'?data:provider==='wavespeed'?data.data:data.data?.workflow;
-      const status=task?.status;const outputs=provider==='krea'?kreaJobOutputs(task):provider==='sogni'?task?.steps?.flatMap((s:any)=>s.artifacts || []).map((a:any)=>a.url).filter(Boolean):task?.outputs || [];
+      const status=task?.status;
+      const outputs=provider==='krea'?kreaJobOutputs(task):provider==='sogni'?task?.steps?.flatMap((s:any)=>s.artifacts || []).map((a:any)=>a.url).filter(Boolean):task?.outputs || [];
       if(!status)throw Object.assign(new Error('上游任务响应没有状态字段'),{status:upstreamStatus,rawResponse:data,endpoint,errorSource:'upstream-protocol'});
       // MuAPI sandbox keys return is_test mock results (docs/provider-api-audit/muapi.md §7). Never count as a real generation.
       if(provider==='muapi' && (data?.is_test===true || task?.is_test===true))return res.json({status:'sandbox_mock',upstreamTaskStatus:status,outputs:[],sandboxOutputs:outputs,error:`MuAPI sandbox key 返回 is_test mock 结果（上游 status=${status}），不是真实出图，不计为成功。请改用 Production key。`,rawResponse:data,upstreamStatus,endpoint,credentialRef:credential.credentialRef});
