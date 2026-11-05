@@ -31,4 +31,25 @@ describe('preset modal blocked archives', () => {
     expect(html).toMatch(/preset-blocked-std-fal-i2v[\s\S]{0,1200}title="清空当前画布并载入此工作流"/);
     expect(html).not.toMatch(/preset-blocked-std-fal-i2v[\s\S]{0,1200}title="仅追加载入待配置模板，不覆盖已有画布"/);
   });
+
+  it('renders task type filters, provider filters, and upfront requirements (reference image / text input)', () => {
+    const html = renderToStaticMarkup(<WorkflowPresetsModal isOpen onClose={vi.fn()} onLoadPreset={vi.fn()} onLoadAndRunPreset={vi.fn()} currentNodes={[]} currentConnections={[]} currentSpatialFrames={[]} onImportWorkflowData={vi.fn()} onClearCanvas={vi.fn()} />);
+    // Task filters
+    expect(html).toContain('文生图 (T2I)');
+    expect(html).toContain('文生视频 (T2V)');
+    expect(html).toContain('图生视频 (I2V)');
+    expect(html).toContain('供应商:');
+    // Upfront requirement badges
+    expect(html).toContain('📷 需参考图');
+    expect(html).toContain('✍️ 纯文本输入');
+    // New standard T2V presets rendered
+    expect(html).toContain('Fal.ai · 标准文生视频');
+    expect(html).toContain('WaveSpeed · 标准文生视频');
+    expect(html).toContain('Replicate · 标准文生视频');
+    expect(html).toContain('MuAPI · 标准文生视频');
+    expect(html).toContain('Civitai · 标准文生视频');
+    // T2V is not blocked by reference image
+    expect(html).not.toContain('preset-blocked-std-fal-t2v');
+    expect(html).not.toContain('preset-blocked-std-wavespeed-t2v');
+  });
 });

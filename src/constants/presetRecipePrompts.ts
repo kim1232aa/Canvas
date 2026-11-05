@@ -68,5 +68,25 @@ export const PRESET_RECIPE_PROMPTS: Record<string, RecipePrompt> = {
   "std-civitai-i2v": {
     "prompt": "summer",
     "source": "https://civitai.red/images/111400580"
+  },
+  "std-fal-t2v": {
+    "prompt": "a woman dancing happily in the middle of a street under a neon sign, cars drive into her and she dances over them",
+    "source": "https://civitai.red/images/84050423"
+  },
+  "std-wavespeed-t2v": {
+    "prompt": "a woman dancing happily in the middle of a street under a neon sign, cars drive into her and she dances over them",
+    "source": "https://civitai.red/images/84050423"
+  },
+  "std-muapi-t2v": {
+    "prompt": "a woman dancing happily in the middle of a street under a neon sign, cars drive into her and she dances over them",
+    "source": "https://civitai.red/images/84050423"
+  },
+  "std-replicate-t2v": {
+    "prompt": "a woman dancing happily in the middle of a street under a neon sign, cars drive into her and she dances over them",
+    "source": "https://civitai.red/images/84050423"
+  },
+  "std-civitai-t2v": {
+    "prompt": "summer",
+    "source": "https://civitai.red/images/111400580"
   }
 };
