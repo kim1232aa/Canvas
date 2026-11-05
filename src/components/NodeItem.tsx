@@ -3,6 +3,7 @@ import { NodeErrorDisclosure } from './NodeErrorDisclosure';
 import { ensureModelSchema, getModelSchemaEntry } from '../services/modelSchemaCache';
 import {PreviewPlaceholder} from './PreviewPlaceholder';
 import { useLiveVideoModelMatch } from '../hooks/useLiveVideoModelMatch';
+import { VideoJobStatus } from './VideoJobStatus';
 import {videoSchemaField} from '../utils/frontendParameters';
 import {ProviderModelSelect} from './ProviderModelSelect';
 import {noteUserModelSelection} from '../services/userModelSelection';
@@ -413,6 +414,12 @@ export const NodeItem: React.FC<NodeItemProps> = ({
             type={node.type}
             executionProgress={node.executionProgress}
           />
+          {node.state === 'running' && node.type === 'AIVideoNode' && (
+            <VideoJobStatus
+              provider={String(node.values?.targetProvider || '').trim()}
+              onUpdate={(key, value) => onUpdateValue(node.id, key, value)}
+            />
+          )}
           {node.state === 'success' && (
             <div className="flex items-center gap-1 text-[10px] font-mono text-emerald-400 bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-800/40">
               <Check className="w-3 h-3" />
