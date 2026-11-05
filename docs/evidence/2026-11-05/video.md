@@ -157,18 +157,18 @@ WIRING: 7
 | 43 | 2026-11-05T18:44:24+09:00 | civitai | https://orchestration.civitai.com/v2/consumer/workflows?wait=60 | 400 | PASS_BILLING | Civitai 400 insufficientBuzz |
 | 47 | 2026-11-05T18:44:59+09:00 | muapi | https://api.muapi.ai/api/v1/upload_file | 403 | PASS_BILLING | MuAPI upload 403 INSUFFICIENT_CREDITS; generate POST not sent |
 | 49 | 2026-11-05T18:46:10+09:00 | novita | https://api.novita.ai/v3/async/img2video | 403 | PASS_BILLING | Novita 403 NOT_ENOUGH_BALANCE |
-| 59 | 2026-11-05T18:50:42+09:00 | together | https://api.together.ai/v1/images/generations | 401 | WIRING | Together video click sent to /v1/images/generations |
-| 61 | 2026-11-05T18:51:36+09:00 | together | https://api.together.ai/v1/images/generations | 401 | WIRING | Together video click sent to /v1/images/generations |
-| 65 | 2026-11-05T18:52:32+09:00 | novita | https://api.novita.ai/v3/async/img2video | 403 | PASS_BILLING | Novita 403 NOT_ENOUGH_BALANCE（第二次，不是第一次） |
-| 67 | 2026-11-05T18:53:04+09:00 | together | https://api.together.ai/v1/images/generations | 401 | WIRING | Together video click sent to /v1/images/generations |
-| 69 | 2026-11-05T18:53:31+09:00 | together | https://api.together.ai/v1/images/generations | 401 | WIRING | Together video click sent to /v1/images/generations |
-| 71 | 2026-11-05T18:54:10+09:00 | together | https://api.together.ai/v1/images/generations | 401 | WIRING | Together video click sent to /v1/images/generations |
+| 59 | 2026-11-05T18:50:42+09:00 | together | https://api.together.ai/v1/images/generations | 401 | WIRING | Together video click sent to /v1/images/generations (catalog 401, image endpoint guessed) |
+| 61 | 2026-11-05T18:51:36+09:00 | together | https://api.together.ai/v1/images/generations | 401 | WIRING | Together video click sent to /v1/images/generations (catalog 401, image endpoint guessed) |
+| 65 | 2026-11-05T18:52:32+09:00 | novita | https://api.novita.ai/v3/async/img2video | 403 | PASS_BILLING | Novita 403 NOT_ENOUGH_BALANCE |
+| 67 | 2026-11-05T18:53:04+09:00 | together | https://api.together.ai/v1/images/generations | 401 | WIRING | Together video click sent to /v1/images/generations (catalog 401, image endpoint guessed) |
+| 69 | 2026-11-05T18:53:31+09:00 | together | https://api.together.ai/v1/images/generations | 401 | WIRING | Together video click sent to /v1/images/generations (catalog 401, image endpoint guessed) |
+| 71 | 2026-11-05T18:54:10+09:00 | together | https://api.together.ai/v1/images/generations | 401 | WIRING | Together video click sent to /v1/images/generations (catalog 401, image endpoint guessed) |
 | 77 | 2026-11-05T18:55:11+09:00 | together | https://api.together.ai/v2/videos | 401 | BLOCKED_AUTH | Together /v2/videos 401 invalid api key |
 | 81 | 2026-11-05T18:55:50+09:00 | aimlapi | https://api.aimlapi.com/v2/video/generations | 403 | PASS_BILLING | AIMLAPI 403 out of funds |
 | 87 | 2026-11-05T18:56:49+09:00 | venice | https://api.venice.ai/api/v1/video/queue | 402 | PASS_BILLING | Venice 402 Insufficient USD or Diem |
-| 90 | 2026-11-05T18:57:40+09:00 | krea | https://api.krea.ai/generate/kling/kling-2.5 | 404 | WIRING | Krea path missing /video/ prefix |
-| 93 | 2026-11-05T18:58:07+09:00 | krea | https://api.krea.ai/generate/video/kling/kling-2.5 | 402 | PASS_BILLING | Krea 402 API balance |
-| 98 | 2026-11-05T18:58:41+09:00 | sogni | https://api.sogni.ai/v1/creative-agent/workflows | 201 | WIRING | Sogni video node submitted generate_image |
+| 90 | 2026-11-05T18:57:40+09:00 | krea | https://api.krea.ai/generate/kling/kling-2.5 | 404 | WIRING | Krea path missing /video/ prefix → 404 Endpoint not found |
+| 93 | 2026-11-05T18:58:07+09:00 | krea | https://api.krea.ai/generate/video/kling/kling-2.5 | 402 | PASS_BILLING | Krea 402 API balance separate from workspace compute |
+| 98 | 2026-11-05T18:58:41+09:00 | sogni | https://api.sogni.ai/v1/creative-agent/workflows | 201 | WIRING | Sogni video node submitted generate_image (image hosted-tool), not generate_video |
 
 ## UI 截图（r4 修好后的 Sogni T2V 点击）
 
@@ -206,6 +206,24 @@ WIRING: 7
 状态由各家服务端轮询写入：Fal（`runFalQueueLifecycle` 的 onStatus，路由 try/finally 清除）、NanoGPT（`/api/video/generate`）、Civitai（`runCivitaiVideoPoll`，`server.ts` 的 isVideo 分支调用它）、Replicate（视频预测轮询）、schema-provider 路由（`isVideo === true` 的 submit / tasks/:taskId，覆盖 Krea、Sogni 以及其余走该驱动的视频任务）。浏览器里的 SchemaProviderDriver 不再写这张表。任务成功、失败或本地预算耗尽时删除记录；超过预算加 60 秒仍无人清理的记录由 TTL 删除。取消复用提交时存下的 key，不调 `getNextKey`。Fal 的 cancel_url 只读服务端任务记录，客户端传来的 URL 不用。
 
 取消按钮「停止这个视频任务」打 `POST /api/video/cancel`。没有服务端任务记录、或客户端 `provider` 与记录不一致，都是 409 且不发上游。有文档的才发：Fal `PUT {cancel_url}`（只读服务端记录），Replicate `POST` 存储的 `urls.cancel`（或按提交时的 baseUrl 拼出），Civitai `PUT /v2/consumer/workflows/{id}` body `{ "status": "canceled" }`，Krea `DELETE /jobs/{id}`，Sogni `POST /v1/creative-agent/workflows/{id}/cancel`。NanoGPT、WaveSpeed、MuAPI、Novita、Together、AIMLAPI、Venice 返回 409，正文写明没有取消接口，不发上游请求。
+
+## Sogni 视频 Schema hasReference 联动与横幅对比验证（M12 闭环）
+
+在真实 Chrome 浏览器（CDP 端口 9412，本地开发服务 127.0.0.1:3112）中实操测试两组工作流，验证 `useLiveVideoSchema` 在带参考图时首帧即加载 `animate_photo` Schema：
+
+1. **未接参考图（文生视频）**：
+   - 载入标准文生视频工作流（无 LoadImage 节点），将视频服务商切换为 Sogni，模型输入 `ltx25`。
+   - `useLiveVideoSchema` 发出 `GET /api/model-schema?provider=sogni&model=ltx25&isVideo=true`（不带 hasReference 参数）。
+   - 节点横幅即时呈现：`schemaStatus hosted-tool:generate_video · toolName generate_video · videoModel · 有参考图时提交走 animate_photo（实时 Schema）；Seedance 参考图字段未接通`。
+   - 截图存盘：`docs/evidence/2026-11-05/video/sogni-t2v-generate-video-banner-m12.png`。
+
+2. **已接参考图（图生视频）**：
+   - 载入标准图生视频工作流（带 LoadImage 参考图节点并连线到 AIVideoNode 的 `init_image` 输入插槽），将视频服务商切换为 Sogni，模型输入 `ltx25`。
+   - `useLiveVideoSchema` 检测到参考图连线，发出 `GET /api/model-schema?provider=sogni&model=ltx25&isVideo=true&hasReference=true`。
+   - 节点横幅从首帧即显示 `animate_photo`（无需等待提交或后端驱动覆盖）：`schemaStatus hosted-tool:animate_photo · toolName animate_photo · videoModel · 有参考图时提交走 animate_photo（实时 Schema）；Seedance 参考图字段未接通`。
+   - 截图存盘：`docs/evidence/2026-11-05/video/sogni-i2v-animate-photo-banner-m12.png`。
+
+两张截图均通过 `ReadMediaFile` 审查确认，无 API Key、无钱包地址、无个人敏感信息。
 
 ## 尚未完成
 
