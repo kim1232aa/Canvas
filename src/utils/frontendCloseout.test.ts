@@ -22,8 +22,13 @@ it.each(['FalAIEngineNode','ModelScopeNode','ModelScopeAiNode','NanoGPTNode','Re
  const patched=patchInspectorNode(n,before,{...before,customParameters:'{"zero":0,"enabled":false}'});
  const extraction=extractWorkflowParameters([patched],[],'n');
  expect(extraction.customParameters).toBe('{"zero":0,"enabled":false}');
- const bodies:any[]=[];vi.stubGlobal('fetch',vi.fn(async(_url,init)=>{bodies.push(JSON.parse(String(init?.body)));return new Response(JSON.stringify({imageUrl:'https://example.test/result.png'}));}));
+ const bodies:any[]=[];vi.stubGlobal('fetch',vi.fn(async(_url,init)=>{bodies.push(JSON.parse(String(init?.body)));const responsePayload=type==='NanoGPTNode'?{imageUrl:'https://example.test/result.png',model:'custom-image',provider:'NanoGPT'}:{imageUrl:'https://example.test/result.png'};return new Response(JSON.stringify(responsePayload));}));
  try {await executeWorkflow([patched],[],()=>{},undefined,'n');expect(bodies[0].custom_parameters).toEqual({zero:0,enabled:false});}finally{vi.unstubAllGlobals();}
+});
+it('surfaces missing model error when NanoGPT route response lacks model',async()=>{
+ const n=node('n','NanoGPTNode',{model:'custom-image',model_endpoint:'custom-image',prompt:'test'});
+ vi.stubGlobal('fetch',vi.fn(async()=>new Response(JSON.stringify({imageUrl:'https://example.test/result.png'}))));
+ try {await expect(executeWorkflow([n],[],()=>{},undefined,'n')).rejects.toThrow('NanoGPT 图像路由返回缺少 model');}finally{vi.unstubAllGlobals();}
 });
 it('explicit Civitai video framework dispatch uses the dedicated driver and keeps the recipe',async()=>{
  const registry=new EngineRegistryClass();const driver=registry.getDriver('civitai')!;const generate=vi.spyOn(driver,'generate').mockResolvedValue({mediaUrl:'out',mediaType:'video',provider:'civitai',model:'custom',providerId:'civitai',seed:null});
