@@ -73,15 +73,34 @@ describe('TensorArt model driver', () => {
     expect(result.seed).toBe(123456);
   });
 
-  it('propagates upstream HTTP errors transparently', async () => {
+  it('surfaces HTTP status, endpoint, and verbatim body on failure without laundering', async () => {
     const driver = new TensorArtDriver();
 
     vi.mocked(tracedFetch).mockResolvedValueOnce({
       ok: false,
       status: 400,
+      text: async () => '{"code":3,"message":"Params Valid","details":[{"field":"base","message":"credits not enough"}]}',
+    } as any);
+
+    await expect(
+      driver.generate(
+        {
+          model: '613045163490732233',
+          prompt: 'test prompt',
+        } as any,
+        { tensorartKey: 'token' }
+      )
+    ).rejects.toThrow(/Tensor\.Art 路由 \/api\/tensorart\/generate 返回 HTTP 400: \{"code":3,"message":"Params Valid","details":\[\{"field":"base","message":"credits not enough"\}\]\}/);
+  });
+
+  it('throws with raw response when mediaUrl is missing without falling back to defaults', async () => {
+    const driver = new TensorArtDriver();
+
+    vi.mocked(tracedFetch).mockResolvedValueOnce({
+      ok: true,
       json: async () => ({
-        error: 'Tensor.Art 模型任务提交失败 [400]',
-        details: 'credits not enough',
+        provider: 'Tensor.Art (模型 API)',
+        model: '613045163490732233',
       }),
     } as any);
 
@@ -93,6 +112,28 @@ describe('TensorArt model driver', () => {
         } as any,
         { tensorartKey: 'token' }
       )
-    ).rejects.toThrow(/HTTP 400: Tensor\.Art 模型任务提交失败 \[400\] · credits not enough/);
+    ).rejects.toThrow(/Tensor\.Art 路由返回缺少 mediaUrl: \{"provider":"Tensor\.Art \(模型 API\)","model":"613045163490732233"\}/);
+  });
+
+  it('throws with raw response when model is missing from response', async () => {
+    const driver = new TensorArtDriver();
+
+    vi.mocked(tracedFetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        mediaUrl: 'https://example.com/out.png',
+        provider: 'Tensor.Art (模型 API)',
+      }),
+    } as any);
+
+    await expect(
+      driver.generate(
+        {
+          model: '613045163490732233',
+          prompt: 'test prompt',
+        } as any,
+        { tensorartKey: 'token' }
+      )
+    ).rejects.toThrow(/Tensor\.Art 路由返回缺少 model: \{"mediaUrl":"https:\/\/example\.com\/out\.png","provider":"Tensor\.Art \(模型 API\)"\}/);
   });
 });

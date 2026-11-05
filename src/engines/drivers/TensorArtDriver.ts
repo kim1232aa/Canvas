@@ -42,7 +42,8 @@ export class TensorArtDriver extends BaseEngineDriver {
     if (params.sampler_name || params.extraParams?.sampler_name) body.sampler_name = params.sampler_name || params.extraParams?.sampler_name;
     if (params.scheduler || params.extraParams?.scheduler) body.scheduler = params.scheduler || params.extraParams?.scheduler;
 
-    const resp = await fetch('/api/tensorart/generate', {
+    const endpoint = '/api/tensorart/generate';
+    const resp = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -52,19 +53,29 @@ export class TensorArtDriver extends BaseEngineDriver {
     });
 
     if (!resp.ok) {
-      const err = await resp.json().catch(() => ({ error: 'Tensor.Art 生成失败' }));
-      throw new Error(`HTTP ${resp.status}: ${[err.error, typeof err.details === 'object' ? JSON.stringify(err.details) : err.details, err.credentialHint].filter(Boolean).join(' · ')}`);
+      const rawBody = await resp.text().catch(() => '');
+      throw new Error(`Tensor.Art 路由 ${endpoint} 返回 HTTP ${resp.status}: ${rawBody}`);
     }
 
     const data = await resp.json();
+    if (!data.mediaUrl) {
+      throw new Error(`Tensor.Art 路由返回缺少 mediaUrl: ${JSON.stringify(data)}`);
+    }
+    if (!data.model) {
+      throw new Error(`Tensor.Art 路由返回缺少 model: ${JSON.stringify(data)}`);
+    }
+    if (!data.provider) {
+      throw new Error(`Tensor.Art 路由返回缺少 provider: ${JSON.stringify(data)}`);
+    }
+
     return {
-      mediaUrl: data.mediaUrl || data.imageUrl || data.videoUrl,
+      mediaUrl: data.mediaUrl,
       mediaType: data.mediaType || 'image',
-      provider: data.provider || 'Tensor.Art (模型 API)',
+      provider: data.provider,
       providerId: this.id,
-      model: data.model || params.model,
-      actualModel: data.actualModel || data.model || params.model,
-      actualProvider: data.actualProvider || 'Tensor.Art (模型 API)',
+      model: data.model,
+      actualModel: data.actualModel,
+      actualProvider: data.actualProvider,
       requestedModel: params.model,
       seed: data.seed ?? data.historyItem?.seed ?? null,
       rawResponse: data,

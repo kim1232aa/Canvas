@@ -23,8 +23,7 @@ export class NanoGPTDriver extends BaseEngineDriver {
     const isVideo = Boolean(params.isVideo || params.videoDuration != null);
     if (isVideo) {
       // Official NanoGPT Video API (https://docs.nano-gpt.com/api-reference/endpoint/video-generation):
-      // Supported fields: model, prompt, imageUrl (image_url), duration, aspect_ratio, seed.
-      // Steps, cfg, sampler_name, scheduler are not in the official specification and are omitted.
+      // Supported fields: model, prompt, imageUrl (image_url), duration, aspect_ratio, seed, negative_prompt, cfg_scale, num_inference_steps.
       const videoPayload: Record<string, any> = {
         workflowSnapshot: params.workflowSnapshot,
         custom_parameters: params.extraParams?.custom_parameters,
@@ -36,6 +35,9 @@ export class NanoGPTDriver extends BaseEngineDriver {
       if (params.image_url) videoPayload.image_url = params.image_url;
       if (params.seed != null) videoPayload.seed = params.seed;
       if (params.videoDuration != null) videoPayload.duration = params.videoDuration;
+      if (params.negative_prompt) videoPayload.negative_prompt = params.negative_prompt;
+      if (params.steps != null) videoPayload.num_inference_steps = params.steps;
+      if (params.cfg != null) videoPayload.cfg_scale = params.cfg;
 
       const endpoint = '/api/video/generate';
       const resp = await fetch(endpoint, {
@@ -49,20 +51,18 @@ export class NanoGPTDriver extends BaseEngineDriver {
 
       if (!resp.ok) {
         const rawBody = await resp.text().catch(() => '');
-        let errMessage = `NanoGPT 视频路由 ${endpoint} 返回 HTTP ${resp.status}: ${rawBody}`;
-        try {
-          const errObj = JSON.parse(rawBody);
-          const detail = errObj.details || errObj.error;
-          if (detail) {
-            errMessage = `NanoGPT 视频路由 ${endpoint} 返回 HTTP ${resp.status}: ${typeof detail === 'object' ? JSON.stringify(detail) : detail}`;
-          }
-        } catch {}
-        throw new Error(errMessage);
+        throw new Error(`NanoGPT 视频路由 ${endpoint} 返回 HTTP ${resp.status}: ${rawBody}`);
       }
 
       const vData = await resp.json();
       if (!vData.videoUrl) {
         throw new Error(`NanoGPT 视频路由返回缺少 videoUrl: ${JSON.stringify(vData)}`);
+      }
+      if (!vData.model) {
+        throw new Error(`NanoGPT 视频路由返回缺少 model: ${JSON.stringify(vData)}`);
+      }
+      if (!vData.provider) {
+        throw new Error(`NanoGPT 视频路由返回缺少 provider: ${JSON.stringify(vData)}`);
       }
 
       return {
@@ -113,33 +113,28 @@ export class NanoGPTDriver extends BaseEngineDriver {
 
     if (!resp.ok) {
       const rawBody = await resp.text().catch(() => '');
-      let errMessage = `NanoGPT 图像路由 ${endpoint} 返回 HTTP ${resp.status}: ${rawBody}`;
-      try {
-        const errObj = JSON.parse(rawBody);
-        const detail = errObj.details || errObj.error;
-        if (detail) {
-          errMessage = `NanoGPT 图像路由 ${endpoint} 返回 HTTP ${resp.status}: ${typeof detail === 'object' ? JSON.stringify(detail) : detail}`;
-        }
-      } catch {}
-      throw new Error(errMessage);
+      throw new Error(`NanoGPT 图像路由 ${endpoint} 返回 HTTP ${resp.status}: ${rawBody}`);
     }
 
     const data = await resp.json();
-    if (!data.imageUrl && !data.mediaUrl) {
+    if (!data.imageUrl) {
       throw new Error(`NanoGPT 图像路由返回缺少 imageUrl: ${JSON.stringify(data)}`);
     }
     if (!data.model) {
       throw new Error(`NanoGPT 图像路由返回缺少 model: ${JSON.stringify(data)}`);
     }
+    if (!data.provider) {
+      throw new Error(`NanoGPT 图像路由返回缺少 provider: ${JSON.stringify(data)}`);
+    }
 
     return {
-      mediaUrl: data.imageUrl || data.mediaUrl,
+      mediaUrl: data.imageUrl,
       mediaType: 'image',
-      provider: data.provider || this.name,
+      provider: data.provider,
       providerId: this.id,
       model: data.model,
-      actualModel: data.actualModel || data.model,
-      actualProvider: data.actualProvider || this.name,
+      actualModel: data.actualModel,
+      actualProvider: data.actualProvider,
       requestedModel: params.model,
       seed: data.historyItem?.seed ?? null,
       rawResponse: data,
