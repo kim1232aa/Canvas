@@ -65,6 +65,7 @@ interface ModelHubModalProps {
   initialProvider?: string;
   isSpatialMode?: boolean;
   currentCheckpoint?: string;
+  currentCheckpointBaseModel?: string;
 }
 
 export type CategoryFilter = 'all' | 'checkpoint' | 'lora' | 'video' | 'edit';
@@ -104,52 +105,208 @@ const ARCHITECTURE_TAGS = [
   {id:'krea',label:'Krea'}, {id:'together',label:'Together'}, {id:'aimlapi',label:'AIMLAPI'}, {id:'novita',label:'Novita'}, {id:'venice',label:'Venice'}, {id:'deepinfra',label:'DeepInfra'}, {id:'chroma',label:'Chroma'}, {id:'hunyuan',label:'Hunyuan'}, {id:'kolors',label:'Kolors'}, {id:'pixart',label:'PixArt'}, {id:'auraflow',label:'AuraFlow'}, {id:'anima',label:'Anima'}, {id:'ernie',label:'ERNIE'}, {id:'hidream',label:'HiDream'},
 ];
 
-interface ArchitectureFields { baseModel?: unknown; id?: unknown; name?: unknown; description?: unknown; tags?: unknown }
+export function getProviderFormatHint(prov: string): { format: string; docUrl?: string; docLabel?: string } {
+  if (prov === 'tensorart') return { format: '输入 Tensor.Art / 吐司模型页 URL 里的纯数字模型 ID (如从 https://tensor.art/models/... 复制)', docUrl: 'https://tensor.art', docLabel: 'Tensor.Art 官方模型库' };
+  if (prov === 'huggingface') return { format: '输入 Hugging Face 仓库 ID，格式为 owner/repo (如从 https://huggingface.co/models 复制)', docUrl: 'https://huggingface.co/models', docLabel: 'Hugging Face Models' };
+  if (prov === 'modelscope' || prov === 'modelscope_ai') return { format: '输入魔搭社区模型 ID，格式为 组织名/模型名', docUrl: prov === 'modelscope' ? 'https://modelscope.cn/models' : 'https://www.modelscope.ai/models', docLabel: '魔搭社区模型库' };
+  if (prov === 'fal') return { format: '输入 Fal.ai 官方端点路径 (如 fal-ai/...)', docUrl: 'https://fal.ai/models', docLabel: 'Fal.ai Models 目录' };
+  if (prov === 'nanogpt') return { format: '输入 NanoGPT 接口端点 ID (如 qwen-image-2.1/text-to-image 或 wan-2.1/t2v-720p)', docUrl: 'https://nano-gpt.com/models', docLabel: 'NanoGPT 模型中心' };
+  if (prov === 'replicate') return { format: '输入 Replicate 仓库 ID，格式为 owner/model-name', docUrl: 'https://replicate.com/explore', docLabel: 'Replicate Explore' };
+  if (prov === 'runware') return { format: '输入 Runware AIR 标识符 (如 civitai:...@... 或 runware:...)', docUrl: 'https://docs.runware.ai', docLabel: 'Runware 官方文档' };
+  if (prov === 'modelslab') return { format: '输入 ModelsLab 官方模型 ID 或 lora_model ID', docUrl: 'https://modelslab.com/models', docLabel: 'ModelsLab 模型库' };
+  if (prov === 'muapi') return { format: '输入 MuAPI 官方端点 ID', docUrl: 'https://muapi.ai', docLabel: 'MuAPI 官方网站' };
+  if (prov === 'wavespeed') return { format: '输入 WaveSpeed 官方端点 ID', docUrl: 'https://wavespeed.ai', docLabel: 'WaveSpeed 官方网站' };
+  if (prov === 'sogni') return { format: '输入 Sogni 协议模型 ID 或 LoRA 标识符', docUrl: 'https://docs.sogni.ai', docLabel: 'Sogni 官方文档' };
+  if (prov === 'krea') return { format: '输入 Krea 端点路径 (如 image/...) 或 style ID', docUrl: 'https://krea.ai', docLabel: 'Krea 官方网站' };
+  if (prov === 'sensenova') return { format: '输入商汤日日新官方模型 ID (如 sensenova-u1.5-lite)', docUrl: 'https://platform.sensenova.cn', docLabel: 'SenseNova 开放平台' };
+  if (prov === 'novita') return { format: '输入 Novita 官方 sd_name_in_api 或端点名称', docUrl: 'https://novita.ai/models', docLabel: 'Novita 模型库' };
+  if (prov === 'mage') return { format: '输入 Mage 官方 model_id (mango 系列)', docUrl: 'https://docs.mage.space/api/models/mango', docLabel: 'Mage Mango 文档' };
+  if (prov === 'agnes') return { format: '输入 Agnes 官方模型 ID (如 agnes-image-2.5-flash)', docUrl: 'https://agnes.ai', docLabel: 'Agnes AI 官方网站' };
+  if (prov === 'openai_compat' || prov === 'grok_compat') return { format: '输入您在 Base URL 目标服务上部署的实际模型 ID', docUrl: undefined, docLabel: undefined };
+  if (prov === 'civitai') return { format: '输入 Civitai 模型数字 ID 或 AIR URN (urn:air:...)', docUrl: 'https://civitai.com/models', docLabel: 'Civitai 模型库' };
+  if (prov === 'openworks') return { format: '输入 Tensor.Art OpenWorks 工具 name', docUrl: 'https://tensor.art', docLabel: 'Tensor.Art OpenWorks' };
+  return { format: '输入该平台支持的真实模型 / LoRA 资源 ID' };
+}
+
+/**
+ * Normalize official architecture / baseModel metadata strings into canonical families.
+ * Strictly operates on architecture metadata strings returned by provider APIs,
+ * never on model names or whitelists.
+ */
+export function normalizeArchitectureFamily(rawMetadata: string | undefined | null): string {
+  if (!rawMetadata) return 'unknown';
+  let s = String(rawMetadata).trim().toLowerCase();
+  const airMatch = s.match(/^(?:urn:)?air:([^:]+):/i);
+  if (airMatch) s = airMatch[1].toLowerCase();
+  // Vendor token is not an architecture
+  if (s === 'bfl') return 'unknown';
+
+  // FLUX.1 family (e.g. "Flux.1 D", "Flux.1 S", "flux_dev", "flux_schnell", "FLUX.1 [dev]", "black-forest-labs/FLUX.1-dev")
+  // Strictly FLUX.1 (distinct from FLUX.2)
+  if (
+    /flux[._\s-]?1(\.[0-9])?/i.test(s) ||
+    s === 'flux_dev' ||
+    s === 'flux_schnell' ||
+    s === 'flux-dev' ||
+    s === 'flux-schnell' ||
+    s === 'flux.1' ||
+    s === 'flux.1 d' ||
+    s === 'flux.1 s'
+  ) {
+    return 'flux-1';
+  }
+
+  // FLUX.2 family (e.g. "Flux.2 D", "Flux.2 Klein 9B", "flux_2", "black-forest-labs/FLUX.2-klein-base-9B")
+  if (/flux[._\s-]?2/i.test(s)) {
+    return 'flux-2';
+  }
+
+  // Generic versionless 'flux' without version cannot be determined as compatible with 1 or 2
+  if (s === 'flux') return 'unknown';
+
+  // Wan 2.1 vs Wan 2.2
+  if (/wan([._\s-]?(video)?)?[._\s-]?2\.1\b/i.test(s) || s === 'wan video 14b t2v' || s === 'wan video 14b') {
+    return 'wan-2.1';
+  }
+  if (/wan([._\s-]?(video)?)?[._\s-]?2\.2\b/i.test(s) || s.includes('wan video 2.2') || s.includes('wan2.2')) {
+    return 'wan-2.2';
+  }
+  if (s === 'wan' || s === 'wan video') return 'unknown';
+
+  // SDXL 1.0 (e.g. "SDXL 1.0", "sdxl", "SDXL Turbo", "SDXL 1.0 LCM", "stable-diffusion-xl", "stabilityai/stable-diffusion-xl-base-1.0")
+  if (/^sd[._\s-]?xl(\s*[0-9.]+)?(\s+(hyper|lcm|turbo|lightning))?$/i.test(s) || /stable[._\s-]diffusion[._\s-]xl/i.test(s)) {
+    return 'sdxl';
+  }
+
+  // SD 1.5 (e.g. "SD 1.5", "sd1", "sd1.5", "sd15", "SD 1.5 Hyper", "SD 1.5 LCM", "stable-diffusion-v1-5", "runwayml/stable-diffusion-v1-5")
+  if (/^sd[._\s-]?(1[._\s-]?[45]?|15)(\s+(hyper|lcm|turbo|lightning))?$/i.test(s) || /stable[._\s-]diffusion[._\s-]v?1[._\s-]?[45]/i.test(s) || s === 'sd1') {
+    return 'sd15';
+  }
+
+  // SD 3.5 (e.g. "SD 3.5", "sd3.5", "stable-diffusion-3.5")
+  if (/^(sd[._\s-]?3[._\s-]?[05]?|stable[._\s-]diffusion[._\s-]3(\.[0-9])?)$/i.test(s)) {
+    return 'sd35';
+  }
+
+  // Pony / Illustrious
+  if (/^pony([._\s-]xl)?$/i.test(s)) return 'pony';
+  if (/^illustrious([._\s-]xl)?$/i.test(s)) return 'illustrious';
+
+  // Qwen (e.g. "Qwen-Image", "Qwen-Image-2.1", "Qwen/Qwen-Image")
+  if (/^qwen([._\s-]image([._\s-][0-9.]+)*)?$/i.test(s) || s.includes('qwen-image') || s.includes('qwen/qwen-image')) {
+    return 'qwen';
+  }
+
+  // Z-Image (e.g. "Z-Image", "Z-Image-Turbo", "Tongyi-MAI/Z-Image-Turbo")
+  if (/^z[._\s-]image([._\s-]turbo|[._\s-]base)?$/i.test(s) || s.includes('z-image-turbo') || s.includes('z-image')) {
+    return 'z-image';
+  }
+
+  return 'unknown';
+}
+
+export const detectModelArchitecture = normalizeArchitectureFamily;
+
+export type CompatibilityStatus = 'compatible' | 'mismatch' | 'unknown';
+
+export interface LoraCompatibilityResult {
+  status: CompatibilityStatus;
+  compatible: boolean;
+  isMismatch: boolean;
+  isUnknown: boolean;
+  chipLabel: string;
+  ckptArch: string;
+  loraArch: string;
+  ckptBaseModel?: string;
+  loraBaseModel?: string;
+}
+
+/**
+ * Compare checkpoint base-model metadata and LoRA base-model metadata.
+ * When an item has no such metadata, returns a neutral chip "架构未知，无法判断兼容"
+ * and NEVER claims compatible or incompatible.
+ */
+export function checkHubLoraCompatibility(
+  currentCheckpointBaseModel: string | undefined | null,
+  loraBaseModel: string | undefined | null
+): LoraCompatibilityResult {
+  const ckptBase = (currentCheckpointBaseModel || '').trim();
+  const loraBase = (loraBaseModel || '').trim();
+
+  const ckptArch = normalizeArchitectureFamily(ckptBase);
+  const loraArch = normalizeArchitectureFamily(loraBase);
+
+  // When either checkpoint or LoRA lacks explicit architecture metadata,
+  // show neutral chip "架构未知，无法判断兼容", never claim compatible or incompatible.
+  if (!ckptBase || !loraBase || ckptArch === 'unknown' || loraArch === 'unknown') {
+    return {
+      status: 'unknown',
+      compatible: false,
+      isMismatch: false,
+      isUnknown: true,
+      chipLabel: '架构未知，无法判断兼容',
+      ckptArch,
+      loraArch,
+      ckptBaseModel: ckptBase || undefined,
+      loraBaseModel: loraBase || undefined,
+    };
+  }
+
+  // Explicit cross-architecture mismatch
+  if (ckptArch !== loraArch) {
+    return {
+      status: 'mismatch',
+      compatible: false,
+      isMismatch: true,
+      isUnknown: false,
+      chipLabel: `架构不兼容 (${loraBase} ≠ ${ckptBase})`,
+      ckptArch,
+      loraArch,
+      ckptBaseModel: ckptBase,
+      loraBaseModel: loraBase,
+    };
+  }
+
+  // Explicit architecture match
+  return {
+    status: 'compatible',
+    compatible: true,
+    isMismatch: false,
+    isUnknown: false,
+    chipLabel: `兼容 ${loraBase}`,
+    ckptArch,
+    loraArch,
+    ckptBaseModel: ckptBase,
+    loraBaseModel: loraBase,
+  };
+}
+
+interface ArchitectureFields { baseModel?: unknown; architecture?: unknown; id?: unknown; name?: unknown; description?: unknown; tags?: unknown }
 
 function matchesArchitecture(m: ArchitectureFields, arch: string): boolean {
   if (!arch || arch === 'all') return true;
-  const target = arch.toLowerCase();
-  const baseModel = String(m.baseModel || '').toLowerCase();
-  const id = String(m.id || '').toLowerCase();
-  const name = String(m.name || '').toLowerCase();
-  const desc = String(m.description || '').toLowerCase();
-  const tags = Array.isArray(m.tags) ? m.tags.map((t: unknown) => String(t).toLowerCase()) : [];
+  const rawBase = m.baseModel || m.architecture;
+  if (!rawBase) return false;
+  const parsed = normalizeArchitectureFamily(String(rawBase));
+  if (parsed === 'unknown') return false;
 
-  if (target === 'flux') {
-    return baseModel.includes('flux') || id.includes('flux') || name.includes('flux') || tags.some(t => t.includes('flux'));
-  }
-  if (target === 'sdxl') {
-    return baseModel.includes('sdxl') || id.includes('sdxl') || name.includes('sdxl') || tags.some(t => t.includes('sdxl'));
-  }
-  if (target === 'wan') {
-    return baseModel.includes('wan') || id.includes('wan') || name.includes('wan') || tags.some(t => t.includes('wan'));
-  }
-  if (target === 'sd15' || target === 'sd 1.5') {
-    return (
-      baseModel.includes('sd 1.5') ||
-      baseModel.includes('sd1.5') ||
-      baseModel.includes('sd 1') ||
-      id.includes('sd15') ||
-      id.includes('sd-1-5') ||
-      id.includes('sd1.5') ||
-      name.includes('sd 1.5') ||
-      name.includes('sd1.5') ||
-      tags.some(t => t.includes('sd 1.5') || t.includes('sd15'))
-    );
-  }
-  if (target === 'pony') {
-    return baseModel.includes('pony') || id.includes('pony') || name.includes('pony') || tags.some(t => t.includes('pony'));
-  }
-  if (target === 'illustrious') {
-    return baseModel.includes('illustrious') || id.includes('illustrious') || name.includes('illustrious') || tags.some(t => t.includes('illustrious'));
-  }
-  if (target === 'qwen') {
-    return baseModel.includes('qwen') || id.includes('qwen') || name.includes('qwen') || tags.some(t => t.includes('qwen'));
-  }
-  if (target === 'z-image') {
-    return baseModel.includes('z-image') || id.includes('z-image') || name.includes('z-image') || tags.some(t => t.includes('z-image'));
-  }
-  return baseModel.includes(target) || id.includes(target) || name.includes(target) || desc.includes(target) || tags.some(t => t.includes(target));
+  const target = arch.toLowerCase();
+  if (target === 'flux') return parsed === 'flux-1';
+  if (target === 'flux-2' || target === 'flux2') return parsed === 'flux-2';
+  if (target === 'sdxl') return parsed === 'sdxl';
+  if (target === 'wan') return parsed === 'wan-2.1';
+  if (target === 'wan-2.2' || target === 'wan2.2') return parsed === 'wan-2.2';
+  if (target === 'sd15' || target === 'sd 1.5') return parsed === 'sd15';
+  if (target === 'sd35' || target === 'sd 3.5') return parsed === 'sd35';
+  if (target === 'pony') return parsed === 'pony';
+  if (target === 'illustrious') return parsed === 'illustrious';
+  if (target === 'qwen') return parsed === 'qwen';
+  if (target === 'z-image') return parsed === 'z-image';
+  if (target === 'chroma') return parsed === 'chroma';
+  if (target === 'hunyuan') return parsed === 'hunyuan';
+  if (target === 'kolors') return parsed === 'kolors';
+
+  return parsed === target;
 }
 
 export const ModelHubModal: React.FC<ModelHubModalProps> = ({
@@ -165,6 +322,8 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
   initialCategory = 'all',
   initialProvider,
   isSpatialMode = false,
+  currentCheckpoint,
+  currentCheckpointBaseModel,
 }) => {
   const [activeProvider, setActiveProvider] = useState<ProviderTab>('all');
   const [activeCategory, setActiveCategory] = useState<CategoryFilter>(initialCategory);
@@ -236,6 +395,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
   // clean-0942: one catalog GET per URL per open. StrictMode double effects, initialProvider/initialCategory settling
   // after open, and repeated handlers share the in-flight/settled result. Failures are dropped so 重试 refetches.
   const catalogMemo = useRef(new Map<string, ReturnType<typeof fetchLiveModels>>());
+  const baseModelCache = useRef(new Map<string, string>());
   const wasOpen = useRef(false);
   if (isOpen && !wasOpen.current) { catalogMemo.current = new Map(); beginTraceOperation('打开底模中心'); }
   wasOpen.current = isOpen;
@@ -247,6 +407,41 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
     catalogMemo.current.set(k, p);
     p.catch(() => { if (catalogMemo.current.get(k) === p) catalogMemo.current.delete(k); });
     return p;
+  };
+
+  const findModelBaseModel = (modelIdOrName?: string): string | undefined => {
+    if (!modelIdOrName) return undefined;
+    if (baseModelCache.current.has(modelIdOrName)) return baseModelCache.current.get(modelIdOrName);
+    const airMatch = modelIdOrName.match(/^(?:urn:)?air:([^:]+):[^:]+:[^:]+:(\d+@\d+|\d+)/i);
+    if (airMatch) {
+      const eco = airMatch[1].toLowerCase();
+      const modelVersion = airMatch[2];
+      if (baseModelCache.current.has(modelVersion)) return baseModelCache.current.get(modelVersion);
+      if (eco === 'sd1' || eco === 'sd15') return 'SD 1.5';
+      if (eco === 'sdxl') return 'SDXL 1.0';
+      if (eco === 'flux1') return 'FLUX.1 [dev]';
+      if (eco === 'flux2' || eco === 'flux2dev' || eco === 'flux2klein') return 'FLUX.2';
+      if (eco === 'wan2.1') return 'Wan 2.1';
+    }
+    const pairMatch = modelIdOrName.match(/(\d+)@(\d+)/);
+    for (const list of Object.values(modelsData)) {
+      if (Array.isArray(list)) {
+        const found = list.find((item: any) => item && (
+          item.id === modelIdOrName ||
+          item.name === modelIdOrName ||
+          (pairMatch && (item.id === pairMatch[0] || String(item.versionId) === pairMatch[2]))
+        ));
+        if (found?.baseModel) {
+          baseModelCache.current.set(modelIdOrName, String(found.baseModel));
+          return String(found.baseModel);
+        }
+        if (found?.architecture) {
+          baseModelCache.current.set(modelIdOrName, String(found.architecture));
+          return String(found.architecture);
+        }
+      }
+    }
+    return undefined;
   };
 
   const loadModels = async (
@@ -344,6 +539,11 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
           errors[key] = (val as any).error + ((val as any).details ? `: ${(val as any).details}` : '');
         } else if (Array.isArray(val)) {
           validData[key] = val;
+          val.forEach((item: any) => {
+            const base = item?.baseModel || item?.architecture;
+            if (item?.id && base) baseModelCache.current.set(String(item.id), String(base));
+            if (item?.name && base) baseModelCache.current.set(String(item.name), String(base));
+          });
           // A full directory page does not establish that another page exists.
         }
       });
@@ -524,6 +724,126 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
     return 0;
   });
 
+  const handleApplyCustomId = async (directId?: string) => {
+    const rawId = (directId || customId).trim();
+    if (importing || activeProvider === 'all' || !rawId) return;
+    const version = requestVersion.current;
+    setImporting(true);
+    setImportError(null);
+    try {
+      if (activeProvider === 'civitai') {
+        const resource = await verifyCivitaiSelection(rawId, activeCategory === 'lora' ? 'lora' : 'checkpoint');
+        if (version !== requestVersion.current) return;
+        if (activeCategory === 'lora') {
+          if (onSelectLoRAWithBaseModel) onSelectLoRAWithBaseModel(resource);
+          else if (onAddLora) onAddLora({ ...resource }); // never invent 0.8
+        } else onSelectModel(resource.name, resource.name, activeProvider, resource);
+        onClose();
+        return;
+      }
+      // LoRA Hub paste of an HTTP(S) weight URL: same executable attachment as LoRALoader typing.
+      if (activeCategory === 'lora' && isExplicitLoraWeightUrl(rawId)) {
+        const lora = selectionFromExplicitLoraUrl(activeProvider, rawId);
+        if (version !== requestVersion.current) return;
+        if (onSelectLoRAWithBaseModel) onSelectLoRAWithBaseModel(lora);
+        else if (onAddLora) onAddLora({ ...lora }); // strength must be explicit — never invent 0.8
+        else throw new Error('当前画布没有可挂载 LoRA 的入口，请先选择底模。');
+        onClose();
+        return;
+      }
+      if (activeProvider === 'replicate') {
+        const info = await fetchReplicateModelInfo(rawId);
+        if (version !== requestVersion.current) return;
+        const verifiedType = String(info?.category || info?.type || '').toLowerCase();
+        const isLora = ['lora', 'locon', 'lycoris', 'dora'].includes(verifiedType) || (activeCategory === 'lora' && rawId.toLowerCase().includes('lora'));
+        if (isLora) {
+          const words = info?.triggerWords || info?.trainedWords || [];
+          const lora = {
+            name: String(rawId),
+            provider: 'replicate',
+            civitaiId: undefined,
+            triggerWords: Array.isArray(words) ? words.join(', ') : String(words),
+            baseModel: info?.baseModel || undefined,
+            resourceVerified: true,
+            resource_source: 'replicate',
+            resource_kind: verifiedType,
+            downloadUrl: info?.downloadUrl,
+          };
+          if (onSelectLoRAWithBaseModel) onSelectLoRAWithBaseModel(lora);
+          else if (onAddLora) onAddLora({ ...lora }); // strength must be explicit — never invent 0.8
+          else onSelectModel(rawId, info?.name || rawId, 'replicate', info);
+        } else {
+          onSelectModel(rawId, info?.name || rawId, 'replicate', info);
+        }
+        onClose();
+        return;
+      }
+      let info: any = { id: rawId, name: rawId };
+      if (activeProvider === 'huggingface') info = await fetchHuggingFaceModelInfo(rawId);
+      if (activeProvider === 'tensorart') info = await fetchTensorArtModelInfo(rawId);
+      if (version !== requestVersion.current) return;
+      if (!info?.id) throw new Error('查询未返回模型 ID，请核对资源 ID 后重试。');
+      const verifiedType = String(info.category || info.type || info.modelType || '').toLowerCase();
+      if (activeCategory === 'lora' && ['huggingface', 'tensorart'].includes(activeProvider) && !['lora', 'locon', 'lycoris', 'dora'].includes(verifiedType)) {
+        throw new Error('资源元数据未标明为 LoRA，不能按当前分类把底模当作 LoRA 挂载');
+      }
+      const isLora = ['lora', 'locon', 'lycoris', 'dora'].includes(verifiedType) || (activeCategory === 'lora' && !['huggingface', 'tensorart'].includes(activeProvider));
+      if (isLora) {
+        const words = info.triggerWords || info.trainedWords || [];
+        const lora = {
+          name: String(info.id),
+          provider: activeProvider,
+          civitaiId: undefined,
+          triggerWords: Array.isArray(words) ? words.join(', ') : String(words),
+          baseModel: info.baseModel || undefined,
+          resourceVerified: ['huggingface', 'tensorart'].includes(activeProvider),
+          resource_source: activeProvider,
+          resource_kind: verifiedType,
+          downloadUrl: info.downloadUrl,
+        };
+        if (onSelectLoRAWithBaseModel) onSelectLoRAWithBaseModel(lora);
+        else if (onAddLora) onAddLora({ ...lora }); // strength must be explicit — never invent 0.8
+        else throw new Error('当前画布没有可挂载 LoRA 的入口，请先选择底模。');
+      } else {
+        onSelectModel(String(info.id), info.name || String(info.id), activeProvider, {
+          ...info,
+          resourceVerified: ['huggingface', 'tensorart'].includes(activeProvider),
+          resource_source: activeProvider,
+          resource_kind: verifiedType,
+        });
+      }
+      onClose();
+    } catch (err) {
+      if (version === requestVersion.current) setImportError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const getCustomIdPlaceholder = (prov: string) => {
+    if (prov === 'tensorart') return '输入 Tensor.Art / 吐司 纯数字模型或 LoRA ID...';
+    if (prov === 'huggingface') return '输入 HF Repo ID (如 user/model-name)...';
+    if (prov === 'modelscope' || prov === 'modelscope_ai') return '输入 ModelScope ID (如 damo/model-id)...';
+    if (prov === 'fal') return '输入 Fal.ai Endpoint (如 fal-ai/...)...';
+    if (prov === 'nanogpt') return '输入 NanoGPT Model ID (如 qwen-image-2.1/text-to-image)...';
+    if (prov === 'gemini') return '输入 Gemini 模型 ID...';
+    if (prov === 'replicate') return '输入 Replicate 模型 ID (如 black-forest-labs/flux-schnell 或 ideogram-ai/ideogram-v2a)...';
+    if (prov === 'runware') return '输入 Runware AIR (如 civitai:xxxx@yyyy)...';
+    if (prov === 'modelslab') return '输入 ModelsLab 模型 ID (如 midjourney)...';
+    if (prov === 'muapi') return '输入 MuAPI 模型端点 ID...';
+    if (prov === 'wavespeed') return '输入 WaveSpeed 模型端点 ID...';
+    if (prov === 'sogni') return '输入 Sogni 模型 ID...';
+    if (prov === 'sensenova') return '输入官方 SenseNova 图像模型 ID（如 sensenova-u1.5-lite）...';
+    if (prov === 'agnes') return '输入 Agnes 模型 ID...';
+    if (prov === 'mage') return '输入 Mage model_id（如 mango-v3）...';
+    if (prov === 'openai_compat' || prov === 'grok_compat') return '输入已配置中转实际支持的模型 ID...';
+    if (prov === 'all') return '请先选择服务商';
+    if (prov === 'civitai') return '输入 Civitai ID (如 133005) 或 URN...';
+    if (prov === 'novita') return '输入 Novita sd_name_in_api...';
+    if (prov === 'openworks') return '输入 OpenWorks 工具 name...';
+    return '输入模型 / LoRA ID...';
+  };
+
   const handleCopyText = async (key: string, text: string) => {
     try { await navigator.clipboard.writeText(text); } catch { alert("复制失败，请检查剪贴板权限"); return; }
     setCopiedKey(key);
@@ -615,6 +935,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
             { id: 'fal', name: 'Fal.ai' },
             { id: 'nanogpt', name: 'NanoGPT' },
             { id: 'gemini', name: 'Google Gemini' },
+            { id: 'tensorart', name: 'Tensor.Art (TAMS)' },
             { id: 'muapi', name: 'MuAPI' },
             { id: 'wavespeed', name: 'WaveSpeed' },
             { id: 'sogni', name: 'Sogni' },
@@ -751,7 +1072,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
             <span>
               <strong>按 ID 选用：</strong>
               {activeProvider === 'tensorart'
-                ? '输入 Tensor.Art / 吐司 模型 ID 或链接 (如 958694016000505570, 672390779613802167)'
+                ? '输入 Tensor.Art / 吐司 纯数字模型或 LoRA ID'
                 : activeProvider === 'huggingface'
                 ? '输入任意 Hugging Face 模型 ID (如 stabilityai/stable-diffusion-xl-base-1.0)'
                 : activeProvider === 'modelscope' || activeProvider === 'modelscope_ai'
@@ -788,7 +1109,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
               type="text"
               placeholder={
                 activeProvider === 'tensorart'
-                  ? '输入 Tensor.Art / 吐司 模型 ID (如 672390779613802167)...'
+                  ? '输入 Tensor.Art / 吐司 纯数字模型或 LoRA ID...'
                   : activeProvider === 'huggingface'
                   ? '输入 HF Repo ID (如 user/model-name)...'
                   : activeProvider === 'modelscope' || activeProvider === 'modelscope_ai'
@@ -824,86 +1145,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
             />
             <button
               disabled={importing || activeProvider === 'all' || !customId.trim()}
-              onClick={async () => {
-                if (importing || activeProvider === 'all' || !customId.trim()) return;
-                const version = requestVersion.current;
-                setImporting(true);
-                setImportError(null);
-                try {
-                  const rawId = customId.trim();
-                  if(activeProvider==='civitai') {
-                    const resource=await verifyCivitaiSelection(rawId,activeCategory==='lora'?'lora':'checkpoint');
-                    if(version !== requestVersion.current)return;
-                    if(activeCategory==='lora') {
-                      if(onSelectLoRAWithBaseModel)onSelectLoRAWithBaseModel(resource);
-                      else if(onAddLora)onAddLora({...resource}); // never invent 0.8
-                    } else onSelectModel(resource.name,resource.name,activeProvider,resource);
-                    onClose();return;
-                  }
-                  // LoRA Hub paste of an HTTP(S) weight URL: same executable attachment as LoRALoader typing.
-                  if (activeCategory === 'lora' && isExplicitLoraWeightUrl(rawId)) {
-                    const lora = selectionFromExplicitLoraUrl(activeProvider, rawId);
-                    if (version !== requestVersion.current) return;
-                    if (onSelectLoRAWithBaseModel) onSelectLoRAWithBaseModel(lora);
-                    else if (onAddLora) onAddLora({ ...lora }); // strength must be explicit — never invent 0.8
-                    else throw new Error('当前画布没有可挂载 LoRA 的入口，请先选择底模。');
-                    onClose();
-                    return;
-                  }
-                  if (activeProvider === 'replicate') {
-                    const info = await fetchReplicateModelInfo(rawId);
-                    if (version !== requestVersion.current) return;
-                    const verifiedType = String(info?.category || info?.type || '').toLowerCase();
-                    const isLora = ['lora', 'locon', 'lycoris', 'dora'].includes(verifiedType) || (activeCategory === 'lora' && rawId.toLowerCase().includes('lora'));
-                    if (isLora) {
-                      const words = info?.triggerWords || info?.trainedWords || [];
-                      const lora = {
-                        name: String(rawId),
-                        provider: 'replicate',
-                        civitaiId: undefined,
-                        triggerWords: Array.isArray(words) ? words.join(', ') : String(words),
-                        baseModel: info?.baseModel || undefined,
-                        resourceVerified: true,
-                        resource_source: 'replicate',
-                        resource_kind: verifiedType,
-                        downloadUrl: info?.downloadUrl,
-                      };
-                      if (onSelectLoRAWithBaseModel) onSelectLoRAWithBaseModel(lora);
-                      else if (onAddLora) onAddLora({ ...lora }); // strength must be explicit — never invent 0.8
-                      else onSelectModel(rawId, info?.name || rawId, 'replicate', info);
-                    } else {
-                      onSelectModel(rawId, info?.name || rawId, 'replicate', info);
-                    }
-                    onClose();
-                    return;
-                  }
-                  let info: any = { id: rawId, name: rawId };
-                  if (activeProvider === 'huggingface') info = await fetchHuggingFaceModelInfo(rawId);
-                  if (activeProvider === 'tensorart') info = await fetchTensorArtModelInfo(rawId);
-                  if (version !== requestVersion.current) return;
-                  if (!info?.id) throw new Error('查询未返回模型 ID，请核对资源 ID 后重试。');
-                  const verifiedType=String(info.category || info.type || info.modelType || '').toLowerCase();
-                  if(activeCategory==='lora' && ['huggingface','tensorart'].includes(activeProvider) && !['lora','locon','lycoris','dora'].includes(verifiedType))throw new Error('资源元数据未标明为 LoRA，不能按当前分类把底模当作 LoRA 挂载');
-                  const isLora = ['lora','locon','lycoris','dora'].includes(verifiedType) || (activeCategory==='lora' && !['huggingface','tensorart'].includes(activeProvider));
-                  if (isLora) {
-                    const words = info.triggerWords || info.trainedWords || [];
-                    const lora = { name: String(info.id), provider: activeProvider,
-                      civitaiId: undefined,
-                      triggerWords: Array.isArray(words) ? words.join(', ') : String(words),
-                      baseModel: info.baseModel || undefined,resourceVerified:['huggingface','tensorart'].includes(activeProvider),resource_source:activeProvider,resource_kind:verifiedType,downloadUrl:info.downloadUrl };
-                    if (onSelectLoRAWithBaseModel) onSelectLoRAWithBaseModel(lora);
-                    else if (onAddLora) onAddLora({ ...lora }); // strength must be explicit — never invent 0.8
-                    else throw new Error('当前画布没有可挂载 LoRA 的入口，请先选择底模。');
-                  } else {
-                    onSelectModel(String(info.id), info.name || String(info.id), activeProvider, {...info,resourceVerified:['huggingface','tensorart'].includes(activeProvider),resource_source:activeProvider,resource_kind:verifiedType});
-                  }
-                  onClose();
-                } catch (err) {
-                  if (version === requestVersion.current) setImportError(err instanceof Error ? err.message : String(err));
-                } finally {
-                  setImporting(false);
-                }
-              }}
+              onClick={() => handleApplyCustomId()}
               data-testid="hub-custom-id-apply"
               style={{ opacity: 1 }}
               className="px-3 py-1.5 rounded-lg bg-[#7e22ce] hover:bg-[#6b21a8] text-white disabled:bg-[#3b2d5e] disabled:text-[#e4dcf5] disabled:cursor-not-allowed font-bold text-xs whitespace-nowrap shadow-sm active:scale-95 transition-all cursor-pointer"
@@ -958,20 +1200,84 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
               <p className="font-medium text-xs">正在读取所选平台目录...</p>
             </div>
           ) : displayList.length === 0 ? (
-            <div className="h-72 flex flex-col items-center justify-center text-slate-400 space-y-3 p-6 bg-[#161720] rounded-2xl border border-[#262834]">
-              <Sparkles className="w-10 h-10 text-cyan-400/60" />
-              <div className="text-center">
+            <div className="min-h-72 flex flex-col items-center justify-center text-slate-400 space-y-3 p-6 bg-[#161720] rounded-2xl border border-[#262834]">
+              {catalogNotices[activeProvider] || activeProvider === 'tensorart' ? (
+                <Box className="w-10 h-10 text-purple-400" />
+              ) : (
+                <Sparkles className="w-10 h-10 text-cyan-400/60" />
+              )}
+              <div className="text-center max-w-xl">
                 <p className="text-sm font-bold text-white">
-                  {activeProvider === 'tensorart' ? '按模型 / LoRA ID 查询' : `当前目录页暂无所选分类资源`}
+                  {activeProvider === 'tensorart'
+                    ? '按模型 / LoRA ID 查询'
+                    : catalogNotices[activeProvider]
+                    ? `${friendlyProviderLabel(activeProvider)} · 官方无公开${activeCategory === 'lora' ? ' LoRA' : activeCategory === 'video' ? '视频模型' : ''}列表 API`
+                    : `当前目录页暂无所选分类资源`}
                 </p>
                 <p className="text-xs text-slate-400 mt-1">
                   {error
                     ? '目录请求失败，详见上方异常提示；可点重试。'
+                    : catalogNotices[activeProvider]
+                    ? catalogNotices[activeProvider]
                     : activeProvider === 'tensorart'
                       ? 'TAMS 没有列表 API；在上方输入真实资源 ID 查询详情。'
                       : '请尝试切换分类、服务商或输入更精准的关键词进行查询所选目录'}
                 </p>
               </div>
+
+              {(activeProvider === 'tensorart' || Boolean(catalogNotices[activeProvider]) || PROVIDERS_WITHOUT_MODEL_DIRECTORY.has(activeProvider)) && activeProvider !== 'all' && (
+                <div className="w-full max-w-lg mt-2 p-4 rounded-xl bg-[#191626] border border-purple-800/40 space-y-2.5 text-left">
+                  <div className="flex items-center gap-2 text-purple-300 font-semibold text-xs">
+                    <Zap className="w-4 h-4 text-purple-400" />
+                    <span>按 ID 直接选用（输入真实模型 ID 后挂载到画布）：</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={customId}
+                      onChange={(e) => { setCustomId(e.target.value); setImportError(null); }}
+                      placeholder={getCustomIdPlaceholder(activeProvider)}
+                      className="flex-1 bg-[#100d1c] border border-purple-800/60 rounded-lg px-3 py-1.5 text-xs text-purple-100 placeholder:text-[#b9a6e0] outline-none focus:border-purple-400 font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleApplyCustomId()}
+                      disabled={importing || !customId.trim()}
+                      className="px-3.5 py-1.5 rounded-lg bg-[#7e22ce] hover:bg-[#6b21a8] text-white disabled:bg-[#3b2d5e] disabled:text-[#e4dcf5] font-bold text-xs whitespace-nowrap shadow-sm cursor-pointer transition-all"
+                    >
+                      {importing ? '正在查询…' : '选用此 ID'}
+                    </button>
+                  </div>
+                  {(() => {
+                    const hintInfo = getProviderFormatHint(activeProvider);
+                    return (
+                      <div className="space-y-1.5 pt-1 text-[11px]">
+                        {hintInfo.docUrl && (
+                          <div className="flex items-center gap-1.5 text-purple-300">
+                            <ExternalLink className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                            <span>查找模型 ID：可前往</span>
+                            <a
+                              href={hintInfo.docUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-cyan-300 hover:text-cyan-200 underline underline-offset-2 font-medium"
+                            >
+                              {hintInfo.docLabel || '服务商官方页面'}
+                            </a>
+                            <span>查找并复制真实 ID</span>
+                          </div>
+                        )}
+                        {hintInfo.format && (
+                          <p className="text-[10px] text-slate-400 font-mono">
+                            格式说明：{hintInfo.format}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
               <div className="flex items-center gap-2 mt-2">
                 {!unsupportedDirectoryProvider && <button
                   onClick={() => {
@@ -982,7 +1288,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                     setActiveProvider('all');
                     loadModels('all', 'all', '', sortOption, 'all');
                   }}
-                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-cyan-600/30 transition-all flex items-center gap-1.5"
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-cyan-600/30 transition-all flex items-center gap-1.5 cursor-pointer"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
                   <span>清除筛选并重新加载</span>
@@ -990,7 +1296,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                 {error && (
                   <button
                     onClick={() => loadModels(activeProvider, activeCategory, query, sortOption)}
-                    className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs transition-all flex items-center gap-1.5 border border-slate-700"
+                    className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs transition-all flex items-center gap-1.5 border border-slate-700 cursor-pointer"
                   >
                     <RefreshCw className="w-3.5 h-3.5" />
                     <span>立即重试 (Retry)</span>
@@ -1014,7 +1320,9 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                 try {resource=selectionFromMetadata(providerKey,m,isLora?'lora':'checkpoint');}catch{/* Incomplete catalog metadata does not clear unresolved imports. */}
                 const trainedWords = m.trainedWords || [];
                 const isBookmarked = isModelBookmarked(m);
-                const baseArch = m.baseModel || '未知底模';
+                const baseArch = m.baseModel || m.architecture || '未知底模';
+                const resolvedCkptBase = currentCheckpointBaseModel || findModelBaseModel(currentCheckpoint);
+                const compat = checkHubLoraCompatibility(resolvedCkptBase, m.baseModel || m.architecture);
                 // fix14: skip baseArch when it duplicates the provider badge (e.g. OpenWorks + openworks).
                 const showBaseArchBadge =
                   Boolean(baseArch) &&
@@ -1248,7 +1556,30 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                                 {m.speed}
                               </span>
                             )}
+                            {m.latest_version?.id && (
+                              <span className="text-[10px] text-slate-400 font-mono bg-[#13141a] px-1.5 py-0.5 rounded border border-slate-800">
+                                版本: {String(m.latest_version.id).slice(0, 10)}…
+                              </span>
+                            )}
                           </div>
+
+                          {/* Real Model Description */}
+                          {m.description && (
+                            <p className="mt-2 text-[11px] text-slate-400 line-clamp-2 leading-relaxed bg-[#13141a]/60 p-2 rounded-lg border border-[#22242f]" title={m.description}>
+                              {m.description}
+                            </p>
+                          )}
+
+                          {/* Real Tags / Supported Tasks */}
+                          {Array.isArray(m.tags) && m.tags.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-2 max-h-12 overflow-hidden">
+                              {m.tags.slice(0, 5).map((t: string, idx: number) => (
+                                <span key={idx} className="text-[9px] px-1.5 py-0.5 rounded bg-[#181a24] text-slate-300 font-mono border border-slate-800/60">
+                                  #{String(t).replace(/^tag:/, '')}
+                                </span>
+                              ))}
+                            </div>
+                          )}
 
                           {/* Trigger words for LoRA */}
                           {trainedWords.length > 0 && (
@@ -1289,13 +1620,37 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                                     onSelectLoRAWithBaseModel({...resource,triggerWords:resource.triggerWords || trainedWords.join(', '),baseModel:resource.baseModel || baseArch});
                                     onClose();
                                   }}
-                                  className="w-full py-1.5 px-2.5 rounded-xl bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-600 hover:from-purple-500 hover:to-cyan-500 text-white font-bold transition-all shadow-md shadow-purple-600/30 flex items-center justify-center gap-1.5 text-[11px] active:scale-98"
-                                  title={`挂载到当前同平台底模；生成前核实 ${baseArch} 架构`}
+                                  className={`w-full py-1.5 px-2.5 rounded-xl font-bold transition-all shadow-md flex items-center justify-center gap-1.5 text-[11px] active:scale-98 ${
+                                    compat.isMismatch
+                                      ? 'bg-gradient-to-r from-amber-700 via-rose-700 to-red-700 hover:from-amber-600 hover:to-rose-600 text-white shadow-rose-700/30 border border-rose-500/50'
+                                      : compat.isUnknown
+                                      ? 'bg-[#22242e] hover:bg-[#2c303d] text-slate-300 border border-[#363949]'
+                                      : 'bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-600 hover:from-purple-500 hover:to-cyan-500 text-white shadow-purple-600/30'
+                                  }`}
+                                  title={
+                                    compat.isMismatch
+                                      ? `警告：当前画布底模元数据为 ${compat.ckptBaseModel}，而此 LoRA 元数据为 ${compat.loraBaseModel} 架构，跨架构挂载会导致上游报错或静默失真。`
+                                      : compat.isUnknown
+                                      ? '该资源上游目录未提供明确底模架构元数据，无法判断兼容性；生成时以上游接口校验为准。'
+                                      : `挂载到当前同平台底模；架构元数据：${baseArch}`
+                                  }
                                 >
-                                  <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                                  <span>挂载到所选底模</span>
-                                  <span className="text-[10px] px-1 py-0.2 rounded bg-black/30 font-mono text-cyan-200">
-                                    {baseArch}
+                                  {compat.isMismatch ? (
+                                    <ShieldCheck className="w-3.5 h-3.5 text-amber-300" />
+                                  ) : compat.isUnknown ? (
+                                    <Info className="w-3.5 h-3.5 text-slate-400" />
+                                  ) : (
+                                    <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                                  )}
+                                  <span>{compat.isMismatch ? '底模架构不匹配' : '挂载到所选底模'}</span>
+                                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
+                                    compat.isMismatch
+                                      ? 'bg-black/50 text-rose-200 border border-rose-500/40'
+                                      : compat.isUnknown
+                                      ? 'bg-black/40 text-slate-300 border border-slate-700'
+                                      : 'bg-black/30 text-cyan-200'
+                                  }`}>
+                                    {compat.chipLabel}
                                   </span>
                                 </button>
                               )}
@@ -1409,6 +1764,11 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                             <div className="space-y-1.5">
                               <button
                                 onClick={() => {
+                                  if (m.baseModel || m.architecture) {
+                                    baseModelCache.current.set(String(resource.name), String(m.baseModel || m.architecture));
+                                    baseModelCache.current.set(String(modelId), String(m.baseModel || m.architecture));
+                                    baseModelCache.current.set(String(displayName), String(m.baseModel || m.architecture));
+                                  }
                                   onSelectModel(resource.name, displayName, providerKey, {...m,...resource});
                                   onClose();
                                 }}

@@ -1293,7 +1293,7 @@ function extractModelMetadata(
   taskOrPipeline = '',
   providerName = ''
 ): {
-  baseModel: string;
+  baseModel?: string;
   category: 'Checkpoint' | 'LoRA' | 'Video' | 'Edit';
   type: 'Checkpoint' | 'LORA' | 'MotionModule' | 'Tools' | 'Reasoning';
   badge?: string;
@@ -1377,83 +1377,8 @@ function extractModelMetadata(
     }
   }
 
-  // 2. Determine Real Base Model Architecture Family
-  let baseModel = '通用底模';
-  if (s.includes('flux.1-dev') || s.includes('flux-dev') || s.includes('flux.1 [dev]') || s.includes('flux_dev')) {
-    baseModel = 'FLUX.1 [dev]';
-  } else if (s.includes('flux.1-schnell') || s.includes('flux-schnell') || s.includes('flux.1 [schnell]') || s.includes('flux_schnell')) {
-    baseModel = 'FLUX.1 [schnell]';
-  } else if (s.includes('flux-pro') || s.includes('flux.1-pro') || s.includes('flux/pro')) {
-    baseModel = 'FLUX.1 Pro';
-  } else if (s.includes('flux') || s.includes('bfl')) {
-    baseModel = 'FLUX.1';
-  } else if (s.includes('pony') || s.includes('pdxl')) {
-    baseModel = 'Pony XL';
-  } else if (s.includes('illustrious') || s.includes('noobai') || s.includes('wai illustrious') || s.includes('wai_illustrious')) {
-    baseModel = 'Illustrious-XL';
-  } else if (s.includes('sd3.5') || s.includes('sd 3.5') || s.includes('sd-3.5') || s.includes('sd3') || s.includes('stable-diffusion-3')) {
-    baseModel = 'SD 3.5';
-  } else if (s.includes('sdxl') || s.includes('stable-diffusion-xl') || s.includes('sd_xl') || s.includes('_xl_') || s.includes('juggernaut-xl') || s.includes('animagine')) {
-    baseModel = 'SDXL 1.0';
-  } else if (s.includes('sd 1.5') || s.includes('sd1.5') || s.includes('sd15') || s.includes('v1-5') || s.includes('stable-diffusion-v1-5') || s.includes('dreamshaper-7') || s.includes('realistic_vision') || s.includes('majicmix')) {
-    baseModel = 'SD 1.5';
-  } else if (s.includes('sd 2.1') || s.includes('sd2.1') || s.includes('sd2') || s.includes('stable-diffusion-2')) {
-    baseModel = 'SD 2.1';
-  } else if (s.includes('wan27') || s.includes('wan 2.7') || s.includes('wan-2.7')) {
-    baseModel = 'Wan 2.7';
-  } else if (s.includes('wan25') || s.includes('wan 2.5') || s.includes('wan-2.5')) {
-    baseModel = 'Wan 2.5';
-  } else if (s.includes('wan22') || s.includes('wan 2.2') || s.includes('wan-2.2')) {
-    baseModel = 'Wan 2.2';
-  } else if (s.includes('wan2.1') || s.includes('wan 2.1') || s.includes('wan_2.1') || s.includes('wan') || s.includes('tongyi')) {
-    baseModel = 'Wan 2.1';
-  } else if (s.includes('krea-2') || s.includes('krea2') || s.includes('krea')) {
-    baseModel = 'Krea 2 Turbo';
-  } else if (s.includes('z-image') || s.includes('z_image') || s.includes('zimage')) {
-    baseModel = 'Z-Image-Turbo';
-  } else if (s.includes('qwen-image') || s.includes('qwen2') || s.includes('qwen')) {
-    baseModel = 'Qwen Image 2.1';
-  } else if (s.includes('kolors') || s.includes('kwai')) {
-    baseModel = 'Kolors';
-  } else if (s.includes('cosmos-3') || s.includes('cosmos')) {
-    baseModel = 'NVIDIA Cosmos';
-  } else if (s.includes('boogu')) {
-    baseModel = 'Boogu Image';
-  } else if (s.includes('recraft')) {
-    baseModel = 'Recraft V3';
-  } else if (s.includes('ideogram')) {
-    baseModel = 'Ideogram';
-  } else if (s.includes('dall-e') || s.includes('dalle')) {
-    baseModel = 'DALL-E 3';
-  } else if (s.includes('midjourney')) {
-    baseModel = 'Midjourney';
-  } else if (s.includes('kling')) {
-    baseModel = 'Kling';
-  } else if (s.includes('ltx-2.3') || s.includes('ltx23') || s.includes('ltx 2.3')) {
-    baseModel = 'LTX 2.3';
-  } else if (s.includes('ltx')) {
-    baseModel = 'LTX-Video';
-  } else if (s.includes('minimax') || s.includes('hailuo')) {
-    baseModel = 'MiniMax';
-  } else if (s.includes('hunyuan')) {
-    baseModel = 'Hunyuan';
-  } else if (s.includes('cogvideo')) {
-    baseModel = 'CogVideoX';
-  } else if (s.includes('gemini-2.5') || s.includes('gemini-3') || s.includes('gemini')) {
-    baseModel = 'Gemini Vision';
-  } else if (s.includes('nano_banana') || s.includes('banana')) {
-    baseModel = 'Nano Banana 2';
-  } else if (providerName === 'Hugging Face') {
-    baseModel = isLora ? '未核实底模' : isVideo ? 'Diffusers Video' : 'Diffusers Checkpoint';
-  } else if (providerName.includes('ModelScope')) {
-    baseModel = isLora ? '未核实底模' : isVideo ? 'ModelScope Video' : 'ModelScope Checkpoint';
-  } else if (providerName === 'Fal.ai') {
-    baseModel = isLora ? '未核实底模' : isVideo ? 'Video Base' : 'Diffusion Base';
-  } else if (providerName === 'NanoGPT') {
-    baseModel = isLora ? '未核实底模' : isVideo ? 'Video Base' : 'NanoGPT Base';
-  } else if (providerName === 'Tensor.Art') {
-    baseModel = isLora ? '未核实底模' : isVideo ? 'Video Base' : '未核实底模';
-  }
+  // 2. Base model architecture is strictly metadata-driven; never guess from names.
+  const baseModel: string | undefined = undefined;
 
   // 3. Clean and normalize displayName for clarity
   let cleanDisplayName = name || id.split('/').pop() || id;
@@ -1667,7 +1592,7 @@ app.get("/api/models", async (req, res) => {
                 provider: "ModelScope CN",
                 category: meta.category,
                 type: meta.type,
-                baseModel: meta.baseModel,
+                baseModel: (m.base_model || m.architecture) ? String(m.base_model || m.architecture) : undefined,
                 downloads: m.downloads || 0,
                 likes: m.likes || 0,
                 rating: m.rating || 0,
@@ -1754,7 +1679,7 @@ app.get("/api/models", async (req, res) => {
                 provider: "ModelScope AI",
                 category: meta.category,
                 type: meta.type,
-                baseModel: meta.baseModel,
+                baseModel: (m.base_model || m.architecture) ? String(m.base_model || m.architecture) : undefined,
                 downloads: m.downloads || 0,
                 likes: m.likes || 0,
                 rating: m.rating || 0,
@@ -1943,7 +1868,7 @@ app.get("/api/models", async (req, res) => {
               inferenceProviderMapping: m.inferenceProviderMapping,
               category: isLoraModel ? "LoRA" : meta.category,
               type: isLoraModel ? "LORA" : meta.type,
-              baseModel: realBaseModel || meta.baseModel,
+              baseModel: realBaseModel || undefined,
               downloads: m.downloads || 0,
               likes: m.likes || 0,
               rating: 0,
@@ -2041,19 +1966,27 @@ app.get("/api/models", async (req, res) => {
               if (cData.error) {
                 results.civitai = { error: cData.error } as any;
               } else {
-                const mappedCivitai = (cData.items || []).map((m: any) => ({
-                  id: String(m.id),
-                  name: m.name,
-                  provider: "Civitai",
-                  type: m.type,
-                  category: m.type === "LORA" ? "LoRA" : m.type === "MotionModule" ? "Video" : "Checkpoint",
-                  baseModel: (m.modelVersions || [])[0]?.baseModel || null,
-                  downloads: m.stats?.downloadCount || 0,
-                  rating: m.stats?.rating || 0,
-                  imageUrl: (m.modelVersions || [])[0]?.images?.[0]?.url || "",
-                  externalUrl: `https://civitai.com/models/${m.id}`,
-                  trainedWords: Array.isArray((m.modelVersions || [])[0]?.trainedWords) ? (m.modelVersions || [])[0].trainedWords : [],
-                }));
+                const mappedCivitai = (cData.items || []).map((m: any) => {
+                  const v = (m.modelVersions || [])[0];
+                  const versionId = v?.id;
+                  const resolvedId = versionId ? `${m.id}@${versionId}` : String(m.id);
+                  return {
+                    id: resolvedId,
+                    modelId: String(m.id),
+                    versionId: versionId ? String(versionId) : undefined,
+                    name: m.name,
+                    provider: "Civitai",
+                    type: m.type,
+                    category: m.type === "LORA" ? "LoRA" : m.type === "MotionModule" ? "Video" : "Checkpoint",
+                    baseModel: v?.baseModel || null,
+                    downloads: m.stats?.downloadCount || 0,
+                    rating: m.stats?.rating || 0,
+                    imageUrl: v?.images?.[0]?.url || "",
+                    externalUrl: versionId ? `https://civitai.com/models/${m.id}?modelVersionId=${versionId}` : `https://civitai.com/models/${m.id}`,
+                    trainedWords: Array.isArray(v?.trainedWords) ? v.trainedWords : [],
+                    modelVersions: m.modelVersions || [],
+                  };
+                });
                 if (cat === "video") {
                   // Video checkpoints (e.g. Wan): types=Checkpoint&baseModels=<video base models from GET /api/v1/enums>
                   // https://developer.civitai.com/site/reference/models.md
@@ -2112,14 +2045,9 @@ app.get("/api/models", async (req, res) => {
     // 4. Fal.ai Real-Time Dynamic Models Discovery Endpoint (https://api.fal.ai/v1/models)
     if (provider === "all" || provider === "fal") {
       tasks.push((async () => {
-        if (cat === 'lora') {
-          results.fal = [];
-          pagination.fal = { page: pageParam, hasMore: false, sourceUrl: 'https://api.fal.ai/v1/models', sourceNotice: 'lookup-only (no public lora weight directory)' };
-          catalogNoticesAccum.fal = 'Fal.ai 模型目录 (https://api.fal.ai/v1/models) 只列出推理端点，没有公开的 LoRA 权重目录；以 "lora" 搜到的是"可加载 LoRA 的生成端点"，其缩略图是端点示例，不是 LoRA 封面，因此不在 LoRA 目录中展示。请在上方输入 LoRA 权重 URL，并在模型中心选择支持 LoRA 的 Fal 端点。';
-        } else {
-          const falItems: any[] = [];
-          try {
-            const falKey = keyPoolManager.getNextKey('fal',req.headers['x-fal-key'] as string) || '';
+        const falItems: any[] = [];
+        try {
+          const falKey = keyPoolManager.getNextKey('fal',req.headers['x-fal-key'] as string) || '';
 
             const falHeaders: Record<string, string> = {
               "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
@@ -2175,13 +2103,14 @@ app.get("/api/models", async (req, res) => {
                     'Fal.ai'
                   );
 
+                  const isLoraReq = cat === 'lora';
                   falItems.push({
                     id: endpointId,
                     name: parsed.cleanDisplayName,
                     provider: "Fal.ai",
-                    category: parsed.category,
-                    type: parsed.type,
-                    baseModel: parsed.baseModel,
+                    category: isLoraReq ? "LoRA" : parsed.category,
+                    type: isLoraReq ? "LORA" : parsed.type,
+                    baseModel: (meta.base_model || meta.architecture) ? String(meta.base_model || meta.architecture) : undefined,
                     downloads: typeof m.popularity === 'number' ? m.popularity : undefined,
                     likes: typeof m.favorites === 'number' ? m.favorites : undefined,
                     rating: typeof m.rating === 'number' ? m.rating : undefined,
@@ -2190,9 +2119,8 @@ app.get("/api/models", async (req, res) => {
                     imageUrl: meta.thumbnail_url || meta.cover_image || meta.sample_output_url || "",
                     externalUrl: `https://fal.ai/models/${endpointId}`,
                     description: meta.description || "",
-                    tags: ["fal", parsed.category.toLowerCase(), parsed.baseModel.toLowerCase(), ...(meta.tags || [])],
+                    tags: ["fal", isLoraReq ? "lora" : parsed.category.toLowerCase(), ...(meta.tags || [])],
                     trainedWords: Array.isArray(meta.trigger_words) ? meta.trigger_words : [],
-                    // Fal /api/v1/models lists generation endpoints only — never LoRA weight files.
                     resourceKind: 'model-endpoint',
                   });
                 }
@@ -2214,7 +2142,6 @@ app.get("/api/models", async (req, res) => {
           if (!results.fal) {
             results.fal = falItems.filter((m) => matchCategory(m) && matchSearch(m));
           }
-        }
       })());
     }
 
@@ -2311,7 +2238,7 @@ app.get("/api/models", async (req, res) => {
                   provider: "NanoGPT",
                   category: isEdit ? 'Edit' : 'Checkpoint',
                   type: isEdit ? 'Tools' : 'Checkpoint',
-                  baseModel: parsed.baseModel,
+                  baseModel: undefined,
                   downloads: undefined,
                   likes: undefined,
                   rating: undefined,
@@ -2320,7 +2247,7 @@ app.get("/api/models", async (req, res) => {
                   imageUrl: iconUrl,
                   externalUrl: `https://nano-gpt.com/models?search=${encodeURIComponent(mId)}`,
                   description: m.description || "",
-                  tags: m.tags || ["nanogpt", isEdit ? "edit" : "checkpoint", parsed.baseModel.toLowerCase()],
+                  tags: m.tags || ["nanogpt", isEdit ? "edit" : "checkpoint"],
                 });
               }
             }
@@ -2364,7 +2291,7 @@ app.get("/api/models", async (req, res) => {
                   provider: "NanoGPT",
                   category: "Video",
                   type: "MotionModule",
-                  baseModel: parsed.baseModel || (m.owned_by ? m.owned_by.toUpperCase() : 'Video'),
+                  baseModel: undefined,
                   downloads: undefined,
                   likes: undefined,
                   rating: undefined,
@@ -2373,7 +2300,7 @@ app.get("/api/models", async (req, res) => {
                   imageUrl: iconUrl,
                   externalUrl: `https://nano-gpt.com/models?search=${encodeURIComponent(mId)}`,
                   description: m.description || "",
-                  tags: [...(m.tags || []), "nanogpt", "video", parsed.baseModel.toLowerCase()],
+                  tags: [...(m.tags || []), "nanogpt", "video"],
                 });
               }
             }
@@ -2464,7 +2391,7 @@ app.get("/api/models", async (req, res) => {
                     provider: "Google Gemini",
                     category: isImage ? "Checkpoint" : "Edit",
                     type: isImage ? "Checkpoint" : "Reasoning",
-                    baseModel: parsed.baseModel,
+                    baseModel: undefined,
                     downloads: 0,
                     likes: 0,
                     rating: 0,
@@ -2487,6 +2414,9 @@ app.get("/api/models", async (req, res) => {
         }
         if (!results.gemini) {
           results.gemini = geminiItems.filter((m) => matchCategory(m) && matchSearch(m));
+          if (cat === 'video' && results.gemini.length === 0) {
+            catalogNoticesAccum.gemini = 'Google Gemini 官方模型列表目前未包含 Veo 视频模型；支持在上方输入模型 ID 选用。';
+          }
         }
       })());
     }
@@ -2577,15 +2507,22 @@ app.get("/api/models", async (req, res) => {
               const spItems = normalizeSchemaProviderItems(sp, rows, {
                 lora: wantsLora,
                 sourceUrl,
-                category: cat === 'all' ? 'checkpoint' : cat,
+                category: cat,
                 query: '',
               });
               const filtered = spItems.filter((m: any) => matchCategory(m) && matchSearch(m));
               results[sp] = filtered.slice((pageParam - 1) * limitParam, pageParam * limitParam);
-              const spNotice = sp === 'sogni' && !wantsLora
+              const isVideoCat = cat === 'video';
+              const spNotice = sp === 'sogni' && !wantsLora && !isVideoCat
                 ? 'live-official-generate_image-schema'
                 : sp === 'sogni' && wantsLora
                 ? 'lookup-only (no public lora directory)'
+                : sp === 'sogni' && isVideoCat
+                ? 'lookup-only (no public video directory)'
+                : sp === 'novita' && isVideoCat
+                ? 'lookup-only (no public video directory)'
+                : sp === 'deepinfra' && isVideoCat
+                ? 'lookup-only (no public video directory)'
                 : 'local-slice-of-live-upstream-catalog';
               pagination[sp] = {
                 page: pageParam,
@@ -2599,6 +2536,15 @@ app.get("/api/models", async (req, res) => {
                 ...(noLoraCatalog ? { noLoraCatalog: true, message: notice } : {}),
               };
               if (notice) catalogNoticesAccum[sp] = notice;
+              if (isVideoCat && filtered.length === 0) {
+                if (sp === 'novita') {
+                  catalogNoticesAccum.novita = 'Novita AI 官方模型目录 API (GET /v3/model) 仅支持 checkpoint / lora，无公开视频模型列表；视频生成采用独立端点（如 Wan 2.5 / Wan 2.6 / Kling）。支持在上方输入模型 ID 选用。';
+                } else if (sp === 'sogni') {
+                  catalogNoticesAccum.sogni = 'Sogni 协议官方目前仅提供文生图端点与 LoRA 目录，无公开视频模型列表；支持按模型 ID 选用。';
+                } else if (sp === 'deepinfra') {
+                  catalogNoticesAccum.deepinfra = 'DeepInfra 官方公开模型列表为文生图（OpenAI images），无独立视频模型列表；支持按模型 ID 选用。';
+                }
+              }
             } catch (spErr: any) {
               results[sp] = {
                 error: spErr.message,
@@ -2884,7 +2830,7 @@ app.get("/api/models", async (req, res) => {
                   provider: "Replicate",
                   category: cat === 'video' ? 'Video' : cat === 'lora' ? 'LoRA' : 'Checkpoint',
                   type: cat === 'video' ? 'MotionModule' : cat === 'lora' ? 'lora' : 'Checkpoint',
-                  baseModel: parsed.baseModel,
+                  baseModel: undefined,
                   downloads: typeof m.run_count === 'number' ? m.run_count : undefined,
                   likes: undefined,
                   rating: undefined,
@@ -2895,7 +2841,7 @@ app.get("/api/models", async (req, res) => {
                   latest_version: m.latest_version?.id ? { id: m.latest_version.id } : undefined,
                   is_official: typeof m.is_official === 'boolean' ? m.is_official : undefined,
                   description: m.description || "",
-                  tags: ["replicate", cat === 'video' ? 'video' : cat === 'lora' ? 'lora' : 'checkpoint', parsed.baseModel.toLowerCase()],
+                  tags: ["replicate", cat === 'video' ? 'video' : cat === 'lora' ? 'lora' : 'checkpoint'],
                 });
               }
 
