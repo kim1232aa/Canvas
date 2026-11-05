@@ -51,7 +51,7 @@ export class SenseNovaDriver extends BaseEngineDriver {
       const raw=await resp.text();
       let errJson: any;
       try { errJson = JSON.parse(raw); } catch { /* raw text */ }
-      const err = new Error(errJson?.details || errJson?.error || `SenseNova 图像路由 HTTP ${resp.status}: ${raw}`);
+      const err = new Error(`SenseNova 图像路由 HTTP ${resp.status}: ${raw}`);
       (err as any).status = resp.status;
       (err as any).data = errJson;
       throw err;

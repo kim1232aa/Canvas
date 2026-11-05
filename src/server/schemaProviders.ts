@@ -1591,20 +1591,12 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
       const endpoint=schemaProviders[provider].root+suffix+encodeURIComponent(req.params.taskId)+(provider==='sogni' || provider==='krea'?'':'/result');
       const {data,status:upstreamStatus}=await read(req,provider,endpoint,undefined,credential);
       const task=provider==='krea'?data:provider==='muapi'?data:provider==='wavespeed'?data.data:data.data?.workflow;
-      let status=task?.status;
-      let error=task?.error;
-      if(provider==='sogni' && status==='waiting_for_user') {
-        const failEvent=(Array.isArray(task?.events)?task.events:[]).find((e:any)=>e.type==='step_failed'||e.message?.includes('Debit Error')||e.data?.errorType==='COST_LIMIT_EXCEEDED');
-        if(task?.waitingReason==='insufficient_credit' || failEvent) {
-          status='failed';
-          error=failEvent?.message || (task?.waitingReason==='insufficient_credit'?'Debit Error: Insufficient funds (insufficient_credit)':'Sogni workflow paused for user input');
-        }
-      }
+      const status=task?.status;
       const outputs=provider==='krea'?kreaJobOutputs(task):provider==='sogni'?task?.steps?.flatMap((s:any)=>s.artifacts || []).map((a:any)=>a.url).filter(Boolean):task?.outputs || [];
       if(!status)throw Object.assign(new Error('上游任务响应没有状态字段'),{status:upstreamStatus,rawResponse:data,endpoint,errorSource:'upstream-protocol'});
       // MuAPI sandbox keys return is_test mock results (docs/provider-api-audit/muapi.md §7). Never count as a real generation.
       if(provider==='muapi' && (data?.is_test===true || task?.is_test===true))return res.json({status:'sandbox_mock',upstreamTaskStatus:status,outputs:[],sandboxOutputs:outputs,error:`MuAPI sandbox key 返回 is_test mock 结果（上游 status=${status}），不是真实出图，不计为成功。请改用 Production key。`,rawResponse:data,upstreamStatus,endpoint,credentialRef:credential.credentialRef});
-      res.json({status,outputs,waitingReason:task?.waitingReason,error,rawResponse:data,upstreamStatus,endpoint,credentialRef:credential.credentialRef});
+      res.json({status,outputs,waitingReason:task?.waitingReason,error:task?.error,rawResponse:data,upstreamStatus,endpoint,credentialRef:credential.credentialRef});
     }catch(e){fail(res,e);}
   });
   // Persistence is a separate explicit stage; a storage failure never changes the

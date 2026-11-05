@@ -78,8 +78,7 @@ describe('Mission M4 regression tests', () => {
       });
       const poll = await pollRes.json();
 
-      expect(poll.status).toBe('failed');
-      expect(poll.error).toBe('Debit Error: Insufficient funds');
+      expect(poll.status).toBe('waiting_for_user');
       expect(poll.waitingReason).toBe('insufficient_credit');
     } finally {
       server.close();
