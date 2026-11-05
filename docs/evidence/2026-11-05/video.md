@@ -67,7 +67,25 @@
 3. 全局 undici：`headersTimeout` / `bodyTimeout` 300 秒 → 600 秒，`connectTimeout` 30 秒 → 60 秒。原因：单次冷启动读取会在 300 秒被 `UND_ERR_HEADERS_TIMEOUT` 掐断，看起来像上游失败。已通知 core5b。
 4. AIVideoNode 服务商下拉增加 together、aimlapi、venice、krea、sogni。这五家的 SchemaProviderDriver 已声明 text2video/img2video，提交与轮询走已有 `/api/schema-provider/:id`。未加入 nanogpt：其注册驱动只有图像能力，点击会被 `assertCapability` 拒绝。已记 finding 给 core5b。
 
+## UI 点击（2026-11-05，本机 PORT=3107，Chrome CDP 9407）
+
+三次都是画布点击，不是脚本直打上游。每次都带了参考图、种子、cfg、帧数或时长，以及官方 schema 声明的 LoRA。三家都在提交阶段拒绝，原因是账户余额，没有生成视频，没有 history id。按规则记 PASS_BILLING，不换模型、不换密钥重试。掩码记录在 `temp/e2e/2026-11-05/video7b/`（该目录被 gitignore，不入库）。
+
+| 点击 | 预设 | 本站路由 | 上游端点 | 状态 | 上游原文 |
+| --- | --- | --- | --- | --- | --- |
+| 1 | Fal.ai · 标准图生视频 | POST /api/video/generate | https://queue.fal.run/fal-ai/wan-i2v-lora | 403 | User is locked. Reason: Exhausted balance |
+| 2 | WaveSpeed · 标准图生视频 | POST /api/schema-provider/wavespeed/submit | https://api.wavespeed.ai/api/v3/wavespeed-ai/wan-2.1/i2v-480p-lora | 400 | Insufficient credits. Please top up your account to continue. |
+| 3 | Replicate · 标准图生视频 | POST /api/engine/replicate/generate | https://api.replicate.com/v1/predictions | 402 | Insufficient credit |
+
+三次发出的字段（提示词已截断，参考图是上传后的本站 `/api/media/…`，不是外链）：
+
+- Fal：model `fal-ai/wan-i2v-lora`，num_frames 81，fps 16，resolution 480p，aspect_ratio 16:9，seed 24231881，cfg 4，loras `[{path: https://huggingface.co/Remade-AI/matrix-shot/resolve/main/matrix_shot.safetensors, scale: 1}]`。节点原文：`Fal.ai 接口执行失败 [403]`，errorSource upstream。
+- WaveSpeed：model `wavespeed-ai/wan-2.1/i2v-480p-lora`，duration 5，size `832*480`，seed 24231881，cfg 4，同一 LoRA。节点原文：`HTTP 400: {"code":400,"message":"Insufficient credits..."}`。
+- Replicate：model `wan-video/wan2.1-with-lora`，num_frames 81，resolution 480p，aspect_ratio 16:9，seed 24231881，cfg 4，同一 LoRA。节点原文：`Replicate 视频接口上游 HTTP 402`，upstreamStatus 402。
+
+没有视频产物。节点预览、SaveVideo、历史播放因而没有可验证的成功样本。
+
 ## 尚未完成
 
-- UI 点击的付费文生视频 / 图生视频（至少 3 家，其中一家带官方支持的 LoRA）还没跑。跑完把 history id、endpoint、掩码后的请求体、状态补在本文。
+- 付费点击已做 3 家（都带 LoRA），全部余额不足，没有可播放的视频。文生视频点击未做：图生视频预设已覆盖三家且都被账单拦住，再点文生视频会打到同一批账户。需要充值后重跑。
 - Together 的 `seconds` / `ratio` / `media.frame_images` 别名还没落地（等 tower 对 `schemaPayloadPlan.ts` 的回复）。在此之前，Together 视频会把画布 `duration` 原样送出；若 schema 只声明 `seconds`，该字段是否被上游拒绝由上游响应决定，不在本地改值重试。
