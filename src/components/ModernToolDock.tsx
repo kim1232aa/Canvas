@@ -132,10 +132,10 @@ export const ModernToolDock: React.FC<ModernToolDockProps> = ({
                 onClick={() => setShowAddNodeMenu(!showAddNodeMenu)}
                 className="px-2.5 py-1.5 rounded-xl bg-[#1e202a] hover:bg-[#262835] border border-[#2c2f3d] text-slate-300 hover:text-white font-semibold flex items-center gap-1.5 transition-colors"
                 title="在节点图中放置新的 ComfyUI 节点（切回节点视图查看）"
-                aria-label="添加节点"
+                aria-label="添加节点（用于节点视图）"
               >
                 <Plus className="w-3.5 h-3.5 text-purple-400" />
-                <span>添加节点</span>
+                <span>添加节点（节点视图）</span>
                 <ChevronUp className={`w-3.5 h-3.5 transition-transform ${showAddNodeMenu ? 'rotate-180' : ''}`} />
               </button>
 

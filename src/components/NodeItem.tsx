@@ -95,6 +95,7 @@ interface NodeItemProps {
   onMeasuredHeight?: (nodeId: string, height: number) => void;
   onAutoFixCheckpoint?: (recommendedCheckpoint: string) => void;
   onOpenModelHub?: (category?: 'all' | 'checkpoint' | 'lora' | 'video' | 'edit') => void;
+  onOpenSettings?: (providerId?: string) => void;
   /** LoRA nodes on this Checkpoint's MODEL chain (run order), for Schema LoRA-slot badges. */
   canvasLoras?: Array<{ name: string }>;
 }
@@ -128,6 +129,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
   onMeasuredHeight,
   onAutoFixCheckpoint,
   onOpenModelHub,
+  onOpenSettings,
   canvasLoras,
 }) => {
   // Callback ref (no extra hook): report rendered height incl. warnings so nodes below get pushed, not covered.
@@ -326,7 +328,9 @@ export const NodeItem: React.FC<NodeItemProps> = ({
         <div className="flex items-center gap-2 min-w-0">
           <button
             onClick={() => onToggleCollapse(node.id)}
-            className="text-slate-400 hover:text-white p-0.5 rounded"
+            className="text-slate-400 hover:text-white p-0.5 rounded focus-visible:ring-1 focus-visible:ring-cyan-400"
+            aria-label={isCollapsed ? '展开节点' : '折叠节点'}
+            title={isCollapsed ? '展开节点' : '折叠节点'}
           >
             {isCollapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
           </button>
@@ -383,16 +387,18 @@ export const NodeItem: React.FC<NodeItemProps> = ({
         <div className="flex items-center gap-1 shrink-0">
           <button
             onClick={() => onToggleBypass(node.id)}
-            className={`p-1 rounded hover:bg-[#282a33] transition-colors ${
+            className={`p-1 rounded hover:bg-[#282a33] transition-colors focus-visible:ring-1 focus-visible:ring-cyan-400 ${
               isBypassed ? 'text-amber-400' : 'text-slate-400 hover:text-slate-200'
             }`}
+            aria-label={isBypassed ? '取消静音 (启用节点)' : '静音节点 (停用节点)'}
             title={isBypassed ? '取消静音 (Enable)' : '静音节点 (Bypass)'}
           >
             {isBypassed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
           </button>
           <button
             onClick={() => onDeleteNode(node.id)}
-            className="p-1 rounded text-slate-400 hover:text-rose-400 hover:bg-[#282a33] transition-colors"
+            className="p-1 rounded text-slate-400 hover:text-rose-400 hover:bg-[#282a33] transition-colors focus-visible:ring-1 focus-visible:ring-rose-400"
+            aria-label="删除节点"
             title="删除节点 (Delete)"
           >
             <Trash2 className="w-3.5 h-3.5" />
@@ -416,6 +422,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
           errorMessage={node.errorMessage}
           provider={currentProvider || node.values?.targetProvider}
           errorAt={node.errorAt}
+          onOpenSettings={onOpenSettings}
         />
       )}
 

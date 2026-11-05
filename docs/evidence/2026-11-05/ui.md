@@ -64,7 +64,7 @@
 - **Schema 动态控件**：
   - `SchemaChoiceControls` 仅显示英文属性名（如 `image_size`、`aspect_ratio`、`output_format`、`guidance_scale`），缺少中文友好名称对照；数值范围字段（带 `minimum` / `maximum`）缺少滑块与数字框联动。
 - **无障碍与键盘可达性（Accessibility）**：
-  - `HistoryModal`、`ComfyGuideModal`、`CanvasManagerModal` 等弹窗缺少标准 `role="dialog"`、`aria-modal="true"`、`aria-labelledby`。
+  - `HistoryModal`、`ComfyGuideModal`、`CanvasManagerModal`、`CloudProjectModal`、`AssetManagerModal` 等弹窗缺少标准 `role="dialog"`、`aria-modal="true"`、`aria-labelledby`。
   - 节点操作按钮（折叠、跳过节点、删除节点）与表单控件缺少完整 `aria-label` 或 `htmlFor` 绑定，键盘焦点样式与快捷键提示不够直观。
 
 ---
@@ -82,7 +82,7 @@
   - 画板（Spatial）模式为空时，中央展示画板专属空状态卡片（`data-testid="spatial-empty-onboarding"`）并提供 `+ 新建画板选区` 按钮。
   - 底部工具栏根据当前视图（`canvasMode`）智能调整首选主按钮：
     - 节点模式下首选紫色渐变 `+ 添加节点`。
-    - 画板模式下首选青色渐变 `+ 新建取景框`，次级按钮标明 `添加节点（用于节点视图）`，消除视图错配困惑。
+    - 画板模式下首选青色渐变 `+ 新建取景框`，次级按钮标明 `添加节点（节点视图）`，消除视图错配困惑。
 
 ### 2. 人性化中文文案对照（Plain User-Facing Copy）
 - **文件**：`src/utils/nodeUiLabels.ts`（遵循约定，不改 `src/constants/nodes.ts`，在渲染层统一映射）、`src/components/NodeItem.tsx`、`src/components/ParameterInspector.tsx`、`src/components/SpatialFrameItem.tsx`
@@ -96,9 +96,9 @@
 ### 3. 错误透明度与渐进式披露组件（NodeErrorDisclosure & High-Visibility Feedback）
 - **文件**：`src/components/NodeErrorDisclosure.tsx`、`src/components/NodeItem.tsx`、`src/App.tsx`
 - **实现细节**：
-  - 新建 `NodeErrorDisclosure` 组件，在节点发生报错时第一眼展示清晰的人话摘要（例如：`【WaveSpeed】账户余额不足或额度耗尽 (HTTP 400)：请前往服务商充值或检查账单`）。
+  - 新建 `NodeErrorDisclosure` 组件，在节点发生报错时第一眼展示清晰的人话摘要，不主观臆造判断（例如：`【WaveSpeed】账户余额不足或额度耗尽 (HTTP 400)：请前往服务商充值或检查账单`）。
   - 下方提供 `展开完整技术诊断细节 v` 折叠区，展开后可直接查看：
-    - 调用服务商名称
+    - 调用服务商名称（由外部显式传入，不靠猜词）
     - 接口请求端点
     - HTTP 状态码
     - 发生时间
@@ -114,44 +114,55 @@
   - 左侧服务商列表依据真实连接状态渲染：
     - `● 已配置 (可用)`：绿色高亮状态球，标明服务端及本地 Key 数量。
     - `○ 未配置`：灰色状态球。
-  - 为所有接入的服务商配置了经由真实网络检索与 FetchURL 逐一核验的官方 API Key 控制台/申请直达链接：
-    - Fal.ai: `https://fal.ai/dashboard/keys`
-    - Together AI: `https://api.together.ai/settings/api-keys`
-    - Replicate: `https://replicate.com/account/api-tokens`
-    - Civitai: `https://civitai.com/user/account`
-    - Hugging Face: `https://huggingface.co/settings/tokens`
-    - ModelScope (国内): `https://modelscope.cn/my/myaccesstoken`
-    - ModelScope AI (国际): `https://modelscope.ai/my/myaccesstoken`
-    - WaveSpeed: `https://wavespeed.ai/accesskey`
-    - Novita AI: `https://novita.ai/settings/key-management`
-    - Venice AI: `https://venice.ai/settings/api`
-    - DeepInfra: `https://deepinfra.com/dash/api_keys`
-    - AIMLAPI: `https://aimlapi.com/app/keys`
-    - Krea: `https://www.krea.ai/app/api/tokens`
-    - Sogni: `https://dashboard.sogni.ai/api-keys`
-    - Google AI Studio (Gemini): `https://aistudio.google.com/app/apikey`
-    - Tensor.Art OpenWorks: `https://tensor.art/settings/access-key`
+  - **服务商官方 Key 控制台直达链接真实核验记录**：
+    | 服务商 | 官方 API Key 申请 / 控制台链接 | 核验方式与状态 | 备注 |
+    | ------ | ---------------------------- | -------------- | ---- |
+    | Fal.ai | `https://fal.ai/dashboard/keys` | FetchURL: 200 OK | 官方登录/控制台页面 |
+    | Together AI | `https://api.together.ai/settings/api-keys` | FetchURL: 200 OK | 官方登录/Key设置页 |
+    | Replicate | `https://replicate.com/account/api-tokens` | FetchURL: 200 OK | 官方 GitHub 登录/Token 页 |
+    | Civitai | `https://civitai.com/user/account` | FetchURL: 200 OK | 官方账户设置页（登录后可见 Key） |
+    | Hugging Face | `https://huggingface.co/settings/tokens` | FetchURL: 200 OK | 官方 Access Tokens 页 |
+    | Google AI Studio | `https://aistudio.google.com/app/apikey` | FetchURL: 200 OK | Google 官方 API Key 页（Google 登录） |
+    | OpenAI Compat | `https://platform.openai.com/api-keys` | FetchURL: 200 OK | OpenAI 官方 API Keys 页 |
+    | WaveSpeed | `https://wavespeed.ai/accesskey` | FetchURL: 200 OK | 官方 AccessKey 登录管理页 |
+    | Novita AI | `https://novita.ai/settings/key-management` | FetchURL: 200 OK | 官方 Key Management 控制台 |
+    | Venice AI | `https://venice.ai/settings/api` | FetchURL: 200 OK | 官方 API Dashboard SPA |
+    | DeepInfra | `https://deepinfra.com/dash/api_keys` | FetchURL: 200 OK | 官方 API Keys Dashboard |
+    | AIMLAPI | `https://aimlapi.com/app/keys` | FetchURL: 200 OK | 官方 Keys 控制台 |
+    | Krea | `https://www.krea.ai/app/api/tokens` | FetchURL: 200 OK | 官方 API Tokens 控制台 |
+    | SenseNova | `https://platform.sensenova.cn/console` | FetchURL: 200 OK | 商汤日日新开发者控制台 |
+    | Agnes AI | `https://apihub.agnes-ai.com` | FetchURL: 200 OK | Agnes 官方 API Hub 控制台 |
+    | ModelScope 国内 | `https://modelscope.cn/my/myaccesstoken` | 网络核验: 官方直达 | SPA 前端，网络搜索确认官方路径 |
+    | ModelScope 国际 | `https://modelscope.ai/my/myaccesstoken` | 网络核验: 官方直达 | SPA 前端，官方路径 |
+    | Sogni | `https://dashboard.sogni.ai/api-keys` | 网络核验: 官方直达 | SPA 前端，官方控制台 |
+    | NanoGPT | `https://nano-gpt.com/api` | FetchURL: 200 OK | 官方 API 控制台/文档 |
+    | Tensor.Art | `https://tensor.art/settings/access-key` | 网络核验: 403 WAF | 官方 Access Key 设置页（Cloudflare 拦截爬虫） |
+    | Grok Compat (xAI) | `https://console.x.ai` | 网络核验: 403 WAF | xAI 官方开发者控制台（Cloudflare 拦截爬虫） |
+    | Runware | `https://my.runware.ai` | 网络核验: 官方控制台 | 官方用户控制台入口 |
+    | ModelsLab | `https://modelslab.com` | FetchURL: 200 OK | 官方首页（登录后进入控制台） |
+    | Mage.space | `https://www.mage.space` | FetchURL: 200 OK | 官方首页 |
   - 在服务商详情顶部新增醒目的绿色按钮 `申请 / 获取 API Key 直达 ↗`，旁边保留 `官方接入文档 ↗`。
   - 优化 `测试连通性` 交互：测试结果不仅呈现在底部，还在顶部标题栏下方即时渲染轻量结果横幅（显示状态码、时延与原始返回）。
 
 ### 5. Schema 动态控件与无障碍支持（Schema Controls & Accessibility）
-- **文件**：`src/components/SchemaChoiceControls.tsx`、`src/components/HistoryModal.tsx`、`src/components/BackendSettingsModal.tsx`
+- **文件**：`src/components/SchemaChoiceControls.tsx`、`src/components/HistoryModal.tsx`、`src/components/BackendSettingsModal.tsx`、`src/components/CanvasManagerModal.tsx`、`src/components/ComfyGuideModal.tsx`、`src/components/CloudProjectModal.tsx`、`src/components/AssetManagerModal.tsx`、`src/components/NodeItem.tsx`
 - **实现细节**：
   - `SchemaChoiceControls` 中针对数值范围字段（带 `minimum` 与 `maximum`），增加滑块（`<input type="range" />`）与数字输入框（`<input type="number" />`）联动控件，方便用户拖动或精确输入。
   - 字段标签引入中文友好映射（如 `image_size -> 图像画幅`、`aspect_ratio -> 画面比例`、`output_format -> 输出格式`、`guidance_scale -> 引导系数`）。
-  - 各大模态弹窗（`HistoryModal`、`BackendSettingsModal` 等）添加标准的 `role="dialog"`、`aria-modal="true"`、`aria-labelledby`，支持 Esc 键与键盘焦点无障碍交互。
+  - 各大模态弹窗添加标准的 `role="dialog"`、`aria-modal="true"`、`aria-labelledby`，支持 Esc 键与键盘焦点无障碍交互。
+  - 节点折叠（`展开节点` / `折叠节点`）、静音（`启用节点` / `停用节点`）和删除（`删除节点`）按钮添加显式 `aria-label` 与 `focus-visible` 焦点环高亮。
 
 ---
 
 ## 三、实机浏览器 E2E 验证与运行产物记录
 
-我们在无头 Chrome 浏览器（CDP 端口 `9403`）中通过真实 DOM 点击，以新用户视角完整跑通了全流程，采集了全套改造后实机截图并进行了多服务商真实带 LoRA 生成测试。
+我们在无头 Chrome 浏览器（CDP 端口 `9403`）中通过 DOM `.click()` 真实驱动，以新用户视角完整跑通了全流程，采集了全套改造后实机截图并进行了多服务商真实带 LoRA 生成测试。
 
 ### 改造后实机截图索引（`temp/e2e/2026-11-05/ui6b/`）
 - `01-landing.png`：改造后首次打开页面（中文友好节点、端口对照标签）
 - `02-blank-canvas-onboarding.png`：清空画布后的 6 步新手入门引导卡片
 - `03-api-settings-enhanced.png`：改造后的「API 与密钥设置」弹窗（显示实时 ● 已配置 / ○ 未配置、官方 API Key 直达链接）
-- `04-api-settings-tested.png`：测试连通性后的即时透明状态反馈
+- `04-api-settings-tested.png`：测试连通性后的即时透明状态反馈（HTTP 503 本地缺少 ADMIN_TOKEN 真实报错暴露）
 - `05-loaded-standard-workflow.png`：在空状态引导卡上一键加载标准工作流
 - `06-run-result-1.png`：Hugging Face + LoRA 生成运行及透明错误披露
 - `07-workflow-modal.png`：工作流与热门模型中心
@@ -169,7 +180,7 @@
 
 ### 多服务商真实付费带 LoRA 请求验证（0 Mock / 100% 真实上游路由）
 
-依据项目规范，所有请求打到用户选定的真实服务商与端点，完整携带官方支持的真实 LoRA 参数，失败原样披露 HTTP 状态码与响应体：
+依据项目规范，所有请求打到用户选定的真实服务商与端点，完整携带官方支持的真实 LoRA 参数，失败原样披露 HTTP 状态码与响应体。以下数据直接提取自 Chrome 运行实测 DOM：
 
 #### 运行 1：Hugging Face + 风格 LoRA
 - **提供者**：`Hugging Face`（fal-ai 托管推理路由）
@@ -177,15 +188,17 @@
 - **挂载 LoRA**：`renderartist/Technically-Color-Z-Image-Turbo`，强度 `0.9`
 - **生成参数**：步数 `12`，CFG `1`，分辨率 `1216×832`，种子 `1840591390`
 - **前端操作**：点击右上角 `运行：保存图像`（`data-testid="run-button"`）
-- **上游真实响应**：
-  ```http
-  HTTP 402 Payment Required
-  {"error":"Purchase pre-paid credits to continue using Inference Providers. Alternatively, subscribe to PRO to get monthly included credits."}
+- **实测 DOM `data-testid="node-error-headline"` 提取原文**：
+  ```text
+  hf_h...Kdks: HTTP 402: {"error":"Purchase pre-paid credits to continue using Inference Providers. Alternatively, subscribe to PRO to get monthly included credits."}
+  hf_b...MMGa: HTTP 402: {"error":"Purchase pre-paid credits to continue using Inference Providers. Alternatively, subscribe to PRO to get monthly included credits."}
+  hf_j...naLB: HTTP 402: {"error":"Purchase pre-paid credits to continue using Inference Providers. Alternatively, subscribe to PRO to get monthly included credits."}
+  hf_n...EIBT: HTTP 402: {"error":"Purchase pre-paid credits to continue using Inference Providers. Alternatively, subscribe to PRO to get monthly included credits."}
   ```
 - **UI 呈现验证**：
   - KSampler 节点摘要第一眼显示：`【huggingface】账户余额不足或额度耗尽 (HTTP 402)：请前往服务商充值或检查账单`
   - 悬浮通知 Toast 即时浮现：`工作流生成失败 hf_b...MMGa: HTTP 402: {"error":"Purchase pre-paid credits..."}`
-- **判定结论**：`PASS_BILLING`（真实上游鉴权与计费响应，无 Mock，无静默降级）
+- **判定结论**：`PASS_BILLING`（真实上游计费响应，无 Mock，无静默降级）
 
 #### 运行 2：WaveSpeed + 写实风格 LoRA
 - **提供者**：`WaveSpeed`
@@ -193,16 +206,15 @@
 - **挂载 LoRA**：`https://huggingface.co/comfyanonymous/flux_RealismLora_converted_comfyui/resolve/main/flux_realism_lora.safetensors`，强度 `1.1`
 - **生成参数**：步数 `36`，CFG `3.5`，画幅 `1024×1024`，种子 `42`
 - **前端操作**：在工作流预设中选择 `WaveSpeed · 标准文生图`，点击 `仅载入` 后点击右上角 `运行：保存图像`
-- **上游真实响应**：
-  ```http
-  HTTP 400 Bad Request
-  {"code": 400, "message": "Insufficient credits. Please top up your account to continue."}
+- **实测 DOM `data-testid="node-error-headline"` 提取原文**：
+  ```text
+  HTTP 400: {"code":400,"message":"Insufficient credits. Please top up your account to continue."}
   ```
 - **UI 呈现验证**：
   - KSampler 节点摘要显示：`【wavespeed】账户余额不足或额度耗尽 (HTTP 400)：请前往服务商充值或检查账单`
   - 展开 `展开完整技术诊断细节` 成功展现调用服务商 `WaveSpeed`、发生时间与原始完整上游响应体（见截图 `11-progressive-disclosure-expanded.png`）。
   - 提供 `复制诊断信息` 按钮，点击成功拷贝完整技术诊断报告。
-- **判定结论**：`PASS_BILLING`（真实上游鉴权与计费响应，无 Mock，无静默降级）
+- **判定结论**：`PASS_BILLING`（真实上游计费响应，无 Mock，无静默降级）
 
 #### 运行 3：Novita AI + 双 LoRA 链微调
 - **提供者**：`Novita AI`
@@ -211,15 +223,14 @@
 - **挂载 LoRA 2**：`more_details_59655`，强度 `0.4`
 - **生成参数**：采样算法 `Euler a`，步数 `15`，CFG `6.5`，画幅 `512×768`，种子 `548949743`
 - **前端操作**：在预设模板中选择 `Novita · 标准文生图` 载入画布并点击 `运行：保存图像`
-- **上游真实响应**：
-  ```http
-  HTTP 403 Forbidden
-  {"code":403,"reason":"NOT_ENOUGH_BALANCE","message":"insufficient balance","metadata":{}}
+- **实测 DOM `data-testid="node-error-headline"` 提取原文**：
+  ```text
+  HTTP 403: {"code":403, "reason":"NOT_ENOUGH_BALANCE", "message":"insufficient balance", "metadata":{}}
   ```
 - **UI 呈现验证**：
   - KSampler 节点摘要显示：`【novita】账户余额不足或额度耗尽 (HTTP 403)：请前往服务商充值或检查账单`
   - 悬浮 Toast 同步显示该详细信息（见截图 `13-novita-run-result.png`）。
-- **判定结论**：`PASS_BILLING`（真实上游鉴权与计费响应，无 Mock，无静默降级）
+- **判定结论**：`PASS_BILLING`（真实上游计费响应，无 Mock，无静默降级）
 
 ---
 
@@ -227,7 +238,7 @@
 
 1. **类型检查**：`npx tsc --noEmit` 退出码 `0`，0 个类型错误。
 2. **构建打包**：`npm run build` 成功完成，客户端及 Worker 均正常产出。
-3. **测试覆盖**：运行相关单元测试套件（`studio.test.tsx`、`nodeUI.test.tsx`、`cleanup-2026-10-17.test.tsx`、`clean1651.test.tsx`、`clean1333.test.tsx`、`fix15-ui.test.tsx`、`historyParameters.test.ts`、`veniceReverifyUi.test.tsx` 等）全部通过（全绿）。
+3. **测试覆盖**：全量运行 `npx vitest run --maxWorkers=2`，**232 个测试文件全部通过（232 passed），1714 个测试用例全部通过（1714 passed），0 失败**。
 4. **范围隔离**：
    - 未修改 `src/constants/nodes.ts`（遵循 ui6/video7 协议，映射在 `src/utils/nodeUiLabels.ts` 完成）。
    - 在 `NodeItem.tsx` 中严格保留 AIVideoNode 区域无改动。

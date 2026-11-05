@@ -23,52 +23,36 @@ export function summarizeErrorMessage(rawMessage: string, providerHint?: string)
   const text = String(rawMessage || '').trim();
   const lower = text.toLowerCase();
 
-  // Detect missing key / unauthorized
-  const isMissingKey =
-    lower.includes('未配置') ||
-    lower.includes('api key') ||
-    lower.includes('401') ||
-    lower.includes('unauthorized') ||
-    lower.includes('forbidden') ||
-    lower.includes('invalid_api_key') ||
-    lower.includes('authentication') ||
-    lower.includes('access denied');
-
-  // Detect balance / quota / payment issue
-  const isBalanceIssue =
-    lower.includes('402') ||
-    lower.includes('payment_required') ||
-    lower.includes('top_up') ||
-    lower.includes('insufficient_balance') ||
-    lower.includes('balance') ||
-    lower.includes('credits') ||
-    lower.includes('quota') ||
-    lower.includes('arrears') ||
-    lower.includes('余额不足') ||
-    lower.includes('欠费');
-
   // Extract HTTP status code if present
   const httpMatch = text.match(/HTTP\s+(\d{3})/i) || text.match(/\b(400|401|402|403|404|422|429|500|502|503|504)\b/);
   const statusStr = httpMatch ? `(HTTP ${httpMatch[1]})` : '';
+  const statusCode = httpMatch ? parseInt(httpMatch[1], 10) : undefined;
 
-  // Detect provider name if not supplied
-  let prov = providerHint;
-  if (!prov) {
-    if (lower.includes('wavespeed')) prov = 'WaveSpeed';
-    else if (lower.includes('together')) prov = 'Together';
-    else if (lower.includes('fal')) prov = 'Fal.ai';
-    else if (lower.includes('replicate')) prov = 'Replicate';
-    else if (lower.includes('novita')) prov = 'Novita';
-    else if (lower.includes('venice')) prov = 'Venice';
-    else if (lower.includes('deepinfra')) prov = 'DeepInfra';
-    else if (lower.includes('aimlapi')) prov = 'AIMLAPI';
-    else if (lower.includes('krea')) prov = 'Krea';
-    else if (lower.includes('sogni')) prov = 'Sogni';
-    else if (lower.includes('civitai')) prov = 'Civitai';
-    else if (lower.includes('modelscope')) prov = 'ModelScope';
-    else if (lower.includes('huggingface')) prov = 'Hugging Face';
-  }
+  // Detect missing key / unauthorized (401 or explicit unauthorized text)
+  const isMissingKey =
+    statusCode === 401 ||
+    lower.includes('未配置') ||
+    lower.includes('invalid_api_key') ||
+    lower.includes('invalid api key') ||
+    lower.includes('missing api key') ||
+    lower.includes('authentication required') ||
+    (statusCode === 403 && (lower.includes('api_key') || lower.includes('token') || lower.includes('unauthorized')));
 
+  // Detect balance / quota / payment issue
+  const isBalanceIssue =
+    statusCode === 402 ||
+    lower.includes('payment_required') ||
+    lower.includes('insufficient credits') ||
+    lower.includes('not_enough_balance') ||
+    lower.includes('insufficient_balance') ||
+    lower.includes('billing_balance') ||
+    lower.includes('purchase pre-paid credits') ||
+    lower.includes('top up your account') ||
+    lower.includes('top_up') ||
+    lower.includes('余额不足') ||
+    lower.includes('欠费');
+
+  const prov = providerHint || undefined;
   const provPrefix = prov ? `【${prov}】` : '';
 
   let headline = '';
@@ -76,14 +60,12 @@ export function summarizeErrorMessage(rawMessage: string, providerHint?: string)
     headline = `${provPrefix}账户余额不足或额度耗尽 ${statusStr}：请前往服务商充值或检查账单`;
   } else if (isMissingKey) {
     headline = `${provPrefix}API 密钥未配置或无效 ${statusStr}：请在设置中配置有效密钥`;
-  } else if (lower.includes('404') || lower.includes('not found')) {
+  } else if (statusCode === 404 || lower.includes('not found') || lower.includes('404')) {
     headline = `${provPrefix}模型或端点未找到 ${statusStr}：所选模型可能已下线或路径不正确`;
-  } else if (lower.includes('429') || lower.includes('rate limit')) {
+  } else if (statusCode === 429 || lower.includes('rate limit') || lower.includes('too many requests')) {
     headline = `${provPrefix}请求频率超限 ${statusStr}：请稍后重试或提高服务商并发配额`;
-  } else if (lower.includes('503') || lower.includes('service unavailable')) {
-    headline = `${provPrefix}服务暂时不可用 ${statusStr}：上游服务繁忙或正在维护`;
-  } else if (lower.includes('500') || lower.includes('internal server error')) {
-    headline = `${provPrefix}上游服务处理异常 ${statusStr}`;
+  } else if (statusCode && statusCode >= 500 && statusCode < 600) {
+    headline = `${provPrefix}上游服务暂时不可用 ${statusStr}：上游服务繁忙或正在维护`;
   } else {
     // First non-empty line of the raw message
     const firstLine = text.split(/\r?\n/).find((l) => l.trim().length > 0) || text;

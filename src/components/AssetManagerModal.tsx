@@ -542,7 +542,7 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
       onDragLeave={() => setIsDraggingOver(false)}
       onDrop={handleDropFiles}
     >
-      <div className="bg-[#14151c] border border-[#272938] rounded-2xl w-full max-w-7xl h-[92vh] flex flex-col shadow-2xl overflow-hidden text-xs relative">
+      <div role="dialog" aria-modal="true" aria-labelledby="asset-manager-title" className="bg-[#14151c] border border-[#272938] rounded-2xl w-full max-w-7xl h-[92vh] flex flex-col shadow-2xl overflow-hidden text-xs relative">
         {(storageWarning || migrationWarning || Object.values(cacheWarnings).some(Boolean)) && <div role="alert" className="border-b border-amber-700/50 bg-amber-950/50 px-4 py-2 text-amber-100">
           {[storageWarning, migrationWarning, ...Object.values(cacheWarnings)].filter(Boolean).join('；')}
           <button type="button" className="ml-3 underline" onClick={() => setRetryRevision(value => value + 1)}>重试迁移与保存</button>

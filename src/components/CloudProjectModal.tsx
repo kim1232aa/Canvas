@@ -118,7 +118,7 @@ export const CloudProjectModal: React.FC<CloudProjectModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="bg-[#17181e] border border-[#2b2d39] rounded-2xl w-full max-w-4xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden text-xs">
+      <div role="dialog" aria-modal="true" aria-labelledby="cloud-project-title" className="bg-[#17181e] border border-[#2b2d39] rounded-2xl w-full max-w-4xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden text-xs">
         {/* Header */}
         <div className="px-6 py-4 border-b border-[#262833] bg-[#131419] flex items-center justify-between">
           <div className="flex items-center gap-3">

@@ -593,6 +593,7 @@ export const Canvas: React.FC<CanvasProps> = ({
                 canvasLoras={node.type === 'CheckpointLoaderSimple' ? canvasLorasForCheckpoint(node.id, nodes as any, connections as any) : undefined}
                 onAutoFixCheckpoint={onAutoFixCheckpoint}
                 onOpenModelHub={onOpenModelHub}
+                onOpenSettings={onOpenSettings}
               />
             </div>
           ))}
