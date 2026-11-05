@@ -127,6 +127,63 @@ export function getProviderFormatHint(prov: string): { format: string; docUrl?: 
   return { format: '输入该平台支持的真实模型 / LoRA 资源 ID' };
 }
 
+export function detectModelArchitecture(modelOrBase: string | undefined | null): string {
+  if (!modelOrBase) return 'unknown';
+  const s = String(modelOrBase).toLowerCase().trim();
+  if (s.includes('qwen')) return 'qwen';
+  if (s.includes('z-image') || s.includes('z_image') || s.includes('zimage')) return 'z-image';
+  if (s.includes('flux')) return 'flux';
+  if (s.includes('wan')) return 'wan';
+  if (s.includes('pony') || s.includes('pdxl')) return 'pony';
+  if (s.includes('illustrious') || s.includes('noobai')) return 'illustrious';
+  if (s.includes('sdxl') || s.includes('stable-diffusion-xl') || s.includes('animagine') || s.includes('juggernaut-xl')) return 'sdxl';
+  if (s.includes('sd 1.5') || s.includes('sd1.5') || s.includes('sd15') || s.includes('v1-5') || s.includes('stable-diffusion-v1-5') || s.includes('dreamshaper') || s.includes('meinahentai')) return 'sd15';
+  if (s.includes('sd 3.5') || s.includes('sd3.5') || s.includes('sd3') || s.includes('stable-diffusion-3')) return 'sd35';
+  if (s.includes('chroma')) return 'chroma';
+  if (s.includes('hunyuan')) return 'hunyuan';
+  if (s.includes('kolors')) return 'kolors';
+  return 'unknown';
+}
+
+export function checkHubLoraCompatibility(
+  currentCheckpoint: string | undefined,
+  loraBaseModel: string | undefined,
+  loraIdOrName: string | undefined
+): { compatible: boolean; chipLabel: string; isMismatch: boolean; ckptArch: string; loraArch: string } {
+  const loraArch = detectModelArchitecture(loraBaseModel) !== 'unknown'
+    ? detectModelArchitecture(loraBaseModel)
+    : detectModelArchitecture(loraIdOrName);
+  const ckptArch = detectModelArchitecture(currentCheckpoint);
+
+  if (!currentCheckpoint || ckptArch === 'unknown' || loraArch === 'unknown') {
+    return {
+      compatible: true,
+      chipLabel: loraBaseModel || '未知底模',
+      isMismatch: false,
+      ckptArch,
+      loraArch,
+    };
+  }
+
+  if (ckptArch !== loraArch) {
+    return {
+      compatible: false,
+      chipLabel: `架构不兼容 (${loraBaseModel || loraArch} ≠ ${ckptArch})`,
+      isMismatch: true,
+      ckptArch,
+      loraArch,
+    };
+  }
+
+  return {
+    compatible: true,
+    chipLabel: `兼容 ${loraBaseModel || ckptArch}`,
+    isMismatch: false,
+    ckptArch,
+    loraArch,
+  };
+}
+
 interface ArchitectureFields { baseModel?: unknown; id?: unknown; name?: unknown; description?: unknown; tags?: unknown }
 
 function matchesArchitecture(m: ArchitectureFields, arch: string): boolean {
@@ -188,6 +245,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
   initialCategory = 'all',
   initialProvider,
   isSpatialMode = false,
+  currentCheckpoint,
 }) => {
   const [activeProvider, setActiveProvider] = useState<ProviderTab>('all');
   const [activeCategory, setActiveCategory] = useState<CategoryFilter>(initialCategory);
@@ -1144,6 +1202,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                 const trainedWords = m.trainedWords || [];
                 const isBookmarked = isModelBookmarked(m);
                 const baseArch = m.baseModel || '未知底模';
+                const compat = checkHubLoraCompatibility(currentCheckpoint, baseArch, modelId);
                 // fix14: skip baseArch when it duplicates the provider badge (e.g. OpenWorks + openworks).
                 const showBaseArchBadge =
                   Boolean(baseArch) &&
@@ -1441,13 +1500,27 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                                     onSelectLoRAWithBaseModel({...resource,triggerWords:resource.triggerWords || trainedWords.join(', '),baseModel:resource.baseModel || baseArch});
                                     onClose();
                                   }}
-                                  className="w-full py-1.5 px-2.5 rounded-xl bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-600 hover:from-purple-500 hover:to-cyan-500 text-white font-bold transition-all shadow-md shadow-purple-600/30 flex items-center justify-center gap-1.5 text-[11px] active:scale-98"
-                                  title={`挂载到当前同平台底模；生成前核实 ${baseArch} 架构`}
+                                  className={`w-full py-1.5 px-2.5 rounded-xl font-bold transition-all shadow-md flex items-center justify-center gap-1.5 text-[11px] active:scale-98 ${
+                                    compat.isMismatch
+                                      ? 'bg-gradient-to-r from-amber-700 via-rose-700 to-red-700 hover:from-amber-600 hover:to-rose-600 text-white shadow-rose-700/30 border border-rose-500/50'
+                                      : 'bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-600 hover:from-purple-500 hover:to-cyan-500 text-white shadow-purple-600/30'
+                                  }`}
+                                  title={
+                                    compat.isMismatch
+                                      ? `警告：当前画布底模为 ${compat.ckptArch}，而此 LoRA 为 ${compat.loraArch} 架构，跨架构挂载会导致上游报错或静默失真。`
+                                      : `挂载到当前同平台底模；生成前核实 ${baseArch} 架构`
+                                  }
                                 >
-                                  <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                                  <span>挂载到所选底模</span>
-                                  <span className="text-[10px] px-1 py-0.2 rounded bg-black/30 font-mono text-cyan-200">
-                                    {baseArch}
+                                  {compat.isMismatch ? (
+                                    <ShieldCheck className="w-3.5 h-3.5 text-amber-300" />
+                                  ) : (
+                                    <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                                  )}
+                                  <span>{compat.isMismatch ? '底模架构不匹配' : '挂载到所选底模'}</span>
+                                  <span className={`text-[10px] px-1 py-0.2 rounded font-mono ${
+                                    compat.isMismatch ? 'bg-black/50 text-rose-200 border border-rose-500/40' : 'bg-black/30 text-cyan-200'
+                                  }`}>
+                                    {compat.chipLabel}
                                   </span>
                                 </button>
                               )}
