@@ -121,7 +121,10 @@ describe('standard workflow presets (23 T2I + 5 T2V + 6 I2V)', () => {
       expect(p.nodes.some(n => n.type === 'LoadImage')).toBe(false);
       expect(p.nodes.some(n => n.type === 'AIVideoNode')).toBe(true);
       expect(p.nodes.some(n => n.type === 'SaveVideo')).toBe(true);
-      expect(p.nodes.some(n => n.type === 'LoRALoader')).toBe(false);
+      expect(p.nodes.some(n => n.type === 'LoRALoader')).toBe(true);
+      const vidLora = p.connections.find(c => c.toSocketId === 'lora' && c.toNodeId === `${p.id}-vid`);
+      expect(vidLora).toBeDefined();
+      expect(p.nodes.find(n => n.id === vidLora?.fromNodeId)?.type).toBe('LoRALoader');
       const vid = p.nodes.find(n => n.type === 'AIVideoNode')!;
       expect(vid.values.targetProvider).toBe(p.provider);
       expect(vid.values.require_reference_image).toBe(false);
@@ -434,11 +437,15 @@ describe('standard workflow presets (23 T2I + 5 T2V + 6 I2V)', () => {
 
   it('ModelsLab/Civitai/Novita seed Schema-supported sampler fields into schemaProperties (no false amber omit)', () => {
     // ModelsLab: official scheduler (UniPC…); sampler unsupported → omit keeps it off the list.
+    // ModelsLab tamarin-xl-v1 is SDXL 1.0 architecture; native resolution is 1024x1024 (corrected from 512x512).
     {
       const p = preset('std-modelslab-t2i');
       const ks = p.nodes.find(n => n.type === 'KSampler')!;
       expect(ks.values.scheduler).toBe('UniPCMultistepScheduler');
       expect(ks.values.sampler_name).toBeUndefined();
+      const lat = p.nodes.find(n => n.type === 'EmptyLatentImage')!;
+      expect(lat.values.width).toBe(1024);
+      expect(lat.values.height).toBe(1024);
       const props = JSON.parse(String(loader(p.id)!.values.custom_parameters || '{}'))?._canvas?.schemaProperties as string[];
       expect(props).toEqual(expect.arrayContaining(['scheduler', 'steps', 'guidance', 'seed', 'loras']));
       expect(props).not.toEqual(expect.arrayContaining(['sampler', 'sampler_name', 'denoise']));

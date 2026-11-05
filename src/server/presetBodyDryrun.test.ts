@@ -18,6 +18,8 @@ const FX = 'src/server/__fixtures__/video-preset-dryrun-2026-11-04/';
 const json = (f: string) => JSON.parse(readFileSync(FX + f, 'utf8'));
 const REF = 'https://example.com/ref.png';
 const LORA = 'https://huggingface.co/Remade-AI/matrix-shot/resolve/main/matrix_shot.safetensors';
+const T2V_LORA = 'https://huggingface.co/artificialguybr/Wan-BalancingAct-Redmond-Wan2.1-T2V-14B/resolve/main/Wan-BalancingAct-Redmond.safetensors';
+const CIVITAI_T2V_LORA = 'urn:air:wanvideo-22-t2v-a14b:lora:civitai:1837542@2186660';
 const log: Record<string, unknown> = {};
 const originalFetch = globalThis.fetch;
 
@@ -118,7 +120,7 @@ describe('std t2v presets → outgoing upstream body (dry run, no network)', () 
     const doc = json('fal-wan-i2v-lora.openapi.json');
     const payload = buildFalVideoRequest(c.body.model, c.body, inlineFalItemRefs(extractFalInputProperties(doc)!, doc)).payload;
     expect(payload).toMatchObject({ resolution: '480p', aspect_ratio: '16:9', num_frames: 81, frames_per_second: 16 });
-    expect(payload).not.toHaveProperty('loras');
+    expect(payload.loras).toEqual([{ path: T2V_LORA, scale: 1 }]);
     expect(payload).not.toHaveProperty('image_url');
     expect(payload).not.toHaveProperty('_canvas');
   });
@@ -131,7 +133,8 @@ describe('std t2v presets → outgoing upstream body (dry run, no network)', () 
     const built = buildReplicatePredictionRequest(c.body, 'https://api.replicate.com/v1', props, undefined, liveModel);
     expect((built.payload as any).input).toMatchObject({ resolution: '480p', aspect_ratio: '16:9', model: '14b', frames: 81 });
     expect((built.payload as any).input).not.toHaveProperty('image');
-    expect((built.payload as any).input).not.toHaveProperty('lora_url');
+    expect((built.payload as any).input.lora_url).toBe(T2V_LORA);
+    expect((built.payload as any).input.lora_strength_model).toBe(1);
   });
 
   it('MuAPI wan2.1-lora-t2v', async () => {
@@ -167,8 +170,7 @@ describe('std t2v presets → outgoing upstream body (dry run, no network)', () 
       : url.endsWith('/api/v1/models') ? { models: [{ name: 'wan2.1-lora-t2v', endpoint_url: 'wan2.1-lora-t2v', group_of: 'video' }] } : { request_id: 'dry-t2v' });
     const gen = calls.find((x) => x.url.endsWith('/api/v1/wan2.1-lora-t2v'))!;
     const body = JSON.parse(String(gen.init!.body));
-    expect(body).toMatchObject({ resolution: '480p', aspect_ratio: '16:9', duration: 5 });
-    expect(body).not.toHaveProperty('lora_list');
+    expect(body).toMatchObject({ resolution: '480p', aspect_ratio: '16:9', duration: 5, lora_list: [{ path: T2V_LORA, scale: 1 }] });
     expect(body).not.toHaveProperty('image_url');
   });
 
@@ -202,8 +204,7 @@ describe('std t2v presets → outgoing upstream body (dry run, no network)', () 
     const calls = await schemaProviderUpstream('wavespeed', c.body, (url) => url.endsWith('/api/v3/models') ? { code: 200, data: [wsT2vRow] } : { code: 200, data: { id: 'dry-ws-t2v' } });
     const gen = calls.find((x) => x.url === 'https://api.wavespeed.ai/api/v3/wavespeed-ai/wan-2.1/t2v-480p-lora')!;
     const body = JSON.parse(String(gen.init!.body));
-    expect(body).toMatchObject({ size: '832*480', duration: 5 });
-    expect(body).not.toHaveProperty('loras');
+    expect(body).toMatchObject({ size: '832*480', duration: 5, loras: [{ path: T2V_LORA, scale: 1 }] });
     expect(body).not.toHaveProperty('image');
   });
 
@@ -211,8 +212,29 @@ describe('std t2v presets → outgoing upstream body (dry run, no network)', () 
     const c = await canvasRequest('std-civitai-t2v');
     expect(c.body.image_url).toBeUndefined();
     const built = buildCivitaiVideoInput(c.body, json('civitai-videogen-schemas.json'));
-    expect(built.payload).toMatchObject({ fps: 24, cfgScale: 3, width: 832, height: 480, shift: 7, diffusionModel: 'urn:air:wanvideo-22-t2v-a14b:checkpoint:civitai:1817671@2114154' });
+    expect(built.payload).toMatchObject({
+      fps: 24,
+      cfgScale: 3,
+      width: 832,
+      height: 480,
+      shift: 7,
+      diffusionModel: 'urn:air:wanvideo-22-t2v-a14b:checkpoint:civitai:1817671@2114154',
+      loras: [{ air: CIVITAI_T2V_LORA, strength: 1 }],
+    });
     expect(built.payload).not.toHaveProperty('sourceImage');
-    expect(built.payload).not.toHaveProperty('loras');
+  });
+});
+
+describe('std-modelslab-t2i dry-run (SDXL native resolution)', () => {
+  it('std-modelslab-t2i builds canvas request with native SDXL 1024x1024 (corrected from 512x512)', () => {
+    const p = WORKFLOW_PRESETS.find((x) => x.id === 'std-modelslab-t2i')!;
+    const lat = p.nodes.find((n) => n.type === 'EmptyLatentImage')!;
+    expect(lat.values.width).toBe(1024);
+    expect(lat.values.height).toBe(1024);
+    const ks = p.nodes.find((n) => n.type === 'KSampler')!;
+    expect(ks.values.scheduler).toBe('UniPCMultistepScheduler');
+    const l = p.nodes.find((n) => n.type === 'LoRALoader')!;
+    expect(l.values.lora_name).toBe('xl-realistic-cake-art-sty');
+    expect(l.values.strength_model).toBe(0.45);
   });
 });

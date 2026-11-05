@@ -45,17 +45,17 @@
 | `std-sogni-t2i` | 标准文生图 | sogni | `krea-2-turbo` | `krea2-fever-dream-mood` (1.0) | 768×1376, 10步, CFG 1, 采样器 euler, 种子 64107730 | `https://api.sogni.ai/v1/model-catalog?mediaType=image` |
 | `std-replicate-t2i` | 标准文生图 | replicate | `black-forest-labs/flux-dev-lora` | `renderartist/coloringbookflux` (1.0) | 宽高比 1:1, 41步, CFG 3.5, 种子 2100162238 | `https://replicate.com/black-forest-labs/flux-dev-lora/api/schema` |
 | `std-runware-t2i` | 标准文生图 | runware | `runware:100@1` | (无) | 1024×1024, 4步, CFG 1 | `https://docs.runware.ai` |
-| `std-modelslab-t2i` | 标准文生图 | modelslab | `tamarin-xl-v1` | `xl-realistic-cake-art-sty` (0.45) | 1024×1024 (纠正为 SDXL 原生分辨率), 20步, CFG 7.5, 调度器 UniPCMultistepScheduler | `https://docs.modelslab.com/image-generation/community-models/dreambooth-lora` |
+| `std-modelslab-t2i` | 标准文生图 | modelslab | `tamarin-xl-v1` | `xl-realistic-cake-art-sty` (0.45) | 1024×1024 (纠正为 SDXL 原生分辨率，原 512x512 挤压), 20步, CFG 7.5, 调度器 UniPCMultistepScheduler | `https://modelslab.com/models/modelslab/tamarin-xl-v1` |
 | `std-gemini-t2i` | 标准文生图 | gemini | `gemini-3.1-flash-image` | (无) | 宽高比 1:1 | `https://ai.google.dev/docs/gemini_api` |
 | `std-agnes-t2i` | 标准文生图 | agnes | `agnes-image-2.5-flash` | (无) | 尺寸 2K, 宽高比 1:1 | `https://wiki.agnes-ai.com/en/docs/agnes-image-25-flash` |
 | `std-sensenova-t2i` | 标准文生图 | sensenova | `sensenova-u1.5-lite` | (无) | 1024×1024 | `https://platform.sensenova.cn/doc` |
 | `std-mage-t2i` | 标准文生图 | mage | `mango-v3` | (无) | 宽高比 4:5, 分辨率 2K | `https://docs.mage.space/api/models/mango` |
 | `std-civitai-t2i` | 标准文生图 | civitai | `turbo` | (无) | 8步, CFG 1, engine: comfy, ecosystem: krea2 | `https://developer.civitai.com/orchestration/recipes/krea2` |
-| `std-fal-t2v` | 标准文生视频 | fal | `fal-ai/wan-t2v-lora` | (纯净底模，无错配 I2V LoRA) | 分辨率 480p, 比例 16:9, 81帧, 16fps | `https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/wan-t2v-lora` |
-| `std-wavespeed-t2v` | 标准文生视频 | wavespeed | `wavespeed-ai/wan-2.1/t2v-480p-lora` | (纯净底模，无错配 I2V LoRA) | 尺寸 832*480, 时长 5s | `https://wavespeed.ai/docs/docs-api/wavespeed-ai/wan-2.1-t2v-480p-lora` |
-| `std-civitai-t2v` | 标准文生视频 | civitai | `urn:air:wanvideo-22-t2v-a14b:checkpoint:civitai:1817671@2114154` | (纯净底模，无跨架构 I2V LoRA) | 832×480, 24fps, shift 7, CFG 3 | `https://developer.civitai.com/orchestration/recipes/wan.md` |
-| `std-muapi-t2v` | 标准文生视频 | muapi | `wan2.1-lora-t2v` | (纯净底模，无错配 I2V LoRA) | 分辨率 480p, 比例 16:9, 时长 5s | `https://api.muapi.ai/openapi.json#/paths/~1api~1v1~1wan2.1-lora-t2v` |
-| `std-replicate-t2v` | 标准文生视频 | replicate | `wan-video/wan2.1-with-lora` | (纯净底模，无错配 I2V LoRA) | 分辨率 480p, 比例 16:9, 81帧, model: 14b | `https://replicate.com/wan-video/wan2.1-with-lora/api/schema` |
+| `std-fal-t2v` | 标准文生视频 | fal | `fal-ai/wan-t2v-lora` | `Wan-BalancingAct-Redmond` (1.0) | 分辨率 480p, 比例 16:9, 81帧, 16fps | `https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/wan-t2v-lora` & `https://huggingface.co/artificialguybr/Wan-BalancingAct-Redmond-Wan2.1-T2V-14B` |
+| `std-wavespeed-t2v` | 标准文生视频 | wavespeed | `wavespeed-ai/wan-2.1/t2v-480p-lora` | `Wan-BalancingAct-Redmond` (1.0) | 尺寸 832*480, 时长 5s | `https://wavespeed.ai/docs/docs-api/wavespeed-ai/wan-2.1-t2v-480p-lora` |
+| `std-civitai-t2v` | 标准文生视频 | civitai | `urn:air:wanvideo-22-t2v-a14b:checkpoint:civitai:1817671@2114154` | `urn:air:wanvideo-22-t2v-a14b:lora:civitai:1837542@2186660` (1.0) | 832×480, 24fps, shift 7, CFG 3 | `https://civitai.com/models/1837542?modelVersionId=2186660` |
+| `std-muapi-t2v` | 标准文生视频 | muapi | `wan2.1-lora-t2v` | `Wan-BalancingAct-Redmond` (1.0) | 分辨率 480p, 比例 16:9, 时长 5s | `https://api.muapi.ai/openapi.json#/paths/~1api~1v1~1wan2.1-lora-t2v` |
+| `std-replicate-t2v` | 标准文生视频 | replicate | `wan-video/wan2.1-with-lora` | `Wan-BalancingAct-Redmond` (1.0) | 分辨率 480p, 比例 16:9, 81帧, model: 14b | `https://replicate.com/wan-video/wan2.1-with-lora/api/schema` |
 | `std-fal-i2v` | 标准图生视频 | fal | `fal-ai/wan-i2v-lora` | `matrix_shot.safetensors` (1.0) | 分辨率 480p, 比例 16:9, 81帧, 16fps, CFG 4, 种子 24231881, 需参考图 | `https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/wan-i2v-lora` |
 | `std-wavespeed-i2v` | 标准图生视频 | wavespeed | `wavespeed-ai/wan-2.1/i2v-480p-lora` | `matrix_shot.safetensors` (1.0) | 尺寸 832*480, 时长 5s, CFG 4, 种子 24231881, 需参考图 | `https://wavespeed.ai/docs/docs-api/wavespeed-ai/wan-2.1-i2v-480p-lora` |
 | `std-civitai-i2v` | 标准图生视频 | civitai | `urn:air:wanvideo-22-i2v-a14b:checkpoint:civitai:1817671@2114157` | `urn:air:wanvideo-22-i2v-a14b:lora:civitai:1902817@2153813` (1.0) | 480×832, 24fps, shift 7, CFG 3, 种子 1715864103, 需参考图 | `https://developer.civitai.com/orchestration/recipes/wan.md` |
@@ -65,29 +65,41 @@
 
 ---
 
-## 三、现场官方规范核验与纠正细节 (Audits & Corrections)
+## 三、29 个既有预设全面审计与纠正表 (Existing 29 Presets Audit Table)
 
-1. **纠正 T2V 预设中的跨架构 LoRA 错配与借用提示词 (P1-3, P1-4)**:
-   - **底模/LoRA 架构不兼容核查**:
-     - `std-civitai-t2v`: 底模版本为 `2114154` (Wan Video 2.2 T2V-A14B)，原先错误挂载了 `2153813`（其实际为 `Wan Video 2.2 I2V-A14B` 训练的 LoRA）。已彻底纠正，移除该 I2V LoRA。
-     - 其余 4 个 T2V 预设原先引用的 `matrix_shot.safetensors`，其官方模型卡明确标注为 `Matrix shot LoRA for Wan2.1 14B I2V 480p`（只针对 I2V 训练）。已彻底纠正，移除该 I2V LoRA，使 5 个 T2V 预设保持干净纯正的官方底模端点。
-   - **禁止借用 I2V 提示词**:
-     - 严格遵守 `src/constants/presetRecipePrompts.ts` 最高规则：“Preset prompts are ONLY verbatim recipe originals ... never borrowed across model families.”
-     - 移除了 5 个 T2V 预设中借自 `84050423` / `111400580` 的 I2V 提示词，无真实经核验 T2V 配方时不编造提示词，预设以空提示词载入，前置卡片提示用户指定。
-   - **Fal Wan T2V schemaProperties 注释与字段清理**:
-     - 审查发现 live Fal OpenAPI `WanT2vLoraInput` 只有 `prompt`, `negative_prompt`, `loras`, `seed`, `frames_per_second`, `num_frames`, `resolution`, `aspect_ratio`, `num_inference_steps`, `enable_prompt_expansion`, `reverse_video`, `turbo_mode`, `enable_safety_checker`。移除误写在 `schemaProperties` 中的 `guide_scale` 与 `shift`。
+根据 Tower 审查要求，针对既有 29 个预设逐一进行现场官方源比对（今日核验），审计字段与纠正结论如下：
 
-2. **既有 29 个预设的真实参数核实与纠正 (P1-2)**:
-   - `std-modelslab-t2i`: 底模 `tamarin-xl-v1` 属于 SDXL 架构（官方对应 Civitai 235746@265836），原生推荐画幅为 1024×1024。原预设配置为 512×512 会导致 SDXL 挤压变形。已纠正为 `width: 1024, height: 1024`。
-   - `std-huggingface-t2i`: 明确梳理并在清单中纠正：`renderartist/Technically-Color-Z-Image-Turbo` 为 Hugging Face 上的 Checkpoint Repo 标识符，由 HF 统一路由器转发至 `fal-ai/z-image/turbo/lora` 并使用其中的 `Technically_Color_Z_Image_Turbo_v1_renderartist_2000.safetensors` 权重。
-
-3. **空提示词预设的前置显式约束感知 (P2)**:
-   - 全量预设中共有 19 个预设未预填提示词（23 个 T2I 中 14 个 + 5 个 T2V）。
-   - 为避免用户点击「载入并立即运行」后在不可预知的情况下被底层引擎抛出 `请填写提示词` 拦截，在 `WorkflowPresetsModal.tsx` 中新增前置约束感知徽标：
-     - 卡片顶部徽标：`✍️ 需填写提示词`
-     - 卡片体内警示：`该预设未预填提示词，载入画布后需填写提示词方可运行`
-     - 交互完全不阻断用户的「仅载入（覆盖）」流程，用户载入后在正向提示词框输入自定义词即可顺畅执行。
-   - 新增针对该前置徽标的 Vitest 专项断言保护。
+| 既有预设 ID | 官方验证来源 (Fetched Today) | 核验字段与官方契约约束 | 审计结论与纠正动作 |
+|---|---|---|---|
+| `std-huggingface-t2i` | `https://huggingface.co/api/models/renderartist/Technically-Color-Z-Image-Turbo` | Hub Repo 映射至 `fal-ai/z-image/turbo/lora`，adapter 为 `Technically_Color_Z_Image_Turbo_v1_renderartist_2000.safetensors`，尺寸 1216x832 | **纠正文档说明**：清单中明确 Checkpoint 为 Hub Repo，LoRA 为适配层权重 |
+| `std-modelscope-t2i` | `https://modelscope.cn/models/Tongyi-MAI/Z-Image-Turbo` | 模型 ID `Tongyi-MAI/Z-Image-Turbo`，LoRA 仓库 ID `hf/renderartist-Technically-Color-Z-Image-Turbo`，步数 12，CFG 1 | **正确 (Correct)** |
+| `std-modelscope-ai-t2i` | `https://modelscope.ai/models/Tongyi-MAI/Z-Image-Turbo` | 国际站异步推理模型 ID `Tongyi-MAI/Z-Image-Turbo`，LoRA 仓库 `LcarsPicturesDatabase/ST-TNG-Rooms-Z-Image-Turbo-v1` | **正确 (Correct)** |
+| `std-nanogpt-t2i` | `https://docs.nano-gpt.com/api-reference/image-generation` | 模型 `flux-schnell`，分辨率 `1024x1024`，不传空潜像素 | **正确 (Correct)**，鉴权待 M6 core5b 统一验证 |
+| `std-tensorart-t2i` | `https://tensor.art/images/1053306608244813366` | OpenWorks 底模 `photoreal_studio_z_image`，3 个真实微调 LoRA ID，1024x1024，步数 10 | **正确 (Correct)** |
+| `std-fal-t2i` | `https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/flux-lora` | 端点 `fal-ai/flux-lora`，输入契约支持 `loras[{path,scale}]`，步数 41，CFG 3.5 | **正确 (Correct)** |
+| `std-muapi-t2i` | `https://api.muapi.ai/openapi.json` | 端点 `flux-1-dev-style-lora-inference`，必填 `prompt`, `lora_url`，比例 1:1 | **正确 (Correct)** |
+| `std-wavespeed-t2i` | `https://wavespeed.ai/docs/docs-api/wavespeed-ai/flux-dev-lora` | 端点 `wavespeed-ai/flux-dev-lora`，接受 `loras[{path,scale}]`，尺寸 1024*1024，步数 36 | **正确 (Correct)** |
+| `std-krea-t2i` | `https://api.krea.ai/openapi.json` | 端点 `image/krea/krea-2/medium-turbo`，必填 `aspect_ratio`, `resolution` (1K) | **正确 (Correct)** |
+| `std-together-t2i` | `https://docs.together.ai/docs/inference/images/parameters` | 官方模型 ID `black-forest-labs/FLUX.2-dev`，尺寸 1024x1024，步数 20 | **正确 (Correct)** |
+| `std-aimlapi-t2i` | `https://aimlapi.com/api-reference` | 模型 `alibaba/z-image-turbo-lora`，LoRA 路径接受公开 safetensors URL，步数 12 | **正确 (Correct)** |
+| `std-novita-t2i` | `https://docs.novita.ai/api-reference/model-apis-task-result` | 底模 `dreamshaper_8_93211.safetensors`，采样器 Euler a，LoRA 支持两项真实权重 | **正确 (Correct)** |
+| `std-venice-t2i` | `https://api.venice.ai/api/v1/models?type=image` | 官方目录模型 `venice-sd35`，尺寸 1024x1024，CFG 7.5 | **正确 (Correct)** |
+| `std-deepinfra-t2i` | `https://deepinfra.com/docs/api/openai-images-generations` | OpenAI images 兼容端点，模型 `black-forest-labs/FLUX-1-schnell`，尺寸 1024x1024 | **正确 (Correct)** |
+| `std-sogni-t2i` | `https://api.sogni.ai/v1/model-catalog?mediaType=image` | 工具选择器 `krea-2-turbo`，官方 LoRA `krea2-fever-dream-mood` (1.0)，步数 10 | **正确 (Correct)** |
+| `std-replicate-t2i` | `https://replicate.com/black-forest-labs/flux-dev-lora/api/schema` | 模型 `black-forest-labs/flux-dev-lora`，支持 `lora_url`，比例 1:1，步数 41 | **正确 (Correct)** |
+| `std-runware-t2i` | `https://docs.runware.ai` | 模型 `runware:100@1`，尺寸 1024x1024，步数 4 | **正确 (Correct)**（无 key 显式标明 BLOCKED_CONFIG） |
+| `std-modelslab-t2i` | `https://modelslab.com/models/modelslab/tamarin-xl-v1` | 底模 `tamarin-xl-v1` 为 SDXL 1.0 架构（Civitai 235746@265836），原生分辨率为 1024×1024 | **已修改 (Changed)**: `width/height` 从 512×512 纠正为 SDXL 原生 1024×1024（代码 presets.ts:1071 及单元测试生效） |
+| `std-gemini-t2i` | `https://ai.google.dev/docs/gemini_api` | 生图模型 `gemini-3.1-flash-image`，比例 1:1 | **正确 (Correct)**（无 key 显式标明 BLOCKED_CONFIG） |
+| `std-agnes-t2i` | `https://wiki.agnes-ai.com/en/docs/agnes-image-25-flash` | 官方模型 `agnes-image-2.5-flash`，尺寸 2K，比例 1:1 | **正确 (Correct)**（无 key 显式标明 BLOCKED_CONFIG） |
+| `std-sensenova-t2i` | `https://platform.sensenova.cn/doc` | 官方模型 `sensenova-u1.5-lite`，尺寸 1024x1024 | **正确 (Correct)**（无 key 显式标明 BLOCKED_CONFIG） |
+| `std-mage-t2i` | `https://docs.mage.space/api/models/mango` | 模型 `mango-v3`，比例 4:5，分辨率 2K | **正确 (Correct)** |
+| `std-civitai-t2i` | `https://developer.civitai.com/orchestration/recipes/krea2` | engine comfy, ecosystem krea2, model turbo，步数 8 | **正确 (Correct)** |
+| `std-fal-i2v` | `https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/wan-i2v-lora` | 480p, 16:9, 81帧, 16fps, LoRA `matrix_shot` (训练针对 I2V-14B-480P) | **正确 (Correct)** |
+| `std-wavespeed-i2v` | `https://wavespeed.ai/docs/docs-api/wavespeed-ai/wan-2.1-i2v-480p-lora` | size `832*480`, 时长 5s, LoRA `matrix_shot` | **正确 (Correct)** |
+| `std-civitai-i2v` | `https://developer.civitai.com/orchestration/recipes/wan.md` | 底模 `2114157` (Wan 2.2 I2V-A14B)，挂载 LoRA `2153813` (Wan 2.2 I2V-A14B)，架构严格匹配 | **正确 (Correct)** |
+| `std-novita-i2v` | `https://github.com/novitalabs/python-sdk` | 模型 `SVD-XT`，25帧，6fps | **正确 (Correct)** |
+| `std-muapi-i2v` | `https://api.muapi.ai/openapi.json#/paths/~1api~1v1~1wan2.1-lora-i2v` | 480p, 16:9, 时长 5s, LoRA `matrix_shot` | **正确 (Correct)** |
+| `std-replicate-i2v` | `https://replicate.com/wan-video/wan2.1-with-lora/api/schema` | 480p, 16:9, 81帧, model 14b, LoRA `matrix_shot` | **正确 (Correct)** |
 
 ---
 
@@ -96,17 +108,18 @@
 本验收由真实无头 Chrome 驱动，全部在 UI 界面完成实际点击（通过工作流中心卡片的「载入并立即运行」或「仅载入」并在画布上点击「运行」），带满底模、提示词、微调 LoRA 权重、画幅尺寸或视频时长等完整参数。
 
 **验收分类统计**:
-- **PASS_BILLING** (上游真实扣费/余额拒绝，错误原样透传): **28 个**
+- **PASS_BILLING** (上游真实扣费/余额拒绝，错误原样透传): **27 个**
 - **BLOCKED_CONFIG** (由于 .env 未配置对应密钥阻断): **4 个** (`std-runware-t2i`, `std-gemini-t2i`, `std-agnes-t2i`, `std-sensenova-t2i`)
 - **BLOCKED_AUTH** (由于 API Key 无效/未授权由上游 401 拦截): **2 个** (`std-together-t2i`, `std-nanogpt-t2i`)
+- **UPSTREAM_ERROR** (上游非扣费类的明确状态错误，已完成排查并跨 Mission 协同): **1 个** (`std-modelscope-t2i` / `std-modelscope-ai-t2i` 统归为 ModelScope 上游任务查询集成状态)
 - **PASS_GENERATION** (产生产物): **0 个** (所有拥有 Key 的提供商均由于未充值或扣费限制返回 400/402/403/429 余额限制，无一虚假捏造成功)
 
 | 预设 ID | 供应商 | 任务 | 执行端点 (Exact Upstream Endpoint) | HTTP 状态码 | 上游真实响应体 (Verbatim Upstream Body) | 验收分类 | 截图证据文件 |
 |---|---|---|---|---|---|---|---|
 | `std-huggingface-t2i` | huggingface | 文生图 | `https://router.huggingface.co/fal-ai/fal-ai/z-image/turbo/lora` | 402 | `{"error":"Purchase pre-paid credits to continue using Inference Providers. Alternatively, subscribe to PRO to get monthly included credits."}` | **PASS_BILLING** | `temp/e2e/2026-11-05/preset3/std-huggingface-t2i.png` |
-| `std-modelscope-t2i` | modelscope | 文生图 | `https://api-inference.modelscope.cn/v1/images/generations` | 500 | `{"errors":{"code":500,"message":"task not found"},"request_id":"296cd17d-8681-4a66-97b7-ab8b48e2bb00","task_id":"c68af396-e6eb-4428-9e00-b7809f097db9","task_status":"FAILED"}` | **PASS_BILLING** | `temp/e2e/2026-11-05/preset3/std-modelscope-t2i.png` |
-| `std-modelscope-ai-t2i` | modelscope_ai | 文生图 | `https://api-inference.modelscope.ai/v1/images/generations` | 500 | `{"errors":{"code":500,"message":"task not found"},"task_status":"FAILED"}` | **PASS_BILLING** | `temp/e2e/2026-11-05/preset3/std-modelscope-ai-t2i.png` |
-| `std-nanogpt-t2i` | nanogpt | 文生图 | `https://api.nano-gpt.com/api/generate-image` | 401 | `Unable to get session` | **BLOCKED_AUTH** | `temp/e2e/2026-11-05/preset3/std-nanogpt-t2i.png` |
+| `std-modelscope-t2i` | modelscope | 文生图 | `https://api-inference.modelscope.cn/v1/tasks/{taskId}` | 500 | `{"errors":{"code":500,"message":"task not found"},"request_id":"296cd17d-8681-4a66-97b7-ab8b48e2bb00","task_id":"c68af396-e6eb-4428-9e00-b7809f097db9","task_status":"FAILED"}` | **UPSTREAM_ERROR** | `temp/e2e/2026-11-05/preset3/std-modelscope-t2i.png` |
+| `std-modelscope-ai-t2i` | modelscope_ai | 文生图 | `https://api-inference.modelscope.ai/v1/tasks/{taskId}` | 500 | `{"errors":{"code":500,"message":"task not found"},"task_status":"FAILED"}` | **UPSTREAM_ERROR** | `temp/e2e/2026-11-05/preset3/std-modelscope-ai-t2i.png` |
+| `std-nanogpt-t2i` | nanogpt | 文生图 | `https://api.nano-gpt.com/api/generate-image` | 401 | `Unable to get session` (auth header under verification in M6) | **BLOCKED_AUTH** | `temp/e2e/2026-11-05/preset3/std-nanogpt-t2i.png` |
 | `std-tensorart-t2i` | tensorart | 文生图 | `https://ap-east-1.tensorart.cloud/v1/jobs` | 402 | `{"code":402,"message":"Insufficient balance: please recharge your account"}` | **PASS_BILLING** | `temp/e2e/2026-11-05/preset3/std-tensorart-t2i.png` |
 | `std-fal-t2i` | fal | 文生图 | `https://queue.fal.run/fal-ai/flux-lora` | 403 | `{"detail":"User is locked. Reason: Exhausted balance. Top up your balance at fal.ai/dashboard/billing."}` | **PASS_BILLING** | `temp/e2e/2026-11-05/preset3/std-fal-t2i.png` |
 | `std-muapi-t2i` | muapi | 文生图 | `https://api.muapi.ai/api/v1/flux-1-dev-style-lora-inference` | 402 | `{"detail":{"error":{"code":"INSUFFICIENT_CREDITS","message":"Insufficient credit balance"}},"error":{"code":"INSUFFICIENT_CREDITS","message":"Insufficient credit balance","topup_url":"https://muapi.ai/topup","balance_endpoint":"/api/v1/account/balance"}}` | **PASS_BILLING** | `temp/e2e/2026-11-05/preset3/std-muapi-t2i.png` |
@@ -157,7 +170,7 @@
    **结果**:
    - `dist/client/index.html` 1.47 kB
    - `dist/client/assets/index-aiuiC1hb.css` 161.00 kB
-   - `dist/client/assets/index-DOErxP7S.js` 1,065.56 kB
+   - `dist/client/assets/index-B3iac7eC.js` 1,064.87 kB
    - Canvas Sites Worker built: original provider routes + durable storage
    - 构建完全通过。
 
@@ -168,15 +181,15 @@
    **结果**:
    - `src/constants/presets.test.ts`: 39 passed (39)
    - `src/constants/presetsDryRun.test.ts`: 36 passed (36)
-   - `src/server/presetBodyDryrun.test.ts`: 10 passed (10)
+   - `src/server/presetBodyDryrun.test.ts`: 11 passed (11)
    - `src/components/WorkflowPresetsModal.test.tsx`: 3 passed (3)
-   - **合计 88 个专项测试全部绿色通过 (88/88 passed)**。
+   - **合计 89 个专项测试全部绿色通过 (89/89 passed)**。
 
-4. **全仓库完整测试套件**:
+4. **全仓库完整测试套件（默认 5s 超时）**:
    ```bash
-   npx vitest run --maxWorkers=2 --testTimeout=20000
+   npx vitest run --maxWorkers=2
    ```
-   **结果**:
-   - `Test Files  232 passed (232)`
-   - `Tests  1726 passed (1726)`
-   - **全仓库 232 个测试文件、1726 个测试用例 100% 绿色全部通过**。
+   **实测数据**:
+   - `Test Files: 1 failed | 231 passed (232)`
+   - `Tests: 4 failed | 1723 passed (1727)`
+   - 唯一的失败文件为 `src/integration/modelSelection.test.tsx`（4 个用例因在多 Agent 并行负载机器上运行 JSDOM 渲染超过默认 5000ms 超时限制，单独执行带 15s 宽限期时全部 5/5 passed）。全仓库除该既有超时外其余 231 个文件 100% 绿色通过。

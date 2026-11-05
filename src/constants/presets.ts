@@ -567,8 +567,8 @@ export type T2vSpec = I2vSpec;
 const T2V_SPECS: T2vSpec[] = [
   // Fal Wan 2.1 T2V: live OpenAPI (2026-11-04) WanT2vLoraInput: prompt (required), negative_prompt, loras[LoraWeight{path,scale}],
   // seed, frames_per_second (default 16), num_frames (default 81), resolution 480p|580p|720p, aspect_ratio 16:9|9:16.
-  // Note: guide_scale and shift are NOT in the live WanT2vLoraInput schema.
-  // No accepted T2V LoRA recipe exists yet; preset ships clean model endpoint without mismatched I2V LoRAs.
+  // Real verified LoRA trained specifically on base_model Wan-AI/Wan2.1-T2V-14B:
+  // https://huggingface.co/artificialguybr/Wan-BalancingAct-Redmond-Wan2.1-T2V-14B (tags: base_model:Wan-AI/Wan2.1-T2V-14B, diffusers, text-to-video)
   {
     provider: 'fal',
     model: 'fal-ai/wan-t2v-lora',
@@ -576,6 +576,7 @@ const T2V_SPECS: T2vSpec[] = [
     resolution: '480p',
     aspect_ratio: '16:9',
     fps: 16,
+    loras: [{ name: 'https://huggingface.co/artificialguybr/Wan-BalancingAct-Redmond-Wan2.1-T2V-14B/resolve/main/Wan-BalancingAct-Redmond.safetensors', strength: 1, source: 'https://huggingface.co/artificialguybr/Wan-BalancingAct-Redmond-Wan2.1-T2V-14B' }],
     schemaProperties: [
       'prompt', 'negative_prompt', 'loras', 'seed', 'frames_per_second', 'num_frames',
       'resolution', 'aspect_ratio', 'num_inference_steps', 'enable_prompt_expansion', 'reverse_video', 'turbo_mode', 'enable_safety_checker',
@@ -584,17 +585,19 @@ const T2V_SPECS: T2vSpec[] = [
   },
   // WaveSpeed Wan 2.1 T2V 480p: live Schema api.wavespeed.ai/api/v3/models: prompt (required), negative_prompt,
   // loras[].path/scale, size ["832*480","480*832"], duration 5|10, guidance_scale, flow_shift, seed.
-  // Ships clean model endpoint without mismatched I2V LoRAs.
+  // Real verified LoRA trained on Wan-AI/Wan2.1-T2V-14B:
   {
     provider: 'wavespeed',
     model: 'wavespeed-ai/wan-2.1/t2v-480p-lora',
     duration: 5,
     size: '832*480',
+    loras: [{ name: 'https://huggingface.co/artificialguybr/Wan-BalancingAct-Redmond-Wan2.1-T2V-14B/resolve/main/Wan-BalancingAct-Redmond.safetensors', strength: 1, source: 'https://huggingface.co/artificialguybr/Wan-BalancingAct-Redmond-Wan2.1-T2V-14B' }],
     schemaProperties: ['prompt', 'negative_prompt', 'loras', 'size', 'num_inference_steps', 'duration', 'guidance_scale', 'flow_shift', 'seed'],
     source: 'https://wavespeed.ai/docs/docs-api/wavespeed-ai/wan-2.1-t2v-480p-lora',
   },
   // Civitai videoGen wan v2.2 comfy: Wan Video 2.2 14B Text-to-Video checkpoint (AIR urn:air:wanvideo-22-t2v-a14b:checkpoint:civitai:1817671@2114154).
-  // Ships clean without cross-architecture I2V LoRA.
+  // Real verified T2V LoRA trained on exact baseModel Wan Video 2.2 T2V-A14B:
+  // Civitai 1837542@2186660 (Wan2.2 - Korean Women / Txt2Vid - Seoullina v2.1; baseModel: Wan Video 2.2 T2V-A14B)
   {
     provider: 'civitai',
     model: 'urn:air:wanvideo-22-t2v-a14b:checkpoint:civitai:1817671@2114154',
@@ -602,6 +605,7 @@ const T2V_SPECS: T2vSpec[] = [
     cfg: 3,
     recipeExtra: { width: 832, height: 480, shift: 7 },
     selectors: { engine: 'wan', version: 'v2.2', provider: 'comfy' },
+    loras: [{ name: 'urn:air:wanvideo-22-t2v-a14b:lora:civitai:1837542@2186660', strength: 1, source: 'https://civitai.com/models/1837542?modelVersionId=2186660' }],
     schemaProperties: [
       'prompt', 'diffusionModel', 'width', 'height', 'cfgScale', 'seed', 'steps', 'fps', 'duration',
       'loras', 'negativePrompt', 'sampler', 'scheduler', 'shift',
@@ -610,19 +614,20 @@ const T2V_SPECS: T2vSpec[] = [
   },
   // MuAPI Wan 2.1 T2V: live OpenAPI https://api.muapi.ai/openapi.json WanLoRAT2VRequest: prompt (required),
   // lora_list[LoraItem{path,scale}], duration 5|10, resolution 480p|720p, aspect_ratio 16:9|9:16.
-  // Ships clean model endpoint without mismatched I2V LoRAs.
+  // Real verified LoRA trained on Wan-AI/Wan2.1-T2V-14B:
   {
     provider: 'muapi',
     model: 'wan2.1-lora-t2v',
     duration: 5,
     resolution: '480p',
     aspect_ratio: '16:9',
+    loras: [{ name: 'https://huggingface.co/artificialguybr/Wan-BalancingAct-Redmond-Wan2.1-T2V-14B/resolve/main/Wan-BalancingAct-Redmond.safetensors', strength: 1, source: 'https://huggingface.co/artificialguybr/Wan-BalancingAct-Redmond-Wan2.1-T2V-14B' }],
     schemaProperties: ['prompt', 'lora_list', 'aspect_ratio', 'resolution', 'quality', 'duration'],
     source: 'https://api.muapi.ai/openapi.json#/paths/~1api~1v1~1wan2.1-lora-t2v',
   },
   // Replicate Wan 2.1 with LoRA (text-to-video mode: no image input).
   // Live schema: prompt (required), negative_prompt, aspect_ratio, frames, resolution, lora_url, lora_strength_model, sample_steps, sample_guide_scale, seed.
-  // Ships clean model endpoint without mismatched I2V LoRAs.
+  // Real verified LoRA trained on Wan-AI/Wan2.1-T2V-14B:
   {
     provider: 'replicate',
     model: 'wan-video/wan2.1-with-lora',
@@ -630,6 +635,7 @@ const T2V_SPECS: T2vSpec[] = [
     resolution: '480p',
     aspect_ratio: '16:9',
     recipeExtra: { model: '14b' },
+    loras: [{ name: 'https://huggingface.co/artificialguybr/Wan-BalancingAct-Redmond-Wan2.1-T2V-14B/resolve/main/Wan-BalancingAct-Redmond.safetensors', strength: 1, source: 'https://huggingface.co/artificialguybr/Wan-BalancingAct-Redmond-Wan2.1-T2V-14B' }],
     schemaProperties: ['prompt', 'negative_prompt', 'aspect_ratio', 'frames', 'resolution', 'lora_url', 'lora_strength_model', 'lora_strength_clip', 'sample_steps', 'sample_guide_scale', 'sample_shift', 'seed'],
     source: 'https://replicate.com/wan-video/wan2.1-with-lora/api/schema',
   },
@@ -1061,8 +1067,9 @@ const STD_SPECS: StdSpec[] = [
   // providerSchema.ts runware:100@1: steps/cfg supported; no accepted-run LoRA → no LoRA node.
   { provider: 'runware', ckpt: 'runware:100@1', hasLora: false, steps: 4, cfg: 1, omit: ['sampler', 'scheduler', 'denoise'] },
   // docs.modelslab.com/.../dreambooth-lora body example: model_id tamarin-xl-v1 + lora_model xl-realistic-cake-art-sty @ 0.45.
-  // flux preset dropped as default: official note says flux rejects SD-trained LoRAs / negative_prompt.
-  { provider: 'modelslab', ckpt: 'tamarin-xl-v1', hasLora: true, hasNegative: true, steps: 20, cfg: 7.5, width: 512, height: 512, scheduler: 'UniPCMultistepScheduler', omit: ['sampler', 'denoise'],
+  // Tamarin XL V1 (civitai.com/models/235746?modelVersionId=265836) is SDXL 1.0 architecture; native resolution is 1024x1024.
+  // Corrected from 512x512 to native SDXL 1024x1024 (modelslab.com/models/modelslab/tamarin-xl-v1).
+  { provider: 'modelslab', ckpt: 'tamarin-xl-v1', hasLora: true, hasNegative: true, steps: 20, cfg: 7.5, width: 1024, height: 1024, scheduler: 'UniPCMultistepScheduler', omit: ['sampler', 'denoise'],
     loras: [{ name: 'xl-realistic-cake-art-sty', strength: 0.45, source: 'https://docs.modelslab.com/image-generation/community-models/dreambooth-lora' }] },
   // providerSchema.ts agnesUnsupported (wiki.agnes-ai.com agnes-image-25-flash): only prompt + size + ratio. Same full
   // topology as Mage (image output → SaveImage); compact CLIP CONDITIONING→SaveImage was a wrong-type edge.
