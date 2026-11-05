@@ -77,6 +77,7 @@ export class RunwareDriver extends BaseEngineDriver {
       steps: params.steps,
       cfg: params.cfg,
       seed: params.seed,
+      scheduler: params.scheduler,
       loras: Array.isArray(params.loras)
         ? params.loras.map((l: any) => (typeof l === 'object' && l !== null ? {
             ...l,

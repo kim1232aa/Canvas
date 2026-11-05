@@ -22,6 +22,7 @@ export interface RunwareTask {
   numberResults?: number;
   outputFormat?: 'PNG' | 'WEBP' | 'JPG';
   outputType?: 'URL' | 'base64Data' | 'dataURI';
+  scheduler?: string;
   lora?: RunwareLora[];
 }
 
@@ -103,6 +104,9 @@ export function buildRunwareImageRequest(body: Record<string, unknown>, baseUrl 
   }
   if (typeof body.seed === 'number' && Number.isFinite(body.seed) && body.seed >= 0) {
     task.seed = Math.round(body.seed);
+  }
+  if (typeof body.scheduler === 'string' && body.scheduler.trim()) {
+    task.scheduler = body.scheduler.trim();
   }
 
   if (Array.isArray(body.loras) && body.loras.length > 0) {

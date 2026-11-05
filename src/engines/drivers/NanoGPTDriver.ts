@@ -8,7 +8,7 @@ export class NanoGPTDriver extends BaseEngineDriver {
   readonly label = 'NanoGPT 极速接口';
   readonly badgeColor = '#f59e0b';
   readonly description = 'NanoGPT 闪电按需推理 API，无需订阅，秒级出片。';
-  readonly capabilities = ['text2img', 'img2img'] as const;
+  readonly capabilities = ['text2img', 'img2img', 'text2video', 'img2video'] as const;
   readonly defaultKey = '';
 
     readonly supportedModels: ModelSpec[] = [];
@@ -20,8 +20,68 @@ export class NanoGPTDriver extends BaseEngineDriver {
     if (!params.model) throw new Error('模型为必填项（model is required）');
     const effectiveKey = params.apiKey || keys.nanogptKey || this.defaultKey;
 
+    const isVideo = Boolean(params.isVideo || params.videoDuration != null);
+    if (isVideo) {
+      // Official NanoGPT Video API (https://docs.nano-gpt.com/api-reference/endpoint/video-generation):
+      // Supported fields: model, prompt, imageUrl (image_url), duration, aspect_ratio, seed, negative_prompt, cfg_scale, num_inference_steps.
+      const videoPayload: Record<string, any> = {
+        workflowSnapshot: params.workflowSnapshot,
+        custom_parameters: params.extraParams?.custom_parameters,
+        prompt: params.prompt,
+        model: params.model,
+        provider: 'nanogpt',
+      };
+      if (params.aspectRatio) videoPayload.aspect_ratio = params.aspectRatio;
+      if (params.image_url) videoPayload.image_url = params.image_url;
+      if (params.seed != null) videoPayload.seed = params.seed;
+      if (params.videoDuration != null) videoPayload.duration = params.videoDuration;
+      if (params.negative_prompt) videoPayload.negative_prompt = params.negative_prompt;
+      if (params.steps != null) videoPayload.num_inference_steps = params.steps;
+      if (params.cfg != null) videoPayload.cfg_scale = params.cfg;
+
+      const endpoint = '/api/video/generate';
+      const resp = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(effectiveKey ? { 'x-nanogpt-key': effectiveKey } : {}),
+        },
+        body: JSON.stringify(videoPayload),
+      });
+
+      if (!resp.ok) {
+        const rawBody = await resp.text().catch(() => '');
+        throw new Error(`NanoGPT 视频路由 ${endpoint} 返回 HTTP ${resp.status}: ${rawBody}`);
+      }
+
+      const vData = await resp.json();
+      if (!vData.videoUrl) {
+        throw new Error(`NanoGPT 视频路由返回缺少 videoUrl: ${JSON.stringify(vData)}`);
+      }
+      if (!vData.model) {
+        throw new Error(`NanoGPT 视频路由返回缺少 model: ${JSON.stringify(vData)}`);
+      }
+      if (!vData.provider) {
+        throw new Error(`NanoGPT 视频路由返回缺少 provider: ${JSON.stringify(vData)}`);
+      }
+
+      return {
+        mediaUrl: vData.videoUrl,
+        mediaType: 'video',
+        provider: vData.provider,
+        providerId: this.id,
+        model: vData.model,
+        actualModel: vData.actualModel,
+        actualProvider: vData.actualProvider,
+        requestedModel: params.model,
+        seed: vData.seed ?? null,
+        rawResponse: vData,
+      };
+    }
+
     // Normalized Image API: server validates fields against live model endpoint metadata.
-    const resp = await fetch('/api/nanogpt/generate', {
+    const endpoint = '/api/nanogpt/generate';
+    const resp = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -52,17 +112,29 @@ export class NanoGPTDriver extends BaseEngineDriver {
     });
 
     if (!resp.ok) {
-      const err = await resp.json().catch(() => ({ error: 'NanoGPT 生成失败' }));
-      throw new Error(err.details || err.error || `NanoGPT 错误 (${resp.status})`);
+      const rawBody = await resp.text().catch(() => '');
+      throw new Error(`NanoGPT 图像路由 ${endpoint} 返回 HTTP ${resp.status}: ${rawBody}`);
     }
 
     const data = await resp.json();
+    if (!data.imageUrl) {
+      throw new Error(`NanoGPT 图像路由返回缺少 imageUrl: ${JSON.stringify(data)}`);
+    }
+    if (!data.model) {
+      throw new Error(`NanoGPT 图像路由返回缺少 model: ${JSON.stringify(data)}`);
+    }
+    if (!data.provider) {
+      throw new Error(`NanoGPT 图像路由返回缺少 provider: ${JSON.stringify(data)}`);
+    }
+
     return {
       mediaUrl: data.imageUrl,
       mediaType: 'image',
-      provider: this.name,
+      provider: data.provider,
       providerId: this.id,
-      model: data.model || params.model,
+      model: data.model,
+      actualModel: data.actualModel,
+      actualProvider: data.actualProvider,
       requestedModel: params.model,
       seed: data.historyItem?.seed ?? null,
       rawResponse: data,
