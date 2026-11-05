@@ -1218,8 +1218,19 @@ export default function App() {
     const thisRunSeq = beginRun();
     // clean-1005: select-model + run share one action — do NOT bump the sharedGet epoch here (reuse the Schema GET).
     setCurrentRunTarget(runTarget ? `${runTarget.title}${runTarget.auto ? '（未选中节点，按输出节点）' : ''}` : null);
+    const runStartTime = Date.now();
     setExecutionProgress(5);
-    setExecutionStatusText('正在调度模型与 LoRA 权重...');
+    setExecutionStatusText('正在提交请求 (正在调度模型与权重)...');
+    const stagedTimer = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - runStartTime) / 1000);
+      if (elapsed >= 1) {
+        setExecutionStatusText((prev) => {
+          if (!prev || prev.includes('完成') || prev.includes('失败')) return prev;
+          const prov = runTarget?.title ? `[${runTarget.title}] ` : '';
+          return `${prov}等待上游返回 (已耗时 ${elapsed}秒)...`;
+        });
+      }
+    }, 1000);
     setToast(null); // drop stale global notices from prior hub/search/run
     // New run: clear every prior red banner / error state (local blocks AND prior upstream failures) before starting,
     // so an old 「上一次 …」 never lingers once the user re-runs. This run's own failure is written in the catch below.
@@ -1298,7 +1309,7 @@ export default function App() {
         },
         runTargetId
       );
-      setExecutionStatusText(`成功完成 (${result.provider})`);
+      setExecutionStatusText(`生成完成 (${result.provider}) · 耗时 ${Math.max(1, Math.floor((Date.now() - runStartTime) / 1000))}秒`);
       setExecutionProgress(100);
       // clean-1651 A: successful run clears all prior upstream failure badges.
       // Also force THIS-session image onto SaveImage and drop 刷新前的结果 (covers saveNodes miss / stale banner).
@@ -1425,6 +1436,8 @@ export default function App() {
           // The failed node shows the full upstream text verbatim (status + body); nothing on the others.
           errorMessage: isTarget ? upstreamMsg : undefined,
           errorAt: isTarget ? new Date().toISOString() : undefined,
+          errorStatusCode: isTarget ? ((err as any)?.upstreamStatus ?? (err as any)?.appStatus) : undefined,
+          errorEndpoint: isTarget ? (err as any)?.endpoint : undefined,
           upstreamFailed: false,
           upstreamFailedTitle: undefined,
           upstreamFailedMessage: undefined,
@@ -1477,11 +1490,11 @@ export default function App() {
       }
       loadHistoryFirstPage().catch((err) => console.error('History refresh failed:', err.message));
     } finally {
+      clearInterval(stagedTimer);
       setIsExecuting(false);
       setCurrentRunTarget(null);
       endRun();
       setExecutionProgress(0);
-      setExecutionStatusText('');
     }
   };
 

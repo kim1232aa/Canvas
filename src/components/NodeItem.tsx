@@ -58,7 +58,7 @@ const hideSamplerShell = (
 import { checkpointNodeTitle, ksamplerNodeTitle, loraLoaderNodeTitle, LORA_LOADER_TYPES } from '../utils/providerLabels';
 import { errorBannerText, priorRunErrorLabel, LOCAL_BLOCK_NODE_LINE } from '../utils/apiFailure';
 import { upstreamFailedLine } from '../utils/schemaFailure';
-import { formatRecordTime } from '../services/executionTrace';
+import { formatRecordTime, getExecutions } from '../services/executionTrace';
 import { loraSourceMismatch } from '../utils/loraSourceMismatch';
 import { EmphasizeLimit } from './TextEmphasis';
 import { CustomModelIdField } from './CustomModelIdField';
@@ -147,6 +147,20 @@ export const NodeItem: React.FC<NodeItemProps> = ({
 
   const uploadInput = React.useRef<HTMLInputElement>(null);
   const [showUnsupported, setShowUnsupported] = React.useState(false);
+  const [elapsedSeconds, setElapsedSeconds] = React.useState(0);
+
+  // Staged run feedback: tracks elapsed seconds while node is actively running
+  React.useEffect(() => {
+    if (node.state !== 'running') {
+      setElapsedSeconds(0);
+      return;
+    }
+    const start = Date.now();
+    const timer = setInterval(() => {
+      setElapsedSeconds(Math.max(1, Math.floor((Date.now() - start) / 1000)));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [node.state]);
   const liveVideoMatch = useLiveVideoModelMatch(node.type === 'AIVideoNode' ? String(node.values?.targetProvider || '').trim() : '', node.type === 'AIVideoNode' ? String(node.values?.model || '').trim() : '');
   const greySeed = isCanvasFieldUnsupported(currentProvider, currentCheckpoint, 'seed');
   const greyNegative = isCanvasFieldUnsupported(currentProvider, currentCheckpoint, 'negative_prompt');
@@ -370,9 +384,15 @@ export const NodeItem: React.FC<NodeItemProps> = ({
             );
           })()}
           {node.state === 'running' && (
-            <div className="flex items-center gap-1 text-[10px] font-mono text-cyan-400 bg-cyan-950/60 px-1.5 py-0.5 rounded border border-cyan-800/40">
+            <div className="flex items-center gap-1 text-[10px] font-mono text-cyan-400 bg-cyan-950/60 px-1.5 py-0.5 rounded border border-cyan-800/40" data-testid="node-running-status">
               <Loader2 className="w-3 h-3 animate-spin" />
-              <span>{node.executionProgress ? `${node.executionProgress}%` : '运行中'}</span>
+              <span>
+                {node.type === 'AIVideoNode'
+                  ? (node.executionProgress ? `${node.executionProgress}%` : '运行中')
+                  : elapsedSeconds < 2
+                  ? '正在提交...'
+                  : `等待上游 (${elapsedSeconds}s)`}
+              </span>
             </div>
           )}
           {node.state === 'success' && (
@@ -417,14 +437,23 @@ export const NodeItem: React.FC<NodeItemProps> = ({
       )}
 
       {/* Node error message banner with progressive disclosure */}
-      {node.errorMessage && node.state !== 'running' && (
-        <NodeErrorDisclosure
-          errorMessage={node.errorMessage}
-          provider={currentProvider || node.values?.targetProvider}
-          errorAt={node.errorAt}
-          onOpenSettings={onOpenSettings}
-        />
-      )}
+      {node.errorMessage && node.state !== 'running' && (() => {
+        const executions = typeof getExecutions === 'function' ? getExecutions() : [];
+        const lastErr = executions.filter((r) => r.state === 'error' && r.category !== 'local').pop();
+        const traceResp = (lastErr?.response && typeof lastErr.response === 'object' ? lastErr.response : {}) as any;
+        const statusCode = (node as any).errorStatusCode || traceResp?.upstreamStatus || traceResp?.status || lastErr?.status || undefined;
+        const endpoint = (node as any).errorEndpoint || traceResp?.endpoint || traceResp?.exactEndpointCalled || lastErr?.route || undefined;
+        return (
+          <NodeErrorDisclosure
+            errorMessage={node.errorMessage}
+            provider={currentProvider || node.values?.targetProvider}
+            endpoint={endpoint}
+            statusCode={statusCode}
+            errorAt={node.errorAt}
+            onOpenSettings={onOpenSettings}
+          />
+        );
+      })()}
 
       {/* Sockets Row (Inputs on Left, Outputs on Right) */}
       <div className="px-3 py-2 flex justify-between gap-4">

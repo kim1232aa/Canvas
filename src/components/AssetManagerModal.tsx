@@ -96,6 +96,15 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
   onClearAllHistory,
 }) => {
   const [activeType, setActiveType] = useState<'all' | 'image' | 'video' | 'reference' | 'starred'>('all');
+
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
   const [selectedProvider, setSelectedProvider] = useState<string>('all');
   const [selectedRatio, setSelectedRatio] = useState<string>('all');
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'model' | 'provider'>('newest');
@@ -564,7 +573,7 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-base font-extrabold text-white tracking-wide">
+                <h2 id="asset-manager-title" className="text-base font-extrabold text-white tracking-wide">
                   资产与素材管理中心 (Asset & Media Gallery)
                 </h2>
                 <div className="flex items-center gap-1.5 font-mono text-[10px]">

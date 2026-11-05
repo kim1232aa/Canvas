@@ -100,7 +100,16 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
   const [keys, setKeys] = React.useState<ApiKeysState>(apiKeys);
   const initialKeysRef = React.useRef<ApiKeysState>(apiKeys);
   const [activeMainTab, setActiveMainTab] = React.useState<'providers' | 'pool' | 'balance' | 'admin'>('providers');
-  const [activeProviderTab, setActiveProviderTab] = React.useState<ProviderId>('fal');
+  const [activeProviderTab, setActiveProviderTab] = React.useState<ProviderId>(() => {
+    const id = String(initialProvider || '').trim().toLowerCase();
+    const known: ProviderId[] = [
+      'fal', 'gemini', 'openai_compat', 'grok_compat', 'agnes', 'sensenova', 'civitai',
+      'huggingface', 'modelscope', 'modelscope_ai', 'nanogpt', 'tensorart', 'muapi',
+      'wavespeed', 'krea', 'together', 'aimlapi', 'novita', 'venice', 'deepinfra', 'sogni',
+      'runware', 'modelslab', 'replicate', 'mage',
+    ];
+    return known.includes(id as ProviderId) ? (id as ProviderId) : 'fal';
+  });
   const [testResults, setTestResults] = React.useState<Record<string, { status: string; message: string; latency?: number }>>({});
   const [testingProvider, setTestingProvider] = React.useState<string | null>(null);
   const [testingSingleKeyIndex, setTestingSingleKeyIndex] = React.useState<number | null>(null);
@@ -183,13 +192,21 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
   }, [apiKeys, isOpen]);
 
   const [providerKeyStatus, setProviderKeyStatus] = React.useState<ProviderKeyStatusMap>({});
+  const [keyStatusError, setKeyStatusError] = React.useState<string | null>(null);
 
   // Auto-fetch provider key status and pool stats on open for real-time visibility
   React.useEffect(() => {
     if (!isOpen) return;
+    setKeyStatusError(null);
     fetchProviderKeyStatus()
-      .then((status) => setProviderKeyStatus(status))
-      .catch((err) => console.error('Failed to fetch provider key status:', err));
+      .then((status) => {
+        setProviderKeyStatus(status);
+        setKeyStatusError(null);
+      })
+      .catch((err) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        setKeyStatusError(msg);
+      });
     refreshStats();
   }, [isOpen, refreshStats]);
 
@@ -274,7 +291,6 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       name: friendlyProviderLabel('agnes'),
       badge: '聚合引擎 / 2.5 Flash / 3.0 推理',
       docsUrl: 'https://apihub.agnes-ai.com',
-      keyPageUrl: 'https://apihub.agnes-ai.com',
       description: '配置 Agnes API 地址与密钥。图像、视频与推理任务分别按选定模型提交。',
       apiUrl: 'https://apihub.agnes-ai.com/v1',
       keyName: 'agnesKey',
@@ -378,7 +394,7 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       name: friendlyProviderLabel('muapi'),
       badge: '动态模型目录',
       docsUrl: 'https://muapi.ai',
-      keyPageUrl: 'https://muapi.ai',
+      keyPageUrl: 'https://muapi.ai/dashboard',
       description: 'MuAPI 多模型推理聚合平台，提供高并发开源文生图底模与定制模型服务。',
       apiUrl: 'MuAPI Models API',
       keyName: 'muapiKey',
@@ -495,7 +511,6 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       name: friendlyProviderLabel('runware'),
       badge: '极速统一 API',
       docsUrl: 'https://runware.ai/docs/',
-      keyPageUrl: 'https://my.runware.ai',
       description: 'Runware 专为高吞吐量设计的生成引擎，按需自填 Base URL 与 API Key。',
       apiUrl: 'https://api.runware.ai/v1',
       keyName: 'runwareKey',
@@ -508,7 +523,6 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       name: friendlyProviderLabel('modelslab'),
       badge: '开放模型库',
       docsUrl: 'https://docs.modelslab.com',
-      keyPageUrl: 'https://modelslab.com',
       description: 'ModelsLab 稳定扩散图像生成，按需自填 Base URL 与 API Key。',
       apiUrl: 'https://modelslab.com/api/v6/images/text2img',
       keyName: 'modelslabKey',
@@ -534,7 +548,6 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       name: friendlyProviderLabel('mage'),
       badge: 'Mango 图像 API',
       docsUrl: 'https://docs.mage.space/api/models/mango',
-      keyPageUrl: 'https://www.mage.space',
       description: 'Mage.space 专业级生成服务，按需配置 Base URL 与 API Key。',
       apiUrl: 'https://api.mage.space',
       keyName: 'mageKey',
@@ -816,6 +829,7 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
         </div>
 
         {readError && <div role="alert" className="px-6 py-3 bg-rose-950/40 text-rose-200 break-words">读取失败：{readError}</div>}
+        {keyStatusError && <div role="alert" data-testid="key-status-error" className="px-6 py-2 bg-rose-950/60 text-rose-200 border-b border-rose-800/40 text-xs font-mono">获取服务端密钥配置状态失败：{keyStatusError}</div>}
         {/* Modal Body */}
         {activeMainTab === 'providers' && (
           <div className="settings-body flex-1 flex min-h-0 overflow-hidden">
@@ -853,9 +867,9 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
                       </div>
                       <div className="text-[10px] text-slate-400 truncate">{p.badge}</div>
                       <div className="text-[9px] font-mono truncate flex items-center gap-1.5 mt-0.5">
-                        <span className={`inline-flex items-center gap-1 ${isConfigured ? 'text-emerald-400 font-semibold' : 'text-slate-500'}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${isConfigured ? 'bg-emerald-400' : 'bg-slate-600'}`} />
-                          <span>{isConfigured ? '已配置' : '未配置'}</span>
+                        <span className={`inline-flex items-center gap-1 ${keyStatusError ? 'text-amber-400 font-semibold' : isConfigured ? 'text-emerald-400 font-semibold' : 'text-slate-500'}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${keyStatusError ? 'bg-amber-400' : isConfigured ? 'bg-emerald-400' : 'bg-slate-600'}`} />
+                          <span>{keyStatusError ? '检测失败' : isConfigured ? '已配置' : '未配置'}</span>
                         </span>
                         <span className="text-slate-500 truncate">
                           · {poolLabel(p.id)}{count > 0 ? ` (本地 ${count})` : ''}
@@ -869,6 +883,8 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
                         <AlertTriangle className="w-4 h-4 text-amber-400" />
                       ) : test?.status === 'error' ? (
                         <XCircle className="w-4 h-4 text-rose-400" />
+                      ) : keyStatusError ? (
+                        <AlertTriangle className="w-3.5 h-3.5 text-amber-400 inline-block" title="密钥检测失败" />
                       ) : isConfigured ? (
                         <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" title="已配置有效密钥" />
                       ) : (

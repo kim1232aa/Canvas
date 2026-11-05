@@ -24,7 +24,7 @@ export interface ChoiceField {
   enumValues: string[];
   sizeObject?: { width: { minimum?: number; maximum?: number; default?: number }; height: { minimum?: number; maximum?: number; default?: number } };
   /** OpenAPI integer/number scalar (e.g. Venice lora_strength 0–100). */
-  numberSpec?: { type: 'integer' | 'number'; minimum?: number; maximum?: number; exclusiveMinimum?: boolean; default?: number };
+  numberSpec?: { type: 'integer' | 'number'; minimum?: number; maximum?: number; exclusiveMinimum?: boolean; default?: number; multipleOf?: number };
   /** Plain string field (no enum), e.g. Replicate lora_weights / image (format uri). */
   stringSpec?: { format?: string };
   /** x-liveConfirmed flag (kept for callers; labels no longer depend on it). */
@@ -79,7 +79,8 @@ export function schemaChoiceFields(inputSchema: any, doc?: any): ChoiceField[] {
     // Plain strings: only keys no canvas widget owns (own-widget aspect_ratio/resolution/format stay single-control).
     const str = !enumValues.length && !obj && !num && !CANVAS_ALIAS_NAMES.has(key) ? vs.find((v) => v?.type === 'string') : undefined;
     if (!enumValues.length && !obj && !num && !str) continue;
-    if (enumValues.length === 1 && !obj && !num) continue; // a single allowed value is not a choice
+    const isRequired = Array.isArray(inputSchema?.required) && inputSchema.required.includes(key);
+    if (enumValues.length === 1 && !obj && !num && !isRequired) continue; // a single allowed value is not a choice unless required by schema
     out.push({
       key,
       stringSpec: str ? { format: typeof str.format === 'string' ? str.format : undefined } : undefined,
@@ -95,6 +96,7 @@ export function schemaChoiceFields(inputSchema: any, doc?: any): ChoiceField[] {
             maximum: typeof num.maximum === 'number' ? num.maximum : undefined,
             exclusiveMinimum: num.exclusiveMinimum === true,
             default: typeof num.default === 'number' ? num.default : undefined,
+            multipleOf: typeof num.multipleOf === 'number' && num.multipleOf > 0 ? num.multipleOf : undefined,
           }
         : undefined,
       liveConfirmed: isLiveConfirmed(spec),
@@ -214,51 +216,64 @@ export function SchemaChoiceControls({
                   className="w-full rounded border border-slate-600 bg-black/30 px-2 py-1"
                 />
               );
-            })() : f.numberSpec && !f.enumValues.length && !f.sizeObject ? (
-              <div className="flex items-center gap-2">
-                {f.numberSpec.minimum !== undefined && f.numberSpec.maximum !== undefined && (
+            })() : f.numberSpec && !f.enumValues.length && !f.sizeObject ? (() => {
+              const isSet = current !== undefined && current !== null && current !== '';
+              const step = f.numberSpec.multipleOf || (f.numberSpec.type === 'integer' ? 1 : 0.1);
+              const minVal = f.numberSpec.minimum ?? 0;
+              const maxVal = f.numberSpec.maximum ?? 100;
+              const sliderValue = isSet ? Number(current) : minVal;
+              return (
+                <div className="flex items-center gap-2">
+                  {f.numberSpec.minimum !== undefined && f.numberSpec.maximum !== undefined && (
+                    <input
+                      type="range"
+                      aria-label={`${f.key} 滑块`}
+                      disabled={!body}
+                      min={minVal}
+                      max={maxVal}
+                      step={step}
+                      value={sliderValue}
+                      onChange={(e) => {
+                        const n = f.numberSpec!.type === 'integer' ? parseInt(e.target.value, 10) : Number(e.target.value);
+                        write(f.key, Number.isFinite(n) ? n : undefined);
+                      }}
+                      className={`w-28 h-1.5 rounded appearance-none cursor-pointer transition-opacity ${
+                        isSet ? 'bg-[#252833] accent-cyan-400 opacity-100' : 'bg-[#1b1d24] accent-slate-500 opacity-40'
+                      }`}
+                      title={isSet ? `当前设定值: ${current}` : '未填写，不发送（拖动滑块或输入数值以设定）'}
+                    />
+                  )}
                   <input
-                    type="range"
-                    aria-label={`${f.key} 滑块`}
+                    type="number"
+                    aria-label={f.key}
                     disabled={!body}
                     min={f.numberSpec.minimum}
                     max={f.numberSpec.maximum}
-                    step={f.numberSpec.type === 'integer' ? 1 : 0.1}
-                    value={current === undefined || current === null ? (f.numberSpec.default ?? f.numberSpec.minimum) : Number(current)}
+                    step={step}
+                    value={isSet ? Number(current) : ''}
+                    placeholder="未填写，不发送"
                     onChange={(e) => {
-                      const n = f.numberSpec!.type === 'integer' ? parseInt(e.target.value, 10) : Number(e.target.value);
-                      write(f.key, Number.isFinite(n) ? n : undefined);
+                      const raw = e.target.value;
+                      if (raw === '') write(f.key, undefined);
+                      else {
+                        const n = f.numberSpec!.type === 'integer' ? parseInt(raw, 10) : Number(raw);
+                        write(f.key, Number.isFinite(n) ? n : undefined);
+                      }
                     }}
-                    className="w-28 h-1.5 bg-[#252833] rounded appearance-none cursor-pointer accent-cyan-400"
+                    className={`w-32 rounded border px-2 py-1 font-mono text-[11px] ${
+                      isSet
+                        ? 'border-cyan-500/50 bg-[#121316] text-cyan-300'
+                        : 'border-slate-600 bg-black/30 text-slate-400'
+                    }`}
                   />
-                )}
-                <input
-                  type="number"
-                  aria-label={f.key}
-                  disabled={!body}
-                  min={f.numberSpec.minimum}
-                  max={f.numberSpec.maximum}
-                  step={f.numberSpec.type === 'integer' ? 1 : 'any'}
-                  value={current === undefined || current === null ? '' : Number(current)}
-                  placeholder={f.numberSpec.default !== undefined ? `默认 ${f.numberSpec.default}` : '留空则不发送'}
-                  onChange={(e) => {
-                    const raw = e.target.value;
-                    if (raw === '') write(f.key, undefined);
-                    else {
-                      const n = f.numberSpec!.type === 'integer' ? parseInt(raw, 10) : Number(raw);
-                      write(f.key, Number.isFinite(n) ? n : undefined);
-                    }
-                  }}
-                  className="w-32 rounded border border-slate-600 bg-black/30 px-2 py-1"
-                />
-                <span className="text-slate-500">
-                  
-                  {f.numberSpec.minimum !== undefined || f.numberSpec.maximum !== undefined
-                    ? `范围 ${f.numberSpec.exclusiveMinimum ? '>' : ''}${f.numberSpec.minimum ?? '?'}–${f.numberSpec.maximum ?? '?'}`
-                    : ''}
-                </span>
-              </div>
-            ) : (
+                  <span className="text-slate-500 font-mono text-[10px]">
+                    {f.numberSpec.minimum !== undefined || f.numberSpec.maximum !== undefined
+                      ? `[${f.numberSpec.exclusiveMinimum ? '>' : ''}${f.numberSpec.minimum ?? '?'}, ${f.numberSpec.maximum ?? '?'}]`
+                      : ''}
+                  </span>
+                </div>
+              );
+            })() : (
               <>
                 <select
                   aria-label={f.key}
