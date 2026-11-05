@@ -210,7 +210,7 @@ describe('Modal Dialog Accessibility & Escape handlers', () => {
     expect(canvasMgr).toContain('id="canvas-manager-title"');
 
     const cloud = renderToStaticMarkup(
-      <CloudProjectModal isOpen={true} onClose={noop} currentProject={{ id: '1', name: 'Test' } as any} onLoadProject={noop} />
+      <CloudProjectModal isOpen={true} onClose={noop} currentProjectId="1" onLoadProject={noop} onSaveCurrentToCloud={async () => {}} />
     );
     expect(cloud).toMatch(/role="dialog"[^>]*aria-modal="true"[^>]*aria-labelledby="cloud-project-title"/);
     expect(cloud).toContain('id="cloud-project-title"');

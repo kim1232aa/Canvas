@@ -884,7 +884,7 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
                       ) : test?.status === 'error' ? (
                         <XCircle className="w-4 h-4 text-rose-400" />
                       ) : keyStatusError ? (
-                        <AlertTriangle className="w-3.5 h-3.5 text-amber-400 inline-block" title="密钥检测失败" />
+                        <span title="密钥检测失败" className="inline-block"><AlertTriangle className="w-3.5 h-3.5 text-amber-400" /></span>
                       ) : isConfigured ? (
                         <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" title="已配置有效密钥" />
                       ) : (
