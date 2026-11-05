@@ -22,10 +22,13 @@ import {
   Cpu,
   Info,
   Database,
+  FileText,
 } from 'lucide-react';
 import { WORKFLOW_PRESETS, presetSummary } from '../constants/presets';
 import { NODE_DEFINITIONS } from '../constants/nodes';
 import { WorkflowPreset, NodeInstance, Connection, SpatialFrame, ComfyParameters } from '../types/graph';
+import { fetchProviderKeyStatus, providerKeyConfigured, ProviderKeyStatusMap } from '../services/providerKeyStatus';
+import { friendlyProviderLabel } from '../utils/providerLabels';
 
 interface WorkflowPresetsModalProps {
   isOpen: boolean;
@@ -77,6 +80,9 @@ export const WorkflowPresetsModal: React.FC<WorkflowPresetsModalProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'presets' | 'civitai-extract' | 'import' | 'export' | 'clear'>(initialTab);
   const [selectedCategory, setSelectedCategory] = useState<string>('全部');
+  const [selectedTask, setSelectedTask] = useState<string>('全部');
+  const [selectedProvider, setSelectedProvider] = useState<string>('全部');
+  const [keyStatusMap, setKeyStatusMap] = useState<ProviderKeyStatusMap>({});
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
@@ -105,6 +111,7 @@ export const WorkflowPresetsModal: React.FC<WorkflowPresetsModalProps> = ({
       setActiveTab(initialTab);
       setImportError(null);
       setImportSummary(null);
+      fetchProviderKeyStatus().then(setKeyStatusMap).catch(() => {});
     }
   }, [isOpen, initialTab]);
 
@@ -160,15 +167,37 @@ export const WorkflowPresetsModal: React.FC<WorkflowPresetsModalProps> = ({
     }
   };
 
+  const TASK_OPTIONS = [
+    { id: '全部', label: '全部任务', count: WORKFLOW_PRESETS.length },
+    { id: '文生图', label: '文生图 (T2I)', count: WORKFLOW_PRESETS.filter(p => p.category === '标准文生图' || p.tags?.includes('文生图')).length },
+    { id: '文生视频', label: '文生视频 (T2V)', count: WORKFLOW_PRESETS.filter(p => p.category === '标准文生视频' || p.tags?.includes('文生视频')).length },
+    { id: '图生视频', label: '图生视频 (I2V)', count: WORKFLOW_PRESETS.filter(p => p.category === '标准图生视频' || p.tags?.includes('图生视频')).length },
+  ];
+
+  const PROVIDER_OPTIONS = [
+    '全部',
+    ...Array.from(new Set(WORKFLOW_PRESETS.map((p) => p.provider))).sort(),
+  ];
+
   const filteredPresets = WORKFLOW_PRESETS.filter((p) => {
-    const matchCat = selectedCategory === '全部' || p.category.includes(selectedCategory) || (selectedCategory === '真实摄影 / 胶片风' && p.category.includes('写实'));
+    const matchLegacyCat = selectedCategory === '全部' || p.category.includes(selectedCategory) || (selectedCategory === '真实摄影 / 胶片风' && p.category.includes('写实'));
+    const matchTask = selectedTask === '全部'
+      || (selectedTask === '文生图' && (p.category === '标准文生图' || p.tags?.includes('文生图')))
+      || (selectedTask === '文生视频' && (p.category === '标准文生视频' || p.tags?.includes('文生视频')))
+      || (selectedTask === '图生视频' && (p.category === '标准图生视频' || p.tags?.includes('图生视频')))
+      || (selectedTask === '图生图' && (p.category.includes('图生图') || p.tags?.includes('图生图')));
+    const matchProvider = selectedProvider === '全部' || p.provider === selectedProvider;
+    const q = searchQuery.toLowerCase().trim();
     const matchSearch =
-      !searchQuery ||
-      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.tags?.some((t) => t.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      p.loraNames?.some((l) => l.toLowerCase().includes(searchQuery.toLowerCase()));
-    return matchCat && matchSearch;
+      !q ||
+      p.name.toLowerCase().includes(q) ||
+      p.description.toLowerCase().includes(q) ||
+      p.provider.toLowerCase().includes(q) ||
+      friendlyProviderLabel(p.provider).toLowerCase().includes(q) ||
+      p.tags?.some((t) => t.toLowerCase().includes(q)) ||
+      p.loraNames?.some((l) => l.toLowerCase().includes(q)) ||
+      presetSummary(p).model.toLowerCase().includes(q);
+    return matchLegacyCat && matchTask && matchProvider && matchSearch;
   });
 
   const handleCopyPrompt = (p: WorkflowPreset) => {
@@ -593,33 +622,69 @@ export const WorkflowPresetsModal: React.FC<WorkflowPresetsModalProps> = ({
           {/* TAB 1: 热门工作流预设 */}
           {activeTab === 'presets' && (
             <div className="space-y-6">
-              {/* Category Pills & Search Bar */}
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full">
-                  {categories.map((cat) => (
-                    <button
-                      key={cat}
-                      onClick={() => setSelectedCategory(cat)}
-                      className={`px-3 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${
-                        selectedCategory === cat
-                          ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
-                          : 'bg-[#1a1c24] text-slate-400 hover:text-white hover:bg-[#242632]'
-                      }`}
-                    >
-                      {cat}
-                    </button>
-                  ))}
+              {/* Task Tabs & Provider Filter & Search Bar */}
+              <div className="space-y-3">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                  {/* Task Type Filters */}
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full">
+                    <span className="text-[11px] text-slate-400 font-mono flex items-center gap-1 shrink-0 mr-1">
+                      <Filter className="w-3 h-3 text-cyan-400" />
+                      <span>任务类型:</span>
+                    </span>
+                    {TASK_OPTIONS.map((t) => (
+                      <button
+                        key={t.id}
+                        onClick={() => setSelectedTask(t.id)}
+                        className={`px-3 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1.5 ${
+                          selectedTask === t.id
+                            ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                            : 'bg-[#1a1c24] text-slate-400 hover:text-white hover:bg-[#242632]'
+                        }`}
+                      >
+                        <span>{t.label}</span>
+                        <span className="text-[10px] opacity-75 font-mono">({t.count})</span>
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Search Bar */}
+                  <div className="relative w-full md:w-64 shrink-0">
+                    <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="搜索工作流、服务商、模型、LoRA..."
+                      className="w-full bg-[#181921] border border-[#2b2d39] rounded-xl pl-9 pr-3 py-1.5 text-xs text-white placeholder-slate-500 outline-none focus:border-cyan-500 transition-colors"
+                    />
+                  </div>
                 </div>
 
-                <div className="relative w-full md:w-64 shrink-0">
-                  <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="搜索工作流、LoRA、大模型..."
-                    className="w-full bg-[#181921] border border-[#2b2d39] rounded-xl pl-9 pr-3 py-1.5 text-xs text-white placeholder-slate-500 outline-none focus:border-cyan-500 transition-colors"
-                  />
+                {/* Provider Filter Bar */}
+                <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
+                  <span className="text-[11px] text-slate-400 font-mono flex items-center gap-1 shrink-0">
+                    <Cpu className="w-3 h-3 text-purple-400" />
+                    <span>供应商:</span>
+                  </span>
+                  <div className="flex items-center gap-1.5 overflow-x-auto">
+                    {PROVIDER_OPTIONS.map((prov) => {
+                      const isSel = selectedProvider === prov;
+                      const label = prov === '全部' ? '全部供应商' : friendlyProviderLabel(prov) || prov;
+                      return (
+                        <button
+                          key={prov}
+                          onClick={() => setSelectedProvider(prov)}
+                          className={`px-2.5 py-0.5 rounded-lg text-[11px] font-mono whitespace-nowrap transition-colors ${
+                            isSel
+                              ? 'bg-purple-500/20 text-purple-300 border border-purple-500/50 shadow-sm'
+                              : 'bg-[#161720] text-slate-400 hover:text-slate-200 hover:bg-[#20222e] border border-transparent'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
 
@@ -640,8 +705,12 @@ export const WorkflowPresetsModal: React.FC<WorkflowPresetsModalProps> = ({
                     || '';
                   const needsReferenceImage = preset.nodes.some(n => n.values.require_reference_image)
                     || Boolean(preset.spatialFrames?.some(f => f.params.requireReferenceImage && !f.referenceImageUrl));
+                  const hasPrompt = Boolean(preset.spatialFrames?.[0]?.prompt?.trim())
+                    || preset.nodes.some(n => (n.type === 'CLIPTextEncode' && Boolean(String(n.values.text || '').trim())) || (n.type === 'AIVideoNode' && Boolean(String(n.values.prompt || '').trim())));
+                  const needsPrompt = !hasPrompt;
                   const blockedReason = configBlockedReason
                     || (needsReferenceImage ? '请先载入并选择参考图。' : '');
+                  const keyConfigured = providerKeyConfigured(keyStatusMap, preset.provider);
                   const loadMode: 'replace' | 'append' = configBlockedReason ? 'append' : 'replace';
 
                   return (
@@ -668,11 +737,34 @@ export const WorkflowPresetsModal: React.FC<WorkflowPresetsModalProps> = ({
                           <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-cyan-950/80 text-cyan-300 border border-cyan-800/60 backdrop-blur-md">
                             {preset.category}
                           </span>
+                          {needsReferenceImage ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-blue-950/80 text-blue-300 border border-blue-700/60 backdrop-blur-md">
+                              📷 需参考图
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-slate-900/80 text-slate-300 border border-slate-700/60 backdrop-blur-md">
+                              ✍️ 纯文本输入
+                            </span>
+                          )}
+                          {needsPrompt && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-amber-950/80 text-amber-300 border border-amber-700/60 backdrop-blur-md">
+                              ✍️ 需填写提示词
+                            </span>
+                          )}
                         </div>
 
-                        <div className="absolute top-3 right-3">
+                        <div className="absolute top-3 right-3 flex items-center gap-1.5">
+                          {keyConfigured === false ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-amber-950/80 text-amber-300 border border-amber-700/60 backdrop-blur-md" title="需在「设置」中配置 API Key">
+                              ⚠️ 需配置密钥
+                            </span>
+                          ) : keyConfigured === true ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-emerald-950/80 text-emerald-300 border border-emerald-700/60 backdrop-blur-md">
+                              ✓ 密钥就绪
+                            </span>
+                          ) : null}
                           <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-purple-950/80 text-purple-300 border border-purple-800/60 backdrop-blur-md">
-                            {preset.provider}
+                            {friendlyProviderLabel(preset.provider) || preset.provider}
                           </span>
                         </div>
 
@@ -688,6 +780,26 @@ export const WorkflowPresetsModal: React.FC<WorkflowPresetsModalProps> = ({
                         <p className="text-slate-400 text-[11px] leading-relaxed line-clamp-2">
                           {preset.description}
                         </p>
+
+                        {/* Upfront requirement alerts */}
+                        {keyConfigured === false && (
+                          <div className="p-2 rounded-xl bg-amber-950/30 border border-amber-800/40 text-amber-300 text-[11px] font-mono flex items-center gap-1.5">
+                            <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                            <span>{friendlyProviderLabel(preset.provider)} 尚未配置 API Key，载入后可运行但需补齐密钥</span>
+                          </div>
+                        )}
+                        {needsReferenceImage && (
+                          <div className="p-2 rounded-xl bg-cyan-950/30 border border-cyan-800/40 text-cyan-300 text-[11px] font-mono flex items-center gap-1.5">
+                            <Info className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                            <span>图生视频：须在「加载参考图」放入有效图片后方可执行</span>
+                          </div>
+                        )}
+                        {needsPrompt && (
+                          <div className="p-2 rounded-xl bg-purple-950/30 border border-purple-800/40 text-purple-300 text-[11px] font-mono flex items-center gap-1.5">
+                            <FileText className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                            <span>该预设未预填提示词，载入画布后需填写提示词方可运行</span>
+                          </div>
+                        )}
 
                         {/* Model & LoRA Highlights */}
                         <div className="space-y-1.5 bg-[#121319] p-2.5 rounded-xl border border-[#22242f]">
@@ -767,20 +879,20 @@ export const WorkflowPresetsModal: React.FC<WorkflowPresetsModalProps> = ({
                         <div className="pt-2 border-t border-[#232532] flex items-center gap-2">
                           {onLoadAndRunPreset && (
                             <button
-                              disabled={Boolean(blockedReason)}
+                              disabled={Boolean(blockedReason || needsPrompt)}
                               aria-describedby={blockedReason ? `preset-blocked-${preset.id}` : undefined}
                               onClick={() => {
-                                if (blockedReason) return;
+                                if (blockedReason || needsPrompt) return;
                                 onLoadAndRunPreset(preset);
                                 onClose();
                               }}
-                              className={blockedReason
+                              className={(blockedReason || needsPrompt)
                                 ? 'flex-1 py-2 px-3 rounded-xl bg-slate-700/80 text-slate-400 font-bold text-xs flex items-center justify-center gap-1.5 cursor-not-allowed border border-slate-600/60 shadow-none ring-0'
                                 : 'flex-1 py-2 px-3 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/25 active:scale-95 transition-all ring-1 ring-emerald-400/40'}
-                              title={blockedReason || '载入画布并运行工作流'}
+                              title={blockedReason || (needsPrompt ? '请先载入画布并填写提示词' : '载入画布并运行工作流')}
                             >
-                              <Play className={`w-3.5 h-3.5 ${blockedReason ? 'fill-slate-500 text-slate-500' : 'fill-white'}`} />
-                              <span>{blockedReason ? (preset.pendingRecipe ? '待配方，不能立即运行' : '待配置，不能立即运行') : '载入并立即运行'}</span>
+                              <Play className={`w-3.5 h-3.5 ${(blockedReason || needsPrompt) ? 'fill-slate-500 text-slate-500' : 'fill-white'}`} />
+                              <span>{blockedReason ? (preset.pendingRecipe ? '待配方，不能立即运行' : '待配置，不能立即运行') : (needsPrompt ? '需填写提示词' : '载入并立即运行')}</span>
                             </button>
                           )}
 

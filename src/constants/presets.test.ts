@@ -39,6 +39,14 @@ const EXPECTED_I2V_PROVIDERS = [
   'replicate',
 ] as const;
 
+const EXPECTED_T2V_PROVIDERS = [
+  'fal',
+  'wavespeed',
+  'civitai',
+  'muapi',
+  'replicate',
+] as const;
+
 /** Only providers with real accepted-run LoRA ids keep LoRALoader nodes. Empty shell forbidden. */
 const HAS_LORA = new Set([
   'tensorart',
@@ -79,15 +87,17 @@ const loader = (id: string) => preset(id).nodes.find(n => n.type === 'Checkpoint
 const lora = (id: string) => preset(id).nodes.find(n => n.type === 'LoRALoader');
 const t2i = () => WORKFLOW_PRESETS.filter(p => p.category === '标准文生图');
 const i2v = () => WORKFLOW_PRESETS.filter(p => p.category === '标准图生视频');
+const t2v = () => WORKFLOW_PRESETS.filter(p => p.category === '标准文生视频');
 
 function expectedT2iId(provider: string): string {
   return provider === 'modelscope_ai' ? 'std-modelscope-ai-t2i' : `std-${provider}-t2i`;
 }
 
-describe('standard workflow presets (23 T2I + 6 I2V)', () => {
-  it('exports exactly 29 presets (23 T2I + 6 I2V)', () => {
-    expect(WORKFLOW_PRESETS).toHaveLength(29);
+describe('standard workflow presets (23 T2I + 5 T2V + 6 I2V)', () => {
+  it('exports exactly 34 presets (23 T2I + 5 T2V + 6 I2V)', () => {
+    expect(WORKFLOW_PRESETS).toHaveLength(34);
     expect(t2i()).toHaveLength(23);
+    expect(t2v()).toHaveLength(5);
     expect(i2v()).toHaveLength(6);
   });
 
@@ -99,6 +109,28 @@ describe('standard workflow presets (23 T2I + 6 I2V)', () => {
     const providers = t2i().map(p => p.provider).sort();
     expect(providers).toEqual([...EXPECTED_T2I_PROVIDERS].sort());
     expect(new Set(providers).size).toBe(23);
+  });
+
+  it('T2V providers are exactly the locked set', () => {
+    const providers = t2v().map(p => p.provider).sort();
+    expect(providers).toEqual([...EXPECTED_T2V_PROVIDERS].sort());
+    for (const p of t2v()) {
+      expect(p.id).toBe(`std-${p.provider}-t2v`);
+      expect(p.category).toBe('标准文生视频');
+      expect(p.tags).toEqual(expect.arrayContaining([p.provider, '标准', '文生视频']));
+      expect(p.nodes.some(n => n.type === 'LoadImage')).toBe(false);
+      expect(p.nodes.some(n => n.type === 'AIVideoNode')).toBe(true);
+      expect(p.nodes.some(n => n.type === 'SaveVideo')).toBe(true);
+      expect(p.nodes.some(n => n.type === 'LoRALoader')).toBe(true);
+      const vidLora = p.connections.find(c => c.toSocketId === 'lora' && c.toNodeId === `${p.id}-vid`);
+      expect(vidLora).toBeDefined();
+      expect(p.nodes.find(n => n.id === vidLora?.fromNodeId)?.type).toBe('LoRALoader');
+      const vid = p.nodes.find(n => n.type === 'AIVideoNode')!;
+      expect(vid.values.targetProvider).toBe(p.provider);
+      expect(vid.values.require_reference_image).toBe(false);
+      expect(typeof vid.values.model).toBe('string');
+      expect(vid.values.prompt).toBe('');
+    }
   });
 
   it('I2V providers are exactly the locked set (no modelscope/together/krea/aimlapi)', () => {
@@ -232,7 +264,7 @@ describe('standard workflow presets (23 T2I + 6 I2V)', () => {
         if (p.id === 'std-muapi-t2i') continue;
         expect(String(n.values.lora_name ?? '').length, `${p.id} empty LoRA shell`).toBeGreaterThan(0);
       }
-      if (!HAS_LORA.has(p.provider) && p.id !== 'std-muapi-t2i' && p.category !== '标准图生视频') {
+      if (!HAS_LORA.has(p.provider) && p.id !== 'std-muapi-t2i' && !p.category.includes('视频')) {
         expect(loras, p.id).toHaveLength(0);
       }
     }
@@ -405,11 +437,15 @@ describe('standard workflow presets (23 T2I + 6 I2V)', () => {
 
   it('ModelsLab/Civitai/Novita seed Schema-supported sampler fields into schemaProperties (no false amber omit)', () => {
     // ModelsLab: official scheduler (UniPC…); sampler unsupported → omit keeps it off the list.
+    // ModelsLab tamarin-xl-v1 is SDXL 1.0 architecture; native resolution is 1024x1024 (corrected from 512x512).
     {
       const p = preset('std-modelslab-t2i');
       const ks = p.nodes.find(n => n.type === 'KSampler')!;
       expect(ks.values.scheduler).toBe('UniPCMultistepScheduler');
       expect(ks.values.sampler_name).toBeUndefined();
+      const lat = p.nodes.find(n => n.type === 'EmptyLatentImage')!;
+      expect(lat.values.width).toBe(1024);
+      expect(lat.values.height).toBe(1024);
       const props = JSON.parse(String(loader(p.id)!.values.custom_parameters || '{}'))?._canvas?.schemaProperties as string[];
       expect(props).toEqual(expect.arrayContaining(['scheduler', 'steps', 'guidance', 'seed', 'loras']));
       expect(props).not.toEqual(expect.arrayContaining(['sampler', 'sampler_name', 'denoise']));
