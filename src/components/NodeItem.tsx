@@ -1,3 +1,5 @@
+import { formatSocketDisplayName, formatNodeDisplayTitle, formatWidgetLabel } from '../utils/nodeUiLabels';
+import { NodeErrorDisclosure } from './NodeErrorDisclosure';
 import { ensureModelSchema, getModelSchemaEntry } from '../services/modelSchemaCache';
 import {PreviewPlaceholder} from './PreviewPlaceholder';
 import { useLiveVideoModelMatch } from '../hooks/useLiveVideoModelMatch';
@@ -56,7 +58,7 @@ const hideSamplerShell = (
 import { checkpointNodeTitle, ksamplerNodeTitle, loraLoaderNodeTitle, LORA_LOADER_TYPES } from '../utils/providerLabels';
 import { errorBannerText, priorRunErrorLabel, LOCAL_BLOCK_NODE_LINE } from '../utils/apiFailure';
 import { upstreamFailedLine } from '../utils/schemaFailure';
-import { formatRecordTime } from '../services/executionTrace';
+import { formatRecordTime, getExecutions } from '../services/executionTrace';
 import { loraSourceMismatch } from '../utils/loraSourceMismatch';
 import { EmphasizeLimit } from './TextEmphasis';
 import { CustomModelIdField } from './CustomModelIdField';
@@ -66,6 +68,45 @@ import { providerSendsSeparateClipStrength } from '../utils/loraClipStrength';
 export const BreakAfterSlashDash: React.FC<{ text: string }> = ({ text }) => {
   const parts = text.split(/(?<=[/\-])/);
   return <>{parts.map((p, i) => <React.Fragment key={i}>{p}{i < parts.length - 1 ? <wbr /> : null}</React.Fragment>)}</>;
+};
+
+/** Staged run feedback child component: isolates the elapsed timer hook from NodeItem */
+export const NodeRunElapsed: React.FC<{
+  state?: NodeInstance['state'];
+  type: string;
+  executionProgress?: number;
+}> = ({ state, type, executionProgress }) => {
+  const [elapsedSeconds, setElapsedSeconds] = React.useState(0);
+
+  React.useEffect(() => {
+    if (state !== 'running') {
+      setElapsedSeconds(0);
+      return;
+    }
+    const start = Date.now();
+    const timer = setInterval(() => {
+      setElapsedSeconds(Math.max(1, Math.floor((Date.now() - start) / 1000)));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [state]);
+
+  if (state !== 'running') return null;
+
+  return (
+    <div
+      className="flex items-center gap-1 text-[10px] font-mono text-cyan-400 bg-cyan-950/60 px-1.5 py-0.5 rounded border border-cyan-800/40"
+      data-testid="node-running-status"
+    >
+      <Loader2 className="w-3 h-3 animate-spin" />
+      <span>
+        {type === 'AIVideoNode'
+          ? (executionProgress ? `${executionProgress}%` : '运行中')
+          : elapsedSeconds < 2
+          ? '正在提交...'
+          : `等待上游 (${elapsedSeconds}s)`}
+      </span>
+    </div>
+  );
 };
 
 
@@ -93,6 +134,7 @@ interface NodeItemProps {
   onMeasuredHeight?: (nodeId: string, height: number) => void;
   onAutoFixCheckpoint?: (recommendedCheckpoint: string) => void;
   onOpenModelHub?: (category?: 'all' | 'checkpoint' | 'lora' | 'video' | 'edit') => void;
+  onOpenSettings?: (providerId?: string) => void;
   /** LoRA nodes on this Checkpoint's MODEL chain (run order), for Schema LoRA-slot badges. */
   canvasLoras?: Array<{ name: string }>;
 }
@@ -126,6 +168,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
   onMeasuredHeight,
   onAutoFixCheckpoint,
   onOpenModelHub,
+  onOpenSettings,
   canvasLoras,
 }) => {
   // Callback ref (no extra hook): report rendered height incl. warnings so nodes below get pushed, not covered.
@@ -324,7 +367,9 @@ export const NodeItem: React.FC<NodeItemProps> = ({
         <div className="flex items-center gap-2 min-w-0">
           <button
             onClick={() => onToggleCollapse(node.id)}
-            className="text-slate-400 hover:text-white p-0.5 rounded"
+            className="text-slate-400 hover:text-white p-0.5 rounded focus-visible:ring-1 focus-visible:ring-cyan-400"
+            aria-label={isCollapsed ? '展开节点' : '折叠节点'}
+            title={isCollapsed ? '展开节点' : '折叠节点'}
           >
             {isCollapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
           </button>
@@ -339,7 +384,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                   ? checkpointNodeTitle(node.values.targetProvider,node.values.ckpt_name)
                 : LORA_LOADER_TYPES.has(node.type)
                   ? loraLoaderNodeTitle(node.title, node.values?.lora_name)
-                  : node.title;
+                  : formatNodeDisplayTitle(node.type, node.title);
             const loraFull = LORA_LOADER_TYPES.has(node.type) ? String(node.values?.lora_name || '').trim() : '';
             const hoverTitle = loraFull
               ? loraFull
@@ -363,12 +408,11 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               </span>
             );
           })()}
-          {node.state === 'running' && (
-            <div className="flex items-center gap-1 text-[10px] font-mono text-cyan-400 bg-cyan-950/60 px-1.5 py-0.5 rounded border border-cyan-800/40">
-              <Loader2 className="w-3 h-3 animate-spin" />
-              <span>{node.executionProgress ? `${node.executionProgress}%` : '运行中'}</span>
-            </div>
-          )}
+          <NodeRunElapsed
+            state={node.state}
+            type={node.type}
+            executionProgress={node.executionProgress}
+          />
           {node.state === 'success' && (
             <div className="flex items-center gap-1 text-[10px] font-mono text-emerald-400 bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-800/40">
               <Check className="w-3 h-3" />
@@ -381,16 +425,18 @@ export const NodeItem: React.FC<NodeItemProps> = ({
         <div className="flex items-center gap-1 shrink-0">
           <button
             onClick={() => onToggleBypass(node.id)}
-            className={`p-1 rounded hover:bg-[#282a33] transition-colors ${
+            className={`p-1 rounded hover:bg-[#282a33] transition-colors focus-visible:ring-1 focus-visible:ring-cyan-400 ${
               isBypassed ? 'text-amber-400' : 'text-slate-400 hover:text-slate-200'
             }`}
+            aria-label={isBypassed ? '取消静音 (启用节点)' : '静音节点 (停用节点)'}
             title={isBypassed ? '取消静音 (Enable)' : '静音节点 (Bypass)'}
           >
             {isBypassed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
           </button>
           <button
             onClick={() => onDeleteNode(node.id)}
-            className="p-1 rounded text-slate-400 hover:text-rose-400 hover:bg-[#282a33] transition-colors"
+            className="p-1 rounded text-slate-400 hover:text-rose-400 hover:bg-[#282a33] transition-colors focus-visible:ring-1 focus-visible:ring-rose-400"
+            aria-label="删除节点"
             title="删除节点 (Delete)"
           >
             <Trash2 className="w-3.5 h-3.5" />
@@ -408,16 +454,24 @@ export const NodeItem: React.FC<NodeItemProps> = ({
         </div>
       )}
 
-      {/* Node error message banner — always inside the node, below the title bar (never absolute above: that covered title + buttons). */}
-      {node.errorMessage && node.state !== 'running' && (
-        <div className="mx-3 mt-2 p-2 bg-rose-950/40 border border-rose-800/60 rounded-lg text-[11px] text-rose-100 leading-relaxed flex items-start gap-1.5" data-testid="node-error-strip">
-          <AlertTriangle className="w-3.5 h-3.5 text-rose-300 shrink-0 mt-0.5" />
-          <div className="min-w-0 flex-1 max-h-48 overflow-y-auto" data-testid="node-error-banner">
-            {/* 雁 2026-11-04: the upstream text verbatim (status + full body), nothing else. */}
-            <div className="[overflow-wrap:anywhere] whitespace-pre-wrap" data-testid="node-error-headline">{node.errorMessage}</div>
-          </div>
-        </div>
-      )}
+      {/* Node error message banner with progressive disclosure */}
+      {node.errorMessage && node.state !== 'running' && (() => {
+        const executions = typeof getExecutions === 'function' ? getExecutions() : [];
+        const lastErr = executions.filter((r) => r.state === 'error' && r.category !== 'local').pop();
+        const traceResp = (lastErr?.response && typeof lastErr.response === 'object' ? lastErr.response : {}) as any;
+        const statusCode = (node as any).errorStatusCode || traceResp?.upstreamStatus || traceResp?.status || lastErr?.status || undefined;
+        const endpoint = (node as any).errorEndpoint || traceResp?.endpoint || traceResp?.exactEndpointCalled || lastErr?.route || undefined;
+        return (
+          <NodeErrorDisclosure
+            errorMessage={node.errorMessage}
+            provider={currentProvider || node.values?.targetProvider}
+            endpoint={endpoint}
+            statusCode={statusCode}
+            errorAt={node.errorAt}
+            onOpenSettings={onOpenSettings}
+          />
+        );
+      })()}
 
       {/* Sockets Row (Inputs on Left, Outputs on Right) */}
       <div className="px-3 py-2 flex justify-between gap-4">
@@ -446,7 +500,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                   }}
                 />
                 <span className="text-[11px] font-mono text-slate-300 font-semibold group-hover:text-white">
-                  {socket.label || socket.name}
+                  {formatSocketDisplayName(socket.label || socket.name, socket.type)}
                 </span>
               </div>
             );
@@ -464,7 +518,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                 title={`${socket.name} (${socket.type})`}
               >
                 <span className="text-[11px] font-mono text-slate-300 font-semibold group-hover:text-white">
-                  {socket.label || socket.name}
+                  {formatSocketDisplayName(socket.label || socket.name, socket.type)}
                 </span>
                 {/* Port circle */}
                 <div
@@ -664,9 +718,8 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               return (
                 <div key={widget.name} className={`space-y-1 `}>
                   <div className="flex flex-wrap items-center justify-between text-slate-400 font-mono text-[11px] gap-1.5">
-                    {/* clean-1333 #6: label never wraps (「去噪强 / 度」); a long badge drops to its own line instead. */}
                     <span className="flex flex-wrap items-center gap-1.5 min-w-0" title={widget.title || undefined}>
-                      <span className="whitespace-nowrap shrink-0" data-testid={`widget-label-${widget.name}`}>{widget.label}</span>
+                      <span className="whitespace-nowrap shrink-0" data-testid={`widget-label-${widget.name}`}>{formatWidgetLabel(widget.name, widget.label)}</span>
                       {unsupported && null}
                       {!unsupported && null}
                     </span>
@@ -909,7 +962,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                   const staleValue = value && !opts.some((option) => option.value === value);
                   return (
                     <div key={widget.name} className="space-y-1" data-testid={`ckpt-${widget.name}`}>
-                      <label className="text-slate-400 font-mono text-[11px] block" title={widget.title || undefined}>{widget.label}</label>
+                      <label className="text-slate-400 font-mono text-[11px] block" title={widget.title || undefined}>{formatWidgetLabel(widget.name, widget.label)}</label>
                       <select
                         value={value || ''}
                         aria-label={widget.label}
@@ -933,7 +986,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                 if (filledCanvasValue(value)) {
                   return (
                     <div key={widget.name} className="space-y-1" data-testid={`ckpt-${widget.name}`}>
-                      <label className="text-slate-400 font-mono text-[11px] block" title={widget.title || undefined}>{widget.label}</label>
+                      <label className="text-slate-400 font-mono text-[11px] block" title={widget.title || undefined}>{formatWidgetLabel(widget.name, widget.label)}</label>
                       <input
                         type="text"
                         value={String(value)}
@@ -1025,7 +1078,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               return (
                 <div key={widget.name} className={`space-y-1 `}>
                   <div className="flex flex-wrap items-center justify-between gap-1.5">
-                    <label className="text-slate-400 font-mono text-[11px] block whitespace-nowrap shrink-0" data-testid={`widget-label-${widget.name}`} title={widget.title || undefined}>{widget.label}</label>
+                    <label className="text-slate-400 font-mono text-[11px] block whitespace-nowrap shrink-0" data-testid={`widget-label-${widget.name}`} title={widget.title || undefined}>{formatWidgetLabel(widget.name, widget.label)}</label>
                     {unsupported && null}
                     {!unsupported && null}
                   </div>
@@ -1138,7 +1191,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               return (
                 <div key={widget.name} className="space-y-1">
                   <div className="flex flex-wrap items-center justify-between gap-1.5">
-                    <label className="text-slate-400 font-mono text-[11px] block whitespace-nowrap shrink-0" data-testid={`widget-label-${widget.name}`} title={widget.title || undefined}>{widget.label}</label>
+                    <label className="text-slate-400 font-mono text-[11px] block whitespace-nowrap shrink-0" data-testid={`widget-label-${widget.name}`} title={widget.title || undefined}>{formatWidgetLabel(widget.name, widget.label)}</label>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <input
@@ -1192,7 +1245,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               return (
                 <div key={widget.name} className={`space-y-1 `}>
                   <div className="flex flex-wrap items-center justify-between gap-1.5">
-                    <label className="text-slate-400 font-mono text-[11px] block whitespace-nowrap shrink-0" data-testid={`widget-label-${widget.name}`} title={widget.title || undefined}>{widget.label}</label>
+                    <label className="text-slate-400 font-mono text-[11px] block whitespace-nowrap shrink-0" data-testid={`widget-label-${widget.name}`} title={widget.title || undefined}>{formatWidgetLabel(widget.name, widget.label)}</label>
                     {unsupported && null}
                     {!unsupported && null}
                   </div>
@@ -1230,7 +1283,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               return (
                 <div key={widget.name} className="space-y-1">
                   <div className="flex items-center justify-between">
-                    <label className="text-slate-400 font-mono text-[11px]" title={widget.title || undefined}>{widget.label}</label>
+                    <label className="text-slate-400 font-mono text-[11px]" title={widget.title || undefined}>{formatWidgetLabel(widget.name, widget.label)}</label>
                     {isLoraName && onOpenCivitaiPicker && (
                       <button
                         onClick={() => onOpenCivitaiPicker(node.id)}

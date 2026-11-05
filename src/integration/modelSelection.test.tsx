@@ -61,7 +61,9 @@ const expectSelected = (model: string) => {
   expect(schemaGets(model)).toHaveLength(1);
 };
 
-describe('clean-0942 real App: explicit model selections', () => {
+// Heavy end-to-end integration test mounting full App in StrictMode across multiple modal opens and schema reads.
+// Under multi-worker load, each test takes 6-10s; per-suite timeout allows reliable completion without raising global timeout.
+describe('clean-0942 real App: explicit model selections', { timeout: 30000 }, () => {
   beforeEach(async () => {
     calls = []; clearSharedGet();
     vi.stubGlobal('fetch', vi.fn(async (u: any) => {

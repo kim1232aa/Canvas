@@ -69,6 +69,15 @@ export const CloudProjectModal: React.FC<CloudProjectModalProps> = ({
     }
   }, [isOpen]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const handleCreateNew = async () => {
@@ -118,7 +127,7 @@ export const CloudProjectModal: React.FC<CloudProjectModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="bg-[#17181e] border border-[#2b2d39] rounded-2xl w-full max-w-4xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden text-xs">
+      <div role="dialog" aria-modal="true" aria-labelledby="cloud-project-title" className="bg-[#17181e] border border-[#2b2d39] rounded-2xl w-full max-w-4xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden text-xs">
         {/* Header */}
         <div className="px-6 py-4 border-b border-[#262833] bg-[#131419] flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -126,7 +135,7 @@ export const CloudProjectModal: React.FC<CloudProjectModalProps> = ({
               <Cloud className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-white flex items-center gap-2">
+              <h2 id="cloud-project-title" className="text-base font-bold text-white flex items-center gap-2">
                 云端项目
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />

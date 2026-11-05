@@ -96,6 +96,15 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
   onClearAllHistory,
 }) => {
   const [activeType, setActiveType] = useState<'all' | 'image' | 'video' | 'reference' | 'starred'>('all');
+
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
   const [selectedProvider, setSelectedProvider] = useState<string>('all');
   const [selectedRatio, setSelectedRatio] = useState<string>('all');
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'model' | 'provider'>('newest');
@@ -542,7 +551,7 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
       onDragLeave={() => setIsDraggingOver(false)}
       onDrop={handleDropFiles}
     >
-      <div className="bg-[#14151c] border border-[#272938] rounded-2xl w-full max-w-7xl h-[92vh] flex flex-col shadow-2xl overflow-hidden text-xs relative">
+      <div role="dialog" aria-modal="true" aria-labelledby="asset-manager-title" className="bg-[#14151c] border border-[#272938] rounded-2xl w-full max-w-7xl h-[92vh] flex flex-col shadow-2xl overflow-hidden text-xs relative">
         {(storageWarning || migrationWarning || Object.values(cacheWarnings).some(Boolean)) && <div role="alert" className="border-b border-amber-700/50 bg-amber-950/50 px-4 py-2 text-amber-100">
           {[storageWarning, migrationWarning, ...Object.values(cacheWarnings)].filter(Boolean).join('；')}
           <button type="button" className="ml-3 underline" onClick={() => setRetryRevision(value => value + 1)}>重试迁移与保存</button>
@@ -564,7 +573,7 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-base font-extrabold text-white tracking-wide">
+                <h2 id="asset-manager-title" className="text-base font-extrabold text-white tracking-wide">
                   资产与素材管理中心 (Asset & Media Gallery)
                 </h2>
                 <div className="flex items-center gap-1.5 font-mono text-[10px]">

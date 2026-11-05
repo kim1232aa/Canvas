@@ -61,6 +61,15 @@ export const CanvasManagerModal: React.FC<CanvasManagerModalProps> = ({
   const [newCanvasName, setNewCanvasName] = useState('');
   const [newCanvasDesc, setNewCanvasDesc] = useState('');
   const [selectedTemplate, setSelectedTemplate] = useState<'empty' | 'flux' | 'ghibli' | 'wan'>('flux');
+
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
 
@@ -89,7 +98,7 @@ export const CanvasManagerModal: React.FC<CanvasManagerModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 select-none animate-in fade-in duration-200">
-      <div className="bg-[#15161c] border border-[#2b2d3a] rounded-2xl w-full max-w-4xl h-[82vh] flex flex-col shadow-2xl overflow-hidden text-xs">
+      <div role="dialog" aria-modal="true" aria-labelledby="canvas-manager-title" className="bg-[#15161c] border border-[#2b2d3a] rounded-2xl w-full max-w-4xl h-[82vh] flex flex-col shadow-2xl overflow-hidden text-xs">
         {/* Header */}
         <div className="px-6 py-4 border-b border-[#252733] bg-[#111216] flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -98,7 +107,7 @@ export const CanvasManagerModal: React.FC<CanvasManagerModalProps> = ({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-base font-extrabold text-white tracking-wide">
+                <h2 id="canvas-manager-title" className="text-base font-extrabold text-white tracking-wide">
                   多画布与工程管理中心 (Canvas Boards)
                 </h2>
                 <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">

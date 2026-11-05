@@ -187,7 +187,7 @@ describe('clean-1333 #5/#6 only the cause node shows the reason (same text as th
 describe('clean-1333 #6 details', () => {
   it('KSampler slider label (去噪强度) never wraps; badge wraps instead', () => {
     const node = read('../components/NodeItem.tsx');
-    expect(node).toContain('<span className="whitespace-nowrap shrink-0" data-testid={`widget-label-${widget.name}`}>{widget.label}</span>');
+    expect(node).toContain('<span className="whitespace-nowrap shrink-0" data-testid={`widget-label-${widget.name}`}>{formatWidgetLabel(widget.name, widget.label)}</span>');
   });
   it('Fit View tooltip is closed on click (no :hover residue)', () => {
     const dock = read('../components/ModernToolDock.tsx');

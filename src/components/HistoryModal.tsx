@@ -444,6 +444,15 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
   const [brokenIds, setBrokenIds] = React.useState<Record<string, true>>({});
   const [copyError, setCopyError] = React.useState('');
 
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const markBroken = (id: string) => {
@@ -499,7 +508,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="bg-[#18191d] border border-[#2e3038] rounded-2xl w-full max-w-5xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+      <div role="dialog" aria-modal="true" aria-labelledby="history-modal-title" className="bg-[#18191d] border border-[#2e3038] rounded-2xl w-full max-w-5xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="px-6 py-4 border-b border-[#2e3038] bg-[#141518] flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -507,7 +516,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
               <Clock className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-white flex items-center gap-2">
+              <h2 id="history-modal-title" className="text-lg font-bold text-white flex items-center gap-2">
                 生成历史
                 <span data-badge-level="primary" className="text-sm font-semibold px-2.5 py-0.5 rounded-full bg-purple-500/20 text-purple-200 border border-purple-500/40" data-testid="history-output-count">
                   {outputCount} 张出图{countsPartial ? '（已载）' : ''}
@@ -548,7 +557,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
           {history.length === 0 ? (
             <div className="h-64 flex flex-col items-center justify-center gap-3 text-slate-400">
               <ImageIcon className="w-12 h-12 text-slate-600" />
-              <p className="text-sm">暂无生成记录。点击右侧「Queue Prompt」开始运行工作流！</p>
+              <p className="text-sm">暂无生成记录。在画布配置好模型与提示词后，点击右上角「运行」开始生成！</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 items-start">

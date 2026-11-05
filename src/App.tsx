@@ -105,6 +105,21 @@ import {
   LORA_LOADER_TYPES,
 } from './utils/providerLabels';
 
+export function formatExecutionStatusText(statusText: string, elapsedSec: number): string {
+  if (
+    statusText.startsWith('[4/5]') ||
+    statusText.includes('正在向') ||
+    statusText.includes('等待渲染') ||
+    statusText.includes('请求进行中') ||
+    statusText.includes('官方算力')
+  ) {
+    return elapsedSec < 2
+      ? '正在提交请求至云端服务商...'
+      : `等待上游返回结果 (已耗时 ${elapsedSec}秒)...`;
+  }
+  return statusText;
+}
+
 export default function App() {
   // Model Schema arrivals re-render inspector/canvas send badges.
   React.useSyncExternalStore(subscribeModelSchema, modelSchemaVersion);
@@ -1218,8 +1233,16 @@ export default function App() {
     const thisRunSeq = beginRun();
     // clean-1005: select-model + run share one action — do NOT bump the sharedGet epoch here (reuse the Schema GET).
     setCurrentRunTarget(runTarget ? `${runTarget.title}${runTarget.auto ? '（未选中节点，按输出节点）' : ''}` : null);
+    const runStartTime = Date.now();
     setExecutionProgress(5);
-    setExecutionStatusText('正在调度模型与 LoRA 权重...');
+    setExecutionStatusText('正在提交请求至云端服务商...');
+    const stagedTimer = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - runStartTime) / 1000);
+      setExecutionStatusText((prev) => {
+        if (!prev || prev.includes('完成') || prev.includes('失败')) return prev;
+        return elapsed < 2 ? '正在提交请求至云端服务商...' : `等待上游返回结果 (已耗时 ${elapsed}秒)...`;
+      });
+    }, 1000);
     setToast(null); // drop stale global notices from prior hub/search/run
     // New run: clear every prior red banner / error state (local blocks AND prior upstream failures) before starting,
     // so an old 「上一次 …」 never lingers once the user re-runs. This run's own failure is written in the catch below.
@@ -1290,7 +1313,8 @@ export default function App() {
         handleNodeStateChange,
         (percent, statusText, details) => {
           setExecutionProgress(percent);
-          setExecutionStatusText(statusText);
+          const elapsed = Math.max(1, Math.floor((Date.now() - runStartTime) / 1000));
+          setExecutionStatusText(formatExecutionStatusText(statusText, elapsed));
           if (Array.isArray(details?.omissions) && details.omissions.length) {
             workflowOmissions = details.omissions;
             setToast({type:'warning', title:'请求参数未提交项', message:workflowOmissions.map(item => `${item.field}=${item.value}：${item.reason}`).join('；')});
@@ -1298,7 +1322,7 @@ export default function App() {
         },
         runTargetId
       );
-      setExecutionStatusText(`成功完成 (${result.provider})`);
+      setExecutionStatusText(`生成完成 (${result.provider}) · 耗时 ${Math.max(1, Math.floor((Date.now() - runStartTime) / 1000))}秒`);
       setExecutionProgress(100);
       // clean-1651 A: successful run clears all prior upstream failure badges.
       // Also force THIS-session image onto SaveImage and drop 刷新前的结果 (covers saveNodes miss / stale banner).
@@ -1425,6 +1449,8 @@ export default function App() {
           // The failed node shows the full upstream text verbatim (status + body); nothing on the others.
           errorMessage: isTarget ? upstreamMsg : undefined,
           errorAt: isTarget ? new Date().toISOString() : undefined,
+          errorStatusCode: isTarget ? ((err as any)?.upstreamStatus ?? (err as any)?.appStatus) : undefined,
+          errorEndpoint: isTarget ? (err as any)?.endpoint : undefined,
           upstreamFailed: false,
           upstreamFailedTitle: undefined,
           upstreamFailedMessage: undefined,
@@ -1434,7 +1460,17 @@ export default function App() {
         };
       }));
 
-      // 雁 2026-11-04: no failure toast; the error shows once, on the failed node.
+      // High-visibility failure notification with progressive disclosure and quick settings link
+      const missingKeyMatch = String(upstreamMsg || errMsg).match(/未配置\s*([a-zA-Z0-9_-]+)\s*的密钥/);
+      const missingKeyProv = missingKeyMatch ? missingKeyMatch[1] : undefined;
+      setToast({
+        type: 'error',
+        title: '工作流生成失败',
+        message: upstreamMsg || errMsg,
+        action: missingKeyProv ? 'api-settings' : undefined,
+        actionProviderId: missingKeyProv,
+      });
+
       // clean-1358 #4 + clean-1613 #2: pan only after writing ONE exec-log row 「视口平移至原因节点」.
       // Capture run attach BEFORE finally/endRun clears currentRunLabel; record OUTSIDE setState (StrictMode would double-fire).
       // state 'complete' — pan is not a request failure (no 请求失败 / 较早失败).
@@ -1467,11 +1503,11 @@ export default function App() {
       }
       loadHistoryFirstPage().catch((err) => console.error('History refresh failed:', err.message));
     } finally {
+      clearInterval(stagedTimer);
       setIsExecuting(false);
       setCurrentRunTarget(null);
       endRun();
       setExecutionProgress(0);
-      setExecutionStatusText('');
     }
   };
 
@@ -2513,6 +2549,9 @@ export default function App() {
               setIsModelHubOpen(true);
             }}
             onClearCanvas={handleClearCanvas}
+            onOpenWorkflowPresets={() => setIsWorkflowPresetsOpen(true)}
+            onOpenSettings={() => setIsSettingsOpen(true)}
+            onAddSpatialFrame={handleAddSpatialFrame}
           />
         );
       })()}
@@ -2787,6 +2826,12 @@ export default function App() {
           (canvasMode==='spatial' && selectedFrameId ? spatialFrames.find((f) => f.id === selectedFrameId)?.params?.checkpoint : undefined) ||
           ''
         }
+        {...({
+          currentCheckpointBaseModel:
+            (resolvedActive as any).baseModel ||
+            ((canvasMode === 'spatial' && selectedFrameId ? spatialFrames.find((f) => f.id === selectedFrameId)?.params : undefined) as any)?.baseModel ||
+            '',
+        } as any)}
         onSelectModel={handleSelectModelFromHub}
         onAddModelNode={(mId, mName, prov, extraData) => {
           const detectedProvider = explicitProvider(prov);

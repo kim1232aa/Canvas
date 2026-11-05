@@ -18,7 +18,7 @@ import { NodeItem } from './NodeItem';
 import { SpatialFrameItem } from './SpatialFrameItem';
 import { NODE_DEFINITIONS } from '../constants/nodes';
 import { resolveCheckpointForNode } from '../utils/resolveCheckpoint';
-import { Plus, X, Trash2, RotateCcw } from 'lucide-react';
+import { Plus, X, Trash2, RotateCcw, Sparkles, Settings, LayoutGrid } from 'lucide-react';
 
 interface CanvasProps {
   canvasMode: CanvasMode;
@@ -53,6 +53,9 @@ interface CanvasProps {
   onAutoFixCheckpoint?: (checkpoint: string) => void;
   onOpenModelHub?: (category?: any) => void;
   onClearCanvas?: (type: 'all' | 'nodes' | 'frames' | 'reset-default') => void;
+  onOpenWorkflowPresets?: () => void;
+  onOpenSettings?: () => void;
+  onAddSpatialFrame?: () => void;
 }
 
 export const Canvas: React.FC<CanvasProps> = ({
@@ -87,6 +90,9 @@ export const Canvas: React.FC<CanvasProps> = ({
   onAutoFixCheckpoint,
   onOpenModelHub,
   onClearCanvas,
+  onOpenWorkflowPresets,
+  onOpenSettings,
+  onAddSpatialFrame,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isPanning, setIsPanning] = useState(false);
@@ -587,11 +593,164 @@ export const Canvas: React.FC<CanvasProps> = ({
                 canvasLoras={node.type === 'CheckpointLoaderSimple' ? canvasLorasForCheckpoint(node.id, nodes as any, connections as any) : undefined}
                 onAutoFixCheckpoint={onAutoFixCheckpoint}
                 onOpenModelHub={onOpenModelHub}
+                onOpenSettings={onOpenSettings}
               />
             </div>
           ))}
         </div>
       </div>
+
+      {/* Empty State Onboarding: Graph Mode */}
+      {canvasMode === 'graph' && nodes.length === 0 && (
+        <div
+          data-testid="canvas-empty-onboarding"
+          className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-30 w-full max-w-xl p-6 bg-[#161720]/95 backdrop-blur-xl border border-[#2b2d39] rounded-2xl shadow-2xl space-y-5 text-slate-200 pointer-events-auto"
+        >
+          <div className="flex items-center gap-3 border-b border-[#252733] pb-3">
+            <div className="p-2.5 rounded-xl bg-gradient-to-br from-cyan-500/20 to-purple-500/20 text-cyan-400 border border-cyan-500/30">
+              <Sparkles className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                从零开启创作 · 新手入门引导
+                <span className="text-[10px] font-mono font-normal px-2 py-0.5 rounded-full bg-cyan-950/60 text-cyan-300 border border-cyan-500/30">
+                  空白画布
+                </span>
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                当前画布为空。您可以一键载入标准工作流，或通过以下 6 步自由搭建：
+              </p>
+            </div>
+          </div>
+
+          {/* 6-step creation flow */}
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="p-2.5 rounded-xl bg-[#111216] border border-[#232530] space-y-1">
+              <div className="font-semibold text-cyan-300 flex items-center gap-1.5">
+                <span className="w-4 h-4 rounded-full bg-cyan-500/20 text-cyan-300 text-[10px] flex items-center justify-center font-bold">1</span>
+                选择服务商
+              </div>
+              <p className="text-[11px] text-slate-400 leading-tight">
+                如 WaveSpeed、Fal.ai、Together、Venice 等云端推理服务
+              </p>
+            </div>
+
+            <div className="p-2.5 rounded-xl bg-[#111216] border border-[#232530] space-y-1">
+              <div className="font-semibold text-cyan-300 flex items-center gap-1.5">
+                <span className="w-4 h-4 rounded-full bg-cyan-500/20 text-cyan-300 text-[10px] flex items-center justify-center font-bold">2</span>
+                选择基础模型
+              </div>
+              <p className="text-[11px] text-slate-400 leading-tight">
+                支持 FLUX.1、SDXL、Wan 2.1 等文生图/文生视频大模型
+              </p>
+            </div>
+
+            <div className="p-2.5 rounded-xl bg-[#111216] border border-[#232530] space-y-1">
+              <div className="font-semibold text-indigo-300 flex items-center gap-1.5">
+                <span className="w-4 h-4 rounded-full bg-indigo-500/20 text-indigo-300 text-[10px] flex items-center justify-center font-bold">3</span>
+                输入提示词
+              </div>
+              <p className="text-[11px] text-slate-400 leading-tight">
+                正向提示词描述画面细节与光影，负向提示词过滤瑕疵
+              </p>
+            </div>
+
+            <div className="p-2.5 rounded-xl bg-[#111216] border border-[#232530] space-y-1">
+              <div className="font-semibold text-indigo-300 flex items-center gap-1.5">
+                <span className="w-4 h-4 rounded-full bg-indigo-500/20 text-indigo-300 text-[10px] flex items-center justify-center font-bold">4</span>
+                可选挂载 LoRA
+              </div>
+              <p className="text-[11px] text-slate-400 leading-tight">
+                调节艺术风格、二次元画风或特定写实人物特征
+              </p>
+            </div>
+
+            <div className="p-2.5 rounded-xl bg-[#111216] border border-[#232530] space-y-1">
+              <div className="font-semibold text-purple-300 flex items-center gap-1.5">
+                <span className="w-4 h-4 rounded-full bg-purple-500/20 text-purple-300 text-[10px] flex items-center justify-center font-bold">5</span>
+                点击右上角「运行」
+              </div>
+              <p className="text-[11px] text-slate-400 leading-tight">
+                快捷键 Ctrl / Cmd + Enter 实时调度真实云端推理
+              </p>
+            </div>
+
+            <div className="p-2.5 rounded-xl bg-[#111216] border border-[#232530] space-y-1">
+              <div className="font-semibold text-purple-300 flex items-center gap-1.5">
+                <span className="w-4 h-4 rounded-full bg-purple-500/20 text-purple-300 text-[10px] flex items-center justify-center font-bold">6</span>
+                实时查看产物
+              </div>
+              <p className="text-[11px] text-slate-400 leading-tight">
+                图像实时上屏，自动保存至历史记录并支持导出与复用
+              </p>
+            </div>
+          </div>
+
+          {/* Quick Action CTAs */}
+          <div className="pt-2 flex flex-wrap items-center gap-2 border-t border-[#252733]">
+            {onClearCanvas && (
+              <button
+                type="button"
+                onClick={() => onClearCanvas('reset-default')}
+                className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-cyan-600/20 transition-all cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>一键加载标准文生图工作流</span>
+              </button>
+            )}
+
+            {onOpenWorkflowPresets && (
+              <button
+                type="button"
+                onClick={onOpenWorkflowPresets}
+                className="px-3 py-2 rounded-xl bg-[#20222c] hover:bg-[#282a37] text-slate-200 hover:text-white font-semibold text-xs border border-[#303342] flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                <span>浏览预设模板库</span>
+              </button>
+            )}
+
+            {onOpenSettings && (
+              <button
+                type="button"
+                onClick={onOpenSettings}
+                className="px-3 py-2 rounded-xl bg-[#20222c] hover:bg-[#282a37] text-slate-200 hover:text-white font-semibold text-xs border border-[#303342] flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <Settings className="w-3.5 h-3.5 text-cyan-400" />
+                <span>配置 API 密钥</span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Empty State Onboarding: Spatial Mode */}
+      {canvasMode === 'spatial' && spatialFrames.length === 0 && (
+        <div
+          data-testid="spatial-empty-onboarding"
+          className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-30 w-full max-w-md p-6 bg-[#161720]/95 backdrop-blur-xl border border-[#2b2d39] rounded-2xl shadow-2xl text-center space-y-4 text-slate-200 pointer-events-auto"
+        >
+          <div className="w-12 h-12 mx-auto rounded-2xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 flex items-center justify-center">
+            <LayoutGrid className="w-6 h-6" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-white">画板视图当前为空</h3>
+            <p className="text-xs text-slate-400 mt-1">
+              画板模式用于多选区空间构图与局部生成。请添加第一块选区画板：
+            </p>
+          </div>
+          {onAddSpatialFrame && (
+            <button
+              type="button"
+              onClick={onAddSpatialFrame}
+              className="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold text-xs flex items-center gap-1.5 mx-auto shadow-lg shadow-cyan-600/20 transition-all cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>+ 新建画板选区</span>
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Right-click Context Menu */}
       {contextMenu && (

@@ -268,7 +268,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
             <div className="flex items-center justify-between font-semibold text-slate-200 text-[11px]">
               <span className="flex items-center gap-1.5">
                 <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                提示词工作台 (CLIP Prompts)
+                提示词工作台
               </span>
               <span className="text-[10px] text-slate-400 font-mono">实时同步工作流节点</span>
             </div>
@@ -277,7 +277,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
             {onChangePositivePrompt && (
               <div className="space-y-1">
                 <div className="flex items-center justify-between text-[10px]">
-                  <label className="text-amber-300/90 font-mono font-semibold">正向提示词 (Positive Prompt)</label>
+                  <label className="text-amber-300/90 font-mono font-semibold">正向提示词</label>
                   <button
                     onClick={handleRefine}
                     disabled={isRefiningPrompt || !positivePrompt}
@@ -305,7 +305,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
               <div className="space-y-1" data-testid="inspector-negative-prompt">
                 <div className="flex flex-wrap items-start justify-between gap-2 text-[10px]">
                   <label className="text-rose-400 font-mono font-semibold flex flex-wrap items-center gap-1.5 min-w-0">
-                    <span className="shrink-0">负向提示词 (Negative Prompt)</span>
+                    <span className="shrink-0">负向提示词</span>
                     {greyNegative && <FieldStatusBadge status="unsupported" />}
                     {!greyNegative && <span className="min-w-0 max-w-full [overflow-wrap:anywhere]" data-testid="inspector-negative-badge"><SchemaSendBadge status={schemaSendStatus(params.targetProvider, 'negative_prompt', negativePrompt, customParamsJson)} omitTitle={SCHEMA_OMIT_REASON} /></span>}
                   </label>
@@ -349,7 +349,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
 
           {/* Cloud Provider Routing */}
           <div className="space-y-1">
-            <label className="text-slate-400 text-[10px] font-mono">云端推理引擎 (ENGINE PROVIDER)</label>
+            <label className="text-slate-400 text-[10px] font-mono">云端推理服务商 (Provider)</label>
             <div className="grid grid-cols-2 gap-1.5">
               {[
                 { id: 'huggingface', label: 'Hugging Face' },
@@ -491,7 +491,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
           <div className="space-y-1.5">
             <div className="flex flex-wrap items-center justify-between gap-1 text-slate-400 text-[10px] font-mono">
               <span className="flex items-center gap-1.5">
-                SEED (随机种子与控制模式)
+                随机种子 (Seed)
                 {greySeed && <FieldStatusBadge status="unsupported" />}
                 {!greySeed && <SchemaSendBadge status={schemaSendStatus(params.targetProvider, 'seed', params.seed, customParamsJson)} omitTitle={SCHEMA_OMIT_REASON} />}
               </span>
@@ -545,7 +545,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
           <div className="space-y-1">
             <div className="flex flex-wrap justify-between gap-x-2 gap-y-1 text-slate-400 text-[10px] font-mono">
               <span className="flex items-center gap-1.5" title="采样步数：FLUX 推荐 4~28 步，SDXL 推荐 25~30 步">
-                STEPS (采样步数)
+                采样步数 (Steps)
                 <SchemaSendBadge status={sendSteps} omitTitle={SCHEMA_OMIT_REASON} />
               </span>
               <span className="font-bold whitespace-nowrap shrink-0 text-cyan-400">{`${params.steps} 步`}</span>
@@ -566,7 +566,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
           <div className="space-y-1">
             <div className="flex flex-wrap justify-between gap-x-2 gap-y-1 text-slate-400 text-[10px] font-mono">
               <span className="flex items-center gap-1.5" title="提示词引导系数：FLUX 推荐 3.5，SDXL 推荐 7.0~8.0">
-                CFG SCALE (提示词引导系数)
+                提示词引导系数 (CFG Scale)
                 <SchemaSendBadge status={sendCfg} omitTitle={SCHEMA_OMIT_REASON} />
               </span>
               <span className="font-bold whitespace-nowrap shrink-0 text-cyan-400">{params.cfg?.toFixed(1) ?? '未设置'}</span>
@@ -589,7 +589,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
             {!(greySampler || omitSampler) && (
             <div className="space-y-1">
               <label className="text-slate-400 text-[10px] font-mono flex items-center gap-1.5">
-                SAMPLER (采样算法)
+                采样算法 (Sampler)
                 <SchemaSendBadge status={sendSampler} omitTitle={SCHEMA_OMIT_REASON} />
               </label>
               <select
@@ -609,7 +609,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
             {!(greyScheduler || omitScheduler) && (
             <div className="space-y-1">
               <label className="text-slate-400 text-[10px] font-mono flex items-center gap-1.5">
-                SCHEDULER (调度器)
+                调度器 (Scheduler)
                 <SchemaSendBadge status={sendScheduler} omitTitle={SCHEMA_OMIT_REASON} />
               </label>
               <select
@@ -632,7 +632,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
           <div className="space-y-1">
             <div className="flex flex-wrap justify-between gap-x-2 gap-y-1 text-slate-400 text-[10px] font-mono">
               <span className="flex items-center gap-1.5" title="文生图固定为 1.0；图生图与重绘建议 0.35 ~ 0.65">
-                DENOISE (重绘降噪幅度)
+                重绘去噪幅度 (Denoise)
                 {greyDenoise && <FieldStatusBadge status="unsupported" />}
                 {!greyDenoise && <SchemaSendBadge status={sendDenoise} omitTitle={SCHEMA_OMIT_REASON} />}
               </span>
@@ -851,7 +851,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
         {/* Section 4: Latent Geometry & Aspect Ratio */}
         <div className="bg-[#1a1b22] border border-[#272933] rounded-xl p-3 space-y-2.5">
           <span className="font-semibold text-slate-200 text-[11px] block">
-            📐 潜空间画幅比例 (Latent Canvas Dimensions)
+            📐 画幅比例与尺寸 (Dimensions)
           </span>
 
           <div className="grid grid-cols-5 gap-1.5">
@@ -879,7 +879,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
           <div className="grid grid-cols-2 gap-2 pt-1 font-mono text-[11px]">
             <div className="space-y-1 min-w-0">
               <div className="flex flex-wrap items-center justify-between gap-1">
-                <span className="text-slate-400 text-[10px]">宽度 WIDTH (像素)</span>
+                <span className="text-slate-400 text-[10px]">宽度 (Width / 像素)</span>
                 {greyWidthHeight && <FieldStatusBadge status="unsupported" />}
                 {!greyWidthHeight && <SchemaSendBadge status={sendWidthHeight} omitTitle={SCHEMA_OMIT_REASON} />}
               </div>
@@ -895,7 +895,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
             </div>
             <div className="space-y-1 min-w-0">
               <div className="flex flex-wrap items-center justify-between gap-1">
-                <span className="text-slate-400 text-[10px]">高度 HEIGHT (像素)</span>
+                <span className="text-slate-400 text-[10px]">高度 (Height / 像素)</span>
                 {greyWidthHeight && <FieldStatusBadge status="unsupported" />}
                 {!greyWidthHeight && <SchemaSendBadge status={sendWidthHeight} omitTitle={SCHEMA_OMIT_REASON} />}
               </div>
