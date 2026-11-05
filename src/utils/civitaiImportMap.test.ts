@@ -17,8 +17,19 @@ describe('civitai import mappers (hard gates)', () => {
     expect(mapSampler('none')).toBe('');
     expect(mapSampler('totally_unknown_xyz')).toBe('');
     expect(mapSampler('euler')).toBe('euler');
-    expect(mapSampler('Euler a')).toBe('euler_ancestral');
-    expect(mapSampler('DPM++ 2M')).toBe('dpmpp_2m');
+    expect(mapSampler('Euler a')).toBe('euler_a');
+    expect(mapSampler('Euler a', 'comfy')).toBe('euler_ancestral');
+    expect(mapSampler('Euler a', 'sdcpp')).toBe('euler_a');
+    expect(mapSampler('DPM++ 2M')).toBe('dpm++2m');
+    expect(mapSampler('DPM++ 2M', 'comfy')).toBe('dpmpp_2m');
+    expect(mapSampler('DPM++ 2M', 'sdcpp')).toBe('dpm++2m');
+    expect(mapSampler('DPM++ 2M V2', 'sdcpp')).toBe('dpm++2mv2');
+    expect(mapSampler('DPM++ 2S a', 'sdcpp')).toBe('dpm++2s_a');
+    expect(mapSampler('DPM2', 'sdcpp')).toBe('dpm2');
+    expect(mapSampler('LCM', 'sdcpp')).toBe('lcm');
+    expect(mapSampler('TCD', 'sdcpp')).toBe('tcd');
+    expect(mapSampler('Heun', 'sdcpp')).toBe('heun');
+    expect(mapSampler('totally_unknown_custom', 'sdcpp')).toBe('');
   });
 
   it('missing/unknown scheduler does not forge sgm_uniform or normal', () => {
@@ -130,7 +141,7 @@ describe('resolveRawImportNegativeSamplerScheduler (plain-text import)', () => {
 
   it('explicit Schedule type is mapped; Unknown/Undefined stay empty', () => {
     const withKarras = 'x\nSteps: 20, Sampler: DPM++ 2M, Schedule type: Karras, CFG scale: 7';
-    expect(resolveRawImportNegativeSamplerScheduler(withKarras).sampler).toBe('dpmpp_2m');
+    expect(resolveRawImportNegativeSamplerScheduler(withKarras).sampler).toBe('dpm++2m');
     expect(resolveRawImportNegativeSamplerScheduler(withKarras).scheduler).toBe('karras');
 
     const undefinedSched = 'x\nSteps: 20, Sampler: Undefined, Schedule type: Undefined';
@@ -141,7 +152,7 @@ describe('resolveRawImportNegativeSamplerScheduler (plain-text import)', () => {
     // Karras embedded in sampler name must NOT become scheduler
     const embedded = 'x\nSteps: 20, Sampler: DPM++ 2M Karras, CFG scale: 7';
     const e = resolveRawImportNegativeSamplerScheduler(embedded);
-    expect(e.sampler).toBe('dpmpp_2m');
+    expect(e.sampler).toBe('dpm++2m');
     expect(e.scheduler).toBe('');
   });
 

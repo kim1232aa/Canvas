@@ -502,4 +502,367 @@ describe('Civitai Routes and Workflow Contract Tests', () => {
       expect(ksamplerNode.values.denoise).toBeUndefined();
     });
   });
+
+  describe('HIGH 7: Cross-provider adaptation in extract-workflow response', () => {
+    it('returns preset.providerAdaptation and preset.currentAdaptation with per-field outcomes', async () => {
+      const mockFetch = vi.fn();
+      const handler = handleExtractCivitaiWorkflow(createMockWorkflowDeps(mockFetch));
+
+      const req = {
+        body: {
+          rawText:
+            'masterpiece, 1girl, portrait, sunset <lora:AsianMix:0.8>\nNegative prompt: blurry, bad anatomy\nSteps: 25, Sampler: DPM++ 2M, Schedule type: Karras, CFG scale: 7, Seed: 12345, Size: 1024x1024, Model: sdxl_base_1.0.safetensors',
+          engine: 'fal',
+        },
+      } as any;
+      const res = createMockRes();
+
+      await handler(req, res);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.data.success).toBe(true);
+
+      const preset = res.data.preset;
+      expect(preset.providerAdaptation).toBeDefined();
+      expect(preset.currentAdaptation).toBeDefined();
+      expect(preset.currentAdaptation.provider).toBe('fal');
+
+      // Check per-field adaptation details on Fal
+      expect(preset.currentAdaptation.fields.prompt.status).toBe('mapped');
+      expect(preset.currentAdaptation.fields.size.mappedValue).toEqual({ width: 1024, height: 1024 });
+      expect(preset.currentAdaptation.fields.steps.targetField).toBe('num_inference_steps');
+      expect(preset.currentAdaptation.fields.cfg.targetField).toBe('guidance_scale');
+
+      // Also verifies other provider adaptations are precomputed
+      expect(preset.providerAdaptation.civitai).toBeDefined();
+      expect(preset.providerAdaptation.replicate).toBeDefined();
+      expect(preset.providerAdaptation.wavespeed).toBeDefined();
+      expect(preset.providerAdaptation.tensorart).toBeDefined();
+      expect(preset.providerAdaptation.modelscope).toBeDefined();
+    });
+  });
+
+  describe('P1-2: Civitai REST image meta resolution (modelId@versionId and canonical AIR)', () => {
+    it('resolves modelId via GET /api/v1/model-versions/{id} from REST-shaped fixture without modelId', async () => {
+      const mockFetch = vi.fn(async (_meta: any, url: string) => {
+        if (url.includes('/api/v1/images?imageId=64399178')) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              items: [
+                {
+                  id: 64399178,
+                  url: 'https://image.civitai.com/preview.jpg',
+                  baseModel: 'Flux.1 D',
+                  meta: {
+                    prompt: 'A close-up portrait',
+                    civitaiResources: [
+                      { type: 'checkpoint', modelVersionId: 691639, modelVersionName: 'Dev' },
+                      { type: 'lora', modelVersionId: 1527024, modelVersionName: 'Cinematic 1940s', weight: 0.3 },
+                    ],
+                  },
+                },
+              ],
+            }),
+          };
+        }
+        if (url.includes('/api/v1/model-versions/691639')) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              id: 691639,
+              modelId: 618692,
+              name: 'Dev',
+              baseModel: 'Flux.1 D',
+              air: 'urn:air:flux1:checkpoint:civitai:618692@691639',
+              downloadUrl: 'https://civitai.com/api/download/models/691639',
+            }),
+          };
+        }
+        if (url.includes('/api/v1/model-versions/1527024')) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              id: 1527024,
+              modelId: 1351798,
+              name: 'Cinematic 1940s',
+              baseModel: 'Flux.1 D',
+              air: 'urn:air:flux1:lora:civitai:1351798@1527024',
+              downloadUrl: 'https://civitai.com/api/download/models/1527024',
+            }),
+          };
+        }
+        return { ok: false, status: 404, text: async () => 'Not found' };
+      });
+
+      const handler = handleExtractCivitaiWorkflow(createMockWorkflowDeps(mockFetch));
+      const req = { body: { imageId: '64399178', engine: 'civitai' } } as any;
+      const res = createMockRes();
+
+      await handler(req, res);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.data.success).toBe(true);
+
+      const preset = res.data.preset;
+      // Checkpoint must have canonical AIR with both modelId (618692) and versionId (691639)
+      const ckptNode = preset.nodes.find((n: any) => n.type === 'CheckpointLoaderSimple');
+      expect(ckptNode.values.ckpt_name).toBe('urn:air:flux1:checkpoint:civitai:618692@691639');
+
+      // LoRA node must have canonical AIR with both modelId (1351798) and versionId (1527024)
+      const loraNode = preset.nodes.find((n: any) => n.type === 'LoRALoader');
+      expect(loraNode).toBeDefined();
+      expect(loraNode.values.civitai_id).toBe('urn:air:flux1:lora:civitai:1351798@1527024');
+
+      // Fal download URL must use the version id (1527024), never the model id
+      expect(preset.providerAdaptation.fal.loras[0].sendableUrlOrId).toBe('https://civitai.com/api/download/models/1527024');
+      expect(preset.providerAdaptation.fal.loras[0].sendableUrlOrId).not.toContain('1351798');
+    });
+  });
+
+  describe('P1-3: Chained LoRALoader nodes for all imported LoRAs', () => {
+    it('creates chained LoRALoader nodes in series when multiple LoRAs are imported', async () => {
+      const mockFetch = vi.fn(async (_meta: any, url: string) => {
+        if (url.includes('/api/v1/images?imageId=64399178')) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              items: [
+                {
+                  id: 64399178,
+                  baseModel: 'Flux.1 D',
+                  meta: {
+                    prompt: 'A close-up portrait',
+                    civitaiResources: [
+                      { type: 'checkpoint', modelVersionId: 691639 },
+                      { type: 'lora', modelVersionId: 1527024, modelVersionName: 'Cinematic 1940s', weight: 0.3 },
+                      { type: 'lora', modelVersionId: 1526912, modelVersionName: 'Cinematic Octane', weight: 0.2 },
+                    ],
+                  },
+                },
+              ],
+            }),
+          };
+        }
+        if (url.includes('/api/v1/model-versions/691639')) {
+          return { ok: true, status: 200, json: async () => ({ id: 691639, modelId: 618692, air: 'urn:air:flux1:checkpoint:civitai:618692@691639' }) };
+        }
+        if (url.includes('/api/v1/model-versions/1527024')) {
+          return { ok: true, status: 200, json: async () => ({ id: 1527024, modelId: 1351798, air: 'urn:air:flux1:lora:civitai:1351798@1527024' }) };
+        }
+        if (url.includes('/api/v1/model-versions/1526912')) {
+          return { ok: true, status: 200, json: async () => ({ id: 1526912, modelId: 1351600, air: 'urn:air:flux1:lora:civitai:1351600@1526912' }) };
+        }
+        return { ok: false, status: 404, text: async () => 'Not found' };
+      });
+
+      const handler = handleExtractCivitaiWorkflow(createMockWorkflowDeps(mockFetch));
+      const req = { body: { imageId: '64399178', engine: 'civitai' } } as any;
+      const res = createMockRes();
+
+      await handler(req, res);
+
+      expect(res.statusCode).toBe(200);
+      const preset = res.data.preset;
+
+      // Both LoRAs must become nodes
+      const loraNodes = preset.nodes.filter((n: any) => n.type === 'LoRALoader');
+      expect(loraNodes).toHaveLength(2);
+      expect(loraNodes[0].values.strength_model).toBe(0.3);
+      expect(loraNodes[1].values.strength_model).toBe(0.2);
+
+      // Verify connection chain: ckpt -> lora1 -> lora2 -> ksampler
+      const m1 = preset.connections.find((c: any) => c.fromNodeId === 'node-imp-1' && c.toNodeId === 'node-imp-lora-1' && c.toSocketId === 'model');
+      expect(m1).toBeDefined();
+
+      const m2 = preset.connections.find((c: any) => c.fromNodeId === 'node-imp-lora-1' && c.toNodeId === 'node-imp-lora-2' && c.toSocketId === 'model');
+      expect(m2).toBeDefined();
+
+      const m3 = preset.connections.find((c: any) => c.fromNodeId === 'node-imp-lora-2' && c.toNodeId === 'node-imp-6' && c.toSocketId === 'model');
+      expect(m3).toBeDefined();
+    });
+  });
+
+  describe('P2-3: Real token consent verification', () => {
+    it('does NOT append token when consent is false and marks requireAuth LoRA requires_consent', async () => {
+      const mockFetch = vi.fn(async (_meta: any, url: string) => {
+        if (url.includes('/api/v1/images?imageId=64399178')) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              items: [
+                {
+                  id: 64399178,
+                  baseModel: 'Flux.1 D',
+                  meta: {
+                    prompt: 'portrait',
+                    civitaiResources: [{ type: 'lora', modelVersionId: 1527024, weight: 0.8 }],
+                  },
+                },
+              ],
+            }),
+          };
+        }
+        if (url.includes('/api/v1/model-versions/mini/1527024')) {
+          return { ok: true, status: 200, json: async () => ({ air: 'urn:air:flux1:lora:civitai:1351798@1527024', requireAuth: true, baseModel: 'Flux.1 D' }) };
+        }
+        if (url.includes('/api/v1/model-versions/1527024')) {
+          return { ok: true, status: 200, json: async () => ({ id: 1527024, modelId: 1351798, baseModel: 'Flux.1 D' }) };
+        }
+        return { ok: false, status: 404, text: async () => 'Not found' };
+      });
+
+      const handler = handleExtractCivitaiWorkflow(createMockWorkflowDeps(mockFetch));
+      const req = { body: { imageId: '64399178', engine: 'fal', consentCivitaiToken: false } } as any;
+      const res = createMockRes();
+
+      await handler(req, res);
+
+      expect(res.statusCode).toBe(200);
+      const falAdaptation = res.data.preset.currentAdaptation;
+      expect(falAdaptation.loras[0].requiresAuthConsent).toBe(true);
+      expect(falAdaptation.loras[0].status).toBe('requires_consent');
+      expect(falAdaptation.loras[0].sendableUrlOrId).toBeUndefined();
+    });
+
+    it('appends token to third-party URL when consent is explicitly granted', async () => {
+      const mockFetch = vi.fn(async (_meta: any, url: string) => {
+        if (url.includes('/api/v1/images?imageId=64399178')) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              items: [
+                {
+                  id: 64399178,
+                  baseModel: 'Flux.1 D',
+                  meta: {
+                    prompt: 'portrait',
+                    civitaiResources: [{ type: 'lora', modelVersionId: 1527024, weight: 0.8 }],
+                  },
+                },
+              ],
+            }),
+          };
+        }
+        if (url.includes('/api/v1/model-versions/mini/1527024')) {
+          return { ok: true, status: 200, json: async () => ({ air: 'urn:air:flux1:lora:civitai:1351798@1527024', requireAuth: true, baseModel: 'Flux.1 D' }) };
+        }
+        if (url.includes('/api/v1/model-versions/1527024')) {
+          return { ok: true, status: 200, json: async () => ({ id: 1527024, modelId: 1351798, baseModel: 'Flux.1 D' }) };
+        }
+        return { ok: false, status: 404, text: async () => 'Not found' };
+      });
+
+      const handler = handleExtractCivitaiWorkflow(createMockWorkflowDeps(mockFetch));
+      const req = {
+        body: { imageId: '64399178', engine: 'fal', consentCivitaiToken: true },
+        headers: { 'x-civitai-token': 'user_secret_token_123' },
+      } as any;
+      const res = createMockRes();
+
+      await handler(req, res);
+
+      expect(res.statusCode).toBe(200);
+      const falAdaptation = res.data.preset.currentAdaptation;
+      expect(falAdaptation.loras[0].status).toBe('compatible');
+      expect(falAdaptation.loras[0].sendableUrlOrId).toContain('https://civitai.com/api/download/models/1527024?token=user_secret_token_123');
+
+      // P2-4: verify node in preset also has token in download_url
+      const loraNode = res.data.preset.nodes.find((n: any) => n.type === 'LoRALoader');
+      expect(loraNode).toBeDefined();
+      expect(loraNode.values.download_url).toBe('https://civitai.com/api/download/models/1527024?token=user_secret_token_123');
+    });
+
+    it('P2-1 & P2-2: preserves known weights from resources/prompt and reports 404 hashes in warnings', async () => {
+      const mockFetch = vi.fn(async (_meta: any, url: string) => {
+        if (url.includes('/api/v1/images')) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              items: [
+                {
+                  id: 11346154,
+                  baseModel: 'SD 1.5',
+                  meta: {
+                    prompt: 'a photo <lora:backlight_slider_v10:-1.5>, <lora:contrast_slider_v10:2>',
+                    sampler: 'Euler a',
+                    clipSkip: 2,
+                    resources: [
+                      { hash: '0ba50a104a1b', name: 'contrast_slider_v10', type: 'lora', weight: 2 },
+                      { hash: 'bce77b76fba3', name: 'backlight_slider_v10', type: 'lora' },
+                    ],
+                    hashes: {
+                      model: '93f7411be9',
+                      'lora:contrast_slider_v10': '0ba50a104a1b',
+                      'lora:backlight_slider_v10': 'bce77b76fba3',
+                      'lora:missing_404_lora': 'deadbeef404',
+                    },
+                  },
+                },
+              ],
+            }),
+          };
+        }
+        if (url.includes('by-hash/93f7411be9')) {
+          return { ok: true, status: 200, json: async () => ({ id: 393843, modelId: 94809, name: 'realcartoon3d_v15', baseModel: 'SD 1.5' }) };
+        }
+        if (url.includes('by-hash/0ba50a104a1b')) {
+          return { ok: true, status: 200, json: async () => ({ id: 10001, modelId: 20001, name: 'contrast_slider_v10', baseModel: 'SD 1.5' }) };
+        }
+        if (url.includes('by-hash/bce77b76fba3')) {
+          return { ok: true, status: 200, json: async () => ({ id: 10002, modelId: 20002, name: 'backlight_slider_v10', baseModel: 'SD 1.5' }) };
+        }
+        if (url.includes('by-hash/deadbeef404')) {
+          return { ok: false, status: 404, text: async () => 'Model not found' };
+        }
+        if (url.includes('/api/v1/model-versions/mini/')) {
+          return { ok: true, status: 200, json: async () => ({ canGenerate: true }) };
+        }
+        if (url.includes('/api/v1/model-versions/')) {
+          return { ok: true, status: 200, json: async () => ({ id: 10001, modelId: 20001, baseModel: 'SD 1.5' }) };
+        }
+        return { ok: false, status: 404, text: async () => 'Not found' };
+      });
+
+      const handler = handleExtractCivitaiWorkflow(createMockWorkflowDeps(mockFetch));
+      const res = createMockRes();
+
+      await handler({ body: { imageId: '11346154', engine: 'civitai' } } as any, res);
+
+      expect(res.statusCode).toBe(200);
+      const loras = res.data.preset.currentAdaptation.loras;
+      const contrast = loras.find((l: any) => l.name.includes('contrast'));
+      const backlight = loras.find((l: any) => l.name.includes('backlight'));
+
+      // P2-1: weights must be preserved!
+      expect(contrast).toBeDefined();
+      expect(contrast.originalStrength).toBe(2);
+      expect(contrast.scale).toBe(2);
+
+      expect(backlight).toBeDefined();
+      expect(backlight.originalStrength).toBe(-1.5);
+      expect(backlight.scale).toBe(-1.5);
+
+      // P2-2: 404 hash must be in importWarnings, never silently dropped!
+      const warnings = res.data.preset.importWarnings;
+      expect(warnings.some((w: any) => w.reason?.includes('deadbeef404'))).toBe(true);
+
+      // P1-1 (Round 3): SD 1.5 clipSkip must be honestly marked unsupported/not sent with explanation
+      expect(res.data.preset.currentAdaptation.fields.clipSkip.status).toBe('unsupported');
+      expect(warnings.some((w: any) => w.field === 'clipSkip' && w.sent === false && w.reason?.includes('CivitaiDriver / civitaiImageContract 尚未映射 clipSkip'))).toBe(true);
+
+      // P1-1 (a): Euler a on sdcpp must map to euler_a on KSampler
+      const ksampler = res.data.preset.nodes.find((n: any) => n.type === 'KSampler');
+      expect(ksampler).toBeDefined();
+      expect(ksampler.values.sampler_name).toBe('euler_a');
+      expect(ksampler.values.clip_skip).toBe(2);
+    });
+  });
 });

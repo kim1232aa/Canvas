@@ -199,11 +199,21 @@ export function replaceSelectedResource(previous:Record<string,any>,selection:Re
  return {...clean,[field]:selection.name,civitai_id:selection.civitaiId,resource_source:selection.resource_source || selection.provider,resource_kind:selection.resource_kind || (explicitWeightUrl ? 'lora' : undefined),download_url:downloadUrl,resourceVerified:true,trigger_words:selection.triggerWords || '',base_model:selection.baseModel || '',...(selection.loraStrengthRange?{lora_strength_min:selection.loraStrengthRange.min,lora_strength_max:selection.loraStrengthRange.max,...(selection.loraStrengthRange.step?{lora_strength_step:selection.loraStrengthRange.step}:{})}:{})};
 }
 
-/** Build the LoRA object sent to generate: AIR in name/path → civitaiId; never keep a stale weight path beside an AIR. */
-export function normalizeLoraPayloadItem<T extends Record<string, any>>(lora: T): T {
+/** Build the LoRA object sent to generate: AIR in name/path → civitaiId; preserves path/downloadUrl for non-Civitai providers. */
+export function normalizeLoraPayloadItem<T extends Record<string, any>>(lora: T, targetProvider?: string): T {
   const name = String(lora.name ?? '').trim();
-  const path = String(lora.path ?? lora.downloadUrl ?? '').trim();
+  const path = String(lora.path ?? lora.downloadUrl ?? lora.download_url ?? '').trim();
+  const prov = String(targetProvider || lora.provider || '').toLowerCase().trim();
+  const isNonCivitaiTarget = Boolean(prov && prov !== 'civitai');
   const air = civitaiAirCanonical(name) || civitaiAirCanonical(path) || civitaiAirCanonical(String(lora.civitaiId ?? lora.civitai_id ?? '').trim());
+
+  if (isNonCivitaiTarget) {
+    if (path) {
+      return { ...lora, path: lora.path || path, downloadUrl: lora.downloadUrl || path } as T;
+    }
+    return lora;
+  }
+
   if (!air) return lora;
   const { downloadUrl: _d, download_url: _du, path: _p, ...rest } = lora as any;
   return { ...rest, name: name || air, civitaiId: air } as T;

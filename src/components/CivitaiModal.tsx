@@ -21,6 +21,7 @@ import {
   Filter,
   Zap,
   ShieldAlert,
+  AlertTriangle,
   RefreshCw,
   ArrowDown,
 } from 'lucide-react';
@@ -79,6 +80,15 @@ export interface UnifiedLoRAItem {
   badge?: string;
 }
 
+import { CivitaiModalImportPreview } from './CivitaiModalImportPreview';
+import {
+  adaptCivitaiRecipeToProvider,
+  buildAllProviderAdaptations,
+  type ProviderAdaptationResult,
+  type ProviderAdaptationMap,
+  type CivitaiRecipeInput,
+} from '../utils/civitaiImportMap';
+
 export interface CivitaiModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -88,6 +98,8 @@ export interface CivitaiModalProps {
   onFillCurrentLoRANode?: (lora: ResourceSelection & {triggerWords:string}) => void;
   onSelectLoRAWithBaseModel?: (lora: ResourceSelection & {triggerWords:string}) => void;
   initialProvider?: LoraProviderFilter;
+  initialMode?: 'browse' | 'import';
+  onLoadWorkflowPreset?: (preset: any) => void;
 }
 
 /** Chips are built from the baseModel tags actually present on the loaded items of the active tab. */
@@ -119,6 +131,8 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
   onFillCurrentLoRANode,
   onSelectLoRAWithBaseModel,
   initialProvider = 'all',
+  initialMode = 'browse',
+  onLoadWorkflowPreset,
 }) => {
   const [activeProvider, setActiveProvider] = useState<LoraProviderFilter>(initialProvider);
   const [query, setQuery] = useState('');
@@ -148,6 +162,15 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [catalogNotice, setCatalogNotice] = useState<string | null>(null);
   const [catalogEvidence, setCatalogEvidence] = useState<CatalogEvidence | null>(null);
+
+  // Civitai recipe import & cross-provider adaptation state
+  const [modalMode, setModalMode] = useState<'browse' | 'import'>(initialMode);
+  const [importInput, setImportInput] = useState<string>('');
+  const [importTargetProvider, setImportTargetProvider] = useState<string>('civitai');
+  const [isExtracting, setIsExtracting] = useState<boolean>(false);
+  const [extractError, setExtractError] = useState<string | null>(null);
+  const [extractedPreset, setExtractedPreset] = useState<any>(null);
+  const [tokenConsent, setTokenConsent] = useState<boolean>(false);
   const activeReqIdRef = useRef(0);
 
   // clean-0942: one LoRA catalog GET per URL per open (StrictMode / repeated effects share it; failures retry).
@@ -475,6 +498,44 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
     setTimeout(() => setCopiedTrigger(null), 2000);
   };
 
+  const handleExtractCivitaiWorkflow = async (
+    targetInput = importInput,
+    targetProv = importTargetProvider,
+    consent = tokenConsent
+  ) => {
+    const trimmed = (targetInput || '').trim();
+    if (!trimmed) return;
+    setIsExtracting(true);
+    setExtractError(null);
+    try {
+      const isRaw =
+        trimmed.includes('Negative prompt:') ||
+        trimmed.includes('Steps:') ||
+        trimmed.includes('Sampler:') ||
+        trimmed.includes('<lora:') ||
+        trimmed.includes('\n');
+
+      const payload = isRaw
+        ? { rawText: trimmed, engine: targetProv, consentCivitaiToken: consent }
+        : { url: trimmed, engine: targetProv, consentCivitaiToken: consent };
+
+      const resp = await fetch('/api/civitai/extract-workflow', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await resp.json();
+      if (!resp.ok || !data.success) {
+        throw new Error(data.error || '提取工作流失败，请检查链接或格式');
+      }
+      setExtractedPreset(data.preset);
+    } catch (err: any) {
+      setExtractError(err.message || '网络请求错误');
+    } finally {
+      setIsExtracting(false);
+    }
+  };
+
   const handleCustomUniversalLoraSubmit = async () => {
     const inputEl = document.getElementById('custom-universal-lora-input') as HTMLInputElement;
     const rawVal = inputEl?.value?.trim() || '';
@@ -675,34 +736,72 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-in fade-in duration-200">
       <div className="bg-[#181920] border border-[#2e303c] rounded-2xl w-full max-w-6xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden text-xs">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-[#282a36] bg-[#13141a] flex items-center justify-between shrink-0">
+        <div className="px-6 py-4 border-b border-[#282a36] bg-[#13141a] flex flex-wrap items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-600 via-indigo-600 to-cyan-600 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-purple-600/30 shrink-0">
               <Layers className="w-5 h-5" />
             </div>
             <div>
               <h2 className="text-base font-bold text-white flex items-center gap-2">
-                全生态 LoRA & 微调模型中心 (Universal LoRA Hub)
+                {modalMode === 'browse'
+                  ? '全生态 LoRA & 微调模型中心 (Universal LoRA Hub)'
+                  : 'Civitai 配方导入与跨供应商适配 (Import & Adapt)'}
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-300 border border-purple-500/20 font-mono">
-                  跨引擎全聚合 · 真实 API 动态直拉
+                  {modalMode === 'browse' ? '跨引擎全聚合 · 真实 API 动态直拉' : '逐字段透明适配 · 官方契约对齐'}
                 </span>
               </h2>
               <p className="text-[11px] text-slate-400">
-                聚合 Civitai / Hugging Face / ModelScope / Tensor.Art 等可检索目录；Fal.ai 无独立公开 LoRA 权重库，需手输权重 URL 或直链。支持架构筛选与翻页
+                {modalMode === 'browse'
+                  ? '聚合 Civitai / Hugging Face / ModelScope / Tensor.Art 等可检索目录；Fal.ai 无独立公开 LoRA 权重库，需手输权重 URL 或直链。支持架构筛选与翻页'
+                  : '输入 Civitai 链接或生成参数，自动逆向提取底模与 LoRA，按目标供应商官方契约智能适配生图参数'}
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-[#252731] transition-colors text-sm shrink-0"
-            title="关闭"
-          >
-            ✕
-          </button>
+
+          <div className="flex items-center gap-3 shrink-0">
+            {/* Mode Switcher */}
+            <div className="flex items-center bg-[#1c1d27] p-1 rounded-xl border border-[#2e3144]">
+              <button
+                type="button"
+                data-testid="civitai-modal-mode-browse"
+                onClick={() => setModalMode('browse')}
+                className={`px-3 py-1.5 rounded-lg font-semibold text-xs transition-all ${
+                  modalMode === 'browse'
+                    ? 'bg-purple-600 text-white shadow-sm font-bold'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                LoRA 模型库 (Browse)
+              </button>
+              <button
+                type="button"
+                data-testid="civitai-modal-mode-import"
+                onClick={() => setModalMode('import')}
+                className={`px-3 py-1.5 rounded-lg font-semibold text-xs transition-all flex items-center gap-1.5 ${
+                  modalMode === 'import'
+                    ? 'bg-gradient-to-r from-pink-600 to-rose-600 text-white shadow-sm font-bold'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                <span>配方导入与适配 (Import)</span>
+              </button>
+            </div>
+
+            <button
+              onClick={onClose}
+              className="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-[#252731] transition-colors text-sm shrink-0"
+              title="关闭"
+            >
+              ✕
+            </button>
+          </div>
         </div>
 
-        {/* Engine Provider Tabs */}
-        <div className="px-6 pt-3 pb-2 bg-[#15161d] border-b border-[#242630] flex flex-wrap items-center gap-x-2 gap-y-1 shrink-0 min-h-[46px]" data-testid="lora-hub-tabs">
+        {modalMode === 'browse' ? (
+          <>
+            {/* Engine Provider Tabs */}
+            <div className="px-6 pt-3 pb-2 bg-[#15161d] border-b border-[#242630] flex flex-wrap items-center gap-x-2 gap-y-1 shrink-0 min-h-[46px]" data-testid="lora-hub-tabs">
           {[
             { id: 'all', name: '全生态聚合' },
             { id: 'civitai', name: 'Civitai (C站社区)' },
@@ -1176,6 +1275,179 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
             </div>
           )}
         </div>
+      </>
+    ) : (
+      <div className="flex-1 p-6 overflow-y-auto bg-[#141518] space-y-5 scrollbar-thin scrollbar-thumb-white/10" data-testid="civitai-modal-import-view">
+        {/* Civitai URL / Text Input Box */}
+        <div className="bg-[#171822] border border-[#2b2d3c] rounded-2xl p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-bold text-slate-200 flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-pink-400" />
+              <span>输入 Civitai 资源或生图参数文本：</span>
+            </label>
+            <span className="text-[11px] text-pink-400 font-mono">
+              支持图片链接 / 图号 / 模型版本 / WebUI 复制文本
+            </span>
+          </div>
+
+          <textarea
+            rows={importInput.includes('\n') ? 4 : 2}
+            value={importInput}
+            onChange={(e) => setImportInput(e.target.value)}
+            data-testid="civitai-import-input"
+            placeholder="粘贴 Civitai 图片链接 (如 https://civitai.com/images/136947637)、纯图号 (如 136947637)、模型版本链接，或直接粘贴整段生图参数文本..."
+            className="w-full bg-[#111216] border border-[#2e3142] focus:border-pink-500 rounded-xl px-4 py-2.5 text-xs text-white outline-none font-mono transition-colors resize-y placeholder-slate-500"
+          />
+
+          {/* Quick Recommendation Pills */}
+          <div className="space-y-1.5 pt-1">
+            <span className="text-[11px] text-slate-400 font-semibold flex items-center justify-between">
+              <span>经典作品与不同生态样例快捷填入:</span>
+              <span className="text-[10px] text-slate-500 font-mono">点击即填并自动解析</span>
+            </span>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                data-testid="civitai-quick-fill-flux"
+                onClick={() => {
+                  const val = 'https://civitai.com/images/64399178';
+                  setImportInput(val);
+                  handleExtractCivitaiWorkflow(val, importTargetProvider, tokenConsent);
+                }}
+                className="px-2.5 py-1.5 rounded-lg bg-emerald-950/40 hover:bg-emerald-900/50 text-emerald-300 border border-emerald-700/50 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <span>🚀 FLUX.1 D 多LoRA (#64399178 · Cinematic 1940s & Octane)</span>
+              </button>
+
+              <button
+                type="button"
+                data-testid="civitai-quick-fill-pony"
+                onClick={() => {
+                  const val = 'https://civitai.com/images/12097475';
+                  setImportInput(val);
+                  handleExtractCivitaiWorkflow(val, importTargetProvider, tokenConsent);
+                }}
+                className="px-2.5 py-1.5 rounded-lg bg-purple-950/40 hover:bg-purple-900/50 text-purple-300 border border-purple-700/50 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <span>⭐ Pony / SDXL 多LoRA (#12097475 · Twilight & Expressive)</span>
+              </button>
+
+              <button
+                type="button"
+                data-testid="civitai-quick-fill-sd15"
+                onClick={() => {
+                  const val = 'https://civitai.com/images/11346154';
+                  setImportInput(val);
+                  handleExtractCivitaiWorkflow(val, importTargetProvider, tokenConsent);
+                }}
+                className="px-2.5 py-1.5 rounded-lg bg-cyan-950/40 hover:bg-cyan-900/50 text-cyan-300 border border-cyan-700/50 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <span>📸 SD 1.5 双LoRA (#11346154 · Backlight & Contrast Sliders)</span>
+              </button>
+
+              <button
+                type="button"
+                data-testid="civitai-quick-fill-raw"
+                onClick={() => {
+                  const val = `asian woman, 1girl, close up portrait, beautiful detailed eyes, natural skin texture, realistic lighting, shallow depth of field, 35mm film photography, masterpiece, sharp focus, 8k <lora:hina_Krea2Turbo_asianMix_v5.0-TQD-CPO:0.85>
+Negative prompt: blurry, bad anatomy, deformed fingers, low resolution, poorly drawn face, plastic skin, oversaturated
+Steps: 28, Sampler: DPM++ 2M Karras, CFG scale: 4.5, Seed: 136947637, Size: 1024x1024, Model: flux1-dev`;
+                  setImportInput(val);
+                  handleExtractCivitaiWorkflow(val, importTargetProvider, tokenConsent);
+                }}
+                className="px-2.5 py-1.5 rounded-lg bg-blue-950/40 hover:bg-blue-900/50 text-blue-300 border border-blue-700/50 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <span>📋 填入 WebUI / Civitai 生图参数文本样例</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Submit button */}
+          <div className="flex items-center justify-between pt-1">
+            <span className="text-[11px] text-slate-500 font-mono">
+              实时反查 Civitai 官方元数据与各供应商输入契约，不伪造、不默认静默兜底
+            </span>
+            <button
+              type="button"
+              onClick={() => handleExtractCivitaiWorkflow(importInput, importTargetProvider, tokenConsent)}
+              disabled={isExtracting || !importInput.trim()}
+              data-testid="civitai-import-submit-button"
+              className="px-6 py-2 rounded-xl bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500 disabled:opacity-50 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-pink-600/20 transition-all shrink-0 active:scale-95 cursor-pointer disabled:cursor-not-allowed"
+            >
+              {isExtracting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>正在逆向解析元数据...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4" />
+                  <span>解析配方并预览适配</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* Error Box */}
+        {extractError && (
+          <div className="p-3.5 rounded-xl bg-rose-950/30 border border-rose-800/40 text-rose-300 text-xs flex items-center gap-2" data-testid="civitai-import-error">
+            <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
+            <span className="font-mono">{extractError}</span>
+          </div>
+        )}
+
+        {/* Extracted Preview Component */}
+        {extractedPreset && (
+          <CivitaiModalImportPreview
+            adaptation={
+              extractedPreset.providerAdaptation?.[importTargetProvider] ||
+              adaptCivitaiRecipeToProvider(
+                {
+                  checkpoint: extractedPreset.nodes?.find((n: any) => n.type === 'CheckpointLoaderSimple')?.values?.ckpt_name,
+                  baseModel: extractedPreset.otherMetadata?.baseModel,
+                  loras: extractedPreset.otherMetadata?.resources || [],
+                  prompt: extractedPreset.prompt,
+                  negativePrompt: extractedPreset.negativePrompt,
+                  steps: extractedPreset.otherMetadata?.steps,
+                  cfg: extractedPreset.otherMetadata?.cfgScale,
+                  sampler: extractedPreset.otherMetadata?.sampler,
+                  scheduler: extractedPreset.otherMetadata?.scheduler,
+                  seed: extractedPreset.otherMetadata?.seed,
+                  clipSkip: extractedPreset.otherMetadata?.clipSkip,
+                  width: extractedPreset.otherMetadata?.width,
+                  height: extractedPreset.otherMetadata?.height,
+                  denoise: extractedPreset.otherMetadata?.denoise,
+                },
+                importTargetProvider,
+                { allowTokenInUrl: tokenConsent }
+              )
+            }
+            allAdaptations={extractedPreset.providerAdaptation}
+            selectedProvider={importTargetProvider}
+            onSelectProvider={(prov) => {
+              setImportTargetProvider(prov);
+              handleExtractCivitaiWorkflow(importInput, prov, tokenConsent);
+            }}
+            tokenConsent={tokenConsent}
+            onToggleTokenConsent={(consent) => {
+              setTokenConsent(consent);
+              handleExtractCivitaiWorkflow(importInput, importTargetProvider, consent);
+            }}
+            preset={extractedPreset}
+            onApplyPreset={(p) => {
+              if (onLoadWorkflowPreset) {
+                onLoadWorkflowPreset(p);
+                onClose();
+              }
+            }}
+            onSelectLoRA={onSelectLoRA}
+            onAddLoRANodeToCanvas={onAddLoRANodeToCanvas}
+            onFillCurrentLoRANode={onFillCurrentLoRANode}
+          />
+        )}
+      </div>
+    )}
       </div>
     </div>
   );

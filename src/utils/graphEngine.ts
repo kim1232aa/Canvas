@@ -331,7 +331,7 @@ function traceModelAndLorasUpstream(
           clipStrength: parseExplicitLoraStrength(n.values.strength_clip),
           triggerWords: n.values.trigger_words || '',
           civitaiId: n.values.civitai_id || n.values.civitaiId || '',
-          unresolvedResource: n.values.import_unresolved_resource === true || n.values.unresolvedResource === true,
+          unresolvedResource: (n.values.import_unresolved_resource === true || n.values.unresolvedResource === true) && !(n.values.resourceVerified === true || Boolean((n.values.download_url || n.values.downloadUrl) && !n.values.inferred_from_prompt)),
           downloadUrl: n.values.download_url || n.values.downloadUrl,
         });
       }
@@ -419,7 +419,7 @@ function traceLorasUpstream(
           clipStrength: parseExplicitLoraStrength(n.values.strength_clip),
           triggerWords: n.values.trigger_words || '',
           civitaiId: n.values.civitai_id || n.values.civitaiId || '',
-          unresolvedResource: n.values.import_unresolved_resource === true || n.values.unresolvedResource === true,
+          unresolvedResource: (n.values.import_unresolved_resource === true || n.values.unresolvedResource === true) && !(n.values.resourceVerified === true || Boolean((n.values.download_url || n.values.downloadUrl) && !n.values.inferred_from_prompt)),
           downloadUrl: n.values.download_url || n.values.downloadUrl,
         });
       }
@@ -1326,13 +1326,14 @@ export async function executeWorkflow(
         name: l.name,
         path: explicitLoraPath(l),
         downloadUrl: l.downloadUrl,
+        provider: engProv,
         strength: l.modelStrength,
         modelStrength: l.modelStrength,
         clipStrength: l.clipStrength,
         civitaiId: l.civitaiId,
         triggers: l.triggerWords,
         baseModel: l.baseModel,
-      })),
+      }, engProv)),
       params.checkpointBaseModel
     );
 
