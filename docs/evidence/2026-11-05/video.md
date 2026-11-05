@@ -45,31 +45,19 @@
 
 ## 本次未重新打开、只标未验证的服务商
 
-下表是写文档前半段时的状态。后文「本轮补开的官方页」已经重新打开的服务商，以那一节为准：Replicate、MuAPI、Novita、AIMLAPI、Krea、Sogni 的取消结论，以及 HF 的同步文生视频，不再沿用本表的「未验证」。WaveSpeed、ModelScope、Tensor.Art 仍是未验证。
-
-| 服务商 | 密钥 | 本次核实 |
-| --- | --- | --- |
-| WaveSpeed | 有 | 未验证 |
-| MuAPI | 有 | 未验证 |
-| Novita | 有 | 未验证 |
-| AIMLAPI | 有 | 未验证 |
-| Krea | 有 | 未验证 |
-| Sogni | 有 | 未验证 |
-| Replicate | 有 | 未验证 |
-| HF Inference Providers | 有 | 未验证 |
-| ModelScope（国内 / 国际） | 有 | 未验证 |
-| Tensor.Art TAMS / OpenWorks | 有 | 未验证 |
+下表是写文档前半段时的状态，**不要再当事实**。后文「本轮补开的官方页」与「2026-11-05 再次抓取」已重新打开的服务商，以那些节为准。
 
 ## 代码改动（对照当前文件，不假设前人已修）
 
 1. NanoGPT `/api/video/generate`：去掉 `for i < 70; sleep 2500`（175 秒）。改为官方示例的 5 秒间隔、10 分钟本地预算。`COMPLETED` 无 URL → 502 `upstream-protocol`。预算耗尽 → 504 `local`。同时转发官方页列出的 `frames_per_second`、`num_frames`、`resolution`、`num_inference_steps`、`cfg_scale`、`shift`。测试：`src/server/nanoGptVideoStatus.test.ts`、`videoGenerateRoute.test.ts` 新增 3 例。
 2. Civitai 视频分支（`/api/civitai/generate` 且 `isVideo === true`）：socket 从 120 秒改为 10 分钟（图像路径仍 120 秒）。提交 `wait=100` 改为 `wait=60`（低于官方点名的 100 秒客户端超时）。轮询改为 2/5/10/15/30 秒，本地预算 10 分钟。预算耗尽返回 504 `errorSource: local`，带 `workflowId` 与 endpoint，不再用 500 笼统句。测试：`src/server/civitaiVideoPollSchedule.test.ts`。
 3. 全局 undici：`headersTimeout` / `bodyTimeout` 300 秒 → 600 秒，`connectTimeout` 30 秒 → 60 秒。原因：单次冷启动读取会在 300 秒被 `UND_ERR_HEADERS_TIMEOUT` 掐断，看起来像上游失败。已通知 core5b。
-4. AIVideoNode 服务商下拉增加 together、aimlapi、venice、krea、sogni。这五家的 SchemaProviderDriver 已声明 text2video/img2video，提交与轮询走已有 `/api/schema-provider/:id`。未加入 nanogpt：其注册驱动只有图像能力，点击会被 `assertCapability` 拒绝。已记 finding 给 core5b。
+4. AIVideoNode 服务商下拉增加 together、aimlapi、venice、krea、sogni。Together / AIMLAPI / Venice / Krea 走各自官方视频端点。Sogni 在 r4 之前把视频节点打到 `generate_image`（见 jsonl 第 98 行）；r4 改为按实时 hosted-tool Schema 选 `generate_video` / `animate_photo`。未加入 nanogpt：其注册驱动只有图像能力，点击会被 `assertCapability` 拒绝。已记 finding 给 core5b。
+5. r4：Sogni 视频 submit 不再写死 `toolName:'generate_image'`。toolName 取自所用 Schema 的 `$id`（`/tools/<name>.schema.json`）。T2V 拉 [generate_video.schema.json](https://raw.githubusercontent.com/Sogni-AI/sogni-protocol/main/schemas/tools/generate_video.schema.json)，参数字段是 `videoModel`。I2V（有 `image_url`）拉 [animate_photo.schema.json](https://raw.githubusercontent.com/Sogni-AI/sogni-protocol/main/schemas/tools/animate_photo.schema.json)，继续 `media_references` + `sourceImageIndex:-1`。Seedance `referenceImageIndices` 未接通。图像节点仍走 `generate_image`。Driver 只在产物 URL 是视频（mp4/webm/mov 或 `data:video/`）或 poll `mediaType==='video'` 时标 VIDEO，不再因 `params.isVideo` 标 VIDEO。
 
 ## UI 点击（2026-11-05，本机 PORT=3107，Chrome CDP 9407）
 
-三次都是画布点击，不是脚本直打上游。每次都带了参考图、种子、cfg、帧数或时长，以及官方 schema 声明的 LoRA。三家都在提交阶段拒绝，原因是账户余额，没有生成视频，没有 history id。按规则记 PASS_BILLING，不换模型、不换密钥重试。掩码记录在 `docs/evidence/2026-11-05/video/`（无截图：video7b 目录只有 JSON 点击日志，没有 png/jpg）。
+三次都是画布点击，不是脚本直打上游。每次都带了参考图、种子、cfg、帧数或时长，以及官方 schema 声明的 LoRA。三家都在提交阶段拒绝，原因是账户余额，没有生成视频，没有 history id。按规则记 PASS_BILLING，不换模型、不换密钥重试。掩码 JSON 在 `docs/evidence/2026-11-05/video/`。r4 补浏览器截图，见后文「UI 截图」。分类以 jsonl 脚本为准，不手写。
 
 | 点击 | 预设 | 本站路由 | 上游端点 | 状态 | 上游原文 |
 | --- | --- | --- | --- | --- | --- |
@@ -84,7 +72,7 @@ Civitai 模型 `urn:air:wanvideo-22-i2v-a14b:checkpoint:civitai:1817671@2114157`
 
 MuAPI 模型 `wan2.1-lora-i2v`，480p，5 秒，16:9，同一 matrix-shot LoRA。403 出在参考图上传，生成请求没有发出。
 
-Novita 预设是 `SVD-XT`，25 帧、6 fps，提示词为空。第一次点击被页面本地拦住（「请填写提示词」），没有请求。补了一句提示词后再点，这是该模型的第一次上游尝试，返回 403 `NOT_ENOUGH_BALANCE`。该预设没有 LoRA 字段。
+Novita 预设是 `SVD-XT`，25 帧、6 fps。jsonl 第 49 行（18:46:10）和第 65 行（18:52:32）是两次相同的上游 `POST /v3/async/img2video` 403 `NOT_ENOUGH_BALANCE`，不是「只有一次」。该预设没有 LoRA 字段。
 
 ## 第二轮：此前未点过的五家（文生视频，各点一次）
 
@@ -92,21 +80,21 @@ Novita 预设是 `SVD-XT`，25 帧、6 fps，提示词为空。第一次点击�
 
 | 服务商 | 模型 | 上游端点 | 状态 | 原文 |
 | --- | --- | --- | --- | --- |
-| Together | `Wan-AI/wan2.7-t2v` | https://api.together.ai/v2/videos | 401 | invalid api key |
-| AIMLAPI | `alibaba/wan-2-6-t2v` | https://api.aimlapi.com/v2/video/generations | 403 | You've run out of funds |
-| Venice | `wan-2.5-preview-text-to-video` | https://api.venice.ai/api/v1/video/queue | 402 | Insufficient USD or Diem balance |
-| Krea | `video/kling/kling-2.5` | https://api.krea.ai/generate/video/kling/kling-2.5 | 402 | API balance is separate from workspace compute balance, top up API balance |
-| Sogni | `ltx25` | https://api.sogni.ai/v1/creative-agent/workflows | 201 后轮询 | status `waiting_for_user`，waitingReason `insufficient_credit` |
+| Together | `Wan-AI/wan2.7-t2v` | https://api.together.ai/v2/videos（jsonl 77） | 401 | invalid api key → **BLOCKED_AUTH** |
+| AIMLAPI | `alibaba/wan-2-6-t2v` | https://api.aimlapi.com/v2/video/generations | 403 | You've run out of funds → PASS_BILLING |
+| Venice | `wan-2.5-preview-text-to-video` | https://api.venice.ai/api/v1/video/queue | 402 | Insufficient USD or Diem balance → PASS_BILLING |
+| Krea | `video/kling/kling-2.5` | https://api.krea.ai/generate/video/kling/kling-2.5（jsonl 93） | 402 | API balance is separate… → PASS_BILLING（jsonl 90 的 404 是接线错误，不算余额） |
+| Sogni | `ltx25` | https://api.sogni.ai/v1/creative-agent/workflows（jsonl 98） | 201 | **接线错误**：请求体 `toolName: generate_image`、`arguments.model: ltx25`。jsonl 99–100 的 `waiting_for_user / insufficient_credit` 是该**图像**工作流，不是视频证据。 |
 
 来源：Together [Wan 2.7 quickstart](https://docs.together.ai/docs/wan2.7-t2v-quickstart)，AIMLAPI [Wan 2.6 text-to-video](https://docs.aimlapi.com/api-references/video-models/alibaba-cloud/wan-2.6-text-to-video)，Venice [Video Generation](https://docs.venice.ai/guides/media/video-generation)，Krea [Text to Video](https://docs.krea.ai/developers/examples/text-to-video)，Sogni [generate_video.schema.json](https://raw.githubusercontent.com/Sogni-AI/sogni-protocol/main/schemas/tools/generate_video.schema.json)。
 
-Together 第一次点击打到了 `/v1/images/generations`。原因：目录接口 401 后没有行，占位记录没有 type，服务端猜成图像端点。已修：视频节点带 `isVideo: true`，目录失败且调用方声明视频时改走 `/v2/videos`，并且不复用这次失败留下的图像路由缓存。修后的点击才是上表那条 401。测试：`src/server/schemaCatalogFailureSends.test.ts`。
+Together 在打到 `/v2/videos` 之前，jsonl 第 59、61、67、69、71 行共 **5 次** POST `https://api.together.ai/v1/images/generations`，都是 401 invalid api key。原因：目录 401 后没有行，占位记录没有 type，服务端猜成图像端点。这 5 次是接线错误，不算视频 billing pass。修后 jsonl 第 77 行才是 `/v2/videos` 401，记 **BLOCKED_AUTH**。测试：`src/server/schemaCatalogFailureSends.test.ts`。
 
-Krea 第一次用了 `kling/kling-2.5`，服务端拼成 `/generate/kling/kling-2.5`，返回 404 Endpoint not found。官方路径是 `/generate/video/kling/kling-2.5`，所以第二次把模型 id 写成 `video/kling/kling-2.5`，得到 402。两次都是这一家，未超两次。
+Krea jsonl 第 90 行：`POST https://api.krea.ai/generate/kling/kling-2.5` → 404 Endpoint not found（路径少了 `/video/`，接线错误）。第 93 行：`POST https://api.krea.ai/generate/video/kling/kling-2.5` → 402 API balance…（余额拒绝，PASS_BILLING）。两次都是这一家，未超两次。
 
-Sogni 的 `generate_video` 只有 MiniMax H3 接受 `loras`，`ltx25` 明确不接受，所以这次没有挂 LoRA。提交返回 workflowId，轮询到 `waiting_for_user / insufficient_credit`，没有视频 URL。
+Sogni jsonl 第 98 行请求体是 `steps[0].toolName = generate_image`、`arguments.model = ltx25`、`duration: 5`。官方 T2V 要求 `toolName: generate_video`、`arguments.videoModel: ltx25`（[direct-generation](https://docs.sogni.ai/api-reference/direct-generation/)）。第 99–100 行 GET 同一 workflow，`waiting_for_user / insufficient_credit` 属于这次**图像**提交，不能当作视频 PASS_BILLING。r4 修好后再点一次，见后文截图。
 
-五家里没有一家返回视频。节点播放、SaveVideo、历史因此仍然没有可验证的成功样本。
+五家里当时没有一家返回视频。节点播放、SaveVideo、历史因此仍然没有可验证的成功样本。
 
 ## 本轮补开的官方页（取消与是否有视频接口）
 
@@ -117,10 +105,82 @@ Sogni 的 `generate_video` 只有 MiniMax H3 接受 `loras`，`ltx25` 明确不�
 - Fal 取消见此前的 queue 页：`PUT {cancel_url}`。
 - MuAPI 参考页只有提交和轮询，状态值含 `cancelled`，没有列出取消调用。[API Reference](https://muapi.ai/docs/api-reference)。所以不发取消。
 - Novita 总览有 Video Generation 和 Task Result，取消只出现在 LLM batch。[API Reference Overview](https://docs.novita.ai/api-reference/api-reference-overview)。视频任务不发取消。
-- NanoGPT、WaveSpeed、Together、AIMLAPI、Venice：本次打开的页面没有取消接口。不发取消，界面说明没有该接口。
+- NanoGPT、Together、AIMLAPI、Venice：本次打开的页面没有取消接口。不发取消，界面说明没有该接口。
 - HF Inference Providers 有文生视频：`InferenceClient.text_to_video`，示例 `provider="fal-ai"`，响应是原始视频字节，没有任务号，因此没有取消。[Text to Video](https://huggingface.co/docs/inference-providers/tasks/text-to-video)。
-- ModelScope 的限制页本次没有渲染出正文（https://www.modelscope.cn/docs/model-service/API-Inference/limits）。是否有视频接口维持未验证。
-- WaveSpeed 与 Tensor.Art 本次没有打开到官方视频页。维持未验证。
+
+## 2026-11-05 再次抓取（WaveSpeed / Tensor.Art / ModelScope）
+
+### WaveSpeed
+
+- 提交：`POST https://api.wavespeed.ai/api/v3/{model_id}`，`Authorization: Bearer`。字段按模型页 / 实时 catalog `model_run` schema，不在本地写死。全局可选 `enable_sync_mode`、`enable_base64_output`。返回 prediction `id`。来源：[Submit Task](https://wavespeed.ai/docs/submit-task)（抓取 2026-11-05）。
+- 轮询：`GET https://api.wavespeed.ai/api/v3/predictions/{task-id}/result`。终态 `completed` 取 `outputs`；`failed` / `cancelled` / `timeout` / `deleted` 停。间隔 ≥2s。来源：[Get Result](https://wavespeed.ai/docs/get-result)。
+- 删除（不是运行中取消）：`POST https://api.wavespeed.ai/api/v3/predictions/delete` body `{ids:[...]}`，只删已结束任务。来源：[Delete Task](https://wavespeed.ai/docs/delete-task)。运行中的视频任务**没有**官方 cancel 调用，UI 不发取消。
+- I2V 例：`wavespeed-ai/wan-2.1/i2v-480p-lora`。页面列出 `prompt`、`image`（必填）、`negative_prompt`、`loras[{path,scale}]` 最多 3、`size`、`num_inference_steps`、`duration`（5s 或 10s）、`guidance_scale`、`flow_shift`、`seed`。来源：[模型页](https://wavespeed.ai/models/wavespeed-ai/wan-2.1/i2v-480p-lora)（抓取 2026-11-05）。首尾帧：该页只要一张起始 `image`；end frame 未在该页列出。
+- LoRA：通用训练页 [LoRA Training & Usage](https://wavespeed.ai/docs/lora-training-usage)；该 I2V 模型页声明 `loras` 数组。
+
+### Tensor.Art TAMS
+
+- 提交：`POST https://{endpoint}/v1/jobs`，鉴权 `TAMS-SHA256-RSA`。视频 stage 类型是 `VIDEO_DIFFUSION` / `video_diffusion`。来源：[Workspace API Example · TextToVideo / ImageToVideo](https://tams-docs.tensor.art/docs/api/guide/workspace-api-example/)（抓取 2026-11-05）。
+- T2V 示例字段：`sdModel`、`generationMode`（`STABLE`）、`width`、`height`、`fps`、`totalFrames`、`prompts[].text`、`negativePrompts[].text`、`lora.items[{lora_model,weight}]`。I2V 在 `INPUT_INITIALIZE.imageResourceId` 放首帧。首尾帧：`VideoInpaint` 用 `inp.args[{startImageResourceId,endImageResourceId}]`。ControlNet 视频：`controlnet.args[{inputVideoResourceId,preprocessor}]`。
+- 取消：`DELETE https://{endpoint}/v1/jobs/:jobId`。[cancel job](https://tams-docs.tensor.art/docs/api/apis/tams-api-v-1-service-cancel-job/)（抓取 2026-11-05）。
+- 轮询：OpenAPI 列出 job `status` 枚举 `DEFAULT | CREATED | PENDING | RUNNING | CANCELED | SUCCESS | FAILED | WAITING`（[v1/jobs/workflow](https://tams-docs.tensor.art/docs/api/apis/tams-api-v-1-service-workflow-job-create/)）。`GET /v1/jobs/:id` 的英文页本次抓取只返回导航壳，具体 path 以 OpenAPI 为准，未把路径写死进代码。
+- **UI 未接通**：AIVideoNode 下拉里没有 `tensorart` / `openworks`。官方有视频 API，但本轮没有把 TAMS VIDEO_DIFFUSION 接到画布，不得在 UI 当已接通。
+
+### ModelScope API-Inference
+
+- 官方介绍页 [API推理介绍](https://www.modelscope.cn/docs/model-service/API-Inference/intro) 与限制页 [API-Inference使用限制](https://www.modelscope.cn/docs/model-service/API-Inference/limits) 本次抓取（2026-11-05）只返回站点壳（页脚/导航），**没有**列出文生视频/图生视频 HTTP 端点、字段或终态。
+- 社区有开源 T2V 模型页（如 `damo/text-to-video-synthesis`），那是本地 pipeline，不是 API-Inference。
+- **结论：本轮未能从官方 API-Inference 文档核实到视频 HTTP API。** UI 不得把 ModelScope 标成已接通视频供应商（下拉里本来也没有）。
+
+## jsonl 对账（脚本生成，禁止手写）
+
+命令：`node docs/evidence/2026-11-05/video/ledger-from-jsonl.mjs temp/logs/requests-2026-11-05.jsonl`
+
+```
+source: temp/logs/requests-2026-11-05.jsonl
+upstream POST count: 18
+Together /v1/images/generations wiring posts: 59, 61, 67, 69, 71
+Together /v2/videos posts: 77:401
+Novita POST count: 2 lines 49, 65
+Krea posts: 90:404:WIRING, 93:402:PASS_BILLING
+Sogni posts: 98:201:WIRING
+PASS_BILLING: 10
+BLOCKED_AUTH: 1
+WIRING: 7
+```
+
+| jsonl line | time | provider | endpoint | HTTP | verdict | note |
+| --- | --- | --- | --- | --- | --- | --- |
+| 7 | 2026-11-05T18:30:18+09:00 | fal | https://queue.fal.run/fal-ai/wan-i2v-lora | 403 | PASS_BILLING | Fal 403 Exhausted balance |
+| 10 | 2026-11-05T18:32:13+09:00 | wavespeed | https://api.wavespeed.ai/api/v3/wavespeed-ai/wan-2.1/i2v-480p-lora | 400 | PASS_BILLING | WaveSpeed 400 Insufficient credits |
+| 25 | 2026-11-05T18:32:53+09:00 | replicate | https://api.replicate.com/v1/predictions | 402 | PASS_BILLING | Replicate 402 Insufficient credit |
+| 43 | 2026-11-05T18:44:24+09:00 | civitai | https://orchestration.civitai.com/v2/consumer/workflows?wait=60 | 400 | PASS_BILLING | Civitai 400 insufficientBuzz |
+| 47 | 2026-11-05T18:44:59+09:00 | muapi | https://api.muapi.ai/api/v1/upload_file | 403 | PASS_BILLING | MuAPI upload 403 INSUFFICIENT_CREDITS; generate POST not sent |
+| 49 | 2026-11-05T18:46:10+09:00 | novita | https://api.novita.ai/v3/async/img2video | 403 | PASS_BILLING | Novita 403 NOT_ENOUGH_BALANCE |
+| 59 | 2026-11-05T18:50:42+09:00 | together | https://api.together.ai/v1/images/generations | 401 | WIRING | Together video click sent to /v1/images/generations |
+| 61 | 2026-11-05T18:51:36+09:00 | together | https://api.together.ai/v1/images/generations | 401 | WIRING | Together video click sent to /v1/images/generations |
+| 65 | 2026-11-05T18:52:32+09:00 | novita | https://api.novita.ai/v3/async/img2video | 403 | PASS_BILLING | Novita 403 NOT_ENOUGH_BALANCE（第二次，不是第一次） |
+| 67 | 2026-11-05T18:53:04+09:00 | together | https://api.together.ai/v1/images/generations | 401 | WIRING | Together video click sent to /v1/images/generations |
+| 69 | 2026-11-05T18:53:31+09:00 | together | https://api.together.ai/v1/images/generations | 401 | WIRING | Together video click sent to /v1/images/generations |
+| 71 | 2026-11-05T18:54:10+09:00 | together | https://api.together.ai/v1/images/generations | 401 | WIRING | Together video click sent to /v1/images/generations |
+| 77 | 2026-11-05T18:55:11+09:00 | together | https://api.together.ai/v2/videos | 401 | BLOCKED_AUTH | Together /v2/videos 401 invalid api key |
+| 81 | 2026-11-05T18:55:50+09:00 | aimlapi | https://api.aimlapi.com/v2/video/generations | 403 | PASS_BILLING | AIMLAPI 403 out of funds |
+| 87 | 2026-11-05T18:56:49+09:00 | venice | https://api.venice.ai/api/v1/video/queue | 402 | PASS_BILLING | Venice 402 Insufficient USD or Diem |
+| 90 | 2026-11-05T18:57:40+09:00 | krea | https://api.krea.ai/generate/kling/kling-2.5 | 404 | WIRING | Krea path missing /video/ prefix |
+| 93 | 2026-11-05T18:58:07+09:00 | krea | https://api.krea.ai/generate/video/kling/kling-2.5 | 402 | PASS_BILLING | Krea 402 API balance |
+| 98 | 2026-11-05T18:58:41+09:00 | sogni | https://api.sogni.ai/v1/creative-agent/workflows | 201 | WIRING | Sogni video node submitted generate_image |
+
+## UI 截图（r4 修好后的 Sogni T2V 点击）
+
+画布：`http://127.0.0.1:3107/`。操作：添加 AI 视频节点 → 视频服务商选 Sogni → 自定义模型 `ltx25` → 提示词 `a paper boat crossing a quiet pond, gentle ripples, daylight` → 时长 5 → 点「运行：AI 视频」。
+
+- 运行前节点：`docs/evidence/2026-11-05/video/sogni-t2v-schema-before-run.jpg`。可见 `schemaStatus hosted-tool:generate_video · toolName generate_video · videoModel`。
+- 运行后节点：`docs/evidence/2026-11-05/video/sogni-t2v-generate-video-ui.jpg`。错误框已脱敏（盖住 wallet / SID / fingerprint），摘要为 `status=failed`、`toolName=generate_video`、`videoModel=ltx25`、`Free tier: this model is not available on the free tier via the API — subscribe to Unlimited`。
+- 全画布：`docs/evidence/2026-11-05/video/sogni-t2v-canvas-run.jpg`。可见运行按钮「运行：AI 视频（显式 Provider/Model）」、画布上的 AI 视频节点、脱敏后的上游失败摘要。
+
+对应请求：`temp/logs/requests-2026-11-06.jsonl` 第 7 行 `POST https://api.sogni.ai/v1/creative-agent/workflows` 201，请求体 `steps[0].toolName=generate_video`、`arguments.videoModel=ltx25`、`duration=5`。第 8 行 GET 同 workflow，`status=failed`，事件原文 `Free tier: this model is not available on the free tier via the API — subscribe to Unlimited`。记 **PASS_BILLING**（免费档/订阅门闸，无视频 URL）。JSON：`docs/evidence/2026-11-05/video/sogni-t2v-generate-video.json`。
+
+截图里没有密钥、token、本机绝对路径。身份字段已打码。
 
 三次发出的字段（提示词已截断，参考图是上传后的本站 `/api/media/…`，不是外链）：
 
@@ -140,5 +200,5 @@ Sogni 的 `generate_video` 只有 MiniMax H3 接受 `loras`，`ltx25` 明确不�
 
 ## 尚未完成
 
-- 付费点击：图生视频 6 家（Fal、WaveSpeed、Replicate、Civitai、MuAPI、Novita）和图生之外的文生视频 5 家（Together、AIMLAPI、Venice、Krea、Sogni）都在提交或轮询阶段被账单或鉴权拒绝。没有任何视频 URL，所以节点播放、SaveVideo、历史都没有可验证的成功样本。这两个任务按 tower 决定保持 dropped。
+- 付费点击：图生视频 6 家（Fal、WaveSpeed、Replicate、Civitai、MuAPI、Novita）和文生视频里 AIMLAPI / Venice / Krea（第二次）被账单拒绝（PASS_BILLING）。Together `/v2/videos` 是 401 BLOCKED_AUTH；此前 5 次 `/v1/images/generations` 与 Krea 首次 404、Sogni jsonl 98 的 `generate_image` 是接线错误。没有任何视频 URL，所以节点播放、SaveVideo、历史都没有可验证的成功样本。这两个任务按 tower 决定保持 dropped。
 - Civitai 的 `runCivitaiVideoPoll` 是 `server.ts` isVideo 分支调用的循环。测试用假时钟：前 7 次 `processing`、第 8 次返回视频（累计等待超过旧的 60 秒）；一直 `scheduled` 直到 10 分钟预算，结果是本地超时，带 workflowId 和 endpoint，路由把它写成 504 `errorSource: local`。图像请求的 socket 仍是 `civitaiGenerateSocketMs(false) === 120000`。

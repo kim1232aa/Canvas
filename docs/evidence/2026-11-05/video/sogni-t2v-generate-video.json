@@ -1,0 +1,42 @@
+{
+  "provider": "sogni",
+  "model": "ltx25",
+  "mode": "T2V",
+  "prompt": "a paper boat crossing a quiet pond, gentle ripples, daylight",
+  "duration": 5,
+  "ui": {
+    "port": 3107,
+    "action": "AIVideoNode → provider Sogni → custom model ltx25 → Run",
+    "schemaStatus": "hosted-tool:generate_video",
+    "screenshots": [
+      "sogni-t2v-schema-before-run.jpg",
+      "sogni-t2v-generate-video-ui.jpg",
+      "sogni-t2v-canvas-run.jpg"
+    ]
+  },
+  "attempts": [
+    {
+      "when": "2026-11-05 jsonl line 98",
+      "endpoint": "https://api.sogni.ai/v1/creative-agent/workflows",
+      "status": 201,
+      "toolName": "generate_image",
+      "arguments": { "model": "ltx25", "duration": 5 },
+      "verdict": "WIRING",
+      "note": "video node sent the image hosted-tool; poll waiting_for_user/insufficient_credit is not video evidence"
+    },
+    {
+      "when": "2026-11-06 jsonl line 7 (temp/logs/requests-2026-11-06.jsonl)",
+      "endpoint": "https://api.sogni.ai/v1/creative-agent/workflows",
+      "status": 201,
+      "toolName": "generate_video",
+      "arguments": { "videoModel": "ltx25", "duration": 5, "prompt": "a paper boat crossing a quiet pond, gentle ripples, daylight" },
+      "poll": {
+        "line": 8,
+        "workflowStatus": "failed",
+        "message": "Free tier: this model is not available on the free tier via the API — subscribe to Unlimited"
+      },
+      "verdict": "PASS_BILLING",
+      "note": "official generate_video + videoModel after r4 fix; free-tier / Unlimited gate, no video URL"
+    }
+  ]
+}

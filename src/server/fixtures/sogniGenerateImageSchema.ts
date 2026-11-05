@@ -1,5 +1,7 @@
 /** Minimal fixture for tests only; production always fetches the official live schema. */
 export const sogniGenerateImageSchemaFixture = {
+  $id: 'https://schemas.sogni.ai/creative-agent/2026-07-18.1/tools/generate_image.schema.json',
+  title: 'generate_image arguments',
   schemaVersion: '2026-07-18.1',
   type: 'object',
   additionalProperties: false,

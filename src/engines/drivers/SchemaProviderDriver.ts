@@ -25,6 +25,17 @@ function asRecord(value: unknown): JsonRecord {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as JsonRecord : {};
 }
 
+function looksLikeVideoUrl(url: string | undefined): boolean {
+  if (!url) return false;
+  if (/^data:video\//i.test(url)) return true;
+  try {
+    const path = new URL(url).pathname.toLowerCase();
+    return /\.(mp4|webm|mov|m4v)(?:$|\?)/.test(path) || path.includes('/video');
+  } catch {
+    return /\.(mp4|webm|mov|m4v)(?:$|\?)/i.test(url);
+  }
+}
+
 /** Accept only provider outputs with an explicit URL; never stringify unknown objects into fake media locators. */
 export function schemaProviderOutputUrl(result: unknown): string | undefined {
   const record = asRecord(result);
@@ -145,7 +156,7 @@ export class SchemaProviderDriver extends BaseEngineDriver {
     const keyHeaders: Record<string, string> = {};
     if (apiKey) keyHeaders[config.header] = apiKey;
     const headers: Record<string, string> = { 'Content-Type': 'application/json', ...keyHeaders };
-    const schemaUrl = `/api/model-schema?provider=${encodeURIComponent(this.id)}&model=${encodeURIComponent(params.model)}`;
+    const schemaUrl = `/api/model-schema?provider=${encodeURIComponent(this.id)}&model=${encodeURIComponent(params.model)}${params.isVideo === true ? '&isVideo=true' : ''}${params.isVideo === true && params.image_url ? '&hasReference=true' : ''}`;
     // Schema GET is traced (exec log row: GET + URL + status). On failure the generation POST is
     // never sent: the user sees the GET URL, upstream status and body verbatim, and a failed history card is written.
     // Same action-scoped shared GET as the node editor / badges: one GET per URL per run (the run began a new action).
@@ -298,7 +309,7 @@ export class SchemaProviderDriver extends BaseEngineDriver {
         } catch(error:any) {historyWarning=[rangeWarning,`上游已生成，保存失败：${error.message}`].filter(Boolean).join('；');saved={error:error.message,stack:error.stack,cause:error.cause};}
         return {
           mediaUrl:saved?.historyItems?.[0]?.url || mediaUrl,
-          mediaType: result.mediaType === 'video' || params.isVideo ? 'video' : 'image',
+          mediaType: result.mediaType === 'video' || looksLikeVideoUrl(mediaUrl) ? 'video' : 'image',
           provider: this.name,
           providerId: this.id,
           model: params.model,

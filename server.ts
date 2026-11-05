@@ -1,4 +1,4 @@
-import {registerSchemaProviderRoutes,makeSchemaProviderReader,fetchSchemaProviderRows,fetchSogniGenerateImageSchema,normalizeSchemaProviderItems,resolveSchemaRefs} from './src/server/schemaProviders.ts';
+import {registerSchemaProviderRoutes,makeSchemaProviderReader,fetchSchemaProviderRows,fetchSogniHostedToolSchema,sogniGenerateVideoSchemaSource,sogniSchemaSource,normalizeSchemaProviderItems,resolveSchemaRefs} from './src/server/schemaProviders.ts';
 import { civitaiVideoBaseModels, parseCivitaiAir, civitaiVersionVideoRow, replicateSearchVideoModels, resolveCivitaiVersions } from './src/server/videoCatalogOfficial.ts';
 import { historyCounts, isServedHistoryItem } from './src/utils/historyCounts';
 import { requestLogLines, writeRequestLog } from './src/server/requestLog.ts';
@@ -2511,7 +2511,7 @@ app.get("/api/models", async (req, res) => {
               const spRead = makeSchemaProviderReader(sp, upstreamFetch, spKey, req.path);
               const wantsLora = cat === 'lora';
               const liveSogniSchema = sp === 'sogni' && !wantsLora
-                ? await fetchSogniGenerateImageSchema(upstreamFetch, req.path)
+                ? await fetchSogniHostedToolSchema(upstreamFetch, cat === 'video' ? sogniGenerateVideoSchemaSource : sogniSchemaSource, req.path)
                 : undefined;
               const spRows = await fetchSchemaProviderRows(sp, spRead, { lora: wantsLora, selectorSchema:liveSogniSchema?.schema, selectorSchemaSource:liveSogniSchema?.sourceUrl });
               const { rows, sourceUrl, notice } = spRows;
@@ -2525,12 +2525,10 @@ app.get("/api/models", async (req, res) => {
               const filtered = spItems.filter((m: any) => matchCategory(m) && matchSearch(m));
               results[sp] = filtered.slice((pageParam - 1) * limitParam, pageParam * limitParam);
               const isVideoCat = cat === 'video';
-              const spNotice = sp === 'sogni' && !wantsLora && !isVideoCat
-                ? 'live-official-generate_image-schema'
+              const spNotice = sp === 'sogni' && !wantsLora
+                ? (isVideoCat ? `live-official-${liveSogniSchema?.hostedToolName || 'generate_video'}-schema` : 'live-official-generate_image-schema')
                 : sp === 'sogni' && wantsLora
                 ? 'lookup-only (no public lora directory)'
-                : sp === 'sogni' && isVideoCat
-                ? 'lookup-only (no public video directory)'
                 : sp === 'novita' && isVideoCat
                 ? 'lookup-only (no public video directory)'
                 : sp === 'deepinfra' && isVideoCat

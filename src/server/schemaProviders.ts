@@ -6,6 +6,8 @@ import type express from 'express';
 import YAML from 'yaml';
 import { canvasNodeId, clearVideoJobStatus, readVideoJobStatus, updateVideoJobStatus } from './videoJobStatus.ts';
 export const sogniSchemaSource='https://raw.githubusercontent.com/Sogni-AI/sogni-protocol/main/schemas/tools/generate_image.schema.json';
+export const sogniGenerateVideoSchemaSource='https://raw.githubusercontent.com/Sogni-AI/sogni-protocol/main/schemas/tools/generate_video.schema.json';
+export const sogniAnimatePhotoSchemaSource='https://raw.githubusercontent.com/Sogni-AI/sogni-protocol/main/schemas/tools/animate_photo.schema.json';
 
 // Protocol adapters are separate from canvas nodes. Model paths and fields come
 // from live provider metadata. No model aliases, replacement or submit retries.
@@ -588,39 +590,103 @@ interface Dependencies {
   durable:(url:string)=>Promise<any>;
 }
 
-/** Fetch the public Sogni hosted-tool Schema without forwarding any Sogni credential to GitHub. */
+const SOGNI_HOSTED_TOOL_ID = /\/tools\/([a-z0-9_]+)\.schema\.json$/i;
+
+/** Selector enum on a live Sogni hosted-tool Schema: videoModel first, else model. */
+export function sogniHostedToolSelectorEnum(schema:any): {field:string;values:string[]} | undefined {
+  const video=schema?.properties?.videoModel?.enum;
+  if(Array.isArray(video) && video.length && video.every((id:any)=>typeof id==='string' && id.trim())) return {field:'videoModel',values:video};
+  const image=schema?.properties?.model?.enum;
+  if(Array.isArray(image) && image.length && image.every((id:any)=>typeof id==='string' && id.trim())) return {field:'model',values:image};
+}
+
+/** toolName from the live Schema $id (…/tools/<name>.schema.json). Title first word only if $id is missing. */
+export function sogniHostedToolName(schema:any): string | undefined {
+  const id=typeof schema?.$id==='string'?schema.$id:'';
+  const fromId=id.match(SOGNI_HOSTED_TOOL_ID)?.[1];
+  if(fromId) return fromId;
+  const title=typeof schema?.title==='string'?schema.title.trim():'';
+  const word=title.split(/\s+/)[0];
+  if(word && /^[a-z0-9_]+$/i.test(word)) return word;
+}
+
+export type SogniHostedToolSchema = {schema:any;sourceUrl:string;hostedToolName:string;selectorField:string};
+
+/** Fetch a public Sogni hosted-tool Schema without forwarding any Sogni credential to GitHub. */
+export async function fetchSogniHostedToolSchema(
+  depFetch: Dependencies['fetch'],
+  sourceUrl: string,
+  route: string,
+  model = '(catalog)',
+): Promise<SogniHostedToolSchema> {
+  const meta={provider:'sogni',route,model,key:''};
+  let response:Response;
+  try {
+    response=await depFetch(meta,sourceUrl,{headers:{Accept:'application/json'},signal:AbortSignal.timeout(60000)});
+  } catch (cause:any) {
+    throw Object.assign(new Error(`Network error fetching Sogni official hosted-tool Schema; no HTTP response was received. GET ${sourceUrl}: ${cause?.message || cause}`),{
+      status:502,errorSource:'network',endpoint:sourceUrl,cause,
+    });
+  }
+  const raw=await response.text();
+  if(!response.ok)throw Object.assign(new Error(`Sogni official hosted-tool Schema GET ${sourceUrl} → HTTP ${response.status}: ${raw}`),{
+    status:response.status,errorSource:'upstream',endpoint:sourceUrl,rawResponse:raw,
+  });
+  let schema:any;
+  try{schema=JSON.parse(raw);}catch(cause:any){
+    throw Object.assign(new Error(`Sogni official hosted-tool Schema GET ${sourceUrl} returned invalid JSON: ${cause?.message || cause}; body: ${raw}`),{
+      status:502,errorSource:'upstream-protocol',endpoint:sourceUrl,rawResponse:raw,cause,
+    });
+  }
+  const selector=sogniHostedToolSelectorEnum(schema);
+  if(!schema || typeof schema!=='object' || !schema.properties || !selector) {
+    throw Object.assign(new Error(`Sogni official hosted-tool Schema GET ${sourceUrl} has no non-empty string properties.videoModel.enum or properties.model.enum; body: ${raw}`),{
+      status:502,errorSource:'upstream-protocol',endpoint:sourceUrl,rawResponse:raw,
+    });
+  }
+  const hostedToolName=sogniHostedToolName(schema);
+  if(!hostedToolName) {
+    throw Object.assign(new Error(`Sogni official hosted-tool Schema GET ${sourceUrl} has no $id matching /tools/<name>.schema.json and no usable title; body: ${raw}`),{
+      status:502,errorSource:'upstream-protocol',endpoint:sourceUrl,rawResponse:raw,
+    });
+  }
+  return {schema,sourceUrl,hostedToolName,selectorField:selector.field};
+}
+
+/** Image node: live generate_image Schema. Video nodes must not call this. */
 export async function fetchSogniGenerateImageSchema(
   depFetch: Dependencies['fetch'],
   route: string,
   model = '(catalog)',
 ): Promise<{schema:any;sourceUrl:string}> {
-  const meta={provider:'sogni',route,model,key:''};
-  let response:Response;
-  try {
-    response=await depFetch(meta,sogniSchemaSource,{headers:{Accept:'application/json'},signal:AbortSignal.timeout(60000)});
-  } catch (cause:any) {
-    const error=Object.assign(new Error(`Network error fetching Sogni official generate_image Schema; no HTTP response was received. GET ${sogniSchemaSource}: ${cause?.message || cause}`),{
-      status:502,errorSource:'network',endpoint:sogniSchemaSource,cause,
-    });
-    throw error;
+  const fetched=await fetchSogniHostedToolSchema(depFetch,sogniSchemaSource,route,model);
+  return {schema:fetched.schema,sourceUrl:fetched.sourceUrl};
+}
+
+function sogniVideoIntent(req:express.Request): boolean {
+  return req.body?.isVideo===true || String(req.query?.isVideo||'').toLowerCase()==='true' || String(req.query?.category||'').toLowerCase()==='video';
+}
+function sogniHasReferenceImage(req:express.Request): boolean {
+  const v=req.body?.image_url;
+  if(typeof v==='string' && v.trim()!=='') return true;
+  return String(req.query?.hasReference||'').toLowerCase()==='true';
+}
+
+/** Real video artifact only. Never inferred from isVideo. */
+export function schemaProviderMediaType(outputs:unknown): 'video' | undefined {
+  const list=Array.isArray(outputs)?outputs:[outputs];
+  for(const item of list) {
+    const url=typeof item==='string'?item:item && typeof item==='object'?(item as any).url:undefined;
+    if(typeof url!=='string' || !url.trim()) continue;
+    const u=url.trim();
+    if(/^data:video\//i.test(u)) return 'video';
+    try {
+      const path=new URL(u).pathname.toLowerCase();
+      if(/\.(mp4|webm|mov|m4v)(?:$|\?)/.test(path) || path.includes('/video')) return 'video';
+    } catch {
+      if(/\.(mp4|webm|mov|m4v)(?:$|\?)/i.test(u)) return 'video';
+    }
   }
-  const raw=await response.text();
-  if(!response.ok)throw Object.assign(new Error(`Sogni official generate_image Schema GET ${sogniSchemaSource} → HTTP ${response.status}: ${raw}`),{
-    status:response.status,errorSource:'upstream',endpoint:sogniSchemaSource,rawResponse:raw,
-  });
-  let schema:any;
-  try{schema=JSON.parse(raw);}catch(cause:any){
-    throw Object.assign(new Error(`Sogni official generate_image Schema GET ${sogniSchemaSource} returned invalid JSON: ${cause?.message || cause}; body: ${raw}`),{
-      status:502,errorSource:'upstream-protocol',endpoint:sogniSchemaSource,rawResponse:raw,cause,
-    });
-  }
-  const modelEnum=schema?.properties?.model?.enum;
-  if(!schema || typeof schema!=='object' || !schema.properties || !Array.isArray(modelEnum) || modelEnum.length===0 || modelEnum.some((id:any)=>typeof id!=='string' || !id.trim())) {
-    throw Object.assign(new Error(`Sogni official generate_image Schema GET ${sogniSchemaSource} has no non-empty string properties.model.enum; body: ${raw}`),{
-      status:502,errorSource:'upstream-protocol',endpoint:sogniSchemaSource,rawResponse:raw,
-    });
-  }
-  return {schema,sourceUrl:sogniSchemaSource};
 }
 
 export async function parseVeniceImageResponse(r:Response,url:string) {
@@ -712,11 +778,13 @@ export async function fetchSchemaProviderRows(provider:Provider,read:ReturnType<
       notice:'无 LoRA 目录接口。此供应商未声明独立 LoRA 目录；请在 LoRA 节点输入资源 URL，并选择支持 LoRA 的模型端点。'};
   }
   if(provider==='sogni' && opts.catalog!=='workers') {
-    const modelEnum=opts.selectorSchema?.properties?.model?.enum;
-    if(!opts.selectorSchema || !Array.isArray(modelEnum) || modelEnum.length===0)throw Object.assign(new Error(`Sogni live hosted-tool Schema is required to build selectors; no bundled or cached fallback is used. Source: ${opts.selectorSchemaSource || sogniSchemaSource}`),{
+    const selector=sogniHostedToolSelectorEnum(opts.selectorSchema);
+    if(!opts.selectorSchema || !selector)throw Object.assign(new Error(`Sogni live hosted-tool Schema is required to build selectors; no bundled or cached fallback is used. Source: ${opts.selectorSchemaSource || sogniSchemaSource}`),{
       status:502,errorSource:'upstream-protocol',endpoint:opts.selectorSchemaSource || sogniSchemaSource,
     });
-    return {rows:modelEnum.map((id:string)=>({id,name:id,parameters:opts.selectorSchema,namespace:'hosted-tool-selector'})),sourceUrl:opts.selectorSchemaSource || sogniSchemaSource};
+    const hosted=sogniHostedToolName(opts.selectorSchema);
+    const videoTool=hosted==='generate_video' || hosted==='animate_photo' || selector.field==='videoModel';
+    return {rows:selector.values.map((id:string)=>({id,name:id,parameters:opts.selectorSchema,namespace:'hosted-tool-selector',category:videoTool?'text-to-video':'text-to-image',type:videoTool?'video':'image'})),sourceUrl:opts.selectorSchemaSource || sogniSchemaSource};
   }
   const sourceUrl=schemaProviders[provider].root+schemaProviders[provider].catalog;
   const {data}=await read(sourceUrl);
@@ -1219,8 +1287,21 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
       return {provider,model,sourceUrl,endpoint,inputSchema,modelMetadata:entry,schemaStatus:'official-openapi-runtime',schemaSource:specUrl,schemaUnprobed:true,mediaKind:'image'};
     }
     if(provider==='sogni') {
-      const {schema,sourceUrl}=await fetchSogniGenerateImageSchema(dep.fetch,req.path,model);
-      return {provider,model,sourceUrl,endpoint:schemaProviders.sogni.root+'/v1/creative-agent/workflows',inputSchema:schema,schemaVersion:schema.schemaVersion,note:'模型 selector 与 generate_image 参数来自实时官方 Schema；实时 worker 目录属于另一种 ID。'};
+      const isVideo=sogniVideoIntent(req);
+      const hasReference=sogniHasReferenceImage(req);
+      const sourceUrl=isVideo?(hasReference?sogniAnimatePhotoSchemaSource:sogniGenerateVideoSchemaSource):sogniSchemaSource;
+      const fetched=await fetchSogniHostedToolSchema(dep.fetch,sourceUrl,req.path,model);
+      const hostedToolName=fetched.hostedToolName;
+      return {
+        provider,model,sourceUrl:fetched.sourceUrl,endpoint:schemaProviders.sogni.root+'/v1/creative-agent/workflows',
+        inputSchema:fetched.schema,schemaVersion:fetched.schema.schemaVersion,hostedToolName,selectorField:fetched.selectorField,
+        schemaStatus:`hosted-tool:${hostedToolName}`,mediaKind:isVideo?'video':'image',
+        note:isVideo
+          ?(hasReference
+            ?`模型 selector 与 ${hostedToolName} 参数来自实时官方 Schema（图生视频：${fetched.selectorField}）。`
+            :`模型 selector 与 ${hostedToolName} 参数来自实时官方 Schema（文生视频：${fetched.selectorField}）。`)
+          :'模型 selector 与 generate_image 参数来自实时官方 Schema；实时 worker 目录属于另一种 ID。',
+      };
     }
     const {rows,sourceUrl}=await listForSchema(req,provider,credential);
     const entry=rows.find((x:any)=>(provider==='wavespeed'?x.model_id:x.id)===model);
@@ -1243,11 +1324,12 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
   // response/error carries `schemaRead` ({fetched, readAt, reusedFrom}) and the UI prints 「复用，未重新请求」 or the GET count.
   // A new GET /api/model-schema (刷新 / 读取官方 Schema) always re-reads upstream and replaces the entry. Failures are not remembered.
   const schemaReads=new Map<string,{definition:any;readAt:string}>();
-  const schemaReadKey=(provider:string,model:string,credential:any)=>`${provider}\u0000${model}\u0000${createHash('sha256').update(String(credential?.key ?? '')).digest('hex')}`;
+  const schemaReadKey=(provider:string,model:string,credential:any,mediaKind:'video'|'image'='image')=>`${provider}\u0000${model}\u0000${mediaKind}\u0000${createHash('sha256').update(String(credential?.key ?? '')).digest('hex')}`;
   app.get('/api/model-schema',async(req,res,next)=>{
     const provider=String(req.query.provider || '');if(!valid(provider))return next();
     try{const credential=credentials(req,provider,{create:true});const model=String(req.query.model || '');const definition=await modelSchema(req,provider,model,credential);
-      const readAt=new Date().toISOString();if(!(definition as any).catalogLookupFailure)schemaReads.set(schemaReadKey(provider,model,credential),{definition,readAt});
+      const mediaKind=(definition as any).mediaKind==='video'?'video':'image';
+      const readAt=new Date().toISOString();if(!(definition as any).catalogLookupFailure)schemaReads.set(schemaReadKey(provider,model,credential,mediaKind),{definition,readAt});
       res.json({...definition,credentialRef:credential.credentialRef,schemaRead:{fetched:true,readAt,route:'/api/model-schema'}});}catch(e){fail(res,e);}
   });
   app.get('/api/models',async(req,res,next)=>{
@@ -1256,14 +1338,15 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
       const wantsLora=String(req.query.type || req.query.category).toLowerCase()==='lora' || String(req.query.category).toLowerCase()==='lora';
       const key=dep.key(provider,req.headers[schemaProviders[provider].header] as string);
       const read=makeSchemaProviderReader(provider,dep.fetch,key,req.path);
+      const sogniVideoCatalog=provider==='sogni' && String(req.query.category||'').toLowerCase()==='video';
       const liveSogniSchema=provider==='sogni' && !wantsLora && req.query.catalog!=='workers'
-        ? await fetchSogniGenerateImageSchema(dep.fetch,req.path)
+        ? await fetchSogniHostedToolSchema(dep.fetch,sogniVideoCatalog?sogniGenerateVideoSchemaSource:sogniSchemaSource,req.path)
         : undefined;
       const {rows,sourceUrl,notice,nextCursor,noLoraCatalog,personalNotice,personalLibrary,personalSourceUrl}=await fetchSchemaProviderRows(provider,read,{lora:wantsLora,model:req.query.model as string,catalog:req.query.catalog as string,cursor:req.query.cursor as string,limit:provider==='krea'&&wantsLora?Math.min(1000,Math.max(1,Number(req.query.limit)||50)):undefined,selectorSchema:liveSogniSchema?.schema,selectorSchemaSource:liveSogniSchema?.sourceUrl}) as any;
       const items=normalizeSchemaProviderItems(provider,rows,{lora:wantsLora,sourceUrl:sourceUrl || '',category:String(req.query.category || 'checkpoint'),query:String(req.query.query || '')});
       const page=nextCursor!==undefined?1:Math.max(1,Number(req.query.page)||1),limit=nextCursor!==undefined?items.length||1:Math.min(100,Math.max(1,Number(req.query.limit)||50)); // upstream-cursor: upstream already paged
       const pagingNotice = provider === 'sogni' && !wantsLora && req.query.catalog !== 'workers'
-        ? 'live-official-generate_image-schema'
+        ? (sogniVideoCatalog?`live-official-${liveSogniSchema?.hostedToolName || 'generate_video'}-schema`:'live-official-generate_image-schema')
         : 'local-slice-of-live-upstream-catalog';
       const paginationData = {
         page,
@@ -1298,11 +1381,12 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
     try {
       const model=String(req.body.model || '').trim();if(!model)return res.status(400).json({error:'请选择模型',errorSource:'local'});
       const credential=credentials(req,provider,{create:true});
-      const remembered=schemaReads.get(schemaReadKey(provider,model,credential));
-      // A remembered image route from a failed catalog (no rows, so no type) must not be reused for a video node.
-      const rememberedUsable=remembered && !(remembered.definition?.catalogLookupFailure && req.body?.isVideo===true && remembered.definition?.mediaKind!=='video');
+      const submitMediaKind=req.body?.isVideo===true?'video':'image';
+      const remembered=schemaReads.get(schemaReadKey(provider,model,credential,submitMediaKind));
+      // Image schema must never be reused for a video submit (Sogni would then send generate_image).
+      const rememberedUsable=remembered && (req.body?.isVideo!==true || remembered.definition?.mediaKind==='video') && !(remembered.definition?.catalogLookupFailure && req.body?.isVideo===true && remembered.definition?.mediaKind!=='video');
       if(rememberedUsable){definition=remembered.definition;schemaRead={fetched:false,reused:true,readAt:remembered.readAt,reusedFrom:'/api/model-schema',note:'复用，未重新请求'};}
-      else{schemaRead={fetched:true,readAt:new Date().toISOString()};definition=await modelSchema(req,provider,model,credential);if(!definition.catalogLookupFailure)schemaReads.set(schemaReadKey(provider,model,credential),{definition,readAt:schemaRead.readAt});}
+      else{schemaRead={fetched:true,readAt:new Date().toISOString()};definition=await modelSchema(req,provider,model,credential);if(!definition.catalogLookupFailure)schemaReads.set(schemaReadKey(provider,model,credential,(definition as any).mediaKind==='video'?'video':'image'),{definition,readAt:schemaRead.readAt});}
       schemaLoaded=true;
       const custom={...req.body.custom_parameters};const canvas=custom._canvas || {};const only=canvas.parametersOnly===true;const schemaFieldsOnly=canvas.schemaFieldsOnly!==false;delete custom._canvas;
       payload={prompt:req.body.prompt};mapping=[];
@@ -1373,7 +1457,7 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
           // No LoRA field in the Schema: send the canvas LoRA list as built (unchanged); upstream decides.
           else payload.loras=loras;
         }
-        mapping.push({from:'loras',to:provider==='sogni'?'loras + loraStrengths':provider==='krea'?'styles':Object.hasOwn(payload,'model_id')?'model_id':Object.hasOwn(payload,'image_loras')?'image_loras':Object.hasOwn(payload,'lora_list')?'lora_list':Object.hasOwn(payload,'lora_url')?'lora_url + lora_weight':'loras',requested:loras,value:payload.styles || payload.loras || payload.model_id || payload.image_loras || payload.lora_list || {url:payload.lora_url,weight:payload.lora_weight},strengths:payload.loraStrengths,...(provider==='sogni'?{capability:'Official generate_image schema describes LoRA support as Krea 2 based; selector-to-worker compatibility is not dynamically declared here'}:{}),note:provider==='sogni'?'按选择器与 LoRA ID 原样提交；兼容性及字段实际应用仍以 workflow 结果为准。':'仅记录已提交的 LoRA 参数；生成成功不证明上游实际应用了 LoRA。独立 CLIP 强度没有对应字段时不会假称生效。'});
+        mapping.push({from:'loras',to:provider==='sogni'?'loras + loraStrengths':provider==='krea'?'styles':Object.hasOwn(payload,'model_id')?'model_id':Object.hasOwn(payload,'image_loras')?'image_loras':Object.hasOwn(payload,'lora_list')?'lora_list':Object.hasOwn(payload,'lora_url')?'lora_url + lora_weight':'loras',requested:loras,value:payload.styles || payload.loras || payload.model_id || payload.image_loras || payload.lora_list || {url:payload.lora_url,weight:payload.lora_weight},strengths:payload.loraStrengths,...(provider==='sogni'?{capability:`Official ${definition.hostedToolName || sogniHostedToolName(definition.inputSchema) || 'hosted-tool'} schema: LoRA arrays are sent only when that live Schema declares them; MiniMax H3 video selectors accept loras, others ignore them`}:{}),note:provider==='sogni'?'按选择器与 LoRA ID 原样提交；兼容性及字段实际应用仍以 workflow 结果为准。':'仅记录已提交的 LoRA 参数；生成成功不证明上游实际应用了 LoRA。独立 CLIP 强度没有对应字段时不会假称生效。'});
       }
       blockStage=undefined;
       // custom_parameters are scoped to the CURRENT model Schema: undeclared keys (e.g. left over from another provider/model) are not sent while Schema matching is on.
@@ -1383,7 +1467,15 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
         mapping.push({from:'custom_parameters.'+key,to:key,value,overrides:Object.hasOwn(payload,key)?payload[key]:undefined,schemaDeclared:declared});
       }
       Object.assign(payload,custom);
-      if(provider==='sogni' && !Object.hasOwn(custom,'model'))payload.model=model;
+      if(provider==='sogni') {
+        const selectorField=definition.selectorField || sogniHostedToolSelectorEnum(definition.inputSchema)?.field;
+        if(selectorField==='videoModel') {
+          if(!Object.hasOwn(custom,'videoModel'))payload.videoModel=model;
+          delete payload.model;
+        } else if(!Object.hasOwn(custom,'model')) {
+          payload.model=model;
+        }
+      }
       if(provider==='together')payload.model=model;
       if(provider==='aimlapi')payload.model=model;
       if(provider==='deepinfra')payload.model=model;
@@ -1471,7 +1563,9 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
         }
       }
       if(only)mapping.push({from:'canvas parameters and LoRA nodes',to:null,reason:'用户选择了仅提交 JSON 与提示词'});
-      const requestBody=provider==='sogni'?{...workflowOptions,input:Object.hasOwn(workflowOptions,'input')?workflowOptions.input:{title:'Canvas · '+model,steps:[{id:'image1',toolName:'generate_image',arguments:payload}]}}:provider==='novita'?(()=>{const extra=(payload.extra && typeof payload.extra==='object')?payload.extra:{response_image_type:'jpeg'};const {extra:_e,...request}=payload;return {extra,request:{...request,model_name:model}};})():payload;
+      const sogniToolName=provider==='sogni'?(definition.hostedToolName || sogniHostedToolName(definition.inputSchema)):undefined;
+      if(provider==='sogni' && !sogniToolName)throw Object.assign(new Error(`Sogni live hosted-tool Schema did not yield a toolName from $id or title; source: ${definition.sourceUrl || sogniSchemaSource}`),{status:502,errorSource:'upstream-protocol',endpoint:definition.sourceUrl || sogniSchemaSource});
+      const requestBody=provider==='sogni'?{...workflowOptions,input:Object.hasOwn(workflowOptions,'input')?workflowOptions.input:{title:'Canvas · '+model,steps:[{id:(definition as any).mediaKind==='video'?'clip':'image1',toolName:sogniToolName,arguments:payload}]}}:provider==='novita'?(()=>{const extra=(payload.extra && typeof payload.extra==='object')?payload.extra:{response_image_type:'jpeg'};const {extra:_e,...request}=payload;return {extra,request:{...request,model_name:model}};})():payload;
       actualRequest={endpoint:definition.endpoint,...(definition.catalogLookupFailure?{catalogLookupFailure:definition.catalogLookupFailure}:{}),...(req.body.schemaPrefetchFailure?{schemaPrefetchFailure:req.body.schemaPrefetchFailure}:{}),parameters:requestBody,mapping:mapping.map(m=>({...m,finalValue:Object.hasOwn(payload,m.to)?payload[m.to]:m.scope==='workflow'?workflowOptions.media_references:undefined})),parametersOnly:only,schemaFieldsOnly,...(definition.inputSchema?.properties?{schemaFields:Object.keys(definition.inputSchema.properties)}:{})};
       const {data,status}=await read(req,provider,definition.endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(requestBody)},credential);
       if(provider==='together' && (definition as any).mediaKind!=='video') {
@@ -1532,7 +1626,8 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
       // fix3 A: every local block after Schema load carries Schema-mapped proposedRequest (never the raw canvas body).
       if(schemaLoaded && e.errorSource==='local' && !e.proposedRequest && definition) {
         try {
-          const proposedBody=provider==='sogni'?{...workflowOptions,input:{title:'Canvas · '+String(req.body.model||''),steps:[{id:'image1',toolName:'generate_image',arguments:payload||{}}]}}:(payload||{});
+          const proposedTool=provider==='sogni'?(definition.hostedToolName || sogniHostedToolName(definition.inputSchema)):undefined;
+          const proposedBody=provider==='sogni'?{...workflowOptions,input:{title:'Canvas · '+String(req.body.model||''),steps:[{id:(definition as any).mediaKind==='video'?'clip':'image1',toolName:proposedTool,arguments:payload||{}}]}}:(payload||{});
           e.proposedRequest=proposedRequestOf(definition,proposedBody,mapping||[],req.body.loras);
         } catch { /* never mask the original local error */ }
       }
@@ -1573,7 +1668,7 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
         const {data,status:upstreamStatus}=await read(req,provider,endpoint,undefined,credential);
         const status=data?.status;const outputs=togetherVideoOutputs(data);
         if(!status)throw Object.assign(new Error('Together 视频任务响应没有 status'),{status:upstreamStatus,rawResponse:data,endpoint,errorSource:'upstream-protocol'});
-        return res.json({status,outputs,error:data?.error,rawResponse:data,upstreamStatus,endpoint,credentialRef:credential.credentialRef});
+        return res.json({status,outputs,error:data?.error,rawResponse:data,upstreamStatus,endpoint,credentialRef:credential.credentialRef,...(schemaProviderMediaType(outputs)?{mediaType:schemaProviderMediaType(outputs)}:{})});
       }
       if(provider==='aimlapi') {
         const sync=aimlapiSyncTasks.get(req.params.taskId);
@@ -1585,7 +1680,7 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
         const {data,status:upstreamStatus}=await read(req,provider,endpoint,undefined,credential);
         const status=data?.status;const outputs=aimlapiVideoOutputs(data);
         if(!status)throw Object.assign(new Error('AIMLAPI 视频任务响应没有 status'),{status:upstreamStatus,rawResponse:data,endpoint,errorSource:'upstream-protocol'});
-        return res.json({status,outputs,error:data?.error,rawResponse:data,upstreamStatus,endpoint,credentialRef:credential.credentialRef});
+        return res.json({status,outputs,error:data?.error,rawResponse:data,upstreamStatus,endpoint,credentialRef:credential.credentialRef,...(schemaProviderMediaType(outputs)?{mediaType:schemaProviderMediaType(outputs)}:{})});
       }
       if(provider==='deepinfra') {
         const sync=deepinfraSyncTasks.get(req.params.taskId);
@@ -1602,7 +1697,7 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
         if(!rawStatus)throw Object.assign(new Error('Novita task-result 响应没有 task.status'),{status:upstreamStatus,rawResponse:data,endpoint,errorSource:'upstream-protocol'});
         const status=novitaTaskStatus(rawStatus);
         const outputs=novitaOutputs(data);
-        return res.json({status,outputs,error:data?.task?.reason || undefined,rawResponse:data,upstreamStatus,endpoint,credentialRef:credential.credentialRef,progress:data?.task?.progress_percent,seed:data?.extra?.seed});
+        return res.json({status,outputs,error:data?.task?.reason || undefined,rawResponse:data,upstreamStatus,endpoint,credentialRef:credential.credentialRef,progress:data?.task?.progress_percent,seed:data?.extra?.seed,...(schemaProviderMediaType(outputs)?{mediaType:schemaProviderMediaType(outputs)}:{})});
       }
       if(provider==='venice') {
         const sync=veniceSyncTasks.get(req.params.taskId);
@@ -1621,7 +1716,7 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
           if(!r.ok)throw Object.assign(new Error(`HTTP ${r.status}: binary ${ctype} ${buf.length}B`),{status:r.status,rawResponse:`<binary ${ctype} ${buf.length}B>`,endpoint,errorSource:'upstream'});
           const dataUrl=`data:${ctype.split(';')[0] || 'video/mp4'};base64,${buf.toString('base64')}`;
           const outputs=meta.downloadUrl?[meta.downloadUrl,dataUrl]:[dataUrl];
-          return res.json({status:'completed',outputs,rawResponse:{note:'binary video body',contentType:ctype,bytes:buf.length,download_url:meta.downloadUrl},upstreamStatus:r.status,endpoint,credentialRef:credential.credentialRef});
+          return res.json({status:'completed',outputs,mediaType:'video',rawResponse:{note:'binary video body',contentType:ctype,bytes:buf.length,download_url:meta.downloadUrl},upstreamStatus:r.status,endpoint,credentialRef:credential.credentialRef});
         }
         const raw=await r.text();let data:any;
         try{data=JSON.parse(raw);}catch(parseErr:any){
@@ -1631,7 +1726,7 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
         const status=veniceVideoStatus(data.status);
         const outputs=[data.video_url,data.url,data.download_url,meta.downloadUrl].filter((u:any)=>typeof u==='string' && u).map(String);
         if(!data.status)throw Object.assign(new Error('Venice 视频 retrieve 响应没有 status'),{status:r.status,rawResponse:data,endpoint,errorSource:'upstream-protocol'});
-        return res.json({status,outputs,error:data.error,rawResponse:data,upstreamStatus:r.status,endpoint,credentialRef:credential.credentialRef});
+        return res.json({status,outputs,error:data.error,rawResponse:data,upstreamStatus:r.status,endpoint,credentialRef:credential.credentialRef,...(schemaProviderMediaType(outputs)?{mediaType:schemaProviderMediaType(outputs)}:{})});
       }
       const suffix=provider==='krea'?'/jobs/':provider==='muapi'?'/api/v1/predictions/':provider==='wavespeed'?'/api/v3/predictions/':'/v1/creative-agent/workflows/';
       const endpoint=schemaProviders[provider].root+suffix+encodeURIComponent(req.params.taskId)+(provider==='sogni' || provider==='krea'?'':'/result');
@@ -1642,7 +1737,7 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
       if(!status)throw Object.assign(new Error('上游任务响应没有状态字段'),{status:upstreamStatus,rawResponse:data,endpoint,errorSource:'upstream-protocol'});
       // MuAPI sandbox keys return is_test mock results (docs/provider-api-audit/muapi.md §7). Never count as a real generation.
       if(provider==='muapi' && (data?.is_test===true || task?.is_test===true))return res.json({status:'sandbox_mock',upstreamTaskStatus:status,outputs:[],sandboxOutputs:outputs,error:`MuAPI sandbox key 返回 is_test mock 结果（上游 status=${status}），不是真实出图，不计为成功。请改用 Production key。`,rawResponse:data,upstreamStatus,endpoint,credentialRef:credential.credentialRef});
-      res.json({status,outputs,waitingReason:task?.waitingReason,error:task?.error,rawResponse:data,upstreamStatus,endpoint,credentialRef:credential.credentialRef});
+      res.json({status,outputs,waitingReason:task?.waitingReason,error:task?.error,rawResponse:data,upstreamStatus,endpoint,credentialRef:credential.credentialRef,...(schemaProviderMediaType(outputs)?{mediaType:schemaProviderMediaType(outputs)}:{})});
     }catch(e){if(readVideoJobStatus(req.params.taskId)) clearVideoJobStatus(req.params.taskId);fail(res,e);}
   });
   // Persistence is a separate explicit stage; a storage failure never changes the

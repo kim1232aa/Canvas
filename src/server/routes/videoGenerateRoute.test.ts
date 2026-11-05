@@ -587,8 +587,8 @@ describe('videoGenerateRoute lifecycle and client disconnect handling (grok_comp
 
   it('keeps the generate socket at Fal budget plus schema fetch plus download', () => {
     const floor = FAL_VIDEO_POLL_BUDGET_MS + VIDEO_GENERATE_SCHEMA_TIMEOUT_MS + VIDEO_GENERATE_DOWNLOAD_MARGIN_MS;
-    expect(VIDEO_GENERATE_SOCKET_TIMEOUT_MS).toBeGreaterThanOrEqual(floor);
-    expect(VIDEO_GENERATE_SOCKET_TIMEOUT_MS).toBeGreaterThanOrEqual(NANO_GPT_VIDEO_POLL_BUDGET_MS + VIDEO_GENERATE_SCHEMA_TIMEOUT_MS + VIDEO_GENERATE_DOWNLOAD_MARGIN_MS);
+    expect(VIDEO_GENERATE_SOCKET_TIMEOUT_MS).toBeGreaterThan(floor);
+    expect(VIDEO_GENERATE_SOCKET_TIMEOUT_MS).toBeGreaterThan(NANO_GPT_VIDEO_POLL_BUDGET_MS + VIDEO_GENERATE_SCHEMA_TIMEOUT_MS + VIDEO_GENERATE_DOWNLOAD_MARGIN_MS);
     expect(VIDEO_GENERATE_SCHEMA_TIMEOUT_MS).toBe(30_000);
     expect(VIDEO_GENERATE_DOWNLOAD_MARGIN_MS).toBe(120_000);
   });
@@ -609,6 +609,6 @@ describe('videoGenerateRoute lifecycle and client disconnect handling (grok_comp
     await handleVideoGenerate(deps)(req, res);
     const floor = FAL_VIDEO_POLL_BUDGET_MS + VIDEO_GENERATE_SCHEMA_TIMEOUT_MS + VIDEO_GENERATE_DOWNLOAD_MARGIN_MS;
     expect(timeouts.length).toBeGreaterThanOrEqual(2);
-    expect(timeouts.every((ms) => ms >= floor)).toBe(true);
+    expect(timeouts.every((ms) => ms > floor)).toBe(true);
   });
 });

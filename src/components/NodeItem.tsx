@@ -2,7 +2,7 @@ import { formatSocketDisplayName, formatNodeDisplayTitle, formatWidgetLabel } fr
 import { NodeErrorDisclosure } from './NodeErrorDisclosure';
 import { ensureModelSchema, getModelSchemaEntry } from '../services/modelSchemaCache';
 import {PreviewPlaceholder} from './PreviewPlaceholder';
-import { useLiveVideoModelMatch } from '../hooks/useLiveVideoModelMatch';
+import { useLiveVideoModelMatch, useLiveVideoSchema } from '../hooks/useLiveVideoModelMatch';
 import { VideoJobStatus } from './VideoJobStatus';
 import {videoSchemaField} from '../utils/frontendParameters';
 import {ProviderModelSelect} from './ProviderModelSelect';
@@ -188,6 +188,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
   const uploadInput = React.useRef<HTMLInputElement>(null);
   const [showUnsupported, setShowUnsupported] = React.useState(false);
   const liveVideoMatch = useLiveVideoModelMatch(node.type === 'AIVideoNode' ? String(node.values?.targetProvider || '').trim() : '', node.type === 'AIVideoNode' ? String(node.values?.model || '').trim() : '');
+  const liveVideoSchema = useLiveVideoSchema(node.type === 'AIVideoNode' ? String(node.values?.targetProvider || '').trim() : '', node.type === 'AIVideoNode' ? String(node.values?.model || '').trim() : '');
   const greySeed = isCanvasFieldUnsupported(currentProvider, currentCheckpoint, 'seed');
   const greyNegative = isCanvasFieldUnsupported(currentProvider, currentCheckpoint, 'negative_prompt');
   const greyWidth = isCanvasFieldUnsupported(currentProvider, currentCheckpoint, 'width');
@@ -601,9 +602,17 @@ export const NodeItem: React.FC<NodeItemProps> = ({
           })}
           {/* AIVideoNode: every official Schema property of the selected model gets an input (enum → dropdown) under its official name.
               Fields already on the node (prompt/seed/duration/…/cfg) and reference/LoRA sockets are not repeated. Values live in custom_parameters and are sent as filled. */}
+          {node.type === 'AIVideoNode' && liveVideoSchema?.schemaStatus && (
+            <p data-testid="node-video-hosted-tool" className="text-[11px] font-mono text-lime-200/90 leading-relaxed rounded border border-lime-900/50 bg-lime-950/20 px-2 py-1">
+              schemaStatus {liveVideoSchema.schemaStatus}
+              {liveVideoSchema.hostedToolName ? ` · toolName ${liveVideoSchema.hostedToolName}` : ''}
+              {liveVideoSchema.selectorField ? ` · ${liveVideoSchema.selectorField}` : ''}
+              {String(node.values?.targetProvider || '') === 'sogni' ? ' · 有参考图时提交走 animate_photo（实时 Schema）；Seedance 参考图字段未接通' : ''}
+            </p>
+          )}
           {node.type === 'AIVideoNode' && (() => {
             const entry = getModelSchemaEntry(node.values.targetProvider, node.values.model);
-            const props: Record<string, any> = (entry?.status === 'ready' && entry.propertiesObj) || {};
+            const props: Record<string, any> = liveVideoSchema?.properties || (entry?.status === 'ready' && entry.propertiesObj) || {};
             let custom: Record<string, any> = {};
             try { const c = typeof node.values.custom_parameters === 'string' ? JSON.parse(node.values.custom_parameters || '{}') : (node.values.custom_parameters || {}); if (c && typeof c === 'object' && !Array.isArray(c)) custom = c; } catch { /* invalid JSON: leave as is */ }
             const schemaKeys = Object.keys(props).filter((k) => !VIDEO_SCHEMA_COVERED.has(k) && (VIDEO_ROUTING_WIDGETS.has(k) || !def.widgets?.some((w) => w.name === k)) && !(VIDEO_CFG_WIRES.has(k) && filledCanvasValue(node.values?.cfg)));

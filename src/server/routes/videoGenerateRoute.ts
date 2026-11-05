@@ -17,7 +17,7 @@ export const VIDEO_GENERATE_SCHEMA_TIMEOUT_MS = 30_000;
 /** Room to download the result after the poll budget. */
 export const VIDEO_GENERATE_DOWNLOAD_MARGIN_MS = 120_000;
 /** Idle socket. Longest provider budget plus schema fetch plus download. Do not shrink the official queue budget. */
-export const VIDEO_GENERATE_SOCKET_TIMEOUT_MS = Math.max(NANO_GPT_VIDEO_POLL_BUDGET_MS, FAL_VIDEO_POLL_BUDGET_MS) + VIDEO_GENERATE_SCHEMA_TIMEOUT_MS + VIDEO_GENERATE_DOWNLOAD_MARGIN_MS;
+export const VIDEO_GENERATE_SOCKET_TIMEOUT_MS = Math.max(NANO_GPT_VIDEO_POLL_BUDGET_MS, FAL_VIDEO_POLL_BUDGET_MS) + VIDEO_GENERATE_SCHEMA_TIMEOUT_MS + VIDEO_GENERATE_DOWNLOAD_MARGIN_MS + 1_000;
 
 export interface VideoGenerateRouteDeps {
   isProvided: (v: any) => boolean;

@@ -298,5 +298,34 @@ describe('SchemaProviderDriver · video submit flags', () => {
       isVideo: true,
       workflowSnapshot: { executingNodeId: 'node-a' },
     });
+    expect(String(mockFetch.mock.calls.find(([url]) => String(url).includes('/api/model-schema'))?.[0])).toContain('isVideo=true');
+  });
+
+  it('does not label VIDEO from isVideo when the completed artifact is an image URL', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+    mockFetch.mockImplementation(async (input: URL | RequestInfo, init?: RequestInit) => {
+      const u = String(input); const method = String(init?.method || 'GET').toUpperCase();
+      if (u.includes('/api/model-schema') && method === 'GET') return jsonResponse({ credentialRef: 'sogni-cred', inputSchema: { type: 'object' }, schemaStatus: 'hosted-tool:generate_video' });
+      if (u.includes('/api/schema-provider/sogni/submit') && method === 'POST') {
+        return jsonResponse({ taskId: 'wf_img', pollUrl: '/api/schema-provider/sogni/tasks/wf_img', actualRequest: {} });
+      }
+      if (u.includes('/api/schema-provider/sogni/tasks/wf_img') && method === 'GET') {
+        return jsonResponse({ status: 'completed', outputs: ['https://cdn.example/frame.png'] });
+      }
+      if (u.includes('/api/schema-provider/sogni/save-result') && method === 'POST') {
+        return jsonResponse({ historyItems: [{ url: 'https://cdn.example/frame.png' }] });
+      }
+      throw new Error(`unexpected ${method} ${u}`);
+    });
+    const pending = new SchemaProviderDriver('sogni').generate({
+      model: 'ltx25', prompt: 'boat', isVideo: true,
+    } as NormalizedGenerateParams, { sogniKey: 'k' });
+    await vi.runAllTimersAsync();
+    const result = await pending;
+    expect(result.mediaType).toBe('image');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
