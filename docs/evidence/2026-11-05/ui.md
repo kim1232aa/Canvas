@@ -2,17 +2,18 @@
 
 ## 一、首次作为真实人类用户的浏览器实机体验走查与痛点清单
 
-我们在真实无头浏览器（Chrome 153，视口 `1600×1000`，CDP 端口 `9403`，开发服务器 `http://127.0.0.1:3103`）中以首次使用本产品的普通创作者视角完整操作了各个界面，并采集了改造前的基线截图（保存在 `temp/e2e/2026-11-05/ui6/before-*.png`）。
+我们在真实无头浏览器（Chrome 153，视口 `1600×1000`，CDP 端口 `9403`，开发服务器 `http://127.0.0.1:3103`）中以首次使用本产品的普通创作者视角完整操作了各个界面，并采集了改造前的基线截图（保存在 `./ui/before/before-*.png`）。
 
 ### 改造前实机截图索引
-- `temp/e2e/2026-11-05/ui6/before-01-landing-graph.png`：首次打开页面（节点模式默认工作流）
-- `temp/e2e/2026-11-05/ui6/before-02-params-drawer.png`：展开右侧参数总控台抽屉
-- `temp/e2e/2026-11-05/ui6/before-03-add-node-menu.png`：底部工具栏「添加节点」弹出菜单
-- `temp/e2e/2026-11-05/ui6/before-04-spatial-mode.png`：切换至「画板（Spatial）」视图
-- `temp/e2e/2026-11-05/ui6/before-05-api-settings.png`：打开「API 与密钥设置」弹窗
-- `temp/e2e/2026-11-05/ui6/before-07-history-modal.png`：打开「生成历史」弹窗（空状态）
-- `temp/e2e/2026-11-05/ui6/before-08-blank-canvas-graph.png`：清空画布后的节点模式空白状态
-- `temp/e2e/2026-11-05/ui6/before-09-blank-canvas-spatial.png`：清空画布后的画板模式空白状态
+- [`before-01-landing-graph.png`](./ui/before/before-01-landing-graph.png)：首次打开页面（节点模式默认工作流）
+- [`before-02-params-drawer.png`](./ui/before/before-02-params-drawer.png)：展开右侧参数总控台抽屉
+- [`before-03-add-node-menu.png`](./ui/before/before-03-add-node-menu.png)：底部工具栏「添加节点」弹出菜单
+- [`before-04-spatial-mode.png`](./ui/before/before-04-spatial-mode.png)：切换至「画板（Spatial）」视图
+- [`before-05-api-settings.png`](./ui/before/before-05-api-settings.png)：打开「API 与密钥设置」弹窗
+- [`before-06-exec-log.png`](./ui/before/before-06-exec-log.png)：执行日志详情（改造前旧版弹窗）
+- [`before-07-history-modal.png`](./ui/before/before-07-history-modal.png)：打开「生成历史」弹窗（空状态）
+- [`before-08-blank-canvas-graph.png`](./ui/before/before-08-blank-canvas-graph.png)：清空画布后的节点模式空白状态
+- [`before-09-blank-canvas-spatial.png`](./ui/before/before-09-blank-canvas-spatial.png)：清空画布后的画板模式空白状态
 
 ---
 
@@ -195,14 +196,14 @@
 - **前端操作**：点击右上角 `运行：保存图像`（`data-testid="run-button"`）
 - **实测 DOM `data-testid="node-error-headline"` 提取原文**：
   ```text
-  hf_h...Kdks: HTTP 402: {"error":"Purchase pre-paid credits to continue using Inference Providers. Alternatively, subscribe to PRO to get monthly included credits."}
-  hf_b...MMGa: HTTP 402: {"error":"Purchase pre-paid credits to continue using Inference Providers. Alternatively, subscribe to PRO to get monthly included credits."}
-  hf_j...naLB: HTTP 402: {"error":"Purchase pre-paid credits to continue using Inference Providers. Alternatively, subscribe to PRO to get monthly included credits."}
-  hf_n...EIBT: HTTP 402: {"error":"Purchase pre-paid credits to continue using Inference Providers. Alternatively, subscribe to PRO to get monthly included credits."}
+  hf_[已脱敏]: HTTP 402: {"error":"Purchase pre-paid credits to continue using Inference Providers. Alternatively, subscribe to PRO to get monthly included credits."}
+  hf_[已脱敏]: HTTP 402: {"error":"Purchase pre-paid credits to continue using Inference Providers. Alternatively, subscribe to PRO to get monthly included credits."}
+  hf_[已脱敏]: HTTP 402: {"error":"Purchase pre-paid credits to continue using Inference Providers. Alternatively, subscribe to PRO to get monthly included credits."}
+  hf_[已脱敏]: HTTP 402: {"error":"Purchase pre-paid credits to continue using Inference Providers. Alternatively, subscribe to PRO to get monthly included credits."}
   ```
 - **UI 呈现验证**：
   - KSampler 节点摘要第一眼显示客观事实：`【huggingface】HTTP 402: {"error":"Purchase pre-paid credits to continue using Inference Providers..."}`
-  - 悬浮通知 Toast 即时浮现：`工作流生成失败 hf_b...MMGa: HTTP 402: {"error":"Purchase pre-paid credits..."}`
+  - 悬浮通知 Toast 即时浮现：`工作流生成失败 hf_[已脱敏]: HTTP 402: {"error":"Purchase pre-paid credits..."}`
 - **判定结论**：`PASS_BILLING`（真实上游计费响应，无 Mock，无静默降级）
 
 #### 运行 2：WaveSpeed + 写实风格 LoRA
