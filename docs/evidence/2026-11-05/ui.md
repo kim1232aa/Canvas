@@ -91,7 +91,7 @@
     - 节点标题友好化：`formatNodeDisplayTitle` 将 `EmptyLatentImage` 渲染为 `画布尺寸设定 (Latent)`、`CLIPTextEncode` 渲染为 `正向提示词 (CLIP)`、`VAEDecode` 渲染为 `图像解码器 (VAE Decode)`、`SaveImage` 渲染为 `保存与预览图像 (Save Image)`。
     - 字段标签友好化：`formatWidgetLabel` 将 `width` -> `图像宽度`、`height` -> `图像高度`、`batch_size` -> `生成张数`、`seed` -> `随机种子`、`control_after_generate` -> `运行后控制`、`steps` -> `步数`、`sampler_name` -> `采样器`、`scheduler` -> `调度器`、`denoise` -> `去噪强度`。
     - 端口标签友好化：`formatSocketDisplayName` 将 `MODEL` -> `模型 (MODEL)`、`CLIP` -> `文本编码 (CLIP)`、`VAE` -> `解码 (VAE)`、`CONDITIONING` -> `提示词条件 (CONDITIONING)`、`LATENT` -> `画幅潜空间 (LATENT)`、`IMAGE` -> `图像 (IMAGE)`。
-  - 参数面板去工程化黑话：将全大写英文黑话改为中文首显格式：`云端推理服务商 (Provider)`、`采样步数 (Steps)`、`提示词引导系数 (CFG Scale)`、`采样算法 (Sampler)`、`调度器 (Scheduler)`、`重绘去噪幅度 (Denoise)`、`宽度 (Width / 像素)`、`高度 (Height / 像素)`。
+  - 参数面板去工程化黑话：将提示词区域双语标题精简为纯中文首显（`提示词工作台`、`正向提示词`、`负向提示词`，见截图 `15-parameter-inspector.png`）；将全大写英文黑话改为中文格式：`云端推理服务商 (Provider)`、`采样步数 (Steps)`、`提示词引导系数 (CFG Scale)`、`采样算法 (Sampler)`、`调度器 (Scheduler)`、`重绘去噪幅度 (Denoise)`、`宽度 (Width / 像素)`、`高度 (Height / 像素)`。
   - 画板去黑话：将 `生成此选区 (Queue Frame)` 改为 `生成此选区画板`，`正向提示词 (Positive)` 改为 `正向提示词`（见截图 `16-spatial-mode.png`）。
   - 历史空状态纠正：移除旧版已不存在的 `Queue Prompt` 按钮指引，改为 `暂无生成记录。在画布配置好模型与提示词后，点击右上角「运行」开始生成！`。
 
@@ -104,6 +104,7 @@
     - 阶段一（提交中 0-1s）：`正在提交请求 (正在调度模型与权重)...` / 节点显示 `正在提交...`。
     - 阶段二（等待上游已耗时计时）：`等待上游返回 (已耗时 Xs)...` / 节点显示 `等待上游 (Xs)`（见截图 `18-staged-run-feedback.png`）。
     - 阶段三（终态响应）：成功显示 `生成完成 (provider) · 耗时 Xs`；失败显示 `生成失败: [错误摘要]`。
+    - **计时器组件化解耦**：将秒级递增计时器完全封装入独立子组件 `<NodeRunElapsed state={node.state} type={node.type} />`，严格消除生产代码中的 `try/catch` 漏洞，保持 `NodeItem` Hook 列表极其稳定，同时完全兼容单元测试中直接调用 `NodeItem(props)` 的场景。
   - 提供 `复制诊断信息` 按钮，一键拷贝完整服务商、端点、状态码与原始响应体。
   - 检测到未配置 API Key 时展示 `去配置密钥` 按钮，已打通透传 `onOpenSettings`，一键打开对应服务商设置。
 

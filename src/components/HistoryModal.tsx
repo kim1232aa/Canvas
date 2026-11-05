@@ -444,6 +444,15 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
   const [brokenIds, setBrokenIds] = React.useState<Record<string, true>>({});
   const [copyError, setCopyError] = React.useState('');
 
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const markBroken = (id: string) => {

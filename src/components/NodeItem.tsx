@@ -70,6 +70,45 @@ export const BreakAfterSlashDash: React.FC<{ text: string }> = ({ text }) => {
   return <>{parts.map((p, i) => <React.Fragment key={i}>{p}{i < parts.length - 1 ? <wbr /> : null}</React.Fragment>)}</>;
 };
 
+/** Staged run feedback child component: isolates the elapsed timer hook from NodeItem */
+export const NodeRunElapsed: React.FC<{
+  state?: NodeInstance['state'];
+  type: string;
+  executionProgress?: number;
+}> = ({ state, type, executionProgress }) => {
+  const [elapsedSeconds, setElapsedSeconds] = React.useState(0);
+
+  React.useEffect(() => {
+    if (state !== 'running') {
+      setElapsedSeconds(0);
+      return;
+    }
+    const start = Date.now();
+    const timer = setInterval(() => {
+      setElapsedSeconds(Math.max(1, Math.floor((Date.now() - start) / 1000)));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [state]);
+
+  if (state !== 'running') return null;
+
+  return (
+    <div
+      className="flex items-center gap-1 text-[10px] font-mono text-cyan-400 bg-cyan-950/60 px-1.5 py-0.5 rounded border border-cyan-800/40"
+      data-testid="node-running-status"
+    >
+      <Loader2 className="w-3 h-3 animate-spin" />
+      <span>
+        {type === 'AIVideoNode'
+          ? (executionProgress ? `${executionProgress}%` : '运行中')
+          : elapsedSeconds < 2
+          ? '正在提交...'
+          : `等待上游 (${elapsedSeconds}s)`}
+      </span>
+    </div>
+  );
+};
+
 
 interface NodeItemProps {
   node: NodeInstance;
@@ -147,24 +186,6 @@ export const NodeItem: React.FC<NodeItemProps> = ({
 
   const uploadInput = React.useRef<HTMLInputElement>(null);
   const [showUnsupported, setShowUnsupported] = React.useState(false);
-  const [elapsedSeconds, setElapsedSeconds] = React.useState(0);
-
-  // Staged run feedback: tracks elapsed seconds while node is actively running
-  try {
-    React.useEffect(() => {
-      if (node.state !== 'running') {
-        setElapsedSeconds(0);
-        return;
-      }
-      const start = Date.now();
-      const timer = setInterval(() => {
-        setElapsedSeconds(Math.max(1, Math.floor((Date.now() - start) / 1000)));
-      }, 1000);
-      return () => clearInterval(timer);
-    }, [node.state]);
-  } catch {
-    // Calling NodeItem directly as a function in tests where mockHooks only mocked useState/useRef
-  }
   const liveVideoMatch = useLiveVideoModelMatch(node.type === 'AIVideoNode' ? String(node.values?.targetProvider || '').trim() : '', node.type === 'AIVideoNode' ? String(node.values?.model || '').trim() : '');
   const greySeed = isCanvasFieldUnsupported(currentProvider, currentCheckpoint, 'seed');
   const greyNegative = isCanvasFieldUnsupported(currentProvider, currentCheckpoint, 'negative_prompt');
@@ -387,18 +408,11 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               </span>
             );
           })()}
-          {node.state === 'running' && (
-            <div className="flex items-center gap-1 text-[10px] font-mono text-cyan-400 bg-cyan-950/60 px-1.5 py-0.5 rounded border border-cyan-800/40" data-testid="node-running-status">
-              <Loader2 className="w-3 h-3 animate-spin" />
-              <span>
-                {node.type === 'AIVideoNode'
-                  ? (node.executionProgress ? `${node.executionProgress}%` : '运行中')
-                  : elapsedSeconds < 2
-                  ? '正在提交...'
-                  : `等待上游 (${elapsedSeconds}s)`}
-              </span>
-            </div>
-          )}
+          <NodeRunElapsed
+            state={node.state}
+            type={node.type}
+            executionProgress={node.executionProgress}
+          />
           {node.state === 'success' && (
             <div className="flex items-center gap-1 text-[10px] font-mono text-emerald-400 bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-800/40">
               <Check className="w-3 h-3" />
@@ -704,7 +718,6 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               return (
                 <div key={widget.name} className={`space-y-1 `}>
                   <div className="flex flex-wrap items-center justify-between text-slate-400 font-mono text-[11px] gap-1.5">
-                    {/* clean-1333 #6: <span className="whitespace-nowrap shrink-0" data-testid={`widget-label-${widget.name}`}>{widget.label}</span> */}
                     <span className="flex flex-wrap items-center gap-1.5 min-w-0" title={widget.title || undefined}>
                       <span className="whitespace-nowrap shrink-0" data-testid={`widget-label-${widget.name}`}>{formatWidgetLabel(widget.name, widget.label)}</span>
                       {unsupported && null}

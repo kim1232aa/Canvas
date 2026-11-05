@@ -268,7 +268,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
             <div className="flex items-center justify-between font-semibold text-slate-200 text-[11px]">
               <span className="flex items-center gap-1.5">
                 <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                提示词工作台 (CLIP Prompts)
+                提示词工作台
               </span>
               <span className="text-[10px] text-slate-400 font-mono">实时同步工作流节点</span>
             </div>
@@ -277,7 +277,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
             {onChangePositivePrompt && (
               <div className="space-y-1">
                 <div className="flex items-center justify-between text-[10px]">
-                  <label className="text-amber-300/90 font-mono font-semibold">正向提示词 (Positive Prompt)</label>
+                  <label className="text-amber-300/90 font-mono font-semibold">正向提示词</label>
                   <button
                     onClick={handleRefine}
                     disabled={isRefiningPrompt || !positivePrompt}
@@ -305,7 +305,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
               <div className="space-y-1" data-testid="inspector-negative-prompt">
                 <div className="flex flex-wrap items-start justify-between gap-2 text-[10px]">
                   <label className="text-rose-400 font-mono font-semibold flex flex-wrap items-center gap-1.5 min-w-0">
-                    <span className="shrink-0">负向提示词 (Negative Prompt)</span>
+                    <span className="shrink-0">负向提示词</span>
                     {greyNegative && <FieldStatusBadge status="unsupported" />}
                     {!greyNegative && <span className="min-w-0 max-w-full [overflow-wrap:anywhere]" data-testid="inspector-negative-badge"><SchemaSendBadge status={schemaSendStatus(params.targetProvider, 'negative_prompt', negativePrompt, customParamsJson)} omitTitle={SCHEMA_OMIT_REASON} /></span>}
                   </label>

@@ -15,19 +15,23 @@ interface NodeErrorDisclosureProps {
  * Project iron rule: NEVER invent a diagnosis the upstream did not make!
  * Strictly: provider + HTTP status (if parsed) + first line of the verbatim body.
  */
-export function summarizeErrorMessage(rawMessage: string, providerHint?: string): {
+export function summarizeErrorMessage(rawMessage: string, providerHint?: string, statusCodeProp?: number | string): {
   headline: string;
   isMissingKey: boolean;
-  isBalanceIssue: boolean;
   provider?: string;
   statusCode?: number;
 } {
   const text = String(rawMessage || '').trim();
   const lower = text.toLowerCase();
 
-  // Extract HTTP status code if present in the message text
-  const httpMatch = text.match(/HTTP\s+(\d{3})/i) || text.match(/\b(400|401|402|403|404|422|429|500|502|503|504)\b/);
-  const statusCode = httpMatch ? parseInt(httpMatch[1], 10) : undefined;
+  // Parse HTTP status ONLY from /HTTP\s+(\d{3})/i or explicit statusCodeProp, NEVER from a bare number in the body
+  let statusCode: number | undefined;
+  if (statusCodeProp != null && String(statusCodeProp).trim() !== '' && !Number.isNaN(Number(statusCodeProp))) {
+    statusCode = Number(statusCodeProp);
+  } else {
+    const httpMatch = text.match(/HTTP\s+(\d{3})/i);
+    statusCode = httpMatch ? parseInt(httpMatch[1], 10) : undefined;
+  }
 
   // First non-empty line of the verbatim body
   const firstLine = text.split(/\r?\n/).map((l) => l.trim()).find((l) => l.length > 0) || text;
@@ -46,11 +50,10 @@ export function summarizeErrorMessage(rawMessage: string, providerHint?: string)
     headline = `${provPrefix}${firstLine}`;
   }
 
-  // Pure factual flags for actions (e.g. settings button)
+  // Pure factual flag for settings action button
   const isMissingKey = statusCode === 401 || lower.includes('未配置') || lower.includes('invalid_api_key');
-  const isBalanceIssue = statusCode === 402 || lower.includes('insufficient credits') || lower.includes('not_enough_balance');
 
-  return { headline, isMissingKey, isBalanceIssue, provider: prov, statusCode };
+  return { headline, isMissingKey, provider: prov, statusCode };
 }
 
 export const NodeErrorDisclosure: React.FC<NodeErrorDisclosureProps> = ({
@@ -64,7 +67,7 @@ export const NodeErrorDisclosure: React.FC<NodeErrorDisclosureProps> = ({
   const [isExpanded, setIsExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const { headline, isMissingKey, provider: detectedProvider } = summarizeErrorMessage(errorMessage, provider);
+  const { headline, isMissingKey, provider: detectedProvider } = summarizeErrorMessage(errorMessage, provider, statusCode);
 
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation();

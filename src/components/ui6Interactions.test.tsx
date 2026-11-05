@@ -1,7 +1,12 @@
-import React from 'react';
+// @vitest-environment jsdom
+import React, { act } from 'react';
+(globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
+import { createRoot } from 'react-dom/client';
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { summarizeErrorMessage, NodeErrorDisclosure } from './NodeErrorDisclosure';
+import * as keyStatusModule from '../services/providerKeyStatus';
+import { HistoryModal } from './HistoryModal';
 import {
   formatNodeDisplayTitle,
   formatWidgetLabel,
@@ -232,7 +237,41 @@ describe('Modal Dialog Accessibility & Escape handlers', () => {
 });
 
 describe('BackendSettingsModal key-page links & key status failure reporting', () => {
-  it('surfaces fetchProviderKeyStatus failure via alert banner and avoids leaving rows silently at 未配置', () => {
+  it('surfaces fetchProviderKeyStatus failure via alert banner and marks rows as 检测失败', async () => {
+    vi.spyOn(keyStatusModule, 'fetchProviderKeyStatus').mockRejectedValueOnce(
+      new Error('Network connection timeout')
+    );
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        <BackendSettingsModal
+          isOpen={true}
+          onClose={() => {}}
+          apiKeys={{} as any}
+          onSaveKeys={() => {}}
+        />
+      );
+    });
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50));
+    });
+
+    expect(container.querySelector('[data-testid="key-status-error"]')?.textContent).toContain(
+      '获取服务端密钥配置状态失败：Network connection timeout'
+    );
+    expect(container.textContent).toContain('检测失败');
+
+    await act(async () => {
+      root.unmount();
+    });
+    container.remove();
+  });
+
+  it('renders verified key-page links (MuAPI dashboard) and omits unverified homepages', () => {
     const noop = () => {};
     const html = renderToStaticMarkup(
       <BackendSettingsModal
@@ -249,5 +288,33 @@ describe('BackendSettingsModal key-page links & key status failure reporting', (
     // Unverified homepages must NOT have the keyPageUrl button
     expect(html).not.toMatch(/href="https:\/\/www\.mage\.space"[^>]*申请 \/ 获取 API Key 直达/);
     expect(html).not.toMatch(/href="https:\/\/modelslab\.com"[^>]*申请 \/ 获取 API Key 直达/);
+  });
+
+  it('Escape key triggers onClose on HistoryModal and BackendSettingsModal', () => {
+    const onHistoryClose = vi.fn();
+    const onSettingsClose = vi.fn();
+    const c1 = document.createElement('div');
+    const c2 = document.createElement('div');
+    document.body.appendChild(c1);
+    document.body.appendChild(c2);
+    const r1 = createRoot(c1);
+    const r2 = createRoot(c2);
+
+    act(() => {
+      r1.render(<HistoryModal isOpen={true} onClose={onHistoryClose} history={[]} onApplyPrompt={() => {}} onDeleteItem={() => {}} onClearAll={() => {}} />);
+      r2.render(<BackendSettingsModal isOpen={true} onClose={onSettingsClose} apiKeys={{} as any} onSaveKeys={() => {}} />);
+    });
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+
+    expect(onHistoryClose).toHaveBeenCalled();
+    expect(onSettingsClose).toHaveBeenCalled();
+
+    act(() => {
+      r1.unmount();
+      r2.unmount();
+    });
+    c1.remove();
+    c2.remove();
   });
 });

@@ -191,6 +191,15 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
     initialKeysRef.current = apiKeys;
   }, [apiKeys, isOpen]);
 
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   const [providerKeyStatus, setProviderKeyStatus] = React.useState<ProviderKeyStatusMap>({});
   const [keyStatusError, setKeyStatusError] = React.useState<string | null>(null);
 
