@@ -165,8 +165,8 @@
 ### 改造后实机截图索引（已脱敏归档并纳入版本跟踪：`docs/evidence/2026-11-05/ui/`）
 - [`01-landing.png`](./ui/01-landing.png)：改造后首次打开页面（中文友好节点标题：`画布尺寸设定 (Latent)`、`正向提示词 (CLIP)`、`图像解码器 (VAE Decode)`；中文字段：`图像宽度`、`图像高度`、`生成张数`、`随机种子`、`运行后控制`、`步数`、`采样器`、`调度器`、`去噪强度`）
 - [`02-blank-canvas-onboarding.png`](./ui/02-blank-canvas-onboarding.png)：清空画布后的 6 步新手入门引导卡片
-- [`03-api-settings-enhanced.png`](./ui/03-api-settings-enhanced.png)：改造后的「API 与密钥设置」弹窗（显示实时 ● 已配置 / ○ 未配置、官方 API Key 直达链接）
-- [`04-api-settings-tested.png`](./ui/04-api-settings-tested.png)：测试连通性后的即时透明状态反馈
+- [`03-api-settings-enhanced.png`](./ui/03-api-settings-enhanced.png)：改造后的「API 与密钥设置」弹窗（显示真实 ● 已配置 / ○ 未配置状态、官方 API Key 直达链接及服务端密钥池加载情况）
+- [`04-api-settings-tested.png`](./ui/04-api-settings-tested.png)：点击「测试已配置连接」后的真实连通性反馈（Fal.ai 账单接口返回 HTTP 403 权限说明及 374ms 真实时延，未配置服务商显示未配置标记，绝不伪造成功）
 - [`05-loaded-standard-workflow.png`](./ui/05-loaded-standard-workflow.png)：在空状态引导卡上一键加载标准工作流
 - [`06-run-result-1.png`](./ui/06-run-result-1.png)：Hugging Face + LoRA 生成运行及透明错误披露
 - [`07-workflow-modal.png`](./ui/07-workflow-modal.png)：工作流与热门模型中心
