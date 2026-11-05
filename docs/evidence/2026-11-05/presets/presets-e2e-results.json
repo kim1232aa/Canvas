@@ -69,10 +69,10 @@
       "classification": "PASS_BILLING",
       "http_status": 400,
       "endpoint": "https://orchestration.civitai.com/v2/consumer/workflows?wait=100",
-      "time": "2026-11-05T19:11:51+09:00",
-      "response_verbatim": "{\"type\":\"https://tools.ietf.org/html/rfc9110#section-15.5.1\",\"title\":\"Bad Request\",\"status\":400,\"detail\":\"insufficientBuzz\",\"traceId\":\"00-3e021fd2b77cab5aa90956ee70a97382-274a382c129ca9f8-02\"}",
+      "time": "2026-11-05T21:14:34+09:00",
+      "response_verbatim": "{\"type\":\"https://tools.ietf.org/html/rfc9110#section-15.5.1\",\"title\":\"Bad Request\",\"status\":400,\"detail\":\"insufficientBuzz\",\"traceId\":\"00-60037fb0eb7acc0ed1e6dabd5a5356b8-e4af40a616f50e45-02\"}",
       "screenshot": "docs/evidence/2026-11-05/presets/screenshots/std-civitai-t2v.webp",
-      "notes": "400 Buzz 积分不足；已挂载中性 Stylized PBR Animation LoRA 2247725@2530788"
+      "notes": "400 Buzz 积分不足；已挂载中性 Stylized PBR Animation LoRA 2247725@2530788 (traceId: 00-60037fb0eb7acc0ed1e6dabd5a5356b8-e4af40a616f50e45-02)"
     },
     {
       "id": "std-civitai-i2v",
