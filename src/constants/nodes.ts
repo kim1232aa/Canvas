@@ -964,6 +964,11 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
           { label: 'Novita', value: 'novita' },
           { label: '⚡ Replicate 官方云平台', value: 'replicate' },
           { label: '🌟 Civitai 官方原生引擎', value: 'civitai' },
+          { label: 'Together', value: 'together' },
+          { label: 'AIMLAPI', value: 'aimlapi' },
+          { label: 'Venice', value: 'venice' },
+          { label: 'Krea', value: 'krea' },
+          { label: 'Sogni', value: 'sogni' },
         ],
       },
       {
