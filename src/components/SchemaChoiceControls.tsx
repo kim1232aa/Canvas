@@ -1,6 +1,7 @@
 import { UrlText } from './UrlText';
 import React from 'react';
 import { CANVAS_TO_SCHEMA_ALIASES } from '../utils/schemaSendHint';
+import { formatSchemaFieldLabel } from '../utils/nodeUiLabels';
 
 /**
  * Generic node controls for official-Schema fields that no canvas widget maps to
@@ -180,11 +181,15 @@ export function SchemaChoiceControls({
         const mode = current === undefined ? '' : isObj ? '__custom__' : String(current);
         const sent = current !== undefined;
         const unfilledLabel = schemaFieldBadge(undefined, f.numberSpec?.default ?? f.defaultValue).text;
+        const fieldMeta = formatSchemaFieldLabel(f.key);
         return (
           <div key={f.key} className="space-y-1" data-testid={`schema-choice-${f.key}`}>
             <label className="flex flex-wrap items-center justify-between gap-2">
               <span className="min-w-0 [overflow-wrap:anywhere]" title={f.description}>
-                <span className="font-mono">{f.key}</span>
+                {fieldMeta.label !== f.key && (
+                  <span className="font-semibold text-white mr-1.5">{fieldMeta.label}</span>
+                )}
+                <span className="font-mono text-slate-300">({f.key})</span>
                 {(f.title || f.description) && <span className="ml-1.5 text-slate-400 line-clamp-2" data-testid={`schema-field-doc-${f.key}`} title={[f.title, f.description].filter(Boolean).join(' · ')}>{f.title ? f.title : ''}{f.title && f.description && f.description !== f.title ? ' · ' : ''}{f.description && f.description !== f.title ? f.description : ''}</span>}
               </span>
               {(() => {
@@ -211,6 +216,22 @@ export function SchemaChoiceControls({
               );
             })() : f.numberSpec && !f.enumValues.length && !f.sizeObject ? (
               <div className="flex items-center gap-2">
+                {f.numberSpec.minimum !== undefined && f.numberSpec.maximum !== undefined && (
+                  <input
+                    type="range"
+                    aria-label={`${f.key} 滑块`}
+                    disabled={!body}
+                    min={f.numberSpec.minimum}
+                    max={f.numberSpec.maximum}
+                    step={f.numberSpec.type === 'integer' ? 1 : 0.1}
+                    value={current === undefined || current === null ? (f.numberSpec.default ?? f.numberSpec.minimum) : Number(current)}
+                    onChange={(e) => {
+                      const n = f.numberSpec!.type === 'integer' ? parseInt(e.target.value, 10) : Number(e.target.value);
+                      write(f.key, Number.isFinite(n) ? n : undefined);
+                    }}
+                    className="w-28 h-1.5 bg-[#252833] rounded appearance-none cursor-pointer accent-cyan-400"
+                  />
+                )}
                 <input
                   type="number"
                   aria-label={f.key}

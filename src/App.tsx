@@ -1434,7 +1434,17 @@ export default function App() {
         };
       }));
 
-      // 雁 2026-11-04: no failure toast; the error shows once, on the failed node.
+      // High-visibility failure notification with progressive disclosure and quick settings link
+      const missingKeyMatch = String(upstreamMsg || errMsg).match(/未配置\s*([a-zA-Z0-9_-]+)\s*的密钥/);
+      const missingKeyProv = missingKeyMatch ? missingKeyMatch[1] : undefined;
+      setToast({
+        type: 'error',
+        title: '工作流生成失败',
+        message: upstreamMsg || errMsg,
+        action: missingKeyProv ? 'api-settings' : undefined,
+        actionProviderId: missingKeyProv,
+      });
+
       // clean-1358 #4 + clean-1613 #2: pan only after writing ONE exec-log row 「视口平移至原因节点」.
       // Capture run attach BEFORE finally/endRun clears currentRunLabel; record OUTSIDE setState (StrictMode would double-fire).
       // state 'complete' — pan is not a request failure (no 请求失败 / 较早失败).
@@ -2513,6 +2523,9 @@ export default function App() {
               setIsModelHubOpen(true);
             }}
             onClearCanvas={handleClearCanvas}
+            onOpenWorkflowPresets={() => setIsWorkflowPresetsOpen(true)}
+            onOpenSettings={() => setIsSettingsOpen(true)}
+            onAddSpatialFrame={handleAddSpatialFrame}
           />
         );
       })()}

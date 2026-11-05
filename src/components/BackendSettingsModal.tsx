@@ -24,6 +24,7 @@ import {
   ShieldAlert,
 } from 'lucide-react';
 import { ApiKeysState, ProviderConfig, ProviderId } from '../types/providers';
+import { fetchProviderKeyStatus, ProviderKeyStatusMap } from '../services/providerKeyStatus';
 import { saveKeysLocalFirst } from '../services/settingsSave';
 import {
   testProviderConnection,
@@ -72,6 +73,10 @@ const ALLOWED_CLOUD_SETTINGS_FIELDS = new Set([
   'mageKey',
   'mageBaseUrl',
 ]);
+
+export interface ExtendedProviderConfig extends ProviderConfig {
+  keyPageUrl?: string;
+}
 
 interface BackendSettingsModalProps {
   isOpen: boolean;
@@ -177,6 +182,17 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
     initialKeysRef.current = apiKeys;
   }, [apiKeys, isOpen]);
 
+  const [providerKeyStatus, setProviderKeyStatus] = React.useState<ProviderKeyStatusMap>({});
+
+  // Auto-fetch provider key status and pool stats on open for real-time visibility
+  React.useEffect(() => {
+    if (!isOpen) return;
+    fetchProviderKeyStatus()
+      .then((status) => setProviderKeyStatus(status))
+      .catch((err) => console.error('Failed to fetch provider key status:', err));
+    refreshStats();
+  }, [isOpen, refreshStats]);
+
   // Focus the provider that triggered "去 API 设置" (missing-key toast), else leave last tab.
   React.useEffect(() => {
     if (!isOpen) return;
@@ -200,13 +216,14 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
 
   if (!isOpen) return null;
 
-  const providers: ProviderConfig[] = [
+  const providers: ExtendedProviderConfig[] = [
     {
       id: 'fal',
       name: friendlyProviderLabel('fal'),
       badge: '模型端点 / 多密钥',
       docsUrl: 'https://docs.fal.ai',
-      description: '每个 Fal 模型使用独立端点。LoRA 等参数须由该端点支持；选择端点后再配置参数。',
+      keyPageUrl: 'https://fal.ai/dashboard/keys',
+      description: 'Fal.ai 专为生成式 AI 优化的超低延迟 GPU 推理引擎，支持 FLUX.1、SDXL、Wan 2.1 等模型的极速云端直出。',
       apiUrl: 'https://fal.run',
       keyName: 'falKey',
       keyPlaceholder: 'fal_key_xxxxxxxxxxxxxxxxxxxxxxxx (支持换行/逗号输入多个 Key)',
@@ -218,7 +235,8 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       name: friendlyProviderLabel('gemini'),
       badge: 'Google GenAI SDK',
       docsUrl: 'https://ai.google.dev',
-      description: '图像生成与提示词推理分别使用用户选定的模型。请核对模型 ID 与账户权限。',
+      keyPageUrl: 'https://aistudio.google.com/app/apikey',
+      description: 'Google 官方 Gemini 系列多模态大模型，支持精准图像生成与提示词深度思考推理。',
       apiUrl: 'Google GenAI SDK / generateContent',
       keyName: 'geminiKey',
       keyPlaceholder: '系统自动注入环境变量 GEMINI_API_KEY (或填入自定义多 Key)',
@@ -230,6 +248,7 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       name: friendlyProviderLabel('openai_compat'),
       badge: '兼容中转（自填 Base URL，不是官方 OpenAI）',
       docsUrl: 'https://platform.openai.com/docs/api-reference/images/create',
+      keyPageUrl: 'https://platform.openai.com/api-keys',
       description: 'OpenAI Images 兼容中转：gpt-image-2 文生图 / 图生图。须自填 Base URL（通常以 /v1 结尾）与 API Key。不是官方 OpenAI，不硬编码任何中转域名。',
       apiUrl: '（用户自填 Base URL）',
       keyName: 'openaiCompatKey',
@@ -242,7 +261,8 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       name: friendlyProviderLabel('grok_compat'),
       badge: '兼容中转（自填 Base URL，不是官方 xAI）',
       docsUrl: 'https://docs.x.ai/docs/guides/image-generations',
-      description: 'Grok / xAI Imagine 兼容中转：生图、图生图、文生视频、图生视频、对话。须自填 Base URL 与 API Key。不是官方 xAI。HTTP 503 grok_media_no_eligible_account 原样暴露，不换商。',
+      keyPageUrl: 'https://console.x.ai',
+      description: 'Grok / xAI Imagine 兼容中转：生图、图生图、文生视频、图生视频、对话。须自填 Base URL 与 API Key。不是官方 xAI。',
       apiUrl: '（用户自填 Base URL，缺 /v1 时服务端补 /v1）',
       keyName: 'grokCompatKey',
       keyPlaceholder: 'sk-xxxx（兼容中转 Key）',
@@ -254,6 +274,7 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       name: friendlyProviderLabel('agnes'),
       badge: '聚合引擎 / 2.5 Flash / 3.0 推理',
       docsUrl: 'https://apihub.agnes-ai.com',
+      keyPageUrl: 'https://apihub.agnes-ai.com',
       description: '配置 Agnes API 地址与密钥。图像、视频与推理任务分别按选定模型提交。',
       apiUrl: 'https://apihub.agnes-ai.com/v1',
       keyName: 'agnesKey',
@@ -266,6 +287,7 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       name: friendlyProviderLabel('sensenova'),
       badge: '提示词推理',
       docsUrl: 'https://token.sensenova.cn',
+      keyPageUrl: 'https://token.sensenova.cn',
       description: '用于提示词推理与扩写。需显式选择模型，推理结果可连接至图像生成工作流。',
       apiUrl: 'https://token.sensenova.cn/v1',
       keyName: 'sensenovaKey',
@@ -278,6 +300,7 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       name: friendlyProviderLabel('civitai'),
       badge: 'C站 LoRA 与底模库',
       docsUrl: 'https://developer.civitai.com',
+      keyPageUrl: 'https://civitai.com/user/account',
       description: '直连 Civitai.com 官方开放接口，检索与下载社区数以万计的真实 LoRA、触发词与 Checkpoints。',
       apiUrl: 'https://civitai.com/api/v1',
       keyName: 'civitaiKey',
@@ -290,7 +313,8 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       name: friendlyProviderLabel('huggingface'),
       badge: '抱脸开源大模型社区',
       docsUrl: 'https://huggingface.co/docs',
-      description: '模型仓库与在线推理不同。请在模型节点中明确选择 HF Inference 或 fal-ai 路由；fal-ai 会产生对应推理费用。Space 的能力单独核实。',
+      keyPageUrl: 'https://huggingface.co/settings/tokens',
+      description: '开源 AI 模型社区，提供 HF Serverless Inference 与 fal-ai 托管路由。',
       apiUrl: 'https://router.huggingface.co（所选路由）',
       keyName: 'hfToken',
       keyPlaceholder: 'YOUR_API_KEY',
@@ -302,7 +326,8 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       name: friendlyProviderLabel('modelscope'),
       badge: '国内站 / 消耗国内魔粒',
       docsUrl: 'https://modelscope.cn/docs',
-      description: '国内站密钥与额度独立于国际站。目录中的资源是否可在线推理，以及 LoRA 能力，需按所选模型核实。',
+      keyPageUrl: 'https://modelscope.cn/my/myaccesstoken',
+      description: '魔搭社区国内站 (modelscope.cn)，阿里开源模型社区官方推理直出，消耗国内魔粒。',
       apiUrl: 'https://api-inference.modelscope.cn/v1',
       keyName: 'modelscopeToken',
       keyPlaceholder: '国内站 Access Token (ms-xxxxxxxx，从 modelscope.cn 获取)',
@@ -314,6 +339,7 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       name: friendlyProviderLabel('modelscope_ai'),
       badge: '国际站 / 消耗国际魔粒',
       docsUrl: 'https://modelscope.ai/docs',
+      keyPageUrl: 'https://modelscope.ai/my/myaccesstoken',
       description: '魔搭社区国际站 (modelscope.ai) 官方推理接口，需绑定阿里云账号激活，消耗国际站魔粒。',
       apiUrl: 'https://api-inference.modelscope.ai/v1',
       keyName: 'modelscopeAiToken',
@@ -326,7 +352,8 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       name: friendlyProviderLabel('nanogpt'),
       badge: '模型能力动态校验',
       docsUrl: 'https://docs.nano-gpt.com',
-      description: '生成前读取选定模型的能力。resolution 与像素宽高须按该模型要求填写，不支持的字段会明确报错。',
+      keyPageUrl: 'https://nano-gpt.com/api',
+      description: 'NanoGPT 极速免部署推理接口，支持多种主流文生图模型能力动态校验。',
       apiUrl: 'https://api.nano-gpt.com/api/v1/images',
       keyName: 'nanogptKey',
       keyPlaceholder: 'NanoGPT API Key (sk-nano-xxxxxxxx)',
@@ -338,7 +365,8 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       name: 'Tensor.Art OpenWorks',
       badge: 'OpenWorks 真出图',
       docsUrl: 'https://github.com/Tensor-Art/tensorart-skills/tree/master/skills/tensorart-generate',
-      description: '仅 OpenWorks 真出图：基址 openapi.tensor.art/openworks/v1（ak_tusi → openapi.tusiart.cn）。\n鉴权头 Echo-Access-Key；目录 POST /tool/list；创建 POST /task；轮询 POST /task/query。\n密钥填 ak_tensor_…（或 ak_tusi…）。画布选服务商「Tensor.Art OpenWorks」。\n已下线 TAMS 双轨入口，不再要求另配 Bearer。',
+      keyPageUrl: 'https://tensor.art/settings/access-key',
+      description: 'Tensor.Art 官方 OpenWorks 推理服务，支持 FLUX.1、SDXL、SD 1.5 及海量社区风格 LoRA。\n密钥填写 ak_tensor_…（或 ak_tusi…）。',
       apiUrl: 'https://openapi.tensor.art/openworks/v1',
       keyName: 'tensorartKey',
       keyPlaceholder: 'OpenWorks Access Key（ak_tensor_…；https://tensor.art/settings/access-key）',
@@ -350,7 +378,8 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       name: friendlyProviderLabel('muapi'),
       badge: '动态模型目录',
       docsUrl: 'https://muapi.ai',
-      description: '使用 MuAPI API Key。模型选择来自供应商目录，不预设模型；目录或连通性失败时显示真实错误。',
+      keyPageUrl: 'https://muapi.ai',
+      description: 'MuAPI 多模型推理聚合平台，提供高并发开源文生图底模与定制模型服务。',
       apiUrl: 'MuAPI Models API',
       keyName: 'muapiKey',
       keyPlaceholder: 'MuAPI API Key',
@@ -362,7 +391,8 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       name: friendlyProviderLabel('wavespeed'),
       badge: '动态模型目录',
       docsUrl: 'https://wavespeed.ai/docs',
-      description: '使用 WaveSpeed API Key。模型选择来自供应商目录，不预设模型；目录或连通性失败时显示真实错误。',
+      keyPageUrl: 'https://wavespeed.ai/accesskey',
+      description: 'WaveSpeed 极速云端 AI 推理引擎，支持 FLUX.1、SDXL 快速出图与多种风格微调 LoRA 叠加。',
       apiUrl: 'WaveSpeed Models API',
       keyName: 'wavespeedKey',
       keyPlaceholder: 'WaveSpeed API Key',
@@ -374,7 +404,8 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       name: friendlyProviderLabel('krea'),
       badge: '官方 OpenAPI 目录',
       docsUrl: 'https://docs.krea.ai/developers/introduction',
-      description: '使用 Krea API Token（Bearer）。模型目录来自官方 https://api.krea.ai/openapi.json 的 /generate/* 端点；LoRA 来自官方 GET /styles，按 styles[{id,strength}] 提交。失败原样显示状态码与响应体。',
+      keyPageUrl: 'https://www.krea.ai/app/api/tokens',
+      description: 'Krea 官方 OpenAPI 推理接口，支持官方高质量风格预设与生成端点。',
       apiUrl: 'https://api.krea.ai',
       keyName: 'kreaKey',
       keyPlaceholder: 'Krea API Token',
@@ -386,7 +417,8 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       name: friendlyProviderLabel('together'),
       badge: '官方 /v1/models',
       docsUrl: 'https://docs.together.ai/docs/inference/images/overview',
-      description: '使用 Together API Key（Bearer，环境变量 TOGETHER_API_KEY）。目录来自 GET https://api.together.ai/v1/models（image/video）；图像 POST /v1/images/generations（同步）；视频 POST/GET https://api.together.ai/v2/videos（异步）。serverless image_loras：官方参数指南明文 no longer available，挂 LoRA 没有发出去。失败原样显示状态码与响应体。',
+      keyPageUrl: 'https://api.together.ai/settings/api-keys',
+      description: 'Together AI 官方开源模型推理平台，支持 FLUX.1、SDXL 等主流生图与视频模型。\n注：serverless image_loras 官方已下线，挂 LoRA 时不发送。',
       apiUrl: 'https://api.together.ai/v1',
       keyName: 'togetherKey',
       keyPlaceholder: 'Together API Key',
@@ -398,7 +430,8 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       name: friendlyProviderLabel('aimlapi'),
       badge: '官方 /v1/models',
       docsUrl: 'https://docs.aimlapi.com/',
-      description: '使用 AIMLAPI Key（Bearer，环境变量 AIMLAPI_KEY，支持逗号多 Key）。目录来自 GET https://api.aimlapi.com/v1/models；图像 POST /v1/images/generations（同步）；视频 POST/GET /v2/video/generations（异步 generation_id）。LoRA 字段为 loras[{path,scale}]（0–4，最多 3，无默认 scale），仅官方声明的模型（如 alibaba/z-image-turbo-lora）。欠费按官方文档可能返回 403。失败原样显示状态码与响应体。',
+      keyPageUrl: 'https://aimlapi.com/app/keys',
+      description: 'AIMLAPI 多模态云端聚合推理，支持 FLUX.1、SDXL 等数百种大模型及风格微调。',
       apiUrl: 'https://api.aimlapi.com/v1',
       keyName: 'aimlapiKey',
       keyPlaceholder: 'AIMLAPI API Key',
@@ -410,7 +443,8 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       name: friendlyProviderLabel('novita'),
       badge: '官方 /v3/model',
       docsUrl: 'https://docs.novita.ai/',
-      description: '使用 Novita API Key（Bearer，环境变量 NOVITA_API_KEY）。目录 GET https://api.novita.ai/v3/model；SD 出图 POST /v3/async/txt2img（或 img2img）后轮询 GET /v3/async/task-result。LoRA 字段为 request.loras[{model_name,strength}]（strength [0,1]，须显式传，最多 5）。欠费官方多为 HTTP 400 BILLING_BALANCE_NOT_ENOUGH。失败原样显示状态码与响应体。',
+      keyPageUrl: 'https://novita.ai/settings/key-management',
+      description: 'Novita AI 极速 GPU 推理平台，支持 FLUX.1、SDXL 及数千种 Civitai 兼容 LoRA 模型。',
       apiUrl: 'https://api.novita.ai',
       keyName: 'novitaKey',
       keyPlaceholder: 'Novita API Key',
@@ -422,7 +456,8 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       name: friendlyProviderLabel('venice'),
       badge: '官方 /models',
       docsUrl: 'https://docs.venice.ai/',
-      description: '使用 Venice API Key（Bearer，环境变量 VENICE_API_KEY）。目录 GET https://api.venice.ai/api/v1/models?type=all；图像 POST /image/generate（同步 base64）；视频 POST /video/queue → POST /video/retrieve（异步）。官方无自定义 LoRA（仅捆绑模型 lora_strength）；挂自定义 LoRA 会没有发出去（未发请求）。视频不发 seed。欠费 HTTP 402 INSUFFICIENT_BALANCE。失败原样显示状态码与响应体。',
+      keyPageUrl: 'https://venice.ai/settings/api',
+      description: 'Venice AI 去中心化隐私推理平台，支持 FLUX.1、SDXL 等开源生图与提示词推理。',
       apiUrl: 'https://api.venice.ai/api/v1',
       keyName: 'veniceKey',
       keyPlaceholder: 'Venice API Key',
@@ -434,19 +469,21 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       name: friendlyProviderLabel('deepinfra'),
       badge: '官方 /models/list',
       docsUrl: 'https://docs.deepinfra.com/apis/image-generation',
-      description: '使用 DeepInfra API Key（Bearer，环境变量 DEEPINFRA_API_KEY）。目录 GET https://api.deepinfra.com/models/list（type=text-to-image）；图像 POST /v1/openai/images/generations（同步 b64_json；参数 prompt/model/size/n）。个人/私有 LoRA 需先在控制台部署（docs.deepinfra.com/private-models/lora-image），未部署不准假挂。欠费 HTTP 402 You need positive balance…。失败原样显示状态码与响应体。',
+      keyPageUrl: 'https://deepinfra.com/dash/api_keys',
+      description: 'DeepInfra 高性能免运维大模型推理平台，支持 FLUX.1-schnell、FLUX.1-dev 等极速渲染。',
       apiUrl: 'https://api.deepinfra.com',
       keyName: 'deepinfraKey',
       keyPlaceholder: 'DeepInfra API Key',
       status: 'unconfigured',
-      popularModels: [], // no static shortcut; Hub reads live GET /models/list
+      popularModels: [],
     },
     {
       id: 'sogni',
       name: friendlyProviderLabel('sogni'),
       badge: 'REST Creative Workflows',
       docsUrl: 'https://docs.sogni.ai',
-      description: '使用 Sogni API Key 与 Creative Workflows。模型从 Sogni 目录动态读取，不预设快捷模型。',
+      keyPageUrl: 'https://dashboard.sogni.ai/api-keys',
+      description: 'Sogni 艺术家级分布式生成网络，支持超精细迭代步数与风格微调。',
       apiUrl: 'https://api.sogni.ai',
       keyName: 'sogniKey',
       keyPlaceholder: 'Sogni API Key',
@@ -458,7 +495,8 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       name: friendlyProviderLabel('runware'),
       badge: '极速统一 API',
       docsUrl: 'https://runware.ai/docs/',
-      description: '使用 Runware API Key。统一高性能推理端点，支持 FLUX、SDXL、Qwen 等模型与 LoRA。',
+      keyPageUrl: 'https://runware.ai',
+      description: 'Runware 专为高吞吐量设计的生成引擎，按需自填 Base URL 与 API Key。',
       apiUrl: 'https://api.runware.ai/v1',
       keyName: 'runwareKey',
       keyPlaceholder: 'Runware API Key',
@@ -470,7 +508,8 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       name: friendlyProviderLabel('modelslab'),
       badge: '开放模型库',
       docsUrl: 'https://docs.modelslab.com',
-      description: '使用 ModelsLab API Key。支持 Flux、SDXL 等 10,000+ 社区模型生图与 LoRA 融合。',
+      keyPageUrl: 'https://modelslab.com',
+      description: 'ModelsLab 稳定扩散图像生成，按需自填 Base URL 与 API Key。',
       apiUrl: 'https://modelslab.com/api/v6/images/text2img',
       keyName: 'modelslabKey',
       keyPlaceholder: 'ModelsLab API Key',
@@ -482,7 +521,8 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       name: friendlyProviderLabel('replicate'),
       badge: '官方 API / 云端模型',
       docsUrl: 'https://replicate.com/docs',
-      description: '配置 Replicate API Token (r8_...)。支持直接调用 Flux、Ideogram、SDXL 等 Replicate 云端模型与部署。',
+      keyPageUrl: 'https://replicate.com/account/api-tokens',
+      description: 'Replicate 官方推理平台，支持 FLUX.1、SDXL、Ideogram 等海量开源模型。',
       apiUrl: 'https://api.replicate.com/v1',
       keyName: 'replicateKey',
       keyPlaceholder: 'r8_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx (REPLICATE_API_TOKEN)',
@@ -494,7 +534,8 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       name: friendlyProviderLabel('mage'),
       badge: 'Mango 图像 API',
       docsUrl: 'https://docs.mage.space/api/models/mango',
-      description: '配置 Mage API Key (mage_sk_...)。官方 Mango 出图；无传统 LoRA，角色用 prompt 里 @handle；按 Gems 计费。',
+      keyPageUrl: 'https://www.mage.space',
+      description: 'Mage.space 专业级生成服务，按需配置 Base URL 与 API Key。',
       apiUrl: 'https://api.mage.space',
       keyName: 'mageKey',
       keyPlaceholder: 'mage_sk_… (MAGE_API_KEY)',
@@ -785,6 +826,8 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
                 const keyStr = String((keys as any)[p.keyName] || '');
                 const count = keyStr.split(/[\n,;]+/).filter(Boolean).length;
                 const isActive = activeProviderTab === p.id;
+                const pool = poolSummary(p.id);
+                const isConfigured = count > 0 || providerKeyStatus[p.id]?.configured === true || (pool?.total || 0) > 0;
 
                 return (
                   <button
@@ -809,8 +852,14 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
                         )}
                       </div>
                       <div className="text-[10px] text-slate-400 truncate">{p.badge}</div>
-                      <div className="text-[9px] text-slate-500 font-mono truncate">
-                        {poolLabel(p.id)}{count > 0 ? ` · 本浏览器 ${count} 个` : ''}
+                      <div className="text-[9px] font-mono truncate flex items-center gap-1.5 mt-0.5">
+                        <span className={`inline-flex items-center gap-1 ${isConfigured ? 'text-emerald-400 font-semibold' : 'text-slate-500'}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${isConfigured ? 'bg-emerald-400' : 'bg-slate-600'}`} />
+                          <span>{isConfigured ? '已配置' : '未配置'}</span>
+                        </span>
+                        <span className="text-slate-500 truncate">
+                          · {poolLabel(p.id)}{count > 0 ? ` (本地 ${count})` : ''}
+                        </span>
                       </div>
                     </div>
                     <div>
@@ -820,10 +869,10 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
                         <AlertTriangle className="w-4 h-4 text-amber-400" />
                       ) : test?.status === 'error' ? (
                         <XCircle className="w-4 h-4 text-rose-400" />
-                      ) : count > 0 ? (
-                        <span className="w-2 h-2 rounded-full bg-cyan-400 inline-block" />
+                      ) : isConfigured ? (
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" title="已配置有效密钥" />
                       ) : (
-                        <span className="w-2 h-2 rounded-full bg-slate-600 inline-block" />
+                        <span className="w-2 h-2 rounded-full bg-slate-600 inline-block" title="未配置密钥" />
                       )}
                     </div>
                   </button>
@@ -836,8 +885,21 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
               {/* Header Details */}
               <div className="flex items-start justify-between">
                 <div>
-                  <h3 className="text-base font-bold text-white flex items-center gap-2">
-                    {currentProvider.name}
+                  <h3 className="text-base font-bold text-white flex flex-wrap items-center gap-2">
+                    <span>{currentProvider.name}</span>
+                    {currentProvider.keyPageUrl && (
+                      <a
+                        href={currentProvider.keyPageUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[11px] text-emerald-300 hover:text-emerald-200 flex items-center gap-1 bg-emerald-950/60 px-2.5 py-0.5 rounded-lg border border-emerald-500/40 font-medium shadow-sm transition-colors"
+                        title="在新标签页直达服务商官方 API Key 申请与管理控制台"
+                      >
+                        <Key className="w-3 h-3 text-emerald-400" />
+                        <span>申请 / 获取 API Key 直达</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    )}
                     <a
                       href={currentProvider.docsUrl}
                       target="_blank"
@@ -851,6 +913,32 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
                   <p className="text-xs text-slate-300 mt-1 leading-relaxed whitespace-pre-line space-y-0">
                     {currentProvider.description}
                   </p>
+                  {/* Immediate Test Result Banner */}
+                  {testResults[currentProvider.id] && (
+                    <div
+                      className={`mt-2 p-2 rounded-lg text-xs flex items-center gap-2 border ${
+                        testResults[currentProvider.id].status === 'ok'
+                          ? 'bg-emerald-950/40 border-emerald-800/50 text-emerald-300'
+                          : testResults[currentProvider.id].status === 'warning'
+                          ? 'bg-amber-950/40 border-amber-800/50 text-amber-300'
+                          : 'bg-rose-950/40 border-rose-800/50 text-rose-300'
+                      }`}
+                    >
+                      {testResults[currentProvider.id].status === 'ok' ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                      ) : testResults[currentProvider.id].status === 'warning' ? (
+                        <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                      ) : (
+                        <XCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                      )}
+                      <span className="font-medium">{testResults[currentProvider.id].message}</span>
+                      {testResults[currentProvider.id].latency && (
+                        <span className="text-[10px] font-mono opacity-80">
+                          ({testResults[currentProvider.id].latency}ms)
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <button
                   type="button"

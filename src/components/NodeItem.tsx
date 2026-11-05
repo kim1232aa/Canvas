@@ -1,3 +1,5 @@
+import { formatSocketDisplayName } from '../utils/nodeUiLabels';
+import { NodeErrorDisclosure } from './NodeErrorDisclosure';
 import { ensureModelSchema, getModelSchemaEntry } from '../services/modelSchemaCache';
 import {PreviewPlaceholder} from './PreviewPlaceholder';
 import { useLiveVideoModelMatch } from '../hooks/useLiveVideoModelMatch';
@@ -408,15 +410,13 @@ export const NodeItem: React.FC<NodeItemProps> = ({
         </div>
       )}
 
-      {/* Node error message banner — always inside the node, below the title bar (never absolute above: that covered title + buttons). */}
+      {/* Node error message banner with progressive disclosure */}
       {node.errorMessage && node.state !== 'running' && (
-        <div className="mx-3 mt-2 p-2 bg-rose-950/40 border border-rose-800/60 rounded-lg text-[11px] text-rose-100 leading-relaxed flex items-start gap-1.5" data-testid="node-error-strip">
-          <AlertTriangle className="w-3.5 h-3.5 text-rose-300 shrink-0 mt-0.5" />
-          <div className="min-w-0 flex-1 max-h-48 overflow-y-auto" data-testid="node-error-banner">
-            {/* 雁 2026-11-04: the upstream text verbatim (status + full body), nothing else. */}
-            <div className="[overflow-wrap:anywhere] whitespace-pre-wrap" data-testid="node-error-headline">{node.errorMessage}</div>
-          </div>
-        </div>
+        <NodeErrorDisclosure
+          errorMessage={node.errorMessage}
+          provider={currentProvider || node.values?.targetProvider}
+          errorAt={node.errorAt}
+        />
       )}
 
       {/* Sockets Row (Inputs on Left, Outputs on Right) */}
@@ -446,7 +446,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                   }}
                 />
                 <span className="text-[11px] font-mono text-slate-300 font-semibold group-hover:text-white">
-                  {socket.label || socket.name}
+                  {formatSocketDisplayName(socket.label || socket.name, socket.type)}
                 </span>
               </div>
             );
@@ -464,7 +464,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                 title={`${socket.name} (${socket.type})`}
               >
                 <span className="text-[11px] font-mono text-slate-300 font-semibold group-hover:text-white">
-                  {socket.label || socket.name}
+                  {formatSocketDisplayName(socket.label || socket.name, socket.type)}
                 </span>
                 {/* Port circle */}
                 <div
