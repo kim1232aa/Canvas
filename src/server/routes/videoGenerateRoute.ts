@@ -6,7 +6,7 @@ import { falQueueSubmitUrl, runFalQueueLifecycle } from '../falQueueLifecycle.ts
 import { buildAgnesVideoRequest, agnesVideoId } from '../agnesVideoRequest.ts';
 import { classifyNanoGptVideoStatus, NANO_GPT_VIDEO_POLL_BUDGET_MS, NANO_GPT_VIDEO_POLL_INTERVAL_MS } from '../nanoGptVideoStatus.ts';
 import { videoCancelPlan, videoProgressLine } from '../videoJobControl.ts';
-import { readVideoJobStatus, updateVideoJobStatus } from '../videoJobStatus.ts';
+import { latestVideoJobStatus, readVideoJobStatus, updateVideoJobStatus } from '../videoJobStatus.ts';
 import { applyCustomParameters } from '../customParameters.ts';
 import { sanitizeGenerationMetadata } from '../../utils/generationMetadata.ts';
 import { resolveAgainstBaseOrigin } from '../../engines/compatRelay.ts';

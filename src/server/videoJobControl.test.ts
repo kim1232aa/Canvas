@@ -8,10 +8,17 @@ describe('video cancel plans', () => {
   });
 
   it('builds the documented Replicate, Civitai, Krea and Sogni cancel calls', () => {
-    expect(videoCancelPlan({ provider: 'replicate', jobId: 'p1' }).url).toBe('https://api.replicate.com/v1/predictions/p1/cancel');
-    expect(videoCancelPlan({ provider: 'civitai', jobId: 'wf1' }).method).toBe('POST');
-    expect(videoCancelPlan({ provider: 'krea', jobId: 'j1' })).toMatchObject({ method: 'DELETE', url: 'https://api.krea.ai/jobs/j1' });
-    expect(videoCancelPlan({ provider: 'sogni', jobId: 'wf2' }).url).toContain('/workflows/wf2/cancel');
+    const replicate = videoCancelPlan({ provider: 'replicate', jobId: 'p1' });
+    const civitai = videoCancelPlan({ provider: 'civitai', jobId: 'wf1' });
+    const krea = videoCancelPlan({ provider: 'krea', jobId: 'j1' });
+    const sogni = videoCancelPlan({ provider: 'sogni', jobId: 'wf2' });
+    if ('unsupported' in replicate || 'unsupported' in civitai || 'unsupported' in krea || 'unsupported' in sogni) {
+      throw new Error('documented cancel provider was marked unsupported');
+    }
+    expect(replicate.url).toBe('https://api.replicate.com/v1/predictions/p1/cancel');
+    expect(civitai.method).toBe('POST');
+    expect(krea).toMatchObject({ method: 'DELETE', url: 'https://api.krea.ai/jobs/j1' });
+    expect(sogni.url).toContain('/workflows/wf2/cancel');
   });
 
   it('refuses to pretend a cancel for providers whose fetched docs have none', () => {
