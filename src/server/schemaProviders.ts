@@ -1117,9 +1117,8 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
     }
     if(provider==='krea') {
       const {rows,sourceUrl}=await listForSchema(req,provider,credential);
-      const entry:any=rows.find((x:any)=>x.id===model || x.id===`image/${model}` || x.id===`video/${model}` || x.endpoint===model || x.endpoint===`/generate/${model}` || x.endpoint===`/generate/image/${model}` || x.endpoint===`/generate/video/${model}`) ?? {id:model,notInCatalog:true}; // not in catalog: send the user's model id; upstream decides
-      const endpointPath = entry.endpoint ?? (model.startsWith('/generate/') ? model : (model.startsWith('image/') || model.startsWith('video/') ? `/generate/${model}` : `/generate/image/${model}`));
-      return {provider,model,sourceUrl,endpoint:schemaProviders.krea.root+endpointPath,inputSchema:entry.parameters || null,modelMetadata:{...entry,parameters:undefined},schemaStatus:'openapi'};
+      const entry:any=rows.find((x:any)=>x.id===model) ?? {id:model,notInCatalog:true}; // not in catalog: send the user's model id; upstream decides
+      return {provider,model,sourceUrl,endpoint:schemaProviders.krea.root+(entry.endpoint ?? `/generate/${model}`),inputSchema:entry.parameters || null,modelMetadata:{...entry,parameters:undefined},schemaStatus:'openapi'};
     }
     if(provider==='together') {
       const {rows,sourceUrl}=await listForSchema(req,provider,credential);
@@ -1180,7 +1179,7 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
     }
     if(provider==='deepinfra') {
       const {rows,sourceUrl}=await listForSchema(req,provider,credential);
-      const entry:any=rows.find((x:any)=>x.id===model || x.id.replace(/\./g, '-')===model.replace(/\./g, '-') || x.name===model) ?? {id:model,notInCatalog:true}; // not in catalog: send the user's model id; upstream decides
+      const entry:any=rows.find((x:any)=>x.id===model) ?? {id:model,notInCatalog:true}; // not in catalog: send the user's model id; upstream decides
       // Docs: POST https://api.deepinfra.com/v1/openai/images/generations (Bearer). OpenAPI twin path /v1/images/generations supplies the request schema (required model+prompt; size/n/response_format).
       const endpoint=schemaProviders.deepinfra.root+'/v1/openai/images/generations';
       const specUrl=officialOpenApiSources.deepinfra;
@@ -1343,7 +1342,7 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
       if(provider==='sogni' && !Object.hasOwn(custom,'model'))payload.model=model;
       if(provider==='together')payload.model=model;
       if(provider==='aimlapi')payload.model=model;
-      if(provider==='deepinfra')payload.model=definition?.modelMetadata?.id && !definition.modelMetadata.notInCatalog?definition.modelMetadata.id:model;
+      if(provider==='deepinfra')payload.model=model;
       const automaticFallback=schemaAutoFallbackSelection(payload,definition.inputSchema,definition.schemaSource);
       if(automaticFallback) {
         const source=automaticFallback.sourceUrl || '(官方 Schema 来源 URL 未返回)';
