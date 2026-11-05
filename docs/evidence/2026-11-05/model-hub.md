@@ -224,6 +224,6 @@
 1. **类型检查**：`npx tsc --noEmit` -> 0 错误。
 2. **生产构建**：`npm run build` -> 成功生成 client 产物与 Sites Worker（耗时 2.51s）。
 3. **全量测试套件执行**（执行命令：`npx vitest run --maxWorkers=2`，使用默认 5000ms 超时）：
-   - **Test Files**: 233 passed, 0 failed (共 233 个测试套件，100% 通过)
-   - **Tests**: 1736 passed, 0 failed (共 1736 个测试用例，100% 通过)
-   - **耗时**: 94.11s，无任何超时或失败。
+   - **Test Files**: 237 passed, 0 failed (共 237 个测试套件，100% 通过)
+   - **Tests**: 1806 passed, 0 failed (共 1806 个测试用例，100% 通过)
+   - **耗时**: 133.48s，无任何超时或失败。
