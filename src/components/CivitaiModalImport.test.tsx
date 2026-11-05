@@ -169,4 +169,42 @@ describe('CivitaiModal Recipe Import and Cross-Provider Adaptation UI', () => {
     applyBtn.props.onClick();
     expect(onApplyPreset).toHaveBeenCalledWith(mockPreset);
   });
+
+  it('P1-1: apply-to-canvas button delegates to onLoadWorkflowPreset and closes modal from CivitaiModal', () => {
+    const onLoadWorkflowPreset = vi.fn();
+    const onClose = vi.fn();
+    const mockPreset = {
+      id: 'p1',
+      name: 'Imported Preset',
+      providerAdaptation: { civitai: sampleAdaptation },
+      nodes: [{ id: 'n1', type: 'CheckpointLoaderSimple', values: {} }],
+      otherMetadata: { baseModel: 'SDXL 1.0', resources: [] },
+    };
+
+    let stateIdx = 0;
+    vi.spyOn(React, 'useState').mockImplementation(((initial: any) => {
+      const idx = stateIdx++;
+      if (idx === 16) return ['import', vi.fn()];
+      if (idx === 21) return [mockPreset, vi.fn()];
+      return [initial, vi.fn()];
+    }) as any);
+
+    const tree = CivitaiModal({
+      isOpen: true,
+      initialMode: 'import',
+      onClose,
+      onSelectLoRA: vi.fn(),
+      onAddLoRANodeToCanvas: vi.fn(),
+      onLoadWorkflowPreset,
+    });
+
+    const allEls = elements(tree);
+    const previewEl = allEls.find((el) => el.type === CivitaiModalImportPreview);
+    expect(previewEl).toBeDefined();
+
+    // Verify onApplyPreset delegates to onLoadWorkflowPreset and calls onClose
+    previewEl.props.onApplyPreset(mockPreset);
+    expect(onLoadWorkflowPreset).toHaveBeenCalledWith(mockPreset);
+    expect(onClose).toHaveBeenCalled();
+  });
 });
