@@ -252,6 +252,28 @@ async function buildCivitaiBaseInput(body: Body, get: CivitaiPublicGet, official
     input[wireName] = numeric && Number.isFinite(Number(body[field])) ? Number(body[field]) : body[field];
   }
 
+  // Civitai official orchestration contract (recipes/sd1.md vs recipes/sdxl.md):
+  // Only SD1/SD1.5 (sdcpp and comfy) accepts clipSkip. SDXL explicitly rejects clipSkip with HTTP 400.
+  // Other ecosystem recipes (flux1, flux2, etc.) do not list clipSkip.
+  // Decision comes strictly from ecosystem/engine contract, never from model names.
+  const snapshotClipSkip = (() => {
+    const nodes = (body.workflowSnapshot as any)?.nodes;
+    if (!Array.isArray(nodes)) return undefined;
+    for (const n of nodes) {
+      const cs = n?.values?.clip_skip ?? n?.values?.clipSkip;
+      if (cs !== undefined && cs !== null && Number.isFinite(Number(cs))) return Number(cs);
+    }
+    return undefined;
+  })();
+  const rawClipSkip = body.clipSkip ?? body.clip_skip ?? snapshotClipSkip;
+  const contractAcceptsClipSkip = (ecosystem === 'sd1' || ecosystem === 'sd15') && (engine === 'sdcpp' || engine === 'comfy') && 'clipSkip' in props;
+  if (contractAcceptsClipSkip && provided(rawClipSkip)) {
+    const num = Number(rawClipSkip);
+    if (Number.isFinite(num)) {
+      input.clipSkip = Math.trunc(num);
+    }
+  }
+
   if (provided(body.image_url)) {
     if ('image' in props) input.image = body.image_url;
     else if ('images' in props) input.images = [body.image_url];
@@ -316,7 +338,7 @@ export async function buildCivitaiImageRequest(
   }
   const custom = parseCustomObject(body.custom_parameters) ?? {};
   for (const key of ['workflowSnapshot', 'operation']) if (key in custom) fail(`custom_parameters 不可修改应用控制字段: ${key}`);
-  const aliases: Record<string, string> = { cfgScale: 'cfg', negativePrompt: 'negative_prompt', sampler: 'sampler_name', sampleMethod: 'sampler_name', schedule: 'scheduler', image: 'image_url', strength: 'denoise', denoiseStrength: 'denoise' };
+  const aliases: Record<string, string> = { cfgScale: 'cfg', negativePrompt: 'negative_prompt', sampler: 'sampler_name', sampleMethod: 'sampler_name', schedule: 'scheduler', image: 'image_url', strength: 'denoise', denoiseStrength: 'denoise', clip_skip: 'clipSkip' };
   const normalize = (source: Body) => {
     const normalized: Body = {};
     for (const [key, value] of Object.entries(source)) {
@@ -333,7 +355,7 @@ export async function buildCivitaiImageRequest(
   const topLevel = normalize(body);
   const normalizedCustom = normalize(custom);
   const effective: Body = { ...topLevel, ...normalizedCustom };
-  const translated = new Set([...Object.values(aliases), 'loras', 'prompt', 'width', 'height', 'steps', 'seed', 'quantity']);
+  const translated = new Set([...Object.values(aliases), 'clipSkip', 'clip_skip', 'loras', 'prompt', 'width', 'height', 'steps', 'seed', 'quantity']);
   const boundary = /^(?:model|comfyModel|engine|ecosystem|provider|endpoint|base_?url|url|inference_provider|diffuserModel|diffusionModel|workflowSnapshot|operation|version)$/i;
   const controls = /^(?:custom_parameters|isVideo|targetProvider|videoDuration|duration|fps|inputSchemaProperties|officialOpenApi)$|api.?key|authorization|credential|password|secret|token/i;
   const advanced = (source: Body) => Object.fromEntries(Object.entries(source).filter(([key]) => !translated.has(key) && !boundary.test(key) && !controls.test(key)));

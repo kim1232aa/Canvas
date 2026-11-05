@@ -335,17 +335,31 @@ describe('Cross-Provider Civitai Recipe Adaptation Engine', () => {
       expect(result.loras[1].reason).toContain('缺少官方模型版本 ID');
     });
 
-    it('P1-1 (Round 3): SD 1.5 clipSkip on Civitai is marked unsupported with honest reason (CivitaiDriver not mapped)', () => {
+    it('M11: SD 1.5 clipSkip on Civitai is mapped and will send', () => {
       const sd15Recipe: CivitaiRecipeInput = {
         baseModel: 'SD 1.5',
         clipSkip: 2,
         checkpoint: 'urn:air:sd1:checkpoint:civitai:94809@393843',
       };
       const result = adaptCivitaiRecipeToProvider(sd15Recipe, 'civitai');
+      expect(result.fields.clipSkip.status).toBe('mapped');
+      expect(result.fields.clipSkip.targetField).toBe('clipSkip');
+      expect(result.fields.clipSkip.humanMessage).toContain('作为 Civitai SD 1.5 clipSkip 发送 (2)');
+      expect(result.unsupportedFields).not.toContain('clipSkip');
+      expect(result.warnings.some((w) => w.includes('clipSkip'))).toBe(false);
+    });
+
+    it('M11: SDXL clipSkip on Civitai remains unsupported (recipe returns 400)', () => {
+      const sdxlRecipe: CivitaiRecipeInput = {
+        baseModel: 'SDXL 1.0',
+        clipSkip: 2,
+        checkpoint: 'urn:air:sdxl:checkpoint:civitai:101055@128078',
+      };
+      const result = adaptCivitaiRecipeToProvider(sdxlRecipe, 'civitai');
       expect(result.fields.clipSkip.status).toBe('unsupported');
-      expect(result.fields.clipSkip.humanMessage).toContain('尚未发送，原因：CivitaiDriver / civitaiImageContract 尚未映射 clipSkip');
+      expect(result.fields.clipSkip.humanMessage).toContain('Sending clipSkip on an SDXL request will 400');
       expect(result.unsupportedFields).toContain('clipSkip');
-      expect(result.warnings.some((w) => w.includes('CivitaiDriver / civitaiImageContract 尚未映射'))).toBe(true);
+      expect(result.warnings.some((w) => w.includes('clipSkip'))).toBe(true);
     });
 
     it('P2-2: prompt-inferred LoRA tag is marked requires_reselection with prompt inference warning', () => {

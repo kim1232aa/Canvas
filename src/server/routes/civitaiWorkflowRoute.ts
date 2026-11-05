@@ -1215,7 +1215,7 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
 
       const eco = normalizeEcosystem(detectedBaseModel);
       const isSdxlFamily = eco === 'sdxl' || eco === 'pony' || eco === 'illustrious';
-      const isCivitaiClipSkipNotSent = targetProvider === 'civitai';
+      const isCivitaiClipSkipNotSent = targetProvider === 'civitai' && eco !== 'sd15';
 
       const providerAdaptation = buildAllProviderAdaptations(recipeInput, {
         allowTokenInUrl: Boolean(req.body?.consentCivitaiToken),
@@ -1234,11 +1234,9 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
           field: 'clipSkip',
           value: clipSkip,
           sent: false,
-          reason: eco === 'sd15'
-            ? '尚未发送，原因：CivitaiDriver / civitaiImageContract 尚未映射 clipSkip'
-            : isSdxlFamily
+          reason: isSdxlFamily
             ? 'Civitai SDXL 官方文档明文指出："Sending clipSkip on an SDXL request will 400"，SDXL 采用双文本编码器，官方配方无 clipSkip 参数，已安全拦截未发送。'
-            : `当前导入器未建立到 ${chosenEngineName} 的经 Schema 核实的 CLIP Skip 映射；原值已保留为来源元数据，未向上游发送。`,
+            : `Civitai ${detectedBaseModel || 'FLUX'} 官方配方无 clipSkip 参数，未向上游发送。`,
         }] : []),
         ...(currentAdaptation?.warnings?.map((w) => ({
           field: 'adaptationWarning',

@@ -56,6 +56,44 @@ export class CivitaiDriver extends BaseEngineDriver {
     // H6: comfy 变体 / 张数由用户指定，没设不发
     if (params.extraParams?.comfyModel) payload.comfyModel = params.extraParams.comfyModel;
     if (params.extraParams?.quantity != null) payload.quantity = params.extraParams.quantity;
+
+    // clipSkip: only mapped for official ecosystems/engines that accept it (recipes/sd1.md vs sdxl.md)
+    const snapshotClipSkip = (() => {
+      const nodes = (params.workflowSnapshot as any)?.nodes;
+      if (!Array.isArray(nodes)) return undefined;
+      for (const n of nodes) {
+        const cs = n?.values?.clip_skip ?? n?.values?.clipSkip;
+        if (cs !== undefined && cs !== null && Number.isFinite(Number(cs))) return Number(cs);
+      }
+      return undefined;
+    })();
+    const rawClip = (params as any).clip_skip ?? (params as any).clipSkip ?? params.extraParams?.clip_skip ?? params.extraParams?.clipSkip ?? snapshotClipSkip;
+    if (rawClip !== undefined && rawClip !== null && Number.isFinite(Number(rawClip))) {
+      const extractEcosystemFromAir = (air: string | undefined): string => {
+        if (!air || typeof air !== 'string') return '';
+        const m = air.replace(/^(?:urn:)?air:/, '').split(':');
+        return (m[0] || '').toLowerCase();
+      };
+      const eco = String(
+        params.extraParams?.ecosystem ||
+        extractEcosystemFromAir(params.model) ||
+        (() => {
+          const nodes = (params.workflowSnapshot as any)?.nodes;
+          if (!Array.isArray(nodes)) return '';
+          for (const n of nodes) {
+            const ckpt = n?.values?.ckpt_name || n?.values?.model;
+            const e = extractEcosystemFromAir(ckpt);
+            if (e) return e;
+          }
+          return '';
+        })() ||
+        ''
+      ).toLowerCase();
+      const isSd1 = eco === 'sd1' || eco === 'sd15';
+      if (isSd1) {
+        payload.clipSkip = Math.trunc(Number(rawClip));
+      }
+    }
     if (isVideo) {
       for (const field of ['engine','version','provider','operation']) if (params.extraParams?.[field] !== undefined) payload[field]=params.extraParams[field];
       if (params.videoFps !== undefined) payload.fps=params.videoFps;

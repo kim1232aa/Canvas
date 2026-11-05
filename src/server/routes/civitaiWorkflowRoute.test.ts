@@ -854,9 +854,10 @@ describe('Civitai Routes and Workflow Contract Tests', () => {
       const warnings = res.data.preset.importWarnings;
       expect(warnings.some((w: any) => w.reason?.includes('deadbeef404'))).toBe(true);
 
-      // P1-1 (Round 3): SD 1.5 clipSkip must be honestly marked unsupported/not sent with explanation
-      expect(res.data.preset.currentAdaptation.fields.clipSkip.status).toBe('unsupported');
-      expect(warnings.some((w: any) => w.field === 'clipSkip' && w.sent === false && w.reason?.includes('CivitaiDriver / civitaiImageContract 尚未映射 clipSkip'))).toBe(true);
+      // M11: SD 1.5 clipSkip is now mapped to clipSkip and will be sent
+      expect(res.data.preset.currentAdaptation.fields.clipSkip.status).toBe('mapped');
+      expect(res.data.preset.currentAdaptation.fields.clipSkip.targetField).toBe('clipSkip');
+      expect(warnings.some((w: any) => w.field === 'clipSkip')).toBe(false);
 
       // P1-1 (a): Euler a on sdcpp must map to euler_a on KSampler
       const ksampler = res.data.preset.nodes.find((n: any) => n.type === 'KSampler');

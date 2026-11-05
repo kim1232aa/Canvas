@@ -308,7 +308,7 @@
 | :--- | :--- | :--- | :--- | :--- |
 | **样例 1** | `https://civitai.com/images/64399178`<br>作者: `L10n_H34r7` | **FLUX.1 D** | 1. `Cinematic 1940s` (weight: 0.3, id: 1527024)<br>2. `Cinematic Octane` (weight: 0.2, id: 1526912) | 1. Civitai 原生适配：底模引用保留，LoRA 转为规范 AIR，负向提示词拦截（FLUX 官方配方无负向）。截图：`docs/evidence/2026-11-05/civitai-import/e2e-01-flux-preview.jpg`<br>2. 画布应用：2 款 LoRA 链式串联为 LoRALoader 节点。截图：`docs/evidence/2026-11-05/civitai-import/e2e-02-flux-applied-canvas.jpg`<br>3. Fal.ai 适配：底模选择 `fal-ai/flux-lora`，LoRA 转为官方公开下载直链，步数与尺寸映射完整。 |
 | **样例 2** | `https://civitai.com/images/12097475`<br>作者: `Stellaaa` | **Pony / SDXL** | 1. `pony/twilight_style` (weight: 0.8)<br>2. `pony/expressiveh` (weight: 0.8)<br>3. `pony/kenva` (weight: 0.8, canGenerate: false)<br>4. `pony/san_pony_v4`<br>5. `sdxl/sinfully_stylish_sdxl` (404 未找到) | 底模架构通过哈希反查精确识别为 `urn:air:sdxl:checkpoint:civitai:257749@290640` (Pony V6)；Kenva 标识出 `Civitai 未启用在线生成 (canGenerate: false)`；404 哈希 `033c44dfb8` 显式呈现于警告横幅，绝无静默丢弃；未标注权重项标为「需设置强度」且 scale 置为空。预览截图：`docs/evidence/2026-11-05/civitai-import/e2e-06-pony-preview.jpg`；画布串联截图：`docs/evidence/2026-11-05/civitai-import/e2e-07-pony-applied-canvas.jpg`。 |
-| **样例 3** | `https://civitai.com/images/11346154`<br>作者: `hcarolin` | **SD 1.5** | 1. `backlight_slider_v10` (weight: -1.5)<br>2. `contrast_slider_v10` (weight: 2.0) | 底模架构通过哈希反查识别为 SD 1.5 AIR；双滑块 LoRA 及负向权重 `-1.5` 与 `2.0` 分别从 `meta.prompt` 和 `meta.resources` 完整保留；`clipSkip: 2` 标记为 `unsupported`（尚未发送，原因：CivitaiDriver / civitaiImageContract 尚未映射 clipSkip）。预览截图：`docs/evidence/2026-11-05/civitai-import/e2e-09-sd15-preview.jpg`；画布截图：`docs/evidence/2026-11-05/civitai-import/e2e-10-sd15-applied-canvas.jpg`。 |
+| **样例 3** | `https://civitai.com/images/11346154`<br>作者: `hcarolin` | **SD 1.5** | 1. `backlight_slider_v10` (weight: -1.5)<br>2. `contrast_slider_v10` (weight: 2.0) | 底模架构通过哈希反查识别为 SD 1.5 AIR；双滑块 LoRA 及负向权重 `-1.5` 与 `2.0` 分别从 `meta.prompt` 和 `meta.resources` 完整保留；在 M11 中 `clipSkip: 2` 已正式映射为出站字段（作为 Civitai SD 1.5 clipSkip 发送 (2)，状态为「✔ 将发送」）；`CivitaiDriver` 与 `civitaiImageContract` 均已接入并真实发送至上游。预览截图：`docs/evidence/2026-11-05/civitai-import/e2e-09-sd15-preview.jpg`（M11 更新截屏见 `docs/evidence/2026-11-05/civitai-clipskip/e2e-m11-sd15-01-import-preview.jpg`）；画布截图：`docs/evidence/2026-11-05/civitai-import/e2e-10-sd15-applied-canvas.jpg`。 |
 
 ---
 
@@ -492,10 +492,11 @@
 
 ### 5.1 缺陷修复与架构升级清单
 
-1. **P1-1 (Round 3) SD 1.5 clipSkip 预览真实性与未映射诚信说明**：
-   - 现阶段 `CivitaiDriver` 与 `civitaiImageContract` 属于 M6 任务范围，M1 严格遵从主控边界指令未越权编辑。
-   - `adaptCivitaiRecipeToProvider` 对 SD 1.5 在 Civitai 目标下的 `clipSkip` 如实标注为 `unsupported`（未发送），状态徽章显示「✖ 不支持(已拦截)」，说明明确记录「尚未发送，原因：CivitaiDriver / civitaiImageContract 尚未映射 clipSkip」，并在 `importWarnings` 中如实加入对应警告。
-   - 彻底杜绝了“出站未发送但预览写将发送”的反透明缺陷。待 M6 合并后主控授权范围扩充，再补齐真实出站字段并切换为「将发送」。
+1. **M11 架构升级：SD 1.5 clipSkip 出站映射与预览对齐**：
+   - `CivitaiDriver` 与 `civitaiImageContract` 现已正式将 SD 1.5 的 `clipSkip` 映射入出站 orchestration 请求体（`steps[0].input.clipSkip: 2`）；
+   - `adaptCivitaiRecipeToProvider` 对 SD 1.5 (`sd1`/`sd15`) 的 `clipSkip` 翻转为 `mapped`（「✔ 将发送」），说明显示「作为 Civitai SD 1.5 clipSkip 发送 (2)」；
+   - 对 SDXL / Pony / Illustrious 等双文本编码器模型，继续严格拦截并保持 `unsupported` 状态，给出官方文档「Sending clipSkip on an SDXL request will 400」的真实依据与 400 拦截说明，从契约层面杜绝报错；
+   - 对 FLUX 等其他无 `clipSkip` 的生态同样保持 `unsupported`。
 2. **P1-1 (a) / P2-3 Civitai sdcpp 采样器枚举完整映射为官方规范**：
    - 全量对齐 live OpenAPI `SdCppSampleMethod` 官方枚举（`euler`, `heun`, `dpm2`, `dpm++2s_a`, `dpm++2m`, `dpm++2mv2`, `ipndm`, `ipndm_v`, `ddim_trailing`, `euler_a`, `lcm`, `res_multistep`, `res_2s`, `tcd`, `er_sde`）：
      - `DPM++ 2M` 严格映射为 `dpm++2m`（Comfy 引擎保留 `dpmpp_2m`）；
@@ -522,9 +523,9 @@
 
 ### 5.2 自动化测试与工程质量全量检验
 
-1. **TypeScript 静态检查**：`npx tsc --noEmit` 耗时 5.2s，**0 错误**。
-2. **专属 Civitai 单元测试套件**：5 个测试文件 **80 / 80 项测试全绿通过**：
-   - `src/utils/civitaiImportMap.adaptation.test.ts` (27 passed)
+1. **TypeScript 静态检查**：`npx tsc --noEmit`，**0 错误**。
+2. **专属 Civitai 单元测试套件**：5 个测试文件 **82 / 82 项测试全绿通过**：
+   - `src/utils/civitaiImportMap.adaptation.test.ts` (29 passed)
    - `src/server/routes/civitaiWorkflowRoute.test.ts` (24 passed)
    - `src/utils/civitaiImportMap.test.ts` (16 passed)
    - `src/components/CivitaiModal.test.tsx` (8 passed)
