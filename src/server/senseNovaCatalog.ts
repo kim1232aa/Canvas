@@ -56,9 +56,10 @@ export async function fetchSenseNovaModelCatalog(
     .map((model: any) => {
       const inputModalities = Array.isArray(model.input_modalities) ? model.input_modalities : [];
       const outputModalities = Array.isArray(model.output_modalities) ? model.output_modalities : [];
+      const videoOutput = outputModalities.includes('video');
       const imageOutput = outputModalities.includes('image');
       const textOutput = outputModalities.includes('text');
-      const category = imageOutput ? 'checkpoint' : textOutput ? 'reasoning' : 'unknown';
+      const category = videoOutput ? 'video' : imageOutput ? 'checkpoint' : textOutput ? 'reasoning' : 'unknown';
       return {
         ...model,
         id: model.id,
