@@ -1,0 +1,10 @@
+{
+  "status": 403,
+  "stage": "reference upload",
+  "error": "INSUFFICIENT_CREDITS",
+  "message": "Insufficient credits. A credit balance > 0 is required for file uploads.",
+  "model": "wan2.1-lora-i2v",
+  "resolution": "480p",
+  "duration": 5,
+  "aspect_ratio": "16:9"
+}

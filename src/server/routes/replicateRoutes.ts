@@ -9,6 +9,7 @@ import {
   ReplicateSchemaMissingError,
   type ReplicateSchemaFetchFailure,
 } from '../replicateImageContract';
+import { canvasNodeId, clearVideoJobStatus, updateVideoJobStatus } from '../videoJobStatus.ts';
 
 export interface ReplicateRouteDeps {
   resolveProviderAuth: (
@@ -203,6 +204,13 @@ export function handleReplicateGenerate(deps: ReplicateRouteDeps) {
           schemaFields: mapped.schemaFields,
         });
       }
+      const replicateCancelUrl = (body: any): string | undefined => {
+        const fromUpstream = typeof body?.urls?.cancel === 'string' ? body.urls.cancel.trim() : '';
+        if (fromUpstream) return fromUpstream;
+        const id = typeof body?.id === 'string' ? body.id.trim() : '';
+        if (!id) return undefined;
+        return `${baseUrl.replace(/\/+$/, '')}/predictions/${id}/cancel`;
+      };
       let parsed: ReturnType<typeof parseReplicatePredictionResponse>;
       try {
         parsed = parseReplicatePredictionResponse(data, baseUrl);
@@ -227,6 +235,21 @@ export function handleReplicateGenerate(deps: ReplicateRouteDeps) {
 
       if (parsed.isPending) {
         const pollUrl = parsed.pollUrl || `${baseUrl.replace(/\/+$/, '')}/predictions/${parsed.predictionId}`;
+        const noteReplicate = () => {
+          if (!isVideo || !parsed.predictionId) return;
+          updateVideoJobStatus({
+            jobId: parsed.predictionId,
+            provider: 'replicate',
+            phase: 'running',
+            upstreamStatus: parsed.status,
+            budgetMs: maxPollDuration,
+            credential: apiKey,
+            nodeId: canvasNodeId(reqBody),
+            cancelUrl: replicateCancelUrl(pollData),
+          });
+        };
+        noteReplicate();
+        try {
         while (parsed.isPending && Date.now() - pollStartTime < maxPollDuration) {
           await sleep(1000);
           let pollResp: any;
@@ -297,6 +320,7 @@ export function handleReplicateGenerate(deps: ReplicateRouteDeps) {
           }
           try {
             parsed = parseReplicatePredictionResponse(pollData);
+            noteReplicate();
           } catch (pollParseErr: any) {
             const errMsg = `Replicate 任务失败: ${pollParseErr.message}`;
             deps.keyPoolManager.recordResult('replicate', apiKey, false, Date.now() - startTime, errMsg, pollResp.status);
@@ -321,6 +345,9 @@ export function handleReplicateGenerate(deps: ReplicateRouteDeps) {
             rawResponse: pollData,
             actualRequest,
           });
+        }
+        } finally {
+          if (isVideo && parsed.predictionId) clearVideoJobStatus(parsed.predictionId);
         }
       }
 

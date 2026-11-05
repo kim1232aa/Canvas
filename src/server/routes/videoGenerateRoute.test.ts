@@ -2,7 +2,10 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import express from 'express';
 import http from 'http';
 import { EventEmitter } from 'node:events';
-import { handleVideoGenerate, type VideoGenerateRouteDeps } from './videoGenerateRoute.ts';
+import { handleVideoGenerate, VIDEO_GENERATE_DOWNLOAD_MARGIN_MS, VIDEO_GENERATE_SCHEMA_TIMEOUT_MS, VIDEO_GENERATE_SOCKET_TIMEOUT_MS, type VideoGenerateRouteDeps } from './videoGenerateRoute.ts';
+import { FAL_VIDEO_POLL_BUDGET_MS } from '../falQueueLifecycle.ts';
+import { NANO_GPT_VIDEO_POLL_BUDGET_MS } from '../nanoGptVideoStatus.ts';
+import { readVideoJobStatus, resetVideoJobStatusForTests } from '../videoJobStatus.ts';
 
 describe('videoGenerateRoute lifecycle and client disconnect handling (grok_compat polling branch)', () => {
   let server: http.Server | undefined;
@@ -18,6 +21,7 @@ describe('videoGenerateRoute lifecycle and client disconnect handling (grok_comp
       server = undefined;
     }
     vi.restoreAllMocks();
+    resetVideoJobStatusForTests();
   });
 
   function createMockDeps(overrides: Partial<VideoGenerateRouteDeps> = {}): {
@@ -385,6 +389,7 @@ describe('videoGenerateRoute lifecycle and client disconnect handling (grok_comp
     expect(recordedResults).toEqual([
       ['fal', 'mock-key', true, expect.any(Number)],
     ]);
+    expect(readVideoJobStatus('req-v1')).toBeUndefined();
   });
 
   it('Fal queue result non-2xx is passed through (status + raw body), never fabricated as success', async () => {
@@ -465,5 +470,145 @@ describe('videoGenerateRoute lifecycle and client disconnect handling (grok_comp
     expect(recordedResults).toEqual([
       ['fal', 'mock-key', false, expect.any(Number), rawResponse, 402],
     ]);
+  });
+
+  function nanoClock() {
+    let t = 0;
+    return {
+      now: () => t,
+      sleep: async (ms: number) => { t += ms; },
+    };
+  }
+
+  it('NanoGPT COMPLETED with only the top-level videoUrl is success, not a 175s timeout', async () => {
+    const clock = nanoClock();
+    const { deps } = createMockDeps({
+      ...clock,
+      upstreamFetch: vi.fn(async (_meta: any, url: string) => {
+        if (url.endsWith('/api/generate-video')) {
+          return new Response(JSON.stringify({ runId: 'vid_top', status: 'pending' }), { status: 200 });
+        }
+        return new Response(JSON.stringify({ status: 'completed', videoUrl: 'https://cdn.example/top.mp4' }), { status: 200 });
+      }),
+    });
+    const res = makeMockRes();
+    await handleVideoGenerate(deps)({
+      body: { provider: 'nanogpt', model: 'wan-video', prompt: 'a gondola', duration: 5, fps: 16, num_frames: 81, resolution: '720p', steps: 30, cfg: 0.5 },
+      headers: {},
+      path: '/api/video/generate',
+    } as any, res);
+    expect(res.statusCode).toBe(200);
+    expect(res.data.videoUrl).toBe('data:video/mp4;base64,AAAA');
+    expect(res.data.error).toBeUndefined();
+    const submit = (deps.upstreamFetch as any).mock.calls.find((c: any[]) => String(c[1]).endsWith('/api/generate-video'));
+    expect(JSON.parse(submit[2].body)).toMatchObject({
+      duration: '5', frames_per_second: 16, num_frames: 81, resolution: '720p', num_inference_steps: 30, cfg_scale: 0.5,
+    });
+  });
+
+  it('NanoGPT COMPLETED without any video URL is 502 upstream-protocol, not 504 timeout', async () => {
+    const clock = nanoClock();
+    const raw = { status: 'completed', videoUrl: null, data: { status: 'COMPLETED', output: {} } };
+    const { deps } = createMockDeps({
+      ...clock,
+      upstreamFetch: vi.fn(async (_meta: any, url: string) => {
+        if (url.endsWith('/api/generate-video')) {
+          return new Response(JSON.stringify({ runId: 'vid_empty', status: 'pending' }), { status: 200 });
+        }
+        return new Response(JSON.stringify(raw), { status: 200 });
+      }),
+    });
+    const res = makeMockRes();
+    await handleVideoGenerate(deps)({
+      body: { provider: 'nanogpt', model: 'wan-video', prompt: 'a gondola' },
+      headers: {},
+      path: '/api/video/generate',
+    } as any, res);
+    expect(res.statusCode).toBe(502);
+    expect(res.data.errorSource).toBe('upstream-protocol');
+    expect(res.data.runId).toBe('vid_empty');
+    expect(res.data.endpoint).toContain('/api/video/status?requestId=vid_empty');
+    expect(res.data.rawResponse).toEqual(raw);
+    expect(String(res.data.error)).not.toContain('175s');
+  });
+
+  it('NanoGPT still in progress when the 10 minute local budget ends is 504 errorSource local', async () => {
+    const clock = nanoClock();
+    const { deps } = createMockDeps({
+      ...clock,
+      upstreamFetch: vi.fn(async (_meta: any, url: string) => {
+        if (url.endsWith('/api/generate-video')) {
+          return new Response(JSON.stringify({ runId: 'vid_slow', status: 'pending' }), { status: 200 });
+        }
+        return new Response(JSON.stringify({ data: { status: 'IN_PROGRESS' } }), { status: 200 });
+      }),
+    });
+    const res = makeMockRes();
+    await handleVideoGenerate(deps)({
+      body: { provider: 'nanogpt', model: 'wan-video', prompt: 'a gondola' },
+      headers: {},
+      path: '/api/video/generate',
+    } as any, res);
+    expect(res.statusCode).toBe(504);
+    expect(res.data.errorSource).toBe('local');
+    expect(res.data.runId).toBe('vid_slow');
+    expect(res.data.lastStatus).toBe('IN_PROGRESS');
+    expect(String(res.data.error)).toContain('600000');
+    expect(String(res.data.error)).not.toContain('175s');
+    const polls = (deps.upstreamFetch as any).mock.calls.filter((c: any[]) => String(c[1]).includes('/api/video/status'));
+    expect(polls.length).toBeGreaterThan(70);
+    expect(readVideoJobStatus('vid_slow')).toBeUndefined();
+  });
+
+  it('Fal queue poll throw still drops the job record', async () => {
+    const { deps } = createMockDeps({
+      upstreamFetch: vi.fn(async (meta: any, url: string) => {
+        if (meta?.readOnly && url.startsWith('https://fal.ai/api/openapi/queue/openapi.json')) {
+          return new Response(FAL_SCHEMA_OK, { status: 200 });
+        }
+        if (url === 'https://queue.fal.run/fal-ai/veo3') {
+          return new Response(JSON.stringify({
+            request_id: 'req-throw',
+            status_url: 'https://queue.fal.run/fal-ai/veo3/requests/req-throw/status',
+            cancel_url: 'https://queue.fal.run/fal-ai/veo3/requests/req-throw/cancel',
+          }), { status: 202 });
+        }
+        throw new Error('status socket hang up');
+      }),
+    });
+    const res = makeMockRes();
+    await handleVideoGenerate(deps)({
+      body: { provider: 'fal', model: 'fal-ai/veo3', prompt: 'throw during poll' },
+      headers: {},
+      path: '/api/video/generate',
+    } as any, res);
+    expect(readVideoJobStatus('req-throw')).toBeUndefined();
+  });
+
+  it('keeps the generate socket at Fal budget plus schema fetch plus download', () => {
+    const floor = FAL_VIDEO_POLL_BUDGET_MS + VIDEO_GENERATE_SCHEMA_TIMEOUT_MS + VIDEO_GENERATE_DOWNLOAD_MARGIN_MS;
+    expect(VIDEO_GENERATE_SOCKET_TIMEOUT_MS).toBeGreaterThan(floor);
+    expect(VIDEO_GENERATE_SOCKET_TIMEOUT_MS).toBeGreaterThan(NANO_GPT_VIDEO_POLL_BUDGET_MS + VIDEO_GENERATE_SCHEMA_TIMEOUT_MS + VIDEO_GENERATE_DOWNLOAD_MARGIN_MS);
+    expect(VIDEO_GENERATE_SCHEMA_TIMEOUT_MS).toBe(30_000);
+    expect(VIDEO_GENERATE_DOWNLOAD_MARGIN_MS).toBe(120_000);
+  });
+
+  it('sets req and res idle timeouts to Fal budget plus schema plus download', async () => {
+    const timeouts: number[] = [];
+    const { deps } = createMockDeps({
+      upstreamFetch: vi.fn(async () => new Response('nope', { status: 400 })),
+    });
+    const req: any = {
+      body: { provider: 'fal', model: 'fal-ai/veo3', prompt: 'socket' },
+      headers: {},
+      path: '/api/video/generate',
+      setTimeout: (ms: number) => { timeouts.push(ms); },
+    };
+    const res: any = makeMockRes();
+    res.setTimeout = (ms: number) => { timeouts.push(ms); };
+    await handleVideoGenerate(deps)(req, res);
+    const floor = FAL_VIDEO_POLL_BUDGET_MS + VIDEO_GENERATE_SCHEMA_TIMEOUT_MS + VIDEO_GENERATE_DOWNLOAD_MARGIN_MS;
+    expect(timeouts.length).toBeGreaterThanOrEqual(2);
+    expect(timeouts.every((ms) => ms > floor)).toBe(true);
   });
 });

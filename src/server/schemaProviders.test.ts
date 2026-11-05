@@ -1,7 +1,8 @@
 import express from 'express';
 import { describe, expect, it } from 'vitest';
-import { fetchSchemaProviderRows, fetchSogniGenerateImageSchema, isSogniPersonalLoraRow, normalizeSchemaProviderItems, registerSchemaProviderRoutes, resolveSchemaRefs, sogniLoraCover, sogniLoraStrengthRange, sogniSchemaSource, upstreamReferenceUrlIssue, validateSogniLoraStrengthRanges } from './schemaProviders';
+import { fetchSchemaProviderRows, fetchSogniGenerateImageSchema, isSogniPersonalLoraRow, normalizeSchemaProviderItems, registerSchemaProviderRoutes, resolveSchemaRefs, sogniAnimatePhotoSchemaSource, sogniGenerateVideoSchemaSource, sogniLoraCover, sogniLoraStrengthRange, sogniSchemaSource, upstreamReferenceUrlIssue, validateSogniLoraStrengthRanges } from './schemaProviders';
 import { sogniGenerateImageSchemaFixture } from './fixtures/sogniGenerateImageSchema';
+import { sogniAnimatePhotoSchemaFixture, sogniGenerateVideoSchemaFixture } from './fixtures/sogniGenerateVideoSchema';
 
 async function withFixture(
   upstream: (url: string, init?: RequestInit) => Promise<Response>,
@@ -17,6 +18,8 @@ async function withFixture(
     fetch: async (meta, url, init) => {
       calls.push({ url, init, meta });
       if(url===sogniSchemaSource)return sogniSchemaResponse?sogniSchemaResponse(url,init):json(sogniGenerateImageSchemaFixture);
+      if(url===sogniGenerateVideoSchemaSource)return json(sogniGenerateVideoSchemaFixture);
+      if(url===sogniAnimatePhotoSchemaSource)return json(sogniAnimatePhotoSchemaFixture);
       return upstream(url, init);
     },
     key,
@@ -208,7 +211,9 @@ describe('Sogni live hosted-tool Schema',()=>{
       });
       const submitted=await submitResponse.json() as any;
       expect(submitted.taskId).toBe('live-selector-task');
+      expect(submitted.actualRequest.parameters.input.steps[0].toolName).toBe('generate_image');
       expect(submitted.actualRequest.parameters.input.steps[0].arguments).toMatchObject({model:'flux-3-klein',guidance:7.25});
+      expect(submitted.actualRequest.parameters.input.steps[0].arguments).not.toHaveProperty('videoModel');
 
       const githubCalls=calls.filter(c=>c.url===sogniSchemaSource);
       expect(githubCalls.length).toBeGreaterThanOrEqual(2);
@@ -258,6 +263,83 @@ describe('Sogni live hosted-tool Schema',()=>{
     expect(meta).toMatchObject({provider:'sogni',key:''});
     expect(new Headers(init?.headers).has('authorization')).toBe(false);
     expect(new Headers(init?.headers).has('x-sogni-key')).toBe(false);
+  });
+
+  it('T2V submit uses the live generate_video Schema: toolName from $id, videoModel, never generate_image', async()=>{
+    await withFixture(async(url,init)=>{
+      if(init?.method==='POST'&&url==='https://api.sogni.ai/v1/creative-agent/workflows')return json({data:{workflow:{workflowId:'video-t2v'}}},201);
+      throw new Error(`Unexpected fixture URL: ${url}`);
+    },async(baseUrl,calls)=>{
+      const schemaResponse=await fetch(`${baseUrl}/api/model-schema?provider=sogni&model=ltx25&isVideo=true`,{headers:{'x-sogni-key':'sogni-secret'}});
+      const schema=await schemaResponse.json() as any;
+      expect(schema.schemaStatus).toBe('hosted-tool:generate_video');
+      expect(schema.hostedToolName).toBe('generate_video');
+      expect(schema.selectorField).toBe('videoModel');
+      expect(schema.inputSchema.properties.videoModel.enum).toContain('ltx25');
+      expect(schema.inputSchema.properties.model).toBeUndefined();
+      expect(schema.sourceUrl).toBe(sogniGenerateVideoSchemaSource);
+
+      const catalogResponse=await fetch(`${baseUrl}/api/models?provider=sogni&category=video`,{headers:{'x-sogni-key':'sogni-secret'}});
+      const catalog=await catalogResponse.json() as any;
+      expect(catalog.sogni.some((row:any)=>row.id==='ltx25')).toBe(true);
+      expect(catalog.sogni.some((row:any)=>row.id==='flux-3-klein')).toBe(false);
+      expect(catalog.pagination.sogni.sourceUrl).toBe(sogniGenerateVideoSchemaSource);
+      expect(catalog.pagination.sogni.sourceNotice).toBe('live-official-generate_video-schema');
+
+      const submitResponse=await fetch(`${baseUrl}/api/schema-provider/sogni/submit`,{
+        method:'POST',headers:{'Content-Type':'application/json','x-canvas-credential-ref':schema.credentialRef},
+        body:JSON.stringify({model:'ltx25',prompt:'a paper boat',duration:5,isVideo:true}),
+      });
+      const submitted=await submitResponse.json() as any;
+      expect(submitResponse.status).toBe(201);
+      const step=submitted.actualRequest.parameters.input.steps[0];
+      expect(step.toolName).toBe('generate_video');
+      expect(step.id).toBe('clip');
+      expect(step.arguments).toMatchObject({prompt:'a paper boat',videoModel:'ltx25',duration:5});
+      expect(step.arguments).not.toHaveProperty('model');
+      expect(JSON.stringify(submitted.actualRequest.parameters)).not.toContain('generate_image');
+      expect(calls.filter(c=>c.url===sogniGenerateVideoSchemaSource).length).toBeGreaterThanOrEqual(1);
+      expect(calls.some(c=>c.url===sogniSchemaSource && c.init?.method==='POST')).toBe(false);
+    },()=> 'sogni-secret');
+  });
+
+  it('I2V submit uses the live animate_photo Schema: toolName from $id and sourceImageIndex, never generate_image', async()=>{
+    await withFixture(async(url,init)=>{
+      if(init?.method==='POST'&&url==='https://api.sogni.ai/v1/creative-agent/workflows')return json({data:{workflow:{workflowId:'video-i2v'}}},201);
+      throw new Error(`Unexpected fixture URL: ${url}`);
+    },async(baseUrl)=>{
+      const submitResponse=await fetch(`${baseUrl}/api/schema-provider/sogni/submit`,{
+        method:'POST',headers:{'Content-Type':'application/json','x-sogni-key':'sogni-secret'},
+        body:JSON.stringify({model:'ltx25',prompt:'slow dolly in',duration:5,isVideo:true,image_url:'https://cdn.example/frame.png'}),
+      });
+      const submitted=await submitResponse.json() as any;
+      expect(submitResponse.status).toBe(201);
+      const step=submitted.actualRequest.parameters.input.steps[0];
+      expect(step.toolName).toBe('animate_photo');
+      expect(step.arguments).toMatchObject({prompt:'slow dolly in',videoModel:'ltx25',sourceImageIndex:-1});
+      expect(step.arguments).not.toHaveProperty('model');
+      expect(submitted.actualRequest.parameters.media_references).toEqual([{kind:'image',url:'https://cdn.example/frame.png'}]);
+      expect(JSON.stringify(submitted.actualRequest.parameters)).not.toContain('generate_image');
+    },()=> 'sogni-secret');
+  });
+
+  it('does not reuse a remembered image Schema when the video node submits', async()=>{
+    await withFixture(async(url,init)=>{
+      if(init?.method==='POST'&&url==='https://api.sogni.ai/v1/creative-agent/workflows')return json({data:{workflow:{workflowId:'after-image'}}},201);
+      throw new Error(`Unexpected fixture URL: ${url}`);
+    },async(baseUrl,calls)=>{
+      await fetch(`${baseUrl}/api/model-schema?provider=sogni&model=ltx25`,{headers:{'x-sogni-key':'sogni-secret'}});
+      const submitResponse=await fetch(`${baseUrl}/api/schema-provider/sogni/submit`,{
+        method:'POST',headers:{'Content-Type':'application/json','x-sogni-key':'sogni-secret'},
+        body:JSON.stringify({model:'ltx25',prompt:'must be video tool',duration:5,isVideo:true}),
+      });
+      const submitted=await submitResponse.json() as any;
+      const step=submitted.actualRequest.parameters.input.steps[0];
+      expect(step.toolName).toBe('generate_video');
+      expect(step.arguments.videoModel).toBe('ltx25');
+      expect(JSON.stringify(step)).not.toContain('generate_image');
+      expect(calls.some(c=>c.url===sogniGenerateVideoSchemaSource)).toBe(true);
+    },()=> 'sogni-secret');
   });
 });
 

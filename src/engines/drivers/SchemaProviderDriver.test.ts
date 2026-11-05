@@ -271,3 +271,61 @@ describe('SchemaProviderDriver · Together schema GET failure never stops the PO
     expect(JSON.stringify(submitBody.schemaPrefetchFailure)).toContain('Attention Required');
   });
 });
+
+describe('SchemaProviderDriver · video submit flags', () => {
+  beforeEach(() => { mockFetch.mockReset(); clearSharedGet(); beginSharedGetAction(); });
+  afterEach(() => { vi.clearAllMocks(); clearSharedGet(); });
+
+  it('sends isVideo true and executingNodeId on a video generate', async () => {
+    let submitBody: any;
+    mockFetch.mockImplementation(async (input: URL | RequestInfo, init?: RequestInit) => {
+      const u = String(input); const method = String(init?.method || 'GET').toUpperCase();
+      if (u.includes('/api/model-schema') && method === 'GET') return jsonResponse({ credentialRef: 'krea-cred', inputSchema: { type: 'object', properties: { prompt: { type: 'string' } } } });
+      if (u.includes('/api/schema-provider/krea/submit') && method === 'POST') {
+        submitBody = JSON.parse(String(init?.body));
+        return jsonResponse({ error: 'API balance is separate', upstreamStatus: 402 }, 402);
+      }
+      throw new Error(`unexpected ${method} ${u}`);
+    });
+    await expect(new SchemaProviderDriver('krea').generate({
+      model: 'video/kling/kling-2.5',
+      prompt: 'a lantern',
+      isVideo: true,
+      workflowSnapshot: { executingNodeId: 'node-a', format: 'comfycanvas' },
+    } as NormalizedGenerateParams, { kreaKey: 'k' })).rejects.toThrow(/API balance is separate/);
+    expect(String(mockFetch.mock.calls.find(([url]) => String(url).includes('/api/schema-provider/'))?.[0])).toContain('/api/schema-provider/krea/submit');
+    expect(submitBody).toMatchObject({
+      isVideo: true,
+      workflowSnapshot: { executingNodeId: 'node-a' },
+    });
+    expect(String(mockFetch.mock.calls.find(([url]) => String(url).includes('/api/model-schema'))?.[0])).toContain('isVideo=true');
+  });
+
+  it('does not label VIDEO from isVideo when the completed artifact is an image URL', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+    mockFetch.mockImplementation(async (input: URL | RequestInfo, init?: RequestInit) => {
+      const u = String(input); const method = String(init?.method || 'GET').toUpperCase();
+      if (u.includes('/api/model-schema') && method === 'GET') return jsonResponse({ credentialRef: 'sogni-cred', inputSchema: { type: 'object' }, schemaStatus: 'hosted-tool:generate_video' });
+      if (u.includes('/api/schema-provider/sogni/submit') && method === 'POST') {
+        return jsonResponse({ taskId: 'wf_img', pollUrl: '/api/schema-provider/sogni/tasks/wf_img', actualRequest: {} });
+      }
+      if (u.includes('/api/schema-provider/sogni/tasks/wf_img') && method === 'GET') {
+        return jsonResponse({ status: 'completed', outputs: ['https://cdn.example/frame.png'] });
+      }
+      if (u.includes('/api/schema-provider/sogni/save-result') && method === 'POST') {
+        return jsonResponse({ historyItems: [{ url: 'https://cdn.example/frame.png' }] });
+      }
+      throw new Error(`unexpected ${method} ${u}`);
+    });
+    const pending = new SchemaProviderDriver('sogni').generate({
+      model: 'ltx25', prompt: 'boat', isVideo: true,
+    } as NormalizedGenerateParams, { sogniKey: 'k' });
+    await vi.runAllTimersAsync();
+    const result = await pending;
+    expect(result.mediaType).toBe('image');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

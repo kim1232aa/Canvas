@@ -42,3 +42,59 @@ export function useLiveVideoModelMatch(provider: string, model: string): LiveVid
   }
   return undefined;
 }
+
+export type LiveVideoSchema = {
+  schemaStatus?: string;
+  hostedToolName?: string;
+  selectorField?: string;
+  sourceUrl?: string;
+  note?: string;
+  properties?: Record<string, any>;
+};
+
+const videoSchemaSettled = new Map<string, LiveVideoSchema | null>();
+const videoSchemaInFlight = new Set<string>();
+const videoSchemaListeners = new Set<() => void>();
+
+export function getLiveVideoSchema(provider?: string | null, model?: string | null): LiveVideoSchema | undefined {
+  if (!provider || !model) return undefined;
+  return videoSchemaSettled.get(`${provider}\u0000${model}`) ?? undefined;
+}
+
+/** GET /api/model-schema?isVideo=true so the video node shows the live hosted-tool Schema, not the image one. */
+export function useLiveVideoSchema(provider: string, model: string): LiveVideoSchema | undefined {
+  const [, setTick] = React.useState(0);
+  if (!provider || !model) return undefined;
+  const key = `${provider}\u0000${model}`;
+  if (videoSchemaSettled.has(key)) return videoSchemaSettled.get(key) ?? undefined;
+  const bump = () => setTick((t) => t + 1);
+  videoSchemaListeners.add(bump);
+  if (!videoSchemaInFlight.has(key)) {
+    videoSchemaInFlight.add(key);
+    Promise.resolve()
+      .then(async () => {
+        const { getStoredApiKeys } = await import('../services/api');
+        const keys = (() => { try { return getStoredApiKeys() as unknown as Record<string, string>; } catch { return {}; } })();
+        const slot = provider === 'openworks' ? 'tensorart' : provider;
+        const keyHeader = keys[`${slot}Key`];
+        const headers: Record<string, string> = keyHeader ? { [`x-${slot}-key`]: keyHeader } : {};
+        const url = `/api/model-schema?provider=${encodeURIComponent(provider)}&model=${encodeURIComponent(model)}&isVideo=true`;
+        const r = await fetch(url, { headers });
+        const data = await r.json().catch(() => null);
+        if (!r.ok || !data) return null;
+        const props = data.inputSchema?.properties;
+        return {
+          schemaStatus: typeof data.schemaStatus === 'string' ? data.schemaStatus : undefined,
+          hostedToolName: typeof data.hostedToolName === 'string' ? data.hostedToolName : undefined,
+          selectorField: typeof data.selectorField === 'string' ? data.selectorField : undefined,
+          sourceUrl: typeof data.sourceUrl === 'string' ? data.sourceUrl : undefined,
+          note: typeof data.note === 'string' ? data.note : undefined,
+          properties: props && typeof props === 'object' ? props : undefined,
+        } as LiveVideoSchema;
+      })
+      .then((entry) => { videoSchemaSettled.set(key, entry); })
+      .catch(() => { videoSchemaSettled.set(key, null); })
+      .finally(() => { videoSchemaInFlight.delete(key); const ls = [...videoSchemaListeners]; videoSchemaListeners.clear(); ls.forEach((l) => { try { l(); } catch { /* unmounted */ } }); });
+  }
+  return undefined;
+}

@@ -29,6 +29,8 @@ export interface FalQueueLifecycleOptions {
   pollIntervalMs?: number;
   /** Client-side deadline for the whole lifecycle (default 15 minutes). */
   timeoutMs?: number;
+  /** Called with each upstream status so the node can show it while this call is open. */
+  onStatus?: (update: { requestId: string; status: string; cancelUrl?: string; done?: boolean }) => void;
 }
 
 export type FalQueueStage = 'submit' | 'status' | 'result' | 'timeout' | 'invalid';
@@ -65,7 +67,8 @@ export function falQueueResultUrl(endpoint: string, requestId: string): string {
 }
 
 const DEFAULT_POLL_INTERVAL_MS = 3000;
-const DEFAULT_TIMEOUT_MS = 15 * 60 * 1000;
+/** Official queue jobs can run 15 minutes. The generate route socket must outlast this. */
+export const FAL_VIDEO_POLL_BUDGET_MS = 15 * 60 * 1000;
 
 function fail(
   stage: FalQueueStage,
@@ -85,7 +88,7 @@ export async function runFalQueueLifecycle(options: FalQueueLifecycleOptions): P
     fetchFn,
     sleep,
     pollIntervalMs = DEFAULT_POLL_INTERVAL_MS,
-    timeoutMs = DEFAULT_TIMEOUT_MS,
+    timeoutMs = FAL_VIDEO_POLL_BUDGET_MS,
   } = options;
 
   const authHeaders = { Authorization: `Key ${apiKey}` };
@@ -110,6 +113,7 @@ export async function runFalQueueLifecycle(options: FalQueueLifecycleOptions): P
     // 2xx without a request_id cannot be tracked — fail closed, never pretend success.
     return fail('invalid', submitResp.status, submitBody, submitUrl, null);
   }
+  options.onStatus?.({ requestId, status: 'IN_QUEUE', cancelUrl: submitData?.cancel_url });
 
   // Prefer the convenience URLs returned by Fal; fall back to app-id based URLs per docs.
   let statusUrl = typeof submitData?.status_url === 'string' && submitData.status_url
@@ -123,16 +127,19 @@ export async function runFalQueueLifecycle(options: FalQueueLifecycleOptions): P
   const deadline = Date.now() + timeoutMs;
   for (;;) {
     if (Date.now() > deadline) {
+      options.onStatus?.({ requestId, status: 'LOCAL_BUDGET_EXHAUSTED', cancelUrl: submitData?.cancel_url, done: true });
       return fail('timeout', null, `Fal queue polling timeout after ${timeoutMs}ms (request_id: ${requestId})`, statusUrl, requestId);
     }
     const statusResp = await fetchFn(statusUrl, { headers: { ...authHeaders } });
     const statusBody = await statusResp.text();
     if (!statusResp.ok) {
+      options.onStatus?.({ requestId, status: `HTTP ${statusResp.status}`, cancelUrl: submitData?.cancel_url, done: true });
       return fail('status', statusResp.status, statusBody, statusUrl, requestId);
     }
     let statusData: any;
     try { statusData = JSON.parse(statusBody); } catch { statusData = undefined; }
     const state = statusData?.status;
+    options.onStatus?.({ requestId, status: String(state || '未知'), cancelUrl: submitData?.cancel_url, done: state !== 'IN_QUEUE' && state !== 'IN_PROGRESS' });
     if (typeof statusData?.response_url === 'string' && statusData.response_url) {
       resultUrl = statusData.response_url;
     }
@@ -149,6 +156,7 @@ export async function runFalQueueLifecycle(options: FalQueueLifecycleOptions): P
   const resultResp = await fetchFn(resultUrl, { headers: { ...authHeaders } });
   const resultBody = await resultResp.text();
   if (!resultResp.ok) {
+    options.onStatus?.({ requestId, status: `HTTP ${resultResp.status}`, cancelUrl: submitData?.cancel_url, done: true });
     return fail('result', resultResp.status, resultBody, resultUrl, requestId);
   }
   let data: any;

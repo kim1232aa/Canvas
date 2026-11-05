@@ -1,0 +1,28 @@
+{
+  "status": 402,
+  "route": "/api/engine/replicate/generate",
+  "endpoint": "https://api.replicate.com/v1/predictions",
+  "upstreamStatus": 402,
+  "error": "Replicate 视频接口上游 HTTP 402: {\"title\":\"Insufficient credit\",\"detail\":\"You have insufficient credit to run this model. Go to https://replicate.com/account/billing#billing to purchase credit. Once you purchase credit, please wait a few minutes before trying again.\",\"status\":402}\n",
+  "sent": {
+    "model": "wan-video/wan2.1-with-lora",
+    "prompt": "a woman dancing happily in the middle of a street under a neon sign, c",
+    "seed": 24231881,
+    "cfg": 4,
+    "resolution": "480p",
+    "aspect_ratio": "16:9",
+    "num_frames": 81,
+    "loras": [
+      {
+        "name": "https://huggingface.co/Remade-AI/matrix-shot/resolve/main/matrix_shot.safetensors",
+        "path": "https://huggingface.co/Remade-AI/matrix-shot/resolve/main/matrix_shot.safetensors",
+        "strength": 1,
+        "modelStrength": 1,
+        "clipStrength": 1,
+        "civitaiId": "",
+        "triggers": ""
+      }
+    ],
+    "image_url": "/api/media/2499392fa70bb3b90fcff25898b490c5ba8b5760ab355d57bd64e5a4529983ba"
+  }
+}

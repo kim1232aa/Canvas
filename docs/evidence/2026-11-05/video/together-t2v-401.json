@@ -1,0 +1,20 @@
+{
+  "provider": "together",
+  "model": "Wan-AI/wan2.7-t2v",
+  "mode": "T2V",
+  "prompt": "a red paper boat crossing a quiet pond, gentle ripples, daylight",
+  "duration": 5,
+  "attempts": [
+    {
+      "note": "before the route fix, catalog 401 made the server guess the image endpoint",
+      "endpoint": "https://api.together.ai/v1/images/generations",
+      "status": 401,
+      "error": "invalid_api_key"
+    },
+    {
+      "endpoint": "https://api.together.ai/v2/videos",
+      "status": 401,
+      "error": "invalid api key"
+    }
+  ]
+}

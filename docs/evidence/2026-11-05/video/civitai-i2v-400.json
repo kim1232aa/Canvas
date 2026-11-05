@@ -1,0 +1,14 @@
+{
+  "status": 400,
+  "error": "insufficientBuzz",
+  "detail": "Civitai 视频生成接口返回错误 [400]",
+  "traceId": "00-19a6267860a085a3ac2c7d19a51d4b7a-6c15bfce02a1a825-02",
+  "model": "urn:air:wanvideo-22-i2v-a14b:checkpoint:civitai:1817671@2114157",
+  "lora": "urn:air:wanvideo-22-i2v-a14b:lora:civitai:1902817@2153813",
+  "seed": 1715864103,
+  "cfg": 3,
+  "width": 480,
+  "height": 832,
+  "fps": 24,
+  "prompt": "summer"
+}

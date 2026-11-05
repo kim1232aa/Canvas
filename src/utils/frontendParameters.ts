@@ -1,4 +1,5 @@
 import { getModelSchemaEntry } from '../services/modelSchemaCache';
+import { getLiveVideoSchema } from '../hooks/useLiveVideoModelMatch';
 import { normalizeLoraPayloadItem } from './resourceSelection';
 import { randomSeedFor } from './seedRange';
 import type { SpatialFrame } from '../types/graph';
@@ -114,12 +115,14 @@ export function spatialRequestParameters(frame: SpatialFrame): NormalizedGenerat
  */
 export type VideoSchemaField = {state:'unknown'} | {state:'absent'} | {state:'declared'; options?: Array<string|number>; min?: number; max?: number};
 export function videoSchemaField(provider: string | undefined, model: string | undefined, field: string): VideoSchemaField {
+  const live = getLiveVideoSchema(provider, model);
   const e = getModelSchemaEntry(provider, model);
-  if (!e || e.status !== 'ready' || !e.propertiesObj) return {state:'unknown'};
+  const propertiesObj = live?.properties || (e?.status === 'ready' ? e.propertiesObj : undefined);
+  if (!propertiesObj) return {state:'unknown'};
   const names = VIDEO_SCHEMA_ALIASES[field] || [field];
   let d: any;
   for (const name of names) {
-    const cand = e.propertiesObj[name];
+    const cand = propertiesObj[name];
     if (cand && typeof cand === 'object') { d = cand; break; }
   }
   if (!d) return {state:'absent'};

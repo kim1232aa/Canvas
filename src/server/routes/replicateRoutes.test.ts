@@ -5,6 +5,7 @@ import {
   registerReplicateRoutes,
   type ReplicateRouteDeps,
 } from './replicateRoutes';
+import { readVideoJobStatus, resetVideoJobStatusForTests } from '../videoJobStatus';
 
 function createMockDeps(overrides: Partial<ReplicateRouteDeps> = {}): {
   deps: ReplicateRouteDeps;
@@ -587,5 +588,42 @@ describe('replicateRoutes', () => {
       expect(routes.has('POST /api/replicate/generate')).toBe(true);
       expect(routes.has('GET /api/replicate/model-info')).toBe(true);
     });
+  });
+
+  it('clears a video job record when a poll fetch throws', async () => {
+    resetVideoJobStatusForTests();
+    const { deps } = createMockDeps({
+      upstreamFetch: vi.fn(async (_meta: any, url: string, options: any) => {
+        if (options?.method === 'POST') {
+          return {
+            ok: true,
+            status: 201,
+            text: async () => JSON.stringify({
+              id: 'pred_vid',
+              status: 'starting',
+              urls: {
+                get: 'https://api.replicate.com/v1/predictions/pred_vid',
+                cancel: 'https://api.replicate.com/v1/predictions/pred_vid/cancel',
+              },
+            }),
+          };
+        }
+        throw new Error('poll 502');
+      }),
+    });
+    const handler = handleReplicateGenerate(deps);
+    const res = createMockRes();
+    await handler({
+      body: {
+        model: 'wan-video/wan2.1-with-lora',
+        prompt: 'orbit',
+        isVideo: true,
+        inputSchemaProperties: { prompt: { type: 'string' } },
+      },
+      path: '/api/engine/replicate/generate',
+    } as any, res);
+    expect(res.statusCode).toBe(502);
+    expect(readVideoJobStatus('pred_vid')).toBeUndefined();
+    resetVideoJobStatusForTests();
   });
 });

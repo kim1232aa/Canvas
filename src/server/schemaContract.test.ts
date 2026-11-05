@@ -7,8 +7,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import express from 'express';
 import { describe, expect, it } from 'vitest';
-import { registerSchemaProviderRoutes, sogniSchemaSource } from './schemaProviders';
+import { registerSchemaProviderRoutes, sogniAnimatePhotoSchemaSource, sogniGenerateVideoSchemaSource, sogniSchemaSource } from './schemaProviders';
 import { sogniGenerateImageSchemaFixture } from './fixtures/sogniGenerateImageSchema';
+import { sogniAnimatePhotoSchemaFixture, sogniGenerateVideoSchemaFixture } from './fixtures/sogniGenerateVideoSchema';
 import { isSchemaOmitCandidate } from '../utils/schemaSendHint';
 
 const draft = (id: string) => JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../docs/provider-schema-drafts', id + '.json'), 'utf8'));
@@ -26,6 +27,8 @@ async function withFixture(
     fetch: async (meta, url, init) => {
       calls.push({ url, init, meta });
       if(url===sogniSchemaSource)return json(sogniGenerateImageSchemaFixture);
+      if(url===sogniGenerateVideoSchemaSource)return json(sogniGenerateVideoSchemaFixture);
+      if(url===sogniAnimatePhotoSchemaSource)return json(sogniAnimatePhotoSchemaFixture);
       return upstream(url, init);
     },
     key,

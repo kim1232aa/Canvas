@@ -33,4 +33,25 @@ describe('Together send despite catalog/OpenAPI 403', () => {
     expect(txt).toContain('catalogLookupFailure');
     expect(txt).toContain('Attention Required');
   });
+
+  it('a video node whose catalog lookup failed is sent to /v2/videos, not the image endpoint', async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    const app = express();
+    registerSchemaProviderRoutes(app as any, {
+      fetch: async (_m: any, url: string, init?: RequestInit) => {
+        calls.push({ url, init });
+        if (init?.method === 'POST') return new Response('{"error":{"message":"Invalid API key"}}', { status: 401 });
+        return new Response('{"error":{"message":"Unauthorized"}}', { status: 401 });
+      },
+      key: () => 'k', record: (i: any) => i, durable: async (u: string) => ({ ok: true, dataUrl: u }),
+    } as any);
+    const layer = (app as any)._router.stack.find((l: any) => l.route?.path === '/api/schema-provider/:provider/submit');
+    const res: any = { status(c: number) { this.statusCode = c; return this; }, json(p: any) { this.body = p; return this; } };
+    await layer.route.stack[0].handle({ method: 'POST', path: '/api/schema-provider/together/submit', params: { provider: 'together' }, query: {}, headers: {},
+      body: { model: 'Wan-AI/wan2.7-t2v', prompt: 'a red paper boat', duration: 5, isVideo: true } }, res, () => {});
+    const posts = calls.filter((c) => c.init?.method === 'POST');
+    expect(posts.map((c) => c.url)).toEqual(['https://api.together.ai/v2/videos']);
+    expect(res.statusCode).toBe(401);
+    expect(JSON.stringify(res.body)).toContain('Invalid API key');
+  });
 });

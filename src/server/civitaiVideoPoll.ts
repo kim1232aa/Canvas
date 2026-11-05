@@ -1,3 +1,6 @@
+import { CIVITAI_VIDEO_POLL_BUDGET_MS, civitaiVideoPollPlan } from './civitaiVideoPollSchedule.ts';
+import { clearVideoJobStatus, updateVideoJobStatus } from './videoJobStatus.ts';
+
 export type CivitaiVideoPollOutcome =
   | { kind: 'pending' }
   | { kind: 'output'; url: string }
@@ -63,4 +66,68 @@ export function classifyCivitaiVideoPoll(
       workflowId,
     },
   };
+}
+
+export interface CivitaiVideoPollDeps {
+  workflowId: string;
+  endpoint: string;
+  budgetMs?: number;
+  credential?: string;
+  nodeId?: string;
+  /** Returns the parsed workflow body and the HTTP status of that poll. */
+  fetchStatus: () => Promise<{ data: unknown; httpStatus: number }>;
+  extractUrl: (data: unknown) => string;
+  sleep: (ms: number) => Promise<void>;
+  /** False once the client has gone away; the loop stops without another poll. */
+  stillWaiting?: () => boolean;
+}
+
+export interface CivitaiVideoPollLoopResult {
+  outcome: CivitaiVideoPollOutcome;
+  polls: number;
+  timedOut: boolean;
+  lastStatus: string;
+  lastResponse: unknown;
+}
+
+/**
+ * The video poll server.ts runs after a submit that did not already contain a
+ * video URL. Each poll is classified by classifyCivitaiVideoPoll. The local
+ * budget running out is a timeout, not an upstream failure.
+ */
+export async function runCivitaiVideoPoll(deps: CivitaiVideoPollDeps): Promise<CivitaiVideoPollLoopResult> {
+  const budgetMs = deps.budgetMs ?? CIVITAI_VIDEO_POLL_BUDGET_MS;
+  const note = (upstreamStatus: string) => updateVideoJobStatus({
+    jobId: deps.workflowId,
+    provider: 'civitai',
+    phase: 'running',
+    upstreamStatus,
+    budgetMs,
+    credential: deps.credential,
+    nodeId: deps.nodeId,
+  });
+  note('');
+  let polls = 0;
+  let lastStatus = '';
+  let lastResponse: unknown;
+  try {
+    for (const step of civitaiVideoPollPlan(budgetMs)) {
+      await deps.sleep(step.delayMs);
+      if (deps.stillWaiting && !deps.stillWaiting()) {
+        return { outcome: { kind: 'pending' }, polls, timedOut: false, lastStatus, lastResponse };
+      }
+      const { data, httpStatus } = await deps.fetchStatus();
+      polls += 1;
+      lastResponse = data;
+      lastStatus = String((data as { status?: unknown })?.status || '');
+      note(lastStatus);
+      const outcome = classifyCivitaiVideoPoll(data, deps.extractUrl(data), httpStatus, deps.endpoint, deps.workflowId);
+      if (outcome.kind !== 'pending') {
+        return { outcome, polls, timedOut: false, lastStatus, lastResponse };
+      }
+    }
+    return { outcome: { kind: 'pending' }, polls, timedOut: true, lastStatus, lastResponse };
+  } finally {
+    clearVideoJobStatus(deps.workflowId);
+  }
 }
