@@ -229,10 +229,10 @@
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | 1 | `fal` | Fal.ai (GPU 云端加速) | `fal-ai/flux-lora` | `https://huggingface.co/alvdations/frosting_lane_flux/resolve/main/frosting_lane_flux.safetensors` (0.8) | `FAL_KEY` (`...554f`) | 上游 HTTP 403: `{"detail":"User is locked. Reason: TOP_UP."}`（界面采样器节点红框原样呈现） | **PASS_BILLING** | `temp/e2e/2026-11-05/core5b/fal.png` |
 | 2 | `civitai` | Civitai 官方原生引擎 | `urn:air:sdxl:checkpoint:civitai:101055@128713` | `urn:air:sdxl:lora:civitai:122359@135867` (0.85) | `CIVITAI_API_KEY` (`...510e`) | 上游 HTTP 400: `{"status":400,"detail":"insufficientBuzz","title":"Bad Request"}`（采样器节点原样红字呈现） | **PASS_BILLING** | `temp/e2e/2026-11-05/core5b/civitai.png` |
-| 3 | `huggingface` | Hugging Face Inference Providers | `renderartist/Technically-Color-Z-Image-Turbo` | `renderartist/Technically-Color-Z-Image-Turbo` (0.9) | `HF_TOKEN` (池内轮换4把: `...Kdks`, `...MMGa`, `...naLB`, `...EIBT`) | 上游 HTTP 402: `{"error":"Purchase pre-paid credits to continue using Inference Providers. Alternatively, subscribe to PRO to get monthly included credits."}` (4把全部透明轮换并记录) | **PASS_BILLING** | `temp/e2e/2026-11-05/core5b/huggingface.png` |
-| 4 | `modelscope` | 魔搭社区 (国内站) | `iic/multi-modal_chinese_stable_diffusion_v1.0` | 无或标准 LoRA | `MODELSCOPE_TOKEN` (`...15b0`) | 上游 HTTP 400: `{"errors":{"message":"submit failed with code: 40212"},"request_id":"71021dcc-ed5b-4ab0-876c-b0ded7ead443"}` (官方错误码 40212 代表账户额度不足/免费配额耗尽) | **PASS_BILLING** | `temp/e2e/2026-11-05/core5b/modelscope_cn.png` |
-| 5 | `modelscope_ai` | 魔搭社区 (国际站) | `iic/multi-modal_chinese_stable_diffusion_v1.0` | 无或标准 LoRA | `MODELSCOPE_AI_TOKEN` (`...d8bf`, `...a7d2`) | 上游 HTTP 401: `{"errors":{"message":"Please bind your Alibaba Cloud account before use. You can bind it at: https://modelscope.ai/my/settings/account"},"request_id":"8d78fe47-4f6d-4e38-a148-43c08959b048"}` | **BLOCKED_AUTH** | `temp/e2e/2026-11-05/core5b/modelscope_ai.png` |
-| 6 | `nanogpt` | NanoGPT (按次即付) | `flux-schnell` | 不支持 LoRA | `NANOGPT_KEY` (`...2d4a`) | 上游 HTTP 401: `{"error":{"message":"Invalid session","type":"invalid_request_error","code":"invalid_api_key"}}` (界面采样器红字报错) | **BLOCKED_AUTH** | `temp/e2e/2026-11-05/core5b/nanogpt.png` |
+| 3 | `huggingface` | Hugging Face Inference Providers | 底模端点: `black-forest-labs/FLUX.1-dev` (`fal-ai/flux-lora`) | LoRA: `renderartist/Technically-Color-Z-Image-Turbo` (scale: 0.9, 权重直链 `c0l0ringb00k_Flux_v1_renderartist.safetensors`) | `HF_TOKEN` (池内轮换4把: `...Kdks`, `...MMGa`, `...naLB`, `...EIBT`) | 上游 HTTP 402: `{"error":"Purchase pre-paid credits to continue using Inference Providers. Alternatively, subscribe to PRO to get monthly included credits."}` (4把全部透明轮换并记录) | **PASS_BILLING** | `temp/e2e/2026-11-05/core5b/huggingface.png` |
+| 4 | `modelscope` | 魔搭社区 (国内站) | `Tongyi-MAI/Z-Image-Turbo` (经实测 iic/multi-modal_chinese_stable_diffusion_v1.0 报 code: 40212 为未核实错误码，已换用官方推荐底模) | 实测 Attempt 1 挂载社区 LoRA (如 F16/z-image-turbo-flow-dpo) 上游报 `模型不存在`（推理机房未预装第三方权重）；Attempt 2 运行纯底模出图 | `MODELSCOPE_TOKEN` (`...15b0`) | 经 `X-ModelScope-Task-Type: image_generation` 轮询至 `task_status: "SUCCEED"`，产生真实图片 `https://modelscope-studios.oss-cn-zhangjiakou.aliyuncs.com/aigc/text-to-image/2edc1f8e-b383-4524-87b6-c643025379c2.png`，存入历史 `hist_1793878989884_i13tm` | **PASS_GENERATION** | `temp/e2e/2026-11-05/core5b/modelscope_cn.png` |
+| 5 | `modelscope_ai` | 魔搭社区 (国际站) | `iic/multi-modal_chinese_stable_diffusion_v1.0` | 无 | `MODELSCOPE_AI_TOKEN` (`...d8bf`, `...a7d2`) | 上游 HTTP 401: `{"errors":{"message":"Please bind your Alibaba Cloud account before use. You can bind it at: https://modelscope.ai/my/settings/account"},"request_id":"8d78fe47-4f6d-4e38-a148-43c08959b048"}` | **BLOCKED_AUTH** | `temp/e2e/2026-11-05/core5b/modelscope_ai.png` |
+| 6 | `nanogpt` | NanoGPT (按次即付) | `flux-schnell` | 不支持 LoRA | `NANOGPT_KEY` (`...2d4a`) | 上游 HTTP 401: `{"error":{"message":"Invalid session","type":"invalid_request_error","code":"invalid_api_key"}}` (界面采样器红字报错；辅助测试见下文) | **BLOCKED_AUTH** | `temp/e2e/2026-11-05/core5b/nanogpt.png` |
 | 7 | `tensorart` | Tensor.Art TAMS 模型 API | `613045163490732233` (SD 1.5 全能动漫) | `661652545330040294` (weight 0.8) | `TENSORART_TAMS_TOKEN` (`...f4a7`, 非 ak_ 密钥) | 上游 HTTP 400: `{"code":3, "message":"Params Valid", "details":[{"@type":"type.googleapis.com/tams_api.ArgumentError", "field":"base", "message":"credits not enough"}]}` (界面采样器显式报「Tensor.Art 模型任务提交失败 [400]」) | **PASS_BILLING** (上游算力额度不足) | `temp/e2e/2026-11-05/core5b/tensorart_tams.png` |
 | 8 | `modelslab` | ModelsLab 开放模型库 | `tamarin-xl-v1` | `xl-realistic-cake-art-sty` (0.45) | `MODELSLAB_API_KEY` (`...91e1`) | 上游语义拦截: `ModelsLab 错误: You need to be subscribed to a plan to continue, buy subscription from https://modelslab.com/pricing` | **PASS_BILLING** (需付费订阅套餐) | `temp/e2e/2026-11-05/core5b/modelslab.png` |
 | 9 | `gemini` | Google Gemini (官方直连) | `gemini-3.1-flash-image` | 不支持 LoRA | 无密钥 (`GEMINI_API_KEY` 未配置) | 前端拦截提示: `未配置密钥` / `未配置 Google Gemini API 密钥` | **BLOCKED_CONFIG** | `temp/e2e/2026-11-05/core5b/gemini.png` |
@@ -262,7 +262,33 @@
 ### 3. xAI / Grok 兼容接口与 Runware 字段补齐
 - **修复措施**：在 `GrokCompatDriver.ts` 与 `server.ts` 中补齐官方文档的 `quality` 字段；在 `RunwareTask` 与 `runwareImageContract.ts` 中补齐 `scheduler` 参数映射。
 
-### 4. 协同视频任务修复（video7b findings）
-- **Finding 1 (CivitaiDriver 轮询超时优化)**：`CivitaiDriver.ts` 在 `isVideo` 为 true 时，将本地轮询超时时间扩展至 600 秒（600000ms），采用 `[2000, 5000, 10000, 15000, 30000]` 的递增退避频率，并在本地超时后透传 `errorSource: 'local'` 与 `workflowId`。（回归测试 `CivitaiDriver.poll.test.ts` 通过）。
-- **Finding 2 (NanoGPT 视频路由分流)**：`NanoGPTDriver.ts` 声明 `text2video` / `img2video` 能力，并在 `isVideo` 为 true 时分流至 `/api/video/generate`（`provider=nanogpt`）；`EngineRegistry.ts` 增加视频驱动回退机制。（回归测试 `src/engines/drivers/NanoGPTDriver.test.ts` 通过）。
+### 4. 协同视频任务与无回退规则彻底整改（P1-a & P1-b）
+- **P1-a (严禁静默回退 VideoDriver)**：
+  - 根因分析：此前在 `EngineRegistry.generate` 中添加的 `if (isVideo && driver缺少视频能力) driver = this.getDriver('video')` 构成了静默驱动切换，违反了项目最高准则「严禁静默容灾与回退」。
+  - 彻底修复：完全移除该静默切换分支。当选择的服务商驱动不具备 `text2video`/`img2video` 能力时，抛出明确命名的错误：`服务商 [名称] (id) 不支持视频生成，且不存在对应的视频执行路由。拒绝静默切换到其他视频驱动。`。
+  - 回归测试：新增 `src/engines/EngineRegistry.test.ts`，验证视频请求 + 纯图像驱动抛出明确错误且绝不调用 `getDriver('video')`。
+- **P1-b (NanoGPTDriver 视频契约严格遵循官方文档)**：
+  - 依据来源：官方文档 `https://docs.nano-gpt.com/api-reference/endpoint/video-generation`（端点 `POST /api/generate-video`，支持字段 `model`, `prompt`, `image_url`/`imageUrl`, `duration`, `aspect_ratio`, `seed`）。官方文档不接受 `steps`, `cfg`, `sampler_name`, `scheduler`, `negative_prompt`，已全部移除。
+  - 错误与回参透明：移除 `resp.json().catch()` 的自造提示，改为读取响应文本并暴露 `HTTP status + endpoint + verbatim body`；移除 `vData.videoUrl || vData.mediaUrl` 及 `|| this.name` 等兜底假定，若上游未返回 `videoUrl` 则携原始响应报错。
+  - 回归测试：`src/engines/drivers/NanoGPTDriver.test.ts` 覆盖仅发送官方字段、报错原样暴露及无 URL 报错（6/6 全绿）。
+
+### 5. NanoGPT 鉴权协议核实与辅助诊断测试（P1-d）
+- **官方规范**：`https://docs.nano-gpt.com/authentication` 官方推荐标头为 `Authorization: Bearer <API_KEY>`，同时兼容 `x-api-key: <API_KEY>`。
+- **辅助诊断实测**（非 UI 验收，仅作底层取证）：
+  - `POST https://nano-gpt.com/api/check-balance`：携带 `x-api-key`、`Authorization: Bearer` 或两者皆带，均返回 `HTTP 401: {"error":{"message":"Incorrect API key. Please check your API key and try again.","type":"invalid_request_error","code":"invalid_api_key"}}`。
+  - `POST https://api.nano-gpt.com/api/v1/images`：携带上述三种组合均返回 `HTTP 401: {"error":{"message":"Invalid session","type":"invalid_request_error","code":"invalid_api_key"}}`。
+  - `server.ts` 同步更新，在出站请求中同时附带 `Authorization: Bearer ${nanoKey}` 与 `x-api-key: nanoKey`。
+  - 结论：确凿证明 `.env` 中提供的 `NANOGPT_KEY` 在官方服务端已失效，分类为 **BLOCKED_AUTH**。
+
+### 6. ModelScope 官方推理模型与任务状态轮询机制（P1-c）
+- **错误码与模型核实**：此前测试 `iic/multi-modal_chinese_stable_diffusion_v1.0` 出现 `code: 40212`，因无官方文档解释其含义，重标为未核实（UNVERIFIED）。
+- **官方支持底模重测（上限2次）**：
+  - Attempt 1（挂载社区 LoRA `F16/z-image-turbo-flow-dpo` / `PAI/Z-Image-Fun-Lora-Distill` / `renderartist/Technically-Color-Z-Image-Turbo`）：ModelScope API-Inference 服务端返回 HTTP 500 `apiInferModelDownload call failed: [Model Exception] 模型不存在`，证实推理容器机房未预装第三方 LoRA 权重，无法动态拉取。
+  - Attempt 2（运行官方支持底模 `Tongyi-MAI/Z-Image-Turbo` 纯文生图）：携带完整参数（`prompt`, `size: "1024x1024"`, `seed`），轮询头携带必选的 `X-ModelScope-Task-Type: image_generation`（若缺此头官方直接返回 500 `task not found`），任务成功轮询至 `SUCCEED`，生成实际产物 `https://modelscope-studios.oss-cn-zhangjiakou.aliyuncs.com/aigc/text-to-image/2edc1f8e-b383-4524-87b6-c643025379c2.png`，存盘历史记录 `hist_1793878989884_i13tm`，达成 **PASS_GENERATION**。
+
+### 7. Hugging Face 实际请求体底模与 LoRA 精确溯源（P1-e）
+- **底模端点**：`black-forest-labs/FLUX.1-dev`（由 `inferenceProviderMapping['fal-ai']` 将适配器映射至 `fal-ai/flux-lora` 端点提交给 HF Router）。
+- **LoRA 映射**：`renderartist/Technically-Color-Z-Image-Turbo`（解析出权重文件 `c0l0ringb00k_Flux_v1_renderartist.safetensors`，scale: 0.9，组装入 `loras: [{ path, scale }]`）。
+- **实际返回**：`HTTP 402: {"error":"Purchase pre-paid credits to continue using Inference Providers. Alternatively, subscribe to PRO to get monthly included credits."}`，真实归属为 **PASS_BILLING**。
+
 
