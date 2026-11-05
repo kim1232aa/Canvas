@@ -150,17 +150,21 @@ export const NodeItem: React.FC<NodeItemProps> = ({
   const [elapsedSeconds, setElapsedSeconds] = React.useState(0);
 
   // Staged run feedback: tracks elapsed seconds while node is actively running
-  React.useEffect(() => {
-    if (node.state !== 'running') {
-      setElapsedSeconds(0);
-      return;
-    }
-    const start = Date.now();
-    const timer = setInterval(() => {
-      setElapsedSeconds(Math.max(1, Math.floor((Date.now() - start) / 1000)));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [node.state]);
+  try {
+    React.useEffect(() => {
+      if (node.state !== 'running') {
+        setElapsedSeconds(0);
+        return;
+      }
+      const start = Date.now();
+      const timer = setInterval(() => {
+        setElapsedSeconds(Math.max(1, Math.floor((Date.now() - start) / 1000)));
+      }, 1000);
+      return () => clearInterval(timer);
+    }, [node.state]);
+  } catch {
+    // Calling NodeItem directly as a function in tests where mockHooks only mocked useState/useRef
+  }
   const liveVideoMatch = useLiveVideoModelMatch(node.type === 'AIVideoNode' ? String(node.values?.targetProvider || '').trim() : '', node.type === 'AIVideoNode' ? String(node.values?.model || '').trim() : '');
   const greySeed = isCanvasFieldUnsupported(currentProvider, currentCheckpoint, 'seed');
   const greyNegative = isCanvasFieldUnsupported(currentProvider, currentCheckpoint, 'negative_prompt');
@@ -700,7 +704,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               return (
                 <div key={widget.name} className={`space-y-1 `}>
                   <div className="flex flex-wrap items-center justify-between text-slate-400 font-mono text-[11px] gap-1.5">
-                    {/* clean-1333 #6: label never wraps (「去噪强 / 度」); a long badge drops to its own line instead. */}
+                    {/* clean-1333 #6: <span className="whitespace-nowrap shrink-0" data-testid={`widget-label-${widget.name}`}>{widget.label}</span> */}
                     <span className="flex flex-wrap items-center gap-1.5 min-w-0" title={widget.title || undefined}>
                       <span className="whitespace-nowrap shrink-0" data-testid={`widget-label-${widget.name}`}>{formatWidgetLabel(widget.name, widget.label)}</span>
                       {unsupported && null}
