@@ -204,15 +204,17 @@ export function normalizeLoraPayloadItem<T extends Record<string, any>>(lora: T,
   const name = String(lora.name ?? '').trim();
   const path = String(lora.path ?? lora.downloadUrl ?? lora.download_url ?? '').trim();
   const prov = String(targetProvider || lora.provider || '').toLowerCase().trim();
-  const isCivitaiTarget = prov === 'civitai' || (!prov && !path);
+  const isNonCivitaiTarget = Boolean(prov && prov !== 'civitai');
   const air = civitaiAirCanonical(name) || civitaiAirCanonical(path) || civitaiAirCanonical(String(lora.civitaiId ?? lora.civitai_id ?? '').trim());
 
-  if (!air || !isCivitaiTarget) {
-    if (!isCivitaiTarget && path) {
+  if (isNonCivitaiTarget) {
+    if (path) {
       return { ...lora, path: lora.path || path, downloadUrl: lora.downloadUrl || path } as T;
     }
     return lora;
   }
+
+  if (!air) return lora;
   const { downloadUrl: _d, download_url: _du, path: _p, ...rest } = lora as any;
   return { ...rest, name: name || air, civitaiId: air } as T;
 }
