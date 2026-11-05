@@ -5,6 +5,8 @@ import { falQueueOpenApiUrl, extractFalInputProperties, inlineFalItemRefs, FalSc
 import { falQueueSubmitUrl, runFalQueueLifecycle } from '../falQueueLifecycle.ts';
 import { buildAgnesVideoRequest, agnesVideoId } from '../agnesVideoRequest.ts';
 import { classifyNanoGptVideoStatus, NANO_GPT_VIDEO_POLL_BUDGET_MS, NANO_GPT_VIDEO_POLL_INTERVAL_MS } from '../nanoGptVideoStatus.ts';
+import { videoCancelPlan, videoProgressLine } from '../videoJobControl.ts';
+import { readVideoJobStatus, updateVideoJobStatus } from '../videoJobStatus.ts';
 import { applyCustomParameters } from '../customParameters.ts';
 import { sanitizeGenerationMetadata } from '../../utils/generationMetadata.ts';
 import { resolveAgainstBaseOrigin } from '../../engines/compatRelay.ts';
@@ -718,6 +720,11 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
         options,
       ),
       sleep: (ms) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
+      onStatus: (update) => updateVideoJobStatus({
+        jobId: update.requestId, provider: 'fal',
+        phase: update.status === 'IN_QUEUE' ? 'queued' : 'running',
+        upstreamStatus: update.status, budgetMs: 15 * 60 * 1000, cancelUrl: update.cancelUrl,
+      }),
     });
 
     if (!outcome.ok) {
@@ -801,4 +808,54 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
 
 export function registerVideoGenerateRoutes(app: any, deps: VideoGenerateRouteDeps) {
   app.post(['/api/video/generate', '/api/engine/video/generate'], handleVideoGenerate(deps));
+  app.post('/api/video/cancel', handleVideoCancel(deps));
+  app.get('/api/video/status', (req: Request, res: ExpressResponse) => {
+    const provider = String(req.query.provider || '').trim().toLowerCase();
+    const snapshot = provider ? latestVideoJobStatus(provider) : undefined;
+    if (!snapshot) return res.status(404).json({ error: '没有正在进行的视频任务状态。', provider });
+    res.json(snapshot);
+  });
 }
+
+/**
+ * Cancel one running video job. Sends the provider's documented cancel call and
+ * returns its status and body unchanged. A provider with no documented cancel
+ * gets 409 and no upstream request.
+ */
+export function handleVideoCancel(deps: Pick<VideoGenerateRouteDeps, 'upstreamFetch' | 'keyPoolManager'>) {
+  return async (req: Request, res: ExpressResponse) => {
+    const provider = String(req.body?.provider || '').trim().toLowerCase();
+    const jobId = String(req.body?.jobId || '').trim();
+    const cancelUrl = typeof req.body?.cancelUrl === 'string' ? req.body.cancelUrl : undefined;
+    if (!provider || !jobId) return res.status(400).json({ error: '取消需要 provider 和 jobId。', errorSource: 'local' });
+    const plan = videoCancelPlan({ provider, jobId, cancelUrl });
+    if ('unsupported' in plan) return res.status(409).json({ error: plan.unsupported, errorSource: 'local', provider, jobId, cancelled: false });
+    const key = deps.keyPoolManager.getNextKey(provider) || '';
+    const headers: Record<string, string> = {};
+    if (provider === 'fal' && key) headers.Authorization = `Key ${key}`;
+    if ((provider === 'replicate' || provider === 'civitai') && key) headers.Authorization = `Bearer ${key}`;
+    if ((provider === 'krea' || provider === 'sogni') && key) headers.Authorization = `Bearer ${key}`;
+    try {
+      const upstream = await deps.upstreamFetch(
+        { provider, route: '/api/video/cancel', model: jobId, key },
+        plan.url,
+        { method: plan.method, headers, ...(plan.body ? { body: JSON.stringify(plan.body) } : {}) },
+      );
+      const body = await upstream.text();
+      return res.status(upstream.ok ? 200 : upstream.status).json({
+        cancelled: upstream.ok,
+        upstreamStatus: upstream.status,
+        endpoint: plan.url,
+        method: plan.method,
+        rawResponse: body,
+        errorSource: upstream.ok ? undefined : 'upstream',
+        provider,
+        jobId,
+      });
+    } catch (error: any) {
+      return res.status(502).json({ error: `取消请求没有得到上游响应: ${error?.message || error}`, errorSource: 'network', endpoint: plan.url, provider, jobId, cancelled: false });
+    }
+  };
+}
+
+export { videoProgressLine };

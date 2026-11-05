@@ -186,6 +186,24 @@ export const NodeItem: React.FC<NodeItemProps> = ({
 
   const uploadInput = React.useRef<HTMLInputElement>(null);
   const [showUnsupported, setShowUnsupported] = React.useState(false);
+  React.useEffect(() => {
+    if (node.type !== 'AIVideoNode' || node.state !== 'running') return;
+    const provider = String(node.values?.targetProvider || '').trim();
+    if (!provider) return;
+    let stopped = false;
+    const tick = async () => {
+      const response = await fetch(`/api/video/status?provider=${encodeURIComponent(provider)}`).catch(() => null);
+      if (!response || !response.ok || stopped) return;
+      const body = await response.json().catch(() => null);
+      if (!body || stopped) return;
+      if (body.text) onUpdateValue(node.id, 'videoStatusText', body.text);
+      if (body.jobId) onUpdateValue(node.id, 'videoJobId', body.jobId);
+      if (body.cancelUrl) onUpdateValue(node.id, 'videoCancelUrl', body.cancelUrl);
+    };
+    void tick();
+    const timer = setInterval(tick, 3000);
+    return () => { stopped = true; clearInterval(timer); };
+  }, [node.type, node.state, node.values?.targetProvider, node.id, onUpdateValue]);
   const liveVideoMatch = useLiveVideoModelMatch(node.type === 'AIVideoNode' ? String(node.values?.targetProvider || '').trim() : '', node.type === 'AIVideoNode' ? String(node.values?.model || '').trim() : '');
   const greySeed = isCanvasFieldUnsupported(currentProvider, currentCheckpoint, 'seed');
   const greyNegative = isCanvasFieldUnsupported(currentProvider, currentCheckpoint, 'negative_prompt');

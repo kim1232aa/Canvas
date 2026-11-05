@@ -17,6 +17,22 @@ export const CIVITAI_VIDEO_POLL_BUDGET_MS = 10 * 60 * 1000;
 export const CIVITAI_VIDEO_SUBMIT_WAIT_SECONDS = 60;
 export const CIVITAI_VIDEO_SOCKET_TIMEOUT_MS = 10 * 60 * 1000;
 
+export interface CivitaiPollStep { delayMs: number; attempt: number }
+
+/** Delays that fit inside the local budget. The old loop stopped after 20×3s. */
+export function civitaiVideoPollPlan(budgetMs: number, now = Date.now()): CivitaiPollStep[] {
+  const steps: CivitaiPollStep[] = [];
+  let spent = 0;
+  for (let attempt = 0; spent < budgetMs; attempt++) {
+    const delayMs = civitaiVideoPollDelayMs(attempt);
+    if (spent + delayMs >= budgetMs) break;
+    steps.push({ delayMs, attempt });
+    spent += delayMs;
+  }
+  void now;
+  return steps;
+}
+
 export function civitaiVideoPollDelayMs(attempt: number): number {
   const index = Math.min(Math.max(0, attempt), CIVITAI_VIDEO_POLL_CADENCE_MS.length - 1);
   return CIVITAI_VIDEO_POLL_CADENCE_MS[index];

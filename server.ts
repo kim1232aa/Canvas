@@ -6,7 +6,7 @@ import { sentHistoryNumbers } from './src/server/historySent.ts';
 import type { GenerationHistoryItem } from './src/types/providers';
 import { lookupExactHuggingFaceRepo } from './src/server/huggingFaceExactRepoSearch.ts';
 import { classifyCivitaiVideoPoll } from './src/server/civitaiVideoPoll.ts';
-import { CIVITAI_VIDEO_POLL_BUDGET_MS, CIVITAI_VIDEO_SOCKET_TIMEOUT_MS, CIVITAI_VIDEO_SUBMIT_WAIT_SECONDS, civitaiVideoPollDelayMs } from './src/server/civitaiVideoPollSchedule.ts';
+import { CIVITAI_VIDEO_POLL_BUDGET_MS, CIVITAI_VIDEO_SOCKET_TIMEOUT_MS, CIVITAI_VIDEO_SUBMIT_WAIT_SECONDS, civitaiVideoPollPlan } from './src/server/civitaiVideoPollSchedule.ts';
 import { fetchSenseNovaModelCatalog } from './src/server/senseNovaCatalog.ts';
 import { readHuggingFaceSpaceImageResponse } from './src/server/huggingFaceSpaceImage.ts';
 import { buildModelScopeImagePayload } from './src/server/modelScopeImageContract';
@@ -3568,12 +3568,9 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
         let civitaiLastResponse: unknown = orchData;
         if (!completedMediaUrl && (orchData.id || orchData.token)) {
           const workflowId = orchData.id || orchData.token;
-          const pollDeadline = Date.now() + CIVITAI_VIDEO_POLL_BUDGET_MS;
           const pollEndpoint = `https://orchestration.civitai.com/v2/consumer/workflows/${workflowId}`;
-          for (let attempt = 0; Date.now() < pollDeadline; attempt++) {
-            const delay = civitaiVideoPollDelayMs(attempt);
-            if (Date.now() + delay >= pollDeadline) break;
-            await new Promise((r) => setTimeout(r, delay));
+          for (const step of civitaiVideoPollPlan(CIVITAI_VIDEO_POLL_BUDGET_MS)) {
+            await new Promise((r) => setTimeout(r, step.delayMs));
             if (res.writableEnded || res.destroyed) return;
             let pollResp: Response;
             try {

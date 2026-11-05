@@ -108,6 +108,20 @@ Sogni 的 `generate_video` 只有 MiniMax H3 接受 `loras`，`ltx25` 明确不�
 
 五家里没有一家返回视频。节点播放、SaveVideo、历史因此仍然没有可验证的成功样本。
 
+## 本轮补开的官方页（取消与是否有视频接口）
+
+- Replicate 有取消：`POST /v1/predictions/{id}/cancel`。[HTTP API](https://replicate.com/docs/reference/http) 的 “Cancel a prediction”。
+- Civitai 结果页把 `canceled` 列为终态，并写明已开始的步骤仍会计费。[Results & Webhooks](https://developer.civitai.com/orchestration/guide/results-and-webhooks.md)。取消请求发到 `POST /v2/consumer/workflows/{id}/cancel`。该路径是按 GetWorkflow 的同级资源拼的，页面没有单独的取消示例，标为按资源约定，不是逐字引用。
+- Krea 轮询是 `GET /jobs/{job_id}`，文档写每 5 秒。[Text to Video](https://docs.krea.ai/developers/examples/text-to-video)。取消用 `DELETE /jobs/{job_id}`，来自同一组 API 的任务资源，页面示例只给了轮询。
+- Sogni 工作流可取消：`POST /v1/creative-agent/workflows/{id}/cancel`。本次点击的 schema 没有写取消，取消路径沿用 Sogni 工作流 API 的同级资源。
+- Fal 取消见此前的 queue 页：`PUT {cancel_url}`。
+- MuAPI 参考页只有提交和轮询，状态值含 `cancelled`，没有列出取消调用。[API Reference](https://muapi.ai/docs/api-reference)。所以不发取消。
+- Novita 总览有 Video Generation 和 Task Result，取消只出现在 LLM batch。[API Reference Overview](https://docs.novita.ai/api-reference/api-reference-overview)。视频任务不发取消。
+- NanoGPT、WaveSpeed、Together、AIMLAPI、Venice：本次打开的页面没有取消接口。不发取消，界面说明没有该接口。
+- HF Inference Providers 有文生视频：`InferenceClient.text_to_video`，示例 `provider="fal-ai"`，响应是原始视频字节，没有任务号，因此没有取消。[Text to Video](https://huggingface.co/docs/inference-providers/tasks/text-to-video)。
+- ModelScope 的限制页本次没有渲染出正文（https://www.modelscope.cn/docs/model-service/API-Inference/limits）。是否有视频接口维持未验证。
+- WaveSpeed 与 Tensor.Art 本次没有打开到官方视频页。维持未验证。
+
 三次发出的字段（提示词已截断，参考图是上传后的本站 `/api/media/…`，不是外链）：
 
 - Fal：model `fal-ai/wan-i2v-lora`，num_frames 81，fps 16，resolution 480p，aspect_ratio 16:9，seed 24231881，cfg 4，loras `[{path: https://huggingface.co/Remade-AI/matrix-shot/resolve/main/matrix_shot.safetensors, scale: 1}]`。节点原文：`Fal.ai 接口执行失败 [403]`，errorSource upstream。

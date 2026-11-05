@@ -29,6 +29,8 @@ export interface FalQueueLifecycleOptions {
   pollIntervalMs?: number;
   /** Client-side deadline for the whole lifecycle (default 15 minutes). */
   timeoutMs?: number;
+  /** Called with each upstream status so the node can show it while this call is open. */
+  onStatus?: (update: { requestId: string; status: string; cancelUrl?: string }) => void;
 }
 
 export type FalQueueStage = 'submit' | 'status' | 'result' | 'timeout' | 'invalid';
@@ -133,6 +135,7 @@ export async function runFalQueueLifecycle(options: FalQueueLifecycleOptions): P
     let statusData: any;
     try { statusData = JSON.parse(statusBody); } catch { statusData = undefined; }
     const state = statusData?.status;
+    options.onStatus?.({ requestId, status: String(state || '未知'), cancelUrl: submitData?.cancel_url });
     if (typeof statusData?.response_url === 'string' && statusData.response_url) {
       resultUrl = statusData.response_url;
     }
