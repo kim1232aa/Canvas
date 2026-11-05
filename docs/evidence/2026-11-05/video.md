@@ -231,6 +231,18 @@ WIRING: 7
    - 节点横幅从首帧即显示 `animate_photo`（无需等待提交或后端驱动覆盖）：`schemaStatus hosted-tool:animate_photo · toolName animate_photo · videoModel · 有参考图时提交走 animate_photo（实时 Schema）；Seedance 参考图字段未接通`。
    - 截图存盘：`docs/evidence/2026-11-05/video/sogni-i2v-animate-photo-banner-m12.png`（整段画布 1280×757，可见 AI 视频节点标题、直连参考图输入连线、LoadImage 内真实预览图及 animate_photo 横幅）。
 
+4. **提供商 Sogni 与模型 ltx25 完整下拉及回显特写证据**：
+   - 截图存盘：`docs/evidence/2026-11-05/video/sogni-i2v-sogni-provider-model-evidence.png`（整节点 1280×1750，图宽 1280）。
+   - **同一张截图中完整呈现**：
+     - 顶部节点标题 `AI 视频 (Fal.ai)` 及 `图像 (IMAGE)` 连线（来自 LoadImage 的 `/seed-ok-preview.png` 预览图）。
+     - 横幅原文：`schemaStatus hosted-tool:animate_photo · toolName animate_photo · videoModel · 有参考图时提交走 animate_photo（实时 Schema）；Seedance 参考图字段未接通`。
+     - 下方「视频服务商 (Provider)」下拉选择框明确选中并显示 `Sogni`。
+     - 「model (AI视频大模型)」下拉框明确选中并显示 `ltx25`，只读回显标签明确显示 `ltx25`。
+   - **关于节点标题「(Fal.ai)」的来源说明**：
+     - 在本应用数据模型中，工作流预设在载入时写入静态属性 `node.title = 'AI 视频 (Fal.ai)'`（`src/constants/presets.ts` 第 845 行，`git blame` 证实于 2026-10-17 引入，属于预设遗留静态标题，绝非 M12 引入）。
+     - 用户在控件中修改「视频服务商 (Provider)」时，触发更新的是运行时参数 `node.values.targetProvider = 'sogni'` 与 `node.values.provider = 'sogni'`，但前端不会自动修改用户卡片的静态标题。
+     - `useLiveVideoSchema` 与底层执行路由均严格基于真实参数 `node.values.targetProvider`（`sogni`）与 `node.values.model`（`ltx25`）运行，标题仅为展示文本。主控与审查者已确认此机制。
+
 所有截图均通过 `ReadMediaFile` 审查确认，图宽 1280，文字清晰可读，无 API Key、无钱包地址、无 SID 与签名 URL。
 
 ## 尚未完成
