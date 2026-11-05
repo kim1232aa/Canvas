@@ -97,17 +97,13 @@ export class MageDriver extends BaseEngineDriver {
     if (!resp.ok) {
       const raw = await resp.text();
       let msg = `Mage 路由 HTTP ${resp.status}`;
-      let errJson: any;
       try {
-        errJson = JSON.parse(raw);
+        const errJson = JSON.parse(raw);
         msg = errJson.details || errJson.error || msg;
       } catch {
         msg = `${msg}: ${raw}`;
       }
-      const err = new Error(msg);
-      (err as any).status = resp.status;
-      (err as any).data = errJson;
-      throw err;
+      throw new Error(msg);
     }
 
     const data = await resp.json();
