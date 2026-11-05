@@ -20,4 +20,7 @@ describe('generation button readiness', () => {
     expect(generationReadiness({...valid, executionBlockedReason: lora, prompt: ''})).toBe(`${lora}；请填写提示词`);
     expect(generationReadiness({...valid, executionBlockedReason: lora, prompt: 'cat'})).toBe(lora);
   });
+  it('allows tensorart with valid model and prompt without local offline block', () => {
+    expect(generationReadiness({ provider: 'tensorart', model: '613045163490732233', prompt: '1girl' })).toBeUndefined();
+  });
 });
