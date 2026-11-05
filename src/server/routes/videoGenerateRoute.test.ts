@@ -2,7 +2,9 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import express from 'express';
 import http from 'http';
 import { EventEmitter } from 'node:events';
-import { handleVideoGenerate, type VideoGenerateRouteDeps } from './videoGenerateRoute.ts';
+import { handleVideoGenerate, VIDEO_GENERATE_DOWNLOAD_MARGIN_MS, VIDEO_GENERATE_SCHEMA_TIMEOUT_MS, VIDEO_GENERATE_SOCKET_TIMEOUT_MS, type VideoGenerateRouteDeps } from './videoGenerateRoute.ts';
+import { FAL_VIDEO_POLL_BUDGET_MS } from '../falQueueLifecycle.ts';
+import { NANO_GPT_VIDEO_POLL_BUDGET_MS } from '../nanoGptVideoStatus.ts';
 import { readVideoJobStatus, resetVideoJobStatusForTests } from '../videoJobStatus.ts';
 
 describe('videoGenerateRoute lifecycle and client disconnect handling (grok_compat polling branch)', () => {
@@ -581,5 +583,32 @@ describe('videoGenerateRoute lifecycle and client disconnect handling (grok_comp
       path: '/api/video/generate',
     } as any, res);
     expect(readVideoJobStatus('req-throw')).toBeUndefined();
+  });
+
+  it('keeps the generate socket at Fal budget plus schema fetch plus download', () => {
+    const floor = FAL_VIDEO_POLL_BUDGET_MS + VIDEO_GENERATE_SCHEMA_TIMEOUT_MS + VIDEO_GENERATE_DOWNLOAD_MARGIN_MS;
+    expect(VIDEO_GENERATE_SOCKET_TIMEOUT_MS).toBeGreaterThanOrEqual(floor);
+    expect(VIDEO_GENERATE_SOCKET_TIMEOUT_MS).toBeGreaterThanOrEqual(NANO_GPT_VIDEO_POLL_BUDGET_MS + VIDEO_GENERATE_SCHEMA_TIMEOUT_MS + VIDEO_GENERATE_DOWNLOAD_MARGIN_MS);
+    expect(VIDEO_GENERATE_SCHEMA_TIMEOUT_MS).toBe(30_000);
+    expect(VIDEO_GENERATE_DOWNLOAD_MARGIN_MS).toBe(120_000);
+  });
+
+  it('sets req and res idle timeouts to Fal budget plus schema plus download', async () => {
+    const timeouts: number[] = [];
+    const { deps } = createMockDeps({
+      upstreamFetch: vi.fn(async () => new Response('nope', { status: 400 })),
+    });
+    const req: any = {
+      body: { provider: 'fal', model: 'fal-ai/veo3', prompt: 'socket' },
+      headers: {},
+      path: '/api/video/generate',
+      setTimeout: (ms: number) => { timeouts.push(ms); },
+    };
+    const res: any = makeMockRes();
+    res.setTimeout = (ms: number) => { timeouts.push(ms); };
+    await handleVideoGenerate(deps)(req, res);
+    const floor = FAL_VIDEO_POLL_BUDGET_MS + VIDEO_GENERATE_SCHEMA_TIMEOUT_MS + VIDEO_GENERATE_DOWNLOAD_MARGIN_MS;
+    expect(timeouts.length).toBeGreaterThanOrEqual(2);
+    expect(timeouts.every((ms) => ms >= floor)).toBe(true);
   });
 });

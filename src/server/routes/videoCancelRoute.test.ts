@@ -72,6 +72,9 @@ describe('handleVideoCancel', () => {
   });
 
   it('returns 409 and sends no request when Fal has no stored cancel_url', async () => {
+    updateVideoJobStatus({
+      jobId: 'req-bare', provider: 'fal', phase: 'running', budgetMs: 600_000, credential: 'stored-fal-key',
+    });
     const seen: unknown[] = [];
     const handler = handleVideoCancel({
       upstreamFetch: vi.fn(async (...args: unknown[]) => {
@@ -81,12 +84,72 @@ describe('handleVideoCancel', () => {
     });
     const res = mockRes();
     await handler({
-      body: { provider: 'fal', jobId: 'missing', cancelUrl: 'https://attacker.example/steal' },
+      body: { provider: 'fal', jobId: 'req-bare', cancelUrl: 'https://attacker.example/steal' },
     } as any, res);
     expect(res.statusCode).toBe(409);
     expect(res.data.cancelled).toBe(false);
     expect(String(res.data.error)).toContain('cancel_url');
     expect(seen).toEqual([]);
+  });
+
+  it('returns 409 and sends no request when there is no job record', async () => {
+    const seen: unknown[] = [];
+    const handler = handleVideoCancel({
+      upstreamFetch: vi.fn(async (...args: unknown[]) => {
+        seen.push(args);
+        return new Response('nope', { status: 200 });
+      }),
+    });
+    const res = mockRes();
+    await handler({ body: { provider: 'civitai', jobId: 'missing' } } as any, res);
+    expect(res.statusCode).toBe(409);
+    expect(res.data.cancelled).toBe(false);
+    expect(seen).toEqual([]);
+  });
+
+  it('returns 409 and sends no request when the claimed provider does not match the stored job', async () => {
+    updateVideoJobStatus({
+      jobId: 'wf1', provider: 'civitai', phase: 'running', budgetMs: 600_000, credential: 'stored-civitai-key',
+    });
+    const seen: unknown[] = [];
+    const handler = handleVideoCancel({
+      upstreamFetch: vi.fn(async (...args: unknown[]) => {
+        seen.push(args);
+        return new Response('nope', { status: 200 });
+      }),
+    });
+    const res = mockRes();
+    await handler({ body: { provider: 'krea', jobId: 'wf1' } } as any, res);
+    expect(res.statusCode).toBe(409);
+    expect(res.data.cancelled).toBe(false);
+    expect(String(res.data.error)).toContain('krea');
+    expect(String(res.data.error)).toContain('civitai');
+    expect(seen).toEqual([]);
+  });
+
+  it('cancels Replicate at the stored cancel URL, not api.replicate.com', async () => {
+    updateVideoJobStatus({
+      jobId: 'pred_custom',
+      provider: 'replicate',
+      phase: 'running',
+      budgetMs: 600_000,
+      credential: 'r8_stored',
+      cancelUrl: 'https://replicate.example.test/v1/predictions/pred_custom/cancel',
+    });
+    const seen: Array<{ url: string; options: any }> = [];
+    const handler = handleVideoCancel({
+      upstreamFetch: vi.fn(async (_meta: any, url: string, options: any) => {
+        seen.push({ url, options });
+        return new Response('{"status":"canceled"}', { status: 200 });
+      }),
+    });
+    const res = mockRes();
+    await handler({ body: { provider: 'replicate', jobId: 'pred_custom' } } as any, res);
+    expect(res.statusCode).toBe(200);
+    expect(seen).toHaveLength(1);
+    expect(seen[0].url).toBe('https://replicate.example.test/v1/predictions/pred_custom/cancel');
+    expect(seen[0].options.method).toBe('POST');
+    expect(seen[0].options.headers.Authorization).toBe('Bearer r8_stored');
   });
 });
 
@@ -117,7 +180,8 @@ describe('GET /api/video/status', () => {
     const byNode = read({ nodeId: 'node-b' });
     expect(byNode.data.jobId).toBe('j-b');
     expect(byNode.data.credential).toBeUndefined();
-    const byProvider = read({ provider: 'krea' });
-    expect(byProvider.data.jobId).toBe('j-b');
+    const missing = read({ provider: 'krea' });
+    expect(missing.statusCode).toBe(400);
+    expect(missing.data.jobId).toBeUndefined();
   });
 });

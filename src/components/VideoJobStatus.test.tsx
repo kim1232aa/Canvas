@@ -70,4 +70,27 @@ describe('VideoJobStatus error lines', () => {
     expect(text).toContain('/api/video/cancel');
     expect(updates.some((u) => u.includes('cancel socket hang up'))).toBe(true);
   });
+
+  it('shows the upstream cancel status and body, not the local 200', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo) => {
+      const url = String(input);
+      if (url.includes('/api/video/status')) {
+        return new Response(JSON.stringify({ jobId: 'j1', text: '生成中。上游状态 IN_PROGRESS。本地已等待 12 秒 / 900 秒。' }), { status: 200 });
+      }
+      return new Response(JSON.stringify({
+        cancelled: true,
+        upstreamStatus: 202,
+        rawResponse: '{"status":"CANCELLATION_REQUESTED"}',
+        provider: 'fal',
+      }), { status: 200 });
+    }));
+    await act(async () => { mount(); });
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    const button = host!.querySelector('button') as HTMLButtonElement;
+    await act(async () => { button.click(); });
+    const text = host!.querySelector('[data-testid="video-job-status-line"]')?.textContent || '';
+    expect(text).toContain('上游 202');
+    expect(text).toContain('CANCELLATION_REQUESTED');
+    expect(text).not.toMatch(/上游 200/);
+  });
 });

@@ -1,0 +1,19 @@
+{
+  "provider": "krea",
+  "attempts": [
+    {
+      "model": "kling/kling-2.5",
+      "endpoint": "https://api.krea.ai/generate/kling/kling-2.5",
+      "status": 404,
+      "error": "Endpoint not found",
+      "note": "id omitted the video segment; server prefixes /generate/"
+    },
+    {
+      "model": "video/kling/kling-2.5",
+      "endpoint": "https://api.krea.ai/generate/video/kling/kling-2.5",
+      "status": 402,
+      "error": "Your API balance is separate from your workspace compute balance. Please top up your API balance",
+      "source": "https://docs.krea.ai/developers/examples/text-to-video"
+    }
+  ]
+}

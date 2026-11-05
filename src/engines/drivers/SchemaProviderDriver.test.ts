@@ -271,3 +271,32 @@ describe('SchemaProviderDriver · Together schema GET failure never stops the PO
     expect(JSON.stringify(submitBody.schemaPrefetchFailure)).toContain('Attention Required');
   });
 });
+
+describe('SchemaProviderDriver · video submit flags', () => {
+  beforeEach(() => { mockFetch.mockReset(); clearSharedGet(); beginSharedGetAction(); });
+  afterEach(() => { vi.clearAllMocks(); clearSharedGet(); });
+
+  it('sends isVideo true and executingNodeId on a video generate', async () => {
+    let submitBody: any;
+    mockFetch.mockImplementation(async (input: URL | RequestInfo, init?: RequestInit) => {
+      const u = String(input); const method = String(init?.method || 'GET').toUpperCase();
+      if (u.includes('/api/model-schema') && method === 'GET') return jsonResponse({ credentialRef: 'krea-cred', inputSchema: { type: 'object', properties: { prompt: { type: 'string' } } } });
+      if (u.includes('/api/schema-provider/krea/submit') && method === 'POST') {
+        submitBody = JSON.parse(String(init?.body));
+        return jsonResponse({ error: 'API balance is separate', upstreamStatus: 402 }, 402);
+      }
+      throw new Error(`unexpected ${method} ${u}`);
+    });
+    await expect(new SchemaProviderDriver('krea').generate({
+      model: 'video/kling/kling-2.5',
+      prompt: 'a lantern',
+      isVideo: true,
+      workflowSnapshot: { executingNodeId: 'node-a', format: 'comfycanvas' },
+    } as NormalizedGenerateParams, { kreaKey: 'k' })).rejects.toThrow(/API balance is separate/);
+    expect(String(mockFetch.mock.calls.find(([url]) => String(url).includes('/api/schema-provider/'))?.[0])).toContain('/api/schema-provider/krea/submit');
+    expect(submitBody).toMatchObject({
+      isVideo: true,
+      workflowSnapshot: { executingNodeId: 'node-a' },
+    });
+  });
+});

@@ -1,0 +1,10 @@
+{
+  "provider": "venice",
+  "model": "wan-2.5-preview-text-to-video",
+  "mode": "T2V",
+  "duration": 5,
+  "endpoint": "https://api.venice.ai/api/v1/video/queue",
+  "status": 402,
+  "error": "Insufficient USD or Diem balance",
+  "source": "https://docs.venice.ai/guides/media/video-generation"
+}

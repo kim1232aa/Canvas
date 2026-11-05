@@ -21,38 +21,36 @@ export function VideoJobStatus({ provider, nodeId, onUpdate }: {
   };
 
   React.useEffect(() => {
-    if (!provider && !nodeId) return;
+    if (!job.current.jobId && !nodeId) return;
     let stopped = false;
     const tick = async () => {
       const params = new URLSearchParams();
       if (job.current.jobId) params.set('jobId', job.current.jobId);
       else if (nodeId) params.set('nodeId', nodeId);
-      else if (provider) params.set('provider', provider);
+      else return;
       const url = `${STATUS_ENDPOINT}?${params.toString()}`;
-      let response: Response;
       try {
-        response = await fetch(url);
+        const response = await fetch(url);
+        if (stopped) return;
+        const raw = await response.text();
+        if (stopped) return;
+        let body: any;
+        try {
+          body = JSON.parse(raw);
+        } catch {
+          show(`HTTP ${response.status} ${raw.slice(0, 200)}（${STATUS_ENDPOINT}）`);
+          return;
+        }
+        if (!response.ok) {
+          show(String(body.error || `HTTP ${response.status} ${raw.slice(0, 200)}（${STATUS_ENDPOINT}）`));
+          return;
+        }
+        if (body.text) setLine(String(body.text));
+        if (body.jobId) job.current.jobId = String(body.jobId);
       } catch (error: any) {
         if (stopped) return;
         show(`状态读取失败：${error?.message || error}（${STATUS_ENDPOINT}）`);
-        return;
       }
-      if (stopped) return;
-      const raw = await response.text();
-      if (stopped) return;
-      let body: any;
-      try {
-        body = JSON.parse(raw);
-      } catch {
-        show(`HTTP ${response.status} ${raw.slice(0, 200)}（${STATUS_ENDPOINT}）`);
-        return;
-      }
-      if (!response.ok) {
-        show(String(body.error || `HTTP ${response.status} ${raw.slice(0, 200)}（${STATUS_ENDPOINT}）`));
-        return;
-      }
-      if (body.text) setLine(String(body.text));
-      if (body.jobId) job.current.jobId = String(body.jobId);
     };
     void tick();
     const timer = setInterval(tick, 3000);
@@ -73,8 +71,10 @@ export function VideoJobStatus({ provider, nodeId, onUpdate }: {
           const raw = await response.text();
           let body: any = {};
           try { body = JSON.parse(raw); } catch { /* verbatim below */ }
+          const upstreamStatus = body.upstreamStatus ?? response.status;
+          const upstreamBody = typeof body.rawResponse === 'string' ? body.rawResponse.slice(0, 200) : '';
           show(response.ok
-            ? `已向 ${provider} 发送取消。上游 ${response.status}。`
+            ? `已向 ${body.provider || provider} 发送取消。上游 ${upstreamStatus}${upstreamBody ? ` ${upstreamBody}` : ''}。`
             : String(body.error || `取消失败 HTTP ${response.status} ${raw.slice(0, 200)}`));
         } catch (error: any) {
           show(`取消失败：${error?.message || error}（${CANCEL_ENDPOINT}）`);

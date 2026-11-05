@@ -46,7 +46,10 @@ export function videoCancelPlan(target: VideoCancelTarget): VideoCancelPlan | { 
     if (!target.cancelUrl) return { unsupported: 'Fal 的任务记录里没有 cancel_url，没有发送取消请求。' };
     return { method: 'PUT', url: target.cancelUrl };
   }
-  if (provider === 'replicate') return { method: 'POST', url: `https://api.replicate.com/v1/predictions/${encodeURIComponent(target.jobId)}/cancel` };
+  if (provider === 'replicate') {
+    if (target.cancelUrl) return { method: 'POST', url: target.cancelUrl };
+    return { method: 'POST', url: `https://api.replicate.com/v1/predictions/${encodeURIComponent(target.jobId)}/cancel` };
+  }
   if (provider === 'civitai') return { method: 'PUT', url: `https://orchestration.civitai.com/v2/consumer/workflows/${encodeURIComponent(target.jobId)}`, body: { status: 'canceled' } };
   if (provider === 'krea') return { method: 'DELETE', url: `https://api.krea.ai/jobs/${encodeURIComponent(target.jobId)}` };
   if (provider === 'sogni') return { method: 'POST', url: `https://api.sogni.ai/v1/creative-agent/workflows/${encodeURIComponent(target.jobId)}/cancel` };

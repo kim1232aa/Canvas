@@ -601,7 +601,10 @@ describe('replicateRoutes', () => {
             text: async () => JSON.stringify({
               id: 'pred_vid',
               status: 'starting',
-              urls: { get: 'https://api.replicate.com/v1/predictions/pred_vid' },
+              urls: {
+                get: 'https://api.replicate.com/v1/predictions/pred_vid',
+                cancel: 'https://api.replicate.com/v1/predictions/pred_vid/cancel',
+              },
             }),
           };
         }

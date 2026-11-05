@@ -1,0 +1,23 @@
+{
+  "note": "UI click evidence, Fal I2V, PASS_BILLING",
+  "endpoint": "https://queue.fal.run/fal-ai/wan-i2v-lora",
+  "status": 403,
+  "errorSource": "upstream",
+  "model": "fal-ai/wan-i2v-lora",
+  "sent": {
+    "prompt": "a woman dancing happily...",
+    "fps": 16,
+    "num_frames": 81,
+    "resolution": "480p",
+    "aspect_ratio": "16:9",
+    "seed": 24231881,
+    "cfg": 4,
+    "loras": [
+      {
+        "path": "https://huggingface.co/Remade-AI/matrix-shot/resolve/main/matrix_shot.safetensors",
+        "scale": 1
+      }
+    ],
+    "image_url": "/api/media/2499392fa70bb3b90fc…"
+  }
+}

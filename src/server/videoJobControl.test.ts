@@ -16,6 +16,9 @@ describe('video cancel plans', () => {
       throw new Error('documented cancel provider was marked unsupported');
     }
     expect(replicate.url).toBe('https://api.replicate.com/v1/predictions/p1/cancel');
+    const custom = videoCancelPlan({ provider: 'replicate', jobId: 'p1', cancelUrl: 'https://replicate.example.test/v1/predictions/p1/cancel' });
+    if ('unsupported' in custom) throw new Error('stored replicate cancel url was marked unsupported');
+    expect(custom.url).toBe('https://replicate.example.test/v1/predictions/p1/cancel');
     expect(civitai).toEqual({ method: 'PUT', url: 'https://orchestration.civitai.com/v2/consumer/workflows/wf1', body: { status: 'canceled' } });
     expect(krea).toMatchObject({ method: 'DELETE', url: 'https://api.krea.ai/jobs/j1' });
     expect(sogni).toEqual({ method: 'POST', url: 'https://api.sogni.ai/v1/creative-agent/workflows/wf2/cancel' });

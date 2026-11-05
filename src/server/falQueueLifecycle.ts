@@ -67,7 +67,8 @@ export function falQueueResultUrl(endpoint: string, requestId: string): string {
 }
 
 const DEFAULT_POLL_INTERVAL_MS = 3000;
-const DEFAULT_TIMEOUT_MS = 15 * 60 * 1000;
+/** Official queue jobs can run 15 minutes. The generate route socket must outlast this. */
+export const FAL_VIDEO_POLL_BUDGET_MS = 15 * 60 * 1000;
 
 function fail(
   stage: FalQueueStage,
@@ -87,7 +88,7 @@ export async function runFalQueueLifecycle(options: FalQueueLifecycleOptions): P
     fetchFn,
     sleep,
     pollIntervalMs = DEFAULT_POLL_INTERVAL_MS,
-    timeoutMs = DEFAULT_TIMEOUT_MS,
+    timeoutMs = FAL_VIDEO_POLL_BUDGET_MS,
   } = options;
 
   const authHeaders = { Authorization: `Key ${apiKey}` };

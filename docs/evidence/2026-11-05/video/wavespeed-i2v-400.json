@@ -1,0 +1,27 @@
+{
+  "status": 400,
+  "route": "/api/schema-provider/wavespeed/submit",
+  "endpoint": "https://api.wavespeed.ai/api/v3/wavespeed-ai/wan-2.1/i2v-480p-lora",
+  "error": "HTTP 400: {\"code\":400,\"message\":\"Insufficient credits. Please top up your account to continue.\"}",
+  "upstreamStatus": null,
+  "sent": {
+    "model": "wavespeed-ai/wan-2.1/i2v-480p-lora",
+    "prompt": "a woman dancing happily …(113)",
+    "duration": 5,
+    "seed": 24231881,
+    "cfg": 4,
+    "size": "832*480",
+    "loras": [
+      {
+        "name": "https://huggingface.co/Remade-AI/matrix-shot/resolve/main/matrix_shot.safetensors",
+        "path": "https://huggingface.co/Remade-AI/matrix-shot/resolve/main/matrix_shot.safetensors",
+        "strength": 1,
+        "modelStrength": 1,
+        "clipStrength": 1,
+        "civitaiId": "",
+        "triggers": ""
+      }
+    ],
+    "image_url": "/api/media/2499392fa70bb3b90fcff25898b490c5ba8b5760ab355d57bd64e5a4529983ba"
+  }
+}

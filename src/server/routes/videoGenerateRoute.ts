@@ -2,15 +2,22 @@ import type { Request, Response as ExpressResponse } from 'express';
 import { tamsVideoUnsupported } from '../../schemas/tensorModelApi.ts';
 import { buildFalVideoRequest } from '../falVideoContract.ts';
 import { falQueueOpenApiUrl, extractFalInputProperties, inlineFalItemRefs, FalSchemaMissingError, type FalSchemaFetchFailure } from '../falImageContract.ts';
-import { falQueueSubmitUrl, runFalQueueLifecycle } from '../falQueueLifecycle.ts';
+import { FAL_VIDEO_POLL_BUDGET_MS, falQueueSubmitUrl, runFalQueueLifecycle } from '../falQueueLifecycle.ts';
 import { buildAgnesVideoRequest, agnesVideoId } from '../agnesVideoRequest.ts';
 import { classifyNanoGptVideoStatus, NANO_GPT_VIDEO_POLL_BUDGET_MS, NANO_GPT_VIDEO_POLL_INTERVAL_MS } from '../nanoGptVideoStatus.ts';
 import { videoCancelPlan, videoProgressLine } from '../videoJobControl.ts';
-import { canvasNodeId, clearVideoJobStatus, latestVideoJobStatus, readVideoJobByNode, readVideoJobCredential, readVideoJobStatus, updateVideoJobStatus } from '../videoJobStatus.ts';
+import { canvasNodeId, clearVideoJobStatus, readVideoJobByNode, readVideoJobCredential, readVideoJobStatus, updateVideoJobStatus } from '../videoJobStatus.ts';
 import { applyCustomParameters } from '../customParameters.ts';
 import { sanitizeGenerationMetadata } from '../../utils/generationMetadata.ts';
 import { resolveAgainstBaseOrigin } from '../../engines/compatRelay.ts';
 import type { FieldKey, Provider as SchemaProvider } from '../../schemas/providerSchema.ts';
+
+/** Fal schema GET abort. The route uses AbortSignal.timeout(30000). */
+export const VIDEO_GENERATE_SCHEMA_TIMEOUT_MS = 30_000;
+/** Room to download the result after the poll budget. */
+export const VIDEO_GENERATE_DOWNLOAD_MARGIN_MS = 120_000;
+/** Idle socket. Longest provider budget plus schema fetch plus download. Do not shrink the official queue budget. */
+export const VIDEO_GENERATE_SOCKET_TIMEOUT_MS = Math.max(NANO_GPT_VIDEO_POLL_BUDGET_MS, FAL_VIDEO_POLL_BUDGET_MS) + VIDEO_GENERATE_SCHEMA_TIMEOUT_MS + VIDEO_GENERATE_DOWNLOAD_MARGIN_MS;
 
 export interface VideoGenerateRouteDeps {
   isProvided: (v: any) => boolean;
@@ -110,9 +117,9 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
     });
 
     try {
-      // Video jobs outlast a 300s socket. Official NanoGPT sample polls ~10 min.
-      if (typeof (req as any).setTimeout === 'function') (req as any).setTimeout(NANO_GPT_VIDEO_POLL_BUDGET_MS + 120_000);
-      if (typeof (res as any).setTimeout === 'function') (res as any).setTimeout(NANO_GPT_VIDEO_POLL_BUDGET_MS + 120_000);
+      // Video jobs outlast a 300s socket. Fal's local budget is 15 min; NanoGPT's is 10.
+      if (typeof (req as any).setTimeout === 'function') (req as any).setTimeout(VIDEO_GENERATE_SOCKET_TIMEOUT_MS);
+      if (typeof (res as any).setTimeout === 'function') (res as any).setTimeout(VIDEO_GENERATE_SOCKET_TIMEOUT_MS);
 
     const {
       prompt,
@@ -739,7 +746,7 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
         updateVideoJobStatus({
           jobId: update.requestId, provider: 'fal',
           phase: update.status === 'IN_QUEUE' ? 'queued' : 'running',
-          upstreamStatus: update.status, budgetMs: 15 * 60 * 1000, cancelUrl: update.cancelUrl,
+          upstreamStatus: update.status, budgetMs: FAL_VIDEO_POLL_BUDGET_MS, cancelUrl: update.cancelUrl,
           credential: falKey,
           nodeId: canvasNodeId(req.body),
         });
@@ -834,15 +841,9 @@ export function registerVideoGenerateRoutes(app: any, deps: VideoGenerateRouteDe
   app.get('/api/video/status', (req: Request, res: ExpressResponse) => {
     const jobId = String(req.query.jobId || '').trim();
     const nodeId = String(req.query.nodeId || '').trim();
-    const provider = String(req.query.provider || '').trim().toLowerCase();
-    const snapshot = jobId
-      ? readVideoJobStatus(jobId)
-      : nodeId
-        ? readVideoJobByNode(nodeId)
-        : provider
-          ? latestVideoJobStatus(provider)
-          : undefined;
-    if (!snapshot) return res.status(404).json({ error: '没有正在进行的视频任务状态。', jobId: jobId || undefined, nodeId: nodeId || undefined, provider });
+    if (!jobId && !nodeId) return res.status(400).json({ error: '状态查询需要 jobId 或 nodeId。', errorSource: 'local' });
+    const snapshot = jobId ? readVideoJobStatus(jobId) : readVideoJobByNode(nodeId);
+    if (!snapshot) return res.status(404).json({ error: '没有正在进行的视频任务状态。', jobId: jobId || undefined, nodeId: nodeId || undefined });
     res.json(snapshot);
   });
 }
@@ -854,12 +855,16 @@ export function registerVideoGenerateRoutes(app: any, deps: VideoGenerateRouteDe
  */
 export function handleVideoCancel(deps: Pick<VideoGenerateRouteDeps, 'upstreamFetch'>) {
   return async (req: Request, res: ExpressResponse) => {
-    const provider = String(req.body?.provider || '').trim().toLowerCase();
     const jobId = String(req.body?.jobId || '').trim();
-    if (!provider || !jobId) return res.status(400).json({ error: '取消需要 provider 和 jobId。', errorSource: 'local' });
-    // The client never supplies the URL. Fal's cancel_url was stored when the job was submitted.
+    if (!jobId) return res.status(400).json({ error: '取消需要 jobId。', errorSource: 'local' });
     const stored = readVideoJobStatus(jobId);
-    const plan = videoCancelPlan({ provider, jobId, cancelUrl: provider === 'fal' ? stored?.cancelUrl : undefined });
+    if (!stored) return res.status(409).json({ error: '没有这条视频任务的服务端记录，没有发送取消请求。', errorSource: 'local', jobId, cancelled: false });
+    const claimed = String(req.body?.provider || '').trim().toLowerCase();
+    if (claimed && claimed !== stored.provider) {
+      return res.status(409).json({ error: `取消请求的 provider=${claimed} 与任务记录的 ${stored.provider} 不一致，没有发送取消请求。`, errorSource: 'local', jobId, cancelled: false });
+    }
+    const provider = stored.provider;
+    const plan = videoCancelPlan({ provider, jobId, cancelUrl: stored.cancelUrl });
     if ('unsupported' in plan) return res.status(409).json({ error: plan.unsupported, errorSource: 'local', provider, jobId, cancelled: false });
     const key = readVideoJobCredential(jobId) || '';
     const headers: Record<string, string> = {};

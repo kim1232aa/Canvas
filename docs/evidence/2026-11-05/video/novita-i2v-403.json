@@ -1,0 +1,10 @@
+{
+  "status": 403,
+  "error": "NOT_ENOUGH_BALANCE",
+  "message": "insufficient balance",
+  "model": "SVD-XT",
+  "num_frames": 25,
+  "fps": 6,
+  "prompt": "a slow camera push toward the subject, gentle motion",
+  "note": "preset prompt was empty; first click was blocked locally with 请填写提示词 and sent nothing. This is the first upstream attempt."
+}

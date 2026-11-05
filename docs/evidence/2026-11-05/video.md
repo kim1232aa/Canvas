@@ -69,7 +69,7 @@
 
 ## UI 点击（2026-11-05，本机 PORT=3107，Chrome CDP 9407）
 
-三次都是画布点击，不是脚本直打上游。每次都带了参考图、种子、cfg、帧数或时长，以及官方 schema 声明的 LoRA。三家都在提交阶段拒绝，原因是账户余额，没有生成视频，没有 history id。按规则记 PASS_BILLING，不换模型、不换密钥重试。掩码记录在 `temp/e2e/2026-11-05/video7b/`（该目录被 gitignore，不入库）。
+三次都是画布点击，不是脚本直打上游。每次都带了参考图、种子、cfg、帧数或时长，以及官方 schema 声明的 LoRA。三家都在提交阶段拒绝，原因是账户余额，没有生成视频，没有 history id。按规则记 PASS_BILLING，不换模型、不换密钥重试。掩码记录在 `docs/evidence/2026-11-05/video/`（无截图：video7b 目录只有 JSON 点击日志，没有 png/jpg）。
 
 | 点击 | 预设 | 本站路由 | 上游端点 | 状态 | 上游原文 |
 | --- | --- | --- | --- | --- | --- |
@@ -132,11 +132,11 @@ Sogni 的 `generate_video` 只有 MiniMax H3 接受 `loras`，`ltx25` 明确不�
 
 ## 状态行与取消（评审第二轮）
 
-运行中的视频节点挂 `<VideoJobStatus>`。它自己每 3 秒读 `GET /api/video/status`（优先 `jobId`，否则 `nodeId`，再否则 `provider`），显示阶段、上游状态原文、本地已等待秒数和本地预算。网络失败和非 JSON 响应写进状态行（HTTP 状态、正文前若干字符、端点），取消包 try/catch。轮询 hook 在子组件里：把 `NodeItem` 当函数调用的测试只会拿到这个元素的描述，不会执行 hook。
+运行中的视频节点挂 `<VideoJobStatus>`。它自己每 3 秒读 `GET /api/video/status`（优先 `jobId`，否则 `nodeId`；缺少二者返回 400，不再按 provider 查）。显示阶段、上游状态原文、本地已等待秒数和本地预算。网络失败和非 JSON 响应写进状态行（HTTP 状态、正文前若干字符、端点），取消包 try/catch，成功行写 `upstreamStatus` 和 `rawResponse`。轮询 hook 在子组件里：把 `NodeItem` 当函数调用的测试只会拿到这个元素的描述，不会执行 hook。
 
 状态由各家服务端轮询写入：Fal（`runFalQueueLifecycle` 的 onStatus，路由 try/finally 清除）、NanoGPT（`/api/video/generate`）、Civitai（`runCivitaiVideoPoll`，`server.ts` 的 isVideo 分支调用它）、Replicate（视频预测轮询）、schema-provider 路由（`isVideo === true` 的 submit / tasks/:taskId，覆盖 Krea、Sogni 以及其余走该驱动的视频任务）。浏览器里的 SchemaProviderDriver 不再写这张表。任务成功、失败或本地预算耗尽时删除记录；超过预算加 60 秒仍无人清理的记录由 TTL 删除。取消复用提交时存下的 key，不调 `getNextKey`。Fal 的 cancel_url 只读服务端任务记录，客户端传来的 URL 不用。
 
-取消按钮「停止这个视频任务」打 `POST /api/video/cancel`。有文档的才发：Fal `PUT {cancel_url}`，Replicate `POST /v1/predictions/{id}/cancel`，Civitai `PUT /v2/consumer/workflows/{id}` body `{ "status": "canceled" }`，Krea `DELETE /jobs/{id}`，Sogni `POST /v1/creative-agent/workflows/{id}/cancel`。NanoGPT、WaveSpeed、MuAPI、Novita、Together、AIMLAPI、Venice 返回 409，正文写明没有取消接口，不发上游请求。
+取消按钮「停止这个视频任务」打 `POST /api/video/cancel`。没有服务端任务记录、或客户端 `provider` 与记录不一致，都是 409 且不发上游。有文档的才发：Fal `PUT {cancel_url}`（只读服务端记录），Replicate `POST` 存储的 `urls.cancel`（或按提交时的 baseUrl 拼出），Civitai `PUT /v2/consumer/workflows/{id}` body `{ "status": "canceled" }`，Krea `DELETE /jobs/{id}`，Sogni `POST /v1/creative-agent/workflows/{id}/cancel`。NanoGPT、WaveSpeed、MuAPI、Novita、Together、AIMLAPI、Venice 返回 409，正文写明没有取消接口，不发上游请求。
 
 ## 尚未完成
 

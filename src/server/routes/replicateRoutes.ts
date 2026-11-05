@@ -204,6 +204,13 @@ export function handleReplicateGenerate(deps: ReplicateRouteDeps) {
           schemaFields: mapped.schemaFields,
         });
       }
+      const replicateCancelUrl = (body: any): string | undefined => {
+        const fromUpstream = typeof body?.urls?.cancel === 'string' ? body.urls.cancel.trim() : '';
+        if (fromUpstream) return fromUpstream;
+        const id = typeof body?.id === 'string' ? body.id.trim() : '';
+        if (!id) return undefined;
+        return `${baseUrl.replace(/\/+$/, '')}/predictions/${id}/cancel`;
+      };
       let parsed: ReturnType<typeof parseReplicatePredictionResponse>;
       try {
         parsed = parseReplicatePredictionResponse(data, baseUrl);
@@ -230,7 +237,16 @@ export function handleReplicateGenerate(deps: ReplicateRouteDeps) {
         const pollUrl = parsed.pollUrl || `${baseUrl.replace(/\/+$/, '')}/predictions/${parsed.predictionId}`;
         const noteReplicate = () => {
           if (!isVideo || !parsed.predictionId) return;
-          updateVideoJobStatus({ jobId: parsed.predictionId, provider: 'replicate', phase: 'running', upstreamStatus: parsed.status, budgetMs: maxPollDuration, credential: apiKey, nodeId: canvasNodeId(reqBody) });
+          updateVideoJobStatus({
+            jobId: parsed.predictionId,
+            provider: 'replicate',
+            phase: 'running',
+            upstreamStatus: parsed.status,
+            budgetMs: maxPollDuration,
+            credential: apiKey,
+            nodeId: canvasNodeId(reqBody),
+            cancelUrl: replicateCancelUrl(pollData),
+          });
         };
         noteReplicate();
         try {

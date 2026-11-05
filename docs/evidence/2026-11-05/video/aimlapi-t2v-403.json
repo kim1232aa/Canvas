@@ -1,0 +1,11 @@
+{
+  "provider": "aimlapi",
+  "model": "alibaba/wan-2-6-t2v",
+  "mode": "T2V",
+  "duration": 5,
+  "isVideo": true,
+  "endpoint": "https://api.aimlapi.com/v2/video/generations",
+  "status": 403,
+  "error": "You've run out of funds. Please top up your balance",
+  "source": "https://docs.aimlapi.com/api-references/video-models/alibaba-cloud/wan-2.6-text-to-video"
+}
