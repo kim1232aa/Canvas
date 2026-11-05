@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { getSchemaProviderCatalog } from './schemaProviders';
+import { getSchemaProviderCatalog, normalizeSchemaProviderItems } from './schemaProviders';
 
 const serverSource = readFileSync(new URL('../../server.ts', import.meta.url), 'utf8');
 const modelHubModalSource = readFileSync(new URL('../components/ModelHubModal.tsx', import.meta.url), 'utf8');
@@ -115,6 +115,37 @@ describe('ModelHub and Backend Directory Architecture', () => {
       expect(modelHubModalSource).toContain('if (prov !== \'all\' && errors[prov])');
       expect(modelHubModalSource).toContain("key === 'catalogNotices'");
     });
+
+    it('/api/models category=all passes category: cat to keep video models alongside checkpoints', () => {
+      expect(serverSource).toContain('category: cat,');
+      expect(serverSource).not.toContain("category: cat === 'all' ? 'checkpoint' : cat");
+    });
+
+    it('sets video-catalog notices when cat === video for providers without a video catalog', () => {
+      expect(serverSource).toContain('if (isVideoCat && filtered.length === 0)');
+      expect(serverSource).toContain("catalogNoticesAccum.novita = 'Novita AI 官方模型目录 API (GET /v3/model) 仅支持 checkpoint / lora，无公开视频模型列表");
+      expect(serverSource).toContain("catalogNoticesAccum.sogni = 'Sogni 协议官方目前仅提供文生图端点与 LoRA 目录，无公开视频模型列表");
+      expect(serverSource).toContain("catalogNoticesAccum.deepinfra = 'DeepInfra 官方公开模型列表为文生图（OpenAI images），无独立视频模型列表");
+      expect(serverSource).toContain("catalogNoticesAccum.gemini = 'Google Gemini 官方模型列表目前未包含 Veo 视频模型");
+    });
+
+    it('normalizeSchemaProviderItems preserves both checkpoint and video rows when category is all', () => {
+      const mockRows = [
+        { id: 'img-1', name: 'Image 1', category: 'text-to-image', type: 'image' },
+        { id: 'vid-1', name: 'Video 1', category: 'text-to-video', type: 'video' },
+      ];
+      const allItems = normalizeSchemaProviderItems('krea' as any, mockRows, { category: 'all' });
+      expect(allItems).toHaveLength(2);
+      expect(allItems.map((m: any) => m.category)).toEqual(['Checkpoint', 'Video']);
+
+      const cpItems = normalizeSchemaProviderItems('krea' as any, mockRows, { category: 'checkpoint' });
+      expect(cpItems).toHaveLength(1);
+      expect(cpItems[0].id).toBe('img-1');
+
+      const vidItems = normalizeSchemaProviderItems('krea' as any, mockRows, { category: 'video' });
+      expect(vidItems).toHaveLength(1);
+      expect(vidItems[0].id).toBe('vid-1');
+    });
   });
 
   describe('Fal LoRA-named generation endpoints stay Checkpoint', () => {
@@ -144,6 +175,15 @@ describe('ModelHub and Backend Directory Architecture', () => {
 
     it('ModelHubModal ignores keys ending in Notice when mapping results', () => {
       expect(modelHubModalSource).toContain("key.endsWith('Notice')");
+    });
+
+    it('ModelHubModal renders the lookup-only ID input panel with format hints and official links when provider has no list API', () => {
+      expect(modelHubModalSource).toContain('getProviderFormatHint');
+      expect(modelHubModalSource).toContain('按 ID 直接选用（输入真实模型 ID 后挂载到画布）：');
+      expect(modelHubModalSource).toContain('选用此 ID');
+      expect(modelHubModalSource).toContain('hintInfo.docUrl');
+      expect(modelHubModalSource).toContain('hintInfo.format');
+      expect(modelHubModalSource).not.toContain('PROVIDER_EXAMPLE_IDS');
     });
   });
 
