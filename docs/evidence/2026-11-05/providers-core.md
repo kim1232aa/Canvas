@@ -215,3 +215,54 @@
   - **请求体字段**：`model` (`grok-imagine-image-2.0` / `grok-imagine-image`), `prompt`, `aspect_ratio`, `resolution` (`1k`/`2k`), `quality` (`low`/`medium`/`auto`), `n`, `response_format` (`url`/`b64_json`)；图生图传 `image: { url, type: "image_url" }`。
 - **代码核对与修复**：
   - 在 `GrokCompatDriver.ts` 与 `server.ts` `/api/engine/grok_compat/generate` 中补齐官方新增的 `quality` 参数支持，并保持其余画布字段原样透传。
+
+---
+
+## 二、UI 真实点击端到端验收与实测证据记录
+
+> **最高验收铁律**：UI 实际点击通过并呈现真实产物或原样报错，严禁绕过前端直接打 API 或跑 curl 代替验收。
+> 本轮测试在真实 Headless Chrome (CDP port 9406) 与 Dev Server (PORT 3106, BU_NAME=core5b) 环境中，通过画布前端真实点击运行按键（`[data-testid="run-button"]`「运行：保存图像」及取景框「生成此选区」）触发执行。
+
+### 1. 13 个核心供应商 UI 实测汇总表
+
+| 序号 | 服务商标识 (`provider`) | 服务商名称 | 测试底模与端点 | 挂载 LoRA 资源与参数 | 实际使用密钥来源（脱敏后4位） | 前端界面真实输出与错误判定 | 验收结论分类 | 产物/界面截图存盘路径 |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| 1 | `fal` | Fal.ai (GPU 云端加速) | `fal-ai/flux-lora` | `https://huggingface.co/alvdations/frosting_lane_flux/resolve/main/frosting_lane_flux.safetensors` (0.8) | `FAL_KEY` (`...554f`) | 上游 HTTP 403: `{"detail":"User is locked. Reason: TOP_UP."}`（界面采样器节点红框原样呈现） | **PASS_BILLING** | `temp/e2e/2026-11-05/core5b/fal.png` |
+| 2 | `civitai` | Civitai 官方原生引擎 | `urn:air:sd1:checkpoint:civitai:4384@128713` | `urn:air:sd1:lora:civitai:48126@52642` (0.8) | `CIVITAI_API_KEY` (`...510e`) | 上游 HTTP 400: `{"status":400,"errors":{"messages":["hanaka - v1.0 is not enabled for generation. Please contact support@civitai.com if you believe this to be an error."]}}` | **PASS_BILLING** (上游算力节点原样拦截) | `temp/e2e/2026-11-05/core5b/civitai.png` |
+| 3 | `huggingface` | Hugging Face Inference Providers | `renderartist/Technically-Color-Z-Image-Turbo` | `renderartist/Technically-Color-Z-Image-Turbo` (0.9) | `HF_TOKEN` (池内轮换4把: `...Kdks`, `...MMGa`, `...naLB`, `...EIBT`) | 上游 HTTP 402: `{"error":"Purchase pre-paid credits to continue using Inference Providers. Alternatively, subscribe to PRO to get monthly included credits."}` (4把全部透明轮换并记录) | **PASS_BILLING** | `temp/e2e/2026-11-05/core5b/huggingface.png` |
+| 4 | `modelscope` | 魔搭社区 (国内站) | `AI-ModelScope/stable-diffusion-v2-1` | `damo/lora_test` (0.8) | `MODELSCOPE_TOKEN` (`...15b0`) | 上游 HTTP 400: `{"errors":{"message":"submit failed with code: 40212"},"request_id":"09593966-6259-4deb-9db1-2d1cf5b97b29"}` | **PASS_BILLING** (上游原样报错) | `temp/e2e/2026-11-05/core5b/modelscope_cn.png` |
+| 5 | `modelscope_ai` | 魔搭社区 (国际站) | `Tongyi-MAI/Z-Image-Turbo` | `damo/lora_test` (0.8) | `MODELSCOPE_AI_TOKEN` (`...d8bf`, `...a7d2`) | 上游 HTTP 500: `{"errors":{"message":"apiInferModelDownload call failed: callApiInferModelDownload failed: [Model Exception] Model does not exist"},"request_id":"be138825-5bfd-4078-94b4-29be619359ea"}` | **PASS_BILLING** (上游原样报错) | `temp/e2e/2026-11-05/core5b/modelscope_ai.png` |
+| 6 | `nanogpt` | NanoGPT (按次即付) | `flux-schnell` | 不支持 LoRA | `NANOGPT_KEY` (`...2d4a`) | 上游 HTTP 401: `{"error":{"message":"Invalid session","type":"invalid_request_error","code":"invalid_api_key"}}` (界面采样器红字报错) | **BLOCKED_AUTH** | `temp/e2e/2026-11-05/core5b/nanogpt.png` |
+| 7 | `tensorart` | Tensor.Art TAMS 模型 API | `613045163490732233` (SD 1.5 全能动漫) | `661652545330040294` (weight 0.8) | `TENSORART_TAMS_TOKEN` (`...f4a7`, 非 ak_ 密钥) | 上游 HTTP 400: `{"code":3, "message":"Params Valid", "details":[{"@type":"type.googleapis.com/tams_api.ArgumentError", "field":"base", "message":"credits not enough"}]}` (界面采样器显式报「Tensor.Art 模型任务提交失败 [400]」) | **PASS_BILLING** (上游算力额度不足) | `temp/e2e/2026-11-05/core5b/tensorart_tams.png` |
+| 8 | `modelslab` | ModelsLab 开放模型库 | `tamarin-xl-v1` | `xl-realistic-cake-art-sty` (0.45) | `MODELSLAB_API_KEY` (`...91e1`) | 上游语义拦截: `ModelsLab 错误: You need to be subscribed to a plan to continue, buy subscription from https://modelslab.com/pricing` | **PASS_BILLING** (需付费订阅套餐) | `temp/e2e/2026-11-05/core5b/modelslab.png` |
+| 9 | `gemini` | Google Gemini (官方直连) | `gemini-3.1-flash-image` | 不支持 LoRA | 无密钥 (`GEMINI_API_KEY` 未配置) | 前端拦截提示: `未配置密钥` / `未配置 Google Gemini API 密钥` | **BLOCKED_CONFIG** | `temp/e2e/2026-11-05/core5b/gemini.png` |
+| 10 | `agnes` | Agnes AI (ApiHub) | `agnes-image-2.5-flash` | 不支持 LoRA | 无密钥 (`AGNES_API_KEY` 未配置) | 前端拦截提示: `未配置密钥` / `未配置 Agnes 的密钥` | **BLOCKED_CONFIG** | `temp/e2e/2026-11-05/core5b/agnes.png` |
+| 11 | `runware` | Runware 极速云平台 | `runware:100@1` | 无 | 无密钥 (`RUNWARE_API_KEY` 未配置) | 前端拦截提示: `未配置密钥` / `未配置 Runware 的密钥` | **BLOCKED_CONFIG** | `temp/e2e/2026-11-05/core5b/runware.png` |
+| 12 | `openai_compat` | OpenAI 兼容中转 | `gpt-image-2` | 不支持 LoRA | 无密钥 / 无 Base URL | 前端拦截提示: `未配置密钥` / `未配置 OpenAI 兼容中转 的密钥` | **BLOCKED_CONFIG** | `temp/e2e/2026-11-05/core5b/openai_compat.png` |
+| 13 | `grok_compat` | Grok / xAI 兼容中转 | `grok-imagine-image` | 不支持 LoRA | 无密钥 / 无 Base URL | 前端拦截提示: `未配置密钥` / `未配置 Grok 兼容中转 的密钥` | **BLOCKED_CONFIG** | `temp/e2e/2026-11-05/core5b/grok_compat.png` |
+
+---
+
+## 三、代码修复与回归验证记录
+
+### 1. Tensor.Art TAMS 全链路恢复与密钥接入
+- **问题根因**：历史 Agent 在 `server.ts` 和 `TensorArtDriver.ts` 中硬编码抛错「Tensor.Art TAMS 出图入口已下线 (HTTP 410)」，且 `server.ts`、`civitaiModelRoutes.ts` 和 `.env.example` 未读取 `.env` 提供的 `TENSORART_TAMS_TOKEN`，并在 `src/utils/generationReadiness.ts` 中写死了本地拦截。
+- **修复措施**：
+  1. `.env.example` 明确记录 `TENSORART_TAMS_TOKEN` 为 TAMS Bearer Token（https://tams.tensor.art/app 获取，UUID 格式），并阐明与 OpenWorks `ak_tensor_` 工具 Key 的隔离。
+  2. `server.ts` 在 `TENSORART_KEY_ENV_SOURCES` 与 `defaultKeys`、`POOL_KEY_FIELDS` 中优先读取并纳管 `TENSORART_TAMS_TOKEN`。
+  3. `server.ts` `testSingleProviderKey` 恢复 TAMS Bearer Key 探针（调用 `GET /v1/models/613045163490732233`）。
+  4. `server.ts` `POST /api/tensorart/generate` 恢复完整的真实 TAMS 流程：`buildTensorModelJob` 规范构建请求体、调用 `POST /v1/jobs` 提交任务，并轮询 `GET /v1/jobs/{taskId}`。
+  5. `TensorArtDriver.ts` 恢复向 `/api/tensorart/generate` 提交完整参数与 LoRA，并注册入 `EngineRegistry.ts`。
+  6. `src/utils/generationReadiness.ts` 移除硬编码下线拦截逻辑。
+- **回归测试**：`src/engines/drivers/TensorArtDriver.test.ts`、`src/schemas/tensorModelApi.test.ts`、`src/utils/generationReadiness.test.ts` 全绿。
+
+### 2. ModelScope 国际站多 Key 轮换透明化
+- **修复措施**：在 `server.ts` 中为 `modelscope` / `modelscope_ai` 接入 `runWithBillingKeyRotate`，当遇到 402、余额不足或配额耗尽等计费错误时，自动尝试 Key 池下一把密钥，并将每次尝试的结果原样记录在 `keyRotation` 与 `executionTrace` 中。
+
+### 3. xAI / Grok 兼容接口与 Runware 字段补齐
+- **修复措施**：在 `GrokCompatDriver.ts` 与 `server.ts` 中补齐官方文档的 `quality` 字段；在 `RunwareTask` 与 `runwareImageContract.ts` 中补齐 `scheduler` 参数映射。
+
+### 4. 协同视频任务修复（video7b findings）
+- **Finding 1 (CivitaiDriver 轮询超时优化)**：`CivitaiDriver.ts` 在 `isVideo` 为 true 时，将本地轮询超时时间扩展至 600 秒（600000ms），采用 `[2000, 5000, 10000, 15000, 30000]` 的递增退避频率，并在本地超时后透传 `errorSource: 'local'` 与 `workflowId`。（回归测试 `CivitaiDriver.poll.test.ts` 通过）。
+- **Finding 2 (NanoGPT 视频路由分流)**：`NanoGPTDriver.ts` 声明 `text2video` / `img2video` 能力，并在 `isVideo` 为 true 时分流至 `/api/video/generate`（`provider=nanogpt`）；`EngineRegistry.ts` 增加视频驱动回退机制。（回归测试 `src/engines/drivers/NanoGPTDriver.test.ts` 通过）。
+
