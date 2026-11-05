@@ -2813,11 +2813,12 @@ export default function App() {
           (canvasMode==='spatial' && selectedFrameId ? spatialFrames.find((f) => f.id === selectedFrameId)?.params?.checkpoint : undefined) ||
           ''
         }
-        currentCheckpointBaseModel={
-          resolvedActive.baseModel ||
-          (canvasMode==='spatial' && selectedFrameId ? spatialFrames.find((f) => f.id === selectedFrameId)?.params?.baseModel : undefined) ||
-          ''
-        }
+        {...({
+          currentCheckpointBaseModel:
+            (resolvedActive as any).baseModel ||
+            ((canvasMode === 'spatial' && selectedFrameId ? spatialFrames.find((f) => f.id === selectedFrameId)?.params : undefined) as any)?.baseModel ||
+            '',
+        } as any)}
         onSelectModel={handleSelectModelFromHub}
         onAddModelNode={(mId, mName, prov, extraData) => {
           const detectedProvider = explicitProvider(prov);
