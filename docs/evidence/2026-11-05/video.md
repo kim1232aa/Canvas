@@ -45,7 +45,7 @@
 
 ## 本次未重新打开、只标未验证的服务商
 
-仓库里已有 schema 路由代码（WaveSpeed、MuAPI、Novita、AIMLAPI、Krea、Sogni、Replicate、HF、ModelScope）。那些路由的字段与生命周期**未在本次重新抓取官方页**，不把前一任草稿或代码注释当成事实。下表是「代码里指向的路径」，不是核实结论。
+下表是写文档前半段时的状态。后文「本轮补开的官方页」已经重新打开的服务商，以那一节为准：Replicate、MuAPI、Novita、AIMLAPI、Krea、Sogni 的取消结论，以及 HF 的同步文生视频，不再沿用本表的「未验证」。WaveSpeed、ModelScope、Tensor.Art 仍是未验证。
 
 | 服务商 | 密钥 | 本次核实 |
 | --- | --- | --- |
@@ -130,7 +130,13 @@ Sogni 的 `generate_video` 只有 MiniMax H3 接受 `loras`，`ltx25` 明确不�
 
 没有视频产物。节点预览、SaveVideo、历史播放因而没有可验证的成功样本。
 
+## 状态行与取消（评审退回后补上）
+
+运行中的视频节点显示一行状态，文案来自 `videoProgressLine`：阶段、上游状态原文、本地已等待秒数和本地预算分开写。读取是节点上的按钮「刷新这个视频任务的状态」，点一次打 `GET /api/video/status?provider=`。不用定时器：`NodeItem` 被静态渲染测试直接当函数调用，那些测试只替掉了 `useState` 和 `useRef`，加 `useEffect` 会在没有 React dispatcher 时崩溃。
+
+取消按钮「停止这个视频任务」打 `POST /api/video/cancel`。有文档的才发：Fal `PUT {cancel_url}`，Replicate `POST /v1/predictions/{id}/cancel`，Civitai `POST /v2/consumer/workflows/{id}/cancel`，Krea `DELETE /jobs/{id}`，Sogni `POST /v1/creative-agent/workflows/{id}/cancel`。NanoGPT、WaveSpeed、MuAPI、Novita、Together、AIMLAPI、Venice 返回 409，正文写明没有取消接口，不发上游请求。
+
 ## 尚未完成
 
-- 付费点击已做 3 家（都带 LoRA），全部余额不足，没有可播放的视频。文生视频点击未做：图生视频预设已覆盖三家且都被账单拦住，再点文生视频会打到同一批账户。需要充值后重跑。
-- Together 的 `seconds` / `ratio` / `media.frame_images` 别名还没落地（等 tower 对 `schemaPayloadPlan.ts` 的回复）。在此之前，Together 视频会把画布 `duration` 原样送出；若 schema 只声明 `seconds`，该字段是否被上游拒绝由上游响应决定，不在本地改值重试。
+- 付费点击：图生视频 6 家（Fal、WaveSpeed、Replicate、Civitai、MuAPI、Novita）和图生之外的文生视频 5 家（Together、AIMLAPI、Venice、Krea、Sogni）都在提交或轮询阶段被账单或鉴权拒绝。没有任何视频 URL，所以节点播放、SaveVideo、历史都没有可验证的成功样本。这两个任务按 tower 决定保持 dropped。
+- Civitai 的回归测试覆盖的是 `civitaiVideoPollPlan` 的总等待（大于 60 秒、不超过 10 分钟）和间隔常量，不是用假时钟驱动 `server.ts` 里的完整 handler。
