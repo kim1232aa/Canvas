@@ -54,4 +54,12 @@ describe('preset modal blocked archives', () => {
     expect(html).not.toContain('preset-blocked-std-fal-t2v');
     expect(html).not.toContain('preset-blocked-std-wavespeed-t2v');
   });
+
+  it('disables 载入并立即运行 when preset has empty prompt (needsPrompt)', () => {
+    const html = renderToStaticMarkup(<WorkflowPresetsModal isOpen onClose={vi.fn()} onLoadPreset={vi.fn()} onLoadAndRunPreset={vi.fn()} currentNodes={[]} currentConnections={[]} currentSpatialFrames={[]} onImportWorkflowData={vi.fn()} onClearCanvas={vi.fn()} />);
+    // Presets with empty prompts show "需填写提示词" and their run button is disabled
+    expect(html).toContain('需填写提示词');
+    // Button must be disabled and display "需填写提示词"
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>[\s\S]*?需填写提示词[\s\S]*?<\/button>/);
+  });
 });
