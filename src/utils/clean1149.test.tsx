@@ -22,9 +22,8 @@ describe('clean-1149 #1 Schema GET 401 toast = HTTP status + upstream body', () 
     const data = schemaPrefetchFailureData(401, body);
     const t = upstreamFailureToast(data, '运行：保存图像')!;
     expect(t.title).toBe('HTTP 401');
-    expect(t.message).toContain('完整上游响应原文');
-    expect(t.message).toContain(body);
-    expect(t.message.split('\n')[0]).not.toBe(body); // fix4 short first line
+    expect(t.message).toBe(body);
+    expect(t.message).not.toContain('完整上游响应原文');
     expect(t.message).not.toMatch(/请求未完成|未发出生成请求/);
   });
   it('toastFromRunError recovers SchemaPrefetchError without .data → plain headline title', () => {

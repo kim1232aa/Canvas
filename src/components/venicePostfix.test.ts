@@ -32,11 +32,11 @@ describe('P0-2 / P0-3 history header + card meta', () => {
 });
 
 describe('(d) one status-text source for exec log and history', () => {
-  it('first line includes upstream statusText from the same trace', () => {
+  it('first line includes upstream statusText and full body from the same trace', () => {
     const data = { executionTrace: [{ method: 'POST', status: 402, statusText: 'Payment Required', responseBody: '{"error":"Insufficient USD"}' }] };
     expect(upstreamHttpFirstLine(data)).toContain('HTTP 402');
     expect(upstreamHttpFirstLine(data)).toContain('Payment Required');
-    expect(upstreamHttpFirstLine(data)).not.toContain('{"error"');
+    expect(upstreamHttpFirstLine(data)).toContain('{"error":"Insufficient USD"}');
     expect(upstreamHttpFirstLine({ executionTrace: [{ status: 402, responseBody: 'x' }] })).toBe('HTTP 402 x');
   });
 });

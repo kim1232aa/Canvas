@@ -1,13 +1,27 @@
 import { formatBeijingHms } from '../services/executionTrace';
-import { LORA_UNSUPPORTED_MESSAGE } from './resolveCheckpoint';
 import { isSchemaPrefetchError, schemaFailureToast } from './schemaFailure';
 
-/** ModelScope upstream 「模型不存在」— plain primary for exec-log / node banner. */
-export const MODELSCOPE_MODEL_MISSING_CN = '魔搭国内站找不到这个模型或 LoRA';
-export const MODELSCOPE_MODEL_MISSING_AI = '魔搭国际站找不到这个模型或 LoRA';
-
-/** Stale selectedNodeId / resolve miss — never expose raw node-… ids in the status bar. */
-export const EXEC_NODE_MISSING = '请重新选择要运行的节点';
+/**
+ * Strips local server-side wrapper strings (e.g. "Mage 图像接口上游 HTTP 402: ", "Civitai Orchestration 官方算力返回错误 [400]: ")
+ * so the genuine, verbatim upstream response body is preserved and exposed.
+ */
+export function stripLocalWrapperPrefix(text: string): string {
+  if (!text) return '';
+  const str = String(text);
+  const trimmed = str.trim();
+  // If it's a JSON object or array, it's verbatim upstream structure — NEVER strip.
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    return text;
+  }
+  // Wrapper prefix must be at the very start, containing provider/API wrapper keywords,
+  // before any JSON or quotation, followed by colon or space.
+  // E.g. "Civitai Orchestration 官方算力返回错误 [400]: " or "Mage 图像接口上游 HTTP 402: "
+  const prefixMatch = trimmed.match(/^[a-zA-Z0-9\u4e00-\u9fa5\s_.-]+?(?:返回错误|执行失败|提交失败|接口上游|接口错误|鉴权失败|API 提交失败)\s*(?:\[\d+\]|HTTP\s*\d+)?[:：]\s*/i);
+  if (prefixMatch && prefixMatch[0].length < trimmed.length) {
+    return trimmed.slice(prefixMatch[0].length);
+  }
+  return text;
+}
 
 /** Pull upstream message/error from a JSON body fragment (402/403 billing etc.). Never invent copy. */
 export function extractUpstreamMessage(text: string): string | null {
@@ -48,75 +62,41 @@ export function isBillingFailureText(text: string | null | undefined): boolean {
   return false;
 }
 
-/** Map known technical refuse strings to plain Chinese for cards / exec-log first line. */
-export function plainFailureConclusion(detail: string | null | undefined): string | null {
-  if (!detail) return null;
-  const text = String(detail);
-  if (
-    /Krea.*(?:不接受|不能).*(?:LoRA|负面)|官方 schema 无 loras|这模型不能挂 LoRA|当前模型不支持 LoRA|请换支持 LoRA 的模型/i.test(
-      text,
-    )
-  ) {
-    return LORA_UNSUPPORTED_MESSAGE;
-  }
-  // ModelScope CN/AI: upstream 500 「模型不存在」 / apiInferModelDownload — never leave JSON/[500] on the primary line.
-  if (
-    (/魔搭|modelscope/i.test(text) && /模型不存在/.test(text)) ||
-    /apiInferModelDownload[\s\S]*模型不存在/i.test(text)
-  ) {
-    if (/国际站|modelscope\.ai|modelscope_ai/i.test(text)) return MODELSCOPE_MODEL_MISSING_AI;
-    return MODELSCOPE_MODEL_MISSING_CN;
-  }
-  // Missing execution target — strip internal node-… ids from status / toast.
-  if (/未找到指定的执行节点/.test(text)) return EXEC_NODE_MISSING;
-  // 402 / 403-funds billing: 透传上游原文。Prefer JSON message; else null so callers keep the original first line.
-  // Never rewrite to Chinese summary (产品硬规：上游传回什么就透传什么).
-  if (isBillingFailureText(text)) {
-    return extractUpstreamMessage(text);
-  }
-  return null;
-}
-
 /**
  * Primary banner / toast / node line for any thrown Error.
- * Billing / funds: full upstream message (no mid-sentence `…`).
+ * Billing / funds & all upstream errors: full upstream message verbatim, no ellipsis.
  */
 export function plainErrorMessage(err: unknown): string {
-  const raw = err instanceof Error ? err.message : String(err ?? '执行遇到错误');
   const rangeWarning = err && typeof err === 'object' && typeof (err as any).data?.loraRangeWarning === 'string'
     ? String((err as any).data.loraRangeWarning)
     : '';
   const withRangeWarning = (message: string) => rangeWarning && !message.includes(rangeWarning)
     ? `${message}；${rangeWarning}`
     : message;
-  const first = raw.split('\n')[0];
-  // Local rejection: verbatim, no rewrite / slice — must not look like upstream failure or success.
-  if (first.startsWith('没有发出去') || first.startsWith('没有发出去 · ')) return withRangeWarning(first);
-  // fix4: HTTP lines → short summary (no raw JSON in node banner / top bar).
-  if (/^HTTP \d{3}\b/.test(first) || first.startsWith('{')) return withRangeWarning(shortUpstreamSummary(first));
-  const plain = plainFailureConclusion(first) || plainFailureConclusion(raw);
-  if (plain) return withRangeWarning(plain);
-  if (isBillingFailureText(first) || isBillingFailureText(raw)) {
-    return withRangeWarning(extractUpstreamMessage(raw) || first);
+
+  if (err && typeof err === 'object') {
+    const data = (err as any).data;
+    if (data) {
+      if (isLocalNotOutbound(data)) return withRangeWarning(localNotOutboundText(data));
+      const line = upstreamHttpFirstLine(data);
+      if (line) return withRangeWarning(line);
+    }
   }
-  return withRangeWarning(unicodeSafeSlice(first, 120));
+
+  const raw = err instanceof Error ? err.message : String(err ?? '执行遇到错误');
+  // Local rejection: verbatim, no rewrite / slice — must not look like upstream failure or success.
+  if (raw.startsWith('没有发出去') || raw.startsWith('没有发出去 · ')) return withRangeWarning(raw);
+  return withRangeWarning(stripLocalWrapperPrefix(raw) || raw);
 }
 
-/** Node / frame error banner: billing pass-through stays full; other lines stay short. */
+/** Node / frame error banner: verbatim error text without clipping or summary rewrite. */
 export function errorBannerText(detail: string | null | undefined): string {
   if (!detail) return '';
-  const first = String(detail).split('\n')[0];
+  const text = String(detail).trim();
+  const first = text.split('\n')[0];
   // Local rejection: verbatim, no rewrite / slice — must not look like upstream failure or success.
   if (first.startsWith('没有发出去') || first.startsWith('没有发出去 · ')) return first;
-  // fix4: short summary for KSampler / node red bar (JSON details → history card).
-  if (/^HTTP \d{3}\b/.test(first) || first.startsWith('{')) return shortUpstreamSummary(first);
-  const plain = plainFailureConclusion(first) || plainFailureConclusion(detail);
-  if (plain) return plain;
-  // Plain billing text (no HTTP/JSON wrapper): full verbatim, never ellipsis.
-  if (isBillingFailureText(first) || isBillingFailureText(detail)) {
-    return extractUpstreamMessage(String(detail)) || first;
-  }
-  return unicodeSafeSlice(first, 120);
+  return stripLocalWrapperPrefix(text) || text;
 }
 
 /**
@@ -138,34 +118,14 @@ export function unicodeSafeSlice(text: string, maxChars: number): string {
 }
 
 /**
- * fix4: short banner / top-bar / node line for upstream failures.
- * Keeps 「HTTP <code> · task status=… · reason」; drops trailing raw JSON (details live in history / toast expand).
+ * Verbatim error line for upstream failures.
+ * Keeps status, status text, and response body as returned (full text, no ellipsis, no dropping JSON).
  */
 export function shortUpstreamSummary(detail: string | null | undefined): string {
   if (!detail) return '';
-  const first = String(detail).split(/\r?\n/)[0].trim();
-  if (!first) return '';
-  if (first.startsWith('没有发出去') || first.startsWith('没有发出去 · ')) return first;
-  // Prefer HTTP head up to (but not including) a trailing JSON object/array.
-  // Keeps 「HTTP 403 Forbidden」 and 「HTTP 200 · task status=…」 intact.
-  const httpHead = first.match(/^(HTTP\s+\d{3}\b[^\{\[]*)/i);
-  if (httpHead) {
-    let head = httpHead[1].replace(/\s+$/, '').trim();
-    const rest = first.slice(httpHead[0].length).trim();
-    if (rest.startsWith('{') || rest.startsWith('[')) {
-      const msg = extractUpstreamMessage(rest);
-      if (msg && !head.includes(msg)) head = `${head} · ${msg}`;
-      return head;
-    }
-    return head;
-  }
-  // Whole first line is JSON → extract message / keep short.
-  if (first.startsWith('{') || first.startsWith('[')) {
-    return extractUpstreamMessage(first) || unicodeSafeSlice(first, 120);
-  }
-  // Billing / funds: never mid-message ellipsis (iron rule).
-  if (isBillingFailureText(first)) return first;
-  return unicodeSafeSlice(first, 120);
+  const text = String(detail).trim();
+  if (text.startsWith('没有发出去') || text.startsWith('没有发出去 · ')) return text;
+  return text;
 }
 
 
@@ -228,39 +188,83 @@ function coerceResponseBodyText(value: unknown): string {
   try { return JSON.stringify(value); } catch { return String(value); }
 }
 
-export function upstreamFailureParts(data: any): { status: number; statusText: string; body: string } | null {
+function extractProviderFromRoute(route?: string): string | undefined {
+  if (!route) return undefined;
+  const match = route.match(/\/api\/(?:engine|schema-provider)\/([a-zA-Z0-9_-]+)/);
+  if (match) return match[1];
+  const directMatch = route.match(/\/api\/([a-zA-Z0-9_-]+)\/(?:generate|submit)/);
+  if (directMatch) return directMatch[1];
+  return undefined;
+}
+
+export function findFailingTrace(traces: any[]): any | undefined {
+  if (!Array.isArray(traces) || traces.length === 0) return undefined;
+  const isFailed = (t: any) => (typeof t?.status === 'number' && t.status >= 400) || t?.status === null;
+  // Prefer real HTTP exchanges (skipping stage: 'key-attempt' bookkeeping rows that lack statusText/endpoint/method)
+  const httpExchange = [...traces].reverse().find((t: any) =>
+    isFailed(t) && t?.stage !== 'key-attempt' && (t?.statusText || t?.endpoint || t?.method)
+  );
+  if (httpExchange) return httpExchange;
+  // If only key-attempt or non-exchange rows exist, use the latest failed trace as-is
+  return [...traces].reverse().find(isFailed);
+}
+
+export function upstreamFailureParts(data: any): { status: number; statusText: string; body: string; provider?: string } | null {
   if (!data || typeof data !== 'object') return null;
   // A local block before the generation request has no upstream failure: never headline a successful catalog/Schema read (e.g. HTTP 200 /tool/list).
   if (isLocalNotOutbound(data)) return null;
   const traces = Array.isArray(data.executionTrace) ? data.executionTrace : Array.isArray(data.taskExecutionTrace) ? data.taskExecutionTrace : [];
-  const failed = [...traces].reverse().find((t: any) => typeof t?.status === 'number' && t.status >= 400);
+  const failed = findFailingTrace(traces);
   const hist = data.historyItem && typeof data.historyItem === 'object' ? data.historyItem : null;
   const status = failed?.status
     ?? (typeof data.upstreamStatus === 'number' ? data.upstreamStatus : null)
     ?? (typeof hist?.upstreamStatus === 'number' ? hist.upstreamStatus : null);
   if (status == null) return null;
-  const body = (
-    typeof failed?.responseBody === 'string' ? failed.responseBody
-    : typeof data.upstreamResponseBody === 'string' ? data.upstreamResponseBody
-    : typeof hist?.upstreamResponseBody === 'string' ? hist.upstreamResponseBody
-    : typeof data.rawResponse === 'string' ? data.rawResponse
-    : data.rawResponse != null ? coerceResponseBodyText(data.rawResponse)
-    : typeof data.details === 'string' ? data.details
-    : typeof data.error === 'string' ? data.error
-    : typeof hist?.error === 'string' ? hist.error
-    : ''
-  );
+  let authoritative: string | undefined = undefined;
+  if (typeof data.rawResponse === 'string') {
+    authoritative = data.rawResponse;
+  } else if (data.rawResponse != null && (typeof data.rawResponse !== 'object' || (data.rawResponse as any).kind !== 'raw-response')) {
+    authoritative = coerceResponseBodyText(data.rawResponse);
+  } else if (typeof data.upstreamResponseBody === 'string') {
+    authoritative = data.upstreamResponseBody;
+  } else if (typeof hist?.upstreamResponseBody === 'string') {
+    authoritative = hist.upstreamResponseBody;
+  } else if (typeof failed?.responseBody === 'string') {
+    authoritative = failed.responseBody;
+  }
+
+  let body: string;
+  if (authoritative !== undefined) {
+    body = authoritative;
+  } else {
+    const fallback = (
+      typeof data.details === 'string' && data.details.trim() ? data.details
+      : typeof data.error === 'string' && data.error.trim() ? data.error
+      : typeof hist?.error === 'string' && hist.error.trim() ? hist.error
+      : ''
+    );
+    body = stripLocalWrapperPrefix(fallback) || fallback;
+    const httpPrefix = body.match(/^HTTP\s+\d{3}(?:\s+[A-Za-z ]+)?[:：\s]\s*/i);
+    if (httpPrefix && httpPrefix[0].length < body.length) {
+      const afterHttp = body.slice(httpPrefix[0].length).trim();
+      if (afterHttp.startsWith('{') || afterHttp.startsWith('[') || afterHttp.length > 0) {
+        body = afterHttp;
+      }
+    }
+  }
+
   // Prefer explicit HTTP statusText / upstreamStatusText. Task-status line (waiting_for_user …) only for non-4xx/5xx.
   const explicit = (typeof failed?.statusText === 'string' && failed.statusText.trim() ? failed.statusText.trim() : '')
     || (typeof data.upstreamStatusText === 'string' && data.upstreamStatusText.trim() ? data.upstreamStatusText.trim() : '')
     || (typeof hist?.upstreamStatusText === 'string' && hist.upstreamStatusText.trim() ? hist.upstreamStatusText.trim() : '');
   const statusText = explicit || (status < 400 ? taskStatusLine(data) : '');
-  return { status, statusText, body };
+  const provider = failed?.provider || data?.provider || hist?.provider || extractProviderFromRoute(data?.route || failed?.route);
+  return { status, statusText, body, provider };
 }
 export const TOAST_BODY_FIRST_LINE_MAX = 400;
-/** Toast for an upstream HTTP failure: title 「HTTP <code>」; first line = upstream body verbatim (cut, never rewritten); full body below. */
+/** Toast for an upstream HTTP failure: title 「【provider】HTTP <code> <statusText>」; message = upstream body verbatim. */
 /** clean-1149 #1: run-catch toast. Prefer structured err.data; else SchemaPrefetchError / any Error carrying upstreamStatus. */
-export function toastFromRunError(err: any, runLine?: string): { title: string; message: string } | null {
+export function toastFromRunError(err: any, runLine?: string): { title: string; message: string; provider?: string; status?: number; localWrapper?: string } | null {
   // Schema lookup miss: title = plain headline (full model name); body = one status line.
   // Never title 「HTTP N」 (contradicted 「生成请求没有发出去」) and never 「HTTP N · HTTP N」.
   if (isSchemaPrefetchError(err) || (err && typeof err === 'object' && err.name === 'SchemaPrefetchError')) {
@@ -276,39 +280,45 @@ export function toastFromRunError(err: any, runLine?: string): { title: string; 
   return null;
 }
 
-export function upstreamFailureToast(data: any, runLine?: string): { title: string; message: string } | null {
+export function upstreamFailureToast(data: any, _runLine?: string): { title: string; message: string; provider?: string; status?: number; localWrapper?: string } | null {
   const parts = upstreamFailureParts(data);
   if (!parts) return null;
-  const body = parts.body;
-  const firstRaw = body.split(/\r?\n/)[0];
-  // fix4: toast first line = short summary (no full JSON); full body stays under 「展开全文」.
-  const summary = shortUpstreamSummary(
-    `HTTP ${parts.status}${parts.statusText ? (`${/^(status:|task status=)/i.test(parts.statusText) ? ' · ' : ' '}${parts.statusText}`) : ''}${firstRaw ? ` ${firstRaw}` : ''}`,
-  ) || extractUpstreamMessage(body) || (firstRaw.startsWith('{') ? '（响应体为 JSON，展开看原文）' : firstRaw);
-  const needsFull = !!body && summary !== body;
-  const sep = parts.statusText && /^(status:|task status=)/i.test(parts.statusText) ? ' · ' : ' ';
-  const title = `HTTP ${parts.status}${parts.statusText ? `${sep}${parts.statusText}` : ''}`;
+  const prov = parts.provider;
+  const provPrefix = prov ? `【${prov}】` : '';
+  const sep = parts.statusText ? ' ' : '';
+  const title = `${provPrefix}HTTP ${parts.status}${sep}${parts.statusText}`.trim();
+  const localWrapper = typeof data?.localWrapper === 'string' && data.localWrapper !== parts.body
+    ? data.localWrapper
+    : undefined;
   return {
     title,
-    message: [summary || (body ? '（上游响应体见展开）' : '（上游响应体为空）'), needsFull ? `完整上游响应原文：\n${body}` : '', runLine || '', typeof data?.localWrapper === 'string' && data.localWrapper !== body ? `本地包装与堆栈（技术详情）：\n${data.localWrapper}` : ''].filter(Boolean).join('\n'),
+    message: parts.body,
+    provider: prov,
+    status: parts.status,
+    localWrapper,
   };
 }
 
-/** Upstream HTTP failure → 「HTTP <code> <upstream body verbatim>」 (all providers). null when no upstream status. */
+/** Upstream HTTP failure → 「【provider】HTTP <code> <statusText>: <upstream body verbatim>」 (all providers). null when no upstream status. */
 export function upstreamHttpFirstLine(data: any): string | null {
   const parts = upstreamFailureParts(data);
   if (!parts) return null;
-  const bodyFirst = parts.body.split(/\r?\n/)[0].replace(/^HTTP \d{3}:?\s*/, '');
-  const sep = parts.statusText && /^(status:|task status=)/i.test(parts.statusText) ? ' · ' : ' ';
-  const raw = `HTTP ${parts.status}${parts.statusText ? `${sep}${parts.statusText}` : ''}${bodyFirst ? ` ${bodyFirst}` : ''}`.trim();
-  // fix4: never put full JSON on the status / node first line.
-  return shortUpstreamSummary(raw) || raw;
+  const prov = parts.provider;
+  const provPrefix = prov ? `【${prov}】` : '';
+  const sep = parts.statusText ? ' ' : '';
+  const statusLine = `HTTP ${parts.status}${sep}${parts.statusText}`.trim();
+  if (parts.body === '') {
+    return `${provPrefix}${statusLine}`;
+  }
+  const sep2 = provPrefix ? ': ' : ' ';
+  return `${provPrefix}${statusLine}${sep2}${parts.body}`;
 }
 
-/** User-facing one-liner: plain conclusion; no HTTP / local / route pile. */
+/** User-facing one-liner: verbatim error; no invented Chinese summary or dropped body. */
 export function userFacingApiFailure(appStatus: number, data: any, route: string): string {
   if (isLocalNotOutbound(data)) return localNotOutboundText(data);
-  const httpLine = upstreamHttpFirstLine(data);
+  const dataWithRoute = data && typeof data === 'object' && !data.route && route ? { ...data, route } : data;
+  const httpLine = upstreamHttpFirstLine(dataWithRoute);
   if (httpLine) return httpLine;
   const nested =
     data && typeof data === 'object'
@@ -316,22 +326,14 @@ export function userFacingApiFailure(appStatus: number, data: any, route: string
       : undefined;
   const kr = data?.keyRotation?.summary;
   if (typeof kr === 'string' && kr.trim()) {
-    return plainFailureConclusion(kr) || kr.trim();
+    return kr.trim();
   }
   const detail = data?.error || nested?.error || (typeof data === 'string' ? data : '请求失败');
-  const plain = plainFailureConclusion(String(detail));
-  if (plain) return plain;
-  const upstream = data?.upstreamStatus ?? nested?.status;
-  const first = String(detail).split('\n')[0];
-  // Billing (402 or 403-funds): 透传上游原文 — never invent Chinese; never mid-message ellipsis.
-  // Do not treat Cloudflare challenge 403 as billing (isBillingFailureText already excludes it).
-  if (appStatus === 402 || upstream === 402 || isBillingFailureText(String(detail))) {
-    return extractUpstreamMessage(String(detail)) || first;
-  }
-  return unicodeSafeSlice(first, 80);
+  const clean = stripLocalWrapperPrefix(String(detail));
+  return clean || String(detail);
 }
 
-/** Build a short technical explanation without discarding the original response. */
+/** Build a technical explanation without discarding the original response. */
 export function describeApiFailure(appStatus: number, data: any, route: string) {
   // Local blocks never reached a provider: no HTTP status is shown (the site's 400 is transport only; errorSource stays 'local').
   if (isLocalNotOutbound(data)) return `${localNotOutboundText(data)} · local · ${route}（${data?.schemaRead ? '已读 Schema，未调用生成端点' : '未调用任何上游'}）`;
@@ -340,7 +342,7 @@ export function describeApiFailure(appStatus: number, data: any, route: string) 
       ? (Object.values(data).find((v: any) => v && typeof v === 'object' && v.error) as any)
       : undefined;
   const traces = Array.isArray(data?.executionTrace) ? data.executionTrace : [];
-  const failed = traces.findLast((t: any) => t.status >= 400 || t.status === null);
+  const failed = findFailingTrace(traces);
   const status = data?.upstreamStatus ?? failed?.status ?? nested?.status;
   const endpoint = data?.exactEndpointCalled || failed?.endpoint || nested?.exactEndpointCalled;
   const source = data?.errorSource || (failed ? (failed.status === null ? 'network' : 'upstream') : 'API');
@@ -349,11 +351,8 @@ export function describeApiFailure(appStatus: number, data: any, route: string) 
   const cloudflare = status === 403 && typeof raw === 'string' && /cf_chl|challenges.cloudflare.com/.test(raw);
   const reason = cloudflare
     ? '上游网页要求人机验证，目录抓取被拒绝；此响应不是余额错误'
-    : String(detail).split('\n')[0];
-  const plain = plainFailureConclusion(String(detail));
-  // Lead with plain conclusion when known; keep source/HTTP/route for copy-report / tech line.
-  const head = plain || reason;
-  return `${head} · ${source} · ${status != null ? `上游 HTTP ${status} / ` : ''}网站 HTTP ${appStatus} · ${endpoint || route}`;
+    : stripLocalWrapperPrefix(String(detail)).split('\n')[0];
+  return `${reason} · ${source} · ${status != null ? `上游 HTTP ${status} / ` : ''}网站 HTTP ${appStatus} · ${endpoint || route}`;
 }
 
 /** Toast title for a local block: first line always 「没有发出去」. */
@@ -371,8 +370,8 @@ export function localBlockToastReason(rawBody: string): string {
 
 /**
  * Same string history persists as item.error (route `error` / recorded historyItem.error).
- * Save Image / downstream upstreamFailedMessage must reuse this — not the short 「HTTP N Unauthorized」 banner.
- * Falls back to extracted upstream body message when error field is absent.
+ * Save Image / downstream upstreamFailedMessage must reuse this — not a short summarized banner.
+ * Verbatim upstream response body preserved in full.
  */
 export function historyFacingErrorMessage(err: unknown): string | undefined {
   const data = err && typeof err === 'object' ? (err as { data?: any }).data : undefined;
@@ -384,10 +383,11 @@ export function historyFacingErrorMessage(err: unknown): string | undefined {
   if (candidate) return candidate;
   const body =
     (typeof data.upstreamResponseBody === 'string' && data.upstreamResponseBody) ||
+    (typeof data.rawResponse === 'string' && data.rawResponse) ||
     (typeof data.details === 'string' && data.details) ||
     '';
   if (!body) return undefined;
-  return extractUpstreamMessage(body) || body.split(/\r?\n/)[0].trim() || undefined;
+  return body.trim() || undefined;
 }
 
 /** A run error is a local block iff its structured response body says so (errorSource local, no non-GET trace) — never by message text. */

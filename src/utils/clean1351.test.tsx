@@ -18,11 +18,11 @@ describe('clean-1351 #1 toast first line = upstream raw body only', () => {
     const t = upstreamFailureToast(schemaPrefetchFailureData(401, wrapper), '运行：保存图像')!;
     expect(t.title).toBe('HTTP 401');
     const first = t.message.split('\n')[0];
-    expect(first).not.toBe(upstream); // fix4 short first line
+    expect(first).toBe(upstream); // verbatim upstream response body without fix4 short first line
     expect(t.message).toContain(upstream);
     expect(first).not.toMatch(/\\"|schemaProviders\.ts|stack|"ok":false/);
-    // wrapper + stack only in the expandable remainder
-    expect(t.message.split('\n').slice(1).join('\n')).toContain('schemaProviders.ts:659');
+    // wrapper + stack separated in dedicated localWrapper field, never polluting message
+    expect(t.localWrapper).toContain('schemaProviders.ts:659');
   });
   it('legacy message-only SchemaPrefetchError is unwrapped too', () => {
     const err = Object.assign(new Error(`GET /api/model-schema?provider=together&model=m → HTTP 401 · 生成 POST 未发送\n${wrapper}`), { name: 'SchemaPrefetchError' });

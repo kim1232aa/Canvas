@@ -73,7 +73,7 @@ import { executeWorkflow, extractWorkflowParameters, resolveTargetNode, shouldCl
 import { getModelSchemaEntry } from './services/modelSchemaCache';
 import { fetchProviderKeyStatus, providerKeyConfigured } from './services/providerKeyStatus';
 import { friendlyProviderLabel } from './utils/providerLabels';
-import { toastFromRunError, plainFailureConclusion, plainErrorMessage, historyFacingErrorMessage, unicodeSafeSlice, EXEC_NODE_MISSING, localBlockToastReason, upstreamFailureToast } from './utils/apiFailure';
+import { toastFromRunError, plainErrorMessage, historyFacingErrorMessage, localBlockToastReason, upstreamFailureToast } from './utils/apiFailure';
 import { applyAIVideoModelSelection } from './utils/videoProvider';
 import { formatVideoNodeTitle, formatCheckpointNodeTitle, formatNodeDisplayTitle, applyHubCheckpointTitle } from './utils/nodeDisplayTitle';
 import {
@@ -151,6 +151,8 @@ export default function App() {
     action?: 'history' | 'api-settings' | 'connect-ref' | 'none';
     /** When action is api-settings: provider id to select in BackendSettingsModal (e.g. gemini). */
     actionProviderId?: string;
+    /** Technical detail / local wrapper error stack, kept strictly separate from verbatim raw body. */
+    localWrapper?: string;
   } | null>(null);
   const [toastThumbSettle, setToastThumbSettle] = useState<PreviewSettleState>('loading');
   const toastThumbSettleRef = useRef<PreviewSettleState>('loading');
@@ -354,7 +356,7 @@ export default function App() {
     };
     const toast = upstreamFailureToast(shaped, `选用模型：${provider} · ${model}`)
       || { title: `HTTP ${result.status || '—'}`, message: `${typeof result.data === 'object' ? JSON.stringify(result.data) : String(result.data ?? 'Schema 读取失败')}\n选用模型：${provider} · ${model}` };
-    setToast({ type: 'error', title: toast.title, message: toast.message });
+    setToast({ type: 'error', title: toast.title, message: toast.message, localWrapper: (toast as any).localWrapper });
   }), []);
 
   // videoschema: saved board / model list change → debounced Schema GET for AIVideoNode (select path notes immediately in NodeItem).
@@ -443,10 +445,10 @@ export default function App() {
         try {
           return readinessFrom(extractWorkflowParameters(nodes, connections, undefined));
         } catch (error2: any) {
-          return plainFailureConclusion(error2?.message) || EXEC_NODE_MISSING;
+          return error2?.message || String(error2);
         }
       }
-      const msg = plainFailureConclusion(error?.message) || error?.message || '工作流连接不完整';
+      const msg = error?.message || '工作流连接不完整';
       // extract 先抛 pendingRecipe（缺 LoRA）时还没查提示词：黄字补上「请填写提示词」。
       const boardHasPrompt = nodes.some((n) => n.type === 'CLIPTextEncode' && String(n.values?.text || '').trim());
       if (!boardHasPrompt && /真 LoRA 地址|待配方|载入后挂上再运行/.test(String(msg)) && !String(msg).includes('提示词')) {
@@ -749,18 +751,30 @@ export default function App() {
       }
     } catch (err: any) {
       console.error('Frame gen error:', err);
-      const plainFrame = plainErrorMessage(err);
+      const toastInfo = toastFromRunError(err) || upstreamFailureToast((err as any)?.data);
+      const plainFrame = toastInfo ? `${toastInfo.title}: ${toastInfo.message}` : plainErrorMessage(err);
       handleUpdateFrame(frameId, {
         status: 'error',
         executionProgress: 0,
         errorMessage: plainFrame,
       });
       setExecutionStatusText(plainFrame);
-      setToast({
-        type: 'error',
-        title: '⚠️ 取景框生成失败',
-        message: plainFrame,
-      });
+      if (toastInfo) {
+        setToast({
+          type: 'error',
+          title: toastInfo.title,
+          message: toastInfo.message,
+          localWrapper: toastInfo.localWrapper,
+          action: toastInfo.status === 401 ? 'api-settings' : undefined,
+          actionProviderId: toastInfo.status === 401 ? toastInfo.provider : undefined,
+        });
+      } else {
+        setToast({
+          type: 'error',
+          title: '⚠️ 取景框生成失败',
+          message: plainFrame,
+        });
+      }
     } finally {
       endRun();
       setIsExecuting(false);
@@ -1394,9 +1408,10 @@ export default function App() {
       // the raw GET URL + status stay in 执行记录 (traced request) and the history failure card.
       const schemaFail = !localBlockedRun && isSchemaPrefetchError(err);
       const schemaNodeMsg = schemaFail ? schemaFailureNodeMessage(err) : undefined;
-      const errMsg = schemaNodeMsg ? schemaNodeMsg.split('\n')[0] : plainErrorMessage(err);
-      // Save Image / downstream: reuse history item.error (bind / JSON body), not short 「HTTP 401 Unauthorized」.
-      const upstreamMsg = schemaNodeMsg || historyFacingErrorMessage(err) || errMsg;
+      const toastInfo = !localBlockedRun && !schemaFail ? (toastFromRunError(err) || upstreamFailureToast((err as any)?.data)) : null;
+      const errMsg = schemaNodeMsg ? schemaNodeMsg.split('\n')[0] : (toastInfo ? `${toastInfo.title}: ${toastInfo.message}` : plainErrorMessage(err));
+      // Save Image / downstream: reuse verbatim error (status line + JSON body), not short 「HTTP 401 Unauthorized」.
+      const upstreamMsg = schemaNodeMsg || (toastInfo ? `${toastInfo.title}: ${toastInfo.message}` : (historyFacingErrorMessage(err) || errMsg));
       // clean-1333 #3/#5/#6: one title for toast / node / exec log, chosen from what was actually requested.
       const blockData = localBlockedRun ? (err as any).data : undefined;
       const blockTitle = localBlockedRun ? localBlockTitle(blockData) : undefined;
@@ -1473,15 +1488,26 @@ export default function App() {
       }));
 
       // High-visibility failure notification with progressive disclosure and quick settings link
-      const missingKeyMatch = String(upstreamMsg || errMsg).match(/未配置\s*([a-zA-Z0-9_-]+)\s*的密钥/);
-      const missingKeyProv = missingKeyMatch ? missingKeyMatch[1] : undefined;
-      setToast({
-        type: 'error',
-        title: '工作流生成失败',
-        message: upstreamMsg || errMsg,
-        action: missingKeyProv ? 'api-settings' : undefined,
-        actionProviderId: missingKeyProv,
-      });
+      if (toastInfo) {
+        setToast({
+          type: 'error',
+          title: toastInfo.title,
+          message: toastInfo.message,
+          localWrapper: toastInfo.localWrapper,
+          action: toastInfo.status === 401 ? 'api-settings' : undefined,
+          actionProviderId: toastInfo.status === 401 ? (toastInfo.provider || branch.target?.values?.targetProvider) : undefined,
+        });
+      } else {
+        const missingKeyMatch = String(upstreamMsg || errMsg).match(/未配置\s*([a-zA-Z0-9_-]+)\s*的密钥/);
+        const missingKeyProv = missingKeyMatch ? missingKeyMatch[1] : undefined;
+        setToast({
+          type: 'error',
+          title: blockTitle || '工作流生成失败',
+          message: blockReason || upstreamMsg || errMsg,
+          action: missingKeyProv ? 'api-settings' : undefined,
+          actionProviderId: missingKeyProv,
+        });
+      }
 
       // clean-1358 #4 + clean-1613 #2: pan only after writing ONE exec-log row 「视口平移至原因节点」.
       // Capture run attach BEFORE finally/endRun clears currentRunLabel; record OUTSIDE setState (StrictMode would double-fire).
@@ -3160,21 +3186,22 @@ export default function App() {
                 )}
               </div>
               {(() => {
-                // First line in full (upstream verbatim); a long remainder is expandable, never ellipsized away.
-                const [first, ...rest] = String(toast.message ?? '').split('\n');
-                const more = rest.join('\n').trim();
+                const text = String(toast.message ?? '');
                 return (
-                  <>
-                    <div data-testid="toast-first-line" className="text-slate-300 mt-0.5 leading-relaxed whitespace-pre-wrap [overflow-wrap:break-word] [word-break:normal]">{first}</div>
-                    {more && (
-                      <details data-testid="toast-more" className="mt-1">
-                        <summary className="cursor-pointer text-cyan-300">展开全文</summary>
-                        <pre className="mt-1 max-h-[40vh] overflow-auto whitespace-pre-wrap [overflow-wrap:break-word] text-[11px] text-slate-300 font-mono">{more}</pre>
-                      </details>
-                    )}
-                  </>
+                  <pre
+                    data-testid="toast-first-line"
+                    className="text-slate-300 mt-1 max-h-48 overflow-y-auto leading-relaxed whitespace-pre-wrap font-mono text-xs break-all bg-black/40 p-2 rounded-lg border border-rose-900/40 select-text"
+                  >
+                    {text}
+                  </pre>
                 );
               })()}
+              {toast.localWrapper && (
+                <div data-testid="toast-local-wrapper" className="mt-1 text-slate-400 font-mono text-[11px] leading-relaxed max-h-24 overflow-y-auto whitespace-pre-wrap break-all bg-black/20 p-1.5 rounded border border-slate-700/40">
+                  <span className="text-slate-500 font-sans block mb-0.5">本地包装与技术详情：</span>
+                  {toast.localWrapper}
+                </div>
+              )}
             </div>
 
             <div className="flex items-center gap-2 shrink-0 ml-2">

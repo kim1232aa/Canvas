@@ -48,24 +48,24 @@ describe('fix4 Together officialUnavailableParams (not rule D)', () => {
   });
 });
 
-describe('fix4 short upstream banner (no JSON in KSampler strip)', () => {
+describe('verbatim upstream banner (keeps JSON in primary strip and toast)', () => {
   const longJson =
     'HTTP 200 · task status=waiting_for_user · insufficient_credit {"status":"success","data":{"workflow":{"status":"waiting_for_user","waitingReason":"insufficient_credit","workflowId":"wf_long"}}}';
 
-  it('shortUpstreamSummary drops trailing JSON', () => {
+  it('shortUpstreamSummary keeps trailing JSON verbatim', () => {
     const s = shortUpstreamSummary(longJson);
     expect(s).toContain('HTTP 200');
     expect(s).toContain('waiting_for_user');
-    expect(s).not.toContain('"workflowId"');
-    expect(s).not.toMatch(/\{"status"/);
+    expect(s).toContain('"workflowId"');
+    expect(s).toMatch(/\{"status"/);
   });
 
-  it('errorBannerText / plainErrorMessage stay short', () => {
-    expect(errorBannerText(longJson)).not.toContain('workflowId');
-    expect(plainErrorMessage(new Error(longJson))).not.toContain('workflowId');
+  it('errorBannerText / plainErrorMessage preserve full JSON body', () => {
+    expect(errorBannerText(longJson)).toContain('workflowId');
+    expect(plainErrorMessage(new Error(longJson))).toContain('workflowId');
   });
 
-  it('upstreamHttpFirstLine + toast title keep task status, body JSON only in expand', () => {
+  it('upstreamHttpFirstLine + toast keep task status and verbatim body', () => {
     const data = {
       upstreamStatus: 200,
       upstreamStatusText: 'task status=waiting_for_user · insufficient_credit',
@@ -74,12 +74,13 @@ describe('fix4 short upstream banner (no JSON in KSampler strip)', () => {
     const line = upstreamHttpFirstLine(data)!;
     expect(line).toContain('HTTP 200');
     expect(line).toContain('waiting_for_user');
-    expect(line).not.toContain('workflowId');
+    expect(line).toContain('insufficient_credit');
+    expect(line).toContain('"status":"success"');
     const toast = upstreamFailureToast(data, '运行：KSampler')!;
     expect(toast.title).toContain('HTTP 200');
     expect(toast.title).toContain('waiting_for_user');
-    expect(toast.message.split('\n')[0]).not.toContain('"status":"success"');
-    expect(toast.message).toContain('完整上游响应原文');
+    expect(toast.message).toContain('"status":"success"');
+    expect(toast.message).toContain('insufficient_credit');
   });
 });
 
