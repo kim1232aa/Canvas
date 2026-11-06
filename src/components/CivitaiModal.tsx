@@ -27,7 +27,7 @@ import {
   Flame,
 } from 'lucide-react';
 import { CivitaiModelItem } from '../types/providers';
-import { searchCivitaiModels, fetchLiveModels, fetchHuggingFaceModelInfo, fetchTensorArtModelInfo } from '../services/api';
+import { fetchLiveModels, fetchHuggingFaceModelInfo, fetchTensorArtModelInfo } from '../services/api';
 import loraHubProviders from '../config/loraHubProviders.json';
 import { identifyArchitectureFamily } from '../utils/baseModelMatcher';
 

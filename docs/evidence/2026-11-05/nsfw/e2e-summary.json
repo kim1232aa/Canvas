@@ -6,7 +6,7 @@
       "selectValue": "true"
     },
     "defaultOnLog": {
-      "time": "2026-11-06T05:38:58+09:00",
+      "time": "2026-11-06T14:07:02+09:00",
       "kind": "upstream",
       "route": "/api/schema-provider/together/submit",
       "provider": "together",
@@ -30,16 +30,8 @@
         "model": "black-forest-labs/FLUX.1-schnell"
       },
       "status": 401,
-      "responseBody": "{\n  \"id\": \"p88nVYG-2kFHot-a55eaa467caed94a\",\n  \"error\": {\n    \"message\": \"Invalid API key provided. You can find your API key at https://api.together.ai/settings/api-keys.\",\n    \"type\": \"invalid_request_error\",\n    \"param\": null,\n    \"code\": \"invalid_api_key\"\n  }\n}",
-      "durationMs": 284,
-      "keyIndex": {
-        "provider": "together",
-        "index": 0,
-        "count": 1,
-        "source": "pool"
-      },
-      "lookup": false,
-      "startedAt": "2026-11-05T20:38:58.215Z"
+      "responseBody": "{\n  \"id\": \"p8BUjHc-2kFHot-a5619281495fd94a\",\n  \"error\": {\n    \"message\": \"Invalid API key provided. You can find your API key at https://api.together.ai/settings/api-keys.\",\n    \"type\": \"invalid_request_error\",\n    \"param\": null,\n    \"code\": \"invalid_api_key\"\n  }\n}",
+      "taxonomy": "BLOCKED_AUTH"
     },
     "toggledOff": {
       "fieldFound": true,
@@ -47,7 +39,7 @@
       "selectValue": "false"
     },
     "toggledOffLog": {
-      "time": "2026-11-06T05:39:04+09:00",
+      "time": "2026-11-06T14:07:09+09:00",
       "kind": "upstream",
       "route": "/api/schema-provider/together/submit",
       "provider": "together",
@@ -71,16 +63,8 @@
         "model": "black-forest-labs/FLUX.1-schnell"
       },
       "status": 401,
-      "responseBody": "{\n  \"id\": \"p88nXHY-2kFHot-a55eaa6b5e28d94a\",\n  \"error\": {\n    \"message\": \"Invalid API key provided. You can find your API key at https://api.together.ai/settings/api-keys.\",\n    \"type\": \"invalid_request_error\",\n    \"param\": null,\n    \"code\": \"invalid_api_key\"\n  }\n}",
-      "durationMs": 245,
-      "keyIndex": {
-        "provider": "together",
-        "index": 0,
-        "count": 1,
-        "source": "pool"
-      },
-      "lookup": false,
-      "startedAt": "2026-11-05T20:39:04.143Z"
+      "responseBody": "{\n  \"id\": \"p8BUmUK-2kFHot-a56192af8d66d94a\",\n  \"error\": {\n    \"message\": \"Invalid API key provided. You can find your API key at https://api.together.ai/settings/api-keys.\",\n    \"type\": \"invalid_request_error\",\n    \"param\": null,\n    \"code\": \"invalid_api_key\"\n  }\n}",
+      "taxonomy": "BLOCKED_AUTH"
     }
   },
   "venice": {
@@ -90,7 +74,7 @@
       "selectValue": "false"
     },
     "defaultOnLog": {
-      "time": "2026-11-06T05:39:13+09:00",
+      "time": "2026-11-06T14:07:24+09:00",
       "kind": "upstream",
       "route": "/api/schema-provider/venice/submit",
       "provider": "venice",
@@ -99,35 +83,17 @@
       "endpoint": "https://api.venice.ai/api/v1/image/generate",
       "requestBody": {
         "prompt": "a cinematic masterpiece portrait, highly detailed",
-        "width": 1216,
-        "height": 832,
-        "steps": 12,
-        "cfg_scale": 1,
-        "seed": 1840591390,
-        "loras": [
-          {
-            "name": "renderartist/Technically-Color-Z-Image-Turbo",
-            "strength": 0.9,
-            "modelStrength": 0.9,
-            "clipStrength": 0.9,
-            "civitaiId": "",
-            "triggers": ""
-          }
-        ],
+        "width": 1024,
+        "height": 1024,
+        "steps": 20,
+        "cfg_scale": 7.5,
+        "seed": 42,
         "safe_mode": false,
         "model": "venice-sd35"
       },
-      "status": 400,
-      "responseBody": "{\"details\":{\"_errors\":[\"Unrecognized key(s) in object: 'loras'\"],\"seed\":{\"_errors\":[\"Number must be less than or equal to 999999999\"]}},\"error\":\"Invalid request parameters\",\"issues\":[{\"code\":\"too_big\",\"maximum\":999999999,\"type\":\"number\",\"inclusive\":true,\"exact\":false,\"message\":\"Number must be less than or equal to 999999999\",\"path\":[\"seed\"]},{\"code\":\"unrecognized_keys\",\"keys\":[\"loras\"],\"path\":[],\"message\":\"Unrecognized key(s) in object: 'loras'\"}]}",
-      "durationMs": 225,
-      "keyIndex": {
-        "provider": "venice",
-        "index": 0,
-        "count": 1,
-        "source": "pool"
-      },
-      "lookup": false,
-      "startedAt": "2026-11-05T20:39:13.189Z"
+      "status": 402,
+      "responseBody": "{\"error\":\"Insufficient USD or Diem balance to complete request. Visit https://venice.ai/settings/api to add credits.\"}",
+      "taxonomy": "PASS_BILLING"
     },
     "toggledOff": {
       "fieldFound": true,
@@ -135,7 +101,7 @@
       "selectValue": "true"
     },
     "toggledOffLog": {
-      "time": "2026-11-06T05:39:19+09:00",
+      "time": "2026-11-06T14:07:31+09:00",
       "kind": "upstream",
       "route": "/api/schema-provider/venice/submit",
       "provider": "venice",
@@ -144,55 +110,91 @@
       "endpoint": "https://api.venice.ai/api/v1/image/generate",
       "requestBody": {
         "prompt": "a cinematic masterpiece portrait, highly detailed",
-        "width": 1216,
-        "height": 832,
-        "steps": 12,
-        "cfg_scale": 1,
-        "seed": 1840591390,
-        "loras": [
-          {
-            "name": "renderartist/Technically-Color-Z-Image-Turbo",
-            "strength": 0.9,
-            "modelStrength": 0.9,
-            "clipStrength": 0.9,
-            "civitaiId": "",
-            "triggers": ""
-          }
-        ],
+        "width": 1024,
+        "height": 1024,
+        "steps": 20,
+        "cfg_scale": 7.5,
+        "seed": 42,
         "safe_mode": true,
         "model": "venice-sd35"
       },
+      "status": 402,
+      "responseBody": "{\"error\":\"Insufficient USD or Diem balance to complete request. Visit https://venice.ai/settings/api to add credits.\"}",
+      "taxonomy": "PASS_BILLING"
+    }
+  },
+  "civitaiWorkflow": {
+    "offLog": {
+      "time": "2026-11-06T14:08:15+09:00",
+      "provider": "civitai",
+      "endpoint": "https://orchestration.civitai.com/v2/consumer/workflows?wait=100",
       "status": 400,
-      "responseBody": "{\"details\":{\"_errors\":[\"Unrecognized key(s) in object: 'loras'\"],\"seed\":{\"_errors\":[\"Number must be less than or equal to 999999999\"]}},\"error\":\"Invalid request parameters\",\"issues\":[{\"code\":\"too_big\",\"maximum\":999999999,\"type\":\"number\",\"inclusive\":true,\"exact\":false,\"message\":\"Number must be less than or equal to 999999999\",\"path\":[\"seed\"]},{\"code\":\"unrecognized_keys\",\"keys\":[\"loras\"],\"path\":[],\"message\":\"Unrecognized key(s) in object: 'loras'\"}]}",
-      "durationMs": 165,
-      "keyIndex": {
-        "provider": "venice",
-        "index": 0,
-        "count": 1,
-        "source": "pool"
+      "requestBody": {
+        "allowMatureContent": false,
+        "steps": [
+          {
+            "$type": "imageGen",
+            "input": {
+              "engine": "comfy",
+              "ecosystem": "krea2",
+              "model": "turbo",
+              "prompt": "a cinematic masterpiece portrait, highly detailed",
+              "steps": 8,
+              "cfg": 1
+            }
+          }
+        ]
       },
-      "lookup": false,
-      "startedAt": "2026-11-05T20:39:19.099Z"
+      "stepInputHasAllowMatureContent": false
+    },
+    "onLog": {
+      "time": "2026-11-06T14:08:22+09:00",
+      "provider": "civitai",
+      "endpoint": "https://orchestration.civitai.com/v2/consumer/workflows?wait=100",
+      "status": 400,
+      "requestBody": {
+        "allowMatureContent": true,
+        "steps": [
+          {
+            "$type": "imageGen",
+            "input": {
+              "engine": "comfy",
+              "ecosystem": "krea2",
+              "model": "turbo",
+              "prompt": "a cinematic masterpiece portrait, highly detailed",
+              "steps": 8,
+              "cfg": 1
+            }
+          }
+        ]
+      },
+      "stepInputHasAllowMatureContent": false
     }
   },
   "modelhubCivitai": {
     "defaultOn": {
       "toggleFound": true,
-      "toggleText": "NSFW: 已开启 (默认)"
+      "toggleText": "NSFW: 已开启 (默认)",
+      "catalogRequest": "/api/models?provider=civitai&type=Checkpoint&category=checkpoint&sort=downloads&page=1&limit=40"
     },
     "toggledOff": {
       "toggleFound": true,
-      "toggleText": "NSFW: 已关闭"
+      "toggleText": "NSFW: 已关闭",
+      "catalogRequest": "/api/models?provider=civitai&type=Checkpoint&category=checkpoint&sort=downloads&page=1&limit=40&catalogTag=nsfw:false"
     }
   },
   "civitaiModalLora": {
     "defaultOn": {
       "toggleFound": true,
-      "toggleText": "NSFW: 已开启 (默认)"
+      "toggleText": "NSFW: 已开启 (默认)",
+      "countText": "已检索到 343 个 LoRA",
+      "catalogRequest": "/api/civitai/models?types=LORA&sort=Highest+Rated&limit=24&nsfw=true&page=1"
     },
     "toggledOff": {
       "toggleFound": true,
-      "toggleText": "NSFW: 已关闭"
+      "toggleText": "NSFW: 已关闭",
+      "countText": "已检索到 343 个 LoRA",
+      "catalogRequest": "/api/civitai/models?types=LORA&sort=Highest+Rated&limit=24&nsfw=false&page=1"
     }
   }
 }

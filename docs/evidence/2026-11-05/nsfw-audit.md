@@ -1,4 +1,4 @@
-# 2026-11-05 全服务商官方 NSFW / 安全开关全量核验与默认放开验收报告 (Mission M10)
+# 2026-11-05 全服务商官方 NSFW / 安全开关全量核验与默认放开验收报告 (Mission M10 - Round 3)
 
 > **最高工程规范与反虚假成功准则**：
 > 1. 用户最高原则（2026-11-05 原文逐字）: **「我们不反对nsfw，有nsfw开关的都默认开启」**。
@@ -9,16 +9,16 @@
 
 ---
 
-## 一、审查意见 (rev-m10-a R1) 逐项整改对账清单
+## 一、审查意见 (rev-m10-b R2) 逐项整改对账清单
 
 | 评审项 | 审查要求 | M10 整改落实细节 | 状态 |
 |---|---|---|---|
-| **P1-1** | 删除服务端隐式写入（OpenAI `moderation` 与 Gemini `safetySettings` 无条件注入）；仅在 live schema 声明时通过前端可见控件播种。 | 1. 彻底删除 `server.ts` 中 OpenAI-compat 的 `else payload.moderation = 'low';`，仅保留 `if (isProvided(moderation))`。<br>2. 彻底删除 `server.ts` 中 Gemini 的 `if (!sentConfig.safetySettings) { sentConfig.safetySettings = ... }` 隐式注入。<br>3. 在策略库中将未在生图 Schema 声明的 Gemini `safetySettings` 标记为未验证，不进行服务端注入。 | **已闭环** |
-| **P1-2** | Civitai `allowMatureContent` 位置纠正：官方通用提交文档中为 workflow JSON body 字段（与 `steps` 同级），非 query 参数。需在 UI 上做成可见开关，请求体与日志中可见。 | 1. `server.ts` 中移除 `/v2/consumer/workflows` 的 URL query 参数 `&allowMatureContent=...`。<br>2. 将 `allowMatureContent` 放置于 workflow JSON body 根级（与 `steps` 同级），图像与视频工作流均支持。<br>3. 在 `ParameterInspector.tsx` 的 Civitai 配置块中新增独立的 `Civitai allowMatureContent` 可见下拉开关与状态徽章，支持一键切回并存入 `custom_parameters`。 | **已闭环** |
-| **P1-3** | 官方依据核实修正，未核实或存在分歧项必须标记未验证，不得再注入。 | 1. `nsfw_detection`：Novita 官方 V3 为嵌套 `extra.enable_nsfw_detection`，非顶层字段；移出活跃注入列表，标为 `unverified_schema_mismatch`。<br>2. `checkNSFW`：Runware 官方页面 404 且仓库 `RunwareTask` 不含该字段；标为 `unverified`，不发送。<br>3. `safety_checker`：ModelsLab 官方文档各模型示例类型相互冲突（企业版 text2img 用 `"no"`，Flux 用布尔 `false`，pony 用 `"yes"`）；标为 `conflicting_documentation`，不硬编码。<br>4. `moderation`：补充 Venice Swagger 与 OpenAI Images 官方文档出处。<br>5. `nsfw`：修正为 Civitai 开发者参考文档 `https://developer.civitai.com/site/reference/models`。 | **已闭环** |
-| **P1-4** | E2E 标签纠偏、用真实存在的模型重跑 Venice、补全 Civitai 标签检索日志与 CivitaiModal LoRA 开关。 | 1. 标签纠偏：Together 401 纠正为 `BLOCKED_AUTH`；目录按钮点击标记为目录交互测试。<br>2. Venice 重测：使用 Venice 官方真实模型 `venice-sd35` 重跑，成功越过模型校验，捕获真实上游 HTTP 402 `Insufficient USD or Diem balance`，定性为 **PASS_BILLING**。<br>3. 模型中心切到 `Civitai` 标签进行开/关切换并截图。<br>4. 申请扩大 scope 补全 `CivitaiModal.tsx` LoRA 搜索中的可见 NSFW 开关（默认开、可一键关，参数带 `nsfw:false`）。<br>5. 截图尺寸全面压缩至 75KB~145KB，确保 `ReadMediaFile` 原生全分辨率读取。 | **已闭环** |
-| **P1-5** | 删除 `server.ts` 中的本机绝对路径。 | 彻底删除 `server.ts` 中的 `fs.existsSync('/root/github/ComfyUI Web Studio/.env')` 及写死路径配置，仅保留标准的 `dotenv.config()`。 | **已闭环** |
-| **P2** | `normalizeForFal` 移除无条件写入；对齐 `sogniLoraCover` JSDoc 说明；避免脆弱的内部 hook 检查。 | 1. `normalizeForFal` 改回「用户没传则不发」，移除无条件 fallback `false`。<br>2. `sogniLoraCover` JSDoc 与默认参数对齐。<br>3. `SchemaChoiceControls` 完善渲染环境安全判定。 | **已闭环** |
+| **P1-1** | 解决 `nsfw-audit.md` 与 `e2e-summary.json` 数据冲突：(a) 在画布上去掉 LoRA、seed 设为 ≤999999999 重跑 Venice，上游额度拒绝记 `PASS_BILLING`；Together 401 记 `BLOCKED_AUTH`。 | 1. 查明根因：此前多服务商连续点击时，Together 的 `disable_safety_checker` 遗留并因服务端无条件 assign 漏进 Venice 入参，导致 Venice 报 400 未知字段。修复 `schemaProviders.ts`，开启 `schemaFieldsOnly` 时严格丢弃其他服务商未声明的遗留字段。<br>2. 载入无 LoRA 的干净预设 `std-venice-t2i`（模型 `venice-sd35`，seed 42），真实点击上游。真实上游返回 HTTP 402 `Insufficient USD or Diem balance`，两份文件完全一致记录 **PASS_BILLING**。<br>3. Together 401 准确记录为 **BLOCKED_AUTH**，响应体与日志完全对齐。 | **已闭环** |
+| **P1-2** | Civitai `allowMatureContent` 泄漏进 `steps[].input`（官方 `ImageGenInput` 为 `additionalProperties: false`）：在 `civitaiImageContract.ts` 加入 `controls`，在 `civitaiVideo.ts` 应用 custom 参数前剥除；加位置测试与突变验证；真实浏览器验证。 | 1. 在 `src/server/civitaiImageContract.ts` 的 `controls` 正则中加入 `allowMatureContent`，使 `advanced()` 不再将其拷入 `genInput`（`steps[0].input`）。<br>2. 在 `src/schemas/civitaiVideo.ts` 中解析并剥除 `custom_parameters` 中的 `allowMatureContent`，使视频 `payload` 绝不携带该字段。<br>3. 契约测试中新增位置断言：断言 `allowMatureContent` 存在于工作流根级，而 `steps[0].input` 绝无此字段。<br>4. 突变验证：故意让字段漏入 step input，测试立即变红；恢复后变绿。<br>5. 真实浏览器点击验证：出站日志确认为根级 `allowMatureContent: true/false`，`steps[0].input` 严格无此字段。 | **已闭环** |
+| **P2-1** | `AGENTS.md` 与 `CLAUDE.md` §6 示例对齐：代码已将 ModelsLab `safety_checker` 标为 `conflicting_documentation` 且不注入，文档示例移除 `safety_checker="no"`。 | 更新两份规则文件的第 6 节，移除 `safety_checker="no"` 示例，其余核实示例及两句用户原话保持不变。 | **已闭环** |
+| **P2-2** | `CivitaiModal.tsx` 清理未使用的 `searchCivitaiModels` import。 | 彻底清理 `CivitaiModal.tsx` 中未使用的 `searchCivitaiModels` 引用。 | **已闭环** |
+| **P2-3** | Civitai 检查器在挂载时将默认值写入 `custom_parameters`，确保徽章、请求体、历史三者一致。 | 提取 `CivitaiAllowMatureControl` 组件，挂载时若未配置则自动向 `custom_parameters` 写入 `allowMatureContent: true`。 | **已闭环** |
+| **P2-4** | 截图 07/08 需在 LoRA 检索完成后重拍，让结果卡片与 NSFW 开关同框，并从日志取出对应的 `nsfw=` 参数。 | 增加检索加载等待时间至卡片渲染完毕，重拍 07/08 截图，画面完整包含检索到的 343 个 LoRA 卡片与 `🔥 NSFW` 开关；并记录出站参数。 | **已闭环** |
 
 ---
 
@@ -31,7 +31,7 @@
 | 3 | **Fal.ai** | `https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/flux-lora` | `enable_safety_checker` | `boolean` | `true` | `false` | **已核实** | 官方 OpenAPI 定义：`enable_safety_checker: { type: "boolean", default: true, description: "If set to true, the safety checker will be enabled. Disabling it requires account authorization..." }` |
 | 3b | **Fal.ai (Pro)** | `https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/flux-pro/v1.1` | `safety_tolerance` | `string` enum | `"2"` | `"5"` | **已核实** | 官方 OpenAPI flux-pro/v1.1 定义：`safety_tolerance: enum ["1".."6"]`，description 明确标注 1 为最严格，**5 为最宽松 (most permissive)**。 |
 | 4 | **Replicate** | `https://api.replicate.com/v1/models/black-forest-labs/flux-schnell` | `disable_safety_checker` | `boolean` | `false` | `true` | **已核实** | 官方 OpenAPI Input Schema 包含 `disable_safety_checker: { type: "boolean", default: false }`，如 flux-schnell / flux-dev 各版本 |
-| 5 | **Civitai (工作流)** | `https://developer.civitai.com/orchestration/guide/submitting-work` | `allowMatureContent` | `boolean` | `false` | `true` | **已核实** | 官方 Orchestration 提交文档：`allowMatureContent` 为工作流 JSON body 根级字段（与 `steps` 同级），允许生成成熟内容 |
+| 5 | **Civitai (工作流)** | `https://developer.civitai.com/orchestration/guide/submitting-work` | `allowMatureContent` | `boolean` | `false` | `true` | **已核实** | 官方 Orchestration 提交文档：`allowMatureContent` 为工作流 JSON body 根级字段（与 `steps` 同级），允许生成成熟内容；`steps[].input` 严格不包含此字段 |
 | 6 | **Civitai (目录)** | `https://developer.civitai.com/site/reference/models` | `nsfw` | `boolean` | `false` | `true` | **已核实** | 官方 REST API 参考：`GET /api/v1/models?nsfw=true` 允许检索成人/成熟内容模型 |
 | 7 | **OpenAI 兼容中转** | `https://platform.openai.com/docs/api-reference/images/create` & Venice Swagger | `moderation` | `string` enum | `"auto"` | `"low"` | **已核实** | 官方 Images 规范支持 `moderation: "low"` 表示最低审核级别；若 live schema 声明则支持在 UI 可见配置 |
 | 8 | **Sogni** | `https://raw.githubusercontent.com/Sogni-AI/sogni-protocol/main/schemas/tools/generate_image.schema.json` | `isMature` | `boolean` | 默认过滤 | 允许 `isMature=true` | **已核实** | `sogniLoraCover` 允许通过 `allowMature` 参数（由 `opts.nsfw !== false` 驱动）默认展示成熟 LoRA 示例图封面 |
@@ -55,28 +55,15 @@
 
 ---
 
-## 三、账号级设置约束与真实透传声明
+## 三、真实浏览器 UI 点击走查与请求日志（Chrome 153，端口 3117 实测）
 
-1. **Fal.ai** (`enable_safety_checker: false`):
-   - 官方规定：禁用检查器需要在 Fal 控制台账号设置中开启成人内容授权。若账号未授权，Fal 服务端会返回纯黑图像或拦截。
-   - 系统行为：请求体如实发送 `enable_safety_checker: false`；上游返回的内容与 HTTP 状态码原样透传呈现，绝不假造解除。
-2. **Civitai** (`allowMatureContent: true` & `nsfw: true`):
-   - 官方规定：成人模型检索与生成需要账户登录且账户设置了对应级别的 Browsing Level（PG, PG-13, R, X, XXX），且成熟生成任务通常消耗 Yellow Buzz。
-   - 系统行为：目录检索默认传 `nsfw=true`，工作流 JSON body 根级默认传 `allowMatureContent: true`；若用户 Buzz 不足或账户等级受限，如实呈现上游响应。
-3. **ModelsLab**:
-   - 官方各文档对 `safety_checker` 取值存在冲突，且通常仅对付费订阅生效；未统一前不进行自动隐式注入。
-
----
-
-## 四、真实浏览器 UI 点击走查与请求日志（Chrome 153 实测）
-
-所有测试均在真实 Chromium 无头浏览器环境中完成 UI 实际点击操作，捕获真实网络请求体与服务端日志。截图文件体积均控制在 75KB~145KB，保证 `ReadMediaFile` 可完整读取无截断。
+所有测试均在真实 Chromium 无头浏览器环境中完成 UI 实际点击操作，捕获真实网络请求体与服务端日志。截图文件体积均控制在 75KB~155KB，保证 `ReadMediaFile` 可完整读取无截断。
 
 ### 1. Together AI (`disable_safety_checker`) 实测
 - **操作流程**：
   1. 在参数总控台选用 `Together` 服务商，输入底模 `black-forest-labs/FLUX.1-schnell`。
   2. 控件自动渲染 `disable_safety_checker`：默认选中 `true (禁用安全检查（项目默认放开）)`，徽章显示 `会发送 true（项目默认开启 NSFW）`。
-  3. 截图取证：`01-together-nsfw-default-on.jpg` (132.9 KB)。
+  3. 截图取证：`01-together-nsfw-default-on.jpg` (148.9 KB)。
   4. 点击「运行：保存图像」触发生成：
      - **出站请求体 (JSON)**：
        ```json
@@ -92,10 +79,10 @@
          "model": "black-forest-labs/FLUX.1-schnell"
        }
        ```
-     - **上游真实响应**：HTTP 401 Unauthorized (`{"error":{"message":"Missing API key. You need to provide your API key in an Authorization header using Bearer auth..."}}`)
-     - **分类判定**：**BLOCKED_AUTH** (真实上游鉴权拒绝，请求体确认携带 `disable_safety_checker: true`)
+     - **上游真实响应**：HTTP 401 Unauthorized (`{"error":{"message":"Invalid API key provided. You can find your API key at https://api.together.ai/settings/api-keys.","type":"invalid_request_error","code":"invalid_api_key"}}`)
+     - **分类判定**：**BLOCKED_AUTH** (真实上游鉴权拒绝，出站请求体确实验证携带 `disable_safety_checker: true`)
   5. 下拉切换回 `false`（严格安全过滤）：徽章实时更新为 `会发送 false（已手动设为严格安全过滤）`，出现「一键恢复放开默认」按钮。
-  6. 截图取证：`02-together-nsfw-toggled-off.jpg` (132.4 KB)。
+  6. 截图取证：`02-together-nsfw-toggled-off.jpg` (150.7 KB)。
   7. 再次点击运行：
      - **出站请求体 (JSON)**：
        ```json
@@ -111,16 +98,16 @@
          "model": "black-forest-labs/FLUX.1-schnell"
        }
        ```
-     - **分类判定**：**BLOCKED_AUTH** (请求体确认已切换为 `disable_safety_checker: false`)
+     - **分类判定**：**BLOCKED_AUTH** (请求体确实验证已切换为 `disable_safety_checker: false`)
 
 ---
 
-### 2. Venice AI (`safe_mode`) 实测（真实有效模型 `venice-sd35`）
+### 2. Venice AI (`safe_mode`) 实测（真实有效预设 `venice-sd35`，无 LoRA，seed 42）
 - **操作流程**：
-  1. 通过工作流预设或模型选择载入 Venice 官方有效模型 `venice-sd35`。
+  1. 通过工作流预设弹窗载入标准干净预设 `std-venice-t2i`（模型为 Venice 官方有效模型 `venice-sd35`，无 LoRA 干扰，seed 42 ≤ 999999999）。
   2. 控件自动渲染 `safe_mode`：默认选中 `false (关闭安全模式（项目默认放开未打码）)`，徽章显示 `会发送 false（项目默认开启 NSFW）`。
-  3. 截图取证：`03-venice-nsfw-default-on.jpg` (126.5 KB)。
-  4. 点击「运行：保存图像」触发生成（成功越过模型校验阶段到达真实上游）：
+  3. 截图取证：`03-venice-nsfw-default-on.jpg` (116.2 KB)。
+  4. 点击「运行：保存图像」触发生成（成功越过模型校验与格式校验阶段到达真实上游）：
      - **出站请求体 (JSON)**：
        ```json
        {
@@ -137,7 +124,7 @@
      - **上游真实响应**：HTTP 402 (`{"error":"Insufficient USD or Diem balance to complete request. Visit https://venice.ai/settings/api to add credits."}`)
      - **分类判定**：**PASS_BILLING** (真实上游扣费/额度拦截，请求体确认携带 `safe_mode: false`)
   5. 下拉切换回 `true`（启用打码严格模式）：徽章实时更新为 `会发送 true（已手动设为严格安全过滤）`，出现「一键恢复放开默认」按钮。
-  6. 截图取证：`04-venice-nsfw-toggled-off.jpg` (126.5 KB)。
+  6. 截图取证：`04-venice-nsfw-toggled-off.jpg` (138.8 KB)。
   7. 再次点击运行：
      - **出站请求体 (JSON)**：
        ```json
@@ -152,28 +139,77 @@
          "model": "venice-sd35"
        }
        ```
-     - **上游真实响应**：HTTP 402 (`{"error":"Insufficient USD or Diem balance..."}`)
+     - **上游真实响应**：HTTP 402 (`{"error":"Insufficient USD or Diem balance to complete request. Visit https://venice.ai/settings/api to add credits."}`)
      - **分类判定**：**PASS_BILLING** (真实上游扣费/额度拦截，请求体确认携带 `safe_mode: true`)
 
 ---
 
-### 3. ModelHubModal Civitai 标签与 CivitaiModal LoRA 检索实测
-- **ModelHubModal Civitai 标签**：
-  1. 打开底模中心并切换至 `Civitai` 服务商标签。
-  2. 默认呈现 `🔥 NSFW: 已开启 (默认)`，请求携带 `nsfw=true`，返回包含成人结果的 Civitai 资源（`Realistic Vision`, `DreamShaper`, `Juggernaut XL`）。
-  3. 截图取证：`05-modelhub-civitai-nsfw-on.jpg` (106.8 KB)。
-  4. 点击切换为 `🔥 NSFW: 已关闭`，出站请求携带 `catalogTag=nsfw:false`，服务端以 `nsfw=false` 请求上游，返回过滤后结果。
-  5. 截图取证：`06-modelhub-civitai-nsfw-off.jpg` (131.0 KB)。
-- **CivitaiModal LoRA 检索**：
-  1. 打开 CivitaiModal LoRA 检索中心。
-  2. 默认呈现高亮 `🔥 NSFW: 已开启 (默认)`，默认以 `nsfw=true` 请求 `/api/civitai/models`。
-  3. 截图取证：`07-civitaimodal-lora-nsfw-on.jpg` (76.0 KB)。
-  4. 点击切换为 `🔥 NSFW: 已关闭`，请求参数带 `nsfw=false`。
-  5. 截图取证：`08-civitaimodal-lora-nsfw-off.jpg` (75.5 KB)。
+### 3. Civitai `allowMatureContent` 工作流请求体核验 (P1-2 实测)
+- **操作流程**：
+  1. 载入 Civitai T2I 预设（`std-civitai-t2i`），打开参数总控台中的 Civitai 配置块。
+  2. `CivitaiAllowMatureControl` 组件挂载时自动向 `custom_parameters` 播种 `allowMatureContent: true`，徽章显示 `会发送 true（项目默认开启 NSFW）`。
+  3. 将下拉切为 `false`，徽章更新为 `会发送 false（已手动设为严格安全过滤）`，点击运行：
+     - **出站请求体结构 (JSON)**：
+       ```json
+       {
+         "allowMatureContent": false,
+         "steps": [
+           {
+             "$type": "imageGen",
+             "input": {
+               "engine": "comfy",
+               "ecosystem": "krea2",
+               "model": "turbo",
+               "prompt": "a cinematic masterpiece portrait, highly detailed",
+               "steps": 8,
+               "cfg": 1
+             }
+           }
+         ]
+       }
+       ```
+     - **契约位置核验**：`allowMatureContent: false` 位于工作流 JSON 根级（与 `steps` 同级），且 `steps[0].input` 中**完全不包含** `allowMatureContent`（`hasAllowMatureContent: false`）。URL 干净无 query 污染（`https://orchestration.civitai.com/v2/consumer/workflows?wait=100`）。
+  4. 点击「一键恢复放开默认」切回 `true`，再次点击运行：
+     - **出站请求体结构 (JSON)**：
+       ```json
+       {
+         "allowMatureContent": true,
+         "steps": [
+           {
+             "$type": "imageGen",
+             "input": {
+               "engine": "comfy",
+               "ecosystem": "krea2",
+               "model": "turbo",
+               "prompt": "a cinematic masterpiece portrait, highly detailed",
+               "steps": 8,
+               "cfg": 1
+             }
+           }
+         ]
+       }
+       ```
+     - **契约位置核验**：根级包含 `allowMatureContent: true`，`steps[0].input` 严格无泄漏。
 
 ---
 
-## 五、8 张验收截图逐行文字转录 (`ReadMediaFile` 原样验视)
+### 4. ModelHubModal Civitai 标签与 CivitaiModal LoRA 检索实测 (P2-4 实测)
+- **ModelHubModal Civitai 标签**：
+  1. 打开底模中心并切换至 `Civitai` 服务商标签。
+  2. 默认呈现 `🔥 NSFW: 已开启 (默认)`，出站请求携带默认参数，返回包含成人结果的 Civitai 资源（`Realistic Vision`, `DreamShaper`, `Juggernaut XL`）。
+  3. 截图取证：`05-modelhub-civitai-nsfw-on.jpg` (123.7 KB)。
+  4. 点击切换为 `🔥 NSFW: 已关闭`，出站请求携带 `catalogTag=nsfw:false`，服务端以 `nsfw=false` 请求上游，返回过滤后结果。
+  5. 截图取证：`06-modelhub-civitai-nsfw-off.jpg` (122.8 KB)。
+- **CivitaiModal LoRA 检索 (卡片完全渲染后截图)**：
+  1. 打开 CivitaiModal LoRA 检索中心，等待网络加载完成（界面提示 `已检索到 343 个 LoRA`）。
+  2. 默认呈现高亮 `🔥 NSFW: 已开启 (默认)`，并与 ModelScope / HuggingFace / Civitai 结果卡片同框。出站请求为 `GET /api/civitai/models?types=LORA&sort=Highest+Rated&limit=24&nsfw=true&page=1`。
+  3. 截图取证：`07-civitaimodal-lora-nsfw-on.jpg` (75.8 KB)。
+  4. 点击切换为 `🔥 NSFW: 已关闭`，出站请求为 `GET /api/civitai/models?types=LORA&sort=Highest+Rated&limit=24&nsfw=false&page=1`。
+  5. 截图取证：`08-civitaimodal-lora-nsfw-off.jpg` (75.3 KB)。
+
+---
+
+## 四、8 张验收截图逐行文字转录 (`ReadMediaFile` 原样验视)
 
 ### 1. `01-together-nsfw-default-on.jpg`
 ```text
@@ -340,7 +376,7 @@ An image style to apply to the image. Visit https://docs.venice.ai/api-...
 
 [Filter Bar]
 底模架构筛选: [全部]
-已检索到 0 个 LoRA
+已检索到 343 个 LoRA
 
 [Search Bar]
 跨引擎检索 LoRA (如: Cyberpunk, Ghibli, Detail, Face, Armor, Realistic, Anime, Wan)...
@@ -348,7 +384,11 @@ An image style to apply to the image. Visit https://docs.venice.ai/api-...
 [按钮]: 🔥 NSFW: 已开启 (默认) (粉色边框，高亮背景)
 [按钮]: 实时检索
 
-正在从官方 API 实时检索云端 LoRA 模型库... (加载指示器)
+[LoRA Cards Grid - 结果已渲染同框]
+1. ModelScope CN: 基础模型封面图
+2. Hugging Face: krea/kre... (手捧咖啡杯写实亚洲女性人像)
+3. ModelScope CN: 基础模型封面图
+4. Civitai: P... (绿皮肤兽人半身铠甲插画)
 ```
 
 ### 8. `08-civitaimodal-lora-nsfw-off.jpg`
@@ -363,7 +403,7 @@ An image style to apply to the image. Visit https://docs.venice.ai/api-...
 
 [Filter Bar]
 底模架构筛选: [全部]
-已检索到 0 个 LoRA
+已检索到 343 个 LoRA
 
 [Search Bar]
 跨引擎检索 LoRA (如: Cyberpunk, Ghibli, Detail, Face, Armor, Realistic, Anime, Wan)...
@@ -371,21 +411,25 @@ An image style to apply to the image. Visit https://docs.venice.ai/api-...
 [按钮]: 🔥 NSFW: 已关闭 (深灰色边框与背景)
 [按钮]: 实时检索
 
-正在从官方 API 实时检索云端 LoRA 模型库... (加载指示器)
+[LoRA Cards Grid - 结果已渲染同框]
+1. ModelScope CN: 基础模型封面图
+2. Hugging Face: krea/kre... (手捧咖啡杯写实亚洲女性人像)
+3. ModelScope CN: 基础模型封面图
+4. Civitai: P... (绿皮肤兽人半身铠甲插画)
 ```
 
 ---
 
-## 六、全量编译与回归测试真实数据
+## 五、全量编译与回归测试真实数据 (wt-10, 无管道)
 
 1. **类型检查 (`npx tsc --noEmit`)**：
    - 退出码：`0`，0 错误。
 
 2. **生产构建 (`npm run build`)**：
    - 命令：`node hosting/build.mjs`
-   - 退出码：`0`，Vite 构建完成耗时 1.86s。
+   - 退出码：`0`，Vite 构建完成耗时 2.46s。
 
 3. **全量 Vitest 测试套件 (`npx vitest run --maxWorkers=2 --exclude '.tower/**' --exclude '**/node_modules/**' --exclude '**/dist/**'`)**：
    - 测试文件总数：**253 passed (253)**
-   - 用例总数：**1900 passed (1900)**
+   - 用例总数：**1901 passed (1901)**
    - 真实退出码：`0`（无任何失败或跳过）

@@ -138,4 +138,18 @@ describe('Civitai image request contract', () => {
   it('live OpenAPI missing → CivitaiSchemaMissingError (no static outbound)', async () => {
     await expect(buildCivitaiImageRequest({ model: 'urn:air:flux1:checkpoint:civitai:1@2', prompt: 'x', engine: 'comfy', ecosystem: 'flux1' }, api({}))).rejects.toBeInstanceOf(CivitaiSchemaMissingError);
   });
+  it('P1-2: allowMatureContent in custom_parameters stays out of steps[0].input (workflow-level body only)', async () => {
+    const res = await buildCivitaiImageRequest({
+      model: 'urn:air:flux1:checkpoint:civitai:1@2',
+      prompt: 'masterpiece',
+      engine: 'comfy',
+      ecosystem: 'flux1',
+      custom_parameters: { allowMatureContent: false },
+    }, api({}), oa());
+
+    // Step input (payload) must NOT contain allowMatureContent
+    expect(res.payload).not.toHaveProperty('allowMatureContent');
+    // But customParameters retains it so server puts it at the workflow root next to steps
+    expect(res.customParameters).toMatchObject({ allowMatureContent: false });
+  });
 });

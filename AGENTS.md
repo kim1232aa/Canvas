@@ -30,7 +30,7 @@
 
 ### 6. NSFW 与安全开关策略
 - 用户原则（原文逐字）：**「我们不反对nsfw，有nsfw开关的都默认开启」**。
-- 凡服务商官方 API / live schema 中真实存在的 NSFW/安全开关，一律默认取放开方向（如 `enable_safety_checker=false`、`disable_safety_checker=true`、`safety_tolerance="5"`、`safe_mode=false`、`moderation="low"`、`safety_checker="no"`、`allowMatureContent=true`、Civitai 目录 `nsfw=true` 等）。
+- 凡服务商官方 API / live schema 中真实存在的 NSFW/安全开关，一律默认取放开方向（如 `enable_safety_checker=false`、`disable_safety_checker=true`、`safety_tolerance="5"`、`safe_mode=false`、`moderation="low"`、`allowMatureContent=true`、Civitai 目录 `nsfw=true` 等）。
 - 默认值在前端节点与参数检查器中完全公开可见、可由用户按节点一键切回，实际发送的请求体与历史记录中如实记录；严禁隐式暗中注入。
 - 账号级限制（API 无法控制的设置）不得伪造；上游若拒绝或打码，原样呈现上游响应。
 - 映射必须经官方文档或 live schema 实测核实，未核实的列为未验证，不得硬编码私有规则。

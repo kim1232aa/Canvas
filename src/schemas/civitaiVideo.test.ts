@@ -145,4 +145,18 @@ describe('Civitai video request mapping from selected official schema', () => {
   it('does not build a request when the official OpenAPI document is unavailable', () => {
     expect(() => buildCivitaiVideoInput({ engine: 'future-engine', prompt: 'hello', custom_parameters: { duration: 10 } }, undefined)).toThrow(/OpenAPI/);
   });
+
+  it('P1-2: strips allowMatureContent from video input payload so it never leaks into steps[0].input', () => {
+    const result = buildCivitaiVideoInput({
+      engine: 'wan',
+      version: 'v2.1',
+      provider: 'civitai',
+      prompt: 'sunset',
+      cfg: 4,
+      custom_parameters: { allowMatureContent: false, customField: 'keep' },
+    }, officialVideoSchema);
+
+    expect(result.payload).not.toHaveProperty('allowMatureContent');
+    expect(result.payload.customField).toBe('keep');
+  });
 });

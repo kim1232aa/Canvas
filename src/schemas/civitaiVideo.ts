@@ -198,7 +198,13 @@ export function buildCivitaiVideoInput(body: Record<string, any>, officialOpenAp
   mapImage(input, properties, customFields, body.image_url);
   mapLoras(input, properties, customFields, body.loras, document);
 
-  const custom = applyCustomParameters(input, body.custom_parameters);
+  // allowMatureContent is a workflow-level JSON body field (with steps), never leaked into steps[].input
+  let videoCustomObj = parseCustomObject(body.custom_parameters);
+  if (videoCustomObj && typeof videoCustomObj === 'object') {
+    const { allowMatureContent: _ignored, ...cleanObj } = videoCustomObj;
+    videoCustomObj = cleanObj;
+  }
+  const custom = applyCustomParameters(input, videoCustomObj);
 
   for (const required of selected.required) {
     if (!provided(custom.payload[required])) throw new Error(`当前 Civitai 视频 Schema 要求 ${required}；请显式提供该字段`);
