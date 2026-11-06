@@ -541,11 +541,21 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
       });
       const data = await resp.json();
       if (!resp.ok || !data.success) {
-        throw new Error(data.error || '提取工作流失败，请检查链接或格式');
+        const errorParts: string[] = [];
+        if (data.error) errorParts.push(data.error);
+        if (data.status) errorParts.push(`[HTTP ${data.status}]`);
+        if (data.endpoint) errorParts.push(`(${data.endpoint})`);
+        const details = data.details || data.rawResponse;
+        if (details && details !== data.error) {
+          const detailStr = typeof details === 'string' ? details : JSON.stringify(details);
+          errorParts.push(`- 响应体: ${detailStr}`);
+        }
+        throw new Error(errorParts.join(' ') || '提取工作流失败，请检查链接或格式');
       }
       setExtractedPreset(data.preset);
     } catch (err: any) {
       setExtractError(err.message || '网络请求错误');
+      setExtractedPreset(null);
     } finally {
       setIsExtracting(false);
     }

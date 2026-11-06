@@ -209,4 +209,43 @@ describe('CivitaiModal Recipe Import and Cross-Provider Adaptation UI', () => {
     expect(onLoadWorkflowPreset).toHaveBeenCalledWith(mockPreset);
     expect(onClose).toHaveBeenCalled();
   });
+
+  it('P1-2: renders unresolved LoRA card with authentic upstream error text and does NOT show Civitai 未启用在线生成 badge', () => {
+    const unresolvedLoRAAdaptation = adaptCivitaiRecipeToProvider(
+      {
+        baseModel: 'Flux.1 D',
+        loras: [
+          {
+            name: 'FailedLoRA',
+            versionId: 404040,
+            strength: 0.8,
+            unresolvedReason: '版本 #404040 上游解析失败: [404] Civitai model-version 上游响应 HTTP 404 - {"error":"Model version 404040 not found"} (https://civitai.com/api/v1/model-versions/404040)',
+          },
+        ],
+      },
+      'civitai'
+    );
+
+    const tree = CivitaiModalImportPreview({
+      adaptation: unresolvedLoRAAdaptation,
+      selectedProvider: 'civitai',
+      onSelectProvider: vi.fn(),
+      tokenConsent: false,
+      onToggleTokenConsent: vi.fn(),
+    });
+
+    const allEls = elements(tree);
+    const textContent = JSON.stringify(allEls.map((e) => e.props?.children));
+
+    // Badge must indicate unresolved/failure, not canGenerate:false
+    expect(textContent).toContain('解析失败 / 未核实');
+    expect(textContent).not.toContain('Civitai 未启用在线生成');
+
+    // Must render the authentic upstream error verbatim
+    expect(textContent).toContain('Model version 404040 not found');
+    expect(textContent).toContain('https://civitai.com/api/v1/model-versions/404040');
+
+    // Must NOT invent download url
+    expect(textContent).not.toContain('https://civitai.com/api/download/models/404040');
+  });
 });

@@ -171,9 +171,9 @@ describe('Cross-Provider Civitai Recipe Adaptation Engine', () => {
         width: 1024,
         height: 768, // ~ 4:3
         loras: [
-          { name: 'LoRA 1', civitaiId: '111', baseModel: 'Flux.1 D', strength: 0.8 },
-          { name: 'LoRA 2', civitaiId: '222', baseModel: 'Flux.1 D', strength: 0.6 },
-          { name: 'LoRA 3 (excess)', civitaiId: '333', baseModel: 'Flux.1 D', strength: 0.5 },
+          { name: 'LoRA 1', civitaiId: '111', baseModel: 'Flux.1 D', strength: 0.8, downloadUrl: 'https://civitai.com/api/download/models/111' },
+          { name: 'LoRA 2', civitaiId: '222', baseModel: 'Flux.1 D', strength: 0.6, downloadUrl: 'https://civitai.com/api/download/models/222' },
+          { name: 'LoRA 3 (excess)', civitaiId: '333', baseModel: 'Flux.1 D', strength: 0.5, downloadUrl: 'https://civitai.com/api/download/models/333' },
         ],
       };
       const result = adaptCivitaiRecipeToProvider(multiLoraRecipe, 'replicate', { allowTokenInUrl: true });
@@ -380,7 +380,7 @@ describe('Cross-Provider Civitai Recipe Adaptation Engine', () => {
       const authRecipe: CivitaiRecipeInput = {
         baseModel: 'Flux.1 D',
         loras: [
-          { name: 'AuthLoRA', versionId: '999888', strength: 0.8, requireAuth: true },
+          { name: 'AuthLoRA', versionId: '999888', strength: 0.8, requireAuth: true, downloadUrl: 'https://civitai.com/api/download/models/999888' },
         ],
       };
       const withToken = adaptCivitaiRecipeToProvider(authRecipe, 'fal', { allowTokenInUrl: true, civitaiToken: 'my_civitai_token_abc' });
@@ -426,7 +426,7 @@ describe('Cross-Provider Civitai Recipe Adaptation Engine', () => {
       const recipeWithNoGenLora: CivitaiRecipeInput = {
         baseModel: 'Pony V6',
         loras: [
-          { name: 'Kenva', versionId: '454703', modelId: '366990', strength: 0.8, canGenerate: false, air: 'urn:air:sdxl:lora:civitai:366990@454703' },
+          { name: 'Kenva', versionId: '454703', modelId: '366990', strength: 0.8, canGenerate: false, air: 'urn:air:sdxl:lora:civitai:366990@454703', downloadUrl: 'https://civitai.com/api/download/models/454703' },
         ],
       };
       const civitaiResult = adaptCivitaiRecipeToProvider(recipeWithNoGenLora, 'civitai');
