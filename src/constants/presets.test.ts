@@ -732,7 +732,9 @@ describe('standard workflow presets (23 T2I + 5 T2V + 6 I2V)', () => {
       /wan-balancingact/i,
     ];
 
-    // Verified official base_model metadata from HF Model Cards / Civitai API / OpenAPI (verified 2026-11-06)
+    // Static regression family fixture mapping (recorded 2026-11-06 from primary OpenAPI/Model Card/API metadata;
+    // this is an explicit static regression protection map, NOT a live network catalog lookup).
+    // Prohibits retired models (Wan 2.1, SVD-XT, SD1.5, SDXL 1.0, FLUX.1) and verifies exact matching of known pairs.
     const detectVerifiedFamily = (name: string): string => {
       const lower = name.toLowerCase();
       if (name === '') return 'unspecified';
@@ -862,5 +864,15 @@ describe('standard workflow presets (23 T2I + 5 T2V + 6 I2V)', () => {
     expect(lat.values.width).toBeUndefined();
     expect(lat.values.height).toBeUndefined();
     expect(lat.values.batch_size).toBeUndefined(); // Agnes sizes via size+ratio (wiki.agnes-ai.com/en/docs/agnes-image-25-flash); no shell
+  });
+  it('std-fal-t2i: drops undeclared aspect_ratio widget and provides image_size in custom_parameters', () => {
+    const p = preset('std-fal-t2i');
+    const ckpt = loader(p.id)!;
+    expect(ckpt.values.aspect_ratio).toBeUndefined();
+    expect(p.spatialFrames![0].params.aspectRatio).toBeUndefined();
+    const custom = JSON.parse(String(ckpt.values.custom_parameters || '{}'));
+    expect(custom.image_size).toBe('square_hd');
+    expect(custom._canvas?.schemaProperties).toContain('image_size');
+    expect(custom._canvas?.schemaProperties).not.toContain('aspect_ratio');
   });
 });

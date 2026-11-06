@@ -15,7 +15,8 @@ const render = (values: Record<string, any>) => { const d = NODE_DEFINITIONS.AIV
 describe('AI video node after std i2v preset load', () => {
   it('preset values follow video-param-table (no fields the official Schema lacks)', () => {
     const fal = vidOf('std-fal-i2v').values, ws = vidOf('std-wavespeed-i2v').values, mu = vidOf('std-muapi-i2v').values, rep = vidOf('std-replicate-i2v').values;
-    expect(fal).toMatchObject({ num_frames: 81, resolution: '480p', aspect_ratio: '16:9', fps: 16, cfg: 4, seed: 24231881 });
+    expect(fal).toMatchObject({ num_frames: 81, resolution: '480p', aspect_ratio: '16:9', fps: 16, cfg: 3.5, seed: 24231881 });
+    expect(JSON.parse(fal.custom_parameters)).toMatchObject({ guidance_scale_2: 4 });
     expect(fal).not.toHaveProperty('duration'); expect(fal).not.toHaveProperty('size');
     expect(ws).not.toHaveProperty('fps'); expect(ws).not.toHaveProperty('size'); expect(ws).not.toHaveProperty('cfg');
     expect(ws).toMatchObject({ duration: 5, seed: 42 });

@@ -64,6 +64,14 @@ function schemaPropertiesForOmit(spec: StdSpec, omit: Set<NonNullable<StdSpec['o
   if (typeof spec.checkpointExtra?.aspect_ratio === 'string') props.push('aspect_ratio');
   if (typeof spec.checkpointExtra?.resolution === 'string') props.push('resolution');
   if (typeof spec.checkpointExtra?.size === 'string' && !props.includes('size')) props.push('size');
+  let customObj: Record<string, unknown> | undefined;
+  try {
+    if (typeof spec.checkpointExtra?.custom_parameters === 'string') customObj = JSON.parse(spec.checkpointExtra.custom_parameters);
+    else if (spec.checkpointExtra?.custom_parameters && typeof spec.checkpointExtra.custom_parameters === 'object') customObj = spec.checkpointExtra.custom_parameters as Record<string, unknown>;
+  } catch {}
+  if (typeof (spec.checkpointExtra as any)?.image_size === 'string' || typeof customObj?.image_size === 'string') {
+    if (!props.includes('image_size')) props.push('image_size');
+  }
   if (spec.hasNegative !== false) props.push('negative_prompt');
   const hasRealLora = (spec.loras ?? []).some((l) => Boolean(l.name));
   if (hasRealLora || spec.hasLora) props.push('loras', 'lora_url', 'lora_weight', 'lora_weights');
@@ -490,8 +498,9 @@ const I2V_SPECS: I2vSpec[] = [
     aspect_ratio: '16:9',
     fps: 16,
     seed: 24231881,
-    cfg: 4,
-    description: 'Fal.ai 官方 Wan 2.2 A14B 图生视频 LoRA 端点。默认挂载 Ostris Orbit Shot 高噪权重（匹配 Fal 默认 transformer=high；模型卡 widget 为 orbit 180，声明触发词为 orbit 360；强度 1 取自 Fal OpenAPI scale 默认值）。',
+    cfg: 3.5,
+    recipeExtra: { guidance_scale_2: 4 },
+    description: 'Fal.ai 官方 Wan 2.2 A14B 图生视频 LoRA 端点。默认挂载 Ostris Orbit Shot 高噪权重（匹配 Fal 默认 transformer=high；seed: 24231881 为固定复现示例种子，非作者配方指定；cfg: 3.5 取自官方 guidance_scale 默认值，guidance_scale_2 设为官方默认值 4；强度 1 取自 Fal OpenAPI 默认值；widget 为 orbit 180，触发词为 orbit 360）。',
     loras: [{ name: 'https://huggingface.co/ostris/wan22_i2v_14b_orbit_shot_lora/resolve/main/wan22_14b_i2v_orbit_high_noise.safetensors', strength: 1, source: 'https://huggingface.co/ostris/wan22_i2v_14b_orbit_shot_lora' }],
     schemaProperties: [
       'prompt', 'image_url', 'negative_prompt', 'loras', 'seed', 'frames_per_second', 'num_frames',
@@ -509,7 +518,7 @@ const I2V_SPECS: I2vSpec[] = [
     model: 'wavespeed-ai/wan-2.2/i2v-480p-lora',
     duration: 5,
     seed: 42,
-    description: 'WaveSpeed 官方 Wan 2.2 480P 图生视频 LoRA 端点；默认挂载 Wavespeed API 专用双阶段 Diffusers 权重（触发词: lexy_vox，映射至全程 loras）。',
+    description: 'WaveSpeed 官方 Wan 2.2 480P 图生视频 LoRA 端点；默认挂载 Wavespeed API 专用双阶段 Diffusers 权重（触发词: lexy_vox，映射至通用 loras 槽位；其与双专家独立加载的等效性标为未验证）。',
     loras: [{ name: 'https://huggingface.co/dustin2050/lexy-vox-i2v-lora-training-wan2.2/resolve/main/lexy_vox_i2v_v2_diffusers.safetensors', strength: 1, source: 'https://huggingface.co/dustin2050/lexy-vox-i2v-lora-training-wan2.2' }],
     schemaProperties: ['prompt', 'image', 'negative_prompt', 'last_image', 'duration', 'loras', 'high_noise_loras', 'low_noise_loras', 'seed'],
     source: 'https://wavespeed.ai/docs/docs-api/wavespeed-ai/wan-2.2-i2v-480p-lora',
@@ -603,7 +612,7 @@ const T2V_SPECS: T2vSpec[] = [
     duration: 5,
     size: '832*480',
     seed: 42,
-    description: 'WaveSpeed 官方 Wan 2.2 480P 文生视频 LoRA 端点；默认挂载 Wavespeed API 专用双阶段 Diffusers 权重（触发词: lexy_vox，映射至全程 loras）。',
+    description: 'WaveSpeed 官方 Wan 2.2 480P 文生视频 LoRA 端点；默认挂载 Wavespeed API 专用双阶段 Diffusers 权重（触发词: lexy_vox，映射至通用 loras 槽位；其与双专家独立加载的等效性标为未验证）。',
     loras: [{ name: 'https://huggingface.co/dustin2050/lexy-vox-t2v-lora-training-wan2.2/resolve/main/lexy_vox_t2v_v2_diffusers.safetensors', strength: 1, source: 'https://huggingface.co/dustin2050/lexy-vox-t2v-lora-training-wan2.2' }],
     schemaProperties: ['prompt', 'negative_prompt', 'size', 'duration', 'loras', 'high_noise_loras', 'low_noise_loras', 'seed'],
     source: 'https://wavespeed.ai/docs/docs-api/wavespeed-ai/wan-2.2-t2v-480p-lora',
@@ -979,11 +988,15 @@ const STD_SPECS: StdSpec[] = [
     checkpointExtra: { resolution: '1024x1024' },
   },
   // Fal live endpoint: fal-ai/krea-2/turbo/lora (Krea 2 Turbo LoRA, verified live 2026-11-06).
-  // Parameters: prompt (required), image_size, seed, loras (maxItems 3, path and scale).
+  // Live OpenAPI parameters: prompt (required), image_size (enum: square_hd | ...), seed, loras (maxItems 3, path and scale). No aspect_ratio.
   // Recipe https://huggingface.co/krea/Krea-2-LoRA-retroanime (Krea 2 Turbo Retro Anime LoRA by Krea, public resolve URL 200 OK).
   { provider: 'fal', ckpt: 'fal-ai/krea-2/turbo/lora', hasLora: true, hasNegative: false, seed: 64107730,
     omit: ['steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'width', 'height'],
-    checkpointExtra: { aspect_ratio: '1:1', image_size: 'square_hd' },
+    checkpointExtra: {
+      custom_parameters: JSON.stringify({
+        image_size: 'square_hd',
+      }),
+    },
     loras: [{ name: 'https://huggingface.co/krea/Krea-2-LoRA-retroanime/resolve/main/retroanime.safetensors', strength: 1, source: 'https://huggingface.co/krea/Krea-2-LoRA-retroanime' }],
   },
   // OpenWorks-only: full params + LoRA (openWorksProvider.ts OPENWORKS_LIVE_EXTRAS: seed/steps/cfg/negative_prompt/loras/checkpoint).

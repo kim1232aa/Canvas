@@ -28,7 +28,7 @@ describe('video LoRA wiring (LoRALoader → AIVideoNode.lora)', () => {
     const x = extract('std-fal-i2v');
     expect(x.loras.map((l) => [l.name, l.modelStrength])).toEqual([[FAL_W22_I2V_LORA, 1]]);
     expect(x.seed).toBe(24231881);
-    expect(x.cfg).toBe(4);
+    expect(x.cfg).toBe(3.5);
     expect(x.size).toBeUndefined();
   });
   it('std-wavespeed-i2v extracts the verified Wan 2.2 Diffusers LoRA, seed 42 and videoDuration 5 as filled', () => {

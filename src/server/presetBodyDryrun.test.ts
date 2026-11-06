@@ -12,6 +12,8 @@ import { extractFalInputProperties, inlineFalItemRefs } from './falImageContract
 import { buildReplicatePredictionRequest, extractReplicateInputProperties, extractReplicateModelRoute } from './replicateImageContract';
 import { buildCivitaiVideoInput } from '../schemas/civitaiVideo';
 import { registerSchemaProviderRoutes } from './schemaProviders';
+import { applyCustomParameters } from './customParameters';
+import { spatialRequestParameters } from '../utils/frontendParameters';
 import muapiDoc from './__fixtures__muapi-wan21-lora-i2v-2026-11-04.json';
 
 const FX = 'src/server/__fixtures__/video-preset-dryrun-2026-11-04/';
@@ -75,7 +77,8 @@ describe('std i2v presets → outgoing upstream body (dry run, no network)', () 
       aspect_ratio: '16:9',
       num_frames: 81,
       seed: 24231881,
-      guide_scale: 4,
+      guide_scale: 3.5,
+      guidance_scale_2: 4,
       frames_per_second: 16,
       loras: [{ path: FAL_I2V_LORA, scale: 1 }],
     });
@@ -304,5 +307,69 @@ describe('std-modelslab-t2i dry-run (SDXL cleaned, placeholder model)', () => {
     const l = p.nodes.find((n) => n.type === 'LoRALoader')!;
     expect(l.values.lora_name).toBe('');
     expect(l.values.strength_model).toBe(0.8);
+  });
+});
+
+describe('std-fal-t2i dry-run (Fal Krea 2 Turbo LoRA image_size forwarding via node and frame)', () => {
+  it('node path: executes std-fal-t2i, forwards custom_parameters.image_size, and changes final request when modified', async () => {
+    const p = WORKFLOW_PRESETS.find((x) => x.id === 'std-fal-t2i')!;
+    const loaderNode = p.nodes.find((n) => n.type === 'CheckpointLoaderSimple')!;
+    expect(loaderNode.values.aspect_ratio).toBeUndefined();
+    const custom = JSON.parse(String(loaderNode.values.custom_parameters || '{}'));
+    expect(custom.image_size).toBe('square_hd');
+
+    let captured: any;
+    globalThis.fetch = vi.fn(async (url: any, init?: any) => {
+      const u = String(url);
+      if (!captured && init?.method === 'POST' && init?.body && u.includes('/api/fal/generate')) {
+        captured = JSON.parse(String(init.body));
+      }
+      return new Response(JSON.stringify({ error: 'dry run: not sent' }), { status: 418 });
+    }) as any;
+
+    await executeWorkflow(p.nodes as any, p.connections as any, () => {}, undefined, 'std-fal-t2i-samp').catch(() => undefined);
+    expect(captured).toBeDefined();
+    expect(captured.custom_parameters.image_size).toBe('square_hd');
+    const finalPayload = applyCustomParameters({ prompt: captured.prompt }, captured.custom_parameters).payload as any;
+    expect(finalPayload.image_size).toBe('square_hd');
+
+    // Modify image_size on the node and re-execute
+    const modifiedNodes = p.nodes.map((n) =>
+      n.id === 'std-fal-t2i-ckpt'
+        ? { ...n, values: { ...n.values, custom_parameters: JSON.stringify({ ...custom, image_size: 'portrait_16_9' }) } }
+        : n
+    );
+    captured = undefined;
+    await executeWorkflow(modifiedNodes as any, p.connections as any, () => {}, undefined, 'std-fal-t2i-samp').catch(() => undefined);
+    expect(captured).toBeDefined();
+    expect(captured.custom_parameters.image_size).toBe('portrait_16_9');
+    const modifiedFinalPayload = applyCustomParameters({ prompt: captured.prompt }, captured.custom_parameters).payload as any;
+    expect(modifiedFinalPayload.image_size).toBe('portrait_16_9');
+  });
+
+  it('frame path: spatialRequestParameters forwards image_size and changes final request when modified', () => {
+    const p = WORKFLOW_PRESETS.find((x) => x.id === 'std-fal-t2i')!;
+    const frame = p.spatialFrames![0];
+    expect(frame.params.aspectRatio).toBeUndefined();
+    const frameCustom = JSON.parse(String(frame.params.customParameters || '{}'));
+    expect(frameCustom.image_size).toBe('square_hd');
+
+    const params = spatialRequestParameters(frame);
+    expect(params.extraParams?.custom_parameters).toMatchObject({ image_size: 'square_hd' });
+    const finalPayload = applyCustomParameters({ prompt: params.prompt }, params.extraParams?.custom_parameters).payload as any;
+    expect(finalPayload.image_size).toBe('square_hd');
+
+    // Modify frame customParameters
+    const modifiedFrame = {
+      ...frame,
+      params: {
+        ...frame.params,
+        customParameters: JSON.stringify({ ...frameCustom, image_size: 'landscape_4_3' }),
+      },
+    };
+    const modifiedParams = spatialRequestParameters(modifiedFrame);
+    expect(modifiedParams.extraParams?.custom_parameters).toMatchObject({ image_size: 'landscape_4_3' });
+    const modifiedFinalPayload = applyCustomParameters({ prompt: modifiedParams.prompt }, modifiedParams.extraParams?.custom_parameters).payload as any;
+    expect(modifiedFinalPayload.image_size).toBe('landscape_4_3');
   });
 });
