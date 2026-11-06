@@ -78,6 +78,45 @@ describe('NanoGPTDriver', () => {
     expect(result.seed).toBe(42);
   });
 
+  it('video branch preserves numeric 0 for seed, fps, num_frames, steps, cfg, and duration without duplicate steps/cfg', async () => {
+    const driver = new NanoGPTDriver();
+    vi.mocked(tracedFetch).mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        videoUrl: 'https://example.com/video.mp4',
+        model: 'wan-2.1-t2v',
+        provider: 'NanoGPT',
+      }),
+    } as any);
+
+    await driver.generate(
+      {
+        model: 'wan-2.1-t2v',
+        prompt: 'test zero values',
+        isVideo: true,
+        seed: 0,
+        videoDuration: 0,
+        steps: 0,
+        cfg: 0,
+        videoFps: 0,
+        videoFrames: 0,
+      } as any,
+      { nanogptKey: 'key-123' }
+    );
+
+    const [, init] = vi.mocked(tracedFetch).mock.calls.at(-1)!;
+    const body = JSON.parse(init?.body as string);
+    expect(body.seed).toBe(0);
+    expect(body.duration).toBe(0);
+    expect(body.num_inference_steps).toBe(0);
+    expect(body.cfg_scale).toBe(0);
+    expect(body.fps).toBe(0);
+    expect(body.num_frames).toBe(0);
+    expect(body).not.toHaveProperty('steps');
+    expect(body).not.toHaveProperty('cfg');
+  });
+
   it('video branch surfaces HTTP status, endpoint, and verbatim body on failure without invented messages', async () => {
     const driver = new NanoGPTDriver();
 

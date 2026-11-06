@@ -36,6 +36,85 @@ describe('GrokCompatDriver', () => {
     expect(body.duration).toBe(4);
   });
 
+  it('视频分支透传所有画布参数 (seed, negative_prompt, steps, cfg, loras, width, height, fps, custom_parameters)', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ videoUrl: 'https://relay.example/v1/videos/1/content', model: 'grok-imagine-video', seed: 4242 }), { status: 200 }));
+
+    const res = await driver.generate(
+      {
+        prompt: 'orbit video',
+        negative_prompt: 'ugly, blurry',
+        model: 'grok-imagine-video',
+        isVideo: true,
+        videoDuration: 5,
+        videoFps: 30,
+        aspectRatio: '16:9',
+        seed: 4242,
+        steps: 25,
+        cfg: 7.5,
+        width: 1280,
+        height: 720,
+        loras: [{ name: 'cyber-lora', strength: 0.8 } as any],
+        extraParams: { custom_parameters: { custom_field: 'custom_val' } },
+      },
+      { grokCompatKey: 'sk-grok', grokCompatBaseUrl: 'https://relay.example' },
+    );
+
+    const [url, init] = (globalThis.fetch as any).mock.calls[0];
+    expect(url).toBe('/api/video/generate');
+    const body = JSON.parse(init.body);
+    expect(body).toMatchObject({
+      provider: 'grok_compat',
+      model: 'grok-imagine-video',
+      prompt: 'orbit video',
+      negative_prompt: 'ugly, blurry',
+      duration: 5,
+      fps: 30,
+      aspect_ratio: '16:9',
+      seed: 4242,
+      steps: 25,
+      cfg: 7.5,
+      width: 1280,
+      height: 720,
+      loras: [{ name: 'cyber-lora', strength: 0.8 }],
+      custom_parameters: { custom_field: 'custom_val' },
+    });
+    expect(res.seed).toBe(4242);
+  });
+
+  it('视频分支保留数值 0 (fps, num_frames, steps, cfg, seed, duration, width, height) 不被 truthy 吞掉', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ videoUrl: 'https://relay.example/v1/videos/1/content', model: 'grok-imagine-video' }), { status: 200 }));
+
+    await driver.generate(
+      {
+        prompt: 'test zeros',
+        model: 'grok-imagine-video',
+        isVideo: true,
+        videoDuration: 0,
+        videoFps: 0,
+        videoFrames: 0,
+        seed: 0,
+        steps: 0,
+        cfg: 0,
+        width: 0,
+        height: 0,
+        denoise: 0,
+      },
+      { grokCompatKey: 'sk-grok' }
+    );
+
+    const [, init] = (globalThis.fetch as any).mock.calls[0];
+    const body = JSON.parse(init.body);
+    expect(body.duration).toBe(0);
+    expect(body.fps).toBe(0);
+    expect(body.num_frames).toBe(0);
+    expect(body.seed).toBe(0);
+    expect(body.steps).toBe(0);
+    expect(body.cfg).toBe(0);
+    expect(body.width).toBe(0);
+    expect(body.height).toBe(0);
+    expect(body.denoise).toBe(0);
+  });
+
   it('HTTP 503 grok_media_no_eligible_account 原样抛出，不换 provider', async () => {
     globalThis.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({
         error: 'Grok 兼容中转失败 [503]: {"error":{"code":"grok_media_no_eligible_account"}}',

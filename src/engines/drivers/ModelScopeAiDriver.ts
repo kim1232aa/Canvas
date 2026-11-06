@@ -7,7 +7,7 @@ export class ModelScopeAiDriver extends BaseEngineDriver {
   readonly name = 'ModelScope AI (魔搭国际站)';
   readonly label = '阿里魔搭 ModelScope.ai';
   readonly badgeColor = '#7c3aed';
-  readonly description = '阿里巴巴开源大模型国际化社区，支持 Wan 2.1 顶级文生视频与全球开源镜像模型。';
+  readonly description = '阿里巴巴开源大模型国际化社区，支持全球开源镜像生图模型。';
   readonly capabilities = ['text2img', 'img2img'] as const;
 
   readonly supportedModels: ModelSpec[] = [];

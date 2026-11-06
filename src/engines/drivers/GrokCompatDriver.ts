@@ -49,18 +49,43 @@ export class GrokCompatDriver extends BaseEngineDriver {
 
     if (isVideo) {
       const extra = params.extraParams || {};
+      const isProvided = (v: any) => v !== undefined && v !== null && v !== '';
+      const videoBody: Record<string, unknown> = {
+        prompt: params.prompt,
+        model: params.model,
+        provider: 'grok_compat',
+        image_url: params.image_url,
+      };
+      if (isProvided(params.videoDuration)) videoBody.duration = params.videoDuration;
+      const ar = isProvided(params.aspectRatio) ? params.aspectRatio : extra.aspect_ratio;
+      if (isProvided(ar)) videoBody.aspect_ratio = ar;
+      const res = isProvided(extra.resolution) ? extra.resolution : params.imageSize;
+      if (isProvided(res)) videoBody.resolution = res;
+      const fpsVal = params.videoFps ?? extra.fps;
+      if (isProvided(fpsVal)) videoBody.fps = fpsVal;
+      const framesVal = params.videoFrames ?? extra.num_frames;
+      if (isProvided(framesVal)) videoBody.num_frames = framesVal;
+      if (extra.custom_parameters && typeof extra.custom_parameters === 'object') videoBody.custom_parameters = extra.custom_parameters;
+
+      withFilledCanvasParams(videoBody, params, [
+        'seed',
+        'negative_prompt',
+        'steps',
+        'cfg',
+        'loras',
+        'width',
+        'height',
+        'sampler_name',
+        'scheduler',
+        'denoise',
+      ]);
+
       const resp = await fetch('/api/video/generate', {
         method: 'POST',
         headers,
         body: JSON.stringify({
-        workflowSnapshot: params.workflowSnapshot,
-          prompt: params.prompt,
-          model: params.model,
-          provider: 'grok_compat',
-          duration: params.videoDuration,
-          aspect_ratio: params.aspectRatio || extra.aspect_ratio,
-          resolution: extra.resolution || params.imageSize,
-          image_url: params.image_url,
+          ...videoBody,
+          workflowSnapshot: params.workflowSnapshot,
         }),
       });
       if (!resp.ok) {
@@ -75,7 +100,7 @@ export class GrokCompatDriver extends BaseEngineDriver {
         providerId: this.id,
         model: data.model || params.model,
         requestedModel: params.model,
-        seed: null,
+        seed: typeof data.seed === 'number' ? data.seed : (params.seed ?? null),
         rawResponse: data,
       };
     }

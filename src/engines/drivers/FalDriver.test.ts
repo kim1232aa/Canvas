@@ -9,16 +9,22 @@ describe('FalDriver LoRA 校验与错误处理', () => {
     await new FalDriver().generate({prompt:'test',model:'fal-ai/flux-lora',loras:[{name:'Display label',civitaiId:'123',strength:0}]},{});
     expect(bodies[0].loras[0]).toEqual({civitaiId:'123',name:'Display label',scale:0});
   });
-  it('rejects clip-only LoRA strength locally instead of sending an empty Fal scale', async () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ imageUrl: 'https://example.test/output.png' })));
+  it('preserves clip-only LoRA without local throw; does not fabricate scale and lets server/upstream decide', async () => {
+    let interceptedBody: any = null;
+    const fetchMock = vi.fn(async (_url, init) => {
+      interceptedBody = JSON.parse(String(init?.body));
+      return new Response(JSON.stringify({ imageUrl: 'https://example.test/output.png' }));
+    });
     globalThis.fetch = fetchMock;
 
-    await expect(new FalDriver().generate({
+    await new FalDriver().generate({
       prompt: 'test',
       model: 'fal-ai/flux-lora',
       loras: [{ name: 'style', path: 'https://example.com/style.safetensors', clipStrength: 0.7 }],
-    }, {})).rejects.toThrow(/clipStrength.*modelStrength|clipStrength.*strength|模型强度/);
-    expect(fetchMock).not.toHaveBeenCalled();
+    }, {});
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(interceptedBody.loras[0].path).toBe('https://example.com/style.safetensors');
+    expect(interceptedBody.loras[0].scale).toBeUndefined();
   });
 
   const driver = new FalDriver();
@@ -115,5 +121,54 @@ describe('FalDriver LoRA 校验与错误处理', () => {
     const res = await driver.generate(params, { falKey: 'test-key' });
     expect(res.mediaUrl).toBe('https://fal.media/files/test.png');
     expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('Fal video forwards width, height, denoise, sampler_name, scheduler (including 0) to /api/video/generate', async () => {
+    let interceptedBody: any = null;
+    globalThis.fetch = vi.fn(async (url, init) => {
+      expect(url).toBe('/api/video/generate');
+      interceptedBody = JSON.parse(String(init?.body));
+      return new Response(JSON.stringify({ videoUrl: 'https://fal.media/vid.mp4', seed: 0 }), { status: 200 });
+    });
+
+    await new FalDriver().generate({
+      model: 'fal-ai/wan-t2v',
+      prompt: 'a running cheetah',
+      isVideo: true,
+      videoDuration: 5,
+      width: 0,
+      height: 0,
+      denoise: 0,
+      sampler_name: 'euler',
+      scheduler: 'normal',
+      seed: 0,
+    }, { falKey: 'test-key' });
+
+    expect(interceptedBody.width).toBe(0);
+    expect(interceptedBody.height).toBe(0);
+    expect(interceptedBody.denoise).toBe(0);
+    expect(interceptedBody.sampler_name).toBe('euler');
+    expect(interceptedBody.scheduler).toBe('normal');
+    expect(interceptedBody.seed).toBe(0);
+  });
+
+  it('Fal image preserves width: 0 and height: 0 in image_size via isProvided', async () => {
+    let interceptedBody: any = null;
+    globalThis.fetch = vi.fn(async (url, init) => {
+      expect(url).toBe('/api/fal/generate');
+      interceptedBody = JSON.parse(String(init?.body));
+      return new Response(JSON.stringify({ imageUrl: 'https://fal.media/img.png', seed: 0 }), { status: 200 });
+    });
+
+    await new FalDriver().generate({
+      model: 'fal-ai/flux/dev',
+      prompt: 'zero dims',
+      width: 0,
+      height: 0,
+    }, { falKey: 'test-key' });
+
+    expect(interceptedBody.image_size).toEqual({ width: 0, height: 0 });
+    expect(interceptedBody.width).toBe(0);
+    expect(interceptedBody.height).toBe(0);
   });
 });

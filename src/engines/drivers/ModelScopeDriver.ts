@@ -7,7 +7,7 @@ export class ModelScopeDriver extends BaseEngineDriver {
   readonly name = 'ModelScope (阿里魔搭社区)';
   readonly label = '阿里魔搭 ModelScope';
   readonly badgeColor = '#8b5cf6';
-  readonly description = '阿里巴巴开源大模型开源社区，原生搭载通义万相 Wan 2.1 大模型及千问系列生图模型。';
+  readonly description = '阿里巴巴开源大模型开源社区，搭载千问系列生图模型。';
   readonly capabilities = ['text2img', 'img2img'] as const;
 
   readonly supportedModels: ModelSpec[] = [];

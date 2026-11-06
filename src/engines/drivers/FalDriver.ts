@@ -2,6 +2,41 @@ import {tracedFetch as fetch} from '../../services/executionTrace';
 import { BaseEngineDriver, withFilledCanvasParams } from '../BaseEngineDriver';
 import { NormalizedGenerateParams, NormalizedGenerateResult, ModelSpec } from '../types';
 
+export interface FalServerLoraMappingResult {
+  wireLoras: Array<{ path: string; scale?: number }>;
+  unmappedLoraFields: Array<{ lora: string; field: string; value: unknown; reason: string }>;
+}
+
+/**
+ * Server-side Fal LoRA mapping specification (shared between server.ts and tests):
+ * Maps valid scale to wire, marks clipStrength as unmapped if Fal OpenAPI lacks a CLIP property,
+ * and NEVER fabricates a fake scale or throws locally for clipStrength.
+ */
+export function mapFalServerLoras(loras: any[]): FalServerLoraMappingResult {
+  const badLora = loras.find((l: any) => !(l?.path || l?.url));
+  if (badLora) {
+    const err: any = new Error('LoRA 没有可直接访问的 path/url，无法发送');
+    err.badLora = badLora;
+    throw err;
+  }
+  const unmappedLoraFields: Array<{ lora: string; field: string; value: unknown; reason: string }> = [];
+  const wireLoras = loras.map((l: any) => {
+    const raw = l.scale ?? l.strength ?? l.modelStrength;
+    const entry: { path: string; scale?: number } = { path: l.path || l.url };
+    if (raw !== undefined && raw !== null && raw !== '') entry.scale = Number(raw);
+    if (l.clipStrength !== undefined && l.clipStrength !== null && l.clipStrength !== '') {
+      unmappedLoraFields.push({
+        lora: l.path || l.url || l.name,
+        field: 'clipStrength',
+        value: l.clipStrength,
+        reason: 'Fal live OpenAPI does not declare CLIP scale/strength property for loras',
+      });
+    }
+    return entry;
+  });
+  return { wireLoras, unmappedLoraFields };
+}
+
 export class FalDriver extends BaseEngineDriver {
   readonly id = 'fal';
   readonly name = 'Fal.ai (GPU 云端加速)';
@@ -22,34 +57,45 @@ export class FalDriver extends BaseEngineDriver {
     const keyHeader: Record<string, string> = effectiveKey ? { 'x-fal-key': effectiveKey } : {};
     // Prefer the normalized flag from BaseEngineDriver; do not guess from model id strings.
     const isVideo = Boolean(params.isVideo || params.videoDuration != null);
+    const isProvided = (v: any) => v !== undefined && v !== null && v !== '';
 
     // No client-side model swap; the server reports any documented t2v→i2v endpoint mapping via wasAdapted.
     const finalModel = params.model;
 
     if (isVideo) {
+      const videoBody: Record<string, unknown> = {
+        workflowSnapshot: params.workflowSnapshot,
+        custom_parameters: params.extraParams?.custom_parameters,
+        prompt: params.prompt,
+        model: finalModel,
+        provider: 'fal',
+        image_url: params.image_url,
+      };
+      if (isProvided(params.aspectRatio)) videoBody.aspect_ratio = params.aspectRatio;
+      if (isProvided(params.seed)) videoBody.seed = params.seed;
+      if (isProvided(params.videoDuration)) videoBody.duration = params.videoDuration;
+      const fpsVal = params.videoFps ?? params.extraParams?.fps;
+      if (isProvided(fpsVal)) videoBody.fps = fpsVal;
+      const framesVal = params.videoFrames ?? params.extraParams?.num_frames;
+      if (isProvided(framesVal)) videoBody.num_frames = framesVal;
+      const resVal = params.extraParams?.resolution ?? params.imageSize;
+      if (isProvided(resVal)) videoBody.resolution = resVal;
+      if (isProvided(params.negative_prompt)) videoBody.negative_prompt = params.negative_prompt;
+      if (isProvided(params.steps)) videoBody.steps = params.steps;
+      if (isProvided(params.cfg)) videoBody.cfg = params.cfg;
+      if (isProvided(params.width)) videoBody.width = params.width;
+      if (isProvided(params.height)) videoBody.height = params.height;
+      if (isProvided(params.denoise)) videoBody.denoise = params.denoise;
+      const sampler = isProvided(params.sampler_name) ? params.sampler_name : params.extraParams?.sampler_name;
+      if (isProvided(sampler)) videoBody.sampler_name = sampler;
+      const scheduler = isProvided(params.scheduler) ? params.scheduler : params.extraParams?.scheduler;
+      if (isProvided(scheduler)) videoBody.scheduler = scheduler;
+      if (params.loras?.length) videoBody.loras = params.loras;
+
       const resp = await fetch('/api/video/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...keyHeader },
-        body: JSON.stringify({
-        workflowSnapshot: params.workflowSnapshot,
-        custom_parameters: params.extraParams?.custom_parameters,
-          prompt: params.prompt,
-          model: finalModel,
-          provider: 'fal',
-          aspect_ratio: params.aspectRatio,
-          image_url: params.image_url,
-          seed: params.seed,
-          duration: params.videoDuration,
-          fps: params.videoFps,
-          num_frames: params.videoFrames,
-          resolution: params.extraParams?.resolution,
-          negative_prompt: params.negative_prompt,
-          steps: params.steps,
-          cfg: params.cfg,
-          sampler_name: params.sampler_name,
-          scheduler: params.scheduler,
-          loras: params.loras?.length ? params.loras : undefined,
-        }),
+        body: JSON.stringify(videoBody),
       });
 
       if (!resp.ok) {
@@ -76,6 +122,9 @@ export class FalDriver extends BaseEngineDriver {
     }
 
     // 图像生成（含文生图与图生图）
+    const hasDims = isProvided(params.width) && isProvided(params.height);
+    const image_size = params.imageSize || (hasDims ? { width: params.width, height: params.height } : undefined);
+
     const resp = await fetch('/api/fal/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...keyHeader },
@@ -85,7 +134,7 @@ export class FalDriver extends BaseEngineDriver {
         prompt: params.prompt,
         negative_prompt: params.negative_prompt,
         model: finalModel,
-        image_size: params.imageSize || (params.width && params.height ? { width: params.width, height: params.height } : undefined),
+        image_size,
         num_inference_steps: params.steps,
         guidance_scale: params.cfg,
         seed: params.seed,
@@ -93,19 +142,19 @@ export class FalDriver extends BaseEngineDriver {
         denoise: params.denoise,
         sampler_name: params.sampler_name,
         scheduler: params.scheduler,
+        ...(isProvided(params.width) ? { width: params.width } : {}),
+        ...(isProvided(params.height) ? { height: params.height } : {}),
         model_name: params.extraParams?.model_name,
         num_images: params.extraParams?.n,
-        // V2: no strength fallback — server 400s if scale/path missing.
+        // 2026-11-06: 不在驱动层拦截 clipStrength-only，不伪造 scale，保留原 clipStrength 如实发送由上游/服务端裁决
         loras: (params.loras || []).map((l: any) => {
           const resolvedPath = l.path || l.downloadUrl || l.url || (/^https?:\/\//i.test(String(l.name || '')) ? l.name : undefined);
           const scale = l.strength ?? l.modelStrength ?? l.scale;
-          if (scale == null && l.clipStrength != null) {
-            throw new Error('本地未发送：Fal LoRA 只有 clipStrength，没有可映射到 loras.scale 的模型强度；请填写 strength/modelStrength，不把 CLIP 强度冒充模型强度');
-          }
           return {
             path: resolvedPath,
             ...(!resolvedPath ? { name: l.name, civitaiId: l.civitaiId } : {}),
-            scale,
+            ...(scale !== undefined ? { scale } : {}),
+            ...(l.clipStrength !== undefined ? { clipStrength: l.clipStrength } : {}),
           };
         }),
       }),
