@@ -57,6 +57,7 @@ const hideSamplerShell = (
     isDeclaredSchemaFieldOmitted(widgetName, schemaCustomParameters, readDeclaredSchemaProperties(schemaCustomParameters)));
 
 import { checkpointNodeTitle, ksamplerNodeTitle, loraLoaderNodeTitle, LORA_LOADER_TYPES } from '../utils/providerLabels';
+import { formatVideoNodeTitle, formatCheckpointNodeTitle, isTemplateVideoNodeTitle, isTemplateCheckpointNodeTitle } from '../utils/nodeDisplayTitle';
 import { errorBannerText, priorRunErrorLabel, LOCAL_BLOCK_NODE_LINE } from '../utils/apiFailure';
 import { upstreamFailedLine } from '../utils/schemaFailure';
 import { formatRecordTime, getExecutions } from '../services/executionTrace';
@@ -408,16 +409,18 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               node.type === 'KSampler'
                 ? ksamplerNodeTitle(node.title, stepsUnsupported || ['muapi','wavespeed','sogni','krea','together','aimlapi','novita'].includes(currentProvider || ''))
                 : node.type === 'CheckpointLoaderSimple'
-                  ? checkpointNodeTitle(node.values.targetProvider,node.values.ckpt_name)
+                  ? formatCheckpointNodeTitle(node.title, node.values.targetProvider, node.values.ckpt_name)
+                : node.type === 'AIVideoNode'
+                  ? formatVideoNodeTitle(node.title, node.values?.targetProvider || currentProvider)
                 : LORA_LOADER_TYPES.has(node.type)
                   ? loraLoaderNodeTitle(node.title, node.values?.lora_name)
                   : formatNodeDisplayTitle(node.type, node.title);
             const loraFull = LORA_LOADER_TYPES.has(node.type) ? String(node.values?.lora_name || '').trim() : '';
             const hoverTitle = loraFull
               ? loraFull
-              : node.title !== displayTitle
+              : node.title !== displayTitle && !isTemplateVideoNodeTitle(node.title) && !isTemplateCheckpointNodeTitle(node.title)
                 ? `${displayTitle}（原标题: ${node.title}）`
-                : node.title;
+                : displayTitle;
             return (
               <span
                 data-testid="node-header-title"

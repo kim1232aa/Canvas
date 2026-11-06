@@ -75,6 +75,7 @@ import { fetchProviderKeyStatus, providerKeyConfigured } from './services/provid
 import { friendlyProviderLabel } from './utils/providerLabels';
 import { toastFromRunError, plainFailureConclusion, plainErrorMessage, historyFacingErrorMessage, unicodeSafeSlice, EXEC_NODE_MISSING, localBlockToastReason, upstreamFailureToast } from './utils/apiFailure';
 import { applyAIVideoModelSelection } from './utils/videoProvider';
+import { formatVideoNodeTitle, formatCheckpointNodeTitle, formatNodeDisplayTitle } from './utils/nodeDisplayTitle';
 import {
   PREVIEW_HANG_MS,
   isRemotePreviewUrl,
@@ -859,7 +860,7 @@ export default function App() {
         // ws-sizenode: editing the board's Empty Latent size clears the hidden width/height copy on the loader it feeds.
         if (n.id !== nodeId && latentFedLoaders.has(n.id)) return clearLoaderSize(n);
         if (n.id !== nodeId) return n;
-        // Provider switch: sync CheckpointLoader title to current provider; clear THIS node error.
+        // Provider switch: sync CheckpointLoader & AIVideoNode title to current provider; clear THIS node error.
         // Sibling stale errors (e.g. leftover Civitai on KSampler) cleared in post-pass below.
         if(widgetName==='targetProvider' && value!==n.values?.targetProvider) {
           const cleared = {
@@ -869,17 +870,27 @@ export default function App() {
             errorMessage:undefined,
           };
           if (n.type === 'CheckpointLoaderSimple') {
-            return { ...cleared, title: checkpointNodeTitle(value, '') };
+            return { ...cleared, title: formatCheckpointNodeTitle(n.title, value, cleared.values?.ckpt_name) };
+          }
+          if (n.type === 'AIVideoNode') {
+            return { ...cleared, title: formatVideoNodeTitle(n.title, value) };
           }
           return cleared;
         }
         // F4: AIVideoNode model select atomically syncs targetProvider + provider from schema option
         if (n.type === 'AIVideoNode' && widgetName === 'model') {
-          return { ...n, values: applyAIVideoModelSelection(n.values || {}, value) };
+          const nextVals = applyAIVideoModelSelection(n.values || {}, value);
+          const nextProv = nextVals.targetProvider || nextVals.provider;
+          return {
+            ...n,
+            title: formatVideoNodeTitle(n.title, nextProv),
+            values: nextVals,
+          };
         }
         if (n.type === 'AIVideoNode' && widgetName === 'targetProvider') {
           return {
             ...n,
+            title: formatVideoNodeTitle(n.title, value),
             values: { ...(n.values || {}), targetProvider: value, provider: value },
           };
         }
@@ -952,7 +963,7 @@ export default function App() {
             n.id === nodeId
               ? {
                   ...n,
-                  title: checkpointNodeTitle(prov, value),
+                  title: formatCheckpointNodeTitle(n.title, prov, value),
                   values: { ...(n.values || {}), ckpt_name: value },
                 }
               : n
@@ -992,7 +1003,7 @@ export default function App() {
             n.id === nodeId
               ? {
                   ...n,
-                  title: checkpointNodeTitle(prov, n.values?.ckpt_name),
+                  title: formatCheckpointNodeTitle(n.title, prov, n.values?.ckpt_name),
                   values: { ...(n.values || {}), targetProvider: prov },
                 }
               : n
@@ -1725,7 +1736,7 @@ export default function App() {
             if (n.id === existingVideoNode.id) {
               return {
                 ...n,
-                title: `AI 视频 (${modelName.split('/').pop()})`,
+                title: formatVideoNodeTitle(n.title, provider),
                 values: {
                   ...replaceSelectedResource(n.values,{...extraData,name:modelId},'model'),
                   model: modelId,
@@ -2460,7 +2471,7 @@ export default function App() {
         isExecuting={isExecuting}
         executionStatusText={executionStatusText}
         runDisabledReason={runDisabledReason}
-        runTargetLabel={runTargetState.target ? runTargetState.target.title : undefined}
+        runTargetLabel={runTargetState.target ? formatNodeDisplayTitle(runTargetState.target.type, runTargetState.target.title, nodes.find((n) => n.id === runTargetState.target.id)?.values) : undefined}
         onClearCanvas={handleClearCanvas}
       />
 
@@ -2724,7 +2735,7 @@ export default function App() {
                     };
                     return {
                       ...n,
-                      title: checkpointNodeTitle(updatedValues.targetProvider, newParams.checkpoint),
+                      title: formatCheckpointNodeTitle(n.title, updatedValues.targetProvider, newParams.checkpoint),
                       values: updatedValues,
                     };
                   }
@@ -2734,7 +2745,10 @@ export default function App() {
                   }
                   if (n.type === 'ModelScopeNode' || n.type === 'ModelScopeAiNode')return {...n,values:{...n.values,model_endpoint:newParams.checkpoint}};
                   if (n.type === 'NanoGPTNode')return {...n,values:{...n.values,model:newParams.checkpoint}};
-                  if (n.type === 'AIVideoNode')return {...n,values:{...n.values,model:newParams.checkpoint,targetProvider:newParams.videoProvider || newParams.targetProvider,duration:newParams.videoDuration,fps:newParams.videoFps,num_frames:newParams.videoFrames,resolution:newParams.resolution,aspect_ratio:newParams.aspectRatio,custom_parameters:newParams.customParameters}};
+                  if (n.type === 'AIVideoNode') {
+                    const p = newParams.videoProvider || newParams.targetProvider || n.values?.targetProvider;
+                    return {...n, title: formatVideoNodeTitle(n.title, p), values:{...n.values,model:newParams.checkpoint,targetProvider:p,duration:newParams.videoDuration,fps:newParams.videoFps,num_frames:newParams.videoFrames,resolution:newParams.resolution,aspect_ratio:newParams.aspectRatio,custom_parameters:newParams.customParameters}};
+                  }
                   if (n.type === 'GoogleImagenNode') {
                     return {
                       ...n,
