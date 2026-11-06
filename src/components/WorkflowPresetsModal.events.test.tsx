@@ -4,7 +4,9 @@ import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { WorkflowPresetsModal } from './WorkflowPresetsModal';
-import { WORKFLOW_PRESETS } from '../constants/presets';
+import { WORKFLOW_PRESETS, presetSummary } from '../constants/presets';
+import { generationReadiness } from '../utils/generationReadiness';
+import { loadWorkspaceCache, saveWorkspaceCache } from '../utils/workspaceCache';
 
 describe('WorkflowPresetsModal mounted UI events & obsolete model audit', () => {
   let container: HTMLDivElement;
@@ -47,7 +49,12 @@ describe('WorkflowPresetsModal mounted UI events & obsolete model audit', () => 
     const textContent = container.textContent || '';
 
     // 1. Strict ban on legacy models as current recommendations:
-    // Wan 2.1, SVD-XT, and SDXL 1.0 (tamarin-xl-v1) must NOT be present in modern preset definitions
+    // SD1.5, SDXL 1.0, FLUX.1, Wan 2.1, and SVD-XT must NOT be present in modern preset recommendations
+    expect(textContent).not.toContain('v1-5-pruned');
+    expect(textContent).not.toContain('dreamshaper_8');
+    expect(textContent).not.toContain('sd_xl_base_1.0');
+    expect(textContent).not.toContain('flux-schnell');
+    expect(textContent).not.toContain('flux-dev');
     expect(textContent).not.toContain('fal-ai/wan-t2v-lora');
     expect(textContent).not.toContain('fal-ai/wan-i2v-lora');
     expect(textContent).not.toContain('wavespeed-ai/wan-2.1');
@@ -128,5 +135,95 @@ describe('WorkflowPresetsModal mounted UI events & obsolete model audit', () => 
     expect(loadedPreset).toBeDefined();
     expect(loadedPreset.nodes.length).toBeGreaterThan(0);
     expect(loadedPreset.connections.length).toBeGreaterThan(0);
+  });
+
+  it('requires explicit user model selection on 待选 presets and becomes ready once user selects a model', () => {
+    for (const id of ['std-novita-t2i', 'std-replicate-t2i', 'std-runware-t2i', 'std-modelslab-t2i', 'std-novita-i2v', 'std-muapi-t2v', 'std-replicate-t2v']) {
+      const p = WORKFLOW_PRESETS.find((x) => x.id === id)!;
+      const summary = presetSummary(p);
+      expect(summary.model, `${id} should be empty placeholder`).toBe('');
+      const initialReason = generationReadiness({ provider: p.provider, model: summary.model });
+      expect(initialReason, `${id} should block before user selects model`).toBe('请先选择模型');
+
+      // Simulate explicit user model selection
+      const afterSelectionReason = generationReadiness({ provider: p.provider, model: 'user-selected-model' });
+      expect(afterSelectionReason, `${id} should be ready after explicit selection`).toBeUndefined();
+    }
+  });
+
+  it('preserves saved custom workspaces (including manual legacy models) without silent migration, while reset-default restores WORKFLOW_PRESETS[0]', async () => {
+    const store = new Map<string, string>();
+    const storage = {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => { store.set(k, v); },
+    };
+
+    const customLegacyNodes = [
+      {
+        id: 'custom-ckpt',
+        type: 'CheckpointLoaderSimple',
+        title: 'My Custom Legacy Loader',
+        pos: { x: 10, y: 20 },
+        inputs: [],
+        outputs: [],
+        values: { targetProvider: 'nanogpt', ckpt_name: 'flux-schnell' },
+      },
+      {
+        id: 'custom-vid',
+        type: 'AIVideoNode',
+        title: 'My Custom Legacy Video',
+        pos: { x: 100, y: 200 },
+        inputs: [],
+        outputs: [],
+        values: { targetProvider: 'novita', model: 'SVD-XT', prompt: 'custom user prompt' },
+      },
+    ];
+
+    saveWorkspaceCache(
+      [{ id: 'user-board-1', name: 'User Saved Legacy Graph', description: 'User custom saved workspace', updatedAt: 12345, nodes: customLegacyNodes as any, connections: [], spatialFrames: [] }],
+      'user-board-1',
+      'graph',
+      storage
+    );
+
+    const loaded = loadWorkspaceCache(
+      [{ id: 'canvas-zimage', name: 'Z-Image Turbo 创作画布', description: 'Default workspace', updatedAt: 99999, nodes: WORKFLOW_PRESETS[0].nodes, connections: [], spatialFrames: WORKFLOW_PRESETS[0].spatialFrames || [] }],
+      storage
+    );
+
+    // Saved custom workspace is preserved verbatim: not overwritten by WORKFLOW_PRESETS[0], legacy models not stripped
+    expect(loaded.active.id).toBe('user-board-1');
+    expect(loaded.active.name).toBe('User Saved Legacy Graph');
+    expect(loaded.active.nodes.find((n: any) => n.id === 'custom-ckpt')?.values.ckpt_name).toBe('flux-schnell');
+    expect(loaded.active.nodes.find((n: any) => n.id === 'custom-vid')?.values.model).toBe('SVD-XT');
+
+    // Clicking reset-default in the modal Clear tab triggers onClearCanvas('reset-default')
+    const handleClearCanvas = vi.fn();
+    await act(async () => {
+      root.render(
+        <WorkflowPresetsModal
+          isOpen={true}
+          onClose={vi.fn()}
+          onLoadPreset={vi.fn()}
+          onLoadAndRunPreset={vi.fn()}
+          currentNodes={loaded.active.nodes as any}
+          currentConnections={[]}
+          currentSpatialFrames={[]}
+          onImportWorkflowData={vi.fn()}
+          onClearCanvas={handleClearCanvas}
+          initialTab="clear"
+        />
+      );
+    });
+
+    const resetBtn = Array.from(container.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('重置为默认示例') || b.textContent?.includes('恢复默认')
+    );
+    expect(resetBtn).toBeDefined();
+    await act(async () => {
+      resetBtn?.click();
+    });
+    expect(handleClearCanvas).toHaveBeenCalledWith('reset-default');
+    expect(WORKFLOW_PRESETS[0].id).toBe('std-huggingface-t2i');
   });
 });

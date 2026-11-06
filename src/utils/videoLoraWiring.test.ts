@@ -5,24 +5,50 @@ import { buildFalVideoRequest } from '../server/falVideoContract';
 import { inlineFalItemRefs } from '../server/falImageContract';
 import { buildReplicatePredictionRequest } from '../server/replicateImageContract';
 
+const FAL_W22_I2V_LORA = 'https://huggingface.co/ostris/wan22_i2v_14b_orbit_shot_lora/resolve/main/wan22_14b_i2v_orbit_high_noise.safetensors';
+const WS_W22_I2V_LORA = 'https://huggingface.co/dustin2050/lexy-vox-i2v-lora-training-wan2.2/resolve/main/lexy_vox_i2v_v2_diffusers.safetensors';
 const W21 = 'https://huggingface.co/Remade-AI/matrix-shot/resolve/main/matrix_shot.safetensors';
-const extract = (id: string) => {
+const extract = (id: string, overrides?: { model?: string; loraName?: string; loraStrength?: number }) => {
   const p = WORKFLOW_PRESETS.find((x) => x.id === id)!;
-  const nodes = p.nodes.map((n) => ({ ...n, values: { ...n.values, ...(n.type === 'LoadImage' ? { image_url: 'https://example.com/ref.png' } : {}) } }));
+  const nodes = p.nodes.map((n) => ({
+    ...n,
+    values: {
+      ...n.values,
+      ...(n.type === 'LoadImage' ? { image_url: 'https://example.com/ref.png' } : {}),
+      ...(n.type === 'AIVideoNode' && overrides?.model !== undefined ? { model: overrides.model } : {}),
+      ...(n.type === 'LoRALoader' && overrides?.loraName !== undefined ? { lora_name: overrides.loraName } : {}),
+      ...(n.type === 'LoRALoader' && overrides?.loraStrength !== undefined ? { strength_model: overrides.loraStrength, strength_clip: overrides.loraStrength } : {}),
+    },
+  }));
   return extractWorkflowParameters(nodes as any, p.connections as any, `${id}-vid`);
 };
 
 describe('video LoRA wiring (LoRALoader → AIVideoNode.lora)', () => {
-  it.each(['std-fal-i2v', 'std-wavespeed-i2v', 'std-replicate-i2v'])('%s extracts the recipe LoRA, seed and cfg as filled', (id) => {
-    const x = extract(id);
+  it('std-fal-i2v extracts the verified Wan 2.2 HIGH-noise LoRA, seed and cfg as filled', () => {
+    const x = extract('std-fal-i2v');
+    expect(x.loras.map((l) => [l.name, l.modelStrength])).toEqual([[FAL_W22_I2V_LORA, 1]]);
+    expect(x.seed).toBe(24231881);
+    expect(x.cfg).toBe(4);
+    expect(x.size).toBeUndefined();
+  });
+  it('std-wavespeed-i2v extracts the verified Wan 2.2 Diffusers LoRA, seed 42 and videoDuration 5 as filled', () => {
+    const x = extract('std-wavespeed-i2v');
+    expect(x.loras.map((l) => [l.name, l.modelStrength])).toEqual([[WS_W22_I2V_LORA, 1]]);
+    expect(x.seed).toBe(42);
+    expect(x.videoDuration).toBe(5);
+  });
+  it('std-replicate-i2v requires explicit user model selection, and preserves manual legacy/custom model + LoRA wiring (including strength 0)', () => {
+    expect(() => extract('std-replicate-i2v')).toThrow('请先选择模型');
+    const x = extract('std-replicate-i2v', { model: 'wan-video/wan2.1-with-lora', loraName: W21, loraStrength: 1 });
     expect(x.loras.map((l) => [l.name, l.modelStrength])).toEqual([[W21, 1]]);
     expect(x.seed).toBe(24231881);
     expect(x.cfg).toBe(4);
-    // WaveSpeed: recipe 688x480 mapped to live Schema enum 832*480 (upstream 400 otherwise).
-    expect(x.size).toBe(id === 'std-wavespeed-i2v' ? '832*480' : undefined); // video-param-table: Fal/Replicate Schemas have no size
+    expect(x.size).toBeUndefined();
+    const zero = extract('std-replicate-i2v', { model: 'wan-video/wan2.1-with-lora', loraName: W21, loraStrength: 0 });
+    expect(zero.loras.map((l) => [l.name, l.modelStrength])).toEqual([[W21, 0]]);
   });
-  it('WaveSpeed preset size is the live Schema enum value 832*480 (sent with * separator)', () => {
-    expect(extract('std-wavespeed-i2v').size).toBe('832*480');
+  it('WaveSpeed T2V preset size is the live Schema enum value 832*480 (sent with * separator)', () => {
+    expect(extract('std-wavespeed-t2v').size).toBe('832*480');
   });
   it('civitai extracts the AIR LoRA', () => {
     const x = extract('std-civitai-i2v');

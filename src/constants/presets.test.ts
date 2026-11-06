@@ -714,31 +714,105 @@ describe('standard workflow presets (23 T2I + 5 T2V + 6 I2V)', () => {
     expect(p.nodes.some(n => n.type === 'LoRALoader')).toBe(true);
   });
 
-  it('enforces architecture compatibility on every preset that carries a LoRA', () => {
-    const detectFamily = (name: string): string => {
+  it('enforces architecture compatibility, provider LoRA namespace, and expert stage semantics on every preset', () => {
+    const RETIRED_PATTERNS = [
+      /wan-2\.1/i,
+      /wan2\.1/i,
+      /wan-t2v-lora/i,
+      /wan-i2v-lora/i,
+      /\bsvd-xt\b/i,
+      /tamarin-xl/i,
+      /dreamshaper/i,
+      /v1-5-pruned/i,
+      /sd_xl_base/i,
+      /flux-schnell/i,
+      /flux-dev/i,
+      /flux\.1/i,
+      /matrix_shot/i,
+      /wan-balancingact/i,
+    ];
+
+    // Verified official base_model metadata from HF Model Cards / Civitai API / OpenAPI (verified 2026-11-06)
+    const detectVerifiedFamily = (name: string): string => {
       const lower = name.toLowerCase();
-      if (lower.includes('krea') || lower.includes('retroanime')) return 'krea2';
-      if (lower.includes('z-image') || lower.includes('zimage') || lower.includes('lcars') || lower.includes('technically-color')) return 'zimage';
-      if (lower.includes('wan-2.2') || lower.includes('wan/v2.2') || lower.includes('v2.2') || lower.includes('wanvideo-22') || lower.includes('2247725') || lower.includes('1902817')) return 'wan2.2';
-      if (lower.includes('wan-2.1') || lower.includes('wan2.1') || lower.includes('wan-t2v') || lower.includes('wan-i2v') || lower.includes('redmond') || lower.includes('matrix_shot')) return 'wan2.1';
-      if (lower.includes('tamarin-xl') || lower.includes('cake-art')) return 'sdxl';
-      if (lower.includes('photoreal_studio_z_image') || /^\d{10,}$/.test(lower)) return 'openworks';
       if (name === '') return 'unspecified';
+      if (RETIRED_PATTERNS.some((re) => re.test(name))) return 'retired-legacy';
+      if (
+        lower === 'fal-ai/krea-2/turbo/lora' ||
+        lower === 'wavespeed-ai/krea-v2/turbo-lora' ||
+        lower === 'krea-v2-turbo-lora' ||
+        lower === 'krea-2-turbo' ||
+        lower === 'krea2-fever-dream-mood' ||
+        lower === 'https://huggingface.co/krea/krea-2-lora-retroanime/resolve/main/retroanime.safetensors'
+      ) {
+        return 'krea2-turbo';
+      }
+      if (
+        lower === 'renderartist/technically-color-z-image-turbo' ||
+        lower === 'tongyi-mai/z-image-turbo' ||
+        lower === 'alibaba/z-image-turbo-lora' ||
+        lower === 'hf/renderartist-technically-color-z-image-turbo' ||
+        lower === 'lcarspicturesdatabase/st-tng-rooms-z-image-turbo-v1' ||
+        lower === 'https://huggingface.co/renderartist/technically-color-z-image-turbo/resolve/main/technically_color_z_image_turbo_v1_renderartist_2000.safetensors'
+      ) {
+        return 'z-image-turbo';
+      }
+      if (
+        lower === 'fal-ai/wan/v2.2-a14b/text-to-video/lora' ||
+        lower === 'wavespeed-ai/wan-2.2/t2v-480p-lora' ||
+        lower === 'urn:air:wanvideo-22-t2v-a14b:checkpoint:civitai:1817671@2114154' ||
+        lower === 'urn:air:wanvideo-22-t2v-a14b:lora:civitai:2247725@2530788' ||
+        lower === 'https://huggingface.co/cseti/wan2.2-14b-kinestasis_concept-lora-v1/resolve/main/246839-wan22_14b-high-banostasis_concept-e459.safetensors' ||
+        lower === 'https://huggingface.co/dustin2050/lexy-vox-t2v-lora-training-wan2.2/resolve/main/lexy_vox_t2v_v2_diffusers.safetensors'
+      ) {
+        return 'wan2.2-t2v-a14b';
+      }
+      if (
+        lower === 'fal-ai/wan/v2.2-a14b/image-to-video/lora' ||
+        lower === 'wavespeed-ai/wan-2.2/i2v-480p-lora' ||
+        lower === 'urn:air:wanvideo-22-i2v-a14b:checkpoint:civitai:1817671@2114157' ||
+        lower === 'urn:air:wanvideo-22-i2v-a14b:lora:civitai:1902817@2153813' ||
+        lower === 'https://huggingface.co/ostris/wan22_i2v_14b_orbit_shot_lora/resolve/main/wan22_14b_i2v_orbit_high_noise.safetensors' ||
+        lower === 'https://huggingface.co/dustin2050/lexy-vox-i2v-lora-training-wan2.2/resolve/main/lexy_vox_i2v_v2_diffusers.safetensors'
+      ) {
+        return 'wan2.2-i2v-a14b';
+      }
+      if (lower === 'photoreal_studio_z_image' || /^\d{10,}$/.test(lower)) return 'openworks';
       return 'unknown';
     };
 
     for (const p of WORKFLOW_PRESETS) {
       const summary = presetSummary(p);
+      const baseModel = summary.model;
+      for (const re of RETIRED_PATTERNS) {
+        expect(baseModel, `Preset ${p.id} must not recommend retired model "${baseModel}"`).not.toMatch(re);
+      }
+
       const loras = summary.loras;
       if (!loras || loras.length === 0) continue;
 
-      const baseModel = summary.model;
-      const baseFamily = detectFamily(baseModel);
+      const baseFamily = detectVerifiedFamily(baseModel);
+      expect(baseFamily, `Preset ${p.id} base "${baseModel}" is retired or unverified`).not.toBe('retired-legacy');
 
       for (const l of loras) {
         if (!l.name) continue;
-        const loraFamily = detectFamily(l.name);
-        expect(loraFamily).not.toBe('unknown');
+        // 1. Namespace contract: non-Civitai providers require URL/HF path/catalog ID, never Civitai-only urn:air:
+        if (p.provider !== 'civitai') {
+          expect(l.name, `Non-Civitai preset ${p.id} must not use Civitai-only AIR "${l.name}"`).not.toMatch(/^urn:air:/i);
+        }
+        // 2. Expert stage contract:
+        // - Fal Wan 2.2 OpenAPI defaults LoRAWeight.transformer to 'high'; must not mount a low-noise-only weight
+        if (p.provider === 'fal' && p.category.includes('视频')) {
+          expect(l.name, `Fal Wan 2.2 preset ${p.id} defaults to high-noise transformer and must not mount low-noise weight`).not.toMatch(/low_noise|_low\.|2530788|2153813/i);
+        }
+        // - WaveSpeed Wan 2.2 maps LoRALoader to general `loras` (throughout generation); must not mount high-only or low-only single-stage weights
+        if (p.provider === 'wavespeed' && p.category.includes('视频')) {
+          expect(l.name, `WaveSpeed Wan 2.2 preset ${p.id} maps LoRALoader to general loras (both experts) and must not mount single-stage high/low-only weight`).not.toMatch(/high_noise|low_noise|-high-|-low-/i);
+        }
+        // 3. Architecture & task family match (T2V vs I2V distinct)
+        const loraFamily = detectVerifiedFamily(l.name);
+        expect(loraFamily, `Preset ${p.id} LoRA "${l.name}" is retired or unverified`).not.toBe('retired-legacy');
+        expect(loraFamily, `Preset ${p.id} LoRA "${l.name}" has unknown family`).not.toBe('unknown');
         if (baseFamily !== 'unspecified') {
           expect(
             baseFamily,

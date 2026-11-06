@@ -37,16 +37,13 @@ describe('std presets dry-run (load → extract, no send)', () => {
       if (hasRecipe === emptyPrompt) issues.push(hasRecipe ? 'recipe prompt not loaded' : 'prompt filled without a recipe');
       // No recipe → loads empty and extraction succeeds with exactly empty string (no fallback prompt).
       if (!hasRecipe) {
-      // No recipe → loads empty and extraction succeeds with exactly empty string (no fallback prompt).
-      if (!hasRecipe) {
         try {
-          const testNodes = p.nodes.map((n) => ({ ...n, values: { ...n.values, ...(n.type === 'LoadImage' ? { image_url: 'https://example.com/ref.png' } : {}), ...(n.type === 'CheckpointLoaderSimple' && !n.values?.ckpt_name ? { ckpt_name: 'USER_SELECTED_MODEL' } : {}) } }));
+          const testNodes = p.nodes.map((n) => ({ ...n, values: { ...n.values, ...(n.type === 'LoadImage' ? { image_url: 'https://example.com/ref.png' } : {}), ...(n.type === 'CheckpointLoaderSimple' && !n.values?.ckpt_name ? { ckpt_name: 'USER_SELECTED_MODEL' } : {}), ...(n.type === 'AIVideoNode' && !n.values?.model ? { model: 'USER_SELECTED_MODEL' } : {}) } }));
           const rawExtracted = extractWorkflowParameters(testNodes as any, p.connections as any, resolveRunTarget(testNodes as any, p.connections as any, undefined, undefined).id);
           if (rawExtracted.positivePrompt !== '') issues.push(`empty prompt got unexpected non-empty content: "${rawExtracted.positivePrompt}"`);
         } catch (e: any) {
           issues.push(`empty prompt extraction threw unexpectedly: ${e.message}`);
         }
-      }
       }
       notes.push(`prompt: ${PRESET_RECIPE_PROMPTS[p.id]?.source ?? 'NONE'}`);
       // Simulate only the user-supplied input a preset cannot ship: the I2V reference image or user-selected model.
@@ -55,7 +52,8 @@ describe('std presets dry-run (load → extract, no send)', () => {
         // Simulate the user typing a prompt into an empty (no-recipe) preset; test-only, never shipped.
         ...(!hasRecipe && n.type === 'CLIPTextEncode' ? { text: 'USER_TYPED_TEST_PROMPT' } : {}),
         ...(!hasRecipe && n.type === 'AIVideoNode' ? { prompt: 'USER_TYPED_TEST_PROMPT' } : {}),
-        ...(n.type === 'CheckpointLoaderSimple' && !n.values?.ckpt_name ? { ckpt_name: 'USER_SELECTED_MODEL' } : {}) } }));
+        ...(n.type === 'CheckpointLoaderSimple' && !n.values?.ckpt_name ? { ckpt_name: 'USER_SELECTED_MODEL' } : {}),
+        ...(n.type === 'AIVideoNode' && !n.values?.model ? { model: 'USER_SELECTED_MODEL' } : {}) } }));
       let tid: string | undefined;
       try { tid = resolveRunTarget(nodes as any, p.connections as any, undefined, undefined).id; } catch (e: any) { issues.push(`run target: ${e.message}`); }
       let req: string = 'n/a';

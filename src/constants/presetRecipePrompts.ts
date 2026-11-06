@@ -44,20 +44,14 @@ export const PRESET_RECIPE_PROMPTS: Record<string, RecipePrompt> = {
     "prompt": "summer",
     "source": "https://civitai.red/images/111400580"
   },
+  // Ostris HF model card widget verbatim ("orbit 180 around an astronaut on the moon."); card also notes trigger word `orbit 360`.
   "std-fal-i2v": {
-    "prompt": "a woman dancing happily in the middle of a street under a neon sign, cars drive into her and she dances over them",
-    "source": "https://civitai.red/images/84050423"
+    "prompt": "orbit 180 around an astronaut on the moon.",
+    "source": "https://huggingface.co/ostris/wan22_i2v_14b_orbit_shot_lora"
   },
+  // Dustin2050 HF model card Wavespeed API Quick Start verbatim prompt (includes trigger word `lexy_vox`).
   "std-wavespeed-i2v": {
-    "prompt": "a woman dancing happily in the middle of a street under a neon sign, cars drive into her and she dances over them",
-    "source": "https://civitai.red/images/84050423"
-  },
-  "std-muapi-i2v": {
-    "prompt": "a woman dancing happily in the middle of a street under a neon sign, cars drive into her and she dances over them",
-    "source": "https://civitai.red/images/84050423"
-  },
-  "std-replicate-i2v": {
-    "prompt": "a woman dancing happily in the middle of a street under a neon sign, cars drive into her and she dances over them",
-    "source": "https://civitai.red/images/84050423"
+    "prompt": "lexy_vox, gentle head turn, warm smile, natural movement",
+    "source": "https://huggingface.co/dustin2050/lexy-vox-i2v-lora-training-wan2.2"
   }
 };

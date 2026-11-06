@@ -111,7 +111,7 @@ function buildStandardT2i(spec: StdSpec): WorkflowPreset {
   const loraList = (spec.loras ?? []).filter(l => Boolean(l.name));
   // Schema requires a LoRA but no recipe has a real one: show ONE visible mount point (official default weight)
   // so the user can paste the real resource; never a made-up value.
-  if (loraList.length === 0 && spec.loraMount) loraList.push({ name: '', strength: spec.loraMount.strength, source: spec.loraMount.source });
+  if (spec.hasLora && loraList.length === 0 && spec.loraMount) loraList.push({ name: '', strength: spec.loraMount.strength, source: spec.loraMount.source });
   const hasLora = loraList.length > 0;
   const steps = spec.steps ?? 20;
   const cfg = spec.cfg ?? 7;
@@ -479,9 +479,9 @@ type I2vSpec = {
 
 const I2V_SPECS: I2vSpec[] = [
   // Fal Wan 2.2 A14B I2V LoRA: live OpenAPI 2026-11-06 (fal-ai/wan/v2.2-a14b/image-to-video/lora).
-  // OpenAPI: prompt (req), image_url (req), loras[LoRAWeight{path,scale,weight_name,transformer}], num_frames (81), frames_per_second (16), resolution 480p|580p|720p.
-  // Real neutral I2V LoRA: Civitai 1902817@2153813 (Wan Video 2.2 I2V-A14B).
-  // FalDriver defaults to upstream transformer: 'high'.
+  // OpenAPI: prompt (req), image_url (req), loras[LoRAWeight{path,scale(default 1),weight_name,transformer(default 'high')}], num_frames (81), frames_per_second (16), resolution 480p|580p|720p.
+  // Public HTTP 200 HIGH-noise I2V LoRA: ostris/wan22_i2v_14b_orbit_shot_lora (wan22_14b_i2v_orbit_high_noise.safetensors, base_model: Wan-AI/Wan2.2-I2V-A14B).
+  // Strength 1 is Fal OpenAPI LoRAWeight.scale default (not specified in Ostris README). Widget prompt uses "orbit 180...", while card trigger notes "orbit 360".
   {
     provider: 'fal',
     model: 'fal-ai/wan/v2.2-a14b/image-to-video/lora',
@@ -491,8 +491,8 @@ const I2V_SPECS: I2vSpec[] = [
     fps: 16,
     seed: 24231881,
     cfg: 4,
-    description: 'Fal.ai 官方 Wan 2.2 A14B 图生视频 LoRA 端点。LoRA 加载目标默认为 high-noise transformer。',
-    loras: [{ name: 'urn:air:wanvideo-22-i2v-a14b:lora:civitai:1902817@2153813', strength: 1, source: 'civitai:2153813' }],
+    description: 'Fal.ai 官方 Wan 2.2 A14B 图生视频 LoRA 端点。默认挂载 Ostris Orbit Shot 高噪权重（匹配 Fal 默认 transformer=high；模型卡 widget 为 orbit 180，声明触发词为 orbit 360；强度 1 取自 Fal OpenAPI scale 默认值）。',
+    loras: [{ name: 'https://huggingface.co/ostris/wan22_i2v_14b_orbit_shot_lora/resolve/main/wan22_14b_i2v_orbit_high_noise.safetensors', strength: 1, source: 'https://huggingface.co/ostris/wan22_i2v_14b_orbit_shot_lora' }],
     schemaProperties: [
       'prompt', 'image_url', 'negative_prompt', 'loras', 'seed', 'frames_per_second', 'num_frames',
       'resolution', 'aspect_ratio', 'num_inference_steps', 'enable_safety_checker', 'enable_output_safety_checker',
@@ -502,17 +502,16 @@ const I2V_SPECS: I2vSpec[] = [
     source: 'https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/wan/v2.2-a14b/image-to-video/lora',
   },
   // WaveSpeed Wan 2.2 480p I2V LoRA: wavespeed-ai/wan-2.2/i2v-480p-lora.
-  // Schema: prompt (req), image (req), loras[].path/scale, size ["832*480","480*832"], duration 5|10, guidance_scale, seed.
+  // Live request_schema (verified 2026-11-06): prompt (req), image (req), negative_prompt, last_image, duration (5|8, default 5), loras, high_noise_loras, low_noise_loras, seed.
+  // Public HTTP 200 Diffusers-format Wan 2.2 I2V LoRA built for Wavespeed API (both stages): dustin2050/lexy-vox-i2v-lora-training-wan2.2.
   {
     provider: 'wavespeed',
     model: 'wavespeed-ai/wan-2.2/i2v-480p-lora',
     duration: 5,
-    seed: 24231881,
-    cfg: 4,
-    size: '832*480',
-    description: 'WaveSpeed 官方 Wan 2.2 480P 图生视频 LoRA 端点；支持多 LoRA 融合与 480P 超快推理。',
-    loras: [{ name: 'urn:air:wanvideo-22-i2v-a14b:lora:civitai:1902817@2153813', strength: 1, source: 'civitai:2153813' }],
-    schemaProperties: ['prompt', 'image', 'negative_prompt', 'loras', 'size', 'num_inference_steps', 'duration', 'guidance_scale', 'flow_shift', 'seed'],
+    seed: 42,
+    description: 'WaveSpeed 官方 Wan 2.2 480P 图生视频 LoRA 端点；默认挂载 Wavespeed API 专用双阶段 Diffusers 权重（触发词: lexy_vox，映射至全程 loras）。',
+    loras: [{ name: 'https://huggingface.co/dustin2050/lexy-vox-i2v-lora-training-wan2.2/resolve/main/lexy_vox_i2v_v2_diffusers.safetensors', strength: 1, source: 'https://huggingface.co/dustin2050/lexy-vox-i2v-lora-training-wan2.2' }],
+    schemaProperties: ['prompt', 'image', 'negative_prompt', 'last_image', 'duration', 'loras', 'high_noise_loras', 'low_noise_loras', 'seed'],
     source: 'https://wavespeed.ai/docs/docs-api/wavespeed-ai/wan-2.2-i2v-480p-lora',
   },
   // Recipe https://civitai.red/images/111400580 (Wan 2.2 I2V-A14B checkpoint 1817671@2114157 + Cinematic Flare low LoRA)
@@ -575,9 +574,8 @@ export type T2vSpec = I2vSpec;
 
 const T2V_SPECS: T2vSpec[] = [
   // Fal Wan 2.2 A14B T2V LoRA: live OpenAPI 2026-11-06 (fal-ai/wan/v2.2-a14b/text-to-video/lora).
-  // OpenAPI: prompt (req), loras[LoRAWeight{path,scale,weight_name,transformer}], num_frames (81), frames_per_second (16), resolution 480p|580p|720p.
-  // Real neutral T2V LoRA: Civitai 2247725@2530788 (Wan Video 2.2 T2V-A14B).
-  // FalDriver defaults to upstream transformer: 'high'.
+  // OpenAPI: prompt (req), loras[LoRAWeight{path,scale(default 1),weight_name,transformer(default 'high')}], num_frames (81), frames_per_second (16), resolution 480p|580p|720p.
+  // Public HTTP 200 HIGH-noise T2V LoRA: Cseti/wan2.2-14B-Kinestasis_concept-lora-v1 (README: "Use it only on your high noise sampler", strength 0.8-1.0, base_model: Wan-AI/Wan2.2-T2V-A14B).
   {
     provider: 'fal',
     model: 'fal-ai/wan/v2.2-a14b/text-to-video/lora',
@@ -586,8 +584,8 @@ const T2V_SPECS: T2vSpec[] = [
     aspect_ratio: '16:9',
     fps: 16,
     cfg: 3.5,
-    description: 'Fal.ai 官方 Wan 2.2 A14B 文生视频 LoRA 端点。LoRA 加载目标默认为 high-noise transformer。',
-    loras: [{ name: 'urn:air:wanvideo-22-t2v-a14b:lora:civitai:2247725@2530788', strength: 1, source: 'https://civitai.com/models/2247725?modelVersionId=2530788' }],
+    description: 'Fal.ai 官方 Wan 2.2 A14B 文生视频 LoRA 端点。默认挂载 Cseti Kinestasis 高噪权重（匹配 Fal 默认 transformer=high；推荐触发词: Banostasis concept）。',
+    loras: [{ name: 'https://huggingface.co/Cseti/wan2.2-14B-Kinestasis_concept-lora-v1/resolve/main/246839-wan22_14B-high-banostasis_concept-e459.safetensors', strength: 1, source: 'https://huggingface.co/Cseti/wan2.2-14B-Kinestasis_concept-lora-v1' }],
     schemaProperties: [
       'prompt', 'negative_prompt', 'loras', 'seed', 'frames_per_second', 'num_frames',
       'resolution', 'aspect_ratio', 'num_inference_steps', 'enable_safety_checker', 'enable_output_safety_checker',
@@ -597,15 +595,17 @@ const T2V_SPECS: T2vSpec[] = [
     source: 'https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/wan/v2.2-a14b/text-to-video/lora',
   },
   // WaveSpeed Wan 2.2 480p T2V LoRA: wavespeed-ai/wan-2.2/t2v-480p-lora.
-  // Schema: prompt (req), loras[].path/scale, size ["832*480","480*832"], duration 5|10, guidance_scale, seed.
+  // Live request_schema (verified 2026-11-06): prompt (req), negative_prompt, size ["832*480","480*832"], duration (5|8, default 5), loras, high_noise_loras, low_noise_loras, seed.
+  // Public HTTP 200 Diffusers-format Wan 2.2 T2V LoRA built for Wavespeed API (both stages): dustin2050/lexy-vox-t2v-lora-training-wan2.2.
   {
     provider: 'wavespeed',
     model: 'wavespeed-ai/wan-2.2/t2v-480p-lora',
     duration: 5,
     size: '832*480',
-    description: 'WaveSpeed 官方 Wan 2.2 480P 文生视频 LoRA 端点；支持多 LoRA 融合与 480P 超快推理。',
-    loras: [{ name: 'urn:air:wanvideo-22-t2v-a14b:lora:civitai:2247725@2530788', strength: 1, source: 'https://civitai.com/models/2247725?modelVersionId=2530788' }],
-    schemaProperties: ['prompt', 'negative_prompt', 'loras', 'size', 'num_inference_steps', 'duration', 'guidance_scale', 'flow_shift', 'seed'],
+    seed: 42,
+    description: 'WaveSpeed 官方 Wan 2.2 480P 文生视频 LoRA 端点；默认挂载 Wavespeed API 专用双阶段 Diffusers 权重（触发词: lexy_vox，映射至全程 loras）。',
+    loras: [{ name: 'https://huggingface.co/dustin2050/lexy-vox-t2v-lora-training-wan2.2/resolve/main/lexy_vox_t2v_v2_diffusers.safetensors', strength: 1, source: 'https://huggingface.co/dustin2050/lexy-vox-t2v-lora-training-wan2.2' }],
+    schemaProperties: ['prompt', 'negative_prompt', 'size', 'duration', 'loras', 'high_noise_loras', 'low_noise_loras', 'seed'],
     source: 'https://wavespeed.ai/docs/docs-api/wavespeed-ai/wan-2.2-t2v-480p-lora',
   },
   // Civitai videoGen wan v2.2 comfy: Wan Video 2.2 14B Text-to-Video checkpoint (AIR urn:air:wanvideo-22-t2v-a14b:checkpoint:civitai:1817671@2114154).

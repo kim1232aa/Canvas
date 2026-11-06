@@ -17,8 +17,10 @@ import muapiDoc from './__fixtures__muapi-wan21-lora-i2v-2026-11-04.json';
 const FX = 'src/server/__fixtures__/video-preset-dryrun-2026-11-04/';
 const json = (f: string) => JSON.parse(readFileSync(FX + f, 'utf8'));
 const REF = 'https://example.com/ref.png';
-const LORA = 'https://huggingface.co/Remade-AI/matrix-shot/resolve/main/matrix_shot.safetensors';
-const T2V_LORA = 'https://huggingface.co/artificialguybr/Wan-BalancingAct-Redmond-Wan2.1-T2V-14B/resolve/main/Wan-BalancingAct-Redmond.safetensors';
+const FAL_I2V_LORA = 'https://huggingface.co/ostris/wan22_i2v_14b_orbit_shot_lora/resolve/main/wan22_14b_i2v_orbit_high_noise.safetensors';
+const FAL_T2V_LORA = 'https://huggingface.co/Cseti/wan2.2-14B-Kinestasis_concept-lora-v1/resolve/main/246839-wan22_14B-high-banostasis_concept-e459.safetensors';
+const WS_I2V_LORA = 'https://huggingface.co/dustin2050/lexy-vox-i2v-lora-training-wan2.2/resolve/main/lexy_vox_i2v_v2_diffusers.safetensors';
+const WS_T2V_LORA = 'https://huggingface.co/dustin2050/lexy-vox-t2v-lora-training-wan2.2/resolve/main/lexy_vox_t2v_v2_diffusers.safetensors';
 const CIVITAI_T2V_LORA = 'urn:air:wanvideo-22-t2v-a14b:lora:civitai:2247725@2530788';
 const log: Record<string, unknown> = {};
 const originalFetch = globalThis.fetch;
@@ -67,7 +69,16 @@ describe('std i2v presets → outgoing upstream body (dry run, no network)', () 
     const doc = json('fal-wan-i2v-lora.openapi.json');
     const payload = buildFalVideoRequest(c.body.model, c.body, inlineFalItemRefs(extractFalInputProperties(doc)!, doc)).payload;
     log.fal = { canvasRoute: c.url, upstream: 'https://queue.fal.run/fal-ai/wan/v2.2-a14b/image-to-video/lora', body: payload };
-    expect(payload).toMatchObject({ resolution: '480p', aspect_ratio: '16:9', num_frames: 81, seed: 24231881, guide_scale: 4, frames_per_second: 16 });
+    expect(payload).toMatchObject({
+      prompt: 'orbit 180 around an astronaut on the moon.',
+      resolution: '480p',
+      aspect_ratio: '16:9',
+      num_frames: 81,
+      seed: 24231881,
+      guide_scale: 4,
+      frames_per_second: 16,
+      loras: [{ path: FAL_I2V_LORA, scale: 1 }],
+    });
     expect(payload).not.toHaveProperty('_canvas');
     expect(payload).not.toHaveProperty('duration');
   });
@@ -112,14 +123,15 @@ describe('std i2v presets → outgoing upstream body (dry run, no network)', () 
           request_schema: {
             additionalProperties: false,
             properties: {
-              duration: { default: 5, enum: [5, 10], type: 'integer' },
-              guidance_scale: { default: 5, type: 'number' },
+              duration: { default: 5, enum: [5, 8], type: 'integer' },
+              high_noise_loras: { type: 'array', items: { type: 'object', properties: { path: { type: 'string' }, scale: { type: 'number' } }, required: ['path'] }, maxItems: 3 },
               image: { type: 'string' },
-              loras: { type: 'array', items: { type: 'object', properties: { path: { type: 'string' }, scale: { type: 'number' } }, required: ['path'] } },
-              num_inference_steps: { default: 30, type: 'integer' },
+              last_image: { type: 'string' },
+              loras: { type: 'array', items: { type: 'object', properties: { path: { type: 'string' }, scale: { type: 'number' } }, required: ['path'] }, maxItems: 3 },
+              low_noise_loras: { type: 'array', items: { type: 'object', properties: { path: { type: 'string' }, scale: { type: 'number' } }, required: ['path'] }, maxItems: 3 },
+              negative_prompt: { type: 'string' },
               prompt: { type: 'string' },
               seed: { type: 'integer' },
-              size: { default: '832*480', enum: ['832*480', '480*832'], type: 'string' },
             },
             required: ['prompt', 'image'],
           },
@@ -130,8 +142,15 @@ describe('std i2v presets → outgoing upstream body (dry run, no network)', () 
     const gen = calls.find((x) => x.url === 'https://api.wavespeed.ai/api/v3/wavespeed-ai/wan-2.2/i2v-480p-lora')!;
     const body = JSON.parse(String(gen.init!.body));
     log.wavespeed = { canvasRoute: c.url, upstream: gen.url, body };
-    expect(body).toMatchObject({ size: '832*480', duration: 5, seed: 24231881, guidance_scale: 4 });
+    expect(body).toMatchObject({
+      prompt: 'lexy_vox, gentle head turn, warm smile, natural movement',
+      duration: 5,
+      seed: 42,
+      loras: [{ path: WS_I2V_LORA, scale: 1 }],
+    });
     expect(body).not.toHaveProperty('fps');
+    expect(body).not.toHaveProperty('size');
+    expect(body).not.toHaveProperty('guidance_scale');
   });
   it('Civitai videoGen wan v2.2 comfy (canvas → server body; unchanged preset)', async () => {
     const c = await canvasRequest('std-civitai-i2v');
@@ -150,7 +169,13 @@ describe('std t2v presets → outgoing upstream body (dry run, no network)', () 
     expect(c.body.model).toBe('fal-ai/wan/v2.2-a14b/text-to-video/lora');
     const doc = json('fal-wan-i2v-lora.openapi.json');
     const payload = buildFalVideoRequest(c.body.model, c.body, inlineFalItemRefs(extractFalInputProperties(doc)!, doc)).payload;
-    expect(payload).toMatchObject({ resolution: '480p', aspect_ratio: '16:9', num_frames: 81, frames_per_second: 16 });
+    expect(payload).toMatchObject({
+      resolution: '480p',
+      aspect_ratio: '16:9',
+      num_frames: 81,
+      frames_per_second: 16,
+      loras: [{ path: FAL_T2V_LORA, scale: 1 }],
+    });
     expect(payload).not.toHaveProperty('image_url');
     expect(payload).not.toHaveProperty('_canvas');
   });
@@ -223,10 +248,11 @@ describe('std t2v presets → outgoing upstream body (dry run, no network)', () 
           request_schema: {
             additionalProperties: false,
             properties: {
-              duration: { default: 5, enum: [5, 10], type: 'integer' },
-              guidance_scale: { default: 5, type: 'number' },
-              loras: { type: 'array', items: { type: 'object', properties: { path: { type: 'string' }, scale: { type: 'number' } }, required: ['path', 'scale'] } },
-              num_inference_steps: { default: 30, type: 'integer' },
+              duration: { default: 5, enum: [5, 8], type: 'integer' },
+              high_noise_loras: { type: 'array', items: { type: 'object', properties: { path: { type: 'string' }, scale: { type: 'number' } }, required: ['path'] }, maxItems: 3 },
+              loras: { type: 'array', items: { type: 'object', properties: { path: { type: 'string' }, scale: { type: 'number' } }, required: ['path'] }, maxItems: 3 },
+              low_noise_loras: { type: 'array', items: { type: 'object', properties: { path: { type: 'string' }, scale: { type: 'number' } }, required: ['path'] }, maxItems: 3 },
+              negative_prompt: { type: 'string' },
               prompt: { type: 'string' },
               seed: { type: 'integer' },
               size: { default: '832*480', enum: ['832*480', '480*832'], type: 'string' },
@@ -239,7 +265,12 @@ describe('std t2v presets → outgoing upstream body (dry run, no network)', () 
     const calls = await schemaProviderUpstream('wavespeed', c.body, (url) => url.endsWith('/api/v3/models') ? { code: 200, data: [wsT2vRow] } : { code: 200, data: { id: 'dry-ws-t2v' } });
     const gen = calls.find((x) => x.url === 'https://api.wavespeed.ai/api/v3/wavespeed-ai/wan-2.2/t2v-480p-lora')!;
     const body = JSON.parse(String(gen.init!.body));
-    expect(body).toMatchObject({ size: '832*480', duration: 5 });
+    expect(body).toMatchObject({
+      size: '832*480',
+      duration: 5,
+      seed: 42,
+      loras: [{ path: WS_T2V_LORA, scale: 1 }],
+    });
     expect(body).not.toHaveProperty('image');
   });
 
