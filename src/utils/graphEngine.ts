@@ -145,6 +145,12 @@ export interface WorkflowExtraction {
     clipStrength?: number;
     triggerWords: string;
     civitaiId?: string;
+    modelId?: string;
+    versionId?: string;
+    air?: string;
+    path?: string;
+    styleId?: string;
+    sd_name_in_api?: string;
     unresolvedResource?: boolean;
     downloadUrl?: string;
   }>;
@@ -329,6 +335,12 @@ function traceModelAndLorasUpstream(
           clipStrength: parseExplicitLoraStrength(n.values.strength_clip),
           triggerWords: n.values.trigger_words || '',
           civitaiId: n.values.civitai_id || n.values.civitaiId || '',
+          modelId: n.values.model_id || n.values.modelId || '',
+          versionId: n.values.version_id || n.values.versionId || '',
+          air: n.values.air || n.values.civitai_air || n.values.civitaiAir || '',
+          path: n.values.path || n.values.lora_path || n.values.loraPath || '',
+          styleId: n.values.style_id || n.values.styleId || '',
+          sd_name_in_api: n.values.sd_name_in_api || n.values.sdNameInApi || '',
           unresolvedResource: (n.values.import_unresolved_resource === true || n.values.unresolvedResource === true) && !(n.values.resourceVerified === true || Boolean((n.values.download_url || n.values.downloadUrl) && !n.values.inferred_from_prompt)),
           downloadUrl: n.values.download_url || n.values.downloadUrl,
         });
@@ -417,6 +429,12 @@ function traceLorasUpstream(
           clipStrength: parseExplicitLoraStrength(n.values.strength_clip),
           triggerWords: n.values.trigger_words || '',
           civitaiId: n.values.civitai_id || n.values.civitaiId || '',
+          modelId: n.values.model_id || n.values.modelId || '',
+          versionId: n.values.version_id || n.values.versionId || '',
+          air: n.values.air || n.values.civitai_air || n.values.civitaiAir || '',
+          path: n.values.path || n.values.lora_path || n.values.loraPath || '',
+          styleId: n.values.style_id || n.values.styleId || '',
+          sd_name_in_api: n.values.sd_name_in_api || n.values.sdNameInApi || '',
           unresolvedResource: (n.values.import_unresolved_resource === true || n.values.unresolvedResource === true) && !(n.values.resourceVerified === true || Boolean((n.values.download_url || n.values.downloadUrl) && !n.values.inferred_from_prompt)),
           downloadUrl: n.values.download_url || n.values.downloadUrl,
         });
@@ -1310,10 +1328,16 @@ export async function executeWorkflow(
     const lorasPayload = resolveGenerateLorasPayload(
       engProv,
       engModel,
-      compatibleLoras.map((l) => normalizeLoraPayloadItem({
+      compatibleLoras.map((l: any) => normalizeLoraPayloadItem({
+        ...l,
         name: l.name,
         path: explicitLoraPath(l),
         downloadUrl: l.downloadUrl,
+        air: l.air,
+        modelId: l.modelId,
+        versionId: l.versionId,
+        styleId: l.styleId,
+        sd_name_in_api: l.sd_name_in_api,
         provider: engProv,
         strength: l.modelStrength,
         modelStrength: l.modelStrength,

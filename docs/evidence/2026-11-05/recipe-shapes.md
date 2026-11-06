@@ -93,10 +93,10 @@ UI 真实操作状态：**BLOCKED_AUTH (真实上游鉴权 401，待有效凭据
 
 2. **UI Workflow Extraction & Live Target Schema Preview**:
    - 打开 Civitai Modal -> 切换至 `配方导入与适配 (Import)` 选项卡。
-   - 解析目标配方，通过 `ProviderModelSelect` 选择目标提供商与具体模型（如 Runware `runware:100@1`）。
-   - 预览组件实时从模型注册表获取 live schema `propertiesObj`，驱动 `adaptCivitaiRecipeToProvider` 自适应呈现：
-     - 选择 Runware：LoRA 动态适配为 `civitai:1351798@1527024` 与 `civitai:1351798@1526912`，目标格式为 `air`（标明「可直接发送」）；Checkpoint 提示跨命名空间「需重选」；CFG 准确映射为 `CFGScale (2.5)`。
-     - 若未选择具体目标模型或模型无 live schema，如实展示 `unverified`（未核实）提示，不再回退到假称 supported/unsupported 的硬编码静态表。
+   - 解析目标配方，通过 `ProviderModelSelect` 选择目标提供商与具体模型：
+     - 选择具备 live schema 的提供商（如 Fal.ai、AIMLAPI 等）：预览组件实时从 `/api/model-schema` 获取 live schema `propertiesObj`，驱动 `adaptCivitaiRecipeToProvider` 自适应呈现。例如 Fal.ai 获取到 `loras[{path, scale}]` 数组后，LoRA 动态适配为通过 `path` 发送直链（标明「可直接发送」），CFG 映射为 `guidance_scale (2.5)`。
+     - 选择未提供实时 schema 接口的提供商（如 Runware，其 `hasModelSchemaFetch('runware') === false`）：如实展示 `unverified`（未核实：「目标端点缺少实时 Schema 规范，状态标为未核实」），绝不伪造 live schema 称可直接发送，严格杜绝假成功。
+     - 若未选择具体目标模型，如实展示 `unverified`（未核实）提示，不再回退到假称 supported/unsupported 的硬编码静态表。
 
 3. **Canvas Node Loading & Real Outbound Run (Authentic Upstream 401)**:
    - 点击「一键生成工作流并载入画布」-> 画布生成 9 个完整节点：

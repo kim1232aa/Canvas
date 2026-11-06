@@ -183,6 +183,10 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
   const [tokenConsent, setTokenConsent] = useState<boolean>(false);
   // 用户最高原则（2026-11-05）：「我们不反对nsfw，有nsfw开关的都默认开启」
   const [nsfwFilter, setNsfwFilter] = useState<boolean>(true);
+  const [, setLiveSchemaVer] = useState<number>(0);
+  useEffect(() => {
+    return subscribeModelSchema(() => setLiveSchemaVer((v) => v + 1));
+  }, []);
   const activeReqIdRef = useRef(0);
 
   // clean-0942: one LoRA catalog GET per URL per open (StrictMode / repeated effects share it; failures retry).
@@ -1458,6 +1462,14 @@ Steps: 28, Sampler: DPM++ 2M Karras, CFG scale: 4.5, Seed: 136947637, Size: 1024
         {extractedPreset && (() => {
           const liveSchemaEntry = getModelSchemaEntry(importTargetProvider, importTargetModel);
           const liveSchemaProps = liveSchemaEntry?.status === 'ready' ? liveSchemaEntry.propertiesObj : undefined;
+          const schemaReasonOverride =
+            !importTargetModel
+              ? '未选择目标模型；请在上方选用目标模型以加载其实时 Schema 规范。'
+              : liveSchemaEntry?.status === 'loading'
+              ? '正在读取目标模型官方 Schema...'
+              : liveSchemaEntry?.status === 'error'
+              ? `目标端点 Schema 获取失败；未核实: ${liveSchemaEntry.error || '获取失败'}`
+              : undefined;
           return (
             <CivitaiModalImportPreview
               adaptation={
@@ -1482,6 +1494,7 @@ Steps: 28, Sampler: DPM++ 2M Karras, CFG scale: 4.5, Seed: 136947637, Size: 1024
                   {
                     targetModel: importTargetModel || undefined,
                     targetSchema: liveSchemaProps,
+                    schemaReasonOverride,
                     allowTokenInUrl: tokenConsent,
                   }
                 )

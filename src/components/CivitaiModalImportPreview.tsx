@@ -15,6 +15,7 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import {
+  adaptCivitaiRecipeToProvider,
   ProviderAdaptationResult,
   FieldAdaptationDetail,
   ProviderLoraAdaptation,
@@ -82,6 +83,45 @@ export const CivitaiModalImportPreview: React.FC<CivitaiModalImportPreviewProps>
   }, [selectedProvider, targetModel]);
 
   const schemaEntry = getModelSchemaEntry(selectedProvider, targetModel);
+  const liveSchemaProps = schemaEntry?.status === 'ready' ? schemaEntry.propertiesObj : undefined;
+  const schemaReasonOverride =
+    !targetModel
+      ? '未选择目标模型；请在上方选用目标模型以加载其实时 Schema 规范。'
+      : schemaEntry?.status === 'loading'
+      ? '正在读取目标模型官方 Schema...'
+      : schemaEntry?.status === 'error'
+      ? `目标端点 Schema 获取失败；未核实: ${schemaEntry.error || '获取失败'}`
+      : undefined;
+
+  let effectiveAdaptation = adaptation;
+  if (preset && (schemaEntry || !targetModel)) {
+    const ckpt = preset.nodes?.find((n: any) => n.type === 'CheckpointLoaderSimple')?.values?.ckpt_name;
+    effectiveAdaptation = adaptCivitaiRecipeToProvider(
+      {
+        checkpoint: ckpt,
+        baseModel: preset.otherMetadata?.baseModel,
+        loras: preset.otherMetadata?.resources || [],
+        prompt: preset.prompt,
+        negativePrompt: preset.negativePrompt,
+        steps: preset.otherMetadata?.steps,
+        cfg: preset.otherMetadata?.cfgScale,
+        sampler: preset.otherMetadata?.sampler,
+        scheduler: preset.otherMetadata?.scheduler,
+        seed: preset.otherMetadata?.seed,
+        clipSkip: preset.otherMetadata?.clipSkip,
+        width: preset.otherMetadata?.width,
+        height: preset.otherMetadata?.height,
+        denoise: preset.otherMetadata?.denoise,
+      },
+      selectedProvider,
+      {
+        targetModel: targetModel || undefined,
+        targetSchema: liveSchemaProps,
+        schemaReasonOverride,
+        allowTokenInUrl: tokenConsent,
+      }
+    );
+  }
 
   const availableProviders = [
     { id: 'civitai', name: 'Civitai 原生' },
@@ -103,7 +143,7 @@ export const CivitaiModalImportPreview: React.FC<CivitaiModalImportPreviewProps>
     { id: 'video', name: 'AI Video' },
   ];
 
-  const hasRequiresConsentLora = adaptation.loras.some(
+  const hasRequiresConsentLora = effectiveAdaptation.loras.some(
     (l) => l.requiresAuthConsent || l.status === 'requires_consent'
   );
 
@@ -117,7 +157,7 @@ export const CivitaiModalImportPreview: React.FC<CivitaiModalImportPreviewProps>
             <span>选择适配目标供应商 (Target Provider Adaptation):</span>
           </label>
           <span className="text-[11px] font-mono text-cyan-400 font-semibold">
-            {adaptation.displayName}
+            {effectiveAdaptation.displayName}
           </span>
         </div>
         <p className="text-[11px] text-slate-400">
@@ -196,7 +236,7 @@ export const CivitaiModalImportPreview: React.FC<CivitaiModalImportPreviewProps>
       {/* 2. Architecture & Compatibility Banner */}
       <div
         className={`border rounded-xl p-3.5 space-y-2 ${
-          adaptation.isCompatible
+          effectiveAdaptation.isCompatible
             ? 'bg-emerald-950/20 border-emerald-800/40 text-emerald-200'
             : 'bg-rose-950/20 border-rose-800/40 text-rose-200'
         }`}
@@ -204,7 +244,7 @@ export const CivitaiModalImportPreview: React.FC<CivitaiModalImportPreviewProps>
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            {adaptation.isCompatible ? (
+            {effectiveAdaptation.isCompatible ? (
               <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
             ) : (
               <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
@@ -212,28 +252,28 @@ export const CivitaiModalImportPreview: React.FC<CivitaiModalImportPreviewProps>
             <span className="font-bold text-xs">
               底模架构与 LoRA 适配状态:
               <span className="ml-1.5 font-mono px-2 py-0.5 rounded text-[10px] bg-black/40 border border-white/10">
-                来源架构: {adaptation.baseModelArchitecture || '未知/通用'}
+                来源架构: {effectiveAdaptation.baseModelArchitecture || '未知/通用'}
               </span>
             </span>
           </div>
           <span
             className={`text-[10px] font-bold px-2 py-0.5 rounded font-mono ${
-              adaptation.isCompatible
+              effectiveAdaptation.isCompatible
                 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
                 : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
             }`}
           >
-            {adaptation.isCompatible ? '架构兼容' : adaptation.baseModelArchitecture === 'unknown' || !adaptation.baseModelArchitecture ? '架构未知，无法确认兼容' : '存在不兼容项'}
+            {effectiveAdaptation.isCompatible ? '架构兼容' : effectiveAdaptation.baseModelArchitecture === 'unknown' || !effectiveAdaptation.baseModelArchitecture ? '架构未知，无法确认兼容' : '存在不兼容项'}
           </span>
         </div>
 
         <p className="text-[11px] leading-relaxed text-slate-300">
-          {adaptation.baseModelMessage}
+          {effectiveAdaptation.baseModelMessage}
         </p>
 
-        {adaptation.warnings.length > 0 && (
+        {effectiveAdaptation.warnings.length > 0 && (
           <div className="pt-1 space-y-1">
-            {adaptation.warnings.map((w, idx) => (
+            {effectiveAdaptation.warnings.map((w, idx) => (
               <div key={idx} className="flex items-start gap-1.5 text-[10px] text-amber-300/90 font-mono">
                 <Info className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-400" />
                 <span>{w}</span>
@@ -244,12 +284,12 @@ export const CivitaiModalImportPreview: React.FC<CivitaiModalImportPreviewProps>
       </div>
 
       {/* 3. LoRAs Adaptation Cards */}
-      {adaptation.loras.length > 0 && (
+      {effectiveAdaptation.loras.length > 0 && (
         <div className="bg-[#14151e] border border-[#292c3d] rounded-xl p-3.5 space-y-2.5" data-testid="import-loras-section">
           <div className="flex items-center justify-between">
             <span className="font-bold text-xs text-white flex items-center gap-1.5">
               <Layers className="w-4 h-4 text-purple-400" />
-              <span>提取的 LoRA 列表与目标供应商映射 ({adaptation.loras.length} 个)</span>
+              <span>提取的 LoRA 列表与目标供应商映射 ({effectiveAdaptation.loras.length} 个)</span>
             </span>
             <span className="text-[10px] text-slate-400 font-mono">
               无静默替换 · 格式与权限公开透明
@@ -257,7 +297,7 @@ export const CivitaiModalImportPreview: React.FC<CivitaiModalImportPreviewProps>
           </div>
 
           <div className="space-y-2">
-            {adaptation.loras.map((lora, idx) => {
+            {effectiveAdaptation.loras.map((lora, idx) => {
               const isUnverified = lora.status === 'unverified';
               const isCompatible = lora.status === 'compatible';
               const isConsent = lora.status === 'requires_consent';
@@ -393,7 +433,7 @@ export const CivitaiModalImportPreview: React.FC<CivitaiModalImportPreviewProps>
           </div>
 
           <p className="text-[11px] text-amber-100/90 leading-relaxed font-mono">
-            检测到所导入的 Civitai LoRA 属于需登录下载资源 (requireAuth=true)。根据系统最高安全规范，<strong>绝不在未经用户显式 UI 授权时向第三方供应商（如 {adaptation.displayName}）发送含有您 Civitai Token 的下载 URL</strong>，以防止个人凭据在第三方服务器日志或代理缓存中泄露。
+            检测到所导入的 Civitai LoRA 属于需登录下载资源 (requireAuth=true)。根据系统最高安全规范，<strong>绝不在未经用户显式 UI 授权时向第三方供应商（如 {effectiveAdaptation.displayName}）发送含有您 Civitai Token 的下载 URL</strong>，以防止个人凭据在第三方服务器日志或代理缓存中泄露。
           </p>
 
           <label className="flex items-center gap-2.5 cursor-pointer pt-1 bg-black/40 p-2.5 rounded-lg border border-amber-600/30">
@@ -406,7 +446,7 @@ export const CivitaiModalImportPreview: React.FC<CivitaiModalImportPreviewProps>
             />
             <span className="text-[11px] text-amber-200 font-semibold select-none flex items-center gap-1.5">
               {tokenConsent ? <Unlock className="w-3.5 h-3.5 text-emerald-400" /> : <Lock className="w-3.5 h-3.5 text-amber-400" />}
-              <span>我已知晓安全风险，明确授权向 {adaptation.displayName} 发送带有 Civitai 登录 Token 的下载直链</span>
+              <span>我已知晓安全风险，明确授权向 {effectiveAdaptation.displayName} 发送带有 Civitai 登录 Token 的下载直链</span>
             </span>
           </label>
         </div>
@@ -432,7 +472,7 @@ export const CivitaiModalImportPreview: React.FC<CivitaiModalImportPreviewProps>
 
         {showAllFields && (
           <div className="divide-y divide-[#222432] max-h-96 overflow-y-auto scrollbar-thin scrollbar-thumb-white/10">
-            {Object.entries(adaptation.fields).map(([fieldName, detail]) => {
+            {Object.entries(effectiveAdaptation.fields).map(([fieldName, detail]) => {
               const label = FIELD_LABELS[fieldName] || fieldName;
               const isMapped = detail.status === 'mapped';
               const isUnsupported = detail.status === 'unsupported';
@@ -490,7 +530,7 @@ export const CivitaiModalImportPreview: React.FC<CivitaiModalImportPreviewProps>
       <div className="pt-2 flex flex-wrap items-center justify-between gap-3 border-t border-[#232535]">
         <div className="text-[11px] text-slate-400 font-mono">
           <span>当前选择引擎：</span>
-          <span className="text-cyan-400 font-bold">{adaptation.displayName}</span>
+          <span className="text-cyan-400 font-bold">{effectiveAdaptation.displayName}</span>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">

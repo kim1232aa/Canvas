@@ -203,12 +203,10 @@ export function inspectTargetSchemaForLoras(
         provider: p,
         model: targetModel,
         field: 'loras',
-        format: 'download_url',
-        pathOrKeyProp: 'path',
-        strengthProp: 'scale',
+        format: 'custom',
         maxItems,
-        status: 'supported',
-        reason: '目标端点声明 loras 数组。',
+        status: 'unverified',
+        reason: `目标端点声明了 loras 数组，但其子项属性 (${Object.keys(itemProps).join('、') || '无明确属性定义'}) 未包含已知的直链 (path/url) 或标识规范；状态标为未核实。`,
       };
     }
 
@@ -225,14 +223,27 @@ export function inspectTargetSchemaForLoras(
           docSource: 'https://docs.together.ai/docs/inference/images/parameters',
         };
       }
+      const itemProps = schemaProperties.image_loras?.items?.properties || {};
+      if (itemProps.path || itemProps.url) {
+        const pathOrKeyProp = itemProps.path ? 'path' : 'url';
+        const strengthProp = ['scale', 'weight', 'strength', 'modelStrength'].find((k) => Object.hasOwn(itemProps, k)) || 'scale';
+        return {
+          provider: p,
+          model: targetModel,
+          field: 'image_loras',
+          format: 'download_url',
+          pathOrKeyProp,
+          strengthProp,
+          status: 'supported',
+        };
+      }
       return {
         provider: p,
         model: targetModel,
         field: 'image_loras',
-        format: 'download_url',
-        pathOrKeyProp: 'path',
-        strengthProp: 'scale',
-        status: 'supported',
+        format: 'custom',
+        status: 'unverified',
+        reason: '目标端点声明了 image_loras 数组，但其属性格式未包含已知直链定义；状态标为未核实。',
       };
     }
 

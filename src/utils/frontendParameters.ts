@@ -102,7 +102,22 @@ export function spatialRequestParameters(frame: SpatialFrame): NormalizedGenerat
     videoDuration:isVideo ? (Object.hasOwn(p,'videoDuration') ? p.videoDuration : frame.videoDuration) : undefined,
     videoFps:isVideo ? (Object.hasOwn(p,'videoFps') ? p.videoFps : frame.videoFps) : undefined,videoFrames:isVideo ? p.videoFrames : undefined,
     aspectRatio:Object.hasOwn(p,'aspectRatio') ? p.aspectRatio : frame.videoAspectRatio,imageSize:p.imageSize,extraParams,
-    loras:p.loras.map(l => normalizeLoraPayloadItem({name:l.name,path:explicitLoraPath(l),...(l.downloadUrl?{downloadUrl:l.downloadUrl}:{}),strength:l.modelStrength,modelStrength:l.modelStrength,clipStrength:l.clipStrength,civitaiId:l.civitaiId,triggers:l.triggerWords})),
+    loras:p.loras.map(l => normalizeLoraPayloadItem({
+      ...l,
+      name:l.name,
+      path:explicitLoraPath(l),
+      ...(l.downloadUrl?{downloadUrl:l.downloadUrl}:{}),
+      ...(l.air?{air:l.air}:{}),
+      ...(l.modelId?{modelId:l.modelId}:{}),
+      ...(l.versionId?{versionId:l.versionId}:{}),
+      ...(l.styleId?{styleId:l.styleId}:{}),
+      ...(l.sd_name_in_api?{sd_name_in_api:l.sd_name_in_api}:{}),
+      strength:l.modelStrength,
+      modelStrength:l.modelStrength,
+      clipStrength:l.clipStrength,
+      civitaiId:l.civitaiId,
+      triggers:l.triggerWords
+    })),
   };
 }
 

@@ -323,6 +323,7 @@ export interface CivitaiAdaptationOptions {
   targetSchema?: Record<string, any>;
   targetEndpoint?: string;
   customLoraCap?: number;
+  schemaReasonOverride?: string;
 }
 
 /**
@@ -387,7 +388,12 @@ export function adaptCivitaiRecipeToProvider(
   }
 
   // Target schema and LoRA capability inspection
-  const targetSpec = inspectTargetSchemaForLoras(provider, options?.targetModel, options?.targetSchema);
+  const targetSpec = inspectTargetSchemaForLoras(
+    provider,
+    options?.targetModel,
+    options?.targetSchema,
+    options?.schemaReasonOverride
+  );
   const effectiveCap = options?.customLoraCap ?? targetSpec.maxItems ?? PROVIDER_LORA_CAPS[provider]?.cap;
   if (typeof effectiveCap === 'number' && loras.length > effectiveCap) {
     const excessCount = loras.length - effectiveCap;
@@ -732,7 +738,13 @@ export function adaptCivitaiRecipeToProvider(
           reason: `将作为 ${displayName} ${targetSpec.pathOrKeyProp || 'air'} 传入 (strength: ${originalStrength})`,
         });
       }
-    } else if ((targetSpec.format === 'download_url' && provider !== 'replicate') || ['fal', 'wavespeed', 'aimlapi', 'muapi'].includes(provider)) {
+    } else if (targetSpec.format === 'download_url') {
+      const isReplicateWeights = targetSpec.field === 'lora_weights' || targetSpec.field === 'extra_lora';
+      const fieldName = isReplicateWeights
+        ? (i === 0 ? 'lora_weights' : 'extra_lora')
+        : (targetSpec.pathOrKeyProp || 'path');
+      const strengthName = targetSpec.strengthProp || 'scale';
+
       if (isArchMismatch) {
         adaptedLoras.push({
           name: loraName,
@@ -796,78 +808,12 @@ export function adaptCivitaiRecipeToProvider(
             scale: originalStrength,
             status: 'compatible',
             reason: l.requireAuth && options?.allowTokenInUrl
-              ? `已获用户显式 UI 授权，向 ${displayName} 发送带 Civitai Token 的下载链接 (scale: ${originalStrength})`
-              : `将作为 ${displayName} ${targetSpec.pathOrKeyProp || 'loras[].path'} 权重直链传入 (scale: ${originalStrength})`,
+              ? `已获用户显式 UI 授权，向 ${displayName} 发送带 Civitai Token 的下载链接 (${strengthName}: ${originalStrength})`
+              : `将作为 ${displayName} ${fieldName} 权重直链传入 (${strengthName}: ${originalStrength})`,
           });
         }
       }
-    } else if (provider === 'replicate') {
-      const fieldName = i === 0 ? 'lora_weights' : 'extra_lora';
-      if (isArchMismatch) {
-        adaptedLoras.push({
-          name: loraName,
-          originalStrength,
-          originalClipStrength,
-          civitaiId: versionId,
-          modelId,
-          versionId,
-          baseModel: loraBaseModel,
-          targetFormat: 'download_url',
-          status: 'architecture_mismatch',
-          reason: `LoRA 架构 (${loraBaseModel}) 与 Replicate 目标模型架构 (${baseModelRaw || ecosystem}) 不匹配。`,
-        });
-      } else {
-        const sendable = buildSendableLoraUrl(directDownloadUrl, {
-          allowTokenInUrl: options?.allowTokenInUrl,
-          civitaiToken: options?.civitaiToken,
-          requireAuth: l.requireAuth,
-        });
-        if (sendable.requiresConsent) {
-          adaptedLoras.push({
-            name: loraName,
-            originalStrength,
-            originalClipStrength,
-            civitaiId: versionId,
-            modelId,
-            versionId,
-            baseModel: loraBaseModel,
-            targetFormat: 'download_url',
-            scale: originalStrength,
-            requiresAuthConsent: true,
-            status: 'requires_consent',
-            reason: `该 Civitai LoRA 需登录鉴权；未获显式授权不向 Replicate 发送凭据。`,
-          });
-        } else if (sendable.url) {
-          adaptedLoras.push({
-            name: loraName,
-            originalStrength,
-            originalClipStrength,
-            civitaiId: versionId,
-            modelId,
-            versionId,
-            baseModel: loraBaseModel,
-            targetFormat: 'download_url',
-            sendableUrlOrId: sendable.url,
-            scale: originalStrength,
-            status: 'compatible',
-            reason: `将作为 Replicate ${fieldName} 传入 (scale: ${originalStrength})`,
-          });
-        } else {
-          adaptedLoras.push({
-            name: loraName,
-            originalStrength,
-            originalClipStrength,
-            civitaiId: versionId,
-            modelId,
-            versionId,
-            baseModel: loraBaseModel,
-            targetFormat: 'unsupported',
-            status: 'requires_reselection',
-            reason: `缺少官方真实下载链接或模型编号，无法向 Replicate 发送权重；需在目标库中重新选用。`,
-          });
-        }
-      }
-    } else if (provider === 'modelscope' || provider === 'modelscope_ai') {
+    } else if (targetSpec.status === 'unsupported' || targetSpec.format === 'unsupported') {
       adaptedLoras.push({
         name: loraName,
         originalStrength,
@@ -876,121 +822,9 @@ export function adaptCivitaiRecipeToProvider(
         modelId,
         versionId,
         baseModel: loraBaseModel,
-        targetFormat: 'repo_id',
-        status: 'requires_reselection',
-        reason: `${displayName} 仅支持魔搭社区内部的 LoRA 仓库 ID (如 owner/model-lora)，不支持外部 URL 或 Civitai AIR，需从魔搭模型库选用对应 LoRA。`,
-      });
-    } else if (provider === 'novita') {
-      adaptedLoras.push({
-        name: loraName,
-        originalStrength,
-        originalClipStrength,
-        civitaiId: versionId,
-        modelId,
-        versionId,
-        baseModel: loraBaseModel,
-        targetFormat: 'catalog_id',
-        status: 'requires_reselection',
-        reason: 'Novita AI 仅支持其模型库已录入或用户自定义上传的 sd_name_in_api，不支持外部直链或 Civitai AIR，需在 Novita 目录选用。',
-      });
-    } else if (provider === 'sogni') {
-      adaptedLoras.push({
-        name: loraName,
-        originalStrength,
-        originalClipStrength,
-        civitaiId: versionId,
-        modelId,
-        versionId,
-        baseModel: loraBaseModel,
-        targetFormat: 'catalog_id',
-        status: 'requires_reselection',
-        reason: 'Sogni 仅支持其官方目录公布的 LoRA ID (如 krea2-detail-enhancer)，不支持外部 URL 或 Civitai AIR。',
-      });
-    } else if (provider === 'tensorart') {
-      adaptedLoras.push({
-        name: loraName,
-        originalStrength,
-        originalClipStrength,
-        civitaiId: versionId,
-        modelId,
-        versionId,
-        baseModel: loraBaseModel,
-        targetFormat: 'catalog_id',
-        status: 'requires_reselection',
-        reason: 'Tensor.Art TAMS 仅支持平台内部的纯数字 LoRA ID，不支持外部 URL 或 Civitai AIR。',
-      });
-    } else if (provider === 'runware') {
-      if (modelId && versionId) {
-        const runwareAir = `civitai:${modelId}@${versionId}`;
-        adaptedLoras.push({
-          name: loraName,
-          originalStrength,
-          originalClipStrength,
-          civitaiId: versionId,
-          modelId,
-          versionId,
-          baseModel: loraBaseModel,
-          targetFormat: 'air',
-          sendableUrlOrId: runwareAir,
-          scale: originalStrength,
-          status: 'compatible',
-          reason: `以 Runware 原生支持的 Civitai AIR (${runwareAir}) 传入 (weight: ${originalStrength})`,
-        });
-      } else if (l.air) {
-        adaptedLoras.push({
-          name: loraName,
-          originalStrength,
-          originalClipStrength,
-          civitaiId: versionId,
-          modelId,
-          versionId,
-          air: l.air,
-          baseModel: loraBaseModel,
-          targetFormat: 'air',
-          sendableUrlOrId: l.air,
-          scale: originalStrength,
-          status: 'compatible',
-          reason: `以 Runware 原生支持的 AIR (${l.air}) 传入 (weight: ${originalStrength})`,
-        });
-      } else {
-        adaptedLoras.push({
-          name: loraName,
-          originalStrength,
-          originalClipStrength,
-          civitaiId: versionId,
-          modelId,
-          versionId,
-          baseModel: loraBaseModel,
-          targetFormat: 'air',
-          status: 'requires_reselection',
-          reason: '缺少母模型与版本编号，无法构建 Runware AIR 引用；需在 Runware 模型库中重新选用。',
-        });
-      }
-    } else if (provider === 'krea') {
-      adaptedLoras.push({
-        name: loraName,
-        originalStrength,
-        originalClipStrength,
-        civitaiId: versionId,
-        modelId,
-        versionId,
-        baseModel: loraBaseModel,
-        targetFormat: 'styles',
-        status: 'requires_reselection',
-        reason: 'Krea 官方生图接口通过 styles 挂载 LoRA，需要其样式目录公布的 style ID；不能将外部 URL 或 Civitai 编号直接作为 Krea style ID。',
-      });
-    } else if (provider === 'modelslab') {
-      adaptedLoras.push({
-        name: loraName,
-        originalStrength,
-        originalClipStrength,
-        civitaiId: versionId,
-        modelId,
-        versionId,
-        baseModel: loraBaseModel,
-        targetFormat: 'catalog_id',
-        status: 'requires_reselection',
-        reason: 'ModelsLab 仅支持其官方模型库中的 lora_model 名称与 lora_strength，需在目标库中重新选用。',
+        targetFormat: 'unsupported',
+        status: 'unsupported',
+        reason: targetSpec.reason || `目标供应商 ${displayName} 官方接口不支持挂载自定义 LoRA。`,
       });
     } else {
       adaptedLoras.push({

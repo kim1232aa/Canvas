@@ -238,6 +238,83 @@ describe('Mission M27: Recipe Shape, LoRA Resource Identity, and Target Schema A
       const result = novitaLoras(loras);
       expect(result).toEqual([{ model_name: 'v1-5-pruned-emaonly.safetensors', strength: 0.7 }]);
     });
+
+    it('Phase B: unknown loras item properties report unverified without guessing path/scale', () => {
+      const unknownItemSchema = {
+        loras: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              repo_id: { type: 'string' },
+              weight: { type: 'number' },
+            },
+          },
+        },
+      };
+      const spec = inspectTargetSchemaForLoras('fal', 'unknown-model', unknownItemSchema);
+      expect(spec.status).toBe('unverified');
+      expect(spec.format).toBe('custom');
+
+      const recipe: CivitaiRecipeInput = {
+        baseModel: 'Flux.1 D',
+        loras: [{ name: 'Test LoRA', downloadUrl: 'https://civitai.com/api/download/models/1527024', civitaiId: '1527024', strength: 0.3 }],
+      };
+      const adapted = adaptCivitaiRecipeToProvider(recipe, 'fal', {
+        targetModel: 'unknown-model',
+        targetSchema: unknownItemSchema,
+      });
+      expect(adapted.loras[0].status).toBe('unverified');
+
+      const unmapped: Array<{ item: any; reason: string }> = [];
+      const mapped = mapSchemaLoraItems(recipe.loras || [], unknownItemSchema.loras.items, {}, 'unknown-model', unmapped);
+      expect(mapped).toEqual([]);
+      expect(unmapped).toHaveLength(1);
+    });
+
+    it('Phase B: Replicate model schema declaring loras array uses loras path instead of hardcoded lora_weights', () => {
+      const replicateLorasSchema = {
+        loras: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              path: { type: 'string' },
+              scale: { type: 'number' },
+            },
+          },
+        },
+      };
+      const spec = inspectTargetSchemaForLoras('replicate', 'custom-replicate-flux-lora', replicateLorasSchema);
+      expect(spec.status).toBe('supported');
+      expect(spec.field).toBe('loras');
+      expect(spec.format).toBe('download_url');
+
+      const recipe: CivitaiRecipeInput = {
+        baseModel: 'Flux.1 D',
+        loras: [{ name: 'Test LoRA', downloadUrl: 'https://civitai.com/api/download/models/1527024', civitaiId: '1527024', strength: 0.3 }],
+      };
+      const adapted = adaptCivitaiRecipeToProvider(recipe, 'replicate', {
+        targetModel: 'custom-replicate-flux-lora',
+        targetSchema: replicateLorasSchema,
+      });
+      expect(adapted.loras[0].status).toBe('compatible');
+      expect(adapted.loras[0].reason).toContain('path');
+      expect(adapted.loras[0].reason).not.toContain('lora_weights');
+    });
+
+    it('Phase B: target provider without schema honestly returns unverified (e.g. Runware)', () => {
+      const recipe: CivitaiRecipeInput = {
+        baseModel: 'Flux.1 D',
+        loras: [{ name: 'Test LoRA', civitaiId: '1527024', strength: 0.3 }],
+      };
+      const adapted = adaptCivitaiRecipeToProvider(recipe, 'runware', {
+        targetModel: 'runware:100@1',
+        targetSchema: undefined,
+      });
+      expect(adapted.loras[0].status).toBe('unverified');
+      expect(adapted.loras[0].reason).toContain('缺少实时 Schema 规范');
+    });
   });
 
   describe('2. Exact version URLs with query strings and token security', () => {
