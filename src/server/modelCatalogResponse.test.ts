@@ -58,6 +58,13 @@ describe('Runware and ModelsLab catalog response parsing', () => {
     expect(hasNoPublicRemoteCatalog({ requiresApiKey: true, catalogAvailable: true, sourceNotice: 'lookup-only (no api key configured)' })).toBe(false);
     expect(hasNoPublicRemoteCatalog({ requiresSearchQuery: true, catalogAvailable: true, sourceNotice: 'lookup-only (search query required for live catalog)' })).toBe(false);
     expect(hasNoPublicRemoteCatalog({ isCustomEndpoint: true, sourceNotice: 'lookup-only (custom endpoint)' })).toBe(false);
+    // Specifically lock isCustomEndpoint exclusion against catalogAvailable: false or noPublicRemoteCatalog: true
+    expect(hasNoPublicRemoteCatalog({ isCustomEndpoint: true, catalogAvailable: false })).toBe(false);
+    expect(hasNoPublicRemoteCatalog({ isCustomEndpoint: true, noPublicRemoteCatalog: true })).toBe(false);
+    // Positive control: without isCustomEndpoint, catalogAvailable: false or noPublicRemoteCatalog: true remains true
+    expect(hasNoPublicRemoteCatalog({ catalogAvailable: false })).toBe(true);
+    expect(hasNoPublicRemoteCatalog({ noPublicRemoteCatalog: true })).toBe(true);
+
     expect(hasNoPublicRemoteCatalog({ sourceNotice: 'lookup-only (no api key configured)' })).toBe(false);
     expect(hasNoPublicRemoteCatalog({ sourceNotice: 'lookup-only (search query required for live catalog)' })).toBe(false);
     expect(hasNoPublicRemoteCatalog({ sourceNotice: 'lookup-only (custom endpoint)' })).toBe(false);

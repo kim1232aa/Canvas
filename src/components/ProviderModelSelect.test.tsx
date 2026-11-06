@@ -372,4 +372,42 @@ describe('ProviderModelSelect live catalog state', () => {
     const statusText = host.querySelector('[data-testid="provider-model-catalog-status"]')?.textContent || '';
     expect(statusText).toContain('OpenAI 兼容接口使用您配置的 Base URL 与模型名称');
   });
+
+  it('never displays no-catalog-guidance card for openai_compat custom endpoint even if catalogAvailable is false', async () => {
+    const openaiResponse = new Response(JSON.stringify({
+      openai_compat: [],
+      results: { openai_compat: [] },
+      _pagination: {
+        openai_compat: {
+          page: 1,
+          limit: 50,
+          total: 0,
+          hasMore: false,
+          sourceUrl: '',
+          sourceNotice: 'lookup-only (custom endpoint)',
+          isCustomEndpoint: true,
+          catalogAvailable: false,
+        },
+      },
+      catalogNotices: {
+        openai_compat: 'OpenAI 兼容接口使用您配置的 Base URL 与模型名称，暂无全网统一目录；支持在上方输入框中直接输入模型 ID (如 dall-e-3) 按 ID 选用。',
+      },
+    }), { status: 200 });
+
+    vi.stubGlobal('fetch', vi.fn(async () => openaiResponse));
+
+    provider = 'openai_compat';
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    await act(async () => {
+      root.render(<ProviderModelSelect provider={provider} value="" onChange={vi.fn()} />);
+    });
+    await startLookup();
+    await refresh();
+
+    expect(host.querySelector('[data-testid="no-catalog-guidance"]')).toBeNull();
+    const statusText = host.querySelector('[data-testid="provider-model-catalog-status"]')?.textContent || '';
+    expect(statusText).toContain('OpenAI 兼容接口使用您配置的 Base URL 与模型名称');
+  });
 });

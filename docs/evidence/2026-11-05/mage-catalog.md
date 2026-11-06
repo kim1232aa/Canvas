@@ -56,6 +56,8 @@ export function hasNoPublicRemoteCatalog(pagination?: GenericCatalogPagination |
 }
 ```
 
+*审查者残留风险确认*：目前 `catalogAvailable:false` 仅由 TAMS、Agnes、Mage 三处写入，且三者都是「官方没有列表接口」；请求失败或网络超时均通过 `results[provider].error` 抛出并展示为「查询失败」，不会误写入 `catalogAvailable:false` 或误冒充「官方无目录」。
+
 ### 3. 组件状态与原文透传 (`src/components/ProviderModelSelect.tsx`)
 - 当 `hasNoPublicRemoteCatalog` 为 `false` 时，**坚决不渲染**紫色的 `[data-testid="no-catalog-guidance"]` 指引卡片。
 - 在状态栏 `[data-testid="provider-model-catalog-status"]` 中，原汁原味透传展示服务端自身的 `catalogNotice` 原文（例如 Runware 的『Runware 实时模型搜索需要配置 API Key (RUNWARE_API_KEY)』，ModelsLab 的『ModelsLab 官方模型列表需要 API Key』），不自行篡改。
@@ -98,10 +100,10 @@ export function hasNoPublicRemoteCatalog(pagination?: GenericCatalogPagination |
 
 ### 1. 覆盖测试与反向测试
 - `src/server/modelCatalogResponse.test.ts`：
-  - 测试 1：严格布尔断言，验证 `hasNoPublicRemoteCatalog` 对 Mage/Agnes 返回 `true`，对 Runware 缺 key、Runware 缺 query、ModelsLab 缺 key、openai_compat/grok_compat 返回 `false`。
+  - 测试 1：严格布尔断言，验证 `hasNoPublicRemoteCatalog` 对 Mage/Agnes 返回 `true`，对 Runware 缺 key、Runware 缺 query、ModelsLab 缺 key、openai_compat/grok_compat 返回 `false`；特别增加锁定断言：`hasNoPublicRemoteCatalog({ isCustomEndpoint: true, catalogAvailable: false }) === false`，`hasNoPublicRemoteCatalog({ isCustomEndpoint: true, noPublicRemoteCatalog: true }) === false`，并配备 `{ catalogAvailable: false } === true` 正向对照。
   - 测试 2：直接解析 `server.ts` 源码，断言 `pagination.mage`、`pagination.agnes` 显式包含 `noPublicRemoteCatalog: true`，而 `runware`、`modelslab` 包含 `requiresApiKey: true` 且绝不包含 `noPublicRemoteCatalog: true`。
 - `src/components/ProviderModelSelect.test.tsx`：
-  - 增加 4 项负向断言：Runware 缺 key、Runware 缺 search、ModelsLab 缺 key、openai_compat 自定义端点均断言 `expect(host.querySelector('[data-testid="no-catalog-guidance"]')).toBeNull()`，并断言 statusText 包含服务端原始提示。
+  - 增加 5 项负向断言：Runware 缺 key、Runware 缺 search、ModelsLab 缺 key、openai_compat 自定义端点，以及即使 mock 的 pagination 携带 `isCustomEndpoint: true` 与 `catalogAvailable: false` 时，均断言 `expect(host.querySelector('[data-testid="no-catalog-guidance"]')).toBeNull()`，并断言 statusText 包含服务端原始提示。
 
 ### 2. 突变检查 (Mutation Checks)
 - **突变检查 1（判定退化为字符串前缀匹配）**：
@@ -110,6 +112,13 @@ export function hasNoPublicRemoteCatalog(pagination?: GenericCatalogPagination |
 - **突变检查 2（服务端配置突变）**：
   - 在 `server.ts` 中将 Runware 缺 key 分页误设为 `noPublicRemoteCatalog: true`。
   - 运行结果：`server.ts declares neutral boolean fields for /api/models pagination objects` 测试变红失败（RED），报 `AssertionError: expected ... not to contain 'noPublicRemoteCatalog: true'`，退出码为 `1`。恢复后恢复全绿（GREEN）。
+- **突变检查 3（P1 专项目标突变：删除 isCustomEndpoint 排除分支）**：
+  - 在 `src/server/modelCatalogResponse.ts:117` 中仅删除 `|| pagination.isCustomEndpoint === true` 排除条件。
+  - 运行命令：`npx vitest run --maxWorkers=2 src/server/modelCatalogResponse.test.ts src/utils/modelCatalog.test.ts src/components/ProviderModelSelect.test.tsx`。
+  - 运行结果：精确出现 2 项测试失败变红（RED，退出码 `1`）：
+    - `src/components/ProviderModelSelect.test.tsx > ProviderModelSelect live catalog state > never displays no-catalog-guidance card for openai_compat custom endpoint even if catalogAvailable is false` (AssertionError: expected <div ...> to be null)
+    - `src/server/modelCatalogResponse.test.ts > Runware and ModelsLab catalog response parsing > generically identifies no-public-catalog providers without being fooled by lookup-only prefix on missing-key/query states` (AssertionError: expected true to be false)
+  - 恢复源码并通过 `git diff` 确认干净后重新运行，所有测试恢复全绿（GREEN，21 项测试全部通过）。证明 `isCustomEndpoint` 排除分支已被测试完全锁定。
 
 ### 3. 全局工程命令真实退出码 (Unpiped)
 在 `/root/github/ComfyUI Web Studio/.tower/worktrees/wt-16` 严格无管道执行各命令：
@@ -118,7 +127,7 @@ export function hasNoPublicRemoteCatalog(pagination?: GenericCatalogPagination |
 | :--- | :--- | :--- |
 | `npx tsc --noEmit` | 全局 TypeScript 严格类型检查 | **0** (0 错误) |
 | `npm run build` | 客户端与 Worker 构建打包 | **0** (构建成功) |
-| `npx vitest run --maxWorkers=2 --exclude '.tower/**' --exclude '**/node_modules/**' --exclude '**/dist/**'` | 全局完整单元测试与集成测试套件 | **0** (249 文件全部通过，1899 测试全部通过) |
+| `npx vitest run --maxWorkers=2 --exclude '.tower/**' --exclude '**/node_modules/**' --exclude '**/dist/**'` | 全局完整单元测试与集成测试套件 | **0** (249 文件全部通过，1901 测试全部通过) |
 
 ---
 
