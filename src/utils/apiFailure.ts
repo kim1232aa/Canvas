@@ -76,19 +76,17 @@ export function plainErrorMessage(err: unknown): string {
   }
 
   const raw = err instanceof Error ? err.message : String(err ?? '执行遇到错误');
-  const first = raw.split('\n')[0];
   // Local rejection: verbatim, no rewrite / slice — must not look like upstream failure or success.
-  if (first.startsWith('没有发出去') || first.startsWith('没有发出去 · ')) return withRangeWarning(first);
-  return withRangeWarning(stripLocalWrapperPrefix(first) || first);
+  if (raw.startsWith('没有发出去') || raw.startsWith('没有发出去 · ')) return withRangeWarning(raw);
+  return withRangeWarning(stripLocalWrapperPrefix(raw) || raw);
 }
 
 /** Node / frame error banner: verbatim error text without clipping or summary rewrite. */
 export function errorBannerText(detail: string | null | undefined): string {
   if (!detail) return '';
   const text = String(detail).trim();
-  const first = text.split('\n')[0];
   // Local rejection: verbatim, no rewrite / slice — must not look like upstream failure or success.
-  if (first.startsWith('没有发出去') || first.startsWith('没有发出去 · ')) return first;
+  if (text.startsWith('没有发出去') || text.startsWith('没有发出去 · ')) return text;
   return stripLocalWrapperPrefix(text) || text;
 }
 
@@ -201,23 +199,29 @@ export function upstreamFailureParts(data: any): { status: number; statusText: s
     ?? (typeof data.upstreamStatus === 'number' ? data.upstreamStatus : null)
     ?? (typeof hist?.upstreamStatus === 'number' ? hist.upstreamStatus : null);
   if (status == null) return null;
-  const rawCandidate = (
+  const authoritative = (
     typeof data.rawResponse === 'string' && data.rawResponse.trim() ? data.rawResponse
     : data.rawResponse != null ? coerceResponseBodyText(data.rawResponse)
     : typeof data.upstreamResponseBody === 'string' && data.upstreamResponseBody.trim() ? data.upstreamResponseBody
     : typeof hist?.upstreamResponseBody === 'string' && hist.upstreamResponseBody.trim() ? hist.upstreamResponseBody
     : typeof failed?.responseBody === 'string' && failed.responseBody.trim() ? failed.responseBody
-    : typeof data.details === 'string' && data.details.trim() ? data.details
-    : typeof data.error === 'string' && data.error.trim() ? data.error
-    : typeof hist?.error === 'string' && hist.error.trim() ? hist.error
     : ''
   );
-  let body = stripLocalWrapperPrefix(rawCandidate) || rawCandidate;
-  const httpPrefix = body.match(/^HTTP\s+\d{3}(?:\s+[A-Za-z ]+)?[:：\s]\s*/i);
-  if (httpPrefix && httpPrefix[0].length < body.length) {
-    const afterHttp = body.slice(httpPrefix[0].length).trim();
-    if (afterHttp.startsWith('{') || afterHttp.startsWith('[') || afterHttp.length > 0) {
-      body = afterHttp;
+  let body = authoritative;
+  if (!body) {
+    const fallback = (
+      typeof data.details === 'string' && data.details.trim() ? data.details
+      : typeof data.error === 'string' && data.error.trim() ? data.error
+      : typeof hist?.error === 'string' && hist.error.trim() ? hist.error
+      : ''
+    );
+    body = stripLocalWrapperPrefix(fallback) || fallback;
+    const httpPrefix = body.match(/^HTTP\s+\d{3}(?:\s+[A-Za-z ]+)?[:：\s]\s*/i);
+    if (httpPrefix && httpPrefix[0].length < body.length) {
+      const afterHttp = body.slice(httpPrefix[0].length).trim();
+      if (afterHttp.startsWith('{') || afterHttp.startsWith('[') || afterHttp.length > 0) {
+        body = afterHttp;
+      }
     }
   }
 
@@ -274,16 +278,8 @@ export function upstreamHttpFirstLine(data: any): string | null {
   const provPrefix = prov ? `【${prov}】` : '';
   const sep = parts.statusText ? ' ' : '';
   const statusLine = `HTTP ${parts.status}${sep}${parts.statusText}`.trim();
-  if (!prov) {
-    const msg = extractUpstreamMessage(parts.body);
-    if (msg) {
-      return `${statusLine} · ${msg}`.trim();
-    }
-    const bodyFirst = parts.body.split(/\r?\n/)[0].replace(/^HTTP \d{3}:?\s*/, '').trim();
-    const raw = `${statusLine}${bodyFirst ? ` ${bodyFirst}` : ''}`.trim();
-    return raw;
-  }
-  return `${provPrefix}${statusLine}: ${parts.body}`.trim();
+  const sep2 = provPrefix ? ': ' : ' ';
+  return `${provPrefix}${statusLine}${parts.body ? `${sep2}${parts.body}` : ''}`.trim();
 }
 
 /** User-facing one-liner: verbatim error; no invented Chinese summary or dropped body. */

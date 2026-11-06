@@ -202,4 +202,28 @@ describe('Task 5 & P1-3: Verbatim upstream error display & mutation sensitivity'
       expect(html).toContain('insufficientBuzz');
     });
   });
+
+  describe('5. Unstructured & non-provider error preservation (multiline, long body, plain text)', () => {
+    it('preserves multiline body without provider or route', () => {
+      const multiline = 'line 1\nline 2\nline 3';
+      const data = { executionTrace: [{ status: 500, statusText: 'Internal Server Error', responseBody: multiline }] };
+      const line = upstreamHttpFirstLine(data)!;
+      expect(line).toBe(`HTTP 500 Internal Server Error ${multiline}`);
+      expect(line).toContain('line 1\nline 2\nline 3');
+    });
+
+    it('preserves multiline plain text in plainErrorMessage', () => {
+      const multiline = 'Internal error occurred\nStack trace: at foo.ts:10\nat bar.ts:20';
+      const err = new Error(multiline);
+      const msg = plainErrorMessage(err);
+      expect(msg).toBe(multiline);
+      expect(msg).toContain('at bar.ts:20');
+    });
+
+    it('handles empty responseBody gracefully without phantom text', () => {
+      const data = { executionTrace: [{ status: 502, statusText: 'Bad Gateway', responseBody: '' }] };
+      const line = upstreamHttpFirstLine(data)!;
+      expect(line).toBe('HTTP 502 Bad Gateway');
+    });
+  });
 });
