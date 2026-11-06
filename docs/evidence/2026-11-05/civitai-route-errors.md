@@ -386,3 +386,68 @@ A mutation test was conducted to prove that the regression tests strictly detect
 3. `npx vitest run --maxWorkers=2 --exclude '.tower/**' --exclude '**/node_modules/**' --exclude '**/dist/**'`
    - Real exit code: `0`
    - Result: 249 test files passed (100%), 1903 tests passed (100%).
+
+---
+
+## 8. Round 2 Review Remediation (rev-m24-a P1-1, P1-2, P2-1, P2-2, P2-3)
+
+### 8.1 Mutation Check Matrix (All 7 Mutations Verified RED -> GREEN)
+
+All mutations were executed in an isolated detached worktree at `/tmp/m24-mut-verify` to ensure tests lock against all swallowed errors and fabricated fields:
+
+| Mutation | Description | Result When Mutated | Failed Tests / Reason | Exit Code |
+|---|---|---|---|---|
+| **Mut A** | Swallow `/model-versions/{id}` (`catch {}`) + invent `downloadUrl` | **RED** | 5 tests failed: Endpoint 1 404/500/502 + e2e | `1` |
+| **Mut B** | Swallow `/model-versions/mini/{id}` (`catch {}`) + invent `downloadUrl` | **RED** | 4 tests failed: Endpoint 2 404/500/502 + 200 lock | `1` |
+| **Mut C** | `requireAuth = ... ?? false` | **RED** | 1 test failed: `on 200 OK when upstream omits requireAuth and downloadUrl` (`AssertionError: expected false to be undefined`) | `1` |
+| **Mut D** | Swallow `/model-versions/by-hash` (`catch {}`; return null) | **RED** | 4 tests failed: Endpoint 3 404/500/502 + P2-1/P2-2 | `1` |
+| **Mut E** | Fall through to HTML scrape on REST failure / empty items | **RED** | 1 test failed: Endpoint 4 empty items (`Error: Unexpected url: https://civitai.com/images/999999`) | `1` |
+| **Mut F** | `canGenerate: false` fabricated on version resolution failure | **RED** | 1 test failed: Endpoint 4 404 version (`AssertionError: expected false to be undefined`) | `1` |
+| **Mut G** | `versionId ? \`https://civitai.com/api/download/models/${versionId}\` : ...` in `civitaiImportMap.ts` | **RED** | 1 test failed: `civitaiImportMap.test.ts` (`AssertionError: expected 'compatible' to be 'requires_reselection'`) | `1` |
+
+When mutations were reverted, all test suites passed 100% GREEN.
+
+---
+
+### 8.2 Round 2 Real UI Acceptance (Dev Server 3124, Headless Chrome 9424, Profile `/tmp/canvas-chrome-civswallow24b`)
+
+Three independent real browser acceptance scenarios were conducted and screenshotted:
+
+1. **Scenario 1: Success Import (`https://civitai.com/images/64399178`)**
+   - **Screenshot:** `docs/evidence/2026-11-05/civitai-route-errors/fix-acceptance-success-r2.png`
+   - **MD5 Hash:** `dad3c9e48ee1ae2d9fbde3748a55d77a` (distinct from baseline `44f8131cd0bb6a382614e6a0d697445f`).
+   - **Line-by-line observations:**
+     - Header: "Civitai 配方导入与跨供应商适配 (Import & Adapt)" with active "配方导入与适配 (Import)" tab.
+     - Provider Selector: "Civitai (原生生成引擎)" selected.
+     - Architecture Banner: "底模架构与 LoRA 适配状态: 来源架构: Flux.1 D", status "架构兼容".
+     - LoRA List: "提取的 LoRA 列表与目标供应商映射 (2 个)":
+       - Card 1: `Cinematic 1940s`, weight `0.3`, badge `可直接发送`, target `urn:air:flux1:lora:civitai:1351798@1527024`.
+       - Card 2: `Cinematic Octane`, weight `0.2`, badge `可直接发送`, target `urn:air:flux1:lora:civitai:1351798@1526912`.
+   - **Acceptance Label & Observation:** `NOT_SENT` (Observed: read-only workflow import that reached Civitai official REST API; no generation request was submitted).
+
+2. **Scenario 2: Failure Case 1 — Non-existent Model Version (`https://civitai.com/models/123?modelVersionId=999999999`)**
+   - **Screenshot:** `docs/evidence/2026-11-05/civitai-route-errors/fix-acceptance-failure-404-version.png`
+   - **Line-by-line observations:**
+     - Input textarea: `https://civitai.com/models/123?modelVersionId=999999999`.
+     - Alert banner: Red error alert with warning icon.
+     - Verbatim error text: `Civitai model-version 上游响应 HTTP 404 [HTTP 404] (https://civitai.com/api/v1/model-versions/999999999) - 响应体: {"error":"Model not found"}`.
+     - Stale preview is cleared.
+   - **Acceptance Label & Observation:** `CONTRACT_REJECT` (Observed: Upstream Civitai model-versions API responded HTTP 404 with JSON body `{"error":"Model not found"}`; presented to user with endpoint, status, and raw response verbatim).
+
+3. **Scenario 3: Failure Case 2 — Documented Empty Items HTTP 200 (`https://civitai.com/images/999999999`)**
+   - **Screenshot:** `docs/evidence/2026-11-05/civitai-route-errors/fix-acceptance-failure-empty-items.png`
+   - **Line-by-line observations:**
+     - Input textarea: `https://civitai.com/images/999999999`.
+     - Alert banner: Red error alert with warning icon.
+     - Verbatim error text: `Civitai images 上游 HTTP 200，响应体包含空 items (未匹配到公开图片元数据) [HTTP 200] (https://civitai.com/api/v1/images?imageId=999999999&withMeta=true) - 响应体: {"items":[],"metadata":{}}`.
+     - Status 200 is accurately presented; not rewritten as 404.
+     - No HTML scrape fallback; no Cloudflare 403 challenge encountered.
+   - **Acceptance Label & Observation:** Observed: Upstream Civitai images REST API returned HTTP 200 with empty items array `{"items":[],"metadata":{}}`; correctly presented as documented upstream response without falling back to web scraping.
+
+---
+
+### 8.3 Final Verification Commands & Real Exit Codes
+
+1. `npx tsc --noEmit` -> **Exit Code: `0`**
+2. `npm run build` -> **Exit Code: `0`**
+3. `npx vitest run --maxWorkers=2 --exclude '.tower/**' --exclude '**/node_modules/**' --exclude '**/dist/**'` -> **Exit Code: `0`** (249 test files passed, 1910 tests passed).

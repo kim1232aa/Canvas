@@ -43,30 +43,39 @@ export interface CivitaiVersionFailure {
 
 export type CivitaiVersionResult = CivitaiVersionSuccess | CivitaiVersionFailure;
 
-async function readResponseBody(resp: any): Promise<{ rawBody: string; parsedJson: any }> {
+async function readResponseBody(resp: any): Promise<{ rawBody: string; parsedJson: any; readError?: string }> {
   let rawBody = '';
   let parsedJson: any = null;
-  if (resp && typeof resp.text === 'function') {
-    try {
-      rawBody = await resp.text();
-    } catch {}
+  let readError: string | undefined;
+
+  if (resp) {
+    if (typeof resp.text === 'function') {
+      try {
+        rawBody = await resp.text();
+      } catch (err: any) {
+        readError = `响应体读取失败: ${err.message}`;
+      }
+    } else if (typeof resp.json === 'function') {
+      try {
+        parsedJson = await resp.json();
+      } catch (err: any) {
+        readError = `JSON读取失败: ${err.message}`;
+      }
+    }
   }
-  if (resp && typeof resp.json === 'function') {
-    try {
-      parsedJson = await resp.json();
-    } catch {}
-  }
-  if (!parsedJson && rawBody) {
+
+  if (!readError && !parsedJson && rawBody) {
     try {
       parsedJson = JSON.parse(rawBody);
     } catch {}
   }
-  if (!rawBody && parsedJson !== null && parsedJson !== undefined) {
+  if (!readError && !rawBody && parsedJson !== null && parsedJson !== undefined) {
     try {
       rawBody = typeof parsedJson === 'string' ? parsedJson : JSON.stringify(parsedJson);
     } catch {}
   }
-  return { rawBody, parsedJson };
+
+  return { rawBody: readError ? (rawBody || readError) : rawBody, parsedJson, readError };
 }
 
 /**
@@ -349,22 +358,22 @@ export async function fetchCivitaiRealImageMeta(imageId: string, upstreamFetch: 
   const item = restJson?.items?.[0];
   if (!item) {
     return {
-      error: `Civitai 图片 #${imageId} 未在官方图片库找到 (items 为空)`,
+      error: `Civitai images 上游 HTTP ${restResp.status}，响应体包含空 items (未匹配到公开图片元数据)`,
       details: rawBody,
       rawResponse: rawBody,
       endpoint: restUrl,
-      status: 404,
+      status: restResp.status,
       errorSource: 'upstream' as const,
     };
   }
 
   if (!item.meta) {
     return {
-      error: `Civitai 图片 #${imageId} 上游返回数据中未包含生图参数元数据 (meta 为空)`,
+      error: `Civitai images 上游 HTTP ${restResp.status}，响应体中未包含生图参数元数据 (meta 为空)`,
       details: rawBody,
       rawResponse: rawBody,
       endpoint: restUrl,
-      status: 404,
+      status: restResp.status,
       errorSource: 'upstream' as const,
     };
   }
@@ -403,7 +412,7 @@ export async function fetchCivitaiRealImageMeta(imageId: string, upstreamFetch: 
           id: r.modelVersionId,
           modelVersionId: r.modelVersionId,
           modelId: r.modelId,
-          versionId: r.modelVersionId,
+          versionId: undefined,
           name: r.modelVersionName || (isCheckpoint ? 'Checkpoint' : 'LoRA'),
           modelName: r.modelVersionName,
           modelType: (r.type || (isCheckpoint ? 'CHECKPOINT' : 'LORA')).toUpperCase(),
@@ -413,7 +422,7 @@ export async function fetchCivitaiRealImageMeta(imageId: string, upstreamFetch: 
           air: undefined,
           downloadUrl: undefined,
           requireAuth: undefined,
-          canGenerate: false,
+          canGenerate: undefined,
           resolutionError: vInfo,
           unresolvedReason: errorMsg,
         };
@@ -854,10 +863,10 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
               name: r.fileName || r.name || r.modelName || `Civitai_LoRA_${r.id}`,
               displayName: r.modelName || r.name || r.fileName,
               strength: r.strength !== undefined && r.strength !== null ? r.strength : null,
-              civitaiId: canonicalAir || (modelId && versionId ? `${modelId}@${versionId}` : String(versionId || '')),
+              civitaiId: canonicalAir || (modelId && versionId ? `${modelId}@${versionId}` : (r.resolutionError ? undefined : String(versionId || ''))),
               air: canonicalAir,
-              modelId,
-              versionId,
+              modelId: r.resolutionError ? undefined : modelId,
+              versionId: r.resolutionError ? undefined : versionId,
               downloadUrl: r.downloadUrl,
               requireAuth: r.requireAuth === undefined ? undefined : Boolean(r.requireAuth),
               canGenerate: r.canGenerate,
@@ -877,10 +886,10 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
               name: a.fileName || a.name || 'LoRA',
               displayName: (a.fileName || a.name || '').replace(/\.safetensors$/, ''),
               strength: a.strength !== undefined && a.strength !== null ? a.strength : null,
-              civitaiId: canonicalAir || (modelId && versionId ? `${modelId}@${versionId}` : String(versionId || a.modelId || '')),
+              civitaiId: canonicalAir || (modelId && versionId ? `${modelId}@${versionId}` : (a.resolutionError ? undefined : String(versionId || a.modelId || ''))),
               air: canonicalAir,
-              modelId,
-              versionId,
+              modelId: a.resolutionError ? undefined : modelId,
+              versionId: a.resolutionError ? undefined : versionId,
               downloadUrl: a.downloadUrl,
               requireAuth: a.requireAuth === undefined ? undefined : Boolean(a.requireAuth),
               triggers: '',

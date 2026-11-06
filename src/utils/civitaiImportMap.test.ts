@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { mapSampler, mapScheduler, resolveImportedNegativePrompt, resolveImportedCheckpointRef, resolveRawImportNegativeSamplerScheduler } from './civitaiImportMap';
+import {
+  mapSampler,
+  mapScheduler,
+  resolveImportedNegativePrompt,
+  resolveImportedCheckpointRef,
+  resolveRawImportNegativeSamplerScheduler,
+  adaptCivitaiRecipeToProvider,
+} from './civitaiImportMap';
 
 describe('civitai import mappers (hard gates)', () => {
   it('empty negative stays empty — never fills blurry template', () => {
@@ -157,8 +164,59 @@ describe('resolveRawImportNegativeSamplerScheduler (plain-text import)', () => {
   });
 
   it('image-import empty negative still empty (resolveImportedNegativePrompt unchanged)', () => {
+    const template = 'blurry, bad quality';
     expect(resolveImportedNegativePrompt(undefined, template)).toBe('');
     expect(resolveImportedNegativePrompt('', template)).toBe('');
     expect(resolveImportedNegativePrompt(null, template)).toBe('');
+  });
+
+  describe('P1-2: LoRA adaptation truthfulness and downloadUrl resolution', () => {
+    it('marks LoRA with unresolvedReason as unsupported and carries verbatim error', () => {
+      const result = adaptCivitaiRecipeToProvider(
+        {
+          baseModel: 'Flux.1 D',
+          loras: [
+            {
+              name: 'FailedLoRA',
+              versionId: 404040,
+              strength: 0.8,
+              unresolvedReason: '版本 #404040 上游解析失败: [404] Civitai model-version 上游响应 HTTP 404 - {"error":"Model version 404040 not found"}',
+            },
+          ],
+        },
+        'civitai'
+      );
+
+      const lora = result.loras[0];
+      expect(lora.status).toBe('unsupported');
+      expect(lora.canGenerate).toBeUndefined();
+      expect(lora.unresolvedReason).toContain('Model version 404040 not found');
+      expect(lora.reason).toContain('Model version 404040 not found');
+      expect(lora.reason).not.toContain('Civitai 官方未启用在线生成');
+      expect(lora.sendableUrlOrId).toBeUndefined();
+    });
+
+    it('for fal provider, does NOT invent https://civitai.com/api/download/models/${versionId} when downloadUrl is missing', () => {
+      const result = adaptCivitaiRecipeToProvider(
+        {
+          baseModel: 'Flux.1 D',
+          loras: [
+            {
+              name: 'MissingUrlLoRA',
+              versionId: 404040,
+              strength: 0.8,
+              // downloadUrl is omitted/missing!
+            },
+          ],
+        },
+        'fal'
+      );
+
+      const lora = result.loras[0];
+      expect(lora.status).toBe('requires_reselection');
+      expect(lora.sendableUrlOrId).toBeUndefined();
+      expect(lora.reason).toContain('缺少官方真实下载链接');
+      expect(lora.reason).not.toContain('https://civitai.com/api/download/models/404040');
+    });
   });
 });

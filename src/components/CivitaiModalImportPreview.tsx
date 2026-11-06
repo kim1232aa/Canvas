@@ -231,7 +231,9 @@ export const CivitaiModalImportPreview: React.FC<CivitaiModalImportPreviewProps>
                       )}
                       <span
                         className={`text-[9px] font-bold px-1.5 py-0.5 rounded font-mono ${
-                          lora.canGenerate === false && selectedProvider === 'civitai'
+                          lora.unresolvedReason
+                            ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                            : lora.canGenerate === false && selectedProvider === 'civitai'
                             ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
                             : isCompatible
                             ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
@@ -242,7 +244,9 @@ export const CivitaiModalImportPreview: React.FC<CivitaiModalImportPreviewProps>
                             : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
                         }`}
                       >
-                        {lora.canGenerate === false && selectedProvider === 'civitai'
+                        {lora.unresolvedReason
+                          ? '解析失败 / 未核实'
+                          : lora.canGenerate === false && selectedProvider === 'civitai'
                           ? 'Civitai 未启用在线生成'
                           : isCompatible
                           ? '可直接发送'
@@ -261,7 +265,7 @@ export const CivitaiModalImportPreview: React.FC<CivitaiModalImportPreviewProps>
                     </div>
 
                     <p className="text-[11px] text-slate-300 font-mono leading-relaxed">
-                      {lora.reason}
+                      {lora.unresolvedReason || lora.reason}
                     </p>
 
                     {lora.sendableUrlOrId && (

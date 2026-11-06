@@ -231,6 +231,7 @@ export interface ProviderLoraAdaptation {
   inferredFromPrompt?: boolean;
   status: 'compatible' | 'architecture_mismatch' | 'requires_reselection' | 'requires_consent' | 'unsupported';
   reason: string;
+  unresolvedReason?: string;
 }
 
 export interface ProviderAdaptationResult {
@@ -267,6 +268,8 @@ export interface CivitaiRecipeInput {
     requireAuth?: boolean;
     canGenerate?: boolean;
     inferredFromPrompt?: boolean;
+    unresolvedReason?: string;
+    resolutionError?: any;
   }>;
   hash404Warnings?: string[];
   prompt?: string;
@@ -468,6 +471,24 @@ export function adaptCivitaiRecipeToProvider(
     const versionId = versionFromAir || (l.versionId ? String(l.versionId) : (l.civitaiId && !l.civitaiId.includes('@') && !l.civitaiId.startsWith('urn:') ? String(l.civitaiId) : ''));
     const modelId = modelFromAir || (l.modelId ? String(l.modelId) : (l.civitaiId && l.civitaiId.includes('@') ? l.civitaiId.split('@')[0] : ''));
 
+    // Check unresolvable or resolution failure first (P1-2: do not rewrite 404 into canGenerate:false or fabricate download URL)
+    if (l.unresolvedReason || l.resolutionError) {
+      adaptedLoras.push({
+        name: loraName,
+        originalStrength,
+        originalClipStrength,
+        civitaiId: undefined,
+        modelId: undefined,
+        versionId: undefined,
+        baseModel: loraBaseModel,
+        targetFormat: 'unsupported',
+        status: 'unsupported',
+        unresolvedReason: l.unresolvedReason,
+        reason: l.unresolvedReason || '模型版本解析失败，未获得有效的官方资源信息；请在目标库重新选择已验证资源。',
+      });
+      continue;
+    }
+
     // Check cap first (P1-3)
     if (capInfo && i >= capInfo.cap) {
       adaptedLoras.push({
@@ -549,7 +570,7 @@ export function adaptCivitaiRecipeToProvider(
       loraEcosystem !== 'unknown' &&
       ecosystem !== loraEcosystem;
 
-    const directDownloadUrl = versionId ? `https://civitai.com/api/download/models/${versionId}` : (l.downloadUrl || '');
+    const directDownloadUrl = l.downloadUrl || '';
     const effectiveEco = loraEcosystem !== 'unknown' ? loraEcosystem : (ecosystem !== 'unknown' ? ecosystem : 'sdxl');
     const canonicalAir = l.air || (modelId && versionId ? `urn:air:${effectiveEco}:lora:civitai:${modelId}@${versionId}` : '');
 
@@ -632,23 +653,40 @@ export function adaptCivitaiRecipeToProvider(
         });
       } else if (l.requireAuth) {
         if (options?.allowTokenInUrl) {
-          const tokenParam = options?.civitaiToken ? `?token=${options.civitaiToken}` : '';
-          const authenticatedUrl = `${directDownloadUrl}${tokenParam}`;
-          adaptedLoras.push({
-            name: loraName,
-            originalStrength,
-            originalClipStrength,
-            civitaiId: versionId,
-            modelId,
-            versionId,
-            baseModel: loraBaseModel,
-            targetFormat: 'download_url',
-            sendableUrlOrId: authenticatedUrl,
-            requiresAuthConsent: true,
-            scale: originalStrength,
-            status: 'compatible',
-            reason: `已获用户显式 UI 授权，向 ${displayName} 发送带 Civitai Token 的下载链接 (scale: ${originalStrength})`,
-          });
+          if (!directDownloadUrl) {
+            adaptedLoras.push({
+              name: loraName,
+              originalStrength,
+              originalClipStrength,
+              civitaiId: versionId,
+              modelId,
+              versionId,
+              baseModel: loraBaseModel,
+              targetFormat: 'unsupported',
+              requiresAuthConsent: true,
+              scale: originalStrength,
+              status: 'requires_reselection',
+              reason: `已获用户授权，但缺少官方真实下载链接 (downloadUrl)，无法向 ${displayName} 发送权重直链；绝不向应用构造的 URL 附加凭据。`,
+            });
+          } else {
+            const tokenParam = options?.civitaiToken ? `?token=${options.civitaiToken}` : '';
+            const authenticatedUrl = `${directDownloadUrl}${tokenParam}`;
+            adaptedLoras.push({
+              name: loraName,
+              originalStrength,
+              originalClipStrength,
+              civitaiId: versionId,
+              modelId,
+              versionId,
+              baseModel: loraBaseModel,
+              targetFormat: 'download_url',
+              sendableUrlOrId: authenticatedUrl,
+              requiresAuthConsent: true,
+              scale: originalStrength,
+              status: 'compatible',
+              reason: `已获用户显式 UI 授权，向 ${displayName} 发送带 Civitai Token 的下载链接 (scale: ${originalStrength})`,
+            });
+          }
         } else {
           adaptedLoras.push({
             name: loraName,
@@ -665,6 +703,19 @@ export function adaptCivitaiRecipeToProvider(
             reason: `该 Civitai LoRA 上游标记为需登录鉴权下载 (requireAuth=true)；严禁在未经用户显式 UI 授权时向 ${displayName} 附带 Civitai API Token（避免个人凭据泄露）。需在界面点击授权后方可附加 Token 发送。`,
           });
         }
+      } else if (!directDownloadUrl) {
+        adaptedLoras.push({
+          name: loraName,
+          originalStrength,
+          originalClipStrength,
+          civitaiId: versionId,
+          modelId,
+          versionId,
+          baseModel: loraBaseModel,
+          targetFormat: 'unsupported',
+          status: 'requires_reselection',
+          reason: `缺少官方真实下载链接 (downloadUrl)，无法向 ${displayName} 发送权重直链；需在目标库中重新选用。`,
+        });
       } else {
         adaptedLoras.push({
           name: loraName,
@@ -711,23 +762,38 @@ export function adaptCivitaiRecipeToProvider(
           reason: `该 Civitai LoRA 需登录鉴权；未获显式授权不向 Replicate 发送凭据。`,
         });
       } else {
-        const repRef = (options?.allowTokenInUrl && options?.civitaiToken && l.requireAuth)
+        const repRef = (options?.allowTokenInUrl && options?.civitaiToken && l.requireAuth && directDownloadUrl)
           ? `${directDownloadUrl}?token=${options.civitaiToken}`
           : (modelId ? `civitai.com/models/${modelId}` : directDownloadUrl);
-        adaptedLoras.push({
-          name: loraName,
-          originalStrength,
-          originalClipStrength,
-          civitaiId: versionId,
-          modelId,
-          versionId,
-          baseModel: loraBaseModel,
-          targetFormat: 'download_url',
-          sendableUrlOrId: repRef,
-          scale: originalStrength,
-          status: 'compatible',
-          reason: `将作为 Replicate ${fieldName} 传入 (scale: ${originalStrength})`,
-        });
+        if (!repRef) {
+          adaptedLoras.push({
+            name: loraName,
+            originalStrength,
+            originalClipStrength,
+            civitaiId: versionId,
+            modelId,
+            versionId,
+            baseModel: loraBaseModel,
+            targetFormat: 'unsupported',
+            status: 'requires_reselection',
+            reason: `缺少官方真实下载链接或模型编号，无法向 Replicate 发送权重；需在目标库中重新选用。`,
+          });
+        } else {
+          adaptedLoras.push({
+            name: loraName,
+            originalStrength,
+            originalClipStrength,
+            civitaiId: versionId,
+            modelId,
+            versionId,
+            baseModel: loraBaseModel,
+            targetFormat: 'download_url',
+            sendableUrlOrId: repRef,
+            scale: originalStrength,
+            status: 'compatible',
+            reason: `将作为 Replicate ${fieldName} 传入 (scale: ${originalStrength})`,
+          });
+        }
       }
     } else if (provider === 'modelscope' || provider === 'modelscope_ai') {
       adaptedLoras.push({
