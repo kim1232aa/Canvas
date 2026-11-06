@@ -3,6 +3,9 @@ import { civitaiEngines, civitaiEcosystemsFor } from '../schemas/providerSchema'
 import { ensureModelSchema, withCachedSchemaProperties } from '../services/modelSchemaCache';
 import {ApiParameterEditor} from './ApiParameterEditor';
 import {videoDurationBounds, videoSchemaField} from '../utils/frontendParameters';
+import { CIVITAI_VIDEO_OPENAPI_URL } from '../schemas/civitaiVideo';
+import { sharedGetJson } from '../services/sharedGet';
+import { civitaiVideoDiscriminatorSteps, type CivitaiVideoInspectorParams } from '../utils/inspectorParameters';
 import {ProviderModelSelect} from './ProviderModelSelect';
 import React from 'react';
 import {
@@ -100,6 +103,117 @@ export function CivitaiAllowMatureControl({
   );
 }
 
+const CIVITAI_VIDEO_DISC_PARAMS = {
+  engine: 'civitaiEngine',
+  version: 'civitaiVersion',
+  operation: 'civitaiOperation',
+  provider: 'civitaiBackend',
+} as const;
+
+const CIVITAI_VIDEO_DISC_LABELS: Record<string, string> = {
+  engine: 'Civitai engine',
+  version: 'Civitai version',
+  operation: 'Civitai operation',
+  provider: 'Civitai schema provider',
+};
+
+function civitaiVideoSelectorValue(params: CivitaiVideoInspectorParams, propertyName: string): string {
+  const key = (CIVITAI_VIDEO_DISC_PARAMS as Record<string, keyof CivitaiVideoInspectorParams | undefined>)[propertyName];
+  return key ? String(params[key] || '') : '';
+}
+
+export function CivitaiVideoLiveSelectors({
+  params,
+  update,
+}: {
+  params: CivitaiVideoInspectorParams;
+  update: (partial: Partial<CivitaiVideoInspectorParams>) => void;
+}) {
+  const [document, setDocument] = React.useState<any>();
+  const [error, setError] = React.useState<{ endpoint: string; status?: number; raw: string } | null>(null);
+  React.useEffect(() => {
+    let cancelled = false;
+    setError(null);
+    setDocument(undefined);
+    const url = CIVITAI_VIDEO_OPENAPI_URL;
+    sharedGetJson(url, { Accept: 'application/json' })
+      .then((result) => {
+        if (cancelled) return;
+        if (!result.ok) {
+          const raw = result.raw !== undefined
+            ? result.raw
+            : (result.data ? (typeof result.data === 'string' ? result.data : JSON.stringify(result.data, null, 2)) : '');
+          setError({ endpoint: url, status: result.status, raw });
+          return;
+        }
+        setDocument(result.data);
+      })
+      .catch((e: any) => {
+        if (cancelled) return;
+        const raw = e?.rawBody !== undefined ? e.rawBody : String(e?.stack || e?.message || e || '');
+        setError({ endpoint: url, status: typeof e?.appStatus === 'number' ? e.appStatus : e?.status, raw });
+      });
+    return () => { cancelled = true; };
+  }, []);
+  const selectors: Record<string, string> = {
+    engine: civitaiVideoSelectorValue(params, 'engine'),
+    version: civitaiVideoSelectorValue(params, 'version'),
+    operation: civitaiVideoSelectorValue(params, 'operation'),
+    provider: civitaiVideoSelectorValue(params, 'provider'),
+  };
+  const steps = document ? civitaiVideoDiscriminatorSteps(document, selectors) : [];
+  const setSelector = (propertyName: string, value: string) => {
+    const key = (CIVITAI_VIDEO_DISC_PARAMS as Record<string, string>)[propertyName];
+    if (!key) return;
+    const next: Partial<CivitaiVideoInspectorParams> = { [key]: value || undefined };
+    // Nested OpenAPI discriminators: changing a parent branch drops child selectors so they are not sent on the new branch.
+    if (propertyName === 'engine') {
+      next.civitaiVersion = undefined;
+      next.civitaiBackend = undefined;
+      next.civitaiOperation = undefined;
+    } else if (propertyName === 'version') {
+      next.civitaiBackend = undefined;
+      next.civitaiOperation = undefined;
+    } else if (propertyName === 'provider') {
+      next.civitaiOperation = undefined;
+    }
+    update(next);
+  };
+  return (
+    <div className="space-y-2" data-testid="civitai-video-live-selectors">
+      {error && (
+        <div role="alert" aria-label="Civitai 视频 Schema 请求失败" className="rounded-lg border border-rose-900/60 bg-rose-950/20 p-2.5 text-xs text-rose-200 font-mono space-y-1">
+          <div className="font-semibold text-rose-100">Civitai 视频 Schema 获取失败</div>
+          <div className="break-all text-[11px] text-rose-300">请求端点：{error.endpoint}</div>
+          {error.status !== undefined && <div className="text-[11px] text-rose-300">HTTP 状态码：{error.status}</div>}
+          <pre className="mt-1 max-h-60 overflow-auto whitespace-pre-wrap break-all text-[11px] bg-black/40 p-2 rounded border border-rose-950 select-text">{error.raw}</pre>
+        </div>
+      )}
+      {steps.map((step) => {
+        const label = CIVITAI_VIDEO_DISC_LABELS[step.propertyName] || `Civitai ${step.propertyName}`;
+        const value = civitaiVideoSelectorValue(params, step.propertyName);
+        return (
+          <label key={step.propertyName} className="block text-sm text-slate-300">
+            {label}
+            <select
+              aria-label={label}
+              value={value}
+              onChange={(e) => setSelector(step.propertyName, e.target.value)}
+              className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2"
+            >
+              <option value="">请选择 {step.propertyName}</option>
+              {step.options.map((opt) => (
+                <option key={opt} value={opt}>{opt}</option>
+              ))}
+              {value && !step.options.includes(value) && <option value={value}>{value}</option>}
+            </select>
+          </label>
+        );
+      })}
+    </div>
+  );
+}
+
 interface ParameterInspectorProps {
   params: ComfyParameters;
   onChange: (newParams: ComfyParameters) => void;
@@ -167,7 +281,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
     }
   };
 
-  const update = (partial: Partial<ComfyParameters>) => {
+  const update = (partial: Partial<CivitaiVideoInspectorParams>) => {
     onChange({ ...params, ...partial });
   };
 
@@ -509,9 +623,15 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
               </label>
             );
           })()}
-          {(params.targetProvider === 'civitai' || (params.targetProvider === 'video' && params.videoProvider === 'civitai')) && <div className="space-y-2 rounded-lg border border-slate-700 p-3">
+          {params.targetProvider === 'civitai' && <div className="space-y-2 rounded-lg border border-slate-700 p-3">
             <label className="block text-sm text-slate-300">Civitai engine<select aria-label="Civitai engine" value={params.civitaiEngine || ''} onChange={e=>update({civitaiEngine:e.target.value || undefined})} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2"><option value="">请选择引擎</option>{civitaiEngines().map(e=><option key={e} value={e}>{e}</option>)}{params.civitaiEngine && !civitaiEngines().includes(params.civitaiEngine) && <option value={params.civitaiEngine}>{params.civitaiEngine}</option>}</select></label>
             <label className="block text-sm text-slate-300">Civitai ecosystem<input aria-label="Civitai ecosystem" value={params.civitaiEcosystem || ''} onChange={e=>update({civitaiEcosystem:e.target.value || undefined})} list="civitai-ecosystems" placeholder="显式填写生态；未知生态保留" className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2" /><datalist id="civitai-ecosystems">{civitaiEcosystemsFor(params.civitaiEngine || '').map(x=><option key={x} value={x} />)}</datalist></label>
+            <label className="block text-sm text-slate-300">Civitai model<input aria-label="Civitai model" value={params.civitaiModel || ''} onChange={e=>update({civitaiModel:e.target.value || undefined})} placeholder="按官方 recipe 填写 model selector" className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2" /></label>
+            <CivitaiAllowMatureControl customParameters={params.customParameters} onChangeCustom={customParameters => update({ customParameters })} />
+          </div>}
+          {params.targetProvider === 'video' && params.videoProvider === 'civitai' && <div className="space-y-2 rounded-lg border border-slate-700 p-3">
+            <CivitaiVideoLiveSelectors params={params} update={update} />
+            <label className="block text-sm text-slate-300">Civitai ecosystem<input aria-label="Civitai ecosystem" value={params.civitaiEcosystem || ''} onChange={e=>update({civitaiEcosystem:e.target.value || undefined})} list="civitai-video-ecosystems" placeholder="显式填写生态；未知生态保留" className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2" /><datalist id="civitai-video-ecosystems">{civitaiEcosystemsFor(params.civitaiEngine || '').map(x=><option key={x} value={x} />)}</datalist></label>
             <label className="block text-sm text-slate-300">Civitai model<input aria-label="Civitai model" value={params.civitaiModel || ''} onChange={e=>update({civitaiModel:e.target.value || undefined})} placeholder="按官方 recipe 填写 model selector" className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2" /></label>
             <CivitaiAllowMatureControl customParameters={params.customParameters} onChangeCustom={customParameters => update({ customParameters })} />
           </div>}

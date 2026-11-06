@@ -145,6 +145,30 @@ describe('inspectorVideoRouting: CheckpointLoaderSimple videoProvider persistenc
     expect(extracted.videoDuration).toBe(5);
   });
 
+  it('extracts Civitai video engine/version/operation from CheckpointLoaderSimple into videoSelectors', () => {
+    const civitaiCkpt: NodeInstance = {
+      ...ckptNode,
+      values: {
+        ...ckptNode.values,
+        prompt: 'waves',
+        civitai_engine: 'wan',
+        civitai_version: 'v2.1',
+        civitai_backend: 'civitai',
+        civitai_operation: 'createVideo',
+        video_selectors: { engine: 'wan', version: 'v2.1', provider: 'civitai', operation: 'createVideo' },
+      },
+    };
+    const extracted = extractWorkflowParameters(
+      [civitaiCkpt, clipNode, ksamplerNode, saveImageNode],
+      [...connections, { id: 'c4', fromNodeId: 'ks-1', fromSocketId: 'LATENT', toNodeId: 'save-img-1', toSocketId: 'images', type: 'LATENT' }],
+      'save-img-1',
+    );
+    expect(extracted.isVideo).toBe(true);
+    expect(extracted.videoProvider).toBe('civitai');
+    expect(extracted.videoSelectors).toEqual({ engine: 'wan', version: 'v2.1', provider: 'civitai', operation: 'createVideo' });
+    expect(extracted.civitaiEngine).toBe('wan');
+  });
+
   it('throws when targetProvider is video but videoProvider is unset', () => {
     const unselectedCkpt: NodeInstance = {
       ...ckptNode,

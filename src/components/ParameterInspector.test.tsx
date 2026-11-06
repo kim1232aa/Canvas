@@ -6,6 +6,9 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { ParameterInspector } from './ParameterInspector';
 import { NODE_DEFINITIONS } from '../constants/nodes';
 import type { ComfyParameters } from '../types/graph';
+import type { CivitaiVideoInspectorParams } from '../utils/inspectorParameters';
+import { CIVITAI_VIDEO_OPENAPI_URL } from '../schemas/civitaiVideo';
+import { clearSharedGet } from '../services/sharedGet';
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -70,13 +73,33 @@ describe('ParameterInspector provider registry derivation and selection (mounted
   let root: Root;
 
   beforeEach(() => {
+    clearSharedGet();
     host = document.createElement('div');
     document.body.appendChild(host);
     root = createRoot(host);
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (String(url) === CIVITAI_VIDEO_OPENAPI_URL) {
+        return new Response(JSON.stringify({
+          components: {
+            schemas: {
+              VideoGenInput: { discriminator: { propertyName: 'engine', mapping: { wan: '#/components/schemas/WanVideoGenInput', ltx2: '#/components/schemas/ComfyLtx2VideoGenInput' } } },
+              WanVideoGenInput: { allOf: [{ $ref: '#/components/schemas/VideoGenInput' }, { discriminator: { propertyName: 'version', mapping: { 'v2.1': '#/components/schemas/Wan21VideoGenInput' } } }] },
+              Wan21VideoGenInput: { allOf: [{ $ref: '#/components/schemas/WanVideoGenInput' }, { discriminator: { propertyName: 'provider', mapping: { civitai: '#/components/schemas/Wan21CivitaiVideoGenInput' } } }] },
+              Wan21CivitaiVideoGenInput: { allOf: [{ $ref: '#/components/schemas/Wan21VideoGenInput' }] },
+              ComfyLtx2VideoGenInput: { allOf: [{ $ref: '#/components/schemas/VideoGenInput' }, { discriminator: { propertyName: 'operation', mapping: { createVideo: '#/components/schemas/ComfyLtx2CreateVideoInput' } } }] },
+              ComfyLtx2CreateVideoInput: { allOf: [{ $ref: '#/components/schemas/ComfyLtx2VideoGenInput' }] },
+            },
+          },
+        }), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } });
+    }));
   });
 
   afterEach(async () => {
     if (root) await act(async () => root.unmount());
+    clearSharedGet();
+    vi.unstubAllGlobals();
   });
 
   it('derives image provider buttons from CheckpointLoaderSimple node registry, including formerly missing options', async () => {
@@ -200,11 +223,97 @@ describe('ParameterInspector provider registry derivation and selection (mounted
       );
     });
 
-    expect(host.querySelector('select[aria-label="Civitai engine"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="civitai-video-live-selectors"]')).not.toBeNull();
     expect(host.querySelector('input[aria-label="Civitai ecosystem"]')).not.toBeNull();
     expect(host.querySelector('input[aria-label="Civitai model"]')).not.toBeNull();
     expect(host.querySelector('[data-testid="civitai-allow-mature-control"]')).not.toBeNull();
     expect(host.querySelector('[aria-label="视频时长（秒）"]')).not.toBeNull();
     expect(host.querySelector('input[aria-label="视频 resolution"]')).not.toBeNull();
+  });
+
+  const liveVideoOpenApi = {
+    components: {
+      schemas: {
+        VideoGenInput: { discriminator: { propertyName: 'engine', mapping: { wan: '#/components/schemas/WanVideoGenInput', ltx2: '#/components/schemas/ComfyLtx2VideoGenInput' } } },
+        WanVideoGenInput: { allOf: [{ $ref: '#/components/schemas/VideoGenInput' }, { discriminator: { propertyName: 'version', mapping: { 'v2.1': '#/components/schemas/Wan21VideoGenInput' } } }] },
+        Wan21VideoGenInput: { allOf: [{ $ref: '#/components/schemas/WanVideoGenInput' }, { discriminator: { propertyName: 'provider', mapping: { civitai: '#/components/schemas/Wan21CivitaiVideoGenInput' } } }] },
+        Wan21CivitaiVideoGenInput: { allOf: [{ $ref: '#/components/schemas/Wan21VideoGenInput' }] },
+        ComfyLtx2VideoGenInput: { allOf: [{ $ref: '#/components/schemas/VideoGenInput' }, { discriminator: { propertyName: 'operation', mapping: { createVideo: '#/components/schemas/ComfyLtx2CreateVideoInput' } } }] },
+        ComfyLtx2CreateVideoInput: { allOf: [{ $ref: '#/components/schemas/ComfyLtx2VideoGenInput' }] },
+      },
+    },
+  };
+
+  it('derives Civitai video engine/version/operation options from the live OpenAPI and updates params on select', async () => {
+    clearSharedGet();
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      expect(String(url)).toBe(CIVITAI_VIDEO_OPENAPI_URL);
+      return new Response(JSON.stringify(liveVideoOpenApi), { status: 200, headers: { 'content-type': 'application/json' } });
+    }));
+    const onChange = vi.fn();
+    let current: CivitaiVideoInspectorParams = params({ targetProvider: 'video', videoProvider: 'civitai' });
+    const rerender = async (next: CivitaiVideoInspectorParams) => {
+      current = next;
+      await act(async () => {
+        root.render(<ParameterInspector params={current} onChange={onChange} onOpenCivitai={noop} />);
+      });
+    };
+    await rerender(current);
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
+
+    const engine = host.querySelector<HTMLSelectElement>('select[aria-label="Civitai engine"]');
+    expect(engine).not.toBeNull();
+    expect(Array.from(engine!.options).map((o) => o.value)).toEqual(['', 'wan', 'ltx2']);
+    await act(async () => {
+      engine!.value = 'wan';
+      engine!.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
+      civitaiEngine: 'wan',
+      civitaiVersion: undefined,
+      civitaiBackend: undefined,
+      civitaiOperation: undefined,
+    }));
+    await rerender({ ...current, civitaiEngine: 'wan' });
+    const version = host.querySelector<HTMLSelectElement>('select[aria-label="Civitai version"]');
+    expect(Array.from(version!.options).map((o) => o.value)).toEqual(['', 'v2.1']);
+    await act(async () => {
+      version!.value = 'v2.1';
+      version!.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ civitaiVersion: 'v2.1' }));
+    await rerender({ ...current, civitaiVersion: 'v2.1' });
+    expect(Array.from(host.querySelector<HTMLSelectElement>('select[aria-label="Civitai schema provider"]')!.options).map((o) => o.value)).toEqual(['', 'civitai']);
+
+    await rerender({ ...params({ targetProvider: 'video', videoProvider: 'civitai', civitaiEngine: 'ltx2' }) });
+    const operation = host.querySelector<HTMLSelectElement>('select[aria-label="Civitai operation"]');
+    expect(Array.from(operation!.options).map((o) => o.value)).toEqual(['', 'createVideo']);
+    await act(async () => {
+      operation!.value = 'createVideo';
+      operation!.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ civitaiOperation: 'createVideo' }));
+  });
+
+  it('shows the live Civitai video OpenAPI fetch failure verbatim without swapping provider or model', async () => {
+    clearSharedGet();
+    const raw = '<html>upstream 502</html>';
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(raw, { status: 502, headers: { 'content-type': 'text/html' } })));
+    await act(async () => {
+      root.render(
+        <ParameterInspector
+          params={params({ targetProvider: 'video', videoProvider: 'civitai', checkpoint: 'keep-this-model' })}
+          onChange={noop}
+          onOpenCivitai={noop}
+        />
+      );
+    });
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
+    const alert = host.querySelector('[role="alert"][aria-label="Civitai 视频 Schema 请求失败"]');
+    expect(alert).not.toBeNull();
+    expect(alert?.textContent).toContain(CIVITAI_VIDEO_OPENAPI_URL);
+    expect(alert?.textContent).toContain('502');
+    expect(alert?.querySelector('pre')?.textContent).toBe(raw);
+    expect(host.textContent).toContain('keep-this-model');
   });
 });

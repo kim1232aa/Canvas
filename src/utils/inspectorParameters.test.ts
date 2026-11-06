@@ -1,5 +1,5 @@
 import {it,expect} from 'vitest';
-import {readInspectorParameters,patchInspectorNode,patchSpatialParameters,variationReference} from './inspectorParameters';
+import {readInspectorParameters,patchInspectorNode,patchSpatialParameters,variationReference,civitaiVideoDiscriminatorSteps} from './inspectorParameters';
 import type {NodeInstance} from '../types/graph';
 const node=(id:string,type:string,values:any):NodeInstance=>({id,type,title:type,pos:{x:0,y:0},inputs:[],outputs:[],values});
 it('reads raw sampler values during execution validation failures and patches only changed fields',()=>{
@@ -37,4 +37,30 @@ it.each([false,true,undefined])('reads and patches optional SenseNova booleans %
  const frame:any={id:'f',params:p,prompt:'keep',referenceImageUrl:'ref.png',videoDuration:5};
  expect(patchSpatialParameters(frame,next)).toEqual({...frame,params:next});
  expect(frame.params).toBe(p);
+});
+it('walks live VideoGenInput discriminators without inventing enum lists',()=>{
+ const document={components:{schemas:{
+  VideoGenInput:{discriminator:{propertyName:'engine',mapping:{wan:'#/components/schemas/WanVideoGenInput',ltx2:'#/components/schemas/ComfyLtx2VideoGenInput'}}},
+  WanVideoGenInput:{allOf:[{$ref:'#/components/schemas/VideoGenInput'},{discriminator:{propertyName:'version',mapping:{'v2.1':'#/components/schemas/Wan21VideoGenInput'}}}]},
+  Wan21VideoGenInput:{allOf:[{$ref:'#/components/schemas/WanVideoGenInput'},{discriminator:{propertyName:'provider',mapping:{civitai:'#/components/schemas/Wan21CivitaiVideoGenInput'}}}]},
+  Wan21CivitaiVideoGenInput:{allOf:[{$ref:'#/components/schemas/Wan21VideoGenInput'}]},
+  ComfyLtx2VideoGenInput:{allOf:[{$ref:'#/components/schemas/VideoGenInput'},{discriminator:{propertyName:'operation',mapping:{createVideo:'#/components/schemas/ComfyLtx2CreateVideoInput'}}}]},
+  ComfyLtx2CreateVideoInput:{allOf:[{$ref:'#/components/schemas/ComfyLtx2VideoGenInput'}]},
+ }}};
+ expect(civitaiVideoDiscriminatorSteps(document,{})).toEqual([{propertyName:'engine',options:['wan','ltx2']}]);
+ expect(civitaiVideoDiscriminatorSteps(document,{engine:'wan'}).map(s=>s.propertyName)).toEqual(['engine','version']);
+ expect(civitaiVideoDiscriminatorSteps(document,{engine:'wan',version:'v2.1'}).find(s=>s.propertyName==='provider')?.options).toEqual(['civitai']);
+ expect(civitaiVideoDiscriminatorSteps(document,{engine:'ltx2'}).find(s=>s.propertyName==='operation')?.options).toEqual(['createVideo']);
+});
+it('persists Civitai video engine/version/operation onto CheckpointLoaderSimple video_selectors and reads them back',()=>{
+ const c=node('c','CheckpointLoaderSimple',{ckpt_name:'wan',targetProvider:'video',video_provider:'civitai'});
+ const before=readInspectorParameters([c],[],'c');
+ const after={...before,civitaiEngine:'wan',civitaiVersion:'v2.1',civitaiBackend:'civitai',civitaiOperation:'createVideo'} as any;
+ const patched=patchInspectorNode(c,before,after);
+ expect(patched.values.video_selectors).toEqual({engine:'wan',version:'v2.1',provider:'civitai',operation:'createVideo'});
+ expect(patched.values.civitai_engine).toBe('wan');
+ expect(patched.values.civitai_version).toBe('v2.1');
+ expect(patched.values.civitai_backend).toBe('civitai');
+ expect(patched.values.civitai_operation).toBe('createVideo');
+ expect(readInspectorParameters([patched],[],'c')).toMatchObject({civitaiEngine:'wan',civitaiVersion:'v2.1',civitaiBackend:'civitai',civitaiOperation:'createVideo'});
 });
