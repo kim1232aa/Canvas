@@ -386,7 +386,7 @@ describe('checkLoraArchitectureCompatibility & ReplicateEngineNode resolution', 
     expect(res.loraFamily).toBe('sdxl');
     expect(res.hint).toContain('likely incompatible');
     expect(res.reason).toBe(
-      'LoRA [[Krea2 Turbo] AsianMix Lora] (baseModel: Krea2 Turbo) 与底模 [black-forest-labs/flux-dev] (baseModel: FLUX.1) 架构可能不兼容（基于目录元数据），已提交上游裁决。'
+      'LoRA [[Krea2 Turbo] AsianMix Lora] (baseModel: Krea2 Turbo) 与底模 [black-forest-labs/flux-dev] (baseModel: FLUX.1) 架构可能不兼容（基于目录元数据）。'
     );
 
     // When catalog metadata baseModel is missing, does not guess from name and does not flag incompatible

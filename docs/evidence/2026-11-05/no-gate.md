@@ -193,9 +193,14 @@
 
 表格逐行重新清点统计结果完全一致：
 - **总审计条目数**: 128 条
-- **CLASS A 保留项**: 101 条（真实无法构建请求、缺失 Key、缺失 Provider、缺失 Model、TAMS uint64 路径校验、Fal/Civitai 缺少 Schema 无法构造载荷、本地输入数据格式损坏、AIR 歧义、安全隔离保护、缺少模型强度无法组装 Civitai loras 规范载荷）
-- **CLASS B 删除/解除阻断项**: 24 条（全部已在当前代码中删除或彻底清理，代码中不再有任何一条处于拦截状态的 Class B 门禁）
-- **转 M23 项**: 3 条（`VideoDriver.ts:133`, `FalDriver.ts:103`, `AgnesDriver.ts:118`，位于 `src/engines/drivers/` 目录，已由主控划归 Mission M23）
+- **分类统计 (Verdict)**:
+  - **CLASS A (请求无法构造)**: 101 条（真实无法构建请求、缺失 Key、缺失 Provider、缺失 Model、TAMS uint64 路径校验、Fal/Civitai 缺少 Schema 无法构造载荷、本地输入数据格式损坏、AIR 歧义、安全隔离保护、缺少模型强度无法组装 Civitai loras 规范载荷）
+  - **CLASS B (应用替上游预检判断)**: 27 条（包括 M18 范围内已处理的 24 项，以及属于 `src/engines/drivers/` 驱动层的 3 项）
+- **处置状态分布 (Disposition)**:
+  - **CLASS A KEEP (保留项)**: 101 条
+  - **CLASS B REMOVE (已删除/解除阻断/彻底清理)**: 24 条（代码中已彻底处理，不再有任何一条处于本地拦截状态）
+  - **转 M23 (移交驱动层处理)**: 3 条（`VideoDriver.ts:133`, `FalDriver.ts:103`, `AgnesDriver.ts:118`，位于 `src/engines/drivers/` 目录，已由主控统一划归 Mission M23）
+  - **校验**: 101 + 24 + 3 = 128，与逐行重数严格相等。
 
 ---
 

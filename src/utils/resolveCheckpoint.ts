@@ -726,7 +726,7 @@ export function checkLoraArchitectureCompatibility(
   const hint = metadataDiffer ? 'likely incompatible: base models differ per the catalog metadata' : undefined;
 
   if (ckptFamily !== 'unknown' && loraFamily !== 'unknown' && ckptFamily !== loraFamily) {
-    const reason = `LoRA [${loraName}] (baseModel: ${loraBase}) 与底模 [${ckptName}] (baseModel: ${ckptBase}) 架构可能不兼容（基于目录元数据），已提交上游裁决。`;
+    const reason = `LoRA [${loraName}] (baseModel: ${loraBase}) 与底模 [${ckptName}] (baseModel: ${ckptBase}) 架构可能不兼容（基于目录元数据）。`;
     return {
       compatible: false,
       reason,

@@ -1159,22 +1159,8 @@ export async function executeWorkflow(
     // Explicit LoRA strength required — never invent 0.8 before upstream submit
     assertExplicitLoraStrengths(params.loras);
 
-    // Check architecture compatibility for each LoRA
-    const compatibleLoras: typeof params.loras = [];
-    for (const l of params.loras) {
-      const compat = checkLoraArchitectureCompatibility(
-        params.checkpointModel,
-        params.checkpointBaseModel,
-        l
-      );
-      // All LoRAs are sent as filled; upstream decides (no pre-send blocking throw).
-      // Non-blocking hint only when catalog metadata explicitly differ.
-      if (!compat.compatible && compat.hint && l.nodeId) {
-        // Non-blocking hint, does not throw or abort execution
-        console.warn(`[LoRA Hint] ${compat.hint}`);
-      }
-      compatibleLoras.push(l);
-    }
+    // All LoRAs are sent as filled; upstream decides (no pre-send blocking throw)
+    const compatibleLoras: typeof params.loras = [...params.loras];
 
     // 0. 前置大模型深度推理思考阶段 (LLM Reasoning Pre-Execution Pipeline)
     let llmPrompt: string | undefined = undefined;

@@ -11,7 +11,7 @@ describe('server.ts TAMS modelType !== CHECKPOINT regression (Task 5)', () => {
     const end = serverSource.indexOf('\napp.post(', start + marker.length);
     const snippet = serverSource.slice(start, end);
 
-    const calls: string[] = [];
+    const calls: Array<{ url: string; method: string; body?: any }> = [];
     const scope: Record<string, unknown> = {
       app: { post: (_paths: string[], handler: Function) => { (scope as any).handler = handler; } },
       resolveTamsBearerKey: () => 'mock-bearer-token',
@@ -22,7 +22,9 @@ describe('server.ts TAMS modelType !== CHECKPOINT regression (Task 5)', () => {
       crypto: { randomUUID: () => 'uuid-123' },
       resolveTamsModelApiOrigin: () => 'https://tams.tensor.art',
       upstreamFetch: async (_meta: unknown, url: string, options: any) => {
-        calls.push(url);
+        const method = options?.method || 'GET';
+        const body = options?.body ? JSON.parse(options.body) : undefined;
+        calls.push({ url, method, body });
         if (url.includes('/v1/models/')) {
           return {
             ok: true,
@@ -63,15 +65,20 @@ describe('server.ts TAMS modelType !== CHECKPOINT regression (Task 5)', () => {
       json: (j: any) => { resJson = j; return res; },
     };
 
+    let handlerError: any = null;
     try {
       await (scope as any).handler(req, res);
-    } catch {
-      // polling completion in mock
+    } catch (e: any) {
+      handlerError = e;
     }
 
-    // Must have queried metadata AND submitted to /v1/jobs (not stopped by modelType)
-    expect(calls).toContain('https://tams.tensor.art/v1/models/613045163490732233');
-    expect(calls).toContain('https://tams.tensor.art/v1/jobs');
+    if (handlerError) {
+      expect(handlerError.message).not.toContain('所选模型不是 CHECKPOINT');
+    }
+
+    // Must have queried metadata AND submitted to /v1/jobs with POST (not stopped by modelType)
+    expect(calls.some((c) => c.url.includes('/v1/models/613045163490732233'))).toBe(true);
+    expect(calls.some((c) => c.url.includes('/v1/jobs') && c.method === 'POST')).toBe(true);
     expect(resStatus).not.toBe(400);
   });
 });
