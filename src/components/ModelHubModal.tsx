@@ -330,6 +330,9 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
   const [sortOption, setSortOption] = useState<ModelSortOption>('downloads');
   const [selectedArch, setSelectedArch] = useState<string>('all');
   const [query, setQuery] = useState('');
+  // 用户最高原则（2026-11-05）：「我们不反对nsfw，有nsfw开关的都默认开启」
+  // Civitai 与全平台模型目录检索默认开启成人内容检索
+  const [nsfwFilter, setNsfwFilter] = useState(true);
   const requestVersion = useRef(0);
   const morePending = useRef(false);
   const [customId, setCustomId] = useState('');
@@ -453,6 +456,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
     isLoadMore = false,
     catalogTag = '',
     explicitlySelectedProvider = false,
+    currentNsfw = nsfwFilter,
   ) => {
     if (!shouldLoadModelHubDirectory(unsupportedDirectoryProvider, explicitlySelectedProvider)) return;
     if (isLoadMore && morePending.current) return;
@@ -481,6 +485,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
       const archQuery = arch === 'all' ? '' : arch;
 
       const backendSort = sort === 'bookmarked' ? 'downloads' : sort;
+      const tagParam = prov === 'tensorart' ? catalogTag : (!currentNsfw ? 'nsfw:false' : '');
       const data = await catalogOncePerOpen(
         prov,
         searchTerm,
@@ -491,7 +496,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
         livePage,
         40,
         archQuery,
-        prov === 'tensorart' ? catalogTag : ''
+        tagParam
       );
 
       if (version !== requestVersion.current) return;
@@ -695,6 +700,17 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
       const desc = String(m.description || '').toLowerCase();
       const tags = Array.isArray(m.tags) ? m.tags.map((t: any) => String(t).toLowerCase()) : [];
       return name.includes(q) || id.includes(q) || baseModel.includes(q) || desc.includes(q) || tags.some((t: string) => t.includes(q));
+    });
+  }
+
+  // Filter by NSFW toggle: when nsfwFilter is false (user explicitly turned it off), filter out mature items.
+  // When nsfwFilter is true (the default), mature / NSFW items are fully included.
+  if (!nsfwFilter) {
+    displayList = displayList.filter((m) => {
+      if (m.nsfw === true || m.isMature === true) return false;
+      const tags = Array.isArray(m.tags) ? m.tags.map((t: any) => String(t).toLowerCase()) : [];
+      if (tags.some((t: string) => t === 'nsfw' || t === 'mature' || t === 'r18')) return false;
+      return true;
     });
   }
 
@@ -1053,6 +1069,26 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                 <option value="bookmarked" className="bg-[#181922] text-white">我的收藏置顶 (Bookmarked)</option>
               </select>
             </div>
+
+            {/* NSFW 筛选可见开关（用户最高原则：我们不反对nsfw，有nsfw开关的都默认开启） */}
+            <button
+              type="button"
+              onClick={() => {
+                const next = !nsfwFilter;
+                setNsfwFilter(next);
+                loadModels(activeProvider, activeCategory, query, sortOption, selectedArch, false, activeProvider === 'tensorart' ? '' : (!next ? 'nsfw:false' : ''), false, next);
+              }}
+              data-testid="hub-nsfw-toggle"
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[11px] font-semibold transition-all cursor-pointer ${
+                nsfwFilter
+                  ? 'border-pink-500/60 bg-pink-950/40 text-pink-300 shadow-sm shadow-pink-950/50'
+                  : 'border-slate-700 bg-[#101115] text-slate-400 hover:text-slate-200'
+              }`}
+              title="用户最高原则：“我们不反对nsfw，有nsfw开关的都默认开启”（点击可切换）"
+            >
+              <Flame className={`w-3.5 h-3.5 ${nsfwFilter ? 'text-pink-400' : 'text-slate-500'}`} />
+              <span>NSFW: {nsfwFilter ? '已开启 (默认)' : '已关闭'}</span>
+            </button>
 
             <button
               onClick={() => loadModels(activeProvider, activeCategory, query, sortOption)}

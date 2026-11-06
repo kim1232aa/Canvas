@@ -1,0 +1,202 @@
+{
+  "together": {
+    "defaultOn": {
+      "fieldFound": true,
+      "badgeText": "会发送 true（项目默认开启 NSFW）",
+      "selectValue": "true"
+    },
+    "defaultOnLog": {
+      "time": "2026-11-06T14:07:02+09:00",
+      "kind": "upstream",
+      "route": "/api/schema-provider/together/submit",
+      "provider": "together",
+      "model": "black-forest-labs/FLUX.1-schnell",
+      "method": "POST",
+      "endpoint": "https://api.together.ai/v1/images/generations",
+      "requestBody": {
+        "prompt": "a cinematic masterpiece portrait, highly detailed",
+        "width": 1216,
+        "height": 832,
+        "steps": 12,
+        "guidance_scale": 1,
+        "seed": 1840591390,
+        "image_loras": [
+          {
+            "path": "renderartist/Technically-Color-Z-Image-Turbo",
+            "scale": 0.9
+          }
+        ],
+        "disable_safety_checker": true,
+        "model": "black-forest-labs/FLUX.1-schnell"
+      },
+      "status": 401,
+      "responseBody": "{\n  \"id\": \"p8BUjHc-2kFHot-a5619281495fd94a\",\n  \"error\": {\n    \"message\": \"Invalid API key provided. You can find your API key at https://api.together.ai/settings/api-keys.\",\n    \"type\": \"invalid_request_error\",\n    \"param\": null,\n    \"code\": \"invalid_api_key\"\n  }\n}",
+      "taxonomy": "BLOCKED_AUTH"
+    },
+    "toggledOff": {
+      "fieldFound": true,
+      "badgeText": "会发送 false（已手动设为严格安全过滤）",
+      "selectValue": "false"
+    },
+    "toggledOffLog": {
+      "time": "2026-11-06T14:07:09+09:00",
+      "kind": "upstream",
+      "route": "/api/schema-provider/together/submit",
+      "provider": "together",
+      "model": "black-forest-labs/FLUX.1-schnell",
+      "method": "POST",
+      "endpoint": "https://api.together.ai/v1/images/generations",
+      "requestBody": {
+        "prompt": "a cinematic masterpiece portrait, highly detailed",
+        "width": 1216,
+        "height": 832,
+        "steps": 12,
+        "guidance_scale": 1,
+        "seed": 1840591390,
+        "image_loras": [
+          {
+            "path": "renderartist/Technically-Color-Z-Image-Turbo",
+            "scale": 0.9
+          }
+        ],
+        "disable_safety_checker": false,
+        "model": "black-forest-labs/FLUX.1-schnell"
+      },
+      "status": 401,
+      "responseBody": "{\n  \"id\": \"p8BUmUK-2kFHot-a56192af8d66d94a\",\n  \"error\": {\n    \"message\": \"Invalid API key provided. You can find your API key at https://api.together.ai/settings/api-keys.\",\n    \"type\": \"invalid_request_error\",\n    \"param\": null,\n    \"code\": \"invalid_api_key\"\n  }\n}",
+      "taxonomy": "BLOCKED_AUTH"
+    }
+  },
+  "venice": {
+    "defaultOn": {
+      "fieldFound": true,
+      "badgeText": "会发送 false（项目默认开启 NSFW）",
+      "selectValue": "false"
+    },
+    "defaultOnLog": {
+      "time": "2026-11-06T14:07:24+09:00",
+      "kind": "upstream",
+      "route": "/api/schema-provider/venice/submit",
+      "provider": "venice",
+      "model": "venice-sd35",
+      "method": "POST",
+      "endpoint": "https://api.venice.ai/api/v1/image/generate",
+      "requestBody": {
+        "prompt": "a cinematic masterpiece portrait, highly detailed",
+        "width": 1024,
+        "height": 1024,
+        "steps": 20,
+        "cfg_scale": 7.5,
+        "seed": 42,
+        "safe_mode": false,
+        "model": "venice-sd35"
+      },
+      "status": 402,
+      "responseBody": "{\"error\":\"Insufficient USD or Diem balance to complete request. Visit https://venice.ai/settings/api to add credits.\"}",
+      "taxonomy": "PASS_BILLING"
+    },
+    "toggledOff": {
+      "fieldFound": true,
+      "badgeText": "会发送 true（已手动设为严格安全过滤）",
+      "selectValue": "true"
+    },
+    "toggledOffLog": {
+      "time": "2026-11-06T14:07:31+09:00",
+      "kind": "upstream",
+      "route": "/api/schema-provider/venice/submit",
+      "provider": "venice",
+      "model": "venice-sd35",
+      "method": "POST",
+      "endpoint": "https://api.venice.ai/api/v1/image/generate",
+      "requestBody": {
+        "prompt": "a cinematic masterpiece portrait, highly detailed",
+        "width": 1024,
+        "height": 1024,
+        "steps": 20,
+        "cfg_scale": 7.5,
+        "seed": 42,
+        "safe_mode": true,
+        "model": "venice-sd35"
+      },
+      "status": 402,
+      "responseBody": "{\"error\":\"Insufficient USD or Diem balance to complete request. Visit https://venice.ai/settings/api to add credits.\"}",
+      "taxonomy": "PASS_BILLING"
+    }
+  },
+  "civitaiWorkflow": {
+    "offLog": {
+      "time": "2026-11-06T14:08:15+09:00",
+      "provider": "civitai",
+      "endpoint": "https://orchestration.civitai.com/v2/consumer/workflows?wait=100",
+      "status": 400,
+      "requestBody": {
+        "allowMatureContent": false,
+        "steps": [
+          {
+            "$type": "imageGen",
+            "input": {
+              "engine": "comfy",
+              "ecosystem": "krea2",
+              "model": "turbo",
+              "prompt": "a cinematic masterpiece portrait, highly detailed",
+              "steps": 8,
+              "cfg": 1
+            }
+          }
+        ]
+      },
+      "stepInputHasAllowMatureContent": false
+    },
+    "onLog": {
+      "time": "2026-11-06T14:08:22+09:00",
+      "provider": "civitai",
+      "endpoint": "https://orchestration.civitai.com/v2/consumer/workflows?wait=100",
+      "status": 400,
+      "requestBody": {
+        "allowMatureContent": true,
+        "steps": [
+          {
+            "$type": "imageGen",
+            "input": {
+              "engine": "comfy",
+              "ecosystem": "krea2",
+              "model": "turbo",
+              "prompt": "a cinematic masterpiece portrait, highly detailed",
+              "steps": 8,
+              "cfg": 1
+            }
+          }
+        ]
+      },
+      "stepInputHasAllowMatureContent": false
+    }
+  },
+  "modelhubCivitai": {
+    "defaultOn": {
+      "toggleFound": true,
+      "toggleText": "NSFW: 已开启 (默认)",
+      "catalogRequest": "/api/models?provider=civitai&type=Checkpoint&category=checkpoint&sort=downloads&page=1&limit=40"
+    },
+    "toggledOff": {
+      "toggleFound": true,
+      "toggleText": "NSFW: 已关闭",
+      "catalogRequest": "/api/models?provider=civitai&type=Checkpoint&category=checkpoint&sort=downloads&page=1&limit=40&catalogTag=nsfw:false"
+    }
+  },
+  "civitaiModalLora": {
+    "defaultOn": {
+      "screenshot": "07-civitaimodal-lora-nsfw-on.jpg",
+      "toggleFound": true,
+      "toggleText": "NSFW: 已开启 (默认)",
+      "countText": "已检索到 343 个 LoRA",
+      "catalogRequest": "/api/civitai/models?types=LORA&sort=Highest+Rated&limit=24&nsfw=true&page=1"
+    },
+    "toggledOff": {
+      "screenshot": "08-civitaimodal-lora-nsfw-off.jpg",
+      "toggleFound": true,
+      "toggleText": "NSFW: 已关闭",
+      "countText": "已检索到 343 个 LoRA",
+      "catalogRequest": "/api/civitai/models?types=LORA&sort=Highest+Rated&limit=24&nsfw=false&page=1"
+    }
+  }
+}

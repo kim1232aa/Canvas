@@ -5,6 +5,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import type express from 'express';
 import YAML from 'yaml';
 import { canvasNodeId, clearVideoJobStatus, readVideoJobStatus, updateVideoJobStatus } from './videoJobStatus.ts';
+import { applyNsfwDefaultsToPayload } from './nsfw';
 export const sogniSchemaSource='https://raw.githubusercontent.com/Sogni-AI/sogni-protocol/main/schemas/tools/generate_image.schema.json';
 export const sogniGenerateVideoSchemaSource='https://raw.githubusercontent.com/Sogni-AI/sogni-protocol/main/schemas/tools/generate_video.schema.json';
 export const sogniAnimatePhotoSchemaSource='https://raw.githubusercontent.com/Sogni-AI/sogni-protocol/main/schemas/tools/animate_photo.schema.json';
@@ -387,7 +388,8 @@ export function schemaAutoFallbackSelection(payload:Record<string,unknown>,schem
 export const officialOpenApiSources={together:'https://docs.together.ai/openapi.yaml',venice:'https://api.venice.ai/doc/api/swagger.yaml',deepinfra:'https://api.deepinfra.com/openapi.json'} as const;
 /** POST requestBody application/json schema at `path` in an OpenAPI document, $refs resolved. null if absent. */
 export function openApiPathRequestSchema(doc:any,path:string):any|null {
-  const raw=doc?.paths?.[path]?.post?.requestBody?.content?.['application/json']?.schema;
+  const p = doc?.paths?.[path] ? path : Object.keys(doc?.paths || {}).find(k => k === path || k.endsWith(path));
+  const raw=p ? doc?.paths?.[p]?.post?.requestBody?.content?.['application/json']?.schema : null;
   if(!raw)return null;
   const schema=resolveSchemaRefs(raw,doc);
   return schema?.properties && typeof schema.properties==='object'?schema:null;
@@ -869,11 +871,14 @@ export function validateSogniLoraStrengthRanges(loras:unknown,strengths:unknown,
 
 /** Cover resolution for Sogni LoRA items:
  *  Reads directly and dynamically from Sogni's upstream `ui.examples`.
- *  Strictly adheres to project rules: NO hardcoded mappings, NO mock covers. */
-export function sogniLoraCover(m: any): { url: string; caption: string } | undefined {
+ *  Strictly adheres to project rules: NO hardcoded mappings, NO mock covers.
+ *  When allowMature is true (e.g. via normalizeSchemaProviderItems with opts.nsfw !== false),
+ *  mature examples are included. Defaults to false when omitted for caller compatibility. */
+export function sogniLoraCover(m: any, allowMature: boolean = m?.allowMature ?? false): { url: string; caption: string } | undefined {
   const examples = Array.isArray(m?.ui?.examples) ? m.ui.examples : [];
   const usable = examples.filter((e: any) => {
-    if (!e?.url || e.isMature === true) return false;
+    if (!e?.url) return false;
+    if (!allowMature && e.isMature === true) return false;
     const cap = String(e.caption || '').trim().toLowerCase();
     // Skip shared baseline / off frames — they look identical across LoRAs.
     if (!cap || cap === 'off' || /baseline/i.test(String(e.url))) return false;
@@ -918,7 +923,7 @@ export function normalizeSchemaProviderItems(provider:Provider,rows:any[],opts:{
   return filtered.map((m:any)=>({id:wantsLora?(provider==='krea'?m.id:(m.loraId || m.slug)):(m.model_id || m.id || m.endpoint_url || m.name),name:m.name || m.title || m.ui?.label || m.model_id || m.id,
     provider:schemaProviders[provider].name,category:wantsLora?'LoRA':isVideoRow(m)?'Video':'Checkpoint',type:wantsLora?'LoRA':'Checkpoint',
     baseModelSource:provider==='krea' && wantsLora && Array.isArray(m.models)?'官方 GET /styles items[].models（Compatible model names），原值显示':(wantsLora && Array.isArray(m.compatibleModels) && compatibleModelsCount(m.compatibleModels)>1?`官方列出可兼容底模共 ${compatibleModelsCount(m.compatibleModels)} 个，卡片只显示第一个名字`:undefined),baseModel:(provider==='krea' && wantsLora && Array.isArray(m.models)?m.models.join(', '):undefined) || m.family || m.tierId || compatibleModelsLabel(m.compatibleModels) || (Array.isArray(m.modelIds)?m.modelIds[0]:undefined),description:m.description || '',tags:m.tags || [],
-    imageUrl:m.image_url || m.cover_url || (Array.isArray(m.urls)?m.urls[0]:undefined) || m.thumbnail || sogniLoraCover(m)?.url || '',imageCaption:sogniLoraCover(m)?.caption,
+    imageUrl:m.image_url || m.cover_url || (Array.isArray(m.urls)?m.urls[0]:undefined) || m.thumbnail || sogniLoraCover(m, (opts as any).nsfw !== false)?.url || '',imageCaption:sogniLoraCover(m, (opts as any).nsfw !== false)?.caption,
     creator:m.ui?.creator || m.owner?.name,externalUrl:m.ui?.sourceUrl,
     sourceUrl:opts.sourceUrl,metadata:m,modelIds:m.modelIds,loraStrength:m.ui?.default,loraStrengthRange:provider==='sogni'?sogniLoraStrengthRange(m):undefined,supportsLora:provider==='venice'||provider==='deepinfra'?false:provider==='together'?undefined:provider==='aimlapi'?(typeof m.supportsLora==='boolean'?m.supportsLora:(m.parameters?.properties && Object.hasOwn(m.parameters.properties,'loras')?true:undefined)):provider==='novita'?(typeof m.supportsLora==='boolean'?m.supportsLora:undefined):provider==='krea'?Boolean(m.parameters?.properties?.styles):JSON.stringify(m.input_fields || m.api_schema || m.parameters || '').includes('lora'),
     badge:wantsLora?(isSogniPersonalLoraRow(m)?'我的个人 LoRA':'官方 LoRA 资源'):'官方模型端点',resourceKind:wantsLora?'adapter':'model-endpoint'}))
@@ -1467,6 +1472,18 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
         mapping.push({from:'custom_parameters.'+key,to:key,value,overrides:Object.hasOwn(payload,key)?payload[key]:undefined,schemaDeclared:declared});
       }
       Object.assign(payload,custom);
+      // Project NSFW Policy (2026-11-05): "我们不反对nsfw，有nsfw开关的都默认开启"
+      // If declared in live schema and not explicitly overridden, default to permissive value.
+      const nsfwApplied = applyNsfwDefaultsToPayload(payload, props);
+      for (const item of nsfwApplied) {
+        mapping.push({
+          from: 'nsfw_policy.' + item.field,
+          to: item.field,
+          value: item.value,
+          schemaDeclared: true,
+          note: `用户最高原则「我们不反对nsfw，有nsfw开关的都默认开启」；官方 Schema 声明字段，默认放开（来源: ${item.docUrl}）`,
+        });
+      }
       if(provider==='sogni') {
         const selectorField=definition.selectorField || sogniHostedToolSelectorEnum(definition.inputSchema)?.field;
         if(selectorField==='videoModel') {

@@ -357,7 +357,7 @@ export async function buildCivitaiImageRequest(
   const effective: Body = { ...topLevel, ...normalizedCustom };
   const translated = new Set([...Object.values(aliases), 'clipSkip', 'clip_skip', 'loras', 'prompt', 'width', 'height', 'steps', 'seed', 'quantity']);
   const boundary = /^(?:model|comfyModel|engine|ecosystem|provider|endpoint|base_?url|url|inference_provider|diffuserModel|diffusionModel|workflowSnapshot|operation|version)$/i;
-  const controls = /^(?:custom_parameters|isVideo|targetProvider|videoDuration|duration|fps|inputSchemaProperties|officialOpenApi)$|api.?key|authorization|credential|password|secret|token/i;
+  const controls = /^(?:custom_parameters|isVideo|targetProvider|videoDuration|duration|fps|inputSchemaProperties|officialOpenApi|allowMatureContent)$|api.?key|authorization|credential|password|secret|token/i;
   const advanced = (source: Body) => Object.fromEntries(Object.entries(source).filter(([key]) => !translated.has(key) && !boundary.test(key) && !controls.test(key)));
   const beforeCustom = { ...await buildCivitaiBaseInput(topLevel, get, officialOpenApi), ...advanced(topLevel) };
   const mapped = await buildCivitaiBaseInput(effective, get, officialOpenApi);
@@ -370,3 +370,28 @@ export async function buildCivitaiImageRequest(
 export async function buildCivitaiImageInput(body: Body, get: CivitaiPublicGet, officialOpenApi?: unknown): Promise<Body> {
   return (await buildCivitaiImageRequest(body, get, officialOpenApi)).payload;
 }
+
+export interface CivitaiWorkflowSubmission {
+  url: string;
+  body: {
+    allowMatureContent: boolean;
+    steps: Array<{
+      $type: 'imageGen';
+      input: Record<string, any>;
+    }>;
+  };
+}
+
+export function buildCivitaiWorkflowSubmission(
+  imageAllowMature: boolean,
+  genInput: Record<string, any>
+): CivitaiWorkflowSubmission {
+  return {
+    url: 'https://orchestration.civitai.com/v2/consumer/workflows?wait=100',
+    body: {
+      allowMatureContent: imageAllowMature,
+      steps: [{ $type: 'imageGen', input: genInput }],
+    },
+  };
+}
+

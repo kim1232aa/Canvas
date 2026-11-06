@@ -24,9 +24,10 @@ import {
   AlertTriangle,
   RefreshCw,
   ArrowDown,
+  Flame,
 } from 'lucide-react';
 import { CivitaiModelItem } from '../types/providers';
-import { searchCivitaiModels, fetchLiveModels, fetchHuggingFaceModelInfo, fetchTensorArtModelInfo } from '../services/api';
+import { fetchLiveModels, fetchHuggingFaceModelInfo, fetchTensorArtModelInfo } from '../services/api';
 import loraHubProviders from '../config/loraHubProviders.json';
 import { identifyArchitectureFamily } from '../utils/baseModelMatcher';
 
@@ -78,6 +79,8 @@ export interface UnifiedLoRAItem {
   civitaiId?: string;
   externalUrl?: string;
   badge?: string;
+  nsfw?: boolean;
+  isMature?: boolean;
 }
 
 import { CivitaiModalImportPreview } from './CivitaiModalImportPreview';
@@ -171,6 +174,8 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
   const [extractError, setExtractError] = useState<string | null>(null);
   const [extractedPreset, setExtractedPreset] = useState<any>(null);
   const [tokenConsent, setTokenConsent] = useState<boolean>(false);
+  // 用户最高原则（2026-11-05）：「我们不反对nsfw，有nsfw开关的都默认开启」
+  const [nsfwFilter, setNsfwFilter] = useState<boolean>(true);
   const activeReqIdRef = useRef(0);
 
   // clean-0942: one LoRA catalog GET per URL per open (StrictMode / repeated effects share it; failures retry).
@@ -193,7 +198,8 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
     searchTerm = query,
     sortOption = sort,
     arch = selectedArch,
-    isLoadMore = false
+    isLoadMore = false,
+    currentNsfw = nsfwFilter
   ) => {
     const currentReqId = ++activeReqIdRef.current;
     if (isLoadMore) {
@@ -216,15 +222,21 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
       // 1. Fetch from Civitai if activeProvider is 'all' or 'civitai'
       if (prov === 'all' || prov === 'civitai') {
         try {
-          const cData = await searchCivitaiModels(
-            searchTerm,
-            'LORA',
-            sortOption,
-            1,
-            24,
-            undefined,
-            isLoadMore ? civitaiCursor || undefined : undefined
-          );
+          const cParams = new URLSearchParams({
+            types: 'LORA',
+            sort: sortOption,
+            limit: '24',
+            nsfw: String(currentNsfw),
+          });
+          if (isLoadMore && civitaiCursor) cParams.append('cursor', civitaiCursor);
+          else if (searchTerm) cParams.append('query', searchTerm);
+          else cParams.append('page', '1');
+
+          const cHeaders: Record<string, string> = {};
+          const cKey = getStoredApiKeys().civitaiKey;
+          if (cKey) cHeaders['x-civitai-key'] = cKey;
+          const cResp = await fetch(`/api/civitai/models?${cParams.toString()}`, { headers: cHeaders });
+          const cData = await cResp.json();
           if (cData && Array.isArray(cData.items)) {
             setCivitaiCursor(cData.metadata?.nextCursor || null);
             if (!cData.metadata?.nextCursor && prov === 'civitai') {
@@ -253,6 +265,7 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
                 civitaiId: String(m.id),
                 externalUrl: `https://civitai.com/models/${m.id}`,
                 badge: fam.toUpperCase(),
+                nsfw: m.nsfw === true,
               });
             });
           }
@@ -266,6 +279,7 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
       if (prov !== 'civitai') {
         const liveCursor = isLoadMore ? (hfCursor || '') : '';
         const livePage = isLoadMore ? (msPage + 1) : 1;
+        const tagParam = prov === 'tensorart' ? '' : (!currentNsfw ? 'nsfw:false' : '');
         const liveData = await catalogOncePerOpen(
           prov === 'all' ? 'all' : prov,
           searchTerm,
@@ -275,7 +289,8 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
           liveCursor,
           livePage,
           36,
-          archQuery
+          archQuery,
+          tagParam
         );
         // Out-of-order guard: a slower response for an earlier provider/query must not overwrite current state.
         if (currentReqId !== activeReqIdRef.current) return;
@@ -724,6 +739,7 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
 
   const displayedModels = models.filter((model) => {
     if (activeProvider !== 'all' && model.providerKey !== activeProvider) return false;
+    if (!nsfwFilter && (model.nsfw === true || model.isMature === true)) return false;
     return selectedArch === 'all' || (model.baseModel || '').trim() === selectedArch;
   });
   const architectureChips = architectureChipsFrom(models.filter((m) => activeProvider === 'all' || m.providerKey === activeProvider));
@@ -917,6 +933,26 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
             <option value="Newest">最新发布 (Newest)</option>
             <option value="Name A-Z">名称排序 (A → Z)</option>
           </select>
+
+          {/* NSFW 筛选可见开关（用户最高原则：我们不反对nsfw，有nsfw开关的都默认开启） */}
+          <button
+            type="button"
+            onClick={() => {
+              const next = !nsfwFilter;
+              setNsfwFilter(next);
+              fetchModels(activeProvider, query, sort, selectedArch, false, next);
+            }}
+            data-testid="lora-hub-nsfw-toggle"
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-[11px] font-semibold transition-all cursor-pointer shrink-0 ${
+              nsfwFilter
+                ? 'border-pink-500/60 bg-pink-950/40 text-pink-300 shadow-sm shadow-pink-950/50'
+                : 'border-slate-700 bg-[#111216] text-slate-400 hover:text-slate-200'
+            }`}
+            title="用户最高原则：“我们不反对nsfw，有nsfw开关的都默认开启”（点击可切换）"
+          >
+            <Flame className={`w-3.5 h-3.5 ${nsfwFilter ? 'text-pink-400' : 'text-slate-500'}`} />
+            <span>NSFW: {nsfwFilter ? '已开启 (默认)' : '已关闭'}</span>
+          </button>
 
           <button
             onClick={() => fetchModels(activeProvider, query, sort, selectedArch, false)}

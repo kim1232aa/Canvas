@@ -12,7 +12,9 @@ const civitaiCache = new Map<string, { data: any; expiry: number; nextCursor?: s
 export function handleCivitaiModels(deps: CivitaiModelRouteDeps) {
   return async (req: Request, res: Response) => {
     try {
-      const { query = '', types = 'LORA', sort = 'Highest Rated', limit = '16', page = '1', nsfw = 'false', cursor = '' } = req.query;
+      // 用户最高原则（2026-11-05）：「我们不反对nsfw，有nsfw开关的都默认开启」
+      // 官方 Civitai 目录检索 API 默认开启 nsfw=true
+      const { query = '', types = 'LORA', sort = 'Highest Rated', limit = '16', page = '1', nsfw = 'true', cursor = '' } = req.query;
       const cloudSettings = deps.getSettings();
       const apiKey =
         (req.headers['x-civitai-key'] as string) ||

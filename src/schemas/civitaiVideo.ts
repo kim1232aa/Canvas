@@ -198,7 +198,13 @@ export function buildCivitaiVideoInput(body: Record<string, any>, officialOpenAp
   mapImage(input, properties, customFields, body.image_url);
   mapLoras(input, properties, customFields, body.loras, document);
 
-  const custom = applyCustomParameters(input, body.custom_parameters);
+  // allowMatureContent is a workflow-level JSON body field (with steps), never leaked into steps[].input
+  let videoCustomObj = parseCustomObject(body.custom_parameters);
+  if (videoCustomObj && typeof videoCustomObj === 'object') {
+    const { allowMatureContent: _ignored, ...cleanObj } = videoCustomObj;
+    videoCustomObj = cleanObj;
+  }
+  const custom = applyCustomParameters(input, videoCustomObj);
 
   for (const required of selected.required) {
     if (!provided(custom.payload[required])) throw new Error(`当前 Civitai 视频 Schema 要求 ${required}；请显式提供该字段`);
@@ -220,3 +226,29 @@ export function buildCivitaiVideoInput(body: Record<string, any>, officialOpenAp
 export function buildCivitaiVideoInputWithoutSchema(_body: Record<string, any>, schemaError: string): never {
   throw new Error(`Civitai 视频 Schema 未知（${schemaError}）；未发送请求。当前没有显式 raw JSON 模式`);
 }
+
+export interface CivitaiVideoWorkflowSubmission {
+  url: string;
+  body: {
+    allowMatureContent: boolean;
+    steps: Array<{
+      $type: 'videoGen';
+      input: Record<string, any>;
+    }>;
+  };
+}
+
+export function buildCivitaiVideoWorkflowSubmission(
+  videoAllowMature: boolean,
+  videoInput: Record<string, any>,
+  waitSeconds = 120
+): CivitaiVideoWorkflowSubmission {
+  return {
+    url: `https://orchestration.civitai.com/v2/consumer/workflows?wait=${waitSeconds}`,
+    body: {
+      allowMatureContent: videoAllowMature,
+      steps: [{ $type: 'videoGen', input: videoInput }],
+    },
+  };
+}
+

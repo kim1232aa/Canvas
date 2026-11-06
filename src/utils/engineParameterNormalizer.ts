@@ -78,6 +78,15 @@ export function normalizeForFal(
     finalPrompt = `${allTriggers}, ${finalPrompt}`.trim();
   }
 
+  const custom = (() => {
+    try {
+      const parsed = JSON.parse(params.customParameters || '{}');
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    } catch {
+      return {};
+    }
+  })();
+
   const payload = {
     prompt: finalPrompt,
     negative_prompt: negativePrompt || undefined,
@@ -87,6 +96,8 @@ export function normalizeForFal(
     seed: params.seed,
     loras: loras.length > 0 ? loras : undefined,
     // H6: enable_safety_checker 不再写死；用户没传则不发，Fal 用自身默认值
+    ...(custom.enable_safety_checker !== undefined ? { enable_safety_checker: custom.enable_safety_checker } : {}),
+    ...(custom.safety_tolerance !== undefined ? { safety_tolerance: custom.safety_tolerance } : {}),
   };
 
   return {

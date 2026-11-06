@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import esbuild from 'esbuild';
 import { CivitaiDriver } from '../engines/drivers/CivitaiDriver';
 const originalFetch = globalThis.fetch;
 afterEach(() => { globalThis.fetch = originalFetch; });
-import { buildCivitaiImageInput, buildCivitaiImageRequest, resolveCivitaiResource, CivitaiSchemaMissingError } from './civitaiImageContract';
+import { buildCivitaiImageInput, buildCivitaiImageRequest, resolveCivitaiResource, CivitaiSchemaMissingError, buildCivitaiWorkflowSubmission } from './civitaiImageContract';
 import { loadCivitaiImageGenOpenApi } from './fixtures/liveSchemaFixtures';
 const oa = () => loadCivitaiImageGenOpenApi();
 
@@ -137,5 +139,101 @@ describe('Civitai image request contract', () => {
   });
   it('live OpenAPI missing → CivitaiSchemaMissingError (no static outbound)', async () => {
     await expect(buildCivitaiImageRequest({ model: 'urn:air:flux1:checkpoint:civitai:1@2', prompt: 'x', engine: 'comfy', ecosystem: 'flux1' }, api({}))).rejects.toBeInstanceOf(CivitaiSchemaMissingError);
+  });
+  it('P1-2: allowMatureContent in custom_parameters stays out of steps[0].input (workflow-level body only)', async () => {
+    const res = await buildCivitaiImageRequest({
+      model: 'urn:air:flux1:checkpoint:civitai:1@2',
+      prompt: 'masterpiece',
+      engine: 'comfy',
+      ecosystem: 'flux1',
+      custom_parameters: { allowMatureContent: false },
+    }, api({}), oa());
+
+    // Step input (payload) must NOT contain allowMatureContent
+    expect(res.payload).not.toHaveProperty('allowMatureContent');
+    // But customParameters retains it so server puts it at the workflow root next to steps
+    expect(res.customParameters).toMatchObject({ allowMatureContent: false });
+  });
+
+  it('buildCivitaiWorkflowSubmission helper constructs workflow JSON root allowMatureContent and no query flag', () => {
+    const genInput = { engine: 'comfy', ecosystem: 'flux1', prompt: 'test' };
+    const subFalse = buildCivitaiWorkflowSubmission(false, genInput);
+    expect(subFalse.url).toBe('https://orchestration.civitai.com/v2/consumer/workflows?wait=100');
+    expect(subFalse.url).not.toContain('allowMatureContent=');
+    expect(subFalse.body).toHaveProperty('allowMatureContent', false);
+    expect(subFalse.body.steps[0].input).not.toHaveProperty('allowMatureContent');
+    expect(subFalse.body.steps[0].input).toBe(genInput);
+
+    const subTrue = buildCivitaiWorkflowSubmission(true, genInput);
+    expect(subTrue.url).not.toContain('allowMatureContent=');
+    expect(subTrue.body).toHaveProperty('allowMatureContent', true);
+    expect(subTrue.body.steps[0].input).not.toHaveProperty('allowMatureContent');
+  });
+
+  it('locks server.ts Civitai image workflow POST wire contract: root allowMatureContent, no query, clean steps[0].input', async () => {
+    const serverSource = readFileSync(new URL('../../server.ts', import.meta.url), 'utf8');
+    const startIdx = serverSource.indexOf('const imageAllowMature =');
+    const endIdx = serverSource.indexOf('if (!orchResp.ok)', startIdx);
+    expect(startIdx, 'Civitai image workflow dispatch block must exist in server.ts').toBeGreaterThanOrEqual(0);
+    expect(endIdx, 'End boundary of Civitai image workflow dispatch must exist in server.ts').toBeGreaterThan(startIdx);
+    const codeSlice = serverSource.slice(startIdx, endIdx);
+
+    const wrapped = `async function __exec(builtImage, req, genInput, upstreamFetch, generationContext, sanitizeGenerationMetadata, model, apiKey) {
+      let capturedUrl = "";
+      let capturedBody = null;
+      const realFetch = upstreamFetch;
+      upstreamFetch = async (m, u, i) => {
+        capturedUrl = u;
+        capturedBody = JSON.parse(i.body);
+        return realFetch(m, u, i);
+      };
+      ${codeSlice}
+      return { capturedUrl, capturedBody, orchResp };
+    }`;
+    const jsCode = esbuild.transformSync(wrapped, { loader: 'ts' }).code;
+    const fn = new Function(jsCode + '; return __exec;')();
+
+    const mockFetch = async () => new Response(JSON.stringify({ id: 'orch-mock-id' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    const generationContext = { getStore: () => undefined };
+    const sanitizeGenerationMetadata = (x: any) => x;
+    const model = 'civitai-test-model';
+    const apiKey = 'test-civitai-api-key';
+    const genInput = { engine: 'comfy', ecosystem: 'flux1', prompt: 'cinematic portrait' };
+
+    // Case 1: custom_parameters toggled off -> allowMatureContent: false
+    const resToggledOff = await fn(
+      { customParameters: { allowMatureContent: false } },
+      { body: {}, path: '/api/civitai/generate' },
+      genInput,
+      mockFetch,
+      generationContext,
+      sanitizeGenerationMetadata,
+      model,
+      apiKey
+    );
+    // (a) 请求体根上有 allowMatureContent，与 steps 同级
+    expect(resToggledOff.capturedBody).toHaveProperty('allowMatureContent', false);
+    expect(resToggledOff.capturedBody).toHaveProperty('steps');
+    expect(Array.isArray(resToggledOff.capturedBody.steps)).toBe(true);
+    // (b) URL 里没有 allowMatureContent=
+    expect(resToggledOff.capturedUrl).not.toContain('allowMatureContent=');
+    expect(resToggledOff.capturedUrl).toBe('https://orchestration.civitai.com/v2/consumer/workflows?wait=100');
+    // (c) steps[0].input 里没有这个键
+    expect(resToggledOff.capturedBody.steps[0].input).not.toHaveProperty('allowMatureContent');
+
+    // Case 2: default-on (no explicit custom override) -> allowMatureContent: true
+    const resDefaultOn = await fn(
+      { customParameters: {} },
+      { body: {}, path: '/api/civitai/generate' },
+      genInput,
+      mockFetch,
+      generationContext,
+      sanitizeGenerationMetadata,
+      model,
+      apiKey
+    );
+    expect(resDefaultOn.capturedBody).toHaveProperty('allowMatureContent', true);
+    expect(resDefaultOn.capturedUrl).not.toContain('allowMatureContent=');
+    expect(resDefaultOn.capturedBody.steps[0].input).not.toHaveProperty('allowMatureContent');
   });
 });
