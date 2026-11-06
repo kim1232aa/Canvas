@@ -297,7 +297,8 @@ describe('provider contract (16): builder / route-handler providers', () => {
     expect(job.stages[1].diffusion).toMatchObject({ steps: 20, cfgScale: 7, width: 1024, height: 768, negativePrompts: [{ text: 'blurry' }], lora: { items: [{ loraModel: '700000000000000001', weight: 0.8 }] } });
     expect(JSON.stringify(job)).not.toContain('strength');
     expect(() => buildTensorModelJob({ model: '600000000000000001', prompt: 'x', width: 1000, height: 768 }, 'r2')).toThrow(/64/);
-    expect(tamsVideoUnsupported('600000000000000001')).toMatch(/没有通用视频生成接口/);
+    expect(tamsVideoUnsupported('600000000000000001')).toMatch(/本应用尚未接入 TAMS 视频/);
+    expect(tamsVideoUnsupported('600000000000000001')).toContain('https://tams-docs.tensor.art/docs/api/guide/workspace-api-example/');
     expect(tamsVideoUnsupported('text2video_tool')).toBeUndefined();
     expect(readFileSync(path.resolve(__dirname, './routes/videoGenerateRoute.ts'), 'utf8')).toContain('if (tamsVideoRefusal) return res.status(400)');
   });

@@ -167,7 +167,7 @@
 - [`02-blank-canvas-onboarding.png`](./ui/02-blank-canvas-onboarding.png)：清空画布后的 6 步新手入门引导卡片
 - [`03-api-settings-enhanced.png`](./ui/03-api-settings-enhanced.png)：改造后的「API 与密钥设置」弹窗（显示真实 ● 已配置 / ○ 未配置状态、官方 API Key 直达链接及服务端密钥池加载情况）
 - [`04-api-settings-tested.png`](./ui/04-api-settings-tested.png)：点击「测试已配置连接」后的真实连通性反馈（Fal.ai 账单接口返回 HTTP 403 权限说明及 374ms 真实时延，未配置服务商显示未配置标记，绝不伪造成功）
-- [`05-loaded-standard-workflow.png`](./ui/05-loaded-standard-workflow.png)：在空状态引导卡上一键加载标准工作流
+- [`05-loaded-standard-workflow.png`](./ui/05-loaded-standard-workflow.png)：在空状态引导卡上一键加载标准工作流（节点与字段呈现中文化友好标签：画布尺寸设定 (Latent) 包含「图像宽度」、「图像高度」、「生成张数」等中文标签而非英文 width/height/batch_size）
 - [`06-run-result-1.png`](./ui/06-run-result-1.png)：Hugging Face + LoRA 生成运行及透明错误披露
 - [`07-workflow-modal.png`](./ui/07-workflow-modal.png)：工作流与热门模型中心
 - [`08-wavespeed-preset.png`](./ui/08-wavespeed-preset.png)：筛选搜索 WaveSpeed 工作流
@@ -180,7 +180,7 @@
 - [`15-parameter-inspector.png`](./ui/15-parameter-inspector.png)：去工程黑话后的右侧参数总控台抽屉（纯中文提示词工作台标题）
 - [`16-spatial-mode.png`](./ui/16-spatial-mode.png)：画板（Spatial）模式实拍（主按钮自适应新建取景框居首，选区按钮文字为 `生成此选区画板`，提示词标题为 `正向提示词`，右侧抽屉提示词标题纯中文）
 - [`17-spatial-empty-onboarding.png`](./ui/17-spatial-empty-onboarding.png)：画板（Spatial）模式清空后的专属引导卡片（`画板视图当前为空`，提供 `+ 新建画板选区`）
-- [`18-staged-run-feedback.png`](./ui/18-staged-run-feedback.png)：图像运行中的分阶段反馈实录（采样器节点实时显示 `等待上游 (2s)`，顶栏状态栏实时显示友好人话 `等待上游返回结果 (已耗时 2秒)...`）
+- [`18-staged-run-feedback.png`](./ui/18-staged-run-feedback.png)：图像运行中的分阶段反馈实录（采样器节点实时显示 `等待上游 (Ns)`，顶栏状态栏实时显示友好人话 `等待上游返回结果 (已耗时 N秒)...`；实拍截图中采样器显示 `等待上游 (2s)`，顶栏显示 `等待上游返回结果 (已耗时 3秒)...`）
 
 ---
 

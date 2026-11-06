@@ -67,10 +67,12 @@ export function buildTensorModelJob(body: Record<string, any>, requestId: string
   return applyCustomParameters({requestId, stages: [{type:'INPUT_INITIALIZE', inputInitialize}, {type:'DIFFUSION', diffusion}]}, jobCustom).payload;
 }
 
-/** TAMS model IDs (numeric / tensor.art model URL) have no generic video job API (docs/provider-schema-drafts/tensorart-tams.json:
- *  video unsupported — only AnimateDiff/workflow). Returns the local refusal message, or undefined when not a TAMS model ID. */
+/** TAMS model IDs (numeric / tensor.art model URL) have a VIDEO_DIFFUSION stage upstream
+ *  (see https://tams-docs.tensor.art/docs/api/guide/workspace-api-example/),
+ *  but this application has not wired TAMS video yet.
+ *  Returns the local refusal message, or undefined when not a TAMS model ID. */
 export function tamsVideoUnsupported(model: unknown): string | undefined {
   const raw = String(model ?? '').trim();
   if (!/^\d{10,25}$/.test(raw) && !/^https:\/\/(?:www\.)?(?:tensor\.art|tusiart\.com)\/models\/\d{10,25}/.test(raw)) return undefined;
-  return `Tensor.Art TAMS 模型 ${raw} 没有通用视频生成接口（官方仅 AnimateDiff / 工作流）；未发送请求，也不会改用 OpenWorks 接口。`;
+  return `Tensor.Art TAMS 模型 ${raw}：本应用尚未接入 TAMS 视频（官方接口参见 https://tams-docs.tensor.art/docs/api/guide/workspace-api-example/ ）；未发送请求，也不会改用 OpenWorks 接口。`;
 }

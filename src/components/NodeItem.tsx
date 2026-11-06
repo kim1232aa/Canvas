@@ -138,6 +138,25 @@ interface NodeItemProps {
   onOpenSettings?: (providerId?: string) => void;
   /** LoRA nodes on this Checkpoint's MODEL chain (run order), for Schema LoRA-slot badges. */
   canvasLoras?: Array<{ name: string }>;
+  /** Explicit reference-image presence (e.g. from canvas connection or direct prop). */
+  hasReferenceImage?: boolean;
+}
+
+export function nodeHasReferenceImage(node: NodeInstance, schemaCustomParameters?: string, directProp?: boolean): boolean {
+  if (directProp !== undefined) return directProp;
+  if (node.values?.hasReferenceImage === true) return true;
+  if (Boolean(node.values?.image_url || node.values?.init_image || node.values?.sourceImage)) return true;
+  try {
+    const parsed = JSON.parse(schemaCustomParameters || '{}');
+    if (parsed?._canvas?.hasReferenceImage === true) return true;
+  } catch { /* */ }
+  try {
+    const parsed = typeof node.values?.custom_parameters === 'string'
+      ? JSON.parse(node.values.custom_parameters || '{}')
+      : node.values?.custom_parameters;
+    if (parsed?._canvas?.hasReferenceImage === true) return true;
+  } catch { /* */ }
+  return false;
 }
 
 /** Official names already represented on the AI video node (widgets, sockets, model routing) — not repeated as Schema inputs. */
@@ -171,6 +190,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
   onOpenModelHub,
   onOpenSettings,
   canvasLoras,
+  hasReferenceImage,
 }) => {
   // Callback ref (no extra hook): report rendered height incl. warnings so nodes below get pushed, not covered.
   const measureRef = (el: HTMLDivElement | null) => {
@@ -188,7 +208,12 @@ export const NodeItem: React.FC<NodeItemProps> = ({
   const uploadInput = React.useRef<HTMLInputElement>(null);
   const [showUnsupported, setShowUnsupported] = React.useState(false);
   const liveVideoMatch = useLiveVideoModelMatch(node.type === 'AIVideoNode' ? String(node.values?.targetProvider || '').trim() : '', node.type === 'AIVideoNode' ? String(node.values?.model || '').trim() : '');
-  const liveVideoSchema = useLiveVideoSchema(node.type === 'AIVideoNode' ? String(node.values?.targetProvider || '').trim() : '', node.type === 'AIVideoNode' ? String(node.values?.model || '').trim() : '');
+  const videoHasReference = node.type === 'AIVideoNode' ? nodeHasReferenceImage(node, schemaCustomParameters, hasReferenceImage) : false;
+  const liveVideoSchema = useLiveVideoSchema(
+    node.type === 'AIVideoNode' ? String(node.values?.targetProvider || '').trim() : '',
+    node.type === 'AIVideoNode' ? String(node.values?.model || '').trim() : '',
+    node.type === 'AIVideoNode' ? videoHasReference : undefined,
+  );
   const greySeed = isCanvasFieldUnsupported(currentProvider, currentCheckpoint, 'seed');
   const greyNegative = isCanvasFieldUnsupported(currentProvider, currentCheckpoint, 'negative_prompt');
   const greyWidth = isCanvasFieldUnsupported(currentProvider, currentCheckpoint, 'width');

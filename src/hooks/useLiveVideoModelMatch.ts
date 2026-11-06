@@ -56,16 +56,33 @@ const videoSchemaSettled = new Map<string, LiveVideoSchema | null>();
 const videoSchemaInFlight = new Set<string>();
 const videoSchemaListeners = new Set<() => void>();
 
-export function getLiveVideoSchema(provider?: string | null, model?: string | null): LiveVideoSchema | undefined {
+export function getLiveVideoSchema(provider?: string | null, model?: string | null, hasReference?: boolean): LiveVideoSchema | undefined {
   if (!provider || !model) return undefined;
-  return videoSchemaSettled.get(`${provider}\u0000${model}`) ?? undefined;
+  if (hasReference !== undefined) {
+    const key = `${provider}\u0000${model}\u0000${hasReference ? 'ref' : 'noref'}`;
+    const hit = videoSchemaSettled.get(key);
+    if (hit !== undefined) return hit ?? undefined;
+  }
+  return videoSchemaSettled.get(`${provider}\u0000${model}\u0000noref`)
+    ?? videoSchemaSettled.get(`${provider}\u0000${model}\u0000ref`)
+    ?? videoSchemaSettled.get(`${provider}\u0000${model}`)
+    ?? undefined;
 }
 
-/** GET /api/model-schema?isVideo=true so the video node shows the live hosted-tool Schema, not the image one. */
-export function useLiveVideoSchema(provider: string, model: string): LiveVideoSchema | undefined {
+/** Clear cached schemas (used in tests). */
+export function _resetLiveVideoSchemaCache(): void {
+  videoSchemaSettled.clear();
+  videoSchemaInFlight.clear();
+  videoSchemaListeners.clear();
+}
+
+/** GET /api/model-schema?isVideo=true so the video node shows the live hosted-tool Schema, not the image one.
+ * When hasReference=true (video node has a reference image connected), passes hasReference=true on the schema GET. */
+export function useLiveVideoSchema(provider: string, model: string, hasReference?: boolean): LiveVideoSchema | undefined {
   const [, setTick] = React.useState(0);
   if (!provider || !model) return undefined;
-  const key = `${provider}\u0000${model}`;
+  const hasRef = Boolean(hasReference);
+  const key = `${provider}\u0000${model}\u0000${hasRef ? 'ref' : 'noref'}`;
   if (videoSchemaSettled.has(key)) return videoSchemaSettled.get(key) ?? undefined;
   const bump = () => setTick((t) => t + 1);
   videoSchemaListeners.add(bump);
@@ -78,7 +95,7 @@ export function useLiveVideoSchema(provider: string, model: string): LiveVideoSc
         const slot = provider === 'openworks' ? 'tensorart' : provider;
         const keyHeader = keys[`${slot}Key`];
         const headers: Record<string, string> = keyHeader ? { [`x-${slot}-key`]: keyHeader } : {};
-        const url = `/api/model-schema?provider=${encodeURIComponent(provider)}&model=${encodeURIComponent(model)}&isVideo=true`;
+        const url = `/api/model-schema?provider=${encodeURIComponent(provider)}&model=${encodeURIComponent(model)}&isVideo=true${hasRef ? '&hasReference=true' : ''}`;
         const r = await fetch(url, { headers });
         const data = await r.json().catch(() => null);
         if (!r.ok || !data) return null;
