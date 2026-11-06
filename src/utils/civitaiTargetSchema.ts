@@ -277,7 +277,8 @@ export function inspectTargetSchemaForLoras(
     };
   }
 
-  // 2. Fallback to known provider conventions when no schema provided
+  // 2. Documented defaults when no live schema is provided
+  // Citations reflect primary source API documentation opened this session:
   switch (p) {
     case 'civitai':
       return {
@@ -286,6 +287,7 @@ export function inspectTargetSchemaForLoras(
         format: 'air',
         status: 'supported',
         reason: 'Civitai Orchestration 原生支持 AIR 模型规范字典/列表。',
+        docSource: 'https://developer.civitai.com/orchestration/guide/submitting-work.md',
       };
     case 'fal':
       return {
@@ -295,7 +297,31 @@ export function inspectTargetSchemaForLoras(
         pathOrKeyProp: 'path',
         strengthProp: 'scale',
         status: 'supported',
-        reason: 'Fal.ai 端点支持 HTTP(S) Safetensors 直链与 scale。',
+        reason: 'Fal.ai 端点支持 HTTP(S) Safetensors 直链与 scale (范围 0~4)。',
+        docSource: 'https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/lora',
+      };
+    case 'replicate':
+      return {
+        provider: p,
+        field: 'lora_weights',
+        format: 'download_url',
+        pathOrKeyProp: 'lora_weights',
+        strengthProp: 'lora_scale',
+        maxItems: 2,
+        status: 'supported',
+        reason: 'Replicate 官方模型端点支持 lora_weights 与 extra_lora 直链 Safetensors (最多支持 2 个 LoRA)。',
+        docSource: 'https://replicate.com/black-forest-labs/flux-dev-lora',
+      };
+    case 'runware':
+      return {
+        provider: p,
+        field: 'lora',
+        format: 'air',
+        pathOrKeyProp: 'model',
+        strengthProp: 'weight',
+        status: 'supported',
+        reason: 'Runware 原生支持 Civitai AIR (civitai:modelId@versionId) 与 Runware model ID。',
+        docSource: 'https://runware.ai/docs/en/image-inference/api-reference',
       };
     case 'wavespeed':
       return {
@@ -305,7 +331,7 @@ export function inspectTargetSchemaForLoras(
         pathOrKeyProp: 'path',
         strengthProp: 'scale',
         status: 'supported',
-        reason: 'WaveSpeed OpenAPI 支持 HTTP(S) 直链与 scale。',
+        reason: 'WaveSpeed 支持 HTTP(S) 直链 Safetensors 与 scale。',
       };
     case 'aimlapi':
       return {
@@ -325,18 +351,7 @@ export function inspectTargetSchemaForLoras(
         pathOrKeyProp: 'path',
         strengthProp: 'scale',
         status: 'supported',
-        reason: 'MuAPI OpenAPI 支持 HTTP(S) 直链与 scale。',
-      };
-    case 'replicate':
-      return {
-        provider: p,
-        field: 'lora_weights',
-        format: 'download_url',
-        pathOrKeyProp: 'lora_weights',
-        strengthProp: 'lora_scale',
-        maxItems: 2,
-        status: 'supported',
-        reason: 'Replicate 官方模型端点支持 lora_weights 直链 Safetensors。',
+        reason: 'MuAPI 支持 HTTP(S) 直链与 scale。',
       };
     case 'krea':
       return {
@@ -346,7 +361,7 @@ export function inspectTargetSchemaForLoras(
         pathOrKeyProp: 'id',
         strengthProp: 'strength',
         status: 'requires_reselection',
-        reason: 'Krea 官方接口接受 styles 数组；需使用 Krea GET /styles 目录的 style ID。',
+        reason: 'Krea 官方生图接口通过 styles 挂载 LoRA，需要其样式目录公布的 style ID。',
       };
     case 'novita':
       return {
@@ -365,16 +380,6 @@ export function inspectTargetSchemaForLoras(
         format: 'catalog_id',
         status: 'requires_reselection',
         reason: 'Sogni 接受 loras 目录 ID 数组与 loraStrengths 强度数组。',
-      };
-    case 'runware':
-      return {
-        provider: p,
-        field: 'lora',
-        format: 'air',
-        pathOrKeyProp: 'model',
-        strengthProp: 'weight',
-        status: 'supported',
-        reason: 'Runware 原生支持 Civitai AIR (civitai:modelId@versionId) 与 Runware model ID。',
       };
     case 'modelslab':
       return {
@@ -403,6 +408,22 @@ export function inspectTargetSchemaForLoras(
         status: 'requires_reselection',
         reason: 'Tensor.Art TAMS 仅支持其内部数字 LoRA ID。',
       };
+    case 'together':
+      return {
+        provider: p,
+        format: 'unsupported',
+        status: 'unsupported',
+        reason: 'Together 官方参数指南明文声明：image_loras no longer available / FLUX.2 拒绝此参数。',
+        docSource: 'https://docs.together.ai/docs/inference/images/parameters',
+      };
+    case 'venice':
+      return {
+        provider: p,
+        format: 'unsupported',
+        status: 'unsupported',
+        reason: 'Venice 官方 GenerateImageRequest 无自定义 loras 数组参数。',
+        docSource: 'https://api.venice.ai/doc/api/swagger.yaml',
+      };
     case 'nanogpt':
       return {
         provider: p,
@@ -419,22 +440,6 @@ export function inspectTargetSchemaForLoras(
         reason: 'Hugging Face Inference Providers 官方参数表未声明 LoRA 字段。',
         docSource: 'https://huggingface.co/docs/inference-providers/en/tasks/text-to-image',
       };
-    case 'together':
-      return {
-        provider: p,
-        format: 'unsupported',
-        status: 'unsupported',
-        reason: 'Together 官方参数指南明文声明：image_loras no longer available / FLUX.2 拒绝此参数。',
-        docSource: 'https://docs.together.ai/docs/inference/images/parameters',
-      };
-    case 'venice':
-      return {
-        provider: p,
-        format: 'unsupported',
-        status: 'unsupported',
-        reason: 'Venice 官方 GenerateImageRequest 无自定义 loras 数组参数。',
-        docSource: 'https://docs.venice.ai/api-reference/endpoint/image/generate',
-      };
     case 'deepinfra':
       return {
         provider: p,
@@ -449,7 +454,9 @@ export function inspectTargetSchemaForLoras(
         model: targetModel,
         format: 'custom',
         status: 'unverified',
-        reason: '未配置显式 LoRA Schema，将按用户填写原样提交上游裁决。',
+        reason: !targetModel
+          ? `未选择目标模型；请在上方选用目标模型以加载其实时 Schema 规范。`
+          : `未配置显式 LoRA Schema，将按用户填写原样提交上游裁决。`,
       };
   }
 }
@@ -504,10 +511,10 @@ export function buildCivitaiCanonicalAir(
   if (originalAir && originalAir.trim()) return originalAir.trim();
   if (!modelId || !versionId) return undefined;
 
-  const eco = (ecosystem || '').trim();
+  const eco = (ecosystem || '').trim().toLowerCase();
   if (eco && eco !== 'unknown') {
     return `urn:air:${eco}:lora:civitai:${modelId}@${versionId}`;
   }
-  // Unknown ecosystem: do NOT default to sdxl! Keep raw model@version reference
-  return `urn:air:civitai:lora:${modelId}@${versionId}`;
+  // Unknown ecosystem: return undefined; do not fabricate urn:air:civitai:lora:... or default to sdxl!
+  return undefined;
 }

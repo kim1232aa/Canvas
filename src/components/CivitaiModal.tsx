@@ -84,6 +84,7 @@ export interface UnifiedLoRAItem {
 }
 
 import { CivitaiModalImportPreview } from './CivitaiModalImportPreview';
+import { getModelSchemaEntry } from '../services/modelSchemaCache';
 import {
   adaptCivitaiRecipeToProvider,
   buildAllProviderAdaptations,
@@ -170,6 +171,7 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
   const [modalMode, setModalMode] = useState<'browse' | 'import'>(initialMode);
   const [importInput, setImportInput] = useState<string>('');
   const [importTargetProvider, setImportTargetProvider] = useState<string>('civitai');
+  const [importTargetModel, setImportTargetModel] = useState<string>('');
   const [isExtracting, setIsExtracting] = useState<boolean>(false);
   const [extractError, setExtractError] = useState<string | null>(null);
   const [extractedPreset, setExtractedPreset] = useState<any>(null);
@@ -516,7 +518,8 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
   const handleExtractCivitaiWorkflow = async (
     targetInput = importInput,
     targetProv = importTargetProvider,
-    consent = tokenConsent
+    consent = tokenConsent,
+    targetModel = importTargetModel
   ) => {
     const trimmed = (targetInput || '').trim();
     if (!trimmed) return;
@@ -530,9 +533,12 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
         trimmed.includes('<lora:') ||
         trimmed.includes('\n');
 
+      const liveSchemaEntry = getModelSchemaEntry(targetProv, targetModel);
+      const liveSchemaProps = liveSchemaEntry?.status === 'ready' ? liveSchemaEntry.propertiesObj : undefined;
+
       const payload = isRaw
-        ? { rawText: trimmed, engine: targetProv, consentCivitaiToken: consent }
-        : { url: trimmed, engine: targetProv, consentCivitaiToken: consent };
+        ? { rawText: trimmed, engine: targetProv, targetModel: targetModel || undefined, targetSchema: liveSchemaProps, consentCivitaiToken: consent }
+        : { url: trimmed, engine: targetProv, targetModel: targetModel || undefined, targetSchema: liveSchemaProps, consentCivitaiToken: consent };
 
       const resp = await fetch('/api/civitai/extract-workflow', {
         method: 'POST',
@@ -1444,54 +1450,67 @@ Steps: 28, Sampler: DPM++ 2M Karras, CFG scale: 4.5, Seed: 136947637, Size: 1024
         )}
 
         {/* Extracted Preview Component */}
-        {extractedPreset && (
-          <CivitaiModalImportPreview
-            adaptation={
-              extractedPreset.providerAdaptation?.[importTargetProvider] ||
-              adaptCivitaiRecipeToProvider(
-                {
-                  checkpoint: extractedPreset.nodes?.find((n: any) => n.type === 'CheckpointLoaderSimple')?.values?.ckpt_name,
-                  baseModel: extractedPreset.otherMetadata?.baseModel,
-                  loras: extractedPreset.otherMetadata?.resources || [],
-                  prompt: extractedPreset.prompt,
-                  negativePrompt: extractedPreset.negativePrompt,
-                  steps: extractedPreset.otherMetadata?.steps,
-                  cfg: extractedPreset.otherMetadata?.cfgScale,
-                  sampler: extractedPreset.otherMetadata?.sampler,
-                  scheduler: extractedPreset.otherMetadata?.scheduler,
-                  seed: extractedPreset.otherMetadata?.seed,
-                  clipSkip: extractedPreset.otherMetadata?.clipSkip,
-                  width: extractedPreset.otherMetadata?.width,
-                  height: extractedPreset.otherMetadata?.height,
-                  denoise: extractedPreset.otherMetadata?.denoise,
-                },
-                importTargetProvider,
-                { allowTokenInUrl: tokenConsent }
-              )
-            }
-            allAdaptations={extractedPreset.providerAdaptation}
-            selectedProvider={importTargetProvider}
-            onSelectProvider={(prov) => {
-              setImportTargetProvider(prov);
-              handleExtractCivitaiWorkflow(importInput, prov, tokenConsent);
-            }}
-            tokenConsent={tokenConsent}
-            onToggleTokenConsent={(consent) => {
-              setTokenConsent(consent);
-              handleExtractCivitaiWorkflow(importInput, importTargetProvider, consent);
-            }}
-            preset={extractedPreset}
-            onApplyPreset={(p) => {
-              if (onLoadWorkflowPreset) {
-                onLoadWorkflowPreset(p);
-                onClose();
+        {extractedPreset && (() => {
+          const liveSchemaEntry = getModelSchemaEntry(importTargetProvider, importTargetModel);
+          const liveSchemaProps = liveSchemaEntry?.status === 'ready' ? liveSchemaEntry.propertiesObj : undefined;
+          return (
+            <CivitaiModalImportPreview
+              adaptation={
+                adaptCivitaiRecipeToProvider(
+                  {
+                    checkpoint: extractedPreset.nodes?.find((n: any) => n.type === 'CheckpointLoaderSimple')?.values?.ckpt_name,
+                    baseModel: extractedPreset.otherMetadata?.baseModel,
+                    loras: extractedPreset.otherMetadata?.resources || [],
+                    prompt: extractedPreset.prompt,
+                    negativePrompt: extractedPreset.negativePrompt,
+                    steps: extractedPreset.otherMetadata?.steps,
+                    cfg: extractedPreset.otherMetadata?.cfgScale,
+                    sampler: extractedPreset.otherMetadata?.sampler,
+                    scheduler: extractedPreset.otherMetadata?.scheduler,
+                    seed: extractedPreset.otherMetadata?.seed,
+                    clipSkip: extractedPreset.otherMetadata?.clipSkip,
+                    width: extractedPreset.otherMetadata?.width,
+                    height: extractedPreset.otherMetadata?.height,
+                    denoise: extractedPreset.otherMetadata?.denoise,
+                  },
+                  importTargetProvider,
+                  {
+                    targetModel: importTargetModel || undefined,
+                    targetSchema: liveSchemaProps,
+                    allowTokenInUrl: tokenConsent,
+                  }
+                )
               }
-            }}
-            onSelectLoRA={onSelectLoRA}
-            onAddLoRANodeToCanvas={onAddLoRANodeToCanvas}
-            onFillCurrentLoRANode={onFillCurrentLoRANode}
-          />
-        )}
+              allAdaptations={extractedPreset.providerAdaptation}
+              selectedProvider={importTargetProvider}
+              targetModel={importTargetModel}
+              onSelectProvider={(prov) => {
+                setImportTargetProvider(prov);
+                setImportTargetModel('');
+                handleExtractCivitaiWorkflow(importInput, prov, tokenConsent, '');
+              }}
+              onSelectTargetModel={(m) => {
+                setImportTargetModel(m);
+                handleExtractCivitaiWorkflow(importInput, importTargetProvider, tokenConsent, m);
+              }}
+              tokenConsent={tokenConsent}
+              onToggleTokenConsent={(consent) => {
+                setTokenConsent(consent);
+                handleExtractCivitaiWorkflow(importInput, importTargetProvider, consent, importTargetModel);
+              }}
+              preset={extractedPreset}
+              onApplyPreset={(p) => {
+                if (onLoadWorkflowPreset) {
+                  onLoadWorkflowPreset(p);
+                  onClose();
+                }
+              }}
+              onSelectLoRA={onSelectLoRA}
+              onAddLoRANodeToCanvas={onAddLoRANodeToCanvas}
+              onFillCurrentLoRANode={onFillCurrentLoRANode}
+            />
+          );
+        })()}
       </div>
     )}
       </div>

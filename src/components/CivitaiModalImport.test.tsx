@@ -187,7 +187,7 @@ describe('CivitaiModal Recipe Import and Cross-Provider Adaptation UI', () => {
     vi.spyOn(React, 'useState').mockImplementation(((initial: any) => {
       const idx = stateIdx++;
       if (idx === 16) return ['import', vi.fn()];
-      if (idx === 21) return [mockPreset, vi.fn()];
+      if (idx === 22) return [mockPreset, vi.fn()];
       return [initial, vi.fn()];
     }) as any);
 

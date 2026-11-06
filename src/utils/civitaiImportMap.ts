@@ -294,9 +294,7 @@ export interface CivitaiRecipeInput {
   hasInitImage?: boolean;
 }
 
-const PROVIDER_LORA_CAPS: Record<string, { cap: number; source: string }> = {
-  replicate: { cap: 2, source: 'Replicate black-forest-labs/flux-dev-lora 官方 Schema (lora_weights, extra_lora 最多 2 个)' },
-};
+const PROVIDER_LORA_CAPS: Record<string, { cap: number; source: string }> = {};
 
 const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
   civitai: 'Civitai (原生生成引擎)',
@@ -627,7 +625,7 @@ export function adaptCivitaiRecipeToProvider(
           baseModel: loraBaseModel,
           targetFormat: 'air',
           status: 'requires_reselection',
-          reason: '缺少母模型编号 modelId，无法构建规范 AIR (urn:air:{eco}:lora:civitai:{modelId}@{versionId})；请选择具体模型版本。',
+          reason: '基础架构未知或缺少母模型编号，无法构建规范 Civitai AIR (urn:air:{eco}:lora:civitai:{modelId}@{versionId})；请选择具体模型版本。',
         });
       } else {
         adaptedLoras.push({
@@ -646,6 +644,32 @@ export function adaptCivitaiRecipeToProvider(
           reason: `以 Civitai AIR 规范传入 loras 映射字典 (权重: ${originalStrength})`,
         });
       }
+    } else if (targetSpec.status === 'unverified') {
+      adaptedLoras.push({
+        name: loraName,
+        originalStrength,
+        originalClipStrength,
+        civitaiId: versionId,
+        modelId,
+        versionId,
+        baseModel: loraBaseModel,
+        targetFormat: targetSpec.format || 'custom',
+        status: 'unverified',
+        reason: targetSpec.reason || `未获取到 ${displayName} 实时 Schema；生成时将按原值提交上游裁决。`,
+      });
+    } else if (targetSpec.status === 'unsupported') {
+      adaptedLoras.push({
+        name: loraName,
+        originalStrength,
+        originalClipStrength,
+        civitaiId: versionId,
+        modelId,
+        versionId,
+        baseModel: loraBaseModel,
+        targetFormat: 'unsupported',
+        status: 'unsupported',
+        reason: targetSpec.reason || `${displayName} 官方接口未声明 LoRA 字段。`,
+      });
     } else if (['fal', 'wavespeed', 'aimlapi', 'muapi'].includes(provider)) {
       if (isArchMismatch) {
         adaptedLoras.push({
@@ -934,33 +958,18 @@ export function adaptCivitaiRecipeToProvider(
         reason: 'ModelsLab 仅支持其官方模型库中的 lora_model 名称与 lora_strength，需在目标库中重新选用。',
       });
     } else {
-      if (targetSpec.status === 'unsupported') {
-        adaptedLoras.push({
-          name: loraName,
-          originalStrength,
-          originalClipStrength,
-          civitaiId: versionId,
-          modelId,
-          versionId,
-          baseModel: loraBaseModel,
-          targetFormat: 'unsupported',
-          status: 'unsupported',
-          reason: targetSpec.reason || `${displayName} 官方接口未声明 LoRA 字段。`,
-        });
-      } else {
-        adaptedLoras.push({
-          name: loraName,
-          originalStrength,
-          originalClipStrength,
-          civitaiId: versionId,
-          modelId,
-          versionId,
-          baseModel: loraBaseModel,
-          targetFormat: targetSpec.format || 'custom',
-          status: targetSpec.status === 'supported' ? 'compatible' : (targetSpec.status || 'unverified'),
-          reason: targetSpec.reason || `${displayName} 未配置显式 LoRA Schema，将按用户填写原样提交上游裁决。`,
-        });
-      }
+      adaptedLoras.push({
+        name: loraName,
+        originalStrength,
+        originalClipStrength,
+        civitaiId: versionId,
+        modelId,
+        versionId,
+        baseModel: loraBaseModel,
+        targetFormat: targetSpec.format || 'custom',
+        status: targetSpec.status === 'supported' ? 'compatible' : (targetSpec.status || 'unverified'),
+        reason: targetSpec.reason || `${displayName} 未配置显式 LoRA Schema，将按用户填写原样提交上游裁决。`,
+      });
     }
   }
 

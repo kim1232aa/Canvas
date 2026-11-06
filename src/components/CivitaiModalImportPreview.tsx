@@ -19,12 +19,16 @@ import {
   FieldAdaptationDetail,
   ProviderLoraAdaptation,
 } from '../utils/civitaiImportMap';
+import { ProviderModelSelect } from './ProviderModelSelect';
+import { getModelSchemaEntry, subscribeModelSchema } from '../services/modelSchemaCache';
 
 export interface CivitaiModalImportPreviewProps {
   adaptation: ProviderAdaptationResult;
   allAdaptations?: Record<string, ProviderAdaptationResult>;
   selectedProvider: string;
   onSelectProvider: (provider: string) => void;
+  targetModel?: string;
+  onSelectTargetModel?: (model: string) => void;
   tokenConsent: boolean;
   onToggleTokenConsent: (consent: boolean) => void;
   preset?: any;
@@ -54,6 +58,8 @@ export const CivitaiModalImportPreview: React.FC<CivitaiModalImportPreviewProps>
   allAdaptations,
   selectedProvider,
   onSelectProvider,
+  targetModel,
+  onSelectTargetModel,
   tokenConsent,
   onToggleTokenConsent,
   preset,
@@ -63,6 +69,13 @@ export const CivitaiModalImportPreview: React.FC<CivitaiModalImportPreviewProps>
   onFillCurrentLoRANode,
 }) => {
   const [showAllFields, setShowAllFields] = useState(true);
+  const [, setSchemaTick] = useState(0);
+
+  React.useEffect(() => {
+    return subscribeModelSchema(() => setSchemaTick((t) => t + 1));
+  }, []);
+
+  const schemaEntry = getModelSchemaEntry(selectedProvider, targetModel);
 
   const availableProviders = [
     { id: 'civitai', name: 'Civitai 原生' },
@@ -131,6 +144,46 @@ export const CivitaiModalImportPreview: React.FC<CivitaiModalImportPreviewProps>
             );
           })}
         </div>
+
+        {selectedProvider !== 'civitai' && (
+          <div className="pt-2 border-t border-[#262837] space-y-1.5" data-testid="import-model-selector-container">
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="font-semibold text-slate-300">
+                🎯 目标模型 / 端点 (Target Model / Endpoint):
+              </span>
+              <span className="font-mono text-cyan-400">
+                {targetModel ? `已绑定: ${targetModel}` : '待选择'}
+              </span>
+            </div>
+            <ProviderModelSelect
+              provider={selectedProvider}
+              value={targetModel || ''}
+              onChange={(m) => {
+                onSelectTargetModel?.(m);
+              }}
+            />
+            {schemaEntry?.status === 'ready' && (
+              <p className="text-[10px] text-emerald-400 font-mono">
+                ✔ 实时 Schema 已就绪（包含 {schemaEntry.properties?.length || 0} 个官方参数定义，LoRA 与生图契约直接由该 Schema 约束）
+              </p>
+            )}
+            {schemaEntry?.status === 'loading' && (
+              <p className="text-[10px] text-amber-400 font-mono">
+                ⏳ 正在读取目标模型官方 Schema...
+              </p>
+            )}
+            {schemaEntry?.status === 'error' && (
+              <p className="text-[10px] text-rose-400 font-mono">
+                ⚠ 目标端点 Schema 获取失败；未核实，将按原值提交上游裁决。
+              </p>
+            )}
+            {!targetModel && (
+              <p className="text-[10px] text-amber-300 font-mono">
+                提示：尚未选择具体模型端点；当前 LoRA 状态标为未核实 (unverified)，选定模型后将根据真实 Schema 动态适配。
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       {/* 2. Architecture & Compatibility Banner */}

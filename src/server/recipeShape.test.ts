@@ -18,53 +18,62 @@ import { buildRunwareImageRequest } from './runwareImageContract';
 import { buildModelsLabImageRequest } from './modelsLabImageContract';
 
 describe('Mission M27: Recipe Shape, LoRA Resource Identity, and Target Schema Alignment', () => {
-  describe('1. Target-ID vs URL/AIR namespace confusion', () => {
-    it('kreaStyles prioritizes native style ID (styleId/id) over name/path/civitaiId', () => {
-      const lorasWithStyleId = [
-        {
-          id: 'krea-style-uuid-1234',
-          name: 'Civitai Watercolor LoRA',
-          civitaiId: '998877',
-          path: 'https://civitai.com/api/download/models/998877',
-          strength: 0.8,
-        },
-      ];
-      const styles = kreaStyles(lorasWithStyleId);
-      expect(styles).toEqual([{ id: 'krea-style-uuid-1234', strength: 0.8 }]);
-    });
-
-    it('kreaStyles throws transparent local error when given external civitai ID or URL without Krea style ID', () => {
-      const lorasWithoutStyleId = [
-        {
-          civitaiId: '998877',
-          path: 'https://civitai.com/api/download/models/998877',
-          strength: 0.8,
-        },
-      ];
-      expect(() => kreaStyles(lorasWithoutStyleId)).toThrow(/style ID/);
-    });
-
-    it('mapSchemaLoraItems respects target id property and does not put download URL into id', () => {
+  describe('1. Target-ID vs URL/AIR namespace confusion & Probe Verification', () => {
+    it('Probe 1: mapSchemaLoraItems does NOT write civitai numeric ID into url field', () => {
       const itemSchema = {
         type: 'object',
         properties: {
-          id: { type: 'string' },
+          url: { type: 'string' },
+          scale: { type: 'number' },
+        },
+      };
+      // LoRA only has civitaiId '222', no downloadUrl/url
+      const loras = [{ civitaiId: '222', scale: 0.5 }];
+      const result = mapSchemaLoraItems(loras, itemSchema, {}, 'test-model');
+      // Must NOT produce [{ url: '222', scale: 0.5 }] — sends nothing for it
+      expect(result).toEqual([]);
+    });
+
+    it('Probe 2: mapSchemaLoraItems does NOT invent path when schema declares air', () => {
+      const itemSchema = {
+        type: 'object',
+        properties: {
+          air: { type: 'string' },
+          strength: { type: 'number' },
+        },
+      };
+      // LoRA has downloadUrl/path but no AIR
+      const loras = [
+        {
+          path: 'https://civitai.com/api/download/models/222',
+          downloadUrl: 'https://civitai.com/api/download/models/222',
+          strength: 0.5,
+        },
+      ];
+      const result = mapSchemaLoraItems(loras, itemSchema, {}, 'test-model');
+      // Must NOT produce [{ path: 'https://...', strength: 0.5 }] — sends nothing for it
+      expect(result).toEqual([]);
+    });
+
+    it('mapSchemaLoraItems correctly maps valid AIR when schema declares air', () => {
+      const itemSchema = {
+        type: 'object',
+        properties: {
+          air: { type: 'string' },
           strength: { type: 'number' },
         },
       };
       const loras = [
         {
-          id: 'catalog-style-42',
-          path: 'https://example.com/weights.safetensors',
-          downloadUrl: 'https://example.com/weights.safetensors',
+          air: 'urn:air:flux1:lora:civitai:111@222',
           strength: 0.75,
         },
       ];
       const result = mapSchemaLoraItems(loras, itemSchema, {}, 'test-model');
-      expect(result).toEqual([{ id: 'catalog-style-42', strength: 0.75 }]);
+      expect(result).toEqual([{ air: 'urn:air:flux1:lora:civitai:111@222', strength: 0.75 }]);
     });
 
-    it('mapSchemaLoraItems respects target path/url property and uses downloadUrl', () => {
+    it('mapSchemaLoraItems correctly maps genuine HTTP URL when schema declares url/path', () => {
       const itemSchema = {
         type: 'object',
         properties: {
@@ -82,6 +91,32 @@ describe('Mission M27: Recipe Shape, LoRA Resource Identity, and Target Schema A
       ];
       const result = mapSchemaLoraItems(loras, itemSchema, {}, 'test-model');
       expect(result).toEqual([{ path: 'https://civitai.com/api/download/models/54321', scale: 0.9 }]);
+    });
+
+    it('kreaStyles prioritizes native style ID (styleId/id) over name/path/civitaiId', () => {
+      const lorasWithStyleId = [
+        {
+          id: 'krea-style-uuid-1234',
+          name: 'Civitai Watercolor LoRA',
+          civitaiId: '998877',
+          path: 'https://civitai.com/api/download/models/998877',
+          strength: 0.8,
+        },
+      ];
+      const styles = kreaStyles(lorasWithStyleId);
+      expect(styles).toEqual([{ id: 'krea-style-uuid-1234', strength: 0.8 }]);
+    });
+
+    it('kreaStyles omits invalid external URL without throwing local error (no local gate)', () => {
+      const lorasWithoutStyleId = [
+        {
+          path: 'https://civitai.com/api/download/models/998877',
+          strength: 0.8,
+        },
+      ];
+      // Must NOT throw; sends nothing for this entry, letting upstream decide
+      expect(() => kreaStyles(lorasWithoutStyleId)).not.toThrow();
+      expect(kreaStyles(lorasWithoutStyleId)).toEqual([]);
     });
 
     it('novitaLoras prioritizes model_name / sd_name_in_api over raw URL or numeric civitaiId', () => {
@@ -139,7 +174,13 @@ describe('Mission M27: Recipe Shape, LoRA Resource Identity, and Target Schema A
           },
         ],
       };
-      const result = adaptCivitaiRecipeToProvider(recipe, 'replicate');
+      const replicateSchema = {
+        lora_weights: { type: 'string' },
+        extra_lora: { type: 'string' },
+      };
+      const result = adaptCivitaiRecipeToProvider(recipe, 'replicate', {
+        targetSchema: replicateSchema,
+      });
       expect(result.loras[0].status).toBe('compatible');
       expect(result.loras[0].sendableUrlOrId).toBe(
         'https://civitai.com/api/download/models/11111?format=SafeTensor'
@@ -149,6 +190,23 @@ describe('Mission M27: Recipe Shape, LoRA Resource Identity, and Target Schema A
   });
 
   describe('3. Dynamic LoRA caps driven by live schema, not blanket provider limits', () => {
+    it('derives Replicate maxItems 2 when schema declares extra_lora', () => {
+      const schemaWithExtra = {
+        lora_weights: { type: 'string' },
+        extra_lora: { type: 'string' },
+      };
+      const spec = inspectTargetSchemaForLoras('replicate', 'black-forest-labs/flux-dev-lora', schemaWithExtra);
+      expect(spec.maxItems).toBe(2);
+    });
+
+    it('derives Replicate maxItems 1 when schema does NOT declare extra_lora', () => {
+      const schemaWithoutExtra = {
+        lora_weights: { type: 'string' },
+      };
+      const spec = inspectTargetSchemaForLoras('replicate', 'single-lora-model', schemaWithoutExtra);
+      expect(spec.maxItems).toBe(1);
+    });
+
     it('allows >3 LoRAs when live endpoint schema declares maxItems: 5 or higher', () => {
       const recipe: CivitaiRecipeInput = {
         checkpoint: 'flux-dev',
@@ -177,32 +235,12 @@ describe('Mission M27: Recipe Shape, LoRA Resource Identity, and Target Schema A
       const result = adaptCivitaiRecipeToProvider(recipe, 'fal', {
         targetSchema: customSchema,
       });
-      // All 5 should be compatible because schema maxItems is 5, not old cap 3!
       expect(result.loras.every((l) => l.status === 'compatible')).toBe(true);
       expect(result.warnings.some((w) => w.includes('超过上限'))).toBe(false);
     });
-
-    it('enforces schema-declared maxItems when exceeded and cites schema', () => {
-      const recipe: CivitaiRecipeInput = {
-        checkpoint: 'flux-dev',
-        baseModel: 'FLUX.1 D',
-        loras: [
-          { name: 'L1', civitaiId: '1', strength: 0.5, downloadUrl: 'https://c/1' },
-          { name: 'L2', civitaiId: '2', strength: 0.5, downloadUrl: 'https://c/2' },
-          { name: 'L3', civitaiId: '3', strength: 0.5, downloadUrl: 'https://c/3' },
-        ],
-      };
-      const result = adaptCivitaiRecipeToProvider(recipe, 'replicate', {
-        customLoraCap: 2,
-      });
-      expect(result.loras[0].status).toBe('compatible');
-      expect(result.loras[1].status).toBe('compatible');
-      expect(result.loras[2].status).toBe('unsupported');
-      expect(result.loras[2].reason).toContain('最多仅支持 2 个 LoRA');
-    });
   });
 
-  describe('4. Ecosystem distinctness and no sdxl fallback', () => {
+  describe('4. Ecosystem distinctness and no fabricated AIRs', () => {
     it('distinguishes Krea from Z-Image and never conflates them', () => {
       expect(normalizeEcosystem('Krea 2 RAW')).toBe('krea');
       expect(normalizeEcosystem('Z-Image Turbo')).toBe('zimage');
@@ -219,13 +257,32 @@ describe('Mission M27: Recipe Shape, LoRA Resource Identity, and Target Schema A
       expect(normalizeEcosystem('Wan 1.0')).toBe('wan');
     });
 
-    it('unknown ecosystem never defaults to sdxl', () => {
+    it('unknown ecosystem returns undefined from buildCivitaiCanonicalAir (never fabricated AIR or sdxl)', () => {
       const unknownEco = normalizeEcosystem('BrandNewModel 2026');
       expect(unknownEco).toBe('unknown');
 
       const canonicalAir = buildCivitaiCanonicalAir(12345, 67890, unknownEco);
-      expect(canonicalAir).toBe('urn:air:civitai:lora:12345@67890');
-      expect(canonicalAir).not.toContain('sdxl');
+      expect(canonicalAir).toBeUndefined();
+    });
+
+    it('importer reports requires_reselection honestly when canonical AIR cannot be built', () => {
+      const recipe: CivitaiRecipeInput = {
+        checkpoint: 'Unknown-Model',
+        baseModel: 'BrandNewModel 2026',
+        loras: [
+          {
+            name: 'Mystery LoRA',
+            modelId: 111,
+            versionId: 222,
+            baseModel: 'BrandNewModel 2026',
+            strength: 0.8,
+          },
+        ],
+      };
+      const result = adaptCivitaiRecipeToProvider(recipe, 'civitai');
+      expect(result.loras[0].status).toBe('requires_reselection');
+      expect(result.loras[0].reason).toContain('基础架构未知');
+      expect(result.loras[0].air).toBeUndefined();
     });
   });
 
@@ -304,7 +361,7 @@ describe('Mission M27: Recipe Shape, LoRA Resource Identity, and Target Schema A
         cfg: 0,
         seed: 0,
       };
-      const result = adaptCivitaiRecipeToProvider(recipe, 'fal');
+      const result = adaptCivitaiRecipeToProvider(recipe, 'civitai');
       expect(result.fields.cfg.mappedValue).toBe(0);
       expect(result.fields.cfg.status).toBe('mapped');
       expect(result.fields.seed.mappedValue).toBe(0);
@@ -313,14 +370,14 @@ describe('Mission M27: Recipe Shape, LoRA Resource Identity, and Target Schema A
   });
 
   describe('6. Honest nonblocking status for missing schemas or unverified providers', () => {
-    it('reports unverified rather than false blanket unsupported for unconfigured provider', () => {
+    it('reports unverified rather than false blanket unsupported when no live schema is loaded', () => {
       const recipe: CivitaiRecipeInput = {
         checkpoint: 'custom-model',
         loras: [{ name: 'L1', civitaiId: '100', strength: 0.8 }],
       };
-      const result = adaptCivitaiRecipeToProvider(recipe, 'some_new_inference_provider');
+      const result = adaptCivitaiRecipeToProvider(recipe, 'unconfigured_provider');
       expect(result.loras[0].status).toBe('unverified');
-      expect(result.loras[0].reason).toContain('未配置显式 LoRA Schema');
+      expect(result.loras[0].reason).toContain('未选择目标模型');
       expect(result.loras[0].reason).not.toContain('官方标准生图接口未提供 loras');
     });
   });

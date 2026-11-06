@@ -1431,10 +1431,12 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
       const isCivitaiClipSkipNotSent = targetProvider === 'civitai' && eco !== 'sd15';
 
       const targetModel = typeof req.body?.targetModel === 'string' ? req.body.targetModel : undefined;
+      const targetSchema = (req.body?.targetSchema && typeof req.body.targetSchema === 'object') ? req.body.targetSchema : undefined;
       const providerAdaptation = buildAllProviderAdaptations(recipeInput, {
         allowTokenInUrl: Boolean(req.body?.consentCivitaiToken),
         civitaiToken: apiKey || undefined,
         targetModel,
+        targetSchema,
       });
       const currentAdaptation = providerAdaptation[targetProvider] || providerAdaptation['civitai'];
 

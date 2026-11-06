@@ -84,38 +84,130 @@ export function proposedRequestOf(definition:any,parameters:any,mapping:any[],lo
  * (3) neither → throw local block 「Schema 未定义 LoRA 强度字段」. Never invent {path,scale} as a silent default.
  */
 export function mapSchemaLoraItems(loras:any[], itemSchema:any, providerMeta:any, model:string):any[] {
-  const resource=(l:any)=>typeof l==='string'?l:(l.path || l.url || l.downloadUrl || l.civitaiId || l.name);
-  const strength=(l:any)=>l.strength ?? l.modelStrength ?? l.scale;
-  if(itemSchema?.type==='string')return loras.map((l:any)=>typeof l==='string'?l:(l.id || l.model || l.name || resource(l)));
-  const props=itemSchema?.properties;
-  if(props && typeof props==='object') {
-    if(props.model)return loras.map((l:any)=>({model:l.model || (l.modelId && l.versionId ? `civitai:${l.modelId}@${l.versionId}` : '') || l.air || resource(l),weight:strength(l)}));
-    const pathKey=['path','url','model_name','name','id'].find(k=>Object.hasOwn(props,k)) || 'path';
-    const strengthKey=['scale','weight','strength','modelStrength'].find(k=>Object.hasOwn(props,k));
-    const resolvePropValue = (l: any, key: string) => {
-      if (typeof l === 'string') return l;
-      if (key === 'path' || key === 'url') return l.downloadUrl || l.url || l.path || resource(l);
-      if (key === 'id') return l.id || l.styleId || l.civitaiId || l.name || resource(l);
-      if (key === 'model_name') return l.model_name || l.sd_name_in_api || l.name || resource(l);
-      return resource(l);
-    };
-    // No strength field in the item Schema: send the resource only, as the Schema defines it.
-    if(!strengthKey)return loras.map((l:any)=>({[pathKey]:resolvePropValue(l, pathKey)}));
-    return loras.map((l:any)=>{
-      const s = strength(l);
-      if (s === undefined || s === null) return {[pathKey]:resolvePropValue(l, pathKey)};
-      return {[pathKey]:resolvePropValue(l, pathKey),[strengthKey]:s};
-    });
+  if (!Array.isArray(loras) || loras.length === 0) return [];
+
+  if (itemSchema?.type === 'string') {
+    return loras
+      .map((l: any) => {
+        if (typeof l === 'string') return l.trim();
+        const raw = l.id || l.model_name || l.sd_name_in_api || l.name;
+        if (typeof raw === 'string' && raw.trim() && !/^https?:\/\//i.test(raw.trim()) && !/^\d+$/.test(raw.trim())) {
+          return raw.trim();
+        }
+        return undefined;
+      })
+      .filter((v): v is string => Boolean(v));
   }
-  const cfg=providerMeta?.loraItemFields as {pathKey:string;strengthKey:string;sourceUrl:string;fetchedAt:string;docQuote:string}|undefined;
-  if(cfg?.pathKey && cfg?.strengthKey && cfg?.sourceUrl) {
-    return loras.map((l:any)=>{
-      const s = strength(l);
-      if (s === undefined || s === null) return {[cfg.pathKey]:resource(l)};
-      return {[cfg.pathKey]:resource(l),[cfg.strengthKey]:s};
-    });
+
+  const props = itemSchema?.properties;
+  if (props && typeof props === 'object') {
+    const declaredKeys = Object.keys(props);
+    const mappedItems: any[] = [];
+
+    for (const l of loras) {
+      if (typeof l !== 'object' || l === null) continue;
+      const item: Record<string, any> = {};
+      let hasValidResource = false;
+
+      for (const k of declaredKeys) {
+        if (k === 'air') {
+          const airVal =
+            (typeof l.air === 'string' && l.air.trim().startsWith('urn:air:'))
+              ? l.air.trim()
+              : (typeof l.civitaiId === 'string' && l.civitaiId.trim().startsWith('urn:air:'))
+              ? l.civitaiId.trim()
+              : undefined;
+          if (airVal) {
+            item.air = airVal;
+            hasValidResource = true;
+          }
+        } else if (k === 'url' || k === 'path') {
+          const urlCandidate =
+            (typeof l.downloadUrl === 'string' && /^https?:\/\//i.test(l.downloadUrl.trim()))
+              ? l.downloadUrl.trim()
+              : (typeof l.url === 'string' && /^https?:\/\//i.test(l.url.trim()))
+              ? l.url.trim()
+              : (typeof l.path === 'string' && /^https?:\/\//i.test(l.path.trim()))
+              ? l.path.trim()
+              : undefined;
+          if (urlCandidate) {
+            item[k] = urlCandidate;
+            hasValidResource = true;
+          }
+        } else if (k === 'model') {
+          const modelVal =
+            (typeof l.model === 'string' && l.model.trim())
+              ? l.model.trim()
+              : (typeof l.air === 'string' && l.air.trim().startsWith('urn:air:'))
+              ? l.air.trim()
+              : (l.modelId && l.versionId)
+              ? `civitai:${l.modelId}@${l.versionId}`
+              : (typeof l.civitaiId === 'string' && (l.civitaiId.includes(':') || l.civitaiId.includes('@')))
+              ? l.civitaiId.trim()
+              : undefined;
+          if (modelVal) {
+            item.model = modelVal;
+            hasValidResource = true;
+          }
+        } else if (k === 'model_name') {
+          const nameVal =
+            (typeof l.model_name === 'string' && l.model_name.trim() && !/^https?:\/\//i.test(l.model_name.trim()) && !/^\d+$/.test(l.model_name.trim()))
+              ? l.model_name.trim()
+              : (typeof l.sd_name_in_api === 'string' && l.sd_name_in_api.trim())
+              ? l.sd_name_in_api.trim()
+              : (typeof l.name === 'string' && l.name.trim() && !/^https?:\/\//i.test(l.name.trim()) && !/^\d+$/.test(l.name.trim()))
+              ? l.name.trim()
+              : undefined;
+          if (nameVal) {
+            item.model_name = nameVal;
+            hasValidResource = true;
+          }
+        } else if (k === 'id') {
+          const idVal =
+            (typeof l.styleId === 'string' && l.styleId.trim() && !/^https?:\/\//i.test(l.styleId.trim()))
+              ? l.styleId.trim()
+              : (typeof l.style_id === 'string' && l.style_id.trim() && !/^https?:\/\//i.test(l.style_id.trim()))
+              ? l.style_id.trim()
+              : (typeof l.id === 'string' && l.id.trim() && !/^https?:\/\//i.test(l.id.trim()) && !/^\d+$/.test(l.id.trim()))
+              ? l.id.trim()
+              : (typeof l.name === 'string' && l.name.trim() && !/^https?:\/\//i.test(l.name.trim()) && !/^\d+$/.test(l.name.trim()))
+              ? l.name.trim()
+              : undefined;
+          if (idVal) {
+            item.id = idVal;
+            hasValidResource = true;
+          }
+        }
+      }
+
+      const strengthKey = ['scale', 'weight', 'strength', 'modelStrength', 'lora_strength'].find((k) => Object.hasOwn(props, k));
+      const s = l.strength ?? l.modelStrength ?? l.scale ?? l.weight;
+      if (strengthKey && typeof s === 'number' && Number.isFinite(s)) {
+        item[strengthKey] = s;
+      }
+
+      if (hasValidResource) {
+        mappedItems.push(item);
+      }
+    }
+    return mappedItems;
   }
-  // Item shape not described: send the canvas LoRA entries as built; upstream decides.
+
+  const cfg = providerMeta?.loraItemFields as { pathKey: string; strengthKey: string; sourceUrl: string; fetchedAt: string; docQuote: string } | undefined;
+  if (cfg?.pathKey && cfg?.strengthKey && cfg?.sourceUrl) {
+    const mappedItems: any[] = [];
+    for (const l of loras) {
+      const candidate = l.downloadUrl || l.url || (typeof l.path === 'string' && /^https?:\/\//i.test(l.path) ? l.path : undefined);
+      if (candidate && typeof candidate === 'string' && /^https?:\/\//i.test(candidate.trim())) {
+        const s = l.strength ?? l.modelStrength ?? l.scale;
+        const entry: Record<string, any> = { [cfg.pathKey]: candidate.trim() };
+        if (typeof s === 'number' && Number.isFinite(s)) entry[cfg.strengthKey] = s;
+        mappedItems.push(entry);
+      }
+    }
+    return mappedItems;
+  }
+
   return loras;
 }
 
@@ -946,16 +1038,21 @@ export function normalizeSchemaProviderItems(provider:Provider,rows:any[],opts:{
 }
 /** Canvas LoRA nodes → Krea styles[{id,strength}] (official request schema). */
 export function kreaStyles(loras:any[]) {
-  return loras.map((l:any)=>{
-    const id=String(l.styleId || l.style_id || l.id || l.name || '').trim();
-    if(!id || /^https?:\/\//i.test(id)) {
-      throw Object.assign(new Error('Krea LoRA 缺少 style ID（Krea 官方样式需要 GET /styles 目录公布的 style ID，无法将外部 URL 直接作为 Krea style ID）'),{status:400,errorSource:'local'});
+  const styles: Array<{ id: string; strength?: number }> = [];
+  for (const l of loras) {
+    const id = String(l.styleId || l.style_id || l.id || l.name || '').trim();
+    if (!id || /^https?:\/\//i.test(id)) {
+      continue;
     }
-    const raw=l.strength ?? l.modelStrength ?? l.scale;
-    if(raw===undefined || raw===null || raw==='')return {id};
-    const strength=Number(raw);
-    return {id,strength:Number.isFinite(strength)?strength:raw};
-  });
+    const raw = l.strength ?? l.modelStrength ?? l.scale;
+    if (raw === undefined || raw === null || raw === '') {
+      styles.push({ id });
+    } else {
+      const strength = Number(raw);
+      styles.push({ id, strength: Number.isFinite(strength) ? strength : raw });
+    }
+  }
+  return styles;
 }
 export function upstreamReferenceUrlIssue(value:string):string|undefined {
   let parsed:URL;
