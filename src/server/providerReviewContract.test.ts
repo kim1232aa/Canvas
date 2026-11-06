@@ -32,10 +32,10 @@ describe('reviewed provider contracts', () => {
     expect(() => buildFalVideoRequest('fal-ai/wan-i2v', { image_url: 'a', custom_parameters: { fps: 20, frames_per_second: 24 } }, wan)).toThrow(/不一致/);
     expect(() => buildFalVideoRequest('fal-ai/wan-i2v', { image_url: 'a', steps: 20, num_inference_steps: 30 }, wan)).toThrow(/不一致/);
   });
-  it('allows explicit Comfy ZImage and uses diffuserModel for source override', async () => {
+  it('allows explicit Comfy ZImage and uses diffusionModel for source override', async () => {
     const source = 'urn:air:zimageturbo:diffusionmodel:civitai:1@2';
     expect(await buildCivitaiImageInput({ model: 'turbo', comfyModel: 'turbo', ecosystem: 'zImage', engine: 'comfy' }, get, oa())).toMatchObject({ model: 'turbo', engine: 'comfy' });
-    expect(await buildCivitaiImageInput({ model: source, comfyModel: 'turbo', ecosystem: 'zImage', engine: 'comfy' }, get, oa())).toMatchObject({ model: 'turbo', diffuserModel: source });
+    expect(await buildCivitaiImageInput({ model: source, comfyModel: 'turbo', ecosystem: 'zImage', engine: 'comfy' }, get, oa())).toMatchObject({ model: 'turbo', diffusionModel: source });
   });
   it('constructs API LoCon AIR as lycoris', async () => {
     const api = async () => new Response(JSON.stringify({ id: 2, modelId: 1, baseModel: 'SDXL 1.0', model: { type: 'LoCon' } }));

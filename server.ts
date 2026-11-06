@@ -3738,7 +3738,7 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
       }
       const genInput = builtImage.payload;
       submittedImageParameters = genInput;
-      generationContext.getStore()?.traces.push(sanitizeGenerationMetadata({ stage: 'parameter-mapping', provider: 'civitai', requested: requestedParameters, unmappedLoras: builtImage.unmappedLoras, beforeCustom: builtImage.beforeCustom, customParameters: builtImage.customParameters, overrides: builtImage.overrides, actualParameters: genInput }));
+      generationContext.getStore()?.traces.push(sanitizeGenerationMetadata({ stage: 'parameter-mapping', provider: 'civitai', requested: requestedParameters, unmappedLoras: builtImage.unmappedLoras, unmappedFields: builtImage.unmappedFields, beforeCustom: builtImage.beforeCustom, customParameters: builtImage.customParameters, overrides: builtImage.overrides, actualParameters: genInput }));
       airModel = String(genInput.diffuserModel ?? genInput.diffusionModel ?? genInput.model);
 
       // POST /v2/consumer/workflows?wait=100 (integer seconds, max 100)
@@ -4702,12 +4702,7 @@ app.post(['/api/huggingface/generate', '/api/engine/huggingface/generate'], asyn
     if (isZImage) {
       // H2: 🌟 Direct integration with verified official Tongyi-MAI/Z-Image-Turbo Gradio Space on Hugging Face (Public Space)
       if (forwardUnmappedFields(res, 'Hugging Face Z-Image Space', req.body, ['width', 'height', 'sampler_name', 'scheduler'])) return;
-      let gradioPayload;
-      try {
-        gradioPayload = buildZImagePayload(req.body);
-      } catch (error: any) {
-        return res.status(400).json({error: error.message});
-      }
+      const gradioPayload = buildZImagePayload(req.body);
       const zActual = gradioPayload.actualParameters as Record<string, any>;
       sentSeed = zActual.random_seed || zActual.seed === -1 ? null : zActual.seed;
       sentSteps = zActual.steps;

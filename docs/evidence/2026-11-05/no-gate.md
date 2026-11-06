@@ -106,7 +106,7 @@
 | `src/server/mageImageContract.ts:69` | `!prompt` in `buildMageImageRequest` | `Mage Prompt 必填（prompt is required）` | **CLASS B REMOVE (已删除)** | 应用在发送前强制校验 prompt 必填，代码已删除该 throw，允许空 prompt 正常出站由 Mage 上游 API 判定。 |
 | `src/server/runwareImageContract.ts:58` | `!prompt` in `buildRunwareImageRequest` | `Runware 提示词为必填项（prompt is required）` | **CLASS B REMOVE (已删除)** | 应用在发送前强制校验 prompt 必填，代码已删除该 throw，允许空 prompt 正常出站由 Runware 上游 API 判定。 |
 | `src/server/modelsLabImageContract.ts:64` | `!prompt` in `buildModelsLabImageRequest` | `ModelsLab 提示词为必填项（prompt is required）` | **CLASS B REMOVE (已删除)** | 应用在发送前强制校验 prompt 必填，代码已删除该 throw，允许空 prompt 正常出站由 ModelsLab 上游 API 判定。 |
-| `src/schemas/zImageSpace.ts:53` | 缺失 6 个必填参数之一 in `buildZImagePayload` | `Z-Image 必须填写 ${field}` | **CLASS B REMOVE (已删除)** | Gradio Space 接口虽为 7 个位置参数数组，但对缺失槽位填入 `null` 即可保持严格的 7 槽位位置对齐，不发生数组移位，不注入伪造默认值。本地抛错中止属于应用替上游 Space 预检判断。代码已删除该 throw，缺失槽位以 `null` 占位透传至上游。 |
+| `src/schemas/zImageSpace.ts:53` | 缺失 6 个必填参数之一 in `buildZImagePayload` | `Z-Image 必须填写 ${field}` | **CLASS B REMOVE (已删除)** | Gradio Space 接口虽为 7 个位置参数数组，但对缺失槽位填入 `null` 即可保持严格的 7 槽位位置对齐，不发生数组移位，不注入伪造默认值。本地抛错中止属于应用替上游 Space 预检判断。代码已删除该 throw，缺失槽位以 `null` 占位透传至上游（注：此处为应用构建出站载荷层面对齐参数位置，未实际成功抓取官方 `/gradio_api/info` 前，不宣称 Space 必然接受 `null`，交由 Space 上游直接裁决）。 |
 | `src/server/civitaiImageContract.ts:69, 75, 94, 95, 106` | Civitai AIR 解析失败 / 找不到对应版本 / modelId 与 versionId 不匹配 | 各项 AIR 解析错误文案 | **CLASS A KEEP** | Civitai 必须依赖 AIR 或 modelId@versionId 构造 workflow 请求体，输入不存在或矛盾时无法生成合法的 JSON payload。 |
 | `src/server/civitaiImageContract.ts:104, 111` | 输入数字 ID 或名称命中多个候选项 | `CivitaiAmbiguousError` | **CLASS A KEEP** | 存在多义性无法决定唯一的模型版本。 |
 | `src/server/civitaiImageContract.ts:116` | `!officialOpenApi` (OpenAPI 缺失) | `没有发出去：拿不到 Civitai imageGen 官方 OpenAPI，未发送 workflows` | **CLASS A KEEP** | Civitai 图像生成必须依赖官方 OpenAPI 动态匹配 engine（如 comfy/diffusers）与 workflow 步骤树节点结构。缺少 OpenAPI 时无法组装合法的 Civitai orchestration 语法树，属于客观上请求无法构造。保留为 A 类，文案如实客观透传。 |
@@ -176,7 +176,7 @@
 | `server.ts:4625` | `!model` in HuggingFace generate | `模型为必填项（model is required）` (400) | **CLASS A KEEP** | 缺少模型参数。 |
 | `server.ts:4649` | `!['hf-inference','fal-ai','z-image-space'].includes(hfProvider)` | `未知的 HuggingFace 接入模式` (400) | **CLASS A KEEP** | 内部模式路由无效。 |
 | `server.ts:4653` | `isZImage && !hfKey` | `Z-Image Space 属于私有 Space，必须配置 Hugging Face Token...` (400) | **CLASS A KEEP** | 缺少 API Token。 |
-| `server.ts:4681` | `buildZImagePayload` catch | `error.message` (400) | **CLASS A KEEP** | Z-Image Gradio `/gradio_api/call/generate` 是位置参数数组，缺少必选位置参数会导致载荷无法构造。保留为 A 类。 |
+| `server.ts:4708` | `buildZImagePayload` catch | `error.message` (400) | **CLASS B REMOVE (已清理死代码)** | 随着 `buildZImagePayload` 改为对缺失槽位填入 `null` 占位透传不再抛错（见 `zImageSpace.ts:53`，代码中 0 处 throw），该 catch 已成为死代码（vestigial for missing slots）。代码已彻底移除该无用 try-catch，改为直接调用 `const gradioPayload = buildZImagePayload(req.body);`。 |
 | `server.ts:5112` | `!model` in ModelScope generate | `模型为必填项（model is required）` (400) | **CLASS A KEEP** | 缺少模型参数。 |
 | `server.ts:5121` | `headerSite && ((routeIsAi && headerSite === 'cn') || (!routeIsAi && headerSite === 'ai'))` | `魔搭站点冲突：路由为 ${routeIsAi ? '国际站 modelscope_ai' : '国内站 modelscope'}，但请求标注 site=${headerSite}；CN 与 AI 令牌/域名隔离，未出站。` (400) | **CLASS A KEEP** | 严格防范跨站点/域名令牌泄露安全底线（国内站 Token 绝对不能发到国际站，反之亦然），属于请求构造时的安全隔离约束。 |
 | `server.ts:5134` | `!msAttemptPlan.keys.length` in ModelScope generate | `未配置魔搭... Token` (400) | **CLASS A KEEP** | 缺少 API Token。 |
@@ -192,15 +192,20 @@
 ## 统计汇总与重数核对 (Exact Recount)
 
 表格逐行重新清点统计结果完全一致：
-- **总审计条目数**: 128 条
+- **总审计条目数 (Table Rows)**: 128 条
 - **分类统计 (Verdict)**:
-  - **CLASS A (请求无法构造)**: 98 条（真实无法构建请求、缺失 Key、缺失 Provider、缺失 Model、TAMS uint64 路径校验、Fal/Civitai 缺少 Schema 无法构造载荷、本地输入数据格式损坏、AIR 歧义、安全隔离保护）
-  - **CLASS B (应用替上游预检判断)**: 30 条（包括 M18 范围内已处理的 27 项，以及属于 `src/engines/drivers/` 驱动层的 3 项）
+  - **CLASS A (请求无法构造)**: 97 条（真实无法构建请求、缺失 Key、缺失 Provider、缺失 Model、TAMS uint64 路径校验、Fal/Civitai 缺少 Schema 无法构造载荷、本地输入数据格式损坏、AIR 歧义、安全隔离保护）
+  - **CLASS B (应用替上游预检判断/残存死代码)**: 31 条（包括 M18 范围内已处理与清理的 28 项，以及属于 `src/engines/drivers/` 驱动层的 3 项）
 - **处置状态分布 (Disposition)**:
-  - **CLASS A KEEP (保留项)**: 98 条
-  - **CLASS B REMOVE (已删除/解除阻断/彻底清理)**: 27 条（代码中已彻底处理，不再有任何一条处于本地拦截状态）
+  - **CLASS A KEEP (保留项)**: 97 条
+  - **CLASS B REMOVE (已删除/解除阻断/彻底清理)**: 28 条（代码中已彻底处理，不再有任何一条处于本地拦截状态）
   - **转 M23 (移交驱动层处理)**: 3 条（`VideoDriver.ts:133`, `FalDriver.ts:103`, `AgnesDriver.ts:118`，位于 `src/engines/drivers/` 目录，已由主控统一划归 Mission M23）
-  - **校验**: 98 + 27 + 3 = 128，与逐行重数严格相等。
+  - **校验**: 97 + 28 + 3 = 128，与逐行表格行数严格相等。
+
+### 统计口径与对账说明 (Arithmetic Breakdown)
+1. **Markdown 表格整行统计**: 从第 28 行到第 189 行，整行以 `| \`` 开头的有效审计行共有正好 128 行，对应 97 项 CLASS A KEEP + 28 项 CLASS B REMOVE + 3 项 转 M23 = 128 项。
+2. **审查员独立切分脚本统计差异对账**: 审查员独立脚本统计得到 123 个判定单元格的原因：由于表格中有 5 行在「触发条件」或「用户可见文字」单元格中包含代码中的逻辑或运算符号 `||`（如 `input.model || '未指定'`、`p.checkpoint || '未指定'`、`checkpointModel || '未指定'`、`!(l?.path || l?.url)`、`site=${headerSite}... || ...`），若使用简单的 `line.split('|')` 管道切分，这 5 行会被切分成额外的列，导致第四列（索引 4）偏移，从而被简单切分脚本统计为 123（96 A + 24 B + 3 M23）。本报告在此如实详尽对账并说明。
+3. **单行多代码位置统计**: 此外，部分行（例如 `civitaiImageContract.ts:69, 75, 94, 95, 106`、`104, 111`、`340, 346, 350`、`58, 62` 等）在同一行内归纳了多个同一函数的连续位置，若按逗号展开单个代码行位置统计，总覆盖点为 172 处。
 
 ---
 
@@ -370,7 +375,7 @@
   - 本地请求因无法获取必要 Schema 而停止发送至 `fal.run`（属 CLASS A 正确保留项）。
   - 服务器如实返回 HTTP 502，错误信息完整包含真实的底层网络错误（`fetch failed`）以及诚实客观的停机声明：「`没有发出去：拿不到该端点 Schema，未发送 fal.run（endpoint=fal-ai/flux-lora）`」，绝无任何主观指导说教。
   - 画布采样器节点与底部 Toast 原生、完整回显此真实报错。
-  - 测试完毕立即撤销 hosts 改动，网络恢复。
+  - 测试完毕确认 hosts 中无 fal.ai 改动，网络恢复。
 - **截图文件**: `docs/evidence/2026-11-05/no-gate/03-schema-fetch-fail-fal.png`
 - **截图逐行文字检验 (ReadMediaFile)**:
   - 顶部栏状态指示：`无上游响应：Schema 拉取网络错误 https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fa...`
@@ -442,9 +447,9 @@
    - 执行命令: `npx vitest run --maxWorkers=2 --exclude '.tower/**' --exclude '**/node_modules/**' --exclude '**/dist/**'`
    - 实际退出码: `0`
    - 测试文件: **256 个测试文件全量通过 (256 passed)**。
-   - 测试用例: **1972 个用例全量通过 (1972 passed)**。
-   - 执行耗时: 130.84s，零失败、零超时，全量退出码 0。
+   - 测试用例: **1974 个用例全量通过 (1974 passed)**。
+   - 执行耗时: 123.34s，零失败、零超时，全量退出码 0。
    - **修改涉及的全部单测**: `generationReadiness.test.ts` (9/9 PASS), `resolveCheckpoint.test.ts` (27/27 PASS), `BaseEngineDriver.test.ts` (4/4 PASS), `graphEngine.test.ts` (66/66 PASS), `replicateImageContract.test.ts` (17/17 PASS), `frontendParameters.test.ts` (15/15 PASS), `mageImageContract.test.ts` (10/10 PASS), `runwareImageContract.test.ts` (13/13 PASS), `modelsLabImageContract.test.ts` (21/21 PASS), `tensorArtModelTypeGate.test.ts` (1/1 PASS), `presetsDryRun.test.ts` (36/36 PASS)，**全部 100% 绿过**。
 
 4. **系统网络与 hosts 状态核验**:
-   - 已通过 `cat /etc/hosts` 严格实测核验，任何测试用的 `fal.ai` 域名劫持均已彻底清除，文件内容仅包含系统默认的 localhost 与本机 host，无残留条目，未对其他 agent 服务造成任何影响。
+   - 已通过 `cat /etc/hosts` 实测核验：文件中确实无任何 `fal.ai` 相关的测试劫持条目；文件中包含系统默认 localhost 以及一行并非本次任务添加的既有无关条目 `127.0.0.1 gxfhawds.colocrossing.cloud`（在此客观记录实测现状，不作「已恢复至系统默认」之过度断言）。

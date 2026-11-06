@@ -118,11 +118,18 @@ export interface CivitaiUnmappedLora {
   reason: string;
 }
 
+export interface CivitaiUnmappedField {
+  field: string;
+  value: unknown;
+  reason: string;
+}
+
 async function buildCivitaiBaseInput(
   body: Body,
   get: CivitaiPublicGet,
   officialOpenApi: unknown,
-  unmappedLoras?: CivitaiUnmappedLora[]
+  unmappedLoras?: CivitaiUnmappedLora[],
+  unmappedFields?: CivitaiUnmappedField[]
 ): Promise<Body> {
   if (!officialOpenApi || typeof officialOpenApi !== 'object') throw new CivitaiSchemaMissingError();
   const document = officialOpenApi as any;
@@ -199,7 +206,19 @@ async function buildCivitaiBaseInput(
   };
   if (builtin) {
     input.model = body.comfyModel;
-    if (source) input[ecosystem === 'zImage' ? 'diffuserModel' : 'diffusionModel'] = source;
+    if (source) {
+      if ('diffusionModel' in props) {
+        input.diffusionModel = source;
+      } else if ('diffuserModel' in props) {
+        input.diffuserModel = source;
+      } else {
+        unmappedFields?.push({
+          field: 'sourceCheckpoint',
+          value: source,
+          reason: `Selected schema declares neither diffusionModel nor diffuserModel; preserved in trace as unmapped without inventing fields`,
+        });
+      }
+    }
   } else if (selectorOnly && modelLooksLiteral) {
     input.model = body.model;
   } else if (modelSelector && (engine === 'flux2' || wire.model !== undefined)) {
@@ -374,12 +393,13 @@ export async function buildCivitaiImageRequest(
   const controls = /^(?:custom_parameters|isVideo|targetProvider|videoDuration|duration|fps|inputSchemaProperties|officialOpenApi|allowMatureContent)$|api.?key|authorization|credential|password|secret|token/i;
   const advanced = (source: Body) => Object.fromEntries(Object.entries(source).filter(([key]) => !translated.has(key) && !boundary.test(key) && !controls.test(key)));
   const unmappedLoras: CivitaiUnmappedLora[] = [];
+  const unmappedFields: CivitaiUnmappedField[] = [];
   const beforeCustom = { ...await buildCivitaiBaseInput(topLevel, get, officialOpenApi), ...advanced(topLevel) };
-  const mapped = await buildCivitaiBaseInput(effective, get, officialOpenApi, unmappedLoras);
+  const mapped = await buildCivitaiBaseInput(effective, get, officialOpenApi, unmappedLoras, unmappedFields);
   if (Object.hasOwn(normalizedCustom, 'loras') && mapped.ecosystem !== 'krea2') mapped.loras = mapped.loras ?? {};
   const payload = { ...mapped, ...advanced(effective) };
   const overrides = Object.fromEntries(Object.entries(payload).filter(([key, value]) => Object.hasOwn(beforeCustom, key) && JSON.stringify(beforeCustom[key]) !== JSON.stringify(value)).map(([key, value]) => [key, { before: beforeCustom[key], after: value }]));
-  return { payload, beforeCustom, customParameters: { ...custom }, overrides, unmappedLoras };
+  return { payload, beforeCustom, customParameters: { ...custom }, overrides, unmappedLoras, unmappedFields };
 }
 
 export async function buildCivitaiImageInput(body: Body, get: CivitaiPublicGet, officialOpenApi?: unknown): Promise<Body> {

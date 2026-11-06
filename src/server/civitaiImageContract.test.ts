@@ -126,14 +126,65 @@ describe('Civitai image request contract', () => {
   });
 
   it('regression: allows ZImage source checkpoint without local throw', async () => {
-    const input = await buildCivitaiImageInput({
-      model: 'urn:air:zImage:checkpoint:civitai:1@2',
+    for (const mode of ['turbo', 'base'] as const) {
+      const input = await buildCivitaiImageInput({
+        model: 'urn:air:zImage:checkpoint:civitai:1@2',
+        engine: 'sdcpp',
+        ecosystem: 'zImage',
+        comfyModel: mode,
+        prompt: 'test',
+      }, api({}), oa());
+      expect(input.model).toBe(mode);
+      expect(input.diffusionModel).toBe('urn:air:zImage:checkpoint:civitai:1@2');
+      expect(input.diffuserModel).toBeUndefined();
+    }
+  });
+
+  it('committed test: clip-only LoRA retains clipStrength in requested trace and records unmappedLoras on buildCivitaiImageRequest & buildCivitaiWorkflowSubmission', async () => {
+    const lora = 'urn:air:flux2:lora:civitai:3@4';
+    const rawBody = {
+      model: 'urn:air:flux2:checkpoint:civitai:1@2',
       engine: 'sdcpp',
-      ecosystem: 'zImage',
-      comfyModel: 'turbo',
-      prompt: 'test',
-    }, api({}), oa());
-    expect(input.diffuserModel).toBe('urn:air:zImage:checkpoint:civitai:1@2');
+      ecosystem: 'flux2Klein',
+      prompt: 'test prompt',
+      loras: [{ civitaiId: lora, clipStrength: 0.7 }],
+      workflowSnapshot: { dummy: true },
+    };
+    const req = await buildCivitaiImageRequest(rawBody, api({}), oa());
+    // 1. unmappedLoras on buildCivitaiImageRequest
+    expect(req.unmappedLoras).toEqual([
+      {
+        air: lora,
+        clipStrength: 0.7,
+        reason: 'Civitai API has no clipStrength wire field; preserved as unmapped',
+      },
+    ]);
+    // 2. Map-mode payload sends null placeholder, preserves AIR key without fabricating numbers
+    expect(req.payload.loras).toEqual({ [lora]: null });
+
+    // 3. buildCivitaiWorkflowSubmission steps[0].input receives actual payload
+    const submission = buildCivitaiWorkflowSubmission(true, req.payload);
+    expect(submission.body.steps[0].input.loras).toEqual({ [lora]: null });
+    const serialized = JSON.stringify(submission.body);
+    expect(serialized).toContain(lora);
+    expect(serialized).toContain('null');
+    expect(serialized).not.toContain('0.7');
+
+    // 4. Server trace requestedParameters preserves clipStrength while unmappedLoras is exposed
+    const requestedParameters = { ...rawBody };
+    delete (requestedParameters as any).workflowSnapshot;
+    expect(requestedParameters.loras[0].clipStrength).toBe(0.7);
+    const trace = {
+      stage: 'parameter-mapping',
+      provider: 'civitai',
+      requested: requestedParameters,
+      unmappedLoras: req.unmappedLoras,
+      unmappedFields: req.unmappedFields,
+      actualParameters: req.payload,
+    };
+    expect(trace.requested.loras[0].clipStrength).toBe(0.7);
+    expect(trace.unmappedLoras).toHaveLength(1);
+    expect(trace.unmappedLoras[0].air).toBe(lora);
   });
   it('Flux2 Klein still builds AIR→strength loras map', async () => {
     const lora = 'urn:air:flux2:lora:civitai:5@6';
