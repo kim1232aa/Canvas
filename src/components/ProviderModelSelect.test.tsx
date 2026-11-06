@@ -111,4 +111,111 @@ describe('ProviderModelSelect live catalog state', () => {
     expect(select().querySelector('option[value="new-provider-model"]')?.textContent).toContain('New provider');
     expect(select().querySelector('option[value="old-provider-model"]')).toBeNull();
   });
+
+  it('renders generic guidance and clickable driver suggestions for Mage with an empty catalog', async () => {
+    const onChangeMock = vi.fn();
+    let currentVal = '';
+    const mageResponse = new Response(JSON.stringify({
+      mage: [],
+      results: { mage: [] },
+      _pagination: {
+        mage: {
+          page: 1,
+          limit: 50,
+          total: 0,
+          hasMore: false,
+          sourceUrl: 'https://docs.mage.space/api/models/mango',
+          sourceNotice: 'lookup-only (no public remote catalog; model_id enum on Mango docs)',
+        },
+      },
+      catalogNotices: {
+        mage: 'Mage 无公开远端模型检索目录；请按官方 model_id 选用（mango / mango-v2 / mango-v3s / mango-v3 / mango-v3-turbo）。空列表是 lookup-only。',
+      },
+    }), { status: 200 });
+
+    vi.stubGlobal('fetch', vi.fn(async () => mageResponse));
+
+    provider = 'mage';
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    await act(async () => {
+      root.render(<ProviderModelSelect provider={provider} value={currentVal} onChange={onChangeMock} />);
+    });
+    await startLookup();
+
+    // Guidance container is rendered
+    const guidance = host.querySelector('[data-testid="no-catalog-guidance"]');
+    expect(guidance).not.toBeNull();
+    expect(guidance?.textContent).toContain('该服务商官方无公开模型检索目录 API');
+    expect(guidance?.textContent).toContain('官方未提供远端公开模型检索目录；您可在下方「自定义模型 (model)」中直接输入任意官方模型 ID。');
+    expect(guidance?.textContent).toContain('推荐候选（驱动按官方文档声明、非实时拉取）：');
+
+    // Official doc URL is rendered
+    const docUrl = host.querySelector('[data-testid="no-catalog-doc-url"] a');
+    expect(docUrl?.getAttribute('href')).toBe('https://docs.mage.space/api/models/mango');
+
+    // Official catalog notice is rendered
+    const notice = host.querySelector('[data-testid="no-catalog-notice"]');
+    expect(notice?.textContent).toContain('Mage 无公开远端模型检索目录');
+
+    // Driver suggestions exist and contain mango models
+    const suggestions = host.querySelectorAll('[data-testid^="provider-model-suggestion-"]');
+    expect(suggestions.length).toBeGreaterThan(0);
+    const mangoV3Btn = host.querySelector('[data-testid="provider-model-suggestion-mango-v3"]') as HTMLButtonElement;
+    expect(mangoV3Btn).not.toBeNull();
+
+    // No silent fallback: onChange not called yet, value is empty
+    expect(onChangeMock).not.toHaveBeenCalled();
+
+    // Click suggestion writes exact id
+    await act(async () => {
+      mangoV3Btn.click();
+    });
+    expect(onChangeMock).toHaveBeenCalledWith('mango-v3');
+  });
+
+  it('renders generic guidance and clickable driver suggestions for another provider (Agnes) with lookup-only catalog', async () => {
+    const onChangeMock = vi.fn();
+    const agnesResponse = new Response(JSON.stringify({
+      agnes: [],
+      results: { agnes: [] },
+      _pagination: {
+        agnes: {
+          page: 1,
+          limit: 50,
+          total: 0,
+          hasMore: false,
+          sourceUrl: 'https://agnes.ai',
+          sourceNotice: 'lookup-only (specialized image/video service; no public remote catalog)',
+        },
+      },
+      catalogNotices: {
+        agnes: 'Agnes 无公开远端模型检索目录；请在上方输入框按官方模型 ID 选用（如 agnes-image-2.5-flash）。空列表不是“没有能力”，而是 lookup-only。',
+      },
+    }), { status: 200 });
+
+    vi.stubGlobal('fetch', vi.fn(async () => agnesResponse));
+
+    provider = 'agnes';
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    await act(async () => {
+      root.render(<ProviderModelSelect provider={provider} value="" onChange={onChangeMock} />);
+    });
+    await startLookup();
+
+    const guidance = host.querySelector('[data-testid="no-catalog-guidance"]');
+    expect(guidance).not.toBeNull();
+    expect(guidance?.textContent).toContain('推荐候选（驱动按官方文档声明、非实时拉取）：');
+
+    const agnesBtn = host.querySelector('[data-testid="provider-model-suggestion-agnes-image-2.5-flash"]') as HTMLButtonElement;
+    expect(agnesBtn).not.toBeNull();
+
+    await act(async () => {
+      agnesBtn.click();
+    });
+    expect(onChangeMock).toHaveBeenCalledWith('agnes-image-2.5-flash');
+  });
 });

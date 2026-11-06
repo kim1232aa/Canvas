@@ -2,11 +2,12 @@ import React from 'react';
 import {fetchLiveModelsShared, isCustomParametersJsonQuery, sanitizeCatalogQuery} from '../services/api';
 import {noteUserModelSelection, schemaReuseFor, subscribeSchemaReuse} from '../services/userModelSelection';
 import {beginTraceOperation} from '../services/executionTrace';
-import {readCheckpointCatalog,mergeCheckpointOptions,isInvalidTensorModel,type CatalogOption} from '../utils/modelCatalog';
+import {readCheckpointCatalog,mergeCheckpointOptions,isInvalidTensorModel,getDriverModelSuggestions,type CatalogOption,type DriverModelSuggestion} from '../utils/modelCatalog';
 
 export function ProviderModelSelect({provider,value,onChange}:{provider:string;value:string;onChange:(value:string)=>void}) {
   const [query,setQuery]=React.useState('');
   const [live,setLive]=React.useState<CatalogOption[]>([]);
+  const [catalogMeta,setCatalogMeta]=React.useState<{sourceUrl?:string;sourceNotice?:string;catalogNotice?:string;isLookupOnly?:boolean}>({});
   const [loading,setLoading]=React.useState(false);
   const [loadingScopeKey,setLoadingScopeKey]=React.useState('');
   const [error,setError]=React.useState('');
@@ -37,7 +38,7 @@ export function ProviderModelSelect({provider,value,onChange}:{provider:string;v
   const lastReload=React.useRef(0);
   React.useEffect(()=>{
     const id=++request.current;
-    setLive([]);setError('');setPage(1);setCursor('');setHasMore(false);
+    setLive([]);setError('');setPage(1);setCursor('');setHasMore(false);setCatalogMeta({});
     if (!provider || !armed) {setLoading(false);return;}
     // clean-1149 #2: pasted custom_parameters JSON is not a catalog search — write nodes only, zero /api/models.
     if (isCustomParametersJsonQuery(query)) {setLoading(false);setQuery('');return;}
@@ -47,7 +48,14 @@ export function ProviderModelSelect({provider,value,onChange}:{provider:string;v
       fetchLiveModelsShared(force,provider,sanitizeCatalogQuery(query),'Checkpoint','checkpoint','downloads','',1,50,'','').then(data=>{
         if(id!==request.current)return;
         const result=readCheckpointCatalog(data,provider);
-        setLive(result.options);setPage(result.page);setCursor(result.nextCursor);setHasMore(result.hasMore);setSettledScopeKey(liveScopeKey);
+        setLive(result.options);setPage(result.page);setCursor(result.nextCursor);setHasMore(result.hasMore);
+        setCatalogMeta({
+          sourceUrl: result.sourceUrl,
+          sourceNotice: result.sourceNotice,
+          catalogNotice: result.catalogNotice,
+          isLookupOnly: result.isLookupOnly,
+        });
+        setSettledScopeKey(liveScopeKey);
       }).catch(error=>{if(id===request.current){setError(`${error.message}\n${error.stack || ''}`);setErrorScopeKey(liveScopeKey);}}).finally(()=>{if(id===request.current)setLoading(false);});
     },query ? 300 : 0);
     return ()=>{clearTimeout(timer);++request.current;};
@@ -58,7 +66,14 @@ export function ProviderModelSelect({provider,value,onChange}:{provider:string;v
     try {
       const result=readCheckpointCatalog(await fetchLiveModelsShared(false,provider,sanitizeCatalogQuery(query),'Checkpoint','checkpoint','downloads',cursor,page+1,50,'',''),provider);
       if(id!==request.current)return;
-      setLive(old=>[...old,...result.options]);setPage(page+1);setCursor(result.nextCursor);setHasMore(result.hasMore);setSettledScopeKey(liveScopeKey);
+      setLive(old=>[...old,...result.options]);setPage(page+1);setCursor(result.nextCursor);setHasMore(result.hasMore);
+      setCatalogMeta({
+        sourceUrl: result.sourceUrl,
+        sourceNotice: result.sourceNotice,
+        catalogNotice: result.catalogNotice,
+        isLookupOnly: result.isLookupOnly,
+      });
+      setSettledScopeKey(liveScopeKey);
     }catch(error:any){if(id===request.current){setError(`${error.message}\n${error.stack || ''}`);setErrorScopeKey(liveScopeKey);}}finally{if(id===request.current)setLoading(false);}
   };
   const all=mergeCheckpointOptions(provider,currentLive);
@@ -66,6 +81,16 @@ export function ProviderModelSelect({provider,value,onChange}:{provider:string;v
   const invalid=isInvalidTensorModel(provider,value);
   const selected=all.find(row=>row.value===value);
   const catalogCount = hasCurrentResult ? currentLive.length : 0;
+  const isNoCatalogProvider = Boolean(hasCurrentResult && catalogMeta.isLookupOnly && currentLive.length === 0);
+  const suggestions: DriverModelSuggestion[] = React.useMemo(() => {
+    return isNoCatalogProvider ? getDriverModelSuggestions(provider) : [];
+  }, [provider, isNoCatalogProvider]);
+  const filteredSuggestions = React.useMemo(() => {
+    if (!query) return suggestions;
+    const q = query.toLowerCase();
+    return suggestions.filter(s => `${s.id} ${s.name} ${s.description || ''}`.toLowerCase().includes(q));
+  }, [suggestions, query]);
+
   const stop=(e:React.SyntheticEvent)=>e.stopPropagation();
   return <div className="space-y-2" onMouseDown={stop} onPointerDown={stop} onKeyDown={stop}>
     {provider==='krea' && !value && <p role="status" data-testid="krea-live-model-selection-note" className="rounded border border-cyan-900/60 bg-cyan-950/20 p-2 text-xs text-cyan-200">请从实时 Krea 官方模型目录选择生成端点；此模板未预选其他服务商的模型标识。</p>}
@@ -73,17 +98,92 @@ export function ProviderModelSelect({provider,value,onChange}:{provider:string;v
     <select aria-label="当前供应商底模" title={selected?.label ? `${selected.label} · ${value}` : value || undefined} value={invalid ? '' : value || ''} onFocus={arm} onMouseDown={arm} onChange={e=>{onChange(e.target.value);noteUserModelSelection(provider,e.target.value);}} className="w-full rounded-lg border border-[#2d303a] bg-[#121316] p-2 text-sm text-slate-200">
       <option value="">{value ? '（保留当前选择）' : '请选择模型'}</option>
       {/* Always keep a selectable option for the current value so reload/catalog race never paints「未选择」over a filled model. */}
-      {value && !invalid && !options.some(row=>row.value===value) && (
+      {value && !invalid && !options.some(row=>row.value===value) && !suggestions.some(s=>s.id===value) && (
         <option value={value}>{selected?.label || `[当前] ${value}`}</option>
       )}
-      {hasCurrentResult && <optgroup label={`${provider.toUpperCase()} · ${options.length} 个已加载模型`}>
+      {hasCurrentResult && options.length > 0 && <optgroup label={`${provider.toUpperCase()} · ${options.length} 个已加载模型`}>
         {options.map(row=><option key={row.value} value={row.value} title={`${row.label} · ${row.value}`}>{row.label}</option>)}
       </optgroup>}
+      {isNoCatalogProvider && suggestions.length > 0 && (
+        <optgroup label="驱动建议模型（按官方文档声明，非实时拉取）">
+          {filteredSuggestions.map(s => (
+            <option key={s.id} value={s.id} title={`${s.name} · ${s.id}${s.description ? ` (${s.description})` : ''}`}>
+              {s.name} · {s.id}
+            </option>
+          ))}
+        </optgroup>
+      )}
     </select>
     <div className="flex items-center justify-between gap-2 text-xs text-slate-400" role="status">
-      <span data-testid="provider-model-catalog-status">{currentLoading ? '正在查询模型目录…' : currentError ? '查询失败' : catalogCount ? `目录已返回 ${catalogCount} 个模型` : value ? '已选底模' : provider==='tensorart' && !query ? '等待输入模型 ID（未请求上游）' : query ? '未找到匹配模型' : '当前目录页暂无底模；可切换分类或输入 ID'}</span>
+      <span data-testid="provider-model-catalog-status">{currentLoading ? '正在查询模型目录…' : currentError ? '查询失败' : catalogCount ? `目录已返回 ${catalogCount} 个模型` : value ? '已选底模' : isNoCatalogProvider ? '官方无公开模型目录（可选用下方驱动建议或输入自定义 ID）' : provider === 'tensorart' && !query ? '等待输入模型 ID（未请求上游）' : query ? '未找到匹配模型' : '当前目录页暂无底模；可切换分类或输入 ID'}</span>
       <button type="button" disabled={currentLoading} onClick={()=>{beginTraceOperation(`刷新目录 ${provider}`);setArmed(true);setReload(x=>x+1);}} className="text-cyan-300 disabled:opacity-40">{provider==='tensorart' ? '查询 ID' : '刷新目录'}</button>
     </div>
+    {isNoCatalogProvider && (
+      <div data-testid="no-catalog-guidance" className="rounded-lg border border-purple-900/60 bg-[#161224] p-2.5 text-xs text-purple-200 space-y-2">
+        <div className="flex items-start gap-1.5">
+          <span className="font-semibold text-purple-100">该服务商官方无公开模型检索目录 API</span>
+        </div>
+        <p className="text-slate-300 text-[11px] leading-relaxed">
+          官方未提供远端公开模型检索目录；您可在下方「自定义模型 (model)」中直接输入任意官方模型 ID。
+        </p>
+        {catalogMeta.catalogNotice && (
+          <p data-testid="no-catalog-notice" className="text-[11px] text-amber-200/90 leading-relaxed font-mono">
+            {catalogMeta.catalogNotice}
+          </p>
+        )}
+        {catalogMeta.sourceUrl && (
+          <div data-testid="no-catalog-doc-url" className="text-[11px] flex items-center gap-1 text-cyan-300">
+            <span>官方文档模型列表：</span>
+            <a
+              href={catalogMeta.sourceUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="underline hover:text-cyan-200 break-all"
+            >
+              {catalogMeta.sourceUrl}
+            </a>
+          </div>
+        )}
+        {suggestions.length > 0 && (
+          <div className="pt-1 border-t border-purple-900/40 space-y-1.5">
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="text-purple-300 font-medium">推荐候选（驱动按官方文档声明、非实时拉取）：</span>
+              <span className="text-[10px] text-slate-400">点击直接填入底模</span>
+            </div>
+            <div className="flex flex-wrap gap-1.5" data-testid="provider-model-suggestions-list">
+              {filteredSuggestions.map((s) => {
+                const isSelected = value === s.id;
+                return (
+                  <button
+                    type="button"
+                    key={s.id}
+                    data-testid={`provider-model-suggestion-${s.id}`}
+                    title={s.description ? `${s.name} (${s.description}) · 点击选用` : `${s.name} · 点击选用`}
+                    onClick={() => {
+                      onChange(s.id);
+                      noteUserModelSelection(provider, s.id);
+                    }}
+                    className={`px-2 py-1 rounded text-xs font-mono transition-colors cursor-pointer border ${
+                      isSelected
+                        ? 'border-cyan-400 bg-cyan-950/70 text-cyan-200 font-semibold shadow-sm'
+                        : 'border-purple-800/60 bg-purple-950/30 text-purple-200 hover:border-purple-500 hover:bg-purple-900/40'
+                    }`}
+                  >
+                    {s.id}
+                    {s.name && s.name !== s.id && (
+                      <span className="ml-1 text-[10px] opacity-70">({s.name.replace(/\s*\(default\)/i, '')})</span>
+                    )}
+                  </button>
+                );
+              })}
+              {filteredSuggestions.length === 0 && (
+                <span className="text-[11px] text-slate-400">未找到匹配建议（可在下方自定义模型输入）</span>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    )}
     {currentHasMore && <button type="button" disabled={currentLoading} onClick={loadMore} className="w-full rounded-lg border border-cyan-900 p-2 text-sm text-cyan-300 disabled:opacity-40">加载更多模型</button>}
     {currentError && <div role="alert" className="rounded-lg border border-rose-900/60 p-2 text-xs text-rose-200"><pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all select-text">{currentError}</pre></div>}
     {invalid && <p role="alert" className="text-sm text-rose-300">请输入有效的 Tensor 模型 ID 或模型页面链接。</p>}

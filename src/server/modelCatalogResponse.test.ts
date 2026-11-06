@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseModelsLabCatalogResponse, parseRunwareCatalogResponse } from './modelCatalogResponse';
+import { isLookupOnlyCatalog, parseModelsLabCatalogResponse, parseRunwareCatalogResponse } from './modelCatalogResponse';
 
 describe('Runware and ModelsLab catalog response parsing', () => {
   it('preserves the complete non-2xx response and actual upstream status', () => {
@@ -37,5 +37,17 @@ describe('Runware and ModelsLab catalog response parsing', () => {
     const result = parseModelsLabCatalogResponse(401, body, key);
     expect(result).toMatchObject({ ok: false, rawResponse: `{"message":"bad key [credential redacted]"}` });
     expect(JSON.stringify(result)).not.toContain(key);
+  });
+
+  it('generically identifies lookup-only catalog pagination without hardcoding provider names', () => {
+    expect(isLookupOnlyCatalog({ sourceNotice: 'lookup-only (no public remote catalog; model_id enum on Mango docs)' })).toBe(true);
+    expect(isLookupOnlyCatalog({ sourceNotice: 'lookup-only (specialized image/video service; no public remote catalog)' })).toBe(true);
+    expect(isLookupOnlyCatalog({ sourceNotice: 'lookup-only (custom endpoint)' })).toBe(true);
+    expect(isLookupOnlyCatalog({ lookupOnly: true })).toBe(true);
+    expect(isLookupOnlyCatalog({ noRemoteCatalog: true })).toBe(true);
+    expect(isLookupOnlyCatalog({ sourceNotice: 'live-api (modelSearch)' })).toBe(false);
+    expect(isLookupOnlyCatalog({ sourceNotice: 'authenticated live-api (GET /v1/models)' })).toBe(false);
+    expect(isLookupOnlyCatalog(undefined)).toBe(false);
+    expect(isLookupOnlyCatalog(null)).toBe(false);
   });
 });
