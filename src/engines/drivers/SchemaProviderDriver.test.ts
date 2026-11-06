@@ -118,6 +118,54 @@ describe('SchemaProviderDriver · Sogni waiting_for_user', () => {
     });
     expect(plainErrorMessage(err)).toMatch(/LoRA 强度范围未能完整核实.*catalog offline/);
   });
+
+  it('surfaces unmappedLoras in historyWarning on completed generation and in error message on submit failure without masking upstream HTTP status/body', async () => {
+    const kreaDriver = new SchemaProviderDriver('krea');
+    mockFetch.mockImplementation(async (input: URL | RequestInfo, init?: RequestInit) => {
+      const u = String(input);
+      const method = String(init?.method || 'GET').toUpperCase();
+      if (u.includes('/api/model-schema') && method === 'GET') {
+        return jsonResponse({ credentialRef: 'krea-cred', inputSchema: { type: 'object', properties: { prompt: { type: 'string' }, styles: { type: 'array' } } } });
+      }
+      if (u.includes('/api/schema-provider/krea/submit') && method === 'POST') {
+        return jsonResponse({
+          taskId: 'krea_job_1',
+          pollUrl: '/api/schema-provider/krea/tasks/krea_job_1',
+          actualRequest: {
+            endpoint: 'https://api.krea.ai/generate/image/bfl/flux-1-dev',
+            parameters: { prompt: 'x', styles: [] },
+            mapping: [
+              {
+                from: 'loras',
+                to: 'styles',
+                unmappedLoras: [
+                  {
+                    item: { name: 'cinematic-1940s.safetensors', downloadUrl: 'https://civitai.com/api/download/models/1527024', civitaiId: '1527024' },
+                    reason: 'Krea LoRA 缺少 styleId（需要 Krea 官方样式目录公布的 style ID）',
+                  },
+                ],
+              },
+            ],
+          },
+        });
+      }
+      if (u.includes('/api/schema-provider/krea/tasks/krea_job_1') && method === 'GET') {
+        return jsonResponse({ status: 'completed', outputs: ['https://cdn.example/krea.png'] });
+      }
+      if (u.includes('/api/schema-provider/krea/save-result') && method === 'POST') {
+        return jsonResponse({ historyItems: [{ url: 'https://cdn.example/krea.png' }] });
+      }
+      return jsonResponse({ error: `unexpected ${method} ${u}` }, 500);
+    });
+
+    const pending = kreaDriver.generate({ prompt: 'x', model: 'image/bfl/flux-1-dev' }, { kreaKey: 'fixture' });
+    await vi.runAllTimersAsync();
+    const result = await pending;
+    expect(result.historyWarning).toContain('部分或全部 LoRA 因标识命名空间或格式不匹配未发送（未挂载）');
+    expect(result.historyWarning).toContain('cinematic-1940s.safetensors');
+    expect(result.historyWarning).toContain('https://civitai.com/api/download/models/1527024');
+    expect(result.historyWarning).toContain('Krea LoRA 缺少 styleId');
+  });
 });
 
 describe('SchemaProviderDriver · output URL protocol validation', () => {

@@ -111,6 +111,7 @@ export function spatialRequestParameters(frame: SpatialFrame): NormalizedGenerat
       ...(l.modelId?{modelId:l.modelId}:{}),
       ...(l.versionId?{versionId:l.versionId}:{}),
       ...(l.styleId?{styleId:l.styleId}:{}),
+      ...(l.catalogId?{catalogId:l.catalogId}:{}),
       ...(l.sd_name_in_api?{sd_name_in_api:l.sd_name_in_api}:{}),
       strength:l.modelStrength,
       modelStrength:l.modelStrength,

@@ -396,4 +396,162 @@ describe('CivitaiModal & CivitaiModalImportPreview Reactive Live Schema Tests (P
     const statusBadge = host.querySelector('[data-testid="import-lora-status-0"]');
     expect(statusBadge?.textContent).toBe('可直接发送');
   });
+
+  it('parent CivitaiModal discards delayed out-of-order extract responses when switching providers', async () => {
+    let resolveFirstExtract: ((value: any) => void) | undefined;
+    const firstExtractPromise = new Promise((resolve) => {
+      resolveFirstExtract = resolve;
+    });
+
+    const mockFetch = vi.fn(async (url: string, init: any) => {
+      const u = String(url);
+      if (u.includes('/api/civitai/extract-workflow')) {
+        const body = JSON.parse(String(init?.body || '{}'));
+        if (body.engine === 'fal') {
+          // Slow response for fal
+          await firstExtractPromise;
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              success: true,
+              preset: {
+                ...samplePreset,
+                provider: 'Fal.ai 目标引擎',
+                nodes: [{ id: 'ckpt-node', type: 'CheckpointLoaderSimple', values: { targetProvider: 'fal', ckpt_name: 'slow-fal' } }],
+              },
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } }
+          );
+        }
+        if (body.engine === 'runware') {
+          // Fast response for runware
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              success: true,
+              preset: {
+                ...samplePreset,
+                provider: 'Runware 目标引擎',
+                nodes: [{ id: 'ckpt-node', type: 'CheckpointLoaderSimple', values: { targetProvider: 'runware', ckpt_name: 'fast-runware' } }],
+              },
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } }
+          );
+        }
+        return new Response(JSON.stringify({ ok: true, success: true, preset: samplePreset }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response(JSON.stringify({}), { status: 200 });
+    });
+
+    vi.stubGlobal('fetch', mockFetch);
+
+    let appliedPreset: any;
+    await act(async () => {
+      root.render(
+        <CivitaiModal
+          isOpen={true}
+          initialMode="import"
+          onClose={vi.fn()}
+          onSelectLoRA={vi.fn()}
+          onAddLoRANodeToCanvas={vi.fn()}
+          onLoadWorkflowPreset={(p) => {
+            appliedPreset = p;
+          }}
+        />
+      );
+    });
+    await flush();
+
+    // Quick fill
+    const quickBtn = host.querySelector('[data-testid="civitai-quick-fill-sd15"]') as HTMLButtonElement;
+    await act(async () => {
+      quickBtn.click();
+    });
+    await flush(50);
+
+    // 1. Switch provider to fal (slow request begins)
+    const falBtn = host.querySelector('[data-testid="import-provider-pill-fal"]') as HTMLButtonElement;
+    await act(async () => {
+      falBtn.click();
+    });
+    await flush(20);
+
+    // 2. Immediately switch provider to runware (fast request completes and sets preset)
+    const runwareBtn = host.querySelector('[data-testid="import-provider-pill-runware"]') as HTMLButtonElement;
+    await act(async () => {
+      runwareBtn.click();
+    });
+    await flush(50);
+
+    // Verify current preview shows Runware
+    expect(host.innerHTML).toContain('Runware');
+
+    // 3. Now let the delayed slow Fal extract complete
+    await act(async () => {
+      resolveFirstExtract!(null);
+    });
+    await flush(50);
+
+    // Stale slow response MUST NOT overwrite current selection
+    expect(host.innerHTML).toContain('Runware');
+    expect(host.innerHTML).not.toContain('slow-fal');
+
+    // Click apply button and check preset handed to canvas is Runware
+    const applyBtn = host.querySelector('[data-testid="apply-imported-workflow-button"]') as HTMLButtonElement;
+    expect(applyBtn).toBeTruthy();
+    await act(async () => {
+      applyBtn.click();
+    });
+    await flush(20);
+
+    expect(appliedPreset).toBeDefined();
+    expect(appliedPreset.nodes[0].values.targetProvider).toBe('runware');
+  });
+
+  it('unselected target model on non-civitai provider displays unverified/pending banner, never false green 架构兼容', async () => {
+    const mockFetch = vi.fn(async (url: string) => {
+      const u = String(url);
+      if (u.includes('/api/civitai/extract-workflow')) {
+        return new Response(JSON.stringify({ ok: true, success: true, preset: samplePreset }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response(JSON.stringify({}), { status: 200 });
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    await act(async () => {
+      root.render(
+        <CivitaiModal
+          isOpen={true}
+          initialMode="import"
+          onClose={vi.fn()}
+          onSelectLoRA={vi.fn()}
+          onAddLoRANodeToCanvas={vi.fn()}
+        />
+      );
+    });
+    await flush();
+
+    const quickBtn = host.querySelector('[data-testid="civitai-quick-fill-sd15"]') as HTMLButtonElement;
+    await act(async () => {
+      quickBtn.click();
+    });
+    await flush(50);
+
+    // Switch provider to sogni
+    const sogniBtn = host.querySelector('[data-testid="import-provider-pill-sogni"]') as HTMLButtonElement;
+    await act(async () => {
+      sogniBtn.click();
+    });
+    await flush(50);
+
+    const badge = host.querySelector('[data-testid="import-architecture-status-badge"]');
+    expect(badge?.textContent).toContain('待选择目标模型 / 未核实');
+    expect(badge?.textContent).not.toBe('架构兼容');
+  });
 });

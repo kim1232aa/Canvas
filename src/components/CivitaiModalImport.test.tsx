@@ -92,10 +92,10 @@ describe('CivitaiModal Recipe Import and Cross-Provider Adaptation UI', () => {
 
     const allEls = elements(tree);
 
-    // Architecture banner renders
+    // Architecture banner renders (unverified when no target model/schema is chosen on Fal)
     const banner = allEls.find((el) => el.props?.['data-testid'] === 'import-architecture-banner');
     expect(banner).toBeDefined();
-    expect(elements(banner).some((el) => String(el.props?.children || '').includes('架构兼容'))).toBe(true);
+    expect(elements(banner).some((el) => String(el.props?.children || '').includes('待选择目标模型 / 未核实'))).toBe(true);
 
     // Provider selector renders
     const selector = allEls.find((el) => el.props?.['data-testid'] === 'import-provider-selector');

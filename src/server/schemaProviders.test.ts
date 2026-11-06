@@ -494,8 +494,8 @@ describe('schema provider server contract', () => {
         body: JSON.stringify({
           model: 'krea-2-turbo', prompt: 'portrait', width: 640,
           loras: [
-            { name: 'first', path: 'https://fixture.invalid/first.safetensors', strength: 0.4 },
-            { name: 'second', path: 'https://fixture.invalid/second.safetensors', strength: 0.9 },
+            { name: 'krea2-detail-enhancer', strength: 0.4 },
+            { name: 'krea2-warm-light', strength: 0.9 },
           ],
         }),
       });
@@ -504,7 +504,7 @@ describe('schema provider server contract', () => {
       expect(standard.rawResponse.data.workflow.workflowId).toBe('task-1');
       expect(standard.actualRequest.parameters.input.steps[0].arguments).toMatchObject({
         model: 'krea-2-turbo', prompt: 'portrait', width: 640,
-        loras: ['https://fixture.invalid/first.safetensors', 'https://fixture.invalid/second.safetensors'],
+        loras: ['krea2-detail-enhancer', 'krea2-warm-light'],
         loraStrengths: [0.4, 0.9],
       });
 

@@ -222,6 +222,7 @@ export interface ComfyParameters {
     air?: string;
     path?: string;
     styleId?: string;
+    catalogId?: string;
     sd_name_in_api?: string;
     downloadUrl?: string;
     unresolvedResource?: boolean;

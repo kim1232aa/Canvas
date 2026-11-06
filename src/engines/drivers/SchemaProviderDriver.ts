@@ -77,6 +77,24 @@ function sogniRangeValidationNotice(submitBody:unknown):string|undefined {
   return `Sogni LoRA 强度范围未能完整核实，已按原值提交，未修改参数；上游可能按其规则处理。${details}`;
 }
 
+export function unmappedLorasNotice(submitBody:unknown):string|undefined {
+  const actualRequest=asRecord(asRecord(submitBody).actualRequest);
+  const mapping=Array.isArray(actualRequest.mapping)?actualRequest.mapping:[];
+  const loraMap=mapping.find((entry:any)=>entry?.from==='loras');
+  const unmapped=Array.isArray(loraMap?.unmappedLoras)?loraMap.unmappedLoras:[];
+  if(!unmapped.length)return undefined;
+  const details=unmapped.map((entry:any)=>{
+    const item=entry?.item;
+    if(typeof item==='string')return `${item}（${entry?.reason || '未映射'}）`;
+    const r=asRecord(item);
+    const label=String(r.name || r.lora_name || r.model_name || r.sd_name_in_api || r.styleId || r.catalogId || r.loraId || r.slug || r.id || r.path || r.downloadUrl || r.air || r.civitaiId || 'LoRA').trim();
+    const src=String(r.downloadUrl || r.url || r.path || r.air || r.civitaiId || '').trim();
+    const display=src && src!==label ? `${label} [${src}]` : label;
+    return `${display}：${entry?.reason || '未映射'}`;
+  }).join('；');
+  return `部分或全部 LoRA 因标识命名空间或格式不匹配未发送（未挂载）：${details}`;
+}
+
 async function readBody(response: Response): Promise<unknown> {
   const text = await response.text();
   if (!text) return '';
@@ -238,11 +256,15 @@ export class SchemaProviderDriver extends BaseEngineDriver {
       const err=failure(`${this.name} submit failed`,submitResponse,submitBody);
       if(schemaPrefetchFailure){err.message+=`\n（此前 GET ${schemaUrl} → HTTP ${schemaPrefetchFailure.status}）`;(err as any).data={...(err as any).data,schemaPrefetchFailure};}
       const rangeWarning=this.id==='sogni'?sogniRangeValidationNotice(submitBody):undefined;
-      if(rangeWarning){err.message+=`; ${rangeWarning}`;(err as any).data={loraRangeWarning:rangeWarning,submitResponse:submitBody};}
+      const unmappedWarning=unmappedLorasNotice(submitBody);
+      const combinedLoraWarning=[rangeWarning,unmappedWarning].filter(Boolean).join('；') || undefined;
+      if(combinedLoraWarning){err.message+=`; ${combinedLoraWarning}`;(err as any).data={...(err as any).data,loraRangeWarning:combinedLoraWarning,submitResponse:submitBody};}
       throw err;
     }
     const submitted = asRecord(submitBody);
     const rangeWarning=this.id==='sogni'?sogniRangeValidationNotice(submitBody):undefined;
+    const unmappedWarning=unmappedLorasNotice(submitBody);
+    const combinedLoraWarning=[rangeWarning,unmappedWarning].filter(Boolean).join('；') || undefined;
     const taskId = String(submitted.taskId || '').trim();
     const pollUrl = String(submitted.pollUrl || '').trim();
     if (!taskId || !pollUrl) {
@@ -305,8 +327,8 @@ export class SchemaProviderDriver extends BaseEngineDriver {
         let saved:any;let historyWarning:string|undefined;
         try {
           const saveResponse=await request(`/api/schema-provider/${this.id}/save-result`,{method:'POST',headers,body:JSON.stringify({taskId,outputs:normalizedOutputs,metadata,workflowSnapshot})},`${this.name} output persistence`);
-          saved=await readBody(saveResponse);historyWarning=[saved?.historyWarning,rangeWarning].filter(Boolean).join('；') || undefined;
-        } catch(error:any) {historyWarning=[rangeWarning,`上游已生成，保存失败：${error.message}`].filter(Boolean).join('；');saved={error:error.message,stack:error.stack,cause:error.cause};}
+          saved=await readBody(saveResponse);historyWarning=[saved?.historyWarning,combinedLoraWarning].filter(Boolean).join('；') || undefined;
+        } catch(error:any) {historyWarning=[combinedLoraWarning,`上游已生成，保存失败：${error.message}`].filter(Boolean).join('；');saved={error:error.message,stack:error.stack,cause:error.cause};}
         return {
           mediaUrl:saved?.historyItems?.[0]?.url || mediaUrl,
           mediaType: result.mediaType === 'video' || looksLikeVideoUrl(mediaUrl) ? 'video' : 'image',
@@ -324,7 +346,7 @@ export class SchemaProviderDriver extends BaseEngineDriver {
       }
       if (status === 'waiting_for_user') {
         const reason = result.waitingReason ?? result.pauseReason ?? result.pausedReason ?? result.error ?? result.message;
-        const err = new Error(`${this.name} task ${taskId} is waiting_for_user; upstream pause reason: ${typeof reason === 'string' ? reason : JSON.stringify(reason ?? '(not provided)')}; full response body: ${JSON.stringify(pollBody)}${rangeWarning?`; ${rangeWarning}`:''}`);
+        const err = new Error(`${this.name} task ${taskId} is waiting_for_user; upstream pause reason: ${typeof reason === 'string' ? reason : JSON.stringify(reason ?? '(not provided)')}; full response body: ${JSON.stringify(pollBody)}${combinedLoraWarning?`; ${combinedLoraWarning}`:''}`);
         // fix3 G: structured data so toast/title carry HTTP + task status + body (not 「响应体为空」).
         (err as any).data = {
           ...asRecord(pollBody),
@@ -332,21 +354,21 @@ export class SchemaProviderDriver extends BaseEngineDriver {
           upstreamStatusText: `status: ${status}${typeof reason === 'string' && reason ? ` · ${reason}` : ''}`,
           upstreamResponseBody: typeof pollBody === 'string' ? pollBody : JSON.stringify(pollBody),
           rawResponse: pollBody,
-          ...(rangeWarning?{loraRangeWarning:rangeWarning}:{}),
+          ...(combinedLoraWarning?{loraRangeWarning:combinedLoraWarning}:{}),
           executionTrace: result.executionTrace ?? result.taskExecutionTrace,
           historyItem: result.historyItem,
         };
         throw err;
       }
       if (['failed', 'sandbox_mock', 'partial_failure', 'cancelled', 'canceled', 'timeout', 'timed_out', 'deleted', 'error'].includes(status)) {
-        const err = new Error(`${this.name} task ${taskId} ended with status=${status}; response body: ${JSON.stringify(pollBody)}${rangeWarning?`; ${rangeWarning}`:''}`);
+        const err = new Error(`${this.name} task ${taskId} ended with status=${status}; response body: ${JSON.stringify(pollBody)}${combinedLoraWarning?`; ${combinedLoraWarning}`:''}`);
         (err as any).data = {
           ...asRecord(pollBody),
           upstreamStatus: typeof result.upstreamStatus === 'number' ? result.upstreamStatus : 200,
           upstreamStatusText: `status: ${status}`,
           upstreamResponseBody: typeof pollBody === 'string' ? pollBody : JSON.stringify(pollBody),
           rawResponse: pollBody,
-          ...(rangeWarning?{loraRangeWarning:rangeWarning}:{}),
+          ...(combinedLoraWarning?{loraRangeWarning:combinedLoraWarning}:{}),
           executionTrace: result.executionTrace ?? result.taskExecutionTrace,
           historyItem: result.historyItem,
         };

@@ -83,6 +83,31 @@ export function proposedRequestOf(definition:any,parameters:any,mapping:any[],lo
  * Priority: (1) items.properties / $ref-resolved properties; (2) provider-table loraItemFields (must cite official source);
  * (3) neither → throw local block 「Schema 未定义 LoRA 强度字段」. Never invent {path,scale} as a silent default.
  */
+function isForeignCivitaiLora(l: any): boolean {
+  if (!l || typeof l !== 'object') return false;
+  if (l.import_source_provider === 'civitai' || l.resource_source === 'civitai') return true;
+  if (typeof l.civitaiId === 'string' && l.civitaiId.trim() !== '') return true;
+  if (typeof l.civitai_id === 'string' && l.civitai_id.trim() !== '') return true;
+  if (typeof l.air === 'string' && l.air.trim().startsWith('urn:air:')) return true;
+  return false;
+}
+
+const LORA_INTERNAL_CANVAS_KEYS = new Set([
+  'name', 'baseModel', 'base_model', 'nodeId', 'modelStrength', 'clipStrength',
+  'strength_model', 'strength_clip', 'triggerWords', 'trigger_words', 'triggers',
+  'civitaiId', 'civitai_id', 'modelId', 'model_id', 'versionId', 'version_id',
+  'air', 'civitai_air', 'civitaiAir', 'path', 'lora_path', 'loraPath',
+  'url', 'downloadUrl', 'download_url', 'styleId', 'style_id',
+  'catalogId', 'catalog_id', 'loraId', 'lora_id', 'slug',
+  'sd_name_in_api', 'sdNameInApi', 'model_name', 'model', 'id',
+  'strength', 'scale', 'weight', 'lora_strength', 'provider',
+  'unresolvedResource', 'import_unresolved_resource', 'resourceVerified', 'resource_verified',
+  'resource_source', 'resource_kind', 'import_source_provider', 'inferred_from_prompt',
+  'import_resource_reason', 'unresolvedReason', 'import_unresolved_reason', 'resource_unresolved_reason',
+  'lora_name', 'selected_model_name', 'selected_triggers',
+  'lora_strength_min', 'lora_strength_max', 'lora_strength_step',
+]);
+
 export function mapSchemaLoraItems(
   loras: any[],
   itemSchema: any,
@@ -95,14 +120,28 @@ export function mapSchemaLoraItems(
   if (itemSchema?.type === 'string') {
     return loras
       .map((l: any) => {
-        if (typeof l === 'string') return l.trim();
-        const raw = l.id || l.model_name || l.sd_name_in_api;
-        if (typeof raw === 'string' && raw.trim() && !/^https?:\/\//i.test(raw.trim()) && !/^\d+$/.test(raw.trim()) && !/\.(safetensors|pt|bin|ckpt)$/i.test(raw.trim())) {
-          return raw.trim();
+        if (typeof l === 'string') {
+          const s = l.trim();
+          if (s && !/^https?:\/\//i.test(s) && !/^urn:air:/i.test(s)) return s;
+          unmappedOut?.push({
+            item: l,
+            reason: 'Schema 要求字符串 ID；外部 URL 或 Civitai AIR 不可直接作为原生 ID',
+          });
+          return undefined;
+        }
+        const foreign = isForeignCivitaiLora(l);
+        const explicitTarget = String(l.catalogId || l.loraId || l.slug || l.id || l.model_name || l.sd_name_in_api || '').trim();
+        const fallbackName = !foreign ? String(l.name || '').trim() : '';
+        const raw = explicitTarget || fallbackName;
+        const isUrl = /^https?:\/\//i.test(raw);
+        const isAir = /^urn:air:/i.test(raw);
+        const isCivitaiFilename = foreign && !explicitTarget && /\.(safetensors|pt|bin|ckpt)$/i.test(raw);
+        if (raw && !isUrl && !isAir && !isCivitaiFilename) {
+          return raw;
         }
         unmappedOut?.push({
           item: l,
-          reason: 'Schema 要求字符串 ID；外部 URL、纯数字 ID 或模型文件名不可直接作为原生 ID',
+          reason: 'Schema 要求字符串 ID；外部 URL、Civitai AIR 或未映射的 Civitai 文件名不可直接作为原生 ID',
         });
         return undefined;
       })
@@ -113,11 +152,13 @@ export function mapSchemaLoraItems(
   if (props && typeof props === 'object') {
     const declaredKeys = Object.keys(props);
     const mappedItems: any[] = [];
+    const strengthKey = ['scale', 'weight', 'strength', 'modelStrength', 'lora_strength'].find((k) => Object.hasOwn(props, k));
 
     for (const l of loras) {
       if (typeof l !== 'object' || l === null) continue;
       const item: Record<string, any> = {};
       let hasValidResource = false;
+      const foreign = isForeignCivitaiLora(l);
 
       for (const k of declaredKeys) {
         if (k === 'air') {
@@ -126,22 +167,31 @@ export function mapSchemaLoraItems(
               ? l.air.trim()
               : (typeof l.civitaiId === 'string' && l.civitaiId.trim().startsWith('urn:air:'))
               ? l.civitaiId.trim()
+              : (!foreign && typeof l.name === 'string' && l.name.trim().startsWith('urn:air:'))
+              ? l.name.trim()
               : undefined;
           if (airVal) {
             item.air = airVal;
             hasValidResource = true;
           }
         } else if (k === 'url' || k === 'path') {
-          const urlCandidate =
-            (typeof l.downloadUrl === 'string' && /^https?:\/\//i.test(l.downloadUrl.trim()))
-              ? l.downloadUrl.trim()
-              : (typeof l.url === 'string' && /^https?:\/\//i.test(l.url.trim()))
-              ? l.url.trim()
-              : (typeof l.path === 'string' && /^https?:\/\//i.test(l.path.trim()))
-              ? l.path.trim()
-              : undefined;
-          if (urlCandidate) {
-            item[k] = urlCandidate;
+          const isValidPathOrUrl = (val: string) =>
+            /^https?:\/\//i.test(val) || (k === 'path' && /^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/.test(val));
+          const candidates = [
+            l.downloadUrl,
+            l.url,
+            l.path,
+            !foreign ? l.name : undefined,
+          ];
+          let matched: string | undefined;
+          for (const c of candidates) {
+            if (typeof c === 'string' && isValidPathOrUrl(c.trim())) {
+              matched = c.trim();
+              break;
+            }
+          }
+          if (matched) {
+            item[k] = matched;
             hasValidResource = true;
           }
         } else if (k === 'model') {
@@ -154,42 +204,46 @@ export function mapSchemaLoraItems(
               ? `civitai:${l.modelId}@${l.versionId}`
               : (typeof l.civitaiId === 'string' && (l.civitaiId.includes(':') || l.civitaiId.includes('@')))
               ? l.civitaiId.trim()
+              : (!foreign && typeof l.name === 'string' && l.name.trim() && !/^https?:\/\//i.test(l.name.trim()))
+              ? l.name.trim()
               : undefined;
           if (modelVal) {
             item.model = modelVal;
             hasValidResource = true;
           }
         } else if (k === 'model_name') {
-          const nameVal =
-            (typeof l.model_name === 'string' && l.model_name.trim() && !/^https?:\/\//i.test(l.model_name.trim()) && !/^\d+$/.test(l.model_name.trim()))
-              ? l.model_name.trim()
-              : (typeof l.sd_name_in_api === 'string' && l.sd_name_in_api.trim())
-              ? l.sd_name_in_api.trim()
-              : undefined;
-          if (nameVal) {
-            item.model_name = nameVal;
+          const explicit = String(l.model_name || l.sd_name_in_api || '').trim();
+          const fallback = !foreign ? String(l.path || l.id || l.name || '').trim() : '';
+          const candidate = explicit || fallback;
+          if (candidate && !/^https?:\/\//i.test(candidate) && !/^urn:air:/i.test(candidate)) {
+            item.model_name = candidate;
             hasValidResource = true;
           }
         } else if (k === 'id') {
-          const idVal =
-            (typeof l.styleId === 'string' && l.styleId.trim() && !/^https?:\/\//i.test(l.styleId.trim()))
-              ? l.styleId.trim()
-              : (typeof l.style_id === 'string' && l.style_id.trim() && !/^https?:\/\//i.test(l.style_id.trim()))
-              ? l.style_id.trim()
-              : (typeof l.id === 'string' && l.id.trim() && !/^https?:\/\//i.test(l.id.trim()) && !/^\d+$/.test(l.id.trim()) && !/\.(safetensors|pt|bin|ckpt)$/i.test(l.id.trim()))
-              ? l.id.trim()
-              : undefined;
-          if (idVal) {
-            item.id = idVal;
+          const explicit = String(l.styleId || l.style_id || l.catalogId || l.loraId || l.slug || (!foreign ? l.id : '') || '').trim();
+          const fallback = !foreign ? String(l.name || '').trim() : '';
+          const candidate = explicit || fallback;
+          const isUrl = /^https?:\/\//i.test(candidate);
+          const isAir = /^urn:air:/i.test(candidate);
+          const isForeignFilename = foreign && !explicit && /\.(safetensors|pt|bin|ckpt)$/i.test(candidate);
+          if (candidate && !isUrl && !isAir && !isForeignFilename) {
+            item.id = candidate;
             hasValidResource = true;
+          }
+        } else if (k !== strengthKey) {
+          // Preserve any additional schema-declared fields explicitly present on the LoRA item (e.g. trigger_word, transformer)
+          if (Object.hasOwn(l, k) && l[k] !== undefined && l[k] !== null && l[k] !== '') {
+            item[k] = l[k];
+          } else if ((k === 'trigger_word' || k === 'triggerWord' || k === 'trained_words') && typeof (l.trigger_word ?? l.triggerWords ?? l.triggers) === 'string' && String(l.trigger_word ?? l.triggerWords ?? l.triggers).trim() !== '') {
+            item[k] = String(l.trigger_word ?? l.triggerWords ?? l.triggers).trim();
           }
         }
       }
 
-      const strengthKey = ['scale', 'weight', 'strength', 'modelStrength', 'lora_strength'].find((k) => Object.hasOwn(props, k));
-      const s = l.strength ?? l.modelStrength ?? l.scale ?? l.weight;
-      if (strengthKey && typeof s === 'number' && Number.isFinite(s)) {
-        item[strengthKey] = s;
+      const s = l.strength ?? l.modelStrength ?? l.scale ?? l.weight ?? l.lora_strength;
+      if (strengthKey && s !== undefined && s !== null && s !== '') {
+        const num = Number(s);
+        item[strengthKey] = Number.isFinite(num) ? num : s;
       }
 
       if (hasValidResource) {
@@ -646,23 +700,25 @@ export function novitaLoras(loras: any[], unmappedOut?: Array<{ item: any; reaso
   const result: Array<{ model_name: string; strength?: number }> = [];
   for (const l of loras) {
     if (l && typeof l === 'object') {
-      if (l.civitaiId && !l.model_name && !l.sd_name_in_api) {
+      const foreign = isForeignCivitaiLora(l);
+      if (foreign && !l.model_name && !l.sd_name_in_api) {
         unmappedOut?.push({
           item: l,
-          reason: 'Novita LoRA 缺少 model_name（需使用 Novita 官方模型目录提供的 sd_name_in_api；不可使用外部 URL 或纯数字 Civitai ID）',
+          reason: 'Novita LoRA 缺少 model_name（需使用 Novita 官方模型目录提供的 sd_name_in_api；不可使用外部 URL 或未映射的 Civitai 资源）',
         });
         continue;
       }
       let candidate = String(l.model_name || l.sd_name_in_api || '').trim();
-      if (!candidate && !l.civitaiId) {
+      if (!candidate && !foreign) {
         const fallback = String(l.path || l.id || l.name || '').trim();
-        if (fallback && !/^https?:\/\//i.test(fallback) && !/^\d+$/.test(fallback) && !/\.(safetensors|pt|bin|ckpt)$/i.test(fallback)) {
+        if (fallback && !/^https?:\/\//i.test(fallback) && !/^urn:air:/i.test(fallback) && !/^\d+$/.test(fallback)) {
           candidate = fallback;
         }
       }
       const isUrl = /^https?:\/\//i.test(candidate);
+      const isAir = /^urn:air:/i.test(candidate);
       const isNumeric = /^\d+$/.test(candidate);
-      if (!candidate || isUrl || isNumeric) {
+      if (!candidate || isUrl || isAir || isNumeric) {
         unmappedOut?.push({
           item: l,
           reason: 'Novita LoRA 缺少 model_name（需使用 Novita 官方模型目录提供的 sd_name_in_api；不可使用外部 URL 或纯数字 Civitai ID）',
@@ -1153,50 +1209,87 @@ export function kreaStyles(
 export function sogniLoras(
   loras: any[],
   unmappedOut?: Array<{ item: any; reason: string }>
-): { ids: string[]; strengths: number[] } {
+): { ids: string[]; strengths: any[] } {
   if (!Array.isArray(loras) || loras.length === 0) return { ids: [], strengths: [] };
-  const ids: string[] = [];
-  const strengths: number[] = [];
+  const candidates: Array<{ id: string; hasStrength: boolean; strength?: any; item: any }> = [];
   for (const l of loras) {
     if (typeof l === 'string') {
       const s = l.trim();
-      if (s && !/^\d+$/.test(s) && !/\.(safetensors|pt|bin|ckpt)$/i.test(s)) {
-        ids.push(s);
-        strengths.push(1);
+      const isUrl = /^https?:\/\//i.test(s);
+      const isAir = /^urn:air:/i.test(s);
+      const isNumeric = /^\d+$/.test(s);
+      const isFilename = /\.(safetensors|pt|bin|ckpt)$/i.test(s);
+      if (s && !isUrl && !isAir && !isNumeric && !isFilename) {
+        candidates.push({ id: s, hasStrength: false, item: l });
       } else {
         unmappedOut?.push({
           item: l,
-          reason: 'Sogni LoRA 缺少目录 catalogId/slug（需使用 Sogni 官方公布的 LoRA 标识；不可使用外部 URL、纯数字 Civitai ID 或文件名）',
+          reason: 'Sogni LoRA 缺少目录 catalogId/slug（官方 generate_image.schema.json 规定 loras 为 Sogni 目录 ID 数组，如 krea2-detail-enhancer 或 personal-…；不支持外部 HTTP(S) URL、Civitai AIR、纯数字 ID 或模型文件名）',
         });
       }
       continue;
     }
     if (l && typeof l === 'object') {
-      if (l.civitaiId && !l.loraId && !l.catalogId && !l.slug) {
+      const foreign = isForeignCivitaiLora(l);
+      const explicitId = String(l.loraId || l.catalogId || l.slug || (!foreign ? l.id : '') || '').trim();
+      if (foreign && !explicitId) {
         unmappedOut?.push({
           item: l,
-          reason: 'Sogni LoRA 缺少目录 catalogId/slug（需使用 Sogni 官方公布的 LoRA 标识；不可使用外部 URL、纯数字 Civitai ID 或文件名）',
+          reason: 'Sogni LoRA 缺少目录 catalogId/slug（官方 generate_image.schema.json 规定 loras 为 Sogni 目录 ID 数组，如 krea2-detail-enhancer 或 personal-…；不支持外部 HTTP(S) URL、Civitai AIR、纯数字 ID 或模型文件名）',
         });
         continue;
       }
-      const candidate = String(l.loraId || l.catalogId || l.slug || l.id || l.path || '').trim();
+      const fallback = !foreign ? String(l.name || l.path || '').trim() : '';
+      const candidate = explicitId || fallback;
+      const isUrl = /^https?:\/\//i.test(candidate);
+      const isAir = /^urn:air:/i.test(candidate);
       const isNumeric = /^\d+$/.test(candidate);
-      const isPlainFilename = !/^https?:\/\//i.test(candidate) && /\.(safetensors|pt|bin|ckpt)$/i.test(candidate);
-      if (!candidate || isNumeric || isPlainFilename) {
+      const isFilename = /\.(safetensors|pt|bin|ckpt)$/i.test(candidate);
+      if (!candidate || isUrl || isAir || isNumeric || isFilename) {
         unmappedOut?.push({
           item: l,
-          reason: 'Sogni LoRA 缺少目录 catalogId/slug（需使用 Sogni 官方公布的 LoRA 标识；不可使用外部 URL、纯数字 Civitai ID 或文件名）',
+          reason: 'Sogni LoRA 缺少目录 catalogId/slug（官方 generate_image.schema.json 规定 loras 为 Sogni 目录 ID 数组，如 krea2-detail-enhancer 或 personal-…；不支持外部 HTTP(S) URL、Civitai AIR、纯数字 ID 或模型文件名）',
         });
         continue;
       }
-      ids.push(candidate);
       const raw = l.strength ?? l.modelStrength ?? l.scale ?? l.weight;
-      if (raw === undefined || raw === null || raw === '') {
-        strengths.push(1);
+      if (raw !== undefined && raw !== null && raw !== '') {
+        const num = Number(raw);
+        candidates.push({
+          id: candidate,
+          hasStrength: true,
+          strength: Number.isFinite(num) ? num : raw,
+          item: l,
+        });
       } else {
-        const s = Number(raw);
-        strengths.push(Number.isFinite(s) ? s : 1);
+        candidates.push({ id: candidate, hasStrength: false, item: l });
       }
+    }
+  }
+
+  const anyHasStrength = candidates.some((c) => c.hasStrength);
+  const allMissingStrength = candidates.length > 0 && !anyHasStrength;
+  if (allMissingStrength) {
+    // Official Sogni generate_image.schema.json: "Omitting the array uses 1.0 for every LoRA".
+    // When every valid LoRA omitted strength, omit loraStrengths as a whole rather than fabricating per-item numbers.
+    return { ids: candidates.map((c) => c.id), strengths: [] };
+  }
+
+  const ids: string[] = [];
+  const strengths: any[] = [];
+  for (const c of candidates) {
+    if (c.hasStrength) {
+      ids.push(c.id);
+      strengths.push(c.strength);
+    } else {
+      // Mixed case: some LoRAs have explicit strengths (e.g. 0 or 0.3) and this one has none.
+      // Official Sogni protocol requires loraStrengths to be positionally aligned and equal length to loras
+      // ("Keep this array positionally aligned with loraStrengths", items: { type: "number" }).
+      // Never swallow the other LoRAs' explicit strengths and never fabricate 1/null for this item.
+      unmappedOut?.push({
+        item: c.item,
+        reason: `Sogni 官方协议要求 loraStrengths 与 loras 按位等长对齐（number[]）；当前其它 LoRA 已显式指定强度，而「${c.id}」未填写强度（不私自补 1 或吞掉其它已填强度），该项未发送`,
+      });
     }
   }
   return { ids, strengths };
@@ -1700,7 +1793,9 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
         if(provider==='sogni') {
           const { ids, strengths } = sogniLoras(loras, unmappedLoras);
           payload.loras = ids;
-          payload.loraStrengths = strengths;
+          if (strengths.length > 0 || ids.length === 0) {
+            payload.loraStrengths = strengths;
+          }
         }
         else if(provider==='krea') {
           // Official field: styles[{id,strength}] ("Styles (typically LoRAs)"). No styles field → refuse, never strip.
@@ -1715,22 +1810,47 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
           payload.loras=novitaLoras(loras, unmappedLoras);
         }
         else {
-          const target=['loras','lora_list','model_id','image_loras'].find(k=>Object.hasOwn(props,k));
-          const arraySchema=props[target || 'loras'];
-          // Resolve items schema through anyOf/oneOf; do NOT invent {path,scale} when properties are absent (fix3 D).
-          const itemSchema=arraySchema?.items || arraySchema?.anyOf?.find((x:any)=>x.type==='array')?.items || arraySchema?.anyOf?.find((x:any)=>x?.items)?.items;
-          if(target)payload[target]=mapSchemaLoraItems(loras,itemSchema,schemaProviders[provider],model,unmappedLoras);
-          else if(Object.hasOwn(props,'lora_url') && loras.length===1) {
-            const candidate = loras[0].downloadUrl || loras[0].url || (typeof loras[0].path === 'string' && /^https?:\/\//i.test(loras[0].path) ? loras[0].path : undefined);
-            if (candidate) {
-              payload.lora_url = candidate;
-              if (Object.hasOwn(props,'lora_weight')) payload.lora_weight = loras[0].strength ?? loras[0].modelStrength ?? loras[0].scale ?? loras[0].weight;
+          const defaultTarget = ['loras', 'lora_list', 'model_id', 'image_loras'].find(k => Object.hasOwn(props, k));
+          const targetedGroups = new Map<string, any[]>();
+          const defaultLoras: any[] = [];
+          for (const l of loras) {
+            const explicitField = String(l?.target_field || l?.targetField || l?.lora_field || '').trim();
+            if (explicitField) {
+              if (Object.hasOwn(props, explicitField)) {
+                if (!targetedGroups.has(explicitField)) targetedGroups.set(explicitField, []);
+                targetedGroups.get(explicitField)!.push(l);
+              } else {
+                unmappedLoras.push({
+                  item: l,
+                  reason: `所指定的 LoRA 目标字段 "${explicitField}" 未在当前模型 Schema 中声明`,
+                });
+              }
             } else {
-              unmappedLoras.push({ item: loras[0], reason: 'lora_url 需要有效直链 URL' });
+              defaultLoras.push(l);
             }
           }
-          // No LoRA field in the Schema: send the canvas LoRA list as built (unchanged); upstream decides.
-          else payload.loras=loras;
+
+          for (const [field, items] of targetedGroups) {
+            const arraySchema = props[field];
+            const itemSchema = arraySchema?.items || arraySchema?.anyOf?.find((x: any) => x.type === 'array')?.items || arraySchema?.anyOf?.find((x: any) => x?.items)?.items;
+            payload[field] = mapSchemaLoraItems(items, itemSchema, schemaProviders[provider], model, unmappedLoras);
+          }
+
+          if (defaultTarget) {
+            const arraySchema = props[defaultTarget];
+            const itemSchema = arraySchema?.items || arraySchema?.anyOf?.find((x: any) => x.type === 'array')?.items || arraySchema?.anyOf?.find((x: any) => x?.items)?.items;
+            payload[defaultTarget] = mapSchemaLoraItems(defaultLoras, itemSchema, schemaProviders[provider], model, unmappedLoras);
+          } else if (Object.hasOwn(props, 'lora_url') && defaultLoras.length === 1) {
+            const candidate = defaultLoras[0].downloadUrl || defaultLoras[0].url || (typeof defaultLoras[0].path === 'string' && /^https?:\/\//i.test(defaultLoras[0].path) ? defaultLoras[0].path : undefined);
+            if (candidate) {
+              payload.lora_url = candidate;
+              if (Object.hasOwn(props, 'lora_weight')) payload.lora_weight = defaultLoras[0].strength ?? defaultLoras[0].modelStrength ?? defaultLoras[0].scale ?? defaultLoras[0].weight;
+            } else {
+              unmappedLoras.push({ item: defaultLoras[0], reason: 'lora_url 需要有效直链 URL' });
+            }
+          } else if (!targetedGroups.size && defaultLoras.length) {
+            payload.loras = defaultLoras;
+          }
         }
         mapping.push({from:'loras',to:provider==='sogni'?'loras + loraStrengths':provider==='krea'?'styles':Object.hasOwn(payload,'model_id')?'model_id':Object.hasOwn(payload,'image_loras')?'image_loras':Object.hasOwn(payload,'lora_list')?'lora_list':Object.hasOwn(payload,'lora_url')?'lora_url + lora_weight':'loras',requested:loras,value:payload.styles || payload.loras || payload.model_id || payload.image_loras || payload.lora_list || {url:payload.lora_url,weight:payload.lora_weight},strengths:payload.loraStrengths,...(unmappedLoras.length ? { unmappedLoras } : {}),...(provider==='sogni'?{capability:`Official ${definition.hostedToolName || sogniHostedToolName(definition.inputSchema) || 'hosted-tool'} schema: LoRA arrays are sent only when that live Schema declares them; MiniMax H3 video selectors accept loras, others ignore them`}:{}),note:provider==='sogni'?'按选择器与 LoRA ID 原样提交；兼容性及字段实际应用仍以 workflow 结果为准。':'仅记录已提交的 LoRA 参数；生成成功不证明上游实际应用了 LoRA。独立 CLIP 强度没有对应字段时不会假称生效。'});
       }

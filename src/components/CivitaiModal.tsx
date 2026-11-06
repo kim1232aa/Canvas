@@ -93,6 +93,7 @@ import {
 import {
   adaptCivitaiRecipeToProvider,
   buildAllProviderAdaptations,
+  isRawBaseModelArchitectureText,
   type ProviderAdaptationResult,
   type ProviderAdaptationMap,
   type CivitaiRecipeInput,
@@ -188,6 +189,7 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
     return subscribeModelSchema(() => setLiveSchemaVer((v) => v + 1));
   }, []);
   const activeReqIdRef = useRef(0);
+  const extractReqIdRef = useRef(0);
 
   // clean-0942: one LoRA catalog GET per URL per open (StrictMode / repeated effects share it; failures retry).
   const catalogMemo = useRef(new Map<string, ReturnType<typeof fetchLiveModels>>());
@@ -532,6 +534,7 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
   ) => {
     const trimmed = (targetInput || '').trim();
     if (!trimmed) return;
+    const reqId = ++extractReqIdRef.current;
     setIsExtracting(true);
     setExtractError(null);
     try {
@@ -555,6 +558,7 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
         body: JSON.stringify(payload),
       });
       const data = await resp.json();
+      if (reqId !== extractReqIdRef.current) return;
       if (!resp.ok || !data.success) {
         const errorParts: string[] = [];
         if (data.error) errorParts.push(data.error);
@@ -569,10 +573,13 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
       }
       setExtractedPreset(data.preset);
     } catch (err: any) {
+      if (reqId !== extractReqIdRef.current) return;
       setExtractError(err.message || '网络请求错误');
       setExtractedPreset(null);
     } finally {
-      setIsExtracting(false);
+      if (reqId === extractReqIdRef.current) {
+        setIsExtracting(false);
+      }
     }
   };
 
@@ -1371,48 +1378,48 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
                 type="button"
                 data-testid="civitai-quick-fill-flux"
                 onClick={() => {
-                  const val = 'https://civitai.com/images/64399178';
+                  const val = 'https://civitai.red/images/148140013';
                   setImportInput(val);
                   handleExtractCivitaiWorkflow(val, importTargetProvider, tokenConsent);
                 }}
                 className="px-2.5 py-1.5 rounded-lg bg-emerald-950/40 hover:bg-emerald-900/50 text-emerald-300 border border-emerald-700/50 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
               >
-                <span>🚀 FLUX.1 D 多LoRA (#64399178 · Cinematic 1940s & Octane)</span>
+                <span>🚀 Krea 2 Turbo 多LoRA (#148140013 · Masterpiece & Ektachrome)</span>
               </button>
 
               <button
                 type="button"
                 data-testid="civitai-quick-fill-pony"
                 onClick={() => {
-                  const val = 'https://civitai.com/images/12097475';
+                  const val = 'https://civitai.red/images/148135866';
                   setImportInput(val);
                   handleExtractCivitaiWorkflow(val, importTargetProvider, tokenConsent);
                 }}
                 className="px-2.5 py-1.5 rounded-lg bg-purple-950/40 hover:bg-purple-900/50 text-purple-300 border border-purple-700/50 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
               >
-                <span>⭐ Pony / SDXL 多LoRA (#12097475 · Twilight & Expressive)</span>
+                <span>⚡ Z-Image Turbo 配方 (#148135866 · CyberRealistic Z-Image)</span>
               </button>
 
               <button
                 type="button"
                 data-testid="civitai-quick-fill-sd15"
                 onClick={() => {
-                  const val = 'https://civitai.com/images/11346154';
+                  const val = 'https://civitai.red/images/148004351';
                   setImportInput(val);
                   handleExtractCivitaiWorkflow(val, importTargetProvider, tokenConsent);
                 }}
                 className="px-2.5 py-1.5 rounded-lg bg-cyan-950/40 hover:bg-cyan-900/50 text-cyan-300 border border-cyan-700/50 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
               >
-                <span>📸 SD 1.5 双LoRA (#11346154 · Backlight & Contrast Sliders)</span>
+                <span>🧠 MOSS-Image SFT 双LoRA (#148004351 · DMD & DarkLines)</span>
               </button>
 
               <button
                 type="button"
                 data-testid="civitai-quick-fill-raw"
                 onClick={() => {
-                  const val = `asian woman, 1girl, close up portrait, beautiful detailed eyes, natural skin texture, realistic lighting, shallow depth of field, 35mm film photography, masterpiece, sharp focus, 8k <lora:hina_Krea2Turbo_asianMix_v5.0-TQD-CPO:0.85>
-Negative prompt: blurry, bad anatomy, deformed fingers, low resolution, poorly drawn face, plastic skin, oversaturated
-Steps: 28, Sampler: DPM++ 2M Karras, CFG scale: 4.5, Seed: 136947637, Size: 1024x1024, Model: flux1-dev`;
+                  const val = `masterpiece, best quality, very aesthetic, ektachrome fade film, nature, A painterly illustration of a tall, elegant woman in a sci-fi corridor <lora:krea2-masterpieces-v51:0.85>
+Negative prompt: (2d ,Illustration, drawing, cartoon, animation, anima, painting:1.4)
+Steps: 8, Sampler: Euler, CFG scale: 1, Seed: 689794262, Size: 832x1248, Model: Krea 2 Turbo`;
                   setImportInput(val);
                   handleExtractCivitaiWorkflow(val, importTargetProvider, tokenConsent);
                 }}
@@ -1462,6 +1469,10 @@ Steps: 28, Sampler: DPM++ 2M Karras, CFG scale: 4.5, Seed: 136947637, Size: 1024
         {extractedPreset && (() => {
           const liveSchemaEntry = getModelSchemaEntry(importTargetProvider, importTargetModel);
           const liveSchemaProps = liveSchemaEntry?.status === 'ready' ? liveSchemaEntry.propertiesObj : undefined;
+          const targetModelFamily =
+            liveSchemaEntry?.status === 'ready'
+              ? String((liveSchemaEntry as any)?.modelMetadata?.base_model || (liveSchemaEntry as any)?.modelMetadata?.family || '').trim() || undefined
+              : undefined;
           const schemaReasonOverride =
             !importTargetModel
               ? '未选择目标模型；请在上方选用目标模型以加载其实时 Schema 规范。'
@@ -1470,35 +1481,86 @@ Steps: 28, Sampler: DPM++ 2M Karras, CFG scale: 4.5, Seed: 136947637, Size: 1024
               : liveSchemaEntry?.status === 'error'
               ? `目标端点 Schema 获取失败；未核实: ${liveSchemaEntry.error || '获取失败'}`
               : undefined;
+          const ckptNodeVal = extractedPreset.nodes?.find((n: any) => n.type === 'CheckpointLoaderSimple')?.values;
+          const sourceCkpt = ckptNodeVal?.import_source_model || ckptNodeVal?.ckpt_name || '';
+          const currentAdapt = adaptCivitaiRecipeToProvider(
+            {
+              checkpoint: sourceCkpt,
+              baseModel: extractedPreset.otherMetadata?.baseModel,
+              loras: extractedPreset.otherMetadata?.resources || [],
+              prompt: extractedPreset.prompt,
+              negativePrompt: extractedPreset.negativePrompt,
+              steps: extractedPreset.otherMetadata?.steps,
+              cfg: extractedPreset.otherMetadata?.cfgScale,
+              sampler: extractedPreset.otherMetadata?.sampler,
+              scheduler: extractedPreset.otherMetadata?.scheduler,
+              seed: extractedPreset.otherMetadata?.seed,
+              clipSkip: extractedPreset.otherMetadata?.clipSkip,
+              width: extractedPreset.otherMetadata?.width,
+              height: extractedPreset.otherMetadata?.height,
+              denoise: extractedPreset.otherMetadata?.denoise,
+            },
+            importTargetProvider,
+            {
+              targetModel: importTargetModel || undefined,
+              targetModelFamily,
+              targetSchema: liveSchemaProps,
+              schemaReasonOverride,
+              allowTokenInUrl: tokenConsent,
+            }
+          );
+          const synchronizedPreset = {
+            ...extractedPreset,
+            currentAdaptation: currentAdapt,
+            nodes: Array.isArray(extractedPreset.nodes)
+              ? extractedPreset.nodes.map((n: any) => {
+                  if (n.type === 'CheckpointLoaderSimple') {
+                    const effectiveCkpt =
+                      importTargetProvider === 'civitai'
+                        ? (importTargetModel || (isRawBaseModelArchitectureText(sourceCkpt) ? '' : sourceCkpt))
+                        : (importTargetModel || '');
+                    return {
+                      ...n,
+                      title: `加载底模 (${currentAdapt.displayName})`,
+                      values: {
+                        ...n.values,
+                        targetProvider: importTargetProvider,
+                        ckpt_name: effectiveCkpt,
+                        import_requires_model_selection: !effectiveCkpt,
+                      },
+                    };
+                  }
+                  if (n.type === 'AIVideoNode' && importTargetModel) {
+                    return {
+                      ...n,
+                      values: {
+                        ...n.values,
+                        targetProvider: importTargetProvider,
+                        provider: importTargetProvider,
+                        model: importTargetModel,
+                      },
+                    };
+                  }
+                  return n;
+                })
+              : extractedPreset.nodes,
+            spatialFrames: Array.isArray(extractedPreset.spatialFrames)
+              ? extractedPreset.spatialFrames.map((f: any) => ({
+                  ...f,
+                  params: {
+                    ...f.params,
+                    targetProvider: importTargetProvider,
+                    checkpoint:
+                      importTargetProvider === 'civitai'
+                        ? (importTargetModel || (isRawBaseModelArchitectureText(sourceCkpt) ? '' : sourceCkpt))
+                        : (importTargetModel || ''),
+                  },
+                }))
+              : extractedPreset.spatialFrames,
+          };
           return (
             <CivitaiModalImportPreview
-              adaptation={
-                adaptCivitaiRecipeToProvider(
-                  {
-                    checkpoint: extractedPreset.nodes?.find((n: any) => n.type === 'CheckpointLoaderSimple')?.values?.ckpt_name,
-                    baseModel: extractedPreset.otherMetadata?.baseModel,
-                    loras: extractedPreset.otherMetadata?.resources || [],
-                    prompt: extractedPreset.prompt,
-                    negativePrompt: extractedPreset.negativePrompt,
-                    steps: extractedPreset.otherMetadata?.steps,
-                    cfg: extractedPreset.otherMetadata?.cfgScale,
-                    sampler: extractedPreset.otherMetadata?.sampler,
-                    scheduler: extractedPreset.otherMetadata?.scheduler,
-                    seed: extractedPreset.otherMetadata?.seed,
-                    clipSkip: extractedPreset.otherMetadata?.clipSkip,
-                    width: extractedPreset.otherMetadata?.width,
-                    height: extractedPreset.otherMetadata?.height,
-                    denoise: extractedPreset.otherMetadata?.denoise,
-                  },
-                  importTargetProvider,
-                  {
-                    targetModel: importTargetModel || undefined,
-                    targetSchema: liveSchemaProps,
-                    schemaReasonOverride,
-                    allowTokenInUrl: tokenConsent,
-                  }
-                )
-              }
+              adaptation={currentAdapt}
               allAdaptations={extractedPreset.providerAdaptation}
               selectedProvider={importTargetProvider}
               targetModel={importTargetModel}
@@ -1517,7 +1579,7 @@ Steps: 28, Sampler: DPM++ 2M Karras, CFG scale: 4.5, Seed: 136947637, Size: 1024
                 setTokenConsent(consent);
                 handleExtractCivitaiWorkflow(importInput, importTargetProvider, consent, importTargetModel);
               }}
-              preset={extractedPreset}
+              preset={synchronizedPreset}
               onApplyPreset={(p) => {
                 if (onLoadWorkflowPreset) {
                   onLoadWorkflowPreset(p);

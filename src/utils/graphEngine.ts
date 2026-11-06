@@ -150,9 +150,11 @@ export interface WorkflowExtraction {
     air?: string;
     path?: string;
     styleId?: string;
+    catalogId?: string;
     sd_name_in_api?: string;
     unresolvedResource?: boolean;
     downloadUrl?: string;
+    [key: string]: any;
   }>;
   targetProvider: string;
   videoProvider?: string;
@@ -324,10 +326,11 @@ function traceModelAndLorasUpstream(
     if (n.type === 'CheckpointLoaderSimple') {
       return n;
     }
-    if (n.type === 'LoRALoader') {
+    if (n.type === 'LoRALoader' || n.type === 'LoraLoader' || n.type === 'LoraLoaderModelOnly') {
       // Unselected / cleared lora_name: keep walking the chain but push nothing (never forge a name).
       if (String(n.values.lora_name ?? '').trim()) {
         loras.push({
+          ...n.values,
           name: String(n.values.lora_name).trim(),
           baseModel: n.values.base_model || n.values.baseModel || '',
           nodeId: n.id,
@@ -340,6 +343,7 @@ function traceModelAndLorasUpstream(
           air: n.values.air || n.values.civitai_air || n.values.civitaiAir || '',
           path: n.values.path || n.values.lora_path || n.values.loraPath || '',
           styleId: n.values.style_id || n.values.styleId || '',
+          catalogId: n.values.catalog_id || n.values.catalogId || n.values.lora_id || n.values.loraId || n.values.slug || '',
           sd_name_in_api: n.values.sd_name_in_api || n.values.sdNameInApi || '',
           unresolvedResource: (n.values.import_unresolved_resource === true || n.values.unresolvedResource === true) && !(n.values.resourceVerified === true || Boolean((n.values.download_url || n.values.downloadUrl) && !n.values.inferred_from_prompt)),
           downloadUrl: n.values.download_url || n.values.downloadUrl,
@@ -350,12 +354,22 @@ function traceModelAndLorasUpstream(
     } else if (n.type === 'CivitaiLoRABrowserNode') {
       if (n.values.selected_model_name) {
         loras.push({
+          ...n.values,
           name: n.values.selected_model_name,
           baseModel: n.values.baseModel || n.values.base_model || '',
           nodeId: n.id,
           modelStrength: parseExplicitLoraStrength(n.values.strength_model ?? n.values.strength ?? n.values.modelStrength),
           clipStrength: parseExplicitLoraStrength(n.values.strength_clip ?? n.values.clipStrength ?? n.values.strength ?? n.values.modelStrength),
           triggerWords: n.values.selected_triggers || '',
+          civitaiId: n.values.civitai_id || n.values.civitaiId || '',
+          modelId: n.values.model_id || n.values.modelId || '',
+          versionId: n.values.version_id || n.values.versionId || '',
+          air: n.values.air || n.values.civitai_air || n.values.civitaiAir || '',
+          path: n.values.path || n.values.lora_path || n.values.loraPath || '',
+          styleId: n.values.style_id || n.values.styleId || '',
+          catalogId: n.values.catalog_id || n.values.catalogId || n.values.lora_id || n.values.loraId || n.values.slug || '',
+          sd_name_in_api: n.values.sd_name_in_api || n.values.sdNameInApi || '',
+          downloadUrl: n.values.download_url || n.values.downloadUrl,
         });
       }
       const inConn = connections.find((c) => c.toNodeId === n.id && c.toSocketId === 'model');
@@ -418,10 +432,11 @@ function traceLorasUpstream(
     if (!n || n.bypassed) break;
     subgraphNodeIds.add(n.id);
 
-    if (n.type === 'LoRALoader') {
+  if ( n.type === 'LoRALoader' || n.type === 'LoraLoader' || n.type === 'LoraLoaderModelOnly') {
       // Unselected / cleared lora_name: keep walking the chain but push nothing (never forge a name).
       if (String(n.values.lora_name ?? '').trim()) {
         loras.push({
+          ...n.values,
           name: String(n.values.lora_name).trim(),
           baseModel: n.values.base_model || n.values.baseModel || '',
           nodeId: n.id,
@@ -434,25 +449,36 @@ function traceLorasUpstream(
           air: n.values.air || n.values.civitai_air || n.values.civitaiAir || '',
           path: n.values.path || n.values.lora_path || n.values.loraPath || '',
           styleId: n.values.style_id || n.values.styleId || '',
+          catalogId: n.values.catalog_id || n.values.catalogId || n.values.lora_id || n.values.loraId || n.values.slug || '',
           sd_name_in_api: n.values.sd_name_in_api || n.values.sdNameInApi || '',
           unresolvedResource: (n.values.import_unresolved_resource === true || n.values.unresolvedResource === true) && !(n.values.resourceVerified === true || Boolean((n.values.download_url || n.values.downloadUrl) && !n.values.inferred_from_prompt)),
           downloadUrl: n.values.download_url || n.values.downloadUrl,
         });
       }
-      const inConn = connections.find((c) => c.toNodeId === n.id && c.toSocketId === 'model');
+      const inConn = connections.find((c) => c.toNodeId === n.id && (c.toSocketId === 'model' || c.toSocketId === 'lora'));
       currId = inConn?.fromNodeId;
     } else if (n.type === 'CivitaiLoRABrowserNode') {
       if (n.values.selected_model_name) {
         loras.push({
+          ...n.values,
           name: n.values.selected_model_name,
           baseModel: n.values.baseModel || n.values.base_model || '',
           nodeId: n.id,
           modelStrength: parseExplicitLoraStrength(n.values.strength_model ?? n.values.strength ?? n.values.modelStrength),
           clipStrength: parseExplicitLoraStrength(n.values.strength_clip ?? n.values.clipStrength ?? n.values.strength ?? n.values.modelStrength),
           triggerWords: n.values.selected_triggers || '',
+          civitaiId: n.values.civitai_id || n.values.civitaiId || '',
+          modelId: n.values.model_id || n.values.modelId || '',
+          versionId: n.values.version_id || n.values.versionId || '',
+          air: n.values.air || n.values.civitai_air || n.values.civitaiAir || '',
+          path: n.values.path || n.values.lora_path || n.values.loraPath || '',
+          styleId: n.values.style_id || n.values.styleId || '',
+          catalogId: n.values.catalog_id || n.values.catalogId || n.values.lora_id || n.values.loraId || n.values.slug || '',
+          sd_name_in_api: n.values.sd_name_in_api || n.values.sdNameInApi || '',
+          downloadUrl: n.values.download_url || n.values.downloadUrl,
         });
       }
-      const inConn = connections.find((c) => c.toNodeId === n.id && c.toSocketId === 'model');
+      const inConn = connections.find((c) => c.toNodeId === n.id && (c.toSocketId === 'model' || c.toSocketId === 'lora'));
       currId = inConn?.fromNodeId;
     } else {
       break;

@@ -224,6 +224,9 @@ export interface FieldAdaptationDetail {
 
 export interface ProviderLoraAdaptation {
   name: string;
+  fileName?: string;
+  fileId?: number;
+  fileHashes?: Record<string, string>;
   originalStrength?: number | null;
   originalClipStrength?: number | null;
   civitaiId?: string;
@@ -246,6 +249,8 @@ export interface ProviderAdaptationResult {
   provider: string;
   displayName: string;
   isCompatible: boolean;
+  /** Tri-state overall compatibility: 'compatible' (verified end-to-end), 'unverified' (target model not chosen, schema/family unverified), 'incompatible' (proven architecture or capability conflict). */
+  compatibilityStatus?: 'compatible' | 'unverified' | 'incompatible';
   baseModelArchitecture: string;
   baseModelStatus: 'direct' | 'requires_selection' | 'incompatible';
   baseModelMessage: string;
@@ -263,6 +268,9 @@ export interface CivitaiRecipeInput {
   engine?: string;
   loras?: Array<{
     name: string;
+    fileName?: string;
+    fileId?: number;
+    fileHashes?: Record<string, string>;
     displayName?: string;
     civitaiId?: string;
     modelId?: number | string;
@@ -273,6 +281,7 @@ export interface CivitaiRecipeInput {
     triggers?: string;
     baseModel?: string;
     downloadUrl?: string;
+    fileUnverifiedReason?: string;
     requireAuth?: boolean;
     canGenerate?: boolean;
     inferredFromPrompt?: boolean;
@@ -320,6 +329,7 @@ export interface CivitaiAdaptationOptions {
   allowTokenInUrl?: boolean;
   civitaiToken?: string;
   targetModel?: string;
+  targetModelFamily?: string;
   targetSchema?: Record<string, any>;
   targetEndpoint?: string;
   customLoraCap?: number;
@@ -408,6 +418,9 @@ export function adaptCivitaiRecipeToProvider(
   let baseModelMessage = '';
   const sourceModel = recipe.checkpoint || baseModelRaw || '';
   const isArchUnknown = ecosystem === 'unknown' || !baseModelRaw;
+  const targetModelTrimmed = (options?.targetModel || '').trim();
+  const targetFamilyRaw = (options?.targetModelFamily || '').trim();
+  const targetEcosystem = normalizeEcosystem(targetFamilyRaw);
 
   if (isArchUnknown) {
     baseModelStatus = 'requires_selection';
@@ -446,14 +459,59 @@ export function adaptCivitaiRecipeToProvider(
     }
   } else if (provider === 'video') {
     baseModelStatus = 'requires_selection';
-    baseModelMessage = `检测到视频工作流；已保留来源模型“${sourceModel || '未提供'}”，但不把 Civitai 模型名猜测为其他视频供应商模型 ID。请在视频节点明确选择目标供应商与模型。`;
+    baseModelMessage = targetModelTrimmed
+      ? `检测到视频工作流；已绑定目标视频模型“${targetModelTrimmed}”，同时保留来源模型“${sourceModel || '未提供'}”元数据。`
+      : `检测到视频工作流；已保留来源模型“${sourceModel || '未提供'}”，但不把 Civitai 模型名猜测为其他视频供应商模型 ID。请在视频节点明确选择目标供应商与模型。`;
     fields.checkpoint = {
       field: 'checkpoint',
       originalValue: sourceModel,
-      status: 'manual_selection',
+      targetField: targetModelTrimmed ? 'model' : undefined,
+      mappedValue: targetModelTrimmed || undefined,
+      status: targetModelTrimmed ? 'mapped' : 'manual_selection',
       humanMessage: baseModelMessage,
       source: 'AI Video 视频模型独立命名空间',
     };
+  } else if (targetModelTrimmed) {
+    if (targetEcosystem !== 'unknown' && targetEcosystem !== ecosystem) {
+      baseModelStatus = 'incompatible';
+      baseModelMessage = `所选目标模型“${targetModelTrimmed}”的公开目录架构 (${targetFamilyRaw}) 与源配方基础架构 (${baseModelRaw}) 不一致；跨架构挂载同源 LoRA 无法生效或会被上游拒绝。`;
+      fields.checkpoint = {
+        field: 'checkpoint',
+        originalValue: sourceModel,
+        targetField: 'model',
+        mappedValue: targetModelTrimmed,
+        status: 'unsupported',
+        humanMessage: baseModelMessage,
+        source: `${displayName} 目录元数据 base_model / family`,
+      };
+    } else if (targetEcosystem !== 'unknown' && targetEcosystem === ecosystem) {
+      const exactVariantMatch = targetFamilyRaw.toLowerCase().trim() === baseModelRaw.toLowerCase().trim();
+      baseModelStatus = exactVariantMatch ? 'direct' : 'requires_selection';
+      baseModelMessage = exactVariantMatch
+        ? `已绑定目标模型“${targetModelTrimmed}”（官方目录标注架构 ${targetFamilyRaw} 与源配方 ${baseModelRaw} 一致）。`
+        : `已绑定目标模型“${targetModelTrimmed}”（目录架构 ${targetFamilyRaw} 与源配方 ${baseModelRaw} 同属 ${ecosystem} 家族，但具体变体差异未由官方证实完全通用，标为待核实）。`;
+      fields.checkpoint = {
+        field: 'checkpoint',
+        originalValue: sourceModel,
+        targetField: 'model',
+        mappedValue: targetModelTrimmed,
+        status: exactVariantMatch ? 'mapped' : 'manual_selection',
+        humanMessage: baseModelMessage,
+        source: `${displayName} 目录元数据 base_model / family`,
+      };
+    } else {
+      baseModelStatus = 'requires_selection';
+      baseModelMessage = `已选定目标模型“${targetModelTrimmed}”；该端点未在公开目录返回可比对的基础架构元数据，已保留来源架构 (${baseModelRaw || '未知'})，架构兼容性保持未核实，按用户所选模型提交上游裁决。`;
+      fields.checkpoint = {
+        field: 'checkpoint',
+        originalValue: sourceModel,
+        targetField: 'model',
+        mappedValue: targetModelTrimmed,
+        status: 'manual_selection',
+        humanMessage: baseModelMessage,
+        source: `${displayName} 官方模型输入契约`,
+      };
+    }
   } else {
     baseModelStatus = 'requires_selection';
     baseModelMessage = `Civitai 模型引用不能跨平台直接作为 ${displayName} 的模型端点/ID；已保留来源架构 (${baseModelRaw || '未知'})，必须从 ${displayName} 的模型目录选择真实模型。`;
@@ -471,7 +529,7 @@ export function adaptCivitaiRecipeToProvider(
   for (let i = 0; i < loras.length; i++) {
     const l = loras[i];
     const loraName = l.displayName || l.name;
-    const loraBaseModel = l.baseModel || baseModelRaw || '';
+    const loraBaseModel = l.baseModel || '';
     const loraEcosystem = normalizeEcosystem(loraBaseModel);
     const originalStrength = l.strength !== null && l.strength !== undefined ? Number(l.strength) : null;
     const originalClipStrength = l.clipStrength !== null && l.clipStrength !== undefined ? Number(l.clipStrength) : null;
@@ -574,17 +632,23 @@ export function adaptCivitaiRecipeToProvider(
       continue;
     }
 
-    // Check architecture compatibility between base model and LoRA
-    const isArchMismatch =
+    // Check architecture compatibility between base model (or target model family) and LoRA
+    const isSourceArchMismatch =
       !isArchUnknown &&
       loraEcosystem !== 'unknown' &&
       ecosystem !== loraEcosystem;
+    const isTargetArchMismatch =
+      targetEcosystem !== 'unknown' &&
+      ((loraEcosystem !== 'unknown' && loraEcosystem !== targetEcosystem) ||
+        (!isArchUnknown && ecosystem !== targetEcosystem));
+    const isArchMismatch = isSourceArchMismatch || isTargetArchMismatch;
+    const isLoraArchUnknown = Boolean(!loraBaseModel || loraEcosystem === 'unknown');
 
     const directDownloadUrl = l.downloadUrl || '';
     const canonicalAir = buildCivitaiCanonicalAir(
       modelId,
       versionId,
-      loraEcosystem !== 'unknown' ? loraEcosystem : (ecosystem !== 'unknown' ? ecosystem : undefined),
+      loraEcosystem !== 'unknown' ? loraEcosystem : undefined,
       l.air
     );
 
@@ -630,8 +694,10 @@ export function adaptCivitaiRecipeToProvider(
           versionId,
           baseModel: loraBaseModel,
           targetFormat: 'air',
-          status: 'requires_reselection',
-          reason: '基础架构未知或缺少母模型编号，无法构建规范 Civitai AIR (urn:air:{eco}:lora:civitai:{modelId}@{versionId})；请选择具体模型版本。',
+          status: loraBaseModel ? 'requires_reselection' : 'unverified',
+          reason: loraBaseModel
+            ? '基础架构未知或缺少母模型编号，无法构建规范 Civitai AIR (urn:air:{eco}:lora:civitai:{modelId}@{versionId})；请选择具体模型版本。'
+            : '该 LoRA 来源元数据未标注具体基础架构 (baseModel)，无法自动构造规范 AIR 或确认与底模兼容；状态标为未核实。',
         });
       } else {
         adaptedLoras.push({
@@ -839,6 +905,13 @@ export function adaptCivitaiRecipeToProvider(
         status: targetSpec.status === 'supported' ? 'compatible' : (targetSpec.status || 'unverified'),
         reason: targetSpec.reason || `${displayName} 未配置显式 LoRA Schema，将按用户填写原样提交上游裁决。`,
       });
+    }
+
+    const lastLora = adaptedLoras[adaptedLoras.length - 1];
+    if (lastLora && adaptedLoras.length === i + 1) {
+      if (l.fileName) lastLora.fileName = l.fileName;
+      if (l.fileId !== undefined) lastLora.fileId = l.fileId;
+      if (l.fileHashes) lastLora.fileHashes = l.fileHashes;
     }
   }
 
@@ -1420,15 +1493,29 @@ export function adaptCivitaiRecipeToProvider(
     };
   }
 
-  const isCompatible =
-    !isArchUnknown &&
-    (baseModelStatus as string) !== 'incompatible' &&
-    !adaptedLoras.some((l) => l.status === 'architecture_mismatch');
+  const hasIncompatible =
+    (baseModelStatus as string) === 'incompatible' ||
+    adaptedLoras.some((l) => l.status === 'architecture_mismatch' || Boolean(l.unresolvedReason));
+
+  const hasUnverified =
+    isArchUnknown ||
+    baseModelStatus === 'requires_selection' ||
+    targetSpec.status === 'unverified' ||
+    adaptedLoras.some((l) => l.status === 'unverified');
+
+  const compatibilityStatus: 'compatible' | 'unverified' | 'incompatible' = hasIncompatible
+    ? 'incompatible'
+    : hasUnverified
+    ? 'unverified'
+    : 'compatible';
+
+  const isCompatible = compatibilityStatus === 'compatible';
 
   return {
     provider,
     displayName,
     isCompatible,
+    compatibilityStatus,
     baseModelArchitecture: baseModelRaw || ecosystem,
     baseModelStatus,
     baseModelMessage,

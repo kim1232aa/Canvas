@@ -84,6 +84,10 @@ export const CivitaiModalImportPreview: React.FC<CivitaiModalImportPreviewProps>
 
   const schemaEntry = getModelSchemaEntry(selectedProvider, targetModel);
   const liveSchemaProps = schemaEntry?.status === 'ready' ? schemaEntry.propertiesObj : undefined;
+  const targetModelFamily =
+    schemaEntry?.status === 'ready'
+      ? String((schemaEntry as any)?.modelMetadata?.base_model || (schemaEntry as any)?.modelMetadata?.family || '').trim() || undefined
+      : undefined;
   const schemaReasonOverride =
     !targetModel
       ? '未选择目标模型；请在上方选用目标模型以加载其实时 Schema 规范。'
@@ -116,12 +120,22 @@ export const CivitaiModalImportPreview: React.FC<CivitaiModalImportPreviewProps>
       selectedProvider,
       {
         targetModel: targetModel || undefined,
+        targetModelFamily,
         targetSchema: liveSchemaProps,
         schemaReasonOverride,
         allowTokenInUrl: tokenConsent,
       }
     );
   }
+
+  const compatState: 'compatible' | 'unverified' | 'incompatible' =
+    effectiveAdaptation.compatibilityStatus ||
+    (effectiveAdaptation.isCompatible
+      ? 'compatible'
+      : effectiveAdaptation.baseModelStatus === 'incompatible' ||
+        effectiveAdaptation.loras.some((l) => l.status === 'architecture_mismatch' || Boolean(l.unresolvedReason))
+      ? 'incompatible'
+      : 'unverified');
 
   const availableProviders = [
     { id: 'civitai', name: 'Civitai 原生' },
@@ -236,16 +250,20 @@ export const CivitaiModalImportPreview: React.FC<CivitaiModalImportPreviewProps>
       {/* 2. Architecture & Compatibility Banner */}
       <div
         className={`border rounded-xl p-3.5 space-y-2 ${
-          effectiveAdaptation.isCompatible
+          compatState === 'compatible'
             ? 'bg-emerald-950/20 border-emerald-800/40 text-emerald-200'
+            : compatState === 'unverified'
+            ? 'bg-amber-950/20 border-amber-800/40 text-amber-200'
             : 'bg-rose-950/20 border-rose-800/40 text-rose-200'
         }`}
         data-testid="import-architecture-banner"
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            {effectiveAdaptation.isCompatible ? (
+            {compatState === 'compatible' ? (
               <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            ) : compatState === 'unverified' ? (
+              <Info className="w-4 h-4 text-amber-400 shrink-0" />
             ) : (
               <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
             )}
@@ -257,13 +275,22 @@ export const CivitaiModalImportPreview: React.FC<CivitaiModalImportPreviewProps>
             </span>
           </div>
           <span
+            data-testid="import-architecture-status-badge"
             className={`text-[10px] font-bold px-2 py-0.5 rounded font-mono ${
-              effectiveAdaptation.isCompatible
+              compatState === 'compatible'
                 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                : compatState === 'unverified'
+                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
                 : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
             }`}
           >
-            {effectiveAdaptation.isCompatible ? '架构兼容' : effectiveAdaptation.baseModelArchitecture === 'unknown' || !effectiveAdaptation.baseModelArchitecture ? '架构未知，无法确认兼容' : '存在不兼容项'}
+            {compatState === 'compatible'
+              ? '架构兼容'
+              : effectiveAdaptation.baseModelArchitecture === 'unknown' || !effectiveAdaptation.baseModelArchitecture
+              ? '架构未知，无法确认兼容'
+              : compatState === 'unverified'
+              ? (selectedProvider !== 'civitai' && !targetModel ? '待选择目标模型 / 未核实' : '待核实 / 需选用目标资源')
+              : '存在不兼容项'}
           </span>
         </div>
 
@@ -382,6 +409,26 @@ export const CivitaiModalImportPreview: React.FC<CivitaiModalImportPreviewProps>
                     <p className="text-[11px] text-slate-300 font-mono leading-relaxed" data-testid={`import-lora-reason-${idx}`}>
                       {lora.reason || lora.unresolvedReason}
                     </p>
+
+                    {(lora.modelId || lora.versionId || lora.fileName || lora.fileHashes?.AutoV2) && (
+                      <div className="text-[10px] text-slate-400 font-mono flex flex-wrap gap-x-3 gap-y-0.5" data-testid={`import-lora-source-meta-${idx}`}>
+                        {(lora.modelId || lora.versionId) && (
+                          <span>
+                            来源版本: <span className="text-slate-200">{lora.modelId ? `model:${lora.modelId} / ` : ''}ver:{lora.versionId}</span>
+                          </span>
+                        )}
+                        {lora.fileName && (
+                          <span>
+                            权重文件: <span className="text-slate-200">{lora.fileName}</span>
+                          </span>
+                        )}
+                        {lora.fileHashes?.AutoV2 && (
+                          <span>
+                            AutoV2: <span className="text-slate-200">{lora.fileHashes.AutoV2}</span>
+                          </span>
+                        )}
+                      </div>
+                    )}
 
                     {lora.sendableUrlOrId && (
                       <div className="text-[10px] text-slate-400 font-mono truncate" title={lora.sendableUrlOrId}>
