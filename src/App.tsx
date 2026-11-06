@@ -783,6 +783,7 @@ export default function App() {
       id: newNodeId,
       type,
       title: def.title,
+      titleSource: 'template',
       pos: defaultPos,
       width: type === 'CLIPTextEncode' || type === 'CLIPTextEncodeNegative' ? 380 : 300,
       inputs: def.inputs,
@@ -870,10 +871,10 @@ export default function App() {
             errorMessage:undefined,
           };
           if (n.type === 'CheckpointLoaderSimple') {
-            return { ...cleared, title: formatCheckpointNodeTitle(n.title, value, cleared.values?.ckpt_name) };
+            return { ...cleared, title: formatCheckpointNodeTitle(n.title, value, cleared.values?.ckpt_name, n.titleSource) };
           }
           if (n.type === 'AIVideoNode') {
-            return { ...cleared, title: formatVideoNodeTitle(n.title, value) };
+            return { ...cleared, title: formatVideoNodeTitle(n.title, value, n.titleSource) };
           }
           return cleared;
         }
@@ -883,14 +884,14 @@ export default function App() {
           const nextProv = nextVals.targetProvider || nextVals.provider;
           return {
             ...n,
-            title: formatVideoNodeTitle(n.title, nextProv),
+            title: formatVideoNodeTitle(n.title, nextProv, n.titleSource),
             values: nextVals,
           };
         }
         if (n.type === 'AIVideoNode' && widgetName === 'targetProvider') {
           return {
             ...n,
-            title: formatVideoNodeTitle(n.title, value),
+            title: formatVideoNodeTitle(n.title, value, n.titleSource),
             values: { ...(n.values || {}), targetProvider: value, provider: value },
           };
         }
@@ -963,7 +964,7 @@ export default function App() {
             n.id === nodeId
               ? {
                   ...n,
-                  title: formatCheckpointNodeTitle(n.title, prov, value),
+                  title: formatCheckpointNodeTitle(n.title, prov, value, n.titleSource),
                   values: { ...(n.values || {}), ckpt_name: value },
                 }
               : n
@@ -1003,7 +1004,7 @@ export default function App() {
             n.id === nodeId
               ? {
                   ...n,
-                  title: formatCheckpointNodeTitle(n.title, prov, n.values?.ckpt_name),
+                  title: formatCheckpointNodeTitle(n.title, prov, n.values?.ckpt_name, n.titleSource),
                   values: { ...(n.values || {}), targetProvider: prov },
                 }
               : n
@@ -1736,7 +1737,7 @@ export default function App() {
             if (n.id === existingVideoNode.id) {
               return {
                 ...n,
-                title: formatVideoNodeTitle(n.title, provider),
+                title: formatVideoNodeTitle(n.title, provider, n.titleSource),
                 values: {
                   ...replaceSelectedResource(n.values,{...extraData,name:modelId},'model'),
                   model: modelId,
@@ -1753,7 +1754,8 @@ export default function App() {
         const newNode: NodeInstance = {
           id: newNodeId,
           type: 'AIVideoNode',
-          title: `AI 视频 (${modelName.split('/').pop()})`,
+          title: `AI 视频 (${friendlyProviderLabel(provider)})`,
+          titleSource: 'template',
           pos: {
             x: Math.round(-transform.x / transform.scale + 120),
             y: Math.round(-transform.y / transform.scale + 160),
@@ -1788,11 +1790,15 @@ export default function App() {
         setNodes((prev) =>
           prev.map((n) => {
             if (n.id === existingCkptNode.id) {
+              const nextTitle =
+                n.titleSource === 'template'
+                  ? (provider === 'replicate'
+                      ? `Load Checkpoint (Replicate · ${modelName.split('/').pop() || modelId})`
+                      : checkpointNodeTitle(provider, modelId))
+                  : n.title;
               return {
                 ...n,
-                title: provider === 'replicate'
-                  ? `Load Checkpoint (Replicate · ${modelName.split('/').pop() || modelId})`
-                  : checkpointNodeTitle(provider, modelId),
+                title: nextTitle,
                 values: {
                   ...replaceSelectedResource(n.values,{...extraData,name:modelId},n.type==='CheckpointLoaderSimple'?'ckpt_name':n.type==='ModelScopeNode'||n.type==='ModelScopeAiNode'?'model_endpoint':'model'),
                   ...(n.type==='CheckpointLoaderSimple'?{ckpt_name:modelId}:n.type==='ModelScopeNode'||n.type==='ModelScopeAiNode'?{model_endpoint:modelId}:{model:modelId}),
@@ -2471,7 +2477,7 @@ export default function App() {
         isExecuting={isExecuting}
         executionStatusText={executionStatusText}
         runDisabledReason={runDisabledReason}
-        runTargetLabel={runTargetState.target ? formatNodeDisplayTitle(runTargetState.target.type, runTargetState.target.title, nodes.find((n) => n.id === runTargetState.target.id)?.values) : undefined}
+        runTargetLabel={runTargetState.target ? formatNodeDisplayTitle(runTargetState.target.type, runTargetState.target.title, nodes.find((n) => n.id === runTargetState.target.id)?.values, nodes.find((n) => n.id === runTargetState.target.id)?.titleSource) : undefined}
         onClearCanvas={handleClearCanvas}
       />
 
@@ -2735,7 +2741,7 @@ export default function App() {
                     };
                     return {
                       ...n,
-                      title: formatCheckpointNodeTitle(n.title, updatedValues.targetProvider, newParams.checkpoint),
+                      title: formatCheckpointNodeTitle(n.title, updatedValues.targetProvider, newParams.checkpoint, n.titleSource),
                       values: updatedValues,
                     };
                   }
@@ -2747,7 +2753,7 @@ export default function App() {
                   if (n.type === 'NanoGPTNode')return {...n,values:{...n.values,model:newParams.checkpoint}};
                   if (n.type === 'AIVideoNode') {
                     const p = newParams.videoProvider || newParams.targetProvider || n.values?.targetProvider;
-                    return {...n, title: formatVideoNodeTitle(n.title, p), values:{...n.values,model:newParams.checkpoint,targetProvider:p,duration:newParams.videoDuration,fps:newParams.videoFps,num_frames:newParams.videoFrames,resolution:newParams.resolution,aspect_ratio:newParams.aspectRatio,custom_parameters:newParams.customParameters}};
+                    return {...n, title: formatVideoNodeTitle(n.title, p, n.titleSource), values:{...n.values,model:newParams.checkpoint,targetProvider:p,duration:newParams.videoDuration,fps:newParams.videoFps,num_frames:newParams.videoFrames,resolution:newParams.resolution,aspect_ratio:newParams.aspectRatio,custom_parameters:newParams.customParameters}};
                   }
                   if (n.type === 'GoogleImagenNode') {
                     return {
@@ -2856,6 +2862,7 @@ export default function App() {
               id: newNodeId,
               type: 'AIVideoNode',
               title: `AI Video (${mName.split('/').pop()})`,
+              titleSource: 'template',
               pos: {
                 x: Math.round(-transform.x / transform.scale + 120),
                 y: Math.round(-transform.y / transform.scale + 160),

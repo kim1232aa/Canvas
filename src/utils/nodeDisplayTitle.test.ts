@@ -7,109 +7,137 @@ import {
   formatNodeDisplayTitle,
 } from './nodeDisplayTitle';
 
-describe('nodeDisplayTitle', () => {
-  describe('formatVideoNodeTitle & isTemplateVideoNodeTitle', () => {
-    it('recognizes preset template and default titles as template-generated', () => {
-      expect(isTemplateVideoNodeTitle('AI 视频 (Fal.ai)')).toBe(true);
-      expect(isTemplateVideoNodeTitle('AI 视频 (Sogni)')).toBe(true);
-      expect(isTemplateVideoNodeTitle('AI 视频 (Civitai)')).toBe(true);
-      expect(isTemplateVideoNodeTitle('AI 视频 (WaveSpeed)')).toBe(true);
-      expect(isTemplateVideoNodeTitle('AI 视频 (MuAPI)')).toBe(true);
-      expect(isTemplateVideoNodeTitle('AI 视频 (Novita)')).toBe(true);
-      expect(isTemplateVideoNodeTitle('AI 视频 (Replicate)')).toBe(true);
-      expect(isTemplateVideoNodeTitle('AI 视频 (Krea)')).toBe(true);
-      expect(isTemplateVideoNodeTitle('AI 视频 (Together)')).toBe(true);
-      expect(isTemplateVideoNodeTitle('AI 视频 (AIMLAPI)')).toBe(true);
-      expect(isTemplateVideoNodeTitle('AI 视频 (Venice)')).toBe(true);
-      expect(isTemplateVideoNodeTitle('AI 视频')).toBe(true);
-      expect(isTemplateVideoNodeTitle('')).toBe(true);
-      expect(isTemplateVideoNodeTitle(undefined)).toBe(true);
-      expect(isTemplateVideoNodeTitle(null)).toBe(true);
+describe('nodeDisplayTitle - explicit titleSource and zero heuristic protection', () => {
+  describe('AIVideoNode title behavior', () => {
+    it('template-generated video node title (titleSource: "template") follows provider dynamically', () => {
+      expect(formatVideoNodeTitle('AI 视频 (Fal.ai)', 'sogni', 'template')).toBe('AI 视频 (Sogni)');
+      expect(formatVideoNodeTitle('AI 视频 (Fal.ai)', 'wavespeed', 'template')).toBe('AI 视频 (WaveSpeed)');
+      expect(formatVideoNodeTitle('AI 视频 (Fal.ai)', 'krea', 'template')).toBe('AI 视频 (Krea)');
+      expect(formatVideoNodeTitle('AI 视频 (Fal.ai)', 'civitai', 'template')).toBe('AI 视频 (Civitai)');
+      expect(formatVideoNodeTitle('AI 视频 (Fal.ai)', 'replicate', 'template')).toBe('AI 视频 (Replicate)');
+      expect(formatVideoNodeTitle('AI 视频 (Fal.ai)', 'together', 'template')).toBe('AI 视频 (Together)');
+      expect(formatVideoNodeTitle('AI 视频 (Fal.ai)', 'aimlapi', 'template')).toBe('AI 视频 (AIMLAPI)');
+      expect(formatVideoNodeTitle('AI 视频 (Fal.ai)', 'venice', 'template')).toBe('AI 视频 (Venice)');
+      expect(formatVideoNodeTitle('AI 视频 (Fal.ai)', 'novita', 'template')).toBe('AI 视频 (Novita)');
+      expect(formatVideoNodeTitle('AI 视频 (Fal.ai)', 'muapi', 'template')).toBe('AI 视频 (MuAPI)');
+      // Palette default when marked as template (P2-1)
+      expect(formatVideoNodeTitle('AI 视频（显式 Provider/Model）', 'sogni', 'template')).toBe('AI 视频 (Sogni)');
+      // Empty provider
+      expect(formatVideoNodeTitle('AI 视频 (Fal.ai)', '', 'template')).toBe('AI 视频');
     });
 
-    it('recognizes user-customized titles as non-template (must not be overwritten)', () => {
-      expect(isTemplateVideoNodeTitle('AI 视频（显式 Provider/Model）')).toBe(false);
-      expect(isTemplateVideoNodeTitle('我的专属视频生成器')).toBe(false);
-      expect(isTemplateVideoNodeTitle('Product Demo Video')).toBe(false);
-      expect(isTemplateVideoNodeTitle('Wan 2.1 镜头A')).toBe(false);
-      expect(isTemplateVideoNodeTitle('AI 视频 (我的测试)')).toBe(false);
-      expect(isTemplateVideoNodeTitle('AI 视频 - 特别定制版')).toBe(false);
+    it('P1-2: locks reviewer lookalike and base titles without titleSource or with titleSource="user" (never overwritten)', () => {
+      // Inputs specifically highlighted in review findings:
+      expect(formatVideoNodeTitle('AI 视频 (Fal)', 'sogni', undefined)).toBe('AI 视频 (Fal)');
+      expect(formatVideoNodeTitle('AI 视频 (Fal)', 'sogni', 'user')).toBe('AI 视频 (Fal)');
+
+      expect(formatVideoNodeTitle('AI 视频 (Sogni)', 'krea', undefined)).toBe('AI 视频 (Sogni)');
+      expect(formatVideoNodeTitle('AI 视频 (Sogni)', 'krea', 'user')).toBe('AI 视频 (Sogni)');
+
+      expect(formatVideoNodeTitle('AI 视频', 'sogni', undefined)).toBe('AI 视频');
+      expect(formatVideoNodeTitle('AI 视频', 'krea', 'user')).toBe('AI 视频');
+
+      expect(formatVideoNodeTitle('AI 视频 (fal)', 'wavespeed', undefined)).toBe('AI 视频 (fal)');
+      expect(formatVideoNodeTitle('AI 视频 (FAL.AI)', 'sogni', undefined)).toBe('AI 视频 (FAL.AI)');
+      expect(formatVideoNodeTitle('AI 视频 (mage)', 'sogni', undefined)).toBe('AI 视频 (mage)');
+
+      // Custom titles
+      expect(formatVideoNodeTitle('我的专属短片生成器', 'sogni', undefined)).toBe('我的专属短片生成器');
+      expect(formatVideoNodeTitle('Product Demo Video', 'wavespeed', 'user')).toBe('Product Demo Video');
+      expect(formatVideoNodeTitle('AI 视频 (我的测试)', 'krea', undefined)).toBe('AI 视频 (我的测试)');
     });
 
-    it('switching provider changes the displayed label for template-generated titles', () => {
-      expect(formatVideoNodeTitle('AI 视频 (Fal.ai)', 'sogni')).toBe('AI 视频 (Sogni)');
-      expect(formatVideoNodeTitle('AI 视频 (Fal.ai)', 'wavespeed')).toBe('AI 视频 (WaveSpeed)');
-      expect(formatVideoNodeTitle('AI 视频 (Fal.ai)', 'krea')).toBe('AI 视频 (Krea)');
-      expect(formatVideoNodeTitle('AI 视频 (Fal.ai)', 'civitai')).toBe('AI 视频 (Civitai)');
-      expect(formatVideoNodeTitle('AI 视频 (Fal.ai)', 'replicate')).toBe('AI 视频 (Replicate)');
-      expect(formatVideoNodeTitle('AI 视频 (Fal.ai)', 'together')).toBe('AI 视频 (Together)');
-      expect(formatVideoNodeTitle('AI 视频 (Fal.ai)', 'aimlapi')).toBe('AI 视频 (AIMLAPI)');
-      expect(formatVideoNodeTitle('AI 视频 (Fal.ai)', 'venice')).toBe('AI 视频 (Venice)');
-      expect(formatVideoNodeTitle('AI 视频 (Fal.ai)', 'novita')).toBe('AI 视频 (Novita)');
-      expect(formatVideoNodeTitle('AI 视频 (Fal.ai)', 'muapi')).toBe('AI 视频 (MuAPI)');
-      expect(formatVideoNodeTitle('AI 视频', 'sogni')).toBe('AI 视频 (Sogni)');
-      expect(formatVideoNodeTitle('', 'sogni')).toBe('AI 视频 (Sogni)');
-    });
-
-    it('switching provider to empty yields generic base title', () => {
-      expect(formatVideoNodeTitle('AI 视频 (Fal.ai)', '')).toBe('AI 视频');
-      expect(formatVideoNodeTitle('AI 视频 (Fal.ai)', null)).toBe('AI 视频');
-      expect(formatVideoNodeTitle('AI 视频 (Fal.ai)', undefined)).toBe('AI 视频');
-    });
-
-    it('preserves user-renamed titles regardless of provider switch', () => {
-      expect(formatVideoNodeTitle('我的专属视频生成器', 'sogni')).toBe('我的专属视频生成器');
-      expect(formatVideoNodeTitle('Product Demo Video', 'wavespeed')).toBe('Product Demo Video');
-      expect(formatVideoNodeTitle('AI 视频 (我的测试)', 'krea')).toBe('AI 视频 (我的测试)');
-      expect(formatVideoNodeTitle('Wan 2.1 镜头A', 'fal')).toBe('Wan 2.1 镜头A');
+    it('isTemplateVideoNodeTitle strictly checks titleSource', () => {
+      expect(isTemplateVideoNodeTitle('AI 视频 (Fal.ai)', 'template')).toBe(true);
+      expect(isTemplateVideoNodeTitle('AI 视频 (Fal.ai)', 'user')).toBe(false);
+      expect(isTemplateVideoNodeTitle('AI 视频 (Fal.ai)', undefined)).toBe(false);
+      expect(isTemplateVideoNodeTitle('AI 视频', undefined)).toBe(false);
+      expect(isTemplateVideoNodeTitle('AI 视频 (Fal)', undefined)).toBe(false);
     });
   });
 
-  describe('formatCheckpointNodeTitle & isTemplateCheckpointNodeTitle', () => {
-    it('recognizes preset and default checkpoint titles as template-generated', () => {
-      expect(isTemplateCheckpointNodeTitle('加载底模 (Hugging Face)')).toBe(true);
-      expect(isTemplateCheckpointNodeTitle('加载底模 (Fal.ai)')).toBe(true);
-      expect(isTemplateCheckpointNodeTitle('加载底模 (Civitai)')).toBe(true);
-      expect(isTemplateCheckpointNodeTitle('加载底模 (Tensor.Art OpenWorks)')).toBe(true);
-      expect(isTemplateCheckpointNodeTitle('Load Checkpoint (Replicate)')).toBe(true);
-      expect(isTemplateCheckpointNodeTitle('加载底模')).toBe(true);
-      expect(isTemplateCheckpointNodeTitle('加载 Checkpoint')).toBe(true);
-      expect(isTemplateCheckpointNodeTitle('加载底模 (Checkpoint)')).toBe(true);
+  describe('CheckpointLoaderSimple title behavior', () => {
+    it('template-generated checkpoint node title (titleSource: "template") follows provider dynamically', () => {
+      expect(formatCheckpointNodeTitle('加载底模 (Hugging Face)', 'sogni', undefined, 'template')).toBe(
+        '加载底模 (Sogni)'
+      );
+      expect(
+        formatCheckpointNodeTitle(
+          '加载底模 (Fal.ai)',
+          'replicate',
+          'black-forest-labs/flux-schnell',
+          'template'
+        )
+      ).toBe('Load Checkpoint (Replicate · flux-schnell)');
     });
 
-    it('recognizes user-customized checkpoint titles as non-template', () => {
-      expect(isTemplateCheckpointNodeTitle('二次元大模型 SDXL')).toBe(false);
-      expect(isTemplateCheckpointNodeTitle('写实摄影底模 v2')).toBe(false);
-      expect(isTemplateCheckpointNodeTitle('Custom Main Checkpoint')).toBe(false);
-    });
+    it('P1-1: locks reviewer lookalike titles without titleSource or with titleSource="user" (never overwritten)', () => {
+      // Inputs specifically highlighted in review findings:
+      expect(formatCheckpointNodeTitle('加载底模 (v2)', 'sogni', undefined, undefined)).toBe('加载底模 (v2)');
+      expect(formatCheckpointNodeTitle('加载底模 (v2)', 'sogni', undefined, 'user')).toBe('加载底模 (v2)');
 
-    it('updates template-generated checkpoint titles to follow provider', () => {
-      expect(formatCheckpointNodeTitle('加载底模 (Hugging Face)', 'sogni')).toBe('加载底模 (Sogni)');
-      expect(formatCheckpointNodeTitle('加载底模 (Fal.ai)', 'replicate', 'black-forest-labs/flux-schnell')).toBe(
-        'Load Checkpoint (Replicate · flux-schnell)'
+      expect(formatCheckpointNodeTitle('加载底模 (my-model)', 'sogni', undefined, undefined)).toBe(
+        '加载底模 (my-model)'
+      );
+      expect(formatCheckpointNodeTitle('加载底模 (my-model)', 'sogni', undefined, 'user')).toBe(
+        '加载底模 (my-model)'
+      );
+
+      expect(formatCheckpointNodeTitle('加载底模 (foo.safetensors)', 'sogni', undefined, undefined)).toBe(
+        '加载底模 (foo.safetensors)'
+      );
+      expect(formatCheckpointNodeTitle('Load Checkpoint (v2)', 'sogni', undefined, undefined)).toBe(
+        'Load Checkpoint (v2)'
+      );
+      expect(
+        formatCheckpointNodeTitle('Load Checkpoint (anything-goes here)', 'sogni', undefined, undefined)
+      ).toBe('Load Checkpoint (anything-goes here)');
+
+      // Custom titles
+      expect(formatCheckpointNodeTitle('二次元大模型 SDXL', 'sogni', undefined, undefined)).toBe(
+        '二次元大模型 SDXL'
+      );
+      expect(formatCheckpointNodeTitle('Custom Main Checkpoint', 'replicate', undefined, 'user')).toBe(
+        'Custom Main Checkpoint'
       );
     });
 
-    it('preserves custom checkpoint titles on provider switch', () => {
-      expect(formatCheckpointNodeTitle('二次元大模型 SDXL', 'sogni')).toBe('二次元大模型 SDXL');
-      expect(formatCheckpointNodeTitle('Custom Main Checkpoint', 'replicate')).toBe('Custom Main Checkpoint');
+    it('isTemplateCheckpointNodeTitle strictly checks titleSource', () => {
+      expect(isTemplateCheckpointNodeTitle('加载底模 (Fal.ai)', 'template')).toBe(true);
+      expect(isTemplateCheckpointNodeTitle('加载底模 (v2)', undefined)).toBe(false);
+      expect(isTemplateCheckpointNodeTitle('加载底模 (my-model)', 'user')).toBe(false);
     });
   });
 
   describe('formatNodeDisplayTitle', () => {
-    it('updates AIVideoNode dynamically when values provided', () => {
-      expect(formatNodeDisplayTitle('AIVideoNode', 'AI 视频 (Fal.ai)', { targetProvider: 'sogni' })).toBe(
-        'AI 视频 (Sogni)'
-      );
-      expect(formatNodeDisplayTitle('AIVideoNode', 'AI 视频 (Fal.ai)', { provider: 'krea' })).toBe(
-        'AI 视频 (Krea)'
-      );
+    it('delegates to formatVideoNodeTitle with titleSource', () => {
+      expect(
+        formatNodeDisplayTitle('AIVideoNode', 'AI 视频 (Fal.ai)', { targetProvider: 'sogni' }, 'template')
+      ).toBe('AI 视频 (Sogni)');
+
+      expect(
+        formatNodeDisplayTitle('AIVideoNode', 'AI 视频 (Fal)', { targetProvider: 'sogni' }, undefined)
+      ).toBe('AI 视频 (Fal)');
     });
 
-    it('preserves custom title for AIVideoNode even with values', () => {
-      expect(formatNodeDisplayTitle('AIVideoNode', '产品渲染短片', { targetProvider: 'sogni' })).toBe(
-        '产品渲染短片'
-      );
+    it('delegates to formatCheckpointNodeTitle with titleSource', () => {
+      expect(
+        formatNodeDisplayTitle(
+          'CheckpointLoaderSimple',
+          '加载底模 (Hugging Face)',
+          { targetProvider: 'sogni' },
+          'template'
+        )
+      ).toBe('加载底模 (Sogni)');
+
+      expect(
+        formatNodeDisplayTitle(
+          'CheckpointLoaderSimple',
+          '加载底模 (v2)',
+          { targetProvider: 'sogni' },
+          undefined
+        )
+      ).toBe('加载底模 (v2)');
     });
 
     it('presets without a provider suffix remain unchanged', () => {
@@ -122,21 +150,6 @@ describe('nodeDisplayTitle', () => {
       expect(formatNodeDisplayTitle('KSampler', '采样器', { targetProvider: 'sogni' })).toBe(
         'KSampler 采样器'
       );
-      expect(formatNodeDisplayTitle('EmptyLatentImage', '尺寸（空潜空间）', { targetProvider: 'sogni' })).toBe(
-        '画布尺寸设定 (Latent)'
-      );
-      expect(formatNodeDisplayTitle('VAEDecode', 'VAE 解码', { targetProvider: 'sogni' })).toBe(
-        '图像解码器 (VAE Decode)'
-      );
-      expect(formatNodeDisplayTitle('CustomUnknown', '未知节点名', { targetProvider: 'sogni' })).toBe(
-        '未知节点名'
-      );
-    });
-
-    it('backward compatibility: returns currentTitle or type when values are not provided', () => {
-      expect(formatNodeDisplayTitle('EmptyLatentImage', 'EmptyLatentImage')).toBe('画布尺寸设定 (Latent)');
-      expect(formatNodeDisplayTitle('CLIPTextEncode', 'CLIPTextEncode')).toBe('正向提示词 (CLIP)');
-      expect(formatNodeDisplayTitle('AIVideoNode', 'AI 视频 (Fal.ai)')).toBe('AI 视频 (Fal.ai)');
     });
   });
 });

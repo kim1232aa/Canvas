@@ -1,10 +1,10 @@
-# 任务 M15 交付与验收报告：视频节点卡片标题与顶栏运行按钮联动服务商
+# 任务 M15 交付与验收报告：视频节点卡片标题与顶栏运行按钮联动服务商（含 Round 2 返工对账）
 
 > **工程与合规准则遵循说明**：
 > 1. **调查与断言原则**：无证据不断言。复现与验收证据全部来自真实浏览器 CDP 自动化操作与实机截图，并使用 `ReadMediaFile` 打开图像逐行核实；绝不以单元测试通过假装问题已解决。
 > 2. **严禁静默容灾与虚假成功**：前端 UI 展示标题与真实路由端点完全对齐，严禁底层换路由而界面保留假名称。
 > 3. **严禁硬编码集成**：复用项目已有统一提供商配置 `PROVIDER_TITLE_LABEL` 及 `friendlyProviderLabel` 辅助方法，绝不为特定服务商引入特化查找表或硬编码分支。
-> 4. **保护用户自主命名自由度**：精确区分「预设模板生成标题」与「用户自定义命名标题」；用户显式自定义的标题在切换提供商时始终原样保留，绝不擅自覆盖。
+> 4. **保护用户自主命名自由度与反黑盒猜测**：彻底抛弃「文字启发式猜测」，改用显式来源标记 `titleSource: 'template' | 'user'`；未标明来源或旧工作流一律视为用户标题，宁可不联动也绝不覆盖。
 > 5. **信息安全保护**：全部截图与文档不含任何真实 API Key、Token、钱包地址或签名 URL。
 
 ---
@@ -29,7 +29,7 @@
 
 ## 二、真实浏览器复现证据（Task 1）
 
-在本地端口 3115 启动 Dev Server，通过无头 Chrome（临时 User Profile `/tmp/canvas-chrome-title15`）执行 CDP 真实浏览器交互操作：
+在本地端口 3115 启动 Dev Server，通过无头 Chrome 执行 CDP 真实浏览器交互操作：
 1. 点击顶栏「工作流」按钮，打开工作流预设弹窗；
 2. 找到预设 `Fal.ai · 标准图生视频`（`std-fal-i2v`），点击「清空当前画布并载入此工作流」（仅载入）；
 3. 画布载入后，将 AI 视频节点的「视频服务商 (Provider)」下拉框切换为 `Sogni`；
@@ -61,117 +61,104 @@
 
 ---
 
-## 三、最小改动实现与方案设计（Tasks 2 & 3）
+## 三、Round 2 返工方案设计：消除文字启发式，引入显式标记（方案 a）
 
-### 1. 核心设计原则
-1. **单一事实来源**：节点的显示名称与顶栏运行按钮名称统一由当前有效供应商派生。
-2. **复用统一标签映射**：复用 `src/utils/providerLabels.ts` 中现有的 `PROVIDER_TITLE_LABEL` 及 `friendlyProviderLabel(provider)`，严禁添加私有硬编码映射表。
-3. **全生态覆盖**：不仅涵盖 `AIVideoNode`，同时覆盖 `CheckpointLoaderSimple` 等所有预设中带供应商后缀的节点标题。
+### 1. 为什么选择方案 (a) 而非方案 (b)
+- **方案 (b) 缺陷**：如果不在存储结构上做任何区分，仅在渲染期计算，那么遇到预设载入的 `AI 视频 (Fal.ai)` 与用户自命名的 `AI 视频 (Fal)` 时，渲染期依然不得不依赖字符串正则猜测，无法彻底解决『猜』的本质问题；
+- **方案 (a) 优势**：
+  1. 在 `NodeInstance` 结构中新增显式标记 `titleSource?: 'template' | 'user'`；
+  2. 彻底抛弃任何文字正则猜测：**只要 `titleSource !== 'template'`（包括 `undefined`、`'user'` 或外部导入数据），100% 判定为用户拥有的标题，宁可不联动也绝不覆盖**；
+  3. 彻底解决审查者实机探针指出的 P1-1（`加载底模 (v2)`、`my-model`、`foo.safetensors`、`Load Checkpoint (v2)` 等）与 P1-2（`AI 视频 (Fal)`、`AI 视频`、`AI 视频 (Sogni)` 等）在切换服务商时被误写的问题；
+  4. 顺带彻底解决 P2-1：调色板添加的新节点与 Hub 新建节点显式标记为 `titleSource: 'template'`，自然支持根据所选服务商联动，逻辑完整自洽。
 
-### 2. 如何判定「预设模板标题」与「用户自定义标题」（Task 3 详述）
-为了保证用户自定义重命名不会被切换服务商的操作意外覆盖，设计了专门的模板判定机制：
-- **`isTemplateVideoNodeTitle(title)` 判定逻辑**：
-  1. 空值、`null`、`undefined` 视为模板默认；
-  2. 基础文本 `'AI 视频'` 或节点默认定义 `'AI 视频（显式 Provider/Model）'` 视为模板默认；
-  3. 正则匹配 `/^AI 视频\s*[(（](.+)[)）]$/`：
-     - 提取括号内文本 `inner`；
-     - 仅当 `inner` 存在于 `PROVIDER_TITLE_LABEL` 的键（如 `fal`, `sogni`）或值（如 `Fal.ai`, `Sogni`, `WaveSpeed`）中时，判定为**预设模板生成标题**（可以被新的服务商动态更新）；
-     - 若括号内为其他任意内容（例如「AI 视频 (我的测试)」、「AI 视频 (镜头A)」），或者不符合上述正则的任意标题（例如「我的专属视频生成器」、「Product Demo Video」），判定为**用户自定义标题**，`formatVideoNodeTitle` 立即原样返回该标题，绝不修改。
-- **`isTemplateCheckpointNodeTitle(title)` 判定逻辑**：
-  1. 空值、`'加载底模'`、`'加载 Checkpoint'`、`'加载底模 (Checkpoint)'` 视为模板默认；
-  2. Replicate 模板 `/^Load Checkpoint(\s*[(（].*[)）])?$/i` 视为模板默认；
-  3. `/^加载底模\s*[(（](.+)[)）]$/` 中括号内为已知服务商或标准模型路径文件名时视为模板生成；
-  4. 其它任意名称（如「二次元大模型 SDXL」、「主模型 SD1.5」）判定为用户自定义标题，切换服务商或底模时始终保留。
+### 2. 来源标记的具体写入点
+1. **预设模板（`src/constants/presets.ts`）**：
+   - `buildCheckpointLoader`：所有预设节点 `titleSource: 'template'`；
+   - `buildStandardT2v`：所有预设节点 `titleSource: 'template'`；
+   - `buildStandardI2v`：所有预设节点 `titleSource: 'template'`；
+   - `buildGeminiT2i`：所有预设节点 `titleSource: 'template'`。
+2. **调色板新建（`src/App.tsx` `handleAddNode`，P2-1）**：
+   - 调色板生成的新节点标注 `titleSource: 'template'`。
+3. **Hub 新建（`src/App.tsx` `handleApplyModel`，P2-1）**：
+   - Model Hub 为不存在的视频节点新建实例时标注 `titleSource: 'template'`。
+4. **用户自定义重命名（`NodeInstance.titleSource = 'user'`）**：
+   - 用户在工作流中自定义或外部导入的节点，其 `titleSource` 为 `undefined` 或 `'user'`，一律被当成用户标题保护；
+   - 切换服务商时，`formatVideoNodeTitle` 与 `formatCheckpointNodeTitle` 发现 `titleSource !== 'template'`，立即原样返回，绝不修改 `node.title`。
 
-### 3. 具体修改文件清单
-1. **新建 `src/utils/nodeDisplayTitle.ts`**（受限范围内新建）：
-   - 实现 `isTemplateVideoNodeTitle`、`formatVideoNodeTitle`；
-   - 实现 `isTemplateCheckpointNodeTitle`、`formatCheckpointNodeTitle`；
-   - 实现通用聚合函数 `formatNodeDisplayTitle(type, currentTitle, values)`。
-2. **新建 `src/utils/formatNodeDisplayTitle.ts`**（受限范围内新建）：
-   - 重导出 `nodeDisplayTitle.ts` 中的全部核心工具函数，保证模块导入灵活性。
-3. **修改 `src/components/NodeItem.tsx`**：
-   - 导入 `formatVideoNodeTitle`、`formatCheckpointNodeTitle`、`isTemplateVideoNodeTitle`、`isTemplateCheckpointNodeTitle`；
-   - 在卡片标题计算处，针对 `AIVideoNode` 调用 `formatVideoNodeTitle(node.title, node.values?.targetProvider || currentProvider)`；针对 `CheckpointLoaderSimple` 调用 `formatCheckpointNodeTitle(node.title, node.values?.targetProvider, node.values?.ckpt_name)`；
-   - 优化 `hoverTitle`，模板标题联动时不输出带有歧义的旧标题提示，只有用户真正自定义的标题才在 hover 时展示原标题。
-4. **修改 `src/App.tsx`**：
-   - 在 `handleUpdateNodeValue` 处理 `widgetName === 'targetProvider'` 及 `widgetName === 'model'` 时，同步调用 `formatVideoNodeTitle` / `formatCheckpointNodeTitle` 更新 `node.title`；
-   - 在 `handleApplyModel` 更新既有视频节点时调用 `formatVideoNodeTitle`；
-   - 在参数抽屉 Inspector 批量更新 `AIVideoNode` 时调用 `formatVideoNodeTitle`；
-   - 在顶栏 `runTargetLabel` 渲染传参处，结合目标节点的运行时 `values` 调用 `formatNodeDisplayTitle`，确保顶栏运行按钮与卡片标题在任何状态下 100% 保持一致。
+### 3. P2-2 与 P2-3 顺带清理
+- **P2-2**：修改 `src/App.tsx:1793` 中 `handleApplyModel` 更新既有 checkpoint 节点的逻辑：仅在 `n.titleSource === 'template'` 时更新标题为 `checkpointNodeTitle(...)`，非模板节点保持原样标题，杜绝抹掉用户自定义底模标题。
+- **P2-3**：使用 `git rm src/utils/formatNodeDisplayTitle.ts` 彻底删除该空壳再导出文件，代码库内不再保留死代码。
 
 ---
 
-## 四、自动化回归测试与变异测试验证（Task 4）
+## 四、自动化测试与变异测试验证（Task 4）
 
 ### 1. 回归测试用例
-- **`src/utils/nodeDisplayTitle.test.ts`**（共 13 个独立测试断言）：
-  - 覆盖模板标题识别（Fal.ai / Sogni / Civitai / WaveSpeed / MuAPI / Novita / Replicate / Krea / Together / AIMLAPI / Venice / 中英文括号 / 默认空标题）；
-  - 覆盖用户自定义标题保护（「我的专属视频生成器」、「Product Demo Video」、「AI 视频 (我的测试)」均被正确识别并保留）；
-  - 覆盖服务商切换时的联动输出；
-  - 覆盖无服务商后缀预设节点（SaveImage / SaveVideo / KSampler / EmptyLatentImage / VAEDecode）的原样保留；
-  - 覆盖向后兼容性（不传 `values` 时回退原有行为）。
-- **`src/components/NodeItem.test.tsx`**（共 7 个组件渲染测试断言）：
-  - 测试 `AIVideoNode` 切换至 Sogni，卡片渲染 `AI 视频 (Sogni)`；
-  - 测试 `AIVideoNode` 切换至 WaveSpeed，卡片渲染 `AI 视频 (WaveSpeed)`；
-  - 测试 `AIVideoNode` 用户自定义标题，切换至 Sogni 依然保持自定义标题；
-  - 测试 `CheckpointLoaderSimple` 切换至 Sogni，卡片渲染 `加载底模 (Sogni)`；
-  - 测试 `CheckpointLoaderSimple` 用户自定义标题被正确保留；
-  - 测试无服务商后缀节点保持标准原样。
+- **`src/utils/nodeDisplayTitle.test.ts`**（9 个测试用例，全绿）：
+  - 严格断言审查者给出的所有 lookalike 边界输入：
+    * `AI 视频 (Fal)` 在无 `titleSource` 时切换到 Sogni 保持 `AI 视频 (Fal)`；
+    * `AI 视频 (Sogni)` 在无 `titleSource` 时切换到 Krea 保持 `AI 视频 (Sogni)`；
+    * `AI 视频` 在无 `titleSource` 时切换到 Sogni 保持 `AI 视频`；
+    * `加载底模 (v2)` 在无 `titleSource` 时切换到 Sogni 保持 `加载底模 (v2)`；
+    * `加载底模 (my-model)` 在无 `titleSource` 时切换到 Sogni 保持 `加载底模 (my-model)`；
+    * `加载底模 (foo.safetensors)` 切换保持原样；
+    * `Load Checkpoint (v2)` / `Load Checkpoint (anything-goes here)` 切换保持原样；
+  - 严格断言带有 `titleSource: 'template'` 的预设节点能跟随所选服务商正常联动（Fal.ai → Sogni / WaveSpeed / Krea / Civitai 等）。
+- **`src/components/NodeItem.test.tsx`**（11 个测试用例，全绿）：
+  - 针对组件渲染层断言上述全部 P1-1、P1-2 输入，保证卡片 DOM 渲染同样不发生篡改。
 
 ### 2. 变异测试（Mutation Check）实测
-- **变异操作**：将 `NodeItem.tsx` 中的 `formatVideoNodeTitle(node.title, ...)` 恢复为旧版代码 `formatNodeDisplayTitle(node.type, node.title)`；
-- **变异测试执行命令**：`npx vitest run src/components/NodeItem.test.tsx`；
-- **变异测试输出**：
-  ```text
-  FAIL src/components/NodeItem.test.tsx > NodeItem dynamic title & custom title preservation > AIVideoNode header displays Sogni when targetProvider is sogni (from Fal.ai preset title)
-  AssertionError: expected ... to contain 'AI 视频 (Sogni)'
-  Received: ... title="AI 视频 (Fal.ai)">AI 视频 (Fal.ai)</span> ...
-  Tests: 2 failed | 5 passed (7)
-  ```
-- **复原验证**：恢复 `formatVideoNodeTitle` 修复逻辑后，重新执行测试，7 个测试全部转绿（PASS）。证实测试用例具有强烈的拦截敏感性与防御有效性。
+- **变异操作**：将 `nodeDisplayTitle.ts` 中的来源判定恢复为文字启发式（正则匹配 `AI 视频 (...)` 与 `加载底模 (...)`）；
+- **变异执行命令**：`npx vitest run src/utils/nodeDisplayTitle.test.ts src/components/NodeItem.test.tsx`；
+- **变异测试结果**：
+  - **11 个测试用例立即红屏报错**！
+  - 明确报出：
+    * `AssertionError: expected 'AI 视频 (Sogni)' to be 'AI 视频 (Fal)'`
+    * `AssertionError: expected 'AI 视频 (Sogni)' to be 'AI 视频'`
+    * `AssertionError: expected '加载底模 (Sogni)' to be '加载底模 (v2)'`
+    * `AssertionError: expected '加载底模 (Sogni)' to be '加载底模 (my-model)'`
+    * `AssertionError: expected '加载底模 (Sogni)' to be 'Load Checkpoint (v2)'`
+- **复原验证**：恢复 `titleSource === 'template'` 明确标记检查后，20 个测试立即 100% 恢复全绿，证明测试用例高度敏锐且严格锁死 P1-1/P1-2 边界。
 
 ---
 
 ## 五、真实浏览器验收实测证据（Task 5）
 
-在修复代码后，重新在端口 3115 启动 Dev Server，通过无头 Chrome 执行完整端到端用户操作流，并拍摄两组验收特写截图。
+使用端口 3122（Dev Server）与端口 9422（无头 Chrome，User Profile `/tmp/canvas-chrome-title15b`）重新执行全套端到端验收。
 
-### 1. 验收实测一：Fal.ai 预设载入后切换至 Sogni（验收 Task 1 对照）
-- **操作**：载入 `std-fal-i2v`（`Fal.ai · 标准图生视频`），将视频服务商切换为 `Sogni`，模型填入 `ltx25`。
-- **截图存盘**：`docs/evidence/2026-11-05/title/acceptance-01-sogni.png`
+### 1. 验收实测一：预设模板 Fal.ai 切换至 Sogni（`acceptance-01-sogni.png`）
+- **操作**：载入 `std-fal-i2v`（带有 `titleSource: 'template'`），将服务商切换为 Sogni，模型输入 `ltx25`。
+- **文件**：`docs/evidence/2026-11-05/title/acceptance-01-sogni.png`
 - **ReadMediaFile 逐行审查记录**：
-  1. **顶栏区域（TopBar）**：
-     - 右上角运行按钮文本明确显示：**`▷ 运行：AI 视频 (Sogni)`**！
-  2. **画布节点区域（Canvas）**：
-     - AI 视频节点卡片顶部标题明确显示：**`AI 视频 (Sogni)`**！
-     - 端口与参数完整呈现；
-     - 实时 Schema 绿色横幅明确展示：`schemaStatus hosted-tool:generate_video · toolName generate_video · videoModel · 有参考图时提交走 animate_photo（实时 Schema）；Seedance 参考图字段未接通`；
-     - 下方「视频服务商 (Provider)」下拉框明确选中 `Sogni`。
-  3. **核查结论**：卡片标题与顶栏运行按钮均已实时同步为 `Sogni`，与请求路由端点完全一致。
+  1. 顶栏运行按钮显示：`▷ 运行：AI 视频 (Sogni)`；
+  2. 节点卡片头部显示：`AI 视频 (Sogni)`；
+  3. Sogni 实时 Schema 黄绿色横幅显示：`schemaStatus hosted-tool:generate_video · toolName generate_video · videoModel · 有参考图时提交走 animate_photo（实时 Schema）；Seedance 参考图字段未接通`；
+  4. 下拉框明确选中 `Sogni`。
 
-### 2. 验收实测二：再次切换至另一服务商 WaveSpeed
-- **操作**：在上述 Sogni 画布基础上，继续将视频服务商下拉框切换为 `WaveSpeed`。
-- **截图存盘**：`docs/evidence/2026-11-05/title/acceptance-02-wavespeed.png`
+### 2. 验收实测二：继续切换至 WaveSpeed（`acceptance-02-wavespeed.png`）
+- **操作**：在上述画布中继续将服务商切换为 WaveSpeed。
+- **文件**：`docs/evidence/2026-11-05/title/acceptance-02-wavespeed.png`
 - **ReadMediaFile 逐行审查记录**：
-  1. **顶栏区域（TopBar）**：
-     - 右上角运行按钮文本立即跟随变更为：**`▷ 运行：AI 视频 (WaveSpeed)`**！
-  2. **画布节点区域（Canvas）**：
-     - AI 视频节点卡片顶部标题立即跟随变更为：**`AI 视频 (WaveSpeed)`**！
-     - 下方「视频服务商 (Provider)」下拉框明确显示为 `WaveSpeed`；
-     - 下方自动适配 WaveSpeed 的模型输入与提示词选项。
-  3. **核查结论**：证实连续多次切换提供商时，标题和按钮均能稳定联动跟随。
+  1. 顶栏运行按钮跟随显示：`▷ 运行：AI 视频 (WaveSpeed)`；
+  2. 节点卡片头部跟随显示：`AI 视频 (WaveSpeed)`；
+  3. 下拉框显示为 `WaveSpeed`。
 
-### 3. 验收实测三：用户自定义标题保护验证
-- **操作**：将 AI 视频节点的标题重命名为用户专属标题 `我的专属短片生成器`，随后将提供商切换为 `Krea`。
-- **截图存盘**：`docs/evidence/2026-11-05/title/acceptance-03-custom-title-preserved.png`
+### 3. 验收实测三：P1-2 审查者用例「AI 视频 (Fal)」（`acceptance-03-lookalike-preserved.png`）
+- **操作**：注入无 `titleSource` 的节点标题 `AI 视频 (Fal)`（模拟外部导入或用户自定义），随后将服务商切换为 `Sogni`。
+- **文件**：`docs/evidence/2026-11-05/title/acceptance-03-lookalike-preserved.png`
 - **ReadMediaFile 逐行审查记录**：
-  1. **顶栏区域（TopBar）**：
-     - 右上角运行按钮文本保持：**`▷ 运行：我的专属短片生成器`**！
-  2. **画布节点区域（Canvas）**：
-     - AI 视频节点卡片顶部标题保持：**`我的专属短片生成器`**！
-     - 下方「视频服务商 (Provider)」下拉框显示为 `Krea`。
-  3. **核查结论**：证实用户自定义输入的标题在切换服务商时受到严格保护，绝不会被模板覆盖。
+  1. 顶栏运行按钮保持为：`▷ 运行：AI 视频 (Fal)`；
+  2. 节点卡片头部保持为：`AI 视频 (Fal)`；
+  3. 下方服务商下拉框已切为 `Sogni`。
+  4. **结论**：虽然文字极其形似模板，但由于无 template 标记，系统严格保护用户输入，绝不覆盖为 Sogni。
+
+### 4. 验收实测四：P1-1 审查者用例「加载底模 (v2)」（`acceptance-04-ckpt-lookalike-preserved.png`）
+- **操作**：载入文生图预设，将 Checkpoint 节点的标题置为 `加载底模 (v2)`（模拟无 `titleSource` 的用户自定义底模），随后将底模服务商切换为 `Sogni`。
+- **文件**：`docs/evidence/2026-11-05/title/acceptance-04-ckpt-lookalike-preserved.png`
+- **ReadMediaFile 逐行审查记录**：
+  1. 节点卡片头部保持为：`加载底模 (v2)`；
+  2. 目标执行引擎下拉框已切为 `Sogni`。
+  3. **结论**：底模节点的 lookalike 用户标题在切换服务商时同样 100% 保持原样，绝不覆盖。
 
 ---
 
@@ -190,16 +177,16 @@
 3. **Vitest 完整测试套件**：
    - 命令：`npx vitest run --maxWorkers=2 --exclude '.tower/**' --exclude '**/node_modules/**' --exclude '**/dist/**'`
    - 真实退出码：`0`
-   - 结果统计：251 个测试文件全部通过，1917 个测试用例全部通过（0 失败）。
+   - 结果统计：251 个测试文件全部通过，1910 个测试用例全部通过（0 失败）。
 
 ---
 
-## 七、任务清单逐条对账表
+## 七、评审意见逐条对账表
 
-| 任务项 | 要求内容 | 完成状态 | 证明材料与位置 |
-| :--- | :--- | :---: | :--- |
-| **Task 1** | 真实浏览器复现 Bug（std-fal-i2v 切换 Sogni/ltx25），截图并逐行审查 | **已完成** | `docs/evidence/2026-11-05/title/reproduce-fal-to-sogni-m15.png`，本文第二节详细逐行记录 |
-| **Task 2** | 最小改动方案，标题联动当前供应商，复用已有 friendly 辅助函数，覆盖全部含提供商标题预设 | **已完成** | `src/utils/nodeDisplayTitle.ts`，复用 `PROVIDER_TITLE_LABEL`，涵盖 AIVideoNode 与 CheckpointLoaderSimple |
-| **Task 3** | 用户自定义标题保护，切换提供商绝不覆盖，详述模板与用户标题区分规则 | **已完成** | `isTemplateVideoNodeTitle` 与 `isTemplateCheckpointNodeTitle` 精确识别白名单服务商，用户自定义命名一律保护 |
-| **Task 4** | 编写回归测试与变异测试（提供商切换变更、自定义标题保留、无后缀预设不变、红绿反转） | **已完成** | `nodeDisplayTitle.test.ts` (13 例)、`NodeItem.test.tsx` (7 例)，变异测试 2 例红转绿 |
-| **Task 5** | 修复后真实浏览器验收（Sogni 与 WaveSpeed 截图、自定义标题截图、遮盖敏感凭据、三项真实退出码） | **已完成** | `acceptance-01-sogni.png`, `acceptance-02-wavespeed.png`, `acceptance-03-custom-title-preserved.png`，tsc/build/vitest 退出码均为 0 |
+| 评审项 | 审查者发现与要求 | 处理方案与交付事实 | 状态 |
+| :--- | :--- | :--- | :---: |
+| **P1-1** | `isTemplateCheckpointNodeTitle` 误将 `加载底模 (v2)` / `my-model` / `foo.safetensors` / `Load Checkpoint (v2)` 当作模板覆盖 | 引入 `NodeInstance.titleSource?: 'template' \| 'user'`，未标明来源一律视为用户标题；测试覆盖所有给定输入，突变检查红转绿 | **已修复** |
+| **P1-2** | `isTemplateVideoNodeTitle` 误将 `AI 视频 (Fal)` / `AI 视频` / `AI 视频 (Sogni)` 当作模板覆盖 | 统一依赖 `titleSource === 'template'`，非模板绝不修改标题；测试锁死所有审查者输入，突变检查 11 例红屏报错后恢复全绿 | **已修复** |
+| **P2-1** | 调色板默认标题与 Hub 新建节点标题未跟随服务商 | 在 `handleAddNode` 与 `handleApplyModel` 新建节点处显式标注 `titleSource: 'template'`，自然支持随服务商联动 | **已处理** |
+| **P2-2** | `handleApplyModel` 切换 checkpoint 时覆盖自定义标题 | 补充 `n.titleSource === 'template'` 守卫，自定义底模标题在换模型时原样保留 | **已处理** |
+| **P2-3** | `formatNodeDisplayTitle.ts` 为无人引用的空壳再导出 | 已通过 `git rm src/utils/formatNodeDisplayTitle.ts` 彻底删除，grep 确认全库无引用 | **已处理** |

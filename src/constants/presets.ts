@@ -342,6 +342,8 @@ function buildStandardT2i(spec: StdSpec): WorkflowPreset {
     },
   ];
 
+  nodes.forEach(n => { n.titleSource = 'template'; });
+
   return {
     id,
     name: `${cardLabel} · 标准文生图`,
@@ -378,6 +380,7 @@ function buildGeminiT2i(): WorkflowPreset {
         id: 'std-gemini-pos',
         type: 'CLIPTextEncode',
         title: '正向提示词',
+        titleSource: 'template',
         pos: { x: 80, y: 120 },
         width: 400,
         inputs: NODE_DEFINITIONS.CLIPTextEncode.inputs,
@@ -388,6 +391,7 @@ function buildGeminiT2i(): WorkflowPreset {
         id: 'std-gemini-imagen',
         type: 'GoogleImagenNode',
         title: 'Gemini generateContent',
+        titleSource: 'template',
         pos: { x: 540, y: 140 },
         width: 320,
         inputs: NODE_DEFINITIONS.GoogleImagenNode.inputs,
@@ -398,6 +402,7 @@ function buildGeminiT2i(): WorkflowPreset {
         id: 'std-gemini-save',
         type: 'SaveImage',
         title: '保存图像',
+        titleSource: 'template',
         pos: { x: 920, y: 140 },
         width: 300,
         inputs: NODE_DEFINITIONS.SaveImage.inputs,
@@ -762,6 +767,7 @@ function buildStandardT2v(spec: T2vSpec): WorkflowPreset {
   if (loraNodeIds.length) {
     preset.connections.push({ id: `${prefix}-c-lora-vid`, fromNodeId: loraNodeIds[loraNodeIds.length - 1], fromSocketId: 'MODEL', toNodeId: vidId, toSocketId: 'lora', type: 'MODEL' });
   }
+  preset.nodes.forEach(n => { n.titleSource = 'template'; });
   return preset;
 }
 
@@ -911,6 +917,7 @@ function buildStandardI2v(spec: I2vSpec): WorkflowPreset {
   if (loraNodeIds.length) {
     preset.connections.push({ id: `${prefix}-c-lora-vid`, fromNodeId: loraNodeIds[loraNodeIds.length - 1], fromSocketId: 'MODEL', toNodeId: vidId, toSocketId: 'lora', type: 'MODEL' });
   }
+  preset.nodes.forEach(n => { n.titleSource = 'template'; });
   return preset;
 }
 

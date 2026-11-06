@@ -77,6 +77,8 @@ export interface NodeInstance {
   id: string;
   type: string;
   title: string;
+  /** 'template' = title was populated by a preset template, palette default, or hub creation; follows provider. 'user' or undefined = user-typed/imported, never overwritten. */
+  titleSource?: 'template' | 'user';
   pos: { x: number; y: number };
   width?: number;
   inputs: Socket[];
