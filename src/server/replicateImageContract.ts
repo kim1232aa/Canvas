@@ -54,38 +54,6 @@ export interface ReplicateSchemaFetchFailure {
   body: string;
 }
 
-/** Thrown when neither a live OpenAPI Input schema nor caller-supplied inputSchemaProperties exists: nothing is sent upstream. Static PROVIDER_SCHEMA is UI clue only and never alone authorizes outbound. */
-export class ReplicateSchemaMissingError extends Error {
-  model: string;
-  schemaFetch?: ReplicateSchemaFetchFailure;
-  /** HTTP status the route must answer with: upstream status when the schema GET got a non-2xx answer. */
-  httpStatus: number;
-  constructor(model: string, schemaFetch?: ReplicateSchemaFetchFailure) {
-    const local = `没有发出去：拿不到该模型 Schema，未发送 /predictions（model=${model}）`;
-    let first: string;
-    let httpStatus: number;
-    if (!schemaFetch) {
-      first = '无上游请求：该模型标识无法定位 Schema（无 owner/name），未向上游发出任何请求';
-      httpStatus = 400;
-    } else if (schemaFetch.status === null) {
-      first = `无上游响应：Schema 拉取网络错误 ${schemaFetch.url}: ${schemaFetch.body}`;
-      httpStatus = 502;
-    } else if (schemaFetch.status >= 400 || schemaFetch.status < 200) {
-      first = `HTTP ${schemaFetch.status}: ${schemaFetch.body} (${schemaFetch.url})`;
-      httpStatus = schemaFetch.status;
-    } else {
-      // Upstream answered 2xx but the body has no Input properties: first line shows that upstream body verbatim; local 422.
-      first = `HTTP ${schemaFetch.status}: ${schemaFetch.body} (${schemaFetch.url})`;
-      httpStatus = 422;
-    }
-    super(`${first}\n${local}`);
-    this.httpStatus = httpStatus;
-    this.name = 'ReplicateSchemaMissingError';
-    this.model = model;
-    this.schemaFetch = schemaFetch;
-  }
-}
-
 /** Parses owner/name[:version] (or bare 64-hex version) without any model-name branching. */
 export function parseReplicateModelRef(rawModel: string): { owner?: string; name?: string; version?: string } {
   const m = String(rawModel || '').trim();
@@ -121,9 +89,6 @@ export function buildReplicatePredictionRequest(
   }
 
   const prompt = String(body.prompt || '').trim();
-  if (!prompt) {
-    throw new Error('Replicate 提示词为必填项（prompt is required）');
-  }
 
   const cleanBaseUrl = baseUrl.replace(/\/+$/, '');
   const isHex64 = /^[0-9a-fA-F]{64}$/.test(rawModel);

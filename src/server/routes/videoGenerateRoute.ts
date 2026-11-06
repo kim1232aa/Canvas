@@ -27,7 +27,7 @@ export interface VideoGenerateRouteDeps {
     body: any,
     fields: string[],
   ) => boolean;
-  rejectSchemaEnum: (
+  rejectSchemaEnum?: (
     res: ExpressResponse,
     provider: SchemaProvider,
     model: string,

@@ -690,6 +690,7 @@ export function getArchitectureFamily(modelOrBaseModel?: string): ArchitectureFa
 export interface LoraArchitectureCompatibilityResult {
   compatible: boolean;
   reason?: string;
+  hint?: string;
   ckptFamily: ArchitectureFamily;
   loraFamily: ArchitectureFamily;
   ckptBaseModel: string;
@@ -720,12 +721,17 @@ export function checkLoraArchitectureCompatibility(
   const effectiveCkptBaseModel = ckptBase || defaultCkptBase;
   const effectiveLoraBaseModel = loraBase || defaultLoraBase;
 
-  // Strict cross-architecture check: if both families are identified and differ, it's incompatible
+  // Non-blocking hint: only when catalog metadata really returned differing baseModel fields
+  const metadataDiffer = Boolean(ckptBase && loraBase && ckptBase.toLowerCase() !== loraBase.toLowerCase());
+  const hint = metadataDiffer ? 'likely incompatible: base models differ per the catalog metadata' : undefined;
+
+  // Cross-architecture check: if both families are identified and differ, flag compatibility for hints only
   if (ckptFamily !== 'unknown' && loraFamily !== 'unknown' && ckptFamily !== loraFamily) {
-    const reason = `LoRA [${loraName}] (baseModel: ${effectiveLoraBaseModel}) 与底模 [${ckptName}] (baseModel: ${effectiveCkptBaseModel}) 架构不兼容，未发送至上游。`;
+    const reason = `LoRA [${loraName}] (baseModel: ${effectiveLoraBaseModel}) 与底模 [${ckptName}] (baseModel: ${effectiveCkptBaseModel}) 架构可能不兼容，已提交上游裁决。`;
     return {
       compatible: false,
       reason,
+      hint,
       ckptFamily,
       loraFamily,
       ckptBaseModel: effectiveCkptBaseModel,
@@ -735,6 +741,7 @@ export function checkLoraArchitectureCompatibility(
 
   return {
     compatible: true,
+    hint,
     ckptFamily,
     loraFamily,
     ckptBaseModel: effectiveCkptBaseModel,

@@ -385,7 +385,7 @@ describe('checkLoraArchitectureCompatibility & ReplicateEngineNode resolution', 
     expect(res.ckptFamily).toBe('flux');
     expect(res.loraFamily).toBe('sdxl');
     expect(res.reason).toBe(
-      'LoRA [[Krea2 Turbo] AsianMix Lora] (baseModel: Krea2 Turbo) 与底模 [black-forest-labs/flux-dev] (baseModel: FLUX.1) 架构不兼容，未发送至上游。'
+      'LoRA [[Krea2 Turbo] AsianMix Lora] (baseModel: Krea2 Turbo) 与底模 [black-forest-labs/flux-dev] (baseModel: FLUX.1) 架构可能不兼容，已提交上游裁决。'
     );
   });
 

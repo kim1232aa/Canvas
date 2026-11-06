@@ -1077,17 +1077,6 @@ function getProviderBaseUrl(provider: AuthProvider): { baseUrl: string; error?: 
   return { baseUrl };
 }
 
-function rejectSchemaEnum(
-  _res: express.Response,
-  _provider: SchemaProvider,
-  _model: string,
-  _field: FieldKey,
-  _value: unknown,
-): boolean {
-  // 2026-11-04 (雁): enum values are sent as filled; upstream decides.
-  return false;
-}
-
 // Helper to create GoogleGenAI client with key rotation and standard aistudio-build telemetry
 const createGoogleGenAI = (apiKey?: string) => {
   const effectiveKey = keyPoolManager.getNextKey('gemini', apiKey);
@@ -3279,7 +3268,6 @@ app.post(['/api/fal/generate', '/api/generate', '/api/engine/fal/generate'], asy
 registerVideoGenerateRoutes(app, {
   isProvided,
   forwardUnmappedFields,
-  rejectSchemaEnum,
   normalizeFalEndpoint,
   resolveProviderAuth,
   upstreamFetch,
@@ -4523,7 +4511,7 @@ app.post(['/api/tensorart/generate', '/api/engine/tensorart/generate'], async (r
 
     if (!isNumericModelId) {
       return res.status(400).json({
-        error: `Tensor.Art 模型 API 只接受 TAMS 数字模型 ID（收到 ${requestedModelOrTool || '(空)'}）。OpenWorks 模型请在模型中心选择「Tensor.Art OpenWorks」服务商。`,
+        error: `没发出去：TAMS 模型接口需要数字 ID（收到 "${requestedModelOrTool || '(空)'}"）`,
         errorSource: 'local',
         requestedModel: requestedModelOrTool,
       });
@@ -4555,11 +4543,6 @@ app.post(['/api/tensorart/generate', '/api/engine/tensorart/generate'], async (r
         requestedModel: modelId,
       });
     }
-    const checkpoint = (await metadata.json()).model;
-    if (checkpoint?.modelType && checkpoint.modelType !== 'CHECKPOINT') {
-      return res.status(400).json({ error: '所选模型不是 CHECKPOINT，不能作为底模', model: checkpoint });
-    }
-
     // Submit job
     const submitted = await upstreamFetch(
       { provider: 'tensorart', route: req.path, model: modelId, key: tamsKey },

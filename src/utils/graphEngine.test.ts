@@ -7,6 +7,9 @@ import { NormalizedGenerateResult } from '../engines/types';
 import * as api from '../services/api';
 
 describe('graphEngine - B2 & L2a & L2b 拓扑反向追踪与参数抽取隔离测试', () => {
+  beforeEach(() => {
+    vi.spyOn(api, 'getStoredApiKeys').mockReturnValue({} as any);
+  });
   it('takes recipe and guards from the model-chain checkpoint rather than CLIP-source checkpoint',()=>{
     const a=createNode('a','CheckpointLoaderSimple',{ckpt_name:'A',targetProvider:'civitai',civitai_engine:'sdcpp',import_unresolved_resource:true});
     const b=createNode('b','CheckpointLoaderSimple',{ckpt_name:'B',targetProvider:'civitai',civitai_engine:'comfy'});
@@ -23,7 +26,9 @@ describe('graphEngine - B2 & L2a & L2b 拓扑反向追踪与参数抽取隔离�
     expect(touched).not.toContain('input');
   });
   it('guards unresolved models and pending video source chains independently of connected LoRAs',()=>{
-    expect(()=>extractWorkflowParameters([createNode('c','CheckpointLoaderSimple',{ckpt_name:'original',targetProvider:'civitai',prompt:'test',import_unresolved_resource:true})],[])).toThrow(/底模.*重新选择/);
+    // Unresolved model is allowed to send without pre-send throw
+    const extracted = extractWorkflowParameters([createNode('c','CheckpointLoaderSimple',{ckpt_name:'original',targetProvider:'civitai',prompt:'test',import_unresolved_resource:true})],[]);
+    expect(extracted.unresolvedModel).toBe(true);
     expect(()=>extractWorkflowParameters([createNode('v','AIVideoNode',{model:'fal-ai/minimax/video-01',targetProvider:'fal',prompt:'test',source_lora_air:'original-source',execution_blocked_reason:'来源执行链尚未接入'})],[])).toThrow(/来源执行链尚未接入/);
     expect(()=>extractWorkflowParameters([createNode('v','AIVideoNode',{model:'fal-ai/minimax/video-01',targetProvider:'fal',prompt:'test',source_lora_air:'original-source'})],[])).toThrow(/来源.*执行链/);
   });
@@ -665,7 +670,7 @@ describe('graphEngine - B2 & L2a & L2b 拓扑反向追踪与参数抽取隔离�
     expect(params.initImageUrl).toBeUndefined();
   });
 
-  it('L2b: 提示词为空时不再使用硬编码兜底文案，而是抛出「请填写提示词」错误', () => {
+  it('L2b: 提示词为空时不阻断出站，原样发出并由上游裁决', () => {
     const nodes: NodeInstance[] = [
       createNode('video-node', 'AIVideoNode', {
         model: 'fal-ai/wan-t2v',
@@ -674,9 +679,8 @@ describe('graphEngine - B2 & L2a & L2b 拓扑反向追踪与参数抽取隔离�
       }),
     ];
 
-    expect(() => {
-      extractWorkflowParameters(nodes, [], 'video-node');
-    }).toThrow('请填写提示词');
+    const extracted = extractWorkflowParameters(nodes, [], 'video-node');
+    expect(extracted.positivePrompt).toBe('');
   });
 
   it('B2: 节点未选模型时抛出「请先选择模型」错误，绝不借用画布上其它节点的模型', () => {
@@ -992,6 +996,9 @@ describe('F5 omit unset seed/sampler defaults', () => {
 
 
 describe('graphEngine - F4 AIVideoNode provider sync / reject empty & mismatch', () => {
+  beforeEach(() => {
+    vi.spyOn(api, 'getStoredApiKeys').mockReturnValue({} as any);
+  });
   const createNode = (id: string, type: string, values: Record<string, any>): NodeInstance => ({
     id,
     type,
@@ -1205,25 +1212,23 @@ describe('graphEngine - F4 AIVideoNode provider sync / reject empty & mismatch',
       seed: 123,
     });
 
-    await expect(
-      executeWorkflow(
-        nodes,
-        connections,
-        (nodeId, state, _progress, _data, error) => {
-          nodeStates.push({ nodeId, state, error });
-        },
-        undefined,
-        'rep-1'
-      )
-    ).rejects.toThrow(/LoRA .* 与底模 .* 架构不兼容，拒绝静默丢弃执行/);
+    const res = await executeWorkflow(
+      nodes,
+      connections,
+      (nodeId, state, _progress, _data, error) => {
+        nodeStates.push({ nodeId, state, error });
+      },
+      undefined,
+      'rep-1'
+    );
 
-    // Generation must NOT be triggered upstream when LoRA is incompatible
-    expect(spy).not.toHaveBeenCalled();
+    // Generation MUST be triggered upstream; LoRA is sent as filled, upstream decides
+    expect(spy).toHaveBeenCalled();
+    expect(res).toBeDefined();
 
-    // LoRA node must receive error state with the exact reason
+    // LoRA node must NOT be aborted with error
     const loraError = nodeStates.find((s) => s.nodeId === 'lora-1' && s.state === 'error');
-    expect(loraError).toBeDefined();
-    expect(loraError?.error).toContain('架构不兼容，拒绝静默丢弃执行');
+    expect(loraError).toBeUndefined();
   });
 
   it('retains LoRA trigger words when LLMReasoningNode rewrites prompt without them', async () => {

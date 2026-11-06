@@ -1016,30 +1016,22 @@ export function extractWorkflowParameters(
     if (lockReason && !loras.some(l => String(l.name || '').trim())) throw new Error(String(lockReason));
   }
 
-  // 4. Validate mandatory positive prompt (L2b: NO fallback to hardcoded string!)
-  if (!positivePrompt || !positivePrompt.trim()) {
-    throw new Error('请填写提示词');
-  }
-
-  // Append LoRA triggers if needed (only for architecture-compatible LoRAs)
-  const originalPositivePrompt = positivePrompt;
-  const compatibleLorasForTriggers = loras.filter(
-    (l) => checkLoraArchitectureCompatibility(checkpointModel, checkpointBaseModel, l).compatible
-  );
-  const triggerWordsAll = compatibleLorasForTriggers
+  // Positive prompt: sent as filled; upstream decides (no pre-send throw on empty prompt)
+  const originalPositivePrompt = positivePrompt || '';
+  const triggerWordsAll = loras
     .map((l) => l.triggerWords)
     .filter(Boolean)
     .join(', ');
 
-  let finalPositive = positivePrompt;
+  let finalPositive = positivePrompt || '';
   if (triggerWordsAll && !finalPositive.includes(triggerWordsAll)) {
-    finalPositive = `${triggerWordsAll}, ${finalPositive}`.trim();
+    finalPositive = finalPositive ? `${triggerWordsAll}, ${finalPositive}`.trim() : triggerWordsAll;
   }
 
   const recipeNode = modelCheckpoint(nodes,connections,execNode.id) || Array.from(subgraphNodeIds).map(id=>nodeMap.get(id)).find(n=>n?.type==='CheckpointLoaderSimple' && (n.values.ckpt_name===checkpointModel || n.values.model===checkpointModel)) || execNode;
   const recipeValues = recipeNode.values;
   const isModelUnresolved = (recipeValues.import_unresolved_resource === true || recipeValues.unresolvedResource === true) && recipeValues.resourceVerified !== true;
-  if (isModelUnresolved) throw new Error(`底模 ${checkpointModel || '未指定'} 尚未核实，请重新选择已核实资源`);
+  // Unresolved model: sent as filled; upstream decides (no pre-send throw)
   const hasRealLora = loras.some(l => String(l.name || '').trim());
   // pendingRecipe: clear TopBar lock once a real LoRA is on the chain (same rule as the early subgraph guard).
   if (recipeValues.execution_blocked_reason && !hasRealLora) throw new Error(String(recipeValues.execution_blocked_reason));
@@ -1176,19 +1168,13 @@ export async function executeWorkflow(
         params.checkpointBaseModel,
         l
       );
-      // Schema-driven providers: LoRA support is decided only by the server provider
-      // table (unified 「没有发出去」 + history) or by upstream verbatim — no
-      // name-heuristic frontend gate.
-      // Video: the endpoint's live Schema / upstream decides LoRA fit (no name-based local gate).
-      if (!compat.compatible && !params.isVideo && !isSchemaDrivenProvider(params.targetProvider)) {
-        const reason = `LoRA [${l.name}] 与底模 [${params.checkpointModel}] 架构不兼容，拒绝静默丢弃执行`;
-        if (l.nodeId) {
-          onNodeStateChange(l.nodeId, 'error', 0, undefined, reason);
-        }
-        throw new Error(reason);
-      } else {
-        compatibleLoras.push(l);
+      // All LoRAs are sent as filled; upstream decides (no pre-send blocking throw).
+      // Non-blocking hint only when catalog metadata explicitly differ.
+      if (!compat.compatible && compat.hint && l.nodeId) {
+        // Non-blocking hint, does not throw or abort execution
+        console.warn(`[LoRA Hint] ${compat.hint}`);
       }
+      compatibleLoras.push(l);
     }
 
     // 0. 前置大模型深度推理思考阶段 (LLM Reasoning Pre-Execution Pipeline)
