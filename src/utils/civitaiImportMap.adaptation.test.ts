@@ -129,9 +129,84 @@ describe('Cross-Provider Civitai Recipe Adaptation Engine', () => {
     });
   });
 
+  const falSchemaOptions = {
+    targetModel: 'fal-ai/flux-lora',
+    targetSchema: {
+      loras: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: { path: { type: 'string' }, scale: { type: 'number' } },
+        },
+      },
+    },
+  };
+  const replicateSchemaOptions = {
+    targetModel: 'black-forest-labs/flux-dev-lora',
+    targetSchema: {
+      lora_weights: { type: 'string' },
+      extra_lora: { type: 'string' },
+      lora_scale: { type: 'number' },
+    },
+  };
+  const wavespeedSchemaOptions = {
+    targetModel: 'wavespeed-ai/flux-dev-lora',
+    targetSchema: {
+      loras: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: { path: { type: 'string' }, scale: { type: 'number' } },
+        },
+      },
+    },
+  };
+  const modelscopeSchemaOptions = {
+    targetModel: 'AI-ModelScope/flux-dev-lora',
+    targetSchema: {
+      loras: {
+        type: 'array',
+        items: { type: 'string' },
+      },
+    },
+  };
+  const novitaSchemaOptions = {
+    targetModel: 'sd_xl_base_1.0.safetensors',
+    targetSchema: {
+      loras: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: { model_name: { type: 'string' }, strength: { type: 'number' } },
+        },
+      },
+    },
+  };
+  const tensorartSchemaOptions = {
+    targetModel: 'tensor-flux',
+    targetSchema: {
+      loras: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: { id: { type: 'string' }, strength: { type: 'number' } },
+        },
+      },
+    },
+  };
+  const sogniSchemaOptions = {
+    targetModel: 'flux-3-klein',
+    targetSchema: {
+      loras: {
+        type: 'array',
+        items: { type: 'string' },
+      },
+    },
+  };
+
   describe('2. Fal.ai Adaptation', () => {
     it('adapts SDXL recipe to Fal.ai with public download URL and image_size', () => {
-      const result = adaptCivitaiRecipeToProvider(sampleSdxlRecipe, 'fal');
+      const result = adaptCivitaiRecipeToProvider(sampleSdxlRecipe, 'fal', falSchemaOptions);
       expect(result.fields.checkpoint.status).toBe('manual_selection');
       expect(result.fields.size.targetField).toBe('image_size');
       expect(result.fields.size.mappedValue).toEqual({ width: 1024, height: 1024 });
@@ -145,20 +220,20 @@ describe('Cross-Provider Civitai Recipe Adaptation Engine', () => {
     });
 
     it('marks requireAuth LoRA as requires_consent to prevent leaking user API token without consent', () => {
-      const result = adaptCivitaiRecipeToProvider(sampleFluxRecipe, 'fal', { allowTokenInUrl: false });
+      const result = adaptCivitaiRecipeToProvider(sampleFluxRecipe, 'fal', { ...falSchemaOptions, allowTokenInUrl: false });
       expect(result.loras[0].requiresAuthConsent).toBe(true);
       expect(result.loras[0].status).toBe('requires_consent');
       expect(result.loras[0].reason).toContain('严禁在未经用户显式 UI 授权时向');
     });
 
     it('allows download URL when token consent is granted', () => {
-      const result = adaptCivitaiRecipeToProvider(sampleFluxRecipe, 'fal', { allowTokenInUrl: true });
+      const result = adaptCivitaiRecipeToProvider(sampleFluxRecipe, 'fal', { ...falSchemaOptions, allowTokenInUrl: true });
       expect(result.loras[0].status).toBe('compatible');
       expect(result.loras[0].sendableUrlOrId).toContain('https://civitai.com/api/download/models/666222');
     });
 
     it('marks negative_prompt unsupported on fal-ai/flux-lora', () => {
-      const result = adaptCivitaiRecipeToProvider(sampleFluxRecipe, 'fal');
+      const result = adaptCivitaiRecipeToProvider(sampleFluxRecipe, 'fal', falSchemaOptions);
       expect(result.fields.negativePrompt.status).toBe('unsupported');
       expect(result.fields.negativePrompt.humanMessage).toContain('fal-ai/flux-lora 官方 Schema 无 negative_prompt 字段');
     });
@@ -176,7 +251,7 @@ describe('Cross-Provider Civitai Recipe Adaptation Engine', () => {
           { name: 'LoRA 3 (excess)', civitaiId: '333', baseModel: 'Flux.1 D', strength: 0.5, downloadUrl: 'https://civitai.com/api/download/models/333' },
         ],
       };
-      const result = adaptCivitaiRecipeToProvider(multiLoraRecipe, 'replicate', { allowTokenInUrl: true });
+      const result = adaptCivitaiRecipeToProvider(multiLoraRecipe, 'replicate', { ...replicateSchemaOptions, allowTokenInUrl: true });
       expect(result.fields.size.mappedValue).toEqual({ aspect_ratio: '4:3', megapixels: '1' });
       expect(result.fields.cfg.targetField).toBe('guidance');
       expect(result.fields.steps.targetField).toBe('num_inference_steps');
@@ -196,7 +271,7 @@ describe('Cross-Provider Civitai Recipe Adaptation Engine', () => {
 
   describe('4. WaveSpeed Adaptation', () => {
     it('maps size to width*height format and requires exact architecture match', () => {
-      const result = adaptCivitaiRecipeToProvider(sampleSdxlRecipe, 'wavespeed');
+      const result = adaptCivitaiRecipeToProvider(sampleSdxlRecipe, 'wavespeed', wavespeedSchemaOptions);
       expect(result.fields.size.mappedValue).toBe('1024*1024');
       expect(result.fields.steps.targetField).toBe('num_inference_steps');
       expect(result.fields.cfg.targetField).toBe('guidance_scale');
@@ -207,7 +282,7 @@ describe('Cross-Provider Civitai Recipe Adaptation Engine', () => {
 
   describe('5. ModelScope (CN & AI) Adaptation', () => {
     it('flags external LoRA as requires_reselection and maps size to WxH', () => {
-      const result = adaptCivitaiRecipeToProvider(sampleSdxlRecipe, 'modelscope');
+      const result = adaptCivitaiRecipeToProvider(sampleSdxlRecipe, 'modelscope', modelscopeSchemaOptions);
       expect(result.fields.size.mappedValue).toBe('1024x1024');
       expect(result.fields.steps.targetField).toBe('steps');
       expect(result.fields.cfg.targetField).toBe('guidance');
@@ -222,7 +297,7 @@ describe('Cross-Provider Civitai Recipe Adaptation Engine', () => {
 
   describe('6. Novita AI Adaptation', () => {
     it('merges scheduler into sampler_name and supports clip_skip', () => {
-      const result = adaptCivitaiRecipeToProvider(sampleSdxlRecipe, 'novita');
+      const result = adaptCivitaiRecipeToProvider(sampleSdxlRecipe, 'novita', novitaSchemaOptions);
       expect(result.fields.sampler.targetField).toBe('sampler_name');
       expect(result.fields.sampler.mappedValue).toBe('dpmpp_2m Karras');
       expect(result.fields.scheduler.status).toBe('unsupported'); // Merged
@@ -235,7 +310,7 @@ describe('Cross-Provider Civitai Recipe Adaptation Engine', () => {
 
   describe('7. Tensor.Art TAMS Adaptation', () => {
     it('maps all parameters to TAMS diffusion.* structure and supports clipSkip', () => {
-      const result = adaptCivitaiRecipeToProvider(sampleSdxlRecipe, 'tensorart');
+      const result = adaptCivitaiRecipeToProvider(sampleSdxlRecipe, 'tensorart', tensorartSchemaOptions);
       expect(result.fields.prompt.targetField).toBe('diffusion.prompts[0].text');
       expect(result.fields.negativePrompt.targetField).toBe('diffusion.negativePrompts[0].text');
       expect(result.fields.steps.targetField).toBe('diffusion.steps');
@@ -251,7 +326,7 @@ describe('Cross-Provider Civitai Recipe Adaptation Engine', () => {
 
   describe('8. Sogni & NanoGPT & Hugging Face Adaptations', () => {
     it('Sogni marks steps and sampler unsupported, requires Sogni catalog ID for LoRA', () => {
-      const result = adaptCivitaiRecipeToProvider(sampleSdxlRecipe, 'sogni');
+      const result = adaptCivitaiRecipeToProvider(sampleSdxlRecipe, 'sogni', sogniSchemaOptions);
       expect(result.fields.steps.status).toBe('unsupported');
       expect(result.fields.sampler.status).toBe('unsupported');
       expect(result.fields.cfg.targetField).toBe('guidance');
@@ -259,21 +334,21 @@ describe('Cross-Provider Civitai Recipe Adaptation Engine', () => {
       expect(result.loras[0].reason).toContain('Sogni 仅支持其官方目录');
     });
 
-    it('NanoGPT standard endpoint marks loras and negativePrompt unsupported', () => {
+    it('NanoGPT standard endpoint marks loras unverified and negativePrompt unsupported', () => {
       const result = adaptCivitaiRecipeToProvider(sampleSdxlRecipe, 'nanogpt');
-      expect(result.loras[0].status).toBe('unsupported');
+      expect(result.loras[0].status).toBe('unverified');
       expect(result.fields.negativePrompt.status).toBe('unsupported');
       expect(result.fields.steps.status).toBe('unsupported');
     });
 
-    it('Hugging Face Inference Providers maps to parameters.* and marks loras unsupported', () => {
+    it('Hugging Face Inference Providers maps to parameters.* and marks loras unverified', () => {
       const result = adaptCivitaiRecipeToProvider(sampleSdxlRecipe, 'huggingface');
       expect(result.fields.prompt.targetField).toBe('inputs');
       expect(result.fields.negativePrompt.targetField).toBe('parameters.negative_prompt');
       expect(result.fields.steps.targetField).toBe('parameters.num_inference_steps');
       expect(result.fields.cfg.targetField).toBe('parameters.guidance_scale');
       expect(result.fields.scheduler.targetField).toBe('parameters.scheduler');
-      expect(result.loras[0].status).toBe('unsupported');
+      expect(result.loras[0].status).toBe('unverified');
     });
   });
 
@@ -383,7 +458,7 @@ describe('Cross-Provider Civitai Recipe Adaptation Engine', () => {
           { name: 'AuthLoRA', versionId: '999888', strength: 0.8, requireAuth: true, downloadUrl: 'https://civitai.com/api/download/models/999888' },
         ],
       };
-      const withToken = adaptCivitaiRecipeToProvider(authRecipe, 'fal', { allowTokenInUrl: true, civitaiToken: 'my_civitai_token_abc' });
+      const withToken = adaptCivitaiRecipeToProvider(authRecipe, 'fal', { ...falSchemaOptions, allowTokenInUrl: true, civitaiToken: 'my_civitai_token_abc' });
       expect(withToken.loras[0].status).toBe('compatible');
       expect(withToken.loras[0].sendableUrlOrId).toBe('https://civitai.com/api/download/models/999888?token=my_civitai_token_abc');
     });
@@ -434,7 +509,7 @@ describe('Cross-Provider Civitai Recipe Adaptation Engine', () => {
       expect(civitaiResult.loras[0].reason).toContain('canGenerate: false');
       expect(civitaiResult.warnings.some((w) => w.includes('canGenerate: false'))).toBe(true);
 
-      const falResult = adaptCivitaiRecipeToProvider(recipeWithNoGenLora, 'fal');
+      const falResult = adaptCivitaiRecipeToProvider(recipeWithNoGenLora, 'fal', falSchemaOptions);
       expect(falResult.loras[0].status).toBe('compatible');
       expect(falResult.loras[0].sendableUrlOrId).toContain('https://civitai.com/api/download/models/454703');
     });

@@ -20,7 +20,7 @@ import {
   ProviderLoraAdaptation,
 } from '../utils/civitaiImportMap';
 import { ProviderModelSelect } from './ProviderModelSelect';
-import { getModelSchemaEntry, subscribeModelSchema } from '../services/modelSchemaCache';
+import { ensureModelSchema, getModelSchemaEntry, subscribeModelSchema } from '../services/modelSchemaCache';
 
 export interface CivitaiModalImportPreviewProps {
   adaptation: ProviderAdaptationResult;
@@ -74,6 +74,12 @@ export const CivitaiModalImportPreview: React.FC<CivitaiModalImportPreviewProps>
   React.useEffect(() => {
     return subscribeModelSchema(() => setSchemaTick((t) => t + 1));
   }, []);
+
+  React.useEffect(() => {
+    if (selectedProvider && targetModel && selectedProvider !== 'civitai') {
+      ensureModelSchema(selectedProvider, targetModel);
+    }
+  }, [selectedProvider, targetModel]);
 
   const schemaEntry = getModelSchemaEntry(selectedProvider, targetModel);
 
@@ -160,21 +166,22 @@ export const CivitaiModalImportPreview: React.FC<CivitaiModalImportPreviewProps>
               value={targetModel || ''}
               onChange={(m) => {
                 onSelectTargetModel?.(m);
+                ensureModelSchema(selectedProvider, m);
               }}
             />
             {schemaEntry?.status === 'ready' && (
-              <p className="text-[10px] text-emerald-400 font-mono">
+              <p className="text-[10px] text-emerald-400 font-mono" data-testid="schema-ready-note">
                 ✔ 实时 Schema 已就绪（包含 {schemaEntry.properties?.length || 0} 个官方参数定义，LoRA 与生图契约直接由该 Schema 约束）
               </p>
             )}
             {schemaEntry?.status === 'loading' && (
-              <p className="text-[10px] text-amber-400 font-mono">
+              <p className="text-[10px] text-amber-400 font-mono" data-testid="schema-loading-note">
                 ⏳ 正在读取目标模型官方 Schema...
               </p>
             )}
             {schemaEntry?.status === 'error' && (
-              <p className="text-[10px] text-rose-400 font-mono">
-                ⚠ 目标端点 Schema 获取失败；未核实，将按原值提交上游裁决。
+              <p className="text-[10px] text-rose-400 font-mono" data-testid="schema-error-note">
+                ⚠ 目标端点 Schema 获取失败；未核实: {schemaEntry.error || '获取失败'}
               </p>
             )}
             {!targetModel && (
@@ -251,6 +258,7 @@ export const CivitaiModalImportPreview: React.FC<CivitaiModalImportPreviewProps>
 
           <div className="space-y-2">
             {adaptation.loras.map((lora, idx) => {
+              const isUnverified = lora.status === 'unverified';
               const isCompatible = lora.status === 'compatible';
               const isConsent = lora.status === 'requires_consent';
               const isMismatch = lora.status === 'architecture_mismatch';
@@ -260,12 +268,16 @@ export const CivitaiModalImportPreview: React.FC<CivitaiModalImportPreviewProps>
                 <div
                   key={idx}
                   className={`p-3 rounded-lg border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${
-                    isCompatible
+                    isUnverified
+                      ? 'bg-amber-950/10 border-amber-800/30'
+                      : isCompatible
                       ? 'bg-[#191a26] border-purple-900/40'
                       : isConsent
                       ? 'bg-amber-950/20 border-amber-800/40'
                       : isMismatch
                       ? 'bg-rose-950/20 border-rose-800/40'
+                      : isReselect
+                      ? 'bg-blue-950/20 border-blue-800/40'
                       : 'bg-[#1b1c28] border-slate-700/40'
                   }`}
                   data-testid={`import-lora-card-${idx}`}
@@ -291,19 +303,26 @@ export const CivitaiModalImportPreview: React.FC<CivitaiModalImportPreviewProps>
                             ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
                             : lora.canGenerate === false && selectedProvider === 'civitai'
                             ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                            : isUnverified
+                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
                             : isCompatible
                             ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
                             : isConsent
                             ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
                             : isMismatch
                             ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
-                            : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                            : isReselect
+                            ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                            : 'bg-slate-500/20 text-slate-300 border border-slate-500/30'
                         }`}
+                        data-testid={`import-lora-status-${idx}`}
                       >
                         {lora.unresolvedReason
                           ? '解析失败 / 未核实'
                           : lora.canGenerate === false && selectedProvider === 'civitai'
                           ? 'Civitai 未启用在线生成'
+                          : isUnverified
+                          ? '未核实'
                           : isCompatible
                           ? '可直接发送'
                           : isConsent
@@ -320,8 +339,8 @@ export const CivitaiModalImportPreview: React.FC<CivitaiModalImportPreviewProps>
                       </span>
                     </div>
 
-                    <p className="text-[11px] text-slate-300 font-mono leading-relaxed">
-                      {lora.unresolvedReason || lora.reason}
+                    <p className="text-[11px] text-slate-300 font-mono leading-relaxed" data-testid={`import-lora-reason-${idx}`}>
+                      {lora.reason || lora.unresolvedReason}
                     </p>
 
                     {lora.sendableUrlOrId && (

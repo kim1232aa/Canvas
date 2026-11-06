@@ -209,7 +209,16 @@ describe('resolveRawImportNegativeSamplerScheduler (plain-text import)', () => {
             },
           ],
         },
-        'fal'
+        'fal',
+        {
+          targetSchema: {
+            loras: {
+              items: {
+                properties: { path: { type: 'string' }, scale: { type: 'number' } },
+              },
+            },
+          },
+        }
       );
 
       const lora = result.loras[0];

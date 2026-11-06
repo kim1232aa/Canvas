@@ -294,7 +294,7 @@ export interface CivitaiRecipeInput {
   hasInitImage?: boolean;
 }
 
-const PROVIDER_LORA_CAPS: Record<string, { cap: number; source: string }> = {};
+export const PROVIDER_LORA_CAPS: Record<string, { cap: number; source: string }> = {};
 
 const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
   civitai: 'Civitai (原生生成引擎)',
@@ -657,7 +657,21 @@ export function adaptCivitaiRecipeToProvider(
         status: 'unverified',
         reason: targetSpec.reason || `未获取到 ${displayName} 实时 Schema；生成时将按原值提交上游裁决。`,
       });
-    } else if (targetSpec.status === 'unsupported') {
+    } else if (targetSpec.status === 'requires_reselection') {
+      let reselectReason = targetSpec.reason || '目标模型需要从目录重新选用 LoRA';
+      if (provider === 'modelscope' || provider === 'modelscope_ai') {
+        reselectReason = `${displayName} 仅支持魔搭社区内部的 LoRA 仓库 ID (如 owner/model-lora)，不支持外部 URL 或 Civitai AIR，需从魔搭模型库选用对应 LoRA。`;
+      } else if (provider === 'sogni') {
+        reselectReason = `Sogni 仅支持其官方目录公布的 LoRA ID (如 krea2-detail-enhancer)，不支持外部 URL 或 Civitai AIR。`;
+      } else if (provider === 'novita') {
+        reselectReason = `Novita AI 仅支持其模型库已录入或用户自定义上传的 sd_name_in_api，不支持外部直链或 Civitai AIR，需在 Novita 目录选用。`;
+      } else if (provider === 'tensorart') {
+        reselectReason = `Tensor.Art TAMS 仅支持平台内部的纯数字 LoRA ID，不支持外部 URL 或 Civitai AIR。`;
+      } else if (provider === 'krea') {
+        reselectReason = `Krea 官方生图接口通过 styles 挂载 LoRA，需要其样式目录公布的 style ID。`;
+      } else if (provider === 'modelslab') {
+        reselectReason = `ModelsLab 接受 lora_model 目录模型名与 lora_strength。`;
+      }
       adaptedLoras.push({
         name: loraName,
         originalStrength,
@@ -666,11 +680,59 @@ export function adaptCivitaiRecipeToProvider(
         modelId,
         versionId,
         baseModel: loraBaseModel,
-        targetFormat: 'unsupported',
-        status: 'unsupported',
-        reason: targetSpec.reason || `${displayName} 官方接口未声明 LoRA 字段。`,
+        targetFormat: targetSpec.format || 'catalog_id',
+        status: 'requires_reselection',
+        reason: reselectReason,
       });
-    } else if (['fal', 'wavespeed', 'aimlapi', 'muapi'].includes(provider)) {
+    } else if (targetSpec.format === 'air') {
+      if (provider === 'runware') {
+        const runwareAir = modelId && versionId ? `civitai:${modelId}@${versionId}` : canonicalAir || directDownloadUrl;
+        if (!runwareAir) {
+          adaptedLoras.push({
+            name: loraName,
+            originalStrength,
+            originalClipStrength,
+            civitaiId: versionId,
+            modelId,
+            versionId,
+            baseModel: loraBaseModel,
+            targetFormat: 'air',
+            status: 'requires_reselection',
+            reason: '缺少模型标识或 AIR，无法构造 Runware LoRA；需在目标库中重新选用。',
+          });
+        } else {
+          adaptedLoras.push({
+            name: loraName,
+            originalStrength,
+            originalClipStrength,
+            civitaiId: versionId,
+            modelId,
+            versionId,
+            baseModel: loraBaseModel,
+            targetFormat: 'air',
+            sendableUrlOrId: runwareAir,
+            scale: originalStrength,
+            status: 'compatible',
+            reason: `将作为 Runware lora[].model AIR 传入 (weight: ${originalStrength})`,
+          });
+        }
+      } else {
+        adaptedLoras.push({
+          name: loraName,
+          originalStrength,
+          originalClipStrength,
+          civitaiId: versionId,
+          modelId,
+          versionId,
+          baseModel: loraBaseModel,
+          targetFormat: 'air',
+          sendableUrlOrId: canonicalAir,
+          scale: originalStrength,
+          status: 'compatible',
+          reason: `将作为 ${displayName} ${targetSpec.pathOrKeyProp || 'air'} 传入 (strength: ${originalStrength})`,
+        });
+      }
+    } else if ((targetSpec.format === 'download_url' && provider !== 'replicate') || ['fal', 'wavespeed', 'aimlapi', 'muapi'].includes(provider)) {
       if (isArchMismatch) {
         adaptedLoras.push({
           name: loraName,
@@ -685,43 +747,13 @@ export function adaptCivitaiRecipeToProvider(
           status: 'architecture_mismatch',
           reason: `LoRA 架构 (${loraBaseModel}) 与目标 ${displayName} 端点架构 (${baseModelRaw || ecosystem}) 不匹配。`,
         });
-      } else if (l.requireAuth) {
-        if (options?.allowTokenInUrl) {
-          if (!directDownloadUrl) {
-            adaptedLoras.push({
-              name: loraName,
-              originalStrength,
-              originalClipStrength,
-              civitaiId: versionId,
-              modelId,
-              versionId,
-              baseModel: loraBaseModel,
-              targetFormat: 'unsupported',
-              requiresAuthConsent: true,
-              scale: originalStrength,
-              status: 'requires_reselection',
-              reason: `已获用户授权，但缺少官方真实下载链接 (downloadUrl)，无法向 ${displayName} 发送权重直链；绝不向应用构造的 URL 附加凭据。`,
-            });
-          } else {
-            const tokenParam = options?.civitaiToken ? `?token=${options.civitaiToken}` : '';
-            const authenticatedUrl = `${directDownloadUrl}${tokenParam}`;
-            adaptedLoras.push({
-              name: loraName,
-              originalStrength,
-              originalClipStrength,
-              civitaiId: versionId,
-              modelId,
-              versionId,
-              baseModel: loraBaseModel,
-              targetFormat: 'download_url',
-              sendableUrlOrId: authenticatedUrl,
-              requiresAuthConsent: true,
-              scale: originalStrength,
-              status: 'compatible',
-              reason: `已获用户显式 UI 授权，向 ${displayName} 发送带 Civitai Token 的下载链接 (scale: ${originalStrength})`,
-            });
-          }
-        } else {
+      } else {
+        const sendable = buildSendableLoraUrl(directDownloadUrl, {
+          allowTokenInUrl: options?.allowTokenInUrl,
+          civitaiToken: options?.civitaiToken,
+          requireAuth: l.requireAuth,
+        });
+        if (sendable.requiresConsent) {
           adaptedLoras.push({
             name: loraName,
             originalStrength,
@@ -736,35 +768,38 @@ export function adaptCivitaiRecipeToProvider(
             status: 'requires_consent',
             reason: `该 Civitai LoRA 上游标记为需登录鉴权下载 (requireAuth=true)；严禁在未经用户显式 UI 授权时向 ${displayName} 附带 Civitai API Token（避免个人凭据泄露）。需在界面点击授权后方可附加 Token 发送。`,
           });
+        } else if (!sendable.url) {
+          adaptedLoras.push({
+            name: loraName,
+            originalStrength,
+            originalClipStrength,
+            civitaiId: versionId,
+            modelId,
+            versionId,
+            baseModel: loraBaseModel,
+            targetFormat: 'unsupported',
+            status: 'requires_reselection',
+            reason: `缺少官方真实下载链接 (downloadUrl)，无法向 ${displayName} 发送权重直链；需在目标库中重新选用。`,
+          });
+        } else {
+          adaptedLoras.push({
+            name: loraName,
+            originalStrength,
+            originalClipStrength,
+            civitaiId: versionId,
+            modelId,
+            versionId,
+            baseModel: loraBaseModel,
+            targetFormat: 'download_url',
+            sendableUrlOrId: sendable.url,
+            requiresAuthConsent: Boolean(l.requireAuth),
+            scale: originalStrength,
+            status: 'compatible',
+            reason: l.requireAuth && options?.allowTokenInUrl
+              ? `已获用户显式 UI 授权，向 ${displayName} 发送带 Civitai Token 的下载链接 (scale: ${originalStrength})`
+              : `将作为 ${displayName} ${targetSpec.pathOrKeyProp || 'loras[].path'} 权重直链传入 (scale: ${originalStrength})`,
+          });
         }
-      } else if (!directDownloadUrl) {
-        adaptedLoras.push({
-          name: loraName,
-          originalStrength,
-          originalClipStrength,
-          civitaiId: versionId,
-          modelId,
-          versionId,
-          baseModel: loraBaseModel,
-          targetFormat: 'unsupported',
-          status: 'requires_reselection',
-          reason: `缺少官方真实下载链接 (downloadUrl)，无法向 ${displayName} 发送权重直链；需在目标库中重新选用。`,
-        });
-      } else {
-        adaptedLoras.push({
-          name: loraName,
-          originalStrength,
-          originalClipStrength,
-          civitaiId: versionId,
-          modelId,
-          versionId,
-          baseModel: loraBaseModel,
-          targetFormat: 'download_url',
-          sendableUrlOrId: directDownloadUrl,
-          scale: originalStrength,
-          status: 'compatible',
-          reason: `将作为 ${displayName} loras[].path 权重直链传入 (scale: ${originalStrength})`,
-        });
       }
     } else if (provider === 'replicate') {
       const fieldName = i === 0 ? 'lora_weights' : 'extra_lora';

@@ -74,17 +74,22 @@ export function normalizeEcosystem(baseModel?: string): string {
 
 /**
  * Resolves target schema LoRA capabilities and parameter specifications.
- * Uses live schema properties if provided, otherwise matches official provider conventions.
+ * Strictly live-schema driven:
+ * - If target is Civitai: uses native Civitai AIR specification.
+ * - If live schema properties are provided: derives field, format, and capabilities from the schema.
+ * - Otherwise (no model chosen, or schema is loading/error/missing): returns 'unverified'.
+ * There is NO hardcoded static provider fallback table.
  */
 export function inspectTargetSchemaForLoras(
   provider: string,
   targetModel?: string,
-  schemaProperties?: Record<string, any>
+  schemaProperties?: Record<string, any>,
+  schemaReasonOverride?: string
 ): TargetSchemaLoraSpec {
   const p = (provider || '').toLowerCase().trim();
 
   // 1. Live schema inspection if schemaProperties provided
-  if (schemaProperties && typeof schemaProperties === 'object') {
+  if (schemaProperties && typeof schemaProperties === 'object' && Object.keys(schemaProperties).length > 0) {
     // Styles (Krea)
     if (schemaProperties.styles) {
       const stylesProp = schemaProperties.styles;
@@ -97,8 +102,8 @@ export function inspectTargetSchemaForLoras(
         pathOrKeyProp: 'id',
         strengthProp: 'strength',
         maxItems,
-        status: 'supported',
-        reason: '目标端点声明 styles 数组；需使用该服务商样式目录的 style ID。',
+        status: 'requires_reselection',
+        reason: '目标端点声明 styles 数组；需使用该服务商样式目录公布的 style ID。',
         docSource: 'OpenAPI styles schema',
       };
     }
@@ -117,7 +122,7 @@ export function inspectTargetSchemaForLoras(
           format: 'catalog_id',
           maxItems,
           status: 'requires_reselection',
-          reason: '目标端点接受字符串 ID 数组；需使用该服务商模型目录的 LoRA ID。',
+          reason: '目标端点接受字符串 ID 数组；需使用该服务商模型目录公布的 LoRA ID。',
         };
       }
 
@@ -133,6 +138,20 @@ export function inspectTargetSchemaForLoras(
           maxItems,
           status: 'supported',
           reason: '目标端点接受 model/weight 对象；支持模型 AIR 或服务商模型 ID。',
+        };
+      }
+
+      if (itemProps.air) {
+        return {
+          provider: p,
+          model: targetModel,
+          field: 'loras',
+          format: 'air',
+          pathOrKeyProp: 'air',
+          strengthProp: 'strength',
+          maxItems,
+          status: 'supported',
+          reason: '目标端点声明 air 字段；支持规范 Civitai AIR (urn:air:...)。',
         };
       }
 
@@ -246,219 +265,44 @@ export function inspectTargetSchemaForLoras(
       };
     }
 
-    // Known official unsupported
-    if (p === 'venice') {
-      return {
-        provider: p,
-        model: targetModel,
-        format: 'unsupported',
-        status: 'unsupported',
-        reason: 'Venice 官方 GenerateImageRequest 无自定义 loras 数组参数 (实测报 400)。',
-        docSource: 'https://docs.venice.ai/api-reference/endpoint/image/generate',
-      };
-    }
-    if (p === 'deepinfra') {
-      return {
-        provider: p,
-        model: targetModel,
-        format: 'unsupported',
-        status: 'unsupported',
-        reason: 'DeepInfra 官方标准 OpenAI 生图接口无 LoRA 参数。',
-        docSource: 'https://docs.deepinfra.com/apis/image-generation',
-      };
-    }
-
     return {
       provider: p,
       model: targetModel,
-      format: 'custom',
-      status: 'unverified',
-      reason: '当前模型 Schema 未声明显式 LoRA 字段，将按用户填写原样提交上游裁决。',
+      format: "custom",
+      status: "unverified",
+      reason: "当前模型 Schema 未声明显式 LoRA 字段，将按用户填写原样提交上游裁决。",
     };
   }
 
-  // 2. Documented defaults when no live schema is provided
-  // Citations reflect primary source API documentation opened this session:
-  switch (p) {
-    case 'civitai':
-      return {
-        provider: p,
-        field: 'loras',
-        format: 'air',
-        status: 'supported',
-        reason: 'Civitai Orchestration 原生支持 AIR 模型规范字典/列表。',
-        docSource: 'https://developer.civitai.com/orchestration/guide/submitting-work.md',
-      };
-    case 'fal':
-      return {
-        provider: p,
-        field: 'loras',
-        format: 'download_url',
-        pathOrKeyProp: 'path',
-        strengthProp: 'scale',
-        status: 'supported',
-        reason: 'Fal.ai 端点支持 HTTP(S) Safetensors 直链与 scale (范围 0~4)。',
-        docSource: 'https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/lora',
-      };
-    case 'replicate':
-      return {
-        provider: p,
-        field: 'lora_weights',
-        format: 'download_url',
-        pathOrKeyProp: 'lora_weights',
-        strengthProp: 'lora_scale',
-        maxItems: 2,
-        status: 'supported',
-        reason: 'Replicate 官方模型端点支持 lora_weights 与 extra_lora 直链 Safetensors (最多支持 2 个 LoRA)。',
-        docSource: 'https://replicate.com/black-forest-labs/flux-dev-lora',
-      };
-    case 'runware':
-      return {
-        provider: p,
-        field: 'lora',
-        format: 'air',
-        pathOrKeyProp: 'model',
-        strengthProp: 'weight',
-        status: 'supported',
-        reason: 'Runware 原生支持 Civitai AIR (civitai:modelId@versionId) 与 Runware model ID。',
-        docSource: 'https://runware.ai/docs/en/image-inference/api-reference',
-      };
-    case 'wavespeed':
-      return {
-        provider: p,
-        field: 'loras',
-        format: 'download_url',
-        pathOrKeyProp: 'path',
-        strengthProp: 'scale',
-        status: 'supported',
-        reason: 'WaveSpeed 支持 HTTP(S) 直链 Safetensors 与 scale。',
-      };
-    case 'aimlapi':
-      return {
-        provider: p,
-        field: 'loras',
-        format: 'download_url',
-        pathOrKeyProp: 'path',
-        strengthProp: 'scale',
-        status: 'supported',
-        reason: 'AIMLAPI 支持 HTTP(S) 直链或 Hugging Face 仓库路径。',
-      };
-    case 'muapi':
-      return {
-        provider: p,
-        field: 'loras',
-        format: 'download_url',
-        pathOrKeyProp: 'path',
-        strengthProp: 'scale',
-        status: 'supported',
-        reason: 'MuAPI 支持 HTTP(S) 直链与 scale。',
-      };
-    case 'krea':
-      return {
-        provider: p,
-        field: 'styles',
-        format: 'styles',
-        pathOrKeyProp: 'id',
-        strengthProp: 'strength',
-        status: 'requires_reselection',
-        reason: 'Krea 官方生图接口通过 styles 挂载 LoRA，需要其样式目录公布的 style ID。',
-      };
-    case 'novita':
-      return {
-        provider: p,
-        field: 'loras',
-        format: 'model_name',
-        pathOrKeyProp: 'model_name',
-        strengthProp: 'strength',
-        status: 'requires_reselection',
-        reason: 'Novita AI 接受 model_name/strength；需使用 Novita 目录的 sd_name_in_api。',
-      };
-    case 'sogni':
-      return {
-        provider: p,
-        field: 'loras',
-        format: 'catalog_id',
-        status: 'requires_reselection',
-        reason: 'Sogni 接受 loras 目录 ID 数组与 loraStrengths 强度数组。',
-      };
-    case 'modelslab':
-      return {
-        provider: p,
-        field: 'lora_model',
-        format: 'catalog_id',
-        pathOrKeyProp: 'lora_model',
-        strengthProp: 'lora_strength',
-        status: 'requires_reselection',
-        reason: 'ModelsLab 接受 lora_model 与 lora_strength。',
-      };
-    case 'modelscope':
-    case 'modelscope_ai':
-      return {
-        provider: p,
-        field: 'loras',
-        format: 'repo_id',
-        status: 'requires_reselection',
-        reason: 'ModelScope 仅支持魔搭社区内部仓库 ID (owner/model-lora)。',
-      };
-    case 'tensorart':
-      return {
-        provider: p,
-        field: 'loras',
-        format: 'catalog_id',
-        status: 'requires_reselection',
-        reason: 'Tensor.Art TAMS 仅支持其内部数字 LoRA ID。',
-      };
-    case 'together':
-      return {
-        provider: p,
-        format: 'unsupported',
-        status: 'unsupported',
-        reason: 'Together 官方参数指南明文声明：image_loras no longer available / FLUX.2 拒绝此参数。',
-        docSource: 'https://docs.together.ai/docs/inference/images/parameters',
-      };
-    case 'venice':
-      return {
-        provider: p,
-        format: 'unsupported',
-        status: 'unsupported',
-        reason: 'Venice 官方 GenerateImageRequest 无自定义 loras 数组参数。',
-        docSource: 'https://api.venice.ai/doc/api/swagger.yaml',
-      };
-    case 'nanogpt':
-      return {
-        provider: p,
-        format: 'unsupported',
-        status: 'unsupported',
-        reason: 'NanoGPT 标准生图接口未提供 LoRA 参数字段。',
-        docSource: 'https://docs.nano-gpt.com/api-reference/image-generation.md',
-      };
-    case 'huggingface':
-      return {
-        provider: p,
-        format: 'unsupported',
-        status: 'unsupported',
-        reason: 'Hugging Face Inference Providers 官方参数表未声明 LoRA 字段。',
-        docSource: 'https://huggingface.co/docs/inference-providers/en/tasks/text-to-image',
-      };
-    case 'deepinfra':
-      return {
-        provider: p,
-        format: 'unsupported',
-        status: 'unsupported',
-        reason: 'DeepInfra 官方标准生图接口无 LoRA 字段。',
-        docSource: 'https://docs.deepinfra.com/apis/image-generation',
-      };
-    default:
-      return {
-        provider: p,
-        model: targetModel,
-        format: 'custom',
-        status: 'unverified',
-        reason: !targetModel
-          ? `未选择目标模型；请在上方选用目标模型以加载其实时 Schema 规范。`
-          : `未配置显式 LoRA Schema，将按用户填写原样提交上游裁决。`,
-      };
+  // 2. Native Civitai Orchestration provider (no remote schema needed)
+  if (p === "civitai") {
+    return {
+      provider: p,
+      field: "loras",
+      format: "air",
+      status: "supported",
+      reason: "Civitai Orchestration 原生支持 AIR 模型规范字典/列表。",
+      docSource: "https://civitai.com",
+    };
   }
+
+  // 3. Any other provider without live schema -> unverified
+  let reason = schemaReasonOverride;
+  if (!reason) {
+    if (!targetModel) {
+      reason = "未选择目标模型；请在上方选用目标模型以加载其实时 Schema 规范。";
+    } else {
+      reason = "目标端点缺少实时 Schema 规范，状态标为未核实。";
+    }
+  }
+
+  return {
+    provider: p,
+    model: targetModel,
+    format: "custom",
+    status: "unverified",
+    reason,
+  };
 }
 
 /**

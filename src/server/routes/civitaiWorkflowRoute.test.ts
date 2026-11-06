@@ -600,7 +600,14 @@ describe('Civitai Routes and Workflow Contract Tests', () => {
       });
 
       const handler = handleExtractCivitaiWorkflow(createMockWorkflowDeps(mockFetch));
-      const req = { body: { imageId: '64399178', engine: 'civitai' } } as any;
+      const req = {
+        body: {
+          imageId: '64399178',
+          engine: 'civitai',
+          targetModel: 'fal-ai/flux-lora',
+          targetSchema: { loras: { items: { properties: { path: { type: 'string' }, scale: { type: 'number' } } } } },
+        },
+      } as any;
       const res = createMockRes();
 
       await handler(req, res);
@@ -719,7 +726,15 @@ describe('Civitai Routes and Workflow Contract Tests', () => {
       });
 
       const handler = handleExtractCivitaiWorkflow(createMockWorkflowDeps(mockFetch));
-      const req = { body: { imageId: '64399178', engine: 'fal', consentCivitaiToken: false } } as any;
+      const req = {
+        body: {
+          imageId: '64399178',
+          engine: 'fal',
+          consentCivitaiToken: false,
+          targetModel: 'fal-ai/flux-lora',
+          targetSchema: { loras: { items: { properties: { path: { type: 'string' }, scale: { type: 'number' } } } } },
+        },
+      } as any;
       const res = createMockRes();
 
       await handler(req, res);
@@ -762,7 +777,13 @@ describe('Civitai Routes and Workflow Contract Tests', () => {
 
       const handler = handleExtractCivitaiWorkflow(createMockWorkflowDeps(mockFetch));
       const req = {
-        body: { imageId: '64399178', engine: 'fal', consentCivitaiToken: true },
+        body: {
+          imageId: '64399178',
+          engine: 'fal',
+          consentCivitaiToken: true,
+          targetModel: 'fal-ai/flux-lora',
+          targetSchema: { loras: { items: { properties: { path: { type: 'string' }, scale: { type: 'number' } } } } },
+        },
         headers: { 'x-civitai-token': 'user_secret_token_123' },
       } as any;
       const res = createMockRes();

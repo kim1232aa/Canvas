@@ -84,7 +84,12 @@ export interface UnifiedLoRAItem {
 }
 
 import { CivitaiModalImportPreview } from './CivitaiModalImportPreview';
-import { getModelSchemaEntry } from '../services/modelSchemaCache';
+import {
+  ensureModelSchema,
+  getModelSchemaEntry,
+  modelSchemaVersion,
+  subscribeModelSchema,
+} from '../services/modelSchemaCache';
 import {
   adaptCivitaiRecipeToProvider,
   buildAllProviderAdaptations,
@@ -1491,6 +1496,7 @@ Steps: 28, Sampler: DPM++ 2M Karras, CFG scale: 4.5, Seed: 136947637, Size: 1024
               }}
               onSelectTargetModel={(m) => {
                 setImportTargetModel(m);
+                ensureModelSchema(importTargetProvider, m);
                 handleExtractCivitaiWorkflow(importInput, importTargetProvider, tokenConsent, m);
               }}
               tokenConsent={tokenConsent}

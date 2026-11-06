@@ -38,10 +38,10 @@ Prior to remediation, the importer, preview, and wire dispatch diverged from act
 
 | Provider | Endpoint | Payload Hierarchy | LoRA / Style Field | Strength Field | Evidence & Verification Level |
 |---|---|---|---|---|---|
-| **Civitai** | `POST https://orchestration.civitai.com/v2/consumer/workflows` | `steps[0].input.loras` (`$type: 'imageGen'`) | AIR 字典 `{ [air]: strength }` 或对象数组 `[{ air, strength }]` | dict value / `strength` | **已核实 (官方文档一手证据: `https://developer.civitai.com/orchestration/guide/submitting-work.md`)** |
+| **Civitai** | `POST https://orchestration.civitai.com/v2/consumer/workflows` | `steps[0].input.loras` (`$type: 'imageGen'`) | AIR 字典 `{ [air]: strength }` 或对象数组 `[{ air, strength }]` | dict value / `strength` | **已核实 (官方 Flux.1 工作流配方及生态约定一手证据；官方基础 submitting-work.md 未细化 LoRA 字典字段)** |
 | **Together** | `POST https://api.together.ai/v1/images/generations` | `image_loras` (deprecated serverless) | 无 (FLUX.2 等原生无 `image_loras` 接入点) | N/A | **已核实 (官方参数指南一手证据: `https://docs.together.ai/docs/inference/images/parameters`)** |
 | **Fal.ai** | `POST https://queue.fal.run/{model_id}` | `loras` 数组 | `path`: HTTP(S) 直链下载 URL | `scale`: float | **已核实 (官方 OpenAPI 一手证据: `https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/lora`)** |
-| **Runware** | `POST https://api.runware.ai/v1` | `[0].lora` (taskType: `imageInference`) | `model`: `civitai:{modelId}@{versionId}` (AIR) 或 Runware 内部模型 ID | `weight`: number | **已核实 (官方 API 参考一手证据: `https://runware.ai/docs/en/image-inference/api-reference`)** |
+| **Runware** | `POST https://api.runware.ai/v1` | `[0].lora` (taskType: `imageInference`) | `model`: `civitai:{modelId}@{versionId}` (AIR) 或 Runware 内部模型 ID | `weight`: number | **已核实 (官方模型文档一手证据: `https://runware.ai/docs/models/bfl-flux-1-kontext-dev.md`，包含 lora[].model AIR 及 weight 字段)** |
 | **Replicate** | `POST https://api.replicate.com/v1/predictions` | 动态版本 Schema 字段 (`lora_weights` / `extra_lora`) | `.safetensors` 直链下载 URL (严禁使用网页 URL) | `lora_scale` 或 `scale` | **已核实 (官方模型页一手证据: `https://replicate.com/black-forest-labs/flux-dev-lora`)** |
 | **Sogni** | `POST https://api.sogni.ai/v1/creative-agent/workflows` | `input.steps[0].arguments.loras` | Sogni catalog LoRA ID 数组 (`string[]`) | `arguments.loraStrengths: number[]` | **未验证 (仅限代码实现/待外部核实)** |
 | **Novita** | `POST https://api.novita.ai/v3/async/txt2img` | `request.loras` | `model_name`: Novita catalog `sd_name_in_api` | `strength`: number `[0, 1]` | **未验证 (仅限代码实现/待外部核实)** |
@@ -84,7 +84,7 @@ UI 真实操作状态：**BLOCKED_AUTH (真实上游鉴权 401，待有效凭据
 
 1. **Recipe Provenance & civitai.red 获取说明**:
    - 目标配方来源：`https://civitai.red/images/64399178` (Civitai 真实社区图像 ID `64399178`)。
-   - 获取方式验证：直接 HTTP GET `https://civitai.red/images/64399178` 返回的是 Next.js 客户端 SPA 外壳，页面中不包含 SSR 配方元数据；配方数据通过专用 API `https://civitai.red/api/v1/images?imageId=64399178` 真实查询、核实并提取：
+   - 获取方式验证：直接 HTTP GET `https://civitai.red/images/64399178` 返回的是 Next.js 客户端 SPA 外壳，页面中不包含 SSR 配方元数据；配方数据通过专用 API `https://civitai.red/api/v1/images?imageId=64399178&withMeta=true`（后端路由及提取器 `civitaiWorkflowRoute.ts:312` 均带 `withMeta=true` 参数以取得嵌套的生成参数及 LoRA 列表）真实查询、核实并提取：
      - Base Model: `Flux.1 D`
      - Checkpoint: `urn:air:flux1:checkpoint:civitai:618692@691639`
      - LoRA 1: `Cinematic 1940s` (weight: 0.3) -> `urn:air:flux1:lora:civitai:1351798@1527024`

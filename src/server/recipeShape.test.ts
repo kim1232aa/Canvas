@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   adaptCivitaiRecipeToProvider,
   normalizeEcosystem,
+  PROVIDER_LORA_CAPS,
   type CivitaiRecipeInput,
 } from '../utils/civitaiImportMap';
 import {
@@ -13,6 +14,8 @@ import {
   mapSchemaLoraItems,
   kreaStyles,
   novitaLoras,
+  aimlapiLoras,
+  sogniLoras,
 } from './schemaProviders';
 import { buildRunwareImageRequest } from './runwareImageContract';
 import { buildModelsLabImageRequest } from './modelsLabImageContract';
@@ -93,18 +96,122 @@ describe('Mission M27: Recipe Shape, LoRA Resource Identity, and Target Schema A
       expect(result).toEqual([{ path: 'https://civitai.com/api/download/models/54321', scale: 0.9 }]);
     });
 
-    it('kreaStyles prioritizes native style ID (styleId/id) over name/path/civitaiId', () => {
-      const lorasWithStyleId = [
+    it('kreaStyles rejects Civitai filename and numeric civitaiId, recording in unmapped trace', () => {
+      const importedCanvasLora = {
+        name: 'cinematic-1940s.safetensors',
+        downloadUrl: 'https://civitai.com/api/download/models/1527024',
+        civitaiId: '1527024',
+        strength: 0.3,
+      };
+      const unmapped: Array<{ item: any; reason: string }> = [];
+      const styles = kreaStyles([importedCanvasLora], unmapped);
+      expect(styles).toEqual([]);
+      expect(unmapped).toHaveLength(1);
+      expect(unmapped[0].reason).toContain('Krea LoRA 缺少 styleId');
+    });
+
+    it('kreaStyles preserves scale / strength: 0', () => {
+      const lora = { styleId: 'style-uuid-42', strength: 0 };
+      const styles = kreaStyles([lora]);
+      expect(styles).toEqual([{ id: 'style-uuid-42', strength: 0 }]);
+    });
+
+    it('novitaLoras rejects Civitai filename and numeric civitaiId without throwing local error', () => {
+      const importedCanvasLora = {
+        name: 'cinematic-1940s.safetensors',
+        downloadUrl: 'https://civitai.com/api/download/models/1527024',
+        civitaiId: '1527024',
+        strength: 0.3,
+      };
+      const unmapped: Array<{ item: any; reason: string }> = [];
+      expect(() => novitaLoras([importedCanvasLora])).not.toThrow();
+      const result = novitaLoras([importedCanvasLora], unmapped);
+      expect(result).toEqual([]);
+      expect(unmapped).toHaveLength(1);
+      expect(unmapped[0].reason).toContain('Novita LoRA 缺少 model_name');
+    });
+
+    it('novitaLoras preserves strength: 0', () => {
+      const lora = { model_name: 'sd_model_v1.safetensors', strength: 0 };
+      const result = novitaLoras([lora]);
+      expect(result).toEqual([{ model_name: 'sd_model_v1.safetensors', strength: 0 }]);
+    });
+
+    it('aimlapiLoras maps downloadUrl correctly and never outputs numeric civitaiId as path', () => {
+      const importedCanvasLora = {
+        name: 'cinematic-1940s.safetensors',
+        downloadUrl: 'https://civitai.com/api/download/models/1527024',
+        civitaiId: '1527024',
+        strength: 0.3,
+      };
+      const result = aimlapiLoras([importedCanvasLora]);
+      expect(result).toEqual([
+        { path: 'https://civitai.com/api/download/models/1527024', scale: 0.3 },
+      ]);
+
+      const numericOnly = {
+        name: 'cinematic-1940s.safetensors',
+        civitaiId: '1527024',
+        strength: 0.3,
+      };
+      const unmapped: Array<{ item: any; reason: string }> = [];
+      const resNumeric = aimlapiLoras([numericOnly], unmapped);
+      expect(resNumeric).toEqual([]);
+      expect(unmapped).toHaveLength(1);
+      expect(unmapped[0].reason).toContain('AIMLAPI LoRA 缺少合法的 path');
+    });
+
+    it('aimlapiLoras preserves scale: 0', () => {
+      const lora = { path: 'https://example.com/lora.safetensors', scale: 0 };
+      const result = aimlapiLoras([lora]);
+      expect(result).toEqual([{ path: 'https://example.com/lora.safetensors', scale: 0 }]);
+    });
+
+    it('sogniLoras rejects Civitai filename and numeric civitaiId, recording in unmapped trace', () => {
+      const importedCanvasLora = {
+        name: 'cinematic-1940s.safetensors',
+        downloadUrl: 'https://civitai.com/api/download/models/1527024',
+        civitaiId: '1527024',
+        strength: 0.3,
+      };
+      const unmapped: Array<{ item: any; reason: string }> = [];
+      const res = sogniLoras([importedCanvasLora], unmapped);
+      expect(res.ids).toEqual([]);
+      expect(res.strengths).toEqual([]);
+      expect(unmapped).toHaveLength(1);
+      expect(unmapped[0].reason).toContain('Sogni LoRA 缺少目录 catalogId');
+    });
+
+    it('sogniLoras accepts native catalog id and preserves strength: 0', () => {
+      const lora = { id: 'krea2-detail-enhancer', strength: 0 };
+      const res = sogniLoras([lora]);
+      expect(res.ids).toEqual(['krea2-detail-enhancer']);
+      expect(res.strengths).toEqual([0]);
+    });
+
+    it('mapSchemaLoraItems preserves scale: 0 and strength: 0', () => {
+      const itemSchema = {
+        type: 'object',
+        properties: {
+          path: { type: 'string' },
+          scale: { type: 'number' },
+        },
+      };
+      const loras = [
         {
-          id: 'krea-style-uuid-1234',
-          name: 'Civitai Watercolor LoRA',
-          civitaiId: '998877',
-          path: 'https://civitai.com/api/download/models/998877',
-          strength: 0.8,
+          downloadUrl: 'https://civitai.com/api/download/models/54321',
+          scale: 0,
         },
       ];
-      const styles = kreaStyles(lorasWithStyleId);
-      expect(styles).toEqual([{ id: 'krea-style-uuid-1234', strength: 0.8 }]);
+      const result = mapSchemaLoraItems(loras, itemSchema, {}, 'test-model');
+      expect(result).toEqual([{ path: 'https://civitai.com/api/download/models/54321', scale: 0 }]);
+    });
+
+    it('PROVIDER_LORA_CAPS does not contain static Replicate cap; caps derived dynamically from schema', () => {
+      expect((PROVIDER_LORA_CAPS as any).replicate).toBeUndefined();
+      const spec = inspectTargetSchemaForLoras('replicate', 'black-forest-labs/flux-dev-lora', undefined);
+      expect(spec.maxItems).toBeUndefined();
+      expect(spec.status).toBe('unverified');
     });
 
     it('kreaStyles omits invalid external URL without throwing local error (no local gate)', () => {

@@ -8,6 +8,7 @@ vi.mock('react', async () => {
     useState: (value: any) => React.useState(value),
     useEffect: (fn: any, deps: any) => React.useEffect(fn, deps),
     useRef: (value: any) => React.useRef(value),
+    useSyncExternalStore: (subscribe: any, getSnapshot: any) => (getSnapshot ? getSnapshot() : 0),
   };
 });
 
@@ -23,6 +24,7 @@ describe('CivitaiModal Recipe Import and Cross-Provider Adaptation UI', () => {
     vi.spyOn(React, 'useState').mockImplementation(((value: any) => [value, vi.fn()]) as any);
     vi.spyOn(React, 'useEffect').mockImplementation(() => {});
     vi.spyOn(React, 'useRef').mockReturnValue({ current: 0 });
+    vi.spyOn(React, 'useSyncExternalStore').mockImplementation(((sub: any, snap: any) => (snap ? snap() : 0)) as any);
   });
 
   afterEach(() => {
@@ -121,11 +123,21 @@ describe('CivitaiModal Recipe Import and Cross-Provider Adaptation UI', () => {
             baseModel: 'Flux.1 D',
             strength: 0.8,
             requireAuth: true,
+            downloadUrl: 'https://civitai.com/api/download/models/999',
           },
         ],
       },
       'fal',
-      { allowTokenInUrl: false }
+      {
+        allowTokenInUrl: false,
+        targetSchema: {
+          loras: {
+            items: {
+              properties: { path: { type: 'string' }, scale: { type: 'number' } },
+            },
+          },
+        },
+      }
     );
 
     const onToggleTokenConsent = vi.fn();
