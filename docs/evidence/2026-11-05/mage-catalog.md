@@ -1,6 +1,6 @@
-# M16: 供应商无目录 API (Lookup-Only) 模型选择指引与驱动建议泛化实现报告
+# M16: 供应商无目录 API (Lookup-Only) 模型选择指引与驱动建议泛化实现报告 (返工更新版)
 
-- **日期**：2026-11-05
+- **日期**：2026-11-06
 - **Mission**：M16 — MAGE16 providers without a catalog API model selection guidance
 - **工作分支**：`feat/mage16-providers-without-a-catalog-api-m`
 - **Worktree**：`/root/github/ComfyUI Web Studio/.tower/worktrees/wt-16`
@@ -9,138 +9,132 @@
 
 ---
 
-## 一、问题背景与复现 (Task 1)
+## 一、返工背景与问题根因分析
 
-### 1. 现象分析
-在原始 `main` 分支代码中，Mage（Mango）供应商因官方未提供公开模型目录 API（GET /models），在 `/api/models` 路由中返回 `results.mage = []`，并在分页元数据中附带 `sourceNotice: 'lookup-only (no public remote catalog; model_id enum on Mango docs)'`。
+在初次提交中，`src/server/modelCatalogResponse.ts` 的 `isLookupOnlyCatalog` 使用 `notice.includes('lookup-only')` 进行子串匹配。主控审查发现该判定存在严重泛化漏洞：
+在 `server.ts` 中，`lookup-only` 前缀具有多种截然不同的语义分支：
+1. **官方确实没有目录 API**：
+   - Mage (`server.ts:2958 'lookup-only (no public remote catalog; model_id enum on Mango docs)'`)
+   - Agnes (`server.ts:2893 'lookup-only (specialized image/video service; no public remote catalog)'`)
+   - TensorArt / TAMS (`server.ts:2453` 显式设置 `catalogAvailable: false`)
+2. **目录存在，但当前不可查（缺 key、缺搜索词、自定义端点）**：
+   - Runware 缺 API Key (`server.ts:2586 'lookup-only (no api key configured)'`)
+   - Runware 缺搜索词 (`server.ts:2597 'lookup-only (search query required for live catalog)'`)
+   - ModelsLab 缺 API Key (`server.ts:2688 'lookup-only (no api key configured)'`)
+   - openai_compat / grok_compat 自定义端点 (`server.ts:2883`, `2888 'lookup-only (custom endpoint)'`)
 
-在画布界面的 Loader 节点中：
-1. 切换服务商为 `Mage (Mango)` 后，模型下拉框中显示 `请选择模型`，展开后列表为空，状态提示 `当前目录页暂无底模；可切换分类或输入 ID`，未向用户说明该平台没有公开目录 API 的真实原因。
-2. 顶部状态栏被阻止运行门禁拦截，显示黄色警告：`请先选择模型`，`运行: 保存图像` 按钮置灰禁用。
-3. 用户必须主动点击下方「自定义模型 (model)」输入框，手动输入 `mango-v3`，运行门禁才解除。
-
-### 2. 实机复现截图
-- **图 1（复现空目录与运行拦截）**：`docs/evidence/2026-11-05/mage-catalog/01-reproduce-empty-catalog.png`
-  - *逐行视觉验证*：顶部运行状态显示黄色文案 `请先选择模型`，右上角运行按钮处于 `disabled` 状态；画布上 `加载底模 (Mage)` 节点内，模型下拉菜单显示 `请选择模型`，状态栏显示 `当前目录页暂无底模；可切换分类或输入 ID`，下方自定义模型为占位符 `输入当前服务商的模型 ID / Repo ID`。
-- **图 2（手动输入自定义模型后解除拦截）**：`docs/evidence/2026-11-05/mage-catalog/02-custom-model-typed.png`
-  - *逐行视觉验证*：在自定义模型框手动输入绿色文本 `mango-v3` 后，上方下拉框同步展示 `[当前] mango-v3`，状态显示 `已选底模`，顶部黄色警告消失，恢复为 `7 个节点 · 9 条连线 · 按所选服务商的接口运行`，运行按钮点亮可用。
+原代码将上述第 2 类情形全部误判为「官方无公开目录 API」，导致用户未配置 Runware API Key 时，节点中也弹出了紫色的「该服务商官方无公开模型检索目录 API」卡片，对用户说了假话，严重违反项目最高准则「没证据不断言」与严格反黑盒透明规则。
 
 ---
 
-## 二、泛化架构与最小修复方案 (Task 2 & Task 3)
+## 二、中立显式布尔字段架构设计
 
-### 1. 架构原则与反硬编码约束
-根据项目最高工程准则：
-- **严禁硬编码集成**：UI 与节点逻辑中不得出现 `if (provider === 'mage')` 特化分支，严禁为 Mage 维护专用查找表。
-- **严禁静默容灾与兜底掩盖**：用户未选择模型时，严禁静默兜底回退为默认模型，运行门禁必须持续拦截并提示 `请先选择模型`。
-- **泛化自适应**：逻辑对所有无公开远端目录 API 的供应商（如 Mage、Agnes、OpenAI Compat、Grok Compat 等）普适生效，完全由目录响应元数据与引擎驱动元数据自驱。
+由主控通过 `TowerSend` 审查批准将 `server.ts` 纳入当前任务范围，以极小变更（共 12 行修改）在各分页对象中注入中立布尔字段，彻底废除前端字符串子串匹配：
 
-### 2. 核心改动模块
+### 1. 服务端响应中立布尔字段定义 (`server.ts`)
+- **真正无公开目录的供应商**：
+  - Mage（`server.ts:2962`）：增加 `catalogAvailable: false, noPublicRemoteCatalog: true`
+  - Agnes（`server.ts:2896`）：增加 `catalogAvailable: false, noPublicRemoteCatalog: true`
+  - TensorArt（`server.ts:2453`）：保持原有的 `catalogAvailable: false`
+- **目录存在但条件未满足的供应商**：
+  - Runware 缺 key（`server.ts:2587`）：增加 `catalogAvailable: true, requiresApiKey: true`
+  - Runware 缺搜索词（`server.ts:2599`）：增加 `catalogAvailable: true, requiresSearchQuery: true`
+  - ModelsLab 缺 key（`server.ts:2693`）：增加 `catalogAvailable: true, requiresApiKey: true`
+  - openai_compat / grok_compat（`server.ts:2889`, `2894`）：增加 `isCustomEndpoint: true`
+- **特殊分类核实（未验证记录）**：
+  - `server.ts:2533` 中的 Novita/DeepInfra 视频目录（`lookup-only (no public video directory)`）：经查阅官方文档，当前无法完全断言其官方绝对没有视频模型目录 API，属于「本应用未接入视频目录」还是「官方完全未公开」属于**未验证 (unverified)**。根据「没证据不断言」铁律，严禁为其打上 `noPublicRemoteCatalog: true`，宁可不弹卡片也不对用户说假话。
 
-#### (1) 通用分页元数据识别 (`src/server/modelCatalogResponse.ts`)
-新增中立判定函数 `isLookupOnlyCatalog`，根据分页对象中的 `sourceNotice`（包含 `lookup-only`、`no public remote catalog`、`no public lora directory`）或标志位 `lookupOnly` / `noRemoteCatalog` 判断该供应商是否为无公开远端目录：
+### 2. 泛化响应判定函数 (`src/server/modelCatalogResponse.ts`)
 ```ts
-export function isLookupOnlyCatalog(pagination?: GenericCatalogPagination | null): boolean {
+export function hasNoPublicRemoteCatalog(pagination?: GenericCatalogPagination | null): boolean {
   if (!pagination || typeof pagination !== 'object') return false;
-  if (pagination.lookupOnly === true || pagination.noRemoteCatalog === true) return true;
-  const notice = String(pagination.sourceNotice || '').toLowerCase();
-  return (
-    notice.includes('lookup-only') ||
-    notice.includes('no public remote catalog') ||
-    notice.includes('no public lora directory')
-  );
+  // 严格布尔排除：缺 key、缺搜索词或自定义端点，绝不可判为官方无目录
+  if (pagination.requiresApiKey === true || pagination.requiresSearchQuery === true || pagination.isCustomEndpoint === true) {
+    return false;
+  }
+  return pagination.noPublicRemoteCatalog === true || pagination.catalogAvailable === false;
 }
 ```
 
-#### (2) 目录解析与驱动声明建议提取 (`src/utils/modelCatalog.ts`)
-- 扩展 `readCheckpointCatalog` 返回结构，保留 `sourceUrl`、`sourceNotice`、`catalogNotice` 及 `isLookupOnly`。
-- 新增 `getDriverModelSuggestions(provider, driverRegistry)`：从该供应商已注册的驱动（`EngineRegistry.getDriver(provider).supportedModels`）中泛化读取官方支持模型，过滤视频类型后作为候选建议项，并打上 `declaredInDriver: true` 标记。
-
-#### (3) 交互组件指引与建议卡片 (`src/components/ProviderModelSelect.tsx`)
-当判定当前供应商为无目录 API（`isNoCatalogProvider = hasCurrentResult && catalogMeta.isLookupOnly && currentLive.length === 0`）时：
-1. **平实自然语言指引 (`[data-testid="no-catalog-guidance"]`)**：
-   - 明确告知供应商官方无公开远端检索目录 API；
-   - 若响应携带 `sourceUrl`，提供官方文档超链接（如 `https://docs.mage.space/api/models/mango`）；
-   - 若响应携带官方公告 `catalogNotice`，原样渲染提示；
-   - 告知用户可在下方「自定义模型 (model)」中直接输入任意官方模型 ID。
-2. **驱动声明建议项 (`[data-testid="provider-model-suggestions-list"]`)**：
-   - 标注来源：`推荐候选（驱动按官方文档声明、非实时拉取）：`；
-   - 渲染一组可点击建议按钮（如 `mango-v3`、`mango-v3-turbo`、`mango-v3s` 等）；
-   - 点击建议按钮触发 `onChange(id)`，精准写入节点值，并将选中项高亮展示；
-   - 下拉框中同步注入 optgroup `驱动建议模型（按官方文档声明，非实时拉取）` 供选择；
-   - 用户手工输入的模型 ID 优先保留，绝不会被建议项强制篡改；
-   - 未选择任何模型时保持为空，运行门禁继续拦截。
+### 3. 组件状态与原文透传 (`src/components/ProviderModelSelect.tsx`)
+- 当 `hasNoPublicRemoteCatalog` 为 `false` 时，**坚决不渲染**紫色的 `[data-testid="no-catalog-guidance"]` 指引卡片。
+- 在状态栏 `[data-testid="provider-model-catalog-status"]` 中，原汁原味透传展示服务端自身的 `catalogNotice` 原文（例如 Runware 的『Runware 实时模型搜索需要配置 API Key (RUNWARE_API_KEY)』，ModelsLab 的『ModelsLab 官方模型列表需要 API Key』），不自行篡改。
+- 仅当 `hasNoPublicRemoteCatalog` 确为 `true` 时，才呈现平实指引面板、官方文档超链接与驱动建议候选芯片。
 
 ---
 
-## 三、实机真实浏览器点击验收 (Task 4)
+## 三、真实浏览器点击验收凭证 (端口 3118 / 9418)
 
-### 1. 验证流程
-使用无头 Chrome 实例（端口 9416，独立临时 profile `/tmp/canvas-chrome-mage16`）访问本地服务（端口 3116）：
-1. 切换至 Mage 服务商，模型选择未选。
-2. 验证引导卡片、官方文档链接及 5 个驱动声明建议项完整呈现，运行门禁显示 `请先选择模型` 且 Run 按钮禁用。
-3. 真实点击建议项 `[data-testid="provider-model-suggestion-mango-v3"]`，验证值写入并解除运行门禁。
-4. 真实点击顶部 `运行: 保存图像` 按钮，发起上游生图请求。
-5. 验证采样器节点与全局报错条原样展示上游 HTTP 402 响应，确认记为 `PASS_BILLING`。
+启动端口 3118 开发服务与端口 9418 无头 Chrome（profile `/tmp/canvas-chrome-mage16b`）：
 
-### 2. 视觉截图凭证
-- **图 3（修复后呈现引导与候选建议，运行拦截）**：`docs/evidence/2026-11-05/mage-catalog/03-fixed-guidance-and-suggestions.png`
-  - *逐行视觉验证*：顶部运行状态显示黄色警告 `请先选择模型`；Mage 节点底模控件下方渲染紫色指引卡片，标题清晰标明 `该服务商官方无公开模型检索目录 API`，附带官方文档链接 `https://docs.mage.space/api/models/mango` 与服务端 notice；底部展示 5 个建议芯片 `mango-v3(Mango 3)`、`mango-v3-turbo`、`mango-v3s`、`mango-v2`、`mango`。
-- **图 4（点击建议项 mango-v3 填入并解除拦截）**：`docs/evidence/2026-11-05/mage-catalog/04-suggestion-clicked-mango-v3.png`
-  - *逐行视觉验证*：`mango-v3(Mango 3)` 芯片呈现高亮青色激活边框与背景；下拉框变为 `Mango 3 (default) · mango-v3`，下方自定义模型框同步填充 `mango-v3`；顶部黄色阻止提示消失，Run 按钮处于激活可用状态。
+### 1. 缺 Key 供应商（Runware）验证：无紫色卡片，服务端原文完整展示
+- **视觉凭证截图**：`docs/evidence/2026-11-05/mage-catalog/06-runware-missing-key-no-purple-card.png`
+- **ReadMediaFile 逐行检查**：
+  - 顶部状态栏：显示黄色警告 `请先选择模型`，Run 按钮禁用。
+  - Loader 节点标题：`加载底模 (Runware)`。
+  - 目标执行引擎：`⚡ Runware 极速云平台`。
+  - 底模下拉菜单：显示 `请选择模型`。
+  - **关键断言**：节点内**完全不存在**紫色的 `[data-testid="no-catalog-guidance"]` 卡片，**未出现**「官方无公开模型检索目录 API」误导文案！
+  - 状态栏原文展示：清晰展示服务端 notice 原文 `Runware 实时模型搜索需要配置 API Key (RUNWARE_API_KEY)；支持直接在上方输入框中输入 AIR 标识符 (如 civitai:xxxx@yyyy 或 runware:xx@y) 按 ID 选用。`
+  - 自定义模型框：展示占位符 `输入当前服务商的模型 ID / Repo ID`。
+
+### 2. Mage 场景指引、建议与运行验收
+- **图 3（呈现指引与候选建议，运行拦截）**：`docs/evidence/2026-11-05/mage-catalog/03-fixed-guidance-and-suggestions.png`
+  - *ReadMediaFile 逐行检查*：Mage 节点底模控件下方渲染紫色指引卡片，标题清晰标明 `该服务商官方无公开模型检索目录 API`，附带官方文档链接 `https://docs.mage.space/api/models/mango` 与服务端 notice；底部展示 5 个建议芯片 `mango-v3(Mango 3)`、`mango-v3-turbo`、`mango-v3s`、`mango-v2`、`mango`。顶部运行被 `请先选择模型` 拦截。
+- **图 4（点击建议项 mango-v3 回填并解除拦截）**：`docs/evidence/2026-11-05/mage-catalog/04-suggestion-clicked-mango-v3.png`
+  - *ReadMediaFile 逐行检查*：`mango-v3(Mango 3)` 芯片呈现高亮青色激活边框与背景；下拉框变为 `Mango 3 (default) · mango-v3`，下方自定义模型框同步填充 `mango-v3`；顶部黄色阻止提示消失，Run 按钮点亮。
 - **图 5（实际运行产生真实上游产物与节点报错展示）**：`docs/evidence/2026-11-05/mage-catalog/05-mage-run-result-node.png`
-  - *逐行视觉验证*：采样器节点顶部与工作流浮动条中原样渲染上游 HTTP 402 报错横幅：`【mage】Mage 图像接口上游 HTTP 402: {"error":{"code":"payment_required","message":"The Mage API and MCP server need a successful payment on this account first: buy any Gem pack or start a plan at https://www.mage.space/gems, then retry. Signup bonus Gems work in the Mage app only."}}`。
-  - 顶部状态栏同步更新为真实 402 账单提示。无任何静默容灾或假成功伪造。符合项目规则判定标准：**PASS_BILLING**。
+  - *ReadMediaFile 逐行检查*：采样器节点顶部与工作流浮动条原样渲染上游 HTTP 402 报错横幅：`【mage】Mage 图像接口上游 HTTP 402: {"error":{"code":"payment_required","message":"The Mage API and MCP server need a successful payment on this account first: buy any Gem pack or start a plan at https://www.mage.space/gems, then retry. Signup bonus Gems work in the Mage app only."}}`。符合验收标准：**PASS_BILLING**。
 
 ### 3. 上游调用 JSONL 日志截取 (脱敏)
-来自工作区日志文件 `/root/github/ComfyUI Web Studio/.tower/worktrees/wt-16/logs/upstream.log`：
+工作区日志 `/root/github/ComfyUI Web Studio/.tower/worktrees/wt-16/logs/upstream.log`：
 ```json
 {"timestamp":"2026-11-06T04:44:54.690Z","provider":"mage","route":"/api/engine/mage/generate","upstream":"api.mage.space/v1/mango/generate","model":"mango-v3","maskedKey":"mage...OhAw","keyUsage":{"provider":"mage","index":0,"count":1,"source":"pool"},"status":402,"durationMs":296,"error":"HTTP 402: {\"error\":{\"code\":\"payment_required\",\"message\":\"The Mage API and MCP server need a successful payment on this account first: buy any Gem pack or start a plan at https://www.mage.space/gems, then retry. Signup bonus Gems work in the Mage app only.\"}}"}
 ```
 
 ---
 
-## 四、回归测试、变异检查与工程质量命令 (Task 5)
+## 四、回归测试、变异检查与工程质量命令
 
-### 1. 泛化回归单元测试
-在 `src/components/ProviderModelSelect.test.tsx`、`src/utils/modelCatalog.test.ts` 和 `src/server/modelCatalogResponse.test.ts` 中新增覆盖测试：
-1. **Mage 场景测试**：验证 Mage 目录响应被正确解析为 `isLookupOnly: true`，组件渲染平实指引、官方链接及 `mango-v3` 建议，点击触发 `onChange('mango-v3')`。
-2. **跨供应商泛化测试 (Agnes)**：模拟 Agnes 供应商返回 `lookup-only` 空目录，验证同样渲染通用指引与 `agnes-image-2.5-flash` 建议，点击正常回填，证明非硬编码 Mage 专用。
-3. **元数据提取与解析测试**：验证各类分页 notice 正确归一化。
+### 1. 覆盖测试与反向测试
+- `src/server/modelCatalogResponse.test.ts`：
+  - 测试 1：严格布尔断言，验证 `hasNoPublicRemoteCatalog` 对 Mage/Agnes 返回 `true`，对 Runware 缺 key、Runware 缺 query、ModelsLab 缺 key、openai_compat/grok_compat 返回 `false`。
+  - 测试 2：直接解析 `server.ts` 源码，断言 `pagination.mage`、`pagination.agnes` 显式包含 `noPublicRemoteCatalog: true`，而 `runware`、`modelslab` 包含 `requiresApiKey: true` 且绝不包含 `noPublicRemoteCatalog: true`。
+- `src/components/ProviderModelSelect.test.tsx`：
+  - 增加 4 项负向断言：Runware 缺 key、Runware 缺 search、ModelsLab 缺 key、openai_compat 自定义端点均断言 `expect(host.querySelector('[data-testid="no-catalog-guidance"]')).toBeNull()`，并断言 statusText 包含服务端原始提示。
 
-### 2. 变异检查 (Mutation Check)
-- **变异操作**：在 `src/components/ProviderModelSelect.tsx` 中将 `const isNoCatalogProvider = Boolean(...)` 强制修改为 `const isNoCatalogProvider = false;`。
-- **变异运行结果**：测试立即变红（RED），2 项新增测试失败，退出码为 `1`：
-  ```text
-  FAIL src/components/ProviderModelSelect.test.tsx > ProviderModelSelect live catalog state > renders generic guidance and clickable driver suggestions for Mage with an empty catalog
-  AssertionError: expected null not to be null
-  FAIL src/components/ProviderModelSelect.test.tsx > ProviderModelSelect live catalog state > renders generic guidance and clickable driver suggestions for another provider (Agnes) with lookup-only catalog
-  AssertionError: expected null not to be null
-  ```
-- **复原后结果**：恢复源码后重新运行，所有测试恢复全绿（GREEN）。
+### 2. 突变检查 (Mutation Checks)
+- **突变检查 1（判定退化为字符串前缀匹配）**：
+  - 将 `hasNoPublicRemoteCatalog` 改回 `notice.includes('lookup-only')`。
+  - 运行结果：5 项测试变红失败（RED），退出码为 `1`。4 项负向测试均捕获到不该出现的卡片。恢复后恢复全绿（GREEN）。
+- **突变检查 2（服务端配置突变）**：
+  - 在 `server.ts` 中将 Runware 缺 key 分页误设为 `noPublicRemoteCatalog: true`。
+  - 运行结果：`server.ts declares neutral boolean fields for /api/models pagination objects` 测试变红失败（RED），报 `AssertionError: expected ... not to contain 'noPublicRemoteCatalog: true'`，退出码为 `1`。恢复后恢复全绿（GREEN）。
 
 ### 3. 全局工程命令真实退出码 (Unpiped)
-严格无管道执行各命令，退出码如下：
+在 `/root/github/ComfyUI Web Studio/.tower/worktrees/wt-16` 严格无管道执行各命令：
 
 | 命令 | 执行说明 | 真实退出码 |
 | :--- | :--- | :--- |
 | `npx tsc --noEmit` | 全局 TypeScript 严格类型检查 | **0** (0 错误) |
 | `npm run build` | 客户端与 Worker 构建打包 | **0** (构建成功) |
-| `npx vitest run --maxWorkers=2 --exclude '.tower/**' --exclude '**/node_modules/**' --exclude '**/dist/**'` | 全局完整单元测试与集成测试套件 | **0** (249 文件全部通过，1895 测试全部通过) |
+| `npx vitest run --maxWorkers=2 --exclude '.tower/**' --exclude '**/node_modules/**' --exclude '**/dist/**'` | 全局完整单元测试与集成测试套件 | **0** (249 文件全部通过，1899 测试全部通过) |
 
 ---
 
 ## 五、修改文件清单
 
-1. `src/server/modelCatalogResponse.ts`：增加 `GenericCatalogPagination` 接口与通用 `isLookupOnlyCatalog` 识别函数。
-2. `src/server/modelCatalogResponse.test.ts`：增加 `isLookupOnlyCatalog` 泛化单元测试。
-3. `src/utils/modelCatalog.ts`：扩展 `readCheckpointCatalog` 返回元数据；实现 `getDriverModelSuggestions` 泛化提取驱动声明模型。
-4. `src/utils/modelCatalog.test.ts`：增加无目录元数据提取与驱动建议提取测试。
-5. `src/components/ProviderModelSelect.tsx`：实现无目录 API 时的平实语言指引面板与可点击驱动建议项。
-6. `src/components/ProviderModelSelect.test.tsx`：增加 Mage 与 Agnes 泛化空目录交互及点击回填测试。
-7. `docs/evidence/2026-11-05/mage-catalog.md`：本交付报告。
-8. `docs/evidence/2026-11-05/mage-catalog/01-reproduce-empty-catalog.png`：复现截图 1。
-9. `docs/evidence/2026-11-05/mage-catalog/02-custom-model-typed.png`：复现截图 2。
-10. `docs/evidence/2026-11-05/mage-catalog/03-fixed-guidance-and-suggestions.png`：修复后指引截图 3。
-11. `docs/evidence/2026-11-05/mage-catalog/04-suggestion-clicked-mango-v3.png`：点击建议项截图 4。
-12. `docs/evidence/2026-11-05/mage-catalog/05-mage-run-result-node.png`：实际运行结果节点展示截图 5。
+1. `server.ts`：在 Runware (~2586, ~2597)、ModelsLab (~2688)、openai_compat/grok_compat (~2883, ~2888)、Agnes (~2893)、Mage (~2958) 的 pagination 对象中注入显式布尔字段（已获 Tower 批准）。
+2. `src/server/modelCatalogResponse.ts`：实现严格中立判定函数 `hasNoPublicRemoteCatalog`（排除缺 key/query/custom 端点），并导出接口。
+3. `src/server/modelCatalogResponse.test.ts`：增加覆盖函数本身与覆盖 `server.ts` 分页对象的严格布尔断言测试。
+4. `src/utils/modelCatalog.ts`：扩展 `readCheckpointCatalog` 结构并接入 `hasNoPublicRemoteCatalog`；实现 `getDriverModelSuggestions` 提取驱动模型。
+5. `src/utils/modelCatalog.test.ts`：增加元数据提取与驱动建议提取测试。
+6. `src/components/ProviderModelSelect.tsx`：实现无目录 API 场景下的指引面板与可点击驱动建议项；缺 key/query/custom 端点不显示卡片且透传服务端 notice 原文。
+7. `src/components/ProviderModelSelect.test.tsx`：增加 Mage/Agnes 引导测试，以及 Runware/ModelsLab/openai_compat 的 4 项负向防误判测试。
+8. `docs/evidence/2026-11-05/mage-catalog.md`：本交付报告。
+9. `docs/evidence/2026-11-05/mage-catalog/01-reproduce-empty-catalog.png`：主干复现截图 1（空下拉框与拦截）。
+10. `docs/evidence/2026-11-05/mage-catalog/02-custom-model-typed.png`：主干复现截图 2（手输模型后放行）。
+11. `docs/evidence/2026-11-05/mage-catalog/03-fixed-guidance-and-suggestions.png`：修复截图 3（引导与候选建议呈现）。
+12. `docs/evidence/2026-11-05/mage-catalog/04-suggestion-clicked-mango-v3.png`：修复截图 4（点击建议回填与放行）。
+13. `docs/evidence/2026-11-05/mage-catalog/05-mage-run-result-node.png`：修复截图 5（实际运行产生 HTTP 402 原样报错产物，PASS_BILLING）。
+14. `docs/evidence/2026-11-05/mage-catalog/06-runware-missing-key-no-purple-card.png`：缺 key 供应商截图 6（无紫色卡片，服务端原文完整呈现）。

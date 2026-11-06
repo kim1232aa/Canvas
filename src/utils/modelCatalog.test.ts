@@ -1,6 +1,7 @@
 import {it,expect} from 'vitest';
 import {readCheckpointCatalog,mergeCheckpointOptions,isInvalidTensorModel,getDriverModelSuggestions} from './modelCatalog';
 import {TENSOR_CATALOG_TAGS,tensorCatalogUrl} from '../schemas/tensorCatalog';
+
 it('uses verified public category links and rejects invented catalog routes',()=>{
  expect(TENSOR_CATALOG_TAGS.length).toBe(26);
  expect(tensorCatalogUrl('all')).toBe('https://tensor.art/models/');
@@ -8,6 +9,7 @@ it('uses verified public category links and rejects invented catalog routes',()=
  expect(()=>tensorCatalogUrl('unpublished')).toThrow(/未知/);
  expect(isInvalidTensorModel('tensorart','https://tensor.art/models/672797109289765558')).toBe(false);
 });
+
 it('uses every live Tensor checkpoint instead of limiting the dropdown to three shortcuts',()=>{
  const rows=Array.from({length:30},(_,i)=>({id:String(672797109289765558n+BigInt(i)),name:`Model ${i}`,type:'CHECKPOINT'}));
  rows.push({id:'672390779613802167',name:'adapter',type:'LORA'});
@@ -18,42 +20,62 @@ it('uses every live Tensor checkpoint instead of limiting the dropdown to three 
  expect(result).toMatchObject({hasMore:true,nextCursor:'next'});
  expect(isInvalidTensorModel('tensorart','photoreal_studio_z_image')).toBe(true);
 });
+
 it('keeps only the chosen provider and surfaces catalog failures',()=>{
  expect(()=>readCheckpointCatalog({tensorart:{error:'upstream unavailable'}},'tensorart')).toThrow(/upstream unavailable/);
  expect(()=>readCheckpointCatalog({huggingface:[]},'tensorart')).toThrow(/所选供应商/);
  expect(mergeCheckpointOptions('tensorart',[{provider:'huggingface',value:'foreign/repo',label:'foreign'}]).some(row=>row.value==='foreign/repo')).toBe(false);
 });
 
-it('extracts sourceNotice, sourceUrl, catalogNotice and flags isLookupOnly generically', () => {
-  const result = readCheckpointCatalog({
+it('extracts sourceNotice, sourceUrl, catalogNotice and flags isLookupOnly only when truly no catalog', () => {
+  // Mage: truly no public remote catalog
+  const mageRes = readCheckpointCatalog({
     mage: [],
     _pagination: {
       mage: {
         page: 1,
         sourceUrl: 'https://docs.mage.space/api/models/mango',
         sourceNotice: 'lookup-only (no public remote catalog; model_id enum on Mango docs)',
+        catalogAvailable: false,
+        noPublicRemoteCatalog: true,
       },
     },
     catalogNotices: {
       mage: 'Mage 无公开远端模型检索目录；请按官方 model_id 选用。',
     },
   }, 'mage');
+  expect(mageRes.options).toHaveLength(0);
+  expect(mageRes.isLookupOnly).toBe(true);
+  expect(mageRes.sourceUrl).toBe('https://docs.mage.space/api/models/mango');
+  expect(mageRes.catalogNotice).toBe('Mage 无公开远端模型检索目录；请按官方 model_id 选用。');
 
-  expect(result.options).toHaveLength(0);
-  expect(result.isLookupOnly).toBe(true);
-  expect(result.sourceUrl).toBe('https://docs.mage.space/api/models/mango');
-  expect(result.sourceNotice).toContain('lookup-only');
-  expect(result.catalogNotice).toBe('Mage 无公开远端模型检索目录；请按官方 model_id 选用。');
+  // Runware without key: catalog exists, requires key -> isLookupOnly MUST be false
+  const rwNoKeyRes = readCheckpointCatalog({
+    runware: [],
+    _pagination: {
+      runware: {
+        page: 1,
+        sourceUrl: 'https://docs.runware.ai',
+        sourceNotice: 'lookup-only (no api key configured)',
+        catalogAvailable: true,
+        requiresApiKey: true,
+      },
+    },
+    catalogNotices: {
+      runware: 'Runware 实时模型搜索需要配置 API Key',
+    },
+  }, 'runware');
+  expect(rwNoKeyRes.options).toHaveLength(0);
+  expect(rwNoKeyRes.isLookupOnly).toBe(false);
+  expect(rwNoKeyRes.catalogNotice).toBe('Runware 实时模型搜索需要配置 API Key');
 });
 
 it('extracts driver model suggestions generically without hardcoding provider checks', () => {
-  // Test with registered Mage driver
   const mageSuggestions = getDriverModelSuggestions('mage');
   expect(mageSuggestions.length).toBeGreaterThan(0);
   expect(mageSuggestions.some((s) => s.id === 'mango-v3')).toBe(true);
   expect(mageSuggestions.every((s) => s.declaredInDriver === true)).toBe(true);
 
-  // Test with a mock custom provider (verifies generic nature)
   const mockRegistry = {
     getDriver: (id: string) => {
       if (id === 'custom-test-provider') {

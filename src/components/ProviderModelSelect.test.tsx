@@ -126,6 +126,8 @@ describe('ProviderModelSelect live catalog state', () => {
           hasMore: false,
           sourceUrl: 'https://docs.mage.space/api/models/mango',
           sourceNotice: 'lookup-only (no public remote catalog; model_id enum on Mango docs)',
+          catalogAvailable: false,
+          noPublicRemoteCatalog: true,
         },
       },
       catalogNotices: {
@@ -188,6 +190,8 @@ describe('ProviderModelSelect live catalog state', () => {
           hasMore: false,
           sourceUrl: 'https://agnes.ai',
           sourceNotice: 'lookup-only (specialized image/video service; no public remote catalog)',
+          catalogAvailable: false,
+          noPublicRemoteCatalog: true,
         },
       },
       catalogNotices: {
@@ -217,5 +221,155 @@ describe('ProviderModelSelect live catalog state', () => {
       agnesBtn.click();
     });
     expect(onChangeMock).toHaveBeenCalledWith('agnes-image-2.5-flash');
+  });
+
+  it('never displays no-catalog-guidance card when Runware has no API key and displays server notice verbatim', async () => {
+    const rwNoKeyResponse = new Response(JSON.stringify({
+      runware: [],
+      results: { runware: [] },
+      _pagination: {
+        runware: {
+          page: 1,
+          limit: 50,
+          total: 0,
+          hasMore: false,
+          sourceUrl: 'https://docs.runware.ai',
+          sourceNotice: 'lookup-only (no api key configured)',
+          catalogAvailable: true,
+          requiresApiKey: true,
+        },
+      },
+      catalogNotices: {
+        runware: 'Runware 实时模型搜索需要配置 API Key (RUNWARE_API_KEY)；支持直接在上方输入框中输入 AIR 标识符 (如 civitai:xxxx@yyyy 或 runware:xx@y) 按 ID 选用。',
+      },
+    }), { status: 200 });
+
+    vi.stubGlobal('fetch', vi.fn(async () => rwNoKeyResponse));
+
+    provider = 'runware';
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    await act(async () => {
+      root.render(<ProviderModelSelect provider={provider} value="" onChange={vi.fn()} />);
+    });
+    await startLookup();
+
+    // MUST NOT display purple no-catalog-guidance card!
+    expect(host.querySelector('[data-testid="no-catalog-guidance"]')).toBeNull();
+    // MUST display server notice verbatim in status
+    const statusText = host.querySelector('[data-testid="provider-model-catalog-status"]')?.textContent || '';
+    expect(statusText).toContain('Runware 实时模型搜索需要配置 API Key');
+  });
+
+  it('never displays no-catalog-guidance card when Runware has no search query and displays server notice verbatim', async () => {
+    const rwNoSearchResponse = new Response(JSON.stringify({
+      runware: [],
+      results: { runware: [] },
+      _pagination: {
+        runware: {
+          page: 1,
+          limit: 50,
+          total: 0,
+          hasMore: false,
+          sourceUrl: 'https://docs.runware.ai',
+          sourceNotice: 'lookup-only (search query required for live catalog)',
+          catalogAvailable: true,
+          requiresSearchQuery: true,
+        },
+      },
+      catalogNotices: {
+        runware: 'Runware 实时模型目录需要搜索关键词；请输入关键词后查询真实上游目录。',
+      },
+    }), { status: 200 });
+
+    vi.stubGlobal('fetch', vi.fn(async () => rwNoSearchResponse));
+
+    provider = 'runware';
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    await act(async () => {
+      root.render(<ProviderModelSelect provider={provider} value="" onChange={vi.fn()} />);
+    });
+    await startLookup();
+    await refresh();
+
+    expect(host.querySelector('[data-testid="no-catalog-guidance"]')).toBeNull();
+    const statusText = host.querySelector('[data-testid="provider-model-catalog-status"]')?.textContent || '';
+    expect(statusText).toContain('Runware 实时模型目录需要搜索关键词');
+  });
+
+  it('never displays no-catalog-guidance card when ModelsLab has no API key and displays server notice verbatim', async () => {
+    const mlNoKeyResponse = new Response(JSON.stringify({
+      modelslab: [],
+      results: { modelslab: [] },
+      _pagination: {
+        modelslab: {
+          page: 1,
+          limit: 50,
+          total: 0,
+          hasMore: false,
+          sourceUrl: 'https://modelslab.com/api/v4/dreambooth/model_list',
+          sourceNotice: 'lookup-only (no api key configured)',
+          catalogAvailable: true,
+          requiresApiKey: true,
+        },
+      },
+      catalogNotices: {
+        modelslab: 'ModelsLab 官方模型列表需要 API Key (MODELSLAB_API_KEY)；支持直接在上方输入框中输入模型 ID / lora_model ID。',
+      },
+    }), { status: 200 });
+
+    vi.stubGlobal('fetch', vi.fn(async () => mlNoKeyResponse));
+
+    provider = 'modelslab';
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    await act(async () => {
+      root.render(<ProviderModelSelect provider={provider} value="" onChange={vi.fn()} />);
+    });
+    await startLookup();
+
+    expect(host.querySelector('[data-testid="no-catalog-guidance"]')).toBeNull();
+    const statusText = host.querySelector('[data-testid="provider-model-catalog-status"]')?.textContent || '';
+    expect(statusText).toContain('ModelsLab 官方模型列表需要 API Key');
+  });
+
+  it('never displays no-catalog-guidance card for openai_compat custom endpoint and displays server notice verbatim', async () => {
+    const openaiResponse = new Response(JSON.stringify({
+      openai_compat: [],
+      results: { openai_compat: [] },
+      _pagination: {
+        openai_compat: {
+          page: 1,
+          limit: 50,
+          total: 0,
+          hasMore: false,
+          sourceUrl: '',
+          sourceNotice: 'lookup-only (custom endpoint)',
+          isCustomEndpoint: true,
+        },
+      },
+      catalogNotices: {
+        openai_compat: 'OpenAI 兼容接口使用您配置的 Base URL 与模型名称，暂无全网统一目录；支持在上方输入框中直接输入模型 ID (如 dall-e-3) 按 ID 选用。',
+      },
+    }), { status: 200 });
+
+    vi.stubGlobal('fetch', vi.fn(async () => openaiResponse));
+
+    provider = 'openai_compat';
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    await act(async () => {
+      root.render(<ProviderModelSelect provider={provider} value="" onChange={vi.fn()} />);
+    });
+    await startLookup();
+
+    expect(host.querySelector('[data-testid="no-catalog-guidance"]')).toBeNull();
+    const statusText = host.querySelector('[data-testid="provider-model-catalog-status"]')?.textContent || '';
+    expect(statusText).toContain('OpenAI 兼容接口使用您配置的 Base URL 与模型名称');
   });
 });

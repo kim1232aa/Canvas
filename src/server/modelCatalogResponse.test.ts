@@ -1,5 +1,13 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { isLookupOnlyCatalog, parseModelsLabCatalogResponse, parseRunwareCatalogResponse } from './modelCatalogResponse';
+import {
+  hasNoPublicRemoteCatalog,
+  isLookupOnlyCatalog,
+  parseModelsLabCatalogResponse,
+  parseRunwareCatalogResponse,
+} from './modelCatalogResponse';
+
+const serverSource = readFileSync(new URL('../../server.ts', import.meta.url), 'utf8');
 
 describe('Runware and ModelsLab catalog response parsing', () => {
   it('preserves the complete non-2xx response and actual upstream status', () => {
@@ -39,15 +47,61 @@ describe('Runware and ModelsLab catalog response parsing', () => {
     expect(JSON.stringify(result)).not.toContain(key);
   });
 
-  it('generically identifies lookup-only catalog pagination without hardcoding provider names', () => {
-    expect(isLookupOnlyCatalog({ sourceNotice: 'lookup-only (no public remote catalog; model_id enum on Mango docs)' })).toBe(true);
-    expect(isLookupOnlyCatalog({ sourceNotice: 'lookup-only (specialized image/video service; no public remote catalog)' })).toBe(true);
-    expect(isLookupOnlyCatalog({ sourceNotice: 'lookup-only (custom endpoint)' })).toBe(true);
-    expect(isLookupOnlyCatalog({ lookupOnly: true })).toBe(true);
-    expect(isLookupOnlyCatalog({ noRemoteCatalog: true })).toBe(true);
-    expect(isLookupOnlyCatalog({ sourceNotice: 'live-api (modelSearch)' })).toBe(false);
-    expect(isLookupOnlyCatalog({ sourceNotice: 'authenticated live-api (GET /v1/models)' })).toBe(false);
-    expect(isLookupOnlyCatalog(undefined)).toBe(false);
-    expect(isLookupOnlyCatalog(null)).toBe(false);
+  it('generically identifies no-public-catalog providers without being fooled by lookup-only prefix on missing-key/query states', () => {
+    // Truly no catalog
+    expect(hasNoPublicRemoteCatalog({ noPublicRemoteCatalog: true, catalogAvailable: false, sourceUrl: 'https://docs.mage.space/api/models/mango' })).toBe(true);
+    expect(hasNoPublicRemoteCatalog({ noPublicRemoteCatalog: true, catalogAvailable: false, sourceUrl: 'https://agnes.ai' })).toBe(true);
+    expect(hasNoPublicRemoteCatalog({ catalogAvailable: false })).toBe(true);
+    expect(isLookupOnlyCatalog({ noPublicRemoteCatalog: true })).toBe(true);
+
+    // Catalog exists but missing key / missing query / custom endpoint: MUST be false
+    expect(hasNoPublicRemoteCatalog({ requiresApiKey: true, catalogAvailable: true, sourceNotice: 'lookup-only (no api key configured)' })).toBe(false);
+    expect(hasNoPublicRemoteCatalog({ requiresSearchQuery: true, catalogAvailable: true, sourceNotice: 'lookup-only (search query required for live catalog)' })).toBe(false);
+    expect(hasNoPublicRemoteCatalog({ isCustomEndpoint: true, sourceNotice: 'lookup-only (custom endpoint)' })).toBe(false);
+    expect(hasNoPublicRemoteCatalog({ sourceNotice: 'lookup-only (no api key configured)' })).toBe(false);
+    expect(hasNoPublicRemoteCatalog({ sourceNotice: 'lookup-only (search query required for live catalog)' })).toBe(false);
+    expect(hasNoPublicRemoteCatalog({ sourceNotice: 'lookup-only (custom endpoint)' })).toBe(false);
+    expect(hasNoPublicRemoteCatalog({ sourceNotice: 'live-api (modelSearch)' })).toBe(false);
+    expect(hasNoPublicRemoteCatalog(undefined)).toBe(false);
+    expect(hasNoPublicRemoteCatalog(null)).toBe(false);
+  });
+
+  it('server.ts declares neutral boolean fields for /api/models pagination objects', () => {
+    // Assert on server.ts pagination blocks
+    // 1. Mage has noPublicRemoteCatalog: true
+    const mageMatch = serverSource.match(/pagination\.mage\s*=\s*\{([^}]+)\}/);
+    expect(mageMatch).not.toBeNull();
+    expect(mageMatch![1]).toContain('noPublicRemoteCatalog: true');
+    expect(mageMatch![1]).toContain('catalogAvailable: false');
+
+    // 2. Agnes has noPublicRemoteCatalog: true
+    const agnesMatch = serverSource.match(/pagination\.agnes\s*=\s*\{([^}]+)\}/);
+    expect(agnesMatch).not.toBeNull();
+    expect(agnesMatch![1]).toContain('noPublicRemoteCatalog: true');
+    expect(agnesMatch![1]).toContain('catalogAvailable: false');
+
+    // 3. Runware (no key) has requiresApiKey: true and does NOT have noPublicRemoteCatalog: true
+    const rwNoKeyMatch = serverSource.match(/if\s*\(!runwareKey\)\s*\{[\s\S]*?pagination\.runware\s*=\s*\{([^}]+)\}/);
+    expect(rwNoKeyMatch).not.toBeNull();
+    expect(rwNoKeyMatch![1]).toContain('requiresApiKey: true');
+    expect(rwNoKeyMatch![1]).not.toContain('noPublicRemoteCatalog: true');
+
+    // 4. Runware (no search) has requiresSearchQuery: true and does NOT have noPublicRemoteCatalog: true
+    const rwNoSearchMatch = serverSource.match(/else\s+if\s*\(!rawSearch\)\s*\{[\s\S]*?pagination\.runware\s*=\s*\{([^}]+)\}/);
+    expect(rwNoSearchMatch).not.toBeNull();
+    expect(rwNoSearchMatch![1]).toContain('requiresSearchQuery: true');
+    expect(rwNoSearchMatch![1]).not.toContain('noPublicRemoteCatalog: true');
+
+    // 5. ModelsLab (no key) has requiresApiKey: true and does NOT have noPublicRemoteCatalog: true
+    const mlNoKeyMatch = serverSource.match(/if\s*\(!modelslabKey\)\s*\{[\s\S]*?pagination\.modelslab\s*=\s*\{([^}]+)\}/);
+    expect(mlNoKeyMatch).not.toBeNull();
+    expect(mlNoKeyMatch![1]).toContain('requiresApiKey: true');
+    expect(mlNoKeyMatch![1]).not.toContain('noPublicRemoteCatalog: true');
+
+    // 6. openai_compat / grok_compat has isCustomEndpoint: true and does NOT have noPublicRemoteCatalog: true
+    const openaiMatch = serverSource.match(/pagination\.openai_compat\s*=\s*\{([^}]+)\}/);
+    expect(openaiMatch).not.toBeNull();
+    expect(openaiMatch![1]).toContain('isCustomEndpoint: true');
+    expect(openaiMatch![1]).not.toContain('noPublicRemoteCatalog: true');
   });
 });

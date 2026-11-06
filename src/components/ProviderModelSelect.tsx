@@ -115,7 +115,7 @@ export function ProviderModelSelect({provider,value,onChange}:{provider:string;v
       )}
     </select>
     <div className="flex items-center justify-between gap-2 text-xs text-slate-400" role="status">
-      <span data-testid="provider-model-catalog-status">{currentLoading ? '正在查询模型目录…' : currentError ? '查询失败' : catalogCount ? `目录已返回 ${catalogCount} 个模型` : value ? '已选底模' : isNoCatalogProvider ? '官方无公开模型目录（可选用下方驱动建议或输入自定义 ID）' : provider === 'tensorart' && !query ? '等待输入模型 ID（未请求上游）' : query ? '未找到匹配模型' : '当前目录页暂无底模；可切换分类或输入 ID'}</span>
+      <span data-testid="provider-model-catalog-status">{currentLoading ? '正在查询模型目录…' : currentError ? '查询失败' : catalogCount ? `目录已返回 ${catalogCount} 个模型` : value ? '已选底模' : isNoCatalogProvider ? '官方无公开模型目录（可选用下方驱动建议或输入自定义 ID）' : catalogMeta.catalogNotice ? catalogMeta.catalogNotice : provider === 'tensorart' && !query ? '等待输入模型 ID（未请求上游）' : query ? '未找到匹配模型' : '当前目录页暂无底模；可切换分类或输入 ID'}</span>
       <button type="button" disabled={currentLoading} onClick={()=>{beginTraceOperation(`刷新目录 ${provider}`);setArmed(true);setReload(x=>x+1);}} className="text-cyan-300 disabled:opacity-40">{provider==='tensorart' ? '查询 ID' : '刷新目录'}</button>
     </div>
     {isNoCatalogProvider && (
