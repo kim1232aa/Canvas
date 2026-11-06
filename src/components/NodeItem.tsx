@@ -1,4 +1,4 @@
-import { formatSocketDisplayName, formatNodeDisplayTitle, formatWidgetLabel } from '../utils/nodeUiLabels';
+import { formatSocketDisplayName, formatWidgetLabel } from '../utils/nodeUiLabels';
 import { NodeErrorDisclosure } from './NodeErrorDisclosure';
 import { ensureModelSchema, getModelSchemaEntry } from '../services/modelSchemaCache';
 import {PreviewPlaceholder} from './PreviewPlaceholder';
@@ -57,6 +57,7 @@ const hideSamplerShell = (
     isDeclaredSchemaFieldOmitted(widgetName, schemaCustomParameters, readDeclaredSchemaProperties(schemaCustomParameters)));
 
 import { checkpointNodeTitle, ksamplerNodeTitle, loraLoaderNodeTitle, LORA_LOADER_TYPES } from '../utils/providerLabels';
+import { formatVideoNodeTitle, formatCheckpointNodeTitle, formatNodeDisplayTitle } from '../utils/nodeDisplayTitle';
 import { errorBannerText, priorRunErrorLabel, LOCAL_BLOCK_NODE_LINE } from '../utils/apiFailure';
 import { upstreamFailedLine } from '../utils/schemaFailure';
 import { formatRecordTime, getExecutions } from '../services/executionTrace';
@@ -408,16 +409,18 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               node.type === 'KSampler'
                 ? ksamplerNodeTitle(node.title, stepsUnsupported || ['muapi','wavespeed','sogni','krea','together','aimlapi','novita'].includes(currentProvider || ''))
                 : node.type === 'CheckpointLoaderSimple'
-                  ? checkpointNodeTitle(node.values.targetProvider,node.values.ckpt_name)
+                  ? formatCheckpointNodeTitle(node.title, node.values.targetProvider, node.values.ckpt_name, node.titleSource)
+                : node.type === 'AIVideoNode'
+                  ? formatVideoNodeTitle(node.title, node.values?.targetProvider || currentProvider, node.titleSource)
                 : LORA_LOADER_TYPES.has(node.type)
                   ? loraLoaderNodeTitle(node.title, node.values?.lora_name)
-                  : formatNodeDisplayTitle(node.type, node.title);
+                  : formatNodeDisplayTitle(node.type, node.title, undefined, node.titleSource);
             const loraFull = LORA_LOADER_TYPES.has(node.type) ? String(node.values?.lora_name || '').trim() : '';
             const hoverTitle = loraFull
               ? loraFull
-              : node.title !== displayTitle
+              : node.title !== displayTitle && node.titleSource !== 'template'
                 ? `${displayTitle}（原标题: ${node.title}）`
-                : node.title;
+                : displayTitle;
             return (
               <span
                 data-testid="node-header-title"

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { WORKFLOW_PRESETS, STD_PROMPT_PLACEHOLDER, presetSummary } from './presets';
 import { correctPresetLayout } from './presetResources';
 import { generationReadiness } from '../utils/generationReadiness';
+import { formatVideoNodeTitle } from '../utils/nodeDisplayTitle';
 
 const EXPECTED_T2I_PROVIDERS = [
   'huggingface',
@@ -99,6 +100,22 @@ describe('standard workflow presets (23 T2I + 5 T2V + 6 I2V)', () => {
     expect(t2i()).toHaveLength(23);
     expect(t2v()).toHaveLength(5);
     expect(i2v()).toHaveLength(6);
+  });
+
+  it('P1-1: every node in all 34 WORKFLOW_PRESETS has titleSource === "template"', () => {
+    for (const p of WORKFLOW_PRESETS) {
+      for (const n of p.nodes) {
+        expect(n.titleSource, `node ${n.id} in preset ${p.id} missing titleSource === 'template'`).toBe('template');
+      }
+    }
+  });
+
+  it('P1-1: original scenario std-fal-i2v AIVideoNode with titleSource template follows Sogni', () => {
+    const falPreset = WORKFLOW_PRESETS.find(p => p.id === 'std-fal-i2v')!;
+    const vidNode = falPreset.nodes.find(n => n.type === 'AIVideoNode')!;
+    expect(vidNode.title).toBe('AI 视频 (Fal.ai)');
+    expect(vidNode.titleSource).toBe('template');
+    expect(formatVideoNodeTitle(vidNode.title, 'sogni', vidNode.titleSource)).toBe('AI 视频 (Sogni)');
   });
 
   it('indexes huggingface T2I first for App default canvas', () => {
