@@ -4,6 +4,7 @@ import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { NodeErrorDisclosure, summarizeErrorMessage } from './NodeErrorDisclosure';
+import { humanSummaryText } from './ExecutionLog';
 import {
   upstreamHttpFirstLine,
   upstreamFailureToast,
@@ -28,6 +29,7 @@ describe('Task 5 & P1-3: Verbatim upstream error display & mutation sensitivity'
   const FAL_403_BODY = '{"detail":"User is locked. Reason: TOP_UP."}';
   const TOGETHER_401_BODY = '{"id":"f0872edf-aws_ue2","error":{"message":"Invalid API key provided. You can find your API key at https://api.together.ai/settings/api-keys.","type":"invalid_request_error","param":null,"code":"invalid_api_key"}}';
   const MODELSCOPE_400_BODY = '{"errors":{"message":"Invalid model id: nonexistent-model-xyz-12345"},"request_id":"13ff7f2a-bf94-4290-abb6-0248a7c80caf"}';
+  const MODELSCOPE_400_BODY_LATEST = '{"errors":{"message":"Invalid model id: nonexistent-model-xyz-12345"},"request_id":"167c3ea8-1280-4dd6-8f17-4d514d16b419"}';
   const MODELSCOPE_500_BODY = '{"errors":{"message":"apiInferModelDownload call failed: callApiInferModelDownload failed: [Model Exception] 模型不存在"},"request_id":"4c0b7caa-7f63-497c-972e-2f4e0e65a677"}';
 
   // Retrospective baseline fixtures (run 1 recorded references)
@@ -141,6 +143,64 @@ describe('Task 5 & P1-3: Verbatim upstream error display & mutation sensitivity'
 
       const line = upstreamHttpFirstLine(data)!;
       expect(line).toBe(`【modelscope】HTTP 400 Bad Request: ${MODELSCOPE_400_BODY}`);
+    });
+
+    it('ModelScope 400 (latest live capture): toast message and line match newly recorded request_id with Bad Request', () => {
+      const data = {
+        provider: 'modelscope',
+        upstreamStatus: 400,
+        upstreamStatusText: 'Bad Request',
+        rawResponse: MODELSCOPE_400_BODY_LATEST,
+        executionTrace: [
+          {
+            method: 'POST',
+            endpoint: 'https://api-inference.modelscope.cn/v1/images/diffusion',
+            status: 400,
+            statusText: 'Bad Request',
+            responseBody: MODELSCOPE_400_BODY_LATEST,
+          },
+          {
+            stage: 'key-attempt',
+            status: 400,
+            responseBody: MODELSCOPE_400_BODY_LATEST,
+          },
+        ],
+      };
+      const toast = upstreamFailureToast(data)!;
+      expect(toast.title).toBe('【modelscope】HTTP 400 Bad Request');
+      expect(toast.message).toBe(MODELSCOPE_400_BODY_LATEST);
+      expect(toast.message).toContain('167c3ea8-1280-4dd6-8f17-4d514d16b419');
+
+      const line = upstreamHttpFirstLine(data)!;
+      expect(line).toBe(`【modelscope】HTTP 400 Bad Request: ${MODELSCOPE_400_BODY_LATEST}`);
+    });
+
+    it('ModelScope 400 with key-attempt: does not let key-attempt bookkeeping trace shadow real statusText Bad Request', () => {
+      const data = {
+        provider: 'modelscope',
+        executionTrace: [
+          {
+            method: 'POST',
+            endpoint: 'https://api-inference.modelscope.cn/v1/images/diffusion',
+            status: 400,
+            statusText: 'Bad Request',
+            responseBody: MODELSCOPE_400_BODY,
+          },
+          {
+            stage: 'key-attempt',
+            status: 400,
+            responseBody: MODELSCOPE_400_BODY,
+          },
+        ],
+      };
+      const toast = upstreamFailureToast(data)!;
+      expect(toast.title).toBe('【modelscope】HTTP 400 Bad Request');
+      expect(toast.title).toContain('Bad Request');
+      expect(toast.message).toBe(MODELSCOPE_400_BODY);
+
+      const line = upstreamHttpFirstLine(data)!;
+      expect(line).toBe(`【modelscope】HTTP 400 Bad Request: ${MODELSCOPE_400_BODY}`);
+      expect(line).toContain('Bad Request');
     });
   });
 
@@ -451,6 +511,35 @@ describe('Task 5 & P1-3: Verbatim upstream error display & mutation sensitivity'
       expect(localWrapperEl?.textContent).toContain('SchemaProviderDriver.ts:120:15');
       expect(toastPre.closest('details')).toBeNull();
     });
+
+    it('mounts App in real DOM: ModelScope 400 with key-attempt trace renders toast title with real statusText Bad Request', async () => {
+      await triggerRunError({
+        provider: 'modelscope',
+        executionTrace: [
+          {
+            method: 'POST',
+            endpoint: 'https://api-inference.modelscope.cn/v1/images/diffusion',
+            status: 400,
+            statusText: 'Bad Request',
+            responseBody: MODELSCOPE_400_BODY,
+          },
+          {
+            stage: 'key-attempt',
+            status: 400,
+            responseBody: MODELSCOPE_400_BODY,
+          },
+        ],
+      });
+
+      const toastTitle = document.querySelector('[data-testid="toast-title"]');
+      expect(toastTitle?.textContent).toBe('【modelscope】HTTP 400 Bad Request');
+      expect(toastTitle?.textContent).toContain('Bad Request');
+
+      const toastPre = document.querySelector('[data-testid="toast-first-line"]') as HTMLPreElement;
+      expect(toastPre).not.toBeNull();
+      expect(toastPre.textContent).toBe(MODELSCOPE_400_BODY);
+      expect(toastPre.closest('details')).toBeNull();
+    });
   });
 
   describe('5. Unstructured & non-provider error preservation (multiline, long body, plain text)', () => {
@@ -484,6 +573,34 @@ describe('Task 5 & P1-3: Verbatim upstream error display & mutation sensitivity'
       // Strips genuine outer local wrappers before JSON or plain text
       const wrapped = 'Civitai Orchestration 官方算力返回错误 [400]: {"error":"bad"}';
       expect(stripLocalWrapperPrefix(wrapped)).toBe('{"error":"bad"}');
+    });
+
+    it('P1-2: upstreamHttpFirstLine and ExecutionLog humanSummaryText strictly lock trailing newline without .trim() truncation', () => {
+      const jsonWithNewline = '{"error":{"message":"Invalid model id"}}\n';
+      const data = {
+        executionTrace: [
+          {
+            status: 400,
+            statusText: 'Bad Request',
+            responseBody: jsonWithNewline,
+          },
+        ],
+      };
+      const line = upstreamHttpFirstLine(data);
+      // Must strictly equal the untrimmed concatenation with trailing newline intact
+      expect(line).toBe(`HTTP 400 Bad Request ${jsonWithNewline}`);
+      expect(line?.endsWith('\n')).toBe(true);
+
+      // Also assert ExecutionLog humanSummaryText first-line path
+      const record: any = {
+        state: 'error',
+        route: '/api/generate',
+        status: 400,
+        response: data,
+      };
+      const summary = humanSummaryText(record);
+      expect(summary).toBe(`HTTP 400 Bad Request ${jsonWithNewline}`);
+      expect(summary.endsWith('\n')).toBe(true);
     });
   });
 });

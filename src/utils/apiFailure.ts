@@ -197,12 +197,24 @@ function extractProviderFromRoute(route?: string): string | undefined {
   return undefined;
 }
 
+export function findFailingTrace(traces: any[]): any | undefined {
+  if (!Array.isArray(traces) || traces.length === 0) return undefined;
+  const isFailed = (t: any) => (typeof t?.status === 'number' && t.status >= 400) || t?.status === null;
+  // Prefer real HTTP exchanges (skipping stage: 'key-attempt' bookkeeping rows that lack statusText/endpoint/method)
+  const httpExchange = [...traces].reverse().find((t: any) =>
+    isFailed(t) && t?.stage !== 'key-attempt' && (t?.statusText || t?.endpoint || t?.method)
+  );
+  if (httpExchange) return httpExchange;
+  // If only key-attempt or non-exchange rows exist, use the latest failed trace as-is
+  return [...traces].reverse().find(isFailed);
+}
+
 export function upstreamFailureParts(data: any): { status: number; statusText: string; body: string; provider?: string } | null {
   if (!data || typeof data !== 'object') return null;
   // A local block before the generation request has no upstream failure: never headline a successful catalog/Schema read (e.g. HTTP 200 /tool/list).
   if (isLocalNotOutbound(data)) return null;
   const traces = Array.isArray(data.executionTrace) ? data.executionTrace : Array.isArray(data.taskExecutionTrace) ? data.taskExecutionTrace : [];
-  const failed = [...traces].reverse().find((t: any) => typeof t?.status === 'number' && t.status >= 400);
+  const failed = findFailingTrace(traces);
   const hist = data.historyItem && typeof data.historyItem === 'object' ? data.historyItem : null;
   const status = failed?.status
     ?? (typeof data.upstreamStatus === 'number' ? data.upstreamStatus : null)
@@ -330,7 +342,7 @@ export function describeApiFailure(appStatus: number, data: any, route: string) 
       ? (Object.values(data).find((v: any) => v && typeof v === 'object' && v.error) as any)
       : undefined;
   const traces = Array.isArray(data?.executionTrace) ? data.executionTrace : [];
-  const failed = traces.findLast((t: any) => t.status >= 400 || t.status === null);
+  const failed = findFailingTrace(traces);
   const status = data?.upstreamStatus ?? failed?.status ?? nested?.status;
   const endpoint = data?.exactEndpointCalled || failed?.endpoint || nested?.exactEndpointCalled;
   const source = data?.errorSource || (failed ? (failed.status === null ? 'network' : 'upstream') : 'API');

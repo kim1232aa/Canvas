@@ -123,7 +123,7 @@
 - `Civitai 400`: `{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.1","title":"Bad Request","status":400,"detail":"insufficientBuzz","traceId":"00-089db51091f4345a3219237a503afea7-a5602b6b0e42f089-02"}`
 - `Fal 403`: `{"detail":"User is locked. Reason: TOP_UP."}`
 - `Together 401`: `{"id":"f0872edf-aws_ue2","error":{"message":"Invalid API key provided. You can find your API key at https://api.together.ai/settings/api-keys.","type":"invalid_request_error","param":null,"code":"invalid_api_key"}}`
-- `ModelScope 400`: `{"errors":{"message":"Invalid model id: nonexistent-model-xyz-12345"},"request_id":"13ff7f2a-bf94-4290-abb6-0248a7c80caf"}`
+- `ModelScope 400`: `{"errors":{"message":"Invalid model id: nonexistent-model-xyz-12345"},"request_id":"167c3ea8-1280-4dd6-8f17-4d514d16b419"}`（最新实机录制）及 `{"request_id":"13ff7f2a-bf94-4290-abb6-0248a7c80caf"}`
 - `ModelScope 500`: `{"errors":{"message":"apiInferModelDownload call failed: callApiInferModelDownload failed: [Model Exception] 模型不存在"},"request_id":"4c0b7caa-7f63-497c-972e-2f4e0e65a677"}`
 - 追溯基线夹具：`BASELINE_CIVITAI_400_BODY`（`3fcab5cbc...`）、`BASELINE_TOGETHER_401_BODY`（`95234f6a...`）、`BASELINE_MODELSCOPE_400_BODY`（`a12ad933...`）作为追溯基线常量同步验证。
 
@@ -197,19 +197,19 @@
    - 浮动 Toast：标题为 `【together】HTTP 401 Unauthorized`；右上角提供便捷的 `去 API 设置` 按钮；正文直接就是原始 JSON。
    - 节点红条（采样器）：展示 `去配置密钥` 快捷入口（仅在 401 下展示）；下方完整呈现原始 JSON。
 5. **`after-05-modelscope-400.png`**：
-   - 顶栏状态：`【modelscope】HTTP 400: {"errors":{"message":"Invalid model id: nonexistent-model-xyz-12345"},"request_id":"13ff7f2a-bf94-4290-abb6-0248a7c80caf"}` —— 带服务商前缀 `【modelscope】`，包含 `errors.message` 与 `request_id` 全字段！
-   - 浮动 Toast：标题为 `【modelscope】HTTP 400`；正文直接就是原始 JSON。
-   - 节点红条（采样器）：完整呈现原始响应体，彻底根除自编中文改写。
+   - 顶栏状态：`【modelscope】HTTP 400 Bad Request: {"errors":{"message":"Invalid model id: nonexistent-model-xyz-12345"},"request_id":"167c3ea8-1280-4dd6-8f17-4d514d16b419"}` —— 带服务商前缀 `【modelscope】`，完整展示真实 HTTP 状态文本 `Bad Request`，以及包含 `errors.message` 与 `request_id` 的完整 JSON 响应体！
+   - 浮动 Toast：标题为 `【modelscope】HTTP 400 Bad Request`（完整包含 `Bad Request` 状态描述）；正文直接就是纯粹的原始 JSON。
+   - 节点红条（采样器）：完整呈现原始响应体与 `HTTP 400 Bad Request`，彻底根除自编中文改写与状态描述丢失。
 
 ### 3. 最终验收对比表（7 项标准标签分类）
 
 | 失败用例 | 验收标签 | 上游返回响应体原文（jsonl 记录） | 改造后 UI 实际展示（节点 / 顶栏 / Toast） | 一致性与透明度核验 |
 | :--- | :--- | :--- | :--- | :--- |
-| **Mage 402** | `PASS_BILLING` | `{"error":{"code":"payment_required","message":"The Mage API and MCP server need a successful payment on this account first: buy any Gem pack or start a plan at https://www.mage.space/gems, then retry. Signup bonus Gems work in the Mage app only."}}` | 节点红条、顶栏、Toast 均显示带有 `【mage】` 的真实状态与包含 `code: payment_required` 的纯粹原始 JSON 响应体。 | **逐字完全一致**。无自编标签，无提取句子，无截断。 |
-| **Civitai 400** | `PASS_BILLING` | `{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.1","title":"Bad Request","status":400,"detail":"insufficientBuzz","traceId":"00-089db51091f4345a3219237a503afea7-a5602b6b0e42f089-02"}` | 节点红条、顶栏、Toast 均显示带有 `【civitai】` 的真实状态与包含 `insufficientBuzz`、`traceId` 的纯粹原始 JSON 响应体。 | **逐字完全一致**。无自编标签，无省略号。 |
-| **Fal 403** | `PASS_BILLING` | `{"detail":"User is locked. Reason: TOP_UP."}` | 节点红条、顶栏、Toast 均显示带有 `【fal】` 的真实状态与包含 `User is locked. Reason: TOP_UP.` 的纯粹原始响应体。 | **逐字完全一致**。无自编标签，原因彻底透明。 |
-| **Together 401** | `BLOCKED_AUTH` | `{"id":"f0872edf-aws_ue2","error":{"message":"Invalid API key provided. You can find your API key at https://api.together.ai/settings/api-keys.","type":"invalid_request_error","param":null,"code":"invalid_api_key"}}` | 节点红条、顶栏、Toast 均显示带有 `【together】` 的真实状态与包含 `id`、`code`、`message` 的纯粹原始 JSON 原文，仅在 401 下提供配置快捷按钮。 | **逐字完全一致**。401 配置按钮正常可用且不替代错误文本。 |
-| **ModelScope 400** | `CONTRACT_REJECT` | `{"errors":{"message":"Invalid model id: nonexistent-model-xyz-12345"},"request_id":"13ff7f2a-bf94-4290-abb6-0248a7c80caf"}` | 节点红条、顶栏、Toast 均显示带有 `【modelscope】` 的真实状态与包含完整 `request_id` 的纯粹原始 JSON 响应体。 | **逐字完全一致**。彻底清除了自编中文改写。 |
+| **Mage 402** | `PASS_BILLING` | `{"error":{"code":"payment_required","message":"The Mage API and MCP server need a successful payment on this account first: buy any Gem pack or start a plan at https://www.mage.space/gems, then retry. Signup bonus Gems work in the Mage app only."}}` | 节点红条、顶栏、Toast 均显示带有 `【mage】` 的真实状态（`HTTP 402 Payment Required`）与包含 `code: payment_required` 的纯粹原始 JSON 响应体。 | 响应体与上游原文一致，保留完整 JSON，无自编标签，无提取句子，无省略号截断。 |
+| **Civitai 400** | `PASS_BILLING` | `{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.1","title":"Bad Request","status":400,"detail":"insufficientBuzz","traceId":"00-089db51091f4345a3219237a503afea7-a5602b6b0e42f089-02"}` | 节点红条、顶栏、Toast 均显示带有 `【civitai】` 的真实状态（`HTTP 400 Bad Request`）与包含 `insufficientBuzz`、`traceId` 的纯粹原始 JSON 响应体。 | 响应体与上游原文一致，保留完整 RFC9110 结构与 traceId，无自编标签，核心原因完全透明。 |
+| **Fal 403** | `PASS_BILLING` | `{"detail":"User is locked. Reason: TOP_UP."}` | 节点红条、顶栏、Toast 均显示带有 `【fal】` 的真实状态（`HTTP 403 Forbidden`）与包含 `User is locked. Reason: TOP_UP.` 的纯粹原始响应体。 | 响应体与上游原文一致，无自编标签，TOP_UP 原因彻底透明呈现。 |
+| **Together 401** | `BLOCKED_AUTH` | `{"id":"f0872edf-aws_ue2","error":{"message":"Invalid API key provided. You can find your API key at https://api.together.ai/settings/api-keys.","type":"invalid_request_error","param":null,"code":"invalid_api_key"}}` | 节点红条、顶栏、Toast 均显示带有 `【together】` 的真实状态（`HTTP 401 Unauthorized`）与包含 `id`、`code`、`message` 的纯粹原始 JSON 原文，仅在 401 下提供配置快捷按钮。 | 响应体与上游原文一致，401 快捷配置按钮正常可用且不替代或掩盖错误文本。 |
+| **ModelScope 400** | `CONTRACT_REJECT` | `{"errors":{"message":"Invalid model id: nonexistent-model-xyz-12345"},"request_id":"167c3ea8-1280-4dd6-8f17-4d514d16b419"}` | 节点红条、顶栏、Toast 均显示带有 `【modelscope】` 的真实状态与状态描述（`HTTP 400 Bad Request`）以及包含完整 `request_id` 的纯粹原始 JSON 响应体。 | 响应体与上游原文一致，真实状态描述 `Bad Request` 正常呈现，彻底清除了自编中文改写。 |
 
 ---
 
@@ -226,5 +226,5 @@
 3. **`npx vitest run --maxWorkers=2 --exclude '.tower/**' --exclude '**/node_modules/**' --exclude '**/dist/**'`**
    - 实际运行结果：
      - **Test Files: 256 passed (256)**
-     - **Tests: 1986 passed (1986)**
+     - **Tests: 1990 passed (1990)**
    - **退出码：0**
