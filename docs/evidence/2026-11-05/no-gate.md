@@ -421,7 +421,7 @@
 
 ## 严格无管道命令真实退出码报告
 
-严格按照指令执行，无管道、真实退出码与结果输出如下：
+基于最新本地 main (`c2b1a0f`，已合入 M10、M15、M16、M24) 基线，在当前 `wt-18` 分支上严格按照指令执行，无管道、真实退出码与结果输出如下：
 
 1. **TypeScript 类型检查 (`npx tsc --noEmit`)**:
    - 执行命令: `npx tsc --noEmit`
@@ -431,14 +431,15 @@
 2. **生产构建检查 (`npm run build`)**:
    - 执行命令: `npm run build`
    - 实际退出码: `0`
-   - 结果: Vite 客户端包与 Cloudflare Sites Worker 产物全量构建成功 (`built in 6.47s`)。
+   - 结果: Vite 客户端包与 Cloudflare Sites Worker 产物全量构建成功 (`built in 3.54s`)。
 
 3. **全量单元测试 (`npx vitest run --maxWorkers=2 ...`)**:
    - 执行命令: `npx vitest run --maxWorkers=2 --exclude '.tower/**' --exclude '**/node_modules/**' --exclude '**/dist/**'`
-   - 实际结果:
-     - **全量测试总数**: 249 个测试文件，1891 个用例。
-     - **248 个测试文件、1890 个用例全量通过 (PASS)**。
-     - 仅 1 个用例在 249 个文件高并发排队下因超过 5000ms 默认超时报 timeout (`src/utils/graphEngine.agnesVideo.test.ts` 中的 `executeWorkflow uses the real Agnes driver and final builder for node size and seed 13`)。
-     - **单独执行该文件 (`npx vitest run src/utils/graphEngine.agnesVideo.test.ts`)**: 12 个测试用例**全量通过 (PASS)**，执行耗时 1342ms，退出码 `0`。
-     - **预设测试 (`src/constants/presetsDryRun.test.ts`)**: 36 个预设用例**全量通过 (PASS)**，退出码 `0`。
-     - **修改涉及的全部单测**: `generationReadiness.test.ts` (9/9 PASS), `resolveCheckpoint.test.ts` (27/27 PASS), `BaseEngineDriver.test.ts` (4/4 PASS), `graphEngine.test.ts` (66/66 PASS), `replicateImageContract.test.ts` (18/18 PASS), `frontendParameters.test.ts` (15/15 PASS), `mageImageContract.test.ts` (10/10 PASS), `runwareImageContract.test.ts` (13/13 PASS), `modelsLabImageContract.test.ts` (21/21 PASS)，**全部一次性绿过**。
+   - 实际退出码: `0`
+   - 测试文件: **256 个测试文件全量通过 (256 passed)**。
+   - 测试用例: **1972 个用例全量通过 (1972 passed)**。
+   - 执行耗时: 130.84s，零失败、零超时，全量退出码 0。
+   - **修改涉及的全部单测**: `generationReadiness.test.ts` (9/9 PASS), `resolveCheckpoint.test.ts` (27/27 PASS), `BaseEngineDriver.test.ts` (4/4 PASS), `graphEngine.test.ts` (66/66 PASS), `replicateImageContract.test.ts` (17/17 PASS), `frontendParameters.test.ts` (15/15 PASS), `mageImageContract.test.ts` (10/10 PASS), `runwareImageContract.test.ts` (13/13 PASS), `modelsLabImageContract.test.ts` (21/21 PASS), `tensorArtModelTypeGate.test.ts` (1/1 PASS), `presetsDryRun.test.ts` (36/36 PASS)，**全部 100% 绿过**。
+
+4. **系统网络与 hosts 状态核验**:
+   - 已通过 `cat /etc/hosts` 严格实测核验，任何测试用的 `fal.ai` 域名劫持均已彻底清除，文件内容仅包含系统默认的 localhost 与本机 host，无残留条目，未对其他 agent 服务造成任何影响。
