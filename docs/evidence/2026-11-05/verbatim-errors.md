@@ -160,6 +160,7 @@
 | `src/utils/clean1029.test.tsx` | 26-33 | `expect(t.message).toContain('完整上游响应原文');` | `expect(t.message).toBe(long);`<br/>`expect(t.message).not.toContain('完整上游响应原文');` | 同上，长响应体直接作为正文透传，无自编标签。 |
 | `src/utils/clean1149.test.tsx` | 21-28 | `expect(t.message).toContain('完整上游响应原文');`<br/>`expect(t.message.split('\n')[0]).not.toBe(body);` | `expect(t.message).toBe(body);`<br/>`expect(t.message).not.toContain('完整上游响应原文');` | 同上，断言 toast.message 原样等于上游 body，绝无自编标签。 |
 | `src/utils/clean1351.test.tsx` | 20-21 | `expect(first).not.toBe(upstream); // fix4 short first line` | `expect(first).toBe(upstream);` | 旧测试断言要求第一行是缩略摘要而不是完整上游响应体。新测试断言第一行就是完整的上游响应体原文。 |
+| `src/components/venicePostfix.test.ts` | 36-41 | `expect(upstreamHttpFirstLine(data)).not.toContain('{"error"');` | `expect(upstreamHttpFirstLine(data)).toContain('{"error":"Insufficient USD"}');` | 旧断言在无 provider 时强制要求剥离上游原始 JSON，丢弃 body 尾部。新断言要求无 provider 时同样完整保留上游 JSON 响应体。 |
 
 ---
 
