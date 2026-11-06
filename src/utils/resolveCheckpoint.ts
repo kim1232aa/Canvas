@@ -707,35 +707,34 @@ export function checkLoraArchitectureCompatibility(
   const ckptBase = (checkpointBaseModel || '').trim();
   const loraBase = (lora.baseModel || '').trim();
 
-  const ckptFamily = getArchitectureFamily(ckptBase) !== 'unknown'
-    ? getArchitectureFamily(ckptBase)
-    : getArchitectureFamily(ckptName);
+  // Non-blocking hint: ONLY when catalog metadata really returned both baseModel fields.
+  // Never guess family from model name.
+  if (!ckptBase || !loraBase) {
+    return {
+      compatible: true,
+      hint: undefined,
+      ckptFamily: 'unknown',
+      loraFamily: 'unknown',
+      ckptBaseModel: ckptBase,
+      loraBaseModel: loraBase,
+    };
+  }
 
-  const loraFamily = getArchitectureFamily(loraBase) !== 'unknown'
-    ? getArchitectureFamily(loraBase)
-    : getArchitectureFamily(loraName);
-
-  const defaultCkptBase = ckptFamily === 'flux' ? 'FLUX.1' : ckptFamily === 'sdxl' ? 'SDXL 1.0' : ckptFamily === 'sd15' ? 'SD 1.5' : ckptFamily === 'sd35' ? 'SD 3.5' : ckptFamily === 'wan21' ? 'Wan 2.1' : ckptName || '未知';
-  const defaultLoraBase = loraFamily === 'flux' ? 'FLUX.1' : loraFamily === 'sdxl' ? 'SDXL 1.0' : loraFamily === 'sd15' ? 'SD 1.5' : loraFamily === 'sd35' ? 'SD 3.5' : loraFamily === 'wan21' ? 'Wan 2.1' : '未知';
-
-  const effectiveCkptBaseModel = ckptBase || defaultCkptBase;
-  const effectiveLoraBaseModel = loraBase || defaultLoraBase;
-
-  // Non-blocking hint: only when catalog metadata really returned differing baseModel fields
-  const metadataDiffer = Boolean(ckptBase && loraBase && ckptBase.toLowerCase() !== loraBase.toLowerCase());
+  const ckptFamily = getArchitectureFamily(ckptBase);
+  const loraFamily = getArchitectureFamily(loraBase);
+  const metadataDiffer = ckptBase.toLowerCase() !== loraBase.toLowerCase();
   const hint = metadataDiffer ? 'likely incompatible: base models differ per the catalog metadata' : undefined;
 
-  // Cross-architecture check: if both families are identified and differ, flag compatibility for hints only
   if (ckptFamily !== 'unknown' && loraFamily !== 'unknown' && ckptFamily !== loraFamily) {
-    const reason = `LoRA [${loraName}] (baseModel: ${effectiveLoraBaseModel}) 与底模 [${ckptName}] (baseModel: ${effectiveCkptBaseModel}) 架构可能不兼容，已提交上游裁决。`;
+    const reason = `LoRA [${loraName}] (baseModel: ${loraBase}) 与底模 [${ckptName}] (baseModel: ${ckptBase}) 架构可能不兼容（基于目录元数据），已提交上游裁决。`;
     return {
       compatible: false,
       reason,
       hint,
       ckptFamily,
       loraFamily,
-      ckptBaseModel: effectiveCkptBaseModel,
-      loraBaseModel: effectiveLoraBaseModel,
+      ckptBaseModel: ckptBase,
+      loraBaseModel: loraBase,
     };
   }
 
@@ -744,8 +743,8 @@ export function checkLoraArchitectureCompatibility(
     hint,
     ckptFamily,
     loraFamily,
-    ckptBaseModel: effectiveCkptBaseModel,
-    loraBaseModel: effectiveLoraBaseModel,
+    ckptBaseModel: ckptBase,
+    loraBaseModel: loraBase,
   };
 }
 

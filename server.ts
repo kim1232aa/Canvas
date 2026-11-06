@@ -3480,8 +3480,11 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
 
         if (!openApi) {
           const upstreamResponded = videoSchemaFetch?.status !== undefined && videoSchemaFetch.status !== null;
+          const statusPart = upstreamResponded
+            ? `HTTP ${videoSchemaFetch?.status}: ${videoSchemaFetch?.body || ''}`.trim()
+            : `Schema 拉取网络错误: ${videoSchemaFetch?.error || '网络不可达'}`;
           return res.status(502).json({
-            error: `Civitai 视频官方 Schema 不可用，未发送生成请求：${videoSchemaFetch?.error || `HTTP ${videoSchemaFetch?.status ?? 'network'}`}`,
+            error: `${statusPart}\n没有发出去：拿不到 Civitai 视频官方 Schema，未发送 workflows`,
             errorSource: videoSchemaFetch?.status === null ? 'network' : videoSchemaFetch?.error ? 'upstream-protocol' : 'upstream',
             ...(upstreamResponded ? { upstreamStatus: videoSchemaFetch?.status } : {}),
             endpoint: CIVITAI_VIDEO_OPENAPI_URL,

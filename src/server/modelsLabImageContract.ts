@@ -61,7 +61,6 @@ export function buildModelsLabImageRequest(
 ): ModelsLabImageRequest {
   if (!apiKey) throw new Error('ModelsLab API Key 必填');
   const prompt = String(body.prompt || '').trim();
-  if (!prompt) throw new Error('ModelsLab 提示词为必填项（prompt is required）');
   const modelId = String(body.model_id || body.model || '').trim();
   if (!modelId) throw new Error('ModelsLab 模型为必填项（model_id is required）');
 

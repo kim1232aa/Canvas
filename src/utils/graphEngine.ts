@@ -1,4 +1,3 @@
-import { isSchemaDrivenProvider } from './schemaSendHint';
 import { Connection, DataType, NodeInstance, Socket } from '../types/graph';
 import { ApiKeysState } from '../types/providers';
 import { getStoredApiKeys, saveToHistory } from '../services/api';

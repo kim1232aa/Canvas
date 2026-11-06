@@ -66,7 +66,6 @@ export function buildMageImageRequest(
   baseUrl = MAGE_DEFAULT_BASE
 ): MageImageRequest {
   const prompt = String(body.prompt || '').trim();
-  if (!prompt) throw new Error('Mage Prompt 必填（prompt is required）');
 
   const modelId = String(body.model_id || body.model || '').trim();
   if (!modelId) throw new Error('模型为必填项（model is required）');

@@ -32,7 +32,6 @@ describe('videoGenerateRoute lifecycle and client disconnect handling (grok_comp
     const deps: VideoGenerateRouteDeps = {
       isProvided: (v: any) => v !== undefined && v !== null && v !== '',
       forwardUnmappedFields: () => false,
-      rejectSchemaEnum: () => false,
       normalizeFalEndpoint: (m: string) => m,
       resolveProviderAuth: () => ({ apiKey: 'mock-key', baseUrl: 'https://mock.grok.ai/v1' }),
       upstreamFetch: vi.fn(),

@@ -1188,6 +1188,7 @@ describe('graphEngine - F4 AIVideoNode provider sync / reject empty & mismatch',
       }),
       createNode('rep-1', 'ReplicateEngineNode', {
         model: 'black-forest-labs/flux-dev',
+        base_model: 'FLUX.1',
         prompt: 'a stylish portrait',
       }),
     ];

@@ -8,7 +8,8 @@ const frame = (params = {}, extra = {}): SpatialFrame => ({id:'f',title:'test',p
 
 describe('explicit frontend request contracts', () => {
   it('enforces serialized model, source-chain and reference-input requirements in spatial mode',()=>{
-    expect(()=>spatialRequestParameters(frame({targetProvider:'civitai',unresolvedModel:true}))).toThrow(/底模.*重新选择/);
+    // unresolvedModel is sent as filled; does not throw locally
+    expect(spatialRequestParameters(frame({targetProvider:'civitai',unresolvedModel:true}))).toBeDefined();
     expect(()=>spatialRequestParameters(frame({targetProvider:'fal',executionBlockedReason:'来源执行链尚未接入'}))).toThrow(/来源执行链尚未接入/);
     expect(()=>spatialRequestParameters(frame({targetProvider:'agnes',requireReferenceImage:true},{imageUrl:'thumbnail.png'}))).toThrow(/编辑输入.*参考图/);
     expect(spatialRequestParameters(frame({targetProvider:'agnes',requireReferenceImage:true},{referenceImageUrl:'reference.png'})).image_url).toBe('reference.png');

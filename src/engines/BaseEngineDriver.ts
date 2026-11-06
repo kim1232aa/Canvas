@@ -26,17 +26,6 @@ export abstract class BaseEngineDriver implements IEngineDriver {
   readonly defaultKey?: string;
 
   /**
-   * 能力边界断言保护：防止调用引擎不支持的模式 (例如对纯推理大模型强行调用像素生成)
-   */
-  protected assertCapability(capability: EngineCapability): void {
-    if (!this.capabilities.includes(capability)) {
-      console.warn(
-        `[assertCapability] 当前 Canvas 驱动 [${this.name}] 本地未声明 [${capability}] 能力，但继续发送请求由上游裁决。`
-      );
-    }
-  }
-
-  /**
    * 生成参数异构归一化 (Normalization Filter)
    */
   protected normalizeGenerateParams(params: NormalizedGenerateParams): NormalizedGenerateParams {
@@ -115,7 +104,6 @@ export abstract class BaseEngineDriver implements IEngineDriver {
       ? hasImage ? 'img2video' : 'text2video'
       : hasImage ? 'img2img' : 'text2img';
 
-    this.assertCapability(requiredCap);
     const normalized = this.normalizeGenerateParams(rawParams);
     return this.executeGenerate(normalized, keys);
   }
@@ -127,7 +115,6 @@ export abstract class BaseEngineDriver implements IEngineDriver {
     rawParams: NormalizedChatParams,
     keys: Record<string, string>
   ): Promise<NormalizedChatResult> {
-    this.assertCapability('reasoning');
     const normalized = this.normalizeChatParams(rawParams);
 
     if (!this.executeChat) {
