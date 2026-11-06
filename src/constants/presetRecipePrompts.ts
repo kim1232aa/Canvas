@@ -29,28 +29,16 @@ export const PRESET_RECIPE_PROMPTS: Record<string, RecipePrompt> = {
     "source": "https://civitai.red/images/142361732"
   },
   "std-fal-t2i": {
-    "prompt": "extreme overhead fisheye perspective of a cyberpunk girl, oversized bright blue eye looking up, dark blue braided hair, complex white mechanical headset with exposed colorful wires, chartreuse shirt, tilted white building, solid blue sky, bold ink outlines, flat vibrant colors, comic illustration",
-    "negative": "watermark,copyrights",
-    "source": "https://civitai.red/images/142361732"
+    "prompt": "two samurais in flowing robes doing a muay thai fight, one throws a high kick while the other leans back. Purple retro anime style",
+    "source": "https://huggingface.co/krea/Krea-2-LoRA-retroanime"
   },
   "std-wavespeed-t2i": {
-    "prompt": "extreme overhead fisheye perspective of a cyberpunk girl, oversized bright blue eye looking up, dark blue braided hair, complex white mechanical headset with exposed colorful wires, chartreuse shirt, tilted white building, solid blue sky, bold ink outlines, flat vibrant colors, comic illustration",
-    "negative": "watermark,copyrights",
-    "source": "https://civitai.red/images/142361732"
+    "prompt": "two samurais in flowing robes doing a muay thai fight, one throws a high kick while the other leans back. Purple retro anime style",
+    "source": "https://huggingface.co/krea/Krea-2-LoRA-retroanime"
   },
   "std-muapi-t2i": {
-    "prompt": "extreme overhead fisheye perspective of a cyberpunk girl, oversized bright blue eye looking up, dark blue braided hair, complex white mechanical headset with exposed colorful wires, chartreuse shirt, tilted white building, solid blue sky, bold ink outlines, flat vibrant colors, comic illustration",
-    "negative": "watermark,copyrights",
-    "source": "https://civitai.red/images/142361732"
-  },
-  "std-runware-t2i": {
-    "prompt": "extreme overhead fisheye perspective of a cyberpunk girl, oversized bright blue eye looking up, dark blue braided hair, complex white mechanical headset with exposed colorful wires, chartreuse shirt, tilted white building, solid blue sky, bold ink outlines, flat vibrant colors, comic illustration",
-    "negative": "watermark,copyrights",
-    "source": "https://civitai.red/images/142361732"
-  },
-  "std-replicate-t2i": {
-    "prompt": "c0l0ringb00k coloring book page, simple cute dragon, white background",
-    "source": "https://civitai.red/images/31247708"
+    "prompt": "two samurais in flowing robes doing a muay thai fight, one throws a high kick while the other leans back. Purple retro anime style",
+    "source": "https://huggingface.co/krea/Krea-2-LoRA-retroanime"
   },
   "std-civitai-i2v": {
     "prompt": "summer",

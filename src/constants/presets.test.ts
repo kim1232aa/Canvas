@@ -67,17 +67,14 @@ const HAS_LORA = new Set([
 
 /** Real LoRAs from accepted runs or official docs recipe IDs (evidence in presets.ts). */
 const PREFILLED_LORA: Record<string, Array<[string, number]>> = {
-  wavespeed: [['https://civitai.com/api/download/models/3129219', 1]],
+  wavespeed: [['https://huggingface.co/krea/Krea-2-LoRA-retroanime/resolve/main/retroanime.safetensors', 1]],
   tensorart: [['1015214543296590260', 1], ['1029661490430387503', 1], ['1015863436619315552', 1]],
   modelslab: [['xl-realistic-cake-art-sty', 0.45]],
-  replicate: [['renderartist/coloringbookflux', 1]],
-  runware: [['civitai:2675439@3129219', 0.8]],
-  novita: [['more_details_59655', 0.8]],
   modelscope: [['hf/renderartist-Technically-Color-Z-Image-Turbo', 0.9]],
   huggingface: [['renderartist/Technically-Color-Z-Image-Turbo', 0.9]],
   aimlapi: [['https://huggingface.co/renderartist/Technically-Color-Z-Image-Turbo/resolve/main/Technically_Color_Z_Image_Turbo_v1_renderartist_2000.safetensors', 0.9]],
-  muapi: [['https://civitai.com/api/download/models/3129219', 1]],
-  fal: [['https://civitai.com/api/download/models/3129219', 1]],
+  muapi: [['https://huggingface.co/krea/Krea-2-LoRA-retroanime/resolve/main/retroanime.safetensors', 1]],
+  fal: [['https://huggingface.co/krea/Krea-2-LoRA-retroanime/resolve/main/retroanime.safetensors', 1]],
   sogni: [['krea2-fever-dream-mood', 1]],
   modelscope_ai: [['LcarsPicturesDatabase/ST-TNG-Rooms-Z-Image-Turbo-v1', 1]],
 };
@@ -241,7 +238,7 @@ describe('standard workflow presets (23 T2I + 5 T2V + 6 I2V)', () => {
   });
 
   it('every preset recipe prompt cites a real recipe page URL (no hist_/doc/official-example/family sources)', () => {
-    const RECIPE_PAGE = /^https:\/\/(civitai\.(com|red)\/images\/\d+|tensor\.art\/images\/\d+)$/;
+    const RECIPE_PAGE = /^https:\/\/(civitai\.(com|red)\/images\/\d+|tensor\.art\/images\/\d+|huggingface\.co\/[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+)$/;
     for (const [id, r] of Object.entries(PRESET_RECIPE_PROMPTS)) {
       expect(r.source, id).toMatch(RECIPE_PAGE);
       expect(r.source, id).not.toMatch(/hist_|docs\/|family|example/i);
@@ -280,10 +277,10 @@ describe('standard workflow presets (23 T2I + 5 T2V + 6 I2V)', () => {
     for (const p of WORKFLOW_PRESETS) {
       const loras = p.nodes.filter(n => n.type === 'LoRALoader');
       for (const n of loras) {
-        if (p.id === 'std-muapi-t2i') continue;
+        if (['std-replicate-t2i', 'std-novita-t2i', 'std-runware-t2i'].includes(p.id)) continue;
         expect(String(n.values.lora_name ?? '').length, `${p.id} empty LoRA shell`).toBeGreaterThan(0);
       }
-      if (!HAS_LORA.has(p.provider) && p.id !== 'std-muapi-t2i' && !p.category.includes('视频')) {
+      if (!HAS_LORA.has(p.provider) && !p.category.includes('视频')) {
         expect(loras, p.id).toHaveLength(0);
       }
     }
@@ -368,7 +365,7 @@ describe('standard workflow presets (23 T2I + 5 T2V + 6 I2V)', () => {
     }
   });
 
-  it('wires wavespeed to the accepted krea-v2-turbo-lora model withCivitai 3129219 LoRA and no negative', () => {
+  it('wires wavespeed to the accepted krea-v2-turbo-lora model with public Retroanime LoRA and no negative', () => {
     const p = preset('std-wavespeed-t2i');
     expect(loader(p.id)!.values.ckpt_name).toBe('wavespeed-ai/krea-v2/turbo-lora');
     expect(p.nodes.map(n => n.type)).toEqual([
@@ -378,6 +375,9 @@ describe('standard workflow presets (23 T2I + 5 T2V + 6 I2V)', () => {
     const ks = p.nodes.find(n => n.type === 'KSampler')!;
     expect(ks.values.sampler_name).toBeUndefined();
     expect(ks.values.scheduler).toBeUndefined();
+    const l = lora(p.id)!;
+    expect(l.values.lora_name).toBe('https://huggingface.co/krea/Krea-2-LoRA-retroanime/resolve/main/retroanime.safetensors');
+    expect(l.values.strength_model).toBe(1);
   });
 
   it('full-chain T2I: visible Chinese size node in loader column, wired to latent_image, loader holds no size', () => {
@@ -598,13 +598,14 @@ describe('standard workflow presets (23 T2I + 5 T2V + 6 I2V)', () => {
     expect(ks.values).toMatchObject({ steps: 12, cfg: 1, seed: 1840591390 });
   });
 
-  it('MuAPI ships a visible LoRA mount point (official lora_weight default 1) and no local run lock', () => {
+  it('MuAPI ships a visible LoRA mount point with public Retroanime LoRA and no local run lock', () => {
     const p = preset('std-muapi-t2i');
     const ckpt = p.nodes.find(n => n.type === 'CheckpointLoaderSimple')!;
     expect(ckpt.values.execution_blocked_reason).toBeUndefined();
     expect(p.pendingRecipe).toBeUndefined();
+    expect(loader(p.id)!.values.ckpt_name).toBe('krea-v2-turbo-lora');
     const l = p.nodes.find(n => n.type === 'LoRALoader')!;
-    expect(l.values).toMatchObject({ lora_name: 'https://civitai.com/api/download/models/3129219', strength_model: 1 });
+    expect(l.values).toMatchObject({ lora_name: 'https://huggingface.co/krea/Krea-2-LoRA-retroanime/resolve/main/retroanime.safetensors', strength_model: 1 });
     const props = JSON.parse(String(ckpt.values.custom_parameters || '{}'))?._canvas?.schemaProperties;
     expect(props).toEqual(expect.arrayContaining(['prompt', 'loras', 'aspect_ratio', 'resolution']));
     const ks = p.nodes.find(n => n.type === 'KSampler')!;
@@ -626,10 +627,15 @@ describe('standard workflow presets (23 T2I + 5 T2V + 6 I2V)', () => {
     }
   });
 
-  it('Novita T2I provides LoRA-capable workflow without hardcoded legacy SDXL/SD1.5 base', () => {
-    const p = preset('std-novita-t2i');
-    expect(loader(p.id)!.values.ckpt_name).toBe('');
-    expect(lora(p.id)!.values.lora_name).toBe('more_details_59655');
+  it('Novita, Replicate, and Runware T2I maintain full LoRA-capable topology awaiting user model choice', () => {
+    for (const prov of ['novita', 'replicate', 'runware']) {
+      const p = preset(`std-${prov}-t2i`);
+      expect(loader(p.id)!.values.ckpt_name).toBe('');
+      expect(p.nodes.some(n => n.type === 'LoRALoader')).toBe(true);
+      const l = lora(p.id)!;
+      expect(l.values.lora_name).toBe('');
+      expect(typeof l.values.strength_model).toBe('number');
+    }
   });
 
   it('ModelScope CN/intl presets mount accepted LoRAs and omit sampler/scheduler shells', () => {
@@ -689,24 +695,59 @@ describe('standard workflow presets (23 T2I + 5 T2V + 6 I2V)', () => {
     expect(preset('std-deepinfra-t2i').nodes.find(n => n.type === 'EmptyLatentImage')!.values.width).toBe(1024);
   });
 
-  it('Replicate flux-dev-lora omits EmptyLatent pixels; aspect_ratio 1:1 on checkpoint', () => {
+  it('Replicate omits EmptyLatent pixels; aspect_ratio 1:1 on checkpoint, maintains LoRA node', () => {
     const p = preset('std-replicate-t2i');
     const ckpt = loader(p.id)!;
-    expect(ckpt.values.ckpt_name).toBe('black-forest-labs/flux-dev-lora');
+    expect(ckpt.values.ckpt_name).toBe('');
     expect(ckpt.values.aspect_ratio).toBe('1:1');
     const lat = p.nodes.find(n => n.type === 'EmptyLatentImage')!;
     expect(lat.values.width).toBeUndefined();
     expect(lat.values.height).toBeUndefined();
     expect(p.spatialFrames![0].params.aspectRatio).toBe('1:1');
     expect(p.spatialFrames![0].params.width).toBeUndefined();
-    expect(lora(p.id)!.values.lora_name).toBe('renderartist/coloringbookflux');
+    expect(p.nodes.some(n => n.type === 'LoRALoader')).toBe(true);
   });
 
-  it('Runware mounts LoRA node with air civitai:2675439@3129219', () => {
+  it('Runware maintains LoRA node with strength 0.8 awaiting user model choice', () => {
     const p = preset('std-runware-t2i');
-    expect(loader(p.id)!.values.ckpt_name).toBe('runware:101@1');
-    expect(lora(p.id)!.values.lora_name).toBe('civitai:2675439@3129219');
+    expect(loader(p.id)!.values.ckpt_name).toBe('');
+    expect(lora(p.id)!.values.strength_model).toBe(0.8);
     expect(p.nodes.some(n => n.type === 'LoRALoader')).toBe(true);
+  });
+
+  it('enforces architecture compatibility on every preset that carries a LoRA', () => {
+    const detectFamily = (name: string): string => {
+      const lower = name.toLowerCase();
+      if (lower.includes('krea') || lower.includes('retroanime')) return 'krea2';
+      if (lower.includes('z-image') || lower.includes('zimage') || lower.includes('lcars') || lower.includes('technically-color')) return 'zimage';
+      if (lower.includes('wan-2.2') || lower.includes('wanvideo-22') || lower.includes('2247725') || lower.includes('1902817')) return 'wan2.2';
+      if (lower.includes('wan-2.1') || lower.includes('wan2.1') || lower.includes('wan-t2v') || lower.includes('wan-i2v') || lower.includes('redmond') || lower.includes('matrix_shot')) return 'wan2.1';
+      if (lower.includes('tamarin-xl') || lower.includes('cake-art')) return 'sdxl';
+      if (lower.includes('photoreal_studio_z_image') || /^\d{10,}$/.test(lower)) return 'openworks';
+      if (name === '') return 'unspecified';
+      return 'unknown';
+    };
+
+    for (const p of WORKFLOW_PRESETS) {
+      const summary = presetSummary(p);
+      const loras = summary.loras;
+      if (!loras || loras.length === 0) continue;
+
+      const baseModel = summary.model;
+      const baseFamily = detectFamily(baseModel);
+
+      for (const l of loras) {
+        if (!l.name) continue;
+        const loraFamily = detectFamily(l.name);
+        expect(loraFamily).not.toBe('unknown');
+        if (baseFamily !== 'unspecified') {
+          expect(
+            baseFamily,
+            `Architecture mismatch on preset ${p.id}: base "${baseModel}" (${baseFamily}) != LoRA "${l.name}" (${loraFamily})`
+          ).toBe(loraFamily);
+        }
+      }
+    }
   });
 
   it('NanoGPT moss-image sets steps 50, cfg 3, seed 42, resolution 1024x1024 on checkpoint', () => {

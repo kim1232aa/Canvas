@@ -977,11 +977,11 @@ const STD_SPECS: StdSpec[] = [
   },
   // Fal live endpoint: fal-ai/krea-2/turbo/lora (Krea 2 Turbo LoRA, verified live 2026-11-06).
   // Parameters: prompt (required), image_size, seed, loras (maxItems 3, path and scale).
-  // Recipe https://civitai.red/images/142361732 (Krea 2 Turbo recipe; Civitai 3129219 Fever Dream Mood).
+  // Recipe https://huggingface.co/krea/Krea-2-LoRA-retroanime (Krea 2 Turbo Retro Anime LoRA by Krea, public resolve URL 200 OK).
   { provider: 'fal', ckpt: 'fal-ai/krea-2/turbo/lora', hasLora: true, hasNegative: false, seed: 64107730,
     omit: ['steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'width', 'height'],
     checkpointExtra: { aspect_ratio: '1:1', image_size: 'square_hd' },
-    loras: [{ name: 'https://civitai.com/api/download/models/3129219', strength: 1, source: 'https://civitai.red/images/142361732' }],
+    loras: [{ name: 'https://huggingface.co/krea/Krea-2-LoRA-retroanime/resolve/main/retroanime.safetensors', strength: 1, source: 'https://huggingface.co/krea/Krea-2-LoRA-retroanime' }],
   },
   // OpenWorks-only: full params + LoRA (openWorksProvider.ts OPENWORKS_LIVE_EXTRAS: seed/steps/cfg/negative_prompt/loras/checkpoint).
   // Accepted run hist_1792223105137_bhlop: sampler/scheduler「该端点不支持，未发送」.
@@ -1009,7 +1009,7 @@ const STD_SPECS: StdSpec[] = [
   },
   // MuAPI live endpoint: /api/v1/krea-v2-turbo-lora (verified 2026-10-16 / 2026-11-06).
   // Live OpenAPI: prompt, loras[{path, scale}], aspect_ratio, resolution (1k/2k).
-  // Recipe https://civitai.red/images/142361732 (Civitai 3129219).
+  // Recipe https://huggingface.co/krea/Krea-2-LoRA-retroanime (Krea 2 Turbo LoRA, public resolve URL 200 OK).
   {
     provider: 'muapi',
     ckpt: 'krea-v2-turbo-lora',
@@ -1025,15 +1025,15 @@ const STD_SPECS: StdSpec[] = [
       }),
     },
     hasLora: true,
-    loras: [{ name: 'https://civitai.com/api/download/models/3129219', strength: 1, source: 'https://civitai.red/images/142361732' }],
+    loras: [{ name: 'https://huggingface.co/krea/Krea-2-LoRA-retroanime/resolve/main/retroanime.safetensors', strength: 1, source: 'https://huggingface.co/krea/Krea-2-LoRA-retroanime' }],
   },
   // WaveSpeed live endpoint: wavespeed-ai/krea-v2/turbo-lora (verified 2026-10-15 / 2026-11-06).
   // Live Schema: prompt, aspect_ratio, resolution (1k/2k), seed, loras[{path, scale}].
-  // Recipe https://civitai.red/images/142361732 (Civitai 3129219).
+  // Recipe https://huggingface.co/krea/Krea-2-LoRA-retroanime (Krea 2 Turbo LoRA, public resolve URL 200 OK).
   { provider: 'wavespeed', ckpt: 'wavespeed-ai/krea-v2/turbo-lora', hasLora: true, hasNegative: false,
     omit: ['steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'width', 'height'],
     checkpointExtra: { aspect_ratio: '1:1', resolution: '1k' },
-    loras: [{ name: 'https://civitai.com/api/download/models/3129219', strength: 1, source: 'https://civitai.red/images/142361732' }],
+    loras: [{ name: 'https://huggingface.co/krea/Krea-2-LoRA-retroanime/resolve/main/retroanime.safetensors', strength: 1, source: 'https://huggingface.co/krea/Krea-2-LoRA-retroanime' }],
   },
   // Krea model IDs are live OpenAPI operation paths (e.g. image/krea/krea-2/medium-turbo), not Sogni's krea-2-turbo selector.
   // Leave the model empty so the user chooses an exact current endpoint from Krea's live catalog; do not alias across providers.
@@ -1048,12 +1048,13 @@ const STD_SPECS: StdSpec[] = [
   { provider: 'aimlapi', ckpt: 'alibaba/z-image-turbo-lora', hasLora: true, hasNegative: false, seed: 1840591390, steps: 12, cfg: 1, width: 1216, height: 832,
     loras: [{ name: 'https://huggingface.co/renderartist/Technically-Color-Z-Image-Turbo/resolve/main/Technically_Color_Z_Image_Turbo_v1_renderartist_2000.safetensors', strength: 0.9, source: 'https://civitai.red/images/113739497' }],
     omit: ['sampler', 'scheduler', 'denoise'] },
-  // Novita: 保持完整文生图 + LoRA 拓扑，底模留空供用户选择或配合模型库选择，不硬编码老旧 SDXL 1.0 / SD1.5。
+  // Novita: 保持完整文生图 + LoRA 拓扑（底模与 LoRA 留空供用户在模型库自主选用当前有效模型）。
   // Novita API 官方支持 request.loras[{model_name, strength}]。
   {
     provider: 'novita',
     ckpt: '',
     hasLora: true,
+    loraMount: { strength: 0.8, source: 'novita-lora-mount' },
     hasNegative: true,
     seed: 548949743,
     steps: 20,
@@ -1061,9 +1062,6 @@ const STD_SPECS: StdSpec[] = [
     sampler: 'Euler a',
     width: 1024,
     height: 1024,
-    loras: [
-      { name: 'more_details_59655', strength: 0.8, source: 'civitai:59655' },
-    ],
     omit: ['scheduler', 'denoise'],
   },
   // docs/evidence/venice-api-2026-10-15.md:51/54: catalog 200 lists venice-sd35; seed/steps/cfg_scale/size/negative sent; no custom loras.
@@ -1077,21 +1075,31 @@ const STD_SPECS: StdSpec[] = [
   { provider: 'sogni', ckpt: 'krea-2-turbo', hasLora: true, seed: 64107730, steps: 10, cfg: 1, sampler: 'euler', width: 768, height: 1376,
     loras: [{ name: 'krea2-fever-dream-mood', strength: 1, source: 'https://civitai.red/images/142361732' }],
     omit: ['scheduler', 'denoise'] },
-  // Live OpenAPI GET /v1/models/black-forest-labs/flux-dev-lora + default_example: lora_weights=fofr/flux-80s-cyberpunk, lora_scale=1, guidance=3, steps=28.
-  // Official docs example also cites fofr/flux-pixar-cars; default_example LoRA is the acceptance recipe id.
-  // Recipe https://civitai.red/images/31247708 (verbatim seed/steps/cfg/LoRA; size 1216x832 not a field on flux-dev-lora → aspect_ratio stays).
-  { provider: 'replicate', ckpt: 'black-forest-labs/flux-dev-lora', hasLora: true, hasNegative: false, seed: 2100162238, steps: 41, cfg: 3.5,
-    // providerSchema + draft: aspect_ratio (+ megapixels); width/height unsupported on flux-dev-lora.
+  // Replicate: 保持完整文生图 + LoRA 拓扑（底模与 LoRA 留空供用户在模型库自主选用当前有效模型）。
+  // 避免硬编码老旧 FLUX.1，保留完整 CheckpointLoaderSimple -> LoRALoader 连线。
+  {
+    provider: 'replicate',
+    ckpt: '',
+    hasLora: true,
+    loraMount: { strength: 1, source: 'replicate-lora-mount' },
+    hasNegative: false,
+    seed: 2100162238,
+    steps: 28,
+    cfg: 3.5,
     omit: ['sampler', 'scheduler', 'denoise', 'width', 'height'],
     checkpointExtra: { aspect_ratio: '1:1' },
-    loras: [{ name: 'renderartist/coloringbookflux', strength: 1, source: 'https://civitai.red/images/31247708' }],
   },
-  // Runware: 官方文生图 + LoRA 完整拓扑 (https://runware.ai/docs/models/bfl-flux-2-klein-9b-base & runware:101@1 FLUX.1 Dev)
-  // Runware LoRA: { model: 'civitai:2675439@3129219', weight: 0.8 } (AIR or civitai ID)
-  // Recipe https://civitai.red/images/142361732
-  { provider: 'runware', ckpt: 'runware:101@1', hasLora: true, hasNegative: false, steps: 25, cfg: 3.5,
+  // Runware: 保持完整文生图 + LoRA 拓扑（底模与 LoRA 留空供用户自主选择，避免架构不匹配）。
+  // 官方支持 lora: [{ model: string, weight: number }]。
+  {
+    provider: 'runware',
+    ckpt: '',
+    hasLora: true,
+    loraMount: { strength: 0.8, source: 'runware-lora-mount' },
+    hasNegative: false,
+    steps: 25,
+    cfg: 3.5,
     omit: ['sampler', 'scheduler', 'denoise'],
-    loras: [{ name: 'civitai:2675439@3129219', strength: 0.8, source: 'https://civitai.red/images/142361732' }],
   },
   // docs.modelslab.com/.../dreambooth-lora body example: model_id tamarin-xl-v1 + lora_model xl-realistic-cake-art-sty @ 0.45.
   // Tamarin XL V1 (civitai.com/models/235746?modelVersionId=265836) is SDXL 1.0 architecture; native resolution is 1024x1024.
