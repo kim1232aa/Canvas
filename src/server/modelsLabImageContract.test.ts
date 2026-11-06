@@ -54,6 +54,49 @@ describe('ModelsLab Image Contract', () => {
     expect(req.payload.lora_strength).toBe(0.8);
   });
 
+  it('omits foreign Civitai filename or bare numeric civitaiId when no ModelsLab catalog lora_model/catalogId is provided', () => {
+    const req = buildModelsLabImageRequest(
+      {
+        model: 'flux',
+        prompt: 'a portrait',
+        loras: [
+          {
+            name: 'cinematic-1940s.safetensors',
+            civitaiId: '1527024',
+            downloadUrl: 'https://civitai.com/api/download/models/1527024',
+            strength: 0.8,
+          },
+        ],
+      },
+      'test-api-key'
+    );
+    expect(req.payload.lora_model).toBeUndefined();
+    expect(req.payload.lora_strength).toBeUndefined();
+    expect(req.unmappedLoras).toHaveLength(1);
+    expect(req.unmappedLoras?.[0].reason).toContain('lora_model');
+  });
+
+  it('uses explicit ModelsLab catalogId or lora_model even when Civitai metadata is attached', () => {
+    const req = buildModelsLabImageRequest(
+      {
+        model: 'flux',
+        prompt: 'a portrait',
+        loras: [
+          {
+            name: 'cinematic-1940s.safetensors',
+            civitaiId: '1527024',
+            lora_model: 'modelslab-cinematic-1940s',
+            strength: 0.65,
+          },
+        ],
+      },
+      'test-api-key'
+    );
+    expect(req.payload.lora_model).toBe('modelslab-cinematic-1940s');
+    expect(req.payload.lora_strength).toBe(0.65);
+    expect(req.unmappedLoras).toBeUndefined();
+  });
+
   it('regression: allows empty prompt and sends it as filled without local throw', () => {
     const req = buildModelsLabImageRequest(
       {

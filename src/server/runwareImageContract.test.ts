@@ -73,6 +73,49 @@ describe('Runware Image Contract', () => {
     expect(req.payload[0].lora).toEqual([{ model: 'civitai:618692@691639', weight: 0.85 }]);
   });
 
+  it('constructs civitai:modelId@versionId when structured modelId and versionId/civitaiId are present even if civitaiId is bare numeric versionId', () => {
+    const req = buildRunwareImageRequest({
+      model: 'runware:100@1',
+      prompt: 'cinematic portrait',
+      loras: [
+        {
+          name: 'cinematic-1940s.safetensors',
+          civitaiId: '1527024',
+          modelId: '1351798',
+          versionId: '1527024',
+          air: 'urn:air:flux1:lora:civitai:1351798@1527024',
+          downloadUrl: 'https://civitai.com/api/download/models/1527024',
+          strength: 0.3,
+        },
+      ],
+    });
+    expect(req.payload[0].lora).toEqual([{ model: 'civitai:1351798@1527024', weight: 0.3 }]);
+    expect(req.unmappedLoras).toBeUndefined();
+  });
+
+  it('rejects bare numeric versionId, .safetensors filename, and raw download URL when Runware AIR or modelId@versionId is missing', () => {
+    const req = buildRunwareImageRequest({
+      model: 'runware:100@1',
+      prompt: 'cinematic portrait',
+      loras: [
+        {
+          name: 'cinematic-1940s.safetensors',
+          downloadUrl: 'https://civitai.com/api/download/models/1527024',
+          civitaiId: '1527024',
+          strength: 0.3,
+        },
+        {
+          name: 'cinematic-1940s.safetensors',
+          path: 'cinematic-1940s.safetensors',
+          strength: 0.3,
+        },
+      ],
+    });
+    expect(req.payload[0].lora).toBeUndefined();
+    expect(req.unmappedLoras).toHaveLength(2);
+    expect(req.unmappedLoras?.[0].reason).toContain('AIR');
+  });
+
   it('maps image_url and denoise to seedImage and strength for image-to-image', () => {
     const req = buildRunwareImageRequest({
       model: 'runware:100@1',

@@ -854,6 +854,58 @@ describe('Mission M27: Recipe Shape, LoRA Resource Identity, and Target Schema A
         modelId: 1351798,
         versionId: 1527024,
       });
+
+      // Also verify when civitai_id holds bare versionId ('1527024') alongside model_id/version_id/air
+      const reqWithBareCivitaiId = buildRunwareImageRequest({
+        model: 'runware:100@1',
+        prompt: 'cinematic scene',
+        loras: [
+          {
+            name: 'cinematic-1940s.safetensors',
+            civitaiId: '1527024',
+            modelId: '1351798',
+            versionId: '1527024',
+            air: 'urn:air:flux1:lora:civitai:1351798@1527024',
+            downloadUrl: 'https://civitai.com/api/download/models/1527024',
+            strength: 0.3,
+          },
+        ],
+      });
+      expect(reqWithBareCivitaiId.payload[0].lora).toEqual([{ model: 'civitai:1351798@1527024', weight: 0.3 }]);
+
+      // And verify bare versionId or filename without modelId/AIR is rejected instead of sent as Runware AIR or ModelsLab lora_model
+      const reqRunwareUnmapped = buildRunwareImageRequest({
+        model: 'runware:100@1',
+        prompt: 'cinematic scene',
+        loras: [
+          {
+            name: 'cinematic-1940s.safetensors',
+            civitaiId: '1527024',
+            downloadUrl: 'https://civitai.com/api/download/models/1527024',
+            strength: 0.3,
+          },
+        ],
+      });
+      expect(reqRunwareUnmapped.payload[0].lora).toBeUndefined();
+      expect(reqRunwareUnmapped.unmappedLoras).toHaveLength(1);
+
+      const reqModelsLabUnmapped = buildModelsLabImageRequest(
+        {
+          model: 'flux',
+          prompt: 'cinematic scene',
+          loras: [
+            {
+              name: 'cinematic-1940s.safetensors',
+              civitaiId: '1527024',
+              downloadUrl: 'https://civitai.com/api/download/models/1527024',
+              strength: 0.8,
+            },
+          ],
+        },
+        'test-key'
+      );
+      expect(reqModelsLabUnmapped.payload.lora_model).toBeUndefined();
+      expect(reqModelsLabUnmapped.unmappedLoras).toHaveLength(1);
     });
 
     it('unmappedLorasNotice surfaces omitted LoRA names, source values, and reasons for historyWarning / UI visibility', () => {

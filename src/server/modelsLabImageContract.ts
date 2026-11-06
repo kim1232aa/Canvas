@@ -5,6 +5,48 @@ export interface ModelsLabImageRequest {
   payload: Record<string, unknown>;
   overrides: CustomOverride[];
   actualModel: string;
+  unmappedLoras?: Array<{ item: unknown; reason: string }>;
+}
+
+function isInvalidModelsLabCatalogId(raw: string): boolean {
+  const s = raw.trim();
+  if (!s) return true;
+  if (/^https?:\/\//i.test(s)) return true;
+  if (/^(?:urn:)?air:/i.test(s)) return true;
+  if (/^[a-z0-9_.-]+:\d+@\d+$/i.test(s)) return true;
+  if (/^\d+$/.test(s)) return true;
+  if (/\.(?:safetensors|ckpt|pt|bin|pth|onnx)(?:$|[?#])/i.test(s)) return true;
+  return false;
+}
+
+function resolveModelsLabLoraModel(item: Record<string, any>): { model: string; reason?: string } {
+  const isForeignCivitai = Boolean(
+    String(item.civitaiId ?? item.civitai_id ?? item.air ?? item.downloadUrl ?? item.download_url ?? '').trim() ||
+      item.import_source_provider === 'civitai' ||
+      item.resource_source === 'civitai'
+  );
+  const explicitCandidates = [
+    item.lora_model,
+    item.loraModel,
+    item.catalogId,
+    item.catalog_id,
+    item.loraId,
+    item.lora_id,
+    item.slug,
+    item.model,
+    ...(!isForeignCivitai ? [item.id, item.name] : []),
+  ];
+  for (const candidate of explicitCandidates) {
+    const s = String(candidate ?? '').trim();
+    if (s && !isInvalidModelsLabCatalogId(s)) {
+      return { model: s };
+    }
+  }
+  return {
+    model: '',
+    reason:
+      'ModelsLab LoRA 需要目标平台目录中的 lora_model 标识符，不能直接发送 Civitai 权重文件名、下载链接、AIR 或纯数字版本 ID',
+  };
 }
 
 export interface ModelsLabSuccessResponse {
@@ -105,13 +147,20 @@ export function buildModelsLabImageRequest(
     payload.scheduler = body.scheduler.trim();
   }
 
+  const unmappedLoras: Array<{ item: unknown; reason: string }> = [];
   if (Array.isArray(body.loras) && body.loras.length > 0) {
     const loraModels: string[] = [];
     const loraStrengths: number[] = [];
     for (const item of body.loras) {
       if (typeof item === 'object' && item !== null) {
-        const name = String((item as any).name || (item as any).civitaiId || (item as any).model || '').trim();
-        if (!name) continue;
+        const resolved = resolveModelsLabLoraModel(item as Record<string, any>);
+        if (!resolved.model) {
+          unmappedLoras.push({
+            item,
+            reason: resolved.reason || 'ModelsLab LoRA 缺少有效的目录模型标识符',
+          });
+          continue;
+        }
         const rawStr =
           typeof (item as any).strength === 'number'
             ? (item as any).strength
@@ -119,8 +168,10 @@ export function buildModelsLabImageRequest(
             ? (item as any).modelStrength
             : typeof (item as any).scale === 'number'
             ? (item as any).scale
+            : typeof (item as any).weight === 'number'
+            ? (item as any).weight
             : undefined;
-        loraModels.push(name);
+        loraModels.push(resolved.model);
         loraStrengths.push(typeof rawStr === 'number' && Number.isFinite(rawStr) ? rawStr : (null as any));
       }
     }
@@ -149,6 +200,7 @@ export function buildModelsLabImageRequest(
     payload: custom.payload,
     overrides: custom.overrides,
     actualModel: String(custom.payload.model_id),
+    ...(unmappedLoras.length > 0 ? { unmappedLoras } : {}),
   };
 }
 

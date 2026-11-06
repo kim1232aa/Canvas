@@ -91,8 +91,8 @@ A comprehensive behavior test suite is maintained across 11 test suites covering
 - **Mutation 1**: Mutated `normalizeEcosystem` to conflate Krea and Z-Image:
   `if (b.includes('krea') || b.includes('zimage')) return 'krea2';`
   -> **FAIL** `src/server/recipeShape.test.ts` (Exit Code 1). Restored clean.
-- **Mutation 2**: Commented out `subscribeModelSchema` in `CivitaiModal.tsx` and `CivitaiModalImportPreview.tsx`:
-  -> **FAIL** `src/components/CivitaiModalImportLiveSchema.test.tsx` (3 failed, Exit Code 1). Restored clean.
+- **Mutation 2**: Commented out `subscribeModelSchema` across `CivitaiModal.tsx` and `CivitaiModalImportPreview.tsx` (or `ensureModelSchema` in `CivitaiModal.tsx`):
+  -> **FAIL** `src/components/CivitaiModalImportLiveSchema.test.tsx` (3 failed, Exit Code 1). Note: removing `subscribeModelSchema` only in `CivitaiModal.tsx` while keeping `CivitaiModalImportPreview.tsx`'s own internal `subscribeModelSchema` + `effectiveAdaptation` recomputation stays green because the child preview component independently subscribes to the live schema store; removing `ensureModelSchema` in `CivitaiModal.tsx` or removing `subscribeModelSchema` in both components turns the suite RED (3 failed, Exit Code 1). Restored clean.
 - **Mutation 3**: Dropped explicit non-Civitai numeric target ID support in `mapSchemaLoraItems`:
   -> **FAIL** `src/server/recipeShape.test.ts > mapSchemaLoraItems allows explicit non-Civitai numeric target IDs` (Exit Code 1). Restored clean.
 - **Mutation 4**: Swallowed explicit LoRA strengths in `sogniLoras` when an item is unset:
@@ -174,7 +174,7 @@ UI 真实操作状态：**BLOCKED_AUTH (真实上游鉴权 401，待有效凭据
          "traceId": "00-0fa7c2aa4454d07d0fb57270fd2e68e4-32e45b932230b480-02"
        }
        ```
-     - 界面呈现：前端顶部 Toast、页面状态栏及 KSampler 节点红底高亮区域原样、完整呈现上游 HTTP 401 Unauthorized 与真实 `traceId`，绝无吞错、美化、本地 fallback 或假冒成功。
+     - 界面呈现：截图 `temp/m27-ui/05-run-upstream-401-verbatim.png` 直接展示的是前端顶部 Toast、页面状态栏及 KSampler 节点红底高亮区域原样、完整呈现的上游 `HTTP 401 Unauthorized` 响应体与真实 `traceId`（注：上方的 `steps[0].input.loras` AIR 字典为后端路由实际组装并发送的出站请求载荷结构，由后端抓包日志与契约单测核实，截图中展示的是 401 错误响应呈现而非请求体 JSON 面板），绝无吞错、美化、本地 fallback 或假冒成功。
 
 > **关于早期探查草稿截图的澄清说明**：
 > 在 429 中断前留存于 `temp/m27-ui/` 目录下的早期探查图片 `03-krea2-canvas-loaded.png` 与 `02-sogni-krea2-live-schema.png` 是定位底模丢失与状态虚假兼容缺陷时的中间调试现场，从未作为正式验收交付。正式验收以本次完全修复后重新在浏览器中真实点击采集的 `temp/m27-ui/01`~`05` 完整链路截图为准。
