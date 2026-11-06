@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
-import { handleExtractCivitaiWorkflow, type CivitaiWorkflowDeps } from './civitaiWorkflowRoute';
+import {
+  handleExtractCivitaiWorkflow,
+  resolveCivitaiVersionInfo,
+  resolveCivitaiVersionByHash,
+  fetchCivitaiRealImageMeta,
+  type CivitaiWorkflowDeps,
+} from './civitaiWorkflowRoute';
 import { handleCivitaiModelVersion, type CivitaiModelRouteDeps } from './civitaiModelRoutes';
 import { isRawBaseModelArchitectureText } from '../../utils/civitaiImportMap';
 
@@ -381,24 +387,21 @@ describe('Civitai Routes and Workflow Contract Tests', () => {
       ['model label', { prompt: 'a portrait', Model: 'wan 2' }],
       ['MiniMax prompt', { prompt: 'a portrait with hailuo framing', Model: 'pixel-wave' }],
     ])('does not infer video from the %s without video media metadata', async (_label, meta) => {
-      const nextData = {
-        props: {
-          pageProps: {
-            trpcState: {
-              json: {
-                queries: [
-                  { queryKey: [['image', 'getGenerationData']], state: { data: { meta, resources: [] } } },
-                  { queryKey: [['image', 'get']], state: { data: { id: 12, user: { username: 'tester' }, metadata: {} } } },
-                ],
-              },
-            },
+      const restData = {
+        items: [
+          {
+            id: 12,
+            username: 'tester',
+            baseModel: 'SDXL 1.0',
+            meta,
           },
-        },
+        ],
       };
       const mockFetch = vi.fn(async () => ({
         ok: true,
         status: 200,
-        text: async () => `<script id="__NEXT_DATA__" type="application/json">${JSON.stringify(nextData)}</script>`,
+        text: async () => JSON.stringify(restData),
+        json: async () => restData,
       }));
       const handler = handleExtractCivitaiWorkflow(createMockWorkflowDeps(mockFetch));
       const res = createMockRes();
@@ -433,27 +436,21 @@ describe('Civitai Routes and Workflow Contract Tests', () => {
     });
 
     it('preserves image meta.clipSkip and reports the unmapped parameter', async () => {
-      const nextData = {
-        props: {
-          pageProps: {
-            trpcState: {
-              json: {
-                queries: [
-                  {
-                    queryKey: [['image', 'getGenerationData']],
-                    state: { data: { meta: { prompt: 'a portrait', Model: 'pixel-wave', clipSkip: 3 }, resources: [] } },
-                  },
-                  { queryKey: [['image', 'get']], state: { data: { id: 1234567, metadata: {} } } },
-                ],
-              },
-            },
+      const restData = {
+        items: [
+          {
+            id: 1234567,
+            username: 'tester',
+            baseModel: 'SDXL 1.0',
+            meta: { prompt: 'a portrait', Model: 'pixel-wave', clipSkip: 3, resources: [] },
           },
-        },
+        ],
       };
       const mockFetch = vi.fn(async () => ({
         ok: true,
         status: 200,
-        text: async () => `<script id="__NEXT_DATA__" type="application/json">${JSON.stringify(nextData)}</script>`,
+        text: async () => JSON.stringify(restData),
+        json: async () => restData,
       }));
       const handler = handleExtractCivitaiWorkflow(createMockWorkflowDeps(mockFetch));
       const res = createMockRes();
@@ -567,7 +564,7 @@ describe('Civitai Routes and Workflow Contract Tests', () => {
             }),
           };
         }
-        if (url.includes('/api/v1/model-versions/691639')) {
+        if (url.includes('691639')) {
           return {
             ok: true,
             status: 200,
@@ -578,10 +575,12 @@ describe('Civitai Routes and Workflow Contract Tests', () => {
               baseModel: 'Flux.1 D',
               air: 'urn:air:flux1:checkpoint:civitai:618692@691639',
               downloadUrl: 'https://civitai.com/api/download/models/691639',
+              downloadUrls: ['https://civitai.com/api/download/models/691639'],
+              canGenerate: true,
             }),
           };
         }
-        if (url.includes('/api/v1/model-versions/1527024')) {
+        if (url.includes('1527024')) {
           return {
             ok: true,
             status: 200,
@@ -592,6 +591,8 @@ describe('Civitai Routes and Workflow Contract Tests', () => {
               baseModel: 'Flux.1 D',
               air: 'urn:air:flux1:lora:civitai:1351798@1527024',
               downloadUrl: 'https://civitai.com/api/download/models/1527024',
+              downloadUrls: ['https://civitai.com/api/download/models/1527024'],
+              canGenerate: true,
             }),
           };
         }
@@ -709,10 +710,10 @@ describe('Civitai Routes and Workflow Contract Tests', () => {
           };
         }
         if (url.includes('/api/v1/model-versions/mini/1527024')) {
-          return { ok: true, status: 200, json: async () => ({ air: 'urn:air:flux1:lora:civitai:1351798@1527024', requireAuth: true, baseModel: 'Flux.1 D' }) };
+          return { ok: true, status: 200, json: async () => ({ air: 'urn:air:flux1:lora:civitai:1351798@1527024', requireAuth: true, baseModel: 'Flux.1 D', downloadUrls: ['https://civitai.com/api/download/models/1527024'] }) };
         }
         if (url.includes('/api/v1/model-versions/1527024')) {
-          return { ok: true, status: 200, json: async () => ({ id: 1527024, modelId: 1351798, baseModel: 'Flux.1 D' }) };
+          return { ok: true, status: 200, json: async () => ({ id: 1527024, modelId: 1351798, baseModel: 'Flux.1 D', downloadUrl: 'https://civitai.com/api/download/models/1527024' }) };
         }
         return { ok: false, status: 404, text: async () => 'Not found' };
       });
@@ -751,10 +752,10 @@ describe('Civitai Routes and Workflow Contract Tests', () => {
           };
         }
         if (url.includes('/api/v1/model-versions/mini/1527024')) {
-          return { ok: true, status: 200, json: async () => ({ air: 'urn:air:flux1:lora:civitai:1351798@1527024', requireAuth: true, baseModel: 'Flux.1 D' }) };
+          return { ok: true, status: 200, json: async () => ({ air: 'urn:air:flux1:lora:civitai:1351798@1527024', requireAuth: true, baseModel: 'Flux.1 D', downloadUrls: ['https://civitai.com/api/download/models/1527024'] }) };
         }
         if (url.includes('/api/v1/model-versions/1527024')) {
-          return { ok: true, status: 200, json: async () => ({ id: 1527024, modelId: 1351798, baseModel: 'Flux.1 D' }) };
+          return { ok: true, status: 200, json: async () => ({ id: 1527024, modelId: 1351798, baseModel: 'Flux.1 D', downloadUrl: 'https://civitai.com/api/download/models/1527024' }) };
         }
         return { ok: false, status: 404, text: async () => 'Not found' };
       });
@@ -864,6 +865,346 @@ describe('Civitai Routes and Workflow Contract Tests', () => {
       expect(ksampler).toBeDefined();
       expect(ksampler.values.sampler_name).toBe('euler_a');
       expect(ksampler.values.clip_skip).toBe(2);
+    });
+  });
+
+  describe('M24: Stop swallowing errors, stop fabricating downloadUrl/requireAuth, remove HTML fallback', () => {
+    describe('Endpoint 1: GET /api/v1/model-versions/{id} (full version endpoint)', () => {
+      it('returns failure with endpoint, status 404, and body verbatim on 404; does not fabricate downloadUrl or requireAuth', async () => {
+        const body404 = '{"error":"No model version with id 99999"}';
+        const stubbedFetch = vi.fn(async (_meta: any, url: string) => {
+          if (url === 'https://civitai.com/api/v1/model-versions/99999') {
+            return { ok: false, status: 404, text: async () => body404 };
+          }
+          throw new Error(`Unexpected url: ${url}`);
+        });
+
+        const result: any = await resolveCivitaiVersionInfo(99999, stubbedFetch);
+
+        expect(result.success).toBe(false);
+        expect(result.endpoint).toBe('https://civitai.com/api/v1/model-versions/99999');
+        expect(result.status).toBe(404);
+        expect(result.rawResponse).toBe(body404);
+        expect(result.details).toBe(body404);
+        expect(result.errorSource).toBe('upstream');
+        expect(result.downloadUrl).toBeUndefined();
+        expect(result.requireAuth).toBeUndefined();
+      });
+
+      it('returns failure with endpoint, status 500, and body verbatim on 500; does not fabricate downloadUrl or requireAuth', async () => {
+        const body500 = '{"error":"Internal Server Error in model version service"}';
+        const stubbedFetch = vi.fn(async (_meta: any, url: string) => {
+          if (url === 'https://civitai.com/api/v1/model-versions/99999') {
+            return { ok: false, status: 500, text: async () => body500 };
+          }
+          throw new Error(`Unexpected url: ${url}`);
+        });
+
+        const result: any = await resolveCivitaiVersionInfo(99999, stubbedFetch);
+
+        expect(result.success).toBe(false);
+        expect(result.endpoint).toBe('https://civitai.com/api/v1/model-versions/99999');
+        expect(result.status).toBe(500);
+        expect(result.rawResponse).toBe(body500);
+        expect(result.details).toBe(body500);
+        expect(result.errorSource).toBe('upstream');
+        expect(result.downloadUrl).toBeUndefined();
+        expect(result.requireAuth).toBeUndefined();
+      });
+
+      it('returns failure with endpoint, status 502, and network error verbatim on network failure; does not fabricate downloadUrl or requireAuth', async () => {
+        const stubbedFetch = vi.fn(async () => {
+          throw new Error('connect ECONNREFUSED 104.18.22.45:443');
+        });
+
+        const result: any = await resolveCivitaiVersionInfo(99999, stubbedFetch);
+
+        expect(result.success).toBe(false);
+        expect(result.endpoint).toBe('https://civitai.com/api/v1/model-versions/99999');
+        expect(result.status).toBe(502);
+        expect(result.error).toContain('connect ECONNREFUSED 104.18.22.45:443');
+        expect(result.errorSource).toBe('network');
+        expect(result.downloadUrl).toBeUndefined();
+        expect(result.requireAuth).toBeUndefined();
+      });
+    });
+
+    describe('Endpoint 2: GET /api/v1/model-versions/mini/{id} (mini version endpoint)', () => {
+      it('returns failure with mini endpoint, status 404, and body verbatim when mini endpoint answers 404', async () => {
+        const fullBody = JSON.stringify({ id: 99999, modelId: 88888, name: 'v1.0', baseModel: 'SDXL 1.0' });
+        const miniBody404 = '{"error":"Mini model version not found"}';
+        const stubbedFetch = vi.fn(async (_meta: any, url: string) => {
+          if (url === 'https://civitai.com/api/v1/model-versions/99999') {
+            return { ok: true, status: 200, text: async (): Promise<string> => fullBody, json: async () => JSON.parse(fullBody) };
+          }
+          if (url === 'https://civitai.com/api/v1/model-versions/mini/99999') {
+            return { ok: false, status: 404, text: async (): Promise<string> => miniBody404 };
+          }
+          throw new Error(`Unexpected url: ${url}`);
+        });
+
+        const result: any = await resolveCivitaiVersionInfo(99999, stubbedFetch);
+
+        expect(result.success).toBe(false);
+        expect(result.endpoint).toBe('https://civitai.com/api/v1/model-versions/mini/99999');
+        expect(result.status).toBe(404);
+        expect(result.rawResponse).toBe(miniBody404);
+        expect(result.details).toBe(miniBody404);
+        expect(result.errorSource).toBe('upstream');
+        expect(result.downloadUrl).toBeUndefined();
+        expect(result.requireAuth).toBeUndefined();
+      });
+
+      it('returns failure with mini endpoint, status 500, and body verbatim when mini endpoint answers 500', async () => {
+        const fullBody = JSON.stringify({ id: 99999, modelId: 88888, name: 'v1.0', baseModel: 'SDXL 1.0' });
+        const miniBody500 = '{"error":"Mini endpoint database timeout 500"}';
+        const stubbedFetch = vi.fn(async (_meta: any, url: string) => {
+          if (url === 'https://civitai.com/api/v1/model-versions/99999') {
+            return { ok: true, status: 200, text: async (): Promise<string> => fullBody, json: async () => JSON.parse(fullBody) };
+          }
+          if (url === 'https://civitai.com/api/v1/model-versions/mini/99999') {
+            return { ok: false, status: 500, text: async (): Promise<string> => miniBody500 };
+          }
+          throw new Error(`Unexpected url: ${url}`);
+        });
+
+        const result: any = await resolveCivitaiVersionInfo(99999, stubbedFetch);
+
+        expect(result.success).toBe(false);
+        expect(result.endpoint).toBe('https://civitai.com/api/v1/model-versions/mini/99999');
+        expect(result.status).toBe(500);
+        expect(result.rawResponse).toBe(miniBody500);
+        expect(result.details).toBe(miniBody500);
+        expect(result.errorSource).toBe('upstream');
+        expect(result.downloadUrl).toBeUndefined();
+        expect(result.requireAuth).toBeUndefined();
+      });
+
+      it('returns failure with mini endpoint, status 502, and network error verbatim when mini endpoint throws network failure', async () => {
+        const fullBody = JSON.stringify({ id: 99999, modelId: 88888, name: 'v1.0', baseModel: 'SDXL 1.0' });
+        const stubbedFetch = vi.fn(async (_meta: any, url: string) => {
+          if (url === 'https://civitai.com/api/v1/model-versions/99999') {
+            return { ok: true, status: 200, text: async () => fullBody, json: async () => JSON.parse(fullBody) };
+          }
+          if (url === 'https://civitai.com/api/v1/model-versions/mini/99999') {
+            throw new Error('socket hang up on mini endpoint');
+          }
+          throw new Error(`Unexpected url: ${url}`);
+        });
+
+        const result: any = await resolveCivitaiVersionInfo(99999, stubbedFetch);
+
+        expect(result.success).toBe(false);
+        expect(result.endpoint).toBe('https://civitai.com/api/v1/model-versions/mini/99999');
+        expect(result.status).toBe(502);
+        expect(result.error).toContain('socket hang up on mini endpoint');
+        expect(result.errorSource).toBe('network');
+        expect(result.downloadUrl).toBeUndefined();
+        expect(result.requireAuth).toBeUndefined();
+      });
+    });
+
+    describe('Endpoint 3: GET /api/v1/model-versions/by-hash/{hash} (hash lookup endpoint)', () => {
+      it('returns failure with hash endpoint, status 404, and body verbatim on 404; does not fabricate downloadUrl or requireAuth', async () => {
+        const hashBody404 = '{"error":"Model not found by hash deadbeef123"}';
+        const stubbedFetch = vi.fn(async (_meta: any, url: string) => {
+          if (url.includes('/api/v1/model-versions/by-hash/deadbeef123')) {
+            return { ok: false, status: 404, text: async () => hashBody404 };
+          }
+          throw new Error(`Unexpected url: ${url}`);
+        });
+
+        const result: any = await resolveCivitaiVersionByHash('deadbeef123', stubbedFetch);
+
+        expect(result.success).toBe(false);
+        expect(result.endpoint).toBe('https://civitai.com/api/v1/model-versions/by-hash/deadbeef123');
+        expect(result.status).toBe(404);
+        expect(result.rawResponse).toBe(hashBody404);
+        expect(result.details).toBe(hashBody404);
+        expect(result.errorSource).toBe('upstream');
+        expect(result.downloadUrl).toBeUndefined();
+        expect(result.requireAuth).toBeUndefined();
+      });
+
+      it('returns failure with hash endpoint, status 500, and body verbatim on 500; does not fabricate downloadUrl or requireAuth', async () => {
+        const hashBody500 = '{"error":"Civitai hash index internal error 500"}';
+        const stubbedFetch = vi.fn(async (_meta: any, url: string) => {
+          if (url.includes('/api/v1/model-versions/by-hash/deadbeef123')) {
+            return { ok: false, status: 500, text: async () => hashBody500 };
+          }
+          throw new Error(`Unexpected url: ${url}`);
+        });
+
+        const result: any = await resolveCivitaiVersionByHash('deadbeef123', stubbedFetch);
+
+        expect(result.success).toBe(false);
+        expect(result.endpoint).toBe('https://civitai.com/api/v1/model-versions/by-hash/deadbeef123');
+        expect(result.status).toBe(500);
+        expect(result.rawResponse).toBe(hashBody500);
+        expect(result.details).toBe(hashBody500);
+        expect(result.errorSource).toBe('upstream');
+        expect(result.downloadUrl).toBeUndefined();
+        expect(result.requireAuth).toBeUndefined();
+      });
+
+      it('returns failure with hash endpoint, status 502, and network error verbatim on network failure; does not fabricate downloadUrl or requireAuth', async () => {
+        const stubbedFetch = vi.fn(async () => {
+          throw new Error('getaddrinfo EAI_AGAIN civitai.com');
+        });
+
+        const result: any = await resolveCivitaiVersionByHash('deadbeef123', stubbedFetch);
+
+        expect(result.success).toBe(false);
+        expect(result.endpoint).toBe('https://civitai.com/api/v1/model-versions/by-hash/deadbeef123');
+        expect(result.status).toBe(502);
+        expect(result.error).toContain('getaddrinfo EAI_AGAIN civitai.com');
+        expect(result.errorSource).toBe('network');
+        expect(result.downloadUrl).toBeUndefined();
+        expect(result.requireAuth).toBeUndefined();
+      });
+    });
+
+    describe('Endpoint 4: GET /api/v1/images (fetchCivitaiRealImageMeta - REST only, no HTML fallback)', () => {
+      it('returns failure with REST endpoint, status 404, and body verbatim on 404; NEVER requests HTML page', async () => {
+        const requestedUrls: string[] = [];
+        const imgBody404 = '{"items":[]}';
+        const stubbedFetch = vi.fn(async (_meta: any, url: string) => {
+          requestedUrls.push(url);
+          if (url.includes('/api/v1/images')) {
+            return { ok: true, status: 200, text: async () => imgBody404, json: async () => JSON.parse(imgBody404) };
+          }
+          throw new Error(`Unexpected url: ${url}`);
+        });
+
+        const result = await fetchCivitaiRealImageMeta('999999', stubbedFetch);
+
+        expect(result.error).toBe('Civitai 图片 #999999 未在官方图片库找到 (items 为空)');
+        expect(result.status).toBe(404);
+        expect(result.endpoint).toBe('https://civitai.com/api/v1/images?imageId=999999&withMeta=true');
+        expect(result.errorSource).toBe('upstream');
+
+        // Strictly verify that NO HTML scraping request was made
+        expect(requestedUrls.some((u) => u.includes('civitai.com/images/999999'))).toBe(false);
+        expect(requestedUrls.length).toBe(1);
+      });
+
+      it('returns failure with REST endpoint, status 500, and body verbatim on 500; NEVER requests HTML page', async () => {
+        const requestedUrls: string[] = [];
+        const imgBody500 = '{"error":"Internal error in images service 500"}';
+        const stubbedFetch = vi.fn(async (_meta: any, url: string) => {
+          requestedUrls.push(url);
+          if (url.includes('/api/v1/images')) {
+            return { ok: false, status: 500, text: async () => imgBody500 };
+          }
+          throw new Error(`Unexpected url: ${url}`);
+        });
+
+        const result = await fetchCivitaiRealImageMeta('999999', stubbedFetch);
+
+        expect(result.error).toBe('Civitai images 上游响应 HTTP 500');
+        expect(result.status).toBe(500);
+        expect(result.endpoint).toBe('https://civitai.com/api/v1/images?imageId=999999&withMeta=true');
+        expect(result.rawResponse).toBe(imgBody500);
+        expect(result.details).toBe(imgBody500);
+        expect(result.errorSource).toBe('upstream');
+
+        // Strictly verify that NO HTML scraping request was made
+        expect(requestedUrls.some((u) => u.includes('civitai.com/images/999999'))).toBe(false);
+        expect(requestedUrls.length).toBe(1);
+      });
+
+      it('returns failure with REST endpoint, status 502, and network error verbatim on network failure; NEVER requests HTML page', async () => {
+        const requestedUrls: string[] = [];
+        const stubbedFetch = vi.fn(async (_meta: any, url: string) => {
+          requestedUrls.push(url);
+          throw new Error('read ECONNRESET on images endpoint');
+        });
+
+        const result = await fetchCivitaiRealImageMeta('999999', stubbedFetch);
+
+        expect(result.error).toContain('Civitai images API 网络错误: read ECONNRESET on images endpoint');
+        expect(result.status).toBe(502);
+        expect(result.endpoint).toBe('https://civitai.com/api/v1/images?imageId=999999&withMeta=true');
+        expect(result.errorSource).toBe('network');
+
+        // Strictly verify that NO HTML scraping request was made
+        expect(requestedUrls.some((u) => u.includes('civitai.com/images/999999'))).toBe(false);
+        expect(requestedUrls.length).toBe(1);
+      });
+    });
+
+    describe('End-to-end /api/civitai/extract-workflow: handles unresolved version without fabricated downloadUrl/requireAuth', () => {
+      it('surfaces upstream 404 in warnings and unresolved status without inventing downloadUrl or requireAuth: false', async () => {
+        const stubbedFetch = vi.fn(async (_meta: any, url: string) => {
+          if (url.includes('/api/v1/images?imageId=55555')) {
+            return {
+              ok: true,
+              status: 200,
+              json: async () => ({
+                items: [
+                  {
+                    id: 55555,
+                    baseModel: 'Flux.1 D',
+                    meta: {
+                      prompt: 'masterpiece portrait',
+                      civitaiResources: [
+                        { type: 'checkpoint', modelVersionId: 691639, modelVersionName: 'Dev' },
+                        { type: 'lora', modelVersionId: 404040, modelVersionName: 'MissingLoRA', weight: 0.7 },
+                      ],
+                    },
+                  },
+                ],
+              }),
+            };
+          }
+          if (url.includes('691639')) {
+            return {
+              ok: true,
+              status: 200,
+              json: async () => ({
+                id: 691639,
+                modelId: 618692,
+                name: 'Dev',
+                baseModel: 'Flux.1 D',
+                air: 'urn:air:flux1:checkpoint:civitai:618692@691639',
+                downloadUrl: 'https://civitai.com/api/download/models/691639',
+              }),
+            };
+          }
+          if (url.includes('404040')) {
+            return {
+              ok: false,
+              status: 404,
+              text: async () => '{"error":"Model version 404040 not found"}',
+            };
+          }
+          throw new Error(`Unexpected url: ${url}`);
+        });
+
+        const handler = handleExtractCivitaiWorkflow(createMockWorkflowDeps(stubbedFetch));
+        const res = createMockRes();
+
+        await handler({ body: { imageId: '55555', engine: 'civitai' } } as any, res);
+
+        expect(res.statusCode).toBe(200);
+        expect(res.data.success).toBe(true);
+
+        const loraNode = res.data.preset.nodes.find((n: any) => n.type === 'LoRALoader');
+        expect(loraNode).toBeDefined();
+
+        // Must NOT invent download_url
+        expect(loraNode.values.download_url).toBeUndefined();
+
+        // Must be marked unresolved with the verbatim upstream error
+        expect(loraNode.values.import_unresolved_resource).toBe(true);
+        expect(loraNode.values.resourceVerified).toBe(false);
+        expect(loraNode.values.unresolvedReason).toContain('404');
+        expect(loraNode.values.unresolvedReason).toContain('https://civitai.com/api/v1/model-versions/404040');
+
+        // Warnings must include the upstream failure verbatim
+        const warnings = res.data.preset.importWarnings;
+        expect(warnings.some((w: any) => w.reason?.includes('404040') && w.reason?.includes('404'))).toBe(true);
+      });
     });
   });
 });

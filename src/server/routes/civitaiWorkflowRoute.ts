@@ -17,6 +17,58 @@ export interface CivitaiWorkflowDeps {
   upstreamFetch: (meta: any, url: string, options?: any) => Promise<any>;
 }
 
+export interface CivitaiVersionSuccess {
+  success: true;
+  modelId?: number;
+  versionId: number;
+  name?: string;
+  baseModel?: string;
+  air?: string;
+  downloadUrl?: string;
+  fileName?: string;
+  requireAuth?: boolean;
+  canGenerate?: boolean;
+}
+
+export interface CivitaiVersionFailure {
+  success: false;
+  error: string;
+  endpoint: string;
+  status?: number;
+  details?: string;
+  rawResponse?: string;
+  errorSource: 'upstream' | 'network' | 'local';
+  versionId?: number;
+}
+
+export type CivitaiVersionResult = CivitaiVersionSuccess | CivitaiVersionFailure;
+
+async function readResponseBody(resp: any): Promise<{ rawBody: string; parsedJson: any }> {
+  let rawBody = '';
+  let parsedJson: any = null;
+  if (resp && typeof resp.text === 'function') {
+    try {
+      rawBody = await resp.text();
+    } catch {}
+  }
+  if (resp && typeof resp.json === 'function') {
+    try {
+      parsedJson = await resp.json();
+    } catch {}
+  }
+  if (!parsedJson && rawBody) {
+    try {
+      parsedJson = JSON.parse(rawBody);
+    } catch {}
+  }
+  if (!rawBody && parsedJson !== null && parsedJson !== undefined) {
+    try {
+      rawBody = typeof parsedJson === 'string' ? parsedJson : JSON.stringify(parsedJson);
+    } catch {}
+  }
+  return { rawBody, parsedJson };
+}
+
 /**
  * Resolve official model version metadata from Civitai API (modelId, versionId, air, downloadUrl, requireAuth)
  * Reference: https://developer.civitai.com/site/reference/model-versions.md
@@ -24,36 +76,117 @@ export interface CivitaiWorkflowDeps {
 export async function resolveCivitaiVersionInfo(
   versionId: number | string,
   upstreamFetch: (meta: any, url: string, options?: any) => Promise<any>
-): Promise<{ modelId?: number; versionId: number; name?: string; baseModel?: string; air?: string; downloadUrl?: string; fileName?: string; requireAuth?: boolean; canGenerate?: boolean } | null> {
+): Promise<CivitaiVersionResult> {
   const vid = String(versionId || '').trim();
-  if (!vid || !/^\d+$/.test(vid)) return null;
+  if (!vid || !/^\d+$/.test(vid)) {
+    return {
+      success: false,
+      error: `无效的 Civitai 版本 ID: "${versionId}"`,
+      endpoint: 'local',
+      status: 400,
+      errorSource: 'local',
+    };
+  }
 
-  let fullInfo: any = null;
-  let miniInfo: any = null;
-
+  const vUrl = `https://civitai.com/api/v1/model-versions/${vid}`;
+  let vResp: any;
   try {
-    const vUrl = `https://civitai.com/api/v1/model-versions/${vid}`;
-    const vResp = await upstreamFetch(
+    vResp = await upstreamFetch(
       { provider: 'civitai', route: 'model-version-resolve', model: vid },
       vUrl,
       { headers: { 'User-Agent': 'ComfyCanvas/1.0', Accept: 'application/json' } }
     );
-    if (vResp && vResp.ok) {
-      fullInfo = await vResp.json().catch(() => null);
-    }
-  } catch {}
+  } catch (netErr: any) {
+    return {
+      success: false,
+      error: `Civitai model-version 网络错误: ${netErr.message}`,
+      endpoint: vUrl,
+      status: 502,
+      details: netErr.message,
+      rawResponse: netErr.message,
+      errorSource: 'network',
+      versionId: parseInt(vid, 10),
+    };
+  }
 
+  const { rawBody: fullText, parsedJson: fullInfo } = await readResponseBody(vResp);
+
+  if (!vResp || !vResp.ok) {
+    const status = vResp?.status || 500;
+    return {
+      success: false,
+      error: `Civitai model-version 上游响应 HTTP ${status}`,
+      endpoint: vUrl,
+      status,
+      details: fullText,
+      rawResponse: fullText,
+      errorSource: 'upstream',
+      versionId: parseInt(vid, 10),
+    };
+  }
+
+  if (!fullInfo) {
+    return {
+      success: false,
+      error: `Civitai model-version 上游响应 JSON 解析失败`,
+      endpoint: vUrl,
+      status: vResp.status || 502,
+      details: fullText,
+      rawResponse: fullText,
+      errorSource: 'upstream',
+      versionId: parseInt(vid, 10),
+    };
+  }
+
+  const mUrl = `https://civitai.com/api/v1/model-versions/mini/${vid}`;
+  let mResp: any;
   try {
-    const mUrl = `https://civitai.com/api/v1/model-versions/mini/${vid}`;
-    const mResp = await upstreamFetch(
+    mResp = await upstreamFetch(
       { provider: 'civitai', route: 'model-version-mini', model: vid },
       mUrl,
       { headers: { 'User-Agent': 'ComfyCanvas/1.0', Accept: 'application/json' } }
     );
-    if (mResp && mResp.ok) {
-      miniInfo = await mResp.json().catch(() => null);
-    }
-  } catch {}
+  } catch (netErr: any) {
+    return {
+      success: false,
+      error: `Civitai model-version-mini 网络错误: ${netErr.message}`,
+      endpoint: mUrl,
+      status: 502,
+      details: netErr.message,
+      rawResponse: netErr.message,
+      errorSource: 'network',
+      versionId: parseInt(vid, 10),
+    };
+  }
+
+  const { rawBody: miniText, parsedJson: miniInfo } = await readResponseBody(mResp);
+
+  if (!mResp || !mResp.ok) {
+    const status = mResp?.status || 500;
+    return {
+      success: false,
+      error: `Civitai model-version-mini 上游响应 HTTP ${status}`,
+      endpoint: mUrl,
+      status,
+      details: miniText,
+      rawResponse: miniText,
+      errorSource: 'upstream',
+      versionId: parseInt(vid, 10),
+    };
+  }
+
+  if (!miniInfo) {
+    return {
+      success: false,
+      error: `Civitai model-version-mini 上游响应 JSON 解析失败`,
+      endpoint: mUrl,
+      status: mResp.status || 502,
+      details: miniText,
+      rawResponse: miniText,
+      errorSource: 'upstream',
+      versionId: parseInt(vid, 10),
+    };
+  }
 
   let modelId = fullInfo?.modelId;
   const air = fullInfo?.air || miniInfo?.air;
@@ -65,11 +198,12 @@ export async function resolveCivitaiVersionInfo(
   const baseModel = fullInfo?.baseModel || miniInfo?.baseModel;
   const name = fullInfo?.name || miniInfo?.versionName || miniInfo?.modelName;
   const fileName = fullInfo?.files?.[0]?.name || miniInfo?.fileName;
-  const downloadUrl = fullInfo?.downloadUrl || (miniInfo?.downloadUrls?.[0] ? miniInfo.downloadUrls[0].split('?')[0] : `https://civitai.com/api/download/models/${vid}`);
-  const requireAuth = miniInfo?.requireAuth ?? fullInfo?.requireAuth ?? false;
+  const downloadUrl = fullInfo?.downloadUrl || (miniInfo?.downloadUrls?.[0] ? miniInfo.downloadUrls[0].split('?')[0] : undefined);
+  const requireAuth = miniInfo?.requireAuth !== undefined ? Boolean(miniInfo.requireAuth) : (fullInfo?.requireAuth !== undefined ? Boolean(fullInfo.requireAuth) : undefined);
   const canGenerate = miniInfo?.canGenerate !== undefined ? Boolean(miniInfo.canGenerate) : undefined;
 
   return {
+    success: true,
     modelId: modelId || undefined,
     versionId: parseInt(vid, 10),
     name,
@@ -89,261 +223,319 @@ export async function resolveCivitaiVersionInfo(
 export async function resolveCivitaiVersionByHash(
   hash: string,
   upstreamFetch: (meta: any, url: string, options?: any) => Promise<any>
-): Promise<{ modelId?: number; versionId: number; name?: string; baseModel?: string; air?: string; downloadUrl?: string; fileName?: string; requireAuth?: boolean; canGenerate?: boolean } | null> {
+): Promise<CivitaiVersionResult> {
   const h = (hash || '').trim();
-  if (!h) return null;
+  if (!h) {
+    return {
+      success: false,
+      error: '空的模型文件哈希',
+      endpoint: 'local',
+      status: 400,
+      errorSource: 'local',
+    };
+  }
+
+  const hUrl = `https://civitai.com/api/v1/model-versions/by-hash/${encodeURIComponent(h)}`;
+  let hResp: any;
   try {
-    const hUrl = `https://civitai.com/api/v1/model-versions/by-hash/${encodeURIComponent(h)}`;
-    const hResp = await upstreamFetch(
+    hResp = await upstreamFetch(
       { provider: 'civitai', route: 'model-version-by-hash', model: h },
       hUrl,
       { headers: { 'User-Agent': 'ComfyCanvas/1.0', Accept: 'application/json' } }
     );
-    if (hResp && hResp.ok) {
-      const hData = await hResp.json().catch(() => null);
-      if (hData && hData.id) {
-        return resolveCivitaiVersionInfo(hData.id, upstreamFetch);
-      }
-    }
-  } catch {}
-  return null;
+  } catch (netErr: any) {
+    return {
+      success: false,
+      error: `Civitai model-version-by-hash 网络错误: ${netErr.message}`,
+      endpoint: hUrl,
+      status: 502,
+      details: netErr.message,
+      rawResponse: netErr.message,
+      errorSource: 'network',
+    };
+  }
+
+  const { rawBody: hText, parsedJson: hData } = await readResponseBody(hResp);
+
+  if (!hResp || !hResp.ok) {
+    const status = hResp?.status || 500;
+    return {
+      success: false,
+      error: `Civitai model-version-by-hash 上游响应 HTTP ${status}`,
+      endpoint: hUrl,
+      status,
+      details: hText,
+      rawResponse: hText,
+      errorSource: 'upstream',
+    };
+  }
+
+  if (!hData) {
+    return {
+      success: false,
+      error: `Civitai model-version-by-hash 上游响应 JSON 解析失败`,
+      endpoint: hUrl,
+      status: hResp.status || 502,
+      details: hText,
+      rawResponse: hText,
+      errorSource: 'upstream',
+    };
+  }
+
+  if (!hData.id) {
+    return {
+      success: false,
+      error: `Civitai model-version-by-hash 上游响应缺少版本 ID`,
+      endpoint: hUrl,
+      status: 404,
+      details: hText,
+      rawResponse: hText,
+      errorSource: 'upstream',
+    };
+  }
+
+  return resolveCivitaiVersionInfo(hData.id, upstreamFetch);
 }
 
 // Helper to fetch real, authentic Civitai image generation metadata
 export async function fetchCivitaiRealImageMeta(imageId: string, upstreamFetch: (meta: any, url: string, options?: any) => Promise<any>) {
-  // 1. Try official Civitai REST v1 API first (reliable, public, withMeta=true returns generation data)
+  // Official Civitai REST v1 API (reliable, public, withMeta=true returns generation data)
   const restUrl = `https://civitai.com/api/v1/images?imageId=${imageId}&withMeta=true`;
+  let restResp: any;
   try {
-    const restResp = await upstreamFetch(
+    restResp = await upstreamFetch(
       { provider: 'civitai', route: 'image-metadata-api', model: imageId },
       restUrl,
       { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) ComfyCanvas/1.0', Accept: 'application/json' } }
     );
-    if (restResp && restResp.ok) {
-      const restJson = await restResp.json().catch(() => null);
-      const item = restJson?.items?.[0];
-      if (item && item.meta) {
-        const meta = item.meta.meta || item.meta;
-        let detectedItemBaseModel = item.baseModel || meta.baseModel || '';
-        let detectedCkpt: any = null;
+  } catch (netErr: any) {
+    return {
+      error: `Civitai images API 网络错误: ${netErr.message}`,
+      details: netErr.message,
+      rawResponse: netErr.message,
+      endpoint: restUrl,
+      status: 502,
+      errorSource: 'network' as const,
+      stack: netErr.stack,
+    };
+  }
 
-        // If meta.hashes?.model, resolve checkpoint through official by-hash endpoint
-        if (meta.hashes?.model) {
-          const hashCkpt = await resolveCivitaiVersionByHash(meta.hashes.model, upstreamFetch);
-          if (hashCkpt) {
-            detectedCkpt = hashCkpt;
-            if (!detectedItemBaseModel || detectedItemBaseModel === 'unknown') {
-              detectedItemBaseModel = hashCkpt.baseModel || detectedItemBaseModel;
-            }
-          }
-        }
+  const { rawBody, parsedJson: restJson } = await readResponseBody(restResp);
 
-        const rawResources = Array.isArray(meta.civitaiResources) ? meta.civitaiResources : [];
-        const resolvedResources = await Promise.all(
-          rawResources.map(async (r: any) => {
-            const isCheckpoint = String(r.type || '').toUpperCase() === 'CHECKPOINT';
-            let vInfo: any = null;
-            if (r.modelVersionId) {
-              vInfo = await resolveCivitaiVersionInfo(r.modelVersionId, upstreamFetch);
-            }
-            const modelId = vInfo?.modelId ?? r.modelId;
-            const versionId = vInfo?.versionId ?? r.modelVersionId;
-            const baseModel = vInfo?.baseModel ?? (r.baseModel || detectedItemBaseModel);
-            const fileName = vInfo?.fileName ?? r.modelVersionName;
-            const canonicalAir = vInfo?.air ?? (modelId && versionId ? `urn:air:${normalizeEcosystem(baseModel)}:${isCheckpoint ? 'checkpoint' : 'lora'}:civitai:${modelId}@${versionId}` : undefined);
-            const downloadUrl = vInfo?.downloadUrl ?? (versionId ? `https://civitai.com/api/download/models/${versionId}` : undefined);
-            const requireAuth = vInfo?.requireAuth ?? false;
+  if (!restResp || !restResp.ok) {
+    const status = restResp?.status || 500;
+    return {
+      error: `Civitai images 上游响应 HTTP ${status}`,
+      details: rawBody,
+      rawResponse: rawBody,
+      endpoint: restUrl,
+      status,
+      errorSource: 'upstream' as const,
+    };
+  }
 
-            return {
-              id: versionId,
-              modelVersionId: versionId,
-              modelId,
-              versionId,
-              name: fileName || r.modelVersionName || (isCheckpoint ? 'Checkpoint' : 'LoRA'),
-              modelName: r.modelVersionName || fileName,
-              modelType: (r.type || (isCheckpoint ? 'CHECKPOINT' : 'LORA')).toUpperCase(),
-              type: (r.type || (isCheckpoint ? 'CHECKPOINT' : 'LORA')).toUpperCase(),
-              strength: r.weight,
-              baseModel,
-              air: canonicalAir,
-              downloadUrl,
-              requireAuth,
-              canGenerate: vInfo?.canGenerate,
-            };
-          })
+  if (!restJson) {
+    return {
+      error: `Civitai images API 上游响应 JSON 解析失败`,
+      details: rawBody,
+      rawResponse: rawBody,
+      endpoint: restUrl,
+      status: restResp.status || 502,
+      errorSource: 'upstream' as const,
+      stack: (new Error()).stack,
+    };
+  }
+
+  const item = restJson?.items?.[0];
+  if (!item) {
+    return {
+      error: `Civitai 图片 #${imageId} 未在官方图片库找到 (items 为空)`,
+      details: rawBody,
+      rawResponse: rawBody,
+      endpoint: restUrl,
+      status: 404,
+      errorSource: 'upstream' as const,
+    };
+  }
+
+  if (!item.meta) {
+    return {
+      error: `Civitai 图片 #${imageId} 上游返回数据中未包含生图参数元数据 (meta 为空)`,
+      details: rawBody,
+      rawResponse: rawBody,
+      endpoint: restUrl,
+      status: 404,
+      errorSource: 'upstream' as const,
+    };
+  }
+
+  const meta = item.meta.meta || item.meta;
+  let detectedItemBaseModel = item.baseModel || meta.baseModel || '';
+  let detectedCkpt: any = null;
+  const hash404Warnings: string[] = [];
+
+  // If meta.hashes?.model, resolve checkpoint through official by-hash endpoint
+  if (meta.hashes?.model) {
+    const hashCkpt = await resolveCivitaiVersionByHash(meta.hashes.model, upstreamFetch);
+    if (hashCkpt.success) {
+      detectedCkpt = hashCkpt;
+      if (!detectedItemBaseModel || detectedItemBaseModel === 'unknown') {
+        detectedItemBaseModel = hashCkpt.baseModel || detectedItemBaseModel;
+      }
+    } else {
+      hash404Warnings.push(`底模哈希 (${meta.hashes.model}) 上游解析失败: [${hashCkpt.status || 'ERR'}] ${hashCkpt.error}${hashCkpt.rawResponse ? ` - ${hashCkpt.rawResponse.slice(0, 200)}` : ''} (${hashCkpt.endpoint})`);
+    }
+  }
+
+  const rawResources = Array.isArray(meta.civitaiResources) ? meta.civitaiResources : [];
+  const resolvedResources = await Promise.all(
+    rawResources.map(async (r: any) => {
+      const isCheckpoint = String(r.type || '').toUpperCase() === 'CHECKPOINT';
+      let vInfo: CivitaiVersionResult | null = null;
+      if (r.modelVersionId) {
+        vInfo = await resolveCivitaiVersionInfo(r.modelVersionId, upstreamFetch);
+      }
+
+      if (vInfo && !vInfo.success) {
+        const errorMsg = `版本 #${r.modelVersionId} 上游解析失败: [${vInfo.status || 'ERR'}] ${vInfo.error}${vInfo.rawResponse ? ` - ${vInfo.rawResponse.slice(0, 200)}` : ''} (${vInfo.endpoint})`;
+        hash404Warnings.push(errorMsg);
+        return {
+          id: r.modelVersionId,
+          modelVersionId: r.modelVersionId,
+          modelId: r.modelId,
+          versionId: r.modelVersionId,
+          name: r.modelVersionName || (isCheckpoint ? 'Checkpoint' : 'LoRA'),
+          modelName: r.modelVersionName,
+          modelType: (r.type || (isCheckpoint ? 'CHECKPOINT' : 'LORA')).toUpperCase(),
+          type: (r.type || (isCheckpoint ? 'CHECKPOINT' : 'LORA')).toUpperCase(),
+          strength: r.weight,
+          baseModel: r.baseModel || detectedItemBaseModel,
+          air: undefined,
+          downloadUrl: undefined,
+          requireAuth: undefined,
+          canGenerate: false,
+          resolutionError: vInfo,
+          unresolvedReason: errorMsg,
+        };
+      }
+
+      const succ = vInfo && vInfo.success ? vInfo : null;
+      const modelId = succ?.modelId ?? r.modelId;
+      const versionId = succ?.versionId ?? r.modelVersionId;
+      const baseModel = succ?.baseModel ?? (r.baseModel || detectedItemBaseModel);
+      const fileName = succ?.fileName ?? r.modelVersionName;
+      const canonicalAir = succ?.air ?? (modelId && versionId ? `urn:air:${normalizeEcosystem(baseModel)}:${isCheckpoint ? 'checkpoint' : 'lora'}:civitai:${modelId}@${versionId}` : undefined);
+      const downloadUrl = succ?.downloadUrl;
+      const requireAuth = succ?.requireAuth;
+
+      return {
+        id: versionId,
+        modelVersionId: versionId,
+        modelId,
+        versionId,
+        name: fileName || r.modelVersionName || (isCheckpoint ? 'Checkpoint' : 'LoRA'),
+        modelName: r.modelVersionName || fileName,
+        modelType: (r.type || (isCheckpoint ? 'CHECKPOINT' : 'LORA')).toUpperCase(),
+        type: (r.type || (isCheckpoint ? 'CHECKPOINT' : 'LORA')).toUpperCase(),
+        strength: r.weight,
+        baseModel,
+        air: canonicalAir,
+        downloadUrl,
+        requireAuth,
+        canGenerate: succ?.canGenerate,
+      };
+    })
+  );
+
+  // If checkpoint was resolved via hash and not already in resources, add it
+  if (detectedCkpt && detectedCkpt.success && !resolvedResources.some((res: any) => res.type === 'CHECKPOINT')) {
+    resolvedResources.unshift({
+      id: detectedCkpt.versionId,
+      modelVersionId: detectedCkpt.versionId,
+      modelId: detectedCkpt.modelId,
+      versionId: detectedCkpt.versionId,
+      name: detectedCkpt.fileName || detectedCkpt.name || 'Checkpoint',
+      modelName: detectedCkpt.name,
+      modelType: 'CHECKPOINT',
+      type: 'CHECKPOINT',
+      strength: null,
+      baseModel: detectedCkpt.baseModel || detectedItemBaseModel,
+      air: detectedCkpt.air,
+      downloadUrl: detectedCkpt.downloadUrl,
+      requireAuth: detectedCkpt.requireAuth,
+      canGenerate: detectedCkpt.canGenerate,
+    });
+  }
+
+  // Also check meta.hashes for any 'lora:...' hashes not yet in resources
+  if (meta.hashes) {
+    for (const [hashKey, hashVal] of Object.entries(meta.hashes)) {
+      if (hashKey.startsWith('lora:') || hashKey.startsWith('LORA:')) {
+        const loraRawName = hashKey.replace(/^(?:lora|LORA):/, '').trim();
+        const alreadyHas = resolvedResources.some((res: any) =>
+          (res.name && res.name.toLowerCase().includes(loraRawName.toLowerCase())) ||
+          (res.modelName && res.modelName.toLowerCase().includes(loraRawName.toLowerCase()))
         );
-
-        // If checkpoint was resolved via hash and not already in resources, add it
-        if (detectedCkpt && !resolvedResources.some((res: any) => res.type === 'CHECKPOINT')) {
-          resolvedResources.unshift({
-            id: detectedCkpt.versionId,
-            modelVersionId: detectedCkpt.versionId,
-            modelId: detectedCkpt.modelId,
-            versionId: detectedCkpt.versionId,
-            name: detectedCkpt.fileName || detectedCkpt.name || 'Checkpoint',
-            modelName: detectedCkpt.name,
-            modelType: 'CHECKPOINT',
-            type: 'CHECKPOINT',
-            strength: null,
-            baseModel: detectedCkpt.baseModel || detectedItemBaseModel,
-            air: detectedCkpt.air,
-            downloadUrl: detectedCkpt.downloadUrl,
-            requireAuth: detectedCkpt.requireAuth,
-            canGenerate: detectedCkpt.canGenerate,
-          });
-        }
-
-        const hash404Warnings: string[] = [];
-        // Also check meta.hashes for any 'lora:...' hashes not yet in resources
-        if (meta.hashes) {
-          for (const [hashKey, hashVal] of Object.entries(meta.hashes)) {
-            if (hashKey.startsWith('lora:') || hashKey.startsWith('LORA:')) {
-              const loraRawName = hashKey.replace(/^(?:lora|LORA):/, '').trim();
-              const alreadyHas = resolvedResources.some((res: any) =>
-                (res.name && res.name.toLowerCase().includes(loraRawName.toLowerCase())) ||
-                (res.modelName && res.modelName.toLowerCase().includes(loraRawName.toLowerCase()))
-              );
-              if (!alreadyHas && typeof hashVal === 'string') {
-                // Find weight in meta.resources or meta.prompt (P2-1)
-                const metaRes = Array.isArray(meta.resources)
-                  ? meta.resources.find((r: any) =>
-                      (r.hash && r.hash.toLowerCase() === hashVal.toLowerCase()) ||
-                      (r.name && r.name.toLowerCase() === loraRawName.toLowerCase())
-                    )
-                  : null;
-                let foundWeight: number | null = (metaRes?.weight !== undefined && metaRes?.weight !== null && Number.isFinite(Number(metaRes.weight)))
-                  ? Number(metaRes.weight)
-                  : null;
-                if (foundWeight === null && meta.prompt) {
-                  const escName = loraRawName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                  const promptRegex = new RegExp(`<lora:${escName}:([+-]?[0-9]*\\.?[0-9]+)>`, 'i');
-                  const match = String(meta.prompt).match(promptRegex);
-                  if (match) {
-                    const val = parseFloat(match[1]);
-                    if (Number.isFinite(val)) {
-                      foundWeight = val;
-                    }
-                  }
-                }
-
-                const loraHashInfo = await resolveCivitaiVersionByHash(hashVal, upstreamFetch);
-                if (loraHashInfo) {
-                  resolvedResources.push({
-                    id: loraHashInfo.versionId,
-                    modelVersionId: loraHashInfo.versionId,
-                    modelId: loraHashInfo.modelId,
-                    versionId: loraHashInfo.versionId,
-                    name: loraHashInfo.fileName || loraHashInfo.name || loraRawName,
-                    modelName: loraHashInfo.name || loraRawName,
-                    modelType: 'LORA',
-                    type: 'LORA',
-                    strength: foundWeight,
-                    baseModel: loraHashInfo.baseModel || detectedItemBaseModel,
-                    air: loraHashInfo.air,
-                    downloadUrl: loraHashInfo.downloadUrl,
-                    requireAuth: loraHashInfo.requireAuth,
-                    canGenerate: loraHashInfo.canGenerate,
-                  });
-                } else {
-                  // P2-2: Hash 404 must NOT be silently dropped!
-                  hash404Warnings.push(`哈希未在 Civitai 找到: ${hashKey} (${hashVal})，无法解析官方模型版本与 AIR，未向上游发送。`);
-                }
+        if (!alreadyHas && typeof hashVal === 'string') {
+          // Find weight in meta.resources or meta.prompt (P2-1)
+          const metaRes = Array.isArray(meta.resources)
+            ? meta.resources.find((r: any) =>
+                (r.hash && r.hash.toLowerCase() === hashVal.toLowerCase()) ||
+                (r.name && r.name.toLowerCase() === loraRawName.toLowerCase())
+              )
+            : null;
+          let foundWeight: number | null = (metaRes?.weight !== undefined && metaRes?.weight !== null && Number.isFinite(Number(metaRes.weight)))
+            ? Number(metaRes.weight)
+            : null;
+          if (foundWeight === null && meta.prompt) {
+            const escName = loraRawName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const promptRegex = new RegExp(`<lora:${escName}:([+-]?[0-9]*\\.?[0-9]+)>`, 'i');
+            const match = String(meta.prompt).match(promptRegex);
+            if (match) {
+              const val = parseFloat(match[1]);
+              if (Number.isFinite(val)) {
+                foundWeight = val;
               }
             }
           }
+
+          const loraHashInfo = await resolveCivitaiVersionByHash(hashVal, upstreamFetch);
+          if (loraHashInfo.success) {
+            resolvedResources.push({
+              id: loraHashInfo.versionId,
+              modelVersionId: loraHashInfo.versionId,
+              modelId: loraHashInfo.modelId,
+              versionId: loraHashInfo.versionId,
+              name: loraHashInfo.fileName || loraHashInfo.name || loraRawName,
+              modelName: loraHashInfo.name || loraRawName,
+              modelType: 'LORA',
+              type: 'LORA',
+              strength: foundWeight,
+              baseModel: loraHashInfo.baseModel || detectedItemBaseModel,
+              air: loraHashInfo.air,
+              downloadUrl: loraHashInfo.downloadUrl,
+              requireAuth: loraHashInfo.requireAuth,
+              canGenerate: loraHashInfo.canGenerate,
+            });
+          } else {
+            hash404Warnings.push(`LoRA 哈希未在 Civitai 找到: ${hashKey} (${hashVal}) - [${loraHashInfo.status || 'ERR'}] ${loraHashInfo.error} (${loraHashInfo.endpoint})`);
+          }
         }
-
-        return {
-          genData: { meta, resources: resolvedResources, hash404Warnings },
-          imgGet: {
-            id: item.id,
-            url: item.url,
-            user: { username: item.username || '' },
-            metadata: { duration: meta.duration },
-          },
-          status: 200,
-          endpoint: restUrl,
-        };
       }
     }
-  } catch {
-    // Fall through to HTML scrape
   }
 
-  // 2. Fallback to HTML __NEXT_DATA__
-  const targetUrl = `https://civitai.com/images/${imageId}`;
-  try {
-    const resp = await upstreamFetch(
-      { provider: 'civitai', route: 'image-metadata', model: imageId },
-      targetUrl,
-      {
-        headers: {
-          'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        },
-      }
-    );
-    if (!resp.ok) {
-      const errText = await resp.text();
-      return {
-        error: `Civitai 上游响应 HTTP ${resp.status}`,
-        details: errText,
-        rawResponse: errText,
-        endpoint: targetUrl,
-        status: resp.status,
-        errorSource: 'upstream' as const,
-      };
-    }
-    const html = await resp.text();
-    const match = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
-    if (!match) {
-      return {
-        error: `Civitai 页面未包含 __NEXT_DATA__ 元数据 (Image #${imageId})`,
-        status: 404,
-        endpoint: targetUrl,
-        errorSource: 'upstream' as const,
-      };
-    }
-    let json: any;
-    try {
-      json = JSON.parse(match[1]);
-    } catch (parseErr: any) {
-      return {
-        error: `Civitai 页面 __NEXT_DATA__ JSON 解析失败: ${parseErr.message}`,
-        status: resp.status || 502,
-        endpoint: targetUrl,
-        rawResponse: match[1],
-        errorSource: 'upstream' as const,
-        stack: parseErr.stack,
-      };
-    }
-    const queries = json.props?.pageProps?.trpcState?.json?.queries || [];
-    let genData: any = null;
-    let imgGet: any = null;
-    for (const q of queries) {
-      const qName = q.queryKey?.[0]?.[1];
-      if (qName === 'getGenerationData') genData = q.state?.data;
-      if (qName === 'get') imgGet = q.state?.data;
-    }
-    if (!genData && !imgGet) {
-      return {
-        error: `Civitai 页面未找到该图片的生成元数据 (Image #${imageId})`,
-        status: 404,
-        endpoint: targetUrl,
-        errorSource: 'upstream' as const,
-      };
-    }
-    return { genData, imgGet, status: 200, endpoint: targetUrl };
-  } catch (e: any) {
-    return {
-      error: `连接 Civitai 发生网络错误: ${e.message}`,
-      status: 502,
-      endpoint: targetUrl,
-      errorSource: 'network' as const,
-      stack: e.stack,
-    };
-  }
+  return {
+    genData: { meta, resources: resolvedResources, hash404Warnings },
+    imgGet: {
+      id: item.id,
+      url: item.url,
+      user: { username: item.username || '' },
+      metadata: { duration: meta.duration },
+    },
+    status: 200,
+    endpoint: restUrl,
+  };
 }
 
 export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
@@ -456,7 +648,10 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
       let detectedEngine = '';
       let checkpoint = '';
       let baseModelArchitecture = '';
-      let loras: NonNullable<CivitaiRecipeInput['loras']> = [];
+      let loras: Array<NonNullable<CivitaiRecipeInput['loras']>[number] & {
+        resolutionError?: CivitaiVersionResult;
+        unresolvedReason?: string;
+      }> = [];
       let steps: number | null = null;
       let cfg: number | null = null;
       let clipSkip: number | null = null;
@@ -663,12 +858,14 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
               air: canonicalAir,
               modelId,
               versionId,
-              downloadUrl: r.downloadUrl || (versionId ? `https://civitai.com/api/download/models/${versionId}` : undefined),
-              requireAuth: Boolean(r.requireAuth),
+              downloadUrl: r.downloadUrl,
+              requireAuth: r.requireAuth === undefined ? undefined : Boolean(r.requireAuth),
               canGenerate: r.canGenerate,
               triggers: r.trainedWords?.join(', ') || '',
               baseModel: r.baseModel || detectedBaseModel,
               inferredFromPrompt: false,
+              resolutionError: r.resolutionError,
+              unresolvedReason: r.unresolvedReason,
             });
           });
         } else if (rawLorasFromAdditional.length > 0) {
@@ -684,11 +881,13 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
               air: canonicalAir,
               modelId,
               versionId,
-              downloadUrl: a.downloadUrl || (versionId ? `https://civitai.com/api/download/models/${versionId}` : undefined),
-              requireAuth: Boolean(a.requireAuth),
+              downloadUrl: a.downloadUrl,
+              requireAuth: a.requireAuth === undefined ? undefined : Boolean(a.requireAuth),
               triggers: '',
               baseModel: detectedBaseModel,
               inferredFromPrompt: false,
+              resolutionError: a.resolutionError,
+              unresolvedReason: a.unresolvedReason,
             });
           });
         }
@@ -715,7 +914,7 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
         if (!prompt && !rawModelName && !previewImage) {
           return res.status(404).json({
             error: `Civitai 图片 #${targetImageId} 页面未包含可执行的生图参数`,
-            endpoint: `https://civitai.com/images/${targetImageId}`,
+            endpoint: `https://civitai.com/api/v1/images?imageId=${targetImageId}&withMeta=true`,
             status: 404,
             errorSource: 'upstream',
           });
@@ -1079,9 +1278,11 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
                 download_url: effectiveDownloadUrl,
                 base_model: loraItem.baseModel || detectedBaseModel,
                 import_source_provider: 'civitai',
-                import_unresolved_resource: Boolean(loraItem.inferredFromPrompt) || (!effectiveDownloadUrl && targetProvider !== 'civitai'),
-                resourceVerified: Boolean(effectiveDownloadUrl) && !loraItem.inferredFromPrompt,
+                import_unresolved_resource: Boolean(loraItem.inferredFromPrompt) || (!effectiveDownloadUrl && targetProvider !== 'civitai') || Boolean(loraItem.resolutionError),
+                resourceVerified: Boolean(effectiveDownloadUrl) && !loraItem.inferredFromPrompt && !loraItem.resolutionError,
                 inferred_from_prompt: Boolean(loraItem.inferredFromPrompt),
+                import_resource_reason: loraItem.unresolvedReason,
+                unresolvedReason: loraItem.unresolvedReason,
               },
             });
 
@@ -1326,7 +1527,8 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
                 clipStrength: l.strength ?? undefined,
                 triggerWords: l.triggers || '',
                 civitaiId: l.civitaiId,
-                unresolvedResource: targetProvider !== 'civitai',
+                unresolvedResource: targetProvider !== 'civitai' || !l.downloadUrl || Boolean(l.resolutionError),
+                unresolvedReason: l.unresolvedReason,
               })),
               targetProvider,
               videoDuration: isVideo ? videoDuration : undefined,
