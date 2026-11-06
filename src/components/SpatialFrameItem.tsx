@@ -394,9 +394,9 @@ export const SpatialFrameItem: React.FC<SpatialFrameItemProps> = ({
             </div>
             <div className="space-y-1 max-w-[90%]">
               <h4 className="text-xs font-bold text-rose-300">生成执行未完成</h4>
-              <p className="text-[11px] text-rose-200/80 leading-relaxed break-words bg-rose-950/40 p-2.5 rounded-lg border border-rose-900/50" title={frame.errorMessage}>
+              <pre className="text-[11px] text-rose-200/80 leading-relaxed [overflow-wrap:anywhere] whitespace-pre-wrap font-mono bg-rose-950/40 p-2.5 rounded-lg border border-rose-900/50 max-h-48 overflow-y-auto select-text text-left" title={frame.errorMessage}>
                 {errorBannerText(frame.errorMessage)}
-              </p>
+              </pre>
             </div>
             <button
               onClick={() => onQueueFrame(frame.id)}

@@ -30,23 +30,24 @@ describe('local 400 never reached upstream', () => {
 import { upstreamHttpFirstLine } from './apiFailure';
 describe('upstream failure first line (all providers)', () => {
   const body = '{"title":"Forbidden","status":403,"message":"You\'ve run out of funds. Please top up: https://aimlapi.com/app/billing/","requestId":"x"}';
-  it('HTTP <code> + extracted message (fix4: no raw JSON on banner)', () => {
-    const data = { error: 'x', errorSource: 'upstream', executionTrace: [{ method: 'GET', status: 200 }, { method: 'POST', endpoint: 'e', status: 403, responseBody: body }] };
+  it('HTTP <code> + verbatim response body (no stripping raw JSON on banner)', () => {
+    const data = { error: 'x', errorSource: 'upstream', executionTrace: [{ method: 'GET', status: 200 }, { provider: 'aimlapi', method: 'POST', endpoint: 'e', status: 403, responseBody: body }] };
     const line = upstreamHttpFirstLine(data)!;
     expect(line).toContain('HTTP 403');
     expect(line).toContain('run out of funds');
-    expect(line).not.toContain('"requestId"');
+    expect(line).toContain('"requestId"');
     expect(userFacingApiFailure(403, data, '/r')).toContain('HTTP 403');
     expect(userFacingApiFailure(403, data, '/r')).toContain('run out of funds');
+    expect(userFacingApiFailure(403, data, '/r')).toContain('"requestId"');
     expect(errorBannerText(`HTTP 403 ${body}\nmore`)).toContain('HTTP 403');
-    expect(errorBannerText(`HTTP 403 ${body}\nmore`)).not.toContain('"requestId"');
-    expect(plainErrorMessage(new Error(`HTTP 403 ${body}`))).not.toContain('"requestId"');
+    expect(errorBannerText(`HTTP 403 ${body}\nmore`)).toContain('"requestId"');
+    expect(plainErrorMessage(new Error(`HTTP 403 ${body}`))).toContain('"requestId"');
   });
-  it('krea 402 too', () => {
-    const line = userFacingApiFailure(402, { executionTrace: [{ status: 402, responseBody: '{"message":"Insufficient"}' }] }, '/r');
+  it('krea 402 too verbatim', () => {
+    const line = userFacingApiFailure(402, { executionTrace: [{ provider: 'krea', status: 402, responseBody: '{"message":"Insufficient"}' }] }, '/api/schema-provider/krea/submit');
     expect(line).toContain('HTTP 402');
     expect(line).toContain('Insufficient');
-    expect(line).not.toContain('{"message"');
+    expect(line).toContain('{"message"');
   });
 });
 

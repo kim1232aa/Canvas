@@ -42,7 +42,9 @@ export function summarizeErrorMessage(rawMessage: string, providerHint?: string,
   // Project rule: strictly "provider + HTTP status (if parsed) + first line of the verbatim body"
   // Never replace raw errors with guessed diagnoses!
   let headline = '';
-  if (firstLine.includes(`HTTP ${statusCode}`) || (statusCode && firstLine.startsWith(String(statusCode)))) {
+  if (firstLine.startsWith('【') || (provPrefix && firstLine.startsWith(provPrefix))) {
+    headline = firstLine;
+  } else if (firstLine.includes(`HTTP ${statusCode}`) || (statusCode && firstLine.startsWith(String(statusCode)))) {
     headline = `${provPrefix}${firstLine}`;
   } else if (statusCode) {
     headline = `${provPrefix}HTTP ${statusCode}: ${firstLine}`;
@@ -50,8 +52,8 @@ export function summarizeErrorMessage(rawMessage: string, providerHint?: string,
     headline = `${provPrefix}${firstLine}`;
   }
 
-  // Pure factual flag for settings action button
-  const isMissingKey = statusCode === 401 || lower.includes('未配置') || lower.includes('invalid_api_key');
+  // Pure factual flag for settings action button: ONLY when statusCode === 401
+  const isMissingKey = statusCode === 401;
 
   return { headline, isMissingKey, provider: prov, statusCode };
 }
@@ -114,9 +116,9 @@ export const NodeErrorDisclosure: React.FC<NodeErrorDisclosureProps> = ({
           </div>
 
           {/* Verbatim error headline for backward compatibility and transparency */}
-          <div className="[overflow-wrap:anywhere] whitespace-pre-wrap text-[11px] text-rose-300/90 font-mono bg-black/40 p-2 rounded-lg border border-rose-900/50" data-testid="node-error-headline">
+          <pre className="[overflow-wrap:anywhere] whitespace-pre-wrap text-[11px] text-rose-300/90 font-mono bg-black/40 p-2 rounded-lg border border-rose-900/50 max-h-48 overflow-y-auto select-text" data-testid="node-error-headline">
             {errorMessage}
-          </div>
+          </pre>
 
           {/* Progressive Disclosure Toggle */}
           <div className="pt-1 flex items-center justify-between border-t border-rose-900/40">

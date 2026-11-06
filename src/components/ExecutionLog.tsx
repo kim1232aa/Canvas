@@ -295,7 +295,7 @@ export function rowSecondLine(r:ExecutionRecord):string|null {
 /** Plain first-line conclusion (no method/path; no 「这次」prose prefix). */
 export function humanSummaryText(r:ExecutionRecord):string {
   if (isNonGenerationRecord(r) && r.state !== 'error') return `${r.method} ${String(r.route).split('?')[0]}${nonGenerationOrigin(r.route)}${r.status != null ? ` · HTTP ${r.status}` : ' · 请求中'}（非生成请求）`;
-  const data = (r.response && typeof r.response === 'object' ? r.response : {}) as Record<string,any>;
+  const data = (r.response && typeof r.response === 'object' ? { route: r.route, ...r.response } : { route: r.route }) as Record<string,any>;
   if (r.state === 'error' && isLocalNotOutbound(data)) return localNotOutboundText(data);
   if (r.state === 'error' && upstreamHttpFirstLine(data)) return upstreamHttpFirstLine(data)!;
   const kr = typeof data.keyRotation?.summary === 'string' ? data.keyRotation.summary.trim() : '';

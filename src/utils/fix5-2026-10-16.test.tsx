@@ -52,15 +52,17 @@ describe('fix5 aspect_ratio becomes the history size row (generic, not WaveSpeed
   });
 });
 
-describe('fix5 MuAPI LocalRecord strength annotation + short red-bar', () => {
+describe('fix5 MuAPI LocalRecord strength annotation + verbatim red-bar', () => {
 
-  it('KSampler/红条 shortUpstreamSummary 丢掉 MuAPI 402 JSON 尾', () => {
+  it('KSampler/红条 shortUpstreamSummary 保留 MuAPI 402 完整原文', () => {
     const long =
       'HTTP 402 Payment Required {"detail":{"error":{"code":"INSUFFICIENT_CREDITS","message":"Insufficient credit balance"}},"error":{"code":"INSUFFICIENT_CREDITS","message":"Insufficient credit balance","topup_url":"https://muapi.ai/topup"}}';
     const s = shortUpstreamSummary(long);
     expect(s).toContain('HTTP 402');
-    expect(s).not.toContain('topup_url');
-    expect(s).not.toContain('"detail"');
-    expect(errorBannerText(long)).not.toContain('topup_url');
+    expect(s).toContain('topup_url');
+    expect(s).toContain('"detail"');
+    expect(s).toContain('INSUFFICIENT_CREDITS');
+    expect(errorBannerText(long)).toContain('topup_url');
+    expect(errorBannerText(long)).toContain('INSUFFICIENT_CREDITS');
   });
 });

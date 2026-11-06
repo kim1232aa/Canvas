@@ -127,7 +127,7 @@ describe('ExecutionLog keyRotation plain summary', () => {
 
 
 describe('ExecutionLog ModelScope plain summary + snapshot provider label', () => {
-  it('humanSummaryText maps 模型不存在 to plain CN conclusion', () => {
+  it('humanSummaryText shows ModelScope upstream error verbatim (never rewritten to Chinese conclusion)', () => {
     const r: ExecutionRecord = {
       id: 3,
       time: '2026-10-14T17:25:17.474Z',
@@ -142,9 +142,14 @@ describe('ExecutionLog ModelScope plain summary + snapshot provider label', () =
           '魔搭国内站 (modelscope.cn) API 提交失败 [500]: {"errors":{"message":"apiInferModelDownload call failed: callApiInferModelDownload failed: [Model Exception] 模型不存在"},"request_id":"4c0b7caa-7f63-497c-972e-2f4e0e65a677"}',
       },
     };
-    expect(humanSummaryText(r)).toBe(MODELSCOPE_MODEL_MISSING_CN);
-    expect(humanSummaryText(r)).toBe('魔搭国内站找不到这个模型或 LoRA');
-    expect(humanSummaryText(r)).not.toMatch(/\[500\]|request_id|\{/);
+    const summary = humanSummaryText(r);
+    expect(summary).toContain('apiInferModelDownload call failed');
+    expect(summary).toContain('模型不存在');
+    expect(summary).toContain('request_id');
+    expect(summary).toContain('4c0b7caa-7f63-497c-972e-2f4e0e65a677');
+    expect(summary).toContain('{"errors":');
+    expect(summary).not.toBe(MODELSCOPE_MODEL_MISSING_CN);
+    expect(summary).not.toContain('魔搭国内站找不到这个模型或 LoRA');
   });
 
   it('providerLabelFromRoute matches modelscope route, not WaveSpeed', () => {
@@ -268,8 +273,7 @@ describe('ExecutionLog Krea 402 透传 summary', () => {
     };
     expect(humanSummaryText(r)).toContain('HTTP 402');
     expect(humanSummaryText(r)).toContain('API balance');
-    expect(humanSummaryText(r)).not.toContain('{"message"');
-    expect(humanSummaryText(r)).toContain('API balance');
+    expect(humanSummaryText(r)).toContain('{"message"');
     expect(humanSummaryText(r)).not.toMatch(/API 余额不足/);
   });
 });
@@ -327,7 +331,9 @@ describe('ExecutionLog AIMLAPI FE P0 — no fake 出图 + actualRequest loras', 
         },
       },
     };
-    expect(humanSummaryText(r)).toBe(upstreamMsg);
+    expect(humanSummaryText(r)).toContain(upstreamMsg);
+    expect(humanSummaryText(r)).toContain('"title":"Forbidden"');
+    expect(humanSummaryText(r)).toContain('403');
     expect(humanSummaryText(r)).toContain('aimlapi.com/app/billing');
     expect(humanSummaryText(r)).not.toMatch(/…$/);
     expect(humanSummaryText(r)).not.toMatch(/出图完成/);

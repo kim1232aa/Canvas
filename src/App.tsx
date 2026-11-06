@@ -749,18 +749,29 @@ export default function App() {
       }
     } catch (err: any) {
       console.error('Frame gen error:', err);
-      const plainFrame = plainErrorMessage(err);
+      const toastInfo = toastFromRunError(err) || upstreamFailureToast((err as any)?.data);
+      const plainFrame = toastInfo ? `${toastInfo.title}: ${toastInfo.message}` : plainErrorMessage(err);
       handleUpdateFrame(frameId, {
         status: 'error',
         executionProgress: 0,
         errorMessage: plainFrame,
       });
       setExecutionStatusText(plainFrame);
-      setToast({
-        type: 'error',
-        title: '⚠️ 取景框生成失败',
-        message: plainFrame,
-      });
+      if (toastInfo) {
+        setToast({
+          type: 'error',
+          title: toastInfo.title,
+          message: toastInfo.message,
+          action: toastInfo.status === 401 ? 'api-settings' : undefined,
+          actionProviderId: toastInfo.status === 401 ? toastInfo.provider : undefined,
+        });
+      } else {
+        setToast({
+          type: 'error',
+          title: '⚠️ 取景框生成失败',
+          message: plainFrame,
+        });
+      }
     } finally {
       endRun();
       setIsExecuting(false);
@@ -1394,9 +1405,10 @@ export default function App() {
       // the raw GET URL + status stay in 执行记录 (traced request) and the history failure card.
       const schemaFail = !localBlockedRun && isSchemaPrefetchError(err);
       const schemaNodeMsg = schemaFail ? schemaFailureNodeMessage(err) : undefined;
-      const errMsg = schemaNodeMsg ? schemaNodeMsg.split('\n')[0] : plainErrorMessage(err);
-      // Save Image / downstream: reuse history item.error (bind / JSON body), not short 「HTTP 401 Unauthorized」.
-      const upstreamMsg = schemaNodeMsg || historyFacingErrorMessage(err) || errMsg;
+      const toastInfo = !localBlockedRun && !schemaFail ? (toastFromRunError(err) || upstreamFailureToast((err as any)?.data)) : null;
+      const errMsg = schemaNodeMsg ? schemaNodeMsg.split('\n')[0] : (toastInfo ? `${toastInfo.title}: ${toastInfo.message}` : plainErrorMessage(err));
+      // Save Image / downstream: reuse verbatim error (status line + JSON body), not short 「HTTP 401 Unauthorized」.
+      const upstreamMsg = schemaNodeMsg || (toastInfo ? `${toastInfo.title}: ${toastInfo.message}` : (historyFacingErrorMessage(err) || errMsg));
       // clean-1333 #3/#5/#6: one title for toast / node / exec log, chosen from what was actually requested.
       const blockData = localBlockedRun ? (err as any).data : undefined;
       const blockTitle = localBlockedRun ? localBlockTitle(blockData) : undefined;
@@ -1473,15 +1485,25 @@ export default function App() {
       }));
 
       // High-visibility failure notification with progressive disclosure and quick settings link
-      const missingKeyMatch = String(upstreamMsg || errMsg).match(/未配置\s*([a-zA-Z0-9_-]+)\s*的密钥/);
-      const missingKeyProv = missingKeyMatch ? missingKeyMatch[1] : undefined;
-      setToast({
-        type: 'error',
-        title: '工作流生成失败',
-        message: upstreamMsg || errMsg,
-        action: missingKeyProv ? 'api-settings' : undefined,
-        actionProviderId: missingKeyProv,
-      });
+      if (toastInfo) {
+        setToast({
+          type: 'error',
+          title: toastInfo.title,
+          message: toastInfo.message,
+          action: toastInfo.status === 401 ? 'api-settings' : undefined,
+          actionProviderId: toastInfo.status === 401 ? (toastInfo.provider || branch.target?.values?.targetProvider) : undefined,
+        });
+      } else {
+        const missingKeyMatch = String(upstreamMsg || errMsg).match(/未配置\s*([a-zA-Z0-9_-]+)\s*的密钥/);
+        const missingKeyProv = missingKeyMatch ? missingKeyMatch[1] : undefined;
+        setToast({
+          type: 'error',
+          title: blockTitle || '工作流生成失败',
+          message: blockReason || upstreamMsg || errMsg,
+          action: missingKeyProv ? 'api-settings' : undefined,
+          actionProviderId: missingKeyProv,
+        });
+      }
 
       // clean-1358 #4 + clean-1613 #2: pan only after writing ONE exec-log row 「视口平移至原因节点」.
       // Capture run attach BEFORE finally/endRun clears currentRunLabel; record OUTSIDE setState (StrictMode would double-fire).
@@ -3160,19 +3182,14 @@ export default function App() {
                 )}
               </div>
               {(() => {
-                // First line in full (upstream verbatim); a long remainder is expandable, never ellipsized away.
-                const [first, ...rest] = String(toast.message ?? '').split('\n');
-                const more = rest.join('\n').trim();
+                const text = String(toast.message ?? '');
                 return (
-                  <>
-                    <div data-testid="toast-first-line" className="text-slate-300 mt-0.5 leading-relaxed whitespace-pre-wrap [overflow-wrap:break-word] [word-break:normal]">{first}</div>
-                    {more && (
-                      <details data-testid="toast-more" className="mt-1">
-                        <summary className="cursor-pointer text-cyan-300">展开全文</summary>
-                        <pre className="mt-1 max-h-[40vh] overflow-auto whitespace-pre-wrap [overflow-wrap:break-word] text-[11px] text-slate-300 font-mono">{more}</pre>
-                      </details>
-                    )}
-                  </>
+                  <pre
+                    data-testid="toast-first-line"
+                    className="text-slate-300 mt-1 max-h-48 overflow-y-auto leading-relaxed whitespace-pre-wrap font-mono text-xs break-all bg-black/40 p-2 rounded-lg border border-rose-900/40 select-text"
+                  >
+                    {text}
+                  </pre>
                 );
               })()}
             </div>
