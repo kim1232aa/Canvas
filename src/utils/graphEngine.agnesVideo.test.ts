@@ -75,11 +75,13 @@ it('executeWorkflow forwards both size=1080P and resolution=720P without local r
     provider: 'agnes',
     model: 'agnes-video-2.5',
     size: '1080P',
+    resolution: '720P',
     seed: 13,
     extraParams: { size: '1080P', resolution: '720P' },
   });
   expect(built!.payload).toMatchObject({
     size: '1080P',
+    resolution: '720P',
     seed: 13,
   });
 });
@@ -95,9 +97,8 @@ it('executeWorkflow retains node resolution source and JSON overrides with zero/
   expect(built!.requestedParameters.extraParams).toEqual({resolution:'1080P'});
   expect(built!.beforeCustom).toMatchObject({size:'1080P',seed:7});
   expect(built!.overrides).toMatchObject({size:{before:'1080P',after:'720P'},seed:{before:7,after:0}});
-  expect(built!.payload).toMatchObject({size:'720P',seed:0,unknown_flag:false});
+  expect(built!.payload).toMatchObject({size:'720P',seed:0,unknown_flag:false,resolution:'1080P'});
   expect(built!.payload).not.toHaveProperty('extraParams');
-  expect(built!.payload).not.toHaveProperty('resolution');
   expect(result.seed).toBe(0);
 });
 

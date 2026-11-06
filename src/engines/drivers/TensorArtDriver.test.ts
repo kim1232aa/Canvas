@@ -136,4 +136,43 @@ describe('TensorArt model driver', () => {
       )
     ).rejects.toThrow(/Tensor\.Art 路由返回缺少 model: \{"mediaUrl":"https:\/\/example\.com\/out\.png","provider":"Tensor\.Art \(模型 API\)"\}/);
   });
+
+  it('preserves numeric 0 for width, height, steps, cfg, seed, duration, and denoise', async () => {
+    const driver = new TensorArtDriver();
+
+    vi.mocked(tracedFetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        mediaUrl: 'https://example.com/test.png',
+        provider: 'Tensor.Art (模型 API)',
+        model: '613045163490732233',
+        seed: 0,
+      }),
+    } as any);
+
+    await driver.generate(
+      {
+        model: '613045163490732233',
+        prompt: 'test prompt',
+        width: 0,
+        height: 0,
+        steps: 0,
+        cfg: 0,
+        seed: 0,
+        videoDuration: 0,
+        denoise: 0,
+      } as any,
+      { tensorartKey: 'token' }
+    );
+
+    const [, init] = vi.mocked(tracedFetch).mock.calls.at(-1)!;
+    const body = JSON.parse(init?.body as string);
+    expect(body.width).toBe(0);
+    expect(body.height).toBe(0);
+    expect(body.steps).toBe(0);
+    expect(body.cfg).toBe(0);
+    expect(body.seed).toBe(0);
+    expect(body.duration).toBe(0);
+    expect(body.denoise).toBe(0);
+  });
 });

@@ -24,6 +24,7 @@ export class NanoGPTDriver extends BaseEngineDriver {
     if (isVideo) {
       // Official NanoGPT Video API (https://docs.nano-gpt.com/api-reference/endpoint/video-generation):
       // Supported fields: model, prompt, imageUrl (image_url), duration, aspect_ratio, seed, negative_prompt, cfg_scale, num_inference_steps.
+      const isProvided = (v: any) => v !== undefined && v !== null && v !== '';
       const videoPayload: Record<string, any> = {
         workflowSnapshot: params.workflowSnapshot,
         custom_parameters: params.extraParams?.custom_parameters,
@@ -31,22 +32,19 @@ export class NanoGPTDriver extends BaseEngineDriver {
         model: params.model,
         provider: 'nanogpt',
       };
-      if (params.aspectRatio) videoPayload.aspect_ratio = params.aspectRatio;
-      if (params.image_url) videoPayload.image_url = params.image_url;
-      if (params.seed != null) videoPayload.seed = params.seed;
-      if (params.videoDuration != null) videoPayload.duration = params.videoDuration;
-      if (params.negative_prompt) videoPayload.negative_prompt = params.negative_prompt;
-      if (params.steps != null) {
-        videoPayload.num_inference_steps = params.steps;
-        videoPayload.steps = params.steps;
-      }
-      if (params.cfg != null) {
-        videoPayload.cfg_scale = params.cfg;
-        videoPayload.cfg = params.cfg;
-      }
-      if (params.videoFps ?? params.extraParams?.fps) videoPayload.fps = params.videoFps ?? params.extraParams?.fps;
-      if (params.videoFrames ?? params.extraParams?.num_frames) videoPayload.num_frames = params.videoFrames ?? params.extraParams?.num_frames;
-      if (params.extraParams?.resolution) videoPayload.resolution = params.extraParams.resolution;
+      if (isProvided(params.aspectRatio)) videoPayload.aspect_ratio = params.aspectRatio;
+      if (isProvided(params.image_url)) videoPayload.image_url = params.image_url;
+      if (isProvided(params.seed)) videoPayload.seed = params.seed;
+      if (isProvided(params.videoDuration)) videoPayload.duration = params.videoDuration;
+      if (isProvided(params.negative_prompt)) videoPayload.negative_prompt = params.negative_prompt;
+      if (isProvided(params.steps)) videoPayload.num_inference_steps = params.steps;
+      if (isProvided(params.cfg)) videoPayload.cfg_scale = params.cfg;
+      const fpsVal = params.videoFps ?? params.extraParams?.fps;
+      if (isProvided(fpsVal)) videoPayload.fps = fpsVal;
+      const framesVal = params.videoFrames ?? params.extraParams?.num_frames;
+      if (isProvided(framesVal)) videoPayload.num_frames = framesVal;
+      const resVal = params.extraParams?.resolution ?? params.imageSize;
+      if (isProvided(resVal)) videoPayload.resolution = resVal;
       withFilledCanvasParams(videoPayload, params, ['loras', 'width', 'height']);
 
       const endpoint = '/api/video/generate';

@@ -112,12 +112,31 @@ export class AgnesDriver extends BaseEngineDriver {
       ...(Array.isArray(params.loras) && params.loras.length > 0 ? { loras: params.loras } : {}),
       ...(params.extraParams?.custom_parameters && typeof params.extraParams.custom_parameters === 'object' ? { custom_parameters: params.extraParams.custom_parameters } : {}),
     };
-    const videoResolution = params.extraParams?.resolution;
+    const videoResolution = params.extraParams?.resolution ?? (params as any).resolution;
     const videoSizeField = params.extraParams?.size ?? params.imageSize;
     // 2026-11-06: 不在本地拦截 resolution 与 size 的组合；照发给上游/服务端由其裁决
     const videoSize = videoSizeField !== undefined && videoSizeField !== '' ? videoSizeField : (videoResolution !== undefined && videoResolution !== '' ? videoResolution : undefined);
     const videoSizeSources = {resolution:videoResolution,size:params.extraParams?.size,imageSize:params.imageSize};
-    const requestBody=isVideo ? {workflowSnapshot:params.workflowSnapshot,provider:'agnes',model:params.model,prompt:params.prompt,duration:params.videoDuration,aspect_ratio:params.aspectRatio,image_url:params.image_url,seed:params.seed,steps:params.steps,cfg:params.cfg,...(Array.isArray(params.loras) && params.loras.length > 0 ? {loras:params.loras} : {}),size:videoSize,extraParams:videoSizeSources,custom_parameters:params.extraParams?.custom_parameters,fps:params.videoFps,num_frames:params.videoFrames,negative_prompt:params.negative_prompt} : imageRequestBody;
+    const requestBody = isVideo ? {
+      workflowSnapshot: params.workflowSnapshot,
+      provider: 'agnes',
+      model: params.model,
+      prompt: params.prompt,
+      duration: params.videoDuration,
+      aspect_ratio: params.aspectRatio,
+      image_url: params.image_url,
+      seed: params.seed,
+      steps: params.steps,
+      cfg: params.cfg,
+      ...(Array.isArray(params.loras) && params.loras.length > 0 ? { loras: params.loras } : {}),
+      size: videoSize,
+      ...(videoResolution !== undefined && videoResolution !== '' ? { resolution: videoResolution } : {}),
+      extraParams: videoSizeSources,
+      custom_parameters: params.extraParams?.custom_parameters,
+      fps: params.videoFps,
+      num_frames: params.videoFrames,
+      negative_prompt: params.negative_prompt,
+    } : imageRequestBody;
     const resp = await fetch(isVideo ? '/api/video/generate' : '/api/engine/agnes/generate', {
       method: 'POST',
       headers,

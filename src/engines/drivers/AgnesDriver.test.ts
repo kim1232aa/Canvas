@@ -43,12 +43,12 @@ it('Agnes video does not send an empty loras array (upstream rejects the field),
   expect(JSON.parse(request.mock.calls[0][1].body).loras).toHaveLength(1);
 });
 
-it('Agnes video maps the node resolution tier to the official size field and never sends resolution',async()=>{
+it('Agnes video maps the node resolution tier to the official size field and sends resolution at top level',async()=>{
   const request=vi.fn().mockResolvedValue(new Response(JSON.stringify({error:'stop'}),{status:400}));globalThis.fetch=request;
   await expect(new AgnesDriver().generate({model:'agnes-video-2.5-flash',prompt:'cat',videoDuration:5,aspectRatio:'16:9',extraParams:{resolution:'720P'}},{})).rejects.toThrow('stop');
   const body=JSON.parse(request.mock.calls[0][1].body);
   expect(body.size).toBe('720P');
-  expect(body).not.toHaveProperty('resolution');
+  expect(body.resolution).toBe('720P');
 });
 
 it('Agnes video keeps an explicit size over node resolution and sends without local throw when both filled',async()=>{
@@ -118,7 +118,7 @@ it.each([
   expect(built.beforeCustom.size).toBe('1080P');
   expect(built.overrides.size).toEqual({before:'1080P',after:'720P'});
   expect(built.payload).toMatchObject({model:'agnes-video-2.5',size:'720P',seed:0,unknown_flag:false});
-  for(const field of ['extraParams','resolution','imageSize','custom_parameters','provider']) expect(built.payload).not.toHaveProperty(field);
+  for(const field of ['extraParams','imageSize','custom_parameters','provider']) expect(built.payload).not.toHaveProperty(field);
 });
 
 it('Agnes known video duration is validated after custom seconds override, retaining final seconds 8 and seed 0',async()=>{

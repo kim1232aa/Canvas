@@ -160,19 +160,33 @@ export class VideoDriver extends BaseEngineDriver {
       reqHeaders['x-modelscope-site'] = 'cn';
     }
     const extra = params.extraParams || {};
+    const isProvided = (v: any) => v !== undefined && v !== null && v !== '';
     const videoBody: Record<string, unknown> = {
       prompt: params.prompt,
       model: targetModel,
       provider: videoProvider,
-      duration: params.videoDuration,
-      aspect_ratio: params.aspectRatio,
       ...(params.image_url ? { image_url: params.image_url } : {}),
       custom_parameters: extra.custom_parameters,
     };
-    if (extra.resolution !== undefined) videoBody.resolution = extra.resolution;
-    if (extra.size !== undefined || params.imageSize !== undefined) videoBody.size = extra.size ?? params.imageSize;
-    for (const [key, value] of Object.entries({fps: params.videoFps ?? extra.fps, num_frames: params.videoFrames, negative_prompt: params.negative_prompt, steps: params.steps, cfg: params.cfg, loras: params.loras?.length ? params.loras : undefined})) {
-      if (value !== undefined && value !== '') videoBody[key] = value;
+    if (isProvided(params.videoDuration)) videoBody.duration = params.videoDuration;
+    if (isProvided(params.aspectRatio)) videoBody.aspect_ratio = params.aspectRatio;
+    if (isProvided(extra.resolution)) videoBody.resolution = extra.resolution;
+    const sizeVal = extra.size ?? params.imageSize;
+    if (isProvided(sizeVal)) videoBody.size = sizeVal;
+    for (const [key, value] of Object.entries({
+      fps: params.videoFps ?? extra.fps,
+      num_frames: params.videoFrames ?? extra.num_frames,
+      negative_prompt: params.negative_prompt,
+      steps: params.steps,
+      cfg: params.cfg,
+      loras: params.loras?.length ? params.loras : undefined,
+      width: params.width,
+      height: params.height,
+      sampler_name: params.sampler_name,
+      scheduler: params.scheduler,
+      denoise: params.denoise,
+    })) {
+      if (isProvided(value)) videoBody[key] = value;
     }
     // 2026-11-05: 照发用户填写的 seed；由上游决定是否接受或返回错误
     if (params.seed != null) videoBody.seed = params.seed;

@@ -24,23 +24,27 @@ export class TensorArtDriver extends BaseEngineDriver {
       prompt: params.prompt,
       model: params.model,
     };
-    if (params.negative_prompt) body.negative_prompt = params.negative_prompt;
-    if (params.width) body.width = params.width;
-    if (params.height) body.height = params.height;
-    if (params.seed != null) body.seed = params.seed;
-    if (params.image_url) body.image_url = params.image_url;
-    if (params.denoise !== undefined) body.denoise = params.denoise;
-    if (params.videoDuration) body.duration = params.videoDuration;
-    if (params.aspectRatio) body.ratio = params.aspectRatio;
-    if (params.extraParams?.size !== undefined) body.size = params.extraParams.size;
-    if (params.extraParams?.count !== undefined) body.count = params.extraParams.count;
-    if (params.extraParams?.inputs !== undefined) body.inputs = params.extraParams.inputs;
-    if (params.extraParams?.custom_parameters !== undefined) body.custom_parameters = params.extraParams.custom_parameters;
-    if (params.steps) body.steps = params.steps;
-    if (params.cfg !== undefined) body.cfg = params.cfg;
+    const isProvided = (v: any) => v !== undefined && v !== null && v !== '';
+    const extra = params.extraParams || {};
+    if (isProvided(params.negative_prompt)) body.negative_prompt = params.negative_prompt;
+    if (isProvided(params.width)) body.width = params.width;
+    if (isProvided(params.height)) body.height = params.height;
+    if (isProvided(params.seed)) body.seed = params.seed;
+    if (isProvided(params.image_url)) body.image_url = params.image_url;
+    if (isProvided(params.denoise)) body.denoise = params.denoise;
+    if (isProvided(params.videoDuration)) body.duration = params.videoDuration;
+    if (isProvided(params.aspectRatio)) body.ratio = params.aspectRatio;
+    if (isProvided(extra.size)) body.size = extra.size;
+    if (isProvided(extra.count)) body.count = extra.count;
+    if (isProvided(extra.inputs)) body.inputs = extra.inputs;
+    if (isProvided(extra.custom_parameters)) body.custom_parameters = extra.custom_parameters;
+    if (isProvided(params.steps)) body.steps = params.steps;
+    if (isProvided(params.cfg)) body.cfg = params.cfg;
     if (params.loras?.length) body.loras = params.loras;
-    if (params.sampler_name || params.extraParams?.sampler_name) body.sampler_name = params.sampler_name || params.extraParams?.sampler_name;
-    if (params.scheduler || params.extraParams?.scheduler) body.scheduler = params.scheduler || params.extraParams?.scheduler;
+    const sampler = isProvided(params.sampler_name) ? params.sampler_name : extra.sampler_name;
+    if (isProvided(sampler)) body.sampler_name = sampler;
+    const scheduler = isProvided(params.scheduler) ? params.scheduler : extra.scheduler;
+    if (isProvided(scheduler)) body.scheduler = scheduler;
 
     const endpoint = '/api/tensorart/generate';
     const resp = await fetch(endpoint, {

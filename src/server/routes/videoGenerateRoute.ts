@@ -168,7 +168,7 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
       try {
         // NanoGPT video submit: POST api.nano-gpt.com/api/generate-video
         // duration is a STRING, seed/negative_prompt are passed through
-        if (forwardUnmappedFields(res, 'NanoGPT Video', req.body, ['loras'])) return;
+        if (forwardUnmappedFields(res, 'NanoGPT Video', req.body, ['loras', 'width', 'height', 'sampler_name', 'scheduler', 'denoise'])) return;
         const nanoPayload: any = { model, prompt };
         if (isProvided(duration)) nanoPayload.duration = String(duration);
         if (isProvided(aspect_ratio)) nanoPayload.aspect_ratio = aspect_ratio;
@@ -177,9 +177,10 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
         if (isProvided(fps)) nanoPayload.frames_per_second = Number(fps);
         if (isProvided(req.body.num_frames)) nanoPayload.num_frames = Number(req.body.num_frames);
         if (isProvided(req.body.resolution)) nanoPayload.resolution = req.body.resolution;
-        if (isProvided(steps)) nanoPayload.num_inference_steps = Number(steps);
-        if (isProvided(req.body.cfg)) nanoPayload.cfg_scale = Number(req.body.cfg);
-        else if (isProvided(req.body.guidance_scale)) nanoPayload.cfg_scale = Number(req.body.guidance_scale);
+        const effectiveSteps = isProvided(steps) ? steps : req.body.num_inference_steps;
+        if (isProvided(effectiveSteps)) nanoPayload.num_inference_steps = Number(effectiveSteps);
+        const effectiveCfg = isProvided(req.body.cfg) ? req.body.cfg : (isProvided(req.body.cfg_scale) ? req.body.cfg_scale : req.body.guidance_scale);
+        if (isProvided(effectiveCfg)) nanoPayload.cfg_scale = Number(effectiveCfg);
         if (isProvided(req.body.shift)) nanoPayload.shift = Number(req.body.shift);
         if (image_url) {
           if (image_url.startsWith('data:')) nanoPayload.imageDataUrl = image_url;
@@ -349,7 +350,7 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
       if (auth.error) return res.status(400).json({ error: auth.error });
       const { apiKey: agnesKey, baseUrl: agnesBaseUrl } = auth;
       const startTime = Date.now();
-      if (forwardUnmappedFields(res, 'Agnes AI Video', req.body, ['negative_prompt', 'steps', 'cfg', 'guidance_scale', 'loras'])) return;
+      if (forwardUnmappedFields(res, 'Agnes AI Video', req.body, ['negative_prompt', 'steps', 'cfg', 'guidance_scale', 'loras', 'resolution'])) return;
 
       let builtAgnes;
       try { builtAgnes = buildAgnesVideoRequest(model, req.body); }

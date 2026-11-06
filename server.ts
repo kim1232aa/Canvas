@@ -3160,6 +3160,7 @@ app.post(['/api/fal/generate', '/api/generate', '/api/engine/fal/generate'], asy
 
     const actualModel = endpoint;
 
+    const unmappedLoraFields: Array<{ lora: string; field: string; value: unknown; reason: string }> = [];
     if (Array.isArray(loras) && loras.length > 0) {
       // F8: 所选端点不支持 LoRA 时返回「该服务商不支持」
       // Only a LoRA with no path/url cannot be sent (no Civitai-ID → URL rewriting: would leak the Civitai token).
@@ -3173,8 +3174,26 @@ app.post(['/api/fal/generate', '/api/generate', '/api/engine/fal/generate'], asy
       }
       payload.loras = loras.map((l: any) => {
         const raw = l.scale ?? l.strength ?? l.modelStrength;
-        return isProvided(raw) ? { path: l.path || l.url, scale: Number(raw) } : { path: l.path || l.url };
+        const entry: Record<string, any> = { path: l.path || l.url };
+        if (isProvided(raw)) entry.scale = Number(raw);
+        if (isProvided(l.clipStrength)) {
+          unmappedLoraFields.push({
+            lora: l.path || l.url || l.name,
+            field: 'clipStrength',
+            value: l.clipStrength,
+            reason: 'Fal live OpenAPI does not declare CLIP scale/strength property for loras',
+          });
+        }
+        return entry;
       });
+      if (unmappedLoraFields.length > 0) {
+        generationContext.getStore()?.traces.push(sanitizeGenerationMetadata({
+          stage: 'unmapped-lora-fields',
+          provider: 'fal',
+          endpoint,
+          unmapped: unmappedLoraFields,
+        }));
+      }
     }
 
     const custom = applyCustomParameters(payload, req.body.custom_parameters);
@@ -3240,7 +3259,7 @@ app.post(['/api/fal/generate', '/api/generate', '/api/engine/fal/generate'], asy
       steps: sentPayload.num_inference_steps ?? null,
       cfg: sentPayload.guidance_scale ?? null,
       loras: (sentPayload.loras || []).map((l: any) => ({ name: l.path, strength: l.scale })),
-      requestMetadata: { requestedParameters: sanitizeGenerationMetadata(Object.fromEntries(Object.entries(req.body).filter(([key]) => key !== 'workflowSnapshot'))), customParameters: custom.customParameters, overrides: custom.overrides, actualParameters: sentPayload, upstreamSeed: result.seed ?? null },
+      requestMetadata: { requestedParameters: sanitizeGenerationMetadata(Object.fromEntries(Object.entries(req.body).filter(([key]) => key !== 'workflowSnapshot'))), customParameters: custom.customParameters, overrides: custom.overrides, actualParameters: sentPayload, ...(unmappedLoraFields.length > 0 ? { unmappedLoraFields } : {}), upstreamSeed: result.seed ?? null },
     }, {
       label: 'Fal.ai',
       response: {
