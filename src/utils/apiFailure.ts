@@ -85,8 +85,9 @@ export function plainErrorMessage(err: unknown): string {
 export function errorBannerText(detail: string | null | undefined): string {
   if (!detail) return '';
   const text = String(detail).trim();
+  const first = text.split('\n')[0];
   // Local rejection: verbatim, no rewrite / slice — must not look like upstream failure or success.
-  if (text.startsWith('没有发出去') || text.startsWith('没有发出去 · ')) return text;
+  if (first.startsWith('没有发出去') || first.startsWith('没有发出去 · ')) return first;
   return stripLocalWrapperPrefix(text) || text;
 }
 
