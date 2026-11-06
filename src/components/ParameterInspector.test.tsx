@@ -1,8 +1,13 @@
-import React from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+// @vitest-environment jsdom
+import React, { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { ParameterInspector } from './ParameterInspector';
+import { NODE_DEFINITIONS } from '../constants/nodes';
 import type { ComfyParameters } from '../types/graph';
+
+(globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
 const noop = () => {};
 const params = (partial: Partial<ComfyParameters> = {}): ComfyParameters => ({
@@ -24,7 +29,10 @@ const params = (partial: Partial<ComfyParameters> = {}): ComfyParameters => ({
 const elements = (tree: any): any[] =>
   !tree ? [] : Array.isArray(tree) ? tree.flatMap(elements) : typeof tree === 'object' && tree.props ? [tree, ...elements(tree.props.children)] : [];
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  document.body.innerHTML = '';
+});
 
 describe('ParameterInspector ComfyUI API JSON export', () => {
   it('does not copy JSON when sampler or scheduler is unset and explains why', async () => {
@@ -54,5 +62,138 @@ describe('ParameterInspector Sogni LoRA strength control', () => {
     expect(unknown).toContain('type="number" step="any"');
     expect(unknown).not.toContain('min="-1.5"');
     expect(unknown).not.toContain('max="2"');
+  });
+});
+
+describe('ParameterInspector provider registry derivation and selection (mounted component)', () => {
+  let host: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+  });
+
+  afterEach(async () => {
+    if (root) await act(async () => root.unmount());
+  });
+
+  it('derives image provider buttons from CheckpointLoaderSimple node registry, including formerly missing options', async () => {
+    const registryOptions = NODE_DEFINITIONS.CheckpointLoaderSimple.widgets?.find((w) => w.name === 'targetProvider')?.options || [];
+    expect(registryOptions.length).toBeGreaterThanOrEqual(26);
+
+    const onChange = vi.fn();
+    await act(async () => {
+      root.render(<ParameterInspector params={params({ targetProvider: 'fal' })} onChange={onChange} onOpenCivitai={noop} />);
+    });
+
+    const buttons = Array.from(host.querySelectorAll<HTMLButtonElement>('.grid button'));
+
+    // Every registry option must have a matching button in the inspector
+    for (const opt of registryOptions) {
+      const button = buttons.find((b) => b.title === opt.label || b.textContent?.trim() === opt.label);
+      expect(button, `Button for provider ${opt.value} (${opt.label})`).toBeDefined();
+    }
+
+    // Explicitly test clicking each formerly missing option
+    for (const missingId of ['runware', 'modelslab', 'video', 'replicate', 'mage']) {
+      const opt = registryOptions.find((o) => o.value === missingId);
+      expect(opt).toBeDefined();
+      const button = buttons.find((b) => b.title === opt!.label || b.textContent?.trim() === opt!.label);
+      expect(button).toBeDefined();
+
+      await act(async () => {
+        button!.click();
+      });
+
+      expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({
+        targetProvider: missingId,
+        checkpoint: '',
+      }));
+    }
+  });
+
+  it('keeps unknown / imported targetProvider visible and highlighted in mounted component', async () => {
+    const customProvider = 'custom_foreign_provider' as any;
+    await act(async () => {
+      root.render(<ParameterInspector params={params({ targetProvider: customProvider })} onChange={noop} onOpenCivitai={noop} />);
+    });
+
+    const buttons = Array.from(host.querySelectorAll<HTMLButtonElement>('.grid button'));
+    const customButton = buttons.find((b) => b.title === customProvider || b.textContent?.trim() === customProvider);
+
+    expect(customButton).toBeDefined();
+    expect(customButton?.className).toContain('text-cyan-300 font-bold');
+  });
+
+  it('derives actual video provider dropdown options from AIVideoNode registry and keeps empty / unknown visible', async () => {
+    const videoOptions = NODE_DEFINITIONS.AIVideoNode.widgets?.find((w) => w.name === 'targetProvider')?.options || [];
+    expect(videoOptions.length).toBeGreaterThanOrEqual(14); // 1 empty + 13 registered
+
+    const onChange = vi.fn();
+    await act(async () => {
+      root.render(
+        <ParameterInspector
+          params={params({ targetProvider: 'video', videoProvider: 'custom_video_engine' })}
+          onChange={onChange}
+          onOpenCivitai={noop}
+        />
+      );
+    });
+
+    const select = host.querySelector<HTMLSelectElement>('select[aria-label="实际视频服务商"]');
+    expect(select).not.toBeNull();
+
+    const options = Array.from(select!.options);
+
+    // Verify all registry options are present
+    for (const opt of videoOptions) {
+      const optEl = options.find((o) => o.value === opt.value);
+      expect(optEl, `Option for video provider ${opt.value}`).toBeDefined();
+    }
+
+    // Verify explicit empty selection is preserved
+    const emptyOption = options.find((o) => o.value === '');
+    expect(emptyOption).toBeDefined();
+
+    // Verify unknown imported videoProvider is preserved
+    const unknownOption = options.find((o) => o.value === 'custom_video_engine');
+    expect(unknownOption).toBeDefined();
+
+    // Selecting formerly missing video provider (e.g. civitai) updates videoProvider via change event
+    await act(async () => {
+      select!.value = 'civitai';
+      select!.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
+      videoProvider: 'civitai',
+    }));
+  });
+
+  it('makes Civitai-specific fields accessible when selecting Civitai as actual video provider', async () => {
+    await act(async () => {
+      root.render(
+        <ParameterInspector
+          params={params({
+            targetProvider: 'video',
+            videoProvider: 'civitai',
+            civitaiEngine: 'comfy',
+            civitaiEcosystem: 'flux',
+            civitaiModel: 'civitai:12345',
+          })}
+          onChange={noop}
+          onOpenCivitai={noop}
+        />
+      );
+    });
+
+    expect(host.querySelector('select[aria-label="Civitai engine"]')).not.toBeNull();
+    expect(host.querySelector('input[aria-label="Civitai ecosystem"]')).not.toBeNull();
+    expect(host.querySelector('input[aria-label="Civitai model"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="civitai-allow-mature-control"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="视频时长（秒）"]')).not.toBeNull();
+    expect(host.querySelector('input[aria-label="视频 resolution"]')).not.toBeNull();
   });
 });

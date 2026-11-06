@@ -25,7 +25,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { ComfyParameters } from '../types/graph';
-import { SAMPLER_OPTIONS, SCHEDULER_OPTIONS } from '../constants/nodes';
+import { SAMPLER_OPTIONS, SCHEDULER_OPTIONS, NODE_DEFINITIONS } from '../constants/nodes';
 import { refinePromptWithGemini, getRefineModelSelection } from '../services/api';
 import { validateLoraCompatibility } from '../utils/baseModelMatcher';
 import { isLoraUnsupportedOnEndpoint, toSchemaProvider, LORA_UNSUPPORTED_TITLE } from '../utils/resolveCheckpoint';
@@ -413,48 +413,34 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
           <div className="space-y-1">
             <label className="text-slate-400 text-[10px] font-mono">云端推理服务商 (Provider)</label>
             <div className="grid grid-cols-2 gap-1.5">
-              {[
-                { id: 'huggingface', label: 'Hugging Face' },
-                { id: 'modelscope', label: '魔搭 CN (国内站)' },
-                { id: 'modelscope_ai', label: '魔搭 AI (国际站)' },
-                { id: 'fal', label: 'Fal.ai (GPU加速)' },
-                { id: 'agnes', label: 'Agnes AI' },
-                { id: 'gemini', label: 'Google Gemini' },
-                { id: 'civitai', label: 'Civitai 原生' },
-                { id: 'nanogpt', label: 'NanoGPT' },
-                { id: 'sensenova', label: '商汤日日新 (SenseNova)' },
-                { id: 'openai_compat', label: 'OpenAI 兼容中转' },
-                { id: 'grok_compat', label: 'Grok 兼容中转' },
-                { id: 'muapi', label: 'MuAPI' },
-                { id: 'wavespeed', label: 'WaveSpeed' },
-                { id: 'sogni', label: 'Sogni' },
-                { id: 'krea', label: 'Krea' },
-                { id: 'together', label: 'Together' },
-                { id: 'aimlapi', label: 'AIMLAPI' },
-                { id: 'novita', label: 'Novita' },
-                { id: 'venice', label: 'Venice' },
-                { id: 'deepinfra', label: 'DeepInfra' },
-                { id: 'openworks', label: 'Tensor.Art OpenWorks' },
-              ].map((p) => {
-                const isSelected = params.targetProvider === p.id;
-                return (
-                  <button
-                    key={p.id}
-                    onClick={() => {
-                      // G4: 切换 provider 时不自动填默认模型 → 清空 checkpoint
-                      if (!isSelected) update({ targetProvider: p.id as any, checkpoint: '' }); // same provider: keep checkpoint (reload must not blank)
-                    }}
-                    className={`py-1.5 px-1 rounded-lg text-center font-mono text-[10px] transition-all whitespace-normal break-words leading-tight ${
-                      isSelected
-                        ? 'bg-cyan-500/25 text-cyan-300 font-bold border border-cyan-500/50 shadow-sm'
-                        : 'bg-[#121316] text-slate-400 border border-[#282a35] hover:text-slate-200'
-                    }`}
-                    title={p.label}
-                  >
-                    {p.label}
-                  </button>
-                );
-              })}
+              {(() => {
+                const widget = NODE_DEFINITIONS.CheckpointLoaderSimple?.widgets?.find((w) => w.name === 'targetProvider');
+                const registered = (widget?.options || []).map((p) => ({ id: p.value, label: p.label }));
+                const list = [...registered];
+                if (params.targetProvider && !list.some((p) => p.id === params.targetProvider)) {
+                  list.push({ id: params.targetProvider, label: params.targetProvider });
+                }
+                return list.map((p) => {
+                  const isSelected = params.targetProvider === p.id;
+                  return (
+                    <button
+                      key={p.id}
+                      onClick={() => {
+                        // G4: 切换 provider 时不自动填默认模型 → 清空 checkpoint
+                        if (!isSelected) update({ targetProvider: p.id as any, checkpoint: '' }); // same provider: keep checkpoint (reload must not blank)
+                      }}
+                      className={`py-1.5 px-1 rounded-lg text-center font-mono text-[10px] transition-all whitespace-normal break-words leading-tight ${
+                        isSelected
+                          ? 'bg-cyan-500/25 text-cyan-300 font-bold border border-cyan-500/50 shadow-sm'
+                          : 'bg-[#121316] text-slate-400 border border-[#282a35] hover:text-slate-200'
+                      }`}
+                      title={p.label}
+                    >
+                      {p.label}
+                    </button>
+                  );
+                });
+              })()}
             </div>
           </div>
 
@@ -499,7 +485,30 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
             return <p role="alert" className="text-sm text-amber-200">{reason}{suffix}</p>;
           })()}
           {params.unresolvedModel && <p role="alert" className="text-sm text-amber-200">底模尚未核实，必须重新选择已核实资源。</p>}
-          {params.targetProvider === 'video' && <label className="block text-sm text-slate-300">实际视频服务商<select aria-label="实际视频服务商" value={params.videoProvider || ''} onChange={e=>update({videoProvider:e.target.value || undefined})} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2"><option value="">请选择实际 provider</option><option value="fal">Fal</option><option value="agnes">Agnes</option><option value="grok_compat">Grok 兼容中转</option>{params.videoProvider && !['fal','agnes','grok_compat'].includes(params.videoProvider) && <option value={params.videoProvider}>{params.videoProvider}</option>}</select></label>}
+          {params.targetProvider === 'video' && (() => {
+            const videoWidget = NODE_DEFINITIONS.AIVideoNode?.widgets?.find((w) => w.name === 'targetProvider');
+            const videoOptions = videoWidget?.options || [];
+            return (
+              <label className="block text-sm text-slate-300">
+                实际视频服务商
+                <select
+                  aria-label="实际视频服务商"
+                  value={params.videoProvider || ''}
+                  onChange={(e) => update({ videoProvider: e.target.value || undefined })}
+                  className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2"
+                >
+                  {videoOptions.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                  {params.videoProvider && !videoOptions.some((opt) => opt.value === params.videoProvider) && (
+                    <option value={params.videoProvider}>{params.videoProvider}</option>
+                  )}
+                </select>
+              </label>
+            );
+          })()}
           {(params.targetProvider === 'civitai' || (params.targetProvider === 'video' && params.videoProvider === 'civitai')) && <div className="space-y-2 rounded-lg border border-slate-700 p-3">
             <label className="block text-sm text-slate-300">Civitai engine<select aria-label="Civitai engine" value={params.civitaiEngine || ''} onChange={e=>update({civitaiEngine:e.target.value || undefined})} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2"><option value="">请选择引擎</option>{civitaiEngines().map(e=><option key={e} value={e}>{e}</option>)}{params.civitaiEngine && !civitaiEngines().includes(params.civitaiEngine) && <option value={params.civitaiEngine}>{params.civitaiEngine}</option>}</select></label>
             <label className="block text-sm text-slate-300">Civitai ecosystem<input aria-label="Civitai ecosystem" value={params.civitaiEcosystem || ''} onChange={e=>update({civitaiEcosystem:e.target.value || undefined})} list="civitai-ecosystems" placeholder="显式填写生态；未知生态保留" className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2" /><datalist id="civitai-ecosystems">{civitaiEcosystemsFor(params.civitaiEngine || '').map(x=><option key={x} value={x} />)}</datalist></label>
