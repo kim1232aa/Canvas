@@ -10,7 +10,7 @@ import {
   resolveGenerateLorasPayload,
 } from './resolveCheckpoint';
 import { assertAIVideoProviderReady } from './videoProvider';
-import {modelCheckpoint} from './inspectorParameters';
+import {modelCheckpoint, resolveNodeVideoSelectors} from './inspectorParameters';
 import { isSchemaPrefetchError, schemaFailureNodeMessage, schemaFailureTargetId } from './schemaFailure';
 import { assertResolvedResources, parseCustomParameters, explicitLoraPath } from './frontendParameters';
 import { normalizeLoraPayloadItem } from './resourceSelection';
@@ -734,14 +734,7 @@ export function extractWorkflowParameters(
     videoDuration = numOrUndef(execNode.values.duration);
     videoFps = numOrUndef(execNode.values.fps);
     videoAspectRatio = strOrUndef(execNode.values.aspect_ratio);
-    const declaredSelectors = execNode.values.video_selectors;
-    if (declaredSelectors !== undefined) {
-      if (!declaredSelectors || typeof declaredSelectors !== 'object' || Array.isArray(declaredSelectors)
-        || !Object.values(declaredSelectors).every((v) => typeof v === 'string' && v.trim() !== '')) {
-        throw new Error('视频节点 video_selectors 必须是非空字符串组成的对象');
-      }
-      videoSelectors = { ...(declaredSelectors as Record<string, string>) };
-    }
+    videoSelectors = resolveNodeVideoSelectors(execNode.values);
     resolution = strOrUndef(execNode.values.resolution);
     size = strOrUndef(execNode.values.size);
     // Filled recipe values (e.g. preset cfg/steps) are sent as filled; the route maps them to the endpoint's declared field.
@@ -868,7 +861,6 @@ export function extractWorkflowParameters(
       traceLorasUpstream(loraConn.fromNodeId, connections, nodeMap, loras, subgraphNodeIds);
     }
   } else if (execNode.type === 'CheckpointLoaderSimple') {
-    isVideo = false;
     checkpointModel = (execNode.values.model || execNode.values.ckpt_name || '').trim();
     checkpointBaseModel = (execNode.values.base_model || execNode.values.baseModel || '').trim() || undefined;
     if (!checkpointModel) {
@@ -876,6 +868,20 @@ export function extractWorkflowParameters(
     }
     targetProvider = (execNode.values.targetProvider || '').trim();
     if (!targetProvider) throw new Error('请选择执行服务商；不会从模型名称猜测引擎');
+    if (targetProvider === 'video') {
+      isVideo = true;
+      videoProvider = (execNode.values.video_provider || execNode.values.videoProvider || '').trim() || undefined;
+      if (!videoProvider) {
+        throw new Error('视频服务商 (Provider) 未设置：请先选择实际视频服务商。不会回退到 Fal。');
+      }
+      videoDuration = numOrUndef(execNode.values.duration ?? execNode.values.videoDuration);
+      videoFps = numOrUndef(execNode.values.fps ?? execNode.values.videoFps);
+      videoFrames = numOrUndef(execNode.values.num_frames ?? execNode.values.videoFrames);
+      videoAspectRatio = strOrUndef(execNode.values.aspect_ratio ?? execNode.values.videoAspectRatio);
+      videoSelectors = resolveNodeVideoSelectors(execNode.values);
+    } else {
+      isVideo = false;
+    }
     width = numOrUndef(execNode.values.width);
     height = numOrUndef(execNode.values.height);
     size = execNode.values.size || undefined;
@@ -924,6 +930,18 @@ export function extractWorkflowParameters(
     }
     targetProvider = (ckpt.values.targetProvider || '').trim();
     if (!targetProvider) throw new Error('请选择执行服务商；不会从模型名称猜测引擎');
+    if (targetProvider === 'video') {
+      isVideo = true;
+      videoProvider = (ckpt.values.video_provider || ckpt.values.videoProvider || '').trim() || undefined;
+      if (!videoProvider) {
+        throw new Error('视频服务商 (Provider) 未设置：请先选择实际视频服务商。不会回退到 Fal。');
+      }
+      videoDuration = numOrUndef(ckpt.values.duration ?? ckpt.values.videoDuration);
+      videoFps = numOrUndef(ckpt.values.fps ?? ckpt.values.videoFps);
+      videoFrames = numOrUndef(ckpt.values.num_frames ?? ckpt.values.videoFrames);
+      videoAspectRatio = strOrUndef(ckpt.values.aspect_ratio ?? ckpt.values.videoAspectRatio);
+      videoSelectors = resolveNodeVideoSelectors(ckpt.values);
+    }
     size = ckpt.values.size || undefined;
     quality = ckpt.values.quality || undefined;
     outputFormat = ckpt.values.output_format || ckpt.values.outputFormat || undefined;
@@ -1044,7 +1062,7 @@ export function extractWorkflowParameters(
     sourceLoraAir: strOrUndef(recipe.source_lora_air),
     watermark: targetProvider === 'sensenova' && typeof recipe.watermark === 'boolean' ? recipe.watermark : undefined,
     promptExtend: targetProvider === 'sensenova' && typeof recipe.prompt_extend === 'boolean' ? recipe.prompt_extend : undefined,
-    civitaiEngine: strOrUndef(recipe.civitai_engine),
+    civitaiEngine: strOrUndef(videoSelectors?.engine || recipe.civitai_engine),
     civitaiEcosystem: strOrUndef(recipe.civitai_ecosystem),
     civitaiModel: strOrUndef(recipe.civitai_model),
     checkpointModel,
