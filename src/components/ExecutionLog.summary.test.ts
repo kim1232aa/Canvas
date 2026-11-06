@@ -4,7 +4,6 @@
  */
 import {describe,expect,it} from 'vitest';
 import {errorScopeTag, humanSummaryText, providerLabelFromRoute, alignRequestSnapshotProvider, plainSuccessConclusion, shortLoraDisplayName, isEmptyClientRequestSnapshot, clientRequestSnapshotText, extractLorasFromRequest, extractLorasFromRecord, actualRequestFromResponse, buttonSummary} from './ExecutionLog';
-import {MODELSCOPE_MODEL_MISSING_CN} from '../utils/apiFailure';
 import type {ExecutionRecord} from '../services/executionTrace';
 import {LORA_UNSUPPORTED_MESSAGE} from '../utils/resolveCheckpoint';
 
@@ -148,7 +147,6 @@ describe('ExecutionLog ModelScope plain summary + snapshot provider label', () =
     expect(summary).toContain('request_id');
     expect(summary).toContain('4c0b7caa-7f63-497c-972e-2f4e0e65a677');
     expect(summary).toContain('{"errors":');
-    expect(summary).not.toBe(MODELSCOPE_MODEL_MISSING_CN);
     expect(summary).not.toContain('魔搭国内站找不到这个模型或 LoRA');
   });
 

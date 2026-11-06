@@ -73,7 +73,7 @@ import { executeWorkflow, extractWorkflowParameters, resolveTargetNode, shouldCl
 import { getModelSchemaEntry } from './services/modelSchemaCache';
 import { fetchProviderKeyStatus, providerKeyConfigured } from './services/providerKeyStatus';
 import { friendlyProviderLabel } from './utils/providerLabels';
-import { toastFromRunError, plainFailureConclusion, plainErrorMessage, historyFacingErrorMessage, unicodeSafeSlice, EXEC_NODE_MISSING, localBlockToastReason, upstreamFailureToast } from './utils/apiFailure';
+import { toastFromRunError, plainErrorMessage, historyFacingErrorMessage, localBlockToastReason, upstreamFailureToast } from './utils/apiFailure';
 import { applyAIVideoModelSelection } from './utils/videoProvider';
 import { formatVideoNodeTitle, formatCheckpointNodeTitle, formatNodeDisplayTitle, applyHubCheckpointTitle } from './utils/nodeDisplayTitle';
 import {
@@ -443,10 +443,10 @@ export default function App() {
         try {
           return readinessFrom(extractWorkflowParameters(nodes, connections, undefined));
         } catch (error2: any) {
-          return plainFailureConclusion(error2?.message) || EXEC_NODE_MISSING;
+          return error2?.message || String(error2);
         }
       }
-      const msg = plainFailureConclusion(error?.message) || error?.message || '工作流连接不完整';
+      const msg = error?.message || '工作流连接不完整';
       // extract 先抛 pendingRecipe（缺 LoRA）时还没查提示词：黄字补上「请填写提示词」。
       const boardHasPrompt = nodes.some((n) => n.type === 'CLIPTextEncode' && String(n.values?.text || '').trim());
       if (!boardHasPrompt && /真 LoRA 地址|待配方|载入后挂上再运行/.test(String(msg)) && !String(msg).includes('提示词')) {

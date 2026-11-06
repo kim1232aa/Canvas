@@ -1,30 +1,6 @@
 import { formatBeijingHms } from '../services/executionTrace';
 import { isSchemaPrefetchError, schemaFailureToast } from './schemaFailure';
 
-/** ModelScope upstream 「模型不存在」— legacy constants retained for backward compatibility; never returned by plainFailureConclusion */
-export const MODELSCOPE_MODEL_MISSING_CN = '魔搭国内站找不到这个模型或 LoRA';
-export const MODELSCOPE_MODEL_MISSING_AI = '魔搭国际站找不到这个模型或 LoRA';
-
-/** Stale selectedNodeId / resolve miss — legacy constant retained for backward compatibility */
-export const EXEC_NODE_MISSING = '请重新选择要运行的节点';
-
-/** Standard HTTP status texts for factual status lines */
-export const HTTP_STATUS_TEXTS: Record<number, string> = {
-  400: 'Bad Request',
-  401: 'Unauthorized',
-  402: 'Payment Required',
-  403: 'Forbidden',
-  404: 'Not Found',
-  408: 'Request Timeout',
-  409: 'Conflict',
-  422: 'Unprocessable Entity',
-  429: 'Too Many Requests',
-  500: 'Internal Server Error',
-  502: 'Bad Gateway',
-  503: 'Service Unavailable',
-  504: 'Gateway Timeout',
-};
-
 /**
  * Strips local server-side wrapper strings (e.g. "Mage 图像接口上游 HTTP 402: ", "Civitai Orchestration 官方算力返回错误 [400]: ")
  * so the genuine, verbatim upstream response body is preserved and exposed.
@@ -76,15 +52,6 @@ export function isBillingFailureText(text: string | null | undefined): boolean {
     return true;
   }
   return false;
-}
-
-/**
- * Map known technical refuse strings to plain Chinese for cards / exec-log first line.
- * Product Iron Rule (Task 2): NEVER rewrite upstream errors with text the app wrote itself!
- * Upstream errors must be shown as returned. Returns null so callers preserve the verbatim upstream error.
- */
-export function plainFailureConclusion(_detail: string | null | undefined): string | null {
-  return null;
 }
 
 /**
@@ -263,7 +230,7 @@ export function upstreamFailureParts(data: any): { status: number; statusText: s
   return { status, statusText, body, provider };
 }
 export const TOAST_BODY_FIRST_LINE_MAX = 400;
-/** Toast for an upstream HTTP failure: title 「HTTP <code>」; message = upstream body verbatim. */
+/** Toast for an upstream HTTP failure: title 「【provider】HTTP <code> <statusText>」; message = upstream body verbatim. */
 /** clean-1149 #1: run-catch toast. Prefer structured err.data; else SchemaPrefetchError / any Error carrying upstreamStatus. */
 export function toastFromRunError(err: any, runLine?: string): { title: string; message: string; provider?: string; status?: number } | null {
   // Schema lookup miss: title = plain headline (full model name); body = one status line.
@@ -281,46 +248,38 @@ export function toastFromRunError(err: any, runLine?: string): { title: string; 
   return null;
 }
 
-export function upstreamFailureToast(data: any, runLine?: string): { title: string; message: string; provider?: string; status?: number } | null {
+export function upstreamFailureToast(data: any, _runLine?: string): { title: string; message: string; provider?: string; status?: number } | null {
   const parts = upstreamFailureParts(data);
   if (!parts) return null;
-  const body = parts.body;
-  const firstRaw = body.split(/\r?\n/)[0];
-  const summary = (
-    body.length > TOAST_BODY_FIRST_LINE_MAX
-      ? unicodeSafeSlice(firstRaw, 120)
-      : (extractUpstreamMessage(body) || firstRaw)
-  );
-  const needsFull = !body || summary !== body || body.length > TOAST_BODY_FIRST_LINE_MAX || Boolean(data?.localWrapper);
-  const sep = parts.statusText && /^(status:|task status=)/i.test(parts.statusText) ? ' · ' : ' ';
-  const title = `HTTP ${parts.status}${parts.statusText ? `${sep}${parts.statusText}` : ''}`;
+  const prov = parts.provider;
+  const provPrefix = prov ? `【${prov}】` : '';
+  const sep = parts.statusText ? ' ' : '';
+  const title = `${provPrefix}HTTP ${parts.status}${sep}${parts.statusText}`.trim();
+  const wrapper = typeof data?.localWrapper === 'string' && data.localWrapper !== parts.body
+    ? `\n本地包装与堆栈（技术详情）：\n${data.localWrapper}`
+    : '';
   return {
     title,
-    message: [
-      summary || (body ? '（上游响应体见展开）' : '（上游响应体为空）'),
-      needsFull ? `完整上游响应原文：\n${body}` : '',
-      runLine || '',
-      typeof data?.localWrapper === 'string' && data.localWrapper !== body ? `本地包装与堆栈（技术详情）：\n${data.localWrapper}` : '',
-    ].filter(Boolean).join('\n'),
-    provider: parts.provider,
+    message: `${parts.body}${wrapper}`,
+    provider: prov,
     status: parts.status,
   };
 }
 
-/** Upstream HTTP failure → 「HTTP <code> <upstream body verbatim>」 (all providers). null when no upstream status. */
+/** Upstream HTTP failure → 「【provider】HTTP <code> <statusText>: <upstream body verbatim>」 (all providers). null when no upstream status. */
 export function upstreamHttpFirstLine(data: any): string | null {
   const parts = upstreamFailureParts(data);
   if (!parts) return null;
   const prov = parts.provider;
   const provPrefix = prov ? `【${prov}】` : '';
-  const sep = parts.statusText && /^(status:|task status=)/i.test(parts.statusText) ? ' · ' : ' ';
-  const statusLine = `HTTP ${parts.status}${parts.statusText ? `${sep}${parts.statusText}` : ''}`;
-  const bodyFirst = parts.body.split(/\r?\n/)[0].replace(/^HTTP \d{3}:?\s*/, '').trim();
+  const sep = parts.statusText ? ' ' : '';
+  const statusLine = `HTTP ${parts.status}${sep}${parts.statusText}`.trim();
   if (!prov) {
     const msg = extractUpstreamMessage(parts.body);
     if (msg) {
       return `${statusLine} · ${msg}`.trim();
     }
+    const bodyFirst = parts.body.split(/\r?\n/)[0].replace(/^HTTP \d{3}:?\s*/, '').trim();
     const raw = `${statusLine}${bodyFirst ? ` ${bodyFirst}` : ''}`.trim();
     return raw;
   }

@@ -1,7 +1,7 @@
 import { localBlockTitle, schemaReadLine, LOCAL_BLOCK_ZERO_TITLE } from '../utils/localBlock';
 import React from 'react';
 import {CATEGORY_LABEL,countsLabel,formatRecordTime,getExecutions,isNonGenerationRecord,recordCategory,subscribeExecution,type ExecutionRecord} from '../services/executionTrace';
-import {isLocalNotOutbound, localNotOutboundText, upstreamHttpFirstLine, plainFailureConclusion, userFacingApiFailure} from '../utils/apiFailure';
+import {isLocalNotOutbound, localNotOutboundText, upstreamHttpFirstLine, userFacingApiFailure} from '../utils/apiFailure';
 import { checkpointNodeTitle } from '../utils/providerLabels';
 import { splitActualRequest, ACTUAL_META_LABEL } from '../utils/actualRequestDisplay';
 import { formatKeyUsage, keyUsagesFromTrace } from '../server/keyUsage';
@@ -299,10 +299,8 @@ export function humanSummaryText(r:ExecutionRecord):string {
   if (r.state === 'error' && isLocalNotOutbound(data)) return localNotOutboundText(data);
   if (r.state === 'error' && upstreamHttpFirstLine(data)) return upstreamHttpFirstLine(data)!;
   const kr = typeof data.keyRotation?.summary === 'string' ? data.keyRotation.summary.trim() : '';
-  if (kr) return plainFailureConclusion(kr) || kr;
+  if (kr) return kr;
   const detail = responseDetail(r.response);
-  const failPlain = plainFailureConclusion(detail);
-  if (failPlain) return failPlain;
   if (r.state === 'error') return userFacingApiFailure(r.status ?? 0, data, r.route);
   if (r.state === 'pending') return detail || '请求中';
   const successPlain = plainSuccessConclusion(r);

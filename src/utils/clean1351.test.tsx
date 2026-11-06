@@ -18,7 +18,7 @@ describe('clean-1351 #1 toast first line = upstream raw body only', () => {
     const t = upstreamFailureToast(schemaPrefetchFailureData(401, wrapper), '运行：保存图像')!;
     expect(t.title).toBe('HTTP 401');
     const first = t.message.split('\n')[0];
-    expect(first).not.toBe(upstream); // fix4 short first line
+    expect(first).toBe(upstream); // verbatim upstream response body without fix4 short first line
     expect(t.message).toContain(upstream);
     expect(first).not.toMatch(/\\"|schemaProviders\.ts|stack|"ok":false/);
     // wrapper + stack only in the expandable remainder

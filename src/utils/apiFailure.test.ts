@@ -1,5 +1,5 @@
 import {it,expect} from 'vitest';
-import {describeApiFailure, plainFailureConclusion, plainErrorMessage, userFacingApiFailure, unicodeSafeSlice, errorBannerText, isBillingFailureText, MODELSCOPE_MODEL_MISSING_CN, MODELSCOPE_MODEL_MISSING_AI, EXEC_NODE_MISSING, extractUpstreamMessage, historyFacingErrorMessage, shortUpstreamSummary} from './apiFailure';
+import {describeApiFailure, plainErrorMessage, userFacingApiFailure, unicodeSafeSlice, errorBannerText, isBillingFailureText, extractUpstreamMessage, historyFacingErrorMessage, shortUpstreamSummary} from './apiFailure';
 it('distinguishes app 200 from upstream 403 and explains a challenge without guessing balance',()=>{
  const data={ok:false,tensorart:{error:'catalog failed',status:403},executionTrace:[{status:403,endpoint:'https://tensor.art/models/',responseBody:'<html>challenges.cloudflare.com cf_chl</html>'}]};
  const text=describeApiFailure(200,data,'/api/models');
@@ -17,7 +17,6 @@ it('keeps local validation distinct from an upstream rejection',()=>{
 
 it('does not rewrite Civitai Krea refuse with app-written Chinese conclusion',()=>{
   const jargon='Civitai Krea v2 官方不接受 LoRA、负面提示词或宽高像素（见 https://developer.civitai.com/orchestration/recipes/krea）。请改用 Flux 2 / Qwen 配方，或换到官方支持 LoRA 的供应商端点。';
-  expect(plainFailureConclusion(jargon)).toBeNull();
   // 2026-10-15 hard rule: local rejection that never left the server → 「没有发出去：<原文>」, no rewrite.
   expect(userFacingApiFailure(400,{errorSource:'local',error:jargon},'/api/engine/civitai/generate')).toBe(`没有发出去：${jargon}`);
 });
@@ -29,32 +28,28 @@ it('unicodeSafeSlice never cuts mid-grapheme',()=>{
 });
 
 it('maps HF billing key-rotate summary without path jargon',()=>{
-  expect(plainFailureConclusion('几把都额度不够')).toBeNull(); // no invented summary mapping
   expect(userFacingApiFailure(402,{error:'x',keyRotation:{summary:'hf_0...a: HTTP 402: Purchase pre-paid credits'}},'/api/engine/huggingface/generate')).toBe('hf_0...a: HTTP 402: Purchase pre-paid credits');
   expect(userFacingApiFailure(402,{error:'x',keyRotation:{summary:'完成\nhf_0...a: HTTP 402: no credits'}},'/api/x')).toBe('完成\nhf_0...a: HTTP 402: no credits');
 });
 
 it('shows ModelScope CN 模型不存在 verbatim without app-written Chinese rewrite',()=>{
   const jargon='魔搭国内站 (modelscope.cn) API 提交失败 [500]: {"errors":{"message":"apiInferModelDownload call failed: callApiInferModelDownload failed: [Model Exception] 模型不存在"},"request_id":"4c0b7caa-7f63-497c-972e-2f4e0e65a677"}';
-  expect(plainFailureConclusion(jargon)).toBeNull();
   const text = userFacingApiFailure(500,{error:jargon,errorSource:'upstream'},'/api/modelscope/generate');
   expect(text).toContain('apiInferModelDownload call failed');
   expect(text).toContain('模型不存在');
   expect(text).toContain('request_id');
   expect(text).toContain('4c0b7caa-7f63-497c-972e-2f4e0e65a677');
   expect(text).toContain('{"errors":');
-  expect(text).not.toContain(MODELSCOPE_MODEL_MISSING_CN);
+  expect(text).not.toContain('魔搭国内站找不到这个模型或 LoRA');
 });
 it('shows ModelScope AI 模型不存在 verbatim without app-written Chinese rewrite',()=>{
   const jargon='魔搭国际站 (modelscope.ai) API 提交失败 [500]: 模型不存在';
-  expect(plainFailureConclusion(jargon)).toBeNull();
   expect(userFacingApiFailure(500,{error:jargon},'/api/modelscope/generate')).toContain('模型不存在');
 });
 
 it('透传 Krea HTTP 402 upstream message verbatim — never rewrite or drop body JSON',()=>{
   const upstreamMsg='Your API balance is separate from your workspace compute balance. Please top up your API balance to continue using the API.';
   const jargon='HTTP 402: {"message":"'+upstreamMsg+'"}';
-  expect(plainFailureConclusion(jargon)).toBeNull();
   // Verbatim error display: preserves full body JSON and never rewrites
   const outShaped = userFacingApiFailure(402,{error:jargon,errorSource:'upstream',upstreamStatus:402,upstreamResponseBody:jargon.replace(/^HTTP 402:?\s*/, '')},'/api/schema-provider/krea/submit');
   expect(outShaped).toContain('HTTP 402');
@@ -69,7 +64,6 @@ it('透传 Krea HTTP 402 upstream message verbatim — never rewrite or drop bod
   expect(plainErrorMessage(new Error(jargon))).toContain('{"message"');
 });
 it('does not rewrite missing execution node error via plainFailureConclusion',()=>{
-  expect(plainFailureConclusion('未找到指定的执行节点: node-1791998332520')).toBeNull();
   expect(plainErrorMessage(new Error('未找到指定的执行节点: node-1'))).toContain('未找到指定的执行节点: node-1');
 });
 it('402 with opaque body 透传 original detail — no invented Chinese summary',()=>{
@@ -88,7 +82,6 @@ it('透传 AIMLAPI HTTP 403 run-out-of-funds message — full verbatim body, no 
     error: { name: 'ForbiddenException', message: upstreamMsg, data: { kind: 'err_insufficent_credits' } },
   });
   const jargon = `HTTP 403: ${bodyJson}`;
-  expect(plainFailureConclusion(jargon)).toBeNull();
   // Verbatim banner: HTTP + full response body JSON preserved
   const shaped = { error: jargon, errorSource: 'upstream', upstreamStatus: 403, upstreamResponseBody: bodyJson };
   expect(userFacingApiFailure(403, shaped, '/api/schema-provider/aimlapi/submit')).toContain('HTTP 403');

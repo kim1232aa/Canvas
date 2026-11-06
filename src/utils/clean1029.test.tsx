@@ -15,19 +15,20 @@ const read = (p: string) => fs.readFileSync(new URL(p, import.meta.url), 'utf8')
 
 describe('clean-1029 #1 toast = HTTP status + upstream body verbatim', () => {
   const body = '{"error":"Insufficient USD or Diem balance to complete request","code":"PAYMENT_REQUIRED"}';
-  it('Venice 402: title HTTP 402, first line = short summary, full body in expand', () => {
+  it('Venice 402: title HTTP 402, message = upstream body verbatim without app wrapper', () => {
     const t = upstreamFailureToast({ ok: false, executionTrace: [{ method: 'POST', status: 402, responseBody: body }] }, '运行：保存图像')!;
     expect(t.title).toBe('HTTP 402');
-    expect(t.message.split('\n')[0]).not.toBe(body); // fix4: short first line
-    expect(t.message).toContain('完整上游响应原文');
+    expect(t.message).toBe(body);
+    expect(t.message).not.toContain('完整上游响应原文');
     expect(t.message).toContain(body);
     expect(t.message).not.toMatch(/LoRA|请求未完成/);
   });
-  it('401 from upstreamStatus + upstreamResponseBody; full body in expand', () => {
+  it('401 from upstreamStatus + upstreamResponseBody; message = upstream body verbatim', () => {
     const long = 'x'.repeat(TOAST_BODY_FIRST_LINE_MAX + 50);
     const t = upstreamFailureToast({ upstreamStatus: 401, upstreamResponseBody: long })!;
     expect(t.title).toBe('HTTP 401');
-    expect(t.message).toContain('完整上游响应原文');
+    expect(t.message).toBe(long);
+    expect(t.message).not.toContain('完整上游响应原文');
     expect(t.message).toContain(long);
   });
 });
