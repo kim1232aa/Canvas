@@ -2588,6 +2588,8 @@ app.get("/api/models", async (req, res) => {
               hasMore: false,
               sourceUrl: 'https://docs.runware.ai',
               sourceNotice: 'lookup-only (no api key configured)',
+              catalogAvailable: true,
+              requiresApiKey: true,
             };
             catalogNoticesAccum.runware = 'Runware 实时模型搜索需要配置 API Key (RUNWARE_API_KEY)；支持直接在上方输入框中输入 AIR 标识符 (如 civitai:xxxx@yyyy 或 runware:xx@y) 按 ID 选用。';
           } else if (!rawSearch) {
@@ -2599,6 +2601,8 @@ app.get("/api/models", async (req, res) => {
               hasMore: false,
               sourceUrl: 'https://docs.runware.ai',
               sourceNotice: 'lookup-only (search query required for live catalog)',
+              catalogAvailable: true,
+              requiresSearchQuery: true,
             };
             catalogNoticesAccum.runware = 'Runware 实时模型目录需要搜索关键词；请输入关键词后查询真实上游目录。';
           } else {
@@ -2690,6 +2694,8 @@ app.get("/api/models", async (req, res) => {
               hasMore: false,
               sourceUrl: 'https://modelslab.com/api/v4/dreambooth/model_list',
               sourceNotice: 'lookup-only (no api key configured)',
+              catalogAvailable: true,
+              requiresApiKey: true,
             };
             catalogNoticesAccum.modelslab = 'ModelsLab 官方模型列表需要 API Key (MODELSLAB_API_KEY)；支持直接在上方输入框中输入模型 ID / lora_model ID。';
           } else {
@@ -2884,17 +2890,17 @@ app.get("/api/models", async (req, res) => {
 
     if (provider === 'all' || provider === 'openai_compat') {
       results.openai_compat = [];
-      pagination.openai_compat = { page: 1, limit: limitParam, total: 0, hasMore: false, sourceUrl: '', sourceNotice: 'lookup-only (custom endpoint)' };
+      pagination.openai_compat = { page: 1, limit: limitParam, total: 0, hasMore: false, sourceUrl: '', sourceNotice: 'lookup-only (custom endpoint)', isCustomEndpoint: true };
       catalogNoticesAccum.openai_compat = 'OpenAI 兼容接口使用您配置的 Base URL 与模型名称，暂无全网统一目录；支持在上方输入框中直接输入模型 ID (如 dall-e-3) 按 ID 选用。';
     }
     if (provider === 'all' || provider === 'grok_compat') {
       results.grok_compat = [];
-      pagination.grok_compat = { page: 1, limit: limitParam, total: 0, hasMore: false, sourceUrl: '', sourceNotice: 'lookup-only (custom endpoint)' };
+      pagination.grok_compat = { page: 1, limit: limitParam, total: 0, hasMore: false, sourceUrl: '', sourceNotice: 'lookup-only (custom endpoint)', isCustomEndpoint: true };
       catalogNoticesAccum.grok_compat = 'Grok 兼容接口使用您配置的 Base URL 与模型名称，暂无公开目录；支持在上方输入框中直接输入模型 ID 按 ID 选用。';
     }
     if (provider === 'all' || provider === 'agnes') {
       results.agnes = [];
-      pagination.agnes = { page: 1, limit: limitParam, total: 0, hasMore: false, sourceUrl: 'https://agnes.ai', sourceNotice: 'lookup-only (specialized image/video service; no public remote catalog)' };
+      pagination.agnes = { page: 1, limit: limitParam, total: 0, hasMore: false, sourceUrl: 'https://agnes.ai', sourceNotice: 'lookup-only (specialized image/video service; no public remote catalog)', catalogAvailable: false, noPublicRemoteCatalog: true };
       catalogNoticesAccum.agnes = 'Agnes 无公开远端模型检索目录；请在上方输入框按官方模型 ID 选用（如 agnes-image-2.5-flash）。空列表不是“没有能力”，而是 lookup-only。';
     }
 
@@ -2960,6 +2966,8 @@ app.get("/api/models", async (req, res) => {
         hasMore: false,
         sourceUrl: 'https://docs.mage.space/api/models/mango',
         sourceNotice: 'lookup-only (no public remote catalog; model_id enum on Mango docs)',
+        catalogAvailable: false,
+        noPublicRemoteCatalog: true,
       };
       catalogNoticesAccum.mage = 'Mage 无公开远端模型检索目录；请按官方 model_id 选用（mango / mango-v2 / mango-v3s / mango-v3 / mango-v3-turbo）。空列表是 lookup-only。';
     }
