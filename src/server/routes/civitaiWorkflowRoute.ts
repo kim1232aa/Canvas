@@ -1284,6 +1284,9 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
                 strength_clip: loraItem.clipStrength ?? (loraItem.strength !== null && loraItem.strength !== undefined ? loraItem.strength : undefined),
                 trigger_words: loraItem.triggers || '',
                 civitai_id: loraItem.air || (loraItem.modelId && loraItem.versionId ? `${loraItem.modelId}@${loraItem.versionId}` : loraItem.civitaiId),
+                model_id: loraItem.modelId,
+                version_id: loraItem.versionId,
+                air: loraItem.air,
                 download_url: effectiveDownloadUrl,
                 base_model: loraItem.baseModel || detectedBaseModel,
                 import_source_provider: 'civitai',
@@ -1427,9 +1430,11 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
       const isSdxlFamily = eco === 'sdxl' || eco === 'pony' || eco === 'illustrious';
       const isCivitaiClipSkipNotSent = targetProvider === 'civitai' && eco !== 'sd15';
 
+      const targetModel = typeof req.body?.targetModel === 'string' ? req.body.targetModel : undefined;
       const providerAdaptation = buildAllProviderAdaptations(recipeInput, {
         allowTokenInUrl: Boolean(req.body?.consentCivitaiToken),
         civitaiToken: apiKey || undefined,
+        targetModel,
       });
       const currentAdaptation = providerAdaptation[targetProvider] || providerAdaptation['civitai'];
 
@@ -1480,8 +1485,12 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
         resources: loras.map((l) => ({
           name: l.displayName || l.name,
           fileName: l.name,
-          versionId: l.civitaiId,
+          modelId: l.modelId,
+          versionId: l.civitaiId || l.versionId,
+          air: l.air,
+          downloadUrl: l.downloadUrl,
           strength: l.strength ?? null,
+          clipStrength: l.clipStrength ?? null,
           baseModel: l.baseModel || detectedBaseModel || null,
         })),
       };
@@ -1533,9 +1542,13 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
               loras: loras.map((l) => ({
                 name: l.name,
                 modelStrength: l.strength ?? undefined,
-                clipStrength: l.strength ?? undefined,
+                clipStrength: l.clipStrength ?? undefined,
                 triggerWords: l.triggers || '',
                 civitaiId: l.civitaiId,
+                modelId: l.modelId,
+                versionId: l.versionId,
+                air: l.air,
+                downloadUrl: l.downloadUrl,
                 unresolvedResource: targetProvider !== 'civitai' || !l.downloadUrl || Boolean(l.resolutionError),
                 unresolvedReason: l.unresolvedReason,
               })),

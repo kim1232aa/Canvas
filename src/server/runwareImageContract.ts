@@ -97,8 +97,7 @@ export function buildRunwareImageRequest(body: Record<string, unknown>, baseUrl 
     task.steps = Math.round(body.steps);
   }
   const cfgVal = body.cfg ?? body.CFGScale ?? body.cfgScale ?? body.guidance_scale;
-  const cfgAllowedAtZero = task.model === 'runware:100@1';
-  if (typeof cfgVal === 'number' && Number.isFinite(cfgVal) && (cfgVal > 0 || (cfgVal === 0 && cfgAllowedAtZero))) {
+  if (typeof cfgVal === 'number' && Number.isFinite(cfgVal) && cfgVal >= 0) {
     task.CFGScale = Number(cfgVal);
   }
   if (typeof body.seed === 'number' && Number.isFinite(body.seed) && body.seed >= 0) {

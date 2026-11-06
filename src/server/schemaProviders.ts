@@ -84,21 +84,36 @@ export function proposedRequestOf(definition:any,parameters:any,mapping:any[],lo
  * (3) neither → throw local block 「Schema 未定义 LoRA 强度字段」. Never invent {path,scale} as a silent default.
  */
 export function mapSchemaLoraItems(loras:any[], itemSchema:any, providerMeta:any, model:string):any[] {
-  const resource=(l:any)=>l.path || l.url || l.civitaiId || l.name;
+  const resource=(l:any)=>typeof l==='string'?l:(l.path || l.url || l.downloadUrl || l.civitaiId || l.name);
   const strength=(l:any)=>l.strength ?? l.modelStrength ?? l.scale;
-  if(itemSchema?.type==='string')return loras.map(resource);
+  if(itemSchema?.type==='string')return loras.map((l:any)=>typeof l==='string'?l:(l.id || l.model || l.name || resource(l)));
   const props=itemSchema?.properties;
   if(props && typeof props==='object') {
-    if(props.model)return loras.map((l:any)=>({model:resource(l),weight:strength(l)}));
+    if(props.model)return loras.map((l:any)=>({model:l.model || (l.modelId && l.versionId ? `civitai:${l.modelId}@${l.versionId}` : '') || l.air || resource(l),weight:strength(l)}));
     const pathKey=['path','url','model_name','name','id'].find(k=>Object.hasOwn(props,k)) || 'path';
     const strengthKey=['scale','weight','strength','modelStrength'].find(k=>Object.hasOwn(props,k));
+    const resolvePropValue = (l: any, key: string) => {
+      if (typeof l === 'string') return l;
+      if (key === 'path' || key === 'url') return l.downloadUrl || l.url || l.path || resource(l);
+      if (key === 'id') return l.id || l.styleId || l.civitaiId || l.name || resource(l);
+      if (key === 'model_name') return l.model_name || l.sd_name_in_api || l.name || resource(l);
+      return resource(l);
+    };
     // No strength field in the item Schema: send the resource only, as the Schema defines it.
-    if(!strengthKey)return loras.map((l:any)=>({[pathKey]:resource(l)}));
-    return loras.map((l:any)=>({[pathKey]:resource(l),[strengthKey]:strength(l)}));
+    if(!strengthKey)return loras.map((l:any)=>({[pathKey]:resolvePropValue(l, pathKey)}));
+    return loras.map((l:any)=>{
+      const s = strength(l);
+      if (s === undefined || s === null) return {[pathKey]:resolvePropValue(l, pathKey)};
+      return {[pathKey]:resolvePropValue(l, pathKey),[strengthKey]:s};
+    });
   }
   const cfg=providerMeta?.loraItemFields as {pathKey:string;strengthKey:string;sourceUrl:string;fetchedAt:string;docQuote:string}|undefined;
   if(cfg?.pathKey && cfg?.strengthKey && cfg?.sourceUrl) {
-    return loras.map((l:any)=>({[cfg.pathKey]:resource(l),[cfg.strengthKey]:strength(l)}));
+    return loras.map((l:any)=>{
+      const s = strength(l);
+      if (s === undefined || s === null) return {[cfg.pathKey]:resource(l)};
+      return {[cfg.pathKey]:resource(l),[cfg.strengthKey]:s};
+    });
   }
   // Item shape not described: send the canvas LoRA entries as built; upstream decides.
   return loras;
@@ -510,7 +525,7 @@ export function novitaLoraCatalogRows(models:any[]) {
 export function novitaLoras(loras:any[]) {
   // 'max 5' comes only from a search snapshot (original page 404): not verified, so no local count block; upstream errors pass through verbatim.
   return loras.map((l:any)=>{
-    const model_name=String(l.path || l.url || l.civitaiId || l.name || l.model_name || '').trim();
+    const model_name=String(l.model_name || l.sd_name_in_api || l.name || l.path || l.url || l.civitaiId || '').trim();
     const raw=l.strength ?? l.modelStrength ?? l.scale;
     if(!model_name)throw Object.assign(new Error('Novita LoRA 缺少 model_name（请用 GET /v3/model?filter.types=lora 的 sd_name_in_api）'),{status:400,errorSource:'local'});
     if(raw===undefined || raw===null || raw==='')return {model_name};
@@ -932,11 +947,13 @@ export function normalizeSchemaProviderItems(provider:Provider,rows:any[],opts:{
 /** Canvas LoRA nodes → Krea styles[{id,strength}] (official request schema). */
 export function kreaStyles(loras:any[]) {
   return loras.map((l:any)=>{
-    const id=String(l.path || l.civitaiId || l.name || '').trim();
-    const strength=Number(l.strength ?? l.modelStrength);
-    if(!id)throw Object.assign(new Error('Krea LoRA 缺少 style ID'),{status:400,errorSource:'local'});
-    const raw=l.strength ?? l.modelStrength;
+    const id=String(l.styleId || l.style_id || l.id || l.name || '').trim();
+    if(!id || /^https?:\/\//i.test(id)) {
+      throw Object.assign(new Error('Krea LoRA 缺少 style ID（Krea 官方样式需要 GET /styles 目录公布的 style ID，无法将外部 URL 直接作为 Krea style ID）'),{status:400,errorSource:'local'});
+    }
+    const raw=l.strength ?? l.modelStrength ?? l.scale;
     if(raw===undefined || raw===null || raw==='')return {id};
+    const strength=Number(raw);
     return {id,strength:Number.isFinite(strength)?strength:raw};
   });
 }

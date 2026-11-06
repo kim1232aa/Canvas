@@ -2,6 +2,14 @@
  * Civitai import field mappers.
  * Empty / Undefined / unknown must NOT forge euler or sgm_uniform.
  */
+import {
+  normalizeEcosystem as targetNormalizeEcosystem,
+  inspectTargetSchemaForLoras,
+  buildSendableLoraUrl,
+  buildCivitaiCanonicalAir,
+  type TargetLoraFormat,
+  type TargetSchemaLoraSpec,
+} from './civitaiTargetSchema';
 
 const EMPTY_TOKENS = new Set(['', 'undefined', 'none', 'null', 'n/a', 'na']);
 
@@ -224,12 +232,12 @@ export interface ProviderLoraAdaptation {
   air?: string;
   baseModel?: string;
   canGenerate?: boolean;
-  targetFormat?: 'air' | 'download_url' | 'repo_id' | 'catalog_id' | 'unsupported';
+  targetFormat?: TargetLoraFormat;
   sendableUrlOrId?: string;
   requiresAuthConsent?: boolean;
   scale?: number;
   inferredFromPrompt?: boolean;
-  status: 'compatible' | 'architecture_mismatch' | 'requires_reselection' | 'requires_consent' | 'unsupported';
+  status: 'compatible' | 'architecture_mismatch' | 'requires_reselection' | 'requires_consent' | 'unsupported' | 'unverified';
   reason: string;
   unresolvedReason?: string;
 }
@@ -288,12 +296,6 @@ export interface CivitaiRecipeInput {
 
 const PROVIDER_LORA_CAPS: Record<string, { cap: number; source: string }> = {
   replicate: { cap: 2, source: 'Replicate black-forest-labs/flux-dev-lora 官方 Schema (lora_weights, extra_lora 最多 2 个)' },
-  wavespeed: { cap: 3, source: 'WaveSpeed OpenAPI (loras 数组上限 3 个)' },
-  fal: { cap: 3, source: 'Fal.ai OpenAPI (loras 数组推荐上限 3 个)' },
-  aimlapi: { cap: 3, source: 'AIMLAPI OpenAPI (loras 数组上限 3 个)' },
-  muapi: { cap: 3, source: 'MuAPI OpenAPI (loras 数组上限 3 个)' },
-  modelscope: { cap: 6, source: 'ModelScope AIGC API 文档 (最多 6 个 LoRA)' },
-  modelscope_ai: { cap: 6, source: 'ModelScope AI API 文档 (最多 6 个 LoRA)' },
 };
 
 const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
@@ -311,22 +313,25 @@ const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
   muapi: 'MuAPI (极速模型 API)',
   tensorart: 'Tensor.Art (TAMS 官方开放平台)',
   video: 'AI Video (视频工作流引擎)',
+  krea: 'Krea (AI 创意设计平台)',
+  runware: 'Runware (超低延迟生成平台)',
+  modelslab: 'ModelsLab (多模型 API 网关)',
 };
+
+export interface CivitaiAdaptationOptions {
+  allowTokenInUrl?: boolean;
+  civitaiToken?: string;
+  targetModel?: string;
+  targetSchema?: Record<string, any>;
+  targetEndpoint?: string;
+  customLoraCap?: number;
+}
 
 /**
  * Normalizes an architecture string into standard family (sdxl, flux1, sd15, etc.)
  */
 export function normalizeEcosystem(baseModel?: string): string {
-  const b = (baseModel || '').toLowerCase().trim();
-  if (b.includes('flux')) return 'flux1';
-  if (b.includes('pony')) return 'pony';
-  if (b.includes('illustrious') || b.includes('noob')) return 'illustrious';
-  if (b.includes('sdxl') || b.includes('xl')) return 'sdxl';
-  if (b.includes('sd 1.5') || b.includes('sd1.5') || b.includes('v1-5') || b.includes('sd 1.4') || b.includes('sd15')) return 'sd15';
-  if (b.includes('sd 3.5') || b.includes('sd3.5') || b.includes('sd 3')) return 'sd35';
-  if (b.includes('krea') || b.includes('zimage') || b.includes('z-image')) return 'krea2';
-  if (b.includes('wan')) return 'wan21';
-  return 'unknown';
+  return targetNormalizeEcosystem(baseModel);
 }
 
 /**
@@ -366,7 +371,7 @@ function toReplicateAspectRatio(width?: number | null, height?: number | null): 
 export function adaptCivitaiRecipeToProvider(
   recipe: CivitaiRecipeInput,
   targetProvider: string,
-  options?: { allowTokenInUrl?: boolean; civitaiToken?: string }
+  options?: CivitaiAdaptationOptions
 ): ProviderAdaptationResult {
   const provider = (targetProvider || 'civitai').toLowerCase();
   const displayName = PROVIDER_DISPLAY_NAMES[provider] || `${targetProvider} 目标引擎`;
@@ -383,13 +388,14 @@ export function adaptCivitaiRecipeToProvider(
     }
   }
 
-  // Provider LoRA caps (P1-3)
-  const capInfo = PROVIDER_LORA_CAPS[provider];
-  if (capInfo && loras.length > capInfo.cap) {
-    const excessCount = loras.length - capInfo.cap;
-    const excessNames = loras.slice(capInfo.cap).map((l) => l.displayName || l.name).join('、');
+  // Target schema and LoRA capability inspection
+  const targetSpec = inspectTargetSchemaForLoras(provider, options?.targetModel, options?.targetSchema);
+  const effectiveCap = options?.customLoraCap ?? targetSpec.maxItems ?? PROVIDER_LORA_CAPS[provider]?.cap;
+  if (typeof effectiveCap === 'number' && loras.length > effectiveCap) {
+    const excessCount = loras.length - effectiveCap;
+    const excessNames = loras.slice(effectiveCap).map((l) => l.displayName || l.name).join('、');
     warnings.push(
-      `目标供应商 ${displayName} 官方接口最多支持 ${capInfo.cap} 个 LoRA；当前导入了 ${loras.length} 个 LoRA，超过上限的 ${excessCount} 个 LoRA（${excessNames}）在该供应商运行时将无法出站发送（依据：${capInfo.source}）。`
+      `目标供应商 ${displayName} 官方接口最多支持 ${effectiveCap} 个 LoRA；当前导入了 ${loras.length} 个 LoRA，超过上限的 ${excessCount} 个 LoRA（${excessNames}）在该供应商运行时将无法出站发送（依据：${targetSpec.docSource || PROVIDER_LORA_CAPS[provider]?.source || '端点 Schema 声明'}）。`
     );
   }
 
@@ -490,7 +496,7 @@ export function adaptCivitaiRecipeToProvider(
     }
 
     // Check cap first (P1-3)
-    if (capInfo && i >= capInfo.cap) {
+    if (typeof effectiveCap === 'number' && i >= effectiveCap) {
       adaptedLoras.push({
         name: loraName,
         originalStrength,
@@ -501,7 +507,7 @@ export function adaptCivitaiRecipeToProvider(
         baseModel: loraBaseModel,
         targetFormat: 'unsupported',
         status: 'unsupported',
-        reason: `超出目标供应商 ${displayName} 官方接口 LoRA 数量上限（最多仅支持 ${capInfo.cap} 个 LoRA，当前为第 ${i + 1} 个；依据：${capInfo.source}）。`,
+        reason: `超出目标供应商 ${displayName} 官方接口 LoRA 数量上限（最多仅支持 ${effectiveCap} 个 LoRA，当前为第 ${i + 1} 个；依据：${targetSpec.docSource || PROVIDER_LORA_CAPS[provider]?.source || '端点 Schema 声明'}）。`,
       });
       continue;
     }
@@ -571,8 +577,12 @@ export function adaptCivitaiRecipeToProvider(
       ecosystem !== loraEcosystem;
 
     const directDownloadUrl = l.downloadUrl || '';
-    const effectiveEco = loraEcosystem !== 'unknown' ? loraEcosystem : (ecosystem !== 'unknown' ? ecosystem : 'sdxl');
-    const canonicalAir = l.air || (modelId && versionId ? `urn:air:${effectiveEco}:lora:civitai:${modelId}@${versionId}` : '');
+    const canonicalAir = buildCivitaiCanonicalAir(
+      modelId,
+      versionId,
+      loraEcosystem !== 'unknown' ? loraEcosystem : (ecosystem !== 'unknown' ? ecosystem : undefined),
+      l.air
+    );
 
     if (provider === 'civitai') {
       if (l.canGenerate === false) {
@@ -747,25 +757,43 @@ export function adaptCivitaiRecipeToProvider(
           status: 'architecture_mismatch',
           reason: `LoRA 架构 (${loraBaseModel}) 与 Replicate 目标模型架构 (${baseModelRaw || ecosystem}) 不匹配。`,
         });
-      } else if (l.requireAuth && !options?.allowTokenInUrl) {
-        adaptedLoras.push({
-          name: loraName,
-          originalStrength,
-          originalClipStrength,
-          civitaiId: versionId,
-          modelId,
-          versionId,
-          baseModel: loraBaseModel,
-          targetFormat: 'download_url',
-          requiresAuthConsent: true,
-          status: 'requires_consent',
-          reason: `该 Civitai LoRA 需登录鉴权；未获显式授权不向 Replicate 发送凭据。`,
-        });
       } else {
-        const repRef = (options?.allowTokenInUrl && options?.civitaiToken && l.requireAuth && directDownloadUrl)
-          ? `${directDownloadUrl}?token=${options.civitaiToken}`
-          : (modelId ? `civitai.com/models/${modelId}` : directDownloadUrl);
-        if (!repRef) {
+        const sendable = buildSendableLoraUrl(directDownloadUrl, {
+          allowTokenInUrl: options?.allowTokenInUrl,
+          civitaiToken: options?.civitaiToken,
+          requireAuth: l.requireAuth,
+        });
+        if (sendable.requiresConsent) {
+          adaptedLoras.push({
+            name: loraName,
+            originalStrength,
+            originalClipStrength,
+            civitaiId: versionId,
+            modelId,
+            versionId,
+            baseModel: loraBaseModel,
+            targetFormat: 'download_url',
+            scale: originalStrength,
+            requiresAuthConsent: true,
+            status: 'requires_consent',
+            reason: `该 Civitai LoRA 需登录鉴权；未获显式授权不向 Replicate 发送凭据。`,
+          });
+        } else if (sendable.url) {
+          adaptedLoras.push({
+            name: loraName,
+            originalStrength,
+            originalClipStrength,
+            civitaiId: versionId,
+            modelId,
+            versionId,
+            baseModel: loraBaseModel,
+            targetFormat: 'download_url',
+            sendableUrlOrId: sendable.url,
+            scale: originalStrength,
+            status: 'compatible',
+            reason: `将作为 Replicate ${fieldName} 传入 (scale: ${originalStrength})`,
+          });
+        } else {
           adaptedLoras.push({
             name: loraName,
             originalStrength,
@@ -777,21 +805,6 @@ export function adaptCivitaiRecipeToProvider(
             targetFormat: 'unsupported',
             status: 'requires_reselection',
             reason: `缺少官方真实下载链接或模型编号，无法向 Replicate 发送权重；需在目标库中重新选用。`,
-          });
-        } else {
-          adaptedLoras.push({
-            name: loraName,
-            originalStrength,
-            originalClipStrength,
-            civitaiId: versionId,
-            modelId,
-            versionId,
-            baseModel: loraBaseModel,
-            targetFormat: 'download_url',
-            sendableUrlOrId: repRef,
-            scale: originalStrength,
-            status: 'compatible',
-            reason: `将作为 Replicate ${fieldName} 传入 (scale: ${originalStrength})`,
           });
         }
       }
@@ -847,7 +860,54 @@ export function adaptCivitaiRecipeToProvider(
         status: 'requires_reselection',
         reason: 'Tensor.Art TAMS 仅支持平台内部的纯数字 LoRA ID，不支持外部 URL 或 Civitai AIR。',
       });
-    } else {
+    } else if (provider === 'runware') {
+      if (modelId && versionId) {
+        const runwareAir = `civitai:${modelId}@${versionId}`;
+        adaptedLoras.push({
+          name: loraName,
+          originalStrength,
+          originalClipStrength,
+          civitaiId: versionId,
+          modelId,
+          versionId,
+          baseModel: loraBaseModel,
+          targetFormat: 'air',
+          sendableUrlOrId: runwareAir,
+          scale: originalStrength,
+          status: 'compatible',
+          reason: `以 Runware 原生支持的 Civitai AIR (${runwareAir}) 传入 (weight: ${originalStrength})`,
+        });
+      } else if (l.air) {
+        adaptedLoras.push({
+          name: loraName,
+          originalStrength,
+          originalClipStrength,
+          civitaiId: versionId,
+          modelId,
+          versionId,
+          air: l.air,
+          baseModel: loraBaseModel,
+          targetFormat: 'air',
+          sendableUrlOrId: l.air,
+          scale: originalStrength,
+          status: 'compatible',
+          reason: `以 Runware 原生支持的 AIR (${l.air}) 传入 (weight: ${originalStrength})`,
+        });
+      } else {
+        adaptedLoras.push({
+          name: loraName,
+          originalStrength,
+          originalClipStrength,
+          civitaiId: versionId,
+          modelId,
+          versionId,
+          baseModel: loraBaseModel,
+          targetFormat: 'air',
+          status: 'requires_reselection',
+          reason: '缺少母模型与版本编号，无法构建 Runware AIR 引用；需在 Runware 模型库中重新选用。',
+        });
+      }
+    } else if (provider === 'krea') {
       adaptedLoras.push({
         name: loraName,
         originalStrength,
@@ -856,10 +916,51 @@ export function adaptCivitaiRecipeToProvider(
         modelId,
         versionId,
         baseModel: loraBaseModel,
-        targetFormat: 'unsupported',
-        status: 'unsupported',
-        reason: `${displayName} 官方标准生图接口未提供 loras 参数字段，无法挂载来源 LoRA。`,
+        targetFormat: 'styles',
+        status: 'requires_reselection',
+        reason: 'Krea 官方生图接口通过 styles 挂载 LoRA，需要其样式目录公布的 style ID；不能将外部 URL 或 Civitai 编号直接作为 Krea style ID。',
       });
+    } else if (provider === 'modelslab') {
+      adaptedLoras.push({
+        name: loraName,
+        originalStrength,
+        originalClipStrength,
+        civitaiId: versionId,
+        modelId,
+        versionId,
+        baseModel: loraBaseModel,
+        targetFormat: 'catalog_id',
+        status: 'requires_reselection',
+        reason: 'ModelsLab 仅支持其官方模型库中的 lora_model 名称与 lora_strength，需在目标库中重新选用。',
+      });
+    } else {
+      if (targetSpec.status === 'unsupported') {
+        adaptedLoras.push({
+          name: loraName,
+          originalStrength,
+          originalClipStrength,
+          civitaiId: versionId,
+          modelId,
+          versionId,
+          baseModel: loraBaseModel,
+          targetFormat: 'unsupported',
+          status: 'unsupported',
+          reason: targetSpec.reason || `${displayName} 官方接口未声明 LoRA 字段。`,
+        });
+      } else {
+        adaptedLoras.push({
+          name: loraName,
+          originalStrength,
+          originalClipStrength,
+          civitaiId: versionId,
+          modelId,
+          versionId,
+          baseModel: loraBaseModel,
+          targetFormat: targetSpec.format || 'custom',
+          status: targetSpec.status === 'supported' ? 'compatible' : (targetSpec.status || 'unverified'),
+          reason: targetSpec.reason || `${displayName} 未配置显式 LoRA Schema，将按用户填写原样提交上游裁决。`,
+        });
+      }
     }
   }
 
@@ -1016,24 +1117,25 @@ export function adaptCivitaiRecipeToProvider(
 
   // 5. Steps
   const stepsVal = recipe.steps;
-  if (['civitai', 'modelscope', 'modelscope_ai', 'novita', 'tensorart'].includes(provider)) {
+  const hasSteps = stepsVal !== null && stepsVal !== undefined && Number.isFinite(stepsVal);
+  if (['civitai', 'modelscope', 'modelscope_ai', 'novita', 'tensorart', 'runware', 'krea'].includes(provider)) {
     const targetField = provider === 'tensorart' ? 'diffusion.steps' : 'steps';
     fields.steps = {
       field: 'steps',
       originalValue: stepsVal,
       targetField,
       mappedValue: stepsVal,
-      status: stepsVal !== null ? 'mapped' : 'not_applicable',
-      humanMessage: `作为步数 ${targetField} 发送 (${stepsVal ?? '默认'})`,
+      status: hasSteps ? 'mapped' : 'not_applicable',
+      humanMessage: `作为步数 ${targetField} 发送 (${hasSteps ? stepsVal : '默认'})`,
     };
-  } else if (['fal', 'replicate', 'wavespeed', 'aimlapi', 'muapi'].includes(provider)) {
+  } else if (['fal', 'replicate', 'wavespeed', 'aimlapi', 'muapi', 'modelslab'].includes(provider)) {
     fields.steps = {
       field: 'steps',
       originalValue: stepsVal,
       targetField: 'num_inference_steps',
       mappedValue: stepsVal,
-      status: stepsVal !== null ? 'mapped' : 'not_applicable',
-      humanMessage: `作为步数 num_inference_steps 发送 (${stepsVal ?? '默认'})`,
+      status: hasSteps ? 'mapped' : 'not_applicable',
+      humanMessage: `作为步数 num_inference_steps 发送 (${hasSteps ? stepsVal : '默认'})`,
     };
   } else if (provider === 'huggingface') {
     fields.steps = {
@@ -1041,8 +1143,8 @@ export function adaptCivitaiRecipeToProvider(
       originalValue: stepsVal,
       targetField: 'parameters.num_inference_steps',
       mappedValue: stepsVal,
-      status: stepsVal !== null ? 'mapped' : 'not_applicable',
-      humanMessage: `作为步数 parameters.num_inference_steps 发送 (${stepsVal ?? '默认'})`,
+      status: hasSteps ? 'mapped' : 'not_applicable',
+      humanMessage: `作为步数 parameters.num_inference_steps 发送 (${hasSteps ? stepsVal : '默认'})`,
     };
   } else {
     fields.steps = {
@@ -1052,7 +1154,7 @@ export function adaptCivitaiRecipeToProvider(
       humanMessage: `${displayName} 官方生图 Schema 未提供步数调节参数。`,
       source: `${displayName} 官方 OpenAPI / Schema`,
     };
-    if (stepsVal !== null) {
+    if (hasSteps) {
       unsupportedFields.push('steps');
       warnings.push(`${displayName} 官方接口不支持步数调节。`);
     }
@@ -1060,6 +1162,7 @@ export function adaptCivitaiRecipeToProvider(
 
   // 6. CFG / Guidance scale
   const cfgVal = recipe.cfg;
+  const hasCfg = typeof cfgVal === 'number' && Number.isFinite(cfgVal);
   if (['civitai', 'tensorart'].includes(provider)) {
     const targetField = provider === 'tensorart' ? 'diffusion.cfgScale' : 'cfgScale';
     fields.cfg = {
@@ -1067,17 +1170,26 @@ export function adaptCivitaiRecipeToProvider(
       originalValue: cfgVal,
       targetField,
       mappedValue: cfgVal,
-      status: cfgVal !== null ? 'mapped' : 'not_applicable',
-      humanMessage: `作为引导系数 ${targetField} 发送 (${cfgVal ?? '默认'})`,
+      status: hasCfg ? 'mapped' : 'not_applicable',
+      humanMessage: `作为引导系数 ${targetField} 发送 (${hasCfg ? cfgVal : '默认'})`,
     };
-  } else if (['fal', 'wavespeed', 'novita', 'aimlapi', 'muapi'].includes(provider)) {
+  } else if (provider === 'runware') {
+    fields.cfg = {
+      field: 'cfg',
+      originalValue: cfgVal,
+      targetField: 'CFGScale',
+      mappedValue: cfgVal,
+      status: hasCfg ? 'mapped' : 'not_applicable',
+      humanMessage: `作为引导系数 CFGScale 发送 (${hasCfg ? cfgVal : '默认'})`,
+    };
+  } else if (['fal', 'wavespeed', 'novita', 'aimlapi', 'muapi', 'modelslab', 'krea'].includes(provider)) {
     fields.cfg = {
       field: 'cfg',
       originalValue: cfgVal,
       targetField: 'guidance_scale',
       mappedValue: cfgVal,
-      status: cfgVal !== null ? 'mapped' : 'not_applicable',
-      humanMessage: `作为引导系数 guidance_scale 发送 (${cfgVal ?? '默认'})`,
+      status: hasCfg ? 'mapped' : 'not_applicable',
+      humanMessage: `作为引导系数 guidance_scale 发送 (${hasCfg ? cfgVal : '默认'})`,
     };
   } else if (['replicate', 'modelscope', 'modelscope_ai', 'sogni'].includes(provider)) {
     fields.cfg = {
@@ -1085,8 +1197,8 @@ export function adaptCivitaiRecipeToProvider(
       originalValue: cfgVal,
       targetField: 'guidance',
       mappedValue: cfgVal,
-      status: cfgVal !== null ? 'mapped' : 'not_applicable',
-      humanMessage: `作为引导系数 guidance 发送 (${cfgVal ?? '默认'})`,
+      status: hasCfg ? 'mapped' : 'not_applicable',
+      humanMessage: `作为引导系数 guidance 发送 (${hasCfg ? cfgVal : '默认'})`,
     };
   } else if (provider === 'huggingface') {
     fields.cfg = {
@@ -1094,8 +1206,8 @@ export function adaptCivitaiRecipeToProvider(
       originalValue: cfgVal,
       targetField: 'parameters.guidance_scale',
       mappedValue: cfgVal,
-      status: cfgVal !== null ? 'mapped' : 'not_applicable',
-      humanMessage: `作为引导系数 parameters.guidance_scale 发送 (${cfgVal ?? '默认'})`,
+      status: hasCfg ? 'mapped' : 'not_applicable',
+      humanMessage: `作为引导系数 parameters.guidance_scale 发送 (${hasCfg ? cfgVal : '默认'})`,
     };
   } else {
     fields.cfg = {
@@ -1105,9 +1217,9 @@ export function adaptCivitaiRecipeToProvider(
       humanMessage: `${displayName} 官方生图 Schema 未提供 CFG / 引导系数调节参数。`,
       source: `${displayName} 官方 Schema`,
     };
-    if (cfgVal !== null) {
+    if (hasCfg) {
       unsupportedFields.push('cfg');
-      warnings.push(`${displayName} 官方接口不支持 CFG 调节。`);
+      warnings.push(`${displayName} 官方接口不支持 CFG 引导系数调节。`);
     }
   }
 
@@ -1454,7 +1566,7 @@ export function adaptCivitaiRecipeToProvider(
  */
 export function buildAllProviderAdaptations(
   recipe: CivitaiRecipeInput,
-  options?: { allowTokenInUrl?: boolean; civitaiToken?: string }
+  options?: CivitaiAdaptationOptions
 ): ProviderAdaptationMap {
   const supportedProviders = [
     'civitai',
@@ -1471,6 +1583,9 @@ export function buildAllProviderAdaptations(
     'muapi',
     'tensorart',
     'video',
+    'krea',
+    'runware',
+    'modelslab',
   ];
 
   const map: ProviderAdaptationMap = {};

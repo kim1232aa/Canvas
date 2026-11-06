@@ -95,7 +95,7 @@ export function buildModelsLabImageRequest(
     payload.num_inference_steps = Math.round(body.steps);
   }
   const cfg = body.cfg ?? body.guidance_scale ?? body.cfgScale;
-  if (typeof cfg === 'number' && cfg > 0) {
+  if (typeof cfg === 'number' && cfg >= 0) {
     payload.guidance_scale = Number(cfg);
   }
   if (typeof body.seed === 'number' && Number.isFinite(body.seed) && body.seed >= 0) {
