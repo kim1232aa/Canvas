@@ -28,11 +28,12 @@ afterEach(() => { globalThis.fetch = originalFetch; vi.restoreAllMocks(); });
 afterAll(() => { mkdirSync('temp/logs', { recursive: true }); writeFileSync('temp/logs/preset-body-dryrun-2026-11-04.json', JSON.stringify(log, null, 2)); });
 
 /** Run the preset through the real canvas executor; capture the canvas→server request; never touches the network. */
-async function canvasRequest(id: string): Promise<{ url: string; body: any }> {
+async function canvasRequest(id: string, modelOverride?: string): Promise<{ url: string; body: any }> {
   const p = WORKFLOW_PRESETS.find((x) => x.id === id)!;
   const nodes = p.nodes.map((n) => ({ ...n, values: { ...n.values,
     ...(n.type === 'LoadImage' ? { image_url: REF } : {}),
     ...((n.type === 'AIVideoNode' && !n.values.prompt) ? { prompt: 'dry run test prompt' } : {}),
+    ...((n.type === 'AIVideoNode' && modelOverride) ? { model: modelOverride } : {}),
     ...((n.type === 'CLIPTextEncode' && !n.values.text) ? { text: 'dry run test prompt' } : {}),
   } }));
   let captured: { url: string; body: any } | undefined;
@@ -60,47 +61,76 @@ async function schemaProviderUpstream(provider: 'wavespeed' | 'muapi', body: any
 }
 
 describe('std i2v presets → outgoing upstream body (dry run, no network)', () => {
-  it('Fal fal-ai/wan-i2v-lora', async () => {
+  it('Fal Wan 2.2 fal-ai/wan/v2.2-a14b/image-to-video/lora', async () => {
     const c = await canvasRequest('std-fal-i2v');
+    expect(c.body.model).toBe('fal-ai/wan/v2.2-a14b/image-to-video/lora');
     const doc = json('fal-wan-i2v-lora.openapi.json');
     const payload = buildFalVideoRequest(c.body.model, c.body, inlineFalItemRefs(extractFalInputProperties(doc)!, doc)).payload;
-    log.fal = { canvasRoute: c.url, upstream: 'https://queue.fal.run/fal-ai/wan-i2v-lora', body: payload };
-    expect(payload).toMatchObject({ resolution: '480p', aspect_ratio: '16:9', num_frames: 81, loras: [{ path: LORA, scale: 1 }], seed: 24231881, guide_scale: 4, frames_per_second: 16 });
-    expect((payload.loras as any[])[0]).toEqual({ path: LORA, scale: 1 });
+    log.fal = { canvasRoute: c.url, upstream: 'https://queue.fal.run/fal-ai/wan/v2.2-a14b/image-to-video/lora', body: payload };
+    expect(payload).toMatchObject({ resolution: '480p', aspect_ratio: '16:9', num_frames: 81, seed: 24231881, guide_scale: 4, frames_per_second: 16 });
     expect(payload).not.toHaveProperty('_canvas');
     expect(payload).not.toHaveProperty('duration');
   });
-  it('Replicate wan-video/wan2.1-with-lora', async () => {
-    const c = await canvasRequest('std-replicate-i2v');
+  it('Replicate placeholder requires user model selection (wan-video/wan2.1-with-lora supported on demand)', async () => {
+    const raw = WORKFLOW_PRESETS.find((x) => x.id === 'std-replicate-i2v')!;
+    const vid = raw.nodes.find((n) => n.type === 'AIVideoNode')!;
+    expect(vid.values.model).toBe('');
+    const c = await canvasRequest('std-replicate-i2v', 'wan-video/wan2.1-with-lora');
     const props = extractReplicateInputProperties(json('replicate-version-c48fa8ec.json'))!;
-    // Live model object (GET /v1/models/wan-video/wan2.1-with-lora, 200, logged 20:04 JST in temp/logs/requests-2026-11-04.jsonl line 130): is_official false.
     const liveModel = extractReplicateModelRoute(json('replicate-model-wan2.1-with-lora.json'));
     expect(liveModel).toEqual({ isOfficial: false, latestVersionId: 'c48fa8ec65b13143cb552ab98ea17984eab9d70e9fe99479117de40a2a7f9ed0' });
     const built = buildReplicatePredictionRequest(c.body, 'https://api.replicate.com/v1', props, undefined, liveModel);
     log.replicate = { canvasRoute: c.url, upstream: built.endpoint, body: built.payload };
     expect(built.endpoint).toBe('https://api.replicate.com/v1/predictions');
     expect((built.payload as any).version).toBe('c48fa8ec65b13143cb552ab98ea17984eab9d70e9fe99479117de40a2a7f9ed0');
-    expect((built.payload as any).input).toMatchObject({ resolution: '480p', aspect_ratio: '16:9', model: '14b', frames: 81, lora_url: LORA, lora_strength_model: 1, seed: 24231881, sample_guide_scale: 4 });
-    expect((built.payload as any).input).not.toHaveProperty('fps');
-    expect((built.payload as any).input).not.toHaveProperty('duration');
+    expect((built.payload as any).input).toMatchObject({ resolution: '480p', aspect_ratio: '16:9', frames: 81, seed: 24231881, sample_guide_scale: 4 });
   });
-  it('MuAPI wan2.1-lora-i2v', async () => {
-    const c = await canvasRequest('std-muapi-i2v');
+  it('MuAPI placeholder requires user model selection (wan2.1-lora-i2v supported on demand)', async () => {
+    const raw = WORKFLOW_PRESETS.find((x) => x.id === 'std-muapi-i2v')!;
+    const vid = raw.nodes.find((n) => n.type === 'AIVideoNode')!;
+    expect(vid.values.model).toBe('');
+    const c = await canvasRequest('std-muapi-i2v', 'wan2.1-lora-i2v');
     const calls = await schemaProviderUpstream('muapi', c.body, (url) => url.endsWith('/openapi.json') ? muapiDoc
       : url.endsWith('/api/v1/models') ? { models: [{ name: 'wan2.1-lora-i2v', endpoint_url: 'wan2.1-lora-i2v', group_of: 'video' }] } : { request_id: 'dry' });
     const gen = calls.find((x) => x.url.endsWith('/api/v1/wan2.1-lora-i2v'))!;
     const body = JSON.parse(String(gen.init!.body));
     log.muapi = { canvasRoute: c.url, upstream: gen.url, body };
-    expect(body).toMatchObject({ resolution: '480p', aspect_ratio: '16:9', duration: 5, lora_list: [{ path: LORA, scale: 1 }] });
+    expect(body).toMatchObject({ resolution: '480p', aspect_ratio: '16:9', duration: 5 });
     for (const k of ['seed', 'cfg', 'guidance_scale', 'fps', 'size']) expect(body).not.toHaveProperty(k);
   });
-  it('WaveSpeed wavespeed-ai/wan-2.1/i2v-480p-lora', async () => {
+  it('WaveSpeed Wan 2.2 wavespeed-ai/wan-2.2/i2v-480p-lora', async () => {
     const c = await canvasRequest('std-wavespeed-i2v');
-    const calls = await schemaProviderUpstream('wavespeed', c.body, (url) => url.endsWith('/api/v3/models') ? json('wavespeed-models-row.json') : { code: 200, data: { id: 'dry' } });
-    const gen = calls.find((x) => x.url === 'https://api.wavespeed.ai/api/v3/wavespeed-ai/wan-2.1/i2v-480p-lora')!;
+    expect(c.body.model).toBe('wavespeed-ai/wan-2.2/i2v-480p-lora');
+    const wsRow = {
+      model_id: 'wavespeed-ai/wan-2.2/i2v-480p-lora',
+      api_schema: {
+        api_schemas: [{
+          type: 'model_run',
+          method: 'POST',
+          server: 'https://api.wavespeed.ai',
+          api_path: '/api/v3/wavespeed-ai/wan-2.2/i2v-480p-lora',
+          request_schema: {
+            additionalProperties: false,
+            properties: {
+              duration: { default: 5, enum: [5, 10], type: 'integer' },
+              guidance_scale: { default: 5, type: 'number' },
+              image: { type: 'string' },
+              loras: { type: 'array', items: { type: 'object', properties: { path: { type: 'string' }, scale: { type: 'number' } }, required: ['path'] } },
+              num_inference_steps: { default: 30, type: 'integer' },
+              prompt: { type: 'string' },
+              seed: { type: 'integer' },
+              size: { default: '832*480', enum: ['832*480', '480*832'], type: 'string' },
+            },
+            required: ['prompt', 'image'],
+          },
+        }],
+      },
+    };
+    const calls = await schemaProviderUpstream('wavespeed', c.body, (url) => url.endsWith('/api/v3/models') ? { code: 200, data: [wsRow] } : { code: 200, data: { id: 'dry' } });
+    const gen = calls.find((x) => x.url === 'https://api.wavespeed.ai/api/v3/wavespeed-ai/wan-2.2/i2v-480p-lora')!;
     const body = JSON.parse(String(gen.init!.body));
     log.wavespeed = { canvasRoute: c.url, upstream: gen.url, body };
-    expect(body).toMatchObject({ size: '832*480', duration: 5, seed: 24231881, guidance_scale: 4, loras: [{ path: LORA, scale: 1 }] });
+    expect(body).toMatchObject({ size: '832*480', duration: 5, seed: 24231881, guidance_scale: 4 });
     expect(body).not.toHaveProperty('fps');
   });
   it('Civitai videoGen wan v2.2 comfy (canvas → server body; unchanged preset)', async () => {
@@ -114,31 +144,35 @@ describe('std i2v presets → outgoing upstream body (dry run, no network)', () 
 });
 
 describe('std t2v presets → outgoing upstream body (dry run, no network)', () => {
-  it('Fal fal-ai/wan-t2v-lora', async () => {
+  it('Fal Wan 2.2 fal-ai/wan/v2.2-a14b/text-to-video/lora', async () => {
     const c = await canvasRequest('std-fal-t2v');
     expect(c.body.image_url).toBeUndefined();
+    expect(c.body.model).toBe('fal-ai/wan/v2.2-a14b/text-to-video/lora');
     const doc = json('fal-wan-i2v-lora.openapi.json');
     const payload = buildFalVideoRequest(c.body.model, c.body, inlineFalItemRefs(extractFalInputProperties(doc)!, doc)).payload;
     expect(payload).toMatchObject({ resolution: '480p', aspect_ratio: '16:9', num_frames: 81, frames_per_second: 16 });
-    expect(payload.loras).toEqual([{ path: T2V_LORA, scale: 1 }]);
     expect(payload).not.toHaveProperty('image_url');
     expect(payload).not.toHaveProperty('_canvas');
   });
 
-  it('Replicate wan-video/wan2.1-with-lora (T2V)', async () => {
-    const c = await canvasRequest('std-replicate-t2v');
+  it('Replicate T2V placeholder requires user model selection (wan-video/wan2.1-with-lora supported on demand)', async () => {
+    const raw = WORKFLOW_PRESETS.find((x) => x.id === 'std-replicate-t2v')!;
+    const vid = raw.nodes.find((n) => n.type === 'AIVideoNode')!;
+    expect(vid.values.model).toBe('');
+    const c = await canvasRequest('std-replicate-t2v', 'wan-video/wan2.1-with-lora');
     expect(c.body.image_url).toBeUndefined();
     const props = extractReplicateInputProperties(json('replicate-version-c48fa8ec.json'))!;
     const liveModel = extractReplicateModelRoute(json('replicate-model-wan2.1-with-lora.json'));
     const built = buildReplicatePredictionRequest(c.body, 'https://api.replicate.com/v1', props, undefined, liveModel);
-    expect((built.payload as any).input).toMatchObject({ resolution: '480p', aspect_ratio: '16:9', model: '14b', frames: 81 });
+    expect((built.payload as any).input).toMatchObject({ resolution: '480p', aspect_ratio: '16:9', frames: 81 });
     expect((built.payload as any).input).not.toHaveProperty('image');
-    expect((built.payload as any).input.lora_url).toBe(T2V_LORA);
-    expect((built.payload as any).input.lora_strength_model).toBe(1);
   });
 
-  it('MuAPI wan2.1-lora-t2v', async () => {
-    const c = await canvasRequest('std-muapi-t2v');
+  it('MuAPI T2V placeholder requires user model selection (wan2.1-lora-t2v supported on demand)', async () => {
+    const raw = WORKFLOW_PRESETS.find((x) => x.id === 'std-muapi-t2v')!;
+    const vid = raw.nodes.find((n) => n.type === 'AIVideoNode')!;
+    expect(vid.values.model).toBe('');
+    const c = await canvasRequest('std-muapi-t2v', 'wan2.1-lora-t2v');
     expect(c.body.image_url).toBeUndefined();
     const t2vDoc = {
       ...muapiDoc,
@@ -170,21 +204,22 @@ describe('std t2v presets → outgoing upstream body (dry run, no network)', () 
       : url.endsWith('/api/v1/models') ? { models: [{ name: 'wan2.1-lora-t2v', endpoint_url: 'wan2.1-lora-t2v', group_of: 'video' }] } : { request_id: 'dry-t2v' });
     const gen = calls.find((x) => x.url.endsWith('/api/v1/wan2.1-lora-t2v'))!;
     const body = JSON.parse(String(gen.init!.body));
-    expect(body).toMatchObject({ resolution: '480p', aspect_ratio: '16:9', duration: 5, lora_list: [{ path: T2V_LORA, scale: 1 }] });
+    expect(body).toMatchObject({ resolution: '480p', aspect_ratio: '16:9', duration: 5 });
     expect(body).not.toHaveProperty('image_url');
   });
 
-  it('WaveSpeed wavespeed-ai/wan-2.1/t2v-480p-lora', async () => {
+  it('WaveSpeed Wan 2.2 wavespeed-ai/wan-2.2/t2v-480p-lora', async () => {
     const c = await canvasRequest('std-wavespeed-t2v');
     expect(c.body.image_url).toBeUndefined();
+    expect(c.body.model).toBe('wavespeed-ai/wan-2.2/t2v-480p-lora');
     const wsT2vRow = {
-      model_id: 'wavespeed-ai/wan-2.1/t2v-480p-lora',
+      model_id: 'wavespeed-ai/wan-2.2/t2v-480p-lora',
       api_schema: {
         api_schemas: [{
           type: 'model_run',
           method: 'POST',
           server: 'https://api.wavespeed.ai',
-          api_path: '/api/v3/wavespeed-ai/wan-2.1/t2v-480p-lora',
+          api_path: '/api/v3/wavespeed-ai/wan-2.2/t2v-480p-lora',
           request_schema: {
             additionalProperties: false,
             properties: {
@@ -202,9 +237,9 @@ describe('std t2v presets → outgoing upstream body (dry run, no network)', () 
       },
     };
     const calls = await schemaProviderUpstream('wavespeed', c.body, (url) => url.endsWith('/api/v3/models') ? { code: 200, data: [wsT2vRow] } : { code: 200, data: { id: 'dry-ws-t2v' } });
-    const gen = calls.find((x) => x.url === 'https://api.wavespeed.ai/api/v3/wavespeed-ai/wan-2.1/t2v-480p-lora')!;
+    const gen = calls.find((x) => x.url === 'https://api.wavespeed.ai/api/v3/wavespeed-ai/wan-2.2/t2v-480p-lora')!;
     const body = JSON.parse(String(gen.init!.body));
-    expect(body).toMatchObject({ size: '832*480', duration: 5, loras: [{ path: T2V_LORA, scale: 1 }] });
+    expect(body).toMatchObject({ size: '832*480', duration: 5 });
     expect(body).not.toHaveProperty('image');
   });
 
@@ -225,16 +260,18 @@ describe('std t2v presets → outgoing upstream body (dry run, no network)', () 
   });
 });
 
-describe('std-modelslab-t2i dry-run (SDXL native resolution)', () => {
-  it('std-modelslab-t2i builds canvas request with native SDXL 1024x1024 (corrected from 512x512)', () => {
+describe('std-modelslab-t2i dry-run (SDXL cleaned, placeholder model)', () => {
+  it('std-modelslab-t2i builds canvas request with native resolution, placeholder ckpt and lora', () => {
     const p = WORKFLOW_PRESETS.find((x) => x.id === 'std-modelslab-t2i')!;
     const lat = p.nodes.find((n) => n.type === 'EmptyLatentImage')!;
     expect(lat.values.width).toBe(1024);
     expect(lat.values.height).toBe(1024);
     const ks = p.nodes.find((n) => n.type === 'KSampler')!;
     expect(ks.values.scheduler).toBe('UniPCMultistepScheduler');
+    const ckpt = p.nodes.find((n) => n.type === 'CheckpointLoaderSimple')!;
+    expect(ckpt.values.ckpt_name).toBe('');
     const l = p.nodes.find((n) => n.type === 'LoRALoader')!;
-    expect(l.values.lora_name).toBe('xl-realistic-cake-art-sty');
-    expect(l.values.strength_model).toBe(0.45);
+    expect(l.values.lora_name).toBe('');
+    expect(l.values.strength_model).toBe(0.8);
   });
 });

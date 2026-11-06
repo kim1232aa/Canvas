@@ -60,7 +60,9 @@ export const BASE_MODELS: BaseModelOption[] = [
   { label: '⚡ [Fal] FLUX.1 Schnell (fal-ai/flux/schnell)', value: 'fal-ai/flux/schnell', provider: 'fal', category: 'checkpoint' },
   { label: '⚡ [Fal] FLUX.1 [dev] (fal-ai/flux/dev)', value: 'fal-ai/flux/dev', provider: 'fal', category: 'checkpoint' },
   { label: '⚡ [Fal] Fast SDXL (fal-ai/fast-sdxl)', value: 'fal-ai/fast-sdxl', provider: 'fal', category: 'checkpoint' },
-  { label: '⚡ [Fal] Wan 2.1 Video (fal-ai/wan-t2v)', value: 'fal-ai/wan-t2v', provider: 'fal', category: 'video' },
+  { label: '⚡ [Fal] Wan 2.1 Video (fal-ai/wan-t2v) (legacy)', value: 'fal-ai/wan-t2v', provider: 'fal', category: 'video' },
+  { label: '⚡ [Fal] Wan 2.2 A14B T2V LoRA', value: 'fal-ai/wan/v2.2-a14b/text-to-video/lora', provider: 'fal', category: 'video' },
+  { label: '⚡ [Fal] Wan 2.2 A14B I2V LoRA', value: 'fal-ai/wan/v2.2-a14b/image-to-video/lora', provider: 'fal', category: 'video' },
 
   // ===================== CIVITAI =====================
   { label: '🌟 [Civitai] Krea 2 Turbo 原生极速 (urn:air:krea2:checkpoint:civitai:2726029@3091481)', value: 'urn:air:krea2:checkpoint:civitai:2726029@3091481', provider: 'civitai', category: 'checkpoint' },
@@ -982,7 +984,9 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
         options: [
           { label: '未选择 (请先选择模型)', value: '' },
           { label: '[Fal] Wan 2.1 Text-to-Video (legacy)', value: 'fal-ai/wan-t2v', provider: 'fal' },
-          { label: '[Fal] Wan 2.1 T2V LoRA', value: 'fal-ai/wan-t2v-lora', provider: 'fal' },
+          { label: '[Fal] Wan 2.1 T2V LoRA (legacy)', value: 'fal-ai/wan-t2v-lora', provider: 'fal' },
+          { label: '[Fal] Wan 2.2 A14B Text-to-Video LoRA', value: 'fal-ai/wan/v2.2-a14b/text-to-video/lora', provider: 'fal' },
+          { label: '[Fal] Wan 2.2 A14B Image-to-Video LoRA', value: 'fal-ai/wan/v2.2-a14b/image-to-video/lora', provider: 'fal' },
           { label: '[Fal] Wan 2.7 Text-to-Video', value: 'fal-ai/wan/v2.7/text-to-video', provider: 'fal' },
           { label: '[Fal] Wan 2.7 Image-to-Video', value: 'fal-ai/wan/v2.7/image-to-video', provider: 'fal' },
           { label: '[Fal] Kling V3 Standard Text-to-Video', value: 'fal-ai/kling-video/v3/standard/text-to-video', provider: 'fal' },

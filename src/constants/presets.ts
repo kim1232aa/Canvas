@@ -449,6 +449,8 @@ function buildGeminiT2i(): WorkflowPreset {
 type I2vSpec = {
   provider: string;
   model: string;
+  /** Description override for preset card and audit trail. */
+  description?: string;
   /** Official seconds when the endpoint declares duration (not invent). */
   duration?: number;
   /** Official resolution tier when the endpoint declares resolution. */
@@ -476,38 +478,42 @@ type I2vSpec = {
 };
 
 const I2V_SPECS: I2vSpec[] = [
-  // Recipe https://civitai.red/images/84050423 (Wan 2.1 I2V 14B 480p + Matrix Bullet Time LoRA) → Fal same-family fal-ai/wan-i2v-lora.
-  // Live OpenAPI 2026-11-04: loras[LoraWeight{path,scale}], seed, guide_scale, frames_per_second, num_frames, resolution 480p|720p.
+  // Fal Wan 2.2 A14B I2V LoRA: live OpenAPI 2026-11-06 (fal-ai/wan/v2.2-a14b/image-to-video/lora).
+  // OpenAPI: prompt (req), image_url (req), loras[LoRAWeight{path,scale,weight_name,transformer}], num_frames (81), frames_per_second (16), resolution 480p|580p|720p.
+  // Real neutral I2V LoRA: Civitai 1902817@2153813 (Wan Video 2.2 I2V-A14B).
+  // FalDriver defaults to upstream transformer: 'high'.
   {
     provider: 'fal',
-    model: 'fal-ai/wan-i2v-lora',
-    // video-param-table.md §1: Schema has no duration/size → num_frames 81 (integer 81–100), resolution 480p (default 720p), aspect_ratio 16:9.
+    model: 'fal-ai/wan/v2.2-a14b/image-to-video/lora',
     num_frames: 81,
     resolution: '480p',
     aspect_ratio: '16:9',
     fps: 16,
     seed: 24231881,
     cfg: 4,
-    loras: [{ name: 'https://huggingface.co/Remade-AI/matrix-shot/resolve/main/matrix_shot.safetensors', strength: 1, source: 'https://civitai.red/images/84050423' }],
+    description: 'Fal.ai 官方 Wan 2.2 A14B 图生视频 LoRA 端点。LoRA 加载目标默认为 high-noise transformer。',
+    loras: [{ name: 'urn:air:wanvideo-22-i2v-a14b:lora:civitai:1902817@2153813', strength: 1, source: 'civitai:2153813' }],
     schemaProperties: [
-      'prompt', 'image_url', 'negative_prompt', 'loras', 'seed', 'guide_scale', 'frames_per_second', 'num_frames',
-      'resolution', 'aspect_ratio', 'num_inference_steps', 'shift', 'enable_prompt_expansion', 'reverse_video', 'turbo_mode', 'enable_safety_checker',
+      'prompt', 'image_url', 'negative_prompt', 'loras', 'seed', 'frames_per_second', 'num_frames',
+      'resolution', 'aspect_ratio', 'num_inference_steps', 'enable_safety_checker', 'enable_output_safety_checker',
+      'enable_prompt_expansion', 'acceleration', 'guidance_scale', 'guidance_scale_2', 'shift', 'interpolator_model',
+      'num_interpolated_frames', 'adjust_fps_for_interpolation', 'video_quality', 'video_write_mode', 'reverse_video',
     ],
-    source: 'https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/wan-i2v-lora',
+    source: 'https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/wan/v2.2-a14b/image-to-video/lora',
   },
-  // Recipe https://civitai.red/images/84050423 → WaveSpeed same-family wavespeed-ai/wan-2.1/i2v-480p-lora (docs: loras[].path/scale, size, duration 5|10, guidance_scale, seed).
+  // WaveSpeed Wan 2.2 480p I2V LoRA: wavespeed-ai/wan-2.2/i2v-480p-lora.
+  // Schema: prompt (req), image (req), loras[].path/scale, size ["832*480","480*832"], duration 5|10, guidance_scale, seed.
   {
     provider: 'wavespeed',
-    model: 'wavespeed-ai/wan-2.1/i2v-480p-lora',
+    model: 'wavespeed-ai/wan-2.2/i2v-480p-lora',
     duration: 5,
-    // video-param-table.md §2: request_schema has no fps (additionalProperties:false) → not filled.
     seed: 24231881,
     cfg: 4,
-    // Recipe 688x480 → WaveSpeed live Schema size enum ["832*480","480*832"] (upstream 400 on 688x480): closest landscape 832*480.
     size: '832*480',
-    loras: [{ name: 'https://huggingface.co/Remade-AI/matrix-shot/resolve/main/matrix_shot.safetensors', strength: 1, source: 'https://civitai.red/images/84050423' }],
+    description: 'WaveSpeed 官方 Wan 2.2 480P 图生视频 LoRA 端点；支持多 LoRA 融合与 480P 超快推理。',
+    loras: [{ name: 'urn:air:wanvideo-22-i2v-a14b:lora:civitai:1902817@2153813', strength: 1, source: 'civitai:2153813' }],
     schemaProperties: ['prompt', 'image', 'negative_prompt', 'loras', 'size', 'num_inference_steps', 'duration', 'guidance_scale', 'flow_shift', 'seed'],
-    source: 'https://wavespeed.ai/docs/docs-api/wavespeed-ai/wan-2.1-i2v-480p-lora',
+    source: 'https://wavespeed.ai/docs/docs-api/wavespeed-ai/wan-2.2-i2v-480p-lora',
   },
   // Recipe https://civitai.red/images/111400580 (Wan 2.2 I2V-A14B checkpoint 1817671@2114157 + Cinematic Flare low LoRA)
   // → Civitai videoGen wan v2.2 comfy (wan.md: only v2.2 comfy takes loras[{air,strength}]; diffusionModel AIR; width/height; cfgScale; seed).
@@ -526,84 +532,84 @@ const I2V_SPECS: I2vSpec[] = [
     ],
     source: 'https://developer.civitai.com/orchestration/recipes/wan.md',
   },
-  // Novita img2video SVD-XT: official Python SDK examples/img2video.py (model_name="SVD-XT"), docs/provider-schema-drafts/novita.json, src/config/providerDeclarations/novita.img2video.json enum ["SVD-XT", "SVD"].
+  // Novita: 彻底清除 SVD-XT。暂无官方核实且驱动支持的纯净 Wan 2.2 LoRA 端点，模型留空待选，保留完整图生视频拓扑。
   {
     provider: 'novita',
-    model: 'SVD-XT',
-    num_frames: 25,
-    fps: 6,
+    model: '',
+    description: 'Novita 暂无经官方核实且支持 LoRA 的 Wan 2.2 端点，模型已留空待选；保留参考图与视频节点完整拓扑。',
     schemaProperties: [
       'model_name', 'image_file', 'frames_num', 'frames_per_second', 'seed',
       'image_file_resize_mode', 'steps', 'motion_bucket_id', 'cond_aug',
     ],
-    source: 'https://github.com/novitalabs/python-sdk/blob/main/examples/img2video.py + src/config/providerDeclarations/novita.img2video.json',
+    source: 'https://github.com/novitalabs/python-sdk',
   },
-  // Recipe https://civitai.red/images/84050423 → MuAPI same-family wan2.1-lora-i2v (openapi.json WanLoRAI2VRequest: lora_list[LoraItem{path,scale}], duration 5|10, resolution).
+  // MuAPI: 官方未提供核实的现代 Wan 2.2 LoRA 端点，模型留空待选；保留完整视频拓扑与 LoRA 挂载连线。
   {
     provider: 'muapi',
-    model: 'wan2.1-lora-i2v',
+    model: '',
     duration: 5,
-    // video-param-table.md §3: WanLoRAI2VRequest has no seed/cfg/fps/size/negative → not filled; resolution 480p, aspect_ratio 16:9.
     resolution: '480p',
     aspect_ratio: '16:9',
-    loras: [{ name: 'https://huggingface.co/Remade-AI/matrix-shot/resolve/main/matrix_shot.safetensors', strength: 1, source: 'https://civitai.red/images/84050423' }],
+    description: 'MuAPI 暂无经官方核实的现代 Wan 2.2 端点，模型已留空待选；保留完整视频拓扑与 LoRA 挂载连线。',
+    loras: [{ name: '', strength: 1, source: '待用户在模型中心指定' }],
     schemaProperties: ['prompt', 'image_url', 'lora_list', 'aspect_ratio', 'resolution', 'quality', 'duration'],
-    source: 'https://api.muapi.ai/openapi.json#/paths/~1api~1v1~1wan2.1-lora-i2v',
+    source: 'https://api.muapi.ai/openapi.json',
   },
-  // Recipe https://civitai.red/images/84050423 → Replicate same-family wan-video/wan2.1-with-lora (llms.txt: image, lora_url, lora_strength_model, seed, sample_guide_scale, frames).
+  // Replicate: 官方未提供核实的现代 Wan 2.2 LoRA 端点，模型留空待选；保留完整视频拓扑与 LoRA 挂载连线。
   {
     provider: 'replicate',
-    model: 'wan-video/wan2.1-with-lora',
-    // video-param-table.md §4: Schema has no fps/duration/size → frames 81 (enum 17|33|49|65|81), resolution 480p, aspect_ratio 16:9, model 14b.
+    model: '',
     num_frames: 81,
     resolution: '480p',
     aspect_ratio: '16:9',
-    recipeExtra: { model: '14b' },
     seed: 24231881,
     cfg: 4,
-    loras: [{ name: 'https://huggingface.co/Remade-AI/matrix-shot/resolve/main/matrix_shot.safetensors', strength: 1, source: 'https://civitai.red/images/84050423' }],
+    description: 'Replicate 暂无经官方核实的现代 Wan 2.2 端点，模型已留空待选；保留完整视频拓扑与 LoRA 挂载连线。',
+    loras: [{ name: '', strength: 1, source: '待用户在模型中心指定' }],
     schemaProperties: ['prompt', 'negative_prompt', 'image', 'aspect_ratio', 'frames', 'resolution', 'lora_url', 'lora_strength_model', 'lora_strength_clip', 'sample_steps', 'sample_guide_scale', 'sample_shift', 'seed'],
-    source: 'https://replicate.com/wan-video/wan2.1-with-lora/llms.txt',
+    source: 'https://replicate.com',
   },
 ];
 
 export type T2vSpec = I2vSpec;
 
 const T2V_SPECS: T2vSpec[] = [
-  // Fal Wan 2.1 T2V: live OpenAPI (2026-11-04) WanT2vLoraInput: prompt (required), negative_prompt, loras[LoraWeight{path,scale}],
-  // seed, frames_per_second (default 16), num_frames (default 81), resolution 480p|580p|720p, aspect_ratio 16:9|9:16.
-  // Real verified LoRA trained specifically on base_model Wan-AI/Wan2.1-T2V-14B:
-  // https://huggingface.co/artificialguybr/Wan-BalancingAct-Redmond-Wan2.1-T2V-14B (tags: base_model:Wan-AI/Wan2.1-T2V-14B, diffusers, text-to-video)
+  // Fal Wan 2.2 A14B T2V LoRA: live OpenAPI 2026-11-06 (fal-ai/wan/v2.2-a14b/text-to-video/lora).
+  // OpenAPI: prompt (req), loras[LoRAWeight{path,scale,weight_name,transformer}], num_frames (81), frames_per_second (16), resolution 480p|580p|720p.
+  // Real neutral T2V LoRA: Civitai 2247725@2530788 (Wan Video 2.2 T2V-A14B).
+  // FalDriver defaults to upstream transformer: 'high'.
   {
     provider: 'fal',
-    model: 'fal-ai/wan-t2v-lora',
+    model: 'fal-ai/wan/v2.2-a14b/text-to-video/lora',
     num_frames: 81,
     resolution: '480p',
     aspect_ratio: '16:9',
     fps: 16,
-    loras: [{ name: 'https://huggingface.co/artificialguybr/Wan-BalancingAct-Redmond-Wan2.1-T2V-14B/resolve/main/Wan-BalancingAct-Redmond.safetensors', strength: 1, source: 'https://huggingface.co/artificialguybr/Wan-BalancingAct-Redmond-Wan2.1-T2V-14B' }],
+    cfg: 3.5,
+    description: 'Fal.ai 官方 Wan 2.2 A14B 文生视频 LoRA 端点。LoRA 加载目标默认为 high-noise transformer。',
+    loras: [{ name: 'urn:air:wanvideo-22-t2v-a14b:lora:civitai:2247725@2530788', strength: 1, source: 'https://civitai.com/models/2247725?modelVersionId=2530788' }],
     schemaProperties: [
       'prompt', 'negative_prompt', 'loras', 'seed', 'frames_per_second', 'num_frames',
-      'resolution', 'aspect_ratio', 'num_inference_steps', 'enable_prompt_expansion', 'reverse_video', 'turbo_mode', 'enable_safety_checker',
+      'resolution', 'aspect_ratio', 'num_inference_steps', 'enable_safety_checker', 'enable_output_safety_checker',
+      'enable_prompt_expansion', 'acceleration', 'guidance_scale', 'guidance_scale_2', 'shift', 'interpolator_model',
+      'num_interpolated_frames', 'adjust_fps_for_interpolation', 'video_quality', 'video_write_mode', 'reverse_video',
     ],
-    source: 'https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/wan-t2v-lora',
+    source: 'https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/wan/v2.2-a14b/text-to-video/lora',
   },
-  // WaveSpeed Wan 2.1 T2V 480p: live Schema api.wavespeed.ai/api/v3/models: prompt (required), negative_prompt,
-  // loras[].path/scale, size ["832*480","480*832"], duration 5|10, guidance_scale, flow_shift, seed.
-  // Real verified LoRA trained on Wan-AI/Wan2.1-T2V-14B:
+  // WaveSpeed Wan 2.2 480p T2V LoRA: wavespeed-ai/wan-2.2/t2v-480p-lora.
+  // Schema: prompt (req), loras[].path/scale, size ["832*480","480*832"], duration 5|10, guidance_scale, seed.
   {
     provider: 'wavespeed',
-    model: 'wavespeed-ai/wan-2.1/t2v-480p-lora',
+    model: 'wavespeed-ai/wan-2.2/t2v-480p-lora',
     duration: 5,
     size: '832*480',
-    loras: [{ name: 'https://huggingface.co/artificialguybr/Wan-BalancingAct-Redmond-Wan2.1-T2V-14B/resolve/main/Wan-BalancingAct-Redmond.safetensors', strength: 1, source: 'https://huggingface.co/artificialguybr/Wan-BalancingAct-Redmond-Wan2.1-T2V-14B' }],
+    description: 'WaveSpeed 官方 Wan 2.2 480P 文生视频 LoRA 端点；支持多 LoRA 融合与 480P 超快推理。',
+    loras: [{ name: 'urn:air:wanvideo-22-t2v-a14b:lora:civitai:2247725@2530788', strength: 1, source: 'https://civitai.com/models/2247725?modelVersionId=2530788' }],
     schemaProperties: ['prompt', 'negative_prompt', 'loras', 'size', 'num_inference_steps', 'duration', 'guidance_scale', 'flow_shift', 'seed'],
-    source: 'https://wavespeed.ai/docs/docs-api/wavespeed-ai/wan-2.1-t2v-480p-lora',
+    source: 'https://wavespeed.ai/docs/docs-api/wavespeed-ai/wan-2.2-t2v-480p-lora',
   },
   // Civitai videoGen wan v2.2 comfy: Wan Video 2.2 14B Text-to-Video checkpoint (AIR urn:air:wanvideo-22-t2v-a14b:checkpoint:civitai:1817671@2114154).
-  // Real neutral T2V LoRA trained on exact baseModel Wan Video 2.2 T2V-A14B:
-  // Stylized PBR Animation [WAN 2.2 T2V] (Civitai 2247725@2530788, nsfwLevel: 1, baseModel: Wan Video 2.2 T2V-A14B).
-  // Swapped from 1837542 per Tower P1-d (neutral public default content).
+  // Real neutral T2V LoRA: Civitai 2247725@2530788.
   {
     provider: 'civitai',
     model: 'urn:air:wanvideo-22-t2v-a14b:checkpoint:civitai:1817671@2114154',
@@ -618,32 +624,29 @@ const T2V_SPECS: T2vSpec[] = [
     ],
     source: 'https://developer.civitai.com/orchestration/recipes/wan.md',
   },
-  // MuAPI Wan 2.1 T2V: live OpenAPI https://api.muapi.ai/openapi.json WanLoRAT2VRequest: prompt (required),
-  // lora_list[LoraItem{path,scale}], duration 5|10, resolution 480p|720p, aspect_ratio 16:9|9:16.
-  // Real verified LoRA trained on Wan-AI/Wan2.1-T2V-14B:
+  // MuAPI: 官方未提供核实的现代 Wan 2.2 LoRA 端点，模型留空待选；保留完整视频拓扑与 LoRA 挂载连线。
   {
     provider: 'muapi',
-    model: 'wan2.1-lora-t2v',
+    model: '',
     duration: 5,
     resolution: '480p',
     aspect_ratio: '16:9',
-    loras: [{ name: 'https://huggingface.co/artificialguybr/Wan-BalancingAct-Redmond-Wan2.1-T2V-14B/resolve/main/Wan-BalancingAct-Redmond.safetensors', strength: 1, source: 'https://huggingface.co/artificialguybr/Wan-BalancingAct-Redmond-Wan2.1-T2V-14B' }],
+    description: 'MuAPI 暂无经官方核实的现代 Wan 2.2 端点，模型已留空待选；保留完整视频拓扑与 LoRA 挂载连线。',
+    loras: [{ name: '', strength: 1, source: '待用户在模型中心指定' }],
     schemaProperties: ['prompt', 'lora_list', 'aspect_ratio', 'resolution', 'quality', 'duration'],
-    source: 'https://api.muapi.ai/openapi.json#/paths/~1api~1v1~1wan2.1-lora-t2v',
+    source: 'https://api.muapi.ai/openapi.json',
   },
-  // Replicate Wan 2.1 with LoRA (text-to-video mode: no image input).
-  // Live schema: prompt (required), negative_prompt, aspect_ratio, frames, resolution, lora_url, lora_strength_model, sample_steps, sample_guide_scale, seed.
-  // Real verified LoRA trained on Wan-AI/Wan2.1-T2V-14B:
+  // Replicate: 官方未提供核实的现代 Wan 2.2 LoRA 端点，模型留空待选；保留完整视频拓扑与 LoRA 挂载连线。
   {
     provider: 'replicate',
-    model: 'wan-video/wan2.1-with-lora',
+    model: '',
     num_frames: 81,
     resolution: '480p',
     aspect_ratio: '16:9',
-    recipeExtra: { model: '14b' },
-    loras: [{ name: 'https://huggingface.co/artificialguybr/Wan-BalancingAct-Redmond-Wan2.1-T2V-14B/resolve/main/Wan-BalancingAct-Redmond.safetensors', strength: 1, source: 'https://huggingface.co/artificialguybr/Wan-BalancingAct-Redmond-Wan2.1-T2V-14B' }],
+    description: 'Replicate 暂无经官方核实的现代 Wan 2.2 端点，模型已留空待选；保留完整视频拓扑与 LoRA 挂载连线。',
+    loras: [{ name: '', strength: 1, source: '待用户在模型中心指定' }],
     schemaProperties: ['prompt', 'negative_prompt', 'aspect_ratio', 'frames', 'resolution', 'lora_url', 'lora_strength_model', 'lora_strength_clip', 'sample_steps', 'sample_guide_scale', 'sample_shift', 'seed'],
-    source: 'https://replicate.com/wan-video/wan2.1-with-lora/api/schema',
+    source: 'https://replicate.com',
   },
 ];
 
@@ -700,7 +703,7 @@ function buildStandardT2v(spec: T2vSpec): WorkflowPreset {
     provider,
     previewImage: '',
     tags: [provider, '标准', '文生视频'],
-    description: '该供应商标准文生视频流程；提示词请填配方或用户指定。',
+    description: spec.description ?? '该供应商标准文生视频流程；提示词请填配方或用户指定。',
     loraNames: t2vLoras.map(l => l.name),
     nodes: [
       {
@@ -832,7 +835,7 @@ function buildStandardI2v(spec: I2vSpec): WorkflowPreset {
     provider,
     previewImage: '',
     tags: [provider, '标准', '图生视频'],
-    description: '该供应商标准图生视频流程；提示词请填配方或用户指定。须先在「加载参考图」放入图片。',
+    description: spec.description ?? '该供应商标准图生视频流程；提示词请填配方或用户指定。须先在「加载参考图」放入图片。',
     loraNames: i2vLoras.map(l => l.name),
     nodes: [
       {
@@ -1101,11 +1104,21 @@ const STD_SPECS: StdSpec[] = [
     cfg: 3.5,
     omit: ['sampler', 'scheduler', 'denoise'],
   },
-  // docs.modelslab.com/.../dreambooth-lora body example: model_id tamarin-xl-v1 + lora_model xl-realistic-cake-art-sty @ 0.45.
-  // Tamarin XL V1 (civitai.com/models/235746?modelVersionId=265836) is SDXL 1.0 architecture; native resolution is 1024x1024.
-  // Corrected from 512x512 to native SDXL 1024x1024 (modelslab.com/models/modelslab/tamarin-xl-v1).
-  { provider: 'modelslab', ckpt: 'tamarin-xl-v1', hasLora: true, hasNegative: true, steps: 20, cfg: 7.5, width: 1024, height: 1024, scheduler: 'UniPCMultistepScheduler', omit: ['sampler', 'denoise'],
-    loras: [{ name: 'xl-realistic-cake-art-sty', strength: 0.45, source: 'https://docs.modelslab.com/image-generation/community-models/dreambooth-lora' }] },
+  // ModelsLab: 暂无经官方核实的现代推荐大模型，底模与 LoRA 留空待选（彻底清理 SDXL 1.0 tamarin-xl-v1）；保留完整 KSampler 与 LoRA 拓扑。
+  {
+    provider: 'modelslab',
+    ckpt: '',
+    hasLora: true,
+    loraMount: { strength: 0.8, source: '待用户在模型中心指定' },
+    hasNegative: true,
+    steps: 20,
+    cfg: 7.5,
+    width: 1024,
+    height: 1024,
+    scheduler: 'UniPCMultistepScheduler',
+    omit: ['sampler', 'denoise'],
+    description: 'ModelsLab 暂无经官方核实的现代推荐大模型，模型已留空待选；保留完整 KSampler 与 LoRA 挂载连线拓扑。',
+  },
   // providerSchema.ts agnesUnsupported (wiki.agnes-ai.com agnes-image-25-flash): only prompt + size + ratio. Same full
   // topology as Mage (image output → SaveImage); compact CLIP CONDITIONING→SaveImage was a wrong-type edge.
   { provider: 'agnes', ckpt: 'agnes-image-2.5-flash', hasLora: false, hasNegative: false,

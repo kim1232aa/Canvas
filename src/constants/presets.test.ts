@@ -69,7 +69,6 @@ const HAS_LORA = new Set([
 const PREFILLED_LORA: Record<string, Array<[string, number]>> = {
   wavespeed: [['https://huggingface.co/krea/Krea-2-LoRA-retroanime/resolve/main/retroanime.safetensors', 1]],
   tensorart: [['1015214543296590260', 1], ['1029661490430387503', 1], ['1015863436619315552', 1]],
-  modelslab: [['xl-realistic-cake-art-sty', 0.45]],
   modelscope: [['hf/renderartist-Technically-Color-Z-Image-Turbo', 0.9]],
   huggingface: [['renderartist/Technically-Color-Z-Image-Turbo', 0.9]],
   aimlapi: [['https://huggingface.co/renderartist/Technically-Color-Z-Image-Turbo/resolve/main/Technically_Color_Z_Image_Turbo_v1_renderartist_2000.safetensors', 0.9]],
@@ -170,23 +169,24 @@ describe('standard workflow presets (23 T2I + 5 T2V + 6 I2V)', () => {
       // Canonical prompt: AIVideoNode.values.prompt only (no twin CLIP box)
       expect(vid.values.prompt).toBe(PRESET_RECIPE_PROMPTS[p.id]?.prompt ?? '');
     }
-    // Recipe base → same-family LoRA endpoints (temp/audit-2026-11-04/recipe-mapping-log.md).
+    // Recipe base → modern Wan 2.2 LoRA endpoints or empty placeholders (Wan 2.1 / SVD-XT forbidden as recommendations).
     const i2vModels: Record<string, string> = {
-      fal: 'fal-ai/wan-i2v-lora',
-      wavespeed: 'wavespeed-ai/wan-2.1/i2v-480p-lora',
+      fal: 'fal-ai/wan/v2.2-a14b/image-to-video/lora',
+      wavespeed: 'wavespeed-ai/wan-2.2/i2v-480p-lora',
       civitai: 'urn:air:wanvideo-22-i2v-a14b:checkpoint:civitai:1817671@2114157',
-      novita: 'SVD-XT',
-      muapi: 'wan2.1-lora-i2v',
-      replicate: 'wan-video/wan2.1-with-lora',
+      novita: '',
+      muapi: '',
+      replicate: '',
     };
     for (const [prov, model] of Object.entries(i2vModels)) {
       const vid = preset(`std-${prov}-i2v`).nodes.find(n => n.type === 'AIVideoNode')!;
       expect(String(vid.values.model), prov).toBe(model);
-      expect(String(vid.values.model).length, `${prov} non-empty`).toBeGreaterThan(0);
+      if (model) {
+        expect(String(vid.values.model).length, `${prov} non-empty`).toBeGreaterThan(0);
+      } else {
+        expect(String(vid.values.model), `${prov} empty placeholder`).toBe('');
+      }
     }
-    const nov = preset('std-novita-i2v').nodes.find(n => n.type === 'AIVideoNode')!;
-    expect(nov.values.num_frames).toBe(25);
-    expect(nov.values.fps).toBe(6);
   });
 
   it('I2V seeds official duration/resolution/frames only — no empty shells, no fake 1024 WH, require_reference_image', () => {
@@ -194,7 +194,7 @@ describe('standard workflow presets (23 T2I + 5 T2V + 6 I2V)', () => {
       fal: { num_frames: 81, resolution: '480p', fps: 16, hide: [] },
       wavespeed: { duration: 5, hide: [] },
       civitai: { fps: 24, hide: [] },
-      novita: { num_frames: 25, fps: 6, hide: ['duration', 'aspect_ratio', 'resolution'] },
+      novita: { hide: ['duration', 'aspect_ratio', 'resolution'] },
       muapi: { duration: 5, resolution: '480p', hide: [] },
       replicate: { num_frames: 81, resolution: '480p', hide: [] },
     };
@@ -277,7 +277,7 @@ describe('standard workflow presets (23 T2I + 5 T2V + 6 I2V)', () => {
     for (const p of WORKFLOW_PRESETS) {
       const loras = p.nodes.filter(n => n.type === 'LoRALoader');
       for (const n of loras) {
-        if (['std-replicate-t2i', 'std-novita-t2i', 'std-runware-t2i'].includes(p.id)) continue;
+        if (['std-replicate-t2i', 'std-novita-t2i', 'std-runware-t2i', 'std-modelslab-t2i', 'std-muapi-t2v', 'std-muapi-i2v', 'std-replicate-t2v', 'std-replicate-i2v'].includes(p.id)) continue;
         expect(String(n.values.lora_name ?? '').length, `${p.id} empty LoRA shell`).toBeGreaterThan(0);
       }
       if (!HAS_LORA.has(p.provider) && !p.category.includes('视频')) {
@@ -618,7 +618,6 @@ describe('standard workflow presets (23 T2I + 5 T2V + 6 I2V)', () => {
       muapi: 'krea-v2-turbo-lora',
       aimlapi: 'alibaba/z-image-turbo-lora',
       venice: 'venice-sd35',
-      modelslab: 'tamarin-xl-v1',
       gemini: 'gemini-3.1-flash-image',
     };
     for (const [prov, model] of Object.entries(filled)) {
@@ -627,8 +626,8 @@ describe('standard workflow presets (23 T2I + 5 T2V + 6 I2V)', () => {
     }
   });
 
-  it('Novita, Replicate, and Runware T2I maintain full LoRA-capable topology awaiting user model choice', () => {
-    for (const prov of ['novita', 'replicate', 'runware']) {
+  it('Novita, Replicate, Runware, and ModelsLab T2I maintain full LoRA-capable topology awaiting user model choice', () => {
+    for (const prov of ['novita', 'replicate', 'runware', 'modelslab']) {
       const p = preset(`std-${prov}-t2i`);
       expect(loader(p.id)!.values.ckpt_name).toBe('');
       expect(p.nodes.some(n => n.type === 'LoRALoader')).toBe(true);
@@ -720,7 +719,7 @@ describe('standard workflow presets (23 T2I + 5 T2V + 6 I2V)', () => {
       const lower = name.toLowerCase();
       if (lower.includes('krea') || lower.includes('retroanime')) return 'krea2';
       if (lower.includes('z-image') || lower.includes('zimage') || lower.includes('lcars') || lower.includes('technically-color')) return 'zimage';
-      if (lower.includes('wan-2.2') || lower.includes('wanvideo-22') || lower.includes('2247725') || lower.includes('1902817')) return 'wan2.2';
+      if (lower.includes('wan-2.2') || lower.includes('wan/v2.2') || lower.includes('v2.2') || lower.includes('wanvideo-22') || lower.includes('2247725') || lower.includes('1902817')) return 'wan2.2';
       if (lower.includes('wan-2.1') || lower.includes('wan2.1') || lower.includes('wan-t2v') || lower.includes('wan-i2v') || lower.includes('redmond') || lower.includes('matrix_shot')) return 'wan2.1';
       if (lower.includes('tamarin-xl') || lower.includes('cake-art')) return 'sdxl';
       if (lower.includes('photoreal_studio_z_image') || /^\d{10,}$/.test(lower)) return 'openworks';
