@@ -117,18 +117,10 @@ export const WorkflowPresetsModal: React.FC<WorkflowPresetsModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Filter presets
+  // Filter presets derived from actual presets data
   const categories = [
     '全部',
-    'Tensor.Art 官方原生',
-    'Civitai 热门精选 (hinablue)',
-    'FLUX 热门微调',
-    '二次元 / 动漫美学',
-    '真实摄影 / 胶片风',
-    '国产大模型 / 国风',
-    '复古艺术 / 游戏美学',
-    '产品建模 / 3D 盲盒',
-    '内置免配置',
+    ...Array.from(new Set(WORKFLOW_PRESETS.map((p) => p.category))).filter(Boolean).sort(),
   ];
 
   const handleExtractCivitaiWorkflow = async (
@@ -180,7 +172,7 @@ export const WorkflowPresetsModal: React.FC<WorkflowPresetsModalProps> = ({
   ];
 
   const filteredPresets = WORKFLOW_PRESETS.filter((p) => {
-    const matchLegacyCat = selectedCategory === '全部' || p.category.includes(selectedCategory) || (selectedCategory === '真实摄影 / 胶片风' && p.category.includes('写实'));
+    const matchCategory = selectedCategory === '全部' || p.category === selectedCategory || p.category.includes(selectedCategory);
     const matchTask = selectedTask === '全部'
       || (selectedTask === '文生图' && (p.category === '标准文生图' || p.tags?.includes('文生图')))
       || (selectedTask === '文生视频' && (p.category === '标准文生视频' || p.tags?.includes('文生视频')))
@@ -197,7 +189,7 @@ export const WorkflowPresetsModal: React.FC<WorkflowPresetsModalProps> = ({
       p.tags?.some((t) => t.toLowerCase().includes(q)) ||
       p.loraNames?.some((l) => l.toLowerCase().includes(q)) ||
       presetSummary(p).model.toLowerCase().includes(q);
-    return matchLegacyCat && matchTask && matchProvider && matchSearch;
+    return matchCategory && matchTask && matchProvider && matchSearch;
   });
 
   const handleCopyPrompt = (p: WorkflowPreset) => {

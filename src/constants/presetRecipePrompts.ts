@@ -11,10 +11,6 @@ export const PRESET_RECIPE_PROMPTS: Record<string, RecipePrompt> = {
     "negative": "(worst quality:2), (low quality:2), (normal quality:1.8), lowres, blurry, jpeg artifacts, pixelated, noisy, grainy, watermark, logo, text, signature, username, copyright, censored, cropped, out of frame, bad anatomy, bad proportions, malformed anatomy, deformed, disfigured, mutated, mutation, ugly, poorly drawn, poorly rendered, bad face, asymmetrical face, bad hands, bad fingers, malformed hands, fused fingers, missing fingers, extra fingers, six fingers, four fingers, extra arms, missing arms, extra legs, missing legs, twisted fingers, broken fingers, disconnected limbs, floating limbs, duplicated limbs, long fingers, short fingers, mutated hands, malformed nails, missing nails, cross-eyed, lazy eye, wonky eyes, mismatched eyes, asymmetrical eyes, extra eyes, missing eyes, bad pupils, blurry eyes, dead eyes, bad mouth, bad teeth, malformed lips, extra mouth, missing mouth, distorted nose, extra nose, duplicate, cloned face, twin, multiple people, multiple girls, extra person, oversaturated, overexposed, underexposed, harsh shadows, unnatural lighting, flat lighting, low contrast, bad perspective, distorted body, stretched body, compressed body, messy hair, floating hair, extra hair, hair covering eyes, tangled hair, bad clothes, fused clothes, clipping, floating accessories, broken accessories, extra accessories",
     "source": "https://tensor.art/images/1053306608244813366"
   },
-  "std-wavespeed-t2i": {
-    "prompt": "A professional photograph of a quirky squirrel with a fiery red mohawk, energetically playing a whimsical drum set in a vibrant autumn forest. The drum kit is entirely imagined, with bass drums made from hollowed, oversized chestnuts that have been polished to a gleaming finish. The snare drum is crafted from a woven basket of intertwined twigs and leaves, producing a crisp, earthy sound. Cymbals are formed from large, dry maple leaves, their edges curled and textured, hanging on thin branch stands. Smaller acorns serve as tom-toms, and the hi-hat is composed of overlapping oak leaves, delicately stacked on a twig frame. Every element of the drum set is organic, blending seamlessly into the forest floor, which is blanketed in a rich layer of autumn leaves, as the squirrel’s paws expertly tap the instruments, filling the scene with the imagined rhythm of nature",
-    "source": "https://civitai.red/images/33530948"
-  },
   "std-huggingface-t2i": {
     "prompt": "t3chnic4lly A gritty documentary-style photograph capturing a tightly packed crowd of muscular old men in black suits, dancing energetically within a dark industrial warehouse. The old men's faces show exaggerated expressions of joy. Sweat glistens on their faces. The lighting is provided by harsh, direct on-camera flash, creating stark white highlights, deep shadows, and significant motion blur among the moving figures. Industrial commercial lasers cut through the dark, highlighting dust motes. Concrete pillars and exposed structural beams are visible in the crowded background. The film grain is heavy.",
     "source": "https://civitai.red/images/113739497"
@@ -27,27 +23,29 @@ export const PRESET_RECIPE_PROMPTS: Record<string, RecipePrompt> = {
     "prompt": "t3chnic4lly A gritty documentary-style photograph capturing a tightly packed crowd of muscular old men in black suits, dancing energetically within a dark industrial warehouse. The old men's faces show exaggerated expressions of joy. Sweat glistens on their faces. The lighting is provided by harsh, direct on-camera flash, creating stark white highlights, deep shadows, and significant motion blur among the moving figures. Industrial commercial lasers cut through the dark, highlighting dust motes. Concrete pillars and exposed structural beams are visible in the crowded background. The film grain is heavy.",
     "source": "https://civitai.red/images/113739497"
   },
-  "std-muapi-t2i": {
-    "prompt": "c0l0ringb00k coloring book page, simple cute dragon, white background",
-    "source": "https://civitai.red/images/31247708"
-  },
-  "std-replicate-t2i": {
-    "prompt": "c0l0ringb00k coloring book page, simple cute dragon, white background",
-    "source": "https://civitai.red/images/31247708"
-  },
-  "std-novita-t2i": {
-    "prompt": "Astartes, silhouette, monochrome, greyscale, BREAK <lora:epi_noiseoffset2:0.65>, <lora:more_details:0.4>,",
-    "negative": "BadDream, UnrealisticDream,",
-    "source": "https://civitai.red/images/28785255"
-  },
   "std-sogni-t2i": {
     "prompt": "extreme overhead fisheye perspective of a cyberpunk girl, oversized bright blue eye looking up, dark blue braided hair, complex white mechanical headset with exposed colorful wires, chartreuse shirt, tilted white building, solid blue sky, bold ink outlines, flat vibrant colors, comic illustration",
     "negative": "watermark,copyrights",
     "source": "https://civitai.red/images/142361732"
   },
   "std-fal-t2i": {
-    "prompt": "c0l0ringb00k coloring book page, simple cute dragon, white background",
-    "source": "https://civitai.red/images/31247708"
+    "prompt": "extreme overhead fisheye perspective of a cyberpunk girl, oversized bright blue eye looking up, dark blue braided hair, complex white mechanical headset with exposed colorful wires, chartreuse shirt, tilted white building, solid blue sky, bold ink outlines, flat vibrant colors, comic illustration",
+    "negative": "watermark,copyrights",
+    "source": "https://civitai.red/images/142361732"
+  },
+  "std-wavespeed-t2i": {
+    "prompt": "extreme overhead fisheye perspective of a cyberpunk girl, oversized bright blue eye looking up, dark blue braided hair, complex white mechanical headset with exposed colorful wires, chartreuse shirt, tilted white building, solid blue sky, bold ink outlines, flat vibrant colors, comic illustration",
+    "negative": "watermark,copyrights",
+    "source": "https://civitai.red/images/142361732"
+  },
+  "std-muapi-t2i": {
+    "prompt": "extreme overhead fisheye perspective of a cyberpunk girl, oversized bright blue eye looking up, dark blue braided hair, complex white mechanical headset with exposed colorful wires, chartreuse shirt, tilted white building, solid blue sky, bold ink outlines, flat vibrant colors, comic illustration",
+    "negative": "watermark,copyrights",
+    "source": "https://civitai.red/images/142361732"
+  },
+  "std-civitai-i2v": {
+    "prompt": "summer",
+    "source": "https://civitai.red/images/111400580"
   },
   "std-fal-i2v": {
     "prompt": "a woman dancing happily in the middle of a street under a neon sign, cars drive into her and she dances over them",
@@ -64,9 +62,5 @@ export const PRESET_RECIPE_PROMPTS: Record<string, RecipePrompt> = {
   "std-replicate-i2v": {
     "prompt": "a woman dancing happily in the middle of a street under a neon sign, cars drive into her and she dances over them",
     "source": "https://civitai.red/images/84050423"
-  },
-  "std-civitai-i2v": {
-    "prompt": "summer",
-    "source": "https://civitai.red/images/111400580"
   }
 };

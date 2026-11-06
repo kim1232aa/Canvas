@@ -55,10 +55,8 @@ export const BASE_MODELS: BaseModelOption[] = [
   { label: '🤗 [HF] Z-Image-Turbo（官方 Space）', value: 'Tongyi-MAI/Z-Image-Turbo', provider: 'huggingface', category: 'checkpoint' },
 
   // ===================== FAL.AI =====================
-  { label: '⚡ [Fal] FLUX.1 Schnell (fal-ai/flux/schnell)', value: 'fal-ai/flux/schnell', provider: 'fal', category: 'checkpoint' },
-  { label: '⚡ [Fal] FLUX.1 [dev] (fal-ai/flux/dev)', value: 'fal-ai/flux/dev', provider: 'fal', category: 'checkpoint' },
-  { label: '⚡ [Fal] Fast SDXL (fal-ai/fast-sdxl)', value: 'fal-ai/fast-sdxl', provider: 'fal', category: 'checkpoint' },
-  { label: '⚡ [Fal] Wan 2.1 Video (fal-ai/wan-t2v)', value: 'fal-ai/wan-t2v', provider: 'fal', category: 'video' },
+  { label: '⚡ [Fal] Krea 2 Turbo LoRA (fal-ai/krea-2/turbo/lora)', value: 'fal-ai/krea-2/turbo/lora', provider: 'fal', category: 'checkpoint' },
+  { label: '⚡ [Fal] Kling V3 Standard (fal-ai/kling-video/v3/standard/image-to-video)', value: 'fal-ai/kling-video/v3/standard/image-to-video', provider: 'fal', category: 'video' },
 
   // ===================== CIVITAI =====================
   { label: '🌟 [Civitai] Krea 2 Turbo 原生极速 (urn:air:krea2:checkpoint:civitai:2726029@3091481)', value: 'urn:air:krea2:checkpoint:civitai:2726029@3091481', provider: 'civitai', category: 'checkpoint' },
@@ -66,7 +64,7 @@ export const BASE_MODELS: BaseModelOption[] = [
   { label: '🌟 [Civitai] FLUX.1 [dev] (urn:air:flux1:checkpoint:civitai:618692@691639)', value: 'urn:air:flux1:checkpoint:civitai:618692@691639', provider: 'civitai', category: 'checkpoint' },
 
   // ===================== GOOGLE / NANOGPT =====================
-  { label: '🟢 [NanoGPT] FLUX.1 Schnell (flux-schnell)', value: 'flux-schnell', provider: 'nanogpt', category: 'checkpoint' },
+  { label: '🟢 [NanoGPT] MOSS Image (moss-image)', value: 'moss-image', provider: 'nanogpt', category: 'checkpoint' },
   { label: '🟢 [NanoGPT] Qwen Image 2512 (qwen-image-2512)', value: 'qwen-image-2512', provider: 'nanogpt', category: 'checkpoint' },
 
   // ===================== OPENAI / GROK 兼容中转 =====================
@@ -937,7 +935,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
     title: 'AI 视频（显式 Provider/Model）',
     category: 'providers',
     colorTag: '#a3e635',
-    description: '视频节点只执行用户显式选择的 provider 与 model；预置项仅包含当前重新核实的 Fal / Agnes 端点和显式 Grok 兼容中转。',
+    description: '视频节点只执行用户显式选择的 provider 与 model；预置项仅包含当前重新核实的 Kling V3 / MiniMax / Wan 2.7 / Agnes / Grok 兼容端点。',
     inputs: [
       { id: 'positive', name: 'positive', type: 'CONDITIONING', label: 'prompt' },
       { id: 'negative', name: 'negative', type: 'CONDITIONING', label: 'negative' },
