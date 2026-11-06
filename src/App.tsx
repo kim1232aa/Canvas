@@ -151,6 +151,8 @@ export default function App() {
     action?: 'history' | 'api-settings' | 'connect-ref' | 'none';
     /** When action is api-settings: provider id to select in BackendSettingsModal (e.g. gemini). */
     actionProviderId?: string;
+    /** Technical detail / local wrapper error stack, kept strictly separate from verbatim raw body. */
+    localWrapper?: string;
   } | null>(null);
   const [toastThumbSettle, setToastThumbSettle] = useState<PreviewSettleState>('loading');
   const toastThumbSettleRef = useRef<PreviewSettleState>('loading');
@@ -354,7 +356,7 @@ export default function App() {
     };
     const toast = upstreamFailureToast(shaped, `选用模型：${provider} · ${model}`)
       || { title: `HTTP ${result.status || '—'}`, message: `${typeof result.data === 'object' ? JSON.stringify(result.data) : String(result.data ?? 'Schema 读取失败')}\n选用模型：${provider} · ${model}` };
-    setToast({ type: 'error', title: toast.title, message: toast.message });
+    setToast({ type: 'error', title: toast.title, message: toast.message, localWrapper: (toast as any).localWrapper });
   }), []);
 
   // videoschema: saved board / model list change → debounced Schema GET for AIVideoNode (select path notes immediately in NodeItem).
@@ -762,6 +764,7 @@ export default function App() {
           type: 'error',
           title: toastInfo.title,
           message: toastInfo.message,
+          localWrapper: toastInfo.localWrapper,
           action: toastInfo.status === 401 ? 'api-settings' : undefined,
           actionProviderId: toastInfo.status === 401 ? toastInfo.provider : undefined,
         });
@@ -1490,6 +1493,7 @@ export default function App() {
           type: 'error',
           title: toastInfo.title,
           message: toastInfo.message,
+          localWrapper: toastInfo.localWrapper,
           action: toastInfo.status === 401 ? 'api-settings' : undefined,
           actionProviderId: toastInfo.status === 401 ? (toastInfo.provider || branch.target?.values?.targetProvider) : undefined,
         });
@@ -3192,6 +3196,12 @@ export default function App() {
                   </pre>
                 );
               })()}
+              {toast.localWrapper && (
+                <div data-testid="toast-local-wrapper" className="mt-1 text-slate-400 font-mono text-[11px] leading-relaxed max-h-24 overflow-y-auto whitespace-pre-wrap break-all bg-black/20 p-1.5 rounded border border-slate-700/40">
+                  <span className="text-slate-500 font-sans block mb-0.5">本地包装与技术详情：</span>
+                  {toast.localWrapper}
+                </div>
+              )}
             </div>
 
             <div className="flex items-center gap-2 shrink-0 ml-2">

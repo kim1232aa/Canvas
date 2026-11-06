@@ -81,13 +81,15 @@
 
 1. **彻底删除中间摘要与应用自编标签**：
    - `upstreamFailureToast()` 完全删除了 `extractUpstreamMessage`、删除了 120 字符截断、删除了应用自编的 `完整上游响应原文：`、删除了 `（上游响应体见展开）` 与 `（上游响应体为空）` 替代文案。
-   - 返回对象的 `message` 就是 100% 完整的上游原始响应体字符串。
+   - 返回对象的 `message` 就是 100% 纯粹的上游原始响应体字符串。
+   - **关于 `schemaFailure.ts:83` 的重要澄清与勘误**：第 1 轮报告中曾有「全库已无自编标签」的绝对化表述，经主控代码排查更正为：**M17 职责范围内的生成（Generation）、轮询（Poll）及主报错链路（`src/utils/apiFailure.ts`、`App.tsx`、`NodeErrorDisclosure.tsx` 等）已 100% 彻底消除了自编标签与改写**。而 `src/utils/schemaFailure.ts:83`（`if (raw) parts.push('完整上游响应原文：\n' + raw)`）属于非 M17 scope 的模型下拉选用时参数表预读（Catalog/Schema Prefetch）遗留逻辑，未包含在 M17 的 scope 内。特此澄清。
 2. **顶栏状态栏（`App.tsx` 中的 `executionStatusText` 与 `studio-run-status`）**：
    - 格式化为标准规范：`【服务商】HTTP 状态码 状态描述: 完整上游原始响应体`。
    - 绝不抽取单个 message 字段，绝不丢弃任何 JSON 结构（如 `code`, `id`, `detail`, `traceId` 均完整呈现）。
 3. **浮动通知 Toast（`App.tsx` 中的 `toast-container`）**：
    - 标题：标准化为 `【服务商】HTTP 状态码 状态描述`（如 `【mage】HTTP 402 Payment Required`、`【civitai】HTTP 400 Bad Request`、`【together】HTTP 401 Unauthorized`）。
-   - 正文：直接在等宽可滚动区域展示未改写的上游 JSON 响应体（`<pre data-testid="toast-first-line" className="... max-h-48 overflow-y-auto whitespace-pre-wrap font-mono text-xs break-all bg-black/40 p-2 rounded-lg border border-rose-900/40 select-text">`），彻底废除 `<details>展开全文</details>` 折叠。
+   - 正文：直接在等宽可滚动区域展示未改写的纯粹上游响应体（`<pre data-testid="toast-first-line" className="... max-h-48 overflow-y-auto whitespace-pre-wrap font-mono text-xs break-all bg-black/40 p-2 rounded-lg border border-rose-900/40 select-text">`），彻底废除 `<details>展开全文</details>` 折叠。
+   - 本地包装分离：`localWrapper` 独立放入结构化字段，并在独立的 `<div data-testid="toast-local-wrapper">` 中展示，绝不污染上游 raw body。
    - 操作按钮：**严格限制仅在 HTTP 状态码为真实的 401 时才允许展示「去 API 设置」按钮**，400/402/403 等状态下一律不出现。
 4. **节点错误红条（`NodeErrorDisclosure.tsx` 与 `NodeItem.tsx`）**：
    - 标题栏：展示真实的 `【服务商】HTTP 状态码 状态描述`，消除任何自编总结或状态码重复。
@@ -112,17 +114,18 @@
 
 ## 五、回归测试迁移与突变敏感性验证（Task 5 & P1-3）
 
-### 1. 规避 M15 合并冲突：迁移至 `src/components/verbatimErrors.test.tsx`
-为彻底避免与 M15 分支新增的 `src/components/NodeItem.test.tsx` 产生 add/add 冲突，我们已将回归测试整体迁移至 `src/components/verbatimErrors.test.tsx`，并从工作区删除了 `src/components/NodeItem.test.tsx`。
+### 1. 规避 M15 合并冲突：独立回归测试置于 `src/components/verbatimErrors.test.tsx`
+为彻底避免与 M15 分支新增的 `src/components/NodeItem.test.tsx` 产生 add/add 冲突，我们已将 M17 的专属回归测试置于 `src/components/verbatimErrors.test.tsx` 中。在 rebase 到最新 main（已包含 M15 成果）后，工作区完整保留并正常运行 M15 的 `src/components/NodeItem.test.tsx`，同时 `verbatimErrors.test.tsx` 独立验证透传逻辑与 DOM 行为。
 
-### 2. 测试用例全量覆盖 after 阶段真实响应体
-测试夹具全部严格对齐 Task 6 真实录制的响应体：
+### 2. 测试用例全量覆盖 after 阶段真实响应体与追溯基线
+测试夹具全部严格对齐 Task 6 最新真实录制的响应体：
 - `Mage 402`: `{"error":{"code":"payment_required","message":"The Mage API and MCP server need a successful payment on this account first: buy any Gem pack or start a plan at https://www.mage.space/gems, then retry. Signup bonus Gems work in the Mage app only."}}`
 - `Civitai 400`: `{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.1","title":"Bad Request","status":400,"detail":"insufficientBuzz","traceId":"00-089db51091f4345a3219237a503afea7-a5602b6b0e42f089-02"}`
 - `Fal 403`: `{"detail":"User is locked. Reason: TOP_UP."}`
 - `Together 401`: `{"id":"f0872edf-aws_ue2","error":{"message":"Invalid API key provided. You can find your API key at https://api.together.ai/settings/api-keys.","type":"invalid_request_error","param":null,"code":"invalid_api_key"}}`
 - `ModelScope 400`: `{"errors":{"message":"Invalid model id: nonexistent-model-xyz-12345"},"request_id":"13ff7f2a-bf94-4290-abb6-0248a7c80caf"}`
 - `ModelScope 500`: `{"errors":{"message":"apiInferModelDownload call failed: callApiInferModelDownload failed: [Model Exception] 模型不存在"},"request_id":"4c0b7caa-7f63-497c-972e-2f4e0e65a677"}`
+- 追溯基线夹具：`BASELINE_CIVITAI_400_BODY`（`3fcab5cbc...`）、`BASELINE_TOGETHER_401_BODY`（`95234f6a...`）、`BASELINE_MODELSCOPE_400_BODY`（`a12ad933...`）作为追溯基线常量同步验证。
 
 ### 3. 五个突变（Mutations a-e）实测验证报告
 
@@ -134,7 +137,7 @@
 | **Mutation (b)** | `errorBannerText` 改回只取 message/error (`extractUpstreamMessage(detail) \|\| detail`) | **RED (Exit 1)** | 1. `apiFailure.test.ts` > `透传 AIMLAPI HTTP 403 run-out-of-funds message`<br/>2. `fix5-2026-10-16.test.tsx` > `errorBannerText(long) 保留 topup_url` |
 | **Mutation (c)** | 在 `plainErrorMessage` 里恢复魔搭「模型不存在」中文改写 (`if (/模型不存在/.test(raw)) return '魔搭国内站找不到这个模型或 LoRA'`) | **RED (Exit 1)** | `verbatimErrors.test.tsx` > `2. Mutation (c) test: plainErrorMessage never rewrites 模型不存在 > fails if plainErrorMessage rewrites ModelScope 500 模型不存在 to Chinese` |
 | **Mutation (d)** | 将 `NodeErrorDisclosure` 的按钮条件放宽 (`isMissingKey = statusCode === 401 \|\| lower.includes('未配置') \|\| lower.includes('invalid_api_key')`) | **RED (Exit 1)** | `verbatimErrors.test.tsx` > `3. Mutation (d) test: 去配置密钥 button ONLY appears on statusCode === 401 > does NOT render 去配置密钥 when statusCode !== 401 even if body contains invalid_api_key or 未配置` |
-| **Mutation (e)** | 把 Toast 里的上游响应体恢复成 `<details>展开全文</details>` 折叠 | **RED (Exit 1)** | `verbatimErrors.test.tsx` > `4. Mutation (e) test: Toast body is never folded behind <details> > verifies App.tsx Toast JSX does not wrap toast text in <details> or 展开全文` |
+| **Mutation (e)** | 把 Toast 里的上游响应体恢复成 `<details>展开全文</details>` 折叠 | **RED (Exit 1)** | `verbatimErrors.test.tsx` > `4. Real DOM mounting & Mutation (e) test: App Toast renders verbatim body without <details>`（真实 DOM 断言 `expect(toastPre.closest('details')).toBeNull()` 变红） |
 
 ---
 
@@ -160,6 +163,7 @@
 | `src/utils/clean1029.test.tsx` | 26-33 | `expect(t.message).toContain('完整上游响应原文');` | `expect(t.message).toBe(long);`<br/>`expect(t.message).not.toContain('完整上游响应原文');` | 同上，长响应体直接作为正文透传，无自编标签。 |
 | `src/utils/clean1149.test.tsx` | 21-28 | `expect(t.message).toContain('完整上游响应原文');`<br/>`expect(t.message.split('\n')[0]).not.toBe(body);` | `expect(t.message).toBe(body);`<br/>`expect(t.message).not.toContain('完整上游响应原文');` | 同上，断言 toast.message 原样等于上游 body，绝无自编标签。 |
 | `src/utils/clean1351.test.tsx` | 20-21 | `expect(first).not.toBe(upstream); // fix4 short first line` | `expect(first).toBe(upstream);` | 旧测试断言要求第一行是缩略摘要而不是完整上游响应体。新测试断言第一行就是完整的上游响应体原文。 |
+| `src/utils/clean1351.test.tsx` | 24-25 | `expect(t.message.split('\n').slice(1).join('\n')).toContain('schemaProviders.ts:659');` | `expect(t.localWrapper).toContain('schemaProviders.ts:659');` | 本地包装文案与调用堆栈必须与上游 raw body 物理分离，独立存在于 `localWrapper` 字段中，不得污染 Toast 主消息。 |
 | `src/components/venicePostfix.test.ts` | 36-41 | `expect(upstreamHttpFirstLine(data)).not.toContain('{"error"');` | `expect(upstreamHttpFirstLine(data)).toContain('{"error":"Insufficient USD"}');` | 旧断言在无 provider 时强制要求剥离上游原始 JSON，丢弃 body 尾部。新断言要求无 provider 时同样完整保留上游 JSON 响应体。 |
 
 ---
@@ -217,10 +221,10 @@
    - 实际运行结果：Command executed successfully.
    - **退出码：0**
 2. **`npm run build`**
-   - 实际运行结果：`✓ built in 5.29s`，`Canvas Sites Worker built: original provider routes + durable storage`。
+   - 实际运行结果：`✓ built in 4.61s`，`Canvas Sites Worker built: original provider routes + durable storage`。
    - **退出码：0**
 3. **`npx vitest run --maxWorkers=2 --exclude '.tower/**' --exclude '**/node_modules/**' --exclude '**/dist/**'`**
    - 实际运行结果：
-     - **Test Files: 250 passed (250)**
-     - **Tests: 1901 passed (1901)**
+     - **Test Files: 256 passed (256)**
+     - **Tests: 1986 passed (1986)**
    - **退出码：0**

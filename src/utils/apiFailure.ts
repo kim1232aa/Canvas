@@ -7,12 +7,20 @@ import { isSchemaPrefetchError, schemaFailureToast } from './schemaFailure';
  */
 export function stripLocalWrapperPrefix(text: string): string {
   if (!text) return '';
-  let str = String(text).trim();
-  const prefixMatch = str.match(/^(?:.*?(?:返回错误|执行失败|提交失败|接口上游|接口错误|鉴权失败|API 提交失败)\s*(?:\[\d+\])?[:：]?\s*)/i);
-  if (prefixMatch && prefixMatch[0].length < str.length) {
-    str = str.slice(prefixMatch[0].length).trim();
+  const str = String(text);
+  const trimmed = str.trim();
+  // If it's a JSON object or array, it's verbatim upstream structure — NEVER strip.
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    return text;
   }
-  return str;
+  // Wrapper prefix must be at the very start, containing provider/API wrapper keywords,
+  // before any JSON or quotation, followed by colon or space.
+  // E.g. "Civitai Orchestration 官方算力返回错误 [400]: " or "Mage 图像接口上游 HTTP 402: "
+  const prefixMatch = trimmed.match(/^[a-zA-Z0-9\u4e00-\u9fa5\s_.-]+?(?:返回错误|执行失败|提交失败|接口上游|接口错误|鉴权失败|API 提交失败)\s*(?:\[\d+\]|HTTP\s*\d+)?[:：]\s*/i);
+  if (prefixMatch && prefixMatch[0].length < trimmed.length) {
+    return trimmed.slice(prefixMatch[0].length);
+  }
+  return text;
 }
 
 /** Pull upstream message/error from a JSON body fragment (402/403 billing etc.). Never invent copy. */
@@ -200,16 +208,23 @@ export function upstreamFailureParts(data: any): { status: number; statusText: s
     ?? (typeof data.upstreamStatus === 'number' ? data.upstreamStatus : null)
     ?? (typeof hist?.upstreamStatus === 'number' ? hist.upstreamStatus : null);
   if (status == null) return null;
-  const authoritative = (
-    typeof data.rawResponse === 'string' && data.rawResponse.trim() ? data.rawResponse
-    : data.rawResponse != null ? coerceResponseBodyText(data.rawResponse)
-    : typeof data.upstreamResponseBody === 'string' && data.upstreamResponseBody.trim() ? data.upstreamResponseBody
-    : typeof hist?.upstreamResponseBody === 'string' && hist.upstreamResponseBody.trim() ? hist.upstreamResponseBody
-    : typeof failed?.responseBody === 'string' && failed.responseBody.trim() ? failed.responseBody
-    : ''
-  );
-  let body = authoritative;
-  if (!body) {
+  let authoritative: string | undefined = undefined;
+  if (typeof data.rawResponse === 'string') {
+    authoritative = data.rawResponse;
+  } else if (data.rawResponse != null && (typeof data.rawResponse !== 'object' || (data.rawResponse as any).kind !== 'raw-response')) {
+    authoritative = coerceResponseBodyText(data.rawResponse);
+  } else if (typeof data.upstreamResponseBody === 'string') {
+    authoritative = data.upstreamResponseBody;
+  } else if (typeof hist?.upstreamResponseBody === 'string') {
+    authoritative = hist.upstreamResponseBody;
+  } else if (typeof failed?.responseBody === 'string') {
+    authoritative = failed.responseBody;
+  }
+
+  let body: string;
+  if (authoritative !== undefined) {
+    body = authoritative;
+  } else {
     const fallback = (
       typeof data.details === 'string' && data.details.trim() ? data.details
       : typeof data.error === 'string' && data.error.trim() ? data.error
@@ -237,7 +252,7 @@ export function upstreamFailureParts(data: any): { status: number; statusText: s
 export const TOAST_BODY_FIRST_LINE_MAX = 400;
 /** Toast for an upstream HTTP failure: title 「【provider】HTTP <code> <statusText>」; message = upstream body verbatim. */
 /** clean-1149 #1: run-catch toast. Prefer structured err.data; else SchemaPrefetchError / any Error carrying upstreamStatus. */
-export function toastFromRunError(err: any, runLine?: string): { title: string; message: string; provider?: string; status?: number } | null {
+export function toastFromRunError(err: any, runLine?: string): { title: string; message: string; provider?: string; status?: number; localWrapper?: string } | null {
   // Schema lookup miss: title = plain headline (full model name); body = one status line.
   // Never title 「HTTP N」 (contradicted 「生成请求没有发出去」) and never 「HTTP N · HTTP N」.
   if (isSchemaPrefetchError(err) || (err && typeof err === 'object' && err.name === 'SchemaPrefetchError')) {
@@ -253,21 +268,22 @@ export function toastFromRunError(err: any, runLine?: string): { title: string; 
   return null;
 }
 
-export function upstreamFailureToast(data: any, _runLine?: string): { title: string; message: string; provider?: string; status?: number } | null {
+export function upstreamFailureToast(data: any, _runLine?: string): { title: string; message: string; provider?: string; status?: number; localWrapper?: string } | null {
   const parts = upstreamFailureParts(data);
   if (!parts) return null;
   const prov = parts.provider;
   const provPrefix = prov ? `【${prov}】` : '';
   const sep = parts.statusText ? ' ' : '';
   const title = `${provPrefix}HTTP ${parts.status}${sep}${parts.statusText}`.trim();
-  const wrapper = typeof data?.localWrapper === 'string' && data.localWrapper !== parts.body
-    ? `\n本地包装与堆栈（技术详情）：\n${data.localWrapper}`
-    : '';
+  const localWrapper = typeof data?.localWrapper === 'string' && data.localWrapper !== parts.body
+    ? data.localWrapper
+    : undefined;
   return {
     title,
-    message: `${parts.body}${wrapper}`,
+    message: parts.body,
     provider: prov,
     status: parts.status,
+    localWrapper,
   };
 }
 
@@ -279,8 +295,11 @@ export function upstreamHttpFirstLine(data: any): string | null {
   const provPrefix = prov ? `【${prov}】` : '';
   const sep = parts.statusText ? ' ' : '';
   const statusLine = `HTTP ${parts.status}${sep}${parts.statusText}`.trim();
+  if (parts.body === '') {
+    return `${provPrefix}${statusLine}`;
+  }
   const sep2 = provPrefix ? ': ' : ' ';
-  return `${provPrefix}${statusLine}${parts.body ? `${sep2}${parts.body}` : ''}`.trim();
+  return `${provPrefix}${statusLine}${sep2}${parts.body}`;
 }
 
 /** User-facing one-liner: verbatim error; no invented Chinese summary or dropped body. */
