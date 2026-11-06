@@ -54,6 +54,17 @@ describe('ModelsLab Image Contract', () => {
     expect(req.payload.lora_strength).toBe(0.8);
   });
 
+  it('regression: allows empty prompt and sends it as filled without local throw', () => {
+    const req = buildModelsLabImageRequest(
+      {
+        model: 'flux',
+        prompt: '',
+      },
+      'test-api-key'
+    );
+    expect(req.payload.prompt).toBe('');
+  });
+
   it('routes an explicit reference image to official img2img fields', () => {
     const req = buildModelsLabImageRequest({
       model: 'flux',

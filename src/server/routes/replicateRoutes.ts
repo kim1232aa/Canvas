@@ -6,7 +6,6 @@ import {
   extractReplicateInputProperties,
   extractReplicateModelRoute,
   type ReplicateLiveModelRoute,
-  ReplicateSchemaMissingError,
   type ReplicateSchemaFetchFailure,
 } from '../replicateImageContract';
 import { canvasNodeId, clearVideoJobStatus, updateVideoJobStatus } from '../videoJobStatus.ts';
@@ -110,20 +109,6 @@ export function handleReplicateGenerate(deps: ReplicateRouteDeps) {
     try {
       mapped = buildReplicatePredictionRequest(reqBody, baseUrl, liveProps, schemaFetch, liveModel);
     } catch (error: any) {
-      if (error instanceof ReplicateSchemaMissingError) {
-        const sf = error.schemaFetch;
-        const upstreamAnswered = Boolean(sf && sf.status !== null && (sf.status < 200 || sf.status >= 300));
-        return res.status(error.httpStatus).json({
-          error: error.message,
-          errorSource: upstreamAnswered ? 'upstream' : sf && sf.status === null ? 'network' : 'local',
-          upstreamStatus: sf?.status ?? null,
-          blocked: 'schema_missing',
-          model: error.model,
-          schemaFetch: error.schemaFetch ?? null,
-          actualRequest: null,
-          notSent: true,
-        });
-      }
       // 「拟发送（未出站）」 = the Schema-mapped body from the same builder a real submit uses. If the rejection came from the
       // custom JSON itself, the proposal is built without it and says so explicitly (customParametersExcluded).
       let proposedRequest: Record<string, unknown> | undefined;

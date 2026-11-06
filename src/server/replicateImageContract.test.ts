@@ -193,10 +193,11 @@ describe('replicateImageContract', () => {
       expect(result.endpoint).toBe('https://my-replicate-proxy.internal/v1/models/black-forest-labs/flux-schnell/predictions');
     });
 
-    it('throws when model or prompt is missing or model format is invalid', () => {
+    it('throws when model is missing or model format is invalid; sends empty prompt as filled', () => {
       expect(() => buildReplicatePredictionRequest({ prompt: 'test' })).toThrow('model is required');
-      expect(() => buildReplicatePredictionRequest({ model: 'owner/name' })).toThrow('prompt is required');
       expect(() => buildReplicatePredictionRequest({ model: 'invalid-single-name', prompt: 'test' })).toThrow('模型格式无效');
+      const req = buildReplicatePredictionRequest({ model: 'owner/name' });
+      expect(req.payload.input).toMatchObject({ prompt: '' });
     });
   });
 

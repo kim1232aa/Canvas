@@ -23,6 +23,14 @@ describe('mageImageContract', () => {
     expect(MAGE_DOC).toContain('docs.mage.space');
   });
 
+  it('regression: allows empty prompt and sends it as filled without local throw', () => {
+    const mapped = buildMageImageRequest({
+      prompt: '',
+      model_id: 'mango-v3',
+    });
+    expect(mapped.payload.prompt).toBe('');
+  });
+
   it('accepts seed, resolution, image, additional_images', () => {
     const mapped = buildMageImageRequest({
       prompt: 'a scene',

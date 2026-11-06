@@ -35,4 +35,13 @@ describe('BaseEngineDriver task selection', () => {
     await driver.generate({ model: 'example/model', prompt: 'test', loras: [{ name: 'adapter', strength: 0.7 }] }, {});
     expect(driver.received?.loras?.[0]).toMatchObject({ strength: 0.7, modelStrength: 0.7, clipStrength: undefined });
   });
+
+  it('regression: capability list no longer throws for an unlisted mode the driver can build', async () => {
+    const driver = new ImageDriver(); // capabilities only has ['text2img']
+    // Calling img2img (with image_url) must not throw due to assertCapability
+    await expect(
+      driver.generate({ model: 'example/model', prompt: 'test', image_url: 'https://example.test/in.png' }, {})
+    ).resolves.toBeDefined();
+    expect(driver.received?.image_url).toBe('https://example.test/in.png');
+  });
 });

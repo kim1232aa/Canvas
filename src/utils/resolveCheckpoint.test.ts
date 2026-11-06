@@ -375,18 +375,28 @@ describe('checkLoraArchitectureCompatibility & ReplicateEngineNode resolution', 
     expect(getArchitectureFamily('Wan-AI/Wan2.1-T2V-14B')).toBe('wan21');
   });
 
-  it('flags cross-architecture mismatch between FLUX.1 checkpoint and Krea2 Turbo / SDXL LoRA', () => {
+  it('flags cross-architecture mismatch between FLUX.1 checkpoint and Krea2 Turbo / SDXL LoRA based on catalog metadata', () => {
     const res = checkLoraArchitectureCompatibility(
       'black-forest-labs/flux-dev',
-      undefined,
+      'FLUX.1',
       { name: '[Krea2 Turbo] AsianMix Lora', baseModel: 'Krea2 Turbo' }
     );
     expect(res.compatible).toBe(false);
     expect(res.ckptFamily).toBe('flux');
     expect(res.loraFamily).toBe('sdxl');
+    expect(res.hint).toContain('likely incompatible');
     expect(res.reason).toBe(
-      'LoRA [[Krea2 Turbo] AsianMix Lora] (baseModel: Krea2 Turbo) 与底模 [black-forest-labs/flux-dev] (baseModel: FLUX.1) 架构不兼容，未发送至上游。'
+      'LoRA [[Krea2 Turbo] AsianMix Lora] (baseModel: Krea2 Turbo) 与底模 [black-forest-labs/flux-dev] (baseModel: FLUX.1) 架构可能不兼容（基于目录元数据）。'
     );
+
+    // When catalog metadata baseModel is missing, does not guess from name and does not flag incompatible
+    const noMeta = checkLoraArchitectureCompatibility(
+      'black-forest-labs/flux-dev',
+      undefined,
+      { name: '[Krea2 Turbo] AsianMix Lora', baseModel: 'Krea2 Turbo' }
+    );
+    expect(noMeta.compatible).toBe(true);
+    expect(noMeta.hint).toBeUndefined();
   });
 
   it('allows matching architectures: FLUX + FLUX, SDXL + SDXL', () => {

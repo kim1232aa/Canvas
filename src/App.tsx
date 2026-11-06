@@ -449,11 +449,6 @@ export default function App() {
         }
       }
       const msg = error?.message || '工作流连接不完整';
-      // extract 先抛 pendingRecipe（缺 LoRA）时还没查提示词：黄字补上「请填写提示词」。
-      const boardHasPrompt = nodes.some((n) => n.type === 'CLIPTextEncode' && String(n.values?.text || '').trim());
-      if (!boardHasPrompt && /真 LoRA 地址|待配方|载入后挂上再运行/.test(String(msg)) && !String(msg).includes('提示词')) {
-        return `${msg}；请填写提示词`;
-      }
       return msg;
     }
   }, [canvasMode, selectedFrameId, spatialFrames, nodes, connections, selectedNodeId, runTargetState]);

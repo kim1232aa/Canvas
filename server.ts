@@ -1077,17 +1077,6 @@ function getProviderBaseUrl(provider: AuthProvider): { baseUrl: string; error?: 
   return { baseUrl };
 }
 
-function rejectSchemaEnum(
-  _res: express.Response,
-  _provider: SchemaProvider,
-  _model: string,
-  _field: FieldKey,
-  _value: unknown,
-): boolean {
-  // 2026-11-04 (雁): enum values are sent as filled; upstream decides.
-  return false;
-}
-
 // Helper to create GoogleGenAI client with key rotation and standard aistudio-build telemetry
 const createGoogleGenAI = (apiKey?: string) => {
   const effectiveKey = keyPoolManager.getNextKey('gemini', apiKey);
@@ -3279,7 +3268,6 @@ app.post(['/api/fal/generate', '/api/generate', '/api/engine/fal/generate'], asy
 registerVideoGenerateRoutes(app, {
   isProvided,
   forwardUnmappedFields,
-  rejectSchemaEnum,
   normalizeFalEndpoint,
   resolveProviderAuth,
   upstreamFetch,
@@ -3492,8 +3480,11 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
 
         if (!openApi) {
           const upstreamResponded = videoSchemaFetch?.status !== undefined && videoSchemaFetch.status !== null;
+          const statusPart = upstreamResponded
+            ? `HTTP ${videoSchemaFetch?.status}: ${videoSchemaFetch?.body || ''}`.trim()
+            : `Schema 拉取网络错误: ${videoSchemaFetch?.error || '网络不可达'}`;
           return res.status(502).json({
-            error: `Civitai 视频官方 Schema 不可用，未发送生成请求：${videoSchemaFetch?.error || `HTTP ${videoSchemaFetch?.status ?? 'network'}`}`,
+            error: `${statusPart}\n没有发出去：拿不到 Civitai 视频官方 Schema，未发送 workflows`,
             errorSource: videoSchemaFetch?.status === null ? 'network' : videoSchemaFetch?.error ? 'upstream-protocol' : 'upstream',
             ...(upstreamResponded ? { upstreamStatus: videoSchemaFetch?.status } : {}),
             endpoint: CIVITAI_VIDEO_OPENAPI_URL,
@@ -3747,7 +3738,7 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
       }
       const genInput = builtImage.payload;
       submittedImageParameters = genInput;
-      generationContext.getStore()?.traces.push(sanitizeGenerationMetadata({ stage: 'parameter-mapping', provider: 'civitai', beforeCustom: builtImage.beforeCustom, customParameters: builtImage.customParameters, overrides: builtImage.overrides, actualParameters: genInput }));
+      generationContext.getStore()?.traces.push(sanitizeGenerationMetadata({ stage: 'parameter-mapping', provider: 'civitai', requested: requestedParameters, unmappedLoras: builtImage.unmappedLoras, unmappedFields: builtImage.unmappedFields, beforeCustom: builtImage.beforeCustom, customParameters: builtImage.customParameters, overrides: builtImage.overrides, actualParameters: genInput }));
       airModel = String(genInput.diffuserModel ?? genInput.diffusionModel ?? genInput.model);
 
       // POST /v2/consumer/workflows?wait=100 (integer seconds, max 100)
@@ -4523,7 +4514,7 @@ app.post(['/api/tensorart/generate', '/api/engine/tensorart/generate'], async (r
 
     if (!isNumericModelId) {
       return res.status(400).json({
-        error: `Tensor.Art 模型 API 只接受 TAMS 数字模型 ID（收到 ${requestedModelOrTool || '(空)'}）。OpenWorks 模型请在模型中心选择「Tensor.Art OpenWorks」服务商。`,
+        error: `没发出去：TAMS 模型接口需要数字 ID（收到 "${requestedModelOrTool || '(空)'}"）`,
         errorSource: 'local',
         requestedModel: requestedModelOrTool,
       });
@@ -4555,11 +4546,6 @@ app.post(['/api/tensorart/generate', '/api/engine/tensorart/generate'], async (r
         requestedModel: modelId,
       });
     }
-    const checkpoint = (await metadata.json()).model;
-    if (checkpoint?.modelType && checkpoint.modelType !== 'CHECKPOINT') {
-      return res.status(400).json({ error: '所选模型不是 CHECKPOINT，不能作为底模', model: checkpoint });
-    }
-
     // Submit job
     const submitted = await upstreamFetch(
       { provider: 'tensorart', route: req.path, model: modelId, key: tamsKey },
@@ -4716,12 +4702,7 @@ app.post(['/api/huggingface/generate', '/api/engine/huggingface/generate'], asyn
     if (isZImage) {
       // H2: 🌟 Direct integration with verified official Tongyi-MAI/Z-Image-Turbo Gradio Space on Hugging Face (Public Space)
       if (forwardUnmappedFields(res, 'Hugging Face Z-Image Space', req.body, ['width', 'height', 'sampler_name', 'scheduler'])) return;
-      let gradioPayload;
-      try {
-        gradioPayload = buildZImagePayload(req.body);
-      } catch (error: any) {
-        return res.status(400).json({error: error.message});
-      }
+      const gradioPayload = buildZImagePayload(req.body);
       const zActual = gradioPayload.actualParameters as Record<string, any>;
       sentSeed = zActual.random_seed || zActual.seed === -1 ? null : zActual.seed;
       sentSteps = zActual.steps;

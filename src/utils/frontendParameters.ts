@@ -72,7 +72,6 @@ export function spatialRequestParameters(frame: SpatialFrame): NormalizedGenerat
   const p = frame.params;
   if (p.executionBlockedReason) throw new Error(p.executionBlockedReason);
   if (p.sourceLoraAir) throw new Error('来源 LoRA 执行链尚未接入；请保留此历史档案，创建新的显式生成分支');
-  if (p.unresolvedModel) throw new Error(`底模 ${p.checkpoint || '未指定'} 尚未核实，请重新选择已核实资源`);
   if (p.requireReferenceImage && !frame.referenceImageUrl?.trim()) throw new Error('编辑输入需要明确参考图，请选择或上传参考图');
   const provider = p.targetProvider === 'video' ? p.videoProvider : p.targetProvider;
   if (!provider || provider === 'video') throw new Error('请选择实际视频服务商 videoProvider；不会从模型名称猜测');

@@ -9,9 +9,12 @@ describe('official Z-Image Space contract', () => {
     expect(fieldOptions('huggingface', 'Tongyi-MAI/Z-Image-Turbo', 'resolution').map(v => v.value)).toEqual(Z_IMAGE_RESOLUTIONS);
     expect(buildZImagePayload(input).data).toEqual(['test', '1152x896 ( 9:7 )', 42, 8, 3, false, []]);
   });
-  it.each(['resolution', 'seed', 'steps', 'shift', 'random_seed', 'gallery_images'])('rejects missing %s without injecting a default', (field) => {
+  it.each(['resolution', 'seed', 'steps', 'shift', 'random_seed', 'gallery_images'])('preserves position and sends null for missing %s without local throw or injecting defaults', (field) => {
     const incomplete: Record<string, unknown> = {...input}; delete incomplete[field];
-    expect(() => buildZImagePayload(incomplete)).toThrow(field);
+    const built = buildZImagePayload(incomplete);
+    expect(built.data).toHaveLength(7);
+    const idx = ['prompt', 'resolution', 'seed', 'steps', 'shift', 'random_seed', 'gallery_images'].indexOf(field);
+    expect(built.data[idx]).toBeNull();
   });
   it.each([{seed: -2}, {seed: Number.MAX_SAFE_INTEGER + 1}, {steps: 101}, {steps: 1.5}, {shift: 0}, {resolution: '960x1440 ( 2:3 )'}])('sends out-of-range / off-list value %j unchanged (no local pre-block)', (v) => {
     const built = buildZImagePayload({...input, ...v});

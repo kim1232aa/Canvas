@@ -55,7 +55,6 @@ export function buildRunwareImageRequest(body: Record<string, unknown>, baseUrl 
   const model = String(body.model || '').trim();
   if (!model) throw new Error('Runware 模型为必填项（model is required）');
   const prompt = String(body.prompt || body.positivePrompt || '').trim();
-  if (!prompt) throw new Error('Runware 提示词为必填项（prompt is required）');
 
   const taskUUID = typeof body.taskUUID === 'string' && body.taskUUID.trim() ? body.taskUUID.trim() : randomUUID();
 

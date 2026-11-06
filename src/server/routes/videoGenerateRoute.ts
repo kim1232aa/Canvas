@@ -27,13 +27,6 @@ export interface VideoGenerateRouteDeps {
     body: any,
     fields: string[],
   ) => boolean;
-  rejectSchemaEnum: (
-    res: ExpressResponse,
-    provider: SchemaProvider,
-    model: string,
-    field: FieldKey,
-    value: unknown,
-  ) => boolean;
   normalizeFalEndpoint: (model: string, isVideo?: boolean) => string;
   resolveProviderAuth: (
     req: Request,
@@ -66,7 +59,6 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
     const {
       isProvided,
       forwardUnmappedFields,
-      rejectSchemaEnum,
       normalizeFalEndpoint,
       resolveProviderAuth,
       upstreamFetch,

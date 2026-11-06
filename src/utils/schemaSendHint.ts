@@ -83,8 +83,7 @@ export function isSchemaDrivenProvider(provider: string | undefined | null): boo
 
 /**
  * Providers whose server scopes the request to the live OpenAPI Input (declared fields only), so send badges and the
- * Schema cache apply. Replicate qualifies (replicateImageContract builds input from declared props) but keeps its own
- * frontend LoRA architecture gate, so it is not in SCHEMA_DRIVEN.
+ * Schema cache apply. Replicate qualifies (replicateImageContract builds input from declared props).
  */
 const SCHEMA_SCOPED_BADGES = new Set([...SCHEMA_DRIVEN, 'replicate']);
 /**

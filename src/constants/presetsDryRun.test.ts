@@ -35,10 +35,15 @@ describe('std presets dry-run (load → extract, no send)', () => {
       const emptyPrompt = !p.nodes.some((n) => String(n.values?.text ?? n.values?.prompt ?? '').trim());
       const hasRecipe = Boolean(PRESET_RECIPE_PROMPTS[p.id]);
       if (hasRecipe === emptyPrompt) issues.push(hasRecipe ? 'recipe prompt not loaded' : 'prompt filled without a recipe');
-      // No recipe → loads empty and extraction must refuse (no fallback prompt).
+      // No recipe → loads empty and extraction succeeds with exactly empty string (no fallback prompt).
       if (!hasRecipe) {
-        try { extractWorkflowParameters(p.nodes as any, p.connections as any, resolveRunTarget(p.nodes as any, p.connections as any, undefined, undefined).id); issues.push('empty prompt was not refused'); }
-        catch (e: any) { if (e.message !== '请填写提示词') issues.push(`empty prompt: ${e.message}`); }
+        try {
+          const testNodes = p.nodes.map((n) => ({ ...n, values: { ...n.values, ...(n.type === 'LoadImage' ? { image_url: 'https://example.com/ref.png' } : {}) } }));
+          const rawExtracted = extractWorkflowParameters(testNodes as any, p.connections as any, resolveRunTarget(testNodes as any, p.connections as any, undefined, undefined).id);
+          if (rawExtracted.positivePrompt !== '') issues.push(`empty prompt got unexpected non-empty content: "${rawExtracted.positivePrompt}"`);
+        } catch (e: any) {
+          issues.push(`empty prompt extraction threw unexpectedly: ${e.message}`);
+        }
       }
       notes.push(`prompt: ${PRESET_RECIPE_PROMPTS[p.id]?.source ?? 'NONE'}`);
       // Simulate only the user-supplied input a preset cannot ship: the I2V reference image.

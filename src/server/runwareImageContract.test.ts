@@ -36,6 +36,14 @@ describe('Runware Image Contract', () => {
     expect(task).not.toHaveProperty('loras');
   });
 
+  it('regression: allows empty prompt and sends it as filled without local throw', () => {
+    const req = buildRunwareImageRequest({
+      model: 'runware:100@1',
+      prompt: '',
+    });
+    expect(req.payload[0].positivePrompt).toBe('');
+  });
+
   it('maps scheduler when provided in request body', () => {
     const req = buildRunwareImageRequest({
       model: 'runware:100@1',
