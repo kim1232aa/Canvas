@@ -112,6 +112,17 @@ describe('ParameterInspector provider registry derivation and selection (mounted
         checkpoint: '',
       }));
     }
+
+    // Explicitly test clicking the empty provider option
+    const emptyButton = buttons.find((b) => b.title === '未选择 (清空服务商)' || b.textContent?.trim() === '未选择 (清空服务商)');
+    expect(emptyButton, 'Explicit empty provider button').toBeDefined();
+    await act(async () => {
+      emptyButton!.click();
+    });
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      targetProvider: '',
+      checkpoint: '',
+    }));
   });
 
   it('keeps unknown / imported targetProvider visible and highlighted in mounted component', async () => {

@@ -868,7 +868,6 @@ export function extractWorkflowParameters(
       traceLorasUpstream(loraConn.fromNodeId, connections, nodeMap, loras, subgraphNodeIds);
     }
   } else if (execNode.type === 'CheckpointLoaderSimple') {
-    isVideo = false;
     checkpointModel = (execNode.values.model || execNode.values.ckpt_name || '').trim();
     checkpointBaseModel = (execNode.values.base_model || execNode.values.baseModel || '').trim() || undefined;
     if (!checkpointModel) {
@@ -876,6 +875,19 @@ export function extractWorkflowParameters(
     }
     targetProvider = (execNode.values.targetProvider || '').trim();
     if (!targetProvider) throw new Error('请选择执行服务商；不会从模型名称猜测引擎');
+    if (targetProvider === 'video') {
+      isVideo = true;
+      videoProvider = (execNode.values.video_provider || execNode.values.videoProvider || '').trim() || undefined;
+      if (!videoProvider) {
+        throw new Error('视频服务商 (Provider) 未设置：请先选择实际视频服务商。不会回退到 Fal。');
+      }
+      videoDuration = numOrUndef(execNode.values.duration ?? execNode.values.videoDuration);
+      videoFps = numOrUndef(execNode.values.fps ?? execNode.values.videoFps);
+      videoFrames = numOrUndef(execNode.values.num_frames ?? execNode.values.videoFrames);
+      videoAspectRatio = strOrUndef(execNode.values.aspect_ratio ?? execNode.values.videoAspectRatio);
+    } else {
+      isVideo = false;
+    }
     width = numOrUndef(execNode.values.width);
     height = numOrUndef(execNode.values.height);
     size = execNode.values.size || undefined;
@@ -924,6 +936,17 @@ export function extractWorkflowParameters(
     }
     targetProvider = (ckpt.values.targetProvider || '').trim();
     if (!targetProvider) throw new Error('请选择执行服务商；不会从模型名称猜测引擎');
+    if (targetProvider === 'video') {
+      isVideo = true;
+      videoProvider = (ckpt.values.video_provider || ckpt.values.videoProvider || '').trim() || undefined;
+      if (!videoProvider) {
+        throw new Error('视频服务商 (Provider) 未设置：请先选择实际视频服务商。不会回退到 Fal。');
+      }
+      videoDuration = numOrUndef(ckpt.values.duration ?? ckpt.values.videoDuration);
+      videoFps = numOrUndef(ckpt.values.fps ?? ckpt.values.videoFps);
+      videoFrames = numOrUndef(ckpt.values.num_frames ?? ckpt.values.videoFrames);
+      videoAspectRatio = strOrUndef(ckpt.values.aspect_ratio ?? ckpt.values.videoAspectRatio);
+    }
     size = ckpt.values.size || undefined;
     quality = ckpt.values.quality || undefined;
     outputFormat = ckpt.values.output_format || ckpt.values.outputFormat || undefined;

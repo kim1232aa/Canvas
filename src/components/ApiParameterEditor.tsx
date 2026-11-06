@@ -40,9 +40,9 @@ export function ApiParameterEditor({provider,model,value,onChange,canvasLoras}:{
     if(scopeRef.current!==scope)return;
     if(!result.ok){
       setSchema(undefined);
-      const rawBody=result.raw !== undefined && result.raw !== ''
+      const rawBody = result.raw !== undefined
         ? result.raw
-        : (result.data ? (typeof result.data === 'string' ? result.data : JSON.stringify(result.data, null, 2)) : `HTTP ${result.status}`);
+        : (result.data ? (typeof result.data === 'string' ? result.data : JSON.stringify(result.data, null, 2)) : '');
       setError({
         endpoint: schemaUrl(),
         upstreamEndpoint: result.data?.endpoint,
@@ -62,9 +62,9 @@ export function ApiParameterEditor({provider,model,value,onChange,canvasLoras}:{
     if(scopeRef.current!==scope)return;
     setSchema(undefined);
     const status = typeof e?.appStatus === 'number' ? e.appStatus : (typeof e?.status === 'number' ? e.status : undefined);
-    const rawBody = (e?.rawBody !== undefined && e?.rawBody !== '')
+    const rawBody = e?.rawBody !== undefined
       ? e.rawBody
-      : (e?.data ? (typeof e.data === 'string' ? e.data : JSON.stringify(e.data, null, 2)) : String(e?.message || e || 'Network Error'));
+      : (e?.data ? (typeof e.data === 'string' ? e.data : JSON.stringify(e.data, null, 2)) : String(e?.stack || e?.message || e || ''));
     const upstreamEndpoint = e?.endpoint || e?.data?.endpoint;
     setError({
       endpoint: schemaUrl(),

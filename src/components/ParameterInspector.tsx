@@ -416,7 +416,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
               {(() => {
                 const widget = NODE_DEFINITIONS.CheckpointLoaderSimple?.widgets?.find((w) => w.name === 'targetProvider');
                 const registered = (widget?.options || []).map((p) => ({ id: p.value, label: p.label }));
-                const list = [...registered];
+                const list = [{ id: '', label: '未选择 (清空服务商)' }, ...registered];
                 if (params.targetProvider && !list.some((p) => p.id === params.targetProvider)) {
                   list.push({ id: params.targetProvider, label: params.targetProvider });
                 }

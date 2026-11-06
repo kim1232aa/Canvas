@@ -144,3 +144,47 @@ In temporary worktree `temp/wt-temp-m26-verify`:
      - Canvas node updated to `AI 视频 (Civitai)` with `allowMatureContent: true` (NSFW default on).
      - Top bar run button synced to `运行: AI 视频 (Civitai)`.
      - Screenshot: `docs/evidence/2026-11-05/parameter-ui/postfix-civitai-video-fields.png`
+  5. **Persistence & Drawer Reopening Verification**:
+     - Closed the parameter drawer via the close button `✕`.
+     - Reopened the drawer via the `参数` button:
+       - Node state persisted the canonical key `video_provider: 'civitai'`.
+       - `readInspectorParameters` read back `v.video_provider || v.videoProvider`.
+       - Parameter Inspector correctly re-mounted with `实际视频服务商` set to `civitai`, preserving Civitai engine, ecosystem, model, and `allowMatureContent` controls.
+     - Screenshot: `docs/evidence/2026-11-05/parameter-ui/postfix-checkpoint-video-civitai-reopen.png`
+  6. **End-to-End Real Click Video Execution & Transparent Error Handling**:
+     - Clicked `运行：保存与预览图像 (Save Image)` top bar run button.
+     - **Key Precheck**: When Civitai API key was unconfigured, the system popped up a transparent toast warning: `未配置密钥: 未配置 Civitai 的密钥` with direct action to API settings (`postfix-checkpoint-video-run-actual.png` initial check).
+     - **Actual Video Request Route**: Upon configuring the Civitai credential in browser local storage and triggering generation, the request routed through `/api/video/generate` with `provider: 'civitai'` rather than an image endpoint.
+     - **Schema Validation & Error Transparency**: Civitai video engine discriminator validation executed against `VideoGenInput` OpenAPI schema. When `engine` or `operation` was unselected, the exact upstream validation error (`【video】HTTP 400: Civitai 官方视频 Schema 要求显式选择 operation；未使用 Schema 默认值`) was surfaced directly on the node and in the top toast/status bar without silent fallbacks, mock data, or error suppression.
+     - Screenshot: `docs/evidence/2026-11-05/parameter-ui/postfix-checkpoint-video-run-actual.png`
+
+---
+
+## 6. Comprehensive Verification Matrix
+
+### 6.1 Test Suites Passing
+- `src/components/ApiParameterEditor.test.tsx`: 6 passed
+- `src/components/ParameterInspector.test.tsx`: 6 passed
+- `src/utils/inspectorVideoRouting.test.ts`: 6 passed
+- `src/integration/parameterInspectorVideoRoute.test.tsx`: 1 passed
+- `src/utils/graphEngine.test.ts`: 66 passed
+- `src/utils/inspectorParameters.test.ts`: 6 passed
+
+Total targeted suite tests: 91 passed.
+
+### 6.2 Architectural Alignment with Tower Directives
+- **Canonical Key Persistence**:
+  - `patchInspectorNode` persists video provider selection into `video_provider` (snake_case canonical key) while preserving backwards compatibility.
+  - `readInspectorParameters` reads from both `v.video_provider` and `v.videoProvider`.
+- **Extraction in Graph Engine**:
+  - `extractWorkflowParameters` inspects `targetProvider === 'video'` on `CheckpointLoaderSimple` and `KSampler`, setting `isVideo: true` and extracting `videoProvider`.
+- **Zero Artificial Gates on Output Nodes**:
+  - In alignment with Tower guidance and existing architecture, `SaveImage` nodes contain no artificial error gates or artificial blockades for video outputs; `NodeItem.tsx` natively handles video outputs when `outputData` contains mp4/video media.
+- **Strict Anti-Black-Box Principles**:
+  - Zero diagnosis synthesis; non-2xx responses and network failures in `ApiParameterEditor` render verbatim original endpoints, upstream endpoints, HTTP status codes, and raw bodies in untruncated scrollable monospace alerts.
+  - User-entered custom parameters are never wiped on failed schema lookups.
+  - CheckpointLoaderSimple and AIVideoNode provider dropdowns dynamically align with the single source of truth in `NODE_DEFINITIONS`.
+
+### 6.3 Cleanup Verification
+- Temporary worktree `temp/wt-temp-m26-verify` completely purged via `git worktree remove --force` and `git worktree prune`.
+- Background development server and headless Chromium instances cleanly terminated post-acceptance.

@@ -3,12 +3,12 @@ import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiParameterEditor } from './ApiParameterEditor';
-import { clearSharedGet, sharedGetJson } from '../services/sharedGet';
+import { clearSharedGet, sharedGetJson, peekSharedGet } from '../services/sharedGet';
 import { schemaRequestFor } from '../services/userModelSelection';
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
-const flush = async () => act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)); });
+const flush = async () => act(async () => { await new Promise((resolve) => setTimeout(resolve, 15)); });
 
 describe('ApiParameterEditor schema error display & state regression tests', () => {
   let host: HTMLDivElement;
@@ -63,6 +63,61 @@ describe('ApiParameterEditor schema error display & state regression tests', () 
     expect(alert?.querySelector('pre')?.className).toContain('overflow-auto');
     expect(alert?.querySelector('pre')?.className).toContain('break-all');
     expect(alert?.className).toContain('font-mono');
+  });
+
+  it('renders resolved non-2xx response via sharedGetJson fetchImpl explicitly without relying on thrown ApiTraceError', async () => {
+    const provider = 'fal';
+    const model = 'resolved-non-2xx-model';
+    const { url, headers } = schemaRequestFor(provider, model);
+    const rawResponse = '{"error":"Not Found","endpoint":"https://api.fal.ai/models/not-found"}';
+
+    // fetchImpl bypasses tracedFetch and returns a non-throwing Response
+    const fetchImpl = vi.fn().mockResolvedValue(new Response(rawResponse, {
+      status: 404,
+      headers: { 'content-type': 'application/json' },
+    }));
+
+    const result = await sharedGetJson(url, headers, { fetchImpl });
+    expect(result.ok).toBe(false);
+    expect(result.status).toBe(404);
+    expect(result.raw).toBe(rawResponse);
+
+    await act(async () => {
+      root.render(<ApiParameterEditor provider={provider} model={model} onChange={vi.fn()} />);
+    });
+    await flush();
+
+    const alert = host.querySelector('[role="alert"][aria-label="Schema 请求失败"]');
+    expect(alert).not.toBeNull();
+    expect(alert?.textContent).toContain('404');
+    expect(alert?.textContent).toContain(url);
+    expect(alert?.textContent).toContain('https://api.fal.ai/models/not-found');
+    expect(alert?.querySelector('pre')?.textContent).toBe(rawResponse);
+  });
+
+  it('preserves empty raw body verbatim without synthesizing replacement diagnosis text', async () => {
+    const provider = 'fal';
+    const model = 'empty-body-404-model';
+    const { url, headers } = schemaRequestFor(provider, model);
+
+    const fetchImpl = vi.fn().mockResolvedValue(new Response('', {
+      status: 404,
+    }));
+
+    const result = await sharedGetJson(url, headers, { fetchImpl });
+    expect(result.ok).toBe(false);
+    expect(result.raw).toBe('');
+
+    await act(async () => {
+      root.render(<ApiParameterEditor provider={provider} model={model} onChange={vi.fn()} />);
+    });
+    await flush();
+
+    const alert = host.querySelector('[role="alert"][aria-label="Schema 请求失败"]');
+    expect(alert).not.toBeNull();
+    expect(alert?.textContent).toContain('404');
+    expect(alert?.querySelector('pre')?.textContent).toBe('');
+    expect(alert?.textContent).not.toContain('HTTP 404'); // no fake synthesis in pre
   });
 
   it('renders non-2xx non-JSON response (e.g. 502 HTML) verbatim without truncation or fallback diagnosis', async () => {
@@ -164,6 +219,70 @@ describe('ApiParameterEditor schema error display & state regression tests', () 
     expect(host.querySelector('[role="alert"]')).toBeNull();
     // Zero extra GETs issued on mount/prop-change
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not allow pending in-flight response from a stale scope to leak into a new selection', async () => {
+    const provider = 'fal';
+    const slowModel = 'slow-model';
+    const fastModel = 'fast-model';
+    const slowReq = schemaRequestFor(provider, slowModel);
+
+    let resolveSlowFetch: (r: Response) => void;
+    const slowPromise = new Promise<Response>((res) => { resolveSlowFetch = res; });
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      return url.includes(slowModel) ? slowPromise : Promise.resolve(new Response(JSON.stringify({ inputSchema: { properties: {} } }), { status: 200 }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    // Start slow request
+    const slowShared = sharedGetJson(slowReq.url, slowReq.headers);
+
+    // Mount editor with slow model while it is still in flight
+    await act(async () => {
+      root.render(<ApiParameterEditor provider={provider} model={slowModel} onChange={vi.fn()} />);
+    });
+    expect(host.querySelector('[role="alert"]')).toBeNull();
+
+    // User switches to fast model before slow settles
+    await act(async () => {
+      root.render(<ApiParameterEditor provider={provider} model={fastModel} onChange={vi.fn()} />);
+    });
+
+    // Now slow response settles with error
+    resolveSlowFetch!(new Response('{"error":"Slow failure"}', { status: 500 }));
+    await slowShared.catch(() => {});
+    await flush();
+
+    // Alert for slowModel must NOT be rendered because current scope is fastModel
+    expect(host.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it('preserves same-action sibling and remount deduplication (0 extra GETs)', async () => {
+    const provider = 'fal';
+    const model = 'dedupe-model';
+    const req = schemaRequestFor(provider, model);
+
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ inputSchema: { properties: { prompt: { type: 'string' } } } }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await sharedGetJson(req.url, req.headers);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // Mount first instance
+    await act(async () => {
+      root.render(<ApiParameterEditor provider={provider} model={model} onChange={vi.fn()} />);
+    });
+    await flush();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // Remount / second instance
+    await act(async () => {
+      root.unmount();
+      root = createRoot(host);
+      root.render(<ApiParameterEditor provider={provider} model={model} onChange={vi.fn()} />);
+    });
+    await flush();
+    expect(fetchMock).toHaveBeenCalledTimes(1); // Still exactly 1 GET
   });
 
   it('does not erase user-entered custom parameters when Schema lookup fails', async () => {
