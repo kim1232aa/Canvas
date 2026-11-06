@@ -53,6 +53,9 @@ const HAS_LORA = new Set([
   'tensorart',
   'wavespeed',
   'modelslab',
+  'replicate',
+  'runware',
+  'novita',
   'modelscope',
   'modelscope_ai',
   'huggingface',
@@ -67,6 +70,9 @@ const PREFILLED_LORA: Record<string, Array<[string, number]>> = {
   wavespeed: [['https://civitai.com/api/download/models/3129219', 1]],
   tensorart: [['1015214543296590260', 1], ['1029661490430387503', 1], ['1015863436619315552', 1]],
   modelslab: [['xl-realistic-cake-art-sty', 0.45]],
+  replicate: [['renderartist/coloringbookflux', 1]],
+  runware: [['civitai:2675439@3129219', 0.8]],
+  novita: [['more_details_59655', 0.8]],
   modelscope: [['hf/renderartist-Technically-Color-Z-Image-Turbo', 0.9]],
   huggingface: [['renderartist/Technically-Color-Z-Image-Turbo', 0.9]],
   aimlapi: [['https://huggingface.co/renderartist/Technically-Color-Z-Image-Turbo/resolve/main/Technically_Color_Z_Image_Turbo_v1_renderartist_2000.safetensors', 0.9]],
@@ -172,7 +178,7 @@ describe('standard workflow presets (23 T2I + 5 T2V + 6 I2V)', () => {
       fal: 'fal-ai/wan-i2v-lora',
       wavespeed: 'wavespeed-ai/wan-2.1/i2v-480p-lora',
       civitai: 'urn:air:wanvideo-22-i2v-a14b:checkpoint:civitai:1817671@2114157',
-      novita: 'img2video',
+      novita: 'SVD-XT',
       muapi: 'wan2.1-lora-i2v',
       replicate: 'wan-video/wan2.1-with-lora',
     };
@@ -610,7 +616,6 @@ describe('standard workflow presets (23 T2I + 5 T2V + 6 I2V)', () => {
     const filled: Record<string, string> = {
       muapi: 'krea-v2-turbo-lora',
       aimlapi: 'alibaba/z-image-turbo-lora',
-      novita: 'sd_xl_base_1.0.safetensors',
       venice: 'venice-sd35',
       modelslab: 'tamarin-xl-v1',
       gemini: 'gemini-3.1-flash-image',
@@ -619,6 +624,12 @@ describe('standard workflow presets (23 T2I + 5 T2V + 6 I2V)', () => {
       const p = preset(prov === 'gemini' ? 'std-gemini-t2i' : `std-${prov}-t2i`);
       expect(presetSummary(p).model, prov).toBe(model);
     }
+  });
+
+  it('Novita T2I provides LoRA-capable workflow without hardcoded legacy SDXL/SD1.5 base', () => {
+    const p = preset('std-novita-t2i');
+    expect(loader(p.id)!.values.ckpt_name).toBe('');
+    expect(lora(p.id)!.values.lora_name).toBe('more_details_59655');
   });
 
   it('ModelScope CN/intl presets mount accepted LoRAs and omit sampler/scheduler shells', () => {
@@ -678,16 +689,24 @@ describe('standard workflow presets (23 T2I + 5 T2V + 6 I2V)', () => {
     expect(preset('std-deepinfra-t2i').nodes.find(n => n.type === 'EmptyLatentImage')!.values.width).toBe(1024);
   });
 
-  it('Replicate minimax/image-01 omits EmptyLatent pixels; aspect_ratio 1:1 on checkpoint', () => {
+  it('Replicate flux-dev-lora omits EmptyLatent pixels; aspect_ratio 1:1 on checkpoint', () => {
     const p = preset('std-replicate-t2i');
     const ckpt = loader(p.id)!;
-    expect(ckpt.values.ckpt_name).toBe('minimax/image-01');
+    expect(ckpt.values.ckpt_name).toBe('black-forest-labs/flux-dev-lora');
     expect(ckpt.values.aspect_ratio).toBe('1:1');
     const lat = p.nodes.find(n => n.type === 'EmptyLatentImage')!;
     expect(lat.values.width).toBeUndefined();
     expect(lat.values.height).toBeUndefined();
     expect(p.spatialFrames![0].params.aspectRatio).toBe('1:1');
     expect(p.spatialFrames![0].params.width).toBeUndefined();
+    expect(lora(p.id)!.values.lora_name).toBe('renderartist/coloringbookflux');
+  });
+
+  it('Runware mounts LoRA node with air civitai:2675439@3129219', () => {
+    const p = preset('std-runware-t2i');
+    expect(loader(p.id)!.values.ckpt_name).toBe('runware:101@1');
+    expect(lora(p.id)!.values.lora_name).toBe('civitai:2675439@3129219');
+    expect(p.nodes.some(n => n.type === 'LoRALoader')).toBe(true);
   });
 
   it('NanoGPT moss-image sets steps 50, cfg 3, seed 42, resolution 1024x1024 on checkpoint', () => {

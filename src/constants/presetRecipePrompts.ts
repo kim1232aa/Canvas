@@ -43,6 +43,15 @@ export const PRESET_RECIPE_PROMPTS: Record<string, RecipePrompt> = {
     "negative": "watermark,copyrights",
     "source": "https://civitai.red/images/142361732"
   },
+  "std-runware-t2i": {
+    "prompt": "extreme overhead fisheye perspective of a cyberpunk girl, oversized bright blue eye looking up, dark blue braided hair, complex white mechanical headset with exposed colorful wires, chartreuse shirt, tilted white building, solid blue sky, bold ink outlines, flat vibrant colors, comic illustration",
+    "negative": "watermark,copyrights",
+    "source": "https://civitai.red/images/142361732"
+  },
+  "std-replicate-t2i": {
+    "prompt": "c0l0ringb00k coloring book page, simple cute dragon, white background",
+    "source": "https://civitai.red/images/31247708"
+  },
   "std-civitai-i2v": {
     "prompt": "summer",
     "source": "https://civitai.red/images/111400580"

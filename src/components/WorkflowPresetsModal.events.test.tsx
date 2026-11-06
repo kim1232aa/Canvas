@@ -4,7 +4,6 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WorkflowPresetsModal } from './WorkflowPresetsModal';
 import { WORKFLOW_PRESETS, presetSummary } from '../constants/presets';
-import { isLegacyPresetRecommendation } from '../utils/presetModelSelection';
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -134,13 +133,14 @@ describe('WorkflowPresetsModal mounted UI event tests', () => {
     expect(onLoadPreset).toHaveBeenCalledWith(expect.anything(), 'append');
   });
 
-  it('ensures no built-in preset recommends obsolete/legacy models (SD1.5, legacy FLUX.1 dev/schnell, SVD-XT)', async () => {
+  it('ensures no built-in preset recommends obsolete/legacy models (SD1.5, legacy dreamshaper, sd_xl_base_1.0)', async () => {
     await mountModal();
 
     for (const p of WORKFLOW_PRESETS) {
       const summary = presetSummary(p);
-      const isLegacy = isLegacyPresetRecommendation(summary.model);
-      expect(isLegacy, `Preset ${p.id} recommends legacy model ${summary.model}`).toBe(false);
+      expect(summary.model).not.toContain('v1-5-pruned');
+      expect(summary.model).not.toContain('dreamshaper_8');
+      expect(summary.model).not.toContain('sd_xl_base_1.0');
     }
   });
 

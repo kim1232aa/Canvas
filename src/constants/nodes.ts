@@ -57,6 +57,10 @@ export const BASE_MODELS: BaseModelOption[] = [
   // ===================== FAL.AI =====================
   { label: '⚡ [Fal] Krea 2 Turbo LoRA (fal-ai/krea-2/turbo/lora)', value: 'fal-ai/krea-2/turbo/lora', provider: 'fal', category: 'checkpoint' },
   { label: '⚡ [Fal] Kling V3 Standard (fal-ai/kling-video/v3/standard/image-to-video)', value: 'fal-ai/kling-video/v3/standard/image-to-video', provider: 'fal', category: 'video' },
+  { label: '⚡ [Fal] FLUX.1 Schnell (fal-ai/flux/schnell)', value: 'fal-ai/flux/schnell', provider: 'fal', category: 'checkpoint' },
+  { label: '⚡ [Fal] FLUX.1 [dev] (fal-ai/flux/dev)', value: 'fal-ai/flux/dev', provider: 'fal', category: 'checkpoint' },
+  { label: '⚡ [Fal] Fast SDXL (fal-ai/fast-sdxl)', value: 'fal-ai/fast-sdxl', provider: 'fal', category: 'checkpoint' },
+  { label: '⚡ [Fal] Wan 2.1 Video (fal-ai/wan-t2v)', value: 'fal-ai/wan-t2v', provider: 'fal', category: 'video' },
 
   // ===================== CIVITAI =====================
   { label: '🌟 [Civitai] Krea 2 Turbo 原生极速 (urn:air:krea2:checkpoint:civitai:2726029@3091481)', value: 'urn:air:krea2:checkpoint:civitai:2726029@3091481', provider: 'civitai', category: 'checkpoint' },
@@ -66,6 +70,7 @@ export const BASE_MODELS: BaseModelOption[] = [
   // ===================== GOOGLE / NANOGPT =====================
   { label: '🟢 [NanoGPT] MOSS Image (moss-image)', value: 'moss-image', provider: 'nanogpt', category: 'checkpoint' },
   { label: '🟢 [NanoGPT] Qwen Image 2512 (qwen-image-2512)', value: 'qwen-image-2512', provider: 'nanogpt', category: 'checkpoint' },
+  { label: '🟢 [NanoGPT] FLUX.1 Schnell (flux-schnell)', value: 'flux-schnell', provider: 'nanogpt', category: 'checkpoint' },
 
   // ===================== OPENAI / GROK 兼容中转 =====================
   { label: '🔁 [OpenAI 兼容中转] GPT Image 2 (gpt-image-2)', value: 'gpt-image-2', provider: 'openai_compat', category: 'checkpoint' },

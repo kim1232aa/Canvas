@@ -526,17 +526,17 @@ const I2V_SPECS: I2vSpec[] = [
     ],
     source: 'https://developer.civitai.com/orchestration/recipes/wan.md',
   },
-  // Novita img2video SDK model: official Python SDK image-to-video endpoint.
+  // Novita img2video SVD-XT: official Python SDK examples/img2video.py (model_name="SVD-XT"), docs/provider-schema-drafts/novita.json, src/config/providerDeclarations/novita.img2video.json enum ["SVD-XT", "SVD"].
   {
     provider: 'novita',
-    model: 'img2video',
+    model: 'SVD-XT',
     num_frames: 25,
     fps: 6,
     schemaProperties: [
       'model_name', 'image_file', 'frames_num', 'frames_per_second', 'seed',
       'image_file_resize_mode', 'steps', 'motion_bucket_id', 'cond_aug',
     ],
-    source: 'https://github.com/novitalabs/python-sdk examples/img2video + docs/provider-schema-drafts/novita.json',
+    source: 'https://github.com/novitalabs/python-sdk/blob/main/examples/img2video.py + src/config/providerDeclarations/novita.img2video.json',
   },
   // Recipe https://civitai.red/images/84050423 → MuAPI same-family wan2.1-lora-i2v (openapi.json WanLoRAI2VRequest: lora_list[LoraItem{path,scale}], duration 5|10, resolution).
   {
@@ -1048,9 +1048,24 @@ const STD_SPECS: StdSpec[] = [
   { provider: 'aimlapi', ckpt: 'alibaba/z-image-turbo-lora', hasLora: true, hasNegative: false, seed: 1840591390, steps: 12, cfg: 1, width: 1216, height: 832,
     loras: [{ name: 'https://huggingface.co/renderartist/Technically-Color-Z-Image-Turbo/resolve/main/Technically_Color_Z_Image_Turbo_v1_renderartist_2000.safetensors', strength: 0.9, source: 'https://civitai.red/images/113739497' }],
     omit: ['sampler', 'scheduler', 'denoise'] },
-  // Novita: Updated from legacy SD1.5 (dreamshaper_8) to SDXL Base 1.0 (sd_xl_base_1.0.safetensors, live catalog 2026-11-06).
-  { provider: 'novita', ckpt: 'sd_xl_base_1.0.safetensors', hasLora: false, hasNegative: true, seed: 548949743, steps: 20, cfg: 7, sampler: 'Euler a', width: 1024, height: 1024,
-    omit: ['scheduler', 'denoise'] },
+  // Novita: 保持完整文生图 + LoRA 拓扑，底模留空供用户选择或配合模型库选择，不硬编码老旧 SDXL 1.0 / SD1.5。
+  // Novita API 官方支持 request.loras[{model_name, strength}]。
+  {
+    provider: 'novita',
+    ckpt: '',
+    hasLora: true,
+    hasNegative: true,
+    seed: 548949743,
+    steps: 20,
+    cfg: 7,
+    sampler: 'Euler a',
+    width: 1024,
+    height: 1024,
+    loras: [
+      { name: 'more_details_59655', strength: 0.8, source: 'civitai:59655' },
+    ],
+    omit: ['scheduler', 'denoise'],
+  },
   // docs/evidence/venice-api-2026-10-15.md:51/54: catalog 200 lists venice-sd35; seed/steps/cfg_scale/size/negative sent; no custom loras.
   { provider: 'venice', ckpt: 'venice-sd35', hasLora: false, steps: 20, cfg: 7.5, omit: ['sampler', 'scheduler', 'denoise'] },
   // DeepInfra live text-to-image catalog: FLUX-2-klein-9b (verified 2026-11-06).
@@ -1062,13 +1077,22 @@ const STD_SPECS: StdSpec[] = [
   { provider: 'sogni', ckpt: 'krea-2-turbo', hasLora: true, seed: 64107730, steps: 10, cfg: 1, sampler: 'euler', width: 768, height: 1376,
     loras: [{ name: 'krea2-fever-dream-mood', strength: 1, source: 'https://civitai.red/images/142361732' }],
     omit: ['scheduler', 'denoise'] },
-  // Replicate live catalog: MiniMax Image-01 (minimax/image-01, verified 2026-11-06).
-  { provider: 'replicate', ckpt: 'minimax/image-01', hasLora: false, hasNegative: false,
-    omit: ['steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'width', 'height'],
+  // Live OpenAPI GET /v1/models/black-forest-labs/flux-dev-lora + default_example: lora_weights=fofr/flux-80s-cyberpunk, lora_scale=1, guidance=3, steps=28.
+  // Official docs example also cites fofr/flux-pixar-cars; default_example LoRA is the acceptance recipe id.
+  // Recipe https://civitai.red/images/31247708 (verbatim seed/steps/cfg/LoRA; size 1216x832 not a field on flux-dev-lora → aspect_ratio stays).
+  { provider: 'replicate', ckpt: 'black-forest-labs/flux-dev-lora', hasLora: true, hasNegative: false, seed: 2100162238, steps: 41, cfg: 3.5,
+    // providerSchema + draft: aspect_ratio (+ megapixels); width/height unsupported on flux-dev-lora.
+    omit: ['sampler', 'scheduler', 'denoise', 'width', 'height'],
     checkpointExtra: { aspect_ratio: '1:1' },
+    loras: [{ name: 'renderartist/coloringbookflux', strength: 1, source: 'https://civitai.red/images/31247708' }],
   },
-  // Runware live catalog: Flux Kontext Dev (runware:106@1, verified 2026-11-06).
-  { provider: 'runware', ckpt: 'runware:106@1', hasLora: false, steps: 20, cfg: 3.5, omit: ['sampler', 'scheduler', 'denoise'] },
+  // Runware: 官方文生图 + LoRA 完整拓扑 (https://runware.ai/docs/models/bfl-flux-2-klein-9b-base & runware:101@1 FLUX.1 Dev)
+  // Runware LoRA: { model: 'civitai:2675439@3129219', weight: 0.8 } (AIR or civitai ID)
+  // Recipe https://civitai.red/images/142361732
+  { provider: 'runware', ckpt: 'runware:101@1', hasLora: true, hasNegative: false, steps: 25, cfg: 3.5,
+    omit: ['sampler', 'scheduler', 'denoise'],
+    loras: [{ name: 'civitai:2675439@3129219', strength: 0.8, source: 'https://civitai.red/images/142361732' }],
+  },
   // docs.modelslab.com/.../dreambooth-lora body example: model_id tamarin-xl-v1 + lora_model xl-realistic-cake-art-sty @ 0.45.
   // Tamarin XL V1 (civitai.com/models/235746?modelVersionId=265836) is SDXL 1.0 architecture; native resolution is 1024x1024.
   // Corrected from 512x512 to native SDXL 1024x1024 (modelslab.com/models/modelslab/tamarin-xl-v1).
