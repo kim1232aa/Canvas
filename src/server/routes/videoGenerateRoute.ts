@@ -350,7 +350,7 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
       if (auth.error) return res.status(400).json({ error: auth.error });
       const { apiKey: agnesKey, baseUrl: agnesBaseUrl } = auth;
       const startTime = Date.now();
-      if (forwardUnmappedFields(res, 'Agnes AI Video', req.body, ['negative_prompt', 'steps', 'cfg', 'guidance_scale', 'loras', 'resolution'])) return;
+      if (forwardUnmappedFields(res, 'Agnes AI Video', req.body, ['negative_prompt', 'steps', 'cfg', 'guidance_scale', 'loras', 'resolution', 'width', 'height', 'sampler_name', 'scheduler', 'denoise'])) return;
 
       let builtAgnes;
       try { builtAgnes = buildAgnesVideoRequest(model, req.body); }
@@ -645,6 +645,8 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
     if (!endpoint) {
       return res.status(400).json({ error: `不认识这个模型: ${model}` });
     }
+
+    if (forwardUnmappedFields(res, 'Fal Video', req.body, ['width', 'height', 'sampler_name', 'scheduler', 'denoise'])) return;
 
     let liveProps: Record<string, unknown> | undefined;
     let schemaFetch: FalSchemaFetchFailure | undefined;

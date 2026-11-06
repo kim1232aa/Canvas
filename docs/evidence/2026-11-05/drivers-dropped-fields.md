@@ -130,9 +130,10 @@
 - **A/B 类判定**：**B 类**。此拦截因用户仅提供 `clipStrength` 而拒绝发送。按照项目最高准则，不应在本地拦截；同时严禁将 `clipStrength` 冒充为模型强度编造数据。当仅有 `clipStrength` 时，出站请求中 `scale` 应如实为 `undefined`，请求正常发往 `/api/fal/generate`，由服务端与上游裁决。
 - **修改处理**：
   1. 删除 `throw` 分支，`FalDriver.ts` 的 `loras.map` 保留原 `clipStrength: l.clipStrength`；
-  2. 服务端 `server.ts:3174-3192` 扩充：在 `requestedParameters` 中保留原 `clipStrength`；
-  3. 若 Fal live OpenAPI 不支持 CLIP 字段，在元数据中将 `clipStrength` 标注为未映射/未发送（`unmappedLoraFields`），严禁在出站 wire 上伪造 `scale` 或新增本地 throw；
-  4. 新建专用验证套件 `src/server/falLoraPreservation.test.ts`。
+  2. 提取公共核心映射函数 `mapFalServerLoras`，由生产环境 `server.ts:3180` 与测试 `falLoraPreservation.test.ts` 共同调用，杜绝测试中复制副本的假绿；
+  3. 服务端 `server.ts:3174-3192` 在 `requestedParameters` 中保留原 `clipStrength`；
+  4. 若 Fal live OpenAPI 不支持 CLIP 字段，在元数据中将 `clipStrength` 标注为未映射/未发送（`unmappedLoraFields`），严禁在出站 wire 上伪造 `scale` 或新增本地 throw；
+  5. 专用验证套件 `src/server/falLoraPreservation.test.ts` 直接导入并执行生产函数 `mapFalServerLoras`。
 - **旧断言与新断言对比 (`FalDriver.test.ts:12-22`, `src/server/falLoraPreservation.test.ts:40-100`)**：
   - 旧断言（守护本地拦截）：
     ```typescript
@@ -152,21 +153,26 @@
     expect(wireLoras[0]).not.toHaveProperty('scale');
     expect(unmappedLoraFields[0]).toMatchObject({ field: 'clipStrength', value: 0.7 });
     ```
-- **突变检查结果**：
-  - 突变：恢复 `if (scale == null && l.clipStrength != null) throw new Error('mutation check: Fal throw');`。
-  - 真实输出：`FAIL src/engines/drivers/FalDriver.test.ts > FalDriver LoRA 校验与错误处理 > preserves clip-only LoRA without local throw; does not fabricate scale and lets server/upstream decide` (Error: mutation check: Fal throw，exit code 1)。
-  - 恢复后：5 passed (5)，耗时 0.21s，绿色通过。
+- **真实突变检查结果 (对生产映射函数执行)**：
+  - 突变 1 (伪造 scale：`raw = l.scale ?? l.strength ?? l.modelStrength ?? l.clipStrength`)：
+    `FAIL src/server/falLoraPreservation.test.ts` (AssertionError: expected { path: '...', scale: 0.7 } to deeply equal { path: '...' }, exit code 1)。
+  - 突变 2 (丢弃 `unmappedLoraFields` 记录)：
+    `FAIL src/server/falLoraPreservation.test.ts` (AssertionError: expected [] to have a length of 2 but got +0, exit code 1)。
+  - 突变 3 (添加 clip-only 本地拦截：`if (raw === undefined && l.clipStrength !== undefined) throw new Error(...)`)：
+    `FAIL src/server/falLoraPreservation.test.ts` (Error: mutation check: clip-only throw, exit code 1)。
+  - 恢复后：4 passed (4)，耗时 1.35s，全绿通过。
 
 ---
 
 ## 四、服务端路由字段透传修复与回归 (`videoGenerateRoute.ts`)
 
 ### 1. 修复明细
-- **文件**：`src/server/routes/videoGenerateRoute.ts:179, 360, 494`
+- **文件**：`src/server/routes/videoGenerateRoute.ts:179, 360, 494, 656`
 - **修复措施**：
   - 行 179 (NanoGPT)：将 `['loras', 'width', 'height', 'sampler_name', 'scheduler', 'denoise']` 纳入 `forwardUnmappedFields`，并兼容接收 `steps`/`num_inference_steps` 与 `cfg`/`cfg_scale`。
-  - 行 360 (Agnes)：将 `['negative_prompt', 'steps', 'cfg', 'guidance_scale', 'loras', 'resolution']` 纳入 `forwardUnmappedFields`，使顶层 `resolution` 顺利进入 `custom_parameters` 并与 `size` 一并送达。
+  - 行 360 (Agnes)：将 `['negative_prompt', 'steps', 'cfg', 'guidance_scale', 'loras', 'resolution', 'width', 'height', 'sampler_name', 'scheduler', 'denoise']` 纳入 `forwardUnmappedFields`，使顶层 `resolution` 与平面维度参数顺利进入 `custom_parameters` 并送达。
   - 行 494 (GrokCompat)：将 `['seed', 'negative_prompt', 'steps', 'cfg', 'guidance_scale', 'loras', 'width', 'height', 'fps', 'num_frames', 'size', 'sampler_name', 'scheduler', 'denoise']` 纳入 `forwardUnmappedFields`。
+  - 行 656 (Fal Video)：将 `['width', 'height', 'sampler_name', 'scheduler', 'denoise']` 纳入 `forwardUnmappedFields`，使 `FalDriver` 发送的平面维度和去噪参数顺利透传至 wire/custom_parameters。
 
 ### 2. 回归测试与突变检查 (`videoGenerateRoute.test.ts:615-700`)
 - **新增回归测试**：`grok_compat: forwards all client-built fields (seed, num_frames, negative_prompt, steps, cfg, loras, width, height, fps) to upstream /videos/generations`。
@@ -270,4 +276,5 @@
     - `duration`: `5`
     - `aspect_ratio`: `"16:9"`
     - `loras`: `[{"name":"cyberpunk-action-v2.safetensors", "strength":0.8, ...}]`
+  - **参数可见性说明**：在前端卡片默认的紧凑折叠视图中，`seed: 4242`、`negative_prompt` 与 `fps: 24` 等细粒度视频参数未直接呈现在卡片顶层裁剪图上，但用户填写的这些字段已在真实出站请求日志 `temp/logs/requests-2026-11-06.jsonl` 及展开的节点技术细节 JSON 中得到 100% 证实与取证。
   - 节点上的错误完全透明回显，绝无静默替换供应商、隐瞒字段丢失或伪造成功的欺骗行为。

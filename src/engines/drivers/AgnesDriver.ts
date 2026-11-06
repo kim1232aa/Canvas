@@ -112,6 +112,7 @@ export class AgnesDriver extends BaseEngineDriver {
       ...(Array.isArray(params.loras) && params.loras.length > 0 ? { loras: params.loras } : {}),
       ...(params.extraParams?.custom_parameters && typeof params.extraParams.custom_parameters === 'object' ? { custom_parameters: params.extraParams.custom_parameters } : {}),
     };
+    const isProvided = (v: any) => v !== undefined && v !== null && v !== '';
     const videoResolution = params.extraParams?.resolution ?? (params as any).resolution;
     const videoSizeField = params.extraParams?.size ?? params.imageSize;
     // 2026-11-06: 不在本地拦截 resolution 与 size 的组合；照发给上游/服务端由其裁决
@@ -130,12 +131,17 @@ export class AgnesDriver extends BaseEngineDriver {
       cfg: params.cfg,
       ...(Array.isArray(params.loras) && params.loras.length > 0 ? { loras: params.loras } : {}),
       size: videoSize,
-      ...(videoResolution !== undefined && videoResolution !== '' ? { resolution: videoResolution } : {}),
+      ...(isProvided(videoResolution) ? { resolution: videoResolution } : {}),
       extraParams: videoSizeSources,
       custom_parameters: params.extraParams?.custom_parameters,
       fps: params.videoFps,
       num_frames: params.videoFrames,
       negative_prompt: params.negative_prompt,
+      ...(isProvided(params.width) ? { width: params.width } : {}),
+      ...(isProvided(params.height) ? { height: params.height } : {}),
+      ...(isProvided(params.sampler_name ?? params.extraParams?.sampler_name) ? { sampler_name: params.sampler_name ?? params.extraParams?.sampler_name } : {}),
+      ...(isProvided(params.scheduler ?? params.extraParams?.scheduler) ? { scheduler: params.scheduler ?? params.extraParams?.scheduler } : {}),
+      ...(isProvided(params.denoise) ? { denoise: params.denoise } : {}),
     } : imageRequestBody;
     const resp = await fetch(isVideo ? '/api/video/generate' : '/api/engine/agnes/generate', {
       method: 'POST',

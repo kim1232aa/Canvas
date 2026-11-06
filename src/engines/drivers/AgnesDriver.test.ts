@@ -60,7 +60,30 @@ it('Agnes video keeps an explicit size over node resolution and sends without lo
   expect(request).toHaveBeenCalledTimes(1);
   const body = JSON.parse(request.mock.calls[0][1].body);
   expect(body.size).toBe('720P');
+  expect(body.resolution).toBe('2K');
   expect(body.extraParams).toMatchObject({ size: '720P', resolution: '2K' });
+});
+
+it('Agnes video forwards width, height, sampler_name, scheduler, denoise (including 0) to /api/video/generate', async () => {
+  const request = vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: 'stop' }), { status: 400 }));
+  globalThis.fetch = request;
+  await expect(new AgnesDriver().generate({
+    model: 'agnes-video-2.5',
+    prompt: 'cat',
+    videoDuration: 5,
+    aspectRatio: '16:9',
+    width: 0,
+    height: 0,
+    sampler_name: 'euler',
+    scheduler: 'normal',
+    denoise: 0,
+  }, {})).rejects.toThrow('stop');
+  const body = JSON.parse(request.mock.calls[0][1].body);
+  expect(body.width).toBe(0);
+  expect(body.height).toBe(0);
+  expect(body.sampler_name).toBe('euler');
+  expect(body.scheduler).toBe('normal');
+  expect(body.denoise).toBe(0);
 });
 
 it('Agnes Image 2.5 sends size/ratio plus every filled canvas field as filled',async()=>{

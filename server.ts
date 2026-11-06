@@ -51,6 +51,7 @@ import {
   normalizeOpenAICompatBaseUrl,
   resolveAgainstBaseOrigin,
 } from './src/engines/compatRelay.ts';
+import { mapFalServerLoras } from './src/engines/drivers/FalDriver.ts';
 import { enrichPoolStatsWithServerBaseUrl } from './src/utils/poolStatsEnrich.ts';
 import { mapSampler, mapScheduler, resolveImportedNegativePrompt, resolveImportedCheckpointRef, resolveRawImportNegativeSamplerScheduler } from './src/utils/civitaiImportMap.ts';
 import { persistRemoteUrlAsDataUrl as persistRemoteUrlAsDataUrlRaw, requireDurableHistoryMediaUrl as requireDurableHistoryMediaUrlRaw } from './src/utils/persistMediaAsDataUrl.ts';
@@ -3160,32 +3161,21 @@ app.post(['/api/fal/generate', '/api/generate', '/api/engine/fal/generate'], asy
 
     const actualModel = endpoint;
 
-    const unmappedLoraFields: Array<{ lora: string; field: string; value: unknown; reason: string }> = [];
+    let unmappedLoraFields: Array<{ lora: string; field: string; value: unknown; reason: string }> = [];
     if (Array.isArray(loras) && loras.length > 0) {
-      // F8: 所选端点不支持 LoRA 时返回「该服务商不支持」
-      // Only a LoRA with no path/url cannot be sent (no Civitai-ID → URL rewriting: would leak the Civitai token).
-      const badLora = loras.find((l: any) => !(l?.path || l?.url));
-      if (badLora) {
-        // V2: no `?? 0.8` strength fallback, no Civitai-ID → download-URL rewriting (would leak the Civitai token to Fal).
-        return res.status(400).json({
-          error: 'LoRA 没有可直接访问的 path/url，无法发送',
-          lora: badLora,
-        });
-      }
-      payload.loras = loras.map((l: any) => {
-        const raw = l.scale ?? l.strength ?? l.modelStrength;
-        const entry: Record<string, any> = { path: l.path || l.url };
-        if (isProvided(raw)) entry.scale = Number(raw);
-        if (isProvided(l.clipStrength)) {
-          unmappedLoraFields.push({
-            lora: l.path || l.url || l.name,
-            field: 'clipStrength',
-            value: l.clipStrength,
-            reason: 'Fal live OpenAPI does not declare CLIP scale/strength property for loras',
+      try {
+        const mapped = mapFalServerLoras(loras);
+        payload.loras = mapped.wireLoras;
+        unmappedLoraFields = mapped.unmappedLoraFields;
+      } catch (err: any) {
+        if (err.badLora) {
+          return res.status(400).json({
+            error: err.message,
+            lora: err.badLora,
           });
         }
-        return entry;
-      });
+        throw err;
+      }
       if (unmappedLoraFields.length > 0) {
         generationContext.getStore()?.traces.push(sanitizeGenerationMetadata({
           stage: 'unmapped-lora-fields',
@@ -6980,7 +6970,9 @@ async function startServer() {
   });
 }
 
-startServer().catch((err) => {
-  console.error('Failed to start server:', err);
-  process.exit(1);
-});
+if (!process.env.VITEST && process.env.NODE_ENV !== 'test') {
+  startServer().catch((err) => {
+    console.error('Failed to start server:', err);
+    process.exit(1);
+  });
+}

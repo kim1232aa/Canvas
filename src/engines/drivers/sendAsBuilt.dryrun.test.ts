@@ -71,18 +71,22 @@ export function checkField(parsed: any, field: string, expected: any): boolean {
         parsed.guidance === expected ||
         parsed.cfg_scale === expected
       );
-    case 'width':
-      return (
-        parsed.width === expected ||
-        parsed.image_size?.width === expected ||
-        (typeof parsed.size === 'string' && parsed.size.includes(String(expected)))
-      );
-    case 'height':
-      return (
-        parsed.height === expected ||
-        parsed.image_size?.height === expected ||
-        (typeof parsed.size === 'string' && parsed.size.includes(String(expected)))
-      );
+    case 'width': {
+      if (parsed.width === expected || parsed.image_size?.width === expected) return true;
+      if (typeof parsed.size === 'string') {
+        const m = parsed.size.match(/^(\d+)x(\d+)$/);
+        if (m && Number(m[1]) === expected) return true;
+      }
+      return false;
+    }
+    case 'height': {
+      if (parsed.height === expected || parsed.image_size?.height === expected) return true;
+      if (typeof parsed.size === 'string') {
+        const m = parsed.size.match(/^(\d+)x(\d+)$/);
+        if (m && Number(m[2]) === expected) return true;
+      }
+      return false;
+    }
     case 'sampler_name':
       return parsed.sampler_name === expected || parsed.sampler === expected;
     case 'scheduler':
@@ -110,8 +114,10 @@ const EXEMPTIONS: Record<string, string[]> = {
 
 const drivers: Array<[string, () => any, string, Record<string, unknown>?]> = [
   ['agnes', () => new AgnesDriver(), 'agnes-model'],
+  ['agnes:video', () => new AgnesDriver(), 'agnes-video-2.5', { targetProvider: 'agnes', isVideo: true, videoDuration: 5 }],
   ['civitai', () => new CivitaiDriver(), 'urn:air:sdxl:checkpoint:civitai:1@2'],
   ['fal', () => new FalDriver(), 'fal-ai/flux/dev'],
+  ['fal:video', () => new FalDriver(), 'fal-ai/wan-t2v', { targetProvider: 'fal', isVideo: true, videoDuration: 5 }],
   ['gemini', () => new GeminiDriver(), 'gemini-2.5-flash-image'],
   ['grok_compat', () => new GrokCompatDriver(), 'grok-imagine-image'],
   ['grok_compat:video', () => new GrokCompatDriver(), 'grok-imagine-video', { isVideo: true, videoDuration: 5 }],
@@ -210,6 +216,16 @@ describe('send-as-built dry run (driver → our server route body)', () => {
     expect(mutatedBody.includes('23')).toBe(true);
     // Structured parse must fail:
     expect(checkField(parsed, 'steps', FILLED.steps)).toBe(false);
+  });
+
+  it('mutation check: substring size: "1832x12160" fails exact structured width/height check while old includes() falsely passed', () => {
+    const fakeBody = { size: '1832x12160' };
+    // Old substring includes would falsely match "832" and "1216":
+    expect(fakeBody.size.includes('832')).toBe(true);
+    expect(fakeBody.size.includes('1216')).toBe(true);
+    // Exact structured check correctly rejects non-matching dimensions:
+    expect(checkField(fakeBody, 'width', FILLED.width)).toBe(false);
+    expect(checkField(fakeBody, 'height', FILLED.height)).toBe(false);
   });
 
   it('write table', () => {

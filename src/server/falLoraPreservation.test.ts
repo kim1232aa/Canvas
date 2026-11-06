@@ -1,37 +1,6 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
-import { FalDriver } from '../engines/drivers/FalDriver';
+import { mapFalServerLoras, FalDriver } from '../engines/drivers/FalDriver';
 import { sanitizeGenerationMetadata } from '../utils/generationMetadata';
-
-const isProvided = (v: any) => v !== undefined && v !== null && v !== '';
-
-/**
- * Server-side Fal LoRA mapping specification (mirrors server.ts:3174-3192):
- * Preserves requested clipStrength in requestedParameters, maps valid scale to wire,
- * marks clipStrength as unmapped if Fal OpenAPI does not declare a CLIP field,
- * and NEVER fabricates a fake scale or throws locally.
- */
-function mapFalLoras(loras: any[]) {
-  const unmappedLoraFields: Array<{ lora: string; field: string; value: unknown; reason: string }> = [];
-  const badLora = loras.find((l: any) => !(l?.path || l?.url));
-  if (badLora) {
-    throw new Error('LoRA 没有可直接访问的 path/url，无法发送');
-  }
-  const wireLoras = loras.map((l: any) => {
-    const raw = l.scale ?? l.strength ?? l.modelStrength;
-    const entry: Record<string, any> = { path: l.path || l.url };
-    if (isProvided(raw)) entry.scale = Number(raw);
-    if (isProvided(l.clipStrength)) {
-      unmappedLoraFields.push({
-        lora: l.path || l.url || l.name,
-        field: 'clipStrength',
-        value: l.clipStrength,
-        reason: 'Fal live OpenAPI does not declare CLIP scale/strength property for loras',
-      });
-    }
-    return entry;
-  });
-  return { wireLoras, unmappedLoraFields };
-}
 
 describe('Fal LoRA clipStrength preservation & metadata mapping', () => {
   const originalFetch = globalThis.fetch;
@@ -103,13 +72,14 @@ describe('Fal LoRA clipStrength preservation & metadata mapping', () => {
     expect(interceptedBody.loras[0]).not.toHaveProperty('scale');
   });
 
-  it('server mapping preserves clipStrength in requestedParameters, marks unmapped, and avoids fabricating scale on wire', () => {
+  it('server mapping (mapFalServerLoras from server.ts) preserves clipStrength in requestedParameters, marks unmapped, and avoids fabricating scale on wire', () => {
     const requestedLoras = [
       { path: 'https://fal.media/style.safetensors', clipStrength: 0.7 },
       { path: 'https://fal.media/character.safetensors', scale: 0.85, clipStrength: 0.5 },
     ];
 
-    const { wireLoras, unmappedLoraFields } = mapFalLoras(requestedLoras);
+    // Executes the REAL production function exported by server.ts
+    const { wireLoras, unmappedLoraFields } = mapFalServerLoras(requestedLoras);
 
     // Wire payload must NOT fabricate scale for the first LoRA
     expect(wireLoras[0]).toEqual({ path: 'https://fal.media/style.safetensors' });
@@ -135,5 +105,9 @@ describe('Fal LoRA clipStrength preservation & metadata mapping', () => {
     const sanitized = sanitizeGenerationMetadata({ loras: requestedLoras });
     expect(sanitized.loras[0].clipStrength).toBe(0.7);
     expect(sanitized.loras[1].clipStrength).toBe(0.5);
+  });
+
+  it('server mapping rejects LoRA without accessible path or url', () => {
+    expect(() => mapFalServerLoras([{ name: 'no-path-lora' }])).toThrow('LoRA 没有可直接访问的 path/url，无法发送');
   });
 });
