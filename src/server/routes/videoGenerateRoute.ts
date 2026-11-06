@@ -483,7 +483,7 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
       if (auth.error) return res.status(400).json({ error: auth.error });
       const { apiKey: grokKey, baseUrl: grokBase } = auth;
       const startTime = Date.now();
-      if (forwardUnmappedFields(res, 'grok_compat', req.body, ['seed', 'negative_prompt', 'steps', 'cfg', 'guidance_scale', 'loras', 'width', 'height', 'fps'])) return;
+      if (forwardUnmappedFields(res, 'grok_compat', req.body, ['seed', 'negative_prompt', 'steps', 'cfg', 'guidance_scale', 'loras', 'width', 'height', 'fps', 'num_frames', 'size', 'sampler_name', 'scheduler', 'denoise'])) return;
       const grokResolution = req.body.resolution;
 
       const grokPayload: Record<string, unknown> = { model, prompt };

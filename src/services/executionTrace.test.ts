@@ -65,3 +65,23 @@ it('clipForSessionStorage keeps actualRequest.loras when response is huge (reloa
   expect(clipped.actualRequest).toBeTruthy();
   expect(clipped.head).toBeUndefined();
 });
+
+it('timeZoneLabel and formatRecordTime match the timezone actually used to format the time', async () => {
+  const { timeZoneLabel, formatRecordTime, CANVAS_TIME_ZONE, CANVAS_TIME_ZONE_LABEL } = await import('./executionTrace');
+  const d = new Date('2026-11-06T00:00:00.000Z');
+
+  // Default timezone (Asia/Shanghai) -> 北京时间
+  expect(timeZoneLabel(CANVAS_TIME_ZONE, d)).toBe(CANVAS_TIME_ZONE_LABEL);
+  expect(formatRecordTime(d.toISOString())).toBe('2026-11-06 08:00:00（北京时间）');
+
+  // Non-Beijing timezones must match the zone really used, never falsely label as 北京时间
+  expect(timeZoneLabel('UTC', d)).toBe('UTC');
+  expect(formatRecordTime(d.toISOString(), 'UTC')).toBe('2026-11-06 00:00:00（UTC）');
+
+  expect(timeZoneLabel('America/New_York', d)).toBe('北美东部标准时间');
+  expect(formatRecordTime(d.toISOString(), 'America/New_York')).toBe('2026-11-05 19:00:00（北美东部标准时间）');
+
+  expect(timeZoneLabel('Asia/Tokyo', d)).toBe('日本标准时间');
+  expect(formatRecordTime(d.toISOString(), 'Asia/Tokyo')).toBe('2026-11-06 09:00:00（日本标准时间）');
+});
+

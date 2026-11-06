@@ -1,5 +1,5 @@
 import {tracedFetch as fetch} from '../../services/executionTrace';
-import { BaseEngineDriver } from '../BaseEngineDriver';
+import { BaseEngineDriver, withFilledCanvasParams } from '../BaseEngineDriver';
 import { NormalizedGenerateParams, NormalizedGenerateResult, ModelSpec } from '../types';
 
 export class NanoGPTDriver extends BaseEngineDriver {
@@ -36,8 +36,18 @@ export class NanoGPTDriver extends BaseEngineDriver {
       if (params.seed != null) videoPayload.seed = params.seed;
       if (params.videoDuration != null) videoPayload.duration = params.videoDuration;
       if (params.negative_prompt) videoPayload.negative_prompt = params.negative_prompt;
-      if (params.steps != null) videoPayload.num_inference_steps = params.steps;
-      if (params.cfg != null) videoPayload.cfg_scale = params.cfg;
+      if (params.steps != null) {
+        videoPayload.num_inference_steps = params.steps;
+        videoPayload.steps = params.steps;
+      }
+      if (params.cfg != null) {
+        videoPayload.cfg_scale = params.cfg;
+        videoPayload.cfg = params.cfg;
+      }
+      if (params.videoFps ?? params.extraParams?.fps) videoPayload.fps = params.videoFps ?? params.extraParams?.fps;
+      if (params.videoFrames ?? params.extraParams?.num_frames) videoPayload.num_frames = params.videoFrames ?? params.extraParams?.num_frames;
+      if (params.extraParams?.resolution) videoPayload.resolution = params.extraParams.resolution;
+      withFilledCanvasParams(videoPayload, params, ['loras', 'width', 'height']);
 
       const endpoint = '/api/video/generate';
       const resp = await fetch(endpoint, {

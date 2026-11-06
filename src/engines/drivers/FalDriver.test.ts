@@ -9,16 +9,22 @@ describe('FalDriver LoRA 校验与错误处理', () => {
     await new FalDriver().generate({prompt:'test',model:'fal-ai/flux-lora',loras:[{name:'Display label',civitaiId:'123',strength:0}]},{});
     expect(bodies[0].loras[0]).toEqual({civitaiId:'123',name:'Display label',scale:0});
   });
-  it('rejects clip-only LoRA strength locally instead of sending an empty Fal scale', async () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ imageUrl: 'https://example.test/output.png' })));
+  it('preserves clip-only LoRA without local throw; does not fabricate scale and lets server/upstream decide', async () => {
+    let interceptedBody: any = null;
+    const fetchMock = vi.fn(async (_url, init) => {
+      interceptedBody = JSON.parse(String(init?.body));
+      return new Response(JSON.stringify({ imageUrl: 'https://example.test/output.png' }));
+    });
     globalThis.fetch = fetchMock;
 
-    await expect(new FalDriver().generate({
+    await new FalDriver().generate({
       prompt: 'test',
       model: 'fal-ai/flux-lora',
       loras: [{ name: 'style', path: 'https://example.com/style.safetensors', clipStrength: 0.7 }],
-    }, {})).rejects.toThrow(/clipStrength.*modelStrength|clipStrength.*strength|模型强度/);
-    expect(fetchMock).not.toHaveBeenCalled();
+    }, {});
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(interceptedBody.loras[0].path).toBe('https://example.com/style.safetensors');
+    expect(interceptedBody.loras[0].scale).toBeUndefined();
   });
 
   const driver = new FalDriver();

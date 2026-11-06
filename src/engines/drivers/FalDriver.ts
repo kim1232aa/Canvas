@@ -95,13 +95,10 @@ export class FalDriver extends BaseEngineDriver {
         scheduler: params.scheduler,
         model_name: params.extraParams?.model_name,
         num_images: params.extraParams?.n,
-        // V2: no strength fallback — server 400s if scale/path missing.
+        // 2026-11-06: 不在驱动层拦截 clipStrength-only，不伪造 scale，如实发送由上游/服务端裁决
         loras: (params.loras || []).map((l: any) => {
           const resolvedPath = l.path || l.downloadUrl || l.url || (/^https?:\/\//i.test(String(l.name || '')) ? l.name : undefined);
           const scale = l.strength ?? l.modelStrength ?? l.scale;
-          if (scale == null && l.clipStrength != null) {
-            throw new Error('本地未发送：Fal LoRA 只有 clipStrength，没有可映射到 loras.scale 的模型强度；请填写 strength/modelStrength，不把 CLIP 强度冒充模型强度');
-          }
           return {
             path: resolvedPath,
             ...(!resolvedPath ? { name: l.name, civitaiId: l.civitaiId } : {}),

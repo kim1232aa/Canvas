@@ -610,4 +610,107 @@ describe('videoGenerateRoute lifecycle and client disconnect handling (grok_comp
     expect(timeouts.length).toBeGreaterThanOrEqual(2);
     expect(timeouts.every((ms) => ms > floor)).toBe(true);
   });
+
+  it('grok_compat: forwards all client-built fields (seed, num_frames, negative_prompt, steps, cfg, loras, width, height, fps) to upstream /videos/generations', async () => {
+    let capturedUpstreamBody: any = null;
+    const forwardUnmappedFieldsCalls: Array<{ provider: string; fields: string[] }> = [];
+
+    const realForwardUnmappedFields = (_res: any, provider: string, body: any, fields: string[]): boolean => {
+      forwardUnmappedFieldsCalls.push({ provider, fields });
+      const isProvided = (v: any) => v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && v.length === 0);
+      const filled = fields.filter((f) => isProvided(body?.[f]));
+      if (!filled.length || !body) return false;
+      let custom: Record<string, unknown> = {};
+      if (body.custom_parameters && typeof body.custom_parameters === 'object') custom = { ...body.custom_parameters };
+      for (const f of filled) if (!Object.hasOwn(custom, f)) custom[f] = body[f];
+      body.custom_parameters = custom;
+      return false;
+    };
+
+    const { deps } = createMockDeps({
+      forwardUnmappedFields: realForwardUnmappedFields,
+      upstreamFetch: vi.fn(async (_meta: any, url: string, init: any) => {
+        if (url.includes('/videos/generations')) {
+          capturedUpstreamBody = JSON.parse(init.body);
+          return new Response(JSON.stringify({ request_id: 'req-grok-123' }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+        if (url.includes('/videos/req-grok-123')) {
+          return new Response(JSON.stringify({ status: 'completed', video: { url: 'https://example.com/v.mp4' } }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+        return new Response('Not Found', { status: 404 });
+      }),
+    });
+
+    const app = express();
+    app.use(express.json());
+    app.post('/api/video/generate', handleVideoGenerate(deps));
+    const port = await startServer(app);
+
+    const clientReqPromise = new Promise<{ status: number; body: any }>((resolve, reject) => {
+      const clientReq = http.request({
+        port,
+        path: '/api/video/generate',
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      }, (res) => {
+        let text = '';
+        res.on('data', (c) => { text += c; });
+        res.on('end', () => {
+          try {
+            resolve({ status: res.statusCode || 0, body: JSON.parse(text) });
+          } catch (e) {
+            reject(e);
+          }
+        });
+      });
+      clientReq.on('error', reject);
+      clientReq.write(JSON.stringify({
+        model: 'grok-imagine-video',
+        provider: 'grok_compat',
+        prompt: 'a cat driving a neon flying car',
+        duration: 5,
+        aspect_ratio: '16:9',
+        seed: 4242,
+        num_frames: 120,
+        negative_prompt: 'blurry, noise',
+        steps: 30,
+        cfg: 8.0,
+        width: 1280,
+        height: 720,
+        fps: 24,
+        loras: [{ name: 'cyber-lora', strength: 0.8 }],
+      }));
+      clientReq.end();
+    });
+
+    const resData = await withDeadline(clientReqPromise, 4500, 'grok forward test timed out');
+    expect(resData.status).toBe(200);
+
+    // Verify forwardUnmappedFields was invoked with num_frames in the fields list
+    expect(forwardUnmappedFieldsCalls[0].fields).toContain('num_frames');
+    expect(forwardUnmappedFieldsCalls[0].fields).toContain('seed');
+
+    // Verify all fields reached the outbound upstream body
+    expect(capturedUpstreamBody).toMatchObject({
+      model: 'grok-imagine-video',
+      prompt: 'a cat driving a neon flying car',
+      duration: 5,
+      aspect_ratio: '16:9',
+      seed: 4242,
+      num_frames: 120,
+      negative_prompt: 'blurry, noise',
+      steps: 30,
+      cfg: 8.0,
+      width: 1280,
+      height: 720,
+      fps: 24,
+      loras: [{ name: 'cyber-lora', strength: 0.8 }],
+    });
+  });
 });

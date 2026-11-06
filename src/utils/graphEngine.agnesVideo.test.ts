@@ -58,10 +58,30 @@ it.each([13,0])('executeWorkflow uses the real Agnes driver and final builder fo
   expect(result).toMatchObject({imageUrl:'https://example.test/out.mp4',seed,isVideo:true});
 });
 
-it('executeWorkflow transparently rejects conflicting node size 1080P and resolution 720P before network',async()=>{
-  const request=vi.fn().mockResolvedValue(new Response(JSON.stringify({videoUrl:'https://example.test/out.mp4'})));globalThis.fetch=request;
-  await expect(executeWorkflow([videoNode({size:'1080P',resolution:'720P',seed:13})],[],()=>{},undefined,'video')).rejects.toThrow(/resolution="720P".*size="1080P"/);
-  expect(request).not.toHaveBeenCalled();
+it('executeWorkflow forwards both size=1080P and resolution=720P without local rejection and surfaces upstream 4xx verbatim',async()=>{
+  let body: any;
+  let built: ReturnType<typeof buildAgnesVideoRequest> | undefined;
+  const request=vi.fn(async (url, init) => {
+    expect(url).toBe('/api/video/generate');
+    body = JSON.parse(String(init?.body));
+    built = buildAgnesVideoRequest(body!.model, body!);
+    return new Response(JSON.stringify({ error: 'Agnes upstream rejected conflicting parameters' }), { status: 422 });
+  });
+  globalThis.fetch=request;
+
+  await expect(executeWorkflow([videoNode({size:'1080P',resolution:'720P',seed:13})],[],()=>{},undefined,'video')).rejects.toThrow(/Agnes upstream rejected conflicting parameters/);
+  expect(request).toHaveBeenCalledTimes(1);
+  expect(body).toMatchObject({
+    provider: 'agnes',
+    model: 'agnes-video-2.5',
+    size: '1080P',
+    seed: 13,
+    extraParams: { size: '1080P', resolution: '720P' },
+  });
+  expect(built!.payload).toMatchObject({
+    size: '1080P',
+    seed: 13,
+  });
 });
 
 it('executeWorkflow retains node resolution source and JSON overrides with zero/false through the real driver and builder',async()=>{

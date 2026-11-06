@@ -175,10 +175,19 @@ export function formatBeijingHms(iso:string,timeZone:string=CANVAS_TIME_ZONE):st
   const parts=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:tz,hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).formatToParts(d).map(p=>[p.type,p.value]));
   return `${parts.hour}:${parts.minute}:${parts.second}`;
 }
-/** Always 「北京时间」 when zone is Asia/Shanghai (default); never surface 「日本标准时间」 from the box locale. */
+/** Always 「北京时间」 when zone is Asia/Shanghai (default); otherwise matches the zone really used. */
 export function timeZoneLabel(tz:string,_at:Date=new Date()):string {
-  if(!tz || tz===CANVAS_TIME_ZONE || /^Asia\/(Shanghai|Chongqing|Harbin|Urumqi|Chungking)$|^PRC$/.test(tz))return CANVAS_TIME_ZONE_LABEL;
-  return CANVAS_TIME_ZONE_LABEL; // clean-1149: site-wide single zone
+  if(!tz || tz===CANVAS_TIME_ZONE || /^Asia\/(Shanghai|Chongqing|Harbin|Urumqi|Chungking)$|^PRC$/.test(tz)) return CANVAS_TIME_ZONE_LABEL;
+  if(tz==='UTC' || tz==='Etc/UTC' || tz==='Z') return 'UTC';
+  try {
+    const name = new Intl.DateTimeFormat('zh-CN', { timeZone: tz, timeZoneName: 'long' })
+      .formatToParts(_at)
+      .find((p) => p.type === 'timeZoneName')?.value;
+    if (name) return name;
+  } catch {
+    // fallback to tz if unknown
+  }
+  return tz;
 }
 
 /** Tag Canvas-UI requests to our own /api so the server can label direct (curl/script) calls 「本机直调」 in history. */

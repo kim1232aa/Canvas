@@ -120,20 +120,6 @@ export class VideoDriver extends BaseEngineDriver {
     let wasAdapted = false;
     let adaptationNotice = '';
 
-    if (hasImage) {
-      if (
-        targetModel === 'fal-ai/wan-t2v' ||
-        targetModel === 'fal-ai/wan/v2.1/text-to-video' || // legacy alias
-        targetModel === 'fal-ai/wan/t2v' ||
-        targetModel === 'wan2.1-t2v' ||
-        targetModel === 'damo/wan2.1-t2v' ||
-        targetModel === 'fal-ai/kling-video/v1/standard/text-to-video' ||
-        targetModel.includes('text-to-video')
-      ) {
-        throw new Error('这个端点不支持参考图');
-      }
-    }
-
     const reqHeaders: Record<string, string> = {
       'Content-Type': 'application/json',
     };
@@ -188,8 +174,8 @@ export class VideoDriver extends BaseEngineDriver {
     for (const [key, value] of Object.entries({fps: params.videoFps ?? extra.fps, num_frames: params.videoFrames, negative_prompt: params.negative_prompt, steps: params.steps, cfg: params.cfg, loras: params.loras?.length ? params.loras : undefined})) {
       if (value !== undefined && value !== '') videoBody[key] = value;
     }
-    // Grok 兼容中转不支持 seed；其它视频商仍透传调用方 seed
-    if (videoProvider !== 'grok_compat' && params.seed != null) videoBody.seed = params.seed;
+    // 2026-11-05: 照发用户填写的 seed；由上游决定是否接受或返回错误
+    if (params.seed != null) videoBody.seed = params.seed;
 
     const resp = await fetch('/api/video/generate', {
       method: 'POST',

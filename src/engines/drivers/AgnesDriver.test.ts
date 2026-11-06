@@ -51,13 +51,16 @@ it('Agnes video maps the node resolution tier to the official size field and nev
   expect(body).not.toHaveProperty('resolution');
 });
 
-it('Agnes video keeps an explicit size over the node resolution and rejects a conflicting pair locally',async()=>{
+it('Agnes video keeps an explicit size over node resolution and sends without local throw when both filled',async()=>{
   const request=vi.fn().mockResolvedValue(new Response(JSON.stringify({error:'stop'}),{status:400}));globalThis.fetch=request;
   await expect(new AgnesDriver().generate({model:'agnes-video-2.5',prompt:'cat',videoDuration:5,aspectRatio:'16:9',extraParams:{size:'1080P',resolution:'1080P'}},{})).rejects.toThrow('stop');
   expect(JSON.parse(request.mock.calls[0][1].body).size).toBe('1080P');
   request.mockClear();
-  await expect(new AgnesDriver().generate({model:'agnes-video-2.5',prompt:'cat',videoDuration:5,aspectRatio:'16:9',extraParams:{size:'720P',resolution:'2K'}},{})).rejects.toThrow(/size.*resolution|resolution.*size/);
-  expect(request).not.toHaveBeenCalled();
+  await expect(new AgnesDriver().generate({model:'agnes-video-2.5',prompt:'cat',videoDuration:5,aspectRatio:'16:9',extraParams:{size:'720P',resolution:'2K'}},{})).rejects.toThrow('stop');
+  expect(request).toHaveBeenCalledTimes(1);
+  const body = JSON.parse(request.mock.calls[0][1].body);
+  expect(body.size).toBe('720P');
+  expect(body.extraParams).toMatchObject({ size: '720P', resolution: '2K' });
 });
 
 it('Agnes Image 2.5 sends size/ratio plus every filled canvas field as filled',async()=>{

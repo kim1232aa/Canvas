@@ -41,26 +41,23 @@ describe('VideoDriver (F3/F4) 参数转发与错误处理', () => {
     globalThis.fetch = originalFetch;
   });
 
-  it('Kling V3 图生视频发送本站 image_url 契约，并拒绝文生视频端点带图', async () => {
-  const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ videoUrl: 'https://cdn.fal.media/out.mp4', model: 'fal-ai/kling-video/v3/standard/image-to-video' }), { status: 200 }));
-  globalThis.fetch = fetchMock;
-  await new VideoDriver().generate({
-    prompt: 'orbit',
-    model: 'fal-ai/kling-video/v3/standard/image-to-video',
-    targetProvider: 'fal',
-    image_url: 'https://example.com/start.png',
-    videoDuration: 5,
-  }, { falKey: 'k' });
-  const body = JSON.parse(fetchMock.mock.calls[0][1].body);
-  expect(body.image_url).toBe('https://example.com/start.png');
-  expect(body).not.toHaveProperty('start_image_url');
-  await expect(new VideoDriver().generate({
-    prompt: 'orbit',
-    model: 'fal-ai/kling-video/v3/standard/text-to-video',
-    targetProvider: 'fal',
-    image_url: 'https://example.com/start.png',
-  }, {})).rejects.toThrow('这个端点不支持参考图');
-});
+  it('Kling V3 图生视频发送本站 image_url 契约，且文生视频端点带参考图时原样透传由上游裁决', async () => {
+    let interceptedBody: any = null;
+    const fetchMock = vi.fn().mockImplementation(async (_url: string, init: any) => {
+      interceptedBody = JSON.parse(init.body);
+      return new Response(JSON.stringify({ videoUrl: 'https://cdn.fal.media/out.mp4', model: 'fal-ai/kling-video/v3/standard/text-to-video' }), { status: 200 });
+    });
+    globalThis.fetch = fetchMock;
+    await new VideoDriver().generate({
+      prompt: 'orbit',
+      model: 'fal-ai/kling-video/v3/standard/text-to-video',
+      targetProvider: 'fal',
+      image_url: 'https://example.com/start.png',
+      videoDuration: 5,
+    }, { falKey: 'k' });
+    expect(interceptedBody.image_url).toBe('https://example.com/start.png');
+    expect(interceptedBody.model).toBe('fal-ai/kling-video/v3/standard/text-to-video');
+  });
 
 it('F3: 完整转发 fps, negative_prompt, steps, cfg, loras 到 /api/video/generate', async () => {
     let interceptedBody: any = null;
@@ -134,7 +131,7 @@ it('F3: 完整转发 fps, negative_prompt, steps, cfg, loras 到 /api/video/gene
     await expect(driver.generate(params, {})).rejects.toThrow(/视频服务商 \(Provider\) 未设置，拒绝回退到 Fal/);
   });
 
-  it('Grok 兼容中转不透传 seed', async () => {
+  it('Grok 兼容中转透传用户填写的 seed', async () => {
     let interceptedBody: any = null;
     const fetchMock = vi.fn().mockImplementation(async (_url: string, init: any) => {
       interceptedBody = JSON.parse(init.body);
@@ -155,7 +152,7 @@ it('F3: 完整转发 fps, negative_prompt, steps, cfg, loras 到 /api/video/gene
     };
 
     await driver.generate(params, { grokCompatKey: 'test-key' });
-    expect(interceptedBody.seed).toBeUndefined();
+    expect(interceptedBody.seed).toBe(12345);
   });
 
   it('零虚假成功: 上游报错原样透传状态码与错误信息', async () => {

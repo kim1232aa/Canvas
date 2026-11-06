@@ -114,9 +114,7 @@ export class AgnesDriver extends BaseEngineDriver {
     };
     const videoResolution = params.extraParams?.resolution;
     const videoSizeField = params.extraParams?.size ?? params.imageSize;
-    if (isVideo && videoResolution !== undefined && videoResolution !== '' && videoSizeField !== undefined && videoSizeField !== '' && String(videoResolution) !== String(videoSizeField)) {
-      throw new Error(`Agnes Video 的分辨率档位官方字段是 size；节点 resolution="${videoResolution}" 与 size="${videoSizeField}" 不一致，请只保留一个`);
-    }
+    // 2026-11-06: 不在本地拦截 resolution 与 size 的组合；照发给上游/服务端由其裁决
     const videoSize = videoSizeField !== undefined && videoSizeField !== '' ? videoSizeField : (videoResolution !== undefined && videoResolution !== '' ? videoResolution : undefined);
     const videoSizeSources = {resolution:videoResolution,size:params.extraParams?.size,imageSize:params.imageSize};
     const requestBody=isVideo ? {workflowSnapshot:params.workflowSnapshot,provider:'agnes',model:params.model,prompt:params.prompt,duration:params.videoDuration,aspect_ratio:params.aspectRatio,image_url:params.image_url,seed:params.seed,steps:params.steps,cfg:params.cfg,...(Array.isArray(params.loras) && params.loras.length > 0 ? {loras:params.loras} : {}),size:videoSize,extraParams:videoSizeSources,custom_parameters:params.extraParams?.custom_parameters,fps:params.videoFps,num_frames:params.videoFrames,negative_prompt:params.negative_prompt} : imageRequestBody;
