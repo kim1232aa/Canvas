@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import esbuild from 'esbuild';
 import {
   buildCivitaiVideoInput,
+  buildCivitaiVideoWorkflowSubmission,
 } from './civitaiVideo';
 
 // Representative structure copied from the live official OpenAPI's VideoGenInput,
@@ -158,5 +161,109 @@ describe('Civitai video request mapping from selected official schema', () => {
 
     expect(result.payload).not.toHaveProperty('allowMatureContent');
     expect(result.payload.customField).toBe('keep');
+  });
+
+  it('buildCivitaiVideoWorkflowSubmission helper constructs video workflow JSON root allowMatureContent and no query flag', () => {
+    const videoInput = { engine: 'wan', version: 'v2.1', prompt: 'sunset river' };
+    const subFalse = buildCivitaiVideoWorkflowSubmission(false, videoInput, 120);
+    expect(subFalse.url).toBe('https://orchestration.civitai.com/v2/consumer/workflows?wait=120');
+    expect(subFalse.url).not.toContain('allowMatureContent=');
+    expect(subFalse.body).toHaveProperty('allowMatureContent', false);
+    expect(subFalse.body.steps[0].input).not.toHaveProperty('allowMatureContent');
+    expect(subFalse.body.steps[0].input).toBe(videoInput);
+
+    const subTrue = buildCivitaiVideoWorkflowSubmission(true, videoInput, 120);
+    expect(subTrue.url).not.toContain('allowMatureContent=');
+    expect(subTrue.body).toHaveProperty('allowMatureContent', true);
+    expect(subTrue.body.steps[0].input).not.toHaveProperty('allowMatureContent');
+  });
+
+  it('locks server.ts Civitai video workflow POST wire contract: root allowMatureContent, no query, clean steps[0].input', async () => {
+    const serverSource = readFileSync(new URL('../../server.ts', import.meta.url), 'utf8');
+    const startIdx = serverSource.indexOf('const videoAllowMature =');
+    const endIdx = serverSource.indexOf('if (!orchResp.ok)', startIdx);
+    expect(startIdx, 'Civitai video workflow dispatch block must exist in server.ts').toBeGreaterThanOrEqual(0);
+    expect(endIdx, 'End boundary of Civitai video workflow dispatch must exist in server.ts').toBeGreaterThan(startIdx);
+    const codeSlice = serverSource.slice(startIdx, endIdx);
+
+    const wrapped = `async function __exec(req, videoInput, upstreamFetch, generationContext, sanitizeGenerationMetadata, CIVITAI_VIDEO_SUBMIT_WAIT_SECONDS, CIVITAI_VIDEO_OPENAPI_URL, videoSchemaStatus, videoSchemaCustomFieldsUnvalidated, videoSchemaFields, videoSchemaSelected, videoOverrides, videoSchemaFetch, model, apiKey) {
+      let capturedUrl = "";
+      let capturedBody = null;
+      const realFetch = upstreamFetch;
+      upstreamFetch = async (m, u, i) => {
+        capturedUrl = u;
+        capturedBody = JSON.parse(i.body);
+        return realFetch(m, u, i);
+      };
+      ${codeSlice}
+      return { capturedUrl, capturedBody, orchResp };
+    }`;
+    const jsCode = esbuild.transformSync(wrapped, { loader: 'ts' }).code;
+    const fn = new Function(jsCode + '; return __exec;')();
+
+    const mockFetch = async () => new Response(JSON.stringify({ id: 'orch-mock-video-id' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    const generationContext = { getStore: () => undefined };
+    const sanitizeGenerationMetadata = (x: any) => x;
+    const CIVITAI_VIDEO_SUBMIT_WAIT_SECONDS = 120;
+    const CIVITAI_VIDEO_OPENAPI_URL = 'https://orchestration.civitai.com/v2/consumer/recipes/videoGen/openapi.json';
+    const videoSchemaStatus = 'official-openapi';
+    const videoSchemaCustomFieldsUnvalidated = false;
+    const videoSchemaFields = undefined;
+    const videoSchemaSelected = undefined;
+    const videoOverrides: any[] = [];
+    const videoSchemaFetch = undefined;
+    const model = 'civitai-video-test-model';
+    const apiKey = 'test-civitai-api-key';
+    const videoInput = { engine: 'wan', version: 'v2.1', prompt: 'sunset river' };
+
+    // Case 1: custom_parameters toggled off -> allowMatureContent: false
+    const resToggledOff = await fn(
+      { body: { custom_parameters: { allowMatureContent: false } }, path: '/api/civitai/generate' },
+      videoInput,
+      mockFetch,
+      generationContext,
+      sanitizeGenerationMetadata,
+      CIVITAI_VIDEO_SUBMIT_WAIT_SECONDS,
+      CIVITAI_VIDEO_OPENAPI_URL,
+      videoSchemaStatus,
+      videoSchemaCustomFieldsUnvalidated,
+      videoSchemaFields,
+      videoSchemaSelected,
+      videoOverrides,
+      videoSchemaFetch,
+      model,
+      apiKey
+    );
+    // (a) 请求体根上有 allowMatureContent，与 steps 同级
+    expect(resToggledOff.capturedBody).toHaveProperty('allowMatureContent', false);
+    expect(resToggledOff.capturedBody).toHaveProperty('steps');
+    expect(Array.isArray(resToggledOff.capturedBody.steps)).toBe(true);
+    // (b) URL 里没有 allowMatureContent=
+    expect(resToggledOff.capturedUrl).not.toContain('allowMatureContent=');
+    expect(resToggledOff.capturedUrl).toBe('https://orchestration.civitai.com/v2/consumer/workflows?wait=120');
+    // (c) steps[0].input 里没有这个键
+    expect(resToggledOff.capturedBody.steps[0].input).not.toHaveProperty('allowMatureContent');
+
+    // Case 2: default-on (no explicit custom override) -> allowMatureContent: true
+    const resDefaultOn = await fn(
+      { body: {}, path: '/api/civitai/generate' },
+      videoInput,
+      mockFetch,
+      generationContext,
+      sanitizeGenerationMetadata,
+      CIVITAI_VIDEO_SUBMIT_WAIT_SECONDS,
+      CIVITAI_VIDEO_OPENAPI_URL,
+      videoSchemaStatus,
+      videoSchemaCustomFieldsUnvalidated,
+      videoSchemaFields,
+      videoSchemaSelected,
+      videoOverrides,
+      videoSchemaFetch,
+      model,
+      apiKey
+    );
+    expect(resDefaultOn.capturedBody).toHaveProperty('allowMatureContent', true);
+    expect(resDefaultOn.capturedUrl).not.toContain('allowMatureContent=');
+    expect(resDefaultOn.capturedBody.steps[0].input).not.toHaveProperty('allowMatureContent');
   });
 });

@@ -370,3 +370,28 @@ export async function buildCivitaiImageRequest(
 export async function buildCivitaiImageInput(body: Body, get: CivitaiPublicGet, officialOpenApi?: unknown): Promise<Body> {
   return (await buildCivitaiImageRequest(body, get, officialOpenApi)).payload;
 }
+
+export interface CivitaiWorkflowSubmission {
+  url: string;
+  body: {
+    allowMatureContent: boolean;
+    steps: Array<{
+      $type: 'imageGen';
+      input: Record<string, any>;
+    }>;
+  };
+}
+
+export function buildCivitaiWorkflowSubmission(
+  imageAllowMature: boolean,
+  genInput: Record<string, any>
+): CivitaiWorkflowSubmission {
+  return {
+    url: 'https://orchestration.civitai.com/v2/consumer/workflows?wait=100',
+    body: {
+      allowMatureContent: imageAllowMature,
+      steps: [{ $type: 'imageGen', input: genInput }],
+    },
+  };
+}
+

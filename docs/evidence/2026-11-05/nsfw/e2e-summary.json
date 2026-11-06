@@ -185,12 +185,14 @@
   },
   "civitaiModalLora": {
     "defaultOn": {
+      "screenshot": "07-civitaimodal-lora-nsfw-on.jpg",
       "toggleFound": true,
       "toggleText": "NSFW: 已开启 (默认)",
       "countText": "已检索到 343 个 LoRA",
       "catalogRequest": "/api/civitai/models?types=LORA&sort=Highest+Rated&limit=24&nsfw=true&page=1"
     },
     "toggledOff": {
+      "screenshot": "08-civitaimodal-lora-nsfw-off.jpg",
       "toggleFound": true,
       "toggleText": "NSFW: 已关闭",
       "countText": "已检索到 343 个 LoRA",

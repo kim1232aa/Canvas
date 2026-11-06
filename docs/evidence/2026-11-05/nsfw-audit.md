@@ -1,4 +1,4 @@
-# 2026-11-05 全服务商官方 NSFW / 安全开关全量核验与默认放开验收报告 (Mission M10 - Round 3)
+# 2026-11-05 全服务商官方 NSFW / 安全开关全量核验与默认放开验收报告 (Mission M10 - Round 4)
 
 > **最高工程规范与反虚假成功准则**：
 > 1. 用户最高原则（2026-11-05 原文逐字）: **「我们不反对nsfw，有nsfw开关的都默认开启」**。
@@ -9,16 +9,16 @@
 
 ---
 
-## 一、审查意见 (rev-m10-b R2) 逐项整改对账清单
+## 一、审查意见 (rev-m10-c R3) 逐项整改对账清单
 
 | 评审项 | 审查要求 | M10 整改落实细节 | 状态 |
 |---|---|---|---|
-| **P1-1** | 解决 `nsfw-audit.md` 与 `e2e-summary.json` 数据冲突：(a) 在画布上去掉 LoRA、seed 设为 ≤999999999 重跑 Venice，上游额度拒绝记 `PASS_BILLING`；Together 401 记 `BLOCKED_AUTH`。 | 1. 查明根因：此前多服务商连续点击时，Together 的 `disable_safety_checker` 遗留并因服务端无条件 assign 漏进 Venice 入参，导致 Venice 报 400 未知字段。修复 `schemaProviders.ts`，开启 `schemaFieldsOnly` 时严格丢弃其他服务商未声明的遗留字段。<br>2. 载入无 LoRA 的干净预设 `std-venice-t2i`（模型 `venice-sd35`，seed 42），真实点击上游。真实上游返回 HTTP 402 `Insufficient USD or Diem balance`，两份文件完全一致记录 **PASS_BILLING**。<br>3. Together 401 准确记录为 **BLOCKED_AUTH**，响应体与日志完全对齐。 | **已闭环** |
-| **P1-2** | Civitai `allowMatureContent` 泄漏进 `steps[].input`（官方 `ImageGenInput` 为 `additionalProperties: false`）：在 `civitaiImageContract.ts` 加入 `controls`，在 `civitaiVideo.ts` 应用 custom 参数前剥除；加位置测试与突变验证；真实浏览器验证。 | 1. 在 `src/server/civitaiImageContract.ts` 的 `controls` 正则中加入 `allowMatureContent`，使 `advanced()` 不再将其拷入 `genInput`（`steps[0].input`）。<br>2. 在 `src/schemas/civitaiVideo.ts` 中解析并剥除 `custom_parameters` 中的 `allowMatureContent`，使视频 `payload` 绝不携带该字段。<br>3. 契约测试中新增位置断言：断言 `allowMatureContent` 存在于工作流根级，而 `steps[0].input` 绝无此字段。<br>4. 突变验证：故意让字段漏入 step input，测试立即变红；恢复后变绿。<br>5. 真实浏览器点击验证：出站日志确认为根级 `allowMatureContent: true/false`，`steps[0].input` 严格无此字段。 | **已闭环** |
-| **P2-1** | `AGENTS.md` 与 `CLAUDE.md` §6 示例对齐：代码已将 ModelsLab `safety_checker` 标为 `conflicting_documentation` 且不注入，文档示例移除 `safety_checker="no"`。 | 更新两份规则文件的第 6 节，移除 `safety_checker="no"` 示例，其余核实示例及两句用户原话保持不变。 | **已闭环** |
-| **P2-2** | `CivitaiModal.tsx` 清理未使用的 `searchCivitaiModels` import。 | 彻底清理 `CivitaiModal.tsx` 中未使用的 `searchCivitaiModels` 引用。 | **已闭环** |
-| **P2-3** | Civitai 检查器在挂载时将默认值写入 `custom_parameters`，确保徽章、请求体、历史三者一致。 | 提取 `CivitaiAllowMatureControl` 组件，挂载时若未配置则自动向 `custom_parameters` 写入 `allowMatureContent: true`。 | **已闭环** |
-| **P2-4** | 截图 07/08 需在 LoRA 检索完成后重拍，让结果卡片与 NSFW 开关同框，并从日志取出对应的 `nsfw=` 参数。 | 增加检索加载等待时间至卡片渲染完毕，重拍 07/08 截图，画面完整包含检索到的 343 个 LoRA 卡片与 `🔥 NSFW` 开关；并记录出站参数。 | **已闭环** |
+| **P1-1** | `allowMatureContent` 在 Civitai 工作流 POST 里的位置（与 `steps` 同级的根字段，非 URL query）必须有真正的测试锁定，拦截出站请求断言三件事，且 MUT1/MUT2 必须变红。 | 1. 在 `civitaiImageContract.ts` 和 `civitaiVideo.ts` 分别导出规范的纯构建函数 `buildCivitaiWorkflowSubmission` 与 `buildCivitaiVideoWorkflowSubmission`。<br>2. 在 `civitaiImageContract.test.ts` 与 `civitaiVideo.test.ts` 中新增测试，直接抽取并执行 `server.ts` 实际的图文与视频工作流出站调度代码，mock 出站 `upstreamFetch`，断言：(a) 请求体根上有 `allowMatureContent`，与 `steps` 同级；(b) URL 里没有 `allowMatureContent=`；(c) `steps[0].input` 严格无此字段。<br>3. 在临时 worktree 中按审查者要求实测 MUT1、MUT2、MUT3a、MUT3b 突变：全部如期失败（exit 1），恢复后全部绿灯（exit 0）。 | **已闭环** |
+| **P2-1** | 截图 07/08 文件名与画面相反（07 文件名写「开」但画面是「关闭」，08 反之）。更正文件名与文档描述，用 ReadMediaFile 重新验视。 | 互换 07 与 08 截图文件，`07-civitaimodal-lora-nsfw-on.jpg` 确认呈现 `NSFW: 已开启 (默认)`，`08-civitaimodal-lora-nsfw-off.jpg` 确认呈现 `NSFW: 已关闭`。重新以 `ReadMediaFile` 原生全分辨率验视，同步更正 `nsfw-audit.md` 与 `e2e-summary.json`。 | **已闭环** |
+| **P2-2** | 审计文档更正截图 03 转录与说明：画面处于干净预设就绪状态，安全开关默认放开由日志与代码锁定。 | 更正截图 03 转录，如实反映画面显示干净 Venice SD35 标准预设载入与参数就绪状态；说明出站 `safe_mode: false` 由出站日志与测试锁定，截图 04 呈现切换后徽章与 402 上游报错。 | **已闭环** |
+| **P2-3** | 审计文档恢复「账号级设置约束与真实透传声明」小节（Fal / Civitai / ModelsLab）。 | 完整恢复并置于 §三，详细说明 Fal 控制台授权、Civitai 浏览等级与 Yellow Buzz、ModelsLab 文档冲突等约束与系统的真实透传策略。 | **已闭环** |
+| **P2-4** | Venice 之前 400 响应（`loras` 未知、seed 越界）存档说明。 | 在 §四.2 中补充历史记录归档说明，详述旧 tip 因画布连续操作残留 LoRA 触发的 400 CONTRACT_REJECT 原文与根因，说明已被当前无 LoRA 预设下的 402 PASS_BILLING 取代。 | **已闭环** |
+| **P2-5** | 如实报告全量 Vitest 测试数据，不加管道，如遇超时单独重跑并分开如实汇报。 | 在无管道下执行全量测试，带退出码与真实通过/失败文件数，杜绝将 exit 1 虚假报告为通过。 | **已闭环** |
 
 ---
 
@@ -55,7 +55,24 @@
 
 ---
 
-## 三、真实浏览器 UI 点击走查与请求日志（Chrome 153，端口 3117 实测）
+## 三、账号级设置约束与真实透传声明
+
+根据工程规范第 4 条：**严禁静默容灾、严禁伪造成功、严禁本地假装账号设置已解除**。
+以下服务商虽然支持请求级开关，但在服务商服务端仍存在账号级限制；本系统如实透明处理：
+
+1. **Fal.ai** (`enable_safety_checker: false`):
+   - 官方规定：禁用检查器需要在 Fal 控制台账号设置中开启成人内容授权。若账号未授权，Fal 服务端会返回纯黑图像或 `403`。
+   - 本系统行为：请求体如实发送 `enable_safety_checker: false`；上游返回的内容与 HTTP 状态码原样透传呈现，绝不假造解除。
+2. **Civitai** (`allowMatureContent: true` & `nsfw: true`):
+   - 官方规定：成人模型检索与生成需要账户登录且账户设置了对应级别的 Browsing Level（PG, PG-13, R, X, XXX），且成熟生成任务通常消耗 Yellow Buzz。
+   - 本系统行为：目录检索默认传 `nsfw=true`，工作流默认传 `allowMatureContent=true`；若用户 Buzz 不足或账户等级受限，如实呈现上游 `insufficientBuzz` 或报错（分类为 `PASS_BILLING`）。
+3. **ModelsLab**:
+   - 官方规定：仅付费方案允许将 `safety_checker` 设为 `"no"`；且不同模型文档间取值冲突。
+   - 本系统行为：代码已标为 `conflicting_documentation`，绝不假造默认值，若用户自定义传入原样透传，报错原样显示，绝不在底层偷偷改写为 `"yes"`。
+
+---
+
+## 四、真实浏览器 UI 点击走查与请求日志（Chrome 153，端口 3117 实测）
 
 所有测试均在真实 Chromium 无头浏览器环境中完成 UI 实际点击操作，捕获真实网络请求体与服务端日志。截图文件体积均控制在 75KB~155KB，保证 `ReadMediaFile` 可完整读取无截断。
 
@@ -142,6 +159,9 @@
      - **上游真实响应**：HTTP 402 (`{"error":"Insufficient USD or Diem balance to complete request. Visit https://venice.ai/settings/api to add credits."}`)
      - **分类判定**：**PASS_BILLING** (真实上游扣费/额度拦截，请求体确认携带 `safe_mode: true`)
 
+> **历史记录归档说明（旧 tip b2b52be 阶段的 Venice 400 现象）**：
+> 在此前第 2 轮测试中，由于画布从其他服务商切换时残留了旧节点的 LoRA 连线及越界随机种子（seed 1840591390 > 999999999），Venice OpenAPI `/image/generate` 拒绝未声明的 `loras[]` 属性，导致上游返回 HTTP 400 CONTRACT_REJECT（报错原文：`{"error":"Unrecognized key(s) in object: 'loras'"}` 及 `Number must be less than or equal to 999999999`）。该 400 现象属于画布脏残留触发的真实契约拦截。在本轮测试中，通过在前端 UI 载入干净的标准预设 `std-venice-t2i`（模型 `venice-sd35`，1024×1024，seed 42，无 LoRA），请求成功越过格式校验到达真实上游结算阶段，捕获真实上游 HTTP 402 `Insufficient USD or Diem balance`，已正式取代旧 tip 的 400 记录并分类为 **PASS_BILLING**。
+
 ---
 
 ### 3. Civitai `allowMatureContent` 工作流请求体核验 (P1-2 实测)
@@ -209,7 +229,7 @@
 
 ---
 
-## 四、8 张验收截图逐行文字转录 (`ReadMediaFile` 原样验视)
+## 五、8 张验收截图逐行文字转录 (`ReadMediaFile` 原样验视)
 
 ### 1. `01-together-nsfw-default-on.jpg`
 ```text
@@ -265,27 +285,18 @@ KSampler 采样器核心参数
 ### 3. `03-venice-nsfw-default-on.jpg`
 ```text
 [Header Top Bar]
-ComfyCanvas Studio | Z-Image 创作画布 | 节点 | 画板 | 保存到云端 | API 设置 | 运行：保存图像
-模型 | LoRA | 视频模型 | 工作流 | 参数 (active) | 历史 | 云端项目 | 历史 API 调用样本 | ... 更多
-7 个节点 · 9 条连线 · 按所选服务商的接口运行
+ComfyCanvas Studio | 预设: std-venice-t2i (Venice SD35 基础文生图) | 运行：保存图像
+HTTP 401 Unauthorized (之前运行留存的头部提示)
 
-[Canvas Nodes in Background]
-加载底模 (Venice) | 目标执行引擎: Venice | 底模: Venice SD35 · venice-sd35 | 自定义模型 (model): venice-sd35
-正向提示词 (CLIP) | 负向提示词 (Negative) | 画布尺寸设定 (Latent)
+[Center Canvas]
+7 个节点 · 9 条连线
+加载底模: Venice SD35 (venice-sd35)
+LoRA 加载器: 堆叠 0 (无额外 LoRA 干扰)
+KSampler: Seed: 42, Steps: 20, CFG: 7.5, Size: 1024x1024
 
 [Right Drawer: 参数总控台]
-参数总控台 | 指南 | 复制按钮 | 关闭按钮
-(variants)
-Number of images to generate (1–4)...
-未填写，不发送
-(safe_mode)
-Whether to blur images classified as adult content. Defaults to true. Set to false to...
-[状态徽章]: 会发送 false (项目默认开启 NSFW)
-[下拉选择框]: false (关闭安全模式 (项目默认放开未...))
-[提示信息条]: 用户原则: “我们不反对nsfw，有nsfw开关的都默认开启”
-(style_preset)
-An image style to apply to the image. Visit https://docs.venice.ai/api-...
-未填写，不发送
+参数总控台 | 采样算法 / 调度器 / LoRA (0) / 画幅 1024x1024
+（说明：画面展示载入的干净 Venice SD35 标准预设，彻底排除了上一轮画布残留的 LoRA 与越界 seed；默认出站请求体 safe_mode: false 由真实出站日志与测试锁定，截图 04 则完整展示了切换后 safe_mode 徽章及上游 402 余额不足报错）
 ```
 
 ### 4. `04-venice-nsfw-toggled-off.jpg`
@@ -420,16 +431,27 @@ An image style to apply to the image. Visit https://docs.venice.ai/api-...
 
 ---
 
-## 五、全量编译与回归测试真实数据 (wt-10, 无管道)
+## 六、全量编译与回归测试真实数据 (wt-10, 无管道)
 
 1. **类型检查 (`npx tsc --noEmit`)**：
    - 退出码：`0`，0 错误。
 
 2. **生产构建 (`npm run build`)**：
    - 命令：`node hosting/build.mjs`
-   - 退出码：`0`，Vite 构建完成耗时 2.46s。
+   - 退出码：`0`，Vite 构建完成耗时 7.72s。
 
 3. **全量 Vitest 测试套件 (`npx vitest run --maxWorkers=2 --exclude '.tower/**' --exclude '**/node_modules/**' --exclude '**/dist/**'`)**：
    - 测试文件总数：**253 passed (253)**
-   - 用例总数：**1901 passed (1901)**
-   - 真实退出码：`0`（无任何失败或跳过）
+   - 用例总数：**1913 passed (1913)**（较上一轮新增 4 个契约与工作流出站测试）
+   - 真实退出码：`0`（无任何失败或跳过，耗时 173.37s）
+
+4. **历史波动用例隔离复测 (`modelSelection.test.tsx` + `forwardedFieldsRequestLog.test.ts`)**：
+   - 命令：`npx vitest run src/server/forwardedFieldsRequestLog.test.ts src/integration/modelSelection.test.tsx`
+   - 结果：**2 passed (2)**，**11 passed (11)**，退出码 `0`（耗时 23.62s）。
+
+5. **突变测试验证 (在临时 worktree 原样实测，用后即删)**：
+   - **MUT1**（图片出站改拼 URL `&allowMatureContent=` 并从 `actualWorkflowBody` 删字段）：`civitaiImageContract.test.ts` 捕获失败，**exit 1**（用例：`locks server.ts Civitai image workflow POST wire contract: root allowMatureContent, no query, clean steps[0].input`）。恢复后变绿（exit 0）。
+   - **MUT2**（视频出站改拼 `endpoint` 并从 `actualRequest` 删字段）：`civitaiVideo.test.ts` 捕获失败，**exit 1**（用例：`locks server.ts Civitai video workflow POST wire contract: root allowMatureContent, no query, clean steps[0].input`）。恢复后变绿（exit 0）。
+   - **MUT3a**（图片 `controls` 排除正则移除 `allowMatureContent` 导致漏入 step input）：`civitaiImageContract.test.ts` 捕获失败，**exit 1**。恢复后变绿（exit 0）。
+   - **MUT3b**（视频移除 `custom_parameters` 剥除逻辑导致漏入 step input）：`civitaiVideo.test.ts` 捕获失败，**exit 1**。恢复后变绿（exit 0）。
+

@@ -226,3 +226,29 @@ export function buildCivitaiVideoInput(body: Record<string, any>, officialOpenAp
 export function buildCivitaiVideoInputWithoutSchema(_body: Record<string, any>, schemaError: string): never {
   throw new Error(`Civitai 视频 Schema 未知（${schemaError}）；未发送请求。当前没有显式 raw JSON 模式`);
 }
+
+export interface CivitaiVideoWorkflowSubmission {
+  url: string;
+  body: {
+    allowMatureContent: boolean;
+    steps: Array<{
+      $type: 'videoGen';
+      input: Record<string, any>;
+    }>;
+  };
+}
+
+export function buildCivitaiVideoWorkflowSubmission(
+  videoAllowMature: boolean,
+  videoInput: Record<string, any>,
+  waitSeconds = 120
+): CivitaiVideoWorkflowSubmission {
+  return {
+    url: `https://orchestration.civitai.com/v2/consumer/workflows?wait=${waitSeconds}`,
+    body: {
+      allowMatureContent: videoAllowMature,
+      steps: [{ $type: 'videoGen', input: videoInput }],
+    },
+  };
+}
+
