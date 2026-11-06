@@ -2,33 +2,6 @@ import { friendlyProviderLabel, checkpointNodeTitle } from './providerLabels';
 import { NODE_TITLE_MAP } from './nodeUiLabels';
 
 /**
- * Checks whether an AIVideoNode's title is marked as a template-generated title.
- *
- * Strict Rule (Zero Heuristic):
- * - ONLY nodes explicitly stamped with `titleSource: 'template'` (e.g. from preset templates,
- *   palette defaults, or hub new nodes) are considered template titles.
- * - Any title with titleSource !== 'template' (undefined, 'user', or absent from imported JSON)
- *   is treated as USER-OWNED.
- * - "宁可不联动也不覆盖": If source is unknown, it is strictly treated as a user title.
- */
-export function isTemplateVideoNodeTitle(
-  _title?: string | null,
-  titleSource?: 'template' | 'user'
-): boolean {
-  return titleSource === 'template';
-}
-
-/**
- * Checks whether a CheckpointLoaderSimple's title is marked as a template-generated title.
- */
-export function isTemplateCheckpointNodeTitle(
-  _title?: string | null,
-  titleSource?: 'template' | 'user'
-): boolean {
-  return titleSource === 'template';
-}
-
-/**
  * Formats the display title for an AIVideoNode:
  * - If titleSource === 'template', updates dynamically to follow the current provider.
  * - If titleSource !== 'template' (user-typed or unknown), preserves currentTitle verbatim.
@@ -65,6 +38,28 @@ export function formatCheckpointNodeTitle(
     return raw || '加载底模';
   }
   return checkpointNodeTitle(provider, checkpoint);
+}
+
+/**
+ * Resolves the title when applying a model from Model Hub to an existing CheckpointLoaderSimple.
+ * - If titleSource === 'template', computes the new title from provider/modelId.
+ * - If titleSource !== 'template' (user-customized or unknown), preserves currentTitle verbatim.
+ */
+export function applyHubCheckpointTitle(
+  currentTitle: string | undefined | null,
+  provider: string | undefined | null,
+  modelId: string | undefined | null,
+  modelName?: string | null,
+  titleSource?: 'template' | 'user'
+): string {
+  if (titleSource !== 'template') {
+    return String(currentTitle || '').trim() || '加载底模';
+  }
+  if (provider === 'replicate') {
+    const short = (modelName || modelId || '').split('/').pop() || modelId || '';
+    return short ? `Load Checkpoint (Replicate · ${short})` : 'Load Checkpoint (Replicate)';
+  }
+  return checkpointNodeTitle(provider, modelId);
 }
 
 /**

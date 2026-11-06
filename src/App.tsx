@@ -75,7 +75,7 @@ import { fetchProviderKeyStatus, providerKeyConfigured } from './services/provid
 import { friendlyProviderLabel } from './utils/providerLabels';
 import { toastFromRunError, plainFailureConclusion, plainErrorMessage, historyFacingErrorMessage, unicodeSafeSlice, EXEC_NODE_MISSING, localBlockToastReason, upstreamFailureToast } from './utils/apiFailure';
 import { applyAIVideoModelSelection } from './utils/videoProvider';
-import { formatVideoNodeTitle, formatCheckpointNodeTitle, formatNodeDisplayTitle } from './utils/nodeDisplayTitle';
+import { formatVideoNodeTitle, formatCheckpointNodeTitle, formatNodeDisplayTitle, applyHubCheckpointTitle } from './utils/nodeDisplayTitle';
 import {
   PREVIEW_HANG_MS,
   isRemotePreviewUrl,
@@ -1790,12 +1790,7 @@ export default function App() {
         setNodes((prev) =>
           prev.map((n) => {
             if (n.id === existingCkptNode.id) {
-              const nextTitle =
-                n.titleSource === 'template'
-                  ? (provider === 'replicate'
-                      ? `Load Checkpoint (Replicate · ${modelName.split('/').pop() || modelId})`
-                      : checkpointNodeTitle(provider, modelId))
-                  : n.title;
+              const nextTitle = applyHubCheckpointTitle(n.title, provider, modelId, modelName, n.titleSource);
               return {
                 ...n,
                 title: nextTitle,
@@ -1829,6 +1824,7 @@ export default function App() {
           title: provider === 'replicate'
             ? `Load Checkpoint (Replicate · ${modelName.split('/').pop() || modelId})`
             : checkpointNodeTitle(provider, modelId),
+          titleSource: 'template',
           pos: {
             x: Math.round(-transform.x / transform.scale + 120),
             y: Math.round(-transform.y / transform.scale + 160),
@@ -2920,6 +2916,7 @@ export default function App() {
               title: detectedProvider === 'replicate'
                 ? `Load Checkpoint (Replicate · ${mName.split('/').pop() || mId})`
                 : `Load Checkpoint (${mName.split('/').pop()})`,
+              titleSource: 'template',
               pos: {
                 x: Math.round(-transform.x / transform.scale + 120),
                 y: Math.round(-transform.y / transform.scale + 160),

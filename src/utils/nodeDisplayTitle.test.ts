@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   formatVideoNodeTitle,
-  isTemplateVideoNodeTitle,
   formatCheckpointNodeTitle,
-  isTemplateCheckpointNodeTitle,
+  applyHubCheckpointTitle,
   formatNodeDisplayTitle,
 } from './nodeDisplayTitle';
 
@@ -45,14 +44,6 @@ describe('nodeDisplayTitle - explicit titleSource and zero heuristic protection'
       expect(formatVideoNodeTitle('我的专属短片生成器', 'sogni', undefined)).toBe('我的专属短片生成器');
       expect(formatVideoNodeTitle('Product Demo Video', 'wavespeed', 'user')).toBe('Product Demo Video');
       expect(formatVideoNodeTitle('AI 视频 (我的测试)', 'krea', undefined)).toBe('AI 视频 (我的测试)');
-    });
-
-    it('isTemplateVideoNodeTitle strictly checks titleSource', () => {
-      expect(isTemplateVideoNodeTitle('AI 视频 (Fal.ai)', 'template')).toBe(true);
-      expect(isTemplateVideoNodeTitle('AI 视频 (Fal.ai)', 'user')).toBe(false);
-      expect(isTemplateVideoNodeTitle('AI 视频 (Fal.ai)', undefined)).toBe(false);
-      expect(isTemplateVideoNodeTitle('AI 视频', undefined)).toBe(false);
-      expect(isTemplateVideoNodeTitle('AI 视频 (Fal)', undefined)).toBe(false);
     });
   });
 
@@ -101,11 +92,23 @@ describe('nodeDisplayTitle - explicit titleSource and zero heuristic protection'
         'Custom Main Checkpoint'
       );
     });
+  });
 
-    it('isTemplateCheckpointNodeTitle strictly checks titleSource', () => {
-      expect(isTemplateCheckpointNodeTitle('加载底模 (Fal.ai)', 'template')).toBe(true);
-      expect(isTemplateCheckpointNodeTitle('加载底模 (v2)', undefined)).toBe(false);
-      expect(isTemplateCheckpointNodeTitle('加载底模 (my-model)', 'user')).toBe(false);
+  describe('P1-2: applyHubCheckpointTitle guard for existing CheckpointLoaderSimple', () => {
+    it('preserves user lookalike titles and custom titles when titleSource is not template', () => {
+      // Inputs from review findings:
+      expect(applyHubCheckpointTitle('加载底模 (v2)', 'sogni', 'ltx25', undefined, undefined)).toBe('加载底模 (v2)');
+      expect(applyHubCheckpointTitle('加载底模 (v2)', 'sogni', 'ltx25', undefined, 'user')).toBe('加载底模 (v2)');
+      expect(applyHubCheckpointTitle('加载底模 (my-model)', 'fal', 'fal-ai/flux', undefined, undefined)).toBe('加载底模 (my-model)');
+      expect(applyHubCheckpointTitle('Load Checkpoint (v2)', 'replicate', 'black-forest-labs/flux-schnell', 'flux-schnell', undefined)).toBe('Load Checkpoint (v2)');
+      expect(applyHubCheckpointTitle('二次元大模型 SDXL', 'sogni', 'ltx25', undefined, undefined)).toBe('二次元大模型 SDXL');
+    });
+
+    it('updates title when titleSource is template', () => {
+      expect(applyHubCheckpointTitle('加载底模 (Fal.ai)', 'sogni', 'ltx25', undefined, 'template')).toBe('加载底模 (Sogni)');
+      expect(applyHubCheckpointTitle('加载底模 (Hugging Face)', 'replicate', 'black-forest-labs/flux-schnell', 'flux-schnell', 'template')).toBe(
+        'Load Checkpoint (Replicate · flux-schnell)'
+      );
     });
   });
 

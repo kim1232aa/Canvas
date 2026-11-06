@@ -57,7 +57,7 @@ const hideSamplerShell = (
     isDeclaredSchemaFieldOmitted(widgetName, schemaCustomParameters, readDeclaredSchemaProperties(schemaCustomParameters)));
 
 import { checkpointNodeTitle, ksamplerNodeTitle, loraLoaderNodeTitle, LORA_LOADER_TYPES } from '../utils/providerLabels';
-import { formatVideoNodeTitle, formatCheckpointNodeTitle, isTemplateVideoNodeTitle, isTemplateCheckpointNodeTitle, formatNodeDisplayTitle } from '../utils/nodeDisplayTitle';
+import { formatVideoNodeTitle, formatCheckpointNodeTitle, formatNodeDisplayTitle } from '../utils/nodeDisplayTitle';
 import { errorBannerText, priorRunErrorLabel, LOCAL_BLOCK_NODE_LINE } from '../utils/apiFailure';
 import { upstreamFailedLine } from '../utils/schemaFailure';
 import { formatRecordTime, getExecutions } from '../services/executionTrace';

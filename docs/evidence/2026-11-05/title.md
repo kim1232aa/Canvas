@@ -160,33 +160,64 @@
   2. 目标执行引擎下拉框已切为 `Sogni`。
   3. **结论**：底模节点的 lookalike 用户标题在切换服务商时同样 100% 保持原样，绝不覆盖。
 
+### 5. 验收实测五：P2-1 Hub/调色板新建底模节点跟随服务商（`acceptance-05-hub-new-ckpt-follow.png`）
+- **操作**：新建/添加一个 CheckpointLoaderSimple 节点（通过系统/Hub 创建，带有 `titleSource: 'template'`，初始标题为 `加载底模 (Fal.ai)`），随后在节点下拉框中将目标执行引擎切换为 `Sogni`。
+- **文件**：`docs/evidence/2026-11-05/title/acceptance-05-hub-new-ckpt-follow.png`
+- **ReadMediaFile 逐行审查记录**：
+  1. 画布中央新增的 Checkpoint 节点卡片头部动态更新为：**`加载底模 (Sogni)`**；
+  2. 节点内的 `目标执行引擎 (Provider)` 下拉框明确显示为 `Sogni`；
+  3. 左侧原有的 Hugging Face 底模节点保持 `加载底模 (Hugging Face)` 不受干扰。
+  4. **结论**：Hub 与调色板新建的底模节点由于带有 `titleSource: 'template'`，切换服务商时能够稳定、正确地跟随目标服务商。
+
 ---
 
-## 六、工程质量与完整校验退出码
+## 六、Round 2 突变测试（Mutation Check）实测记录
+
+在 `/tmp/m15-mut-test` 临时独立 worktree 中对 rev-m15-b 指出的两处进行严格突变验证：
+
+1. **突变 C 验证（P1-1: presets.ts 去掉 titleSource 标记）**：
+   - **操作**：删除 `src/constants/presets.ts` 中的 `nodes.forEach(n => { n.titleSource = 'template'; })` 与 `preset.nodes.forEach(n => { n.titleSource = 'template'; })`；
+   - **运行命令**：`npx vitest run src/constants/presets.test.ts`；
+   - **结果**：**2 例红屏报错，exit 1**！
+     * `FAIL: P1-1: every node in all 34 WORKFLOW_PRESETS has titleSource === "template"`
+     * `FAIL: P1-1: original scenario std-fal-i2v AIVideoNode with titleSource template follows Sogni`
+   - **恢复**：`git checkout -- src/constants/presets.ts`，重新执行测试恢复 41/41 全绿（exit 0）。
+
+2. **突变 B 验证（P1-2: 移除 applyHubCheckpointTitle 守卫）**：
+   - **操作**：删除 `src/utils/nodeDisplayTitle.ts` 中 `applyHubCheckpointTitle` 的 `if (titleSource !== 'template') return currentTitle;` 守卫；
+   - **运行命令**：`npx vitest run src/utils/nodeDisplayTitle.test.ts`；
+   - **结果**：**红屏报错，exit 1**！
+     * `FAIL: P1-2: applyHubCheckpointTitle guard for existing CheckpointLoaderSimple > preserves user lookalike titles and custom titles when titleSource is not template`
+     * `AssertionError: expected '加载底模 (Sogni)' to be '加载底模 (v2)'`
+   - **恢复**：恢复守卫代码，重新执行测试恢复 9/9 全绿（exit 0）。
+
+---
+
+## 七、工程质量与完整校验退出码
 
 所有命令均在 `/root/github/ComfyUI Web Studio/.tower/worktrees/wt-15` 下直接执行（不接管道，如实记录）：
 
 1. **TypeScript 静态检查**：
    - 命令：`npx tsc --noEmit`
-   - 真实退出码：`0`
+   - 真实退出码：**`0`**
    - 输出：无错误输出，干净通过。
 2. **生产构建检查**：
    - 命令：`npm run build`
-   - 真实退出码：`0`
+   - 真实退出码：**`0`**
    - 输出：前端 Vite Client 与 Cloudflare Worker 均顺利构建输出。
 3. **Vitest 完整测试套件**：
    - 命令：`npx vitest run --maxWorkers=2 --exclude '.tower/**' --exclude '**/node_modules/**' --exclude '**/dist/**'`
-   - 真实退出码：`0`
+   - 真实退出码：**`0`**
    - 结果统计：251 个测试文件全部通过，1910 个测试用例全部通过（0 失败）。
 
 ---
 
-## 七、评审意见逐条对账表
+## 八、评审意见逐条对账表
 
 | 评审项 | 审查者发现与要求 | 处理方案与交付事实 | 状态 |
 | :--- | :--- | :--- | :---: |
-| **P1-1** | `isTemplateCheckpointNodeTitle` 误将 `加载底模 (v2)` / `my-model` / `foo.safetensors` / `Load Checkpoint (v2)` 当作模板覆盖 | 引入 `NodeInstance.titleSource?: 'template' \| 'user'`，未标明来源一律视为用户标题；测试覆盖所有给定输入，突变检查红转绿 | **已修复** |
-| **P1-2** | `isTemplateVideoNodeTitle` 误将 `AI 视频 (Fal)` / `AI 视频` / `AI 视频 (Sogni)` 当作模板覆盖 | 统一依赖 `titleSource === 'template'`，非模板绝不修改标题；测试锁死所有审查者输入，突变检查 11 例红屏报错后恢复全绿 | **已修复** |
-| **P2-1** | 调色板默认标题与 Hub 新建节点标题未跟随服务商 | 在 `handleAddNode` 与 `handleApplyModel` 新建节点处显式标注 `titleSource: 'template'`，自然支持随服务商联动 | **已处理** |
-| **P2-2** | `handleApplyModel` 切换 checkpoint 时覆盖自定义标题 | 补充 `n.titleSource === 'template'` 守卫，自定义底模标题在换模型时原样保留 | **已处理** |
-| **P2-3** | `formatNodeDisplayTitle.ts` 为无人引用的空壳再导出 | 已通过 `git rm src/utils/formatNodeDisplayTitle.ts` 彻底删除，grep 确认全库无引用 | **已处理** |
+| **P1-1 (Round 2)** | 预设模板打 `titleSource = 'template'` 的标记未被测试锁住（突变 C 不报红） | `src/constants/presets.test.ts` 补充全量预设 34 个节点的 `titleSource === 'template'` 及原场景联动断言；突变 C 验证 2 例红屏报错，exit 1 | **已修复并锁死** |
+| **P1-2 (Round 2)** | `handleApplyModel` 对既有 checkpoint 的标题守卫未被测试锁住（突变 B 不报红） | 抽取 `applyHubCheckpointTitle` 纯函数并由 `App.tsx:1793` 唯一调用，补充 lookalike 保护断言；突变 B 验证红屏报错，exit 1 | **已修复并锁死** |
+| **P2-1 (Round 2)** | Hub 新建的 CheckpointLoaderSimple 未设 `titleSource: 'template'`，导致后续切换不联动 | 在 `App.tsx:1831` 与 `:2922` 补充 `titleSource: 'template'`；浏览器实机截图 `acceptance-05-hub-new-ckpt-follow.png` 验证切换 Sogni 成功跟随 | **已处理** |
+| **P2-2 (Round 2)** | `NodeItem.tsx:60` 导入了未使用的函数 | 已从 `NodeItem.tsx` 及 `nodeDisplayTitle.ts` 彻底删除未引用的空壳函数，全库无残留 | **已处理** |
+| **P2-3 (Round 2)** | `formatNodeDisplayTitle.ts` 空壳再导出文件 | 已通过 `git rm` 彻底删除，全库无引用 | **已处理** |
