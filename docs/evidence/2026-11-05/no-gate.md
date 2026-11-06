@@ -106,15 +106,15 @@
 | `src/server/mageImageContract.ts:69` | `!prompt` in `buildMageImageRequest` | `Mage Prompt 必填（prompt is required）` | **CLASS B REMOVE (已删除)** | 应用在发送前强制校验 prompt 必填，代码已删除该 throw，允许空 prompt 正常出站由 Mage 上游 API 判定。 |
 | `src/server/runwareImageContract.ts:58` | `!prompt` in `buildRunwareImageRequest` | `Runware 提示词为必填项（prompt is required）` | **CLASS B REMOVE (已删除)** | 应用在发送前强制校验 prompt 必填，代码已删除该 throw，允许空 prompt 正常出站由 Runware 上游 API 判定。 |
 | `src/server/modelsLabImageContract.ts:64` | `!prompt` in `buildModelsLabImageRequest` | `ModelsLab 提示词为必填项（prompt is required）` | **CLASS B REMOVE (已删除)** | 应用在发送前强制校验 prompt 必填，代码已删除该 throw，允许空 prompt 正常出站由 ModelsLab 上游 API 判定。 |
-| `src/schemas/zImageSpace.ts:53` | 缺失 6 个必填参数之一 in `buildZImagePayload` | `Z-Image 必须填写 ${field}` | **CLASS A KEEP** | Gradio Space `/gradio_api/call/generate` 接口是严格的位置参数数组（7 个必选位置参数，包括 prompt, resolution, seed, steps, shift, random_seed, gallery_images），缺失任一字段会导致位置数组错位，属于请求无法构造的 A 类。 |
+| `src/schemas/zImageSpace.ts:53` | 缺失 6 个必填参数之一 in `buildZImagePayload` | `Z-Image 必须填写 ${field}` | **CLASS B REMOVE (已删除)** | Gradio Space 接口虽为 7 个位置参数数组，但对缺失槽位填入 `null` 即可保持严格的 7 槽位位置对齐，不发生数组移位，不注入伪造默认值。本地抛错中止属于应用替上游 Space 预检判断。代码已删除该 throw，缺失槽位以 `null` 占位透传至上游。 |
 | `src/server/civitaiImageContract.ts:69, 75, 94, 95, 106` | Civitai AIR 解析失败 / 找不到对应版本 / modelId 与 versionId 不匹配 | 各项 AIR 解析错误文案 | **CLASS A KEEP** | Civitai 必须依赖 AIR 或 modelId@versionId 构造 workflow 请求体，输入不存在或矛盾时无法生成合法的 JSON payload。 |
 | `src/server/civitaiImageContract.ts:104, 111` | 输入数字 ID 或名称命中多个候选项 | `CivitaiAmbiguousError` | **CLASS A KEEP** | 存在多义性无法决定唯一的模型版本。 |
 | `src/server/civitaiImageContract.ts:116` | `!officialOpenApi` (OpenAPI 缺失) | `没有发出去：拿不到 Civitai imageGen 官方 OpenAPI，未发送 workflows` | **CLASS A KEEP** | Civitai 图像生成必须依赖官方 OpenAPI 动态匹配 engine（如 comfy/diffusers）与 workflow 步骤树节点结构。缺少 OpenAPI 时无法组装合法的 Civitai orchestration 语法树，属于客观上请求无法构造。保留为 A 类，文案如实客观透传。 |
 | `src/server/civitaiImageContract.ts:135` | `!ecosystem && !literalModelEngines...` | `Civitai ecosystem 为必填项，或提供带生态的完整 AIR` | **CLASS A KEEP** | 缺少生态标识无法定位执行引擎。 |
 | `src/server/civitaiImageContract.ts:181` | `!selected` (selectImageGenInputSchema 未能匹配分支) | `Civitai imageGen 输入 Schema 未选中（selectImageGenInputSchema 未返回结果），未发送` | **CLASS A KEEP** | 当官方 OpenAPI 中未能通过 `selectImageGenInputSchema` 选定输入 Schema 分支时，底层 workflow JSON 缺少合法的 step 输入规范，请求无法构造。 |
-| `src/server/civitaiImageContract.ts:192` | ZImage 内建 selector 收到 source checkpoint | `ZImage 内建 selector 不接受 source checkpoint；请明确选择 turbo/base` | **CLASS A KEEP** | Civitai ZImage 模型的内建 selector 仅接受 turbo/base 模式，传入 source checkpoint 无法映射到官方 OpenAPI 载荷，属于非法参数导致无法构造请求。 |
+| `src/server/civitaiImageContract.ts:192` | ZImage 内建 selector 收到 source checkpoint | `ZImage 内建 selector 不接受 source checkpoint；请明确选择 turbo/base` | **CLASS B REMOVE (已删除)** | 用户明确指定 ZImage 内建 selector（如 turbo/base）同时挂接 source checkpoint 时，应用原先本地抛错拒绝。代码已删除该 throw，将 selector 保留在 `input.model`，source checkpoint 显式保留在 `input.diffuserModel`，保持源模型身份，不伪造字段、不暗中替换模型，由 Civitai 上游 API 校验处理。 |
 | `src/server/civitaiImageContract.ts:288, 305` | `loras` 不是数组 / 缺少 AIR 或 ID | 对应参数格式错误 | **CLASS A KEEP** | 本地数据结构无法序列化。 |
-| `src/server/civitaiImageContract.ts:316` | LoRA 仅有 clipStrength 无模型强度 | `本地未发送：Civitai LoRA 只有 clipStrength，没有可映射到 loras.strength 的模型强度...` | **CLASS A KEEP** | 官方 Civitai OpenAPI 的 loras 入参规范仅接受 `{ air: string, strength: number }`，无任何 clipStrength 参数；严禁将 clipStrength 假冒为 strength（违反「严禁反透明假数据」最高准则），属于缺少合法模型强度导致请求无法构造。保留该拦截。 |
+| `src/server/civitaiImageContract.ts:316` | LoRA 仅有 clipStrength 无模型强度 | `本地未发送：Civitai LoRA 只有 clipStrength...` | **CLASS B REMOVE (已删除)** | 邻行代码显示当 LoRA 完全无 strength 时，array 分支直接构建 `{ air: resource }`，map 分支赋值为 `null`，LoRA 身份完整保留在序列化 JSON 中，并未因缺少模型 strength 导致无法构造。原先仅因 `clipStrength` 存在而抛错拒绝，属于应用替上游判断「不能把 clip 强度冒充模型强度」。已删除该前置 throw，array 模式出站 `{ air }`，map 模式出站 `{[air]: null}`，不伪造 strength 数值；原始 `clipStrength` 在 requested/mapping 追踪中透明保留为未映射。 |
 | `src/server/civitaiImageContract.ts:337` | `schemaFetchFailure` 触发抛错 | `CivitaiSchemaMissingError` | **CLASS A KEEP** | 缺少 Schema 导致无法构建 Civitai workflow。保留为 A 类。 |
 | `src/server/civitaiImageContract.ts:340, 346, 350` | custom_parameters 非法修改核心系统字段 / 参数冲突 | 对应错误文案 | **CLASS A KEEP** | 防止破坏底层协议关键字段。 |
 | `src/server/routes/videoGenerateRoute.ts:136` | `!model` | `模型为必填项（model is required）` (400) | **CLASS A KEEP** | 视频模型必填。 |
@@ -194,13 +194,13 @@
 表格逐行重新清点统计结果完全一致：
 - **总审计条目数**: 128 条
 - **分类统计 (Verdict)**:
-  - **CLASS A (请求无法构造)**: 101 条（真实无法构建请求、缺失 Key、缺失 Provider、缺失 Model、TAMS uint64 路径校验、Fal/Civitai 缺少 Schema 无法构造载荷、本地输入数据格式损坏、AIR 歧义、安全隔离保护、缺少模型强度无法组装 Civitai loras 规范载荷）
-  - **CLASS B (应用替上游预检判断)**: 27 条（包括 M18 范围内已处理的 24 项，以及属于 `src/engines/drivers/` 驱动层的 3 项）
+  - **CLASS A (请求无法构造)**: 98 条（真实无法构建请求、缺失 Key、缺失 Provider、缺失 Model、TAMS uint64 路径校验、Fal/Civitai 缺少 Schema 无法构造载荷、本地输入数据格式损坏、AIR 歧义、安全隔离保护）
+  - **CLASS B (应用替上游预检判断)**: 30 条（包括 M18 范围内已处理的 27 项，以及属于 `src/engines/drivers/` 驱动层的 3 项）
 - **处置状态分布 (Disposition)**:
-  - **CLASS A KEEP (保留项)**: 101 条
-  - **CLASS B REMOVE (已删除/解除阻断/彻底清理)**: 24 条（代码中已彻底处理，不再有任何一条处于本地拦截状态）
+  - **CLASS A KEEP (保留项)**: 98 条
+  - **CLASS B REMOVE (已删除/解除阻断/彻底清理)**: 27 条（代码中已彻底处理，不再有任何一条处于本地拦截状态）
   - **转 M23 (移交驱动层处理)**: 3 条（`VideoDriver.ts:133`, `FalDriver.ts:103`, `AgnesDriver.ts:118`，位于 `src/engines/drivers/` 目录，已由主控统一划归 Mission M23）
-  - **校验**: 101 + 24 + 3 = 128，与逐行重数严格相等。
+  - **校验**: 98 + 27 + 3 = 128，与逐行重数严格相等。
 
 ---
 

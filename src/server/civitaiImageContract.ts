@@ -112,7 +112,18 @@ export async function resolveCivitaiResource(rawInput: string, get: CivitaiPubli
   return versionAir(models[0].modelVersions[0], models[0]);
 }
 
-async function buildCivitaiBaseInput(body: Body, get: CivitaiPublicGet, officialOpenApi: unknown): Promise<Body> {
+export interface CivitaiUnmappedLora {
+  air: string;
+  clipStrength?: unknown;
+  reason: string;
+}
+
+async function buildCivitaiBaseInput(
+  body: Body,
+  get: CivitaiPublicGet,
+  officialOpenApi: unknown,
+  unmappedLoras?: CivitaiUnmappedLora[]
+): Promise<Body> {
   if (!officialOpenApi || typeof officialOpenApi !== 'object') throw new CivitaiSchemaMissingError();
   const document = officialOpenApi as any;
 
@@ -188,8 +199,7 @@ async function buildCivitaiBaseInput(body: Body, get: CivitaiPublicGet, official
   };
   if (builtin) {
     input.model = body.comfyModel;
-    if (source && engine === 'comfy') input[ecosystem === 'zImage' ? 'diffuserModel' : 'diffusionModel'] = source;
-    else if (source) fail('ZImage 内建 selector 不接受 source checkpoint；请明确选择 turbo/base');
+    if (source) input[ecosystem === 'zImage' ? 'diffuserModel' : 'diffusionModel'] = source;
   } else if (selectorOnly && modelLooksLiteral) {
     input.model = body.model;
   } else if (modelSelector && (engine === 'flux2' || wire.model !== undefined)) {
@@ -312,12 +322,16 @@ async function buildCivitaiBaseInput(body: Body, get: CivitaiPublicGet, official
     const flux2Resource = resourceEcosystem === 'flux2' && (ecosystem === 'flux2Dev' || ecosystem === 'flux2Klein' || ecosystem === 'dev' || ecosystem === 'klein' || engine === 'flux2') || !!spec?.request?.airEcosystems?.includes(resourceEcosystem);
     void sd1Resource; void zImageTurboResource; void zImageBaseResource; void flux2Resource;
     const strength = lora.strength ?? lora.modelStrength;
-    if (!provided(strength) && provided(lora.clipStrength)) {
-      fail('本地未发送：Civitai LoRA 只有 clipStrength，没有可映射到 loras.strength 的模型强度；请填写 strength/modelStrength，不把 CLIP 强度冒充模型强度');
+    if (!provided(strength) && provided(lora.clipStrength) && unmappedLoras) {
+      unmappedLoras.push({ air: resource, clipStrength: lora.clipStrength, reason: 'Civitai API has no clipStrength wire field; preserved as unmapped' });
     }
-    const sv = provided(strength) ? Number(strength) : (undefined as unknown as number);
-    if (loraShape === 'array') lorasArr.push(sv === undefined ? ({ air: resource } as any) : { air: resource, strength: sv });
-    else lorasMap[resource] = sv;
+    const sv = provided(strength) ? Number(strength) : undefined;
+    if (loraShape === 'array') {
+      lorasArr.push(sv === undefined ? ({ air: resource } as any) : { air: resource, strength: sv });
+    } else {
+      // In map mode, use null for unsupplied strength so JSON.stringify preserves the AIR key without fabricating numbers
+      lorasMap[resource] = sv === undefined ? null : sv;
+    }
   }
   if (loraShape === 'array') {
     if (lorasArr.length) input.loras = lorasArr;
@@ -359,12 +373,13 @@ export async function buildCivitaiImageRequest(
   const boundary = /^(?:model|comfyModel|engine|ecosystem|provider|endpoint|base_?url|url|inference_provider|diffuserModel|diffusionModel|workflowSnapshot|operation|version)$/i;
   const controls = /^(?:custom_parameters|isVideo|targetProvider|videoDuration|duration|fps|inputSchemaProperties|officialOpenApi|allowMatureContent)$|api.?key|authorization|credential|password|secret|token/i;
   const advanced = (source: Body) => Object.fromEntries(Object.entries(source).filter(([key]) => !translated.has(key) && !boundary.test(key) && !controls.test(key)));
+  const unmappedLoras: CivitaiUnmappedLora[] = [];
   const beforeCustom = { ...await buildCivitaiBaseInput(topLevel, get, officialOpenApi), ...advanced(topLevel) };
-  const mapped = await buildCivitaiBaseInput(effective, get, officialOpenApi);
+  const mapped = await buildCivitaiBaseInput(effective, get, officialOpenApi, unmappedLoras);
   if (Object.hasOwn(normalizedCustom, 'loras') && mapped.ecosystem !== 'krea2') mapped.loras = mapped.loras ?? {};
   const payload = { ...mapped, ...advanced(effective) };
   const overrides = Object.fromEntries(Object.entries(payload).filter(([key, value]) => Object.hasOwn(beforeCustom, key) && JSON.stringify(beforeCustom[key]) !== JSON.stringify(value)).map(([key, value]) => [key, { before: beforeCustom[key], after: value }]));
-  return { payload, beforeCustom, customParameters: { ...custom }, overrides };
+  return { payload, beforeCustom, customParameters: { ...custom }, overrides, unmappedLoras };
 }
 
 export async function buildCivitaiImageInput(body: Body, get: CivitaiPublicGet, officialOpenApi?: unknown): Promise<Body> {

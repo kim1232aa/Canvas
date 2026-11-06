@@ -96,14 +96,44 @@ describe('Civitai image request contract', () => {
     }, api({}), oa());
     expect(input.loras).toEqual([{ air: lora, strength: 0.7 }]);
   });
-  it('rejects clip-only LoRA strength instead of silently invoking an upstream default', async () => {
+  it('regression: allows clip-only LoRA strength without local throw, preserves LoRA identity in serialized JSON without fabricating strength', async () => {
     const lora = 'urn:air:flux2:lora:civitai:3@4';
-    await expect(buildCivitaiImageInput({
+    // Array mode (e.g. flux2 dev): builds { air } without fabricated strength
+    const arrayInput = await buildCivitaiImageInput({
       model: 'urn:air:flux2:checkpoint:civitai:1@2',
       engine: 'flux2',
       ecosystem: 'dev',
       loras: [{ civitaiId: lora, clipStrength: 0.7 }],
-    }, api({}), oa())).rejects.toThrow(/clipStrength.*modelStrength|clipStrength.*strength|模型强度/);
+    }, api({}), oa());
+    expect(arrayInput.loras).toEqual([{ air: lora }]);
+    const arraySerialized = JSON.stringify(arrayInput.loras);
+    expect(arraySerialized).toContain(lora);
+    expect(arraySerialized).not.toContain('0.7');
+
+    // Map mode (e.g. flux2Klein): builds { [air]: null } so JSON.stringify does NOT drop the key
+    const mapInput = await buildCivitaiImageInput({
+      model: 'urn:air:flux2:checkpoint:civitai:1@2',
+      engine: 'sdcpp',
+      ecosystem: 'flux2Klein',
+      prompt: 'x',
+      loras: [{ civitaiId: lora, clipStrength: 0.7 }],
+    }, api({}), oa());
+    expect(mapInput.loras).toEqual({ [lora]: null });
+    const mapSerialized = JSON.stringify(mapInput.loras);
+    expect(mapSerialized).toContain(lora);
+    expect(mapSerialized).toContain('null');
+    expect(mapSerialized).not.toContain('0.7');
+  });
+
+  it('regression: allows ZImage source checkpoint without local throw', async () => {
+    const input = await buildCivitaiImageInput({
+      model: 'urn:air:zImage:checkpoint:civitai:1@2',
+      engine: 'sdcpp',
+      ecosystem: 'zImage',
+      comfyModel: 'turbo',
+      prompt: 'test',
+    }, api({}), oa());
+    expect(input.diffuserModel).toBe('urn:air:zImage:checkpoint:civitai:1@2');
   });
   it('Flux2 Klein still builds AIR→strength loras map', async () => {
     const lora = 'urn:air:flux2:lora:civitai:5@6';

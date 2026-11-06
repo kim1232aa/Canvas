@@ -49,10 +49,15 @@ export function buildZImagePayload(rawInput: Record<string, unknown>) {
   const extra = customEntries.filter(([field]) => !(Z_IMAGE_PARAMETERS as readonly string[]).includes(field));
   const overrides = customEntries.map(([field, value]) => ({ field, requested: rawInput[field], custom: value, applied: true }));
   const input: Record<string, unknown> = { ...rawInput, ...Object.fromEntries(customEntries) };
-  for (const field of ['resolution', 'seed', 'steps', 'shift', 'random_seed', 'gallery_images'] as const) {
-    if (input[field] === undefined || input[field] === null || input[field] === '') throw new Error(`Z-Image 必须填写 ${field}`);
-  }
-  const data = [...Z_IMAGE_PARAMETERS.map((field) => field === 'prompt' ? input.prompt ?? '' : input[field]), ...extra.map(([, v]) => v)];
+  // Missing positional fields are sent as null (exact index alignment, no shifting, no fabricated defaults; Space decides)
+  const data = [
+    ...Z_IMAGE_PARAMETERS.map((field) => {
+      if (field === 'prompt') return input.prompt ?? '';
+      const v = input[field];
+      return v !== undefined && v !== '' ? v : null;
+    }),
+    ...extra.map(([, v]) => v),
+  ];
   const actualParameters = Object.fromEntries([...Z_IMAGE_PARAMETERS.map((field, index) => [field, data[index]]), ...extra]);
   return { data, overrides, actualParameters };
 }

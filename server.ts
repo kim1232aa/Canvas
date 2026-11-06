@@ -3738,7 +3738,7 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
       }
       const genInput = builtImage.payload;
       submittedImageParameters = genInput;
-      generationContext.getStore()?.traces.push(sanitizeGenerationMetadata({ stage: 'parameter-mapping', provider: 'civitai', beforeCustom: builtImage.beforeCustom, customParameters: builtImage.customParameters, overrides: builtImage.overrides, actualParameters: genInput }));
+      generationContext.getStore()?.traces.push(sanitizeGenerationMetadata({ stage: 'parameter-mapping', provider: 'civitai', requested: requestedParameters, unmappedLoras: builtImage.unmappedLoras, beforeCustom: builtImage.beforeCustom, customParameters: builtImage.customParameters, overrides: builtImage.overrides, actualParameters: genInput }));
       airModel = String(genInput.diffuserModel ?? genInput.diffusionModel ?? genInput.model);
 
       // POST /v2/consumer/workflows?wait=100 (integer seconds, max 100)
