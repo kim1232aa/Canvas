@@ -446,9 +446,9 @@
 3. **全量单元测试 (`npx vitest run --maxWorkers=2 ...`)**:
    - 执行命令: `npx vitest run --maxWorkers=2 --exclude '.tower/**' --exclude '**/node_modules/**' --exclude '**/dist/**'`
    - 实际退出码: `0`
-   - 测试文件: **256 个测试文件全量通过 (256 passed)**。
-   - 测试用例: **1974 个用例全量通过 (1974 passed)**。
-   - 执行耗时: 123.34s，零失败、零超时，全量退出码 0。
+   - 测试文件: **257 个测试文件全量通过 (257 passed)**（包含 M17 新增的 `verbatimErrors.test.tsx`）。
+   - 测试用例: **1998 个用例全量通过 (1998 passed)**。
+   - 执行耗时: 158.67s，零失败、零超时，全量退出码 0。
    - **修改涉及的全部单测**: `generationReadiness.test.ts` (9/9 PASS), `resolveCheckpoint.test.ts` (27/27 PASS), `BaseEngineDriver.test.ts` (4/4 PASS), `graphEngine.test.ts` (66/66 PASS), `replicateImageContract.test.ts` (17/17 PASS), `frontendParameters.test.ts` (15/15 PASS), `mageImageContract.test.ts` (10/10 PASS), `runwareImageContract.test.ts` (13/13 PASS), `modelsLabImageContract.test.ts` (21/21 PASS), `tensorArtModelTypeGate.test.ts` (1/1 PASS), `presetsDryRun.test.ts` (36/36 PASS)，**全部 100% 绿过**。
 
 4. **系统网络与 hosts 状态核验**:
