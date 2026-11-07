@@ -1,16 +1,31 @@
 # ComfyCanvas Studio：开发交接、产品缺口与验收手册
 
-## 2026-11-04 当前终态总览（唯一基线，优先于下文全部历史记录）
+## 2026-11-07 当前终态总览（唯一已验证基线，优先于下文全部历史记录）
 
-- **最新 HEAD**：`db34fa7`（`main` 与 `origin/main` 严格同步；全量测试 229 文件 / 1686 用例全通过，`tsc --noEmit` 0 错误）。
-- **核心架构准则（2026-11-04 收敛落地）**：
-  1. **有值照发，撤除本地拦截**：彻底移除 `rejectUnsupported` / `rejectSchemaEnum` 与本地 400 预检拦截；凡是用户在节点或高级设置填写的参数，一律原样组装发往上游服务商；若上游拒绝，节点单次原生展示上游返回的真实 HTTP 状态码与原始错误体，不静默 Fallback、不吞错。
-  2. **UI 去工程化**：移除开发期的执行日志面板（execution-log）、冗余运行 Toast、节点支持性角标及红条；历史记录仅保留成功产出媒体的有效记录，卡片仅展示真实发出的参数，支持「照这组参数再来一张」一键回填。
-  3. **视频与预设**：WaveSpeed / MuAPI / Replicate / Fal / Civitai 图生视频与视频 LoRA 链路已接通；全部标准预设（T2I/I2V）严格采用真实配方页（civitai.red / tensor.art）的参数与提示词。
-- **当前剩余外部阻塞（代码已就绪，非代码缺陷）**：
-  - **MuAPI 文生图预设**：官方 Schema 明确要求必填真实训练产物 `lora_url`，未填前上游拒绝出图（卡片保持「待配方」提示）。
-  - **真机视频出片（Funded I2V）**：WaveSpeed 账户余额不足（$0.008 < $0.15）；ModelScope 官方云端 REST API 无视频端点。
-  - **凭证与额度待就绪**：Together（官方已下线 `image_loras`）、Tensor.Art TAMS Bearer、civitai.red 付费 LoRA（Buzz 限制）。
+- **最新代码基准**：`main` @ `4ab0948`（已完全合并 M1~M12, M14~M18, M23, M24, M26, M27, M28 全量修复；经 M25 终结回归验证）。
+- **全量工程质量指标**：
+  - `npm run build`：Exit code 0，成功生成 `hosting/server.generated.ts` 与 `dist/` 前端资产包。
+  - `npx tsc --noEmit`：Exit code 0，0 错误，严格类型检查通过。
+  - `npx vitest run --maxWorkers=2 --exclude '.tower/**' --exclude '**/node_modules/**' --exclude '**/dist/**'`：**264 个测试文件全部通过，2128 个测试用例全绿，0 failures**，耗时 166.86s，Exit code 0。
+  - `src/integration/modelSelection.test.tsx` 单独运行：5 passed，耗时 25.18s，Exit code 0。
+- **真实浏览器 UI 回归成果 (Headless Chrome 153 CDP, 2560×1440)**：
+  - 完整执行 6 大核心流程（空白画布新手入门引导与一键装配、全量 34 个内置现代预设核查与 15 家供应商真实出站运行、Civitai 现代/SD1.5/FLUX 配方逆向导入与出站、模型中心浏览与多端点 LoRA 挂载、AI 视频节点 T2V/I2V 与 Sogni 动态切换 `animate_photo` 横幅、Fal Wan 2.2 与 Venice 双服务商 NSFW 宽松默认可见与用户手动切回）。
+  - 产出 **41 张独立唯一 MD5 全量高保真截图**（归档于 `docs/evidence/2026-11-05/final/*.png`，0 重复哈希，经 `ReadMediaFile` + `region` 逐张眼核，0 处 UI 逻辑矛盾与遮挡），并联合引用 `docs/evidence/2026-11-05/recipe-shapes/01..07.png`（现代 Civitai 配方 `#148140013` / `#148135866` / `#148004351`）与 `docs/evidence/2026-11-05/current-presets/01..16.png`（现代内置预设实测截图）。
+  - 脱敏后的代表性出站请求/响应摘录与上游任务 ID 归档于 [docs/evidence/2026-11-05/final.md](docs/evidence/2026-11-05/final.md) 第八节（不依赖已删除的 `temp/logs/requests-m25.jsonl`）。
+  - D6：当前 tracked `*.md` / `docs/**` 敏感模式 grep 为 0 行。更早 git 提交历史仍含脱敏前字符串；彻底清除需用户授权的 history rewrite（`git filter-repo` / force-push），本任务未执行。
+  - D9 待充值复测：Fal / HF / WaveSpeed / Sogni / AIMLAPI / DeepInfra / Mage / Civitai / Novita（`final/35` 403 `NOT_ENOUGH_BALANCE`）/ Venice（`final/14` 402 Insufficient USD or Diem）。ModelsLab 本轮底模留空为 `NOT_SENT`。
+  - 详尽终结报告：[docs/evidence/2026-11-05/final.md](docs/evidence/2026-11-05/final.md)。
+- **核心工程准则（落地闭环）**：
+  1. **唯一验收标准**：「UI实际点击通过并有产物，你之前绕过前端直接请求api的是违规，是绕过，你请求api通过，和我前端点击通过根本不是一回事」。
+  2. **余额不足政策**：「余额不足不做卡点，先集成api，错误能原样透传算暂时通过」。
+  3. **单元测试与实际问题**：「最后：单元测试通过绝不等于实际问题解决」。
+  4. **透明透传与反黑盒**：「不要美化报错，原样放回」「严禁静默容灾与虚假成功」「禁止多余的拦截」。
+  5. **NSFW 放开策略**：「我们不反对nsfw，有nsfw开关的都默认开启」。
+- **下文声明**：本文件下文「2026-11-04」及更早各章节均为早期 Agent 留存的**未验证历史记录（Unverified History）**，不得作为当前系统现状与能力的凭据。
+
+---
+
+## 2026-11-04 历史总览（未验证历史）
 
 ## 2026-11-04 非消耗：Replicate 步数透明 + 本地拦截展示
 
@@ -105,7 +120,7 @@
 
 | 项 | 判定 | 要点 / 证据 |
 | --- | --- | --- |
-| WaveSpeed 同会话重交 | **PASS_GENERATION**（产品核；补此前混态拒收） | hist `hist_1793687045083_fuctj`；保存节点松鼠图无「不是本次会话」；角标「生成请求 13」；actualRequest 含 LoRA path+scale1.1、seed42、steps36、guidance3.5、832×1216。证据 `/workspace/canvas/temp/e2e/wavespeed/fe-same-session-2026-11-03/`（01–03+NOTES）。既有 WaveSpeed PASS 不降级。 |
+| WaveSpeed 同会话重交 | **PASS_GENERATION**（产品核；补此前混态拒收） | hist `hist_1793687045083_fuctj`；保存节点松鼠图无「不是本次会话」；角标「生成请求 13」；actualRequest 含 LoRA path+scale1.1、seed42、steps36、guidance3.5、832×1216。证据 `<repo-root>/temp/e2e/wavespeed/fe-same-session-2026-11-03/`（01–03+NOTES）。既有 WaveSpeed PASS 不降级。 |
 | 失败态保存节点露上游原文 | **已过**（见上节 2026-11-03 保存节点失败原文透传） | — |
 
 ## 2026-10-16 晚间历史状态（仅作归档，以文首 2026-11-04 终态为准）
@@ -113,8 +128,8 @@
 ### fix15.1 / fix16（本段为历史归档）
 | 项 | 判定 | 要点 / 证据 |
 | --- | --- | --- |
-| **fix15.1** | **CLOSED**（挑刺无严重；接线形状过，非 PASS_BILLING/GENERATION） | 实际发送块移到未发送折叠前。证据 `docs/evidence/fix15.1-2026-10-16.md`、`/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-fix15.1-accept-2254/` |
-| **fix16** | **CODE_ONLY 冻结，等画布重拍历史卡** | PID **3695091**，ticks **326**，lstart 北京 **23:03:32**。五项：蓝标组标题+间距；种子分两处说；prompt/LoRA 不截断；未发送折叠去重复后缀；历史开着不浮 error toast。证据 `docs/evidence/fix16-2026-10-16.md`。Restore `/workspace/canvas/temp/backups/canvas-restore-fix16-2301.tgz` |
+| **fix15.1** | **CLOSED**（挑刺无严重；接线形状过，非 PASS_BILLING/GENERATION） | 实际发送块移到未发送折叠前。证据 `docs/evidence/fix15.1-2026-10-16.md`、`<repo-root>/temp/canvas-e2e-archive-20261017/canvas-e2e-fix15.1-accept-2254/` |
+| **fix16** | **CODE_ONLY 冻结，等画布重拍历史卡** | PID **3695091**，ticks **326**，lstart 北京 **23:03:32**。五项：蓝标组标题+间距；种子分两处说；prompt/LoRA 不截断；未发送折叠去重复后缀；历史开着不浮 error toast。证据 `docs/evidence/fix16-2026-10-16.md`。Restore `<repo-root>/temp/backups/canvas-restore-fix16-2301.tgz` |
 
 
 **不能宣称全供应商/全模式验收完毕。** 本段只同步当日 UI 修复收口、Git 与待办；不发明未核验 PASS。
@@ -122,7 +137,7 @@
 ### 仓库 / Git
 | 项 | 事实 |
 | --- | --- |
-| 路径 | `/workspace/canvas/Canvas-main`（本地已有 `.git`） |
+| 路径 | `<repo-root>/Canvas-main`（本地已有 `.git`） |
 | HEAD / origin/main | `2d76382`（2026-10-16 推送） |
 | 远程 | https://github.com/kim1232aa/Canvas 分支 `main` |
 | 提交说明 | `sync local canvas work: multi-provider E2E fixes through fix12` |
@@ -131,13 +146,13 @@
 ### 本轮已收口（前端 E2E + 挑刺，无严重项才正式收口）
 | 项 | 判定 | 要点 / 证据 |
 | --- | --- | --- |
-| **fix10.1** | **CLOSED** | 零宽字符（ZWSP）不再进入 value/存储；出站 model 码点干净。Fal Kling V3 i2v 真跑一次：历史卡 `q1cbe` 上游 **403 TOP_UP** 原样（记该路由 **PASS_BILLING** 级证据，非出图）。证据：`docs/evidence/fix10.1-2026-10-16.md`、`/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-fix10.1/`、`/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-fix10.1-accept-1803/` |
-| **fix11.2** | **CLOSED**（挑刺无严重） | 900/1100/1600 预览浮层贴齐底栏顶且字全可读；不盖「画面比例」；历史弹层打开时不渲染浮层。证据：`docs/evidence/fix11.2-2026-10-16.md`、`/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-fix11.2-accept-2022/`。中间版 fix11 / fix11.1 已被 11.2 取代，不单独升格 |
+| **fix10.1** | **CLOSED** | 零宽字符（ZWSP）不再进入 value/存储；出站 model 码点干净。Fal Kling V3 i2v 真跑一次：历史卡 `q1cbe` 上游 **403 TOP_UP** 原样（记该路由 **PASS_BILLING** 级证据，非出图）。证据：`docs/evidence/fix10.1-2026-10-16.md`、`<repo-root>/temp/canvas-e2e-archive-20261017/canvas-e2e-fix10.1/`、`<repo-root>/temp/canvas-e2e-archive-20261017/canvas-e2e-fix10.1-accept-1803/` |
+| **fix11.2** | **CLOSED**（挑刺无严重） | 900/1100/1600 预览浮层贴齐底栏顶且字全可读；不盖「画面比例」；历史弹层打开时不渲染浮层。证据：`docs/evidence/fix11.2-2026-10-16.md`、`<repo-root>/temp/canvas-e2e-archive-20261017/canvas-e2e-fix11.2-accept-2022/`。中间版 fix11 / fix11.1 已被 11.2 取代，不单独升格 |
 
 ### 进行中 / 未收口
 | 项 | 状态 | 说明 |
 | --- | --- | --- |
-| **fix12** | **CLOSED（挑刺过，见文末「2026-10-16 fix12 CLOSED」）** | PID **3473149**，ticks **14993784**，启动约 **20:45 JST**（北京 19:45 CST）。改动：历史折叠摘要徽章「共 N 项」；900 宽执行记录 `under-top` 虚线样式。自测证据 `docs/evidence/fix12-2026-10-16.md`、`/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-fix12/`；前端验收目录 `/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-fix12-accept-2157/`。**已挑刺收口，记 CLOSED** |
+| **fix12** | **CLOSED（挑刺过，见文末「2026-10-16 fix12 CLOSED」）** | PID **3473149**，ticks **14993784**，启动约 **20:45 JST**（北京 19:45 CST）。改动：历史折叠摘要徽章「共 N 项」；900 宽执行记录 `under-top` 虚线样式。自测证据 `docs/evidence/fix12-2026-10-16.md`、`<repo-root>/temp/canvas-e2e-archive-20261017/canvas-e2e-fix12/`；前端验收目录 `<repo-root>/temp/canvas-e2e-archive-20261017/canvas-e2e-fix12-accept-2157/`。**已挑刺收口，记 CLOSED** |
 | Parked UI | 无 | — |
 
 ### 供应商相关待办（不降级既有 PASS）
@@ -167,7 +182,7 @@
 - 未出现 LoRA 强度控件；`loras: []`。KSampler 空白的 cfg/denoise 被显式填为 1 / 1。Schema 匹配后实际提交不包含 steps/cfg（界面记「未发送」）；`denoise=1` 映射为官方字段 `strength=1`（该字段说明仅在带 image 时用于图生图；本次无参考图，上游仍接受）。
 - 实际端点：`POST https://api.wavespeed.ai/api/v3/wavespeed-ai/krea-v2/turbo`。上游回显 input：`prompt` + `seed=42` + `strength=1` + 默认 `aspect_ratio=1:1`、`resolution=1k`。提交 `status=created`，task `507d3d31d97d4f05af7852a595b48e38`；轮询终态 `status=completed`，`code=200`，`inference=3767` ms，error 为空。
 - 输出：`https://d2h7xmz5gqybh9.cloudfront.net/output/15fc1dbb-393a-4712-b0f4-672ce5682c08-u1_1b7bf0fe-9640-487b-a257-a36a7f5ef8cb.jpeg`，画布与历史均显示同一张图，本地 `/api/media/7b77ccd3152521a920183250d610b0d4979e3c25d1637ce62134d72ead636da8`。画面与提示词一致（雨夜撑伞蹲姿、黑猫、积水反光）。
-- 证据截图与脱敏历史 JSON：`/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-wavespeed/`（01 运行前、02 画布出图、03 结果图、04 历史弹窗、history-export.json）。凭证已脱敏，未写入密钥。
+- 证据截图与脱敏历史 JSON：`<repo-root>/temp/canvas-e2e-archive-20261017/canvas-e2e-wavespeed/`（01 运行前、02 画布出图、03 结果图、04 历史弹窗、history-export.json）。凭证已脱敏，未写入密钥。
 
 
 ## 2026-10-11 当前状态：Runware/ModelsLab 网页实测闭环、双兼容中转出图通过、模型中心 17 家全聚合
@@ -177,8 +192,8 @@
 - **真实网页点击运行出图成功（PASS_GENERATION）**：
   - **Tensor.Art (TAMS)**：旧 OpenWorks 工具名（如 `photoreal_studio_z_image`）不代表模型和 LoRA，不算 TAMS 验收；真实 TAMS 模型 API (`https://tams-api.tensor.art/v1`) 当前账户返回 `unauthorized / app not found`，记 **`BLOCKED_AUTH`**；
   - **Runware**：预设载入 `runware:100@1` (FLUX.1 [schnell])，从网页点击运行，上游返回 HTTP 200 真实成功出图，持久化至 `/api/media/<hash>`，记 **`PASS_GENERATION`**（证据保存在 `docs/evidence/t7-runware-acceptance.md`）；
-  - **OpenAI 兼容中转**：中转 Base URL `https://sub.alibb123.ccwu.cc/v1` + 模型 `gpt-image-2`，从网页点击运行，上游返回 HTTP 200 真实成功出图，持久化至 `/api/media/<hash>`，记 **`PASS_GENERATION`**（证据保存在 `docs/evidence/t7-openai-compat-acceptance.md`）；
-  - **Grok 兼容中转**：中转 Base URL `https://sub.alibb123.ccwu.cc/v1` + 模型 `grok-imagine-image`，在网页选定 `1k` 分辨率并点击运行，上游返回 HTTP 200 真实成功出图，持久化并在画布与大图灯箱渲染，记 **`PASS_GENERATION`**（证据保存在 `docs/evidence/t7-grok-compat-acceptance.md`）；
+  - **OpenAI 兼容中转**：中转 Base URL `https://<user-configured-relay>/v1` + 模型 `gpt-image-2`，从网页点击运行，上游返回 HTTP 200 真实成功出图，持久化至 `/api/media/<hash>`，记 **`PASS_GENERATION`**（证据保存在 `docs/evidence/t7-openai-compat-acceptance.md`）；
+  - **Grok 兼容中转**：中转 Base URL `https://<user-configured-relay>/v1` + 模型 `grok-imagine-image`，在网页选定 `1k` 分辨率并点击运行，上游返回 HTTP 200 真实成功出图，持久化并在画布与大图灯箱渲染，记 **`PASS_GENERATION`**（证据保存在 `docs/evidence/t7-grok-compat-acceptance.md`）；
   - **Agnes Image 2.5 Flash**：英文雪豹/中文橘猫文生图、人物水彩编辑真实出图 200（证据保存在 `docs/evidence/t7-agnes-acceptance.md`）；
   - **SenseNova U1.5 Lite**：>1MB 红夹克编辑、橘猫窗台文生图真实出图 200（证据保存在 `docs/evidence/t7-sensenova-acceptance.md`）；
   - **WaveSpeed**：指定 LoRA 端点真实出图通过（证据保存在 `docs/evidence/t7-wavespeed-acceptance.md`）；
@@ -315,11 +330,11 @@
 | 2026-10-04 交接历史 GitHub 提交 | `af68228241e335a53d560e92c750a945949777e1`（仅历史追溯，不是当前 HEAD） |
 | 2026-10-04 对应 Sites 源提交 | `2b986c9cb58132f6107fc630e4860f1a36781f67`（仅历史追溯） |
 | 当时两者相同的源码 tree | `70e0f5e5370173b75754d0c748c725b88ce18550` |
-| 历史 Sites 地址 | https://comfycanvas-studio.quilts-nock-0mb.chatgpt.site |
-| Sites project_id | `appgprj_6abf7823b9648191aed7e4c4f10bbea8` |
-| 历史已成功发布部署 | `appgdep_6ac22888c5708191ab2bb63304361b66`，环境 revision 4 |
+| 历史 Sites 地址 | https://<private-deployment-host> |
+| Sites project_id | `<redacted-project-id>` |
+| 历史已成功发布部署 | `<redacted-deployment-id>`，环境 revision 4 |
 | 2026-10-06 收尾前本地 HEAD | `d75d1d4`；本轮收尾提交完成后以 `git log -1` / `origin/main` 为准，不再把此哈希当最终版本 |
-| 当前活跃工作目录 | `/workspace/canvas/Canvas-main`（当前 HEAD 见文首 `db34fa7`；历史 2026-10-16 快照为 `2d76382`） |
+| 当前活跃工作目录 | `<repo-root>/Canvas-main`（当前 HEAD 见文首 `db34fa7`；历史 2026-10-16 快照为 `2d76382`） |
 | 历史验证（2026-10-04 前） | 35 个测试文件、267 个测试通过；仅作历史追溯 |
 | 2026-10-08 当前回归 | `npm run lint` PASS；`npm test` 40 files / 295 tests PASS；`npm run build` PASS（含 frontend + hosting worker 构建）。仍不替代真实前端/上游验收 |
 
@@ -620,26 +635,26 @@
 以上链接是接手检索入口及已有审计引用，不表示本次重新测试了所有官方行为。供应商文档和目录会变化，修改 API 接线前仍须重新取证。
 
 ## 2026-10-16 fix12 CLOSED
-- UI：历史未记录「共 N 项」+ 900 under-top / 1100 靠栏；证据 `/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-fix12-accept-2157/`；挑刺无问题。
+- UI：历史未记录「共 N 项」+ 900 under-top / 1100 靠栏；证据 `<repo-root>/temp/canvas-e2e-archive-20261017/canvas-e2e-fix12-accept-2157/`；挑刺无问题。
 - 下一批：TAMS/OpenWorks 混用清理 + 主机 ap-east-1；Together 公共不挂假 LoRA。
 
 ## 2026-10-16 fix13 CLOSED（清理+主机）
 - TAMS 默认 `ap-east-1.tensorart.cloud`；钥匙不再把 ak_ 记成 TAMS ok；OpenWorks 真生图保留为独立服务商；Together 公共不挂假 LoRA。
-- 证据 `/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-fix13-accept-2235/`；挑刺无严重。
+- 证据 `<repo-root>/temp/canvas-e2e-archive-20261017/canvas-e2e-fix13-accept-2235/`；挑刺无严重。
 - 出图仍等 Bearer。下一批 fix13.1：挑刺 UI 细节。
 
 ## 2026-10-16 fix13.1 CLOSED
-- UI 细节五项：证据 `/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-fix13.1-accept-2257/`；挑刺无严重。
+- UI 细节五项：证据 `<repo-root>/temp/canvas-e2e-archive-20261017/canvas-e2e-fix13.1-accept-2257/`；挑刺无严重。
 - 下一批：魔搭国际站挂 LoRA（等 Researchy）；顺手双徽章/副说明断行。
 
 ## 2026-10-16 fix14 CLOSED
-- 副说明断行 + OpenWorks 单徽章；证据 `/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-fix14-accept-2314/`。
+- 副说明断行 + OpenWorks 单徽章；证据 `<repo-root>/temp/canvas-e2e-archive-20261017/canvas-e2e-fix14-accept-2314/`。
 - 下一批：魔搭国际站 `loras` 接线（Researchy 已锁）；按钮截断顺手。
 
 ## 2026-10-17 Tensor.Art OpenWorks-only 真出图（画布核）
 
 - **结论**：`PASS_GENERATION` — 图落保存节点 + 历史成功卡 `hist_1792214134866_6vduu`；seed/steps/cfg/LoRA `969483275569466663`@0.8 均标「实际发送」（不宣称上游生效）。
 - **产品**：只留 OpenWorks；`POST /api/tensorart/generate` → 410（TAMS 撤）。
-- **证据**：`/workspace/canvas/temp/canvas-e2e-ow-only-20261017/retry/`（01 工作流 / 02 节点落图 / 03 历史缩略 / 04 实际发送）。
+- **证据**：`<repo-root>/temp/canvas-e2e-ow-only-20261017/retry/`（01 工作流 / 02 节点落图 / 03 历史缩略 / 04 实际发送）。
 - **后批**：ModelHub/App 残留「TAMS/模型 API」文案。
 

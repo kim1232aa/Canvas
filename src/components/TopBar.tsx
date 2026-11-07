@@ -138,7 +138,7 @@ export const TopBar: React.FC<TopBarProps> = ({
             </div>}
           </div>
         </nav>
-        <div id="studio-run-status" role="status" aria-live="polite" className={`mt-2 text-sm leading-relaxed ${runDisabledReason ? 'text-amber-300' : 'text-slate-400'}`}>
+        <div id="studio-run-status" role="status" aria-live="polite" className={`mt-2 max-h-20 overflow-y-auto break-all text-sm leading-relaxed ${runDisabledReason ? 'text-amber-300' : 'text-slate-400'}`}>
           {runDisabledReason || (isExecuting || executionStatusText ? executionStatusText : canvasMode === 'graph' ? (nodeCount === 0 ? '画布为空：可点击「工作流」载入预设或添加新节点开始创作' : `${nodeCount} 个节点 · ${connectionCount} 条连线 · 按所选服务商的接口运行`) : '选择画板后设置模型和参数，再点击生成')}
         </div>
       </div>

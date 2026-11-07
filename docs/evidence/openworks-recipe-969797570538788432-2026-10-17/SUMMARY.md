@@ -26,8 +26,8 @@
 - Hashes identical: **False**
 
 ## PNG paths
-- `/workspace/canvas/Canvas-main/docs/evidence/openworks-recipe-969797570538788432-2026-10-17/1-ckpt-prompt-only.png`
-- `/workspace/canvas/Canvas-main/docs/evidence/openworks-recipe-969797570538788432-2026-10-17/2-full-with-page-lora.png`
+- `<repo-root>/Canvas-main/docs/evidence/openworks-recipe-969797570538788432-2026-10-17/1-ckpt-prompt-only.png`
+- `<repo-root>/Canvas-main/docs/evidence/openworks-recipe-969797570538788432-2026-10-17/2-full-with-page-lora.png`
 
 ## Note
 OW `photoreal_studio_z_image` schema declares only prompt/width/height/count. Extra named fields (incl. LoRA) may 200+FINISH but ≠ applied. Compare hashes/images. Do not claim LoRA works on OpenWorks from HTTP200 alone.

@@ -1,96 +1,112 @@
+# 项目已知与待复测问题跟踪表 (UNRESOLVED_ISSUES.md)
 
-> **最新基准提示（2026-11-04）**：本项目已于 2026-11-04 完成全量「有值照发、撤除本地拦截」与「UI 去工程化」架构收敛。最新产品事实、设计准则与全部已知缺口请优先查阅 [HANDOFF.md](HANDOFF.md) 顶部的「2026-11-04 当前终态总览」。下文各章节保留为历史阶段的问题演进与归档记录。
-
-## fix16（2026-10-16）CODE_ONLY 冻等重拍
-- 五项历史卡 UI：见 `docs/evidence/fix16-2026-10-16.md`；PID 3695091。未改供应商接线。
-> 2026-10-16 晚间追加（Asia/Tokyo；北京=JST−1）：UI fix10.1 / fix11.2 已 CLOSED；fix12 当时为 CODE_ONLY 待前端重拍，现已 CLOSED（见文末）。Git `2d76382` 已推 `kim1232aa/Canvas` main；`.env` 未进仓。Together image_loras / TAMS Bearer / ModelScope intl LoRA / civitai.red 付费 LoRA 仍挂起。不发明 PASS。详见下方「开/闭」与 HANDOFF 同日条。
-
-## 2026-10-16 开项 vs 已闭（产品真相快照）
-
-### 已闭 CLOSED
-| ID | 说明 | 证据 |
-| --- | --- | --- |
-| fix10.1 | ZWSP 不进 value/存储；出站 model 干净；Fal Kling V3 i2v 403 TOP_UP（PASS_BILLING） | `docs/evidence/fix10.1-2026-10-16.md` |
-| fix11.2 | 三宽预览浮层可读、不盖画面比例；历史弹层隐藏浮层；挑刺无严重 | `docs/evidence/fix11.2-2026-10-16.md`、`/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-fix11.2-accept-2022/` |
-
-### 开项 OPEN / 进行中
-| ID | 状态 | 说明 |
-| --- | --- | --- |
-| fix12 | CLOSED（挑刺过） | 「共 N 项」摘要 + 900 执行记录 under-top；PID 3473149 / ticks 14993784；`/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-fix12-accept-2157/` **已收口** |
-| Together `image_loras` | BLOCKED | 等有效 Key |
-| TAMS Bearer | BLOCKED | 既有鉴权阻塞不变 |
-| ModelScope 国际站 LoRA E2E | **CLOSED** PASS_GENERATION 2026-11-03 | hist `hist_1793706156544_8obck`；Lcars@1；`temp/e2e/modelscope-ai-fe-gen-2026-11-03/`；不宣称 I2V |
-| civitai.red 付费 LoRA 复跑 | pending | — |
-| 视频更多供应商（Fal 之后） | pending | 预设/App 拆分未批准 |
-| Parked UI | — | 无 parked |
-
-### 既有供应商等级（不降级）
-WaveSpeed `PASS_GENERATION`；ModelScope AI / ModelScope CN `PASS_GENERATION`（2026-11-03）；MuAPI / Sogni / HF→fal-ai / Fal（含 Kling V3 i2v）等按 HANDOFF §3.2 与各 evidence 保持原判定。本晚无 FUNDED_I2V，不宣称出视频。Krea / AIMLAPI / Novita / Replicate 等以已有 evidence 为准，本文件不另升格。
+> ⚠️ **基准说明（2026-11-07 M25 终结审计）**：
+> 本文档记录 2026-11-07 经真实 Chrome CDP 自动化 UI 回归测试（见 [docs/evidence/2026-11-05/final.md](docs/evidence/2026-11-05/final.md)）实测核验后的全部未决项、待充值复测清单、未验证功能场景与代码架构审计风险。
+> 历史阶段性记录保留于文末作为审计存证，但不得作为当前能力的凭据。
 
 ---
 
-> 2026-10-14 追加：WaveSpeed 目录模型 `wavespeed-ai/krea-v2/turbo`（非 LoRA）已在真实前端单次运行出图，记 PASS_GENERATION。不新开未决项，也不外推其他供应商。证据见 HANDOFF 同日条目与 `/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-wavespeed/`。
+## 一、用户余额不足准则与 7 类标签定义 (User Balance Policy)
 
-> 当前状态（2026-10-13）：下文含历史实现与历史验收描述。以 CLAUDE.md 固定规则、PROGRESS.md 最新验收、public/verification/ 真实响应为准；禁止未经核实的自动模型/端点替换与静默丢弃。
+项目严格执行用户最高准则（原文逐字）：
+> **「余额不足不做卡点，先集成api，错误能原样透传算暂时通过」**
 
-# 项目已知与已解决问题跟踪表 (UNRESOLVED_ISSUES.md)
-
-## 最新修复与全链路审计记录 (2026-10-13)
-
-### 15. Tensor.Art 视频分类与真实 CDN 封面解析 (已修复)
-- **现象描述**：在模型中心选择「AI 视频」并筛选 Tensor.Art 时，返回 0 个模型；且部分社区卡片未展示源站真实图片。
-- **根因分析**：
-  1. 吐司社区原生存在 `VIDEO` 架构类型（如 MiniMax、Wan），但之前在 `fetchTensorArtModelsList` 中仅识别 LoRA，且非 LoRA 默认硬编码为 `Checkpoint`。
-  2. 属于视频微调的权重被标记为 `LoRA` 且未打上 `video` 标签，导致在 `matchCategory` 中被误杀过滤。
-- **修复方案**：引入 `isVideo` 智能识别与分类标签注入，当 `cat === 'video'` 时赋予 `category: 'Video'` 与 `video` 标签；直接从 HTML 正则捕获 `https://images.tusiassets.com/...`（包含 `mp4!snapshot` 视频抽帧缩略图），实测 32 款社区视频大模型全量展示。
-
-### 16. NanoGPT 视频大模型与生图大模型物理隔离 (已修复)
-- **现象描述**：NanoGPT 视频专区模型数量与官方接口不符，且生图模型混入视频专区。
-- **根因分析**：
-  1. 后端未按分类做端点分流，同时请求了 `image-models` 与 `video-models`。
-  2. `extractModelMetadata` 仅凭 `id.includes('minimax')` 将文本生图模型（如 `minimax-h3/text-to-image`）误归为视频。
-- **修复方案**：`cat === 'video'` 时严格直连官方 `https://nano-gpt.com/api/v1/video-models`（175 款视频大模型）；生图时直连 `image-models`（239 款生图模型）；补全官方源站 SVG 品牌图标。
-
-### 17. Google Gemini / 多引擎限流 (429 / Quota / Overloaded) 状态感知 (已修复)
-- **现象描述**：Gemini 遇到 `generic::resource_exhausted` 或 `API is currently overloaded` 时，单 Key 测速池误将其标记为 `invalid`（永久废弃）。
-- **根因分析**：`KeyPoolManager.recordResult` 之前对错误字符串做大小写敏感匹配，遗漏了全小写的 `resource_exhausted`、`overloaded` 与 `503`。
-- **修复方案**：重构错误感知器，精准命中限流与负载过载状态，触发 60 秒冷却解冻队列；移除了提示词增强中静默替换为假提示词的 Fallback 行为。
-
-### 18. Tensor.Art 社区模型与 OpenWorks 工具误接线彻底修正 (已修正)
-- **错误现状核实**：此前曾试图建立 OpenWorks 工具名（`photoreal_studio`, `anime_lab` 等）与社区模型 ID 的“语义对齐”，这在 ComfyCanvas 扩散节点画布体系中属于错误接线（将工具 API 冒充扩散底模）。
-- **根因与修复**：彻底废弃并移除任何将 OpenWorks 工具映射为 Checkpoint 模型的兜底逻辑。Tensor.Art 在画布中严格对应原生 TAMS API；当查询社区模型 ID 或端点失败时，原样暴露官方 HTTP 状态（如 404 unauthorized / app not found）与错误细节，禁止任何静默偷换工具或模型行为。
-
-### 19. 文生图、图生图与图生视频全管线闭环审计 (已验证)
-- **验证项**：
-  1. 图生图：`LoadImage -> VAEEncode -> KSampler` 与 `LoadImage -> KSampler` 自动提取 `initImageUrl`，默认基准降噪比科学控制（0.65）。
-  2. 图生视频：`LoadImage -> AIVideoNode` 与前序产物串联，根据 `image_url` 自动透明适配至官方 `image-to-video` 端点。
-  3. 各引擎驱动（Fal, Gemini, NanoGPT, TensorArt, Agnes, ModelScope）全量支持 `image_url` 与 `strength` 透传。
-
-### 20. 跨模型架构 LoRA 混用强校验与禁止静默丢弃 (已修复)
-- **现象描述**：当用户在画布中将与底模架构不匹配的 LoRA（如在 FLUX.1 底模挂载 Krea2 Turbo / SDXL LoRA）连接到采样节点时，系统曾出现记录 warning 但静默剔除 LoRA 继续发送给上游、伪造“生成成功”的违规降级行为。
-- **修复方案**：在 `graphEngine.ts` 与 `resolveCheckpoint.ts` 建立严格架构兼容性断言；架构不兼容时直接阻断执行并向用户明确报错，严禁静默丢弃 LoRA 发起虚假请求。
-
-### 21. 云端一体化引擎节点孤立与双轨并存补全 (已修复)
-- **现象描述**：`ReplicateEngineNode`、`ModelScopeNode`、`ModelScopeAiNode`、`NanoGPTNode`、`FalAIEngineNode`、`GoogleImagenNode` 曾在 `ModernToolDock` 缺少入口、在 `ModelHubModal` 无法直接添加，沦为孤立节点。
-- **修复方案**：采用双轨并存方案（标准 ComfyUI Checkpoint 链与一体化引擎节点并存），在 `ModernToolDock` 正式设立「云端一体化加速引擎」分类，在 `ModelHubModal` 增设「添加一体化引擎节点」专属按钮，打通 `NodeItem` 高级参数白名单与节点级出图渲染，完成全链路贯通。
-
-### 22. Replicate 官方推理引擎全链路接入 (已完成)
-- **实现内容**：新增 `ReplicateDriver`、`replicateImageContract`、`replicateRoutes`，支持 FLUX.1、SDXL、Ideogram 等模型。后端 `/api/model-schema` 对接 Replicate 官方 OpenAPI Schema 提取 Input 字段规范。全链路支持任务轮询、参数校验与上游 402/401/422 错误透明回传。
+所有问题分类严格采用项目规定的 7 类判定标签：
+- `PASS_GENERATION`: 界面可见真实生成产物。
+- `PASS_BILLING`: 全参数请求抵达上游，上游欠费/额度不足报错原样透传。
+- `BLOCKED_AUTH`: 401 鉴权失效。
+- `BLOCKED_CONFIG`: 本地未配置对应 API Key。
+- `NOT_SENT`: 请求未出站（如未接入端点本地明确报错）。
+- `CONTRACT_REJECT`: 非计费类 400/422/404 契约异常。
+- `WIRING_BUG`: 接线故障。
 
 ---
 
-*当前范围：所有上述项均已通过无头浏览器 E2E 走查与自动化单元测试验证。*
+## 二、待充值出图复测服务商清单 (Awaiting Funded Generation Re-check)
 
-### 2026-10-16 已关
-- fix12 历史徽章/执行记录停靠：CLOSED（挑刺过）
-### 仍开
-- TAMS：无 Bearer；清 OpenWorks 冒充后接 ap-east-1 `/v1/jobs`
-- Together：公共不挂假 LoRA；Dedicated 另接；等有效 Key
-- OpenWorks：工具层不要；真生图测通才留
+根据 2026-11-07 全量 UI 回归实测，以下服务商的前后端参数构建、动态 OpenAPI 映射与错误透传链路均已跑通（或本轮复测确认），因上游账户余额耗尽或未开通付费包，暂时评定为 `PASS_BILLING`，待后续账号充值后安排真实出图/视频产物验收：
 
-### 2026-10-16 已关
-- fix13 OpenWorks↔TAMS 混用清理 + 主机 ap-east-1 + Together 口径：CLOSED（UI 复验+挑刺无严重；出图 BLOCKED）
-### 仍开 / 下一批
-- fix13.1 挑刺细节（说明过密、URL 截断、空态双层、Together 说明块、标点不一致）
-- TAMS Bearer 补齐后建任务 E2E
-- Together 有效 Key / Dedicated 另接
+| 序号 | 服务商 (Provider) | 涉及预设与模型 | 上游真实报错 (Verbatim Response) | 判定标签 | 充值与复测说明 |
+|:---:|---|---|---|:---:|---|
+| 1 | **Fal.ai** | `fal-ai/krea-2/turbo/lora`, `fal-ai/wan/v2.2-a14b/text-to-video/lora` | `HTTP 403: {"detail":"User is locked. Reason: Exhausted balance..."}` | `PASS_BILLING` | 需在 Fal.ai 控制台为绑定 API Key 充值计算额度 |
+| 2 | **Hugging Face** | `renderartist/Technically-Color-Z-Image-Turbo` (via HF Router) | `HTTP 402: {"error":"Purchase pre-paid credits to continue using Inference Providers. Alternatively, subscribe to PRO to get monthly included credits."}` | `PASS_BILLING` | 需在 Hugging Face 账号购买预付费计算额度或订阅 PRO |
+| 3 | **WaveSpeed** | `wavespeed-ai/wan-2.2/i2v-480p-lora` | `HTTP 400: {"message":"Insufficient credits"}` | `PASS_BILLING` | 需在 WaveSpeed 平台为对应 Token 充值算力点数 |
+| 4 | **Sogni** | `krea-2-turbo` + `krea2-fever-dream-mood`, `animate_photo` | `HTTP 200 (task status): waiting_for_user - insufficient_credit` (`Debit Error: Insufficient funds`) | `PASS_BILLING` | 需在 Sogni 账号充值 Spark/Token 算力 |
+| 5 | **AIMLAPI** | `alibaba/z-image-turbo-lora` | `HTTP 403: {"error":{"message":"Out of funds","code":403}}` | `PASS_BILLING` | 需在 AIMLAPI 平台充值账户余额 |
+| 6 | **DeepInfra** | `black-forest-labs/FLUX-2-klein-9b` | `HTTP 402: {"error":"Payment required"}` | `PASS_BILLING` | 需在 DeepInfra 控制台添加结算方式充值 |
+| 7 | **Mage.space** | `mango-v3` | `HTTP 402: {"error":"Payment required"}` | `PASS_BILLING` | 需在 Mage 账户开通 API 点数包 |
+| 8 | **ModelsLab** | `modelslab-t2i` (Realtime v6) | `HTTP 400/402: {"status":"error","message":"Out of credits"}` | `PASS_BILLING` | 需在 ModelsLab 平台补充生成点数 |
+| 9 | **Civitai** | Civitai Wan 2.2 工作流 / Krea 2 Turbo | `HTTP 400: {"code":"insufficientBuzz","message":"User has insufficient buzz to run workflow."}` | `PASS_BILLING` | 需为 Civitai 账号充值 Buzz 积分以执行云端工作流 |
+| 10 | **Novita AI** | `std-novita-t2i` + `realisticVisionV40_v40VAE-inpainting_81543.safetensors` + LoRA `weight_slider_v2_91681` @ 0.8 | `HTTP 403: {"code":403,"reason":"NOT_ENOUGH_BALANCE","message":"insufficient balance","metadata":{}}` | `PASS_BILLING` | 证据 `final/35-novita-lora-attached-and-run.png`；需在 Novita 控制台充值余额后再跑真出图 |
+| 11 | **Venice AI** | `std-venice-t2i` (`venice-sd35`)，非空 CLIP 提示词 | `HTTP 402: {"error":"Insufficient USD or Diem balance to complete request. Visit https://venice.ai/settings/api to add credits."}` | `PASS_BILLING` | 证据 `final/14-venice-run.png`（2026-11-07 填写提示词后复测）；需在 Venice 设置页充值 USD/Diem |
+
+---
+
+## 三、未验证功能场景清单 (Unverified Functional Scenarios)
+
+受限于上游计费与媒体产物生成前提，以下功能场景当前处于**未验证 (Unverified)** 状态，严禁在未亲眼见证产物前宣称闭环：
+
+1. **浏览器内真实视频播放 (Playable Video in UI)**：
+   - 现状：由于 Fal、WaveSpeed、Civitai 视频端点均在提交阶段因余额不足拒绝，未能获取上游最终生成的 MP4/WebM 视频 URL。
+   - 影响：前端 `SaveVideo` 节点与画板中的视频播放器控件（HTML5 `<video>`、自动播放、静音循环、控制条）尚未在真机 UI 中验证真实视频流渲染表现。
+2. **视频生成产物下载与持久化 (SaveVideo & Local Media Store)**：
+   - 现状：尚未验证 `server.ts` 对真实上游 MP4 视频的 `requireDurableHistoryMediaUrl` 数据 URL / 本地媒体缓存下载与持久化写入。
+3. **视频历史记录一键重提与复用 (Video History Reuse)**：
+   - 现状：历史记录卡片重提视频任务并恢复参数至 `AIVideoNode` 的完整交互尚未经真实生成记录复测。
+4. **Civitai Comfy SDXL / SD1 真实云端扣费出图**:
+   - 现状：当前仅验证到 Buzz 余额不足拦截；真实扣费后云端节点执行、WebSocket 进度推送与结果图像拉取仍待验证。
+5. **Venice 默认预设提示词为空（历史 400，本轮已用填写后 402 复测）**:
+   - 现状：`std-venice-t2i` 仍不预填配方提示词。2026-11-07 在 CLIP「提示词」填入非空文本后，`final/14-venice-run.png` 为 `402 Insufficient USD or Diem`（`PASS_BILLING`）。空提示词 400 不再作为本轮图像验收标签。
+6. **ModelsLab 标准预设底模留空**:
+   - 现状：`std-modelslab-t2i` 底模为空待选；`final/17-modelslab-loaded.png` / `18-modelslab-run.png` 运行按钮禁用，顶栏「请先选择模型」，`NOT_SENT`。旧「400/402 Out of credits」不是本轮截图所证明的标签。
+
+---
+
+## 四、代码与架构审计遗留风险 (Code & Architecture Audit Risks)
+
+结合 M19~M22 前期专项审计调查结果与 M25 终结代码核查，记录以下已知代码缺陷与审计风险：
+
+### 1. [LOW] Civitai 导入预览采样器与调度器文档链接硬编码 (`Finding 20261107-final25-bug-civitai-import-preview-hardcodes-recipes-sdxl-md-source-for`)
+- **文件与行号**: `src/utils/civitaiImportMap.ts:1201, 1214`
+- **问题描述**: 当导入 Civitai SD1.5 或 FLUX 配方时，预览字段表中的 Sampler 与 Scheduler 来源链接硬编码为 `'https://developer.civitai.com/orchestration/recipes/sdxl.md'`，未根据实际 ecosystem 动态指向 `sd1.md` 或 `flux.md`。
+- **影响**: 仅影响导入预览弹窗中的参考文档链接展示，真实出站参数映射已完全准确。
+
+### 2. [HIGH] 存在未被图引擎接入的空壳节点 `ImageUpscaleWithModel` (SHELLUI21 Audit)
+- **文件与行号**: `src/constants/nodes.ts:1093`
+- **问题描述**: 节点定义了 `ImageUpscaleWithModel` 及其控件 `model_name` 和 `scale_by`，但 `src/utils/graphEngine.ts` 中完全没有该节点的执行逻辑或拓扑分发。用户若在画布添加该节点，无法产生任何放大产物。
+
+### 3. [MEDIUM] 参数状态徽章组件被静默注销 (SHELLUI21 Audit)
+- **文件与行号**: `src/components/FieldStatusBadge.tsx:33, 43`
+- **问题描述**: `FieldStatusBadge` 与 `SchemaSendBadge` 当前直接返回 `null`，导致节点与参数面板中部分微观字段的「会发送/不会发送」状态标签无法显示，仅保留了 `SchemaChoiceControls` 中的显式徽章。
+
+### 4. [MEDIUM] `CivitaiLoRABrowserNode` 包含死控件 `search_keyword` (SHELLUI21 Audit)
+- **文件与行号**: `src/constants/nodes.ts:628`
+- **问题描述**: 节点声明了 `search_keyword` 字段，用户输入后写入 `node.values.search_keyword`，但后续无论是 Civitai 弹窗还是图引擎均未读取该字段，属于无效控件。
+
+### 5. [MEDIUM] 孤立未挂载组件 `ControlPanel.tsx` (SHELLUI21 Audit)
+- **文件与行号**: `src/components/ControlPanel.tsx`
+- **问题描述**: 该组件有 44 行实现，但在全仓 `src/` 中没有任何父级组件引入或挂载，属于早期遗留死代码。
+
+### 6. [MEDIUM] Together AI 官方参数指南与 OpenAPI 契约分歧 (D4 Audit)
+- **官方来源**: `https://docs.together.ai/docs/inference/images/parameters.md` vs `https://docs.together.ai/reference/post-images-generations.md`
+- **核查结论**: 官方 OpenAPI 仍声明了 `image_loras[{path, scale}]` 结构，但官方一手参数指南（`parameters.md`）明文标注：「`image_loras: No longer available. The FLUX models that accepted LoRA adapters have been deprecated, and the current FLUX.2 models reject this parameter.`」。`src/server/schemaProviders.ts:39` 通过 `officialUnavailableParams` 正确阻断该失效字段，不向用户虚假承诺 LoRA 已在服务端生效。
+
+### 7. [HIGH] 单测套件包含约 108 个源码字符串静态匹配用例 (SHELLTEST22 Audit)
+- **审计发现**: 全仓 264 个测试文件中，有 42 个文件包含约 108 个使用 `fs.readFileSync` 检索未执行源码文本的用例（如 `expect(source).toContain(...)`）。这些用例在生产代码崩溃或返回 `null` 时依然保持全绿，属于伪绿测试。已在项目规则中明确「单元测试通过绝不等于实际问题解决」。
+
+### 8. [LOW] `rejectSchemaEnum` / `rejectUnsupported` 真实清理状态与单测桩残留 (D5 Audit)
+- **文件与行号**:
+  - `server.ts`: **0 处**（原 `server.ts:1080` 的 `rejectSchemaEnum` 空壳及 `rejectUnsupported` 已在 M18 彻底删除）。
+  - `src/server/routes/videoGenerateRoute.ts`: **0 处**（`VideoGenerateRouteDeps` 接口与路由实现中均已移除）。
+  - `src/server/schemaProviderVideoStatus.test.ts:32`: **1 处测试桩残留**（`stubVideoDeps()` 中仍保留了未被生产代码读取的 `rejectSchemaEnum: () => false` 属性）。
+- **影响**: 生产代码已 100% 移除所有 `rejectSchemaEnum` 与 `rejectUnsupported` 本地枚举/字段预拦截门禁，仅测试辅助桩对象存在一处无害多余字段。
+
+---
+
+## 五、未验证历史记录归档 (Unverified Historical Records)
+
+> 下文为早期 Agent 留存的历史未决项快照，部分已被后续修复取代，仅供追溯：
+
+- **历史 fix10.1 / fix11.2 / fix12**: 针对画布防抖、视口遮挡与执行日志的修复，已随 M15/M17/M18 重构被全新架构取代。
+- **历史 ModelScope 国际站 LoRA**: 2026-11-03 记录出图历史 `hist_1793706156544_8obck`。
+- **历史 WaveSpeed 出图**: 2026-10-17 记录出图历史 `hist_1792224305224_meynb`。

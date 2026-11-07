@@ -26,5 +26,5 @@
       }
     ]
   },
-  "details_preview": "{'code': '0', 'message': '', 'data': {'task': {'id': '1056282141186342651', 'userId': '1048723019146487792', 'status': 'WAITING', 'toolName': 'photoreal_studio_z_image', 'outputs': []}}}"
+  "details_preview": "{'code': '0', 'message': '', 'data': {'task': {'id': '1056282141186342651', 'userId': '<redacted-user-id>', 'status': 'WAITING', 'toolName': 'photoreal_studio_z_image', 'outputs': []}}}"
 }

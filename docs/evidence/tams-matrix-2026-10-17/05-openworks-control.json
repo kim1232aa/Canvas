@@ -98,7 +98,7 @@
       "data": {
         "task": {
           "id": "1056282141186342651",
-          "userId": "1048723019146487792",
+          "userId": "<redacted-user-id>",
           "status": "WAITING",
           "toolName": "photoreal_studio_z_image",
           "outputs": []

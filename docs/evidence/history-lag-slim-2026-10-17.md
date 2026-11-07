@@ -17,10 +17,10 @@
 | After slim all | ~690KB |
 | Page limit=5 | ~70KB |
 
-Server PID after restart: see live process on :3000. `ALLOWED_HOSTS=canvas.alibb123.ccwu.cc`.
+Server PID after restart: see live process on :3000. `ALLOWED_HOSTS=<private-deployment-host>`.
 
 ## Paused
-Apply-to-canvas + prompt URL strip stashed at `/workspace/canvas/temp/canvas-stash-apply-prompt-20261017/` — resume after lag accepted.
+Apply-to-canvas + prompt URL strip stashed at `<repo-root>/temp/canvas-stash-apply-prompt-20261017/` — resume after lag accepted.
 
 ## Tests
 `npx vitest run src/server/historyListSlim.test.ts src/components/HistoryModal.test.ts` — pass.
@@ -52,10 +52,10 @@ Slim list alone was not enough: `App.tsx` still called `fetchHistory()` → full
 | Before this fix (open = slim all) | ~486–690KB | App fetched entire slim list |
 
 Server PID: **115753** (`tsx server.ts` worker).  
-`ALLOWED_HOSTS=canvas.alibb123.ccwu.cc` `ALLOWED_ORIGINS=https://canvas.alibb123.ccwu.cc`.
+`ALLOWED_HOSTS=<private-deployment-host>` `ALLOWED_ORIGINS=https://<private-deployment-host>`.
 
 ### Tests
 `npx vitest run src/components/HistoryModal.test.ts src/server/historyListSlim.test.ts` — 11 passed.
 
 ### Still paused
-Apply-to-canvas stash: `/workspace/canvas/temp/canvas-stash-apply-prompt-20261017/` — do not unstash until lag hand-feel OK.
+Apply-to-canvas stash: `<repo-root>/temp/canvas-stash-apply-prompt-20261017/` — do not unstash until lag hand-feel OK.

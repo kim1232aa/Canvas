@@ -12,7 +12,7 @@
 - 契约：`{ extra, request }`；LoRA = `request.loras[{ model_name, strength∈[0,1] }]`；`model_name` = 目录 `sd_name_in_api`。
 
 ## 根因
-- 旧 E2E（`/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-novita-fe/outcome.json`，03:20）**早于** HTML 声明落地（03:25），当时 `loadProviderDeclaration` 为空 → `BLOCKED_SCHEMA_LOOKUP`。
+- 旧 E2E（`<repo-root>/temp/canvas-e2e-archive-20261017/canvas-e2e-novita-fe/outcome.json`，03:20）**早于** HTML 声明落地（03:25），当时 `loadProviderDeclaration` 为空 → `BLOCKED_SCHEMA_LOOKUP`。
 - 声明已存在后仍缺：`model_name` 未进 declaration properties；字段描述残留「待确认」；UI unprobed →「发送情况未知」与挑刺四档不符。
 
 ## 改动文件
@@ -27,13 +27,13 @@
 | 相关 `*.test.ts(x)` | 对齐新文案/徽章/声明 |
 
 ## Restore
-`/workspace/canvas/temp/backups/canvas-restore/pre-novita-polish-20261016-085318.tgz`（Asia/Tokyo 墙钟命名；打包时刻 box CST≈08:53）
+`<repo-root>/temp/backups/canvas-restore/pre-novita-polish-20261016-085318.tgz`（Asia/Tokyo 墙钟命名；打包时刻 box CST≈08:53）
 
 ## 后端重启（仅一次）
 - 旧 PID：2396826
 - 新 PID：**2429653**
 - 启动（Asia/Tokyo）：**2026-10-16 09:58:15 JST**
-- `cwd=/workspace/canvas/Canvas-main`；`npx tsx server.ts`；`curl 127.0.0.1:3000 → 200`
+- `cwd=<repo-root>/Canvas-main`；`npx tsx server.ts`；`curl 127.0.0.1:3000 → 200`
 
 ## Live 证据（本机 Key，密钥未写入本文件）
 目录：`docs/evidence/novita-polish-batch-2026-10-16/`

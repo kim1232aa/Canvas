@@ -1868,7 +1868,6 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
         mapping.push({from:'custom_parameters.'+key,to:key,value,overrides:Object.hasOwn(payload,key)?payload[key]:undefined,schemaDeclared:declared});
       }
       Object.assign(payload,custom);
-      // Project NSFW Policy (2026-11-05): "我们不反对nsfw，有nsfw开关的都默认开启"
       // If declared in live schema and not explicitly overridden, default to permissive value.
       const nsfwApplied = applyNsfwDefaultsToPayload(payload, props);
       for (const item of nsfwApplied) {
@@ -1877,7 +1876,7 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
           to: item.field,
           value: item.value,
           schemaDeclared: true,
-          note: `用户最高原则「我们不反对nsfw，有nsfw开关的都默认开启」；官方 Schema 声明字段，默认放开（来源: ${item.docUrl}）`,
+          note: `官方 Schema 声明安全开关字段，默认放开（来源: ${item.docUrl}）`,
         });
       }
       if(provider==='sogni') {

@@ -31,15 +31,15 @@
 
 ## 运行产物核验
 - curl `/src/components/{HistoryModal,NodeItem,TextEmphasis}.tsx` 含新标记
-- 无头 Chrome 真实 DOM（hist_..._eigrc）：JSON sw=cw=283（无溢出）；种子 note top 947.6 vs chip 929.1（两行）；Key 胶囊 1 个。截图 `/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-fix16.1-probe/zoom-after2.png`
+- 无头 Chrome 真实 DOM（hist_..._eigrc）：JSON sw=cw=283（无溢出）；种子 note top 947.6 vs chip 929.1（两行）；Key 胶囊 1 个。截图 `<repo-root>/temp/canvas-e2e-archive-20261017/canvas-e2e-fix16.1-probe/zoom-after2.png`
 - LoRA 节点未在无头新 profile 实测（画板存在用户浏览器 localStorage），待画布重拍
 
 ## Restore
-`/workspace/canvas/temp/backups/canvas-restore-fix16.1-2312.tgz`
+`<repo-root>/temp/backups/canvas-restore-fix16.1-2312.tgz`
 
 ## 前端重拍（2026-10-16 23:26–23:37 北京）
 - PID **3714746**（未重启）
-- 证据 `/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-fix16.1-accept-2318/`
+- 证据 `<repo-root>/temp/canvas-e2e-archive-20261017/canvas-e2e-fix16.1-accept-2318/`
 - 卡 `hist_1792164378635_ndobk`：HTTP 429 + 上游原文 `insufficient balance`（未改接线，不升徽标）
 - loras 形状：`{"LcarsPicturesDatabase/ST-TNG-Rooms-Z-Image-Turbo-v1": 1}`
 

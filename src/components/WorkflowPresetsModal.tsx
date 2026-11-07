@@ -947,7 +947,7 @@ export const WorkflowPresetsModal: React.FC<WorkflowPresetsModalProps> = ({
                       </span>
                     </h3>
                     <p className="text-xs text-slate-400 mt-0.5">
-                      输入 Civitai 任意热门作品链接 (如 https://civitai.red/images/136947637) 或模型链接，系统自动抽取 Checkpoint 底模、LoRA 权重与触发词、正负向 Prompt、KSampler 采样参数并组装完整 ComfyUI 连线！
+                      输入 Civitai 任意热门作品链接 (如 https://civitai.red/images/148140013) 或模型链接，系统自动抽取 Checkpoint 底模、LoRA 权重与触发词、正负向 Prompt、KSampler 采样参数并组装完整 ComfyUI 连线！
                     </p>
                   </div>
                 </div>
@@ -955,76 +955,58 @@ export const WorkflowPresetsModal: React.FC<WorkflowPresetsModalProps> = ({
                 {/* Quick Recommendation Pills */}
                 <div className="space-y-2 pt-1">
                   <span className="text-[11px] text-slate-400 font-semibold flex items-center justify-between">
-                    <span>hinablue 原作与热门图片预设快捷填入:</span>
+                    <span>经典作品与不同生态样例快捷填入:</span>
                     <span className="text-[10px] text-pink-400 font-mono">点击即填并自动解析</span>
                   </span>
                   <div className="flex flex-wrap gap-2">
                     <button
+                      type="button"
                       onClick={() => {
-                        const val = 'https://civitai.red/images/136947637';
+                        const val = 'https://civitai.red/images/148140013';
                         setCivitaiUrlInput(val);
                         handleExtractCivitaiWorkflow(val, selectedEngine);
                       }}
-                      className="px-2.5 py-1.5 rounded-lg bg-pink-950/50 hover:bg-pink-900/60 text-pink-300 border border-pink-700/60 text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm ring-1 ring-pink-500/20"
+                      className="px-2.5 py-1.5 rounded-lg bg-emerald-950/40 hover:bg-emerald-900/50 text-emerald-300 border border-emerald-700/50 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
                     >
-                      <span>🔥 hinablue - AsianMix LoRA (#136947637 · Krea 2 Turbo)</span>
+                      <span>🚀 Krea 2 Turbo 多LoRA (#148140013 · Masterpiece & Ektachrome)</span>
                     </button>
 
                     <button
+                      type="button"
                       onClick={() => {
-                        const val = 'https://civitai.red/images/134923610';
+                        const val = 'https://civitai.red/images/148135866';
                         setCivitaiUrlInput(val);
                         handleExtractCivitaiWorkflow(val, selectedEngine);
                       }}
-                      className="px-2.5 py-1.5 rounded-lg bg-indigo-950/50 hover:bg-indigo-900/60 text-indigo-300 border border-indigo-700/60 text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm ring-1 ring-indigo-500/20"
+                      className="px-2.5 py-1.5 rounded-lg bg-purple-950/40 hover:bg-purple-900/50 text-purple-300 border border-purple-700/50 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
                     >
-                      <span>✨ AIImageStudio - Radiance Chrome (#134923610 · 逆光胶片)</span>
+                      <span>⚡ Z-Image Turbo 配方 (#148135866 · CyberRealistic Z-Image)</span>
                     </button>
 
                     <button
+                      type="button"
                       onClick={() => {
-                        const val = 'https://civitai.red/images/143279135';
-                        setCivitaiUrlInput(val);
-                        handleExtractCivitaiWorkflow(val, 'video');
-                      }}
-                      className="px-2.5 py-1.5 rounded-lg bg-rose-950/50 hover:bg-rose-900/60 text-rose-300 border border-rose-700/60 text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm ring-1 ring-rose-500/20"
-                    >
-                      <span>🎬 arpalest - SoftBreastMotion (#143279135 · MiniMax 视频)</span>
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        const val = 'https://civitai.com/images/102508931';
+                        const val = 'https://civitai.red/images/148004351';
                         setCivitaiUrlInput(val);
                         handleExtractCivitaiWorkflow(val, selectedEngine);
                       }}
-                      className="px-2.5 py-1.5 rounded-lg bg-cyan-950/40 hover:bg-cyan-900/50 text-cyan-300 border border-cyan-700/50 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                      className="px-2.5 py-1.5 rounded-lg bg-cyan-950/40 hover:bg-cyan-900/50 text-cyan-300 border border-cyan-700/50 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
                     >
-                      <span>⭐ hinablue - 9527 Detail Realistic XL</span>
+                      <span>🧠 MOSS-Image SFT 双LoRA (#148004351 · DMD & DarkLines)</span>
                     </button>
 
                     <button
+                      type="button"
                       onClick={() => {
-                        const val = 'https://civitai.com/images/142524199';
+                        const val = `masterpiece, best quality, very aesthetic, ektachrome fade film, nature, A painterly illustration of a tall, elegant woman in a sci-fi corridor <lora:krea2-masterpieces-v51:0.85>
+Negative prompt: (2d ,Illustration, drawing, cartoon, animation, anima, painting:1.4)
+Steps: 8, Sampler: Euler, CFG scale: 1, Seed: 689794262, Size: 832x1248, Model: Krea 2 Turbo`;
                         setCivitaiUrlInput(val);
                         handleExtractCivitaiWorkflow(val, selectedEngine);
                       }}
-                      className="px-2.5 py-1.5 rounded-lg bg-emerald-950/40 hover:bg-emerald-900/50 text-emerald-300 border border-emerald-700/50 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                      className="px-2.5 py-1.5 rounded-lg bg-blue-950/40 hover:bg-blue-900/50 text-blue-300 border border-blue-700/50 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
                     >
-                      <span>📸 hinablue - 2758 FLUX 胶片街拍人文</span>
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        const val = `asian woman, 1girl, close up portrait, beautiful detailed eyes, natural skin texture, realistic lighting, shallow depth of field, 35mm film photography, masterpiece, sharp focus, 8k <lora:hina_Krea2Turbo_asianMix_v5.0-TQD-CPO:0.85>
-Negative prompt: blurry, bad anatomy, deformed fingers, low resolution, poorly drawn face, plastic skin, oversaturated
-Steps: 28, Sampler: DPM++ 2M Karras, CFG scale: 4.5, Seed: 136947637, Size: 1024x1024, Model: flux1-dev`;
-                        setCivitaiUrlInput(val);
-                        handleExtractCivitaiWorkflow(val, selectedEngine);
-                      }}
-                      className="px-2.5 py-1.5 rounded-lg bg-blue-950/40 hover:bg-blue-900/50 text-blue-300 border border-blue-700/50 text-xs font-semibold flex items-center gap-1.5 transition-colors"
-                    >
-                      <span>📋 填入 WebUI/Civitai 生图参数文本样例</span>
+                      <span>📋 填入 WebUI / Civitai 生图参数文本样例</span>
                     </button>
                   </div>
                 </div>
@@ -1085,7 +1067,7 @@ Steps: 28, Sampler: DPM++ 2M Karras, CFG scale: 4.5, Seed: 136947637, Size: 1024
                       rows={civitaiUrlInput.includes('\n') ? 4 : 2}
                       value={civitaiUrlInput}
                       onChange={(e) => setCivitaiUrlInput(e.target.value)}
-                      placeholder="粘贴 Civitai 图片链接 (如 https://civitai.red/images/136947637)、图号、模型链接，或直接粘贴整段从 C 站复制的生图参数文本..."
+                      placeholder="粘贴 Civitai 图片链接 (如 https://civitai.red/images/148140013)、图号、模型链接，或直接粘贴整段从 C 站复制的生图参数文本..."
                       className="w-full bg-[#111216] border border-[#2e3142] focus:border-pink-500 rounded-xl px-4 py-2.5 text-xs text-white outline-none font-mono transition-colors resize-y"
                     />
                   </div>
@@ -1641,7 +1623,7 @@ Steps: 28, Sampler: DPM++ 2M Karras, CFG scale: 4.5, Seed: 136947637, Size: 1024
                     <div>
                       <div className="font-bold text-white text-xs">恢复为官方推荐默认工作流</div>
                       <div className="text-[11px] text-slate-400 mt-0.5">
-                        重新加载 FLUX.1 + 赛博朋克霓虹 LoRA 初始旗舰模板
+                        重新加载 Z-Image Turbo 初始默认工作流模板
                       </div>
                     </div>
                     <button
@@ -1659,6 +1641,24 @@ Steps: 28, Sampler: DPM++ 2M Karras, CFG scale: 4.5, Seed: 136947637, Size: 1024
             </div>
           )}
         </div>
+
+        {activeTab !== 'clear' && (
+        <div className="px-6 py-2.5 bg-[#111216] border-t border-[#252733] flex items-center justify-between text-xs shrink-0">
+          <span className="text-slate-400">
+            恢复为官方推荐默认工作流：<span className="text-slate-300">重新加载 Z-Image Turbo 初始默认工作流模板</span>
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              onClearCanvas('reset-default');
+              onClose();
+            }}
+            className="px-3 py-1 rounded-lg bg-[#1d202b] hover:bg-cyan-950/60 text-cyan-300 border border-cyan-500/30 font-semibold text-[11px] transition-colors cursor-pointer"
+          >
+            恢复默认预设
+          </button>
+        </div>
+        )}
       </div>
     </div>
   );

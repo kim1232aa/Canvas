@@ -35,13 +35,13 @@ agent-117 wire 的 FetchURL **结果**已确认成功读取 [OpenAI JSON edits](
 
 ## 结论
 
-**PASS_GENERATION** — 真实通过 Canvas 网页端在“API 设置”填入自定义中转 Base URL 与 API 密钥，在画布上选择“OpenAI 兼容中转”并指定模型 `gpt-image-2`，点击“运行工作流”。服务端按官方契约向 `POST https://sub.alibb123.ccwu.cc/v1/images/generations` 发送请求，上游返回 HTTP 200 并携带图片数据，系统通过 `requireDurableHistoryMediaUrl` 成功持久化至本地媒体存储并在画布 SaveImage 节点成功渲染。
+**PASS_GENERATION** — 真实通过 Canvas 网页端在“API 设置”填入自定义中转 Base URL 与 API 密钥，在画布上选择“OpenAI 兼容中转”并指定模型 `gpt-image-2`，点击“运行工作流”。服务端按官方契约向 `POST https://<user-configured-relay>/v1/images/generations` 发送请求，上游返回 HTTP 200 并携带图片数据，系统通过 `requireDurableHistoryMediaUrl` 成功持久化至本地媒体存储并在画布 SaveImage 节点成功渲染。
 
 ## 证据链
 
 1. **设置与鉴权**：
    - 目标执行引擎：`OpenAI 兼容中转` (`openai_compat`)
-   - 中转 Base URL：`https://sub.alibb123.ccwu.cc/v1`
+   - 中转 Base URL：`https://<user-configured-relay>/v1`
    - API 密钥掩码：`sk-30cd...b4c2`
    - 密钥仅保存在当前测试浏览器的本地配置中，未硬编码至任何代码或环境配置。
 2. **工作流节点与载荷**：
@@ -49,7 +49,7 @@ agent-117 wire 的 FetchURL **结果**已确认成功读取 [OpenAI JSON edits](
    - 提示词：`A tiny blue ceramic teapot with a yellow handle on a white table, product photo.`
    - 客户端路由：`POST /api/engine/openai_compat/generate`
 3. **上游调用契约**：
-   - 实际上游端点：`POST https://sub.alibb123.ccwu.cc/v1/images/generations`
+   - 实际上游端点：`POST https://<user-configured-relay>/v1/images/generations`
    - 上游响应状态：**HTTP 200 OK**
 4. **媒体持久化与历史**：
    - 媒体存储路径：`/api/media/13b27430e4243820ab2b4cf9a0fe4b29e6b4add62d2be62d6fb2738fb09410de`

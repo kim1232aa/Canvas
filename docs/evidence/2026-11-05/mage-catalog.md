@@ -3,7 +3,7 @@
 - **日期**：2026-11-06
 - **Mission**：M16 — MAGE16 providers without a catalog API model selection guidance
 - **工作分支**：`feat/mage16-providers-without-a-catalog-api-m`
-- **Worktree**：`/root/github/ComfyUI Web Studio/.tower/worktrees/wt-16`
+- **Worktree**：`<repo-root>/.tower/worktrees/wt-16`
 - **对应 Finding**：`.tower/comms/findings/20261105-schema5b-improve-mage-lacks-catalog-endpoint-requiring-manual-custom-model-in.md` (schema5b 提交)
 - **验收标签**：`PASS_BILLING` (上游返回 HTTP 402 payment_required 原样展示在节点中)
 
@@ -89,7 +89,7 @@ export function hasNoPublicRemoteCatalog(pagination?: GenericCatalogPagination |
   - *ReadMediaFile 逐行检查*：采样器节点顶部与工作流浮动条原样渲染上游 HTTP 402 报错横幅：`【mage】Mage 图像接口上游 HTTP 402: {"error":{"code":"payment_required","message":"The Mage API and MCP server need a successful payment on this account first: buy any Gem pack or start a plan at https://www.mage.space/gems, then retry. Signup bonus Gems work in the Mage app only."}}`。符合验收标准：**PASS_BILLING**。
 
 ### 3. 上游调用 JSONL 日志截取 (脱敏)
-工作区日志 `/root/github/ComfyUI Web Studio/.tower/worktrees/wt-16/logs/upstream.log`：
+工作区日志 `<repo-root>/.tower/worktrees/wt-16/logs/upstream.log`：
 ```json
 {"timestamp":"2026-11-06T04:44:54.690Z","provider":"mage","route":"/api/engine/mage/generate","upstream":"api.mage.space/v1/mango/generate","model":"mango-v3","maskedKey":"mage...OhAw","keyUsage":{"provider":"mage","index":0,"count":1,"source":"pool"},"status":402,"durationMs":296,"error":"HTTP 402: {\"error\":{\"code\":\"payment_required\",\"message\":\"The Mage API and MCP server need a successful payment on this account first: buy any Gem pack or start a plan at https://www.mage.space/gems, then retry. Signup bonus Gems work in the Mage app only.\"}}"}
 ```
@@ -121,7 +121,7 @@ export function hasNoPublicRemoteCatalog(pagination?: GenericCatalogPagination |
   - 恢复源码并通过 `git diff` 确认干净后重新运行，所有测试恢复全绿（GREEN，21 项测试全部通过）。证明 `isCustomEndpoint` 排除分支已被测试完全锁定。
 
 ### 3. 全局工程命令真实退出码 (Unpiped)
-在 `/root/github/ComfyUI Web Studio/.tower/worktrees/wt-16` 严格无管道执行各命令：
+在 `<repo-root>/.tower/worktrees/wt-16` 严格无管道执行各命令：
 
 | 命令 | 执行说明 | 真实退出码 |
 | :--- | :--- | :--- |

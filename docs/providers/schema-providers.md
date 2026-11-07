@@ -1,12 +1,14 @@
+> ⚠️ **未验证历史文档（Unverified History）**：本文档由早期 Agent 编写，包含未经证实的推断或已过期状态，**不得作为当前事实依据**；当前经真实 UI 点击与代码实测核实的基线请以 [../evidence/2026-11-05/final.md](../evidence/2026-11-05/final.md) 与 [../../HANDOFF.md](../../HANDOFF.md) 为准。
+
 # MuAPI、WaveSpeed、Sogni 接入记录
 
-核实日期：2026-10-04。此文档描述当前代码与证据，不代表网页出图验收通过。
+核实日期：2026-10-04 / 2026-11-06（M7/M25 更新）。此文档描述当前代码与证据，不代表网页出图验收通过。
 
 | 供应商 | 模型来源 | 提交 | 轮询 | LoRA 请求 |
 | --- | --- | --- | --- | --- |
 | MuAPI | `GET https://api.muapi.ai/api/v1/models` + `/openapi.json` | 目录 `endpoint_url` 对应的 `/api/v1/…` POST；`x-api-key` | `/api/v1/predictions/{request_id}/result` | 按 Schema 使用 `loras` / `lora_list` 的 `{path,scale}`，或 `model_id` 的 `{model,weight}`，或单个 `lora_url,lora_weight` |
 | WaveSpeed | `GET https://api.wavespeed.ai/api/v3/models` 中每个端点的 `api_schema` | `model_run` 指定的原生 POST 路径；Bearer | `/api/v3/predictions/{id}/result` | 所选端点声明的 `loras:[{path,scale}]`；例如 `wavespeed-ai/krea-v2/turbo-lora` |
-| Sogni | 每次读取官方 [live `generate_image` Schema](https://raw.githubusercontent.com/Sogni-AI/sogni-protocol/main/schemas/tools/generate_image.schema.json) | `POST https://api.sogni.ai/v1/creative-agent/workflows`；Bearer；明确的 `generate_image` step | `/v1/creative-agent/workflows/{workflowId}` | 官方资源 ID 数组 `loras` 与对应位置的 `loraStrengths`；公开资源目录 `/v1/loras/comfy` |
+| Sogni | 每次按任务类型读取官方实时 Schema：图像为 [live `generate_image` Schema](https://raw.githubusercontent.com/Sogni-AI/sogni-protocol/main/schemas/tools/generate_image.schema.json)；视频依据 live Schema `$id` 分流为 `generate_video`（文生视频）与 `animate_photo`（图生视频带参考图）；定义于 `src/server/schemaProviders.ts:9-11`，分流判定见 `src/server/schemaProviders.ts:1012` | `POST https://api.sogni.ai/v1/creative-agent/workflows`；Bearer；明确的 `generate_image` / `generate_video` / `animate_photo` step | `/v1/creative-agent/workflows/{workflowId}` | 官方资源 ID 数组 `loras` 与对应位置的 `loraStrengths`；公开资源目录 `/v1/loras/comfy` |
 
 ## 目录身份与分页
 

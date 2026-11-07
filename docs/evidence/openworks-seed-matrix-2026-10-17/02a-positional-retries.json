@@ -2,12 +2,12 @@
   {
     "case": "02a1-positional-seed-only",
     "httpStatus": 200,
-    "responseSnippet": "{\"code\":\"0\", \"message\":\"\", \"data\":{\"task\":{\"id\":\"1056284777222547745\", \"userId\":\"1048723019146487792\", \"status\":\"WAITING\", \"toolName\":\"photoreal_studio_z_image\", \"outputs\":[]}}}"
+    "responseSnippet": "{\"code\":\"0\", \"message\":\"\", \"data\":{\"task\":{\"id\":\"1056284777222547745\", \"userId\":\"<redacted-user-id>\", \"status\":\"WAITING\", \"toolName\":\"photoreal_studio_z_image\", \"outputs\":[]}}}"
   },
   {
     "case": "02a2-positional-seed-steps-int",
     "httpStatus": 200,
-    "responseSnippet": "{\"code\":\"0\", \"message\":\"\", \"data\":{\"task\":{\"id\":\"1056284785812482359\", \"userId\":\"1048723019146487792\", \"status\":\"WAITING\", \"toolName\":\"photoreal_studio_z_image\", \"outputs\":[]}}}"
+    "responseSnippet": "{\"code\":\"0\", \"message\":\"\", \"data\":{\"task\":{\"id\":\"1056284785812482359\", \"userId\":\"<redacted-user-id>\", \"status\":\"WAITING\", \"toolName\":\"photoreal_studio_z_image\", \"outputs\":[]}}}"
   },
   {
     "case": "02a3-positional-seed-steps-cfg-float",

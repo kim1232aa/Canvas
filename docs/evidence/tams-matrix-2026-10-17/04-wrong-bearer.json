@@ -55,7 +55,7 @@
       }
     ],
     "errorSource": "upstream",
-    "stack": "Error: Tensor.Art 模型 API 鉴权 / 模型查询失败 [404]\n    at ServerResponse.res.json (/workspace/canvas/Canvas-main/server.ts:328:24)\n    at <anonymous> (/workspace/canvas/Canvas-main/server.ts:4204:60)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)"
+    "stack": "Error: Tensor.Art 模型 API 鉴权 / 模型查询失败 [404]\n    at ServerResponse.res.json (<repo-root>/Canvas-main/server.ts:328:24)\n    at <anonymous> (<repo-root>/Canvas-main/server.ts:4204:60)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)"
   },
   "actualRequest": {
     "requestId": "722c66f2-aa59-4e08-8f81-1113e1765959",

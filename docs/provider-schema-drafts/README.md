@@ -1,10 +1,12 @@
+> ⚠️ **未验证历史文档（Unverified History）**：本文档由早期 Agent 编写，包含未经证实的推断或已过期状态，**不得作为当前事实依据**；当前经真实 UI 点击与代码实测核实的基线请以 [../evidence/2026-11-05/final.md](../evidence/2026-11-05/final.md) 与 [../../HANDOFF.md](../../HANDOFF.md) 为准。
+>
 > **画布验收状态：真出图 4 家（WaveSpeed、OpenWorks、魔搭国内站、魔搭国际站 AI）；Together=契约对齐未出图；Fal/Civitai/Replicate 等欠费接线。** OpenWorks/魔搭 LoRA 只写「已发送」不写「已生效」。
 
-> **OpenWorks（2026-11-03 画布再认）：** 同次点跑真出图——配方原文+底模/种子/步数/CFG/负向+三枚真 LoRA，图落保存节点，历史 hist_1793693239642_fo6ux；只写「已发送」不写「已生效」。证据 /workspace/canvas/temp/e2e/openworks-fe-gen-2026-11-03/。此前 10-17 hist_1792223105137_bhlop 仍算已出图。
+> **OpenWorks（2026-11-03 画布再认）：** 同次点跑真出图——配方原文+底模/种子/步数/CFG/负向+三枚真 LoRA，图落保存节点，历史 hist_1793693239642_fo6ux；只写「已发送」不写「已生效」。证据 <repo-root>/temp/e2e/openworks-fe-gen-2026-11-03/。此前 10-17 hist_1792223105137_bhlop 仍算已出图。
 
-> **魔搭国内站（2026-11-03 画布认可）：** Tongyi-MAI/Z-Image-Turbo + Realism LoRA，图落保存节点，历史 hist_1793695144423_1ms48。证据 /workspace/canvas/temp/e2e/modelscope-cn-fe-gen-2026-11-03/。
+> **魔搭国内站（2026-11-03 画布认可）：** Tongyi-MAI/Z-Image-Turbo + Realism LoRA，图落保存节点，历史 hist_1793695144423_1ms48。证据 <repo-root>/temp/e2e/modelscope-cn-fe-gen-2026-11-03/。
 
-> **WaveSpeed（2026-10-17 ~16:14 画布认可）：** 第二家在画布真出图——flux-dev-lora + Realism LoRA 1.1，同一会话出图落保存节点，历史成功卡 hist_1792224305224_meynb；尺寸改由空潜空间节点 832×1216 发出。证据 /workspace/canvas/temp/e2e/wavespeed/recipe-33530948/。
+> **WaveSpeed（2026-10-17 ~16:14 画布认可）：** 第二家在画布真出图——flux-dev-lora + Realism LoRA 1.1，同一会话出图落保存节点，历史成功卡 hist_1792224305224_meynb；尺寸改由空潜空间节点 832×1216 发出。证据 <repo-root>/temp/e2e/wavespeed/recipe-33530948/。
 
 > **2026-10-15 03:26 起：** 旧 `docs/provider-api-audit/` 仅留作对比、以 `provider-api-audit-v2/` 为准，各草案中引用旧审计的结论一律视为未核实（见各文件 `_auditStatus`），Researchy 已于 2026-10-15 完成 16 家 v2 重查；更新草案以 v2 为准，字段「会发送」仍须前端实测。
 

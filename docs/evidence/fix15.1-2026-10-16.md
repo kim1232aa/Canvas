@@ -11,7 +11,7 @@
 - 回归：fix15.1 / fix12 / fix11.1 / traceFix2 / fix5 共 31/31 通过。
 
 ## Restore
-`/workspace/canvas/temp/backups/canvas-restore-fix15.1-2253.tgz`（改前 HistoryModal.tsx；`tar xzf` 于仓库根）
+`<repo-root>/temp/backups/canvas-restore-fix15.1-2253.tgz`（改前 HistoryModal.tsx；`tar xzf` 于仓库根）
 
 ## Server（一次重启；未用 start-canvas.sh；沿用旧进程 env，未换 provider）
 - 旧 PID 3656255 → 新 PID **3681517**（127.0.0.1:3000 HTTP 200）
@@ -26,7 +26,7 @@
 **CODE_ONLY**（UI 位置修正；不升出图）。不做：prompt/LoRA 名截断、toast 重复 401。
 
 ## 收口（画布 2026-10-16 22:59 北京）
-- 前端重拍：/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-fix15.1-accept-2254/（PID 3681517，未出图点击）
+- 前端重拍：<repo-root>/temp/canvas-e2e-archive-20261017/canvas-e2e-fix15.1-accept-2254/（PID 3681517，未出图点击）
 - 挑刺：严重无。蓝标实际发送已在未发送折叠上方；折叠 6 项均不在请求体。
 - fix15 主项：modelscope_ai loras={"LcarsPicturesDatabase/ST-TNG-Rooms-Z-Image-Turbo-v1":1} 无 path/scale；上游 401「bind Alibaba Cloud account」原样（hist_1792161944810_gfkr9）。
 - 状态：CLOSED（接线形状过；非 PASS_GENERATION，非 PASS_BILLING——401 是账号未绑定，不是欠费）。

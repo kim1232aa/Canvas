@@ -22,8 +22,8 @@
 
 | case | HTTP | response snippet |
 |---|---|---|
-| 02a1-positional-seed-only | 200 | `{"code":"0", "message":"", "data":{"task":{"id":"1056284777222547745", "userId":"1048723019146487792", "status":"WAITING` |
-| 02a2-positional-seed-steps-int | 200 | `{"code":"0", "message":"", "data":{"task":{"id":"1056284785812482359", "userId":"1048723019146487792", "status":"WAITING` |
+| 02a1-positional-seed-only | 200 | `{"code":"0", "message":"", "data":{"task":{"id":"1056284777222547745", "userId":"<redacted-user-id>", "status":"WAITING` |
+| 02a2-positional-seed-steps-int | 200 | `{"code":"0", "message":"", "data":{"task":{"id":"1056284785812482359", "userId":"<redacted-user-id>", "status":"WAITING` |
 | 02a3-positional-seed-steps-cfg-float | 500 | `{"code":13,"message":"failed to handle task: works service error: code=1300013, message=WORKS_QUEUE_FULL"} ` |
 | 02a4-positional-three-integers | 500 | `{"code":13,"message":"failed to handle task: works service error: code=1300013, message=WORKS_QUEUE_FULL"} ` |
 

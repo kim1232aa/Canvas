@@ -46,7 +46,8 @@ export class TensorArtDriver extends BaseEngineDriver {
     const scheduler = isProvided(params.scheduler) ? params.scheduler : extra.scheduler;
     if (isProvided(scheduler)) body.scheduler = scheduler;
 
-    const endpoint = '/api/tensorart/generate';
+    const endpoint = params.isVideo ? '/api/video/generate' : '/api/tensorart/generate';
+    if (params.isVideo) body.provider = 'tensorart';
     const resp = await fetch(endpoint, {
       method: 'POST',
       headers: {
@@ -58,6 +59,15 @@ export class TensorArtDriver extends BaseEngineDriver {
 
     if (!resp.ok) {
       const rawBody = await resp.text().catch(() => '');
+      if (params.isVideo) {
+        try {
+          const err = JSON.parse(rawBody);
+          throw new Error(err.details || err.error || rawBody);
+        } catch (e: any) {
+          if (e instanceof SyntaxError) throw new Error(rawBody || `HTTP ${resp.status}`);
+          throw e;
+        }
+      }
       throw new Error(`Tensor.Art 路由 ${endpoint} 返回 HTTP ${resp.status}: ${rawBody}`);
     }
 

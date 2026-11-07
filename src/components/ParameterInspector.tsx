@@ -67,7 +67,7 @@ export function CivitaiAllowMatureControl({
       <div className="flex items-center justify-between">
         <label className="text-sm text-slate-300">Civitai allowMatureContent</label>
         <span className={`text-[10px] px-1.5 py-0.5 rounded border ${currentVal ? 'border-pink-500/60 bg-pink-950/40 text-pink-300 font-semibold' : 'border-amber-500/60 bg-amber-950/40 text-amber-300'}`}>
-          {currentVal ? '会发送 true（项目默认开启 NSFW）' : '会发送 false（已手动设为严格安全过滤）'}
+          {currentVal ? '会发送 true（默认开启 NSFW）' : '会发送 false（已开启安全过滤）'}
         </span>
       </div>
       <select
@@ -80,11 +80,11 @@ export function CivitaiAllowMatureControl({
         }}
         className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2 text-slate-200 text-xs font-mono"
       >
-        <option value="true">true（允许成熟/成人内容，项目默认放开）</option>
+        <option value="true">true（允许成人内容，默认）</option>
         <option value="false">false（禁止成熟/成人内容，严格过滤）</option>
       </select>
       <div className="flex items-center justify-between text-[11px] text-pink-300/80 bg-pink-950/20 px-2 py-1 rounded border border-pink-900/30">
-        <span>用户原则：“我们不反对nsfw，有nsfw开关的都默认开启”</span>
+        <span>默认允许成人内容 (NSFW)</span>
         {!currentVal && (
           <button
             type="button"
@@ -94,7 +94,7 @@ export function CivitaiAllowMatureControl({
             }}
             className="text-[10px] text-cyan-300 hover:text-cyan-200 underline font-semibold ml-2 cursor-pointer shrink-0"
           >
-            一键恢复放开默认
+            恢复默认
           </button>
         )}
       </div>
@@ -956,7 +956,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                           placeholder="未设置"
                           disabled={loraUnsupported}
                           aria-label={`LoRA ${lora.name} 强度（未设置）`}
-                          title={loraUnsupported ? LORA_UNSUPPORTED_TITLE : '生成前必须显式填写强度，禁止静默兜底 0.8'}
+                          title={loraUnsupported ? LORA_UNSUPPORTED_TITLE : '请填写 LoRA 权重强度'}
                           onChange={(e) => {
                             if (loraUnsupported) return;
                             const next = [...params.loras];

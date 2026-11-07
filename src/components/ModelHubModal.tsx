@@ -330,7 +330,6 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
   const [sortOption, setSortOption] = useState<ModelSortOption>('downloads');
   const [selectedArch, setSelectedArch] = useState<string>('all');
   const [query, setQuery] = useState('');
-  // 用户最高原则（2026-11-05）：「我们不反对nsfw，有nsfw开关的都默认开启」
   // Civitai 与全平台模型目录检索默认开启成人内容检索
   const [nsfwFilter, setNsfwFilter] = useState(true);
   const requestVersion = useRef(0);
@@ -1070,7 +1069,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
               </select>
             </div>
 
-            {/* NSFW 筛选可见开关（用户最高原则：我们不反对nsfw，有nsfw开关的都默认开启） */}
+            {/* NSFW 筛选可见开关 */}
             <button
               type="button"
               onClick={() => {
@@ -1084,7 +1083,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                   ? 'border-pink-500/60 bg-pink-950/40 text-pink-300 shadow-sm shadow-pink-950/50'
                   : 'border-slate-700 bg-[#101115] text-slate-400 hover:text-slate-200'
               }`}
-              title="用户最高原则：“我们不反对nsfw，有nsfw开关的都默认开启”（点击可切换）"
+              title="包含 NSFW 成人内容模型（点击切换）"
             >
               <Flame className={`w-3.5 h-3.5 ${nsfwFilter ? 'text-pink-400' : 'text-slate-500'}`} />
               <span>NSFW: {nsfwFilter ? '已开启 (默认)' : '已关闭'}</span>

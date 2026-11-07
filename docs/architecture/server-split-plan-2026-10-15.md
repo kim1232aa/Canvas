@@ -1,10 +1,12 @@
+> ⚠️ **未验证历史文档（Unverified History）**：本文档由早期 Agent 编写，包含未经证实的推断或已过期状态，**不得作为当前事实依据**；当前经真实 UI 点击与代码实测核实的基线请以 [../evidence/2026-11-05/final.md](../evidence/2026-11-05/final.md) 与 [../../HANDOFF.md](../../HANDOFF.md) 为准。
+
 # server.ts / 大文件拆分方案（2026-10-15）
 
 > **状态**：文档-only。本轮**未改任何生产代码**。  
 > **约束**：图片供应商队列（Together 接线）并行进行中 —— **禁止**在 Together 落地前改 `server.ts`、`src/server/schemaProviders.ts`、以及 Together 可能碰的 settings/schema 文件。  
 > **产品裁定（画布）**：先按路由/供应商拆 `server.ts`（每块带测试），再拆 `App.tsx`；**禁止一刀切大重构**。
 
-测量基准：`wc -c` / `wc -l`，路径相对仓库根 `/workspace/canvas/Canvas-main`，日期 2026-10-15（Asia/Shanghai）。
+测量基准：`wc -c` / `wc -l`，路径相对仓库根 `<repo-root>/Canvas-main`，日期 2026-10-15（Asia/Shanghai）。
 
 ---
 
@@ -115,7 +117,7 @@
 | **风险** | 低。`hosting/build.mjs` 对 `logUpstream` 有字符串 `removeRange` —— **必须同步改 adapter 锚点或保持函数名/邻近注释不变** |
 | **测试** | 新建小 vitest（纯函数）；跑既有 `src/server/*.test.ts` 全绿 |
 | **冒烟** | `node`/`tsx` 起服 + `GET /api/cloud/health` |
-| **回滚** | 恢复 tar：`/workspace/canvas/temp/backups/canvas-restore/Canvas-main-pre-<slice0>-*.tar.gz`（实施前现打） |
+| **回滚** | 恢复 tar：`<repo-root>/temp/backups/canvas-restore/Canvas-main-pre-<slice0>-*.tar.gz`（实施前现打） |
 | **与 Together** | 若 Together 只动 schema/settings，本片仍可能碰 `server.ts` 顶部 → **建议等 Together merge 后再做**，或确认无并行写 `server.ts` |
 
 ### Slice 1 — 单供应商路由（推荐第一刀）
@@ -185,12 +187,12 @@
 实施任一 Slice 前：
 
 ```bash
-tar czf /workspace/canvas/temp/backups/canvas-restore/Canvas-main-pre-<slice-name>-$(date +%Y%m%d-%H%M%S).tar.gz \
-  -C /workspace/canvas Canvas-main \
+tar czf <repo-root>/temp/backups/canvas-restore/Canvas-main-pre-<slice-name>-$(date +%Y%m%d-%H%M%S).tar.gz \
+  -C <repo-root> Canvas-main \
   --exclude=Canvas-main/node_modules --exclude=Canvas-main/dist
 ```
 
-回滚：解压覆盖对应文件（或整树）。参考已有包：`/workspace/canvas/temp/backups/canvas-restore/Canvas-main-pre-exec-success-plain-20261015-014200.tar.gz` 等。
+回滚：解压覆盖对应文件（或整树）。参考已有包：`<repo-root>/temp/backups/canvas-restore/Canvas-main-pre-exec-success-plain-20261015-014200.tar.gz` 等。
 
 **禁止** commit/push（用户铁律）。
 

@@ -641,7 +641,7 @@ export const Canvas: React.FC<CanvasProps> = ({
                 选择基础模型
               </div>
               <p className="text-[11px] text-slate-400 leading-tight">
-                支持 FLUX.1、SDXL、Wan 2.1 等文生图/文生视频大模型
+                支持 Z-Image Turbo、Krea 2、MOSS-Image、Wan 2.2 等文生图/文生视频大模型
               </p>
             </div>
 
