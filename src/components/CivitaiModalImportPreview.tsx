@@ -24,7 +24,8 @@ import { ProviderModelSelect } from './ProviderModelSelect';
 import { ensureModelSchema, getModelSchemaEntry, subscribeModelSchema } from '../services/modelSchemaCache';
 
 export interface CivitaiModalImportPreviewProps {
-  adaptation: ProviderAdaptationResult;
+  /** Absent until a recipe is parsed. Section 1 (provider + target model) still renders. */
+  adaptation?: ProviderAdaptationResult | null;
   allAdaptations?: Record<string, ProviderAdaptationResult>;
   selectedProvider: string;
   onSelectProvider: (provider: string) => void;
@@ -97,8 +98,11 @@ export const CivitaiModalImportPreview: React.FC<CivitaiModalImportPreviewProps>
       ? `目标端点 Schema 获取失败；未核实: ${schemaEntry.error || '获取失败'}`
       : undefined;
 
-  let effectiveAdaptation = adaptation;
-  if (preset && (schemaEntry || !targetModel)) {
+  let effectiveAdaptation = adaptation ?? null;
+  // Recompute only when the preset carries the parsed recipe. An adaptation passed without
+  // recipe resources (unit fixtures) must be shown as-is, not replaced by an empty recompute.
+  const presetHasRecipe = Boolean(preset && (preset.otherMetadata?.resources?.length || preset.prompt || preset.otherMetadata?.baseModel || preset.nodes?.some((n: any) => n.type === 'CheckpointLoaderSimple' && n.values?.ckpt_name)));
+  if (presetHasRecipe && (schemaEntry || !targetModel)) {
     const ckpt = preset.nodes?.find((n: any) => n.type === 'CheckpointLoaderSimple')?.values?.ckpt_name;
     effectiveAdaptation = adaptCivitaiRecipeToProvider(
       {
@@ -128,8 +132,9 @@ export const CivitaiModalImportPreview: React.FC<CivitaiModalImportPreviewProps>
     );
   }
 
-  const compatState: 'compatible' | 'unverified' | 'incompatible' =
-    effectiveAdaptation.compatibilityStatus ||
+  const compatState: 'compatible' | 'unverified' | 'incompatible' | null = !effectiveAdaptation
+    ? null
+    : effectiveAdaptation.compatibilityStatus ||
     (effectiveAdaptation.isCompatible
       ? 'compatible'
       : effectiveAdaptation.baseModelStatus === 'incompatible' ||
@@ -157,9 +162,9 @@ export const CivitaiModalImportPreview: React.FC<CivitaiModalImportPreviewProps>
     { id: 'video', name: 'AI Video' },
   ];
 
-  const hasRequiresConsentLora = effectiveAdaptation.loras.some(
+  const hasRequiresConsentLora = Boolean(effectiveAdaptation?.loras.some(
     (l) => l.requiresAuthConsent || l.status === 'requires_consent'
-  );
+  ));
 
   return (
     <div className="space-y-4 text-xs font-sans animate-in fade-in duration-150" data-testid="civitai-import-preview">
@@ -171,7 +176,7 @@ export const CivitaiModalImportPreview: React.FC<CivitaiModalImportPreviewProps>
             <span>选择适配目标供应商 (Target Provider Adaptation):</span>
           </label>
           <span className="text-[11px] font-mono text-cyan-400 font-semibold">
-            {effectiveAdaptation.displayName}
+            {effectiveAdaptation?.displayName || (selectedProvider === 'civitai' ? 'Civitai 原生' : selectedProvider)}
           </span>
         </div>
         <p className="text-[11px] text-slate-400">
@@ -247,6 +252,13 @@ export const CivitaiModalImportPreview: React.FC<CivitaiModalImportPreviewProps>
         )}
       </div>
 
+      {!preset && !effectiveAdaptation && (
+        <p className="text-[11px] text-slate-400 font-mono leading-relaxed px-1" data-testid="import-empty-hint">
+          请粘贴上方 Civitai 链接或点击快捷样例，即可实时查看当前所选目标供应商的逐字段适配分析
+        </p>
+      )}
+
+      {effectiveAdaptation && compatState && <>
       {/* 2. Architecture & Compatibility Banner */}
       <div
         className={`border rounded-xl p-3.5 space-y-2 ${
@@ -581,7 +593,7 @@ export const CivitaiModalImportPreview: React.FC<CivitaiModalImportPreviewProps>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {preset && onApplyPreset && (
+          {onApplyPreset && (
             <button
               type="button"
               data-testid="apply-imported-workflow-button"
@@ -594,6 +606,7 @@ export const CivitaiModalImportPreview: React.FC<CivitaiModalImportPreviewProps>
           )}
         </div>
       </div>
+      </>}
     </div>
   );
 };

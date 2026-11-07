@@ -70,6 +70,39 @@ describe('CivitaiModal & CivitaiModalImportPreview Reactive Live Schema Tests (P
     vi.unstubAllGlobals();
   });
 
+  it('import tab shows the cross-provider bar and every provider pill before any recipe is parsed', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({}), { status: 200, headers: { 'Content-Type': 'application/json' } })));
+    await act(async () => {
+      root.render(
+        <CivitaiModal
+          isOpen={true}
+          initialMode="import"
+          onClose={vi.fn()}
+          onSelectLoRA={vi.fn()}
+          onAddLoRANodeToCanvas={vi.fn()}
+        />
+      );
+    });
+    await flush();
+
+    expect(host.textContent).toContain('选择适配目标供应商 (Target Provider Adaptation)');
+    const selector = host.querySelector('[data-testid="import-provider-selector"]');
+    expect(selector).toBeTruthy();
+    for (const id of ['civitai', 'fal', 'sogni', 'replicate', 'wavespeed', 'huggingface', 'muapi', 'krea']) {
+      expect(host.querySelector(`[data-testid="import-provider-pill-${id}"]`), id).toBeTruthy();
+    }
+    expect(host.querySelector('[data-testid="import-empty-hint"]')?.textContent).toContain('请粘贴上方 Civitai 链接或点击快捷样例');
+    expect(host.querySelector('[data-testid="import-architecture-banner"]')).toBeNull();
+    expect(host.querySelector('[data-testid="apply-imported-workflow-button"]')).toBeNull();
+
+    const falBtn = host.querySelector('[data-testid="import-provider-pill-fal"]') as HTMLButtonElement;
+    await act(async () => { falBtn.click(); });
+    await flush();
+    expect(host.textContent).toContain('目标模型 / 端点 (Target Model / Endpoint)');
+    expect(host.querySelector('[data-testid="import-model-selector-container"]')).toBeTruthy();
+    expect(host.querySelector('[data-testid="civitai-import-error"]')).toBeNull();
+  });
+
   it('parent CivitaiModal async chain: parse -> select model -> loading (unverified) -> ready (compatible)', async () => {
     let schemaResolve: ((value: any) => void) | undefined;
     const schemaPromise = new Promise((resolve) => {

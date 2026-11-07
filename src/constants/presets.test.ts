@@ -63,6 +63,7 @@ const HAS_LORA = new Set([
   'muapi',
   'sogni',
   'fal',
+  'civitai',
 ]);
 
 /** Real LoRAs from accepted runs or official docs recipe IDs (evidence in presets.ts). */
@@ -76,6 +77,7 @@ const PREFILLED_LORA: Record<string, Array<[string, number]>> = {
   fal: [['https://huggingface.co/krea/Krea-2-LoRA-retroanime/resolve/main/retroanime.safetensors', 1]],
   sogni: [['krea2-fever-dream-mood', 1]],
   modelscope_ai: [['LcarsPicturesDatabase/ST-TNG-Rooms-Z-Image-Turbo-v1', 1]],
+  civitai: [['urn:air:krea2:lora:civitai:929497@3077110', 0.85]],
 };
 
 // Only documented recipe prompts (presetRecipePrompts.ts, each with a source) or empty.
@@ -433,24 +435,33 @@ describe('standard workflow presets (23 T2I + 5 T2V + 6 I2V)', () => {
     }
   });
 
-  it('civitai uses turbo + comfy/krea2 with no LoRA node (krea2 Schema: loras unsupported)', () => {
-    expect(loader('std-civitai-t2i')!.values).toMatchObject({
-      ckpt_name: 'turbo',
+  it('civitai ships the verified Krea 2 Turbo AIR plus Masterpiece LoRA (image 148140013)', () => {
+    const ckpt = loader('std-civitai-t2i')!;
+    expect(ckpt.values).toMatchObject({
+      ckpt_name: 'urn:air:krea2:diffusionmodel:civitai:2732656@3072332',
       targetProvider: 'civitai',
+      // Kept on the node values so graphEngine can build the request; the canvas widgets for these were removed.
       civitai_engine: 'comfy',
       civitai_ecosystem: 'krea2',
       civitai_model: 'turbo',
     });
-    expect(lora('std-civitai-t2i')).toBeUndefined();
+    expect(lora('std-civitai-t2i')!.values).toMatchObject({
+      lora_name: 'urn:air:krea2:lora:civitai:929497@3077110',
+      strength_model: 0.85,
+    });
+    expect(preset('std-civitai-t2i').nodes.some(n => n.type === 'CLIPTextEncodeNegative')).toBe(true);
   });
 
-  it('Civitai krea2 omits EmptyLatent pixels (Schema width/height unsupported)', () => {
+  it('Civitai Krea 2 Turbo writes explicit 832x1248 (image 148140013), not an empty EmptyLatent shell', () => {
     const p = preset('std-civitai-t2i');
     const lat = p.nodes.find(n => n.type === 'EmptyLatentImage')!;
-    expect(lat.values.width).toBeUndefined();
-    expect(lat.values.height).toBeUndefined();
-    expect(p.spatialFrames?.[0]?.params?.width).toBeUndefined();
-    expect(p.spatialFrames?.[0]?.params?.height).toBeUndefined();
+    expect(lat.values.width).toBe(832);
+    expect(lat.values.height).toBe(1248);
+    expect(lat.values.batch_size).toBe(1);
+    expect(p.spatialFrames?.[0]?.params?.width).toBe(832);
+    expect(p.spatialFrames?.[0]?.params?.height).toBe(1248);
+    const ks = p.nodes.find(n => n.type === 'KSampler')!;
+    expect(ks.values.seed).toBe(689794262);
   });
 
   it('ModelsLab/Civitai/Novita seed Schema-supported sampler fields into schemaProperties (no false amber omit)', () => {
@@ -468,15 +479,15 @@ describe('standard workflow presets (23 T2I + 5 T2V + 6 I2V)', () => {
       expect(props).toEqual(expect.arrayContaining(['scheduler', 'steps', 'guidance', 'seed', 'loras']));
       expect(props).not.toEqual(expect.arrayContaining(['sampler', 'sampler_name', 'denoise']));
     }
-    // Civitai krea2: providerSchema marks sampler+scheduler supported; width/height omitted.
+    // Civitai image 148140013: sampler+scheduler+width+height+negative+lora are filled (comfy krea2 createImage).
     {
       const p = preset('std-civitai-t2i');
       const ks = p.nodes.find(n => n.type === 'KSampler')!;
       expect(ks.values.sampler_name).toBe('euler');
       expect(ks.values.scheduler).toBe('simple');
       const props = JSON.parse(String(loader(p.id)!.values.custom_parameters || '{}'))?._canvas?.schemaProperties as string[];
-      expect(props).toEqual(expect.arrayContaining(['sampler', 'sampler_name', 'scheduler', 'seed', 'steps']));
-      expect(props).not.toEqual(expect.arrayContaining(['denoise', 'width', 'height']));
+      expect(props).toEqual(expect.arrayContaining(['sampler', 'sampler_name', 'scheduler', 'seed', 'steps', 'width', 'height', 'negative_prompt', 'loras']));
+      expect(props).not.toEqual(expect.arrayContaining(['denoise']));
     }
     // Novita: SdImageRequest has sampler_name; no scheduler → omit scheduler/denoise only.
     {
@@ -745,7 +756,9 @@ describe('standard workflow presets (23 T2I + 5 T2V + 6 I2V)', () => {
         lower === 'krea-v2-turbo-lora' ||
         lower === 'krea-2-turbo' ||
         lower === 'krea2-fever-dream-mood' ||
-        lower === 'https://huggingface.co/krea/krea-2-lora-retroanime/resolve/main/retroanime.safetensors'
+        lower === 'https://huggingface.co/krea/krea-2-lora-retroanime/resolve/main/retroanime.safetensors' ||
+        lower === 'urn:air:krea2:diffusionmodel:civitai:2732656@3072332' ||
+        lower === 'urn:air:krea2:lora:civitai:929497@3077110'
       ) {
         return 'krea2-turbo';
       }

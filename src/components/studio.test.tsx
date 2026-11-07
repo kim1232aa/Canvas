@@ -18,7 +18,9 @@ it('inspector retains custom ecosystem and explicit video provider controls',()=
   const html=renderToStaticMarkup(<ParameterInspector params={params} onChange={noop} onOpenCivitai={noop} />);
   expect(html).toContain('实际视频服务商');expect(html).toContain('视频 resolution');expect(html).not.toContain('视频自定义参数 JSON'); // cleanup-2026-10-17 #2
   const civ=renderToStaticMarkup(<ParameterInspector params={{...params,targetProvider:'civitai',civitaiEngine:'comfy',civitaiEcosystem:'custom-ecosystem',civitaiModel:'custom-model'}} onChange={noop} onOpenCivitai={noop} />);
-  expect(civ).toContain('custom-ecosystem');expect(civ).toContain('custom-model');expect(civ).toContain('Civitai engine');
+  // engine/ecosystem/model are resolved from the selected AIR — not raw developer inputs on the image checkpoint.
+  expect(civ).not.toContain('Civitai engine');expect(civ).not.toContain('Civitai ecosystem');expect(civ).not.toContain('Civitai model');
+  expect(civ).toContain('data-testid="civitai-allow-mature-control"');
   expect(civ).not.toContain('读取所选模型的官方 Schema');
 });
 it('shows essential studio actions and explains a disabled run', () => {
@@ -59,11 +61,12 @@ it('uses model-specific duration bounds and keeps custom Civitai recipe selector
   expect(video).not.toMatch(/type="number" min="3" max="15"/); // cleanup-2026-10-17: bounds only from Schema cache
   const unknown=render('AIVideoNode',{targetProvider:'fal',model:'custom-video',duration:20,fps:30});
   expect(unknown).not.toMatch(/type="number" min="5" max="24"/);
-  const civitai=render('CheckpointLoaderSimple',{targetProvider:'civitai',ckpt_name:'custom',civitai_ecosystem:'custom-ecosystem'});
-  expect(civitai).toContain('Civitai engine');
-  expect(civitai).toContain('Civitai ecosystem');
-  expect(civitai).toContain('Civitai model');
-  expect(civitai).toContain('custom-ecosystem');
+  const civitai=render('CheckpointLoaderSimple',{targetProvider:'civitai',ckpt_name:'urn:air:krea2:diffusionmodel:civitai:2732656@3072332',civitai_ecosystem:'custom-ecosystem'});
+  // Raw engine/ecosystem/model boxes are gone; the selected AIR stays visible as the checkpoint.
+  expect(civitai).not.toContain('Civitai engine');
+  expect(civitai).not.toContain('Civitai ecosystem');
+  expect(civitai).not.toContain('Civitai model');
+  expect(civitai).toContain('urn:air:krea2:diffusionmodel:civitai:2732656@3072332');
   expect(civitai).not.toContain('aria-label="自定义 API 参数 JSON"'); // cleanup-2026-10-17: JSON editor no longer on nodes
   expect(civitai).not.toContain('读取所选模型的官方 Schema');
   expect(render('CheckpointLoaderSimple',{targetProvider:'fal',ckpt_name:'custom'})).not.toContain('Civitai engine');

@@ -1,5 +1,5 @@
 import { noteUserModelSelection } from '../services/userModelSelection';
-import { civitaiEngines, civitaiEcosystemsFor } from '../schemas/providerSchema';
+import { civitaiEcosystemsFor } from '../schemas/providerSchema';
 import { ensureModelSchema, withCachedSchemaProperties } from '../services/modelSchemaCache';
 import {ApiParameterEditor} from './ApiParameterEditor';
 import {videoDurationBounds, videoSchemaField} from '../utils/frontendParameters';
@@ -624,9 +624,6 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
             );
           })()}
           {params.targetProvider === 'civitai' && <div className="space-y-2 rounded-lg border border-slate-700 p-3">
-            <label className="block text-sm text-slate-300">Civitai engine<select aria-label="Civitai engine" value={params.civitaiEngine || ''} onChange={e=>update({civitaiEngine:e.target.value || undefined})} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2"><option value="">请选择引擎</option>{civitaiEngines().map(e=><option key={e} value={e}>{e}</option>)}{params.civitaiEngine && !civitaiEngines().includes(params.civitaiEngine) && <option value={params.civitaiEngine}>{params.civitaiEngine}</option>}</select></label>
-            <label className="block text-sm text-slate-300">Civitai ecosystem<input aria-label="Civitai ecosystem" value={params.civitaiEcosystem || ''} onChange={e=>update({civitaiEcosystem:e.target.value || undefined})} list="civitai-ecosystems" placeholder="显式填写生态；未知生态保留" className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2" /><datalist id="civitai-ecosystems">{civitaiEcosystemsFor(params.civitaiEngine || '').map(x=><option key={x} value={x} />)}</datalist></label>
-            <label className="block text-sm text-slate-300">Civitai model<input aria-label="Civitai model" value={params.civitaiModel || ''} onChange={e=>update({civitaiModel:e.target.value || undefined})} placeholder="按官方 recipe 填写 model selector" className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2" /></label>
             <CivitaiAllowMatureControl customParameters={params.customParameters} onChangeCustom={customParameters => update({ customParameters })} />
           </div>}
           {params.targetProvider === 'video' && params.videoProvider === 'civitai' && <div className="space-y-2 rounded-lg border border-slate-700 p-3">

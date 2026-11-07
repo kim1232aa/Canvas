@@ -384,6 +384,42 @@ describe('std-fal-t2i dry-run (Fal Krea 2 Turbo LoRA image_size forwarding via n
   });
 });
 
+describe('std-civitai-t2i dry-run (image 148140013 Krea 2 Turbo AIR + Masterpiece LoRA)', () => {
+  it('canvas request carries the checkpoint AIR, LoRA AIR @ 0.85, negative, and 832x1248 — not raw ckpt turbo', async () => {
+    const p = WORKFLOW_PRESETS.find((x) => x.id === 'std-civitai-t2i')!;
+    const ckpt = p.nodes.find((n) => n.type === 'CheckpointLoaderSimple')!;
+    expect(ckpt.values.ckpt_name).toBe('urn:air:krea2:diffusionmodel:civitai:2732656@3072332');
+    expect(ckpt.values.civitai_engine).toBe('comfy');
+    const lora = p.nodes.find((n) => n.type === 'LoRALoader')!;
+    expect(lora.values).toMatchObject({ lora_name: 'urn:air:krea2:lora:civitai:929497@3077110', strength_model: 0.85 });
+    const lat = p.nodes.find((n) => n.type === 'EmptyLatentImage')!;
+    expect([lat.values.width, lat.values.height, lat.values.batch_size]).toEqual([832, 1248, 1]);
+
+    let captured: any;
+    globalThis.fetch = vi.fn(async (url: any, init?: any) => {
+      const u = String(url);
+      if (!captured && init?.method === 'POST' && init?.body && !u.includes('/api/history') && !u.includes('/api/trace')) {
+        captured = JSON.parse(String(init.body));
+      }
+      return new Response(JSON.stringify({ error: 'dry run: not sent' }), { status: 418 });
+    }) as any;
+    await executeWorkflow(p.nodes as any, p.connections as any, () => {}, undefined, 'std-civitai-t2i-samp').catch(() => undefined);
+    expect(captured).toBeDefined();
+    expect(captured.model).toBe('urn:air:krea2:diffusionmodel:civitai:2732656@3072332');
+    expect(captured.model).not.toBe('turbo');
+    expect(captured.width).toBe(832);
+    expect(captured.height).toBe(1248);
+    expect(captured.steps).toBe(8);
+    expect(captured.cfg).toBe(1);
+    expect(captured.seed).toBe(689794262);
+    expect(captured.prompt).toBe(PRESET_RECIPE_PROMPTS['std-civitai-t2i'].prompt);
+    expect(captured.negative_prompt ?? '').toBe(PRESET_RECIPE_PROMPTS['std-civitai-t2i'].negative ?? '');
+    const sentLoras = captured.loras ?? captured.lora ?? [];
+    const names = (Array.isArray(sentLoras) ? sentLoras : []).map((l: any) => l?.name || l?.air || l?.civitaiId || l?.path || '');
+    expect(names.join(' ')).toContain('urn:air:krea2:lora:civitai:929497@3077110');
+  });
+});
+
 describe('std-nanogpt-t2i dry-run (NanoGPT moss-image live supported_parameters mapping, no duplicate WH)', () => {
   const mossEndpoint = {
     supported_parameters: {
