@@ -63,6 +63,29 @@ function resolveRunwareLoraModel(item: Record<string, any>): { model: string; re
     }
   }
 
+  for (const primary of [item.lora_name, item.name, item.id, item.path]) {
+    const air = extractRunwareAir(primary);
+    if (air) return { model: air };
+  }
+
+  const resourceSource = String(item.resource_source ?? '').trim().toLowerCase();
+  const hasCivitaiId = Boolean(String(item.civitaiId ?? item.civitai_id ?? '').trim());
+  const isReselectedNonCivitai = Boolean(resourceSource && resourceSource !== 'civitai' && !hasCivitaiId);
+
+  if (isReselectedNonCivitai) {
+    for (const candidate of [item.lora_name, item.name, item.id]) {
+      const s = String(candidate ?? '').trim();
+      if (s && !isWeightFilenameOrUrlOrBareDigits(s)) {
+        return { model: s };
+      }
+    }
+    return {
+      model: '',
+      reason:
+        'Runware LoRA 需要有效的 AIR 标识（如 civitai:modelId@versionId 或 runware:id@version），不能直接发送权重文件名、下载链接或缺少 modelId 的纯数字版本 ID',
+    };
+  }
+
   const airFromAirField = extractRunwareAir(item.air);
   if (airFromAirField) return { model: airFromAirField };
 
@@ -78,18 +101,14 @@ function resolveRunwareLoraModel(item: Record<string, any>): { model: string; re
     return { model: `civitai:${modelId}@${versionId}` };
   }
 
-  for (const candidate of [item.id, item.path, item.name]) {
-    const air = extractRunwareAir(candidate);
-    if (air) return { model: air };
-  }
-
   const isForeignCivitai = Boolean(
-    String(item.civitaiId ?? item.civitai_id ?? item.downloadUrl ?? item.download_url ?? '').trim() ||
+    hasCivitaiId ||
+      String(item.downloadUrl ?? item.download_url ?? '').trim() ||
       item.import_source_provider === 'civitai' ||
-      item.resource_source === 'civitai'
+      resourceSource === 'civitai'
   );
   if (!isForeignCivitai) {
-    for (const candidate of [item.id, item.name]) {
+    for (const candidate of [item.lora_name, item.id, item.name]) {
       const s = String(candidate ?? '').trim();
       if (s && !isWeightFilenameOrUrlOrBareDigits(s)) {
         return { model: s };

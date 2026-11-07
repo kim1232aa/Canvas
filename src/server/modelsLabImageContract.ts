@@ -20,11 +20,19 @@ function isInvalidModelsLabCatalogId(raw: string): boolean {
 }
 
 function resolveModelsLabLoraModel(item: Record<string, any>): { model: string; reason?: string } {
-  const isForeignCivitai = Boolean(
-    String(item.civitaiId ?? item.civitai_id ?? item.air ?? item.downloadUrl ?? item.download_url ?? '').trim() ||
-      item.import_source_provider === 'civitai' ||
-      item.resource_source === 'civitai'
+  const resourceSource = String(item.resource_source ?? '').trim().toLowerCase();
+  const hasCivitaiIdOrDownload = Boolean(
+    String(item.civitaiId ?? item.civitai_id ?? item.downloadUrl ?? item.download_url ?? '').trim()
   );
+  const isReselectedNonCivitai = Boolean(resourceSource && resourceSource !== 'civitai' && !hasCivitaiIdOrDownload);
+  const isForeignCivitai = isReselectedNonCivitai
+    ? false
+    : Boolean(
+        hasCivitaiIdOrDownload ||
+          String(item.air ?? '').trim() ||
+          item.import_source_provider === 'civitai' ||
+          resourceSource === 'civitai'
+      );
   const explicitCandidates = [
     item.lora_model,
     item.loraModel,
@@ -34,7 +42,7 @@ function resolveModelsLabLoraModel(item: Record<string, any>): { model: string; 
     item.lora_id,
     item.slug,
     item.model,
-    ...(!isForeignCivitai ? [item.id, item.name] : []),
+    ...(!isForeignCivitai ? [item.lora_name, item.id, item.name] : []),
   ];
   for (const candidate of explicitCandidates) {
     const s = String(candidate ?? '').trim();

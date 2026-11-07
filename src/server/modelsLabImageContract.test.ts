@@ -230,4 +230,27 @@ describe('ModelsLab Image Contract', () => {
     const parsed = parseModelsLabResponse({ status: 'processing', id: 9, eta: 3, future_links: ['https://a/1.png', 'https://a/2.png'] });
     expect(parsed).toMatchObject({ status: 'processing', taskId: 9, futureLinks: ['https://a/1.png', 'https://a/2.png'] });
   });
+
+  it('uses newly selected ModelsLab catalog resource and ignores leftover Civitai air and import_source_provider', () => {
+    const req = buildModelsLabImageRequest(
+      {
+        model: 'flux',
+        prompt: 'a portrait',
+        loras: [
+          {
+            name: 'contrast-fix',
+            resource_source: 'modelslab',
+            strength: 0.6,
+            air: 'urn:air:flux1:lora:civitai:1351798@1527024',
+            import_source_provider: 'civitai',
+          },
+        ],
+      },
+      'test-api-key'
+    );
+    expect(req.payload.lora_model).toBe('contrast-fix');
+    expect(req.payload.lora_strength).toBe(0.6);
+    expect(String(req.payload.lora_strength)).toBe('0.6');
+    expect(req.unmappedLoras).toBeUndefined();
+  });
 });

@@ -178,6 +178,17 @@ export async function verifyCivitaiSelection(raw:string,kind:string):Promise<Res
  if(versionId && String(metadata.id)!==versionId)throw new Error('versionId 与版本 metadata 不一致');
  return selectionFromMetadata('civitai',metadata,kind,requestedAir?.canonical);
 }
+const STALE_CIVITAI_IDENTITY_KEYS = [
+  'air',
+  'civitai_air',
+  'civitaiAir',
+  'model_id',
+  'modelId',
+  'version_id',
+  'versionId',
+  'import_source_provider',
+  'original_air',
+];
 export function replaceSelectedResource(previous:Record<string,any>,selection:ResourceSelection,field:string):Record<string,any> {
  const isFromCatalog = Boolean(
    (selection as any).fromCatalog ||
@@ -186,16 +197,29 @@ export function replaceSelectedResource(previous:Record<string,any>,selection:Re
    (selection as any)._sourceProvider ||
    ((selection as any).category && ((selection as any).downloads !== undefined || (selection as any).rating !== undefined))
  );
+ const effectiveProvider = String(selection.resource_source || selection.provider || '').trim().toLowerCase();
+ const clearStaleCivitaiIdentity = effectiveProvider !== 'civitai' && !selection.civitaiId;
  // Explicit HTTP(S) weight URLs are executable path intent (Hub paste ≡ manual LoRALoader URL).
  // Do not force unresolved solely because Civitai AIR / catalog metadata was never fetched.
  const explicitWeightUrl = isExplicitLoraWeightUrl(selection.downloadUrl) || isExplicitLoraWeightUrl(selection.name);
  const isVerified = (selection.resourceVerified ?? (isFromCatalog ? true : false)) || explicitWeightUrl;
  if(!isVerified && !isFromCatalog){
-  const clean=Object.fromEntries(Object.entries(previous).filter(([key])=>!['civitaiId','civitai_id','resource_source','resource_kind','resourceVerified','resource_verified','download_url','downloadUrl','lora_strength_min','lora_strength_max','lora_strength_step'].includes(key)));
+  const stripKeys = new Set([
+    'civitaiId','civitai_id','resource_source','resource_kind','resourceVerified','resource_verified',
+    'download_url','downloadUrl','lora_strength_min','lora_strength_max','lora_strength_step',
+    ...STALE_CIVITAI_IDENTITY_KEYS,
+  ]);
+  const clean=Object.fromEntries(Object.entries(previous).filter(([key])=>!stripKeys.has(key)));
   return {...clean,[field]:selection.name,resourceVerified:false,import_unresolved_resource:true,unresolvedResource:true,import_resource_reason:'新资源未经公开 metadata 核实，请重新选择已验证资源'};
  }
  const downloadUrl = selection.downloadUrl || (explicitWeightUrl ? String(selection.name).trim() : undefined);
- const clean=Object.fromEntries(Object.entries(previous).filter(([key])=>!['civitaiId','civitai_id','resource_source','resource_kind','resourceVerified','resource_verified','download_url','downloadUrl','lora_strength_min','lora_strength_max','lora_strength_step','import_unresolved_resource','unresolvedResource','import_unresolved_reason','import_resource_reason','unresolvedReason','resource_unresolved_reason'].includes(key)));
+ const stripKeys = new Set([
+   'civitaiId','civitai_id','resource_source','resource_kind','resourceVerified','resource_verified',
+   'download_url','downloadUrl','lora_strength_min','lora_strength_max','lora_strength_step',
+   'import_unresolved_resource','unresolvedResource','import_unresolved_reason','import_resource_reason','unresolvedReason','resource_unresolved_reason',
+   ...(clearStaleCivitaiIdentity ? STALE_CIVITAI_IDENTITY_KEYS : []),
+ ]);
+ const clean=Object.fromEntries(Object.entries(previous).filter(([key])=>!stripKeys.has(key)));
  return {...clean,[field]:selection.name,civitai_id:selection.civitaiId,resource_source:selection.resource_source || selection.provider,resource_kind:selection.resource_kind || (explicitWeightUrl ? 'lora' : undefined),download_url:downloadUrl,resourceVerified:true,trigger_words:selection.triggerWords || '',base_model:selection.baseModel || '',...(selection.loraStrengthRange?{lora_strength_min:selection.loraStrengthRange.min,lora_strength_max:selection.loraStrengthRange.max,...(selection.loraStrengthRange.step?{lora_strength_step:selection.loraStrengthRange.step}:{})}:{})};
 }
 

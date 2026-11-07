@@ -85,9 +85,15 @@ export function proposedRequestOf(definition:any,parameters:any,mapping:any[],lo
  */
 function isForeignCivitaiLora(l: any): boolean {
   if (!l || typeof l !== 'object') return false;
-  if (l.import_source_provider === 'civitai' || l.resource_source === 'civitai') return true;
-  if (typeof l.civitaiId === 'string' && l.civitaiId.trim() !== '') return true;
-  if (typeof l.civitai_id === 'string' && l.civitai_id.trim() !== '') return true;
+  const resourceSource = typeof l.resource_source === 'string' ? l.resource_source.trim().toLowerCase() : '';
+  const hasCivitaiId =
+    (typeof l.civitaiId === 'string' && l.civitaiId.trim() !== '') ||
+    (typeof l.civitai_id === 'string' && l.civitai_id.trim() !== '');
+  if (resourceSource && resourceSource !== 'civitai' && !hasCivitaiId) {
+    return false;
+  }
+  if (l.import_source_provider === 'civitai' || resourceSource === 'civitai') return true;
+  if (hasCivitaiId) return true;
   if (typeof l.air === 'string' && l.air.trim().startsWith('urn:air:')) return true;
   return false;
 }

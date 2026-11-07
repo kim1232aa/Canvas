@@ -195,4 +195,25 @@ describe('Runware Image Contract', () => {
     ] } as any);
     expect(parsed.images).toEqual([{ url: 'https://im.runware.ai/a.webp', seed: 1 }, { url: 'https://im.runware.ai/b.webp', seed: 2 }]);
   });
+
+  it('prefers newly selected native Runware AIR over leftover Civitai identity and does not emit old Civitai AIR', () => {
+    const req = buildRunwareImageRequest({
+      model: 'runware:100@1',
+      prompt: 'a portrait with native Runware lora',
+      loras: [
+        {
+          lora_name: 'runware:999@1',
+          resource_source: 'runware',
+          strength: 0.8,
+          air: 'urn:air:flux1:lora:civitai:1351798@1527024',
+          modelId: '1351798',
+          versionId: '1527024',
+          import_source_provider: 'civitai',
+        },
+      ],
+    });
+    expect(req.payload[0].lora).toEqual([{ model: 'runware:999@1', weight: 0.8 }]);
+    expect(JSON.stringify(req.payload[0].lora)).not.toContain('civitai:1351798@1527024');
+    expect(req.unmappedLoras).toBeUndefined();
+  });
 });

@@ -91,8 +91,8 @@ A comprehensive behavior test suite is maintained across 11 test suites covering
 - **Mutation 1**: Mutated `normalizeEcosystem` to conflate Krea and Z-Image:
   `if (b.includes('krea') || b.includes('zimage')) return 'krea2';`
   -> **FAIL** `src/server/recipeShape.test.ts` (Exit Code 1). Restored clean.
-- **Mutation 2**: Commented out `subscribeModelSchema` across `CivitaiModal.tsx` and `CivitaiModalImportPreview.tsx` (or `ensureModelSchema` in `CivitaiModal.tsx`):
-  -> **FAIL** `src/components/CivitaiModalImportLiveSchema.test.tsx` (3 failed, Exit Code 1). Note: removing `subscribeModelSchema` only in `CivitaiModal.tsx` while keeping `CivitaiModalImportPreview.tsx`'s own internal `subscribeModelSchema` + `effectiveAdaptation` recomputation stays green because the child preview component independently subscribes to the live schema store; removing `ensureModelSchema` in `CivitaiModal.tsx` or removing `subscribeModelSchema` in both components turns the suite RED (3 failed, Exit Code 1). Restored clean.
+- **Mutation 2**: Commented out `subscribeModelSchema` across both `CivitaiModal.tsx` and `CivitaiModalImportPreview.tsx`:
+  -> **FAIL** `src/components/CivitaiModalImportLiveSchema.test.tsx` (3 failed, Exit Code 1). Note: removing `subscribeModelSchema` only in parent `CivitaiModal.tsx` while keeping `CivitaiModalImportPreview.tsx`'s own internal `subscribeModelSchema` + `effectiveAdaptation` recomputation stays green because the child preview component independently subscribes to the live schema store; simultaneously commenting out `subscribeModelSchema` in both parent and child components causes live schema updates to fail to propagate to preview, failing 3 tests with Exit Code 1. Restored clean.
 - **Mutation 3**: Dropped explicit non-Civitai numeric target ID support in `mapSchemaLoraItems`:
   -> **FAIL** `src/server/recipeShape.test.ts > mapSchemaLoraItems allows explicit non-Civitai numeric target IDs` (Exit Code 1). Restored clean.
 - **Mutation 4**: Swallowed explicit LoRA strengths in `sogniLoras` when an item is unset:

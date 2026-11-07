@@ -26,7 +26,7 @@ import { buildFalVideoRequest } from './falVideoContract';
 import { extractWorkflowParameters } from '../utils/graphEngine';
 import { spatialRequestParameters, explicitLoraPath } from '../utils/frontendParameters';
 import { workflowFrame } from '../utils/workflowFrame';
-import { normalizeLoraPayloadItem } from '../utils/resourceSelection';
+import { normalizeLoraPayloadItem, replaceSelectedResource } from '../utils/resourceSelection';
 import { sogniGenerateImageSchemaFixture } from './fixtures/sogniGenerateImageSchema';
 import { unmappedLorasNotice } from '../engines/drivers/SchemaProviderDriver';
 import type { NodeInstance, Connection } from '../types/graph';
@@ -1181,6 +1181,57 @@ describe('Mission M27: Recipe Shape, LoRA Resource Identity, and Target Schema A
       } finally {
         await new Promise<void>((resolve) => server.close(() => resolve()));
       }
+    });
+
+    it('replaceSelectedResource clears stale Civitai identity keys when selecting non-Civitai catalog resource', () => {
+      const oldNode = {
+        air: 'urn:air:flux1:lora:civitai:1351798@1527024',
+        model_id: '1351798',
+        version_id: '1527024',
+        import_source_provider: 'civitai',
+        lora_name: 'cinematic-1940s.safetensors',
+        strength: 0.8,
+      };
+      const selection = {
+        name: 'runware:999@1',
+        provider: 'runware',
+        fromCatalog: true,
+      };
+      const updated = replaceSelectedResource(oldNode, selection as any, 'lora_name');
+
+      expect(updated.lora_name).toBe('runware:999@1');
+      expect(updated.resource_source).toBe('runware');
+      expect(updated.air).toBeUndefined();
+      expect(updated.model_id).toBeUndefined();
+      expect(updated.version_id).toBeUndefined();
+      expect(updated.import_source_provider).toBeUndefined();
+    });
+
+    it('novitaLoras and sogniLoras map native catalog items without dropping them even if leftover air and import_source_provider remain', () => {
+      const leftoverNovitaItem = {
+        air: 'urn:air:flux1:lora:civitai:1351798@1527024',
+        import_source_provider: 'civitai',
+        resource_source: 'novita',
+        name: 'add_detail.safetensors',
+        strength: 0.75,
+      };
+      const novitaUnmapped: any[] = [];
+      const novitaResult = novitaLoras([leftoverNovitaItem], novitaUnmapped);
+      expect(novitaResult).toEqual([{ model_name: 'add_detail.safetensors', strength: 0.75 }]);
+      expect(novitaUnmapped).toHaveLength(0);
+
+      const leftoverSogniItem = {
+        air: 'urn:air:flux1:lora:civitai:1351798@1527024',
+        import_source_provider: 'civitai',
+        resource_source: 'sogni',
+        name: 'krea2-fever-dream-mood',
+        strength: 0.6,
+      };
+      const sogniUnmapped: any[] = [];
+      const sogniResult = sogniLoras([leftoverSogniItem], sogniUnmapped);
+      expect(sogniResult.ids).toEqual(['krea2-fever-dream-mood']);
+      expect(sogniResult.strengths).toEqual([0.6]);
+      expect(sogniUnmapped).toHaveLength(0);
     });
   });
 });
