@@ -193,7 +193,7 @@ import { falImageFieldGate, FalSchemaMissingError } from './falImageContract';
 import { loadFalLiveProps } from './fixtures/liveSchemaFixtures';
 import { buildModelScopeLoras } from '../schemas/modelScopeLoras';
 import { buildModelScopeImagePayload } from './modelScopeImageContract';
-import { buildTensorModelJob, tamsVideoUnsupported } from '../schemas/tensorModelApi';
+import { buildTensorModelJob, buildTamsVideoJob, isTamsNumericModel } from '../schemas/tensorModelApi';
 import { buildOpenWorksRequest, openWorksInputSchema, openWorksMediaKind, openWorksCatalogItems, parseOpenWorksCatalog, OPENWORKS_PROBE_RESULTS } from './openWorksProvider';
 import { schemaSendStatus } from '../utils/schemaSendStatus';
 import { schemaChoiceFields } from '../components/SchemaChoiceControls';
@@ -291,16 +291,31 @@ describe('provider contract (16): schema-route providers', () => {
 
 describe('provider contract (16): builder / route-handler providers', () => {
 
-  it('TAMS: seed→inputInitialize.seed, steps/cfg/size→diffusion.*, LoRA→diffusion.lora.items[{loraModel,weight}]; non-64 rejected; video rejected locally', () => {
+  it('TAMS: seed→inputInitialize.seed, steps/cfg/size→diffusion.*, LoRA→diffusion.lora.items[{loraModel,weight}]; non-64 rejected; numeric video builds VIDEO_DIFFUSION and is not locally refused', () => {
     const job = buildTensorModelJob({ model: '600000000000000001', prompt: 'x', seed: 42, steps: 20, cfg: 7, width: 1024, height: 768, negative_prompt: 'blurry', loras: [{ tensorartId: '700000000000000001', strength: 0.8 }] }, 'r1');
     expect(job.stages[0].inputInitialize).toEqual({ seed: '42' });
     expect(job.stages[1].diffusion).toMatchObject({ steps: 20, cfgScale: 7, width: 1024, height: 768, negativePrompts: [{ text: 'blurry' }], lora: { items: [{ loraModel: '700000000000000001', weight: 0.8 }] } });
     expect(JSON.stringify(job)).not.toContain('strength');
     expect(() => buildTensorModelJob({ model: '600000000000000001', prompt: 'x', width: 1000, height: 768 }, 'r2')).toThrow(/64/);
-    expect(tamsVideoUnsupported('600000000000000001')).toMatch(/本应用尚未接入 TAMS 视频/);
-    expect(tamsVideoUnsupported('600000000000000001')).toContain('https://tams-docs.tensor.art/docs/api/guide/workspace-api-example/');
-    expect(tamsVideoUnsupported('text2video_tool')).toBeUndefined();
-    expect(readFileSync(path.resolve(__dirname, './routes/videoGenerateRoute.ts'), 'utf8')).toContain('if (tamsVideoRefusal) return res.status(400)');
+    const video = buildTamsVideoJob({
+      model: '834845675863700019',
+      prompt: 'A cheerful 3D girl with long pink hair walking through a dusk city',
+      negative_prompt: 'blurry, static',
+      width: 480, height: 832, fps: 16, totalFrames: 49,
+      generationMode: 'STABLE',
+      loras: [{ name: '844857819904659507', strength: 1 }],
+    }, 'r-video');
+    expect(video.stages.map((s: { type: string }) => s.type)).toEqual(['INPUT_INITIALIZE', 'VIDEO_DIFFUSION']);
+    const videoStage = video.stages[1];
+    expect(videoStage?.video_diffusion?.lora?.items).toEqual([{ lora_model: '844857819904659507', weight: 1 }]);
+    expect(isTamsNumericModel('834845675863700019')).toBe(true);
+    expect(isTamsNumericModel('text2video_wan27')).toBe(false);
+    const routeSrc = readFileSync(path.resolve(__dirname, './routes/videoGenerateRoute.ts'), 'utf8');
+    expect(routeSrc).toContain('buildTamsVideoJob');
+    expect(routeSrc).toContain('isTamsNumericModel');
+    expect(routeSrc).toContain('/v1/jobs');
+    expect(routeSrc).not.toContain('tamsVideoUnsupported');
+    expect(routeSrc).not.toContain('tamsVideoRefusal');
   });
 
   it('NanoGPT: LoRA sent as filled without supported_parameters.loras; declared seed sent; billing text verbatim', () => {

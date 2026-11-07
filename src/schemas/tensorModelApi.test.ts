@@ -5,7 +5,7 @@ import {
   isOpenWorksAccessKey,
   TAMS_BEARER_REQUIRED_HINT,
 } from '../schemas/tensorArtCredentials';
-import { buildTensorModelJob } from '../schemas/tensorModelApi';
+import { buildTensorModelJob, buildTamsVideoJob, isTamsNumericModel } from '../schemas/tensorModelApi';
 
 describe('Tensor.Art TAMS Credential & Job API Verification', () => {
   it('parses TENSORART_TAMS_TOKEN and prefers it over OpenWorks ak_tensor_ keys', () => {
@@ -82,6 +82,55 @@ describe('Tensor.Art TAMS Credential & Job API Verification', () => {
         'req-id'
       )
     ).toThrow('Tensor.Art 模型为必填项');
+  });
+
+  it('builds TAMS VIDEO_DIFFUSION with snake_case lora_model, and imageResourceId only for I2V', () => {
+    const shared = {
+      model: '834845675863700019',
+      prompt: 'A cheerful 3D girl with long pink hair walking through a dusk city',
+      negative_prompt: 'blurry, static, low quality',
+      width: 480,
+      height: 832,
+      fps: 16,
+      totalFrames: 49,
+      generationMode: 'STABLE',
+      seed: -1,
+      count: 1,
+      loras: [{ name: '844857819904659507', strength: 1 }],
+    };
+    const t2v = buildTamsVideoJob(shared, 'req-tams-video-t2v');
+    expect(t2v.requestId).toBe('req-tams-video-t2v');
+    expect(t2v.stages.map((s: any) => s.type)).toEqual(['INPUT_INITIALIZE', 'VIDEO_DIFFUSION']);
+    const t2vInit = t2v.stages[0];
+    expect(t2vInit?.inputInitialize).toEqual({ seed: '-1', count: 1 });
+    expect(t2vInit?.inputInitialize?.imageResourceId).toBeUndefined();
+    expect(t2v.stages[1].video_diffusion).toEqual({
+      sdModel: '834845675863700019',
+      generationMode: 'STABLE',
+      width: 480,
+      height: 832,
+      fps: 16,
+      totalFrames: 49,
+      prompts: [{ text: shared.prompt }],
+      negativePrompts: [{ text: 'blurry, static, low quality' }],
+      lora: { items: [{ lora_model: '844857819904659507', weight: 1 }] },
+    });
+    expect(JSON.stringify(t2v)).not.toContain('loraModel');
+
+    const i2v = buildTamsVideoJob({ ...shared, imageResourceId: '7aacd321-2093-428e-80c0-d47d42f38f8e' }, 'req-tams-video-i2v');
+    expect(i2v.stages[0]?.inputInitialize?.imageResourceId).toBe('7aacd321-2093-428e-80c0-d47d42f38f8e');
+    expect(i2v.stages[1].type).toBe('VIDEO_DIFFUSION');
+    expect(isTamsNumericModel('text2video_wan27')).toBe(false);
+    expect(isTamsNumericModel('834845675863700019')).toBe(true);
+  });
+
+  it('refuses a raw image URL in place of imageResourceId', () => {
+    expect(() => buildTamsVideoJob({
+      model: '834845675863700019',
+      prompt: 'a cat turning toward the camera',
+      width: 480, height: 832, fps: 16, totalFrames: 49,
+      image_url: 'https://example.com/cat.png',
+    }, 'req')).toThrow(/imageResourceId/);
   });
 
   it('provides official TAMS Bearer required hint', () => {

@@ -714,6 +714,93 @@ describe('videoGenerateRoute lifecycle and client disconnect handling (grok_comp
     });
   });
 
+  it('Tensor.Art TAMS numeric video posts VIDEO_DIFFUSION and returns a verbatim upstream 4xx', async () => {
+    const seen: Array<{ url: string; options: any }> = [];
+    const upstreamBody = '{"code":"invalid_height_or_width","message":"width 480 is not a supported resolution for this model"}';
+    const { deps } = createMockDeps({
+      upstreamFetch: vi.fn(async (_meta: any, url: string, options: any) => {
+        seen.push({ url, options });
+        return new Response(upstreamBody, { status: 400 });
+      }),
+    });
+    const res: any = { headersSent: false, writableEnded: false, destroyed: false, on() { return this; }, off() { return this; }, once() { return this; }, setTimeout() {}, statusCode: 200, data: undefined };
+    res.status = (code: number) => { res.statusCode = code; return res; };
+    res.json = (body: any) => { res.data = body; return res; };
+    await handleVideoGenerate(deps)({
+      body: {
+        provider: 'tensorart',
+        model: '834845675863700019',
+        prompt: 'A cheerful 3D girl with long pink hair walking through a dusk city',
+        negative_prompt: 'blurry, static, low quality',
+        width: 480,
+        height: 832,
+        fps: 16,
+        totalFrames: 49,
+        generationMode: 'STABLE',
+        seed: -1,
+        count: 1,
+        loras: [{ name: '844857819904659507', strength: 1 }],
+      },
+      headers: { 'x-tensorart-key': '38b4e85f-f6e2-4f3b-b2f5-8d9e7a6c5b4a' },
+      path: '/api/video/generate',
+    } as any, res);
+    expect(seen).toHaveLength(1);
+    expect(seen[0].url).toBe('https://ap-east-1.tensorart.cloud/v1/jobs');
+    expect(seen[0].options.method).toBe('POST');
+    expect(seen[0].options.headers.Authorization).toBe('Bearer 38b4e85f-f6e2-4f3b-b2f5-8d9e7a6c5b4a');
+    const wire = JSON.parse(seen[0].options.body);
+    expect(wire.stages[1].type).toBe('VIDEO_DIFFUSION');
+    expect(wire.stages[1].video_diffusion.lora.items).toEqual([{ lora_model: '844857819904659507', weight: 1 }]);
+    expect(wire.stages[0].inputInitialize.imageResourceId).toBeUndefined();
+    expect(res.statusCode).toBe(400);
+    expect(res.data.rawResponse).toBe(upstreamBody);
+    expect(res.data.error).toBe(upstreamBody);
+    expect(res.data.errorSource).toBe('upstream');
+    expect(res.data.provider).toBe('tensorart');
+    expect(res.data.exactEndpointCalled).toBe('https://ap-east-1.tensorart.cloud/v1/jobs');
+  });
+
+  it('Tensor.Art TAMS image-to-video puts imageResourceId on INPUT_INITIALIZE and polls GET /v1/jobs/{jobId}', async () => {
+    const seen: Array<{ url: string; options: any }> = [];
+    const { deps } = createMockDeps({
+      now: () => 1_000,
+      sleep: async () => {},
+      upstreamFetch: vi.fn(async (_meta: any, url: string, options: any) => {
+        seen.push({ url, options });
+        if (options?.method === 'POST') {
+          return new Response(JSON.stringify({ job: { id: '865959067493915843', status: 'CREATED' } }), { status: 200 });
+        }
+        return new Response(JSON.stringify({
+          job: { id: '865959067493915843', status: 'SUCCESS', successInfo: { videos: [{ id: 'v1', url: 'https://cdn.example/tams.mp4' }] } },
+        }), { status: 200 });
+      }),
+    });
+    const res: any = { headersSent: false, writableEnded: false, destroyed: false, on() { return this; }, off() { return this; }, once() { return this; }, setTimeout() {}, statusCode: 200, data: undefined };
+    res.status = (code: number) => { res.statusCode = code; return res; };
+    res.json = (body: any) => { res.data = body; return res; };
+    await handleVideoGenerate(deps)({
+      body: {
+        provider: 'tensorart',
+        model: '834845658683829748',
+        prompt: 'a cat turning a full circle on a wooden floor',
+        width: 480, height: 832, fps: 16, totalFrames: 49,
+        imageResourceId: '7aacd321-2093-428e-80c0-d47d42f38f8e',
+      },
+      headers: { 'x-tensorart-key': '38b4e85f-f6e2-4f3b-b2f5-8d9e7a6c5b4a' },
+      path: '/api/video/generate',
+    } as any, res);
+    expect(seen[0].url).toBe('https://ap-east-1.tensorart.cloud/v1/jobs');
+    const wire = JSON.parse(seen[0].options.body);
+    expect(wire.stages[0].inputInitialize.imageResourceId).toBe('7aacd321-2093-428e-80c0-d47d42f38f8e');
+    expect(wire.stages[1].video_diffusion.sdModel).toBe('834845658683829748');
+    expect(seen[1].url).toBe('https://ap-east-1.tensorart.cloud/v1/jobs/865959067493915843');
+    expect(seen[1].options.method).toBe('GET');
+    expect(res.statusCode).toBe(200);
+    expect(res.data.provider).toBe('tensorart');
+    expect(res.data.videoUrl).toBe('data:video/mp4;base64,AAAA');
+    expect(res.data.jobId).toBe('865959067493915843');
+  });
+
   it('Tensor.Art OpenWorks video submits POST /task and returns the upstream body on failure', async () => {
     const seen: Array<{ url: string; options: any }> = [];
     const { deps } = createMockDeps({
