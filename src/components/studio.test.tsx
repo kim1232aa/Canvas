@@ -16,12 +16,14 @@ it('inspector retains custom ecosystem and explicit video provider controls',()=
   const noop=()=>{};
   const params={checkpoint:'custom-video',targetProvider:'video' as const,videoProvider:'fal',denoise:0,width:1024,height:1024,batchSize:1,seedControl:'fixed' as const,loras:[]};
   const html=renderToStaticMarkup(<ParameterInspector params={params} onChange={noop} onOpenCivitai={noop} />);
-  expect(html).toContain('实际视频服务商');expect(html).toContain('视频 resolution');expect(html).not.toContain('视频自定义参数 JSON'); // cleanup-2026-10-17 #2
+  expect(html).toContain('实际视频服务商');expect(html).toContain('视频 resolution');
   const civ=renderToStaticMarkup(<ParameterInspector params={{...params,targetProvider:'civitai',civitaiEngine:'comfy',civitaiEcosystem:'custom-ecosystem',civitaiModel:'custom-model'}} onChange={noop} onOpenCivitai={noop} />);
   // engine/ecosystem/model are resolved from the selected AIR — not raw developer inputs on the image checkpoint.
   expect(civ).not.toContain('Civitai engine');expect(civ).not.toContain('Civitai ecosystem');expect(civ).not.toContain('Civitai model');
   expect(civ).toContain('data-testid="civitai-allow-mature-control"');
-  expect(civ).not.toContain('读取所选模型的官方 Schema');
+  // M38: the free JSON editor and official-schema refresh live in the inspector.
+  expect(civ).toContain('读取所选模型的官方 Schema');
+  expect(civ).toContain('自定义 API 参数 JSON');
 });
 it('shows essential studio actions and explains a disabled run', () => {
   const noop = () => {};

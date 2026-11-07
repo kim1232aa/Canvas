@@ -39,7 +39,6 @@ import {
 import { GenerationHistoryItem } from '../types/providers';
 import { displayValue } from './HistoryModal';
 import { PreviewMediaPanel } from './PreviewMediaPanel';
-import { isApplyToCanvasDisabled, type PreviewSettleState } from '../utils/previewHang';
 import { uploadMedia } from '../services/api';
 import { createInlineAssetMigrator, mergeMigratedAssets, parseAssetCache } from '../utils/legacyAssetMigration';
 
@@ -536,10 +535,7 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
     });
   };
 
-  const isAssetApplyDisabled = (asset: { id: string; url?: string | null }) => {
-    const settle: PreviewSettleState = !asset.url || brokenIds[asset.id] ? 'failed_hard' : 'ok';
-    return isApplyToCanvasDisabled(settle);
-  };
+  const isAssetApplyDisabled = (asset: { id: string; url?: string | null }) => !asset.url;
 
   return (
     <div
@@ -923,7 +919,7 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
                                     ? 'bg-slate-700/50 text-slate-400 cursor-not-allowed opacity-50 shadow-none'
                                     : 'bg-purple-600 hover:bg-purple-500 text-white shadow-purple-600/30'
                                 }`}
-                                title={applyDisabled ? '预览加载失败，无法送入画板' : '在无限画布上放置空间画板取景框'}
+                                title={applyDisabled ? '这条资产没有媒体地址，无法送入画板' : '在无限画布上放置空间画板取景框'}
                               >
                                 <Plus className="w-3.5 h-3.5" />
                                 <span>送入画板</span>
@@ -945,7 +941,7 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
                                       ? 'bg-slate-700/50 text-slate-400 cursor-not-allowed opacity-50 shadow-none'
                                       : 'bg-cyan-600 hover:bg-cyan-500 text-white shadow-cyan-600/30'
                                   }`}
-                                  title={applyDisabled ? '预览加载失败，无法添加至节点图' : '在 ComfyUI 节点图中添加此资产节点'}
+                                  title={applyDisabled ? '这条资产没有媒体地址，无法添加至节点图' : '在 ComfyUI 节点图中添加此资产节点'}
                                 >
                                   <Layers className="w-3.5 h-3.5" />
                                   <span>加节点</span>
@@ -1189,7 +1185,7 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
                       ? 'bg-slate-800/60 text-slate-500 cursor-not-allowed opacity-50 shadow-none'
                       : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-md shadow-purple-600/20 active:scale-98'
                   }`}
-                  title={isAssetApplyDisabled(selectedAsset) ? '预览加载失败，无法送入画板' : undefined}
+                  title={isAssetApplyDisabled(selectedAsset) ? '这条资产没有媒体地址，无法送入画板' : undefined}
                 >
                   <Plus className="w-4 h-4" />
                   <span>送入空间画板取景框</span>
@@ -1210,7 +1206,7 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
                         ? 'bg-slate-800/60 text-slate-500 cursor-not-allowed opacity-50 shadow-none'
                         : 'bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-500 hover:to-teal-500 text-white shadow-md shadow-cyan-600/20 active:scale-98'
                     }`}
-                    title={isAssetApplyDisabled(selectedAsset) ? '预览加载失败，无法添加至节点图' : undefined}
+                    title={isAssetApplyDisabled(selectedAsset) ? '这条资产没有媒体地址，无法添加至节点图' : undefined}
                   >
                     <Layers className="w-4 h-4" />
                     <span>添加至 ComfyUI 节点图</span>

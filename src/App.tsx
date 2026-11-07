@@ -36,6 +36,8 @@ import { WorkflowPresetsModal } from './components/WorkflowPresetsModal';
 import { CanvasManagerModal, CanvasProject } from './components/CanvasManagerModal';
 import { AssetManagerModal, MediaAsset } from './components/AssetManagerModal';
 import { ImageDetailModal } from './components/ImageDetailModal';
+import { ExecutionLog } from './components/ExecutionLog';
+import { ProviderMatrixModal } from './components/ProviderMatrixModal';
 import {
   CanvasMode,
   CanvasTransform,
@@ -2517,6 +2519,7 @@ export default function App() {
           setIsWorkflowPresetsOpen(true);
         }}
         onOpenCivitaiImport={handleOpenCivitaiImport}
+        onOpenProviderMatrix={() => setIsProviderMatrixOpen(true)}
         onOpenCanvasManager={() => setIsCanvasManagerOpen(true)}
         onOpenCloudProjects={() => setIsCloudProjectsOpen(true)}
         onSaveProject={() => {handleSaveProject().catch(() => {});}}
@@ -3088,6 +3091,17 @@ export default function App() {
       />
 
       {/* Workflow Presets & Templates Modal */}
+      <ProviderMatrixModal
+        isOpen={isProviderMatrixOpen}
+        onClose={() => setIsProviderMatrixOpen(false)}
+        onOpenSettings={() => {
+          setIsProviderMatrixOpen(false);
+          setIsSettingsOpen(true);
+        }}
+      />
+
+      <ExecutionLog />
+
       <WorkflowPresetsModal
         isOpen={isWorkflowPresetsOpen}
         onClose={() => setIsWorkflowPresetsOpen(false)}

@@ -8,6 +8,7 @@ import {
   Loader2,
   Sparkles,
   ShieldCheck,
+  Zap,
   AlertTriangle,
   RefreshCw,
   Layers,
@@ -703,6 +704,19 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
     refreshStats();
   };
 
+  // Local test helper only: fills empty placeholders in this form. It does not
+  // contact a provider and it does not contain a real key.
+  const handleFillTestKeys = () => {
+    const placeholder = '本地测试-未配置';
+    setKeys((prev) => {
+      const next = { ...prev };
+      for (const field of ['falKey','agnesKey','sensenovaKey','civitaiKey','hfToken','modelscopeToken','modelscopeAiToken','nanogptKey','geminiKey','tensorartKey','muapiKey','wavespeedKey','kreaKey','togetherKey','aimlapiKey','novitaKey','veniceKey','deepinfraKey','sogniKey','runwareKey','modelslabKey','replicateKey','mageKey'] as const) {
+        if (!String(next[field] || '').trim()) next[field] = placeholder;
+      }
+      return next;
+    });
+  };
+
   const handleSave = async () => {
     if (isSavingAll) return;
     setIsSavingAll(true); setSaveError(null);
@@ -766,6 +780,15 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleFillTestKeys}
+              className="px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 border border-indigo-500/30 text-[11px] font-bold flex items-center gap-1.5 transition-all"
+              title="本地测试助手：把空白密钥栏填成占位符「本地测试-未配置」，不会连到任何服务商"
+            >
+              <Zap className="w-3.5 h-3.5 text-indigo-400" />
+              <span>一键填入测试 Key</span>
+            </button>
             <button
               onClick={handleTestAll}
               disabled={testingAll || Boolean(testingProvider) || testingSingleKeyIndex !== null || isSavingAll}

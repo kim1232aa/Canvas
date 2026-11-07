@@ -88,6 +88,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   onClearCanvas,
 }) => {
   const [showTools, setShowTools] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
   const toolsRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const close = (event: MouseEvent) => {if (!toolsRef.current?.contains(event.target as Node)) setShowTools(false);};
@@ -121,6 +122,7 @@ export const TopBar: React.FC<TopBarProps> = ({
           {button('工作流', <Sparkles className="w-4 h-4" />, onOpenWorkflowPresets)}
           {button('参数', <Sliders className="w-4 h-4" />, onOpenParamsDrawer, isParamsDrawerOpen)}
           {button('历史', <Clock className="w-4 h-4" />, onOpenHistory)}
+          {button('供应商矩阵', <Cpu className="w-4 h-4" />, onOpenProviderMatrix)}
           {button('云端项目', <Cloud className="w-4 h-4" />, onOpenCloudProjects)}
           <a href="/verification/index.html" target="_blank" rel="noopener noreferrer" title="在新标签页查看历史 API 调用样本" aria-label="历史 API 调用样本" data-compact="" className="studio-action"><CheckCircle2 className="w-4 h-4" /><span>历史 API 调用样本</span></a>
           <div className="relative ml-auto shrink-0" ref={toolsRef}>
@@ -131,10 +133,21 @@ export const TopBar: React.FC<TopBarProps> = ({
               {button('使用指南', <BookOpen className="w-4 h-4" />, onOpenGuide)}
               {onClearCanvas && <>
                 <div className="border-t border-white/10 my-1" />
+                {button('一键清空全部', <Trash2 className="w-4 h-4 text-rose-400" />, () => {if (confirm('确定一键清空整个画布（包括所有节点、连线与画板）吗？')) onClearCanvas('all'); setShowTools(false);})}
                 {button('清空当前视图', <Trash2 className="w-4 h-4 text-rose-400" />, () => {onClearCanvas(canvasMode === 'graph' ? 'nodes' : 'frames'); setShowTools(false);})}
                 {button('重置默认工作流', <RotateCcw className="w-4 h-4" />, () => {onClearCanvas('reset-default'); setShowTools(false);})}
               </>}
-              <p className="text-xs text-slate-400 border-t border-white/10 mt-1 pt-2">Ctrl / Cmd + Enter 生成<br />Ctrl / Cmd + S 保存到云端<br />Esc 关闭窗口</p>
+              <button type="button" onClick={() => setShowShortcuts(v => !v)} aria-expanded={showShortcuts} aria-label="快捷键与画布操作指南" title="快捷键与画布操作指南" className="studio-action"><HelpCircle className="w-4 h-4" /><span>快捷键</span></button>
+              {showShortcuts && <div role="dialog" aria-label="画布快捷键与操作" className="mt-1 rounded-lg border border-white/10 bg-black/30 p-2 text-xs text-slate-300 space-y-1">
+                <p className="font-semibold text-white">画布快捷键与操作</p>
+                <p>运行工作流：Ctrl / Cmd + Enter</p>
+                <p>保存到云端：Ctrl / Cmd + S</p>
+                <p>平移画布：鼠标中键 / 空格 + 拖拽</p>
+                <p>缩放画布：鼠标滚轮</p>
+                <p>连接线缆：从同颜色圆点拖拽至目标端口</p>
+                <p>删除节点 / 取景框：选中后按 Delete 或 Backspace</p>
+                <p>关闭窗口：Esc</p>
+              </div>}
             </div>}
           </div>
         </nav>
