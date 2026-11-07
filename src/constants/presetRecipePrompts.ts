@@ -11,10 +11,6 @@ export const PRESET_RECIPE_PROMPTS: Record<string, RecipePrompt> = {
     "negative": "(worst quality:2), (low quality:2), (normal quality:1.8), lowres, blurry, jpeg artifacts, pixelated, noisy, grainy, watermark, logo, text, signature, username, copyright, censored, cropped, out of frame, bad anatomy, bad proportions, malformed anatomy, deformed, disfigured, mutated, mutation, ugly, poorly drawn, poorly rendered, bad face, asymmetrical face, bad hands, bad fingers, malformed hands, fused fingers, missing fingers, extra fingers, six fingers, four fingers, extra arms, missing arms, extra legs, missing legs, twisted fingers, broken fingers, disconnected limbs, floating limbs, duplicated limbs, long fingers, short fingers, mutated hands, malformed nails, missing nails, cross-eyed, lazy eye, wonky eyes, mismatched eyes, asymmetrical eyes, extra eyes, missing eyes, bad pupils, blurry eyes, dead eyes, bad mouth, bad teeth, malformed lips, extra mouth, missing mouth, distorted nose, extra nose, duplicate, cloned face, twin, multiple people, multiple girls, extra person, oversaturated, overexposed, underexposed, harsh shadows, unnatural lighting, flat lighting, low contrast, bad perspective, distorted body, stretched body, compressed body, messy hair, floating hair, extra hair, hair covering eyes, tangled hair, bad clothes, fused clothes, clipping, floating accessories, broken accessories, extra accessories",
     "source": "https://tensor.art/images/1053306608244813366"
   },
-  "std-wavespeed-t2i": {
-    "prompt": "A professional photograph of a quirky squirrel with a fiery red mohawk, energetically playing a whimsical drum set in a vibrant autumn forest. The drum kit is entirely imagined, with bass drums made from hollowed, oversized chestnuts that have been polished to a gleaming finish. The snare drum is crafted from a woven basket of intertwined twigs and leaves, producing a crisp, earthy sound. Cymbals are formed from large, dry maple leaves, their edges curled and textured, hanging on thin branch stands. Smaller acorns serve as tom-toms, and the hi-hat is composed of overlapping oak leaves, delicately stacked on a twig frame. Every element of the drum set is organic, blending seamlessly into the forest floor, which is blanketed in a rich layer of autumn leaves, as the squirrel’s paws expertly tap the instruments, filling the scene with the imagined rhythm of nature",
-    "source": "https://civitai.red/images/33530948"
-  },
   "std-huggingface-t2i": {
     "prompt": "t3chnic4lly A gritty documentary-style photograph capturing a tightly packed crowd of muscular old men in black suits, dancing energetically within a dark industrial warehouse. The old men's faces show exaggerated expressions of joy. Sweat glistens on their faces. The lighting is provided by harsh, direct on-camera flash, creating stark white highlights, deep shadows, and significant motion blur among the moving figures. Industrial commercial lasers cut through the dark, highlighting dust motes. Concrete pillars and exposed structural beams are visible in the crowded background. The film grain is heavy.",
     "source": "https://civitai.red/images/113739497"
@@ -27,46 +23,61 @@ export const PRESET_RECIPE_PROMPTS: Record<string, RecipePrompt> = {
     "prompt": "t3chnic4lly A gritty documentary-style photograph capturing a tightly packed crowd of muscular old men in black suits, dancing energetically within a dark industrial warehouse. The old men's faces show exaggerated expressions of joy. Sweat glistens on their faces. The lighting is provided by harsh, direct on-camera flash, creating stark white highlights, deep shadows, and significant motion blur among the moving figures. Industrial commercial lasers cut through the dark, highlighting dust motes. Concrete pillars and exposed structural beams are visible in the crowded background. The film grain is heavy.",
     "source": "https://civitai.red/images/113739497"
   },
-  "std-muapi-t2i": {
-    "prompt": "c0l0ringb00k coloring book page, simple cute dragon, white background",
-    "source": "https://civitai.red/images/31247708"
-  },
-  "std-replicate-t2i": {
-    "prompt": "c0l0ringb00k coloring book page, simple cute dragon, white background",
-    "source": "https://civitai.red/images/31247708"
-  },
-  "std-novita-t2i": {
-    "prompt": "Astartes, silhouette, monochrome, greyscale, BREAK <lora:epi_noiseoffset2:0.65>, <lora:more_details:0.4>,",
-    "negative": "BadDream, UnrealisticDream,",
-    "source": "https://civitai.red/images/28785255"
-  },
   "std-sogni-t2i": {
     "prompt": "extreme overhead fisheye perspective of a cyberpunk girl, oversized bright blue eye looking up, dark blue braided hair, complex white mechanical headset with exposed colorful wires, chartreuse shirt, tilted white building, solid blue sky, bold ink outlines, flat vibrant colors, comic illustration",
     "negative": "watermark,copyrights",
     "source": "https://civitai.red/images/142361732"
   },
   "std-fal-t2i": {
-    "prompt": "c0l0ringb00k coloring book page, simple cute dragon, white background",
-    "source": "https://civitai.red/images/31247708"
+    "prompt": "two samurais in flowing robes doing a muay thai fight, one throws a high kick while the other leans back. Purple retro anime style",
+    "source": "https://huggingface.co/krea/Krea-2-LoRA-retroanime"
   },
-  "std-fal-i2v": {
-    "prompt": "a woman dancing happily in the middle of a street under a neon sign, cars drive into her and she dances over them",
-    "source": "https://civitai.red/images/84050423"
+  "std-wavespeed-t2i": {
+    "prompt": "two samurais in flowing robes doing a muay thai fight, one throws a high kick while the other leans back. Purple retro anime style",
+    "source": "https://huggingface.co/krea/Krea-2-LoRA-retroanime"
   },
-  "std-wavespeed-i2v": {
-    "prompt": "a woman dancing happily in the middle of a street under a neon sign, cars drive into her and she dances over them",
-    "source": "https://civitai.red/images/84050423"
-  },
-  "std-muapi-i2v": {
-    "prompt": "a woman dancing happily in the middle of a street under a neon sign, cars drive into her and she dances over them",
-    "source": "https://civitai.red/images/84050423"
-  },
-  "std-replicate-i2v": {
-    "prompt": "a woman dancing happily in the middle of a street under a neon sign, cars drive into her and she dances over them",
-    "source": "https://civitai.red/images/84050423"
+  "std-muapi-t2i": {
+    "prompt": "two samurais in flowing robes doing a muay thai fight, one throws a high kick while the other leans back. Purple retro anime style",
+    "source": "https://huggingface.co/krea/Krea-2-LoRA-retroanime"
   },
   "std-civitai-i2v": {
     "prompt": "summer",
     "source": "https://civitai.red/images/111400580"
+  },
+  // Ostris HF model card widget verbatim ("orbit 180 around an astronaut on the moon."); card also notes trigger word `orbit 360`.
+  "std-fal-i2v": {
+    "prompt": "orbit 180 around an astronaut on the moon.",
+    "source": "https://huggingface.co/ostris/wan22_i2v_14b_orbit_shot_lora"
+  },
+  // Dustin2050 HF model card Wavespeed API Quick Start verbatim prompt (includes trigger word `lexy_vox`).
+  "std-wavespeed-i2v": {
+    "prompt": "lexy_vox, gentle head turn, warm smile, natural movement",
+    "source": "https://huggingface.co/dustin2050/lexy-vox-i2v-lora-training-wan2.2"
+  },
+  // Cseti HF model card widget[0].text verbatim (includes trigger word `Banostasis concept` and recommended transition structure).
+  "std-fal-t2v": {
+    "prompt": "Banostasis concept, a cinematic sequence of quick scene transitions of musical instruments dissolving into fragments of sound waves, which then condense into glowing orbs of light, the sequence of changes includes the transitions between a concert hall, a crowded subway tunnel, and an open desert plain, shot with rapid lens push-ins and kaleidoscopic lighting shifts, stylized in synesthetic neon abstract art.",
+    "source": "https://huggingface.co/Cseti/wan2.2-14B-Kinestasis_concept-lora-v1"
+  },
+  // Dustin2050 HF model card Wavespeed API Quick Start verbatim prompt (includes trigger word `lexy_vox`).
+  "std-wavespeed-t2v": {
+    "prompt": "lexy_vox, close-up portrait, warm smile, natural daylight, sharp focus",
+    "source": "https://huggingface.co/dustin2050/lexy-vox-t2v-lora-training-wan2.2"
+  },
+  // Civitai Wan 2.2 T2V LoRA 2247725@2530788 images[0].meta.prompt / negativePrompt verbatim.
+  "std-civitai-t2v": {
+    "prompt": "(PBRSty1e, 3d animation), caucasian woman, shiny skin, realistic style. . bride, white wedding dres, hair: Black hair, joy with clear indications of ecstasy, long shot",
+    "negative": "色调艳丽，过曝，静态，细节模糊不清，字幕，风格，作品，画作，画面，静止，整体发灰，最差质量，低质量，JPEG压缩残留，丑陋的，残缺的，多余的手指，画得不好的手部，画得不好的脸部，畸形的，毁容的，形态畸形的肢体，手指融合，静止不动的画面，杂乱的背景，三条腿，背景人很多，倒着走，裸露，(child),(teen),(youth)",
+    "source": "https://civitai.com/api/v1/model-versions/2530788"
+  },
+  // OpenMOSS MOSS-Image-Base HF model card Quick Start verbatim prompt (matches seed=42, steps=50, cfg=3.0, 1024x1024).
+  "std-nanogpt-t2i": {
+    "prompt": "A wide view of a refrigerator beside a kitchen counter with a fruit bowl. A small sticky note on the refrigerator door is handwritten in Chinese:\n\"记得买牛奶和鸡蛋！\n牛奶两盒，鸡蛋一打。\n顺便带一袋面包。\"",
+    "source": "https://huggingface.co/OpenMOSS-Team/MOSS-Image-Base"
+  },
+  // Civitai official Krea v2 orchestration recipe (krea.md) verbatim prompt.
+  "std-civitai-t2i": {
+    "prompt": "A photorealistic portrait of a woman with flowers in her hair, golden hour lighting",
+    "source": "https://developer.civitai.com/orchestration/recipes/krea.md"
   }
 };

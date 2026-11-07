@@ -64,6 +64,14 @@ function schemaPropertiesForOmit(spec: StdSpec, omit: Set<NonNullable<StdSpec['o
   if (typeof spec.checkpointExtra?.aspect_ratio === 'string') props.push('aspect_ratio');
   if (typeof spec.checkpointExtra?.resolution === 'string') props.push('resolution');
   if (typeof spec.checkpointExtra?.size === 'string' && !props.includes('size')) props.push('size');
+  let customObj: Record<string, unknown> | undefined;
+  try {
+    if (typeof spec.checkpointExtra?.custom_parameters === 'string') customObj = JSON.parse(spec.checkpointExtra.custom_parameters);
+    else if (spec.checkpointExtra?.custom_parameters && typeof spec.checkpointExtra.custom_parameters === 'object') customObj = spec.checkpointExtra.custom_parameters as Record<string, unknown>;
+  } catch {}
+  if (typeof (spec.checkpointExtra as any)?.image_size === 'string' || typeof customObj?.image_size === 'string') {
+    if (!props.includes('image_size')) props.push('image_size');
+  }
   if (spec.hasNegative !== false) props.push('negative_prompt');
   const hasRealLora = (spec.loras ?? []).some((l) => Boolean(l.name));
   if (hasRealLora || spec.hasLora) props.push('loras', 'lora_url', 'lora_weight', 'lora_weights');
@@ -111,7 +119,7 @@ function buildStandardT2i(spec: StdSpec): WorkflowPreset {
   const loraList = (spec.loras ?? []).filter(l => Boolean(l.name));
   // Schema requires a LoRA but no recipe has a real one: show ONE visible mount point (official default weight)
   // so the user can paste the real resource; never a made-up value.
-  if (loraList.length === 0 && spec.loraMount) loraList.push({ name: '', strength: spec.loraMount.strength, source: spec.loraMount.source });
+  if (spec.hasLora && loraList.length === 0 && spec.loraMount) loraList.push({ name: '', strength: spec.loraMount.strength, source: spec.loraMount.source });
   const hasLora = loraList.length > 0;
   const steps = spec.steps ?? 20;
   const cfg = spec.cfg ?? 7;
@@ -449,6 +457,8 @@ function buildGeminiT2i(): WorkflowPreset {
 type I2vSpec = {
   provider: string;
   model: string;
+  /** Description override for preset card and audit trail. */
+  description?: string;
   /** Official seconds when the endpoint declares duration (not invent). */
   duration?: number;
   /** Official resolution tier when the endpoint declares resolution. */
@@ -476,38 +486,42 @@ type I2vSpec = {
 };
 
 const I2V_SPECS: I2vSpec[] = [
-  // Recipe https://civitai.red/images/84050423 (Wan 2.1 I2V 14B 480p + Matrix Bullet Time LoRA) → Fal same-family fal-ai/wan-i2v-lora.
-  // Live OpenAPI 2026-11-04: loras[LoraWeight{path,scale}], seed, guide_scale, frames_per_second, num_frames, resolution 480p|720p.
+  // Fal Wan 2.2 A14B I2V LoRA: live OpenAPI 2026-11-06 (fal-ai/wan/v2.2-a14b/image-to-video/lora).
+  // OpenAPI: prompt (req), image_url (req), loras[LoRAWeight{path,scale(default 1),weight_name,transformer(default 'high')}], num_frames (81), frames_per_second (16), resolution 480p|580p|720p.
+  // Public HTTP 200 HIGH-noise I2V LoRA: ostris/wan22_i2v_14b_orbit_shot_lora (wan22_14b_i2v_orbit_high_noise.safetensors, base_model: Wan-AI/Wan2.2-I2V-A14B).
+  // Strength 1 is Fal OpenAPI LoRAWeight.scale default (not specified in Ostris README). Widget prompt uses "orbit 180...", while card trigger notes "orbit 360".
   {
     provider: 'fal',
-    model: 'fal-ai/wan-i2v-lora',
-    // video-param-table.md §1: Schema has no duration/size → num_frames 81 (integer 81–100), resolution 480p (default 720p), aspect_ratio 16:9.
+    model: 'fal-ai/wan/v2.2-a14b/image-to-video/lora',
     num_frames: 81,
     resolution: '480p',
     aspect_ratio: '16:9',
     fps: 16,
     seed: 24231881,
-    cfg: 4,
-    loras: [{ name: 'https://huggingface.co/Remade-AI/matrix-shot/resolve/main/matrix_shot.safetensors', strength: 1, source: 'https://civitai.red/images/84050423' }],
+    cfg: 3.5,
+    recipeExtra: { guidance_scale_2: 4, enable_safety_checker: false, enable_output_safety_checker: false },
+    description: 'Fal.ai 官方 Wan 2.2 A14B 图生视频 LoRA 端点。默认挂载 Ostris Orbit Shot 高噪权重（匹配 Fal 默认 transformer=high；seed: 24231881 为固定复现示例种子，非作者配方指定；cfg: 3.5 取自官方 guidance_scale 默认值，guidance_scale_2 设为官方默认值 4；强度 1 取自 Fal OpenAPI 默认值；widget 为 orbit 180，触发词为 orbit 360）。',
+    loras: [{ name: 'https://huggingface.co/ostris/wan22_i2v_14b_orbit_shot_lora/resolve/main/wan22_14b_i2v_orbit_high_noise.safetensors', strength: 1, source: 'https://huggingface.co/ostris/wan22_i2v_14b_orbit_shot_lora' }],
     schemaProperties: [
-      'prompt', 'image_url', 'negative_prompt', 'loras', 'seed', 'guide_scale', 'frames_per_second', 'num_frames',
-      'resolution', 'aspect_ratio', 'num_inference_steps', 'shift', 'enable_prompt_expansion', 'reverse_video', 'turbo_mode', 'enable_safety_checker',
+      'prompt', 'image_url', 'negative_prompt', 'loras', 'seed', 'frames_per_second', 'num_frames',
+      'resolution', 'aspect_ratio', 'num_inference_steps', 'enable_safety_checker', 'enable_output_safety_checker',
+      'enable_prompt_expansion', 'acceleration', 'guidance_scale', 'guidance_scale_2', 'shift', 'interpolator_model',
+      'num_interpolated_frames', 'adjust_fps_for_interpolation', 'video_quality', 'video_write_mode', 'reverse_video',
     ],
-    source: 'https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/wan-i2v-lora',
+    source: 'https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/wan/v2.2-a14b/image-to-video/lora',
   },
-  // Same recipe → WaveSpeed same-family wavespeed-ai/wan-2.1/i2v-480p-lora (docs: loras[].path/scale, size, duration 5|10, guidance_scale, seed).
+  // WaveSpeed Wan 2.2 480p I2V LoRA: wavespeed-ai/wan-2.2/i2v-480p-lora.
+  // Live request_schema (verified 2026-11-06): prompt (req), image (req), negative_prompt, last_image, duration (5|8, default 5), loras, high_noise_loras, low_noise_loras, seed.
+  // Public HTTP 200 Diffusers-format Wan 2.2 I2V LoRA built for Wavespeed API (both stages): dustin2050/lexy-vox-i2v-lora-training-wan2.2.
   {
     provider: 'wavespeed',
-    model: 'wavespeed-ai/wan-2.1/i2v-480p-lora',
+    model: 'wavespeed-ai/wan-2.2/i2v-480p-lora',
     duration: 5,
-    // video-param-table.md §2: request_schema has no fps (additionalProperties:false) → not filled.
-    seed: 24231881,
-    cfg: 4,
-    // Recipe 688x480 → WaveSpeed live Schema size enum ["832*480","480*832"] (upstream 400 on 688x480): closest landscape 832*480.
-    size: '832*480',
-    loras: [{ name: 'https://huggingface.co/Remade-AI/matrix-shot/resolve/main/matrix_shot.safetensors', strength: 1, source: 'https://civitai.red/images/84050423' }],
-    schemaProperties: ['prompt', 'image', 'negative_prompt', 'loras', 'size', 'num_inference_steps', 'duration', 'guidance_scale', 'flow_shift', 'seed'],
-    source: 'https://wavespeed.ai/docs/docs-api/wavespeed-ai/wan-2.1-i2v-480p-lora',
+    seed: 42,
+    description: 'WaveSpeed 官方 Wan 2.2 480P 图生视频 LoRA 端点；默认挂载 Wavespeed API 专用双阶段 Diffusers 权重（触发词: lexy_vox，映射至通用 loras 槽位；其与双专家独立加载的等效性标为未验证）。',
+    loras: [{ name: 'https://huggingface.co/dustin2050/lexy-vox-i2v-lora-training-wan2.2/resolve/main/lexy_vox_i2v_v2_diffusers.safetensors', strength: 1, source: 'https://huggingface.co/dustin2050/lexy-vox-i2v-lora-training-wan2.2' }],
+    schemaProperties: ['prompt', 'image', 'negative_prompt', 'last_image', 'duration', 'loras', 'high_noise_loras', 'low_noise_loras', 'seed'],
+    source: 'https://wavespeed.ai/docs/docs-api/wavespeed-ai/wan-2.2-i2v-480p-lora',
   },
   // Recipe https://civitai.red/images/111400580 (Wan 2.2 I2V-A14B checkpoint 1817671@2114157 + Cinematic Flare low LoRA)
   // → Civitai videoGen wan v2.2 comfy (wan.md: only v2.2 comfy takes loras[{air,strength}]; diffusionModel AIR; width/height; cfgScale; seed).
@@ -526,84 +540,86 @@ const I2V_SPECS: I2vSpec[] = [
     ],
     source: 'https://developer.civitai.com/orchestration/recipes/wan.md',
   },
-  // Novita img2video SVD-XT: no recipe (Researchy: no Novita video LoRA endpoint found) — unchanged.
+  // Novita: 彻底清除 SVD-XT。暂无官方核实且驱动支持的纯净 Wan 2.2 LoRA 端点，模型留空待选，保留完整图生视频拓扑。
   {
     provider: 'novita',
-    model: 'SVD-XT',
-    num_frames: 25,
-    fps: 6,
+    model: '',
+    description: 'Novita 暂无经官方核实且支持 LoRA 的 Wan 2.2 端点，模型已留空待选；保留参考图与视频节点完整拓扑。',
     schemaProperties: [
       'model_name', 'image_file', 'frames_num', 'frames_per_second', 'seed',
       'image_file_resize_mode', 'steps', 'motion_bucket_id', 'cond_aug',
     ],
-    source: 'https://github.com/novitalabs/python-sdk examples/img2video + docs/provider-schema-drafts/novita.json',
+    source: 'https://github.com/novitalabs/python-sdk',
   },
-  // Recipe https://civitai.red/images/84050423 → MuAPI same-family wan2.1-lora-i2v (openapi.json WanLoRAI2VRequest: lora_list[LoraItem{path,scale}], duration 5|10, resolution).
+  // MuAPI: 官方未提供核实的现代 Wan 2.2 LoRA 端点，模型留空待选；保留完整视频拓扑与 LoRA 挂载连线。
   {
     provider: 'muapi',
-    model: 'wan2.1-lora-i2v',
+    model: '',
     duration: 5,
-    // video-param-table.md §3: WanLoRAI2VRequest has no seed/cfg/fps/size/negative → not filled; resolution 480p, aspect_ratio 16:9.
     resolution: '480p',
     aspect_ratio: '16:9',
-    loras: [{ name: 'https://huggingface.co/Remade-AI/matrix-shot/resolve/main/matrix_shot.safetensors', strength: 1, source: 'https://civitai.red/images/84050423' }],
+    description: 'MuAPI 暂无经官方核实的现代 Wan 2.2 端点，模型已留空待选；保留完整视频拓扑与 LoRA 挂载连线。',
+    loras: [{ name: '', strength: 1, source: '待用户在模型中心指定' }],
     schemaProperties: ['prompt', 'image_url', 'lora_list', 'aspect_ratio', 'resolution', 'quality', 'duration'],
-    source: 'https://api.muapi.ai/openapi.json#/paths/~1api~1v1~1wan2.1-lora-i2v',
+    source: 'https://api.muapi.ai/openapi.json',
   },
-  // Recipe https://civitai.red/images/84050423 → Replicate same-family wan-video/wan2.1-with-lora (llms.txt: image, lora_url, lora_strength_model, seed, sample_guide_scale, frames).
+  // Replicate: 官方未提供核实的现代 Wan 2.2 LoRA 端点，模型留空待选；保留完整视频拓扑与 LoRA 挂载连线。
   {
     provider: 'replicate',
-    model: 'wan-video/wan2.1-with-lora',
-    // video-param-table.md §4: Schema has no fps/duration/size → frames 81 (enum 17|33|49|65|81), resolution 480p, aspect_ratio 16:9, model 14b.
+    model: '',
     num_frames: 81,
     resolution: '480p',
     aspect_ratio: '16:9',
-    recipeExtra: { model: '14b' },
     seed: 24231881,
     cfg: 4,
-    loras: [{ name: 'https://huggingface.co/Remade-AI/matrix-shot/resolve/main/matrix_shot.safetensors', strength: 1, source: 'https://civitai.red/images/84050423' }],
+    description: 'Replicate 暂无经官方核实的现代 Wan 2.2 端点，模型已留空待选；保留完整视频拓扑与 LoRA 挂载连线。',
+    loras: [{ name: '', strength: 1, source: '待用户在模型中心指定' }],
     schemaProperties: ['prompt', 'negative_prompt', 'image', 'aspect_ratio', 'frames', 'resolution', 'lora_url', 'lora_strength_model', 'lora_strength_clip', 'sample_steps', 'sample_guide_scale', 'sample_shift', 'seed'],
-    source: 'https://replicate.com/wan-video/wan2.1-with-lora/llms.txt',
+    source: 'https://replicate.com',
   },
 ];
 
 export type T2vSpec = I2vSpec;
 
 const T2V_SPECS: T2vSpec[] = [
-  // Fal Wan 2.1 T2V: live OpenAPI (2026-11-04) WanT2vLoraInput: prompt (required), negative_prompt, loras[LoraWeight{path,scale}],
-  // seed, frames_per_second (default 16), num_frames (default 81), resolution 480p|580p|720p, aspect_ratio 16:9|9:16.
-  // Real verified LoRA trained specifically on base_model Wan-AI/Wan2.1-T2V-14B:
-  // https://huggingface.co/artificialguybr/Wan-BalancingAct-Redmond-Wan2.1-T2V-14B (tags: base_model:Wan-AI/Wan2.1-T2V-14B, diffusers, text-to-video)
+  // Fal Wan 2.2 A14B T2V LoRA: live OpenAPI 2026-11-06 (fal-ai/wan/v2.2-a14b/text-to-video/lora).
+  // OpenAPI: prompt (req), loras[LoRAWeight{path,scale(default 1),weight_name,transformer(default 'high')}], num_frames (81), frames_per_second (16), resolution 480p|580p|720p.
+  // Public HTTP 200 HIGH-noise T2V LoRA: Cseti/wan2.2-14B-Kinestasis_concept-lora-v1 (README: "Use it only on your high noise sampler", strength 0.8-1.0, base_model: Wan-AI/Wan2.2-T2V-A14B).
   {
     provider: 'fal',
-    model: 'fal-ai/wan-t2v-lora',
+    model: 'fal-ai/wan/v2.2-a14b/text-to-video/lora',
     num_frames: 81,
     resolution: '480p',
     aspect_ratio: '16:9',
     fps: 16,
-    loras: [{ name: 'https://huggingface.co/artificialguybr/Wan-BalancingAct-Redmond-Wan2.1-T2V-14B/resolve/main/Wan-BalancingAct-Redmond.safetensors', strength: 1, source: 'https://huggingface.co/artificialguybr/Wan-BalancingAct-Redmond-Wan2.1-T2V-14B' }],
+    cfg: 3.5,
+    recipeExtra: { enable_safety_checker: false, enable_output_safety_checker: false },
+    description: 'Fal.ai 官方 Wan 2.2 A14B 文生视频 LoRA 端点。默认挂载 Cseti Kinestasis 高噪权重（匹配 Fal 默认 transformer=high；推荐触发词: Banostasis concept）。',
+    loras: [{ name: 'https://huggingface.co/Cseti/wan2.2-14B-Kinestasis_concept-lora-v1/resolve/main/246839-wan22_14B-high-banostasis_concept-e459.safetensors', strength: 1, source: 'https://huggingface.co/Cseti/wan2.2-14B-Kinestasis_concept-lora-v1' }],
     schemaProperties: [
       'prompt', 'negative_prompt', 'loras', 'seed', 'frames_per_second', 'num_frames',
-      'resolution', 'aspect_ratio', 'num_inference_steps', 'enable_prompt_expansion', 'reverse_video', 'turbo_mode', 'enable_safety_checker',
+      'resolution', 'aspect_ratio', 'num_inference_steps', 'enable_safety_checker', 'enable_output_safety_checker',
+      'enable_prompt_expansion', 'acceleration', 'guidance_scale', 'guidance_scale_2', 'shift', 'interpolator_model',
+      'num_interpolated_frames', 'adjust_fps_for_interpolation', 'video_quality', 'video_write_mode', 'reverse_video',
     ],
-    source: 'https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/wan-t2v-lora',
+    source: 'https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/wan/v2.2-a14b/text-to-video/lora',
   },
-  // WaveSpeed Wan 2.1 T2V 480p: live Schema api.wavespeed.ai/api/v3/models: prompt (required), negative_prompt,
-  // loras[].path/scale, size ["832*480","480*832"], duration 5|10, guidance_scale, flow_shift, seed.
-  // Real verified LoRA trained on Wan-AI/Wan2.1-T2V-14B:
+  // WaveSpeed Wan 2.2 480p T2V LoRA: wavespeed-ai/wan-2.2/t2v-480p-lora.
+  // Live request_schema (verified 2026-11-06): prompt (req), negative_prompt, size ["832*480","480*832"], duration (5|8, default 5), loras, high_noise_loras, low_noise_loras, seed.
+  // Public HTTP 200 Diffusers-format Wan 2.2 T2V LoRA built for Wavespeed API (both stages): dustin2050/lexy-vox-t2v-lora-training-wan2.2.
   {
     provider: 'wavespeed',
-    model: 'wavespeed-ai/wan-2.1/t2v-480p-lora',
+    model: 'wavespeed-ai/wan-2.2/t2v-480p-lora',
     duration: 5,
     size: '832*480',
-    loras: [{ name: 'https://huggingface.co/artificialguybr/Wan-BalancingAct-Redmond-Wan2.1-T2V-14B/resolve/main/Wan-BalancingAct-Redmond.safetensors', strength: 1, source: 'https://huggingface.co/artificialguybr/Wan-BalancingAct-Redmond-Wan2.1-T2V-14B' }],
-    schemaProperties: ['prompt', 'negative_prompt', 'loras', 'size', 'num_inference_steps', 'duration', 'guidance_scale', 'flow_shift', 'seed'],
-    source: 'https://wavespeed.ai/docs/docs-api/wavespeed-ai/wan-2.1-t2v-480p-lora',
+    seed: 42,
+    description: 'WaveSpeed 官方 Wan 2.2 480P 文生视频 LoRA 端点；默认挂载 Wavespeed API 专用双阶段 Diffusers 权重（触发词: lexy_vox，映射至通用 loras 槽位；其与双专家独立加载的等效性标为未验证）。',
+    loras: [{ name: 'https://huggingface.co/dustin2050/lexy-vox-t2v-lora-training-wan2.2/resolve/main/lexy_vox_t2v_v2_diffusers.safetensors', strength: 1, source: 'https://huggingface.co/dustin2050/lexy-vox-t2v-lora-training-wan2.2' }],
+    schemaProperties: ['prompt', 'negative_prompt', 'size', 'duration', 'loras', 'high_noise_loras', 'low_noise_loras', 'seed'],
+    source: 'https://wavespeed.ai/docs/docs-api/wavespeed-ai/wan-2.2-t2v-480p-lora',
   },
   // Civitai videoGen wan v2.2 comfy: Wan Video 2.2 14B Text-to-Video checkpoint (AIR urn:air:wanvideo-22-t2v-a14b:checkpoint:civitai:1817671@2114154).
-  // Real neutral T2V LoRA trained on exact baseModel Wan Video 2.2 T2V-A14B:
-  // Stylized PBR Animation [WAN 2.2 T2V] (Civitai 2247725@2530788, nsfwLevel: 1, baseModel: Wan Video 2.2 T2V-A14B).
-  // Swapped from 1837542 per Tower P1-d (neutral public default content).
+  // Real neutral T2V LoRA: Civitai 2247725@2530788.
   {
     provider: 'civitai',
     model: 'urn:air:wanvideo-22-t2v-a14b:checkpoint:civitai:1817671@2114154',
@@ -618,32 +634,29 @@ const T2V_SPECS: T2vSpec[] = [
     ],
     source: 'https://developer.civitai.com/orchestration/recipes/wan.md',
   },
-  // MuAPI Wan 2.1 T2V: live OpenAPI https://api.muapi.ai/openapi.json WanLoRAT2VRequest: prompt (required),
-  // lora_list[LoraItem{path,scale}], duration 5|10, resolution 480p|720p, aspect_ratio 16:9|9:16.
-  // Real verified LoRA trained on Wan-AI/Wan2.1-T2V-14B:
+  // MuAPI: 官方未提供核实的现代 Wan 2.2 LoRA 端点，模型留空待选；保留完整视频拓扑与 LoRA 挂载连线。
   {
     provider: 'muapi',
-    model: 'wan2.1-lora-t2v',
+    model: '',
     duration: 5,
     resolution: '480p',
     aspect_ratio: '16:9',
-    loras: [{ name: 'https://huggingface.co/artificialguybr/Wan-BalancingAct-Redmond-Wan2.1-T2V-14B/resolve/main/Wan-BalancingAct-Redmond.safetensors', strength: 1, source: 'https://huggingface.co/artificialguybr/Wan-BalancingAct-Redmond-Wan2.1-T2V-14B' }],
+    description: 'MuAPI 暂无经官方核实的现代 Wan 2.2 端点，模型已留空待选；保留完整视频拓扑与 LoRA 挂载连线。',
+    loras: [{ name: '', strength: 1, source: '待用户在模型中心指定' }],
     schemaProperties: ['prompt', 'lora_list', 'aspect_ratio', 'resolution', 'quality', 'duration'],
-    source: 'https://api.muapi.ai/openapi.json#/paths/~1api~1v1~1wan2.1-lora-t2v',
+    source: 'https://api.muapi.ai/openapi.json',
   },
-  // Replicate Wan 2.1 with LoRA (text-to-video mode: no image input).
-  // Live schema: prompt (required), negative_prompt, aspect_ratio, frames, resolution, lora_url, lora_strength_model, sample_steps, sample_guide_scale, seed.
-  // Real verified LoRA trained on Wan-AI/Wan2.1-T2V-14B:
+  // Replicate: 官方未提供核实的现代 Wan 2.2 LoRA 端点，模型留空待选；保留完整视频拓扑与 LoRA 挂载连线。
   {
     provider: 'replicate',
-    model: 'wan-video/wan2.1-with-lora',
+    model: '',
     num_frames: 81,
     resolution: '480p',
     aspect_ratio: '16:9',
-    recipeExtra: { model: '14b' },
-    loras: [{ name: 'https://huggingface.co/artificialguybr/Wan-BalancingAct-Redmond-Wan2.1-T2V-14B/resolve/main/Wan-BalancingAct-Redmond.safetensors', strength: 1, source: 'https://huggingface.co/artificialguybr/Wan-BalancingAct-Redmond-Wan2.1-T2V-14B' }],
+    description: 'Replicate 暂无经官方核实的现代 Wan 2.2 端点，模型已留空待选；保留完整视频拓扑与 LoRA 挂载连线。',
+    loras: [{ name: '', strength: 1, source: '待用户在模型中心指定' }],
     schemaProperties: ['prompt', 'negative_prompt', 'aspect_ratio', 'frames', 'resolution', 'lora_url', 'lora_strength_model', 'lora_strength_clip', 'sample_steps', 'sample_guide_scale', 'sample_shift', 'seed'],
-    source: 'https://replicate.com/wan-video/wan2.1-with-lora/api/schema',
+    source: 'https://replicate.com',
   },
 ];
 
@@ -671,7 +684,8 @@ function buildStandardT2v(spec: T2vSpec): WorkflowPreset {
   if (spec.size !== undefined) vidValues.size = spec.size;
   const t2vLoras = spec.loras ?? [];
   const loraNodeIds = t2vLoras.map((_, i) => `${prefix}-lora${i === 0 ? '' : `-${i + 1}`}`);
-  if (spec.schemaProperties.includes('negative_prompt')) vidValues.negative_prompt = PRESET_RECIPE_PROMPTS[id]?.negative ?? '';
+  const supportsNegT2v = spec.schemaProperties.includes('negative_prompt') || spec.schemaProperties.includes('negativePrompt');
+  if (supportsNegT2v) vidValues.negative_prompt = PRESET_RECIPE_PROMPTS[id]?.negative ?? '';
   if (spec.duration !== undefined) vidValues.duration = spec.duration;
   if (spec.resolution !== undefined) vidValues.resolution = spec.resolution;
   if (spec.aspect_ratio !== undefined) vidValues.aspect_ratio = spec.aspect_ratio;
@@ -700,7 +714,7 @@ function buildStandardT2v(spec: T2vSpec): WorkflowPreset {
     provider,
     previewImage: '',
     tags: [provider, '标准', '文生视频'],
-    description: '该供应商标准文生视频流程；提示词请填配方或用户指定。',
+    description: spec.description ?? '该供应商标准文生视频流程；提示词请填配方或用户指定。',
     loraNames: t2vLoras.map(l => l.name),
     nodes: [
       {
@@ -742,7 +756,7 @@ function buildStandardT2v(spec: T2vSpec): WorkflowPreset {
         width: 480,
         height: 480,
         prompt: PRESET_RECIPE_PROMPTS[id]?.prompt ?? '',
-        negativePrompt: '',
+        negativePrompt: (supportsNegT2v && PRESET_RECIPE_PROMPTS[id]?.negative) || '',
         params: frameParams,
         status: 'idle',
         imageUrl: '',
@@ -832,7 +846,7 @@ function buildStandardI2v(spec: I2vSpec): WorkflowPreset {
     provider,
     previewImage: '',
     tags: [provider, '标准', '图生视频'],
-    description: '该供应商标准图生视频流程；提示词请填配方或用户指定。须先在「加载参考图」放入图片。',
+    description: spec.description ?? '该供应商标准图生视频流程；提示词请填配方或用户指定。须先在「加载参考图」放入图片。',
     loraNames: i2vLoras.map(l => l.name),
     nodes: [
       {
@@ -968,17 +982,24 @@ const STD_SPECS: StdSpec[] = [
     height: 1216,
     omit: ['sampler', 'scheduler', 'denoise'],
   },
-  // providerSchema.ts flux-schnell: resolution/num_images only; seed/negative/steps/cfg/sampler/scheduler/denoise/loras unsupported.
-  { provider: 'nanogpt', ckpt: 'flux-schnell', hasLora: false, hasNegative: false,
-    // providerSchema flux-schnell: resolution enum + num_images; seed/steps/cfg/sampler unsupported; pixels not the wire field.
-    omit: ['seed', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'width', 'height'],
-    checkpointExtra: { resolution: '1024x1024' },
+  // NanoGPT live endpoint: moss-image (MOSS Image by OpenMOSS, verified live 2026-11-06).
+  // Parameters: num_inference_steps (1-100, default 50), guidance_scale (0-10, default 3), negative_prompt, seed, resolution (mapped from EmptyLatentImage 1024x1024).
+  { provider: 'nanogpt', ckpt: 'moss-image', hasLora: false, hasNegative: true,
+    steps: 50, cfg: 3, seed: 42,
+    omit: ['sampler', 'scheduler', 'denoise'],
   },
-  // providerSchema.ts fal-ai/flux/schnell: seed, steps 1–12, cfg 1–20, image_size; negative/sampler/scheduler/loras unsupported.
-  // Recipe https://civitai.red/images/31247708 (verbatim; base FLUX.1-dev → fal-ai/flux-lora, live OpenAPI 2026-11-04: prompt/loras/seed/num_inference_steps/guidance_scale/image_size).
-  { provider: 'fal', ckpt: 'fal-ai/flux-lora', hasLora: true, hasNegative: false, seed: 2100162238, steps: 41, cfg: 3.5, width: 1216, height: 832,
-    loras: [{ name: 'https://huggingface.co/renderartist/coloringbookflux/resolve/main/c0l0ringb00k_Flux_v1_renderartist.safetensors', strength: 1, source: 'https://civitai.red/images/31247708' }],
-    omit: ['sampler', 'scheduler', 'denoise'] },
+  // Fal live endpoint: fal-ai/krea-2/turbo/lora (Krea 2 Turbo LoRA, verified live 2026-11-06).
+  // Live OpenAPI parameters: prompt (required), image_size (enum: square_hd | ...), seed, loras (maxItems 3, path and scale). No aspect_ratio.
+  // Recipe https://huggingface.co/krea/Krea-2-LoRA-retroanime (Krea 2 Turbo Retro Anime LoRA by Krea, public resolve URL 200 OK).
+  { provider: 'fal', ckpt: 'fal-ai/krea-2/turbo/lora', hasLora: true, hasNegative: false, seed: 64107730,
+    omit: ['steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'width', 'height'],
+    checkpointExtra: {
+      custom_parameters: JSON.stringify({
+        image_size: 'square_hd',
+      }),
+    },
+    loras: [{ name: 'https://huggingface.co/krea/Krea-2-LoRA-retroanime/resolve/main/retroanime.safetensors', strength: 1, source: 'https://huggingface.co/krea/Krea-2-LoRA-retroanime' }],
+  },
   // OpenWorks-only: full params + LoRA (openWorksProvider.ts OPENWORKS_LIVE_EXTRAS: seed/steps/cfg/negative_prompt/loras/checkpoint).
   // Accepted run hist_1792223105137_bhlop: sampler/scheduler「该端点不支持，未发送」.
   {
@@ -1003,35 +1024,34 @@ const STD_SPECS: StdSpec[] = [
       custom_parameters: JSON.stringify({ 'result image count': 1 }),
     },
   },
-  // MuAPI: catalog model from t7-muapi-acceptance; no accepted-run LoRA id → no LoRA node.
-  // Live https://api.muapi.ai/openapi.json (2026-10-17) flux-1-dev-style-lora-inference body: prompt/lora_url/lora_weight/aspect_ratio/webhook_url only → no seed/steps/cfg/sampler/scheduler/denoise.
-  // Official table (openapi.json 2026-10-17 16:46, temp/e2e/workflow-hub/muapi-openapi-20261017-1646.json): prompt, lora_url (REQUIRED), lora_weight, aspect_ratio. No negative prompt, no seed.
+  // MuAPI live endpoint: /api/v1/krea-v2-turbo-lora (verified 2026-10-16 / 2026-11-06).
+  // Live OpenAPI: prompt, loras[{path, scale}], aspect_ratio, resolution (1k/2k).
+  // Recipe https://huggingface.co/krea/Krea-2-LoRA-retroanime (Krea 2 Turbo LoRA, public resolve URL 200 OK).
   {
     provider: 'muapi',
-    ckpt: 'flux-1-dev-style-lora-inference',
+    ckpt: 'krea-v2-turbo-lora',
     hasNegative: false,
-    // Official OpenAPI Flux1DevStyleLoraInferenceRequest: prompt/lora_url/lora_weight/aspect_ratio(default 1:1)/webhook_url — no width/height pixels.
-    // Recipe https://civitai.red/images/31247708: seed kept and sent as-is (official body has no seed; upstream answer shown verbatim — 雁 room 2026-11-04).
-    seed: 2100162238,
     omit: ['steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'width', 'height'],
     checkpointExtra: {
       aspect_ratio: '1:1',
       custom_parameters: JSON.stringify({
         _canvas: {
-          scope: { provider: 'muapi', model: 'flux-1-dev-style-lora-inference' },
-          // 'seed' is NOT in the official body: listed so the recipe seed that is sent stays visible (no hidden send).
-          schemaProperties: ['prompt', 'lora_url', 'lora_weight', 'aspect_ratio', 'webhook_url', 'seed'],
+          scope: { provider: 'muapi', model: 'krea-v2-turbo-lora' },
+          schemaProperties: ['prompt', 'loras', 'aspect_ratio', 'resolution'],
         },
       }),
     },
-    // Official OpenAPI: lora_url REQUIRED (trainer task URL), lora_weight default 1.0. No accepted-run URL → empty visible LoRA node to mount one.
     hasLora: true,
-    loras: [{ name: 'https://huggingface.co/renderartist/coloringbookflux/resolve/main/c0l0ringb00k_Flux_v1_renderartist.safetensors', strength: 1, source: 'https://civitai.red/images/31247708' }],
+    loras: [{ name: 'https://huggingface.co/krea/Krea-2-LoRA-retroanime/resolve/main/retroanime.safetensors', strength: 1, source: 'https://huggingface.co/krea/Krea-2-LoRA-retroanime' }],
   },
-  // Schema (temp/e2e/wavespeed/recipe-33530948/wavespeed-flux-dev-lora-schema.json): steps 1–50; accepted run hist_1792224305224_meynb used 36 steps / CFG 3.5 (Schema default was 28), size, seed, loras; no negative/sampler/scheduler.
-  { provider: 'wavespeed', ckpt: 'wavespeed-ai/flux-dev-lora', hasLora: true, hasNegative: false, steps: 36, cfg: 3.5, omit: ['sampler', 'scheduler', 'denoise'],
-    // Accepted run hist_1792224305224_meynb (temp/e2e/wavespeed/recipe-33530948/recipe.json): HF mirror, SHA256 == Civitai 706528.
-    loras: [{ name: 'https://huggingface.co/comfyanonymous/flux_RealismLora_converted_comfyui/resolve/main/flux_realism_lora.safetensors', strength: 1.1, source: 'hist_1792224305224_meynb' }] },
+  // WaveSpeed live endpoint: wavespeed-ai/krea-v2/turbo-lora (verified 2026-10-15 / 2026-11-06).
+  // Live Schema: prompt, aspect_ratio, resolution (1k/2k), seed, loras[{path, scale}].
+  // Recipe https://huggingface.co/krea/Krea-2-LoRA-retroanime (Krea 2 Turbo LoRA, public resolve URL 200 OK).
+  { provider: 'wavespeed', ckpt: 'wavespeed-ai/krea-v2/turbo-lora', hasLora: true, hasNegative: false,
+    omit: ['steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'width', 'height'],
+    checkpointExtra: { aspect_ratio: '1:1', resolution: '1k' },
+    loras: [{ name: 'https://huggingface.co/krea/Krea-2-LoRA-retroanime/resolve/main/retroanime.safetensors', strength: 1, source: 'https://huggingface.co/krea/Krea-2-LoRA-retroanime' }],
+  },
   // Krea model IDs are live OpenAPI operation paths (e.g. image/krea/krea-2/medium-turbo), not Sogni's krea-2-turbo selector.
   // Leave the model empty so the user chooses an exact current endpoint from Krea's live catalog; do not alias across providers.
   // Live https://api.krea.ai/openapi.json (2026-11-04) POST /generate/image/krea/krea-2/medium-turbo: required prompt+aspect_ratio+resolution(enum 1K);
@@ -1045,40 +1065,74 @@ const STD_SPECS: StdSpec[] = [
   { provider: 'aimlapi', ckpt: 'alibaba/z-image-turbo-lora', hasLora: true, hasNegative: false, seed: 1840591390, steps: 12, cfg: 1, width: 1216, height: 832,
     loras: [{ name: 'https://huggingface.co/renderartist/Technically-Color-Z-Image-Turbo/resolve/main/Technically_Color_Z_Image_Turbo_v1_renderartist_2000.safetensors', strength: 0.9, source: 'https://civitai.red/images/113739497' }],
     omit: ['sampler', 'scheduler', 'denoise'] },
-  // docs/evidence/novita-api-2026-10-15.md:51/54: catalog model; Schema has steps/cfg; no accepted-run LoRA → no LoRA node.
-  // Recipe https://civitai.red/images/28785255 (verbatim; Hires fix + klF8Anime2 VAE in the recipe are not preset fields).
-  { provider: 'novita', ckpt: 'dreamshaper_8_93211.safetensors', hasLora: true, seed: 548949743, steps: 15, cfg: 6.5, sampler: 'Euler a', width: 512, height: 768,
-    loras: [
-      { name: 'epi_noiseoffset2_14333', strength: 0.65, source: 'https://civitai.red/images/28785255' },
-      { name: 'more_details_59655', strength: 0.4, source: 'https://civitai.red/images/28785255' },
-    ],
-    omit: ['scheduler', 'denoise'] },
+  // Novita: 保持完整文生图 + LoRA 拓扑（底模与 LoRA 留空供用户在模型库自主选用当前有效模型）。
+  // Novita API 官方支持 request.loras[{model_name, strength}]。
+  {
+    provider: 'novita',
+    ckpt: '',
+    hasLora: true,
+    loraMount: { strength: 0.8, source: 'novita-lora-mount' },
+    hasNegative: true,
+    seed: 548949743,
+    steps: 20,
+    cfg: 7,
+    sampler: 'Euler a',
+    width: 1024,
+    height: 1024,
+    omit: ['scheduler', 'denoise'],
+  },
   // docs/evidence/venice-api-2026-10-15.md:51/54: catalog 200 lists venice-sd35; seed/steps/cfg_scale/size/negative sent; no custom loras.
   { provider: 'venice', ckpt: 'venice-sd35', hasLora: false, steps: 20, cfg: 7.5, omit: ['sampler', 'scheduler', 'denoise'] },
-  // DeepInfra public T2I: docs.deepinfra.com/apis/image-generation + OpenAPI OpenAIImagesGenerationsIn — prompt/model/size/n/response_format only; hasLora:false (private LoRA needs dashboard deploy).
-  // Official OpenAI images path: prompt/model/size/n/response_format (+quality/style); no seed/steps/cfg/sampler/LoRA on public FLUX-schnell.
-  { provider: 'deepinfra', ckpt: 'black-forest-labs/FLUX-1-schnell', hasLora: false, hasNegative: false, omit: ['seed', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise'] },
+  // DeepInfra live text-to-image catalog: FLUX-2-klein-9b (verified 2026-11-06).
+  // Official OpenAI images path: prompt/model/size/n/response_format (+quality/style).
+  { provider: 'deepinfra', ckpt: 'black-forest-labs/FLUX-2-klein-9b', hasLora: false, hasNegative: false, omit: ['seed', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise'] },
   // Sogni hosted-tool selector: live official generate_image.schema.json enum includes krea-2-turbo (verified 2026-11-03, 30 models). Not a Krea API path.
   // Driver maps cfg→guidance; Schema has no steps → omit steps. LoRA via loras+loraStrengths when catalog confirms.
   // Recipe https://civitai.red/images/142361732 (verbatim seed/steps 10/cfg 1/euler/768x1376; Sogni schema has no steps, sent as-is). Single recipe LoRA civitai 3129219 (weight 1) = Sogni catalog krea2-fever-dream-mood.
   { provider: 'sogni', ckpt: 'krea-2-turbo', hasLora: true, seed: 64107730, steps: 10, cfg: 1, sampler: 'euler', width: 768, height: 1376,
     loras: [{ name: 'krea2-fever-dream-mood', strength: 1, source: 'https://civitai.red/images/142361732' }],
     omit: ['scheduler', 'denoise'] },
-  // Live OpenAPI GET /v1/models/black-forest-labs/flux-dev-lora + default_example: lora_weights=fofr/flux-80s-cyberpunk, lora_scale=1, guidance=3, steps=28.
-  // Official docs example also cites fofr/flux-pixar-cars; default_example LoRA is the acceptance recipe id.
-  // Recipe https://civitai.red/images/31247708 (verbatim seed/steps/cfg/LoRA; size 1216x832 not a field on flux-dev-lora → aspect_ratio stays).
-  { provider: 'replicate', ckpt: 'black-forest-labs/flux-dev-lora', hasLora: true, hasNegative: false, seed: 2100162238, steps: 41, cfg: 3.5,
-    // providerSchema + draft: aspect_ratio (+ megapixels); width/height unsupported on flux-dev-lora.
+  // Replicate: 保持完整文生图 + LoRA 拓扑（底模与 LoRA 留空供用户在模型库自主选用当前有效模型）。
+  // 避免硬编码老旧 FLUX.1，保留完整 CheckpointLoaderSimple -> LoRALoader 连线。
+  {
+    provider: 'replicate',
+    ckpt: '',
+    hasLora: true,
+    loraMount: { strength: 1, source: 'replicate-lora-mount' },
+    hasNegative: false,
+    seed: 2100162238,
+    steps: 28,
+    cfg: 3.5,
     omit: ['sampler', 'scheduler', 'denoise', 'width', 'height'],
     checkpointExtra: { aspect_ratio: '1:1' },
-    loras: [{ name: 'renderartist/coloringbookflux', strength: 1, source: 'https://civitai.red/images/31247708' }] },
-  // providerSchema.ts runware:100@1: steps/cfg supported; no accepted-run LoRA → no LoRA node.
-  { provider: 'runware', ckpt: 'runware:100@1', hasLora: false, steps: 4, cfg: 1, omit: ['sampler', 'scheduler', 'denoise'] },
-  // docs.modelslab.com/.../dreambooth-lora body example: model_id tamarin-xl-v1 + lora_model xl-realistic-cake-art-sty @ 0.45.
-  // Tamarin XL V1 (civitai.com/models/235746?modelVersionId=265836) is SDXL 1.0 architecture; native resolution is 1024x1024.
-  // Corrected from 512x512 to native SDXL 1024x1024 (modelslab.com/models/modelslab/tamarin-xl-v1).
-  { provider: 'modelslab', ckpt: 'tamarin-xl-v1', hasLora: true, hasNegative: true, steps: 20, cfg: 7.5, width: 1024, height: 1024, scheduler: 'UniPCMultistepScheduler', omit: ['sampler', 'denoise'],
-    loras: [{ name: 'xl-realistic-cake-art-sty', strength: 0.45, source: 'https://docs.modelslab.com/image-generation/community-models/dreambooth-lora' }] },
+  },
+  // Runware: 保持完整文生图 + LoRA 拓扑（底模与 LoRA 留空供用户自主选择，避免架构不匹配）。
+  // 官方支持 lora: [{ model: string, weight: number }]。
+  {
+    provider: 'runware',
+    ckpt: '',
+    hasLora: true,
+    loraMount: { strength: 0.8, source: 'runware-lora-mount' },
+    hasNegative: false,
+    steps: 25,
+    cfg: 3.5,
+    omit: ['sampler', 'scheduler', 'denoise'],
+  },
+  // ModelsLab: 暂无经官方核实的现代推荐大模型，底模与 LoRA 留空待选（彻底清理 SDXL 1.0 tamarin-xl-v1）；保留完整 KSampler 与 LoRA 拓扑。
+  {
+    provider: 'modelslab',
+    ckpt: '',
+    hasLora: true,
+    loraMount: { strength: 0.8, source: '待用户在模型中心指定' },
+    hasNegative: true,
+    steps: 20,
+    cfg: 7.5,
+    width: 1024,
+    height: 1024,
+    scheduler: 'UniPCMultistepScheduler',
+    omit: ['sampler', 'denoise'],
+    description: 'ModelsLab 暂无经官方核实的现代推荐大模型，模型已留空待选；保留完整 KSampler 与 LoRA 挂载连线拓扑。',
+  },
   // providerSchema.ts agnesUnsupported (wiki.agnes-ai.com agnes-image-25-flash): only prompt + size + ratio. Same full
   // topology as Mage (image output → SaveImage); compact CLIP CONDITIONING→SaveImage was a wrong-type edge.
   { provider: 'agnes', ckpt: 'agnes-image-2.5-flash', hasLora: false, hasNegative: false,

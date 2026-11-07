@@ -62,4 +62,20 @@ describe('preset modal blocked archives', () => {
     // Button must be disabled and display "需填写提示词"
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>[\s\S]*?需填写提示词[\s\S]*?<\/button>/);
   });
+
+  it('P1-1: strictly excludes legacy models (Wan 2.1, SVD-XT, SDXL 1.0) from modern recommended presets', () => {
+    const html = renderToStaticMarkup(<WorkflowPresetsModal isOpen onClose={vi.fn()} onLoadPreset={vi.fn()} onLoadAndRunPreset={vi.fn()} currentNodes={[]} currentConnections={[]} currentSpatialFrames={[]} onImportWorkflowData={vi.fn()} onClearCanvas={vi.fn()} />);
+    expect(html).not.toContain('fal-ai/wan-t2v-lora');
+    expect(html).not.toContain('fal-ai/wan-i2v-lora');
+    expect(html).not.toContain('wavespeed-ai/wan-2.1');
+    expect(html).not.toContain('SVD-XT');
+    expect(html).not.toContain('tamarin-xl-v1');
+    expect(html).not.toContain('wan2.1-lora');
+    expect(html).not.toContain('wan-video/wan2.1-with-lora');
+    // Confirms modern Wan 2.2 recommendations are present
+    expect(html).toContain('fal-ai/wan/v2.2-a14b/text-to-video/lora');
+    expect(html).toContain('fal-ai/wan/v2.2-a14b/image-to-video/lora');
+    expect(html).toContain('wavespeed-ai/wan-2.2/t2v-480p-lora');
+    expect(html).toContain('wavespeed-ai/wan-2.2/i2v-480p-lora');
+  });
 });

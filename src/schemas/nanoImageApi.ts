@@ -18,8 +18,16 @@ export function buildNanoImagePayload(body:Record<string,any>,endpoint:Record<st
     if (supplied(body.width)) payload.width=body.width;
     if (supplied(body.height)) payload.height=body.height;
   }
-  for (const key of ['aspect_ratio','seed','quality','output_format','negative_prompt','steps','cfg','guidance_scale','denoise','sampler_name','scheduler','size','n']) {
+  for (const key of ['aspect_ratio','seed','quality','output_format','negative_prompt','steps','num_inference_steps','cfg','guidance_scale','denoise','sampler_name','scheduler','size','n']) {
     if (!supplied(body[key])) continue;
+    if (key==='steps' && supported.num_inference_steps && !supported.steps && !supplied(body.num_inference_steps)) {
+      payload.num_inference_steps=body.steps;
+      continue;
+    }
+    if (key==='cfg' && supported.guidance_scale && !supported.cfg && !supplied(body.guidance_scale)) {
+      payload.guidance_scale=body.cfg;
+      continue;
+    }
     payload[key]=body[key];
     if (!supported[key] && key!=='n') capabilityNotes.push({field:key,value:body[key],capability:'undeclared_sent',note:'supported_parameters 未声明；按所填原样发送，上游决定。'});
   }

@@ -125,7 +125,7 @@ export default function App() {
   // Model Schema arrivals re-render inspector/canvas send badges.
   React.useSyncExternalStore(subscribeModelSchema, modelSchemaVersion);
   const [initialWorkspace] = useState(() => loadWorkspaceCache([
-    {id: 'canvas-zimage', name: 'Z-Image 创作画布', description: 'Hugging Face 官方 Space 文生图', updatedAt: Date.now(), nodes: WORKFLOW_PRESETS[0].nodes, connections: WORKFLOW_PRESETS[0].connections, spatialFrames: WORKFLOW_PRESETS[0].spatialFrames || []},
+    {id: 'canvas-zimage', name: 'Z-Image Turbo 创作画布', description: 'Hugging Face (fal-ai 路由) Z-Image-Turbo + Technically Color LoRA 微调风格', updatedAt: Date.now(), nodes: WORKFLOW_PRESETS[0].nodes, connections: WORKFLOW_PRESETS[0].connections, spatialFrames: WORKFLOW_PRESETS[0].spatialFrames || []},
   ]));
   const [canvasMode, setCanvasMode] = useState<CanvasMode>(initialWorkspace.mode);
   const [transform, setTransform] = useState<CanvasTransform>(initialWorkspace.active.transform || {x: 80, y: 80, scale: 0.8});

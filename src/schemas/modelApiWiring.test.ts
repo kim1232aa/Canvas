@@ -29,10 +29,51 @@ describe('Nano normalized API uses live per-model capabilities',()=>{
     expect(buildNanoImagePayload({model:'flux-schnell',width:512,height:512},endpoint).payload.resolution).toBe('512x512');
     expect(buildNanoImagePayload({model:'flux-schnell',resolution:'1k'},endpoint).payload.resolution).toBe('1k');
   });
-  it('undeclared seed/steps/cfg/negative are sent as filled and noted',()=>{
+    it('undeclared seed/steps/cfg/negative are sent as filled and noted',()=>{
     const r=buildNanoImagePayload({model:'flux-schnell',prompt:'x',seed:42,negative_prompt:'blur',steps:8,cfg:3.5},endpoint);
     expect(r.payload).toMatchObject({seed:42,negative_prompt:'blur',steps:8,cfg:3.5});
     expect(r.capabilityNotes.map((n:any)=>n.field).sort()).toEqual(['cfg','negative_prompt','seed','steps']);
+  });
+  it('maps steps -> num_inference_steps and cfg -> guidance_scale without undeclared_sent notes when supported_parameters declares them (e.g. moss-image), including zero values',()=>{
+    const mossEndpoint={
+      supported_parameters:{
+        output_format:['jpeg','png','webp'],
+        image_size:{min_width:512,max_width:2048,multiple_of:16,default:'square_hd'},
+        num_inference_steps:{min:1,max:100,default:50},
+        guidance_scale:{min:0,max:10,default:3},
+        enable_prompt_expansion:{default:true},
+        negative_prompt:true,
+        seed:true,
+        resolutions:['1024x1024','512x512','1536x1024','1024x1536','1920x1072','2048x2048'],
+      },
+      capabilities:{image_to_image:false},
+    };
+    const r=buildNanoImagePayload({model:'moss-image',prompt:'refrigerator note',width:1024,height:1024,seed:42,steps:50,cfg:3,n:1},mossEndpoint);
+    expect(r.payload).toEqual({
+      model:'moss-image',
+      prompt:'refrigerator note',
+      resolution:'1024x1024',
+      seed:42,
+      num_inference_steps:50,
+      guidance_scale:3,
+      n:1,
+    });
+    expect(r.payload).not.toHaveProperty('steps');
+    expect(r.payload).not.toHaveProperty('cfg');
+    expect(r.payload).not.toHaveProperty('width');
+    expect(r.payload).not.toHaveProperty('height');
+    expect(r.capabilityNotes).toEqual([]);
+
+    // Zero-value edge preservation (steps: 0, cfg: 0)
+    const zeroRun=buildNanoImagePayload({model:'moss-image',prompt:'zero test',width:1024,height:1024,seed:0,steps:0,cfg:0,n:1},mossEndpoint);
+    expect(zeroRun.payload).toMatchObject({
+      seed:0,
+      num_inference_steps:0,
+      guidance_scale:0,
+    });
+    expect(zeroRun.payload).not.toHaveProperty('steps');
+    expect(zeroRun.payload).not.toHaveProperty('cfg');
+    expect(zeroRun.capabilityNotes).toEqual([]);
   });
   it('LoRA: sent as {path,scale} whether or not supported_parameters declares loras',()=>{
     expect(buildNanoImagePayload({model:'flux-schnell',prompt:'x',loras:[{name:'https://cdn.example.com/a.safetensors',strength:0.8}]},endpoint).payload.loras).toEqual([{path:'https://cdn.example.com/a.safetensors',scale:0.8}]);
