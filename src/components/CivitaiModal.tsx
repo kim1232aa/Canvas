@@ -94,7 +94,10 @@ import {
   adaptCivitaiRecipeToProvider,
   buildAllProviderAdaptations,
   isRawBaseModelArchitectureText,
+  isResolvableCheckpointRef,
   resolveCivitaiNativeSelectors,
+  resolveImportedCheckpoint,
+  withImportedLoraLoaders,
   type ProviderAdaptationResult,
   type ProviderAdaptationMap,
   type CivitaiRecipeInput,
@@ -1582,10 +1585,16 @@ Steps: 8, Sampler: Euler, CFG scale: 1, Seed: 689794262, Size: 832x1248, Model: 
             nodes: Array.isArray(extractedPreset.nodes)
               ? extractedPreset.nodes.map((n: any) => {
                   if (n.type === 'CheckpointLoaderSimple') {
-                    const effectiveCkpt =
-                      importTargetProvider === 'civitai'
-                        ? (importTargetModel || (isRawBaseModelArchitectureText(sourceCkpt) ? '' : sourceCkpt))
-                        : (importTargetModel || '');
+                    const resolvedCheckpoint = resolveImportedCheckpoint({
+                      checkpoint: sourceCkpt,
+                      sourceModel: ckptNodeVal?.import_source_model || sourceCkpt,
+                      baseModel: extractedPreset?.otherMetadata?.baseModel,
+                      targetProvider: importTargetProvider,
+                      targetModel: importTargetModel,
+                    });
+                    const effectiveCkpt = isResolvableCheckpointRef(resolvedCheckpoint.ckptName)
+                      ? resolvedCheckpoint.ckptName
+                      : '';
                     return {
                       ...n,
                       title: `加载底模 (${currentAdapt.displayName})`,
@@ -1593,6 +1602,9 @@ Steps: 8, Sampler: Euler, CFG scale: 1, Seed: 689794262, Size: 832x1248, Model: 
                         ...n.values,
                         targetProvider: importTargetProvider,
                         ckpt_name: effectiveCkpt,
+                        import_source_model: resolvedCheckpoint.originalName || n.values?.import_source_model,
+                        import_unresolved_checkpoint: resolvedCheckpoint.unresolved,
+                        import_unresolved_reason: resolvedCheckpoint.unresolved ? resolvedCheckpoint.reason : undefined,
                         base_model: n.values?.base_model || extractedPreset?.otherMetadata?.baseModel || undefined,
                         ...(importTargetProvider === 'civitai'
                           ? {
@@ -1625,10 +1637,16 @@ Steps: 8, Sampler: Euler, CFG scale: 1, Seed: 689794262, Size: 832x1248, Model: 
                   params: {
                     ...f.params,
                     targetProvider: importTargetProvider,
-                    checkpoint:
-                      importTargetProvider === 'civitai'
-                        ? (importTargetModel || (isRawBaseModelArchitectureText(sourceCkpt) ? '' : sourceCkpt))
-                        : (importTargetModel || ''),
+                    checkpoint: (() => {
+                      const resolved = resolveImportedCheckpoint({
+                        checkpoint: sourceCkpt,
+                        sourceModel: sourceCkpt,
+                        baseModel: extractedPreset?.otherMetadata?.baseModel,
+                        targetProvider: importTargetProvider,
+                        targetModel: importTargetModel,
+                      });
+                      return isResolvableCheckpointRef(resolved.ckptName) ? resolved.ckptName : '';
+                    })(),
                   },
                 }))
               : extractedPreset.spatialFrames,
@@ -1657,7 +1675,13 @@ Steps: 8, Sampler: Euler, CFG scale: 1, Seed: 689794262, Size: 832x1248, Model: 
               preset={synchronizedPreset ?? undefined}
               onApplyPreset={(p) => {
                 if (onLoadWorkflowPreset) {
-                  onLoadWorkflowPreset(p);
+                  const graph = withImportedLoraLoaders(p);
+                  onLoadWorkflowPreset({
+                    ...p,
+                    name: p?.name || (extractedPreset?.name ?? ''),
+                    nodes: graph.nodes,
+                    connections: graph.connections,
+                  });
                   onClose();
                 }
               }}

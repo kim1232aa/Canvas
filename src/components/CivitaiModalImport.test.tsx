@@ -239,9 +239,32 @@ describe('CivitaiModal Recipe Import and Cross-Provider Adaptation UI', () => {
     const previewEl = allEls.find((el) => el.type === CivitaiModalImportPreview);
     expect(previewEl).toBeDefined();
 
-    // Verify onApplyPreset delegates to onLoadWorkflowPreset and calls onClose
+    // Applying always loads the canvas. A bare architecture label is rewritten to the unresolved
+    // state (empty ckpt_name plus the original name) instead of being sent as a checkpoint.
     previewEl.props.onApplyPreset(mockPreset);
-    expect(onLoadWorkflowPreset).toHaveBeenCalledWith(mockPreset);
+    expect(onLoadWorkflowPreset).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'p1',
+      name: 'Imported Preset',
+      nodes: [expect.objectContaining({
+        values: expect.objectContaining({ ckpt_name: '', import_unresolved_checkpoint: true, import_source_model: 'SDXL 1.0' }),
+      })],
+    }));
+    expect(onLoadWorkflowPreset.mock.calls[0][0].nodes[0].values.ckpt_name).not.toBe('SDXL 1.0');
+    expect(onClose).toHaveBeenCalled();
+
+    onLoadWorkflowPreset.mockClear();
+    onClose.mockClear();
+    const airPreset = {
+      ...mockPreset,
+      nodes: [{ id: 'n1', type: 'CheckpointLoaderSimple', pos: { x: 0, y: 0 }, values: { ckpt_name: 'urn:air:sdxl:checkpoint:civitai:101055@128078', import_source_model: 'urn:air:sdxl:checkpoint:civitai:101055@128078' } }],
+      connections: [],
+      otherMetadata: { baseModel: 'SDXL 1.0', resources: [] },
+    };
+    previewEl.props.onApplyPreset(airPreset);
+    expect(onLoadWorkflowPreset).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'p1',
+      nodes: [expect.objectContaining({ values: expect.objectContaining({ ckpt_name: 'urn:air:sdxl:checkpoint:civitai:101055@128078' }) })],
+    }));
     expect(onClose).toHaveBeenCalled();
   });
 

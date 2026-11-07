@@ -7,6 +7,9 @@ import {
   resolveRawImportNegativeSamplerScheduler,
   adaptCivitaiRecipeToProvider,
   civitaiSamplerSource,
+  resolveImportedCheckpoint,
+  withImportedLoraLoaders,
+  mountableImportedLoras,
 } from './civitaiImportMap';
 
 describe('civitai import mappers (hard gates)', () => {
@@ -245,5 +248,127 @@ describe('resolveRawImportNegativeSamplerScheduler (plain-text import)', () => {
       expect(sdxl.fields.sampler.source).toBe('https://developer.civitai.com/orchestration/recipes/sdxl.md');
       expect(sdxl.fields.scheduler.source).toBe('https://developer.civitai.com/orchestration/recipes/sdxl.md');
     });
+  });
+});
+
+/**
+ * Image 148140013, read live from GET https://civitai.com/api/v1/images?imageId=148140013&withMeta=true
+ * on 2026-11-07. meta.meta lists 832x1248, 8 steps, cfgScale 1, sampler euler, seed 689794262 and five
+ * civitaiResources. Each model-versions/{id} response supplied the AIR below; strengths are the recipe
+ * weights, not defaults. ComfyKrea2TurboImageGenInput (imageGen OpenAPI) defaults scheduler to `simple`.
+ */
+const IMAGE_148140013 = {
+  air: 'urn:air:krea2:diffusionmodel:civitai:2732656@3072332',
+  prompt: 'masterpiece, best quality, very aesthetic, ektachrome fade film, nature',
+  negative: '(2d ,Illustration, drawing, cartoon, animation, anima, painting:1.4)',
+  loras: [
+    { name: 'Mrpopo Anime/Art', air: 'urn:air:krea2:lora:civitai:2744585@3168308', strength: 1, baseModel: 'Krea 2 Turbo' },
+    { name: 'Masterpiece', air: 'urn:air:krea2:lora:civitai:929497@3077110', strength: 0.85, baseModel: 'Krea 2' },
+  ],
+};
+
+describe('image 148140013 import graph', () => {
+  const recipePreset = () => ({
+    name: 'Civitai 作品 #148140013：Hairpin 原作逆向工作流',
+    prompt: IMAGE_148140013.prompt,
+    negativePrompt: IMAGE_148140013.negative,
+    nodes: [
+      { id: 'node-imp-1', type: 'CheckpointLoaderSimple', pos: { x: 60, y: 120 }, values: { ckpt_name: IMAGE_148140013.air, targetProvider: 'civitai', base_model: 'Krea 2 Turbo', civitai_engine: 'comfy', civitai_ecosystem: 'krea2', civitai_model: 'turbo', import_source_model: IMAGE_148140013.air } },
+      { id: 'node-imp-3', type: 'CLIPTextEncode', values: { text: IMAGE_148140013.prompt } },
+      { id: 'node-imp-4', type: 'CLIPTextEncodeNegative', values: { text: IMAGE_148140013.negative } },
+      { id: 'node-imp-5', type: 'EmptyLatentImage', values: { width: 832, height: 1248, batch_size: 1 } },
+      { id: 'node-imp-6', type: 'KSampler', values: { seed: 689794262, steps: 8, cfg: 1, sampler_name: 'euler', scheduler: 'simple', control_after_generate: 'fixed' } },
+    ],
+    connections: [
+      { id: 'clip-pos', fromNodeId: 'node-imp-1', fromSocketId: 'CLIP', toNodeId: 'node-imp-3', toSocketId: 'clip', type: 'CLIP' },
+      { id: 'clip-neg', fromNodeId: 'node-imp-1', fromSocketId: 'CLIP', toNodeId: 'node-imp-4', toSocketId: 'clip', type: 'CLIP' },
+      { id: 'model-ks', fromNodeId: 'node-imp-1', fromSocketId: 'MODEL', toNodeId: 'node-imp-6', toSocketId: 'model', type: 'MODEL' },
+    ],
+    otherMetadata: { resources: IMAGE_148140013.loras, width: 832, height: 1248, steps: 8, cfgScale: 1, sampler: 'euler', scheduler: 'simple', seed: 689794262 },
+  });
+
+  it('yields the checkpoint AIR, two LoRA nodes with real strengths, and 832x1248 / 8 / cfg 1 / euler / simple', () => {
+    const graph = withImportedLoraLoaders(recipePreset());
+    const ckpt = graph.nodes.find((n) => n.type === 'CheckpointLoaderSimple');
+    expect(ckpt.values.ckpt_name).toBe(IMAGE_148140013.air);
+    expect(ckpt.values.ckpt_name).not.toBe('turbo');
+    expect(ckpt.values.import_unresolved_checkpoint).toBe(false);
+
+    const loraNodes = graph.nodes.filter((n) => n.type === 'LoRALoader');
+    expect(loraNodes).toHaveLength(2);
+    expect(loraNodes.map((n) => n.values.lora_name)).toEqual(IMAGE_148140013.loras.map((l) => l.air));
+    expect(loraNodes.map((n) => n.values.strength_model)).toEqual([1, 0.85]);
+    expect(loraNodes.every((n) => n.values.strength_model !== 0 && n.values.strength_clip !== 0)).toBe(true);
+    expect(loraNodes.every((n) => String(n.values.lora_name).trim() !== '')).toBe(true);
+
+    // Checkpoint MODEL/CLIP feed the first LoRA; the last LoRA feeds the sampler and both prompts.
+    expect(graph.connections).toEqual(expect.arrayContaining([
+      expect.objectContaining({ fromNodeId: 'node-imp-1', fromSocketId: 'MODEL', toNodeId: 'node-imp-lora-1', toSocketId: 'model', type: 'MODEL' }),
+      expect.objectContaining({ fromNodeId: 'node-imp-1', fromSocketId: 'CLIP', toNodeId: 'node-imp-lora-1', toSocketId: 'clip', type: 'CLIP' }),
+      expect.objectContaining({ fromNodeId: 'node-imp-lora-1', fromSocketId: 'MODEL', toNodeId: 'node-imp-lora-2', toSocketId: 'model' }),
+      expect.objectContaining({ fromNodeId: 'node-imp-lora-2', fromSocketId: 'MODEL', toNodeId: 'node-imp-6', toSocketId: 'model', type: 'MODEL' }),
+      expect.objectContaining({ fromNodeId: 'node-imp-lora-2', fromSocketId: 'CLIP', toNodeId: 'node-imp-3', toSocketId: 'clip', type: 'CLIP' }),
+      expect.objectContaining({ fromNodeId: 'node-imp-lora-2', fromSocketId: 'CLIP', toNodeId: 'node-imp-4', toSocketId: 'clip', type: 'CLIP' }),
+    ]));
+    expect(graph.connections.some((c) => c.fromNodeId === 'node-imp-1' && c.toNodeId === 'node-imp-6')).toBe(false);
+
+    const sampler = graph.nodes.find((n) => n.type === 'KSampler').values;
+    const latent = graph.nodes.find((n) => n.type === 'EmptyLatentImage').values;
+    expect(latent).toMatchObject({ width: 832, height: 1248 });
+    expect(sampler).toMatchObject({ steps: 8, cfg: 1, sampler_name: 'euler', scheduler: 'simple', seed: 689794262 });
+    const serialized = JSON.stringify(graph);
+    expect(serialized).not.toMatch(/""\s*:/);
+    for (const node of graph.nodes) {
+      for (const value of Object.values(node.values)) expect(value).not.toBe('');
+    }
+  });
+
+  it('does not create a LoRA node for a missing or zero strength', () => {
+    expect(mountableImportedLoras([
+      { name: 'no-weight', air: 'urn:air:krea2:lora:civitai:1@2', strength: null },
+      { name: 'zero', air: 'urn:air:krea2:lora:civitai:3@4', strength: 0 },
+      { name: '', strength: 0.5 },
+    ])).toEqual([]);
+  });
+});
+
+describe('unresolved checkpoint metadata', () => {
+  it('keeps the original name and never writes turbo into ckpt_name', () => {
+    const resolved = resolveImportedCheckpoint({ checkpoint: 'turbo', sourceModel: 'turbo', baseModel: 'Krea 2 Turbo', targetProvider: 'civitai' });
+    expect(resolved.unresolved).toBe(true);
+    expect(resolved.ckptName).toBe('');
+    expect(resolved.originalName).toBe('turbo');
+    expect(resolved.reason).toContain('turbo');
+
+    const graph = withImportedLoraLoaders({
+      nodes: [{ id: 'ck', type: 'CheckpointLoaderSimple', pos: { x: 0, y: 0 }, values: { ckpt_name: 'turbo', import_source_model: 'turbo', targetProvider: 'civitai', base_model: 'Krea 2 Turbo' } }],
+      connections: [],
+      otherMetadata: { resources: IMAGE_148140013.loras },
+    });
+    const ckpt = graph.nodes.find((n) => n.type === 'CheckpointLoaderSimple');
+    expect(ckpt.values.ckpt_name).toBe('');
+    expect(ckpt.values.ckpt_name).not.toBe('turbo');
+    expect(ckpt.values.import_unresolved_checkpoint).toBe(true);
+    expect(ckpt.values.import_source_model).toBe('turbo');
+    expect(ckpt.values.import_unresolved_reason).toContain('turbo');
+    expect(graph.nodes.some((n) => n.type === 'LoRALoader')).toBe(false);
+  });
+
+  it('keeps a provider model id the caller already chose, and does not guess one when none was chosen', () => {
+    const chosen = resolveImportedCheckpoint({
+      checkpoint: 'fal-ai/flux-lora',
+      sourceModel: IMAGE_148140013.air,
+      targetProvider: 'fal',
+    });
+    expect(chosen).toMatchObject({ ckptName: 'fal-ai/flux-lora', unresolved: false });
+
+    const missing = resolveImportedCheckpoint({
+      checkpoint: '',
+      sourceModel: IMAGE_148140013.air,
+      targetProvider: 'fal',
+    });
+    expect(missing.unresolved).toBe(true);
+    expect(missing.ckptName).toBe('');
+    expect(missing.originalName).toBe(IMAGE_148140013.air);
   });
 });
