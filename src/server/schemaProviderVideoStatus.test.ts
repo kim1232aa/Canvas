@@ -29,7 +29,6 @@ function stubVideoDeps(): any {
   return {
     isProvided: () => false,
     forwardUnmappedFields: () => false,
-    rejectSchemaEnum: () => false,
     normalizeFalEndpoint: (m: string) => m,
     resolveProviderAuth: () => ({ apiKey: '', baseUrl: '' }),
     upstreamFetch: async () => new Response('unused', { status: 500 }),

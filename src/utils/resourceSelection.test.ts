@@ -231,3 +231,76 @@ it('selectionFromExplicitLoraUrl refuses provider=all and non-URL input', () => 
   expect(() => selectionFromExplicitLoraUrl('all', HF_LORA_URL)).toThrow(/供应商/);
   expect(() => selectionFromExplicitLoraUrl('wavespeed', 'owner/repo')).toThrow(/HTTP/);
 });
+
+const STALE_IMPORTED_LORA = {
+ lora_name: 'urn:air:sdxl:lora:civitai:111@222',
+ air: 'urn:air:sdxl:lora:civitai:111@222',
+ civitai_air: 'urn:air:sdxl:lora:civitai:111@222',
+ civitaiAir: 'urn:air:sdxl:lora:civitai:111@222',
+ model_id: '111',
+ modelId: '111',
+ version_id: '222',
+ versionId: '222',
+ import_source_provider: 'civitai',
+ original_air: 'urn:air:sdxl:lora:civitai:111@222',
+ civitai_id: 'urn:air:sdxl:lora:civitai:111@222',
+ trigger_words: 'old trigger',
+};
+
+it('replacing an imported Civitai LoRA with a non-Civitai LoRA strips the previous AIR and version identity', () => {
+ const next = replaceSelectedResource(STALE_IMPORTED_LORA, {
+  name: 'wavespeed-detail',
+  provider: 'wavespeed',
+  resource_source: 'wavespeed',
+  resource_kind: 'lora',
+  resourceVerified: true,
+  downloadUrl: 'https://example.test/detail.safetensors',
+ }, 'lora_name');
+ expect(next).toMatchObject({
+  lora_name: 'wavespeed-detail',
+  resource_source: 'wavespeed',
+  download_url: 'https://example.test/detail.safetensors',
+  resourceVerified: true,
+ });
+ for (const key of ['air', 'civitai_air', 'civitaiAir', 'model_id', 'modelId', 'version_id', 'versionId', 'import_source_provider', 'original_air', 'civitai_id']) {
+  expect(next).not.toHaveProperty(key);
+ }
+});
+
+it('replacing an imported Civitai LoRA with a different Civitai catalog LoRA does not keep the previous AIR or version', () => {
+ const next = replaceSelectedResource(STALE_IMPORTED_LORA, {
+  name: 'urn:air:flux1:lora:civitai:333@444',
+  provider: 'civitai',
+  resource_source: 'civitai',
+  resource_kind: 'lora',
+  civitaiId: 'urn:air:flux1:lora:civitai:333@444',
+  resourceVerified: true,
+ }, 'lora_name');
+ expect(next).toMatchObject({
+  lora_name: 'urn:air:flux1:lora:civitai:333@444',
+  civitai_id: 'urn:air:flux1:lora:civitai:333@444',
+  resource_source: 'civitai',
+ });
+ for (const key of ['air', 'civitai_air', 'civitaiAir', 'model_id', 'modelId', 'version_id', 'versionId', 'import_source_provider', 'original_air']) {
+  expect(next).not.toHaveProperty(key);
+ }
+ expect(JSON.stringify(next)).not.toContain('111@222');
+});
+
+it('keeps an identity key only when the new selection sets it explicitly', () => {
+ const next = replaceSelectedResource(STALE_IMPORTED_LORA, {
+  name: 'urn:air:sdxl:lora:civitai:555@666',
+  provider: 'civitai',
+  civitaiId: 'urn:air:sdxl:lora:civitai:555@666',
+  resourceVerified: true,
+  air: 'urn:air:sdxl:lora:civitai:555@666',
+  modelId: '555',
+  versionId: '666',
+ } as any, 'lora_name');
+ expect(next.air).toBe('urn:air:sdxl:lora:civitai:555@666');
+ expect(next.modelId).toBe('555');
+ expect(next.versionId).toBe('666');
+ expect(next).not.toHaveProperty('import_source_provider');
+ expect(next).not.toHaveProperty('original_air');
+ expect(next).not.toHaveProperty('model_id');
+});

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { FalDriver } from './FalDriver';
+import { FalDriver, mapFalServerLoras } from './FalDriver';
 import { NormalizedGenerateParams } from '../types';
 
 describe('FalDriver LoRA 校验与错误处理', () => {
@@ -170,5 +170,58 @@ describe('FalDriver LoRA 校验与错误处理', () => {
     expect(interceptedBody.image_size).toEqual({ width: 0, height: 0 });
     expect(interceptedBody.width).toBe(0);
     expect(interceptedBody.height).toBe(0);
+  });
+
+  it('describes current Fal families instead of the legacy Wan 2.1 copy', () => {
+    expect(new FalDriver().description).toContain('Z-Image Turbo');
+    expect(new FalDriver().description).toContain('Krea 2');
+    expect(new FalDriver().description).toContain('Wan 2.2');
+    expect(new FalDriver().description).not.toContain('Wan 2.1');
+    expect(new FalDriver().description).not.toContain('FLUX.1 全系列');
+  });
+});
+
+describe('mapFalServerLoras live schema item properties', () => {
+  it('copies properties declared by the live LoRA item schema and leaves undeclared extras off the wire', () => {
+    const { wireLoras, unmappedLoraFields } = mapFalServerLoras([
+      {
+        path: 'https://example.test/wan.safetensors',
+        scale: 0.4,
+        weight_name: 'wan.safetensors',
+        transformer: 'high',
+        trigger_word: 'wanstyle',
+        privateNote: 'do not send',
+      },
+    ], {
+      path: { type: 'string' },
+      scale: { type: 'number' },
+      weight_name: { type: 'string' },
+      transformer: { type: 'string', enum: ['high', 'low'] },
+      trigger_word: { type: 'string' },
+    });
+    expect(wireLoras[0]).toEqual({
+      path: 'https://example.test/wan.safetensors',
+      scale: 0.4,
+      weight_name: 'wan.safetensors',
+      transformer: 'high',
+      trigger_word: 'wanstyle',
+    });
+    expect(unmappedLoraFields).toEqual([]);
+  });
+
+  it('sends clipStrength under the declared clip key instead of recording it as unmapped', () => {
+    const { wireLoras, unmappedLoraFields } = mapFalServerLoras([
+      { path: 'https://example.test/clip.safetensors', clipStrength: 0.6 },
+    ], { path: { type: 'string' }, clip_scale: { type: 'number' } });
+    expect(wireLoras[0]).toEqual({ path: 'https://example.test/clip.safetensors', clip_scale: 0.6 });
+    expect(unmappedLoraFields).toEqual([]);
+  });
+
+  it('still records clipStrength as unmapped when the live item schema has no CLIP property', () => {
+    const { wireLoras, unmappedLoraFields } = mapFalServerLoras([
+      { path: 'https://example.test/style.safetensors', clipStrength: 0.7, weight_name: 'ignored-without-schema' },
+    ]);
+    expect(wireLoras[0]).toEqual({ path: 'https://example.test/style.safetensors' });
+    expect(unmappedLoraFields).toEqual([expect.objectContaining({ field: 'clipStrength', value: 0.7 })]);
   });
 });

@@ -197,8 +197,7 @@ export function replaceSelectedResource(previous:Record<string,any>,selection:Re
    (selection as any)._sourceProvider ||
    ((selection as any).category && ((selection as any).downloads !== undefined || (selection as any).rating !== undefined))
  );
- const effectiveProvider = String(selection.resource_source || selection.provider || '').trim().toLowerCase();
- const clearStaleCivitaiIdentity = effectiveProvider !== 'civitai' && !selection.civitaiId;
+ const selectionRecord = selection as Record<string, any>;
  // Explicit HTTP(S) weight URLs are executable path intent (Hub paste ≡ manual LoRALoader URL).
  // Do not force unresolved solely because Civitai AIR / catalog metadata was never fetched.
  const explicitWeightUrl = isExplicitLoraWeightUrl(selection.downloadUrl) || isExplicitLoraWeightUrl(selection.name);
@@ -217,10 +216,17 @@ export function replaceSelectedResource(previous:Record<string,any>,selection:Re
    'civitaiId','civitai_id','resource_source','resource_kind','resourceVerified','resource_verified',
    'download_url','downloadUrl','lora_strength_min','lora_strength_max','lora_strength_step',
    'import_unresolved_resource','unresolvedResource','import_unresolved_reason','import_resource_reason','unresolvedReason','resource_unresolved_reason',
-   ...(clearStaleCivitaiIdentity ? STALE_CIVITAI_IDENTITY_KEYS : []),
+   // Previous resource identity never survives a replacement, including Civitai → Civitai.
+   // A key is written back only when the new selection carries it explicitly.
+   ...STALE_CIVITAI_IDENTITY_KEYS,
  ]);
  const clean=Object.fromEntries(Object.entries(previous).filter(([key])=>!stripKeys.has(key)));
- return {...clean,[field]:selection.name,civitai_id:selection.civitaiId,resource_source:selection.resource_source || selection.provider,resource_kind:selection.resource_kind || (explicitWeightUrl ? 'lora' : undefined),download_url:downloadUrl,resourceVerified:true,trigger_words:selection.triggerWords || '',base_model:selection.baseModel || '',...(selection.loraStrengthRange?{lora_strength_min:selection.loraStrengthRange.min,lora_strength_max:selection.loraStrengthRange.max,...(selection.loraStrengthRange.step?{lora_strength_step:selection.loraStrengthRange.step}:{})}:{})};
+ const carriedIdentity = Object.fromEntries(
+   STALE_CIVITAI_IDENTITY_KEYS
+     .filter((key) => selectionRecord[key] !== undefined)
+     .map((key) => [key, selectionRecord[key]]),
+ );
+ return {...clean,...carriedIdentity,[field]:selection.name,...(selection.civitaiId ? {civitai_id:selection.civitaiId} : {}),resource_source:selection.resource_source || selection.provider,resource_kind:selection.resource_kind || (explicitWeightUrl ? 'lora' : undefined),download_url:downloadUrl,resourceVerified:true,trigger_words:selection.triggerWords || '',base_model:selection.baseModel || '',...(selection.loraStrengthRange?{lora_strength_min:selection.loraStrengthRange.min,lora_strength_max:selection.loraStrengthRange.max,...(selection.loraStrengthRange.step?{lora_strength_step:selection.loraStrengthRange.step}:{})}:{})};
 }
 
 /** Build the LoRA object sent to generate: AIR in name/path → civitaiId; preserves path/downloadUrl for non-Civitai providers. */

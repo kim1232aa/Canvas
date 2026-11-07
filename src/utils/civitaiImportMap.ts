@@ -73,6 +73,13 @@ export function mapScheduler(s: string): string {
   return '';
 }
 
+/** SD1.5 / SDXL sampler docs live on the recipe page; every other ecosystem cites the imageGen schema. */
+export function civitaiSamplerSource(ecosystem: string): string {
+  return ecosystem === 'sdxl' || ecosystem === 'sd15'
+    ? 'https://developer.civitai.com/orchestration/recipes/sdxl.md'
+    : 'https://developer.civitai.com/orchestration/schemas/imageGen.yaml';
+}
+
 /** Image-import: empty/missing negative must stay empty (no blurry template). */
 export function resolveImportedNegativePrompt(
   metaNegative: unknown,
@@ -1198,7 +1205,7 @@ export function adaptCivitaiRecipeToProvider(
       humanMessage: isUnmapped
         ? `采样器 "${samplerVal}" 不在 Civitai ${isComfy ? 'Comfy' : 'sdcpp'} 官方枚举内，未映射；上游请求不会发送此未知采样器。`
         : `按 Civitai 引擎映射为 ${isComfy ? 'sampler (comfy)' : 'sampleMethod (sdcpp)'}: ${mappedSampler || '默认'}`,
-      source: 'https://developer.civitai.com/orchestration/recipes/sdxl.md',
+      source: civitaiSamplerSource(ecosystem),
     };
     if (isUnmapped) {
       unsupportedFields.push('sampler');
@@ -1211,7 +1218,7 @@ export function adaptCivitaiRecipeToProvider(
       mappedValue: schedulerVal,
       status: schedulerVal ? 'mapped' : 'not_applicable',
       humanMessage: `按 Civitai 引擎映射为 schedule (sdcpp) 或 scheduler (comfy): ${schedulerVal || '默认'}`,
-      source: 'https://developer.civitai.com/orchestration/recipes/sdxl.md',
+      source: civitaiSamplerSource(ecosystem),
     };
   } else if (provider === 'fal') {
     if (ecosystem === 'sd15' || ecosystem === 'sdxl') {
