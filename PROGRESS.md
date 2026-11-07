@@ -1,10 +1,18 @@
-# 交接状态更新（2026-11-07 M25 终结审计基线）
+# 交接状态更新（2026-11-07 M31 核验基线，承接 M25 / M29 / M30）
 
 > ⚠️ **基准声明**：下文「2026-11-05」及更早各节均为早期 Agent 留存的历史推进记录（未验证历史），不得作为当前系统现状与能力的凭据。当前唯一验证基准请以 [docs/evidence/2026-11-05/final.md](docs/evidence/2026-11-05/final.md) 与 [HANDOFF.md](HANDOFF.md) 为准。
 
+## 2026-11-07 M31 ModelsLab 出站复测与 M29/M30 UI 核验
+
+- **代码基准**：`main` @ `38a83f2`（含 M29 壳节点修复、M30 资源重选 / unmapped LoRA）。
+- **M31 实机**：wt-31，`PORT=4329`，`npx tsx server.ts`，Playwright Chromium + Chrome 153，视口 2560×1440。密钥只进 `localStorage.comfycanvas_api_keys`。
+- **ModelsLab**：载入 `std-modelslab-t2i`，自定义模型填 `z-image-turbo`，CLIP 非空提示词，点击运行。`POST /api/engine/modelslab/generate` 出站 `https://modelslab.com/api/v6/images/text2img`（`model_id=z-image-turbo`，1024×1024 / 20 步 / cfg 7.5 / seed 42）。上游 HTTP 200 业务体 `{"status":"error","message":"You need to be subscribed to a plan to continue, buy subscription from https://modelslab.com/pricing"}`，本站 502 原样透传到顶栏 / 采样器 / toast。判定 `PASS_BILLING`。证据 `final/17-modelslab-loaded.png` / `18-modelslab-run.png`（MD5 `423026198cce6e07f6d3b501302db5eb` / `180ecb8c87f5e6ed75f57505a134cf41`）。已消除 M25 底模留空 `NOT_SENT`。
+- **M29 UI 核验**：ModernToolDock「恢复 Z-Image Turbo 标准默认工作流」；ParameterInspector 在 Venice/Sogni 可见 `schema-send-badge-will_send`；`CivitaiLoRABrowserNode.search_keyword` 预填 CivitaiModal。
+- **文档**：`UNRESOLVED_ISSUES.md` 将 M29–M31 代码缺陷迁入已关闭表；开放表只保留外部计费/凭据项。`HANDOFF.md` / `README.md` / `final.md` 同步 ModelsLab `PASS_BILLING`。
+
 ## 2026-11-07 M25 全量集成 UI 回归与文档终结收口
 
-- **代码基准**：`main` @ `4ab0948`。
+- **代码基准**：当时 `main` @ `4ab0948`（随后已合入 M29 / M30，见文首 M31 节）。
 - **全量工程命令实测结果**：
   - `npm run build`：Exit code 0，生成 `hosting/server.generated.ts` 与 `dist/`。
   - `npx tsc --noEmit`：Exit code 0，0 错误。
@@ -22,7 +30,7 @@
   - D4：核实 Together `image_loras` 官方参数指南下线事实，引用 `https://docs.together.ai/docs/inference/images/parameters.md`。
   - D5：核查确认 `rejectSchemaEnum` 与 `rejectUnsupported` 在 `server.ts` 及 `src/server/routes/videoGenerateRoute.ts` 中均为 0 处（仅 `src/server/schemaProviderVideoStatus.test.ts:32` 保留 1 处未被生产代码读取的测试桩属性）。
   - D6：当前 tracked `*.md` / `docs/**` 对敏感模式 grep 为 0 行。更早 git 提交历史仍含脱敏前字符串；彻底清除需用户授权的 history rewrite（`git filter-repo` / force-push），本任务未执行。
-  - D9：待充值复测清单含 Fal / HF / WaveSpeed / Sogni / AIMLAPI / DeepInfra / Mage / Civitai / **Novita**（`final/35` 403 `NOT_ENOUGH_BALANCE`）/ **Venice**（`final/14` 402 Insufficient USD or Diem）。ModelsLab 本轮为底模留空 `NOT_SENT`，不列入 billed 复测。
+  - D9：待充值复测清单含 Fal / HF / WaveSpeed / Sogni / AIMLAPI / DeepInfra / Mage / Civitai / **Novita**（`final/35` 403 `NOT_ENOUGH_BALANCE`）/ **Venice**（`final/14` 402 Insufficient USD or Diem）。ModelsLab 当时为底模留空 `NOT_SENT`；**已被 2026-11-07 M31 出站复测取代**（`final/17`/`18`，`PASS_BILLING` 订阅套餐限制）。
   - D7：校准 `.env.example`，剔除未引用变量 `APP_URL`，补齐 `PORT`、`ALLOWED_HOSTS`、`ALLOWED_ORIGINS`、`TENSORART_KEY`、`TENSORART_BASE_URL`。
   - D8：检查确认 `AGENTS.md` 与 `CLAUDE.md` 包含两句用户原文逐字。
   - D10：全面重构 `README.md`，输出经文件系统验证的目录树、独立 Image/Video 服务商矩阵与 100% 有效链接。

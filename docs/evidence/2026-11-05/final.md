@@ -1,15 +1,15 @@
 # M25 全量集成 UI 回归与终结验收证据报告 (FINAL25 Integrated UI Regression Evidence)
 
-**执行日期**: 2026-11-07  
-**基准分支与提交**: `main` @ `4ab0948` (包含 M1~M12, M14~M18, M23, M24, M26, M27, M28 全量修复与本分支 UI 文案/路由修正)  
-**工作树**: `<repo-root>/.tower/worktrees/wt-25`  
-**执行 Agent**: `final25-grok` (Tower Worker；2026-11-07 重拍与文档对齐)  
+**执行日期**: 2026-11-07（M31 于同日补拍 ModelsLab 出站帧）  
+**基准分支与提交**: `main` @ `38a83f2`（含 M1~M12, M14~M18, M23, M24, M26~M30；M31 仅更新本证据集与交接文档）  
+**工作树**: `<repo-root>/.tower/worktrees/wt-31`（M25 原始回归在 wt-25；M31 在 wt-31 对 `std-modelslab-t2i` 重跑出站）  
+**执行 Agent**: `final25-grok`（M25 全量回归）；`worker-verify31`（M31 ModelsLab 出站 + M29/M30 UI 核验）  
 **测试环境**:
 - Node.js: `v22.23.2`
-- 浏览器: Headless Google Chrome `153.0.8010.52` (CDP 控制，视口 `2560×1440`)
-- 本地服务端口: `3125` (Express + Vite 8 SPA 中间件模式；本轮重拍)
+- 浏览器: Headless Google Chrome `153.0.8010.52` (CDP / Playwright Chromium，视口 `2560×1440`)
+- 本地服务端口: M25=`3125`；M31 ModelsLab 复测=`4329` (`npx tsx server.ts`，Express + Vite 8 SPA 中间件)
 - 实机截图归档:
-  - `docs/evidence/2026-11-05/final/*.png` (41 张独立唯一 MD5 全量高保真截图，0 重复 MD5，经 `ReadMediaFile` + `region` 逐张眼核)
+  - `docs/evidence/2026-11-05/final/*.png` (41 张独立唯一 MD5 全量高保真截图，0 重复 MD5，经 `ReadMediaFile` + `region` 逐张眼核；其中 `17`/`18` 为 2026-11-07 M31 重拍)
   - `docs/evidence/2026-11-05/recipe-shapes/01..07.png` (Civitai 现代真实配方 `#148140013` / `#148135866` / `#148004351` 逆向解析、Schema 校验与出站运行实测截图)
   - `docs/evidence/2026-11-05/current-presets/01..16.png` (现代预设 Fal Krea 2、Fal Wan 2.2 T2V + LoRA、WaveSpeed Wan 2.2 I2V、Civitai Wan 2.2 T2V、NanoGPT MOSS-Image 实测截图)
 
@@ -61,8 +61,8 @@
 | `final/14-venice-run.png` | (b) Venice 预设填写提示词后运行 | 点击运行，出站 Venice 图像接口 | 402 Payment Required | `PASS_BILLING` | 非空 CLIP；toast/顶栏原样 `【venice】HTTP 402 Payment Required: {"error":"Insufficient USD or Diem balance to complete request. Visit https://venice.ai/settings/api to add credits."}`。**不是**空提示词 400 |
 | `final/15-sogni-loaded.png` | (b) Sogni 预设载入 | 载入 `std-sogni-t2i` (`krea-2-turbo` + LoRA `krea2-fever-dream-mood` @ 1)；0 toast | N/A | UI_SURFACE | 8 节点 11 连线；768×1376；配方提示词已预填 |
 | `final/16-sogni-run.png` | (b) Sogni 预设运行 | 点击运行 | 200 OK (`waiting_for_user`) | `PASS_BILLING` | toast/顶栏 `HTTP 200 status: waiting_for_user · insufficient_credit`；钱包已打码 `0x<redacted-wallet>`；`#studio-run-status` 为 `max-h-20 overflow-y-auto`，顶栏未撑满画布 |
-| `final/17-modelslab-loaded.png` | (b) ModelsLab 预设载入 | 载入 `std-modelslab-t2i`（底模留空待选），CLIP 填写非空提示词；0 toast | N/A | UI_SURFACE | 8 节点；运行按钮禁用；顶栏「请先选择模型」 |
-| `final/18-modelslab-run.png` | (b) ModelsLab 空底模无法出站 | 打开参数抽屉选中「加载底模 (ModelsLab)」；Run 仍禁用 | 未出站 | `NOT_SENT` | 顶栏「请先选择模型」；检查器显示「请选择模型」；**不是** 400/402 计费拒绝 |
+| `final/17-modelslab-loaded.png` | (b) ModelsLab 预设载入并填入真实底模（M31 重拍） | 载入 `std-modelslab-t2i`，在 CheckpointLoaderSimple 自定义模型输入填入 `z-image-turbo`，CLIP 填写非空提示词；Fit-View；0 toast | N/A | UI_SURFACE | 8 节点 11 连线；底模下拉 `[当前] z-image-turbo`；自定义模型 `z-image-turbo`；运行按钮可用「运行：保存与预览图像 (Save Image)」；顶栏「8 个节点 · 11 条连线」；**无**「请先选择模型」 |
+| `final/18-modelslab-run.png` | (b) ModelsLab 真实出站运行（M31 重拍） | 点击 `#studio-run-button` / `[data-testid=run-button]` | 本站 HTTP 502；上游 HTTP 200 `text2img` | `PASS_BILLING` | `POST /api/engine/modelslab/generate` 出站至 `https://modelslab.com/api/v6/images/text2img`；`actualRequest.model_id=z-image-turbo`，1024×1024 / steps 20 / cfg 7.5 / seed 42 / UniPCMultistepScheduler。上游业务体 `{"status":"error","message":"You need to be subscribed to a plan to continue, buy subscription from https://modelslab.com/pricing"}` 原样出现在顶栏、采样器节点红框与底部 toast。**不是** `NOT_SENT` |
 | `final/19-mage-loaded.png` | (b) Mage 预设载入 | 载入 `std-mage-t2i` (`mango-v3`)，CLIP 填写非空提示词；0 toast | N/A | UI_SURFACE | 4:5 / 2K；6 节点 |
 | `final/20-mage-run.png` | (b) Mage 预设运行 | 点击运行 | 402 Payment Required | `PASS_BILLING` | 原样 `【mage】HTTP 402 Payment Required` + `payment_required` / Gem pack 原文 |
 | `final/21-sensenova-loaded.png` | (b) SenseNova 预设载入 | 载入 `std-sensenova-t2i` (`sensenova-u1.5-lite`)，CLIP 填写非空提示词；0 toast | N/A | UI_SURFACE | 6 节点 |
@@ -117,7 +117,7 @@
 | **R4** | `ui.md` 截图 18 计时与截图 05 中文标签 | 采样器节点分阶段计时反馈；Latent 节点字段中文化标签 | **CLOSED** | 截图 `final/02-blank-canvas-assembled.png` 中可见「图像宽度」、「图像高度」、「生成张数」完全中文化 |
 | **R5** | `App.tsx` 中 `currentCheckpointBaseModel` 的 `as any` 清理 | `src/App.tsx:2856-2862` 严格使用类型安全的可选链属性获取 | **CLOSED** | 代码检查确认 0 处 `as any`，完全由类型系统推导 |
 | **R6** | `civitai-import.md` 测试计数核验 | 5 个关联测试文件实际执行通过计数 | **CLOSED** | 实测 `5 passed / 106 tests` 全绿通过（原记录 82 个，后续增加用例） |
-| **R7** | Civitai 预览中采样器/调度器来源链接 | SD1.5 与 FLUX 导入时 Sampler/Scheduler 来源硬编码为 `sdxl.md` | **REPORTED (FINDING)** | 代码 `src/utils/civitaiImportMap.ts:1201, 1214` 硬编码 `sdxl.md`，已提交结构化 `TowerFinding` 并记入 `UNRESOLVED_ISSUES.md` |
+| **R7** | Civitai 预览中采样器/调度器来源链接 | SD1.5 与 FLUX 导入时 Sampler/Scheduler 来源曾硬编码为 `sdxl.md` | **CLOSED (M30)** | `fields.sampler` / `fields.scheduler` 的 `source` 改为 `civitaiSamplerSource(ecosystem)`（`src/utils/civitaiImportMap.ts`）。sdxl / sd15 指向 `recipes/sdxl.md`；其余生态指向 `schemas/imageGen.yaml`。clipSkip 对 sd15 指向 `recipes/sd1.md`、FLUX 指向 `recipes/flux1.md` |
 | **R8** | NanoGPT 视频独立路由 | `src/server/routes/videoGenerateRoute.ts:161-345` 独立接入 `/api/generate-video` | **CLOSED** | 截图 `final/42-nanogpt-video-run.png`，`AIVideoNode` 出站返回 401 `invalid_api_key`，出站路径完全独立于图像生成 |
 | **R9** | 原始错误文本与 JSONL 响应体比对 | 前端错误弹窗与卡片完整呈现状态码与 JSON 体 | **CLOSED** | 比对全量截图与 JSONL，所有报错信息原样透传，无任何本地美化或降级吞错 |
 | **R10 / D5** | `rejectSchemaEnum` 与 `rejectUnsupported` 真实状态 (File:Line Truth) | `Grep` 全仓核查：<br>1. `server.ts`: **0 处**（原 `server.ts:1080` 的 `rejectSchemaEnum` 与 `rejectUnsupported` 已在 M18 彻底移除）。<br>2. `src/server/routes/videoGenerateRoute.ts`: **0 处**（`VideoGenerateRouteDeps` 接口与路由实现中均已移除）。<br>3. `src/server/schemaProviderVideoStatus.test.ts:32`: **仅剩 1 处测试桩残留属性** `rejectSchemaEnum: () => false`（位于 `stubVideoDeps()` 测试辅助函数中，生产代码不再读取）。 | **CLOSED** | 生产代码 `server.ts` 与 `src/server/routes/videoGenerateRoute.ts` 中 `rejectSchemaEnum` / `rejectUnsupported` 均为 0 处；唯一残留位于测试文件 `src/server/schemaProviderVideoStatus.test.ts:32`，已如实记录于本报告与 `UNRESOLVED_ISSUES.md` |
@@ -166,7 +166,7 @@
    - **Civitai**: 400 `insufficientBuzz`
    - **Novita**: 403 `NOT_ENOUGH_BALANCE`（`final/35-novita-lora-attached-and-run.png`）
    - **Venice**: 402 `Insufficient USD or Diem balance`（`final/14-venice-run.png`，填写非空提示词后）
-   - **ModelsLab**：本轮 `std-modelslab-t2i` 底模留空，`final/17`/`18` 为 `NOT_SENT`「请先选择模型」，**不**列入 billed 复测
+   - **ModelsLab**：M31 为 `std-modelslab-t2i` 填入 `z-image-turbo` 后真实出站，`final/17`/`18` 为订阅套餐限制原文透传（`PASS_BILLING`）。开通套餐后才能验收真出图
 
 2. **未验证交互场景 (Unverified Functional Scenarios)**：
    - **Playable Video**: 浏览器内真实播放生成的 MP4/WebM 视频画面（因所有视频服务商均欠费或鉴权拒绝，未能获取可播放视频流）。
@@ -189,4 +189,18 @@
 | `20-mage-run.png` | 无本地 hist（402） | `{"error":{"code":"payment_required","message":"The Mage API and MCP server need a successful payment on this account first..."}}` |
 | `35-novita-lora-attached-and-run.png` | 无本地 hist（403） | `{"code":403,"reason":"NOT_ENOUGH_BALANCE","message":"insufficient balance","metadata":{}}` |
 | `22`/`24`/`26` | 未出站 | 本地 `未配置密钥：未配置 SenseNova/Agnes/Gemini 的密钥` |
-| `18-modelslab-run.png` | 未出站 | 顶栏 `请先选择模型`（底模留空） |
+| `18-modelslab-run.png` | 无本地 hist（上游业务 error / 本站 502） | `{"status":"error","message":"You need to be subscribed to a plan to continue, buy subscription from https://modelslab.com/pricing"}`；出站 `POST https://modelslab.com/api/v6/images/text2img`，`model_id=z-image-turbo` |
+
+---
+
+## 九、M29–M31 收口（壳节点 / 资源重选 / ModelsLab 出站）
+
+M25 全量回归之后，M29 消除空壳 UI，M30 修资源重选与 unmapped LoRA 透明化，M31 在真实浏览器点击验证上述修复并为 ModelsLab 补出站证据。
+
+1. **M31 实机环境**：wt-31，`npx tsx server.ts`，`PORT=4329`，Playwright Chromium + Google Chrome for Testing 153，视口 2560×1440。密钥仅注入 `localStorage.comfycanvas_api_keys`，未写入任何文档或仓库文件。
+2. **ModelsLab 出站**：载入 `std-modelslab-t2i` → 自定义模型填 `z-image-turbo` → CLIP 非空提示词 → 点击运行。`POST /api/engine/modelslab/generate` 到达 `https://modelslab.com/api/v6/images/text2img`。判定 `PASS_BILLING`（订阅套餐限制原文透传）。MD5：`17`=`423026198cce6e07f6d3b501302db5eb`，`18`=`180ecb8c87f5e6ed75f57505a134cf41`；41 张截图仍 41 个唯一哈希。
+3. **M29 UI 核验**：
+   - ModernToolDock 清空菜单可见「恢复 Z-Image Turbo 标准默认工作流」。
+   - ParameterInspector 在 Venice 渲染 5 枚、Sogni 渲染 8 枚 `[data-testid=schema-send-badge-will_send]`（「会发送」）。ModelsLab 不在 schema-scoped 徽章集合，检查器对该家不绘制 send badge 属预期。
+   - `CivitaiLoRABrowserNode.search_keyword=z-image turbo` 打开弹窗后，`[data-testid=lora-hub-search-input]` 预填相同字符串。
+4. **已关闭项**（详见 `UNRESOLVED_ISSUES.md` 第四节）：`ImageUpscaleWithModel` 空壳、徽章注销、`search_keyword` 死控件、`ControlPanel.tsx` 死代码、`STALE_CIVITAI_IDENTITY_KEYS`、Runware/ModelsLab `unmappedLoras`、`mapFalServerLoras` 属性保留、Civitai sampler 来源 URL、ModelsLab `NOT_SENT` 漏测。
