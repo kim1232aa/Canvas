@@ -176,15 +176,18 @@ describe('TensorArt model driver', () => {
     expect(body.denoise).toBe(0);
   });
 
-  it('routes isVideo requests to /api/video/generate with provider: tensorart and surfaces verbatim TAMS refusal', async () => {
+  it('routes isVideo requests to /api/video/generate with provider: tensorart and surfaces the upstream body verbatim', async () => {
     const driver = new TensorArtDriver();
+    const upstream = '{"code":"invalid_height_or_width","message":"width 480 is not a supported resolution"}';
 
     vi.mocked(tracedFetch).mockResolvedValueOnce({
       ok: false,
       status: 400,
       text: async () => JSON.stringify({
-        error: 'Tensor.Art TAMS 模型 672797109289765558：本应用尚未接入 TAMS 视频（官方接口参见 https://tams-docs.tensor.art/docs/api/guide/workspace-api-example/ ）；未发送请求，也不会改用 OpenWorks 接口。',
-        errorSource: 'local',
+        error: upstream,
+        rawResponse: upstream,
+        errorSource: 'upstream',
+        upstreamStatus: 400,
         provider: 'tensorart',
         model: '672797109289765558',
       }),
@@ -199,7 +202,7 @@ describe('TensorArt model driver', () => {
         } as any,
         { tensorartKey: 'token' }
       )
-    ).rejects.toThrow('Tensor.Art TAMS 模型 672797109289765558：本应用尚未接入 TAMS 视频');
+    ).rejects.toThrow(upstream);
 
     expect(tracedFetch).toHaveBeenCalledTimes(1);
     const [url, init] = vi.mocked(tracedFetch).mock.calls[0];
