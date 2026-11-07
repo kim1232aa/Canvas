@@ -1,4 +1,5 @@
 import { NODE_DEFINITIONS } from '../constants/nodes';
+import { videoModelSendsAspectRatio } from '../constants/videoModels';
 import { friendlyProviderLabel } from './providerLabels';
 
 /**
@@ -60,4 +61,23 @@ export function assertAIVideoProviderReady(modelId: string, rawProvider: unknown
     );
   }
   return videoProvider;
+}
+
+/**
+ * Keep a selected aspect ratio only when this request should carry it.
+ * A loaded model Schema wins: declared aliases send, an absent field does not.
+ * With no loaded Schema, the static registry says whether the official page declares the field.
+ * Unknown custom model ids are unchanged.
+ */
+export function aspectRatioForVideoRequest(
+  modelId: string,
+  aspectRatio: string | undefined,
+  schema?: { loaded: boolean; declaresAspectRatio: boolean },
+): string | undefined {
+  const value = typeof aspectRatio === 'string' ? aspectRatio.trim() : '';
+  if (!value) return undefined;
+  if (schema?.loaded) return schema.declaresAspectRatio ? value : undefined;
+  const known = videoModelSendsAspectRatio(modelId);
+  if (known === false) return undefined;
+  return value;
 }

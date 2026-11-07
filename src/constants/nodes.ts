@@ -1,5 +1,6 @@
 import { NodeDefinition } from '../types/graph';
 import { listModels, modelStatus } from '../schemas/providerSchema';
+import { aiVideoAspectRatioOptions, aiVideoModelOptions } from './videoModels';
 
 export const SAMPLER_OPTIONS = [
   { label: '未指定', value: '' },
@@ -946,7 +947,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
     title: 'AI 视频（显式 Provider/Model）',
     category: 'providers',
     colorTag: '#a3e635',
-    description: '视频节点只执行用户显式选择的 provider 与 model；预置项仅包含当前重新核实的 Kling V3 / MiniMax / Wan 2.7 / Agnes / Grok 兼容端点。',
+    description: '视频节点只执行用户显式选择的 provider 与 model。下拉项来自已打开的官方视频文档；没有官方视频端点的服务商不出现。',
     inputs: [
       { id: 'positive', name: 'positive', type: 'CONDITIONING', label: 'prompt' },
       { id: 'negative', name: 'negative', type: 'CONDITIONING', label: 'negative' },
@@ -970,7 +971,6 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
           { label: '🔁 Grok 兼容中转', value: 'grok_compat' },
           { label: 'WaveSpeed', value: 'wavespeed' },
           { label: 'MuAPI', value: 'muapi' },
-          { label: 'Novita', value: 'novita' },
           { label: '⚡ Replicate 官方云平台', value: 'replicate' },
           { label: '🌟 Civitai 官方原生引擎', value: 'civitai' },
           { label: 'Together', value: 'together' },
@@ -985,24 +985,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
         label: 'model (AI视频大模型)',
         type: 'select',
         default: '',
-        options: [
-          { label: '未选择 (请先选择模型)', value: '' },
-          { label: '[Fal] Wan 2.1 Text-to-Video (legacy)', value: 'fal-ai/wan-t2v', provider: 'fal' },
-          { label: '[Fal] Wan 2.1 T2V LoRA (legacy)', value: 'fal-ai/wan-t2v-lora', provider: 'fal' },
-          { label: '[Fal] Wan 2.2 A14B Text-to-Video LoRA', value: 'fal-ai/wan/v2.2-a14b/text-to-video/lora', provider: 'fal' },
-          { label: '[Fal] Wan 2.2 A14B Image-to-Video LoRA', value: 'fal-ai/wan/v2.2-a14b/image-to-video/lora', provider: 'fal' },
-          { label: '[Fal] Wan 2.7 Text-to-Video', value: 'fal-ai/wan/v2.7/text-to-video', provider: 'fal' },
-          { label: '[Fal] Wan 2.7 Image-to-Video', value: 'fal-ai/wan/v2.7/image-to-video', provider: 'fal' },
-          { label: '[Fal] Kling V3 Standard Text-to-Video', value: 'fal-ai/kling-video/v3/standard/text-to-video', provider: 'fal' },
-          { label: '[Fal] Kling V3 Standard Image-to-Video', value: 'fal-ai/kling-video/v3/standard/image-to-video', provider: 'fal' },
-          { label: '[Fal] MiniMax Video-01 Text-to-Video', value: 'fal-ai/minimax/video-01', provider: 'fal' },
-          { label: '[Fal] MiniMax Video-01 Image-to-Video', value: 'fal-ai/minimax/video-01/image-to-video', provider: 'fal' },
-          { label: '[Fal · research-only] LTX Video', value: 'fal-ai/ltx-video', provider: 'fal' },
-          { label: '[Agnes] Agnes Video 2.5', value: 'agnes-video-2.5', provider: 'agnes' },
-          { label: '[Agnes] Agnes Video 2.5 Flash', value: 'agnes-video-2.5-flash', provider: 'agnes' },
-          { label: '[Grok 兼容中转] Imagine Video', value: 'grok-imagine-video', provider: 'grok_compat' },
-          { label: '[Grok 兼容中转] Imagine Video 1.5', value: 'grok-imagine-video-1.5', provider: 'grok_compat' },
-        ],
+        options: aiVideoModelOptions(),
         placeholder: '输入视频大模型端点 ID，或在上方下拉中快速切换',
       },
       {
@@ -1042,9 +1025,7 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
         label: '画面比例 (Aspect Ratio)',
         type: 'select',
         default: '',
-        options: [
-          { label: '未指定（以所选模型官方 Schema 为准）', value: '' },
-        ],
+        options: aiVideoAspectRatioOptions(),
       },
     ],
     defaultValues: {
