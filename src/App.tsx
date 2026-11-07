@@ -106,6 +106,10 @@ import {
   LORA_LOADER_TYPES,
 } from './utils/providerLabels';
 
+export function maskWalletAddresses(text: string): string {
+  return String(text ?? '').replace(/0x[a-fA-F0-9]{40}/g, '0x<redacted-wallet>');
+}
+
 export function formatExecutionStatusText(statusText: string, elapsedSec: number): string {
   if (
     statusText.startsWith('[4/5]') ||
@@ -118,7 +122,7 @@ export function formatExecutionStatusText(statusText: string, elapsedSec: number
       ? '正在提交请求至云端服务商...'
       : `等待上游返回结果 (已耗时 ${elapsedSec}秒)...`;
   }
-  return statusText;
+  return maskWalletAddresses(statusText);
 }
 
 export default function App() {
@@ -138,11 +142,18 @@ export default function App() {
 
   // Execution States
   const [isExecuting, setIsExecuting] = useState(false);
-  const [executionStatusText, setExecutionStatusText] = useState('');
+  const [executionStatusText, setExecutionStatusTextRaw] = useState('');
+  const setExecutionStatusText = (value: React.SetStateAction<string>) => {
+    if (typeof value === 'function') {
+      setExecutionStatusTextRaw((prev) => maskWalletAddresses(value(prev)));
+      return;
+    }
+    setExecutionStatusTextRaw(maskWalletAddresses(value));
+  };
   const [executionProgress, setExecutionProgress] = useState(0);
 
   // Floating Notification Toast State
-  const [toast, setToast] = useState<{
+  type StudioToast = {
     type: 'success' | 'error' | 'warning' | 'info';
     title: string;
     message: string;
@@ -153,7 +164,24 @@ export default function App() {
     actionProviderId?: string;
     /** Technical detail / local wrapper error stack, kept strictly separate from verbatim raw body. */
     localWrapper?: string;
-  } | null>(null);
+  };
+  const [toast, setToastRaw] = useState<StudioToast | null>(null);
+  const maskStudioToast = (next: StudioToast | null): StudioToast | null => {
+    if (!next) return null;
+    return {
+      ...next,
+      title: maskWalletAddresses(next.title),
+      message: maskWalletAddresses(next.message),
+      localWrapper: next.localWrapper ? maskWalletAddresses(next.localWrapper) : next.localWrapper,
+    };
+  };
+  const setToast = (value: React.SetStateAction<StudioToast | null>) => {
+    if (typeof value === 'function') {
+      setToastRaw((prev) => maskStudioToast(value(prev)));
+      return;
+    }
+    setToastRaw(maskStudioToast(value));
+  };
   const [toastThumbSettle, setToastThumbSettle] = useState<PreviewSettleState>('loading');
   const toastThumbSettleRef = useRef<PreviewSettleState>('loading');
 
@@ -1198,6 +1226,7 @@ export default function App() {
         title: '无法运行',
         message: runDisabledReason,
       });
+      setExecutionStatusText(`无法运行：${runDisabledReason}`);
       return;
     }
     const activeNodes = overrideNodes || nodes;
@@ -1205,7 +1234,12 @@ export default function App() {
     let runTarget: ReturnType<typeof resolveRunTarget> | undefined;
     if (activeNodes.length) {
       try { runTarget = resolveRunTarget(activeNodes, activeConns, targetNodeId, selectedNodeId); }
-      catch (error: any) { setToast({type:'warning', title:'未发送请求', message:error.message}); return; }
+      catch (error: any) {
+        const message = error.message;
+        setToast({type:'warning', title:'未发送请求', message});
+        setExecutionStatusText(`未发送请求：${message}`);
+        return;
+      }
     }
     if (runTarget) {
       const pre = preRunPrecheck(activeNodes, activeConns, runTarget.id, (p, m) => {
@@ -1216,6 +1250,7 @@ export default function App() {
       if (pre) {
         setNodes((prev) => clearPriorMediaPreviews(prev));
         setToast({type:'warning', title:'运行前检查未通过', message:pre, action: pre === '图生视频要先连一张参考图' ? 'connect-ref' : 'none'});
+        setExecutionStatusText(`运行前检查未通过：${pre}`);
         return;
       }
       // Key precheck: block locally before any generate request when the target provider has no key.
@@ -1227,25 +1262,31 @@ export default function App() {
           const ok = providerKeyConfigured(status, prov);
           if (ok === false) {
             const label = friendlyProviderLabel(prov) || prov;
+            const message = `未配置 ${label} 的密钥`;
             setNodes((prev) => clearPriorMediaPreviews(prev));
-            setToast({ type: 'warning', title: '未配置密钥', message: `未配置 ${label} 的密钥`, action: 'api-settings', actionProviderId: prov });
+            setToast({ type: 'warning', title: '未配置密钥', message, action: 'api-settings', actionProviderId: prov });
+            setExecutionStatusText(`未配置密钥：${message}`);
             return;
           }
         }
       } catch (error: any) {
         // extractWorkflowParameters may throw on incomplete graphs — surface that, don't hide with a key check.
-        setToast({ type: 'warning', title: '运行前检查未通过', message: error?.message || String(error) });
+        const message = error?.message || String(error);
+        setToast({ type: 'warning', title: '运行前检查未通过', message });
+        setExecutionStatusText(`运行前检查未通过：${message}`);
         return;
       }
     }
     const runTargetId = runTarget?.id;
 
     if (activeNodes.length === 0) {
+      const emptyMessage = '请先在「工作流预设」中载入一套预设或在上方添加节点。';
       setToast({
         type: 'warning',
         title: '画布上暂无节点',
-        message: '请先在「工作流预设」中载入一套预设或在上方添加节点。',
+        message: emptyMessage,
       });
+      setExecutionStatusText(`画布上暂无节点：${emptyMessage}`);
       setIsWorkflowPresetsOpen(true);
       return;
     }
@@ -1974,6 +2015,8 @@ export default function App() {
   const handleLoadPreset = (preset: WorkflowPreset, mode: 'replace' | 'append') => {
     preset = migrateTensorWorkflow(preset);
     if (mode === 'replace') {
+      setToast(null);
+      setExecutionStatusText('');
       setNodes(JSON.parse(JSON.stringify(preset.nodes)));
       setConnections(JSON.parse(JSON.stringify(preset.connections)));
       setSpatialFrames(JSON.parse(JSON.stringify(preset.spatialFrames || [])));
@@ -2018,6 +2061,8 @@ export default function App() {
   };
 
   const handleClearCanvas = (type: 'all' | 'nodes' | 'frames' | 'reset-default') => {
+    setToast(null);
+    setExecutionStatusText('');
     if (type === 'all') {
       setNodes([]);
       setConnections([]);

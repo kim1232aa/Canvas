@@ -11,7 +11,9 @@
 - **真实浏览器 UI 回归成果 (Headless Chrome 153 CDP, 2560×1440)**：
   - 完整执行 6 大核心流程（空白画布新手入门引导与一键装配、全量 34 个内置现代预设核查与 15 家供应商真实出站运行、Civitai 现代/SD1.5/FLUX 配方逆向导入与出站、模型中心浏览与多端点 LoRA 挂载、AI 视频节点 T2V/I2V 与 Sogni 动态切换 `animate_photo` 横幅、Fal Wan 2.2 与 Venice 双服务商 NSFW 宽松默认可见与用户手动切回）。
   - 产出 **41 张独立唯一 MD5 全量高保真截图**（归档于 `docs/evidence/2026-11-05/final/*.png`，0 重复哈希，经 `ReadMediaFile` + `region` 逐张眼核，0 处 UI 逻辑矛盾与遮挡），并联合引用 `docs/evidence/2026-11-05/recipe-shapes/01..07.png`（现代 Civitai 配方 `#148140013` / `#148135866` / `#148004351`）与 `docs/evidence/2026-11-05/current-presets/01..16.png`（现代内置预设实测截图）。
-  - 记录 **105 条真实出站网络日志**（归档于 `temp/logs/requests-m25.jsonl`，严格脱敏）。
+  - 脱敏后的代表性出站请求/响应摘录与上游任务 ID 归档于 [docs/evidence/2026-11-05/final.md](docs/evidence/2026-11-05/final.md) 第八节（不依赖已删除的 `temp/logs/requests-m25.jsonl`）。
+  - D6：当前 tracked `*.md` / `docs/**` 敏感模式 grep 为 0 行。更早 git 提交历史仍含脱敏前字符串；彻底清除需用户授权的 history rewrite（`git filter-repo` / force-push），本任务未执行。
+  - D9 待充值复测：Fal / HF / WaveSpeed / Sogni / AIMLAPI / DeepInfra / Mage / Civitai / Novita（`final/35` 403 `NOT_ENOUGH_BALANCE`）/ Venice（`final/14` 402 Insufficient USD or Diem）。ModelsLab 本轮底模留空为 `NOT_SENT`。
   - 详尽终结报告：[docs/evidence/2026-11-05/final.md](docs/evidence/2026-11-05/final.md)。
 - **核心工程准则（落地闭环）**：
   1. **唯一验收标准**：「UI实际点击通过并有产物，你之前绕过前端直接请求api的是违规，是绕过，你请求api通过，和我前端点击通过根本不是一回事」。

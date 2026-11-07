@@ -1642,7 +1642,7 @@ Steps: 8, Sampler: Euler, CFG scale: 1, Seed: 689794262, Size: 832x1248, Model: 
           )}
         </div>
 
-        {/* Modal Footer */}
+        {activeTab !== 'clear' && (
         <div className="px-6 py-2.5 bg-[#111216] border-t border-[#252733] flex items-center justify-between text-xs shrink-0">
           <span className="text-slate-400">
             恢复为官方推荐默认工作流：<span className="text-slate-300">重新加载 Z-Image Turbo 初始默认工作流模板</span>
@@ -1658,6 +1658,7 @@ Steps: 8, Sampler: Euler, CFG scale: 1, Seed: 689794262, Size: 832x1248, Model: 
             恢复默认预设
           </button>
         </div>
+        )}
       </div>
     </div>
   );

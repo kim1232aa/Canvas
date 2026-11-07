@@ -68,7 +68,7 @@ describe('SchemaChoiceControls & NSFW Handling', () => {
     expect(restrictedBadge.text).toContain('会发送 false（已开启安全过滤）');
   });
 
-  it('renders static markup with user principle notice and select options', () => {
+  it('renders NSFW switch with default NSFW notice and select options', () => {
     const inputSchema = {
       properties: {
         disable_safety_checker: {

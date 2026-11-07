@@ -24,7 +24,7 @@
 
 ## 二、待充值出图复测服务商清单 (Awaiting Funded Generation Re-check)
 
-根据 2026-11-07 全量 UI 回归实测，以下 9 家服务商的前后端参数构建、动态 OpenAPI 映射与错误透传链路均已完全跑通，因上游账户余额耗尽或未开通付费包，暂时评定为 `PASS_BILLING`，待后续账号充值后安排真实出图/视频产物验收：
+根据 2026-11-07 全量 UI 回归实测，以下服务商的前后端参数构建、动态 OpenAPI 映射与错误透传链路均已跑通（或本轮复测确认），因上游账户余额耗尽或未开通付费包，暂时评定为 `PASS_BILLING`，待后续账号充值后安排真实出图/视频产物验收：
 
 | 序号 | 服务商 (Provider) | 涉及预设与模型 | 上游真实报错 (Verbatim Response) | 判定标签 | 充值与复测说明 |
 |:---:|---|---|---|:---:|---|
@@ -37,6 +37,8 @@
 | 7 | **Mage.space** | `mango-v3` | `HTTP 402: {"error":"Payment required"}` | `PASS_BILLING` | 需在 Mage 账户开通 API 点数包 |
 | 8 | **ModelsLab** | `modelslab-t2i` (Realtime v6) | `HTTP 400/402: {"status":"error","message":"Out of credits"}` | `PASS_BILLING` | 需在 ModelsLab 平台补充生成点数 |
 | 9 | **Civitai** | Civitai Wan 2.2 工作流 / Krea 2 Turbo | `HTTP 400: {"code":"insufficientBuzz","message":"User has insufficient buzz to run workflow."}` | `PASS_BILLING` | 需为 Civitai 账号充值 Buzz 积分以执行云端工作流 |
+| 10 | **Novita AI** | `std-novita-t2i` + `realisticVisionV40_v40VAE-inpainting_81543.safetensors` + LoRA `weight_slider_v2_91681` @ 0.8 | `HTTP 403: {"code":403,"reason":"NOT_ENOUGH_BALANCE","message":"insufficient balance","metadata":{}}` | `PASS_BILLING` | 证据 `final/35-novita-lora-attached-and-run.png`；需在 Novita 控制台充值余额后再跑真出图 |
+| 11 | **Venice AI** | `std-venice-t2i` (`venice-sd35`)，非空 CLIP 提示词 | `HTTP 402: {"error":"Insufficient USD or Diem balance to complete request. Visit https://venice.ai/settings/api to add credits."}` | `PASS_BILLING` | 证据 `final/14-venice-run.png`（2026-11-07 填写提示词后复测）；需在 Venice 设置页充值 USD/Diem |
 
 ---
 
@@ -53,8 +55,10 @@
    - 现状：历史记录卡片重提视频任务并恢复参数至 `AIVideoNode` 的完整交互尚未经真实生成记录复测。
 4. **Civitai Comfy SDXL / SD1 真实云端扣费出图**:
    - 现状：当前仅验证到 Buzz 余额不足拦截；真实扣费后云端节点执行、WebSocket 进度推送与结果图像拉取仍待验证。
-5. **Venice 默认预设提示词缺失**:
-   - 现状：`std-venice-t2i` 预设载入后默认提示词为空，直接运行触发上游 `400 Bad Request: prompt cannot be empty`。用户需先手动填入提示词方可触发正常出图/计费拒绝。
+5. **Venice 默认预设提示词为空（历史 400，本轮已用填写后 402 复测）**:
+   - 现状：`std-venice-t2i` 仍不预填配方提示词。2026-11-07 在 CLIP「提示词」填入非空文本后，`final/14-venice-run.png` 为 `402 Insufficient USD or Diem`（`PASS_BILLING`）。空提示词 400 不再作为本轮图像验收标签。
+6. **ModelsLab 标准预设底模留空**:
+   - 现状：`std-modelslab-t2i` 底模为空待选；`final/17-modelslab-loaded.png` / `18-modelslab-run.png` 运行按钮禁用，顶栏「请先选择模型」，`NOT_SENT`。旧「400/402 Out of credits」不是本轮截图所证明的标签。
 
 ---
 

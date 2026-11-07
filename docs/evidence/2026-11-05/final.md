@@ -3,11 +3,11 @@
 **执行日期**: 2026-11-07  
 **基准分支与提交**: `main` @ `4ab0948` (包含 M1~M12, M14~M18, M23, M24, M26, M27, M28 全量修复与本分支 UI 文案/路由修正)  
 **工作树**: `<repo-root>/.tower/worktrees/wt-25`  
-**执行 Agent**: `final25-argon` (Tower Worker)  
+**执行 Agent**: `final25-grok` (Tower Worker；2026-11-07 重拍与文档对齐)  
 **测试环境**:
 - Node.js: `v22.23.2`
 - 浏览器: Headless Google Chrome `153.0.8010.52` (CDP 控制，视口 `2560×1440`)
-- 本地服务端口: `3325` (Express + Vite 8 SPA 中间件模式)
+- 本地服务端口: `3125` (Express + Vite 8 SPA 中间件模式；本轮重拍)
 - 实机截图归档:
   - `docs/evidence/2026-11-05/final/*.png` (41 张独立唯一 MD5 全量高保真截图，0 重复 MD5，经 `ReadMediaFile` + `region` 逐张眼核)
   - `docs/evidence/2026-11-05/recipe-shapes/01..07.png` (Civitai 现代真实配方 `#148140013` / `#148135866` / `#148004351` 逆向解析、Schema 校验与出站运行实测截图)
@@ -48,32 +48,32 @@
 | `final/01-blank-canvas-empty-onboarding.png` | (a) 空白画布引导 | 中央渲染 `canvas-empty-onboarding` 引导卡，步骤 2 显示「支持 Z-Image Turbo、Krea 2、MOSS-Image、Wan 2.2 等文生图/文生视频大模型」，运行按钮显示「运行：未确定节点」且禁用 | N/A | UI_SURFACE | 6 步新手入门引导清晰无遮挡，已彻底清除旧模型文案 |
 | `final/02-blank-canvas-assembled.png` | (a) 空白画布一键装配 | 一键加载标准文生图工作流，装配 7 节点 9 连线 (Hugging Face + Z-Image Turbo + LoRA 0.9 + CLIP + KSampler 12步 + VAE + SaveImage) | N/A | UI_SURFACE | 运行按钮激活为「运行：保存与预览图像 (Save Image)」 |
 | `final/03-blank-canvas-run-result.png` | (a) 空白画布运行结果 | 采样器节点与顶栏红框浮层实时展示透传报错 | 402 Payment Required | `PASS_BILLING` | 上游真实返回 `Purchase pre-paid credits to continue using Inference Providers...` 原样透传 |
-| `final/04-preset-gallery-modal.png` | (b) 预设模板库总览 | 打开 `WorkflowPresetsModal`，34 个预设 (23 T2I, 5 T2V, 6 I2V)，22 家服务商标签 | N/A | UI_SURFACE | 经审查无任何已退役旧模型（SD 1.5, FLUX.1-schnell, Wan 2.1, SVD-XT）作为主力推荐 |
-| `final/05-hf-zimage-loaded.png` | (b) Hugging Face 预设载入 | 载入 `std-huggingface-t2i` (Z-Image Turbo @ 0.9) | N/A | UI_SURFACE | 节点参数完整就绪 |
+| `final/04-preset-gallery-modal.png` | (b) 预设模板库总览 | 干净画布打开 `WorkflowPresetsModal`；底部 0 toast | N/A | UI_SURFACE | 34 个预设；HF / Agnes / AIMLAPI / Civitai 卡片可见；页脚「恢复默认预设」仅一处 |
+| `final/05-hf-zimage-loaded.png` | (b) Hugging Face 预设载入 | 载入 `std-huggingface-t2i`（Z-Image Turbo + Technically Color LoRA 0.9）；0 toast；未点击运行 | N/A | UI_SURFACE | 7 节点 9 连线；配方提示词已预填 |
 | `final/06-hf-zimage-run.png` | (b) Hugging Face 预设运行 | 点击运行，出站至 `router.huggingface.co` 队列 | 402 Payment Required | `PASS_BILLING` | 真实透传充值提示与配额限制 |
-| `final/07-together-flux2-loaded.png` | (b) Together 预设载入 | 载入 `std-together-t2i` (FLUX.2 Dev, 1024x1024, steps 20, CFG 1) | N/A | UI_SURFACE | 拓扑连线正确，底模指向 Together |
-| `final/08-together-flux2-run.png` | (b) Together 预设运行 | 出站 `POST https://api.together.ai/v1/images/generations` | 401 Unauthorized | `BLOCKED_AUTH` | 上游返回 `{"error":{"message":"Invalid API key provided..."}}` 原样上屏 |
-| `final/09-aimlapi-loaded.png` | (b) AIMLAPI 预设载入 | 载入 `std-aimlapi-t2i` (alibaba/z-image-turbo-lora) | N/A | UI_SURFACE | 拓扑完整 |
-| `final/10-aimlapi-run.png` | (b) AIMLAPI 预设运行 | 出站 `POST https://api.aimlapi.com/v1/images/generations` | 403 Forbidden | `PASS_BILLING` | 上游返回账户额度耗尽报错，原样展示 |
-| `final/11-deepinfra-loaded.png` | (b) DeepInfra 预设载入 | 载入 `std-deepinfra-t2i` (FLUX-2-klein-9b) | N/A | UI_SURFACE | 拓扑完整 |
-| `final/12-deepinfra-run.png` | (b) DeepInfra 预设运行 | 出站 `POST https://api.deepinfra.com/v1/openai/images/generations` | 402 Payment Required | `PASS_BILLING` | 上游返回欠费提示，原样透传展示 |
-| `final/13-venice-loaded.png` | (b) Venice 预设载入 | 载入 `std-venice-t2i` (venice-sd35) | N/A | UI_SURFACE | 拓扑完整 |
-| `final/14-venice-run.png` | (b) Venice 预设空提示词运行 | 出站 `POST https://api.venice.ai/api/v1/image/generate` | 400 Bad Request | `CONTRACT_REJECT` | 预设默认提示词为空触发上游 `prompt cannot be empty`，原样呈现（填写提示词后为 402 `PASS_BILLING`，见 `nsfw-audit.md`） |
-| `final/15-sogni-loaded.png` | (b) Sogni 预设载入 | 载入 `std-sogni-t2i` (krea-2-turbo + LoRA krea2-fever-dream-mood @ 1) | N/A | UI_SURFACE | 拓扑完整，768x1376，步数 10，CFG 1，Euler |
-| `final/16-sogni-run.png` | (b) Sogni 预设运行 | 出站 `POST https://api.sogni.ai/v1/creative-agent/workflows` | 200 OK (Task waiting) | `PASS_BILLING` | 轮询返回 `waiting_for_user: insufficient_credit`（`Debit Error: Insufficient funds`），弹窗原样披露 |
-| `final/17-modelslab-loaded.png` | (b) ModelsLab 预设载入 | 载入 `std-modelslab-t2i` | N/A | UI_SURFACE | 拓扑完整 |
-| `final/18-modelslab-run.png` | (b) ModelsLab 预设运行 | 出站 `POST https://modelslab.com/api/v6/realtime/text2img` | 400 / 402 | `PASS_BILLING` | 上游返回账户点数不足报错，原样透传展示 |
-| `final/19-mage-loaded.png` | (b) Mage 预设载入 | 载入 `std-mage-t2i` (mango-v3) | N/A | UI_SURFACE | 包含 4:5 比例与 2K 分辨率配置 |
-| `final/20-mage-run.png` | (b) Mage 预设运行 | 出站 `POST https://api.mage.space/v1/models/mango-v3/predict` | 402 Payment Required | `PASS_BILLING` | 上游返回配额不足提示，原样透传展示 |
-| `final/21-sensenova-loaded.png` | (b) SenseNova 预设载入 | 载入 `std-sensenova-t2i` (sensenova-u1.5-lite) | N/A | UI_SURFACE | 预设卡片标记「SenseNova 尚未配置 API Key」 |
-| `final/22-sensenova-run.png` | (b) SenseNova 预设运行 | 点击运行，前端状态栏提示未配置密钥 | Local Guard | `BLOCKED_CONFIG` | 本地拦截未配置密钥，引导用户去设置页填写 |
-| `final/23-agnes-loaded.png` | (b) Agnes 预设载入 | 载入 `std-agnes-t2i` (agnes-image-2.5-flash) | N/A | UI_SURFACE | 预设卡片标记「待配置密钥」 |
-| `final/24-agnes-run.png` | (b) Agnes 预设运行 | 点击运行，状态栏提示未配置密钥 | Local Guard | `BLOCKED_CONFIG` | 引导用户去设置页配置 API Key |
-| `final/25-gemini-loaded.png` | (b) Gemini 预设载入 | 载入 `std-gemini-t2i` (gemini-3.1-flash-image) | N/A | UI_SURFACE | 预设卡片标记「待配置密钥」 |
-| `final/26-gemini-run.png` | (b) Gemini 预设运行 | 点击运行，状态栏提示未配置密钥 | Local Guard | `BLOCKED_CONFIG` | 引导用户去设置页配置 API Key |
-| `final/27-civitai-import-modal.png` | (c) Civitai 导入弹窗 (旧版对照) | 打开 Civitai 导入界面 | N/A | UI_SURFACE | 展示导入面板与目标服务商选择网格 |
-| `final/28-civitai-sd15-preview.png` | (c) Civitai SD1.5 导入预览 | 输入 SD1.5 原始提示词（含 `Clip skip: 2`, `Sampler: DPM++ 2M Karras`）点击解析 | N/A | UI_SURFACE | 解析识别 `clipSkip: 2`（采样器链接指向 `sdxl.md` 已记录 Finding） |
-| `final/29-civitai-flux-preview.png` | (c) Civitai FLUX 导入预览 | 输入 FLUX 原始参数（`Sampler: Euler`, `Schedule: Simple`）点击解析 | N/A | UI_SURFACE | 识别模型与采样调度器 |
+| `final/07-together-flux2-loaded.png` | (b) Together 预设载入 | 载入 `std-together-t2i` (`black-forest-labs/FLUX.2-dev`)，CLIP 填写非空提示词；0 toast | N/A | UI_SURFACE | 7 节点 9 连线；提示词可见 `A cinematic portrait of a cyberpunk samurai under neon rain, 8k, detailed lighting` |
+| `final/08-together-flux2-run.png` | (b) Together 预设运行 | 点击运行，出站 Together 图像接口 | 401 Unauthorized | `BLOCKED_AUTH` | 顶栏与 toast 原样 `【together】HTTP 401 Unauthorized` + `Invalid API key provided... invalid_api_key`；非空提示词；非「生成中 0%」 |
+| `final/09-aimlapi-loaded.png` | (b) AIMLAPI 预设载入 | 载入 `std-aimlapi-t2i` (`alibaba/z-image-turbo-lora` + Technically Color LoRA 0.9)；0 toast | N/A | UI_SURFACE | 配方提示词已预填；未点击运行（`10` 已存） |
+| `final/10-aimlapi-run.png` | (b) AIMLAPI 预设运行 | 出站 `POST https://api.aimlapi.com/v1/images/generations` | 403 Forbidden | `PASS_BILLING` | 上游返回账户额度耗尽报错，原样展示（本轮未重拍，保留既有帧） |
+| `final/11-deepinfra-loaded.png` | (b) DeepInfra 预设载入 | 载入 `std-deepinfra-t2i` (`black-forest-labs/FLUX-2-klein-9b`)，CLIP 填写非空提示词；0 toast | N/A | UI_SURFACE | 6 节点 7 连线 |
+| `final/12-deepinfra-run.png` | (b) DeepInfra 预设运行 | 点击运行 | 402 Payment Required | `PASS_BILLING` | 原样 `【deepinfra】HTTP 402 Payment Required: {"detail":{"error":"You need positive balance to do inference. Please add balance manually or setup top-up"}}` |
+| `final/13-venice-loaded.png` | (b) Venice 预设载入 | 载入 `std-venice-t2i` (`venice-sd35`)，CLIP 填写非空提示词；0 toast | N/A | UI_SURFACE | 7 节点 9 连线 |
+| `final/14-venice-run.png` | (b) Venice 预设填写提示词后运行 | 点击运行，出站 Venice 图像接口 | 402 Payment Required | `PASS_BILLING` | 非空 CLIP；toast/顶栏原样 `【venice】HTTP 402 Payment Required: {"error":"Insufficient USD or Diem balance to complete request. Visit https://venice.ai/settings/api to add credits."}`。**不是**空提示词 400 |
+| `final/15-sogni-loaded.png` | (b) Sogni 预设载入 | 载入 `std-sogni-t2i` (`krea-2-turbo` + LoRA `krea2-fever-dream-mood` @ 1)；0 toast | N/A | UI_SURFACE | 8 节点 11 连线；768×1376；配方提示词已预填 |
+| `final/16-sogni-run.png` | (b) Sogni 预设运行 | 点击运行 | 200 OK (`waiting_for_user`) | `PASS_BILLING` | toast/顶栏 `HTTP 200 status: waiting_for_user · insufficient_credit`；钱包已打码 `0x<redacted-wallet>`；`#studio-run-status` 为 `max-h-20 overflow-y-auto`，顶栏未撑满画布 |
+| `final/17-modelslab-loaded.png` | (b) ModelsLab 预设载入 | 载入 `std-modelslab-t2i`（底模留空待选），CLIP 填写非空提示词；0 toast | N/A | UI_SURFACE | 8 节点；运行按钮禁用；顶栏「请先选择模型」 |
+| `final/18-modelslab-run.png` | (b) ModelsLab 空底模无法出站 | 打开参数抽屉选中「加载底模 (ModelsLab)」；Run 仍禁用 | 未出站 | `NOT_SENT` | 顶栏「请先选择模型」；检查器显示「请选择模型」；**不是** 400/402 计费拒绝 |
+| `final/19-mage-loaded.png` | (b) Mage 预设载入 | 载入 `std-mage-t2i` (`mango-v3`)，CLIP 填写非空提示词；0 toast | N/A | UI_SURFACE | 4:5 / 2K；6 节点 |
+| `final/20-mage-run.png` | (b) Mage 预设运行 | 点击运行 | 402 Payment Required | `PASS_BILLING` | 原样 `【mage】HTTP 402 Payment Required` + `payment_required` / Gem pack 原文 |
+| `final/21-sensenova-loaded.png` | (b) SenseNova 预设载入 | 载入 `std-sensenova-t2i` (`sensenova-u1.5-lite`)，CLIP 填写非空提示词；0 toast | N/A | UI_SURFACE | 6 节点 |
+| `final/22-sensenova-run.png` | (b) SenseNova 预设运行 | 点击运行 | 本地密钥预检 | `BLOCKED_CONFIG` | toast「未配置密钥：未配置 SenseNova 的密钥」；顶栏同步该文案（不再残留上一供应商 HTTP 402） |
+| `final/23-agnes-loaded.png` | (b) Agnes 预设载入 | 载入 `std-agnes-t2i` (`agnes-image-2.5-flash`)，CLIP 填写非空提示词；0 toast | N/A | UI_SURFACE | 6 节点 |
+| `final/24-agnes-run.png` | (b) Agnes 预设运行 | 点击运行 | 本地密钥预检 | `BLOCKED_CONFIG` | toast/顶栏「未配置密钥：未配置 Agnes 的密钥」 |
+| `final/25-gemini-loaded.png` | (b) Gemini 预设载入 | 载入 `std-gemini-t2i` (`gemini-3.1-flash-image`)，CLIP 填写非空提示词；0 toast | N/A | UI_SURFACE | 3 节点 2 连线 |
+| `final/26-gemini-run.png` | (b) Gemini 预设运行 | 点击运行 | 本地密钥预检 | `BLOCKED_CONFIG` | toast/顶栏「未配置密钥：未配置 Gemini 的密钥」 |
+| `final/27-civitai-import-modal.png` | (c) Civitai 导入弹窗 | LoRA 中心 →「配方导入与适配 (Import)」；0 toast | N/A | UI_SURFACE | 空输入框、现代快捷胶囊 `#148140013` / `#148135866` / `#148004351`、解析按钮可见 |
+| `final/28-civitai-sd15-preview.png` | (c) Civitai SD1.5 WebUI 文本预览 | 粘贴 SD1.5 参数文本并点「解析配方并预览适配」 | N/A | UI_SURFACE | `data-testid=civitai-import-preview` 可见；`clipSkip: 2`、`Sampler: DPM++ 2M Karras`；采样器来源仍硬编码 `sdxl.md`（Finding 未关） |
+| `final/29-civitai-flux-preview.png` | (c) Civitai FLUX WebUI 文本预览 | 粘贴 FLUX 参数文本并解析 | N/A | UI_SURFACE | 输入含 `flux1-dev` / Euler / Simple / 1024x1024；预览字段表可见 |
 | `final/30-workflow-modal-civitai-tab.png` | (c) 工作流弹窗 Civitai Tab (现代配方刷新) | 打开 `WorkflowPresetsModal` 第 2 个标签「✨ Civitai 一键生成工作流」 | N/A | UI_SURFACE | 清晰展示已更新的 4 个现代快捷胶囊（`#148140013` Krea 2 Turbo、`#148135866` Z-Image Turbo、`#148004351` MOSS-Image SFT、Krea 2 Turbo 文本样例）、`148140013` 占位符及底部「重新加载 Z-Image Turbo 初始默认工作流模板」，无任何弹窗遮挡 |
 | `final/32-model-hub-modal.png` | (d) 模型中心总览 | 打开 `ModelHubModal`，展示各服务商目录 | N/A | UI_SURFACE | 显式呈现粉色标签 `NSFW: 已开启 (默认)`，支持一键切换 |
 | `final/33-hf-lora-attached.png` | (d) HF 挂载 LoRA 画布 | Checkpoint + LoRALoader 挂载 `Technically-Color-Z-Image-Turbo` @ 0.9 | N/A | UI_SURFACE | 连线完整，无弹窗遮挡 |
@@ -84,8 +84,8 @@
 | `final/43-tams-video-not-sent.png` | (e) Tensor.Art (TAMS) 视频本地透明拒绝 | 在 `AIVideoNode` 选择 `Tensor.Art (TAMS)` 并输入纯数字模型 ID `672797109289765558`，点击运行 | 400 (Local NOT_SENT) | `NOT_SENT` | **R2 核心闭环**：修正 `TensorArtDriver.ts` 视频路由后，节点与横幅清晰展示 `没有发出去: Tensor.Art TAMS 模型 672797109289765558：本应用尚未接入 TAMS 视频（官方接口参见 https://tams-docs.tensor.art/docs/api/guide/workspace-api-example/ ）；未发送请求，也不会改用 OpenWorks 接口。` |
 | `final/44-fal-nsfw-default-false.png` | (f) Fal Wan 2.2 T2V NSFW 默认值 | 干净画布载入 `std-fal-t2v`，打开右侧「参数总控台」检查 `enable_output_safety_checker` 与 `enable_safety_checker` | N/A | UI_SURFACE | 无任何报错弹窗遮挡；`enable_output_safety_checker` 显示 `会发送 false`，`enable_safety_checker` 显示 `会发送 false（默认开启 NSFW）`、下拉选中 `false (关闭安全检查（默认）)` 及干净产品提示 `默认允许成人内容 (NSFW)` |
 | `final/45-fal-nsfw-toggled-true.png` | (f) Fal Wan 2.2 T2V NSFW 手动切回 | 在 UI 中将 `enable_safety_checker` 切换为 `true (开启安全检查)` | N/A | UI_SURFACE | 徽章实时更新为 `会发送 true（已开启安全过滤）`，节点上 `enable_safety_checker` 同步变为 `true`，并出现「恢复默认」按钮 |
-| `final/46-venice-nsfw-default-false.png` | (f) Venice T2I NSFW 默认值 | 干净画布载入 `std-venice-t2i` (`venice-sd35`)，打开右侧「参数总控台」并滚动至 `safe_mode` | N/A | UI_SURFACE | 无任何旧弹窗遮挡；`safe_mode` 显式显示 `会发送 false（默认开启 NSFW）`、下拉选中 `false (关闭安全模式（默认未打码）)` 及干净产品提示 `默认允许成人内容 (NSFW)` |
-| `final/47-venice-nsfw-toggled-true.png` | (f) Venice T2I NSFW 手动切回 | 在 UI 中将 `safe_mode` 切换为 `true (开启安全模式（打码）)` | N/A | UI_SURFACE | 徽章实时更新为 `会发送 true（已开启安全过滤）`，并出现「恢复默认」按钮 |
+| `final/46-venice-nsfw-default-false.png` | (f) Venice T2I NSFW 默认值 | 载入 `std-venice-t2i`，CLIP 填写非空提示词，打开「参数」并滚动到 `safe_mode` | N/A | UI_SURFACE | 画布 CLIP 非空；0 toast；徽章 `会发送 false（默认开启 NSFW）`；下拉 `false (关闭安全模式（默认未打码）)`；提示 `默认允许成人内容 (NSFW)` |
+| `final/47-venice-nsfw-toggled-true.png` | (f) Venice T2I NSFW 手动切回 | 将 `safe_mode` 切为 `true` | N/A | UI_SURFACE | 徽章 `会发送 true（已开启安全过滤）`；出现「恢复默认」；CLIP 仍非空 |
 
 ### 3.2 已验证现代配方与预设跨集引用（避免对已验证 `PASS_BILLING` 节点重复消耗付费请求）
 
@@ -133,7 +133,8 @@
 - 对象存储签名 URL 脱敏为 `https://<redacted-signed-url>`
 - 私有兼容中转域名与标识脱敏为 `https://<user-configured-relay>/v1`
 - 私有部署域名与项目/部署 ID 脱敏为 `https://<private-deployment-host>`、`<redacted-project-id>`、`<redacted-deployment-id>`
-- **复核命令验证**：执行 `git grep -n -E` 检查上述全部敏感模式，匹配行数为 **0 行**。
+- **复核命令验证**：当前 tracked `*.md` 与 `docs/**` 执行 `git grep -n -E` 检查上述全部敏感模式，匹配行数为 **0 行**。
+- **git 历史**：更早提交仍含脱敏前字符串。彻底清除需用户授权的 history rewrite（`git filter-repo` / force-push）；本任务未改写历史、未 force-push。
 
 ---
 
@@ -162,13 +163,30 @@
    - **AIMLAPI**: 403 `Out of funds`
    - **DeepInfra**: 402 `Payment required`
    - **Mage.space**: 402 `Payment required`
-   - **ModelsLab**: 400 / 402 `Out of credits`
    - **Civitai**: 400 `insufficientBuzz`
-   - **Novita**: 403 `NOT_ENOUGH_BALANCE`
-   - **Venice**: 402 `Insufficient USD or Diem balance`
+   - **Novita**: 403 `NOT_ENOUGH_BALANCE`（`final/35-novita-lora-attached-and-run.png`）
+   - **Venice**: 402 `Insufficient USD or Diem balance`（`final/14-venice-run.png`，填写非空提示词后）
+   - **ModelsLab**：本轮 `std-modelslab-t2i` 底模留空，`final/17`/`18` 为 `NOT_SENT`「请先选择模型」，**不**列入 billed 复测
 
 2. **未验证交互场景 (Unverified Functional Scenarios)**：
    - **Playable Video**: 浏览器内真实播放生成的 MP4/WebM 视频画面（因所有视频服务商均欠费或鉴权拒绝，未能获取可播放视频流）。
    - **SaveVideo**: 视频生成产物下载与保存至本地资产库。
    - **Video History Reuse**: 从历史记录中一键将视频重提载入画布与参数复用。
    - **Civitai Comfy 真实扣费生成**: 实际 Buzz 扣费并在云端 ComfyUI 执行完整出图。
+
+---
+
+## 八、脱敏出站摘录与历史 ID（替代已删除的 `temp/logs/requests-m25.jsonl`）
+
+本轮 UI 点击产生的上游拒绝均在画布 toast / `#studio-run-status` 原样可见。下列为从截图与顶栏抄录的脱敏 JSON 片段（不含密钥、钱包明文、签名 URL、私有主机）：
+
+| 证据 | 可见历史/任务 ID | 脱敏响应摘录 |
+|---|---|---|
+| `14-venice-run.png` | 无本地 hist（计费拒绝） | `{"error":"Insufficient USD or Diem balance to complete request. Visit https://venice.ai/settings/api to add credits."}` |
+| `08-together-flux2-run.png` | Together `id":"dbde4290-aws_ue2"` | `{"error":{"message":"Invalid API key provided. You can find your API key at https://api.together.ai/settings/api-keys.","type":"invalid_request_error","code":"invalid_api_key"}}` |
+| `12-deepinfra-run.png` | 无本地 hist（402） | `{"detail":{"error":"You need positive balance to do inference. Please add balance manually or setup top-up"}}` |
+| `16-sogni-run.png` | `workflowId":"wf_durable_workflow_c392c6e4-c3ea-4955-818d-2d3b1fc87191"` | `{"status":"waiting_for_user","waitingReason":"insufficient_credit","rawResponse":{"data":{"workflow":{"ownerWalletAddress":"0x<redacted-wallet>"}}}}` |
+| `20-mage-run.png` | 无本地 hist（402） | `{"error":{"code":"payment_required","message":"The Mage API and MCP server need a successful payment on this account first..."}}` |
+| `35-novita-lora-attached-and-run.png` | 无本地 hist（403） | `{"code":403,"reason":"NOT_ENOUGH_BALANCE","message":"insufficient balance","metadata":{}}` |
+| `22`/`24`/`26` | 未出站 | 本地 `未配置密钥：未配置 SenseNova/Agnes/Gemini 的密钥` |
+| `18-modelslab-run.png` | 未出站 | 顶栏 `请先选择模型`（底模留空） |

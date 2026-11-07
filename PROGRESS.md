@@ -21,10 +21,10 @@
   - D3：更新 `docs/providers/schema-providers.md` Sogni `generate_video` / `animate_photo` 动态分流说明。
   - D4：核实 Together `image_loras` 官方参数指南下线事实，引用 `https://docs.together.ai/docs/inference/images/parameters.md`。
   - D5：核查确认 `rejectSchemaEnum` 与 `rejectUnsupported` 在 `server.ts` 及 `src/server/routes/videoGenerateRoute.ts` 中均为 0 处（仅 `src/server/schemaProviderVideoStatus.test.ts:32` 保留 1 处未被生产代码读取的测试桩属性）。
-  - D6：脱敏公共文档与 `docs/evidence/**` 中所有本地绝对路径（`<repo-root>`）、本地代理名称（`<local-proxy>`）、账户/钱包 ID（`<redacted-user-id>`）、对象存储签名 URL（`https://<redacted-signed-url>`）、私有中转地址（`https://<user-configured-relay>/v1`）与私有部署标识（0 grep 匹配）。
+  - D6：当前 tracked `*.md` / `docs/**` 对敏感模式 grep 为 0 行。更早 git 提交历史仍含脱敏前字符串；彻底清除需用户授权的 history rewrite（`git filter-repo` / force-push），本任务未执行。
+  - D9：待充值复测清单含 Fal / HF / WaveSpeed / Sogni / AIMLAPI / DeepInfra / Mage / Civitai / **Novita**（`final/35` 403 `NOT_ENOUGH_BALANCE`）/ **Venice**（`final/14` 402 Insufficient USD or Diem）。ModelsLab 本轮为底模留空 `NOT_SENT`，不列入 billed 复测。
   - D7：校准 `.env.example`，剔除未引用变量 `APP_URL`，补齐 `PORT`、`ALLOWED_HOSTS`、`ALLOWED_ORIGINS`、`TENSORART_KEY`、`TENSORART_BASE_URL`。
   - D8：检查确认 `AGENTS.md` 与 `CLAUDE.md` 包含两句用户原文逐字。
-  - D9：整理 9 家待充值复测清单、未验证功能场景与代码审计风险。
   - D10：全面重构 `README.md`，输出经文件系统验证的目录树、独立 Image/Video 服务商矩阵与 100% 有效链接。
 
 ---
