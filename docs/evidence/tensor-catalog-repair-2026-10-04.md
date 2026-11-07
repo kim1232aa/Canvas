@@ -12,7 +12,7 @@ No paid generation/upload calls, new images, configuration changes, service rest
 
 ## Observed production failure
 
-Sites Worker logs for project appgprj_6abf7823b9648191aed7e4c4f10bbea8:
+Sites Worker logs for project <redacted-project-id>:
 - GET /api/models?provider=tensorart&query=&type=Checkpoint&category=checkpoint&sort=downloads&page=1&limit=50&catalogTag=all
 - timestamp 1791085867056 (UTC epoch milliseconds).
 - Upstream: https://tensor.art/models/?model_types=CHECKPOINT

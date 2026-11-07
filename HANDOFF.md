@@ -6,11 +6,11 @@
 - **全量工程质量指标**：
   - `npm run build`：Exit code 0，成功生成 `hosting/server.generated.ts` 与 `dist/` 前端资产包。
   - `npx tsc --noEmit`：Exit code 0，0 错误，严格类型检查通过。
-  - `npx vitest run --maxWorkers=2 --exclude '.tower/**' --exclude '**/node_modules/**' --exclude '**/dist/**'`：**264 个测试文件全部通过，2128 个测试用例全绿，0 failures**，耗时 139.95s，Exit code 0。
+  - `npx vitest run --maxWorkers=2 --exclude '.tower/**' --exclude '**/node_modules/**' --exclude '**/dist/**'`：**264 个测试文件全部通过，2128 个测试用例全绿，0 failures**，耗时 166.86s，Exit code 0。
   - `src/integration/modelSelection.test.tsx` 单独运行：5 passed，耗时 25.18s，Exit code 0。
 - **真实浏览器 UI 回归成果 (Headless Chrome 153 CDP, 2560×1440)**：
   - 完整执行 6 大核心流程（空白画布新手入门引导与一键装配、全量 34 个内置现代预设核查与 15 家供应商真实出站运行、Civitai 现代/SD1.5/FLUX 配方逆向导入与出站、模型中心浏览与多端点 LoRA 挂载、AI 视频节点 T2V/I2V 与 Sogni 动态切换 `animate_photo` 横幅、Fal Wan 2.2 与 Venice 双服务商 NSFW 宽松默认可见与用户手动切回）。
-  - 产出 **47 张全量高保真截图**（归档于 `docs/evidence/2026-11-05/final/*.png`，经 `ReadMediaFile` 逐张眼核，0 处 UI 逻辑矛盾与遮挡）。
+  - 产出 **41 张独立唯一 MD5 全量高保真截图**（归档于 `docs/evidence/2026-11-05/final/*.png`，0 重复哈希，经 `ReadMediaFile` + `region` 逐张眼核，0 处 UI 逻辑矛盾与遮挡），并联合引用 `docs/evidence/2026-11-05/recipe-shapes/01..07.png`（现代 Civitai 配方 `#148140013` / `#148135866` / `#148004351`）与 `docs/evidence/2026-11-05/current-presets/01..16.png`（现代内置预设实测截图）。
   - 记录 **105 条真实出站网络日志**（归档于 `temp/logs/requests-m25.jsonl`，严格脱敏）。
   - 详尽终结报告：[docs/evidence/2026-11-05/final.md](docs/evidence/2026-11-05/final.md)。
 - **核心工程准则（落地闭环）**：
@@ -329,8 +329,8 @@
 | 2026-10-04 对应 Sites 源提交 | `2b986c9cb58132f6107fc630e4860f1a36781f67`（仅历史追溯） |
 | 当时两者相同的源码 tree | `70e0f5e5370173b75754d0c748c725b88ce18550` |
 | 历史 Sites 地址 | https://<private-deployment-host> |
-| Sites project_id | `appgprj_6abf7823b9648191aed7e4c4f10bbea8` |
-| 历史已成功发布部署 | `appgdep_6ac22888c5708191ab2bb63304361b66`，环境 revision 4 |
+| Sites project_id | `<redacted-project-id>` |
+| 历史已成功发布部署 | `<redacted-deployment-id>`，环境 revision 4 |
 | 2026-10-06 收尾前本地 HEAD | `d75d1d4`；本轮收尾提交完成后以 `git log -1` / `origin/main` 为准，不再把此哈希当最终版本 |
 | 当前活跃工作目录 | `<repo-root>/Canvas-main`（当前 HEAD 见文首 `db34fa7`；历史 2026-10-16 快照为 `2d76382`） |
 | 历史验证（2026-10-04 前） | 35 个测试文件、267 个测试通过；仅作历史追溯 |

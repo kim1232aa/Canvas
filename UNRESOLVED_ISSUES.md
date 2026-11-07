@@ -88,7 +88,14 @@
 - **核查结论**: 官方 OpenAPI 仍声明了 `image_loras[{path, scale}]` 结构，但官方一手参数指南（`parameters.md`）明文标注：「`image_loras: No longer available. The FLUX models that accepted LoRA adapters have been deprecated, and the current FLUX.2 models reject this parameter.`」。`src/server/schemaProviders.ts:39` 通过 `officialUnavailableParams` 正确阻断该失效字段，不向用户虚假承诺 LoRA 已在服务端生效。
 
 ### 7. [HIGH] 单测套件包含约 108 个源码字符串静态匹配用例 (SHELLTEST22 Audit)
-- **审计发现**: 全仓 262 个测试文件中，有 42 个文件包含约 108 个使用 `fs.readFileSync` 检索未执行源码文本的用例（如 `expect(source).toContain(...)`）。这些用例在生产代码崩溃或返回 `null` 时依然保持全绿，属于伪绿测试。已在项目规则中明确「单元测试通过绝不等于实际问题解决」。
+- **审计发现**: 全仓 264 个测试文件中，有 42 个文件包含约 108 个使用 `fs.readFileSync` 检索未执行源码文本的用例（如 `expect(source).toContain(...)`）。这些用例在生产代码崩溃或返回 `null` 时依然保持全绿，属于伪绿测试。已在项目规则中明确「单元测试通过绝不等于实际问题解决」。
+
+### 8. [LOW] `rejectSchemaEnum` / `rejectUnsupported` 真实清理状态与单测桩残留 (D5 Audit)
+- **文件与行号**:
+  - `server.ts`: **0 处**（原 `server.ts:1080` 的 `rejectSchemaEnum` 空壳及 `rejectUnsupported` 已在 M18 彻底删除）。
+  - `src/server/routes/videoGenerateRoute.ts`: **0 处**（`VideoGenerateRouteDeps` 接口与路由实现中均已移除）。
+  - `src/server/schemaProviderVideoStatus.test.ts:32`: **1 处测试桩残留**（`stubVideoDeps()` 中仍保留了未被生产代码读取的 `rejectSchemaEnum: () => false` 属性）。
+- **影响**: 生产代码已 100% 移除所有 `rejectSchemaEnum` 与 `rejectUnsupported` 本地枚举/字段预拦截门禁，仅测试辅助桩对象存在一处无害多余字段。
 
 ---
 

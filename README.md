@@ -127,8 +127,8 @@ npx vitest run --maxWorkers=2 --exclude '.tower/**' --exclude '**/node_modules/*
 ├── docs/                          # 架构、审计与一手证据归档
 │   ├── evidence/                  # 真实浏览器点击录屏、截图与请求日志
 │   │   └── 2026-11-05/            # 2026-11-05 / 11-07 阶段性全量实测证据
-│   │       ├── final.md           # M25 全量回归终结报告与 47 项实机截图索引
-│   │       └── final/             # 47 张全量高保真实机截图 (*.png)
+│   │       ├── final.md           # M25 全量回归终结报告与实机截图索引
+│   │       └── final/             # 41 张独立唯一 MD5 全量高保真实机截图 (*.png)
 │   └── providers/                 # 供应商协议规格与在线 Schema 说明
 └── src/                           # 前端核心业务源码
     ├── App.tsx                    # 主视图编排、全局状态流、顶栏与弹窗交互

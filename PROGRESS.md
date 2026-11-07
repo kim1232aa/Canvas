@@ -8,20 +8,20 @@
 - **全量工程命令实测结果**：
   - `npm run build`：Exit code 0，生成 `hosting/server.generated.ts` 与 `dist/`。
   - `npx tsc --noEmit`：Exit code 0，0 错误。
-  - `npx vitest run --maxWorkers=2 --exclude '.tower/**' --exclude '**/node_modules/**' --exclude '**/dist/**'`：**264 个测试文件全部通过，2128 个测试用例全绿，0 failures**，耗时 139.95s，Exit code 0。
+  - `npx vitest run --maxWorkers=2 --exclude '.tower/**' --exclude '**/node_modules/**' --exclude '**/dist/**'`：**264 个测试文件全部通过，2128 个测试用例全绿，0 failures**，耗时 166.86s，Exit code 0。
   - `src/integration/modelSelection.test.tsx` 单独运行：5 passed，耗时 25.18s，Exit code 0。
 - **UI 回归实测交付**：
   - 在真实无头 Chrome (CDP, 2560×1440) 中完成 6 大流程真实点击操作。
-  - 采集 47 张高保真实机截图至 `docs/evidence/2026-11-05/final/*.png`，经 `ReadMediaFile` 逐张眼核，确认 0 UI 逻辑矛盾。
-  - 记录 105 条真实网络出站日志至 `temp/logs/requests-m25.jsonl`。
-  - 闭环验证：空白画布新手引导、34 个现代预设核查与 15 家服务商运行、Civitai 现代/SD1.5/FLUX 配方逆向导入与出站、模型中心浏览与多端点 LoRA 挂载、AI 视频节点 T2V/I2V 与 Sogni 动态切换 `animate_photo` 横幅、Fal Wan 2.2 与 Venice 双服务商 NSFW 宽松默认可见与用户手动切回。
+  - 采集 **41 张独立唯一 MD5 高保真实机截图**至 `docs/evidence/2026-11-05/final/*.png`（0 重复哈希，经 `ReadMediaFile` + `region` 逐张眼核，确认 0 UI 逻辑矛盾与遮挡），并联合引用 `docs/evidence/2026-11-05/recipe-shapes/01..07.png` 与 `docs/evidence/2026-11-05/current-presets/01..16.png`。
+  - 记录真实网络出站日志。
+  - 闭环验证：空白画布新手引导、34 个现代预设核查与 15 家服务商运行、Civitai 现代配方（`#148140013` / `#148135866` / `#148004351`）及 SD1.5/FLUX 配方逆向导入与出站、模型中心浏览与多端点 LoRA 挂载、AI 视频节点 T2V/I2V 与 Sogni 动态切换 `animate_photo` 横幅、Fal Wan 2.2 与 Venice 双服务商 NSFW 宽松默认可见与用户手动切回。
 - **文档全量对齐与公共仓库卫生 (D1~D10)**：
   - D1：在全部指定历史遗留文档顶部追加未验证历史警示横幅。
   - D2：重写 `HANDOFF.md`、`PROGRESS.md`、`UNRESOLVED_ISSUES.md`、`README.md` 至 2026-11-07 实测基准。
   - D3：更新 `docs/providers/schema-providers.md` Sogni `generate_video` / `animate_photo` 动态分流说明。
   - D4：核实 Together `image_loras` 官方参数指南下线事实，引用 `https://docs.together.ai/docs/inference/images/parameters.md`。
-  - D5：核查确认 `rejectSchemaEnum` 与 `rejectUnsupported` 生产代码已彻底删除，0 残留门禁。
-  - D6：脱敏公共文档中绝对路径 `<repo-root>/...`（3 处清零）、代理名称 `<local-proxy>`（2 处清零）、用户 ID `<redacted-user-id>`（130 处清零）、Signed URLs（32 处清零）。
+  - D5：核查确认 `rejectSchemaEnum` 与 `rejectUnsupported` 在 `server.ts` 及 `src/server/routes/videoGenerateRoute.ts` 中均为 0 处（仅 `src/server/schemaProviderVideoStatus.test.ts:32` 保留 1 处未被生产代码读取的测试桩属性）。
+  - D6：脱敏公共文档与 `docs/evidence/**` 中所有本地绝对路径（`<repo-root>`）、本地代理名称（`<local-proxy>`）、账户/钱包 ID（`<redacted-user-id>`）、对象存储签名 URL（`https://<redacted-signed-url>`）、私有中转地址（`https://<user-configured-relay>/v1`）与私有部署标识（0 grep 匹配）。
   - D7：校准 `.env.example`，剔除未引用变量 `APP_URL`，补齐 `PORT`、`ALLOWED_HOSTS`、`ALLOWED_ORIGINS`、`TENSORART_KEY`、`TENSORART_BASE_URL`。
   - D8：检查确认 `AGENTS.md` 与 `CLAUDE.md` 包含两句用户原文逐字。
   - D9：整理 9 家待充值复测清单、未验证功能场景与代码审计风险。
@@ -258,7 +258,7 @@
 
 21:28:26（北京时间）重新从前端点击 HF Z-Image Space 工作流：网站 HTTP 500，上游 status=null，ECONNREFUSED；只验证前端提交与错误透明展示，记 BLOCKED_ENV，非欠费、非出图成功。截图、完整页面记录与结构化请求/响应见 docs/evidence/handoff-frontend-2026-10-04.*。
 
-上一节 Tensor 修复的生产构建和部署实际已成功（部署 appgdep_6ac22888c5708191ab2bb63304361b66）；旧段落的“remaining gate”是当时中间状态。本次仅追加交接文档和证据，不改应用代码。
+上一节 Tensor 修复的生产构建和部署实际已成功（部署 <redacted-deployment-id>）；旧段落的“remaining gate”是当时中间状态。本次仅追加交接文档和证据，不改应用代码。
 
 # 2026-10-04 Tensor catalog / legacy-tool correction
 
