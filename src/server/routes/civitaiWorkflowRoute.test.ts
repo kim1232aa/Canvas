@@ -4,6 +4,7 @@ import {
   resolveCivitaiVersionInfo,
   resolveCivitaiVersionByHash,
   fetchCivitaiRealImageMeta,
+  selectVerifiedCivitaiModelFile,
   type CivitaiWorkflowDeps,
 } from './civitaiWorkflowRoute';
 import { handleCivitaiModelVersion, type CivitaiModelRouteDeps } from './civitaiModelRoutes';
@@ -600,7 +601,14 @@ describe('Civitai Routes and Workflow Contract Tests', () => {
       });
 
       const handler = handleExtractCivitaiWorkflow(createMockWorkflowDeps(mockFetch));
-      const req = { body: { imageId: '64399178', engine: 'civitai' } } as any;
+      const req = {
+        body: {
+          imageId: '64399178',
+          engine: 'civitai',
+          targetModel: 'fal-ai/flux-lora',
+          targetSchema: { loras: { items: { properties: { path: { type: 'string' }, scale: { type: 'number' } } } } },
+        },
+      } as any;
       const res = createMockRes();
 
       await handler(req, res);
@@ -719,7 +727,15 @@ describe('Civitai Routes and Workflow Contract Tests', () => {
       });
 
       const handler = handleExtractCivitaiWorkflow(createMockWorkflowDeps(mockFetch));
-      const req = { body: { imageId: '64399178', engine: 'fal', consentCivitaiToken: false } } as any;
+      const req = {
+        body: {
+          imageId: '64399178',
+          engine: 'fal',
+          consentCivitaiToken: false,
+          targetModel: 'fal-ai/flux-lora',
+          targetSchema: { loras: { items: { properties: { path: { type: 'string' }, scale: { type: 'number' } } } } },
+        },
+      } as any;
       const res = createMockRes();
 
       await handler(req, res);
@@ -762,7 +778,13 @@ describe('Civitai Routes and Workflow Contract Tests', () => {
 
       const handler = handleExtractCivitaiWorkflow(createMockWorkflowDeps(mockFetch));
       const req = {
-        body: { imageId: '64399178', engine: 'fal', consentCivitaiToken: true },
+        body: {
+          imageId: '64399178',
+          engine: 'fal',
+          consentCivitaiToken: true,
+          targetModel: 'fal-ai/flux-lora',
+          targetSchema: { loras: { items: { properties: { path: { type: 'string' }, scale: { type: 'number' } } } } },
+        },
         headers: { 'x-civitai-token': 'user_secret_token_123' },
       } as any;
       const res = createMockRes();
@@ -1346,6 +1368,94 @@ describe('Civitai Routes and Workflow Contract Tests', () => {
         expect(falLora.sendableUrlOrId).toBeUndefined();
         expect(falLora.unresolvedReason).toContain('Model version 404040 not found');
         expect(falLora.reason).toContain('Model version 404040 not found');
+      });
+    });
+
+    describe('File selection & target model binding across engines', () => {
+      it('selectVerifiedCivitaiModelFile selects primary Model file over auxiliary Other/VAE files at index 0', () => {
+        const files = [
+          { id: 101, name: 'vae.safetensors', type: 'Other', primary: false },
+          { id: 102, name: 'actual_model.safetensors', type: 'Model', primary: true, downloadUrl: 'https://c/dl?fileId=102' },
+        ];
+        const res = selectVerifiedCivitaiModelFile(files, 'https://c/dl');
+        expect(res.fileName).toBe('actual_model.safetensors');
+        expect(res.fileId).toBe(102);
+        expect(res.downloadUrl).toBe('https://c/dl?fileId=102');
+        expect(res.unverifiedReason).toBeUndefined();
+      });
+
+      it('selectVerifiedCivitaiModelFile reports unverifiedReason when only non-model files exist', () => {
+        const files = [
+          { id: 101, name: 'vae.safetensors', type: 'VAE', primary: true },
+          { id: 102, name: 'training_data.zip', type: 'Training Data' },
+        ];
+        const res = selectVerifiedCivitaiModelFile(files, 'https://c/dl');
+        expect(res.unverifiedReason).toContain('未找到 type="Model"');
+        expect(res.file).toBeUndefined();
+      });
+
+      it('selectVerifiedCivitaiModelFile reports unverifiedReason when multiple model files exist with no primary or multiple primaries', () => {
+        const filesMulti = [
+          { id: 201, name: 'model_fp16.safetensors', type: 'Model' },
+          { id: 202, name: 'model_bf16.safetensors', type: 'Model' },
+        ];
+        const resMulti = selectVerifiedCivitaiModelFile(filesMulti, 'https://c/dl');
+        expect(resMulti.unverifiedReason).toContain('未自动猜测精度或变体');
+
+        const filesMultiPrimary = [
+          { id: 301, name: 'model_a.safetensors', type: 'Model', primary: true },
+          { id: 302, name: 'model_b.safetensors', type: 'Model', primary: true },
+        ];
+        const resMultiPrim = selectVerifiedCivitaiModelFile(filesMultiPrimary, 'https://c/dl');
+        expect(resMultiPrim.unverifiedReason).toContain('多个标记为 primary');
+      });
+
+      it('handleExtractCivitaiWorkflow binds targetModel into preset nodes[0] and spatialFrames for non-civitai providers', async () => {
+        const stubbedFetch = vi.fn(async (_meta: any, url: string) => {
+          if (url.includes('/api/v1/images')) {
+            return {
+              ok: true,
+              status: 200,
+              json: async () => ({
+                items: [
+                  {
+                    id: 77777,
+                    baseModel: 'Krea 2 Turbo',
+                    meta: {
+                      prompt: 'a cinematic portrait',
+                      Model: 'Krea 2 Turbo',
+                      civitaiResources: [],
+                    },
+                  },
+                ],
+              }),
+            };
+          }
+          throw new Error(`Unexpected url: ${url}`);
+        });
+
+        const handler = handleExtractCivitaiWorkflow(createMockWorkflowDeps(stubbedFetch));
+        const res = createMockRes();
+        await handler(
+          {
+            body: {
+              imageId: '77777',
+              engine: 'runware',
+              targetModel: 'runware:100@1',
+            },
+          } as any,
+          res
+        );
+
+        expect(res.statusCode).toBe(200);
+        const preset = res.data.preset;
+        const ckptNode = preset.nodes.find((n: any) => n.type === 'CheckpointLoaderSimple');
+        expect(ckptNode.values.targetProvider).toBe('runware');
+        expect(ckptNode.values.ckpt_name).toBe('runware:100@1');
+        expect(ckptNode.values.import_requires_model_selection).toBe(false);
+
+        expect(preset.spatialFrames[0].params.targetProvider).toBe('runware');
+        expect(preset.spatialFrames[0].params.checkpoint).toBe('runware:100@1');
       });
     });
   });

@@ -124,6 +124,52 @@ export interface CivitaiUnmappedField {
   reason: string;
 }
 
+function findSchemaDiscriminator(document: any, schema: any, propName: string): Record<string, any> | undefined {
+  if (!schema || typeof schema !== 'object') return undefined;
+  if (schema.discriminator?.propertyName === propName) return schema.discriminator;
+  for (const part of schema.allOf || []) {
+    const resolved = part.$ref ? schemaAt(document, part.$ref) : part;
+    const found = findSchemaDiscriminator(document, resolved, propName);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+function findSchemaProperty(document: any, schema: any, propName: string): Record<string, any> | undefined {
+  if (!schema || typeof schema !== 'object') return undefined;
+  if (schema.properties?.[propName]) return schema.properties[propName];
+  for (const part of schema.allOf || []) {
+    const resolved = part.$ref ? schemaAt(document, part.$ref) : part;
+    const found = findSchemaProperty(document, resolved, propName);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+function matchModelVariantTokens(texts: Array<unknown>, mappingKeys: string[]): string | undefined {
+  const validTexts = texts.filter((t): t is string => typeof t === 'string' && t.trim().length > 0).map((t) => t.trim());
+  if (!validTexts.length || !mappingKeys.length) return undefined;
+
+  for (const text of validTexts) {
+    const exactMatches = mappingKeys.filter((k) => k.toLowerCase() === text.toLowerCase());
+    if (exactMatches.length === 1) return exactMatches[0];
+  }
+
+  const matched = new Set<string>();
+  for (const text of validTexts) {
+    const normalized = text.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase();
+    const tokens = normalized.split(/[^a-z0-9.+-]+/).filter(Boolean);
+    for (const key of mappingKeys) {
+      const kLower = key.toLowerCase();
+      if (tokens.includes(kLower)) {
+        matched.add(key);
+      }
+    }
+  }
+  if (matched.size === 1) return [...matched][0];
+  return undefined;
+}
+
 async function buildCivitaiBaseInput(
   body: Body,
   get: CivitaiPublicGet,
@@ -134,32 +180,98 @@ async function buildCivitaiBaseInput(
   if (!officialOpenApi || typeof officialOpenApi !== 'object') throw new CivitaiSchemaMissingError();
   const document = officialOpenApi as any;
 
-  const builtin = (body.ecosystem === 'zImage' || body.ecosystem === 'krea2') && provided(body.comfyModel);
+  const engineMapping: Record<string, string> = document?.components?.schemas?.ImageGenInput?.discriminator?.mapping || {};
+  const sdcppSchema = engineMapping.sdcpp ? schemaAt(document, engineMapping.sdcpp) : undefined;
+  const comfySchema = engineMapping.comfy ? schemaAt(document, engineMapping.comfy) : undefined;
+  const sdcppEcoMap: Record<string, string> = findSchemaDiscriminator(document, sdcppSchema, 'ecosystem')?.mapping || {};
+  const comfyEcoMap: Record<string, string> = findSchemaDiscriminator(document, comfySchema, 'ecosystem')?.mapping || {};
+
+  const resolveLiveEcosystem = (rawEco: string | undefined, preferredEngine?: string) => {
+    if (!rawEco) return { ecosystem: undefined as string | undefined, inferredModelSelector: undefined as string | undefined };
+    const lower = rawEco.toLowerCase();
+    if (lower === 'sd15') return { ecosystem: 'sd1', inferredModelSelector: undefined };
+    const engineOrder = preferredEngine === 'comfy' ? ['comfy', 'sdcpp'] : preferredEngine === 'sdcpp' ? ['sdcpp', 'comfy'] : ['sdcpp', 'comfy'];
+    for (const eng of engineOrder) {
+      const ecoMap = eng === 'comfy' ? comfyEcoMap : sdcppEcoMap;
+      for (const ecoKey of Object.keys(ecoMap)) {
+        if (ecoKey.toLowerCase() === lower) {
+          return { ecosystem: ecoKey, inferredModelSelector: undefined };
+        }
+      }
+    }
+    for (const eng of engineOrder) {
+      const ecoMap = eng === 'comfy' ? comfyEcoMap : sdcppEcoMap;
+      for (const [ecoKey, ecoRef] of Object.entries(ecoMap)) {
+        const ecoSchema = schemaAt(document, ecoRef);
+        const modelDisc = findSchemaDiscriminator(document, ecoSchema, 'model');
+        for (const modelKey of Object.keys(modelDisc?.mapping || {})) {
+          if ((ecoKey + modelKey).toLowerCase() === lower) {
+            return { ecosystem: ecoKey, inferredModelSelector: modelKey };
+          }
+        }
+      }
+    }
+    return { ecosystem: rawEco, inferredModelSelector: undefined };
+  };
+
   const engineHint = String(body.engine || '');
   const literalModelEngines = ['krea', 'krea3', 'fal', 'flux2', 'flux1-kontext', 'flux1-pro', 'gemini', 'google', 'grok', 'openai', 'seedream'];
-  const modelLooksLiteral = provided(body.model) && !String(body.model).startsWith('urn:air:') && !/^\d+(@\d+)?$/.test(String(body.model));
-  const selectorOnly = (builtin && (!provided(body.model) || body.model === body.comfyModel))
-    || (literalModelEngines.includes(engineHint) && modelLooksLiteral);
+  const modelLooksLiteral = provided(body.model) && !String(body.model).startsWith('urn:air:') && !String(body.model).startsWith('civitai:') && !/^\d+(@\d+)?$/.test(String(body.model));
+
+  const bodyEcoMatch = provided(body.ecosystem) ? resolveLiveEcosystem(String(body.ecosystem), engineHint || undefined) : undefined;
+  let preEcoSchema: Record<string, any> | undefined;
+  if (bodyEcoMatch?.ecosystem) {
+    const ecoRef = (engineHint === 'comfy' ? comfyEcoMap[bodyEcoMatch.ecosystem] : engineHint === 'sdcpp' ? sdcppEcoMap[bodyEcoMatch.ecosystem] : undefined)
+      ?? comfyEcoMap[bodyEcoMatch.ecosystem]
+      ?? sdcppEcoMap[bodyEcoMatch.ecosystem];
+    if (ecoRef) preEcoSchema = schemaAt(document, ecoRef);
+  }
+  const preModelDisc = findSchemaDiscriminator(document, preEcoSchema, 'model');
+  const preModelDiscKeys = Object.keys(preModelDisc?.mapping || {});
+
+  const selectorOnly = (literalModelEngines.includes(engineHint) && modelLooksLiteral)
+    || (Boolean(preModelDisc) && ((!provided(body.model) && provided(body.comfyModel)) || (provided(body.model) && (body.model === body.comfyModel || preModelDiscKeys.includes(String(body.model))))));
+
   const source = selectorOnly ? undefined : await resolveCivitaiResource(String(body.model ?? ''), get);
   const actualEcosystem = source ? airParts(source)[0] : undefined;
   const sourceType = source ? airParts(source)[1]?.toLowerCase() : undefined;
-  // AIR guide uses sd15; imageGen OpenAPI uses sd1 as the request discriminator.
-  const requestEcosystem = actualEcosystem === 'sd15' ? 'sd1' : actualEcosystem === 'zimageturbo' && body.comfyModel === 'turbo' || actualEcosystem === 'zimagebase' && body.comfyModel === 'base' ? 'zImage' : actualEcosystem;
+  void sourceType;
+
+  const actualEcoMatch = resolveLiveEcosystem(actualEcosystem, engineHint || undefined);
+  const requestEcosystem = actualEcoMatch.ecosystem;
+  const inferredModelSelector = bodyEcoMatch?.inferredModelSelector ?? actualEcoMatch.inferredModelSelector;
+
   // AIR namespace is "flux2"; request discriminators are flux2Dev / flux2Klein (recipe pages). Static table remains UI clue for airEcosystems aliases.
   const declaredSpec = provided(body.engine) && provided(body.ecosystem) ? getModelSpec('civitai', `${body.engine}:${body.ecosystem}`) : undefined;
   const flux2RecipeOk = actualEcosystem === 'flux2' && (body.ecosystem === 'flux2Dev' || body.ecosystem === 'flux2Klein' || body.ecosystem === 'dev' || body.ecosystem === 'klein') || (!!actualEcosystem && !!declaredSpec?.request?.airEcosystems?.includes(actualEcosystem));
   void flux2RecipeOk; // user's explicit ecosystem is sent as filled
-  const ecosystem = body.ecosystem ?? requestEcosystem;
+  const ecosystem = bodyEcoMatch?.ecosystem ?? body.ecosystem ?? requestEcosystem;
   if (!ecosystem && !literalModelEngines.includes(String(body.engine || ''))) fail('Civitai ecosystem 为必填项，或提供带生态的完整 AIR');
-  const engine = body.engine ?? (['sd1', 'sd15', 'sdxl', 'flux1', 'flux2Dev', 'flux2Klein', 'qwen', 'zImage', 'anima'].includes(ecosystem) ? 'sdcpp' : 'comfy');
+
+  const sdcppDefaultEcosystems = new Set(['sd1', 'sd15', 'sdxl', 'flux1', 'flux2Dev', 'flux2Klein', 'qwen', 'zImage', 'anima']);
+  const engine = body.engine ?? (
+    ecosystem && Object.hasOwn(sdcppEcoMap, ecosystem) && (sdcppDefaultEcosystems.has(ecosystem) || !Object.hasOwn(comfyEcoMap, ecosystem))
+      ? 'sdcpp'
+      : ecosystem && Object.hasOwn(comfyEcoMap, ecosystem)
+      ? 'comfy'
+      : sdcppDefaultEcosystems.has(String(ecosystem || ''))
+      ? 'sdcpp'
+      : 'comfy'
+  );
   // Engines listed by live ImageGenInput discriminator are accepted; comfy/sdcpp always ok.
-  const liveEngines = Object.keys(document?.components?.schemas?.ImageGenInput?.discriminator?.mapping || {});
+  const liveEngines = Object.keys(engineMapping);
   void liveEngines;
   const operation = body.operation ?? (provided(body.image_url) ? 'createVariant' : 'createImage');
 
   // Static request.wire remains a clue for omitEcosystem / baked model literal; outbound field/LoRA shape comes from live.
   const spec = getModelSpec('civitai', `${engine}:${ecosystem}`);
   const wire = spec?.request ?? {};
+
+  const chosenEcoMap = engine === 'comfy' ? comfyEcoMap : engine === 'sdcpp' ? sdcppEcoMap : {};
+  const chosenEcoSchema = ecosystem && chosenEcoMap[ecosystem] ? schemaAt(document, chosenEcoMap[ecosystem]) : undefined;
+  const modelDiscriminator = findSchemaDiscriminator(document, chosenEcoSchema, 'model');
+  const modelDiscKeys = Object.keys(modelDiscriminator?.mapping || {});
+  const hasModelDiscriminator = Boolean(modelDiscriminator && modelDiscKeys.length > 0);
 
   // flux2 engine discriminates on `model` (dev/flex/pro/max/klein). Callers often pass ecosystem:'dev'.
   const flux2ModelLiterals = ['dev', 'flex', 'pro', 'max', 'klein'];
@@ -174,10 +286,56 @@ async function buildCivitaiBaseInput(
     modelSelector = String(wire.model);
   }
 
-  // Nested OpenAPI discriminators (comfy krea2/zImage turbo|base, flux2 model, …) need `model` in selectors.
-  if (!modelSelector && builtin && provided(body.comfyModel)) modelSelector = String(body.comfyModel);
+  if (!modelSelector && hasModelDiscriminator) {
+    if (provided(body.comfyModel)) {
+      modelSelector = String(body.comfyModel);
+    } else if (provided(body.model) && modelDiscKeys.includes(String(body.model))) {
+      modelSelector = String(body.model);
+    } else if (inferredModelSelector && modelDiscKeys.includes(inferredModelSelector)) {
+      modelSelector = inferredModelSelector;
+    } else {
+      const candidateTexts: unknown[] = [body.checkpointBaseModel, body.baseModel];
+      const snapshotNodes = (body.workflowSnapshot as any)?.nodes;
+      if (Array.isArray(snapshotNodes)) {
+        for (const n of snapshotNodes) {
+          if (n?.type === 'CheckpointLoaderSimple' && n.values) {
+            if (provided(n.values.civitai_model)) candidateTexts.unshift(n.values.civitai_model);
+            if (provided(n.values.base_model)) candidateTexts.push(n.values.base_model);
+            if (provided(n.values.baseModel)) candidateTexts.push(n.values.baseModel);
+          }
+        }
+      }
+      let matched = matchModelVariantTokens(candidateTexts, modelDiscKeys);
+      if (!matched && source) {
+        const verMatch = /@(\d+)/.exec(source);
+        if (verMatch) {
+          try {
+            const verData = await readApi(get, `https://civitai.com/api/v1/model-versions/${verMatch[1]}`);
+            if (verData) {
+              matched = matchModelVariantTokens([verData.baseModel, verData.name, verData.model?.name], modelDiscKeys);
+            }
+          } catch {
+            // Catch lookup errors gracefully when offline or mocked
+          }
+        }
+      }
+      if (matched) {
+        modelSelector = matched;
+      } else {
+        const modelProp = findSchemaProperty(document, chosenEcoSchema, 'model');
+        if (typeof modelProp?.default === 'string' && modelDiscKeys.includes(modelProp.default)) {
+          modelSelector = modelProp.default;
+        } else if (modelDiscKeys.length === 1) {
+          modelSelector = modelDiscKeys[0];
+        } else {
+          fail(`Civitai ${engine}:${ecosystem} 需要显式指定 model 变体（可选值: ${modelDiscKeys.join(', ')}）`);
+        }
+      }
+    }
+  }
+
+  if (!modelSelector && provided(body.comfyModel)) modelSelector = String(body.comfyModel);
   if (!modelSelector && provided(body.model) && !String(body.model).startsWith('urn:air:') && !/^\d+@\d+$/.test(String(body.model))) {
-    // Literal selector models (turbo/base/dev/…) — not AIR checkpoints.
     const literal = String(body.model);
     if (['turbo', 'base', 'raw', 'edit', 'dev', 'flex', 'pro', 'max', 'klein'].includes(literal)) modelSelector = literal;
   }
@@ -204,18 +362,20 @@ async function buildCivitaiBaseInput(
     ...(wire.omitEcosystem || engine === 'flux2' ? {} : { ecosystem }),
     operation,
   };
-  if (builtin) {
-    input.model = body.comfyModel;
+  if (hasModelDiscriminator && modelSelector) {
+    input.model = modelSelector;
     if (source) {
       if ('diffusionModel' in props) {
         input.diffusionModel = source;
+      } else if ('checkpointModel' in props) {
+        input.checkpointModel = source;
       } else if ('diffuserModel' in props) {
         input.diffuserModel = source;
       } else {
         unmappedFields?.push({
           field: 'sourceCheckpoint',
           value: source,
-          reason: `Selected schema declares neither diffusionModel nor diffuserModel; preserved in trace as unmapped without inventing fields`,
+          reason: `Selected schema declares neither diffusionModel, checkpointModel, nor diffuserModel; preserved in trace as unmapped without inventing fields`,
         });
       }
     }

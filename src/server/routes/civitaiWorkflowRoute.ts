@@ -8,6 +8,7 @@ import {
   isRawBaseModelArchitectureText,
   buildAllProviderAdaptations,
   normalizeEcosystem,
+  resolveCivitaiNativeSelectors,
   type CivitaiRecipeInput,
 } from '../../utils/civitaiImportMap.ts';
 
@@ -22,10 +23,14 @@ export interface CivitaiVersionSuccess {
   modelId?: number;
   versionId: number;
   name?: string;
+  modelName?: string;
   baseModel?: string;
   air?: string;
   downloadUrl?: string;
   fileName?: string;
+  fileId?: number;
+  fileHashes?: Record<string, string>;
+  fileUnverifiedReason?: string;
   requireAuth?: boolean;
   canGenerate?: boolean;
 }
@@ -78,10 +83,84 @@ async function readResponseBody(resp: any): Promise<{ rawBody: string; parsedJso
   return { rawBody: readError ? (rawBody || readError) : rawBody, parsedJson, readError };
 }
 
+export interface SelectedCivitaiModelFile {
+  file?: any;
+  fileName?: string;
+  fileId?: number;
+  downloadUrl?: string;
+  fileHashes?: Record<string, string>;
+  unverifiedReason?: string;
+}
+
 /**
- * Resolve official model version metadata from Civitai API (modelId, versionId, air, downloadUrl, requireAuth)
- * Reference: https://developer.civitai.com/site/reference/model-versions.md
+ * Selects the authentic model weight file from a Civitai version's `files` array.
+ * - Filters strictly for model weight files (`type === 'Model'` or omitted type, excluding `VAE`, `Other`, `Training Data`, `Config`, `Negative`, `TextEncoder`, `Archive`).
+ * - Never picks an auxiliary `Other` / `VAE` file even if it appears at `files[0]` or has `primary: true`.
+ * - If exactly one primary model file exists, selects it.
+ * - If no primary flag exists on model files and only one model file exists, selects it.
+ * - If multiple model files exist without a single primary, or zero model files exist, returns `unverifiedReason` without guessing or fabricating a downloadUrl.
  */
+export function selectVerifiedCivitaiModelFile(files: unknown, fallbackVersionDownloadUrl?: string, fallbackMiniFileName?: string): SelectedCivitaiModelFile {
+  if (!Array.isArray(files) || files.length === 0) {
+    if (fallbackVersionDownloadUrl) {
+      return {
+        fileName: fallbackMiniFileName,
+        downloadUrl: fallbackVersionDownloadUrl,
+      };
+    }
+    return {
+      unverifiedReason: '版本元数据未返回 files 列表，文件身份未核实',
+    };
+  }
+
+  const NON_MODEL_TYPES = new Set(['other', 'vae', 'training data', 'config', 'negative', 'textencoder', 'archive', 'pruned model']);
+  const modelFiles = files.filter((f: any) => {
+    if (!f || typeof f !== 'object') return false;
+    const t = String(f.type || '').trim().toLowerCase();
+    if (!t) return true;
+    if (t === 'model') return true;
+    if (NON_MODEL_TYPES.has(t)) return false;
+    return false;
+  });
+
+  if (modelFiles.length === 0) {
+    const typesFound = files.map((f: any) => `${f?.name || '未知'}(type=${f?.type || '未知'})`).join('、');
+    return {
+      unverifiedReason: `版本 files 列表中未找到 type="Model" 的主权重文件（当前仅有：${typesFound}），文件身份未核实`,
+    };
+  }
+
+  const primaryModelFiles = modelFiles.filter((f: any) => f.primary === true);
+  let chosen: any;
+  if (primaryModelFiles.length === 1) {
+    chosen = primaryModelFiles[0];
+  } else if (primaryModelFiles.length > 1) {
+    const names = primaryModelFiles.map((f: any) => f.name || f.id).join('、');
+    return {
+      unverifiedReason: `版本包含多个标记为 primary 的 Model 权重文件（${names}），未自动猜测精度或变体`,
+    };
+  } else if (modelFiles.length === 1) {
+    chosen = modelFiles[0];
+  } else {
+    const names = modelFiles.map((f: any) => f.name || f.id).join('、');
+    return {
+      unverifiedReason: `版本包含 ${modelFiles.length} 个未标记 primary 的 Model 权重文件（${names}），未自动猜测精度或变体`,
+    };
+  }
+
+  const downloadUrl =
+    (typeof chosen.downloadUrl === 'string' && chosen.downloadUrl.trim())
+      ? chosen.downloadUrl.trim()
+      : fallbackVersionDownloadUrl;
+
+  return {
+    file: chosen,
+    fileName: typeof chosen.name === 'string' && chosen.name.trim() ? chosen.name.trim() : fallbackMiniFileName,
+    fileId: typeof chosen.id === 'number' ? chosen.id : undefined,
+    downloadUrl,
+    fileHashes: chosen.hashes && typeof chosen.hashes === 'object' ? chosen.hashes : undefined,
+  };
+}
 export async function resolveCivitaiVersionInfo(
   versionId: number | string,
   upstreamFetch: (meta: any, url: string, options?: any) => Promise<any>
@@ -205,9 +284,16 @@ export async function resolveCivitaiVersionInfo(
   }
 
   const baseModel = fullInfo?.baseModel || miniInfo?.baseModel;
-  const name = fullInfo?.name || miniInfo?.versionName || miniInfo?.modelName;
-  const fileName = fullInfo?.files?.[0]?.name || miniInfo?.fileName;
-  const downloadUrl = fullInfo?.downloadUrl || (miniInfo?.downloadUrls?.[0] ? miniInfo.downloadUrls[0].split('?')[0] : undefined);
+  const versionName = fullInfo?.name || miniInfo?.versionName;
+  const parentModelName = fullInfo?.model?.name || miniInfo?.modelName;
+  const name = parentModelName && versionName && parentModelName !== versionName
+    ? `${parentModelName} (${versionName})`
+    : (parentModelName || versionName);
+
+  const fallbackVersionDownloadUrl = fullInfo?.downloadUrl || (miniInfo?.downloadUrls?.[0] ? miniInfo.downloadUrls[0].split('?')[0] : undefined);
+  const selectedFile = selectVerifiedCivitaiModelFile(fullInfo?.files, fallbackVersionDownloadUrl, miniInfo?.fileName);
+  const fileName = selectedFile.fileName;
+  const downloadUrl = selectedFile.downloadUrl;
   const requireAuth = miniInfo?.requireAuth !== undefined ? Boolean(miniInfo.requireAuth) : (fullInfo?.requireAuth !== undefined ? Boolean(fullInfo.requireAuth) : undefined);
   const canGenerate = miniInfo?.canGenerate !== undefined ? Boolean(miniInfo.canGenerate) : undefined;
 
@@ -216,10 +302,14 @@ export async function resolveCivitaiVersionInfo(
     modelId: modelId || undefined,
     versionId: parseInt(vid, 10),
     name,
+    modelName: parentModelName || name,
     baseModel,
     air,
     downloadUrl,
     fileName,
+    fileId: selectedFile.fileId,
+    fileHashes: selectedFile.fileHashes,
+    fileUnverifiedReason: selectedFile.unverifiedReason,
     requireAuth,
     canGenerate,
   };
@@ -399,7 +489,8 @@ export async function fetchCivitaiRealImageMeta(imageId: string, upstreamFetch: 
   const rawResources = Array.isArray(meta.civitaiResources) ? meta.civitaiResources : [];
   const resolvedResources = await Promise.all(
     rawResources.map(async (r: any) => {
-      const isCheckpoint = String(r.type || '').toUpperCase() === 'CHECKPOINT';
+      const rType = String(r.type || '').toUpperCase();
+      const isCheckpoint = rType === 'CHECKPOINT' || rType === 'DIFFUSIONMODEL' || rType === 'UNET';
       let vInfo: CivitaiVersionResult | null = null;
       if (r.modelVersionId) {
         vInfo = await resolveCivitaiVersionInfo(r.modelVersionId, upstreamFetch);
@@ -431,9 +522,9 @@ export async function fetchCivitaiRealImageMeta(imageId: string, upstreamFetch: 
       const succ = vInfo && vInfo.success ? vInfo : null;
       const modelId = succ?.modelId ?? r.modelId;
       const versionId = succ?.versionId ?? r.modelVersionId;
-      const baseModel = succ?.baseModel ?? (r.baseModel || detectedItemBaseModel);
+      const baseModel = succ?.baseModel ?? r.baseModel;
       const fileName = succ?.fileName ?? r.modelVersionName;
-      const canonicalAir = succ?.air ?? (modelId && versionId ? `urn:air:${normalizeEcosystem(baseModel)}:${isCheckpoint ? 'checkpoint' : 'lora'}:civitai:${modelId}@${versionId}` : undefined);
+      const canonicalAir = succ?.air ?? (modelId && versionId && baseModel ? `urn:air:${normalizeEcosystem(baseModel)}:${isCheckpoint ? 'checkpoint' : 'lora'}:civitai:${modelId}@${versionId}` : undefined);
       const downloadUrl = succ?.downloadUrl;
       const requireAuth = succ?.requireAuth;
 
@@ -442,8 +533,12 @@ export async function fetchCivitaiRealImageMeta(imageId: string, upstreamFetch: 
         modelVersionId: versionId,
         modelId,
         versionId,
-        name: fileName || r.modelVersionName || (isCheckpoint ? 'Checkpoint' : 'LoRA'),
-        modelName: r.modelVersionName || fileName,
+        name: fileName || succ?.name || r.modelVersionName || (isCheckpoint ? 'Checkpoint' : 'LoRA'),
+        fileName: succ?.fileName,
+        fileId: succ?.fileId,
+        fileHashes: succ?.fileHashes,
+        fileUnverifiedReason: succ?.fileUnverifiedReason,
+        modelName: succ?.name || r.modelVersionName || fileName,
         modelType: (r.type || (isCheckpoint ? 'CHECKPOINT' : 'LORA')).toUpperCase(),
         type: (r.type || (isCheckpoint ? 'CHECKPOINT' : 'LORA')).toUpperCase(),
         strength: r.weight,
@@ -653,6 +748,8 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
       let rawModelName = '';
       let detectedBaseModel = '';
       let importedCheckpointRef = '';
+      let checkpointVersionName = '';
+      let checkpointModelName = '';
       let detectedVae = '';
       let detectedEngine = '';
       let checkpoint = '';
@@ -815,6 +912,17 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
           detectedBaseModel = meta.baseModel;
         }
 
+        const ckptRes = Array.isArray(genData?.resources)
+          ? genData.resources.find((r: any) => {
+              const t = String(r?.modelType || r?.type || '').toUpperCase();
+              return t === 'CHECKPOINT' || t === 'DIFFUSIONMODEL' || t === 'UNET';
+            })
+          : null;
+        if (ckptRes) {
+          checkpointVersionName = ckptRes.modelName || ckptRes.name || '';
+          checkpointModelName = ckptRes.modelName || ckptRes.name || '';
+        }
+
         importedCheckpointRef = resolveImportedCheckpointRef(genData?.resources, meta, rawModelName, detectedBaseModel);
 
         if (meta.engine) detectedEngine = meta.engine;
@@ -858,9 +966,16 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
           rawLorasFromGen.forEach((r: any) => {
             const versionId = r.versionId || r.modelVersionId || r.id;
             const modelId = r.modelId;
-            const canonicalAir = r.air || (modelId && versionId ? `urn:air:${normalizeEcosystem(r.baseModel || detectedBaseModel)}:lora:civitai:${modelId}@${versionId}` : undefined);
+            const canonicalAir = r.air || (modelId && versionId && r.baseModel ? `urn:air:${normalizeEcosystem(r.baseModel)}:lora:civitai:${modelId}@${versionId}` : undefined);
+            if (r.fileUnverifiedReason) {
+              hash404Warnings.push(`LoRA "${r.modelName || r.name || versionId}" 文件校验提示: ${r.fileUnverifiedReason}`);
+            }
             loras.push({
               name: r.fileName || r.name || r.modelName || `Civitai_LoRA_${r.id}`,
+              fileName: r.fileName,
+              fileId: r.fileId,
+              fileHashes: r.fileHashes,
+              fileUnverifiedReason: r.fileUnverifiedReason,
               displayName: r.modelName || r.name || r.fileName,
               strength: r.strength !== undefined && r.strength !== null ? r.strength : null,
               civitaiId: canonicalAir || (modelId && versionId ? `${modelId}@${versionId}` : (r.resolutionError ? undefined : String(versionId || ''))),
@@ -871,19 +986,20 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
               requireAuth: r.requireAuth === undefined ? undefined : Boolean(r.requireAuth),
               canGenerate: r.canGenerate,
               triggers: r.trainedWords?.join(', ') || '',
-              baseModel: r.baseModel || detectedBaseModel,
+              baseModel: r.baseModel,
               inferredFromPrompt: false,
               resolutionError: r.resolutionError,
-              unresolvedReason: r.unresolvedReason,
+              unresolvedReason: r.unresolvedReason || r.fileUnverifiedReason,
             });
           });
         } else if (rawLorasFromAdditional.length > 0) {
           rawLorasFromAdditional.forEach((a: any) => {
             const versionId = a.versionId || a.modelVersionId || a.id;
             const modelId = a.modelId;
-            const canonicalAir = a.air || (modelId && versionId ? `urn:air:${normalizeEcosystem(a.baseModel || detectedBaseModel)}:lora:civitai:${modelId}@${versionId}` : undefined);
+            const canonicalAir = a.air || (modelId && versionId && a.baseModel ? `urn:air:${normalizeEcosystem(a.baseModel)}:lora:civitai:${modelId}@${versionId}` : undefined);
             loras.push({
               name: a.fileName || a.name || 'LoRA',
+              fileName: a.fileName,
               displayName: (a.fileName || a.name || '').replace(/\.safetensors$/, ''),
               strength: a.strength !== undefined && a.strength !== null ? a.strength : null,
               civitaiId: canonicalAir || (modelId && versionId ? `${modelId}@${versionId}` : (a.resolutionError ? undefined : String(versionId || a.modelId || ''))),
@@ -893,7 +1009,7 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
               downloadUrl: a.downloadUrl,
               requireAuth: a.requireAuth === undefined ? undefined : Boolean(a.requireAuth),
               triggers: '',
-              baseModel: detectedBaseModel,
+              baseModel: a.baseModel,
               inferredFromPrompt: false,
               resolutionError: a.resolutionError,
               unresolvedReason: a.unresolvedReason,
@@ -911,7 +1027,7 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
               displayName: match[1].split('/').pop() || match[1],
               strength: match[2] ? parseFloat(match[2]) : null,
               triggers: '',
-              baseModel: detectedBaseModel,
+              baseModel: undefined,
               inferredFromPrompt: true, // P2-2
             });
           }
@@ -976,20 +1092,36 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
             const isLoraType = modelType === 'LORA' || modelType === 'LOCON' || modelType === 'DORA';
 
             if (isLoraType) {
+              const selectedLoraFile = selectVerifiedCivitaiModelFile(vData.files, vData.downloadUrl);
+              if (selectedLoraFile.unverifiedReason) {
+                hash404Warnings.push(`LoRA "${vData.model?.name || vData.name || vData.id}" 文件校验提示: ${selectedLoraFile.unverifiedReason}`);
+              }
               loras = [
                 {
-                  name: vData.files?.[0]?.name || vData.name || '',
+                  name: selectedLoraFile.fileName || vData.name || '',
+                  fileName: selectedLoraFile.fileName,
+                  fileId: selectedLoraFile.fileId,
+                  fileHashes: selectedLoraFile.fileHashes,
+                  fileUnverifiedReason: selectedLoraFile.unverifiedReason,
+                  displayName: vData.model?.name ? `${vData.model.name} (${vData.name || ''})` : vData.name,
                   strength: null,
                   civitaiId: String(vData.id),
+                  modelId: vData.modelId,
+                  versionId: vData.id,
+                  air: vData.air,
+                  downloadUrl: selectedLoraFile.downloadUrl,
                   triggers,
                   baseModel: rawModelName,
+                  unresolvedReason: selectedLoraFile.unverifiedReason,
                 },
               ];
               checkpoint = '';
             } else {
               // Checkpoint or other model type
               loras = [];
-              importedCheckpointRef = `civitai:${vData.modelId || ''}@${vData.id}`;
+              checkpointVersionName = vData.name || '';
+              checkpointModelName = vData.model?.name || '';
+              importedCheckpointRef = vData.air || `civitai:${vData.modelId || ''}@${vData.id}`;
               checkpoint = importedCheckpointRef;
             }
             parsedUpstreamData = true;
@@ -1157,29 +1289,50 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
       let chosenEngineName = 'Civitai 官方原生生成引擎';
       let engineExplanation = '';
 
+      const requestedTargetModel = typeof req.body?.targetModel === 'string' ? req.body.targetModel.trim() : '';
       const sourceModelReference = importedCheckpointRef || rawModelName || detectedBaseModel || '';
       if (isVideo && (engine === 'video' || engine === 'civitai')) {
         targetProvider = 'video';
         chosenEngineName = 'AI Video 视频生成引擎';
-        checkpoint = '';
+        checkpoint = requestedTargetModel || '';
         baseModelArchitecture = detectedBaseModel || '';
-        engineExplanation = `检测到视频来源；已保留来源模型“${sourceModelReference || '未提供'}”，但不会把 Civitai 模型名猜成其他视频供应商 ID。请在视频节点明确选择实际供应商与模型后再运行。`;
+        engineExplanation = requestedTargetModel
+          ? `检测到视频来源；已绑定您在目标目录选择的视频模型“${requestedTargetModel}”，同时保留来源模型“${sourceModelReference || '未提供'}”元数据。`
+          : `检测到视频来源；已保留来源模型“${sourceModelReference || '未提供'}”，但不会把 Civitai 模型名猜成其他视频供应商 ID。请在视频节点明确选择实际供应商与模型后再运行。`;
       } else if (engine === 'civitai') {
         targetProvider = 'civitai';
         chosenEngineName = 'Civitai 官方原生生成引擎';
         const isRawArch = isRawBaseModelArchitectureText(sourceModelReference);
-        checkpoint = isRawArch ? '' : sourceModelReference;
+        const isValidCivitaiTarget =
+          requestedTargetModel &&
+          (requestedTargetModel.startsWith('urn:air:') ||
+            requestedTargetModel.startsWith('civitai:') ||
+            /^\d+(?:@\d+)?$/.test(requestedTargetModel));
+        checkpoint = isValidCivitaiTarget ? requestedTargetModel : (isRawArch ? '' : sourceModelReference);
         baseModelArchitecture = detectedBaseModel || (isRawArch ? sourceModelReference : '');
-        engineExplanation = isRawArch
+        engineExplanation = isRawArch && !isValidCivitaiTarget
           ? `来源模型“${sourceModelReference}”仅为基础架构标签，非具体 Checkpoint 模型文件或 Civitai AIR；已保留该架构信息，底模节点需要明确选择真实执行 Checkpoint 后方可运行。`
           : '保留 Civitai 解析出的原始模型/版本引用；是否具备在线生成权限以本次上游响应为准。';
       } else {
         targetProvider = engine || '';
         chosenEngineName = `${engine || '未选择'} 目标引擎`;
-        checkpoint = '';
+        checkpoint = requestedTargetModel || '';
         baseModelArchitecture = detectedBaseModel || '';
-        engineExplanation = `已保留 Civitai 来源模型“${sourceModelReference || '未提供'}”和 LoRA 意图，但不会跨供应商猜测模型 ID、端点或 LoRA 资源。请先从 ${engine || '目标供应商'} 的模型中心选择真实执行模型；来源 LoRA 也必须在该供应商重新解析后才能运行。`;
+        engineExplanation = requestedTargetModel
+          ? `已绑定您在 ${engine || '目标供应商'} 选定的目标模型“${requestedTargetModel}”，并保留 Civitai 来源模型“${sourceModelReference || '未提供'}”和 LoRA 原始元数据。`
+          : `已保留 Civitai 来源模型“${sourceModelReference || '未提供'}”和 LoRA 意图，但不会跨供应商猜测模型 ID、端点或 LoRA 资源。请先从 ${engine || '目标供应商'} 的模型中心选择真实执行模型；来源 LoRA 也必须在该供应商重新解析后才能运行。`;
       }
+
+      const civitaiSelectors = targetProvider === 'civitai'
+        ? resolveCivitaiNativeSelectors({
+            checkpoint: checkpoint || sourceModelReference,
+            baseModel: detectedBaseModel,
+            versionName: checkpointVersionName,
+            modelName: checkpointModelName || rawModelName,
+            detectedEngine,
+          })
+        : {};
+      const hasExtractedSeed = seed !== null && seed !== undefined;
 
       const nodes: any[] = [];
       const connections: any[] = [];
@@ -1207,6 +1360,7 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
               duration: videoDuration !== null ? videoDuration : undefined,
               fps: undefined,
               aspect_ratio: undefined,
+              ...(hasExtractedSeed ? { seed, control_after_generate: 'fixed' } : {}),
             },
           },
           {
@@ -1244,9 +1398,13 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
           values: {
             ckpt_name: checkpoint,
             targetProvider,
+            base_model: detectedBaseModel || undefined,
+            ...(civitaiSelectors.engine ? { civitai_engine: civitaiSelectors.engine } : {}),
+            ...(civitaiSelectors.ecosystem ? { civitai_ecosystem: civitaiSelectors.ecosystem } : {}),
+            ...(civitaiSelectors.model ? { civitai_model: civitaiSelectors.model } : {}),
             import_source_provider: 'civitai',
             import_source_model: sourceModelReference,
-            import_requires_model_selection: !checkpoint || (targetProvider !== 'civitai'),
+            import_requires_model_selection: !checkpoint,
             clip_skip: clipSkip !== null && clipSkip !== undefined ? clipSkip : undefined,
           },
         });
@@ -1284,11 +1442,14 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
                 strength_clip: loraItem.clipStrength ?? (loraItem.strength !== null && loraItem.strength !== undefined ? loraItem.strength : undefined),
                 trigger_words: loraItem.triggers || '',
                 civitai_id: loraItem.air || (loraItem.modelId && loraItem.versionId ? `${loraItem.modelId}@${loraItem.versionId}` : loraItem.civitaiId),
+                model_id: loraItem.modelId,
+                version_id: loraItem.versionId,
+                air: loraItem.air,
                 download_url: effectiveDownloadUrl,
-                base_model: loraItem.baseModel || detectedBaseModel,
+                base_model: loraItem.baseModel,
                 import_source_provider: 'civitai',
-                import_unresolved_resource: Boolean(loraItem.inferredFromPrompt) || (!effectiveDownloadUrl && targetProvider !== 'civitai') || Boolean(loraItem.resolutionError),
-                resourceVerified: Boolean(effectiveDownloadUrl) && !loraItem.inferredFromPrompt && !loraItem.resolutionError,
+                import_unresolved_resource: Boolean(loraItem.inferredFromPrompt) || (!effectiveDownloadUrl && targetProvider !== 'civitai') || Boolean(loraItem.resolutionError) || Boolean(loraItem.fileUnverifiedReason),
+                resourceVerified: Boolean(effectiveDownloadUrl) && !loraItem.inferredFromPrompt && !loraItem.resolutionError && !loraItem.fileUnverifiedReason,
                 inferred_from_prompt: Boolean(loraItem.inferredFromPrompt),
                 import_resource_reason: loraItem.unresolvedReason,
                 unresolvedReason: loraItem.unresolvedReason,
@@ -1359,7 +1520,7 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
             outputs: [{ id: 'LATENT', name: 'LATENT', type: 'LATENT' }],
             values: {
               seed,
-              control_after_generate: 'randomize',
+              control_after_generate: seed !== null && seed !== undefined ? 'fixed' : 'randomize',
               steps,
               cfg,
               sampler_name: sampler || undefined,
@@ -1427,9 +1588,13 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
       const isSdxlFamily = eco === 'sdxl' || eco === 'pony' || eco === 'illustrious';
       const isCivitaiClipSkipNotSent = targetProvider === 'civitai' && eco !== 'sd15';
 
+      const targetModel = typeof req.body?.targetModel === 'string' ? req.body.targetModel : undefined;
+      const targetSchema = (req.body?.targetSchema && typeof req.body.targetSchema === 'object') ? req.body.targetSchema : undefined;
       const providerAdaptation = buildAllProviderAdaptations(recipeInput, {
         allowTokenInUrl: Boolean(req.body?.consentCivitaiToken),
         civitaiToken: apiKey || undefined,
+        targetModel,
+        targetSchema,
       });
       const currentAdaptation = providerAdaptation[targetProvider] || providerAdaptation['civitai'];
 
@@ -1479,10 +1644,23 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
         selectedMultiVersion: selectedMultiVersionInfo || null,
         resources: loras.map((l) => ({
           name: l.displayName || l.name,
-          fileName: l.name,
-          versionId: l.civitaiId,
+          fileName: l.fileName || l.name,
+          fileId: l.fileId,
+          fileHashes: l.fileHashes,
+          fileUnverifiedReason: l.fileUnverifiedReason,
+          modelId: l.modelId,
+          versionId: l.versionId || l.civitaiId,
+          civitaiId: l.civitaiId,
+          air: l.air,
+          downloadUrl: l.downloadUrl,
+          requireAuth: l.requireAuth,
+          canGenerate: l.canGenerate,
+          inferredFromPrompt: l.inferredFromPrompt,
+          unresolvedReason: l.unresolvedReason,
+          resolutionError: l.resolutionError,
           strength: l.strength ?? null,
-          baseModel: l.baseModel || detectedBaseModel || null,
+          clipStrength: l.clipStrength ?? null,
+          baseModel: l.baseModel || null,
         })),
       };
 
@@ -1520,8 +1698,11 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
             negativePrompt,
             params: {
               checkpoint,
+              ...(civitaiSelectors.engine ? { civitaiEngine: civitaiSelectors.engine } : {}),
+              ...(civitaiSelectors.ecosystem ? { civitaiEcosystem: civitaiSelectors.ecosystem } : {}),
+              ...(civitaiSelectors.model ? { civitaiModel: civitaiSelectors.model } : {}),
               seed,
-              seedControl: 'randomize',
+              seedControl: seed !== null && seed !== undefined ? 'fixed' : 'randomize',
               steps,
               cfg,
               sampler,
@@ -1533,9 +1714,13 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
               loras: loras.map((l) => ({
                 name: l.name,
                 modelStrength: l.strength ?? undefined,
-                clipStrength: l.strength ?? undefined,
+                clipStrength: l.clipStrength ?? undefined,
                 triggerWords: l.triggers || '',
                 civitaiId: l.civitaiId,
+                modelId: l.modelId,
+                versionId: l.versionId,
+                air: l.air,
+                downloadUrl: l.downloadUrl,
                 unresolvedResource: targetProvider !== 'civitai' || !l.downloadUrl || Boolean(l.resolutionError),
                 unresolvedReason: l.unresolvedReason,
               })),

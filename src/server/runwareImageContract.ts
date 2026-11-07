@@ -31,6 +31,96 @@ export interface RunwareImageRequest {
   payload: RunwareTask[];
   overrides: CustomOverride[];
   actualModel: string;
+  unmappedLoras?: Array<{ item: unknown; reason: string }>;
+}
+
+function extractRunwareAir(raw: unknown): string {
+  const s = String(raw ?? '').trim();
+  if (!s) return '';
+  const urnMatch = s.match(/^(?:urn:)?air:[^:]+:[^:]+:([a-z0-9_.-]+:[a-z0-9_.-]+@[a-z0-9_.-]+)$/i);
+  if (urnMatch) return urnMatch[1].toLowerCase();
+  const shortMatch = s.match(/^([a-z0-9_.-]+:[a-z0-9_.-]+@[a-z0-9_.-]+)$/i);
+  if (shortMatch) return shortMatch[1].toLowerCase();
+  return '';
+}
+
+function isWeightFilenameOrUrlOrBareDigits(raw: string): boolean {
+  const s = raw.trim();
+  if (!s) return true;
+  if (/^https?:\/\//i.test(s)) return true;
+  if (/^\d+$/.test(s)) return true;
+  if (/\.(?:safetensors|ckpt|pt|bin|pth|onnx)(?:$|[?#])/i.test(s)) return true;
+  return false;
+}
+
+function resolveRunwareLoraModel(item: Record<string, any>): { model: string; reason?: string } {
+  const rawExplicitModel = String(item.model ?? '').trim();
+  if (rawExplicitModel) {
+    const airFromModel = extractRunwareAir(rawExplicitModel);
+    if (airFromModel) return { model: airFromModel };
+    if (!isWeightFilenameOrUrlOrBareDigits(rawExplicitModel)) {
+      return { model: rawExplicitModel };
+    }
+  }
+
+  for (const primary of [item.lora_name, item.name, item.id, item.path]) {
+    const air = extractRunwareAir(primary);
+    if (air) return { model: air };
+  }
+
+  const resourceSource = String(item.resource_source ?? '').trim().toLowerCase();
+  const hasCivitaiId = Boolean(String(item.civitaiId ?? item.civitai_id ?? '').trim());
+  const isReselectedNonCivitai = Boolean(resourceSource && resourceSource !== 'civitai' && !hasCivitaiId);
+
+  if (isReselectedNonCivitai) {
+    for (const candidate of [item.lora_name, item.name, item.id]) {
+      const s = String(candidate ?? '').trim();
+      if (s && !isWeightFilenameOrUrlOrBareDigits(s)) {
+        return { model: s };
+      }
+    }
+    return {
+      model: '',
+      reason:
+        'Runware LoRA 需要有效的 AIR 标识（如 civitai:modelId@versionId 或 runware:id@version），不能直接发送权重文件名、下载链接或缺少 modelId 的纯数字版本 ID',
+    };
+  }
+
+  const airFromAirField = extractRunwareAir(item.air);
+  if (airFromAirField) return { model: airFromAirField };
+
+  const airFromCivitaiId = extractRunwareAir(item.civitaiId ?? item.civitai_id);
+  if (airFromCivitaiId) return { model: airFromCivitaiId };
+
+  const modelId = String(item.modelId ?? item.model_id ?? '').trim();
+  const rawVersionCandidate = String(item.versionId ?? item.version_id ?? item.civitaiId ?? item.civitai_id ?? '').trim();
+  const versionId = /^\d+$/.test(rawVersionCandidate)
+    ? rawVersionCandidate
+    : String(item.versionId ?? item.version_id ?? '').trim();
+  if (/^\d+$/.test(modelId) && /^\d+$/.test(versionId)) {
+    return { model: `civitai:${modelId}@${versionId}` };
+  }
+
+  const isForeignCivitai = Boolean(
+    hasCivitaiId ||
+      String(item.downloadUrl ?? item.download_url ?? '').trim() ||
+      item.import_source_provider === 'civitai' ||
+      resourceSource === 'civitai'
+  );
+  if (!isForeignCivitai) {
+    for (const candidate of [item.lora_name, item.id, item.name]) {
+      const s = String(candidate ?? '').trim();
+      if (s && !isWeightFilenameOrUrlOrBareDigits(s)) {
+        return { model: s };
+      }
+    }
+  }
+
+  return {
+    model: '',
+    reason:
+      'Runware LoRA 需要有效的 AIR 标识（如 civitai:modelId@versionId 或 runware:id@version），不能直接发送权重文件名、下载链接或缺少 modelId 的纯数字版本 ID',
+  };
 }
 
 export interface RunwareImageResponse {
@@ -97,8 +187,7 @@ export function buildRunwareImageRequest(body: Record<string, unknown>, baseUrl 
     task.steps = Math.round(body.steps);
   }
   const cfgVal = body.cfg ?? body.CFGScale ?? body.cfgScale ?? body.guidance_scale;
-  const cfgAllowedAtZero = task.model === 'runware:100@1';
-  if (typeof cfgVal === 'number' && Number.isFinite(cfgVal) && (cfgVal > 0 || (cfgVal === 0 && cfgAllowedAtZero))) {
+  if (typeof cfgVal === 'number' && Number.isFinite(cfgVal) && cfgVal >= 0) {
     task.CFGScale = Number(cfgVal);
   }
   if (typeof body.seed === 'number' && Number.isFinite(body.seed) && body.seed >= 0) {
@@ -108,14 +197,19 @@ export function buildRunwareImageRequest(body: Record<string, unknown>, baseUrl 
     task.scheduler = body.scheduler.trim();
   }
 
+  const unmappedLoras: Array<{ item: unknown; reason: string }> = [];
   if (Array.isArray(body.loras) && body.loras.length > 0) {
     const loras: RunwareLora[] = [];
     for (const item of body.loras) {
       if (typeof item === 'object' && item !== null) {
-        const rawLoraModel = String((item as any).civitaiId || (item as any).path || (item as any).name || (item as any).model || '').trim();
-        if (!rawLoraModel) continue;
-        const airMatch = rawLoraModel.match(/^(?:urn:)?air:[^:]+:[^:]+:(civitai:\d+@\d+)/i);
-        const loraModel = airMatch ? airMatch[1].toLowerCase() : rawLoraModel;
+        const resolved = resolveRunwareLoraModel(item as Record<string, any>);
+        if (!resolved.model) {
+          unmappedLoras.push({
+            item,
+            reason: resolved.reason || 'Runware LoRA 缺少有效的 AIR 标识',
+          });
+          continue;
+        }
         const rawWeight =
           typeof (item as any).strength === 'number'
             ? (item as any).strength
@@ -123,8 +217,14 @@ export function buildRunwareImageRequest(body: Record<string, unknown>, baseUrl 
             ? (item as any).modelStrength
             : typeof (item as any).weight === 'number'
             ? (item as any).weight
+            : typeof (item as any).scale === 'number'
+            ? (item as any).scale
             : undefined;
-        loras.push(typeof rawWeight === 'number' && Number.isFinite(rawWeight) ? { model: loraModel, weight: rawWeight } : { model: loraModel });
+        loras.push(
+          typeof rawWeight === 'number' && Number.isFinite(rawWeight)
+            ? { model: resolved.model, weight: rawWeight }
+            : { model: resolved.model }
+        );
       }
     }
     if (loras.length > 0) {
@@ -143,6 +243,7 @@ export function buildRunwareImageRequest(body: Record<string, unknown>, baseUrl 
     payload: [sentTask],
     overrides: custom.overrides,
     actualModel: String(sentTask.model),
+    ...(unmappedLoras.length > 0 ? { unmappedLoras } : {}),
   };
 }
 

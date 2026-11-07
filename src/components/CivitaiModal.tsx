@@ -85,8 +85,16 @@ export interface UnifiedLoRAItem {
 
 import { CivitaiModalImportPreview } from './CivitaiModalImportPreview';
 import {
+  ensureModelSchema,
+  getModelSchemaEntry,
+  modelSchemaVersion,
+  subscribeModelSchema,
+} from '../services/modelSchemaCache';
+import {
   adaptCivitaiRecipeToProvider,
   buildAllProviderAdaptations,
+  isRawBaseModelArchitectureText,
+  resolveCivitaiNativeSelectors,
   type ProviderAdaptationResult,
   type ProviderAdaptationMap,
   type CivitaiRecipeInput,
@@ -170,13 +178,19 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
   const [modalMode, setModalMode] = useState<'browse' | 'import'>(initialMode);
   const [importInput, setImportInput] = useState<string>('');
   const [importTargetProvider, setImportTargetProvider] = useState<string>('civitai');
+  const [importTargetModel, setImportTargetModel] = useState<string>('');
   const [isExtracting, setIsExtracting] = useState<boolean>(false);
   const [extractError, setExtractError] = useState<string | null>(null);
   const [extractedPreset, setExtractedPreset] = useState<any>(null);
   const [tokenConsent, setTokenConsent] = useState<boolean>(false);
   // 用户最高原则（2026-11-05）：「我们不反对nsfw，有nsfw开关的都默认开启」
   const [nsfwFilter, setNsfwFilter] = useState<boolean>(true);
+  const [, setLiveSchemaVer] = useState<number>(0);
+  useEffect(() => {
+    return subscribeModelSchema(() => setLiveSchemaVer((v) => v + 1));
+  }, []);
   const activeReqIdRef = useRef(0);
+  const extractReqIdRef = useRef(0);
 
   // clean-0942: one LoRA catalog GET per URL per open (StrictMode / repeated effects share it; failures retry).
   const catalogMemo = useRef(new Map<string, ReturnType<typeof fetchLiveModels>>());
@@ -516,10 +530,12 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
   const handleExtractCivitaiWorkflow = async (
     targetInput = importInput,
     targetProv = importTargetProvider,
-    consent = tokenConsent
+    consent = tokenConsent,
+    targetModel = importTargetModel
   ) => {
     const trimmed = (targetInput || '').trim();
     if (!trimmed) return;
+    const reqId = ++extractReqIdRef.current;
     setIsExtracting(true);
     setExtractError(null);
     try {
@@ -530,9 +546,12 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
         trimmed.includes('<lora:') ||
         trimmed.includes('\n');
 
+      const liveSchemaEntry = getModelSchemaEntry(targetProv, targetModel);
+      const liveSchemaProps = liveSchemaEntry?.status === 'ready' ? liveSchemaEntry.propertiesObj : undefined;
+
       const payload = isRaw
-        ? { rawText: trimmed, engine: targetProv, consentCivitaiToken: consent }
-        : { url: trimmed, engine: targetProv, consentCivitaiToken: consent };
+        ? { rawText: trimmed, engine: targetProv, targetModel: targetModel || undefined, targetSchema: liveSchemaProps, consentCivitaiToken: consent }
+        : { url: trimmed, engine: targetProv, targetModel: targetModel || undefined, targetSchema: liveSchemaProps, consentCivitaiToken: consent };
 
       const resp = await fetch('/api/civitai/extract-workflow', {
         method: 'POST',
@@ -540,6 +559,7 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
         body: JSON.stringify(payload),
       });
       const data = await resp.json();
+      if (reqId !== extractReqIdRef.current) return;
       if (!resp.ok || !data.success) {
         const errorParts: string[] = [];
         if (data.error) errorParts.push(data.error);
@@ -554,10 +574,13 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
       }
       setExtractedPreset(data.preset);
     } catch (err: any) {
+      if (reqId !== extractReqIdRef.current) return;
       setExtractError(err.message || '网络请求错误');
       setExtractedPreset(null);
     } finally {
-      setIsExtracting(false);
+      if (reqId === extractReqIdRef.current) {
+        setIsExtracting(false);
+      }
     }
   };
 
@@ -1356,48 +1379,48 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
                 type="button"
                 data-testid="civitai-quick-fill-flux"
                 onClick={() => {
-                  const val = 'https://civitai.com/images/64399178';
+                  const val = 'https://civitai.red/images/148140013';
                   setImportInput(val);
                   handleExtractCivitaiWorkflow(val, importTargetProvider, tokenConsent);
                 }}
                 className="px-2.5 py-1.5 rounded-lg bg-emerald-950/40 hover:bg-emerald-900/50 text-emerald-300 border border-emerald-700/50 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
               >
-                <span>🚀 FLUX.1 D 多LoRA (#64399178 · Cinematic 1940s & Octane)</span>
+                <span>🚀 Krea 2 Turbo 多LoRA (#148140013 · Masterpiece & Ektachrome)</span>
               </button>
 
               <button
                 type="button"
                 data-testid="civitai-quick-fill-pony"
                 onClick={() => {
-                  const val = 'https://civitai.com/images/12097475';
+                  const val = 'https://civitai.red/images/148135866';
                   setImportInput(val);
                   handleExtractCivitaiWorkflow(val, importTargetProvider, tokenConsent);
                 }}
                 className="px-2.5 py-1.5 rounded-lg bg-purple-950/40 hover:bg-purple-900/50 text-purple-300 border border-purple-700/50 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
               >
-                <span>⭐ Pony / SDXL 多LoRA (#12097475 · Twilight & Expressive)</span>
+                <span>⚡ Z-Image Turbo 配方 (#148135866 · CyberRealistic Z-Image)</span>
               </button>
 
               <button
                 type="button"
                 data-testid="civitai-quick-fill-sd15"
                 onClick={() => {
-                  const val = 'https://civitai.com/images/11346154';
+                  const val = 'https://civitai.red/images/148004351';
                   setImportInput(val);
                   handleExtractCivitaiWorkflow(val, importTargetProvider, tokenConsent);
                 }}
                 className="px-2.5 py-1.5 rounded-lg bg-cyan-950/40 hover:bg-cyan-900/50 text-cyan-300 border border-cyan-700/50 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
               >
-                <span>📸 SD 1.5 双LoRA (#11346154 · Backlight & Contrast Sliders)</span>
+                <span>🧠 MOSS-Image SFT 双LoRA (#148004351 · DMD & DarkLines)</span>
               </button>
 
               <button
                 type="button"
                 data-testid="civitai-quick-fill-raw"
                 onClick={() => {
-                  const val = `asian woman, 1girl, close up portrait, beautiful detailed eyes, natural skin texture, realistic lighting, shallow depth of field, 35mm film photography, masterpiece, sharp focus, 8k <lora:hina_Krea2Turbo_asianMix_v5.0-TQD-CPO:0.85>
-Negative prompt: blurry, bad anatomy, deformed fingers, low resolution, poorly drawn face, plastic skin, oversaturated
-Steps: 28, Sampler: DPM++ 2M Karras, CFG scale: 4.5, Seed: 136947637, Size: 1024x1024, Model: flux1-dev`;
+                  const val = `masterpiece, best quality, very aesthetic, ektachrome fade film, nature, A painterly illustration of a tall, elegant woman in a sci-fi corridor <lora:krea2-masterpieces-v51:0.85>
+Negative prompt: (2d ,Illustration, drawing, cartoon, animation, anima, painting:1.4)
+Steps: 8, Sampler: Euler, CFG scale: 1, Seed: 689794262, Size: 832x1248, Model: Krea 2 Turbo`;
                   setImportInput(val);
                   handleExtractCivitaiWorkflow(val, importTargetProvider, tokenConsent);
                 }}
@@ -1444,54 +1467,148 @@ Steps: 28, Sampler: DPM++ 2M Karras, CFG scale: 4.5, Seed: 136947637, Size: 1024
         )}
 
         {/* Extracted Preview Component */}
-        {extractedPreset && (
-          <CivitaiModalImportPreview
-            adaptation={
-              extractedPreset.providerAdaptation?.[importTargetProvider] ||
-              adaptCivitaiRecipeToProvider(
-                {
-                  checkpoint: extractedPreset.nodes?.find((n: any) => n.type === 'CheckpointLoaderSimple')?.values?.ckpt_name,
-                  baseModel: extractedPreset.otherMetadata?.baseModel,
-                  loras: extractedPreset.otherMetadata?.resources || [],
-                  prompt: extractedPreset.prompt,
-                  negativePrompt: extractedPreset.negativePrompt,
-                  steps: extractedPreset.otherMetadata?.steps,
-                  cfg: extractedPreset.otherMetadata?.cfgScale,
-                  sampler: extractedPreset.otherMetadata?.sampler,
-                  scheduler: extractedPreset.otherMetadata?.scheduler,
-                  seed: extractedPreset.otherMetadata?.seed,
-                  clipSkip: extractedPreset.otherMetadata?.clipSkip,
-                  width: extractedPreset.otherMetadata?.width,
-                  height: extractedPreset.otherMetadata?.height,
-                  denoise: extractedPreset.otherMetadata?.denoise,
-                },
-                importTargetProvider,
-                { allowTokenInUrl: tokenConsent }
-              )
+        {extractedPreset && (() => {
+          const liveSchemaEntry = getModelSchemaEntry(importTargetProvider, importTargetModel);
+          const liveSchemaProps = liveSchemaEntry?.status === 'ready' ? liveSchemaEntry.propertiesObj : undefined;
+          const targetModelFamily =
+            liveSchemaEntry?.status === 'ready'
+              ? String((liveSchemaEntry as any)?.modelMetadata?.base_model || (liveSchemaEntry as any)?.modelMetadata?.family || '').trim() || undefined
+              : undefined;
+          const schemaReasonOverride =
+            !importTargetModel
+              ? '未选择目标模型；请在上方选用目标模型以加载其实时 Schema 规范。'
+              : liveSchemaEntry?.status === 'loading'
+              ? '正在读取目标模型官方 Schema...'
+              : liveSchemaEntry?.status === 'error'
+              ? `目标端点 Schema 获取失败；未核实: ${liveSchemaEntry.error || '获取失败'}`
+              : undefined;
+          const ckptNodeVal = extractedPreset.nodes?.find((n: any) => n.type === 'CheckpointLoaderSimple')?.values;
+          const sourceCkpt = ckptNodeVal?.import_source_model || ckptNodeVal?.ckpt_name || '';
+          const currentAdapt = adaptCivitaiRecipeToProvider(
+            {
+              checkpoint: sourceCkpt,
+              baseModel: extractedPreset.otherMetadata?.baseModel,
+              loras: extractedPreset.otherMetadata?.resources || [],
+              prompt: extractedPreset.prompt,
+              negativePrompt: extractedPreset.negativePrompt,
+              steps: extractedPreset.otherMetadata?.steps,
+              cfg: extractedPreset.otherMetadata?.cfgScale,
+              sampler: extractedPreset.otherMetadata?.sampler,
+              scheduler: extractedPreset.otherMetadata?.scheduler,
+              seed: extractedPreset.otherMetadata?.seed,
+              clipSkip: extractedPreset.otherMetadata?.clipSkip,
+              width: extractedPreset.otherMetadata?.width,
+              height: extractedPreset.otherMetadata?.height,
+              denoise: extractedPreset.otherMetadata?.denoise,
+            },
+            importTargetProvider,
+            {
+              targetModel: importTargetModel || undefined,
+              targetModelFamily,
+              targetSchema: liveSchemaProps,
+              schemaReasonOverride,
+              allowTokenInUrl: tokenConsent,
             }
-            allAdaptations={extractedPreset.providerAdaptation}
-            selectedProvider={importTargetProvider}
-            onSelectProvider={(prov) => {
-              setImportTargetProvider(prov);
-              handleExtractCivitaiWorkflow(importInput, prov, tokenConsent);
-            }}
-            tokenConsent={tokenConsent}
-            onToggleTokenConsent={(consent) => {
-              setTokenConsent(consent);
-              handleExtractCivitaiWorkflow(importInput, importTargetProvider, consent);
-            }}
-            preset={extractedPreset}
-            onApplyPreset={(p) => {
-              if (onLoadWorkflowPreset) {
-                onLoadWorkflowPreset(p);
-                onClose();
-              }
-            }}
-            onSelectLoRA={onSelectLoRA}
-            onAddLoRANodeToCanvas={onAddLoRANodeToCanvas}
-            onFillCurrentLoRANode={onFillCurrentLoRANode}
-          />
-        )}
+          );
+          const civitaiSelectors =
+            importTargetProvider === 'civitai'
+              ? resolveCivitaiNativeSelectors({
+                  checkpoint: importTargetModel || sourceCkpt,
+                  baseModel: extractedPreset.otherMetadata?.baseModel,
+                  detectedEngine: extractedPreset.otherMetadata?.engine,
+                })
+              : {};
+          const synchronizedPreset = {
+            ...extractedPreset,
+            currentAdaptation: currentAdapt,
+            nodes: Array.isArray(extractedPreset.nodes)
+              ? extractedPreset.nodes.map((n: any) => {
+                  if (n.type === 'CheckpointLoaderSimple') {
+                    const effectiveCkpt =
+                      importTargetProvider === 'civitai'
+                        ? (importTargetModel || (isRawBaseModelArchitectureText(sourceCkpt) ? '' : sourceCkpt))
+                        : (importTargetModel || '');
+                    return {
+                      ...n,
+                      title: `加载底模 (${currentAdapt.displayName})`,
+                      values: {
+                        ...n.values,
+                        targetProvider: importTargetProvider,
+                        ckpt_name: effectiveCkpt,
+                        base_model: n.values?.base_model || extractedPreset.otherMetadata?.baseModel || undefined,
+                        ...(importTargetProvider === 'civitai'
+                          ? {
+                              ...(n.values?.civitai_engine ? {} : civitaiSelectors.engine ? { civitai_engine: civitaiSelectors.engine } : {}),
+                              ...(n.values?.civitai_ecosystem ? {} : civitaiSelectors.ecosystem ? { civitai_ecosystem: civitaiSelectors.ecosystem } : {}),
+                              ...(n.values?.civitai_model ? {} : civitaiSelectors.model ? { civitai_model: civitaiSelectors.model } : {}),
+                            }
+                          : {}),
+                        import_requires_model_selection: !effectiveCkpt,
+                      },
+                    };
+                  }
+                  if (n.type === 'AIVideoNode' && importTargetModel) {
+                    return {
+                      ...n,
+                      values: {
+                        ...n.values,
+                        targetProvider: importTargetProvider,
+                        provider: importTargetProvider,
+                        model: importTargetModel,
+                      },
+                    };
+                  }
+                  return n;
+                })
+              : extractedPreset.nodes,
+            spatialFrames: Array.isArray(extractedPreset.spatialFrames)
+              ? extractedPreset.spatialFrames.map((f: any) => ({
+                  ...f,
+                  params: {
+                    ...f.params,
+                    targetProvider: importTargetProvider,
+                    checkpoint:
+                      importTargetProvider === 'civitai'
+                        ? (importTargetModel || (isRawBaseModelArchitectureText(sourceCkpt) ? '' : sourceCkpt))
+                        : (importTargetModel || ''),
+                  },
+                }))
+              : extractedPreset.spatialFrames,
+          };
+          return (
+            <CivitaiModalImportPreview
+              adaptation={currentAdapt}
+              allAdaptations={extractedPreset.providerAdaptation}
+              selectedProvider={importTargetProvider}
+              targetModel={importTargetModel}
+              onSelectProvider={(prov) => {
+                setImportTargetProvider(prov);
+                setImportTargetModel('');
+                handleExtractCivitaiWorkflow(importInput, prov, tokenConsent, '');
+              }}
+              onSelectTargetModel={(m) => {
+                setImportTargetModel(m);
+                ensureModelSchema(importTargetProvider, m);
+                handleExtractCivitaiWorkflow(importInput, importTargetProvider, tokenConsent, m);
+              }}
+              tokenConsent={tokenConsent}
+              onToggleTokenConsent={(consent) => {
+                setTokenConsent(consent);
+                handleExtractCivitaiWorkflow(importInput, importTargetProvider, consent, importTargetModel);
+              }}
+              preset={synchronizedPreset}
+              onApplyPreset={(p) => {
+                if (onLoadWorkflowPreset) {
+                  onLoadWorkflowPreset(p);
+                  onClose();
+                }
+              }}
+              onSelectLoRA={onSelectLoRA}
+              onAddLoRANodeToCanvas={onAddLoRANodeToCanvas}
+              onFillCurrentLoRANode={onFillCurrentLoRANode}
+            />
+          );
+        })()}
       </div>
     )}
       </div>

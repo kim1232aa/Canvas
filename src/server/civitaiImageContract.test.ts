@@ -317,4 +317,147 @@ describe('Civitai image request contract', () => {
     expect(resDefaultOn.capturedUrl).not.toContain('allowMatureContent=');
     expect(resDefaultOn.capturedBody.steps[0].input).not.toHaveProperty('allowMatureContent');
   });
+
+  it('resolves nested OpenAPI model discriminators and compound AIR ecosystems (#148140013 Krea 2 Turbo, #148135866 Z-Image Turbo, #148004351 MOSS-Image SFT)', async () => {
+    const versionMetadata: Record<string, any> = {
+      '3072332': {
+        id: 3072332,
+        modelId: 2732656,
+        name: 'v1.0',
+        baseModel: 'Krea 2 Turbo',
+        air: 'urn:air:krea2:diffusionmodel:civitai:2732656@3072332',
+        model: { name: 'Krea 2 Turbo', type: 'Checkpoint' },
+      },
+      '3331554': {
+        id: 3331554,
+        modelId: 2218365,
+        name: 'v9.0',
+        baseModel: 'ZImageTurbo',
+        air: 'urn:air:zimageturbo:diffusionmodel:civitai:2218365@3331554',
+        model: { name: 'CyberRealistic Z-Image Turbo', type: 'Checkpoint' },
+      },
+      '3409867': {
+        id: 3409867,
+        modelId: 3005406,
+        name: 'SFT',
+        baseModel: 'MOSS Image',
+        air: 'urn:air:mossimage:diffusionmodel:civitai:3005406@3409867',
+        model: { name: 'MOSS Image', type: 'Checkpoint' },
+      },
+    };
+    const mockGet = api(versionMetadata);
+
+    // 1. #148140013 Krea 2 Turbo (even when comfyModel / ecosystem are not explicitly supplied in body)
+    const kreaReq = await buildCivitaiImageRequest(
+      {
+        model: 'urn:air:krea2:diffusionmodel:civitai:2732656@3072332',
+        prompt: 'masterpiece, best quality, very aesthetic',
+        negative_prompt: '(2d ,Illustration, drawing:1.4)',
+        steps: 8,
+        cfg: 1,
+        sampler_name: 'euler',
+        seed: 689794262,
+        width: 832,
+        height: 1248,
+        loras: [
+          { civitaiId: 'urn:air:krea2:lora:civitai:2744585@3168308', strength: 1 },
+          { civitaiId: 'urn:air:krea2:lora:civitai:929497@3077110', strength: 0.85 },
+          { civitaiId: 'urn:air:krea2:lora:civitai:2826739@3189191', strength: 1 },
+          { civitaiId: 'urn:air:krea2:lora:civitai:2904145@3284125', strength: 0.6 },
+        ],
+      },
+      mockGet,
+      oa()
+    );
+    expect(kreaReq.payload).toMatchObject({
+      engine: 'comfy',
+      ecosystem: 'krea2',
+      operation: 'createImage',
+      model: 'turbo',
+      diffusionModel: 'urn:air:krea2:diffusionmodel:civitai:2732656@3072332',
+      cfgScale: 1,
+      sampler: 'euler',
+      negativePrompt: '(2d ,Illustration, drawing:1.4)',
+      steps: 8,
+      seed: 689794262,
+      width: 832,
+      height: 1248,
+      loras: {
+        'urn:air:krea2:lora:civitai:2744585@3168308': 1,
+        'urn:air:krea2:lora:civitai:929497@3077110': 0.85,
+        'urn:air:krea2:lora:civitai:2826739@3189191': 1,
+        'urn:air:krea2:lora:civitai:2904145@3284125': 0.6,
+      },
+    });
+    expect(Array.isArray(kreaReq.payload.loras)).toBe(false);
+
+    // 2. #148135866 Z-Image Turbo (compound AIR ecosystem zimageturbo -> ecosystem:'zImage', model:'turbo')
+    const zimgReq = await buildCivitaiImageRequest(
+      {
+        model: 'urn:air:zimageturbo:diffusionmodel:civitai:2218365@3331554',
+        engine: 'comfy',
+        prompt: 'Ultra-photorealistic cinematic photograph',
+        steps: 9,
+        cfg: 1,
+        sampler_name: 'euler',
+        seed: 552388375,
+        width: 832,
+        height: 1216,
+        loras: [{ civitaiId: 'urn:air:zimageturbo:lora:civitai:3012414@3418941', strength: 1 }],
+      },
+      mockGet,
+      oa()
+    );
+    expect(zimgReq.payload).toMatchObject({
+      engine: 'comfy',
+      ecosystem: 'zImage',
+      operation: 'createImage',
+      model: 'turbo',
+      diffusionModel: 'urn:air:zimageturbo:diffusionmodel:civitai:2218365@3331554',
+      cfgScale: 1,
+      sampler: 'euler',
+      steps: 9,
+      seed: 552388375,
+      loras: {
+        'urn:air:zimageturbo:lora:civitai:3012414@3418941': 1,
+      },
+    });
+
+    // 3. #148004351 MOSS-Image SFT (case-insensitive ecosystem mossimage -> ecosystem:'mossImage', model:'sft')
+    const mossReq = await buildCivitaiImageRequest(
+      {
+        model: 'urn:air:mossimage:diffusionmodel:civitai:3005406@3409867',
+        prompt: 'Image is a digital painting depicting a medieval knight',
+        negative_prompt: 'bad quality, bad eyes',
+        steps: 10,
+        cfg: 1,
+        sampler_name: 'euler',
+        seed: 2280565052,
+        width: 1024,
+        height: 1536,
+        loras: [
+          { civitaiId: 'urn:air:mossimage:lora:civitai:599757@3452384', strength: 1 },
+          { civitaiId: 'urn:air:mossimage:lora:civitai:3006599@3411385', strength: 1 },
+        ],
+      },
+      mockGet,
+      oa()
+    );
+    expect(mossReq.payload).toMatchObject({
+      engine: 'comfy',
+      ecosystem: 'mossImage',
+      operation: 'createImage',
+      model: 'sft',
+      diffusionModel: 'urn:air:mossimage:diffusionmodel:civitai:3005406@3409867',
+      cfgScale: 1,
+      sampler: 'euler',
+      negativePrompt: 'bad quality, bad eyes',
+      steps: 10,
+      seed: 2280565052,
+      loras: {
+        'urn:air:mossimage:lora:civitai:599757@3452384': 1,
+        'urn:air:mossimage:lora:civitai:3006599@3411385': 1,
+      },
+    });
+  });
 });
