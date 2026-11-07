@@ -438,7 +438,7 @@
   },
   "snapshotGaps20261103": {
     "at": "2026-11-03",
-    "source": "/workspace/canvas/temp/risk-scan-2026-11-03.md",
+    "source": "<repo-root>/temp/risk-scan-2026-11-03.md",
     "gaps": [
       "Kling V3 i2v：草案 duration 字符串 3–15 会发送；providerSchema FAL_MODELS 缺 duration 行（出站靠合同代码塞）",
       "fal-ai/wan-t2v-lora 在草案、不在 FAL_MODELS；勿把 wan-t2v 快照套到 LoRA/v2.7 端点",

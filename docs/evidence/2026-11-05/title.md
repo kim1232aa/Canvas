@@ -195,7 +195,7 @@
 
 ## 七、工程质量与完整校验退出码
 
-所有命令均在 `/root/github/ComfyUI Web Studio/.tower/worktrees/wt-15` 下直接执行（不接管道，如实记录）：
+所有命令均在 `<repo-root>/.tower/worktrees/wt-15` 下直接执行（不接管道，如实记录）：
 
 1. **TypeScript 静态检查**：
    - 命令：`npx tsc --noEmit`

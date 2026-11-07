@@ -308,7 +308,7 @@
   },
   "snapshotGaps20261103": {
     "at": "2026-11-03 ~15:00 JST",
-    "source": "/workspace/canvas/temp/risk-scan-2026-11-03.md",
+    "source": "<repo-root>/temp/risk-scan-2026-11-03.md",
     "gaps": [
       "Krea steps/cfg/宽高/LoRA：草案仍标 unsupported，但「明文拒」措辞未从 OpenAPI 证明——继续 officialVerifyRequired",
       "Krea 调用：engine 字面值已核为 krea/krea3；旧 fal+krea2 写法作废",

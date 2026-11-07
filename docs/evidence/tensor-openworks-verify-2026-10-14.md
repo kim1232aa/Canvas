@@ -1,6 +1,6 @@
 # Tensor.Art OpenWorks tools verify — 2026-10-14 (Asia/Tokyo)
 
-Project: `/workspace/canvas/Canvas-main`  
+Project: `<repo-root>/Canvas-main`  
 Service: `http://127.0.0.1:3000`  
 Method: API/curl only (no browser; avoid clobbering parallel WaveSpeed LoRA Hub UI E2E)  
 Credentials: `.env` has OpenWorks `ak_tensor_…` only (prefix confirmed; secret not echoed). **No TAMS Bearer.**

@@ -183,7 +183,6 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
   const [extractError, setExtractError] = useState<string | null>(null);
   const [extractedPreset, setExtractedPreset] = useState<any>(null);
   const [tokenConsent, setTokenConsent] = useState<boolean>(false);
-  // 用户最高原则（2026-11-05）：「我们不反对nsfw，有nsfw开关的都默认开启」
   const [nsfwFilter, setNsfwFilter] = useState<boolean>(true);
   const [, setLiveSchemaVer] = useState<number>(0);
   useEffect(() => {
@@ -967,7 +966,7 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
             <option value="Name A-Z">名称排序 (A → Z)</option>
           </select>
 
-          {/* NSFW 筛选可见开关（用户最高原则：我们不反对nsfw，有nsfw开关的都默认开启） */}
+          {/* NSFW 筛选可见开关 */}
           <button
             type="button"
             onClick={() => {
@@ -981,7 +980,7 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
                 ? 'border-pink-500/60 bg-pink-950/40 text-pink-300 shadow-sm shadow-pink-950/50'
                 : 'border-slate-700 bg-[#111216] text-slate-400 hover:text-slate-200'
             }`}
-            title="用户最高原则：“我们不反对nsfw，有nsfw开关的都默认开启”（点击可切换）"
+            title="包含 NSFW 成人内容模型（点击切换）"
           >
             <Flame className={`w-3.5 h-3.5 ${nsfwFilter ? 'text-pink-400' : 'text-slate-500'}`} />
             <span>NSFW: {nsfwFilter ? '已开启 (默认)' : '已关闭'}</span>
@@ -1364,7 +1363,7 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
             value={importInput}
             onChange={(e) => setImportInput(e.target.value)}
             data-testid="civitai-import-input"
-            placeholder="粘贴 Civitai 图片链接 (如 https://civitai.com/images/136947637)、纯图号 (如 136947637)、模型版本链接，或直接粘贴整段生图参数文本..."
+            placeholder="粘贴 Civitai 图片链接 (如 https://civitai.red/images/148140013)、纯图号 (如 148140013)、模型版本链接，或直接粘贴整段生图参数文本..."
             className="w-full bg-[#111216] border border-[#2e3142] focus:border-pink-500 rounded-xl px-4 py-2.5 text-xs text-white outline-none font-mono transition-colors resize-y placeholder-slate-500"
           />
 
@@ -1434,7 +1433,7 @@ Steps: 8, Sampler: Euler, CFG scale: 1, Seed: 689794262, Size: 832x1248, Model: 
           {/* Submit button */}
           <div className="flex items-center justify-between pt-1">
             <span className="text-[11px] text-slate-500 font-mono">
-              实时反查 Civitai 官方元数据与各供应商输入契约，不伪造、不默认静默兜底
+              自动解析 Civitai 作品元数据并匹配目标服务商参数
             </span>
             <button
               type="button"

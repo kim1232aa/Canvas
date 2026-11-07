@@ -4,11 +4,7 @@
  * Grounded in verified API documentation across Fal.ai, Together AI, Venice AI,
  * Civitai, Replicate, ModelsLab, Novita AI, Runware, and Google Gemini.
  *
- * User directive (verbatim 2026-11-05):
- * "我们不反对nsfw，有nsfw开关的都默认开启"
- *
  * Top rules:
- * - 严禁静默容灾与虚假成功；严禁回退，兜底；严禁硬编码集成；严禁反透明的黑盒行为。
  * - 判定应来自实时 schema 或官方契约里声明了该字段。已经出现在 live schema 里的字段，才在该节点上默认放开。
  * - 默认值公开透明可见，可由用户按节点一键切回，实际请求体与历史记录如实体现。
  */
@@ -39,7 +35,7 @@ export const OFFICIAL_NSFW_FIELD_POLICIES: Record<string, NsfwFieldPolicy> = {
     permissiveValue: false,
     upstreamDefault: true,
     restrictedValue: true,
-    permissiveLabel: '关闭安全检查（项目默认放开）',
+    permissiveLabel: '关闭安全检查（默认）',
     restrictedLabel: '开启安全检查',
     docUrl: 'https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/flux-lora',
     description: 'Fal.ai / AIMLAPI 官方安全过滤开关：false 为放开内容（禁用检查器），true 为启用过滤。注：Fal 账号需在控制台开启成人内容授权。',
@@ -50,7 +46,7 @@ export const OFFICIAL_NSFW_FIELD_POLICIES: Record<string, NsfwFieldPolicy> = {
     permissiveValue: true,
     upstreamDefault: false,
     restrictedValue: false,
-    permissiveLabel: '禁用安全检查（项目默认放开）',
+    permissiveLabel: '禁用安全检查（默认）',
     restrictedLabel: '启用安全检查',
     docUrl: 'https://docs.together.ai/openapi.yaml',
     description: 'Together AI / Replicate 官方安全过滤开关：true 为禁用检查器（放开 NSFW），false 为启用过滤。',
@@ -61,7 +57,7 @@ export const OFFICIAL_NSFW_FIELD_POLICIES: Record<string, NsfwFieldPolicy> = {
     permissiveValue: false,
     upstreamDefault: true,
     restrictedValue: true,
-    permissiveLabel: '关闭安全模式（项目默认放开未打码）',
+    permissiveLabel: '关闭安全模式（默认未打码）',
     restrictedLabel: '开启安全模式（打码）',
     docUrl: 'https://api.venice.ai/api/v1/swagger.yaml',
     description: 'Venice AI 官方成人内容模糊开关：false 为返回未打码原图，true 为打码模糊。',
@@ -72,7 +68,7 @@ export const OFFICIAL_NSFW_FIELD_POLICIES: Record<string, NsfwFieldPolicy> = {
     permissiveValue: '5',
     upstreamDefault: '2',
     restrictedValue: '2',
-    permissiveLabel: '宽松度 5（项目默认最宽松放开）',
+    permissiveLabel: '宽松度 5（默认最宽松）',
     restrictedLabel: '严格度 1-2（过滤严格）',
     docUrl: 'https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/flux-pro/v1.1',
     description: 'Fal.ai FLUX Pro 官方安全容忍度：1 最严格，5 最宽松放开（官方 description 明确说明 5 为最宽松）。',
@@ -83,7 +79,7 @@ export const OFFICIAL_NSFW_FIELD_POLICIES: Record<string, NsfwFieldPolicy> = {
     permissiveValue: 'low',
     upstreamDefault: 'auto',
     restrictedValue: 'auto',
-    permissiveLabel: '最低审核 low（项目默认放开）',
+    permissiveLabel: '最低审核 low（默认）',
     restrictedLabel: '自动严格审核 auto',
     docUrl: 'https://api.venice.ai/api/v1/swagger.yaml',
     description: 'Venice (/images/generations) 与 OpenAI Images 官方图像审核等级：low 为最低审核（不模糊/放开），auto 为自动严格过滤。',
@@ -94,7 +90,7 @@ export const OFFICIAL_NSFW_FIELD_POLICIES: Record<string, NsfwFieldPolicy> = {
     permissiveValue: true,
     upstreamDefault: false,
     restrictedValue: false,
-    permissiveLabel: '允许成人内容（项目默认放开）',
+    permissiveLabel: '允许成人内容（默认）',
     restrictedLabel: '禁止成人内容',
     docUrl: 'https://developer.civitai.com/orchestration/guide/submitting-work',
     description: 'Civitai Orchestration 官方工作流 JSON body 根级字段（与 steps 同级）：true 为允许成熟内容。注：账号需具备对应浏览等级与 Yellow Buzz。',
@@ -105,7 +101,7 @@ export const OFFICIAL_NSFW_FIELD_POLICIES: Record<string, NsfwFieldPolicy> = {
     permissiveValue: true,
     upstreamDefault: false,
     restrictedValue: false,
-    permissiveLabel: '包含 NSFW 模型（项目默认放开）',
+    permissiveLabel: '包含 NSFW 模型（默认）',
     restrictedLabel: '仅 SFW 模型',
     docUrl: 'https://developer.civitai.com/site/reference/models',
     description: 'Civitai 目录检索官方 API 参数（GET /api/v1/models?nsfw=true）：true 为包含成人内容模型。',

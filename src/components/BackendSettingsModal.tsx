@@ -249,7 +249,7 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
       badge: '模型端点 / 多密钥',
       docsUrl: 'https://docs.fal.ai',
       keyPageUrl: 'https://fal.ai/dashboard/keys',
-      description: 'Fal.ai 专为生成式 AI 优化的超低延迟 GPU 推理引擎，支持 FLUX.1、SDXL、Wan 2.1 等模型的极速云端直出。注：关闭安全检查（enable_safety_checker=false）需要在 Fal 控制台账号设置中开启成人内容授权。',
+      description: 'Fal.ai 专为生成式 AI 优化的超低延迟 GPU 推理引擎，支持 Z-Image Turbo、Krea 2、Wan 2.2 等模型的极速云端直出。注：关闭安全检查（enable_safety_checker=false）需要在 Fal 控制台账号设置中开启成人内容授权。',
       apiUrl: 'https://fal.run',
       keyName: 'falKey',
       keyPlaceholder: 'fal_key_xxxxxxxxxxxxxxxxxxxxxxxx (支持换行/逗号输入多个 Key)',

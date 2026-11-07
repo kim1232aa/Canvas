@@ -1,6 +1,6 @@
 # Tensor.Art official TAMS — 2026-10-15 (Asia/Tokyo)
 
-Project: `/workspace/canvas/Canvas-main`  
+Project: `<repo-root>/Canvas-main`  
 Service: `http://127.0.0.1:3000` (tsx watch)  
 Method: official docs fetch + server-side smoke (no browser / no computerUse)  
 Credentials: `.env` `TENSORART_API_KEY` / `TENSORART_KEY` — **2 keys, both `ak_tensor_…` (OpenWorks only)**. No TAMS Bearer present. Secrets never printed.

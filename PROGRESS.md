@@ -8,20 +8,20 @@
 - **全量工程命令实测结果**：
   - `npm run build`：Exit code 0，生成 `hosting/server.generated.ts` 与 `dist/`。
   - `npx tsc --noEmit`：Exit code 0，0 错误。
-  - `npx vitest run --maxWorkers=2 --exclude '.tower/**' --exclude '**/node_modules/**' --exclude '**/dist/**'`：**264 个测试文件全部通过，2127 个测试用例全绿，0 failures**，耗时 128.71s，Exit code 0。
-  - `src/integration/modelSelection.test.tsx` 单独运行：5 passed，耗时 19.96s，Exit code 0。
+  - `npx vitest run --maxWorkers=2 --exclude '.tower/**' --exclude '**/node_modules/**' --exclude '**/dist/**'`：**264 个测试文件全部通过，2128 个测试用例全绿，0 failures**，耗时 139.95s，Exit code 0。
+  - `src/integration/modelSelection.test.tsx` 单独运行：5 passed，耗时 25.18s，Exit code 0。
 - **UI 回归实测交付**：
   - 在真实无头 Chrome (CDP, 2560×1440) 中完成 6 大流程真实点击操作。
   - 采集 47 张高保真实机截图至 `docs/evidence/2026-11-05/final/*.png`，经 `ReadMediaFile` 逐张眼核，确认 0 UI 逻辑矛盾。
   - 记录 105 条真实网络出站日志至 `temp/logs/requests-m25.jsonl`。
-  - 闭环验证：空白画布新手引导、34 个现代预设核查与 15 家服务商运行、Civitai 现代/SD1.5/FLUX 配方逆向导入与出站、模型中心浏览与多端点 LoRA 挂载、AI 视频节点 T2V/I2V 与 Sogni 动态切换 `animate_photo` 横幅、Fal Wan 2.2 与 Civitai 双服务商 NSFW 宽松默认可见与用户手动切回。
+  - 闭环验证：空白画布新手引导、34 个现代预设核查与 15 家服务商运行、Civitai 现代/SD1.5/FLUX 配方逆向导入与出站、模型中心浏览与多端点 LoRA 挂载、AI 视频节点 T2V/I2V 与 Sogni 动态切换 `animate_photo` 横幅、Fal Wan 2.2 与 Venice 双服务商 NSFW 宽松默认可见与用户手动切回。
 - **文档全量对齐与公共仓库卫生 (D1~D10)**：
   - D1：在全部指定历史遗留文档顶部追加未验证历史警示横幅。
   - D2：重写 `HANDOFF.md`、`PROGRESS.md`、`UNRESOLVED_ISSUES.md`、`README.md` 至 2026-11-07 实测基准。
   - D3：更新 `docs/providers/schema-providers.md` Sogni `generate_video` / `animate_photo` 动态分流说明。
   - D4：核实 Together `image_loras` 官方参数指南下线事实，引用 `https://docs.together.ai/docs/inference/images/parameters.md`。
   - D5：核查确认 `rejectSchemaEnum` 与 `rejectUnsupported` 生产代码已彻底删除，0 残留门禁。
-  - D6：脱敏公共文档中绝对路径 `/root/github/...`（3 处清零）、代理名称 `mihomo`（2 处清零）、用户 ID `1048723019146487792`（130 处清零）、Signed URLs（32 处清零）。
+  - D6：脱敏公共文档中绝对路径 `<repo-root>/...`（3 处清零）、代理名称 `<local-proxy>`（2 处清零）、用户 ID `<redacted-user-id>`（130 处清零）、Signed URLs（32 处清零）。
   - D7：校准 `.env.example`，剔除未引用变量 `APP_URL`，补齐 `PORT`、`ALLOWED_HOSTS`、`ALLOWED_ORIGINS`、`TENSORART_KEY`、`TENSORART_BASE_URL`。
   - D8：检查确认 `AGENTS.md` 与 `CLAUDE.md` 包含两句用户原文逐字。
   - D9：整理 9 家待充值复测清单、未验证功能场景与代码审计风险。
@@ -80,9 +80,9 @@
 
 ## 2026-10-16 晚间（Asia/Tokyo）
 
-- **Git**：本地 `/workspace/canvas/Canvas-main` 已对上远程；`2d76382` 推送至 https://github.com/kim1232aa/Canvas `main`；**.env 未提交**。
-- **CLOSED**：fix10.1（ZWSP 出 value/存储；Fal Kling V3 i2v `q1cbe` 403 TOP_UP = PASS_BILLING）；fix11.2（900/1100/1600 预览浮层可读、不盖画面比例、历史弹层藏浮层；挑刺无严重后正式收口）。证据见 `docs/evidence/fix10.1-2026-10-16.md`、`fix11.2-2026-10-16.md` 与 `/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-fix11.2-accept-2022/`。
-- **进行中**：fix12 CODE_ONLY 冻结（PID 3473149 / ticks 14993784，约 20:45 JST）— 历史「共 N 项」+ 900 执行记录 under-top；前端重拍 `/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-fix12-accept-2157/`，**未收口**。
+- **Git**：本地 `<repo-root>/Canvas-main` 已对上远程；`2d76382` 推送至 https://github.com/kim1232aa/Canvas `main`；**.env 未提交**。
+- **CLOSED**：fix10.1（ZWSP 出 value/存储；Fal Kling V3 i2v `q1cbe` 403 TOP_UP = PASS_BILLING）；fix11.2（900/1100/1600 预览浮层可读、不盖画面比例、历史弹层藏浮层；挑刺无严重后正式收口）。证据见 `docs/evidence/fix10.1-2026-10-16.md`、`fix11.2-2026-10-16.md` 与 `<repo-root>/temp/canvas-e2e-archive-20261017/canvas-e2e-fix11.2-accept-2022/`。
+- **进行中**：fix12 CODE_ONLY 冻结（PID 3473149 / ticks 14993784，约 20:45 JST）— 历史「共 N 项」+ 900 执行记录 under-top；前端重拍 `<repo-root>/temp/canvas-e2e-archive-20261017/canvas-e2e-fix12-accept-2157/`，**未收口**。
 - **挂起**：Together `image_loras`（等 Key）；TAMS Bearer；ModelScope intl LoRA E2E；civitai.red 付费 LoRA 复跑；Fal 之后更多视频供应商；预设/App 拆分未批准。
 - **不降级**：WaveSpeed PASS_GENERATION；MuAPI/Sogni 等 PASS_BILLING；Krea/AIMLAPI/Novita/Replicate 等维持既有 evidence 判定。本条只记进度，不发明 PASS。
 
@@ -289,7 +289,7 @@
 
 - Civitai 生成成功后服务端把 blob 拉成 `data:image/…` 写入历史（与 OpenAI/fal 同源持久形态）；HistoryModal 坏链显示「预览加载失败」。
 - 图片导入：空负向不填 blurry 模板；Undefined 采样器不映射 euler；缺调度器不伪造 sgm_uniform。
-- 自测报告：`/workspace/canvas-review/civitai-hard-gate-fix-selftest.md`
+- 自测报告：`<repo-root>-review/civitai-hard-gate-fix-selftest.md`
 - 未推 origin；未动 `/workspace/Canvas`。
 
 ## 0c. F5 — Gemini canvas seed grey (f5-gemini-seed-grey) — 2026-09-29
@@ -378,7 +378,7 @@ Tip hash: 6426ab6e98ff877eba631203cb3ab26dcbf3ca06 (feat commit d4da15d2c41ff9b1
 - [x] 新增一等公民 provider：`openai_compat`（仅生图/改图）、`grok_compat`（推理+生图+改图+生视频）
 - [x] 设置面板标签「兼容中转」；可编辑 Base URL + 掩码 Key（Agnes 同款 `resolveProviderAuth`：header > settings > env；无硬编码域名）
 - [x] 设置面板「服务端密钥池」展示掩码 key + 来源徽章；只读「当前服务端 Base URL」（stats.serverBaseUrl，不把 .env URL 写入可编辑浏览器字段）
-- [x] Env：`OPENAI_COMPAT_IMAGE_BASE_URL` / `OPENAI_COMPAT_IMAGE_API_KEY`、`GROK_COMPAT_BASE_URL` / `GROK_COMPAT_API_KEY`（见 `.env.example`；测试密钥在仓库外 `/workspace/canvas-secrets/compat-relays.env`，永不提交）
+- [x] Env：`OPENAI_COMPAT_IMAGE_BASE_URL` / `OPENAI_COMPAT_IMAGE_API_KEY`、`GROK_COMPAT_BASE_URL` / `GROK_COMPAT_API_KEY`（见 `.env.example`；测试密钥在仓库外 `<repo-root>-secrets/compat-relays.env`，永不提交）
 - [x] Grok Base URL 缺 `/v1` 时服务端补全；相对视频 URL 相对 base origin 解析
 - [x] providerSchema + UI 灰显「该服务商不支持」：
   - OpenAI 兼容：灰 seed / negative / steps / CFG / sampler / LoRA；保留 size / quality / output_format / background / moderation / n
@@ -396,7 +396,7 @@ Tip hash: 6426ab6e98ff877eba631203cb3ab26dcbf3ca06 (feat commit d4da15d2c41ff9b1
 ```bash
 cd /workspace/Canvas-ui
 git checkout compat-relays   # tip 6426ab6e98ff877eba631203cb3ab26dcbf3ca06
-set -a; source /workspace/canvas-secrets/compat-relays.env; set +a
+set -a; source <repo-root>-secrets/compat-relays.env; set +a
 # 或在设置面板「OpenAI 兼容中转」「Grok 兼容中转」手填 Base URL + Key
 npm run dev   # 勿占用 3417 / 勿动 Canvas-b1-fix
 ```
@@ -487,10 +487,10 @@ npm run dev   # 勿占用 3417 / 勿动 Canvas-b1-fix
 | B1 | 已完成（r2b：tsc 0 错误，npm test 31 pass） | Fal schnell + Koda LoRA **r2b**：`resolveTargetNode` 在 Fal 为唯一/选中云引擎时优先 FalAIEngineNode，不再被僵尸 KSampler+CheckpointLoaderSimple 拐去 Hugging Face；`resolveCheckpointForNode` 对 orphan LoRA 用 sole Fal schnell，永不发明 Z-Image；Fal LoRA 从 socket + 解析到该 Fal 的 LoRALoader 收集；去掉 FalDriver / BaseEngineDriver / extractWorkflowParameters 的客户端预发拦截，真实 POST `/api/fal/generate`，Fal 节点展示 `HTTP 400: 该端点不支持 LoRA…`；HuggingFaceDriver 错误也加 `HTTP ${status}:` 前缀；App catch 只用 Fal/端点文案刷 Fal 节点，不把 HF `该服务商不支持: loras（Hugging Face）` 广播到 Fal。 | src/utils/graphEngine.ts；src/utils/resolveCheckpoint.ts；src/engines/BaseEngineDriver.ts；src/engines/drivers/FalDriver.ts；src/engines/drivers/HuggingFaceDriver.ts；src/App.tsx；tests |
 
 ### B1 / 历史种子备注（2026-09-29）
-- `fal-ai/wan-t2v` / `fal-ai/wan-i2v` 保留：官方 OpenAPI schema 存在（见 `/workspace/canvas-schema/provider-params.md`）；仅删除无 schema 的 `fal-ai/wan/t2v` 与 `fal-ai/wan/v2.1/*`。
+- `fal-ai/wan-t2v` / `fal-ai/wan-i2v` 保留：官方 OpenAPI schema 存在（见 `<repo-root>-schema/provider-params.md`）；仅删除无 schema 的 `fal-ai/wan/t2v` 与 `fal-ai/wan/v2.1/*`。
 - 历史「未填写」种子（不提交密钥）：
   ```bash
-  CANVAS_BASE_URL=http://127.0.0.1:3418 /workspace/canvas-audit/seed-history-weitianxie.sh
+  CANVAS_BASE_URL=http://127.0.0.1:3418 <repo-root>-audit/seed-history-weitianxie.sh
   ```
   等价 curl（seed/steps/cfg 省略 → 服务端存 null）：
   ```bash
@@ -753,7 +753,7 @@ P 事实表（2026-09-29 抓取）：
    - `src/constants/nodes.ts` / `src/engines/drivers/GeminiDriver.ts` / `src/engines/drivers/GrokCompatDriver.ts` / `src/components/BackendSettingsModal.tsx`：移除虚构模型 ID（`gemini-3.8-flash`、`grok-4.3`、`grok-4.5`），替换为真实模型标识并保留全开放自定义模型 ID 输入。
    - `server.ts` (`/api/test-provider` & `/api/cloud-keys/balances`)：移除 Tensor.Art TAMS 鉴权探针中写死的模型 ID `'613045163490732233'`。
 3. **清除写死 URL 与补齐自定义 Base URL 路由**：
-   - `server.ts`：移除 `EXTRA_HOSTS` / `EXTRA_ORIGINS` 中写死的私人域名 `canvas.alibb123.ccwu.cc`。
+   - `server.ts`：移除 `EXTRA_HOSTS` / `EXTRA_ORIGINS` 中写死的私人域名 `<private-deployment-host>`。
    - `server.ts`：将 `nanogpt` 正式纳入 `AuthProvider` / `AUTH_META` / `defaultKeys.nanogptBaseUrl` / `ALLOWED_SETTINGS_PLAIN`，修复 `resolveProviderAuth(req, 'nanogpt')` 并将 NanoGPT 生图与视频轮询统一路由至动态解析的 `nanoOrigin` / `nanoApiV1`。
    - `server.ts` & `src/server/replicateImageContract.ts` & `src/server/routes/replicateRoutes.ts`：Replicate `/api/model-schema`、`/api/test-provider` 与异步预测 `pollUrl`、Runware `/api/models`、ModelsLab `/api/models` 全部支持从请求头、`cloudSettings` 或环境变量读取自定义 `baseUrl`。
    - `src/components/WorkflowPresetsModal.tsx`：将 `civitaiUrlInput` 初始状态从写死的 `'https://civitai.red/images/136947637'` 清空为 `''`。

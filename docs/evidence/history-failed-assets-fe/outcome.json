@@ -5,8 +5,8 @@
   "historyFailedDownloadDisabled": "yes",
   "historyFailedApplyDisabled": "yes",
   "screenshotPaths": [
-    "/workspace/canvas/Canvas-main/docs/evidence/history-failed-assets-fe/01-history-title.png",
-    "/workspace/canvas/Canvas-main/docs/evidence/history-failed-assets-fe/02-failed-card.png",
-    "/workspace/canvas/Canvas-main/docs/evidence/history-failed-assets-fe/03-assets.png"
+    "<repo-root>/Canvas-main/docs/evidence/history-failed-assets-fe/01-history-title.png",
+    "<repo-root>/Canvas-main/docs/evidence/history-failed-assets-fe/02-failed-card.png",
+    "<repo-root>/Canvas-main/docs/evidence/history-failed-assets-fe/03-assets.png"
   ]
 }

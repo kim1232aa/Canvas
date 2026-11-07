@@ -139,19 +139,19 @@ export function schemaFieldBadge(current: unknown, schemaDefault?: unknown, nsfw
   if (current !== undefined) {
     if (nsfwPolicy) {
       if (current === nsfwPolicy.permissiveValue) {
-        return { kind: 'nsfw_permissive', text: `会发送 ${String(current)}（项目默认开启 NSFW）` };
+        return { kind: 'nsfw_permissive', text: `会发送 ${String(current)}（默认开启 NSFW）` };
       }
       const isRestricted = nsfwPolicy.restrictedValue !== undefined
         ? current === nsfwPolicy.restrictedValue
         : (nsfwPolicy.type === 'boolean' && current === !nsfwPolicy.permissiveValue);
       if (isRestricted) {
-        return { kind: 'nsfw_restricted', text: `会发送 ${String(current)}（已手动设为严格安全过滤）` };
+        return { kind: 'nsfw_restricted', text: `会发送 ${String(current)}（已开启安全过滤）` };
       }
     }
     return { kind: 'send', text: `会发送 ${typeof current === 'object' ? JSON.stringify(current) : String(current)}` };
   }
   if (nsfwPolicy) {
-    return { kind: 'not_sent', text: `${UNFILLED_NOT_SENT}（项目默认放开：${String(nsfwPolicy.permissiveValue)}）` };
+    return { kind: 'not_sent', text: `${UNFILLED_NOT_SENT}（默认：${String(nsfwPolicy.permissiveValue)}）` };
   }
   const d = scalarDefault(schemaDefault);
   return { kind: 'not_sent', text: d !== undefined ? `${UNFILLED_NOT_SENT}（Schema 默认：${d}）` : UNFILLED_NOT_SENT };
@@ -199,7 +199,6 @@ export function SchemaChoiceControls({
   const loraDescriptions = schemaLoraDescriptions(inputSchema, openapi);
   const declaredKeys = Object.keys(inputSchema?.properties || {});
 
-  // Project NSFW Policy: "我们不反对nsfw，有nsfw开关的都默认开启"
   // Transparently initialize declared official NSFW fields to their permissive values in custom_parameters.
   const internals = (React as any).__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE || (React as any).__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED;
   const isInsideRender = Boolean(internals?.H || internals?.ReactCurrentDispatcher?.current);
@@ -285,14 +284,14 @@ export function SchemaChoiceControls({
                 </select>
                 {f.isNsfw && (
                   <div className="flex items-center justify-between text-[11px] text-pink-300/80 bg-pink-950/20 px-2 py-1 rounded border border-pink-900/30">
-                    <span>用户原则：“我们不反对nsfw，有nsfw开关的都默认开启”</span>
+                    <span>默认允许成人内容 (NSFW)</span>
                     {current !== f.nsfwPolicy?.permissiveValue && (
                       <button
                         type="button"
                         onClick={() => write(f.key, f.nsfwPolicy?.permissiveValue)}
                         className="text-[10px] text-cyan-300 hover:text-cyan-200 underline font-semibold ml-2 cursor-pointer shrink-0"
                       >
-                        一键恢复放开默认
+                        恢复默认
                       </button>
                     )}
                   </div>
@@ -389,14 +388,14 @@ export function SchemaChoiceControls({
                 </select>
                 {f.isNsfw && (
                   <div className="flex items-center justify-between text-[11px] text-pink-300/80 bg-pink-950/20 px-2 py-1 rounded border border-pink-900/30 mt-1">
-                    <span>用户原则：“我们不反对nsfw，有nsfw开关的都默认开启”</span>
+                    <span>默认允许成人内容 (NSFW)</span>
                     {current !== f.nsfwPolicy?.permissiveValue && (
                       <button
                         type="button"
                         onClick={() => write(f.key, f.nsfwPolicy?.permissiveValue)}
                         className="text-[10px] text-cyan-300 hover:text-cyan-200 underline font-semibold ml-2 cursor-pointer shrink-0"
                       >
-                        一键恢复放开默认 ({String(f.nsfwPolicy?.permissiveValue)})
+                        恢复默认 ({String(f.nsfwPolicy?.permissiveValue)})
                       </button>
                     )}
                   </div>

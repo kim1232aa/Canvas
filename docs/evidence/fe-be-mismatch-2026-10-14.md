@@ -1,6 +1,6 @@
 # 前后端对不上 / 错误接线清单（2026-10-14）
 
-范围：`/workspace/canvas/Canvas-main`。只做盘点，未改代码。
+范围：`<repo-root>/Canvas-main`。只做盘点，未改代码。
 方法：`rg` + 读 `server.ts`、`src/server/schemaProviders.ts`、`src/services/api.ts`、drivers、`ModelHubModal`、`ExecutionLog`、`BackendSettingsModal`、`App.tsx`。
 本机 `http://127.0.0.1:3000` 进程仍在（node pid 1206568，未杀）。首次 curl 在 tsx watch 重启窗口里得到空响应；随后重试成功。响应里不含密钥明文。
 

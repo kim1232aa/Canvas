@@ -2,7 +2,7 @@
 
 **Document Date:** 2026-11-05  
 **Author:** civswallow24  
-**Worktree:** `/root/github/ComfyUI Web Studio/.tower/worktrees/wt-24`  
+**Worktree:** `<repo-root>/.tower/worktrees/wt-24`  
 **Mission:** M24 - Civitai workflow route stop swallowing errors and fabricating results  
 
 ---

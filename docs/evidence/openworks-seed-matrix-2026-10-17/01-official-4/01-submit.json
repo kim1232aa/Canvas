@@ -41,7 +41,7 @@
     "data": {
       "task": {
         "id": "1056284107207646691",
-        "userId": "1048723019146487792",
+        "userId": "<redacted-user-id>",
         "status": "WAITING",
         "toolName": "photoreal_studio_z_image",
         "outputs": []

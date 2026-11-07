@@ -1489,7 +1489,6 @@ app.get('/api/model-schema', async (req,res)=>{
 
 app.get("/api/models", async (req, res) => {
   const { provider = "all", query = "", type = "" } = req.query;
-  // 用户最高原则（2026-11-05）：「我们不反对nsfw，有nsfw开关的都默认开启」
   // 目录检索有 nsfw 筛选的默认传 true，允许前端参数显式关闭（支持 query nsfw 或 catalogTag nsfw:false）
   const rawNsfw = req.query.nsfw ?? (typeof req.query.catalogTag === 'string' && req.query.catalogTag.startsWith('nsfw:') ? req.query.catalogTag.split(':')[1] : undefined);
   const nsfwParam = rawNsfw !== undefined ? String(rawNsfw) : "true";
@@ -3188,7 +3187,6 @@ app.post(['/api/fal/generate', '/api/generate', '/api/engine/fal/generate'], asy
 
     const custom = applyCustomParameters(payload, req.body.custom_parameters);
     const sentPayload = custom.payload as Record<string, any>;
-    // 用户最高原则（2026-11-05）：「我们不反对nsfw，有nsfw开关的都默认开启」
     // Fal 官方文档：https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/flux-lora
     // 已经出现在 live schema 里的字段，才在该节点上默认放开；用户显式传入时保留用户设置
     if (liveProps && 'enable_safety_checker' in liveProps && sentPayload.enable_safety_checker === undefined) {
@@ -3751,7 +3749,6 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
       airModel = String(genInput.diffuserModel ?? genInput.diffusionModel ?? genInput.model);
 
       // POST /v2/consumer/workflows?wait=100 (integer seconds, max 100)
-      // 用户最高原则（2026-11-05）：「我们不反对nsfw，有nsfw开关的都默认开启」
       // 官方 Orchestration 文档 (https://developer.civitai.com/orchestration/guide/submitting-work) 规范：
       // allowMatureContent 为 workflow JSON body 字段（与 steps 同级），非 query 参数
       const imageAllowMature = builtImage.customParameters?.allowMatureContent !== undefined

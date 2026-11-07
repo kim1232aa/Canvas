@@ -42,7 +42,7 @@
 
 ## 还原包
 
-`/workspace/canvas/temp/backups/canvas-restore-tams-reopen-1159.tgz`
+`<repo-root>/temp/backups/canvas-restore-tams-reopen-1159.tgz`
 
 ## 前端 E2E 清单（本代理无浏览器 → CODE_ONLY，交 computerUse）
 

@@ -7,7 +7,7 @@
       "1056300802819258469"
     ]
   },
-  "responseRaw": "{\"code\":\"0\", \"message\":\"\", \"data\":{\"tasks\":[{\"id\":\"1056300802819258469\", \"userId\":\"1048723019146487792\", \"status\":\"PROCESSING\", \"toolName\":\"photoreal_studio_z_image\", \"outputs\":[]}]}}",
+  "responseRaw": "{\"code\":\"0\", \"message\":\"\", \"data\":{\"tasks\":[{\"id\":\"1056300802819258469\", \"userId\":\"<redacted-user-id>\", \"status\":\"PROCESSING\", \"toolName\":\"photoreal_studio_z_image\", \"outputs\":[]}]}}",
   "response": {
     "code": "0",
     "message": "",
@@ -15,7 +15,7 @@
       "tasks": [
         {
           "id": "1056300802819258469",
-          "userId": "1048723019146487792",
+          "userId": "<redacted-user-id>",
           "status": "PROCESSING",
           "toolName": "photoreal_studio_z_image",
           "outputs": []

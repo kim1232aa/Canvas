@@ -7,7 +7,7 @@
 - **未 commit / 未 push**；未开浏览器；不喊画布重拍。
 
 ## 证据来源
-- 挑刺退回：`/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-novita-0958/` 01–04
+- 挑刺退回：`<repo-root>/temp/canvas-e2e-archive-20261017/canvas-e2e-novita-0958/` 01–04
 - 真体形状：`docs/evidence/novita-polish-batch-2026-10-16/submit-redacted.json` → `parameters.request.*`
 
 ## 改动文件
@@ -19,7 +19,7 @@
 | `src/components/nodeUI.test.tsx` | unverified 不得含「不匹配」 |
 
 ## Restore
-`/workspace/canvas/temp/backups/canvas-restore/pre-novita-chips-20261016-101629.tgz`
+`<repo-root>/temp/backups/canvas-restore/pre-novita-chips-20261016-101629.tgz`
 
 ## 单测
 `vitest run`：historyParameters / veniceP0Fix / nodeUI / historyUiPolish / SpatialFrameItem.loraCopy / runDFollowups / clean0611 → **58 passed**。
@@ -28,7 +28,7 @@
 - 旧 PID：2429653
 - 新 PID：**2462454**（node server.ts；npm wrapper 2462429）
 - 启动（Asia/Tokyo）：**2026-10-16 10:19:54 JST**
-- `cwd=/workspace/canvas/Canvas-main`；`npx tsx server.ts`；`curl 127.0.0.1:3000 → 200`
+- `cwd=<repo-root>/Canvas-main`；`npx tsx server.ts`；`curl 127.0.0.1:3000 → 200`
 
 ## 残留
 - CODE_ONLY：前端干净会话重拍归画布（03 芯片 + 01 LoRA 旁）。
@@ -37,4 +37,4 @@
 
 
 ## 收口
-- 2026-10-16 挑刺过 → Novita **PASS_BILLING**。证据 `/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-novita-1019/`。下一步 Replicate FE E2E。
+- 2026-10-16 挑刺过 → Novita **PASS_BILLING**。证据 `<repo-root>/temp/canvas-e2e-archive-20261017/canvas-e2e-novita-1019/`。下一步 Replicate FE E2E。

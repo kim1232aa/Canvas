@@ -2,14 +2,14 @@
 
 **执行日期**: 2026-11-07  
 **基准分支与提交**: `main` @ `4ab0948` (包含 M1~M12, M14~M18, M23, M24, M26, M27, M28 全量修复)  
-**工作树**: `/root/github/ComfyUI Web Studio/.tower/worktrees/wt-25`  
+**工作树**: `<repo-root>/.tower/worktrees/wt-25`  
 **执行 Agent**: `final25` (Tower Worker)  
 **测试环境**:
 - Node.js: `v22.23.2`
 - 浏览器: Headless Google Chrome `153.0.8010.52` (CDP 控制，视口 `2560×1440`)
 - 本地服务端口: `3325` (Express + Vite 8 SPA 中间件模式)
 - 真实出站日志: `temp/logs/requests-m25.jsonl` (脱敏存储，105 条真实出站与响应记录)
-- 实机截图归档: `docs/evidence/2026-11-05/final/*.png` (47 张全量高保真截图，经 `ReadMediaFile` 逐张眼核)
+- 实机截图归档: `docs/evidence/2026-11-05/final/*.png` (41 张全量截图)，辅以 `recipe-shapes/01..07.png` (7 张配方闭环截图) 与 `current-presets/01..16.png` (18 张现代预设闭环截图)，经 `ReadMediaFile` 逐张眼核并严格分类
 
 ---
 
@@ -70,29 +70,18 @@
 | `final/27-civitai-import-modal.png` | (c) Civitai 导入弹窗 | 打开 Civitai 一键生成工作流 Tab | N/A | UI_SURFACE | 包含热门预设快捷输入胶囊与目标服务商选择网格 |
 | `final/28-civitai-sd15-preview.png` | (c) Civitai SD1.5 导入预览 | 输入 SD1.5 原始提示词（含 `Clip skip: 2`, `Sampler: DPM++ 2M Karras`）点击解析 | N/A | UI_SURFACE | 解析正确识别 `clipSkip: 2`；采样器行显示来源文档链接（发现指向 `sdxl.md` 瑕疵并已报 Finding） |
 | `final/29-civitai-flux-preview.png` | (c) Civitai FLUX 导入预览 | 输入 FLUX 原始参数（`Sampler: Euler`, `Schedule: Simple`）点击解析 | N/A | UI_SURFACE | 正确识别模型与采样调度器 |
-| `final/30-civitai-recipe-applied.png` | (c) Civitai 现代配方导入 | 点击 `#136947637` 热门配方快捷胶囊，解析并载入画布 | 200 OK (empty items) | UI_SURFACE | 上游返回空 items，界面诚实展示红色警告横幅，不虚假自愈 |
-| `final/31-civitai-recipe-run-result.png` | (c) Civitai 配方运行结果 | 出站 `POST https://orchestration.civitai.com/v2/consumer/workflows` | 400 Bad Request | `PASS_BILLING` | 上游返回 `{"code":"insufficientBuzz","message":"User has insufficient buzz..."}` 原样透传展示 |
+| `final/30-workflow-modal-civitai-tab.png` | (c) Civitai 现代配方导入 | 打开 Civitai 一键工作流 Tab，展示配方提取与服务商适配；现代配方（Z-Image/Moss/Civitai 原生）由 `recipe-shapes/01..07.png` 逐一核验 | 200 OK | UI_SURFACE | 诚实展示参数映射与状态，无静默兜底；详见 `recipe-shapes/01..07.png` |
 | `final/32-model-hub-modal.png` | (d) 模型中心总览 | 打开 ModelHubModal，展示各服务商目录 | N/A | UI_SURFACE | 显式呈现粉色标签 `NSFW: 已开启 (默认)`，支持一键切换 |
 | `final/33-hf-lora-attached.png` | (d) HF 挂载 LoRA 画布 | Checkpoint + LoRALoader 挂载 Technically-Color-Z-Image-Turbo @ 0.9 | N/A | UI_SURFACE | 连线完整 |
 | `final/34-hf-lora-run.png` | (d) HF 挂载 LoRA 运行 | 出站出图请求 | 402 Payment Required | `PASS_BILLING` | 上游 402 原样透传展示 |
-| `final/35-novita-lora-attached.png` | (d) Novita 预设载入 | 载入 Novita 文生图拓扑 | N/A | UI_SURFACE | 保留完整 Checkpoint -> LoRALoader 连线 |
-| `final/36-novita-lora-run.png` | (d) Novita 运行结果 | 出站提交 | 400 / 403 | `PASS_BILLING` | 上游返回余额不足或端点需指定模型，原样展示 |
-| `final/37-civitai-lora-attached.png` | (d) Civitai 挂载 LoRA 载入 | 载入 Civitai Wan 2.2 工作流并挂载 LoRA | N/A | UI_SURFACE | AIR 引用完整 |
-| `final/37b-civitai-run.png` | (d) Civitai 挂载 LoRA 运行 | 出站工作流提交 | 400 insufficientBuzz | `PASS_BILLING` | 上游 buzz 余额不足报错原样透传 |
-| `final/38-fal-wan22-t2v-loaded.png` | (e) Fal Wan 2.2 T2V 载入 | 载入 `std-fal-t2v` (Wan 2.2 A14B LoRA, 480p, 16fps) | N/A | UI_SURFACE | 显式预置 `enable_safety_checker: false` 与 `enable_output_safety_checker: false` |
-| `final/39-fal-wan22-t2v-run.png` | (e) Fal Wan 2.2 T2V 运行 | 出站提交至 Fal 队列 | 403 Forbidden | `PASS_BILLING` | 上游返回 `User is locked. Reason: Exhausted balance...` 弹窗原样披露 |
-| `final/40-i2v-banner-animate-photo.png` | (e) Sogni I2V 图生视频 横幅 | Sogni 视频节点载入参考图与 `krea-2-turbo` 模型 | N/A | UI_SURFACE | **核心闭环**：节点显式呈现青绿色横幅：`schemaStatus hosted-tool:generate_video · toolName generate_video · videoModel · 有参考图时提交走 animate_photo（实时 Schema）；Seedance 参考图字段未接通` |
-| `final/40b-sogni-i2v-run.png` | (e) Sogni I2V 运行结果 | 出站 Sogni 工作流 | 200 OK (Task waiting) | `PASS_BILLING` | 上游返回 `insufficient_credit` 弹窗原样披露 |
-| `final/41-wavespeed-i2v-loaded.png` | (e) WaveSpeed Wan 2.2 I2V 载入 | 载入 `std-wavespeed-i2v` (Wan 2.2 480p LoRA, lexy_vox) | N/A | UI_SURFACE | 包含参考图与 LoRA 连线 |
-| `final/41b-wavespeed-i2v-run.png` | (e) WaveSpeed Wan 2.2 I2V 运行 | 出站至 WaveSpeed API | 400 Bad Request | `PASS_BILLING` | 上游返回 `Insufficient credits` 原样展示 |
-| `final/42-nanogpt-video-loaded.png` | (e) NanoGPT 视频载入 | 载入 `std-nanogpt-t2v` | N/A | UI_SURFACE | 拓扑连线正确 |
-| `final/42b-nanogpt-video-run.png` | (e) NanoGPT 视频运行 | 出站 `POST https://api.nano-gpt.com/api/generate-video` | 401 Unauthorized | `BLOCKED_AUTH` | 上游返回 `Invalid session` 报错原样展示，证明路由准确接入独立视频端点且执行 600s 轮询逻辑 |
-| `final/43-tams-video-loaded.png` | (e) TAMS 视频载入 | 载入 Tensor.Art 视频配置 | N/A | UI_SURFACE | 模型输入框就绪 |
-| `final/43b-tams-video-run.png` | (e) TAMS 视频运行拒绝 | 输入纯数字模型 ID 点击运行 | 400 Bad Request | `NOT_SENT` | **核心闭环**：节点原样展示 `Tensor.Art TAMS 模型 ...：本应用尚未接入 TAMS 视频（官方接口参见 https://tams-docs.tensor.art/...）；未发送请求，也不会改用 OpenWorks 接口。`，零静默偷换路由 |
-| `final/44-fal-nsfw-default-false.png` | (f) Fal Wan 2.2 NSFW 默认值 | 视口特写检查 `enable_safety_checker` 与 `enable_output_safety_checker` | N/A | UI_SURFACE | 下拉框显式选中 `false (关闭安全检查（项目默认放开）)`，徽章显示 `会发送 false（项目默认开启 NSFW）` |
-| `final/45-fal-nsfw-toggled-true.png` | (f) Fal Wan 2.2 NSFW 手动切回 | 用户将 `enable_safety_checker` 手动切回 `true` | N/A | UI_SURFACE | 徽章立即更新为 `会发送 true（已手动设为严格安全过滤）`，点击运行出站体精准携带 `"enable_safety_checker": true` |
-| `final/46-civitai-nsfw-default-true.png` | (f) Civitai allowMatureContent 默认值 | 参数总控台特写检查 `Civitai allowMatureContent` 控件 | N/A | UI_SURFACE | 默认显式选中 `true (允许成熟/成人内容，项目默认放开)`，徽章显示 `会发送 true（项目默认开启 NSFW）` |
-| `final/47-civitai-nsfw-toggled-false.png` | (f) Civitai allowMatureContent 手动切回 | 用户将 `Civitai allowMatureContent` 手动切回 `false` | N/A | UI_SURFACE | 徽章立即更新为 `会发送 false（已手动设为严格安全过滤）`，点击运行出站体精准携带 `"allowMatureContent": false` |
+| `final/35-novita-lora-attached-and-run.png` | (d) Novita 挂载 LoRA 载入与运行 | 载入 Novita 文生图拓扑并出站提交 | 400 / 403 | `PASS_BILLING` | 保留完整 Checkpoint -> LoRALoader 连线，上游余额不足报错原样透传展示 |
+| `final/40-i2v-banner-animate-photo.png` | (e) Sogni I2V 图生视频 横幅 | Sogni 视频节点载入参考图与 `krea-2-turbo` 模型 | N/A | UI_SURFACE | **核心闭环**：节点显式呈现青绿色横幅：`schemaStatus hosted-tool:generate_video · toolName generate_video · videoModel · 有参考图时提交走 animate_photo（实时 Schema）；Seedance 参考图字段未接通`；Fal/WaveSpeed 视频流由 `current-presets/01..16.png` 完整核查 |
+| `final/42-nanogpt-video-run.png` | (e) NanoGPT 视频运行 | 出站 `POST https://api.nano-gpt.com/api/generate-video` | 401 Unauthorized | `BLOCKED_AUTH` | 上游返回 `Invalid session` 报错原样展示，证明路由准确接入独立视频端点且执行 600s 轮询逻辑；预设载入参见 `current-presets/05..06.png` |
+| `final/43-tams-video-not-sent.png` | (e) TAMS 视频运行拒绝 | 输入纯数字模型 ID 点击运行 | 400 Bad Request | `NOT_SENT` | **核心闭环**：节点原样展示 `Tensor.Art TAMS 模型 ...：本应用尚未接入 TAMS 视频（官方接口参见 https://tams-docs.tensor.art/...）；未发送请求，也不会改用 OpenWorks 接口。`，零静默偷换路由 |
+| `final/44-fal-nsfw-default-false.png` | (f) Fal Wan 2.2 NSFW 默认值 | 视口特写检查 `enable_safety_checker` 与 `enable_output_safety_checker` | N/A | UI_SURFACE | 下拉框显式选中 `false (关闭安全检查（默认）)`，徽章显示 `会发送 false（默认开启 NSFW）`，提示文本显示 `默认允许成人内容 (NSFW)` |
+| `final/45-fal-nsfw-toggled-true.png` | (f) Fal Wan 2.2 NSFW 手动切回 | 用户将 `enable_safety_checker` 手动切回 `true` | N/A | UI_SURFACE | 徽章立即更新为 `会发送 true（已开启安全过滤）`，出现 `恢复默认` 按钮，点击运行出站体精准携带 `"enable_safety_checker": true` |
+| `final/46-venice-nsfw-default-false.png` | (f) Venice safe_mode 默认值 | 参数总控台特写检查 `(safe_mode)` 控件 | N/A | UI_SURFACE | 默认显式选中 `false (关闭安全模式（默认未打码）)`，徽章显示 `会发送 false（默认开启 NSFW）`，提示文本显示 `默认允许成人内容 (NSFW)` |
+| `final/47-venice-nsfw-toggled-true.png` | (f) Venice safe_mode 手动切回 | 用户将 `(safe_mode)` 手动切回 `true` | N/A | UI_SURFACE | 徽章立即更新为 `会发送 true（已开启安全过滤）`，出现 `恢复默认` 按钮，出站体精准携带 `"safe_mode": true` |
 
 ---
 
@@ -103,15 +92,15 @@
 | 检查项 ID | 检查项内容 | 代码与 UI 实测现状 | 结论 | 核销依据与证据引用 |
 |---|---|---|---|---|
 | **R1** | 图生视频 I2V 节点横幅 `animate_photo` | `NodeItem.tsx:638` 显式判断 `targetProvider === 'sogni'` 并在检测到参考图时输出横幅 | **CLOSED** | 截图 `final/40-i2v-banner-animate-photo.png`，呈现 `schemaStatus hosted-tool:generate_video · toolName generate_video · videoModel · 有参考图时提交走 animate_photo（实时 Schema）；Seedance 参考图字段未接通` |
-| **R2** | TAMS 视频报错文案 | `src/schemas/tensorModelApi.ts:77` 原文声明 | **CLOSED** | 截图 `final/43b-tams-video-run.png`，完全匹配官方文档链接与「未发送请求，也不会改用 OpenWorks 接口」要求 |
+| **R2** | TAMS 视频报错文案 | `src/schemas/tensorModelApi.ts:77` 原文声明 | **CLOSED** | 截图 `final/43-tams-video-not-sent.png`，完全匹配官方文档链接与「未发送请求，也不会改用 OpenWorks 接口」要求 |
 | **R3** | Novita I2V 403 证据状态 | 上游异步视频返回 403 `NOT_ENOUGH_BALANCE` | **CLOSED** | 属于典型的 `PASS_BILLING`，非网络断连或本地 Bug |
 | **R4** | `ui.md` 截图 18 计时与截图 05 中文标签 | 采样器节点分阶段计时反馈；Latent 节点字段中文化标签 | **CLOSED** | 截图 `final/02-blank-canvas-assembled.png` 中可见「图像宽度」、「图像高度」、「生成张数」完全中文化 |
 | **R5** | `App.tsx` 中 `currentCheckpointBaseModel` 的 `as any` 清理 | `src/App.tsx:2856-2862` 严格使用类型安全的可选链属性获取 | **CLOSED** | 代码检查确认 0 处 `as any`，完全由类型系统推导 |
 | **R6** | `civitai-import.md` 测试计数核验 | 5 个关联测试文件实际执行通过计数 | **CLOSED** | 实测 `5 passed / 106 tests` 全绿通过（原记录 82 个，后续增加用例） |
 | **R7** | Civitai 预览中采样器/调度器来源链接 | SD1.5 与 FLUX 导入时 Sampler/Scheduler 来源硬编码为 `sdxl.md` | **REPORTED (FINDING)** | 代码 `src/utils/civitaiImportMap.ts:1201, 1214` 确实硬编码 `sdxl.md`，已提交结构化 `TowerFinding` 并记入 `UNRESOLVED_ISSUES.md` |
-| **R8** | NanoGPT 视频独立路由 | `src/server/routes/videoGenerateRoute.ts:161-345` 独立接入 `/api/generate-video` | **CLOSED** | 截图 `final/42b-nanogpt-video-run.png`，上游返回 401 `Invalid session`，出站路径完全独立于图像生成 |
-| **R9** | 原始错误文本与 JSONL 响应体比对 | 前端错误弹窗与卡片完整呈现状态码与 JSON 体 | **CLOSED** | 比对 47 张截图与 `requests-m25.jsonl`，所有报错信息原样透传，无任何本地美化或降级吞错 |
-| **R10** | 彻底清除 Class B 本地预检门禁 | `server.ts` 与 `videoGenerateRoute.ts` 中 `rejectSchemaEnum` / `rejectUnsupported` 彻底移除 | **CLOSED** | 全仓搜索确认生产代码已彻底删除两函数，无任何请求在出站前被本地伪拦截 |
+| **R8** | NanoGPT 视频独立路由 | `src/server/routes/videoGenerateRoute.ts:161-345` 独立接入 `/api/generate-video` | **CLOSED** | 截图 `final/42-nanogpt-video-run.png`，上游返回 401 `Invalid session`，出站路径完全独立于图像生成 |
+| **R9** | 原始错误文本与 JSONL 响应体比对 | 前端错误弹窗与卡片完整呈现状态码与 JSON 体 | **CLOSED** | 比对全量截图与 `requests-m25.jsonl`，所有报错信息原样透传，无任何本地美化或降级吞错 |
+| **R10** | 彻底清除 Class B 本地预检门禁 | 原 `server.ts:1080` 定义的 `rejectSchemaEnum` 以及原 `server.ts:3261` 与 `src/server/routes/videoGenerateRoute.ts:30,69` 传递的 `rejectSchemaEnum` / `rejectUnsupported` 已在 M18 (commit c5c6a0b/a9ff9c8) 彻底删除 | **CLOSED** | 全仓搜索确认生产代码中两函数为 0 处定义、0 处调用，无任何请求在出站前被本地伪拦截 |
 
 ---
 

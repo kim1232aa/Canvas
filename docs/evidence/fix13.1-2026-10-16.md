@@ -2,7 +2,7 @@
 
 - Date: 2026-10-16
 - Status: **CODE_ONLY**（无出图；无 TAMS 令牌建任务仍 BLOCKED）
-- Restore: `/workspace/canvas/pre-fix13.1-20261016-215547.tgz`
+- Restore: `<repo-root>/pre-fix13.1-20261016-215547.tgz`
 - Baseline PID (pre-restart): `3576628`
 
 ## Scope (画布锁定)
@@ -43,7 +43,7 @@
 
 ## 前端重拍（2026-10-16 ~23:10 JST）
 
-- 证据：`/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-fix13.1-accept-2257/`
+- 证据：`<repo-root>/temp/canvas-e2e-archive-20261017/canvas-e2e-fix13.1-accept-2257/`
 - PID 3611920（starttime 15782305）
 - 01 TAMS 分行 + URL 完整：**PASS**
 - 02 OpenWorks 空态双层：**SKIP_NO_ERROR**（目录 15 项，无红条）

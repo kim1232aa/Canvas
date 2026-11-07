@@ -120,7 +120,7 @@ Researchy + 画布：tensorart/OpenWorks 标准预设 **无 LoRA / 不挂空壳*
 - wavespeed：`wavespeed-ai/krea-v2/turbo-lora` + 空 LoRA 槽。
 - gemini：CLIP → GoogleImagenNode → SaveImage；agnes：紧凑链；sensenova：空壳无 agnes/flux。
 - `presetResources.ts`：`correctPreset` 仅 layout identity；`PRESET_RESOURCES` 已清空。
-- 恢复包：`/workspace/canvas/temp/backups/canvas-restore-presets-std-20261017-1522.tgz`
+- 恢复包：`<repo-root>/temp/backups/canvas-restore-presets-std-20261017-1522.tgz`
 
 **21 条 id**：
 `std-huggingface-t2i`, `std-aimlapi-t2i`, `std-agnes-t2i`, `std-civitai-t2i`, `std-fal-t2i`, `std-gemini-t2i`, `std-krea-t2i`, `std-modelslab-t2i`, `std-modelscope-ai-t2i`, `std-modelscope-t2i`, `std-muapi-t2i`, `std-nanogpt-t2i`, `std-novita-t2i`, `std-replicate-t2i`, `std-runware-t2i`, `std-sensenova-t2i`, `std-sogni-t2i`, `std-tensorart-t2i`, `std-together-t2i`, `std-venice-t2i`, `std-wavespeed-t2i`
@@ -157,7 +157,7 @@ vitest：`src/constants/presets.test.ts` + `legacyTensorWorkflow` + `fix9` + `ci
 ### 合计
 
 - T2I 21 + I2V 6 = **27** 条 `WORKFLOW_PRESETS`。
-- 恢复包：`/workspace/canvas/temp/backups/canvas-restore-presets-ow-i2v-20261017-1527.tgz`
+- 恢复包：`<repo-root>/temp/backups/canvas-restore-presets-ow-i2v-20261017-1527.tgz`
 - vitest：`presets.test.ts` + `legacyTensorWorkflow` + `fix9` + `civitaiImageContract` → 46 passed。
 
 ## F) 2026-10-17 画布驳回后修正（OpenWorks 全链 + I2V 模型填实）
@@ -186,4 +186,4 @@ vitest：`src/constants/presets.test.ts` + `legacyTensorWorkflow` + `fix9` + `ci
 ### 测试 / 恢复包
 
 - vitest：`presets.test.ts` 15 passed；连同 `legacyTensorWorkflow` + `fix9` + `civitaiImportMap` → **40 passed**。
-- 恢复包：`/workspace/canvas/canvas-restore-presets-ow-chain-i2v-20261017-1431.tgz`
+- 恢复包：`<repo-root>/canvas-restore-presets-ow-chain-i2v-20261017-1431.tgz`

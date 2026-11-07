@@ -1,6 +1,6 @@
 # FE/BE mismatch HIGH fixes (2026-10-14)
 
-Scope: `/workspace/canvas/Canvas-main`. Inventory: `docs/evidence/fe-be-mismatch-2026-10-14.md` HIGH 1–4.
+Scope: `<repo-root>/Canvas-main`. Inventory: `docs/evidence/fe-be-mismatch-2026-10-14.md` HIGH 1–4.
 No secrets printed. No browser. No commit/push.
 
 ## HIGH-1 Video driver ModelScope CN vs AI tokens

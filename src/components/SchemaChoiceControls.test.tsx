@@ -60,12 +60,12 @@ describe('SchemaChoiceControls & NSFW Handling', () => {
     // Default permissive state (sent true)
     const permissiveBadge = schemaFieldBadge(true, false, togetherPolicy);
     expect(permissiveBadge.kind).toBe('nsfw_permissive');
-    expect(permissiveBadge.text).toContain('会发送 true（项目默认开启 NSFW）');
+    expect(permissiveBadge.text).toContain('会发送 true（默认开启 NSFW）');
 
     // User toggled back to strict filtering (sent false)
     const restrictedBadge = schemaFieldBadge(false, false, togetherPolicy);
     expect(restrictedBadge.kind).toBe('nsfw_restricted');
-    expect(restrictedBadge.text).toContain('会发送 false（已手动设为严格安全过滤）');
+    expect(restrictedBadge.text).toContain('会发送 false（已开启安全过滤）');
   });
 
   it('renders static markup with user principle notice and select options', () => {
@@ -88,8 +88,8 @@ describe('SchemaChoiceControls & NSFW Handling', () => {
     );
 
     expect(markup).toContain('disable_safety_checker');
-    expect(markup).toContain('用户原则：“我们不反对nsfw，有nsfw开关的都默认开启”');
-    expect(markup).toContain('会发送 true（项目默认开启 NSFW）');
+    expect(markup).toContain('默认允许成人内容 (NSFW)');
+    expect(markup).toContain('会发送 true（默认开启 NSFW）');
   });
 
   it('seeds default into custom_parameters on DOM mount via effect', async () => {

@@ -319,7 +319,7 @@ export const CivitaiModalImportPreview: React.FC<CivitaiModalImportPreviewProps>
               <span>提取的 LoRA 列表与目标供应商映射 ({effectiveAdaptation.loras.length} 个)</span>
             </span>
             <span className="text-[10px] text-slate-400 font-mono">
-              无静默替换 · 格式与权限公开透明
+              按目标服务商参数格式自动适配
             </span>
           </div>
 

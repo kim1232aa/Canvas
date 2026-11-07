@@ -30,7 +30,7 @@
 - 设置页：tensorart 槽改成 OpenWorks 文案与基址；连通性用 `/tool/list` 测 ak_
 - 画布宽高/张数别名：`width`→`image width`，`height`→`image height`，`count`→`result image count`
 
-还原包：`/workspace/canvas/temp/backups/canvas-restore-tensorart-ow-0527.tgz`
+还原包：`<repo-root>/temp/backups/canvas-restore-tensorart-ow-0527.tgz`
 
 ## 当日实测（本地）
 
@@ -49,4 +49,4 @@
 3. 模型：`photoreal_studio_z_image` 或 `anime_lab_wai_illustrious`（模型中心 openworks 目录）
 4. 正向提示词；宽高 512；batch/张数 1；**清空** seed/steps/cfg/LoRA（探针拦截）
 5. 点运行 → 图落保存节点 → 历史成功卡缩略图
-6. 证据目录：`/workspace/canvas/temp/canvas-e2e-archive-20261017/canvas-e2e-tensorart-openworks-20261017/`（workflow / node / history）
+6. 证据目录：`<repo-root>/temp/canvas-e2e-archive-20261017/canvas-e2e-tensorart-openworks-20261017/`（workflow / node / history）
