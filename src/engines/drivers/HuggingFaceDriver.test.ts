@@ -40,9 +40,11 @@ describe('HuggingFaceDriver error prefix', () => {
     await expect(driver.generate({prompt: 'test', model: 'huggingface-text-to-image', scheduler: 'test-scheduler'}, {})).rejects.toThrow('HTTP 400');
     expect(JSON.parse(request.mock.calls[0][1].body).scheduler).toBe('test-scheduler');
   });
-  it('keeps LoRA repository, explicit strength and the HF billing route', async()=>{
+  it('keeps LoRA repository and explicit strength without an inference_provider route field', async()=>{
     const request=vi.fn().mockResolvedValue(new Response(JSON.stringify({error:'Payment required'}), { status: 402 }));globalThis.fetch=request;
-    await expect(driver.generate({model:'XLabs-AI/flux-RealismLora',prompt:'robot',width:512,height:512,seed:42,steps:12,cfg:3.5,extraParams:{hf_provider:'fal-ai'},loras:[{name:'XLabs-AI/flux-RealismLora',strength:0.8}]},{})).rejects.toThrow('HTTP 402');
-    expect(JSON.parse(request.mock.calls[0][1].body)).toMatchObject({inference_provider:'fal-ai',loras:[{name:'XLabs-AI/flux-RealismLora',strength:0.8}],width:512,height:512,guidance:3.5,seed:42});
+    await expect(driver.generate({model:'XLabs-AI/flux-RealismLora',prompt:'robot',width:512,height:512,seed:42,steps:12,cfg:3.5,loras:[{name:'XLabs-AI/flux-RealismLora',strength:0.8}]},{})).rejects.toThrow('HTTP 402');
+    const body=JSON.parse(request.mock.calls[0][1].body);
+    expect(body).toMatchObject({loras:[{name:'XLabs-AI/flux-RealismLora',strength:0.8}],width:512,height:512,guidance:3.5,seed:42});
+    expect(body).not.toHaveProperty('inference_provider');
   });
 });

@@ -23,9 +23,9 @@ describe('generation button readiness', () => {
   it('allows tensorart with valid model and prompt without local offline block', () => {
     expect(generationReadiness({ provider: 'tensorart', model: '613045163490732233', prompt: '1girl' })).toBeUndefined();
   });
-  it('regression: allows Z-Image Space requests with unselected seed strategy or gallery images (no Class B pre-block)', () => {
-    expect(generationReadiness({ ...valid, hfProvider: 'z-image-space', randomSeed: undefined })).toBeUndefined();
-    expect(generationReadiness({ ...valid, hfProvider: 'z-image-space', galleryImages: undefined })).toBeUndefined();
-    expect(generationReadiness({ ...valid, hfProvider: 'z-image-space', shift: undefined })).toBeUndefined();
+  it('regression: allows Hugging Face requests with unselected seed strategy or gallery images (no Class B pre-block)', () => {
+    expect(generationReadiness({ ...valid, randomSeed: undefined })).toBeUndefined();
+    expect(generationReadiness({ ...valid, galleryImages: undefined })).toBeUndefined();
+    expect(generationReadiness({ ...valid, shift: undefined })).toBeUndefined();
   });
 });

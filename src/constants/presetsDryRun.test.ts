@@ -77,13 +77,13 @@ describe('std presets dry-run (load → extract, no send)', () => {
 });
 
 describe('HF standard preset dry-run builds a sendable request', () => {
-  it('std-huggingface-t2i: route set, seed/steps/size present', () => {
+  it('std-huggingface-t2i: seed/steps/size present without a routing field', () => {
     const p0 = WORKFLOW_PRESETS.find((x) => x.id === 'std-huggingface-t2i')!;
     const p = { ...p0, nodes: p0.nodes.map((n) => (n.type === 'CLIPTextEncode' ? { ...n, values: { ...n.values, text: 'USER_TYPED_TEST_PROMPT' } } : n)) };
     const tid = resolveRunTarget(p.nodes as any, p.connections as any, undefined, undefined).id;
     const x: any = extractWorkflowParameters(p.nodes as any, p.connections as any, tid);
     expect(x.targetProvider).toBe('huggingface');
-    expect(x.hfProvider).toBe('fal-ai');
+    expect(x.hfProvider).toBeUndefined();
     expect(typeof x.seed).toBe('number');
     expect(x.steps).toBe(12);
     expect([x.width, x.height]).toEqual([1216, 832]);

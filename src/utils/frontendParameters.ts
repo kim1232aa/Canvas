@@ -89,7 +89,6 @@ export function spatialRequestParameters(frame: SpatialFrame): NormalizedGenerat
   if (['fal','nanogpt','openai_compat','grok_compat'].includes(provider)) extraParams.n = p.batchSize;
   if (provider === 'tensorart') extraParams.count = p.batchSize;
   if (provider === 'huggingface') {
-    if (p.hfProvider) extraParams.hf_provider = p.hfProvider;
     for (const [key,value] of Object.entries({shift:p.shift,random_seed:p.randomSeed,gallery_images:p.galleryImages})) if (value !== undefined) extraParams[key] = value;
   }
   // 雁 rule: every filled value is sent as filled (no per-provider withholding of pixels/seed/denoise).

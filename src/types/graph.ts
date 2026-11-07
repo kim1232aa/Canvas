@@ -249,7 +249,6 @@ export interface ComfyParameters {
   moderation?: string;
   resolution?: string;
   customParameters?: string;
-  hfProvider?: 'hf-inference' | 'fal-ai' | 'z-image-space';
   videoFrames?: number;
   videoFps?: number;
   falModelName?: string;

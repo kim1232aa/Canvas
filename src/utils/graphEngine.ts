@@ -187,7 +187,6 @@ export interface WorkflowExtraction {
   civitaiEngine?: string;
   civitaiEcosystem?: string;
   civitaiModel?: string;
-  hfProvider?: string;
   initImageUrl?: string;
   saveImageNodeId?: string;
   saveVideoNodeId?: string;
@@ -749,7 +748,6 @@ export function extractWorkflowParameters(
   let randomSeed: boolean | undefined;
   let galleryImages: unknown[] | undefined;
   let customParameters: string | undefined;
-  let hfProvider: string | undefined;
   let width: number | undefined;
   let height: number | undefined;
   let batchSize = 1;
@@ -938,7 +936,6 @@ export function extractWorkflowParameters(
     randomSeed = typeof execNode.values.random_seed === 'boolean' ? execNode.values.random_seed : undefined;
     galleryImages = Array.isArray(execNode.values.gallery_images) ? execNode.values.gallery_images : undefined;
     customParameters=execNode.values.custom_parameters;
-    hfProvider = execNode.values.hf_provider || undefined;
     aspectRatio = execNode.values.aspect_ratio || execNode.values.aspectRatio || undefined;
     if (execNode.values.n != null || execNode.values.batch_size != null || execNode.values.batchSize != null) {
       batchSize = numOrUndef(execNode.values.n ?? execNode.values.batch_size ?? execNode.values.batchSize) ?? batchSize;
@@ -996,7 +993,6 @@ export function extractWorkflowParameters(
     randomSeed = typeof ckpt.values.random_seed === 'boolean' ? ckpt.values.random_seed : undefined;
     galleryImages = Array.isArray(ckpt.values.gallery_images) ? ckpt.values.gallery_images : undefined;
     customParameters=ckpt.values.custom_parameters;
-    hfProvider = ckpt.values.hf_provider || undefined;
     falModelName=ckpt.values.fal_model_name || undefined;
     aspectRatio = ckpt.values.aspect_ratio || ckpt.values.aspectRatio || aspectRatio;
     if (ckpt.values.n != null || ckpt.values.batch_size != null || ckpt.values.batchSize != null) {
@@ -1053,7 +1049,6 @@ export function extractWorkflowParameters(
           randomSeed = typeof src.values.random_seed === 'boolean' ? src.values.random_seed : undefined;
           galleryImages = Array.isArray(src.values.gallery_images) ? src.values.gallery_images : undefined;
           customParameters = src.values.custom_parameters;
-          hfProvider = src.values.hf_provider || undefined;
           aspectRatio = src.values.aspect_ratio || src.values.aspectRatio || aspectRatio;
           if (src.values.n != null || src.values.batch_size != null || src.values.batchSize != null) {
             batchSize = numOrUndef(src.values.n ?? src.values.batch_size ?? src.values.batchSize) ?? batchSize;
@@ -1146,7 +1141,6 @@ export function extractWorkflowParameters(
     randomSeed,
     galleryImages,
     customParameters,
-    hfProvider,
     initImageUrl,
     saveImageNodeId,
     saveVideoNodeId,
@@ -1332,8 +1326,7 @@ export async function executeWorkflow(
     if (params.resolution) extraParams.resolution = params.resolution;
     if (params.falModelName) extraParams.model_name=params.falModelName;
     if (params.targetProvider === 'huggingface') {
-      if (params.hfProvider) extraParams.hf_provider = params.hfProvider;
-      // 雁 rule: filled values are sent on every HF route (server forwards undeclared fields as filled; upstream decides).
+      // 雁 rule: filled values are sent (server forwards undeclared fields as filled; upstream decides).
       if (params.shift !== undefined) extraParams.shift = params.shift;
       if (params.randomSeed !== undefined) extraParams.random_seed = params.randomSeed;
       if (params.galleryImages !== undefined) extraParams.gallery_images = params.galleryImages;

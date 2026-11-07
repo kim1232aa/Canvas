@@ -58,12 +58,27 @@ describe('request log requestBody = body actually sent, with every filled field'
     expect(line.requestBody).toMatchObject(FILLED);
     expect(line.requestBody).toEqual(sent[0].body);
   });
-  it('HF Z-Image Space', async () => {
-    await dispatch('/api/huggingface/generate', {model: 'Tongyi-MAI/Z-Image-Turbo', inference_provider: 'z-image-space', prompt: 'p', resolution: '1024x1024 ( 1:1 )', shift: 3, random_seed: false, gallery_images: [], ...FILLED}, {});
-    const line = upstreamLine(/gradio_api\/call\/generate/);
-    const call = sent.find((s) => s.url.includes('/gradio_api/call/generate'));
+  it('HF hf-inference', async () => {
+    await dispatch('/api/huggingface/generate', {model: 'Tongyi-MAI/Z-Image-Turbo', prompt: 'p', resolution: '1024x1024 ( 1:1 )', shift: 3, random_seed: false, gallery_images: [], ...FILLED}, { hfToken: 'hf_test' });
+    const line = upstreamLine(/router\.huggingface\.co\/hf-inference\/models\//);
+    const call = sent.find((s) => String(s.url).includes('router.huggingface.co/hf-inference/models/'));
+    expect(call).toBeTruthy();
     expect(line.requestBody).toEqual(call.body);
-    for (const v of [7, 9, 'blurry', 640, 960, 'euler', 'karras', 3.5, 0.6]) expect(line.requestBody.data).toContain(v);
+    expect(line.requestBody.parameters).toMatchObject({
+      seed: 7,
+      negative_prompt: 'blurry',
+      num_inference_steps: 9,
+      cfg: 3.5,
+      sampler_name: 'euler',
+      scheduler: 'karras',
+      denoise: 0.6,
+      width: 640,
+      height: 960,
+      loras: [{name: 'x', strength: 0.8}],
+      resolution: '1024x1024 ( 1:1 )',
+      shift: 3,
+      random_seed: false,
+    });
   });
   it('Gemini (SDK call): logged requestBody is the request handed to generateContent, filled fields in extraBody.generationConfig', async () => {
     sdk.generate.mockRejectedValue(Object.assign(new Error('fixture google says no'), {status: 400}));

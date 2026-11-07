@@ -2,7 +2,6 @@
 import {beforeEach, describe, expect, it, vi} from 'vitest';
 import {CanvasStore} from '../../hosting/store';
 import {requestContext} from '../../hosting/context';
-import {buildZImagePayload} from '../schemas/zImageSpace';
 
 const sdk = vi.hoisted(() => ({generate: vi.fn()}));
 vi.mock('@google/genai', () => ({GoogleGenAI: class {models = {generateContent: sdk.generate};}}));
@@ -49,15 +48,30 @@ describe('filled params are forwarded, upstream decides', () => {
     expect(sent).toHaveLength(1);
     expect(sent[0].body).toMatchObject({model: 'g', aspect_ratio: '7:3', resolution: '9k', ...FILLED});
   });
-  it('HF Z-Image Space: filled fields outside the 7-position signature are appended to data and sent', async () => {
-    await dispatch('/api/huggingface/generate', {model: 'Tongyi-MAI/Z-Image-Turbo', inference_provider: 'z-image-space', prompt: 'p', resolution: '1024x1024 ( 1:1 )', seed: 7, steps: 9, shift: 3, random_seed: false, gallery_images: [], negative_prompt: 'blurry', width: 640, height: 960, sampler_name: 'euler', scheduler: 'karras', cfg: 3.5, denoise: 0.6, loras: [{name: 'x', strength: 0.8}]}, {});
-    const call = sent.find((s) => s.url.includes('/gradio_api/call/generate'));
+  it('HF hf-inference: every filled field lands in parameters at router.huggingface.co/hf-inference', async () => {
+    await dispatch('/api/huggingface/generate', {model: 'Tongyi-MAI/Z-Image-Turbo', prompt: 'p', resolution: '1024x1024 ( 1:1 )', seed: 7, steps: 9, shift: 3, random_seed: false, gallery_images: [], negative_prompt: 'blurry', width: 640, height: 960, sampler_name: 'euler', scheduler: 'karras', cfg: 3.5, denoise: 0.6, loras: [{name: 'x', strength: 0.8}]}, { hfToken: 'hf_test' });
+    const call = sent.find((s) => String(s.url).includes('router.huggingface.co/hf-inference/models/'));
     expect(call).toBeTruthy();
-    const data = call.body.data as unknown[];
-    expect(data.slice(0, 7)).toEqual(['p', '1024x1024 ( 1:1 )', 7, 9, 3, false, []]);
-    for (const v of ['blurry', 640, 960, 'euler', 'karras', 3.5, 0.6]) expect(data).toContain(v);
-    expect(data).toContainEqual([{name: 'x', strength: 0.8}]);
-    expect(buildZImagePayload({prompt: 'p', resolution: 'not-a-listed-size', seed: 7, steps: 500, shift: 0, random_seed: false, gallery_images: []}).data.slice(1, 5)).toEqual(['not-a-listed-size', 7, 500, 0]);
+    expect(String(call.url)).toBe('https://router.huggingface.co/hf-inference/models/Tongyi-MAI/Z-Image-Turbo');
+    expect(call.body).toMatchObject({
+      inputs: 'p',
+      parameters: {
+        negative_prompt: 'blurry',
+        width: 640,
+        height: 960,
+        num_inference_steps: 9,
+        seed: 7,
+        scheduler: 'karras',
+        cfg: 3.5,
+        denoise: 0.6,
+        sampler_name: 'euler',
+        resolution: '1024x1024 ( 1:1 )',
+        shift: 3,
+        random_seed: false,
+        loras: [{name: 'x', strength: 0.8}],
+      },
+    });
+    expect(call.body).not.toHaveProperty('inference_provider');
   });
   it('Gemini: fields with no @google/genai config slot go via httpOptions.extraBody.generationConfig (merged into REST body by the SDK)', async () => {
     sdk.generate.mockResolvedValue({candidates: [{content: {parts: [{inlineData: {mimeType: 'image/png', data: png}}]}}]});

@@ -5,7 +5,6 @@ export function generationReadiness(input: {
   requireReferenceImage?: boolean;
   referenceImageUrl?: string;
   provider?: string;
-  hfProvider?: string;
   model?: string;
   prompt?: string;
   loras?: unknown[];

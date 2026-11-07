@@ -847,9 +847,9 @@ describe('standard workflow presets (23 T2I + 5 T2V + 6 I2V)', () => {
     expect(p.spatialFrames![0].params.aspectRatio).toBe('1:1');
   });
 
-  it('Hugging Face Z-Image ships the live fal-ai route and 1024x1024 pixels', () => {
+  it('Hugging Face Z-Image ships direct hf-inference pixels without a routing field', () => {
     const p = preset('std-huggingface-t2i');
-    expect(loader(p.id)!.values.hf_provider).toBe('fal-ai');
+    expect(loader(p.id)!.values.hf_provider).toBeUndefined();
     const lat = p.nodes.find(n => n.type === 'EmptyLatentImage')!;
     expect(lat.values.width).toBe(1216);
     expect(lat.values.height).toBe(832);

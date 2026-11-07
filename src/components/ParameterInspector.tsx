@@ -641,20 +641,6 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
           </div>}
           {params.targetProvider === 'fal' && params.checkpoint === 'fal-ai/lora' && <label className="block text-sm text-slate-300">SD LoRA 底模 model_name<input className="mt-1 w-full bg-[#111216] border border-slate-700 rounded-lg p-2" value={params.falModelName || ''} onChange={e => update({falModelName:e.target.value})} placeholder="必填：底模仓库 ID 或 URL" /></label>}
 
-          {params.targetProvider === 'huggingface' && (
-            <div className="space-y-2 rounded-lg border border-amber-800/40 bg-amber-950/20 p-3">
-              <label className="block text-sm text-amber-200">HF 在线推理路由
-                <select aria-label="HF 在线推理路由" value={params.hfProvider || ''} onChange={e => update({ hfProvider: (e.target.value || undefined) as ComfyParameters['hfProvider'] })} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2 text-slate-200">
-                  <option value="">请选择实际执行路由</option>
-                  <option value="hf-inference">HF Inference</option><option value="z-image-space">Z-Image 官方 Space</option>
-                  <option value="fal-ai">HF → fal-ai（计费推理）</option>
-                </select>
-              </label>
-              <p className="text-sm text-slate-400">模型仓库可下载不代表可在线推理。选择 fal-ai 会通过 HF Router 提交至该服务商并计费；LoRA 能力由模型与路由决定。</p>
-
-            </div>
-          )}
-
           {['civitai','fal','modelscope','modelscope_ai','huggingface','muapi','wavespeed','sogni','krea','together','aimlapi','novita','venice','openworks','replicate'].includes(params.targetProvider) && <ApiParameterEditor provider={params.targetProvider} model={params.checkpoint} value={params.customParameters} onChange={customParameters=>update({customParameters})} canvasLoras={params.loras ?? []} />}
 
 
