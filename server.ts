@@ -5518,7 +5518,7 @@ async function testSingleProviderKey(
 
   try {
     if (['muapi','wavespeed','sogni','krea','together','aimlapi','novita','venice'].includes(prov)) {
-      const urls:Record<string,string>={muapi:'https://api.muapi.ai/api/v1/models',wavespeed:'https://api.wavespeed.ai/api/v3/models',sogni:'https://api.sogni.ai/v1/creative-agent/workflows?limit=1',krea:'https://api.krea.ai/styles?limit=1',together:'https://api.together.ai/v1/models',aimlapi:'https://api.aimlapi.com/v2/billing',novita:'https://api.novita.ai/openapi/v1/billing/balance/detail',venice:'https://api.venice.ai/api/v1/models?type=image',deepinfra:'https://api.deepinfra.com/v1/me'};
+      const urls:Record<string,string>={muapi:'https://api.muapi.ai/api/v1/models',wavespeed:'https://api.wavespeed.ai/api/v3/models',sogni:'https://api.sogni.ai/v1/creative-agent/workflows?limit=1',krea:'https://api.krea.ai/styles?limit=1',together:'https://api.together.ai/v1/models',aimlapi:'https://api.aimlapi.com/v2/billing/detail',novita:'https://api.novita.ai/openapi/v1/billing/balance/detail',venice:'https://api.venice.ai/api/v1/models?type=image',deepinfra:'https://api.deepinfra.com/v1/me'};
       const resp=await upstreamFetch({provider:prov,route:routePath,key:singleKey},urls[prov],{headers:prov==='muapi'?{'x-api-key':singleKey}:{Authorization:`Bearer ${singleKey}`}});
       const raw=await resp.text();
       return {maskedKey,status:resp.ok?(prov==='muapi'?'warning':'ok'):'error',latency:Date.now()-startTime,message:`HTTP ${resp.status} · ${urls[prov]} · ${resp.ok?'只读接口可访问；尚未验证生成权限':'原始响应：'+raw}`};
@@ -6137,6 +6137,64 @@ app.post('/api/cloud-keys/balances', requireAdminAuth, checkSecFetchSite, async 
           }
         } catch (e: any) {
           balances.huggingface = { status: 'error', detail: e.message };
+        }
+      }
+    })(),
+
+    // WaveSpeed
+    (async () => {
+      const wsKey = keyPoolManager.getNextKey('wavespeed');
+      if (wsKey) {
+        try {
+          const resp = await upstreamFetch(
+            { provider: 'wavespeed', route: '/api/cloud-keys/balances', key: wsKey },
+            'https://api.wavespeed.ai/api/v3/balance',
+            {
+              headers: { 'Authorization': `Bearer ${wsKey}` },
+            }
+          );
+          if (resp.ok) {
+            const body = await resp.json().catch(() => ({}));
+            if (body.code === 200 && body.data?.balance !== undefined) {
+              balances.wavespeed = { status: 'ok', detail: `WaveSpeed 余额: $${body.data.balance}`, amount: body.data.balance };
+            } else {
+              balances.wavespeed = { status: 'error', detail: `WaveSpeed 响应格式异常: ${JSON.stringify(body).slice(0, 150)}` };
+            }
+          } else {
+            const errBody = await resp.text().catch(() => '');
+            balances.wavespeed = { status: 'error', detail: `WaveSpeed 状态码 [${resp.status}]: ${errBody.slice(0, 150)}` };
+          }
+        } catch (e: any) {
+          balances.wavespeed = { status: 'error', detail: e.message };
+        }
+      }
+    })(),
+
+    // AIMLAPI
+    (async () => {
+      const aimlapiKey = keyPoolManager.getNextKey('aimlapi');
+      if (aimlapiKey) {
+        try {
+          const resp = await upstreamFetch(
+            { provider: 'aimlapi', route: '/api/cloud-keys/balances', key: aimlapiKey },
+            'https://api.aimlapi.com/v2/billing/detail',
+            {
+              headers: { 'Authorization': `Bearer ${aimlapiKey}` },
+            }
+          );
+          if (resp.ok) {
+            const body = await resp.json().catch(() => ({}));
+            if (body.current_balance !== undefined) {
+              balances.aimlapi = { status: 'ok', detail: `AIMLAPI 余额: $${body.current_balance}`, amount: body.current_balance };
+            } else {
+              balances.aimlapi = { status: 'error', detail: `AIMLAPI 响应格式异常: ${JSON.stringify(body).slice(0, 150)}` };
+            }
+          } else {
+            const errBody = await resp.text().catch(() => '');
+            balances.aimlapi = { status: 'error', detail: `AIMLAPI 状态码 [${resp.status}]: ${errBody.slice(0, 150)}` };
+          }
+        } catch (e: any) {
+          balances.aimlapi = { status: 'error', detail: e.message };
         }
       }
     })(),

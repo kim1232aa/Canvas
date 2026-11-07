@@ -71,6 +71,8 @@ const ALLOWED_CLOUD_SETTINGS_FIELDS = new Set([
   'modelslabKey',
   'modelslabBaseUrl',
   'replicateKey',
+  'replicateBaseUrl',
+  'nanogptBaseUrl',
   'mageKey',
   'mageBaseUrl',
 ]);
@@ -1060,6 +1062,8 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
                 currentProvider.id === 'sensenova' ||
                 currentProvider.id === 'runware' ||
                 currentProvider.id === 'modelslab' ||
+                currentProvider.id === 'replicate' ||
+                currentProvider.id === 'nanogpt' ||
                 currentProvider.id === 'mage') && (
                 <div className="bg-[#111216] border border-[#252733] rounded-xl p-3 space-y-1.5">
                   <label className="text-slate-300 text-[11px] font-semibold flex items-center gap-1.5">
@@ -1079,9 +1083,13 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
                                 ? 'sensenovaBaseUrl'
                                 : currentProvider.id === 'runware'
                                   ? 'runwareBaseUrl'
-                                  : currentProvider.id === 'mage'
-                                    ? 'mageBaseUrl'
-                                    : 'modelslabBaseUrl'
+                                  : currentProvider.id === 'modelslab'
+                                    ? 'modelslabBaseUrl'
+                                    : currentProvider.id === 'replicate'
+                                      ? 'replicateBaseUrl'
+                                      : currentProvider.id === 'nanogpt'
+                                        ? 'nanogptBaseUrl'
+                                        : 'mageBaseUrl'
                       ] || '',
                     )}
                     onChange={(e) => {
@@ -1096,9 +1104,13 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
                                 ? 'sensenovaBaseUrl'
                                 : currentProvider.id === 'runware'
                                   ? 'runwareBaseUrl'
-                                  : currentProvider.id === 'mage'
-                                    ? 'mageBaseUrl'
-                                    : 'modelslabBaseUrl';
+                                  : currentProvider.id === 'modelslab'
+                                    ? 'modelslabBaseUrl'
+                                    : currentProvider.id === 'replicate'
+                                      ? 'replicateBaseUrl'
+                                      : currentProvider.id === 'nanogpt'
+                                        ? 'nanogptBaseUrl'
+                                        : 'mageBaseUrl';
                       setKeys((prev) => ({ ...prev, [field]: e.target.value }));
                     }}
                     placeholder={
@@ -1108,11 +1120,15 @@ export const BackendSettingsModal: React.FC<BackendSettingsModalProps> = ({
                           ? 'https://your-relay.example  （缺 /v1 时服务端补 /v1）'
                           : currentProvider.id === 'runware'
                             ? 'https://api.runware.ai/v1'
-                            : currentProvider.id === 'mage'
-                              ? 'https://api.mage.space'
                             : currentProvider.id === 'modelslab'
                               ? 'https://modelslab.com'
-                              : 'https://...'
+                              : currentProvider.id === 'replicate'
+                                ? 'https://api.replicate.com/v1'
+                                : currentProvider.id === 'nanogpt'
+                                  ? 'https://api.nano-gpt.com/api/v1'
+                                  : currentProvider.id === 'mage'
+                                    ? 'https://api.mage.space'
+                                    : 'https://...'
                     }
                     className="w-full bg-[#0d0e12] border border-[#2b2d38] focus:border-cyan-500 rounded-lg px-2.5 py-1.5 text-slate-200 text-[11px] font-mono outline-none"
                   />
