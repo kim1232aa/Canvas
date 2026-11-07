@@ -4,8 +4,21 @@ import { NODE_DEFINITIONS } from './nodes';
 
 describe('NODE_DEFINITIONS hollow-node audit', () => {
   it('does not register unimplemented ImageUpscaleWithModel', () => {
+    // M41: no verified upscaler execution path (graph engine + server route) was wired this turn.
+    // A shell node is worse than a missing one, so the definition stays absent.
     expect(NODE_DEFINITIONS).not.toHaveProperty('ImageUpscaleWithModel');
     expect(Object.keys(NODE_DEFINITIONS)).not.toContain('ImageUpscaleWithModel');
+  });
+
+  it('LoRALoader strength defaults are the documented recommended scale 1', () => {
+    const def = NODE_DEFINITIONS.LoRALoader;
+    expect(def.defaultValues?.strength_model).toBe(1);
+    expect(def.defaultValues?.strength_clip).toBe(1);
+    const model = def.widgets?.find((w) => w.name === 'strength_model');
+    const clip = def.widgets?.find((w) => w.name === 'strength_clip');
+    expect(model?.default).toBe(1);
+    expect(clip?.default).toBe(1);
+    expect(String(model?.label ?? '')).toContain('1.0');
   });
 
   it('keeps CivitaiLoRABrowserNode.search_keyword as a real canvas field', () => {

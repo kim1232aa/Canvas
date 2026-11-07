@@ -193,18 +193,20 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
       },
       {
         name: 'strength_model',
-        label: 'LoRA 强度',
-        title: '必填，禁止默认 0.8',
+        label: 'LoRA 强度（官方推荐 1.0）',
+        title: 'Runware Krea 2 Turbo 文档 lora.weight 默认 1；ModelsLab z-image-turbo 示例 lora_strength 为 1。未另行指定时按官方推荐倍率 1.0 发送。',
         type: 'slider',
-        // No invented default — user must set explicitly before generate
+        default: 1,
         min: -2.0,
         max: 2.0,
         step: 0.05,
       },
       {
         name: 'strength_clip',
-        label: 'CLIP 强度',
+        label: 'CLIP 强度（官方推荐 1.0）',
+        title: '与模型强度同一官方推荐倍率 1.0（Runware lora.weight 默认 1 / ModelsLab lora_strength 示例 1）。',
         type: 'slider',
+        default: 1,
         min: -2.0,
         max: 2.0,
         step: 0.05,
@@ -226,7 +228,10 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
     ],
     defaultValues: {
       lora_name: '',
-      // strength_model / strength_clip intentionally omitted — never invent 0.8
+      // 1.0 = documented recommended scale (Runware Krea 2 Turbo lora.weight default 1;
+      // ModelsLab z-image-turbo llms.txt example lora_strength "1"). Not an invented 0.8.
+      strength_model: 1,
+      strength_clip: 1,
       trigger_words: '',
       civitai_id: '',
     },
