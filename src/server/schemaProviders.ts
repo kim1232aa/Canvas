@@ -1579,7 +1579,14 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
     if(provider==='krea') {
       const {rows,sourceUrl}=await listForSchema(req,provider,credential);
       const entry:any=rows.find((x:any)=>x.id===model) ?? {id:model,notInCatalog:true}; // not in catalog: send the user's model id; upstream decides
-      return {provider,model,sourceUrl,endpoint:schemaProviders.krea.root+(entry.endpoint ?? `/generate/${model}`),inputSchema:entry.parameters || null,modelMetadata:{...entry,parameters:undefined},schemaStatus:'openapi'};
+      // Catalog rows carry the OpenAPI path (POST /generate/image|video/{provider}/{model}).
+      // A failed catalog has no row: video is still the official video path, never the image path.
+      // Verified 2026-11-07: https://www.krea.ai/docs/api-reference/video/wan-30 and
+      // https://api.krea.ai/openapi.json → POST /generate/video/alibaba/wan-3.0.
+      // Image requests stay on /generate/{model} (image ids are image/{provider}/{model}).
+      const videoRequest=req.body?.isVideo===true || String(entry.category||'').includes('video') || String(model).startsWith('video/');
+      const fallbackPath=videoRequest?`/generate/video/${String(model).replace(/^video\//,'')}`:`/generate/${model}`;
+      return {provider,model,sourceUrl,endpoint:schemaProviders.krea.root+(entry.endpoint ?? fallbackPath),inputSchema:entry.parameters || null,modelMetadata:{...entry,parameters:undefined},schemaStatus:'openapi',...(videoRequest?{mediaKind:'video' as const}:{})};
     }
     if(provider==='together') {
       const {rows,sourceUrl}=await listForSchema(req,provider,credential);
