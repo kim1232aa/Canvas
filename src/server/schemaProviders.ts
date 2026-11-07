@@ -65,7 +65,8 @@ export const schemaProviders = {
 
 /** Local LoRA block reason from provider-table data: verbatim official doc quote + URL. */
 const taskSubmissions=new Map<string,{model:string;prompt?:string;negative_prompt?:string;actualRequest:any}>();
-export const LOCAL_BLOCK_PREFIX='没有发出去'; // clean-1333 #3: submit always read (or reused) the Schema first
+// Advisory prefix only. It must not be the reason a generation request is withheld from upstream.
+export const LOCAL_BLOCK_PREFIX='';
 /**
  * 「拟发送（未出站）」 for a local block: the Schema-scoped request the endpoint would have received (same mapping as a real
  * submit), plus the canvas LoRAs that were NOT sent (name + strength only, no canvas-internal fields). Diagnostics
@@ -398,7 +399,7 @@ export function kreaJobOutputs(job:any):string[] {
 }
 /** Together/Novita/Venice: no built-in request Schema (画布 2026-10-15). Catalog rows carry no `parameters`; only a genuine official runtime Schema may populate it. */
 // Iron rule 3: no built-in Schema / guessed endpoint fallback. Missing official Schema → local 400 (没有发出去), no POST.
-export const schemaUnavailableBlock=(providerName:string,model:string,reason:string,sourceUrl:string|null,extra:Record<string,unknown>={})=>Object.assign(new Error(`没有发出去：${providerName} 模型 ${model} 官方 Schema 不可用（${reason}；来源 ${sourceUrl ?? '无'}）；未发送生成请求，不使用内置 Schema 或猜测端点兜底。`),{status:400,errorSource:'local',schemaUrl:sourceUrl,...extra});
+export const schemaUnavailableBlock=(providerName:string,model:string,reason:string,sourceUrl:string|null,extra:Record<string,unknown>={})=>Object.assign(new Error(`${providerName} 模型 ${model} 官方 Schema 不可用（${reason}；来源 ${sourceUrl ?? '无'}）。不使用内置 Schema 或猜测端点兜底。`),{status:400,errorSource:'local',schemaUrl:sourceUrl,...extra});
 /** Normalize GET /v1/models array → canvas catalog rows (image + video only). */
 export function togetherCatalogRows(models:any[]) {
   return (Array.isArray(models)?models:[]).filter((m:any)=>m && (m.type==='image' || m.type==='video')).map((m:any)=>({

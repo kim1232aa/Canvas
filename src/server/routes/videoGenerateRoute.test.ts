@@ -713,4 +713,56 @@ describe('videoGenerateRoute lifecycle and client disconnect handling (grok_comp
       loras: [{ name: 'cyber-lora', strength: 0.8 }],
     });
   });
+
+  it('Tensor.Art OpenWorks video submits POST /task and returns the upstream body on failure', async () => {
+    const seen: Array<{ url: string; options: any }> = [];
+    const { deps } = createMockDeps({
+      upstreamFetch: vi.fn(async (_meta: any, url: string, options: any) => {
+        seen.push({ url, options });
+        if (url.endsWith('/tool/list')) {
+          return new Response(JSON.stringify({ code: '0', data: { tools: [{ name: 'text2video_wan27', inputs: [{ type: 'STRING', description: 'prompt' }] }] } }), { status: 200 });
+        }
+        if (url.endsWith('/task')) return new Response('{"code":"1001","message":"credits not enough"}', { status: 402 });
+        return new Response('unexpected', { status: 500 });
+      }),
+    });
+    const res: any = { headersSent: false, writableEnded: false, destroyed: false, on() { return this; }, off() { return this; }, once() { return this; }, setTimeout() {}, statusCode: 200, data: undefined };
+    res.status = (code: number) => { res.statusCode = code; return res; };
+    res.json = (body: any) => { res.data = body; return res; };
+    await handleVideoGenerate(deps)({
+      body: { provider: 'tensorart', model: 'text2video_wan27', prompt: 'a boat' },
+      headers: { 'x-tensorart-key': 'ak_tensor_test' },
+      path: '/api/video/generate',
+    } as any, res);
+    expect(seen.map((s) => s.url)).toEqual([
+      'https://openapi.tensor.art/openworks/v1/tool/list',
+      'https://openapi.tensor.art/openworks/v1/task',
+    ]);
+    const wire = JSON.parse(seen[1].options.body);
+    expect(wire.toolName).toBe('text2video_wan27');
+    expect(wire.inputs).toEqual([{ type: 'STRING', value: 'a boat' }]);
+    expect((seen[1].options.headers as any)['Echo-Access-Key']).toBe('mock-key'); // createMockDeps getNextKey returns mock-key
+    expect(res.statusCode).toBe(402);
+    expect(res.data.rawResponse).toBe('{"code":"1001","message":"credits not enough"}');
+    expect(res.data.errorSource).toBe('upstream');
+    expect(res.data.provider).toBe('tensorart');
+  });
+
+  it('ModelScope video stays a documented 400 and never calls upstream', async () => {
+    const fetchImpl = vi.fn();
+    const { deps } = createMockDeps({ upstreamFetch: fetchImpl });
+    const res: any = { headersSent: false, writableEnded: false, destroyed: false, on() { return this; }, off() { return this; }, once() { return this; }, setTimeout() {}, statusCode: 200, data: undefined };
+    res.status = (code: number) => { res.statusCode = code; return res; };
+    res.json = (body: any) => { res.data = body; return res; };
+    await handleVideoGenerate(deps)({
+      body: { provider: 'modelscope', model: 'Wan-AI/Wan2.1-T2V-1.3B', prompt: 'a boat' },
+      headers: { 'x-modelscope-token': 'ms-token' },
+      path: '/api/video/generate',
+    } as any, res);
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(400);
+    expect(res.data.provider).toBe('modelscope');
+    expect(res.data.error).toContain('无视频生成端点');
+    expect(res.data.docUrl).toBe('https://www.modelscope.cn/docs/model-service/API-Inference/intro');
+  });
 });

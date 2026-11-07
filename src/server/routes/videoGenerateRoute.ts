@@ -144,14 +144,214 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
       reqProvider === 'tensor';
 
     if (isTensorArtTarget) {
-      // TAMS numeric model IDs have no generic video job API → local refusal before key lookup or any upstream call.
+      // TAMS numeric model IDs have a VIDEO_DIFFUSION stage this route has not wired.
+      // OpenWorks tool names (text2video_wan27 / image2video_wan27 / …) are submitted for real.
       const tamsVideoRefusal = tamsVideoUnsupported(model);
       if (tamsVideoRefusal) return res.status(400).json({ error: tamsVideoRefusal, errorSource: 'local', provider: reqProvider, model });
-      // OpenWorks video models are served by the generic schema provider `openworks` (POST /api/schema-provider/openworks/submit).
-      return res.status(400).json({
-        error: `Tensor.Art 视频路由只处理 TAMS；模型 ${model || '(空)'} 不是 TAMS 视频接口。OpenWorks 视频模型请在模型中心选择「Tensor.Art OpenWorks」服务商（通用 Schema 路由）。`,
-        errorSource: 'local', provider: reqProvider, model,
-      });
+
+      const taKey = keyPoolManager.getNextKey('tensorart', (req.headers['x-tensorart-key'] as string) || undefined) || '';
+      if (!taKey) {
+        return res.status(400).json({
+          error: '未配置 Tensor.Art API Key (x-tensorart-key)。请在右上角设置面板中配置 Tensor.Art API Key。',
+          errorSource: 'local', provider: reqProvider, model,
+        });
+      }
+      const targetToolName = String(model || 'text2video_wan27').trim();
+      const baseUrl = taKey.trim().startsWith('ak_tusi')
+        ? 'https://openapi.tusiart.cn/openworks/v1'
+        : 'https://openapi.tensor.art/openworks/v1';
+      const taStart = Date.now();
+      try {
+        const listRes = await upstreamFetch(
+          { provider: 'tensorart', route: `${req.path}:tools`, model: targetToolName, key: taKey, readOnly: true },
+          `${baseUrl}/tool/list`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Echo-Access-Key': taKey },
+            body: '{}',
+            signal: AbortSignal.timeout(15000),
+          },
+        );
+        if (!listRes.ok) {
+          const errText = await listRes.text();
+          keyPoolManager.recordResult('tensorart', taKey, false, Date.now() - taStart, errText, listRes.status);
+          return res.status(listRes.status).json({
+            error: `Tensor.Art OpenWorks 工具列表失败 [${listRes.status}]: ${errText}`,
+            errorSource: 'upstream', upstreamStatus: listRes.status, rawResponse: errText,
+            exactEndpointCalled: `${baseUrl}/tool/list`, provider: 'tensorart', model: targetToolName,
+          });
+        }
+        const listRaw = await listRes.text();
+        let listData: any;
+        try { listData = JSON.parse(listRaw); } catch { listData = undefined; }
+        if (!listData || (listData.code !== '0' && listData.code !== 0)) {
+          keyPoolManager.recordResult('tensorart', taKey, false, Date.now() - taStart, listRaw);
+          return res.status(502).json({
+            error: `Tensor.Art OpenWorks 工具列表失败: ${listRaw}`,
+            errorSource: 'upstream', rawResponse: listRaw,
+            exactEndpointCalled: `${baseUrl}/tool/list`, provider: 'tensorart', model: targetToolName,
+          });
+        }
+        const tools: any[] = Array.isArray(listData.data?.tools) ? listData.data.tools : [];
+        const targetTool = tools.find((t: any) => t?.name === targetToolName) || { name: targetToolName, inputs: [] };
+        const toolInputs: any[] = Array.isArray(targetTool.inputs) ? targetTool.inputs : [];
+        const bodyInputs = req.body?.inputs;
+        const formattedInputs = Array.isArray(bodyInputs) && bodyInputs.length === toolInputs.length
+          ? bodyInputs
+          : toolInputs.map((inp: any) => {
+              const desc = String(inp?.description || '').toLowerCase();
+              const type = String(inp?.type || 'STRING').toUpperCase();
+              if (type === 'FILE') return { type: inp.type, value: image_url || '' };
+              if (type === 'ARRAY') return { type: inp.type, value: image_url ? [image_url] : [] };
+              if (desc.includes('width') && isProvided(req.body.width)) return { type: inp.type, value: Number(req.body.width) };
+              if (desc.includes('height') && isProvided(req.body.height)) return { type: inp.type, value: Number(req.body.height) };
+              if ((desc.includes('count') || desc.includes('number')) && isProvided(req.body.count)) return { type: inp.type, value: Number(req.body.count) };
+              if (desc.includes('duration') || desc.includes('seconds')) return { type: inp.type, value: String(isProvided(duration) ? duration : '') };
+              if (desc.includes('ratio') || desc.includes('aspect')) return { type: inp.type, value: String(aspect_ratio || '') };
+              if (desc.includes('size') && isProvided(req.body.size)) return { type: inp.type, value: String(req.body.size) };
+              if (desc.includes('prompt') || desc.includes('text') || desc.includes('description') || desc.includes('motion')) return { type: inp.type, value: String(prompt || '') };
+              return { type: inp.type, value: String(prompt || '') };
+            });
+        const wire = { toolName: targetTool.name, inputs: formattedInputs };
+        const submitUrl = `${baseUrl}/task`;
+        const submitRes = await upstreamFetch(
+          { provider: 'tensorart', route: req.path, model: targetTool.name, key: taKey },
+          submitUrl,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Echo-Access-Key': taKey },
+            body: JSON.stringify(wire),
+          },
+        );
+        const submitRaw = await submitRes.text();
+        let submitData: any;
+        try { submitData = JSON.parse(submitRaw); } catch { submitData = undefined; }
+        if (!submitRes.ok) {
+          keyPoolManager.recordResult('tensorart', taKey, false, Date.now() - taStart, submitRaw, submitRes.status);
+          return res.status(submitRes.status).json({
+            error: `Tensor.Art 视频任务提交失败 [${submitRes.status}]: ${submitRaw}`,
+            errorSource: 'upstream', upstreamStatus: submitRes.status, rawResponse: submitRaw,
+            toolName: targetTool.name, exactEndpointCalled: submitUrl, provider: 'tensorart',
+          });
+        }
+        if (!submitData || (submitData.code !== '0' && submitData.code !== 0)) {
+          keyPoolManager.recordResult('tensorart', taKey, false, Date.now() - taStart, submitRaw);
+          return res.status(502).json({
+            error: `Tensor.Art 视频任务创建失败: ${submitRaw}`,
+            errorSource: 'upstream', rawResponse: submitRaw,
+            toolName: targetTool.name, exactEndpointCalled: submitUrl, provider: 'tensorart',
+          });
+        }
+        const taskId = submitData.data?.task?.id || submitData.data?.taskId || submitData.data?.id;
+        if (!taskId) {
+          keyPoolManager.recordResult('tensorart', taKey, false, Date.now() - taStart, submitRaw);
+          return res.status(502).json({
+            error: `Tensor.Art 任务成功受理，但未返回有效 Task ID: ${submitRaw}`,
+            errorSource: 'upstream', rawResponse: submitRaw,
+            toolName: targetTool.name, exactEndpointCalled: submitUrl, provider: 'tensorart',
+          });
+        }
+        let videoResult = '';
+        const pollDeadline = now() + 200_000;
+        while (now() < pollDeadline) {
+          await (sleep ? sleep(2500) : sleepOrAbort(2500));
+          const qRes = await upstreamFetch(
+            { provider: 'tensorart', route: 'video/poll', model: targetTool.name, key: taKey },
+            `${baseUrl}/task/query`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Echo-Access-Key': taKey },
+              body: JSON.stringify({ taskIds: [String(taskId)] }),
+            },
+          );
+          if (!qRes.ok) {
+            const errText = await qRes.text().catch(() => '');
+            keyPoolManager.recordResult('tensorart', taKey, false, Date.now() - taStart, errText, qRes.status);
+            return res.status(qRes.status).json({
+              error: `Tensor.Art 视频任务查询失败 [${qRes.status}]: ${errText}`,
+              errorSource: 'upstream', upstreamStatus: qRes.status, rawResponse: errText,
+              taskId, toolName: targetTool.name, exactEndpointCalled: `${baseUrl}/task/query`, provider: 'tensorart',
+            });
+          }
+          const qRaw = await qRes.text();
+          let qData: any;
+          try { qData = JSON.parse(qRaw); } catch { qData = undefined; }
+          if (!qData || (qData.code !== '0' && qData.code !== 0)) {
+            keyPoolManager.recordResult('tensorart', taKey, false, Date.now() - taStart, qRaw);
+            return res.status(502).json({
+              error: `Tensor.Art 视频任务查询失败: ${qRaw}`,
+              errorSource: 'upstream', rawResponse: qRaw,
+              taskId, toolName: targetTool.name, provider: 'tensorart',
+            });
+          }
+          const task = qData.data?.tasks?.[0] || qData.data?.[0];
+          const status = String(task?.status || '').toUpperCase();
+          if (status === 'FINISH' || status === 'SUCCESS') {
+            const out = task.outputs?.[0];
+            videoResult = typeof out === 'string' ? out : out?.value || out?.url || '';
+            if (!videoResult) {
+              return res.status(502).json({
+                error: `Tensor.Art 视频任务完成但未返回视频 URL: ${qRaw}`,
+                errorSource: 'upstream', rawResponse: qRaw, taskId, toolName: targetTool.name, provider: 'tensorart',
+              });
+            }
+            break;
+          }
+          if (status === 'FAILED' || status === 'EXCEPTION' || status === 'CANCELED') {
+            keyPoolManager.recordResult('tensorart', taKey, false, Date.now() - taStart, qRaw);
+            return res.status(502).json({
+              error: `Tensor.Art 视频任务处理异常 (${status}): ${qRaw}`,
+              errorSource: 'upstream', rawResponse: qRaw, taskId, toolName: targetTool.name, provider: 'tensorart',
+            });
+          }
+        }
+        if (!videoResult) {
+          keyPoolManager.recordResult('tensorart', taKey, false, Date.now() - taStart, 'poll budget exhausted');
+          return res.status(504).json({
+            error: 'Tensor.Art 视频云端渲染超时 (200s 未完成)，请稍后重试。',
+            errorSource: 'local', taskId, toolName: targetTool.name, provider: 'tensorart',
+          });
+        }
+        keyPoolManager.recordResult('tensorart', taKey, true, Date.now() - taStart);
+        const durableVideo = await requireDurableHistoryMediaUrl(videoResult);
+        if (!durableVideo.ok) {
+          return res.status(500).json({
+            error: `Tensor.Art 视频已生成，但无法下载并持久化为本地历史副本（data URL）: ${durableVideo.message}`,
+            ...(durableVideo.status != null ? { persistStatus: durableVideo.status } : {}),
+            transientMediaUrl: videoResult, taskId, toolName: targetTool.name, provider: 'tensorart',
+          });
+        }
+        const durableVideoUrl = durableVideo.dataUrl;
+        const item = await recordHistoryItem({
+          url: durableVideoUrl,
+          prompt,
+          provider: 'Tensor.Art (OpenWorks Video)',
+          model: targetTool.name,
+          seed: null,
+          steps: null,
+          cfg: null,
+        });
+        return res.json({
+          videoUrl: durableVideoUrl,
+          mediaUrl: durableVideoUrl,
+          mediaType: 'video',
+          provider: 'Tensor.Art (OpenWorks Video)',
+          actualProvider: 'Tensor.Art (OpenWorks Video)',
+          model: targetTool.name,
+          actualModel: targetTool.name,
+          requestedModel: model,
+          exactEndpointCalled: submitUrl,
+          taskId,
+          historyItem: item,
+        });
+      } catch (taErr: any) {
+        if (taErr?.clientDisconnected) throw taErr;
+        keyPoolManager.recordResult('tensorart', taKey, false, Date.now() - taStart, taErr?.message || String(taErr));
+        return res.status(502).json({
+          error: `Tensor.Art 视频生成异常: ${taErr?.message || taErr}`,
+          errorSource: 'network', provider: 'tensorart', model: targetToolName,
+        });
+      }
     }
 
     // 2. NanoGPT Video API (https://api.nano-gpt.com/api/generate-video)
@@ -622,10 +822,16 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
       reqProvider === 'modelscope' ||
       reqProvider === 'modelscope_ai';
 
-    // ModelScope API-Inference has no video generation endpoint (Item 6) → explicit 400, never fall through to another provider.
+    // Official API-Inference intro (https://www.modelscope.cn/docs/model-service/API-Inference/intro, fetched 2026-11-07)
+    // documents LLM, Vision, Image (POST /v1/images/generations) and Audio (POST /v1/audios/generations).
+    // It has no video generation endpoint. Do not call a guessed URL and do not switch provider.
     if (isModelScopeTarget) {
       return res.status(400).json({
-        error: `ModelScope API-Inference 当前没有已接入的视频生成接口（model: ${model || '(空)'}）。本请求保持 provider=${reqProvider}。`,
+        error: `ModelScope API-Inference 目前文档化能力为 LLM / Vision / Image / Audio，无视频生成端点（来源：https://www.modelscope.cn/docs/model-service/API-Inference/intro）。本请求保持 provider=${reqProvider}（model: ${model || '(空)'}），不切换到其他供应商。`,
+        errorSource: 'local',
+        provider: reqProvider,
+        model,
+        docUrl: 'https://www.modelscope.cn/docs/model-service/API-Inference/intro',
       });
     }
 

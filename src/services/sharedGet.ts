@@ -1,9 +1,9 @@
 /**
  * One GET per URL per user action (catalog / Schema plumbing only).
- * Within one action (a model selection — run reuses it) every caller of the same GET (same URL + same credential headers) shares
- * ONE request and its result, INCLUDING failures: a second caller inside the same action gets the same verbatim error,
- * it does not re-fetch. A new user action calls `beginSharedGetAction()` (model (re)selection via noteUserModelSelection) or passes
- * `force: true` (「刷新目录」「读取所选模型的官方 Schema」); only then may the same URL be fetched again.
+ * Within one action, callers of the same GET share ONE in-flight request and reuse a *successful* result.
+ * A failed result is not reused: the next call (re-select, refresh, or Run) performs a fresh GET.
+ * A new user action calls `beginSharedGetAction()` (model (re)selection via noteUserModelSelection) or passes
+ * `force: true` (「刷新目录」「读取所选模型的官方 Schema」).
  * `peekSharedGet` reads the last result without fetching (mount / hydrate never fetch).
  * Generation requests (POST) never go through here.
  */
@@ -26,16 +26,16 @@ export const subscribeSharedGet = (fn: () => void) => { listeners.add(fn); retur
 export function sharedGetJson(url: string, headers: Record<string, string> = {}, opts: { force?: boolean; fetchImpl?: typeof fetch } = {}): Promise<SharedGetResult> {
   const key = sharedGetKey(url, headers);
   const hit = store.get(key);
-  if (hit && hit.epoch === epoch && !opts.force) return hit.p;
+  // Dedupe an in-flight request and a successful result of this action. A settled failure is not a hit:
+  // re-select / refresh / Run must be able to GET again after the user fixes a key.
+  if (hit && hit.epoch === epoch && !opts.force && hit.ok !== false) return hit.p;
   const doFetch = opts.fetchImpl ?? ((u: string, i: RequestInit) => tracedFetch(u, i, 'schema'));
   const p: Promise<SharedGetResult> = doFetch(url, { method: 'GET', headers })
     .then(async (r) => { const raw = await r.text(); let data: any = null; try { data = JSON.parse(raw); } catch { /* non-JSON: raw kept verbatim */ } return { ok: r.ok, status: r.status, data, raw }; });
   const entry: Entry = { epoch, p };
   store.set(key, entry);
-  // clean-1333 #7: remember when / how it settled so a reuse can be shown as 「复用上次失败（北京时间 HH:MM:SS）」.
   p.then((r) => { entry.settledAt = new Date().toISOString(); entry.ok = r.ok; entry.status = r.status; },
     (e: any) => { entry.settledAt = new Date().toISOString(); entry.ok = false; entry.status = typeof e?.appStatus === 'number' ? e.appStatus : undefined; });
-  // Failures stay memoised for this action (same verbatim error to every caller); the next action retries.
   p.catch(() => {}).finally(() => listeners.forEach((fn) => fn()));
   listeners.forEach((fn) => fn());
   return p;

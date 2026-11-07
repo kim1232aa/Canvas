@@ -19,7 +19,9 @@ describe('clean-0544', () => {
     const r = applyCustomParameters({ model: 'm' }, custom);
     expect((r.payload as any)._canvas).toBeUndefined();
     expect(() => parseCustomObject({ provider: 'x' })).toThrow(/路由\/凭据/);
-    expect(() => parseCustomObject({ a: { endpoint: 'x' } })).toThrow();
+    expect(() => parseCustomObject({ endpoint: 'x' })).toThrow(/路由\/凭据/);
+    expect(() => parseCustomObject({ image: { url: 'https://cdn.example/a.png' }, image_url: 'https://cdn.example/b.png', callback_url: 'https://app.example/hook' })).not.toThrow();
+    expect(parseCustomObject({ image: { url: 'https://cdn.example/a.png' } })?.image).toEqual({ url: 'https://cdn.example/a.png' });
   });
   it('5 provider switch with unreadable Schema drops the previous scope properties', () => {
     const prev = JSON.stringify({ lora_strength: 50, _canvas: { scope: { provider: 'venice', model: 'v' }, schemaProperties: ['lora_strength'], endpoint: 'https://api.venice.ai' } });

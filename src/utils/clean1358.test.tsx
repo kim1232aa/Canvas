@@ -102,8 +102,8 @@ describe('clean-1358 #3 Schema select failure toasts immediately', () => {
       const before = events.length;
       await noteUserModelSelection('together', 'black-forest-labs/FLUX.1-schnell')?.catch(() => {});
       await new Promise((r) => setTimeout(r, 0));
-      expect(n).toBe(1);
-      expect(events.slice(before).every((e) => e.reused === true)).toBe(true);
+      expect(n).toBe(2);
+      expect(events.slice(before).some((e) => e.reused === false && e.result.ok === false)).toBe(true);
     } finally {
       globalThis.fetch = prevFetch;
       unsub();

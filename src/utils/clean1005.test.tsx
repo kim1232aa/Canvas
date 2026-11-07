@@ -29,19 +29,19 @@ describe('1 select-model + run → exactly one Schema GET', () => {
     await new SchemaProviderDriver('wavespeed').generate({ model: MODEL, prompt: 'p' } as any, {}).catch(() => {});
     expect(f.mock.calls.filter((c: any[]) => String(c[0]) === URL_)).toHaveLength(1);
   });
-  it('failure is shared: run gets the same failed Schema result without a second GET', async () => {
+  it('a failed Schema GET is not reused: Run issues a fresh GET', async () => {
     const f = vi.fn(async (url: any, init?: any) => {
       if (String(url) === URL_) return new Response('{"error":"boom"}', { status: 401 });
+      if (init?.method === 'POST') return new Response('{"error":"stop"}', { status: 400 });
       return new Response('{}', { status: 200 });
     });
     vi.stubGlobal('fetch', f);
-    noteUserModelSelection('wavespeed', MODEL); // kicks off the shared (rejecting) GET
-    const first = await sharedGetJson(URL_, {}).catch((e) => e);
+    await expect(noteUserModelSelection('wavespeed', MODEL)).rejects.toThrow(/boom/);
     expect(f.mock.calls.filter((c: any[]) => String(c[0]) === URL_)).toHaveLength(1);
     await new SchemaProviderDriver('wavespeed').generate({ model: MODEL, prompt: 'p' } as any, {}).catch(() => {});
-    expect(f.mock.calls.filter((c: any[]) => String(c[0]) === URL_)).toHaveLength(1);
-    const second = await sharedGetJson(URL_, {}).catch((e) => e);
-    expect(second).toBe(first);
+    expect(f.mock.calls.filter((c: any[]) => String(c[0]) === URL_).length).toBeGreaterThanOrEqual(2);
+    const posts = f.mock.calls.filter((c: any[]) => c[1]?.method === 'POST');
+    expect(posts.length).toBeGreaterThanOrEqual(1);
   });
   it('beginSharedGetAction alone (old run behaviour) WOULD fetch again — lock that we no longer do that at run', async () => {
     const f = vi.fn(async () => new Response('{"inputSchema":{"properties":{"prompt":{}}}}', { status: 200 }));
