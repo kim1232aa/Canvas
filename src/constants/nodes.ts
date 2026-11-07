@@ -1096,43 +1096,6 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
       image_url: '',
     },
   },
-
-  ImageUpscaleWithModel: {
-    type: 'ImageUpscaleWithModel',
-    title: '4K/8K 图像高清放大器 (Upscaler)',
-    category: 'image',
-    colorTag: '#10b981',
-    description: '采用 Clarity AI / CCSR 超分辨率模型，对图像进行 2x/4x 细节重塑与毛孔纹理放大。',
-    inputs: [{ id: 'image', name: 'image', type: 'IMAGE', label: 'image' }],
-    outputs: [{ id: 'IMAGE', name: 'IMAGE', type: 'IMAGE', label: 'IMAGE' }],
-    widgets: [
-      {
-        name: 'model_name',
-        label: 'model_name',
-        type: 'select',
-        default: '',
-        options: [
-          { label: '未选择 (请选择或输入放大模型)', value: '' },
-          { label: 'Clarity AI (人像皮肤纹理高清增强放大)', value: 'fal-ai/clarity-upscaler' },
-          { label: 'CCSR 4K/8K (超分辨率细节重塑放大器)', value: 'fal-ai/ccsr' },
-          { label: 'RealESRGAN_x4plus (通用动漫与二次元)', value: 'RealESRGAN_x4plus' },
-        ],
-      },
-      {
-        name: 'scale_by',
-        label: 'scale_by',
-        type: 'slider',
-        default: 2.0,
-        min: 1.5,
-        max: 4.0,
-        step: 0.5,
-      },
-    ],
-    defaultValues: {
-      model_name: '',
-      scale_by: 2.0,
-    },
-  },
 };
 /** All-in-one engine node type declared for a provider (NodeDefinition.engineProvider); undefined when none is declared. */
 export function engineNodeTypeFor(provider: string | undefined): string | undefined {

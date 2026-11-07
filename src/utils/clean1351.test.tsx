@@ -120,7 +120,7 @@ describe('clean-1351 #5 Fit View subtracts chrome; viewport only', () => {
     expect(ins).toMatchObject({ left: 0, right: 0 });
     expect(read('../components/TopBar.tsx')).toContain('data-canvas-chrome="top"');
     expect(read('../components/ModernToolDock.tsx')).toContain('data-canvas-chrome="bottom"');
-    expect(read('../components/ControlPanel.tsx')).not.toContain('onClick={onResetView}');
+    expect(fs.existsSync(new URL('../components/ControlPanel.tsx', import.meta.url))).toBe(false);
     expect(read('../App.tsx')).toContain('measureChromeInsets(el)');
   });
 });

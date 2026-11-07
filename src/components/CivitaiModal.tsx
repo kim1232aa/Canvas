@@ -111,6 +111,7 @@ export interface CivitaiModalProps {
   initialProvider?: LoraProviderFilter;
   initialMode?: 'browse' | 'import';
   onLoadWorkflowPreset?: (preset: any) => void;
+  initialQuery?: string;
 }
 
 /** Chips are built from the baseModel tags actually present on the loaded items of the active tab. */
@@ -144,6 +145,7 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
   initialProvider = 'all',
   initialMode = 'browse',
   onLoadWorkflowPreset,
+  initialQuery,
 }) => {
   const [activeProvider, setActiveProvider] = useState<LoraProviderFilter>(initialProvider);
   const [query, setQuery] = useState('');
@@ -506,9 +508,19 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
     return () => clearTimeout(t);
   }, [loading, activeProvider]);
 
+  const wasOpenForQuery = useRef(false);
   useEffect(() => {
     if (isOpen) {
-      fetchModels(activeProvider, query, sort, selectedArch, false);
+      const opening = !wasOpenForQuery.current;
+      wasOpenForQuery.current = true;
+      let term = query;
+      if (opening && initialQuery !== undefined) {
+        setQuery(initialQuery);
+        term = initialQuery;
+      }
+      fetchModels(activeProvider, term, sort, selectedArch, false);
+    } else {
+      wasOpenForQuery.current = false;
     }
   }, [isOpen, activeProvider]);
 

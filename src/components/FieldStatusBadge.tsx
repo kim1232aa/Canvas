@@ -29,8 +29,19 @@ const FIELD_STATUS_CLASS: Record<BadgeStatus, string> = {
   schema_unavailable: 'bg-rose-950/40 border-rose-500/50 text-rose-200',
 };
 
-// 雁 2026-11-04: per-field send tags removed from the param panel (what was sent lives in the run record).
-export const FieldStatusBadge: React.FC<{ status: BadgeStatus; title?: string }> = () => null;
+export const FieldStatusBadge: React.FC<{ status: BadgeStatus; title?: string }> = ({ status, title }) => {
+  const label = FIELD_STATUS_LABEL[status];
+  if (!label) return null;
+  return (
+    <span
+      data-testid={`field-status-badge-${status}`}
+      title={title || label}
+      className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border ${FIELD_STATUS_CLASS[status] || ''}`}
+    >
+      {label}
+    </span>
+  );
+};
 
 export const SCHEMA_SEND_TITLE = {
   will_send: '模型 Schema 已声明该字段（含别名），已填值会原样发送；以执行记录 actualRequest 为准。',
@@ -40,4 +51,17 @@ export const SCHEMA_SEND_TITLE = {
 } as const;
 
 /** Renders 会发送 / 未填写·不发送 / Schema 不支持 / Schema 未读取 for a schemaSendStatus() result. */
-export const SchemaSendBadge: React.FC<{ status: 'will_send' | 'not_sent' | 'pending' | 'loading' | 'no_image' | 'schema_unavailable' | null; omitTitle?: string }> = () => null;
+export const SchemaSendBadge: React.FC<{ status: 'will_send' | 'not_sent' | 'pending' | 'loading' | 'no_image' | 'schema_unavailable' | null; omitTitle?: string }> = ({ status, omitTitle }) => {
+  if (!status) return null;
+  const label = FIELD_STATUS_LABEL[status];
+  const title = status === 'not_sent' ? (omitTitle || label) : ((SCHEMA_SEND_TITLE as Record<string, string>)[status] || label);
+  return (
+    <span
+      data-testid={`schema-send-badge-${status}`}
+      title={title}
+      className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border ${FIELD_STATUS_CLASS[status] || ''}`}
+    >
+      {label}
+    </span>
+  );
+};
