@@ -1686,6 +1686,13 @@ export default function App() {
   };
 
   const handleAddLoRANodeToCanvas = (lora: ResourceSelection & {modelStrength?:number;clipStrength?:number}, attach = false) => {
+    const loraName = String(lora?.name || '').trim();
+    const modelStrength = parseExplicitLoraStrength(lora?.modelStrength);
+    const clipStrength = parseExplicitLoraStrength(lora?.clipStrength ?? lora?.modelStrength);
+    if (!loraName || modelStrength === undefined || modelStrength === 0 || clipStrength === undefined || clipStrength === 0) {
+      setToast({ type: 'error', title: 'LoRA 未挂载', message: !loraName ? '没有真实的 LoRA 名称或 AIR，未创建空节点。' : 'LoRA 强度缺失或为 0，未创建节点、未猜测强度。' });
+      return false;
+    }
     const newNodeId = `node-lora-${Date.now()}`;
     const def = NODE_DEFINITIONS['LoRALoader'];
 
@@ -2020,6 +2027,10 @@ export default function App() {
       setConnections(JSON.parse(JSON.stringify(preset.connections)));
       setSpatialFrames(JSON.parse(JSON.stringify(preset.spatialFrames || [])));
       if (preset.spatialFrames?.[0]) setSelectedFrameId(preset.spatialFrames[0].id);
+      const importedTitle = String(preset.name || '').trim();
+      if (importedTitle) {
+        setCanvases((prev) => prev.map((c) => c.id === currentCanvasId ? { ...c, name: importedTitle, updatedAt: Date.now() } : c));
+      }
       requestFit();
     } else {
       const timestamp = Date.now();

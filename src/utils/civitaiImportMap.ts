@@ -1573,3 +1573,235 @@ export function buildAllProviderAdaptations(
   }
   return map;
 }
+
+const AIR_URN = /^(?:urn:)?air:[a-z0-9_-]+:[a-z0-9_-]+:[a-z0-9_-]+:[a-z0-9_.-]+(?:@[a-z0-9_.-]+)?(?:\+[a-z0-9_.-]+)?(?:\.[a-z0-9_-]+)?$/i;
+
+/**
+ * A checkpoint may be written into ckpt_name only when it is a real AIR URN
+ * or an explicit provider model id. Bare short names (`turbo`, `sft`) and
+ * raw architecture labels are not checkpoints — the caller must keep the
+ * original text as an unresolved state instead of guessing.
+ * AIR grammar: https://developer.civitai.com/site/guide/air.md
+ */
+export function isResolvableCheckpointRef(value: unknown): boolean {
+  const s = idStr(value);
+  if (!s) return false;
+  if (AIR_URN.test(s)) return true;
+  if (/^civitai:\d+@\d+(?:\+\d+)?$/i.test(s)) return true;
+  if (/^\d+@\d+$/.test(s)) return true;
+  // A bare Civitai model-version id is a real, resolvable reference (GET /model-versions/{id}).
+  if (/^\d{3,}$/.test(s)) return true;
+  if (isRawBaseModelArchitectureText(s)) return false;
+  // A single token with no path, file extension, or version pin is a short name, not a model id.
+  if (!/[/:]/.test(s) && !/\.(?:safetensors|ckpt|pt|bin)$/i.test(s) && !/@/.test(s)) return false;
+  return true;
+}
+
+export interface ImportedLoraMount {
+  name: string;
+  strength: number;
+  clipStrength?: number;
+  air?: string;
+  civitaiId?: string;
+  modelId?: string;
+  versionId?: string;
+  baseModel?: string;
+  triggers?: string;
+  downloadUrl?: string;
+  fileName?: string;
+}
+
+export interface CheckpointResolution {
+  /** Value safe to write into ckpt_name. Empty when unresolved — never a guessed short name. */
+  ckptName: string;
+  unresolved: boolean;
+  /** What the recipe actually said, kept verbatim for the unresolved banner. */
+  originalName: string;
+  reason?: string;
+}
+
+/**
+ * Normalize an imported checkpoint to a real AIR URN or provider model id.
+ * When the recipe only has a short name or architecture label, return the
+ * explicit unresolved state and do not invent a checkpoint.
+ */
+export function resolveImportedCheckpoint(input: {
+  checkpoint?: unknown;
+  sourceModel?: unknown;
+  baseModel?: unknown;
+  targetProvider?: string;
+  targetModel?: unknown;
+}): CheckpointResolution {
+  const provider = idStr(input.targetProvider) || 'civitai';
+  const originalName = idStr(input.sourceModel) || idStr(input.checkpoint) || idStr(input.baseModel);
+  const targetModel = idStr(input.targetModel);
+  // The caller already picked the checkpoint (an AIR, or the target provider's own model id).
+  // A bare source label must not override that choice.
+  const chosen = idStr(input.checkpoint);
+  if (isResolvableCheckpointRef(chosen)) return { ckptName: chosen, unresolved: false, originalName: originalName || chosen };
+  if (provider !== 'civitai') {
+    if (isResolvableCheckpointRef(targetModel)) return { ckptName: targetModel, unresolved: false, originalName };
+    return {
+      ckptName: '',
+      unresolved: true,
+      originalName,
+      reason: originalName
+        ? `来源底模“${originalName}”不能当作 ${provider} 的模型 ID；未选择该供应商目录中的真实模型，未猜测。`
+        : `未解析到来源底模，也未选择 ${provider} 的真实模型；未猜测。`,
+    };
+  }
+  const candidate = idStr(input.checkpoint) || idStr(input.sourceModel);
+  if (isResolvableCheckpointRef(candidate)) return { ckptName: candidate, unresolved: false, originalName: originalName || candidate };
+  return {
+    ckptName: '',
+    unresolved: true,
+    originalName,
+    reason: originalName
+      ? `来源底模“${originalName}”不是 Civitai AIR URN 或具体模型版本，无法写入底模；未猜测。`
+      : '配方未提供可解析的底模 AIR 或模型版本；未猜测。',
+  };
+}
+
+function finiteStrength(value: unknown): number | undefined {
+  if (value === null || value === undefined || value === '') return undefined;
+  const n = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+/**
+ * LoRA mounts that can actually be placed on the canvas: a real AIR or name
+ * plus a finite nonzero strength. Empty names, missing weights, and zero
+ * strengths are skipped — never fabricated.
+ */
+export function mountableImportedLoras(resources: unknown): ImportedLoraMount[] {
+  if (!Array.isArray(resources)) return [];
+  const mounts: ImportedLoraMount[] = [];
+  for (const raw of resources) {
+    if (!raw || typeof raw !== 'object') continue;
+    const item = raw as Record<string, unknown>;
+    const kind = String(item.type || item.modelType || 'lora').toLowerCase();
+    if (kind && !/lora|locon|dora/.test(kind)) continue;
+    if (item.unresolvedReason || item.resolutionError || item.inferredFromPrompt) continue;
+    const strength = finiteStrength(item.strength ?? item.weight ?? item.originalStrength ?? item.modelStrength);
+    if (strength === undefined || strength === 0) continue;
+    const air = idStr(item.air) || idStr(item.sendableUrlOrId);
+    const name = air || idStr(item.fileName) || idStr(item.name) || idStr(item.displayName);
+    if (!name || isRawBaseModelArchitectureText(name)) continue;
+    const clip = finiteStrength(item.clipStrength ?? item.strength_clip);
+    mounts.push({
+      name,
+      strength,
+      ...(clip !== undefined ? { clipStrength: clip } : {}),
+      ...(air ? { air } : {}),
+      civitaiId: idStr(item.civitaiId) || (idStr(item.modelId) && idStr(item.versionId) ? `${idStr(item.modelId)}@${idStr(item.versionId)}` : idStr(item.versionId)) || undefined,
+      modelId: idStr(item.modelId) || undefined,
+      versionId: idStr(item.versionId) || undefined,
+      baseModel: idStr(item.baseModel) || undefined,
+      triggers: idStr(item.triggers) || idStr(item.triggerWords) || undefined,
+      downloadUrl: idStr(item.downloadUrl) || undefined,
+      fileName: idStr(item.fileName) || undefined,
+    });
+  }
+  return mounts;
+}
+
+export interface ImportCanvasGraph {
+  nodes: any[];
+  connections: any[];
+  checkpoint: CheckpointResolution;
+  loras: ImportedLoraMount[];
+}
+
+/**
+ * Place real LoRALoader nodes between the checkpoint and the sampler.
+ * MODEL and CLIP are rewired through the chain. Returns the preset unchanged
+ * when there is no resolvable checkpoint or no mountable LoRA — never an
+ * empty or invented LoRA node.
+ */
+export function withImportedLoraLoaders(preset: any, resources?: unknown): ImportCanvasGraph {
+  const nodes: any[] = Array.isArray(preset?.nodes) ? preset.nodes.map((n: any) => ({ ...n, values: { ...(n.values || {}) } })) : [];
+  const connections: any[] = Array.isArray(preset?.connections) ? preset.connections.map((c: any) => ({ ...c })) : [];
+  const ckptNode = nodes.find((n) => n.type === 'CheckpointLoaderSimple');
+  const checkpoint = resolveImportedCheckpoint({
+    checkpoint: ckptNode?.values?.ckpt_name,
+    sourceModel: ckptNode?.values?.import_source_model,
+    baseModel: ckptNode?.values?.base_model || preset?.otherMetadata?.baseModel,
+    targetProvider: ckptNode?.values?.targetProvider || 'civitai',
+  });
+  const loras = mountableImportedLoras(resources ?? preset?.otherMetadata?.resources);
+  if (ckptNode) {
+    ckptNode.values.ckpt_name = checkpoint.ckptName;
+    ckptNode.values.import_source_model = checkpoint.originalName || ckptNode.values.import_source_model;
+    ckptNode.values.import_unresolved_checkpoint = checkpoint.unresolved;
+    ckptNode.values.import_requires_model_selection = checkpoint.unresolved || !checkpoint.ckptName;
+    ckptNode.values.import_unresolved_reason = checkpoint.unresolved ? checkpoint.reason : undefined;
+  }
+  if (!ckptNode || checkpoint.unresolved || !checkpoint.ckptName || loras.length === 0) {
+    return { nodes, connections, checkpoint, loras: [] };
+  }
+
+  const dropEdge = (edge: any) => edge.fromNodeId === ckptNode.id && (edge.fromSocketId === 'MODEL' || edge.fromSocketId === 'CLIP');
+  const downstream = connections.filter(dropEdge);
+  const kept = connections.filter((edge) => !dropEdge(edge));
+  let modelFrom = { nodeId: ckptNode.id, socketId: 'MODEL' };
+  let clipFrom = { nodeId: ckptNode.id, socketId: 'CLIP' };
+  const baseX = Number(ckptNode.pos?.x) || 60;
+  const baseY = Number(ckptNode.pos?.y) || 120;
+  loras.forEach((lora, index) => {
+    const nodeId = `node-imp-lora-${index + 1}`;
+    nodes.push({
+      id: nodeId,
+      type: 'LoRALoader',
+      title: `LoRA: ${lora.name}`,
+      pos: { x: baseX + 340 * (index + 1), y: baseY },
+      width: 320,
+      inputs: [
+        { id: 'model', name: 'model', type: 'MODEL' },
+        { id: 'clip', name: 'clip', type: 'CLIP' },
+      ],
+      outputs: [
+        { id: 'MODEL', name: 'MODEL', type: 'MODEL' },
+        { id: 'CLIP', name: 'CLIP', type: 'CLIP' },
+      ],
+      values: {
+        lora_name: lora.name,
+        strength_model: lora.strength,
+        strength_clip: lora.clipStrength ?? lora.strength,
+        ...(lora.triggers ? { trigger_words: lora.triggers } : {}),
+        civitai_id: lora.air || lora.civitaiId || '',
+        model_id: lora.modelId,
+        version_id: lora.versionId,
+        air: lora.air,
+        download_url: lora.downloadUrl,
+        base_model: lora.baseModel,
+        import_source_provider: 'civitai',
+      },
+    });
+    kept.push(
+      { id: `imp-lora-m-${index + 1}`, fromNodeId: modelFrom.nodeId, fromSocketId: modelFrom.socketId, toNodeId: nodeId, toSocketId: 'model', type: 'MODEL' },
+      { id: `imp-lora-c-${index + 1}`, fromNodeId: clipFrom.nodeId, fromSocketId: clipFrom.socketId, toNodeId: nodeId, toSocketId: 'clip', type: 'CLIP' },
+    );
+    modelFrom = { nodeId, socketId: 'MODEL' };
+    clipFrom = { nodeId, socketId: 'CLIP' };
+  });
+  for (const edge of downstream) {
+    const via = edge.fromSocketId === 'CLIP' ? clipFrom : modelFrom;
+    kept.push({ ...edge, fromNodeId: via.nodeId, fromSocketId: via.socketId });
+  }
+  return { nodes, connections: kept, checkpoint, loras };
+}
+
+/** One imported LoRA as the payload the canvas LoRA callbacks already accept. */
+export function importedLoraSelection(lora: ImportedLoraMount, provider: string) {
+  return {
+    name: lora.name,
+    provider,
+    civitaiId: lora.air || lora.civitaiId,
+    triggerWords: lora.triggers || '',
+    baseModel: lora.baseModel,
+    modelStrength: lora.strength,
+    clipStrength: lora.clipStrength ?? lora.strength,
+    downloadUrl: lora.downloadUrl,
+    air: lora.air,
+  };
+}

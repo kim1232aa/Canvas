@@ -16,6 +16,10 @@ import {
 } from 'lucide-react';
 import {
   adaptCivitaiRecipeToProvider,
+  importedLoraSelection,
+  isResolvableCheckpointRef,
+  mountableImportedLoras,
+  resolveImportedCheckpoint,
   ProviderAdaptationResult,
   FieldAdaptationDetail,
   ProviderLoraAdaptation,
@@ -166,6 +170,22 @@ export const CivitaiModalImportPreview: React.FC<CivitaiModalImportPreviewProps>
     (l) => l.requiresAuthConsent || l.status === 'requires_consent'
   ));
 
+  // The canvas callbacks only ever receive a LoRA that has a real AIR/name and a finite nonzero strength.
+  const mountableLoras = mountableImportedLoras(effectiveAdaptation?.loras);
+  const mountableByName = new Map(mountableLoras.map((l) => [l.name, l]));
+  const checkpointResolution = effectiveAdaptation
+    ? resolveImportedCheckpoint({
+        checkpoint: effectiveAdaptation.fields.checkpoint?.mappedValue ?? effectiveAdaptation.fields.checkpoint?.originalValue,
+        sourceModel: effectiveAdaptation.fields.checkpoint?.originalValue,
+        baseModel: effectiveAdaptation.baseModelArchitecture,
+        targetProvider: selectedProvider,
+        targetModel,
+      })
+    : null;
+  const unresolvedCheckpoint = Boolean(
+    checkpointResolution?.unresolved && !isResolvableCheckpointRef(checkpointResolution.ckptName)
+  );
+
   return (
     <div className="space-y-4 text-xs font-sans animate-in fade-in duration-150" data-testid="civitai-import-preview">
       {/* 1. Target Provider Selector */}
@@ -310,6 +330,19 @@ export const CivitaiModalImportPreview: React.FC<CivitaiModalImportPreviewProps>
           {effectiveAdaptation.baseModelMessage}
         </p>
 
+        {unresolvedCheckpoint && checkpointResolution && (
+          <div
+            className="mt-1 rounded-lg border border-rose-700/50 bg-rose-950/40 p-2.5 space-y-1"
+            data-testid="import-unresolved-checkpoint"
+          >
+            <p className="text-[11px] font-bold text-rose-200">底模未解析，未写入 ckpt_name</p>
+            <p className="text-[11px] font-mono text-rose-100/90" data-testid="import-unresolved-original-name">
+              来源名称：{checkpointResolution.originalName || '（配方未提供）'}
+            </p>
+            <p className="text-[10px] font-mono text-rose-200/80">{checkpointResolution.reason}</p>
+          </div>
+        )}
+
         {effectiveAdaptation.warnings.length > 0 && (
           <div className="pt-1 space-y-1">
             {effectiveAdaptation.warnings.map((w, idx) => (
@@ -449,67 +482,49 @@ export const CivitaiModalImportPreview: React.FC<CivitaiModalImportPreviewProps>
                     )}
                   </div>
 
-                  {/* Individual LoRA Actions */}
+                  {/* Individual LoRA Actions — only a real AIR/name with a nonzero strength reaches the canvas. */}
                   <div className="flex items-center gap-1.5 shrink-0">
-                    {onSelectLoRA && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          onSelectLoRA({
-                            name: lora.sendableUrlOrId || lora.name,
-                            provider: selectedProvider,
-                            civitaiId: lora.civitaiId,
-                            triggerWords: '',
-                            baseModel: lora.baseModel,
-                            modelStrength: lora.originalStrength ?? undefined,
-                            clipStrength: lora.originalClipStrength ?? undefined,
-                          })
-                        }
-                        className="px-2.5 py-1 rounded bg-[#252838] hover:bg-[#2e3146] text-purple-300 text-[10px] font-semibold border border-[#373a50] transition-colors"
-                      >
-                        选用此 LoRA
-                      </button>
-                    )}
-                    {onAddLoRANodeToCanvas && (
-                      <button
-                        type="button"
-                        data-testid={`import-lora-new-node-${idx}`}
-                        onClick={() =>
-                          onAddLoRANodeToCanvas({
-                            name: lora.sendableUrlOrId || lora.name,
-                            provider: selectedProvider,
-                            civitaiId: lora.civitaiId,
-                            triggerWords: '',
-                            baseModel: lora.baseModel,
-                            modelStrength: lora.originalStrength ?? undefined,
-                            clipStrength: lora.originalClipStrength ?? undefined,
-                          })
-                        }
-                        className="px-2.5 py-1 rounded bg-[#252838] hover:bg-[#2e3146] text-purple-300 text-[10px] font-semibold border border-[#373a50] transition-colors"
-                      >
-                        新建节点
-                      </button>
-                    )}
-                    {onFillCurrentLoRANode && (
-                      <button
-                        type="button"
-                        data-testid={`import-lora-fill-current-${idx}`}
-                        onClick={() =>
-                          onFillCurrentLoRANode({
-                            name: lora.sendableUrlOrId || lora.name,
-                            provider: selectedProvider,
-                            civitaiId: lora.civitaiId,
-                            triggerWords: '',
-                            baseModel: lora.baseModel,
-                            modelStrength: lora.originalStrength ?? undefined,
-                            clipStrength: lora.originalClipStrength ?? undefined,
-                          })
-                        }
-                        className="px-2.5 py-1 rounded bg-[#252838] hover:bg-[#2e3146] text-slate-300 text-[10px] font-semibold border border-[#373a50] transition-colors"
-                      >
-                        仅填入当前节点
-                      </button>
-                    )}
+                    {(() => {
+                      const mount = mountableByName.get(lora.sendableUrlOrId || '') || mountableByName.get(lora.name);
+                      if (!mount) return null;
+                      const selection = importedLoraSelection(mount, selectedProvider);
+                      return (
+                        <>
+                          {onSelectLoRA && (
+                            <button
+                              type="button"
+                              data-testid={`import-lora-select-${idx}`}
+                              onClick={() => onSelectLoRA(selection)}
+                              className="px-2.5 py-1 rounded bg-[#252838] hover:bg-[#2e3146] text-purple-300 text-[10px] font-semibold border border-[#373a50] transition-colors"
+                            >
+                              选用此 LoRA
+                            </button>
+                          )}
+                          {onAddLoRANodeToCanvas && !unresolvedCheckpoint && (
+                            <button
+                              type="button"
+                              data-testid={`import-lora-new-node-${idx}`}
+                              onClick={() => onAddLoRANodeToCanvas(selection)}
+                              className="px-2.5 py-1 rounded bg-[#252838] hover:bg-[#2e3146] text-purple-300 text-[10px] font-semibold border border-[#373a50] transition-colors"
+                              title="新建 LoRALoader，写入真实 AIR/名称与非零强度，并接入底模的 MODEL/CLIP"
+                            >
+                              新建节点
+                            </button>
+                          )}
+                          {onFillCurrentLoRANode && (
+                            <button
+                              type="button"
+                              data-testid={`import-lora-fill-current-${idx}`}
+                              onClick={() => onFillCurrentLoRANode(selection)}
+                              className="px-2.5 py-1 rounded bg-[#252838] hover:bg-[#2e3146] text-slate-300 text-[10px] font-semibold border border-[#373a50] transition-colors"
+                              title="仅把这个真实 LoRA 与其强度填入当前 LoRA 节点，不新建节点"
+                            >
+                              仅填入当前节点
+                            </button>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
               );
