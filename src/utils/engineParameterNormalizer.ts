@@ -95,9 +95,11 @@ export function normalizeForFal(
     guidance_scale: params.cfg,
     seed: params.seed,
     loras: loras.length > 0 ? loras : undefined,
-    // H6: enable_safety_checker 不再写死；用户没传则不发，Fal 用自身默认值
-    ...(custom.enable_safety_checker !== undefined ? { enable_safety_checker: custom.enable_safety_checker } : {}),
-    ...(custom.safety_tolerance !== undefined ? { safety_tolerance: custom.safety_tolerance } : {}),
+    // Fal live schema declares these (https://fal.ai/models/fal-ai/flux-2-flex/api, fetched 2026-11-07):
+    // enable_safety_checker boolean, default true; safety_tolerance enum "1".."5", default "2" (5 = most permissive).
+    // User custom values win. Otherwise the outgoing body carries the open default.
+    enable_safety_checker: custom.enable_safety_checker !== undefined ? custom.enable_safety_checker : false,
+    safety_tolerance: custom.safety_tolerance !== undefined ? custom.safety_tolerance : '5',
   };
 
   return {

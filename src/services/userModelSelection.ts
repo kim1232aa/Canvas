@@ -34,9 +34,10 @@ export function noteUserModelSelection(provider?: string | null, model?: string 
   const key = `${p}\u0000${m}`;
   if (key === last) {
     const reused = peekSharedGetMeta(url, headers);
-    if (reused) {
-      // clean-1333 #7: never silent. A settled result that is reused gets a visible label and a log row 「复用，未重新请求」.
-      // (Still in flight → it is the same request; nothing to label.) Retry = 刷新 (force) or choose another model.
+    // A settled failure is not reused: selecting the model again (or Run) issues a fresh GET.
+    if (reused && reused.ok !== false) {
+      // A settled success that is reused gets a visible label and a log row 「复用，未重新请求」.
+      // (Still in flight → it is the same request; nothing to label.)
       if (reused.settledAt) {
         beginTraceOperation(`选用模型 ${p} · ${m}（复用）`);
         const at = formatRecordTime(reused.settledAt).split(' ')[1].replace(/（.*$/, '');

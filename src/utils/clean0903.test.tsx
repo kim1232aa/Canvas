@@ -30,17 +30,19 @@ describe('1+2 action-scoped Schema GET: mount/hydrate 0, selection 1, run 1', ()
     expect(peekSharedGet(URL_, {})).toBeUndefined();
     expect(f).toHaveBeenCalledTimes(0);
     expect(getModelSchemaEntry('wavespeed', MODEL)).toBeUndefined();
-    // User selects the model: node editor + inspector editor + badge cache → ONE GET (failure included).
+    // User selects the model: concurrent callers share ONE in-flight GET.
+    // A successful result is reused; a failed result is not, so the next call GETs again.
     beginSharedGetAction();
     await Promise.allSettled([sharedGetJson(URL_, {}), sharedGetJson(URL_, {})]);
     ensureModelSchema('wavespeed', MODEL);
     await Promise.allSettled([sharedGetJson(URL_, {})]);
-    expect(schemaGets(f)).toBe(1);
+    expect(schemaGets(f)).toBe(status === 200 ? 1 : 2);
     // Run: new action → exactly one more GET even though editor + driver both need it.
     beginSharedGetAction();
     await Promise.allSettled([sharedGetJson(URL_, {})]);
     await new SchemaProviderDriver('wavespeed').generate({ model: MODEL, prompt: 'p' } as any, {}).catch(() => {});
-    expect(schemaGets(f)).toBe(2);
+    // 500: selection retries once, then the driver's own sharedGet throws (tracedFetch) and its catch path GETs again.
+    expect(schemaGets(f)).toBe(status === 200 ? 2 : 4);
   });
 });
 

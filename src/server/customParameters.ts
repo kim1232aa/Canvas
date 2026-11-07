@@ -9,7 +9,10 @@ export interface CustomOverride {
 
 // Routing and credentials are chosen by explicit provider/base-URL settings; custom JSON never changes them.
 // Model is a request field: an explicit JSON model override is sent and recorded as the actual model.
-const BOUNDARY = /^(?:provider|endpoint|route|url|base_?url|baseurl|inference_provider|headers?|__proto__|prototype|constructor|(?:access|refresh|auth|bearer|hf|api)[_-]?token|token)$|api.?key|authorization|credential|password|secret/i;
+// Only a top-level key can redirect the request or replace credentials. Nested body fields such as
+// image.url / image_url / callback_url are request parameters and must pass through.
+const TOP_LEVEL_BOUNDARY = /^(?:provider|endpoint|route|url|base_?url|baseurl|inference_provider|headers?|(?:access|refresh|auth|bearer|hf|api)[_-]?token|token)$|api.?key|authorization|credential|password|secret/i;
+const PROTOTYPE_KEY = /^(?:__proto__|prototype|constructor)$/i;
 
 const isObject = (value: unknown): value is Json => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 
@@ -26,7 +29,10 @@ function assertNoBoundary(value: unknown, path: string): void {
     // it is never merged into the upstream payload, so its keys are not routing fields.
     if (!path && key === CANVAS_META_KEY) continue;
     const field = path ? `${path}.${key}` : key;
-    if (BOUNDARY.test(key)) throw new Error(`自定义 JSON 不可修改路由/凭据字段：${field}；请在供应商设置中修改`);
+    // Prototype keys are dangerous at any depth. Routing/credential names only redirect the request at the top level.
+    if (PROTOTYPE_KEY.test(key) || (!path && TOP_LEVEL_BOUNDARY.test(key))) {
+      throw new Error(`自定义 JSON 不可修改路由/凭据字段：${field}；请在供应商设置中修改`);
+    }
     assertNoBoundary(value[key], field);
   }
 }

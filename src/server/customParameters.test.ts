@@ -22,17 +22,19 @@ describe('applyCustomParameters', () => {
     expect(built.payload.loras).toEqual([{ name: 'b', strength: 0 }]);
   });
 
-  it('rejects routing and credential keys at any depth instead of changing network auth', () => {
-    for (const custom of [{ endpoint: 'x' }, { provider: 'x' }, { base_url: 'https://evil.test' }, { apiKey: 'x' }, { headers: { Authorization: 'x' } }, { extra: { token: 'x' } }]) {
+  it('rejects top-level routing and credential overrides, and prototype keys at any depth', () => {
+    for (const custom of [{ endpoint: 'x' }, { provider: 'x' }, { base_url: 'https://evil.test' }, { apiKey: 'x' }, { headers: { Authorization: 'x' } }, { token: 'x' }]) {
       expect(() => applyCustomParameters({}, JSON.parse(JSON.stringify(custom)))).toThrow(/路由|凭据/);
     }
     expect(() => applyCustomParameters({}, JSON.parse('{"__proto__":{"polluted":true}}'))).toThrow();
+    expect(() => applyCustomParameters({}, { nested: { constructor: { polluted: true } } })).toThrow(/路由|凭据/);
     expect(({} as any).polluted).toBeUndefined();
   });
 
-  it('allows generation token limits while rejecting credentials nested inside arrays', () => {
+  it('allows nested request-body URL fields and generation token limits', () => {
     expect(applyCustomParameters({}, { max_tokens: 1024, token_count: 2 }).payload).toEqual({ max_tokens: 1024, token_count: 2 });
-    expect(() => applyCustomParameters({}, { items: [{ authorization: 'secret' }] })).toThrow(/凭据/);
+    const nested = applyCustomParameters({}, { image: { url: 'https://cdn.example/a.png' }, image_url: 'https://cdn.example/b.png', callback_url: 'https://app.example/hook' });
+    expect(nested.payload).toEqual({ image: { url: 'https://cdn.example/a.png' }, image_url: 'https://cdn.example/b.png', callback_url: 'https://app.example/hook' });
   });
 
   it('rejects non-object JSON', () => {
