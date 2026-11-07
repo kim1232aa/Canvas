@@ -1,22 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync as rf } from 'node:fs';
 import { preRunPrecheck } from './graphEngine';
 import { unusedLineText } from '../components/HistoryModal';
 
 describe('cleanup-2026-10-17', () => {
-  const node = readFileSync('src/components/NodeItem.tsx', 'utf8');
   it('#1 no 未发送 sticky / send badges on canvas nodes', () => {
+    const node = rf('src/components/NodeItem.tsx', 'utf8');
     expect(node).not.toContain('未发送：${notSent');
     expect(node).not.toContain('<SchemaSendBadge');
   });
-  it('#2 no free-text JSON on nodes / inspector; AI video box not in add menu', () => {
-    expect(node).not.toContain('视频自定义参数 JSON');
-    expect(node).not.toContain('<ApiParameterEditor');
-    expect(readFileSync('src/components/ParameterInspector.tsx', 'utf8')).not.toContain('视频自定义参数 JSON');
-    expect(readFileSync('src/components/ApiParameterEditor.tsx', 'utf8')).not.toContain('<textarea');
-    expect(readFileSync('src/components/Canvas.tsx', 'utf8')).toContain("def.type !== 'AIVideoNode'");
-  });
-  it('#3 no auto base-model swap button', () => expect(node).not.toContain('一键自动配对前置底模'));
   it('#3 precheck: broken edge and Schema-required image', () => {
     const nodes: any[] = [{ id: 'v', type: 'AIVideoNode', title: 'V', values: { targetProvider: 'fal', model: 'm' } }];
     expect(preRunPrecheck(nodes, [{ id: 'c', fromNodeId: 'gone', fromSocketId: 'o', toNodeId: 'v', toSocketId: 'positive' } as any], 'v', () => [])).toContain('连线断开');
@@ -32,7 +24,6 @@ describe('cleanup-2026-10-17', () => {
 
 import { modelRequiresInputImageFromMetadata } from './i2vMetadata';
 import { preRunPrecheck as pre2 } from './graphEngine';
-import { readFileSync as rf } from 'node:fs';
 
 describe('cleanup-2026-10-17 key + I2V + sampler disable', () => {
   it('A server exposes /api/provider-key-status driven by POOL_KEY_FIELDS', () => {

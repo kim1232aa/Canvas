@@ -90,7 +90,22 @@ export function ApiParameterEditor({provider,model,value,onChange,canvasLoras}:{
  React.useEffect(()=>subscribeSharedGet(()=>{if(provider && provider!=='civitai' && model && peekSharedGet(schemaUrl(),keyHeaders() as Record<string,string>))void load(false,true);}),// eslint-disable-next-line react-hooks/exhaustive-deps
  [provider,model]);
  let invalid='';try{if(value){const p=JSON.parse(value);if(!p||Array.isArray(p)||typeof p!=='object')invalid='请求参数必须为 JSON 对象';}}catch{invalid='JSON 尚未完成，提交前请修正';}
+ const schemaProps=schema?.inputSchema?.properties;
+ const insertField=(key:string,spec:any)=>{
+  try{
+   const body=JSON.parse(value || '{}');
+   if(!body||Array.isArray(body)||typeof body!=='object')return;
+   if(!(key in body))body[key]=spec?.default ?? (spec?.type==='boolean'?false:spec?.type==='number'||spec?.type==='integer'?0:spec?.type==='array'?[]:spec?.type==='object'?{}:'');
+   onChange(JSON.stringify(body,null,2));
+  }catch{/* the invalid-JSON alert above stays; nothing is written until it parses */}
+ };
  return <>
+  <div className="rounded-xl border border-slate-700 bg-[#111620] p-3 text-sm text-slate-200 my-2" onPointerDown={e=>e.stopPropagation()} onMouseDown={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()}>
+   <p className="mb-2 text-slate-300">自定义 API 参数 JSON · 这里的字段覆盖同名请求参数并直接提交，空值也保留。</p>
+   <textarea aria-label="自定义 API 参数 JSON" value={value || ''} onChange={e=>onChange(e.target.value)} placeholder={'{\n  "seed": 42\n}'} spellCheck={false} className="w-full min-h-32 rounded-lg border border-slate-600 bg-black/30 p-3 font-mono text-sm" />
+   <button type="button" onClick={()=>void load(true)} className="mt-3 text-cyan-300">读取所选模型的官方 Schema</button>
+   {schemaProps&&typeof schemaProps==='object'&&<div className="flex flex-wrap gap-2 my-2">{Object.entries(schemaProps).filter(([key])=>!['model','provider','endpoint','inference_provider'].includes(key)).map(([key,spec]:[string,any])=><button key={key} type="button" title={typeof spec?.description==='string'?spec.description:key} onClick={()=>insertField(key,spec)} className="rounded border border-slate-600 px-2 py-1 text-cyan-200">{key}</button>)}</div>}
+  </div>
   {schema?.inputSchema && <SchemaChoiceControls inputSchema={schema.inputSchema} sourceUrl={schema.schemaSource || schema.sourceUrl} value={value} onChange={onChange} schemaUnprobed={schema.schemaUnprobed===true} openapi={schema.openapi} canvasLoras={canvasLoras} />}
   {error && (
    <div role="alert" aria-label="Schema 请求失败" className="rounded-lg border border-rose-900/60 bg-rose-950/20 p-2.5 text-xs text-rose-200 font-mono space-y-1 my-2">

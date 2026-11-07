@@ -15,6 +15,7 @@ import {
   AlertCircle,
   AlertTriangle,
 } from 'lucide-react';
+import { FieldStatusBadge } from './FieldStatusBadge';
 import { SpatialFrame, ComfyParameters } from '../types/graph';
 import { refinePromptWithGemini, getRefineModelSelection } from '../services/api';
 import { validateModelCompatibility } from '../utils/baseModelMatcher';
@@ -25,7 +26,6 @@ import { friendlyProviderLabel,
   spatialFrameModelLabel,
   sanitizeFrameMarketingTitle,
 } from '../utils/providerLabels';
-import { FieldStatusBadge } from './FieldStatusBadge';
 import { errorBannerText } from '../utils/apiFailure';
 
 interface SpatialFrameItemProps {
@@ -214,13 +214,9 @@ export const SpatialFrameItem: React.FC<SpatialFrameItemProps> = ({
               // Omit Comfy sampler/steps/CFG chips entirely for Gemini/compat — show only seed side
               return null;
             }
-            const chip = (unsupported: boolean, label: string, field: string) =>
-              (void unsupported, false) ? (
-                <span
-                  className="text-slate-600 flex items-center gap-1"
-                  aria-label={field}
-                >
-                  <span>—</span>
+            const chip = (unsupported: boolean, label: string, field: string) => unsupported ? (
+                <span className="text-slate-500 flex items-center gap-1" aria-label={field}>
+                  <span className="line-through">{label}</span>
                   <FieldStatusBadge status="unsupported" />
                 </span>
               ) : (
@@ -243,22 +239,16 @@ export const SpatialFrameItem: React.FC<SpatialFrameItemProps> = ({
         </div>
         <div className="flex items-center gap-1 shrink-0">
           {(() => {
-            const seedUnsupported = false; // 雁: seed never greyed
             return (
               <button
                 type="button"
-                onClick={seedUnsupported ? undefined : handleRerollSeed}
-                disabled={seedUnsupported}
-                className={`flex items-center gap-1 ${
-                  seedUnsupported
-                    ? 'text-slate-600 cursor-not-allowed opacity-40 pointer-events-none'
-                    : 'text-slate-400 hover:text-white'
-                }`}
+                onClick={handleRerollSeed}
+                className="flex items-center gap-1 text-slate-400 hover:text-white"
                 title="摇随机种子"
                 aria-label="摇随机种子"
               >
-                <span>{seedUnsupported ? '—' : frame.params.seed}</span>
-                <Dices className={`w-3 h-3 ${seedUnsupported ? 'text-slate-600' : 'text-cyan-400'}`} />
+                <span>{frame.params.seed}</span>
+                <Dices className="w-3 h-3 text-cyan-400" />
               </button>
             );
           })()}

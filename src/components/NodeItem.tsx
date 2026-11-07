@@ -1426,7 +1426,17 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                   <p className="text-amber-200/90 leading-tight">
                     {compat.message}
                   </p>
-                  {/* cleanup-2026-10-17 #3: warning only — no one-click base-model swap; the user changes the checkpoint. */}
+                  {onAutoFixCheckpoint && compat.recommendedCheckpoint && (
+                    <button
+                      type="button"
+                      onClick={() => onAutoFixCheckpoint(compat.recommendedCheckpoint!)}
+                      className="w-full py-1.5 px-2 rounded-lg bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold flex items-center justify-center gap-1 transition-all shadow-md text-[10px] active:scale-95"
+                      title="一键将前置 CheckpointLoader 节点的模型切换为匹配底模"
+                    >
+                      <Sparkles className="w-3 h-3 text-amber-200" />
+                      <span>⚡ 一键自动配对前置底模</span>
+                    </button>
+                  )}
                 </div>
               );
             })()

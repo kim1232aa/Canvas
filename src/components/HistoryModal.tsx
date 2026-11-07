@@ -6,7 +6,6 @@ import { fetchHistoryItem } from '../services/api';
 import { PreviewMediaPanel } from './PreviewMediaPanel';
 import { EmphasizeLimit, UrlNoMidBreak, JsonNoMidBreak } from './TextEmphasis';
 import { formatRecordTime } from '../services/executionTrace';
-import { isApplyToCanvasDisabled, type PreviewSettleState } from '../utils/previewHang';
 import { splitActualRequest, ACTUAL_META_LABEL } from '../utils/actualRequestDisplay';
 import { requestedNotSentLoras, notSentLoraLabel, generationPostNotSent, historySeedStatement, historySeedRowText, historySeedUpstreamMissingNote, historyUpstreamTaskId, otherSentParameters, formatHistorySize, historySizeMismatchNote, formatResolvedHistoryParameter, hasOutputMedia, historySentParameterValues, historyFieldOrigins, historyParameterSourceLabel, resolveHistoryParameters, sentHistoryLoras, historyModelSent, upstreamErrorMessage, historyKeyUsageLabels, historyActualRequest, isSchemaFetchFailure, historyUpstreamExchanges, groupUpstreamExchanges, terminalSuccessIndex, upstreamBodyStatus, upstreamSegmentStatusLabel, upstreamCallTime, upstreamSegmentLabel, extractUpstreamEcho, upstreamEchoContrast, unwrapGenerationParameters, valueAtPath, type UpstreamExchangeRow, type ResolvedHistoryParameter } from '../utils/historyParameters';
 import { PROVIDER_UPSTREAM_ECHO_PATH } from '../config/providerDisplayHints';
@@ -326,8 +325,9 @@ const HistoryCardFace: React.FC<{ item: GenerationHistoryItem; resolved: Record<
 export const applyDisabledReason = (item: GenerationHistoryItem, broken: boolean): string => {
   if (item.status === 'local_blocked') return '没有发出去：这次没有出图，没有结果可应用到画布';
   if (item.status === 'failed') return '上游请求失败：这次没有出图，没有结果可应用到画布';
-  if (!item.url) return '这条记录没有输出图片，无法应用到画布';
-  if (broken) return '预览加载失败，无法应用到画布';
+  if (!item.url && !item.videoUrl) return '这条记录没有输出媒体，无法应用到画布';
+  // A broken preview is exactly when the user needs to regenerate from these parameters.
+  void broken;
   return '';
 };
 
@@ -566,10 +566,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
                 const unsupportedRows = historyUnsupportedRows(resolved);
                 const unsupportedKeys = new Set(unsupportedRows.map((r) => r.key));
                 const unrecorded = schemaUnrecordedKeys(resolved, unsupportedKeys);
-                const settleForApply: PreviewSettleState = !item.url || brokenIds[item.id]
-                  ? 'failed_hard'
-                  : 'ok';
-                const applyDisabled = isApplyToCanvasDisabled(settleForApply);
+                const applyDisabled = applyDisabledReason(item, false) !== '';
                 return (
                 <div
                   key={item.id}
