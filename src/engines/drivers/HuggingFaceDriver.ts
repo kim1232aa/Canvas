@@ -7,7 +7,7 @@ export class HuggingFaceDriver extends BaseEngineDriver {
   readonly name = 'Hugging Face (Serverless)';
   readonly label = 'Hugging Face 开源平台';
   readonly badgeColor = '#ffbb00';
-  readonly description = 'HF Inference、官方 Z-Image Space，以及显式选择的 HF → fal-ai 路由；目录资源不等于在线推理能力。';
+  readonly description = 'Hugging Face Serverless Inference 直连推理；按模型仓库调用官方 hf-inference 接口并原样返回上游响应。';
   readonly capabilities = ['text2img'] as const;
 
   readonly supportedModels: ModelSpec[] = [];
@@ -39,11 +39,9 @@ export class HuggingFaceDriver extends BaseEngineDriver {
         scheduler: params.scheduler ?? params.extraParams?.scheduler,
         sampler_name: params.sampler_name,
         denoise: params.denoise,
-        inference_provider: params.extraParams?.hf_provider,
         image_url: params.image_url,
         loras: params.loras?.length ? params.loras : undefined,
         parameterOmissions: params.parameterOmissions || params.extraParams?.parameterOmissions || params.extraParams?.omissions,
-        // All seven Space arguments come from explicit canvas state.
         resolution: params.extraParams?.resolution,
         shift: params.extraParams?.shift,
         random_seed: params.extraParams?.random_seed,

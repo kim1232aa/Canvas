@@ -426,7 +426,6 @@ export default function App() {
       return generationReadiness({
         ...p,
         referenceImageUrl: frame.referenceImageUrl,
-        hfProvider: p.hfProvider,
         provider: p.targetProvider === 'video' ? p.videoProvider : p.targetProvider,
         model: p.checkpoint,
         prompt: frame.prompt,
@@ -447,7 +446,6 @@ export default function App() {
     const readinessFrom = (p: ReturnType<typeof extractWorkflowParameters>) =>
       generationReadiness({
         executionBlockedReason: p.executionBlockedReason,
-        hfProvider: p.hfProvider,
         provider: p.videoProvider || p.targetProvider,
         model: p.checkpointModel,
         prompt: p.positivePrompt,
@@ -644,7 +642,6 @@ export default function App() {
     const issue = generationReadiness({
       ...frame.params,
       referenceImageUrl: frame.referenceImageUrl,
-      hfProvider: frame.params.hfProvider,
       provider: frame.params.targetProvider === 'video' ? frame.params.videoProvider : frame.params.targetProvider,
       model: frame.params.checkpoint,
       prompt: frame.prompt,
@@ -903,7 +900,7 @@ export default function App() {
         if(widgetName==='targetProvider' && value!==n.values?.targetProvider) {
           const cleared = {
             ...n,
-            values:{...n.values,targetProvider:value,provider:value,ckpt_name:'',model:'',model_endpoint:'',hf_provider:'',custom_parameters:undefined,resource_source:undefined,resource_kind:undefined,download_url:undefined,civitai_id:undefined},
+            values:{...n.values,targetProvider:value,provider:value,ckpt_name:'',model:'',model_endpoint:'',custom_parameters:undefined,resource_source:undefined,resource_kind:undefined,download_url:undefined,civitai_id:undefined},
             state:'idle' as const,
             errorMessage:undefined,
           };
@@ -1148,7 +1145,7 @@ export default function App() {
             params: {
               ...f.params,
               ...(widgetName === 'ckpt_name' ? { checkpoint: value } : {}),
-              ...(widgetName === 'targetProvider' ? { targetProvider: value,checkpoint:'',hfProvider:undefined,customParameters:undefined,loras:f.params.loras } : {}),
+              ...(widgetName === 'targetProvider' ? { targetProvider: value,checkpoint:'',customParameters:undefined,loras:f.params.loras } : {}),
               ...(widgetName === 'ckpt_name' ? { loras: nextLoras } : {}),
               ...(widgetName === 'aspect_ratio' ? { aspectRatio: value || undefined } : {}),
               ...(widgetName === 'resolution' ? { resolution: value || undefined } : {}),
@@ -2477,7 +2474,6 @@ export default function App() {
     videoDuration: graphExtraction?.videoDuration ?? videoEngineNode?.values.duration,
     videoFps: graphExtraction?.videoFps ?? videoEngineNode?.values.fps,
     videoFrames: graphExtraction?.videoFrames ?? videoEngineNode?.values.num_frames,
-    hfProvider: checkpointLoaderNode?.values?.hf_provider,
     galleryImages: checkpointLoaderNode?.values?.gallery_images ?? inspectorFrame?.params?.galleryImages,
   };
 
@@ -2787,7 +2783,6 @@ export default function App() {
                       shift: newParams.shift,
                       random_seed: newParams.randomSeed,
                       gallery_images: newParams.galleryImages,
-                      hf_provider: newParams.hfProvider,
                       custom_parameters: newParams.customParameters,
                       civitai_engine: newParams.civitaiEngine,
                       civitai_ecosystem: newParams.civitaiEcosystem,

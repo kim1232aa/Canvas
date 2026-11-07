@@ -945,16 +945,12 @@ function buildStandardI2v(spec: I2vSpec): WorkflowPreset {
  * I2V: fal/wavespeed/civitai/novita/muapi/replicate.
  */
 const STD_SPECS: StdSpec[] = [
-  // HF route = fal-ai: live https://huggingface.co/api/models/Tongyi-MAI/Z-Image-Turbo?expand[]=inferenceProviderMapping
-  // (2026-11-04) lists fal-ai (fal-ai/z-image/turbo) status live, task text-to-image; hf-inference is not listed.
-  // server.ts fal-ai branch sends width/height → image_size, steps → num_inference_steps, seed. Route preset so it runs unchanged.
-  // Recipe https://civitai.red/images/113739497 (verbatim: seed/steps/cfg/size/LoRA@0.9; sampler 'Undefined' → none). HF LoRA route: model = the LoRA repo
-  // (inferenceProviderMapping fal-ai live, providerId fal-ai/z-image/turbo/lora); server sends the same-repo LoRA scale.
+  // Hugging Face always POSTs https://router.huggingface.co/hf-inference/models/${model} (no fal-ai / Space detour).
+  // Recipe https://civitai.red/images/113739497 (verbatim: seed/steps/cfg/size/LoRA@0.9; sampler 'Undefined' → none).
   { provider: 'huggingface', ckpt: 'renderartist/Technically-Color-Z-Image-Turbo', hasLora: true, hasNegative: false,
     loras: [{ name: 'renderartist/Technically-Color-Z-Image-Turbo', strength: 0.9, source: 'https://civitai.red/images/113739497' }],
     seed: 1840591390, steps: 12, cfg: 1, width: 1216, height: 832,
     omit: ['sampler', 'scheduler', 'denoise'],
-    checkpointExtra: { hf_provider: 'fal-ai' },
   },
   // Official API-Inference: size/steps/guidance/seed/negative_prompt/loras; sampler/scheduler/denoise not on REST table → omit (no empty shells).
   // Recipe https://civitai.red/images/113739497 (verbatim): Technically Color Z LoRA@0.9 via the 魔搭 mirror hf/renderartist-Technically-Color-Z-Image-Turbo (sha256 = civitai).

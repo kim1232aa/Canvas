@@ -36,10 +36,11 @@ it('explicit Civitai video framework dispatch uses the dedicated driver and keep
  await registry.generate('video',params);expect(generate).toHaveBeenCalledWith(params,{});
 });
 it('imports the actual model-chain checkpoint and retains explicit schema fields',()=>{
- const a=node('a','CheckpointLoaderSimple',{ckpt_name:'clip-only',targetProvider:'civitai'}),b=node('b','CheckpointLoaderSimple',{ckpt_name:'actual',targetProvider:'huggingface',resolution:'custom',aspect_ratio:'4:3',hf_provider:'custom',random_seed:false,shift:0});
+ const a=node('a','CheckpointLoaderSimple',{ckpt_name:'clip-only',targetProvider:'civitai'}),b=node('b','CheckpointLoaderSimple',{ckpt_name:'actual',targetProvider:'huggingface',resolution:'custom',aspect_ratio:'4:3',random_seed:false,shift:0});
  const p=node('p','CLIPTextEncode',{text:'test'}),k=node('k','KSampler',{seed:0}),l=node('l','EmptyLatentImage',{width:1024,height:768,batch_size:1});
  const connections=[edge('a','p','clip'),edge('p','k','positive'),edge('b','k','model'),edge('l','k','latent_image')];
- expect(workflowFrame([a,b,p,k,l],connections)?.params).toMatchObject({checkpoint:'actual',resolution:'custom',aspectRatio:'4:3',hfProvider:'custom',randomSeed:false,shift:0});
+ expect(workflowFrame([a,b,p,k,l],connections)?.params).toMatchObject({checkpoint:'actual',resolution:'custom',aspectRatio:'4:3',randomSeed:false,shift:0});
+ expect(workflowFrame([a,b,p,k,l],connections)?.params).not.toHaveProperty('hfProvider');
 });
 it('explicit clearing of FPS and duration does not revive old legacy fields',()=>{
  const f:any={mediaType:'video',prompt:'test',params:{checkpoint:'custom',targetProvider:'video',videoProvider:'fal',loras:[],videoDuration:5,videoFps:24},videoDuration:5,videoFps:24};

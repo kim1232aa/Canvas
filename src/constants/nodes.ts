@@ -159,7 +159,6 @@ export const NODE_DEFINITIONS: Record<string, NodeDefinition> = {
       { name: 'random_seed', label: '种子策略', type: 'select', default: '', options: [] },
       { name: 'gallery_images', label: '结果集', type: 'select', default: '', options: [] },
       { name: 'fal_model_name', label: 'SD LoRA 底模仓库 / URL', type: 'text', default: '' },
-      { name: 'hf_provider', label: 'HF 推理端点', type: 'select', default: '', options: [] },
     ],
     defaultValues: {
       targetProvider: '',

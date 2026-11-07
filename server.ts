@@ -9,7 +9,6 @@ import { classifyCivitaiVideoPoll, runCivitaiVideoPoll } from './src/server/civi
 import { canvasNodeId, clearVideoJobStatus } from './src/server/videoJobStatus.ts';
 import { CIVITAI_VIDEO_POLL_BUDGET_MS, CIVITAI_VIDEO_SUBMIT_WAIT_SECONDS, civitaiGenerateSocketMs } from './src/server/civitaiVideoPollSchedule.ts';
 import { fetchSenseNovaModelCatalog } from './src/server/senseNovaCatalog.ts';
-import { readHuggingFaceSpaceImageResponse } from './src/server/huggingFaceSpaceImage.ts';
 import { buildModelScopeImagePayload } from './src/server/modelScopeImageContract';
 import { MODELSCOPE_REGIONS, buildLoraListRequest, parseLoraListResponse } from './src/server/modelScopeLoraList.ts';
 import {isHuggingFaceLora} from './src/utils/hfResource.ts';
@@ -23,7 +22,6 @@ import { applyCustomParameters, parseCustomObject } from './src/server/customPar
 import { runWithBillingKeyRotate, buildKeyRotationPayload, type KeyAttemptRecord } from './src/server/billingKeyRotate.ts';
 import { persistGeneratedImages, normalizeGeneratedImages } from './src/server/multiImageHistory.ts';
 import { collectCivitaiImageOutputs } from './src/server/civitaiOutputs.ts';
-import { buildZImagePayload } from './src/schemas/zImageSpace.ts';
 import { buildModelScopeLoras } from './src/schemas/modelScopeLoras.ts';
 import { buildTensorModelJob, tensorModelId, validateTensorModelDimensions, TENSOR_MODEL_API } from './src/schemas/tensorModelApi.ts';
 import { isOpenWorksAccessKey, pickTamsBearerKey, parseTensorArtKeys, TAMS_BEARER_REQUIRED_HINT } from './src/schemas/tensorArtCredentials.ts';
@@ -4671,7 +4669,6 @@ app.post(['/api/tensorart/generate', '/api/engine/tensorart/generate'], async (r
 // 3. Hugging Face Inference API (huggingface.co/docs)
 // ==========================================
 app.post(['/api/huggingface/generate', '/api/engine/huggingface/generate'], async (req, res) => {
-  const startTime = Date.now();
   try {
     const {
       prompt,
@@ -4705,427 +4702,109 @@ app.post(['/api/huggingface/generate', '/api/engine/huggingface/generate'], asyn
       else keyPoolManager.recordResult('huggingface', key, false, 0, rec.responseBody || '', rec.status || 0);
     };
 
-    const normalizedModel = (model || '').trim().toLowerCase();
-    const hfProvider = req.body.inference_provider;
-    if (!['hf-inference','fal-ai','z-image-space'].includes(hfProvider)) return res.status(400).json({error:'请选择 HF 实际执行路由',errorSource:'local'});
-    const isZImage = hfProvider==='z-image-space';
-
-    if (!hfToken && !isZImage) {
+    if (!hfToken) {
       return res.status(400).json({
         error: '未配置 Hugging Face Token，请在右上角设置中填写您的 User Access Token (hf_...)。',
       });
     }
 
-    // HF text-to-image and this Z-Image Space have no LoRA argument. Never silently drop.
-    // Filled fields with no canvas mapping are sent under their own name (fal: top-level; hf-inference: parameters.*, per
-    // https://huggingface.co/docs/inference-providers/tasks/text-to-image). Z-Image Space: custom_parameters merge.
-    const hfExtraFields = ['cfg', 'denoise', 'image_url', 'sampler_name'];
-    if (isZImage && forwardUnmappedFields(res, 'Hugging Face Z-Image Space', req.body, [...hfExtraFields, 'loras'])) return;
-    // Z-Image Space has seven live /generate arguments; no negative prompt / guidance.
-    if (isZImage && forwardUnmappedFields(res, 'Hugging Face Z-Image Space', req.body, ['negative_prompt', 'guidance'])) return;
-
+    // Hugging Face always POSTs https://router.huggingface.co/hf-inference/models/${model}.
+    // Filled fields land in parameters (https://huggingface.co/docs/inference-providers/tasks/text-to-image); upstream decides.
+    const hfExtraFields = ['cfg', 'denoise', 'image_url', 'sampler_name', 'resolution', 'shift', 'random_seed', 'gallery_images'];
     const finalPrompt = prompt || '';
     let dataUrl = '';
     let sentSeed: number | null = null;
     let sentSteps: number | null = null;
     let sentCfg: number | null = null;
-    let zImageRequest: { actualParameters: Record<string, unknown>; overrides: unknown[] } | undefined;
     let hfInferenceRequest: { actualParameters: Record<string, unknown>; overrides: unknown[]; customParameters?: unknown } | undefined;
 
-    if (isZImage) {
-      // H2: 🌟 Direct integration with verified official Tongyi-MAI/Z-Image-Turbo Gradio Space on Hugging Face (Public Space)
-      if (forwardUnmappedFields(res, 'Hugging Face Z-Image Space', req.body, ['width', 'height', 'sampler_name', 'scheduler'])) return;
-      const gradioPayload = buildZImagePayload(req.body);
-      const zActual = gradioPayload.actualParameters as Record<string, any>;
-      sentSeed = zActual.random_seed || zActual.seed === -1 ? null : zActual.seed;
-      sentSteps = zActual.steps;
-      zImageRequest = { actualParameters: zActual, overrides: gradioPayload.overrides };
-
-      const gradioHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (hfToken) gradioHeaders['Authorization'] = `Bearer ${hfToken}`;
-
-      const initResp = await upstreamFetch(
-        { provider: 'huggingface', route: '/api/huggingface/generate', model, key: hfToken },
-        'https://tongyi-mai-z-image-turbo.hf.space/gradio_api/call/generate',
-        { method: 'POST', headers: gradioHeaders, body: JSON.stringify({ data: gradioPayload.data }) }
-      );
-
-      if (!initResp.ok) {
-        const errText = await initResp.text();
-        return res.status(initResp.status).json({
-          error: `Hugging Face (Tongyi-MAI/Z-Image-Turbo 官方算力) 提交失败 [${initResp.status}]`,
-          details: errText,
-          model,
-        });
-      }
-
-      const initData = await initResp.json();
-      const eventId = initData.event_id;
-      if (!eventId) {
-        return res.status(500).json({
-          error: 'Hugging Face Z-Image-Turbo 空间未返回事件 ID',
-          details: JSON.stringify(initData),
-          model,
-        });
-      }
-
-      const sseHeaders: Record<string, string> = {};
-      if (hfToken) sseHeaders['Authorization'] = `Bearer ${hfToken}`;
-
-      const sseResp = await upstreamFetch(
-        { provider: 'huggingface', route: '/api/huggingface/generate', model, key: hfToken },
-        `https://tongyi-mai-z-image-turbo.hf.space/gradio_api/call/generate/${eventId}`,
-        { headers: sseHeaders }
-      );
-
-      if (!sseResp.ok) {
-        const sseErr = await sseResp.text();
-        return res.status(sseResp.status).json({
-          error: `Hugging Face 渲染流拉取失败 [${sseResp.status}]`,
-          details: sseErr,
-          model,
-        });
-      }
-
-      const streamText = await sseResp.text();
-      let genUrl = '';
-      const sseParseErrors: string[] = [];
-      const lines = streamText.split('\n');
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          try {
-            const parsed = JSON.parse(line.slice(6));
-            if (Array.isArray(parsed) && parsed[0] && Array.isArray(parsed[0]) && parsed[0][0]) {
-              if (typeof parsed[2] === 'number' && Number.isSafeInteger(parsed[2])) sentSeed = parsed[2];
-              genUrl = parsed[0][0].image?.url || parsed[0][0].image?.path || '';
-            }
-          } catch (e: any) {
-            sseParseErrors.push(String(e?.message || e));
-          }
-        }
-      }
-
-      if (!genUrl) {
-        return res.status(500).json({
-          error: 'Hugging Face Z-Image-Turbo 未能产生有效图像产物',
-          details: streamText,
-          parseErrors: sseParseErrors.length ? sseParseErrors : undefined,
-          model,
-        });
-      }
-
-      let imgResp: Response;
-      try {
-        imgResp = await upstreamFetch(
-          { provider: 'huggingface', route: '/api/huggingface/generate', model, key: hfToken },
-          genUrl,
-          { headers: hfToken ? { 'Authorization': `Bearer ${hfToken}` } : {} }
-        );
-      } catch (error: any) {
-        return res.status(502).json({
-          error: `Hugging Face Z-Image-Turbo 图像下载网络失败: ${error.message}`,
-          errorSource: 'network',
-          endpoint: genUrl,
-          actualRequest: zActual,
-          model,
-        });
-      }
-      const imageResult = await readHuggingFaceSpaceImageResponse(imgResp, genUrl);
-      if (!imageResult.ok) {
-        const isProtocolError = imageResult.kind === 'protocol';
-        return res.status(isProtocolError ? 502 : imageResult.status).json({
-          error: isProtocolError
-            ? `Hugging Face Z-Image-Turbo 上游返回非图像或空图像响应 [${imageResult.status}]`
-            : `Hugging Face Z-Image-Turbo 图像下载失败 [${imageResult.status}]`,
-          errorSource: isProtocolError ? 'upstream-protocol' : 'upstream',
-          upstreamStatus: imageResult.status,
-          endpoint: imageResult.endpoint,
-          contentType: imageResult.contentType,
-          details: imageResult.body,
-          ...(imageResult.kind === 'protocol' ? { bodyBase64: imageResult.bodyBase64 } : {}),
-          actualRequest: zActual,
-          model,
-        });
-      }
-      dataUrl = await externalizeMedia(imageResult.dataUrl);
-    } else if (hfProvider === 'fal-ai') {
-      // Official HF SDK routing + live inferenceProviderMapping.
-      // No provider failover. Billing/402 may try the next KeyPool key (billingKeyRotate); other errors stop.
-      if (forwardUnmappedFields(res,'HF → fal-ai',req.body,['scheduler','resolution','shift','random_seed','gallery_images'])) return;
-
-      const falRotated = await runWithBillingKeyRotate({
-        keys: hfAttemptPlan.keys,
-        pinned: hfAttemptPlan.pinned,
-        maskKey: (k) => keyPoolManager.maskKey(k),
-        onAttempt: pushHfKeyAttempt,
-        attempt: async (token) => {
-          hfToken = token;
-          const metadata = async (id: string) => {
-            if (!/^[\w.-]+\/[\w.-]+$/.test(id)) {
-              return { local: true as const, status: 400, payload: { error: `无效 HF 仓库 ID：${id}` } };
-            }
-            const response = await upstreamFetch(
-              { provider: 'huggingface', route: req.path, model: id, key: token },
-              `https://huggingface.co/api/models/${id}?expand=inferenceProviderMapping&expand=cardData&expand=siblings`,
-              { headers: { Authorization: `Bearer ${token}` } },
-            );
-            if (!response.ok) {
-              const body = await response.text();
-              return { upstream: true as const, status: response.status, body };
-            }
-            return { ok: true as const, json: await response.json() };
-          };
-
-          const modelMetaResult = await metadata(model);
-          if ('local' in modelMetaResult) return { ok: false, local: true, status: modelMetaResult.status, payload: modelMetaResult.payload };
-          if ('upstream' in modelMetaResult) return { ok: false, status: modelMetaResult.status, body: modelMetaResult.body };
-          const modelMetadata = modelMetaResult.json;
-          const mainMapping = modelMetadata.inferenceProviderMapping?.['fal-ai'];
-          const baseModel = mainMapping?.adapter === 'lora' ? modelMetadata.cardData?.base_model : model;
-          const loraEntries = Array.isArray(req.body.loras) ? req.body.loras : [];
-          const loraFiles: any[] = [];
-          const loraEndpoints: any[] = [];
-          let mapping = mainMapping;
-          for (const lora of loraEntries) {
-            const id = String(lora.name || '');
-            const infoResult = id === model ? modelMetaResult : await metadata(id);
-            if (id !== model) {
-              if ('local' in (infoResult as any)) return { ok: false, local: true, status: (infoResult as any).status, payload: (infoResult as any).payload };
-              if ('upstream' in (infoResult as any)) return { ok: false, status: (infoResult as any).status, body: (infoResult as any).body };
-            }
-            const info = id === model ? modelMetadata : (infoResult as any).json;
-            const adapter = info.inferenceProviderMapping?.['fal-ai'];
-            if (adapter?.status !== 'live' || adapter?.task !== 'text-to-image' || adapter?.adapter !== 'lora' || !adapter.adapterWeightsPath) {
-              return { ok: false, local: true, status: 400, payload: { error: `HF → fal-ai 未提供 ${id} 的在线 LoRA 映射；可下载不等于可在线生成` } };
-            }
-            const bases = Array.isArray(info.cardData?.base_model) ? info.cardData.base_model : [info.cardData?.base_model];
-            void bases; void baseModel;
-            const scale = lora.strength ?? lora.modelStrength;
-            // 雁 rule: mixed-endpoint LoRAs are not stopped locally. Endpoint = first LoRA's adapter (same as single-LoRA);
-            // every LoRA is sent; each LoRA's own providerId is recorded in loraEndpoints for the trace. Upstream decides.
-            loraEndpoints.push({ lora: id, providerId: adapter.providerId });
-            if (!loraFiles.length) mapping = adapter;
-            loraFiles.push({ path: `https://huggingface.co/${id}/resolve/main/${adapter.adapterWeightsPath}`, ...(scale != null ? { scale } : {}) });
-          }
-          if (mapping?.status !== 'live' || mapping?.task !== 'text-to-image') {
-            return { ok: false, local: true, status: 400, payload: { error: `HF 未给 ${model} 提供 fal-ai 生图映射` } };
-          }
-          const endpoint = mapping.providerId;
-          const payload: any = { prompt: finalPrompt };
-          if (isProvided(width) || isProvided(height)) {
-            payload.image_size = { ...(isProvided(width) ? { width } : {}), ...(isProvided(height) ? { height } : {}) };
-          }
-          if (isProvided(steps)) payload.num_inference_steps = steps;
-          if (isProvided(guidance)) payload.guidance_scale = guidance;
-          if (isProvided(seed) && seed >= 0) payload.seed = seed;
-          if (isProvided(negative_prompt)) payload.negative_prompt = negative_prompt;
-          if (loraFiles.length) payload.loras = loraFiles;
-          for (const f of hfExtraFields) if (isProvided(req.body[f]) && !Object.hasOwn(payload, f)) payload[f] = req.body[f];
-          let hfCustom;
-          try {
-            hfCustom = applyCustomParameters(payload, req.body.custom_parameters);
-          } catch (error: any) {
-            return { ok: false, local: true, status: 400, payload: { error: error.message } };
-          }
-          const sentPayload = hfCustom.payload as Record<string, any>;
-          const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-          const url = `https://router.huggingface.co/fal-ai/${endpoint}?_subdomain=queue`;
-          const submit = await upstreamFetch(
-            { provider: 'huggingface', route: req.path, model: baseModel, key: token },
-            url,
-            { method: 'POST', headers, body: JSON.stringify(sentPayload) },
-          );
-          if (!submit.ok) return { ok: false, status: submit.status, body: await submit.text(), endpoint: url, loraEndpoints };
-          let result = await submit.json();
-          if (!result.request_id || !result.response_url) {
-            return { ok: false, local: true, status: 502, payload: { error: 'HF → fal-ai 未返回任务 ID / 结果地址', details: result } };
-          }
-          const responsePath = new URL(result.response_url);
-          if (responsePath.hostname !== 'queue.fal.run' || !responsePath.pathname.startsWith('/fal-ai/') || !responsePath.pathname.includes('/requests/')) {
-            return { ok: false, local: true, status: 502, payload: { error: 'HF → fal-ai 返回未核实的任务地址', details: result } };
-          }
-          const resultUrl = `https://router.huggingface.co/fal-ai${responsePath.pathname}?_subdomain=queue`;
-          for (let attempt = 0; attempt < 120 && result.status !== 'COMPLETED'; attempt++) {
-            await new Promise((resolve) => setTimeout(resolve, 1000));
-            const status = await upstreamFetch(
-              { provider: 'huggingface', route: 'HF fal-ai poll', model: baseModel, key: token },
-              resultUrl.replace('?_', '/status?_'),
-              { headers },
-            );
-            if (!status.ok) return { ok: false, status: status.status, body: await status.text() };
-            result = await status.json();
-          }
-          if (result.status !== 'COMPLETED') {
-            return { ok: false, local: true, status: 504, payload: { error: 'HF → fal-ai 任务未在等待时间内完成', details: result } };
-          }
-          const output = await upstreamFetch(
-            { provider: 'huggingface', route: 'HF fal-ai result', model: baseModel, key: token },
-            resultUrl,
-            { headers },
-          );
-          if (!output.ok) return { ok: false, status: output.status, body: await output.text() };
-          const generated = await output.json();
-          const generatedImages = Array.isArray(generated.images) ? generated.images : [];
-          if (!generatedImages.some((image: any) => image?.url)) {
-            return { ok: false, local: true, status: 502, payload: { error: 'HF → fal-ai 未返回图像', errorSource: 'upstream', details: generated } };
-          }
-          return {
-            ok: true,
-            value: { generatedImages, sentPayload, hfCustom, baseModel, endpoint, url, generated, loraEntries, loraEndpoints },
-          };
-        },
-      });
-
-      hfKeyRotation = falRotated.keyRotation;
-      if (!falRotated.ok) {
-        if (falRotated.localPayload) {
-          return res.status(falRotated.lastStatus).json({ ...falRotated.localPayload, keyRotation: falRotated.keyRotation });
-        }
-        return res.status(falRotated.lastStatus).json({
-          error: falRotated.keyRotation.summary,
-          details: falRotated.lastBody,
-          model,
-          keyRotation: falRotated.keyRotation,
-          errorSource: 'upstream',
-        });
-      }
-
-      const { generatedImages, sentPayload, hfCustom, baseModel, endpoint, url, generated, loraEntries, loraEndpoints } = falRotated.value;
-      return await respondWithGeneratedImages(
-        res,
-        generatedImages,
-        {
-          prompt: typeof sentPayload.prompt === 'string' ? sentPayload.prompt : finalPrompt,
-          negativePrompt: typeof sentPayload.negative_prompt === 'string' ? sentPayload.negative_prompt : negative_prompt,
-          provider: 'Hugging Face → fal-ai',
-          model: baseModel,
-          actualModel: baseModel,
-          seed: generated.seed ?? sentPayload.seed ?? null,
-          steps: sentPayload.num_inference_steps ?? null,
-          cfg: sentPayload.guidance_scale ?? null,
-          loras: loraEntries.map((l: any) => ({ name: l.name, strength: l.strength ?? l.modelStrength })),
-          requestMetadata: {
-            requestedParameters: sanitizeGenerationMetadata(Object.fromEntries(Object.entries(req.body).filter(([key]) => key !== 'workflowSnapshot'))),
-            customParameters: hfCustom.customParameters,
-            overrides: hfCustom.overrides,
-            actualParameters: sentPayload,
-            upstreamEndpoint: url,
-            loraEndpoints,
-            keyRotation: falRotated.keyRotation,
-          },
-        },
-        {
-          label: 'HF → fal-ai',
-          response: {
-            provider: 'Hugging Face',
-            actualProvider: 'Hugging Face Inference Providers → fal-ai',
-            model,
-            actualModel: baseModel,
-            endpoint,
-            overrides: hfCustom.overrides,
-            keyRotation: falRotated.keyRotation,
-          },
-        },
-      );
-    } else {
-      // HF text-to-image task: only forward what the caller provided; no defaults, no SDK→router / provider retry.
-      // Billing/402 may try the next KeyPool key (billingKeyRotate).
-      const infRotated = await runWithBillingKeyRotate({
-        keys: hfAttemptPlan.keys,
-        pinned: hfAttemptPlan.pinned,
-        maskKey: (k) => keyPoolManager.maskKey(k),
-        onAttempt: pushHfKeyAttempt,
-        attempt: async (token) => {
-          hfToken = token;
-          const metadata = await upstreamFetch(
-            { provider: 'huggingface', route: 'hf-inference capabilities', model, key: token },
-            `https://huggingface.co/api/models/${model}?expand=inferenceProviderMapping`,
-            { headers: { Authorization: `Bearer ${token}` } },
-          );
-          if (!metadata.ok) return { ok: false, status: metadata.status, body: await metadata.text() };
-          const mapping = (await metadata.json()).inferenceProviderMapping?.['hf-inference'];
-          void mapping; // not listed as live hf-inference text-to-image: still sent; upstream decides.
-          const parameters: Record<string, any> = {};
-          if (isProvided(negative_prompt)) parameters.negative_prompt = negative_prompt;
-          if (isProvided(width)) parameters.width = Number(width);
-          if (isProvided(height)) parameters.height = Number(height);
-          if (isProvided(steps)) parameters.num_inference_steps = Number(steps);
-          if (isProvided(guidance)) parameters.guidance_scale = Number(guidance);
-          if (typeof seed === 'number' && seed >= 0) parameters.seed = seed;
-          if (isProvided(req.body.scheduler)) parameters.scheduler = req.body.scheduler;
-          for (const f of [...hfExtraFields, 'loras']) if (isProvided(req.body[f]) && !Object.hasOwn(parameters, f)) parameters[f] = req.body[f];
-          let hfCustom;
-          try {
-            hfCustom = applyCustomParameters({ inputs: finalPrompt, parameters }, req.body.custom_parameters);
-          } catch (error: any) {
-            return { ok: false, local: true, status: 400, payload: { error: error.message } };
-          }
-          const hfBody = hfCustom.payload as { inputs: unknown; parameters?: Record<string, any> };
-          const resp = await upstreamFetch(
-            { provider: 'huggingface', route: '/api/huggingface/generate', model, key: token },
-            `https://router.huggingface.co/hf-inference/models/${model}`,
-            {
-              method: 'POST',
-              headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-              body: JSON.stringify(hfBody),
-            },
-          );
-          if (!resp.ok) return { ok: false, status: resp.status, body: await resp.text() };
-          const buffer = await resp.arrayBuffer();
-          const mimeType = resp.headers.get('content-type') || 'image/jpeg';
-          const url = await externalizeMedia(`data:${mimeType};base64,${Buffer.from(buffer).toString('base64')}`);
-          return {
-            ok: true,
-            value: {
-              dataUrl: url,
-              hfBody,
-              hfCustom,
-              sentSeed: hfBody.parameters?.seed ?? null,
-              sentSteps: hfBody.parameters?.num_inference_steps ?? null,
-              sentCfg: hfBody.parameters?.guidance_scale ?? null,
-            },
-          };
-        },
-      });
-
-      hfKeyRotation = infRotated.keyRotation;
-      if (!infRotated.ok) {
-        if (infRotated.localPayload) {
-          return res.status(infRotated.lastStatus).json({ ...infRotated.localPayload, keyRotation: infRotated.keyRotation });
-        }
-        let parsedError: any;
+    const infRotated = await runWithBillingKeyRotate({
+      keys: hfAttemptPlan.keys,
+      pinned: hfAttemptPlan.pinned,
+      maskKey: (k) => keyPoolManager.maskKey(k),
+      onAttempt: pushHfKeyAttempt,
+      attempt: async (token) => {
+        hfToken = token;
+        const parameters: Record<string, any> = {};
+        if (isProvided(negative_prompt)) parameters.negative_prompt = negative_prompt;
+        if (isProvided(width)) parameters.width = Number(width);
+        if (isProvided(height)) parameters.height = Number(height);
+        if (isProvided(steps)) parameters.num_inference_steps = Number(steps);
+        if (isProvided(guidance)) parameters.guidance_scale = Number(guidance);
+        if (typeof seed === 'number' && seed >= 0) parameters.seed = seed;
+        if (isProvided(req.body.scheduler)) parameters.scheduler = req.body.scheduler;
+        for (const f of [...hfExtraFields, 'loras']) if (isProvided(req.body[f]) && !Object.hasOwn(parameters, f)) parameters[f] = req.body[f];
+        let hfCustom;
         try {
-          parsedError = JSON.parse(infRotated.lastBody);
-        } catch {
-          parsedError = { error: infRotated.lastBody };
+          hfCustom = applyCustomParameters({ inputs: finalPrompt, parameters }, req.body.custom_parameters);
+        } catch (error: any) {
+          return { ok: false, local: true, status: 400, payload: { error: error.message } };
         }
-        return res.status(infRotated.lastStatus).json({
-          error: infRotated.keyRotation.summary,
-          details: parsedError.error || parsedError.message || infRotated.lastBody,
-          model,
-          keyRotation: infRotated.keyRotation,
-          errorSource: 'upstream',
-        });
-      }
+        const hfBody = hfCustom.payload as { inputs: unknown; parameters?: Record<string, any> };
+        const resp = await upstreamFetch(
+          { provider: 'huggingface', route: '/api/huggingface/generate', model, key: token },
+          `https://router.huggingface.co/hf-inference/models/${model}`,
+          {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(hfBody),
+          },
+        );
+        if (!resp.ok) return { ok: false, status: resp.status, body: await resp.text() };
+        const buffer = await resp.arrayBuffer();
+        const mimeType = resp.headers.get('content-type') || 'image/jpeg';
+        const url = await externalizeMedia(`data:${mimeType};base64,${Buffer.from(buffer).toString('base64')}`);
+        return {
+          ok: true,
+          value: {
+            dataUrl: url,
+            hfBody,
+            hfCustom,
+            sentSeed: hfBody.parameters?.seed ?? null,
+            sentSteps: hfBody.parameters?.num_inference_steps ?? null,
+            sentCfg: hfBody.parameters?.guidance_scale ?? null,
+          },
+        };
+      },
+    });
 
-      dataUrl = infRotated.value.dataUrl;
-      hfInferenceRequest = {
-        actualParameters: infRotated.value.hfBody,
-        overrides: infRotated.value.hfCustom.overrides,
-        customParameters: infRotated.value.hfCustom.customParameters,
-      };
-      sentSeed = infRotated.value.sentSeed;
-      sentSteps = infRotated.value.sentSteps;
-      sentCfg = infRotated.value.sentCfg;
+    hfKeyRotation = infRotated.keyRotation;
+    if (!infRotated.ok) {
+      if (infRotated.localPayload) {
+        return res.status(infRotated.lastStatus).json({ ...infRotated.localPayload, keyRotation: infRotated.keyRotation });
+      }
+      let parsedError: any;
+      try {
+        parsedError = JSON.parse(infRotated.lastBody);
+      } catch {
+        parsedError = { error: infRotated.lastBody };
+      }
+      return res.status(infRotated.lastStatus).json({
+        error: infRotated.keyRotation.summary,
+        details: parsedError.error || parsedError.message || infRotated.lastBody,
+        model,
+        keyRotation: infRotated.keyRotation,
+        errorSource: 'upstream',
+      });
     }
 
-    const hfActual = (zImageRequest || hfInferenceRequest)?.actualParameters as Record<string, any> | undefined;
-    const sentPrompt = isZImage ? hfActual?.prompt : hfActual?.inputs;
-    const hfOverrides = (zImageRequest || hfInferenceRequest)?.overrides || [];
+    dataUrl = infRotated.value.dataUrl;
+    hfInferenceRequest = {
+      actualParameters: infRotated.value.hfBody,
+      overrides: infRotated.value.hfCustom.overrides,
+      customParameters: infRotated.value.hfCustom.customParameters,
+    };
+    sentSeed = infRotated.value.sentSeed;
+    sentSteps = infRotated.value.sentSteps;
+    sentCfg = infRotated.value.sentCfg;
+
+    const hfActual = hfInferenceRequest?.actualParameters as Record<string, any> | undefined;
+    const sentPrompt = hfActual?.inputs;
+    const hfOverrides = hfInferenceRequest?.overrides || [];
     const item = await recordHistoryItem({
       url: dataUrl,
       prompt: typeof sentPrompt === 'string' ? sentPrompt : finalPrompt,
-      negativePrompt: isZImage ? undefined : (hfActual?.parameters?.negative_prompt ?? negative_prompt),
+      negativePrompt: hfActual?.parameters?.negative_prompt ?? negative_prompt,
       provider: 'Hugging Face',
       model,
       seed: sentSeed,
@@ -5133,7 +4812,7 @@ app.post(['/api/huggingface/generate', '/api/engine/huggingface/generate'], asyn
       cfg: sentCfg,
       width: typeof hfActual?.parameters?.width === 'number' ? hfActual.parameters.width : null,
       height: typeof hfActual?.parameters?.height === 'number' ? hfActual.parameters.height : null,
-      requestMetadata: { requestedParameters: sanitizeGenerationMetadata(Object.fromEntries(Object.entries(req.body).filter(([key]) => key !== 'workflowSnapshot'))), actualParameters: hfActual, overrides: hfOverrides, route: isZImage ? 'z-image-space /gradio_api/call/generate' : 'hf-inference', ...(hfKeyRotation ? { keyRotation: hfKeyRotation } : {}) },
+      requestMetadata: { requestedParameters: sanitizeGenerationMetadata(Object.fromEntries(Object.entries(req.body).filter(([key]) => key !== 'workflowSnapshot'))), actualParameters: hfActual, overrides: hfOverrides, route: 'hf-inference', ...(hfKeyRotation ? { keyRotation: hfKeyRotation } : {}) },
     });
 
     return res.json({

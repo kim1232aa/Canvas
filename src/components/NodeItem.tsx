@@ -713,16 +713,12 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               }
               return null;
             }
-            if (widget.name === 'hf_provider') {
-              if ((node.values.targetProvider || currentProvider) !== 'huggingface') return null;
-              return <label key={widget.name} className="block text-sm text-slate-400">HF 推理端点<select value={value || ''} onChange={e=>onUpdateValue(node.id,'hf_provider',e.target.value)} onMouseDown={e=>e.stopPropagation()} className="mt-1 w-full bg-[#121316] rounded-lg border border-[#2d303a] p-2 text-slate-200"><option value="">请选择实际执行路由</option><option value="hf-inference">HF Inference</option><option value="z-image-space">Z-Image 官方 Space</option><option value="fal-ai">HF Inference Providers → fal-ai（HF Token 计费）</option></select></label>;
-            }
             if (LORA_LOADER_TYPES.has(node.type) && widget.name === 'strength_clip' && !providerSendsSeparateClipStrength(currentProvider)) return null;
 
-            // Z-Image Space-only controls (resolution / shift / random_seed / gallery_images): on any other HF route
-            // (e.g. fal-ai/z-image/turbo, whose documented input has none of them) an empty one is an empty shell → hidden.
+            // Empty resolution / shift / random_seed / gallery_images shells stay hidden on Hugging Face
+            // (official hf-inference has none of them unless the live schema or a filled canvas value says otherwise).
             if (node.type === 'CheckpointLoaderSimple' && ['resolution', 'shift', 'random_seed', 'gallery_images'].includes(widget.name)
-              && String(node.values?.targetProvider || currentProvider || '') === 'huggingface' && node.values?.hf_provider !== 'z-image-space'
+              && String(node.values?.targetProvider || currentProvider || '') === 'huggingface'
               && !filledCanvasValue(node.values?.[widget.name]) && !(Array.isArray(node.values?.[widget.name]) && node.values[widget.name].length)) return null;
             if (node.type === 'CheckpointLoaderSimple' && widget.name === 'shift') {
               const prov = String(node.values?.targetProvider || currentProvider || '');
