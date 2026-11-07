@@ -72,7 +72,7 @@ export const ModernToolDock: React.FC<ModernToolDockProps> = ({
       group: '常用基础节点',
       items: [
         { type: 'KSampler', label: 'KSampler 采样生成器', desc: '控制步数、CFG、采样算法与随机种子', tag: '核心' },
-        { type: 'CheckpointLoaderSimple', label: '基础大模型 (Checkpoint)', desc: '加载 FLUX、SDXL、Wan 等底模', tag: '底模' },
+        { type: 'CheckpointLoaderSimple', label: '基础大模型 (Checkpoint)', desc: '加载 Z-Image Turbo、Krea 2、MOSS-Image、Wan 2.2 等底模', tag: '底模' },
         { type: 'CLIPTextEncode', label: '正向提示词 (Prompt)', desc: '描述主体、构图与画质', tag: '正向' },
         { type: 'CLIPTextEncodeNegative', label: '负向提示词 (Negative)', desc: '过滤变形、模糊与瑕疵', tag: '负向' },
         { type: 'EmptyLatentImage', label: '画布尺寸设定 (Latent)', desc: '设定生图尺寸与批次', tag: '尺寸' },
@@ -89,18 +89,18 @@ export const ModernToolDock: React.FC<ModernToolDockProps> = ({
     {
       group: '云端一体化加速引擎',
       items: [
-        { type: 'FalAIEngineNode', label: 'Fal.ai GPU 加速引擎', desc: '极速 FLUX / SDXL 云端直出', tag: 'Fal.ai' },
-        { type: 'ReplicateEngineNode', label: 'Replicate 官方推理引擎', desc: 'FLUX.1 / SDXL / Ideogram 云端直出', tag: 'Replicate' },
+        { type: 'FalAIEngineNode', label: 'Fal.ai GPU 加速引擎', desc: 'Z-Image Turbo / Krea 2 / Kling 云端直出', tag: 'Fal.ai' },
+        { type: 'ReplicateEngineNode', label: 'Replicate 官方推理引擎', desc: 'Z-Image / Krea 2 / Wan 2.2 官方推理直出', tag: 'Replicate' },
         { type: 'ModelScopeNode', label: '魔搭国内加速引擎', desc: '魔搭社区模型一键推理直出', tag: '魔搭CN' },
         { type: 'ModelScopeAiNode', label: '魔搭国际加速引擎', desc: 'ModelScope.ai 国际站推理直出', tag: '魔搭AI' },
-        { type: 'NanoGPTNode', label: 'NanoGPT 极速引擎', desc: '轻量免部署 FLUX / SDXL 云端出图', tag: 'NanoGPT' },
+        { type: 'NanoGPTNode', label: 'NanoGPT 极速引擎', desc: '轻量免部署 Z-Image / Krea 2 云端出图', tag: 'NanoGPT' },
         { type: 'GoogleImagenNode', label: 'Gemini 生图', desc: '官方 Gemini 图像模型', tag: 'Gemini' },
       ],
     },
     {
       group: '多媒体与 AI 视频',
       items: [
-        { type: 'AIVideoNode', label: 'AI 视频生成节点', desc: 'Wan 2.1 / LTX 5秒电影运镜', tag: '视频' },
+        { type: 'AIVideoNode', label: 'AI 视频生成节点', desc: 'Wan 2.2 / Kling 3.0 / Hailuo 2.3 动态视频', tag: '视频' },
         { type: 'SaveVideo', label: '保存与预览视频 (Save Video)', desc: 'AI 动态视频播放与 MP4 下载', tag: '视频' },
         { type: 'LoadImage', label: '参考底图加载 (Load Image)', desc: '图生图 / 图生视频首帧底图', tag: '参考' },
       ],
@@ -340,7 +340,7 @@ export const ModernToolDock: React.FC<ModernToolDockProps> = ({
                     <RotateCcw className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
                     <div>
                       <div className="font-semibold">重置为默认工作流</div>
-                      <div className="text-[9px] text-slate-400">恢复标准 FLUX.1 + SDXL 预设</div>
+                      <div className="text-[9px] text-slate-400">恢复 Z-Image Turbo 标准默认工作流</div>
                     </div>
                   </button>
                 </div>

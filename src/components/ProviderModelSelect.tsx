@@ -1,6 +1,6 @@
 import React from 'react';
 import {fetchLiveModelsShared, isCustomParametersJsonQuery, sanitizeCatalogQuery} from '../services/api';
-import {noteUserModelSelection, schemaReuseFor, subscribeSchemaReuse} from '../services/userModelSelection';
+import {noteUserModelSelection} from '../services/userModelSelection';
 import {beginTraceOperation} from '../services/executionTrace';
 import {readCheckpointCatalog,mergeCheckpointOptions,isInvalidTensorModel,getDriverModelSuggestions,type CatalogOption,type DriverModelSuggestion} from '../utils/modelCatalog';
 
@@ -188,13 +188,4 @@ export function ProviderModelSelect({provider,value,onChange}:{provider:string;v
     {currentError && <div role="alert" className="rounded-lg border border-rose-900/60 p-2 text-xs text-rose-200"><pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all select-text">{currentError}</pre></div>}
     {invalid && <p role="alert" className="text-sm text-rose-300">请输入有效的 Tensor 模型 ID 或模型页面链接。</p>}
   </div>;
-}
-
-/** clean-1333 #7: re-selecting the same model reuses the earlier Schema result — say so, with its Beijing time. */
-export function SchemaReuseNote({provider,model}:{provider:string;model:string}) {
-  const [,tick]=React.useReducer((x:number)=>x+1,0);
-  React.useEffect(()=>subscribeSchemaReuse(tick),[]);
-  const reuse=schemaReuseFor(provider,model);
-  if(!reuse)return null;
-  return <p role="status" data-testid="schema-reuse-note" className={`text-[11px] leading-relaxed rounded border px-2 py-1 ${reuse.ok?'border-slate-600/60 text-slate-300':'border-amber-600/60 text-amber-200 bg-amber-950/30'}`}>{reuse.label} · 复用，未重新请求。要重试：点刷新，或换一个模型。</p>;
 }

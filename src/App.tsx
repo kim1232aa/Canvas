@@ -3048,6 +3048,7 @@ export default function App() {
         onFillCurrentLoRANode={handleFillCurrentLoRANode}
         onAddLoRANodeToCanvas={handleAddLoRANodeToCanvas}
         onSelectLoRAWithBaseModel={handleSelectLoRAWithBaseModel}
+        initialQuery={targetLoRANodeId ? String(nodes.find((n) => n.id === targetLoRANodeId)?.values?.search_keyword ?? '') : undefined}
         onLoadWorkflowPreset={(preset) => {
           handleLoadPreset(preset, 'replace');
           setCanvasMode('graph');
