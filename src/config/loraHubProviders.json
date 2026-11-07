@@ -31,6 +31,11 @@
       "idFormat": "输入任意 Fal.ai LoRA 路径或 Endpoint",
       "placeholder": "输入 Fal.ai LoRA path / Endpoint..."
     },
+    "tensorart": {
+      "supportsCustomImport": true,
+      "idFormat": "输入 Tensor.Art / 吐司模型页 URL 里的纯数字模型 ID（TAMS GET /v1/models/:modelId，modelId 为 uint64；LoRA 请求字段 lora.items[].loraModel 同样是该数字 ID）",
+      "placeholder": "输入 Tensor.Art 纯数字模型 ID（如 619225630271212879）..."
+    },
     "openworks": {
       "supportsCustomImport": false,
       "idFormat": "OpenWorks 目录模型不走 TAMS LoRA ID；请在模型中心选 Tensor.Art OpenWorks",

@@ -52,6 +52,7 @@ const CIVITAI_IMPORT_TARGETS: Array<{id:ImportTargetProvider;name:string;badge:s
   {id:'civitai',name:'Civitai',badge:'保留原始引用',desc:'保留 Civitai 原始模型/版本引用；权限与能力以上游响应为准',badgeColor:'bg-blue-500/20 text-blue-300 border-blue-500/30',activeBorder:'border-blue-500 bg-blue-950/30 text-white'},
   {id:'fal',name:'Fal.ai',badge:'需重选模型',desc:'从 Fal 模型目录重新选择真实端点和 LoRA URL',badgeColor:'bg-purple-500/20 text-purple-300 border-purple-500/30',activeBorder:'border-purple-500 bg-purple-950/30 text-white'},
   {id:'nanogpt',name:'NanoGPT',badge:'需重选模型',desc:'从当前 NanoGPT 模型元数据中选择执行模型',badgeColor:'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',activeBorder:'border-emerald-500 bg-emerald-950/30 text-white'},
+  {id:'tensorart',name:'Tensor.Art',badge:'需重选 TAMS 数字 ID',desc:'切换到 Tensor.Art 后必须另行选择 TAMS 纯数字模型 ID；不会把来源模型名改写成 Tensor 模型',badgeColor:'bg-purple-600/20 text-purple-300 border-purple-500/30',activeBorder:'border-purple-500 bg-purple-950/30 text-white'},
   {id:'modelscope',name:'ModelScope CN',badge:'需重选模型',desc:'国内站单独选择真实模型，不与 Civitai 资源名互换',badgeColor:'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',activeBorder:'border-cyan-500 bg-cyan-950/30 text-white'},
   {id:'modelscope_ai',name:'ModelScope AI',badge:'需重选模型',desc:'国际站单独选择真实模型与账户，不与国内站互换',badgeColor:'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',activeBorder:'border-cyan-500 bg-cyan-950/30 text-white'},
   {id:'huggingface',name:'Hugging Face',badge:'需重选模型',desc:'明确选择 Hub 模型及实际在线推理路由',badgeColor:'bg-slate-500/20 text-slate-300 border-slate-500/30',activeBorder:'border-slate-400 bg-slate-800/40 text-white'},
@@ -998,6 +999,20 @@ export const WorkflowPresetsModal: React.FC<WorkflowPresetsModalProps> = ({
                     <button
                       type="button"
                       onClick={() => {
+                        const val = 'https://civitai.com/images/111400580';
+                        setCivitaiUrlInput(val);
+                        setSelectedEngine('video');
+                        handleExtractCivitaiWorkflow(val, 'video');
+                      }}
+                      className="px-2.5 py-1.5 rounded-lg bg-rose-950/50 hover:bg-rose-900/60 text-rose-300 border border-rose-700/60 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                      title="Civitai 视频作品 111400580：Wan 2.2 I2V-A14B（目标引擎固定为 AI Video，不沿用当前图像引擎）"
+                    >
+                      <span>🎬 Wan 2.2 I2V 视频 (#111400580 · 目标引擎 AI Video)</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
                         const val = `masterpiece, best quality, very aesthetic, ektachrome fade film, nature, A painterly illustration of a tall, elegant woman in a sci-fi corridor <lora:krea2-masterpieces-v51:0.85>
 Negative prompt: (2d ,Illustration, drawing, cartoon, animation, anima, painting:1.4)
 Steps: 8, Sampler: Euler, CFG scale: 1, Seed: 689794262, Size: 832x1248, Model: Krea 2 Turbo`;
@@ -1165,6 +1180,8 @@ Steps: 8, Sampler: Euler, CFG scale: 1, Seed: 689794262, Size: 832x1248, Model: 
                           {[
                             { id: 'civitai', label: '🌟 Civitai 原生' },
                             { id: 'fal', label: '⚡ Fal.ai' },
+                            { id: 'tensorart', label: '🎨 Tensor.Art' },
+                            { id: 'nanogpt', label: '🟢 NanoGPT' },
                             { id: 'video', label: '🎬 AI Video' },
                             { id: 'agnes', label: '🚀 Agnes' },
                             { id: 'sensenova', label: '🧠 SenseNova' },

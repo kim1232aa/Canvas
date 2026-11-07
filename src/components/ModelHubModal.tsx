@@ -1667,7 +1667,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                                       ? `警告：当前画布底模元数据为 ${compat.ckptBaseModel}，而此 LoRA 元数据为 ${compat.loraBaseModel} 架构，跨架构挂载会导致上游报错或静默失真。`
                                       : compat.isUnknown
                                       ? '该资源上游目录未提供明确底模架构元数据，无法判断兼容性；生成时以上游接口校验为准。'
-                                      : `挂载到当前同平台底模；架构元数据：${baseArch}`
+                                      : `选用此 LoRA 并自动将前置底模同步为兼容的 ${baseArch} 官方架构`
                                   }
                                 >
                                   {compat.isMismatch ? (
@@ -1677,7 +1677,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                                   ) : (
                                     <Sparkles className="w-3.5 h-3.5 text-amber-300" />
                                   )}
-                                  <span>{compat.isMismatch ? '底模架构不匹配' : '挂载到所选底模'}</span>
+                                  <span>{compat.isMismatch ? '底模架构不匹配' : '🎯 选用 LoRA 并自动配对底模'}</span>
                                   <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
                                     compat.isMismatch
                                       ? 'bg-black/50 text-rose-200 border border-rose-500/40'

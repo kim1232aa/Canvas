@@ -470,6 +470,46 @@ export const CivitaiModalImportPreview: React.FC<CivitaiModalImportPreviewProps>
                         选用此 LoRA
                       </button>
                     )}
+                    {onAddLoRANodeToCanvas && (
+                      <button
+                        type="button"
+                        data-testid={`import-lora-new-node-${idx}`}
+                        onClick={() =>
+                          onAddLoRANodeToCanvas({
+                            name: lora.sendableUrlOrId || lora.name,
+                            provider: selectedProvider,
+                            civitaiId: lora.civitaiId,
+                            triggerWords: '',
+                            baseModel: lora.baseModel,
+                            modelStrength: lora.originalStrength ?? undefined,
+                            clipStrength: lora.originalClipStrength ?? undefined,
+                          })
+                        }
+                        className="px-2.5 py-1 rounded bg-[#252838] hover:bg-[#2e3146] text-purple-300 text-[10px] font-semibold border border-[#373a50] transition-colors"
+                      >
+                        新建节点
+                      </button>
+                    )}
+                    {onFillCurrentLoRANode && (
+                      <button
+                        type="button"
+                        data-testid={`import-lora-fill-current-${idx}`}
+                        onClick={() =>
+                          onFillCurrentLoRANode({
+                            name: lora.sendableUrlOrId || lora.name,
+                            provider: selectedProvider,
+                            civitaiId: lora.civitaiId,
+                            triggerWords: '',
+                            baseModel: lora.baseModel,
+                            modelStrength: lora.originalStrength ?? undefined,
+                            clipStrength: lora.originalClipStrength ?? undefined,
+                          })
+                        }
+                        className="px-2.5 py-1 rounded bg-[#252838] hover:bg-[#2e3146] text-slate-300 text-[10px] font-semibold border border-[#373a50] transition-colors"
+                      >
+                        仅填入当前节点
+                      </button>
+                    )}
                   </div>
                 </div>
               );

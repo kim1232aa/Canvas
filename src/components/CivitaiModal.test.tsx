@@ -9,7 +9,7 @@ vi.mock('react',async()=>{
   useRef:(value:any)=>React.useRef(value),
  };
 });
-import {CivitaiModal,type LoraProviderFilter} from './CivitaiModal';
+import {CivitaiModal,matchesLoraArchitecture,type LoraProviderFilter} from './CivitaiModal';
 import {validateModelCompatibility} from '../utils/baseModelMatcher';
 const elements=(tree:any):any[]=>!tree?[]:Array.isArray(tree)?tree.flatMap(elements):typeof tree==='object'&&tree.props?[tree,...elements(tree.props.children)]:[];
 const metadata={id:456,modelId:123,model:{name:'Public adapter',type:'LORA'},air:'urn:air:sdxl:lora:civitai:123@456',files:[{id:999,name:'adapter.safetensors',metadata:{format:'SafeTensor'}}]};
@@ -159,10 +159,44 @@ it('选用 LoRA preserves the verified version AIR instead of replacing it with 
     onClose: vi.fn(),
     onAddLoRANodeToCanvas: vi.fn(),
   });
-  const button = elements(tree).find((el) => el.type === 'button' && String(el.props.title || '').startsWith('将此 LoRA'));
+  const button = elements(tree).find((el) => el.type === 'button' && String(el.props.title || '').startsWith('选用此 LoRA 并自动将前置底模'));
 
   expect(button).toBeDefined();
+  expect(String(button.props.children && JSON.stringify(button.props.children))).toContain('选用 LoRA 并自动配对底模');
   button.props.onClick();
   expect(onSelectLoRAWithBaseModel).toHaveBeenCalledWith(expect.objectContaining({ civitaiId: air, resourceVerified: true }));
+});
+
+it('renders the Tensor.Art tab and refetches the catalog when an architecture chip is clicked', async () => {
+  const setters: Array<ReturnType<typeof vi.fn>> = [];
+  vi.spyOn(React, 'useState').mockImplementation(((initial: any) => {
+    const setter = vi.fn();
+    setters.push(setter);
+    return [initial, setter];
+  }) as any);
+  vi.spyOn(React, 'useEffect').mockImplementation(() => {});
+  vi.spyOn(React, 'useRef').mockImplementation(((value: any) => ({ current: value instanceof Map ? new Map() : value })) as any);
+  vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => {}, removeItem: () => {} });
+  const fetch = vi.fn(async () => new Response(JSON.stringify({ results: {}, _pagination: {} })));
+  vi.stubGlobal('fetch', fetch);
+  const tree = CivitaiModal({ isOpen: true, initialProvider: 'all', onSelectLoRA: vi.fn(), onClose: vi.fn(), onAddLoRANodeToCanvas: vi.fn() });
+  const tab = elements(tree).find((el) => el.props?.['data-testid'] === 'lora-hub-tab-tensorart');
+  expect(tab).toBeDefined();
+  expect(JSON.stringify(tab.props.children)).toContain('Tensor.Art');
+  const fluxChip = elements(tree).find((el) => el.type === 'button' && String(el.props.children) === 'FLUX.2');
+  expect(fluxChip).toBeDefined();
+  fluxChip.props.onClick();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  expect(setters.some((setter) => setter.mock.calls.some((call) => call[0] === 'flux-2' || (Array.isArray(call[0]) && call[0].length === 0)))).toBe(true);
+  const urls = fetch.mock.calls.map((call) => String((call as unknown[])[0]));
+  expect(urls.join('\n')).toContain('architecture=flux-2');
+});
+
+it('matches an architecture chip by family, not by the exact baseModel string', () => {
+  expect(matchesLoraArchitecture('FLUX.2 [dev]', 'flux-2')).toBe(true);
+  expect(matchesLoraArchitecture('FLUX.1 D', 'flux-2')).toBe(false);
+  expect(matchesLoraArchitecture('Wan2.2-T2V-A14B', 'wan-2.2')).toBe(true);
+  expect(matchesLoraArchitecture('Wan Video 14B', 'wan-2.2')).toBe(false);
+  expect(matchesLoraArchitecture('SDXL 1.0', 'flux')).toBe(false);
 });
 

@@ -77,6 +77,29 @@ describe('CivitaiModal Recipe Import and Cross-Provider Adaptation UI', () => {
     expect(importBtn).toBeDefined();
   });
 
+  it('renders 新建节点 and 仅填入当前节点 on a LoRA card and calls the passed callbacks', () => {
+    const onAddLoRANodeToCanvas = vi.fn();
+    const onFillCurrentLoRANode = vi.fn();
+    const tree = CivitaiModalImportPreview({
+      adaptation: sampleAdaptation,
+      selectedProvider: 'fal',
+      onSelectProvider: vi.fn(),
+      tokenConsent: false,
+      onToggleTokenConsent: vi.fn(),
+      onAddLoRANodeToCanvas,
+      onFillCurrentLoRANode,
+    });
+    const allEls = elements(tree);
+    const addBtn = allEls.find((el) => el.props?.['data-testid'] === 'import-lora-new-node-0');
+    const fillBtn = allEls.find((el) => el.props?.['data-testid'] === 'import-lora-fill-current-0');
+    expect(addBtn).toBeDefined();
+    expect(fillBtn).toBeDefined();
+    addBtn.props.onClick();
+    fillBtn.props.onClick();
+    expect(onAddLoRANodeToCanvas).toHaveBeenCalledWith(expect.objectContaining({ name: expect.any(String), provider: 'fal' }));
+    expect(onFillCurrentLoRANode).toHaveBeenCalledWith(expect.objectContaining({ provider: 'fal' }));
+  });
+
   it('renders CivitaiModalImportPreview with target provider selector and per-field adaptation outcome', () => {
     const onSelectProvider = vi.fn();
     const onToggleTokenConsent = vi.fn();

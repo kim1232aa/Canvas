@@ -56,7 +56,7 @@ export function evidenceForTab(ev: CatalogEvidence | null, activeProvider: strin
   return ev && ev.provider === activeProvider ? ev : null;
 }
 
-export type LoraProviderFilter = 'all' | 'civitai' | 'huggingface' | 'modelscope' | 'modelscope_ai' | 'fal' | 'tensorart' | 'muapi' | 'wavespeed' | 'sogni' | 'krea' | 'together' | 'aimlapi' | 'novita' | 'venice' | 'runware' | 'modelslab' | 'replicate';
+export type LoraProviderFilter = 'all' | 'civitai' | 'huggingface' | 'modelscope' | 'modelscope_ai' | 'fal' | 'tensorart' | 'muapi' | 'wavespeed' | 'sogni' | 'krea' | 'together' | 'aimlapi' | 'novita' | 'venice' | 'deepinfra' | 'runware' | 'modelslab' | 'replicate';
 
 export interface UnifiedLoRAItem {
   id: string;
@@ -112,6 +112,49 @@ export interface CivitaiModalProps {
   initialMode?: 'browse' | 'import';
   onLoadWorkflowPreset?: (preset: any) => void;
   initialQuery?: string;
+}
+
+/** Fixed family chips. Clicking one re-queries the catalog with that family; it is not a local exact-string filter. */
+export const LORA_HUB_ARCHITECTURE_CHIPS: Array<{ id: string; label: string }> = [
+  { id: 'all', label: '全部架构' },
+  { id: 'flux', label: 'FLUX.1' },
+  { id: 'flux-2', label: 'FLUX.2' },
+  { id: 'sdxl', label: 'SDXL 1.0' },
+  { id: 'wan', label: 'Wan 2.1' },
+  { id: 'wan-2.2', label: 'Wan 2.2' },
+  { id: 'sd15', label: 'SD 1.5' },
+  { id: 'pony', label: 'Pony XL' },
+  { id: 'illustrious', label: 'Illustrious' },
+  { id: 'qwen', label: 'Qwen-Image' },
+  { id: 'z-image', label: 'Z-Image' },
+  { id: 'krea2', label: 'Krea 2' },
+];
+
+/** Family of a provider-returned baseModel string. A bare filename is not a family. */
+export function loraArchitectureFamily(baseModel: string | null | undefined): string {
+  const raw = (baseModel || '').trim().toLowerCase();
+  if (!raw) return '';
+  if (/flux[._\s-]?2/.test(raw)) return 'flux-2';
+  if (/flux/.test(raw)) return 'flux';
+  if (/z[._\s-]?image/.test(raw)) return 'z-image';
+  if (/krea/.test(raw)) return 'krea2';
+  if (/wan[._\s-]?2[._\s-]?2|wan2\.2/.test(raw)) return 'wan-2.2';
+  if (/wan/.test(raw)) return 'wan';
+  if (/pony/.test(raw)) return 'pony';
+  if (/illustrious|noobai|noob/.test(raw)) return 'illustrious';
+  if (/qwen/.test(raw)) return 'qwen';
+  if (/sd[._\s-]?3/.test(raw)) return 'sd35';
+  if (/sd[._\s-]?1|sd15|v1-5/.test(raw)) return 'sd15';
+  if (/sdxl|stable[._\s-]?diffusion[._\s-]?xl|\bxl\b/.test(raw)) return 'sdxl';
+  return raw;
+}
+
+/** A loaded item matches a chip when its baseModel belongs to that family, not only when the strings are equal. */
+export function matchesLoraArchitecture(baseModel: string | null | undefined, arch: string): boolean {
+  if (!arch || arch === 'all') return true;
+  const family = loraArchitectureFamily(baseModel);
+  if (!family) return false;
+  return family === arch;
 }
 
 /** Chips are built from the baseModel tags actually present on the loaded items of the active tab. */
@@ -232,7 +275,8 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
     setErrorMsg(null);
     try {
       const items: UnifiedLoRAItem[] = [];
-      const archQuery = ''; // architecture chips filter loaded items locally (built from their real tags)
+      // Chip id goes to the catalog as ?architecture= (server forwards it to providers that accept it, e.g. Runware modelSearch).
+      const archQuery = arch === 'all' ? '' : arch;
 
       // 1. Fetch from Civitai if activeProvider is 'all' or 'civitai'
       if (prov === 'all' || prov === 'civitai') {
@@ -784,9 +828,9 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
   const displayedModels = models.filter((model) => {
     if (activeProvider !== 'all' && model.providerKey !== activeProvider) return false;
     if (!nsfwFilter && (model.nsfw === true || model.isMature === true)) return false;
-    return selectedArch === 'all' || (model.baseModel || '').trim() === selectedArch;
+    return matchesLoraArchitecture(model.baseModel, selectedArch);
   });
-  const architectureChips = architectureChipsFrom(models.filter((m) => activeProvider === 'all' || m.providerKey === activeProvider));
+  const architectureChips = LORA_HUB_ARCHITECTURE_CHIPS;
   const credentialReq = credentialRequirementFor(activeProvider);
   // Missing declared credential → no cards, no import/mount controls; only the notice.
   const credentialMissing = !!credentialReq && credentialPresent[credentialReq.kind] !== true;
@@ -869,6 +913,7 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
             { id: 'modelscope', name: '魔搭 CN (国内站)' },
             { id: 'modelscope_ai', name: '魔搭 AI (国际站)' },
             { id: 'fal', name: 'Fal.ai (云端端点)' },
+            { id: 'tensorart', name: '🎨 Tensor.Art (吐司 LoRA & 工作流)' },
             { id: 'muapi', name: 'MuAPI' },
             { id: 'wavespeed', name: 'WaveSpeed' },
             { id: 'sogni', name: 'Sogni' },
@@ -928,6 +973,8 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
                 key={tag.id}
                 onClick={() => {
                   setSelectedArch(tag.id);
+                  setModels([]);
+                  fetchModels(activeProvider, query, sort, tag.id, false);
                 }}
                 className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold transition-all shrink-0 ${
                   isSelected
@@ -1271,10 +1318,10 @@ export const CivitaiModal: React.FC<CivitaiModalProps> = ({
                                     onClose();
                                   }}
                                   className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-600 hover:from-purple-500 hover:to-cyan-500 text-xs font-bold text-white transition-all shadow-md shadow-purple-600/30 flex items-center justify-center gap-1.5 active:scale-98"
-                                  title={`将此 LoRA 接入当前生成分支；保留已选底模，架构要求 ${baseArch}`}
+                                  title={`选用此 LoRA 并自动将前置底模同步为兼容的 ${baseArch} 官方架构`}
                                 >
                                   <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
-                                  <span>选用 LoRA</span>
+                                  <span>🎯 选用 LoRA 并自动配对底模</span>
                                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-black/40 font-mono text-cyan-200">
                                     兼容 {baseArch}
                                   </span>
