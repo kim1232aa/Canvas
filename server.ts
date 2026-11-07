@@ -6140,6 +6140,64 @@ app.post('/api/cloud-keys/balances', requireAdminAuth, checkSecFetchSite, async 
         }
       }
     })(),
+
+    // WaveSpeed
+    (async () => {
+      const wsKey = keyPoolManager.getNextKey('wavespeed');
+      if (wsKey) {
+        try {
+          const resp = await upstreamFetch(
+            { provider: 'wavespeed', route: '/api/cloud-keys/balances', key: wsKey },
+            'https://api.wavespeed.ai/api/v3/balance',
+            {
+              headers: { 'Authorization': `Bearer ${wsKey}` },
+            }
+          );
+          if (resp.ok) {
+            const body = await resp.json().catch(() => ({}));
+            if (body.code === 200 && body.data?.balance !== undefined) {
+              balances.wavespeed = { status: 'ok', detail: `WaveSpeed 余额: $${body.data.balance}`, amount: body.data.balance };
+            } else {
+              balances.wavespeed = { status: 'error', detail: `WaveSpeed 响应格式异常: ${JSON.stringify(body).slice(0, 150)}` };
+            }
+          } else {
+            const errBody = await resp.text().catch(() => '');
+            balances.wavespeed = { status: 'error', detail: `WaveSpeed 状态码 [${resp.status}]: ${errBody.slice(0, 150)}` };
+          }
+        } catch (e: any) {
+          balances.wavespeed = { status: 'error', detail: e.message };
+        }
+      }
+    })(),
+
+    // AIMLAPI
+    (async () => {
+      const aimlapiKey = keyPoolManager.getNextKey('aimlapi');
+      if (aimlapiKey) {
+        try {
+          const resp = await upstreamFetch(
+            { provider: 'aimlapi', route: '/api/cloud-keys/balances', key: aimlapiKey },
+            'https://api.aimlapi.com/v2/billing/detail',
+            {
+              headers: { 'Authorization': `Bearer ${aimlapiKey}` },
+            }
+          );
+          if (resp.ok) {
+            const body = await resp.json().catch(() => ({}));
+            if (body.current_balance !== undefined) {
+              balances.aimlapi = { status: 'ok', detail: `AIMLAPI 余额: $${body.current_balance}`, amount: body.current_balance };
+            } else {
+              balances.aimlapi = { status: 'error', detail: `AIMLAPI 响应格式异常: ${JSON.stringify(body).slice(0, 150)}` };
+            }
+          } else {
+            const errBody = await resp.text().catch(() => '');
+            balances.aimlapi = { status: 'error', detail: `AIMLAPI 状态码 [${resp.status}]: ${errBody.slice(0, 150)}` };
+          }
+        } catch (e: any) {
+          balances.aimlapi = { status: 'error', detail: e.message };
+        }
+      }
+    })(),
   ]);
 
   return res.json(balances);
