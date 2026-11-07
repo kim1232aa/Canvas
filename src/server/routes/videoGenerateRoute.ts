@@ -1,5 +1,6 @@
 import type { Request, Response as ExpressResponse } from 'express';
-import { tamsVideoUnsupported } from '../../schemas/tensorModelApi.ts';
+import { buildTamsVideoJob, isTamsNumericModel, TENSOR_MODEL_API } from '../../schemas/tensorModelApi.ts';
+import { pickTamsBearerKey, TAMS_BEARER_REQUIRED_HINT } from '../../schemas/tensorArtCredentials.ts';
 import { buildFalVideoRequest } from '../falVideoContract.ts';
 import { falQueueOpenApiUrl, extractFalInputProperties, inlineFalItemRefs, FalSchemaMissingError, type FalSchemaFetchFailure } from '../falImageContract.ts';
 import { FAL_VIDEO_POLL_BUDGET_MS, falQueueSubmitUrl, runFalQueueLifecycle } from '../falQueueLifecycle.ts';
@@ -144,10 +145,206 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
       reqProvider === 'tensor';
 
     if (isTensorArtTarget) {
-      // TAMS numeric model IDs have a VIDEO_DIFFUSION stage this route has not wired.
-      // OpenWorks tool names (text2video_wan27 / image2video_wan27 / …) are submitted for real.
-      const tamsVideoRefusal = tamsVideoUnsupported(model);
-      if (tamsVideoRefusal) return res.status(400).json({ error: tamsVideoRefusal, errorSource: 'local', provider: reqProvider, model });
+      // Numeric TAMS model IDs use VIDEO_DIFFUSION on POST /v1/jobs.
+      // OpenWorks tool names (text2video_wan27 / image2video_wan27 / …) stay on the path below.
+      if (isTamsNumericModel(model)) {
+        const headerKey = req.headers['x-tensorart-key'];
+        const pooled = keyPoolManager.getNextKey('tensorart', (headerKey as string) || undefined);
+        const tamsKey = pickTamsBearerKey(headerKey, pooled);
+        if (!tamsKey) {
+          return res.status(400).json({
+            error: TAMS_BEARER_REQUIRED_HINT,
+            errorSource: 'local',
+            provider: 'tensorart',
+            model,
+          });
+        }
+        let tamsBody: Record<string, any>;
+        try {
+          tamsBody = buildTamsVideoJob(req.body, `video-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`);
+        } catch (buildErr: any) {
+          return res.status(400).json({
+            error: buildErr?.message || String(buildErr),
+            errorSource: 'local',
+            provider: 'tensorart',
+            model,
+          });
+        }
+        const tamsBase = String(TENSOR_MODEL_API).replace(/\/+$/, '');
+        const submitUrl = `${tamsBase}/v1/jobs`;
+        const taStart = Date.now();
+        const tamsHeaders = { 'Content-Type': 'application/json; charset=UTF-8', Accept: 'application/json', Authorization: `Bearer ${tamsKey}` };
+        try {
+          const submitRes = await upstreamFetch(
+            { provider: 'tensorart', route: req.path, model: String(model), key: tamsKey },
+            submitUrl,
+            { method: 'POST', headers: tamsHeaders, body: JSON.stringify(tamsBody) },
+          );
+          const submitRaw = await submitRes.text();
+          if (!submitRes.ok) {
+            keyPoolManager.recordResult('tensorart', tamsKey, false, Date.now() - taStart, submitRaw, submitRes.status);
+            return res.status(submitRes.status).json({
+              error: submitRaw,
+              errorSource: 'upstream',
+              upstreamStatus: submitRes.status,
+              rawResponse: submitRaw,
+              actualRequest: tamsBody,
+              exactEndpointCalled: submitUrl,
+              provider: 'tensorart',
+              model,
+            });
+          }
+          let submitData: any;
+          try { submitData = JSON.parse(submitRaw); } catch { submitData = undefined; }
+          const jobId = submitData?.job?.id;
+          if (!jobId) {
+            keyPoolManager.recordResult('tensorart', tamsKey, false, Date.now() - taStart, submitRaw);
+            return res.status(502).json({
+              error: submitRaw,
+              errorSource: 'upstream',
+              rawResponse: submitRaw,
+              actualRequest: tamsBody,
+              exactEndpointCalled: submitUrl,
+              provider: 'tensorart',
+              model,
+            });
+          }
+          const queryUrl = `${tamsBase}/v1/jobs/${encodeURIComponent(String(jobId))}`;
+          let videoResult = '';
+          const pollDeadline = now() + 200_000;
+          while (now() < pollDeadline) {
+            await (sleep ? sleep(2500) : sleepOrAbort(2500));
+            const qRes = await upstreamFetch(
+              { provider: 'tensorart', route: 'video/poll', model: String(model), key: tamsKey },
+              queryUrl,
+              { method: 'GET', headers: tamsHeaders },
+            );
+            const qRaw = await qRes.text();
+            if (!qRes.ok) {
+              keyPoolManager.recordResult('tensorart', tamsKey, false, Date.now() - taStart, qRaw, qRes.status);
+              return res.status(qRes.status).json({
+                error: qRaw,
+                errorSource: 'upstream',
+                upstreamStatus: qRes.status,
+                rawResponse: qRaw,
+                jobId,
+                actualRequest: tamsBody,
+                exactEndpointCalled: queryUrl,
+                provider: 'tensorart',
+                model,
+              });
+            }
+            let qData: any;
+            try { qData = JSON.parse(qRaw); } catch { qData = undefined; }
+            const status = String(qData?.job?.status || '').toUpperCase();
+            if (status === 'SUCCESS') {
+              const videos = qData?.job?.successInfo?.videos;
+              const url = Array.isArray(videos) ? videos.find((v: any) => typeof v?.url === 'string' && v.url)?.url : '';
+              if (!url) {
+                return res.status(502).json({
+                  error: qRaw,
+                  errorSource: 'upstream',
+                  rawResponse: qRaw,
+                  jobId,
+                  actualRequest: tamsBody,
+                  exactEndpointCalled: queryUrl,
+                  provider: 'tensorart',
+                  model,
+                });
+              }
+              videoResult = url;
+              break;
+            }
+            if (status === 'FAILED' || status === 'CANCELED') {
+              keyPoolManager.recordResult('tensorart', tamsKey, false, Date.now() - taStart, qRaw);
+              return res.status(502).json({
+                error: qRaw,
+                errorSource: 'upstream',
+                rawResponse: qRaw,
+                jobId,
+                actualRequest: tamsBody,
+                exactEndpointCalled: queryUrl,
+                provider: 'tensorart',
+                model,
+              });
+            }
+            if (status && !['DEFAULT', 'CREATED', 'PENDING', 'RUNNING', 'WAITING'].includes(status)) {
+              keyPoolManager.recordResult('tensorart', tamsKey, false, Date.now() - taStart, qRaw);
+              return res.status(502).json({
+                error: qRaw,
+                errorSource: 'upstream',
+                rawResponse: qRaw,
+                jobId,
+                actualRequest: tamsBody,
+                exactEndpointCalled: queryUrl,
+                provider: 'tensorart',
+                model,
+              });
+            }
+          }
+          if (!videoResult) {
+            keyPoolManager.recordResult('tensorart', tamsKey, false, Date.now() - taStart, 'poll budget exhausted');
+            return res.status(504).json({
+              error: 'Tensor.Art TAMS 视频仍未完成：本地等待预算 200000ms 已用尽（不是上游报错）。',
+              errorSource: 'local',
+              jobId,
+              actualRequest: tamsBody,
+              exactEndpointCalled: queryUrl,
+              provider: 'tensorart',
+              model,
+            });
+          }
+          keyPoolManager.recordResult('tensorart', tamsKey, true, Date.now() - taStart);
+          const durableVideo = await requireDurableHistoryMediaUrl(videoResult);
+          if (!durableVideo.ok) {
+            return res.status(500).json({
+              error: `Tensor.Art TAMS 视频已生成，但无法下载并持久化为本地历史副本（data URL）: ${durableVideo.message}`,
+              ...(durableVideo.status != null ? { persistStatus: durableVideo.status } : {}),
+              transientMediaUrl: videoResult,
+              jobId,
+              actualRequest: tamsBody,
+              provider: 'tensorart',
+              model,
+            });
+          }
+          const durableVideoUrl = durableVideo.dataUrl;
+          const item = await recordHistoryItem({
+            url: durableVideoUrl,
+            prompt,
+            provider: 'tensorart',
+            model: String(model),
+            seed: tamsBody.stages?.[0]?.inputInitialize?.seed ?? null,
+            steps: null,
+            cfg: null,
+          });
+          return res.json({
+            videoUrl: durableVideoUrl,
+            mediaUrl: durableVideoUrl,
+            mediaType: 'video',
+            provider: 'tensorart',
+            actualProvider: 'tensorart',
+            model: String(model),
+            actualModel: String(model),
+            requestedModel: model,
+            exactEndpointCalled: submitUrl,
+            queryEndpoint: queryUrl,
+            jobId,
+            actualRequest: tamsBody,
+            historyItem: item,
+          });
+        } catch (taErr: any) {
+          if (taErr?.clientDisconnected) throw taErr;
+          keyPoolManager.recordResult('tensorart', tamsKey, false, Date.now() - taStart, taErr?.message || String(taErr));
+          return res.status(502).json({
+            error: `Tensor.Art TAMS 视频生成异常: ${taErr?.message || taErr}`,
+            errorSource: 'network',
+            actualRequest: tamsBody,
+            exactEndpointCalled: submitUrl,
+            provider: 'tensorart',
+            model,
+          });
+        }
+      }
 
       const taKey = keyPoolManager.getNextKey('tensorart', (req.headers['x-tensorart-key'] as string) || undefined) || '';
       if (!taKey) {

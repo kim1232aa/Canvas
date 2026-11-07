@@ -67,12 +67,76 @@ export function buildTensorModelJob(body: Record<string, any>, requestId: string
   return applyCustomParameters({requestId, stages: [{type:'INPUT_INITIALIZE', inputInitialize}, {type:'DIFFUSION', diffusion}]}, jobCustom).payload;
 }
 
-/** TAMS model IDs (numeric / tensor.art model URL) have a VIDEO_DIFFUSION stage upstream
- *  (see https://tams-docs.tensor.art/docs/api/guide/workspace-api-example/),
- *  but this application has not wired TAMS video yet.
- *  Returns the local refusal message, or undefined when not a TAMS model ID. */
-export function tamsVideoUnsupported(model: unknown): string | undefined {
+/** True for a numeric TAMS model id or a tensor.art / tusiart model URL. OpenWorks tool names return false. */
+export function isTamsNumericModel(model: unknown): boolean {
   const raw = String(model ?? '').trim();
-  if (!/^\d{10,25}$/.test(raw) && !/^https:\/\/(?:www\.)?(?:tensor\.art|tusiart\.com)\/models\/\d{10,25}/.test(raw)) return undefined;
-  return `Tensor.Art TAMS 模型 ${raw}：本应用尚未接入 TAMS 视频（官方接口参见 https://tams-docs.tensor.art/docs/api/guide/workspace-api-example/ ）；未发送请求，也不会改用 OpenWorks 接口。`;
+  return /^\d{10,25}$/.test(raw) || /^https:\/\/(?:www\.)?(?:tensor\.art|tusiart\.com)\/models\/\d{10,25}/.test(raw);
+}
+
+/**
+ * TAMS video job. Shape is the official workspace example
+ * (https://tams-docs.tensor.art/docs/api/guide/workspace-api-example/):
+ * stages [INPUT_INITIALIZE, VIDEO_DIFFUSION], body key video_diffusion,
+ * LoRA item key lora_model (snake_case — not the image-stage loraModel).
+ * Image-to-video is the same stage with inputInitialize.imageResourceId.
+ * Submit: POST {TENSOR_MODEL_API}/v1/jobs (https://tams-docs.tensor.art/docs/api/signature/signature_build/).
+ * Poll: GET {TENSOR_MODEL_API}/v1/jobs/{jobId} (live OpenAPI TamsApiV1Service_GetJob;
+ * page https://tams-docs.tensor.art/docs/api/apis/tams-api-v-1-service-get-job/).
+ */
+export function buildTamsVideoJob(body: Record<string, any>, requestId: string) {
+  const model = tensorModelId(body.model);
+  const imageResourceId = typeof body.imageResourceId === 'string' ? body.imageResourceId.trim() : '';
+  if (body.image_url && !imageResourceId) {
+    throw new Error('TAMS 图生视频需要已上传的 imageResourceId（官方 INPUT_INITIALIZE.imageResourceId）。原始图片 URL 不能代替资源 ID，本请求未发送。');
+  }
+  for (const field of ['width', 'height', 'fps', 'totalFrames'] as const) {
+    if (!Number.isInteger(body[field]) || body[field] < 1) {
+      throw new Error(`${field} 必填，须为正整数（官方 VIDEO_DIFFUSION 示例字段，不按图像 512–1536 规则改写）`);
+    }
+  }
+  if (!String(body.prompt ?? '').trim()) throw new Error('prompt 为必填项');
+  const inputInitialize: Record<string, any> = {};
+  if (imageResourceId) inputInitialize.imageResourceId = imageResourceId;
+  if (body.seed !== undefined) {
+    if (!Number.isInteger(body.seed) || body.seed < -1 || body.seed > 4294967295) throw new Error('seed 须为 -1–4294967295 的整数');
+    inputInitialize.seed = String(body.seed);
+  }
+  if (body.count !== undefined) {
+    if (!Number.isInteger(body.count) || body.count < 1 || body.count > 4) throw new Error('count 须为 1–4 的整数');
+    inputInitialize.count = body.count;
+  }
+  const videoDiffusion: Record<string, any> = {
+    sdModel: model,
+    width: body.width,
+    height: body.height,
+    fps: body.fps,
+    totalFrames: body.totalFrames,
+    prompts: [{ text: String(body.prompt) }],
+    negativePrompts: body.negative_prompt !== undefined ? [{ text: String(body.negative_prompt) }] : [],
+  };
+  if (body.generationMode !== undefined) {
+    const mode = String(body.generationMode);
+    if (mode !== 'STABLE' && mode !== 'FAST') {
+      throw new Error(`generationMode 仅接受官方示例值 STABLE 或 FAST，收到 ${mode}`);
+    }
+    videoDiffusion.generationMode = mode;
+  }
+  if (body.loras !== undefined) {
+    if (!Array.isArray(body.loras) || body.loras.length === 0) throw new Error('loras 必须为非空数组');
+    videoDiffusion.lora = {
+      items: body.loras.map((entry: any) => {
+        const id = tensorModelId(entry?.lora_model ?? entry?.tensorartId ?? entry?.name);
+        const weight = entry?.weight ?? entry?.strength ?? entry?.modelStrength;
+        if (!Number.isFinite(weight)) throw new Error(`LoRA ${id} 的 weight 必填，须为有限数值`);
+        return { lora_model: id, weight };
+      }),
+    };
+  }
+  const custom = parseCustomObject(body.custom_parameters);
+  const { model: customModel, ...jobCustom } = custom || {};
+  if (customModel !== undefined) videoDiffusion.sdModel = tensorModelId(customModel);
+  return applyCustomParameters(
+    { requestId, stages: [{ type: 'INPUT_INITIALIZE', inputInitialize }, { type: 'VIDEO_DIFFUSION', video_diffusion: videoDiffusion }] },
+    jobCustom,
+  ).payload;
 }
