@@ -4,7 +4,8 @@ import { AI_VIDEO_ASPECT_RATIOS, AI_VIDEO_MODEL_REGISTRY } from './videoModels';
 import { EngineRegistry } from '../engines/EngineRegistry';
 
 // AIVideoNode 服务商下拉必须与 EngineRegistry 里具备视频能力的活驱动对齐：
-// 已接通的 wavespeed / muapi / novita / replicate / civitai 应可手动选择。
+// 已打开官方视频端点的 wavespeed / muapi / replicate / civitai 应可手动选择。
+// Novita 当前文档页 404、API 总览视频表为空，不放进下拉。
 // NanoGPT 图像驱动没有视频能力，不得出现；视频路由在 /api/video/generate，等驱动接入后再加入。
 function videoProviderOptionValues(): string[] {
   const def = NODE_DEFINITIONS['AIVideoNode'];
@@ -15,11 +16,12 @@ function videoProviderOptionValues(): string[] {
 }
 
 describe('AIVideoNode 服务商下拉与 EngineRegistry 视频驱动对齐', () => {
-  it('已接通视频驱动的 wavespeed / muapi / novita / replicate / civitai 可手动选择', () => {
+  it('已打开官方视频端点的 wavespeed / muapi / replicate / civitai 可手动选择', () => {
     const values = videoProviderOptionValues();
-    for (const p of ['wavespeed', 'muapi', 'novita', 'replicate', 'civitai', 'together', 'aimlapi', 'venice', 'krea', 'sogni']) {
+    for (const p of ['wavespeed', 'muapi', 'replicate', 'civitai', 'together', 'aimlapi', 'venice', 'krea', 'sogni']) {
       expect(values).toContain(p);
     }
+    expect(values).not.toContain('novita');
   });
 
   it('保留既有 fal / agnes / grok_compat 选项', () => {

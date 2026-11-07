@@ -199,13 +199,6 @@ export const AI_VIDEO_MODEL_REGISTRY: VideoModelEntry[] = [
     sendsAspectRatio: true,
   },
   {
-    provider: 'novita',
-    id: 'wan2.7-t2v',
-    label: '[Novita] Wan 2.7 Text-to-Video',
-    sourceUrl: 'https://docs.novita.ai/api-reference/model-apis-wan2.7-t2v',
-    sendsAspectRatio: false,
-  },
-  {
     provider: 'muapi',
     id: 'wan2.2-text-to-video',
     label: '[MuAPI] Wan 2.2 Text-to-Video',
