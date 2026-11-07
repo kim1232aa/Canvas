@@ -57,8 +57,12 @@ describe('Civitai image request contract', () => {
     expect(params.targetProvider).toBe('civitai');
     expect(params.civitaiEngine).toBe('comfy');
     expect(params.civitaiEcosystem).toBe('krea2');
-    expect(params.checkpointModel).toBe('turbo');
+    // The preset stores the checkpoint AIR (public model-versions/3072332: Krea 2 Turbo), not the bare selector.
+    const krea2TurboAir = 'urn:air:krea2:diffusionmodel:civitai:2732656@3072332';
+    expect(params.checkpointModel).toBe(krea2TurboAir);
+    expect(params.checkpointModel).not.toBe('turbo');
     const input = await buildCivitaiImageInput({ model: params.checkpointModel, prompt: params.positivePrompt, engine: params.civitaiEngine, ecosystem: params.civitaiEcosystem, comfyModel: params.civitaiModel || 'turbo', loras: [] }, api({}), oa());
+    // The builder derives the recipe selector from the AIR; the wire model is the selector, not the URN.
     expect(input).toMatchObject({ engine: 'comfy', ecosystem: 'krea2', model: 'turbo' });
   });
   it('maps documented SD1 AIR namespace to the request discriminator without rewriting resources', async () => {
