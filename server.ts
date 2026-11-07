@@ -9,6 +9,7 @@ import { classifyCivitaiVideoPoll, runCivitaiVideoPoll } from './src/server/civi
 import { canvasNodeId, clearVideoJobStatus } from './src/server/videoJobStatus.ts';
 import { CIVITAI_VIDEO_POLL_BUDGET_MS, CIVITAI_VIDEO_SUBMIT_WAIT_SECONDS, civitaiGenerateSocketMs } from './src/server/civitaiVideoPollSchedule.ts';
 import { fetchSenseNovaModelCatalog } from './src/server/senseNovaCatalog.ts';
+import { probeModelScopeKey, probeOpenAICompatModelsKey, probeTamsKey } from './src/server/keyTestProbes.ts';
 import { buildModelScopeImagePayload } from './src/server/modelScopeImageContract';
 import { MODELSCOPE_REGIONS, buildLoraListRequest, parseLoraListResponse } from './src/server/modelScopeLoraList.ts';
 import {isHuggingFaceLora} from './src/utils/hfResource.ts';
@@ -5593,10 +5594,16 @@ async function testSingleProviderKey(
       };
     }
 
-    // ponytail: ModelScope docs are JS-rendered; GET /v1/models could not be verified, so nothing is sent.
-    // Restore the model-list call once an official page documents it.
+    // GET {documented API-Inference base}/v1/models. The official intro pages document the
+    // base URL and Bearer auth, not this path; a non-2xx answer is returned verbatim.
     if (prov === 'modelscope' || prov === 'modelscope_cn' || prov === 'modelscope_ai') {
-      return { maskedKey, status: 'unsupported', latency: 0, message: `${NO_READONLY_TEST}（未能核实官方只读接口）` };
+      const probed = await probeModelScopeKey(
+        { upstreamFetch, resolveBaseUrl: getProviderBaseUrl, resolveTamsOrigin: resolveTamsModelApiOrigin },
+        prov,
+        singleKey,
+        routePath,
+      );
+      return { maskedKey, ...probed };
     }
 
     if (prov === 'nanogpt') {
@@ -5655,9 +5662,16 @@ async function testSingleProviderKey(
       };
     }
 
-    // Official docs list only chat/generation endpoints (Agnes: wiki.agnes-ai.com/llms.txt; SenseNova: OpenSenseNova API.md).
+    // Same GET ${baseUrl}/models the balance check sends. Official docs list only
+    // chat/generation endpoints, so the upstream status and body are the result.
     if (prov === 'agnes' || prov === 'sensenova') {
-      return { maskedKey, status: 'unsupported', latency: 0, message: `${NO_READONLY_TEST}（官方文档仅列出生成/对话接口）` };
+      const probed = await probeOpenAICompatModelsKey(
+        { upstreamFetch, resolveBaseUrl: getProviderBaseUrl, resolveTamsOrigin: resolveTamsModelApiOrigin },
+        prov,
+        singleKey,
+        routePath,
+      );
+      return { maskedKey, ...probed };
     }
 
     if (prov === 'openai_compat' || prov === 'grok_compat') {
@@ -5709,22 +5723,14 @@ async function testSingleProviderKey(
         }
         return { maskedKey, status: resp.status === 429 ? 'rate_limited' : 'error', latency, message: `OpenWorks 鉴权/目录失败 [${resp.status}]: ${raw.slice(0, 300)}` };
       }
-      // TAMS Bearer key probe (query SD1.5 model info)
-      const origin = resolveTamsModelApiOrigin();
-      const testModelId = '613045163490732233';
-      const resp = await upstreamFetch(
-        { provider: 'tensorart', route: routePath, model: testModelId, key: singleKey },
-        `${origin}/v1/models/${testModelId}`,
-        { headers: { Authorization: `Bearer ${singleKey}` } }
+      // TAMS Bearer key: GET /v1/models/{id}. The printed name is model.name from the
+      // response; a missing name is reported as missing, never replaced.
+      const probed = await probeTamsKey(
+        { upstreamFetch, resolveBaseUrl: getProviderBaseUrl, resolveTamsOrigin: resolveTamsModelApiOrigin },
+        singleKey,
+        routePath,
       );
-      const latency = Date.now() - startTime;
-      const raw = await resp.text().catch(() => '');
-      if (resp.ok) {
-        let name = 'SD1.5';
-        try { const j = JSON.parse(raw); name = j?.model?.name || name; } catch {}
-        return { maskedKey, status: 'ok', latency, message: `TAMS 模型 API 鉴权成功（GET /v1/models/${testModelId} · ${name}）` };
-      }
-      return { maskedKey, status: resp.status === 429 ? 'rate_limited' : 'error', latency, message: `TAMS 模型 API 鉴权/模型查询失败 [${resp.status}]: ${raw.slice(0, 300)}` };
+      return { maskedKey, ...probed };
     }
 
     if (prov === 'replicate') {
