@@ -1,152 +1,176 @@
-> **接手开发先读：[完整交接文档 HANDOFF.md](HANDOFF.md)。铁律、16 个产品板块、各家缺口、前端验收等级和真实证据均以该文档及最新实测为准。下文包含历史宣传与旧实现说明，不能当作当前全量能力或验收完成承诺。**
-
 # ComfyUI Web Studio (AI 节点式工作流全栈生成平台)
 
-## Sites 在线部署
-
-本部署副本保留原始 `server.ts` 和 React 界面，通过 `hosting/build.mjs` 将 Express 接口适配为 Cloudflare Worker。运行 `npm run build` 生成前端及 Worker；`npm run dev` 仍可运行原始本地服务。
-
-- 网站保持仅所有者可访问；在线管理使用 ChatGPT 登录身份，无需另填管理令牌。生产认证邮箱与原生网站所有者匹配，固定所有者账号；旧部署才使用首次绑定。
-- 云端项目与生成历史接口使用 D1 保存索引、R2 保存项目和媒体文件；多画布浏览器缓存保留，并提供真实云端保存 / 加载按钮。
-- 云端服务商设置通过 `CANVAS_SETTINGS_SECRET` 加密保存。该值只能配置为运行环境密钥，不得写入源码。
-- AI 服务商模型、端点与参数处理逻辑沿用仓库。提供的测试 key 保存在 Sites 加密运行环境；可在设置中覆盖。实际生成验证见网站「真实生成验收」，未验证的模型和视频不代表已通过。
-- `node hosting/check-hosting.mjs` 使用本地 Worker 验证数据保存、重启恢复及访问限制，禁止测试时调用外部服务商。
-
-
-基于 React 19 + TypeScript + Tailwind CSS 构建的 Web 版 ComfyUI 节点式图像/视频/推理工作流平台。项目包含多供应商模型中心、LoRA、参数面板、工作流导入导出、执行记录与持久化。**具体供应商、模型和参数是否可用，以 HANDOFF.md、PROGRESS.md 及当前上游真实响应为准；目录可见、代码已接线或历史成功都不等于当前已经通过前端验收。**
+> ⚠️ **项目基准与首要阅读指引**：
+> 接手开发请务必先查阅 [完整交接基准 HANDOFF.md](HANDOFF.md)、[未闭环与审计跟踪 UNRESOLVED_ISSUES.md](UNRESOLVED_ISSUES.md) 以及 [最新端到端 UI 实测证据 docs/evidence/2026-11-05/final.md](docs/evidence/2026-11-05/final.md)。
+> 历史交接文档（如 `ENGINE_LORA_SPECIFICATION.md`、`PITFALLS.md`、`HANDOVER.md`、`docs/HANDOVER-2026-10-05.md` 等）均为早期 Agent 编写的**未验证历史文档（Unverified History）**，包含已过期的推断与历史描述，**不得作为当前事实依据**。
 
 ---
 
-## 🌟 核心特性与架构亮点
+## 一、项目核心最高规则与验收准则 (Project Rules)
 
-### 1. 🎨 专业级可视化节点画布 (Graph Canvas)
-- **无限平移缩放与网格吸附**：支持超大无边潜空间画布、智能框选、多选移动与拓扑自动重排。
-- **强类型端口安全连接**：贝塞尔曲线连接端口（支持 `MODEL`、`CLIP`、`LATENT`、`IMAGE`、`CONDITIONING`、`STRING`、`VIDEO` 等强类型检测与拓扑兼容转换）。
-- **节点状态与操作**：支持节点折叠、跳过 (Bypass)、克隆、快速重命名、实时执行进度条与状态光晕。
+本项目严格遵守最高工程规范与用户逐字指示：
 
-### 2. 🔐 多 Key 配置与任务凭据一致性
-- **多 Key 密钥池管理**：设置页可保存多个凭据；是否支持余额/健康查询取决于该供应商当前真实接口，不能把“有 Key”写成“账户可用”。
-- **禁止失败后静默换 Key 重提生成**：一次生成任务使用已选定的凭据；Schema → 提交 → 轮询需要保持同一账户语义。对支持任务凭据引用的路由，引用失效时直接报错，不自动换另一把 Key。
-- **不把 401/403/429 按状态码猜业务原因**：只有上游响应体明确给出鉴权、账户绑定、额度/余额信息时才做对应分类；网络无响应单独记为网络问题。
-
-### 3. 💰 账户状态与错误透明度
-- **余额能力按供应商实际接口核实**：只有已经核实存在余额/额度接口或上游明确返回额度信息的供应商才展示对应事实；没有接口就不虚构“实时余额”。
-- **透明错误记录**：执行记录保留真实 endpoint、网站 HTTP、上游 HTTP、响应体和错误来源；欠费、鉴权、参数错误和网络失败分开记录。
-
-### 4. 💎 Google Gemini 图像路线
-- 模型列表与图像能力以当前 Gemini 官方接口和项目模型选择器为准，不在 README 固定承诺某个历史模型仍在线。
-- Gemini 图像生成使用其原生自然语言 / 图像配置能力；**不要把 ComfyUI 的 Sampler、Steps、CFG、LoRA 等扩散参数假装成 Gemini 已接收字段**。未经过真实前端请求验证的能力不标记为通过。
-
-### 5. 🎛️ ComfyUI 核心参数总控台 (Parameter Inspector)
-- **全要素参数双向绑定**：实时同步 CLIP 正向/负向提示词、基底大模型 (Checkpoint)、云端推理引擎 (Provider)、采样步数 (Steps)、引导系数 (CFG Scale)、采样算法 (Sampler)、调度器 (Scheduler)、重绘降噪幅度 (Denoise) 与潜空间画幅比例 (Latent Canvas Dimensions)。
-- **种子控制模式 (Seed Control)**：支持 **每次随机 (Randomize)**、**锁定固定 (Fixed)**、**递增 +1 (Increment)** 与 **递减 -1 (Decrement)**。
-- **LoRA 堆叠与架构兼容性校验**：实时监控 LoRA 与 Checkpoint 的架构匹配状态（如 FLUX.1、SDXL、Krea 2），支持一键切换兼容底模与双向同步画布 `LoRALoader` 节点。
-
-### 6. 🛡️ 严格反黑盒与零硬编码准则 (Strict Transparency & No Fallbacks)
-- **严禁静默容灾与虚假成功**：绝不在底层私自替换 provider、端点、模型或使用 fake 伪数据假装成功。
-- **全链路错误公开透明**：请求失败原样输出真实 HTTP 状态码、上游响应体与详细堆栈。
-- **动态通用 API Schema 驱动**：所有模型 ID、路径、端点 URL 均支持自由输入与动态配置，彻底消除写死特化规则。
+1. **唯一验收标准**（用户原文逐字）：
+   > **「我的验收标准只有一个，UI实际点击通过并有产物，你之前绕过前端直接请求api的是违规，是绕过，你请求api通过，和我前端点击通过根本不是一回事」**
+   - 严禁绕过前端直接打 API、跑 curl 或用脚本请求代替验收。任何没有前端真实点击运行证据的交付一律视为未通过。
+2. **单元测试与实际问题解决**（用户原文逐字）：
+   > **「最后：单元测试通过绝不等于实际问题解决」**
+   - 单元测试覆盖只作为代码回归安全网，绝不代表实际业务问题已解决。
+3. **余额不足政策**（用户原文逐字）：
+   > **「余额不足不做卡点，先集成api，错误能原样透传算暂时通过」**
+   - 全参数请求成功抵达真实上游服务商，上游返回的欠费/余额不足错误原样透传展示时，按 `PASS_BILLING` 暂定通过。
+4. **透明错误与反黑盒准则**：
+   > **「不要美化报错，原样放回」「严禁静默容灾与虚假成功」「禁止多余的拦截」**
+   - 严禁在底层偷换 provider、端点、模型或使用 fake 数据伪造成功。
+   - 请求失败必须原样、完整展示真实 HTTP 状态码与响应体，绝不使用 fallback 兜底掩盖错误。
+5. **NSFW 与安全开关策略**（用户原文逐字）：
+   > **「我们不反对nsfw，有nsfw开关的都默认开启」**
+   - 凡服务商官方 API / live schema 中真实存在的安全开关（如 `enable_safety_checker`、`disable_safety_checker`、`safe_mode`、`allowMatureContent` 等），一律默认取放开方向（如 `enable_safety_checker=false`、`disable_safety_checker=true`、`safe_mode=false`、`allowMatureContent=true`）。
+   - 默认值在前端节点与参数检查器中完全公开可见、可由用户按节点一键切回，实际发送的请求体与历史记录中如实记录；严禁隐式暗中注入。
 
 ---
 
-## 🚀 快速启动
+## 二、全量服务商前端 UI 验收矩阵 (Provider Acceptance Matrix)
 
-### 1. 环境准备
-本项目基于 Node.js 18+ 环境构建。
+所有服务商在节点画布与参数总控台中均严格按照实际端点分类。状态严格采用 7 类标准标签：
+- `PASS_GENERATION`: 界面可见真实生成产物。
+- `PASS_BILLING`: 全参数请求抵达上游，上游欠费/额度不足报错原样透传。
+- `BLOCKED_AUTH`: 401 鉴权失效。
+- `BLOCKED_CONFIG`: 本地未配置对应 API Key。
+- `NOT_SENT`: 请求未出站（如未接入端点本地明确报错）。
+- `CONTRACT_REJECT`: 非计费类 400/422/404 契约异常。
+- `WIRING_BUG`: 接线故障。
 
-### 2. 安装依赖
+| 服务商 (Provider) | 图像生成状态 (Image) | 视频生成状态 (Video) | 最近实测日期 | 证据文档索引 | 状态说明与边界 |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Civitai** | `PASS_BILLING` | `PASS_BILLING` | 2026-11-07 | [final.md](docs/evidence/2026-11-05/final.md) | 图像与视频工作流请求直达上游，返回 `400 insufficientBuzz` 原样透传；历史出图样本见 `public/verification/` |
+| **Fal.ai** | `PASS_BILLING` | `PASS_BILLING` | 2026-11-07 | [final.md](docs/evidence/2026-11-05/final.md) | Krea-2 / Wan 2.2 T2V/I2V LoRA 达真实 Fal 队列，返回 `403 Exhausted balance` |
+| **WaveSpeed** | `PASS_GENERATION` | `PASS_BILLING` | 2026-11-07 | [final.md](docs/evidence/2026-11-05/final.md) | 图像已有历史真出图证据 (`hist_1792224305224_meynb`)；Wan 2.2 I2V 返回 `400 Insufficient credits` |
+| **Hugging Face** | `PASS_BILLING` | `NOT_SENT` | 2026-11-07 | [final.md](docs/evidence/2026-11-05/final.md) | Z-Image Turbo 达 HF Inference Router，返回 `402 Purchase pre-paid credits`；视频路由未接通 |
+| **ModelScope 魔搭 CN** | `PASS_BILLING` | `NOT_SENT` | 2026-11-07 | [final.md](docs/evidence/2026-11-05/final.md) | 图像直达魔搭国内站，返回 `insufficient balance`；视频未声明构建路径 |
+| **ModelScope 魔搭 AI** | `PASS_BILLING` | `NOT_SENT` | 2026-11-07 | [final.md](docs/evidence/2026-11-05/final.md) | 国际站独立账户接入，返回欠费/余额不足；视频未构建 |
+| **Sogni** | `PASS_BILLING` | `PASS_BILLING` | 2026-11-07 | [final.md](docs/evidence/2026-11-05/final.md) | 任务创建成功 (201/200)，轮询返回 `waiting_for_user: insufficient_credit`；I2V 动态切入 `animate_photo` |
+| **AIMLAPI** | `PASS_BILLING` | `PASS_BILLING` | 2026-11-07 | [final.md](docs/evidence/2026-11-05/final.md) | 图像直达 `/v1/images/generations`，返回 `403 Out of funds`；视频同欠费 |
+| **DeepInfra** | `PASS_BILLING` | `NOT_SENT` | 2026-11-07 | [final.md](docs/evidence/2026-11-05/final.md) | FLUX-2-klein-9b 直达端点，返回 `402 Payment Required`；未构建视频 |
+| **Venice AI** | `PASS_BILLING` | `PASS_BILLING` | 2026-11-07 | [final.md](docs/evidence/2026-11-05/final.md) | 图像直达 `/v1/image/generate`，上游返回 `402 Insufficient USD or Diem`（空提示词返回 400） |
+| **ModelsLab** | `PASS_BILLING` | `NOT_SENT` | 2026-11-07 | [final.md](docs/evidence/2026-11-05/final.md) | 图像直达实时接口，返回 `400/402 Out of credits`；未接入视频 |
+| **Mage.space** | `PASS_BILLING` | `NOT_SENT` | 2026-11-07 | [final.md](docs/evidence/2026-11-05/final.md) | mango-v3 直达端点，返回 `402 Payment Required`；未接入视频 |
+| **Novita AI** | `PASS_BILLING` | `PASS_BILLING` | 2026-11-07 | [final.md](docs/evidence/2026-11-05/final.md) | SD 异步生图与 SVD-XT 图生视频均返回 `403 NOT_ENOUGH_BALANCE` |
+| **MuAPI** | `PASS_BILLING` | `NOT_SENT` | 2026-11-07 | [final.md](docs/evidence/2026-11-05/final.md) | 图像直达端点，返回 `402 INSUFFICIENT_CREDITS`；视频路径尚未打通 |
+| **NanoGPT** | `BLOCKED_AUTH` | `BLOCKED_AUTH` | 2026-11-07 | [final.md](docs/evidence/2026-11-05/final.md) | 图像与视频路由均返回 `401 Invalid session / invalid_api_key`；视频独立接入 `/api/generate-video` |
+| **Together AI** | `BLOCKED_AUTH` | `BLOCKED_AUTH` | 2026-11-07 | [final.md](docs/evidence/2026-11-05/final.md) | 图像端点 `/v1/images/generations` 与视频端点 `/v2/videos` 均返回 `401 Invalid API key` |
+| **Tensor.Art (TAMS)** | `BLOCKED_CONFIG` | `NOT_SENT` | 2026-11-07 | [final.md](docs/evidence/2026-11-05/final.md) | 模型查询返回鉴权拒绝；视频输入纯数字模型 ID 明确返回「尚未接入 TAMS 视频」本地拒绝，不偷换路由 |
+| **Tensor.Art (OpenWorks)** | `PASS_GENERATION` | `NOT_SENT` | 2026-11-07 | [final.md](docs/evidence/2026-11-05/final.md) | 历史已有真出图证据 (`hist_1793693239642_fo6ux`)，当前按 SchemaProvider 运行 |
+| **SenseNova (商汤)** | `BLOCKED_CONFIG` | `NOT_SENT` | 2026-11-07 | [final.md](docs/evidence/2026-11-05/final.md) | 图像驱动已构建并支持 `sensenova-u1.5-lite`，未配置 Key 时提示配置；非 FAIL_INTEGRATION |
+| **Agnes AI** | `BLOCKED_CONFIG` | `BLOCKED_CONFIG` | 2026-11-07 | [final.md](docs/evidence/2026-11-05/final.md) | 图像与视频驱动均已接入，当前本地未配置 `AGNES_KEY` |
+| **Google Gemini** | `BLOCKED_CONFIG` | `NOT_SENT` | 2026-11-07 | [final.md](docs/evidence/2026-11-05/final.md) | Imagen 3 / Gemini 生图驱动已接通，当前未配置 `GEMINI_API_KEY` |
+| **Replicate** | `BLOCKED_CONFIG` | `NOT_SENT` | 2026-11-07 | [final.md](docs/evidence/2026-11-05/final.md) | 动态模型 Schema 驱动已接通，预设模型留空待用户在模型中心自主选用 |
+| **Runware** | `BLOCKED_CONFIG` | `NOT_SENT` | 2026-11-07 | [final.md](docs/evidence/2026-11-05/final.md) | 官方 AIR / Model 动态驱动已接通，预设模型留空待选 |
+
+---
+
+## 三、快速启动与开发环境 (Quick Start)
+
+### 1. 运行环境要求
+- **Node.js**: `Node.js 22+`（实测采用 `v22.23.2`）。
+- **浏览器环境**: Google Chrome / Chromium（支持最新 Web 标准与 CDP 自动化交互）。
+
+### 2. 依赖安装与启动
 ```bash
+# 安装生产与开发依赖
 npm install
-```
 
-### 3. 配置环境变量 (可选)
-复制 `.env.example` 并配置相关云端服务商 Key（亦可在 Web 界面「后台设置」中实时录入与管理）：
-```bash
-cp .env.example .env
-```
-
-### 4. 启动全栈开发服务器
-```bash
+# 启动全栈开发服务器 (Express 后端 + Vite SPA 中间件)
 npm run dev
-```
-开发服务器将运行在 `http://localhost:3000`。
-前台为 Vite 驱动的 React SPA，后台由 `server.ts` 提供统一引擎分发、多 Key 轮询管理、余额探测与端点审计服务。
 
-### 5. 代码质量检查与构建
+# 或指定端口启动后端
+npx tsx server.ts --port 3000
+```
+本地服务启动后，访问 `http://127.0.0.1:3000` 即可开始创作。
+
+### 3. 代码质量与全量测试
 ```bash
-# 验证 TypeScript 类型与语法规范
+# TypeScript 类型检查 (package.json: "lint": "tsc --noEmit")
 npm run lint
 
-# 生产环境打包构建
+# 生产环境打包构建 (生成 hosting/server.generated.ts 与 dist/)
 npm run build
+
+# 运行全量 Vitest 单元与契约测试 (排除 .tower 与 node_modules)
+npx vitest run --maxWorkers=2 --exclude '.tower/**' --exclude '**/node_modules/**' --exclude '**/dist/**'
 ```
 
 ---
 
-## 🛠️ 项目目录结构
+## 四、项目真实目录结构 (Filesystem Verified Architecture)
 
-```
-├── README.md                      # 项目主说明与功能全景
-├── HANDOVER.md                    # 核心交接指南、数据流与维护准则
-├── UNRESOLVED_ISSUES.md           # 技术审计报告、攻坚历程与已解决清单
-├── ENGINE_LORA_SPECIFICATION.md   # 各引擎 LoRA 原生形状规范与反黑盒准则
-├── server.ts                      # 全栈后端代理服务 (Fal, Gemini, Agnes, SenseNova, TensorArt, etc.)
-├── package.json                   # 项目依赖与启动脚本
-├── vite.config.ts                 # Vite 配置文件
-├── src/
-│   ├── App.tsx                    # 主视图编排、全局状态、快捷工具栏与历史抽屉
-│   ├── index.css                  # 全局样式与 Tailwind 指令
-│   ├── components/                # 业务 UI 组件
-│   │   ├── Canvas.tsx             # 节点画布缩放、平移与连线渲染
-│   │   ├── NodeItem.tsx           # 单个节点渲染 (KSampler, LoRA, VAE, LLM 推理等)
-│   │   ├── TopBar.tsx             # 顶部工具栏与模型中心快速入口
-│   │   ├── ParameterInspector.tsx # ComfyUI 核心参数总控台 (Prompt, Checkpoint, KSampler, LoRA)
-│   │   ├── BackendSettingsModal.tsx # API 接入管理、多 Key 轮询总控与余额查询弹窗
-│   │   ├── ModelHubModal.tsx      # 全生态模型中心 (Checkpoints, LoRAs, Video Models)
-│   │   ├── AssetManagerModal.tsx  # 资产库与生成历史管理弹窗
-│   │   ├── WorkflowPresetsModal.tsx # 官方预设与 Civitai 逆向一键生成工作流弹窗
-│   │   └── ResultGalleryModal.tsx # 生成结果大图画廊与参数回溯面板
-│   ├── constants/
-│   │   ├── nodes.ts               # 节点定义字典 (LLMReasoning, VAEEncode, KSampler, etc.)
-│   │   └── presets.ts             # 官方工作流预设库
-│   ├── engines/                   # 模块化引擎驱动 (Drivers)
-│   │   ├── BaseEngineDriver.ts    # 引擎抽象基类
-│   │   ├── EngineRegistry.ts      # 引擎注册与调度中心
-│   │   └── drivers/               # 各引擎具体实现 (Fal, Gemini, Agnes, SenseNova, etc.)
-│   ├── services/
-│   │   └── api.ts                 # 前端 API 统一封装与多 Key 请求交互
-│   ├── types/
-│   │   ├── graph.ts               # 节点、连线与 ComfyParameters 类型定义
-│   │   └── providers.ts           # 服务商、多 Key 轮询与余额数据结构
-│   └── utils/
-│       ├── graphEngine.ts         # 工作流参数反向拓扑解析与执行引擎
-│       ├── baseModelMatcher.ts    # 底模与 LoRA 架构兼容性智能校验器
-│       └── engineParameterNormalizer.ts # 参数归一化与 ComfyUI JSON 导出工具
+本目录树由真实文件系统命令验证生成，剔除任何虚构文件：
+
+```text
+├── README.md                      # 项目说明、核心规则、服务商矩阵与架构全景
+├── HANDOFF.md                    # 唯一交接基准文档（真实提交、全量测试计数与闭环说明）
+├── UNRESOLVED_ISSUES.md           # 待充值复测清单、未验证交互场景与技术审计追踪
+├── PROGRESS.md                    # 历史进度记录与最新验收基线
+├── PITFALLS.md                    # 历史防踩坑说明（未验证历史）
+├── HANDOVER.md                    # 历史架构交接说明（未验证历史）
+├── ENGINE_LORA_SPECIFICATION.md   # 历史引擎规范说明（未验证历史）
+├── server.ts                      # 全栈后端代理服务、鉴权调度与通用 OpenAPI 路由
+├── package.json                   # 项目依赖与执行脚本
+├── tsconfig.json                  # TypeScript 编译器配置
+├── vite.config.ts                 # Vite 打包与开发服务配置
+├── .env.example                   # 真实代码读取的环境变量模板
+├── hosting/                       # Cloudflare Workers / Sites 适配层
+│   ├── build.mjs                  # 生产构建与代码生成脚本
+│   ├── check-hosting.mjs          # 本地 Worker 环境持久化与恢复测试脚本
+│   ├── worker.ts                  # Cloudflare Worker 入口与 D1/R2 存储绑定
+│   └── routes.ts                  # Worker 端轻量路由分发
+├── docs/                          # 架构、审计与一手证据归档
+│   ├── evidence/                  # 真实浏览器点击录屏、截图与请求日志
+│   │   └── 2026-11-05/            # 2026-11-05 / 11-07 阶段性全量实测证据
+│   │       ├── final.md           # M25 全量回归终结报告与 47 项实机截图索引
+│   │       └── final/             # 47 张全量高保真实机截图 (*.png)
+│   └── providers/                 # 供应商协议规格与在线 Schema 说明
+└── src/                           # 前端核心业务源码
+    ├── App.tsx                    # 主视图编排、全局状态流、顶栏与弹窗交互
+    ├── main.tsx                   # React 19 应用启动入口
+    ├── index.css                  # 全局样式与 Tailwind CSS 声明
+    ├── components/                # 业务 UI 组件库
+    │   ├── Canvas.tsx             # 节点画布缩放、平移与连线渲染
+    │   ├── NodeItem.tsx           # 单个节点渲染 (KSampler, LoRA, VAE, AIVideoNode 等)
+    │   ├── TopBar.tsx             # 顶部工具栏 (运行按钮、模型、LoRA、工作流入口)
+    │   ├── ParameterInspector.tsx # ComfyUI 核心参数总控台 (NSFW 控件、Prompt、Sampler)
+    │   ├── WorkflowPresetsModal.tsx # 工作流预设模板中心与 Civitai 逆向解析弹窗
+    │   ├── ModelHubModal.tsx      # 全生态模型与 LoRA 枢纽中心
+    │   ├── CivitaiModal.tsx       # Civitai 模型浏览与导入弹窗
+    │   ├── SchemaChoiceControls.tsx # 动态 Schema 参数渲染与 NSFW 安全开关控制器
+    │   ├── VideoJobStatus.tsx     # 视频任务阶段性进度反馈条
+    │   └── ProviderModelSelect.tsx # 动态模型选择器
+    ├── constants/                 # 常量定义与预设库
+    │   ├── nodes.ts               # 节点定义字典与端口规格声明
+    │   ├── presets.ts             # 34 项现代工作流预设库
+    │   └── presetRecipePrompts.ts # 预设配方真实提示词字典
+    ├── engines/                   # 模块化引擎驱动 (Drivers)
+    │   └── drivers/               # 各引擎具体实现 (Fal, Sogni, Venice, SenseNova 等)
+    ├── hooks/                     # 自定义 React Hooks
+    │   └── useLiveVideoModelMatch.ts # 实时视频模型匹配与 Schema 获取
+    ├── schemas/                   # 供应商参数模式声明与契约
+    ├── server/                    # 服务端模块化路由、适配器与目录查询
+    ├── services/                  # 前端统一 API 调用封装
+    ├── types/                     # TypeScript 类型定义
+    └── utils/                     # 拓扑解析、参数归一化与 NSFW 政策工具
 ```
 
 ---
 
-## 📡 支持的云端算力与大模型生态
+## 五、Cloudflare Worker 与托管部署声明 (Hosting Integration)
 
-| 服务商 / 路由 | 当前前端验收状态 | 边界 |
-| :--- | :--- | :--- |
-| **Civitai** | `PASS_GENERATION` | 已有当前网页真实基础图与 LoRA 生成；不外推为“所有 Civitai 模型都可在线生成” |
-| **Fal.ai** | `PASS_BILLING` | `fal-ai/flux-lora` 已真实到达上游，当前账户返回 `TOP_UP`；未证明其他端点生成成功 |
-| **ModelScope CN** | `PASS_BILLING` | 当前图像路由上游明确 `insufficient balance` |
-| **ModelScope AI** | `BLOCKED_AUTH` | 国际站独立账户返回需绑定 Alibaba Cloud |
-| **NanoGPT** | `BLOCKED_AUTH` | 当前真实前端请求返回 `invalid_api_key` / `Invalid session` |
-| **Tensor.Art / TAMS** | `BLOCKED_AUTH` | 真实模型 ID 查询返回 `unauthorized / app not found`；旧 OpenWorks 图片不算 TAMS 验收 |
-| **WaveSpeed** | `PASS_GENERATION` | 已有带 LoRA 的真实前端生成证据 |
-| **MuAPI** | `PASS_BILLING` | 真实提交返回 `INSUFFICIENT_CREDITS` |
-| **Sogni** | `PASS_BILLING` | 真实任务创建后上游明确 `insufficient_credit` |
-| **Hugging Face** | `PASS_BILLING` | HF→fal-ai + FLUX.1-dev + HF LoRA 已到真实 HF Router，当前账户 HTTP 402 no remaining credits；旧 Space 结论不外推 |
-| **Google Gemini** | `BLOCKED_CONFIG` | 真实前端到 `/api/gemini/generate`，本地未配置 `GEMINI_API_KEY`；没有上游响应，不记欠费或出图 |
-| **Agnes AI** | `BLOCKED_CONFIG` | 真实前端到 `/api/engine/agnes/generate`，当前本地未配置 `AGNES_KEY`；官方当前 Image 2.5 Flash 使用 `size + ratio`，尚未到上游 |
-| **SenseNova 图像** | `FAIL_INTEGRATION` | 官方当前平台已有图像生成/编辑模型，但 Canvas 只接入 chat/reasoning；未取得完整官方图像 OpenAPI Schema 前不猜 endpoint、不自动换供应商 |
-| **兼容中转 / Video** | 见 `HANDOFF.md` / `PROGRESS.md` | 兼容中转只使用用户显式 Base URL；Video 必须按具体 provider/model 路由逐项验收 |
+本项目在 `hosting/` 目录中维护了云端 Worker 部署适配层：
+- **无状态服务适配**: 通过 `hosting/build.mjs` 将 Express 接口与静态前端整合打包。
+- **持久化存储抽象**: 云端项目索引与生成历史通过 Cloudflare D1 存储，媒体产物由 Cloudflare R2 存储；本地开发环境下通过 Express 本地存储 (`data/`) 维持一致交互。
+- **环境安全准则**: 服务端密钥统一通过环境变量或加密设置存储注入，本公开仓库严格禁止包含任何私有端点、个人凭据、钱包地址或内部代理配置。
 
 ---
 
-## 📄 许可证
+## 六、许可证
 
 MIT License

@@ -1,16 +1,29 @@
 # ComfyCanvas Studio：开发交接、产品缺口与验收手册
 
-## 2026-11-04 当前终态总览（唯一基线，优先于下文全部历史记录）
+## 2026-11-07 当前终态总览（唯一已验证基线，优先于下文全部历史记录）
 
-- **最新 HEAD**：`db34fa7`（`main` 与 `origin/main` 严格同步；全量测试 229 文件 / 1686 用例全通过，`tsc --noEmit` 0 错误）。
-- **核心架构准则（2026-11-04 收敛落地）**：
-  1. **有值照发，撤除本地拦截**：彻底移除 `rejectUnsupported` / `rejectSchemaEnum` 与本地 400 预检拦截；凡是用户在节点或高级设置填写的参数，一律原样组装发往上游服务商；若上游拒绝，节点单次原生展示上游返回的真实 HTTP 状态码与原始错误体，不静默 Fallback、不吞错。
-  2. **UI 去工程化**：移除开发期的执行日志面板（execution-log）、冗余运行 Toast、节点支持性角标及红条；历史记录仅保留成功产出媒体的有效记录，卡片仅展示真实发出的参数，支持「照这组参数再来一张」一键回填。
-  3. **视频与预设**：WaveSpeed / MuAPI / Replicate / Fal / Civitai 图生视频与视频 LoRA 链路已接通；全部标准预设（T2I/I2V）严格采用真实配方页（civitai.red / tensor.art）的参数与提示词。
-- **当前剩余外部阻塞（代码已就绪，非代码缺陷）**：
-  - **MuAPI 文生图预设**：官方 Schema 明确要求必填真实训练产物 `lora_url`，未填前上游拒绝出图（卡片保持「待配方」提示）。
-  - **真机视频出片（Funded I2V）**：WaveSpeed 账户余额不足（$0.008 < $0.15）；ModelScope 官方云端 REST API 无视频端点。
-  - **凭证与额度待就绪**：Together（官方已下线 `image_loras`）、Tensor.Art TAMS Bearer、civitai.red 付费 LoRA（Buzz 限制）。
+- **最新代码基准**：`main` @ `4ab0948`（已完全合并 M1~M12, M14~M18, M23, M24, M26, M27, M28 全量修复；经 M25 终结回归验证）。
+- **全量工程质量指标**：
+  - `npm run build`：Exit code 0，成功生成 `hosting/server.generated.ts` 与 `dist/` 前端资产包。
+  - `npx tsc --noEmit`：Exit code 0，0 错误，严格类型检查通过。
+  - `npx vitest run --maxWorkers=2 --exclude '.tower/**' --exclude '**/node_modules/**' --exclude '**/dist/**'`：**264 个测试文件全部通过，2127 个测试用例全绿，0 failures**，耗时 128.71s，Exit code 0。
+  - `src/integration/modelSelection.test.tsx` 单独运行：5 passed，耗时 19.96s，Exit code 0。
+- **真实浏览器 UI 回归成果 (Headless Chrome 153 CDP, 2560×1440)**：
+  - 完整执行 6 大核心流程（空白画布新手入门引导与一键装配、全量 34 个内置现代预设核查与 15 家供应商真实出站运行、Civitai 现代/SD1.5/FLUX 配方逆向导入与出站、模型中心浏览与多端点 LoRA 挂载、AI 视频节点 T2V/I2V 与 Sogni 动态切换 `animate_photo` 横幅、Fal Wan 2.2 与 Civitai 双服务商 NSFW 宽松默认可见与用户手动切回）。
+  - 产出 **47 张全量高保真截图**（归档于 `docs/evidence/2026-11-05/final/*.png`，经 `ReadMediaFile` 逐张眼核，0 处 UI 逻辑矛盾与遮挡）。
+  - 记录 **105 条真实出站网络日志**（归档于 `temp/logs/requests-m25.jsonl`，严格脱敏）。
+  - 详尽终结报告：[docs/evidence/2026-11-05/final.md](docs/evidence/2026-11-05/final.md)。
+- **核心工程准则（落地闭环）**：
+  1. **唯一验收标准**：「UI实际点击通过并有产物，你之前绕过前端直接请求api的是违规，是绕过，你请求api通过，和我前端点击通过根本不是一回事」。
+  2. **余额不足政策**：「余额不足不做卡点，先集成api，错误能原样透传算暂时通过」。
+  3. **单元测试与实际问题**：「最后：单元测试通过绝不等于实际问题解决」。
+  4. **透明透传与反黑盒**：「不要美化报错，原样放回」「严禁静默容灾与虚假成功」「禁止多余的拦截」。
+  5. **NSFW 放开策略**：「我们不反对nsfw，有nsfw开关的都默认开启」。
+- **下文声明**：本文件下文「2026-11-04」及更早各章节均为早期 Agent 留存的**未验证历史记录（Unverified History）**，不得作为当前系统现状与能力的凭据。
+
+---
+
+## 2026-11-04 历史总览（未验证历史）
 
 ## 2026-11-04 非消耗：Replicate 步数透明 + 本地拦截展示
 

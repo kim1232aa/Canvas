@@ -44,14 +44,14 @@
     }
   },
   "httpStatus": 200,
-  "responseRaw": "{\"code\":\"0\", \"message\":\"\", \"data\":{\"task\":{\"id\":\"1056289973059242576\", \"userId\":\"1048723019146487792\", \"status\":\"WAITING\", \"toolName\":\"photoreal_studio_z_image\", \"outputs\":[]}}}",
+  "responseRaw": "{\"code\":\"0\", \"message\":\"\", \"data\":{\"task\":{\"id\":\"1056289973059242576\", \"userId\":\"[ACCOUNT_ID_REDACTED]\", \"status\":\"WAITING\", \"toolName\":\"photoreal_studio_z_image\", \"outputs\":[]}}}",
   "response": {
     "code": "0",
     "message": "",
     "data": {
       "task": {
         "id": "1056289973059242576",
-        "userId": "1048723019146487792",
+        "userId": "[ACCOUNT_ID_REDACTED]",
         "status": "WAITING",
         "toolName": "photoreal_studio_z_image",
         "outputs": []

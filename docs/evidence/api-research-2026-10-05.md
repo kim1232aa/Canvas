@@ -1,11 +1,11 @@
 # 供应商 API 官方文档取证（2026-10-05）
 
 规则：本文件只记录本轮亲自检索到的官方文档/官方 OpenAPI 事实。找不到的标「未能核实」。
-检索方式：web 搜索 + 官方文档站抓取；civitai/tensor/hf 域名在本环境经本地 mihomo 代理（127.0.0.1:7890，Clash 订阅，节点 JP住宅·SonyNURO·exit-01）访问。
+检索方式：web 搜索 + 官方文档站抓取；civitai/tensor/hf 域名在本环境经本地代理（127.0.0.1:7890，节点 exit-01）访问。
 
 ## 网络环境事实（本轮实测）
 - 沙箱直连与 6 个 socks5 出口均无法访问 civitai.com / huggingface.co / tams.tensor.art（000）。
-- 本地 mihomo 代理后：civitai.com 200、orchestration.civitai.com 200、huggingface.co 200、router.huggingface.co 404（服务在线）、tams.tensor.art 200、tams-api.tensor.art 404（服务在线）、api.tensor.art 405（服务在线）。
+- 本地代理后：civitai.com 200、orchestration.civitai.com 200、huggingface.co 200、router.huggingface.co 404（服务在线）、tams.tensor.art 200、tams-api.tensor.art 404（服务在线）、api.tensor.art 405（服务在线）。
 - 直连即可达：fal.ai、modelscope.cn、api-inference.modelscope.cn、api-inference.modelscope.ai、nano-gpt.com、api.muapi.ai、api.wavespeed.ai、api.sogni.ai。
 - 结论：本环境可对全部 10 家做真实前端验收，无 BLOCKED_ENV。
 

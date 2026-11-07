@@ -1,3 +1,5 @@
+> ⚠️ **未验证历史文档（Unverified History）**：本文档由早期 Agent 编写，包含未经证实的推断或已过期状态，**不得作为当前事实依据**；当前经真实 UI 点击与代码实测核实的基线请以 [../evidence/2026-11-05/final.md](../evidence/2026-11-05/final.md) 与 [../../HANDOFF.md](../../HANDOFF.md) 为准。
+
 # 供应商 API 审计 v2 — 总表
 2026-10-15 重新调查，与旧版无关。03:26–04:45 北京时间（box 时钟；中途 box 时钟从 03:3x 跳到 04:3x，以文件记录为准）。
 方法：每家 agy-search → WebSearch → curl 官方原页/OpenAPI/公开接口。**搜索摘要不计为证据**。原始抓取存于 `/workspace/audit-v2-raw/`。

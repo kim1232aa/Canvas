@@ -1,7 +1,7 @@
 # Mission M14: FIX14 NanoGPT closeout test stub vs strict driver response - Verification Evidence
 
 Date: 2026-11-05
-Worktree: `/root/github/ComfyUI Web Studio/.tower/worktrees/wt-14`
+Worktree: `.tower/worktrees/wt-14`
 Branch: `feat/fix14-nanogpt-closeout-test-stub-vs-stri`
 
 ## 1. Reproduction of Single Failure on Main

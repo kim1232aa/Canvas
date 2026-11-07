@@ -1,3 +1,5 @@
+> ⚠️ **未验证历史文档（Unverified History）**：本文档由早期 Agent 编写，包含未经证实的推断或已过期状态，**不得作为当前事实依据**；当前经真实 UI 点击与代码实测核实的基线请以 [docs/evidence/2026-11-05/final.md](docs/evidence/2026-11-05/final.md) 与 [HANDOFF.md](HANDOFF.md) 为准。
+>
 > 当前状态（2026-10-03）：下文含历史实现与历史验收描述，不能作为本次能力保证。以 CLAUDE.md 固定规则、PROGRESS.md 最新验收、public/verification/results.json 真实响应为准；禁止未经核实的自动模型/端点替换。
 
 # 模块交接与架构说明文档 (HANDOVER.md)

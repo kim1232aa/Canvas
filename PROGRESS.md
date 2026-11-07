@@ -1,6 +1,35 @@
-# 交接状态更新（用户于 2026-10-04 要求）
+# 交接状态更新（2026-11-07 M25 终结审计基线）
 
-## 2026-11-05 供应商复核、Civitai 导入闭环与 HF 真实复验
+> ⚠️ **基准声明**：下文「2026-11-05」及更早各节均为早期 Agent 留存的历史推进记录（未验证历史），不得作为当前系统现状与能力的凭据。当前唯一验证基准请以 [docs/evidence/2026-11-05/final.md](docs/evidence/2026-11-05/final.md) 与 [HANDOFF.md](HANDOFF.md) 为准。
+
+## 2026-11-07 M25 全量集成 UI 回归与文档终结收口
+
+- **代码基准**：`main` @ `4ab0948`。
+- **全量工程命令实测结果**：
+  - `npm run build`：Exit code 0，生成 `hosting/server.generated.ts` 与 `dist/`。
+  - `npx tsc --noEmit`：Exit code 0，0 错误。
+  - `npx vitest run --maxWorkers=2 --exclude '.tower/**' --exclude '**/node_modules/**' --exclude '**/dist/**'`：**264 个测试文件全部通过，2127 个测试用例全绿，0 failures**，耗时 128.71s，Exit code 0。
+  - `src/integration/modelSelection.test.tsx` 单独运行：5 passed，耗时 19.96s，Exit code 0。
+- **UI 回归实测交付**：
+  - 在真实无头 Chrome (CDP, 2560×1440) 中完成 6 大流程真实点击操作。
+  - 采集 47 张高保真实机截图至 `docs/evidence/2026-11-05/final/*.png`，经 `ReadMediaFile` 逐张眼核，确认 0 UI 逻辑矛盾。
+  - 记录 105 条真实网络出站日志至 `temp/logs/requests-m25.jsonl`。
+  - 闭环验证：空白画布新手引导、34 个现代预设核查与 15 家服务商运行、Civitai 现代/SD1.5/FLUX 配方逆向导入与出站、模型中心浏览与多端点 LoRA 挂载、AI 视频节点 T2V/I2V 与 Sogni 动态切换 `animate_photo` 横幅、Fal Wan 2.2 与 Civitai 双服务商 NSFW 宽松默认可见与用户手动切回。
+- **文档全量对齐与公共仓库卫生 (D1~D10)**：
+  - D1：在全部指定历史遗留文档顶部追加未验证历史警示横幅。
+  - D2：重写 `HANDOFF.md`、`PROGRESS.md`、`UNRESOLVED_ISSUES.md`、`README.md` 至 2026-11-07 实测基准。
+  - D3：更新 `docs/providers/schema-providers.md` Sogni `generate_video` / `animate_photo` 动态分流说明。
+  - D4：核实 Together `image_loras` 官方参数指南下线事实，引用 `https://docs.together.ai/docs/inference/images/parameters.md`。
+  - D5：核查确认 `rejectSchemaEnum` 与 `rejectUnsupported` 生产代码已彻底删除，0 残留门禁。
+  - D6：脱敏公共文档中绝对路径 `/root/github/...`（3 处清零）、代理名称 `mihomo`（2 处清零）、用户 ID `1048723019146487792`（130 处清零）、Signed URLs（32 处清零）。
+  - D7：校准 `.env.example`，剔除未引用变量 `APP_URL`，补齐 `PORT`、`ALLOWED_HOSTS`、`ALLOWED_ORIGINS`、`TENSORART_KEY`、`TENSORART_BASE_URL`。
+  - D8：检查确认 `AGENTS.md` 与 `CLAUDE.md` 包含两句用户原文逐字。
+  - D9：整理 9 家待充值复测清单、未验证功能场景与代码审计风险。
+  - D10：全面重构 `README.md`，输出经文件系统验证的目录树、独立 Image/Video 服务商矩阵与 100% 有效链接。
+
+---
+
+## 2026-11-05 供应商复核、Civitai 导入闭环与 HF 真实复验（未验证历史）
 
 - 按用户要求重新调查官方 API，不把旧交接文档当作事实。Civitai 修复均先以失败测试复现：导入器生成的 `civitai:modelId@versionId` 现在可由生成解析器接受；数组形 `loras[{air,strength}]` 在历史中不再变成索引 `0/1` 与 `NaN`；只有 `clipStrength` 时明确本地拒发并要求模型强度，不再静默让上游套用默认强度。对应修复分别提交并推送，测试通过不代表 Civitai 真实生成已验收。
 - Hugging Face → fal-ai 真实前端复验：Z-Image Turbo + LoRA，7 节点、9 连线，实际发送 1216×832、12 步、CFG 1、固定种子与 `loras[{path,scale:0.9}]`。模型元数据 HTTP 200；指定 fal-ai 端点的四次计费尝试均 HTTP 402，原文要求购买预付费额度或订阅 PRO，记 **PASS_BILLING**，没有图片。完整证据见 `docs/evidence/t7-huggingface-current-acceptance.md` 与同目录 Z-Image JSON/截图。

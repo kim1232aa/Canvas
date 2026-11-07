@@ -1,3 +1,5 @@
+> ⚠️ **未验证历史文档（Unverified History）**：本文档由早期 Agent 编写，包含未经证实的推断或已过期状态，**不得作为当前事实依据**；当前经真实 UI 点击与代码实测核实的基线请以 [../evidence/2026-11-05/final.md](../evidence/2026-11-05/final.md) 与 [../../HANDOFF.md](../../HANDOFF.md) 为准。
+>
 > **画布验收状态：真出图 4 家（WaveSpeed、OpenWorks、魔搭国内站、魔搭国际站 AI）；Together=契约对齐未出图；Fal/Civitai/Replicate 等欠费接线。** OpenWorks/魔搭 LoRA 只写「已发送」不写「已生效」。
 
 > **OpenWorks（2026-11-03 画布再认）：** 同次点跑真出图——配方原文+底模/种子/步数/CFG/负向+三枚真 LoRA，图落保存节点，历史 hist_1793693239642_fo6ux；只写「已发送」不写「已生效」。证据 /workspace/canvas/temp/e2e/openworks-fe-gen-2026-11-03/。此前 10-17 hist_1792223105137_bhlop 仍算已出图。

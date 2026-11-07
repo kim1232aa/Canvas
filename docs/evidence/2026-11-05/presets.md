@@ -3,7 +3,7 @@
 **报告日期**: 2026-11-05  
 **执行角色**: preset3 (Mission M2: PRESET3 workflow presets audit and correction image and video)  
 **分支**: `feat/preset3-workflow-presets-audit-and-corre`  
-**代码目录**: `/root/github/ComfyUI Web Studio/.tower/worktrees/wt-2`  
+**代码目录**: `.tower/worktrees/wt-2`  
 **归档证据产物目录**: `docs/evidence/2026-11-05/presets/`  
 - 结构化机器可读结果: `docs/evidence/2026-11-05/presets/presets-e2e-results.json`  
 - 上游请求与脱敏日志: `docs/evidence/2026-11-05/presets/requests-preset3-2026-11-05.jsonl`  
@@ -180,7 +180,7 @@
 
 ## 六、编译与全量测试验证
 
-在当前独立工作区 `/root/github/ComfyUI Web Studio/.tower/worktrees/wt-2` 执行核心工程命令：
+在当前独立工作区 `.tower/worktrees/wt-2` 执行核心工程命令：
 
 1. **类型检查**:  
    ```bash
