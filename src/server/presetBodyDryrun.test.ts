@@ -6,6 +6,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as api from '../services/api';
 import { WORKFLOW_PRESETS } from '../constants/presets';
+import { PRESET_RECIPE_PROMPTS } from '../constants/presetRecipePrompts';
 import { executeWorkflow } from '../utils/graphEngine';
 import { buildFalVideoRequest } from './falVideoContract';
 import { extractFalInputProperties, inlineFalItemRefs } from './falImageContract';
@@ -80,6 +81,8 @@ describe('std i2v presets → outgoing upstream body (dry run, no network)', () 
       guide_scale: 3.5,
       guidance_scale_2: 4,
       frames_per_second: 16,
+      enable_safety_checker: false,
+      enable_output_safety_checker: false,
       loras: [{ path: FAL_I2V_LORA, scale: 1 }],
     });
     expect(payload).not.toHaveProperty('_canvas');
@@ -170,13 +173,17 @@ describe('std t2v presets → outgoing upstream body (dry run, no network)', () 
     const c = await canvasRequest('std-fal-t2v');
     expect(c.body.image_url).toBeUndefined();
     expect(c.body.model).toBe('fal-ai/wan/v2.2-a14b/text-to-video/lora');
+    expect(c.body.prompt).toContain('Banostasis concept');
     const doc = json('fal-wan-i2v-lora.openapi.json');
     const payload = buildFalVideoRequest(c.body.model, c.body, inlineFalItemRefs(extractFalInputProperties(doc)!, doc)).payload;
     expect(payload).toMatchObject({
+      prompt: PRESET_RECIPE_PROMPTS['std-fal-t2v'].prompt,
       resolution: '480p',
       aspect_ratio: '16:9',
       num_frames: 81,
       frames_per_second: 16,
+      enable_safety_checker: false,
+      enable_output_safety_checker: false,
       loras: [{ path: FAL_T2V_LORA, scale: 1 }],
     });
     expect(payload).not.toHaveProperty('image_url');
@@ -269,6 +276,7 @@ describe('std t2v presets → outgoing upstream body (dry run, no network)', () 
     const gen = calls.find((x) => x.url === 'https://api.wavespeed.ai/api/v3/wavespeed-ai/wan-2.2/t2v-480p-lora')!;
     const body = JSON.parse(String(gen.init!.body));
     expect(body).toMatchObject({
+      prompt: PRESET_RECIPE_PROMPTS['std-wavespeed-t2v'].prompt,
       size: '832*480',
       duration: 5,
       seed: 42,
@@ -282,6 +290,8 @@ describe('std t2v presets → outgoing upstream body (dry run, no network)', () 
     expect(c.body.image_url).toBeUndefined();
     const built = buildCivitaiVideoInput(c.body, json('civitai-videogen-schemas.json'));
     expect(built.payload).toMatchObject({
+      prompt: PRESET_RECIPE_PROMPTS['std-civitai-t2v'].prompt,
+      negativePrompt: PRESET_RECIPE_PROMPTS['std-civitai-t2v'].negative,
       fps: 24,
       cfgScale: 3,
       width: 832,
@@ -371,5 +381,57 @@ describe('std-fal-t2i dry-run (Fal Krea 2 Turbo LoRA image_size forwarding via n
     expect(modifiedParams.extraParams?.custom_parameters).toMatchObject({ image_size: 'landscape_4_3' });
     const modifiedFinalPayload = applyCustomParameters({ prompt: modifiedParams.prompt }, modifiedParams.extraParams?.custom_parameters).payload as any;
     expect(modifiedFinalPayload.image_size).toBe('landscape_4_3');
+  });
+});
+
+describe('std-nanogpt-t2i dry-run (NanoGPT moss-image live supported_parameters mapping, no duplicate WH)', () => {
+  const mossEndpoint = {
+    supported_parameters: {
+      output_format: ['jpeg', 'png', 'webp'],
+      image_size: { min_width: 512, max_width: 2048, multiple_of: 16, default: 'square_hd' },
+      num_inference_steps: { min: 1, max: 100, default: 50 },
+      guidance_scale: { min: 0, max: 10, default: 3 },
+      enable_prompt_expansion: { default: true },
+      negative_prompt: true,
+      seed: true,
+      resolutions: ['1024x1024', '512x512', '1536x1024', '1024x1536', '1920x1072', '2048x2048'],
+    },
+    capabilities: { image_to_image: false },
+  };
+
+  it('executes std-nanogpt-t2i out of the box with documented prompt and builds clean moss-image payload', async () => {
+    const p = WORKFLOW_PRESETS.find((x) => x.id === 'std-nanogpt-t2i')!;
+    let captured: any;
+    globalThis.fetch = vi.fn(async (url: any, init?: any) => {
+      const u = String(url);
+      if (!captured && init?.method === 'POST' && init?.body && u.includes('/nanogpt/generate')) {
+        captured = JSON.parse(String(init.body));
+      }
+      return new Response(JSON.stringify({ error: 'dry run: not sent' }), { status: 418 });
+    }) as any;
+
+    await executeWorkflow(p.nodes as any, p.connections as any, () => {}, undefined, 'std-nanogpt-t2i-samp').catch(() => undefined);
+    expect(captured).toBeDefined();
+    expect(captured.prompt).toContain('A wide view of a refrigerator beside a kitchen counter with a fruit bowl.');
+    expect(captured.resolution).toBeUndefined();
+    expect(captured.width).toBe(1024);
+    expect(captured.height).toBe(1024);
+
+    const { buildNanoImagePayload } = await import('../schemas/nanoImageApi');
+    const built = buildNanoImagePayload(captured, mossEndpoint);
+    expect(built.payload).toEqual({
+      model: 'moss-image',
+      prompt: PRESET_RECIPE_PROMPTS['std-nanogpt-t2i'].prompt,
+      resolution: '1024x1024',
+      seed: 42,
+      num_inference_steps: 50,
+      guidance_scale: 3,
+      n: 1,
+    });
+    expect(built.payload).not.toHaveProperty('steps');
+    expect(built.payload).not.toHaveProperty('cfg');
+    expect(built.payload).not.toHaveProperty('width');
+    expect(built.payload).not.toHaveProperty('height');
+    expect(built.capabilityNotes).toEqual([]);
   });
 });

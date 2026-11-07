@@ -53,5 +53,31 @@ export const PRESET_RECIPE_PROMPTS: Record<string, RecipePrompt> = {
   "std-wavespeed-i2v": {
     "prompt": "lexy_vox, gentle head turn, warm smile, natural movement",
     "source": "https://huggingface.co/dustin2050/lexy-vox-i2v-lora-training-wan2.2"
+  },
+  // Cseti HF model card widget[0].text verbatim (includes trigger word `Banostasis concept` and recommended transition structure).
+  "std-fal-t2v": {
+    "prompt": "Banostasis concept, a cinematic sequence of quick scene transitions of musical instruments dissolving into fragments of sound waves, which then condense into glowing orbs of light, the sequence of changes includes the transitions between a concert hall, a crowded subway tunnel, and an open desert plain, shot with rapid lens push-ins and kaleidoscopic lighting shifts, stylized in synesthetic neon abstract art.",
+    "source": "https://huggingface.co/Cseti/wan2.2-14B-Kinestasis_concept-lora-v1"
+  },
+  // Dustin2050 HF model card Wavespeed API Quick Start verbatim prompt (includes trigger word `lexy_vox`).
+  "std-wavespeed-t2v": {
+    "prompt": "lexy_vox, close-up portrait, warm smile, natural daylight, sharp focus",
+    "source": "https://huggingface.co/dustin2050/lexy-vox-t2v-lora-training-wan2.2"
+  },
+  // Civitai Wan 2.2 T2V LoRA 2247725@2530788 images[0].meta.prompt / negativePrompt verbatim.
+  "std-civitai-t2v": {
+    "prompt": "(PBRSty1e, 3d animation), caucasian woman, shiny skin, realistic style. . bride, white wedding dres, hair: Black hair, joy with clear indications of ecstasy, long shot",
+    "negative": "色调艳丽，过曝，静态，细节模糊不清，字幕，风格，作品，画作，画面，静止，整体发灰，最差质量，低质量，JPEG压缩残留，丑陋的，残缺的，多余的手指，画得不好的手部，画得不好的脸部，畸形的，毁容的，形态畸形的肢体，手指融合，静止不动的画面，杂乱的背景，三条腿，背景人很多，倒着走，裸露，(child),(teen),(youth)",
+    "source": "https://civitai.com/api/v1/model-versions/2530788"
+  },
+  // OpenMOSS MOSS-Image-Base HF model card Quick Start verbatim prompt (matches seed=42, steps=50, cfg=3.0, 1024x1024).
+  "std-nanogpt-t2i": {
+    "prompt": "A wide view of a refrigerator beside a kitchen counter with a fruit bowl. A small sticky note on the refrigerator door is handwritten in Chinese:\n\"记得买牛奶和鸡蛋！\n牛奶两盒，鸡蛋一打。\n顺便带一袋面包。\"",
+    "source": "https://huggingface.co/OpenMOSS-Team/MOSS-Image-Base"
+  },
+  // Civitai official Krea v2 orchestration recipe (krea.md) verbatim prompt.
+  "std-civitai-t2i": {
+    "prompt": "A photorealistic portrait of a woman with flowers in her hair, golden hour lighting",
+    "source": "https://developer.civitai.com/orchestration/recipes/krea.md"
   }
 };

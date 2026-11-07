@@ -499,7 +499,7 @@ const I2V_SPECS: I2vSpec[] = [
     fps: 16,
     seed: 24231881,
     cfg: 3.5,
-    recipeExtra: { guidance_scale_2: 4 },
+    recipeExtra: { guidance_scale_2: 4, enable_safety_checker: false, enable_output_safety_checker: false },
     description: 'Fal.ai 官方 Wan 2.2 A14B 图生视频 LoRA 端点。默认挂载 Ostris Orbit Shot 高噪权重（匹配 Fal 默认 transformer=high；seed: 24231881 为固定复现示例种子，非作者配方指定；cfg: 3.5 取自官方 guidance_scale 默认值，guidance_scale_2 设为官方默认值 4；强度 1 取自 Fal OpenAPI 默认值；widget 为 orbit 180，触发词为 orbit 360）。',
     loras: [{ name: 'https://huggingface.co/ostris/wan22_i2v_14b_orbit_shot_lora/resolve/main/wan22_14b_i2v_orbit_high_noise.safetensors', strength: 1, source: 'https://huggingface.co/ostris/wan22_i2v_14b_orbit_shot_lora' }],
     schemaProperties: [
@@ -593,6 +593,7 @@ const T2V_SPECS: T2vSpec[] = [
     aspect_ratio: '16:9',
     fps: 16,
     cfg: 3.5,
+    recipeExtra: { enable_safety_checker: false, enable_output_safety_checker: false },
     description: 'Fal.ai 官方 Wan 2.2 A14B 文生视频 LoRA 端点。默认挂载 Cseti Kinestasis 高噪权重（匹配 Fal 默认 transformer=high；推荐触发词: Banostasis concept）。',
     loras: [{ name: 'https://huggingface.co/Cseti/wan2.2-14B-Kinestasis_concept-lora-v1/resolve/main/246839-wan22_14B-high-banostasis_concept-e459.safetensors', strength: 1, source: 'https://huggingface.co/Cseti/wan2.2-14B-Kinestasis_concept-lora-v1' }],
     schemaProperties: [
@@ -683,7 +684,8 @@ function buildStandardT2v(spec: T2vSpec): WorkflowPreset {
   if (spec.size !== undefined) vidValues.size = spec.size;
   const t2vLoras = spec.loras ?? [];
   const loraNodeIds = t2vLoras.map((_, i) => `${prefix}-lora${i === 0 ? '' : `-${i + 1}`}`);
-  if (spec.schemaProperties.includes('negative_prompt')) vidValues.negative_prompt = PRESET_RECIPE_PROMPTS[id]?.negative ?? '';
+  const supportsNegT2v = spec.schemaProperties.includes('negative_prompt') || spec.schemaProperties.includes('negativePrompt');
+  if (supportsNegT2v) vidValues.negative_prompt = PRESET_RECIPE_PROMPTS[id]?.negative ?? '';
   if (spec.duration !== undefined) vidValues.duration = spec.duration;
   if (spec.resolution !== undefined) vidValues.resolution = spec.resolution;
   if (spec.aspect_ratio !== undefined) vidValues.aspect_ratio = spec.aspect_ratio;
@@ -754,7 +756,7 @@ function buildStandardT2v(spec: T2vSpec): WorkflowPreset {
         width: 480,
         height: 480,
         prompt: PRESET_RECIPE_PROMPTS[id]?.prompt ?? '',
-        negativePrompt: '',
+        negativePrompt: (supportsNegT2v && PRESET_RECIPE_PROMPTS[id]?.negative) || '',
         params: frameParams,
         status: 'idle',
         imageUrl: '',
@@ -981,11 +983,10 @@ const STD_SPECS: StdSpec[] = [
     omit: ['sampler', 'scheduler', 'denoise'],
   },
   // NanoGPT live endpoint: moss-image (MOSS Image by OpenMOSS, verified live 2026-11-06).
-  // Parameters: steps (1-100, default 50), guidance_scale (0-10, default 3), negative_prompt, seed, resolution.
+  // Parameters: num_inference_steps (1-100, default 50), guidance_scale (0-10, default 3), negative_prompt, seed, resolution (mapped from EmptyLatentImage 1024x1024).
   { provider: 'nanogpt', ckpt: 'moss-image', hasLora: false, hasNegative: true,
     steps: 50, cfg: 3, seed: 42,
     omit: ['sampler', 'scheduler', 'denoise'],
-    checkpointExtra: { resolution: '1024x1024' },
   },
   // Fal live endpoint: fal-ai/krea-2/turbo/lora (Krea 2 Turbo LoRA, verified live 2026-11-06).
   // Live OpenAPI parameters: prompt (required), image_size (enum: square_hd | ...), seed, loras (maxItems 3, path and scale). No aspect_ratio.

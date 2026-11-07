@@ -144,7 +144,7 @@ describe('standard workflow presets (23 T2I + 5 T2V + 6 I2V)', () => {
       expect(vid.values.targetProvider).toBe(p.provider);
       expect(vid.values.require_reference_image).toBe(false);
       expect(typeof vid.values.model).toBe('string');
-      expect(vid.values.prompt).toBe('');
+      expect(vid.values.prompt).toBe(PRESET_RECIPE_PROMPTS[p.id]?.prompt ?? '');
     }
   });
 
@@ -238,7 +238,7 @@ describe('standard workflow presets (23 T2I + 5 T2V + 6 I2V)', () => {
   });
 
   it('every preset recipe prompt cites a real recipe page URL (no hist_/doc/official-example/family sources)', () => {
-    const RECIPE_PAGE = /^https:\/\/(civitai\.(com|red)\/images\/\d+|tensor\.art\/images\/\d+|huggingface\.co\/[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+)$/;
+    const RECIPE_PAGE = /^https:\/\/(civitai\.(com|red)\/images\/\d+|civitai\.com\/api\/v1\/model-versions\/\d+|developer\.civitai\.com\/orchestration\/recipes\/[a-z0-9._-]+\.md|tensor\.art\/images\/\d+|huggingface\.co\/[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+)$/;
     for (const [id, r] of Object.entries(PRESET_RECIPE_PROMPTS)) {
       expect(r.source, id).toMatch(RECIPE_PAGE);
       expect(r.source, id).not.toMatch(/hist_|docs\/|family|example/i);
@@ -825,10 +825,10 @@ describe('standard workflow presets (23 T2I + 5 T2V + 6 I2V)', () => {
     }
   });
 
-  it('NanoGPT moss-image sets steps 50, cfg 3, seed 42, resolution 1024x1024 on checkpoint', () => {
+  it('NanoGPT moss-image sets steps 50, cfg 3, seed 42, and 1024x1024 on EmptyLatentImage without duplicate checkpoint resolution', () => {
     const p = preset('std-nanogpt-t2i');
     expect(loader(p.id)!.values.ckpt_name).toBe('moss-image');
-    expect(loader(p.id)!.values.resolution).toBe('1024x1024');
+    expect(loader(p.id)!.values.resolution).toBeUndefined();
     const lat = p.nodes.find(n => n.type === 'EmptyLatentImage')!;
     expect(lat.values.width).toBe(1024);
     expect(lat.values.height).toBe(1024);
@@ -874,5 +874,17 @@ describe('standard workflow presets (23 T2I + 5 T2V + 6 I2V)', () => {
     expect(custom.image_size).toBe('square_hd');
     expect(custom._canvas?.schemaProperties).toContain('image_size');
     expect(custom._canvas?.schemaProperties).not.toContain('aspect_ratio');
+  });
+
+  it('std-fal-t2v and std-fal-i2v: seed visible permissive NSFW safety switches (false) in custom_parameters', () => {
+    for (const id of ['std-fal-t2v', 'std-fal-i2v']) {
+      const p = preset(id);
+      const vid = p.nodes.find(n => n.type === 'AIVideoNode')!;
+      const custom = JSON.parse(String(vid.values.custom_parameters || '{}'));
+      expect(custom.enable_safety_checker).toBe(false);
+      expect(custom.enable_output_safety_checker).toBe(false);
+      expect(custom._canvas?.schemaProperties).toContain('enable_safety_checker');
+      expect(custom._canvas?.schemaProperties).toContain('enable_output_safety_checker');
+    }
   });
 });
