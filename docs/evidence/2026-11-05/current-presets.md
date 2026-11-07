@@ -73,9 +73,9 @@
 | `std-tensorart-t2i` | OpenWorks (`tensorart`) | `photoreal_studio_z_image` | 3 个 OpenWorks 数字 ID @ 1.0 | 已核实 (OpenWorks API) | 已核实 (官方端点) | 预设展示 | 未验证 (未运行) |
 | `std-gemini-t2i` | Google Gemini | `gemini-3.1-flash-image` | 无 | 已核实 (Google SDK) | 已核实 (官方模型) | 预设展示 | 未验证 (未运行) |
 | `std-agnes-t2i` | Agnes | `agnes-image-2.5-flash` | 无 | 已核实 (Agnes wiki) | 已核实 (官方模型) | 预设展示 | 未验证 (未运行) |
-| `std-sensenova-t2i` | SenseNova | `sensenova-6.8-flash-lite` | 无 | **未外部核实** (基于既有代码声明) | 官方内建 | 预设展示 | 未验证 (未运行) |
-| `std-mage-t2i` | Mage | `flux-schnell` | 无 | 待用户在模型中心选择 | 官方内建 | 预设展示 | 未验证 (未运行) |
-| `std-venice-t2i` | Venice | `""` (**待选**) | 无 | 待用户在模型中心选择 | 官方内建 | **诚实待选** (需先选模) | 未验证 (待选) |
+| `std-sensenova-t2i` | SenseNova | `sensenova-u1.5-lite` | 无 | **未外部核实** (代码声明配置) | 官方内建 | 预设展示 | 未验证 (未运行) |
+| `std-mage-t2i` | Mage | `mango-v3` | 无 | 已核实 (`docs.mage.space`) | 已核实 (官方端点) | 预设展示 | 未验证 (未运行) |
+| `std-venice-t2i` | Venice | `venice-sd35` | 无 | 已核实 (Venice 目录) | 已核实 (官方端点) | 预设展示 | 未验证 (未运行) |
 | `std-novita-t2i` | Novita | `""` (**待选**) | `""` @ 0.8 (**待选**) | 待用户在模型中心选择 | 保持完整LoRA拓扑 | **诚实待选** (需先选模) | 未验证 (待选) |
 | `std-replicate-t2i` | Replicate | `""` (**待选**) | `""` @ 1.0 (**待选**) | 待用户在模型中心选择 | 保持完整LoRA拓扑 | **诚实待选** (需先选模) | 未验证 (待选) |
 | `std-runware-t2i` | Runware | `""` (**待选**) | `""` @ 0.8 (**待选**) | 待用户在模型中心选择 | 保持完整LoRA拓扑 | **诚实待选** (需先选模) | 未验证 (待选) |
@@ -333,5 +333,5 @@ HEAD 200 752166    https://huggingface.co/dustin2050/lexy-vox-i2v-lora-training-
 在当前工作树 `wt-28` 上依次执行生产构建、TypeScript 类型检查与全量 Vitest 测试：
 1. **`npm run build`**: **Exit code 0**
 2. **`npx tsc --noEmit`**: **Exit code 0**（0 errors）
-3. **`npx vitest run --maxWorkers=2 --exclude '.tower/**' --exclude '**/node_modules/**' --exclude '**/dist/**'`**: **262 个测试文件全部通过，2058 个测试用例全绿，0 failures，耗时 121.5s，Exit code 0**。
+3. **`npx vitest run --maxWorkers=2 --exclude '.tower/**' --exclude '**/node_modules/**' --exclude '**/dist/**'`**: **262 个测试文件全部通过，2060 个测试用例全绿，0 failures，耗时 128.76s，Exit code 0**。
 4. **工作区状态**: 提交后 `git status --porcelain` 为空。
