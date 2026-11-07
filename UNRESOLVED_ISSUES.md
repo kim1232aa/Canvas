@@ -1,8 +1,8 @@
 # 项目已知与待复测问题跟踪表 (UNRESOLVED_ISSUES.md)
 
-> ⚠️ **基准说明（2026-11-07 M25 终结审计）**：
-> 本文档记录 2026-11-07 经真实 Chrome CDP 自动化 UI 回归测试（见 [docs/evidence/2026-11-05/final.md](docs/evidence/2026-11-05/final.md)）实测核验后的全部未决项、待充值复测清单、未验证功能场景与代码架构审计风险。
-> 历史阶段性记录保留于文末作为审计存证，但不得作为当前能力的凭据。
+> ⚠️ **基准说明（2026-11-07 M31 核验，承接 M25 / M29 / M30）**：
+> 本文档记录经真实浏览器 UI 点击核验后的**未决业务项**。开放表只保留真实外部计费 / 凭据阻塞；M29–M31 已关闭的壳节点、徽章、死代码、资源重选与 ModelsLab `NOT_SENT` 漏测已迁入「已关闭」表。
+> 证据索引：[docs/evidence/2026-11-05/final.md](docs/evidence/2026-11-05/final.md)。历史阶段性记录保留于文末作为审计存证，但不得作为当前能力的凭据。
 
 ---
 
@@ -13,7 +13,7 @@
 
 所有问题分类严格采用项目规定的 7 类判定标签：
 - `PASS_GENERATION`: 界面可见真实生成产物。
-- `PASS_BILLING`: 全参数请求抵达上游，上游欠费/额度不足报错原样透传。
+- `PASS_BILLING`: 全参数请求抵达上游，上游欠费/额度不足/订阅或套餐限制报错原样透传。
 - `BLOCKED_AUTH`: 401 鉴权失效。
 - `BLOCKED_CONFIG`: 本地未配置对应 API Key。
 - `NOT_SENT`: 请求未出站（如未接入端点本地明确报错）。
@@ -24,7 +24,7 @@
 
 ## 二、待充值出图复测服务商清单 (Awaiting Funded Generation Re-check)
 
-根据 2026-11-07 全量 UI 回归实测，以下服务商的前后端参数构建、动态 OpenAPI 映射与错误透传链路均已跑通（或本轮复测确认），因上游账户余额耗尽或未开通付费包，暂时评定为 `PASS_BILLING`，待后续账号充值后安排真实出图/视频产物验收：
+根据 2026-11-07 全量 UI 回归与 M31 ModelsLab 出站复测，以下服务商的前后端参数构建、动态 OpenAPI 映射与错误透传链路均已跑通（或本轮复测确认），因上游账户余额耗尽、未开通付费包或要求订阅套餐，暂时评定为 `PASS_BILLING`，待后续账号充值 / 开通套餐后安排真实出图/视频产物验收：
 
 | 序号 | 服务商 (Provider) | 涉及预设与模型 | 上游真实报错 (Verbatim Response) | 判定标签 | 充值与复测说明 |
 |:---:|---|---|---|:---:|---|
@@ -35,7 +35,7 @@
 | 5 | **AIMLAPI** | `alibaba/z-image-turbo-lora` | `HTTP 403: {"error":{"message":"Out of funds","code":403}}` | `PASS_BILLING` | 需在 AIMLAPI 平台充值账户余额 |
 | 6 | **DeepInfra** | `black-forest-labs/FLUX-2-klein-9b` | `HTTP 402: {"error":"Payment required"}` | `PASS_BILLING` | 需在 DeepInfra 控制台添加结算方式充值 |
 | 7 | **Mage.space** | `mango-v3` | `HTTP 402: {"error":"Payment required"}` | `PASS_BILLING` | 需在 Mage 账户开通 API 点数包 |
-| 8 | **ModelsLab** | `modelslab-t2i` (Realtime v6) | `HTTP 400/402: {"status":"error","message":"Out of credits"}` | `PASS_BILLING` | 需在 ModelsLab 平台补充生成点数 |
+| 8 | **ModelsLab** | `std-modelslab-t2i` + 手填底模 `z-image-turbo` | 上游 `POST https://modelslab.com/api/v6/images/text2img` HTTP 200，业务体 `{"status":"error","message":"You need to be subscribed to a plan to continue, buy subscription from https://modelslab.com/pricing"}`；本站 `/api/engine/modelslab/generate` 以 HTTP 502 原样透传 | `PASS_BILLING` | 证据 `final/17-modelslab-loaded.png` / `18-modelslab-run.png`（2026-11-07 M31 真实 UI 点击出站，已消除底模留空 `NOT_SENT`）。需在 ModelsLab 开通付费套餐后再跑真出图 |
 | 9 | **Civitai** | Civitai Wan 2.2 工作流 / Krea 2 Turbo | `HTTP 400: {"code":"insufficientBuzz","message":"User has insufficient buzz to run workflow."}` | `PASS_BILLING` | 需为 Civitai 账号充值 Buzz 积分以执行云端工作流 |
 | 10 | **Novita AI** | `std-novita-t2i` + `realisticVisionV40_v40VAE-inpainting_81543.safetensors` + LoRA `weight_slider_v2_91681` @ 0.8 | `HTTP 403: {"code":403,"reason":"NOT_ENOUGH_BALANCE","message":"insufficient balance","metadata":{}}` | `PASS_BILLING` | 证据 `final/35-novita-lora-attached-and-run.png`；需在 Novita 控制台充值余额后再跑真出图 |
 | 11 | **Venice AI** | `std-venice-t2i` (`venice-sd35`)，非空 CLIP 提示词 | `HTTP 402: {"error":"Insufficient USD or Diem balance to complete request. Visit https://venice.ai/settings/api to add credits."}` | `PASS_BILLING` | 证据 `final/14-venice-run.png`（2026-11-07 填写提示词后复测）；需在 Venice 设置页充值 USD/Diem |
@@ -57,56 +57,45 @@
    - 现状：当前仅验证到 Buzz 余额不足拦截；真实扣费后云端节点执行、WebSocket 进度推送与结果图像拉取仍待验证。
 5. **Venice 默认预设提示词为空（历史 400，本轮已用填写后 402 复测）**:
    - 现状：`std-venice-t2i` 仍不预填配方提示词。2026-11-07 在 CLIP「提示词」填入非空文本后，`final/14-venice-run.png` 为 `402 Insufficient USD or Diem`（`PASS_BILLING`）。空提示词 400 不再作为本轮图像验收标签。
-6. **ModelsLab 标准预设底模留空**:
-   - 现状：`std-modelslab-t2i` 底模为空待选；`final/17-modelslab-loaded.png` / `18-modelslab-run.png` 运行按钮禁用，顶栏「请先选择模型」，`NOT_SENT`。旧「400/402 Out of credits」不是本轮截图所证明的标签。
+
+> ModelsLab 底模留空 `NOT_SENT` 已关闭：M31 在真实 UI 为 `std-modelslab-t2i` 填入 `z-image-turbo` 并点击运行，请求已出站至 `modelslab.com`（见第二节第 8 行与 `final/17` / `18`）。
 
 ---
 
-## 四、代码与架构审计遗留风险 (Code & Architecture Audit Risks)
+## 四、已关闭的代码与 UI 缺陷 (Resolved in M29–M31)
 
-结合 M19~M22 前期专项审计调查结果与 M25 终结代码核查，记录以下已知代码缺陷与审计风险：
+下列项已从开放缺陷表移除。关闭依据为 M29 / M30 合入代码 + M31 真实浏览器点击核验（Headless Chrome 153，视口 2560×1440，本地 `PORT=4329`）。
 
-### 1. [LOW] Civitai 导入预览采样器与调度器文档链接硬编码 (`Finding 20261107-final25-bug-civitai-import-preview-hardcodes-recipes-sdxl-md-source-for`)
-- **文件与行号**: `src/utils/civitaiImportMap.ts:1201, 1214`
-- **问题描述**: 当导入 Civitai SD1.5 或 FLUX 配方时，预览字段表中的 Sampler 与 Scheduler 来源链接硬编码为 `'https://developer.civitai.com/orchestration/recipes/sdxl.md'`，未根据实际 ecosystem 动态指向 `sd1.md` 或 `flux.md`。
-- **影响**: 仅影响导入预览弹窗中的参考文档链接展示，真实出站参数映射已完全准确。
-
-### 2. [HIGH] 存在未被图引擎接入的空壳节点 `ImageUpscaleWithModel` (SHELLUI21 Audit)
-- **文件与行号**: `src/constants/nodes.ts:1093`
-- **问题描述**: 节点定义了 `ImageUpscaleWithModel` 及其控件 `model_name` 和 `scale_by`，但 `src/utils/graphEngine.ts` 中完全没有该节点的执行逻辑或拓扑分发。用户若在画布添加该节点，无法产生任何放大产物。
-
-### 3. [MEDIUM] 参数状态徽章组件被静默注销 (SHELLUI21 Audit)
-- **文件与行号**: `src/components/FieldStatusBadge.tsx:33, 43`
-- **问题描述**: `FieldStatusBadge` 与 `SchemaSendBadge` 当前直接返回 `null`，导致节点与参数面板中部分微观字段的「会发送/不会发送」状态标签无法显示，仅保留了 `SchemaChoiceControls` 中的显式徽章。
-
-### 4. [MEDIUM] `CivitaiLoRABrowserNode` 包含死控件 `search_keyword` (SHELLUI21 Audit)
-- **文件与行号**: `src/constants/nodes.ts:628`
-- **问题描述**: 节点声明了 `search_keyword` 字段，用户输入后写入 `node.values.search_keyword`，但后续无论是 Civitai 弹窗还是图引擎均未读取该字段，属于无效控件。
-
-### 5. [MEDIUM] 孤立未挂载组件 `ControlPanel.tsx` (SHELLUI21 Audit)
-- **文件与行号**: `src/components/ControlPanel.tsx`
-- **问题描述**: 该组件有 44 行实现，但在全仓 `src/` 中没有任何父级组件引入或挂载，属于早期遗留死代码。
-
-### 6. [MEDIUM] Together AI 官方参数指南与 OpenAPI 契约分歧 (D4 Audit)
-- **官方来源**: `https://docs.together.ai/docs/inference/images/parameters.md` vs `https://docs.together.ai/reference/post-images-generations.md`
-- **核查结论**: 官方 OpenAPI 仍声明了 `image_loras[{path, scale}]` 结构，但官方一手参数指南（`parameters.md`）明文标注：「`image_loras: No longer available. The FLUX models that accepted LoRA adapters have been deprecated, and the current FLUX.2 models reject this parameter.`」。`src/server/schemaProviders.ts:39` 通过 `officialUnavailableParams` 正确阻断该失效字段，不向用户虚假承诺 LoRA 已在服务端生效。
-
-### 7. [HIGH] 单测套件包含约 108 个源码字符串静态匹配用例 (SHELLTEST22 Audit)
-- **审计发现**: 全仓 264 个测试文件中，有 42 个文件包含约 108 个使用 `fs.readFileSync` 检索未执行源码文本的用例（如 `expect(source).toContain(...)`）。这些用例在生产代码崩溃或返回 `null` 时依然保持全绿，属于伪绿测试。已在项目规则中明确「单元测试通过绝不等于实际问题解决」。
-
-### 8. [LOW] `rejectSchemaEnum` / `rejectUnsupported` 真实清理状态与单测桩残留 (D5 Audit)
-- **文件与行号**:
-  - `server.ts`: **0 处**（原 `server.ts:1080` 的 `rejectSchemaEnum` 空壳及 `rejectUnsupported` 已在 M18 彻底删除）。
-  - `src/server/routes/videoGenerateRoute.ts`: **0 处**（`VideoGenerateRouteDeps` 接口与路由实现中均已移除）。
-  - `src/server/schemaProviderVideoStatus.test.ts:32`: **1 处测试桩残留**（`stubVideoDeps()` 中仍保留了未被生产代码读取的 `rejectSchemaEnum: () => false` 属性）。
-- **影响**: 生产代码已 100% 移除所有 `rejectSchemaEnum` 与 `rejectUnsupported` 本地枚举/字段预拦截门禁，仅测试辅助桩对象存在一处无害多余字段。
+| 原优先级 | 项 | 关闭轮次 | 现状与证据 |
+|---|---|---|---|
+| HIGH | 空壳节点 `ImageUpscaleWithModel` | M29 | `NODE_DEFINITIONS` 不再注册该类型；`src/constants/nodes.test.ts` 锁定 `not.toHaveProperty('ImageUpscaleWithModel')`。工具坞无此入口。 |
+| MEDIUM | `FieldStatusBadge` / `SchemaSendBadge` 被静默注销 | M29 + M31 | 组件按状态渲染 `data-testid="field-status-badge-*"` / `schema-send-badge-*`，不再 `return null`。M31 在参数总控台实测：Venice 5 枚 `schema-send-badge-will_send`（「会发送」），Sogni 8 枚。ModelsLab 不在 schema-scoped 徽章供应商集合内，检查器对该家不绘制 send badge 属预期。 |
+| MEDIUM | `CivitaiLoRABrowserNode.search_keyword` 死控件 | M29 + M31 | `App.tsx` 将 `values.search_keyword` 传入 `CivitaiModal.initialQuery`；弹窗打开时 `setQuery(initialQuery)`。M31 在节点填入 `z-image turbo` 后点「打开 Civitai LoRA 浏览器」，`[data-testid=lora-hub-search-input]` 预填为 `z-image turbo`。 |
+| MEDIUM | 孤立组件 `ControlPanel.tsx` / `SchemaReuseNote` | M29 | `src/components/ControlPanel.tsx` 已删除；全仓 `src/` 无 `SchemaReuseNote` 引用。 |
+| LOW | `ModernToolDock` 重置文案仍写旧模型 | M29 + M31 | 清空菜单重置项副文案为「恢复 Z-Image Turbo 标准默认工作流」。M31 实机点击清空菜单可见该句。 |
+| — | `replaceSelectedResource` 残留 Civitai 身份键 | M30 | `src/utils/resourceSelection.ts` 始终剥离 `STALE_CIVITAI_IDENTITY_KEYS`。 |
+| — | Runware / ModelsLab 静默丢弃无法映射的 LoRA | M30 | `modelsLabImageContract.ts` / `runwareImageContract.ts` 在无法映射时写入 `unmappedLoras[{item, reason}]`，不静默吞掉。 |
+| — | `FalDriver.mapFalServerLoras` 丢掉 schema 声明的 LoRA 项属性 | M30 | `mapFalServerLoras(loras, loraItemProps?)` 保留 schema 声明的 item 属性。 |
+| LOW | Civitai 导入预览 Sampler/Scheduler 来源硬编码 `sdxl.md` | M30 | 预览 `fields.sampler` / `fields.scheduler` 的 `source` 改为 `civitaiSamplerSource(ecosystem)`（`src/utils/civitaiImportMap.ts`）。sdxl / sd15 指向 `recipes/sdxl.md`；其余生态指向 `schemas/imageGen.yaml`。clipSkip 对 sd15 指向 `recipes/sd1.md`、FLUX 指向 `recipes/flux1.md`。 |
+| — | `std-modelslab-t2i` 底模留空导致 `NOT_SENT` 漏测 | M31 | 真实 UI 填入 `z-image-turbo` 后点击运行；`POST /api/engine/modelslab/generate` 出站至 `https://modelslab.com/api/v6/images/text2img`。截图 `final/17-modelslab-loaded.png`（底模 `[当前] z-image-turbo`，自定义模型 `z-image-turbo`，运行按钮可用，无「请先选择模型」）与 `final/18-modelslab-run.png`（顶栏 / 采样器 / toast 原样 `You need to be subscribed to a plan to continue...`）。标签 `PASS_BILLING`。 |
 
 ---
 
-## 五、未验证历史记录归档 (Unverified Historical Records)
+## 五、已知工程说明（非开放业务缺陷）
+
+下列不是「待修接线故障」，也不进入第二节待充值表：
+
+1. **Together `image_loras` 官方指南与 OpenAPI 分歧**：官方参数指南写明 FLUX.2 已拒绝该字段；`src/server/schemaProviders.ts` 通过 `officialUnavailableParams` 阻断，不向用户虚假承诺 LoRA 已生效。
+2. **单测套件含源码字符串静态匹配用例**：单元测试全绿不能替代 UI 点击验收（用户原文：「最后：单元测试通过绝不等于实际问题解决」）。
+3. **`rejectSchemaEnum` 测试桩残留**：生产 `server.ts` 与 `videoGenerateRoute.ts` 为 0 处；仅 `src/server/schemaProviderVideoStatus.test.ts:32` 的 `stubVideoDeps()` 仍带未被生产代码读取的属性。
+
+---
+
+## 六、未验证历史记录归档 (Unverified Historical Records)
 
 > 下文为早期 Agent 留存的历史未决项快照，部分已被后续修复取代，仅供追溯：
 
 - **历史 fix10.1 / fix11.2 / fix12**: 针对画布防抖、视口遮挡与执行日志的修复，已随 M15/M17/M18 重构被全新架构取代。
 - **历史 ModelScope 国际站 LoRA**: 2026-11-03 记录出图历史 `hist_1793706156544_8obck`。
 - **历史 WaveSpeed 出图**: 2026-10-17 记录出图历史 `hist_1792224305224_meynb`。
+- **历史 ModelsLab 底模留空 `NOT_SENT`（M25 `final/17`/`18`）**: 已被 2026-11-07 M31 出站复测取代，见第二节第 8 行。

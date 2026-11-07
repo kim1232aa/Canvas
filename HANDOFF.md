@@ -2,7 +2,11 @@
 
 ## 2026-11-07 当前终态总览（唯一已验证基线，优先于下文全部历史记录）
 
-- **最新代码基准**：`main` @ `4ab0948`（已完全合并 M1~M12, M14~M18, M23, M24, M26, M27, M28 全量修复；经 M25 终结回归验证）。
+- **最新代码基准**：`main` @ `38a83f2`（已完全合并 M1~M12, M14~M18, M23, M24, M26~M30；M31 为文档/证据核验，不改应用源码）。
+- **M29–M31 收口（2026-11-07）**：
+  - M29：恢复 `FieldStatusBadge` / `SchemaSendBadge`、删除 `ImageUpscaleWithModel` 空壳与 `ControlPanel.tsx` 死代码、`CivitaiLoRABrowserNode.search_keyword` 写入 `CivitaiModal.initialQuery`、ModernToolDock 重置文案改为「恢复 Z-Image Turbo 标准默认工作流」。
+  - M30：`replaceSelectedResource` 始终剥离 `STALE_CIVITAI_IDENTITY_KEYS`；Runware / ModelsLab 暴露 `unmappedLoras`；`FalDriver.mapFalServerLoras` 保留 schema 声明的 LoRA 项属性；Civitai 导入预览 Sampler/Scheduler 来源改为 `civitaiSamplerSource(ecosystem)`。
+  - M31：真实 UI 为 `std-modelslab-t2i` 填入 `z-image-turbo` 并点击运行；`POST /api/engine/modelslab/generate` 出站 `https://modelslab.com/api/v6/images/text2img`；上游订阅套餐限制原文透传（`PASS_BILLING`）。证据 `final/17-modelslab-loaded.png` / `18-modelslab-run.png`。同步核验徽章、Dock 文案、`search_keyword` 预填。
 - **全量工程质量指标**：
   - `npm run build`：Exit code 0，成功生成 `hosting/server.generated.ts` 与 `dist/` 前端资产包。
   - `npx tsc --noEmit`：Exit code 0，0 错误，严格类型检查通过。
@@ -13,7 +17,7 @@
   - 产出 **41 张独立唯一 MD5 全量高保真截图**（归档于 `docs/evidence/2026-11-05/final/*.png`，0 重复哈希，经 `ReadMediaFile` + `region` 逐张眼核，0 处 UI 逻辑矛盾与遮挡），并联合引用 `docs/evidence/2026-11-05/recipe-shapes/01..07.png`（现代 Civitai 配方 `#148140013` / `#148135866` / `#148004351`）与 `docs/evidence/2026-11-05/current-presets/01..16.png`（现代内置预设实测截图）。
   - 脱敏后的代表性出站请求/响应摘录与上游任务 ID 归档于 [docs/evidence/2026-11-05/final.md](docs/evidence/2026-11-05/final.md) 第八节（不依赖已删除的 `temp/logs/requests-m25.jsonl`）。
   - D6：当前 tracked `*.md` / `docs/**` 敏感模式 grep 为 0 行。更早 git 提交历史仍含脱敏前字符串；彻底清除需用户授权的 history rewrite（`git filter-repo` / force-push），本任务未执行。
-  - D9 待充值复测：Fal / HF / WaveSpeed / Sogni / AIMLAPI / DeepInfra / Mage / Civitai / Novita（`final/35` 403 `NOT_ENOUGH_BALANCE`）/ Venice（`final/14` 402 Insufficient USD or Diem）。ModelsLab 本轮底模留空为 `NOT_SENT`。
+  - D9 待充值复测：Fal / HF / WaveSpeed / Sogni / AIMLAPI / DeepInfra / Mage / Civitai / Novita（`final/35` 403 `NOT_ENOUGH_BALANCE`）/ Venice（`final/14` 402 Insufficient USD or Diem）/ ModelsLab（M31 `final/17`/`18`：填入 `z-image-turbo` 后出站，订阅套餐限制原文透传，`PASS_BILLING`）。
   - 详尽终结报告：[docs/evidence/2026-11-05/final.md](docs/evidence/2026-11-05/final.md)。
 - **核心工程准则（落地闭环）**：
   1. **唯一验收标准**：「UI实际点击通过并有产物，你之前绕过前端直接请求api的是违规，是绕过，你请求api通过，和我前端点击通过根本不是一回事」。
