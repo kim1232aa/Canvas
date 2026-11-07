@@ -88,32 +88,17 @@ describe('std i2v presets → outgoing upstream body (dry run, no network)', () 
     expect(payload).not.toHaveProperty('_canvas');
     expect(payload).not.toHaveProperty('duration');
   });
-  it('Replicate placeholder requires user model selection (wan-video/wan2.1-with-lora supported on demand)', async () => {
-    const raw = WORKFLOW_PRESETS.find((x) => x.id === 'std-replicate-i2v')!;
-    const vid = raw.nodes.find((n) => n.type === 'AIVideoNode')!;
-    expect(vid.values.model).toBe('');
-    const c = await canvasRequest('std-replicate-i2v', 'wan-video/wan2.1-with-lora');
-    const props = extractReplicateInputProperties(json('replicate-version-c48fa8ec.json'))!;
-    const liveModel = extractReplicateModelRoute(json('replicate-model-wan2.1-with-lora.json'));
-    expect(liveModel).toEqual({ isOfficial: false, latestVersionId: 'c48fa8ec65b13143cb552ab98ea17984eab9d70e9fe99479117de40a2a7f9ed0' });
-    const built = buildReplicatePredictionRequest(c.body, 'https://api.replicate.com/v1', props, undefined, liveModel);
-    log.replicate = { canvasRoute: c.url, upstream: built.endpoint, body: built.payload };
-    expect(built.endpoint).toBe('https://api.replicate.com/v1/predictions');
-    expect((built.payload as any).version).toBe('c48fa8ec65b13143cb552ab98ea17984eab9d70e9fe99479117de40a2a7f9ed0');
-    expect((built.payload as any).input).toMatchObject({ resolution: '480p', aspect_ratio: '16:9', frames: 81, seed: 24231881, sample_guide_scale: 4 });
-  });
-  it('MuAPI placeholder requires user model selection (wan2.1-lora-i2v supported on demand)', async () => {
-    const raw = WORKFLOW_PRESETS.find((x) => x.id === 'std-muapi-i2v')!;
-    const vid = raw.nodes.find((n) => n.type === 'AIVideoNode')!;
-    expect(vid.values.model).toBe('');
-    const c = await canvasRequest('std-muapi-i2v', 'wan2.1-lora-i2v');
-    const calls = await schemaProviderUpstream('muapi', c.body, (url) => url.endsWith('/openapi.json') ? muapiDoc
-      : url.endsWith('/api/v1/models') ? { models: [{ name: 'wan2.1-lora-i2v', endpoint_url: 'wan2.1-lora-i2v', group_of: 'video' }] } : { request_id: 'dry' });
-    const gen = calls.find((x) => x.url.endsWith('/api/v1/wan2.1-lora-i2v'))!;
-    const body = JSON.parse(String(gen.init!.body));
-    log.muapi = { canvasRoute: c.url, upstream: gen.url, body };
-    expect(body).toMatchObject({ resolution: '480p', aspect_ratio: '16:9', duration: 5 });
-    for (const k of ['seed', 'cfg', 'guidance_scale', 'fps', 'size']) expect(body).not.toHaveProperty(k);
+  it('Replicate and MuAPI i2v placeholders were removed (M41) and are not restored as empty cards', () => {
+    // Both shipped an empty model. The cards that remain (fal, wavespeed, civitai) each carry a real model,
+    // and their outgoing bodies are asserted by the tests above and below. The old assertions described the
+    // deleted cards' own parameters, so they are not re-aimed at a different card.
+    for (const id of ['std-replicate-i2v', 'std-muapi-i2v']) {
+      expect(WORKFLOW_PRESETS.some((x) => x.id === id), id).toBe(false);
+    }
+    for (const id of ['std-fal-i2v', 'std-wavespeed-i2v', 'std-civitai-i2v']) {
+      const vid = WORKFLOW_PRESETS.find((x) => x.id === id)!.nodes.find((n) => n.type === 'AIVideoNode')!;
+      expect(String(vid.values.model).length, id).toBeGreaterThan(0);
+    }
   });
   it('WaveSpeed Wan 2.2 wavespeed-ai/wan-2.2/i2v-480p-lora', async () => {
     const c = await canvasRequest('std-wavespeed-i2v');
@@ -190,59 +175,15 @@ describe('std t2v presets → outgoing upstream body (dry run, no network)', () 
     expect(payload).not.toHaveProperty('_canvas');
   });
 
-  it('Replicate T2V placeholder requires user model selection (wan-video/wan2.1-with-lora supported on demand)', async () => {
-    const raw = WORKFLOW_PRESETS.find((x) => x.id === 'std-replicate-t2v')!;
-    const vid = raw.nodes.find((n) => n.type === 'AIVideoNode')!;
-    expect(vid.values.model).toBe('');
-    const c = await canvasRequest('std-replicate-t2v', 'wan-video/wan2.1-with-lora');
-    expect(c.body.image_url).toBeUndefined();
-    const props = extractReplicateInputProperties(json('replicate-version-c48fa8ec.json'))!;
-    const liveModel = extractReplicateModelRoute(json('replicate-model-wan2.1-with-lora.json'));
-    const built = buildReplicatePredictionRequest(c.body, 'https://api.replicate.com/v1', props, undefined, liveModel);
-    expect((built.payload as any).input).toMatchObject({ resolution: '480p', aspect_ratio: '16:9', frames: 81 });
-    expect((built.payload as any).input).not.toHaveProperty('image');
+  it('Replicate and MuAPI t2v placeholders were removed (M41) and are not restored as empty cards', () => {
+    for (const id of ['std-replicate-t2v', 'std-muapi-t2v']) {
+      expect(WORKFLOW_PRESETS.some((x) => x.id === id), id).toBe(false);
+    }
+    for (const id of ['std-fal-t2v', 'std-wavespeed-t2v', 'std-civitai-t2v']) {
+      const vid = WORKFLOW_PRESETS.find((x) => x.id === id)!.nodes.find((n) => n.type === 'AIVideoNode')!;
+      expect(String(vid.values.model).length, id).toBeGreaterThan(0);
+    }
   });
-
-  it('MuAPI T2V placeholder requires user model selection (wan2.1-lora-t2v supported on demand)', async () => {
-    const raw = WORKFLOW_PRESETS.find((x) => x.id === 'std-muapi-t2v')!;
-    const vid = raw.nodes.find((n) => n.type === 'AIVideoNode')!;
-    expect(vid.values.model).toBe('');
-    const c = await canvasRequest('std-muapi-t2v', 'wan2.1-lora-t2v');
-    expect(c.body.image_url).toBeUndefined();
-    const t2vDoc = {
-      ...muapiDoc,
-      paths: {
-        ...muapiDoc.paths,
-        '/api/v1/wan2.1-lora-t2v': {
-          post: {
-            requestBody: { content: { 'application/json': { schema: { $ref: '#/components/schemas/WanLoRAT2VRequest' } } } },
-          },
-        },
-      },
-      components: {
-        schemas: {
-          ...muapiDoc.components.schemas,
-          WanLoRAT2VRequest: {
-            type: 'object',
-            properties: {
-              prompt: { type: 'string' },
-              lora_list: { type: 'array', items: { $ref: '#/components/schemas/LoraItem' } },
-              aspect_ratio: { type: 'string', enum: ['16:9', '9:16'] },
-              resolution: { type: 'string', enum: ['480p', '720p'] },
-              duration: { type: 'integer', enum: [5, 10] },
-            },
-          },
-        },
-      },
-    };
-    const calls = await schemaProviderUpstream('muapi', c.body, (url) => url.endsWith('/openapi.json') ? t2vDoc
-      : url.endsWith('/api/v1/models') ? { models: [{ name: 'wan2.1-lora-t2v', endpoint_url: 'wan2.1-lora-t2v', group_of: 'video' }] } : { request_id: 'dry-t2v' });
-    const gen = calls.find((x) => x.url.endsWith('/api/v1/wan2.1-lora-t2v'))!;
-    const body = JSON.parse(String(gen.init!.body));
-    expect(body).toMatchObject({ resolution: '480p', aspect_ratio: '16:9', duration: 5 });
-    expect(body).not.toHaveProperty('image_url');
-  });
-
   it('WaveSpeed Wan 2.2 wavespeed-ai/wan-2.2/t2v-480p-lora', async () => {
     const c = await canvasRequest('std-wavespeed-t2v');
     expect(c.body.image_url).toBeUndefined();
@@ -304,19 +245,21 @@ describe('std t2v presets → outgoing upstream body (dry run, no network)', () 
   });
 });
 
-describe('std-modelslab-t2i dry-run (SDXL cleaned, placeholder model)', () => {
-  it('std-modelslab-t2i builds canvas request with native resolution, placeholder ckpt and lora', () => {
+describe('std-modelslab-t2i dry-run (z-image-turbo, lora_model required but no real id opened)', () => {
+  it('ships the official model and size, omits undeclared sampler fields, and blocks the run instead of inventing a LoRA', () => {
     const p = WORKFLOW_PRESETS.find((x) => x.id === 'std-modelslab-t2i')!;
     const lat = p.nodes.find((n) => n.type === 'EmptyLatentImage')!;
     expect(lat.values.width).toBe(1024);
     expect(lat.values.height).toBe(1024);
     const ks = p.nodes.find((n) => n.type === 'KSampler')!;
-    expect(ks.values.scheduler).toBe('UniPCMultistepScheduler');
+    expect(ks.values.steps).toBeUndefined();
+    expect(ks.values.cfg).toBeUndefined();
+    expect(ks.values.scheduler).toBeUndefined();
     const ckpt = p.nodes.find((n) => n.type === 'CheckpointLoaderSimple')!;
-    expect(ckpt.values.ckpt_name).toBe('');
-    const l = p.nodes.find((n) => n.type === 'LoRALoader')!;
-    expect(l.values.lora_name).toBe('');
-    expect(l.values.strength_model).toBe(0.8);
+    expect(ckpt.values.ckpt_name).toBe('z-image-turbo');
+    expect(p.nodes.some((n) => n.type === 'LoRALoader')).toBe(false);
+    expect(p.pendingRecipe).toMatch(/lora_model/);
+    expect(ckpt.values.execution_blocked_reason).toBe(p.pendingRecipe);
   });
 });
 
