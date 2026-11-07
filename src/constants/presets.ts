@@ -8,6 +8,10 @@ export const STD_PROMPT_PLACEHOLDER = '填入配方/用户指定';
 
 type StdSpec = {
   provider: string;
+  /** Human-facing aesthetic category shown on the preset card (not the mechanical 标准文生图 bucket). */
+  category: string;
+  /** Card title suffix after the provider label. */
+  title: string;
   /** Checkpoint targetProvider; defaults to provider. tensorart → openworks (OpenWorks-only). */
   targetProvider?: string;
   ckpt: string;
@@ -304,7 +308,7 @@ function buildStandardT2i(spec: StdSpec): WorkflowPreset {
   const spatialFrames: SpatialFrame[] = [
     {
       id: `${prefix}-frame`,
-      title: `${cardLabel} · 标准文生图`,
+      title: `${cardLabel} · ${spec.title}`,
       pos: { x: 260, y: 160 },
       width: 480,
       height: 480,
@@ -354,12 +358,12 @@ function buildStandardT2i(spec: StdSpec): WorkflowPreset {
 
   return {
     id,
-    name: `${cardLabel} · 标准文生图`,
-    category: '标准文生图',
+    name: `${cardLabel} · ${spec.title}`,
+    category: spec.category,
     provider,
     previewImage: '',
-    tags: [provider, '标准', '文生图'],
-    description: spec.description || '该供应商标准文生图流程；提示词请填配方或用户指定。',
+    tags: [provider, spec.category, '文生图'],
+    description: spec.description || `${spec.category}：${spec.title}。提示词来自已打开的配方页，可直接改。`,
     loraNames: loraList.map(l => l.name).filter(Boolean),
     ...(spec.pendingRecipe ? { pendingRecipe: spec.pendingRecipe } : {}),
     nodes,
@@ -376,12 +380,12 @@ function buildGeminiT2i(): WorkflowPreset {
   const id = 'std-gemini-t2i';
   return {
     id,
-    name: `${friendly(provider)} · 标准文生图`,
-    category: '标准文生图',
+    name: `${friendly(provider)} · 静物文字摄影`,
+    category: '静物与文字',
     provider,
     previewImage: '',
-    tags: [provider, '标准', '文生图'],
-    description: '该供应商标准文生图流程；提示词请填配方或用户指定。',
+    tags: [provider, '静物与文字', '文生图'],
+    description: 'Gemini 官方模型 gemini-3.1-flash-image。提示词取自已打开的 MOSS-Image 模型卡静物文字示例，可直接改。',
     loraNames: [],
     nodes: [
       {
@@ -425,7 +429,7 @@ function buildGeminiT2i(): WorkflowPreset {
     spatialFrames: [
       {
         id: 'std-gemini-frame',
-        title: 'Gemini · 标准文生图',
+        title: 'Gemini · 静物文字摄影',
         pos: { x: 260, y: 160 },
         width: 480,
         height: 480,
@@ -540,43 +544,9 @@ const I2V_SPECS: I2vSpec[] = [
     ],
     source: 'https://developer.civitai.com/orchestration/recipes/wan.md',
   },
-  // Novita: 彻底清除 SVD-XT。暂无官方核实且驱动支持的纯净 Wan 2.2 LoRA 端点，模型留空待选，保留完整图生视频拓扑。
-  {
-    provider: 'novita',
-    model: '',
-    description: 'Novita 暂无经官方核实且支持 LoRA 的 Wan 2.2 端点，模型已留空待选；保留参考图与视频节点完整拓扑。',
-    schemaProperties: [
-      'model_name', 'image_file', 'frames_num', 'frames_per_second', 'seed',
-      'image_file_resize_mode', 'steps', 'motion_bucket_id', 'cond_aug',
-    ],
-    source: 'https://github.com/novitalabs/python-sdk',
-  },
-  // MuAPI: 官方未提供核实的现代 Wan 2.2 LoRA 端点，模型留空待选；保留完整视频拓扑与 LoRA 挂载连线。
-  {
-    provider: 'muapi',
-    model: '',
-    duration: 5,
-    resolution: '480p',
-    aspect_ratio: '16:9',
-    description: 'MuAPI 暂无经官方核实的现代 Wan 2.2 端点，模型已留空待选；保留完整视频拓扑与 LoRA 挂载连线。',
-    loras: [{ name: '', strength: 1, source: '待用户在模型中心指定' }],
-    schemaProperties: ['prompt', 'image_url', 'lora_list', 'aspect_ratio', 'resolution', 'quality', 'duration'],
-    source: 'https://api.muapi.ai/openapi.json',
-  },
-  // Replicate: 官方未提供核实的现代 Wan 2.2 LoRA 端点，模型留空待选；保留完整视频拓扑与 LoRA 挂载连线。
-  {
-    provider: 'replicate',
-    model: '',
-    num_frames: 81,
-    resolution: '480p',
-    aspect_ratio: '16:9',
-    seed: 24231881,
-    cfg: 4,
-    description: 'Replicate 暂无经官方核实的现代 Wan 2.2 端点，模型已留空待选；保留完整视频拓扑与 LoRA 挂载连线。',
-    loras: [{ name: '', strength: 1, source: '待用户在模型中心指定' }],
-    schemaProperties: ['prompt', 'negative_prompt', 'image', 'aspect_ratio', 'frames', 'resolution', 'lora_url', 'lora_strength_model', 'lora_strength_clip', 'sample_steps', 'sample_guide_scale', 'sample_shift', 'seed'],
-    source: 'https://replicate.com',
-  },
+  // Novita / MuAPI / Replicate I2V cards removed (M41): no verified current endpoint that also
+  // carries a real LoRA. Shipping model:'' or lora_name:'' produced a canvas that cannot run.
+  // Novita docs index (2026-11-07) lists Wan 2.6, not a verified Wan 2.2 LoRA route.
 ];
 
 export type T2vSpec = I2vSpec;
@@ -634,30 +604,7 @@ const T2V_SPECS: T2vSpec[] = [
     ],
     source: 'https://developer.civitai.com/orchestration/recipes/wan.md',
   },
-  // MuAPI: 官方未提供核实的现代 Wan 2.2 LoRA 端点，模型留空待选；保留完整视频拓扑与 LoRA 挂载连线。
-  {
-    provider: 'muapi',
-    model: '',
-    duration: 5,
-    resolution: '480p',
-    aspect_ratio: '16:9',
-    description: 'MuAPI 暂无经官方核实的现代 Wan 2.2 端点，模型已留空待选；保留完整视频拓扑与 LoRA 挂载连线。',
-    loras: [{ name: '', strength: 1, source: '待用户在模型中心指定' }],
-    schemaProperties: ['prompt', 'lora_list', 'aspect_ratio', 'resolution', 'quality', 'duration'],
-    source: 'https://api.muapi.ai/openapi.json',
-  },
-  // Replicate: 官方未提供核实的现代 Wan 2.2 LoRA 端点，模型留空待选；保留完整视频拓扑与 LoRA 挂载连线。
-  {
-    provider: 'replicate',
-    model: '',
-    num_frames: 81,
-    resolution: '480p',
-    aspect_ratio: '16:9',
-    description: 'Replicate 暂无经官方核实的现代 Wan 2.2 端点，模型已留空待选；保留完整视频拓扑与 LoRA 挂载连线。',
-    loras: [{ name: '', strength: 1, source: '待用户在模型中心指定' }],
-    schemaProperties: ['prompt', 'negative_prompt', 'aspect_ratio', 'frames', 'resolution', 'lora_url', 'lora_strength_model', 'lora_strength_clip', 'sample_steps', 'sample_guide_scale', 'sample_shift', 'seed'],
-    source: 'https://replicate.com',
-  },
+  // MuAPI / Replicate T2V cards removed (M41): no verified current endpoint plus a real LoRA id.
 ];
 
 function buildStandardT2v(spec: T2vSpec): WorkflowPreset {
@@ -709,12 +656,12 @@ function buildStandardT2v(spec: T2vSpec): WorkflowPreset {
 
   const preset: WorkflowPreset = {
     id,
-    name: `${friendly(provider)} · 标准文生视频`,
-    category: '标准文生视频',
+    name: `${friendly(provider)} · 电影镜头文生视频`,
+    category: '电影镜头',
     provider,
     previewImage: '',
-    tags: [provider, '标准', '文生视频'],
-    description: spec.description ?? '该供应商标准文生视频流程；提示词请填配方或用户指定。',
+    tags: [provider, '电影镜头', '文生视频'],
+    description: spec.description ?? '电影镜头文生视频。提示词来自已打开的配方页。',
     loraNames: t2vLoras.map(l => l.name),
     nodes: [
       {
@@ -751,7 +698,7 @@ function buildStandardT2v(spec: T2vSpec): WorkflowPreset {
     spatialFrames: [
       {
         id: `${prefix}-frame`,
-        title: `${friendly(provider)} · 标准文生视频`,
+        title: `${friendly(provider)} · 电影镜头文生视频`,
         pos: { x: 260, y: 160 },
         width: 480,
         height: 480,
@@ -841,12 +788,12 @@ function buildStandardI2v(spec: I2vSpec): WorkflowPreset {
 
   const preset: WorkflowPreset = {
     id,
-    name: `${friendly(provider)} · 标准图生视频`,
-    category: '标准图生视频',
+    name: `${friendly(provider)} · 图生视频运镜`,
+    category: '运镜与动作',
     provider,
     previewImage: '',
-    tags: [provider, '标准', '图生视频'],
-    description: spec.description ?? '该供应商标准图生视频流程；提示词请填配方或用户指定。须先在「加载参考图」放入图片。',
+    tags: [provider, '运镜与动作', '图生视频'],
+    description: spec.description ?? '图生视频运镜。提示词来自已打开的配方页。须先在「加载参考图」放入图片。',
     loraNames: i2vLoras.map(l => l.name),
     nodes: [
       {
@@ -901,7 +848,7 @@ function buildStandardI2v(spec: I2vSpec): WorkflowPreset {
     spatialFrames: [
       {
         id: `${prefix}-frame`,
-        title: `${friendly(provider)} · 标准图生视频`,
+        title: `${friendly(provider)} · 图生视频运镜`,
         pos: { x: 260, y: 160 },
         width: 480,
         height: 480,
@@ -947,7 +894,7 @@ function buildStandardI2v(spec: I2vSpec): WorkflowPreset {
 const STD_SPECS: StdSpec[] = [
   // Hugging Face always POSTs https://router.huggingface.co/hf-inference/models/${model} (no fal-ai / Space detour).
   // Recipe https://civitai.red/images/113739497 (verbatim: seed/steps/cfg/size/LoRA@0.9; sampler 'Undefined' → none).
-  { provider: 'huggingface', ckpt: 'renderartist/Technically-Color-Z-Image-Turbo', hasLora: true, hasNegative: false,
+  { provider: 'huggingface', category: '纪实闪光', title: '闪光纪实人群', ckpt: 'renderartist/Technically-Color-Z-Image-Turbo', hasLora: true, hasNegative: false,
     loras: [{ name: 'renderartist/Technically-Color-Z-Image-Turbo', strength: 0.9, source: 'https://civitai.red/images/113739497' }],
     seed: 1840591390, steps: 12, cfg: 1, width: 1216, height: 832,
     omit: ['sampler', 'scheduler', 'denoise'],
@@ -956,6 +903,8 @@ const STD_SPECS: StdSpec[] = [
   // Recipe https://civitai.red/images/113739497 (verbatim): Technically Color Z LoRA@0.9 via the 魔搭 mirror hf/renderartist-Technically-Color-Z-Image-Turbo (sha256 = civitai).
   {
     provider: 'modelscope',
+    category: '纪实闪光',
+    title: '闪光纪实人群',
     ckpt: 'Tongyi-MAI/Z-Image-Turbo',
     hasLora: true,
     loras: [{ name: 'hf/renderartist-Technically-Color-Z-Image-Turbo', strength: 0.9, source: 'https://civitai.red/images/113739497' }],
@@ -969,6 +918,8 @@ const STD_SPECS: StdSpec[] = [
   // Intl accepted temp/e2e/modelscope-intl-lora-2026-11-02: Lcars LoRA@1 (CN rejects this id).
   {
     provider: 'modelscope_ai',
+    category: '科幻室内',
+    title: '星际舰桥室内',
     ckpt: 'Tongyi-MAI/Z-Image-Turbo',
     hasLora: true,
     loras: [{ name: 'LcarsPicturesDatabase/ST-TNG-Rooms-Z-Image-Turbo-v1', strength: 1, source: 'temp/e2e/modelscope-intl-lora-2026-11-02' }],
@@ -980,14 +931,14 @@ const STD_SPECS: StdSpec[] = [
   },
   // NanoGPT live endpoint: moss-image (MOSS Image by OpenMOSS, verified live 2026-11-06).
   // Parameters: num_inference_steps (1-100, default 50), guidance_scale (0-10, default 3), negative_prompt, seed, resolution (mapped from EmptyLatentImage 1024x1024).
-  { provider: 'nanogpt', ckpt: 'moss-image', hasLora: false, hasNegative: true,
+  { provider: 'nanogpt', category: '静物与文字', title: '冰箱便签静物', ckpt: 'moss-image', hasLora: false, hasNegative: true,
     steps: 50, cfg: 3, seed: 42,
     omit: ['sampler', 'scheduler', 'denoise'],
   },
   // Fal live endpoint: fal-ai/krea-2/turbo/lora (Krea 2 Turbo LoRA, verified live 2026-11-06).
   // Live OpenAPI parameters: prompt (required), image_size (enum: square_hd | ...), seed, loras (maxItems 3, path and scale). No aspect_ratio.
   // Recipe https://huggingface.co/krea/Krea-2-LoRA-retroanime (Krea 2 Turbo Retro Anime LoRA by Krea, public resolve URL 200 OK).
-  { provider: 'fal', ckpt: 'fal-ai/krea-2/turbo/lora', hasLora: true, hasNegative: false, seed: 64107730,
+  { provider: 'fal', category: '复古动漫', title: '复古动漫对打', ckpt: 'fal-ai/krea-2/turbo/lora', hasLora: true, hasNegative: false, seed: 64107730,
     omit: ['steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'width', 'height'],
     checkpointExtra: {
       custom_parameters: JSON.stringify({
@@ -1000,6 +951,8 @@ const STD_SPECS: StdSpec[] = [
   // Accepted run hist_1792223105137_bhlop: sampler/scheduler「该端点不支持，未发送」.
   {
     provider: 'tensorart',
+    category: '写真人像',
+    title: '溪边白裙人像',
     targetProvider: 'openworks',
     ckpt: 'photoreal_studio_z_image',
     hasLora: true,
@@ -1025,6 +978,8 @@ const STD_SPECS: StdSpec[] = [
   // Recipe https://huggingface.co/krea/Krea-2-LoRA-retroanime (Krea 2 Turbo LoRA, public resolve URL 200 OK).
   {
     provider: 'muapi',
+    category: '复古动漫',
+    title: '复古动漫对打',
     ckpt: 'krea-v2-turbo-lora',
     hasNegative: false,
     omit: ['steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'width', 'height'],
@@ -1043,7 +998,7 @@ const STD_SPECS: StdSpec[] = [
   // WaveSpeed live endpoint: wavespeed-ai/krea-v2/turbo-lora (verified 2026-10-15 / 2026-11-06).
   // Live Schema: prompt, aspect_ratio, resolution (1k/2k), seed, loras[{path, scale}].
   // Recipe https://huggingface.co/krea/Krea-2-LoRA-retroanime (Krea 2 Turbo LoRA, public resolve URL 200 OK).
-  { provider: 'wavespeed', ckpt: 'wavespeed-ai/krea-v2/turbo-lora', hasLora: true, hasNegative: false,
+  { provider: 'wavespeed', category: '复古动漫', title: '复古动漫对打', ckpt: 'wavespeed-ai/krea-v2/turbo-lora', hasLora: true, hasNegative: false,
     omit: ['steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'width', 'height'],
     checkpointExtra: { aspect_ratio: '1:1', resolution: '1k' },
     loras: [{ name: 'https://huggingface.co/krea/Krea-2-LoRA-retroanime/resolve/main/retroanime.safetensors', strength: 1, source: 'https://huggingface.co/krea/Krea-2-LoRA-retroanime' }],
@@ -1052,93 +1007,70 @@ const STD_SPECS: StdSpec[] = [
   // Leave the model empty so the user chooses an exact current endpoint from Krea's live catalog; do not alias across providers.
   // Live https://api.krea.ai/openapi.json (2026-11-04) POST /generate/image/krea/krea-2/medium-turbo: required prompt+aspect_ratio+resolution(enum 1K);
   // seed optional; no width/height/negative/steps/cfg/sampler. LoRA = styles (no accepted-run style id → none).
-  { provider: 'krea', ckpt: 'image/krea/krea-2/medium-turbo', hasLora: false, hasNegative: false,
+  { provider: 'krea', category: '复古动漫', title: '复古动漫对打', ckpt: 'image/krea/krea-2/medium-turbo', hasLora: false, hasNegative: false,
     omit: ['steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'width', 'height'],
     checkpointExtra: { aspect_ratio: '1:1', resolution: '1K' } },
-  { provider: 'together', ckpt: 'black-forest-labs/FLUX.2-dev', hasLora: false, steps: 20, cfg: 1, omit: ['sampler', 'scheduler', 'denoise'] },
+  { provider: 'together', category: '静物与文字', title: '冰箱便签静物', ckpt: 'black-forest-labs/FLUX.2-dev', hasLora: false, steps: 20, cfg: 1, omit: ['sampler', 'scheduler', 'denoise'] },
   // docs/evidence/aimlapi-lora-p0-2026-10-15.md + aimlapi.json: steps 1–8, no guidance_scale → omit cfg. No accepted-run LoRA → no LoRA node.
   // Recipe https://civitai.red/images/113739497 (verbatim incl. cfg 1 — sent as-is; upstream decides).
-  { provider: 'aimlapi', ckpt: 'alibaba/z-image-turbo-lora', hasLora: true, hasNegative: false, seed: 1840591390, steps: 12, cfg: 1, width: 1216, height: 832,
+  { provider: 'aimlapi', category: '纪实闪光', title: '闪光纪实人群', ckpt: 'alibaba/z-image-turbo-lora', hasLora: true, hasNegative: false, seed: 1840591390, steps: 12, cfg: 1, width: 1216, height: 832,
     loras: [{ name: 'https://huggingface.co/renderartist/Technically-Color-Z-Image-Turbo/resolve/main/Technically_Color_Z_Image_Turbo_v1_renderartist_2000.safetensors', strength: 0.9, source: 'https://civitai.red/images/113739497' }],
     omit: ['sampler', 'scheduler', 'denoise'] },
-  // Novita: 保持完整文生图 + LoRA 拓扑（底模与 LoRA 留空供用户在模型库自主选用当前有效模型）。
-  // Novita API 官方支持 request.loras[{model_name, strength}]。
-  {
-    provider: 'novita',
-    ckpt: '',
-    hasLora: true,
-    loraMount: { strength: 0.8, source: 'novita-lora-mount' },
-    hasNegative: true,
-    seed: 548949743,
-    steps: 20,
-    cfg: 7,
-    sampler: 'Euler a',
-    width: 1024,
-    height: 1024,
-    omit: ['scheduler', 'denoise'],
-  },
-  // docs/evidence/venice-api-2026-10-15.md:51/54: catalog 200 lists venice-sd35; seed/steps/cfg_scale/size/negative sent; no custom loras.
-  { provider: 'venice', ckpt: 'venice-sd35', hasLora: false, steps: 20, cfg: 7.5, omit: ['sampler', 'scheduler', 'denoise'] },
+  // Novita T2I removed (M41): the card shipped ckpt '' + lora_name ''. docs.novita.ai index (2026-11-07)
+  // has no verified current image model + real LoRA pair. venice-sd35 is SD 3.5, outside the allowed 2026 set.
   // DeepInfra live text-to-image catalog: FLUX-2-klein-9b (verified 2026-11-06).
   // Official OpenAI images path: prompt/model/size/n/response_format (+quality/style).
-  { provider: 'deepinfra', ckpt: 'black-forest-labs/FLUX-2-klein-9b', hasLora: false, hasNegative: false, omit: ['seed', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise'] },
+  { provider: 'deepinfra', category: '静物与文字', title: '冰箱便签静物', ckpt: 'black-forest-labs/FLUX-2-klein-9b', hasLora: false, hasNegative: false, omit: ['seed', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise'] },
   // Sogni hosted-tool selector: live official generate_image.schema.json enum includes krea-2-turbo (verified 2026-11-03, 30 models). Not a Krea API path.
   // Driver maps cfg→guidance; Schema has no steps → omit steps. LoRA via loras+loraStrengths when catalog confirms.
   // Recipe https://civitai.red/images/142361732 (verbatim seed/steps 10/cfg 1/euler/768x1376; Sogni schema has no steps, sent as-is). Single recipe LoRA civitai 3129219 (weight 1) = Sogni catalog krea2-fever-dream-mood.
-  { provider: 'sogni', ckpt: 'krea-2-turbo', hasLora: true, seed: 64107730, steps: 10, cfg: 1, sampler: 'euler', width: 768, height: 1376,
+  { provider: 'sogni', category: '漫画插画', title: '鱼眼赛博漫画', ckpt: 'krea-2-turbo', hasLora: true, seed: 64107730, steps: 10, cfg: 1, sampler: 'euler', width: 768, height: 1376,
     loras: [{ name: 'krea2-fever-dream-mood', strength: 1, source: 'https://civitai.red/images/142361732' }],
     omit: ['scheduler', 'denoise'] },
-  // Replicate: 保持完整文生图 + LoRA 拓扑（底模与 LoRA 留空供用户在模型库自主选用当前有效模型）。
-  // 避免硬编码老旧 FLUX.1，保留完整 CheckpointLoaderSimple -> LoRALoader 连线。
-  {
-    provider: 'replicate',
-    ckpt: '',
-    hasLora: true,
-    loraMount: { strength: 1, source: 'replicate-lora-mount' },
-    hasNegative: false,
-    seed: 2100162238,
-    steps: 28,
-    cfg: 3.5,
-    omit: ['sampler', 'scheduler', 'denoise', 'width', 'height'],
-    checkpointExtra: { aspect_ratio: '1:1' },
-  },
-  // Runware: 保持完整文生图 + LoRA 拓扑（底模与 LoRA 留空供用户自主选择，避免架构不匹配）。
-  // 官方支持 lora: [{ model: string, weight: number }]。
+  // Replicate T2I removed (M41): prunaai/z-image-turbo is a verified current model (replicate.com/prunaai/z-image-turbo)
+  // but no LoRA id was opened for that endpoint. An empty LoRA mount is forbidden.
+  // Runware: official model page https://runware.ai/docs/models/krea-2-turbo (fetched 2026-11-07).
+  // ID krea:krea@2-turbo. Required width+height. steps default 8. lora.weight default 1.
+  // No public LoRA AIR was opened, so the card ships without a LoRA node (schema accepts lora, it is not required).
   {
     provider: 'runware',
-    ckpt: '',
-    hasLora: true,
-    loraMount: { strength: 0.8, source: 'runware-lora-mount' },
+    category: '建筑室内',
+    title: '水塔住宅室内',
+    ckpt: 'krea:krea@2-turbo',
+    hasLora: false,
     hasNegative: false,
-    steps: 25,
-    cfg: 3.5,
-    omit: ['sampler', 'scheduler', 'denoise'],
+    steps: 8,
+    width: 1536,
+    height: 1024,
+    omit: ['cfg', 'sampler', 'scheduler', 'denoise'],
+    description: 'Runware 官方 Krea 2 Turbo（krea:krea@2-turbo）。提示词取自该模型文档示例「Converted Water Tower Living Room」。lora 字段官方支持但未打开到具体 LoRA AIR，故不挂空 LoRA。',
   },
-  // ModelsLab: 暂无经官方核实的现代推荐大模型，底模与 LoRA 留空待选（彻底清理 SDXL 1.0 tamarin-xl-v1）；保留完整 KSampler 与 LoRA 拓扑。
+  // ModelsLab: https://modelslab.com/models/modelslab/z-image-turbo/llms.txt (fetched 2026-11-07).
+  // model_id z-image-turbo; width/height required 512–1488. lora_model is listed required but the example value
+  // is the UI placeholder "Select LoRA models..." — no real LoRA id was opened, so no empty LoRA node.
+  // num_inference_steps is not in that parameter list → omit steps. sampler/scheduler/denoise likewise absent.
   {
     provider: 'modelslab',
-    ckpt: '',
-    hasLora: true,
-    loraMount: { strength: 0.8, source: '待用户在模型中心指定' },
-    hasNegative: true,
-    steps: 20,
-    cfg: 7.5,
+    category: '静物与文字',
+    title: '冰箱便签静物',
+    ckpt: 'z-image-turbo',
+    hasLora: false,
+    hasNegative: false,
     width: 1024,
     height: 1024,
-    scheduler: 'UniPCMultistepScheduler',
-    omit: ['sampler', 'denoise'],
-    description: 'ModelsLab 暂无经官方核实的现代推荐大模型，模型已留空待选；保留完整 KSampler 与 LoRA 挂载连线拓扑。',
+    omit: ['steps', 'cfg', 'sampler', 'scheduler', 'denoise'],
+    description: 'ModelsLab 官方模型页 z-image-turbo。提示词取自已打开的 MOSS-Image 模型卡。lora_model 示例值是界面占位符，未打开到真实 LoRA id，故不挂空 LoRA。',
   },
   // providerSchema.ts agnesUnsupported (wiki.agnes-ai.com agnes-image-25-flash): only prompt + size + ratio. Same full
   // topology as Mage (image output → SaveImage); compact CLIP CONDITIONING→SaveImage was a wrong-type edge.
-  { provider: 'agnes', ckpt: 'agnes-image-2.5-flash', hasLora: false, hasNegative: false,
+  { provider: 'agnes', category: '静物与文字', title: '冰箱便签静物', ckpt: 'agnes-image-2.5-flash', hasLora: false, hasNegative: false,
     omit: ['seed', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'width', 'height'],
     checkpointExtra: { size: '2K', aspect_ratio: '1:1' } },
   // docs.mage.space/api/models/mango OpenAPI (fetched 2026-11-03): prompt + seed + model_id + aspect_ratio + resolution (+ refs); no LoRA/steps/cfg/sampler; no width/height pixels.
   // Board keeps sampler+VAE topology (雁: no compact) but omits EmptyLatent pixel size — size lives on checkpoint aspect_ratio/resolution.
-  { provider: 'mage', ckpt: 'mango-v3', hasLora: false, hasNegative: false, omit: ['steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'width', 'height'], checkpointExtra: { aspect_ratio: '4:5', resolution: '2K' } },
+  { provider: 'mage', category: '写真人像', title: '溪边白裙人像', ckpt: 'mango-v3', hasLora: false, hasNegative: false, omit: ['steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'width', 'height'], checkpointExtra: { aspect_ratio: '4:5', resolution: '2K' } },
   // providerSchema.ts sensenova-u1.5-lite: width/height/size only.
-  { provider: 'sensenova', ckpt: 'sensenova-u1.5-lite', hasLora: false, hasNegative: false, omit: ['seed', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise'] },
+  { provider: 'sensenova', category: '静物与文字', title: '冰箱便签静物', ckpt: 'sensenova-u1.5-lite', hasLora: false, hasNegative: false, omit: ['seed', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise'] },
   // Civitai official orchestration recipe https://civitai.red/images/148140013 (Krea 2 Turbo + Masterpiece LoRA):
   // Public GET https://civitai.com/api/v1/images?imageId=148140013 (2026-11-07) lists baseModel Krea 2 Turbo,
   // 832x1248, modelVersionIds 3072332 (checkpoint) + 3077110 (LoRA). buildCivitaiImageRequest resolves
@@ -1146,6 +1078,8 @@ const STD_SPECS: StdSpec[] = [
   // The public listing returns meta:null, so prompt/negative stay the documented krea.md recipe text — not invented.
   {
     provider: 'civitai',
+    category: '黄金时刻人像',
+    title: '花饰人像',
     ckpt: 'urn:air:krea2:diffusionmodel:civitai:2732656@3072332',
     hasLora: true,
     loras: [

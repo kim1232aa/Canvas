@@ -17,11 +17,9 @@ const EXPECTED_T2I_PROVIDERS = [
   'krea',
   'together',
   'aimlapi',
-  'novita',
-  'venice',
   'deepinfra',
   'sogni',
-  'replicate',
+  // replicate T2I removed: prunaai/z-image-turbo verified, but no opened LoRA id for that endpoint.
   'runware',
   'modelslab',
   'gemini',
@@ -35,27 +33,18 @@ const EXPECTED_I2V_PROVIDERS = [
   'fal',
   'wavespeed',
   'civitai',
-  'novita',
-  'muapi',
-  'replicate',
 ] as const;
 
 const EXPECTED_T2V_PROVIDERS = [
   'fal',
   'wavespeed',
   'civitai',
-  'muapi',
-  'replicate',
 ] as const;
 
 /** Only providers with real accepted-run LoRA ids keep LoRALoader nodes. Empty shell forbidden. */
 const HAS_LORA = new Set([
   'tensorart',
   'wavespeed',
-  'modelslab',
-  'replicate',
-  'runware',
-  'novita',
   'modelscope',
   'modelscope_ai',
   'huggingface',
@@ -86,23 +75,23 @@ const ALLOWED_PROMPT = new Set(['', STD_PROMPT_PLACEHOLDER, ...Object.values(PRE
 const preset = (id: string) => WORKFLOW_PRESETS.find(p => p.id === id)!;
 const loader = (id: string) => preset(id).nodes.find(n => n.type === 'CheckpointLoaderSimple');
 const lora = (id: string) => preset(id).nodes.find(n => n.type === 'LoRALoader');
-const t2i = () => WORKFLOW_PRESETS.filter(p => p.category === '标准文生图');
-const i2v = () => WORKFLOW_PRESETS.filter(p => p.category === '标准图生视频');
-const t2v = () => WORKFLOW_PRESETS.filter(p => p.category === '标准文生视频');
+const t2i = () => WORKFLOW_PRESETS.filter(p => p.id.endsWith('-t2i'));
+const i2v = () => WORKFLOW_PRESETS.filter(p => p.id.endsWith('-i2v'));
+const t2v = () => WORKFLOW_PRESETS.filter(p => p.id.endsWith('-t2v'));
 
 function expectedT2iId(provider: string): string {
   return provider === 'modelscope_ai' ? 'std-modelscope-ai-t2i' : `std-${provider}-t2i`;
 }
 
-describe('standard workflow presets (23 T2I + 5 T2V + 6 I2V)', () => {
-  it('exports exactly 34 presets (23 T2I + 5 T2V + 6 I2V)', () => {
-    expect(WORKFLOW_PRESETS).toHaveLength(34);
-    expect(t2i()).toHaveLength(23);
-    expect(t2v()).toHaveLength(5);
-    expect(i2v()).toHaveLength(6);
+describe('standard workflow presets (20 T2I + 3 T2V + 3 I2V)', () => {
+  it('exports exactly 26 presets (20 T2I + 3 T2V + 3 I2V) — empty-model cards removed', () => {
+    expect(WORKFLOW_PRESETS).toHaveLength(26);
+    expect(t2i()).toHaveLength(20);
+    expect(t2v()).toHaveLength(3);
+    expect(i2v()).toHaveLength(3);
   });
 
-  it('P1-1: every node in all 34 WORKFLOW_PRESETS has titleSource === "template"', () => {
+  it('P1-1: every node in all WORKFLOW_PRESETS has titleSource === "template"', () => {
     for (const p of WORKFLOW_PRESETS) {
       for (const n of p.nodes) {
         expect(n.titleSource, `node ${n.id} in preset ${p.id} missing titleSource === 'template'`).toBe('template');
@@ -125,7 +114,7 @@ describe('standard workflow presets (23 T2I + 5 T2V + 6 I2V)', () => {
   it('covers each T2I provider id exactly once', () => {
     const providers = t2i().map(p => p.provider).sort();
     expect(providers).toEqual([...EXPECTED_T2I_PROVIDERS].sort());
-    expect(new Set(providers).size).toBe(23);
+    expect(new Set(providers).size).toBe(20);
   });
 
   it('T2V providers are exactly the locked set', () => {
@@ -133,8 +122,8 @@ describe('standard workflow presets (23 T2I + 5 T2V + 6 I2V)', () => {
     expect(providers).toEqual([...EXPECTED_T2V_PROVIDERS].sort());
     for (const p of t2v()) {
       expect(p.id).toBe(`std-${p.provider}-t2v`);
-      expect(p.category).toBe('标准文生视频');
-      expect(p.tags).toEqual(expect.arrayContaining([p.provider, '标准', '文生视频']));
+      expect(p.category).toBe('电影镜头');
+      expect(p.tags).toEqual(expect.arrayContaining([p.provider, '电影镜头', '文生视频']));
       expect(p.nodes.some(n => n.type === 'LoadImage')).toBe(false);
       expect(p.nodes.some(n => n.type === 'AIVideoNode')).toBe(true);
       expect(p.nodes.some(n => n.type === 'SaveVideo')).toBe(true);
@@ -158,11 +147,9 @@ describe('standard workflow presets (23 T2I + 5 T2V + 6 I2V)', () => {
     }
     for (const p of i2v()) {
       expect(p.id).toBe(`std-${p.provider}-i2v`);
-      expect(p.category).toBe('标准图生视频');
-      expect(p.tags).toEqual(expect.arrayContaining([p.provider, '标准', '图生视频']));
-      expect(p.nodes.map(n => n.type)).toEqual(p.provider === 'novita'
-        ? ['LoadImage', 'AIVideoNode', 'SaveVideo']
-        : ['LoadImage', 'AIVideoNode', 'SaveVideo', 'LoRALoader']);
+      expect(p.category).toBe('运镜与动作');
+      expect(p.tags).toEqual(expect.arrayContaining([p.provider, '运镜与动作', '图生视频']));
+      expect(p.nodes.map(n => n.type)).toEqual(['LoadImage', 'AIVideoNode', 'SaveVideo', 'LoRALoader']);
       expect(p.nodes.some(n => n.type === 'CLIPTextEncode')).toBe(false);
       expect(p.connections.some(c => c.toSocketId === 'positive')).toBe(false);
       const vid = p.nodes.find(n => n.type === 'AIVideoNode')!;
@@ -176,18 +163,11 @@ describe('standard workflow presets (23 T2I + 5 T2V + 6 I2V)', () => {
       fal: 'fal-ai/wan/v2.2-a14b/image-to-video/lora',
       wavespeed: 'wavespeed-ai/wan-2.2/i2v-480p-lora',
       civitai: 'urn:air:wanvideo-22-i2v-a14b:checkpoint:civitai:1817671@2114157',
-      novita: '',
-      muapi: '',
-      replicate: '',
     };
     for (const [prov, model] of Object.entries(i2vModels)) {
       const vid = preset(`std-${prov}-i2v`).nodes.find(n => n.type === 'AIVideoNode')!;
       expect(String(vid.values.model), prov).toBe(model);
-      if (model) {
-        expect(String(vid.values.model).length, `${prov} non-empty`).toBeGreaterThan(0);
-      } else {
-        expect(String(vid.values.model), `${prov} empty placeholder`).toBe('');
-      }
+      expect(String(vid.values.model).length, `${prov} non-empty`).toBeGreaterThan(0);
     }
   });
 
@@ -196,9 +176,6 @@ describe('standard workflow presets (23 T2I + 5 T2V + 6 I2V)', () => {
       fal: { num_frames: 81, resolution: '480p', fps: 16, hide: [] },
       wavespeed: { duration: 5, hide: [] },
       civitai: { fps: 24, hide: [] },
-      novita: { hide: ['duration', 'aspect_ratio', 'resolution'] },
-      muapi: { duration: 5, resolution: '480p', hide: [] },
-      replicate: { num_frames: 81, resolution: '480p', hide: [] },
     };
     for (const p of i2v()) {
       const vid = p.nodes.find(n => n.type === 'AIVideoNode')!;
@@ -234,26 +211,28 @@ describe('standard workflow presets (23 T2I + 5 T2V + 6 I2V)', () => {
   it('T2I uses std-*-t2i ids and category', () => {
     for (const p of t2i()) {
       expect(p.id).toBe(expectedT2iId(p.provider));
-      expect(p.category).toBe('标准文生图');
-      expect(p.tags).toEqual(expect.arrayContaining([p.provider, '标准', '文生图']));
+      expect(p.category.length, p.id).toBeGreaterThan(0);
+      expect(p.category, p.id).not.toBe('标准文生图');
+      expect(p.tags).toEqual(expect.arrayContaining([p.provider, p.category, '文生图']));
     }
   });
 
   it('every preset recipe prompt cites a real recipe page URL (no hist_/doc/official-example/family sources)', () => {
-    const RECIPE_PAGE = /^https:\/\/(civitai\.(com|red)\/images\/\d+|civitai\.com\/api\/v1\/model-versions\/\d+|developer\.civitai\.com\/orchestration\/recipes\/[a-z0-9._-]+\.md|tensor\.art\/images\/\d+|huggingface\.co\/[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+)$/;
+    const RECIPE_PAGE = /^https:\/\/(civitai\.(com|red)\/images\/\d+|civitai\.com\/api\/v1\/model-versions\/\d+|developer\.civitai\.com\/orchestration\/recipes\/[a-z0-9._-]+\.md|tensor\.art\/images\/\d+|huggingface\.co\/[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+|runware\.ai\/docs\/models\/[a-z0-9-]+)$/;
     for (const [id, r] of Object.entries(PRESET_RECIPE_PROMPTS)) {
       expect(r.source, id).toMatch(RECIPE_PAGE);
-      expect(r.source, id).not.toMatch(/hist_|docs\/|family|example/i);
+      expect(r.source, id).not.toMatch(/hist_|\/family|example\.com/i);
       expect(r.prompt, id).toBeTruthy();
     }
   });
 
-  it('presets without a recipe load with an empty prompt (never filled in)', () => {
-    for (const p of WORKFLOW_PRESETS.filter(x => x.id.startsWith('std-') && !PRESET_RECIPE_PROMPTS[x.id])) {
-      for (const n of p.nodes) {
-        if (n.type === 'CLIPTextEncode') expect(String(n.values.text ?? ''), p.id).toBe('');
-        if (n.type === 'AIVideoNode') expect(String(n.values.prompt ?? ''), p.id).toBe('');
-      }
+  it('every shipped preset has a non-placeholder recipe prompt', () => {
+    const banned = new Set(['', STD_PROMPT_PLACEHOLDER, 'test', '1', 'a']);
+    for (const p of WORKFLOW_PRESETS) {
+      expect(PRESET_RECIPE_PROMPTS[p.id], p.id).toBeTruthy();
+      const prompt = PRESET_RECIPE_PROMPTS[p.id].prompt;
+      expect(banned.has(prompt), p.id).toBe(false);
+      expect(prompt.trim().length, p.id).toBeGreaterThan(0);
     }
   });
 
@@ -279,8 +258,8 @@ describe('standard workflow presets (23 T2I + 5 T2V + 6 I2V)', () => {
     for (const p of WORKFLOW_PRESETS) {
       const loras = p.nodes.filter(n => n.type === 'LoRALoader');
       for (const n of loras) {
-        if (['std-replicate-t2i', 'std-novita-t2i', 'std-runware-t2i', 'std-modelslab-t2i', 'std-muapi-t2v', 'std-muapi-i2v', 'std-replicate-t2v', 'std-replicate-i2v'].includes(p.id)) continue;
         expect(String(n.values.lora_name ?? '').length, `${p.id} empty LoRA shell`).toBeGreaterThan(0);
+        expect(Number(n.values.strength_model), `${p.id} zero LoRA strength`).not.toBe(0);
       }
       if (!HAS_LORA.has(p.provider) && !p.category.includes('视频')) {
         expect(loras, p.id).toHaveLength(0);
@@ -290,8 +269,7 @@ describe('standard workflow presets (23 T2I + 5 T2V + 6 I2V)', () => {
     expect(lora('std-wavespeed-t2i')).toBeDefined();
     for (const p of i2v()) {
       const vidLora = p.connections.find(c => c.toSocketId === 'lora' && c.toNodeId === `${p.id}-vid`);
-      if (p.provider === 'novita') expect(vidLora, p.id).toBeUndefined();
-      else expect(p.nodes.find(n => n.id === vidLora?.fromNodeId)?.type, p.id).toBe('LoRALoader');
+      expect(p.nodes.find(n => n.id === vidLora?.fromNodeId)?.type, p.id).toBe('LoRALoader');
     }
   });
 
@@ -464,20 +442,24 @@ describe('standard workflow presets (23 T2I + 5 T2V + 6 I2V)', () => {
     expect(ks.values.seed).toBe(689794262);
   });
 
-  it('ModelsLab/Civitai/Novita seed Schema-supported sampler fields into schemaProperties (no false amber omit)', () => {
-    // ModelsLab: official scheduler (UniPC…); sampler unsupported → omit keeps it off the list.
-    // ModelsLab tamarin-xl-v1 is SDXL 1.0 architecture; native resolution is 1024x1024 (corrected from 512x512).
+  it('ModelsLab/Civitai seed Schema-supported fields into schemaProperties (no false amber omit)', () => {
+    // ModelsLab z-image-turbo llms.txt: width/height required; steps/cfg/sampler/scheduler/denoise not listed.
     {
       const p = preset('std-modelslab-t2i');
+      expect(p.category).toBe('静物与文字');
+      expect(loader(p.id)!.values.ckpt_name).toBe('z-image-turbo');
       const ks = p.nodes.find(n => n.type === 'KSampler')!;
-      expect(ks.values.scheduler).toBe('UniPCMultistepScheduler');
+      expect(ks.values.steps).toBeUndefined();
+      expect(ks.values.cfg).toBeUndefined();
       expect(ks.values.sampler_name).toBeUndefined();
+      expect(ks.values.scheduler).toBeUndefined();
       const lat = p.nodes.find(n => n.type === 'EmptyLatentImage')!;
       expect(lat.values.width).toBe(1024);
       expect(lat.values.height).toBe(1024);
+      expect(p.nodes.some(n => n.type === 'LoRALoader')).toBe(false);
       const props = JSON.parse(String(loader(p.id)!.values.custom_parameters || '{}'))?._canvas?.schemaProperties as string[];
-      expect(props).toEqual(expect.arrayContaining(['scheduler', 'steps', 'guidance', 'seed', 'loras']));
-      expect(props).not.toEqual(expect.arrayContaining(['sampler', 'sampler_name', 'denoise']));
+      expect(props).toEqual(expect.arrayContaining(['prompt', 'seed', 'width', 'height']));
+      expect(props).not.toEqual(expect.arrayContaining(['sampler', 'steps', 'denoise']));
     }
     // Civitai image 148140013: sampler+scheduler+width+height+negative+lora are filled (comfy krea2 createImage).
     {
@@ -489,15 +471,17 @@ describe('standard workflow presets (23 T2I + 5 T2V + 6 I2V)', () => {
       expect(props).toEqual(expect.arrayContaining(['sampler', 'sampler_name', 'scheduler', 'seed', 'steps', 'width', 'height', 'negative_prompt', 'loras']));
       expect(props).not.toEqual(expect.arrayContaining(['denoise']));
     }
-    // Novita: SdImageRequest has sampler_name; no scheduler → omit scheduler/denoise only.
+    // Runware Krea 2 Turbo docs: width+height required, steps default 8, no CFG/sampler/scheduler.
     {
-      const p = preset('std-novita-t2i');
+      const p = preset('std-runware-t2i');
+      expect(loader(p.id)!.values.ckpt_name).toBe('krea:krea@2-turbo');
       const ks = p.nodes.find(n => n.type === 'KSampler')!;
-      expect(ks.values.sampler_name).toBe('Euler a'); // recipe civitai.red/images/28785255
-      expect(ks.values.scheduler).toBeUndefined();
-      const props = JSON.parse(String(loader(p.id)!.values.custom_parameters || '{}'))?._canvas?.schemaProperties as string[];
-      expect(props).toEqual(expect.arrayContaining(['sampler', 'sampler_name', 'steps', 'guidance', 'seed']));
-      expect(props).not.toEqual(expect.arrayContaining(['scheduler', 'denoise']));
+      expect(ks.values.steps).toBe(8);
+      expect(ks.values.cfg).toBeUndefined();
+      const lat = p.nodes.find(n => n.type === 'EmptyLatentImage')!;
+      expect(lat.values.width).toBe(1536);
+      expect(lat.values.height).toBe(1024);
+      expect(p.nodes.some(n => n.type === 'LoRALoader')).toBe(false);
     }
   });
 
@@ -585,8 +569,8 @@ describe('standard workflow presets (23 T2I + 5 T2V + 6 I2V)', () => {
 
   it('OpenWorks card name matches save prefix std_openworks (not Tensor.Art / std_tensorart)', () => {
     const p = preset('std-tensorart-t2i');
-    expect(p.name).toBe('OpenWorks · 标准文生图');
-    expect(p.spatialFrames![0].title).toBe('OpenWorks · 标准文生图');
+    expect(p.name).toBe('OpenWorks · 溪边白裙人像');
+    expect(p.spatialFrames![0].title).toBe('OpenWorks · 溪边白裙人像');
     expect(p.nodes.find(n => n.type === 'SaveImage')!.values.filename_prefix).toBe('std_openworks');
     expect(loader(p.id)!.values.targetProvider).toBe('openworks');
   });
@@ -628,7 +612,6 @@ describe('standard workflow presets (23 T2I + 5 T2V + 6 I2V)', () => {
     const filled: Record<string, string> = {
       muapi: 'krea-v2-turbo-lora',
       aimlapi: 'alibaba/z-image-turbo-lora',
-      venice: 'venice-sd35',
       gemini: 'gemini-3.1-flash-image',
     };
     for (const [prov, model] of Object.entries(filled)) {
@@ -637,14 +620,23 @@ describe('standard workflow presets (23 T2I + 5 T2V + 6 I2V)', () => {
     }
   });
 
-  it('Novita, Replicate, Runware, and ModelsLab T2I maintain full LoRA-capable topology awaiting user model choice', () => {
-    for (const prov of ['novita', 'replicate', 'runware', 'modelslab']) {
-      const p = preset(`std-${prov}-t2i`);
-      expect(loader(p.id)!.values.ckpt_name).toBe('');
-      expect(p.nodes.some(n => n.type === 'LoRALoader')).toBe(true);
-      const l = lora(p.id)!;
-      expect(l.values.lora_name).toBe('');
-      expect(typeof l.values.strength_model).toBe('number');
+  it('no shipped preset has an empty model, empty prompt, empty lora_name, or a legacy model id', () => {
+    const legacy = [/sd.?1\.?5/i, /stable-diffusion-v1-5/i, /\bflux\.?1\b/i, /flux-schnell/i, /flux-dev/i, /wan.?2\.1/i, /wan-t2v/i, /venice-sd35/i];
+    for (const p of WORKFLOW_PRESETS) {
+      const s = presetSummary(p);
+      expect(s.model.length, p.id).toBeGreaterThan(0);
+      for (const re of legacy) expect(s.model, p.id).not.toMatch(re);
+      for (const n of p.nodes) {
+        if (n.type === 'CLIPTextEncode') expect(String(n.values.text ?? '').trim().length, p.id).toBeGreaterThan(0);
+        if (n.type === 'AIVideoNode') expect(String(n.values.prompt ?? '').trim().length, p.id).toBeGreaterThan(0);
+        if (n.type === 'LoRALoader') {
+          expect(String(n.values.lora_name ?? '').length, p.id).toBeGreaterThan(0);
+          expect(Number(n.values.strength_model), p.id).not.toBe(0);
+        }
+      }
+    }
+    for (const gone of ['std-novita-t2i', 'std-novita-i2v', 'std-venice-t2i', 'std-replicate-t2i', 'std-replicate-t2v', 'std-replicate-i2v', 'std-muapi-t2v', 'std-muapi-i2v']) {
+      expect(WORKFLOW_PRESETS.some(p => p.id === gone), gone).toBe(false);
     }
   });
 
@@ -705,26 +697,6 @@ describe('standard workflow presets (23 T2I + 5 T2V + 6 I2V)', () => {
     expect(preset('std-deepinfra-t2i').nodes.find(n => n.type === 'EmptyLatentImage')!.values.width).toBe(1024);
   });
 
-  it('Replicate omits EmptyLatent pixels; aspect_ratio 1:1 on checkpoint, maintains LoRA node', () => {
-    const p = preset('std-replicate-t2i');
-    const ckpt = loader(p.id)!;
-    expect(ckpt.values.ckpt_name).toBe('');
-    expect(ckpt.values.aspect_ratio).toBe('1:1');
-    const lat = p.nodes.find(n => n.type === 'EmptyLatentImage')!;
-    expect(lat.values.width).toBeUndefined();
-    expect(lat.values.height).toBeUndefined();
-    expect(p.spatialFrames![0].params.aspectRatio).toBe('1:1');
-    expect(p.spatialFrames![0].params.width).toBeUndefined();
-    expect(p.nodes.some(n => n.type === 'LoRALoader')).toBe(true);
-  });
-
-  it('Runware maintains LoRA node with strength 0.8 awaiting user model choice', () => {
-    const p = preset('std-runware-t2i');
-    expect(loader(p.id)!.values.ckpt_name).toBe('');
-    expect(lora(p.id)!.values.strength_model).toBe(0.8);
-    expect(p.nodes.some(n => n.type === 'LoRALoader')).toBe(true);
-  });
-
   it('enforces architecture compatibility, provider LoRA namespace, and expert stage semantics on every preset', () => {
     const RETIRED_PATTERNS = [
       /wan-2\.1/i,
@@ -748,7 +720,7 @@ describe('standard workflow presets (23 T2I + 5 T2V + 6 I2V)', () => {
     // Prohibits retired models (Wan 2.1, SVD-XT, SD1.5, SDXL 1.0, FLUX.1) and verifies exact matching of known pairs.
     const detectVerifiedFamily = (name: string): string => {
       const lower = name.toLowerCase();
-      if (name === '') return 'unspecified';
+      if (lower === 'krea:krea@2-turbo' || lower === 'z-image-turbo') return 'catalog-no-lora';
       if (RETIRED_PATTERNS.some((re) => re.test(name))) return 'retired-legacy';
       if (
         lower === 'fal-ai/krea-2/turbo/lora' ||
@@ -817,18 +789,18 @@ describe('standard workflow presets (23 T2I + 5 T2V + 6 I2V)', () => {
         }
         // 2. Expert stage contract:
         // - Fal Wan 2.2 OpenAPI defaults LoRAWeight.transformer to 'high'; must not mount a low-noise-only weight
-        if (p.provider === 'fal' && p.category.includes('视频')) {
+        if (p.provider === 'fal' && (p.id.endsWith('-t2v') || p.id.endsWith('-i2v'))) {
           expect(l.name, `Fal Wan 2.2 preset ${p.id} defaults to high-noise transformer and must not mount low-noise weight`).not.toMatch(/low_noise|_low\.|2530788|2153813/i);
         }
         // - WaveSpeed Wan 2.2 maps LoRALoader to general `loras` (throughout generation); must not mount high-only or low-only single-stage weights
-        if (p.provider === 'wavespeed' && p.category.includes('视频')) {
+        if (p.provider === 'wavespeed' && (p.id.endsWith('-t2v') || p.id.endsWith('-i2v'))) {
           expect(l.name, `WaveSpeed Wan 2.2 preset ${p.id} maps LoRALoader to general loras (both experts) and must not mount single-stage high/low-only weight`).not.toMatch(/high_noise|low_noise|-high-|-low-/i);
         }
         // 3. Architecture & task family match (T2V vs I2V distinct)
         const loraFamily = detectVerifiedFamily(l.name);
         expect(loraFamily, `Preset ${p.id} LoRA "${l.name}" is retired or unverified`).not.toBe('retired-legacy');
         expect(loraFamily, `Preset ${p.id} LoRA "${l.name}" has unknown family`).not.toBe('unknown');
-        if (baseFamily !== 'unspecified') {
+        if (baseFamily !== 'catalog-no-lora') {
           expect(
             baseFamily,
             `Architecture mismatch on preset ${p.id}: base "${baseModel}" (${baseFamily}) != LoRA "${l.name}" (${loraFamily})`

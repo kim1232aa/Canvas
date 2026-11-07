@@ -15,6 +15,10 @@ export const PRESET_RECIPE_PROMPTS: Record<string, RecipePrompt> = {
     "prompt": "t3chnic4lly A gritty documentary-style photograph capturing a tightly packed crowd of muscular old men in black suits, dancing energetically within a dark industrial warehouse. The old men's faces show exaggerated expressions of joy. Sweat glistens on their faces. The lighting is provided by harsh, direct on-camera flash, creating stark white highlights, deep shadows, and significant motion blur among the moving figures. Industrial commercial lasers cut through the dark, highlighting dust motes. Concrete pillars and exposed structural beams are visible in the crowded background. The film grain is heavy.",
     "source": "https://civitai.red/images/113739497"
   },
+  "std-modelscope-ai-t2i": {
+    "prompt": "t3chnic4lly A gritty documentary-style photograph capturing a tightly packed crowd of muscular old men in black suits, dancing energetically within a dark industrial warehouse. The old men's faces show exaggerated expressions of joy. Sweat glistens on their faces. The lighting is provided by harsh, direct on-camera flash, creating stark white highlights, deep shadows, and significant motion blur among the moving figures. Industrial commercial lasers cut through the dark, highlighting dust motes. Concrete pillars and exposed structural beams are visible in the crowded background. The film grain is heavy.",
+    "source": "https://civitai.red/images/113739497"
+  },
   "std-modelscope-t2i": {
     "prompt": "t3chnic4lly A gritty documentary-style photograph capturing a tightly packed crowd of muscular old men in black suits, dancing energetically within a dark industrial warehouse. The old men's faces show exaggerated expressions of joy. Sweat glistens on their faces. The lighting is provided by harsh, direct on-camera flash, creating stark white highlights, deep shadows, and significant motion blur among the moving figures. Industrial commercial lasers cut through the dark, highlighting dust motes. Concrete pillars and exposed structural beams are visible in the crowded background. The film grain is heavy.",
     "source": "https://civitai.red/images/113739497"
@@ -79,5 +83,44 @@ export const PRESET_RECIPE_PROMPTS: Record<string, RecipePrompt> = {
   "std-civitai-t2i": {
     "prompt": "A photorealistic portrait of a woman with flowers in her hair, golden hour lighting",
     "source": "https://developer.civitai.com/orchestration/recipes/krea.md"
+  },
+  // Krea model card has no negative field on this endpoint; prompt is the card's own preview caption.
+  "std-krea-t2i": {
+    "prompt": "two samurais in flowing robes doing a muay thai fight, one throws a high kick while the other leans back. Purple retro anime style",
+    "source": "https://huggingface.co/krea/Krea-2-LoRA-retroanime"
+  },
+  // Runware Krea 2 Turbo docs example "Converted Water Tower Living Room" (verbatim positivePrompt).
+  "std-runware-t2i": {
+    "prompt": "High-end real-estate interior photography of a decommissioned 1960s concrete water tower converted into an extraordinary circular residence. Show the main living room occupying the full round tank: honest curved board-formed concrete walls, a shallow ribbed concrete ceiling, and a continuous band of slim panoramic windows overlooking a dense European city at blue hour. Compose from the edge of the room with a wide but natural architectural perspective, emphasizing the sweeping curve of the space while keeping vertical lines straight. A low crescent-shaped rust velvet sofa faces a sculptural blackened-steel fireplace; cobalt lounge chairs, a round travertine coffee table, a large hand-knotted cream rug, walnut cabinetry, and restrained contemporary art create a sophisticated warm interior. Include a compact reading nook integrated beneath the windows and subtle evidence of the original industrial structure, including restored steel braces and one sealed pipe connection used as a display niche. Soft amber concealed lighting grazes the textured concrete, balanced with cool indigo dusk through the glazing; practical lamps are gently illuminated, with realistic reflections and nuanced shadow detail. Immaculately staged but believable, quiet and inviting, tactile materials, editorial architectural photography, photorealistic, crisp natural detail, broad dynamic range, no people, no signs, no lettering, no fisheye distortion, no duplicated furniture. Finished standalone property-marketing image in 3:2 landscape composition.",
+    "source": "https://runware.ai/docs/models/krea-2-turbo"
+  },
+  // Same opened MOSS-Image card prompt, reused only where the endpoint has no LoRA trigger of its own.
+  "std-together-t2i": {
+    "prompt": "A wide view of a refrigerator beside a kitchen counter with a fruit bowl. A small sticky note on the refrigerator door is handwritten in Chinese:\n\"记得买牛奶和鸡蛋！\n牛奶两盒，鸡蛋一打。\n顺便带一袋面包。\"",
+    "source": "https://huggingface.co/OpenMOSS-Team/MOSS-Image-Base"
+  },
+  "std-deepinfra-t2i": {
+    "prompt": "A wide view of a refrigerator beside a kitchen counter with a fruit bowl. A small sticky note on the refrigerator door is handwritten in Chinese:\n\"记得买牛奶和鸡蛋！\n牛奶两盒，鸡蛋一打。\n顺便带一袋面包。\"",
+    "source": "https://huggingface.co/OpenMOSS-Team/MOSS-Image-Base"
+  },
+  "std-agnes-t2i": {
+    "prompt": "A wide view of a refrigerator beside a kitchen counter with a fruit bowl. A small sticky note on the refrigerator door is handwritten in Chinese:\n\"记得买牛奶和鸡蛋！\n牛奶两盒，鸡蛋一打。\n顺便带一袋面包。\"",
+    "source": "https://huggingface.co/OpenMOSS-Team/MOSS-Image-Base"
+  },
+  "std-sensenova-t2i": {
+    "prompt": "A wide view of a refrigerator beside a kitchen counter with a fruit bowl. A small sticky note on the refrigerator door is handwritten in Chinese:\n\"记得买牛奶和鸡蛋！\n牛奶两盒，鸡蛋一打。\n顺便带一袋面包。\"",
+    "source": "https://huggingface.co/OpenMOSS-Team/MOSS-Image-Base"
+  },
+  "std-modelslab-t2i": {
+    "prompt": "A wide view of a refrigerator beside a kitchen counter with a fruit bowl. A small sticky note on the refrigerator door is handwritten in Chinese:\n\"记得买牛奶和鸡蛋！\n牛奶两盒，鸡蛋一打。\n顺便带一袋面包。\"",
+    "source": "https://huggingface.co/OpenMOSS-Team/MOSS-Image-Base"
+  },
+  "std-gemini-t2i": {
+    "prompt": "A wide view of a refrigerator beside a kitchen counter with a fruit bowl. A small sticky note on the refrigerator door is handwritten in Chinese:\n\"记得买牛奶和鸡蛋！\n牛奶两盒，鸡蛋一打。\n顺便带一袋面包。\"",
+    "source": "https://huggingface.co/OpenMOSS-Team/MOSS-Image-Base"
+  },
+  "std-mage-t2i": {
+    "prompt": "Outfit: ((long flowing ivory-white dress:1.5)), lightweight semi-sheer fabric, soft translucent layers, off-shoulder neckline, long flowing sleeves, elegant draped silhouette, delicate gauzy texture, romantic ethereal design, fabric flowing naturally around the body Hair: ((long dark brown hair:1.45)), soft naturally wavy dark brown hair, long hair falling over the shoulders and down the back, loose face-framing strands, slightly tousled texture, natural movement, subtle warm highlights from the sunlight Face: ((soft ethereal feminine features:1.4)), delicate youthful face, large fuchsia red eyes, natural eyelashes, gentle rosy cheeks, small refined nose, glossy natural pink lips, peaceful dreamy expression, eyes softly closed or looking upward, serene romantic mood Accessories: ((small white flower hair accessory:1.4)), single delicate white flower tucked behind the ear, minimal jewelry, simple natural styling Pose: standing gracefully beside a shallow stream, body turned slightly sideways, head tilted upward toward the light, one hand raised near the face, the other arm relaxed naturally, flowing dress trailing around the body, peaceful elegant posture Props: ((small glowing water feature:1.35)), narrow stream of sparkling water flowing beside her, bright water droplets catching the sunlight, smooth pale stones surrounding the water Background: ((quiet natural rocky stream:1.45)), dark mossy rocks, shallow clear water, scattered pale stones, subtle greenery, secluded forest-like environment, peaceful hidden garden atmosphere Lighting: ((strong backlighting:1.55)), intense sunlight shining from behind the subject, dramatic glowing rim light around the hair and dress, dreamy overexposed highlights, sparkling reflections on the water, soft atmospheric haze, luminous white glow Photography: ((dreamy candid outdoor photograph:1.45)), strong natural lens flare, slightly overexposed exposure, soft focus, glowing highlights, subtle film grain, realistic digital camera texture, nostalgic Japanese photography aesthetic, ethereal summer atmosphere, natural imperfect composition",
+    "source": "https://tensor.art/images/1053306608244813366"
   }
 };
