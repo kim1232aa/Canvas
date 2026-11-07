@@ -23,6 +23,9 @@ import {
 import { buildRunwareImageRequest } from './runwareImageContract';
 import { buildModelsLabImageRequest } from './modelsLabImageContract';
 import { buildFalVideoRequest } from './falVideoContract';
+import { buildCivitaiImageRequest } from './civitaiImageContract';
+import { handleExtractCivitaiWorkflow } from './routes/civitaiWorkflowRoute';
+import { loadCivitaiImageGenOpenApi } from './fixtures/liveSchemaFixtures';
 import { extractWorkflowParameters } from '../utils/graphEngine';
 import { spatialRequestParameters, explicitLoraPath } from '../utils/frontendParameters';
 import { workflowFrame } from '../utils/workflowFrame';
@@ -1232,6 +1235,409 @@ describe('Mission M27: Recipe Shape, LoRA Resource Identity, and Target Schema A
       expect(sogniResult.ids).toEqual(['krea2-fever-dream-mood']);
       expect(sogniResult.strengths).toEqual([0.6]);
       expect(sogniUnmapped).toHaveLength(0);
+    });
+
+    it('End-to-end quick-fill recipes (#148140013 Krea 2 Turbo, #148135866 Z-Image Turbo, #148004351 MOSS-Image SFT) and seed=0 preservation from handleExtractCivitaiWorkflow -> extractWorkflowParameters -> buildCivitaiImageRequest', async () => {
+      const oa = loadCivitaiImageGenOpenApi();
+      const versionMocks: Record<string, any> = {
+        '3072332': {
+          id: 3072332,
+          modelId: 2732656,
+          name: 'v1.0',
+          baseModel: 'Krea 2 Turbo',
+          air: 'urn:air:krea2:diffusionmodel:civitai:2732656@3072332',
+          downloadUrl: 'https://civitai.com/api/download/models/3072332',
+          files: [{ id: 1, name: 'krea2_turbo.safetensors', type: 'Model', primary: true, downloadUrl: 'https://civitai.com/api/download/models/3072332' }],
+          model: { name: 'Krea 2 Turbo', type: 'Checkpoint' },
+        },
+        '3168308': {
+          id: 3168308,
+          modelId: 2744585,
+          name: 'Full Potential v3.0',
+          baseModel: 'Krea 2',
+          air: 'urn:air:krea2:lora:civitai:2744585@3168308',
+          downloadUrl: 'https://civitai.com/api/download/models/3168308',
+          files: [{ id: 2, name: 'Mrpopo anime full potential.safetensors', type: 'Model', primary: true, downloadUrl: 'https://civitai.com/api/download/models/3168308' }],
+          model: { name: "Mrpopo's Krea2 Anime", type: 'LORA' },
+        },
+        '3077110': {
+          id: 3077110,
+          modelId: 929497,
+          name: 'v5.1 [krea2]',
+          baseModel: 'Krea 2',
+          air: 'urn:air:krea2:lora:civitai:929497@3077110',
+          downloadUrl: 'https://civitai.com/api/download/models/3077110',
+          files: [{ id: 3, name: 'krea2-masterpieces-v51.safetensors', type: 'Model', primary: true, downloadUrl: 'https://civitai.com/api/download/models/3077110' }],
+          model: { name: 'Aesthetic Quality Modifiers - Masterpiece', type: 'LORA' },
+        },
+        '3189191': {
+          id: 3189191,
+          modelId: 2826739,
+          name: 'Krea 2 v1',
+          baseModel: 'Krea 2',
+          air: 'urn:air:krea2:lora:civitai:2826739@3189191',
+          downloadUrl: 'https://civitai.com/api/download/models/3189191',
+          files: [{ id: 4, name: 'EV8CFBRDYBXKT105NMPEDD6JE0.safetensors', type: 'Model', primary: true, downloadUrl: 'https://civitai.com/api/download/models/3189191' }],
+          model: { name: 'Notes of Nature by AK', type: 'LORA' },
+        },
+        '3284125': {
+          id: 3284125,
+          modelId: 2904145,
+          name: 'V1',
+          baseModel: 'Krea 2',
+          air: 'urn:air:krea2:lora:civitai:2904145@3284125',
+          downloadUrl: 'https://civitai.com/api/download/models/3284125',
+          files: [{ id: 5, name: 'TSM3BMD98WNY1GS3X2XQC72C30.safetensors', type: 'Model', primary: true, downloadUrl: 'https://civitai.com/api/download/models/3284125' }],
+          model: { name: 'Ektachrome Fade Film', type: 'LORA' },
+        },
+        '3331554': {
+          id: 3331554,
+          modelId: 2218365,
+          name: 'v9.0',
+          baseModel: 'ZImageTurbo',
+          air: 'urn:air:zimageturbo:diffusionmodel:civitai:2218365@3331554',
+          downloadUrl: 'https://civitai.com/api/download/models/3331554',
+          files: [{ id: 6, name: 'cyberrealistic_zimage_v90.safetensors', type: 'Model', primary: true, downloadUrl: 'https://civitai.com/api/download/models/3331554' }],
+          model: { name: 'CyberRealistic Z-Image Turbo', type: 'Checkpoint' },
+        },
+        '3418941': {
+          id: 3418941,
+          modelId: 3012414,
+          name: 'ZImageTurbo',
+          baseModel: 'ZImageTurbo',
+          air: 'urn:air:zimageturbo:lora:civitai:3012414@3418941',
+          downloadUrl: 'https://civitai.com/api/download/models/3418941',
+          files: [{ id: 7, name: 'tamara_zimage.safetensors', type: 'Model', primary: true, downloadUrl: 'https://civitai.com/api/download/models/3418941' }],
+          model: { name: 'Tamara Von Vergin', type: 'LORA' },
+        },
+        '3409867': {
+          id: 3409867,
+          modelId: 3005406,
+          name: 'SFT',
+          baseModel: 'MOSS Image',
+          air: 'urn:air:mossimage:diffusionmodel:civitai:3005406@3409867',
+          downloadUrl: 'https://civitai.com/api/download/models/3409867',
+          files: [{ id: 8, name: 'mossImage_sft_pruned_int8.safetensors', type: 'Model', primary: true, downloadUrl: 'https://civitai.com/api/download/models/3409867' }],
+          model: { name: 'MOSS Image', type: 'Checkpoint' },
+        },
+        '3452384': {
+          id: 3452384,
+          modelId: 599757,
+          name: 'MOSS Dark Lines',
+          baseModel: 'MOSS Image',
+          air: 'urn:air:mossimage:lora:civitai:599757@3452384',
+          downloadUrl: 'https://civitai.com/api/download/models/3452384',
+          files: [{ id: 9, name: 'MossMythD4rkL1nes.safetensors', type: 'Model', primary: true, downloadUrl: 'https://civitai.com/api/download/models/3452384' }],
+          model: { name: "Velvet's Mythic Fantasy Styles", type: 'LORA' },
+        },
+        '3411385': {
+          id: 3411385,
+          modelId: 3006599,
+          name: 'Moss_SFT_8_steps_dmd_v0.1',
+          baseModel: 'MOSS Image',
+          air: 'urn:air:mossimage:lora:civitai:3006599@3411385',
+          downloadUrl: 'https://civitai.com/api/download/models/3411385',
+          files: [{ id: 10, name: 'MOSS_Image_SFT_8_steps_dmd_v0.1.safetensors', type: 'Model', primary: true, downloadUrl: 'https://civitai.com/api/download/models/3411385' }],
+          model: { name: 'Moss Image Turbo LoRas', type: 'LORA' },
+        },
+      };
+
+      const imageMocks: Record<string, any> = {
+        '148140013': {
+          id: 148140013,
+          baseModel: 'Krea 2 Turbo',
+          username: 'Hairpin',
+          url: 'https://image.civitai.com/148140013.jpeg',
+          meta: {
+            seed: 689794262,
+            steps: 8,
+            width: 832,
+            height: 1248,
+            prompt: 'masterpiece, best quality, very aesthetic, ektachrome fade film, nature',
+            negativePrompt: '(2d ,Illustration, drawing, cartoon, animation, anima, painting:1.4)',
+            sampler: 'euler',
+            cfgScale: 1,
+            civitaiResources: [
+              { type: 'checkpoint', modelVersionId: 3072332 },
+              { type: 'lora', weight: 1, modelVersionId: 3168308 },
+              { type: 'lora', weight: 0.85, modelVersionId: 3077110 },
+              { type: 'lora', weight: 1, modelVersionId: 3189191 },
+              { type: 'lora', weight: 0.6, modelVersionId: 3284125 },
+            ],
+          },
+        },
+        '148135866': {
+          id: 148135866,
+          baseModel: 'ZImageTurbo',
+          username: 'CyberCreator',
+          url: 'https://image.civitai.com/148135866.jpeg',
+          meta: {
+            seed: 552388375,
+            steps: 9,
+            width: 832,
+            height: 1216,
+            prompt: 'Ultra-photorealistic cinematic photograph, 85mm lens look',
+            sampler: 'euler',
+            cfgScale: 1,
+            civitaiResources: [
+              { type: 'diffusionmodel', weight: 1, modelVersionId: 3331554 },
+              { type: 'lora', weight: 1, modelVersionId: 3418941 },
+            ],
+          },
+        },
+        '148004351': {
+          id: 148004351,
+          baseModel: 'MOSS Image',
+          username: 'MossArtist',
+          url: 'https://image.civitai.com/148004351.jpeg',
+          meta: {
+            seed: 2280565052,
+            Model: 'mossImage_sft_pruned_int8',
+            steps: 10,
+            width: 1024,
+            height: 1536,
+            prompt: 'Image is a digital painting depicting a medieval knight <lora:MossMythD4rkL1nes:1> <lora:MOSS_Image_SFT_8_steps_dmd_v0.1:1>',
+            negativePrompt: 'bad quality, bad eyes, worst quality',
+            sampler: 'Euler',
+            cfgScale: 1,
+            hashes: {
+              model: 'b4d1475bc7',
+              'lora:MossMythD4rkL1nes': 'e14a1f7c2b7d',
+              'lora:MOSS_Image_SFT_8_steps_dmd_v0.1': '4abb14e39c1a',
+            },
+            resources: [
+              { hash: 'e14a1f7c2b7d', name: 'MossMythD4rkL1nes', type: 'lora', weight: 1 },
+              { hash: '4abb14e39c1a', name: 'MOSS_Image_SFT_8_steps_dmd_v0.1', type: 'lora', weight: 1 },
+              { hash: 'b4d1475bc7', name: 'mossImage_sft_pruned_int8', type: 'model' },
+            ],
+          },
+        },
+      };
+
+      const hashToVersionId: Record<string, string> = {
+        b4d1475bc7: '3409867',
+        e14a1f7c2b7d: '3452384',
+        '4abb14e39c1a': '3411385',
+      };
+
+      const upstreamFetch = async (_meta: any, url: string) => {
+        const imgMatch = url.match(/imageId=(\d+)/);
+        if (imgMatch && imageMocks[imgMatch[1]]) {
+          return new Response(JSON.stringify({ items: [imageMocks[imgMatch[1]]] }), { status: 200 });
+        }
+        const hashMatch = url.match(/by-hash\/([a-f0-9]+)/i);
+        if (hashMatch && hashToVersionId[hashMatch[1].toLowerCase()]) {
+          const vid = hashToVersionId[hashMatch[1].toLowerCase()];
+          return new Response(JSON.stringify(versionMocks[vid]), { status: 200 });
+        }
+        const miniMatch = url.match(/model-versions\/mini\/(\d+)/);
+        if (miniMatch && versionMocks[miniMatch[1]]) {
+          const v = versionMocks[miniMatch[1]];
+          return new Response(
+            JSON.stringify({
+              id: v.id,
+              modelId: v.modelId,
+              versionName: v.name,
+              modelName: v.model?.name,
+              baseModel: v.baseModel,
+              air: v.air,
+              downloadUrls: [v.downloadUrl],
+              fileName: v.files?.[0]?.name,
+              canGenerate: true,
+              requireAuth: false,
+            }),
+            { status: 200 }
+          );
+        }
+        const verMatch = url.match(/model-versions\/(\d+)/);
+        if (verMatch && versionMocks[verMatch[1]]) {
+          return new Response(JSON.stringify(versionMocks[verMatch[1]]), { status: 200 });
+        }
+        return new Response('not found', { status: 404 });
+      };
+
+      const publicGet = async (url: string) => upstreamFetch({}, url);
+      const handler = handleExtractCivitaiWorkflow({
+        getSettings: () => ({}),
+        defaultKeys: {},
+        upstreamFetch,
+      });
+
+      const runExtractAndBuild = async (imageUrl: string) => {
+        let statusCode = 200;
+        let jsonData: any = null;
+        const req = { body: { url: imageUrl, engine: 'civitai' }, headers: {} } as any;
+        const res = {
+          status(c: number) {
+            statusCode = c;
+            return this;
+          },
+          json(d: any) {
+            jsonData = d;
+            return this;
+          },
+        } as any;
+        await handler(req, res);
+        expect(statusCode).toBe(200);
+        const preset = jsonData.preset;
+        const extracted = extractWorkflowParameters(preset.nodes, preset.connections);
+        const built = await buildCivitaiImageRequest(
+          {
+            model: extracted.checkpointModel,
+            engine: extracted.civitaiEngine,
+            ecosystem: extracted.civitaiEcosystem,
+            comfyModel: extracted.civitaiModel,
+            checkpointBaseModel: extracted.checkpointBaseModel,
+            prompt: extracted.positivePrompt,
+            negative_prompt: extracted.negativePrompt,
+            width: extracted.width,
+            height: extracted.height,
+            steps: extracted.steps,
+            cfg: extracted.cfg,
+            seed: extracted.seed,
+            sampler_name: extracted.sampler,
+            scheduler: extracted.scheduler,
+            loras: extracted.loras.map((l: any) =>
+              normalizeLoraPayloadItem(
+                {
+                  ...l,
+                  name: l.name,
+                  path: explicitLoraPath(l),
+                  downloadUrl: l.downloadUrl,
+                  air: l.air,
+                  modelId: l.modelId,
+                  versionId: l.versionId,
+                  strength: l.modelStrength,
+                  modelStrength: l.modelStrength,
+                  clipStrength: l.clipStrength,
+                  civitaiId: l.civitaiId,
+                },
+                'civitai'
+              )
+            ),
+            workflowSnapshot: { nodes: preset.nodes, connections: preset.connections },
+          },
+          publicGet,
+          oa
+        );
+        return { preset, extracted, built };
+      };
+
+      // Case 1: #148140013 Krea 2 Turbo + 4 LoRAs
+      const r1 = await runExtractAndBuild('https://civitai.red/images/148140013');
+      const ckptNode1 = r1.preset.nodes.find((n: any) => n.type === 'CheckpointLoaderSimple');
+      const ksampler1 = r1.preset.nodes.find((n: any) => n.type === 'KSampler');
+      expect(ckptNode1.values).toMatchObject({
+        ckpt_name: 'urn:air:krea2:diffusionmodel:civitai:2732656@3072332',
+        civitai_engine: 'comfy',
+        civitai_ecosystem: 'krea2',
+        civitai_model: 'turbo',
+      });
+      expect(ksampler1.values.control_after_generate).toBe('fixed');
+      expect(r1.extracted.seed).toBe(689794262);
+      expect(r1.built.payload).toMatchObject({
+        engine: 'comfy',
+        ecosystem: 'krea2',
+        operation: 'createImage',
+        model: 'turbo',
+        diffusionModel: 'urn:air:krea2:diffusionmodel:civitai:2732656@3072332',
+        cfgScale: 1,
+        sampler: 'euler',
+        negativePrompt: '(2d ,Illustration, drawing, cartoon, animation, anima, painting:1.4)',
+        seed: 689794262,
+        steps: 8,
+        width: 832,
+        height: 1248,
+        loras: {
+          'urn:air:krea2:lora:civitai:2744585@3168308': 1,
+          'urn:air:krea2:lora:civitai:929497@3077110': 0.85,
+          'urn:air:krea2:lora:civitai:2826739@3189191': 1,
+          'urn:air:krea2:lora:civitai:2904145@3284125': 0.6,
+        },
+      });
+      expect(Array.isArray(r1.built.payload.loras)).toBe(false);
+
+      // Case 2: #148135866 Z-Image Turbo + LoRA
+      const r2 = await runExtractAndBuild('https://civitai.red/images/148135866');
+      const ckptNode2 = r2.preset.nodes.find((n: any) => n.type === 'CheckpointLoaderSimple');
+      expect(ckptNode2.values).toMatchObject({
+        ckpt_name: 'urn:air:zimageturbo:diffusionmodel:civitai:2218365@3331554',
+        civitai_engine: 'comfy',
+        civitai_ecosystem: 'zImage',
+        civitai_model: 'turbo',
+      });
+      expect(r2.extracted.seed).toBe(552388375);
+      expect(r2.built.payload).toMatchObject({
+        engine: 'comfy',
+        ecosystem: 'zImage',
+        operation: 'createImage',
+        model: 'turbo',
+        diffusionModel: 'urn:air:zimageturbo:diffusionmodel:civitai:2218365@3331554',
+        cfgScale: 1,
+        sampler: 'euler',
+        seed: 552388375,
+        steps: 9,
+        width: 832,
+        height: 1216,
+        loras: {
+          'urn:air:zimageturbo:lora:civitai:3012414@3418941': 1,
+        },
+      });
+
+      // Case 3: #148004351 MOSS-Image SFT + 2 LoRAs
+      const r3 = await runExtractAndBuild('https://civitai.red/images/148004351');
+      const ckptNode3 = r3.preset.nodes.find((n: any) => n.type === 'CheckpointLoaderSimple');
+      expect(ckptNode3.values).toMatchObject({
+        ckpt_name: 'urn:air:mossimage:diffusionmodel:civitai:3005406@3409867',
+        civitai_engine: 'comfy',
+        civitai_ecosystem: 'mossImage',
+        civitai_model: 'sft',
+      });
+      expect(r3.extracted.seed).toBe(2280565052);
+      expect(r3.built.payload).toMatchObject({
+        engine: 'comfy',
+        ecosystem: 'mossImage',
+        operation: 'createImage',
+        model: 'sft',
+        diffusionModel: 'urn:air:mossimage:diffusionmodel:civitai:3005406@3409867',
+        cfgScale: 1,
+        sampler: 'euler',
+        negativePrompt: 'bad quality, bad eyes, worst quality',
+        seed: 2280565052,
+        steps: 10,
+        width: 1024,
+        height: 1536,
+        loras: {
+          'urn:air:mossimage:lora:civitai:599757@3452384': 1,
+          'urn:air:mossimage:lora:civitai:3006599@3411385': 1,
+        },
+      });
+
+      // Case 4: Seed === 0 preservation (control_after_generate === 'fixed', exact seed 0 preserved)
+      let rawResData: any = null;
+      await handler(
+        {
+          body: {
+            rawText: 'masterpiece portrait\nSteps: 8, Sampler: Euler, CFG scale: 1, Seed: 0, Size: 832x1248, Model: urn:air:krea2:diffusionmodel:civitai:2732656@3072332',
+            engine: 'civitai',
+          },
+          headers: {},
+        } as any,
+        {
+          status() {
+            return this;
+          },
+          json(d: any) {
+            rawResData = d;
+            return this;
+          },
+        } as any
+      );
+      const seed0Ksampler = rawResData.preset.nodes.find((n: any) => n.type === 'KSampler');
+      expect(seed0Ksampler.values.seed).toBe(0);
+      expect(seed0Ksampler.values.control_after_generate).toBe('fixed');
+      const seed0Extracted = extractWorkflowParameters(rawResData.preset.nodes, rawResData.preset.connections);
+      expect(seed0Extracted.seed).toBe(0);
     });
   });
 });

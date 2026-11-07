@@ -8,6 +8,7 @@ import {
   isRawBaseModelArchitectureText,
   buildAllProviderAdaptations,
   normalizeEcosystem,
+  resolveCivitaiNativeSelectors,
   type CivitaiRecipeInput,
 } from '../../utils/civitaiImportMap.ts';
 
@@ -488,7 +489,8 @@ export async function fetchCivitaiRealImageMeta(imageId: string, upstreamFetch: 
   const rawResources = Array.isArray(meta.civitaiResources) ? meta.civitaiResources : [];
   const resolvedResources = await Promise.all(
     rawResources.map(async (r: any) => {
-      const isCheckpoint = String(r.type || '').toUpperCase() === 'CHECKPOINT';
+      const rType = String(r.type || '').toUpperCase();
+      const isCheckpoint = rType === 'CHECKPOINT' || rType === 'DIFFUSIONMODEL' || rType === 'UNET';
       let vInfo: CivitaiVersionResult | null = null;
       if (r.modelVersionId) {
         vInfo = await resolveCivitaiVersionInfo(r.modelVersionId, upstreamFetch);
@@ -746,6 +748,8 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
       let rawModelName = '';
       let detectedBaseModel = '';
       let importedCheckpointRef = '';
+      let checkpointVersionName = '';
+      let checkpointModelName = '';
       let detectedVae = '';
       let detectedEngine = '';
       let checkpoint = '';
@@ -906,6 +910,17 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
           detectedBaseModel = resWithBase.baseModel;
         } else if (meta.baseModel) {
           detectedBaseModel = meta.baseModel;
+        }
+
+        const ckptRes = Array.isArray(genData?.resources)
+          ? genData.resources.find((r: any) => {
+              const t = String(r?.modelType || r?.type || '').toUpperCase();
+              return t === 'CHECKPOINT' || t === 'DIFFUSIONMODEL' || t === 'UNET';
+            })
+          : null;
+        if (ckptRes) {
+          checkpointVersionName = ckptRes.modelName || ckptRes.name || '';
+          checkpointModelName = ckptRes.modelName || ckptRes.name || '';
         }
 
         importedCheckpointRef = resolveImportedCheckpointRef(genData?.resources, meta, rawModelName, detectedBaseModel);
@@ -1104,7 +1119,9 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
             } else {
               // Checkpoint or other model type
               loras = [];
-              importedCheckpointRef = `civitai:${vData.modelId || ''}@${vData.id}`;
+              checkpointVersionName = vData.name || '';
+              checkpointModelName = vData.model?.name || '';
+              importedCheckpointRef = vData.air || `civitai:${vData.modelId || ''}@${vData.id}`;
               checkpoint = importedCheckpointRef;
             }
             parsedUpstreamData = true;
@@ -1306,6 +1323,17 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
           : `已保留 Civitai 来源模型“${sourceModelReference || '未提供'}”和 LoRA 意图，但不会跨供应商猜测模型 ID、端点或 LoRA 资源。请先从 ${engine || '目标供应商'} 的模型中心选择真实执行模型；来源 LoRA 也必须在该供应商重新解析后才能运行。`;
       }
 
+      const civitaiSelectors = targetProvider === 'civitai'
+        ? resolveCivitaiNativeSelectors({
+            checkpoint: checkpoint || sourceModelReference,
+            baseModel: detectedBaseModel,
+            versionName: checkpointVersionName,
+            modelName: checkpointModelName || rawModelName,
+            detectedEngine,
+          })
+        : {};
+      const hasExtractedSeed = seed !== null && seed !== undefined;
+
       const nodes: any[] = [];
       const connections: any[] = [];
 
@@ -1332,6 +1360,7 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
               duration: videoDuration !== null ? videoDuration : undefined,
               fps: undefined,
               aspect_ratio: undefined,
+              ...(hasExtractedSeed ? { seed, control_after_generate: 'fixed' } : {}),
             },
           },
           {
@@ -1369,6 +1398,10 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
           values: {
             ckpt_name: checkpoint,
             targetProvider,
+            base_model: detectedBaseModel || undefined,
+            ...(civitaiSelectors.engine ? { civitai_engine: civitaiSelectors.engine } : {}),
+            ...(civitaiSelectors.ecosystem ? { civitai_ecosystem: civitaiSelectors.ecosystem } : {}),
+            ...(civitaiSelectors.model ? { civitai_model: civitaiSelectors.model } : {}),
             import_source_provider: 'civitai',
             import_source_model: sourceModelReference,
             import_requires_model_selection: !checkpoint,
@@ -1487,7 +1520,7 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
             outputs: [{ id: 'LATENT', name: 'LATENT', type: 'LATENT' }],
             values: {
               seed,
-              control_after_generate: 'randomize',
+              control_after_generate: seed !== null && seed !== undefined ? 'fixed' : 'randomize',
               steps,
               cfg,
               sampler_name: sampler || undefined,
@@ -1665,8 +1698,11 @@ export function handleExtractCivitaiWorkflow(deps: CivitaiWorkflowDeps) {
             negativePrompt,
             params: {
               checkpoint,
+              ...(civitaiSelectors.engine ? { civitaiEngine: civitaiSelectors.engine } : {}),
+              ...(civitaiSelectors.ecosystem ? { civitaiEcosystem: civitaiSelectors.ecosystem } : {}),
+              ...(civitaiSelectors.model ? { civitaiModel: civitaiSelectors.model } : {}),
               seed,
-              seedControl: 'randomize',
+              seedControl: seed !== null && seed !== undefined ? 'fixed' : 'randomize',
               steps,
               cfg,
               sampler,

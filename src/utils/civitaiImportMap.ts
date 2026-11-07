@@ -7,9 +7,13 @@ import {
   inspectTargetSchemaForLoras,
   buildSendableLoraUrl,
   buildCivitaiCanonicalAir,
+  resolveCivitaiNativeSelectors,
+  type CivitaiNativeSelectors,
   type TargetLoraFormat,
   type TargetSchemaLoraSpec,
 } from './civitaiTargetSchema';
+
+export { resolveCivitaiNativeSelectors, type CivitaiNativeSelectors };
 
 const EMPTY_TOKENS = new Set(['', 'undefined', 'none', 'null', 'n/a', 'na']);
 
@@ -81,7 +85,10 @@ export function resolveImportedNegativePrompt(
   return '';
 }
 
-const isCheckpointType = (t: unknown) => String(t ?? '').toLowerCase() === 'checkpoint';
+const isCheckpointType = (t: unknown) => {
+  const lower = String(t ?? '').toLowerCase();
+  return lower === 'checkpoint' || lower === 'diffusionmodel' || lower === 'unet';
+};
 const idStr = (v: unknown) => (v == null ? '' : String(v).trim());
 
 /**

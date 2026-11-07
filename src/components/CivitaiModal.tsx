@@ -94,6 +94,7 @@ import {
   adaptCivitaiRecipeToProvider,
   buildAllProviderAdaptations,
   isRawBaseModelArchitectureText,
+  resolveCivitaiNativeSelectors,
   type ProviderAdaptationResult,
   type ProviderAdaptationMap,
   type CivitaiRecipeInput,
@@ -1509,6 +1510,14 @@ Steps: 8, Sampler: Euler, CFG scale: 1, Seed: 689794262, Size: 832x1248, Model: 
               allowTokenInUrl: tokenConsent,
             }
           );
+          const civitaiSelectors =
+            importTargetProvider === 'civitai'
+              ? resolveCivitaiNativeSelectors({
+                  checkpoint: importTargetModel || sourceCkpt,
+                  baseModel: extractedPreset.otherMetadata?.baseModel,
+                  detectedEngine: extractedPreset.otherMetadata?.engine,
+                })
+              : {};
           const synchronizedPreset = {
             ...extractedPreset,
             currentAdaptation: currentAdapt,
@@ -1526,6 +1535,14 @@ Steps: 8, Sampler: Euler, CFG scale: 1, Seed: 689794262, Size: 832x1248, Model: 
                         ...n.values,
                         targetProvider: importTargetProvider,
                         ckpt_name: effectiveCkpt,
+                        base_model: n.values?.base_model || extractedPreset.otherMetadata?.baseModel || undefined,
+                        ...(importTargetProvider === 'civitai'
+                          ? {
+                              ...(n.values?.civitai_engine ? {} : civitaiSelectors.engine ? { civitai_engine: civitaiSelectors.engine } : {}),
+                              ...(n.values?.civitai_ecosystem ? {} : civitaiSelectors.ecosystem ? { civitai_ecosystem: civitaiSelectors.ecosystem } : {}),
+                              ...(n.values?.civitai_model ? {} : civitaiSelectors.model ? { civitai_model: civitaiSelectors.model } : {}),
+                            }
+                          : {}),
                         import_requires_model_selection: !effectiveCkpt,
                       },
                     };

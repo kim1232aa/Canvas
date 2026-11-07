@@ -373,3 +373,88 @@ export function buildCivitaiCanonicalAir(
   // Unknown ecosystem: return undefined; do not fabricate urn:air:civitai:lora:... or default to sdxl!
   return undefined;
 }
+
+export interface CivitaiNativeSelectors {
+  engine?: string;
+  ecosystem?: string;
+  model?: string;
+}
+
+/**
+ * Resolves unambiguously known Civitai native (engine, ecosystem, model) selectors
+ * from a checkpoint AIR / reference, baseModel string, and version/model name.
+ * Never fabricates or guesses when variant is unknown.
+ */
+export function resolveCivitaiNativeSelectors(input: {
+  checkpoint?: string;
+  baseModel?: string;
+  versionName?: string;
+  modelName?: string;
+  detectedEngine?: string;
+}): CivitaiNativeSelectors {
+  const ckpt = (input.checkpoint || '').trim();
+  const base = (input.baseModel || '').trim();
+  const verName = (input.versionName || '').trim();
+  const modName = (input.modelName || '').trim();
+  const detEng = (input.detectedEngine || '').trim().toLowerCase();
+
+  let airEco = '';
+  if (/^(?:urn:)?air:/i.test(ckpt)) {
+    const parts = ckpt.replace(/^(?:urn:)?air:/i, '').split(':');
+    airEco = (parts[0] || '').toLowerCase();
+  }
+
+  const combinedTokens = [base, verName, modName]
+    .filter(Boolean)
+    .join(' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .toLowerCase()
+    .split(/[^a-z0-9.+-]+/)
+    .filter(Boolean);
+  const hasToken = (t: string) => combinedTokens.includes(t.toLowerCase());
+
+  // 1. Compound Z-Image AIR or baseModel
+  if (airEco === 'zimageturbo' || base.toLowerCase() === 'zimageturbo' || (airEco === 'zimage' && hasToken('turbo'))) {
+    const engine = detEng === 'comfy' || detEng === 'sdcpp' ? detEng : 'comfy';
+    return { engine, ecosystem: 'zImage', model: 'turbo' };
+  }
+  if (airEco === 'zimagebase' || base.toLowerCase() === 'zimagebase' || (airEco === 'zimage' && hasToken('base'))) {
+    const engine = detEng === 'comfy' || detEng === 'sdcpp' ? detEng : 'comfy';
+    return { engine, ecosystem: 'zImage', model: 'base' };
+  }
+
+  // 2. Krea 2
+  if (airEco === 'krea2' || /\bkrea\s*2\b/i.test(base)) {
+    const model = hasToken('turbo') && !hasToken('raw') ? 'turbo' : hasToken('raw') && !hasToken('turbo') ? 'raw' : hasToken('edit') ? 'edit' : undefined;
+    return { engine: 'comfy', ecosystem: 'krea2', ...(model ? { model } : {}) };
+  }
+
+  // 3. MOSS Image
+  if (airEco === 'mossimage' || /\bmoss\b/i.test(base)) {
+    const model = hasToken('sft') && !hasToken('base') ? 'sft' : hasToken('base') && !hasToken('sft') ? 'base' : 'sft';
+    return { engine: 'comfy', ecosystem: 'mossImage', model };
+  }
+
+  // 4. Pony V7
+  if (airEco === 'ponyv7' || /\bpony\s*v?7\b/i.test(base)) {
+    return { engine: 'comfy', ecosystem: 'ponyV7' };
+  }
+
+  // 5. Standard sdcpp / comfy ecosystems when explicitly known from AIR or baseModel
+  const standardEco: Record<string, { engine: string; ecosystem: string }> = {
+    sd15: { engine: detEng === 'comfy' ? 'comfy' : 'sdcpp', ecosystem: 'sd1' },
+    sd1: { engine: detEng === 'comfy' ? 'comfy' : 'sdcpp', ecosystem: 'sd1' },
+    sdxl: { engine: detEng === 'comfy' ? 'comfy' : 'sdcpp', ecosystem: 'sdxl' },
+    pony: { engine: detEng === 'comfy' ? 'comfy' : 'sdcpp', ecosystem: 'sdxl' },
+    illustrious: { engine: detEng === 'comfy' ? 'comfy' : 'sdcpp', ecosystem: 'sdxl' },
+    noobai: { engine: detEng === 'comfy' ? 'comfy' : 'sdcpp', ecosystem: 'sdxl' },
+    flux1: { engine: detEng === 'comfy' ? 'comfy' : 'sdcpp', ecosystem: 'flux1' },
+    anima: { engine: detEng === 'comfy' ? 'comfy' : 'sdcpp', ecosystem: 'anima' },
+  };
+  if (airEco && standardEco[airEco]) {
+    return standardEco[airEco];
+  }
+
+  return {};
+}
+
