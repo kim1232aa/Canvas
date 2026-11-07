@@ -251,15 +251,114 @@ export function matchBaseModelFromArchitecture(
   return baseProfile;
 }
 
+/** A catalog row the caller already loaded. Family is taken only from its declared base-model metadata. */
+export interface CatalogCheckpointCandidate {
+  /** Identifier the caller would write onto CheckpointLoaderSimple (ckpt_name). */
+  checkpoint: string;
+  provider: string;
+  /**
+   * Architecture string the provider's own API returned for this row
+   * (Civitai model-version `baseModel`, Hugging Face model-card `base_model`).
+   * A filename or display name is not metadata and must not be passed here.
+   */
+  baseModelMetadata?: string;
+  baseModelSource?: string;
+}
+
+export interface VerifiedCheckpointRecommendation {
+  provider: string;
+  checkpoint: string;
+  steps: number;
+  cfg: number;
+  sampler: string;
+  scheduler: string;
+  /** Present only when both sides share a family derived from provider metadata. */
+  recommendedReason?: string;
+  family: ModelArchitectureFamily;
+  verification: 'verified' | 'unverified';
+}
+
+const VERIFIED_METADATA_SOURCES = new Set(['civitai:baseModel', 'huggingface:base_model']);
+
 /**
- * Validates whether a Checkpoint and LoRA are architecturally compatible
+ * Family of a provider-returned architecture string.
+ * `modelNameHint` is ignored on purpose: a filename substring is not metadata.
+ */
+export function architectureFamilyFromMetadata(baseModelMetadata?: string): ModelArchitectureFamily {
+  if (!baseModelMetadata || !baseModelMetadata.trim()) return 'unknown';
+  return identifyArchitectureFamily(baseModelMetadata, '');
+}
+
+export function isVerifiedBaseModelSource(source?: string): boolean {
+  return !!source && VERIFIED_METADATA_SOURCES.has(source);
+}
+
+/**
+ * Pick the first catalog candidate whose provider-returned `baseModel` is the same
+ * architecture family as the LoRA's provider-returned `baseModel`.
+ * No architecture→checkpoint table: candidates come from the caller.
+ * Missing or ambiguous metadata returns verification 'unverified' and no checkpoint.
+ */
+export function recommendCheckpointFromVerifiedMetadata(
+  loraBaseModelMetadata: string | undefined,
+  candidates: CatalogCheckpointCandidate[],
+  loraBaseModelSource?: string
+): VerifiedCheckpointRecommendation | null {
+  if (!isVerifiedBaseModelSource(loraBaseModelSource)) return null;
+  const loraFamily = architectureFamilyFromMetadata(loraBaseModelMetadata);
+  if (loraFamily === 'unknown') return null;
+  const match = candidates.find((candidate) => {
+    if (!candidate.checkpoint || !candidate.provider) return false;
+    if (!isVerifiedBaseModelSource(candidate.baseModelSource)) return false;
+    return architectureFamilyFromMetadata(candidate.baseModelMetadata) === loraFamily;
+  });
+  if (!match) return null;
+  const profile = ARCHITECTURE_PROFILES[loraFamily];
+  return {
+    provider: match.provider,
+    checkpoint: match.checkpoint,
+    steps: profile.recommendedSteps,
+    cfg: profile.recommendedCfg,
+    sampler: profile.recommendedSampler,
+    scheduler: profile.recommendedScheduler,
+    recommendedReason: `verified base_model metadata: ${loraBaseModelMetadata}`,
+    family: loraFamily,
+    verification: 'verified',
+  };
+}
+
+/**
+ * Validates whether a Checkpoint and LoRA are architecturally compatible.
+ * `verification:'verified'` is returned only when both base-model strings were
+ * supplied as provider metadata (see `options.metadataSources`) and name the same family.
+ * A family guessed from a filename never verifies and never recommends a checkpoint.
  */
 export function validateModelCompatibility(
   checkpointName: string,
   loraBaseModelRaw?: string,
   loraName?: string,
-  preferredProvider?: string
-): { isCompatible: boolean; verification:'verified'|'unverified'|'incompatible'; message: string; recommendedCheckpoint?: string } {
+  preferredProvider?: string,
+  options?: {
+    checkpointBaseModelMetadata?: string;
+    checkpointBaseModelSource?: string;
+    loraBaseModelSource?: string;
+    candidates?: CatalogCheckpointCandidate[];
+  }
+): { isCompatible: boolean; verification:'verified'|'unverified'|'incompatible'; message: string; recommendedCheckpoint?: string; recommendedReason?: string } {
+  const recommendation = recommendCheckpointFromVerifiedMetadata(loraBaseModelRaw, options?.candidates || [], options?.loraBaseModelSource);
+  const sameVerifiedFamily = isVerifiedBaseModelSource(options?.checkpointBaseModelSource)
+    && isVerifiedBaseModelSource(options?.loraBaseModelSource)
+    && architectureFamilyFromMetadata(options?.checkpointBaseModelMetadata) !== 'unknown'
+    && architectureFamilyFromMetadata(options?.checkpointBaseModelMetadata) === architectureFamilyFromMetadata(loraBaseModelRaw);
+  if (sameVerifiedFamily) {
+    return {
+      isCompatible: true,
+      verification: 'verified',
+      message: `底模与 LoRA 的 base_model 元数据同属 ${architectureFamilyFromMetadata(loraBaseModelRaw)}（${options?.checkpointBaseModelMetadata}）`,
+      recommendedCheckpoint: recommendation?.checkpoint,
+      recommendedReason: recommendation?.recommendedReason,
+    };
+  }
   const ckptLower = (checkpointName || '').toLowerCase();
   const loraLower = (loraBaseModelRaw || '').toLowerCase();
 
@@ -300,9 +399,16 @@ export function validateModelCompatibility(
 export function getRecommendedBaseModelForLora(
   loraBaseModelRaw?: string,
   loraName?: string,
-  preferredProvider?: string
-): BaseArchitectureInfo {
-  return matchBaseModelFromArchitecture(loraBaseModelRaw, loraName, preferredProvider);
+  preferredProvider?: string,
+  candidates: CatalogCheckpointCandidate[] = [],
+  loraBaseModelSource?: string
+): BaseArchitectureInfo & { recommendation: VerifiedCheckpointRecommendation | null } {
+  const profile = matchBaseModelFromArchitecture(loraBaseModelRaw, loraName, preferredProvider);
+  const recommendation = recommendCheckpointFromVerifiedMetadata(loraBaseModelRaw, candidates, loraBaseModelSource);
+  // A filename-derived profile checkpoint is not a recommendation. Only verified metadata may name one.
+  if (!recommendation) profile.recommendedCheckpoint = '';
+  else profile.recommendedCheckpoint = recommendation.checkpoint;
+  return { ...profile, recommendation };
 }
 
 /**
@@ -314,8 +420,9 @@ export function validateLoraCompatibility(
   checkpointName: string,
   loraBaseModelRaw?: string,
   loraName?: string,
-  preferredProvider?: string
-): { isCompatible: boolean; verification:'verified'|'unverified'|'incompatible'; message: string; recommendedCheckpoint?: string; endpointUnsupported?: boolean } {
+  preferredProvider?: string,
+  options?: Parameters<typeof validateModelCompatibility>[4]
+): { isCompatible: boolean; verification:'verified'|'unverified'|'incompatible'; message: string; recommendedCheckpoint?: string; recommendedReason?: string; endpointUnsupported?: boolean } {
   const endpoint = isLoraUnsupportedOnEndpoint(preferredProvider, checkpointName);
   if (endpoint.unsupported && endpoint.message) {
     return {
@@ -325,5 +432,5 @@ export function validateLoraCompatibility(
       endpointUnsupported: true,
     };
   }
-  return validateModelCompatibility(checkpointName, loraBaseModelRaw, loraName, preferredProvider);
+  return validateModelCompatibility(checkpointName, loraBaseModelRaw, loraName, preferredProvider, options);
 }

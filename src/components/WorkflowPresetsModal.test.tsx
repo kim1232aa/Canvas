@@ -78,4 +78,13 @@ describe('preset modal blocked archives', () => {
     expect(html).toContain('wavespeed-ai/wan-2.2/t2v-480p-lora');
     expect(html).toContain('wavespeed-ai/wan-2.2/i2v-480p-lora');
   });
+
+  it('renders Tensor.Art and NanoGPT target engines and the Wan 2.2 video quick-fill pill on the extract tab', () => {
+    const html = renderToStaticMarkup(<WorkflowPresetsModal isOpen initialTab="civitai-extract" onClose={vi.fn()} onLoadPreset={vi.fn()} currentNodes={[]} currentConnections={[]} currentSpatialFrames={[]} onImportWorkflowData={vi.fn()} onClearCanvas={vi.fn()} />);
+    expect(html).toContain('Tensor.Art');
+    expect(html).toContain('需重选 TAMS 数字 ID');
+    expect(html).toContain('NanoGPT');
+    expect(html).toContain('Wan 2.2 I2V 视频 (#111400580 · 目标引擎 AI Video)');
+    expect(html).not.toContain('自动匹配');
+  });
 });
