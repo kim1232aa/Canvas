@@ -3191,14 +3191,9 @@ app.post(['/api/fal/generate', '/api/generate', '/api/engine/fal/generate'], asy
 
     const custom = applyCustomParameters(payload, req.body.custom_parameters);
     const sentPayload = custom.payload as Record<string, any>;
-    // Fal 官方文档：https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/flux-lora
-    // 已经出现在 live schema 里的字段，才在该节点上默认放开；用户显式传入时保留用户设置
-    if (liveProps && 'enable_safety_checker' in liveProps && sentPayload.enable_safety_checker === undefined) {
-      sentPayload.enable_safety_checker = false;
-    }
-    if (liveProps && 'safety_tolerance' in liveProps && sentPayload.safety_tolerance === undefined) {
-      sentPayload.safety_tolerance = '5';
-    }
+    // enable_safety_checker / safety_tolerance are sent only when custom_parameters
+    // already carries them (applyCustomParameters above). An unset field is omitted;
+    // Fal's own default then applies (checker on, tolerance "2").
 
     const response = await upstreamFetch(
       { provider: 'fal', route: req.path, model: endpoint, key: falKey },
@@ -3526,9 +3521,11 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
             notSent: true,
           });
         }
+        // Official docs leave allowMatureContent unset so the orchestrator decides from the
+        // Buzz currency charged. Send it only when the caller set it explicitly.
         const videoAllowMature = (req.body.custom_parameters && typeof req.body.custom_parameters === 'object' && req.body.custom_parameters.allowMatureContent !== undefined)
           ? Boolean(req.body.custom_parameters.allowMatureContent)
-          : (req.body.allowMatureContent !== undefined ? Boolean(req.body.allowMatureContent) : true);
+          : (req.body.allowMatureContent !== undefined ? Boolean(req.body.allowMatureContent) : undefined);
         const workflowEndpoint = `https://orchestration.civitai.com/v2/consumer/workflows?wait=${CIVITAI_VIDEO_SUBMIT_WAIT_SECONDS}`;
         const videoRequestMetadata = {
           schemaStatus: videoSchemaStatus,
@@ -3543,7 +3540,7 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
           ...(videoSchemaSelected ? { schemaSelected: videoSchemaSelected } : {}),
           ...(videoOverrides.length ? { overrides: videoOverrides } : {}),
           actualRequest: {
-            allowMatureContent: videoAllowMature,
+            ...(videoAllowMature !== undefined ? { allowMatureContent: videoAllowMature } : {}),
             steps: [{ $type: 'videoGen', input: videoInput }],
           },
           endpoint: workflowEndpoint,
@@ -3753,14 +3750,15 @@ app.post(['/api/engine/civitai/generate', '/api/civitai/generate'], async (req, 
       airModel = String(genInput.diffuserModel ?? genInput.diffusionModel ?? genInput.model);
 
       // POST /v2/consumer/workflows?wait=100 (integer seconds, max 100)
-      // 官方 Orchestration 文档 (https://developer.civitai.com/orchestration/guide/submitting-work) 规范：
-      // allowMatureContent 为 workflow JSON body 字段（与 steps 同级），非 query 参数
+      // 官方 Orchestration 文档 (https://developer.civitai.com/orchestration/guide/submitting-work)：
+      // allowMatureContent 为 workflow JSON body 字段（与 steps 同级），非 query 参数。
+      // 未填写则不发送，由上游按扣费币种决定；显式 true/false 原样发送。
       const imageAllowMature = builtImage.customParameters?.allowMatureContent !== undefined
         ? Boolean(builtImage.customParameters.allowMatureContent)
-        : (req.body.allowMatureContent !== undefined ? Boolean(req.body.allowMatureContent) : true);
+        : (req.body.allowMatureContent !== undefined ? Boolean(req.body.allowMatureContent) : undefined);
       const civitaiWorkflowUrl = 'https://orchestration.civitai.com/v2/consumer/workflows?wait=100';
       const actualWorkflowBody = {
-        allowMatureContent: imageAllowMature,
+        ...(imageAllowMature !== undefined ? { allowMatureContent: imageAllowMature } : {}),
         steps: [{ $type: 'imageGen', input: genInput }],
       };
       generationContext.getStore()?.traces.push(sanitizeGenerationMetadata({

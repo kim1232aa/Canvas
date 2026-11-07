@@ -244,8 +244,8 @@ describe('Civitai video request mapping from selected official schema', () => {
     // (c) steps[0].input 里没有这个键
     expect(resToggledOff.capturedBody.steps[0].input).not.toHaveProperty('allowMatureContent');
 
-    // Case 2: default-on (no explicit custom override) -> allowMatureContent: true
-    const resDefaultOn = await fn(
+    // Case 2: unset -> omitted. Official docs leave the field unset and let the orchestrator decide.
+    const resUnset = await fn(
       { body: {}, path: '/api/civitai/generate' },
       videoInput,
       mockFetch,
@@ -262,8 +262,8 @@ describe('Civitai video request mapping from selected official schema', () => {
       model,
       apiKey
     );
-    expect(resDefaultOn.capturedBody).toHaveProperty('allowMatureContent', true);
-    expect(resDefaultOn.capturedUrl).not.toContain('allowMatureContent=');
-    expect(resDefaultOn.capturedBody.steps[0].input).not.toHaveProperty('allowMatureContent');
+    expect(resUnset.capturedBody).not.toHaveProperty('allowMatureContent');
+    expect(resUnset.capturedUrl).not.toContain('allowMatureContent=');
+    expect(resUnset.capturedBody.steps[0].input).not.toHaveProperty('allowMatureContent');
   });
 });
