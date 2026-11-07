@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { schemaFieldBadge } from './SchemaChoiceControls';
+import { findNsfwPolicy } from '../utils/nsfw';
 import { historyCardTime } from './HistoryModal';
 import { nonGenerationOrigin, humanSummaryText } from './ExecutionLog';
 import { upstreamHttpFirstLine } from '../utils/apiFailure';
@@ -15,6 +16,15 @@ describe('P0-1 badge derives from the actualRequest rule (key present in body �
     expect(schemaFieldBadge(undefined, 'png')).toEqual({ kind: 'not_sent', text: '未填写，不发送（Schema 默认：png）' });
     expect(schemaFieldBadge(undefined)).toEqual({ kind: 'not_sent', text: '未填写，不发送' });
     expect(schemaFieldBadge({ width: 1, height: 2 }).text).toBe('会发送 {"width":1,"height":2}');
+  });
+
+  it('a safety field states the value, and an empty one states it is not sent', () => {
+    const safeMode = findNsfwPolicy('safe_mode');
+    expect(schemaFieldBadge(false, true, safeMode)).toEqual({ kind: 'send', text: '会发送 false' });
+    expect(schemaFieldBadge(undefined, undefined, safeMode)).toEqual({ kind: 'not_sent', text: '未填写，不发送（上游默认 true）' });
+    expect(schemaFieldBadge(undefined, undefined, findNsfwPolicy('allowMatureContent'))).toEqual({
+      kind: 'not_sent', text: '未填写，不发送（Schema 未声明默认）',
+    });
   });
 });
 

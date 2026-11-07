@@ -9,7 +9,7 @@ import {
   applyNsfwDefaultsToCustomParameters,
 } from './nsfw';
 
-describe('Official NSFW & Safety Policy Grounding', () => {
+describe('Official NSFW & Safety field facts', () => {
   it('verified official NSFW switches cite their verified official sources', () => {
     expect(OFFICIAL_NSFW_FIELD_POLICIES.enable_safety_checker).toMatchObject({
       field: 'enable_safety_checker',
@@ -24,7 +24,7 @@ describe('Official NSFW & Safety Policy Grounding', () => {
       type: 'boolean',
       permissiveValue: true,
       upstreamDefault: false,
-      docUrl: 'https://docs.together.ai/openapi.yaml',
+      docUrl: 'https://docs.together.ai/docs/inference/images/parameters',
     });
 
     expect(OFFICIAL_NSFW_FIELD_POLICIES.safe_mode).toMatchObject({
@@ -32,7 +32,7 @@ describe('Official NSFW & Safety Policy Grounding', () => {
       type: 'boolean',
       permissiveValue: false,
       upstreamDefault: true,
-      docUrl: 'https://api.venice.ai/api/v1/swagger.yaml',
+      docUrl: 'https://docs.venice.ai/guides/media/image-generation',
     });
 
     expect(OFFICIAL_NSFW_FIELD_POLICIES.safety_tolerance).toMatchObject({
@@ -40,7 +40,7 @@ describe('Official NSFW & Safety Policy Grounding', () => {
       type: 'enum',
       permissiveValue: '5',
       upstreamDefault: '2',
-      docUrl: 'https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/flux-pro/v1.1',
+      docUrl: 'https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/flux-2-flex',
     });
 
     expect(OFFICIAL_NSFW_FIELD_POLICIES.moderation).toMatchObject({
@@ -48,14 +48,14 @@ describe('Official NSFW & Safety Policy Grounding', () => {
       type: 'enum',
       permissiveValue: 'low',
       upstreamDefault: 'auto',
-      docUrl: 'https://api.venice.ai/api/v1/swagger.yaml',
+      docUrl: 'https://docs.venice.ai/guides/media/image-generation',
     });
 
     expect(OFFICIAL_NSFW_FIELD_POLICIES.allowMatureContent).toMatchObject({
       field: 'allowMatureContent',
       type: 'boolean',
       permissiveValue: true,
-      upstreamDefault: false,
+      upstreamDefault: undefined,
       docUrl: 'https://developer.civitai.com/orchestration/guide/submitting-work',
     });
 
@@ -68,13 +68,12 @@ describe('Official NSFW & Safety Policy Grounding', () => {
     });
   });
 
-  it('unverified or conflicting switches are documented and excluded from automatic injection', () => {
+  it('unverified or conflicting switches are documented and excluded from the field list', () => {
     expect(UNVERIFIED_NSFW_FIELDS.checkNSFW.status).toBe('unverified');
     expect(UNVERIFIED_NSFW_FIELDS.nsfw_detection.status).toBe('unverified_schema_mismatch');
     expect(UNVERIFIED_NSFW_FIELDS.safety_checker.status).toBe('conflicting_documentation');
     expect(UNVERIFIED_NSFW_FIELDS.safetySettings.status).toBe('unverified_in_schema');
 
-    // Must NOT be in official active policy mapping
     expect(isNsfwField('checkNSFW')).toBe(false);
     expect(isNsfwField('nsfw_detection')).toBe(false);
     expect(isNsfwField('safety_checker')).toBe(false);
@@ -84,13 +83,13 @@ describe('Official NSFW & Safety Policy Grounding', () => {
   it('correctly matches policy by field name', () => {
     expect(isNsfwField('disable_safety_checker')).toBe(true);
     expect(isNsfwField('random_unknown_field')).toBe(false);
-    expect(findNsfwPolicy('safe_mode')?.docUrl).toBe('https://api.venice.ai/api/v1/swagger.yaml');
+    expect(findNsfwPolicy('safe_mode')?.docUrl).toBe('https://docs.venice.ai/guides/media/image-generation');
     expect(getNsfwPermissiveDefault('enable_safety_checker')).toBe(false);
     expect(getNsfwPermissiveDefault('disable_safety_checker')).toBe(true);
   });
 
   describe('extractDeclaredNsfwDefaults', () => {
-    it('extracts permissive defaults only for fields declared in schemaProps', () => {
+    it('lists only fields the schema declares, and lists nothing for an unrelated schema', () => {
       const togetherProps = {
         prompt: { type: 'string' },
         disable_safety_checker: { type: 'boolean', default: false },
@@ -122,43 +121,31 @@ describe('Official NSFW & Safety Policy Grounding', () => {
         seed: { type: 'integer' },
       };
       expect(extractDeclaredNsfwDefaults(unrelatedProps)).toEqual({});
+      expect(extractDeclaredNsfwDefaults(undefined)).toEqual({});
     });
   });
 
-  describe('applyNsfwDefaultsToCustomParameters & Toggle-back path', () => {
-    it('transparently adds declared NSFW defaults when missing from custom_parameters', () => {
-      const schemaProps = {
-        disable_safety_checker: { type: 'boolean' },
-      };
+  describe('applyNsfwDefaultsToCustomParameters', () => {
+    it('does not write a declared safety field that the user left unset', () => {
+      const schemaProps = { disable_safety_checker: { type: 'boolean' } };
       const initial = JSON.stringify({ steps: 20 });
-      const next = applyNsfwDefaultsToCustomParameters(initial, schemaProps);
-      const parsed = JSON.parse(next);
-
-      expect(parsed.steps).toBe(20);
-      expect(parsed.disable_safety_checker).toBe(true);
+      expect(applyNsfwDefaultsToCustomParameters(initial, schemaProps)).toBe(initial);
     });
 
-    it('strictly preserves user toggle-back overrides (e.g. user chose disable_safety_checker: false)', () => {
-      const schemaProps = {
-        disable_safety_checker: { type: 'boolean' },
-      };
-      const userToggledBack = JSON.stringify({ disable_safety_checker: false });
-      const next = applyNsfwDefaultsToCustomParameters(userToggledBack, schemaProps);
-      const parsed = JSON.parse(next);
-
-      // Must remain false as set by user, never overwritten back
-      expect(parsed.disable_safety_checker).toBe(false);
+    it('returns the user value unchanged, including a restrictive choice', () => {
+      const schemaProps = { disable_safety_checker: { type: 'boolean' } };
+      const userSet = JSON.stringify({ disable_safety_checker: false, steps: 20 });
+      expect(applyNsfwDefaultsToCustomParameters(userSet, schemaProps)).toBe(userSet);
     });
 
-    it('strictly preserves user toggle-back overrides for enable_safety_checker (user chose true)', () => {
-      const schemaProps = {
-        enable_safety_checker: { type: 'boolean' },
-      };
-      const userToggledBack = JSON.stringify({ enable_safety_checker: true });
-      const next = applyNsfwDefaultsToCustomParameters(userToggledBack, schemaProps);
-      const parsed = JSON.parse(next);
+    it('returns the user value unchanged when they chose the open value', () => {
+      const schemaProps = { enable_safety_checker: { type: 'boolean' } };
+      const userSet = JSON.stringify({ enable_safety_checker: false });
+      expect(applyNsfwDefaultsToCustomParameters(userSet, schemaProps)).toBe(userSet);
+    });
 
-      expect(parsed.enable_safety_checker).toBe(true);
+    it('does not invent a body when custom_parameters is empty', () => {
+      expect(applyNsfwDefaultsToCustomParameters(undefined, { safe_mode: { type: 'boolean' } })).toBe('{}');
     });
   });
 });

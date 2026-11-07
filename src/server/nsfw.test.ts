@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { applyNsfwDefaultsToPayload } from './nsfw';
 
-describe('Server-side NSFW Defaults & Audit Logging', () => {
-  it('applies permissive default to payload when declared in schema and missing in payload', () => {
-    const payload: Record<string, any> = { prompt: 'a beautiful landscape' };
+describe('Server-side NSFW payload is never rewritten', () => {
+  it('does not add a declared safety field the payload omitted', () => {
+    const payload: Record<string, any> = { prompt: 'a red fox sitting on a stone wall at dusk' };
     const schemaProps = {
       prompt: { type: 'string' },
       disable_safety_checker: { type: 'boolean', default: false },
@@ -11,19 +11,14 @@ describe('Server-side NSFW Defaults & Audit Logging', () => {
 
     const applied = applyNsfwDefaultsToPayload(payload, schemaProps);
 
-    expect(payload.disable_safety_checker).toBe(true);
-    expect(applied).toHaveLength(1);
-    expect(applied[0]).toMatchObject({
-      field: 'disable_safety_checker',
-      value: true,
-      docUrl: 'https://docs.together.ai/openapi.yaml',
-    });
+    expect(payload).toEqual({ prompt: 'a red fox sitting on a stone wall at dusk' });
+    expect(applied).toEqual([]);
   });
 
-  it('does NOT overwrite explicit user setting in payload (toggle-back preserved)', () => {
+  it('does not change a value the caller already set', () => {
     const payload: Record<string, any> = {
-      prompt: 'a beautiful landscape',
-      disable_safety_checker: false, // user explicitly toggled back
+      prompt: 'a red fox sitting on a stone wall at dusk',
+      disable_safety_checker: false,
     };
     const schemaProps = {
       prompt: { type: 'string' },
@@ -32,32 +27,22 @@ describe('Server-side NSFW Defaults & Audit Logging', () => {
 
     const applied = applyNsfwDefaultsToPayload(payload, schemaProps);
 
-    // Stays false
     expect(payload.disable_safety_checker).toBe(false);
-    expect(applied).toHaveLength(0);
+    expect(applied).toEqual([]);
   });
 
-  it('applies permissive default for safe_mode (Venice)', () => {
-    const payload: Record<string, any> = { prompt: 'portrait' };
-    const schemaProps = {
-      safe_mode: { type: 'boolean', default: true },
-    };
+  it('does not fill Venice safe_mode or Fal enable_safety_checker', () => {
+    const venice: Record<string, any> = { prompt: 'portrait of a red fox' };
+    const fal: Record<string, any> = { prompt: 'portrait of a red fox' };
 
-    const applied = applyNsfwDefaultsToPayload(payload, schemaProps);
-
-    expect(payload.safe_mode).toBe(false);
-    expect(applied[0].docUrl).toBe('https://api.venice.ai/api/v1/swagger.yaml');
+    expect(applyNsfwDefaultsToPayload(venice, { safe_mode: { type: 'boolean', default: true } })).toEqual([]);
+    expect(applyNsfwDefaultsToPayload(fal, { enable_safety_checker: { type: 'boolean', default: true } })).toEqual([]);
+    expect(venice).toEqual({ prompt: 'portrait of a red fox' });
+    expect(fal).toEqual({ prompt: 'portrait of a red fox' });
   });
 
-  it('applies permissive default for enable_safety_checker (Fal / AIMLAPI)', () => {
-    const payload: Record<string, any> = { prompt: 'art' };
-    const schemaProps = {
-      enable_safety_checker: { type: 'boolean', default: true },
-    };
-
-    const applied = applyNsfwDefaultsToPayload(payload, schemaProps);
-
-    expect(payload.enable_safety_checker).toBe(false);
-    expect(applied[0].docUrl).toBe('https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/flux-lora');
+  it('returns nothing for a missing schema or payload', () => {
+    expect(applyNsfwDefaultsToPayload({ prompt: 'x' }, undefined)).toEqual([]);
+    expect(applyNsfwDefaultsToPayload(undefined as any, { safe_mode: {} })).toEqual([]);
   });
 });

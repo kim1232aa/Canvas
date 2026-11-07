@@ -52,53 +52,49 @@ export function CivitaiAllowMatureControl({
   let customObj: Record<string, any> = {};
   try { customObj = JSON.parse(customParameters || '{}'); } catch {}
   const isUnset = customObj.allowMatureContent === undefined;
-  const currentVal = isUnset ? true : Boolean(customObj.allowMatureContent);
-
-  // P2-3: seed allowMatureContent: true into custom_parameters on mount if unset
-  React.useEffect(() => {
-    if (isUnset) {
-      const nextCustom = { ...customObj, allowMatureContent: true };
-      onChangeCustom(JSON.stringify(nextCustom, null, 2));
-    }
-  }, [isUnset]);
+  const currentVal = isUnset ? undefined : Boolean(customObj.allowMatureContent);
+  const badge = isUnset
+    ? '未填写，不发送（Schema 未声明默认）'
+    : `会发送 ${String(currentVal)}`;
 
   return (
     <div className="space-y-1 pt-1" data-testid="civitai-allow-mature-control">
       <div className="flex items-center justify-between">
         <label className="text-sm text-slate-300">Civitai allowMatureContent</label>
-        <span className={`text-[10px] px-1.5 py-0.5 rounded border ${currentVal ? 'border-pink-500/60 bg-pink-950/40 text-pink-300 font-semibold' : 'border-amber-500/60 bg-amber-950/40 text-amber-300'}`}>
-          {currentVal ? '会发送 true（默认开启 NSFW）' : '会发送 false（已开启安全过滤）'}
+        <span className={`text-[10px] px-1.5 py-0.5 rounded border ${isUnset ? 'border-slate-600 text-slate-400' : 'border-emerald-500/50 text-emerald-300'}`}>
+          {badge}
         </span>
       </div>
       <select
         aria-label="Civitai allowMatureContent"
-        value={String(currentVal)}
+        value={isUnset ? '' : String(currentVal)}
         onChange={(e) => {
-          const nextVal = e.target.value === 'true';
-          const nextCustom = { ...customObj, allowMatureContent: nextVal };
+          const nextCustom = { ...customObj };
+          if (e.target.value === '') delete nextCustom.allowMatureContent;
+          else nextCustom.allowMatureContent = e.target.value === 'true';
           onChangeCustom(JSON.stringify(nextCustom, null, 2));
         }}
         className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2 text-slate-200 text-xs font-mono"
       >
-        <option value="true">true（允许成人内容，默认）</option>
-        <option value="false">false（禁止成熟/成人内容，严格过滤）</option>
+        <option value="">（不发送）</option>
+        <option value="true">true</option>
+        <option value="false">false</option>
       </select>
-      <div className="flex items-center justify-between text-[11px] text-pink-300/80 bg-pink-950/20 px-2 py-1 rounded border border-pink-900/30">
-        <span>默认允许成人内容 (NSFW)</span>
-        {!currentVal && (
+      {currentVal !== true && (
+        <div className="flex items-center justify-end text-[11px] px-2 py-1">
           <button
             type="button"
             onClick={() => {
               const nextCustom = { ...customObj, allowMatureContent: true };
               onChangeCustom(JSON.stringify(nextCustom, null, 2));
             }}
-            className="text-[10px] text-cyan-300 hover:text-cyan-200 underline font-semibold ml-2 cursor-pointer shrink-0"
+            className="text-[10px] text-cyan-300 hover:text-cyan-200 underline font-semibold cursor-pointer shrink-0"
           >
-            恢复默认
+            填入 true
           </button>
-        )}
-      </div>
-      <p className="text-[10px] text-slate-400">官方 Orchestration 工作流 JSON body 根级字段（与 steps 同级）。需账户具备对应浏览等级与 Yellow Buzz。</p>
+        </div>
+      )}
+      <p className="text-[10px] text-slate-400">官方 Orchestration 工作流 JSON body 根级字段（与 steps 同级）。不填时由上游按扣费币种决定；true 强制 Yellow Buzz。</p>
     </div>
   );
 }

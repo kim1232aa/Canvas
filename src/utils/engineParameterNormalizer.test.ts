@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeForComfyUI } from './engineParameterNormalizer';
+import { normalizeForComfyUI, normalizeForFal } from './engineParameterNormalizer';
 import type { ComfyParameters } from '../types/graph';
 
 const params = (partial: Partial<ComfyParameters> = {}): ComfyParameters => ({
@@ -39,5 +39,23 @@ describe('normalizeForComfyUI sampler and scheduler requirements', () => {
       sampler_name: 'dpmpp_2m',
       scheduler: 'karras',
     });
+  });
+});
+
+describe('normalizeForFal safety fields', () => {
+  it('omits enable_safety_checker and safety_tolerance when custom_parameters does not set them', () => {
+    const result = normalizeForFal(params(), 'a red fox on a stone wall', '');
+    expect(result.payload).not.toHaveProperty('enable_safety_checker');
+    expect(result.payload).not.toHaveProperty('safety_tolerance');
+  });
+
+  it('copies the values the user set and does not replace them', () => {
+    const result = normalizeForFal(
+      params({ customParameters: JSON.stringify({ enable_safety_checker: true, safety_tolerance: '2' }) }),
+      'a red fox on a stone wall',
+      ''
+    );
+    expect(result.payload.enable_safety_checker).toBe(true);
+    expect(result.payload.safety_tolerance).toBe('2');
   });
 });
