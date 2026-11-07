@@ -15,10 +15,12 @@ export const PRESET_RECIPE_PROMPTS: Record<string, RecipePrompt> = {
     "prompt": "t3chnic4lly A gritty documentary-style photograph capturing a tightly packed crowd of muscular old men in black suits, dancing energetically within a dark industrial warehouse. The old men's faces show exaggerated expressions of joy. Sweat glistens on their faces. The lighting is provided by harsh, direct on-camera flash, creating stark white highlights, deep shadows, and significant motion blur among the moving figures. Industrial commercial lasers cut through the dark, highlighting dust motes. Concrete pillars and exposed structural beams are visible in the crowded background. The film grain is heavy.",
     "source": "https://civitai.red/images/113739497"
   },
-  "std-modelscope-ai-t2i": {
-    "prompt": "t3chnic4lly A gritty documentary-style photograph capturing a tightly packed crowd of muscular old men in black suits, dancing energetically within a dark industrial warehouse. The old men's faces show exaggerated expressions of joy. Sweat glistens on their faces. The lighting is provided by harsh, direct on-camera flash, creating stark white highlights, deep shadows, and significant motion blur among the moving figures. Industrial commercial lasers cut through the dark, highlighting dust motes. Concrete pillars and exposed structural beams are visible in the crowded background. The film grain is heavy.",
-    "source": "https://civitai.red/images/113739497"
-  },
+  // std-modelscope-ai-t2i has no entry on purpose. Its LoRA card
+  // (https://www.modelscope.ai/models/LcarsPicturesDatabase/ST-TNG-Rooms-Z-Image-Turbo-v1, opened 2026-11-07)
+  // quotes no generation prompt: the README inference sample is the placeholder "a cat" and its load_lora call
+  // points at a different model (caciotta/StarTrek-UFP-Starliner). The Technically Color prompt (trigger
+  // t3chnic4lly) belongs to a different LoRA, so it is not kept, and no prompt is invented. The preset loads
+  // empty and is marked pendingRecipe.
   "std-modelscope-t2i": {
     "prompt": "t3chnic4lly A gritty documentary-style photograph capturing a tightly packed crowd of muscular old men in black suits, dancing energetically within a dark industrial warehouse. The old men's faces show exaggerated expressions of joy. Sweat glistens on their faces. The lighting is provided by harsh, direct on-camera flash, creating stark white highlights, deep shadows, and significant motion blur among the moving figures. Industrial commercial lasers cut through the dark, highlighting dust motes. Concrete pillars and exposed structural beams are visible in the crowded background. The film grain is heavy.",
     "source": "https://civitai.red/images/113739497"

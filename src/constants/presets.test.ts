@@ -218,7 +218,7 @@ describe('standard workflow presets (20 T2I + 3 T2V + 3 I2V)', () => {
   });
 
   it('every preset recipe prompt cites a real recipe page URL (no hist_/doc/official-example/family sources)', () => {
-    const RECIPE_PAGE = /^https:\/\/(civitai\.(com|red)\/images\/\d+|civitai\.com\/api\/v1\/model-versions\/\d+|developer\.civitai\.com\/orchestration\/recipes\/[a-z0-9._-]+\.md|tensor\.art\/images\/\d+|huggingface\.co\/[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+|runware\.ai\/docs\/models\/[a-z0-9-]+)$/;
+    const RECIPE_PAGE = /^https:\/\/(civitai\.(com|red)\/images\/\d+|civitai\.com\/api\/v1\/model-versions\/\d+|developer\.civitai\.com\/orchestration\/recipes\/[a-z0-9._-]+\.md|tensor\.art\/images\/\d+|huggingface\.co\/[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+|runware\.ai\/docs\/models\/[a-z0-9-]+|www\.modelscope\.(cn|ai)\/models\/[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+)$/;
     for (const [id, r] of Object.entries(PRESET_RECIPE_PROMPTS)) {
       expect(r.source, id).toMatch(RECIPE_PAGE);
       expect(r.source, id).not.toMatch(/hist_|\/family|example\.com/i);
@@ -226,9 +226,11 @@ describe('standard workflow presets (20 T2I + 3 T2V + 3 I2V)', () => {
     }
   });
 
-  it('every shipped preset has a non-placeholder recipe prompt', () => {
+  it('every shipped preset has a non-placeholder recipe prompt (pendingRecipe cards are the exception: they load empty)', () => {
     const banned = new Set(['', STD_PROMPT_PLACEHOLDER, 'test', '1', 'a']);
     for (const p of WORKFLOW_PRESETS) {
+      // A pending card may ship a real opened prompt (ModelsLab) or none (魔搭 AI, whose LoRA card quotes none).
+      if (p.pendingRecipe && !(PRESET_RECIPE_PROMPTS[p.id]?.prompt ?? '').trim()) { expect(PRESET_RECIPE_PROMPTS[p.id]?.prompt ?? '', p.id).toBe(''); continue; }
       expect(PRESET_RECIPE_PROMPTS[p.id], p.id).toBeTruthy();
       const prompt = PRESET_RECIPE_PROMPTS[p.id].prompt;
       expect(banned.has(prompt), p.id).toBe(false);
@@ -444,9 +446,12 @@ describe('standard workflow presets (20 T2I + 3 T2V + 3 I2V)', () => {
 
   it('ModelsLab/Civitai seed Schema-supported fields into schemaProperties (no false amber omit)', () => {
     // ModelsLab z-image-turbo llms.txt: width/height required; steps/cfg/sampler/scheduler/denoise not listed.
+    // lora_model is required there but no real id was opened, so the card is 待配方 and run is blocked.
     {
       const p = preset('std-modelslab-t2i');
       expect(p.category).toBe('静物与文字');
+      expect(p.pendingRecipe).toMatch(/lora_model/);
+      expect(loader(p.id)!.values.execution_blocked_reason).toBe(p.pendingRecipe);
       expect(loader(p.id)!.values.ckpt_name).toBe('z-image-turbo');
       const ks = p.nodes.find(n => n.type === 'KSampler')!;
       expect(ks.values.steps).toBeUndefined();
@@ -587,10 +592,11 @@ describe('standard workflow presets (20 T2I + 3 T2V + 3 I2V)', () => {
     expect(ks('std-sogni-t2i').seed).toBe(64107730);
   });
 
-  it('AIMLAPI shows steps only (official schema has no guidance_scale/cfg)', () => {
+  it('AIMLAPI ships the official maximum of 8 steps (schema max 8; the recipe value 12 would be rejected)', () => {
     const ks = preset('std-aimlapi-t2i').nodes.find(n => n.type === 'KSampler')!;
-    // Recipe civitai.red/images/113739497 values copied verbatim (cfg 1 sent as-is).
-    expect(ks.values).toMatchObject({ steps: 12, cfg: 1, seed: 1840591390 });
+    // docs.aimlapi.com z-image-turbo-lora: num_inference_steps min 1 max 8. cfg 1 is the recipe value, sent as-is.
+    expect(ks.values).toMatchObject({ steps: 8, cfg: 1, seed: 1840591390 });
+    expect(ks.values.steps).toBeLessThanOrEqual(8);
   });
 
   it('MuAPI ships a visible LoRA mount point with public Retroanime LoRA and no local run lock', () => {
@@ -620,14 +626,14 @@ describe('standard workflow presets (20 T2I + 3 T2V + 3 I2V)', () => {
     }
   });
 
-  it('no shipped preset has an empty model, empty prompt, empty lora_name, or a legacy model id', () => {
+  it('no shipped preset has an empty model, empty prompt, empty lora_name, or a legacy model id (a pendingRecipe card may load with an empty prompt)', () => {
     const legacy = [/sd.?1\.?5/i, /stable-diffusion-v1-5/i, /\bflux\.?1\b/i, /flux-schnell/i, /flux-dev/i, /wan.?2\.1/i, /wan-t2v/i, /venice-sd35/i];
     for (const p of WORKFLOW_PRESETS) {
       const s = presetSummary(p);
       expect(s.model.length, p.id).toBeGreaterThan(0);
       for (const re of legacy) expect(s.model, p.id).not.toMatch(re);
       for (const n of p.nodes) {
-        if (n.type === 'CLIPTextEncode') expect(String(n.values.text ?? '').trim().length, p.id).toBeGreaterThan(0);
+        if (n.type === 'CLIPTextEncode' && !p.pendingRecipe) expect(String(n.values.text ?? '').trim().length, p.id).toBeGreaterThan(0);
         if (n.type === 'AIVideoNode') expect(String(n.values.prompt ?? '').trim().length, p.id).toBeGreaterThan(0);
         if (n.type === 'LoRALoader') {
           expect(String(n.values.lora_name ?? '').length, p.id).toBeGreaterThan(0);
@@ -663,6 +669,12 @@ describe('standard workflow presets (20 T2I + 3 T2V + 3 I2V)', () => {
     }
     expect(lora('std-modelscope-t2i')!.values.lora_name).toBe('hf/renderartist-Technically-Color-Z-Image-Turbo');
     expect(lora('std-modelscope-ai-t2i')!.values.lora_name).toBe('LcarsPicturesDatabase/ST-TNG-Rooms-Z-Image-Turbo-v1');
+    // Its model card quotes no generation prompt, so the card loads empty and stays unverified.
+    const intl = preset('std-modelscope-ai-t2i');
+    expect(intl.pendingRecipe).toMatch(/a cat/);
+    expect(PRESET_RECIPE_PROMPTS['std-modelscope-ai-t2i']).toBeUndefined();
+    expect(intl.nodes.find(n => n.type === 'CLIPTextEncode')!.values.text).toBe('');
+    expect(lora('std-modelscope-ai-t2i')!.values.unresolvedResource).toBe(true);
   });
 
   it('Mage omits EmptyLatent pixel size; aspect_ratio/resolution live on checkpoint (no compact)', () => {

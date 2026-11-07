@@ -36,7 +36,8 @@ describe('std presets dry-run (load → extract, no send)', () => {
       const hasRecipe = Boolean(PRESET_RECIPE_PROMPTS[p.id]);
       if (hasRecipe === emptyPrompt) issues.push(hasRecipe ? 'recipe prompt not loaded' : 'prompt filled without a recipe');
       // No recipe → loads empty and extraction succeeds with exactly empty string (no fallback prompt).
-      if (!hasRecipe) {
+      // A pendingRecipe card is the exception: it is built to refuse the run, so the throw is the expected result.
+      if (!hasRecipe && !p.pendingRecipe) {
         try {
           const testNodes = p.nodes.map((n) => ({ ...n, values: { ...n.values, ...(n.type === 'LoadImage' ? { image_url: 'https://example.com/ref.png' } : {}), ...(n.type === 'CheckpointLoaderSimple' && !n.values?.ckpt_name ? { ckpt_name: 'USER_SELECTED_MODEL' } : {}), ...(n.type === 'AIVideoNode' && !n.values?.model ? { model: 'USER_SELECTED_MODEL' } : {}) } }));
           const rawExtracted = extractWorkflowParameters(testNodes as any, p.connections as any, resolveRunTarget(testNodes as any, p.connections as any, undefined, undefined).id);
@@ -62,6 +63,20 @@ describe('std presets dry-run (load → extract, no send)', () => {
         const ks = nodes.find((n) => n.type === 'KSampler');
         const brk = ks ? modelChainBreak(nodes as any, p.connections as any, ks.id) : undefined;
         if (brk) issues.push(`chain: ${brk}`);
+        if (p.pendingRecipe) {
+          // A 待配方 card must refuse to run and say why, not silently extract a sendable request.
+          // A card that also mounts an unverified LoRA is stopped by the unresolved-resource check first;
+          // the pending reason still has to be present in that message or on the card itself.
+          let thrown = '';
+          try { extractWorkflowParameters(nodes as any, p.connections as any, tid); }
+          catch (e: any) { thrown = String(e?.message ?? e); }
+          const blocked = thrown.includes(p.pendingRecipe) || /未核实资源/.test(thrown);
+          if (!blocked) issues.push(`pendingRecipe card did not block the run: ${thrown || 'extracted a request'}`);
+          notes.push(`pendingRecipe blocks run (${thrown.slice(0, 80)})`);
+          rows.push(`| ${p.id} | ${issues.length ? 'FAIL' : 'BLOCKED'} | - | ${issues.join('; ') || '-'} | ${notes.join('; ')} |`);
+          expect(issues, p.id).toEqual([]);
+          return;
+        }
         const x = extractWorkflowParameters(nodes as any, p.connections as any, tid);
         if (!x.targetProvider) issues.push('no provider');
         if (!x.checkpointModel) issues.push('no model');

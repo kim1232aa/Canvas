@@ -16,8 +16,8 @@ type StdSpec = {
   targetProvider?: string;
   ckpt: string;
   hasLora: boolean;
-  /** Real LoRAs proven in an accepted run (evidence path in comment at the spec). Chained in order. Empty/missing → no LoRALoader node. */
-  loras?: Array<{ name: string; strength: number; source: string }>;
+  /** Real LoRAs proven in an accepted run (evidence path in comment at the spec). Chained in order. Empty/missing → no LoRALoader node. unresolved: the id is real but its card has no opened prompt, so the node stays unverified. */
+  loras?: Array<{ name: string; strength: number; source: string; unresolved?: boolean }>;
   /** Extra Checkpoint values (civitai engine fields, agnes size, etc.) */
   checkpointExtra?: Record<string, unknown>;
   steps?: number;
@@ -195,6 +195,9 @@ function buildStandardT2i(spec: StdSpec): WorkflowPreset {
         strength_model: l.strength,
         strength_clip: l.strength,
         trigger_words: '',
+        // A mounted LoRA clears the pendingRecipe lock, so a card whose prompt could not be opened
+        // marks the resource unresolved: extraction throws until the user re-selects a verified one.
+        ...(l.unresolved ? { import_unresolved_resource: true, unresolvedResource: true, import_resource_reason: spec.pendingRecipe } : {}),
       },
     });
     const sfx = i === 0 ? '' : `-${i + 1}`;
@@ -328,7 +331,7 @@ function buildStandardT2i(spec: StdSpec): WorkflowPreset {
         width: keep('width', width),
         height: keep('height', height),
         batchSize: 1,
-        loras: loraList.map(l => ({ name: l.name, modelStrength: l.strength, clipStrength: l.strength, triggerWords: '' })),
+        loras: loraList.map(l => ({ name: l.name, modelStrength: l.strength, clipStrength: l.strength, triggerWords: '', ...(l.unresolved ? { unresolvedResource: true } : {}) })),
         ...(spec.checkpointExtra?.civitai_engine
           ? {
               civitaiEngine: spec.checkpointExtra.civitai_engine as string,
@@ -883,13 +886,13 @@ function buildStandardI2v(spec: I2vSpec): WorkflowPreset {
 }
 
 /**
- * 23 standard text-to-image + 6 standard image-to-video.
+ * 20 standard text-to-image + 3 standard text-to-video + 3 standard image-to-video.
  * SenseNova/Sogni stay on the roster (雁: every listed provider keeps a standard card).
  * Sogni: protocol selector krea-2-turbo (LoRA via loras+loraStrengths; no steps/cfg in schema).
  * SenseNova: sensenova-u1.5-lite (official Token Plan; no LoRA in image Schema).
  * OpenWorks T2I: full params + LoRA (雁 2026-10-17 15:27 override of the old four-field rule).
  * WaveSpeed T2I: wavespeed-ai/flux-dev-lora (accepted board hist_1792224305224_meynb); Schema has no negative.
- * I2V: fal/wavespeed/civitai/novita/muapi/replicate.
+ * I2V: fal/wavespeed/civitai (novita/muapi/replicate empty cards removed by M41).
  */
 const STD_SPECS: StdSpec[] = [
   // Hugging Face always POSTs https://router.huggingface.co/hf-inference/models/${model} (no fal-ai / Space detour).
@@ -915,19 +918,25 @@ const STD_SPECS: StdSpec[] = [
     height: 832,
     omit: ['sampler', 'scheduler', 'denoise'],
   },
-  // Intl accepted temp/e2e/modelscope-intl-lora-2026-11-02: Lcars LoRA@1 (CN rejects this id).
+  // Intl LoRA id LcarsPicturesDatabase/ST-TNG-Rooms-Z-Image-Turbo-v1 @1 (CN rejects this id).
+  // Its model card (https://www.modelscope.ai/models/LcarsPicturesDatabase/ST-TNG-Rooms-Z-Image-Turbo-v1, opened
+  // 2026-11-07) describes TNG room interiors but quotes no generation prompt: the README inference sample is the
+  // placeholder "a cat" and its load_lora call points at a different model (caciotta/StarTrek-UFP-Starliner).
+  // The Technically Color prompt (trigger t3chnic4lly) belongs to a different LoRA, so it is not kept and none
+  // is invented. The card loads with an empty prompt and is 待配方 until a prompt from this card is opened.
   {
     provider: 'modelscope_ai',
     category: '科幻室内',
     title: '星际舰桥室内',
     ckpt: 'Tongyi-MAI/Z-Image-Turbo',
     hasLora: true,
-    loras: [{ name: 'LcarsPicturesDatabase/ST-TNG-Rooms-Z-Image-Turbo-v1', strength: 1, source: 'temp/e2e/modelscope-intl-lora-2026-11-02' }],
+    loras: [{ name: 'LcarsPicturesDatabase/ST-TNG-Rooms-Z-Image-Turbo-v1', strength: 1, source: 'https://www.modelscope.ai/models/LcarsPicturesDatabase/ST-TNG-Rooms-Z-Image-Turbo-v1', unresolved: true }],
     steps: 8,
     cfg: 1,
     width: 832,
     height: 1216,
     omit: ['sampler', 'scheduler', 'denoise'],
+    pendingRecipe: '魔搭 AI 所挂 LoRA（LcarsPicturesDatabase/ST-TNG-Rooms-Z-Image-Turbo-v1）的模型卡没有生成用提示词：README 的推理示例是占位符 “a cat”，且 load_lora 指向另一个模型 caciotta/StarTrek-UFP-Starliner。原先的 t3chnic4lly 提示词属于另一张 LoRA，已移除，不另造提示词。打开到该卡自己的提示词后再运行。',
   },
   // NanoGPT live endpoint: moss-image (MOSS Image by OpenMOSS, verified live 2026-11-06).
   // Parameters: num_inference_steps (1-100, default 50), guidance_scale (0-10, default 3), negative_prompt, seed, resolution (mapped from EmptyLatentImage 1024x1024).
@@ -1011,9 +1020,11 @@ const STD_SPECS: StdSpec[] = [
     omit: ['steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'width', 'height'],
     checkpointExtra: { aspect_ratio: '1:1', resolution: '1K' } },
   { provider: 'together', category: '静物与文字', title: '冰箱便签静物', ckpt: 'black-forest-labs/FLUX.2-dev', hasLora: false, steps: 20, cfg: 1, omit: ['sampler', 'scheduler', 'denoise'] },
-  // docs/evidence/aimlapi-lora-p0-2026-10-15.md + aimlapi.json: steps 1–8, no guidance_scale → omit cfg. No accepted-run LoRA → no LoRA node.
-  // Recipe https://civitai.red/images/113739497 (verbatim incl. cfg 1 — sent as-is; upstream decides).
-  { provider: 'aimlapi', category: '纪实闪光', title: '闪光纪实人群', ckpt: 'alibaba/z-image-turbo-lora', hasLora: true, hasNegative: false, seed: 1840591390, steps: 12, cfg: 1, width: 1216, height: 832,
+  // Official schema https://docs.aimlapi.com/api-references/image-models/alibaba-cloud/z-image-turbo-lora (opened 2026-11-07):
+  // num_inference_steps integer min 1 max 8. The recipe's steps 12 is above that max, so the card ships the verified maximum 8.
+  // The same page has no guidance_scale; cfg 1 is the recipe value and is sent as-is (upstream decides).
+  // Recipe https://civitai.red/images/113739497.
+  { provider: 'aimlapi', category: '纪实闪光', title: '闪光纪实人群', ckpt: 'alibaba/z-image-turbo-lora', hasLora: true, hasNegative: false, seed: 1840591390, steps: 8, cfg: 1, width: 1216, height: 832,
     loras: [{ name: 'https://huggingface.co/renderartist/Technically-Color-Z-Image-Turbo/resolve/main/Technically_Color_Z_Image_Turbo_v1_renderartist_2000.safetensors', strength: 0.9, source: 'https://civitai.red/images/113739497' }],
     omit: ['sampler', 'scheduler', 'denoise'] },
   // Novita T2I removed (M41): the card shipped ckpt '' + lora_name ''. docs.novita.ai index (2026-11-07)
@@ -1045,9 +1056,11 @@ const STD_SPECS: StdSpec[] = [
     omit: ['cfg', 'sampler', 'scheduler', 'denoise'],
     description: 'Runware 官方 Krea 2 Turbo（krea:krea@2-turbo）。提示词取自该模型文档示例「Converted Water Tower Living Room」。lora 字段官方支持但未打开到具体 LoRA AIR，故不挂空 LoRA。',
   },
-  // ModelsLab: https://modelslab.com/models/modelslab/z-image-turbo/llms.txt (fetched 2026-11-07).
-  // model_id z-image-turbo; width/height required 512–1488. lora_model is listed required but the example value
-  // is the UI placeholder "Select LoRA models..." — no real LoRA id was opened, so no empty LoRA node.
+  // ModelsLab: https://modelslab.com/models/modelslab/z-image-turbo/llms.txt (opened 2026-11-07).
+  // model_id z-image-turbo; width/height required 512–1488. lora_model is listed required, but the only example
+  // value is the UI placeholder "Select LoRA models...". The enterprise docs page marks lora_model optional and
+  // shows null. Related model pages (z-image-lora, zit-mystic-hhh-d) are separate model_ids, not a lora_model value.
+  // No real LoRA id was opened, so the card is 待配方 and run is blocked — never an invented id, never an empty node.
   // num_inference_steps is not in that parameter list → omit steps. sampler/scheduler/denoise likewise absent.
   {
     provider: 'modelslab',
@@ -1059,7 +1072,8 @@ const STD_SPECS: StdSpec[] = [
     width: 1024,
     height: 1024,
     omit: ['steps', 'cfg', 'sampler', 'scheduler', 'denoise'],
-    description: 'ModelsLab 官方模型页 z-image-turbo。提示词取自已打开的 MOSS-Image 模型卡。lora_model 示例值是界面占位符，未打开到真实 LoRA id，故不挂空 LoRA。',
+    pendingRecipe: 'ModelsLab z-image-turbo 官方 llms.txt 把 lora_model 标为 required，但示例值只是界面占位符 “Select LoRA models...”。enterprise 文档把该字段标为 optional 且示例为 null，相关模型页（z-image-lora、zit-mystic-hhh-d）是独立 model_id，不是可用的 lora_model 值。没有打开到真实 LoRA id，故挡住运行；填入真实 id 后再运行。',
+    description: 'ModelsLab 官方模型页 z-image-turbo。提示词取自已打开的 MOSS-Image 模型卡。lora_model 官方标 required，但没有打开到真实 LoRA id，待配方，运行已挡住。',
   },
   // providerSchema.ts agnesUnsupported (wiki.agnes-ai.com agnes-image-25-flash): only prompt + size + ratio. Same full
   // topology as Mage (image output → SaveImage); compact CLIP CONDITIONING→SaveImage was a wrong-type edge.
@@ -1071,11 +1085,17 @@ const STD_SPECS: StdSpec[] = [
   { provider: 'mage', category: '写真人像', title: '溪边白裙人像', ckpt: 'mango-v3', hasLora: false, hasNegative: false, omit: ['steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'width', 'height'], checkpointExtra: { aspect_ratio: '4:5', resolution: '2K' } },
   // providerSchema.ts sensenova-u1.5-lite: width/height/size only.
   { provider: 'sensenova', category: '静物与文字', title: '冰箱便签静物', ckpt: 'sensenova-u1.5-lite', hasLora: false, hasNegative: false, omit: ['seed', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise'] },
-  // Civitai official orchestration recipe https://civitai.red/images/148140013 (Krea 2 Turbo + Masterpiece LoRA):
-  // Public GET https://civitai.com/api/v1/images?imageId=148140013 (2026-11-07) lists baseModel Krea 2 Turbo,
-  // 832x1248, modelVersionIds 3072332 (checkpoint) + 3077110 (LoRA). buildCivitaiImageRequest resolves
-  // engine='comfy', ecosystem='krea2', model='turbo' from the checkpoint AIR (civitaiImageContract.test.ts).
-  // The public listing returns meta:null, so prompt/negative stay the documented krea.md recipe text — not invented.
+  // Civitai: the current recipe page https://developer.civitai.com/orchestration/recipes/krea.md (opened 2026-11-07)
+  // is engine "fal" / model "krea2" and states Krea v2 does not accept LoRAs, negative prompts, or width/height.
+  // That is a different engine from this card. The live imageGen OpenAPI
+  // (https://orchestration.civitai.com/v2/consumer/recipes/imageGen/openapi.yaml, opened 2026-11-07) still declares
+  // ComfyKrea2TurboCreateImageGenInput: engine enum comfy, ecosystem enum krea2, model enum turbo, plus loras,
+  // diffusionModel (AIR pattern), negativePrompt, width/height (64–2048), steps default 8, cfgScale default 1,
+  // sampler default euler, scheduler default simple. Public GET /api/v1/model-versions/3072332 returns baseModel
+  // "Krea 2 Turbo" (modelId 2732656, Checkpoint) and /3077110 returns baseModel "Krea 2" (modelId 929497, LORA),
+  // so the AIR is still a published resource. The card stays on that Comfy branch; it is not rebuilt onto fal/krea2,
+  // which would drop the LoRA the card exists to mount.
+  // The public image listing returns meta:null, so prompt/negative stay the documented krea.md recipe text — not invented.
   {
     provider: 'civitai',
     category: '黄金时刻人像',
