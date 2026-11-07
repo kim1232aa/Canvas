@@ -1477,8 +1477,8 @@ Steps: 8, Sampler: Euler, CFG scale: 1, Seed: 689794262, Size: 832x1248, Model: 
           </div>
         )}
 
-        {/* Extracted Preview Component */}
-        {extractedPreset && (() => {
+        {/* Cross-provider bar is always on the Import tab. Field analysis waits for a parsed recipe. */}
+        {(() => {
           const liveSchemaEntry = getModelSchemaEntry(importTargetProvider, importTargetModel);
           const liveSchemaProps = liveSchemaEntry?.status === 'ready' ? liveSchemaEntry.propertiesObj : undefined;
           const targetModelFamily =
@@ -1493,24 +1493,24 @@ Steps: 8, Sampler: Euler, CFG scale: 1, Seed: 689794262, Size: 832x1248, Model: 
               : liveSchemaEntry?.status === 'error'
               ? `目标端点 Schema 获取失败；未核实: ${liveSchemaEntry.error || '获取失败'}`
               : undefined;
-          const ckptNodeVal = extractedPreset.nodes?.find((n: any) => n.type === 'CheckpointLoaderSimple')?.values;
+          const ckptNodeVal = extractedPreset?.nodes?.find((n: any) => n.type === 'CheckpointLoaderSimple')?.values;
           const sourceCkpt = ckptNodeVal?.import_source_model || ckptNodeVal?.ckpt_name || '';
           const currentAdapt = adaptCivitaiRecipeToProvider(
             {
               checkpoint: sourceCkpt,
-              baseModel: extractedPreset.otherMetadata?.baseModel,
-              loras: extractedPreset.otherMetadata?.resources || [],
-              prompt: extractedPreset.prompt,
-              negativePrompt: extractedPreset.negativePrompt,
-              steps: extractedPreset.otherMetadata?.steps,
-              cfg: extractedPreset.otherMetadata?.cfgScale,
-              sampler: extractedPreset.otherMetadata?.sampler,
-              scheduler: extractedPreset.otherMetadata?.scheduler,
-              seed: extractedPreset.otherMetadata?.seed,
-              clipSkip: extractedPreset.otherMetadata?.clipSkip,
-              width: extractedPreset.otherMetadata?.width,
-              height: extractedPreset.otherMetadata?.height,
-              denoise: extractedPreset.otherMetadata?.denoise,
+              baseModel: extractedPreset?.otherMetadata?.baseModel,
+              loras: extractedPreset?.otherMetadata?.resources || [],
+              prompt: extractedPreset?.prompt,
+              negativePrompt: extractedPreset?.negativePrompt,
+              steps: extractedPreset?.otherMetadata?.steps,
+              cfg: extractedPreset?.otherMetadata?.cfgScale,
+              sampler: extractedPreset?.otherMetadata?.sampler,
+              scheduler: extractedPreset?.otherMetadata?.scheduler,
+              seed: extractedPreset?.otherMetadata?.seed,
+              clipSkip: extractedPreset?.otherMetadata?.clipSkip,
+              width: extractedPreset?.otherMetadata?.width,
+              height: extractedPreset?.otherMetadata?.height,
+              denoise: extractedPreset?.otherMetadata?.denoise,
             },
             importTargetProvider,
             {
@@ -1525,11 +1525,11 @@ Steps: 8, Sampler: Euler, CFG scale: 1, Seed: 689794262, Size: 832x1248, Model: 
             importTargetProvider === 'civitai'
               ? resolveCivitaiNativeSelectors({
                   checkpoint: importTargetModel || sourceCkpt,
-                  baseModel: extractedPreset.otherMetadata?.baseModel,
-                  detectedEngine: extractedPreset.otherMetadata?.engine,
+                  baseModel: extractedPreset?.otherMetadata?.baseModel,
+                  detectedEngine: extractedPreset?.otherMetadata?.engine,
                 })
               : {};
-          const synchronizedPreset = {
+          const synchronizedPreset = extractedPreset ? {
             ...extractedPreset,
             currentAdaptation: currentAdapt,
             nodes: Array.isArray(extractedPreset.nodes)
@@ -1546,7 +1546,7 @@ Steps: 8, Sampler: Euler, CFG scale: 1, Seed: 689794262, Size: 832x1248, Model: 
                         ...n.values,
                         targetProvider: importTargetProvider,
                         ckpt_name: effectiveCkpt,
-                        base_model: n.values?.base_model || extractedPreset.otherMetadata?.baseModel || undefined,
+                        base_model: n.values?.base_model || extractedPreset?.otherMetadata?.baseModel || undefined,
                         ...(importTargetProvider === 'civitai'
                           ? {
                               ...(n.values?.civitai_engine ? {} : civitaiSelectors.engine ? { civitai_engine: civitaiSelectors.engine } : {}),
@@ -1585,17 +1585,17 @@ Steps: 8, Sampler: Euler, CFG scale: 1, Seed: 689794262, Size: 832x1248, Model: 
                   },
                 }))
               : extractedPreset.spatialFrames,
-          };
+          } : null;
           return (
             <CivitaiModalImportPreview
-              adaptation={currentAdapt}
-              allAdaptations={extractedPreset.providerAdaptation}
+              adaptation={extractedPreset ? currentAdapt : null}
+              allAdaptations={extractedPreset?.providerAdaptation}
               selectedProvider={importTargetProvider}
               targetModel={importTargetModel}
               onSelectProvider={(prov) => {
                 setImportTargetProvider(prov);
                 setImportTargetModel('');
-                handleExtractCivitaiWorkflow(importInput, prov, tokenConsent, '');
+                if (importInput.trim()) handleExtractCivitaiWorkflow(importInput, prov, tokenConsent, '');
               }}
               onSelectTargetModel={(m) => {
                 setImportTargetModel(m);
@@ -1607,7 +1607,7 @@ Steps: 8, Sampler: Euler, CFG scale: 1, Seed: 689794262, Size: 832x1248, Model: 
                 setTokenConsent(consent);
                 handleExtractCivitaiWorkflow(importInput, importTargetProvider, consent, importTargetModel);
               }}
-              preset={synchronizedPreset}
+              preset={synchronizedPreset ?? undefined}
               onApplyPreset={(p) => {
                 if (onLoadWorkflowPreset) {
                   onLoadWorkflowPreset(p);

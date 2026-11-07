@@ -1139,16 +1139,33 @@ const STD_SPECS: StdSpec[] = [
   { provider: 'mage', ckpt: 'mango-v3', hasLora: false, hasNegative: false, omit: ['steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'width', 'height'], checkpointExtra: { aspect_ratio: '4:5', resolution: '2K' } },
   // providerSchema.ts sensenova-u1.5-lite: width/height/size only.
   { provider: 'sensenova', ckpt: 'sensenova-u1.5-lite', hasLora: false, hasNegative: false, omit: ['seed', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise'] },
-  // providerSchema.ts comfy:krea2: sampler/scheduler/seed supported, steps/cfg unverified; loras + negative unsupported (docs/evidence/civitai-krea-no-lora-2026-10-14.md).
+  // Civitai official orchestration recipe https://civitai.red/images/148140013 (Krea 2 Turbo + Masterpiece LoRA):
+  // Public GET https://civitai.com/api/v1/images?imageId=148140013 (2026-11-07) lists baseModel Krea 2 Turbo,
+  // 832x1248, modelVersionIds 3072332 (checkpoint) + 3077110 (LoRA). buildCivitaiImageRequest resolves
+  // engine='comfy', ecosystem='krea2', model='turbo' from the checkpoint AIR (civitaiImageContract.test.ts).
+  // The public listing returns meta:null, so prompt/negative stay the documented krea.md recipe text — not invented.
   {
     provider: 'civitai',
-    ckpt: 'turbo',
-    hasLora: false,
-    hasNegative: false,
+    ckpt: 'urn:air:krea2:diffusionmodel:civitai:2732656@3072332',
+    hasLora: true,
+    loras: [
+      {
+        name: 'urn:air:krea2:lora:civitai:929497@3077110',
+        strength: 0.85,
+        source: 'https://civitai.red/images/148140013',
+      },
+    ],
+    hasNegative: true,
+    seed: 689794262,
     steps: 8,
     cfg: 1,
-    // providerSchema comfy:krea2: width/height unsupported (official Krea recipe); omit pixels so EmptyLatent has no 假 1024 壳.
-    omit: ['denoise', 'width', 'height'],
+    sampler: 'euler',
+    scheduler: 'simple',
+    width: 832,
+    height: 1248,
+    omit: ['denoise'],
+    // Stored for the request builder (graphEngine reads civitai_engine/ecosystem/model). Not shown as node widgets —
+    // NodeItem / ParameterInspector no longer render those developer inputs; buildCivitaiBaseInput also derives them from the AIR.
     checkpointExtra: { civitai_engine: 'comfy', civitai_ecosystem: 'krea2', civitai_model: 'turbo' },
   },
 ];
