@@ -71,6 +71,8 @@ const ALLOWED_CLOUD_SETTINGS_FIELDS = new Set([
   'modelslabKey',
   'modelslabBaseUrl',
   'replicateKey',
+  'replicateBaseUrl',
+  'nanogptBaseUrl',
   'mageKey',
   'mageBaseUrl',
 ]);

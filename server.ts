@@ -5518,7 +5518,7 @@ async function testSingleProviderKey(
 
   try {
     if (['muapi','wavespeed','sogni','krea','together','aimlapi','novita','venice'].includes(prov)) {
-      const urls:Record<string,string>={muapi:'https://api.muapi.ai/api/v1/models',wavespeed:'https://api.wavespeed.ai/api/v3/models',sogni:'https://api.sogni.ai/v1/creative-agent/workflows?limit=1',krea:'https://api.krea.ai/styles?limit=1',together:'https://api.together.ai/v1/models',aimlapi:'https://api.aimlapi.com/v2/billing',novita:'https://api.novita.ai/openapi/v1/billing/balance/detail',venice:'https://api.venice.ai/api/v1/models?type=image',deepinfra:'https://api.deepinfra.com/v1/me'};
+      const urls:Record<string,string>={muapi:'https://api.muapi.ai/api/v1/models',wavespeed:'https://api.wavespeed.ai/api/v3/models',sogni:'https://api.sogni.ai/v1/creative-agent/workflows?limit=1',krea:'https://api.krea.ai/styles?limit=1',together:'https://api.together.ai/v1/models',aimlapi:'https://api.aimlapi.com/v2/billing/detail',novita:'https://api.novita.ai/openapi/v1/billing/balance/detail',venice:'https://api.venice.ai/api/v1/models?type=image',deepinfra:'https://api.deepinfra.com/v1/me'};
       const resp=await upstreamFetch({provider:prov,route:routePath,key:singleKey},urls[prov],{headers:prov==='muapi'?{'x-api-key':singleKey}:{Authorization:`Bearer ${singleKey}`}});
       const raw=await resp.text();
       return {maskedKey,status:resp.ok?(prov==='muapi'?'warning':'ok'):'error',latency:Date.now()-startTime,message:`HTTP ${resp.status} · ${urls[prov]} · ${resp.ok?'只读接口可访问；尚未验证生成权限':'原始响应：'+raw}`};
