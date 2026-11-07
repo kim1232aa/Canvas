@@ -57,8 +57,12 @@ describe('Civitai image request contract', () => {
     expect(params.targetProvider).toBe('civitai');
     expect(params.civitaiEngine).toBe('comfy');
     expect(params.civitaiEcosystem).toBe('krea2');
-    expect(params.checkpointModel).toBe('turbo');
+    // The preset stores the checkpoint AIR (public model-versions/3072332: Krea 2 Turbo), not the bare selector.
+    const krea2TurboAir = 'urn:air:krea2:diffusionmodel:civitai:2732656@3072332';
+    expect(params.checkpointModel).toBe(krea2TurboAir);
+    expect(params.checkpointModel).not.toBe('turbo');
     const input = await buildCivitaiImageInput({ model: params.checkpointModel, prompt: params.positivePrompt, engine: params.civitaiEngine, ecosystem: params.civitaiEcosystem, comfyModel: params.civitaiModel || 'turbo', loras: [] }, api({}), oa());
+    // The builder derives the recipe selector from the AIR; the wire model is the selector, not the URN.
     expect(input).toMatchObject({ engine: 'comfy', ecosystem: 'krea2', model: 'turbo' });
   });
   it('maps documented SD1 AIR namespace to the request discriminator without rewriting resources', async () => {
@@ -302,8 +306,8 @@ describe('Civitai image request contract', () => {
     // (c) steps[0].input 里没有这个键
     expect(resToggledOff.capturedBody.steps[0].input).not.toHaveProperty('allowMatureContent');
 
-    // Case 2: default-on (no explicit custom override) -> allowMatureContent: true
-    const resDefaultOn = await fn(
+    // Case 2: unset -> the field is omitted; the orchestrator decides from the Buzz currency charged
+    const resUnset = await fn(
       { customParameters: {} },
       { body: {}, path: '/api/civitai/generate' },
       genInput,
@@ -313,9 +317,23 @@ describe('Civitai image request contract', () => {
       model,
       apiKey
     );
-    expect(resDefaultOn.capturedBody).toHaveProperty('allowMatureContent', true);
-    expect(resDefaultOn.capturedUrl).not.toContain('allowMatureContent=');
-    expect(resDefaultOn.capturedBody.steps[0].input).not.toHaveProperty('allowMatureContent');
+    expect(resUnset.capturedBody).not.toHaveProperty('allowMatureContent');
+    expect(resUnset.capturedUrl).not.toContain('allowMatureContent=');
+    expect(resUnset.capturedBody.steps[0].input).not.toHaveProperty('allowMatureContent');
+
+    // Case 3: explicit true is preserved
+    const resExplicitTrue = await fn(
+      { customParameters: { allowMatureContent: true } },
+      { body: {}, path: '/api/civitai/generate' },
+      genInput,
+      mockFetch,
+      generationContext,
+      sanitizeGenerationMetadata,
+      model,
+      apiKey
+    );
+    expect(resExplicitTrue.capturedBody).toHaveProperty('allowMatureContent', true);
+    expect(resExplicitTrue.capturedBody.steps[0].input).not.toHaveProperty('allowMatureContent');
   });
 
   it('resolves nested OpenAPI model discriminators and compound AIR ecosystems (#148140013 Krea 2 Turbo, #148135866 Z-Image Turbo, #148004351 MOSS-Image SFT)', async () => {
