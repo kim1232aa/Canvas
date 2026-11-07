@@ -6,6 +6,7 @@ import {
   resolveImportedCheckpointRef,
   resolveRawImportNegativeSamplerScheduler,
   adaptCivitaiRecipeToProvider,
+  civitaiSamplerSource,
 } from './civitaiImportMap';
 
 describe('civitai import mappers (hard gates)', () => {
@@ -226,6 +227,23 @@ describe('resolveRawImportNegativeSamplerScheduler (plain-text import)', () => {
       expect(lora.sendableUrlOrId).toBeUndefined();
       expect(lora.reason).toContain('缺少官方真实下载链接');
       expect(lora.reason).not.toContain('https://civitai.com/api/download/models/404040');
+    });
+  });
+
+  describe('Civitai sampler source follows the recipe ecosystem', () => {
+    it('cites the SDXL recipe only for SD1.5 and SDXL', () => {
+      expect(civitaiSamplerSource('sdxl')).toBe('https://developer.civitai.com/orchestration/recipes/sdxl.md');
+      expect(civitaiSamplerSource('sd15')).toBe('https://developer.civitai.com/orchestration/recipes/sdxl.md');
+      expect(civitaiSamplerSource('flux1')).toBe('https://developer.civitai.com/orchestration/schemas/imageGen.yaml');
+    });
+
+    it('does not attach the SDXL recipe URL to a Flux adaptation', () => {
+      const flux = adaptCivitaiRecipeToProvider({ baseModel: 'Flux.1 D', sampler: 'Euler', scheduler: 'simple' }, 'civitai');
+      expect(flux.fields.sampler.source).toBe('https://developer.civitai.com/orchestration/schemas/imageGen.yaml');
+      expect(flux.fields.scheduler.source).toBe('https://developer.civitai.com/orchestration/schemas/imageGen.yaml');
+      const sdxl = adaptCivitaiRecipeToProvider({ baseModel: 'SDXL 1.0', sampler: 'Euler' }, 'civitai');
+      expect(sdxl.fields.sampler.source).toBe('https://developer.civitai.com/orchestration/recipes/sdxl.md');
+      expect(sdxl.fields.scheduler.source).toBe('https://developer.civitai.com/orchestration/recipes/sdxl.md');
     });
   });
 });

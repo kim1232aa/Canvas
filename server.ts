@@ -33,7 +33,7 @@ import { registerSenseNovaRoutes } from './src/server/routes/sensenovaRoutes.ts'
 import {buildRunwareImageRequest, inspectRunwareImageResponseBody} from './src/server/runwareImageContract.ts';
 import {buildModelsLabImageRequest, parseModelsLabResponse, buildModelsLabFetchRequest, sanitizeModelsLabPayload, inspectModelsLabPollBody, inspectModelsLabImageResponseBody} from './src/server/modelsLabImageContract.ts';
 import { parseModelsLabCatalogResponse, parseRunwareCatalogResponse } from './src/server/modelCatalogResponse.ts';
-import {falImageFieldGate, falQueueOpenApiUrl, extractFalInputProperties, FalSchemaMissingError, falLiveAcceptsImageUrl, falLiveStrengthWire, type FalSchemaFetchFailure} from './src/server/falImageContract.ts';
+import {falImageFieldGate, falQueueOpenApiUrl, extractFalInputProperties, inlineFalItemRefs, FalSchemaMissingError, falLiveAcceptsImageUrl, falLiveStrengthWire, type FalSchemaFetchFailure} from './src/server/falImageContract.ts';
 import {buildCivitaiImageRequest, CivitaiAmbiguousError, CivitaiSchemaMissingError, CIVITAI_IMAGE_OPENAPI_URL, type CivitaiSchemaFetchFailure} from './src/server/civitaiImageContract.ts';
 import { withGeminiImageResponseModality } from './src/server/geminiImageConfig.ts';
 import {civitaiImageHistory} from './src/server/civitaiHistoryContract.ts';
@@ -987,6 +987,7 @@ async function respondWithGeneratedImages(
       ...options.response,
     });
   }
+  const historyWarnings = [options.response?.historyWarning, result.historyWarning].filter((item): item is string => typeof item === 'string' && item.length > 0);
   return res.json({
     ...options.response,
     imageUrl: result.first.url,
@@ -995,7 +996,7 @@ async function respondWithGeneratedImages(
     historyItem: result.first,
     historyItems: result.historyItems,
     transientOutputs: result.transientOutputs,
-    ...(result.historyWarning ? {historyWarning: result.historyWarning} : {}),
+    ...(historyWarnings.length ? {historyWarning: historyWarnings.join('；')} : {}),
   });
 }
 
@@ -3102,6 +3103,7 @@ app.post(['/api/fal/generate', '/api/generate', '/api/engine/fal/generate'], asy
           let parsed: unknown;
           try { parsed = JSON.parse(raw); } catch { parsed = undefined; }
           liveProps = extractFalInputProperties(parsed);
+          if (liveProps) liveProps = inlineFalItemRefs(liveProps, parsed);
           if (!liveProps) schemaFetch = { url: schemaUrl, status: sr.status, body: raw };
         }
       } catch (e: any) {
@@ -3163,7 +3165,11 @@ app.post(['/api/fal/generate', '/api/generate', '/api/engine/fal/generate'], asy
     let unmappedLoraFields: Array<{ lora: string; field: string; value: unknown; reason: string }> = [];
     if (Array.isArray(loras) && loras.length > 0) {
       try {
-        const mapped = mapFalServerLoras(loras);
+        const loraItems = (liveProps?.loras as any)?.items;
+        const loraItemProps = loraItems?.properties && typeof loraItems.properties === 'object' && !Array.isArray(loraItems.properties)
+          ? loraItems.properties as Record<string, any>
+          : null;
+        const mapped = mapFalServerLoras(loras, loraItemProps);
         payload.loras = mapped.wireLoras;
         unmappedLoraFields = mapped.unmappedLoraFields;
       } catch (err: any) {
@@ -4009,6 +4015,7 @@ app.post('/api/engine/runware/generate', async (req, res) => {
         endpoint,
         rawResponse,
         actualRequest: mapped.payload,
+        ...(mapped.unmappedLoras?.length ? { unmappedLoras: mapped.unmappedLoras } : {}),
       });
     }
 
@@ -4024,6 +4031,7 @@ app.post('/api/engine/runware/generate', async (req, res) => {
         endpoint,
         rawResponse: inspected.rawResponse,
         actualRequest: mapped.payload,
+        ...(mapped.unmappedLoras?.length ? { unmappedLoras: mapped.unmappedLoras } : {}),
       });
     }
     const parsed = inspected.parsed;
@@ -4032,6 +4040,10 @@ app.post('/api/engine/runware/generate', async (req, res) => {
     keyPoolManager.recordResult('runware', apiKey, true, Date.now() - startTime);
 
     const task = mapped.payload[0];
+    const unmappedLoras = mapped.unmappedLoras;
+    const unmappedLoraNote = unmappedLoras?.length
+      ? `${unmappedLoras.length} 个 LoRA 未能映射到 Runware AIR，已从上游请求中省略并保留在 unmappedLoras`
+      : '';
     return await respondWithGeneratedImages(res, parsed.images, {
       prompt: task.positivePrompt,
       negativePrompt: task.negativePrompt,
@@ -4044,10 +4056,11 @@ app.post('/api/engine/runware/generate', async (req, res) => {
       width: task.width ?? null,
       height: task.height ?? null,
       loras: (task.lora || []).map(l => ({ name: l.model, strength: l.weight as number })),
-      requestMetadata: { requestedParameters: sanitizeGenerationMetadata(Object.fromEntries(Object.entries(req.body).filter(([key]) => key !== 'workflowSnapshot'))), actualParameters: mapped.payload, overrides: mapped.overrides, upstreamEndpoint: endpoint },
+      ...(unmappedLoraNote ? { historyWarning: unmappedLoraNote } : {}),
+      requestMetadata: { requestedParameters: sanitizeGenerationMetadata(Object.fromEntries(Object.entries(req.body).filter(([key]) => key !== 'workflowSnapshot'))), actualParameters: mapped.payload, overrides: mapped.overrides, upstreamEndpoint: endpoint, ...(unmappedLoras?.length ? { unmappedLoras } : {}) },
     }, {
       label: 'Runware',
-      response: { provider: 'Runware', model: mapped.actualModel, requestedModel: req.body.model, actualModel: mapped.actualModel, seed: task.seed ?? null, cost: parsed.cost, taskUUID: parsed.taskUUID, actualRequest: mapped.payload, overrides: mapped.overrides, upstreamEndpoint: endpoint },
+      response: { provider: 'Runware', model: mapped.actualModel, requestedModel: req.body.model, actualModel: mapped.actualModel, seed: task.seed ?? null, cost: parsed.cost, taskUUID: parsed.taskUUID, actualRequest: mapped.payload, overrides: mapped.overrides, upstreamEndpoint: endpoint, ...(unmappedLoras?.length ? { unmappedLoras } : {}), ...(unmappedLoraNote ? { historyWarning: unmappedLoraNote } : {}) },
     });
   } catch (error: any) {
     keyPoolManager.recordResult('runware', apiKey, false, Date.now() - startTime, error.message);
@@ -4081,6 +4094,7 @@ app.post('/api/engine/modelslab/generate', async (req, res) => {
 
   const endpoint = mapped.endpoint;
   const actualRequest = sanitizeModelsLabPayload(mapped.payload);
+  const unmappedLoraPayload = mapped.unmappedLoras?.length ? { unmappedLoras: mapped.unmappedLoras } : {};
   let receivedStatus: number | undefined;
   let receivedBody: string | undefined;
   let imageResponseParsed = false;
@@ -4106,6 +4120,7 @@ app.post('/api/engine/modelslab/generate', async (req, res) => {
         endpoint,
         rawResponse,
         actualRequest,
+        ...unmappedLoraPayload,
       });
     }
 
@@ -4122,6 +4137,7 @@ app.post('/api/engine/modelslab/generate', async (req, res) => {
         rawResponse: inspected.rawResponse,
         ...(inspected.data !== undefined ? { parsedResponse: inspected.data } : {}),
         actualRequest,
+        ...unmappedLoraPayload,
       });
     }
     let parsed: ReturnType<typeof parseModelsLabResponse> = inspected.parsed;
@@ -4152,6 +4168,7 @@ app.post('/api/engine/modelslab/generate', async (req, res) => {
             errorSource: 'network',
             endpoint: fetchReq.endpoint,
             actualRequest,
+            ...unmappedLoraPayload,
             stack: pollNetErr.stack,
           });
         }
@@ -4166,6 +4183,7 @@ app.post('/api/engine/modelslab/generate', async (req, res) => {
             rawResponse: pollErrText,
             endpoint: fetchReq.endpoint,
             actualRequest,
+            ...unmappedLoraPayload,
           });
         }
         const pollRawResponse = await polled.text();
@@ -4182,6 +4200,7 @@ app.post('/api/engine/modelslab/generate', async (req, res) => {
             rawResponse: pollInspection.rawResponse,
             endpoint: fetchReq.endpoint,
             actualRequest,
+            ...unmappedLoraPayload,
           });
         }
         const pollData = pollInspection.data;
@@ -4201,6 +4220,7 @@ app.post('/api/engine/modelslab/generate', async (req, res) => {
             endpoint: fetchReq.endpoint,
             rawResponse: pollInspection.rawResponse,
             actualRequest,
+            ...unmappedLoraPayload,
           });
         }
       }
@@ -4211,6 +4231,7 @@ app.post('/api/engine/modelslab/generate', async (req, res) => {
           errorSource: 'upstream',
           endpoint: fetchReq.endpoint,
           actualRequest,
+          ...unmappedLoraPayload,
         });
       }
     }
@@ -4222,12 +4243,17 @@ app.post('/api/engine/modelslab/generate', async (req, res) => {
         errorSource: 'upstream',
         endpoint,
         actualRequest,
+        ...unmappedLoraPayload,
       });
     }
 
     keyPoolManager.recordResult('modelslab', apiKey, true, Date.now() - startTime);
     const imageUrls = parsed.imageUrls?.length ? parsed.imageUrls : [finalImageUrl];
     const sent = mapped.payload as Record<string, any>;
+    const unmappedLoras = mapped.unmappedLoras;
+    const unmappedLoraNote = unmappedLoras?.length
+      ? `${unmappedLoras.length} 个 LoRA 未能映射到 ModelsLab 目录模型，已从上游请求中省略并保留在 unmappedLoras`
+      : '';
     return await respondWithGeneratedImages(res, imageUrls, {
       prompt: String(sent.prompt),
       negativePrompt: typeof sent.negative_prompt === 'string' ? sent.negative_prompt : undefined,
@@ -4240,10 +4266,11 @@ app.post('/api/engine/modelslab/generate', async (req, res) => {
       width: typeof sent.width === 'number' ? sent.width : null,
       height: typeof sent.height === 'number' ? sent.height : null,
       loras: typeof sent.lora_model === 'string' && sent.lora_model ? sent.lora_model.split(',').map((name: string, index: number) => ({ name, strength: Number(String(sent.lora_strength ?? '').split(',')[index] ?? sent.lora_strength) })) : [],
-      requestMetadata: { requestedParameters: sanitizeGenerationMetadata(Object.fromEntries(Object.entries(req.body).filter(([key]) => key !== 'workflowSnapshot'))), actualParameters: actualRequest, overrides: mapped.overrides, upstreamEndpoint: endpoint },
+      ...(unmappedLoraNote ? { historyWarning: unmappedLoraNote } : {}),
+      requestMetadata: { requestedParameters: sanitizeGenerationMetadata(Object.fromEntries(Object.entries(req.body).filter(([key]) => key !== 'workflowSnapshot'))), actualParameters: actualRequest, overrides: mapped.overrides, upstreamEndpoint: endpoint, ...(unmappedLoras?.length ? { unmappedLoras } : {}) },
     }, {
       label: 'ModelsLab',
-      response: { provider: 'ModelsLab', model: mapped.actualModel, requestedModel: req.body.model ?? req.body.model_id, actualModel: mapped.actualModel, taskId: parsed.taskId ?? null, actualRequest, overrides: mapped.overrides, upstreamEndpoint: endpoint },
+      response: { provider: 'ModelsLab', model: mapped.actualModel, requestedModel: req.body.model ?? req.body.model_id, actualModel: mapped.actualModel, taskId: parsed.taskId ?? null, actualRequest, overrides: mapped.overrides, upstreamEndpoint: endpoint, ...(unmappedLoras?.length ? { unmappedLoras } : {}), ...(unmappedLoraNote ? { historyWarning: unmappedLoraNote } : {}) },
     });
   } catch (error: any) {
     keyPoolManager.recordResult('modelslab', apiKey, false, Date.now() - startTime, error.message);
