@@ -1814,7 +1814,7 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
         // fix3 B: map LoRAs into the payload first; maxItems / constraint checks run after the full body is assembled.
         const loras=req.body.loras;
         const unmappedLoras: Array<{ item: any; reason: string }> = [];
-        const declaredTarget = (provider==='krea' ? ['styles'] : ['loras','lora_list','image_loras','lora_url','model_id']).find(k=>Object.hasOwn(props,k))
+        const declaredTarget = (provider==='krea' ? ['styles'] : ['loras','lora_list','image_loras','lora_url','model_id']).find(k=>Object.hasOwn(props,k) && (k!=='model_id' || props[k]?.type==='array' || props[k]?.items || props[k]?.anyOf?.some((s:any)=>s?.type==='array')))
           || Object.keys(props).find(k=>/lora|styles/i.test(k) && (props[k]?.type==='array' || props[k]?.items || props[k]?.anyOf?.some((s:any)=>s?.type==='array')));
         const explicitTargets = loras.map((l:any)=>String(l?.target_field || l?.targetField || l?.lora_field || '').trim());
         if(!declaredTarget && !explicitTargets.every((field:string)=>field && Object.hasOwn(props,field))) {

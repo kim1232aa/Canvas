@@ -117,8 +117,8 @@ describe('LoRA submission transparency', () => {
       expect(data.actualRequest.mapping.find((m: any) => m.from === 'loras')).toMatchObject({ to: target, value: sent[target], finalValue: sent[target] });
     });
   });
-  it('returns local 400 with every unmapped item when the schema has no LoRA field', async () => {
-    await withFixture(async () => json({ data: [{ model_id: 'fixture/model', api_schema: { api_schemas: [{ type: 'model_run', method: 'POST', api_path: '/api/v3/fixture/model', server: 'https://api.wavespeed.ai', request_schema: { properties: { prompt: { type: 'string' } } } }] } }] }), async (baseUrl, calls) => {
+  it.each([{}, { model_id: { type: 'string' } }])('returns local 400 when the schema has no LoRA field, including scalar model_id (%j)', async (extra) => {
+    await withFixture(async () => json({ data: [{ model_id: 'fixture/model', api_schema: { api_schemas: [{ type: 'model_run', method: 'POST', api_path: '/api/v3/fixture/model', server: 'https://api.wavespeed.ai', request_schema: { properties: { prompt: { type: 'string' }, ...extra } } }] } }] }), async (baseUrl, calls) => {
       const response = await fetch(`${baseUrl}/api/schema-provider/wavespeed/submit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: 'fixture/model', prompt: 'cinematic mountain landscape', loras: [lora, { id: 'native-id', strength: 0.5 }] }) });
       expect(response.status).toBe(400);
       const data = await response.json() as any;
