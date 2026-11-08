@@ -34,12 +34,21 @@ const CANVAS_WIRES: Array<[string, string[]]> = [
 ];
 
 /**
- * Check if a property specification accepts null (via anyOf with type: 'null').
+ * Check if a property specification accepts null (via nullable: true, type: 'null', or anyOf/oneOf with type: 'null').
  */
 export const isNullableProp = (spec: unknown): boolean => {
   if (!spec || typeof spec !== 'object' || Array.isArray(spec)) return false;
-  const anyOf = (spec as Record<string, unknown>).anyOf;
-  return Array.isArray(anyOf) && anyOf.some((branch) => Boolean(branch && typeof branch === 'object' && (branch as Record<string, unknown>).type === 'null'));
+  const s = spec as Record<string, unknown>;
+  if (s.nullable === true) return true;
+  if (s.type === 'null') return true;
+  if (Array.isArray(s.type) && s.type.includes('null')) return true;
+  if (Array.isArray(s.anyOf) && s.anyOf.some((branch) => Boolean(branch && typeof branch === 'object' && (branch as Record<string, unknown>).type === 'null'))) {
+    return true;
+  }
+  if (Array.isArray(s.oneOf) && s.oneOf.some((branch) => Boolean(branch && typeof branch === 'object' && (branch as Record<string, unknown>).type === 'null'))) {
+    return true;
+  }
+  return false;
 };
 
 /**
@@ -154,22 +163,29 @@ export function buildFalVideoRequest(
     const resSchema = props.resolution as { enum?: unknown[] } | undefined;
     void resSchema;
   }
-  if (provided(body.image_url) && provided(body.start_image_url) && body.image_url !== body.start_image_url) fail('image_url 与 start_image_url 不一致');
-  const siteReference = provided(body.start_image_url) ? body.start_image_url : body.image_url;
-  if (provided(siteReference)) {
+  const hasBodyStart = Object.hasOwn(body, 'start_image_url') && body.start_image_url !== undefined;
+  const hasBodyImg = Object.hasOwn(body, 'image_url') && body.image_url !== undefined;
+  if (hasBodyStart && hasBodyImg && body.image_url !== body.start_image_url) {
+    fail('image_url 与 start_image_url 不一致');
+  }
+  const siteReference = hasBodyStart ? body.start_image_url : hasBodyImg ? body.image_url : undefined;
+  if (siteReference !== undefined) {
     payload[imageWire ?? 'image_url'] = siteReference;
   }
 
   const beforeCustom = { ...payload };
   const custom = (body.custom_parameters ?? {}) as Record<string, unknown>;
   if (['model', 'provider', 'endpoint', 'inference_provider'].some((key) => Object.hasOwn(custom, key))) fail('custom_parameters 不可覆盖模型或路由');
-  if (provided(custom.image_url) && provided(custom.start_image_url) && custom.image_url !== custom.start_image_url) fail('image_url 与 start_image_url 不一致');
+  const hasCustomStart = Object.hasOwn(custom, 'start_image_url') && custom.start_image_url !== undefined;
+  const hasCustomImg = Object.hasOwn(custom, 'image_url') && custom.image_url !== undefined;
+  if (hasCustomStart && hasCustomImg && custom.image_url !== custom.start_image_url) {
+    fail('image_url 与 start_image_url 不一致');
+  }
   for (const key of Object.keys(custom)) if (CONTROLS.test(key)) fail(`custom_parameters 不可覆盖模型/路由/凭据: ${key}`);
 
   const mappedCustom = mapInputs(custom);
-  const hasCustomReference = Object.hasOwn(custom, 'start_image_url') || Object.hasOwn(custom, 'image_url');
-  const customReference = Object.hasOwn(custom, 'start_image_url') ? custom.start_image_url : custom.image_url;
-  if (hasCustomReference) {
+  const customReference = hasCustomStart ? custom.start_image_url : hasCustomImg ? custom.image_url : undefined;
+  if (customReference !== undefined) {
     delete mappedCustom.image_url;
     delete mappedCustom.start_image_url;
     mappedCustom[imageWire ?? 'image_url'] = customReference;
@@ -193,21 +209,35 @@ export function buildFalVideoRequest(
   );
   const actual = { ...payload, ...mappedCustom };
 
-  const reference = imageWire ? actual[imageWire] : undefined;
-  if (provided(reference) && imageWire) {
+  if (imageWire && (Object.hasOwn(actual, 'image_url') || Object.hasOwn(actual, 'start_image_url'))) {
+    const chosen = Object.hasOwn(actual, imageWire)
+      ? actual[imageWire]
+      : Object.hasOwn(actual, 'start_image_url')
+        ? actual.start_image_url
+        : actual.image_url;
     delete actual.image_url;
     delete actual.start_image_url;
-    actual[imageWire] = reference;
+    actual[imageWire] = chosen;
   }
 
   // Schema-driven required validation: driven strictly by live OpenAPI required / anyOf.
-  // Never hardcode endpoint names or block locally when the live schema declares no required fields.
+  // Validate property presence on actual payload; do not reject valid empty strings, empty arrays, or nullable nulls.
+  const isFieldSatisfied = (field: string): boolean => {
+    if (!Object.hasOwn(actual, field)) return false;
+    const val = actual[field];
+    if (val === undefined) return false;
+    if (val === null) {
+      return isNullableProp(props[field]);
+    }
+    return true;
+  };
+
   const propLevelRequired = Object.entries(props)
     .filter(([_, spec]) => spec && typeof spec === 'object' && (spec as any).required === true)
     .map(([k]) => k);
   const allRequired = Array.from(new Set([...schemaRequired, ...propLevelRequired]));
   for (const reqField of allRequired) {
-    if (!provided(actual[reqField])) {
+    if (!isFieldSatisfied(reqField)) {
       fail(`${reqField} 为必填项`);
     }
   }
@@ -215,7 +245,7 @@ export function buildFalVideoRequest(
   if (schemaAnyOf.length > 0) {
     const satisfied = schemaAnyOf.some((branch) => {
       if (!Array.isArray(branch.required) || branch.required.length === 0) return true;
-      return (branch.required as string[]).every((field) => provided(actual[field]));
+      return (branch.required as string[]).every((field) => isFieldSatisfied(field));
     });
     if (!satisfied) {
       const branchReqs = schemaAnyOf

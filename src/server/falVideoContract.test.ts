@@ -4,6 +4,7 @@ import {
   falVideoImageField,
   isKlingV3,
   klingV3Duration,
+  isNullableProp,
   FalVideoContractError,
 } from './falVideoContract';
 import { getFieldSpec, valueStatus } from '../schemas/providerSchema';
@@ -175,5 +176,124 @@ describe('Fal video contract schema-driven validation (no hardcoded endpoint blo
       klingRawSchema,
     );
     expect(valid.payload.start_image_url).toBe('https://example.com/start.png');
+  });
+});
+
+describe('JSON Schema required presence semantics (empty string, nullable null, empty array)', () => {
+  it('isNullableProp identifies OpenAPI 3.0, 3.1, and JSON Schema nullability', () => {
+    expect(isNullableProp({ anyOf: [{ type: 'string' }, { type: 'null' }] })).toBe(true);
+    expect(isNullableProp({ oneOf: [{ type: 'string' }, { type: 'null' }] })).toBe(true);
+    expect(isNullableProp({ type: ['string', 'null'] })).toBe(true);
+    expect(isNullableProp({ type: 'null' })).toBe(true);
+    expect(isNullableProp({ type: 'string', nullable: true })).toBe(true);
+    expect(isNullableProp({ type: 'string' })).toBe(false);
+    expect(isNullableProp(undefined)).toBe(false);
+    expect(isNullableProp(null)).toBe(false);
+  });
+
+  it('required path: allows empty string, nullable null, and empty array when property is present', () => {
+    const schema = {
+      type: 'object',
+      properties: {
+        prompt: { anyOf: [{ type: 'string' }, { type: 'array' }, { type: 'null' }] },
+      },
+      required: ['prompt'],
+    };
+
+    // Empty string is a valid present value
+    const resEmptyStr = buildFalVideoRequest('test-endpoint', { prompt: '' }, schema);
+    expect(resEmptyStr.payload).toEqual({ prompt: '' });
+
+    // Null is allowed because prompt schema accepts null
+    const resNull = buildFalVideoRequest('test-endpoint', { prompt: null }, schema);
+    expect(resNull.payload).toEqual({ prompt: null });
+
+    // Empty array is a valid present value
+    const resEmptyArr = buildFalVideoRequest('test-endpoint', { prompt: [] }, schema);
+    expect(resEmptyArr.payload).toEqual({ prompt: [] });
+
+    // Truly missing field throws error
+    expect(() =>
+      buildFalVideoRequest('test-endpoint', {}, schema),
+    ).toThrowError(/prompt 为必填项/);
+
+    // Explicit undefined is treated as missing
+    expect(() =>
+      buildFalVideoRequest('test-endpoint', { prompt: undefined }, schema),
+    ).toThrowError(/prompt 为必填项/);
+  });
+
+  it('required path: rejects null when property schema does not accept null', () => {
+    const nonNullableSchema = {
+      type: 'object',
+      properties: {
+        prompt: { type: 'string' },
+      },
+      required: ['prompt'],
+    };
+
+    // Non-nullable string with prompt: '' passes presence check
+    const valid = buildFalVideoRequest('test-endpoint', { prompt: '' }, nonNullableSchema);
+    expect(valid.payload).toEqual({ prompt: '' });
+
+    // Non-nullable string with prompt: null fails required check
+    expect(() =>
+      buildFalVideoRequest('test-endpoint', { prompt: null }, nonNullableSchema),
+    ).toThrowError(/prompt 为必填项/);
+  });
+
+  it('anyOf path: allows empty string, nullable null, and empty array', () => {
+    const anyOfSchema = {
+      type: 'object',
+      properties: {
+        prompt: { anyOf: [{ type: 'string' }, { type: 'array' }, { type: 'null' }] },
+      },
+      anyOf: [{ required: ['prompt'] }],
+    };
+
+    expect(buildFalVideoRequest('test-endpoint', { prompt: '' }, anyOfSchema).payload).toEqual({ prompt: '' });
+    expect(buildFalVideoRequest('test-endpoint', { prompt: null }, anyOfSchema).payload).toEqual({ prompt: null });
+    expect(buildFalVideoRequest('test-endpoint', { prompt: [] }, anyOfSchema).payload).toEqual({ prompt: [] });
+
+    expect(() =>
+      buildFalVideoRequest('test-endpoint', {}, anyOfSchema),
+    ).toThrowError(/未满足必填组合要求/);
+  });
+
+  it('combines property-level required: true with top-level required and anyOf', () => {
+    const combinedSchema = {
+      type: 'object',
+      properties: {
+        prompt: { type: 'string', required: true },
+        extra: { type: 'string' },
+        fps: { type: 'integer' },
+        duration: { type: 'integer' },
+      },
+      required: ['extra'],
+      anyOf: [{ required: ['fps'] }, { required: ['duration'] }],
+    };
+
+    // Missing property-level required: true
+    expect(() =>
+      buildFalVideoRequest('test-endpoint', { extra: 'ok', fps: 24 }, combinedSchema),
+    ).toThrowError(/prompt 为必填项/);
+
+    // Missing top-level required: ['extra']
+    expect(() =>
+      buildFalVideoRequest('test-endpoint', { prompt: '', fps: 24 }, combinedSchema),
+    ).toThrowError(/extra 为必填项/);
+
+    // Missing anyOf branches
+    expect(() =>
+      buildFalVideoRequest('test-endpoint', { prompt: '', extra: '' }, combinedSchema),
+    ).toThrowError(/未满足必填组合要求/);
+
+    // Satisfying all three with empty strings and an anyOf branch
+    const passed = buildFalVideoRequest(
+      'test-endpoint',
+      { prompt: '', extra: '', fps: 24 },
+      combinedSchema,
+    );
+    expect(passed.payload).toMatchObject({ prompt: '', extra: '', fps: 24 });
   });
 });
