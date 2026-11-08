@@ -7,6 +7,10 @@ vi.mock('./executionTrace', async (importOriginal) => {
 
 import {
   EMPTY_KEYS,
+  fetchCloudServerHealth,
+  testSingleKey,
+  updateKeyPoolStrategy,
+  updateKeyPoolStrategyDetailed,
   cloudProjectRequest,
   fetchCloudServerSettings,
   fetchHuggingFaceModelInfo,
@@ -138,5 +142,43 @@ describe('EMPTY_KEYS', () => {
     const keys = getStoredApiKeys();
     expect(keys.runwareKey).toBe('');
     expect(keys.modelslabBaseUrl).toBe('');
+  });
+});
+
+describe('api.ts keeps real HTTP status and body for cloud admin reads', () => {
+  it('fetchCloudServerHealth reports the upstream status and body instead of posing as a healthy local server', async () => {
+    globalThis.fetch = respond(503, '<html>cloud gateway down</html>') as any;
+    const health = await fetchCloudServerHealth();
+    expect(health.ok).toBe(false);
+    expect(health.status).toBe('offline');
+    expect(health.httpStatus).toBe(503);
+    expect(health.error).toContain('503');
+    expect(health.error).toContain('<html>cloud gateway down</html>');
+    expect(health.serverType).not.toBe('Local Mode');
+  });
+
+  it('fetchCloudServerHealth passes a real payload through with ok/httpStatus', async () => {
+    globalThis.fetch = respond(200, JSON.stringify({ status: 'online', serverType: 'Cloud', uptimeSeconds: 5, projectsCount: 2, historyCount: 9, hasGeminiKey: true }), 'application/json') as any;
+    const health = await fetchCloudServerHealth();
+    expect(health).toMatchObject({ ok: true, httpStatus: 200, status: 'online', serverType: 'Cloud', projectsCount: 2 });
+  });
+
+  it('updateKeyPoolStrategyDetailed keeps 401 status and body; the boolean wrapper reports the same failure', async () => {
+    globalThis.fetch = respond(401, JSON.stringify({ error: 'admin token expired' }), 'application/json') as any;
+    const detailed = await updateKeyPoolStrategyDetailed('fal', 'round_robin');
+    expect(detailed.ok).toBe(false);
+    expect(detailed.httpStatus).toBe(401);
+    expect(detailed.error).toContain('401');
+    expect(detailed.error).toContain('admin token expired');
+    expect(await updateKeyPoolStrategy('fal', 'round_robin')).toBe(false);
+  });
+
+  it('testSingleKey keeps 403 status and body verbatim', async () => {
+    globalThis.fetch = respond(403, 'forbidden: key pool locked', 'text/plain') as any;
+    const res = await testSingleKey('fal', 'sk-test');
+    expect(res.httpStatus).toBe(403);
+    expect(res.status).toBe('invalid');
+    expect(res.message).toContain('403');
+    expect(res.message).toContain('forbidden: key pool locked');
   });
 });
