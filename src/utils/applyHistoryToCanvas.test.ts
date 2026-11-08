@@ -124,6 +124,14 @@ describe('applyHistoryToCanvas', () => {
     expect(out.nodes.find((n) => n.type === 'EmptyLatentImage')!.values).toMatchObject({ width: 768, height: 1344 });
   });
 
+  it('restores recorded video fields onto an AIVideoNode snapshot', () => {
+    const item = successItem({ mediaType: 'video', videoUrl: 'https://cdn.example/out.mp4', actualModel: 'new', actualProvider: 'tensorart', workflowSnapshot: {
+      nodes: [node({ id: 'v', type: 'AIVideoNode', values: { model: 'old', steps: 4, fps: 8, num_frames: 9 } }), node({ id: 'sv', type: 'SaveVideo' })], connections: [],
+    }, requestMetadata: { actualParameters: { model: 'new', steps: 25, fps: 16, num_frames: 49, cfg: 7.5, reference_image: 'ref.png', loras: [{ name: 'motion', strength: 0.8 }] } } as any });
+    const out = applyHistoryToCanvas({ item, nodes: [], connections: [] });
+    expect(out.nodes.find((n) => n.type === 'AIVideoNode')?.values).toMatchObject({ model: 'new', steps: 25, fps: 16, num_frames: 49, cfg: 7.5, reference_image: 'https://cdn.example/out.png' });
+  });
+
   it('hasWorkflowSnapshot flag alone without object is treated as no snapshot', () => {
     const { nodes, connections } = baseGraph();
     const out = applyHistoryToCanvas({ item: successItem({ hasWorkflowSnapshot: true }), nodes, connections });

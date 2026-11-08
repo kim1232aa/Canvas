@@ -7,6 +7,7 @@ import { saveImagePrefixFor } from './saveImagePrefix';
 import { providerIdFromHistory } from './providerLabels';
 import type { GenerationHistoryItem } from '../types/providers';
 import { WORKFLOW_PRESETS } from '../constants/presets';
+import { unwrapGenerationParameters, sentHistoryLoras } from './historyParameters';
 
 export const NO_WORKFLOW_SNAPSHOT_MSG = '这条没存工作流';
 
@@ -47,6 +48,7 @@ export type ApplyHistoryOutput = {
 };
 
 const clone = <T,>(x: T): T => JSON.parse(JSON.stringify(x));
+const isRecord = (value: unknown): value is Record<string, any> => !!value && typeof value === 'object' && !Array.isArray(value);
 
 const imageUrlOf = (item: HistoryApplyItem): string | undefined => {
   const u = item.url || item.imageUrl;
@@ -106,13 +108,20 @@ export function patchHistoryParamsOntoNodes(nodes: NodeInstance[], item: History
 } {
   const model = (item.actualModel || item.model || undefined) ?? undefined;
   const provider = (item.actualProvider || item.provider || undefined) ?? undefined;
+  const sent = isRecord(item.requestMetadata?.actualParameters)
+    ? unwrapGenerationParameters(item.requestMetadata.actualParameters)
+    : isRecord(item.requestMetadata?.actualRequest) ? unwrapGenerationParameters(item.requestMetadata.actualRequest) : {};
+  const value = (key: string, fallback: unknown) => Object.prototype.hasOwnProperty.call(sent, key) ? sent[key] : fallback;
+  const fps = value('fps', (item as any).fps);
+  const numFrames = value('num_frames', (item as any).num_frames ?? (item as any).totalFrames);
+  const duration = value('duration', (item as any).duration);
   const providerId = providerIdFromHistory(provider);
   const prompt = item.prompt != null && String(item.prompt).length ? String(item.prompt) : undefined;
   const negativePrompt =
     item.negativePrompt != null && String(item.negativePrompt).length
       ? String(item.negativePrompt)
       : undefined;
-  const loras = Array.isArray(item.loras) ? item.loras.filter((l) => l && l.name) : [];
+  const loras = sentHistoryLoras(item);
   let loraIdx = 0;
   const imageUrl = imageUrlOf(item);
 
@@ -128,6 +137,20 @@ export function patchHistoryParamsOntoNodes(nodes: NodeInstance[], item: History
     return { ...n, values: v };
   };
   const next = nodes.map(blank).map((n) => {
+    if (n.type === 'AIVideoNode') {
+      const values = { ...n.values };
+      for (const key of ['model', 'targetProvider', 'prompt', 'negative_prompt', 'seed', 'steps', 'cfg', 'width', 'height', 'fps', 'num_frames', 'duration', 'sampler', 'scheduler', 'reference_image', 'loras']) delete values[key];
+      const fields: Array<[string, unknown]> = [
+        ['model', model], ['targetProvider', providerId], ['prompt', prompt], ['negative_prompt', negativePrompt],
+        ['seed', value('seed', item.seed)], ['steps', value('steps', item.steps)], ['cfg', value('cfg', item.cfg)],
+        ['width', value('width', item.width)], ['height', value('height', item.height)], ['fps', fps],
+        ['num_frames', numFrames], ['duration', duration], ['sampler', value('sampler', item.sampler)], ['scheduler', value('schedule', item.scheduler)],
+      ];
+      for (const [key, val] of fields) if (val !== undefined && val !== null) values[key] = val;
+      if (loras.length) values.loras = loras;
+      if (imageUrl) values.reference_image = imageUrl;
+      return { ...n, values };
+    }
     if (n.type === 'CLIPTextEncode' && prompt !== undefined) {
       return { ...n, values: { ...n.values, text: prompt } };
     }
@@ -345,7 +368,7 @@ export function standardPresetForHistory(item: HistoryApplyItem) {
   const std = WORKFLOW_PRESETS.filter((p) => p.id.startsWith('std-') && (p.provider === pid
     || p.nodes.some((n) => n.type === 'CheckpointLoaderSimple' && n.values?.targetProvider === pid)));
   const video = item.mediaType === 'video' || !!item.videoUrl;
-  return std.find((p) => p.category.includes('视频') === video) || std[0];
+  return std.find((p) => p.nodes.some((n) => n.type === 'AIVideoNode') === video) || (video ? undefined : std[0]);
 }
 
 /** Build the apply payload ImageDetailModal / HistoryModal share (params + image + snapshot). */
