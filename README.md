@@ -34,7 +34,7 @@
 
 所有服务商在节点画布与参数总控台中均严格按照实际端点分类。状态严格采用 7 类标准标签：
 - `PASS_GENERATION`: 界面可见真实生成产物。
-- `PASS_BILLING`: 全参数请求抵达上游，上游欠费/额度不足报错原样透传。
+- `PASS_BILLING`: 请求出站抵达上游，上游欠费/额度不足/套餐限制报错原样透传。注意：此状态仅证明请求真实出站与错误透传，绝不代表最终 UI 产物验收通过。
 - `BLOCKED_AUTH`: 401 鉴权失效。
 - `BLOCKED_CONFIG`: 本地未配置对应 API Key。
 - `NOT_SENT`: 请求未出站（如未接入端点本地明确报错）。
@@ -45,23 +45,23 @@
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Civitai** | `PASS_BILLING` | `PASS_BILLING` | 2026-11-07 | [final.md](docs/evidence/2026-11-05/final.md) | 图像与视频工作流请求直达上游，返回 `400 insufficientBuzz` 原样透传；历史出图样本见 `public/verification/` |
 | **Fal.ai** | `PASS_BILLING` | `PASS_BILLING` | 2026-11-07 | [final.md](docs/evidence/2026-11-05/final.md) | Krea-2 / Wan 2.2 T2V/I2V LoRA 达真实 Fal 队列，返回 `403 Exhausted balance` |
-| **WaveSpeed** | `PASS_BILLING` | `PASS_BILLING` | 2026-11-08 | [acceptance.md](docs/evidence/2026-11-08/acceptance.md) | 图像与视频请求真实出站至上游，返回 `400 Insufficient credits` 原样透传；因磁盘 `data/` 无产物文件，图像原 PASS_GENERATION 声明已按产物诚实原则降级为 `PASS_BILLING` |
+| **WaveSpeed** | `PASS_BILLING` | `PASS_BILLING` | 2026-11-08 | [acceptance.md](docs/evidence/2026-11-08/acceptance.md) | 图像与视频请求真实出站至上游，返回 `400 Insufficient credits` 原样透传；因磁盘 `data/` 无产物文件，图像按产物诚实原则标为 `PASS_BILLING`（未完成产物验收） |
 | **Hugging Face** | `PASS_BILLING` | `NOT_SENT` | 2026-11-07 | [final.md](docs/evidence/2026-11-05/final.md) | Z-Image Turbo 达 HF Inference Router，无多余路由下拉；返回 `402 Purchase pre-paid credits` (`final/06-hf-zimage-run.png`)；视频路由未接通 |
 | **ModelScope 魔搭 CN** | `PASS_BILLING` | `NOT_SENT` | 2026-11-07 | [final.md](docs/evidence/2026-11-05/final.md) | 图像直达魔搭国内站，返回 `insufficient balance`；视频未声明构建路径 |
 | **ModelScope 魔搭 AI** | `PASS_BILLING` | `NOT_SENT` | 2026-11-07 | [final.md](docs/evidence/2026-11-05/final.md) | 国际站独立账户接入，返回欠费/余额不足；视频未构建 |
 | **Sogni** | `PASS_BILLING` | `PASS_BILLING` | 2026-11-08 | [acceptance.md](docs/evidence/2026-11-08/acceptance.md) | 任务创建成功 (201/200)，轮询返回 `waiting_for_user: insufficient_credit`；I2V 动态切入 `animate_photo`；导入时明确区分来源 URL 与 personal-LoRA ID |
-| **AIMLAPI** | `PASS_BILLING` | `NOT_SENT` | 2026-11-07 | [final.md](docs/evidence/2026-11-05/final.md) | 图像 `std-aimlapi-t2i` 直达 `/v1/images/generations`，返回 `403 Out of funds`（`final/10-aimlapi-run.png`）。`VIDEO_PROVIDERS`（`src/server/routes/videoGenerateRoute.ts:130`）不含 aimlapi，本轮无 AIMLAPI 视频截图，视频标 `NOT_SENT` |
-| **DeepInfra** | `PASS_BILLING` | `NOT_SENT` | 2026-11-08 | [acceptance.md](docs/evidence/2026-11-08/acceptance.md) | FLUX-2-klein-9b 直达端点，M46 实机运行返回 `402 Payment Required`，`actualRequest` 与原始响应透传展示 (`docs/evidence/2026-11-08/13-real-run...` / `14-real-run...`)；未构建视频 |
-| **Venice AI** | `PASS_BILLING` | `NOT_SENT` | 2026-11-07 | [final.md](docs/evidence/2026-11-05/final.md) | 图像 `std-venice-t2i` 填写非空 CLIP 提示词后出站，`final/14-venice-run.png` 原样展示 `【venice】HTTP 402 Payment Required: {"error":"Insufficient USD or Diem balance to complete request. Visit https://venice.ai/settings/api to add credits."}`。`VIDEO_PROVIDERS` 不含 venice，无 Venice 视频截图，视频标 `NOT_SENT` |
-| **Krea** | `BLOCKED_CONFIG` | `NOT_SENT` | 2026-11-07 | [final.md](docs/evidence/2026-11-05/final.md) | 预设 `std-krea-t2i`（`image/krea/krea-2/medium-turbo`）与 Civitai 导入目标芯片存在于 UI；本轮未配置 `KREA_API_KEY` 的出站复测，图像标 `BLOCKED_CONFIG`。`VIDEO_PROVIDERS` 不含 krea，视频标 `NOT_SENT` |
+| **AIMLAPI** | `PASS_BILLING` | `未验证` | 2026-11-07 | [final.md](docs/evidence/2026-11-05/final.md) | 图像 `std-aimlapi-t2i` 直达 `/v1/images/generations`，返回 `403 Out of funds`（`final/10-aimlapi-run.png`）。视频分派通过 `EngineRegistry` 的 `SchemaProviderDriver('aimlapi')`，具备视频能力，不受旧 `videoGenerateRoute` 白名单限制；本轮无 UI 点击实测，视频标「未验证」 |
+| **DeepInfra** | `PASS_BILLING` | `NOT_SENT` | 2026-11-08 | [acceptance.md](docs/evidence/2026-11-08/acceptance.md) | FLUX-2-klein-9b 直达端点，M46 实机运行仅出站 3 字段（prompt/model/size）并返回 `402 Payment Required` 原样透传；此仅证实三字段出站与错误透传（PASS_BILLING），无满参数/LoRA 证据，且未产出真图像产物；未构建视频 |
+| **Venice AI** | `PASS_BILLING` | `未验证` | 2026-11-07 | [final.md](docs/evidence/2026-11-05/final.md) | 图像 `std-venice-t2i` 填写非空 CLIP 提示词后出站，`final/14-venice-run.png` 原样展示 `【venice】HTTP 402 Payment Required: {"error":"Insufficient USD or Diem balance to complete request. Visit https://venice.ai/settings/api to add credits."}`。视频分派通过 `EngineRegistry` 的 `SchemaProviderDriver('venice')`，具备视频能力；本轮无 UI 点击截图，视频标「未验证」 |
+| **Krea** | `BLOCKED_CONFIG` | `未验证` | 2026-11-07 | [final.md](docs/evidence/2026-11-05/final.md) | 预设 `std-krea-t2i` 与 Civitai 导入目标芯片存在于 UI；本轮未配置 `KREA_API_KEY`。视频分派通过 `SchemaProviderDriver('krea')`；本轮无 UI 视频实测，视频标「未验证」 |
 | **ModelsLab** | `PASS_BILLING` | `NOT_SENT` | 2026-11-07 | [final.md](docs/evidence/2026-11-05/final.md) | M31：`std-modelslab-t2i` 填入 `z-image-turbo` 后真实出站 `POST https://modelslab.com/api/v6/images/text2img`；`final/17-modelslab-loaded.png` / `18-modelslab-run.png` 原样展示订阅套餐限制。未接入视频 |
 | **Mage.space** | `PASS_BILLING` | `NOT_SENT` | 2026-11-07 | [final.md](docs/evidence/2026-11-05/final.md) | mango-v3 直达端点，返回 `402 Payment Required`；未接入视频 |
-| **Novita AI** | `PASS_BILLING` | `NOT_SENT` | 2026-11-08 | [acceptance.md](docs/evidence/2026-11-08/acceptance.md) | SD 异步生图返回 `403 NOT_ENOUGH_BALANCE`；SVD-XT 视频已被 RETIRED_PATTERNS 标记退役且 VIDEO_PROVIDERS 不含 novita，无法从当前 UI 触达，视频诚实标注为 `NOT_SENT` |
+| **Novita AI** | `PASS_BILLING` | `未验证` | 2026-11-08 | [acceptance.md](docs/evidence/2026-11-08/acceptance.md) | SD 异步生图返回 `403 NOT_ENOUGH_BALANCE`。视频分派通过 `EngineRegistry` 的 `SchemaProviderDriver('novita')` 走动态 Schema 路由，不受旧 `videoGenerateRoute` 白名单限制；虽然旧 SVD-XT 预设已标记退役，但当前路由仍可分派 Novita 视频能力；本轮因未执行现代视频模型 UI 点击实测，视频标「未验证」 |
 | **MuAPI** | `PASS_BILLING` | `NOT_SENT` | 2026-11-07 | [final.md](docs/evidence/2026-11-05/final.md) | 图像直达端点，返回 `402 INSUFFICIENT_CREDITS`；视频路径尚未打通 |
 | **NanoGPT** | `BLOCKED_AUTH` | `BLOCKED_AUTH` | 2026-11-08 | [acceptance.md](docs/evidence/2026-11-08/acceptance.md) | 图像与视频路由均返回 `401 Invalid session / invalid_api_key`；视频独立接入 `/api/generate-video` |
-| **Together AI** | `BLOCKED_AUTH` | `NOT_SENT` | 2026-11-07 | [final.md](docs/evidence/2026-11-05/final.md) | 图像 `final/08-together-flux2-run.png` 原样 `401 Invalid API key`。`VIDEO_PROVIDERS` 不含 together，本轮无 Together 视频截图，视频标 `NOT_SENT` |
-| **Tensor.Art (TAMS)** | `BLOCKED_CONFIG` | `NOT_SENT` | 2026-11-08 | [acceptance.md](docs/evidence/2026-11-08/acceptance.md) | 模型查询返回鉴权拒绝；视频输入纯数字模型 ID 明确返回「尚未接入 TAMS 视频」本地拒绝，不偷换路由 |
-| **Tensor.Art (OpenWorks)** | `PASS_BILLING` | `NOT_SENT` | 2026-11-08 | [acceptance.md](docs/evidence/2026-11-08/acceptance.md) | 按 SchemaProvider 运行；因本地 `data/` 无对应产物文件，原 PASS_GENERATION 声明已按产物诚实原则降级为 `PASS_BILLING`；未接入视频 |
+| **Together AI** | `BLOCKED_AUTH` | `未验证` | 2026-11-07 | [final.md](docs/evidence/2026-11-05/final.md) | 图像 `final/08-together-flux2-run.png` 原样 `401 Invalid API key`。视频分派通过 `EngineRegistry` 的 `SchemaProviderDriver('together')`，具备视频能力；本轮无 UI 点击实测，视频标「未验证」 |
+| **Tensor.Art (TAMS)** | `BLOCKED_CONFIG` | `未验证` | 2026-11-08 | [acceptance.md](docs/evidence/2026-11-08/acceptance.md) | 模型查询返回鉴权拒绝；视频输入纯数字模型 ID 在 `videoGenerateRoute.ts:159` 走 `POST /v1/jobs` 的 `VIDEO_DIFFUSION` 路由，并非本地拒绝；但因尚未完成端到端 UI 点击产物验证，视频标「未验证」 |
+| **Tensor.Art (OpenWorks)** | `PASS_BILLING` | `未验证` | 2026-11-08 | [acceptance.md](docs/evidence/2026-11-08/acceptance.md) | M96/M100 已成功生成并持久化真实 1024×1024 PNG 物理产物（`artifact-openworks-bdf77680.png`），但官方工具目录仅声明 4 个位置输入，LoRA/扩展参数是否被上游采用未获契约证实（未验证），且截图存在跨运行混杂，完整终验未通过；视频在 `videoGenerateRoute.ts:366+` 存在 OpenWorks 工具调用路径，但产物未经验收，视频标「未验证」 |
 | **SenseNova (商汤)** | `BLOCKED_CONFIG` | `NOT_SENT` | 2026-11-07 | [final.md](docs/evidence/2026-11-05/final.md) | 图像驱动已构建并支持 `sensenova-u1.5-lite`，未配置 Key 时提示配置；非 FAIL_INTEGRATION |
 | **Agnes AI** | `BLOCKED_CONFIG` | `BLOCKED_CONFIG` | 2026-11-07 | [final.md](docs/evidence/2026-11-05/final.md) | 图像与视频驱动均已接入，当前本地未配置 `AGNES_KEY` |
 | **Google Gemini** | `BLOCKED_CONFIG` | `NOT_SENT` | 2026-11-08 | [acceptance.md](docs/evidence/2026-11-08/acceptance.md) | M83 已全面校准全景矩阵：Google Gemini 原生图像 (gemini-3.1-flash-image) 驱动已接通，提示词原样透传，无免 Key 兜底；当前未配置 `GEMINI_API_KEY` |
