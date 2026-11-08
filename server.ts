@@ -50,7 +50,7 @@ import {
   normalizeOpenAICompatBaseUrl,
   resolveAgainstBaseOrigin,
 } from './src/engines/compatRelay.ts';
-import { mapFalServerLoras } from './src/engines/drivers/FalDriver.ts';
+import { mapFalServerLoras } from './src/utils/falLoraMapping.ts';
 import { enrichPoolStatsWithServerBaseUrl } from './src/utils/poolStatsEnrich.ts';
 import { mapSampler, mapScheduler, resolveImportedNegativePrompt, resolveImportedCheckpointRef, resolveRawImportNegativeSamplerScheduler } from './src/utils/civitaiImportMap.ts';
 import { persistRemoteUrlAsDataUrl as persistRemoteUrlAsDataUrlRaw, requireDurableHistoryMediaUrl as requireDurableHistoryMediaUrlRaw } from './src/utils/persistMediaAsDataUrl.ts';
