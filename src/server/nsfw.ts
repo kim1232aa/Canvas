@@ -26,12 +26,10 @@ export interface AppliedNsfwDefault {
 }
 
 /**
- * DEPRECATED: Backend no longer supplements omitted fields (AGENTS.md #5 anti-blackbox).
- * Permissive defaults are seeded only in the UI (SchemaChoiceControls, ParameterInspector)
- * where they are publicly visible and can be toggled back by the user.
- * The wire sends exactly what the user set; omitted fields stay omitted.
- * 
- * This function now only audits NSFW fields the user explicitly set to permissive values.
+ * Audit only: the backend never adds a safety field the user did not send (AGENTS.md #5).
+ * Permissive defaults are seeded in the visible UI (SchemaChoiceControls / Civitai control), where the user can
+ * switch them to true / false / 不发送; the wire carries exactly what the saved parameters contain.
+ * Returns the declared safety fields the request carries at their permissive value; the payload is not modified.
  */
 export function applyNsfwDefaultsToPayload(
   payload: Record<string, any>,
