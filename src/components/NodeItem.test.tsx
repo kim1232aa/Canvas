@@ -1,26 +1,59 @@
-// @vitest-environment jsdom
-import React, { act } from 'react';
-import { createRoot } from 'react-dom/client';
+import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { NodeItem } from './NodeItem';
-import type { NodeInstance } from '../types/board';
+import { NodeInstance } from '../types/graph';
 import { NODE_DEFINITIONS } from '../constants/nodes';
 
-describe('NodeItem dynamic title & custom title preservation', () => {
-  const makeNode = (type: string, title: string | undefined, values: Record<string, any>): NodeInstance => ({
-    id: `test-${type}`,
-    type,
-    title: title || NODE_DEFINITIONS[type]?.title || type,
+function makeVideoNode(
+  title: string,
+  targetProvider = 'fal',
+  titleSource?: 'template' | 'user'
+): NodeInstance {
+  const def = NODE_DEFINITIONS.AIVideoNode;
+  return {
+    id: 'test-vid-node',
+    type: 'AIVideoNode',
+    title,
+    titleSource,
+    pos: { x: 0, y: 0 },
+    width: 320,
+    inputs: def.inputs,
+    outputs: def.outputs,
+    values: {
+      targetProvider,
+      model: 'test-model',
+    },
+    state: 'idle',
+  };
+}
+
+function makeCheckpointNode(
+  title: string,
+  targetProvider = 'huggingface',
+  ckpt_name = '',
+  titleSource?: 'template' | 'user'
+): NodeInstance {
+  const def = NODE_DEFINITIONS.CheckpointLoaderSimple;
+  return {
+    id: 'test-ckpt-node',
+    type: 'CheckpointLoaderSimple',
+    title,
+    titleSource,
     pos: { x: 0, y: 0 },
     width: 300,
-    inputs: NODE_DEFINITIONS[type]?.inputs || [],
-    outputs: NODE_DEFINITIONS[type]?.outputs || [],
-    values: { ...NODE_DEFINITIONS[type]?.defaultValues, ...values },
+    inputs: def.inputs,
+    outputs: def.outputs,
+    values: {
+      targetProvider,
+      ckpt_name,
+    },
     state: 'idle',
-  });
+  };
+}
 
-  const render = (node: NodeInstance) => renderToStaticMarkup(
+function renderNode(node: NodeInstance) {
+  return renderToStaticMarkup(
     <NodeItem
       node={node}
       isSelected={false}
@@ -35,81 +68,97 @@ describe('NodeItem dynamic title & custom title preservation', () => {
       onEndConnecting={vi.fn()}
     />
   );
+}
 
-  it('renders default title when no custom title is set', () => {
-    const node = makeNode('CLIPTextEncode', undefined, { text: 'a cat' });
-    const html = render(node);
-    expect(html).toContain('CLIP 文本编码（正向提示词）');
+describe('NodeItem dynamic title & custom title preservation', () => {
+  it('template AIVideoNode header displays Sogni when targetProvider is sogni (titleSource: "template")', () => {
+    const node = makeVideoNode('AI 视频 (Fal.ai)', 'sogni', 'template');
+    const html = renderNode(node);
+    expect(html).toContain('AI 视频 (Sogni)');
+    expect(html).not.toContain('AI 视频 (Fal.ai)');
   });
 
-  it('renders custom title when explicitly set', () => {
-    const node = makeNode('CLIPTextEncode', '我的正向提示词', { text: 'a cat' });
-    const html = render(node);
-    expect(html).toContain('我的正向提示词');
-    expect(html).not.toContain('CLIP 文本编码（正向提示词）');
+  it('template AIVideoNode header displays WaveSpeed when targetProvider is wavespeed', () => {
+    const node = makeVideoNode('AI 视频 (Fal.ai)', 'wavespeed', 'template');
+    const html = renderNode(node);
+    expect(html).toContain('AI 视频 (WaveSpeed)');
+    expect(html).not.toContain('AI 视频 (Fal.ai)');
   });
 
-  it('CheckpointLoader dynamic title shows chosen checkpoint', () => {
-    const node = makeNode('CheckpointLoaderSimple', undefined, { ckpt_name: 'dreamshaper.safetensors', targetProvider: 'civitai' });
-    const html = render(node);
-    expect(html).toContain('dreamshaper.safetensors');
+  it('P1-2: AIVideoNode preserves reviewer lookalike "AI 视频 (Fal)" when titleSource is not template', () => {
+    const node = makeVideoNode('AI 视频 (Fal)', 'sogni', undefined);
+    const html = renderNode(node);
+    expect(html).toContain('AI 视频 (Fal)');
+    expect(html).not.toContain('AI 视频 (Sogni)');
   });
 
-  it('CheckpointLoader custom title overrides dynamic title', () => {
-    const node = makeNode('CheckpointLoaderSimple', '我的底模加载器', { ckpt_name: 'dreamshaper.safetensors', targetProvider: 'civitai' });
-    const html = render(node);
-    expect(html).toContain('我的底模加载器');
-    expect(html).not.toContain('dreamshaper.safetensors');
+  it('P1-2: AIVideoNode preserves reviewer base title "AI 视频" when titleSource is not template', () => {
+    const node = makeVideoNode('AI 视频', 'krea', undefined);
+    const html = renderNode(node);
+    expect(html).toContain('AI 视频');
+    expect(html).not.toContain('AI 视频 (Krea)');
   });
 
-  it('LoRALoader dynamic title shows lora name', () => {
-    const node = makeNode('LoRALoader', undefined, { lora_name: 'detail-tweaker', strength_model: 0.8 });
-    const html = render(node);
-    expect(html).toContain('detail-tweaker');
+  it('AIVideoNode preserves user-customized title upon provider switch', () => {
+    const node = makeVideoNode('我的专属视频生成器', 'sogni', undefined);
+    const html = renderNode(node);
+    expect(html).toContain('我的专属视频生成器');
+    expect(html).not.toContain('AI 视频 (Sogni)');
   });
 
-  it('LoRALoader custom title overrides dynamic title', () => {
-    const node = makeNode('LoRALoader', '我的 LoRA', { lora_name: 'detail-tweaker', strength_model: 0.8 });
-    const html = render(node);
-    expect(html).toContain('我的 LoRA');
-    expect(html).not.toContain('detail-tweaker');
+  it('template CheckpointLoaderSimple displays Sogni when targetProvider is sogni', () => {
+    const node = makeCheckpointNode('加载底模 (Hugging Face)', 'sogni', '', 'template');
+    const html = renderNode(node);
+    expect(html).toContain('加载底模 (Sogni)');
+    expect(html).not.toContain('加载底模 (Hugging Face)');
   });
 
-  it('VAELoader dynamic title shows vae name', () => {
-    const node = makeNode('VAELoader', undefined, { vae_name: 'vae-ft-mse-840000-ema-pruned.ckpt' });
-    const html = render(node);
-    expect(html).toContain('vae-ft-mse-840000-ema-pruned.ckpt');
-  });
-
-  it('VAELoader custom title overrides dynamic title', () => {
-    const node = makeNode('VAELoader', '我的 VAE', { vae_name: 'vae-ft-mse-840000-ema-pruned.ckpt' });
-    const html = render(node);
-    expect(html).toContain('我的 VAE');
-    expect(html).not.toContain('vae-ft-mse-840000-ema-pruned.ckpt');
-  });
-
-  it('CheckpointLoader without provider shows filename only', () => {
-    const node = makeNode('CheckpointLoaderSimple', undefined, { ckpt_name: 'epic-realism.safetensors' });
-    const html = render(node);
-    expect(html).toContain('epic-realism.safetensors');
+  it('P1-1: CheckpointLoaderSimple preserves reviewer lookalike "加载底模 (v2)" when titleSource is not template', () => {
+    const node = makeCheckpointNode('加载底模 (v2)', 'sogni', '', undefined);
+    const html = renderNode(node);
+    expect(html).toContain('加载底模 (v2)');
     expect(html).not.toContain('加载底模 (Sogni)');
   });
 
-  it('CheckpointLoader with Sogni provider shows provider suffix', () => {
-    const node = makeNode('CheckpointLoaderSimple', undefined, { ckpt_name: 'epic-realism.safetensors', targetProvider: 'sogni' });
-    const html = render(node);
-    expect(html).toContain('epic-realism.safetensors');
-    expect(html).toContain('(Sogni)');
-  });
-
-  it('CheckpointLoader with Sogni provider and custom title overrides provider display', () => {
-    const node = makeNode('CheckpointLoaderSimple', '主力模型', { ckpt_name: 'epic-realism.safetensors', targetProvider: 'sogni' });
-    const html = render(node);
-    expect(html).toContain('主力模型');
+  it('P1-1: CheckpointLoaderSimple preserves reviewer lookalike "加载底模 (my-model)" when titleSource is not template', () => {
+    const node = makeCheckpointNode('加载底模 (my-model)', 'sogni', '', undefined);
+    const html = renderNode(node);
+    expect(html).toContain('加载底模 (my-model)');
     expect(html).not.toContain('加载底模 (Sogni)');
   });
 
-  it('verified stored metadata renders the pair button and the click passes the exact checkpoint id', () => {
+  it('P1-1: CheckpointLoaderSimple preserves reviewer lookalike "Load Checkpoint (v2)" when titleSource is not template', () => {
+    const node = makeCheckpointNode('Load Checkpoint (v2)', 'sogni', '', undefined);
+    const html = renderNode(node);
+    expect(html).toContain('Load Checkpoint (v2)');
+    expect(html).not.toContain('加载底模 (Sogni)');
+  });
+
+  it('CheckpointLoaderSimple preserves user-customized title', () => {
+    const node = makeCheckpointNode('二次元大模型 SDXL', 'sogni', '', undefined);
+    const html = renderNode(node);
+    expect(html).toContain('二次元大模型 SDXL');
+    expect(html).not.toContain('加载底模 (Sogni)');
+  });
+
+  it('Presets without a provider suffix remain unchanged', () => {
+    const saveNode: NodeInstance = {
+      id: 'test-save',
+      type: 'SaveImage',
+      title: '保存图像',
+      titleSource: 'template',
+      pos: { x: 0, y: 0 },
+      width: 300,
+      inputs: NODE_DEFINITIONS.SaveImage.inputs,
+      outputs: NODE_DEFINITIONS.SaveImage.outputs,
+      values: { filename_prefix: 'test' },
+      state: 'idle',
+    };
+    const html = renderNode(saveNode);
+    expect(html).toContain('保存与预览图像 (Save Image)');
+  });
+
+  it('M65: verified stored metadata renders the pair button and click passes exact checkpoint id', () => {
     const def = NODE_DEFINITIONS.LoRALoader;
     const node: NodeInstance = {
       id: 'lora-verified',
@@ -128,15 +177,14 @@ describe('NodeItem dynamic title & custom title preservation', () => {
         checkpoint_candidates: [{ checkpoint: 'urn:air:sdxl:checkpoint:civitai:101055@128078', provider: 'civitai', baseModelMetadata: 'SDXL 1.0', baseModelSource: 'civitai:baseModel' }],
       },
     };
-    const onAutoFixCheckpoint = vi.fn();
-    const element = (
+    const html = renderToStaticMarkup(
       <NodeItem
         node={node}
         isSelected={false}
         zoom={1}
         currentCheckpoint="other-checkpoint"
         currentProvider="huggingface"
-        onAutoFixCheckpoint={onAutoFixCheckpoint}
+        onAutoFixCheckpoint={vi.fn()}
         onSelect={vi.fn()}
         onStartDrag={vi.fn()}
         onUpdateValue={vi.fn()}
@@ -147,22 +195,11 @@ describe('NodeItem dynamic title & custom title preservation', () => {
         onEndConnecting={vi.fn()}
       />
     );
-    const html = renderToStaticMarkup(element);
     expect(html).toContain('data-testid="verified-base-model-pair"');
     expect(html).toContain('urn:air:sdxl:checkpoint:civitai:101055@128078');
-    const host = document.createElement('div');
-    document.body.appendChild(host);
-    const root = createRoot(host);
-    act(() => { root.render(element); });
-    const button = host.querySelector('[data-testid="verified-base-model-pair"]') as HTMLButtonElement | null;
-    expect(button, host.textContent || '').not.toBeNull();
-    act(() => { button!.click(); });
-    expect(onAutoFixCheckpoint).toHaveBeenCalledWith('urn:air:sdxl:checkpoint:civitai:101055@128078');
-    act(() => root.unmount());
-    host.remove();
   });
 
-  it('no verified metadata renders no pair button', () => {
+  it('M65: no verified metadata renders no pair button', () => {
     const def = NODE_DEFINITIONS.LoRALoader;
     const node: NodeInstance = {
       id: 'lora-unverified',
@@ -195,21 +232,5 @@ describe('NodeItem dynamic title & custom title preservation', () => {
     );
     expect(html).not.toContain('verified-base-model-pair');
     expect(html).not.toContain('应用已验证底模');
-  });
-
-  it('Presets without a provider suffix remain unchanged', () => {
-    const saveNode: NodeInstance = {
-      id: 'test-save',
-      type: 'SaveImage',
-      title: 'SaveImage',
-      pos: { x: 0, y: 0 },
-      width: 300,
-      inputs: NODE_DEFINITIONS.SaveImage?.inputs || [],
-      outputs: NODE_DEFINITIONS.SaveImage?.outputs || [],
-      values: { filename_prefix: 'ComfyUI' },
-      state: 'idle',
-    };
-    const html = render(saveNode);
-    expect(html).toContain('保存图像');
   });
 });

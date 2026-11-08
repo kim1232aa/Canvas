@@ -1631,6 +1631,7 @@ export default function App() {
 
   // Civitai / Multi-Hub LoRA selection
   const handleSelectLoRAFromCivitai = (lora: ResourceSelection & {triggerWords:string}) => {
+    if (!lora.provider) {setToast({type:'error',title:'LoRA 未挂载',message:'LoRA 缺少明确的供应商信息，请从 Hub 重新选择已验证的资源'});return;}
     if(lora.provider && lora.provider!=='civitai') {handleSelectLoRAWithBaseModel(lora);return;}
     // A remembered spatial selection must not redirect graph-mode mounting.
     if (canvasMode === 'spatial' && selectedFrameId) {
@@ -1741,6 +1742,7 @@ export default function App() {
 
   // Verified auto-pair: only getRecommendedBaseModelForLora may name a checkpoint. No table, no guess.
   const handleSelectLoRAWithBaseModel = (lora: ResourceSelection & {modelStrength?:number;clipStrength?:number}) => {
+    if (!lora.provider) {setToast({type:'error',title:'LoRA 未挂载',message:'LoRA 缺少明确的供应商信息，请从 Hub 重新选择已验证的资源'});return;}
     const frame=canvasMode==='spatial' ? spatialFrames.find(f=>f.id===selectedFrameId) : undefined;
     if (canvasMode==='spatial' && !frame) {setToast({type:'error',title:'LoRA 未挂载',message:'请先选择目标空间画板'});return;}
     const carried = lora as ResourceSelection & { baseModelSource?: string; checkpointCandidates?: CatalogCheckpointCandidate[] };
