@@ -1,19 +1,26 @@
 /**
- * Official NSFW & Safety field facts.
+ * Official NSFW & Safety field policies.
  *
- * A field is recognized only when it is named here AND declared by the live
- * schema of the node being edited. Nothing in this module writes a value:
- * an unset field is not sent, and a value the user set is left untouched.
+ * Grounded in verified official API documentation and live OpenAPI schemas across
+ * Fal.ai, Together AI, Venice AI, Civitai, and Replicate.
+ *
+ * Rules (AGENTS.md #6):
+ * - A safety switch is recognized only when it is in OFFICIAL_NSFW_FIELD_POLICIES AND
+ *   declared by the live schema of the model/endpoint being used.
+ * - Declared safety switches default to their permissive (open) value.
+ * - Defaults are publicly visible in the UI controls and custom_parameters, can be
+ *   toggled back (true / false / not sent) by the user, and user explicit values
+ *   always take precedence.
  */
 
 export interface NsfwFieldPolicy {
   field: string;
   type: 'boolean' | 'enum' | 'string';
-  /** Open value (safety filter off). Shown as a selectable option, never written automatically. */
+  /** Open value (safety filter off) used as the permissive default when declared by live schema. */
   permissiveValue: unknown;
   /** Value the upstream uses when the field is omitted. Shown in the unfilled badge. */
   upstreamDefault: unknown;
-  /** Restrictive value when the user turns filtering back on. */
+  /** Restrictive value when the user turns filtering on. */
   restrictedValue?: unknown;
   /** UI label for the open value. */
   permissiveLabel: string;
@@ -143,14 +150,14 @@ export function isNsfwField(fieldName: string): boolean {
   return Boolean(findNsfwPolicy(fieldName));
 }
 
-/** Open value for a recognized field. Display only — callers must not write it automatically. */
+/** Permissive (open) default value for a recognized official safety field. */
 export function getNsfwPermissiveDefault(fieldName: string): unknown | undefined {
   return findNsfwPolicy(fieldName)?.permissiveValue;
 }
 
 /**
- * Official safety fields that the given live schema actually declares.
- * The map values are the open option, for display. This function writes nothing.
+ * Official safety fields that the given live schema actually declares,
+ * mapped to their verified permissive default values.
  */
 export function extractDeclaredNsfwDefaults(schemaProps: Record<string, any> | undefined): Record<string, unknown> {
   if (!schemaProps || typeof schemaProps !== 'object') return {};
@@ -163,12 +170,34 @@ export function extractDeclaredNsfwDefaults(schemaProps: Record<string, any> | u
 }
 
 /**
- * Returns custom_parameters unchanged.
- * An unset safety field is omitted from the request; it is never filled in here.
+ * Seeds permissive defaults into visible custom_parameters JSON for any official
+ * safety switch declared by the live schema that the user has not explicitly set.
+ * User-specified keys (including restrictive values) are never overwritten.
  */
 export function applyNsfwDefaultsToCustomParameters(
   customParamsStr: string | undefined,
-  _schemaProps: Record<string, any> | undefined
+  schemaProps: Record<string, any> | undefined
 ): string {
-  return customParamsStr ?? '{}';
+  let body: Record<string, any> = {};
+  try {
+    const parsed = JSON.parse(customParamsStr || '{}');
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      body = parsed;
+    } else {
+      return customParamsStr ?? '{}';
+    }
+  } catch {
+    return customParamsStr ?? '{}';
+  }
+
+  const nsfwDefaults = extractDeclaredNsfwDefaults(schemaProps);
+  let changed = false;
+  for (const [key, permissiveValue] of Object.entries(nsfwDefaults)) {
+    if (body[key] === undefined) {
+      body[key] = permissiveValue;
+      changed = true;
+    }
+  }
+
+  return changed ? JSON.stringify(body, null, 2) : (customParamsStr ?? '{}');
 }

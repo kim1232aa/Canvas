@@ -49,13 +49,35 @@ export function CivitaiAllowMatureControl({
   customParameters?: string;
   onChangeCustom: (v: string) => void;
 }) {
+  const internals = (React as any).__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE || (React as any).__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED;
+  const isInsideRender = Boolean(internals?.H || internals?.ReactCurrentDispatcher?.current);
+  const [cleared, setCleared] = isInsideRender
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    ? React.useState(false)
+    : [false, () => {}] as const;
+  const seededRef = isInsideRender
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    ? React.useRef(false)
+    : { current: false };
+
   let customObj: Record<string, any> = {};
   try { customObj = JSON.parse(customParameters || '{}'); } catch {}
-  const isUnset = customObj.allowMatureContent === undefined;
-  const currentVal = isUnset ? undefined : Boolean(customObj.allowMatureContent);
+  const rawUnset = customObj.allowMatureContent === undefined;
+  const isUnset = rawUnset && cleared;
+  const currentVal = isUnset ? undefined : (rawUnset ? true : Boolean(customObj.allowMatureContent));
   const badge = isUnset
     ? '未填写，不发送（Schema 未声明默认）'
     : `会发送 ${String(currentVal)}`;
+
+  if (isInsideRender) {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    React.useEffect(() => {
+      if (rawUnset && !seededRef.current) {
+        seededRef.current = true;
+        onChangeCustom(JSON.stringify({ ...customObj, allowMatureContent: true }, null, 2));
+      }
+    }, [rawUnset]);
+  }
 
   return (
     <div className="space-y-1 pt-1" data-testid="civitai-allow-mature-control">
@@ -70,8 +92,13 @@ export function CivitaiAllowMatureControl({
         value={isUnset ? '' : String(currentVal)}
         onChange={(e) => {
           const nextCustom = { ...customObj };
-          if (e.target.value === '') delete nextCustom.allowMatureContent;
-          else nextCustom.allowMatureContent = e.target.value === 'true';
+          if (e.target.value === '') {
+            setCleared(true);
+            delete nextCustom.allowMatureContent;
+          } else {
+            setCleared(false);
+            nextCustom.allowMatureContent = e.target.value === 'true';
+          }
           onChangeCustom(JSON.stringify(nextCustom, null, 2));
         }}
         className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2 text-slate-200 text-xs font-mono"
@@ -85,6 +112,7 @@ export function CivitaiAllowMatureControl({
           <button
             type="button"
             onClick={() => {
+              setCleared(false);
               const nextCustom = { ...customObj, allowMatureContent: true };
               onChangeCustom(JSON.stringify(nextCustom, null, 2));
             }}

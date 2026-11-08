@@ -1,12 +1,11 @@
-// Verified against ModelScope API-Inference AIGC example comments
-// (https://www.modelscope.cn/docs/model-service/API-Inference/intro and the Z-Image-Turbo
-// images/generations sample): LoRA IDs are ModelScope repository IDs (owner/model);
-// multiple LoRA weights must sum to 1.0; up to 6 LoRAs. Do not auto-rescale weights.
+// ModelScope API-Inference /v1/images/generations `loras` field:
+// Official examples use repository IDs (owner/model) or {"<id>": weight}, but custom user
+// strings are forwarded verbatim so upstream decides without local false blocking.
 const REPO_ID = /^[^/\s]+\/[^/\s]+$/;
 
-/** Pick ModelScope repository id from a canvas LoRA row. Prefer name/id over path/url (path may be HTTPS). */
+/** Pick ModelScope LoRA identifier from a canvas LoRA row. Prefer repo-id-shaped name/id over residual HTTPS downloadUrl when both exist; otherwise pass user string verbatim. */
 function modelScopeRepoId(l: any): string {
-  if (l == null || typeof l !== 'object') return String(l ?? '');
+  if (l == null || typeof l !== 'object') return String(l ?? '').trim();
   if ('path_or_id' in l && !('name' in l) && !('id' in l)) {
     throw new Error('魔搭 LoRA 不接受 path_or_id/weight 形状；请用仓库 ID（owner/model）或 {"owner/model": weight}');
   }
@@ -15,19 +14,14 @@ function modelScopeRepoId(l: any): string {
     const s = String(c ?? '').trim();
     if (REPO_ID.test(s)) return s;
   }
-  // Fall back so the existing validation can throw a clear 仓库 ID error (never send HTTPS path as id).
-  return String(l.name || l.id || l.path || '').trim();
+  return String(l.name ?? l.id ?? l.path ?? l.url ?? l.downloadUrl ?? '').trim();
 }
 
 export function buildModelScopeLoras(input: unknown): string | Record<string, number> | undefined {
   if (input === undefined || input === null || (Array.isArray(input) && !input.length)) return undefined;
   if (typeof input === 'string') {
-    if (!REPO_ID.test(input)) {
-      throw new Error(
-        `魔搭 LoRA 必须为仓库 ID（owner/model），不能使用通用 HTTPS 权重 URL 或文件名；收到: ${input}`
-      );
-    }
-    return input;
+    const trimmed = input.trim();
+    return trimmed ? input : undefined;
   }
   let pairs: Array<[string, number]>;
   if (Array.isArray(input)) {
@@ -44,11 +38,9 @@ export function buildModelScopeLoras(input: unknown): string | Record<string, nu
   } else throw new Error('LoRA 必须为仓库 ID、权重映射或 LoRA 数组');
   if (!pairs.length) throw new Error('LoRA 为空');
   if (new Set(pairs.map(([id]) => id)).size !== pairs.length) throw new Error('魔搭 LoRA 仓库 ID 不能重复');
-  for (const [id, weight] of pairs) {
-    if (!id || !REPO_ID.test(id)) {
-      throw new Error(
-        `魔搭 LoRA 必须为仓库 ID（owner/model），不能使用通用 HTTPS 权重 URL 或文件名；收到 path/name: ${id || '(空)'}`
-      );
+  for (const [id] of pairs) {
+    if (!id || !id.trim()) {
+      throw new Error('魔搭 LoRA 标识不能为空');
     }
   }
   return Object.fromEntries(pairs);

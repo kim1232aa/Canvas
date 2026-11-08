@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { seedRangeFor, seedRangeIssue, seedSchemaIssues, randomSeedFor } from './seedRange';
+import { seedRangeFor, seedRangeIssue, seedSchemaIssues, seedRangeAdvisory, randomSeedFor } from './seedRange';
 
 const ms = (seed: any, extra: any = {}) => ({ type: 'ModelScopeNode', title: '魔搭生成', values: { model_endpoint: 'Tongyi-MAI/Z-Image-Turbo', seed, ...extra } });
 
@@ -13,21 +13,47 @@ const modelscopeCnBoard = (seed: number, control: string = 'fixed') => {
   return { nodes, connections };
 };
 
-describe('seed range from model Schema', () => {
+describe('seed range from model Schema (advisory only, never blocks pre-run)', () => {
   it('ModelScope static Schema has official seed range [0, 2^31-1] (hint / random)', () => {
     const r = seedRangeFor('modelscope', 'Tongyi-MAI/Z-Image-Turbo');
     expect(r).toEqual({ min: 0, max: 2147483647, source: 'https://www.modelscope.cn/docs/model-service/API-Inference/intro' });
     expect(seedRangeFor('modelscope_ai', 'Tongyi-MAI/Z-Image-Turbo')).toEqual(r);
   });
-  it('ModelScope out-of-range seed is NOT hard-blocked (product: hint only, upstream verbatim)', () => {
-    const n = ms(4294967295); expect(seedSchemaIssues([n])).toBeNull(); expect(n.values.seed).toBe(4294967295);
+
+  it('seed -1 and out-of-range seeds are NEVER locally blocked for any provider', () => {
+    const n = ms(4294967295);
+    expect(seedSchemaIssues([n])).toBeNull();
+    expect(n.values.seed).toBe(4294967295);
     expect(seedRangeIssue('modelscope', 'Tongyi-MAI/Z-Image-Turbo', -1)).toBeNull();
     expect(seedRangeIssue('modelscope_ai', 'Tongyi-MAI/Z-Image-Turbo', 4294967295)).toBeNull();
+    expect(seedRangeIssue('fal', 'fal-ai/flux/dev', -1)).toBeNull();
+    expect(seedRangeIssue('venice', 'fluently-xl', -1)).toBeNull();
+    expect(seedRangeIssue('together', 'black-forest-labs/FLUX.1-schnell', -1)).toBeNull();
+    expect(seedRangeIssue('fal', 'fal-ai/flux/dev', 999999999999)).toBeNull();
     expect(seedSchemaIssues([ms(1.5)])).toBeNull();
   });
-  it('in-range seed → allowed', () => { expect(seedSchemaIssues([ms(42)])).toBeNull(); expect(seedSchemaIssues([ms(2147483647)])).toBeNull(); });
-  it('randomize mode skips stored value check', () => { expect(seedSchemaIssues([ms(4294967295, { control_after_generate: 'randomize' })])).toBeNull(); });
-  it('no declared range → no block', () => { expect(seedRangeIssue('unknownprov', 'x', 99999999999)).toBeNull(); });
+
+  it('advisory helper treats -1 as valid random sentinel and gives non-blocking hint on out-of-range values', () => {
+    expect(seedRangeAdvisory('modelscope', 'Tongyi-MAI/Z-Image-Turbo', -1)).toBeNull();
+    expect(seedRangeAdvisory('modelscope', 'Tongyi-MAI/Z-Image-Turbo', 42)).toBeNull();
+    const hint = seedRangeAdvisory('modelscope', 'Tongyi-MAI/Z-Image-Turbo', 4294967295);
+    expect(hint).toContain('仅提示');
+    expect(hint).not.toContain('未发送请求');
+  });
+
+  it('in-range seed → allowed', () => {
+    expect(seedSchemaIssues([ms(42)])).toBeNull();
+    expect(seedSchemaIssues([ms(2147483647)])).toBeNull();
+  });
+
+  it('randomize mode skips stored value check', () => {
+    expect(seedSchemaIssues([ms(4294967295, { control_after_generate: 'randomize' })])).toBeNull();
+  });
+
+  it('no declared range → no block', () => {
+    expect(seedRangeIssue('unknownprov', 'x', 99999999999)).toBeNull();
+  });
+
   it('random seed for ModelScope stays inside official [0, 2^31-1]', () => {
     for (const r of [0, 0.5, 0.999999999]) {
       const s = randomSeedFor('modelscope', 'Qwen/Qwen-Image', () => r);
@@ -38,11 +64,14 @@ describe('seed range from model Schema', () => {
     }
   });
 
-  it('ROOT: CheckpointLoaderSimple modelscope + KSampler huge seed → still no local hard block', () => {
+  it('ROOT: CheckpointLoaderSimple modelscope + KSampler huge seed or -1 → no local hard block', () => {
     const { nodes, connections } = modelscopeCnBoard(4294967295, 'fixed');
     expect(seedSchemaIssues(nodes)).toBeNull();
     expect(seedSchemaIssues(nodes, connections)).toBeNull();
     expect(nodes[1].values.seed).toBe(4294967295);
+
+    const negOne = modelscopeCnBoard(-1, 'fixed');
+    expect(seedSchemaIssues(negOne.nodes, negOne.connections)).toBeNull();
   });
 
   it('ROOT: same graph with seed 42 → allowed', () => {

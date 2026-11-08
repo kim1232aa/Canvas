@@ -126,10 +126,13 @@ describe('Official NSFW & Safety field facts', () => {
   });
 
   describe('applyNsfwDefaultsToCustomParameters', () => {
-    it('does not write a declared safety field that the user left unset', () => {
+    it('writes declared safety switches with their permissive defaults while keeping user keys', () => {
       const schemaProps = { disable_safety_checker: { type: 'boolean' } };
       const initial = JSON.stringify({ steps: 20 });
-      expect(applyNsfwDefaultsToCustomParameters(initial, schemaProps)).toBe(initial);
+      expect(JSON.parse(applyNsfwDefaultsToCustomParameters(initial, schemaProps))).toEqual({
+        steps: 20,
+        disable_safety_checker: true,
+      });
     });
 
     it('returns the user value unchanged, including a restrictive choice', () => {
@@ -144,8 +147,11 @@ describe('Official NSFW & Safety field facts', () => {
       expect(applyNsfwDefaultsToCustomParameters(userSet, schemaProps)).toBe(userSet);
     });
 
-    it('does not invent a body when custom_parameters is empty', () => {
-      expect(applyNsfwDefaultsToCustomParameters(undefined, { safe_mode: { type: 'boolean' } })).toBe('{}');
+    it('seeds permissive defaults into an empty custom_parameters when schema declares a switch', () => {
+      expect(JSON.parse(applyNsfwDefaultsToCustomParameters(undefined, { safe_mode: { type: 'boolean' } }))).toEqual({
+        safe_mode: false,
+      });
+      expect(applyNsfwDefaultsToCustomParameters(undefined, { prompt: { type: 'string' } })).toBe('{}');
     });
   });
 });

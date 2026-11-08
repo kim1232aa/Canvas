@@ -2,7 +2,7 @@ import { UrlText } from './UrlText';
 import React from 'react';
 import { CANVAS_TO_SCHEMA_ALIASES } from '../utils/schemaSendHint';
 import { formatSchemaFieldLabel } from '../utils/nodeUiLabels';
-import { findNsfwPolicy, type NsfwFieldPolicy } from '../utils/nsfw';
+import { applyNsfwDefaultsToCustomParameters, findNsfwPolicy, type NsfwFieldPolicy } from '../utils/nsfw';
 
 /**
  * Generic node controls for official-Schema fields that no canvas widget maps to
@@ -90,7 +90,6 @@ export function schemaChoiceFields(inputSchema: any, doc?: any): ChoiceField[] {
 
     const nsfwPolicy = findNsfwPolicy(key);
     const isNsfw = Boolean(nsfwPolicy);
-    // Schema's own default only. The open value is a selectable option, never the displayed default.
     const defaultVal = spec.default ?? vs.find((v) => v.default !== undefined)?.default;
 
     out.push({
@@ -135,7 +134,6 @@ const scalarDefault = (d: unknown): string | undefined => d === undefined || d =
  * A filled key is in the body and sent verbatim. An unfilled key is not sent.
  * The unfilled note names the Schema default when the Schema declares one,
  * otherwise the upstream default documented for a recognized safety field.
- * Neither value is written into the body.
  */
 export function schemaFieldBadge(current: unknown, schemaDefault?: unknown, nsfwPolicy?: NsfwFieldPolicy): { kind: 'send' | 'not_sent'; text: string } {
   if (current !== undefined) {
@@ -192,23 +190,65 @@ export function SchemaChoiceControls({
   const fields = schemaChoiceFields(inputSchema, openapi);
   const loraDescriptions = schemaLoraDescriptions(inputSchema, openapi);
   const declaredKeys = Object.keys(inputSchema?.properties || {});
+  const nsfwKeySig = fields.filter((f) => f.isNsfw).map((f) => f.key).sort().join(',');
+
+  const internals = (React as any).__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE || (React as any).__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED;
+  const isInsideRender = Boolean(internals?.H || internals?.ReactCurrentDispatcher?.current);
+  const [clearedKeys, setClearedKeys] = isInsideRender
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    ? React.useState<Record<string, boolean>>({})
+    : [{}, () => {}] as const;
+  const seededSchemaRef = isInsideRender
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    ? React.useRef<string>('')
+    : { current: '' };
+
+  if (isInsideRender) {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    React.useEffect(() => {
+      if (!nsfwKeySig || seededSchemaRef.current === nsfwKeySig) return;
+      seededSchemaRef.current = nsfwKeySig;
+      const next = applyNsfwDefaultsToCustomParameters(value, inputSchema?.properties);
+      if (next !== (value ?? '{}')) {
+        onChange(next);
+      }
+    }, [nsfwKeySig, inputSchema, value, onChange]);
+  }
 
   if (!fields.length && !loraDescriptions.length) return null;
   const body = parse(value);
   const write = (key: string, next: unknown) => {
     const b = parse(value);
     if (!b) return;
-    if (next === undefined) delete b[key]; else b[key] = next;
+    for (const f of fields) {
+      if (f.isNsfw && f.nsfwPolicy && b[f.key] === undefined && !clearedKeys[f.key] && f.key !== key) {
+        b[f.key] = f.nsfwPolicy.permissiveValue;
+      }
+    }
+    if (next === undefined) {
+      setClearedKeys((prev) => ({ ...prev, [key]: true }));
+      delete b[key];
+    } else {
+      setClearedKeys((prev) => {
+        if (!prev[key]) return prev;
+        const copy = { ...prev };
+        delete copy[key];
+        return copy;
+      });
+      b[key] = next;
+    }
     onChange(JSON.stringify(b, null, 2));
   };
   return (
     <div className="rounded-xl border border-slate-700 bg-[#111620] p-3 text-xs text-slate-200 space-y-2" data-testid="schema-choice-controls" onPointerDown={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
       {fields.map((f) => {
-        const current = body?.[f.key];
+        const rawCurrent = body?.[f.key];
+        const current = rawCurrent !== undefined
+          ? rawCurrent
+          : (f.isNsfw && f.nsfwPolicy && !clearedKeys[f.key] ? f.nsfwPolicy.permissiveValue : undefined);
         const isObj = current && typeof current === 'object' && !Array.isArray(current);
         const mode = current === undefined ? '' : isObj ? '__custom__' : String(current);
-        const sent = current !== undefined;
-        const unfilledLabel = schemaFieldBadge(undefined, f.numberSpec?.default ?? f.defaultValue).text;
+        const unfilledLabel = schemaFieldBadge(undefined, f.numberSpec?.default ?? f.defaultValue, f.nsfwPolicy).text;
         const fieldMeta = formatSchemaFieldLabel(f.key);
         return (
           <div key={f.key} className="space-y-1" data-testid={`schema-choice-${f.key}`}>
