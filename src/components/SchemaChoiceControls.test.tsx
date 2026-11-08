@@ -119,10 +119,10 @@ describe('SchemaChoiceControls safety fields', () => {
       select.value = '';
       select.dispatchEvent(new Event('change', { bubbles: true }));
     });
-    
+
     // Now has metadata marking it as omitted
     const cleared = JSON.parse(handleChange.mock.calls[0][0]);
-    expect(cleared).toHaveProperty('__nsfwOmitted', ['disable_safety_checker']);
+    expect(cleared._canvas).toEqual({ nsfwOmitted: ['disable_safety_checker'] });
     expect(cleared).not.toHaveProperty('disable_safety_checker');
     currentValue = handleChange.mock.calls[0][0];
 
@@ -136,7 +136,7 @@ describe('SchemaChoiceControls safety fields', () => {
         />
       );
     });
-    
+
     const select2 = container.querySelector('select[aria-label="disable_safety_checker"]') as HTMLSelectElement;
     expect(select2?.value).toBe('');
     expect(container.textContent).toContain('未填写，不发送（Schema 默认：false）');
@@ -183,7 +183,7 @@ describe('SchemaChoiceControls safety fields', () => {
     });
     const clearedJson = handleChange.mock.calls[0][0];
     const cleared = JSON.parse(clearedJson);
-    expect(cleared).toHaveProperty('__nsfwOmitted', ['disable_safety_checker']);
+    expect(cleared._canvas).toEqual({ nsfwOmitted: ['disable_safety_checker'] });
     expect(cleared).not.toHaveProperty('disable_safety_checker');
     currentValue = clearedJson;
     handleChange.mockClear();
@@ -270,7 +270,7 @@ describe('SchemaChoiceControls safety fields', () => {
     });
     const clearedJson = handleChange.mock.calls[0][0];
     currentValue = clearedJson;
-    expect(JSON.parse(clearedJson)).toHaveProperty('__nsfwOmitted', ['disable_safety_checker']);
+    expect(JSON.parse(clearedJson)._canvas).toEqual({ nsfwOmitted: ['disable_safety_checker'] });
     handleChange.mockClear();
 
     // Unmount (simulates closing drawer)
@@ -330,7 +330,7 @@ describe('SchemaChoiceControls safety fields', () => {
     currentValue = handleChange.mock.calls[0][0];
     const afterClear = JSON.parse(currentValue);
     expect(afterClear).not.toHaveProperty('disable_safety_checker');
-    expect(afterClear).toHaveProperty('__nsfwOmitted', ['disable_safety_checker']);
+    expect(afterClear._canvas).toEqual({ nsfwOmitted: ['disable_safety_checker'] });
     handleChange.mockClear();
 
     // Edit random_toggle
@@ -355,7 +355,7 @@ describe('SchemaChoiceControls safety fields', () => {
     });
 
     const final = JSON.parse(handleChange.mock.calls[0][0]);
-    expect(final).toEqual({ random_toggle: true, __nsfwOmitted: ['disable_safety_checker'] });
+    expect(final).toEqual({ random_toggle: true, _canvas: { nsfwOmitted: ['disable_safety_checker'] } });
     expect(final).not.toHaveProperty('disable_safety_checker');
 
     await act(async () => { root.unmount(); });
@@ -394,43 +394,60 @@ describe('ParameterInspector CivitaiAllowMatureControl', () => {
     container.remove();
   });
 
-  it('initial false -> omit does not immediately re-seed true', async () => {
+  // Real useState-controlled parent: onChange feeds the value back like the node's saved custom_parameters.
+  async function mountControlled(initial: string, saved?: { value: string }) {
+    const { CivitaiAllowMatureControl } = await import('./ParameterInspector');
     const container = document.createElement('div');
     document.body.appendChild(container);
     const root = createRoot(container);
-    let currentValue = JSON.stringify({ allowMatureContent: false, keep: 'unchanged' });
-    const handleChange = vi.fn((v: string) => { currentValue = v; });
+    const writes: string[] = [];
+    const state = saved ?? { value: initial };
+    function Parent() {
+      const [value, setValue] = React.useState(state.value);
+      return React.createElement(CivitaiAllowMatureControl, {
+        customParameters: value,
+        onChangeCustom: (next: string) => { writes.push(next); state.value = next; setValue(next); },
+      });
+    }
+    await act(async () => { root.render(React.createElement(Parent)); });
+    const select = () => container.querySelector('select[aria-label="Civitai allowMatureContent"]') as HTMLSelectElement;
+    const choose = async (v: string) => { await act(async () => { select().value = v; select().dispatchEvent(new Event('change', { bubbles: true })); }); };
+    const unmount = async () => { await act(async () => { root.unmount(); }); container.remove(); };
+    return { writes, state, select, choose, unmount };
+  }
 
-    // Mount with explicit false
-    await act(async () => {
-      root.render(
-        <div>
-          {React.createElement(
-            (await import('./ParameterInspector')).CivitaiAllowMatureControl,
-            { customParameters: currentValue, onChangeCustom: handleChange }
-          )}
-        </div>
-      );
-    });
+  it('initial false -> 不发送 stays omitted: one write, field absent, no reseed true', async () => {
+    const h = await mountControlled(JSON.stringify({ allowMatureContent: false, keep: 'unchanged' }));
+    expect(h.writes).toHaveLength(0);
+    await h.choose('');
+    expect(h.writes).toHaveLength(1);
+    expect(h.select().value).toBe('');
+    const saved = JSON.parse(h.state.value);
+    expect(saved).toEqual({ keep: 'unchanged', _canvas: { nsfwOmitted: ['allowMatureContent'] } });
+    await h.unmount();
+  });
 
-    // Should not write anything on mount (false is explicit)
-    expect(handleChange).not.toHaveBeenCalled();
-    handleChange.mockClear();
+  it('seed true -> 不发送 -> remount from saved JSON stays omitted and writes nothing', async () => {
+    const h1 = await mountControlled('{}');
+    expect(JSON.parse(h1.state.value)).toEqual({ allowMatureContent: true });
+    await h1.choose('');
+    expect(h1.select().value).toBe('');
+    const savedValue = h1.state.value;
+    await h1.unmount();
 
-    // User selects 不发送 to omit
-    const select = container.querySelector('select[aria-label="Civitai allowMatureContent"]') as HTMLSelectElement;
-    await act(async () => {
-      select.value = '';
-      select.dispatchEvent(new Event('change', { bubbles: true }));
-    });
+    const h2 = await mountControlled(savedValue);
+    expect(h2.writes).toHaveLength(0);
+    expect(h2.select().value).toBe('');
+    expect(JSON.parse(h2.state.value)).not.toHaveProperty('allowMatureContent');
+    await h2.unmount();
+  });
 
-    // Should write omitted version (no allowMatureContent key)
-    expect(handleChange).toHaveBeenCalledWith(JSON.stringify({ keep: 'unchanged' }, null, 2));
-    const omitted = JSON.parse(handleChange.mock.calls[0][0]);
-    expect(omitted).toEqual({ keep: 'unchanged' });
-    expect(omitted).not.toHaveProperty('allowMatureContent');
-
-    await act(async () => { root.unmount(); });
-    container.remove();
+  it('choosing true after 不发送 clears the omission marker and keeps other _canvas fields', async () => {
+    const h = await mountControlled(JSON.stringify({ allowMatureContent: false, _canvas: { scope: { provider: 'civitai', model: 'm' }, schemaProperties: ['prompt'] } }));
+    await h.choose('');
+    expect(JSON.parse(h.state.value)._canvas).toEqual({ scope: { provider: 'civitai', model: 'm' }, schemaProperties: ['prompt'], nsfwOmitted: ['allowMatureContent'] });
+    await h.choose('true');
+    expect(JSON.parse(h.state.value)).toEqual({ allowMatureContent: true, _canvas: { scope: { provider: 'civitai', model: 'm' }, schemaProperties: ['prompt'] } });
+    await h.unmount();
   });
 });

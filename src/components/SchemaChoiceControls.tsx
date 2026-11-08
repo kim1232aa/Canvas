@@ -2,7 +2,7 @@ import { UrlText } from './UrlText';
 import React from 'react';
 import { CANVAS_TO_SCHEMA_ALIASES } from '../utils/schemaSendHint';
 import { formatSchemaFieldLabel } from '../utils/nodeUiLabels';
-import { applyNsfwDefaultsToCustomParameters, findNsfwPolicy, type NsfwFieldPolicy } from '../utils/nsfw';
+import { applyNsfwDefaultsToCustomParameters, findNsfwPolicy, readNsfwOmitted, writeNsfwOmitted, type NsfwFieldPolicy } from '../utils/nsfw';
 
 /**
  * Generic node controls for official-Schema fields that no canvas widget maps to
@@ -119,16 +119,8 @@ export function schemaChoiceFields(inputSchema: any, doc?: any): ChoiceField[] {
   return out;
 }
 
-const NSFW_OMITTED_META = '__nsfwOmitted';
-
 const parse = (value?: string): Record<string, any> | null => {
   try { const p = JSON.parse(value || '{}'); return p && typeof p === 'object' && !Array.isArray(p) ? p : null; } catch { return null; }
-};
-
-/** Extract explicitly-omitted NSFW field names from metadata; returns Set for fast lookup. */
-const getExplicitlyOmitted = (body: Record<string, any> | null): Set<string> => {
-  if (!body || !Array.isArray(body[NSFW_OMITTED_META])) return new Set();
-  return new Set(body[NSFW_OMITTED_META].filter((x: unknown) => typeof x === 'string'));
 };
 
 /**
@@ -190,10 +182,7 @@ function SchemaNsfwSeedEffect({
   React.useEffect(() => {
     if (!nsfwKeySig || seededSchemaRef.current === nsfwKeySig) return;
     seededSchemaRef.current = nsfwKeySig;
-    const body = parse(value);
-    if (!body) return;
-    const explicitlyOmitted = getExplicitlyOmitted(body);
-    const next = applyNsfwDefaultsToCustomParameters(value, inputSchema?.properties, explicitlyOmitted);
+    const next = applyNsfwDefaultsToCustomParameters(value, inputSchema?.properties);
     if (next !== (value ?? '{}')) {
       onChange(next);
     }
@@ -214,7 +203,7 @@ function NsfwChoiceFieldRow({
   canvasLoras?: Array<{ name?: string; strength?: number }> | null;
   writeField: (key: string, next: unknown, cleared: boolean) => void;
 }) {
-  const explicitlyOmitted = getExplicitlyOmitted(body);
+  const explicitlyOmitted = readNsfwOmitted(body);
   const rawCurrent = body?.[f.key];
   const current = rawCurrent !== undefined
     ? rawCurrent
@@ -337,25 +326,14 @@ export function SchemaChoiceControls({
 
   if (!fields.length && !loraDescriptions.length) return null;
   const body = parse(value);
-  const explicitlyOmitted = getExplicitlyOmitted(body);
 
   const writeField = (key: string, next: unknown, isCleared = false) => {
     const b = parse(value);
     if (!b) return;
-    const omitted = getExplicitlyOmitted(b);
-
-    if (isCleared) {
-      omitted.add(key);
-    } else {
-      omitted.delete(key);
-    }
-
-    // Update metadata
-    if (omitted.size > 0) {
-      b[NSFW_OMITTED_META] = Array.from(omitted).sort();
-    } else {
-      delete b[NSFW_OMITTED_META];
-    }
+    const omitted = readNsfwOmitted(b);
+    if (isCleared) omitted.add(key);
+    else omitted.delete(key);
+    writeNsfwOmitted(b, omitted);
 
     // Seed other unset NSFW fields that aren't explicitly omitted
     for (const f of fields) {

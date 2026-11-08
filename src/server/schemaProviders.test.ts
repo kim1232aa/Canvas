@@ -264,6 +264,52 @@ describe('LoRA submission transparency', () => {
   });
 });
 
+describe('safety-switch choices on the wire (registered submit route)', () => {
+  const properties = {
+    prompt: { type: 'string' },
+    disable_safety_checker: { type: 'boolean', default: false },
+    enable_safety_checker: { type: 'boolean', default: true },
+    random_toggle: { type: 'boolean' },
+  };
+  async function submit(custom: Record<string, unknown>, check: (sent: any, data: any) => void) {
+    const sent: any[] = [];
+    await withFixture(async (_url, init) => {
+      if (init?.method === 'POST') { sent.push(JSON.parse(String(init.body))); return json({ data: { id: 'task' } }); }
+      return json({ data: [{ model_id: 'fixture/model', api_schema: { api_schemas: [{ type: 'model_run', method: 'POST', api_path: '/api/v3/fixture/model', server: 'https://api.wavespeed.ai', request_schema: { properties } }] } }] });
+    }, async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/api/schema-provider/wavespeed/submit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: 'fixture/model', prompt: 'mountain valley in watercolor, panoramic composition', custom_parameters: custom }) });
+      expect(response.status).toBe(200);
+      const data = await response.json() as any;
+      expect(sent).toHaveLength(1);
+      check(sent[0], data);
+    });
+  }
+  const noMeta = (sent: any, data: any) => {
+    expect(JSON.stringify(sent)).not.toMatch(/nsfwOmitted|_canvas/);
+    expect(JSON.stringify(data.actualRequest.parameters)).not.toMatch(/nsfwOmitted|_canvas/);
+  };
+
+  it('explicit 不发送 recorded in _canvas.nsfwOmitted: field absent from upstream body and actualRequest, marker never sent', async () => {
+    await submit({ random_toggle: true, _canvas: { schemaProperties: Object.keys(properties), nsfwOmitted: ['disable_safety_checker'] } }, (sent, data) => {
+      noMeta(sent, data);
+      expect(sent).not.toHaveProperty('disable_safety_checker');
+      expect(data.actualRequest.parameters).not.toHaveProperty('disable_safety_checker');
+      expect(sent.random_toggle).toBe(true);
+      expect(data.actualRequest.parameters.random_toggle).toBe(true);
+    });
+  });
+
+  it('explicit true and explicit false go out verbatim, marker never sent', async () => {
+    await submit({ disable_safety_checker: true, enable_safety_checker: false, _canvas: { nsfwOmitted: ['safe_mode'] } }, (sent, data) => {
+      noMeta(sent, data);
+      expect(sent.disable_safety_checker).toBe(true);
+      expect(sent.enable_safety_checker).toBe(false);
+      expect(data.actualRequest.parameters.disable_safety_checker).toBe(true);
+      expect(data.actualRequest.parameters.enable_safety_checker).toBe(false);
+    });
+  });
+});
+
 describe('Sogni LoRA catalog covers', () => {
   const example=(caption:string,isMature=false)=>({url:`https://cdn.sogni.ai/ComfyUI/lora-examples/x_${caption}.jpg`,caption,isMature});
   it('uses an upstream positive-strength example, skipping the shared Off baseline, negatives and mature samples', () => {

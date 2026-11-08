@@ -169,16 +169,37 @@ export function extractDeclaredNsfwDefaults(schemaProps: Record<string, any> | u
   return declared;
 }
 
+const isPlainObject = (v: unknown): v is Record<string, any> => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
+
+/**
+ * Safety fields the user explicitly set to 不发送 after the UI showed the permissive default.
+ * Stored in the node's saved custom_parameters under the root `_canvas` UI-metadata object
+ * (`_canvas.nsfwOmitted`), which every upstream builder strips, so it is never part of a provider request.
+ */
+export function readNsfwOmitted(body: Record<string, any> | null | undefined): Set<string> {
+  const list = isPlainObject(body?._canvas) ? body._canvas.nsfwOmitted : undefined;
+  return new Set(Array.isArray(list) ? list.filter((x): x is string => typeof x === 'string') : []);
+}
+
+/** Writes the omitted set into `body._canvas.nsfwOmitted`, keeping every other `_canvas` field untouched. */
+export function writeNsfwOmitted(body: Record<string, any>, omitted: Set<string>): void {
+  const canvas = isPlainObject(body._canvas) ? { ...body._canvas } : {};
+  if (omitted.size === 0 && canvas.nsfwOmitted === undefined) return;
+  if (omitted.size > 0) canvas.nsfwOmitted = [...omitted].sort();
+  else delete canvas.nsfwOmitted;
+  if (Object.keys(canvas).length > 0) body._canvas = canvas;
+  else delete body._canvas;
+}
+
 /**
  * Seeds permissive defaults into visible custom_parameters JSON for any official
  * safety switch declared by the live schema that the user has not explicitly set.
- * User-specified keys (including restrictive values) are never overwritten.
- * Fields in explicitlyOmitted are skipped even when undefined.
+ * User-specified keys (including restrictive values) are never overwritten, and
+ * fields recorded in `_canvas.nsfwOmitted` (explicit 不发送) are not seeded again.
  */
 export function applyNsfwDefaultsToCustomParameters(
   customParamsStr: string | undefined,
-  schemaProps: Record<string, any> | undefined,
-  explicitlyOmitted?: Set<string>
+  schemaProps: Record<string, any> | undefined
 ): string {
   let body: Record<string, any> = {};
   try {
@@ -193,9 +214,10 @@ export function applyNsfwDefaultsToCustomParameters(
   }
 
   const nsfwDefaults = extractDeclaredNsfwDefaults(schemaProps);
+  const explicitlyOmitted = readNsfwOmitted(body);
   let changed = false;
   for (const [key, permissiveValue] of Object.entries(nsfwDefaults)) {
-    if (body[key] === undefined && !(explicitlyOmitted?.has(key))) {
+    if (body[key] === undefined && !explicitlyOmitted.has(key)) {
       body[key] = permissiveValue;
       changed = true;
     }

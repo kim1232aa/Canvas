@@ -41,6 +41,7 @@ import { parseExplicitLoraStrength } from '../utils/loraStrength';
 import { fieldOptions, getFieldSpec, resolveSchemaModelId, type FieldKey, type Provider as SchemaProvider } from '../schemas/providerSchema';
 import { middleEllipsis } from '../utils/middleEllipsis';
 import { randomSeedFor, seedRangeAdvisory } from '../utils/seedRange';
+import { readNsfwOmitted, writeNsfwOmitted } from '../utils/nsfw';
 
 export function CivitaiAllowMatureControl({
   customParameters,
@@ -49,7 +50,6 @@ export function CivitaiAllowMatureControl({
   customParameters?: string;
   onChangeCustom: (v: string) => void;
 }) {
-  const [cleared, setCleared] = React.useState(false);
   const initializedRef = React.useRef(false);
 
   let customObj: Record<string, any> = {};
@@ -65,23 +65,34 @@ export function CivitaiAllowMatureControl({
     parseError = err instanceof Error ? err.message : String(err);
   }
 
+  const withMature = (next: boolean | undefined) => {
+    const out: Record<string, any> = { ...customObj };
+    const omitted = readNsfwOmitted(out);
+    if (next === undefined) {
+      delete out.allowMatureContent;
+      omitted.add('allowMatureContent');
+    } else {
+      out.allowMatureContent = next;
+      omitted.delete('allowMatureContent');
+    }
+    writeNsfwOmitted(out, omitted);
+    return JSON.stringify(out, null, 2);
+  };
+
   const rawUnset = customObj.allowMatureContent === undefined;
-  const isUnset = rawUnset && cleared;
+  const explicitlyOmitted = readNsfwOmitted(customObj).has('allowMatureContent');
+  const isUnset = rawUnset && explicitlyOmitted;
   const currentVal = isUnset ? undefined : (rawUnset ? true : Boolean(customObj.allowMatureContent));
   const badge = isUnset
     ? '未填写，不发送（Schema 未声明默认）'
     : `会发送 ${String(currentVal)}`;
 
   React.useEffect(() => {
-    // Mark initialization complete on first mount regardless of initial value
-    if (initializedRef.current) return;
+    // Visible default initialization runs once per mount and only for a never-initialized, parseable value.
+    // An explicit choice (true/false) or a recorded 不发送 (_canvas.nsfwOmitted) is never overwritten.
+    if (parseError || initializedRef.current) return;
     initializedRef.current = true;
-
-    // Only seed if truly unset and not explicitly cleared, and no parse error
-    // Note: cleared is captured from render but not in deps - initialization runs once
-    if (rawUnset && !cleared && !parseError) {
-      onChangeCustom(JSON.stringify({ ...customObj, allowMatureContent: true }, null, 2));
-    }
+    if (rawUnset && !explicitlyOmitted) onChangeCustom(withMature(true));
   }, [rawUnset, parseError]);
 
   return (
@@ -102,17 +113,7 @@ export function CivitaiAllowMatureControl({
         aria-label="Civitai allowMatureContent"
         disabled={Boolean(parseError)}
         value={isUnset ? '' : String(currentVal)}
-        onChange={(e) => {
-          const nextCustom = { ...customObj };
-          if (e.target.value === '') {
-            setCleared(true);
-            delete nextCustom.allowMatureContent;
-          } else {
-            setCleared(false);
-            nextCustom.allowMatureContent = e.target.value === 'true';
-          }
-          onChangeCustom(JSON.stringify(nextCustom, null, 2));
-        }}
+        onChange={(e) => onChangeCustom(withMature(e.target.value === '' ? undefined : e.target.value === 'true'))}
         className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2 text-slate-200 text-xs font-mono"
       >
         <option value="">（不发送）</option>
@@ -123,11 +124,7 @@ export function CivitaiAllowMatureControl({
         <div className="flex items-center justify-end text-[11px] px-2 py-1">
           <button
             type="button"
-            onClick={() => {
-              setCleared(false);
-              const nextCustom = { ...customObj, allowMatureContent: true };
-              onChangeCustom(JSON.stringify(nextCustom, null, 2));
-            }}
+            onClick={() => onChangeCustom(withMature(true))}
             className="text-[10px] text-cyan-300 hover:text-cyan-200 underline font-semibold cursor-pointer shrink-0"
           >
             填入 true
