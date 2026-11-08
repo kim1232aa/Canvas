@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { describeKeySelection, formatKeyUsage, keyUsagesFromTrace } from './keyUsage';
+import { describeKeySelection, formatKeyUsage, keyUsagesFromTrace } from '../utils/keyUsage';
 import { resolveHistoryParameters, historyKeyUsageLabels } from '../utils/historyParameters';
 import { recordKeyUsageLabels } from '../components/ExecutionLog';
 import { MODELSCOPE_REGIONS, buildLoraListRequest, parseLoraListResponse } from './modelScopeLoraList';

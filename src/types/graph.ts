@@ -283,3 +283,16 @@ export interface SpatialFrame {
   historyImages?: string[];
   createdAt: number;
 }
+
+export interface CanvasProject {
+  id: string;
+  name: string;
+  description: string;
+  updatedAt: number;
+  previewImage?: string;
+  nodes: NodeInstance[];
+  connections: Connection[];
+  spatialFrames: SpatialFrame[];
+  transform?: CanvasTransform;
+  canvasMode?: 'graph' | 'spatial';
+}

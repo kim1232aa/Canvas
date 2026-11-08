@@ -67,7 +67,8 @@ it('clipForSessionStorage keeps actualRequest.loras when response is huge (reloa
 });
 
 it('timeZoneLabel and formatRecordTime match the timezone actually used to format the time', async () => {
-  const { timeZoneLabel, formatRecordTime, CANVAS_TIME_ZONE, CANVAS_TIME_ZONE_LABEL } = await import('./executionTrace');
+  const { timeZoneLabel, formatRecordTime } = await import('./executionTrace');
+  const { CANVAS_TIME_ZONE, CANVAS_TIME_ZONE_LABEL } = await import('../utils/dateFormat');
   const d = new Date('2026-11-06T00:00:00.000Z');
 
   // Default timezone (Asia/Shanghai) -> 北京时间

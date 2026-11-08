@@ -4,7 +4,7 @@ import {CATEGORY_LABEL,countsLabel,formatRecordTime,getExecutions,isNonGeneratio
 import {isLocalNotOutbound, localNotOutboundText, upstreamHttpFirstLine, userFacingApiFailure} from '../utils/apiFailure';
 import { checkpointNodeTitle } from '../utils/providerLabels';
 import { splitActualRequest, ACTUAL_META_LABEL } from '../utils/actualRequestDisplay';
-import { formatKeyUsage, keyUsagesFromTrace } from '../server/keyUsage';
+import { formatKeyUsage, keyUsagesFromTrace } from '../utils/keyUsage';
 
 /** Key rotation visibility for one execution record: 「Key #0（共 2 个）」 from the response's executionTrace (index + count only). */
 export function recordKeyUsageLabels(r: Pick<ExecutionRecord,'response'>): string[] {

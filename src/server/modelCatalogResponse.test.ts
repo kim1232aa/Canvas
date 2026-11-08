@@ -1,8 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { hasNoPublicRemoteCatalog, isLookupOnlyCatalog } from '../utils/catalogPagination';
 import {
-  hasNoPublicRemoteCatalog,
-  isLookupOnlyCatalog,
   parseModelsLabCatalogResponse,
   parseRunwareCatalogResponse,
 } from './modelCatalogResponse';

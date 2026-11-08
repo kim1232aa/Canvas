@@ -33,13 +33,14 @@ import { CivitaiModal } from './components/CivitaiModal';
 import { HistoryModal } from './components/HistoryModal';
 import { ComfyGuideModal } from './components/ComfyGuideModal';
 import { WorkflowPresetsModal } from './components/WorkflowPresetsModal';
-import { CanvasManagerModal, CanvasProject } from './components/CanvasManagerModal';
-import { AssetManagerModal, MediaAsset, type AssetDeleteResult } from './components/AssetManagerModal';
+import { CanvasManagerModal } from './components/CanvasManagerModal';
+import { AssetManagerModal, type AssetDeleteResult } from './components/AssetManagerModal';
 import { ImageDetailModal } from './components/ImageDetailModal';
 import { ExecutionLog } from './components/ExecutionLog';
 import { ProviderMatrixModal } from './components/ProviderMatrixModal';
 import {
   CanvasMode,
+  CanvasProject,
   CanvasTransform,
   ComfyParameters,
   Connection,
@@ -48,6 +49,7 @@ import {
   WorkflowPreset,
 } from './types/graph';
 import { ApiKeysState, GenerationHistoryItem } from './types/providers';
+import type { MediaAsset } from './types/assets';
 import { WORKFLOW_PRESETS } from './constants/presets';
 import { NODE_DEFINITIONS, engineNodeTypeFor } from './constants/nodes';
 import { CategoryFilter } from './components/ModelHubModal';

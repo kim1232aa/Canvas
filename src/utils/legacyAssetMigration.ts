@@ -1,4 +1,4 @@
-import type { MediaAsset } from '../components/AssetManagerModal';
+import type { MediaAsset } from '../types/assets';
 
 const INLINE_MEDIA = /^data:(?:image|video|audio)\/[\w.+-]+;base64,/;
 

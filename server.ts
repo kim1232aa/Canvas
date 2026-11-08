@@ -17,7 +17,7 @@ import {isLoraWeightResource} from './src/utils/isLoraWeightResource.ts';
 import {buildCivitaiVideoInput, CIVITAI_VIDEO_OPENAPI_URL} from './src/schemas/civitaiVideo.ts';
 import express from 'express';
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { describeKeySelection, keyUsagesFromTrace, type KeyUsage } from './src/server/keyUsage.ts';
+import { describeKeySelection, keyUsagesFromTrace, type KeyUsage } from './src/utils/keyUsage.ts';
 import { sanitizeGenerationMetadata } from './src/utils/generationMetadata.ts';
 import { applyCustomParameters, parseCustomObject } from './src/server/customParameters.ts';
 import { runWithBillingKeyRotate, buildKeyRotationPayload, type KeyAttemptRecord } from './src/server/billingKeyRotate.ts';
