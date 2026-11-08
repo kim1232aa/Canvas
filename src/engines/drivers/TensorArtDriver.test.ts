@@ -211,4 +211,97 @@ describe('TensorArt model driver', () => {
     expect(body.provider).toBe('tensorart');
     expect(body.model).toBe('672797109289765558');
   });
+
+  it('forwards videoFps/videoFrames as fps/totalFrames and extraParams clip_skip/imageResourceId/generationMode to request body', async () => {
+    const driver = new TensorArtDriver();
+
+    vi.mocked(tracedFetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        mediaUrl: 'https://example.com/video.mp4',
+        provider: 'Tensor.Art (模型 API)',
+        model: '834845675863700019',
+        seed: 42,
+      }),
+    } as any);
+
+    await driver.generate(
+      {
+        model: '834845675863700019',
+        prompt: 'a cat running through a field',
+        isVideo: true,
+        videoFps: 16,
+        videoFrames: 49,
+        extraParams: {
+          clip_skip: 2,
+          imageResourceId: '7aacd321-2093-428e-80c0-d47d42f38f8e',
+          generationMode: 'STABLE',
+        },
+      } as any,
+      { tensorartTamsToken: 'tams-bearer-token' }
+    );
+
+    const [, init] = vi.mocked(tracedFetch).mock.calls.at(-1)!;
+    const body = JSON.parse(init?.body as string);
+    expect(body.fps).toBe(16);
+    expect(body.totalFrames).toBe(49);
+    expect(body.clipSkip).toBe(2);
+    expect(body.imageResourceId).toBe('7aacd321-2093-428e-80c0-d47d42f38f8e');
+    expect(body.generationMode).toBe('STABLE');
+    expect(body.provider).toBe('tensorart');
+  });
+
+  it('forwards clipSkip from extraParams (camelCase and snake_case)', async () => {
+    const driver = new TensorArtDriver();
+
+    vi.mocked(tracedFetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        mediaUrl: 'https://example.com/out.png',
+        provider: 'Tensor.Art (模型 API)',
+        model: '613045163490732233',
+        seed: 0,
+      }),
+    } as any);
+
+    await driver.generate(
+      {
+        model: '613045163490732233',
+        prompt: 'a lighthouse',
+        extraParams: { clip_skip: 3 },
+      } as any,
+      { tensorartKey: 'key' }
+    );
+
+    const [, init] = vi.mocked(tracedFetch).mock.calls.at(-1)!;
+    const body = JSON.parse(init?.body as string);
+    expect(body.clipSkip).toBe(3);
+  });
+
+  it('forwards imageResourceId from extraParams for img2img', async () => {
+    const driver = new TensorArtDriver();
+
+    vi.mocked(tracedFetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        mediaUrl: 'https://example.com/out.png',
+        provider: 'Tensor.Art (模型 API)',
+        model: '613045163490732233',
+        seed: 0,
+      }),
+    } as any);
+
+    await driver.generate(
+      {
+        model: '613045163490732233',
+        prompt: 'a lighthouse at night',
+        extraParams: { imageResourceId: '9519ae80-8f42-4129-a6aa-5fa7d2b25596' },
+      } as any,
+      { tensorartKey: 'key' }
+    );
+
+    const [, init] = vi.mocked(tracedFetch).mock.calls.at(-1)!;
+    const body = JSON.parse(init?.body as string);
+    expect(body.imageResourceId).toBe('9519ae80-8f42-4129-a6aa-5fa7d2b25596');
+  });
 });
