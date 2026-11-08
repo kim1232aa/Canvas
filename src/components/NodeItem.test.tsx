@@ -234,3 +234,128 @@ describe('NodeItem dynamic title & custom title preservation', () => {
     expect(html).not.toContain('应用已验证底模');
   });
 });
+
+describe('M115: AIVideoNode model select scope filtering', () => {
+  it('nanogpt provider with no static models shows only custom input, not other providers', () => {
+    const def = NODE_DEFINITIONS.AIVideoNode;
+    const node: NodeInstance = {
+      id: 'video-nanogpt',
+      type: 'AIVideoNode',
+      title: 'AI 视频',
+      pos: { x: 0, y: 0 },
+      width: 320,
+      inputs: def.inputs,
+      outputs: def.outputs,
+      state: 'idle',
+      values: { targetProvider: 'nanogpt', model: '' },
+    };
+    const html = renderNode(node);
+    expect(html).toContain('data-testid="node-video-model-select"');
+    expect(html).toContain('未选择 (请先选择模型)');
+    // Check the select itself has no other provider optgroups or options
+    expect(html).not.toContain('🎬 FAL');
+    expect(html).not.toContain('🎬 AGNES');
+    expect(html).not.toContain('其它视频服务商端点');
+    expect(html).not.toContain('KLING');
+    expect(html).not.toContain('minimax');
+    expect(html).not.toContain('[FAL]');
+    expect(html).not.toContain('[AGNES]');
+  });
+
+  it('tensorart provider with no static models shows only custom input, not fallback to all', () => {
+    const def = NODE_DEFINITIONS.AIVideoNode;
+    const node: NodeInstance = {
+      id: 'video-tensorart',
+      type: 'AIVideoNode',
+      title: 'AI 视频',
+      pos: { x: 0, y: 0 },
+      width: 320,
+      inputs: def.inputs,
+      outputs: def.outputs,
+      state: 'idle',
+      values: { targetProvider: 'tensorart', model: '' },
+    };
+    const html = renderNode(node);
+    expect(html).toContain('data-testid="node-video-model-select"');
+    // Check the select has no other provider optgroups
+    expect(html).not.toContain('🎬 FAL');
+    expect(html).not.toContain('🎬 AGNES');
+    expect(html).not.toContain('其它视频服务商端点');
+    expect(html).not.toContain('[FAL]');
+    expect(html).not.toContain('KLING');
+  });
+
+  it('custom model value is preserved when provider has no static options', () => {
+    const def = NODE_DEFINITIONS.AIVideoNode;
+    const customModel = 'custom-provider/my-video-model';
+    const node: NodeInstance = {
+      id: 'video-custom',
+      type: 'AIVideoNode',
+      title: 'AI 视频',
+      pos: { x: 0, y: 0 },
+      width: 320,
+      inputs: def.inputs,
+      outputs: def.outputs,
+      state: 'idle',
+      values: { targetProvider: 'nanogpt', model: customModel },
+    };
+    const html = renderNode(node);
+    expect(html).toContain('★ [自定义视频端点]');
+    expect(html).toContain(customModel);
+  });
+
+  it('unknown provider shows custom input only, no cross-provider fallback', () => {
+    const def = NODE_DEFINITIONS.AIVideoNode;
+    const node: NodeInstance = {
+      id: 'video-unknown',
+      type: 'AIVideoNode',
+      title: 'AI 视频',
+      pos: { x: 0, y: 0 },
+      width: 320,
+      inputs: def.inputs,
+      outputs: def.outputs,
+      state: 'idle',
+      values: { targetProvider: 'unknown-provider', model: '' },
+    };
+    const html = renderNode(node);
+    expect(html).toContain('data-testid="node-video-model-select"');
+    expect(html).not.toContain('KLING');
+    expect(html).not.toContain('其它视频服务商端点');
+  });
+
+  it('fal provider with static models shows fal optgroup only', () => {
+    const def = NODE_DEFINITIONS.AIVideoNode;
+    const node: NodeInstance = {
+      id: 'video-fal',
+      type: 'AIVideoNode',
+      title: 'AI 视频',
+      pos: { x: 0, y: 0 },
+      width: 320,
+      inputs: def.inputs,
+      outputs: def.outputs,
+      state: 'idle',
+      values: { targetProvider: 'fal', model: '' },
+    };
+    const html = renderNode(node);
+    expect(html).toContain('🎬 FAL 官方推荐视频大模型');
+    expect(html).not.toContain('其它视频服务商端点');
+  });
+
+  it('empty provider shows custom input with warning, no provider-specific options', () => {
+    const def = NODE_DEFINITIONS.AIVideoNode;
+    const node: NodeInstance = {
+      id: 'video-empty',
+      type: 'AIVideoNode',
+      title: 'AI 视频',
+      pos: { x: 0, y: 0 },
+      width: 320,
+      inputs: def.inputs,
+      outputs: def.outputs,
+      state: 'idle',
+      values: { targetProvider: '', model: '' },
+    };
+    const html = renderNode(node);
+    expect(html).toContain('data-testid="node-video-model-select"');
+    expect(html).toContain('请先选择模型');
+  });
+});

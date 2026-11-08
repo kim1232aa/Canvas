@@ -875,7 +875,6 @@ export const NodeItem: React.FC<NodeItemProps> = ({
               if (node.type === 'AIVideoNode' && widget.name === 'model') {
                 const currentProv = String(node.values?.targetProvider || '').trim();
                 const providerOpts = opts.filter((o: any) => o.provider === currentProv);
-                const otherOpts = [] as typeof opts;
                 const liveMatch = liveVideoMatch;
                 const inStatic = providerOpts.some((o) => o.value === value);
                 const isCustom = !inStatic && !liveMatch && Boolean(value);
@@ -931,20 +930,6 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                           ))}
                         </optgroup>
                       )}
-                      {currentProv && otherOpts.length > 0 && (
-                        <optgroup label="🌐 其它视频服务商端点">
-                          {otherOpts.map((opt, idx) => (
-                            <option key={`other-vid-${(opt as any).provider}-${opt.value}-${idx}`} value={opt.value}>
-                              [{(opt as any).provider?.toUpperCase()}] {opt.label}
-                            </option>
-                          ))}
-                        </optgroup>
-                      )}
-                      {(!currentProv || (providerOpts.length === 0 && otherOpts.length === 0)) && opts.filter((o) => o.value !== '').map((opt, idx) => (
-                        <option key={`fallback-vid-${opt.value}-${idx}`} value={opt.value}>
-                          {opt.label}
-                        </option>
-                      ))}
                     </select>
                     <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
                     </div>
