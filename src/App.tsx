@@ -1805,13 +1805,27 @@ export default function App() {
       try { mounted = attachLoraToBranch(nodes, connections, newNode, selectedNodeId); }
       catch (error: any) { setToast({ type: 'error', title: 'LoRA 未挂载', message: error.message }); return; }
       const resolved = resolveCheckpointForNode(target.id, mounted.nodes, mounted.connections);
+      let appliedToTarget = false;
+      let incompatibleReason = '';
       const nextNodes = mounted.nodes.map((n) => {
         if (!recommendation) return n;
         if (n.id === resolved.engineNodeId && n.type === 'CheckpointLoaderSimple') {
+          appliedToTarget = true;
           return { ...n, values: { ...n.values, ckpt_name: recommendation.checkpoint, targetProvider: recommendation.provider } };
         }
         if (n.id === target.id && n.type === 'KSampler') {
+          appliedToTarget = true;
           return { ...n, values: { ...n.values, steps: recommendation.steps, cfg: recommendation.cfg, sampler_name: recommendation.sampler, scheduler: recommendation.scheduler } };
+        }
+        if (n.id === target.id && n.type === 'AIVideoNode') {
+          // Image checkpoint recommendations are incompatible with video nodes
+          incompatibleReason = `推荐的底模 ${recommendation.checkpoint} 是图像生成模型，不适用于视频节点。请手动为视频节点选择视频模型。`;
+          return n;
+        }
+        if (n.id === target.id && (n.type === 'FalAIEngineNode' || n.type === 'ReplicateEngineNode' || n.type === 'NanoGPTNode' || n.type === 'ModelScopeNode' || n.type === 'ModelScopeAiNode')) {
+          appliedToTarget = true;
+          const modelField = n.type === 'ModelScopeNode' || n.type === 'ModelScopeAiNode' ? 'model_endpoint' : 'model';
+          return { ...n, values: { ...n.values, [modelField]: recommendation.checkpoint } };
         }
         return n;
       });
@@ -1820,8 +1834,12 @@ export default function App() {
       setSelectedNodeId(newNodeId);
     }
     const shown=parseExplicitLoraStrength(lora.modelStrength);
-    if (recommendation) {
+    if (recommendation && incompatibleReason) {
+      setToast({type:'warning',title:'LoRA 已挂载，底模不适配',message:`${lora.name} 已挂载。${incompatibleReason}${shown !== undefined ? ` LoRA 强度 ${shown}。` : ''}`});
+    } else if (recommendation && appliedToTarget) {
       setToast({type:'success',title:'已配对验证底模',message:`已应用 ${recommendation.checkpoint}。${recommendation.recommendedReason || ''}${shown !== undefined ? ` LoRA 强度 ${shown}。` : ''}`});
+    } else if (recommendation && !appliedToTarget) {
+      setToast({type:'info',title:'LoRA 已挂载',message:`${lora.name} 已挂载。找到了推荐底模 ${recommendation.checkpoint}，但当前目标节点类型暂不支持自动应用。${shown !== undefined ? ` LoRA 强度 ${shown}。` : ''}`});
     } else {
       setToast({type:'info',title:'LoRA 已挂载',message:`${lora.name} 已挂载。没有找到经过验证的底模，底模、供应商和采样参数均未改动。${shown !== undefined ? '' : '生成前必须显式填写 strength_model，禁止静默兜底 0.8。'}`});
     }
