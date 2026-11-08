@@ -1,5 +1,5 @@
-import {it,expect} from 'vitest';
-import {readInspectorParameters,patchInspectorNode,patchSpatialParameters,variationReference,civitaiVideoDiscriminatorSteps} from './inspectorParameters';
+import {it,expect,describe} from 'vitest';
+import {readInspectorParameters,patchInspectorNode,patchSpatialParameters,variationReference,civitaiVideoDiscriminatorSteps,resolveNodeVideoSelectors} from './inspectorParameters';
 import type {NodeInstance} from '../types/graph';
 const node=(id:string,type:string,values:any):NodeInstance=>({id,type,title:type,pos:{x:0,y:0},inputs:[],outputs:[],values});
 it('reads raw sampler values during execution validation failures and patches only changed fields',()=>{
@@ -75,7 +75,7 @@ it('M82: readCivitaiVideoSelectors auto-parses four-segment model ID wan:v2.2:fa
  expect(p.civitaiOperation).toBe('text-to-video');
 });
 it('M82: readCivitaiVideoSelectors explicit selectors override model-ID auto-parse',()=>{
- // Explicit video_selectors must take priority over model-ID defaults
+ // An explicit video_selectors object replaces the model-ID parse entirely
  const v=node('v','AIVideoNode',{model:'wan:v2.2:fal:text-to-video',targetProvider:'civitai',
   video_selectors:{engine:'wan',version:'v2.6',provider:'fal',operation:'image-to-video'}});
  const p=readInspectorParameters([v],[],'v');
@@ -97,4 +97,55 @@ it('M82: readCivitaiVideoSelectors handles ltx2.3 engine segment',()=>{
  expect(p.civitaiVersion).toBe('v1.0');
  expect(p.civitaiBackend).toBe('comfy');
  expect(p.civitaiOperation).toBe('createVideo');
+});
+
+const OLD_MODEL='wan:v2.2:fal:text-to-video';
+const videoNodes:Array<[string,()=>NodeInstance]>=[
+ ['AIVideoNode',()=>node('v','AIVideoNode',{model:OLD_MODEL,targetProvider:'civitai'})],
+ ['CheckpointLoaderSimple wrapper',()=>node('v','CheckpointLoaderSimple',{ckpt_name:OLD_MODEL,targetProvider:'video',video_provider:'civitai'})],
+];
+describe.each(videoNodes)('M110 explicit video_selectors are the complete user choice (%s)',(_name,make)=>{
+ const edit=(n:NodeInstance,change:Record<string,any>)=>{const before=readInspectorParameters([n],[],n.id);return patchInspectorNode(n,before,{...before,...change});};
+ it('without video_selectors the original model ID is read and resolved identically',()=>{
+  const n=make();
+  const sel={engine:'wan',version:'v2.2',provider:'fal',operation:'text-to-video'};
+  expect(resolveNodeVideoSelectors(n.values)).toEqual(sel);
+  expect(readInspectorParameters([n],[],n.id)).toMatchObject({civitaiEngine:'wan',civitaiVersion:'v2.2',civitaiBackend:'fal',civitaiOperation:'text-to-video'});
+ });
+ it('changing engine and clearing children keeps only the engine — no old version/provider/operation',()=>{
+  const n=edit(make(),{civitaiEngine:'ltx2.3',civitaiVersion:undefined,civitaiBackend:undefined,civitaiOperation:undefined});
+  expect(n.values.video_selectors).toEqual({engine:'ltx2.3'});
+  expect(resolveNodeVideoSelectors(n.values)).toEqual({engine:'ltx2.3'});
+  const p=readInspectorParameters([n],[],n.id);
+  expect(p).toMatchObject({civitaiEngine:'ltx2.3'});
+  expect([p.civitaiVersion,p.civitaiBackend,p.civitaiOperation]).toEqual([undefined,undefined,undefined]);
+ });
+ it('clearing every selector stores {} and is never re-filled from the old model ID',()=>{
+  const n=edit(make(),{civitaiEngine:undefined,civitaiVersion:undefined,civitaiBackend:undefined,civitaiOperation:undefined});
+  expect(n.values.video_selectors).toEqual({});
+  expect(resolveNodeVideoSelectors(n.values)).toEqual({});
+  const p=readInspectorParameters([n],[],n.id);
+  expect([p.civitaiEngine,p.civitaiVersion,p.civitaiBackend,p.civitaiOperation]).toEqual([undefined,undefined,undefined,undefined]);
+  expect((n.values.model||n.values.ckpt_name)).toBe(OLD_MODEL);
+ });
+ it('survives save and reopen (JSON round trip) for partial and empty choices',()=>{
+  for(const change of [{civitaiEngine:'ltx2.3',civitaiVersion:undefined,civitaiBackend:undefined,civitaiOperation:undefined},{civitaiEngine:undefined,civitaiVersion:undefined,civitaiBackend:undefined,civitaiOperation:undefined}]){
+   const saved=edit(make(),change);
+   const reopened=JSON.parse(JSON.stringify(saved)) as NodeInstance;
+   expect(resolveNodeVideoSelectors(reopened.values)).toEqual(resolveNodeVideoSelectors(saved.values));
+   expect(readInspectorParameters([reopened],[],reopened.id)).toMatchObject({civitaiEngine:saved.values.video_selectors.engine});
+  }
+ });
+ it('rejects a non-object or blank-valued video_selectors at resolve time instead of guessing',()=>{
+  expect(()=>resolveNodeVideoSelectors({...make().values,video_selectors:{engine:''}})).toThrow('video_selectors');
+  expect(()=>resolveNodeVideoSelectors({...make().values,video_selectors:['wan']})).toThrow('video_selectors');
+ });
+});
+it('M110: a four-segment model ID on a non-civitai video route or an image checkpoint is not read as selectors',()=>{
+ const fal=node('f','AIVideoNode',{model:OLD_MODEL,targetProvider:'fal'});
+ expect(resolveNodeVideoSelectors(fal.values)).toBeUndefined();
+ const image=node('i','CheckpointLoaderSimple',{ckpt_name:OLD_MODEL,targetProvider:'civitai'});
+ expect(readInspectorParameters([image],[],'i').civitaiEngine).toBeUndefined();
+ const waveSpeedWrapped=node('w','CheckpointLoaderSimple',{ckpt_name:OLD_MODEL,targetProvider:'video',video_provider:'fal'});
+ expect(resolveNodeVideoSelectors(waveSpeedWrapped.values)).toBeUndefined();
 });

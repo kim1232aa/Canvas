@@ -50,27 +50,39 @@ export function civitaiVideoDiscriminatorSteps(document:any,selectors:Record<str
  return steps;
 }
 
-/** Regex for Civitai four-segment video model IDs: engine:version:provider:operation */
-const CIVITAI_VIDEO_MODEL_RE=/^(wan|ltx2|ltx2\.3|flux):([^:]+):([^:]+):(text-to-video|image-to-video|createVideo)$/;
-export function readCivitaiVideoSelectors(values:Record<string,any>|undefined):Record<string,string>|undefined{
+/** App registry shape for Civitai video model IDs: engine:version:provider:operation. Segment values are not enumerated here; the live OpenAPI discriminators own the real option lists. */
+const CIVITAI_VIDEO_MODEL_RE=/^([^:/\s@]+):([^:/\s@]+):([^:/\s@]+):([^:/\s@]+)$/;
+/** Same route rule as graphEngine: AIVideoNode uses targetProvider/provider; a loader wrapped as 'video' uses video_provider. */
+const civitaiVideoRoute=(v:Record<string,any>)=>{const p=str(v.targetProvider)||str(v.provider);return (p==='video'?str(v.video_provider)||str(v.videoProvider):p)==='civitai';};
+const declaredVideoSelectors=(v:Record<string,any>):Record<string,unknown>|undefined=>{
+ const d=v.video_selectors;
+ return d && typeof d==='object' && !Array.isArray(d)?d as Record<string,unknown>:undefined;
+};
+/**
+ * One source per read, never a per-key merge: an explicit video_selectors object (including {}) is the user's complete choice;
+ * only without it do legacy civitai_* values apply, and only without those is the user's original model ID parsed.
+ * parseModelId=false for nodes that are not a video route (e.g. an image Civitai checkpoint), so their model ID is never read as a video selector.
+ */
+export function readCivitaiVideoSelectors(values:Record<string,any>|undefined,parseModelId=true):Record<string,string>|undefined{
  const v=values||{};
- const declared=v.video_selectors;
- const vs=declared && typeof declared==='object' && !Array.isArray(declared)?declared as Record<string,unknown>:{};
- // Auto-parse default selectors from four-segment model ID (engine:version:provider:operation)
+ const out:Record<string,string>={};
+ const declared=declaredVideoSelectors(v);
+ if(declared){
+  for(const [k,val] of Object.entries(declared)){const s=str(val);if(s)out[k]=s;}
+  return out;
+ }
+ const legacy:Record<string,unknown>={engine:v.civitai_engine,version:v.civitai_version,provider:v.civitai_backend,operation:v.civitai_operation};
+ if(Object.values(legacy).some(x=>str(x))){
+  for(const [k,val] of Object.entries(legacy)){const s=str(val);if(s)out[k]=s;}
+  return out;
+ }
  // AIVideoNode uses v.model; CheckpointLoaderSimple uses v.ckpt_name
  const modelId=str(v.model) || str(v.ckpt_name) || '';
- const modelMatch=modelId?CIVITAI_VIDEO_MODEL_RE.exec(modelId):null;
- const modelDefaults:Record<string,string>=modelMatch?{engine:modelMatch[1],version:modelMatch[2],provider:modelMatch[3],operation:modelMatch[4]}:{};
- const out:Record<string,string>={};
- // Explicit fields (video_selectors / civitai_* params) take priority over model-ID defaults
- const take=(key:string,...cands:unknown[])=>{for(const c of cands){const s=str(c);if(s){out[key]=s;return;}}};
- take('engine',vs.engine,v.civitai_engine,modelDefaults.engine);
- take('version',vs.version,v.civitai_version,modelDefaults.version);
- take('provider',vs.provider,v.civitai_backend,modelDefaults.provider);
- take('operation',vs.operation,v.civitai_operation,modelDefaults.operation);
- return Object.keys(out).length?out:undefined;
+ const m=parseModelId&&civitaiVideoRoute(v)&&modelId?CIVITAI_VIDEO_MODEL_RE.exec(modelId):null;
+ return m?{engine:m[1],version:m[2],provider:m[3],operation:m[4]}:undefined;
 }
 
+/** Run-time selectors: an explicit video_selectors object (including {}) is returned as-is — cleared children are never re-filled from the old model ID. */
 export function resolveNodeVideoSelectors(values:Record<string,any>|undefined):Record<string,string>|undefined{
  const v=values||{};
  const declared=v.video_selectors;
@@ -78,10 +90,7 @@ export function resolveNodeVideoSelectors(values:Record<string,any>|undefined):R
   if(!declared || typeof declared!=='object' || Array.isArray(declared) || !Object.values(declared).every((x)=>typeof x==='string' && x.trim()!=='')){
    throw new Error('视频节点 video_selectors 必须是非空字符串组成的对象');
   }
-  const out={...(declared as Record<string,string>)};
-  const fallback=readCivitaiVideoSelectors({...v,video_selectors:undefined});
-  if(fallback)for(const [k,val] of Object.entries(fallback))if(!out[k])out[k]=val;
-  return out;
+  return {...(declared as Record<string,string>)};
  }
  return readCivitaiVideoSelectors(v);
 }
@@ -101,11 +110,11 @@ export function readInspectorParameters(nodes:NodeInstance[],connections:Connect
  // ws-sizenode: a connected Empty Latent is the only size source (an empty field stays empty — no loader fallback).
  const latentWired=!resolution && nodes.some(n=>n.id===edge?.fromNodeId && n.type==='EmptyLatentImage');
  const width=latentWired?num(latent.width):(num(latent.width) ?? num(v.width)); const height=latentWired?num(latent.height):(num(latent.height) ?? num(v.height));
- const videoSelectors=readCivitaiVideoSelectors(target?.type==='AIVideoNode'?s:v);
+ const videoSelectors=readCivitaiVideoSelectors(target?.type==='AIVideoNode'?s:v,target?.type==='AIVideoNode' || v.targetProvider==='video' || v.provider==='video');
  return {checkpoint:v.ckpt_name ?? v.model_endpoint ?? v.model ?? '',targetProvider:(v.targetProvider || v.provider || ({FalAIEngineNode:'fal',ModelScopeNode:'modelscope',ModelScopeAiNode:'modelscope_ai',NanoGPTNode:'nanogpt',GoogleImagenNode:'gemini',ReplicateEngineNode:'replicate'} as any)[target?.type || ''] || '') as ComfyParameters['targetProvider'],
  seed:num(s.seed),seedControl:s.control_after_generate || 'fixed',steps:num(s.steps),cfg:num(s.cfg ?? s.guidance_scale),sampler:s.sampler_name,scheduler:s.scheduler,denoise:num(s.denoise) as number,width:width as number,height:height as number,batchSize:num(v.n ?? v.batch_size ?? v.batchSize ?? latent.batch_size) as number,loras:[],
- aspectRatio:v.aspect_ratio ?? v.aspectRatio,imageSize:v.image_size,size:v.size,outputFormat:v.output_format ?? v.outputFormat,watermark:typeof v.watermark==='boolean'?v.watermark:undefined,promptExtend:typeof v.prompt_extend==='boolean'?v.prompt_extend:undefined,resolution:v.resolution,customParameters:v.custom_parameters,shift:v.shift,randomSeed:v.random_seed,galleryImages:v.gallery_images,civitaiEngine:videoSelectors?.engine || v.civitai_engine,civitaiEcosystem:v.civitai_ecosystem,civitaiModel:v.civitai_model,
- civitaiVersion:videoSelectors?.version || v.civitai_version,civitaiOperation:videoSelectors?.operation || v.civitai_operation,civitaiBackend:videoSelectors?.provider || v.civitai_backend,
+ aspectRatio:v.aspect_ratio ?? v.aspectRatio,imageSize:v.image_size,size:v.size,outputFormat:v.output_format ?? v.outputFormat,watermark:typeof v.watermark==='boolean'?v.watermark:undefined,promptExtend:typeof v.prompt_extend==='boolean'?v.prompt_extend:undefined,resolution:v.resolution,customParameters:v.custom_parameters,shift:v.shift,randomSeed:v.random_seed,galleryImages:v.gallery_images,civitaiEngine:videoSelectors?.engine,civitaiEcosystem:v.civitai_ecosystem,civitaiModel:v.civitai_model,
+ civitaiVersion:videoSelectors?.version,civitaiOperation:videoSelectors?.operation,civitaiBackend:videoSelectors?.provider,
  videoProvider:target?.type==='AIVideoNode' ? s.targetProvider || s.provider : ((v.targetProvider === 'video' || v.provider === 'video') ? v.video_provider || v.videoProvider : undefined),videoDuration:num(s.duration) ?? ((v.targetProvider === 'video' || v.provider === 'video') ? num(v.videoDuration ?? v.duration) : undefined),videoFps:num(s.fps) ?? ((v.targetProvider === 'video' || v.provider === 'video') ? num(v.videoFps ?? v.fps) : undefined),videoFrames:num(s.num_frames) ?? ((v.targetProvider === 'video' || v.provider === 'video') ? num(v.videoFrames ?? v.num_frames) : undefined),requireReferenceImage:v.require_reference_image,unresolvedModel:v.import_unresolved_resource === true || v.unresolvedResource === true,executionBlockedReason:v.execution_blocked_reason,sourceLoraAir:v.source_lora_air} as ComfyParameters;
 }
 export function patchInspectorNode(n:NodeInstance,before:ComfyParameters,after:ComfyParameters):NodeInstance {
@@ -135,7 +144,7 @@ export function patchInspectorNode(n:NodeInstance,before:ComfyParameters,after:C
    if(fields.version)selectors.version=fields.version;
    if(fields.provider)selectors.provider=fields.provider;
    if(fields.operation)selectors.operation=fields.operation;
-   values.video_selectors=Object.keys(selectors).length?selectors:undefined;
+   values.video_selectors=selectors;
   }
  }
  return {...n,values};
