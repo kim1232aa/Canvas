@@ -5,6 +5,7 @@ import { WORKFLOW_PRESETS } from '../constants/presets';
 import { NODE_DEFINITIONS, engineNodeTypeFor } from '../constants/nodes';
 import { CivitaiDriver } from '../engines/drivers/CivitaiDriver';
 import { ReplicateDriver } from '../engines/drivers/ReplicateDriver';
+import { extractWorkflowParameters } from './graphEngine';
 
 const node = (id: string, type: string, extra: any = {}) => ({ id, type, title: type, pos: { x: 0, y: 0 }, inputs: [], outputs: [], values: {}, ...extra }) as any;
 
@@ -34,15 +35,17 @@ describe('video result lands on SaveVideo (declared mediaType, no URL/name guess
 describe('Civitai i2v preset declares wan.md selectors; driver does not guess video from model name', () => {
   afterEach(() => vi.unstubAllGlobals());
   it('std-civitai-i2v AIVideoNode carries wan.md v2.2 comfy selectors (only LoRA route)', () => {
-    const p = WORKFLOW_PRESETS.find((x) => x.id === 'std-civitai-i2v')!;
-    const vid = p.nodes.find((n) => n.type === 'AIVideoNode')!;
-    expect(vid.values.video_selectors).toEqual({ engine: 'wan', version: 'v2.2', provider: 'comfy' });
+    const p = WORKFLOW_PRESETS.find((x) => x.id === 'std-civitai-i2v');
+    expect(p, 'current Civitai I2V preset').toBeDefined();
+    const video = p!.nodes.find((n) => n.type === 'AIVideoNode');
+    expect(video, 'Civitai video node').toBeDefined();
+    expect(video!.values.video_selectors).toEqual({ engine: 'wan', version: 'v2.2', provider: 'comfy' });
   });
 
   it('model name containing image-to-video is NOT treated as video without isVideo', async () => {
     let body: any;
     vi.stubGlobal('fetch', vi.fn(async (_u: string, o: any) => { body = JSON.parse(o.body); return new Response(JSON.stringify({ error: 'fake' }), { status: 402 }); }));
-    await new CivitaiDriver().generate({ model: 'some/image-to-video', prompt: 'p' } as any, {}).catch(() => {});
+    await expect(new CivitaiDriver().generate({ model: 'some/image-to-video', prompt: 'A lighthouse above rough seas, cinematic wide shot' } as any, {})).rejects.toMatchObject({ name: 'ApiTraceError', appStatus: 402, rawBody: '{"error":"fake"}' });
     expect(body.isVideo).toBe(false);
   });
 
@@ -72,12 +75,22 @@ describe('一体化引擎 node is declaration-driven', () => {
   });
 });
 
-describe('Novita I2V seed (required by SDK) is an empty, editable field', () => {
-  it('AIVideoNode declares a seed widget with empty default; Novita preset leaves it unset and declares seed', () => {
-    const w = NODE_DEFINITIONS.AIVideoNode.widgets.find((x) => x.name === 'seed')!;
-    expect(w.default).toBe('');
-    const vid = WORKFLOW_PRESETS.find((x) => x.id === 'std-novita-i2v')!.nodes.find((n) => n.type === 'AIVideoNode')!;
-    expect(vid.values.seed).toBeUndefined();
-    expect(JSON.parse(vid.values.custom_parameters)._canvas.schemaProperties).toContain('seed');
+describe('user-created video seed stays unset until explicitly filled', () => {
+  it('AIVideoNode declares an empty number widget; extraction does not invent a seed and preserves explicit zero', () => {
+    const def = NODE_DEFINITIONS.AIVideoNode;
+    const seed = def.widgets.find((x) => x.name === 'seed');
+    expect(seed, 'AIVideoNode seed widget').toBeDefined();
+    expect(seed).toMatchObject({ type: 'number', default: '', step: 1 });
+    const values = {
+      ...def.defaultValues,
+      targetProvider: 'novita', model: 'user-selected/video-model',
+      prompt: 'A lighthouse above rough seas, cinematic wide shot, slow orbit',
+      custom_parameters: JSON.stringify({ _canvas: { scope: { provider: 'novita', model: 'user-selected/video-model' }, schemaProperties: ['prompt', 'seed'] } }),
+    };
+    const video = node('user-video', 'AIVideoNode', { inputs: def.inputs, outputs: def.outputs, values });
+    expect(video.values.seed).toBeUndefined();
+    expect(extractWorkflowParameters([video], [], video.id).seed).toBeUndefined();
+    expect(extractWorkflowParameters([{ ...video, values: { ...values, seed: 0 } }], [], video.id).seed).toBe(0);
+    expect(JSON.parse(values.custom_parameters)._canvas.schemaProperties).toContain('seed');
   });
 });
