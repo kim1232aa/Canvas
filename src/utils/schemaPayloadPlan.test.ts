@@ -26,4 +26,16 @@ describe('video field aliases stay schema-driven', () => {
     expect(planCanvasField('duration', ctx(['duration', 'seconds'])).target).toBe('duration');
     expect(planCanvasField('aspect_ratio', ctx(['aspect_ratio', 'ratio'])).target).toBe('aspect_ratio');
   });
+
+  it('maps num_frames to frames_num (Novita img2video) only when the schema declares it', () => {
+    expect(planCanvasField('num_frames', ctx(['model_name', 'frames_num', 'frames_per_second']))).toEqual({ send: true, target: 'frames_num' });
+    expect(planCanvasField('fps', ctx(['frames_num', 'frames_per_second']))).toEqual({ send: true, target: 'frames_per_second' });
+    expect(planCanvasField('num_frames', ctx(['prompt', 'seed'])).target).toBe('num_frames');
+  });
+
+  it('keeps num_frames > frames > frames_num priority and a user-declared native name', () => {
+    expect(planCanvasField('num_frames', ctx(['num_frames', 'frames_num'])).target).toBe('num_frames');
+    expect(planCanvasField('num_frames', ctx(['frames', 'frames_num'])).target).toBe('frames');
+    expect(planCanvasField('num_frames', ctx(['frames_num', 'frames'])).target).toBe('frames');
+  });
 });

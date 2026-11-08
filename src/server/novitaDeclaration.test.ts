@@ -36,6 +36,7 @@ describe('Novita HTML declaration (config data)', () => {
 import express from 'express';
 import type { AddressInfo } from 'node:net';
 import { novitaRequestBody, registerSchemaProviderRoutes } from './schemaProviders';
+import { schemaSendStatus } from '../utils/schemaSendStatus';
 
 describe('Novita requestWrapper decides the POST body shape (M89)', () => {
   it('requestWrapper null → flat fields, no request wrapper, no default response_image_type', () => {
@@ -69,6 +70,42 @@ describe('Novita requestWrapper decides the POST body shape (M89)', () => {
       expect(post.body).not.toHaveProperty('request');
       expect(JSON.stringify(post.body)).not.toContain('response_image_type');
       expect(j.actualRequest.parameters).toEqual(post.body);
+      // M106: canvas num_frames/fps land on the declared frames_num/frames_per_second, never as undeclared num_frames/fps.
+      expect(post.body).toMatchObject({ frames_num: 25, frames_per_second: 6 });
+      expect(post.body).not.toHaveProperty('num_frames');
+      expect(post.body).not.toHaveProperty('fps');
+      const m = (from: string) => j.actualRequest.mapping.find((x: any) => x.from === from);
+      expect(m('num_frames')).toMatchObject({ to: 'frames_num', value: 25, schemaDeclared: true, finalValue: 25 });
+      expect(m('fps')).toMatchObject({ to: 'frames_per_second', value: 6, schemaDeclared: true, finalValue: 6 });
+      expect(m('seed')).toMatchObject({ to: 'seed', value: 7, schemaDeclared: true });
+      expect(m('steps')).toMatchObject({ to: 'steps', value: 20, schemaDeclared: true });
+      expect(m('custom_parameters.image_file')).toMatchObject({ to: 'image_file', schemaDeclared: true });
+      expect(m('custom_parameters.image_file_resize_mode')).toMatchObject({ to: 'image_file_resize_mode', schemaDeclared: true });
+      // send badge uses the same planCanvasField: declared frames_num/frames_per_second ⇒ 会发送.
+      const cp = JSON.stringify({ _canvas: { schemaProperties: j.actualRequest.schemaFields } });
+      expect(schemaSendStatus('novita', 'num_frames', 25, cp)).toBe('will_send');
+      expect(schemaSendStatus('novita', 'fps', 6, cp)).toBe('will_send');
+    } finally { server.close(); }
+  });
+
+  it('route: custom_parameters.frames_num overrides canvas num_frames and is recorded as the override', async () => {
+    const app = express(); app.use(express.json());
+    const calls: Array<{ url: string; body: any }> = [];
+    registerSchemaProviderRoutes(app, {
+      fetch: async (_m: any, url: string, init?: any) => { calls.push({ url, body: init?.body ? JSON.parse(init.body) : undefined }); return new Response(JSON.stringify({ task_id: 't2' }), { status: 200 }); },
+      key: () => 'k', record: (i: any) => i, durable: async (u: string) => ({ ok: true, dataUrl: u }),
+    } as any);
+    const server = app.listen(0);
+    try {
+      const port = (server.address() as AddressInfo).port;
+      const r = await fetch(`http://127.0.0.1:${port}/api/schema-provider/novita/submit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: 'SVD-XT', prompt: 'a lone boat on a misty lake', seed: 7, steps: 20, fps: 6, num_frames: 25, isVideo: true, custom_parameters: { image_file: 'https://e.invalid/a.png', frames_num: 14 } }) });
+      const j: any = await r.json();
+      expect(r.status).toBe(200);
+      const post = calls.find((c) => c.url.endsWith('/v3/async/img2video'))!;
+      expect(post.body).toMatchObject({ frames_num: 14, frames_per_second: 6 });
+      expect(post.body).not.toHaveProperty('num_frames');
+      expect(j.actualRequest.parameters).toEqual(post.body);
+      expect(j.actualRequest.mapping.find((x: any) => x.from === 'custom_parameters.frames_num')).toMatchObject({ to: 'frames_num', value: 14, overrides: 25 });
     } finally { server.close(); }
   });
 });

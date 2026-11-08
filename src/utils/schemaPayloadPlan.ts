@@ -13,7 +13,7 @@ export const GENERIC_PAYLOAD_ALIASES: Record<string, string[]> = {
   scheduler: ['scheduler'],
   aspect_ratio: ['aspect_ratio', 'aspectRatio', 'ratio'],
   resolution: ['resolution'],
-  num_frames: ['num_frames', 'frames'],
+  num_frames: ['num_frames', 'frames', 'frames_num'],
   fps: ['fps', 'frames_per_second'],
   duration: ['duration', 'seconds'],
   output_format: ['output_format', 'outputFormat', 'format'],
