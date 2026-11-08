@@ -1767,6 +1767,8 @@ export default function App() {
     const matched = getRecommendedBaseModelForLora(lora.baseModel, lora.name, lora.provider, candidates, source);
     const recommendation = matched.recommendation;
     const selected={...lora,triggerWords:lora.triggerWords || ''};
+    let appliedToTarget = false;
+    let incompatibleReason = '';
     if (canvasMode==='spatial') {
       const strength=parseExplicitLoraStrength(lora.modelStrength);
       const clip=parseExplicitLoraStrength(lora.clipStrength ?? lora.modelStrength);
@@ -1774,6 +1776,7 @@ export default function App() {
         ? {...frame!.params,checkpoint:recommendation.checkpoint,targetProvider:recommendation.provider as ComfyParameters['targetProvider'],steps:recommendation.steps,cfg:recommendation.cfg,sampler:recommendation.sampler,scheduler:recommendation.scheduler}
         : frame!.params;
       handleUpdateFrame(frame!.id,{params:{...nextParams,loras:[...frame!.params.loras.filter(row=>row.name!==lora.name),{...selected,downloadUrl:lora.downloadUrl,modelStrength:strength,clipStrength:clip}]}});
+      if (recommendation) appliedToTarget = true;
     } else {
       const target = findLoraTarget(nodes, connections, selectedNodeId);
       const newNodeId = `node-lora-${Date.now()}`;
@@ -1805,8 +1808,6 @@ export default function App() {
       try { mounted = attachLoraToBranch(nodes, connections, newNode, selectedNodeId); }
       catch (error: any) { setToast({ type: 'error', title: 'LoRA 未挂载', message: error.message }); return; }
       const resolved = resolveCheckpointForNode(target.id, mounted.nodes, mounted.connections);
-      let appliedToTarget = false;
-      let incompatibleReason = '';
       const nextNodes = mounted.nodes.map((n) => {
         if (!recommendation) return n;
         if (n.id === resolved.engineNodeId && n.type === 'CheckpointLoaderSimple') {
@@ -1818,11 +1819,26 @@ export default function App() {
           return { ...n, values: { ...n.values, steps: recommendation.steps, cfg: recommendation.cfg, sampler_name: recommendation.sampler, scheduler: recommendation.scheduler } };
         }
         if (n.id === target.id && n.type === 'AIVideoNode') {
-          // Image checkpoint recommendations are incompatible with video nodes
-          incompatibleReason = `推荐的底模 ${recommendation.checkpoint} 是图像生成模型，不适用于视频节点。请手动为视频节点选择视频模型。`;
-          return n;
+          // Check family compatibility: wan21 and video are compatible with video nodes
+          const isVideoCompatible = matched.family === 'wan21' || matched.family === 'video';
+          if (!isVideoCompatible) {
+            incompatibleReason = `推荐的底模 ${recommendation.checkpoint} (${matched.family}) 是图像生成模型，不适用于视频节点。请手动为视频节点选择视频模型。`;
+            return n;
+          }
+          appliedToTarget = true;
+          return { ...n, values: { ...n.values, model: recommendation.checkpoint, targetProvider: recommendation.provider } };
         }
         if (n.id === target.id && (n.type === 'FalAIEngineNode' || n.type === 'ReplicateEngineNode' || n.type === 'NanoGPTNode' || n.type === 'ModelScopeNode' || n.type === 'ModelScopeAiNode')) {
+          // Fixed-provider nodes: reject if recommendation provider doesn't match node's fixed provider
+          const nodeProvider = n.type === 'FalAIEngineNode' ? 'fal'
+            : n.type === 'ReplicateEngineNode' ? 'replicate'
+            : n.type === 'NanoGPTNode' ? 'nanogpt'
+            : n.type === 'ModelScopeNode' ? 'modelscope'
+            : 'modelscope_ai';
+          if (recommendation.provider !== nodeProvider) {
+            incompatibleReason = `推荐的供应商 ${recommendation.provider} 与当前节点的固定供应商 ${nodeProvider} 不匹配。`;
+            return n;
+          }
           appliedToTarget = true;
           const modelField = n.type === 'ModelScopeNode' || n.type === 'ModelScopeAiNode' ? 'model_endpoint' : 'model';
           return { ...n, values: { ...n.values, [modelField]: recommendation.checkpoint } };
