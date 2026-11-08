@@ -74,4 +74,26 @@ describe('LoRA mounting modifies the executing branch, not just the node palette
   expect(nanoExtracted.resolution).toBe('1280x720');
   expect(nanoExtracted.loras.map(r=>[r.name,r.modelStrength])).toEqual([['https://example.test/nano.safetensors',0.75]]);
  });
+ it('attaches one LoRALoader to AIVideoNode via lora port',()=>{
+  const videoNodes=[node('vid','AIVideoNode',{targetProvider:'fal',model:'fal-ai/wan/v2.2-a14b/text-to-video/lora',prompt:'A racing car'})];
+  const mounted=attachLoraToBranch(videoNodes,[],node('la','LoRALoader',{lora_name:'https://civitai.com/api/download/models/123',strength_model:0.8}),'vid');
+  expect(mounted.nodes.some(n=>n.id==='la')).toBe(true);
+  const loraEdge=mounted.connections.find(e=>e.fromNodeId==='la'&&e.toNodeId==='vid'&&e.toSocketId==='lora');
+  expect(loraEdge).toBeDefined();
+  const extracted=extractWorkflowParameters(mounted.nodes,mounted.connections,'vid');
+  expect(extracted.loras).toHaveLength(1);
+  expect(extracted.loras[0]).toMatchObject({name:'https://civitai.com/api/download/models/123',modelStrength:0.8});
+ });
+ it('chains two LoRALoaders on AIVideoNode; extractWorkflowParameters returns both',()=>{
+  const videoNodes=[node('vid','AIVideoNode',{targetProvider:'fal',model:'fal-ai/wan/v2.2-a14b/text-to-video/lora',prompt:'Slow motion rain'})];
+  const first=attachLoraToBranch(videoNodes,[],node('la','LoRALoader',{lora_name:'https://civitai.com/api/download/models/111',strength_model:0.6}),'vid');
+  const second=attachLoraToBranch(first.nodes,first.connections,node('lb','LoRALoader',{lora_name:'https://civitai.com/api/download/models/222',strength_model:0.9}),'vid');
+  const loraEdge=second.connections.find(e=>e.toNodeId==='vid'&&e.toSocketId==='lora');
+  expect(loraEdge?.fromNodeId).toBe('lb');
+  const chainEdge=second.connections.find(e=>e.toNodeId==='lb'&&e.toSocketId==='model');
+  expect(chainEdge?.fromNodeId).toBe('la');
+  const extracted=extractWorkflowParameters(second.nodes,second.connections,'vid');
+  expect(extracted.loras).toHaveLength(2);
+  expect(extracted.loras.map(r=>[r.name,r.modelStrength])).toEqual([['https://civitai.com/api/download/models/222',0.9],['https://civitai.com/api/download/models/111',0.6]]);
+ });
 });
