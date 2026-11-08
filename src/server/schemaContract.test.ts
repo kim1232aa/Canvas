@@ -291,12 +291,12 @@ describe('provider contract (16): schema-route providers', () => {
 
 describe('provider contract (16): builder / route-handler providers', () => {
 
-  it('TAMS: seed→inputInitialize.seed, steps/cfg/size→diffusion.*, LoRA→diffusion.lora.items[{loraModel,weight}]; non-64 rejected; numeric video builds VIDEO_DIFFUSION and is not locally refused', () => {
+  it('TAMS: seed→inputInitialize.seed, steps/cfg/size→diffusion.*, LoRA→diffusion.lora.items[{loraModel,weight}]; non-64 width forwarded as-is (upstream decides); numeric video builds VIDEO_DIFFUSION and is not locally refused', () => {
     const job = buildTensorModelJob({ model: '600000000000000001', prompt: 'x', seed: 42, steps: 20, cfg: 7, width: 1024, height: 768, negative_prompt: 'blurry', loras: [{ tensorartId: '700000000000000001', strength: 0.8 }] }, 'r1');
     expect(job.stages[0].inputInitialize).toEqual({ seed: '42' });
     expect(job.stages[1].diffusion).toMatchObject({ steps: 20, cfgScale: 7, width: 1024, height: 768, negativePrompts: [{ text: 'blurry' }], lora: { items: [{ loraModel: '700000000000000001', weight: 0.8 }] } });
     expect(JSON.stringify(job)).not.toContain('strength');
-    expect(() => buildTensorModelJob({ model: '600000000000000001', prompt: 'x', width: 1000, height: 768 }, 'r2')).toThrow(/64/);
+    expect(buildTensorModelJob({ model: '600000000000000001', prompt: 'x', width: 1000, height: 768 }, 'r2').stages[1].diffusion).toMatchObject({ width: 1000, height: 768 });
     const video = buildTamsVideoJob({
       model: '834845675863700019',
       prompt: 'A cheerful 3D girl with long pink hair walking through a dusk city',
