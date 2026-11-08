@@ -411,3 +411,148 @@ describe('ParameterInspector provider registry derivation and selection (mounted
     expect(host.querySelector('[data-testid="civitai-video-live-selectors"]')).toBeNull();
   });
 });
+
+describe('ParameterInspector unset values stay unset (mounted controlled component)', () => {
+  let host: HTMLDivElement;
+  let root: Root;
+
+  const Harness = ({ initial, spy }: { initial: ComfyParameters; spy: (next: ComfyParameters) => void }) => {
+    const [current, setCurrent] = React.useState(initial);
+    return <ParameterInspector params={current} onChange={(next) => { spy(next); setCurrent(next); }} onOpenCivitai={noop} />;
+  };
+  const nano = (partial: Partial<ComfyParameters> = {}) =>
+    params({ targetProvider: 'nanogpt', checkpoint: 'fixture-model', resolution: '1024x1024', loras: [], ...partial });
+  const mount = async (initial: ComfyParameters, spy: (next: ComfyParameters) => void = vi.fn()) => {
+    await act(async () => { root.render(<Harness initial={initial} spy={spy} />); });
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
+    return spy;
+  };
+  const type = async (el: HTMLInputElement, value: string) => {
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(el, value);
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  };
+  const input = (label: string) => host.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!;
+  const sizeAlert = () => host.querySelector('[role="alert"]');
+  const sizeStatus = () => host.querySelector('[data-testid="nanogpt-size-incomplete"]');
+
+  beforeEach(() => {
+    clearSharedGet();
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } })));
+  });
+
+  afterEach(async () => {
+    await act(async () => root.unmount());
+    clearSharedGet();
+    vi.unstubAllGlobals();
+  });
+
+  it('NanoGPT resolution without width/height: no conflict, no undefinedxundefined, no hidden size write', async () => {
+    const spy = await mount(nano({ width: undefined, height: undefined }));
+    expect(sizeAlert()).toBeNull();
+    expect(sizeStatus()).toBeNull();
+    expect(host.textContent).not.toContain('undefined');
+    expect(host.textContent).toContain('width=未填写');
+    expect(host.textContent).toContain('height=未填写');
+    expect(input('NanoGPT resolution').value).toBe('1024x1024');
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('NanoGPT resolution with only one of width/height shows the specific missing field, not a conflict', async () => {
+    await mount(nano({ width: 1024, height: undefined }));
+    expect(sizeAlert()).toBeNull();
+    expect(sizeStatus()?.textContent).toContain('已填 width=1024');
+    expect(sizeStatus()?.textContent).toContain('缺少 height');
+    await act(async () => root.render(<Harness initial={nano({ width: undefined, height: 768 })} spy={vi.fn()} />));
+    expect(sizeAlert()).toBeNull();
+  });
+
+  it('NanoGPT resolution mismatching both filled pixel sizes shows the concrete conflict', async () => {
+    await mount(nano({ resolution: '512x512', width: 1024, height: 768 }));
+    expect(sizeAlert()?.textContent).toContain('尺寸冲突');
+    expect(sizeAlert()?.textContent).toContain('512x512');
+    expect(sizeAlert()?.textContent).toContain('1024x768');
+    expect(sizeStatus()).toBeNull();
+  });
+
+  it('NanoGPT resolution equal to both filled pixel sizes shows neither conflict nor incomplete notice', async () => {
+    await mount(nano({ resolution: '1024x1024', width: 1024, height: 1024 }));
+    expect(sizeAlert()).toBeNull();
+    expect(sizeStatus()).toBeNull();
+  });
+
+  it('NanoGPT treats an explicit width 0 as filled (conflict), not as missing', async () => {
+    await mount(nano({ resolution: '1024x1024', width: 0, height: 1024 }));
+    expect(sizeAlert()?.textContent).toContain('0x1024');
+    expect(sizeStatus()).toBeNull();
+  });
+
+  it('NanoGPT conflict follows live edits: clearing a size field switches from conflict to incomplete, never auto-fills', async () => {
+    const spy = await mount(nano({ resolution: '512x512', width: 1024, height: 1024 }));
+    expect(sizeAlert()).not.toBeNull();
+    await type(host.querySelector<HTMLInputElement>('input[type="number"][step="64"]')!, '');
+    expect(spy).toHaveBeenLastCalledWith(expect.objectContaining({ width: undefined, height: 1024, resolution: '512x512' }));
+    expect(sizeAlert()).toBeNull();
+    expect(sizeStatus()?.textContent).toContain('缺少 width');
+  });
+
+  it('unset steps/cfg sliders render as unset, commit nothing on mount, and commit only after the user acts', async () => {
+    const spy = await mount(nano({ steps: undefined, cfg: undefined }));
+    const stepsRange = input('steps 滑块');
+    const cfgRange = input('cfg 滑块');
+    expect(spy).not.toHaveBeenCalled();
+    // MDN: a range input is never empty; the unset thumb sits at min, never the midpoint 40.5 / 10.5 posing as a selection.
+    expect(stepsRange.value).toBe('1');
+    expect(cfgRange.value).toBe('1');
+    for (const range of [stepsRange, cfgRange]) {
+      expect(range.getAttribute('data-unset')).toBe('true');
+      expect(range.getAttribute('aria-valuetext')).toBe('未设置');
+    }
+    expect(input('steps').value).toBe('');
+    expect(input('cfg').value).toBe('');
+    expect(host.textContent).toContain('未设置');
+
+    await type(stepsRange, '40');
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenLastCalledWith(expect.objectContaining({ steps: 40, cfg: undefined }));
+    expect(input('steps 滑块').getAttribute('data-unset')).toBeNull();
+    expect(input('steps 滑块').value).toBe('40');
+    expect(input('steps').value).toBe('40');
+    expect(input('cfg 滑块').getAttribute('data-unset')).toBe('true');
+
+    await type(input('cfg 滑块'), '7.5');
+    expect(spy).toHaveBeenLastCalledWith(expect.objectContaining({ steps: 40, cfg: 7.5 }));
+    expect(input('cfg').value).toBe('7.5');
+  });
+
+  it('steps/cfg number inputs: explicit 0 is committed, empty returns to unset', async () => {
+    const spy = await mount(nano({ steps: 20, cfg: 7 }));
+    expect(input('steps 滑块').getAttribute('data-unset')).toBeNull();
+
+    await type(input('steps'), '0');
+    expect(spy).toHaveBeenLastCalledWith(expect.objectContaining({ steps: 0 }));
+    expect(input('steps').value).toBe('0');
+    expect(input('steps 滑块').getAttribute('data-unset')).toBeNull();
+    expect(host.textContent).toContain('0 步');
+
+    await type(input('cfg'), '0');
+    expect(spy).toHaveBeenLastCalledWith(expect.objectContaining({ steps: 0, cfg: 0 }));
+    expect(host.textContent).toContain('0.0');
+
+    await type(input('steps'), '');
+    expect(spy).toHaveBeenLastCalledWith(expect.objectContaining({ steps: undefined, cfg: 0 }));
+    expect(input('steps 滑块').getAttribute('data-unset')).toBe('true');
+    expect(input('steps').value).toBe('');
+  });
+
+  it('filled steps/cfg keep the slider thumb on the filled value', async () => {
+    await mount(nano({ steps: 33, cfg: 4.5 }));
+    expect(input('steps 滑块').value).toBe('33');
+    expect(input('cfg 滑块').value).toBe('4.5');
+    expect(input('steps 滑块').getAttribute('aria-valuetext')).toBeNull();
+  });
+});
