@@ -325,14 +325,40 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
             });
           }
           const durableVideoUrl = durableVideo.dataUrl;
+          const sentStages = Array.isArray(tamsBody.stages) ? tamsBody.stages : [];
+          const sentInput = sentStages.find((stage: any) => stage?.type === 'INPUT_INITIALIZE')?.inputInitialize ?? {};
+          const sentVideo = sentStages.find((stage: any) => stage?.type === 'VIDEO_DIFFUSION')?.video_diffusion ?? {};
+          const sentPrompt = sentVideo.prompts?.[0]?.text;
+          const sentNegative = sentVideo.negativePrompts?.[0]?.text;
+          const sentModel = sentVideo.sdModel != null ? String(sentVideo.sdModel) : null;
+          const sentSeed = sentInput.seed;
+          const requestMetadata = {
+            actualRequest: tamsBody,
+            actualParameters: {
+              ...sentInput,
+              ...sentVideo,
+              ...(sentPrompt !== undefined ? { prompt: sentPrompt } : {}),
+              ...(sentNegative !== undefined ? { negative_prompt: sentNegative } : {}),
+              ...(sentVideo.scheduleName !== undefined ? { scheduler: sentVideo.scheduleName } : {}),
+            },
+          };
           const item = await recordHistoryItem({
             url: durableVideoUrl,
-            prompt,
+            videoUrl: durableVideoUrl,
+            mediaType: 'video',
+            prompt: sentPrompt ?? null,
+            negativePrompt: sentNegative,
             provider: 'tensorart',
-            model: String(model),
-            seed: tamsBody.stages?.[0]?.inputInitialize?.seed ?? null,
-            steps: null,
-            cfg: null,
+            model: sentModel,
+            seed: (typeof sentSeed === 'number' || (typeof sentSeed === 'string' && sentSeed.trim() !== '')) && Number.isFinite(Number(sentSeed)) ? Number(sentSeed) : null,
+            steps: sentVideo.steps ?? null,
+            cfg: sentVideo.cfgScale ?? null,
+            width: sentVideo.width,
+            height: sentVideo.height,
+            sampler: sentVideo.sampler,
+            scheduler: sentVideo.scheduleName,
+            loras: Array.isArray(sentVideo.lora?.items) ? sentVideo.lora.items.map((lora: any) => ({ name: lora.lora_model, strength: lora.weight })) : undefined,
+            requestMetadata,
           });
           return res.json({
             videoUrl: durableVideoUrl,
@@ -340,13 +366,14 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
             mediaType: 'video',
             provider: 'tensorart',
             actualProvider: 'tensorart',
-            model: String(model),
-            actualModel: String(model),
+            model: sentModel,
+            actualModel: sentModel,
             requestedModel: model,
             exactEndpointCalled: submitUrl,
             queryEndpoint: queryUrl,
             jobId,
             actualRequest: tamsBody,
+            requestMetadata,
             historyItem: item,
           });
         } catch (taErr: any) {

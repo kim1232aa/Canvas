@@ -6,6 +6,8 @@ import { handleVideoGenerate, VIDEO_GENERATE_DOWNLOAD_MARGIN_MS, VIDEO_GENERATE_
 import { FAL_VIDEO_POLL_BUDGET_MS } from '../falQueueLifecycle.ts';
 import { NANO_GPT_VIDEO_POLL_BUDGET_MS } from '../nanoGptVideoStatus.ts';
 import { readVideoJobStatus, resetVideoJobStatusForTests } from '../videoJobStatus.ts';
+import { resolveHistoryParameters } from '../../utils/historyParameters.ts';
+import { historyItemToApplyParams } from '../../utils/applyHistoryToCanvas.ts';
 
 describe('videoGenerateRoute lifecycle and client disconnect handling (grok_compat polling branch)', () => {
   let server: http.Server | undefined;
@@ -800,6 +802,144 @@ describe('videoGenerateRoute lifecycle and client disconnect handling (grok_comp
     expect(res.data.provider).toBe('tensorart');
     expect(res.data.videoUrl).toBe('data:video/mp4;base64,AAAA');
     expect(res.data.jobId).toBe('865959067493915843');
+  });
+
+  async function runTamsHistoryFixture(body: Record<string, any>) {
+    let wire: any;
+    const recordHistoryItem = vi.fn(async (item: any) => ({ ...item, id: 'hist-tams' }));
+    const { deps } = createMockDeps({
+      now: () => 1_000,
+      sleep: async () => {},
+      recordHistoryItem,
+      upstreamFetch: vi.fn(async (_meta: any, _url: string, options: any) => {
+        if (options?.method === 'POST') {
+          wire = JSON.parse(options.body);
+          return new Response(JSON.stringify({ job: { id: 'tams-history-job' } }), { status: 200 });
+        }
+        return new Response(JSON.stringify({
+          job: { status: 'SUCCESS', successInfo: { videos: [{ url: 'https://cdn.example/tams-history.mp4' }] } },
+        }), { status: 200 });
+      }),
+    });
+    const res = makeMockRes();
+    await handleVideoGenerate(deps)({
+      body: {
+        provider: 'tensorart', model: '834845675863700019',
+        prompt: 'A pink-haired dancer turning in a softly lit 3D city scene, full-body wide shot',
+        width: 480, height: 832, fps: 16, totalFrames: 49,
+        ...body,
+      },
+      headers: { 'x-tensorart-key': '38b4e85f-f6e2-4f3b-b2f5-8d9e7a6c5b4a' },
+      path: '/api/video/generate',
+    } as any, res);
+    return { wire, res, recordHistoryItem };
+  }
+
+  it('Tensor.Art TAMS video history retains the sent steps, cfg, seed and complete video request', async () => {
+    const { wire, res, recordHistoryItem } = await runTamsHistoryFixture({
+      negative_prompt: 'blurry, static, low quality',
+      steps: 25, cfg: 7.5, seed: 42, sampler_name: 'euler', scheduler: 'simple',
+      generationMode: 'STABLE', count: 1, imageResourceId: 'source-image-resource',
+      loras: [{ name: '844857819904659507', strength: 0.8 }],
+    });
+    const sent = wire.stages.find((stage: any) => stage.type === 'VIDEO_DIFFUSION').video_diffusion;
+    const saved = recordHistoryItem.mock.calls[0][0];
+    expect(sent).toMatchObject({ steps: 25, cfgScale: 7.5 });
+    expect(saved).toMatchObject({
+      mediaType: 'video', videoUrl: 'data:video/mp4;base64,AAAA',
+      prompt: sent.prompts[0].text, negativePrompt: 'blurry, static, low quality',
+      model: '834845675863700019', seed: 42, steps: 25, cfg: 7.5,
+      width: 480, height: 832, sampler: 'euler', scheduler: 'simple',
+      loras: [{ name: '844857819904659507', strength: 0.8 }],
+      requestMetadata: {
+        actualRequest: wire,
+        actualParameters: {
+          ...sent, seed: '42', count: 1, imageResourceId: 'source-image-resource',
+          prompt: sent.prompts[0].text, negative_prompt: 'blurry, static, low quality', scheduler: 'simple',
+        },
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.data.actualRequest).toEqual(wire);
+    expect(res.data.historyItem).toEqual({ ...saved, id: 'hist-tams' });
+    expect(res.data.requestMetadata).toEqual(saved.requestMetadata);
+    const displayed = resolveHistoryParameters(res.data.historyItem);
+    for (const [field, value] of Object.entries({ steps: 25, cfg: 7.5, seed: '42', width: 480, height: 832, sampler: 'euler', scheduler: 'simple', negativePrompt: 'blurry, static, low quality' })) {
+      expect(displayed[field as keyof typeof displayed]).toMatchObject({ value, source: 'sent' });
+    }
+    expect(historyItemToApplyParams(res.data.historyItem)).toMatchObject({
+      steps: 25, cfg: 7.5, seed: 42, width: 480, height: 832, sampler: 'euler', scheduler: 'simple',
+      loras: [{ name: '844857819904659507', strength: 0.8 }],
+    });
+  });
+
+  it('Tensor.Art TAMS video history reads reordered custom stages instead of the original canvas values', async () => {
+    const video = {
+      sdModel: '834845658683829748', width: 832, height: 480, fps: 24, totalFrames: 81,
+      prompts: [{ text: 'A cat circling a wooden stage, cinematic side view' }],
+      negativePrompts: [{ text: 'blur, flickering' }], generationMode: 'IMAGE_TO_VIDEO',
+      steps: 30, cfgScale: 4.5, sampler: 'custom_sampler', scheduleName: 'custom_schedule',
+      lora: { items: [{ lora_model: '839561768998186170', weight: 0.6 }] },
+    };
+    const { wire, res, recordHistoryItem } = await runTamsHistoryFixture({
+      steps: 25, cfg: 7.5, seed: 42, negative_prompt: 'original negative',
+      sampler_name: 'euler', scheduler: 'simple', loras: [{ name: '844857819904659507', strength: 0.8 }],
+      custom_parameters: { stages: [
+        { type: 'VIDEO_DIFFUSION', video_diffusion: video },
+        { type: 'INPUT_INITIALIZE', inputInitialize: { seed: '123', count: 2, imageResourceId: 'custom-image-resource' } },
+      ] },
+    });
+    const saved = recordHistoryItem.mock.calls[0][0];
+    expect(wire.stages[0].video_diffusion).toEqual(video);
+    expect(saved).toMatchObject({
+      prompt: video.prompts[0].text, negativePrompt: 'blur, flickering', model: video.sdModel,
+      width: 832, height: 480, seed: 123, steps: 30, cfg: 4.5,
+      sampler: 'custom_sampler', scheduler: 'custom_schedule',
+      loras: [{ name: '839561768998186170', strength: 0.6 }],
+      requestMetadata: { actualRequest: wire, actualParameters: { ...video, fps: 24, totalFrames: 81, count: 2, imageResourceId: 'custom-image-resource' } },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.data.model).toBe(video.sdModel);
+    expect(res.data.actualModel).toBe(video.sdModel);
+    expect(res.data.requestedModel).toBe('834845675863700019');
+    expect(res.data.requestMetadata).toEqual(saved.requestMetadata);
+  });
+
+  it('Tensor.Art TAMS video history preserves explicit zero values from the final request', async () => {
+    const { wire, res, recordHistoryItem } = await runTamsHistoryFixture({
+      cfg: 0, seed: 0, loras: [{ name: '844857819904659507', strength: 0 }],
+      custom_parameters: { stages: [
+        { type: 'INPUT_INITIALIZE', inputInitialize: { seed: '0' } },
+        { type: 'VIDEO_DIFFUSION', video_diffusion: {
+          sdModel: '834845675863700019', width: 480, height: 832, fps: 16, totalFrames: 49,
+          prompts: [{ text: 'A dancer under neon lights, wide cinematic composition' }],
+          negativePrompts: [{ text: '' }], steps: 0, cfgScale: 0,
+          lora: { items: [{ lora_model: '844857819904659507', weight: 0 }] },
+        } },
+      ] },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(recordHistoryItem.mock.calls[0][0]).toMatchObject({
+      seed: 0, steps: 0, cfg: 0, negativePrompt: '',
+      loras: [{ name: '844857819904659507', strength: 0 }],
+      requestMetadata: { actualRequest: wire, actualParameters: { steps: 0, cfgScale: 0 } },
+    });
+  });
+
+  it('Tensor.Art TAMS video history leaves omitted optional parameters unset', async () => {
+    const { wire, res, recordHistoryItem } = await runTamsHistoryFixture({});
+    const sent = wire.stages.find((stage: any) => stage.type === 'VIDEO_DIFFUSION').video_diffusion;
+    expect(sent).not.toHaveProperty('steps');
+    expect(sent).not.toHaveProperty('cfgScale');
+    const saved = recordHistoryItem.mock.calls[0][0];
+    expect(saved).toMatchObject({ seed: null, steps: null, cfg: null });
+    for (const field of ['negativePrompt', 'sampler', 'scheduler', 'loras']) expect(saved[field]).toBeUndefined();
+    expect(saved.requestMetadata.actualRequest).toEqual(wire);
+    for (const field of ['seed', 'steps', 'cfgScale', 'count', 'imageResourceId', 'generationMode']) {
+      expect(saved.requestMetadata.actualParameters).not.toHaveProperty(field);
+    }
+    expect(res.statusCode).toBe(200);
+    expect(res.data.requestMetadata).toEqual(saved.requestMetadata);
   });
 
   it('Tensor.Art OpenWorks video submits POST /task and returns the upstream body on failure', async () => {
