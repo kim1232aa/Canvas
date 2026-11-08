@@ -173,10 +173,12 @@ export function extractDeclaredNsfwDefaults(schemaProps: Record<string, any> | u
  * Seeds permissive defaults into visible custom_parameters JSON for any official
  * safety switch declared by the live schema that the user has not explicitly set.
  * User-specified keys (including restrictive values) are never overwritten.
+ * Fields in explicitlyOmitted are skipped even when undefined.
  */
 export function applyNsfwDefaultsToCustomParameters(
   customParamsStr: string | undefined,
-  schemaProps: Record<string, any> | undefined
+  schemaProps: Record<string, any> | undefined,
+  explicitlyOmitted?: Set<string>
 ): string {
   let body: Record<string, any> = {};
   try {
@@ -193,7 +195,7 @@ export function applyNsfwDefaultsToCustomParameters(
   const nsfwDefaults = extractDeclaredNsfwDefaults(schemaProps);
   let changed = false;
   for (const [key, permissiveValue] of Object.entries(nsfwDefaults)) {
-    if (body[key] === undefined) {
+    if (body[key] === undefined && !(explicitlyOmitted?.has(key))) {
       body[key] = permissiveValue;
       changed = true;
     }

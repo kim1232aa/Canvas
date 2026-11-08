@@ -119,8 +119,16 @@ export function schemaChoiceFields(inputSchema: any, doc?: any): ChoiceField[] {
   return out;
 }
 
+const NSFW_OMITTED_META = '__nsfwOmitted';
+
 const parse = (value?: string): Record<string, any> | null => {
   try { const p = JSON.parse(value || '{}'); return p && typeof p === 'object' && !Array.isArray(p) ? p : null; } catch { return null; }
+};
+
+/** Extract explicitly-omitted NSFW field names from metadata; returns Set for fast lookup. */
+const getExplicitlyOmitted = (body: Record<string, any> | null): Set<string> => {
+  if (!body || !Array.isArray(body[NSFW_OMITTED_META])) return new Set();
+  return new Set(body[NSFW_OMITTED_META].filter((x: unknown) => typeof x === 'string'));
 };
 
 /**
@@ -182,7 +190,10 @@ function SchemaNsfwSeedEffect({
   React.useEffect(() => {
     if (!nsfwKeySig || seededSchemaRef.current === nsfwKeySig) return;
     seededSchemaRef.current = nsfwKeySig;
-    const next = applyNsfwDefaultsToCustomParameters(value, inputSchema?.properties);
+    const body = parse(value);
+    if (!body) return;
+    const explicitlyOmitted = getExplicitlyOmitted(body);
+    const next = applyNsfwDefaultsToCustomParameters(value, inputSchema?.properties, explicitlyOmitted);
     if (next !== (value ?? '{}')) {
       onChange(next);
     }
@@ -203,18 +214,17 @@ function NsfwChoiceFieldRow({
   canvasLoras?: Array<{ name?: string; strength?: number }> | null;
   writeField: (key: string, next: unknown, cleared: boolean) => void;
 }) {
-  const [cleared, setCleared] = React.useState(false);
+  const explicitlyOmitted = getExplicitlyOmitted(body);
   const rawCurrent = body?.[f.key];
   const current = rawCurrent !== undefined
     ? rawCurrent
-    : (f.nsfwPolicy && !cleared ? f.nsfwPolicy.permissiveValue : undefined);
+    : (f.nsfwPolicy && !explicitlyOmitted.has(f.key) ? f.nsfwPolicy.permissiveValue : undefined);
   const isObj = current && typeof current === 'object' && !Array.isArray(current);
   const mode = current === undefined ? '' : isObj ? '__custom__' : String(current);
   const unfilledLabel = schemaFieldBadge(undefined, f.numberSpec?.default ?? f.defaultValue, f.nsfwPolicy).text;
   const fieldMeta = formatSchemaFieldLabel(f.key);
   const updateVal = (next: unknown) => {
     const nextCleared = next === undefined;
-    setCleared(nextCleared);
     writeField(f.key, next, nextCleared);
   };
   return (
@@ -324,23 +334,36 @@ export function SchemaChoiceControls({
   const loraDescriptions = schemaLoraDescriptions(inputSchema, openapi);
   const declaredKeys = Object.keys(inputSchema?.properties || {});
   const nsfwKeySig = fields.filter((f) => f.isNsfw).map((f) => f.key).sort().join(',');
-  const clearedKeysRef = React.useRef<Record<string, boolean>>({});
 
   if (!fields.length && !loraDescriptions.length) return null;
   const body = parse(value);
+  const explicitlyOmitted = getExplicitlyOmitted(body);
+
   const writeField = (key: string, next: unknown, isCleared = false) => {
     const b = parse(value);
     if (!b) return;
+    const omitted = getExplicitlyOmitted(b);
+
     if (isCleared) {
-      clearedKeysRef.current[key] = true;
+      omitted.add(key);
     } else {
-      delete clearedKeysRef.current[key];
+      omitted.delete(key);
     }
+
+    // Update metadata
+    if (omitted.size > 0) {
+      b[NSFW_OMITTED_META] = Array.from(omitted).sort();
+    } else {
+      delete b[NSFW_OMITTED_META];
+    }
+
+    // Seed other unset NSFW fields that aren't explicitly omitted
     for (const f of fields) {
-      if (f.isNsfw && f.nsfwPolicy && b[f.key] === undefined && !clearedKeysRef.current[f.key] && f.key !== key) {
+      if (f.isNsfw && f.nsfwPolicy && b[f.key] === undefined && !omitted.has(f.key) && f.key !== key) {
         b[f.key] = f.nsfwPolicy.permissiveValue;
       }
     }
+
     if (next === undefined) {
       delete b[key];
     } else {

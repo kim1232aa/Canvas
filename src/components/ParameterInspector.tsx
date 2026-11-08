@@ -50,7 +50,7 @@ export function CivitaiAllowMatureControl({
   onChangeCustom: (v: string) => void;
 }) {
   const [cleared, setCleared] = React.useState(false);
-  const seededRef = React.useRef(false);
+  const initializedRef = React.useRef(false);
 
   let customObj: Record<string, any> = {};
   let parseError: string | undefined;
@@ -73,11 +73,15 @@ export function CivitaiAllowMatureControl({
     : `会发送 ${String(currentVal)}`;
 
   React.useEffect(() => {
-    if (rawUnset && !seededRef.current && !parseError) {
-      seededRef.current = true;
+    // Mark initialization complete on first mount regardless of initial value
+    if (initializedRef.current) return;
+    initializedRef.current = true;
+
+    // Only seed if truly unset and not explicitly cleared, and no parse error
+    if (rawUnset && !cleared && !parseError) {
       onChangeCustom(JSON.stringify({ ...customObj, allowMatureContent: true }, null, 2));
     }
-  }, [rawUnset, parseError]);
+  }, [rawUnset, cleared, parseError]);
 
   return (
     <div className="space-y-1 pt-1" data-testid="civitai-allow-mature-control">
@@ -1078,7 +1082,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                   key={ar.label}
                   disabled={greyWidthHeight}
                   onClick={() => handleAspectRatioPreset(ar.w, ar.h)}
-                  
+
                   className={`py-1.5 rounded-lg text-center transition-all disabled:opacity-40 disabled:cursor-not-allowed ${omitWidthHeight ? 'opacity-40 ' : ''}${
                     isActive
                       ? 'bg-cyan-500/20 border border-cyan-500/50 text-cyan-300 font-bold'

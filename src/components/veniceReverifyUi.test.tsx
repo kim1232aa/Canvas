@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import { SchemaChoiceControls, schemaChoiceFields } from './SchemaChoiceControls';
@@ -27,17 +28,17 @@ describe('Venice reverify UI · lora_strength pending never says 不发', () => 
 
   // clean-1029 #3 supersedes the 待确认 contract: no Schema default declared → 「未填写，不发送」, never 待确认.
   it('unfilled lora_strength (no Schema default) → 未填写，不发送; no 待确认 anywhere', () => {
-    const tree = SchemaChoiceControls({
-      schemaUnprobed: true,
-      inputSchema: { properties: { lora_strength: { type: 'integer', minimum: 0, maximum: 100 } } },
-      value: '{}',
-      onChange: () => {},
-    } as any);
-    const placeholders = elements(tree).map((el) => el.props?.placeholder || '').join(' ');
-    const blob = texts(tree) + placeholders;
-    expect(blob).toContain('未填写，不发送');
-    expect(blob).not.toMatch(/待确认/);
-    expect(blob).not.toMatch(/Schema 默认/);
+    const markup = renderToStaticMarkup(
+      React.createElement(SchemaChoiceControls, {
+        schemaUnprobed: true,
+        inputSchema: { properties: { lora_strength: { type: 'integer', minimum: 0, maximum: 100 } } },
+        value: '{}',
+        onChange: () => {},
+      })
+    );
+    expect(markup).toContain('未填写，不发送');
+    expect(markup).not.toMatch(/待确认/);
+    expect(markup).not.toMatch(/Schema 默认/);
   });
 });
 
