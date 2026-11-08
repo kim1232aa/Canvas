@@ -5,13 +5,13 @@
     "tasks": [
       {
         "id": "1064569861478308016",
-        "userId": "1048723019146487792",
+        "userId": "[REDACTED_USER_ID]",
         "status": "FINISH",
         "toolName": "photoreal_studio_z_image",
         "outputs": [
           {
             "type": "STRING",
-            "value": "https://tensor-sf-sig.7022ae40757f8d53295a57619de9b364.r2.cloudflarestorage.com/workspace/generation/1048723019146487792/2026-11-08/bdf77680-c981-4203-95e5-b54cfe767087.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=0bef8a003dc93fc4d7030c9da79271ff%2F20261108%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20261108T111540Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&x-id=GetObject&X-Amz-Signature=cea268a03835b74972050113b09da60980763620decc22b6efa0fde344b7b3d6"
+            "value": "https://tensor-sf-sig.7022ae40757f8d53295a57619de9b364.r2.cloudflarestorage.com/workspace/generation/[REDACTED_USER_ID]/2026-11-08/bdf77680-c981-4203-95e5-b54cfe767087.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=[REDACTED]&X-Amz-Date=20261108T111540Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&x-id=GetObject&X-Amz-Signature=[REDACTED_SIGNATURE]"
           }
         ]
       }
