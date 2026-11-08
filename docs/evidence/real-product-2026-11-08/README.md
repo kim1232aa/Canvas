@@ -2,10 +2,10 @@
 
 - **执行日期**: 2026-11-08
 - **测试环境**: Headless Chromium (Playwright Chromium, `--no-proxy-server`, 视口 `1920×1080`)
-- **本地服务**: `http://127.0.0.1:4596` (`PORT=4596 npx tsx server.ts`)
+- **本地服务**: `http://127.0.0.1:4597` (`PORT=4597 npx tsx server.ts`)
 - **执行分支**: `feat/realprod96-real-ui-generation-with-visib`
 - **执行 Agent**: `worker-m96-realprod-gemini`
-- **验收核心结论**: **UI 实际点击运行完全通过，并成功产生真实图像产物（1024×1024 PNG，1,370,908 字节，SHA256: `83868b5457faa66b6b8e9e8f30bca850846a1e7785a1cf31f8bf41b199c7acf0`）**。
+- **验收核心结论**: **UI 实际点击运行完全通过，并成功产生真实图像产物（1024×1024 PNG，1,392,518 字节，SHA256: `0837cd142c3d40cf73374ab17a53d785b360c02705e7e3490c82233a98ef7970`）**。
 
 ---
 
@@ -71,7 +71,7 @@
 | `venice` | Venice | 速率限额直查 | `200 OK` (未授权) | `"accessPermitted":false,"balances":{"USD":0,"DIEM":0,"BUNDLED_CREDITS":0}` | 额度为 0 |
 | `aimlapi` | AIMLAPI | 账单详情直查 | `200 OK` | `{"current_balance":0}` | 余额为 0 |
 | `novita` | Novita | 账单接口直查 | `200 OK` | `{"availableBalance":"0","cashBalance":"0"}` | 余额为 0 |
-| **`openworks`** | **Tensor.Art OpenWorks** | **UI 实际点击运行** | **`200 OK`** | **任务提交成功 (`1064565672811467028`)，轮询返回 `status: FINISH`，输出真实图像 URL** | **✅ 成功生成真实产物** |
+| **`openworks`** | **Tensor.Art OpenWorks** | **UI 实际点击运行** | **`200 OK`** | **任务提交成功 (`1064569861478308016`)，轮询 23 次返回 `status: FINISH`，输出真实图像 URL** | **✅ 成功生成真实产物** |
 
 ---
 
@@ -175,18 +175,18 @@
 - **提交接口上游原始响应体原文**:
   ```json
   {
-    "taskId": "1064565672811467028",
-    "pollUrl": "/api/schema-provider/openworks/tasks/1064565672811467028"
+    "taskId": "1064569861478308016",
+    "pollUrl": "/api/schema-provider/openworks/tasks/1064569861478308016"
   }
   ```
-- **轮询查询接口 HTTP 状态码**: `200 OK`
+- **轮询查询接口 HTTP 状态码**: `200 OK`（共轮询 23 次，状态依次由 `WAITING` -> `PROCESSING` -> `FINISH`）
 - **轮询查询接口上游原始响应体原文**:
   ```json
   {
     "status": "completed",
     "upstreamStatus": "FINISH",
     "outputs": [
-      "https://tensor-sf-sig.7022ae40757f8d53295a57619de9b364.r2.cloudflarestorage.com/workspace/generation/1048723019146487792/2026-11-08/4b75921d-f2b1-428e-8de4-5cced75964c3.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=0bef8a003dc93fc4d7030c9da79271ff%2F20261108%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20261108T105916Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&x-id=GetObject&X-Amz-Signature=5f4b49b6f5202e2b49a8434de4f573fc150308f1e9fe3cffe7c45d4461a071e9"
+      "https://tensor-sf-sig.7022ae40757f8d53295a57619de9b364.r2.cloudflarestorage.com/workspace/generation/1048723019146487792/2026-11-08/bdf77680-c981-4203-95e5-b54cfe767087.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=0bef8a003dc93fc4d7030c9da79271ff%2F20261108%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20261108T111540Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&x-id=GetObject&X-Amz-Signature=4bb64aa7e584ec66f3922e3e57143491ba6368d374e2d3bbfe2c78652c7be0fe"
     ],
     "mediaType": "image",
     "rawResponse": {
@@ -195,14 +195,14 @@
       "data": {
         "tasks": [
           {
-            "id": "1064565672811467028",
+            "id": "1064569861478308016",
             "userId": "1048723019146487792",
             "status": "FINISH",
             "toolName": "photoreal_studio_z_image",
             "outputs": [
               {
                 "type": "STRING",
-                "value": "https://tensor-sf-sig.7022ae40757f8d53295a57619de9b364.r2.cloudflarestorage.com/workspace/generation/1048723019146487792/2026-11-08/4b75921d-f2b1-428e-8de4-5cced75964c3.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=0bef8a003dc93fc4d7030c9da79271ff%2F20261108%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20261108T105916Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&x-id=GetObject&X-Amz-Signature=5f4b49b6f5202e2b49a8434de4f573fc150308f1e9fe3cffe7c45d4461a071e9"
+                "value": "https://tensor-sf-sig.7022ae40757f8d53295a57619de9b364.r2.cloudflarestorage.com/workspace/generation/1048723019146487792/2026-11-08/bdf77680-c981-4203-95e5-b54cfe767087.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=0bef8a003dc93fc4d7030c9da79271ff%2F20261108%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20261108T111540Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&x-id=GetObject&X-Amz-Signature=4bb64aa7e584ec66f3922e3e57143491ba6368d374e2d3bbfe2c78652c7be0fe"
               }
             ]
           }
@@ -217,8 +217,8 @@
   2. 底部浮动 Toast: 显式呈现 `工作流运行成功！`，带缩略图与「查看历史」按钮；
   3. KSampler 采样器节点: 内部渲染完整可见的高清生成图像产物；
   4. SaveImage 保存图像节点: 内部同步渲染完整可见的高清生成图像产物；
-  5. ExecutionLog 抽屉: 完整记录该次出站 trace，可展开查看 `actualRequest` 与上游真实响应；
-  6. 历史记录 (HistoryModal): 完整展示该次出图卡片、模型、LoRA、种子、尺寸与生成的真实图像缩略图。
+  5. ExecutionLog 抽屉: 完整记录该次出站 trace，展开可见 `actualRequest` 与上游真实响应；
+  6. 历史记录 (HistoryModal): 完整展示该次出图卡片、模型、LoRA、种子、尺寸与生成的真实图像缩略图（ID: `hist_1794136541248_ixzdi`，共 1 张出图）。
 
 ---
 
@@ -227,14 +227,16 @@
 本次 UI 点击运行生成的真实图像产物已完整持久化于 `docs/evidence/real-product-2026-11-08/` 目录下：
 
 ### 1. 真实生成图像产物 (Real Image Artifact)
-- **文件物理路径**: `docs/evidence/real-product-2026-11-08/artifact-openworks-4b75921d.png`
+- **文件物理路径**: `docs/evidence/real-product-2026-11-08/artifact-openworks-bdf77680.png`
 - **图像格式与规格**: PNG 格式，`1024 × 1024` 像素，8-bit RGB
-- **文件物理大小**: `1,370,908` 字节 (`1.31 MB`)
+- **文件物理大小**: `1,392,518` 字节 (`1.33 MB`)
 - **SHA256 哈希**:
   ```
-  83868b5457faa66b6b8e9e8f30bca850846a1e7785a1cf31f8bf41b199c7acf0
+  0837cd142c3d40cf73374ab17a53d785b360c02705e7e3490c82233a98ef7970
   ```
-- **上游原始存储地址**: `https://tensor-sf-sig.7022ae40757f8d53295a57619de9b364.r2.cloudflarestorage.com/workspace/generation/1048723019146487792/2026-11-08/4b75921d-f2b1-428e-8de4-5cced75964c3.png`
+- **上游原始存储地址**: `https://tensor-sf-sig.7022ae40757f8d53295a57619de9b364.r2.cloudflarestorage.com/workspace/generation/1048723019146487792/2026-11-08/bdf77680-c981-4203-95e5-b54cfe767087.png`
+- **本地服务存储记录**: `data/media/0837cd142c3d40cf73374ab17a53d785b360c02705e7e3490c82233a98ef7970`
+- **历史记录持久化条目**: `data/history.json` 中 `id: hist_1794136541248_ixzdi`，时间戳 `1794136541248`
 
 ### 2. UI 运行与截图证据清单 (Screenshot Evidence)
 
@@ -245,7 +247,7 @@
 | **03** | `03-sogni-insufficient-funds.png` | `docs/evidence/real-product-2026-11-08/03-sogni-insufficient-funds.png` | 472,810 B | `df807d680bfee18fef7e43058627dad71763b6876e7b6829e76ec93266937718` | **供应商 2 实测 (Sogni)**：载入 `Sogni · 鱼眼赛博漫画`，UI 点击运行，上游返回任务挂起 `waiting_for_user`，事件原文为 `Debit Error: Insufficient funds`（资金不足），原样透传。 |
 | **04** | `04-modelscope-insufficient-balance.png` | `docs/evidence/real-product-2026-11-08/04-modelscope-insufficient-balance.png` | 365,404 B | `3de5a50e49753ea14ed2e94d538478839b4e70dede2f8a5370ce2ec78036098d` | **供应商 3 实测 (ModelScope)**：载入 `魔搭 CN · 闪光纪实人群`，UI 点击运行，上游返回 HTTP 429 `insufficient balance`（魔粒耗尽），原样呈现于顶部状态栏。 |
 | **05** | `05-openworks-canvas-loaded-full-params.png` | `docs/evidence/real-product-2026-11-08/05-openworks-canvas-loaded-full-params.png` | 349,608 B | `e582fc5c4ea06bd31052cc0e48a608f78835b0fec363bfcdfa0bb50bc4fb1e77` | **满参数 + LoRA 配置**：画布载入 `OpenWorks · 溪边白裙人像`，完整呈现底模 `photoreal_studio_z_image`、3 个级联 LoRALoader（权重均为 1.0）、有意义正向提示词、负向提示词、1024×1024 尺寸、KSampler 步数 10、CFG 1、种子 42。 |
-| **06** | `06-openworks-run-success-visible-artifact.png` | `docs/evidence/real-product-2026-11-08/06-openworks-run-success-visible-artifact.png` | 421,144 B | `a5a3231284b9ecd537f1bb12edf0bf44b44152917fb4d2eeb379ddeb727c13ac` | **UI 实际点击生成成功 + 可见产物**：顶部呈现 `生成完成 (Tensor.Art OpenWorks) · 耗时 55秒`，底部呈现 `工作流运行成功！` Toast，KSampler 与 SaveImage 节点内部均渲染出真实可见的高清白裙人像图。 |
-| **07** | `07-openworks-executionlog-trace.png` | `docs/evidence/real-product-2026-11-08/07-openworks-executionlog-trace.png` | 428,894 B | `a2605ca8930f277b11ea1098ad6e8a510fb1e1bac884e8faef56b9746c584643` | **ExecutionLog 展开追溯**：底部展开执行日志抽屉，完整展示 `POST /api/schema-provider/openworks/submit · HTTP 200`、轮询 22 次、`save-result · HTTP 200`，清晰包含 `actualRequest` 与端点信息。 |
-| **07b** | `07b-openworks-actualrequest-expanded.png` | `docs/evidence/real-product-2026-11-08/07b-openworks-actualrequest-expanded.png` | 431,690 B | `6c202de7a8175b48a96706f4ccdcbdd927e341989ebb195a5962efd59406b6ef` | **actualRequest 展开核验**：展开 `实际上游请求 actualRequest · loras×3`，清晰看到出站 JSON 包含 `toolName`、正向提示词、负向提示词、1024×1024 尺寸、步数 10、CFG 1、种子 42 及 3 组 LoRA 标识符与权重。 |
-| **08** | `08-history-modal-visible-artifact.png` | `docs/evidence/real-product-2026-11-08/08-history-modal-visible-artifact.png` | 717,504 B | `71824d5fc9ff3f02c207d4d5822f72f21c38bd5cface61c6943034fe84ff883c` | **历史记录 (HistoryModal) 产物可见性**：点击「历史」打开弹窗，完整呈现 3 张真实出图卡片、模型名称、3 个 LoRA 标签与强度、种子 42、尺寸 1024×1024，以及清晰可见的高保真生成产物缩略图。 |
+| **06** | `06-openworks-run-success-visible-artifact.png` | `docs/evidence/real-product-2026-11-08/06-openworks-run-success-visible-artifact.png` | 421,021 B | `fa72ae63f8e9c47c03253de145061bb568686923f259abdad364366676696246` | **UI 实际点击生成成功 + 可见产物**：顶部呈现 `生成完成 (Tensor.Art OpenWorks) · 耗时 55秒`，底部呈现 `工作流运行成功！` Toast，KSampler 与 SaveImage 节点内部均渲染出真实可见的高清白裙人像图。与产物及历史记录完全处于同一次干净运行。 |
+| **07** | `07-openworks-executionlog-trace.png` | `docs/evidence/real-product-2026-11-08/07-openworks-executionlog-trace.png` | 434,143 B | `a5c530385ea2db2baea1db32fa61747df6b676e7d1d3c7df3989008430d8eb4d` | **ExecutionLog 展开追溯**：底部展开执行日志抽屉，完整展示 `POST /api/schema-provider/openworks/submit · HTTP 200`、轮询 23 次 (`1064569861478308016`)、`save-result · HTTP 200`，清晰包含 `actualRequest` 与端点信息。 |
+| **07b** | `07b-openworks-actualrequest-expanded.png` | `docs/evidence/real-product-2026-11-08/07b-openworks-actualrequest-expanded.png` | 428,285 B | `d96ed1ddd3135abdb462a90e6f28d27ff38d938b9ce260b83f2f0c0fb29e5cd3` | **actualRequest 展开核验**：展开 `实际上游请求 actualRequest · loras×3`，清晰看到出站 JSON 包含 `toolName: photoreal_studio_z_image`、正向提示词、负向提示词、1024×1024 尺寸、步数 10、CFG 1、种子 42 及 3 组 LoRA 标识符与权重。 |
+| **08** | `08-history-modal-visible-artifact.png` | `docs/evidence/real-product-2026-11-08/08-history-modal-visible-artifact.png` | 374,797 B | `ae25a572c2e31ce4351291fde6980bb4f46f341e82a47c22978194455fe1ee67` | **历史记录 (HistoryModal) 产物可见性**：点击「历史」打开弹窗，完整呈现当前干净运行生成的 1 张出图卡片（`hist_1794136541248_ixzdi`），展示模型名称、3 个 LoRA 标签与强度、种子 42、尺寸 1024×1024，以及清晰可见的高保真生成产物缩略图。 |
