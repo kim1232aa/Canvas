@@ -651,10 +651,6 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
       loadModels('all', activeCategory, query, sortOption, selectedArch, false, '', true);
       return;
     }
-    // Routing contract: ModelHubModal.providerRouting.test.ts asserts this guard
-    // string remains in source. The 'all' case is handled by the branch above; the
-    // line below is retained verbatim for that source-level assertion:
-    // if (unsupportedDirectoryProvider && newProv === 'all') return;
     const leavingUnsupportedProvider = Boolean(unsupportedDirectoryProvider);
     setUnsupportedDirectoryProvider(null);
     setActiveProvider(newProv);
