@@ -1,4 +1,5 @@
 import {tracedFetch as fetch} from '../../services/executionTrace';
+import { httpErrorFromResponse } from '../../utils/apiFailure';
 import { BaseEngineDriver, withFilledCanvasParams } from '../BaseEngineDriver';
 import {
   NormalizedGenerateParams,
@@ -116,15 +117,7 @@ export class CivitaiDriver extends BaseEngineDriver {
     });
 
     if (!response.ok) {
-      const errText = await response.text();
-      let errorMsg = `Civitai 引擎调用失败 (HTTP ${response.status})`;
-      try {
-        const errJson = JSON.parse(errText);
-        errorMsg = errJson.error || errJson.message || errorMsg;
-      } catch {
-        errorMsg = errText.startsWith('<') ? `服务端接口返回异常 HTML 页面 [HTTP ${response.status}]` : errText;
-      }
-      throw new Error(errorMsg);
+      throw await httpErrorFromResponse(response, ['error', 'message']);
     }
 
     const resText = await response.text();
@@ -132,7 +125,7 @@ export class CivitaiDriver extends BaseEngineDriver {
     try {
       data = JSON.parse(resText);
     } catch {
-      throw new Error(`Civitai 接口响应非有效 JSON 格式 [HTTP ${response.status}]: ${resText.slice(0, 150)}`);
+      throw new Error(`Civitai 接口响应非有效 JSON 格式 [HTTP ${response.status}]: ${resText}`);
     }
 
     let mediaUrl = data.mediaUrl || data.imageUrl || data.videoUrl;
@@ -163,7 +156,7 @@ export class CivitaiDriver extends BaseEngineDriver {
             if (statusErrJson.errorSource) statusErrMsg += ` (errorSource: ${statusErrJson.errorSource})`;
             if (statusErrJson.workflowId) statusErrMsg += ` [workflowId: ${statusErrJson.workflowId}]`;
           } catch {
-            statusErrMsg = statusErrText.startsWith('<') ? `轮询状态接口返回 HTML 错误页面 [HTTP ${statusResp.status}]` : statusErrText;
+            statusErrMsg = `HTTP ${statusResp.status}: ${statusErrText}`;
           }
           throw new Error(statusErrMsg);
         }
@@ -174,7 +167,7 @@ export class CivitaiDriver extends BaseEngineDriver {
           statusData = JSON.parse(pollText);
         } catch (parseErr: any) {
           throw new Error(
-            `Civitai 轮询响应非 JSON [HTTP ${statusResp.status}]: ${parseErr?.message || parseErr}\n${pollText.slice(0, 2000)}`
+            `Civitai 轮询响应非 JSON [HTTP ${statusResp.status}]: ${parseErr?.message || parseErr}\n${pollText}`
           );
         }
         const foundUrl = statusData.mediaUrl;

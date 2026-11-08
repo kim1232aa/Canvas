@@ -1,4 +1,5 @@
 import {tracedFetch as fetch} from '../../services/executionTrace';
+import { httpErrorFromResponse } from '../../utils/apiFailure';
 import { BaseEngineDriver } from '../BaseEngineDriver';
 import {
   NormalizedGenerateParams,
@@ -150,8 +151,7 @@ export class AgnesDriver extends BaseEngineDriver {
     });
 
     if (!resp.ok) {
-      const err = await resp.json().catch(() => ({ error: 'Agnes AI 执行失败' }));
-      throw new Error(err.details || err.error || `Agnes AI 错误 (${resp.status})`);
+      throw await httpErrorFromResponse(resp);
     }
 
     const data = await resp.json();
@@ -193,8 +193,7 @@ export class AgnesDriver extends BaseEngineDriver {
     });
 
     if (!resp.ok) {
-      const err = await resp.json().catch(() => ({ error: 'Agnes AI 文本推理失败' }));
-      throw new Error(err.details || err.error || `Agnes AI 错误 (${resp.status})`);
+      throw await httpErrorFromResponse(resp);
     }
 
     const data = await resp.json();
