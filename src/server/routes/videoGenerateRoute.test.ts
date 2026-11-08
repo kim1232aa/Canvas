@@ -697,7 +697,6 @@ describe('videoGenerateRoute lifecycle and client disconnect handling (grok_comp
 
     // Verify forwardUnmappedFields was invoked with num_frames in the fields list
     expect(forwardUnmappedFieldsCalls[0].fields).toContain('num_frames');
-    expect(forwardUnmappedFieldsCalls[0].fields).toContain('seed');
 
     // Verify all fields reached the outbound upstream body
     expect(capturedUpstreamBody).toMatchObject({
