@@ -34,6 +34,15 @@ const CANVAS_WIRES: Array<[string, string[]]> = [
 ];
 
 /**
+ * Check if a property specification accepts null (via anyOf with type: 'null').
+ */
+export const isNullableProp = (spec: unknown): boolean => {
+  if (!spec || typeof spec !== 'object' || Array.isArray(spec)) return false;
+  const anyOf = (spec as Record<string, unknown>).anyOf;
+  return Array.isArray(anyOf) && anyOf.some((branch) => Boolean(branch && typeof branch === 'object' && (branch as Record<string, unknown>).type === 'null'));
+};
+
+/**
  * Build Fal video outbound body from live OpenAPI Input properties.
  * Static FAL_MODELS is UI clue only — never alone authorizes outbound.
  */
@@ -42,11 +51,29 @@ export function buildFalVideoRequest(
   body: Record<string, unknown>,
   liveInputProperties?: Record<string, unknown>,
   schemaFetchFailure?: FalSchemaFetchFailure,
+  liveRequired?: readonly string[],
 ) {
   if (!liveInputProperties || typeof liveInputProperties !== 'object' || Array.isArray(liveInputProperties)) {
     throw new FalSchemaMissingError(endpoint, schemaFetchFailure);
   }
-  const props = liveInputProperties;
+  const rawSchema = liveInputProperties;
+  const hasNestedProps =
+    rawSchema.properties !== null &&
+    typeof rawSchema.properties === 'object' &&
+    !Array.isArray(rawSchema.properties) &&
+    (rawSchema.type === 'object' || Array.isArray(rawSchema.required) || Array.isArray(rawSchema.anyOf));
+  const rawProps = hasNestedProps ? (rawSchema.properties as Record<string, unknown>) : rawSchema;
+  const schemaRequired = Array.isArray(liveRequired)
+    ? liveRequired
+    : Array.isArray(rawSchema.required)
+      ? (rawSchema.required as unknown[]).filter((k): k is string => typeof k === 'string')
+      : [];
+  const schemaAnyOf = Array.isArray(rawSchema.anyOf)
+    ? (rawSchema.anyOf as unknown[]).filter((b): b is Record<string, unknown> => Boolean(b && typeof b === 'object' && !Array.isArray(b)))
+    : [];
+  const props: Record<string, unknown> = Object.fromEntries(
+    Object.entries(rawProps).filter(([k, v]) => !((k === 'required' || k === 'anyOf') && Array.isArray(v))),
+  );
   const fail = (message: string): never => { throw new FalVideoContractError(message); };
   if ('custom_parameters' in body && (!body.custom_parameters || typeof body.custom_parameters !== 'object' || Array.isArray(body.custom_parameters))) {
     fail('custom_parameters 必须为有效 JSON 对象 (object)');
@@ -54,9 +81,6 @@ export function buildFalVideoRequest(
   if (provided(body.cfg) && provided(body.guidance_scale) && Number(body.cfg) !== Number(body.guidance_scale)) {
     fail('cfg 与 guidance_scale 不一致；请只提供一个来源或相同值');
   }
-
-  const hasDuration = 'duration' in props;
-  const hasNumFrames = 'num_frames' in props;
 
   const cfgWire = (['guidance_scale', 'guide_scale', 'cfg_scale', 'cfg'] as const).find((w) => w in props) ?? 'guidance_scale';
   const imageWire = falVideoImageFieldFromLive(props);
@@ -170,17 +194,42 @@ export function buildFalVideoRequest(
   const actual = { ...payload, ...mappedCustom };
 
   const reference = imageWire ? actual[imageWire] : undefined;
-  if (endpoint === 'fal-ai/wan/v2.7/image-to-video') {
-    if (!provided(reference) && !provided(actual.video_url)) fail('image_url 或 video_url 为必填项');
-  } else if (imageWire && (endpoint.endsWith('/image-to-video') || endpoint === 'fal-ai/wan-i2v') && !provided(reference)) {
-    fail(`${imageWire}（或 image_url）为必填项`);
-  }
   if (provided(reference) && imageWire) {
     delete actual.image_url;
     delete actual.start_image_url;
     actual[imageWire] = reference;
   }
-  if (provided(actual.duration) && isKlingV3(endpoint)) actual.duration = klingV3Duration(actual.duration);
+
+  // Schema-driven required validation: driven strictly by live OpenAPI required / anyOf.
+  // Never hardcode endpoint names or block locally when the live schema declares no required fields.
+  const propLevelRequired = Object.entries(props)
+    .filter(([_, spec]) => spec && typeof spec === 'object' && (spec as any).required === true)
+    .map(([k]) => k);
+  const allRequired = Array.from(new Set([...schemaRequired, ...propLevelRequired]));
+  for (const reqField of allRequired) {
+    if (!provided(actual[reqField])) {
+      fail(`${reqField} 为必填项`);
+    }
+  }
+
+  if (schemaAnyOf.length > 0) {
+    const branchesWithRequired = schemaAnyOf.filter((b) => Array.isArray(b.required) && b.required.length > 0);
+    if (branchesWithRequired.length > 0) {
+      const satisfied = branchesWithRequired.some((branch) =>
+        (branch.required as string[]).every((field) => provided(actual[field])),
+      );
+      if (!satisfied) {
+        fail(`未满足必填组合要求 (${branchesWithRequired.map((b) => (b.required as string[]).join(' + ')).join(' 或 ')})`);
+      }
+    }
+  }
+
+  const durationSpec = props.duration as Record<string, unknown> | undefined;
+  const durationType = durationSpec && typeof durationSpec === 'object' ? durationSpec.type : undefined;
+  if (provided(actual.duration) && durationType === 'string') {
+    actual.duration = String(actual.duration);
+  }
+
   return { payload: actual, beforeCustom, customParameters: { ...custom }, overrides, fieldStatus, schemaFields: Object.keys(props) };
 }
 
@@ -197,9 +246,6 @@ export const falVideoImageField = (endpoint: string): 'start_image_url' | 'image
   isKlingV3(endpoint) && endpoint.endsWith('/image-to-video') ? 'start_image_url' : 'image_url';
 
 export function klingV3Duration(value: unknown): string {
-  const seconds = Number(value);
-  if (value === '' || value === null || value === undefined || !Number.isInteger(seconds)) {
-    throw new Error('Kling V3 duration 须为整数秒');
-  }
-  return String(seconds);
+  if (value === '' || value === null || value === undefined) return '';
+  return String(value);
 }
