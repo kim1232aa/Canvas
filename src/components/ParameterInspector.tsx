@@ -49,16 +49,8 @@ export function CivitaiAllowMatureControl({
   customParameters?: string;
   onChangeCustom: (v: string) => void;
 }) {
-  const internals = (React as any).__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE || (React as any).__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED;
-  const isInsideRender = Boolean(internals?.H || internals?.ReactCurrentDispatcher?.current);
-  const [cleared, setCleared] = isInsideRender
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    ? React.useState(false)
-    : [false, () => {}] as const;
-  const seededRef = isInsideRender
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    ? React.useRef(false)
-    : { current: false };
+  const [cleared, setCleared] = React.useState(false);
+  const seededRef = React.useRef(false);
 
   let customObj: Record<string, any> = {};
   try { customObj = JSON.parse(customParameters || '{}'); } catch {}
@@ -69,15 +61,12 @@ export function CivitaiAllowMatureControl({
     ? '未填写，不发送（Schema 未声明默认）'
     : `会发送 ${String(currentVal)}`;
 
-  if (isInsideRender) {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    React.useEffect(() => {
-      if (rawUnset && !seededRef.current) {
-        seededRef.current = true;
-        onChangeCustom(JSON.stringify({ ...customObj, allowMatureContent: true }, null, 2));
-      }
-    }, [rawUnset]);
-  }
+  React.useEffect(() => {
+    if (rawUnset && !seededRef.current) {
+      seededRef.current = true;
+      onChangeCustom(JSON.stringify({ ...customObj, allowMatureContent: true }, null, 2));
+    }
+  }, [rawUnset]);
 
   return (
     <div className="space-y-1 pt-1" data-testid="civitai-allow-mature-control">

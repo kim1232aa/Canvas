@@ -167,6 +167,139 @@ export function schemaLoraDescriptions(inputSchema: any, doc?: any): Array<{ key
   return out;
 }
 
+function SchemaNsfwSeedEffect({
+  nsfwKeySig,
+  inputSchema,
+  value,
+  onChange,
+}: {
+  nsfwKeySig: string;
+  inputSchema: any;
+  value?: string;
+  onChange: (value: string) => void;
+}) {
+  const seededSchemaRef = React.useRef<string>('');
+  React.useEffect(() => {
+    if (!nsfwKeySig || seededSchemaRef.current === nsfwKeySig) return;
+    seededSchemaRef.current = nsfwKeySig;
+    const next = applyNsfwDefaultsToCustomParameters(value, inputSchema?.properties);
+    if (next !== (value ?? '{}')) {
+      onChange(next);
+    }
+  }, [nsfwKeySig, inputSchema, value, onChange]);
+  return null;
+}
+
+function NsfwChoiceFieldRow({
+  field: f,
+  body,
+  declaredKeys,
+  canvasLoras,
+  writeField,
+}: {
+  field: ChoiceField;
+  body: Record<string, any> | null;
+  declaredKeys: string[];
+  canvasLoras?: Array<{ name?: string; strength?: number }> | null;
+  writeField: (key: string, next: unknown, cleared: boolean) => void;
+}) {
+  const [cleared, setCleared] = React.useState(false);
+  const rawCurrent = body?.[f.key];
+  const current = rawCurrent !== undefined
+    ? rawCurrent
+    : (f.nsfwPolicy && !cleared ? f.nsfwPolicy.permissiveValue : undefined);
+  const isObj = current && typeof current === 'object' && !Array.isArray(current);
+  const mode = current === undefined ? '' : isObj ? '__custom__' : String(current);
+  const unfilledLabel = schemaFieldBadge(undefined, f.numberSpec?.default ?? f.defaultValue, f.nsfwPolicy).text;
+  const fieldMeta = formatSchemaFieldLabel(f.key);
+  const updateVal = (next: unknown) => {
+    const nextCleared = next === undefined;
+    setCleared(nextCleared);
+    writeField(f.key, next, nextCleared);
+  };
+  return (
+    <div className="space-y-1" data-testid={`schema-choice-${f.key}`}>
+      <label className="flex flex-wrap items-center justify-between gap-2">
+        <span className="min-w-0 [overflow-wrap:anywhere]" title={f.description}>
+          {fieldMeta.label !== f.key && (
+            <span className="font-semibold text-white mr-1.5">{fieldMeta.label}</span>
+          )}
+          <span className="font-mono text-slate-300">({f.key})</span>
+          {(f.title || f.description) && <span className="ml-1.5 text-slate-400 line-clamp-2" data-testid={`schema-field-doc-${f.key}`} title={[f.title, f.description].filter(Boolean).join(' · ')}>{f.title ? f.title : ''}{f.title && f.description && f.description !== f.title ? ' · ' : ''}{f.description && f.description !== f.title ? f.description : ''}</span>}
+        </span>
+        {(() => {
+          const fromLora = current === undefined ? canvasLoraFieldValue(f.key, declaredKeys, canvasLoras) : undefined;
+          if (fromLora) return <span data-testid={`schema-badge-${f.key}`} className="text-[10px] px-1.5 py-0.5 rounded border border-emerald-500/50 text-emerald-300 [overflow-wrap:anywhere]">{`会发送 ${fromLora}（来自 LoRA 节点）`}</span>;
+          if (fromLora === null) return <span data-testid={`schema-badge-${f.key}`} className="text-[10px] px-1.5 py-0.5 rounded border border-slate-600 text-slate-400">取自画布 LoRA 节点（见参数面板）</span>;
+          const b = schemaFieldBadge(current, f.numberSpec?.default ?? f.defaultValue, f.nsfwPolicy);
+          const badgeStyle = b.kind === 'send'
+            ? 'border-emerald-500/50 text-emerald-300'
+            : 'border-slate-600 text-slate-400';
+          return <span data-testid={`schema-badge-${f.key}`} className={`text-[10px] px-1.5 py-0.5 rounded border ${badgeStyle}`}>{b.text}</span>;
+        })()}
+      </label>
+      {f.booleanSpec ? (
+        <div className="space-y-1">
+          <select
+            aria-label={f.key}
+            disabled={!body}
+            value={current === undefined ? '' : String(current)}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v === '') updateVal(undefined);
+              else updateVal(v === 'true');
+            }}
+            className="w-full rounded border border-pink-500/50 bg-[#16121a] px-2 py-1 font-mono text-xs text-pink-200"
+          >
+            <option value="" title={unfilledLabel}>（不发送）</option>
+            <option value="true">true</option>
+            <option value="false">false</option>
+          </select>
+          {current !== f.nsfwPolicy?.permissiveValue && (
+            <div className="flex items-center justify-end text-[11px] px-2 py-1">
+              <button
+                type="button"
+                onClick={() => updateVal(f.nsfwPolicy?.permissiveValue)}
+                className="text-[10px] text-cyan-300 hover:text-cyan-200 underline font-semibold cursor-pointer shrink-0"
+              >
+                填入 {String(f.nsfwPolicy?.permissiveValue)}
+              </button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
+          <select
+            aria-label={f.key}
+            disabled={!body}
+            value={mode}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v === '') updateVal(undefined);
+              else updateVal(v);
+            }}
+            className="w-full rounded border border-slate-600 bg-black/30 px-2 py-1"
+          >
+            <option value="" title={unfilledLabel}>（不发送）</option>
+            {f.enumValues.map((v) => <option key={v} value={v}>{v}</option>)}
+          </select>
+          {current !== f.nsfwPolicy?.permissiveValue && (
+            <div className="flex items-center justify-end text-[11px] px-2 py-1 mt-1">
+              <button
+                type="button"
+                onClick={() => updateVal(f.nsfwPolicy?.permissiveValue)}
+                className="text-[10px] text-cyan-300 hover:text-cyan-200 underline font-semibold cursor-pointer shrink-0"
+              >
+                填入 {String(f.nsfwPolicy?.permissiveValue)}
+              </button>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 export function SchemaChoiceControls({
   inputSchema,
   sourceUrl,
@@ -191,61 +324,48 @@ export function SchemaChoiceControls({
   const loraDescriptions = schemaLoraDescriptions(inputSchema, openapi);
   const declaredKeys = Object.keys(inputSchema?.properties || {});
   const nsfwKeySig = fields.filter((f) => f.isNsfw).map((f) => f.key).sort().join(',');
-
-  const internals = (React as any).__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE || (React as any).__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED;
-  const isInsideRender = Boolean(internals?.H || internals?.ReactCurrentDispatcher?.current);
-  const [clearedKeys, setClearedKeys] = isInsideRender
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    ? React.useState<Record<string, boolean>>({})
-    : [{}, () => {}] as const;
-  const seededSchemaRef = isInsideRender
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    ? React.useRef<string>('')
-    : { current: '' };
-
-  if (isInsideRender) {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    React.useEffect(() => {
-      if (!nsfwKeySig || seededSchemaRef.current === nsfwKeySig) return;
-      seededSchemaRef.current = nsfwKeySig;
-      const next = applyNsfwDefaultsToCustomParameters(value, inputSchema?.properties);
-      if (next !== (value ?? '{}')) {
-        onChange(next);
-      }
-    }, [nsfwKeySig, inputSchema, value, onChange]);
-  }
+  const clearedKeys: Record<string, boolean> = {};
 
   if (!fields.length && !loraDescriptions.length) return null;
   const body = parse(value);
-  const write = (key: string, next: unknown) => {
+  const writeField = (key: string, next: unknown, isCleared = false) => {
     const b = parse(value);
     if (!b) return;
+    if (isCleared) {
+      clearedKeys[key] = true;
+    } else {
+      delete clearedKeys[key];
+    }
     for (const f of fields) {
       if (f.isNsfw && f.nsfwPolicy && b[f.key] === undefined && !clearedKeys[f.key] && f.key !== key) {
         b[f.key] = f.nsfwPolicy.permissiveValue;
       }
     }
     if (next === undefined) {
-      setClearedKeys((prev) => ({ ...prev, [key]: true }));
       delete b[key];
     } else {
-      setClearedKeys((prev) => {
-        if (!prev[key]) return prev;
-        const copy = { ...prev };
-        delete copy[key];
-        return copy;
-      });
       b[key] = next;
     }
     onChange(JSON.stringify(b, null, 2));
   };
+  const write = (key: string, next: unknown) => writeField(key, next, next === undefined);
   return (
     <div className="rounded-xl border border-slate-700 bg-[#111620] p-3 text-xs text-slate-200 space-y-2" data-testid="schema-choice-controls" onPointerDown={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+      {nsfwKeySig ? <SchemaNsfwSeedEffect nsfwKeySig={nsfwKeySig} inputSchema={inputSchema} value={value} onChange={onChange} /> : null}
       {fields.map((f) => {
-        const rawCurrent = body?.[f.key];
-        const current = rawCurrent !== undefined
-          ? rawCurrent
-          : (f.isNsfw && f.nsfwPolicy && !clearedKeys[f.key] ? f.nsfwPolicy.permissiveValue : undefined);
+        if (f.isNsfw) {
+          return (
+            <NsfwChoiceFieldRow
+              key={f.key}
+              field={f}
+              body={body}
+              declaredKeys={declaredKeys}
+              canvasLoras={canvasLoras}
+              writeField={writeField}
+            />
+          );
+        }
+        const current = body?.[f.key];
         const isObj = current && typeof current === 'object' && !Array.isArray(current);
         const mode = current === undefined ? '' : isObj ? '__custom__' : String(current);
         const unfilledLabel = schemaFieldBadge(undefined, f.numberSpec?.default ?? f.defaultValue, f.nsfwPolicy).text;
