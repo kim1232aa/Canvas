@@ -106,13 +106,15 @@ describe('LoRA submission transparency', () => {
       expect(data.actualRequest.mapping.find((m: any) => m.from === 'loras').unmappedLoras).toEqual([expect.objectContaining({ item: lora, reason: expect.any(String) })]);
     });
   });
-  it.each(['loras', 'lora_weights'])('preserves mixed mapped/unmapped order in the declared %s array', async (target) => {
+  it.each(['loras', 'lora_weights', 'lora_list', 'image_loras', 'model_id'])('preserves mixed mapped/unmapped order in the declared %s array', async (target) => {
     const loras = [lora, { path: 'https://example.invalid/native.safetensors', strength: 0.4 }];
     await withFixture(async (_url, init) => init?.method === 'POST' ? json({ data: { id: 'task' } }) : json({ data: [{ model_id: 'fixture/model', api_schema: { api_schemas: [{ type: 'model_run', method: 'POST', api_path: '/api/v3/fixture/model', server: 'https://api.wavespeed.ai', request_schema: { properties: { [target]: { type: 'array', items: { type: 'object', properties: { path: { type: 'string' }, scale: { type: 'number' } } } } } } }] } }] }), async (baseUrl, calls) => {
       const response = await fetch(`${baseUrl}/api/schema-provider/wavespeed/submit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: 'fixture/model', prompt: 'cinematic mountain landscape', loras }) });
       expect(response.status).toBe(200);
       const sent = JSON.parse(String(calls.find(c => c.init?.method === 'POST')?.init?.body));
       expect(sent[target]).toEqual([{ path: lora.name, scale: 0.7 }, { path: 'https://example.invalid/native.safetensors', scale: 0.4 }]);
+      const data = await response.json() as any;
+      expect(data.actualRequest.mapping.find((m: any) => m.from === 'loras')).toMatchObject({ to: target, value: sent[target], finalValue: sent[target] });
     });
   });
   it('returns local 400 with every unmapped item when the schema has no LoRA field', async () => {
