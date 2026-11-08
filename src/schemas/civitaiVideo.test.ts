@@ -105,7 +105,29 @@ describe('Civitai video request mapping from selected official schema', () => {
     });
     expect(result.schemaStatus).toBe('official-openapi');
     expect(result.schemaFields).toContain('diffusionModel');
-    expect(() => buildCivitaiVideoInput({ ...body, negative_prompt: 'blur' }, officialVideoSchema)).toThrow(/未声明/);
+    expect(result.unmappedFields).toEqual([]);
+    const passthrough = buildCivitaiVideoInput({ ...body, negative_prompt: 'blur', sampler_name: 'euler' }, officialVideoSchema);
+    expect(passthrough.payload).toMatchObject({
+      engine: 'wan',
+      version: 'v2.1',
+      provider: 'civitai',
+      negative_prompt: 'blur',
+      sampler_name: 'euler',
+    });
+    expect(passthrough.unmappedFields).toEqual([
+      expect.objectContaining({
+        field: 'negative_prompt',
+        value: 'blur',
+        passthroughAs: 'negative_prompt',
+        reason: expect.stringContaining('未声明字段已原样透传'),
+      }),
+      expect.objectContaining({
+        field: 'sampler_name',
+        value: 'euler',
+        passthroughAs: 'sampler_name',
+        reason: expect.stringContaining('未声明字段已原样透传'),
+      }),
+    ]);
     expect(() => buildCivitaiVideoInput({ ...body, version: 'v2.7' }, officialVideoSchema)).toThrow(/未列出|不含/);
   });
 
@@ -124,9 +146,31 @@ describe('Civitai video request mapping from selected official schema', () => {
     expect(result.payload).not.toHaveProperty('sourceImage');
   });
 
-  it('accepts engine branches added to the live discriminator without a code allowlist', () => {
-    const result = buildCivitaiVideoInput({ engine: 'ltx2.3', operation: 'createVideo', prompt: 'new branch', steps: 9, fps: 30 }, officialVideoSchema);
-    expect(result.payload).toMatchObject({ engine: 'ltx2.3', operation: 'createVideo', prompt: 'new branch', steps: 9, fps: 30 });
+  it('accepts engine branches added to the live discriminator without a code allowlist, and passes through undeclared model/image_url/loras/clipSkip without local throw', () => {
+    const result = buildCivitaiVideoInput({
+      engine: 'ltx2.3',
+      operation: 'createVideo',
+      prompt: 'new branch',
+      steps: 9,
+      fps: 30,
+      model: 'custom-ltx23-model',
+      image_url: 'https://example.test/frame.png',
+      loras: [{ air: 'urn:air:ltx23:lora:civitai:1@2', strength: 0.8 }],
+      clipSkip: 2,
+    }, officialVideoSchema);
+    expect(result.payload).toMatchObject({
+      engine: 'ltx2.3',
+      operation: 'createVideo',
+      prompt: 'new branch',
+      steps: 9,
+      fps: 30,
+      model: 'custom-ltx23-model',
+      image_url: 'https://example.test/frame.png',
+      loras: [{ air: 'urn:air:ltx23:lora:civitai:1@2', strength: 0.8 }],
+      clipSkip: 2,
+    });
+    expect(result.unmappedFields.map((f) => f.field)).toEqual(['model', 'clipSkip', 'image_url', 'loras']);
+    expect(result.customParametersUnvalidated).toBe(true);
   });
 
   it('rejects an engine absent from the supplied official schema and does not alias flux3', () => {

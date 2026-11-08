@@ -59,7 +59,7 @@ export class CivitaiDriver extends BaseEngineDriver {
     if (params.batchSize != null && params.batchSize > 0) payload.quantity = params.batchSize;
     else if (params.extraParams?.quantity != null) payload.quantity = params.extraParams.quantity;
 
-    // clipSkip: only mapped for official ecosystems/engines that accept it (recipes/sd1.md vs sdxl.md)
+    // clipSkip: normalized and forwarded to server; server maps or passes through per live schema
     const snapshotClipSkip = (() => {
       const nodes = (params.workflowSnapshot as any)?.nodes;
       if (!Array.isArray(nodes)) return undefined;
@@ -70,31 +70,8 @@ export class CivitaiDriver extends BaseEngineDriver {
       return undefined;
     })();
     const rawClip = (params as any).clip_skip ?? (params as any).clipSkip ?? params.extraParams?.clip_skip ?? params.extraParams?.clipSkip ?? snapshotClipSkip;
-    if (rawClip !== undefined && rawClip !== null && Number.isFinite(Number(rawClip))) {
-      const extractEcosystemFromAir = (air: string | undefined): string => {
-        if (!air || typeof air !== 'string') return '';
-        const m = air.replace(/^(?:urn:)?air:/, '').split(':');
-        return (m[0] || '').toLowerCase();
-      };
-      const eco = String(
-        params.extraParams?.ecosystem ||
-        extractEcosystemFromAir(params.model) ||
-        (() => {
-          const nodes = (params.workflowSnapshot as any)?.nodes;
-          if (!Array.isArray(nodes)) return '';
-          for (const n of nodes) {
-            const ckpt = n?.values?.ckpt_name || n?.values?.model;
-            const e = extractEcosystemFromAir(ckpt);
-            if (e) return e;
-          }
-          return '';
-        })() ||
-        ''
-      ).toLowerCase();
-      const isSd1 = eco === 'sd1' || eco === 'sd15';
-      if (isSd1) {
-        payload.clipSkip = Math.trunc(Number(rawClip));
-      }
+    if (rawClip !== undefined && rawClip !== null && rawClip !== '' && Number.isFinite(Number(rawClip))) {
+      payload.clipSkip = Math.trunc(Number(rawClip));
     }
     if (isVideo) {
       for (const field of ['engine','version','provider','operation']) if (params.extraParams?.[field] !== undefined) payload[field]=params.extraParams[field];

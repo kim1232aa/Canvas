@@ -89,6 +89,13 @@ function provided(value: unknown): boolean {
   return value !== undefined && value !== null && value !== '';
 }
 
+export interface CivitaiVideoUnmappedField {
+  field: string;
+  value: unknown;
+  passthroughAs: string;
+  reason: string;
+}
+
 function assignCanvasField(
   input: JsonObject,
   properties: Record<string, any>,
@@ -96,27 +103,54 @@ function assignCanvasField(
   source: string,
   candidates: string[],
   value: unknown,
+  unmappedFields: CivitaiVideoUnmappedField[],
 ): void {
   if (!provided(value)) return;
   const wire = candidates.find((candidate) => Object.hasOwn(properties, candidate));
   if (!wire) {
-    if (candidates.some((candidate) => Object.hasOwn(custom, candidate))) return;
-    throw new Error(`当前所选 Civitai 视频 Schema 未声明 ${source} 对应字段；请在 custom_parameters 中显式提供上游字段`);
+    if (candidates.some((candidate) => Object.hasOwn(custom, candidate)) || Object.hasOwn(custom, source)) return;
+    input[source] = value;
+    unmappedFields.push({
+      field: source,
+      value,
+      passthroughAs: source,
+      reason: `未声明字段已原样透传：当前所选 Civitai 视频 Schema 未声明 ${source}（候选 ${candidates.join('/')}），已按 input.${source} 原样透传`,
+    });
+    return;
   }
   input[wire] = value;
 }
 
-function mapModel(input: JsonObject, properties: Record<string, any>, custom: JsonObject, body: Record<string, any>): void {
+function mapModel(
+  input: JsonObject,
+  properties: Record<string, any>,
+  custom: JsonObject,
+  body: Record<string, any>,
+  unmappedFields: CivitaiVideoUnmappedField[],
+): void {
   if (!provided(body.model)) return;
   const wire = ['diffusionModel', 'model'].find((candidate) => Object.hasOwn(properties, candidate));
   if (!wire) {
     if (['diffusionModel', 'model'].some((candidate) => Object.hasOwn(custom, candidate))) return;
-    throw new Error('当前所选 Civitai 视频 Schema 未声明 model/diffusionModel；请在 custom_parameters 中显式提供上游字段');
+    input.model = body.model;
+    unmappedFields.push({
+      field: 'model',
+      value: body.model,
+      passthroughAs: 'model',
+      reason: '未声明字段已原样透传：当前所选 Civitai 视频 Schema 未声明 model/diffusionModel，已按 input.model 原样透传',
+    });
+    return;
   }
   input[wire] = body.model;
 }
 
-function mapImage(input: JsonObject, properties: Record<string, any>, custom: JsonObject, imageUrl: unknown): void {
+function mapImage(
+  input: JsonObject,
+  properties: Record<string, any>,
+  custom: JsonObject,
+  imageUrl: unknown,
+  unmappedFields: CivitaiVideoUnmappedField[],
+): void {
   if (!provided(imageUrl)) return;
   if (Object.hasOwn(properties, 'sourceImage')) {
     input.sourceImage = imageUrl;
@@ -126,24 +160,47 @@ function mapImage(input: JsonObject, properties: Record<string, any>, custom: Js
     input.images = [imageUrl];
     return;
   }
-  if (['sourceImage', 'images'].some((candidate) => Object.hasOwn(custom, candidate))) return;
-  throw new Error('当前所选 Civitai 视频 Schema 未声明 sourceImage/images；请在 custom_parameters 中显式提供上游字段');
+  if (['sourceImage', 'images', 'image_url'].some((candidate) => Object.hasOwn(custom, candidate))) return;
+  input.image_url = imageUrl;
+  unmappedFields.push({
+    field: 'image_url',
+    value: imageUrl,
+    passthroughAs: 'image_url',
+    reason: '未声明字段已原样透传：当前所选 Civitai 视频 Schema 未声明 sourceImage/images，已按 input.image_url 原样透传',
+  });
 }
 
-function mapLoras(input: JsonObject, properties: Record<string, any>, custom: JsonObject, loras: unknown, document: any): void {
+function mapLoras(
+  input: JsonObject,
+  properties: Record<string, any>,
+  custom: JsonObject,
+  loras: unknown,
+  document: any,
+  unmappedFields: CivitaiVideoUnmappedField[],
+): void {
   if (!Array.isArray(loras) || loras.length === 0) return;
   const schema = properties.loras;
   if (!schema) {
     if (Object.hasOwn(custom, 'loras')) return;
-    throw new Error('当前所选 Civitai 视频 Schema 未声明 LoRA；请在 custom_parameters 中显式提供上游字段');
+    input.loras = loras;
+    unmappedFields.push({
+      field: 'loras',
+      value: loras,
+      passthroughAs: 'loras',
+      reason: '未声明字段已原样透传：当前所选 Civitai 视频 Schema 未声明 loras，已按 input.loras 原样透传',
+    });
+    return;
   }
   const normalized = loras.map((entry: any) => {
-    const air = entry?.air || entry?.name;
+    const air = entry?.air || entry?.name || entry?.civitaiId;
     const strength = entry?.strength ?? entry?.modelStrength;
-    if (typeof air !== 'string' || !air.trim() || typeof strength !== 'number' || !Number.isFinite(strength)) {
-      throw new Error('视频 LoRA 需要明确的 AIR 与数值 strength');
+    if (typeof air === 'string' && air.trim() && typeof strength === 'number' && Number.isFinite(strength)) {
+      return { air, strength };
     }
-    return { air, strength };
+    if (typeof air === 'string' && air.trim()) {
+      return { air };
+    }
+    return entry;
   });
   const itemSchema = schema.items?.$ref
     ? schemaAt(document, schema.items.$ref)
@@ -153,11 +210,17 @@ function mapLoras(input: JsonObject, properties: Record<string, any>, custom: Js
     return;
   }
   if (schema.type === 'object' && schema.additionalProperties?.type === 'number') {
-    input.loras = Object.fromEntries(normalized.map(({ air, strength }) => [air, strength]));
+    input.loras = Object.fromEntries(normalized.map((item: any) => [item.air, typeof item.strength === 'number' ? item.strength : null]));
     return;
   }
   if (Object.hasOwn(custom, 'loras')) return;
-  throw new Error('当前 Civitai 视频 Schema 的 LoRA 形状无法确认；请在 custom_parameters 中显式提供原始 loras');
+  input.loras = loras;
+  unmappedFields.push({
+    field: 'loras',
+    value: loras,
+    passthroughAs: 'loras',
+    reason: '未声明字段已原样透传：当前所选 Civitai 视频 Schema 的 loras 形状未知，已按 input.loras 原样透传',
+  });
 }
 
 export interface CivitaiVideoInputResult {
@@ -167,6 +230,7 @@ export interface CivitaiVideoInputResult {
   schemaFields: string[];
   schemaSelected: string[];
   overrides: unknown[];
+  unmappedFields: CivitaiVideoUnmappedField[];
 }
 
 export function buildCivitaiVideoInput(body: Record<string, any>, officialOpenApi: unknown): CivitaiVideoInputResult {
@@ -175,28 +239,33 @@ export function buildCivitaiVideoInput(body: Record<string, any>, officialOpenAp
   const properties = selected.properties;
   const customFields = parseCustomObject(body.custom_parameters) ?? {};
   const input: JsonObject = {};
+  const unmappedFields: CivitaiVideoUnmappedField[] = [];
 
   // Preserve the existing Wan v2.1 mapping through declarations in that exact official variant.
   for (const selector of ['engine', 'version', 'provider', 'operation']) {
     if (provided(body[selector]) && Object.hasOwn(properties, selector)) input[selector] = body[selector];
   }
   if (provided(body.prompt)) input.prompt = body.prompt;
-  else if (!Object.hasOwn(customFields, 'prompt')) throw new Error('prompt 是 Civitai VideoGenInput 的必填字段');
-  mapModel(input, properties, customFields, body);
-  assignCanvasField(input, properties, customFields, 'cfg', ['cfgScale'], body.cfg);
-  assignCanvasField(input, properties, customFields, 'steps', ['steps'], body.steps);
-  assignCanvasField(input, properties, customFields, 'seed', ['seed'], body.seed);
-  assignCanvasField(input, properties, customFields, 'fps', ['fps'], body.fps);
-  assignCanvasField(input, properties, customFields, 'width', ['width'], body.width);
-  assignCanvasField(input, properties, customFields, 'height', ['height'], body.height);
-  assignCanvasField(input, properties, customFields, 'videoDuration', ['duration'], body.videoDuration);
-  assignCanvasField(input, properties, customFields, 'aspectRatio', ['aspectRatio'], body.aspectRatio);
-  assignCanvasField(input, properties, customFields, 'negative_prompt', ['negativePrompt'], body.negative_prompt);
-  assignCanvasField(input, properties, customFields, 'sampler_name', ['sampler', 'samplerName'], body.sampler_name);
-  assignCanvasField(input, properties, customFields, 'scheduler', ['scheduler'], body.scheduler);
-  assignCanvasField(input, properties, customFields, 'denoise', ['denoise', 'strength'], body.denoise);
-  mapImage(input, properties, customFields, body.image_url);
-  mapLoras(input, properties, customFields, body.loras, document);
+  mapModel(input, properties, customFields, body, unmappedFields);
+  assignCanvasField(input, properties, customFields, 'cfg', ['cfgScale'], body.cfg, unmappedFields);
+  assignCanvasField(input, properties, customFields, 'steps', ['steps'], body.steps, unmappedFields);
+  assignCanvasField(input, properties, customFields, 'seed', ['seed'], body.seed, unmappedFields);
+  assignCanvasField(input, properties, customFields, 'fps', ['fps'], body.fps, unmappedFields);
+  assignCanvasField(input, properties, customFields, 'width', ['width'], body.width, unmappedFields);
+  assignCanvasField(input, properties, customFields, 'height', ['height'], body.height, unmappedFields);
+  assignCanvasField(input, properties, customFields, 'videoDuration', ['duration'], body.videoDuration, unmappedFields);
+  assignCanvasField(input, properties, customFields, 'aspectRatio', ['aspectRatio'], body.aspectRatio, unmappedFields);
+  assignCanvasField(input, properties, customFields, 'negative_prompt', ['negativePrompt'], body.negative_prompt, unmappedFields);
+  assignCanvasField(input, properties, customFields, 'sampler_name', ['sampler', 'samplerName'], body.sampler_name, unmappedFields);
+  assignCanvasField(input, properties, customFields, 'scheduler', ['scheduler'], body.scheduler, unmappedFields);
+  assignCanvasField(input, properties, customFields, 'denoise', ['denoise', 'strength'], body.denoise, unmappedFields);
+  if (provided(body.clipSkip)) {
+    assignCanvasField(input, properties, customFields, 'clipSkip', ['clipSkip'], body.clipSkip, unmappedFields);
+  } else if (provided(body.clip_skip)) {
+    assignCanvasField(input, properties, customFields, 'clip_skip', ['clipSkip'], body.clip_skip, unmappedFields);
+  }
+  mapImage(input, properties, customFields, body.image_url, unmappedFields);
+  mapLoras(input, properties, customFields, body.loras, document, unmappedFields);
 
   // allowMatureContent is a workflow-level JSON body field (with steps), never leaked into steps[].input
   let videoCustomObj = parseCustomObject(body.custom_parameters);
@@ -206,19 +275,18 @@ export function buildCivitaiVideoInput(body: Record<string, any>, officialOpenAp
   }
   const custom = applyCustomParameters(input, videoCustomObj);
 
-  for (const required of selected.required) {
-    if (!provided(custom.payload[required])) throw new Error(`当前 Civitai 视频 Schema 要求 ${required}；请显式提供该字段`);
-  }
-
   return {
     payload: custom.payload,
     schemaStatus: custom.overrides.some((override) => ['engine', 'version', 'provider', 'operation'].includes(override.field))
       ? 'custom-selector-override'
       : 'official-openapi',
-    customParametersUnvalidated: Object.keys(customFields).some((field) => field !== '_canvas' && !Object.hasOwn(properties, field) && selected.additionalProperties === false),
+    customParametersUnvalidated:
+      unmappedFields.length > 0 ||
+      Object.keys(customFields).some((field) => field !== '_canvas' && !Object.hasOwn(properties, field) && selected.additionalProperties === false),
     schemaFields: Object.keys(properties),
     schemaSelected: [...new Set(selected.selected)],
     overrides: custom.overrides,
+    unmappedFields,
   };
 }
 

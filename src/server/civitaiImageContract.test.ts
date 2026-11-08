@@ -206,21 +206,31 @@ describe('Civitai image request contract', () => {
     const input = await buildCivitaiImageInput({ model: 'urn:air:flux1:checkpoint:civitai:1@2', engine: 'comfy', ecosystem: 'flux1', loras: [{ civitaiId: lora, strength: 0.7 }] }, api({}), oa());
     expect(input).toMatchObject({ ecosystem: 'flux1', loras: { [lora]: 0.7 } });
   });
-  it('maps clipSkip to outbound body on SD1.5 (sdcpp and comfy) but omits it on SDXL and FLUX', async () => {
+  it('maps clipSkip from live schema props without hardcoded ecosystem/engine allowlist, and passes through + records unmappedFields when live schema omits clipSkip', async () => {
     const sd1 = 'urn:air:sd1:checkpoint:civitai:4384@128713';
-    const sd1InputSdcpp = await buildCivitaiImageInput({ model: sd1, engine: 'sdcpp', ecosystem: 'sd1', prompt: 'p', clipSkip: 2 }, api({}), oa());
-    expect(sd1InputSdcpp).toMatchObject({ engine: 'sdcpp', ecosystem: 'sd1', clipSkip: 2 });
+    const sd1ReqSdcpp = await buildCivitaiImageRequest({ model: sd1, engine: 'sdcpp', ecosystem: 'sd1', prompt: 'p', clipSkip: 2 }, api({}), oa());
+    expect(sd1ReqSdcpp.payload).toMatchObject({ engine: 'sdcpp', ecosystem: 'sd1', clipSkip: 2 });
+    expect(sd1ReqSdcpp.unmappedFields).toEqual([]);
 
-    const sd1InputComfy = await buildCivitaiImageInput({ model: sd1, engine: 'comfy', ecosystem: 'sd1', prompt: 'p', clip_skip: 2 }, api({}), oa());
-    expect(sd1InputComfy).toMatchObject({ engine: 'comfy', ecosystem: 'sd1', clipSkip: 2 });
+    const sd1ReqComfy = await buildCivitaiImageRequest({ model: sd1, engine: 'comfy', ecosystem: 'sd1', prompt: 'p', clip_skip: 2 }, api({}), oa());
+    expect(sd1ReqComfy.payload).toMatchObject({ engine: 'comfy', ecosystem: 'sd1', clipSkip: 2 });
+    expect(sd1ReqComfy.unmappedFields).toEqual([]);
 
-    // SDXL: official recipe specifies clipSkip is not supported (would return 400); contract omits it
-    const sdxlInput = await buildCivitaiImageInput({ model: air, engine: 'sdcpp', ecosystem: 'sdxl', prompt: 'p', clipSkip: 2 }, api({}), oa());
-    expect(sdxlInput).not.toHaveProperty('clipSkip');
+    // SDXL: live imageGen OpenAPI (SdxlImageGenInput / ComfySdxlImageGenInput) declares clipSkip in properties -> mapped without ecosystem allowlist blocking
+    const sdxlReq = await buildCivitaiImageRequest({ model: air, engine: 'sdcpp', ecosystem: 'sdxl', prompt: 'p', clipSkip: 2 }, api({}), oa());
+    expect(sdxlReq.payload).toMatchObject({ engine: 'sdcpp', ecosystem: 'sdxl', clipSkip: 2 });
+    expect(sdxlReq.unmappedFields).toEqual([]);
 
-    // Flux1: no clipSkip
-    const fluxInput = await buildCivitaiImageInput({ model: 'urn:air:flux1:checkpoint:civitai:1@2', engine: 'comfy', ecosystem: 'flux1', prompt: 'p', clipSkip: 2 }, api({}), oa());
-    expect(fluxInput).not.toHaveProperty('clipSkip');
+    // Flux1: live ComfyFlux1ImageGenInput does not declare clipSkip -> passed through to payload and recorded in unmappedFields (never silently dropped)
+    const fluxReq = await buildCivitaiImageRequest({ model: 'urn:air:flux1:checkpoint:civitai:1@2', engine: 'comfy', ecosystem: 'flux1', prompt: 'p', clipSkip: 2 }, api({}), oa());
+    expect(fluxReq.payload).toMatchObject({ engine: 'comfy', ecosystem: 'flux1', clipSkip: 2 });
+    expect(fluxReq.unmappedFields).toEqual([
+      expect.objectContaining({
+        field: 'clipSkip',
+        value: 2,
+        reason: expect.stringContaining('未声明字段已原样透传'),
+      }),
+    ]);
   });
   it('live OpenAPI missing → CivitaiSchemaMissingError (no static outbound)', async () => {
     await expect(buildCivitaiImageRequest({ model: 'urn:air:flux1:checkpoint:civitai:1@2', prompt: 'x', engine: 'comfy', ecosystem: 'flux1' }, api({}))).rejects.toBeInstanceOf(CivitaiSchemaMissingError);
