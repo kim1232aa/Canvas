@@ -1,7 +1,9 @@
 import { engineNodeTypeFor } from '../constants/nodes';
 import { beginTraceOperation } from '../services/executionTrace';
-import {isExplicitLoraWeightUrl,selectionFromExplicitLoraUrl,selectionFromMetadata,verifyCivitaiSelection,type ResourceSelection} from '../utils/resourceSelection';
+import {buildCheckpointCandidates,huggingFaceBaseModelStamp,isExplicitLoraWeightUrl,selectionFromExplicitLoraUrl,selectionFromMetadata,verifyCivitaiSelection,type ResourceSelection} from '../utils/resourceSelection';
+import type { CatalogCheckpointCandidate } from '../utils/baseModelMatcher';
 import {isLoraWeightResource} from '../utils/isLoraWeightResource';
+import {isHuggingFaceLora} from '../utils/hfResource';
 import { friendlyProviderLabel } from '../utils/providerLabels';
 import React, { useState, useEffect, useRef } from 'react';
 import {
@@ -58,6 +60,8 @@ interface ModelHubModalProps {
     civitaiId?: string;
     triggerWords?: string;
     baseModel?: string;
+    baseModelSource?: string;
+    checkpointCandidates?: CatalogCheckpointCandidate[];
   }) => void;
   onQuickTestModel?: (modelId: string, modelName: string, providerHint?: string) => void;
   onOpenDedicatedLoRAHub?: () => void;
@@ -334,6 +338,8 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
   const [nsfwFilter, setNsfwFilter] = useState(true);
   const requestVersion = useRef(0);
   const morePending = useRef(false);
+  // Checkpoint rows survive category switches (loadModels clears modelsData) so a LoRA tab can still pair against them.
+  const checkpointCatalogRef = useRef<Record<string, any[]>>({});
   const [customId, setCustomId] = useState('');
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
@@ -563,6 +569,16 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
       });
       setCatalogNotices((prev) => (isLoadMore ? { ...prev, ...extractedNotices } : extractedNotices));
 
+      if (cat !== 'lora') {
+        Object.entries(validData).forEach(([key, list]) => {
+          const provKey = key.toLowerCase();
+          const cached = checkpointCatalogRef.current[provKey] || [];
+          const known = new Set(cached.map((row) => String(row?.id)));
+          const fresh = list.filter((row) => !isLoraWeightResource(row, provKey) && !known.has(String(row?.id)));
+          if (fresh.length) checkpointCatalogRef.current[provKey] = [...cached, ...fresh];
+        });
+      }
+
       if (isLoadMore) {
         setModelsData((prev) => {
           const merged = { ...prev };
@@ -599,6 +615,23 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
         setLoadingMore(false);
       }
     }
+  };
+
+  // Verified same-family checkpoints from rows already loaded in this modal (cache + current page). Never fetched or guessed here.
+  const checkpointCandidatesFor = (lora: ResourceSelection): CatalogCheckpointCandidate[] => {
+    const rows: ResourceSelection[] = [];
+    const sources = new Set([...Object.keys(checkpointCatalogRef.current), ...Object.keys(modelsData).map((key) => key.toLowerCase())]);
+    sources.forEach((provKey) => {
+      const loaded = Object.entries(modelsData).filter(([key]) => key.toLowerCase() === provKey).flatMap(([, list]) => (Array.isArray(list) ? list : []));
+      const seen = new Set<string>();
+      [...(checkpointCatalogRef.current[provKey] || []), ...loaded].forEach((item) => {
+        const rowId = String(item?.id);
+        if (seen.has(rowId) || isLoraWeightResource(item, provKey)) return;
+        seen.add(rowId);
+        try { rows.push(selectionFromMetadata(provKey, { ...item, _sourceProvider: provKey }, 'checkpoint')); } catch { /* unverified row is not a candidate */ }
+      });
+    });
+    return buildCheckpointCandidates(lora, rows);
   };
 
   const handleCategoryChange = (newCat: CategoryFilter) => {
@@ -750,7 +783,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
         const resource = await verifyCivitaiSelection(rawId, activeCategory === 'lora' ? 'lora' : 'checkpoint');
         if (version !== requestVersion.current) return;
         if (activeCategory === 'lora') {
-          if (onSelectLoRAWithBaseModel) onSelectLoRAWithBaseModel(resource);
+          if (onSelectLoRAWithBaseModel) onSelectLoRAWithBaseModel({ ...resource, checkpointCandidates: checkpointCandidatesFor(resource) });
           else if (onAddLora) onAddLora({ ...resource }); // never invent 0.8
         } else onSelectModel(resource.name, resource.name, activeProvider, resource);
         onClose();
@@ -798,25 +831,28 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
       if (activeProvider === 'tensorart') info = await fetchTensorArtModelInfo(rawId);
       if (version !== requestVersion.current) return;
       if (!info?.id) throw new Error('查询未返回模型 ID，请核对资源 ID 后重试。');
-      const verifiedType = String(info.category || info.type || info.modelType || '').toLowerCase();
+      const hfDeclaredLora = activeProvider === 'huggingface' && isHuggingFaceLora(info);
+      const verifiedType = String(info.category || info.type || info.modelType || (hfDeclaredLora ? 'lora' : '')).toLowerCase();
       if (activeCategory === 'lora' && ['huggingface', 'tensorart'].includes(activeProvider) && !['lora', 'locon', 'lycoris', 'dora'].includes(verifiedType)) {
         throw new Error('资源元数据未标明为 LoRA，不能按当前分类把底模当作 LoRA 挂载');
       }
       const isLora = ['lora', 'locon', 'lycoris', 'dora'].includes(verifiedType) || (activeCategory === 'lora' && !['huggingface', 'tensorart'].includes(activeProvider));
       if (isLora) {
         const words = info.triggerWords || info.trainedWords || [];
-        const lora = {
+        const hfStamp = activeProvider === 'huggingface' ? huggingFaceBaseModelStamp(info) : undefined;
+        const lora: ResourceSelection = {
           name: String(info.id),
           provider: activeProvider,
           civitaiId: undefined,
           triggerWords: Array.isArray(words) ? words.join(', ') : String(words),
-          baseModel: info.baseModel || undefined,
+          baseModel: hfStamp?.baseModel || info.baseModel || undefined,
+          ...(hfStamp ? { baseModelSource: hfStamp.baseModelSource } : {}),
           resourceVerified: ['huggingface', 'tensorart'].includes(activeProvider),
           resource_source: activeProvider,
           resource_kind: verifiedType,
           downloadUrl: info.downloadUrl,
         };
-        if (onSelectLoRAWithBaseModel) onSelectLoRAWithBaseModel(lora);
+        if (onSelectLoRAWithBaseModel) onSelectLoRAWithBaseModel({ ...lora, checkpointCandidates: checkpointCandidatesFor(lora) });
         else if (onAddLora) onAddLora({ ...lora }); // strength must be explicit — never invent 0.8
         else throw new Error('当前画布没有可挂载 LoRA 的入口，请先选择底模。');
       } else {
@@ -1652,7 +1688,7 @@ export const ModelHubModal: React.FC<ModelHubModalProps> = ({
                               {onSelectLoRAWithBaseModel && (
                                 <button
                                   onClick={() => {
-                                    onSelectLoRAWithBaseModel({...resource,triggerWords:resource.triggerWords || trainedWords.join(', '),baseModel:resource.baseModel || baseArch});
+                                    onSelectLoRAWithBaseModel({...resource,triggerWords:resource.triggerWords || trainedWords.join(', '),baseModel:resource.baseModel || baseArch,checkpointCandidates:checkpointCandidatesFor(resource)});
                                     onClose();
                                   }}
                                   className={`w-full py-1.5 px-2.5 rounded-xl font-bold transition-all shadow-md flex items-center justify-center gap-1.5 text-[11px] active:scale-98 ${
