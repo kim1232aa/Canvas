@@ -26,6 +26,12 @@ describe('schemaSendStatus (symmetric 会发送 / 不会发送 / 待确认)', ()
     expect(schemaSendStatus('fal', 'steps', 28, withSchema(['steps']))).toBeNull();
     expect(schemaSendStatus('krea', 'steps', 28, JSON.stringify({ _canvas: { schemaFieldsOnly: false, schemaProperties: ['steps'] } }))).toBeNull();
   });
+  it('Novita img2video: num_frames/fps declared as frames_num/frames_per_second → will_send; undeclared → null', () => {
+    const cp = withSchema(['model_name', 'image_file', 'frames_num', 'frames_per_second', 'seed', 'steps']);
+    expect(schemaSendStatus('novita', 'num_frames', 25, cp)).toBe('will_send');
+    expect(schemaSendStatus('novita', 'fps', 6, cp)).toBe('will_send');
+    expect(schemaSendStatus('novita', 'num_frames', 25, withSchema(['prompt', 'seed']))).toBeNull();
+  });
   it('Krea: filled loras with styles in Schema → will_send (LoRA 走 styles)', () => {
     const cp = withSchema(['prompt', 'steps', 'guidance_scale', 'seed', 'styles']);
     expect(schemaSendStatus('krea', 'loras', [{ id: '79tzf61yz', strength: 0.8 }], cp)).toBe('will_send');
