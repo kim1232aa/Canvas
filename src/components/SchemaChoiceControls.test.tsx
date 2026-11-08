@@ -12,7 +12,7 @@ import {
 import { findNsfwPolicy } from '../utils/nsfw';
 
 describe('SchemaChoiceControls safety fields', () => {
-  it('shows a declared safety field and keeps the schema default, not the open value', () => {
+  it('shows a declared safety field and keeps the schema default metadata on the ChoiceField', () => {
     const inputSchema = {
       properties: {
         disable_safety_checker: {
@@ -91,7 +91,7 @@ describe('SchemaChoiceControls safety fields', () => {
     expect(markup).not.toContain('默认允许成人内容');
   });
 
-  it('does not write custom_parameters on mount when the safety field is unset', async () => {
+  it('publicly pre-fills permissive default on mount when the safety field is unset, and lets the user toggle back to false or not sent', async () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
     const root = createRoot(container);
@@ -107,7 +107,17 @@ describe('SchemaChoiceControls safety fields', () => {
       );
     });
 
-    expect(handleChange).not.toHaveBeenCalled();
+    expect(handleChange).toHaveBeenCalledWith(JSON.stringify({ disable_safety_checker: true }, null, 2));
+    expect(container.textContent).toContain('会发送 true');
+    const select = container.querySelector('select[aria-label="disable_safety_checker"]') as HTMLSelectElement;
+    expect(select?.value).toBe('true');
+
+    // Toggle to '' (not sent)
+    await act(async () => {
+      select.value = '';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(select.value).toBe('');
     expect(container.textContent).toContain('未填写，不发送（Schema 默认：false）');
 
     await act(async () => { root.unmount(); });

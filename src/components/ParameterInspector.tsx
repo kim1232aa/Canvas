@@ -40,7 +40,7 @@ import { schemaSendStatus } from '../utils/schemaSendStatus';
 import { parseExplicitLoraStrength } from '../utils/loraStrength';
 import { fieldOptions, getFieldSpec, resolveSchemaModelId, type FieldKey, type Provider as SchemaProvider } from '../schemas/providerSchema';
 import { middleEllipsis } from '../utils/middleEllipsis';
-import { randomSeedFor } from '../utils/seedRange';
+import { randomSeedFor, seedRangeAdvisory } from '../utils/seedRange';
 
 export function CivitaiAllowMatureControl({
   customParameters,
@@ -49,13 +49,24 @@ export function CivitaiAllowMatureControl({
   customParameters?: string;
   onChangeCustom: (v: string) => void;
 }) {
+  const [cleared, setCleared] = React.useState(false);
+  const seededRef = React.useRef(false);
+
   let customObj: Record<string, any> = {};
   try { customObj = JSON.parse(customParameters || '{}'); } catch {}
-  const isUnset = customObj.allowMatureContent === undefined;
-  const currentVal = isUnset ? undefined : Boolean(customObj.allowMatureContent);
+  const rawUnset = customObj.allowMatureContent === undefined;
+  const isUnset = rawUnset && cleared;
+  const currentVal = isUnset ? undefined : (rawUnset ? true : Boolean(customObj.allowMatureContent));
   const badge = isUnset
     ? '未填写，不发送（Schema 未声明默认）'
     : `会发送 ${String(currentVal)}`;
+
+  React.useEffect(() => {
+    if (rawUnset && !seededRef.current) {
+      seededRef.current = true;
+      onChangeCustom(JSON.stringify({ ...customObj, allowMatureContent: true }, null, 2));
+    }
+  }, [rawUnset]);
 
   return (
     <div className="space-y-1 pt-1" data-testid="civitai-allow-mature-control">
@@ -70,8 +81,13 @@ export function CivitaiAllowMatureControl({
         value={isUnset ? '' : String(currentVal)}
         onChange={(e) => {
           const nextCustom = { ...customObj };
-          if (e.target.value === '') delete nextCustom.allowMatureContent;
-          else nextCustom.allowMatureContent = e.target.value === 'true';
+          if (e.target.value === '') {
+            setCleared(true);
+            delete nextCustom.allowMatureContent;
+          } else {
+            setCleared(false);
+            nextCustom.allowMatureContent = e.target.value === 'true';
+          }
           onChangeCustom(JSON.stringify(nextCustom, null, 2));
         }}
         className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2 text-slate-200 text-xs font-mono"
@@ -85,6 +101,7 @@ export function CivitaiAllowMatureControl({
           <button
             type="button"
             onClick={() => {
+              setCleared(false);
               const nextCustom = { ...customObj, allowMatureContent: true };
               onChangeCustom(JSON.stringify(nextCustom, null, 2));
             }}
@@ -709,6 +726,16 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                 <span>摇号</span>
               </button>
             </div>
+            {(() => {
+              const seedHint = (params.seedControl || 'randomize') === 'randomize'
+                ? null
+                : seedRangeAdvisory(params.targetProvider, params.checkpoint, params.seed);
+              return seedHint ? (
+                <p className="text-[10px] text-amber-300/90 font-mono" data-testid="inspector-seed-advisory">
+                  {seedHint}
+                </p>
+              ) : null;
+            })()}
           </div>
 
           {/* Steps / CFG / sampler / scheduler: hide when Schema omits or static table says unsupported (no empty adjustable shells). */}

@@ -26,13 +26,34 @@ export interface AppliedNsfwDefault {
 }
 
 /**
- * Does not write safety fields into the payload.
- * A field reaches the request only when the caller already put it there
- * (the visible control writes the value the user chose).
+ * For any official NSFW/safety field declared in the live schema (`schemaProps`),
+ * if the request payload does not already have an explicit value from the user,
+ * fill the verified permissive default and return the audit record (with `docUrl`)
+ * so `mapping` can publicly disclose the default policy and official source.
  */
 export function applyNsfwDefaultsToPayload(
-  _payload: Record<string, any>,
-  _schemaProps: Record<string, any> | undefined
+  payload: Record<string, any>,
+  schemaProps: Record<string, any> | undefined
 ): AppliedNsfwDefault[] {
-  return [];
+  if (!schemaProps || typeof schemaProps !== 'object' || !payload || typeof payload !== 'object') {
+    return [];
+  }
+
+  const applied: AppliedNsfwDefault[] = [];
+  const declaredDefaults = extractDeclaredNsfwDefaults(schemaProps);
+
+  for (const [field, permissiveValue] of Object.entries(declaredDefaults)) {
+    if (payload[field] === undefined) {
+      payload[field] = permissiveValue;
+      const policy = findNsfwPolicy(field)!;
+      applied.push({
+        field,
+        value: permissiveValue,
+        docUrl: policy.docUrl,
+        description: policy.description,
+      });
+    }
+  }
+
+  return applied;
 }
