@@ -780,15 +780,38 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
           });
         }
         const durableVideoUrl = durableVideo.dataUrl;
+        const sentNanoParams = {
+          prompt: sentNanoVideo.prompt,
+          ...(sentNanoVideo.duration !== undefined ? { duration: sentNanoVideo.duration } : {}),
+          ...(sentNanoVideo.aspect_ratio !== undefined ? { aspect_ratio: sentNanoVideo.aspect_ratio } : {}),
+          ...(sentNanoVideo.seed !== undefined ? { seed: sentNanoVideo.seed } : {}),
+          ...(sentNanoVideo.negative_prompt !== undefined ? { negative_prompt: sentNanoVideo.negative_prompt } : {}),
+          ...(sentNanoVideo.frames_per_second !== undefined ? { frames_per_second: sentNanoVideo.frames_per_second } : {}),
+          ...(sentNanoVideo.num_frames !== undefined ? { num_frames: sentNanoVideo.num_frames } : {}),
+          ...(sentNanoVideo.resolution !== undefined ? { resolution: sentNanoVideo.resolution } : {}),
+          ...(sentNanoVideo.num_inference_steps !== undefined ? { num_inference_steps: sentNanoVideo.num_inference_steps } : {}),
+          ...(sentNanoVideo.cfg_scale !== undefined ? { cfg_scale: sentNanoVideo.cfg_scale } : {}),
+          ...(sentNanoVideo.shift !== undefined ? { shift: sentNanoVideo.shift } : {}),
+          ...(sentNanoVideo.imageUrl !== undefined ? { imageUrl: sentNanoVideo.imageUrl } : {}),
+          ...(sentNanoVideo.imageDataUrl !== undefined ? { imageDataUrl: '(data URL omitted)' } : {}),
+        };
+        const lorasFromCustom = nanoCustom.payload.loras || req.body.custom_parameters?.loras;
         const item = await recordHistoryItem({
           url: durableVideoUrl,
           prompt,
-          negativePrompt: nanoPayload.negative_prompt,
+          negativePrompt: sentNanoVideo.negative_prompt,
           provider: 'NanoGPT Video',
           model,
-          seed: nanoPayload.seed ?? null,
-          steps: null,
-          cfg: null,
+          seed: typeof sentNanoVideo.seed === 'number' ? sentNanoVideo.seed : null,
+          steps: typeof sentNanoVideo.num_inference_steps === 'number' ? sentNanoVideo.num_inference_steps : null,
+          cfg: typeof sentNanoVideo.cfg_scale === 'number' ? sentNanoVideo.cfg_scale : null,
+          loras: Array.isArray(lorasFromCustom) ? lorasFromCustom.map((l: any) => ({ name: String(l?.name ?? l?.path ?? l), strength: typeof l?.strength === 'number' ? l.strength : (typeof l?.weight === 'number' ? l.weight : (typeof l?.scale === 'number' ? l.scale : null)) })).filter((l: any) => l.name) : undefined,
+          requestMetadata: {
+            actualRequest: sentNanoVideo,
+            actualParameters: sentNanoParams,
+            ...(nanoCustom.customParameters ? { customParameters: nanoCustom.customParameters } : {}),
+            ...(nanoCustom.overrides?.length ? { overrides: nanoCustom.overrides } : {}),
+          },
         });
 
         return res.json({
@@ -914,14 +937,19 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
           });
         }
         const durableVideoUrl = durableVideo.dataUrl;
+        const lorasFromCustom = builtAgnes.customParameters?.loras || agnesPayload.loras;
         const item = await recordHistoryItem({
           url: durableVideoUrl,
           prompt: typeof agnesPayload.prompt === 'string' ? agnesPayload.prompt : null,
+          negativePrompt: typeof agnesPayload.negative_prompt === 'string' ? agnesPayload.negative_prompt : null,
           provider: 'Agnes AI Video (ApiHub)',
           model,
           seed: typeof agnesPayload.seed === 'number' ? agnesPayload.seed : null,
-          steps: null,
-          cfg: null,
+          steps: typeof agnesPayload.num_inference_steps === 'number' ? agnesPayload.num_inference_steps : (typeof agnesPayload.steps === 'number' ? agnesPayload.steps : null),
+          cfg: typeof agnesPayload.cfg_scale === 'number' ? agnesPayload.cfg_scale : (typeof agnesPayload.guidance_scale === 'number' ? agnesPayload.guidance_scale : (typeof agnesPayload.cfg === 'number' ? agnesPayload.cfg : null)),
+          width: typeof agnesPayload.width === 'number' ? agnesPayload.width : null,
+          height: typeof agnesPayload.height === 'number' ? agnesPayload.height : null,
+          loras: Array.isArray(lorasFromCustom) ? lorasFromCustom.map((l: any) => ({ name: String(l?.name ?? l?.path ?? l), strength: typeof l?.strength === 'number' ? l.strength : (typeof l?.weight === 'number' ? l.weight : (typeof l?.scale === 'number' ? l.scale : null)) })).filter((l: any) => l.name) : undefined,
           requestMetadata,
         });
 
@@ -1057,14 +1085,25 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
           });
         }
         const durableVideoUrl = durableVideo.dataUrl;
+        const lorasFromCustom = req.body.custom_parameters?.loras;
         const item = await recordHistoryItem({
           url: durableVideoUrl,
           prompt,
+          negativePrompt: typeof sentGrokVideo.negative_prompt === 'string' ? sentGrokVideo.negative_prompt : null,
           provider: 'Grok 兼容中转',
           model,
-          seed: null,
-          steps: null,
-          cfg: null,
+          seed: typeof sentGrokVideo.seed === 'number' ? sentGrokVideo.seed : null,
+          steps: typeof sentGrokVideo.steps === 'number' ? sentGrokVideo.steps : (typeof sentGrokVideo.num_inference_steps === 'number' ? sentGrokVideo.num_inference_steps : null),
+          cfg: typeof sentGrokVideo.cfg === 'number' ? sentGrokVideo.cfg : (typeof sentGrokVideo.cfg_scale === 'number' ? sentGrokVideo.cfg_scale : (typeof sentGrokVideo.guidance_scale === 'number' ? sentGrokVideo.guidance_scale : null)),
+          width: typeof sentGrokVideo.width === 'number' ? sentGrokVideo.width : null,
+          height: typeof sentGrokVideo.height === 'number' ? sentGrokVideo.height : null,
+          loras: Array.isArray(lorasFromCustom) ? lorasFromCustom.map((l: any) => ({ name: String(l?.name ?? l?.path ?? l), strength: typeof l?.strength === 'number' ? l.strength : (typeof l?.weight === 'number' ? l.weight : (typeof l?.scale === 'number' ? l.scale : null)) })).filter((l: any) => l.name) : undefined,
+          requestMetadata: {
+            actualRequest: sentGrokVideo,
+            actualParameters: sentGrokVideo,
+            ...(grokCustom.customParameters ? { customParameters: grokCustom.customParameters } : {}),
+            ...(grokCustom.overrides?.length ? { overrides: grokCustom.overrides } : {}),
+          },
         });
         return res.json({
           videoUrl: durableVideoUrl,
