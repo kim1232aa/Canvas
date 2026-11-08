@@ -1172,7 +1172,7 @@ describe('Mission M27: Recipe Shape, LoRA Resource Identity, and Target Schema A
         expect(resp.status).toBe(200);
 
         // Verify payload partitioned cleanly into declared fields
-        expect(submittedBody.loras).toEqual([{ path: 'https://cdn.example/general.safetensors', scale: 0.8 }]);
+        expect(submittedBody.loras).toEqual([{ path: 'https://cdn.example/general.safetensors', scale: 0.8 }, { path: 'https://cdn.example/bad.safetensors', scale: 0.5 }]);
         expect(submittedBody.high_noise_loras).toEqual([{ path: 'https://cdn.example/high.safetensors', scale: 0.9 }]);
         expect(submittedBody.low_noise_loras).toEqual([{ path: 'https://cdn.example/low.safetensors', scale: 0.7 }]);
 
