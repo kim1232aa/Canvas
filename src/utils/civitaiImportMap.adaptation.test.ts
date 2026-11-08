@@ -331,7 +331,42 @@ describe('Cross-Provider Civitai Recipe Adaptation Engine', () => {
       expect(result.fields.sampler.status).toBe('unsupported');
       expect(result.fields.cfg.targetField).toBe('guidance');
       expect(result.loras[0].status).toBe('requires_reselection');
-      expect(result.loras[0].reason).toContain('Sogni 仅支持其官方目录');
+      expect(result.loras[0].reason).toContain('Sogni personal-LoRA 导入来源');
+    });
+
+    it('distinguishes Sogni import source URL from a generation ID, and accepts only ready personal IDs or catalog IDs', () => {
+      const sourceUrl = 'https://civitai.com/api/download/models/789012';
+      const recipe: CivitaiRecipeInput = {
+        baseModel: 'SDXL 1.0',
+        loras: [{ name: 'Imported LoRA', strength: 0.8, downloadUrl: sourceUrl, baseModel: 'SDXL 1.0' }],
+      };
+      const withoutId = adaptCivitaiRecipeToProvider(recipe, 'sogni', sogniSchemaOptions);
+      expect(withoutId.loras[0].status).toBe('requires_reselection');
+      expect(withoutId.loras[0].sourceUrl).toBe(sourceUrl);
+      expect(withoutId.loras[0].sendableUrlOrId).toBeUndefined();
+      expect(withoutId.loras[0].reason).toContain('不是生成时的 LoRA ID');
+
+      const pendingPersonal = adaptCivitaiRecipeToProvider({
+        ...recipe,
+        loras: [{ ...recipe.loras![0], loraId: 'personal-12345678-1234-1234-1234-123456789abc', personalStatus: 'queued' }],
+      }, 'sogni', sogniSchemaOptions);
+      expect(pendingPersonal.loras[0].status).toBe('requires_reselection');
+      expect(pendingPersonal.loras[0].sendableUrlOrId).toBeUndefined();
+
+      const readyPersonal = adaptCivitaiRecipeToProvider({
+        ...recipe,
+        loras: [{ ...recipe.loras![0], loraId: 'personal-12345678-1234-1234-1234-123456789abc', personalStatus: 'ready', modelIds: ['sogni-model'] }],
+      }, 'sogni', { ...sogniSchemaOptions, targetModel: 'sogni-model' });
+      expect(readyPersonal.loras[0].status).toBe('compatible');
+      expect(readyPersonal.loras[0].sendableUrlOrId).toBe('personal-12345678-1234-1234-1234-123456789abc');
+      expect(readyPersonal.loras[0].sourceUrl).toBe(sourceUrl);
+
+      const catalog = adaptCivitaiRecipeToProvider({
+        ...recipe,
+        loras: [{ ...recipe.loras![0], loraId: 'krea2-detail-enhancer' }],
+      }, 'sogni', sogniSchemaOptions);
+      expect(catalog.loras[0].status).toBe('compatible');
+      expect(catalog.loras[0].sendableUrlOrId).toBe('krea2-detail-enhancer');
     });
 
     it('NanoGPT standard endpoint marks loras unverified and negativePrompt unsupported', () => {
@@ -349,6 +384,56 @@ describe('Cross-Provider Civitai Recipe Adaptation Engine', () => {
       expect(result.fields.cfg.targetField).toBe('parameters.guidance_scale');
       expect(result.fields.scheduler.targetField).toBe('parameters.scheduler');
       expect(result.loras[0].status).toBe('unverified');
+    });
+  });
+
+  describe('Runware LoRA AIR adaptation', () => {
+    const runwareSchemaOptions = {
+      targetModel: 'runware:400@1',
+      targetSchema: {
+        loras: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: { model: { type: 'string' }, weight: { type: 'number' } },
+          },
+        },
+      },
+    };
+
+    it('does not treat a direct download URL as a Runware AIR when Civitai model ID is unavailable', () => {
+      const result = adaptCivitaiRecipeToProvider({
+        baseModel: 'Flux.1 D',
+        loras: [{
+          name: 'URL-only LoRA',
+          versionId: '666222',
+          strength: 0.8,
+          baseModel: 'Flux.1 D',
+          downloadUrl: 'https://civitai.com/api/download/models/666222',
+        }],
+      }, 'runware', runwareSchemaOptions);
+
+      expect(result.loras[0].status).toBe('requires_reselection');
+      expect(result.loras[0].sendableUrlOrId).toBeUndefined();
+      expect(result.loras[0].reason).toContain('Runware');
+      expect(result.loras[0].reason).toContain('AIR');
+    });
+
+    it('maps a verified Civitai modelId@versionId to Runware AIR', () => {
+      const result = adaptCivitaiRecipeToProvider({
+        baseModel: 'Flux.1 D',
+        loras: [{
+          name: 'Verified Civitai LoRA',
+          modelId: '555111',
+          versionId: '666222',
+          strength: 0.85,
+          baseModel: 'Flux.1 D',
+          downloadUrl: 'https://civitai.com/api/download/models/666222',
+        }],
+      }, 'runware', runwareSchemaOptions);
+
+      expect(result.loras[0].status).toBe('compatible');
+      expect(result.loras[0].sendableUrlOrId).toBe('civitai:555111@666222');
     });
   });
 

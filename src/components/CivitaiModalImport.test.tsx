@@ -268,6 +268,27 @@ describe('CivitaiModal Recipe Import and Cross-Provider Adaptation UI', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  it('shows Sogni source URL as import source, not as a generation ID', () => {
+    const sourceUrl = 'https://civitai.com/api/download/models/789012';
+    const sogniAdaptation = adaptCivitaiRecipeToProvider({
+      baseModel: 'SDXL 1.0',
+      loras: [{ name: 'Source LoRA', strength: 0.8, baseModel: 'SDXL 1.0', downloadUrl: sourceUrl }],
+    }, 'sogni');
+    const tree = CivitaiModalImportPreview({
+      adaptation: sogniAdaptation,
+      selectedProvider: 'sogni',
+      tokenConsent: false,
+      onSelectProvider: vi.fn(),
+      onToggleTokenConsent: vi.fn(),
+    });
+    const textContent = JSON.stringify(elements(tree).map((e) => e.props?.children));
+
+    expect(textContent).toContain('来源 URL（Sogni 导入来源，不是生成 ID）');
+    expect(textContent).toContain(sourceUrl);
+    expect(textContent).toContain('不是生成时的 LoRA ID');
+    expect(sogniAdaptation.loras[0].sendableUrlOrId).toBeUndefined();
+  });
+
   it('P1-2: renders unresolved LoRA card with authentic upstream error text and does NOT show Civitai 未启用在线生成 badge', () => {
     const unresolvedLoRAAdaptation = adaptCivitaiRecipeToProvider(
       {
