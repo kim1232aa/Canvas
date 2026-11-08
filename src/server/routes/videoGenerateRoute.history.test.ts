@@ -6,7 +6,7 @@
  * what was actually sent, not canvas defaults or undeclared fields.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { handleVideoGenerate, isProvided, V_DEPS } from './videoGenerateRoute.ts';
+import { handleVideoGenerate, type VideoGenerateRouteDeps } from './videoGenerateRoute.ts';
 
 const logged = vi.hoisted(() => [] as any[]);
 vi.mock('../requestLog', async (orig) => ({
@@ -16,19 +16,18 @@ vi.mock('../requestLog', async (orig) => ({
   },
 }));
 
-function createMockDeps(overrides: Partial<typeof V_DEPS> = {}): { deps: typeof V_DEPS } {
+function createMockDeps(overrides: Partial<VideoGenerateRouteDeps> = {}): { deps: VideoGenerateRouteDeps } {
   const deps = {
+    isProvided: (v: any) => v !== undefined && v !== null && v !== '',
     now: () => Date.now(),
-    sleep: async (ms: number) => new Promise((r) => setTimeout(r, ms)),
-    sleepOrAbort: async (ms: number) => new Promise((r) => setTimeout(r, ms)),
+    sleep: async () => undefined,
+    sleepOrAbort: async () => undefined,
+    normalizeFalEndpoint: () => '',
+    generationContext: { getStore: () => ({ traces: [] }) },
     recordHistoryItem: vi.fn(async (item: any) => ({ ...item, id: 'hist-m125' })),
     requireDurableHistoryMediaUrl: vi.fn(async (url: string) => ({
       ok: true,
       dataUrl: url.startsWith('data:') ? url : `data:video/mp4;base64,RkFLRQ==`,
-    })),
-    persistMediaAsDataUrl: vi.fn(async () => ({
-      ok: true,
-      dataUrl: 'data:video/mp4;base64,RkFBS0U=',
     })),
     upstreamFetch: vi.fn(async () => new Response('{}', { status: 200 })),
     resolveProviderAuth: vi.fn((req: any, prov: string) => ({
@@ -42,15 +41,12 @@ function createMockDeps(overrides: Partial<typeof V_DEPS> = {}): { deps: typeof 
     })),
     forwardUnmappedFields: vi.fn(() => false),
     keyPoolManager: {
-      getKey: vi.fn((prov: string) => ({ key: `${prov}-pool-key`, source: 'pool' })),
+      getNextKey: vi.fn((prov: string) => `${prov}-pool-key`),
       recordResult: vi.fn(),
     },
-    updateVideoJobStatus: vi.fn(),
-    clearVideoJobStatus: vi.fn(),
-    canvasNodeId: vi.fn(() => 'n1'),
     ...overrides,
   };
-  return { deps };
+  return { deps: deps as VideoGenerateRouteDeps };
 }
 
 function makeMockRes() {
@@ -70,6 +66,8 @@ function makeMockRes() {
     setHeader: () => res,
     getHeader: () => undefined,
     on: () => res,
+    off: () => res,
+    once: () => res,
     headersSent: false,
     destroyed: false,
     writableEnded: false,
@@ -77,7 +75,6 @@ function makeMockRes() {
   return new Proxy(res, {
     get(target, prop) {
       if (prop === 'data') return jsonData;
-      if (prop === 'status') return status;
       return target[prop];
     },
   });
@@ -131,7 +128,6 @@ describe('VIDEOHIST125 - NanoGPT/Agnes/Grok video history records actual sent pa
     await handleVideoGenerate(deps)({
       body: { ...CANVAS, provider: 'nanogpt', model: 'ltx-video-1' },
       headers: {},
-      path: '/api/video/generate',
     } as any, res);
 
     expect(res.statusCode).toBe(200);

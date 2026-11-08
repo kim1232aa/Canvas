@@ -780,21 +780,7 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
           });
         }
         const durableVideoUrl = durableVideo.dataUrl;
-        const sentNanoParams = {
-          prompt: sentNanoVideo.prompt,
-          ...(sentNanoVideo.duration !== undefined ? { duration: sentNanoVideo.duration } : {}),
-          ...(sentNanoVideo.aspect_ratio !== undefined ? { aspect_ratio: sentNanoVideo.aspect_ratio } : {}),
-          ...(sentNanoVideo.seed !== undefined ? { seed: sentNanoVideo.seed } : {}),
-          ...(sentNanoVideo.negative_prompt !== undefined ? { negative_prompt: sentNanoVideo.negative_prompt } : {}),
-          ...(sentNanoVideo.frames_per_second !== undefined ? { frames_per_second: sentNanoVideo.frames_per_second } : {}),
-          ...(sentNanoVideo.num_frames !== undefined ? { num_frames: sentNanoVideo.num_frames } : {}),
-          ...(sentNanoVideo.resolution !== undefined ? { resolution: sentNanoVideo.resolution } : {}),
-          ...(sentNanoVideo.num_inference_steps !== undefined ? { num_inference_steps: sentNanoVideo.num_inference_steps } : {}),
-          ...(sentNanoVideo.cfg_scale !== undefined ? { cfg_scale: sentNanoVideo.cfg_scale } : {}),
-          ...(sentNanoVideo.shift !== undefined ? { shift: sentNanoVideo.shift } : {}),
-          ...(sentNanoVideo.imageUrl !== undefined ? { imageUrl: sentNanoVideo.imageUrl } : {}),
-          ...(sentNanoVideo.imageDataUrl !== undefined ? { imageDataUrl: '(data URL omitted)' } : {}),
-        };
+        const sentNanoParams = { ...sentNanoVideo };
         const lorasFromCustom = nanoCustom.payload.loras || req.body.custom_parameters?.loras;
         const item = await recordHistoryItem({
           url: durableVideoUrl,
@@ -803,8 +789,8 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
           provider: 'NanoGPT Video',
           model,
           seed: typeof sentNanoVideo.seed === 'number' ? sentNanoVideo.seed : null,
-          steps: typeof sentNanoVideo.num_inference_steps === 'number' ? sentNanoVideo.num_inference_steps : null,
-          cfg: typeof sentNanoVideo.cfg_scale === 'number' ? sentNanoVideo.cfg_scale : null,
+          steps: typeof sentNanoVideo.num_inference_steps === 'number' ? sentNanoVideo.num_inference_steps : (typeof sentNanoVideo.steps === 'number' ? sentNanoVideo.steps : null),
+          cfg: typeof sentNanoVideo.cfg_scale === 'number' ? sentNanoVideo.cfg_scale : (typeof sentNanoVideo.cfg === 'number' ? sentNanoVideo.cfg : null),
           loras: Array.isArray(lorasFromCustom) ? lorasFromCustom.map((l: any) => ({ name: String(l?.name ?? l?.path ?? l), strength: typeof l?.strength === 'number' ? l.strength : (typeof l?.weight === 'number' ? l.weight : (typeof l?.scale === 'number' ? l.scale : null)) })).filter((l: any) => l.name) : undefined,
           requestMetadata: {
             actualRequest: sentNanoVideo,
@@ -983,6 +969,8 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
       const grokPayload: Record<string, unknown> = { model, prompt };
       if (isProvided(duration)) grokPayload.duration = Number(duration);
       if (isProvided(aspect_ratio)) grokPayload.aspect_ratio = aspect_ratio;
+      if (isProvided(req.body.seed)) grokPayload.seed = Number(req.body.seed);
+      if (isProvided(req.body.negative_prompt)) grokPayload.negative_prompt = req.body.negative_prompt;
       if (isProvided(grokResolution)) grokPayload.resolution = grokResolution;
       if (image_url) grokPayload.image = { url: image_url };
       const grokCustom = applyCustomParameters(grokPayload, req.body.custom_parameters);
@@ -1085,16 +1073,16 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
           });
         }
         const durableVideoUrl = durableVideo.dataUrl;
-        const lorasFromCustom = req.body.custom_parameters?.loras;
+        const lorasFromCustom = sentGrokVideo.loras || grokCustom.customParameters?.loras || req.body.custom_parameters?.loras;
         const item = await recordHistoryItem({
           url: durableVideoUrl,
           prompt,
-          negativePrompt: typeof sentGrokVideo.negative_prompt === 'string' ? sentGrokVideo.negative_prompt : null,
+          negativePrompt: typeof sentGrokVideo.negative_prompt === 'string' ? sentGrokVideo.negative_prompt : (typeof req.body.negative_prompt === 'string' ? req.body.negative_prompt : null),
           provider: 'Grok 兼容中转',
           model,
-          seed: typeof sentGrokVideo.seed === 'number' ? sentGrokVideo.seed : null,
-          steps: typeof sentGrokVideo.steps === 'number' ? sentGrokVideo.steps : (typeof sentGrokVideo.num_inference_steps === 'number' ? sentGrokVideo.num_inference_steps : null),
-          cfg: typeof sentGrokVideo.cfg === 'number' ? sentGrokVideo.cfg : (typeof sentGrokVideo.cfg_scale === 'number' ? sentGrokVideo.cfg_scale : (typeof sentGrokVideo.guidance_scale === 'number' ? sentGrokVideo.guidance_scale : null)),
+          seed: typeof sentGrokVideo.seed === 'number' ? sentGrokVideo.seed : (typeof req.body.seed === 'number' ? req.body.seed : null),
+          steps: typeof sentGrokVideo.steps === 'number' ? sentGrokVideo.steps : (typeof sentGrokVideo.num_inference_steps === 'number' ? sentGrokVideo.num_inference_steps : (typeof req.body.custom_parameters?.steps === 'number' ? req.body.custom_parameters.steps : null)),
+          cfg: typeof sentGrokVideo.cfg === 'number' ? sentGrokVideo.cfg : (typeof sentGrokVideo.cfg_scale === 'number' ? sentGrokVideo.cfg_scale : (typeof sentGrokVideo.guidance_scale === 'number' ? sentGrokVideo.guidance_scale : (typeof req.body.custom_parameters?.cfg === 'number' ? req.body.custom_parameters.cfg : null))),
           width: typeof sentGrokVideo.width === 'number' ? sentGrokVideo.width : null,
           height: typeof sentGrokVideo.height === 'number' ? sentGrokVideo.height : null,
           loras: Array.isArray(lorasFromCustom) ? lorasFromCustom.map((l: any) => ({ name: String(l?.name ?? l?.path ?? l), strength: typeof l?.strength === 'number' ? l.strength : (typeof l?.weight === 'number' ? l.weight : (typeof l?.scale === 'number' ? l.scale : null)) })).filter((l: any) => l.name) : undefined,
