@@ -1,4 +1,4 @@
-export type ProviderId = 'civitai' | 'fal' | 'agnes' | 'sensenova' | 'huggingface' | 'modelscope' | 'modelscope_ai' | 'nanogpt' | 'gemini' | 'tensorart' | 'video' | 'openai_compat' | 'grok_compat' | 'muapi' | 'wavespeed' | 'sogni' | 'krea' | 'together' | 'aimlapi' | 'novita' | 'venice' | 'deepinfra' | 'runware' | 'modelslab' | 'replicate' | 'mage';
+export type ProviderId = 'civitai' | 'fal' | 'agnes' | 'sensenova' | 'huggingface' | 'modelscope' | 'modelscope_ai' | 'nanogpt' | 'gemini' | 'tensorart' | 'video' | 'openai_compat' | 'grok_compat' | 'muapi' | 'wavespeed' | 'sogni' | 'krea' | 'together' | 'aimlapi' | 'novita' | 'venice' | 'deepinfra' | 'runware' | 'modelslab' | 'replicate' | 'mage' | 'openworks';
 
 export interface ProviderConfig {
   id: ProviderId;
