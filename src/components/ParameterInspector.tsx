@@ -78,10 +78,11 @@ export function CivitaiAllowMatureControl({
     initializedRef.current = true;
 
     // Only seed if truly unset and not explicitly cleared, and no parse error
+    // Note: cleared is captured from render but not in deps - initialization runs once
     if (rawUnset && !cleared && !parseError) {
       onChangeCustom(JSON.stringify({ ...customObj, allowMatureContent: true }, null, 2));
     }
-  }, [rawUnset, cleared, parseError]);
+  }, [rawUnset, parseError]);
 
   return (
     <div className="space-y-1 pt-1" data-testid="civitai-allow-mature-control">
