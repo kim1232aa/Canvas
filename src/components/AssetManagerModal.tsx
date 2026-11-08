@@ -65,6 +65,29 @@ export interface MediaAsset {
   isReference?: boolean;
 }
 
+/** Result of a server delete the modal can await: `{ ok: true }` only when the server confirmed it; `{ ok: false, error }` carries the real upstream error. */
+export type AssetDeleteResult = { ok: true } | { ok: false; error: Error };
+
+/** Local-only assets: user uploads (id `upload-…`) live in the browser library and never existed in server history, so there is nothing to delete on the server. Everything else is server-backed. */
+export const LOCAL_ONLY_ASSET_ID_PREFIX = 'upload-';
+export const isLocalOnlyAsset = (asset: { id: string }): boolean => asset.id.startsWith(LOCAL_ONLY_ASSET_ID_PREFIX);
+
+/** null = the delete was confirmed; otherwise the real error. A throw, `{ ok: false }` or any non-`{ ok: true }` resolution (false, undefined, …) is NOT a confirmation. */
+const deleteFailure = async (call: () => Promise<AssetDeleteResult>, source: string): Promise<Error | null> => {
+  try {
+    const result: unknown = await call();
+    const ok = result && typeof result === 'object' ? (result as { ok?: unknown }).ok : undefined;
+    if (ok === true) return null;
+    if (ok === false) {
+      const error = (result as { error?: unknown }).error;
+      return error instanceof Error ? error : new Error(error === undefined ? `${source} 返回 ok:false 但未给出错误` : String(error));
+    }
+    return new Error(`服务器未确认删除（${source} 返回 ${String(result)}）`);
+  } catch (error) {
+    return error instanceof Error ? error : new Error(String(error));
+  }
+};
+
 interface AssetManagerModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -74,8 +97,8 @@ interface AssetManagerModalProps {
   onUseAsReference: (asset: MediaAsset) => void;
   onApplyParameters?: (asset: MediaAsset) => void;
   onPreviewImage: (url: string) => void;
-  onDeleteAsset: (id: string, url?: string) => void;
-  onDeleteBatchAssets?: (ids: string[]) => void;
+  onDeleteAsset: (id: string, url?: string) => Promise<AssetDeleteResult>;
+  onDeleteBatchAssets?: (ids: string[]) => Promise<AssetDeleteResult>;
   onRefreshHistory?: () => void;
   onClearAllHistory?: () => void;
 }
@@ -123,6 +146,7 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
   const cacheErrors = useRef<Record<string, string>>({});
   const [cacheWarnings, setCacheWarnings] = useState<Record<string, string>>({});
   const [migrationWarning, setMigrationWarning] = useState('');
+  const [deleteError, setDeleteError] = useState<{ title: string; message: string } | null>(null);
   const [retryRevision, setRetryRevision] = useState(0);
   const consumedRetry = useRef(0);
   const readCache = <T,>(key: string, fallback: T, parse: (value: string) => T): T => {
@@ -320,7 +344,7 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
         const dataUrl = evt.target?.result as string;
         uploadMedia(dataUrl).then((url) => {
         const newAsset: MediaAsset = {
-          id: `upload-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+          id: `${LOCAL_ONLY_ASSET_ID_PREFIX}${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
           url,
           type: isVideo ? 'video' : 'image',
           title: file.name,
@@ -353,78 +377,89 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
     }
   };
 
-  // Single Asset Delete Handler
-  const handleDelete = (e: React.MouseEvent, asset: MediaAsset) => {
-    e.stopPropagation();
-    if (confirm(`确定从资产库彻底删除「${asset.title || asset.model}」吗？`)) {
-      // 1. Update persistent deleted IDs blacklist
-      setDeletedIds((prev) => {
-        const next = new Set(prev);
-        next.add(asset.id);
-        if (asset.url) next.add(asset.url);
-        return next;
+  /** Blacklist (id + url, persisted in comfycanvas_deleted_assets_v2) and drop from selection/inspector. Call only for local-only assets or ids the server confirmed. */
+  const markAssetsDeleted = (assets: Array<{ id: string; url?: string }>) => {
+    const ids = new Set(assets.map((a) => a.id));
+    setDeletedIds((prev) => {
+      const next = new Set(prev);
+      assets.forEach((a) => {
+        next.add(a.id);
+        if (a.url) next.add(a.url);
       });
-
-      // 2. Remove from custom uploads if it was user uploaded
-      if (asset.id.startsWith('upload-')) {
-        setCustomUploads((prev) => prev.filter((a) => a.id !== asset.id));
-      }
-
-      // 3. Remove from multi-select
-      setSelectedAssetIds((prev) => {
-        const next = new Set(prev);
-        next.delete(asset.id);
-        return next;
-      });
-
-      // 4. Trigger backend server deletion
-      onDeleteAsset(asset.id, asset.url);
-
-      // 5. Clear inspector if this asset was selected
-      if (selectedAsset?.id === asset.id) {
-        setSelectedAsset(null);
-      }
-    }
+      return next;
+    });
+    setCustomUploads((prev) => prev.filter((a) => !ids.has(a.id)));
+    setSelectedAssetIds((prev) => {
+      const next = new Set(prev);
+      ids.forEach((id) => next.delete(id));
+      return next;
+    });
+    setSelectedAsset((prev) => (prev && ids.has(prev.id) ? null : prev));
   };
 
-  // Batch Delete Handler
-  const handleBatchDelete = () => {
-    if (selectedAssetIds.size === 0) return;
-    if (confirm(`确定彻底删除选中的 ${selectedAssetIds.size} 项资产吗？(此操作不可逆)`)) {
-      const idsToDelete = Array.from(selectedAssetIds);
-      
-      // Update persistent blacklist
-      setDeletedIds((prev) => {
-        const next = new Set(prev);
-        idsToDelete.forEach((id) => next.add(id));
-        allAssets
-          .filter((a) => selectedAssetIds.has(a.id))
-          .forEach((a) => {
-            if (a.url) next.add(a.url);
-          });
-        return next;
-      });
+  // Single Asset Delete Handler. Server-backed assets enter the blacklist only after the server confirmed; a failure keeps the asset visible and shows the real error.
+  const handleDelete = async (e: React.MouseEvent, asset: MediaAsset) => {
+    e.stopPropagation();
+    if (!confirm(`确定从资产库彻底删除「${asset.title || asset.model}」吗？`)) return;
+    setDeleteError(null);
 
-      // Remove from uploads
-      setCustomUploads((prev) => prev.filter((a) => !selectedAssetIds.has(a.id)));
-
-      // Trigger batch delete
-      if (onDeleteBatchAssets) {
-        onDeleteBatchAssets(idsToDelete);
-      } else {
-        idsToDelete.forEach((id) => {
-          const item = allAssets.find((a) => a.id === id);
-          onDeleteAsset(id, item?.url);
-        });
-      }
-
-      if (selectedAsset && selectedAssetIds.has(selectedAsset.id)) {
-        setSelectedAsset(null);
-      }
-
-      setSelectedAssetIds(new Set());
-      setIsMultiSelectMode(false);
+    if (isLocalOnlyAsset(asset)) {
+      markAssetsDeleted([asset]);
+      return;
     }
+
+    const failure = await deleteFailure(() => onDeleteAsset(asset.id, asset.url), 'onDeleteAsset');
+    if (failure) {
+      setDeleteError({ title: `资产「${asset.title || asset.model || asset.id}」删除失败，服务器未确认删除，已保留在资产库`, message: failure.message });
+      return;
+    }
+    markAssetsDeleted([asset]);
+  };
+
+  // Batch Delete Handler. Local-only ids are removed locally; server-backed ids are blacklisted only after the server confirmed them.
+  const handleBatchDelete = async () => {
+    if (selectedAssetIds.size === 0) return;
+    if (!confirm(`确定彻底删除选中的 ${selectedAssetIds.size} 项资产吗？(此操作不可逆)`)) return;
+    setDeleteError(null);
+
+    const ids = Array.from(selectedAssetIds);
+    const byId = new Map(allAssets.map((a) => [a.id, a] as const));
+    const describe = (id: string) => {
+      const asset = byId.get(id);
+      return asset?.title || asset?.model || id;
+    };
+    const entry = (id: string) => ({ id, url: byId.get(id)?.url });
+    const localIds = ids.filter((id) => isLocalOnlyAsset({ id }));
+    const serverIds = ids.filter((id) => !isLocalOnlyAsset({ id }));
+
+    const confirmedIds: string[] = [];
+    const failures: Array<{ label: string; count: number; error: Error }> = [];
+    if (serverIds.length > 0) {
+      if (onDeleteBatchAssets) {
+        const failure = await deleteFailure(() => onDeleteBatchAssets(serverIds), 'onDeleteBatchAssets');
+        if (failure) failures.push({ label: `${serverIds.length} 项`, count: serverIds.length, error: failure });
+        else confirmedIds.push(...serverIds);
+      } else {
+        for (const id of serverIds) {
+          const failure = await deleteFailure(() => onDeleteAsset(id, byId.get(id)?.url), 'onDeleteAsset');
+          if (failure) failures.push({ label: `「${describe(id)}」`, count: 1, error: failure });
+          else confirmedIds.push(id);
+        }
+      }
+    }
+
+    markAssetsDeleted([...localIds, ...confirmedIds].map(entry));
+
+    if (failures.length > 0) {
+      const failedCount = failures.reduce((sum, f) => sum + f.count, 0);
+      setDeleteError({
+        title: `批量删除失败：${failedCount} 项服务器未确认删除，已保留在资产库${confirmedIds.length + localIds.length > 0 ? `（另有 ${confirmedIds.length + localIds.length} 项已删除）` : ''}`,
+        message: failures.map((f) => `${f.label}：${f.error.message}`).join('\n'),
+      });
+      return;
+    }
+    setSelectedAssetIds(new Set());
+    setIsMultiSelectMode(false);
   };
 
   // Toggle single item selection for multi-select
@@ -551,6 +586,10 @@ export const AssetManagerModal: React.FC<AssetManagerModalProps> = ({
         {(storageWarning || migrationWarning || Object.values(cacheWarnings).some(Boolean)) && <div role="alert" className="border-b border-amber-700/50 bg-amber-950/50 px-4 py-2 text-amber-100">
           {[storageWarning, migrationWarning, ...Object.values(cacheWarnings)].filter(Boolean).join('；')}
           <button type="button" className="ml-3 underline" onClick={() => setRetryRevision(value => value + 1)}>重试迁移与保存</button>
+        </div>}
+        {deleteError && <div role="alert" data-testid="asset-delete-error" className="border-b border-rose-700/50 bg-rose-950/60 px-4 py-2 text-rose-100 whitespace-pre-wrap break-words">
+          <strong>{deleteError.title}</strong>{'\n'}{deleteError.message}
+          <button type="button" className="ml-3 underline" onClick={() => setDeleteError(null)}>关闭提示</button>
         </div>}
         {/* Drag & Drop Overlay */}
         {isDraggingOver && (

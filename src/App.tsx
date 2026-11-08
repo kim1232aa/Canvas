@@ -34,7 +34,7 @@ import { HistoryModal } from './components/HistoryModal';
 import { ComfyGuideModal } from './components/ComfyGuideModal';
 import { WorkflowPresetsModal } from './components/WorkflowPresetsModal';
 import { CanvasManagerModal, CanvasProject } from './components/CanvasManagerModal';
-import { AssetManagerModal, MediaAsset } from './components/AssetManagerModal';
+import { AssetManagerModal, MediaAsset, type AssetDeleteResult } from './components/AssetManagerModal';
 import { ImageDetailModal } from './components/ImageDetailModal';
 import { ExecutionLog } from './components/ExecutionLog';
 import { ProviderMatrixModal } from './components/ProviderMatrixModal';
@@ -2245,7 +2245,10 @@ export default function App() {
     });
   };
 
-  const handleDeleteHistoryItem = async (id: string, url?: string) => {
+  /** Hand the real failure back to the asset library: it may blacklist an asset only after `{ ok: true }`. */
+  const historyDeleteFailure = (e: unknown): AssetDeleteResult => ({ ok: false, error: e instanceof Error ? e : new Error(String(e)) });
+
+  const handleDeleteHistoryItem = async (id: string, url?: string): Promise<AssetDeleteResult> => {
     const snapshot = history;
     const hadMore = historyHasMore;
     const removed = snapshot.filter((item) => item.id === id || (!!url && (item.url === url || item.imageUrl === url)));
@@ -2263,13 +2266,14 @@ export default function App() {
     } catch (e) {
       restoreRemovedHistory(snapshot, removed, countDelta, hadMore);
       showHistoryDeleteFailure('资产删除失败', e, removed.length);
-      return;
+      return historyDeleteFailure(e);
     }
     refreshHistoryCounts();
     setToast({ type: 'success', title: '资产已删除', message: '已从服务器和资产库永久移除' });
+    return { ok: true };
   };
 
-  const handleDeleteBatchHistoryItems = async (ids: string[]) => {
+  const handleDeleteBatchHistoryItems = async (ids: string[]): Promise<AssetDeleteResult> => {
     const idSet = new Set(ids);
     const snapshot = history;
     const hadMore = historyHasMore;
@@ -2286,10 +2290,11 @@ export default function App() {
     } catch (e) {
       restoreRemovedHistory(snapshot, removed, countDelta, hadMore);
       showHistoryDeleteFailure('批量资产删除失败', e, removed.length);
-      return;
+      return historyDeleteFailure(e);
     }
     refreshHistoryCounts();
     setToast({ type: 'success', title: '批量资产已删除', message: `已成功移除 ${ids.length} 项生成资产` });
+    return { ok: true };
   };
 
   const handleClearHistory = async () => {

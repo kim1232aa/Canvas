@@ -17,6 +17,7 @@ import type { GenerationHistoryItem } from '../types/providers';
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
 const noop = () => {};
+const asyncOk = async () => ({ ok: true as const });
 
 describe('restored UI controls', () => {
   let host: HTMLDivElement;
@@ -125,7 +126,7 @@ describe('restored UI controls', () => {
     const item = { id: 'a1', url: 'https://example.test/missing.png', prompt: 'a dog', seed: 2, steps: 10, cfg: 3, provider: 'fal', model: 'm', timestamp: 2 } as GenerationHistoryItem;
     const onAdd = vi.fn();
     await act(async () => {
-      root.render(<AssetManagerModal isOpen onClose={noop} history={[item]} onAddToCanvasAsFrame={onAdd} onUseAsReference={noop} onPreviewImage={noop} onDeleteAsset={noop} />);
+      root.render(<AssetManagerModal isOpen onClose={noop} history={[item]} onAddToCanvasAsFrame={onAdd} onUseAsReference={noop} onPreviewImage={noop} onDeleteAsset={asyncOk} />);
     });
     const send = [...host.querySelectorAll('button')].find((b) => b.textContent?.includes('送入画板')) as HTMLButtonElement;
     expect(send).toBeTruthy();

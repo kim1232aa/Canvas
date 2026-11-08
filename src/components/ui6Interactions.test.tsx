@@ -193,6 +193,8 @@ describe('SchemaChoiceControls slider and single-value required enum (rev-m4 fix
 describe('Modal Dialog Accessibility & Escape handlers', () => {
   it('all modal dialogs have role="dialog", aria-modal="true", and matching heading ids', () => {
     const noop = () => {};
+    const asyncOkOne = async () => ({ ok: true as const });
+    const asyncOk = async () => ({ ok: true as const });
 
     const guide = renderToStaticMarkup(<ComfyGuideModal isOpen={true} onClose={noop} />);
     expect(guide).toMatch(/role="dialog"[^>]*aria-modal="true"[^>]*aria-labelledby="comfy-guide-title"/);
@@ -229,7 +231,7 @@ describe('Modal Dialog Accessibility & Escape handlers', () => {
         onAddToCanvasAsFrame={noop}
         onUseAsReference={noop}
         onPreviewImage={noop}
-        onDeleteAsset={noop}
+        onDeleteAsset={asyncOkOne}
       />
     );
     expect(asset).toMatch(/role="dialog"[^>]*aria-modal="true"[^>]*aria-labelledby="asset-manager-title"/);
