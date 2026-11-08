@@ -89,7 +89,7 @@ import {
   previewKeepMediaMounted,
   type PreviewSettleState,
 } from './utils/previewHang';
-import { identifyArchitectureFamily } from './utils/baseModelMatcher';
+import { identifyArchitectureFamily, getRecommendedBaseModelForLora, isVerifiedBaseModelSource, type CatalogCheckpointCandidate } from './utils/baseModelMatcher';
 import {
   findFirstNodeOfType,
   getProviderFromNode,
@@ -1631,6 +1631,7 @@ export default function App() {
 
   // Civitai / Multi-Hub LoRA selection
   const handleSelectLoRAFromCivitai = (lora: ResourceSelection & {triggerWords:string}) => {
+    if (!lora.provider) {setToast({type:'error',title:'LoRA 未挂载',message:'LoRA 缺少明确的供应商信息，请从 Hub 重新选择已验证的资源'});return;}
     if(lora.provider && lora.provider!=='civitai') {handleSelectLoRAWithBaseModel(lora);return;}
     // A remembered spatial selection must not redirect graph-mode mounting.
     if (canvasMode === 'spatial' && selectedFrameId) {
@@ -1655,7 +1656,11 @@ export default function App() {
       }
     }
 
-    if (canvasMode === 'graph' && !targetLoRANodeId) {handleSelectLoRAWithBaseModel({...lora,provider:lora.provider || 'civitai'});return;}
+    if (canvasMode === 'graph' && !targetLoRANodeId) {
+      if (!lora.provider) {setToast({type:'error',title:'LoRA 未挂载',message:'LoRA 缺少明确的供应商信息，请从 Hub 重新选择已验证的资源'});return;}
+      handleSelectLoRAWithBaseModel(lora);
+      return;
+    }
 
     // Also update any targeted LoRALoader node if present
     if (canvasMode === 'graph' && targetLoRANodeId) {
@@ -1735,33 +1740,76 @@ export default function App() {
     return true;
   };
 
-  // Attach to the explicitly selected provider/model; architecture is verified by its API.
+  // Verified auto-pair: only getRecommendedBaseModelForLora may name a checkpoint. No table, no guess.
   const handleSelectLoRAWithBaseModel = (lora: ResourceSelection & {modelStrength?:number;clipStrength?:number}) => {
+    if (!lora.provider) {setToast({type:'error',title:'LoRA 未挂载',message:'LoRA 缺少明确的供应商信息，请从 Hub 重新选择已验证的资源'});return;}
     const frame=canvasMode==='spatial' ? spatialFrames.find(f=>f.id===selectedFrameId) : undefined;
-    let chosen: {checkpoint:string;provider:string};
-    let adaptedLora = { ...lora };
-    try {
-      if (canvasMode==='spatial') {
-        if(!frame)throw new Error('请先选择目标空间画板');
-        chosen={checkpoint:frame.params.checkpoint,provider:frame.params.targetProvider};
-      } else {
-        const target=findLoraTarget(nodes,connections,selectedNodeId);
-        chosen=resolveCheckpointForNode(target.id,nodes,connections);
-      }
-      const source=lora.provider==='tensor'?'tensorart':lora.provider;
-      if(!chosen.provider || !chosen.checkpoint || (source && source!==chosen.provider))throw new Error('请先选择同平台底模，LoRA 不会自动修改供应商或底模');
-      if(isInvalidTensorModel(chosen.provider,chosen.checkpoint))throw new Error('Tensor.Art 模型 API 只接受 TAMS 数字模型 ID 挂载 LoRA，请先选择真实 Tensor 模型 ID');
-    } catch(error:any) {setToast({type:'error',title:'LoRA 未挂载',message:error.message});return;}
-    const selected={...lora,triggerWords:lora.triggerWords || '',civitaiId:chosen.provider==='civitai'?lora.civitaiId:undefined};
+    if (canvasMode==='spatial' && !frame) {setToast({type:'error',title:'LoRA 未挂载',message:'请先选择目标空间画板'});return;}
+    const carried = lora as ResourceSelection & { baseModelSource?: string; checkpointCandidates?: CatalogCheckpointCandidate[] };
+    const source = carried.baseModelSource && isVerifiedBaseModelSource(carried.baseModelSource) ? carried.baseModelSource : undefined;
+    const candidates: CatalogCheckpointCandidate[] = (Array.isArray(carried.checkpointCandidates) ? carried.checkpointCandidates : [])
+      .filter((row): row is CatalogCheckpointCandidate => !!row && isVerifiedBaseModelSource(row.baseModelSource) && !!row.checkpoint && !!row.provider);
+    const matched = getRecommendedBaseModelForLora(lora.baseModel, lora.name, lora.provider, candidates, source);
+    const recommendation = matched.recommendation;
+    const selected={...lora,triggerWords:lora.triggerWords || ''};
     if (canvasMode==='spatial') {
       const strength=parseExplicitLoraStrength(lora.modelStrength);
       const clip=parseExplicitLoraStrength(lora.clipStrength ?? lora.modelStrength);
-      handleUpdateFrame(frame!.id,{params:{...frame!.params,loras:[...frame!.params.loras.filter(row=>row.name!==lora.name),{...selected,downloadUrl:lora.downloadUrl,modelStrength:strength,clipStrength:clip}]}});
-    } else if(!handleAddLoRANodeToCanvas(selected,true))return;
+      const nextParams = recommendation
+        ? {...frame!.params,checkpoint:recommendation.checkpoint,targetProvider:recommendation.provider as ComfyParameters['targetProvider'],steps:recommendation.steps,cfg:recommendation.cfg,sampler:recommendation.sampler,scheduler:recommendation.scheduler}
+        : frame!.params;
+      handleUpdateFrame(frame!.id,{params:{...nextParams,loras:[...frame!.params.loras.filter(row=>row.name!==lora.name),{...selected,downloadUrl:lora.downloadUrl,modelStrength:strength,clipStrength:clip}]}});
+    } else {
+      const target = findLoraTarget(nodes, connections, selectedNodeId);
+      const newNodeId = `node-lora-${Date.now()}`;
+      const def = NODE_DEFINITIONS['LoRALoader'];
+      const newNode: NodeInstance = {
+        id: newNodeId,
+        type: 'LoRALoader',
+        title: loraLoaderNodeTitle(undefined, lora.name),
+        pos: findNonOverlappingPos(nodes.map((n) => ({ id: n.id, pos: n.pos, width: n.width })), { x: Math.round(-transform.x / transform.scale + 420), y: Math.round(-transform.y / transform.scale + 220) }, { w: 320, h: 180 }),
+        width: 320,
+        inputs: def.inputs,
+        outputs: def.outputs,
+        values: {
+          ...replaceSelectedResource(def.defaultValues, selected, 'lora_name'),
+          lora_name: lora.name,
+          civitai_id: lora.civitaiId || '',
+          trigger_words: lora.triggerWords || '',
+          base_model: lora.baseModel || '',
+          ...(source ? { base_model_source: source } : {}),
+          ...(candidates.length ? { checkpoint_candidates: candidates } : {}),
+          ...(recommendation ? { recommended_checkpoint: recommendation.checkpoint, recommended_provider: recommendation.provider, recommended_reason: recommendation.recommendedReason || '' } : {}),
+          source_provider: lora.provider || '',
+          ...(parseExplicitLoraStrength(lora.modelStrength) !== undefined ? { strength_model: parseExplicitLoraStrength(lora.modelStrength) } : {}),
+          ...(parseExplicitLoraStrength(lora.clipStrength ?? lora.modelStrength) !== undefined ? { strength_clip: parseExplicitLoraStrength(lora.clipStrength ?? lora.modelStrength) } : {}),
+        },
+        state: 'idle',
+      };
+      let mounted: ReturnType<typeof attachLoraToBranch>;
+      try { mounted = attachLoraToBranch(nodes, connections, newNode, selectedNodeId); }
+      catch (error: any) { setToast({ type: 'error', title: 'LoRA 未挂载', message: error.message }); return; }
+      const resolved = resolveCheckpointForNode(target.id, mounted.nodes, mounted.connections);
+      const nextNodes = mounted.nodes.map((n) => {
+        if (!recommendation) return n;
+        if (n.id === resolved.engineNodeId && n.type === 'CheckpointLoaderSimple') {
+          return { ...n, values: { ...n.values, ckpt_name: recommendation.checkpoint, targetProvider: recommendation.provider } };
+        }
+        if (n.id === target.id && n.type === 'KSampler') {
+          return { ...n, values: { ...n.values, steps: recommendation.steps, cfg: recommendation.cfg, sampler_name: recommendation.sampler, scheduler: recommendation.scheduler } };
+        }
+        return n;
+      });
+      setNodes(nextNodes);
+      setConnections(mounted.connections);
+      setSelectedNodeId(newNodeId);
+    }
     const shown=parseExplicitLoraStrength(lora.modelStrength);
-    setToast({type:'success',title:'LoRA 已挂载',message:shown !== undefined
-      ? `${lora.name} × ${shown}；已接入当前${canvasMode==='graph'?'生成分支':'空间画板'}，生成前继续核实模型架构与权限。`
-      : `${lora.name} 已挂载但未设置强度；生成前必须显式填写 strength_model，禁止静默兜底 0.8。`});
+    if (recommendation) {
+      setToast({type:'success',title:'已配对验证底模',message:`已应用 ${recommendation.checkpoint}。${recommendation.recommendedReason || ''}${shown !== undefined ? ` LoRA 强度 ${shown}。` : ''}`});
+    } else {
+      setToast({type:'info',title:'LoRA 已挂载',message:`${lora.name} 已挂载。没有找到经过验证的底模，底模、供应商和采样参数均未改动。${shown !== undefined ? '' : '生成前必须显式填写 strength_model，禁止静默兜底 0.8。'}`});
+    }
   };
 
   // Live Model Hub selection

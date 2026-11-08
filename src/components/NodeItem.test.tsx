@@ -157,4 +157,80 @@ describe('NodeItem dynamic title & custom title preservation', () => {
     const html = renderNode(saveNode);
     expect(html).toContain('保存与预览图像 (Save Image)');
   });
+
+  it('M65: verified stored metadata renders the pair button and click passes exact checkpoint id', () => {
+    const def = NODE_DEFINITIONS.LoRALoader;
+    const node: NodeInstance = {
+      id: 'lora-verified',
+      type: 'LoRALoader',
+      title: 'LoRA',
+      pos: { x: 0, y: 0 },
+      width: 320,
+      inputs: def.inputs,
+      outputs: def.outputs,
+      state: 'idle',
+      values: {
+        lora_name: 'portrait-xl',
+        base_model: 'SDXL 1.0',
+        base_model_source: 'civitai:baseModel',
+        recommended_checkpoint: 'urn:air:sdxl:checkpoint:civitai:101055@128078',
+        checkpoint_candidates: [{ checkpoint: 'urn:air:sdxl:checkpoint:civitai:101055@128078', provider: 'civitai', baseModelMetadata: 'SDXL 1.0', baseModelSource: 'civitai:baseModel' }],
+      },
+    };
+    const html = renderToStaticMarkup(
+      <NodeItem
+        node={node}
+        isSelected={false}
+        zoom={1}
+        currentCheckpoint="other-checkpoint"
+        currentProvider="huggingface"
+        onAutoFixCheckpoint={vi.fn()}
+        onSelect={vi.fn()}
+        onStartDrag={vi.fn()}
+        onUpdateValue={vi.fn()}
+        onDeleteNode={vi.fn()}
+        onToggleCollapse={vi.fn()}
+        onToggleBypass={vi.fn()}
+        onStartConnecting={vi.fn()}
+        onEndConnecting={vi.fn()}
+      />
+    );
+    expect(html).toContain('data-testid="verified-base-model-pair"');
+    expect(html).toContain('urn:air:sdxl:checkpoint:civitai:101055@128078');
+  });
+
+  it('M65: no verified metadata renders no pair button', () => {
+    const def = NODE_DEFINITIONS.LoRALoader;
+    const node: NodeInstance = {
+      id: 'lora-unverified',
+      type: 'LoRALoader',
+      title: 'LoRA',
+      pos: { x: 0, y: 0 },
+      width: 320,
+      inputs: def.inputs,
+      outputs: def.outputs,
+      state: 'idle',
+      values: { lora_name: 'portrait-xl', base_model: 'SDXL 1.0' },
+    };
+    const html = renderToStaticMarkup(
+      <NodeItem
+        node={node}
+        isSelected={false}
+        zoom={1}
+        currentCheckpoint="some-checkpoint"
+        currentProvider="civitai"
+        onAutoFixCheckpoint={vi.fn()}
+        onSelect={vi.fn()}
+        onStartDrag={vi.fn()}
+        onUpdateValue={vi.fn()}
+        onDeleteNode={vi.fn()}
+        onToggleCollapse={vi.fn()}
+        onToggleBypass={vi.fn()}
+        onStartConnecting={vi.fn()}
+        onEndConnecting={vi.fn()}
+      />
+    );
+    expect(html).not.toContain('verified-base-model-pair');
+    expect(html).not.toContain('应用已验证底模');
+  });
 });

@@ -1387,21 +1387,57 @@ export const NodeItem: React.FC<NodeItemProps> = ({
             (() => {
               const ckpt = currentCheckpoint || '';
               const currentProv = currentProvider || node.values?.targetProvider || (ckpt.startsWith('fal-ai/') ? 'fal' : (ckpt.includes("krea-ai") || ckpt.includes("black-forest") || ckpt.includes("stabilityai") ? "huggingface" : undefined));
+              const storedCandidates = Array.isArray(node.values.checkpoint_candidates) ? node.values.checkpoint_candidates : [];
               const compat = validateLoraCompatibility(
                 ckpt,
                 node.values.base_model,
                 node.values.lora_name,
-                currentProv
+                currentProv,
+                {
+                  loraBaseModelSource: node.values.base_model_source,
+                  checkpointBaseModelMetadata: node.values.checkpoint_base_model,
+                  checkpointBaseModelSource: node.values.checkpoint_base_model_source,
+                  candidates: storedCandidates,
+                }
               );
-              if (compat.verification === 'unverified') return null; // no speculative copy (画布 reverify3 P0-3)
+              const verifiedRecommendation = typeof node.values.recommended_checkpoint === 'string' && node.values.recommended_checkpoint
+                ? node.values.recommended_checkpoint
+                : compat.verification === 'verified' ? compat.recommendedCheckpoint : undefined;
+              if (compat.verification === 'unverified') {
+                // A stored recommendation came from verified metadata at selection time. The current
+                // checkpoint's own metadata is not on this node, so it cannot verify — show only the stored id.
+                if (!verifiedRecommendation || !onAutoFixCheckpoint) return null;
+                return (
+                  <button
+                    type="button"
+                    data-testid="verified-base-model-pair"
+                    onClick={(e) => { e.stopPropagation(); onAutoFixCheckpoint(verifiedRecommendation); }}
+                    className="mt-1 px-2 py-1 rounded-lg border border-emerald-400/40 text-emerald-100 hover:bg-emerald-900/40 text-xs"
+                  >
+                    应用已验证底模 {verifiedRecommendation}
+                  </button>
+                );
+              }
               if (compat.verification === 'verified') {
                 return (
-                  <div className="mt-1 px-2 py-1 rounded bg-emerald-950/40 border border-emerald-800/40 text-[10px] text-emerald-300 flex items-center justify-between font-mono">
-                    <span className="flex items-center gap-1">
-                      <Sparkles className="w-3 h-3 text-emerald-400" />
-                      底模兼容 ({ckpt.split('/').pop()})
-                    </span>
-                    <span className="text-[9px] text-emerald-400/80">OK</span>
+                  <div className="mt-1 px-2 py-1 rounded bg-emerald-950/40 border border-emerald-800/40 text-[10px] text-emerald-300 font-mono space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="flex items-center gap-1">
+                        <Sparkles className="w-3 h-3 text-emerald-400" />
+                        底模兼容 ({ckpt.split('/').pop()})
+                      </span>
+                      <span className="text-[9px] text-emerald-400/80">OK</span>
+                    </div>
+                    {verifiedRecommendation && onAutoFixCheckpoint && (
+                      <button
+                        type="button"
+                        data-testid="verified-base-model-pair"
+                        onClick={(e) => { e.stopPropagation(); onAutoFixCheckpoint(verifiedRecommendation); }}
+                        className="px-2 py-1 rounded-lg border border-emerald-400/40 text-emerald-100 hover:bg-emerald-900/40 text-xs"
+                      >
+                        应用已验证底模 {verifiedRecommendation}
+                      </button>
+                    )}
                   </div>
                 );
               }
@@ -1429,7 +1465,7 @@ export const NodeItem: React.FC<NodeItemProps> = ({
                   {onAutoFixCheckpoint && compat.recommendedCheckpoint && (
                     <button
                       type="button"
-                      onClick={() => onAutoFixCheckpoint(compat.recommendedCheckpoint!)}
+                      onClick={(e) => { e.stopPropagation(); onAutoFixCheckpoint(compat.recommendedCheckpoint!); }}
                       className="w-full py-1.5 px-2 rounded-lg bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold flex items-center justify-center gap-1 transition-all shadow-md text-[10px] active:scale-95"
                       title="一键将前置 CheckpointLoader 节点的模型切换为匹配底模"
                     >
