@@ -50,16 +50,24 @@ export function civitaiVideoDiscriminatorSteps(document:any,selectors:Record<str
  return steps;
 }
 
+/** Regex for Civitai four-segment video model IDs: engine:version:provider:operation */
+const CIVITAI_VIDEO_MODEL_RE=/^(wan|ltx2|ltx2\.3|flux):([^:]+):([^:]+):(text-to-video|image-to-video|createVideo)$/;
 export function readCivitaiVideoSelectors(values:Record<string,any>|undefined):Record<string,string>|undefined{
  const v=values||{};
  const declared=v.video_selectors;
  const vs=declared && typeof declared==='object' && !Array.isArray(declared)?declared as Record<string,unknown>:{};
+ // Auto-parse default selectors from four-segment model ID (engine:version:provider:operation)
+ // AIVideoNode uses v.model; CheckpointLoaderSimple uses v.ckpt_name
+ const modelId=str(v.model) || str(v.ckpt_name) || '';
+ const modelMatch=modelId?CIVITAI_VIDEO_MODEL_RE.exec(modelId):null;
+ const modelDefaults:Record<string,string>=modelMatch?{engine:modelMatch[1],version:modelMatch[2],provider:modelMatch[3],operation:modelMatch[4]}:{};
  const out:Record<string,string>={};
+ // Explicit fields (video_selectors / civitai_* params) take priority over model-ID defaults
  const take=(key:string,...cands:unknown[])=>{for(const c of cands){const s=str(c);if(s){out[key]=s;return;}}};
- take('engine',vs.engine,v.civitai_engine);
- take('version',vs.version,v.civitai_version);
- take('provider',vs.provider,v.civitai_backend);
- take('operation',vs.operation,v.civitai_operation);
+ take('engine',vs.engine,v.civitai_engine,modelDefaults.engine);
+ take('version',vs.version,v.civitai_version,modelDefaults.version);
+ take('provider',vs.provider,v.civitai_backend,modelDefaults.provider);
+ take('operation',vs.operation,v.civitai_operation,modelDefaults.operation);
  return Object.keys(out).length?out:undefined;
 }
 

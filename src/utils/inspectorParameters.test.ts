@@ -64,3 +64,37 @@ it('persists Civitai video engine/version/operation onto CheckpointLoaderSimple 
  expect(patched.values.civitai_operation).toBe('createVideo');
  expect(readInspectorParameters([patched],[],'c')).toMatchObject({civitaiEngine:'wan',civitaiVersion:'v2.1',civitaiBackend:'civitai',civitaiOperation:'createVideo'});
 });
+it('M82: readCivitaiVideoSelectors auto-parses four-segment model ID wan:v2.2:fal:text-to-video',()=>{
+ // Regression: selecting civitai model 'wan:v2.2:fal:text-to-video' without manually filling selectors
+ // previously returned undefined, causing CivitaiDriver to 400 with "engine 是必填选择项"
+ const v=node('v','AIVideoNode',{model:'wan:v2.2:fal:text-to-video',targetProvider:'civitai'});
+ const p=readInspectorParameters([v],[],'v');
+ expect(p.civitaiEngine).toBe('wan');
+ expect(p.civitaiVersion).toBe('v2.2');
+ expect(p.civitaiBackend).toBe('fal');
+ expect(p.civitaiOperation).toBe('text-to-video');
+});
+it('M82: readCivitaiVideoSelectors explicit selectors override model-ID auto-parse',()=>{
+ // Explicit video_selectors must take priority over model-ID defaults
+ const v=node('v','AIVideoNode',{model:'wan:v2.2:fal:text-to-video',targetProvider:'civitai',
+  video_selectors:{engine:'wan',version:'v2.6',provider:'fal',operation:'image-to-video'}});
+ const p=readInspectorParameters([v],[],'v');
+ expect(p.civitaiVersion).toBe('v2.6');
+ expect(p.civitaiOperation).toBe('image-to-video');
+});
+it('M82: readCivitaiVideoSelectors returns undefined for non-civitai four-segment IDs',()=>{
+ // Non-matching model IDs must not produce false selectors
+ const v=node('v','AIVideoNode',{model:'fal-ai/wan/v2.2-a14b/text-to-video/lora',targetProvider:'fal'});
+ const p=readInspectorParameters([v],[],'v');
+ // fal model id does not match engine:version:provider:operation pattern
+ expect(p.civitaiEngine).toBeUndefined();
+ expect(p.civitaiVersion).toBeUndefined();
+});
+it('M82: readCivitaiVideoSelectors handles ltx2.3 engine segment',()=>{
+ const v=node('v','AIVideoNode',{model:'ltx2.3:v1.0:comfy:createVideo',targetProvider:'civitai'});
+ const p=readInspectorParameters([v],[],'v');
+ expect(p.civitaiEngine).toBe('ltx2.3');
+ expect(p.civitaiVersion).toBe('v1.0');
+ expect(p.civitaiBackend).toBe('comfy');
+ expect(p.civitaiOperation).toBe('createVideo');
+});
