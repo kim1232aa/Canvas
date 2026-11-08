@@ -44,8 +44,7 @@ describe('M94: Spatial defaults and promptTransform auditability', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (url: string) => {
-        // console.log('FETCH URL:', url);
-        if (typeof url === 'string' && (url.includes('/api/models') || url.includes('models'))) {
+        if (typeof url === 'string' && url.includes('/api/models')) {
           return new Response(JSON.stringify(MOCK_VIDEO_CATALOG), {
             status: 200,
             headers: { 'content-type': 'application/json' },
@@ -204,7 +203,7 @@ describe('M94: Spatial defaults and promptTransform auditability', () => {
     });
 
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 100));
+      // flush microtasks so the resolved catalog fetch re-renders the modal
     });
 
     // 2. 点击「应用为视频模型」按钮 (调用 App.tsx:handleSelectModelFromHub 入口)
@@ -266,7 +265,7 @@ describe('M94: Spatial defaults and promptTransform auditability', () => {
     });
 
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 50));
+      // flush microtasks so the resolved catalog fetch re-renders the modal
     });
 
     // 2. 点击「添加视频节点」按钮 (调用 App.tsx:onAddModelNode 入口)
