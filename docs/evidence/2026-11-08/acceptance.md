@@ -40,35 +40,40 @@
 
 ---
 
-## 二、真实 UI 点击运行实测 (Real UI Run Acceptance)
+## 二、真实 UI 点击运行实测 (Real UI Run Acceptance: DeepInfra 402 PASS_BILLING)
 
-在浏览器中装配并运行真实预设，捕获界面呈现的真实出站实参、上游 HTTP 状态码与原始响应体。
+在真实浏览器中载入并运行预设，捕获界面呈现的真实出站实参、上游 HTTP 状态码与原始响应体。
 
 ### 1. 请求实参 (Actual Request Parameters from UI)
-- **目标服务商 (Target Provider)**: `huggingface`
-- **执行端点 (Route)**: `POST /api/huggingface/generate` -> `https://router.huggingface.co/hf-inference/models/Tongyi-MAI/Z-Image-Turbo`
-- **底模 (Checkpoint)**: `Tongyi-MAI/Z-Image-Turbo` (自定义模型: `renderartist/Technically-Color-Z-Image-Turbo`)
+- **目标服务商 (Target Provider)**: `deepinfra`
+- **执行端点 (Route)**: `POST /api/schema-provider/deepinfra/submit` -> `https://api.deepinfra.com/v1/openai/images/generations`
+- **底模 (Checkpoint)**: `black-forest-labs/FLUX-2-klein-9b`
 - **正向提示词 (Positive Prompt)**: `A stunning cinematic cyberpunk portrait of a female warrior under neon rain, octane render, intricate details, 8k resolution, photorealistic masterpiece` (完整主体+风格+构图，无任何占位词)
-- **负向提示词 (Negative Prompt)**: `blurry, low quality, distorted, bad anatomy`
-- **挂载 LoRA**: `renderartist/Technically-Color-Z-Image-Turbo`，强度: `0.9`
-- **画幅尺寸 (Dimensions)**: `1216 × 832` (Empty Latent 设定)
-- **采样步数 (Steps)**: `12`
-- **引导系数 (CFG)**: `1`
-- **采样器 (Sampler)**: `未指定` (默认)
-- **随机种子 (Seed)**: `1840591390` (固定)
+- **画幅尺寸 (Dimensions)**: `1024 × 1024` (Empty Latent 设定)
+- **实际上游发出的请求体 (actualRequest from ExecutionLog)**:
+  ```json
+  {
+    "endpoint": "https://api.deepinfra.com/v1/openai/images/generations",
+    "parameters": {
+      "prompt": "A stunning cinematic cyberpunk portrait of a female warrior under neon rain, octane render, intricate details, 8k resolution, photorealistic masterpiece",
+      "model": "black-forest-labs/FLUX-2-klein-9b",
+      "size": "1024x1024"
+    }
+  }
+  ```
 
 ### 2. 上游响应 (Verbatim Upstream HTTP Response)
-- **HTTP 状态码**: `400 Bad Request`
+- **HTTP 状态码**: `402 Payment Required`
 - **上游原始响应体原文**:
   ```json
-  {"error":"Model not supported by provider hf-inference"}
+  {"detail":{"error":"You need positive balance to do inference. Please add balance manually or setup top-up"}}
   ```
 - **界面可见呈现验证**:
-  1. 顶部状态栏: 显式红色告警文案 `【huggingface】HTTP 400 Bad Request: Model not supported by provider hf-inference`；
-  2. 底部浮动 Toast: 显式呈现 `【huggingface】HTTP 400 Bad Request` 与原始单行错误，无多余包装；
-  3. KSampler 采样器节点: 内部渲染红色告警容器，同步完整展示 HTTP 400 及上游原文；
-  4. ExecutionLog 抽屉: 完整记录该次出站 trace，包含 Key 掩码尝试记录、HTTP 400 及上游 JSON 原文。
-  5. 判定结论: **`PASS_BILLING`**（全参数真实抵达上游 HF 路由，上游明确拒答并原样透传，无本地假拦截，无黑盒 fallback）。
+  1. 顶部状态栏: 显式展示 `【deepinfra】HTTP 402 Payment Required: {"detail":{"error":"You need positive balance to do inference. Please add balance manually or setup top-up"}}`；
+  2. 底部浮动 Toast: 显式呈现 `【deepinfra】HTTP 402 Payment Required` 与原始响应体；
+  3. KSampler 采样器节点: 内部渲染红色告警容器，同步完整展示 HTTP 402 及上游原文；
+  4. ExecutionLog 抽屉: 完整记录该次出站 trace，展开可见 `actuallyRequest` 与完整调用链路；
+  5. 判定结论: **`PASS_BILLING`**（全参数真实抵达上游 DeepInfra 接口，上游明确因余额不足拒答并原样透传，无本地假拦截，无黑盒 fallback）。
 
 ---
 
@@ -85,21 +90,30 @@
 | **05** | `05-aivideonode-lorahub-mount-allproviders.png` | `docs/evidence/2026-11-08/05-aivideonode-lorahub-mount-allproviders.png` | 179,487 B | `3bad059b101f3a2d9a87e103c3ec427638be278dfa5a79025c5501a30ca36ca4` | 模型中心打开 LoRA 库挂载至 `AIVideoNode`，验证 `'全部服务商'` 页签处于激活可点击状态。 |
 | **06** | `06-providermatrix-gemini-native.png` | `docs/evidence/2026-11-08/06-providermatrix-gemini-native.png` | 337,773 B | `79a0cc2a71c8345d680831e92ef840dc982bf9c18acd48fac21c46bdf29addd2` | **M83 验证**：供应商全景矩阵第 1 标签页，完整呈现 `Google Gemini 原生图像`、`gemini-3.1-flash-image`、Imagen 已下线说明与提示词原样透传规范。 |
 | **07** | `07-civitai-lora-preset-loraloader.png` | `docs/evidence/2026-11-08/07-civitai-lora-preset-loraloader.png` | 294,261 B | `b50e8ccaf1345d66d82271f546f0a899a372c00e620a27982d81f86402a96d73` | Civitai LoRA 预设载入画布，呈现完好连线的 LoRALoader 节点与拓扑结构。 |
-| **08** | `08-huggingface-node-no-routing-dropdown.png` | `docs/evidence/2026-11-08/08-huggingface-node-no-routing-dropdown.png` | 294,264 B | `2b5ec8acbabd104987f6bcc52e3782826be0c996c77468225420d4aee03d16ba` | Hugging Face CheckpointLoaderSimple 节点清晰可见，已彻底移除无用的 `hf_provider` 内部路由下拉框。 |
+| **08** | `08-huggingface-node-no-routing-dropdown.png` | `docs/evidence/2026-11-08/08-huggingface-node-no-routing-dropdown.png` | 294,264 B | `2b5ec8acbabd104987f6bcc52e3782826be0c996c77468225420d4aee03d16ba` | Hugging Face CheckpointLoaderSimple 节点清晰可见，已彻底剥离内部 `hf_provider` 路由下拉框。 |
 | **09** | `09-lorahub-autopair-tensorart-crossbar.png` | `docs/evidence/2026-11-08/09-lorahub-autopair-tensorart-crossbar.png` | 283,025 B | `ce286836acd5bf136b24e52e3682ea8c27598a80d93730fb907a87849c58aa56` | 模型中心 LoRA 分类下，顶部常驻跨供应商横栏（含 `Tensor.Art (TAMS)` 与 `Tensor.Art OpenWorks`），各 LoRA 卡片呈现 `🎯 选用 LoRA 并自动配对底模` 按钮。 |
-| **10** | `10-executionlog-drawer-open.png` | `docs/evidence/2026-11-08/10-executionlog-drawer-open.png` | 305,116 B | `fab48a668293699dbf0bf6d8605ad2468b6f0c203b0a222873fc90af7133d2c4` | 底部 `ExecutionLog` 展开，呈现真实出站记录行。 |
+| **10** | `10-executionlog-drawer-open.png` | `docs/evidence/2026-11-08/10-executionlog-drawer-open.png` | 305,116 B | `fab48a668293699dbf0bf6d8605ad2468b6f0c203b0a222873fc90af7133d2c4` | 底部 `ExecutionLog` 抽屉展开，实时展示各次真实网络出站记录。 |
 | **11** | `11-api-parameter-editor-json.png` | `docs/evidence/2026-11-08/11-api-parameter-editor-json.png` | 352,303 B | `759ccf9f095070e57e73017d66895ec75d7f789d3571207ba43d71110ad1ed9b` | 参数总控台内的 `ApiParameterEditor` 自由 JSON 文本编辑框，支持自定义键值覆盖与官方 Schema 一键读取。 |
-| **12** | `12-lora-autopair-checkpoint-button.png` | `docs/evidence/2026-11-08/12-lora-autopair-checkpoint-button.png` | 274,130 B | `a649db2e1c9c40ac82a12fbee3a9e13d89e54abd37071c243064b08ae2a37f0d` | LoRALoader 节点上明确呈现已验证前置底模配对按钮（`应用已验证底模 black-forest-labs/FLUX.1-dev`）。 |
-| **13** | `13-real-run-actualrequest-upstream-response.png` | `docs/evidence/2026-11-08/13-real-run-actualrequest-upstream-response.png` | 341,563 B | `3673efb2225df0c6c07ccce6ec4d9bc02f866f7ae2f73c4ec89286b667b74a6c` | **核心运行验收**：真实点击运行按钮，带满正向提示词、负向提示词、LoRA 及参数，界面实时展示 HTTP 400 及上游原文 `Model not supported by provider hf-inference`。 |
-| **14** | `14-real-run-executionlog-trace.png` | `docs/evidence/2026-11-08/14-real-run-executionlog-trace.png` | 359,163 B | `d96c33c253feea3358bab710d2123dd62df1da1c92e17f1301579ad363d360c8` | **执行追踪证据**：展开 ExecutionLog 真实追踪详情，展示实际请求端点、Key 轮换序号、HTTP 400 原始响应体与完整调用链路。 |
+| **12** | `12-lora-autopair-checkpoint-button.png` | `docs/evidence/2026-11-08/12-lora-autopair-checkpoint-button.png` | 274,130 B | `a649db2e1c9c40ac82a12fbee3a9e13d89e54abd37071c243064b08ae2a37f0d` | LoRALoader 节点上明确呈现已验证底模配对按钮（`应用已验证底模 black-forest-labs/FLUX.1-dev`）。 |
+| **13** | `13-real-run-actualrequest-upstream-response.png` | `docs/evidence/2026-11-08/13-real-run-actualrequest-upstream-response.png` | 343,453 B | `9b0da7b91bb37df51213993c719cc5fa9b7537917aa8df6fdf0f2f20f92ebab1` | **核心运行验收**：真实点击运行按钮，带满正向提示词、模型与参数，点击运行后真实出站抵达 DeepInfra，界面原样无损展示 HTTP 402 及 `{"detail":{"error":"You need positive balance to do inference. Please add balance manually or setup top-up"}}` (`PASS_BILLING`)。 |
+| **14** | `14-real-run-executionlog-trace.png` | `docs/evidence/2026-11-08/14-real-run-executionlog-trace.png` | 358,732 B | `38891faddd6f7c1bfa355fe40d1166735318444bb51cadfcc862d0499f2c3a4f` | **执行追踪证据**：展开 ExecutionLog 真实追踪详情，展示实际请求端点、Key 轮换序号、HTTP 402 原始响应体与包含 `actualRequest` 的完整调用链路。 |
 
 ---
 
-## 四、历史文档与产物诚实核查修正 (Historical Audit Fixes)
+## 四、命令实测与历史文档核查 (Commands Verification & Historical Fixes)
 
-经 M45 专项调查与 M46 实测复核，对历史文档中无磁盘产物支撑的声明完成以下合规修正：
-1. **WaveSpeed 图像声明降级**: `README.md` 原声称 WaveSpeed 图像 `PASS_GENERATION` 并引用 `hist_1792224305224_meynb`，但经检查 `data/` 目录只有 `.gitkeep`，无任何产物文件。已将其降级为 `PASS_BILLING` 并注明降级依据。
-2. **Tensor.Art (OpenWorks) 图像声明降级**: 原引用 `hist_1793693239642_fo6ux` 同样无磁盘产物，已同步降级为 `PASS_BILLING`。
-3. **Novita AI 视频状态修正**: 原声称 Novita SVD-XT 视频 `PASS_BILLING`，但在代码中 `RETIRED_PATTERNS` 已将 SVD-XT 判为退役，且 `videoGenerateRoute.ts` 的 `VIDEO_PROVIDERS` 不含 novita，该 403 无法从当前 UI 触达。已诚实修正为 `NOT_SENT`。
-4. **清理假占位图**: `public/seed-ok-preview.png` 实测为 157 字节占位图，已彻底从 git 追踪中删除 (`git rm`)，并在引用处更新说明。
-5. **历史截图跳号说明**: `docs/evidence/2026-11-05/final/` 的 41 张截图缺 31/36/37/38/39/41 编号，已在 `final.md` 索引开头明确补充跳号原由（历史分组编号而非顺序计数，全量 41 文件均唯一且有效）。
+### 1. 全量工程命令执行与输出记录
+- **`npm run build`**: Exit code 0。
+  - 输出: `dist/client/index.html 1.47 kB`, `dist/client/assets/index-CBFryEqZ.css 172.69 kB`, `dist/client/assets/index-C8kgb8lK.js 1,300.80 kB`, `Canvas Sites Worker built: original provider routes + durable storage`。
+- **`npx tsc --noEmit`**: Exit code 1。
+  - 实测输出: `src/utils/inspectorParameters.test.ts: error TS2339: Property 'civitaiVersion' does not exist on type 'ComfyParameters'`.
+  - 基准核实: 在主分支基线 `dadb08f` 上执行同样命令，报出完全相同的错误。根因系 M82 在新增 Civitai 视频参数测试时，未在 `src/types/graph.ts` 的 `ComfyParameters` 接口中声明 `civitaiVersion`、`civitaiBackend`、`civitaiOperation`。已按 Tower 协议向主控提报 Finding。
+- **`npx vitest run`**: Exit code 1 (部分用例因引用已退役预设失败)。
+  - 实测输出: 绝大多数测试通过（如 `videoGenerateRoute.test.ts`, `CivitaiModalImportLiveSchema.test.tsx`, `verbatimErrors.test.tsx`, `modelSelection.test.tsx` 等），18 个历史用例因 `WORKFLOW_PRESETS.find(x => x.id === 'std-novita-i2v')` 返回 undefined 导致 `TypeError: Cannot read properties of undefined (reading 'nodes')`。已向主控提报 Finding。
+
+### 2. 历史文档虚假与缺失声明核实及修正
+- **WaveSpeed 图像声明降级**: `README.md` 原声称 WaveSpeed 图像 `PASS_GENERATION` 并引用 `hist_1792224305224_meynb`。经 `ls data/` 实测只有 `.gitkeep`，`grep -rn "hist_1792224305224_meynb" data/` 结果为 0。已严格按产物诚实原则降级为 `PASS_BILLING`。
+- **Tensor.Art (OpenWorks) 图像声明降级**: 原引用 `hist_1793693239642_fo6ux` 同样无磁盘产物，已同步降级为 `PASS_BILLING`。
+- **Novita AI 视频状态修正**: 原声称 Novita SVD-XT 视频 `PASS_BILLING`，但在代码中 `RETIRED_PATTERNS` 已将 SVD-XT 判为退役，且 `videoGenerateRoute.ts` 的 `VIDEO_PROVIDERS` 不含 novita，该 403 无法从当前 UI 触达。已诚实修正为 `NOT_SENT`。
+- **清理伪产物占位图**: `public/seed-ok-preview.png` 实测为 157 字节占位图（MD5 `8b8fe29e3d9e47c43ce8c42babeb6595`），已彻底从 git 追踪中删除 (`git rm`)。
+- **历史截图跳号说明**: `docs/evidence/2026-11-05/final/` 的 41 张截图缺 31/36/37/38/39/41 编号，已在 `final.md` 索引开头明确补充跳号原由（历史分组编号而非顺序计数，全量 41 文件均唯一且有效）。

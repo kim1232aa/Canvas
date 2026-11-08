@@ -18,8 +18,8 @@
     10. `10-executionlog-drawer-open.png`：底部 `ExecutionLog` 抽屉展开，实时展示各次真实网络出站记录。
     11. `11-api-parameter-editor-json.png`：参数面板中的 `ApiParameterEditor` 自由 JSON 文本框，支持直接覆盖请求字段与读取官方 Schema。
     12. `12-lora-autopair-checkpoint-button.png`：LoRALoader 节点上明确呈现已验证底模配对按钮（`应用已验证底模 black-forest-labs/FLUX.1-dev`）。
-    13. `13-real-run-actualrequest-upstream-response.png`：**真实运行验收**，带满正向提示词、负向提示词、LoRA 及参数，点击运行后真实出站抵达 Hugging Face Router，界面原样无损展示 HTTP 400 及 `Model not supported by provider hf-inference`。
-    14. `14-real-run-executionlog-trace.png`：ExecutionLog 展开该次出站详情，完整呈现真实端点、Key 轮换尝试与上游原始 JSON。
+    13. `13-real-run-actualrequest-upstream-response.png`：**真实运行验收**，载入 DeepInfra FLUX-2 预设并带满正向提示词，点击运行后真实出站抵达 DeepInfra，界面原样无损展示 HTTP 402 及 `{"detail":{"error":"You need positive balance to do inference. Please add balance manually or setup top-up"}}` (`PASS_BILLING`)。
+    14. `14-real-run-executionlog-trace.png`：ExecutionLog 展开该次出站详情，完整呈现真实端点、`actualRequest` 实参与上游原始 JSON。
 - **历史文档与产物诚实核查（M45/M46 闭环）**：
   - `README.md` 中 WaveSpeed 与 Tensor.Art (OpenWorks) 因磁盘 `data/` 目录无生成产物，原 `PASS_GENERATION` 声明均已合规降级为 `PASS_BILLING`。
   - `README.md` 中 Novita 视频状态因 SVD-XT 预设退役且 `VIDEO_PROVIDERS` 不含 novita，更正为 `NOT_SENT`。
