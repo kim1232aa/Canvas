@@ -248,7 +248,7 @@ describe('videoGenerateRoute TAMS: submit origin comes from the injected resolve
   };
 
   it('POSTs /v1/jobs to the configured origin (trailing slash trimmed)', async () => {
-    const upstream = vi.fn(async () => new Response('{"code":"bad"}', { status: 400 }));
+    const upstream = vi.fn(async (_meta: any, _url: string) => new Response('{"code":"bad"}', { status: 400 }));
     const res = await call({ ...createDeps(upstream), resolveTamsModelApiOrigin: () => 'https://tams.example.invalid/' });
     expect(upstream.mock.calls[0][1]).toBe('https://tams.example.invalid/v1/jobs');
     expect(res.data.exactEndpointCalled).toBe('https://tams.example.invalid/v1/jobs');
