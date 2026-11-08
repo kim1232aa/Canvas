@@ -203,3 +203,41 @@ describe('Mage pass-through WxH (official additionalProperties:true)', () => {
     expect(historySizeMismatchNote(resolveHistoryParameters(same))).toBeNull();
   });
 });
+
+
+describe('TAMS VIDEO_DIFFUSION history parameters', () => {
+  it('extracts video stage fields and init seed from old actualRequest', () => {
+    const item: any = {
+      ...baseItem(),
+      actualModel: 'new-video-model',
+      requestMetadata: { actualRequest: { parameters: {
+        stages: [
+          { type: 'VIDEO_DIFFUSION', video_diffusion: { sdModel: 'new-video-model', width: 640, height: 360, fps: 16, totalFrames: 49, steps: 25, cfgScale: 7.5, sampler: 'euler', scheduleName: 'simple', prompts: [{ text: 'moving robot' }], negativePrompts: [{ text: 'blur' }], lora: { items: [{ lora_model: 'motion.safetensors', weight: 0.8 }] } } },
+          { type: 'INPUT_INITIALIZE', inputInitialize: { seed: '42' } },
+        ],
+      } } },
+    };
+    const r = resolveHistoryParameters(item);
+    expect(r.seed).toMatchObject({ value: '42', source: 'sent' });
+    expect(r.steps).toMatchObject({ value: 25, source: 'sent' });
+    expect(r.cfg).toMatchObject({ value: 7.5, source: 'sent' });
+    expect(r.width).toMatchObject({ value: 640, source: 'sent' });
+    expect(r.height).toMatchObject({ value: 360, source: 'sent' });
+    expect(r.fps).toMatchObject({ value: 16, source: 'sent' });
+    expect(r.num_frames).toMatchObject({ value: 49, source: 'sent' });
+    expect(r.negativePrompt).toMatchObject({ value: 'blur', source: 'sent' });
+    expect(sentHistoryLoras(item)).toEqual([{ name: 'motion.safetensors', strength: 0.8 }]);
+  });
+
+  it('recognizes lowercase video_diffusion and preserves explicit zero', () => {
+    const item: any = { ...baseItem(), requestMetadata: { actualParameters: { stages: [
+      { type: 'INPUT_INITIALIZE', inputInitialize: { seed: 0 } },
+      { type: 'video_diffusion', video_diffusion: { fps: 0, totalFrames: 0, cfgScale: 0 } },
+    ] } } };
+    const r = resolveHistoryParameters(item);
+    expect(r.seed).toMatchObject({ value: 0, source: 'sent' });
+    expect(r.fps).toMatchObject({ value: 0, source: 'sent' });
+    expect(r.num_frames).toMatchObject({ value: 0, source: 'sent' });
+    expect(r.cfg).toMatchObject({ value: 0, source: 'sent' });
+  });
+});

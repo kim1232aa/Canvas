@@ -17,6 +17,7 @@ vi.mock('./services/api', async (importOriginal) => {
 });
 
 import App from './App';
+import { applyHistoryToCanvas } from './utils/applyHistoryToCanvas';
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -31,6 +32,7 @@ describe('App history delete honesty', () => {
   let host: HTMLDivElement | null = null;
   let root: Root | null = null;
   let deleteRoutes: (path: string, method: string) => Response;
+  let historyResponseItems: any[] = ITEMS;
 
   beforeEach(async () => {
     const actual = await vi.importActual<typeof import('./services/api')>('./services/api');
@@ -38,6 +40,7 @@ describe('App history delete honesty', () => {
     apiMocks.deleteHistoryBatch.mockReset().mockImplementation(actual.deleteHistoryBatch);
     apiMocks.clearHistory.mockReset().mockImplementation(actual.clearHistory);
     localStorage.clear();
+    historyResponseItems = ITEMS;
     if (!Element.prototype.scrollIntoView) Element.prototype.scrollIntoView = () => {};
     deleteRoutes = () => json({ success: true });
     vi.stubGlobal('confirm', vi.fn(() => true));
@@ -46,7 +49,7 @@ describe('App history delete honesty', () => {
       const target = String(input);
       const method = (init?.method || 'GET').toUpperCase();
       if (target.startsWith('/api/history') && method === 'GET') {
-        return json({ items: ITEMS, total: ITEMS.length, limit: 24, offset: 0, hasMore: false, counts: { output: ITEMS.length, failed: 0, all: ITEMS.length } });
+        return json({ items: historyResponseItems, total: historyResponseItems.length, limit: 24, offset: 0, hasMore: false, counts: { output: historyResponseItems.length, failed: 0, all: historyResponseItems.length } });
       }
       if (target.startsWith('/api/history') && method !== 'GET') return deleteRoutes(target, method);
       return new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } });
@@ -122,6 +125,20 @@ describe('App history delete honesty', () => {
     expect(toastText()).toContain('资产删除失败');
     expect(toastText()).toContain('HTTP 500: disk write failed: EACCES');
     expect(toastText()).not.toContain('资产已删除');
+  });
+
+  it('history apply click restores the rendered video node from the full history record', async () => {
+    historyResponseItems = [{ id: 'video-1', url: '/media/v.mp4', videoUrl: '/media/v.mp4', mediaType: 'video', prompt: 'moving robot', model: 'old', provider: 'tensorart', timestamp: 3, hasWorkflowSnapshot: true }];
+    const full = { id: 'video-1', url: '/media/v.mp4', videoUrl: '/media/v.mp4', mediaType: 'video', prompt: 'moving robot', actualModel: 'new', actualProvider: 'tensorart', timestamp: 3, workflowSnapshot: { nodes: [{ id: 'video', type: 'AIVideoNode', title: 'AI Video', pos: { x: 0, y: 0 }, inputs: [], outputs: [], width: 340, values: { model: 'old', steps: 4, fps: 8 } }], connections: [] }, requestMetadata: { actualParameters: { model: 'new', steps: 25, fps: 16 } } };
+    vi.stubGlobal('fetch', vi.fn(async (input: any, init?: RequestInit) => {
+      const target = String(input);
+      if (target === '/api/history/video-1' && (!init?.method || init.method === 'GET')) return json(full);
+      if (target.startsWith('/api/history') && (!init?.method || init.method === 'GET')) return json({ items: historyResponseItems, total: historyResponseItems.length, limit: 24, offset: 0, hasMore: false, counts: { output: historyResponseItems.length, failed: 0, all: historyResponseItems.length } });
+      return new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } });
+    }));
+    await openHistory();
+    await clickByText('照这组参数再来一张');
+    expect(document.getElementById('node-video')).toBeTruthy();
   });
 
   it('single delete: a resolved false is a failure too (item restored, error toast, no success toast)', async () => {

@@ -10,7 +10,11 @@ export type HistoryParameterKey =
   | 'scheduler'
   | 'width'
   | 'height'
-  | 'size';
+  | 'size'
+  | 'fps'
+  | 'num_frames'
+  | 'duration'
+  | 'referenceImage';
 
 export type HistoryParameterSource =
   | 'upstream'
@@ -51,21 +55,24 @@ const parseJson = (value: unknown): unknown => {
 
 const flattenTamsStages = (body: AnyRecord): AnyRecord | null => {
   if (!Array.isArray(body.stages)) return null;
-  const init = body.stages.find((s: any) => s?.type === 'INPUT_INITIALIZE')?.inputInitialize
-    ?? body.stages[0]?.inputInitialize;
-  const diff = body.stages.find((s: any) => s?.type === 'DIFFUSION')?.diffusion
-    ?? body.stages[1]?.diffusion;
-  if (!isRecord(init) && !isRecord(diff)) return null;
+  const init = body.stages.find((s: any) => String(s?.type || '').toUpperCase() === 'INPUT_INITIALIZE')?.inputInitialize;
+  const video = body.stages.find((s: any) => String(s?.type || '').toUpperCase() === 'VIDEO_DIFFUSION')?.video_diffusion;
+  const diff = body.stages.find((s: any) => String(s?.type || '').toUpperCase() === 'DIFFUSION')?.diffusion;
+  if (!isRecord(init) && !isRecord(diff) && !isRecord(video)) return null;
   const flat: AnyRecord = {};
   if (isRecord(init)) Object.assign(flat, init);
-  if (isRecord(diff)) {
-    Object.assign(flat, diff);
-    if (Array.isArray(diff.negativePrompts) && diff.negativePrompts[0]?.text != null) {
-      flat.negativePrompt = diff.negativePrompts[0].text;
-      flat.negative_prompt = diff.negativePrompts[0].text;
+  const stage = isRecord(video) ? video : diff;
+  if (isRecord(stage)) {
+    Object.assign(flat, stage);
+    if (stage.sdModel != null && flat.model == null) flat.model = stage.sdModel;
+    if (stage.totalFrames != null) flat.num_frames = stage.totalFrames;
+    if (Array.isArray(stage.negativePrompts) && stage.negativePrompts[0]?.text != null) {
+      flat.negativePrompt = stage.negativePrompts[0].text;
+      flat.negative_prompt = stage.negativePrompts[0].text;
     }
-    if (diff.sampler != null) flat.sampler = diff.sampler;
-    if (diff.scheduleName != null) flat.schedule = diff.scheduleName;
+    if (stage.sampler != null) flat.sampler = stage.sampler;
+    if (stage.lora && isRecord(stage.lora) && Array.isArray(stage.lora.items)) flat.loras = stage.lora.items;
+    if (Array.isArray(flat.loras)) flat.loras = flat.loras.map((l: any) => ({ path: l?.lora_model ?? l?.path ?? l?.name, weight: l?.weight ?? l?.strength }));
   }
   return flat;
 };
@@ -109,7 +116,7 @@ export const unwrapGenerationParameters = (value: unknown): AnyRecord => {
   if (isRecord(inputStep?.input)) return inputStep.input;
 
   // Schema-provider actualRequest envelope
-  if (isRecord(body.parameters) && (body.endpoint || body.mapping)) {
+  if (isRecord(body.parameters) && (body.endpoint || body.mapping || Array.isArray(body.parameters.stages))) {
     return unwrapGenerationParameters(body.parameters);
   }
 
@@ -148,10 +155,11 @@ const FIELD_KEYS: Record<HistoryParameterKey, string[]> = {
   scheduler: ['schedule', 'scheduler'],
   width: ['width'],
   height: ['height'],
-  // Schema size fields (e.g. AIMLAPI image_size enum string or {width,height}; OpenAI-style size string;
-  // aspect_ratio for MuAPI/WaveSpeed/Sogni/Venice ratio models — so history size row shows the sent ratio
-  // instead of folding 「尺寸」 into 「该端点不支持」 when the endpoint only has aspect_ratio).
   size: ['image_size', 'size', 'aspect_ratio'],
+  fps: ['fps'],
+  num_frames: ['num_frames', 'totalFrames'],
+  duration: ['duration'],
+  referenceImage: ['imageResourceId', 'image_url', 'image', 'referenceImage'],
 };
 
 const normalizeSize = (value: unknown): unknown =>
@@ -165,6 +173,7 @@ const BLOCKED_FROM_KEY: Record<string, HistoryParameterKey> = {
 
 const legacyValue = (item: GenerationHistoryItem, key: HistoryParameterKey): unknown => {
   if (key === 'negativePrompt') return item.negativePrompt;
+  if (key === 'duration' || key === 'fps' || key === 'num_frames' || key === 'referenceImage') return (item as any)[key];
   if (key === 'size') return undefined;
   return item[key];
 };
@@ -437,6 +446,10 @@ export function sentHistoryLoras(item: GenerationHistoryItem): Array<{ name: str
   const raw = isRecord(metadata.actualRequest) ? metadata.actualRequest : isRecord(submission) ? submission
     : item.status === 'local_blocked' && isRecord(metadata.intendedRequest) ? metadata.intendedRequest : undefined;
   const params = unwrapGenerationParameters(raw);
+  const stageLoras = isRecord(raw) && isRecord(raw.parameters) && Array.isArray(raw.parameters.stages)
+    ? raw.parameters.stages.find((s: any) => String(s?.type || '').toUpperCase() === 'VIDEO_DIFFUSION')?.video_diffusion?.lora?.items
+    : undefined;
+  if (Array.isArray(stageLoras)) return stageLoras.map((l: any) => ({ name: String(l?.lora_model ?? l?.path ?? l?.name ?? ''), strength: l?.weight ?? l?.strength })).filter((l: any) => l.name);
   const fromParams = lorasFromSentParameters(params);
   if (fromParams.length) return fromParams;
   return fromItem.filter((l) => l.name.trim() || l.strength !== undefined);
@@ -456,6 +469,7 @@ export function lorasFromSentParameters(params: unknown): Array<{ name: string; 
     && (Array.isArray(v) ? v.length > 0 : isRecord(v) && Object.keys(v).length > 0));
   if (!entry) return [];
   const value = entry[1];
+  if (isRecord(value) && Array.isArray(value.items)) return lorasFromSentParameters({ loras: value.items });
   if (isRecord(value)) return Object.entries(value).map(([name, strength]) => ({ name, strength }));
   // Names and strengths in two parallel arrays (e.g. loras + loraStrengths): same length, key names a LoRA strength.
   const parallel = Object.entries(params).find(([k, v]) => k !== entry[0] && isStrengthArray(k, v) && (v as unknown[]).length === (value as unknown[]).length)?.[1] as unknown[] | undefined;
