@@ -705,7 +705,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
             <div className="flex gap-1.5">
               <input
                 type="number"
-                value={greySeed ? '' : params.seed}
+                value={greySeed ? '' : (params.seed ?? '')}
                 disabled={greySeed}
                 placeholder={undefined}
                 title={undefined}
@@ -746,14 +746,14 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                 采样步数 (Steps)
                 <SchemaSendBadge status={sendSteps} omitTitle={SCHEMA_OMIT_REASON} />
               </span>
-              <span className="font-bold whitespace-nowrap shrink-0 text-cyan-400">{`${params.steps} 步`}</span>
+              <span className="font-bold whitespace-nowrap shrink-0 text-cyan-400">{params.steps !== undefined ? `${params.steps} 步` : '未设置'}</span>
             </div>
             <input
               type="range"
               min={1}
               max={80}
               step={1}
-              value={params.steps}
+              value={params.steps ?? ''}
               onChange={(e) => update({ steps: parseInt(e.target.value) })}
               className="w-full h-1.5 bg-[#252833] rounded appearance-none cursor-pointer accent-cyan-400"
             />
@@ -774,7 +774,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
               min={1.0}
               max={20.0}
               step={0.1}
-              value={params.cfg}
+              value={params.cfg ?? ''}
               onChange={(e) => update({ cfg: parseFloat(e.target.value) })}
               className="w-full h-1.5 bg-[#252833] rounded appearance-none cursor-pointer accent-cyan-400"
             />

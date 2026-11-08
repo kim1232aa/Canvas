@@ -141,7 +141,9 @@ export const SpatialFrameItem: React.FC<SpatialFrameItemProps> = ({
             {frame.title}
           </span>
           <span className="text-[10px] font-mono text-slate-400 bg-[#1c1d25] px-2 py-0.5 rounded border border-[#2b2d38]">
-            {frame.params.width}×{frame.params.height}
+            {frame.params.width !== undefined && frame.params.height !== undefined
+              ? `${frame.params.width}×${frame.params.height}`
+              : '未设置尺寸'}
           </span>
         </div>
 
@@ -230,9 +232,9 @@ export const SpatialFrameItem: React.FC<SpatialFrameItemProps> = ({
                   greySampler && !greyScheduler ? 'sampler' : greyScheduler && !greySampler ? 'scheduler' : 'sampler'
                 )}
                 <span>·</span>
-                {chip(greySteps, `${frame.params.steps}步`, 'steps')}
+                {chip(greySteps, frame.params.steps !== undefined ? `${frame.params.steps}步` : '未设置', 'steps')}
                 <span>·</span>
-                {chip(greyCfg, `CFG ${frame.params.cfg}`, 'cfg')}
+                {chip(greyCfg, frame.params.cfg !== undefined ? `CFG ${frame.params.cfg}` : '未设置', 'cfg')}
               </>
             );
           })()}
