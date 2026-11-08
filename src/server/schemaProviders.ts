@@ -1814,6 +1814,13 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
         // fix3 B: map LoRAs into the payload first; maxItems / constraint checks run after the full body is assembled.
         const loras=req.body.loras;
         const unmappedLoras: Array<{ item: any; reason: string }> = [];
+        const declaredTarget = (provider==='krea' ? ['styles'] : ['loras','lora_list','image_loras','lora_url','model_id']).find(k=>Object.hasOwn(props,k));
+        const explicitTargets = loras.map((l:any)=>String(l?.target_field || l?.targetField || l?.lora_field || '').trim());
+        if(!declaredTarget && !explicitTargets.every((field:string)=>field && Object.hasOwn(props,field))) {
+          for(const item of loras)unmappedLoras.push({item,reason:'当前模型 Schema 未声明可接收此 LoRA 的字段，未发送请求'});
+          mapping.push({from:'loras',to:null,requested:loras,unmappedLoras});
+          throw Object.assign(new Error('当前模型 Schema 未声明 LoRA 字段，未发送请求'),{status:400,errorSource:'local'});
+        }
         if(provider==='sogni') {
           const { ids, strengths } = sogniLoras(loras, unmappedLoras);
           payload.loras = ids;
@@ -1872,11 +1879,43 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
             } else {
               unmappedLoras.push({ item: defaultLoras[0], reason: 'lora_url 需要有效直链 URL' });
             }
-          } else if (!targetedGroups.size && defaultLoras.length) {
-            payload.loras = defaultLoras;
+          } else if (defaultLoras.length) {
+            for(const item of defaultLoras)unmappedLoras.push({item,reason:'Schema 未声明可映射的 LoRA 数组字段'});
           }
         }
+        let loraMappingError: string | undefined;
+        for(const entry of unmappedLoras) {
+          const l=entry.item;
+          const explicit=String(l?.target_field || l?.targetField || l?.lora_field || '').trim();
+          const target=explicit && Object.hasOwn(props,explicit)?explicit:declaredTarget;
+          const candidate=typeof l==='string'?l:[l?.id,l?.name,l?.path,l?.url,l?.air,l?.downloadUrl,l?.lora_name,l?.civitaiId].find(v=>v!==undefined && v!==null && v!=='');
+          if(!target || candidate===undefined || candidate==='') {
+            entry.reason+='；没有可原样提交的候选标识或已声明字段';
+            loraMappingError=entry.reason;continue;
+          }
+          if(target==='lora_url') {
+            if(loras.length!==1){entry.reason+='；标量 lora_url 无法承载多个 LoRA';loraMappingError=entry.reason;continue;}
+            payload[target]=candidate;
+            if(Object.hasOwn(props,'lora_weight'))payload.lora_weight=l?.strength ?? l?.modelStrength ?? l?.scale ?? l?.weight;
+          } else {
+            const spec=props[target];
+            const itemSchema=spec?.items || spec?.anyOf?.find((x:any)=>x?.items)?.items;
+            const itemProps=itemSchema?.properties;
+            const resourceKey=itemProps?['id','path','url','air','model','model_name','name'].find(k=>Object.hasOwn(itemProps,k)):undefined;
+            const strengthKey=itemProps?['scale','weight','strength','modelStrength','lora_strength'].find(k=>Object.hasOwn(itemProps,k)):undefined;
+            const strength=l?.strength ?? l?.modelStrength ?? l?.scale ?? l?.weight;
+            const value=resourceKey?{[resourceKey]:candidate,...(strengthKey && strength!==undefined?{[strengthKey]:strength}:{})}:candidate;
+            if(!Array.isArray(payload[target]))payload[target]=[];
+            payload[target].push(value);
+            if(provider==='sogni') {
+              const index=payload[target].length-1;
+              if(strength!==undefined){if(!Array.isArray(payload.loraStrengths))payload.loraStrengths=[];payload.loraStrengths[index]=strength;}
+            }
+          }
+          entry.reason+='；候选标识已原样提交到 '+target+'，由上游裁决';
+        }
         mapping.push({from:'loras',to:provider==='sogni'?'loras + loraStrengths':provider==='krea'?'styles':Object.hasOwn(payload,'model_id')?'model_id':Object.hasOwn(payload,'image_loras')?'image_loras':Object.hasOwn(payload,'lora_list')?'lora_list':Object.hasOwn(payload,'lora_url')?'lora_url + lora_weight':'loras',requested:loras,value:payload.styles || payload.loras || payload.model_id || payload.image_loras || payload.lora_list || {url:payload.lora_url,weight:payload.lora_weight},strengths:payload.loraStrengths,...(unmappedLoras.length ? { unmappedLoras } : {}),...(provider==='sogni'?{capability:`Official ${definition.hostedToolName || sogniHostedToolName(definition.inputSchema) || 'hosted-tool'} schema: LoRA arrays are sent only when that live Schema declares them; MiniMax H3 video selectors accept loras, others ignore them`}:{}),note:provider==='sogni'?'按选择器与 LoRA ID 原样提交；兼容性及字段实际应用仍以 workflow 结果为准。':'仅记录已提交的 LoRA 参数；生成成功不证明上游实际应用了 LoRA。独立 CLIP 强度没有对应字段时不会假称生效。'});
+        if(loraMappingError)throw Object.assign(new Error('LoRA 无法完整提交：'+loraMappingError),{status:400,errorSource:'local'});
       }
       blockStage=undefined;
       // custom_parameters are scoped to the CURRENT model Schema: undeclared keys (e.g. left over from another provider/model) are not sent while Schema matching is on.

@@ -88,6 +88,37 @@ function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 }
 
+describe('LoRA submission transparency', () => {
+  const lora = { name: 'foreign-style.safetensors', air: 'urn:air:flux1:lora:civitai:1@2', strength: 0.7 };
+  it.each([
+    { type: 'array', items: { type: 'string' } },
+    { type: 'array', items: { type: 'object', properties: { path: { type: 'string' }, scale: { type: 'number' } } } },
+  ])('sends unresolved candidates through the declared LoRA field (%j)', async (field) => {
+    await withFixture(async (_url, init) => {
+      if (init?.method === 'POST') return json({ error: 'upstream rejected foreign LoRA' }, 422);
+      return json({ data: [{ model_id: 'fixture/model', api_schema: { api_schemas: [{ type: 'model_run', method: 'POST', api_path: '/api/v3/fixture/model', server: 'https://api.wavespeed.ai', request_schema: { properties: { loras: field } } }] } }] });
+    }, async (baseUrl, calls) => {
+      const response = await fetch(`${baseUrl}/api/schema-provider/wavespeed/submit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: 'fixture/model', prompt: 'cinematic mountain landscape', loras: [lora] }) });
+      expect(response.status).toBe(422);
+      const data = await response.json() as any;
+      const sent = JSON.parse(String(calls.find(c => c.init?.method === 'POST')?.init?.body));
+      expect(sent.loras).toEqual(field.items.type === 'string' ? [lora.name] : [{ path: lora.name, scale: 0.7 }]);
+      expect(data.actualRequest.mapping.find((m: any) => m.from === 'loras').unmappedLoras).toEqual([expect.objectContaining({ item: lora, reason: expect.any(String) })]);
+    });
+  });
+  it('returns local 400 with every unmapped item when the schema has no LoRA field', async () => {
+    await withFixture(async () => json({ data: [{ model_id: 'fixture/model', api_schema: { api_schemas: [{ type: 'model_run', method: 'POST', api_path: '/api/v3/fixture/model', server: 'https://api.wavespeed.ai', request_schema: { properties: { prompt: { type: 'string' } } } }] } }] }), async (baseUrl, calls) => {
+      const response = await fetch(`${baseUrl}/api/schema-provider/wavespeed/submit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: 'fixture/model', prompt: 'cinematic mountain landscape', loras: [lora, { id: 'native-id', strength: 0.5 }] }) });
+      expect(response.status).toBe(400);
+      const data = await response.json() as any;
+      expect(data.errorSource).toBe('local');
+      expect(data.blockedField.field).toBe('loras');
+      expect(data.proposedRequest.mapping.find((m: any) => m.from === 'loras').unmappedLoras).toHaveLength(2);
+      expect(calls.some(c => c.init?.method === 'POST')).toBe(false);
+    });
+  });
+});
+
 describe('Sogni LoRA catalog covers', () => {
   const example=(caption:string,isMature=false)=>({url:`https://cdn.sogni.ai/ComfyUI/lora-examples/x_${caption}.jpg`,caption,isMature});
   it('uses an upstream positive-strength example, skipping the shared Off baseline, negatives and mature samples', () => {
