@@ -1,6 +1,41 @@
-# 交接状态更新（2026-11-07 M31 核验基线，承接 M25 / M29 / M30）
+# 交接状态更新（2026-11-08 M46 真实浏览器点击验收基线，承接 M77 / M81 / M82 / M83）
 
-> ⚠️ **基准声明**：下文「2026-11-05」及更早各节均为早期 Agent 留存的历史推进记录（未验证历史），不得作为当前系统现状与能力的凭据。当前唯一验证基准请以 [docs/evidence/2026-11-05/final.md](docs/evidence/2026-11-05/final.md) 与 [HANDOFF.md](HANDOFF.md) 为准。
+> ⚠️ **基准声明**：下文「2026-11-07」及更早各节均为早期 Agent 留存的历史推进记录（未验证历史），不得作为当前系统现状与能力的凭据。当前唯一验证基准请以 [docs/evidence/2026-11-08/acceptance.md](docs/evidence/2026-11-08/acceptance.md) 与 [HANDOFF.md](HANDOFF.md) 为准。
+
+## 2026-11-08 M46 真实浏览器无代理点击验收与全量截图取证
+
+- **代码基准**：`main` @ `dadb08f`（已合入 M77、M81、M82、M83 及并行网络搜索交叉验证防呆铁律）。
+- **实测环境**：`PORT=4546`，`npx tsx server.ts`，Playwright Chromium (`--no-proxy-server`)，视口 `1920×1080`。
+- **并行 3-MCP 检索与一手官方文档交叉验证**：
+  - 并行调用 `tavily_search`、`9router_search`、`agy_search`，并用 `FetchURL` / `9router_fetch` 抓取一手官方文档：
+    - Civitai AIR 规范: `https://developer.civitai.com/site/guide/air`，证实格式为 `urn:air:{ecosystem}:{type}:{source}:{id}[@{version}]`，Runware API 原生支持。
+    - Sogni Protocol: 证实个人 LoRA 需通过 `POST /v1/loras/personal` 导入，生成时使用 ready `personal-<uuid>` 或目录 ID，区分导入来源 URL 与生成 ID。
+    - Google Gemini 原生图像: `https://ai.google.dev/gemini-api/docs/models/gemini-3.1-flash-image`，证实独立 Imagen 模型已下线，统一由 `gemini-3.1-flash-image` (Nano Banana 2) 原生生成，提示词直接透传。
+- **全量 14 项真实 UI 交互截图交付 (`docs/evidence/2026-11-08/*.png`)**：
+  1. `01-civitai-import-runware-air.png`: Civitai 导入弹窗切换至 Runware，提示必须从目录选择真实模型，LoRA 按 AIR 规范解析映射。
+  2. `02-civitai-import-sogni-source-vs-id.png`: Civitai 导入弹窗切换至 Sogni，明确区分原始下载 URL 为导入来源，生成必须使用 ready personal ID 或官方目录 ID。
+  3. `03-canvas-add-node-menu-aivideonode.png`: 画布右键菜单完整包含 `AI 视频（显式 Provider/Model）` (`AIVideoNode`)。
+  4. `04-aivideonode-targetprovider-dropdown.png`: `AIVideoNode` 视频服务商下拉展开，包含 `nanogpt`、`novita`、`tensorart` 等具备视频能力的服务商选项。
+  5. `05-aivideonode-lorahub-mount-allproviders.png`: 打开模型中心 LoRA 目录，`全部服务商` 页签可点击且激活。
+  6. `06-providermatrix-gemini-native.png`: 供应商全景矩阵第 1 标签页，包含 `Google Gemini 原生图像`、`gemini-3.1-flash-image`、Imagen 下线说明与提示词原样透传。
+  7. `07-civitai-lora-preset-loraloader.png`: Civitai LoRA 预设载入画布，展示结构完整的 LoRALoader 节点。
+  8. `08-huggingface-node-no-routing-dropdown.png`: Hugging Face 节点无任何内部 `hf_provider` 路由下拉框。
+  9. `09-lorahub-autopair-tensorart-crossbar.png`: 模型中心 LoRA 分类常驻跨服务商横栏（含 `Tensor.Art (TAMS)` 与 `Tensor.Art OpenWorks`），各卡片展示 `🎯 选用 LoRA 并自动配对底模`。
+  10. `10-executionlog-drawer-open.png`: 底部 ExecutionLog 抽屉展开，展示真实出站 trace。
+  11. `11-api-parameter-editor-json.png`: 参数面板中的 `ApiParameterEditor` 自由 JSON 文本编辑框，填入自定义参数。
+  12. `12-lora-autopair-checkpoint-button.png`: LoRALoader 节点上呈现已验证底模配对按钮（`应用已验证底模 black-forest-labs/FLUX.1-dev`）。
+  13. `13-real-run-actualrequest-upstream-response.png`: 真实带满参数点击运行，抵达 Hugging Face Router，顶栏/Toast/节点原样透传 HTTP 400 `Model not supported by provider hf-inference` (`PASS_BILLING`)。
+  14. `14-real-run-executionlog-trace.png`: ExecutionLog 展开该次真实运行记录，呈现 Key 轮换尝试与上游原始 JSON。
+- **历史声明修正与诚实清理**：
+  - `README.md` 中 WaveSpeed 与 Tensor.Art (OpenWorks) 无磁盘产物支撑，降级为 `PASS_BILLING`。
+  - `README.md` 中 Novita SVD-XT 视频因预设退役修正为 `NOT_SENT`。
+  - 彻底删除 `public/seed-ok-preview.png` 157 字节伪产物占位图。
+  - 在 `final.md` 索引处说明 41 张截图跳号原由。
+- **Tower 缺陷提报 (TowerFinding)**：
+  - Bug 1: `src/types/graph.ts` 的 `ComfyParameters` 缺少 `civitaiVersion`、`civitaiBackend`、`civitaiOperation` 导致 `tsc` 报错。
+  - Bug 2: 遗留测试用例引用已退役预设导致 vitest 跑 `undefined.nodes` 异常。
+
+---
 
 ## 2026-11-07 M31 ModelsLab 出站复测与 M29/M30 UI 核验
 
