@@ -64,7 +64,7 @@ export function openWorksCatalogItems(entries: any[], sourceUrl: string) {
   });
 }
 
-const JSON_TYPE: Record<string, string> = { STRING: 'string', INTEGER: 'integer', NUMBER: 'number', BOOLEAN: 'boolean', ARRAY: 'array', FILE: 'string' };
+const JSON_TYPE: Record<string, string> = { STRING: 'string', INTEGER: 'integer', NUMBER: 'number', BOOLEAN: 'boolean', ARRAY: 'array', OBJECT: 'object', FILE: 'string' };
 
 /** Upstream inputs[] → JSON Schema. Property name = upstream description verbatim (dedupe with #position). All required (upstream has no optional flag; SKILL.md forbids placeholders). */
 export function openWorksInputSchema(entry: any) {
@@ -76,6 +76,10 @@ export function openWorksInputSchema(entry: any) {
     const spec: any = { type: JSON_TYPE[t] || 'string', description: inp?.description || '', 'x-openworks-position': i, 'x-openworks-type': t || 'STRING' };
     if (t === 'FILE') spec.format = 'url';
     if (t === 'ARRAY' && inp?.schema?.items) spec.items = inp.schema.items;
+    if (t === 'OBJECT' && inp?.schema?.properties) {
+      spec.properties = inp.schema.properties;
+      if (inp?.schema?.required) spec.required = inp.schema.required;
+    }
     properties[key] = spec;
   });
   return { type: 'object', properties, required: Object.keys(properties) };
@@ -86,6 +90,8 @@ function typeError(key: string, spec: any, v: unknown): string | null {
   if (t === 'INTEGER' && !(typeof v === 'number' && Number.isInteger(v))) return `「${key}」须为整数（收到 ${JSON.stringify(v)}）`;
   if (t === 'NUMBER' && typeof v !== 'number') return `「${key}」须为数字（收到 ${JSON.stringify(v)}）`;
   if ((t === 'STRING' || t === 'FILE') && typeof v !== 'string') return `「${key}」须为字符串（收到 ${JSON.stringify(v)}）`;
+  if (t === 'BOOLEAN' && typeof v !== 'boolean') return `「${key}」须为布尔值（收到 ${JSON.stringify(v)}）`;
+  if (t === 'OBJECT' && (typeof v !== 'object' || v === null || Array.isArray(v))) return `「${key}」须为对象（收到 ${JSON.stringify(v)}）`;
   if (t === 'ARRAY') {
     if (!Array.isArray(v)) return `「${key}」须为数组（收到 ${JSON.stringify(v)}）`;
     const req: string[] = Array.isArray(spec.items?.required) ? spec.items.required : [];
@@ -165,51 +171,57 @@ export function buildOpenWorksRequest(model: string, inputSchema: ReturnType<typ
   const inputs: Array<{ type: string; name?: string; value: unknown }> = ordered.map(([k, spec]: any) => ({ type: spec['x-openworks-type'], value: values[k] }));
   const flat: Record<string, unknown> = {};
 
-  const pushNamed = (from: string, name: string, type: string, value: unknown) => {
+  const pushNamed = (from: string, name: string, type: string, value: unknown, reason?: string) => {
     if (!isFilled(value)) return;
     inputs.push({ type, name, value });
-    mapping.push({ from, to: name, value, sent: true, reason: 'live-tested named extra (雁 2026-10-17)' });
+    mapping.push({ from, to: name, value, sent: true, reason });
   };
-  const extraType = (v: unknown) => typeof v === 'number' ? (Number.isInteger(v) ? 'INT' : 'FLOAT') : typeof v === 'boolean' ? 'BOOLEAN' : 'STRING';
-  for (const [from, name, v] of extras) pushNamed(from, name, extraType(v), v);
+  const extraType = (v: unknown): string => {
+    if (typeof v === 'number') return Number.isInteger(v) ? 'INTEGER' : 'NUMBER';
+    if (typeof v === 'boolean') return 'BOOLEAN';
+    if (Array.isArray(v)) return 'ARRAY';
+    if (v !== null && typeof v === 'object') return 'OBJECT';
+    return 'STRING';
+  };
+  for (const [from, name, v] of extras) pushNamed(from, name, extraType(v), v, 'custom_parameters 自定义字段');
 
   const seed = body?.seed;
   if (isFilled(seed)) {
     const n = Number(seed);
-    if (Number.isFinite(n)) { pushNamed('seed', 'seed', 'INTEGER', Math.trunc(n)); flat.seed = Math.trunc(n); }
+    if (Number.isFinite(n)) { pushNamed('seed', 'seed', 'INTEGER', Math.trunc(n), 'live-tested named extra (雁 2026-10-17)'); flat.seed = Math.trunc(n); }
   }
   const steps = body?.steps;
   if (isFilled(steps)) {
     const n = Number(steps);
-    if (Number.isFinite(n)) { pushNamed('steps', 'steps', 'INTEGER', Math.trunc(n)); flat.steps = Math.trunc(n); }
+    if (Number.isFinite(n)) { pushNamed('steps', 'steps', 'INTEGER', Math.trunc(n), 'live-tested named extra (雁 2026-10-17)'); flat.steps = Math.trunc(n); }
   }
   const cfg = body?.cfg ?? body?.cfg_scale;
   if (isFilled(cfg)) {
     const n = Number(cfg);
     if (Number.isFinite(n)) {
-      pushNamed('cfg', 'cfg', 'NUMBER', n);
-      pushNamed('cfg', 'cfg_scale', 'NUMBER', n);
+      pushNamed('cfg', 'cfg', 'NUMBER', n, 'live-tested named extra (雁 2026-10-17)');
+      pushNamed('cfg', 'cfg_scale', 'NUMBER', n, 'live-tested named extra (雁 2026-10-17)');
       flat.cfg = n;
     }
   }
   const clipSkip = body?.clip_skip ?? body?.clipSkip ?? custom.clip_skip;
   if (isFilled(clipSkip)) {
     const n = Number(clipSkip);
-    if (Number.isFinite(n)) { pushNamed('clip_skip', 'clip_skip', 'INTEGER', Math.trunc(n)); flat.clip_skip = Math.trunc(n); }
+    if (Number.isFinite(n)) { pushNamed('clip_skip', 'clip_skip', 'INTEGER', Math.trunc(n), 'live-tested named extra (雁 2026-10-17)'); flat.clip_skip = Math.trunc(n); }
   }
   // Checkpoint id is NOT body.model (that is the OpenWorks toolName). Accept TAMS-shaped aliases.
   const ckpt = body?.checkpoint ?? body?.sdModel ?? body?.sd_model ?? custom.checkpoint ?? custom.sdModel;
   if (isFilled(ckpt)) {
     const id = String(ckpt).trim();
-    pushNamed('checkpoint', 'checkpoint', 'STRING', id);
-    pushNamed('checkpoint', 'model', 'STRING', id);
-    pushNamed('checkpoint', 'sdModel', 'STRING', id);
+    pushNamed('checkpoint', 'checkpoint', 'STRING', id, 'live-tested named extra (雁 2026-10-17)');
+    pushNamed('checkpoint', 'model', 'STRING', id, 'live-tested named extra (雁 2026-10-17)');
+    pushNamed('checkpoint', 'sdModel', 'STRING', id, 'live-tested named extra (雁 2026-10-17)');
     flat.checkpoint = id;
   }
   const neg = body?.negative_prompt ?? body?.negativePrompt;
   const negDeclared = [...(CANVAS_TO_SCHEMA_ALIASES.negative_prompt || []), 'negative_prompt'].some((n) => Object.hasOwn(props, n));
   if (isFilled(neg) && !negDeclared) {
-    pushNamed('negative_prompt', 'negative_prompt', 'STRING', String(neg));
+    pushNamed('negative_prompt', 'negative_prompt', 'STRING', String(neg), 'live-tested named extra (雁 2026-10-17)');
     flat.negative_prompt = String(neg);
   }
 
@@ -227,15 +239,16 @@ export function buildOpenWorksRequest(model: string, inputSchema: ReturnType<typ
   if (loraItems.length) {
     const primary = loraItems[0];
     const ids = loraItems.map((x) => x.name).join(',');
-    pushNamed('loras', 'loras', 'STRING', ids);
-    pushNamed('loras', 'image_loras', 'STRING', ids);
-    pushNamed('loras', 'lora', 'STRING', primary.name);
-    pushNamed('loras', 'lora_id', 'STRING', primary.name);
-    pushNamed('loras', 'lora_weight', 'NUMBER', primary.strength);
-    pushNamed('loras', 'weight', 'NUMBER', primary.strength);
+    const reason = 'live-tested named extra (雁 2026-10-17)';
+    pushNamed('loras', 'loras', 'STRING', ids, reason);
+    pushNamed('loras', 'image_loras', 'STRING', ids, reason);
+    pushNamed('loras', 'lora', 'STRING', primary.name, reason);
+    pushNamed('loras', 'lora_id', 'STRING', primary.name, reason);
+    pushNamed('loras', 'lora_weight', 'NUMBER', primary.strength, reason);
+    pushNamed('loras', 'weight', 'NUMBER', primary.strength, reason);
     const itemsJson = JSON.stringify(loraItems.map((x) => ({ loraModel: x.name, weight: x.strength })));
-    pushNamed('loras', 'diffusion.lora.items', 'STRING', itemsJson);
-    pushNamed('loras', 'lora_items', 'STRING', itemsJson);
+    pushNamed('loras', 'diffusion.lora.items', 'STRING', itemsJson, reason);
+    pushNamed('loras', 'lora_items', 'STRING', itemsJson, reason);
     flat.loras = loraItems;
   }
 
@@ -246,6 +259,18 @@ export function buildOpenWorksRequest(model: string, inputSchema: ReturnType<typ
   const hSent = mapping.find((m) => m.from === 'height' && m.sent);
   if (wSent && Number.isFinite(Number(wSent.value))) flat.width = Number(wSent.value);
   if (hSent && Number.isFinite(Number(hSent.value))) flat.height = Number(hSent.value);
+
+  // Validate: type errors for filled slots, mark unfilled required slots in mapping
+  for (const [k, spec] of ordered) {
+    const v = values[k];
+    if (!isFilled(v)) {
+      mapping.push({ from: `schema:${k}`, to: k, value: undefined, sent: false, reason: '未填写' });
+      continue;
+    }
+    const err = typeError(k, spec, v);
+    if (err) errors.push(err);
+  }
+  if (errors.length) return { ok: false, error: errors.join('; '), mapping };
 
   const schemaFields = [...new Set([...Object.keys(props), ...mapping.filter((m) => m.sent && !m.from.startsWith('custom_parameters.')).map((m) => m.from)])];
   const parameters = { toolName: model, inputs, ...flat } as OpenWorksBuildOk['parameters'];
