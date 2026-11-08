@@ -247,6 +247,59 @@ export function CivitaiVideoLiveSelectors({
   );
 }
 
+const isFilledNumber = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+
+/**
+ * Range input for an optional number. An unset value is shown dimmed with 「未设置」 (aria-valuetext) and the thumb at `min`
+ * (a range input can never be empty — MDN: its default is the midpoint, which would pose as a chosen value). Nothing is committed
+ * until the user moves the slider or types in the paired number input; clearing the number input unsets it again. An explicit 0 is a value.
+ */
+function OptionalNumberRange({ label, value, min, max, step, integer, onCommit }: {
+  label: string;
+  value: number | undefined;
+  min: number;
+  max: number;
+  step: number;
+  integer?: boolean;
+  onCommit: (value: number | undefined) => void;
+}) {
+  const isSet = isFilledNumber(value);
+  const parse = (raw: string) => {
+    const n = integer ? parseInt(raw, 10) : parseFloat(raw);
+    return Number.isFinite(n) ? n : undefined;
+  };
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        type="range"
+        aria-label={`${label} 滑块`}
+        min={min}
+        max={max}
+        step={step}
+        value={isSet ? value : min}
+        aria-valuetext={isSet ? undefined : '未设置'}
+        data-unset={isSet ? undefined : 'true'}
+        title={isSet ? `当前设定值: ${value}` : '未设置，不发送（拖动滑块或输入数值以设定）'}
+        onChange={(e) => { const n = parse(e.target.value); if (n !== undefined) onCommit(n); }}
+        className={`flex-1 h-1.5 rounded appearance-none cursor-pointer transition-opacity ${isSet ? 'bg-[#252833] accent-cyan-400' : 'bg-[#1b1d24] accent-slate-500 opacity-40'}`}
+      />
+      <input
+        type="number"
+        aria-label={label}
+        min={min}
+        max={max}
+        step={step}
+        value={isSet ? value : ''}
+        placeholder="未设置"
+        onMouseDown={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
+        onChange={(e) => onCommit(e.target.value === '' ? undefined : parse(e.target.value))}
+        className={`w-20 rounded border px-2 py-1 font-mono text-[11px] ${isSet ? 'border-cyan-500/50 bg-[#121316] text-cyan-300' : 'border-slate-600 bg-black/30 text-slate-400'}`}
+      />
+    </div>
+  );
+}
+
 interface ParameterInspectorProps {
   params: ComfyParameters;
   onChange: (newParams: ComfyParameters) => void;
@@ -767,17 +820,9 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                 采样步数 (Steps)
                 <SchemaSendBadge status={sendSteps} omitTitle={SCHEMA_OMIT_REASON} />
               </span>
-              <span className="font-bold whitespace-nowrap shrink-0 text-cyan-400">{params.steps !== undefined ? `${params.steps} 步` : '未设置'}</span>
+              <span className="font-bold whitespace-nowrap shrink-0 text-cyan-400">{isFilledNumber(params.steps) ? `${params.steps} 步` : '未设置'}</span>
             </div>
-            <input
-              type="range"
-              min={1}
-              max={80}
-              step={1}
-              value={params.steps ?? ''}
-              onChange={(e) => update({ steps: parseInt(e.target.value) })}
-              className="w-full h-1.5 bg-[#252833] rounded appearance-none cursor-pointer accent-cyan-400"
-            />
+            <OptionalNumberRange label="steps" value={params.steps} min={1} max={80} step={1} integer onCommit={(steps) => update({ steps })} />
           </div>
           )}
 
@@ -788,17 +833,9 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                 提示词引导系数 (CFG Scale)
                 <SchemaSendBadge status={sendCfg} omitTitle={SCHEMA_OMIT_REASON} />
               </span>
-              <span className="font-bold whitespace-nowrap shrink-0 text-cyan-400">{params.cfg?.toFixed(1) ?? '未设置'}</span>
+              <span className="font-bold whitespace-nowrap shrink-0 text-cyan-400">{isFilledNumber(params.cfg) ? params.cfg.toFixed(1) : '未设置'}</span>
             </div>
-            <input
-              type="range"
-              min={1.0}
-              max={20.0}
-              step={0.1}
-              value={params.cfg ?? ''}
-              onChange={(e) => update({ cfg: parseFloat(e.target.value) })}
-              className="w-full h-1.5 bg-[#252833] rounded appearance-none cursor-pointer accent-cyan-400"
-            />
+            <OptionalNumberRange label="cfg" value={params.cfg} min={1} max={20} step={0.1} onCommit={(cfg) => update({ cfg })} />
           </div>
           )}
 
@@ -1133,8 +1170,22 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
             <label className="block text-sm text-slate-300">模型分辨率 resolution
               <input aria-label="NanoGPT resolution" type="text" value={params.resolution || ''} placeholder="留空使用上方像素宽高" onChange={e => update({resolution: e.target.value || undefined})} className="mt-1 w-full rounded-lg border border-slate-700 bg-[#111216] p-2 text-slate-200" />
             </label>
-            <p className="text-sm text-slate-400">允许值由选定模型的实时能力决定，不通用。若同时保留宽高，resolution 必须与 {params.width}x{params.height} 一致，否则提交会报冲突。</p>
-            {params.resolution && params.resolution !== `${params.width}x${params.height}` && <p role="alert" className="text-sm text-amber-200">尺寸冲突：resolution 与当前像素宽高不同。请清空 resolution，或修改为一致的值。</p>}
+            <p className="text-sm text-slate-400">允许值由选定模型的实时能力决定，不通用。当前 width={isFilledNumber(params.width) ? params.width : '未填写'}、height={isFilledNumber(params.height) ? params.height : '未填写'}；宽高都填写时 resolution 必须与其一致，否则提交会报冲突，任一未填写则不做该比较。</p>
+            {(() => {
+              const resolution = params.resolution;
+              if (!resolution) return null;
+              const hasWidth = isFilledNumber(params.width);
+              const hasHeight = isFilledNumber(params.height);
+              if (hasWidth && hasHeight) {
+                return resolution !== `${params.width}x${params.height}`
+                  ? <p role="alert" className="text-sm text-amber-200">尺寸冲突：resolution {resolution} 与当前像素宽高 {params.width}x{params.height} 不同。请清空 resolution，或修改为一致的值。</p>
+                  : null;
+              }
+              if (hasWidth !== hasHeight) {
+                return <p role="status" data-testid="nanogpt-size-incomplete" className="text-sm text-slate-300">宽高未填写完整：已填 {hasWidth ? `width=${params.width}` : `height=${params.height}`}，缺少 {hasWidth ? 'height' : 'width'}。未比较 resolution 与像素尺寸，也不会自动补全宽高。</p>;
+              }
+              return null;
+            })()}
           </div>}
 
           {isGemini && (
