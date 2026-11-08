@@ -113,12 +113,44 @@ describe('server.ts testSingleProviderKey probes real read-only endpoints', () =
     expect(result.message).toContain('modelSearch');
   });
 
-  it('runware keeps the upstream status and verbatim body on rejection', async () => {
+  it('runware HTTP 401 keeps the upstream status and verbatim body', async () => {
     const h = probeHarness({ baseUrl: 'https://api.runware.ai/v1', respond: () => ({ ok: false, status: 401, text: async () => '{"errors":["invalid api key"]}' }) });
     const result = await h.run('runware', 'rw-bad-1234567890');
     expect(result.status).toBe('error');
     expect(result.message).toContain('HTTP 401');
     expect(result.message).toContain('invalid api key');
+  });
+
+  it('runware HTTP 200 with errors array is a business error, not ok', async () => {
+    const h = probeHarness({
+      baseUrl: 'https://api.runware.ai/v1',
+      respond: () => ({ ok: true, status: 200, text: async () => '{"errors":[{"code":"invalidApiKey","message":"Invalid API key. Get one at https://runware.ai/signup"}]}' }),
+    });
+    const result = await h.run('runware', 'rw-bad-key');
+    expect(result.status).toBe('error');
+    expect(result.message).toContain('HTTP 200 业务错误');
+    expect(result.message).toContain('Invalid API key');
+  });
+
+  it('runware HTTP 200 with invalid JSON is a protocol error', async () => {
+    const h = probeHarness({
+      baseUrl: 'https://api.runware.ai/v1',
+      respond: () => ({ ok: true, status: 200, text: async () => '{not valid json' }),
+    });
+    const result = await h.run('runware', 'rw-key');
+    expect(result.status).toBe('error');
+    expect(result.message).toContain('返回无效 JSON');
+    expect(result.message).toContain('{not valid json');
+  });
+
+  it('runware HTTP 429 returns rate_limited status', async () => {
+    const h = probeHarness({
+      baseUrl: 'https://api.runware.ai/v1',
+      respond: () => ({ ok: false, status: 429, text: async () => '{"errors":[{"code":"tooManyRequests"}]}' }),
+    });
+    const result = await h.run('runware', 'rw-key');
+    expect(result.status).toBe('rate_limited');
+    expect(result.message).toContain('HTTP 429');
   });
 
   it('modelslab posts the documented /api/v4/dreambooth/model_list body', async () => {
@@ -129,6 +161,48 @@ describe('server.ts testSingleProviderKey probes real read-only endpoints', () =
     expect(h.calls[0].init.method).toBe('POST');
     expect(JSON.parse(h.calls[0].init.body)).toEqual({ key: 'ml-live-1234567890' });
     expect(result.message).toContain('2 个公开模型');
+  });
+
+  it('modelslab HTTP 200 with status:error is a business error, not ok', async () => {
+    const h = probeHarness({
+      baseUrl: 'https://modelslab.com',
+      respond: () => ({ ok: true, status: 200, text: async () => '{"status":"error","message":"Invalid API key"}' }),
+    });
+    const result = await h.run('modelslab', 'ml-bad-key');
+    expect(result.status).toBe('error');
+    expect(result.message).toContain('HTTP 200 业务错误');
+    expect(result.message).toContain('Invalid API key');
+  });
+
+  it('modelslab HTTP 200 with invalid JSON is a protocol error', async () => {
+    const h = probeHarness({
+      baseUrl: 'https://modelslab.com',
+      respond: () => ({ ok: true, status: 200, text: async () => 'not json at all' }),
+    });
+    const result = await h.run('modelslab', 'ml-key');
+    expect(result.status).toBe('error');
+    expect(result.message).toContain('返回无效 JSON');
+    expect(result.message).toContain('not json at all');
+  });
+
+  it('modelslab HTTP 401 returns error status', async () => {
+    const h = probeHarness({
+      baseUrl: 'https://modelslab.com',
+      respond: () => ({ ok: false, status: 401, text: async () => '{"status":"error","message":"Unauthorized"}' }),
+    });
+    const result = await h.run('modelslab', 'ml-key');
+    expect(result.status).toBe('error');
+    expect(result.message).toContain('HTTP 401');
+  });
+
+  it('modelslab HTTP 429 returns rate_limited status', async () => {
+    const h = probeHarness({
+      baseUrl: 'https://modelslab.com',
+      respond: () => ({ ok: false, status: 429, text: async () => '{"status":"error","message":"Rate limit exceeded"}' }),
+    });
+    const result = await h.run('modelslab', 'ml-key');
+    expect(result.status).toBe('rate_limited');
+    expect(result.message).toContain('HTTP 429');
   });
 
   it('deepinfra probes GET https://api.deepinfra.com/v1/me with the bearer key', async () => {

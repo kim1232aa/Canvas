@@ -198,6 +198,27 @@ describe('Cloud settings payload builder for Base URLs', () => {
   });
 });
 
+describe('Balance route shows configured providers with unknown status', () => {
+  it('Runware and ModelsLab balances logic reuses testSingleProviderKey probe', () => {
+    expect(serverSource).toContain("balances.runware = probeResult.status === 'ok'");
+    expect(serverSource).toContain("{ status: 'unknown', detail: `key 可用（${probeResult.message}）；Runware 无已核实的余额接口");
+    expect(serverSource).toContain("balances.modelslab = probeResult.status === 'ok'");
+    expect(serverSource).toContain("{ status: 'unknown', detail: `key 可用（${probeResult.message}）；ModelsLab 无已核实的余额接口");
+  });
+
+  it('configured Runware key appears in balances with unknown status when probe succeeds', () => {
+    expect(serverSource).toContain("const runwareKey = keyPoolManager.getNextKey('runware')");
+    expect(serverSource).toContain("if (!runwareKey) return;");
+    expect(serverSource).toContain("const probeResult = await testSingleProviderKey('runware', runwareKey");
+  });
+
+  it('configured ModelsLab key appears in balances with unknown status when probe succeeds', () => {
+    expect(serverSource).toContain("const modelslabKey = keyPoolManager.getNextKey('modelslab')");
+    expect(serverSource).toContain("if (!modelslabKey) return;");
+    expect(serverSource).toContain("const probeResult = await testSingleProviderKey('modelslab', modelslabKey");
+  });
+});
+
 // ---------------------------------------------------------------------------
 // server.ts whitelist / storage / balance helpers executed from source.
 // ---------------------------------------------------------------------------
