@@ -124,7 +124,7 @@ export function mapSchemaLoraItems(
 ): any[] {
   if (!Array.isArray(loras) || loras.length === 0) return [];
 
-  if (itemSchema?.type === 'string') {
+  if (itemSchema?.type === 'string' || (Array.isArray(itemSchema?.type) && itemSchema.type.includes('string'))) {
     return loras
       .map((l: any) => {
         if (typeof l === 'string') {
@@ -271,9 +271,12 @@ export function mapSchemaLoraItems(
     for (const l of loras) {
       const candidate = l.downloadUrl || l.url || (typeof l.path === 'string' && /^https?:\/\//i.test(l.path) ? l.path : undefined);
       if (candidate && typeof candidate === 'string' && /^https?:\/\//i.test(candidate.trim())) {
-        const s = l.strength ?? l.modelStrength ?? l.scale ?? l.weight;
+        const s = l.strength ?? l.modelStrength ?? l.scale ?? l.weight ?? l.lora_strength;
         const entry: Record<string, any> = { [cfg.pathKey]: candidate.trim() };
-        if (typeof s === 'number' && Number.isFinite(s)) entry[cfg.strengthKey] = s;
+        if (s !== undefined && s !== null && s !== '') {
+          const num = Number(s);
+          entry[cfg.strengthKey] = Number.isFinite(num) ? num : s;
+        }
         mappedItems.push(entry);
       } else {
         unmappedOut?.push({ item: l, reason: `${cfg.pathKey} 缺少有效直链 URL` });
@@ -652,7 +655,7 @@ export function aimlapiLoras(loras: any[], unmappedOut?: Array<{ item: any; reas
       });
       continue;
     }
-    const raw = l.scale ?? l.strength ?? l.modelStrength ?? l.weight;
+    const raw = l.scale ?? l.strength ?? l.modelStrength ?? l.weight ?? l.lora_strength;
     if (raw === undefined || raw === null || raw === '') {
       result.push({ path: candidate });
     } else {
@@ -742,7 +745,7 @@ export function novitaLoras(loras: any[], unmappedOut?: Array<{ item: any; reaso
         });
         continue;
       }
-      const raw = l.strength ?? l.modelStrength ?? l.scale ?? l.weight;
+      const raw = l.strength ?? l.modelStrength ?? l.scale ?? l.weight ?? l.lora_strength;
       if (raw === undefined || raw === null || raw === '') {
         result.push({ model_name: candidate });
       } else {
@@ -1197,7 +1200,7 @@ export function kreaStyles(
         });
         continue;
       }
-      const raw = l.strength ?? l.modelStrength ?? l.scale ?? l.weight;
+      const raw = l.strength ?? l.modelStrength ?? l.scale ?? l.weight ?? l.lora_strength;
       if (raw === undefined || raw === null || raw === '') {
         styles.push({ id: candidate });
       } else {
@@ -1269,7 +1272,7 @@ export function sogniLoras(
         });
         continue;
       }
-      const raw = l.strength ?? l.modelStrength ?? l.scale ?? l.weight;
+      const raw = l.strength ?? l.modelStrength ?? l.scale ?? l.weight ?? l.lora_strength;
       if (raw !== undefined && raw !== null && raw !== '') {
         const num = Number(raw);
         candidates.push({
@@ -1814,8 +1817,16 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
         // fix3 B: map LoRAs into the payload first; maxItems / constraint checks run after the full body is assembled.
         const loras=req.body.loras;
         const unmappedLoras: Array<{ item: any; reason: string }> = [];
-        const declaredTarget = (provider==='krea' ? ['styles'] : ['loras','lora_list','image_loras','lora_url','model_id']).find(k=>Object.hasOwn(props,k) && (k!=='model_id' || props[k]?.type==='array' || props[k]?.items || props[k]?.anyOf?.some((s:any)=>s?.type==='array')))
-          || Object.keys(props).find(k=>/lora|styles/i.test(k) && (props[k]?.type==='array' || props[k]?.items || props[k]?.anyOf?.some((s:any)=>s?.type==='array')));
+        const hasType = (s: any, t: string) => s?.type === t || (Array.isArray(s?.type) && s.type.includes(t));
+        const variantsOf = (s: any) => s && typeof s === 'object' ? [s, ...(s.anyOf || []), ...(s.oneOf || [])] : [];
+        const isArraySpec = (s: any) => variantsOf(s).some((v: any) => hasType(v, 'array') || v?.items);
+        const sogniSelector = provider === 'sogni' ? (definition.selectorField || sogniHostedToolSelectorEnum(definition.inputSchema)?.field) : undefined;
+        const reservedSelectors = new Set<string>([
+          ...(definition.selectorField ? [definition.selectorField] : []),
+          ...(provider === 'sogni' ? ['model', 'videoModel', ...(sogniSelector ? [sogniSelector] : [])] : provider === 'novita' ? ['model_name'] : ['together', 'aimlapi', 'deepinfra', 'venice'].includes(provider) ? ['model'] : []),
+        ]);
+        const declaredTarget = (provider==='krea' ? ['styles'] : ['loras','lora_list','image_loras','lora_url','model_id']).find(k=>Object.hasOwn(props,k) && !reservedSelectors.has(k) && (k!=='model_id' || isArraySpec(props[k])))
+          || Object.keys(props).find(k=>/lora|styles/i.test(k) && !reservedSelectors.has(k) && isArraySpec(props[k]));
         const groups = new Map<string, any[]>();
         const failures: Array<{ item: any; reason: string }> = [];
         const reject = (item:any,reason:string) => { const entry={item,reason};unmappedLoras.push(entry);failures.push(entry); };
@@ -1832,16 +1843,20 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
         }
         for(const [target,items] of groups) {
           const spec=props[target];
-          const variants=[spec,...(spec?.anyOf || []),...(spec?.oneOf || [])];
-          const arraySpec=variants.find((s:any)=>s?.type==='array' || s?.items || (Array.isArray(s?.type) && s.type.includes('array')));
-          const scalarSpec=variants.find((s:any)=>s?.type==='string' || s?.type==='object' || s?.properties);
+          const variants=variantsOf(spec);
+          const arraySpec=variants.find((s:any)=>hasType(s,'array') || s?.items);
+          const scalarSpec=variants.find((s:any)=>hasType(s,'string') || hasType(s,'object') || s?.properties);
           const groupUnmappedStart=unmappedLoras.length;
-          if(Object.hasOwn(payload,target) || Object.hasOwn(custom,target) || target===definition.selectorField) {
+          if(Object.hasOwn(payload,target) || reservedSelectors.has(target)) {
             for(const item of items)reject(item,`LoRA 目标字段 "${target}" 与已填写参数或模型选择器冲突，不能覆盖`);
           } else if(!arraySpec && (!scalarSpec || items.length!==1)) {
             for(const item of items)reject(item,`LoRA 目标字段 "${target}" 的 Schema 形态 ${spec?.type || '未知'} 无法完整承载 ${items.length} 个 LoRA`);
           } else {
-            const itemSchema=arraySpec?arraySpec.items:scalarSpec;
+            const rawItemSchema=arraySpec?arraySpec.items:scalarSpec;
+            const itemVariants=variantsOf(rawItemSchema);
+            const itemObject=itemVariants.find((s:any)=>hasType(s,'object') || s?.properties);
+            const itemString=itemVariants.find((s:any)=>hasType(s,'string'));
+            const itemSchema=itemObject?{...rawItemSchema,...itemObject,type:'object'}:itemString?{...rawItemSchema,...itemString,type:'string'}:rawItemSchema;
             const values:any[]=[];
             const strengths=items.map(l=>l?.strength ?? l?.modelStrength ?? l?.scale ?? l?.weight ?? l?.lora_strength);
             for(const l of items) {
@@ -1854,18 +1869,39 @@ export function registerSchemaProviderRoutes(app:express.Express,dep:Dependencie
                 const strengthKey=itemProps?['scale','weight','strength','modelStrength','lora_strength'].find(k=>Object.hasOwn(itemProps,k)):documentedFields?.strengthKey;
                 const candidate=typeof l==='string'?l:[l?.[resourceKey],l?.id,l?.name,l?.path,l?.url,l?.air,l?.downloadUrl,l?.lora_name,l?.civitaiId].find(v=>(typeof v==='string' && v.trim()!=='') || typeof v==='number');
                 const strength=l?.strength ?? l?.modelStrength ?? l?.scale ?? l?.weight ?? l?.lora_strength;
-                if(candidate===undefined || candidate==='' || (!resourceKey && itemSchema?.type!=='string')) {
+                if(candidate===undefined || candidate==='' || (!resourceKey && !hasType(itemSchema,'string'))) {
                   reject(l,`LoRA 目标字段 "${target}" 缺少可提交的资源标识或 Schema 资源属性`);continue;
                 }
-                value=resourceKey?{[resourceKey]:candidate,...(strengthKey && strength!==undefined?{[strengthKey]:strength}:{})}:candidate;
+                if(resourceKey) {
+                  const entry:Record<string,any>={[resourceKey]:candidate};
+                  if(itemProps && typeof l==='object' && l!==null) {
+                    for(const k of Object.keys(itemProps)) {
+                      if(k===resourceKey || k===strengthKey)continue;
+                      if(Object.hasOwn(l,k) && l[k]!==undefined && l[k]!==null && l[k]!=='')entry[k]=l[k];
+                      else if((k==='trigger_word' || k==='triggerWord' || k==='trained_words') && typeof (l.trigger_word ?? l.triggerWords ?? l.triggers)==='string' && String(l.trigger_word ?? l.triggerWords ?? l.triggers).trim()!=='')entry[k]=String(l.trigger_word ?? l.triggerWords ?? l.triggers).trim();
+                    }
+                  }
+                  if(strengthKey && strength!==undefined && strength!==null && strength!=='') {
+                    const num=Number(strength);
+                    entry[strengthKey]=Number.isFinite(num)?num:strength;
+                  }
+                  value=entry;
+                } else {
+                  value=candidate;
+                }
                 if(unmappedLoras.length===prior)unmappedLoras.push({item:l,reason:'原始 LoRA 项需要按目标 Schema 形态映射'});
                 for(const entry of unmappedLoras.slice(prior))entry.reason+='；候选标识已原样提交到 '+target+'，由上游裁决';
               }
               values.push(value);
             }
-            payload[target]=arraySpec?values:values[0];
-            if(target==='loras' && Object.hasOwn(props,'loraStrengths') && strengths.some(v=>v!==undefined))payload.loraStrengths=strengths;
-            if(target==='lora_url' && Object.hasOwn(props,'lora_weight') && strengths[0]!==undefined)payload.lora_weight=strengths[0];
+            if(!arraySpec && Object.hasOwn(custom,target) && JSON.stringify(custom[target])!==JSON.stringify(values[0])) {
+              unmappedLoras.length=groupUnmappedStart;
+              for(const item of items)reject(item,`LoRA 目标字段 "${target}" 与已填写参数或模型选择器冲突，不能覆盖`);
+            } else {
+              payload[target]=arraySpec?values:values[0];
+              if(target==='loras' && Object.hasOwn(props,'loraStrengths') && strengths.some(v=>v!==undefined))payload.loraStrengths=strengths;
+              if(target==='lora_url' && Object.hasOwn(props,'lora_weight') && strengths[0]!==undefined)payload.lora_weight=strengths[0];
+            }
           }
           mapping.push({from:'loras',to:target,requested:items,value:payload[target],strengths:payload.loraStrengths,...(unmappedLoras.length>groupUnmappedStart?{unmappedLoras:unmappedLoras.slice(groupUnmappedStart)}:{}),note:'按已声明字段提交；生成成功不证明上游实际应用了 LoRA。'});
         }

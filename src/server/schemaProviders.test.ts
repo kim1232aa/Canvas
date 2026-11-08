@@ -173,6 +173,56 @@ describe('LoRA submission transparency', () => {
       expect(sent[0]).toMatchObject({ lora_url: 'https://example.invalid/a', lora_weight: 0, other_loras: [{ path: 'https://example.invalid/b', scale: 0.6 }] });
     });
   });
+  it('refuses an explicit LoRA targeting a late-bound provider model selector instead of overwriting it', async () => {
+    const sent: any[] = [];
+    await withFixture(async (url, init) => {
+      if (init?.method === 'POST') { sent.push(JSON.parse(String(init.body))); return json({ data: [{ url: 'https://example.invalid/out.png' }] }); }
+      if (url.includes('/models')) return json({ data: [{ id: 'fixture', info: { docsJson: 'https://api.aimlapi.com/docs-json?model=fixture' } }] });
+      return json({ paths: { '/v1/images/generations': { post: { requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { model: { type: 'string' }, loras: objectArray } } } } } } } } });
+    }, async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/api/schema-provider/aimlapi/submit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: 'fixture', prompt: 'A mountain valley in watercolor, panoramic composition', loras: [{ target_field: 'model', name: 'chosen-lora', strength: 0.4 }] }) });
+      const data = await response.json() as any;
+      expect(response.status).toBe(400);
+      expect(sent).toEqual([]);
+      expect(data.errorSource).toBe('local');
+      expect(data.error).toContain('model');
+      expect(data.proposedRequest.mapping.flatMap((m: any) => m.unmappedLoras || [])).toHaveLength(1);
+    });
+  });
+  it.each([0, 0.25])('preserves lora_strength=%s on MuAPI documented-field object arrays without item properties', async (strength) => {
+    const sent: any[] = [];
+    await withFixture(async (url, init) => {
+      if (init?.method === 'POST') { sent.push(JSON.parse(String(init.body))); return json({ request_id: 'muapi-task' }); }
+      if (url.endsWith('/api/v1/models')) return json({ models: [{ name: 'flux-lora', endpoint: '/api/v1/flux-lora', endpoint_url: 'flux_lora', group_of: 'image', category: 'Text to Image' }] });
+      return json({ paths: { '/api/v1/flux_lora': { post: { requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { prompt: { type: 'string' }, loras: { type: 'array', items: { type: 'object', additionalProperties: true } } } } } } } } } } });
+    }, async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/api/schema-provider/muapi/submit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: 'flux_lora', prompt: 'A mountain valley in watercolor, panoramic composition', loras: [{ path: 'https://example.invalid/style', lora_strength: strength }] }) });
+      expect(response.status).toBe(200);
+      expect(sent[0].loras).toEqual([{ path: 'https://example.invalid/style', scale: strength }]);
+    });
+  });
+  it('retains schema-declared extra item properties such as trigger_word on candidate fallback items', async () => {
+    await submitLoras({ loras: { type: 'array', items: { type: 'object', properties: { path: { type: 'string' }, scale: { type: 'number' }, trigger_word: { type: 'string' } } } } }, [{ name: 'foreign.safetensors', air: 'urn:air:flux1:lora:civitai:1@2', strength: 0.4, trigger_word: 'mountain_watercolor' }], (status, _data, sent) => {
+      expect(status).toBe(200);
+      expect(sent[0].loras).toEqual([{ path: 'foreign.safetensors', scale: 0.4, trigger_word: 'mountain_watercolor' }]);
+    });
+  });
+  it('accepts nullable JSON Schema scalar type arrays such as ["string", "null"] for lora_url', async () => {
+    await submitLoras({ lora_url: { type: ['string', 'null'] }, lora_weight: { type: ['number', 'null'] } }, [{ path: 'https://example.invalid/style', strength: 0.4 }], (status, _data, sent) => {
+      expect(status).toBe(200);
+      expect(sent[0]).toMatchObject({ lora_url: 'https://example.invalid/style', lora_weight: 0.4 });
+    });
+  });
+  it.each([
+    [[{ path: 'https://example.invalid/style', scale: 0.4 }]],
+    [[{ path: 'https://example.invalid/override', scale: 0.8 }]],
+  ])('preserves existing custom_parameters.loras channel for identical and explicit override arrays (%j)', async (customLoras) => {
+    await submitLoras({ loras: objectArray }, [{ path: 'https://example.invalid/style', scale: 0.4 }], (status, data, sent) => {
+      expect(status).toBe(200);
+      expect(sent[0].loras).toEqual(customLoras);
+      expect(data.actualRequest.mapping.find((m: any) => m.from === 'custom_parameters.loras')).toMatchObject({ to: 'loras', value: customLoras, overrides: [{ path: 'https://example.invalid/style', scale: 0.4 }] });
+    }, { custom_parameters: { loras: customLoras } });
+  });
   const lora = { name: 'foreign-style.safetensors', air: 'urn:air:flux1:lora:civitai:1@2', strength: 0.7 };
   it.each([
     { type: 'array', items: { type: 'string' } },
