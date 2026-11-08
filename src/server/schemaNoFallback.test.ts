@@ -1,6 +1,7 @@
 // Iron rule 3: Together/Novita/Venice no built-in Schema fallback; WaveSpeed no guessed /api/v3/<model> endpoint.
 import express from 'express';
 import { describe, expect, it } from 'vitest';
+import { isLocalNotOutbound, localNotOutboundText, userFacingApiFailure } from '../utils/apiFailure';
 import { registerSchemaProviderRoutes, schemaUnavailableBlock, officialOpenApiSources, openApiPathRequestSchema, applyModelSpecConstraints } from './schemaProviders';
 
 async function submit(provider: string, catalog: any, model: string, bodyExtra: Record<string, unknown> = {}) {
@@ -18,13 +19,23 @@ async function submit(provider: string, catalog: any, model: string, bodyExtra: 
 }
 
 describe('no Schema/endpoint fallback (iron rule 3)', () => {
-  it('helper: local 400, 未出站 prefix, source URL, no-fallback wording', () => {
+  // schemaUnavailableBlock only builds the local error (400, errorSource 'local', provider/model/reason/source/no-fallback);
+  // the 「没有发出去：」 prefix is added by the shared outbound wording (apiFailure) from errorSource + the absence of a non-GET trace.
+  it('helper: local 400 carries provider, model, reason, source URL and no-fallback wording; the shared wording marks it 没有发出去', () => {
     for (const p of ['Together', 'Novita', 'Venice']) {
       const e: any = schemaUnavailableBlock(p, 'm', '目录项没有 parameters', 'https://x/models');
-      expect(e.status).toBe(400); expect(e.errorSource).toBe('local');
-      expect(e.message).toMatch(/^没有发出去：/); expect(e.message).toContain('https://x/models');
-      expect(e.message).toContain('不使用内置 Schema');
+      expect(e).toBeInstanceOf(Error);
+      expect(e.status).toBe(400); expect(e.errorSource).toBe('local'); expect(e.schemaUrl).toBe('https://x/models');
+      expect(e.message).toBe(`${p} 模型 m 官方 Schema 不可用（目录项没有 parameters；来源 https://x/models）。不使用内置 Schema 或猜测端点兜底。`);
+      const body = { ok: false, error: e.message, errorSource: e.errorSource, endpoint: e.endpoint };
+      expect(isLocalNotOutbound(body)).toBe(true);
+      expect(localNotOutboundText(body)).toBe(`没有发出去：${e.message}`);
+      expect(userFacingApiFailure(e.status, body, '/api/schema-provider/x/submit')).toBe(`没有发出去：${e.message}`);
+      // a POST that already left makes the same local-looking error NOT a 「没有发出去」 claim
+      expect(isLocalNotOutbound({ ...body, executionTrace: [{ endpoint: 'https://up/x', method: 'POST', status: 500 }] })).toBe(false);
     }
+    expect((schemaUnavailableBlock('Together', 'm', 'r', null) as any).message).toContain('来源 无');
+    expect((schemaUnavailableBlock('Together', 'm', 'r', null, { endpoint: 'e' }) as any).endpoint).toBe('e');
   });
   it('WaveSpeed row without model_run → sent to official POST /api/v3/{model_id} (docs submit-task), no local stop', async () => {
     const r = await submit('wavespeed', { code: 200, data: [{ model_id: 'vendor/m', type: 'text-to-image' }] }, 'vendor/m');
