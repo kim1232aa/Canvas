@@ -1,4 +1,8 @@
 import { describe, it, expect } from 'vitest';
+import fs, { readFileSync, mkdtempSync, writeFileSync, readdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { transformSync } from 'esbuild';
 
 // Extract and test WaveSpeed balance response parser
 function parseWavespeedBalanceResponse(body: any): { balance?: number; error?: string } {
@@ -191,5 +195,150 @@ describe('Cloud settings payload builder for Base URLs', () => {
     const payload = buildCloudSettingsPayload(keys, ALLOWED_CLOUD_SETTINGS_FIELDS);
     expect(payload.replicateBaseUrl).toBe('https://api.replicate.com/v1');
     expect(payload.nanogptBaseUrl).toBe('https://api.nano-gpt.com/api/v1');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// server.ts whitelist / storage / balance helpers executed from source.
+// ---------------------------------------------------------------------------
+
+const serverSource = readFileSync(new URL('../../server.ts', import.meta.url), 'utf8');
+
+function sliceBetween(source: string, startMarker: string, endMarker: string): string {
+  const start = source.indexOf(startMarker);
+  const end = start < 0 ? -1 : source.indexOf(endMarker, start + startMarker.length);
+  if (start < 0 || end <= start) throw new Error(`slice not found: ${startMarker}`);
+  return source.slice(start, end);
+}
+
+function compile(vars: Record<string, unknown>, code: string, returnExpression: string) {
+  const js = transformSync(code, { loader: 'ts' }).code;
+  return new Function(...Object.keys(vars), `${js}\nreturn ${returnExpression};`)(...Object.values(vars));
+}
+
+function allowedSettingsSets() {
+  const code = sliceBetween(serverSource, 'const ALLOWED_SETTINGS_SECRET = new Set([', 'const isSecretKeyField =');
+  return compile({}, code, '{ALLOWED_SETTINGS_SECRET, ALLOWED_SETTINGS_PLAIN, ALLOWED_SETTINGS}');
+}
+
+function buildSettingsHandler() {
+  const code = sliceBetween(
+    serverSource,
+    "app.post('/api/cloud/settings', requireAdminAuth, (req, res) => {",
+    "app.get('/api/cloud/health'",
+  );
+  const sets = allowedSettingsSets();
+  const box: { handler: ((req: any, res: any) => any) | null } = { handler: null };
+  const getSettings = compile(
+    {
+      app: { post: (_path: string, _auth: any, handler: (req: any, res: any) => any) => { box.handler = handler; } },
+      requireAdminAuth: (_req: any, _res: any, next: any) => next(),
+      ALLOWED_SETTINGS_SECRET: sets.ALLOWED_SETTINGS_SECRET,
+      ALLOWED_SETTINGS_PLAIN: sets.ALLOWED_SETTINGS_PLAIN,
+      ALLOWED_SETTINGS: sets.ALLOWED_SETTINGS,
+      getSanitizedCloudSettings: (settings: Record<string, any>) => ({ ...settings }),
+      writeJsonFile: () => {},
+      SETTINGS_FILE: 'settings.json',
+      keyPoolManager: { maskKey: (key: string) => key, refreshFromSettings: () => {} },
+    },
+    `let cloudSettings: Record<string, any> = {};\n${code}`,
+    '() => cloudSettings',
+  );
+  return { handler: box.handler!, getSettings };
+}
+
+function makeRes() {
+  const res: any = {
+    code: 200,
+    body: null,
+    status(code: number) { this.code = code; return this; },
+    json(body: any) { this.body = body; return this; },
+  };
+  return res;
+}
+
+describe('ALLOWED_SETTINGS covers every server-read Tensor.Art field', () => {
+  it('includes tensorartTamsToken as a secret and tensorartBaseUrl as a plain field', () => {
+    const sets = allowedSettingsSets();
+    expect(sets.ALLOWED_SETTINGS_SECRET.has('tensorartTamsToken')).toBe(true);
+    expect(sets.ALLOWED_SETTINGS_PLAIN.has('tensorartBaseUrl')).toBe(true);
+    expect(sets.ALLOWED_SETTINGS.has('tensorartTamsToken')).toBe(true);
+    expect(sets.ALLOWED_SETTINGS.has('tensorartBaseUrl')).toBe(true);
+    // Every field server.ts reads from cloudSettings must be saveable.
+    for (const field of ['tensorartTamsToken', 'tensorartKey', 'mageKey', 'runwareKey', 'modelslabKey', 'replicateKey', 'novitaKey', 'deepinfraKey']) {
+      expect(sets.ALLOWED_SETTINGS.has(field)).toBe(true);
+    }
+  });
+
+  it('POST /api/cloud/settings no longer answers 400 for the TAMS token and base URL', async () => {
+    const { handler } = buildSettingsHandler();
+    const res = makeRes();
+    await handler({ body: { tensorartTamsToken: 'tams-live-token-123456', tensorartBaseUrl: 'https://custom-tams.example/v1' } }, res);
+    expect(res.code).toBe(200);
+    expect(res.body.success).toBe(true);
+  });
+
+  it('still rejects fields the server does not read', async () => {
+    const { handler } = buildSettingsHandler();
+    const res = makeRes();
+    await handler({ body: { totallyUnknownField: 'x' } }, res);
+    expect(res.code).toBe(400);
+    expect(res.body.error).toContain('不支持的设置字段');
+  });
+});
+
+describe('readJsonFile keeps a corrupt file instead of overwriting it with empty data', () => {
+  function readJsonFileFromSource() {
+    const code = sliceBetween(serverSource, 'const corruptJsonFiles = new Set<string>();', 'const writeJsonFile =');
+    return compile({ fs, storageError: (error: any) => new Error(String(error?.message || error)) }, code, '({ readJsonFile, corruptJsonFiles })');
+  }
+
+  it('backs up a corrupt file, returns the fallback, and leaves the original bytes untouched', () => {
+    const { readJsonFile, corruptJsonFiles } = readJsonFileFromSource();
+    const dir = mkdtempSync(path.join(tmpdir(), 'm87-corrupt-'));
+    const file = path.join(dir, 'history.json');
+    writeFileSync(file, '{not valid json');
+    const result = readJsonFile(file, []);
+    expect(result).toEqual([]);
+    expect(corruptJsonFiles.has(file)).toBe(true);
+    expect(readdirSync(dir).filter((name) => name.startsWith('history.json.corrupt-'))).toHaveLength(1);
+    expect(readFileSync(file, 'utf8')).toBe('{not valid json');
+  });
+
+  it('parses valid JSON and treats a missing file as a normal empty start', () => {
+    const { readJsonFile, corruptJsonFiles } = readJsonFileFromSource();
+    const dir = mkdtempSync(path.join(tmpdir(), 'm87-json-'));
+    const file = path.join(dir, 'settings.json');
+    writeFileSync(file, '{"novitaKey":"k"}');
+    expect(readJsonFile(file, {})).toEqual({ novitaKey: 'k' });
+    expect(readJsonFile(path.join(dir, 'missing.json'), {})).toEqual({});
+    expect(corruptJsonFiles.has(file)).toBe(false);
+    expect(readdirSync(dir)).toEqual(['settings.json']);
+  });
+});
+
+describe('Novita / Mage balance parsing helpers', () => {
+  function balanceHelpers() {
+    const code = sliceBetween(serverSource, 'function novitaBalanceUsd(', '// Update Key Pool Strategy');
+    return compile({}, code, '{novitaBalanceUsd, mageGemsBalance}');
+  }
+
+  it('converts Novita availableBalance from 1/10000 USD to USD', () => {
+    const { novitaBalanceUsd } = balanceHelpers();
+    expect(novitaBalanceUsd({ availableBalance: '123456' }).usd).toBeCloseTo(12.3456, 6);
+    expect(novitaBalanceUsd({}).error).toContain('Novita 响应格式异常');
+    expect(novitaBalanceUsd({ availableBalance: 'n/a' }).error).toContain('非数字');
+  });
+
+  it('reads Mage balance.gems and rejects unrelated payloads', () => {
+    const { mageGemsBalance } = balanceHelpers();
+    expect(mageGemsBalance({ balance: { gems: 2500 } }).gems).toBe(2500);
+    expect(mageGemsBalance({ balance: { gems: '1500' } }).gems).toBe(1500);
+    expect(mageGemsBalance({}).error).toContain('Mage 响应格式异常');
+  });
+
+  it('balances route queries the official Novita balance endpoint', () => {
+    expect(serverSource).toContain('https://api.novita.ai/openapi/v1/billing/balance/detail');
+    expect(serverSource).toContain("balances.novita = parsed.usd !== undefined");
   });
 });
