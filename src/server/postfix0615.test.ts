@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import catalog from './__fixtures__wavespeed-live-2026-10-15.json';
 import { registerSchemaProviderRoutes } from './schemaProviders';
 import { rescopeCustomParameters } from '../utils/customParameterScope';
-import { sharedGetJson, clearSharedGet, beginSharedGetAction } from '../services/sharedGet';
+import { sharedGetJson, clearSharedGet, beginSharedGetAction, peekSharedGetMeta } from '../services/sharedGet';
 import { otherSentParameters } from '../utils/historyParameters';
 import { schemaChoiceFields } from '../components/SchemaChoiceControls';
 import { FIELD_STATUS_LABEL } from '../components/FieldStatusBadge';
@@ -57,17 +57,37 @@ describe('2. one GET per real change', () => {
     await sharedGetJson(url, { 'x-wavespeed-key': 'OTHER' });
     expect(f).toHaveBeenCalledTimes(4);
   });
-  // clean-0903: "next call" = next user ACTION. A second caller inside the same action gets the same verbatim failure.
-  it('failures are memoised for the action; the next action (beginSharedGetAction) retries', async () => {
-    const f = vi.fn(async () => new Response('{"error":"boom"}', { status: 500 }));
+  // sharedGet contract (src/services/sharedGet.ts): callers inside one in-flight GET share it and its verbatim failure;
+  // a settled failure is never reused (re-select / refresh / Run must be able to GET again), a settled success is.
+  it('in-flight callers share one GET and its verbatim failure; a settled failure is not reused, a later success is', async () => {
+    const url = '/api/model-schema?provider=x&model=y';
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    let n = 0;
+    const f = vi.fn(async () => {
+      if (++n === 1) { await gate; return new Response('{"error":"boom"}', { status: 500 }); }
+      return new Response('{"inputSchema":{"properties":{"prompt":{}}}}', { status: 200 });
+    });
     vi.stubGlobal('fetch', f);
-    const e1 = await sharedGetJson('/api/model-schema?provider=x&model=y').catch((e) => e);
-    const e2 = await sharedGetJson('/api/model-schema?provider=x&model=y').catch((e) => e);
+    const first = sharedGetJson(url).catch((e) => e);
+    const second = sharedGetJson(url).catch((e) => e);
+    release();
+    const [e1, e2] = await Promise.all([first, second]);
     expect(f).toHaveBeenCalledTimes(1);
     expect(e2).toBe(e1);
-    beginSharedGetAction();
-    await expect(sharedGetJson('/api/model-schema?provider=x&model=y')).rejects.toBeTruthy();
+    expect(e1.appStatus).toBe(500);
+    expect(e1.rawBody).toBe('{"error":"boom"}');
+    expect(e1.message).toContain('{"error":"boom"}');
+    expect(peekSharedGetMeta(url)).toMatchObject({ ok: false, status: 500, currentAction: true });
+    // Same action, settled failure → not a cache hit: the next call performs a fresh GET and gets the real result.
+    await expect(sharedGetJson(url)).resolves.toMatchObject({ ok: true, status: 200, data: { inputSchema: { properties: { prompt: {} } } } });
     expect(f).toHaveBeenCalledTimes(2);
+    // The settled success is reused inside the action, and fetched again once a new user action begins.
+    await sharedGetJson(url);
+    expect(f).toHaveBeenCalledTimes(2);
+    beginSharedGetAction();
+    await sharedGetJson(url);
+    expect(f).toHaveBeenCalledTimes(3);
   });
 });
 
