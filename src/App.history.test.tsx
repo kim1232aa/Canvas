@@ -95,6 +95,15 @@ describe('App history delete honesty', () => {
     await clickByText(/彻底批量删除/);
   };
 
+  const openAssetManager = async () => {
+    await act(async () => { root!.render(<App />); });
+    await flush();
+    await clickByText('更多');
+    await clickByText('资产库');
+  };
+  const assetCardDeleteButtons = () => Array.from(document.querySelectorAll('button[title="从资产库彻底删除"]')) as HTMLButtonElement[];
+  const assetBlacklist = (): string[] => JSON.parse(localStorage.getItem('comfycanvas_deleted_assets_v2') || '[]');
+  const assetDeleteError = () => document.querySelector('[data-testid="asset-delete-error"]')?.textContent || '';
   const deleteButtons = () => Array.from(document.querySelectorAll('button[title="删除此项记录"]')) as HTMLButtonElement[];
   const clearButton = () => Array.from(document.querySelectorAll('button')).find((b) => b.textContent?.includes('清空历史')) as HTMLButtonElement;
   const toastText = () => document.querySelector('[data-testid="toast-container"]')?.textContent || '';
@@ -197,6 +206,62 @@ describe('App history delete honesty', () => {
     expect(toastText()).not.toContain('批量资产删除失败');
     await clickByText('历史');
     expect(deleteButtons()).toHaveLength(0);
+  });
+
+  describe('asset library blacklist (comfycanvas_deleted_assets_v2) follows the server result', () => {
+    it('single delete: HTTP 500 keeps the asset visible, does NOT blacklist it, shows the real status + body in the toast and in the library', async () => {
+      deleteRoutes = () => new Response('disk write failed: EACCES', { status: 500 });
+      await openAssetManager();
+      expect(assetCardDeleteButtons()).toHaveLength(2);
+      await act(async () => { assetCardDeleteButtons()[0].click(); });
+      await flush();
+      expect(apiMocks.deleteHistoryItem).toHaveBeenCalled();
+      expect(assetCardDeleteButtons()).toHaveLength(2);
+      expect(assetBlacklist()).toEqual([]);
+      expect(toastText()).toContain('资产删除失败');
+      expect(toastText()).toContain('HTTP 500: disk write failed: EACCES');
+      expect(assetDeleteError()).toContain('HTTP 500: disk write failed: EACCES');
+    });
+
+    it('single delete: a resolved false is a failure too (asset stays, not blacklisted, error shown)', async () => {
+      apiMocks.deleteHistoryItem.mockResolvedValue(false);
+      await openAssetManager();
+      await act(async () => { assetCardDeleteButtons()[1].click(); });
+      await flush();
+      expect(assetCardDeleteButtons()).toHaveLength(2);
+      expect(assetBlacklist()).toEqual([]);
+      expect(toastText()).toContain('服务器未确认删除');
+      expect(assetDeleteError()).toContain('服务器未确认删除');
+    });
+
+    it('single delete: a server-confirmed delete hides the asset and persists its id + url in the blacklist', async () => {
+      await openAssetManager();
+      await act(async () => { assetCardDeleteButtons()[0].click(); });
+      await flush();
+      expect(assetCardDeleteButtons()).toHaveLength(1);
+      expect(toastText()).toContain('资产已删除');
+      expect(assetDeleteError()).toBe('');
+      const blacklisted = assetBlacklist();
+      expect(blacklisted.some((v) => v === 'h-1' || v === 'h-2')).toBe(true);
+      expect(blacklisted.some((v) => v.startsWith('/media/'))).toBe(true);
+    });
+
+    it('batch delete: HTTP 500 keeps every asset visible and out of the blacklist, with the real error in the toast and in the library', async () => {
+      deleteRoutes = () => new Response('batch write failed: ENOSPC', { status: 500 });
+      await batchDeleteAllFromAssetManager();
+      expect(apiMocks.deleteHistoryBatch).toHaveBeenCalledWith(['h-2', 'h-1']);
+      expect(assetBlacklist()).toEqual([]);
+      expect(toastText()).toContain('HTTP 500: batch write failed: ENOSPC');
+      expect(assetDeleteError()).toContain('HTTP 500: batch write failed: ENOSPC');
+      expect(document.querySelector('#asset-manager-title')?.parentElement?.textContent).toContain('共 2 项');
+    });
+
+    it('batch delete: a server-confirmed delete hides every asset and persists ids + urls in the blacklist', async () => {
+      await batchDeleteAllFromAssetManager();
+      expect(assetDeleteError()).toBe('');
+      expect(assetBlacklist()).toEqual(expect.arrayContaining(['h-1', 'h-2', '/media/one.png', '/media/two.png']));
+      expect(document.querySelector('#asset-manager-title')?.parentElement?.textContent).toContain('共 0 项');
+    });
   });
 
   it('api helpers: a 2xx body with success:false is rejected with the verbatim body', async () => {
