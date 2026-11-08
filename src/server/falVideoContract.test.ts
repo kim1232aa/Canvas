@@ -296,4 +296,10 @@ describe('JSON Schema required presence semantics (empty string, nullable null, 
     );
     expect(passed.payload).toMatchObject({ prompt: '', extra: '', fps: 24 });
   });
+
+  it('preserves explicitly provided empty image_url in payload', () => {
+    const props = { image_url: { type: 'string' } };
+    const res = buildFalVideoRequest('test-endpoint', { image_url: '' }, props);
+    expect(res.payload.image_url).toBe('');
+  });
 });
