@@ -6,6 +6,7 @@ vi.mock('./executionTrace', async (importOriginal) => {
 });
 
 import {
+  EMPTY_KEYS,
   cloudProjectRequest,
   fetchCloudServerSettings,
   fetchHuggingFaceModelInfo,
@@ -15,9 +16,7 @@ import {
   generateWithFal,
   generateWithGemini,
   generateWithHuggingFace,
-  generateWithModelScope,
   generateWithNanoGPT,
-  generateVideo,
   refinePromptWithGemini,
   saveCloudServerSettings,
   searchCivitaiModels,
@@ -51,9 +50,7 @@ const callSites: Array<[string, () => Promise<unknown>]> = [
   ['searchCivitaiModels', () => searchCivitaiModels('x')],
   ['generateWithFal', () => generateWithFal({ prompt: 'a lighthouse at dusk, oil painting' })],
   ['generateWithHuggingFace', () => generateWithHuggingFace({ prompt: 'a lighthouse at dusk, oil painting' } as any)],
-  ['generateWithModelScope', () => generateWithModelScope({ prompt: 'a lighthouse at dusk, oil painting' })],
   ['generateWithNanoGPT', () => generateWithNanoGPT({ prompt: 'a lighthouse at dusk, oil painting' } as any)],
-  ['generateVideo', () => generateVideo({ prompt: 'waves rolling on a beach' } as any)],
   ['generateWithGemini', () => generateWithGemini({ prompt: 'a lighthouse at dusk, oil painting' })],
   ['refinePromptWithGemini', () => refinePromptWithGemini('a lighthouse', { provider: 'gemini', model: 'gemini-2.5-flash' })],
   ['fetchLiveModels', () => fetchLiveModels('civitai')],
@@ -126,5 +123,20 @@ describe('engine drivers keep real HTTP status and verbatim upstream body', () =
     globalThis.fetch = respond(200, long) as any;
     const err: Error = await civitai().then(() => { throw new Error('x'); }, (e) => e);
     expect(err.message).toContain('END-OF-BODY');
+  });
+});
+
+describe('EMPTY_KEYS', () => {
+  it('has an empty-string slot for every key and base-URL field the app reads from ApiKeysState', () => {
+    for (const k of ['runwareKey', 'runwareBaseUrl', 'modelslabKey', 'modelslabBaseUrl', 'replicateKey', 'mageKey', 'sogniKey', 'deepinfraKey']) {
+      expect(EMPTY_KEYS).toHaveProperty(k, '');
+    }
+  });
+  it('getStoredApiKeys on empty storage returns the new slots as empty strings', async () => {
+    const { getStoredApiKeys } = await import('./api');
+    store.clear();
+    const keys = getStoredApiKeys();
+    expect(keys.runwareKey).toBe('');
+    expect(keys.modelslabBaseUrl).toBe('');
   });
 });

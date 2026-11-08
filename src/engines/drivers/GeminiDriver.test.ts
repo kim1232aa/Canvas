@@ -63,3 +63,17 @@ describe('GeminiDriver', () => {
    expect(JSON.parse(fetchMock.mock.calls[0][1].body).seed).toBe(42);
    vi.unstubAllGlobals();
  });
+
+describe('GeminiDriver batchSize', () => {
+  it('does not invent a batch field and reports unsent batchSize', async () => {
+    const original = globalThis.fetch;
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ imageUrl: 'https://example.test/o.png' }), { status: 200 }));
+    try {
+      const r = await new GeminiDriver().generate({ prompt: 'a lighthouse at dusk', model: 'gemini-3-pro-image', batchSize: 2 }, { geminiKey: 'k' });
+      const body = JSON.parse((globalThis.fetch as any).mock.calls[0][1].body);
+      expect(Object.keys(body).filter((k) => /^(n|num_images|candidateCount|batch_size|batchSize)$/.test(k))).toEqual([]);
+      expect(r.wasAdapted).toBe(true);
+      expect(r.adaptationNotice).toMatch(/批量张数 2 未发送/);
+    } finally { globalThis.fetch = original; }
+  });
+});

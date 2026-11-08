@@ -3,6 +3,7 @@ import {
   handleReplicateGenerate,
   handleReplicateModelInfo,
   registerReplicateRoutes,
+  replicateHistoryLoras,
   type ReplicateRouteDeps,
 } from './replicateRoutes';
 import { readVideoJobStatus, resetVideoJobStatusForTests } from '../videoJobStatus';
@@ -625,5 +626,54 @@ describe('replicateRoutes', () => {
     expect(res.statusCode).toBe(502);
     expect(readVideoJobStatus('pred_vid')).toBeUndefined();
     resetVideoJobStatusForTests();
+  });
+});
+
+describe('replicateHistoryLoras', () => {
+  it('keeps the single lora_weights / hf_lora slot with lora_scale', () => {
+    expect(replicateHistoryLoras({ lora_weights: 'owner/repo-a', lora_scale: 0.8 })).toEqual([{ name: 'owner/repo-a', strength: 0.8 }]);
+    expect(replicateHistoryLoras({ hf_lora: 'owner/repo-b', lora_scale: 0.5 })).toEqual([{ name: 'owner/repo-b', strength: 0.5 }]);
+  });
+  it('records both LoRAs of the two-slot contract with their own scales', () => {
+    expect(replicateHistoryLoras({ lora_weights: 'owner/a', lora_scale: 0.8, extra_lora: 'owner/b', extra_lora_scale: 0.3 })).toEqual([
+      { name: 'owner/a', strength: 0.8 },
+      { name: 'owner/b', strength: 0.3 },
+    ]);
+  });
+  it('records the lora_url single-URL slot with lora_strength_model', () => {
+    expect(replicateHistoryLoras({ lora_url: 'https://example.test/w.safetensors', lora_strength_model: 1.2 })).toEqual([{ name: 'https://example.test/w.safetensors', strength: 1.2 }]);
+  });
+  it('records overflow loras and uses null (not a made-up number) when no strength was sent', () => {
+    expect(replicateHistoryLoras({ lora_weights: 'owner/a', loras: [{ path: 'owner/c', scale: 0.4 }, 'owner/d'] })).toEqual([
+      { name: 'owner/a', strength: null },
+      { name: 'owner/c', strength: 0.4 },
+      { name: 'owner/d', strength: null },
+    ]);
+    expect(replicateHistoryLoras({ prompt: 'x' })).toEqual([]);
+  });
+});
+
+describe('handleReplicateGenerate history LoRAs', () => {
+  it('writes both extra_lora LoRAs and the lora_url slot into the history record sent to respondWithGeneratedImages', async () => {
+    const run = async (inputSchemaProperties: Record<string, unknown>, loras: unknown[]) => {
+      const { deps, persistedCalls } = createMockDeps({
+        upstreamFetch: vi.fn(async (_m: any, url: string, options: any) => {
+          if (options?.method === 'GET' && url.endsWith('/models/owner/name')) return { ok: true, status: 200, text: async () => JSON.stringify({ is_official: true }) };
+          return { ok: true, status: 200, text: async () => JSON.stringify({ id: 'p', status: 'succeeded', output: ['https://replicate.delivery/o.png'] }) };
+        }),
+      });
+      const res = createMockRes();
+      await handleReplicateGenerate(deps)({ body: { model: 'owner/name', prompt: 'a lighthouse at dusk, oil painting', inputSchemaProperties, loras }, path: '/api/engine/replicate/generate' } as any, res);
+      expect(res.statusCode).toBe(200);
+      return persistedCalls[0].metadata.loras;
+    };
+    expect(await run(
+      { prompt: {}, lora_weights: {}, lora_scale: {}, extra_lora: {}, extra_lora_scale: {} },
+      [{ name: 'a', path: 'owner/a', strength: 0.8 }, { name: 'b', path: 'owner/b', strength: 0.3 }],
+    )).toEqual([{ name: 'owner/a', strength: 0.8 }, { name: 'owner/b', strength: 0.3 }]);
+    expect(await run(
+      { prompt: {}, lora_url: {}, lora_strength_model: {} },
+      [{ name: 'w', path: 'https://example.test/w.safetensors', strength: 1.2 }],
+    )).toEqual([{ name: 'https://example.test/w.safetensors', strength: 1.2 }]);
   });
 });

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
+  MEDIA_DOWNLOAD_USER_AGENT,
   bufferToDataUrl,
   guessMimeFromUrl,
   isAlreadyDurableHistoryUrl,
@@ -236,5 +237,22 @@ describe('requireDurableHistoryMediaUrl (grok history write contract)', () => {
     const r = await requireDurableHistoryMediaUrl('/uploads/local-durable.png');
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.dataUrl).toBe('/uploads/local-durable.png');
+  });
+});
+
+describe('persistRemoteUrlAsDataUrlResult download headers', () => {
+  it('sends an explicit non-empty User-Agent (Together CDN answers a blank one with HTTP 403)', async () => {
+    const originalFetch = globalThis.fetch;
+    const fetchMock = vi.fn(async () => new Response(TINY_PNG, { status: 200, headers: { 'Content-Type': 'image/png' } }));
+    globalThis.fetch = fetchMock as any;
+    try {
+      const result = await persistRemoteUrlAsDataUrlResult('https://api.together.ai/imgproxy/out.png');
+      expect(result.ok).toBe(true);
+      const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+      expect((init.headers as Record<string, string>)['User-Agent']).toBe(MEDIA_DOWNLOAD_USER_AGENT);
+      expect(MEDIA_DOWNLOAD_USER_AGENT.trim().length).toBeGreaterThan(0);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });

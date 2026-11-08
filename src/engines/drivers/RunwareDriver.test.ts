@@ -154,3 +154,17 @@ describe('RunwareDriver', () => {
     ).rejects.toThrow('Runware 返回缺少图像输出 URL');
   });
 });
+
+describe('RunwareDriver batchSize', () => {
+  it('forwards params.batchSize as numberResults and omits it when unset or 0', async () => {
+    mockFetch.mockImplementation(async () => jsonResponse({ mediaUrl: 'https://example.test/r.png' }));
+    const d = new RunwareDriver();
+    await d.generate({ prompt: 'a red fox in snow', model: 'runware:100@1', batchSize: 3 }, { runwareKey: FIXTURE_KEY });
+    await d.generate({ prompt: 'a red fox in snow', model: 'runware:100@1' }, { runwareKey: FIXTURE_KEY });
+    await d.generate({ prompt: 'a red fox in snow', model: 'runware:100@1', batchSize: 0 }, { runwareKey: FIXTURE_KEY });
+    const bodies = mockFetch.mock.calls.map((c) => JSON.parse(String(c[1]?.body)));
+    expect(bodies[0].numberResults).toBe(3);
+    expect(bodies[1]).not.toHaveProperty('numberResults');
+    expect(bodies[2]).not.toHaveProperty('numberResults');
+  });
+});

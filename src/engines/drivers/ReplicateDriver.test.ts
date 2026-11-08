@@ -198,3 +198,24 @@ describe('ReplicateDriver', () => {
     await expect(driver.generate({ prompt: 'x', model: 'a/b' } as any, { replicateKey: FIXTURE_KEY })).rejects.toThrow(err);
   });
 });
+
+describe('ReplicateDriver batchSize', () => {
+  const run = async (params: Partial<NormalizedGenerateParams>) => {
+    mockFetch.mockResolvedValue(jsonResponse({ mediaUrl: 'https://example.test/r.png' }));
+    await new ReplicateDriver().generate({ prompt: 'a red fox in snow', model: 'black-forest-labs/flux-schnell', ...params } as NormalizedGenerateParams, { replicateKey: FIXTURE_KEY });
+    return JSON.parse(String(mockFetch.mock.calls.at(-1)![1]?.body));
+  };
+
+  it('sends num_outputs via custom_parameters for batchSize > 1 and keeps user JSON authoritative', async () => {
+    expect((await run({ batchSize: 4 })).custom_parameters).toEqual({ num_outputs: 4 });
+    expect((await run({ batchSize: 4, extraParams: { custom_parameters: { num_outputs: 2, go_fast: true } } })).custom_parameters).toEqual({ num_outputs: 2, go_fast: true });
+    expect((await run({ batchSize: 4, extraParams: { custom_parameters: { input: { megapixels: '1' } } } })).custom_parameters).toEqual({ input: { num_outputs: 4, megapixels: '1' } });
+  });
+
+  it('omits num_outputs when batchSize is unset, 0 or 1 and keeps user JSON untouched', async () => {
+    expect((await run({})).custom_parameters).toBeUndefined();
+    expect((await run({ batchSize: 0 })).custom_parameters).toBeUndefined();
+    expect((await run({ batchSize: 1 })).custom_parameters).toBeUndefined();
+    expect((await run({ extraParams: { custom_parameters: { go_fast: true } } })).custom_parameters).toEqual({ go_fast: true });
+  });
+});

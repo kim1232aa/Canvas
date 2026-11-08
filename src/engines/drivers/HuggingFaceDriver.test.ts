@@ -48,3 +48,20 @@ describe('HuggingFaceDriver error prefix', () => {
     expect(body).not.toHaveProperty('inference_provider');
   });
 });
+
+describe('HuggingFaceDriver batchSize', () => {
+  it('does not invent a batch field (none in the official text-to-image spec) and surfaces that to the caller', async () => {
+    const original = globalThis.fetch;
+    globalThis.fetch = vi.fn().mockImplementation(async () => new Response(JSON.stringify({ imageUrl: 'https://example.test/o.png' }), { status: 200 }));
+    try {
+      const d = new HuggingFaceDriver();
+      const r = await d.generate({ prompt: 'a lighthouse at dusk', model: 'black-forest-labs/FLUX.1-dev', batchSize: 4 }, { hfToken: 't' });
+      const body = JSON.parse((globalThis.fetch as any).mock.calls[0][1].body);
+      expect(Object.keys(body).filter((k) => /^(n|num_images|num_images_per_prompt|batch_size|batchSize)$/.test(k))).toEqual([]);
+      expect(r.wasAdapted).toBe(true);
+      expect(r.adaptationNotice).toMatch(/批量张数 4 未发送/);
+      const r1 = await d.generate({ prompt: 'a lighthouse at dusk', model: 'black-forest-labs/FLUX.1-dev', batchSize: 1 }, { hfToken: 't' });
+      expect(r1.adaptationNotice).toBeUndefined();
+    } finally { globalThis.fetch = original; }
+  });
+});

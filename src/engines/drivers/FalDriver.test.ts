@@ -225,3 +225,17 @@ describe('mapFalServerLoras live schema item properties', () => {
     expect(unmappedLoraFields).toEqual([expect.objectContaining({ field: 'clipStrength', value: 0.7 })]);
   });
 });
+
+describe('FalDriver batchSize', () => {
+  it('forwards params.batchSize as num_images and omits it when unset or 0', async () => {
+    const bodies: any[] = [];
+    globalThis.fetch = vi.fn(async (_url, init) => { bodies.push(JSON.parse(String(init?.body))); return new Response(JSON.stringify({ imageUrl: 'https://example.test/o.png' })); });
+    const driver = new FalDriver();
+    await driver.generate({ prompt: 'a lighthouse at dusk, oil painting', model: 'fal-ai/flux/dev', batchSize: 4 }, {});
+    await driver.generate({ prompt: 'a lighthouse at dusk, oil painting', model: 'fal-ai/flux/dev' }, {});
+    await driver.generate({ prompt: 'a lighthouse at dusk, oil painting', model: 'fal-ai/flux/dev', batchSize: 0 }, {});
+    expect(bodies[0].num_images).toBe(4);
+    expect(bodies[1]).not.toHaveProperty('num_images');
+    expect(bodies[2]).not.toHaveProperty('num_images');
+  });
+});
