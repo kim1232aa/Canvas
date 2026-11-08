@@ -56,7 +56,8 @@ export class CivitaiDriver extends BaseEngineDriver {
     if (params.extraParams?.custom_parameters !== undefined) payload.custom_parameters = params.extraParams.custom_parameters;
     // H6: comfy 变体 / 张数由用户指定，没设不发
     if (params.extraParams?.comfyModel) payload.comfyModel = params.extraParams.comfyModel;
-    if (params.extraParams?.quantity != null) payload.quantity = params.extraParams.quantity;
+    if (params.batchSize != null && params.batchSize > 0) payload.quantity = params.batchSize;
+    else if (params.extraParams?.quantity != null) payload.quantity = params.extraParams.quantity;
 
     // clipSkip: only mapped for official ecosystems/engines that accept it (recipes/sd1.md vs sdxl.md)
     const snapshotClipSkip = (() => {

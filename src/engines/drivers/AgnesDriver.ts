@@ -155,6 +155,7 @@ export class AgnesDriver extends BaseEngineDriver {
     }
 
     const data = await resp.json();
+    const batchNotice = !isVideo && params.batchSize != null && params.batchSize > 1 ? `批量张数 ${params.batchSize} 未发送：Agnes Image 官方参数表（model/prompt/size/ratio/image/return_base64/extra_body）无批量张数字段` : undefined;
     const videoSeed = [data.actualRequest?.seed,data.historyItem?.seed,data.seed].find(value=>typeof value === 'number' && Number.isFinite(value));
     return {
       mediaUrl: data.mediaUrl || data.imageUrl || data.videoUrl,
@@ -164,8 +165,8 @@ export class AgnesDriver extends BaseEngineDriver {
       model: data.model || params.model,
       requestedModel: params.model,
       seed: isVideo ? videoSeed ?? null : null,
-      wasAdapted: data.wasAdapted,
-      adaptationNotice: data.adaptationNotice,
+      wasAdapted: data.wasAdapted || Boolean(batchNotice),
+      adaptationNotice: [data.adaptationNotice, batchNotice].filter(Boolean).join('；') || undefined,
       timings: data.timings,
       rawResponse: data,
     };

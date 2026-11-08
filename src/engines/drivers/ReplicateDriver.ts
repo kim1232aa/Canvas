@@ -6,6 +6,22 @@ import {
   ModelSpec,
 } from '../types';
 
+/**
+ * Official Replicate field is `num_outputs` (image models; default 1). The server contract builder does not map it from a
+ * top-level body field, so it travels in custom_parameters (merged into prediction `input`). The user's own JSON wins.
+ * ponytail: sent only for batchSize > 1 — 1 is the provider default and some models declare no num_outputs; add schema-gated mapping server-side.
+ */
+export function withReplicateBatchOutputs(params: NormalizedGenerateParams): Record<string, unknown> | undefined {
+  const custom = params.extraParams?.custom_parameters;
+  if (params.isVideo || params.batchSize == null || !(params.batchSize > 1)) return custom;
+  const base: Record<string, unknown> = custom && typeof custom === 'object' && !Array.isArray(custom) ? custom : {};
+  if ('input' in base || 'version' in base) {
+    const input = base.input && typeof base.input === 'object' && !Array.isArray(base.input) ? base.input as Record<string, unknown> : {};
+    return { ...base, input: { num_outputs: params.batchSize, ...input } };
+  }
+  return { num_outputs: params.batchSize, ...base };
+}
+
 export class ReplicateDriver extends BaseEngineDriver {
   readonly id = 'replicate';
   readonly name = 'Replicate';
@@ -110,9 +126,9 @@ export class ReplicateDriver extends BaseEngineDriver {
             ...(typeof (l.strength ?? l.modelStrength ?? l.scale) === 'number' ? { strength: l.strength ?? l.modelStrength ?? l.scale } : {}),
           } : l))
         : params.loras,
-      custom_parameters: params.extraParams?.custom_parameters,
       workflowSnapshot: params.workflowSnapshot,
       ...params.extraParams,
+      custom_parameters: withReplicateBatchOutputs(params),
     };
 
     const resp = await fetch('/api/engine/replicate/generate', {

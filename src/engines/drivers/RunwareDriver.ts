@@ -85,6 +85,7 @@ export class RunwareDriver extends BaseEngineDriver {
           } : l))
         : params.loras,
       custom_parameters: params.extraParams?.custom_parameters,
+      numberResults: params.batchSize != null && params.batchSize > 0 ? params.batchSize : undefined,
       workflowSnapshot: params.workflowSnapshot,
     };
 

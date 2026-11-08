@@ -10,6 +10,28 @@ import {
 } from '../replicateImageContract';
 import { canvasNodeId, clearVideoJobStatus, updateVideoJobStatus } from '../videoJobStatus.ts';
 
+const loraStrength = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+
+/** LoRAs actually sent in the prediction `input`, for history: lora_weights|hf_lora(+lora_scale), lora_url(+lora_strength_model|lora_strength|lora_scale), extra_lora(+extra_lora_scale), and overflow `loras`. */
+export function replicateHistoryLoras(input: Record<string, any>): Array<{ name: string; strength: number | null }> {
+  const out: Array<{ name: string; strength: number | null }> = [];
+  const add = (name: unknown, strength: unknown) => {
+    if (typeof name === 'string' && name.trim()) out.push({ name: name.trim(), strength: loraStrength(strength) });
+  };
+  add(input.lora_weights || input.hf_lora, input.lora_scale);
+  add(input.lora_url, input.lora_strength_model ?? input.lora_strength ?? input.lora_scale);
+  add(input.extra_lora, input.extra_lora_scale);
+  if (Array.isArray(input.loras)) {
+    for (const entry of input.loras) {
+      if (typeof entry === 'string') add(entry, null);
+      else if (entry && typeof entry === 'object') {
+        add(entry.path || entry.url || entry.downloadUrl || entry.name, entry.scale ?? entry.strength ?? entry.modelStrength);
+      }
+    }
+  }
+  return out;
+}
+
 export interface ReplicateRouteDeps {
   resolveProviderAuth: (
     req: Request,
@@ -351,7 +373,6 @@ export function handleReplicateGenerate(deps: ReplicateRouteDeps) {
 
       const inputObj = (mapped.payload.input as Record<string, any>) || {};
       const sanitize = deps.sanitizeGenerationMetadata || ((v: any) => v);
-      const primaryLoraName = inputObj.lora_weights || inputObj.hf_lora;
 
       return await deps.respondWithGeneratedImages(
         res,
@@ -372,9 +393,7 @@ export function handleReplicateGenerate(deps: ReplicateRouteDeps) {
               : null,
           width: typeof inputObj.width === 'number' ? inputObj.width : null,
           height: typeof inputObj.height === 'number' ? inputObj.height : null,
-          loras: primaryLoraName
-            ? [{ name: primaryLoraName, strength: typeof inputObj.lora_scale === 'number' ? inputObj.lora_scale : null }]
-            : [],
+          loras: replicateHistoryLoras(inputObj),
           requestMetadata: {
             requestedParameters: sanitize(
               Object.fromEntries(

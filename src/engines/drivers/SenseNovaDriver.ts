@@ -43,6 +43,7 @@ export class SenseNovaDriver extends BaseEngineDriver {
       ...(extra.watermark !== undefined ? {watermark:extra.watermark} : {}),
       ...(extra.prompt_extend !== undefined ? {prompt_extend:extra.prompt_extend} : {}),
       ...(extra.output_format !== undefined ? {output_format:extra.output_format} : {}),
+      ...(params.batchSize != null && params.batchSize > 0 ? {n:params.batchSize} : {}),
       response_format:'b64_json',
       ...(extra.custom_parameters && typeof extra.custom_parameters === 'object' ? { custom_parameters: extra.custom_parameters } : {}),
       workflowSnapshot:params.workflowSnapshot,

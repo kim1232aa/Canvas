@@ -7,7 +7,7 @@ import { ApiKeysState, CivitaiSearchResult, GenerationHistoryItem, ProviderId } 
 const API_KEYS_STORAGE_KEY = 'comfycanvas_api_keys';
 
 // Browser-local keys only ("本浏览器"); empty when nothing was saved. No placeholder keys or base URLs.
-const EMPTY_KEYS: ApiKeysState = {
+export const EMPTY_KEYS: ApiKeysState = {
   civitaiKey: '',
   falKey: '',
   agnesKey: '',
@@ -31,6 +31,10 @@ const EMPTY_KEYS: ApiKeysState = {
   veniceKey: '',
   deepinfraKey: '',
   sogniKey: '',
+  runwareKey: '',
+  runwareBaseUrl: '',
+  modelslabKey: '',
+  modelslabBaseUrl: '',
   replicateKey: '',
   mageKey: '',
 };
@@ -183,42 +187,6 @@ export const generateWithHuggingFace = async (params: {
   return resp.json();
 };
 
-export const generateWithModelScope = async (params: {
-  prompt: string;
-  negative_prompt?: string;
-  model?: string;
-  steps?: number;
-  width?: number;
-  height?: number;
-  guidance?: number;
-  loras?: Array<{ name: string; strength: number; civitaiId?: string; triggers?: string }>;
-  targetProvider?: string;
-}) => {
-  const keys = getStoredApiKeys();
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  
-  const isAi = params.targetProvider === 'modelscope_ai';
-  const token = isAi ? keys.modelscopeAiToken : keys.modelscopeToken;
-  
-  if (token) headers['x-modelscope-token'] = token;
-  if (isAi) headers['x-modelscope-site'] = 'ai';
-
-  const resp = await fetch('/api/modelscope/generate', {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      ...params,
-      site: isAi ? 'ai' : 'cn'
-    }),
-  });
-
-  if (!resp.ok) {
-    throw await httpErrorFromResponse(resp);
-  }
-
-  return resp.json();
-};
-
 export const generateWithNanoGPT = async (params: {
   prompt: string;
   model: string;
@@ -230,31 +198,6 @@ export const generateWithNanoGPT = async (params: {
   if (keys.nanogptKey) headers['x-nanogpt-key'] = keys.nanogptKey;
 
   const resp = await fetch('/api/nanogpt/generate', {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(params),
-  });
-
-  if (!resp.ok) {
-    throw await httpErrorFromResponse(resp);
-  }
-
-  return resp.json();
-};
-
-export const generateVideo = async (params: {
-  prompt: string;
-  model?: string;
-  duration?: number;
-  fps?: number;
-  aspect_ratio?: string;
-  image_url?: string;
-}): Promise<{ videoUrl: string; provider: string; model: string; duration: number; fps: number }> => {
-  const keys = getStoredApiKeys();
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (keys.falKey) headers['x-fal-key'] = keys.falKey;
-
-  const resp = await fetch('/api/video/generate', {
     method: 'POST',
     headers,
     body: JSON.stringify(params),

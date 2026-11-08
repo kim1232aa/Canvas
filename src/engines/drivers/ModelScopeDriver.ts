@@ -54,7 +54,9 @@ export class ModelScopeDriver extends BaseEngineDriver {
     }
 
     const data = await resp.json();
+    const batchNotice = params.batchSize != null && params.batchSize > 1 ? `批量张数 ${params.batchSize} 未发送：魔搭 API-Inference 图像参数表（model/prompt/negative_prompt/size/seed/steps/guidance/image_url/loras）无批量张数字段` : undefined;
     return {
+      ...(batchNotice ? { wasAdapted: true, adaptationNotice: batchNotice } : {}),
       mediaUrl: data.imageUrl,
       mediaType: 'image',
       provider: this.name,

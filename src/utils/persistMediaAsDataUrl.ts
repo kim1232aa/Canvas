@@ -28,6 +28,9 @@ export function isAlreadyDurableHistoryUrl(url: string): boolean {
   );
 }
 
+/** Together's CDN answers a blank User-Agent with HTTP 403 (docs.together.ai/docs/inference/images/overview); send an explicit one on every media download. */
+export const MEDIA_DOWNLOAD_USER_AGENT = 'ComfyUI-Web-Studio/1.0 (media-persist)';
+
 export type PersistRemoteResult =
   | { ok: true; dataUrl: string }
   | {
@@ -59,7 +62,7 @@ export async function persistRemoteUrlAsDataUrlResult(remoteUrl: string): Promis
     return { ok: true, dataUrl: remoteUrl };
   }
   try {
-    const resp = await fetch(remoteUrl);
+    const resp = await fetch(remoteUrl, { headers: { 'User-Agent': MEDIA_DOWNLOAD_USER_AGENT } });
     if (!resp.ok) {
       try {
         const rawResponse = await resp.text();
