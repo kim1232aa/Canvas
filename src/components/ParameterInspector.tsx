@@ -40,7 +40,7 @@ import { schemaSendStatus } from '../utils/schemaSendStatus';
 import { parseExplicitLoraStrength } from '../utils/loraStrength';
 import { fieldOptions, getFieldSpec, resolveSchemaModelId, type FieldKey, type Provider as SchemaProvider } from '../schemas/providerSchema';
 import { middleEllipsis } from '../utils/middleEllipsis';
-import { randomSeedFor } from '../utils/seedRange';
+import { randomSeedFor, seedRangeAdvisory } from '../utils/seedRange';
 
 export function CivitaiAllowMatureControl({
   customParameters,
@@ -737,6 +737,16 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
                 <span>摇号</span>
               </button>
             </div>
+            {(() => {
+              const seedHint = (params.seedControl || 'randomize') === 'randomize'
+                ? null
+                : seedRangeAdvisory(params.targetProvider, params.checkpoint, params.seed);
+              return seedHint ? (
+                <p className="text-[10px] text-amber-300/90 font-mono" data-testid="inspector-seed-advisory">
+                  {seedHint}
+                </p>
+              ) : null;
+            })()}
           </div>
 
           {/* Steps / CFG / sampler / scheduler: hide when Schema omits or static table says unsupported (no empty adjustable shells). */}
