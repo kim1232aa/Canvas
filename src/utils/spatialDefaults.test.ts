@@ -731,4 +731,127 @@ describe('M94: Spatial defaults and promptTransform auditability', () => {
     expect(derivedFrame.params.height).toBeUndefined();
     expect(derivedFrame.params.batchSize).toBeUndefined();
   });
+
+  it('新建取景框及打开参数检查器时，缺失字段渲染为未设置，不出现 undefined、NaN 或孤立 ×，且参数保持缺失', async () => {
+    localStorage.setItem(
+      BOARDS_KEY,
+      JSON.stringify([
+        {
+          id: 'board-spatial',
+          name: '空间画布',
+          nodes: [],
+          connections: [],
+          spatialFrames: [],
+        },
+      ])
+    );
+    localStorage.setItem(ACTIVE_BOARD_KEY, 'board-spatial');
+    localStorage.setItem(MODE_KEY, 'spatial');
+
+    await act(async () => {
+      root!.render(React.createElement(App));
+    });
+
+    // 1. 新建空取景框
+    const addFrameBtn = document.querySelector('button[aria-label="新建取景框"]') as HTMLButtonElement;
+    await act(async () => {
+      addFrameBtn.click();
+    });
+
+    // 2. 检查取景框标题栏与快捷参数栏文本
+    const bodyTextBeforeInspector = document.body.textContent || '';
+    expect(bodyTextBeforeInspector).toContain('未设置尺寸');
+    expect(bodyTextBeforeInspector).not.toMatch(/\bundefined\b/);
+    expect(bodyTextBeforeInspector).not.toMatch(/\bNaN\b/);
+    expect(bodyTextBeforeInspector).not.toContain('undefined步');
+    expect(bodyTextBeforeInspector).not.toContain('CFG undefined');
+
+    // 3. 点击「ComfyUI 参数」打开参数检查器抽屉
+    const openInspectorBtn = Array.from(document.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('ComfyUI 参数')
+    ) as HTMLButtonElement;
+    expect(openInspectorBtn).toBeDefined();
+
+    await act(async () => {
+      openInspectorBtn.click();
+    });
+
+    // 4. 检查参数检查器内部文本
+    const bodyTextWithInspector = document.body.textContent || '';
+    expect(bodyTextWithInspector).not.toContain('undefined 步');
+    expect(bodyTextWithInspector).not.toContain('undefined步');
+    expect(bodyTextWithInspector).not.toContain('CFG undefined');
+    expect(bodyTextWithInspector).not.toMatch(/\bundefined\b/);
+    expect(bodyTextWithInspector).not.toMatch(/\bNaN\b/);
+
+    // 5. 验证底层数据：参数仍然真实缺失（未被伪造写回 25/4.5 等默认值）
+    const rawBoards = localStorage.getItem(BOARDS_KEY);
+    const boards = JSON.parse(rawBoards!);
+    const board = boards.find((b: any) => b.id === 'board-spatial');
+    const frame: SpatialFrame = board.spatialFrames[0];
+    expect(frame.params.steps).toBeUndefined();
+    expect(frame.params.cfg).toBeUndefined();
+    expect(frame.params.width).toBeUndefined();
+    expect(frame.params.height).toBeUndefined();
+  });
+
+  it('显式 0 必须仍正常显示为 0，不能被误判为未设置', async () => {
+    const frameWithZero: SpatialFrame = {
+      id: 'frame-zero',
+      title: '零值测试框',
+      pos: { x: 100, y: 100 },
+      width: 480,
+      height: 480,
+      prompt: 'test zero values',
+      negativePrompt: '',
+      status: 'idle',
+      createdAt: Date.now(),
+      params: {
+        checkpoint: 'flux-dev',
+        targetProvider: 'fal',
+        loras: [],
+        steps: 0,
+        cfg: 0,
+        width: 0,
+        height: 0,
+      },
+    };
+
+    localStorage.setItem(
+      BOARDS_KEY,
+      JSON.stringify([
+        {
+          id: 'board-spatial',
+          name: '空间画布',
+          nodes: [],
+          connections: [],
+          spatialFrames: [frameWithZero],
+        },
+      ])
+    );
+    localStorage.setItem(ACTIVE_BOARD_KEY, 'board-spatial');
+    localStorage.setItem(MODE_KEY, 'spatial');
+
+    await act(async () => {
+      root!.render(React.createElement(App));
+    });
+
+    const bodyText = document.body.textContent || '';
+    // 显式 0 必须渲染 0×0、0步、CFG 0，不被当作缺失
+    expect(bodyText).toContain('0×0');
+    expect(bodyText).toContain('0步');
+    expect(bodyText).toContain('CFG 0');
+
+    // 打开检查器
+    const openInspectorBtn = Array.from(document.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('ComfyUI 参数')
+    ) as HTMLButtonElement;
+    await act(async () => {
+      openInspectorBtn.click();
+    });
+
+    const bodyTextWithInspector = document.body.textContent || '';
+    expect(bodyTextWithInspector).toContain('0 步');
+    expect(bodyTextWithInspector).toContain('0.0');
+  });
 });
