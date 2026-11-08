@@ -46,6 +46,19 @@ export class TensorArtDriver extends BaseEngineDriver {
     const scheduler = isProvided(params.scheduler) ? params.scheduler : extra.scheduler;
     if (isProvided(scheduler)) body.scheduler = scheduler;
 
+    // NormalizedGenerateParams has no clipSkip/imageResourceId/generationMode keys and
+    // BaseEngineDriver.normalizeGenerateParams drops unknown top-level keys; extraParams is the carrier.
+    const clipSkip = extra.clipSkip ?? extra.clip_skip;
+    if (isProvided(clipSkip)) body.clipSkip = clipSkip;
+    if (isProvided(extra.imageResourceId)) body.imageResourceId = extra.imageResourceId;
+    if (isProvided(extra.generationMode)) body.generationMode = extra.generationMode;
+
+    // TAMS VIDEO_DIFFUSION field names: fps / totalFrames (workspace-api-example).
+    const fps = params.videoFps ?? extra.videoFps;
+    if (isProvided(fps)) body.fps = fps;
+    const totalFrames = params.videoFrames ?? extra.videoFrames;
+    if (isProvided(totalFrames)) body.totalFrames = totalFrames;
+
     const endpoint = params.isVideo ? '/api/video/generate' : '/api/tensorart/generate';
     if (params.isVideo) body.provider = 'tensorart';
     const resp = await fetch(endpoint, {

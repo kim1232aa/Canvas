@@ -16,37 +16,47 @@ export function validateTensorModelDimensions(body:Record<string,any>,baseModel:
   } else if (base==='sdxl' || base==='sdxl1.0' || base.includes('pony') || base.includes('illustrious') || base.includes('noobai')) {
     if(area<262144 || area>2073600) throw new Error('SDXL 衍生架构像素面积须为262144–2073600');
   }
-  // Other architectures (e.g. Flux.1, SD 3.5, Kolors) are validated by the 512–1536 multiple-of-64 rule and upstream TAMS API.
+  // Other architectures: no local range blocking — upstream TAMS decides.
 }
 export function buildTensorModelJob(body: Record<string, any>, requestId: string) {
   const model = tensorModelId(body.model);
+  // width and height are required integers; range and 64-multiple validation is delegated
+  // to TAMS upstream (per project rule: no local range blocking).
   for (const field of ['width', 'height']) {
-    if (!Number.isInteger(body[field]) || body[field] < 512 || body[field] > 1536 || body[field] % 64 !== 0) throw new Error(`${field} 必填，须为 512–1536 之间的 64 倍数`);
+    if (!Number.isInteger(body[field])) throw new Error(`${field} 必填，须为整数`);
   }
   if (!String(body.prompt ?? '').trim()) throw new Error('prompt 为必填项');
   const inputInitialize: Record<string, any> = {};
   if (body.seed !== undefined) {
-    if (!Number.isInteger(body.seed) || body.seed < -1 || body.seed > 4294967295) throw new Error('seed 须为 -1–4294967295 的整数');
+    if (!Number.isInteger(body.seed)) throw new Error('seed 须为整数');
     inputInitialize.seed = String(body.seed);
   }
+  // count: required to be integer >= 1; no upper-bound local block (upstream decides).
   if (body.count !== undefined) {
-    if (!Number.isInteger(body.count) || body.count < 1 || body.count > 4) throw new Error('count 须为 1–4 的整数');
+    if (!Number.isInteger(body.count) || body.count < 1) throw new Error('count 须为正整数');
     inputInitialize.count = body.count;
   }
+  // imageResourceId / image_url → inputInitialize.imageResourceId (官方 img2img 契约)
+  const imageResourceId = body.imageResourceId || body.image_url;
+  if (imageResourceId) inputInitialize.imageResourceId = String(imageResourceId);
   const diffusion: Record<string, any> = {sdModel: model, width: body.width, height: body.height, prompts: [{text: body.prompt}], negativePrompts: body.negative_prompt !== undefined ? [{text: body.negative_prompt}] : []};
+  // steps: required to be a positive integer; no upper-bound local block (upstream decides).
   if (body.steps !== undefined) {
-    if (!Number.isInteger(body.steps) || body.steps < 1 || body.steps > 60) throw new Error('steps 须为 1–60 的整数');
+    if (!Number.isInteger(body.steps) || body.steps < 1) throw new Error('steps 须为正整数');
     diffusion.steps = body.steps;
   }
+  // cfg: required to be finite number; no upper-bound local block (upstream decides).
   if (body.cfg !== undefined) {
-    if (!Number.isFinite(body.cfg) || body.cfg < 0 || body.cfg > 30) throw new Error('cfg 须为 0–30');
+    if (!Number.isFinite(body.cfg)) throw new Error('cfg 须为有限数值');
     diffusion.cfgScale = body.cfg;
   }
   if (body.sampler_name) diffusion.sampler = body.sampler_name;
   if (body.scheduler) diffusion.scheduleName = body.scheduler;
   if (typeof body.denoise === 'number' && Number.isFinite(body.denoise)) diffusion.denoisingStrength = body.denoise;
   if (typeof body.sdVae === 'string' && body.sdVae.trim()) diffusion.sdVae = body.sdVae.trim();
-  if (typeof body.clipSkip === 'number' && Number.isInteger(body.clipSkip)) diffusion.clipSkip = body.clipSkip;
+  // Support both snake_case (clip_skip) and camelCase (clipSkip); TAMS diffusion field is clipSkip.
+  const clipSkipVal = body.clip_skip ?? body.clipSkip;
+  if (typeof clipSkipVal === 'number' && Number.isInteger(clipSkipVal)) diffusion.clipSkip = clipSkipVal;
   if (typeof body.modelAccessKey === 'string' && body.modelAccessKey.trim()) diffusion.modelAccessKey = body.modelAccessKey.trim();
   if (body.loras !== undefined) {
     if (!Array.isArray(body.loras)) throw new Error('loras 必须为数组');
@@ -89,6 +99,8 @@ export function buildTamsVideoJob(body: Record<string, any>, requestId: string) 
   if (body.image_url && !imageResourceId) {
     throw new Error('TAMS 图生视频需要已上传的 imageResourceId（官方 INPUT_INITIALIZE.imageResourceId）。原始图片 URL 不能代替资源 ID，本请求未发送。');
   }
+  // width, height, fps, totalFrames are required positive integers; no local range blocking
+  // beyond type/existence — upstream TAMS enforces model-specific resolution and frame constraints.
   for (const field of ['width', 'height', 'fps', 'totalFrames'] as const) {
     if (!Number.isInteger(body[field]) || body[field] < 1) {
       throw new Error(`${field} 必填，须为正整数（官方 VIDEO_DIFFUSION 示例字段，不按图像 512–1536 规则改写）`);
@@ -98,11 +110,11 @@ export function buildTamsVideoJob(body: Record<string, any>, requestId: string) 
   const inputInitialize: Record<string, any> = {};
   if (imageResourceId) inputInitialize.imageResourceId = imageResourceId;
   if (body.seed !== undefined) {
-    if (!Number.isInteger(body.seed) || body.seed < -1 || body.seed > 4294967295) throw new Error('seed 须为 -1–4294967295 的整数');
+    if (!Number.isInteger(body.seed)) throw new Error('seed 须为整数');
     inputInitialize.seed = String(body.seed);
   }
   if (body.count !== undefined) {
-    if (!Number.isInteger(body.count) || body.count < 1 || body.count > 4) throw new Error('count 须为 1–4 的整数');
+    if (!Number.isInteger(body.count) || body.count < 1) throw new Error('count 须为正整数');
     inputInitialize.count = body.count;
   }
   const videoDiffusion: Record<string, any> = {
@@ -114,13 +126,24 @@ export function buildTamsVideoJob(body: Record<string, any>, requestId: string) 
     prompts: [{ text: String(body.prompt) }],
     negativePrompts: body.negative_prompt !== undefined ? [{ text: String(body.negative_prompt) }] : [],
   };
-  if (body.generationMode !== undefined) {
-    const mode = String(body.generationMode);
-    if (mode !== 'STABLE' && mode !== 'FAST') {
-      throw new Error(`generationMode 仅接受官方示例值 STABLE 或 FAST，收到 ${mode}`);
-    }
-    videoDiffusion.generationMode = mode;
+  // generationMode is passed through verbatim: the official enum (DEFAULT, TEXT_TO_VIDEO, IMAGE_TO_VIDEO)
+  // and the official examples (STABLE) differ, so no local whitelist; upstream decides.
+  if (body.generationMode !== undefined && body.generationMode !== '') videoDiffusion.generationMode = String(body.generationMode);
+  // steps: positive integer; no upper-bound local block.
+  if (body.steps !== undefined) {
+    if (!Number.isInteger(body.steps) || body.steps < 1) throw new Error('steps 须为正整数');
+    videoDiffusion.steps = body.steps;
   }
+  // cfg → cfgScale; no upper-bound local block.
+  if (body.cfg !== undefined) {
+    if (!Number.isFinite(body.cfg)) throw new Error('cfg 须为有限数值');
+    videoDiffusion.cfgScale = body.cfg;
+  }
+  if (body.sampler_name) videoDiffusion.sampler = body.sampler_name;
+  if (body.scheduler) videoDiffusion.scheduleName = body.scheduler;
+  // clipSkip: support both camelCase and snake_case input; TAMS field is clipSkip.
+  const videoClipSkip = body.clipSkip ?? body.clip_skip;
+  if (typeof videoClipSkip === 'number' && Number.isInteger(videoClipSkip)) videoDiffusion.clipSkip = videoClipSkip;
   if (body.loras !== undefined) {
     if (!Array.isArray(body.loras) || body.loras.length === 0) throw new Error('loras 必须为非空数组');
     videoDiffusion.lora = {

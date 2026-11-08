@@ -137,4 +137,128 @@ describe('Tensor.Art TAMS Credential & Job API Verification', () => {
     expect(TAMS_BEARER_REQUIRED_HINT).toContain('https://tams.tensor.art/app');
     expect(TAMS_BEARER_REQUIRED_HINT).toContain('TAMS Bearer Token');
   });
+
+  // --- Range blocking removal tests ---
+
+  it('accepts width 1537 without local rejection (upstream decides)', () => {
+    const job = buildTensorModelJob(
+      { model: '613045163490732233', prompt: 'test prompt', width: 1537, height: 512 },
+      'req-wide'
+    );
+    expect(job.stages[1].diffusion?.width).toBe(1537);
+  });
+
+  it('accepts steps 61 without local rejection (upstream decides)', () => {
+    const job = buildTensorModelJob(
+      { model: '613045163490732233', prompt: 'test prompt', width: 512, height: 512, steps: 61 },
+      'req-steps-61'
+    );
+    expect(job.stages[1].diffusion?.steps).toBe(61);
+  });
+
+  it('accepts cfg 31 without local rejection (upstream decides)', () => {
+    const job = buildTensorModelJob(
+      { model: '613045163490732233', prompt: 'test prompt', width: 512, height: 512, cfg: 31 },
+      'req-cfg-31'
+    );
+    expect(job.stages[1].diffusion?.cfgScale).toBe(31);
+  });
+
+  it('accepts count 5 without local rejection (upstream decides)', () => {
+    const job = buildTensorModelJob(
+      { model: '613045163490732233', prompt: 'test prompt', width: 512, height: 512, count: 5 },
+      'req-count-5'
+    );
+    expect(job.stages[0].inputInitialize?.count).toBe(5);
+  });
+
+  // --- clip_skip snake_case support ---
+
+  it('forwards snake_case clip_skip into diffusion.clipSkip', () => {
+    const job = buildTensorModelJob(
+      { model: '613045163490732233', prompt: 'test', width: 512, height: 512, clip_skip: 2 },
+      'req-clip-snake'
+    );
+    expect(job.stages[1].diffusion?.clipSkip).toBe(2);
+  });
+
+  it('forwards camelCase clipSkip into diffusion.clipSkip', () => {
+    const job = buildTensorModelJob(
+      { model: '613045163490732233', prompt: 'test', width: 512, height: 512, clipSkip: 3 },
+      'req-clip-camel'
+    );
+    expect(job.stages[1].diffusion?.clipSkip).toBe(3);
+  });
+
+  it('prefers clip_skip over clipSkip when both present', () => {
+    const job = buildTensorModelJob(
+      { model: '613045163490732233', prompt: 'test', width: 512, height: 512, clip_skip: 2, clipSkip: 4 },
+      'req-clip-both'
+    );
+    expect(job.stages[1].diffusion?.clipSkip).toBe(2);
+  });
+
+  // --- image_url / imageResourceId -> inputInitialize.imageResourceId ---
+
+  it('puts image_url into inputInitialize.imageResourceId for img2img', () => {
+    const job = buildTensorModelJob(
+      { model: '613045163490732233', prompt: 'test', width: 512, height: 512, image_url: 'f204c24a-52dc-4cf4-930a-9b8f73969414' },
+      'req-img2img'
+    );
+    expect(job.stages[0].inputInitialize?.imageResourceId).toBe('f204c24a-52dc-4cf4-930a-9b8f73969414');
+  });
+
+  it('puts imageResourceId directly into inputInitialize for img2img', () => {
+    const job = buildTensorModelJob(
+      { model: '613045163490732233', prompt: 'test', width: 512, height: 512, imageResourceId: '9519ae80-8f42-4129-a6aa-5fa7d2b25596' },
+      'req-img2img-rid'
+    );
+    expect(job.stages[0].inputInitialize?.imageResourceId).toBe('9519ae80-8f42-4129-a6aa-5fa7d2b25596');
+  });
+
+  // --- Video job: steps/cfg/sampler/scheduler/clipSkip forwarded ---
+
+  it('forwards steps, cfg, sampler, scheduler, clipSkip into video_diffusion', () => {
+    const job = buildTamsVideoJob(
+      {
+        model: '834845675863700019',
+        prompt: 'a cat running',
+        width: 480, height: 832, fps: 16, totalFrames: 49,
+        steps: 25, cfg: 7.5, sampler_name: 'euler', scheduler: 'beta', clipSkip: 2,
+      },
+      'req-video-extra'
+    );
+    const vd = job.stages[1].video_diffusion;
+    expect(vd?.steps).toBe(25);
+    expect(vd?.cfgScale).toBe(7.5);
+    expect(vd?.sampler).toBe('euler');
+    expect(vd?.scheduleName).toBe('beta');
+    expect(vd?.clipSkip).toBe(2);
+  });
+
+  it('forwards snake_case clip_skip into video_diffusion.clipSkip', () => {
+    const job = buildTamsVideoJob(
+      {
+        model: '834845675863700019',
+        prompt: 'a cat running',
+        width: 480, height: 832, fps: 16, totalFrames: 49,
+        clip_skip: 3,
+      },
+      'req-video-clip-snake'
+    );
+    expect(job.stages[1].video_diffusion?.clipSkip).toBe(3);
+  });
+
+  it('accepts video steps 61 without local rejection', () => {
+    const job = buildTamsVideoJob(
+      {
+        model: '834845675863700019',
+        prompt: 'a cat running',
+        width: 480, height: 832, fps: 16, totalFrames: 49,
+        steps: 61,
+      },
+      'req-video-steps-61'
+    );
+    expect(job.stages[1].video_diffusion?.steps).toBe(61);
+  });
 });
