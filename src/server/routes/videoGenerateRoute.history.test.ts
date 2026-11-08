@@ -6,6 +6,8 @@
  * what was actually sent, not canvas defaults or undeclared fields.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import express from 'express';
+import type { AddressInfo } from 'node:net';
 import { handleVideoGenerate, type VideoGenerateRouteDeps } from './videoGenerateRoute.ts';
 
 const logged = vi.hoisted(() => [] as any[]);
@@ -49,37 +51,25 @@ function createMockDeps(overrides: Partial<VideoGenerateRouteDeps> = {}): { deps
   return { deps: deps as VideoGenerateRouteDeps };
 }
 
-function makeMockRes() {
-  let status = 200;
-  let jsonData: any;
-  const res: any = {
-    statusCode: 200,
-    status(code: number) {
-      status = code;
-      this.statusCode = code;
-      return this;
-    },
-    json(body: any) {
-      jsonData = body;
-      return this;
-    },
-    setHeader: () => res,
-    getHeader: () => undefined,
-    on: () => res,
-    off: () => res,
-    once: () => res,
-    headersSent: false,
-    destroyed: false,
-    writableEnded: false,
-  };
-  return new Proxy(res, {
-    get(target, prop) {
-      if (prop === 'data') return jsonData;
-      return target[prop];
-    },
+async function postVideoGenerate(deps: VideoGenerateRouteDeps, body: unknown) {
+  const app = express();
+  app.use(express.json());
+  app.post('/api/video/generate', handleVideoGenerate(deps));
+  const server = await new Promise<ReturnType<typeof app.listen>>((resolve) => {
+    const s = app.listen(0, '127.0.0.1', () => resolve(s));
   });
+  try {
+    const { port } = server.address() as AddressInfo;
+    const response = await fetch(`http://127.0.0.1:${port}/api/video/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    return { statusCode: response.status, data: await response.json() as any };
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
 }
-
 const CANVAS = {
   prompt: 'a waterfall',
   duration: 7,
@@ -124,11 +114,7 @@ describe('VIDEOHIST125 - NanoGPT/Agnes/Grok video history records actual sent pa
         );
       }),
     });
-    const res = makeMockRes();
-    await handleVideoGenerate(deps)({
-      body: { ...CANVAS, provider: 'nanogpt', model: 'ltx-video-1' },
-      headers: {},
-    } as any, res);
+    const res = await postVideoGenerate(deps, { ...CANVAS, provider: 'nanogpt', model: 'ltx-video-1' });
 
     expect(res.statusCode).toBe(200);
     expect(res.data.historyItem).toBeDefined();
@@ -144,20 +130,19 @@ describe('VIDEOHIST125 - NanoGPT/Agnes/Grok video history records actual sent pa
     expect(hist.loras[0]).toMatchObject({ name: 'cinematic', strength: 0.7 });
     expect(hist.loras[1]).toMatchObject({ name: 'hdr', strength: 1.1 });
 
-    // actualRequest / actualParameters
     expect(hist.requestMetadata.actualRequest).toMatchObject({
       prompt: 'a waterfall',
-      duration: 7,
+      duration: '7',
       seed: 42,
       negative_prompt: 'blur',
     });
     expect(hist.requestMetadata.actualParameters).toMatchObject({
       prompt: 'a waterfall',
-      duration: 7,
+      duration: '7',
       seed: 42,
       negative_prompt: 'blur',
-      num_inference_steps: 25,
-      cfg_scale: 5.2,
+      steps: 25,
+      cfg: 5.2,
       width: 768,
       height: 1024,
     });
@@ -167,11 +152,11 @@ describe('VIDEOHIST125 - NanoGPT/Agnes/Grok video history records actual sent pa
     expect(genCall).toBeDefined();
     expect(genCall!.body).toMatchObject({
       prompt: 'a waterfall',
-      duration: 7,
+      duration: '7',
       seed: 42,
       negative_prompt: 'blur',
-      num_inference_steps: 25,
-      cfg_scale: 5.2,
+      steps: 25,
+      cfg: 5.2,
       width: 768,
       height: 1024,
     });
@@ -198,12 +183,7 @@ describe('VIDEOHIST125 - NanoGPT/Agnes/Grok video history records actual sent pa
         );
       }),
     });
-    const res = makeMockRes();
-    await handleVideoGenerate(deps)({
-      body: { ...CANVAS, provider: 'agnes', model: 'agnes-video-2.5' },
-      headers: {},
-      path: '/api/video/generate',
-    } as any, res);
+    const res = await postVideoGenerate(deps, { ...CANVAS, provider: 'agnes', model: 'agnes-video-2.5' });
 
     expect(res.statusCode).toBe(200);
     expect(res.data.historyItem).toBeDefined();
@@ -223,7 +203,7 @@ describe('VIDEOHIST125 - NanoGPT/Agnes/Grok video history records actual sent pa
     const genCall = upstreamCalls.find((c) => c.url.includes('/videos') && c.body?.prompt);
     expect(genCall).toBeDefined();
     expect(genCall!.body.prompt).toBe('a waterfall');
-    expect(genCall!.body.seconds).toBe(7);
+    expect(genCall!.body.seconds).toBe('7');
     expect(genCall!.body.seed).toBe(42);
   });
 
@@ -244,12 +224,7 @@ describe('VIDEOHIST125 - NanoGPT/Agnes/Grok video history records actual sent pa
         );
       }),
     });
-    const res = makeMockRes();
-    await handleVideoGenerate(deps)({
-      body: { ...CANVAS, provider: 'grok_compat', model: 'grok-imagine-video-1.5' },
-      headers: {},
-      path: '/api/video/generate',
-    } as any, res);
+    const res = await postVideoGenerate(deps, { ...CANVAS, provider: 'grok_compat', model: 'grok-imagine-video-1.5' });
 
     expect(res.statusCode).toBe(200);
     expect(res.data.historyItem).toBeDefined();
@@ -283,12 +258,7 @@ describe('VIDEOHIST125 - NanoGPT/Agnes/Grok video history records actual sent pa
         return new Response(JSON.stringify({ error: 'invalid model' }), { status: 422 });
       }),
     });
-    const res = makeMockRes();
-    await handleVideoGenerate(deps)({
-      body: { ...CANVAS, provider: 'nanogpt', model: 'bad-model' },
-      headers: {},
-      path: '/api/video/generate',
-    } as any, res);
+    const res = await postVideoGenerate(deps, { ...CANVAS, provider: 'nanogpt', model: 'bad-model' });
 
     expect(res.statusCode).toBe(422);
     expect(res.data.error).toContain('NanoGPT 视频任务提交失败');

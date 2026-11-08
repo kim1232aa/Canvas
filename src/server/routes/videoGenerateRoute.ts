@@ -791,6 +791,8 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
           seed: typeof sentNanoVideo.seed === 'number' ? sentNanoVideo.seed : null,
           steps: typeof sentNanoVideo.num_inference_steps === 'number' ? sentNanoVideo.num_inference_steps : (typeof sentNanoVideo.steps === 'number' ? sentNanoVideo.steps : null),
           cfg: typeof sentNanoVideo.cfg_scale === 'number' ? sentNanoVideo.cfg_scale : (typeof sentNanoVideo.cfg === 'number' ? sentNanoVideo.cfg : null),
+          width: typeof sentNanoVideo.width === 'number' ? sentNanoVideo.width : null,
+          height: typeof sentNanoVideo.height === 'number' ? sentNanoVideo.height : null,
           loras: Array.isArray(lorasFromCustom) ? lorasFromCustom.map((l: any) => ({ name: String(l?.name ?? l?.path ?? l), strength: typeof l?.strength === 'number' ? l.strength : (typeof l?.weight === 'number' ? l.weight : (typeof l?.scale === 'number' ? l.scale : null)) })).filter((l: any) => l.name) : undefined,
           requestMetadata: {
             actualRequest: sentNanoVideo,
@@ -873,7 +875,10 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
           if (clientClosed) {
             return;
           }
-          try { await sleepOrAbort(5000); } catch (e: any) {
+          try {
+            if (sleep) await sleep(5000);
+            else await sleepOrAbort(5000);
+          } catch (e: any) {
             if (e?.clientDisconnected) {
               return;
             }
@@ -936,7 +941,7 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
           width: typeof agnesPayload.width === 'number' ? agnesPayload.width : null,
           height: typeof agnesPayload.height === 'number' ? agnesPayload.height : null,
           loras: Array.isArray(lorasFromCustom) ? lorasFromCustom.map((l: any) => ({ name: String(l?.name ?? l?.path ?? l), strength: typeof l?.strength === 'number' ? l.strength : (typeof l?.weight === 'number' ? l.weight : (typeof l?.scale === 'number' ? l.scale : null)) })).filter((l: any) => l.name) : undefined,
-          requestMetadata,
+          requestMetadata: { ...requestMetadata, actualRequest: agnesPayload },
         });
 
         return res.json({
@@ -963,7 +968,7 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
       if (auth.error) return res.status(400).json({ error: auth.error });
       const { apiKey: grokKey, baseUrl: grokBase } = auth;
       const startTime = Date.now();
-      if (forwardUnmappedFields(res, 'grok_compat', req.body, ['seed', 'negative_prompt', 'steps', 'cfg', 'guidance_scale', 'loras', 'width', 'height', 'fps', 'num_frames', 'size', 'sampler_name', 'scheduler', 'denoise'])) return;
+      if (forwardUnmappedFields(res, 'grok_compat', req.body, ['steps', 'cfg', 'guidance_scale', 'loras', 'width', 'height', 'fps', 'num_frames', 'size', 'sampler_name', 'scheduler', 'denoise'])) return;
       const grokResolution = req.body.resolution;
 
       const grokPayload: Record<string, unknown> = { model, prompt };
@@ -1004,7 +1009,10 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
           if (clientClosed) {
             return;
           }
-          try { await sleepOrAbort(3000); } catch (e: any) {
+          try {
+            if (sleep) await sleep(3000);
+            else await sleepOrAbort(3000);
+          } catch (e: any) {
             if (e?.clientDisconnected) {
               return;
             }
