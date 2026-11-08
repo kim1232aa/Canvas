@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { SchemaProviderDriver, schemaProviderOutputUrl, waveSpeedBase64ImageDataUrl } from './SchemaProviderDriver';
+import { SchemaProviderDriver, schemaBatchWireName, schemaProviderOutputUrl, waveSpeedBase64ImageDataUrl } from './SchemaProviderDriver';
 import { clearSharedGet, beginSharedGetAction } from '../../services/sharedGet';
 import { plainErrorMessage } from '../../utils/apiFailure';
 import type { NormalizedGenerateParams } from '../types';
@@ -375,5 +375,44 @@ describe('SchemaProviderDriver · video submit flags', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('SchemaProviderDriver batchSize', () => {
+  beforeEach(() => { mockFetch.mockReset(); clearSharedGet(); beginSharedGetAction(); vi.useFakeTimers({ shouldAdvanceTime: true }); });
+  afterEach(() => { vi.useRealTimers(); vi.clearAllMocks(); clearSharedGet(); });
+
+  const submitBodyFor = async (provider: 'together' | 'novita', properties: Record<string, unknown>, batchSize?: number) => {
+    mockFetch.mockReset(); clearSharedGet(); beginSharedGetAction();
+    mockFetch.mockImplementation(async (input: URL | RequestInfo, init?: RequestInit) => {
+      const u = String(input); const method = String(init?.method || 'GET').toUpperCase();
+      if (u.includes('/api/model-schema') && method === 'GET') return jsonResponse({ credentialRef: 'c', inputSchema: { type: 'object', properties } });
+      if (u.includes('/submit') && method === 'POST') return jsonResponse({ taskId: 't', pollUrl: `/api/schema-provider/${provider}/tasks/t` });
+      if (u.includes('/tasks/t')) return jsonResponse({ status: 'completed', outputs: ['https://fixture.invalid/o.png'] });
+      return jsonResponse({ ok: true });
+    });
+    const pending = new SchemaProviderDriver(provider).generate({ prompt: 'a lighthouse at dusk', model: 'm', ...(batchSize !== undefined ? { batchSize } : {}) }, { [`${provider}Key`]: 'k' });
+    await vi.runAllTimersAsync();
+    await pending;
+    const submit = mockFetch.mock.calls.find((c) => String(c[0]).includes('/submit'))!;
+    return JSON.parse(String(submit[1]?.body));
+  };
+
+  it('puts batchSize under the wire name the model Schema declares (n / image_num / num_images)', async () => {
+    expect((await submitBodyFor('together', { n: { type: 'integer' } }, 3)).custom_parameters).toEqual({ n: 3 });
+    expect((await submitBodyFor('novita', { image_num: { type: 'integer' } }, 2)).custom_parameters).toEqual({ image_num: 2 });
+    expect((await submitBodyFor('together', { num_images: { type: 'integer' } }, 4)).custom_parameters).toEqual({ num_images: 4 });
+  });
+
+  it('sends nothing when the Schema declares no batch field, or batchSize is unset or 0', async () => {
+    expect((await submitBodyFor('together', { steps: { type: 'integer' } }, 3)).custom_parameters).toEqual({});
+    expect((await submitBodyFor('together', { n: { type: 'integer' } })).custom_parameters).toEqual({});
+    expect((await submitBodyFor('together', { n: { type: 'integer' } }, 0)).custom_parameters).toEqual({});
+  });
+
+  it('schemaBatchWireName reads only declared properties', () => {
+    expect(schemaBatchWireName({ inputSchema: { properties: { numberResults: {} } } })).toBe('numberResults');
+    expect(schemaBatchWireName({ inputSchema: {} })).toBeUndefined();
+    expect(schemaBatchWireName(undefined)).toBeUndefined();
   });
 });

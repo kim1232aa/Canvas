@@ -207,3 +207,17 @@ describe('CivitaiDriver history provenance', () => {
     });
   });
 });
+
+describe('CivitaiDriver batchSize', () => {
+  it('forwards params.batchSize as quantity (overriding extraParams.quantity) and omits it when unset or 0', async () => {
+    const bodies: any[] = [];
+    globalThis.fetch = vi.fn(async (_url, init) => { bodies.push(JSON.parse(String(init?.body))); return new Response(JSON.stringify({ imageUrl: 'https://example.test/o.png' })); });
+    const base = { prompt: 'a lighthouse at dusk, oil painting', model: 'urn:air:sdxl:checkpoint:civitai:123@456' };
+    await new CivitaiDriver().generate({ ...base, batchSize: 4, extraParams: { quantity: 2 } }, {});
+    await new CivitaiDriver().generate({ ...base }, {});
+    await new CivitaiDriver().generate({ ...base, batchSize: 0 }, {});
+    expect(bodies[0].quantity).toBe(4);
+    expect(bodies[1]).not.toHaveProperty('quantity');
+    expect(bodies[2]).not.toHaveProperty('quantity');
+  });
+});

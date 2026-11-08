@@ -85,3 +85,17 @@ describe('OpenAICompatDriver', () => {
     ).rejects.toThrow(/HTTP 400[\s\S]*moderation_blocked/);
   });
 });
+
+describe('OpenAICompatDriver batchSize', () => {
+  it('forwards params.batchSize as n (over extraParams.n) and omits n when unset or 0', async () => {
+    const d = new OpenAICompatDriver();
+    globalThis.fetch = vi.fn().mockImplementation(async () => new Response(JSON.stringify({ imageUrl: 'data:image/png;base64,aaa', model: 'gpt-image-2' }), { status: 200 }));
+    await d.generate({ prompt: 'tiny red square', model: 'gpt-image-2', batchSize: 3, extraParams: { n: 1 } }, { openaiCompatKey: 'sk' });
+    await d.generate({ prompt: 'tiny red square', model: 'gpt-image-2' }, { openaiCompatKey: 'sk' });
+    await d.generate({ prompt: 'tiny red square', model: 'gpt-image-2', batchSize: 0 }, { openaiCompatKey: 'sk' });
+    const bodies = (globalThis.fetch as any).mock.calls.map((c: any[]) => JSON.parse(c[1].body));
+    expect(bodies[0].n).toBe(3);
+    expect(bodies[1]).not.toHaveProperty('n');
+    expect(bodies[2]).not.toHaveProperty('n');
+  });
+});

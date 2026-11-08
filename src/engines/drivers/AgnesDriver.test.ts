@@ -184,3 +184,12 @@ it.each(['provider','model','extraParams'])('Agnes custom JSON cannot overwrite 
   });
   await expect(new AgnesDriver().generate({model:'agnes-video-2.5',prompt:'robot',extraParams:{custom_parameters:{[field]:'replacement'}}},{})).rejects.toThrow(/模型\/路由\/凭据边界/);
 });
+
+it('Agnes image does not invent a batch field and reports unsent batchSize',async()=>{
+  const request=vi.fn().mockResolvedValue(new Response(JSON.stringify({imageUrl:'https://example.test/o.png'}),{status:200}));globalThis.fetch=request;
+  const r=await new AgnesDriver().generate({model:'agnes-image-2.5-flash',prompt:'a lighthouse at dusk',batchSize:4},{});
+  const body=JSON.parse(request.mock.calls[0][1].body);
+  expect(Object.keys(body).filter(k=>/^(n|num_images|image_num|batch_size|batchSize)$/.test(k))).toEqual([]);
+  expect(r.wasAdapted).toBe(true);
+  expect(r.adaptationNotice).toMatch(/批量张数 4 未发送/);
+});

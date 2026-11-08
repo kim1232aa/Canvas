@@ -303,3 +303,18 @@ describe('NanoGPTDriver', () => {
     expect(result.mediaUrl).toBe('https://example.com/video.mp4');
   });
 });
+
+describe('NanoGPTDriver batchSize', () => {
+  it('forwards params.batchSize as n on the image route and omits n when unset or 0', async () => {
+    const res = { ok: true, json: async () => ({ imageUrl: 'https://example.com/i.png', model: 'm', provider: 'NanoGPT' }) };
+    vi.mocked(tracedFetch).mockResolvedValue(res as any);
+    const d = new NanoGPTDriver();
+    await d.generate({ prompt: 'a lighthouse at dusk', model: 'm', batchSize: 3 } as any, {});
+    await d.generate({ prompt: 'a lighthouse at dusk', model: 'm' } as any, {});
+    await d.generate({ prompt: 'a lighthouse at dusk', model: 'm', batchSize: 0 } as any, {});
+    const bodies = vi.mocked(tracedFetch).mock.calls.map((c: any[]) => JSON.parse(c[1].body));
+    expect(bodies[0].n).toBe(3);
+    expect(bodies[1].n).toBeUndefined();
+    expect(bodies[2].n).toBeUndefined();
+  });
+});

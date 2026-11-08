@@ -113,7 +113,7 @@ export class FalDriver extends BaseEngineDriver {
         ...(isProvided(params.width) ? { width: params.width } : {}),
         ...(isProvided(params.height) ? { height: params.height } : {}),
         model_name: params.extraParams?.model_name,
-        num_images: params.extraParams?.n,
+        num_images: params.batchSize != null && params.batchSize > 0 ? params.batchSize : params.extraParams?.n,
         // 2026-11-06: 不在驱动层拦截 clipStrength-only，不伪造 scale，保留原 clipStrength 如实发送由上游/服务端裁决
         loras: (params.loras || []).map((l: any) => {
           const resolvedPath = l.path || l.downloadUrl || l.url || (/^https?:\/\//i.test(String(l.name || '')) ? l.name : undefined);

@@ -124,3 +124,17 @@ describe('ModelScopeDriver & ModelScopeAiDriver', () => {
     }
   });
 });
+
+describe('ModelScopeDriver batchSize', () => {
+  it('does not invent a batch field (none in the official image params) and surfaces that to the caller', async () => {
+    const original = global.fetch;
+    global.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ imageUrl: 'https://example.com/a.png', historyItem: { seed: 1 } }), { status: 200 })) as any;
+    try {
+      const r = await (new ModelScopeDriver() as any).executeGenerate({ model: 'Tongyi-MAI/Z-Image-Turbo', prompt: 'a lighthouse at dusk', batchSize: 3 }, { modelscopeToken: 't' });
+      const body = JSON.parse((global.fetch as any).mock.calls[0][1].body);
+      expect(Object.keys(body).filter((k) => /^(n|num_images|batch_size|batchSize)$/.test(k))).toEqual([]);
+      expect(r.wasAdapted).toBe(true);
+      expect(r.adaptationNotice).toMatch(/批量张数 3 未发送/);
+    } finally { global.fetch = original; }
+  });
+});

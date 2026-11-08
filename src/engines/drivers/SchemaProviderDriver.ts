@@ -25,6 +25,15 @@ function asRecord(value: unknown): JsonRecord {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as JsonRecord : {};
 }
 
+/** Official batch-count wire names seen in provider contracts (Together/OpenAI `n`, WaveSpeed `num_images`, Novita `image_num`, Runware `numberResults`, Civitai `quantity`). Only a name the model Schema declares is sent. */
+const BATCH_COUNT_WIRE_NAMES = ['n', 'num_images', 'image_num', 'numberResults', 'quantity'] as const;
+
+/** Wire name for params.batchSize, read from the model's own input Schema; undefined when the Schema declares none. */
+export function schemaBatchWireName(schemaBody: unknown): string | undefined {
+  const props = asRecord(asRecord(asRecord(schemaBody).inputSchema).properties);
+  return BATCH_COUNT_WIRE_NAMES.find((name) => Object.hasOwn(props, name));
+}
+
 function looksLikeVideoUrl(url: string | undefined): boolean {
   if (!url) return false;
   if (/^data:video\//i.test(url)) return true;
@@ -214,6 +223,14 @@ export class SchemaProviderDriver extends BaseEngineDriver {
     // Leaving them inside custom_parameters makes buildOpenWorksRequest local-400 「不在该模型 Schema」.
     if (this.id === 'openworks') {
       for (const k of ['checkpoint', 'sdModel', 'sd_model', 'clip_skip', 'clipSkip']) delete custom[k];
+    }
+    if (params.batchSize != null && params.batchSize > 0) {
+      const batchWire = schemaBatchWireName(schemaBody);
+      if (!batchWire) {
+        recordLocalEvent(`批量张数未发送 · ${this.id} · ${params.model}`, { ok: false, batchSize: params.batchSize, note: '该模型 Schema 未声明批量张数字段（n / num_images / image_num / numberResults / quantity）；batchSize 未写入请求体' }, 'error');
+      } else if (!Object.hasOwn(custom, batchWire)) {
+        custom[batchWire] = params.batchSize;
+      }
     }
     const body = {
       model: params.model,

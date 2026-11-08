@@ -7,7 +7,7 @@ import { ApiKeysState, CivitaiSearchResult, GenerationHistoryItem, ProviderId } 
 const API_KEYS_STORAGE_KEY = 'comfycanvas_api_keys';
 
 // Browser-local keys only ("本浏览器"); empty when nothing was saved. No placeholder keys or base URLs.
-const EMPTY_KEYS: ApiKeysState = {
+export const EMPTY_KEYS: ApiKeysState = {
   civitaiKey: '',
   falKey: '',
   agnesKey: '',
@@ -31,6 +31,10 @@ const EMPTY_KEYS: ApiKeysState = {
   veniceKey: '',
   deepinfraKey: '',
   sogniKey: '',
+  runwareKey: '',
+  runwareBaseUrl: '',
+  modelslabKey: '',
+  modelslabBaseUrl: '',
   replicateKey: '',
   mageKey: '',
 };
@@ -183,42 +187,6 @@ export const generateWithHuggingFace = async (params: {
   return resp.json();
 };
 
-export const generateWithModelScope = async (params: {
-  prompt: string;
-  negative_prompt?: string;
-  model?: string;
-  steps?: number;
-  width?: number;
-  height?: number;
-  guidance?: number;
-  loras?: Array<{ name: string; strength: number; civitaiId?: string; triggers?: string }>;
-  targetProvider?: string;
-}) => {
-  const keys = getStoredApiKeys();
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  
-  const isAi = params.targetProvider === 'modelscope_ai';
-  const token = isAi ? keys.modelscopeAiToken : keys.modelscopeToken;
-  
-  if (token) headers['x-modelscope-token'] = token;
-  if (isAi) headers['x-modelscope-site'] = 'ai';
-
-  const resp = await fetch('/api/modelscope/generate', {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      ...params,
-      site: isAi ? 'ai' : 'cn'
-    }),
-  });
-
-  if (!resp.ok) {
-    throw await httpErrorFromResponse(resp);
-  }
-
-  return resp.json();
-};
-
 export const generateWithNanoGPT = async (params: {
   prompt: string;
   model: string;
@@ -230,31 +198,6 @@ export const generateWithNanoGPT = async (params: {
   if (keys.nanogptKey) headers['x-nanogpt-key'] = keys.nanogptKey;
 
   const resp = await fetch('/api/nanogpt/generate', {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(params),
-  });
-
-  if (!resp.ok) {
-    throw await httpErrorFromResponse(resp);
-  }
-
-  return resp.json();
-};
-
-export const generateVideo = async (params: {
-  prompt: string;
-  model?: string;
-  duration?: number;
-  fps?: number;
-  aspect_ratio?: string;
-  image_url?: string;
-}): Promise<{ videoUrl: string; provider: string; model: string; duration: number; fps: number }> => {
-  const keys = getStoredApiKeys();
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (keys.falKey) headers['x-fal-key'] = keys.falKey;
-
-  const resp = await fetch('/api/video/generate', {
     method: 'POST',
     headers,
     body: JSON.stringify(params),
@@ -636,28 +579,46 @@ export const deleteCloudProject = async (id: string): Promise<boolean> => {
 };
 export const cloneCloudProject = async (id: string): Promise<any> => cloudProjectRequest(`/api/cloud/projects/${encodeURIComponent(id)}/clone`, {method: 'POST'});
 
-export const fetchCloudServerHealth = async (): Promise<{
+export interface CloudHealthResponse {
+  ok: boolean;
   status: string;
   serverType: string;
   uptimeSeconds: number;
   projectsCount: number;
   historyCount: number;
   hasGeminiKey: boolean;
-}> => {
-  try {
-    const resp = await fetch('/api/cloud/health');
-    if (resp.ok) return await resp.json();
-  } catch (e) {
-    console.error('Health check error:', e);
-  }
-  return {
+  /** Real upstream HTTP status; 0 when no HTTP response was received. */
+  httpStatus: number;
+  /** Upstream response body text, verbatim, when the health check failed. */
+  error?: string;
+}
+
+/** Health read: a failed check reports the real status + body instead of posing as a healthy project server. */
+export const fetchCloudServerHealth = async (): Promise<CloudHealthResponse> => {
+  const offline = (httpStatus: number, error: string): CloudHealthResponse => ({
+    ok: false,
     status: 'offline',
-    serverType: 'Local Mode',
+    serverType: '',
     uptimeSeconds: 0,
     projectsCount: 0,
     historyCount: 0,
     hasGeminiKey: false,
-  };
+    httpStatus,
+    error,
+  });
+  let resp: Response;
+  try {
+    resp = await fetch('/api/cloud/health');
+  } catch (e: any) {
+    return offline(0, `网络连接异常：${e?.message || String(e)}`);
+  }
+  if (!resp.ok) return offline(resp.status, httpErrorMessageFromBody(await readResponseBody(resp), ['error']));
+  try {
+    const data = await resp.json();
+    return { ...data, ok: true, httpStatus: resp.status };
+  } catch (e: any) {
+    return offline(resp.status, `响应不是有效 JSON：${e?.message || String(e)}`);
+  }
 };
 
 export const ADMIN_TOKEN_STORAGE_KEY = 'canvas_admin_token';
@@ -759,47 +720,77 @@ export const fetchKeyPoolStats = async (token?: string): Promise<Record<string, 
   return resp.json();
 };
 
-export const updateKeyPoolStrategy = async (
+export interface KeyPoolWriteResult {
+  ok: boolean;
+  /** Real upstream HTTP status; 0 when no HTTP response was received. */
+  httpStatus: number;
+  /** Upstream response body text, verbatim, when the write failed. */
+  error?: string;
+}
+
+/** Strategy write: keeps the server's status and response body instead of reducing every failure to `false`. */
+export const updateKeyPoolStrategyDetailed = async (
   provider: string,
   strategy: 'round_robin',
   token?: string
-): Promise<boolean> => {
+): Promise<KeyPoolWriteResult> => {
   const effectiveToken = (token !== undefined ? token : getStoredAdminToken()).trim();
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (effectiveToken) {
     headers['Authorization'] = `Bearer ${effectiveToken}`;
   }
+  let resp: Response;
   try {
-    const resp = await fetch('/api/cloud-keys/strategy', {
+    resp = await fetch('/api/cloud-keys/strategy', {
       method: 'POST',
       headers,
       body: JSON.stringify({ provider, strategy }),
     });
-    return resp.ok;
-  } catch (e) {
-    console.error('Update key pool strategy error:', e);
+  } catch (e: any) {
+    return { ok: false, httpStatus: 0, error: `网络连接异常：${e?.message || String(e)}` };
   }
-  return false;
+  if (!resp.ok) return { ok: false, httpStatus: resp.status, error: httpErrorMessageFromBody(await readResponseBody(resp), ['error']) };
+  return { ok: true, httpStatus: resp.status };
 };
 
-export const testSingleKey = async (provider: string, key: string, token?: string): Promise<{ status: string; latency?: number; message: string }> => {
+/** Boolean wrapper kept for the current callers. ponytail: swap BackendSettingsModal to updateKeyPoolStrategyDetailed to show status+body; then delete this. */
+export const updateKeyPoolStrategy = async (
+  provider: string,
+  strategy: 'round_robin',
+  token?: string
+): Promise<boolean> => (await updateKeyPoolStrategyDetailed(provider, strategy, token)).ok;
+
+export interface SingleKeyTestResult {
+  status: string;
+  latency?: number;
+  message: string;
+  /** Real upstream HTTP status; 0 when no HTTP response was received. */
+  httpStatus: number;
+}
+
+/** Single-key probe: failures keep the server's status code and response body verbatim in `message`. */
+export const testSingleKey = async (provider: string, key: string, token?: string): Promise<SingleKeyTestResult> => {
+  const effectiveToken = (token !== undefined ? token : getStoredAdminToken()).trim();
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (effectiveToken) {
+    headers['Authorization'] = `Bearer ${effectiveToken}`;
+  }
+  let resp: Response;
   try {
-    const effectiveToken = (token !== undefined ? token : getStoredAdminToken()).trim();
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (effectiveToken) {
-      headers['Authorization'] = `Bearer ${effectiveToken}`;
-    }
-    const resp = await fetch('/api/cloud-keys/test-single', {
+    resp = await fetch('/api/cloud-keys/test-single', {
       method: 'POST',
       headers,
       body: JSON.stringify({ provider, key }),
     });
-    if (resp.ok) return await resp.json();
-    const text = await resp.text().catch(() => '');
-    return { status: 'invalid', message: `HTTP ${resp.status}: ${text}` };
   } catch (e: any) {
-    return { status: 'invalid', message: e.message || '测试失败' };
+    return { status: 'invalid', httpStatus: 0, message: `网络连接异常：${e?.message || String(e)}` };
   }
+  if (!resp.ok) {
+    return { status: 'invalid', httpStatus: resp.status, message: `HTTP ${resp.status}: ${await resp.text().catch(() => '')}` };
+  }
+  const body = await readResponseBody(resp);
+  if (body.json && typeof body.json === 'object') return { ...body.json, httpStatus: resp.status };
+  return { status: 'invalid', httpStatus: resp.status, message: `HTTP ${resp.status}: 响应不是有效 JSON: ${body.text}` };
 };
 
 export const fetchCloudBalances = async (token?: string): Promise<Record<string, { status: string; detail: string; amount?: number | string }>> => {

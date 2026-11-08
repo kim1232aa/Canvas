@@ -19,3 +19,18 @@ describe('SenseNova images',()=>{
   await expect(new SenseNovaDriver().generate({model:'sensenova-u1.5-lite',prompt:'sample'},{})).rejects.toThrow(/HTTP 402.*remaining credits/);
  });
 });
+
+describe('SenseNova batchSize',()=>{
+ beforeEach(()=>mock.mockReset());
+ it('forwards params.batchSize as n and omits it when unset or 0',async()=>{
+  mock.mockImplementation(async()=>new Response(JSON.stringify({imageUrl:'data:image/png;base64,AAAA',model:'sensenova-u1.5-lite'}),{status:200}));
+  const d=new SenseNovaDriver();
+  await d.generate({model:'sensenova-u1.5-lite',prompt:'a lighthouse at dusk',batchSize:1},{});
+  await d.generate({model:'sensenova-u1.5-lite',prompt:'a lighthouse at dusk'},{});
+  await d.generate({model:'sensenova-u1.5-lite',prompt:'a lighthouse at dusk',batchSize:0},{});
+  const bodies=mock.mock.calls.map(c=>JSON.parse(String(c[1]?.body)));
+  expect(bodies[0].n).toBe(1);
+  expect(bodies[1]).not.toHaveProperty('n');
+  expect(bodies[2]).not.toHaveProperty('n');
+ });
+});

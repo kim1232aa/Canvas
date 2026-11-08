@@ -6,6 +6,11 @@ vi.mock('./executionTrace', async (importOriginal) => {
 });
 
 import {
+  EMPTY_KEYS,
+  fetchCloudServerHealth,
+  testSingleKey,
+  updateKeyPoolStrategy,
+  updateKeyPoolStrategyDetailed,
   cloudProjectRequest,
   fetchCloudServerSettings,
   fetchHuggingFaceModelInfo,
@@ -15,9 +20,7 @@ import {
   generateWithFal,
   generateWithGemini,
   generateWithHuggingFace,
-  generateWithModelScope,
   generateWithNanoGPT,
-  generateVideo,
   refinePromptWithGemini,
   saveCloudServerSettings,
   searchCivitaiModels,
@@ -51,9 +54,7 @@ const callSites: Array<[string, () => Promise<unknown>]> = [
   ['searchCivitaiModels', () => searchCivitaiModels('x')],
   ['generateWithFal', () => generateWithFal({ prompt: 'a lighthouse at dusk, oil painting' })],
   ['generateWithHuggingFace', () => generateWithHuggingFace({ prompt: 'a lighthouse at dusk, oil painting' } as any)],
-  ['generateWithModelScope', () => generateWithModelScope({ prompt: 'a lighthouse at dusk, oil painting' })],
   ['generateWithNanoGPT', () => generateWithNanoGPT({ prompt: 'a lighthouse at dusk, oil painting' } as any)],
-  ['generateVideo', () => generateVideo({ prompt: 'waves rolling on a beach' } as any)],
   ['generateWithGemini', () => generateWithGemini({ prompt: 'a lighthouse at dusk, oil painting' })],
   ['refinePromptWithGemini', () => refinePromptWithGemini('a lighthouse', { provider: 'gemini', model: 'gemini-2.5-flash' })],
   ['fetchLiveModels', () => fetchLiveModels('civitai')],
@@ -126,5 +127,58 @@ describe('engine drivers keep real HTTP status and verbatim upstream body', () =
     globalThis.fetch = respond(200, long) as any;
     const err: Error = await civitai().then(() => { throw new Error('x'); }, (e) => e);
     expect(err.message).toContain('END-OF-BODY');
+  });
+});
+
+describe('EMPTY_KEYS', () => {
+  it('has an empty-string slot for every key and base-URL field the app reads from ApiKeysState', () => {
+    for (const k of ['runwareKey', 'runwareBaseUrl', 'modelslabKey', 'modelslabBaseUrl', 'replicateKey', 'mageKey', 'sogniKey', 'deepinfraKey']) {
+      expect(EMPTY_KEYS).toHaveProperty(k, '');
+    }
+  });
+  it('getStoredApiKeys on empty storage returns the new slots as empty strings', async () => {
+    const { getStoredApiKeys } = await import('./api');
+    store.clear();
+    const keys = getStoredApiKeys();
+    expect(keys.runwareKey).toBe('');
+    expect(keys.modelslabBaseUrl).toBe('');
+  });
+});
+
+describe('api.ts keeps real HTTP status and body for cloud admin reads', () => {
+  it('fetchCloudServerHealth reports the upstream status and body instead of posing as a healthy local server', async () => {
+    globalThis.fetch = respond(503, '<html>cloud gateway down</html>') as any;
+    const health = await fetchCloudServerHealth();
+    expect(health.ok).toBe(false);
+    expect(health.status).toBe('offline');
+    expect(health.httpStatus).toBe(503);
+    expect(health.error).toContain('503');
+    expect(health.error).toContain('<html>cloud gateway down</html>');
+    expect(health.serverType).not.toBe('Local Mode');
+  });
+
+  it('fetchCloudServerHealth passes a real payload through with ok/httpStatus', async () => {
+    globalThis.fetch = respond(200, JSON.stringify({ status: 'online', serverType: 'Cloud', uptimeSeconds: 5, projectsCount: 2, historyCount: 9, hasGeminiKey: true }), 'application/json') as any;
+    const health = await fetchCloudServerHealth();
+    expect(health).toMatchObject({ ok: true, httpStatus: 200, status: 'online', serverType: 'Cloud', projectsCount: 2 });
+  });
+
+  it('updateKeyPoolStrategyDetailed keeps 401 status and body; the boolean wrapper reports the same failure', async () => {
+    globalThis.fetch = respond(401, JSON.stringify({ error: 'admin token expired' }), 'application/json') as any;
+    const detailed = await updateKeyPoolStrategyDetailed('fal', 'round_robin');
+    expect(detailed.ok).toBe(false);
+    expect(detailed.httpStatus).toBe(401);
+    expect(detailed.error).toContain('401');
+    expect(detailed.error).toContain('admin token expired');
+    expect(await updateKeyPoolStrategy('fal', 'round_robin')).toBe(false);
+  });
+
+  it('testSingleKey keeps 403 status and body verbatim', async () => {
+    globalThis.fetch = respond(403, 'forbidden: key pool locked', 'text/plain') as any;
+    const res = await testSingleKey('fal', 'sk-test');
+    expect(res.httpStatus).toBe(403);
+    expect(res.status).toBe('invalid');
+    expect(res.message).toContain('403');
+    expect(res.message).toContain('forbidden: key pool locked');
   });
 });

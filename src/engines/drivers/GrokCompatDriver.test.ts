@@ -125,3 +125,17 @@ describe('GrokCompatDriver', () => {
     ).rejects.toThrow(/HTTP 503[\s\S]*grok_media_no_eligible_account/);
   });
 });
+
+describe('GrokCompatDriver batchSize', () => {
+  it('forwards params.batchSize as n on images and omits n when unset or 0', async () => {
+    const d = new GrokCompatDriver();
+    globalThis.fetch = vi.fn().mockImplementation(async () => new Response(JSON.stringify({ imageUrl: 'data:image/png;base64,aaa', model: 'grok-imagine-image' }), { status: 200 }));
+    await d.generate({ prompt: 'a lighthouse at dusk', model: 'grok-imagine-image', batchSize: 2 }, { grokCompatKey: 'sk', grokCompatBaseUrl: 'https://relay.example' });
+    await d.generate({ prompt: 'a lighthouse at dusk', model: 'grok-imagine-image' }, { grokCompatKey: 'sk', grokCompatBaseUrl: 'https://relay.example' });
+    await d.generate({ prompt: 'a lighthouse at dusk', model: 'grok-imagine-image', batchSize: 0 }, { grokCompatKey: 'sk', grokCompatBaseUrl: 'https://relay.example' });
+    const bodies = (globalThis.fetch as any).mock.calls.map((c: any[]) => JSON.parse(c[1].body));
+    expect(bodies[0].n).toBe(2);
+    expect(bodies[1]).not.toHaveProperty('n');
+    expect(bodies[2]).not.toHaveProperty('n');
+  });
+});
