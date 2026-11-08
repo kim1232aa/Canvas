@@ -548,22 +548,12 @@ export default function App() {
       },
       width: 480,
       height: 480,
-      prompt: 'A majestic dragon floating above misty mountains in sunrise, cinematic lighting, 8k',
-      negativePrompt: 'blurry, bad anatomy, low quality',
+      prompt: '',
+      negativePrompt: '',
       params: {
-        checkpoint: 'black-forest-labs/FLUX.1-schnell',
-        seed: Math.floor(Math.random() * 1000000000),
-        seedControl: 'randomize',
-        steps: 25,
-        cfg: 4.5,
-        sampler: 'euler',
-        scheduler: 'normal',
-        denoise: 1.0,
-        width: 1024,
-        height: 1024,
-        batchSize: 1,
+        checkpoint: '',
         loras: [],
-        targetProvider: 'fal',
+        targetProvider: '' as unknown as ComfyParameters['targetProvider'],
       },
       status: 'idle',
       createdAt: Date.now(),
@@ -630,8 +620,6 @@ export default function App() {
       pos: { x: frame.pos.x + 520, y: frame.pos.y },
       params: {
         ...frame.params,
-        seed: Math.floor(Math.random() * 1000000000),
-        denoise: 0.65, // Img2Img denoise
       },
       createdAt: Date.now(),
     };
@@ -673,15 +661,17 @@ export default function App() {
     beginRun();
     // clean-1005: select-model + run share one action — do NOT bump the sharedGet epoch here (reuse the Schema GET).
     setCurrentRunTarget(frame.title || '取景框');
-    setExecutionStatusText(`正在通过 ${frame.params.targetProvider.toUpperCase()} 渲染: ${frame.title}...`);
+    setExecutionStatusText(`正在通过 ${(frame.params.targetProvider || '').toUpperCase()} 渲染: ${frame.title}...`);
 
     try {
       const p = frame.params;
       let finalPrompt = frame.prompt;
+      let prependedTriggerWords = '';
       if (p.loras.length > 0) {
-        const triggers = p.loras.map((l) => l.triggerWords).filter(Boolean).join(', ');
+        const triggers = p.loras.map((l) => l.triggerWords?.trim()).filter(Boolean).join(', ');
         if (triggers && !finalPrompt.includes(triggers)) {
-          finalPrompt = `${triggers}, ${finalPrompt}`.trim();
+          finalPrompt = finalPrompt ? `${triggers}, ${finalPrompt}`.trim() : triggers;
+          prependedTriggerWords = finalPrompt !== frame.prompt ? triggers : '';
         }
       }
 
@@ -706,12 +696,24 @@ export default function App() {
 
       handleUpdateFrame(frameId, {
         executionProgress: 30,
-        executionStage: `正在整理请求参数 (${p.targetProvider.toUpperCase()})...`,
+        executionStage: `正在整理请求参数 (${(p.targetProvider || '').toUpperCase()})...`,
       });
 
       const normParams: NormalizedGenerateParams = {
         ...spatialRequestParameters({...frame, mediaType: isVideo ? 'video' : 'image'}),
-        workflowSnapshot: { format: 'comfycanvas', version: 1, canvasMode: 'spatial', frame },
+        workflowSnapshot: {
+          format: 'comfycanvas',
+          version: 1,
+          canvasMode: 'spatial',
+          frame,
+          requestMetadata: {
+            promptTransform: {
+              prependedTriggerWords,
+              originalPrompt: frame.prompt,
+              finalPrompt,
+            },
+          },
+        },
         prompt: finalPrompt,
       };
       const omissions = normParams.extraParams?.omissions;
@@ -737,7 +739,7 @@ export default function App() {
         console.log(`[SPATIAL FRAME RESULT] 渲染成功:`, execResult);
 
         if (!execResult || !execResult.mediaUrl) {
-          throw new Error(`${p.targetProvider.toUpperCase()} 算力商未能回传有效结果`);
+          throw new Error(`${(p.targetProvider || '').toUpperCase()} 算力商未能回传有效结果`);
         }
 
         if (execResult.mediaType === 'video' || isVideo) {
@@ -1882,14 +1884,9 @@ export default function App() {
           inputs: def ? def.inputs : [{ id: 'positive', name: 'positive', type: 'CONDITIONING', label: 'prompt' }],
           outputs: def ? def.outputs : [{ id: 'VIDEO', name: 'VIDEO', type: 'VIDEO', label: 'VIDEO' }],
           values: {
+            ...(def ? def.defaultValues : {}),
             model: modelId,
             targetProvider: provider,
-            prompt: 'Cinematic dynamic scene, high quality, 4k ultra-detailed, photorealistic motion',
-            aspect_ratio: undefined,
-            duration: '',
-            fps: '',
-            steps: 30,
-            cfg: 5.0,
           },
           state: 'idle',
         };
@@ -3029,14 +3026,9 @@ export default function App() {
               inputs: def ? def.inputs : [{ id: 'prompt', name: 'prompt', label: 'Prompt', type: 'STRING' }],
               outputs: def ? def.outputs : [{ id: 'video', name: 'video', label: 'VIDEO', type: 'VIDEO' }],
               values: {
+                ...(def ? def.defaultValues : {}),
                 model: mId,
                 targetProvider: detectedProvider,
-                prompt: 'Cinematic dynamic scene, high quality, 4k ultra-detailed, photorealistic motion',
-                aspect_ratio: undefined,
-                duration: '',
-                fps: 24,
-                steps: 30,
-                cfg: 6.0,
               },
               state: 'idle',
             };
@@ -3467,17 +3459,8 @@ export default function App() {
               status: 'idle',
               params: activeFrame?.params || {
                 checkpoint: '',
-                seed: Math.floor(Math.random() * 10000000),
-                seedControl: 'randomize',
-                steps: 25,
-                cfg: 4.5,
-                sampler: 'euler',
-                scheduler: 'normal',
-                denoise: 0.7,
-                width: 1024,
-                height: 1024,
-                batchSize: 1,
                 loras: [],
+                targetProvider: '' as unknown as ComfyParameters['targetProvider'],
               },
             });
             setInspectingMediaItem(null);
@@ -3497,11 +3480,6 @@ export default function App() {
               status: 'idle',
               params: {
                 checkpoint: '',
-                seedControl: 'fixed',
-                denoise: 1.0,
-                width: 832,
-                height: 480,
-                batchSize: 1,
                 loras: [],
                 targetProvider: 'video',
                 videoProvider: undefined,
