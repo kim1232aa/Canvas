@@ -6,7 +6,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { ParameterInspector } from './ParameterInspector';
 import { NODE_DEFINITIONS } from '../constants/nodes';
 import type { ComfyParameters } from '../types/graph';
-import type { CivitaiVideoInspectorParams } from '../utils/inspectorParameters';
+import { patchInspectorNode, readInspectorParameters, resolveNodeVideoSelectors, type CivitaiVideoInspectorParams } from '../utils/inspectorParameters';
+import type { NodeInstance } from '../types/graph';
 import { CIVITAI_VIDEO_OPENAPI_URL } from '../schemas/civitaiVideo';
 import { clearSharedGet } from '../services/sharedGet';
 
@@ -315,5 +316,98 @@ describe('ParameterInspector provider registry derivation and selection (mounted
     expect(alert?.textContent).toContain('502');
     expect(alert?.querySelector('pre')?.textContent).toBe(raw);
     expect(host.textContent).toContain('keep-this-model');
+  });
+
+  // Fixture mirrors the verified live VideoGenInput tree: engine -> (wan) version -> provider -> operation, (ltx2.3) operation.
+  const nestedVideoOpenApi = {
+    components: {
+      schemas: {
+        VideoGenInput: { discriminator: { propertyName: 'engine', mapping: { wan: '#/components/schemas/WanVideoGenInput', 'ltx2.3': '#/components/schemas/ComfyLtx23VideoGenInput' } } },
+        WanVideoGenInput: { allOf: [{ $ref: '#/components/schemas/VideoGenInput' }, { discriminator: { propertyName: 'version', mapping: { 'v2.2': '#/components/schemas/Wan22VideoGenInput' } } }] },
+        Wan22VideoGenInput: { allOf: [{ $ref: '#/components/schemas/WanVideoGenInput' }, { discriminator: { propertyName: 'provider', mapping: { fal: '#/components/schemas/Wan22FalVideoGenInput' } } }] },
+        Wan22FalVideoGenInput: { allOf: [{ $ref: '#/components/schemas/Wan22VideoGenInput' }, { discriminator: { propertyName: 'operation', mapping: { 'text-to-video': '#/components/schemas/Wan22FalTextToVideoInput' } } }] },
+        Wan22FalTextToVideoInput: { allOf: [{ $ref: '#/components/schemas/Wan22FalVideoGenInput' }] },
+        ComfyLtx23VideoGenInput: { allOf: [{ $ref: '#/components/schemas/VideoGenInput' }, { discriminator: { propertyName: 'operation', mapping: { createVideo: '#/components/schemas/ComfyLtx23CreateVideoInput' } } }] },
+        ComfyLtx23CreateVideoInput: { allOf: [{ $ref: '#/components/schemas/ComfyLtx23VideoGenInput' }] },
+      },
+    },
+  };
+  const OLD_MODEL = 'wan:v2.2:fal:text-to-video';
+  const entries: Array<[string, () => NodeInstance]> = [
+    ['AIVideoNode targetProvider=civitai', () => ({ id: 'n', type: 'AIVideoNode', title: 'v', pos: { x: 0, y: 0 }, inputs: [], outputs: [], values: { model: OLD_MODEL, targetProvider: 'civitai' } })],
+    ['CheckpointLoaderSimple targetProvider=video/video_provider=civitai', () => ({ id: 'n', type: 'CheckpointLoaderSimple', title: 'c', pos: { x: 0, y: 0 }, inputs: [], outputs: [], values: { ckpt_name: OLD_MODEL, targetProvider: 'video', video_provider: 'civitai' } })],
+  ];
+
+  it.each(entries)('real read -> panel click -> patch -> resolve chain keeps cleared selectors cleared (%s)', async (_name, make) => {
+    clearSharedGet();
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(nestedVideoOpenApi), { status: 200, headers: { 'content-type': 'application/json' } })));
+    let latest!: NodeInstance;
+    const Harness = ({ initial }: { initial: NodeInstance }) => {
+      const [node, setNode] = React.useState(initial);
+      latest = node;
+      const current = readInspectorParameters([node], [], node.id);
+      return <ParameterInspector params={current} onChange={(next) => setNode((n) => patchInspectorNode(n, current, next))} onOpenCivitai={noop} />;
+    };
+    const mount = async (initial: NodeInstance) => {
+      await act(async () => root.render(<Harness initial={initial} />));
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
+    };
+    const select = (label: string) => host.querySelector<HTMLSelectElement>(`select[aria-label="${label}"]`);
+    const choose = async (label: string, value: string) => {
+      const el = select(label);
+      expect(el, label).not.toBeNull();
+      await act(async () => { el!.value = value; el!.dispatchEvent(new Event('change', { bubbles: true })); });
+    };
+
+    await mount(make());
+    // Panel shows the live-schema selectors for the real node, seeded from the user's original model ID.
+    expect(select('Civitai engine')?.value).toBe('wan');
+    expect(select('Civitai version')?.value).toBe('v2.2');
+    expect(select('Civitai schema provider')?.value).toBe('fal');
+    expect(select('Civitai operation')?.value).toBe('text-to-video');
+    expect(resolveNodeVideoSelectors(latest.values)).toEqual({ engine: 'wan', version: 'v2.2', provider: 'fal', operation: 'text-to-video' });
+
+    // Change the parent: children are dropped and not re-filled from the old model ID.
+    await choose('Civitai engine', 'ltx2.3');
+    expect(latest.values.video_selectors).toEqual({ engine: 'ltx2.3' });
+    expect(resolveNodeVideoSelectors(latest.values)).toEqual({ engine: 'ltx2.3' });
+    expect(select('Civitai engine')?.value).toBe('ltx2.3');
+    expect(select('Civitai version')).toBeNull();
+    expect(select('Civitai operation')?.value).toBe('');
+    expect(latest.values.model ?? latest.values.ckpt_name).toBe(OLD_MODEL);
+
+    // Save and reopen: the explicit choice survives, the old model ID does not refill it.
+    await act(async () => root.unmount());
+    root = createRoot(host);
+    await mount(JSON.parse(JSON.stringify(latest)) as NodeInstance);
+    expect(select('Civitai engine')?.value).toBe('ltx2.3');
+    expect(select('Civitai operation')?.value).toBe('');
+    expect(resolveNodeVideoSelectors(latest.values)).toEqual({ engine: 'ltx2.3' });
+
+    // Clear everything: {} is the choice; nothing comes back after reopen either.
+    await choose('Civitai engine', '');
+    expect(latest.values.video_selectors).toEqual({});
+    expect(resolveNodeVideoSelectors(latest.values)).toEqual({});
+    await act(async () => root.unmount());
+    root = createRoot(host);
+    await mount(JSON.parse(JSON.stringify(latest)) as NodeInstance);
+    expect(select('Civitai engine')?.value).toBe('');
+    expect(Array.from(host.querySelectorAll('[data-testid="civitai-video-live-selectors"] select')).map((e) => (e as HTMLSelectElement).getAttribute('aria-label'))).toEqual(['Civitai engine']);
+    expect(resolveNodeVideoSelectors(latest.values)).toEqual({});
+  });
+
+  it('shows the live Civitai selectors for a real AIVideoNode with targetProvider=civitai but not for other providers', async () => {
+    await act(async () => {
+      root.render(<ParameterInspector params={params({ targetProvider: 'civitai', videoProvider: 'civitai', checkpoint: OLD_MODEL })} onChange={noop} onOpenCivitai={noop} />);
+    });
+    expect(host.querySelector('[data-testid="civitai-video-live-selectors"]')).not.toBeNull();
+    await act(async () => {
+      root.render(<ParameterInspector params={params({ targetProvider: 'civitai', checkpoint: 'urn:air:sdxl:checkpoint:civitai:1@2' })} onChange={noop} onOpenCivitai={noop} />);
+    });
+    expect(host.querySelector('[data-testid="civitai-video-live-selectors"]')).toBeNull();
+    await act(async () => {
+      root.render(<ParameterInspector params={params({ targetProvider: 'fal', videoProvider: 'fal' })} onChange={noop} onOpenCivitai={noop} />);
+    });
+    expect(host.querySelector('[data-testid="civitai-video-live-selectors"]')).toBeNull();
   });
 });

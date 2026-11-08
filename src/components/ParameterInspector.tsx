@@ -657,6 +657,7 @@ export const ParameterInspector: React.FC<ParameterInspectorProps> = ({
             );
           })()}
           {params.targetProvider === 'civitai' && <div className="space-y-2 rounded-lg border border-slate-700 p-3">
+            {params.videoProvider === 'civitai' && <CivitaiVideoLiveSelectors params={params} update={update} />}
             <CivitaiAllowMatureControl customParameters={params.customParameters} onChangeCustom={customParameters => update({ customParameters })} />
           </div>}
           {params.targetProvider === 'video' && params.videoProvider === 'civitai' && <div className="space-y-2 rounded-lg border border-slate-700 p-3">
