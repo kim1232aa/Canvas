@@ -166,6 +166,8 @@ export default function App() {
     actionProviderId?: string;
     /** Technical detail / local wrapper error stack, kept strictly separate from verbatim raw body. */
     localWrapper?: string;
+    /** Keep this error visible even while HistoryModal is open (history-delete failures are not shown on any history card). */
+    alwaysVisible?: boolean;
   };
   const [toast, setToastRaw] = useState<StudioToast | null>(null);
   const maskStudioToast = (next: StudioToast | null): StudioToast | null => {
@@ -2216,63 +2218,95 @@ export default function App() {
     }
   };
 
-  const handleDeleteHistoryItem = async (id: string, url?: string) => {
-    setHistory((prev) => {
-      const next = prev.filter((item) => item.id !== id && (!url || (item.url !== url && item.imageUrl !== url)));
-      setHistoryTotal((t) => {
-        const nt = Math.max(0, t - (prev.length - next.length || 1));
-        setHistoryHasMore(next.length < nt);
-        return nt;
-      });
+  /** Roll back an optimistic history removal: put the removed items back at their old positions and restore the counts. */
+  const restoreRemovedHistory = (snapshot: GenerationHistoryItem[], removed: GenerationHistoryItem[], countDelta: number, hadMore: boolean) => {
+    const order = new Map(snapshot.map((item, index) => [item.id, index] as const));
+    setHistory((cur) => {
+      const have = new Set(cur.map((item) => item.id));
+      const missing = removed.filter((item) => !have.has(item.id)).sort((x, y) => (order.get(x.id) ?? 0) - (order.get(y.id) ?? 0));
+      if (missing.length === 0) return cur;
+      const next = [...cur];
+      for (const item of missing) next.splice(Math.min(order.get(item.id) ?? next.length, next.length), 0, item);
       return next;
     });
+    setHistoryTotal((t) => t + countDelta);
+    setHistoryHasMore(hadMore);
+  };
+
+  const showHistoryDeleteFailure = (title: string, e: unknown, restoredCount: number) => {
+    const reason = e instanceof Error ? e.message : String(e);
+    console.error(`${title}:`, e);
+    setToast({
+      type: 'error',
+      title,
+      message: restoredCount > 0 ? `${reason}\n服务器未确认删除，已将 ${restoredCount} 项恢复到列表。` : `${reason}\n服务器未确认删除。`,
+      action: 'none',
+      alwaysVisible: true,
+    });
+  };
+
+  const handleDeleteHistoryItem = async (id: string, url?: string) => {
+    const snapshot = history;
+    const hadMore = historyHasMore;
+    const removed = snapshot.filter((item) => item.id === id || (!!url && (item.url === url || item.imageUrl === url)));
+    const countDelta = removed.length || 1;
+    const removedIds = new Set(removed.map((item) => item.id));
+    const nextTotal = Math.max(0, historyTotal - countDelta);
+    setHistory((prev) => prev.filter((item) => !removedIds.has(item.id)));
+    setHistoryTotal(nextTotal);
+    setHistoryHasMore(snapshot.length - removed.length < nextTotal);
     try {
       const { deleteHistoryItem } = await import('./services/api');
-      const ok = await deleteHistoryItem(id);
-      if (!ok && url) {
-        await deleteHistoryItem(url);
-      }
-      refreshHistoryCounts();
-      setToast({ type: 'success', title: '资产已删除', message: '已从服务器和资产库永久移除' });
+      let ok = await deleteHistoryItem(id);
+      if (!ok && url) ok = await deleteHistoryItem(url);
+      if (!ok) throw new Error(`服务器未确认删除（deleteHistoryItem 返回 ${String(ok)}）`);
     } catch (e) {
-      console.error('Delete history item error:', e);
+      restoreRemovedHistory(snapshot, removed, countDelta, hadMore);
+      showHistoryDeleteFailure('资产删除失败', e, removed.length);
+      return;
     }
+    refreshHistoryCounts();
+    setToast({ type: 'success', title: '资产已删除', message: '已从服务器和资产库永久移除' });
   };
 
   const handleDeleteBatchHistoryItems = async (ids: string[]) => {
     const idSet = new Set(ids);
-    setHistory((prev) => {
-      const next = prev.filter((item) => !idSet.has(item.id));
-      const removed = prev.length - next.length;
-      setHistoryTotal((t) => {
-        const nt = Math.max(0, t - removed);
-        setHistoryHasMore(next.length < nt);
-        return nt;
-      });
-      return next;
-    });
+    const snapshot = history;
+    const hadMore = historyHasMore;
+    const removed = snapshot.filter((item) => idSet.has(item.id));
+    const countDelta = removed.length;
+    const nextTotal = Math.max(0, historyTotal - countDelta);
+    setHistory((prev) => prev.filter((item) => !idSet.has(item.id)));
+    setHistoryTotal(nextTotal);
+    setHistoryHasMore(snapshot.length - removed.length < nextTotal);
     try {
       const { deleteHistoryBatch } = await import('./services/api');
-      await deleteHistoryBatch(ids);
-      refreshHistoryCounts();
-      setToast({ type: 'success', title: '批量资产已删除', message: `已成功移除 ${ids.length} 项生成资产` });
+      const ok = await deleteHistoryBatch(ids);
+      if (!ok) throw new Error(`服务器未确认批量删除（deleteHistoryBatch 返回 ${String(ok)}）`);
     } catch (e) {
-      console.error('Batch delete history items error:', e);
+      restoreRemovedHistory(snapshot, removed, countDelta, hadMore);
+      showHistoryDeleteFailure('批量资产删除失败', e, removed.length);
+      return;
     }
+    refreshHistoryCounts();
+    setToast({ type: 'success', title: '批量资产已删除', message: `已成功移除 ${ids.length} 项生成资产` });
   };
 
   const handleClearHistory = async () => {
-    const { clearHistory } = await import('./services/api');
-    const ok = await clearHistory();
-    if (ok) {
-      setHistory([]);
-      setHistoryTotal(0);
-      setHistoryHasMore(false);
-      setHistoryCountsAll(undefined);
-      setToast({ type: 'success', title: '历史记录已清空', message: '所有生成记录已从服务器永久移除' });
+    try {
+      const { clearHistory } = await import('./services/api');
+      const ok = await clearHistory();
+      if (!ok) throw new Error(`服务器未确认清空（clearHistory 返回 ${String(ok)}）`);
+    } catch (e) {
+      showHistoryDeleteFailure('历史记录清空失败', e, 0);
+      return;
     }
+    setHistory([]);
+    setHistoryTotal(0);
+    setHistoryHasMore(false);
+    setHistoryCountsAll(undefined);
+    setToast({ type: 'success', title: '历史记录已清空', message: '所有生成记录已从服务器永久移除' });
   };
-
 
   // trace-fix2 #10: a LoRA-caused block whose LoRA count no longer matches the graph is stale → clear it (and its toast).
   useEffect(() => {
@@ -3213,7 +3247,7 @@ export default function App() {
 
       {/* Real-time Floating Notification Toast */}
       {/* fix16 #5: while HistoryModal is open, skip error toast — failure is already on the history card. */}
-      {toast && !(isHistoryOpen && toast.type === 'error') && (
+      {toast && !(isHistoryOpen && toast.type === 'error' && !toast.alwaysVisible) && (
         /* fix4.1: bottom-center above bottom tool dock (bottom-6 + ~3.5rem pill); clear 「LoRA 模型中心」/「100%」. */
         <div data-testid="toast-container" className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 pointer-events-auto animate-in slide-in-from-bottom-4 duration-300 max-w-[min(48rem,94vw)] max-h-[min(40vh,24rem)] overflow-auto">
           <div
