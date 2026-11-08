@@ -126,7 +126,13 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
       provider: inputProvider,
     } = req.body;
 
-    if (!model) return res.status(400).json({ error: '模型为必填项（model is required）' });
+    if (!String(model ?? '').trim()) {
+      return res.status(400).json({
+        error: '请先选择视频模型 / 工具（模型为必填项，model is required）；服务端不会代入默认模型，请求未发出。',
+        errorSource: 'local',
+        provider: String(inputProvider || '').toLowerCase().trim() || undefined,
+      });
+    }
     const reqProvider = (inputProvider || '').toLowerCase().trim();
     const VIDEO_PROVIDERS = ['tensorart', 'tensor', 'nanogpt', 'agnes', 'modelscope', 'modelscope_ai', 'fal', 'civitai', 'grok_compat'];
     if (!reqProvider) {
@@ -353,7 +359,7 @@ export function handleVideoGenerate(deps: VideoGenerateRouteDeps) {
           errorSource: 'local', provider: reqProvider, model,
         });
       }
-      const targetToolName = String(model || 'text2video_wan27').trim();
+      const targetToolName = String(model).trim();
       const baseUrl = taKey.trim().startsWith('ak_tusi')
         ? 'https://openapi.tusiart.cn/openworks/v1'
         : 'https://openapi.tensor.art/openworks/v1';
