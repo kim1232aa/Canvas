@@ -285,3 +285,155 @@ describe('M65: handleSelectLoRAWithBaseModel verified auto-pair', { timeout: 300
     expect(toastText()).toContain('LoRA 缺少明确的供应商信息');
   });
 });
+
+describe('M108: AIVideoNode and cloud engine recommendation routing', { timeout: 30000 }, () => {
+  beforeEach(() => { localStorage.clear(); vi.restoreAllMocks(); });
+  afterEach(async () => { await act(async () => root?.unmount()); document.body.innerHTML = ''; localStorage.clear(); vi.unstubAllGlobals(); });
+
+  it('video-compatible recommendation (wan21) applies to AIVideoNode', async () => {
+    const videoBoard = {
+      id: 'v1', name: 'video-test', canvasMode: 'graph',
+      nodes: [node('vid', 'AIVideoNode', { model: '', targetProvider: '', prompt: 'cinematic shot' })],
+      connections: [],
+      spatialFrames: [],
+    };
+    localStorage.setItem(BOARDS_KEY, JSON.stringify([videoBoard]));
+    localStorage.setItem(ACTIVE_BOARD_KEY, 'v1');
+    localStorage.setItem(MODE_KEY, 'graph');
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } })));
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    const App = (await import('./App')).default;
+    await act(async () => { root.render(<App />); });
+    await settle();
+
+    const wan21Candidate: CatalogCheckpointCandidate = {
+      provider: 'fal', checkpoint: 'wan2.1-t2v',
+      baseModelMetadata: 'Wan 2.1', baseModelSource: 'civitai:baseModel',
+    };
+    await pair({
+      name: 'wan style', provider: 'civitai', triggerWords: '',
+      baseModel: 'Wan 2.1', baseModelSource: 'civitai:baseModel', checkpointCandidates: [wan21Candidate],
+    });
+
+    const graph = saved();
+    const video = graph.nodes.find((n: { type: string }) => n.type === 'AIVideoNode');
+    expect(video.values.model).toBe('wan2.1-t2v');
+    expect(video.values.targetProvider).toBe('fal');
+    expect(video.values.prompt).toBe('cinematic shot');
+    expect(toastText()).toContain('wan2.1-t2v');
+    expect(toastText()).toContain('已配对验证底模');
+  });
+
+  it('image recommendation (flux) shows incompatibility warning for AIVideoNode', async () => {
+    const videoBoard = {
+      id: 'v1', name: 'video-test', canvasMode: 'graph',
+      nodes: [node('vid', 'AIVideoNode', { model: 'original-video', targetProvider: 'fal', prompt: 'test' })],
+      connections: [],
+      spatialFrames: [],
+    };
+    localStorage.setItem(BOARDS_KEY, JSON.stringify([videoBoard]));
+    localStorage.setItem(ACTIVE_BOARD_KEY, 'v1');
+    localStorage.setItem(MODE_KEY, 'graph');
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } })));
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    const App = (await import('./App')).default;
+    await act(async () => { root.render(<App />); });
+    await settle();
+
+    await pair({
+      name: 'flux lora', provider: 'civitai', triggerWords: '',
+      baseModel: 'Flux.1 D', baseModelSource: 'civitai:baseModel', checkpointCandidates: [fluxCandidate],
+    });
+
+    const graph = saved();
+    const video = graph.nodes.find((n: { type: string }) => n.type === 'AIVideoNode');
+    expect(video.values.model).toBe('original-video');
+    expect(video.values.targetProvider).toBe('fal');
+    expect(toastText()).toContain('不适用于视频节点');
+    expect(toastText()).toContain('LoRA 已挂载，底模不适配');
+  });
+
+  it('matching provider applies to FalAIEngineNode', async () => {
+    const falBoard = {
+      id: 'f1', name: 'fal-test', canvasMode: 'graph',
+      nodes: [node('fal', 'FalAIEngineNode', { model: '', steps: 28 })],
+      connections: [],
+      spatialFrames: [],
+    };
+    localStorage.setItem(BOARDS_KEY, JSON.stringify([falBoard]));
+    localStorage.setItem(ACTIVE_BOARD_KEY, 'f1');
+    localStorage.setItem(MODE_KEY, 'graph');
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } })));
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    const App = (await import('./App')).default;
+    await act(async () => { root.render(<App />); });
+    await settle();
+
+    const falCandidate: CatalogCheckpointCandidate = {
+      provider: 'fal', checkpoint: 'fal-ai/flux-lora',
+      baseModelMetadata: 'FLUX.1 D', baseModelSource: 'civitai:baseModel',
+    };
+    await pair({
+      name: 'fal lora', provider: 'civitai', triggerWords: '',
+      baseModel: 'Flux.1 D', baseModelSource: 'civitai:baseModel', checkpointCandidates: [falCandidate],
+    });
+
+    const graph = saved();
+    const fal = graph.nodes.find((n: { type: string }) => n.type === 'FalAIEngineNode');
+    expect(fal.values.model).toBe('fal-ai/flux-lora');
+    expect(fal.values.steps).toBe(28);
+    expect(toastText()).toContain('fal-ai/flux-lora');
+  });
+
+  it('mismatched provider shows incompatibility warning for fixed-provider node', async () => {
+    const falBoard = {
+      id: 'f1', name: 'fal-test', canvasMode: 'graph',
+      nodes: [node('fal', 'FalAIEngineNode', { model: 'original-fal', steps: 28 })],
+      connections: [],
+      spatialFrames: [],
+    };
+    localStorage.setItem(BOARDS_KEY, JSON.stringify([falBoard]));
+    localStorage.setItem(ACTIVE_BOARD_KEY, 'f1');
+    localStorage.setItem(MODE_KEY, 'graph');
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } })));
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    const App = (await import('./App')).default;
+    await act(async () => { root.render(<App />); });
+    await settle();
+
+    await pair({
+      name: 'hf lora', provider: 'civitai', triggerWords: '',
+      baseModel: 'Flux.1 D', baseModelSource: 'huggingface:base_model', checkpointCandidates: [fluxCandidate],
+    });
+
+    const graph = saved();
+    const fal = graph.nodes.find((n: { type: string }) => n.type === 'FalAIEngineNode');
+    expect(fal.values.model).toBe('original-fal');
+    expect(toastText()).toContain('供应商');
+    expect(toastText()).toContain('不匹配');
+  });
+
+  it('LoRA wires correctly through MODEL connections', async () => {
+    await mount();
+    await pair({
+      name: 'test lora', provider: 'civitai', triggerWords: 'test trigger', modelStrength: 0.8,
+      baseModel: 'Flux.1 D', baseModelSource: 'civitai:baseModel', checkpointCandidates: [fluxCandidate],
+    });
+    const graph = saved();
+    const lora = graph.nodes.find((n: { type: string }) => n.type === 'LoRALoader');
+    expect(lora).toBeDefined();
+    expect(lora.values.strength_model).toBe(0.8);
+    expect(lora.values.lora_name).toBe('test lora');
+    const modelConnection = graph.connections.find((c: any) => c.fromNodeId === lora.id && c.fromSocketId === 'MODEL');
+    expect(modelConnection).toBeDefined();
+    expect(modelConnection.toNodeId).toBe('ks');
+  });
+});
