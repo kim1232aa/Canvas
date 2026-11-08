@@ -252,6 +252,7 @@ export interface ProviderLoraAdaptation {
   targetFormat?: TargetLoraFormat;
   sendableUrlOrId?: string;
   requiresAuthConsent?: boolean;
+  sourceUrl?: string;
   scale?: number;
   inferredFromPrompt?: boolean;
   status: 'compatible' | 'architecture_mismatch' | 'requires_reselection' | 'requires_consent' | 'unsupported' | 'unverified';
@@ -289,6 +290,11 @@ export interface CivitaiRecipeInput {
     civitaiId?: string;
     modelId?: number | string;
     versionId?: number | string;
+    loraId?: string;
+    catalogId?: string;
+    slug?: string;
+    personalStatus?: string;
+    modelIds?: string[];
     air?: string;
     strength?: number | null;
     clipStrength?: number | null;
@@ -665,7 +671,6 @@ export function adaptCivitaiRecipeToProvider(
       loraEcosystem !== 'unknown' ? loraEcosystem : undefined,
       l.air
     );
-
     if (provider === 'civitai') {
       if (l.canGenerate === false) {
         adaptedLoras.push({
@@ -730,6 +735,51 @@ export function adaptCivitaiRecipeToProvider(
           reason: `以 Civitai AIR 规范传入 loras 映射字典 (权重: ${originalStrength})`,
         });
       }
+    } else if (provider === 'sogni') {
+      const sogniId = String(l.loraId || l.catalogId || l.slug || '').trim();
+      const isPersonalId = /^personal-/i.test(sogniId);
+      const isValidPersonalId = /^personal-[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(sogniId);
+      const isValidId = Boolean(sogniId) && (isPersonalId ? isValidPersonalId : !/^https?:\/\//i.test(sogniId) && !/^urn:air:/i.test(sogniId) && !/^\d+$/.test(sogniId) && !/\.(?:safetensors|pt|bin|ckpt)$/i.test(sogniId));
+      const personalReady = !isPersonalId || l.personalStatus === 'ready';
+      const modelCompatible = !Array.isArray(l.modelIds) || !targetModelTrimmed || l.modelIds.includes(targetModelTrimmed);
+      const sourceUrl = directDownloadUrl || (/^https?:\/\//i.test(sogniId) ? sogniId : '');
+      if (!isValidId || !personalReady || !modelCompatible) {
+        adaptedLoras.push({
+          name: loraName,
+          originalStrength,
+          originalClipStrength,
+          civitaiId: versionId,
+          modelId,
+          versionId,
+          baseModel: loraBaseModel,
+          sourceUrl: sourceUrl || undefined,
+          targetFormat: 'catalog_id',
+          status: 'requires_reselection',
+          reason: !isValidId
+            ? sourceUrl
+              ? `此 Civitai/Hugging Face URL 是 Sogni personal-LoRA 导入来源，不是生成时的 LoRA ID。用户可自行完成有权限确认的导入，等待状态 ready 后使用 personal-<uuid>，或选择 Sogni 官方目录 ID。来源：${sourceUrl}`
+              : 'Sogni 生成需要官方目录 ID 或 ready personal-<uuid>；请先在 Sogni 可用 LoRA 目录选择并确认。'
+            : !personalReady
+            ? `Sogni personal-LoRA 尚未确认 ready（当前状态：${l.personalStatus || '未提供'}）；生成需使用 ready 后的 personal-<uuid>。${sourceUrl ? ` 来源：${sourceUrl}` : ''}`
+            : `Sogni personal-LoRA 未确认适用于目标模型；请核对该条目的 modelIds 或选择适用目录 LoRA。${sourceUrl ? ` 来源：${sourceUrl}` : ''}`,
+        });
+      } else {
+        adaptedLoras.push({
+          name: loraName,
+          originalStrength,
+          originalClipStrength,
+          civitaiId: versionId,
+          modelId,
+          versionId,
+          baseModel: loraBaseModel,
+          sourceUrl: sourceUrl || undefined,
+          targetFormat: 'catalog_id',
+          sendableUrlOrId: sogniId,
+          scale: originalStrength,
+          status: 'compatible',
+          reason: `Sogni generation LoRA ID: ${sogniId}${isPersonalId ? ' (ready personal-LoRA)' : ' (catalog)'}; source URL is retained as import-source metadata only.`,
+        });
+      }
     } else if (targetSpec.status === 'unverified') {
       adaptedLoras.push({
         name: loraName,
@@ -772,7 +822,7 @@ export function adaptCivitaiRecipeToProvider(
       });
     } else if (targetSpec.format === 'air') {
       if (provider === 'runware') {
-        const runwareAir = modelId && versionId ? `civitai:${modelId}@${versionId}` : canonicalAir || directDownloadUrl;
+        const runwareAir = modelId && versionId ? `civitai:${modelId}@${versionId}` : canonicalAir;
         if (!runwareAir) {
           adaptedLoras.push({
             name: loraName,
@@ -784,7 +834,9 @@ export function adaptCivitaiRecipeToProvider(
             baseModel: loraBaseModel,
             targetFormat: 'air',
             status: 'requires_reselection',
-            reason: '缺少模型标识或 AIR，无法构造 Runware LoRA；需在目标库中重新选用。',
+            reason: directDownloadUrl
+              ? '来源提供了 Civitai 下载 URL，但它不是 Runware lora[].model AIR；请在 Runware 可用目录选择或确认具体模型版本。来源 URL 与 LoRA 元信息仍保留供查看。'
+              : '缺少模型标识或 Runware/Civitai AIR；请在 Runware 可用目录选择或确认具体模型版本。',
           });
         } else {
           adaptedLoras.push({
@@ -915,6 +967,7 @@ export function adaptCivitaiRecipeToProvider(
         modelId,
         versionId,
         baseModel: loraBaseModel,
+        ...(provider === 'sogni' && directDownloadUrl ? { sourceUrl: directDownloadUrl } : {}),
         targetFormat: targetSpec.format || 'custom',
         status: targetSpec.status === 'supported' ? 'compatible' : (targetSpec.status || 'unverified'),
         reason: targetSpec.reason || `${displayName} 未配置显式 LoRA Schema，将按用户填写原样提交上游裁决。`,

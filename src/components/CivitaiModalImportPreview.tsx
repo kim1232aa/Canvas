@@ -480,6 +480,14 @@ export const CivitaiModalImportPreview: React.FC<CivitaiModalImportPreviewProps>
                         目标标识/URL: <span className="text-cyan-300">{lora.sendableUrlOrId}</span>
                       </div>
                     )}
+                    {lora.sourceUrl && (
+                      <div className="text-[10px] text-slate-400 font-mono break-all" data-testid={`import-lora-source-url-${idx}`}>
+                        <span className="text-slate-300">来源 URL（Sogni 导入来源，不是生成 ID）: </span>
+                        <a href={lora.sourceUrl} target="_blank" rel="noreferrer" className="text-cyan-300 underline">
+                          {lora.sourceUrl}
+                        </a>
+                      </div>
+                    )}
                   </div>
 
                   {/* Individual LoRA Actions — only a real AIR/name with a nonzero strength reaches the canvas. */}
