@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { migrateInlineAssets, createInlineAssetMigrator, mergeMigratedAssets, parseAssetCache } from './legacyAssetMigration';
-import type { MediaAsset } from '../components/AssetManagerModal';
+import type { MediaAsset } from '../types/assets';
 
 const asset = (url: string): MediaAsset => ({
   id: 'legacy-1', url, type: 'image', title: '旧素材', prompt: '', provider: '本地导入', model: '', timestamp: 1,

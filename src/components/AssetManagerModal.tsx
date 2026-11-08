@@ -37,33 +37,13 @@ import {
   FileText,
 } from 'lucide-react';
 import { GenerationHistoryItem } from '../types/providers';
+import type { MediaAsset } from '../types/assets';
 import { displayValue } from './HistoryModal';
 import { PreviewMediaPanel } from './PreviewMediaPanel';
 import { uploadMedia } from '../services/api';
 import { createInlineAssetMigrator, mergeMigratedAssets, parseAssetCache } from '../utils/legacyAssetMigration';
 
 const migrateAssets = createInlineAssetMigrator(uploadMedia);
-
-export interface MediaAsset {
-  id: string;
-  url: string;
-  type: 'image' | 'video';
-  title?: string;
-  prompt: string;
-  negativePrompt?: string;
-  provider: string;
-  model: string;
-  timestamp: number;
-  width?: number;
-  height?: number;
-  seed?: number | null;
-  steps?: number | null;
-  cfg?: number | null;
-  sampler?: string;
-  scheduler?: string;
-  loras?: Array<{ name: string; strength?: number }>;
-  isReference?: boolean;
-}
 
 /** Result of a server delete the modal can await: `{ ok: true }` only when the server confirmed it; `{ ok: false, error }` carries the real upstream error. */
 export type AssetDeleteResult = { ok: true } | { ok: false; error: Error };

@@ -17,20 +17,7 @@ import {
   Play,
   RotateCcw,
 } from 'lucide-react';
-import { NodeInstance, Connection, SpatialFrame, CanvasTransform } from '../types/graph';
-
-export interface CanvasProject {
-  id: string;
-  name: string;
-  description: string;
-  updatedAt: number;
-  previewImage?: string;
-  nodes: NodeInstance[];
-  connections: Connection[];
-  spatialFrames: SpatialFrame[];
-  transform?: CanvasTransform;
-  canvasMode?: 'graph' | 'spatial';
-}
+import type { CanvasProject } from '../types/graph';
 
 interface CanvasManagerModalProps {
   isOpen: boolean;

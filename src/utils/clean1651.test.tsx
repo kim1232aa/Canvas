@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import { measureChromeInsets, computeFitTransform, allItemsInUsableBox } from './fitView';
 import { clearNodeExecutionErrors } from './graphEngine';
 import { priorRunErrorLabel, errorBannerText } from './apiFailure';
-import { formatBeijingHms, CANVAS_TIME_ZONE } from '../services/executionTrace';
+import { formatBeijingHms, CANVAS_TIME_ZONE } from './dateFormat';
 import { buttonSummary } from '../components/ExecutionLog';
 
 const read = (rel: string) => fs.readFileSync(new URL(rel, import.meta.url), 'utf8');

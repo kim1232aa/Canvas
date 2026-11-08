@@ -1,4 +1,4 @@
-import { formatBeijingHms } from '../services/executionTrace';
+import { formatBeijingHms } from './dateFormat';
 import { isSchemaPrefetchError, schemaFailureToast } from './schemaFailure';
 
 export interface ReadResponseBody {

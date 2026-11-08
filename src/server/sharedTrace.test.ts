@@ -4,7 +4,7 @@ import express from 'express';
 import { describe, expect, it } from 'vitest';
 import fx from './__fixtures__sharedtrace-2026-10-16.json';
 import { appendTaskTraces, taskTraces, isTaskFailureBody, firstUpstreamMessage, schemaLoraMaxItems, registerSchemaProviderRoutes } from './schemaProviders';
-import { keyUsagesFromTrace } from './keyUsage';
+import { keyUsagesFromTrace } from '../utils/keyUsage';
 import { countActualRequestLoras } from '../utils/actualRequestLoras';
 import { loraDisplayName } from '../utils/loraDisplayName';
 import { loraSourceMismatch } from '../utils/loraSourceMismatch';

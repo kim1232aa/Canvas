@@ -1,5 +1,5 @@
 import type { GenerationHistoryItem } from '../types/providers';
-import { formatKeyUsage, keyUsagesFromTrace } from '../server/keyUsage';
+import { formatKeyUsage, keyUsagesFromTrace } from './keyUsage';
 
 export type HistoryParameterKey =
   | 'negativePrompt'

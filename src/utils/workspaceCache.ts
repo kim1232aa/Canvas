@@ -1,6 +1,5 @@
 import {migrateTensorWorkflow} from './legacyTensorWorkflow';
-import type {CanvasProject} from '../components/CanvasManagerModal';
-import type {CanvasMode} from '../types/graph';
+import type {CanvasMode,CanvasProject} from '../types/graph';
 
 export const BOARDS_KEY = 'comfycanvas_boards_v2';
 export const ACTIVE_BOARD_KEY = 'comfycanvas_active_board_v2';

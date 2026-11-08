@@ -7,7 +7,8 @@ import { toastFromRunError, upstreamFailureToast, TOAST_BODY_FIRST_LINE_MAX } fr
 import { schemaPrefetchFailureData } from '../engines/drivers/SchemaProviderDriver';
 import { isCustomParametersJsonQuery, sanitizeCatalogQuery } from '../services/api';
 import { formatHistorySize, historyParameterSourceLabel } from './historyParameters';
-import { formatRecordTime, CANVAS_TIME_ZONE, CANVAS_TIME_ZONE_LABEL } from '../services/executionTrace';
+import { formatRecordTime } from '../services/executionTrace';
+import { CANVAS_TIME_ZONE, CANVAS_TIME_ZONE_LABEL } from './dateFormat';
 import { groupAuxByOperation, groupGenByRun, genRunHeader, auxOperationHeader } from '../components/ExecutionLog';
 import type { ExecutionRecord } from '../services/executionTrace';
 import { computeFitTransform, allItemsInViewport } from './fitView';

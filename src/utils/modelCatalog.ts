@@ -1,5 +1,5 @@
 import {tensorModelId} from '../schemas/tensorModelApi';
-import {isLookupOnlyCatalog} from '../server/modelCatalogResponse';
+import {isLookupOnlyCatalog} from './catalogPagination';
 import {EngineRegistry} from '../engines/EngineRegistry';
 
 export interface CatalogOption {value:string;label:string;provider:string}
