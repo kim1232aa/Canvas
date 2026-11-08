@@ -1,6 +1,40 @@
 # ComfyCanvas Studio：开发交接、产品缺口与验收手册
 
-## 2026-11-07 当前终态总览（唯一已验证基线，优先于下文全部历史记录）
+## 2026-11-08 当前终态总览（M46 真实浏览器点击验收完成，主分支已全量合并 M77/M81/M82/M83）
+
+- **最新代码基准**：`main` @ `dadb08f`（已合并 M77 跨供应商导入、M81 视频全生态对齐、M82 视频下拉与底模过滤、M83 Gemini 矩阵解耦与诚实规范，以及最高搜索防呆铁律）。
+- **M46 验收执行成果 (Headless Chromium, --no-proxy-server, 1920×1080)**：
+  - 启动真实本地服务 `PORT=4546 npx tsx server.ts`，全程通过真实浏览器无代理自动化点击验收所有合并与恢复功能。
+  - 采集 **14 张高保真独立哈希截图**存盘于 `docs/evidence/2026-11-08/*.png`（详见 [acceptance.md](docs/evidence/2026-11-08/acceptance.md)）：
+    1. `01-civitai-import-runware-air.png`：Civitai 导入弹窗切换至 Runware，显式要求选择平台真实模型，并以 Civitai AIR 规范映射解析 LoRA。
+    2. `02-civitai-import-sogni-source-vs-id.png`：Civitai 导入弹窗切换至 Sogni，明确区分原始下载 URL 为导入来源元数据，生成时需使用 ready personal ID 或目录 ID。
+    3. `03-canvas-add-node-menu-aivideonode.png`：画布右键添加节点菜单完整呈现 `AI 视频（显式 Provider/Model）` (`AIVideoNode`)。
+    4. `04-aivideonode-targetprovider-dropdown.png`：`AIVideoNode` 视频服务商下拉框完整包含 `nanogpt`、`novita`、`tensorart` 等官方已声明视频能力的服务商。
+    5. `05-aivideonode-lorahub-mount-allproviders.png`：模型中心打开挂载 LoRA，`全部服务商` 页签正常激活且可点击。
+    6. `06-providermatrix-gemini-native.png`：供应商矩阵全景第 1 标签页，完整呈现 `Google Gemini 原生图像`、`gemini-3.1-flash-image`、Imagen 下线说明与提示词原样透传规范。
+    7. `07-civitai-lora-preset-loraloader.png`：Civitai LoRA 预设载入画布，展示结构完整的 LoRALoader 节点与拓扑。
+    8. `08-huggingface-node-no-routing-dropdown.png`：Hugging Face 节点清晰可见，已彻底剥离内部 `hf_provider` 路由下拉框。
+    9. `09-lorahub-autopair-tensorart-crossbar.png`：模型中心 LoRA 目录常驻跨服务商横栏（含 `Tensor.Art (TAMS)` 与 `Tensor.Art OpenWorks`），各卡片呈现 `🎯 选用 LoRA 并自动配对底模`。
+    10. `10-executionlog-drawer-open.png`：底部 `ExecutionLog` 抽屉展开，实时展示各次真实网络出站记录。
+    11. `11-api-parameter-editor-json.png`：参数面板中的 `ApiParameterEditor` 自由 JSON 文本框，支持直接覆盖请求字段与读取官方 Schema。
+    12. `12-lora-autopair-checkpoint-button.png`：LoRALoader 节点上明确呈现已验证底模配对按钮（`应用已验证底模 black-forest-labs/FLUX.1-dev`）。
+    13. `13-real-run-actualrequest-upstream-response.png`：**真实运行验收**，载入 DeepInfra FLUX-2 预设并带满正向提示词，点击运行后真实出站抵达 DeepInfra，界面原样无损展示 HTTP 402 及 `{"detail":{"error":"You need positive balance to do inference. Please add balance manually or setup top-up"}}` (`PASS_BILLING`)。
+    14. `14-real-run-executionlog-trace.png`：ExecutionLog 展开该次出站详情，完整呈现真实端点、`actualRequest` 实参与上游原始 JSON。
+- **历史文档与产物诚实核查（M45/M46 闭环）**：
+  - `README.md` 中 WaveSpeed 与 Tensor.Art (OpenWorks) 因磁盘 `data/` 目录无生成产物，原 `PASS_GENERATION` 声明均已合规降级为 `PASS_BILLING`。
+  - `README.md` 中 Novita 视频状态因 SVD-XT 预设退役且 `VIDEO_PROVIDERS` 不含 novita，更正为 `NOT_SENT`。
+  - 删除 `public/seed-ok-preview.png` 157 字节伪产物占位图。
+  - `docs/evidence/2026-11-05/final.md` 明确增加对 41 张截图跳号（缺 31/36/37/38/39/41）的历史原由说明。
+- **工程构建与测试现状**：
+  - `npm run build`：Exit code 0，顺利生成前端 dist 与 Worker 产物。
+  - 类型检查与测试遗留问题（已按治理协议向 Tower 提报 Finding）：
+    1. `src/types/graph.ts` 的 `ComfyParameters` 缺少 `civitaiVersion`、`civitaiBackend`、`civitaiOperation` 属性定义，导致 `src/utils/inspectorParameters.test.ts` 在 `tsc` 下报错（Finding 已提报）。
+    2. 部分历史测试文件引用了已退役的旧预设（`std-novita-i2v`, `std-replicate-i2v`），导致读取 undefined.nodes 抛错（Finding 已提报）。
+- **详尽验收报告索引**：[docs/evidence/2026-11-08/acceptance.md](docs/evidence/2026-11-08/acceptance.md)。
+
+---
+
+## 2026-11-07 历史终态记录（承接 M25 / M29 / M30 / M31）
 
 - **最新代码基准**：`main` @ `38a83f2`（已完全合并 M1~M12, M14~M18, M23, M24, M26~M30；M31 为文档/证据核验，不改应用源码）。
 - **M29–M31 收口（2026-11-07）**：

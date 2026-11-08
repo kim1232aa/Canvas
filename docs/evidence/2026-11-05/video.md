@@ -234,7 +234,7 @@ WIRING: 7
 4. **提供商 Sogni 与模型 ltx25 完整下拉及回显特写证据**：
    - 截图存盘：`docs/evidence/2026-11-05/video/sogni-i2v-sogni-provider-model-evidence.png`（整节点 1280×1750，图宽 1280）。
    - **同一张截图中完整呈现**：
-     - 顶部节点标题 `AI 视频 (Fal.ai)` 及 `图像 (IMAGE)` 连线（来自 LoadImage 的 `/seed-ok-preview.png` 预览图）。
+     - 顶部节点标题 `AI 视频 (Fal.ai)` 及 `图像 (IMAGE)` 连线（来自 LoadImage；原 `/seed-ok-preview.png` 实测为 157 字节占位图，M46 已按产物诚实原则清理删除）。
      - 横幅原文：`schemaStatus hosted-tool:animate_photo · toolName animate_photo · videoModel · 有参考图时提交走 animate_photo（实时 Schema）；Seedance 参考图字段未接通`。
      - 下方「视频服务商 (Provider)」下拉选择框明确选中并显示 `Sogni`。
      - 「model (AI视频大模型)」下拉框明确选中并显示 `ltx25`，只读回显标签明确显示 `ltx25`。
