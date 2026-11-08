@@ -2,6 +2,27 @@ import { describe, it, expect } from 'vitest';
 import { buildRunwareImageRequest, inspectRunwareImageResponseBody, parseRunwareImageResponse } from './runwareImageContract';
 
 describe('Runware Image Contract', () => {
+  it.each([
+    { outputFormat: 'TIFF', outputType: 'binary' },
+    { outputFormat: ' webp ', outputType: ' DataURI ' },
+    { output_format: 'avif', output_type: 'future-output' },
+  ])('preserves explicit output values and records final wire values (%j)', (outputs) => {
+    const req = buildRunwareImageRequest({ model: 'runware:100@1', prompt: 'mountain lake at dusk', ...outputs });
+    const outputFormat = 'outputFormat' in outputs ? outputs.outputFormat : outputs.output_format;
+    const outputType = 'outputType' in outputs ? outputs.outputType : outputs.output_type;
+    expect(req.payload[0]).toMatchObject({ outputFormat, outputType });
+    expect(req.mapping).toEqual(expect.arrayContaining([
+      expect.objectContaining({ to: 'outputFormat', value: outputFormat }),
+      expect.objectContaining({ to: 'outputType', value: outputType }),
+    ]));
+  });
+  it('records project defaults and custom JSON output overrides as actually sent', () => {
+    const defaults = buildRunwareImageRequest({ model: 'm' });
+    expect(defaults.payload[0]).toMatchObject({ outputFormat: 'PNG', outputType: 'URL' });
+    expect(defaults.mapping).toEqual(expect.arrayContaining([expect.objectContaining({ to: 'outputFormat', value: 'PNG' }), expect.objectContaining({ to: 'outputType', value: 'URL' })]));
+    const custom = buildRunwareImageRequest({ model: 'm', outputFormat: 'TIFF', custom_parameters: { outputFormat: 'AVIF', outputType: 'binary' } });
+    expect(custom.mapping).toEqual(expect.arrayContaining([expect.objectContaining({ to: 'outputFormat', value: 'AVIF' }), expect.objectContaining({ to: 'outputType', value: 'binary' })]));
+  });
   it('builds a valid imageInference task payload array', () => {
     const req = buildRunwareImageRequest({
       model: 'runware:100@1',

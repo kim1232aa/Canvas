@@ -88,6 +88,182 @@ function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 }
 
+describe('LoRA submission transparency', () => {
+  const objectArray = { type: 'array', items: { type: 'object', properties: { path: { type: 'string' }, scale: { type: 'number' } } } };
+  async function submitLoras(properties: any, loras: any[], check: (status: number, data: any, sent: any[]) => void, body: any = {}) {
+    const sent: any[] = [];
+    await withFixture(async (_url, init) => {
+      if (init?.method === 'POST') { sent.push(JSON.parse(String(init.body))); return json({ data: { id: 'task' } }); }
+      return json({ data: [{ model_id: 'fixture/model', api_schema: { api_schemas: [{ type: 'model_run', method: 'POST', api_path: '/api/v3/fixture/model', server: 'https://api.wavespeed.ai', request_schema: { properties } }] } }] });
+    }, async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/api/schema-provider/wavespeed/submit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: 'fixture/model', prompt: 'mountain valley in watercolor, panoramic composition', loras, ...body }) });
+      check(response.status, await response.json(), sent);
+    });
+  }
+  it.each([false, true])('keeps explicit default-target entries exactly once and in input order (mixed=%s)', async (mixed) => {
+    const loras = [{ target_field: 'loras', path: 'https://example.invalid/a', strength: 0.4 }, ...(mixed ? [{ path: 'https://example.invalid/b', strength: 0 }, { target_field: 'other_loras', path: 'https://example.invalid/c', strength: 0.8 }, { target_field: 'loras', path: 'https://example.invalid/d', strength: 0.6 }] : [])];
+    await submitLoras({ loras: objectArray, other_loras: objectArray }, loras, (status, data, sent) => {
+      expect(status).toBe(200);
+      expect(sent[0].loras).toEqual([{ path: 'https://example.invalid/a', scale: 0.4 }, ...(mixed ? [{ path: 'https://example.invalid/b', scale: 0 }, { path: 'https://example.invalid/d', scale: 0.6 }] : [])]);
+      if (mixed) expect(sent[0].other_loras).toEqual([{ path: 'https://example.invalid/c', scale: 0.8 }]);
+      expect(data.actualRequest.mapping.find((m: any) => m.to === 'loras').value).toEqual(sent[0].loras);
+    });
+  });
+  it('maps a string URL into the declared object item resource property', async () => {
+    await submitLoras({ loras: objectArray }, ['https://example.invalid/style.safetensors'], (status, _data, sent) => {
+      expect(status).toBe(200);
+      expect(sent[0].loras).toEqual([{ path: 'https://example.invalid/style.safetensors' }]);
+    });
+  });
+  it.each([0, 0.25])('preserves lora_strength=%s for unresolved candidates', async (strength) => {
+    await submitLoras({ loras: objectArray }, [{ name: 'foreign.safetensors', air: 'urn:air:flux1:lora:civitai:1@2', lora_strength: strength }], (status, _data, sent) => {
+      expect(status).toBe(200);
+      expect(sent[0].loras).toEqual([{ path: 'foreign.safetensors', scale: strength }]);
+    });
+  });
+  it.each(['lora_url', 'model_id'])('sends one explicitly targeted %s as its declared string shape', async (target) => {
+    await submitLoras({ [target]: { type: 'string' }, lora_weight: { type: 'number' } }, [{ target_field: target, path: 'https://example.invalid/style', lora_strength: 0 }], (status, _data, sent) => {
+      expect(status).toBe(200);
+      expect(sent[0][target]).toBe('https://example.invalid/style');
+      if (target === 'lora_url') expect(sent[0].lora_weight).toBe(0);
+    });
+  });
+  it.each([false, true])('rejects multiple LoRAs targeting a scalar without sending (explicit=%s)', async (explicit) => {
+    const loras = ['a', 'b'].map(name => ({ name, ...(explicit ? { target_field: 'lora_url' } : {}) }));
+    await submitLoras({ lora_url: { type: 'string' } }, loras, (status, data, sent) => {
+      expect(status).toBe(400);
+      expect(sent).toEqual([]);
+      expect(data.errorSource).toBe('local');
+      expect(data.error).toContain('lora_url');
+      expect(data.proposedRequest.mapping.flatMap((m: any) => m.unmappedLoras || [])).toHaveLength(2);
+    });
+  });
+  it.each([null, 12, false, [], {}, ''])('diagnoses invalid item %j and never submits a partial LoRA list', async (invalid) => {
+    await submitLoras({ loras: objectArray }, [{ path: 'https://example.invalid/valid', strength: 0.3 }, invalid], (status, data, sent) => {
+      expect(status).toBe(400);
+      expect(sent).toEqual([]);
+      expect(data.errorSource).toBe('local');
+      expect(data.proposedRequest.mapping.flatMap((m: any) => m.unmappedLoras || [])).toEqual(expect.arrayContaining([expect.objectContaining({ item: invalid, reason: expect.any(String) })]));
+    });
+  });
+  it('does not redirect an undeclared explicit target to the default array', async () => {
+    await submitLoras({ loras: objectArray }, [{ target_field: 'missing_loras', path: 'https://example.invalid/a' }], (status, data, sent) => {
+      expect(status).toBe(400);
+      expect(sent).toEqual([]);
+      expect(data.error).toContain('missing_loras');
+    });
+  });
+  it('preserves a declared scalar object target instead of wrapping it in an array', async () => {
+    await submitLoras({ adapter: objectArray.items }, [{ target_field: 'adapter', path: 'https://example.invalid/style', strength: 0 }], (status, _data, sent) => {
+      expect(status).toBe(200);
+      expect(sent[0].adapter).toEqual({ path: 'https://example.invalid/style', scale: 0 });
+    });
+  });
+  it('does not overwrite a filled scalar target with a LoRA', async () => {
+    await submitLoras({ model_id: { type: 'string' } }, [{ target_field: 'model_id', name: 'style' }], (status, data, sent) => {
+      expect(status).toBe(400);
+      expect(sent).toEqual([]);
+      expect(data.error).toContain('model_id');
+      expect(data.error).toContain('冲突');
+    }, { custom_parameters: { model_id: 'selected-model' } });
+  });
+  it('keeps a scalar LoRA and a separately targeted array with their own strengths', async () => {
+    await submitLoras({ lora_url: { type: 'string' }, lora_weight: { type: 'number' }, other_loras: objectArray }, [{ target_field: 'lora_url', path: 'https://example.invalid/a', lora_strength: 0 }, { target_field: 'other_loras', path: 'https://example.invalid/b', strength: 0.6 }], (status, _data, sent) => {
+      expect(status).toBe(200);
+      expect(sent[0]).toMatchObject({ lora_url: 'https://example.invalid/a', lora_weight: 0, other_loras: [{ path: 'https://example.invalid/b', scale: 0.6 }] });
+    });
+  });
+  it('refuses an explicit LoRA targeting a late-bound provider model selector instead of overwriting it', async () => {
+    const sent: any[] = [];
+    await withFixture(async (url, init) => {
+      if (init?.method === 'POST') { sent.push(JSON.parse(String(init.body))); return json({ data: [{ url: 'https://example.invalid/out.png' }] }); }
+      if (url.includes('/models')) return json({ data: [{ id: 'fixture', info: { docsJson: 'https://api.aimlapi.com/docs-json?model=fixture' } }] });
+      return json({ paths: { '/v1/images/generations': { post: { requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { model: { type: 'string' }, loras: objectArray } } } } } } } } });
+    }, async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/api/schema-provider/aimlapi/submit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: 'fixture', prompt: 'A mountain valley in watercolor, panoramic composition', loras: [{ target_field: 'model', name: 'chosen-lora', strength: 0.4 }] }) });
+      const data = await response.json() as any;
+      expect(response.status).toBe(400);
+      expect(sent).toEqual([]);
+      expect(data.errorSource).toBe('local');
+      expect(data.error).toContain('model');
+      expect(data.proposedRequest.mapping.flatMap((m: any) => m.unmappedLoras || [])).toHaveLength(1);
+    });
+  });
+  it.each([0, 0.25])('preserves lora_strength=%s on MuAPI documented-field object arrays without item properties', async (strength) => {
+    const sent: any[] = [];
+    await withFixture(async (url, init) => {
+      if (init?.method === 'POST') { sent.push(JSON.parse(String(init.body))); return json({ request_id: 'muapi-task' }); }
+      if (url.endsWith('/api/v1/models')) return json({ models: [{ name: 'flux-lora', endpoint: '/api/v1/flux-lora', endpoint_url: 'flux_lora', group_of: 'image', category: 'Text to Image' }] });
+      return json({ paths: { '/api/v1/flux_lora': { post: { requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { prompt: { type: 'string' }, loras: { type: 'array', items: { type: 'object', additionalProperties: true } } } } } } } } } } });
+    }, async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/api/schema-provider/muapi/submit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: 'flux_lora', prompt: 'A mountain valley in watercolor, panoramic composition', loras: [{ path: 'https://example.invalid/style', lora_strength: strength }] }) });
+      expect(response.status).toBe(200);
+      expect(sent[0].loras).toEqual([{ path: 'https://example.invalid/style', scale: strength }]);
+    });
+  });
+  it('retains schema-declared extra item properties such as trigger_word on candidate fallback items', async () => {
+    await submitLoras({ loras: { type: 'array', items: { type: 'object', properties: { path: { type: 'string' }, scale: { type: 'number' }, trigger_word: { type: 'string' } } } } }, [{ name: 'foreign.safetensors', air: 'urn:air:flux1:lora:civitai:1@2', strength: 0.4, trigger_word: 'mountain_watercolor' }], (status, _data, sent) => {
+      expect(status).toBe(200);
+      expect(sent[0].loras).toEqual([{ path: 'foreign.safetensors', scale: 0.4, trigger_word: 'mountain_watercolor' }]);
+    });
+  });
+  it('accepts nullable JSON Schema scalar type arrays such as ["string", "null"] for lora_url', async () => {
+    await submitLoras({ lora_url: { type: ['string', 'null'] }, lora_weight: { type: ['number', 'null'] } }, [{ path: 'https://example.invalid/style', strength: 0.4 }], (status, _data, sent) => {
+      expect(status).toBe(200);
+      expect(sent[0]).toMatchObject({ lora_url: 'https://example.invalid/style', lora_weight: 0.4 });
+    });
+  });
+  it.each([
+    [[{ path: 'https://example.invalid/style', scale: 0.4 }]],
+    [[{ path: 'https://example.invalid/override', scale: 0.8 }]],
+  ])('preserves existing custom_parameters.loras channel for identical and explicit override arrays (%j)', async (customLoras) => {
+    await submitLoras({ loras: objectArray }, [{ path: 'https://example.invalid/style', scale: 0.4 }], (status, data, sent) => {
+      expect(status).toBe(200);
+      expect(sent[0].loras).toEqual(customLoras);
+      expect(data.actualRequest.mapping.find((m: any) => m.from === 'custom_parameters.loras')).toMatchObject({ to: 'loras', value: customLoras, overrides: [{ path: 'https://example.invalid/style', scale: 0.4 }] });
+    }, { custom_parameters: { loras: customLoras } });
+  });
+  const lora = { name: 'foreign-style.safetensors', air: 'urn:air:flux1:lora:civitai:1@2', strength: 0.7 };
+  it.each([
+    { type: 'array', items: { type: 'string' } },
+    { type: 'array', items: { type: 'object', properties: { path: { type: 'string' }, scale: { type: 'number' } } } },
+  ])('sends unresolved candidates through the declared LoRA field (%j)', async (field) => {
+    await withFixture(async (_url, init) => {
+      if (init?.method === 'POST') return json({ error: 'upstream rejected foreign LoRA' }, 422);
+      return json({ data: [{ model_id: 'fixture/model', api_schema: { api_schemas: [{ type: 'model_run', method: 'POST', api_path: '/api/v3/fixture/model', server: 'https://api.wavespeed.ai', request_schema: { properties: { loras: field } } }] } }] });
+    }, async (baseUrl, calls) => {
+      const response = await fetch(`${baseUrl}/api/schema-provider/wavespeed/submit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: 'fixture/model', prompt: 'cinematic mountain landscape', loras: [lora] }) });
+      expect(response.status).toBe(422);
+      const data = await response.json() as any;
+      const sent = JSON.parse(String(calls.find(c => c.init?.method === 'POST')?.init?.body));
+      expect(sent.loras).toEqual(field.items.type === 'string' ? [lora.name] : [{ path: lora.name, scale: 0.7 }]);
+      expect(data.actualRequest.mapping.find((m: any) => m.from === 'loras').unmappedLoras).toEqual([expect.objectContaining({ item: lora, reason: expect.any(String) })]);
+    });
+  });
+  it.each(['loras', 'lora_weights', 'lora_list', 'image_loras', 'model_id'])('preserves mixed mapped/unmapped order in the declared %s array', async (target) => {
+    const loras = [lora, { path: 'https://example.invalid/native.safetensors', strength: 0.4 }];
+    await withFixture(async (_url, init) => init?.method === 'POST' ? json({ data: { id: 'task' } }) : json({ data: [{ model_id: 'fixture/model', api_schema: { api_schemas: [{ type: 'model_run', method: 'POST', api_path: '/api/v3/fixture/model', server: 'https://api.wavespeed.ai', request_schema: { properties: { [target]: { type: 'array', items: { type: 'object', properties: { path: { type: 'string' }, scale: { type: 'number' } } } } } } }] } }] }), async (baseUrl, calls) => {
+      const response = await fetch(`${baseUrl}/api/schema-provider/wavespeed/submit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: 'fixture/model', prompt: 'cinematic mountain landscape', loras }) });
+      expect(response.status).toBe(200);
+      const sent = JSON.parse(String(calls.find(c => c.init?.method === 'POST')?.init?.body));
+      expect(sent[target]).toEqual([{ path: lora.name, scale: 0.7 }, { path: 'https://example.invalid/native.safetensors', scale: 0.4 }]);
+      const data = await response.json() as any;
+      expect(data.actualRequest.mapping.find((m: any) => m.from === 'loras')).toMatchObject({ to: target, value: sent[target], finalValue: sent[target] });
+    });
+  });
+  it.each([{}, { model_id: { type: 'string' } }])('returns local 400 when the schema has no LoRA field, including scalar model_id (%j)', async (extra) => {
+    await withFixture(async () => json({ data: [{ model_id: 'fixture/model', api_schema: { api_schemas: [{ type: 'model_run', method: 'POST', api_path: '/api/v3/fixture/model', server: 'https://api.wavespeed.ai', request_schema: { properties: { prompt: { type: 'string' }, ...extra } } }] } }] }), async (baseUrl, calls) => {
+      const response = await fetch(`${baseUrl}/api/schema-provider/wavespeed/submit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: 'fixture/model', prompt: 'cinematic mountain landscape', loras: [lora, { id: 'native-id', strength: 0.5 }] }) });
+      expect(response.status).toBe(400);
+      const data = await response.json() as any;
+      expect(data.errorSource).toBe('local');
+      expect(data.blockedField.field).toBe('loras');
+      expect(data.proposedRequest.mapping.find((m: any) => m.from === 'loras').unmappedLoras).toHaveLength(2);
+      expect(calls.some(c => c.init?.method === 'POST')).toBe(false);
+    });
+  });
+});
+
 describe('Sogni LoRA catalog covers', () => {
   const example=(caption:string,isMature=false)=>({url:`https://cdn.sogni.ai/ComfyUI/lora-examples/x_${caption}.jpg`,caption,isMature});
   it('uses an upstream positive-strength example, skipping the shared Off baseline, negatives and mature samples', () => {

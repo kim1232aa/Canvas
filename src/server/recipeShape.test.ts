@@ -1169,15 +1169,14 @@ describe('Mission M27: Recipe Shape, LoRA Resource Identity, and Target Schema A
           }),
         });
         const resJson = await resp.json();
-        expect(resp.status).toBe(200);
+        expect(resp.status).toBe(400);
+        expect(resJson.errorSource).toBe('local');
+        expect(submittedBody).toBeUndefined();
+        expect(resJson.proposedRequest.parameters.loras).toEqual([{ path: 'https://cdn.example/general.safetensors', scale: 0.8 }]);
+        expect(resJson.proposedRequest.parameters.high_noise_loras).toEqual([{ path: 'https://cdn.example/high.safetensors', scale: 0.9 }]);
+        expect(resJson.proposedRequest.parameters.low_noise_loras).toEqual([{ path: 'https://cdn.example/low.safetensors', scale: 0.7 }]);
 
-        // Verify payload partitioned cleanly into declared fields
-        expect(submittedBody.loras).toEqual([{ path: 'https://cdn.example/general.safetensors', scale: 0.8 }]);
-        expect(submittedBody.high_noise_loras).toEqual([{ path: 'https://cdn.example/high.safetensors', scale: 0.9 }]);
-        expect(submittedBody.low_noise_loras).toEqual([{ path: 'https://cdn.example/low.safetensors', scale: 0.7 }]);
-
-        // Verify undeclared target_field reported in unmappedLoras trace
-        const unmapped = resJson.actualRequest.mapping.find((m: any) => m.from === 'loras')?.unmappedLoras;
+        const unmapped = resJson.proposedRequest.mapping.flatMap((m: any) => m.unmappedLoras || []);
         expect(unmapped).toHaveLength(1);
         expect(unmapped[0].item.path).toBe('https://cdn.example/bad.safetensors');
         expect(unmapped[0].reason).toContain('undeclared_expert_field');

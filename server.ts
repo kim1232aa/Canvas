@@ -4044,6 +4044,7 @@ app.post('/api/engine/runware/generate', async (req, res) => {
   }
 
   const endpoint = mapped.endpoint;
+  const actualRequest = { endpoint, parameters: mapped.payload, mapping: mapped.mapping };
   let receivedStatus: number | undefined;
   let receivedBody: string | undefined;
   let imageResponseParsed = false;
@@ -4071,7 +4072,7 @@ app.post('/api/engine/runware/generate', async (req, res) => {
         errorSource: 'upstream',
         endpoint,
         rawResponse,
-        actualRequest: mapped.payload,
+        actualRequest,
         ...(mapped.unmappedLoras?.length ? { unmappedLoras: mapped.unmappedLoras } : {}),
       });
     }
@@ -4087,7 +4088,7 @@ app.post('/api/engine/runware/generate', async (req, res) => {
         errorSource: inspected.kind === 'semantic-error' ? 'upstream' : 'upstream-protocol',
         endpoint,
         rawResponse: inspected.rawResponse,
-        actualRequest: mapped.payload,
+        actualRequest,
         ...(mapped.unmappedLoras?.length ? { unmappedLoras: mapped.unmappedLoras } : {}),
       });
     }
@@ -4114,10 +4115,10 @@ app.post('/api/engine/runware/generate', async (req, res) => {
       height: task.height ?? null,
       loras: (task.lora || []).map(l => ({ name: l.model, strength: l.weight as number })),
       ...(unmappedLoraNote ? { historyWarning: unmappedLoraNote } : {}),
-      requestMetadata: { requestedParameters: sanitizeGenerationMetadata(Object.fromEntries(Object.entries(req.body).filter(([key]) => key !== 'workflowSnapshot'))), actualParameters: mapped.payload, overrides: mapped.overrides, upstreamEndpoint: endpoint, ...(unmappedLoras?.length ? { unmappedLoras } : {}) },
+      requestMetadata: { requestedParameters: sanitizeGenerationMetadata(Object.fromEntries(Object.entries(req.body).filter(([key]) => key !== 'workflowSnapshot'))), actualParameters: mapped.payload, mapping: mapped.mapping, overrides: mapped.overrides, upstreamEndpoint: endpoint, ...(unmappedLoras?.length ? { unmappedLoras } : {}) },
     }, {
       label: 'Runware',
-      response: { provider: 'Runware', model: mapped.actualModel, requestedModel: req.body.model, actualModel: mapped.actualModel, seed: task.seed ?? null, cost: parsed.cost, taskUUID: parsed.taskUUID, actualRequest: mapped.payload, overrides: mapped.overrides, upstreamEndpoint: endpoint, ...(unmappedLoras?.length ? { unmappedLoras } : {}), ...(unmappedLoraNote ? { historyWarning: unmappedLoraNote } : {}) },
+      response: { provider: 'Runware', model: mapped.actualModel, requestedModel: req.body.model, actualModel: mapped.actualModel, seed: task.seed ?? null, cost: parsed.cost, taskUUID: parsed.taskUUID, actualRequest, overrides: mapped.overrides, upstreamEndpoint: endpoint, ...(unmappedLoras?.length ? { unmappedLoras } : {}), ...(unmappedLoraNote ? { historyWarning: unmappedLoraNote } : {}) },
     });
   } catch (error: any) {
     keyPoolManager.recordResult('runware', apiKey, false, Date.now() - startTime, error.message);
@@ -4128,6 +4129,7 @@ app.post('/api/engine/runware/generate', async (req, res) => {
       errorSource: receivedStatus === undefined ? 'network' : imageResponseParsed ? 'local' : 'upstream-protocol',
       endpoint,
       ...(receivedBody !== undefined ? { rawResponse: receivedBody.split(apiKey).join('[credential redacted]') } : {}),
+      actualRequest,
       stack: error.stack,
     });
   }

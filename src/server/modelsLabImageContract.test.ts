@@ -120,8 +120,16 @@ describe('ModelsLab Image Contract', () => {
     expect(req.payload.strength).toBe(0.6);
   });
 
-  it.each([1.5, 0, -1, '2'])('rejects an invalid explicit samples value instead of rounding or defaulting (%s)', (samples) => {
-    expect(() => buildModelsLabImageRequest({ model: 'flux', prompt: 'p', samples }, 'test-key')).toThrow(/samples/);
+  it.each([1.5, 0, -1, '2', '0', '-1', '1.5'])('forwards explicit samples unchanged for upstream validation (%s)', (samples) => {
+    expect(buildModelsLabImageRequest({ model: 'flux', prompt: 'p', samples }, 'test-key').payload.samples).toBe(samples);
+  });
+
+  it.each([undefined, null, ''])('omits unfilled samples (%s)', (samples) => {
+    expect(buildModelsLabImageRequest({ model: 'flux', samples }, 'test-key').payload).not.toHaveProperty('samples');
+  });
+
+  it('preserves the num_images alias as a numeric string', () => {
+    expect(buildModelsLabImageRequest({ model: 'flux', num_images: '3' }, 'test-key').payload.samples).toBe('3');
   });
 
   it('preserves positive integer sample counts without imposing a provider-specific maximum', () => {

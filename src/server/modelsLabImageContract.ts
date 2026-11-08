@@ -115,20 +115,12 @@ export function buildModelsLabImageRequest(
   if (!modelId) throw new Error('ModelsLab 模型为必填项（model_id is required）');
 
   const requestedSamples = body.samples ?? body.num_images;
-  if (requestedSamples !== undefined && requestedSamples !== null) {
-    if (typeof requestedSamples !== 'number' || !Number.isFinite(requestedSamples) || !Number.isInteger(requestedSamples)) {
-      throw new Error('ModelsLab samples 必须是有限整数');
-    }
-    if (requestedSamples <= 0) {
-      throw new Error('ModelsLab samples 必须是正整数');
-    }
-  }
 
   const payload: Record<string, unknown> = {
     key: apiKey,
     prompt,
     model_id: modelId,
-    samples: requestedSamples === undefined || requestedSamples === null ? 1 : requestedSamples,
+    ...(requestedSamples !== undefined && requestedSamples !== null && requestedSamples !== '' ? { samples: requestedSamples } : {}),
   };
 
   const neg = String(body.negative_prompt || body.negativePrompt || '').trim();
