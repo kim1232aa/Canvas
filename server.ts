@@ -5878,11 +5878,42 @@ async function testSingleProviderKey(
       );
       const latency = Date.now() - startTime;
       const raw = await resp.text().catch(() => '');
+      
+      // HTTP 200 can carry business errors in {errors:[{code,message}]} — parse with inspectRunwareImageResponseBody.
+      if (!resp.ok) {
+        return {
+          maskedKey,
+          status: resp.status === 429 ? 'rate_limited' : 'error',
+          latency,
+          message: `Runware modelSearch HTTP ${resp.status} · ${baseUrl} · 原始响应：${raw.slice(0, 200)}`,
+        };
+      }
+      let parsed: any;
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        return {
+          maskedKey,
+          status: 'error',
+          latency,
+          message: `Runware modelSearch HTTP ${resp.status} 返回无效 JSON · ${baseUrl} · ${raw.slice(0, 200)}`,
+        };
+      }
+      if (Array.isArray(parsed?.errors) && parsed.errors.length > 0) {
+        const firstErr = parsed.errors[0];
+        const errMsg = firstErr?.message || firstErr?.code || JSON.stringify(firstErr);
+        return {
+          maskedKey,
+          status: 'error',
+          latency,
+          message: `Runware modelSearch HTTP ${resp.status} 业务错误 · ${baseUrl} · ${errMsg}`,
+        };
+      }
       return {
         maskedKey,
-        status: resp.ok ? 'ok' : resp.status === 429 ? 'rate_limited' : 'error',
+        status: 'ok',
         latency,
-        message: `Runware modelSearch 只读探针 HTTP ${resp.status} · ${baseUrl}${resp.ok ? '' : ` · 原始响应：${raw.slice(0, 200)}`}`,
+        message: `Runware modelSearch 只读探针 HTTP ${resp.status} · ${baseUrl}`,
       };
     }
 
@@ -5907,13 +5938,42 @@ async function testSingleProviderKey(
       );
       const latency = Date.now() - startTime;
       const raw = await resp.text().catch(() => '');
-      let modelCount: number | undefined;
-      try { const parsed = JSON.parse(raw); if (Array.isArray(parsed)) modelCount = parsed.length; } catch { /* raw below */ }
+      
+      // HTTP 200 can carry business errors in {status:"error",message} — parse to catch auth failures.
+      if (!resp.ok) {
+        return {
+          maskedKey,
+          status: resp.status === 429 ? 'rate_limited' : 'error',
+          latency,
+          message: `ModelsLab model_list HTTP ${resp.status} · ${listUrl} · 原始响应：${raw.slice(0, 200)}`,
+        };
+      }
+      let parsed: any;
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        return {
+          maskedKey,
+          status: 'error',
+          latency,
+          message: `ModelsLab model_list HTTP ${resp.status} 返回无效 JSON · ${listUrl} · ${raw.slice(0, 200)}`,
+        };
+      }
+      if (parsed?.status === 'error') {
+        const errMsg = parsed.message || 'Unknown error';
+        return {
+          maskedKey,
+          status: 'error',
+          latency,
+          message: `ModelsLab model_list HTTP ${resp.status} 业务错误 · ${listUrl} · ${errMsg}`,
+        };
+      }
+      const modelCount = Array.isArray(parsed) ? parsed.length : undefined;
       return {
         maskedKey,
-        status: resp.ok ? 'ok' : resp.status === 429 ? 'rate_limited' : 'error',
+        status: 'ok',
         latency,
-        message: `ModelsLab model_list 只读探针 HTTP ${resp.status} · ${listUrl}${resp.ok && modelCount !== undefined ? ` · ${modelCount} 个公开模型` : ''}${resp.ok ? '' : ` · 原始响应：${raw.slice(0, 200)}`}`,
+        message: `ModelsLab model_list 只读探针 HTTP ${resp.status} · ${listUrl}${modelCount !== undefined ? ` · ${modelCount} 个公开模型` : ''}`,
       };
     }
 
@@ -6427,6 +6487,44 @@ app.post('/api/cloud-keys/balances', requireAdminAuth, checkSecFetchSite, async 
           : { status: 'error', detail: parsed.error || 'Mage 响应格式异常' };
       } catch (e: any) {
         balances.mage = { status: 'error', detail: e.message };
+      }
+    })(),
+
+    // Runware: use the same modelSearch probe as testSingleProviderKey, never claims balance.
+    (async () => {
+      const runwareKey = keyPoolManager.getNextKey('runware');
+      if (!runwareKey) return;
+      const { baseUrl, error: urlErr } = getProviderBaseUrl('runware');
+      if (urlErr) {
+        balances.runware = { status: 'error', detail: urlErr };
+        return;
+      }
+      try {
+        const probeResult = await testSingleProviderKey('runware', runwareKey, '/api/cloud-keys/balances');
+        balances.runware = probeResult.status === 'ok'
+          ? { status: 'unknown', detail: `key 可用（${probeResult.message}）；Runware 无已核实的余额接口，请用「测试连接」确认权限` }
+          : { status: 'error', detail: probeResult.message };
+      } catch (e: any) {
+        balances.runware = { status: 'error', detail: `Runware: ${e.message}` };
+      }
+    })(),
+
+    // ModelsLab: use the same model_list probe as testSingleProviderKey, never claims balance.
+    (async () => {
+      const modelslabKey = keyPoolManager.getNextKey('modelslab');
+      if (!modelslabKey) return;
+      const { baseUrl, error: urlErr } = getProviderBaseUrl('modelslab');
+      if (urlErr) {
+        balances.modelslab = { status: 'error', detail: urlErr };
+        return;
+      }
+      try {
+        const probeResult = await testSingleProviderKey('modelslab', modelslabKey, '/api/cloud-keys/balances');
+        balances.modelslab = probeResult.status === 'ok'
+          ? { status: 'unknown', detail: `key 可用（${probeResult.message}）；ModelsLab 无已核实的余额接口，请用「测试连接」确认权限` }
+          : { status: 'error', detail: probeResult.message };
+      } catch (e: any) {
+        balances.modelslab = { status: 'error', detail: `ModelsLab: ${e.message}` };
       }
     })(),
 
