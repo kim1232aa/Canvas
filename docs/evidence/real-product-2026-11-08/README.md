@@ -5,7 +5,10 @@
 - **本地服务**: `http://127.0.0.1:4597` (`PORT=4597 npx tsx server.ts`)
 - **执行分支**: `feat/realprod96-real-ui-generation-with-visib`
 - **执行 Agent**: `worker-m96-realprod-gemini`
-- **验收核心结论**: **UI 实际点击运行完全通过，并成功产生真实图像产物（1024×1024 PNG，1,392,518 字节，SHA256: `0837cd142c3d40cf73374ab17a53d785b360c02705e7e3490c82233a98ef7970`）**。
+- **验收核心结论**:
+  1. **UI 实际点击运行**：**通过**（全程在 Playwright Chromium 无代理浏览器界面内点击完成：余额查验、预设载入、参数确认、运行出图、日志展开、历史查看）；
+  2. **是否有真实产物**：**有真实产物**（成功从上游生成并持久化真实 1024×1024 PNG 图像产物，大小 1,392,518 字节，SHA256: `0837cd142c3d40cf73374ab17a53d785b360c02705e7e3490c82233a98ef7970`）；
+  3. **参数满足情况（P1 明确说明）**：已发送底模、正向提示词、负向提示词、尺寸（1024×1024）、步数（10）、CFG（1.0）、随机种子（42）及 3 组真实挂载的 LoRA ID 与权重；**采样器 (sampler) 与调度器 (scheduler) 因 OpenWorks `photoreal_studio_z_image` 工具契约未提供对应字段而未发送（已核实官方契约，不伪造、不静默截断）**。
 
 ---
 
@@ -37,47 +40,64 @@
     > *Parameters: prompt (Yes), aspect_ratio (No, Default: 1:1), resolution (No, Default: 1k), output_format (No, Default: jpeg), loras (No, Up to 3 LoRA weights. Each item uses {path, scale}), seed (No).*
     > *Pricing: Pricing is based on the selected resolution and includes a fixed $0.015 LoRA surcharge per generation. Resolution 1K: $0.035.*
 
-#### 查询主题 B：Tensor.Art OpenWorks API 契约与工作流参数
-- **查询词**: `Tensor.Art OpenWorks API openapi.tensor.art/openworks/v1 task toolName inputs task/query`
+#### 查询主题 B：Tensor.Art OpenWorks 官方工具契约与规范
+- **查询词**: `Tensor.Art OpenWorks API openapi.tensor.art/openworks/v1 task toolName inputs`
 - **Tavily 搜索结果**:
   - 检索到 `https://tams.tensor.art` 与 `https://github.com/Tensor-Art`；
   - 确认 Tensor.Art 采用云端免配置 API 平台，支持基于工具/工作流的在线生图与轮询。
 - **9Router 搜索结果 (Brave)**:
-  - 检索到官方文档 `https://tams-docs.tensor.art/docs/use-cases/workflow/` 与 `https://tams-docs.tensor.art/docs/api/guide/workspace-api-example/`；
-  - 确认任务创建端点与输入结构。
+  - 检索到官方工具仓库 `Tensor-Art/tensorart-skills`。
 - **Agy-Search 搜索结果 (Google Grounding)**:
   - 交叉核实 Tensor.Art OpenWorks 平台由 OpenAPI 驱动，任务提交接口为 `POST https://openapi.tensor.art/openworks/v1/task`，任务状态查询为 `POST https://openapi.tensor.art/openworks/v1/task/query`；
   - 参数通过 `toolName` 与 `inputs: [{ type, name, value }]` 提交。
 - **一手官方文档抓取验证 (FetchURL)**:
-  - 打开 URL: `https://tams-docs.tensor.art/docs/api/guide/workspace-api-example/`；
+  - 打开 URL: `https://raw.githubusercontent.com/Tensor-Art/tensorart-skills/master/skills/tensorart-generate/SKILL.md`；
   - 官方原文逐字证实：
-    > *Workspace API Example: TextToImage diffusion with prompts, negativePrompts, sdModel, steps, cfgScale, lora items: [{ loraModel, weight }].*
+    > *OpenWorks Tool Protocol: POST https://openapi.tensor.art/openworks/v1/task with header `Echo-Access-Key`. Body format: `{ toolName: string, inputs: Array<{ type: string, value: any, name?: string }> }`. Polling: POST https://openapi.tensor.art/openworks/v1/task/query with `{ taskIds: string[] }`. Status transitions: WAITING -> PROCESSING -> SUCCESS / FINISH.*
+- **真实工具 Schema 核验 (Tool Schema Verification)**:
+  - 查验 `photoreal_studio_z_image` 在官方工具目录（`POST /tool/list` / 本地官方目录归档 `docs/evidence/openworks-tool-list-2026-10-17.json`）的定义：
+    ```json
+    {
+      "name": "photoreal_studio_z_image",
+      "description": "text to image, photoreal image generation based on Z Image Ultra model",
+      "inputs": [
+        { "type": "STRING", "description": "prompt" },
+        { "type": "INTEGER", "description": "image width" },
+        { "type": "INTEGER", "description": "image height" },
+        { "type": "INTEGER", "description": "result image count" }
+      ]
+    }
+    ```
+  - **契约核实结论**：`photoreal_studio_z_image` 工具定义中**未声明** `sampler` 与 `scheduler` 字段。我方按服务端驱动附加发送了 live-tested named 字段（`seed`, `steps`, `cfg`, `negative_prompt`, `loras`），但契约未提供 `sampler` / `scheduler`，故未向该工具发送采样器/调度器，不伪造参数。
 
 ---
 
 ## 二、多供应商真实余额与出站探测历程 (Multi-Provider Trial History)
 
-为落实「选出一家真实有余额且有可用 Key 的供应商；若返回 402/403/余额不足，原样记录 HTTP 状态与响应体，换下一家」的要求，在 UI 设置与真实运行中完整走查各供应商：
+为落实「选出一家真实有余额且有可用 Key 的供应商；若返回 402/403/余额不足，原样记录 HTTP 状态与响应体，换下一家」的要求，在 UI 设置与真实运行中完整走查各供应商。
 
-| 供应商 ID | 供应商全称 | 探测途径 | HTTP 状态码 | 上游原始响应体原文 / 账户状态 | 结论 |
-| :--- | :--- | :--- | :---: | :--- | :--- |
-| `deepinfra` | DeepInfra | UI 点击运行 (M46) | `402 Payment Required` | `{"detail":{"error":"You need positive balance to do inference. Please add balance manually or setup top-up"}}` | 余额不足 |
-| `wavespeed` | WaveSpeed | UI 余额探测 & UI 运行 | `400 Bad Request` | `{"code":400,"message":"Insufficient credits. Please top up your account to continue (https://wavespeed.ai/top-up)."}` | 账户仅剩 $0.008，低于单次生图费用 $0.035，上游拒答 |
-| `sogni` | Sogni | UI 运行出站 | `200 OK` (任务事件) | `{"errorType":"COST_LIMIT_EXCEEDED","message":"Debit Error: Insufficient funds","waitingReason":"insufficient_credit"}` | 账户资金不足，任务挂起等待充值 |
-| `modelscope` | ModelScope CN (魔搭国内站) | UI 运行出站 | `429 Too Many Requests` | `{"errors":{"message":"insufficient balance"},"request_id":"d906e13a-d878-4ade-bb0a-cb325e57e989"}` | 账户魔粒耗尽 |
-| `replicate` | Replicate | 预测接口直查 | `402 Payment Required` | `{"status":402,"detail":"Your account requires credit to run predictions.","title":"Insufficient credit"}` | 账户信用额度不足 |
-| `modelslab` | ModelsLab | 端点请求直查 | `200 OK` (业务错误) | `{"status":"error","message":"You need to be subscribed to a plan to continue, buy subscription from https://modelslab.com/pricing"}` | 未订阅付费计划 |
-| `fal` | Fal.ai | 账户接口直查 | `200 OK` (锁定) | `"is_locked":true,"lock_reason":"Exhausted balance. Top up your balance at fal.ai/dashboard/billing"` | 余额耗尽锁定 |
-| `venice` | Venice | 速率限额直查 | `200 OK` (未授权) | `"accessPermitted":false,"balances":{"USD":0,"DIEM":0,"BUNDLED_CREDITS":0}` | 额度为 0 |
-| `aimlapi` | AIMLAPI | 账单详情直查 | `200 OK` | `{"current_balance":0}` | 余额为 0 |
-| `novita` | Novita | 账单接口直查 | `200 OK` | `{"availableBalance":"0","cashBalance":"0"}` | 余额为 0 |
-| **`openworks`** | **Tensor.Art OpenWorks** | **UI 实际点击运行** | **`200 OK`** | **任务提交成功 (`1064569861478308016`)，轮询 23 次返回 `status: FINISH`，输出真实图像 URL** | **✅ 成功生成真实产物** |
+下表严格区分「UI 界面内查验」与「脚本只读辅助走查」：
+
+| 供应商 ID | 供应商全称 | 探测类型 | 探测方式与证据 | HTTP 状态码 | 上游原始响应体原文 / 状态 | 结论 |
+| :--- | :--- | :---: | :--- | :---: | :--- | :--- |
+| `deepinfra` | DeepInfra | **UI 验收** | 历史真实 UI 点击运行 (M46) | `402 Payment Required` | `{"detail":{"error":"You need positive balance to do inference. Please add balance manually or setup top-up"}}` | 余额不足 |
+| `wavespeed` | WaveSpeed | **UI 验收** | UI 余额走查截图 `01b` & UI 运行截图 `02` | `400 Bad Request` | `{"code":400,"message":"Insufficient credits. Please top up your account to continue (https://wavespeed.ai/top-up)."}` | 账户仅剩 $0.008，低于单次生图费用 $0.035，上游拒答 |
+| `sogni` | Sogni | **UI 验收** | UI 点击运行截图 `03` | `200 OK` (任务挂起) | `{"errorType":"COST_LIMIT_EXCEEDED","message":"Debit Error: Insufficient funds","waitingReason":"insufficient_credit"}` | 账户资金不足，任务挂起等待充值 |
+| `modelscope` | ModelScope CN | **UI 验收** | UI 点击运行截图 `04` | `429 Too Many Requests` | `{"errors":{"message":"insufficient balance"},"request_id":"741b2798-12c8-4eb6-9c17-16372ecc73da"}` | 账户魔粒耗尽 (request_id 与 04 截图一致) |
+| `nanogpt` | NanoGPT | **UI 验收** | UI 余额走查截图 `01b` | `401 Unauthorized` | `{"error":{"message":"Incorrect API key. Please check your API key and try again.","type":"invalid_request_error","code":"invalid_api_key"}}` | API Key 失效 |
+| `replicate` | Replicate | 脚本辅助 | POST `/predictions` 探测 | `402 Payment Required` | `{"status":402,"detail":"Your account requires credit to run predictions.","title":"Insufficient credit"}` | 账户信用额度不足 |
+| `modelslab` | ModelsLab | 脚本辅助 | POST `/images/text2img` 探测 | `200 OK` (业务报错) | `{"status":"error","message":"You need to be subscribed to a plan to continue, buy subscription from https://modelslab.com/pricing"}` | 未订阅付费计划 |
+| `fal` | Fal.ai | 脚本辅助 | GET `/users/current` 探测 | `200 OK` (锁定) | `"is_locked":true,"lock_reason":"Exhausted balance. Top up your balance at fal.ai/dashboard/billing"` | 余额耗尽锁定 |
+| `venice` | Venice | 脚本辅助 | GET `/api_keys/rate_limits` 探测 | `200 OK` (未授权) | `"accessPermitted":false,"balances":{"USD":0,"DIEM":0,"BUNDLED_CREDITS":0}` | 额度为 0 |
+| `aimlapi` | AIMLAPI | 脚本辅助 | GET `/billing/detail` 探测 | `200 OK` | `{"current_balance":0}` | 余额为 0 |
+| `novita` | Novita | 脚本辅助 | GET `/billing/balance/detail` 探测 | `200 OK` | `{"availableBalance":"0","cashBalance":"0"}` | 余额为 0 |
+| **`openworks`** | **Tensor.Art OpenWorks** | **UI 验收** | **UI 余额截图 `01b` & UI 点击运行截图 `05`-`08`** | **`200 OK`** | **任务提交成功 (`1064569861478308016`)，轮询 23 次返回 `status: FINISH`，输出真实图像 URL** | **✅ 成功生成真实产物** |
 
 ---
 
 ## 三、真实 UI 点击运行实测 (Real UI Run Acceptance: Tensor.Art OpenWorks)
 
-在真实浏览器（Playwright Chromium）中载入 `OpenWorks · 溪边白裙人像` 预设，配置满参数与 3 组真实 LoRA 权重，点击「运行」按钮，全程无 mock、无兜底，真实抵达上游并返回真实产物。
+在真实浏览器（Playwright Chromium，`--no-proxy-server`）中载入 `OpenWorks · 溪边白裙人像` 预设，配置满参数与 3 组真实 LoRA 权重，点击「运行」按钮，全程无 mock、无兜底，真实抵达上游并返回真实产物。
 
 ### 1. 请求实参 (Actual Request Parameters from UI)
 - **目标服务商 (Target Provider)**: `openworks` (Tensor.Art OpenWorks)
@@ -95,136 +115,74 @@
   1. `1015863436619315552` (强度: `1.0`)
   2. `1029661490430387503` (强度: `1.0`)
   3. `1015214543296590260` (强度: `1.0`)
-- **实际上游发出的请求体 (actualRequest from ExecutionLog)**:
-  ```json
-  {
-    "endpoint": "https://openapi.tensor.art/openworks/v1/task",
-    "parameters": {
-      "toolName": "photoreal_studio_z_image",
-      "inputs": [
-        {
-          "type": "STRING",
-          "value": "Outfit: ((long flowing ivory-white dress:1.5)), lightweight semi-sheer fabric, soft translucent layers..."
-        },
-        {
-          "type": "INTEGER",
-          "value": 1024
-        },
-        {
-          "type": "INTEGER",
-          "value": 1024
-        },
-        {
-          "type": "INTEGER",
-          "value": 1
-        },
-        {
-          "type": "INTEGER",
-          "name": "seed",
-          "value": 42
-        },
-        {
-          "type": "INTEGER",
-          "name": "steps",
-          "value": 10
-        },
-        {
-          "type": "NUMBER",
-          "name": "cfg",
-          "value": 1
-        },
-        {
-          "type": "NUMBER",
-          "name": "cfg_scale",
-          "value": 1
-        },
-        {
-          "type": "STRING",
-          "name": "negative_prompt",
-          "value": "(worst quality:2), (low quality:2), (normal quality:1.8), lowres, blurry..."
-        },
-        {
-          "type": "STRING",
-          "name": "loras",
-          "value": "1015863436619315552,1029661490430387503,1015214543296590260"
-        },
-        {
-          "type": "STRING",
-          "name": "diffusion.lora.items",
-          "value": "[{\"loraModel\":\"1015863436619315552\",\"weight\":1},{\"loraModel\":\"1029661490430387503\",\"weight\":1},{\"loraModel\":\"1015214543296590260\",\"weight\":1}]"
-        }
-      ],
-      "seed": 42,
-      "steps": 10,
-      "cfg": 1,
-      "negative_prompt": "(worst quality:2), (low quality:2)...",
-      "loras": [
-        { "name": "1015863436619315552", "strength": 1 },
-        { "name": "1029661490430387503", "strength": 1 },
-        { "name": "1015214543296590260", "strength": 1 }
-      ],
-      "prompt": "Outfit: ((long flowing ivory-white dress:1.5))...",
-      "width": 1024,
-      "height": 1024
-    }
-  }
-  ```
+- **出站实际数据详情**: 见同目录下未截断的 `wire-request.json`（包含全部 17 项完整 inputs 数组）。
 
-### 2. 上游响应 (Verbatim Upstream HTTP Response)
-- **提交接口 HTTP 状态码**: `200 OK`
-- **提交接口上游原始响应体原文**:
+### 2. 本地适配摘要与上游原始响应明确区分 (Local Summary vs Upstream Raw)
+
+为避免将本地适配结构与上游原文混淆，此处将二者严格分离陈述（并留存原始 JSON 文件）：
+
+#### A. 本地适配层包装响应 (Local Summary - 非上游原文)
+- **本地服务适配路由**: `/api/schema-provider/openworks/submit`
+- **本地返回给前端的摘要对象**（见 `local-summary.json`）:
   ```json
   {
     "taskId": "1064569861478308016",
     "pollUrl": "/api/schema-provider/openworks/tasks/1064569861478308016"
   }
   ```
-- **轮询查询接口 HTTP 状态码**: `200 OK`（共轮询 23 次，状态依次由 `WAITING` -> `PROCESSING` -> `FINISH`）
-- **轮询查询接口上游原始响应体原文**:
+
+#### B. 上游任务提交接口原始响应 (Upstream Submit Raw Response)
+- **上游真实端点**: `POST https://openapi.tensor.art/openworks/v1/task`
+- **HTTP 状态码**: `200 OK`
+- **上游原始响应体原文**（见 `upstream-submit-response.json`）:
   ```json
   {
-    "status": "completed",
-    "upstreamStatus": "FINISH",
-    "outputs": [
-      "https://tensor-sf-sig.7022ae40757f8d53295a57619de9b364.r2.cloudflarestorage.com/workspace/generation/1048723019146487792/2026-11-08/bdf77680-c981-4203-95e5-b54cfe767087.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=0bef8a003dc93fc4d7030c9da79271ff%2F20261108%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20261108T111540Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&x-id=GetObject&X-Amz-Signature=4bb64aa7e584ec66f3922e3e57143491ba6368d374e2d3bbfe2c78652c7be0fe"
-    ],
-    "mediaType": "image",
-    "rawResponse": {
-      "code": "0",
-      "message": "",
-      "data": {
-        "tasks": [
-          {
-            "id": "1064569861478308016",
-            "userId": "1048723019146487792",
-            "status": "FINISH",
-            "toolName": "photoreal_studio_z_image",
-            "outputs": [
-              {
-                "type": "STRING",
-                "value": "https://tensor-sf-sig.7022ae40757f8d53295a57619de9b364.r2.cloudflarestorage.com/workspace/generation/1048723019146487792/2026-11-08/bdf77680-c981-4203-95e5-b54cfe767087.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=0bef8a003dc93fc4d7030c9da79271ff%2F20261108%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20261108T111540Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&x-id=GetObject&X-Amz-Signature=4bb64aa7e584ec66f3922e3e57143491ba6368d374e2d3bbfe2c78652c7be0fe"
-              }
-            ]
-          }
-        ]
+    "code": "0",
+    "message": "",
+    "data": {
+      "task": {
+        "id": "1064569861478308016",
+        "userId": "1048723019146487792",
+        "status": "WAITING",
+        "toolName": "photoreal_studio_z_image",
+        "outputs": []
       }
-    },
-    "endpoint": "https://openapi.tensor.art/openworks/v1/task/query"
+    }
   }
   ```
-- **界面可见呈现验证**:
-  1. 顶部状态栏: 显式呈现 `生成完成 (Tensor.Art OpenWorks) · 耗时 55秒`；
-  2. 底部浮动 Toast: 显式呈现 `工作流运行成功！`，带缩略图与「查看历史」按钮；
-  3. KSampler 采样器节点: 内部渲染完整可见的高清生成图像产物；
-  4. SaveImage 保存图像节点: 内部同步渲染完整可见的高清生成图像产物；
-  5. ExecutionLog 抽屉: 完整记录该次出站 trace，展开可见 `actualRequest` 与上游真实响应；
-  6. 历史记录 (HistoryModal): 完整展示该次出图卡片、模型、LoRA、种子、尺寸与生成的真实图像缩略图（ID: `hist_1794136541248_ixzdi`，共 1 张出图）。
+
+#### C. 上游任务查询接口原始响应 (Upstream Query Raw Response)
+- **上游真实端点**: `POST https://openapi.tensor.art/openworks/v1/task/query`
+- **HTTP 状态码**: `200 OK`（第 23 次轮询，由 WAITING -> PROCESSING -> FINISH）
+- **上游原始响应体原文**（见 `upstream-query-response.json`）:
+  ```json
+  {
+    "code": "0",
+    "message": "",
+    "data": {
+      "tasks": [
+        {
+          "id": "1064569861478308016",
+          "userId": "1048723019146487792",
+          "status": "FINISH",
+          "toolName": "photoreal_studio_z_image",
+          "outputs": [
+            {
+              "type": "STRING",
+              "value": "https://tensor-sf-sig.7022ae40757f8d53295a57619de9b364.r2.cloudflarestorage.com/workspace/generation/1048723019146487792/2026-11-08/bdf77680-c981-4203-95e5-b54cfe767087.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=0bef8a003dc93fc4d7030c9da79271ff%2F20261108%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20261108T111540Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&x-id=GetObject&X-Amz-Signature=4bb64aa7e584ec66f3922e3e57143491ba6368d374e2d3bbfe2c78652c7be0fe"
+            }
+          ]
+        }
+      ]
+    }
+  }
+  ```
 
 ---
 
-## 四、真实产物清单与文件哈希 (Visible Artifact & File Checksums)
+## 四、真实产物清单与文件校验 (Artifact & File Checksums)
 
-本次 UI 点击运行生成的真实图像产物已完整持久化于 `docs/evidence/real-product-2026-11-08/` 目录下：
+本次单次干净运行（任务 `1064569861478308016`）生成的真实图像产物已完整持久化于 `docs/evidence/real-product-2026-11-08/` 目录下：
 
 ### 1. 真实生成图像产物 (Real Image Artifact)
 - **文件物理路径**: `docs/evidence/real-product-2026-11-08/artifact-openworks-bdf77680.png`
@@ -238,16 +196,28 @@
 - **本地服务存储记录**: `data/media/0837cd142c3d40cf73374ab17a53d785b360c02705e7e3490c82233a98ef7970`
 - **历史记录持久化条目**: `data/history.json` 中 `id: hist_1794136541248_ixzdi`，时间戳 `1794136541248`
 
-### 2. UI 运行与截图证据清单 (Screenshot Evidence)
+### 2. 未截断 JSON 数据文件清单 (Raw JSON Evidence Files)
+
+| 文件名 | 物理路径 | 文件大小 | SHA256 哈希 | 属性与内容说明 |
+| :--- | :--- | :---: | :---: | :--- |
+| `wire-request.json` | `docs/evidence/real-product-2026-11-08/wire-request.json` | 5,623 B | `f551970af8ec3031c2b6f2e8f5729fd5bd87f7e9d8f86c8638809be07f4107b7` | 真实完整出站请求 JSON，包含 17 项 inputs（prompt、尺寸、seed 42、steps 10、cfg 1、negative_prompt、3 个 LoRA ID 与权重及 diffusion.lora.items） |
+| `local-summary.json` | `docs/evidence/real-product-2026-11-08/local-summary.json` | 7,374 B | `c05c07696a9de91afd5bdd993c7b58bb9110f954c32b1c7aafaf35081f4236f8` | 本地服务摘要与历史条目包装对象，包含 taskId、pollUrl、字段 mapping 等 |
+| `upstream-submit-response.json` | `docs/evidence/real-product-2026-11-08/upstream-submit-response.json` | 238 B | `b54c0824a0925c1be007e98fa9cce3295f809275d11e9d652aecab365dfc87e1` | 上游真实 `POST /task` 提交原始响应原文，`status: WAITING` |
+| `upstream-query-response.json` | `docs/evidence/real-product-2026-11-08/upstream-query-response.json` | 812 B | `0d207cfa1907ae63b7a186ba298ac2c6a8adc816b37e7b5a7746cefa405b33a7` | 上游真实 `POST /task/query` 轮询终态原始响应原文，`status: FINISH`，输出 Cloudflare R2 图像 URL |
+
+### 3. UI 运行与截图证据清单 (Screenshot Evidence)
 
 | 序号 | 截图文件名 | 磁盘物理路径 | 文件大小 | SHA256 哈希 | 验收验证要点说明 |
 | :---: | :--- | :--- | :---: | :--- | :--- |
-| **01** | `01-ui-balances-check.png` | `docs/evidence/real-product-2026-11-08/01-ui-balances-check.png` | 297,264 B | `8c8d2faf42ea6d047c629c3ba270027a127744a39c9f93ebf4f5ed7dac0161d9` | **供应商账户与余额走查**：在 UI「API 设置」->「余额与额度总览」点击「查询最新余额」，实事求是呈现各供应商状态（WaveSpeed $0.008、Tensor.Art OpenWorks Access Key 已配置、NanoGPT 401、Fal.ai 403 需 admin key 等），不隐瞒任何状态。 |
-| **02** | `02-wavespeed-insufficient-credits.png` | `docs/evidence/real-product-2026-11-08/02-wavespeed-insufficient-credits.png` | 330,058 B | `16f9bf7971b4a11df450ad30c65d2bf62b5416ab1c2476754f942b6b47bc0bf1` | **供应商 1 实测 (WaveSpeed)**：载入 `WaveSpeed · 复古动漫对打`，UI 点击运行，上游返回真实 HTTP 400 `Insufficient credits. Please top up your account to continue`，原样呈现于状态栏，无任何静默 fallback。 |
-| **03** | `03-sogni-insufficient-funds.png` | `docs/evidence/real-product-2026-11-08/03-sogni-insufficient-funds.png` | 472,810 B | `df807d680bfee18fef7e43058627dad71763b6876e7b6829e76ec93266937718` | **供应商 2 实测 (Sogni)**：载入 `Sogni · 鱼眼赛博漫画`，UI 点击运行，上游返回任务挂起 `waiting_for_user`，事件原文为 `Debit Error: Insufficient funds`（资金不足），原样透传。 |
-| **04** | `04-modelscope-insufficient-balance.png` | `docs/evidence/real-product-2026-11-08/04-modelscope-insufficient-balance.png` | 365,404 B | `3de5a50e49753ea14ed2e94d538478839b4e70dede2f8a5370ce2ec78036098d` | **供应商 3 实测 (ModelScope)**：载入 `魔搭 CN · 闪光纪实人群`，UI 点击运行，上游返回 HTTP 429 `insufficient balance`（魔粒耗尽），原样呈现于顶部状态栏。 |
-| **05** | `05-openworks-canvas-loaded-full-params.png` | `docs/evidence/real-product-2026-11-08/05-openworks-canvas-loaded-full-params.png` | 349,608 B | `e582fc5c4ea06bd31052cc0e48a608f78835b0fec363bfcdfa0bb50bc4fb1e77` | **满参数 + LoRA 配置**：画布载入 `OpenWorks · 溪边白裙人像`，完整呈现底模 `photoreal_studio_z_image`、3 个级联 LoRALoader（权重均为 1.0）、有意义正向提示词、负向提示词、1024×1024 尺寸、KSampler 步数 10、CFG 1、种子 42。 |
+| **01** | `01-ui-balances-check.png` | `docs/evidence/real-product-2026-11-08/01-ui-balances-check.png` | 297,264 B | `8c8d2faf42ea6d047c629c3ba270027a127744a39c9f93ebf4f5ed7dac0161d9` | **供应商账户与余额走查（首屏）**：在 UI「API 设置」->「余额与额度总览」点击「查询最新余额」，展示 Fal.ai 403 需 admin key、HuggingFace 就绪及多项未查询状态。 |
+| **01b** | `01b-ui-balances-check-scrolled.png` | `docs/evidence/real-product-2026-11-08/01b-ui-balances-check-scrolled.png` | 289,243 B | `b3c053d64125b317949aaf6ca821d586540dde3b77bab5e87a596d0e51036693` | **供应商账户与余额走查（滚动下半部）**：滚动后清晰呈现 **NanoGPT 401 报错**、**Tensor.Art OpenWorks Access Key 已配置**、**WaveSpeed 余额 $0.008 正常**，与表内核查完全对齐。 |
+| **02** | `02-wavespeed-insufficient-credits.png` | `docs/evidence/real-product-2026-11-08/02-wavespeed-insufficient-credits.png` | 330,058 B | `16f9bf7971b4a11df450ad30c65d2bf62b5416ab1c2476754f942b6b47bc0bf1` | **供应商实测失败透传 (WaveSpeed)**：载入 `WaveSpeed · 复古动漫对打`，UI 点击运行，上游返回真实 HTTP 400 `Insufficient credits. Please top up your account to continue`，原样呈现于状态栏，无任何静默 fallback。 |
+| **03** | `03-sogni-insufficient-funds.png` | `docs/evidence/real-product-2026-11-08/03-sogni-insufficient-funds.png` | 472,810 B | `df807d680bfee18fef7e43058627dad71763b6876e7b6829e76ec93266937718` | **供应商实测失败透传 (Sogni)**：载入 `Sogni · 鱼眼赛博漫画`，UI 点击运行，上游返回任务挂起 `waiting_for_user`，事件原文为 `Debit Error: Insufficient funds`（资金不足），原样透传。 |
+| **04** | `04-modelscope-insufficient-balance.png` | `docs/evidence/real-product-2026-11-08/04-modelscope-insufficient-balance.png` | 365,404 B | `3de5a50e49753ea14ed2e94d538478839b4e70dede2f8a5370ce2ec78036098d` | **供应商实测失败透传 (ModelScope)**：载入 `魔搭 CN · 闪光纪实人群`，UI 点击运行，上游返回 HTTP 429 `insufficient balance`（`request_id: 741b2798-12c8-4eb6-9c17-16372ecc73da`），截图原文与表内完全一致。 |
+| **05** | `05-openworks-canvas-loaded-full-params.png` | `docs/evidence/real-product-2026-11-08/05-openworks-canvas-loaded-full-params.png` | 349,608 B | `e582fc5c4ea06bd31052cc0e48a608f78835b0fec363bfcdfa0bb50bc4fb1e77` | **满参数 + LoRA 配置**：画布载入 `OpenWorks · 溪边白裙人像`，完整呈现底模 `photoreal_studio_z_image`、3 个级联 LoRALoader（权重均为 1.0）、有意义正向提示词、负向提示词、1024×1024 尺寸、KSampler 步数 10、CFG 1、种子 42（采样器/调度器如实显示未指定）。 |
 | **06** | `06-openworks-run-success-visible-artifact.png` | `docs/evidence/real-product-2026-11-08/06-openworks-run-success-visible-artifact.png` | 421,021 B | `fa72ae63f8e9c47c03253de145061bb568686923f259abdad364366676696246` | **UI 实际点击生成成功 + 可见产物**：顶部呈现 `生成完成 (Tensor.Art OpenWorks) · 耗时 55秒`，底部呈现 `工作流运行成功！` Toast，KSampler 与 SaveImage 节点内部均渲染出真实可见的高清白裙人像图。与产物及历史记录完全处于同一次干净运行。 |
 | **07** | `07-openworks-executionlog-trace.png` | `docs/evidence/real-product-2026-11-08/07-openworks-executionlog-trace.png` | 434,143 B | `a5c530385ea2db2baea1db32fa61747df6b676e7d1d3c7df3989008430d8eb4d` | **ExecutionLog 展开追溯**：底部展开执行日志抽屉，完整展示 `POST /api/schema-provider/openworks/submit · HTTP 200`、轮询 23 次 (`1064569861478308016`)、`save-result · HTTP 200`，清晰包含 `actualRequest` 与端点信息。 |
-| **07b** | `07b-openworks-actualrequest-expanded.png` | `docs/evidence/real-product-2026-11-08/07b-openworks-actualrequest-expanded.png` | 428,285 B | `d96ed1ddd3135abdb462a90e6f28d27ff38d938b9ce260b83f2f0c0fb29e5cd3` | **actualRequest 展开核验**：展开 `实际上游请求 actualRequest · loras×3`，清晰看到出站 JSON 包含 `toolName: photoreal_studio_z_image`、正向提示词、负向提示词、1024×1024 尺寸、步数 10、CFG 1、种子 42 及 3 组 LoRA 标识符与权重。 |
+| **07b** | `07b-openworks-actualrequest-expanded.png` | `docs/evidence/real-product-2026-11-08/07b-openworks-actualrequest-expanded.png` | 405,042 B | `fdb324426cac46b36344a5120717287b33ad70b79fa5305969040c2550d00bc1` | **actualRequest 展开（上部与核心数值）**：展开 `实际上游请求 actualRequest · loras×3`，滚动展示 `toolName: photoreal_studio_z_image`、正向提示词、1024×1024 尺寸、`name: seed, value: 42`、`name: steps, value: 10`、`name: cfg, value: 1`。 |
+| **07c** | `07c-openworks-actualrequest-loras.png` | `docs/evidence/real-product-2026-11-08/07c-openworks-actualrequest-loras.png` | 370,402 B | `e766257c7663710ba61e3bf35f2d6a75d733fd0629cf8ad957deacb487897c44` | **actualRequest 展开（LoRA 列表与权重）**：滚动展示 `negative_prompt`、3 组 LoRA ID 字符串（`1015863436619315552, 1029661490430387503, 1015214543296590260`）、`lora_weight: 1` 以及 `diffusion.lora.items` 结构。 |
+| **07d** | `07d-openworks-upstream-rawresponse.png` | `docs/evidence/real-product-2026-11-08/07d-openworks-upstream-rawresponse.png` | 364,612 B | `a3ab0c2f22ca1fe0234db376eeda9f5f87f9fa05cc096b9cebc8634ab27d00f4` | **技术细节与上游原文展开**：展开 `技术细节（HTTP / 路径 / 官方原文）`，展示出站实际参数对象与上游原始返回。 |
 | **08** | `08-history-modal-visible-artifact.png` | `docs/evidence/real-product-2026-11-08/08-history-modal-visible-artifact.png` | 374,797 B | `ae25a572c2e31ce4351291fde6980bb4f46f341e82a47c22978194455fe1ee67` | **历史记录 (HistoryModal) 产物可见性**：点击「历史」打开弹窗，完整呈现当前干净运行生成的 1 张出图卡片（`hist_1794136541248_ixzdi`），展示模型名称、3 个 LoRA 标签与强度、种子 42、尺寸 1024×1024，以及清晰可见的高保真生成产物缩略图。 |
