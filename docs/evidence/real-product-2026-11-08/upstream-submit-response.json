@@ -1,0 +1,13 @@
+{
+  "code": "0",
+  "message": "",
+  "data": {
+    "task": {
+      "id": "1064569861478308016",
+      "userId": "1048723019146487792",
+      "status": "WAITING",
+      "toolName": "photoreal_studio_z_image",
+      "outputs": []
+    }
+  }
+}
